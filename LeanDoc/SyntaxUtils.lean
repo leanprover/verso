@@ -37,10 +37,9 @@ defmethod ParserFn.test (p : ParserFn) (input : String) : IO String := do
   else
     return s!"Success! Final stack:\n{stk.pretty 50}\n{remaining}"
 
-
-
 defmethod ParserFn.test! (p : ParserFn) (input : String) : IO Unit :=
   p.test input >>= IO.println
+
 
 scoped instance : Quote SourceInfo `term where
   quote

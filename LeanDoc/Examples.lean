@@ -5,12 +5,13 @@ import LeanDoc.Doc.Concrete
 
 namespace LeanDoc.Examples
 
+set_option pp.rawOnError true
 
-#docs none "" :=
+#docs none "Nothing" :=
 :::::::
 :::::::
 
-/-- info: LeanDoc.Doc.Part.mk #[LeanDoc.Doc.Inline.text ""] #[] #[] -/
+/-- info: LeanDoc.Doc.Part.mk #[LeanDoc.Doc.Inline.text "Nothing"] #[] #[] -/
 #guard_msgs in
   #eval none
 
