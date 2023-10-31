@@ -2,7 +2,6 @@ import LeanDoc
 
 open LeanDoc Doc Html Concrete ToHtml
 
-set_option pp.rawOnError true
 
 def main : IO Unit := do
   IO.println <| Html.format <| Html.embody <| toHtml <| #doc "My wonderful document" =>
@@ -34,3 +33,6 @@ For demo-worthiness, we also need:
 It's still a start, though!
 
 ## Other idea
+
+
+## Further subsection

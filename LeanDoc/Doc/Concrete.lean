@@ -2,6 +2,7 @@ import Lean
 
 import LeanDoc.Doc
 import LeanDoc.Doc.Elab
+import LeanDoc.Doc.Elab.Monad
 import LeanDoc.Parser
 import LeanDoc.SyntaxUtils
 
@@ -44,10 +45,12 @@ def inlineStr := inStrLit <| textLine
 elab "inlines!" s:inlineStr : term => open Lean Elab Term in
   match s.raw with
   | `<low| [~_ ~(.node _ _ out) ] > => do
-    let ((), st') ← DocElabM.run {headerContext := none, headerStack := #[]} <| for i in out do elabInline i
-    let res := st'.stack
-    elabTerm (← `(term| #[ $[$res],* ] )) none
+    let tms ← DocElabM.run (.init (← `(foo))) <| out.mapM elabInline
+    elabTerm (← `(term| #[ $[$tms],* ] )) none
   | _ => throwUnsupportedSyntax
+
+set_option pp.rawOnError true
+
 
 #eval inlines!"Hello, *emph*"
 
@@ -58,43 +61,39 @@ def document : Parser where
 @[combinator_formatter document] def document.formatter := PrettyPrinter.Formatter.visitAtom Name.anonymous
 
 
-elab "#docs" n:ident title:inlineStr ":=" ":::::::" text:document ":::::::" : command => open Lean Elab Command DocElabM in do
+
+
+elab "#docs" n:ident title:inlineStr ":=" ":::::::" text:document ":::::::" : command => open Lean Elab Command PartElabM DocElabM in do
   let endTok := match ← getRef with | .node _ _ t => t.back?.get! | _ => panic! "Nothing"
   let endPos := endTok.getPos?.get!
   let .node _ _ blocks := text.raw
     | dbg_trace "nope {ppSyntax text.raw}" throwUnsupportedSyntax
   let ⟨`<low| [~_ ~(titleName@(.node _ _ titleParts))]>⟩ := title
     | dbg_trace "nope {ppSyntax title}" throwUnsupportedSyntax
-  let (toc, st) ← liftTermElabM <| DocElabM.run (State.init titleName) <| do
-    array for titleInline in titleParts do elabInline titleInline
-    for b in blocks do
-      elabBlock b
-    closeSectionsUntil endTok 1
-    let toc := (← get).headerStack[0]!.close endPos
-    closeSectionsUntil endTok 0
-    pure toc
-  pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk toc}
-  let #[stx] := st.stack
-    | throwErrorAt n "Too many ({st.stack.size}) leftover stack elements! {st.stack.map ppSyntax}"
+  let titleString := inlinesToString (← getEnv) titleParts
+  let (toc, st) ← liftTermElabM <| PartElabM.run (.init titleName) <| do
+    setTitle titleString (← liftDocElabM <| titleParts.mapM elabInline)
+    for b in blocks do partCommand b
+    closePartsUntil 0 endPos
+    pure ()
+  let finished := st.partContext.toPartFrame.close endPos
+  pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
   -- dbg_trace "Syntax is {stx}"
-  elabCommand (← `(def $n : Part := $stx))
+  elabCommand (← `(def $n : Part := $(← finished.toSyntax)))
 
 
-elab "#doc" title:inlineStr "=>" text:document eof:eoi : term => open Lean Elab Term DocElabM in do
+elab "#doc" title:inlineStr "=>" text:document eof:eoi : term => open Lean Elab Term PartElabM DocElabM in do
+  let endPos := eof.raw.getTailPos?.get!
   let .node _ _ blocks := text.raw
     | dbg_trace "nope {ppSyntax text.raw}" throwUnsupportedSyntax
   let ⟨`<low| [~_ ~(titleName@(.node _ _ titleParts))]>⟩ := title
     | dbg_trace "nope {ppSyntax title}" throwUnsupportedSyntax
-  let (toc, st) ← DocElabM.run (State.init titleName) <| do
-    array for titleInline in titleParts do elabInline titleInline
-    for b in blocks do
-      elabBlock b
-    closeSectionsUntil eof 1
-    let toc := (← get).headerStack[0]!.close eof.raw.getTailPos?.get!
-    closeSectionsUntil eof 0
-    pure toc
-  pushInfoLeaf <| .ofCustomInfo {stx := text, value := Dynamic.mk toc}
-  let #[stx] := st.stack
-    | throwErrorAt title "Too many ({st.stack.size}) leftover stack elements! {st.stack.map ppSyntax}"
-  -- dbg_trace "Syntax is {stx}"
-  elabTerm stx none
+  let titleString := inlinesToString (← getEnv) titleParts
+  let (toc, st) ← PartElabM.run (.init titleName) <| do
+    setTitle titleString (← liftDocElabM <| titleParts.mapM elabInline)
+    for b in blocks do partCommand b
+    closePartsUntil 0 endPos
+    pure ()
+  let finished := st.partContext.toPartFrame.close endPos
+  pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
+  elabTerm (← finished.toSyntax) none

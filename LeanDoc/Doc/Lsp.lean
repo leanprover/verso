@@ -123,9 +123,38 @@ def combine (f : α → α → α) (g : ε → ε → ε) : Except ε α → Exc
   | .ok x, .error _ => .ok x
   | .error x, .error y => .error (g x y)
 
+open Lean Lsp
+
+def rangeContains (outer inner : Lsp.Range) :=
+  outer.start < inner.start && inner.«end» ≤ outer.«end» ||
+  outer.start == inner.start && inner.«end» < outer.«end»
+
+mutual
+
+  partial def graftSymbolOnto (inner outer : DocumentSymbol) : Option DocumentSymbol :=
+    match outer, inner with
+    | .mk s1, .mk s2 =>
+      if rangeContains s1.range s2.range then
+        -- add as child
+        some <| .mk {s1 with children? := some (graftSymbolInto inner (s1.children?.getD #[])) }
+      else
+        -- signal peer
+        none
+
+  partial def graftSymbolInto (inner : DocumentSymbol) (outer : Array DocumentSymbol) : Array DocumentSymbol := Id.run do
+    let mut i := 0
+    while h : i < outer.size do
+      let sym := outer[i]
+      if let some sym' := graftSymbolOnto inner sym then
+        return outer.set ⟨i, h⟩ sym'
+    return outer.push inner
+end
+
+def graftSymbols (outer inner : Array DocumentSymbol) : Array DocumentSymbol :=
+  inner.foldr graftSymbolInto outer
 
 open Lean Server Lsp RequestM in
-partial def handleSyms (params : DocumentSymbolParams) (prev : RequestTask DocumentSymbolResult) : RequestM (RequestTask DocumentSymbolResult) := do
+partial def handleSyms (_params : DocumentSymbolParams) (prev : RequestTask DocumentSymbolResult) : RequestM (RequestTask DocumentSymbolResult) := do
   dbg_trace "hey"
   let doc ← readDoc
   let text := doc.meta.text
@@ -136,12 +165,13 @@ partial def handleSyms (params : DocumentSymbolParams) (prev : RequestTask Docum
       return { syms := getSections text snaps }
   bindTask syms fun r1 =>
     bindTask prev fun r2 =>
-      pure <| Task.spawn fun () => (combine (combineAnswers) (fun x _ => x) r1 r2)
+      pure <| Task.spawn fun () => (combine combineAnswers (fun x _ => x) r1 r2)
   where
-    combineAnswers (x y : DocumentSymbolResult) : DocumentSymbolResult := ⟨x.syms ++ y.syms⟩
+    combineAnswers (x y : DocumentSymbolResult) : DocumentSymbolResult := ⟨graftSymbols y.syms x.syms⟩
     tocSym (text : _) : TOC → Option DocumentSymbol
       | .mk title titleStx endPos children => Id.run do
-        let some selRange@⟨start, stop⟩ := titleStx.lspRange text
+        dbg_trace "title {title}"
+        let some selRange@⟨start, _⟩ := titleStx.lspRange text
           | return none
         let mut kids := #[]
         for c in children do

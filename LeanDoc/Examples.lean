@@ -33,6 +33,23 @@ info: LeanDoc.Doc.Part.mk
 #guard_msgs in
   #eval a
 
+#docs a' "My title here" :=
+:::::::
+
+* Just a list with one item
+
+:::::::
+
+/--
+info: LeanDoc.Doc.Part.mk
+  #[LeanDoc.Doc.Inline.text "My title here"]
+  #[LeanDoc.Doc.Block.ul
+      #[{ indent := 0, contents := #[LeanDoc.Doc.Block.para #[LeanDoc.Doc.Inline.text "Just a list with one item"]] }]]
+  #[]
+-/
+#guard_msgs in
+  #eval a'
+
 
 #docs b "My title here" :=
 :::::::
