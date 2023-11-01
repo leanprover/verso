@@ -59,6 +59,11 @@ def _root_.LeanDoc.Syntax.bold.expand : InlineExpander
     ``(Inline.bold #[$[$(← args.mapM elabInline)],*])
   | _ => throwUnsupportedSyntax
 
+@[inline_expander LeanDoc.Syntax.code]
+def _root_.LeanDoc.Syntax.code.expand : InlineExpander
+  | `<low|(LeanDoc.Syntax.code ~_open ~(.atom _ s) ~_close)> => do
+    ``(Inline.code $(quote s))
+  | _ => throwUnsupportedSyntax
 
 def elabBlock (block : Syntax) : DocElabM (TSyntax `term) :=
   withRef block <| withFreshMacroScope <| withIncRecDepth <| do
@@ -181,9 +186,9 @@ def _root_.LeanDoc.Syntax.blockquote.expand : BlockExpander
   | _ =>
     throwUnsupportedSyntax
 
-@[block_expander LeanDoc.Syntax.code]
-def _root_.LeanDoc.Syntax.code.expand : BlockExpander
-  | `<low|(LeanDoc.Syntax.code (column ~_col) ~_open ~_name ~_args ~(.atom _ contents) ~_close )> =>
+@[block_expander LeanDoc.Syntax.codeblock]
+def _root_.LeanDoc.Syntax.codeblock.expand : BlockExpander
+  | `<low|(LeanDoc.Syntax.codeblock (column ~_col) ~_open ~_name ~_args ~(.atom _ contents) ~_close )> =>
     -- TODO name and args and indent
     ``(Block.code Option.none #[] 0 $(quote contents))
   | _ =>

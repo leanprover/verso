@@ -177,3 +177,18 @@ info: LeanDoc.Doc.Part.mk
 #guard_msgs in
   #eval e
 
+#docs f "More code writing" :=
+:::::::
+
+# Section 1
+
+Here's some `code`!
+
+``` code
+(define (zero f z) z)
+(define (succ n) (lambda (f x) (f (n f z))))
+```
+
+:::::::
+
+#eval f

@@ -2,6 +2,7 @@ import LeanDoc
 
 open LeanDoc Doc Html Concrete ToHtml
 
+set_option pp.rawOnError true
 
 def main : IO Unit := do
   IO.println <| Html.format <| Html.embody <| toHtml <| #doc "My wonderful document" =>
@@ -33,7 +34,7 @@ For demo-worthiness, we also need:
 
 As someone said:
 
-> It's still a start!
+> It's still a start! And we have `inline code`
 
 ## Other idea
 

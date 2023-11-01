@@ -25,8 +25,9 @@ partial def Inline.toHtml : Inline → Html
   | .text str => str
   | .link content dest => {{ <a href={{ dest.str }}> {{ content.map toHtml }}* </a> }}
   | .linebreak _str => {{ <br /> }} -- this is more like Github Flavored - we don't actually want that here but it was expedient
-  | .emph content => {{ <emph> {{ content.map toHtml }}* </emph>}}
+  | .emph content => {{ <em> {{ content.map toHtml }}* </em>}}
   | .bold content => {{ <strong> {{ content.map toHtml }}* </strong>}}
+  | .code str => {{ <code> {{str}} </code>}}
 
 instance : ToHtml Inline where
   toHtml := Inline.toHtml

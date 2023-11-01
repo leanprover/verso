@@ -285,7 +285,7 @@ def blankLine : ParserFn := nodeFn `blankLine <| atomicFn <| asStringFn <| takeW
 def bullet := satisfyFn (· == '*') "bullet (*)"
 
 /-- Characters with a special meaning during a line (we already know we're reading inlines) -/
-def specialChars := "*_\n[]".toList
+def specialChars := "*_\n[]`".toList
 
 def isSpecial (c : Char) : Bool := c ∈ specialChars
 
@@ -399,6 +399,38 @@ mutual
   partial def emph := emphLike ``emph '_' "emphasize" "underscores" (·.emphDepth) ({· with emphDepth := ·})
   partial def bold := emphLike ``bold '*' "bold" "asterisks" (·.boldDepth) ({· with boldDepth := ·})
 
+  partial def code : ParserFn :=
+    nodeFn ``code <|
+    withCurrentColumn fun c =>
+      atomicFn opener >>
+      withCurrentColumn fun c' =>
+        let count := c' - c
+        asStringFn (takeContentsFn (count - 1)) >>
+        asStringFn (atomicFn (repFn count (satisfyFn (· == '`') s!"{count} backticks"))) >>
+        notFollowedByFn (satisfyFn (· == '`') "`") "backtick"
+
+  where
+    opener : ParserFn := asStringFn (many1Fn (satisfyFn (· == '`') s!"any number of backticks"))
+    takeBackticksFn : Nat → ParserFn
+      | 0 => satisfyFn (· != '`') "expected non-backtick"
+      | n+1 => fun c s =>
+        let i := s.pos
+        if h : c.input.atEnd i then s.mkEOIError
+        else
+          if c.input.get' i h == '`' then
+            takeBackticksFn n c (s.next' c.input i h)
+          else s.next' c.input i h
+    takeContentsFn (maxCount : Nat) : ParserFn := fun c s =>
+      let i := s.pos
+      if h : c.input.atEnd i then s.mkEOIError
+      else
+        let ch := c.input.get' i h
+        if ch == '`' then
+          optionalFn (atomicFn (takeBackticksFn maxCount) >> takeContentsFn maxCount) c s
+        else if ch == '\n' then s.mkUnexpectedError "newline"
+        else takeContentsFn maxCount c (s.next' c.input i h)
+
+
   -- Read a prefix of a line of text, stopping at a text-mode special character
   partial def text :=
     nodeFn ``text (asStringFn (atomicFn (manyFn (chFn ' ') >> notSpecial) >> takeUntilEscFn isSpecial))
@@ -420,7 +452,7 @@ mutual
 
 
   partial def inline (ctxt : InlineCtxt) : ParserFn :=
-    text <|> emph ctxt <|> bold ctxt <|> linebreak ctxt <|> link ctxt
+    text <|> emph ctxt <|> bold ctxt <|> linebreak ctxt <|> code <|> link ctxt
 end
 
 def textLine (allowNewlines := true) : ParserFn := many1Fn (inline { allowNewlines })
@@ -464,6 +496,113 @@ Remaining: "_ aa_"
 -/
 #guard_msgs in
   #eval emph {} |>.test! "_ aa_"
+
+/--
+info: Success! Final stack:
+  (LeanDoc.Syntax.code "``" "foo bar" "``")
+All input consumed.
+-/
+#guard_msgs in
+  #eval code.test! "``foo bar``"
+
+/--
+info: Success! Final stack:
+  (LeanDoc.Syntax.code
+   "``"
+   "foo `stuff` bar"
+   "``")
+All input consumed.
+-/
+#guard_msgs in
+  #eval code.test! "``foo `stuff` bar``"
+
+/--
+info: Failure: unexpected end of input
+Final stack:
+  (LeanDoc.Syntax.code "`" <missing>)
+Remaining: ""
+-/
+#guard_msgs in
+  #eval code.test! "`foo"
+
+/--
+info: Success! Final stack:
+  (LeanDoc.Syntax.code "`" " foo" "`")
+All input consumed.
+-/
+#guard_msgs in
+  #eval code.test! "` foo`"
+
+/--
+info: Success! Final stack:
+  (LeanDoc.Syntax.code "`" " foo " "`")
+All input consumed.
+-/
+#guard_msgs in
+  #eval code.test! "` foo `"
+
+/--
+info: Failure: newline
+Final stack:
+  (LeanDoc.Syntax.code "`" <missing>)
+Remaining: "\no `"
+-/
+#guard_msgs in
+  #eval code.test! "` fo\no `"
+
+
+/--
+info: Success! Final stack:
+  (LeanDoc.Syntax.code "``" "foo bar" "``")
+All input consumed.
+-/
+#guard_msgs in
+  #eval (inline {}).test! "``foo bar``"
+
+/--
+info: Success! Final stack:
+  (LeanDoc.Syntax.code
+   "``"
+   "foo `stuff` bar"
+   "``")
+All input consumed.
+-/
+#guard_msgs in
+  #eval (inline {}).test! "``foo `stuff` bar``"
+
+/--
+info: Failure: unexpected end of input
+Final stack:
+  (LeanDoc.Syntax.code "`" <missing>)
+Remaining: ""
+-/
+#guard_msgs in
+  #eval (inline {}).test! "`foo"
+
+/--
+info: Success! Final stack:
+  (LeanDoc.Syntax.code "`" " foo" "`")
+All input consumed.
+-/
+#guard_msgs in
+  #eval (inline {}).test! "` foo`"
+
+/--
+info: Success! Final stack:
+  (LeanDoc.Syntax.code "`" " foo " "`")
+All input consumed.
+-/
+#guard_msgs in
+  #eval (inline {}).test! "` foo `"
+
+/--
+info: Failure: newline
+Final stack:
+  (LeanDoc.Syntax.code "`" <missing>)
+Remaining: "\no `"
+-/
+#guard_msgs in
+  #eval (inline {}).test! "` fo\no `"
 
 /--
 info: Success! Final stack:
@@ -680,7 +819,7 @@ mutual
       textLine (allowNewlines := false)
 
   partial def codeBlock (ctxt : BlockCtxt) : ParserFn :=
-    nodeFn ``code <|
+    nodeFn ``codeblock <|
       -- Opener - leaves indent info and open token on the stack
       atomicFn (takeWhileFn (· == ' ') >> guardMinColumn ctxt.minIndent >> pushColumn >> asStringFn (atLeastFn 3 (skipChFn '`'))) >>
       withIndentColumn fun c =>
@@ -885,7 +1024,7 @@ All input consumed.
 
 /--
 info: Success! Final stack:
-  (LeanDoc.Syntax.code
+  (LeanDoc.Syntax.codeblock
    (column "1")
    "```"
    "scheme"
@@ -899,7 +1038,7 @@ All input consumed.
 
 /--
 info: Success! Final stack:
-  (LeanDoc.Syntax.code
+  (LeanDoc.Syntax.codeblock
    (column "0")
    "```"
    "scheme"
@@ -913,7 +1052,7 @@ All input consumed.
 
 /--
 info: Success! Final stack:
-  (LeanDoc.Syntax.code
+  (LeanDoc.Syntax.codeblock
    (column "0")
    "```"
    "scheme"
@@ -929,7 +1068,7 @@ All input consumed.
 /--
 info: Failure: expected column 0
 Final stack:
-  (LeanDoc.Syntax.code
+  (LeanDoc.Syntax.codeblock
    (column "0")
    "```"
    "scheme"
@@ -944,7 +1083,7 @@ Remaining: "````"
 /--
 info: Failure: newline
 Final stack:
-  (LeanDoc.Syntax.code
+  (LeanDoc.Syntax.codeblock
    (column "0")
    "```"
    "scheme"
@@ -958,7 +1097,7 @@ Remaining: "43\n(define x 4)\nx\n```"
 /--
 info: Failure: expected column 1
 Final stack:
-  (LeanDoc.Syntax.code
+  (LeanDoc.Syntax.codeblock
    (column "1")
    "```"
    "scheme"
@@ -973,7 +1112,7 @@ Remaining: "(define x 4)\nx\n```"
 /--
 info: Failure: expected column 1
 Final stack:
-  (LeanDoc.Syntax.code
+  (LeanDoc.Syntax.codeblock
    (column "1")
    "```"
    "scheme"

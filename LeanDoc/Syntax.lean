@@ -10,17 +10,19 @@ syntax (name:=bold) str : inline
 syntax (name:=link) str : inline
 /-- Line break -/
 syntax (name:=linebreak) str : inline
+/-- Literal characters-/
+syntax (name:=code) str : inline
 
 declare_syntax_cat list_item
 /-- List item -/
-syntax (name:=li) str : inline
+syntax (name:=li) str : list_item
 
 declare_syntax_cat block
 syntax (name:=para) str : block
 /-- List -/
 syntax (name:=ul) str : block
 /-- Literal code -/
-syntax (name:=code) str : block
+syntax (name:=codeblock) str : block
 /-- Quotation -/
 syntax (name:=blockquote) str : block
 /-- Custom directive -/

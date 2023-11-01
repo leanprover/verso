@@ -14,6 +14,7 @@ inductive Inline where
   | text (string : String)
   | emph (content : Array Inline)
   | bold (content : Array Inline)
+  | code (string : String)
   | linebreak (string : String)
   | link (content : Array Inline) (dest : LinkDest)
 deriving Repr
