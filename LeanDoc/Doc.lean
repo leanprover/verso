@@ -10,6 +10,7 @@ namespace LeanDoc
 
 namespace Doc
 
+
 inductive LinkDest where
   | url (address : String)
   | ref (name : String)
@@ -22,6 +23,7 @@ inductive Inline where
   | code (string : String)
   | linebreak (string : String)
   | link (content : Array Inline) (dest : LinkDest)
+  | concat (content : Array Inline)
 deriving Repr
 
 inductive ArgVal where

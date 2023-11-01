@@ -196,4 +196,16 @@ Here's some `code`!
 
 :::::::
 
-#eval f
+/--
+info: LeanDoc.Doc.Part.mk
+  #[LeanDoc.Doc.Inline.text "More code writing"]
+  #[]
+  #[LeanDoc.Doc.Part.mk
+      #[LeanDoc.Doc.Inline.text "Section 1"]
+      #[LeanDoc.Doc.Block.para
+          #[LeanDoc.Doc.Inline.text "Here's some ", LeanDoc.Doc.Inline.code "code", LeanDoc.Doc.Inline.text "!"],
+        LeanDoc.Doc.Block.code none #[] 0 "(define (zero f z) z)\n(define (succ n) (lambda (f x) (f (n f z))))\n"]
+      #[]]
+-/
+#guard_msgs in
+  #eval f

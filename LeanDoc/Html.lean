@@ -32,7 +32,7 @@ scoped syntax "section" : tag_name
 partial def _root_.Lean.TSyntax.tagName : TSyntax `tag_name → String
   | ⟨.node _ _ #[.atom _ x]⟩ => x
   | ⟨.node _ _ #[.ident _ _ x ..]⟩ => x.eraseMacroScopes.toString
-  | _ => panic! "oops wrong syntax"
+  | _ => "fake tag name!!!"
 
 
 scoped syntax "{{" term "}}" : html

@@ -6,11 +6,13 @@ Author: David Thrane Christiansen
 import Lean
 
 import LeanDoc.Doc.Elab.Monad
+import LeanDoc.Syntax
 
 namespace LeanDoc.Doc.Elab
 
 open Lean Elab
 open PartElabM
+open LeanDoc.Syntax
 
 partial def elabInline (inline : Syntax) : DocElabM (TSyntax `term) :=
   withRef inline <| withFreshMacroScope <| withIncRecDepth <| do
@@ -34,11 +36,19 @@ partial def elabInline (inline : Syntax) : DocElabM (TSyntax `term) :=
     throwUnsupportedSyntax
 
 @[inline_expander LeanDoc.Syntax.text]
-def _root_.LeanDoc.Syntax.text.expand : InlineExpander := fun x =>
+partial def _root_.LeanDoc.Syntax.text.expand : InlineExpander := fun x =>
   match x with
-  | `<low|(LeanDoc.Syntax.text ~(.atom _ s))> =>
-    ``(Inline.text $(quote s))
+  | `(inline| $s:str) => do
+    -- Erase the source locations from the string literal to prevent unwanted hover info
+    ``(Inline.text $(⟨deleteInfo s.raw⟩))
   | other => dbg_trace "text {other}"; throwUnsupportedSyntax
+  where
+    deleteInfo : Syntax → Syntax
+      | .node _ k args => .node .none k (args.map deleteInfo)
+      | .atom _ val => .atom .none val
+      | .ident _ rawVal val preres => .ident .none rawVal val preres
+      | .missing => .missing
+
 
 @[inline_expander LeanDoc.Syntax.linebreak]
 def _root_.linebreak.expand : InlineExpander
@@ -48,20 +58,41 @@ def _root_.linebreak.expand : InlineExpander
 
 @[inline_expander LeanDoc.Syntax.emph]
 def _root_.LeanDoc.Syntax.emph.expand : InlineExpander
-  | `<low|(LeanDoc.Syntax.emph ~_open ~(.node _ `null args) ~_close)> => do
+  | `(inline| _{ $args* }) => do
     ``(Inline.emph #[$[$(← args.mapM elabInline)],*])
   | _ => throwUnsupportedSyntax
 
 @[inline_expander LeanDoc.Syntax.bold]
 def _root_.LeanDoc.Syntax.bold.expand : InlineExpander
-  | `<low|(LeanDoc.Syntax.bold ~_open ~(.node _ `null args) ~_close)> => do
+  | `(inline| *{ $args* }) => do
     ``(Inline.bold #[$[$(← args.mapM elabInline)],*])
   | _ => throwUnsupportedSyntax
 
+@[inline_expander LeanDoc.Syntax.role]
+def _root_.LeanDoc.Syntax.role.expand : InlineExpander
+  | inline@`(inline| role{$name $_args*} $subjects) => do
+    --TODO arguments
+      withRef inline <| withFreshMacroScope <| withIncRecDepth <| do
+        let ⟨.node _ _ subjectArr⟩ := subjects
+          | throwUnsupportedSyntax
+        let exp ← roleExpandersFor name.getId
+        for e in exp do
+          try
+            let termStxs ← withFreshMacroScope <| e #[] subjectArr
+            return (← ``(Inline.concat #[$[$termStxs],*]))
+          catch
+            | ex@(.internal id) =>
+              if id == unsupportedSyntaxExceptionId then pure ()
+              else throw ex
+            | ex => throw ex
+        throwUnsupportedSyntax
+  | _ => throwUnsupportedSyntax
+
+
 @[inline_expander LeanDoc.Syntax.code]
 def _root_.LeanDoc.Syntax.code.expand : InlineExpander
-  | `<low|(LeanDoc.Syntax.code ~_open ~(.atom _ s) ~_close)> => do
-    ``(Inline.code $(quote s))
+  |  `(inline| code{ $s }) =>
+    ``(Inline.code $s)
   | _ => throwUnsupportedSyntax
 
 def elabBlock (block : Syntax) : DocElabM (TSyntax `term) :=

@@ -5,9 +5,22 @@ Author: David Thrane Christiansen
 -/
 import LeanDoc
 
-open LeanDoc Doc Html Concrete ToHtml
+open LeanDoc Doc Html Concrete ToHtml Elab Monad
+open Lean Elab Term
 
 set_option pp.rawOnError true
+
+def vanish := ()
+def rev := ()
+
+@[role_expander vanish]
+def vanish.expand : RoleExpander
+   | _args, _stxs => pure #[]
+
+@[role_expander rev]
+def rev.expand : RoleExpander
+  | _args, stxs => .reverse <$> stxs.mapM elabInline
+
 
 def main : IO Unit := do
   IO.println <| Html.format <| Html.embody <| toHtml <| #doc "My wonderful document" =>
@@ -21,12 +34,11 @@ There is *bold* and _emphasis_ available.
 
 There are a number of basic things to fix:
 
- * No inline code or math or numbered lists yet
+ * No math or numbered lists yet
  * The parser is a bit of a kludge, with too much lookahead making up
    for lack of a clear structure
- * Custom directives are block-only for now, and are not yet
-   extensible with custom elaborators
- * Gratuitous line breaks a la GitHub-flavored Markdown
+ * Custom roles/directives are not yet extensible with custom elaborators
+ * Gratuitous line breaks a la GitHub-flavored Markdown in rendering
 
 For demo-worthiness, we also need:
 
@@ -39,9 +51,9 @@ For demo-worthiness, we also need:
 
 As someone said:
 
-> It's still a start! And we have `inline code`.
+> It's still a start! And we have `inline code`. And {vanish}[there can be secrets and] {rev}[documents *in* code].
 
-```someLanguage option1=5
+```someLanguage option1:=5
 Block code too
 ```
 

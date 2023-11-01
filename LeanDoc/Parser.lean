@@ -225,22 +225,24 @@ def ignoreFn (p : ParserFn) : ParserFn := fun c s =>
   let s' := p c s
   s'.shrinkStack iniSz
 
-private def asStringAux  (startPos : String.Pos) : ParserFn := fun c s =>
+private def asStringAux (quoted : Bool) (startPos : String.Pos) : ParserFn := fun c s =>
   let input   := c.input
   let stopPos := s.pos
   let leading := mkEmptySubstringAt input startPos
   let val     := input.extract startPos stopPos
   let trailing := mkEmptySubstringAt input stopPos
-  let atom     := mkAtom (SourceInfo.original leading startPos trailing (startPos + val)) val
+  let atom     :=
+    mkAtom (SourceInfo.original leading startPos trailing (startPos + val)) <|
+      if quoted then val.quote else val
   s.pushSyntax atom
 
 /-- Match an arbitrary Parser and return the consumed String in a `Syntax.atom`. -/
-def asStringFn (p : ParserFn) : ParserFn := fun c s =>
+def asStringFn (p : ParserFn) (quoted := false) : ParserFn := fun c s =>
   let startPos := s.pos
   let iniSz := s.stxStack.size
   let s := p c s
   if s.hasError then s
-  else asStringAux startPos c (s.shrinkStack iniSz)
+  else asStringAux quoted startPos c (s.shrinkStack iniSz)
 
 def checkCol0Fn (errorMsg : String) : ParserFn := fun c s =>
   let pos      := c.fileMap.toPosition s.pos
@@ -593,7 +595,7 @@ mutual
       atomicFn opener >>
       withCurrentColumn fun c' =>
         let count := c' - c
-        asStringFn (takeContentsFn (count - 1)) >>
+        nodeFn strLitKind (asStringFn (takeContentsFn (count - 1)) (quoted := true)) >>
         asStringFn (atomicFn (repFn count (satisfyFn (· == '`') s!"{count} backticks"))) >>
         notFollowedByFn (satisfyFn (· == '`') "`") "backtick"
 
@@ -621,7 +623,7 @@ mutual
 
   -- Read a prefix of a line of text, stopping at a text-mode special character
   partial def text :=
-    nodeFn ``text (asStringFn (atomicFn (manyFn (chFn ' ') >> notSpecial) >> takeUntilEscFn isSpecial))
+    nodeFn ``text (nodeFn strLitKind (asStringFn (atomicFn (manyFn (chFn ' ') >> notSpecial) >> takeUntilEscFn isSpecial) (quoted := true)))
 
   partial def link (ctxt : InlineCtxt) :=
     nodeFn ``link <|
@@ -637,17 +639,9 @@ mutual
     ref : ParserFn := nodeFn `ref ((atomicFn <| strFn "[") >> asStringFn notRefEnd >> strFn "]")
     url : ParserFn := nodeFn `url ((atomicFn <| strFn "(") >> asStringFn notUrlEnd >> strFn ")")
 
-  partial def role (ctxt : InlineCtxt) : ParserFn := fun c s =>
-    let iniSz := s.stackSize
-    let s := intro c s
-    let n := s.stxStack.get! (iniSz + 1) |>.getId
-    if s.hasError then s
-    else let s := (nodeFn nullKind (delimitedInline ctxt) <|> bracketed) c s
-         let s := s.mkNode n iniSz
-         let top := s.stxStack.back
-         {s with stxStack := s.stxStack.pop.pop.push top}
-
-
+  partial def role (ctxt : InlineCtxt) : ParserFn :=
+    nodeFn ``role <|
+      intro >> (nodeFn nullKind (delimitedInline ctxt) <|> bracketed)
   where
     eatSpaces := takeWhileFn (· == ' ')
     intro := atomicFn (chFn '{') >> eatSpaces >> nameAndArgs >> eatSpaces >> chFn '}'
@@ -660,11 +654,12 @@ mutual
     text <|> linebreak ctxt <|> link ctxt <|> delimitedInline ctxt
 end
 
+
 def textLine (allowNewlines := true) : ParserFn := many1Fn (inline { allowNewlines })
 
 /--
 info: Success! Final stack:
-  (LeanDoc.Syntax.text "abc ")
+  (LeanDoc.Syntax.text (str "\"abc \""))
 All input consumed.
 -/
 #guard_msgs in
@@ -674,7 +669,7 @@ All input consumed.
 info: Success! Final stack:
   (LeanDoc.Syntax.emph
    "_"
-   [(LeanDoc.Syntax.text "aa")]
+   [(LeanDoc.Syntax.text (str "\"aa\""))]
    "_")
 All input consumed.
 -/
@@ -686,7 +681,7 @@ info: Failure: expected closer without preceding space
 Final stack:
   (LeanDoc.Syntax.emph
    "_"
-   [(LeanDoc.Syntax.text "aa ")]
+   [(LeanDoc.Syntax.text (str "\"aa \""))]
    <missing>)
 Remaining: "_"
 -/
@@ -706,7 +701,10 @@ Remaining: "_ aa_"
 
 /--
 info: Success! Final stack:
-  (LeanDoc.Syntax.code "``" "foo bar" "``")
+  (LeanDoc.Syntax.code
+   "``"
+   (str "\"foo bar\"")
+   "``")
 All input consumed.
 -/
 #guard_msgs in
@@ -716,7 +714,7 @@ All input consumed.
 info: Success! Final stack:
   (LeanDoc.Syntax.code
    "``"
-   "foo `stuff` bar"
+   (str "\"foo `stuff` bar\"")
    "``")
 All input consumed.
 -/
@@ -726,7 +724,7 @@ All input consumed.
 /--
 info: Failure: unexpected end of input
 Final stack:
-  (LeanDoc.Syntax.code "`" <missing>)
+  (LeanDoc.Syntax.code "`" (str <missing>))
 Remaining: ""
 -/
 #guard_msgs in
@@ -734,7 +732,7 @@ Remaining: ""
 
 /--
 info: Success! Final stack:
-  (LeanDoc.Syntax.code "`" " foo" "`")
+  (LeanDoc.Syntax.code "`" (str "\" foo\"") "`")
 All input consumed.
 -/
 #guard_msgs in
@@ -742,7 +740,7 @@ All input consumed.
 
 /--
 info: Success! Final stack:
-  (LeanDoc.Syntax.code "`" " foo " "`")
+  (LeanDoc.Syntax.code "`" (str "\" foo \"") "`")
 All input consumed.
 -/
 #guard_msgs in
@@ -751,7 +749,7 @@ All input consumed.
 /--
 info: Failure: newline
 Final stack:
-  (LeanDoc.Syntax.code "`" <missing>)
+  (LeanDoc.Syntax.code "`" (str <missing>))
 Remaining: "\no `"
 -/
 #guard_msgs in
@@ -760,7 +758,10 @@ Remaining: "\no `"
 
 /--
 info: Success! Final stack:
-  (LeanDoc.Syntax.code "``" "foo bar" "``")
+  (LeanDoc.Syntax.code
+   "``"
+   (str "\"foo bar\"")
+   "``")
 All input consumed.
 -/
 #guard_msgs in
@@ -770,7 +771,7 @@ All input consumed.
 info: Success! Final stack:
   (LeanDoc.Syntax.code
    "``"
-   "foo `stuff` bar"
+   (str "\"foo `stuff` bar\"")
    "``")
 All input consumed.
 -/
@@ -780,7 +781,7 @@ All input consumed.
 /--
 info: Failure: unexpected end of input
 Final stack:
-  (LeanDoc.Syntax.code "`" <missing>)
+  (LeanDoc.Syntax.code "`" (str <missing>))
 Remaining: ""
 -/
 #guard_msgs in
@@ -788,7 +789,7 @@ Remaining: ""
 
 /--
 info: Success! Final stack:
-  (LeanDoc.Syntax.code "`" " foo" "`")
+  (LeanDoc.Syntax.code "`" (str "\" foo\"") "`")
 All input consumed.
 -/
 #guard_msgs in
@@ -796,7 +797,7 @@ All input consumed.
 
 /--
 info: Success! Final stack:
-  (LeanDoc.Syntax.code "`" " foo " "`")
+  (LeanDoc.Syntax.code "`" (str "\" foo \"") "`")
 All input consumed.
 -/
 #guard_msgs in
@@ -805,7 +806,7 @@ All input consumed.
 /--
 info: Failure: newline
 Final stack:
-  (LeanDoc.Syntax.code "`" <missing>)
+  (LeanDoc.Syntax.code "`" (str <missing>))
 Remaining: "\no `"
 -/
 #guard_msgs in
@@ -815,7 +816,7 @@ Remaining: "\no `"
 info: Success! Final stack:
   (LeanDoc.Syntax.bold
    "**"
-   [(LeanDoc.Syntax.text "aa")]
+   [(LeanDoc.Syntax.text (str "\"aa\""))]
    "**")
 All input consumed.
 -/
@@ -826,9 +827,9 @@ All input consumed.
 info: Success! Final stack:
   (LeanDoc.Syntax.bold
    "**"
-   [(LeanDoc.Syntax.text "aa")
+   [(LeanDoc.Syntax.text (str "\"aa\""))
     (LeanDoc.Syntax.linebreak "\n")
-    (LeanDoc.Syntax.text "bb")]
+    (LeanDoc.Syntax.text (str "\"bb\""))]
    "**")
 All input consumed.
 -/
@@ -840,7 +841,7 @@ All input consumed.
 info: Success! Final stack:
   (LeanDoc.Syntax.link
    "["
-   [(LeanDoc.Syntax.text "Wikipedia")]
+   [(LeanDoc.Syntax.text (str "\"Wikipedia\""))]
    "]"
    (url "(" "https://en.wikipedia.org" ")"))
 All input consumed.
@@ -850,14 +851,14 @@ All input consumed.
 
 /--
 info: Success! Final stack:
-  (hello
+  (LeanDoc.Syntax.role
    "{"
    `hello
    []
    "}"
    [(LeanDoc.Syntax.bold
      "*"
-     [(LeanDoc.Syntax.text "there")]
+     [(LeanDoc.Syntax.text (str "\"there\""))]
      "*")])
 All input consumed.
 -/
@@ -866,12 +867,12 @@ All input consumed.
 
 /--
 info: Success! Final stack:
-  (hello
+  (LeanDoc.Syntax.role
    "{"
    `hello
    []
    "}"
-   [(LeanDoc.Syntax.text "there")])
+   [(LeanDoc.Syntax.text (str "\"there\""))])
 All input consumed.
 -/
 #guard_msgs in
@@ -879,12 +880,12 @@ All input consumed.
 
 /--
 info: Success! Final stack:
-  (hello
+  (LeanDoc.Syntax.role
    "{"
    `hello
    [(arg.named `world `gaia)]
    "}"
-   [(LeanDoc.Syntax.text "there")])
+   [(LeanDoc.Syntax.text (str "\"there\""))])
 All input consumed.
 -/
 #guard_msgs in
@@ -1000,9 +1001,10 @@ end
 info: Success! Final stack:
   [(LeanDoc.Syntax.para
     [(LeanDoc.Syntax.text
-      "This is just some textual content. How is it?")])
+      (str
+       "\"This is just some textual content. How is it?\""))])
    (LeanDoc.Syntax.para
-    [(LeanDoc.Syntax.text "More?")])]
+    [(LeanDoc.Syntax.text (str "\"More?\""))])]
 All input consumed.
 -/
 #guard_msgs in
@@ -1012,18 +1014,20 @@ All input consumed.
 info: Success! Final stack:
   [(LeanDoc.Syntax.para
     [(LeanDoc.Syntax.text
-      "I can describe lists like this one:")])
+      (str
+       "\"I can describe lists like this one:\""))])
    (LeanDoc.Syntax.ul
     (column "0")
     [(LeanDoc.Syntax.li
       (bullet (column "0") "*")
       [(LeanDoc.Syntax.para
-        [(LeanDoc.Syntax.text "a")
+        [(LeanDoc.Syntax.text (str "\"a\""))
          (LeanDoc.Syntax.linebreak "\n")])])
      (LeanDoc.Syntax.li
       (bullet (column "0") "*")
       [(LeanDoc.Syntax.para
-        [(LeanDoc.Syntax.text "b")])])])]
+        [(LeanDoc.Syntax.text
+          (str "\"b\""))])])])]
 All input consumed.
 -/
 #guard_msgs in
@@ -1034,7 +1038,7 @@ info: Success! Final stack:
   (LeanDoc.Syntax.li
    (bullet (column "0") "*")
    [(LeanDoc.Syntax.para
-     [(LeanDoc.Syntax.text "foo")
+     [(LeanDoc.Syntax.text (str "\"foo\""))
       (LeanDoc.Syntax.linebreak "\n")])])
 Remaining:
 "* bar\n"
@@ -1049,12 +1053,12 @@ info: Success! Final stack:
     [(LeanDoc.Syntax.li
       (bullet (column "0") "*")
       [(LeanDoc.Syntax.para
-        [(LeanDoc.Syntax.text "foo")
+        [(LeanDoc.Syntax.text (str "\"foo\""))
          (LeanDoc.Syntax.linebreak "\n")])])
      (LeanDoc.Syntax.li
       (bullet (column "0") "*")
       [(LeanDoc.Syntax.para
-        [(LeanDoc.Syntax.text "bar")
+        [(LeanDoc.Syntax.text (str "\"bar\""))
          (LeanDoc.Syntax.linebreak "\n")])])])]
 All input consumed.
 -/
@@ -1068,20 +1072,21 @@ info: Success! Final stack:
     [(LeanDoc.Syntax.li
       (bullet (column "0") "*")
       [(LeanDoc.Syntax.para
-        [(LeanDoc.Syntax.text "foo")
+        [(LeanDoc.Syntax.text (str "\"foo\""))
          (LeanDoc.Syntax.linebreak "\n")])
        (LeanDoc.Syntax.ul
         (column "2")
         [(LeanDoc.Syntax.li
           (bullet (column "2") "*")
           [(LeanDoc.Syntax.para
-            [(LeanDoc.Syntax.text "bar")
+            [(LeanDoc.Syntax.text (str "\"bar\""))
              (LeanDoc.Syntax.linebreak
               "\n")])])])])
      (LeanDoc.Syntax.li
       (bullet (column "0") "*")
       [(LeanDoc.Syntax.para
-        [(LeanDoc.Syntax.text "more outer")])])])]
+        [(LeanDoc.Syntax.text
+          (str "\"more outer\""))])])])]
 All input consumed.
 -/
 #guard_msgs in
@@ -1092,7 +1097,7 @@ info: Success! Final stack:
   [(LeanDoc.Syntax.blockquote
     ">"
     [(LeanDoc.Syntax.para
-      [(LeanDoc.Syntax.text "hey")
+      [(LeanDoc.Syntax.text (str "\"hey\""))
        (LeanDoc.Syntax.linebreak "\n")])])]
 All input consumed.
 -/
@@ -1102,7 +1107,7 @@ All input consumed.
 /--
 info: Success! Final stack:
   [(LeanDoc.Syntax.para
-    [(LeanDoc.Syntax.text "n\\*k ")])]
+    [(LeanDoc.Syntax.text (str "\"n\\\\*k \""))])]
 All input consumed.
 -/
 #guard_msgs in
@@ -1115,10 +1120,10 @@ Final stack:
   [(LeanDoc.Syntax.para
     [(LeanDoc.Syntax.bold
       "*"
-      [(LeanDoc.Syntax.text "This is ")
+      [(LeanDoc.Syntax.text (str "\"This is \""))
        (LeanDoc.Syntax.emph
         "_"
-        [(LeanDoc.Syntax.text "strong")]
+        [(LeanDoc.Syntax.text (str "\"strong\""))]
         <missing>)])])]
 Remaining: "* not regular_ emphasis"
 -/
@@ -1129,7 +1134,7 @@ Remaining: "* not regular_ emphasis"
 info: Success! Final stack:
   (LeanDoc.Syntax.header
    "#"
-   [(LeanDoc.Syntax.text "Header!")])
+   [(LeanDoc.Syntax.text (str "\"Header!\""))])
 All input consumed.
 -/
 #guard_msgs in
@@ -1139,7 +1144,7 @@ All input consumed.
 info: Success! Final stack:
   [(LeanDoc.Syntax.header
     "#"
-    [(LeanDoc.Syntax.text "Header!")])]
+    [(LeanDoc.Syntax.text (str "\"Header!\""))])]
 All input consumed.
 -/
 #guard_msgs in
@@ -1150,9 +1155,10 @@ info: Success! Final stack:
   [(LeanDoc.Syntax.blockquote
     ">"
     [(LeanDoc.Syntax.para
-      [(LeanDoc.Syntax.text "Quotation")
+      [(LeanDoc.Syntax.text (str "\"Quotation\""))
        (LeanDoc.Syntax.linebreak "\n")
-       (LeanDoc.Syntax.text "and contained")])])]
+       (LeanDoc.Syntax.text
+        (str "\"and contained\""))])])]
 All input consumed.
 -/
 #guard_msgs in
@@ -1163,9 +1169,11 @@ info: Success! Final stack:
   [(LeanDoc.Syntax.blockquote
     ">"
     [(LeanDoc.Syntax.para
-      [(LeanDoc.Syntax.text "Quotation")])
+      [(LeanDoc.Syntax.text
+        (str "\"Quotation\""))])
      (LeanDoc.Syntax.para
-      [(LeanDoc.Syntax.text "and contained")])])]
+      [(LeanDoc.Syntax.text
+        (str "\"and contained\""))])])]
 All input consumed.
 -/
 #guard_msgs in
@@ -1176,9 +1184,11 @@ info: Success! Final stack:
   [(LeanDoc.Syntax.blockquote
     ">"
     [(LeanDoc.Syntax.para
-      [(LeanDoc.Syntax.text "Quotation")])])
+      [(LeanDoc.Syntax.text
+        (str "\"Quotation\""))])])
    (LeanDoc.Syntax.para
-    [(LeanDoc.Syntax.text "and not contained")])]
+    [(LeanDoc.Syntax.text
+      (str "\"and not contained\""))])]
 All input consumed.
 -/
 #guard_msgs in
@@ -1347,7 +1357,7 @@ info: Success! Final stack:
    `multiPara
    []
    [(LeanDoc.Syntax.para
-     [(LeanDoc.Syntax.text "foo")])]
+     [(LeanDoc.Syntax.text (str "\"foo\""))])]
    "::::")
 All input consumed.
 -/
@@ -1362,7 +1372,7 @@ info: Success! Final stack:
    `multiPara
    [(arg.named `greatness (str "\"amazing!\""))]
    [(LeanDoc.Syntax.para
-     [(LeanDoc.Syntax.text "foo")])]
+     [(LeanDoc.Syntax.text (str "\"foo\""))])]
    ":::")
 All input consumed.
 -/
@@ -1377,14 +1387,14 @@ info: Success! Final stack:
    `multiPara
    []
    [(LeanDoc.Syntax.para
-     [(LeanDoc.Syntax.text "foo")])
+     [(LeanDoc.Syntax.text (str "\"foo\""))])
     (LeanDoc.Syntax.ul
      (column "2")
      [(LeanDoc.Syntax.li
        (bullet (column "2") "*")
        [(LeanDoc.Syntax.para
          [(LeanDoc.Syntax.text
-           "List item ")])])])]
+           (str "\"List item \""))])])])]
    ":::")
 All input consumed.
 -/
@@ -1399,14 +1409,14 @@ info: Success! Final stack:
    `multiPara
    []
    [(LeanDoc.Syntax.para
-     [(LeanDoc.Syntax.text "foo")])
+     [(LeanDoc.Syntax.text (str "\"foo\""))])
     (LeanDoc.Syntax.ul
      (column "1")
      [(LeanDoc.Syntax.li
        (bullet (column "1") "*")
        [(LeanDoc.Syntax.para
          [(LeanDoc.Syntax.text
-           "List item ")])])])]
+           (str "\"List item \""))])])])]
    ":::")
 All input consumed.
 -/

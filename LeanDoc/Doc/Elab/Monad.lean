@@ -9,6 +9,7 @@ import LeanDoc.Doc
 import LeanDoc.Doc.Elab.ExpanderAttribute
 import LeanDoc.Doc.Elab.InlineString
 import LeanDoc.SyntaxUtils
+import LeanDoc.Syntax
 
 namespace LeanDoc.Doc.Elab
 
@@ -18,7 +19,7 @@ open LeanDoc.SyntaxUtils
 -- For use in IDE features and previews and such
 @[inline_to_string LeanDoc.Syntax.text]
 def _root_.LeanDoc.Syntax.text.inline_to_string : InlineToString
-  | _, `<low|(LeanDoc.Syntax.text ~(.atom _ s))> => some s
+  | _, `(inline| $s:str) => some s.getString
   | _, _ => none
 
 @[inline_to_string LeanDoc.Syntax.linebreak]
@@ -28,13 +29,13 @@ def _root_.LeanDoc.Syntax.linebreak.inline_to_string : InlineToString
 
 @[inline_to_string LeanDoc.Syntax.emph]
 def _root_.LeanDoc.Syntax.emph.inline_to_string : InlineToString
-  | env, `<low|(LeanDoc.Syntax.emph ~_open ~(.node _ `null args) ~_close)> =>
+  | env, `(inline| _{ $args* }) =>
     some <| String.intercalate " " (Array.map (inlineToString env) args).toList
   | _, _ => none
 
 @[inline_to_string LeanDoc.Syntax.bold]
 def _root_.LeanDoc.Syntax.bold.inline_to_string : InlineToString
-  | env, `<low|(LeanDoc.Syntax.bold ~_open ~(.node _ `null args) ~_close)> =>
+  | env, `(inline| *{ $args* }) =>
     some <| String.intercalate " " (Array.map (inlineToString env) args).toList
   | _, _ => none
 
@@ -264,3 +265,24 @@ unsafe def partCommandsForUnsafe (x : Name) : PartElabM (Array PartCommand) := d
 
 @[implemented_by partCommandsForUnsafe]
 opaque partCommandsFor (x : Name) : PartElabM (Array PartCommand)
+
+inductive RoleArgumentValue where
+  | string (str : String)
+  | int (int : Int)
+  | name (name : Ident)
+
+inductive RoleArgument where
+  | named (name : Ident) (val : RoleArgumentValue)
+  | anonymous (val : RoleArgumentValue)
+
+abbrev RoleExpander := Array RoleArgument → Array Syntax → DocElabM (Array (TSyntax `term))
+
+initialize roleExpanderAttr : KeyedDeclsAttribute RoleExpander ←
+  mkDocExpanderAttribute `role_expander ``RoleExpander "Indicates that this function is used to implement a given role" `roleExpanderAttr
+
+unsafe def roleExpandersForUnsafe (x : Name) : DocElabM (Array RoleExpander) := do
+  let expanders := roleExpanderAttr.getEntries (← getEnv) x
+  return expanders.map (·.value) |>.toArray
+
+@[implemented_by roleExpandersForUnsafe]
+opaque roleExpandersFor (x : Name) : DocElabM (Array RoleExpander)

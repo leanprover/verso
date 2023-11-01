@@ -4,20 +4,32 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 
+import LeanDoc.SyntaxUtils
+
 namespace LeanDoc.Syntax
+
+declare_syntax_cat arg_val
+syntax str : arg_val
+syntax ident : arg_val
+syntax num : arg_val
+
+declare_syntax_cat argument
+syntax (name:=anon) arg_val : argument
+syntax (name:=named) ident ":=" arg_val : argument
 
 declare_syntax_cat inline
 syntax (name:=text) str : inline
 /-- Emphasis (often rendered as italics) -/
-syntax (name:=emph) str : inline
+syntax (name:=emph) "_{" inline* "}" : inline
 /-- Bold emphasis   -/
-syntax (name:=bold) str : inline
+syntax (name:=bold) "*{" inline* "}" : inline
 /-- Link -/
-syntax (name:=link) str : inline
+syntax (name:=link) "[" inline* "](" str ")" : inline
 /-- Line break -/
-syntax (name:=linebreak) str : inline
+syntax (name:=linebreak) "line!" : inline
 /-- Literal characters-/
-syntax (name:=code) str : inline
+syntax (name:=code) "code{" str "}" : inline
+syntax (name:=role) "role{" ident argument* "}" inline  : inline
 
 declare_syntax_cat list_item
 /-- List item -/
@@ -36,6 +48,16 @@ syntax (name:=directive) str : block
 /-- A header -/
 syntax (name:=header) str : block
 
+
+open LeanDoc.SyntaxUtils Lean Elab Term Std in
+macro "#seeStx" tm:term : command =>
+  `(#eval (ppSyntax <$> $tm : TermElabM Std.Format) )
+
+#seeStx `(inline| "foo")
+#seeStx `(inline| _{ "foo" "bar" })
+#seeStx `(inline| *{ "foo" "bar" })
+#seeStx `(inline| [_{"FPiL" line! "book"}]("https://..."))
+#seeStx `(inline| code{ "foo" })
 
 
 end LeanDoc.Syntax

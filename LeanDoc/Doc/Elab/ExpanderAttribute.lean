@@ -15,7 +15,8 @@ unsafe def mkDocExpanderAttrUnsafe (attrName typeName : Name) (descr : String) (
     descr := descr,
     valueTypeName := typeName,
     evalKey := fun _ stx => do
-      return (← Attribute.Builtin.getIdent stx).getId
+      Elab.resolveGlobalConstNoOverloadWithInfo (← Attribute.Builtin.getIdent stx)
+      -- return (← Attribute.Builtin.getIdent stx).getId
   } attrDeclName
 
 

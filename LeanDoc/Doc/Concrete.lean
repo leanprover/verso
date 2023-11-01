@@ -58,7 +58,7 @@ elab "inlines!" s:inlineStr : term => open Lean Elab Term in
 set_option pp.rawOnError true
 
 
-#eval inlines!"Hello, _*emph*_"
+#check inlines!"Hello, _*emph*_"
 
 def document : Parser where
   fn := rawFn <| blocks {maxDirective := some 6}
@@ -77,14 +77,13 @@ elab "#docs" n:ident title:inlineStr ":=" ":::::::" text:document ":::::::" : co
   let ⟨`<low| [~_ ~(titleName@(.node _ _ titleParts))]>⟩ := title
     | dbg_trace "nope {ppSyntax title}" throwUnsupportedSyntax
   let titleString := inlinesToString (← getEnv) titleParts
-  let (toc, st) ← liftTermElabM <| PartElabM.run (.init titleName) <| do
+  let ((), st) ← liftTermElabM <| PartElabM.run (.init titleName) <| do
     setTitle titleString (← liftDocElabM <| titleParts.mapM elabInline)
     for b in blocks do partCommand b
     closePartsUntil 0 endPos
     pure ()
   let finished := st.partContext.toPartFrame.close endPos
   pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
-  -- dbg_trace "Syntax is {stx}"
   elabCommand (← `(def $n : Part := $(← finished.toSyntax)))
 
 
@@ -95,7 +94,7 @@ elab "#doc" title:inlineStr "=>" text:document eof:eoi : term => open Lean Elab 
   let ⟨`<low| [~_ ~(titleName@(.node _ _ titleParts))]>⟩ := title
     | dbg_trace "nope {ppSyntax title}" throwUnsupportedSyntax
   let titleString := inlinesToString (← getEnv) titleParts
-  let (toc, st) ← PartElabM.run (.init titleName) <| do
+  let ((), st) ← PartElabM.run (.init titleName) <| do
     setTitle titleString (← liftDocElabM <| titleParts.mapM elabInline)
     for b in blocks do partCommand b
     closePartsUntil 0 endPos

@@ -103,10 +103,8 @@ def handleHl (params : DocumentHighlightParams) (prev : RequestTask DocumentHigh
   let text := doc.meta.text
   let pos := text.lspPosToUtf8Pos params.position
   bindWaitFindSnap doc (·.endPos + ' ' >= pos) (notFoundX := pure prev) fun snap => do
-    -- let some (ctxt, tree) := findInfoTree? (Name.mkSimple "*") ⟨pos, pos⟩ none snap.infoTree (canonicalOnly := false) (fun _ info => info matches .ofCustomInfo _)
-    --   | dbg_trace "none"; pure prev
     withFallbackResponse prev <| pure <| Task.spawn <| fun () => do
-      let nodes := snap.infoTree.deepestNodes fun ctxt info arr =>
+      let nodes := snap.infoTree.deepestNodes fun _ctxt info _arr =>
         match info with
         | .ofCustomInfo ⟨stx, data⟩ =>
           if stx.containsPos pos then
@@ -123,12 +121,6 @@ def handleHl (params : DocumentHighlightParams) (prev : RequestTask DocumentHigh
               hls := hls.push ⟨r, none⟩
         pure hls
 
-def combine (f : α → α → α) (g : ε → ε → ε) : Except ε α → Except ε α → Except ε α
-  | .ok x, .ok y => .ok (f x y)
-  | .error _, .ok y => .ok y
-  | .ok x, .error _ => .ok x
-  | .error x, .error y => .error (g x y)
-
 open Lean Lsp
 
 def rangeContains (outer inner : Lsp.Range) :=
@@ -136,7 +128,6 @@ def rangeContains (outer inner : Lsp.Range) :=
   outer.start == inner.start && inner.«end» < outer.«end»
 
 mutual
-
   partial def graftSymbolOnto (inner outer : DocumentSymbol) : Option DocumentSymbol :=
     match outer, inner with
     | .mk s1, .mk s2 =>
@@ -153,11 +144,22 @@ mutual
       let sym := outer[i]
       if let some sym' := graftSymbolOnto inner sym then
         return outer.set ⟨i, h⟩ sym'
+      i := i + 1
     return outer.push inner
 end
 
-def graftSymbols (outer inner : Array DocumentSymbol) : Array DocumentSymbol :=
+def graftSymbols (inner outer : Array DocumentSymbol) : Array DocumentSymbol :=
   inner.foldr graftSymbolInto outer
+
+open Lean Server Lsp RequestM in
+def mergeResponses (docTask : RequestTask α) (leanTask : RequestTask α) (f : α → α → α) : RequestM (RequestTask α) := do
+  bindTask docTask fun
+  | .ok docResult =>
+    bindTask leanTask fun
+    | .ok leanResult =>
+      pure <| Task.pure <| pure <| f docResult leanResult
+    | .error e => throw e
+  | .error _ => pure leanTask
 
 open Lean Server Lsp RequestM in
 partial def handleSyms (_params : DocumentSymbolParams) (prev : RequestTask DocumentSymbolResult) : RequestM (RequestTask DocumentSymbolResult) := do
@@ -165,15 +167,13 @@ partial def handleSyms (_params : DocumentSymbolParams) (prev : RequestTask Docu
   let text := doc.meta.text
   -- bad: we have to wait on elaboration of the entire file before we can report document symbols
   let t := doc.cmdSnaps.waitAll
-  let syms ←
-    mapTask t fun (snaps, _) => do
-      return { syms := getSections text snaps }
-  bindTask syms fun r1 =>
-    bindTask prev fun r2 =>
-      pure <| Task.spawn fun () => (combine combineAnswers (fun x _ => x) r1 r2)
+  let syms ← mapTask t fun (snaps, _) => do
+      return { syms := getSections text snaps : DocumentSymbolResult }
+  mergeResponses syms prev combineAnswers
+  --pure syms
   where
-    combineAnswers (x y : DocumentSymbolResult) : DocumentSymbolResult := ⟨graftSymbols y.syms x.syms⟩
-    tocSym (text : _) : TOC → Option DocumentSymbol
+    combineAnswers (x y : DocumentSymbolResult) : DocumentSymbolResult := ⟨graftSymbols x.syms y.syms⟩
+    tocSym (text : FileMap) : TOC → Option DocumentSymbol
       | .mk title titleStx endPos children => Id.run do
         let some selRange@⟨start, _⟩ := titleStx.lspRange text
           | return none
@@ -187,12 +187,12 @@ partial def handleSyms (_params : DocumentSymbolParams) (prev : RequestTask Docu
           selectionRange := selRange,
           children? := kids
         }
-    getSections text ss := Id.run do
+    getSections text ss : Array DocumentSymbol := Id.run do
       let mut syms := #[]
       for snap in ss do
-        let info := snap.infoTree.deepestNodes fun ctxt info arr =>
+        let info := snap.infoTree.deepestNodes fun _ctxt info _arr =>
           match info with
-          | .ofCustomInfo ⟨stx, data⟩ =>
+          | .ofCustomInfo ⟨_stx, data⟩ =>
             data.get? TOC
           | _ => none
         for i in info do
