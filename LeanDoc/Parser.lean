@@ -7,6 +7,7 @@ Author: David Thrane Christiansen
 import Lean
 import Std.Tactic.GuardMsgs
 
+import LeanDoc.Parser.Lean
 import LeanDoc.SyntaxUtils
 import LeanDoc.Syntax
 
@@ -650,14 +651,7 @@ All input consumed.
   #eval inline {} |>.test! "[Wikipedia](https://en.wikipedia.org)"
 
 
-def name : ParserFn := asStringFn <| satisfyFn (·.isAlpha) >> takeWhileFn (fun ch => ch.isAlpha || ch.isDigit || ch ∈ "_'".toList)
-
-def val : ParserFn := num <|> nameArg <|> str
-where
-  num := nodeFn `num <| asStringFn <| atomicFn (takeWhile1Fn (·.isDigit) "digits")
-  nameArg := nodeFn `name <| name
-  strContents := asStringFn <| takeUntilEscFn (· ∈ "\"\n".toList)
-  str := nodeFn `string <| asStringFn <| atomicFn (chFn '\"') >> strContents >> chFn '\"'
+def val : ParserFn := docNumLitFn <|> docIdentFn <|> docStrLitFn
 
 /--
 info: Success! Final stack:
@@ -674,9 +668,9 @@ All input consumed.
 #guard_msgs in
   #eval val.test! "3"
 /--
-info: Failure: unexpected end of input
+info: Failure: unexpected end of input; expected identifier, numeral or string literal
 Final stack:
-  (string <missing>)
+  <missing>
 Remaining: ""
 -/
 #guard_msgs in
@@ -684,11 +678,21 @@ Remaining: ""
 
 /--
 info: Success! Final stack:
-  (string "\"a b c\\ d\"")
+  (str "\"a b c\t d\"")
 All input consumed.
 -/
 #guard_msgs in
-  #eval val.test! "\"a b c\\ d\""
+  #eval val.test! "\"a b c\t d\""
+
+/--
+info: Success! Final stack:
+  (str "\"a b c\t d\"")
+Remaining:
+"\n"
+-/
+#guard_msgs in
+  #eval val.test! "\"a b c\t d\"\n"
+
 
 def withCurrentStackSize (p : Nat → ParserFn) : ParserFn := fun c s =>
   p s.stxStack.size c s
@@ -698,18 +702,19 @@ def skipChFn (c : Char) : ParserFn :=
   satisfyFn (· == c) c.toString
 
 def arg : ParserFn :=
-  withCurrentStackSize fun iniSz =>
-    atomicFn name >> eatSpaces >>
-    ((atomicFn (skipChFn '=') >> eatSpaces >> val >> eatSpaces >> mkNamed iniSz) <|> mkAnon iniSz)
+    withCurrentStackSize fun iniSz =>
+      potentiallyNamed iniSz <|> ((docStrLitFn <|> docNumLitFn) >> mkAnon iniSz)
 
 where
   mkNamed (iniSz : Nat) : ParserFn := fun _ s => s.mkNode `arg.named iniSz
   mkAnon (iniSz : Nat) : ParserFn := fun _ s => s.mkNode `arg.anon iniSz
   eatSpaces := takeWhileFn (· == ' ')
-
+  potentiallyNamed iniSz :=
+      atomicFn docIdentFn >> eatSpaces >>
+       ((atomicFn (skipChFn ':' >> skipChFn '=') >> eatSpaces >> val >> eatSpaces >> mkNamed iniSz) <|> mkAnon iniSz)
 /--
 info: Success! Final stack:
-  (arg.anon "x")
+  (arg.anon `x)
 All input consumed.
 -/
 #guard_msgs in
@@ -717,56 +722,74 @@ All input consumed.
 
 /--
 info: Success! Final stack:
-  (arg.named "x" (num "1"))
+  (arg.named `x (num "1"))
 All input consumed.
 -/
 #guard_msgs in
-  #eval arg.test! "x=1"
+  #eval arg.test! "x:=1"
 
 /--
 info: Success! Final stack:
-  (arg.named "x" (name "y"))
+  (arg.named `x `y)
 All input consumed.
 -/
 #guard_msgs in
-  #eval arg.test! "x=y"
+  #eval arg.test! "x:=y"
 
 /--
 info: Success! Final stack:
-  (arg.named "x" (string "\"y\""))
+  (arg.named `x (str "\"y\""))
 All input consumed.
 -/
 #guard_msgs in
-  #eval arg.test! "x=\"y\""
+  #eval arg.test! "x:=\"y\""
 
 /--
-info: Failure: unexpected end of input
+info: Failure: unterminated string literal; expected identifier or numeral
 Final stack:
- • "x"
- • (string "\"" "y" <missing>)
+ • `x
+ • <missing>
 
-Remaining: ""
+Remaining: "\"y"
 -/
 #guard_msgs in
-  #eval arg.test! "x=\"y"
+  #eval arg.test! "x:=\"y"
 
-def nameAndArgs : ParserFn := eatSpaces >> name >> eatSpaces >> manyFn arg
+/--
+info: Success! Final stack:
+  (arg.anon (num "42"))
+All input consumed.
+-/
+#guard_msgs in
+#eval arg.test! "42"
+
+
+/--
+info: Success! Final stack:
+  `x
+Remaining:
+"\n"
+-/
+#guard_msgs in
+#eval docIdentFn.test! "x\n"
+
+def nameAndArgs : ParserFn := eatSpaces >> docIdentFn >> eatSpaces >> sepByFn true arg eatSpaces
 where
   eatSpaces := takeWhileFn (· == ' ')
 
 /--
 info: Success! Final stack:
- • "leanExample"
- • [(arg.named "context" (num "2"))]
+ • `leanExample
+ • [(arg.named `context (num "2"))]
 
 All input consumed.
 -/
 #guard_msgs in
-#eval nameAndArgs.test! "leanExample context=2"
+#eval nameAndArgs.test! "leanExample context := 2"
 /--
 info: Success! Final stack:
- • "leanExample"
- • [(arg.anon "context")]
+ • `leanExample
+ • [(arg.anon `context)]
 
 All input consumed.
 -/
@@ -774,8 +797,8 @@ All input consumed.
 #eval nameAndArgs.test! "leanExample context"
 /--
 info: Success! Final stack:
- • "leanExample"
- • [(arg.anon "context") (arg.anon "more")]
+ • `leanExample
+ • [(arg.anon `context) (arg.anon `more)]
 
 All input consumed.
 -/
@@ -783,14 +806,27 @@ All input consumed.
 #eval nameAndArgs.test! "leanExample context more"
 /--
 info: Success! Final stack:
- • "leanExample"
- • [(arg.anon "context")
-     (arg.named "more" (string "\"stuff\""))]
+ • `leanExample
+ • [(arg.anon `context)
+     (arg.named `more (str "\"stuff\""))]
 
 All input consumed.
 -/
 #guard_msgs in
-#eval nameAndArgs.test! "leanExample context more=\"stuff\""
+#eval nameAndArgs.test! "leanExample context more:=\"stuff\""
+
+
+/--
+info: Success! Final stack:
+ • `leanExample
+ • [(arg.anon `context)
+     (arg.named `more (str "\"stuff\""))]
+
+Remaining:
+"\n\nabc"
+-/
+#guard_msgs in
+#eval nameAndArgs.test! "leanExample context more:=\"stuff\"\n\nabc"
 
 structure BlockCtxt where
   minIndent : Nat := 0
@@ -1093,7 +1129,7 @@ info: Success! Final stack:
   (LeanDoc.Syntax.codeblock
    (column "1")
    "```"
-   ["scheme" []]
+   [`scheme []]
    " (define x 4)\n x\n"
    "```")
 All input consumed.
@@ -1133,7 +1169,7 @@ info: Success! Final stack:
   (LeanDoc.Syntax.codeblock
    (column "0")
    "```"
-   ["scheme" []]
+   [`scheme []]
    " (define x 4)\n x\n"
    "```")
 All input consumed.
@@ -1146,7 +1182,7 @@ info: Success! Final stack:
   (LeanDoc.Syntax.codeblock
    (column "0")
    "```"
-   ["scheme" []]
+   [`scheme []]
    "(define x 4)\nx\n"
    "```")
 All input consumed.
@@ -1161,7 +1197,7 @@ Final stack:
   (LeanDoc.Syntax.codeblock
    (column "0")
    "```"
-   ["scheme" []]
+   [`scheme []]
    "(define x 4)\nx\n"
    <missing>)
 Remaining: "````"
@@ -1175,15 +1211,14 @@ Final stack:
   (LeanDoc.Syntax.codeblock
    (column "0")
    "```"
-   ["scheme"
-    [(arg.named
-      "dialect"
-      (string "\"chicken\""))]]
+   [`scheme
+    [(arg.named `dialect (str "\"chicken\""))
+     (arg.anon (num "43"))]]
    <missing>)
-Remaining: "43\n(define x 4)\nx\n```"
+Remaining: "(define x 4)\nx\n```"
 -/
 #guard_msgs in
-  #eval codeBlock {} |>.test! "``` scheme dialect=\"chicken\" 43\n(define x 4)\nx\n```"
+  #eval codeBlock {} |>.test! "``` scheme dialect:=\"chicken\" 43\n(define x 4)\nx\n```"
 
 /--
 info: Failure: expected column 1
@@ -1191,7 +1226,7 @@ Final stack:
   (LeanDoc.Syntax.codeblock
    (column "1")
    "```"
-   ["scheme" []]
+   [`scheme []]
    ""
    <missing>)
 Remaining: "(define x 4)\nx\n```"
@@ -1205,7 +1240,7 @@ Final stack:
   (LeanDoc.Syntax.codeblock
    (column "1")
    "```"
-   ["scheme" []]
+   [`scheme []]
    " (define x 4)\n x\n"
    <missing>)
 Remaining: "```"
@@ -1247,7 +1282,7 @@ info: Success! Final stack:
   (LeanDoc.Syntax.directive
    (column "0")
    "::::"
-   "multiPara"
+   `multiPara
    []
    [(LeanDoc.Syntax.para
      [(LeanDoc.Syntax.text "foo")])]
@@ -1262,24 +1297,22 @@ info: Success! Final stack:
   (LeanDoc.Syntax.directive
    (column "1")
    ":::"
-   "multiPara"
-   [(arg.named
-     "greatness"
-     (string "\"amazing!\""))]
+   `multiPara
+   [(arg.named `greatness (str "\"amazing!\""))]
    [(LeanDoc.Syntax.para
      [(LeanDoc.Syntax.text "foo")])]
    ":::")
 All input consumed.
 -/
 #guard_msgs in
-  #eval directive {} |>.test! " ::: multiPara greatness=\"amazing!\"\n foo\n :::"
+  #eval directive {} |>.test! " ::: multiPara greatness:=\"amazing!\"\n foo\n :::"
 
 /--
 info: Success! Final stack:
   (LeanDoc.Syntax.directive
    (column "1")
    ":::"
-   "multiPara"
+   `multiPara
    []
    [(LeanDoc.Syntax.para
      [(LeanDoc.Syntax.text "foo")])
@@ -1301,7 +1334,7 @@ info: Success! Final stack:
   (LeanDoc.Syntax.directive
    (column "1")
    ":::"
-   "multiPara"
+   `multiPara
    []
    [(LeanDoc.Syntax.para
      [(LeanDoc.Syntax.text "foo")])
