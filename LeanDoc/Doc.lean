@@ -13,6 +13,7 @@ deriving Repr
 inductive Inline where
   | text (string : String)
   | emph (content : Array Inline)
+  | bold (content : Array Inline)
   | linebreak (string : String)
   | link (content : Array Inline) (dest : LinkDest)
 deriving Repr

@@ -52,7 +52,7 @@ elab "inlines!" s:inlineStr : term => open Lean Elab Term in
 set_option pp.rawOnError true
 
 
-#eval inlines!"Hello, *emph*"
+#eval inlines!"Hello, _*emph*_"
 
 def document : Parser where
   fn := rawFn <| blocks {maxDirective := some 6}

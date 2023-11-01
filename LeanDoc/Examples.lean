@@ -150,7 +150,6 @@ info: LeanDoc.Doc.Part.mk
 #guard_msgs in
   #eval d
 
--- TODO buggy parsing of backtick (but probably a lean token parser issue)
 #docs e "More writing" :=
 :::::::
 

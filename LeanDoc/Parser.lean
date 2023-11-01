@@ -2,11 +2,13 @@ import Lean
 import Std.Tactic.GuardMsgs
 
 import LeanDoc.SyntaxUtils
+import LeanDoc.Syntax
 
 namespace LeanDoc.Parser
 
 
 open LeanDoc.SyntaxUtils
+open LeanDoc.Syntax
 open Lean Parser
 
 
@@ -283,7 +285,7 @@ def blankLine : ParserFn := nodeFn `blankLine <| atomicFn <| asStringFn <| takeW
 def bullet := satisfyFn (· == '*') "bullet (*)"
 
 /-- Characters with a special meaning during a line (we already know we're reading inlines) -/
-def specialChars := "*\n[]".toList
+def specialChars := "*_\n[]".toList
 
 def isSpecial (c : Char) : Bool := c ∈ specialChars
 
@@ -331,10 +333,14 @@ All input consumed.
   #eval notSpecial.test! "\\>"
 
 structure InlineCtxt where
+  allowNewlines := true
   -- The minimum indentation of a continuation line for the current paragraph
   minIndent : Nat := 0
-  -- How many asterisks introduced the current level of emphasis? `none` means no emphasis here.
+  -- How many asterisks introduced the current level of boldness? `none` means no bold here.
+  boldDepth : Option Nat := none
+  -- How many underscores introduced the current level of emphasis? `none` means no emphasis here.
   emphDepth : Option Nat := none
+
   -- Are we in a link?
   inLink : Bool := false
 
@@ -359,25 +365,29 @@ def strFn (str : String) : ParserFn := asStringFn <| fun c s =>
 /--
 A linebreak that isn't a block break (that is, there's non-space content on the next line)
 -/
-def linebreak := nodeFn `linebreak <| asStringFn <| atomicFn (chFn '\n' >> lookaheadFn (manyFn (chFn ' ') >> notFollowedByFn (chFn '\n' <|> atLeastFn 3 (chFn ':')) "newline"))
+def linebreak (ctxt : InlineCtxt) :=
+  if ctxt.allowNewlines then
+    nodeFn ``linebreak <| asStringFn <| atomicFn (chFn '\n' >> lookaheadFn (manyFn (chFn ' ') >> notFollowedByFn (chFn '\n' <|> atLeastFn 3 (chFn ':')) "newline"))
+  else
+    errorFn "Newlines not allowed here"
 
 mutual
-  partial def emph (ctxt : InlineCtxt) : ParserFn :=
-    nodeFn `emph <|
+  partial def emphLike (name : SyntaxNodeKind) (char : Char) (what plural : String) (getter : InlineCtxt → Option Nat) (setter : InlineCtxt → Option Nat → InlineCtxt) (ctxt : InlineCtxt) : ParserFn :=
+    nodeFn name <|
     withCurrentColumn fun c =>
       atomicFn (asStringFn (asStringFn (opener ctxt) >> notFollowedByFn (chFn ' ' false <|> chFn '\n' false) "space or newline after opener")) >>
       withCurrentColumn fun c' =>
         let count := c' - c
-        manyFn (inline {ctxt with emphDepth := some count}) >>
+        manyFn (inline (setter ctxt (some count))) >>
 
-        asStringFn (atomicFn (noSpaceBefore >> repFn count (satisfyFn (· == '*') s!"{count} asterisks")))
+        asStringFn (atomicFn (noSpaceBefore >> repFn count (satisfyFn (· == char) s!"{count} {plural}")))
 
   where
     opener (ctxt : InlineCtxt) : ParserFn :=
-      match ctxt.emphDepth with
-      | none => many1Fn (satisfyFn (· == '*') s!"any number of *s")
-      | some 1 | some 0 => fun _ s => s.mkError "Can't emphasize here"
-      | some d => atMostFn (d - 1) (satisfyFn (· == '*') "*") s!"at most {d} *s"
+      match getter ctxt with
+      | none => many1Fn (satisfyFn (· == char) s!"any number of {char}s")
+      | some 1 | some 0 => fun _ s => s.mkError s!"Can't {what} here"
+      | some d => atMostFn (d - 1) (satisfyFn (· == char) s!"{char}") s!"at most {d} {plural}"
     noSpaceBefore : ParserFn := fun c s =>
       if s.pos == 0 then s
       else
@@ -386,13 +396,15 @@ mutual
           s.mkError "closer without preceding space"
         else s
 
+  partial def emph := emphLike ``emph '_' "emphasize" "underscores" (·.emphDepth) ({· with emphDepth := ·})
+  partial def bold := emphLike ``bold '*' "bold" "asterisks" (·.boldDepth) ({· with boldDepth := ·})
 
   -- Read a prefix of a line of text, stopping at a text-mode special character
   partial def text :=
-    nodeFn `text (asStringFn (atomicFn (manyFn (chFn ' ') >> notSpecial) >> takeUntilEscFn isSpecial))
+    nodeFn ``text (asStringFn (atomicFn (manyFn (chFn ' ') >> notSpecial) >> takeUntilEscFn isSpecial))
 
   partial def link (ctxt : InlineCtxt) :=
-    nodeFn `link <|
+    nodeFn ``link <|
       (atomicFn (notInLink >> strFn "[" )) >>
       many1Fn (inline {ctxt with inLink := true}) >>
       strFn "]" >>
@@ -408,14 +420,14 @@ mutual
 
 
   partial def inline (ctxt : InlineCtxt) : ParserFn :=
-    text <|> emph ctxt <|> linebreak <|> link ctxt
+    text <|> emph ctxt <|> bold ctxt <|> linebreak ctxt <|> link ctxt
 end
 
-def textLine : ParserFn := many1Fn (inline {})
+def textLine (allowNewlines := true) : ParserFn := many1Fn (inline { allowNewlines })
 
 /--
 info: Success! Final stack:
-  (text "abc ")
+  (LeanDoc.Syntax.text "abc ")
 All input consumed.
 -/
 #guard_msgs in
@@ -423,43 +435,54 @@ All input consumed.
 
 /--
 info: Success! Final stack:
-  (emph "*" [(text "aa")] "*")
+  (LeanDoc.Syntax.emph
+   "_"
+   [(LeanDoc.Syntax.text "aa")]
+   "_")
 All input consumed.
 -/
 #guard_msgs in
-  #eval emph {} |>.test! "*aa*"
+  #eval emph {} |>.test! "_aa_"
 
 /--
 info: Failure: expected closer without preceding space
 Final stack:
-  (emph "*" [(text "aa ")] <missing>)
-Remaining: "*"
+  (LeanDoc.Syntax.emph
+   "_"
+   [(LeanDoc.Syntax.text "aa ")]
+   <missing>)
+Remaining: "_"
 -/
 #guard_msgs in
-  #eval emph {} |>.test! "*aa *"
+  #eval emph {} |>.test! "_aa _"
 
 /--
 info: Failure: unexpected space or newline after opener
 Final stack:
-  (emph "*" <missing>)
-Remaining: "* aa*"
+  (LeanDoc.Syntax.emph "_" <missing>)
+Remaining: "_ aa_"
 -/
 #guard_msgs in
-  #eval emph {} |>.test! "* aa*"
+  #eval emph {} |>.test! "_ aa_"
 
 /--
 info: Success! Final stack:
-  (emph "**" [(text "aa")] "**")
+  (LeanDoc.Syntax.bold
+   "**"
+   [(LeanDoc.Syntax.text "aa")]
+   "**")
 All input consumed.
 -/
 #guard_msgs in
-  #eval emph {} |>.test! "**aa**"
+  #eval bold {} |>.test! "**aa**"
 
 /--
 info: Success! Final stack:
-  (emph
+  (LeanDoc.Syntax.bold
    "**"
-   [(text "aa") (linebreak "\n") (text "bb")]
+   [(LeanDoc.Syntax.text "aa")
+    (LeanDoc.Syntax.linebreak "\n")
+    (LeanDoc.Syntax.text "bb")]
    "**")
 All input consumed.
 -/
@@ -469,9 +492,9 @@ All input consumed.
 
 /--
 info: Success! Final stack:
-  (link
+  (LeanDoc.Syntax.link
    "["
-   [(text "Wikipedia")]
+   [(LeanDoc.Syntax.text "Wikipedia")]
    "]"
    (url "(" "https://en.wikipedia.org" ")"))
 All input consumed.
@@ -629,7 +652,7 @@ deriving Inhabited, Repr
 
 mutual
   partial def listItem (ctxt : BlockCtxt) : ParserFn :=
-    nodeFn `li (bulletFn >> withCurrentColumn fun c => manyFn (block {ctxt with minIndent := c}))
+    nodeFn ``li (bulletFn >> withCurrentColumn fun c => manyFn (block {ctxt with minIndent := c}))
   where
     bulletFn := atomicFn <| nodeFn `bullet <|
       takeWhileFn (· == ' ') >>
@@ -639,25 +662,25 @@ mutual
       asStringFn (chFn '*' false)
 
   partial def blockquote (ctxt : BlockCtxt) : ParserFn :=
-    atomicFn <| nodeFn `blockquote <|
+    atomicFn <| nodeFn ``blockquote <|
       takeWhileFn (· == ' ') >> guardMinColumn ctxt.minIndent >> chFn '>' >>
       withCurrentColumn fun c => many1Fn (block { ctxt with minIndent := c })
 
   partial def list (ctxt : BlockCtxt) : ParserFn :=
-    nodeFn `ul <|
+    nodeFn ``ul <|
       atomicFn (bol >> takeWhileFn (· == ' ') >> ignoreFn (lookaheadFn (chFn '*' >> chFn ' ')) >> guardMinColumn ctxt.minIndent >> pushColumn) >>
       withCurrentColumn (fun c => many1Fn (listItem {ctxt with minIndent := c} ))
 
   partial def para (ctxt : BlockCtxt) : ParserFn :=
-    nodeFn `para <| atomicFn (takeWhileFn (· == ' ') >> notFollowedByFn blockOpener "block opener" >> guardMinColumn ctxt.minIndent) >> textLine
+    nodeFn ``para <| atomicFn (takeWhileFn (· == ' ') >> notFollowedByFn blockOpener "block opener" >> guardMinColumn ctxt.minIndent) >> textLine
 
   partial def header : ParserFn :=
-    nodeFn `header <|
+    nodeFn ``header <|
       atomicFn (bol >> asStringFn (many1Fn (skipChFn '#')) >> skipChFn ' ' >> takeWhileFn (· == ' ') >> lookaheadFn (satisfyFn (· != '\n'))) >>
-      textLine
+      textLine (allowNewlines := false)
 
   partial def codeBlock (ctxt : BlockCtxt) : ParserFn :=
-    nodeFn `code <|
+    nodeFn ``code <|
       -- Opener - leaves indent info and open token on the stack
       atomicFn (takeWhileFn (· == ' ') >> guardMinColumn ctxt.minIndent >> pushColumn >> asStringFn (atLeastFn 3 (skipChFn '`'))) >>
       withIndentColumn fun c =>
@@ -689,7 +712,7 @@ mutual
       takeWhileFn (· == ' ') >> (satisfyFn (· == '\n') "newline" <|> eoiFn)
 
   partial def directive (ctxt : BlockCtxt) : ParserFn :=
-    nodeFn `directive <|
+    nodeFn ``directive <|
       -- Opener - leaves indent info and open token on the stack
       atomicFn
         (takeWhileFn (· == ' ') >> guardMinColumn ctxt.minIndent >> pushColumn >> asStringFn (atLeastFn 3 (skipChFn ':')) >>
@@ -730,10 +753,11 @@ end
 
 /--
 info: Success! Final stack:
-  [(para
-    [(text
+  [(LeanDoc.Syntax.para
+    [(LeanDoc.Syntax.text
       "This is just some textual content. How is it?")])
-   (para [(text "More?")])]
+   (LeanDoc.Syntax.para
+    [(LeanDoc.Syntax.text "More?")])]
 All input consumed.
 -/
 #guard_msgs in
@@ -741,17 +765,20 @@ All input consumed.
 
 /--
 info: Success! Final stack:
-  [(para
-    [(text
+  [(LeanDoc.Syntax.para
+    [(LeanDoc.Syntax.text
       "I can describe lists like this one:")])
-   (ul
+   (LeanDoc.Syntax.ul
     (column "0")
-    [(li
+    [(LeanDoc.Syntax.li
       (bullet (column "0") "*")
-      [(para [(text "a") (linebreak "\n")])])
-     (li
+      [(LeanDoc.Syntax.para
+        [(LeanDoc.Syntax.text "a")
+         (LeanDoc.Syntax.linebreak "\n")])])
+     (LeanDoc.Syntax.li
       (bullet (column "0") "*")
-      [(para [(text "b")])])])]
+      [(LeanDoc.Syntax.para
+        [(LeanDoc.Syntax.text "b")])])])]
 All input consumed.
 -/
 #guard_msgs in
@@ -759,9 +786,11 @@ All input consumed.
 
 /--
 info: Success! Final stack:
-  (li
+  (LeanDoc.Syntax.li
    (bullet (column "0") "*")
-   [(para [(text "foo") (linebreak "\n")])])
+   [(LeanDoc.Syntax.para
+     [(LeanDoc.Syntax.text "foo")
+      (LeanDoc.Syntax.linebreak "\n")])])
 Remaining:
 "* bar\n"
 -/
@@ -770,14 +799,18 @@ Remaining:
 
 /--
 info: Success! Final stack:
-  [(ul
+  [(LeanDoc.Syntax.ul
     (column "0")
-    [(li
+    [(LeanDoc.Syntax.li
       (bullet (column "0") "*")
-      [(para [(text "foo") (linebreak "\n")])])
-     (li
+      [(LeanDoc.Syntax.para
+        [(LeanDoc.Syntax.text "foo")
+         (LeanDoc.Syntax.linebreak "\n")])])
+     (LeanDoc.Syntax.li
       (bullet (column "0") "*")
-      [(para [(text "bar") (linebreak "\n")])])])]
+      [(LeanDoc.Syntax.para
+        [(LeanDoc.Syntax.text "bar")
+         (LeanDoc.Syntax.linebreak "\n")])])])]
 All input consumed.
 -/
 #guard_msgs in
@@ -785,20 +818,25 @@ All input consumed.
 
 /--
 info: Success! Final stack:
-  [(ul
+  [(LeanDoc.Syntax.ul
     (column "0")
-    [(li
+    [(LeanDoc.Syntax.li
       (bullet (column "0") "*")
-      [(para [(text "foo") (linebreak "\n")])
-       (ul
+      [(LeanDoc.Syntax.para
+        [(LeanDoc.Syntax.text "foo")
+         (LeanDoc.Syntax.linebreak "\n")])
+       (LeanDoc.Syntax.ul
         (column "2")
-        [(li
+        [(LeanDoc.Syntax.li
           (bullet (column "2") "*")
-          [(para
-            [(text "bar") (linebreak "\n")])])])])
-     (li
+          [(LeanDoc.Syntax.para
+            [(LeanDoc.Syntax.text "bar")
+             (LeanDoc.Syntax.linebreak
+              "\n")])])])])
+     (LeanDoc.Syntax.li
       (bullet (column "0") "*")
-      [(para [(text "more outer")])])])]
+      [(LeanDoc.Syntax.para
+        [(LeanDoc.Syntax.text "more outer")])])])]
 All input consumed.
 -/
 #guard_msgs in
@@ -806,9 +844,11 @@ All input consumed.
 
 /--
 info: Success! Final stack:
-  [(blockquote
+  [(LeanDoc.Syntax.blockquote
     ">"
-    [(para [(text "hey") (linebreak "\n")])])]
+    [(LeanDoc.Syntax.para
+      [(LeanDoc.Syntax.text "hey")
+       (LeanDoc.Syntax.linebreak "\n")])])]
 All input consumed.
 -/
 #guard_msgs in
@@ -816,7 +856,8 @@ All input consumed.
 
 /--
 info: Success! Final stack:
-  [(para [(text "n\\*k ")])]
+  [(LeanDoc.Syntax.para
+    [(LeanDoc.Syntax.text "n\\*k ")])]
 All input consumed.
 -/
 #guard_msgs in
@@ -824,7 +865,9 @@ All input consumed.
 
 /--
 info: Success! Final stack:
-  (header "#" [(text "Header!")])
+  (LeanDoc.Syntax.header
+   "#"
+   [(LeanDoc.Syntax.text "Header!")])
 All input consumed.
 -/
 #guard_msgs in
@@ -832,9 +875,9 @@ All input consumed.
 
 /--
 info: Success! Final stack:
-  [(header
+  [(LeanDoc.Syntax.header
     "#"
-    [(text "Header!") (linebreak "\n")])]
+    [(LeanDoc.Syntax.text "Header!")])]
 All input consumed.
 -/
 #guard_msgs in
@@ -842,7 +885,7 @@ All input consumed.
 
 /--
 info: Success! Final stack:
-  (code
+  (LeanDoc.Syntax.code
    (column "1")
    "```"
    "scheme"
@@ -856,7 +899,7 @@ All input consumed.
 
 /--
 info: Success! Final stack:
-  (code
+  (LeanDoc.Syntax.code
    (column "0")
    "```"
    "scheme"
@@ -870,7 +913,7 @@ All input consumed.
 
 /--
 info: Success! Final stack:
-  (code
+  (LeanDoc.Syntax.code
    (column "0")
    "```"
    "scheme"
@@ -886,7 +929,7 @@ All input consumed.
 /--
 info: Failure: expected column 0
 Final stack:
-  (code
+  (LeanDoc.Syntax.code
    (column "0")
    "```"
    "scheme"
@@ -901,7 +944,7 @@ Remaining: "````"
 /--
 info: Failure: newline
 Final stack:
-  (code
+  (LeanDoc.Syntax.code
    (column "0")
    "```"
    "scheme"
@@ -915,7 +958,7 @@ Remaining: "43\n(define x 4)\nx\n```"
 /--
 info: Failure: expected column 1
 Final stack:
-  (code
+  (LeanDoc.Syntax.code
    (column "1")
    "```"
    "scheme"
@@ -930,7 +973,7 @@ Remaining: "(define x 4)\nx\n```"
 /--
 info: Failure: expected column 1
 Final stack:
-  (code
+  (LeanDoc.Syntax.code
    (column "1")
    "```"
    "scheme"
@@ -945,12 +988,13 @@ Remaining: "```"
 
 /--
 info: Success! Final stack:
-  (directive
+  (LeanDoc.Syntax.directive
    (column "0")
    "::::"
    "multiPara"
    []
-   [(para [(text "foo")])]
+   [(LeanDoc.Syntax.para
+     [(LeanDoc.Syntax.text "foo")])]
    "::::")
 All input consumed.
 -/
@@ -959,14 +1003,15 @@ All input consumed.
 
 /--
 info: Success! Final stack:
-  (directive
+  (LeanDoc.Syntax.directive
    (column "1")
    ":::"
    "multiPara"
    [(arg.named
      "greatness"
      (string "\"amazing!\""))]
-   [(para [(text "foo")])]
+   [(LeanDoc.Syntax.para
+     [(LeanDoc.Syntax.text "foo")])]
    ":::")
 All input consumed.
 -/
@@ -975,17 +1020,20 @@ All input consumed.
 
 /--
 info: Success! Final stack:
-  (directive
+  (LeanDoc.Syntax.directive
    (column "1")
    ":::"
    "multiPara"
    []
-   [(para [(text "foo")])
-    (ul
+   [(LeanDoc.Syntax.para
+     [(LeanDoc.Syntax.text "foo")])
+    (LeanDoc.Syntax.ul
      (column "2")
-     [(li
+     [(LeanDoc.Syntax.li
        (bullet (column "2") "*")
-       [(para [(text "List item ")])])])]
+       [(LeanDoc.Syntax.para
+         [(LeanDoc.Syntax.text
+           "List item ")])])])]
    ":::")
 All input consumed.
 -/
@@ -994,17 +1042,20 @@ All input consumed.
 
 /--
 info: Success! Final stack:
-  (directive
+  (LeanDoc.Syntax.directive
    (column "1")
    ":::"
    "multiPara"
    []
-   [(para [(text "foo")])
-    (ul
+   [(LeanDoc.Syntax.para
+     [(LeanDoc.Syntax.text "foo")])
+    (LeanDoc.Syntax.ul
      (column "1")
-     [(li
+     [(LeanDoc.Syntax.li
        (bullet (column "1") "*")
-       [(para [(text "List item ")])])])]
+       [(LeanDoc.Syntax.para
+         [(LeanDoc.Syntax.text
+           "List item ")])])])]
    ":::")
 All input consumed.
 -/

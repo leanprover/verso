@@ -10,21 +10,28 @@ open Lean Elab
 open LeanDoc.SyntaxUtils
 
 -- For use in IDE features and previews and such
-@[inline_to_string text]
-def text.inline_to_string : InlineToString
-  | _, `<low|(text ~(.atom _ s))> => some s
+@[inline_to_string LeanDoc.Syntax.text]
+def _root_.LeanDoc.Syntax.text.inline_to_string : InlineToString
+  | _, `<low|(LeanDoc.Syntax.text ~(.atom _ s))> => some s
   | _, _ => none
 
-@[inline_to_string linebreak]
-def linebreak.inline_to_string : InlineToString
-  | _, `<low|(linebreak ~_ )> => some " "
+@[inline_to_string LeanDoc.Syntax.linebreak]
+def _root_.LeanDoc.Syntax.linebreak.inline_to_string : InlineToString
+  | _, `<low|(LeanDoc.Syntax.linebreak ~_ )> => some " "
   | _, _ => none
 
-@[inline_to_string emph]
-def emph.inline_to_string : InlineToString
-  | env, `<low|(emph ~_open ~(.node _ `null args) ~_close)> =>
+@[inline_to_string LeanDoc.Syntax.emph]
+def _root_.LeanDoc.Syntax.emph.inline_to_string : InlineToString
+  | env, `<low|(LeanDoc.Syntax.emph ~_open ~(.node _ `null args) ~_close)> =>
     some <| String.intercalate " " (Array.map (inlineToString env) args).toList
   | _, _ => none
+
+@[inline_to_string LeanDoc.Syntax.bold]
+def _root_.LeanDoc.Syntax.bold.inline_to_string : InlineToString
+  | env, `<low|(LeanDoc.Syntax.bold ~_open ~(.node _ `null args) ~_close)> =>
+    some <| String.intercalate " " (Array.map (inlineToString env) args).toList
+  | _, _ => none
+
 
 def inlinesToString (env : Environment) (inlines : Array Syntax)  : String :=
   String.intercalate " " (inlines.map (inlineToString env)).toList
@@ -37,7 +44,7 @@ def inlineSyntaxToString (env : Environment) (inlines : Syntax) : String :=
       "<missing>"
 
 def headerStxToString (env : Environment) : Syntax → String
-  | `<low| (header ~(.atom _ _hashes ) ~(.node _ `null inlines) ) > => inlinesToString env inlines
+  | `<low|(LeanDoc.Syntax.header ~(.atom _ _hashes ) ~(.node _ `null inlines) ) > => inlinesToString env inlines
   | headerStx => dbg_trace "didn't understand {headerStx} for string"
     "<missing>"
 
