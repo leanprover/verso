@@ -1,3 +1,9 @@
+/-
+Copyright (c) 2023 Lean FRO LLC. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+Author: David Thrane Christiansen
+-/
+
 import Lean
 import Lean.Data.Lsp
 import Std.CodeAction.Basic
@@ -155,7 +161,6 @@ def graftSymbols (outer inner : Array DocumentSymbol) : Array DocumentSymbol :=
 
 open Lean Server Lsp RequestM in
 partial def handleSyms (_params : DocumentSymbolParams) (prev : RequestTask DocumentSymbolResult) : RequestM (RequestTask DocumentSymbolResult) := do
-  dbg_trace "hey"
   let doc ← readDoc
   let text := doc.meta.text
   -- bad: we have to wait on elaboration of the entire file before we can report document symbols
@@ -170,7 +175,6 @@ partial def handleSyms (_params : DocumentSymbolParams) (prev : RequestTask Docu
     combineAnswers (x y : DocumentSymbolResult) : DocumentSymbolResult := ⟨graftSymbols y.syms x.syms⟩
     tocSym (text : _) : TOC → Option DocumentSymbol
       | .mk title titleStx endPos children => Id.run do
-        dbg_trace "title {title}"
         let some selRange@⟨start, _⟩ := titleStx.lspRange text
           | return none
         let mut kids := #[]
@@ -193,7 +197,6 @@ partial def handleSyms (_params : DocumentSymbolParams) (prev : RequestTask Docu
           | _ => none
         for i in info do
           if let some x := tocSym text i then syms := syms.push x
-      dbg_trace (toJson syms)
       pure syms
 
 open Lean Server Lsp in

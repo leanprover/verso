@@ -1,3 +1,9 @@
+/-
+Copyright (c) 2023 Lean FRO LLC. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+Author: David Thrane Christiansen
+-/
+
 import Lean
 import Std.Tactic.GuardMsgs
 
@@ -497,6 +503,8 @@ Remaining: "_ aa_"
 #guard_msgs in
   #eval emph {} |>.test! "_ aa_"
 
+
+
 /--
 info: Success! Final stack:
   (LeanDoc.Syntax.code "``" "foo bar" "``")
@@ -803,7 +811,7 @@ mutual
   partial def blockquote (ctxt : BlockCtxt) : ParserFn :=
     atomicFn <| nodeFn ``blockquote <|
       takeWhileFn (· == ' ') >> guardMinColumn ctxt.minIndent >> chFn '>' >>
-      withCurrentColumn fun c => many1Fn (block { ctxt with minIndent := c })
+      withCurrentColumn fun c => blocks { ctxt with minIndent := c }
 
   partial def list (ctxt : BlockCtxt) : ParserFn :=
     nodeFn ``ul <|
@@ -826,7 +834,7 @@ mutual
         withCurrentColumn fun c' =>
           let fenceWidth := c' - c
           takeWhileFn (· == ' ') >>
-          nameAndArgs >>
+          optionalFn nameAndArgs >>
           satisfyFn (· == '\n') "newline" >>
           asStringFn (manyFn (codeFrom c fenceWidth)) >>
           closeFence c fenceWidth
@@ -887,7 +895,7 @@ mutual
 
   partial def block (c : BlockCtxt) := list c <|> header <|> codeBlock c <|> directive c <|> blockquote c <|> para c
 
-  partial def blocks c := sepByFn true (block c) (ignoreFn (many1Fn blankLine))
+  partial def blocks (c : BlockCtxt) := sepByFn true (block c) (ignoreFn (manyFn blankLine))
 end
 
 /--
@@ -1002,6 +1010,23 @@ All input consumed.
 #guard_msgs in
   #eval blocks {} |>.test! "n\\*k "
 
+-- Unlike Djot, we don't have precedence - these must be well-nested
+/--
+info: Failure: 1 underscores
+Final stack:
+  [(LeanDoc.Syntax.para
+    [(LeanDoc.Syntax.bold
+      "*"
+      [(LeanDoc.Syntax.text "This is ")
+       (LeanDoc.Syntax.emph
+        "_"
+        [(LeanDoc.Syntax.text "strong")]
+        <missing>)])])]
+Remaining: "* not regular_ emphasis"
+-/
+#guard_msgs in
+  #eval blocks {} |>.test! "*This is _strong* not regular_ emphasis"
+
 /--
 info: Success! Final stack:
   (LeanDoc.Syntax.header
@@ -1024,11 +1049,51 @@ All input consumed.
 
 /--
 info: Success! Final stack:
+  [(LeanDoc.Syntax.blockquote
+    ">"
+    [(LeanDoc.Syntax.para
+      [(LeanDoc.Syntax.text "Quotation")
+       (LeanDoc.Syntax.linebreak "\n")
+       (LeanDoc.Syntax.text "and contained")])])]
+All input consumed.
+-/
+#guard_msgs in
+#eval blocks {} |>.test! "> Quotation\nand contained"
+
+/--
+info: Success! Final stack:
+  [(LeanDoc.Syntax.blockquote
+    ">"
+    [(LeanDoc.Syntax.para
+      [(LeanDoc.Syntax.text "Quotation")])
+     (LeanDoc.Syntax.para
+      [(LeanDoc.Syntax.text "and contained")])])]
+All input consumed.
+-/
+#guard_msgs in
+#eval blocks {} |>.test! "> Quotation\n\n and contained"
+
+/--
+info: Success! Final stack:
+  [(LeanDoc.Syntax.blockquote
+    ">"
+    [(LeanDoc.Syntax.para
+      [(LeanDoc.Syntax.text "Quotation")])])
+   (LeanDoc.Syntax.para
+    [(LeanDoc.Syntax.text "and not contained")])]
+All input consumed.
+-/
+#guard_msgs in
+#eval blocks {} |>.test! "> Quotation\n\nand not contained"
+
+
+
+/--
+info: Success! Final stack:
   (LeanDoc.Syntax.codeblock
    (column "1")
    "```"
-   "scheme"
-   []
+   ["scheme" []]
    " (define x 4)\n x\n"
    "```")
 All input consumed.
@@ -1039,10 +1104,36 @@ All input consumed.
 /--
 info: Success! Final stack:
   (LeanDoc.Syntax.codeblock
+   (column "1")
+   "```"
+   []
+   " (define x 4)\n x\n"
+   "```")
+All input consumed.
+-/
+#guard_msgs in
+  #eval codeBlock {} |>.test! " ``` \n (define x 4)\n x\n ```"
+
+/--
+info: Success! Final stack:
+  (LeanDoc.Syntax.codeblock
+   (column "1")
+   "```"
+   []
+   " (define x 4)\n x\n"
+   "```")
+All input consumed.
+-/
+#guard_msgs in
+  #eval codeBlock {} |>.test! " ```\n (define x 4)\n x\n ```"
+
+
+/--
+info: Success! Final stack:
+  (LeanDoc.Syntax.codeblock
    (column "0")
    "```"
-   "scheme"
-   []
+   ["scheme" []]
    " (define x 4)\n x\n"
    "```")
 All input consumed.
@@ -1055,8 +1146,7 @@ info: Success! Final stack:
   (LeanDoc.Syntax.codeblock
    (column "0")
    "```"
-   "scheme"
-   []
+   ["scheme" []]
    "(define x 4)\nx\n"
    "```")
 All input consumed.
@@ -1071,8 +1161,7 @@ Final stack:
   (LeanDoc.Syntax.codeblock
    (column "0")
    "```"
-   "scheme"
-   []
+   ["scheme" []]
    "(define x 4)\nx\n"
    <missing>)
 Remaining: "````"
@@ -1086,8 +1175,10 @@ Final stack:
   (LeanDoc.Syntax.codeblock
    (column "0")
    "```"
-   "scheme"
-   [(arg.named "dialect" (string "\"chicken\""))]
+   ["scheme"
+    [(arg.named
+      "dialect"
+      (string "\"chicken\""))]]
    <missing>)
 Remaining: "43\n(define x 4)\nx\n```"
 -/
@@ -1100,8 +1191,7 @@ Final stack:
   (LeanDoc.Syntax.codeblock
    (column "1")
    "```"
-   "scheme"
-   []
+   ["scheme" []]
    ""
    <missing>)
 Remaining: "(define x 4)\nx\n```"
@@ -1115,14 +1205,41 @@ Final stack:
   (LeanDoc.Syntax.codeblock
    (column "1")
    "```"
-   "scheme"
-   []
+   ["scheme" []]
    " (define x 4)\n x\n"
    <missing>)
 Remaining: "```"
 -/
 #guard_msgs in
   #eval codeBlock {} |>.test! " ``` scheme\n (define x 4)\n x\n```"
+
+/--
+info: Failure: expected column 1
+Final stack:
+  (LeanDoc.Syntax.codeblock
+   (column "1")
+   "```"
+   []
+   " (define x 4)\n x\n"
+   <missing>)
+Remaining: "```"
+-/
+#guard_msgs in
+  #eval codeBlock {} |>.test! " ```\n (define x 4)\n x\n```"
+
+/--
+info: Failure: expected column 1
+Final stack:
+  (LeanDoc.Syntax.codeblock
+   (column "1")
+   "```"
+   []
+   " (define x 4)\n x\n"
+   <missing>)
+Remaining: "```"
+-/
+#guard_msgs in
+  #eval codeBlock {} |>.test! " ```   \n (define x 4)\n x\n```"
 
 
 /--

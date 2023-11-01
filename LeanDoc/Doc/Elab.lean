@@ -1,3 +1,8 @@
+/-
+Copyright (c) 2023 Lean FRO LLC. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+Author: David Thrane Christiansen
+-/
 import Lean
 
 import LeanDoc.Doc.Elab.Monad
@@ -6,12 +11,6 @@ namespace LeanDoc.Doc.Elab
 
 open Lean Elab
 open PartElabM
-
--- elab "#dump_inline_expand" : command => open Lean Elab Command in do
---   let out := inlineExpanderAttr.ext.getState (← getEnv)
---   dbg_trace (repr out.size)
-
-
 
 partial def elabInline (inline : Syntax) : DocElabM (TSyntax `term) :=
   withRef inline <| withFreshMacroScope <| withIncRecDepth <| do
@@ -188,7 +187,7 @@ def _root_.LeanDoc.Syntax.blockquote.expand : BlockExpander
 
 @[block_expander LeanDoc.Syntax.codeblock]
 def _root_.LeanDoc.Syntax.codeblock.expand : BlockExpander
-  | `<low|(LeanDoc.Syntax.codeblock (column ~_col) ~_open ~_name ~_args ~(.atom _ contents) ~_close )> =>
+  | `<low|(LeanDoc.Syntax.codeblock (column ~_col) ~_open ~_nameAndArgs ~(.atom _ contents) ~_close )> =>
     -- TODO name and args and indent
     ``(Block.code Option.none #[] 0 $(quote contents))
   | _ =>

@@ -1,3 +1,8 @@
+/-
+Copyright (c) 2023 Lean FRO LLC. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+Author: David Thrane Christiansen
+-/
 import LeanDoc
 
 open LeanDoc Doc Html Concrete ToHtml
@@ -34,9 +39,12 @@ For demo-worthiness, we also need:
 
 As someone said:
 
-> It's still a start! And we have `inline code`
+> It's still a start! And we have `inline code`.
+
+```someLanguage option1=5
+Block code too
+```
 
 ## Other idea
-
 
 ## Further subsection
