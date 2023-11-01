@@ -292,7 +292,7 @@ def blankLine : ParserFn := nodeFn `blankLine <| atomicFn <| asStringFn <| takeW
 def bullet := satisfyFn (· == '*') "bullet (*)"
 
 /-- Characters with a special meaning during a line (we already know we're reading inlines) -/
-def specialChars := "*_\n[]`".toList
+def specialChars := "*_\n[]{}`".toList
 
 def isSpecial (c : Char) : Bool := c ∈ specialChars
 
@@ -338,6 +338,187 @@ All input consumed.
 -/
 #guard_msgs in
   #eval notSpecial.test! "\\>"
+
+
+def val : ParserFn := docNumLitFn <|> docIdentFn <|> docStrLitFn
+
+/--
+info: Success! Final stack:
+  (num "1")
+All input consumed.
+-/
+#guard_msgs in
+  #eval val.test! "1"
+/--
+info: Success! Final stack:
+  (num "3")
+All input consumed.
+-/
+#guard_msgs in
+  #eval val.test! "3"
+/--
+info: Failure: unexpected end of input; expected identifier, numeral or string literal
+Final stack:
+  <missing>
+Remaining: ""
+-/
+#guard_msgs in
+  #eval val.test! ""
+
+/--
+info: Success! Final stack:
+  (str "\"a b c\t d\"")
+All input consumed.
+-/
+#guard_msgs in
+  #eval val.test! "\"a b c\t d\""
+
+/--
+info: Success! Final stack:
+  (str "\"a b c\t d\"")
+Remaining:
+"\n"
+-/
+#guard_msgs in
+  #eval val.test! "\"a b c\t d\"\n"
+
+
+def withCurrentStackSize (p : Nat → ParserFn) : ParserFn := fun c s =>
+  p s.stxStack.size c s
+
+/-- Match the character indicated, pushing nothing to the stack in case of success -/
+def skipChFn (c : Char) : ParserFn :=
+  satisfyFn (· == c) c.toString
+
+def arg : ParserFn :=
+    withCurrentStackSize fun iniSz =>
+      potentiallyNamed iniSz <|> ((docStrLitFn <|> docNumLitFn) >> mkAnon iniSz)
+
+where
+  mkNamed (iniSz : Nat) : ParserFn := fun _ s => s.mkNode `arg.named iniSz
+  mkAnon (iniSz : Nat) : ParserFn := fun _ s => s.mkNode `arg.anon iniSz
+  eatSpaces := takeWhileFn (· == ' ')
+  potentiallyNamed iniSz :=
+      atomicFn docIdentFn >> eatSpaces >>
+       ((atomicFn (skipChFn ':' >> skipChFn '=') >> eatSpaces >> val >> eatSpaces >> mkNamed iniSz) <|> mkAnon iniSz)
+/--
+info: Success! Final stack:
+  (arg.anon `x)
+All input consumed.
+-/
+#guard_msgs in
+  #eval arg.test! "x"
+
+/--
+info: Success! Final stack:
+  (arg.named `x (num "1"))
+All input consumed.
+-/
+#guard_msgs in
+  #eval arg.test! "x:=1"
+
+/--
+info: Success! Final stack:
+  (arg.named `x `y)
+All input consumed.
+-/
+#guard_msgs in
+  #eval arg.test! "x:=y"
+
+/--
+info: Success! Final stack:
+  (arg.named `x (str "\"y\""))
+All input consumed.
+-/
+#guard_msgs in
+  #eval arg.test! "x:=\"y\""
+
+/--
+info: Failure: unterminated string literal; expected identifier or numeral
+Final stack:
+ • `x
+ • <missing>
+
+Remaining: "\"y"
+-/
+#guard_msgs in
+  #eval arg.test! "x:=\"y"
+
+/--
+info: Success! Final stack:
+  (arg.anon (num "42"))
+All input consumed.
+-/
+#guard_msgs in
+#eval arg.test! "42"
+
+
+/--
+info: Success! Final stack:
+  `x
+Remaining:
+"\n"
+-/
+#guard_msgs in
+#eval docIdentFn.test! "x\n"
+
+def eatSpaces := takeWhileFn (· == ' ')
+
+def args : ParserFn := sepByFn true arg eatSpaces
+
+def nameAndArgs : ParserFn := eatSpaces >> docIdentFn >> eatSpaces >> args
+
+
+/--
+info: Success! Final stack:
+ • `leanExample
+ • [(arg.named `context (num "2"))]
+
+All input consumed.
+-/
+#guard_msgs in
+#eval nameAndArgs.test! "leanExample context := 2"
+/--
+info: Success! Final stack:
+ • `leanExample
+ • [(arg.anon `context)]
+
+All input consumed.
+-/
+#guard_msgs in
+#eval nameAndArgs.test! "leanExample context"
+/--
+info: Success! Final stack:
+ • `leanExample
+ • [(arg.anon `context) (arg.anon `more)]
+
+All input consumed.
+-/
+#guard_msgs in
+#eval nameAndArgs.test! "leanExample context more"
+/--
+info: Success! Final stack:
+ • `leanExample
+ • [(arg.anon `context)
+     (arg.named `more (str "\"stuff\""))]
+
+All input consumed.
+-/
+#guard_msgs in
+#eval nameAndArgs.test! "leanExample context more:=\"stuff\""
+
+
+/--
+info: Success! Final stack:
+ • `leanExample
+ • [(arg.anon `context)
+     (arg.named `more (str "\"stuff\""))]
+
+Remaining:
+"\n\nabc"
+-/
+#guard_msgs in
+#eval nameAndArgs.test! "leanExample context more:=\"stuff\"\n\nabc"
 
 structure InlineCtxt where
   allowNewlines := true
@@ -456,10 +637,27 @@ mutual
     ref : ParserFn := nodeFn `ref ((atomicFn <| strFn "[") >> asStringFn notRefEnd >> strFn "]")
     url : ParserFn := nodeFn `url ((atomicFn <| strFn "(") >> asStringFn notUrlEnd >> strFn ")")
 
+  partial def role (ctxt : InlineCtxt) : ParserFn := fun c s =>
+    let iniSz := s.stackSize
+    let s := intro c s
+    let n := s.stxStack.get! (iniSz + 1) |>.getId
+    if s.hasError then s
+    else let s := (nodeFn nullKind (delimitedInline ctxt) <|> bracketed) c s
+         let s := s.mkNode n iniSz
+         let top := s.stxStack.back
+         {s with stxStack := s.stxStack.pop.pop.push top}
 
+
+  where
+    eatSpaces := takeWhileFn (· == ' ')
+    intro := atomicFn (chFn '{') >> eatSpaces >> nameAndArgs >> eatSpaces >> chFn '}'
+    bracketed := atomicFn (satisfyFn (· == '[') "'['">> manyFn (inline ctxt) >> satisfyFn (· == ']') "']'")
+
+
+  partial def delimitedInline (ctxt : InlineCtxt) : ParserFn := emph ctxt <|> bold ctxt <|> code <|> role ctxt
 
   partial def inline (ctxt : InlineCtxt) : ParserFn :=
-    text <|> emph ctxt <|> bold ctxt <|> linebreak ctxt <|> code <|> link ctxt
+    text <|> linebreak ctxt <|> link ctxt <|> delimitedInline ctxt
 end
 
 def textLine (allowNewlines := true) : ParserFn := many1Fn (inline { allowNewlines })
@@ -650,183 +848,47 @@ All input consumed.
 #guard_msgs in
   #eval inline {} |>.test! "[Wikipedia](https://en.wikipedia.org)"
 
-
-def val : ParserFn := docNumLitFn <|> docIdentFn <|> docStrLitFn
-
 /--
 info: Success! Final stack:
-  (num "1")
+  (hello
+   "{"
+   `hello
+   []
+   "}"
+   [(LeanDoc.Syntax.bold
+     "*"
+     [(LeanDoc.Syntax.text "there")]
+     "*")])
 All input consumed.
 -/
 #guard_msgs in
-  #eval val.test! "1"
+#eval role {} |>.test! "{hello}*there*"
+
 /--
 info: Success! Final stack:
-  (num "3")
+  (hello
+   "{"
+   `hello
+   []
+   "}"
+   [(LeanDoc.Syntax.text "there")])
 All input consumed.
 -/
 #guard_msgs in
-  #eval val.test! "3"
-/--
-info: Failure: unexpected end of input; expected identifier, numeral or string literal
-Final stack:
-  <missing>
-Remaining: ""
--/
-#guard_msgs in
-  #eval val.test! ""
+#eval role {} |>.test! "{hello}[there]"
 
 /--
 info: Success! Final stack:
-  (str "\"a b c\t d\"")
+  (hello
+   "{"
+   `hello
+   [(arg.named `world `gaia)]
+   "}"
+   [(LeanDoc.Syntax.text "there")])
 All input consumed.
 -/
 #guard_msgs in
-  #eval val.test! "\"a b c\t d\""
-
-/--
-info: Success! Final stack:
-  (str "\"a b c\t d\"")
-Remaining:
-"\n"
--/
-#guard_msgs in
-  #eval val.test! "\"a b c\t d\"\n"
-
-
-def withCurrentStackSize (p : Nat → ParserFn) : ParserFn := fun c s =>
-  p s.stxStack.size c s
-
-/-- Match the character indicated, pushing nothing to the stack in case of success -/
-def skipChFn (c : Char) : ParserFn :=
-  satisfyFn (· == c) c.toString
-
-def arg : ParserFn :=
-    withCurrentStackSize fun iniSz =>
-      potentiallyNamed iniSz <|> ((docStrLitFn <|> docNumLitFn) >> mkAnon iniSz)
-
-where
-  mkNamed (iniSz : Nat) : ParserFn := fun _ s => s.mkNode `arg.named iniSz
-  mkAnon (iniSz : Nat) : ParserFn := fun _ s => s.mkNode `arg.anon iniSz
-  eatSpaces := takeWhileFn (· == ' ')
-  potentiallyNamed iniSz :=
-      atomicFn docIdentFn >> eatSpaces >>
-       ((atomicFn (skipChFn ':' >> skipChFn '=') >> eatSpaces >> val >> eatSpaces >> mkNamed iniSz) <|> mkAnon iniSz)
-/--
-info: Success! Final stack:
-  (arg.anon `x)
-All input consumed.
--/
-#guard_msgs in
-  #eval arg.test! "x"
-
-/--
-info: Success! Final stack:
-  (arg.named `x (num "1"))
-All input consumed.
--/
-#guard_msgs in
-  #eval arg.test! "x:=1"
-
-/--
-info: Success! Final stack:
-  (arg.named `x `y)
-All input consumed.
--/
-#guard_msgs in
-  #eval arg.test! "x:=y"
-
-/--
-info: Success! Final stack:
-  (arg.named `x (str "\"y\""))
-All input consumed.
--/
-#guard_msgs in
-  #eval arg.test! "x:=\"y\""
-
-/--
-info: Failure: unterminated string literal; expected identifier or numeral
-Final stack:
- • `x
- • <missing>
-
-Remaining: "\"y"
--/
-#guard_msgs in
-  #eval arg.test! "x:=\"y"
-
-/--
-info: Success! Final stack:
-  (arg.anon (num "42"))
-All input consumed.
--/
-#guard_msgs in
-#eval arg.test! "42"
-
-
-/--
-info: Success! Final stack:
-  `x
-Remaining:
-"\n"
--/
-#guard_msgs in
-#eval docIdentFn.test! "x\n"
-
-def nameAndArgs : ParserFn := eatSpaces >> docIdentFn >> eatSpaces >> sepByFn true arg eatSpaces
-where
-  eatSpaces := takeWhileFn (· == ' ')
-
-/--
-info: Success! Final stack:
- • `leanExample
- • [(arg.named `context (num "2"))]
-
-All input consumed.
--/
-#guard_msgs in
-#eval nameAndArgs.test! "leanExample context := 2"
-/--
-info: Success! Final stack:
- • `leanExample
- • [(arg.anon `context)]
-
-All input consumed.
--/
-#guard_msgs in
-#eval nameAndArgs.test! "leanExample context"
-/--
-info: Success! Final stack:
- • `leanExample
- • [(arg.anon `context) (arg.anon `more)]
-
-All input consumed.
--/
-#guard_msgs in
-#eval nameAndArgs.test! "leanExample context more"
-/--
-info: Success! Final stack:
- • `leanExample
- • [(arg.anon `context)
-     (arg.named `more (str "\"stuff\""))]
-
-All input consumed.
--/
-#guard_msgs in
-#eval nameAndArgs.test! "leanExample context more:=\"stuff\""
-
-
-/--
-info: Success! Final stack:
- • `leanExample
- • [(arg.anon `context)
-     (arg.named `more (str "\"stuff\""))]
-
-Remaining:
-"\n\nabc"
--/
-#guard_msgs in
-#eval nameAndArgs.test! "leanExample context more:=\"stuff\"\n\nabc"
+#eval role {} |>.test! "{hello world:=gaia}[there]"
 
 structure BlockCtxt where
   minIndent : Nat := 0
