@@ -36,9 +36,9 @@ declare_syntax_cat list_item
 syntax (name:=li) str : list_item
 
 declare_syntax_cat block
-syntax (name:=para) str : block
+syntax (name:=para) "para{" inline+ "}" : block
 /-- List -/
-syntax (name:=ul) str : block
+syntax (name:=ul) "ul{" list_item* "}" : block
 /-- Literal code -/
 syntax (name:=codeblock) str : block
 /-- Quotation -/
@@ -47,6 +47,8 @@ syntax (name:=blockquote) str : block
 syntax (name:=directive) str : block
 /-- A header -/
 syntax (name:=header) str : block
+
+syntax (name:=block_role) "role{" ident argument* "}" block  : block
 
 
 open LeanDoc.SyntaxUtils Lean Elab Term Std in

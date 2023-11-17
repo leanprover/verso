@@ -100,9 +100,9 @@ inductive FinishedPart where
 deriving Repr, BEq
 
 partial def FinishedPart.toSyntax [Monad m] [MonadQuotation m] : FinishedPart → m (TSyntax `term)
-  | .mk _titleStx titleInlines _titleString blocks subParts _endPos => do
+  | .mk _titleStx titleInlines titleString blocks subParts _endPos => do
     let subStx ← subParts.mapM toSyntax
-    ``(Part.mk #[$[$titleInlines],*] #[$[$blocks],*] #[$[$subStx],*])
+    ``(Part.mk #[$[$titleInlines],*] $(quote titleString) #[$[$blocks],*] #[$[$subStx],*])
 
 partial def FinishedPart.toTOC : FinishedPart → TOC
   | .mk titleStx _titleInlines titleString _blocks subParts endPos =>
@@ -286,3 +286,15 @@ unsafe def roleExpandersForUnsafe (x : Name) : DocElabM (Array RoleExpander) := 
 
 @[implemented_by roleExpandersForUnsafe]
 opaque roleExpandersFor (x : Name) : DocElabM (Array RoleExpander)
+
+abbrev BlockRoleExpander := Array RoleArgument → Array Syntax → DocElabM (Array (TSyntax `term))
+
+initialize blockRoleExpanderAttr : KeyedDeclsAttribute BlockRoleExpander ←
+  mkDocExpanderAttribute `blockRole_expander ``BlockRoleExpander "Indicates that this function is used to implement a given blockRole" `blockRoleExpanderAttr
+
+unsafe def blockRoleExpandersForUnsafe (x : Name) : DocElabM (Array BlockRoleExpander) := do
+  let expanders := blockRoleExpanderAttr.getEntries (← getEnv) x
+  return expanders.map (·.value) |>.toArray
+
+@[implemented_by blockRoleExpandersForUnsafe]
+opaque blockRoleExpandersFor (x : Name) : DocElabM (Array BlockRoleExpander)

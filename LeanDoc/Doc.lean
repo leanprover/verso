@@ -50,12 +50,14 @@ inductive Block where
 deriving Repr
 
 inductive Part where
-  | mk (title : Array Inline) (content : Array Block) (subParts : Array Part)
+  | mk (title : Array Inline) (titleString : String) (content : Array Block) (subParts : Array Part)
 deriving Repr
 
 def Part.title : Part → Array Inline
   | .mk title .. => title
+def Part.titleString : Part → String
+  | .mk _ titleString .. => titleString
 def Part.content : Part → Array Block
-  | .mk _ content .. => content
+  | .mk _ _ content .. => content
 def Part.subParts : Part → Array Part
-  | .mk _ _ subParts => subParts
+  | .mk _ _ _ subParts => subParts

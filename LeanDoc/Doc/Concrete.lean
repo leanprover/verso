@@ -57,7 +57,10 @@ elab "inlines!" s:inlineStr : term => open Lean Elab Term in
 
 set_option pp.rawOnError true
 
-
+/--
+info: #[Inline.text "Hello, ", Inline.emph #[Inline.bold #[Inline.text "emph"]]] : Array Inline
+-/
+#guard_msgs in
 #check inlines!"Hello, _*emph*_"
 
 def document : Parser where
@@ -102,3 +105,37 @@ elab "#doc" title:inlineStr "=>" text:document eof:eoi : term => open Lean Elab 
   let finished := st.partContext.toPartFrame.close endPos
   pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
   elabTerm (← finished.toSyntax) none
+
+def docName (moduleName : Name) : Name :=
+  absolutize <| .str moduleName "the canonical document object name"
+where
+  absolutize : Name → Name
+    | .anonymous => .anonymous
+    | .num ns i => .num (absolutize ns) i
+    | n@(.str .anonymous "_root_") => n
+    | .str .anonymous other => .str (.str .anonymous "_root_") other
+    | .str ns n => .str (absolutize ns) n
+
+macro "%doc" moduleName:ident : term =>
+  pure <| mkIdentFrom moduleName <| docName moduleName.getId
+
+def currentDocName [Monad m] [MonadEnv m] : m Name := do
+  pure <| docName <| (← Lean.MonadEnv.getEnv).mainModule
+
+
+elab "#doc" title:inlineStr "=>" text:document eof:eoi : command => open Lean Elab Term Command PartElabM DocElabM in do
+  let endPos := eof.raw.getTailPos?.get!
+  let .node _ _ blocks := text.raw
+    | dbg_trace "nope {ppSyntax text.raw}" throwUnsupportedSyntax
+  let ⟨`<low| [~_ ~(titleName@(.node _ _ titleParts))]>⟩ := title
+    | dbg_trace "nope {ppSyntax title}" throwUnsupportedSyntax
+  let titleString := inlinesToString (← getEnv) titleParts
+  let ((), st) ← liftTermElabM <| PartElabM.run (.init titleName) <| do
+    setTitle titleString (← liftDocElabM <| titleParts.mapM elabInline)
+    for b in blocks do partCommand b
+    closePartsUntil 0 endPos
+    pure ()
+  let finished := st.partContext.toPartFrame.close endPos
+  pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
+  let docName ← mkIdentFrom title <$> currentDocName
+  elabCommand (← `(def $docName := $(← finished.toSyntax)))

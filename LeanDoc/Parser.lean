@@ -466,9 +466,23 @@ Remaining:
 
 def eatSpaces := takeWhileFn (· == ' ')
 
-def args : ParserFn := sepByFn true arg eatSpaces
+/--
 
-def nameAndArgs : ParserFn := eatSpaces >> docIdentFn >> eatSpaces >> args
+Skip whitespace for name and arguments. If the argument is `none`,
+it's in a single-line context and whitespace may only be the space
+character. If it's `some N`, then newlines are allowed, but `N` is the
+minimum indentation column.
+-/
+def nameArgWhitespace : (multiline : Option Nat) → ParserFn
+  | none => eatSpaces
+  | some n => takeWhileFn (fun c => c == ' ' || c == '\n') >> guardMinColumn n
+
+def args (multiline : Option Nat := none) : ParserFn :=
+  sepByFn true arg <| nameArgWhitespace multiline
+
+def nameAndArgs (multiline : Option Nat := none) : ParserFn :=
+  nameArgWhitespace multiline >> docIdentFn >>
+  nameArgWhitespace multiline >> args (multiline := multiline)
 
 
 /--
@@ -992,7 +1006,27 @@ mutual
       notFollowedByFn (skipChFn ':') "extra :" >>
       takeWhileFn (· == ' ') >> (satisfyFn (· == '\n') "newline" <|> eoiFn)
 
-  partial def block (c : BlockCtxt) := list c <|> header <|> codeBlock c <|> directive c <|> blockquote c <|> para c
+  partial def block_role (ctxt : BlockCtxt) : ParserFn := fun c s =>
+    let iniPos := s.pos
+    let iniSz := s.stxStack.size
+    let restorePosOnErr : ParserState → ParserState
+      | ⟨stack, lhsPrec, _, cache, some msg⟩ => ⟨stack, lhsPrec, iniPos, cache, some msg⟩
+      | other => other
+    let s := eatSpaces c s
+    if s.hasError then restorePosOnErr s
+    else
+      let col := c.currentColumn s
+      let s := (intro >> eatSpaces >> ignoreFn (satisfyFn (· == '\n') "newline" <|> eoiFn)) c s
+      if s.hasError then restorePosOnErr s
+      else
+        let s := block {ctxt with minIndent := col} c s
+        s.mkNode ``block_role iniSz
+  where
+    eatSpaces := takeWhileFn (· == ' ')
+    intro := guardMinColumn (ctxt.minIndent) >> withCurrentColumn fun c => atomicFn (chFn '{') >> withCurrentColumn fun c' => nameAndArgs (some c') >> nameArgWhitespace (some c)  >> chFn '}'
+
+
+  partial def block (c : BlockCtxt) := block_role c <|> list c <|> header <|> codeBlock c <|> directive c <|> blockquote c <|> para c
 
   partial def blocks (c : BlockCtxt) := sepByFn true (block c) (ignoreFn (manyFn blankLine))
 end
@@ -1347,6 +1381,144 @@ Remaining: "```"
 -/
 #guard_msgs in
   #eval codeBlock {} |>.test! " ```   \n (define x 4)\n x\n```"
+
+
+/--
+info: Success! Final stack:
+  (LeanDoc.Syntax.block_role
+   "{"
+   `test
+   []
+   "}"
+   (LeanDoc.Syntax.para
+    [(LeanDoc.Syntax.text
+      (str "\"Here's a modified paragraph.\""))]))
+All input consumed.
+-/
+#guard_msgs in
+#eval block {} |>.test! "{test}\nHere's a modified paragraph."
+/--
+info: Success! Final stack:
+  (LeanDoc.Syntax.block_role
+   "{"
+   `test
+   []
+   "}"
+   (LeanDoc.Syntax.para
+    [(LeanDoc.Syntax.text
+      (str "\"Here's a modified paragraph.\""))]))
+All input consumed.
+-/
+#guard_msgs in
+#eval block {} |>.test! "{test}\n Here's a modified paragraph."
+/--
+info: Success! Final stack:
+  (LeanDoc.Syntax.block_role
+   "{"
+   `test
+   []
+   "}"
+   (LeanDoc.Syntax.para
+    [(LeanDoc.Syntax.text
+      (str "\"Here's a modified paragraph.\""))]))
+All input consumed.
+-/
+#guard_msgs in
+#eval block {} |>.test! " {test}\n Here's a modified paragraph."
+/--
+info: Failure: #; expected expected column at least 1
+Final stack:
+  (LeanDoc.Syntax.block_role
+   "{"
+   `test
+   []
+   "}"
+   (LeanDoc.Syntax.para <missing>))
+Remaining: "Here's a modified paragraph."
+-/
+#guard_msgs in
+#eval block {} |>.test! " {test}\nHere's a modified paragraph."
+/--
+info: Success! Final stack:
+  (LeanDoc.Syntax.block_role
+   "{"
+   `test
+   []
+   "}"
+   (LeanDoc.Syntax.blockquote
+    ">"
+    [(LeanDoc.Syntax.para
+      [(LeanDoc.Syntax.text
+        (str
+         "\"Here's a modified blockquote\""))])
+     (LeanDoc.Syntax.para
+      [(LeanDoc.Syntax.text
+        (str "\"with multiple paras\""))])]))
+Remaining:
+"that ends"
+-/
+#guard_msgs in
+#eval block {} |>.test! "{test}\n> Here's a modified blockquote\n\n with multiple paras\n\nthat ends"
+/--
+info: Failure: expected identifier
+Final stack:
+  (LeanDoc.Syntax.para
+   [(LeanDoc.Syntax.role "{" <missing>)])
+Remaining: "\ntest}\nHere's a modified paragraph."
+-/
+#guard_msgs in
+#eval block {} |>.test! "{\ntest}\nHere's a modified paragraph."
+/--
+info: Success! Final stack:
+  (LeanDoc.Syntax.block_role
+   "{"
+   `test
+   []
+   "}"
+   (LeanDoc.Syntax.para
+    [(LeanDoc.Syntax.text
+      (str "\"Here's a modified paragraph.\""))]))
+All input consumed.
+-/
+#guard_msgs in
+#eval block {} |>.test! "{\n test}\nHere's a modified paragraph."
+/--
+info: Failure: expected identifier
+Final stack:
+  (LeanDoc.Syntax.para
+   [(LeanDoc.Syntax.role "{" <missing>)])
+Remaining: "\n    test\narg}\nHere's a modified paragraph."
+-/
+#guard_msgs in
+#eval block {} |>.test! "{\n    test\narg}\nHere's a modified paragraph."
+/--
+info: Success! Final stack:
+  (LeanDoc.Syntax.block_role
+   "{"
+   `test
+   [(arg.anon `arg)]
+   "}"
+   (LeanDoc.Syntax.para
+    [(LeanDoc.Syntax.text
+      (str "\"Here's a modified paragraph.\""))]))
+All input consumed.
+-/
+#guard_msgs in
+#eval block {} |>.test! "{\n    test\n arg}\nHere's a modified paragraph."
+/--
+info: Failure: '{'; expected [
+Final stack:
+  (LeanDoc.Syntax.block_role
+   "{"
+   `test
+   [(arg.anon `arg)]
+   "}"
+   (LeanDoc.Syntax.para
+    [(LeanDoc.Syntax.role <missing>)]))
+Remaining: "\n\nHere's a modified paragraph."
+-/
+#guard_msgs in
+#eval block {} |>.test! "{\n    test\n arg}\n\n\nHere's a modified paragraph."
 
 
 /--

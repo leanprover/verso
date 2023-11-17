@@ -10,20 +10,17 @@ open Lean Elab Term
 
 set_option pp.rawOnError true
 
-def vanish := ()
-def rev := ()
-
 @[role_expander vanish]
-def vanish.expand : RoleExpander
+def vanish : RoleExpander
    | _args, _stxs => pure #[]
 
 @[role_expander rev]
-def rev.expand : RoleExpander
+def rev : RoleExpander
   | _args, stxs => .reverse <$> stxs.mapM elabInline
 
 
 def main : IO Unit := do
-  IO.println <| Html.format <| Html.embody <| toHtml <| #doc "My wonderful document" =>
+  IO.println <| Html.asString <| Html.embody <| toHtml <| #doc "My wonderful document" =>
 
 This is an example document. There's still bogus syntax highlighting
 and no LSP features, but it does seem to run things.

@@ -16,7 +16,7 @@ set_option pp.rawOnError true
 :::::::
 :::::::
 
-/-- info: LeanDoc.Doc.Part.mk #[LeanDoc.Doc.Inline.text "Nothing"] #[] #[] -/
+/-- info: LeanDoc.Doc.Part.mk #[LeanDoc.Doc.Inline.text "Nothing"] "Nothing" #[] #[] -/
 #guard_msgs in
   #eval none
 
@@ -32,6 +32,7 @@ Hello, I'm a paragraph. Yes I am!
 /--
 info: LeanDoc.Doc.Part.mk
   #[LeanDoc.Doc.Inline.text "My title here"]
+  "My title here"
   #[LeanDoc.Doc.Block.para #[LeanDoc.Doc.Inline.text "Hello, I'm a paragraph. Yes I am!"]]
   #[]
 -/
@@ -48,6 +49,7 @@ info: LeanDoc.Doc.Part.mk
 /--
 info: LeanDoc.Doc.Part.mk
   #[LeanDoc.Doc.Inline.text "My title here"]
+  "My title here"
   #[LeanDoc.Doc.Block.ul
       #[{ indent := 0, contents := #[LeanDoc.Doc.Block.para #[LeanDoc.Doc.Inline.text "Just a list with one item"]] }]]
   #[]
@@ -69,9 +71,11 @@ a paragraph
 /--
 info: LeanDoc.Doc.Part.mk
   #[LeanDoc.Doc.Inline.text "My title here"]
+  "My title here"
   #[]
   #[LeanDoc.Doc.Part.mk
       #[LeanDoc.Doc.Inline.text "Section 1"]
+      "Section 1"
       #[LeanDoc.Doc.Block.para #[LeanDoc.Doc.Inline.text "a paragraph"]]
       #[]]
 -/
@@ -100,12 +104,15 @@ More text:
 /--
 info: LeanDoc.Doc.Part.mk
   #[LeanDoc.Doc.Inline.text "My title here"]
+  "My title here"
   #[]
   #[LeanDoc.Doc.Part.mk
       #[LeanDoc.Doc.Inline.text "Section 1"]
+      "Section 1"
       #[LeanDoc.Doc.Block.para #[LeanDoc.Doc.Inline.text "a paragraph"]]
       #[LeanDoc.Doc.Part.mk
           #[LeanDoc.Doc.Inline.text "Section 1.1"]
+          "Section 1.1"
           #[LeanDoc.Doc.Block.para #[LeanDoc.Doc.Inline.text "More text:"],
             LeanDoc.Doc.Block.ul
               #[{ indent := 0,
@@ -140,9 +147,11 @@ Also, 2 > 3.
 /--
 info: LeanDoc.Doc.Part.mk
   #[LeanDoc.Doc.Inline.text "More writing"]
+  "More writing"
   #[]
   #[LeanDoc.Doc.Part.mk
       #[LeanDoc.Doc.Inline.text "Section 1"]
+      "Section 1"
       #[LeanDoc.Doc.Block.para #[LeanDoc.Doc.Inline.text "Here's a quote;"],
         LeanDoc.Doc.Block.blockquote
           #[LeanDoc.Doc.Block.para #[LeanDoc.Doc.Inline.text "I like quotes", LeanDoc.Doc.Inline.linebreak "\n"],
@@ -172,9 +181,11 @@ Here's some code
 /--
 info: LeanDoc.Doc.Part.mk
   #[LeanDoc.Doc.Inline.text "More writing"]
+  "More writing"
   #[]
   #[LeanDoc.Doc.Part.mk
       #[LeanDoc.Doc.Inline.text "Section 1"]
+      "Section 1"
       #[LeanDoc.Doc.Block.para #[LeanDoc.Doc.Inline.text "Here's some code"],
         LeanDoc.Doc.Block.code none #[] 0 "(define (zero f z) z)\n(define (succ n) (lambda (f x) (f (n f z))))\n"]
       #[]]
@@ -199,9 +210,11 @@ Here's some `code`!
 /--
 info: LeanDoc.Doc.Part.mk
   #[LeanDoc.Doc.Inline.text "More code writing"]
+  "More code writing"
   #[]
   #[LeanDoc.Doc.Part.mk
       #[LeanDoc.Doc.Inline.text "Section 1"]
+      "Section 1"
       #[LeanDoc.Doc.Block.para
           #[LeanDoc.Doc.Inline.text "Here's some ", LeanDoc.Doc.Inline.code "code", LeanDoc.Doc.Inline.text "!"],
         LeanDoc.Doc.Block.code none #[] 0 "(define (zero f z) z)\n(define (succ n) (lambda (f x) (f (n f z))))\n"]
