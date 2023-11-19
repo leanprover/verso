@@ -102,7 +102,7 @@ deriving Repr, BEq
 partial def FinishedPart.toSyntax [Monad m] [MonadQuotation m] : FinishedPart → m (TSyntax `term)
   | .mk _titleStx titleInlines titleString blocks subParts _endPos => do
     let subStx ← subParts.mapM toSyntax
-    ``(Part.mk #[$[$titleInlines],*] $(quote titleString) #[$[$blocks],*] #[$[$subStx],*])
+    ``(Part.mk #[$[$titleInlines],*] $(quote titleString) none #[$[$blocks],*] #[$[$subStx],*])
 
 partial def FinishedPart.toTOC : FinishedPart → TOC
   | .mk titleStx _titleInlines titleString _blocks subParts endPos =>
@@ -270,10 +270,12 @@ inductive RoleArgumentValue where
   | string (str : String)
   | int (int : Int)
   | name (name : Ident)
+deriving Repr
 
 inductive RoleArgument where
   | named (name : Ident) (val : RoleArgumentValue)
   | anonymous (val : RoleArgumentValue)
+deriving Repr
 
 abbrev RoleExpander := Array RoleArgument → Array Syntax → DocElabM (Array (TSyntax `term))
 

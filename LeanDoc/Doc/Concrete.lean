@@ -58,7 +58,7 @@ elab "inlines!" s:inlineStr : term => open Lean Elab Term in
 set_option pp.rawOnError true
 
 /--
-info: #[Inline.text "Hello, ", Inline.emph #[Inline.bold #[Inline.text "emph"]]] : Array Inline
+info: #[Inline.text "Hello, ", Inline.emph #[Inline.bold #[Inline.text "emph"]]] : Array (Inline ?m.10489)
 -/
 #guard_msgs in
 #check inlines!"Hello, _*emph*_"
@@ -69,10 +69,13 @@ def document : Parser where
 @[combinator_parenthesizer document] def document.parenthesizer := PrettyPrinter.Parenthesizer.visitToken
 @[combinator_formatter document] def document.formatter := PrettyPrinter.Formatter.visitAtom Name.anonymous
 
+partial def findGenre [Monad m] [MonadInfoTree m] [MonadResolveName m] [MonadEnv m] [MonadError m] : Syntax → m Unit
+  | `($g:ident) => discard <| resolveGlobalConstNoOverloadWithInfo g -- Don't allow it to become an auto-argument
+  | `(($e)) => findGenre e
+  | _ => pure ()
 
-
-
-elab "#docs" n:ident title:inlineStr ":=" ":::::::" text:document ":::::::" : command => open Lean Elab Command PartElabM DocElabM in do
+elab "#docs" "(" genre:term ")" n:ident title:inlineStr ":=" ":::::::" text:document ":::::::" : command => open Lean Elab Command PartElabM DocElabM in do
+  findGenre genre
   let endTok := match ← getRef with | .node _ _ t => t.back?.get! | _ => panic! "Nothing"
   let endPos := endTok.getPos?.get!
   let .node _ _ blocks := text.raw
@@ -87,10 +90,11 @@ elab "#docs" n:ident title:inlineStr ":=" ":::::::" text:document ":::::::" : co
     pure ()
   let finished := st.partContext.toPartFrame.close endPos
   pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
-  elabCommand (← `(def $n : Part := $(← finished.toSyntax)))
+  elabCommand (← `(def $n : Part $genre := $(← finished.toSyntax)))
 
 
-elab "#doc" title:inlineStr "=>" text:document eof:eoi : term => open Lean Elab Term PartElabM DocElabM in do
+elab "#doc" "(" genre:term ")" title:inlineStr "=>" text:document eof:eoi : term => open Lean Elab Term PartElabM DocElabM in do
+  findGenre genre
   let endPos := eof.raw.getTailPos?.get!
   let .node _ _ blocks := text.raw
     | dbg_trace "nope {ppSyntax text.raw}" throwUnsupportedSyntax
@@ -104,7 +108,7 @@ elab "#doc" title:inlineStr "=>" text:document eof:eoi : term => open Lean Elab 
     pure ()
   let finished := st.partContext.toPartFrame.close endPos
   pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
-  elabTerm (← finished.toSyntax) none
+  elabTerm (← `(($(← finished.toSyntax) : Part $genre))) none
 
 def docName (moduleName : Name) : Name :=
   absolutize <| .str moduleName "the canonical document object name"
@@ -123,7 +127,8 @@ def currentDocName [Monad m] [MonadEnv m] : m Name := do
   pure <| docName <| (← Lean.MonadEnv.getEnv).mainModule
 
 
-elab "#doc" title:inlineStr "=>" text:document eof:eoi : command => open Lean Elab Term Command PartElabM DocElabM in do
+elab "#doc" "(" genre:term ")" title:inlineStr "=>" text:document eof:eoi : command => open Lean Elab Term Command PartElabM DocElabM in do
+  findGenre genre
   let endPos := eof.raw.getTailPos?.get!
   let .node _ _ blocks := text.raw
     | dbg_trace "nope {ppSyntax text.raw}" throwUnsupportedSyntax
@@ -138,4 +143,4 @@ elab "#doc" title:inlineStr "=>" text:document eof:eoi : command => open Lean El
   let finished := st.partContext.toPartFrame.close endPos
   pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
   let docName ← mkIdentFrom title <$> currentDocName
-  elabCommand (← `(def $docName := $(← finished.toSyntax)))
+  elabCommand (← `(def $docName : Part $genre := $(← finished.toSyntax)))

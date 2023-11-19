@@ -6,5 +6,6 @@ import LeanDoc.Doc.Elab
 import LeanDoc.Doc.Elab.Monad
 import LeanDoc.Doc.Html
 import LeanDoc.Doc.Lsp
+import LeanDoc.Genre
 import LeanDoc.Parser
 import LeanDoc.Html

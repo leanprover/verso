@@ -12,15 +12,15 @@ namespace LeanDoc.Examples
 
 set_option pp.rawOnError true
 
-#docs none "Nothing" :=
+#docs (.none) noDoc "Nothing" :=
 :::::::
 :::::::
 
-/-- info: LeanDoc.Doc.Part.mk #[LeanDoc.Doc.Inline.text "Nothing"] "Nothing" #[] #[] -/
+/-- info: LeanDoc.Doc.Part.mk #[LeanDoc.Doc.Inline.text "Nothing"] "Nothing" none #[] #[] -/
 #guard_msgs in
-  #eval none
+  #eval noDoc
 
-#docs a "My title here" :=
+#docs (.none) a "My title here" :=
 :::::::
 
 Hello, I'm a paragraph. Yes I am!
@@ -33,13 +33,14 @@ Hello, I'm a paragraph. Yes I am!
 info: LeanDoc.Doc.Part.mk
   #[LeanDoc.Doc.Inline.text "My title here"]
   "My title here"
+  none
   #[LeanDoc.Doc.Block.para #[LeanDoc.Doc.Inline.text "Hello, I'm a paragraph. Yes I am!"]]
   #[]
 -/
 #guard_msgs in
   #eval a
 
-#docs a' "My title here" :=
+#docs (.none) a' "My title here" :=
 :::::::
 
 * Just a list with one item
@@ -50,6 +51,7 @@ info: LeanDoc.Doc.Part.mk
 info: LeanDoc.Doc.Part.mk
   #[LeanDoc.Doc.Inline.text "My title here"]
   "My title here"
+  none
   #[LeanDoc.Doc.Block.ul
       #[{ indent := 0, contents := #[LeanDoc.Doc.Block.para #[LeanDoc.Doc.Inline.text "Just a list with one item"]] }]]
   #[]
@@ -58,7 +60,7 @@ info: LeanDoc.Doc.Part.mk
   #eval a'
 
 
-#docs b "My title here" :=
+#docs (.none) b "My title here" :=
 :::::::
 
 # Section 1
@@ -72,17 +74,19 @@ a paragraph
 info: LeanDoc.Doc.Part.mk
   #[LeanDoc.Doc.Inline.text "My title here"]
   "My title here"
+  none
   #[]
   #[LeanDoc.Doc.Part.mk
       #[LeanDoc.Doc.Inline.text "Section 1"]
       "Section 1"
+      none
       #[LeanDoc.Doc.Block.para #[LeanDoc.Doc.Inline.text "a paragraph"]]
       #[]]
 -/
 #guard_msgs in
   #eval b
 
-#docs c "My title here" :=
+#docs (.none) c "My title here" :=
 :::::::
 
 # Section 1
@@ -105,14 +109,17 @@ More text:
 info: LeanDoc.Doc.Part.mk
   #[LeanDoc.Doc.Inline.text "My title here"]
   "My title here"
+  none
   #[]
   #[LeanDoc.Doc.Part.mk
       #[LeanDoc.Doc.Inline.text "Section 1"]
       "Section 1"
+      none
       #[LeanDoc.Doc.Block.para #[LeanDoc.Doc.Inline.text "a paragraph"]]
       #[LeanDoc.Doc.Part.mk
           #[LeanDoc.Doc.Inline.text "Section 1.1"]
           "Section 1.1"
+          none
           #[LeanDoc.Doc.Block.para #[LeanDoc.Doc.Inline.text "More text:"],
             LeanDoc.Doc.Block.ul
               #[{ indent := 0,
@@ -130,7 +137,7 @@ info: LeanDoc.Doc.Part.mk
 #guard_msgs in
   #eval c
 
-#docs d "More writing" :=
+#docs (.none) d "More writing" :=
 :::::::
 
 # Section 1
@@ -148,23 +155,25 @@ Also, 2 > 3.
 info: LeanDoc.Doc.Part.mk
   #[LeanDoc.Doc.Inline.text "More writing"]
   "More writing"
+  none
   #[]
   #[LeanDoc.Doc.Part.mk
       #[LeanDoc.Doc.Inline.text "Section 1"]
       "Section 1"
+      none
       #[LeanDoc.Doc.Block.para #[LeanDoc.Doc.Inline.text "Here's a quote;"],
         LeanDoc.Doc.Block.blockquote
-          #[LeanDoc.Doc.Block.para #[LeanDoc.Doc.Inline.text "I like quotes", LeanDoc.Doc.Inline.linebreak "\n"],
-            LeanDoc.Doc.Block.ul
-              #[{ indent := 2,
-                  contents := #[LeanDoc.Doc.Block.para #[LeanDoc.Doc.Inline.text "Also with lists in them"]] }]],
+          #[(LeanDoc.Doc.Block.para #[LeanDoc.Doc.Inline.text "I like quotes", LeanDoc.Doc.Inline.linebreak "\n"]),
+            (LeanDoc.Doc.Block.ul
+               #[{ indent := 2,
+                   contents := #[LeanDoc.Doc.Block.para #[LeanDoc.Doc.Inline.text "Also with lists in them"]] }])],
         LeanDoc.Doc.Block.para #[LeanDoc.Doc.Inline.text "Also, 2 > 3."]]
       #[]]
 -/
 #guard_msgs in
   #eval d
 
-#docs e "More writing" :=
+#docs (.none) e "More writing" :=
 :::::::
 
 # Section 1
@@ -182,10 +191,12 @@ Here's some code
 info: LeanDoc.Doc.Part.mk
   #[LeanDoc.Doc.Inline.text "More writing"]
   "More writing"
+  none
   #[]
   #[LeanDoc.Doc.Part.mk
       #[LeanDoc.Doc.Inline.text "Section 1"]
       "Section 1"
+      none
       #[LeanDoc.Doc.Block.para #[LeanDoc.Doc.Inline.text "Here's some code"],
         LeanDoc.Doc.Block.code none #[] 0 "(define (zero f z) z)\n(define (succ n) (lambda (f x) (f (n f z))))\n"]
       #[]]
@@ -193,7 +204,7 @@ info: LeanDoc.Doc.Part.mk
 #guard_msgs in
   #eval e
 
-#docs f "More code writing" :=
+#docs (.none) f "More code writing" :=
 :::::::
 
 # Section 1
@@ -211,10 +222,12 @@ Here's some `code`!
 info: LeanDoc.Doc.Part.mk
   #[LeanDoc.Doc.Inline.text "More code writing"]
   "More code writing"
+  none
   #[]
   #[LeanDoc.Doc.Part.mk
       #[LeanDoc.Doc.Inline.text "Section 1"]
       "Section 1"
+      none
       #[LeanDoc.Doc.Block.para
           #[LeanDoc.Doc.Inline.text "Here's some ", LeanDoc.Doc.Inline.code "code", LeanDoc.Doc.Inline.text "!"],
         LeanDoc.Doc.Block.code none #[] 0 "(define (zero f z) z)\n(define (succ n) (lambda (f x) (f (n f z))))\n"]

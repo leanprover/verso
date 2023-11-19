@@ -70,15 +70,23 @@ def _root_.LeanDoc.Syntax.bold.expand : InlineExpander
 
 @[inline_expander LeanDoc.Syntax.role]
 def _root_.LeanDoc.Syntax.role.expand : InlineExpander
-  | inline@`(inline| role{$name $_args*} $subjects) => do
+  | inline@`(inline| role{$name $args*} $subjects) => do
     --TODO arguments
       withRef inline <| withFreshMacroScope <| withIncRecDepth <| do
         let ⟨.node _ _ subjectArr⟩ := subjects
           | throwUnsupportedSyntax
         let exp ← roleExpandersFor name.getId
+        let mut argVals := #[]
+        for arg in args do
+          match arg.raw with
+          | `<low|(arg.anon ~v)> =>
+            match v with
+            | `($y:ident) => argVals := argVals.push <| .anonymous <| .name y
+            | other => dbg_trace "didn't parse arg val {repr other}"; pure ()
+          | other => dbg_trace "didn't parse arg {repr other}"; pure ()
         for e in exp do
           try
-            let termStxs ← withFreshMacroScope <| e #[] subjectArr
+            let termStxs ← withFreshMacroScope <| e argVals subjectArr
             return (← ``(Inline.concat #[$[$termStxs],*]))
           catch
             | ex@(.internal id) =>

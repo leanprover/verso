@@ -1,6 +1,8 @@
 import LeanDoc
 
-#doc "The Example Blog" =>
+open LeanDoc.Genre (Blog)
+
+#doc (Blog) "The Example Blog" =>
 
 This is an example website/blog, for testing purposes.
 
