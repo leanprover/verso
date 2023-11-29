@@ -30,9 +30,7 @@ def label : RoleExpander
     let args ← stxs.mapM elabInline
     let val ← ``(Inline.other (Blog.InlineExt.label $(quote l.getId)) #[ $[ $args ],* ])
     pure #[val]
-  | args, stx =>
-    throwError "{repr args} & {stx}"
-    --throwUnsupportedSyntax
+  | _, _ => throwUnsupportedSyntax
 
 @[role_expander ref]
 def ref : RoleExpander

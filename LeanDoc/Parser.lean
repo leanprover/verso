@@ -300,10 +300,23 @@ def isSpecial (c : Char) : Bool := c ∈ specialChars
 
 def notSpecial := satisfyEscFn (not ∘ isSpecial)
 
+def strFn (str : String) : ParserFn := asStringFn <| fun c s =>
+  let rec go (iter : String.Iterator) (s : ParserState) :=
+    if iter.atEnd then s
+    else
+      let ch := iter.curr
+      go iter.next <| satisfyFn (· == ch) ch.toString c s
+  let iniPos := s.pos
+  let iniSz := s.stxStack.size
+  let s := go str.iter s
+  if s.hasError then s.mkErrorAt str iniPos (some iniSz) else s
+
+
 /-- Block opener prefixes -/
 def blockOpener := atomicFn <|
   takeWhileEscFn (· == ' ') >>
   (atomicFn ((bullet >> chFn ' ')) <|>
+   atomicFn (strFn ": ") <|>
    atomicFn (atLeastFn 3 (chFn ':')) <|>
    atomicFn (atLeastFn 3 (chFn '`')) <|>
    atomicFn (chFn '>'))
@@ -340,18 +353,6 @@ All input consumed.
 -/
 #guard_msgs in
   #eval notSpecial.test! "\\>"
-
-def strFn (str : String) : ParserFn := asStringFn <| fun c s =>
-  let rec go (iter : String.Iterator) (s : ParserState) :=
-    if iter.atEnd then s
-    else
-      let ch := iter.curr
-      go iter.next <| satisfyFn (· == ch) ch.toString c s
-  let iniPos := s.pos
-  let iniSz := s.stxStack.size
-  let s := go str.iter s
-  if s.hasError then s.mkErrorAt str iniPos (some iniSz) else s
-
 
 
 def val : ParserFn := docNumLitFn <|> docIdentFn <|> docStrLitFn
@@ -952,6 +953,10 @@ structure BlockCtxt where
   maxDirective : Option Nat := none
 deriving Inhabited, Repr
 
+def fakeAtom (str : String) : ParserFn := fun c s =>
+  let atom := mkAtom SourceInfo.none str
+  s.pushSyntax atom
+
 mutual
   partial def listItem (ctxt : BlockCtxt) : ParserFn :=
     nodeFn ``li (bulletFn >> withCurrentColumn fun c => blocks {ctxt with minIndent := c})
@@ -963,6 +968,18 @@ mutual
       guardColumn (· == ctxt.minIndent) s!"indentation at {ctxt.minIndent}" >>
       asStringFn (chFn '*' false) >> ignoreFn (lookaheadFn (chFn ' '))
 
+  partial def descItem (ctxt : BlockCtxt) : ParserFn :=
+    nodeFn ``desc <|
+      colonFn >>
+      withCurrentColumn fun c => textLine >> ignoreFn (manyFn blankLine) >>
+      fakeAtom "=>" >>
+      blocks1 { ctxt with minIndent := c}
+  where
+    colonFn := atomicFn <|
+      takeWhileFn (· == ' ') >>
+      guardColumn (· == ctxt.minIndent) s!"indentation at {ctxt.minIndent}" >>
+      asStringFn (chFn ':' false) >> ignoreFn (lookaheadFn (chFn ' '))
+
   partial def blockquote (ctxt : BlockCtxt) : ParserFn :=
     atomicFn <| nodeFn ``blockquote <|
       takeWhileFn (· == ' ') >> guardMinColumn ctxt.minIndent >> chFn '>' >>
@@ -972,6 +989,11 @@ mutual
     nodeFn ``ul <|
       atomicFn (bol >> takeWhileFn (· == ' ') >> ignoreFn (lookaheadFn (chFn '*' >> chFn ' ')) >> guardMinColumn ctxt.minIndent >> pushColumn) >>
       withCurrentColumn (fun c => many1Fn (listItem {ctxt with minIndent := c} ))
+
+  partial def definitionList (ctxt : BlockCtxt) : ParserFn :=
+    nodeFn ``dl <|
+      atomicFn (bol >> takeWhileFn (· == ' ') >> ignoreFn (lookaheadFn (chFn ':' >> chFn ' ')) >> guardMinColumn ctxt.minIndent) >>
+      withCurrentColumn (fun c => many1Fn (descItem {ctxt with minIndent := c}))
 
   partial def para (ctxt : BlockCtxt) : ParserFn :=
     nodeFn ``para <| atomicFn (takeWhileFn (· == ' ') >> notFollowedByFn blockOpener "block opener" >> guardMinColumn ctxt.minIndent) >> textLine
@@ -1069,9 +1091,12 @@ mutual
     intro := guardMinColumn (ctxt.minIndent) >> withCurrentColumn fun c => atomicFn (chFn '{') >> withCurrentColumn fun c' => nameAndArgs (some c') >> nameArgWhitespace (some c)  >> chFn '}'
 
 
-  partial def block (c : BlockCtxt) : ParserFn := block_role c <|> unorderedList c <|> header c <|> codeBlock c <|> directive c <|> blockquote c <|> para c
+  partial def block (c : BlockCtxt) : ParserFn :=
+    block_role c <|> unorderedList c <|> definitionList c <|> header c <|> codeBlock c <|> directive c <|> blockquote c <|> para c
 
   partial def blocks (c : BlockCtxt) : ParserFn := sepByFn true (block c) (ignoreFn (manyFn blankLine))
+
+  partial def blocks1 (c : BlockCtxt) : ParserFn := sepBy1Fn true (block c) (ignoreFn (manyFn blankLine))
 end
 
 /--
@@ -1214,6 +1239,90 @@ All input consumed.
 -/
 #guard_msgs in
   #eval blocks {} |>.test! "* foo\n  * bar\n* more outer"
+
+/--
+info: Failure: unexpected end of input; expected [ or expected beginning of line at ⟨2, 15⟩
+Final stack:
+  [(LeanDoc.Syntax.dl
+    [(LeanDoc.Syntax.desc
+      ":"
+      [(LeanDoc.Syntax.text
+        (str "\" an excellent idea\""))
+       (LeanDoc.Syntax.linebreak "\n")
+       (LeanDoc.Syntax.text
+        (str "\"Let's say more!\""))]
+      "=>"
+      [(LeanDoc.Syntax.para
+        [(LeanDoc.Syntax.role <missing>)])
+       <missing>])])]
+Remaining: ""
+-/
+#guard_msgs in
+  #eval blocks {} |>.test! ": an excellent idea\nLet's say more!"
+
+/--
+info: Success! Final stack:
+  [(LeanDoc.Syntax.dl
+    [(LeanDoc.Syntax.desc
+      ":"
+      [(LeanDoc.Syntax.text
+        (str "\" an excellent idea\""))]
+      "=>"
+      [(LeanDoc.Syntax.para
+        [(LeanDoc.Syntax.text
+          (str "\"Let's say more!\""))])])])]
+All input consumed.
+-/
+#guard_msgs in
+  #eval blocks {} |>.test! ": an excellent idea\n\n    Let's say more!"
+
+/--
+info: Failure: unexpected end of input; expected expected column at least 1
+Final stack:
+  [(LeanDoc.Syntax.dl
+    [(LeanDoc.Syntax.desc
+      ":"
+      [(LeanDoc.Syntax.text
+        (str "\" an excellent idea\""))]
+      "=>"
+      [(LeanDoc.Syntax.para
+        [(LeanDoc.Syntax.text
+          (str "\"Let's say more!\""))])])
+     (LeanDoc.Syntax.desc
+      ":"
+      [(LeanDoc.Syntax.text (str "\" more\""))]
+      "=>"
+      [(LeanDoc.Syntax.para <missing>)
+       <missing>])])]
+Remaining: ""
+-/
+#guard_msgs in
+  #eval blocks {} |>.test! ": an excellent idea\n\n Let's say more!\n\n: more\n\n"
+
+/--
+info: Success! Final stack:
+  [(LeanDoc.Syntax.dl
+    [(LeanDoc.Syntax.desc
+      ":"
+      [(LeanDoc.Syntax.text
+        (str "\" an excellent idea\""))]
+      "=>"
+      [(LeanDoc.Syntax.para
+        [(LeanDoc.Syntax.text
+          (str "\"Let's say more!\""))])])
+     (LeanDoc.Syntax.desc
+      ":"
+      [(LeanDoc.Syntax.text (str "\" more\""))]
+      "=>"
+      [(LeanDoc.Syntax.para
+        [(LeanDoc.Syntax.text
+          (str "\"stuff\""))])])])]
+All input consumed.
+-/
+#guard_msgs in
+  #eval blocks {} |>.test! ": an excellent idea\n\n Let's say more!\n\n: more\n\n stuff"
+
+
 
 /--
 info: Success! Final stack:
@@ -1515,7 +1624,7 @@ All input consumed.
 #guard_msgs in
 #eval block {} |>.test! " {test}\n Here's a modified paragraph."
 /--
-info: Failure: '*'; expected expected column at least 1
+info: Failure: ':'; expected expected column at least 1
 Final stack:
   (LeanDoc.Syntax.block_role
    "{"

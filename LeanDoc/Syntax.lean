@@ -40,9 +40,14 @@ declare_syntax_cat list_item
 syntax (name:=li) "*" str : list_item
 
 declare_syntax_cat block
+declare_syntax_cat desc_item
+syntax (name:=desc) ":" inline+ "=>" block+ : desc_item
+
 syntax (name:=para) "para{" inline+ "}" : block
 /-- List -/
 syntax (name:=ul) "ul{" list_item* "}" : block
+/-- Definition list -/
+syntax (name:=dl) "dl{" desc_item* "}" : block
 /-- Literal code -/
 syntax (name:=codeblock) str : block
 /-- Quotation -/

@@ -74,6 +74,17 @@ partial def Block.toHtml [GenreHtml g] : Block g → HtmlM g Html
     pure {{ <blockquote> {{← bs.mapM Block.toHtml }} </blockquote> }}
   | .ul items => do
     pure {{ <ul> {{← items.mapM fun li => do pure {{ <li> {{← li.contents.mapM Block.toHtml }} </li>}} }} </ul> }}
+  | .dl items => do
+    pure {{
+      <dl>
+        {{← items.mapM fun ⟨t, d⟩ => do
+          pure {{
+            <dt>{{← t.mapM Inline.toHtml }}</dt>
+            <dd>{{← d.mapM Block.toHtml }}</dd>
+          }}
+        }}
+      </dl>
+    }}
   | .code (some name) _ _ content => do
     pure #[{{ <pre class={{"language-" ++ name}}> {{ content }} </pre>}}]
   | .code none _ _ content => pure #[{{ <pre> {{ content }} </pre>}}]

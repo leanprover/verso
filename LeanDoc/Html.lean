@@ -70,7 +70,7 @@ scoped syntax  "<" tag_name attrib* "/" ">" : html
 scoped syntax str : html
 scoped syntax "s!" interpolatedStr(term) : html
 
-scoped syntax "{{"  html "}}" : term
+scoped syntax "{{"  html+ "}}" : term
 scoped syntax "{{{" attrib* "}}}" : term
 
 open Lean.Macro in
@@ -86,6 +86,8 @@ macro_rules
   | `(term| {{ {{ $e:term }} }} ) => ``(($e : Html))
   | `(term| {{ $s:str }} ) => ``(Html.text $s)
   | `(term| {{ s! $s:interpolatedStr }} ) => ``(Html.text s!$s)
+  | `(term| {{ $html1:html $html2:html $htmls:html*}}) =>
+    `({{$html1}} ++ {{$html2}} ++ Html.seq #[$[{{$htmls}}],*])
   | `(term| {{ <$tag:tag_name $[$extra]* > $content:html </ $tag':tag_name> }}) => do
     if tag.tagName != tag'.tagName then
       Macro.throwErrorAt tag' s!"Mismatched closing tag, expected {tag.tagName} but got {tag'.tagName}"

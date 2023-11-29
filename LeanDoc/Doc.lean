@@ -104,10 +104,18 @@ deriving Repr
 
 def ListItem.reprPrec [Repr α] : ListItem α → Nat → Std.Format := Repr.reprPrec
 
+structure DescItem (α : Type u) (β : Type v) where
+  term : Array α
+  desc : Array β
+deriving Repr
+
+def DescItem.reprPrec [Repr α] [Repr β] : DescItem α β → Nat → Std.Format := Repr.reprPrec
+
 inductive Block (genre : Genre) : Type where
   | para (contents : Array (Inline genre))
   | code (name : Option String) (args : Array Arg) (indent : Nat) (content : String)
   | ul (items : Array (ListItem (Block genre)))
+  | dl (items : Array (DescItem (Inline genre) (Block genre)))
   | blockquote (items : Array (Block genre))
   | other (container : genre.Block) (content : Array (Block genre))
 
@@ -119,6 +127,7 @@ partial def Block.reprPrec [Repr g.Inline] [Repr g.Block] (inline : Block g) (pr
         | para contents => reprCtor ``Block.para [reprArg contents]
         | code name args indent content => reprCtor ``Block.code [reprArg name, reprArg args, reprArg indent, reprArg content]
         | ul items => reprCtor ``Block.ul [reprArray (@ListItem.reprPrec _ ⟨go⟩) items]
+        | dl items => reprCtor ``Block.dl [reprArray (@DescItem.reprPrec _ _ _ ⟨go⟩) items]
         | blockquote items => reprCtor ``Block.blockquote [reprArray go items]
         | other container content => reprCtor ``Block.other [reprArg container, reprArray go content]
     go inline prec
@@ -192,6 +201,8 @@ where
     | .para contents => .para <$> contents.mapM inline
     | .ul items => .ul <$> items.mapM fun
       | ListItem.mk n contents => ListItem.mk n <$> contents.mapM block
+    | .dl items => .dl <$> items.mapM fun
+      | DescItem.mk t d => DescItem.mk <$> t.mapM inline <*> d.mapM block
     | .blockquote items => .blockquote <$> items.mapM block
     | .other container content =>
       match ← Traverse.genreBlock container content with

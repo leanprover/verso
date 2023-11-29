@@ -234,6 +234,32 @@ def _root_.LeanDoc.Syntax.ul.expand : BlockExpander
   | _ =>
     throwUnsupportedSyntax
 
+def elabDesc (block : Syntax) : DocElabM (Syntax × TSyntax `term) :=
+  withRef block <|
+  match block with
+  | `<low|(LeanDoc.Syntax.desc ~colon ~(.node _ `null dts) ~_ ~(.node _ `null dds))> => do
+    let item ← ``(DescItem.mk #[$[$(← dts.mapM elabInline)],*] #[$[$(← dds.mapM elabBlock)],*])
+    pure (colon, item)
+  | _ =>
+    dbg_trace "unexpected block {block}"
+    throwUnsupportedSyntax
+
+@[block_expander LeanDoc.Syntax.dl]
+def _root_.LeanDoc.Syntax.dl.expand : BlockExpander
+  | `<low|(LeanDoc.Syntax.dl ~(.node _ `null itemStxs) )> => do
+    let mut colons : Array Syntax := #[]
+    let mut items : Array (TSyntax `term) := #[]
+    for i in itemStxs do
+      let (b, item) ← elabDesc i
+      colons := colons.push b
+      items := items.push item
+    let info := DocListInfo.mk colons
+    for b in colons do
+      pushInfoLeaf <| .ofCustomInfo {stx := b, value := Dynamic.mk info}
+    ``(Block.dl #[$[$items],*])
+  | _ =>
+    throwUnsupportedSyntax
+
 @[block_expander LeanDoc.Syntax.blockquote]
 def _root_.LeanDoc.Syntax.blockquote.expand : BlockExpander
   | `<low|(LeanDoc.Syntax.blockquote ~_ ~(.node _ `null innerBlocks) )> => do

@@ -303,6 +303,9 @@ where
     | ``LeanDoc.Syntax.li =>
       mkTok text .keyword stx[0][1] ++
       go snap text stx[1]
+    | ``LeanDoc.Syntax.desc =>
+      mkTok text .keyword stx[0] ++ go snap text stx[1] ++
+      mkTok text .keyword stx[2] ++ go snap text stx[3]
     | _ =>
       let mut out := #[]
       for arg in stx.getArgs do
