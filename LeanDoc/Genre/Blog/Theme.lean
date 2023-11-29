@@ -16,12 +16,15 @@ structure Theme where
 namespace Theme
 
 def dirLinks : Dir Page → TemplateM (Array Html)
-  | .pages subs => subs.mapM fun s => do
-      let url ← mkLink [s.name]
-      return {{<a href={{url}}>{{s.text.titleString}}</a>}}
-  | .blog subs => subs.mapM fun s => do
+  | .pages subs =>
+    subs.filterMapM fun
+      | .page name _id txt .. =>
+        pure <| some {{<li><a href={{"/" ++ name}}>{{txt.titleString}}</a></li>}}
+      | .static .. => pure none
+  | .blog subs =>
+    subs.mapM fun s => do
       let url ← mkLink [(← currentConfig).postName s.date s.content.titleString]
-      return {{<a href={{url}}>{{s.content.titleString}}</a>}}
+      return {{<li><a href={{url}}>{{s.content.titleString}}</a></li>}}
 where
   mkLink dest := do
     let dest' ← relative dest
@@ -30,7 +33,7 @@ where
 def topNav : Template := do
   let ⟨_, topPages⟩ := (← read).site
   return {{
-    <nav class="top">
+    <nav class="top" role="navigation">
       <ol>
         {{ ← dirLinks topPages }}
       </ol>
@@ -48,6 +51,7 @@ def primary : Template := do
     <html>
       <head>
         <title>{{ (← param (α := String) "title") }}</title>
+        <link rel="stylesheet" href="/static/style.css"/>
       </head>
       <body>
         {{ ← topNav }}

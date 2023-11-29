@@ -17,6 +17,10 @@ declare_syntax_cat argument
 syntax (name:=anon) arg_val : argument
 syntax (name:=named) ident ":=" arg_val : argument
 
+declare_syntax_cat link_target
+syntax (name:=url) "(" str ")" : link_target
+syntax (name:=ref) "[" str "]" : link_target
+
 declare_syntax_cat inline
 syntax (name:=text) str : inline
 /-- Emphasis (often rendered as italics) -/
@@ -24,7 +28,7 @@ syntax (name:=emph) "_{" inline* "}" : inline
 /-- Bold emphasis   -/
 syntax (name:=bold) "*{" inline* "}" : inline
 /-- Link -/
-syntax (name:=link) "[" inline* "](" str ")" : inline
+syntax (name:=link) "link[" inline* "]" link_target : inline
 /-- Line break -/
 syntax (name:=linebreak) "line!" : inline
 /-- Literal characters-/
@@ -58,7 +62,7 @@ macro "#seeStx" tm:term : command =>
 #seeStx `(inline| "foo")
 #seeStx `(inline| _{ "foo" "bar" })
 #seeStx `(inline| *{ "foo" "bar" })
-#seeStx `(inline| [_{"FPiL" line! "book"}]("https://..."))
+#seeStx `(inline| link[_{"FPiL" line! "book"}]("https://..."))
 #seeStx `(inline| code{ "foo" })
 
 

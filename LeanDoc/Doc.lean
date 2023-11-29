@@ -13,6 +13,16 @@ namespace Doc
 open Std (Format)
 open Lean (Name)
 
+def docName (moduleName : Name) : Name :=
+  absolutize <| .str moduleName "the canonical document object name"
+where
+  absolutize : Name → Name
+    | .anonymous => .anonymous
+    | .num ns i => .num (absolutize ns) i
+    | n@(.str .anonymous "_root_") => n
+    | .str .anonymous other => .str (.str .anonymous "_root_") other
+    | .str ns n => .str (absolutize ns) n
+
 structure Genre : Type 1 where
   PartMetadata : Type
   Block : Type

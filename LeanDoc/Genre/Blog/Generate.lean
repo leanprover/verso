@@ -82,6 +82,21 @@ end Generate
 
 open Generate
 
+open IO.FS in
+partial def copyRecursively (src tgt : System.FilePath) : IO Unit := do
+  if (← src.metadata).type == .symlink then
+    pure () -- TODO
+  if ← src.isDir then
+    ensureDir tgt
+    for d in ← src.readDir do
+      copyRecursively d.path (tgt.join d.fileName)
+  else
+    withFile src .read fun h =>
+      withFile tgt .write fun h' => do
+        let mut buf ← h.read 1024
+        while !buf.isEmpty do
+          h'.write buf
+          buf ← h.read 1024
 mutual
   partial def Dir.generate (theme : Theme) : Dir Page → GenerateM Unit
     | .pages content => do
@@ -98,7 +113,8 @@ mutual
               h.putStrLn output.asString
 
   partial def Page.generate (theme : Theme) : Page → GenerateM Unit
-    | .page _ txt subPages => do
+    | .page _ _ txt subPages => do
+      IO.println s!"Generating {(← currentDir)}"
       ensureDir <| (← currentDir)
       -- TODO more configurable template context
       let postList ←
@@ -116,6 +132,11 @@ mutual
       IO.FS.withFile ((← currentDir).join "index.html") .write fun h =>
         h.putStrLn output.asString
       subPages.generate theme
+    | .static _ file => do
+      IO.println s!"Copying from {file} to {(← currentDir)}"
+      if ← (← currentDir).pathExists then
+        IO.FS.removeDirAll (← currentDir)
+      copyRecursively file (← currentDir)
 end
 
 def Site.generate (theme : Theme) (site : Site): GenerateM Unit := do

@@ -11,6 +11,7 @@ namespace LeanDoc.Genre
 inductive Blog.InlineExt where
   | label (name : Lean.Name)
   | ref (name : Lean.Name)
+  | pageref (name : Lean.Name)
 
 structure Blog.Info.Target where
   path : List String
@@ -68,6 +69,7 @@ structure Blog.TraverseState where
   usedIds : Lean.RBMap (List String) (Lean.HashSet String) compare := {}
   targets : Lean.NameMap Blog.Info.Target := {}
   refs : Lean.NameMap Blog.Info.Ref := {}
+  pageIds : Lean.NameMap (List String) := {}
 
 
 def Blog : Genre where
@@ -125,10 +127,11 @@ where
 
 instance : BEq TraverseState where
   beq
-    | ⟨u1, t1, r1⟩, ⟨u2, t2, r2⟩ =>
+    | ⟨u1, t1, r1, p1⟩, ⟨u2, t2, r2, p2⟩ =>
       u1.toList.map (fun p => {p with snd := p.snd.toList}) == u2.toList.map (fun p => {p with snd := p.snd.toList}) &&
       t1.toList == t2.toList &&
-      r1.toList == r2.toList
+      r1.toList == r2.toList &&
+      p1.toList == p2.toList
 
 
 namespace Traverse
@@ -145,17 +148,17 @@ instance : Traverse Blog Blog.TraverseM where
   genrePart _ _ := pure none
   genreBlock _ _ := pure none
   genreInline
-    | .label x, contents => do
+    | .label x, _contents => do
       -- Add as target if not already present
-      if let some _ := (← get).targets.find? x then
-        pure ()
-      else
+      if let none := (← get).targets.find? x then
         let path := (← read).path
         let htmlId := (← get).freshId path x
         modify (fun st => {st with targets := st.targets.insert x ⟨path, htmlId⟩})
       pure none
-    | .ref x, contents =>
+    | .ref _x, _contents =>
       -- TODO backreference
       pure none
-
+    | .pageref _x, _contents =>
+      -- TODO backreference
+      pure none
 end Traverse

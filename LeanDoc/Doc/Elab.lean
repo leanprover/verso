@@ -104,6 +104,15 @@ def _root_.LeanDoc.Syntax.role.expand : InlineExpander
         throwUnsupportedSyntax
   | _ => throwUnsupportedSyntax
 
+@[inline_expander LeanDoc.Syntax.link]
+def _root_.LeanDoc.Syntax.link.expand : InlineExpander
+  | `(inline| link[ $txt* ] $dest:link_target) => do
+    let destStx ←
+      match dest with
+      | `(link_target| ( $url )) =>
+        ``(Inline.link #[$[$(← txt.mapM elabInline)],*] (LinkDest.url $url))
+      | _ => withRef dest throwUnsupportedSyntax
+  | _ => throwUnsupportedSyntax
 
 @[inline_expander LeanDoc.Syntax.code]
 def _root_.LeanDoc.Syntax.code.expand : InlineExpander

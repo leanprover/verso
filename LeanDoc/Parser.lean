@@ -652,8 +652,8 @@ mutual
     notRefEnd := satisfyEscFn (· ∉ "]\n".toList) >> takeUntilEscFn (· ∈ "]\n".toList)
     notInLink : ParserFn := fun _ s =>
       if ctxt.inLink then s.mkError "Already in a link" else s
-    ref : ParserFn := nodeFn `ref ((atomicFn <| strFn "[") >> asStringFn notRefEnd >> strFn "]")
-    url : ParserFn := nodeFn `url ((atomicFn <| strFn "(") >> asStringFn notUrlEnd >> strFn ")")
+    ref : ParserFn := nodeFn ``LeanDoc.Syntax.ref ((atomicFn <| strFn "[") >> nodeFn strLitKind (asStringFn notRefEnd (quoted := true)) >> strFn "]")
+    url : ParserFn := nodeFn ``LeanDoc.Syntax.url ((atomicFn <| strFn "(") >> nodeFn strLitKind (asStringFn notUrlEnd (quoted := true)) >> strFn ")")
 
   partial def role (ctxt : InlineCtxt) : ParserFn :=
     nodeFn ``role <|
@@ -865,7 +865,10 @@ info: Success! Final stack:
    "["
    [(LeanDoc.Syntax.text (str "\"Wikipedia\""))]
    "]"
-   (url "(" "https://en.wikipedia.org" ")"))
+   (LeanDoc.Syntax.url
+    "("
+    (str "\"https://en.wikipedia.org\"")
+    ")"))
 All input consumed.
 -/
 #guard_msgs in

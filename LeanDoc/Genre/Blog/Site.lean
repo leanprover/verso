@@ -20,23 +20,25 @@ def Dir.traverse1 (dir : Dir α) (sub : α → Blog.TraverseM α) : Blog.Travers
   | .blog posts => .blog <$> posts.mapM Post.traverse1
 
 inductive Page where
-  | page (name : String) (text : Part Blog) (contents : Dir Page)
+  | page (name : String) (id : Lean.Name) (text : Part Blog) (contents : Dir Page)
+  | static (name : String) (files : System.FilePath)
 
 instance : Inhabited Page where
-  default := .page default default default
+  default := .page default default default default
 
 def Page.name : Page → String
   | .page n .. => n
-
-def Page.text : Page → Part Blog
-  | .page _ txt .. => txt
+  | .static n .. => n
 
 partial def Page.traverse1 (nav : Page) : Blog.TraverseM Page := do
   match nav with
-  | .page name txt contents =>
+  | .page name id txt contents =>
     withReader (fun ctxt => {ctxt with path := ctxt.path ++ [name]}) <| do
+      let path ← (·.path) <$> read
+      modify (fun st => {st with pageIds := st.pageIds.insert id path})
       let txt' ← Blog.traverse txt
-      .page name txt' <$> contents.traverse1 Page.traverse1
+      .page name id txt' <$> contents.traverse1 Page.traverse1
+  | .static .. => pure nav
 
 structure Site where
   frontPage : Part Blog

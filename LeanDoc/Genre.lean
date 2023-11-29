@@ -5,6 +5,7 @@ import LeanDoc.Html
 import LeanDoc.Doc.Html
 
 import LeanDoc.Genre.Blog
+import LeanDoc.Genre.Blog.Site.Syntax
 
 open LeanDoc.Doc (Genre Part)
 open LeanDoc.Doc.Html
@@ -22,6 +23,7 @@ section
 open Lean Elab
 open LeanDoc Doc Elab
 
+
 @[role_expander label]
 def label : RoleExpander
   | #[.anonymous (.name l)], stxs => do
@@ -37,6 +39,16 @@ def ref : RoleExpander
   | #[.anonymous (.name l)], stxs => do
     let args ← stxs.mapM elabInline
     let val ← ``(Inline.other (Blog.InlineExt.ref $(quote l.getId)) #[ $[ $args ],* ])
+    pure #[val]
+  | _, _ => throwUnsupportedSyntax
+
+
+@[role_expander page_link]
+def page_link : RoleExpander
+  | #[.anonymous (.name page)], stxs => do
+    let args ← stxs.mapM elabInline
+    let pageName := mkIdentFrom page <| docName page.getId
+    let val ← ``(Inline.other (Blog.InlineExt.pageref $(quote pageName.getId)) #[ $[ $args ],* ])
     pure #[val]
   | _, _ => throwUnsupportedSyntax
 

@@ -46,6 +46,14 @@ partial instance : GenreHtml Blog where
       | some tgt =>
         let addr := s!"{String.join ((← relative tgt.path).intersperse "/")}#{tgt.htmlId}"
         go <| .link contents (.url addr)
+    | .pageref x, contents => do
+      match (← state).pageIds.find? x with
+      | none =>
+         -- TODO better error handling
+        pure {{<strong class="internal-error">s!"Can't find target {x}"</strong>}}
+      | some path =>
+        let addr := String.join ((← relative path).intersperse "/")
+        go <| .link contents (.url addr)
 
 namespace LeanDoc.Genre.Blog.Template
 

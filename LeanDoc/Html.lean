@@ -94,7 +94,7 @@ macro_rules
     if tag.tagName != tag'.tagName then
       Macro.throwErrorAt tag' s!"Mismatched closing tag, expected {tag.tagName} but got {tag'.tagName}"
     ``(Html.tag $(quote tag.tagName) {{{ $extra* }}} <| Html.fromArray #[$[ {{ $content }} ],*] )
-  | `(term| {{ <$tag:tag_name $[$extra]* /> }}) => ``(Html.tag $(quote tag.tagName) {{{ $extra* }}} #[] )
+  | `(term| {{ <$tag:tag_name $[$extra]* /> }}) => ``(Html.tag $(quote tag.tagName) {{{ $extra* }}} Html.empty )
 
 scoped instance : Coe String Html := ⟨.text⟩
 

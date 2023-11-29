@@ -110,18 +110,14 @@ elab "#doc" "(" genre:term ")" title:inlineStr "=>" text:document eof:eoi : term
   pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
   elabTerm (← `(($(← finished.toSyntax) : Part $genre))) none
 
-def docName (moduleName : Name) : Name :=
-  absolutize <| .str moduleName "the canonical document object name"
-where
-  absolutize : Name → Name
-    | .anonymous => .anonymous
-    | .num ns i => .num (absolutize ns) i
-    | n@(.str .anonymous "_root_") => n
-    | .str .anonymous other => .str (.str .anonymous "_root_") other
-    | .str ns n => .str (absolutize ns) n
 
 macro "%doc" moduleName:ident : term =>
   pure <| mkIdentFrom moduleName <| docName moduleName.getId
+
+macro "%docName" moduleName:ident : term =>
+  let n := mkIdentFrom moduleName (docName moduleName.getId) |>.getId
+  pure <| quote n
+
 
 def currentDocName [Monad m] [MonadEnv m] : m Name := do
   pure <| docName <| (← Lean.MonadEnv.getEnv).mainModule

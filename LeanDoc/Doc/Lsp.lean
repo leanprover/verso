@@ -287,8 +287,10 @@ where
       mkTok text .keyword stx[0] ++ go snap text stx[1] ++ mkTok text .keyword stx[2]
     | ``LeanDoc.Syntax.header =>
       mkTok text .keyword stx[0] ++ go snap text stx[1]
+    | ``LeanDoc.Syntax.link =>
+      mkTok text .keyword stx[0] ++ go snap text stx[1] ++ mkTok text .keyword stx[2] ++
+      mkTok text .keyword stx[3][0] ++ mkTok text .keyword stx[3][2]
     | ``LeanDoc.Syntax.role =>
-      dbg_trace "{stx}"
       mkTok text .keyword stx[0] ++ -- {
       mkTok text .function stx[1] ++ -- roleName
       go snap text stx[2] ++  -- args
