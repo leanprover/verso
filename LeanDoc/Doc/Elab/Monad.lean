@@ -266,6 +266,9 @@ unsafe def partCommandsForUnsafe (x : Name) : PartElabM (Array PartCommand) := d
 @[implemented_by partCommandsForUnsafe]
 opaque partCommandsFor (x : Name) : PartElabM (Array PartCommand)
 
+
+
+
 inductive RoleArgumentValue where
   | string (str : String)
   | int (int : Int)
@@ -288,6 +291,20 @@ unsafe def roleExpandersForUnsafe (x : Name) : DocElabM (Array RoleExpander) := 
 
 @[implemented_by roleExpandersForUnsafe]
 opaque roleExpandersFor (x : Name) : DocElabM (Array RoleExpander)
+
+
+abbrev CodeBlockExpander := Array RoleArgument → TSyntax `str → DocElabM (Array (TSyntax `term))
+
+initialize codeBlockExpanderAttr : KeyedDeclsAttribute CodeBlockExpander ←
+  mkDocExpanderAttribute `code_block_expander ``CodeBlockExpander "Indicates that this function is used to implement a given code block" `codeBlockExpanderAttr
+
+unsafe def codeBlockExpandersForUnsafe (x : Name) : DocElabM (Array CodeBlockExpander) := do
+  let expanders := codeBlockExpanderAttr.getEntries (← getEnv) x
+  return expanders.map (·.value) |>.toArray
+
+@[implemented_by codeBlockExpandersForUnsafe]
+opaque codeBlockExpandersFor (x : Name) : DocElabM (Array CodeBlockExpander)
+
 
 abbrev BlockRoleExpander := Array RoleArgument → Array Syntax → DocElabM (Array (TSyntax `term))
 

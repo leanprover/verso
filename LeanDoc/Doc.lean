@@ -117,6 +117,7 @@ inductive Block (genre : Genre) : Type where
   | ul (items : Array (ListItem (Block genre)))
   | dl (items : Array (DescItem (Inline genre) (Block genre)))
   | blockquote (items : Array (Block genre))
+  | concat (content : Array (Block genre))
   | other (container : genre.Block) (content : Array (Block genre))
 
 partial def Block.reprPrec [Repr g.Inline] [Repr g.Block] (inline : Block g) (prec : Nat) : Std.Format :=
@@ -129,6 +130,7 @@ partial def Block.reprPrec [Repr g.Inline] [Repr g.Block] (inline : Block g) (pr
         | ul items => reprCtor ``Block.ul [reprArray (@ListItem.reprPrec _ ⟨go⟩) items]
         | dl items => reprCtor ``Block.dl [reprArray (@DescItem.reprPrec _ _ _ ⟨go⟩) items]
         | blockquote items => reprCtor ``Block.blockquote [reprArray go items]
+        | concat content => reprCtor ``Block.concat [reprArray go content]
         | other container content => reprCtor ``Block.other [reprArg container, reprArray go content]
     go inline prec
 
@@ -204,6 +206,7 @@ where
     | .dl items => .dl <$> items.mapM fun
       | DescItem.mk t d => DescItem.mk <$> t.mapM inline <*> d.mapM block
     | .blockquote items => .blockquote <$> items.mapM block
+    | .concat items => .concat <$> items.mapM block
     | .other container content =>
       match ← Traverse.genreBlock container content with
       | .none => .other container <$> content.mapM block

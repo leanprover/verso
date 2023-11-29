@@ -180,7 +180,7 @@ info: LeanDoc.Doc.Part.mk
 
 Here's some code
 
-``` code
+```
 (define (zero f z) z)
 (define (succ n) (lambda (f x) (f (n f z))))
 ```
@@ -211,7 +211,7 @@ info: LeanDoc.Doc.Part.mk
 
 Here's some `code`!
 
-``` code
+```
 (define (zero f z) z)
 (define (succ n) (lambda (f x) (f (n f z))))
 ```

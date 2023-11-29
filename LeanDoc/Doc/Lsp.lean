@@ -11,7 +11,6 @@ import Std.CodeAction.Basic
 import LeanDoc.Doc.Elab
 import LeanDoc.Syntax
 
-open Std.CodeAction (findInfoTree?)
 open LeanDoc.Doc.Elab (DocListInfo TOC)
 
 open Lean

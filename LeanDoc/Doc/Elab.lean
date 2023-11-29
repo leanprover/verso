@@ -269,8 +269,26 @@ def _root_.LeanDoc.Syntax.blockquote.expand : BlockExpander
 
 @[block_expander LeanDoc.Syntax.codeblock]
 def _root_.LeanDoc.Syntax.codeblock.expand : BlockExpander
-  | `<low|(LeanDoc.Syntax.codeblock (column ~_col) ~_open ~_nameAndArgs ~(.atom _ contents) ~_close )> =>
-    -- TODO name and args and indent
-    ``(Block.code Option.none #[] 0 $(quote contents))
+  | `<low|(LeanDoc.Syntax.codeblock (column ~(.atom _ col)) ~_open ~(.node _ `null nameAndArgs) ~(.atom info contents) ~_close )> => do
+    if h : 0 < nameAndArgs.size then
+      let nameStx := nameAndArgs[0]
+      let name ← resolveGlobalConstNoOverloadWithInfo nameStx
+      let _argsStx := nameAndArgs.extract 1 nameAndArgs.size
+      let exp ← codeBlockExpandersFor name
+      -- TODO parse args
+      let args := #[]
+      for e in exp do
+        try
+          let termStxs ← withFreshMacroScope <| e args (Syntax.mkStrLit (info:=info) contents)
+          return (← ``(Block.concat #[$[$termStxs],*]))
+        catch
+          | ex@(.internal id) =>
+            if id == unsupportedSyntaxExceptionId then pure ()
+            else throw ex
+          | ex => throw ex
+      dbg_trace "No expander for '{nameStx}'"
+      throwUnsupportedSyntax
+    else
+      ``(Block.code Option.none #[] $(Syntax.mkNumLit col) $(quote contents))
   | _ =>
     throwUnsupportedSyntax

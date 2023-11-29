@@ -88,6 +88,7 @@ partial def Block.toHtml [GenreHtml g] : Block g → HtmlM g Html
   | .code (some name) _ _ content => do
     pure #[{{ <pre class={{"language-" ++ name}}> {{ content }} </pre>}}]
   | .code none _ _ content => pure #[{{ <pre> {{ content }} </pre>}}]
+  | .concat items => Html.seq <$> items.mapM Block.toHtml
   | .other container content => GenreHtml.block Block.toHtml container content
 
 
