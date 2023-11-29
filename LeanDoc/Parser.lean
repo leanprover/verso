@@ -954,21 +954,21 @@ deriving Inhabited, Repr
 
 mutual
   partial def listItem (ctxt : BlockCtxt) : ParserFn :=
-    nodeFn ``li (bulletFn >> withCurrentColumn fun c => manyFn (block {ctxt with minIndent := c}))
+    nodeFn ``li (bulletFn >> withCurrentColumn fun c => blocks {ctxt with minIndent := c})
   where
     bulletFn := atomicFn <| nodeFn `bullet <|
       takeWhileFn (· == ' ') >>
       pushColumn >>
       -- The outer list block recognizer sets up the minimum indent to be the precise indent of its items
       guardColumn (· == ctxt.minIndent) s!"indentation at {ctxt.minIndent}" >>
-      asStringFn (chFn '*' false)
+      asStringFn (chFn '*' false) >> ignoreFn (lookaheadFn (chFn ' '))
 
   partial def blockquote (ctxt : BlockCtxt) : ParserFn :=
     atomicFn <| nodeFn ``blockquote <|
       takeWhileFn (· == ' ') >> guardMinColumn ctxt.minIndent >> chFn '>' >>
       withCurrentColumn fun c => blocks { ctxt with minIndent := c }
 
-  partial def list (ctxt : BlockCtxt) : ParserFn :=
+  partial def unorderedList (ctxt : BlockCtxt) : ParserFn :=
     nodeFn ``ul <|
       atomicFn (bol >> takeWhileFn (· == ' ') >> ignoreFn (lookaheadFn (chFn '*' >> chFn ' ')) >> guardMinColumn ctxt.minIndent >> pushColumn) >>
       withCurrentColumn (fun c => many1Fn (listItem {ctxt with minIndent := c} ))
@@ -976,8 +976,9 @@ mutual
   partial def para (ctxt : BlockCtxt) : ParserFn :=
     nodeFn ``para <| atomicFn (takeWhileFn (· == ' ') >> notFollowedByFn blockOpener "block opener" >> guardMinColumn ctxt.minIndent) >> textLine
 
-  partial def header : ParserFn :=
+  partial def header (ctxt : BlockCtxt) : ParserFn :=
     nodeFn ``header <|
+      guardMinColumn ctxt.minIndent >>
       atomicFn (bol >> asStringFn (many1Fn (skipChFn '#')) >> skipChFn ' ' >> takeWhileFn (· == ' ') >> lookaheadFn (satisfyFn (· != '\n'))) >>
       textLine (allowNewlines := false)
 
@@ -1068,9 +1069,9 @@ mutual
     intro := guardMinColumn (ctxt.minIndent) >> withCurrentColumn fun c => atomicFn (chFn '{') >> withCurrentColumn fun c' => nameAndArgs (some c') >> nameArgWhitespace (some c)  >> chFn '}'
 
 
-  partial def block (c : BlockCtxt) := block_role c <|> list c <|> header <|> codeBlock c <|> directive c <|> blockquote c <|> para c
+  partial def block (c : BlockCtxt) : ParserFn := block_role c <|> unorderedList c <|> header c <|> codeBlock c <|> directive c <|> blockquote c <|> para c
 
-  partial def blocks (c : BlockCtxt) := sepByFn true (block c) (ignoreFn (manyFn blankLine))
+  partial def blocks (c : BlockCtxt) : ParserFn := sepByFn true (block c) (ignoreFn (manyFn blankLine))
 end
 
 /--
@@ -1148,6 +1149,52 @@ info: Success! Final stack:
     [(LeanDoc.Syntax.li
       (bullet (column "0") "*")
       [(LeanDoc.Syntax.para
+        [(LeanDoc.Syntax.text (str "\"foo\""))])])
+     (LeanDoc.Syntax.li
+      (bullet (column "0") "*")
+      [(LeanDoc.Syntax.para
+        [(LeanDoc.Syntax.text (str "\"bar\""))
+         (LeanDoc.Syntax.linebreak "\n")])])])]
+All input consumed.
+-/
+#guard_msgs in
+  #eval blocks {} |>.test! "* foo\n\n* bar\n"
+
+/--
+info: Success! Final stack:
+  [(LeanDoc.Syntax.ul
+    (column "0")
+    [(LeanDoc.Syntax.li
+      (bullet (column "0") "*")
+      [(LeanDoc.Syntax.para
+        [(LeanDoc.Syntax.text (str "\"foo\""))
+         (LeanDoc.Syntax.linebreak "\n")
+         (LeanDoc.Syntax.text
+          (str "\"  stuff\""))])
+       (LeanDoc.Syntax.blockquote
+        ">"
+        [(LeanDoc.Syntax.para
+          [(LeanDoc.Syntax.text
+            (str "\"more \""))])])
+       (LeanDoc.Syntax.para
+        [(LeanDoc.Syntax.text (str "\"abc\""))])])
+     (LeanDoc.Syntax.li
+      (bullet (column "0") "*")
+      [(LeanDoc.Syntax.para
+        [(LeanDoc.Syntax.text (str "\"bar\""))
+         (LeanDoc.Syntax.linebreak "\n")])])])]
+All input consumed.
+-/
+#guard_msgs in
+  #eval blocks {} |>.test! "* foo\n  stuff\n\n > more \n\n abc\n\n\n* bar\n"
+
+/--
+info: Success! Final stack:
+  [(LeanDoc.Syntax.ul
+    (column "0")
+    [(LeanDoc.Syntax.li
+      (bullet (column "0") "*")
+      [(LeanDoc.Syntax.para
         [(LeanDoc.Syntax.text (str "\"foo\""))
          (LeanDoc.Syntax.linebreak "\n")])
        (LeanDoc.Syntax.ul
@@ -1214,7 +1261,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval header |>.test! "# Header!"
+  #eval header {} |>.test! "# Header!"
 
 /--
 info: Success! Final stack:
@@ -1468,7 +1515,7 @@ All input consumed.
 #guard_msgs in
 #eval block {} |>.test! " {test}\n Here's a modified paragraph."
 /--
-info: Failure: #; expected expected column at least 1
+info: Failure: '*'; expected expected column at least 1
 Final stack:
   (LeanDoc.Syntax.block_role
    "{"
