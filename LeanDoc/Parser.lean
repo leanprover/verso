@@ -341,6 +341,18 @@ All input consumed.
 #guard_msgs in
   #eval notSpecial.test! "\\>"
 
+def strFn (str : String) : ParserFn := asStringFn <| fun c s =>
+  let rec go (iter : String.Iterator) (s : ParserState) :=
+    if iter.atEnd then s
+    else
+      let ch := iter.curr
+      go iter.next <| satisfyFn (· == ch) ch.toString c s
+  let iniPos := s.pos
+  let iniSz := s.stxStack.size
+  let s := go str.iter s
+  if s.hasError then s.mkErrorAt str iniPos (some iniSz) else s
+
+
 
 def val : ParserFn := docNumLitFn <|> docIdentFn <|> docStrLitFn
 
@@ -402,7 +414,7 @@ where
   eatSpaces := takeWhileFn (· == ' ')
   potentiallyNamed iniSz :=
       atomicFn docIdentFn >> eatSpaces >>
-       ((atomicFn (skipChFn ':' >> skipChFn '=') >> eatSpaces >> val >> eatSpaces >> mkNamed iniSz) <|> mkAnon iniSz)
+       ((atomicFn (strFn ":=") >> eatSpaces >> val >> eatSpaces >> mkNamed iniSz) <|> mkAnon iniSz)
 /--
 info: Success! Final stack:
   (arg.anon `x)
@@ -413,7 +425,7 @@ All input consumed.
 
 /--
 info: Success! Final stack:
-  (arg.named `x (num "1"))
+  (arg.named `x ":=" (num "1"))
 All input consumed.
 -/
 #guard_msgs in
@@ -421,7 +433,7 @@ All input consumed.
 
 /--
 info: Success! Final stack:
-  (arg.named `x `y)
+  (arg.named `x ":=" `y)
 All input consumed.
 -/
 #guard_msgs in
@@ -429,7 +441,7 @@ All input consumed.
 
 /--
 info: Success! Final stack:
-  (arg.named `x (str "\"y\""))
+  (arg.named `x ":=" (str "\"y\""))
 All input consumed.
 -/
 #guard_msgs in
@@ -439,6 +451,7 @@ All input consumed.
 info: Failure: unterminated string literal; expected identifier or numeral
 Final stack:
  • `x
+ • ":="
  • <missing>
 
 Remaining: "\"y"
@@ -488,7 +501,7 @@ def nameAndArgs (multiline : Option Nat := none) : ParserFn :=
 /--
 info: Success! Final stack:
  • `leanExample
- • [(arg.named `context (num "2"))]
+ • [(arg.named `context ":=" (num "2"))]
 
 All input consumed.
 -/
@@ -516,7 +529,7 @@ All input consumed.
 info: Success! Final stack:
  • `leanExample
  • [(arg.anon `context)
-     (arg.named `more (str "\"stuff\""))]
+     (arg.named `more ":=" (str "\"stuff\""))]
 
 All input consumed.
 -/
@@ -528,7 +541,7 @@ All input consumed.
 info: Success! Final stack:
  • `leanExample
  • [(arg.anon `context)
-     (arg.named `more (str "\"stuff\""))]
+     (arg.named `more ":=" (str "\"stuff\""))]
 
 Remaining:
 "\n\nabc"
@@ -550,17 +563,6 @@ structure InlineCtxt where
 
 deriving Inhabited
 
-
-def strFn (str : String) : ParserFn := asStringFn <| fun c s =>
-  let rec go (iter : String.Iterator) (s : ParserState) :=
-    if iter.atEnd then s
-    else
-      let ch := iter.curr
-      go iter.next <| satisfyFn (· == ch) ch.toString c s
-  let iniPos := s.pos
-  let iniSz := s.stxStack.size
-  let s := go str.iter s
-  if s.hasError then s.mkErrorAt str iniPos (some iniSz) else s
 
 /- Parsing inlines:
  * Inline parsers may not consume trailing whitespace, and must be robust in the face of leading whitespace
@@ -655,11 +657,17 @@ mutual
 
   partial def role (ctxt : InlineCtxt) : ParserFn :=
     nodeFn ``role <|
-      intro >> (nodeFn nullKind (delimitedInline ctxt) <|> bracketed)
+      intro >> (atomicFn nonBracketed <|> bracketed)
   where
     eatSpaces := takeWhileFn (· == ' ')
     intro := atomicFn (chFn '{') >> eatSpaces >> nameAndArgs >> eatSpaces >> chFn '}'
-    bracketed := atomicFn (satisfyFn (· == '[') "'['">> manyFn (inline ctxt) >> satisfyFn (· == ']') "']'")
+    bracketed := atomicFn (chFn '[') >> manyFn (inline ctxt >> eatSpaces) >> chFn ']'
+    fakeOpen := mkAtom SourceInfo.none "["
+    fakeClose := mkAtom SourceInfo.none "]"
+    nonBracketed : ParserFn := fun c s =>
+      let s := s.pushSyntax fakeOpen
+      let s := nodeFn nullKind (delimitedInline ctxt) c s
+      s.pushSyntax fakeClose
 
 
   partial def delimitedInline (ctxt : InlineCtxt) : ParserFn := emph ctxt <|> bold ctxt <|> code <|> role ctxt
@@ -870,10 +878,12 @@ info: Success! Final stack:
    `hello
    []
    "}"
+   "["
    [(LeanDoc.Syntax.bold
      "*"
      [(LeanDoc.Syntax.text (str "\"there\""))]
-     "*")])
+     "*")]
+   "]")
 All input consumed.
 -/
 #guard_msgs in
@@ -886,7 +896,9 @@ info: Success! Final stack:
    `hello
    []
    "}"
-   [(LeanDoc.Syntax.text (str "\"there\""))])
+   "["
+   [(LeanDoc.Syntax.text (str "\"there\""))]
+   "]")
 All input consumed.
 -/
 #guard_msgs in
@@ -897,13 +909,40 @@ info: Success! Final stack:
   (LeanDoc.Syntax.role
    "{"
    `hello
-   [(arg.named `world `gaia)]
+   [(arg.named `world ":=" `gaia)]
    "}"
-   [(LeanDoc.Syntax.text (str "\"there\""))])
+   "["
+   [(LeanDoc.Syntax.text (str "\"there\""))]
+   "]")
 All input consumed.
 -/
 #guard_msgs in
 #eval role {} |>.test! "{hello world:=gaia}[there]"
+
+/--
+info: Success! Final stack:
+  (LeanDoc.Syntax.role
+   "{"
+   `hello
+   [(arg.named `world ":=" `gaia)]
+   "}"
+   "["
+   [(LeanDoc.Syntax.text (str "\"there \""))
+    (LeanDoc.Syntax.bold
+     "*"
+     [(LeanDoc.Syntax.text (str "\"is\""))]
+     "*")
+    (LeanDoc.Syntax.emph
+     "_"
+     [(LeanDoc.Syntax.text
+       (str "\"a meaning!\""))]
+     "_")]
+   "]")
+All input consumed.
+-/
+#guard_msgs in
+#eval role {} |>.test! "{hello world:=gaia}[there *is* _a meaning!_ ]"
+
 
 structure BlockCtxt where
   minIndent : Nat := 0
@@ -1318,7 +1357,7 @@ Final stack:
    (column "0")
    "```"
    [`scheme
-    [(arg.named `dialect (str "\"chicken\""))
+    [(arg.named `dialect ":=" (str "\"chicken\""))
      (arg.anon (num "43"))]]
    <missing>)
 Remaining: "(define x 4)\nx\n```"
@@ -1542,7 +1581,10 @@ info: Success! Final stack:
    (column "1")
    ":::"
    `multiPara
-   [(arg.named `greatness (str "\"amazing!\""))]
+   [(arg.named
+     `greatness
+     ":="
+     (str "\"amazing!\""))]
    [(LeanDoc.Syntax.para
      [(LeanDoc.Syntax.text (str "\"foo\""))])]
    ":::")

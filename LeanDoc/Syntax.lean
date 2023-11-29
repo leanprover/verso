@@ -29,11 +29,11 @@ syntax (name:=link) "[" inline* "](" str ")" : inline
 syntax (name:=linebreak) "line!" : inline
 /-- Literal characters-/
 syntax (name:=code) "code{" str "}" : inline
-syntax (name:=role) "role{" ident argument* "}" inline  : inline
+syntax (name:=role) "role{" ident argument* "}" "[" inline "]"  : inline
 
 declare_syntax_cat list_item
 /-- List item -/
-syntax (name:=li) str : list_item
+syntax (name:=li) "*" str : list_item
 
 declare_syntax_cat block
 syntax (name:=para) "para{" inline+ "}" : block
@@ -46,9 +46,9 @@ syntax (name:=blockquote) str : block
 /-- Custom directive -/
 syntax (name:=directive) str : block
 /-- A header -/
-syntax (name:=header) str : block
+syntax (name:=header) inline* : block
 
-syntax (name:=block_role) "role{" ident argument* "}" block  : block
+syntax (name:=block_role) "role{" ident argument* "}" "[" block "]"  : block
 
 
 open LeanDoc.SyntaxUtils Lean Elab Term Std in

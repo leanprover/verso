@@ -9,6 +9,7 @@ import Lean.Data.Lsp
 import Std.CodeAction.Basic
 
 import LeanDoc.Doc.Elab
+import LeanDoc.Syntax
 
 open Std.CodeAction (findInfoTree?)
 open LeanDoc.Doc.Elab (DocListInfo TOC)
@@ -152,14 +153,17 @@ def graftSymbols (inner outer : Array DocumentSymbol) : Array DocumentSymbol :=
   inner.foldr graftSymbolInto outer
 
 open Lean Server Lsp RequestM in
-def mergeResponses (docTask : RequestTask α) (leanTask : RequestTask α) (f : α → α → α) : RequestM (RequestTask α) := do
+def mergeResponses (docTask : RequestTask α) (leanTask : RequestTask β) (f : Option α → Option β → γ) : RequestM (RequestTask γ) := do
   bindTask docTask fun
   | .ok docResult =>
     bindTask leanTask fun
     | .ok leanResult =>
-      pure <| Task.pure <| pure <| f docResult leanResult
+      pure <| Task.pure <| pure <| f (some docResult) (some leanResult)
+    | .error _ => pure <| Task.pure <| pure <| f (some docResult) none
+  | .error _ =>
+    bindTask leanTask fun
+    | .ok leanResult => pure <| Task.pure <| pure <| f none (some leanResult)
     | .error e => throw e
-  | .error _ => pure leanTask
 
 open Lean Server Lsp RequestM in
 partial def handleSyms (_params : DocumentSymbolParams) (prev : RequestTask DocumentSymbolResult) : RequestM (RequestTask DocumentSymbolResult) := do
@@ -172,7 +176,7 @@ partial def handleSyms (_params : DocumentSymbolParams) (prev : RequestTask Docu
   mergeResponses syms prev combineAnswers
   --pure syms
   where
-    combineAnswers (x y : DocumentSymbolResult) : DocumentSymbolResult := ⟨graftSymbols x.syms y.syms⟩
+    combineAnswers (x y : Option DocumentSymbolResult) : DocumentSymbolResult := ⟨graftSymbols (x.getD ⟨{}⟩).syms (y.getD ⟨{}⟩).syms⟩
     tocSym (text : FileMap) : TOC → Option DocumentSymbol
       | .mk title titleStx endPos children => Id.run do
         let some selRange@⟨start, _⟩ := titleStx.lspRange text
@@ -199,7 +203,125 @@ partial def handleSyms (_params : DocumentSymbolParams) (prev : RequestTask Docu
           if let some x := tocSym text i then syms := syms.push x
       pure syms
 
+-- Shamelessly cribbed from https://github.com/tydeu/lean4-alloy/blob/57792f4e8a9674f8b4b8b17742607a1db142d60e/Alloy/C/Server/SemanticTokens.lean
+structure SemanticTokenEntry where
+  line : Nat
+  startChar : Nat
+  length : Nat
+  type : Nat
+  modifierMask : Nat
+deriving Inhabited, Repr
+
+protected def SemanticTokenEntry.ordLt (a b : SemanticTokenEntry) : Bool :=
+  a.line < b.line ∨ (a.line = b.line ∧ a.startChar < b.startChar)
+
+def encodeTokenEntries (entries : Array SemanticTokenEntry) : Array Nat := Id.run do
+  let mut data := #[]
+  let mut lastLine := 0
+  let mut lastChar := 0
+  for ⟨line, char, len, type, modMask⟩ in entries do
+    let deltaLine := line - lastLine
+    let deltaStart := if line = lastLine then char - lastChar else char
+    data := data ++ #[deltaLine, deltaStart, len, type, modMask]
+    lastLine := line; lastChar := char
+  return data
+
+def decodeLeanTokens (data : Array Nat) : Array SemanticTokenEntry := Id.run do
+  let mut line := 0
+  let mut char := 0
+  let mut entries : Array SemanticTokenEntry := #[]
+  for i in [0:data.size:5] do
+    let #[deltaLine, deltaStart, len, type, modMask] := data[i:i+5].toArray
+      | return entries -- If this happens, something is wrong with Lean, but we don't really care
+    line := line + deltaLine
+    char := if deltaLine = 0 then char + deltaStart else deltaStart
+    entries := entries.push ⟨line, char, len, type, modMask⟩
+  return entries
+
+deriving instance Repr, BEq for SemanticTokenType
+
+open Lean Server Lsp RequestM in
+partial def handleTokens (prev : RequestTask SemanticTokens) (beginPos endPos : String.Pos) : RequestM (RequestTask SemanticTokens) := do
+  let doc ← readDoc
+  let text := doc.meta.text
+  let t := doc.cmdSnaps.waitUntil (·.endPos >= endPos)
+  let toks ←
+    mapTask t fun (snaps, _) => do
+      let mut toks := #[]
+      for s in snaps do
+        if s.endPos <= beginPos then continue
+        toks := toks ++ go s text s.stx
+      pure toks
+
+  mergeResponses toks prev fun
+    | none, none => SemanticTokens.mk none #[]
+    | some xs, none => SemanticTokens.mk none <| encodeTokenEntries <| xs.qsort (·.ordLt ·)
+    | none, some r => r
+    | some mine, some leans =>
+      let toks := decodeLeanTokens leans.data
+      {leans with data := encodeTokenEntries (toks ++ mine |>.qsort (·.ordLt ·))}
+
+where
+  mkTok (text : FileMap) (type : SemanticTokenType) (stx : Syntax) : Array SemanticTokenEntry := Id.run do
+    let (some startPos, some endPos) := (stx.getPos?, stx.getTailPos?)
+      | return #[]
+    let startLspPos := text.utf8PosToLspPos startPos
+    let endLspPos := text.utf8PosToLspPos endPos
+    -- VS Code has a limitation where tokens can't span lines The
+    -- parser obeys an invariant that nothing spans a line, so we can
+    -- bail, rather than resorting to workarounds.
+    if startLspPos.line == endLspPos.line then #[{
+        line := startLspPos.line,
+        startChar := startLspPos.character,
+        length := endLspPos.character - startLspPos.character,
+        type := type.toNat,
+        modifierMask := 0
+      }]
+    else #[]
+
+  go (snap : Snapshots.Snapshot) (text : FileMap) (stx : Syntax) : Array SemanticTokenEntry := Id.run do
+    match stx.getKind with
+    | ``LeanDoc.Syntax.text =>
+      mkTok text .string stx
+    | ``LeanDoc.Syntax.emph | ``LeanDoc.Syntax.bold =>
+      mkTok text .keyword stx[0] ++ go snap text stx[1] ++ mkTok text .keyword stx[2]
+    | ``LeanDoc.Syntax.header =>
+      mkTok text .keyword stx[0] ++ go snap text stx[1]
+    | ``LeanDoc.Syntax.role =>
+      dbg_trace "{stx}"
+      mkTok text .keyword stx[0] ++ -- {
+      mkTok text .function stx[1] ++ -- roleName
+      go snap text stx[2] ++  -- args
+      mkTok text .keyword stx[3] ++ -- }
+      mkTok text .keyword stx[4] ++ -- [
+      go snap text stx[5] ++
+      mkTok text .keyword stx[6] -- ]
+    | ``LeanDoc.Syntax.named =>
+      mkTok text .keyword stx[1] -- :=
+    | ``LeanDoc.Syntax.li =>
+      mkTok text .keyword stx[0][1] ++
+      go snap text stx[1]
+    | _ =>
+      let mut out := #[]
+      for arg in stx.getArgs do
+        out := out ++ go snap text arg
+      return out
+
+open Lean Server Lsp RequestM in
+def handleTokensRange (params : SemanticTokensRangeParams) (prev : RequestTask SemanticTokens) : RequestM (RequestTask SemanticTokens) := do
+  let doc ← readDoc
+  let text := doc.meta.text
+  let beginPos := text.lspPosToUtf8Pos params.range.start
+  let endPos := text.lspPosToUtf8Pos params.range.end
+  handleTokens prev beginPos endPos
+
+open Lean Server Lsp RequestM in
+def handleTokensFull (_params : SemanticTokensParams) (prev : RequestTask SemanticTokens) : RequestM (RequestTask SemanticTokens) := handleTokens prev 0 ⟨1 <<< 31⟩
+
+
 open Lean Server Lsp in
 initialize
   chainLspRequestHandler "textDocument/documentHighlight" DocumentHighlightParams DocumentHighlightResult handleHl
   chainLspRequestHandler "textDocument/documentSymbol" DocumentSymbolParams DocumentSymbolResult handleSyms
+  chainLspRequestHandler "textDocument/semanticTokens/full" SemanticTokensParams SemanticTokens handleTokensFull
+  chainLspRequestHandler "textDocument/semanticTokens/range" SemanticTokensRangeParams SemanticTokens handleTokensRange
