@@ -49,12 +49,16 @@ structure Config where
   destination : System.FilePath := "./_site"
   showDrafts : Bool := false
   postName : Date → String → String := defaultPostName
+  logError : String → IO Unit
 deriving Inhabited
 
 class MonadConfig (m : Type → Type u) where
   currentConfig : m Config
 
 export MonadConfig (currentConfig)
+
+def logError [Monad m] [MonadConfig m] [MonadLift IO m] (message : String) : m Unit := do
+  (← currentConfig).logError message
 
 structure TraverseContext where
   path : List String := {}

@@ -14,7 +14,7 @@ open Std (Format)
 open Lean (Name)
 
 def docName (moduleName : Name) : Name :=
-  absolutize <| .str moduleName "the canonical document object name"
+  id <| .str moduleName "the canonical document object name"
 where
   absolutize : Name → Name
     | .anonymous => .anonymous

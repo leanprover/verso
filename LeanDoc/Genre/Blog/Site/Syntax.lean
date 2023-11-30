@@ -41,29 +41,22 @@ scoped syntax "post" post_spec : term
 scoped syntax "dir" dir_spec : term
 
 def resolvedDocName [Monad m] [MonadResolveName m] [MonadEnv m] [MonadError m] (id : TSyntax `ident) : m (TSyntax `ident) :=
-  mkIdent <$> resolveGlobalConstNoOverload (mkIdentFrom id (docName id.getId))
+  mkIdentFrom id <$> resolveGlobalConstNoOverload (mkIdentFrom id (docName id.getId))
 
-elab_rules : term
-  | `(term| site $id:ident) => do
-    let content ← resolvedDocName id
-    elabTerm (← `({frontPage := $content, contents := .pages #[] : Site})) none
-  | `(term| site $id:ident $contents:dir_spec) => do
-    let content ← resolvedDocName id
-    elabTerm (← `({frontPage := $content, contents := (dir $contents) : Site})) none
-  | `(term| page $name:str $id:ident) => do
-    let content ← resolvedDocName id
-    elabTerm (← `(.page $name $(quote content.getId) $content (.pages #[]))) none
-  | `(term| page $name:str $id:ident $d:dir_spec) => do
-    let content ← resolvedDocName id
-    elabTerm (← `(.page $name $(quote content.getId) $content (dir $d))) none
-  | `(term| post $id:ident by $authors:str,* on $y:num-$m:num-$d:num) => do
-    let content ← resolvedDocName id
-    elabTerm (← `({ date := ⟨$y, $m, $d⟩, authors := [$authors,*], content := $content, «draft» := false : Post})) none
-  | `(term| post $id:ident by $authors:str,* on $y:num-$m:num-$d:num (draft)) => do
-    let content ← resolvedDocName id
-    elabTerm (← `({ date := ⟨$y, $m, $d⟩, authors := [$authors,*], content := $content, «draft» := true : Post})) none
 
 macro_rules
+  | `(term| site $id:ident) => do
+    `({frontPage := (%doc $id), contents := .pages #[] : Site})
+  | `(term| site $id:ident $contents:dir_spec) =>
+    `({frontPage := (%doc $id), contents := (dir $contents) : Site})
+  | `(term| page $name:str $id:ident) =>
+    `(.page $name (%docName $id) (%doc $id) (.pages #[]))
+  | `(term| page $name:str $id:ident $d:dir_spec) => do
+    `(.page $name (%docName $id) (%doc $id) (dir $d))
+  | `(term| post $id:ident by $authors:str,* on $y:num-$m:num-$d:num) => do
+    `({ date := ⟨$y, $m, $d⟩, authors := [$authors,*], content := (%doc $id), «draft» := false : Post})
+  | `(term| post $id:ident by $authors:str,* on $y:num-$m:num-$d:num (draft)) => do
+    `({ date := ⟨$y, $m, $d⟩, authors := [$authors,*], content := (%doc $id), «draft» := true : Post})
   | `(term| page static $name:str => $d:str) => `(.static $name $d)
   | `(term| dir / $pages:page_spec*) =>
     `(.pages #[$[page $pages],*])

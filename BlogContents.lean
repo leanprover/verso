@@ -48,7 +48,6 @@ def theme : Theme := { Theme.default with
     }}
   }
 
-
 def blog : Site := site BlogContents.Pages.Front /
   static "static" => "static"
   "about" BlogContents.Pages.Mission /

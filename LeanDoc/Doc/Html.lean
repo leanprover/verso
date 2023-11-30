@@ -15,32 +15,54 @@ namespace LeanDoc.Doc.Html
 
 open LeanDoc Doc Html
 
-structure Options where
+structure Options (m : Type → Type) where
   /-- The level of the top-level headers -/
   headerLevel : Nat := 1
+  logError : String → m Unit
 
-abbrev HtmlM (genre : Genre) (α : Type) : Type :=
-  ReaderT (Options × genre.TraverseContext × genre.TraverseState) Id α
+abbrev HtmlT (genre : Genre) (m : Type → Type) (α : Type) : Type :=
+  ReaderT (Options m × genre.TraverseContext × genre.TraverseState) m α
 
-def HtmlM.options : HtmlM genre Options := (·.fst) <$> read
-def HtmlM.withOptions (opts : Options → Options) (act : HtmlM g α) : HtmlM g α :=
+instance [Functor m] : Functor (HtmlT genre m) where
+  map f act := fun ρ => Functor.map f (act ρ)
+
+instance [Monad m] : Monad (HtmlT genre m) where
+  pure x := fun _ => pure x
+  bind act k := fun ρ => (act ρ >>= fun x => k x ρ)
+
+instance [Pure m] : MonadReader (Options m × genre.TraverseContext × genre.TraverseState) (HtmlT genre m) where
+  read := fun ρ => pure ρ
+
+instance : MonadWithReader (Options m × genre.TraverseContext × genre.TraverseState) (HtmlT genre m) where
+  withReader f act := fun ρ => act (f ρ)
+
+def HtmlT.options [Monad m] : HtmlT genre m (Options m) := do
+  let (opts, _, _) ← read
+  pure opts
+
+def HtmlT.withOptions (opts : Options m → Options m) (act : HtmlT g m α) : HtmlT g m α :=
   withReader (fun (x, y, z) => (opts x, y, z)) act
 
-def HtmlM.context : HtmlM genre genre.TraverseContext := read >>= fun (_, ctxt, _) => pure ctxt
-def HtmlM.state : HtmlM genre genre.TraverseState := read >>= fun (_, _, state) => pure state
+def HtmlT.context [Monad m] : HtmlT genre m genre.TraverseContext := do
+  let (_, ctxt, _) ← read
+  pure ctxt
 
-open HtmlM
+def HtmlT.state [Monad m] : HtmlT genre m genre.TraverseState := read >>= fun (_, _, state) => pure state
 
-class ToHtml (genre : Genre) (α : Type u) where
-  toHtml (val : α) : HtmlM genre Html
+def HtmlT.logError [Monad m] (message : String) : HtmlT genre m Unit := do (← options).logError message
 
-class GenreHtml (genre : Genre) where
-  part (partHtml : Part genre → HtmlM genre Html)
-    (metadata : genre.PartMetadata) (contents : Part genre) : HtmlM genre Html
-  block (blockHtml : Block genre → HtmlM genre Html)
-    (container : genre.Block) (contents : Array (Block genre)) : HtmlM genre Html
-  inline (inlineHtml : Inline genre → HtmlM genre Html)
-    (container : genre.Inline) (contents : Array (Inline genre)) : HtmlM genre Html
+open HtmlT
+
+class ToHtml (genre : Genre) (m : Type → Type) (α : Type u) where
+  toHtml (val : α) : HtmlT genre m Html
+
+class GenreHtml (genre : Genre) (m : Type → Type) where
+  part (partHtml : Part genre → HtmlT genre m Html)
+    (metadata : genre.PartMetadata) (contents : Part genre) : HtmlT genre m Html
+  block (blockHtml : Block genre → HtmlT genre m Html)
+    (container : genre.Block) (contents : Array (Block genre)) : HtmlT genre m Html
+  inline (inlineHtml : Inline genre → HtmlT genre m Html)
+    (container : genre.Inline) (contents : Array (Inline genre)) : HtmlT genre m Html
 
 
 section
@@ -50,7 +72,7 @@ defmethod LinkDest.str : LinkDest → String
   | .url addr => addr
   | .ref TODO => TODO
 
-partial def Inline.toHtml [GenreHtml g] : Inline g → HtmlM g Html
+partial def Inline.toHtml [Monad m] [GenreHtml g m] : Inline g → HtmlT g m Html
   | .text str => pure <| .text str
   | .link content dest => do
     pure {{ <a href={{dest.str}}> {{← content.mapM toHtml}} </a> }}
@@ -65,11 +87,11 @@ partial def Inline.toHtml [GenreHtml g] : Inline g → HtmlM g Html
   | .concat inlines => inlines.mapM toHtml
   | .other container content => GenreHtml.inline Inline.toHtml container content
 
-instance [GenreHtml g] : ToHtml g (Inline g) where
+instance [Monad m] [GenreHtml g m] : ToHtml g m (Inline g) where
   toHtml := Inline.toHtml
 
 
-partial def Block.toHtml [GenreHtml g] : Block g → HtmlM g Html
+partial def Block.toHtml [Monad m] [GenreHtml g m] : Block g → HtmlT g m Html
   | .para xs => do
     pure {{ <p> {{← xs.mapM Inline.toHtml }} </p> }}
   | .blockquote bs => do
@@ -94,10 +116,10 @@ partial def Block.toHtml [GenreHtml g] : Block g → HtmlM g Html
   | .other container content => GenreHtml.block Block.toHtml container content
 
 
-instance [GenreHtml g] : ToHtml g (Block g) where
+instance [Monad m] [GenreHtml g m] : ToHtml g m (Block g) where
   toHtml := Block.toHtml
 
-partial def Part.toHtml [GenreHtml g] (p : Part g) : HtmlM g Html :=
+partial def Part.toHtml [Monad m] [GenreHtml g m] (p : Part g) : HtmlT g m Html :=
   match p.metadata with
   | .none => do
     pure {{
@@ -110,15 +132,15 @@ partial def Part.toHtml [GenreHtml g] (p : Part g) : HtmlM g Html :=
   | some m =>
     GenreHtml.part Part.toHtml m p.withoutMetadata
 
-instance [GenreHtml g] : ToHtml g (Part g) where
+instance [Monad m] [GenreHtml g m] : ToHtml g m (Part g) where
   toHtml := Part.toHtml
 
-instance : GenreHtml .none where
+instance : GenreHtml .none m where
   part _ m := nomatch m
   block _ x := nomatch x
   inline _ x := nomatch x
 
-defmethod Genre.toHtml (g : Genre) [ToHtml g α] (options : Options) (context : g.TraverseContext) (state : g.TraverseState) (x : α) : Html :=
+defmethod Genre.toHtml (g : Genre) [ToHtml g m α] (options : Options m) (context : g.TraverseContext) (state : g.TraverseState) (x : α) : m Html :=
   ToHtml.toHtml x (options, context, state)
 
 open LeanDoc.Examples
@@ -141,7 +163,7 @@ info: LeanDoc.Html.tag
               (LeanDoc.Html.text "(define (zero f z) z)\n(define (succ n) (lambda (f x) (f (n f z))))\n")])])
 -/
 #guard_msgs in
-  #eval Genre.none.toHtml {} () () e
+  #eval Genre.none.toHtml (m:=Id) {logError := fun _ => ()} () () e
 end
 
 def embody (content : Html) : Html := {{

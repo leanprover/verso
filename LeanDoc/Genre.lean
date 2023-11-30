@@ -72,8 +72,7 @@ def lean : CodeBlockExpander
     let (env, msgs) ← processHeader header opts msgs context 0
     if msgs.hasErrors then
       for msg in msgs.toList do
-        if msg.severity == .error then
-          let _ ← logError (← msg.toString)
+        logMessage msg
       liftM (m := IO) (throw <| IO.userError "Errors during import; aborting")
     let commandState := configureCommandState env msgs
     let s ← IO.processCommands context state commandState
@@ -103,11 +102,16 @@ private def filterString (p : Char → Bool) (str : String) : String := Id.run <
   pure out
 
 def blogMain (theme : Theme) (site : Site) (options : List String) : IO UInt32 := do
-  let cfg ← opts {} options
+  let hasError ← IO.mkRef false
+  let logError msg := do hasError.set true; IO.eprintln msg
+  let cfg ← opts {logError := logError} options
   let (site, xref) ← site.traverse cfg
   site.generate theme {site := site, ctxt := ⟨[], cfg⟩, xref := xref, dir := cfg.destination, config := cfg}
-  pure 0
-
+  if (← hasError.get) then
+    IO.eprintln "Errors were encountered!"
+    return 1
+  else
+    return 0
 where
   opts (cfg : Config)
     | ("--output"::dir::more) => opts {cfg with destination := dir} more

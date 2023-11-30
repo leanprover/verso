@@ -17,19 +17,19 @@ private def next (xs : Array α) : Option (α × Array α) :=
   else
     none
 
-instance : MonadPath (HtmlM Blog) where
+instance [Monad m] : MonadPath (HtmlT Blog m) where
   currentPath := do
     let (_, ctxt, _) ← read
     pure ctxt.path
 
-instance : MonadConfig (HtmlM Blog) where
+instance [Monad m] : MonadConfig (HtmlT Blog m) where
   currentConfig := do
     let (_, ctxt, _) ← read
     pure ctxt.config
 
-open HtmlM
+open HtmlT
 
-partial instance : GenreHtml Blog where
+partial instance : GenreHtml Blog IO where
   part _ m := nomatch m
   block _ b := nomatch b
   inline go
@@ -41,7 +41,7 @@ partial instance : GenreHtml Blog where
     | .ref x, contents => do
       match (← state).targets.find? x with
       | none =>
-        -- TODO better error handling
+        HtmlT.logError "Can't find target {x}"
         pure {{<strong class="internal-error">s!"Can't find target {x}"</strong>}}
       | some tgt =>
         let addr := s!"{String.join ((← relative tgt.path).intersperse "/")}#{tgt.htmlId}"
@@ -49,7 +49,7 @@ partial instance : GenreHtml Blog where
     | .pageref x, contents => do
       match (← state).pageIds.find? x with
       | none =>
-         -- TODO better error handling
+        HtmlT.logError "Can't find target {x}"
         pure {{<strong class="internal-error">s!"Can't find target {x}"</strong>}}
       | some path =>
         let addr := String.join ((← relative path).intersperse "/")
@@ -100,13 +100,6 @@ def toList (params : Params) : List (String × Val) :=
 def insert (params : Params) (key : String) (val : Val) : Params :=
   Lean.RBMap.insert params key val
 
-
-def forPart (context : Blog.TraverseContext) (state : Blog.TraverseState) (txt : Part Blog) : Params :=
-  let titleHtml := {{ <h1> {{ txt.title.map (Blog.toHtml {} context state) }} </h1>}}
-  ofList [
-    ("title", ⟨.mk txt.titleString, #[.mk titleHtml]⟩),
-    ("content", txt.content.map (Blog.toHtml {} context state) ++ txt.subParts.map (Blog.toHtml {} context state))
-  ]
 
 end Params
 
