@@ -225,11 +225,26 @@ def ignoreFn (p : ParserFn) : ParserFn := fun c s =>
   let s' := p c s
   s'.shrinkStack iniSz
 
-private def asStringAux (quoted : Bool) (startPos : String.Pos) : ParserFn := fun c s =>
-  let input   := c.input
-  let stopPos := s.pos
-  let leading := mkEmptySubstringAt input startPos
-  let val     := input.extract startPos stopPos
+private def unescapeStr (str : String) : String := Id.run do
+  let mut out := ""
+  let mut iter := str.iter
+  while !iter.atEnd do
+    let c := iter.curr
+    iter := iter.next
+    if c == '\\' then
+      if !iter.atEnd then
+        out := out.push iter.curr
+        iter := iter.next
+    else
+      out := out.push c
+  out
+
+private def asStringAux (quoted : Bool) (unescape : Bool) (startPos : String.Pos) : ParserFn := fun c s =>
+  let input    := c.input
+  let stopPos  := s.pos
+  let leading  := mkEmptySubstringAt input startPos
+  let val      := input.extract startPos stopPos
+  let val      := if unescape then unescapeStr val else val
   let trailing := mkEmptySubstringAt input stopPos
   let atom     :=
     mkAtom (SourceInfo.original leading startPos trailing (startPos + val)) <|
@@ -237,12 +252,12 @@ private def asStringAux (quoted : Bool) (startPos : String.Pos) : ParserFn := fu
   s.pushSyntax atom
 
 /-- Match an arbitrary Parser and return the consumed String in a `Syntax.atom`. -/
-def asStringFn (p : ParserFn) (quoted := false) : ParserFn := fun c s =>
+def asStringFn (p : ParserFn) (quoted := false) (unescape := false) : ParserFn := fun c s =>
   let startPos := s.pos
   let iniSz := s.stxStack.size
   let s := p c s
   if s.hasError then s
-  else asStringAux quoted startPos c (s.shrinkStack iniSz)
+  else asStringAux quoted unescape startPos c (s.shrinkStack iniSz)
 
 def checkCol0Fn (errorMsg : String) : ParserFn := fun c s =>
   let pos      := c.fileMap.toPosition s.pos
@@ -289,17 +304,6 @@ Remaining:
 #guard_msgs in
 #eval nl.test! "\n "
 
-def blankLine : ParserFn := nodeFn `blankLine <| atomicFn <| asStringFn <| takeWhileFn (· == ' ') >> nl
-
-def bullet := satisfyFn (· == '*') "bullet (*)"
-
-/-- Characters with a special meaning during a line (we already know we're reading inlines) -/
-def specialChars := "*_\n[]{}`".toList
-
-def isSpecial (c : Char) : Bool := c ∈ specialChars
-
-def notSpecial := satisfyEscFn (not ∘ isSpecial)
-
 def strFn (str : String) : ParserFn := asStringFn <| fun c s =>
   let rec go (iter : String.Iterator) (s : ParserState) :=
     if iter.atEnd then s
@@ -312,6 +316,127 @@ def strFn (str : String) : ParserFn := asStringFn <| fun c s =>
   if s.hasError then s.mkErrorAt str iniPos (some iniSz) else s
 
 
+def blankLine : ParserFn := nodeFn `blankLine <| atomicFn <| asStringFn <| takeWhileFn (· == ' ') >> nl
+
+def bullet := satisfyFn (· == '*') "bullet (*)"
+
+
+def inlineTextChar : ParserFn := fun c s =>
+  let i := s.pos
+  if h : c.input.atEnd i then s.mkEOIError
+  else
+    let curr := c.input.get' i h
+    match curr with
+    | '\\' =>
+      let s := s.next' c.input i h
+      let i := s.pos
+      if h : c.input.atEnd i then s.mkEOIError
+      else s.next' c.input i h
+    | '*' | '_' | '\n' | '[' | ']' | '{' | '}' | '`' => s.mkUnexpectedErrorAt s!"'{curr}'" i
+    | '!' =>
+      let s := s.next' c.input i h
+      let i' := s.pos
+      if h : c.input.atEnd i' then s
+      else if c.input.get' i' h == '['
+      then s.mkUnexpectedErrorAt "![" i
+      else s
+    | _ => s.next' c.input i h
+
+/-- Return some inline text up to the next inline opener or the end of
+the line, whichever is first. Always consumes at least one
+logical character on success, taking escaping into account. -/
+def inlineText : ParserFn := asStringFn (unescape := true) <| atomicFn inlineTextChar >> manyFn inlineTextChar
+
+/--
+info: Failure: unexpected end of input
+Final stack:
+  <missing>
+Remaining: ""
+-/
+#guard_msgs in
+#eval inlineTextChar |>.test! ""
+
+
+/--
+info: Success! Final stack:
+ empty
+All input consumed.
+-/
+#guard_msgs in
+#eval inlineTextChar |>.test! "a"
+
+/--
+info: Success! Final stack:
+ empty
+Remaining:
+"bc"
+-/
+#guard_msgs in
+#eval inlineTextChar |>.test! "abc"
+
+/--
+info: Failure: '['
+Final stack:
+  <missing>
+Remaining: "[abc"
+-/
+#guard_msgs in
+#eval inlineTextChar |>.test! "[abc"
+
+/--
+info: Success! Final stack:
+ empty
+Remaining:
+"abc"
+-/
+#guard_msgs in
+#eval inlineTextChar |>.test! "!abc"
+
+/--
+info: Success! Final stack:
+  "!!"
+Remaining:
+"![abc"
+-/
+#guard_msgs in
+#eval asStringFn (many1Fn inlineTextChar) |>.test! "!!![abc"
+
+/--
+info: Failure: '*'
+Final stack:
+  [<missing>]
+Remaining: "*"
+-/
+#guard_msgs in
+#eval asStringFn (many1Fn inlineTextChar) |>.test! "*"
+
+/--
+info: Success! Final stack:
+  "**"
+Remaining:
+"*"
+-/
+#guard_msgs in
+#eval asStringFn (unescape := true) (many1Fn inlineTextChar) |>.test! "\\*\\**"
+
+/--
+info: Success! Final stack:
+  "!!!\\[abc"
+Remaining:
+"]"
+-/
+#guard_msgs in
+#eval asStringFn (many1Fn inlineTextChar) |>.test! "!!!\\[abc]"
+
+/--
+info: Success! Final stack:
+  ">"
+All input consumed.
+-/
+#guard_msgs in
+#eval asStringFn (unescape := true) (many1Fn inlineTextChar) |>.test! "\\>"
+
+
 /-- Block opener prefixes -/
 def blockOpener := atomicFn <|
   takeWhileEscFn (· == ' ') >>
@@ -320,40 +445,6 @@ def blockOpener := atomicFn <|
    atomicFn (atLeastFn 3 (chFn ':')) <|>
    atomicFn (atLeastFn 3 (chFn '`')) <|>
    atomicFn (chFn '>'))
-
-
-/--
-info: Success! Final stack:
- empty
-All input consumed.
--/
-#guard_msgs in
-  #eval notSpecial.test! "a"
-
-/--
-info: Success! Final stack:
- empty
-All input consumed.
--/
-#guard_msgs in
-  #eval notSpecial.test! "b"
-
-/--
-info: Success! Final stack:
- empty
-All input consumed.
--/
-#guard_msgs in
-  #eval notSpecial.test! "\\*"
-
-/--
-info: Success! Final stack:
- empty
-All input consumed.
--/
-#guard_msgs in
-  #eval notSpecial.test! "\\>"
-
 
 def val : ParserFn := docNumLitFn <|> docIdentFn <|> docStrLitFn
 
@@ -640,21 +731,35 @@ mutual
 
   -- Read a prefix of a line of text, stopping at a text-mode special character
   partial def text :=
-    nodeFn ``text (nodeFn strLitKind (asStringFn (atomicFn (manyFn (chFn ' ') >> notSpecial) >> takeUntilEscFn isSpecial) (quoted := true)))
+    nodeFn ``text <|
+      nodeFn strLitKind <|
+        asStringFn (unescape := true) (quoted := true) <|
+          atomicFn (manyFn (chFn ' ') >> inlineTextChar) >>
+          manyFn inlineTextChar
 
   partial def link (ctxt : InlineCtxt) :=
     nodeFn ``link <|
-      (atomicFn (notInLink >> strFn "[" )) >>
+      (atomicFn (notInLink ctxt >> strFn "[" )) >>
       many1Fn (inline {ctxt with inLink := true}) >>
       strFn "]" >>
-      (ref <|> url)
+      linkTarget
+
+  partial def linkTarget := ref <|> url
   where
     notUrlEnd := satisfyEscFn (· ∉ ")\n".toList) >> takeUntilEscFn (· ∈ ")\n".toList)
     notRefEnd := satisfyEscFn (· ∉ "]\n".toList) >> takeUntilEscFn (· ∈ "]\n".toList)
-    notInLink : ParserFn := fun _ s =>
-      if ctxt.inLink then s.mkError "Already in a link" else s
     ref : ParserFn := nodeFn ``LeanDoc.Syntax.ref ((atomicFn <| strFn "[") >> nodeFn strLitKind (asStringFn notRefEnd (quoted := true)) >> strFn "]")
     url : ParserFn := nodeFn ``LeanDoc.Syntax.url ((atomicFn <| strFn "(") >> nodeFn strLitKind (asStringFn notUrlEnd (quoted := true)) >> strFn ")")
+
+  partial def notInLink (ctxt : InlineCtxt) : ParserFn := fun _ s =>
+      if ctxt.inLink then s.mkError "Already in a link" else s
+
+  partial def image : ParserFn :=
+    nodeFn ``image <|
+      atomicFn (strFn "![") >>
+      asStringFn (takeUntilEscFn (· ∈ "]\n".toList))>>
+      strFn "]" >>
+      linkTarget
 
   partial def role (ctxt : InlineCtxt) : ParserFn :=
     nodeFn ``role <|
@@ -671,10 +776,10 @@ mutual
       s.pushSyntax fakeClose
 
 
-  partial def delimitedInline (ctxt : InlineCtxt) : ParserFn := emph ctxt <|> bold ctxt <|> code <|> role ctxt
+  partial def delimitedInline (ctxt : InlineCtxt) : ParserFn := emph ctxt <|> bold ctxt <|> code <|> role ctxt <|> image <|> link ctxt
 
   partial def inline (ctxt : InlineCtxt) : ParserFn :=
-    text <|> linebreak ctxt <|> link ctxt <|> delimitedInline ctxt
+    text <|> linebreak ctxt <|> delimitedInline ctxt
 end
 
 
@@ -859,6 +964,14 @@ All input consumed.
 #guard_msgs in
   #eval inline {} |>.test! "**aa\nbb**"
 
+/--
+info: Success! Final stack:
+  (LeanDoc.Syntax.text (str "\"a \""))
+Remaining:
+"* b"
+-/
+#guard_msgs in
+  #eval inline {} |>.test! "a * b"
 
 /--
 info: Success! Final stack:
@@ -874,6 +987,49 @@ All input consumed.
 -/
 #guard_msgs in
   #eval inline {} |>.test! "[Wikipedia](https://en.wikipedia.org)"
+
+/--
+info: Success! Final stack:
+  (LeanDoc.Syntax.image
+   "!["
+   ""
+   "]"
+   (LeanDoc.Syntax.url
+    "("
+    (str "\"logo.png\"")
+    ")"))
+All input consumed.
+-/
+#guard_msgs in
+  #eval inline {} |>.test! "![](logo.png)"
+
+/--
+info: Success! Final stack:
+  (LeanDoc.Syntax.image
+   "!["
+   "alt text is good"
+   "]"
+   (LeanDoc.Syntax.url
+    "("
+    (str "\"logo.png\"")
+    ")"))
+All input consumed.
+-/
+#guard_msgs in
+  #eval inline {} |>.test! "![alt text is good](logo.png)"
+
+/--
+info: Failure: expected ( or [
+Final stack:
+  (LeanDoc.Syntax.image
+   "!["
+   "alt text is good"
+   "]"
+   (LeanDoc.Syntax.url <missing>))
+Remaining: "](logo.png)"
+-/
+#guard_msgs in
+  #eval inline {} |>.test! "![alt text is good]](logo.png)"
 
 /--
 info: Success! Final stack:
@@ -1241,7 +1397,7 @@ All input consumed.
   #eval blocks {} |>.test! "* foo\n  * bar\n* more outer"
 
 /--
-info: Failure: unexpected end of input; expected [ or expected beginning of line at ⟨2, 15⟩
+info: Failure: unexpected end of input; expected ![, [ or expected beginning of line at ⟨2, 15⟩
 Final stack:
   [(LeanDoc.Syntax.dl
     [(LeanDoc.Syntax.desc
@@ -1253,7 +1409,7 @@ Final stack:
         (str "\"Let's say more!\""))]
       "=>"
       [(LeanDoc.Syntax.para
-        [(LeanDoc.Syntax.role <missing>)])
+        [(LeanDoc.Syntax.link <missing>)])
        <missing>])])]
 Remaining: ""
 -/
@@ -1339,7 +1495,7 @@ All input consumed.
 /--
 info: Success! Final stack:
   [(LeanDoc.Syntax.para
-    [(LeanDoc.Syntax.text (str "\"n\\\\*k \""))])]
+    [(LeanDoc.Syntax.text (str "\"n*k \""))])]
 All input consumed.
 -/
 #guard_msgs in
@@ -1704,7 +1860,7 @@ All input consumed.
 #guard_msgs in
 #eval block {} |>.test! "{\n    test\n arg}\nHere's a modified paragraph."
 /--
-info: Failure: '{'; expected [
+info: Failure: '{'; expected ![ or [
 Final stack:
   (LeanDoc.Syntax.block_role
    "{"
@@ -1712,7 +1868,7 @@ Final stack:
    [(arg.anon `arg)]
    "}"
    (LeanDoc.Syntax.para
-    [(LeanDoc.Syntax.role <missing>)]))
+    [(LeanDoc.Syntax.link <missing>)]))
 Remaining: "\n\nHere's a modified paragraph."
 -/
 #guard_msgs in

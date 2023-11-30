@@ -54,6 +54,7 @@ inductive Inline (genre : Genre) : Type where
   | code (string : String)
   | linebreak (string : String)
   | link (content : Array (Inline genre)) (dest : LinkDest)
+  | image (alt : String) (dest : LinkDest)
   | concat (content : Array (Inline genre))
   | other (container : genre.Inline) (content : Array (Inline genre))
 
@@ -75,6 +76,10 @@ partial def Inline.reprPrec [Repr g.Inline] (inline : Inline g) (prec : Nat) : S
         | .linebreak str => reprCtor ``Inline.linebreak [reprArg str]
         | .link content dest => reprCtor ``Inline.link [
             reprArray go content,
+            reprArg dest
+          ]
+        | .image content dest => reprCtor ``Inline.image [
+            reprArg content,
             reprArg dest
           ]
         | .concat content => reprCtor ``Inline.concat [reprArray go content]
@@ -190,6 +195,7 @@ where
     | .emph content => .emph <$> content.mapM inline
     | .bold content => .bold <$> content.mapM inline
     | .link content ref => (.link · ref) <$> content.mapM inline
+    | .image alt ref => pure <| .image alt ref
     | .concat content => .concat <$> content.mapM inline
     | .other container content => do
       match ← Traverse.genreInline container content with

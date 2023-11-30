@@ -29,6 +29,8 @@ syntax (name:=emph) "_{" inline* "}" : inline
 syntax (name:=bold) "*{" inline* "}" : inline
 /-- Link -/
 syntax (name:=link) "link[" inline* "]" link_target : inline
+/-- Image -/
+syntax (name:=image) "image[" str* "]" link_target : inline
 /-- Line break -/
 syntax (name:=linebreak) "line!" : inline
 /-- Literal characters-/

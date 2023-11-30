@@ -53,13 +53,15 @@ defmethod LinkDest.str : LinkDest → String
 partial def Inline.toHtml [GenreHtml g] : Inline g → HtmlM g Html
   | .text str => pure <| .text str
   | .link content dest => do
-    pure #[{{ <a href={{ dest.str }}> {{← content.mapM toHtml}} </a> }}]
+    pure {{ <a href={{dest.str}}> {{← content.mapM toHtml}} </a> }}
+  | .image alt dest => do
+    pure {{ <img src={{dest.str}} alt={{alt}}/> }}
   | .linebreak _str => pure .empty
   | .emph content => do
-    pure #[{{ <em> {{← content.mapM toHtml }} </em>}}]
+    pure {{ <em> {{← content.mapM toHtml }} </em> }}
   | .bold content => do
-    pure #[{{ <strong> {{← content.mapM toHtml}} </strong>}}]
-  | .code str => pure #[{{ <code> {{str}} </code>}}]
+    pure {{ <strong> {{← content.mapM toHtml}} </strong> }}
+  | .code str => pure {{ <code> {{str}} </code> }}
   | .concat inlines => inlines.mapM toHtml
   | .other container content => GenreHtml.inline Inline.toHtml container content
 
