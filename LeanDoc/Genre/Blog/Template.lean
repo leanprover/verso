@@ -29,9 +29,32 @@ instance [Monad m] : MonadConfig (HtmlT Blog m) where
 
 open HtmlT
 
+defmethod Highlighted.Token.Kind.«class» : Highlighted.Token.Kind → String
+  | .var .. => "var"
+  | .sort .. => "sort"
+  | .const .. => "const"
+  | .keyword .. => "keyword"
+  | .unknown => "unknown"
+
+defmethod Highlighted.Token.toHtml (tok : Highlighted.Token) : Html := {{
+  {{tok.pre}}<span class={{tok.kind.«class»}}>{{tok.content}}</span>{{tok.post}}
+}}
+
+defmethod Highlighted.Span.Kind.«class» : Highlighted.Span.Kind → String
+  | .info => "info"
+  | .warning => "warning"
+  | .error => "error"
+
+partial defmethod Highlighted.toHtml : Highlighted → Html
+  | .token t => t.toHtml
+  | .span s hl => {{<span class={{s.«class»}}>{{toHtml hl}}</span>}}
+  | .seq hls => hls.map toHtml
+
 partial instance : GenreHtml Blog IO where
   part _ m := nomatch m
-  block _ b := nomatch b
+  block _go
+    | .highlightedCode hls, _contents => do
+      pure {{ <pre class="hl lean"> {{ hls.toHtml }} </pre> }}
   inline go
     | .label x, contents => do
       let contentHtml ← contents.mapM go

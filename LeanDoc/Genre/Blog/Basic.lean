@@ -3,10 +3,15 @@ import Lean
 import LeanDoc.Doc
 import LeanDoc.Doc.Html
 import LeanDoc.Method
+import LeanDoc.Genre.Blog.Highlighted
 
 open LeanDoc Doc Html
 
 namespace LeanDoc.Genre
+
+inductive Blog.BlockExt where
+  | highlightedCode (highlighted : Highlighted)
+deriving Repr
 
 inductive Blog.InlineExt where
   | label (name : Lean.Name)
@@ -78,7 +83,7 @@ structure Blog.TraverseState where
 
 def Blog : Genre where
   PartMetadata := Empty
-  Block := Empty
+  Block := Blog.BlockExt
   Inline := Blog.InlineExt
   TraverseContext := Blog.TraverseContext
   TraverseState := Blog.TraverseState

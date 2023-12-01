@@ -5,6 +5,7 @@ import LeanDoc.Html
 import LeanDoc.Doc.Html
 
 import LeanDoc.Genre.Blog
+import LeanDoc.Genre.Blog.HighlightCode
 import LeanDoc.Genre.Blog.Site.Syntax
 
 open LeanDoc.Doc (Genre Part)
@@ -50,6 +51,7 @@ def page_link : RoleExpander
     pure #[val]
   | _, _ => throwUnsupportedSyntax
 
+open LeanDoc.Genre.Highlighted in
 @[code_block_expander lean]
 def lean : CodeBlockExpander
   | _, str => do
@@ -85,7 +87,15 @@ def lean : CodeBlockExpander
     for msg in s.commandState.messages.msgs do
       logMessage msg
     -- TODO highlighted output
-    pure #[← ``(Block.code Option.none #[] 0 $(quote str.getString))]
+    let mut hls := Highlighted.empty
+    let infoSt ← getInfoState
+    try
+      setInfoState s.commandState.infoState
+      for cmd in s.commands do
+        hls := hls ++ (← highlight (← getFileMap) cmd false)
+    finally
+      setInfoState infoSt
+    pure #[← ``(Block.other (Blog.BlockExt.highlightedCode $(quote hls)) #[Block.code none #[] 0 $(quote str.getString)])]
 where
   initializeLeanContext : IO Unit := do
     let leanPath ← Lean.findSysroot
