@@ -51,7 +51,7 @@ defmethod Highlighted.Token.Kind.hover? : (tok : Highlighted.Token.Kind) → Opt
     let docs := match doc with
       | none => .empty
       | some txt => {{<hr/><p>{{txt}}</p>}}
-    some <| hover {{<span class={{tok.«class»}}>{{toString n}}{{docs}}</span>}}
+    some <| hover {{ {{toString n}} {{docs}} }}
   | _ => none
 
 

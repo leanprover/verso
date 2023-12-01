@@ -186,6 +186,8 @@ h6 {
   display: inline-block;
   position: absolute;
   top: 1em;
+  font-weight: normal;
+  font-style: normal;
 }
 
 
