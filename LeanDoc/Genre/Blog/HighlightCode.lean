@@ -11,7 +11,7 @@ partial defmethod Highlighted.Token.Kind.priority : Highlighted.Token.Kind → N
   | .var .. => 2
   | .const .. => 5
   | .sort => 4
-  | .keyword => 3
+  | .keyword _ _ => 3
   | .unknown => 0
 
 -- Find all info nodes whose canonical span matches the given syntax
@@ -53,7 +53,7 @@ def mkToken (meaning : Token.Kind) (info : SourceInfo)  (tok : String) : Token :
   -- hl.processWhitespace trailing
 
 
-def identKind [Monad m] [MonadInfoTree m] (stx : TSyntax `ident) : m Token.Kind := do
+def identKind [Monad m] [MonadInfoTree m] [MonadLiftT IO m] [MonadEnv m] (stx : TSyntax `ident) : m Token.Kind := do
   let trees ← getInfoTrees
   let mut kind : Token.Kind := .unknown
 
@@ -62,11 +62,12 @@ def identKind [Monad m] [MonadInfoTree m] (stx : TSyntax `ident) : m Token.Kind 
       match info with
       | .ofTermInfo termInfo =>
         match termInfo.expr with
-        | Expr.fvar .. =>
-          let seen := .var `todo -- TODO
+        | Expr.fvar id =>
+          let seen := .var id
           if seen.priority > kind.priority then kind := seen
         | Expr.const name _ => --TODO universe vars
-          let seen := .const name
+          let docs ← findDocString? (← getEnv) name
+          let seen := .const name docs
           if seen.priority > kind.priority then kind := seen
         | Expr.sort .. =>
           let seen := .sort
@@ -84,17 +85,16 @@ def identKind [Monad m] [MonadInfoTree m] (stx : TSyntax `ident) : m Token.Kind 
       | .ofCommandInfo _ => continue
   pure kind
 
-def infoExists [Monad m] [MonadInfoTree m] (stx : Syntax) : m Bool := do
+def infoExists [Monad m] [MonadInfoTree m] [MonadLiftT IO m] (stx : Syntax) : m Bool := do
   let trees ← getInfoTrees
-
   for t in trees do
     for _ in infoForSyntax t stx do
       return true
   return false
 
 
-partial def highlight [Inhabited (m Highlighted)] [Monad m] [MonadInfoTree m] [MonadError m]
-    (text : FileMap) (stx : Syntax) (inErr : Bool := false) : m Highlighted := do
+partial def highlight [Inhabited (m Highlighted)] [Monad m] [MonadEnv m] [MonadInfoTree m] [MonadError m] [MonadLiftT IO m]
+    (text : FileMap) (stx : Syntax) (inErr : Bool := false) (lookingAt : Option Name := none) : m Highlighted := do
   match stx with
   | `($e.%$tk$field:ident) =>
       let hl1 ← highlight text e inErr
@@ -123,14 +123,17 @@ partial def highlight [Inhabited (m Highlighted)] [Monad m] [MonadInfoTree m] [M
           | _ => pure <| .token (mkToken (← identKind ⟨stx⟩) i x.toString)
         | _ => pure <| .token (mkToken (← identKind ⟨stx⟩) i x.toString)
     | stx@(.atom i x) =>
+      let docs ← match lookingAt with
+        | none => pure none
+        | some n => findDocString? (← getEnv) n
       if let .sort ← identKind ⟨stx⟩ then
         return .token (mkToken .sort i x)
       return (.token <| mkToken · i x) <|
         match x.get? 0 with
-        | some '#' => .keyword
+        | some '#' => .keyword lookingAt docs
         | some c =>
-          if c.isAlpha then .keyword
+          if c.isAlpha then .keyword lookingAt docs
           else .unknown
         | _ => .unknown
-    | .node _ _ children =>
-      .seq <$> children.mapM (highlight text · inErr)
+    | .node _ k children =>
+      .seq <$> children.mapM (highlight text · inErr (lookingAt := some k))

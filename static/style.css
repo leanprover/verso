@@ -164,4 +164,32 @@ h6 {
 
 .hl.lean .var {
   font-style: italic;
+  position: relative;
+}
+
+.hover-container {
+    width: 0;
+    height: 0;
+    position: relative;
+    display: inline;
+}
+
+.hl.lean .hover-info {
+  display: none;
+  background-color: #e5e5e5;
+  border: 1px solid black;
+  padding: 0.5em;
+  z-index: 200;
+}
+
+.hl.lean .token:hover .hover-info {
+  display: inline-block;
+  position: absolute;
+  top: 1em;
+}
+
+
+.binding-hl {
+    background-color: #eee;
+    border-radius: 2px;
 }

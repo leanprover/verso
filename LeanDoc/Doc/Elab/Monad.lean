@@ -177,6 +177,8 @@ def DocElabM.run (st : PartElabM.State) (act : DocElabM α) : TermElabM α :=
 
 instance : Inhabited (DocElabM α) := inferInstanceAs <| Inhabited (ReaderT PartElabM.State TermElabM α)
 
+instance : MonadLift TermElabM DocElabM := inferInstanceAs <| MonadLift TermElabM (ReaderT PartElabM.State TermElabM)
+
 instance : MonadRef DocElabM := inferInstanceAs <| MonadRef (ReaderT PartElabM.State TermElabM)
 
 instance : MonadQuotation DocElabM := inferInstanceAs <| MonadQuotation (ReaderT PartElabM.State TermElabM)

@@ -68,7 +68,6 @@ def lean : CodeBlockExpander
       return code
     let context := Parser.mkInputContext inputString "<example>"
     let (header, state, msgs) ← Parser.parseHeader context
-    -- TODO do this before header - requires Lean change
     initializeLeanContext
     let opts := Options.empty -- .setBool `trace.Elab.info true
     let (env, msgs) ← processHeader header opts msgs context 0
@@ -86,15 +85,17 @@ def lean : CodeBlockExpander
       pushInfoTree t
     for msg in s.commandState.messages.msgs do
       logMessage msg
-    -- TODO highlighted output
     let mut hls := Highlighted.empty
     let infoSt ← getInfoState
+    let env ← getEnv
     try
       setInfoState s.commandState.infoState
+      setEnv s.commandState.env
       for cmd in s.commands do
         hls := hls ++ (← highlight (← getFileMap) cmd false)
     finally
       setInfoState infoSt
+      setEnv env
     pure #[← ``(Block.other (Blog.BlockExt.highlightedCode $(quote hls)) #[Block.code none #[] 0 $(quote str.getString)])]
 where
   initializeLeanContext : IO Unit := do

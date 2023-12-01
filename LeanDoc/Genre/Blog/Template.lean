@@ -30,15 +30,35 @@ instance [Monad m] : MonadConfig (HtmlT Blog m) where
 open HtmlT
 
 defmethod Highlighted.Token.Kind.«class» : Highlighted.Token.Kind → String
-  | .var .. => "var"
-  | .sort .. => "sort"
-  | .const .. => "const"
-  | .keyword .. => "keyword"
+  | .var _ => "var"
+  | .sort  => "sort"
+  | .const _ _ => "const"
+  | .keyword _ _ => "keyword"
   | .unknown => "unknown"
 
-defmethod Highlighted.Token.toHtml (tok : Highlighted.Token) : Html := {{
-  {{tok.pre}}<span class={{tok.kind.«class»}}>{{tok.content}}</span>{{tok.post}}
+defmethod Highlighted.Token.Kind.data : Highlighted.Token.Kind → String
+  | .const n _ => "const-" ++ toString n
+  | .var ⟨v⟩ => "var-" ++ toString v
+  | _ => ""
+
+
+def hover (content : Html) : Html := {{
+  <div class="hover-container"><div class="hover-info"> {{ content }} </div></div>
 }}
+
+defmethod Highlighted.Token.Kind.hover? : (tok : Highlighted.Token.Kind) → Option Html
+  | tok@(.const n doc) | tok@(.keyword (some n) doc) =>
+    let docs := match doc with
+      | none => .empty
+      | some txt => {{<hr/><p>{{txt}}</p>}}
+    some <| hover {{<span class={{tok.«class»}}>{{toString n}}{{docs}}</span>}}
+  | _ => none
+
+
+defmethod Highlighted.Token.toHtml (tok : Highlighted.Token) : Html := {{
+  {{tok.pre}}<span class={{tok.kind.«class» ++ " token"}} "data-binding"={{tok.kind.data}}>{{tok.content}}{{tok.kind.hover?.getD .empty}}</span>{{tok.post}}
+}}
+
 
 defmethod Highlighted.Span.Kind.«class» : Highlighted.Span.Kind → String
   | .info => "info"
@@ -47,7 +67,7 @@ defmethod Highlighted.Span.Kind.«class» : Highlighted.Span.Kind → String
 
 partial defmethod Highlighted.toHtml : Highlighted → Html
   | .token t => t.toHtml
-  | .span s hl => {{<span class={{s.«class»}}>{{toHtml hl}}</span>}}
+  | .span s hl => {{<span class={{s.«class» ++ " token"}}>{{toHtml hl}}</span>}}
   | .seq hls => hls.map toHtml
 
 partial instance : GenreHtml Blog IO where

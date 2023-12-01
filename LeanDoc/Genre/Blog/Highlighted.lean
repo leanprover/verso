@@ -5,20 +5,20 @@ open Lean
 namespace LeanDoc.Genre
 
 inductive Highlighted.Token.Kind where
-  | keyword
-  | const (name : Name)
-  | var (name : Name)
+  | keyword (name : Option Name) (docs : Option String)
+  | const (name : Name) (docs : Option String)
+  | var (name : FVarId)
   | sort
   | unknown
-deriving Repr, DecidableEq, Inhabited
+deriving Repr, Inhabited
 
 open Highlighted.Token.Kind in
 open Syntax (mkCApp) in
 instance : Quote Highlighted.Token.Kind where
   quote
-    | .keyword => mkCApp ``keyword #[]
-    | .const n => mkCApp ``const #[quote n]
-    | .var n => mkCApp ``var #[quote n]
+    | .keyword n docs => mkCApp ``keyword #[quote n, quote docs]
+    | .const n docs => mkCApp ``const #[quote n, quote docs]
+    | .var (.mk n) => mkCApp ``var #[mkCApp ``FVarId.mk #[quote n]]
     | .sort => mkCApp ``sort #[]
     | .unknown => mkCApp ``unknown #[]
 
@@ -27,7 +27,7 @@ structure Highlighted.Token where
   content : String
   post : String
   kind : Token.Kind
-deriving Repr, DecidableEq, Inhabited
+deriving Repr, Inhabited
 
 open Syntax in
 open Highlighted in

@@ -28,6 +28,7 @@ def theme : Theme := { Theme.default with
           <meta charset="UTF-8"/>
           <title>{{ (← param (α := String) "title") }} " — Lean FRO"</title>
           <link rel="stylesheet" href="/static/style.css"/>
+          <script language="javascript" src="/static/bindings.js">""</script>
         </head>
         <body>
           <header>

@@ -127,6 +127,7 @@ mutual
             ensureDir (← currentDir)
             IO.println s!"Generating post {← currentDir}"
             IO.FS.withFile ((← currentDir).join "index.html") .write fun h => do
+              h.putStrLn "<!DOCTYPE html>"
               h.putStrLn output.asString
 
   partial def Page.generate (theme : Theme) : Page → GenerateM Unit
@@ -145,7 +146,8 @@ mutual
         | none => pageParams
         | some ps => pageParams.insert "posts" ⟨.mk (Html.seq ps), #[]⟩
 
-      IO.FS.withFile ((← currentDir).join "index.html") .write fun h =>
+      IO.FS.withFile ((← currentDir).join "index.html") .write fun h => do
+        h.putStrLn "<!DOCTYPE html>"
         h.putStrLn output.asString
       subPages.generate theme
     | .static _ file => do
