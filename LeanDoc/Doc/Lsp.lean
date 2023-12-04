@@ -305,6 +305,14 @@ where
     | ``LeanDoc.Syntax.desc =>
       mkTok text .keyword stx[0] ++ go snap text stx[1] ++
       mkTok text .keyword stx[2] ++ go snap text stx[3]
+    | ``LeanDoc.Syntax.directive =>
+      mkTok text .keyword stx[0] ++ -- :::
+      mkTok text .function stx[1] ++ -- name
+      go snap text stx[2] ++  -- args
+      mkTok text .keyword stx[4] ++ -- only in meta code
+      mkTok text .keyword stx[4] ++ -- only in meta code
+      go snap text stx[5] ++
+      mkTok text .keyword stx[6] -- :::
     | _ =>
       let mut out := #[]
       for arg in stx.getArgs do

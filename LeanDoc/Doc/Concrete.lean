@@ -64,7 +64,7 @@ info: #[Inline.text "Hello, ", Inline.emph #[Inline.bold #[Inline.text "emph"]]]
 #check inlines!"Hello, _*emph*_"
 
 def document : Parser where
-  fn := rawFn <| blocks {maxDirective := some 6}
+  fn := rawFn <| LeanDoc.Parser.document (blockContext := {maxDirective := some 6})
 
 @[combinator_parenthesizer document] def document.parenthesizer := PrettyPrinter.Parenthesizer.visitToken
 @[combinator_formatter document] def document.formatter := PrettyPrinter.Formatter.visitAtom Name.anonymous
@@ -76,8 +76,14 @@ partial def findGenre [Monad m] [MonadInfoTree m] [MonadResolveName m] [MonadEnv
 
 elab "#docs" "(" genre:term ")" n:ident title:inlineStr ":=" ":::::::" text:document ":::::::" : command => open Lean Elab Command PartElabM DocElabM in do
   findGenre genre
-  let endTok := match ← getRef with | .node _ _ t => t.back?.get! | _ => panic! "Nothing"
-  let endPos := endTok.getPos?.get!
+  let endTok :=
+    match ← getRef with
+    | .node _ _ t =>
+      match t.back? with
+      | some x => x
+      | none => panic! "No final token!"
+    | _ => panic! "Nothing"
+  let endPos := endTok.getPos!
   let .node _ _ blocks := text.raw
     | dbg_trace "nope {ppSyntax text.raw}" throwUnsupportedSyntax
   let ⟨`<low| [~_ ~(titleName@(.node _ _ titleParts))]>⟩ := title

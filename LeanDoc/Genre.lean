@@ -25,6 +25,40 @@ open Lean Elab
 open LeanDoc Doc Elab
 
 
+@[role_expander htmlSpan]
+def htmlSpan : RoleExpander
+  | #[.named `«class» (.string classes)], stxs => do
+    let args ← stxs.mapM elabInline
+    let val ← ``(Inline.other (Blog.InlineExt.htmlSpan $(quote classes)) #[ $[ $args ],* ])
+    pure #[val]
+  | _, _ => throwUnsupportedSyntax
+
+@[directive_expander htmlDiv]
+def htmlDiv : DirectiveExpander
+  | #[.named `«class» (.string classes)], stxs => do
+    let args ← stxs.mapM elabBlock
+    let val ← ``(Block.other (Blog.BlockExt.htmlDiv $(quote classes)) #[ $[ $args ],* ])
+    pure #[val]
+  | _, _ => throwUnsupportedSyntax
+
+@[directive_expander blob]
+def blob : DirectiveExpander
+  | #[.anonymous (.name blobName)], stxs => do
+    if h : stxs.size > 0 then logErrorAt stxs[0] "Expected no contents"
+    let actualName ← resolveGlobalConstNoOverloadWithInfo blobName
+    let val ← ``(Block.other (Blog.BlockExt.blob ($(mkIdentFrom blobName actualName) : Html)) #[])
+    pure #[val]
+  | _, _ => throwUnsupportedSyntax
+
+@[role_expander blob]
+def inlineBlob : RoleExpander
+  | #[.anonymous (.name blobName)], stxs => do
+    if h : stxs.size > 0 then logErrorAt stxs[0] "Expected no contents"
+    let actualName ← resolveGlobalConstNoOverloadWithInfo blobName
+    let val ← ``(Inline.other (Blog.InlineExt.blob ($(mkIdentFrom blobName actualName) : Html)) #[])
+    pure #[val]
+  | _, _ => throwUnsupportedSyntax
+
 @[role_expander label]
 def label : RoleExpander
   | #[.anonymous (.name l)], stxs => do

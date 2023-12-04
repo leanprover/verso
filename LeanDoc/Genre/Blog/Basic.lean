@@ -11,12 +11,16 @@ namespace LeanDoc.Genre
 
 inductive Blog.BlockExt where
   | highlightedCode (highlighted : Highlighted)
+  | htmlDiv (classes : String)
+  | blob (html : Html)
 deriving Repr
 
 inductive Blog.InlineExt where
   | label (name : Lean.Name)
   | ref (name : Lean.Name)
   | pageref (name : Lean.Name)
+  | htmlSpan (classes : String)
+  | blob (html : Html)
 
 structure Blog.Info.Target where
   path : List String
@@ -170,4 +174,5 @@ instance : Traverse Blog Blog.TraverseM where
     | .pageref _x, _contents =>
       -- TODO backreference
       pure none
+    | .htmlSpan .., _ | .blob .., _ => pure none
 end Traverse

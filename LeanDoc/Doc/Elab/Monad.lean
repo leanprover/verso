@@ -280,7 +280,7 @@ inductive RoleArgumentValue where
 deriving Repr
 
 inductive RoleArgument where
-  | named (name : Ident) (val : RoleArgumentValue)
+  | named (name : Name) (val : RoleArgumentValue)
   | anonymous (val : RoleArgumentValue)
 deriving Repr
 
@@ -308,6 +308,21 @@ unsafe def codeBlockExpandersForUnsafe (x : Name) : DocElabM (Array CodeBlockExp
 
 @[implemented_by codeBlockExpandersForUnsafe]
 opaque codeBlockExpandersFor (x : Name) : DocElabM (Array CodeBlockExpander)
+
+
+
+abbrev DirectiveExpander := Array RoleArgument → Array Syntax → DocElabM (Array (TSyntax `term))
+
+initialize directiveExpanderAttr : KeyedDeclsAttribute DirectiveExpander ←
+  mkDocExpanderAttribute `directive_expander ``DirectiveExpander "Indicates that this function is used to implement a given directive" `directiveExpanderAttr
+
+unsafe def directiveExpandersForUnsafe (x : Name) : DocElabM (Array DirectiveExpander) := do
+  let expanders := directiveExpanderAttr.getEntries (← getEnv) x
+  return expanders.map (·.value) |>.toArray
+
+@[implemented_by directiveExpandersForUnsafe]
+opaque directiveExpandersFor (x : Name) : DocElabM (Array DirectiveExpander)
+
 
 
 abbrev BlockRoleExpander := Array RoleArgument → Array Syntax → DocElabM (Array (TSyntax `term))

@@ -55,7 +55,7 @@ syntax (name:=codeblock) str : block
 /-- Quotation -/
 syntax (name:=blockquote) str : block
 /-- Custom directive -/
-syntax (name:=directive) str : block
+syntax (name:=directive) "directive{" ident argument* "}" "[" block* "]": block
 /-- A header -/
 syntax (name:=header) inline* : block
 

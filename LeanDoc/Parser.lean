@@ -1201,9 +1201,12 @@ mutual
       withIndentColumn fun c =>
         withCurrentColumn fun c' =>
           let fenceWidth := c' - c
+          dropIndentColumn >> -- TODO kludge
           takeWhileFn (· == ' ') >>
           nameAndArgs >>
           satisfyFn (· == '\n') "newline" >>
+          fakeAtom "\n" >>
+          fakeAtom "\n" >>
           blocks {ctxt with minIndent := c, maxDirective := fenceWidth} >>
           closeFence c fenceWidth
 
@@ -1214,6 +1217,11 @@ mutual
       | .node _ `column #[.atom _ col] =>
         if let some colNat := col.toNat? then p colNat c s else s.mkError s!"Internal error - not a Nat {col}"
       | other => s.mkError s!"Internal error - not a column node {other}"
+
+    dropIndentColumn : ParserFn := fun _ s =>
+      let top := s.stxStack.get! (s.stxStack.size - 1)
+      let s := {s with stxStack := s.stxStack.pop.pop}
+      s.pushSyntax top
 
     guardOpenerSize : ParserFn := withIndentColumn fun c => withCurrentColumn fun c' =>
       match ctxt.maxDirective with
@@ -1253,6 +1261,8 @@ mutual
   partial def blocks (c : BlockCtxt) : ParserFn := sepByFn true (block c) (ignoreFn (manyFn blankLine))
 
   partial def blocks1 (c : BlockCtxt) : ParserFn := sepBy1Fn true (block c) (ignoreFn (manyFn blankLine))
+
+  partial def document (blockContext : BlockCtxt := {}) : ParserFn := ignoreFn (manyFn blankLine) >> blocks blockContext
 end
 
 /--
@@ -1290,6 +1300,29 @@ All input consumed.
 -/
 #guard_msgs in
   #eval blocks {} |>.test! "I can describe lists like this one:\n\n* a\n* b"
+
+
+/--
+info: Success! Final stack:
+  [(LeanDoc.Syntax.para
+    [(LeanDoc.Syntax.image
+      "!["
+      "Lean logo"
+      "]"
+      (LeanDoc.Syntax.url
+       "("
+       (str "\"/static/lean_logo.svg\"")
+       ")"))])
+   (LeanDoc.Syntax.para
+    [(LeanDoc.Syntax.text
+      (str
+       "\"This is an example website/blog, for testing purposes.\""))])]
+All input consumed.
+-/
+#guard_msgs in
+  #eval document |>.test! "\n![Lean logo](/static/lean_logo.svg)\n\nThis is an example website/blog, for testing purposes."
+
+
 
 /--
 info: Success! Final stack:
@@ -1878,10 +1911,11 @@ Remaining: "\n\nHere's a modified paragraph."
 /--
 info: Success! Final stack:
   (LeanDoc.Syntax.directive
-   (column "0")
    "::::"
    `multiPara
    []
+   "\n"
+   "\n"
    [(LeanDoc.Syntax.para
      [(LeanDoc.Syntax.text (str "\"foo\""))])]
    "::::")
@@ -1893,13 +1927,14 @@ All input consumed.
 /--
 info: Success! Final stack:
   (LeanDoc.Syntax.directive
-   (column "1")
    ":::"
    `multiPara
    [(arg.named
      `greatness
      ":="
      (str "\"amazing!\""))]
+   "\n"
+   "\n"
    [(LeanDoc.Syntax.para
      [(LeanDoc.Syntax.text (str "\"foo\""))])]
    ":::")
@@ -1911,10 +1946,11 @@ All input consumed.
 /--
 info: Success! Final stack:
   (LeanDoc.Syntax.directive
-   (column "1")
    ":::"
    `multiPara
    []
+   "\n"
+   "\n"
    [(LeanDoc.Syntax.para
      [(LeanDoc.Syntax.text (str "\"foo\""))])
     (LeanDoc.Syntax.ul
@@ -1933,10 +1969,11 @@ All input consumed.
 /--
 info: Success! Final stack:
   (LeanDoc.Syntax.directive
-   (column "1")
    ":::"
    `multiPara
    []
+   "\n"
+   "\n"
    [(LeanDoc.Syntax.para
      [(LeanDoc.Syntax.text (str "\"foo\""))])
     (LeanDoc.Syntax.ul

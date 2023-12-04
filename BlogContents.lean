@@ -39,7 +39,6 @@ def theme : Theme := { Theme.default with
           </header>
           <div class="main" role="main">
             <div class="wrap">
-              {{ (← param "title") }}
               {{ (← param "content") }}
               {{ postList }}
             </div>
@@ -48,6 +47,10 @@ def theme : Theme := { Theme.default with
       </html>
     }}
   }
+  |>.override #[] ⟨do return {{<div class="frontpage">{{← param "content"}}<h1>{{← param "title"}}</h1></div>}}, id⟩
+  |>.override #["team"] ⟨do return {{<div class="teampage"><h1>{{← param "title"}}</h1>{{← param "content"}}</div>}}, id⟩
+
+
 
 def blog : Site := site BlogContents.Pages.Front /
   static "static" => "static"

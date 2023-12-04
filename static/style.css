@@ -156,8 +156,41 @@ h6 {
   line-height: 1.55555;
 }
 
+/*************/
+
+.frontpage img {
+  width: 100%;
+}
+
+.frontpage h1 {
+  text-align: center;
+}
 
 /*************/
+
+.person {
+  display: inline-block;
+  width: 260px;
+  text-align: center;
+}
+
+.person img {
+  width: 180px;
+  clip-path: circle();
+}
+
+.person .name {
+  font-weight: bold;
+}
+
+.person .name a {
+  text-decoration: none;
+  border: none;
+  color: #000;
+}
+
+/*************/
+
 .hl.lean .keyword {
   font-weight : bold;
 }
@@ -176,6 +209,7 @@ h6 {
 
 .hl.lean .hover-info {
   display: none;
+  position: absolute;
   background-color: #e5e5e5;
   border: 1px solid black;
   padding: 0.5em;
@@ -191,7 +225,13 @@ h6 {
 }
 
 
-.binding-hl {
-    background-color: #eee;
-    border-radius: 2px;
+
+.hl.lean .token {
+  transition: all 0.25s; /* Slight fade for highlights */
+}
+
+.hl.lean .token.binding-hl {
+  background-color: #eee;
+  border-radius: 2px;
+  transition: none;
 }

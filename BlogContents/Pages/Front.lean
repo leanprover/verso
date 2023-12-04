@@ -2,8 +2,8 @@ import LeanDoc
 
 open LeanDoc.Genre (Blog)
 
-#doc (Blog) "The Example Blog" =>
+set_option pp.rawOnError true
 
-LOGO GOES HERE
+#doc (Blog) "Focused Research Organization" =>
 
-This is an example website/blog, for testing purposes.
+![Lean logo](/static/lean_logo.svg)

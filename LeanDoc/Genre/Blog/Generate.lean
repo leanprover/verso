@@ -35,7 +35,7 @@ instance : MonadConfig GenerateM where
 
 def GenerateM.toHtml [ToHtml Blog IO α] (x : α) : GenerateM Html := do
   let {ctxt := ctxt, xref := state, ..} ← read
-  Blog.toHtml (m := IO) {logError := fun x => ctxt.config.logError x} ctxt state x
+  Blog.toHtml (m := IO) {logError := fun x => ctxt.config.logError x, headerLevel := 2} ctxt state x
 
 namespace Template
 
@@ -112,6 +112,7 @@ partial def copyRecursively (src tgt : System.FilePath) : IO Unit := do
         while !buf.isEmpty do
           h'.write buf
           buf ← h.read 1024
+
 open Template.Params (forPart)
 mutual
   partial def Dir.generate (theme : Theme) : Dir Page → GenerateM Unit
@@ -123,7 +124,8 @@ mutual
       for post in posts do
           if post.draft && !(← showDrafts) then continue
           inPost post <| do
-            let output ← Template.renderMany [theme.postTemplate, theme.primaryTemplate] <| ← forPart post.content
+            let ⟨baseTemplate, modParams⟩ := theme.adHocTemplates (Array.mk (← currentPath)) |>.getD ⟨theme.postTemplate, id⟩
+            let output ← Template.renderMany [baseTemplate, theme.primaryTemplate] <| modParams <| ← forPart post.content
             ensureDir (← currentDir)
             IO.println s!"Generating post {← currentDir}"
             IO.FS.withFile ((← currentDir).join "index.html") .write fun h => do
@@ -141,7 +143,8 @@ mutual
             theme.archiveEntryTemplate.render (.ofList [("post", ⟨.mk p, #[]⟩)])
         else pure none
       let pageParams : Template.Params ← forPart txt
-      let output ← Template.renderMany [theme.pageTemplate, theme.primaryTemplate] <|
+      let ⟨baseTemplate, modParams⟩ := theme.adHocTemplates (Array.mk (← currentPath)) |>.getD ⟨theme.pageTemplate, id⟩
+      let output ← Template.renderMany [baseTemplate, theme.primaryTemplate] <| modParams <|
         match postList with
         | none => pageParams
         | some ps => pageParams.insert "posts" ⟨.mk (Html.seq ps), #[]⟩
@@ -160,9 +163,11 @@ end
 def Site.generate (theme : Theme) (site : Site): GenerateM Unit := do
   let root ← currentDir
   ensureDir root
-  let output ← Template.renderMany [theme.pageTemplate, theme.primaryTemplate] <| ← forPart site.frontPage
+  let ⟨baseTemplate, modParams⟩ := theme.adHocTemplates (Array.mk (← currentPath)) |>.getD ⟨theme.pageTemplate, id⟩
+  let output ← Template.renderMany [baseTemplate, theme.primaryTemplate] <| modParams <| ← forPart site.frontPage
   let filename := root.join "index.html"
   IO.FS.withFile filename .write fun h => do
+    h.putStrLn "<!DOCTYPE html>"
     h.putStrLn output.asString
 
   site.contents.generate theme

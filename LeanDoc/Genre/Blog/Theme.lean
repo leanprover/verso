@@ -6,12 +6,24 @@ open LeanDoc Html
 
 namespace LeanDoc.Genre.Blog
 
+structure Template.Override where
+  template : Template
+  params : Params → Params
+
 structure Theme where
   primaryTemplate : Template
   pageTemplate : Template
   postTemplate : Template
   archiveEntryTemplate : Template
-  adHocTemplates : Array String → Option Template := fun _ => none
+  /--
+  Customize the rendering of a given path by replacing the
+  template and providing additional parameters
+  -/
+  adHocTemplates : Array String → Option Template.Override := fun _ => none
+
+def Theme.override (path : Array String) (override : Template.Override) (theme : Theme) : Theme :=
+  {theme with
+    adHocTemplates := fun p => if path = p then some override else theme.adHocTemplates p}
 
 namespace Theme
 
@@ -50,21 +62,24 @@ def primary : Template := do
   return {{
     <html>
       <head>
-        <title>{{ (← param (α := String) "title") }}</title>
+        <title>{{← param (α := String) "title"}}</title>
         <link rel="stylesheet" href="/static/style.css"/>
       </head>
       <body>
-        {{ ← topNav }}
-        <h1>{{ (← param "title") }}</h1>
-        {{ (← param "content") }}
-        {{ postList }}
+        {{← topNav}}
+        {{← param "content"}}
+        {{postList}}
       </body>
     </html>
   }}
 
-def page : Template := param "content"
+def page : Template := do
+  pure {{
+    <h1>{{← param "title"}}</h1>
+    {{← param "content"}}
+  }}
 
-def post : Template := param "content"
+def post : Template := page -- TODO author, date, etc
 
 def archiveEntry : Template := do
   let post : Post ← param "post"
@@ -75,6 +90,7 @@ def archiveEntry : Template := do
     match post.date with
     | Date.mk y m d => {{<span class="date"> s!"{y}-{m}-{d}" </span>}}
     }}
+    " — "
     <span class="name">{{post.content.titleString}}</span>
     </a>
   </li>

@@ -14,6 +14,11 @@ namespace LeanDoc.SyntaxUtils
 open Lean Parser
 open Std.Format
 
+defmethod Syntax.getPos! (stx : Syntax) : String.Pos :=
+  if let some pos := stx.getPos? then pos else panic! s!"No position for {stx}"
+
+defmethod SourceInfo.getPos! (info : SourceInfo) : String.Pos :=
+  if let some pos := info.getPos? then pos else panic! s!"No position for {repr info}"
 
 def ppSyntax (stx : Syntax) : Std.Format := .nest 2 <| stx.formatStx (some 50) false
 

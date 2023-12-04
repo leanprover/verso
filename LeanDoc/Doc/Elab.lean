@@ -68,6 +68,25 @@ def _root_.LeanDoc.Syntax.bold.expand : InlineExpander
     ``(Inline.bold #[$[$(← args.mapM elabInline)],*])
   | _ => throwUnsupportedSyntax
 
+def parseArgs (argStx : TSyntaxArray `argument) : DocElabM (Array RoleArgument) := do
+  let mut argVals := #[]
+  for arg in argStx do
+    match arg.raw with
+    | `<low|(arg.anon ~v)> =>
+      match v with
+      | `($y:ident) => argVals := argVals.push <| .anonymous <| .name y
+      | other => dbg_trace "didn't parse arg val {repr other}"; pure ()
+    | `<low|(arg.named ~n ~_ ~v)> =>
+      match n with
+      | `($y:ident) =>
+        match v with
+        | `($z:ident) => argVals := argVals.push <| .named y.getId <| .name z
+        | `($s:str) => argVals := argVals.push <| .named y.getId <| .string s.getString
+        | other => dbg_trace "didn't parse arg val {repr other}"; pure ()
+      | other => dbg_trace "didn't parse arg name {repr other}"; pure ()
+    | other => dbg_trace "didn't parse arg {repr other}"; pure ()
+  pure argVals
+
 @[inline_expander LeanDoc.Syntax.role]
 def _root_.LeanDoc.Syntax.role.expand : InlineExpander
   | inline@`(inline| role{$name $args*} [$subjects]) => do
@@ -77,21 +96,7 @@ def _root_.LeanDoc.Syntax.role.expand : InlineExpander
           | throwUnsupportedSyntax
         let name ← resolveGlobalConstNoOverloadWithInfo name
         let exp ← roleExpandersFor name
-        let mut argVals := #[]
-        for arg in args do
-          match arg.raw with
-          | `<low|(arg.anon ~v)> =>
-            match v with
-            | `($y:ident) => argVals := argVals.push <| .anonymous <| .name y
-            | other => dbg_trace "didn't parse arg val {repr other}"; pure ()
-          | `<low|(arg.named ~n ~_ ~v)> =>
-            match n with
-            | `($y:ident) =>
-              match v with
-              | `($z:ident) => argVals := argVals.push <| .named y <| .name z
-              | other => dbg_trace "didn't parse arg val {repr other}"; pure ()
-            | other => dbg_trace "didn't parse arg name {repr other}"; pure ()
-          | other => dbg_trace "didn't parse arg {repr other}"; pure ()
+        let argVals ← parseArgs args
         for e in exp do
           try
             let termStxs ← withFreshMacroScope <| e argVals subjectArr
@@ -114,6 +119,18 @@ def _root_.LeanDoc.Syntax.link.expand : InlineExpander
       | _ => withRef dest throwUnsupportedSyntax
   | _ => throwUnsupportedSyntax
 
+@[inline_expander LeanDoc.Syntax.image]
+def _root_.LeanDoc.Syntax.image.expand : InlineExpander
+  | `(inline| image[ $alt:str* ] $dest:link_target) => do
+    let destStx ←
+      match dest with
+      | `(link_target| ( $url )) =>
+        let altText := String.join (alt.map (·.getString) |>.toList)
+        ``(Inline.image $(quote altText) (LinkDest.url $url))
+      | _ => withRef dest throwUnsupportedSyntax
+  | _ => throwUnsupportedSyntax
+
+
 @[inline_expander LeanDoc.Syntax.code]
 def _root_.LeanDoc.Syntax.code.expand : InlineExpander
   |  `(inline| code{ $s }) =>
@@ -133,12 +150,11 @@ def elabBlock (block : Syntax) : DocElabM (TSyntax `term) :=
         return termStx
       catch
         | ex@(.internal id) =>
-          if id == unsupportedSyntaxExceptionId then pure ()
+          if id == unsupportedSyntaxExceptionId then continue
           else throw ex
         | ex => throw ex
     throwUnsupportedSyntax
   | _ =>
-    dbg_trace "block not found: {block}"
     throwUnsupportedSyntax
 
 def partCommand (cmd : Syntax) : PartElabM Unit :=
@@ -152,7 +168,7 @@ def partCommand (cmd : Syntax) : PartElabM Unit :=
         return
       catch
         | ex@(.internal id) =>
-          if id == unsupportedSyntaxExceptionId then pure ()
+          if id == unsupportedSyntaxExceptionId then continue
           else throw ex
         | ex => throw ex
     fallback
@@ -187,6 +203,7 @@ partial def _root_.LeanDoc.Syntax.header.command : PartCommand
       -- Prelude is done!
       pure ()
     else
+      if let none := info.getPos? then dbg_trace "No start position for {stx}"
       closePartsUntil ambientLevel info.getPos?.get!
 
     -- Start a new subpart
@@ -267,6 +284,7 @@ def _root_.LeanDoc.Syntax.blockquote.expand : BlockExpander
   | _ =>
     throwUnsupportedSyntax
 
+
 @[block_expander LeanDoc.Syntax.codeblock]
 def _root_.LeanDoc.Syntax.codeblock.expand : BlockExpander
   | `<low|(LeanDoc.Syntax.codeblock (column ~(.atom _ col)) ~_open ~(.node _ `null nameAndArgs) ~(.atom info contents) ~_close )> => do
@@ -286,9 +304,31 @@ def _root_.LeanDoc.Syntax.codeblock.expand : BlockExpander
             if id == unsupportedSyntaxExceptionId then pure ()
             else throw ex
           | ex => throw ex
-      dbg_trace "No expander for '{nameStx}'"
+      dbg_trace "No code block expander for '{nameStx}' ---> '{name}'"
       throwUnsupportedSyntax
     else
       ``(Block.code Option.none #[] $(Syntax.mkNumLit col) $(quote contents))
   | _ =>
+    throwUnsupportedSyntax
+
+@[block_expander LeanDoc.Syntax.directive]
+def _root_.LeanDoc.Syntax.directive.expand : BlockExpander
+  | `<low|(LeanDoc.Syntax.directive  ~_open ~nameStx ~(.node _ `null argsStx) ~_fake ~_fake' ~(.node _ `null contents) ~_close )> => do
+    let name ← resolveGlobalConstNoOverloadWithInfo nameStx
+    let exp ← directiveExpandersFor name
+    -- TODO typed syntax here
+    let args ← parseArgs <| argsStx.map (⟨·⟩)
+    for e in exp do
+      try
+        let termStxs ← withFreshMacroScope <| e args contents
+        return (← ``(Block.concat #[$[$termStxs],*]))
+      catch
+        | ex@(.internal id) =>
+          if id == unsupportedSyntaxExceptionId then pure ()
+          else throw ex
+        | ex => throw ex
+    dbg_trace "No directive expander for '{nameStx}'"
+    throwUnsupportedSyntax
+  | stx =>
+    dbg_trace "can't directive {stx}"
     throwUnsupportedSyntax

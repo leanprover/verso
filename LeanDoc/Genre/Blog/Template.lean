@@ -47,7 +47,7 @@ def hover (content : Html) : Html := {{
 }}
 
 defmethod Highlighted.Token.Kind.hover? : (tok : Highlighted.Token.Kind) → Option Html
-  | tok@(.const n doc) | tok@(.keyword (some n) doc) =>
+  | .const n doc | .keyword (some n) doc =>
     let docs := match doc with
       | none => .empty
       | some txt => {{<hr/><p>{{txt}}</p>}}
@@ -72,9 +72,12 @@ partial defmethod Highlighted.toHtml : Highlighted → Html
 
 partial instance : GenreHtml Blog IO where
   part _ m := nomatch m
-  block _go
+  block go
     | .highlightedCode hls, _contents => do
       pure {{ <pre class="hl lean"> {{ hls.toHtml }} </pre> }}
+    | .htmlDiv classes, contents => do
+      pure {{ <div class={{classes}}> {{← contents.mapM go}} </div> }}
+    | .blob html, _ => pure html
   inline go
     | .label x, contents => do
       let contentHtml ← contents.mapM go
@@ -97,6 +100,9 @@ partial instance : GenreHtml Blog IO where
       | some path =>
         let addr := String.join ((← relative path).intersperse "/")
         go <| .link contents (.url addr)
+    | .htmlSpan classes, contents => do
+      pure {{ <span class={{classes}}> {{← contents.mapM go}} </span> }}
+    | .blob html, _ => pure html
 
 namespace LeanDoc.Genre.Blog.Template
 
@@ -131,6 +137,7 @@ instance : Coe Html Template.Params.Val where
 
 def Params := RBMap String Params.Val compare
 
+instance : EmptyCollection Params := inferInstanceAs <| EmptyCollection (RBMap _ _ _)
 
 namespace Params
 
@@ -142,6 +149,9 @@ def toList (params : Params) : List (String × Val) :=
 
 def insert (params : Params) (key : String) (val : Val) : Params :=
   Lean.RBMap.insert params key val
+
+def erase (params : Params) (key : String) : Params :=
+  Lean.RBMap.erase params key
 
 
 end Params
