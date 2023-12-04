@@ -10,7 +10,7 @@ open LeanDoc Doc Html
 namespace LeanDoc.Genre
 
 inductive Blog.BlockExt where
-  | highlightedCode (highlighted : Highlighted)
+  | highlightedCode (contextName : Lean.Name) (highlighted : Highlighted)
   | htmlDiv (classes : String)
   | blob (html : Html)
 deriving Repr

@@ -1,7 +1,7 @@
 import LeanDoc
 
 open LeanDoc.Genre
-open LeanDoc.Genre.Blog (label ref lean)
+open LeanDoc.Genre.Blog (label ref lean leanInit)
 
 set_option pp.rawOnError true
 
@@ -23,10 +23,11 @@ Aliquam erat volutpat.  Nunc eleifend leo vitae magna.  In id erat non orci comm
 
  Lots of benefits
 
-``` lean
-
+```leanInit myExamples
 import Lean
+```
 
+```lean myExamples
 #eval 3
 
 def testFun : Nat → Nat := fun x => x * 99
@@ -44,6 +45,24 @@ def main (args : List String) : IO UInt32 := do
   println "hello, world"
   pure 0
 ```
+
+Still in scope!
+
+```lean myExamples
+#eval testFun 2
+```
+
+```leanInit others
+```
+
+And this isn't in scope:
+
+`````lean others
+
+def testFun : String → String := (· ++ ",")
+example := testFun "hey"
+`````
+
 
 Pellentesque dapibus suscipit ligula.  Donec posuere augue in quam.  Etiam vel tortor sodales tellus ultricies commodo.  Suspendisse potenti.  Aenean in sem ac leo mollis blandit.  Donec neque quam, dignissim in, mollis nec, sagittis eu, wisi.  Phasellus lacus.  Etiam laoreet quam sed arcu.  Phasellus at dui in ligula mollis ultricies.  Integer placerat tristique nisl.  Praesent augue.  Fusce commodo.  Vestibulum convallis, lorem a tempus semper, dui dui euismod elit, vitae placerat urna tortor vitae lacus.  Nullam libero mauris, consequat quis, varius et, dictum id, arcu.  Mauris mollis tincidunt felis.  Aliquam feugiat tellus ut neque.  Nulla facilisis, risus a rhoncus fermentum, tellus tellus lacinia purus, et dictum nunc justo sit amet elit.
 

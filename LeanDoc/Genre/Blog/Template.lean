@@ -73,8 +73,8 @@ partial defmethod Highlighted.toHtml : Highlighted → Html
 partial instance : GenreHtml Blog IO where
   part _ m := nomatch m
   block go
-    | .highlightedCode hls, _contents => do
-      pure {{ <pre class="hl lean"> {{ hls.toHtml }} </pre> }}
+    | .highlightedCode contextName hls, _contents => do
+      pure {{ <pre class="hl lean" "data-lean-context"={{toString contextName}}> {{ hls.toHtml }} </pre> }}
     | .htmlDiv classes, contents => do
       pure {{ <div class={{classes}}> {{← contents.mapM go}} </div> }}
     | .blob html, _ => pure html

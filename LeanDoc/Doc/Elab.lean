@@ -204,7 +204,7 @@ partial def _root_.LeanDoc.Syntax.header.command : PartCommand
       pure ()
     else
       if let none := info.getPos? then dbg_trace "No start position for {stx}"
-      closePartsUntil ambientLevel info.getPos?.get!
+      closePartsUntil ambientLevel info.getPos!
 
     -- Start a new subpart
     push {
@@ -287,14 +287,11 @@ def _root_.LeanDoc.Syntax.blockquote.expand : BlockExpander
 
 @[block_expander LeanDoc.Syntax.codeblock]
 def _root_.LeanDoc.Syntax.codeblock.expand : BlockExpander
-  | `<low|(LeanDoc.Syntax.codeblock (column ~(.atom _ col)) ~_open ~(.node _ `null nameAndArgs) ~(.atom info contents) ~_close )> => do
-    if h : 0 < nameAndArgs.size then
-      let nameStx := nameAndArgs[0]
+  | `<low|(LeanDoc.Syntax.codeblock (column ~(.atom _ col)) ~_open ~(.node _ `null #[nameStx, .node _ `null argsStx]) ~(.atom info contents) ~_close )> => do
       let name ← resolveGlobalConstNoOverloadWithInfo nameStx
-      let _argsStx := nameAndArgs.extract 1 nameAndArgs.size
       let exp ← codeBlockExpandersFor name
-      -- TODO parse args
-      let args := #[]
+      -- TODO typed syntax here
+      let args ← parseArgs <| argsStx.map (⟨·⟩)
       for e in exp do
         try
           let termStxs ← withFreshMacroScope <| e args (Syntax.mkStrLit (info:=info) contents)
@@ -306,8 +303,8 @@ def _root_.LeanDoc.Syntax.codeblock.expand : BlockExpander
           | ex => throw ex
       dbg_trace "No code block expander for '{nameStx}' ---> '{name}'"
       throwUnsupportedSyntax
-    else
-      ``(Block.code Option.none #[] $(Syntax.mkNumLit col) $(quote contents))
+  | `<low|(LeanDoc.Syntax.codeblock (column ~(.atom _ col)) ~_open ~(.node _ `null #[]) ~(.atom info contents) ~_close )> =>
+    ``(Block.code Option.none #[] $(Syntax.mkNumLit col) $(quote contents))
   | _ =>
     throwUnsupportedSyntax
 
