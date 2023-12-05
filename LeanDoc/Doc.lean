@@ -120,6 +120,7 @@ inductive Block (genre : Genre) : Type where
   | para (contents : Array (Inline genre))
   | code (name : Option String) (args : Array Arg) (indent : Nat) (content : String)
   | ul (items : Array (ListItem (Block genre)))
+  | ol (start : Int) (items : Array (ListItem (Block genre)))
   | dl (items : Array (DescItem (Inline genre) (Block genre)))
   | blockquote (items : Array (Block genre))
   | concat (content : Array (Block genre))
@@ -133,6 +134,7 @@ partial def Block.reprPrec [Repr g.Inline] [Repr g.Block] (inline : Block g) (pr
         | para contents => reprCtor ``Block.para [reprArg contents]
         | code name args indent content => reprCtor ``Block.code [reprArg name, reprArg args, reprArg indent, reprArg content]
         | ul items => reprCtor ``Block.ul [reprArray (@ListItem.reprPrec _ ⟨go⟩) items]
+        | ol start items => reprCtor ``Block.ol [reprArg start, reprArray (@ListItem.reprPrec _ ⟨go⟩) items]
         | dl items => reprCtor ``Block.dl [reprArray (@DescItem.reprPrec _ _ _ ⟨go⟩) items]
         | blockquote items => reprCtor ``Block.blockquote [reprArray go items]
         | concat content => reprCtor ``Block.concat [reprArray go content]
@@ -208,6 +210,8 @@ where
     match b with
     | .para contents => .para <$> contents.mapM inline
     | .ul items => .ul <$> items.mapM fun
+      | ListItem.mk n contents => ListItem.mk n <$> contents.mapM block
+    | .ol start items => .ol start <$> items.mapM fun
       | ListItem.mk n contents => ListItem.mk n <$> contents.mapM block
     | .dl items => .dl <$> items.mapM fun
       | DescItem.mk t d => DescItem.mk <$> t.mapM inline <*> d.mapM block

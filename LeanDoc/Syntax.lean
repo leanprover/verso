@@ -46,10 +46,12 @@ declare_syntax_cat desc_item
 syntax (name:=desc) ":" inline+ "=>" block+ : desc_item
 
 syntax (name:=para) "para{" inline+ "}" : block
-/-- List -/
+/-- Unordered List -/
 syntax (name:=ul) "ul{" list_item* "}" : block
 /-- Definition list -/
 syntax (name:=dl) "dl{" desc_item* "}" : block
+/-- Ordered list -/
+syntax (name:=ol) "ol{" num list_item* "}" : block
 /-- Literal code -/
 syntax (name:=codeblock) str : block
 /-- Quotation -/

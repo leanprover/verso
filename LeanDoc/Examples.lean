@@ -122,12 +122,9 @@ info: LeanDoc.Doc.Part.mk
           none
           #[LeanDoc.Doc.Block.para #[LeanDoc.Doc.Inline.text "More text:"],
             LeanDoc.Doc.Block.ul
-              #[{ indent := 0,
-                  contents := #[LeanDoc.Doc.Block.para
-                                  #[LeanDoc.Doc.Inline.text "and a list", LeanDoc.Doc.Inline.linebreak "\n"]] },
+              #[{ indent := 0, contents := #[LeanDoc.Doc.Block.para #[LeanDoc.Doc.Inline.text "and a list"]] },
                 { indent := 0,
-                  contents := #[LeanDoc.Doc.Block.para
-                                  #[LeanDoc.Doc.Inline.text "with two", LeanDoc.Doc.Inline.linebreak "\n"],
+                  contents := #[LeanDoc.Doc.Block.para #[LeanDoc.Doc.Inline.text "with two"],
                                 LeanDoc.Doc.Block.ul
                                   #[{ indent := 1,
                                       contents := #[LeanDoc.Doc.Block.para
@@ -163,7 +160,7 @@ info: LeanDoc.Doc.Part.mk
       none
       #[LeanDoc.Doc.Block.para #[LeanDoc.Doc.Inline.text "Here's a quote;"],
         LeanDoc.Doc.Block.blockquote
-          #[(LeanDoc.Doc.Block.para #[LeanDoc.Doc.Inline.text "I like quotes", LeanDoc.Doc.Inline.linebreak "\n"]),
+          #[(LeanDoc.Doc.Block.para #[LeanDoc.Doc.Inline.text "I like quotes"]),
             (LeanDoc.Doc.Block.ul
                #[{ indent := 2,
                    contents := #[LeanDoc.Doc.Block.para #[LeanDoc.Doc.Inline.text "Also with lists in them"]] }])],

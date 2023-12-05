@@ -239,7 +239,7 @@ def elabLi (block : Syntax) : DocElabM (Syntax × TSyntax `term) :=
 
 @[block_expander LeanDoc.Syntax.ul]
 def _root_.LeanDoc.Syntax.ul.expand : BlockExpander
-  | `<low|(LeanDoc.Syntax.ul ~_ ~(.node _ `null itemStxs) )> => do
+  | `<low|(LeanDoc.Syntax.ul ~(.node _ `null itemStxs) )> => do
     let mut bullets : Array Syntax := #[]
     let mut items : Array (TSyntax `term) := #[]
     for i in itemStxs do
@@ -250,6 +250,22 @@ def _root_.LeanDoc.Syntax.ul.expand : BlockExpander
     for b in bullets do
       pushInfoLeaf <| .ofCustomInfo {stx := b, value := Dynamic.mk info}
     ``(Block.ul #[$[$items],*])
+  | _ =>
+    throwUnsupportedSyntax
+
+@[block_expander LeanDoc.Syntax.ol]
+def _root_.LeanDoc.Syntax.ol.expand : BlockExpander
+  | `<low|(LeanDoc.Syntax.ol (num ~start) ~(.node _ `null itemStxs) )> => do
+    let mut bullets : Array Syntax := #[]
+    let mut items : Array (TSyntax `term) := #[]
+    for i in itemStxs do
+      let (b, item) ← elabLi i
+      bullets := bullets.push b
+      items := items.push item
+    let info := DocListInfo.mk bullets
+    for b in bullets do
+      pushInfoLeaf <| .ofCustomInfo {stx := b, value := Dynamic.mk info}
+    ``(Block.ol $(Syntax.mkNumLit start.getAtomVal) #[$[$items],*])
   | _ =>
     throwUnsupportedSyntax
 

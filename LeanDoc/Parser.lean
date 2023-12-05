@@ -316,9 +316,65 @@ def strFn (str : String) : ParserFn := asStringFn <| fun c s =>
   if s.hasError then s.mkErrorAt str iniPos (some iniSz) else s
 
 
+inductive OrderedListType where
+   /-- Items like 1. -/
+  | numDot
+   /-- Items like 1) -/
+  | parenAfter
+deriving Repr, BEq, Ord, DecidableEq
+
+def OrderedListType.all : List OrderedListType :=
+  [.numDot, .parenAfter]
+
+theorem OrderedListType.all_complete : ∀ x : OrderedListType, x ∈ all := by
+  unfold all; intro x; cases x <;> repeat constructor
+
+
+inductive UnorderedListType where
+   /-- Items like * -/
+  | asterisk
+   /-- Items like - -/
+  | dash
+   /-- Items like + -/
+  | plus
+deriving Repr, BEq, Ord, DecidableEq
+
+def UnorderedListType.all : List UnorderedListType :=
+  [.asterisk, .dash, .plus]
+
+theorem UnorderedListType.all_complete : ∀ x : UnorderedListType, x ∈ all := by
+  unfold all; intro x; cases x <;> repeat constructor
+
+def unorderedListIndicator (type : UnorderedListType) : ParserFn :=
+  asStringFn <|
+    match type with
+    | .asterisk => chFn '*'
+    | .dash => chFn '-'
+    | .plus => chFn '+'
+
+def orderedListIndicator (type : OrderedListType) : ParserFn :=
+  asStringFn <|
+    takeWhile1Fn (·.isDigit) "digits" >>
+    match type with
+    | .numDot => chFn '.'
+    | .parenAfter => chFn ')'
+
+
 def blankLine : ParserFn := nodeFn `blankLine <| atomicFn <| asStringFn <| takeWhileFn (· == ' ') >> nl
 
-def bullet := satisfyFn (· == '*') "bullet (*)"
+def bullet := atomicFn (go UnorderedListType.all)
+where
+  go
+    | [] => fun _ s => s.mkError "no list type"
+    | [x] => atomicFn (unorderedListIndicator x)
+    | x :: xs => atomicFn (unorderedListIndicator x) <|> go xs
+
+def numbering := atomicFn (go OrderedListType.all)
+where
+  go
+    | [] => fun _ s => s.mkError "no list type"
+    | [x] => atomicFn (orderedListIndicator x)
+    | x :: xs => atomicFn (orderedListIndicator x) <|> go xs
 
 
 def inlineTextChar : ParserFn := fun c s =>
@@ -441,10 +497,36 @@ All input consumed.
 def blockOpener := atomicFn <|
   takeWhileEscFn (· == ' ') >>
   (atomicFn ((bullet >> chFn ' ')) <|>
+   atomicFn ((numbering >> chFn ' ')) <|>
    atomicFn (strFn ": ") <|>
    atomicFn (atLeastFn 3 (chFn ':')) <|>
    atomicFn (atLeastFn 3 (chFn '`')) <|>
    atomicFn (chFn '>'))
+
+/--
+info: Success! Final stack:
+ empty
+Remaining:
+"abc"
+-/
+#guard_msgs in
+#eval ignoreFn blockOpener |>.test! "+ abc"
+/--
+info: Success! Final stack:
+ empty
+Remaining:
+"abc"
+-/
+#guard_msgs in
+#eval ignoreFn blockOpener |>.test! "* abc"
+/--
+info: Success! Final stack:
+ empty
+Remaining:
+"abc"
+-/
+#guard_msgs in
+#eval ignoreFn blockOpener |>.test! " + abc"
 
 def val : ParserFn := docNumLitFn <|> docIdentFn <|> docStrLitFn
 
@@ -665,7 +747,7 @@ A linebreak that isn't a block break (that is, there's non-space content on the 
 -/
 def linebreak (ctxt : InlineCtxt) :=
   if ctxt.allowNewlines then
-    nodeFn ``linebreak <| asStringFn <| atomicFn (chFn '\n' >> lookaheadFn (manyFn (chFn ' ') >> notFollowedByFn (chFn '\n' <|> atLeastFn 3 (chFn ':')) "newline"))
+    nodeFn ``linebreak <| asStringFn <| atomicFn (chFn '\n' >> lookaheadFn (manyFn (chFn ' ') >> notFollowedByFn (chFn '\n' <|> blockOpener) "newline"))
   else
     errorFn "Newlines not allowed here"
 
@@ -1103,26 +1185,203 @@ All input consumed.
 #guard_msgs in
 #eval role {} |>.test! "{hello world:=gaia}[there *is* _a meaning!_ ]"
 
+structure InList where
+  indentation : Nat
+  type : OrderedListType ⊕ UnorderedListType
+deriving Repr
 
 structure BlockCtxt where
   minIndent : Nat := 0
   maxDirective : Option Nat := none
+  inLists : List InList := []
 deriving Inhabited, Repr
 
 def fakeAtom (str : String) : ParserFn := fun c s =>
   let atom := mkAtom SourceInfo.none str
   s.pushSyntax atom
 
+def lookaheadOrderedListIndicator (ctxt : BlockCtxt) (p : OrderedListType → Int → ParserFn) : ParserFn := fun c s =>
+    let iniPos := s.pos
+    let iniSz := s.stxStack.size
+    let s := (bol >> takeWhileFn (· == ' ') >> guardMinColumn ctxt.minIndent) c s
+    if s.hasError then s.setPos iniPos |>.shrinkStack iniSz
+    else
+    let numPos := s.pos
+    let s := ignoreFn (takeWhile1Fn (·.isDigit) "digits") c s
+    if s.hasError then {s with pos := iniPos}.shrinkStack iniSz else
+    let digits := c.input.extract numPos s.pos
+    match digits.toNat? with
+    | none => {s.mkError s!"digits, got '{digits}'" with pos := iniPos}
+    | some n =>
+      let i := s.pos
+      if h : c.input.atEnd i then {s.mkEOIError with pos := iniPos}
+      else
+        let (s, next, type) := match c.input.get' i h with
+          | '.' => (s.next' c.input i h, chFn ' ', OrderedListType.numDot)
+          | ')' => (s.next' c.input i h, chFn ' ', OrderedListType.parenAfter)
+          | other => (s.setError {unexpected := s!"unexpected '{other}'", expected := ["'.'", "')'"]}, skipFn, .numDot)
+        if s.hasError then {s with pos := iniPos}
+        else
+          let s := next c s
+          if s.hasError then {s with pos := iniPos}
+          else
+            let leading := mkEmptySubstringAt c.input numPos
+            let trailing := mkEmptySubstringAt c.input i
+            let num := Syntax.mkNumLit digits (info := .original leading numPos trailing i)
+            p type n c (s.shrinkStack iniSz |>.setPos numPos |>.pushSyntax num)
+/--
+info: Success! Final stack:
+ • (num "1")
+ • "LeanDoc.Parser.OrderedListType.numDot 1"
+
+Remaining:
+"1. "
+-/
+#guard_msgs in
+#eval lookaheadOrderedListIndicator {} (fun type i => fakeAtom s!"{repr type} {i}") |>.test! "1. "
+/--
+info: Success! Final stack:
+ • (num "2")
+ • "LeanDoc.Parser.OrderedListType.numDot 2"
+
+Remaining:
+"2. "
+-/
+#guard_msgs in
+#eval lookaheadOrderedListIndicator {} (fun type i => fakeAtom s!"{repr type} {i}") |>.test! "2. "
+/--
+info: Failure: unexpected end of input
+Final stack:
+  <missing>
+Remaining: "2."
+-/
+#guard_msgs in
+#eval lookaheadOrderedListIndicator {} (fun type i => fakeAtom s!"{repr type} {i}") |>.test! "2."
+/--
+info: Success! Final stack:
+ • (num "2")
+ • "LeanDoc.Parser.OrderedListType.parenAfter 2"
+
+Remaining:
+"2) "
+-/
+#guard_msgs in
+#eval lookaheadOrderedListIndicator {} (fun type i => fakeAtom s!"{repr type} {i}") |>.test! "2) "
+/--
+info: Failure: digits
+Final stack:
+ empty
+Remaining: "-23) "
+-/
+#guard_msgs in
+#eval lookaheadOrderedListIndicator {} (fun type i => fakeAtom s!"{repr type} {i}") |>.test! "-23) "
+/--
+info: Failure: digits
+Final stack:
+ empty
+Remaining: "a-23) "
+-/
+#guard_msgs in
+#eval lookaheadOrderedListIndicator {} (fun type i => fakeAtom s!"{repr type} {i}") |>.test! "a-23) "
+/--
+info: Failure: unexpected ' '; expected ')' or '.'
+Final stack:
+ empty
+Remaining: "23 ) "
+-/
+#guard_msgs in
+#eval lookaheadOrderedListIndicator {} (fun type i => fakeAtom s!"{repr type} {i}") |>.test! "23 ) "
+
+
+def lookaheadUnorderedListIndicator (ctxt : BlockCtxt) (p : UnorderedListType → ParserFn) : ParserFn := fun c s =>
+  let iniPos := s.pos
+  let iniSz := s.stxStack.size
+  let s := (bol >> takeWhileFn (· == ' ') >> guardMinColumn ctxt.minIndent) c s
+  let bulletPos := s.pos
+  if s.hasError then s.setPos iniPos |>.shrinkStack iniSz
+  else if h : c.input.atEnd s.pos then s.mkEOIError.setPos iniPos |>.shrinkStack iniSz
+  else let (s, type) : (_ × UnorderedListType) := match c.input.get' s.pos h with
+    | '*' => (s.next' c.input s.pos h, .asterisk)
+    | '-' => (s.next' c.input s.pos h, .dash)
+    | '+' => (s.next' c.input s.pos h, .plus)
+    | other => (s.setError {expected := ["*", "-", "+"], unexpected := s!"'{other}'"}, .plus)
+  if s.hasError then s.setPos iniPos
+  else
+    let s := (chFn ' ') c s
+    if s.hasError then s.setPos iniPos
+    else p type c (s.shrinkStack iniSz |>.setPos bulletPos)
+
+/--
+info: Success! Final stack:
+  "LeanDoc.Parser.UnorderedListType.asterisk"
+Remaining:
+"* "
+-/
+#guard_msgs in
+#eval lookaheadUnorderedListIndicator {} (fun type => fakeAtom s! "{repr type}") |>.test! "* "
+/--
+info: Success! Final stack:
+  "LeanDoc.Parser.UnorderedListType.dash"
+Remaining:
+"- "
+-/
+#guard_msgs in
+#eval lookaheadUnorderedListIndicator {} (fun type => fakeAtom s! "{repr type}") |>.test! "- "
+/--
+info: Success! Final stack:
+  "LeanDoc.Parser.UnorderedListType.plus"
+Remaining:
+"+ "
+-/
+#guard_msgs in
+#eval lookaheadUnorderedListIndicator {} (fun type => fakeAtom s! "{repr type}") |>.test! "+ "
+/--
+info: Success! Final stack:
+  "LeanDoc.Parser.UnorderedListType.asterisk"
+Remaining:
+"* "
+-/
+#guard_msgs in
+#eval lookaheadUnorderedListIndicator {} (fun type => fakeAtom s! "{repr type}") |>.test! " * "
+
+/--
+info: Failure: unexpected end of input
+Final stack:
+  <missing>
+Remaining: " *"
+-/
+#guard_msgs in
+#eval lookaheadUnorderedListIndicator {} (fun type => fakeAtom s! "{repr type}") |>.test! " *"
+/--
+info: Failure: ' '
+Final stack:
+  <missing>
+Remaining: "** "
+-/
+#guard_msgs in
+#eval lookaheadUnorderedListIndicator {} (fun type => fakeAtom s! "{repr type}") |>.test! "** "
+
+
 mutual
   partial def listItem (ctxt : BlockCtxt) : ParserFn :=
     nodeFn ``li (bulletFn >> withCurrentColumn fun c => blocks {ctxt with minIndent := c})
   where
-    bulletFn := atomicFn <| nodeFn `bullet <|
-      takeWhileFn (· == ' ') >>
-      pushColumn >>
-      -- The outer list block recognizer sets up the minimum indent to be the precise indent of its items
-      guardColumn (· == ctxt.minIndent) s!"indentation at {ctxt.minIndent}" >>
-      asStringFn (chFn '*' false) >> ignoreFn (lookaheadFn (chFn ' '))
+    bulletFn :=
+      match ctxt.inLists.head? with
+      | none => fun _ s => s.mkError "not in a list"
+      | some ⟨col, .inr type⟩ =>
+        atomicFn <| nodeFn `bullet <|
+          takeWhileFn (· == ' ') >>
+          pushColumn >>
+          guardColumn (· == col) s!"indentation at {col}" >>
+          unorderedListIndicator type >> ignoreFn (lookaheadFn (chFn ' '))
+      | some ⟨col, .inl type⟩ =>
+        atomicFn <| nodeFn `bullet <|
+          takeWhileFn (· == ' ') >>
+          pushColumn >>
+          guardColumn (· == col) s!"indentation at {col}" >>
+          orderedListIndicator type >> ignoreFn (lookaheadFn (chFn ' '))
+
 
   partial def descItem (ctxt : BlockCtxt) : ParserFn :=
     nodeFn ``desc <|
@@ -1143,8 +1402,14 @@ mutual
 
   partial def unorderedList (ctxt : BlockCtxt) : ParserFn :=
     nodeFn ``ul <|
-      atomicFn (bol >> takeWhileFn (· == ' ') >> ignoreFn (lookaheadFn (chFn '*' >> chFn ' ')) >> guardMinColumn ctxt.minIndent >> pushColumn) >>
-      withCurrentColumn (fun c => many1Fn (listItem {ctxt with minIndent := c} ))
+      lookaheadUnorderedListIndicator ctxt (fun type => withCurrentColumn (fun c => many1Fn (listItem {ctxt with minIndent := c + 1 , inLists := ⟨c, .inr type⟩  :: ctxt.inLists})))
+
+  partial def orderedList (ctxt : BlockCtxt) : ParserFn :=
+    nodeFn ``ol <|
+      lookaheadOrderedListIndicator ctxt fun type _start => -- TODO? Validate list numbering?
+        withCurrentColumn fun c =>
+          many1Fn (listItem {ctxt with minIndent := c + 1 , inLists := ⟨c, .inl type⟩  :: ctxt.inLists})
+
 
   partial def definitionList (ctxt : BlockCtxt) : ParserFn :=
     nodeFn ``dl <|
@@ -1256,7 +1521,7 @@ mutual
 
 
   partial def block (c : BlockCtxt) : ParserFn :=
-    block_role c <|> unorderedList c <|> definitionList c <|> header c <|> codeBlock c <|> directive c <|> blockquote c <|> para c
+    block_role c <|> unorderedList c <|> orderedList c <|> definitionList c <|> header c <|> codeBlock c <|> directive c <|> blockquote c <|> para c
 
   partial def blocks (c : BlockCtxt) : ParserFn := sepByFn true (block c) (ignoreFn (manyFn blankLine))
 
@@ -1285,12 +1550,10 @@ info: Success! Final stack:
       (str
        "\"I can describe lists like this one:\""))])
    (LeanDoc.Syntax.ul
-    (column "0")
     [(LeanDoc.Syntax.li
       (bullet (column "0") "*")
       [(LeanDoc.Syntax.para
-        [(LeanDoc.Syntax.text (str "\"a\""))
-         (LeanDoc.Syntax.linebreak "\n")])])
+        [(LeanDoc.Syntax.text (str "\"a\""))])])
      (LeanDoc.Syntax.li
       (bullet (column "0") "*")
       [(LeanDoc.Syntax.para
@@ -1329,23 +1592,20 @@ info: Success! Final stack:
   (LeanDoc.Syntax.li
    (bullet (column "0") "*")
    [(LeanDoc.Syntax.para
-     [(LeanDoc.Syntax.text (str "\"foo\""))
-      (LeanDoc.Syntax.linebreak "\n")])])
+     [(LeanDoc.Syntax.text (str "\"foo\""))])])
 Remaining:
 "* bar\n"
 -/
 #guard_msgs in
-  #eval listItem {} |>.test! "* foo\n* bar\n"
+  #eval listItem {inLists:=[⟨0, .inr .asterisk⟩]} |>.test! "* foo\n* bar\n"
 
 /--
 info: Success! Final stack:
   [(LeanDoc.Syntax.ul
-    (column "0")
     [(LeanDoc.Syntax.li
       (bullet (column "0") "*")
       [(LeanDoc.Syntax.para
-        [(LeanDoc.Syntax.text (str "\"foo\""))
-         (LeanDoc.Syntax.linebreak "\n")])])
+        [(LeanDoc.Syntax.text (str "\"foo\""))])])
      (LeanDoc.Syntax.li
       (bullet (column "0") "*")
       [(LeanDoc.Syntax.para
@@ -1359,7 +1619,40 @@ All input consumed.
 /--
 info: Success! Final stack:
   [(LeanDoc.Syntax.ul
-    (column "0")
+    [(LeanDoc.Syntax.li
+      (bullet (column "0") "*")
+      [(LeanDoc.Syntax.para
+        [(LeanDoc.Syntax.text (str "\"foo\""))
+         (LeanDoc.Syntax.linebreak "\n")
+         (LeanDoc.Syntax.text
+          (str "\"  thing\""))])])])]
+Remaining:
+"* bar\n"
+-/
+#guard_msgs in
+  #eval blocks {} |>.test! "* foo\n  thing* bar\n"
+
+/--
+info: Success! Final stack:
+  [(LeanDoc.Syntax.ul
+    [(LeanDoc.Syntax.li
+      (bullet (column "0") "+")
+      [(LeanDoc.Syntax.para
+        [(LeanDoc.Syntax.text (str "\"foo\""))])])
+     (LeanDoc.Syntax.li
+      (bullet (column "0") "+")
+      [(LeanDoc.Syntax.para
+        [(LeanDoc.Syntax.text (str "\"bar\""))
+         (LeanDoc.Syntax.linebreak "\n")])])])]
+All input consumed.
+-/
+#guard_msgs in
+  #eval blocks {} |>.test! "+ foo\n+ bar\n"
+
+
+/--
+info: Success! Final stack:
+  [(LeanDoc.Syntax.ul
     [(LeanDoc.Syntax.li
       (bullet (column "0") "*")
       [(LeanDoc.Syntax.para
@@ -1377,7 +1670,6 @@ All input consumed.
 /--
 info: Success! Final stack:
   [(LeanDoc.Syntax.ul
-    (column "0")
     [(LeanDoc.Syntax.li
       (bullet (column "0") "*")
       [(LeanDoc.Syntax.para
@@ -1405,20 +1697,16 @@ All input consumed.
 /--
 info: Success! Final stack:
   [(LeanDoc.Syntax.ul
-    (column "0")
     [(LeanDoc.Syntax.li
       (bullet (column "0") "*")
       [(LeanDoc.Syntax.para
-        [(LeanDoc.Syntax.text (str "\"foo\""))
-         (LeanDoc.Syntax.linebreak "\n")])
+        [(LeanDoc.Syntax.text (str "\"foo\""))])
        (LeanDoc.Syntax.ul
-        (column "2")
         [(LeanDoc.Syntax.li
           (bullet (column "2") "*")
           [(LeanDoc.Syntax.para
-            [(LeanDoc.Syntax.text (str "\"bar\""))
-             (LeanDoc.Syntax.linebreak
-              "\n")])])])])
+            [(LeanDoc.Syntax.text
+              (str "\"bar\""))])])])])
      (LeanDoc.Syntax.li
       (bullet (column "0") "*")
       [(LeanDoc.Syntax.para
@@ -1511,7 +1799,78 @@ All input consumed.
 #guard_msgs in
   #eval blocks {} |>.test! ": an excellent idea\n\n Let's say more!\n\n: more\n\n stuff"
 
+/--
+info: Success! Final stack:
+  [(LeanDoc.Syntax.ol
+    (num "1")
+    [(LeanDoc.Syntax.li
+      (bullet (column "0") "1.")
+      [(LeanDoc.Syntax.para
+        [(LeanDoc.Syntax.text
+          (str "\"Hello\""))])])
+     (LeanDoc.Syntax.li
+      (bullet (column "0") "2.")
+      [(LeanDoc.Syntax.para
+        [(LeanDoc.Syntax.text
+          (str "\"World\""))])])])]
+All input consumed.
+-/
+#guard_msgs in
+ #eval blocks {} |>.test! "1. Hello\n\n2. World"
 
+/--
+info: Success! Final stack:
+  [(LeanDoc.Syntax.ol
+    (num "1")
+    [(LeanDoc.Syntax.li
+      (bullet (column "1") "1.")
+      [(LeanDoc.Syntax.para
+        [(LeanDoc.Syntax.text
+          (str "\"Hello\""))])])])]
+All input consumed.
+-/
+#guard_msgs in
+ #eval blocks {} |>.test! " 1. Hello"
+
+/--
+info: Success! Final stack:
+  [(LeanDoc.Syntax.ol
+    (num "1")
+    [(LeanDoc.Syntax.li
+      (bullet (column "0") "1.")
+      [(LeanDoc.Syntax.para
+        [(LeanDoc.Syntax.text
+          (str "\"Hello\""))])])])
+   (LeanDoc.Syntax.ol
+    (num "2")
+    [(LeanDoc.Syntax.li
+      (bullet (column "1") "2.")
+      [(LeanDoc.Syntax.para
+        [(LeanDoc.Syntax.text
+          (str "\"World\""))])])])]
+All input consumed.
+-/
+#guard_msgs in
+ #eval blocks {} |>.test! "1. Hello\n\n 2. World"
+
+/--
+info: Success! Final stack:
+  [(LeanDoc.Syntax.ol
+    (num "1")
+    [(LeanDoc.Syntax.li
+      (bullet (column "1") "1.")
+      [(LeanDoc.Syntax.para
+        [(LeanDoc.Syntax.text
+          (str "\"Hello\""))])])
+     (LeanDoc.Syntax.li
+      (bullet (column "1") "2.")
+      [(LeanDoc.Syntax.para
+        [(LeanDoc.Syntax.text
+          (str "\"World\""))])])])]
+All input consumed.
+-/
+#guard_msgs in
+ #eval blocks {} |>.test! " 1. Hello\n\n 2. World"
 
 /--
 info: Success! Final stack:
@@ -1893,7 +2252,7 @@ All input consumed.
 #guard_msgs in
 #eval block {} |>.test! "{\n    test\n arg}\nHere's a modified paragraph."
 /--
-info: Failure: '{'; expected ![ or [
+info: Failure: '{'; expected ![, *, +, - or [
 Final stack:
   (LeanDoc.Syntax.block_role
    "{"
@@ -1954,7 +2313,6 @@ info: Success! Final stack:
    [(LeanDoc.Syntax.para
      [(LeanDoc.Syntax.text (str "\"foo\""))])
     (LeanDoc.Syntax.ul
-     (column "2")
      [(LeanDoc.Syntax.li
        (bullet (column "2") "*")
        [(LeanDoc.Syntax.para
@@ -1977,7 +2335,6 @@ info: Success! Final stack:
    [(LeanDoc.Syntax.para
      [(LeanDoc.Syntax.text (str "\"foo\""))])
     (LeanDoc.Syntax.ul
-     (column "1")
      [(LeanDoc.Syntax.li
        (bullet (column "1") "*")
        [(LeanDoc.Syntax.para

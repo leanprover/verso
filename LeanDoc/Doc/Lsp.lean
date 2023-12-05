@@ -330,6 +330,36 @@ def handleTokensRange (params : SemanticTokensRangeParams) (prev : RequestTask S
 open Lean Server Lsp RequestM in
 def handleTokensFull (_params : SemanticTokensParams) (prev : RequestTask SemanticTokens) : RequestM (RequestTask SemanticTokens) := handleTokens prev 0 ⟨1 <<< 31⟩
 
+open Lean Server Lsp RequestM in
+@[code_action_provider]
+def renumberLists : CodeActionProvider := fun params snap => do
+  let doc ← readDoc
+  let text := doc.meta.text
+  let startPos := text.lspPosToUtf8Pos params.range.start
+  let endPos := text.lspPosToUtf8Pos params.range.end
+  let lists := snap.infoTree.foldInfo (init := #[]) fun ctx info result => Id.run do
+    let .ofCustomInfo ⟨stx, data⟩ := info | result
+    let some listInfo := data.get? DocListInfo | result
+    let (some head, some tail) := (stx.getPos? true, stx.getTailPos? true) | result
+    unless head ≤ endPos && startPos ≤ tail do return result
+    result.push (ctx, listInfo)
+  pure <| lists.map fun (_, ⟨bulletStxs⟩) => {
+      eager := {
+        title := "Number from 1",
+        kind? := some "quickfix",
+        edit? := some <| .ofTextDocumentEdit {
+          textDocument := doc.versionedIdentifier,
+          edits := Id.run do
+            let mut counter := 1
+            let mut edits := #[]
+            for stx in bulletStxs do
+              let some r := stx.lspRange text | continue
+              edits := edits.push {range := r, newText := s!"{counter}."}
+              counter := counter + 1
+            edits
+        }
+      }
+    }
 
 open Lean Server Lsp in
 initialize

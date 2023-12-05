@@ -98,6 +98,8 @@ partial def Block.toHtml [Monad m] [GenreHtml g m] : Block g → HtmlT g m Html
     pure {{ <blockquote> {{← bs.mapM Block.toHtml }} </blockquote> }}
   | .ul items => do
     pure {{ <ul> {{← items.mapM fun li => do pure {{ <li> {{← li.contents.mapM Block.toHtml }} </li>}} }} </ul> }}
+  | .ol start items => do
+    pure {{ <ol start={{max start 0 |> toString}}> {{← items.mapM fun li => do pure {{ <li> {{← li.contents.mapM Block.toHtml }} </li>}} }} </ol> }}
   | .dl items => do
     pure {{
       <dl>
