@@ -14,6 +14,9 @@ open Lean Elab
 open PartElabM
 open LeanDoc.Syntax
 
+def throwUnexpected [Monad m] [MonadError m] (stx : Syntax) : m α :=
+  throwErrorAt stx "unexpected syntax{indentD stx}"
+
 partial def elabInline (inline : Syntax) : DocElabM (TSyntax `term) :=
   withRef inline <| withFreshMacroScope <| withIncRecDepth <| do
   match inline with
@@ -31,9 +34,9 @@ partial def elabInline (inline : Syntax) : DocElabM (TSyntax `term) :=
           if id == unsupportedSyntaxExceptionId then pure ()
           else throw ex
         | ex => throw ex
-    throwUnsupportedSyntax
-  | _ =>
-    throwUnsupportedSyntax
+    throwUnexpected stx
+  | other =>
+    throwUnexpected other
 
 @[inline_expander LeanDoc.Syntax.text]
 partial def _root_.LeanDoc.Syntax.text.expand : InlineExpander := fun x =>
@@ -41,14 +44,13 @@ partial def _root_.LeanDoc.Syntax.text.expand : InlineExpander := fun x =>
   | `(inline| $s:str) => do
     -- Erase the source locations from the string literal to prevent unwanted hover info
     ``(Inline.text $(⟨deleteInfo s.raw⟩))
-  | other => dbg_trace "text {other}"; throwUnsupportedSyntax
+  | _ => throwUnsupportedSyntax
   where
     deleteInfo : Syntax → Syntax
       | .node _ k args => .node .none k (args.map deleteInfo)
       | .atom _ val => .atom .none val
       | .ident _ rawVal val preres => .ident .none rawVal val preres
       | .missing => .missing
-
 
 @[inline_expander LeanDoc.Syntax.linebreak]
 def _root_.linebreak.expand : InlineExpander
@@ -153,9 +155,9 @@ def elabBlock (block : Syntax) : DocElabM (TSyntax `term) :=
           if id == unsupportedSyntaxExceptionId then continue
           else throw ex
         | ex => throw ex
-    throwUnsupportedSyntax
+    throwUnexpected block
   | _ =>
-    throwUnsupportedSyntax
+    throwUnexpected block
 
 def partCommand (cmd : Syntax) : PartElabM Unit :=
   withRef cmd <| withFreshMacroScope <| do

@@ -120,7 +120,7 @@ def leanInit : CodeBlockExpander
     let commandState := configureCommandState env msgs
     modifyEnv <| fun env => exampleContextExt.modifyState env fun s => {s with contexts := s.contexts.insert x.getId (commandState, state)}
     pure #[]
-  | otherArgs, _ => dbg_trace "Didn't understand {repr otherArgs}"; throwUnsupportedSyntax
+  | otherArgs, str => throwErrorAt str "Unexpected arguments {repr otherArgs}"
 where
   initializeLeanContext : IO Unit := do
     let leanPath ← Lean.findSysroot
@@ -154,7 +154,7 @@ def lean : CodeBlockExpander
       setInfoState infoSt
       setEnv env
     pure #[← ``(Block.other (Blog.BlockExt.highlightedCode $(quote x.getId) $(quote hls)) #[Block.code none #[] 0 $(quote str.getString)])]
-  | otherArgs, _ => dbg_trace "Didn't understand {repr otherArgs}"; throwUnsupportedSyntax
+  | otherArgs, str => throwErrorAt str "Unexpected arguments {repr otherArgs}"
 
 end
 

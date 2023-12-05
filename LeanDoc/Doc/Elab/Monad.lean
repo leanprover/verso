@@ -152,6 +152,8 @@ def PartElabM.run (st : PartElabM.State) (act : PartElabM α) : TermElabM (α ×
 
 instance : MonadRef PartElabM := inferInstanceAs <| MonadRef (StateT PartElabM.State TermElabM)
 
+instance : AddErrorMessageContext PartElabM := inferInstanceAs <| AddErrorMessageContext (StateT PartElabM.State TermElabM)
+
 instance : MonadQuotation PartElabM := inferInstanceAs <| MonadQuotation (StateT PartElabM.State TermElabM)
 
 instance : Monad PartElabM := inferInstanceAs <| Monad (StateT PartElabM.State TermElabM)
@@ -176,6 +178,8 @@ def DocElabM.run (st : PartElabM.State) (act : DocElabM α) : TermElabM α :=
   ReaderT.run act st
 
 instance : Inhabited (DocElabM α) := inferInstanceAs <| Inhabited (ReaderT PartElabM.State TermElabM α)
+
+instance : AddErrorMessageContext DocElabM := inferInstanceAs <| AddErrorMessageContext (ReaderT PartElabM.State TermElabM)
 
 instance : MonadLift TermElabM DocElabM := inferInstanceAs <| MonadLift TermElabM (ReaderT PartElabM.State TermElabM)
 
@@ -269,9 +273,6 @@ unsafe def partCommandsForUnsafe (x : Name) : PartElabM (Array PartCommand) := d
 
 @[implemented_by partCommandsForUnsafe]
 opaque partCommandsFor (x : Name) : PartElabM (Array PartCommand)
-
-
-
 
 inductive RoleArgumentValue where
   | string (str : String)
