@@ -18,10 +18,10 @@ def vanish : RoleExpander
 def rev : RoleExpander
   | _args, stxs => .reverse <$> stxs.mapM elabInline
 
-def html (doc : Part .none) : Html := Genre.none.toHtml {} () () doc
+def html [Monad m] (doc : Part .none) : m Html := Genre.none.toHtml {logError := fun _ => pure ()} () () doc
 
 def main : IO Unit := do
-  IO.println <| Html.asString <| Html.embody <| html <| #doc (.none) "My wonderful document" =>
+  IO.println <| Html.asString <| Html.embody <| ← html <| #doc (.none) "My wonderful document" =>
 
 This is an example document. There's still bogus syntax highlighting
 and no LSP features, but it does seem to run things.
@@ -51,7 +51,7 @@ As someone said:
 
 > It's still a start! And we have `inline code`. And {vanish}[there can be secrets and] {rev}[documents *in* code].
 
-```someLanguage option1:=5
+```
 Block code too
 ```
 
