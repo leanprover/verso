@@ -149,7 +149,7 @@ def lean : CodeBlockExpander
       setInfoState s.commandState.infoState
       setEnv s.commandState.env
       for cmd in s.commands do
-        hls := hls ++ (← highlight (← getFileMap) cmd false)
+        hls := hls ++ (← highlight cmd)
     finally
       setInfoState infoSt
       setEnv env
