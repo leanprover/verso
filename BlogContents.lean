@@ -1,6 +1,5 @@
-import LeanDoc
 import LeanDoc.Doc.Html
-import LeanDoc.Genre
+import LeanDoc.Genre.Blog
 
 import BlogContents.Pages.Front
 import BlogContents.Pages.Mission

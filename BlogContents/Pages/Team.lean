@@ -1,4 +1,4 @@
-import LeanDoc
+import LeanDoc.Genre.Blog
 
 open LeanDoc.Genre (Blog)
 open LeanDoc.Genre.Blog (page_link htmlSpan htmlDiv blob)

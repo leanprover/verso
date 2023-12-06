@@ -1,4 +1,4 @@
--- This module serves as the root of the `Leandoc` library.
+-- This module serves as the root of the `LeanDoc` library.
 -- Import modules here that should be built as part of the library.
 import LeanDoc.Basic
 import LeanDoc.Doc.Concrete
@@ -6,6 +6,5 @@ import LeanDoc.Doc.Elab
 import LeanDoc.Doc.Elab.Monad
 import LeanDoc.Doc.Html
 import LeanDoc.Doc.Lsp
-import LeanDoc.Genre
 import LeanDoc.Parser
 import LeanDoc.Output.Html

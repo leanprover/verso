@@ -1,27 +1,15 @@
-import Lean.Data.RBMap
-
-import LeanDoc.Doc
-import LeanDoc.Doc.Html
-
-import LeanDoc.Genre.Blog
+import LeanDoc.Genre.Blog.Basic
+import LeanDoc.Genre.Blog.Generate
+import LeanDoc.Genre.Blog.Highlighted
 import LeanDoc.Genre.Blog.HighlightCode
+import LeanDoc.Genre.Blog.Site
 import LeanDoc.Genre.Blog.Site.Syntax
-
-import LeanDoc.Output.Html
-
-
-open LeanDoc.Doc (Genre Part)
-open LeanDoc.Doc.Html
-
-namespace LeanDoc.Genre
-
-
-namespace Blog
-
+import LeanDoc.Genre.Blog.Template
+import LeanDoc.Genre.Blog.Theme
 open LeanDoc.Output Html
 open Lean (RBMap)
 
-section
+namespace LeanDoc.Genre.Blog
 
 open Lean Elab
 open LeanDoc Doc Elab
@@ -158,8 +146,6 @@ def lean : CodeBlockExpander
     pure #[← ``(Block.other (Blog.BlockExt.highlightedCode $(quote x.getId) $(quote hls)) #[Block.code none #[] 0 $(quote str.getString)])]
   | otherArgs, str => throwErrorAt str "Unexpected arguments {repr otherArgs}"
 
-end
-
 private def filterString (p : Char → Bool) (str : String) : String := Id.run <| do
   let mut out := ""
   for c in str.toList do
@@ -183,8 +169,3 @@ where
     | ("--drafts"::more) => opts {cfg with showDrafts := true} more
     | (other :: _) => throw (↑ s!"Unknown option {other}")
     | [] => pure cfg
-
-end Blog
-namespace Manual
-
-end Manual

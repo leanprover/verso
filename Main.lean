@@ -3,7 +3,11 @@ Copyright (c) 2023 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-import LeanDoc
+import LeanDoc.Doc.Elab
+import LeanDoc.Doc.Html
+import LeanDoc.Output
+import LeanDoc.Output.Html
+import LeanDoc.Doc.Concrete
 
 open LeanDoc Doc Output Html Concrete ToHtml Elab Monad
 open Lean Elab Term

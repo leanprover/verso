@@ -1,5 +1,4 @@
 import BlogContents
-import LeanDoc
 
 open LeanDoc.Genre.Blog
 

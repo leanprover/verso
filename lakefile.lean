@@ -6,8 +6,14 @@ require std from git "https://github.com/leanprover/std4" @ "main"
 package «leandoc» where
   -- add package configuration options here
 
-lean_lib «LeanDoc» where
+lean_lib LeanDoc where
+  srcDir := "src/leandoc"
+  roots := #[`LeanDoc.Doc, `LeanDoc.Output, `LeanDoc.Parser, `LeanDoc.Examples, `LeanDoc.Method, `LeanDoc.Syntax, `LeanDoc.SyntaxUtils]
   -- add library configuration options here
+
+lean_lib LeanBlog where
+  srcDir := "src/leanblog"
+  roots := #[`LeanDoc.Genre.Blog]
 
 @[default_target]
 lean_exe «leandoc» where
