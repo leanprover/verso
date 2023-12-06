@@ -1,12 +1,14 @@
 import Lean.Data.RBMap
 
 import LeanDoc.Doc
-import LeanDoc.Html
 import LeanDoc.Doc.Html
 
 import LeanDoc.Genre.Blog
 import LeanDoc.Genre.Blog.HighlightCode
 import LeanDoc.Genre.Blog.Site.Syntax
+
+import LeanDoc.Output.Html
+
 
 open LeanDoc.Doc (Genre Part)
 open LeanDoc.Doc.Html
@@ -16,7 +18,7 @@ namespace LeanDoc.Genre
 
 namespace Blog
 
-open LeanDoc.Html
+open LeanDoc.Output Html
 open Lean (RBMap)
 
 section

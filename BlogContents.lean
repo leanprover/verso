@@ -14,7 +14,7 @@ import BlogContents.Posts.AnotherPost
 
 open LeanDoc.Genre Blog Theme Template
 open LeanDoc.Genre.Blog.Site.Syntax
-open LeanDoc Html
+open LeanDoc.Output Html
 
 def theme : Theme := { Theme.default with
   primaryTemplate := do

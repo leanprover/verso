@@ -4,11 +4,11 @@ import LeanDoc.Doc
 import LeanDoc.Doc.Html
 import LeanDoc.Genre.Blog.Basic
 import LeanDoc.Genre.Blog.Site
-import LeanDoc.Html
+import LeanDoc.Output.Html
 
 open Lean (RBMap)
 
-open LeanDoc Doc Html
+open LeanDoc Doc Output Html
 open LeanDoc.Genre Blog
 
 private def next (xs : Array α) : Option (α × Array α) :=

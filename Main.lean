@@ -5,7 +5,7 @@ Author: David Thrane Christiansen
 -/
 import LeanDoc
 
-open LeanDoc Doc Html Concrete ToHtml Elab Monad
+open LeanDoc Doc Output Html Concrete ToHtml Elab Monad
 open Lean Elab Term
 
 set_option pp.rawOnError true

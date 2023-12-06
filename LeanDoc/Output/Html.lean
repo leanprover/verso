@@ -6,7 +6,7 @@ Author: David Thrane Christiansen
 import Lean
 import Std.Tactic.GuardMsgs
 
-namespace LeanDoc
+namespace LeanDoc.Output
 
 open Lean
 
@@ -111,13 +111,13 @@ def test : Html := {{
 }}
 
 /--
-info: LeanDoc.Html.tag
+info: LeanDoc.Output.Html.tag
   "html"
   #[]
-  (LeanDoc.Html.tag
+  (LeanDoc.Output.Html.tag
     "body"
     #[("lang", "en"), ("class", "thing")]
-    (LeanDoc.Html.tag "p" #[] (LeanDoc.Html.text "foo bar")))
+    (LeanDoc.Output.Html.tag "p" #[] (LeanDoc.Output.Html.text "foo bar")))
 -/
 #guard_msgs in
   #eval test

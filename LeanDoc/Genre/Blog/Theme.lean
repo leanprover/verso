@@ -2,7 +2,7 @@ import LeanDoc.Genre.Blog.Site
 import LeanDoc.Genre.Blog.Template
 
 open LeanDoc.Genre.Blog Template
-open LeanDoc Html
+open LeanDoc Output Html
 
 namespace LeanDoc.Genre.Blog
 

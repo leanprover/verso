@@ -7,13 +7,13 @@ import Std.Tactic.GuardMsgs
 
 import LeanDoc.Doc
 import LeanDoc.Examples
-import LeanDoc.Html
+import LeanDoc.Output.Html
 import LeanDoc.Method
 
 
 namespace LeanDoc.Doc.Html
 
-open LeanDoc Doc Html
+open LeanDoc Output Doc Html
 
 structure Options (m : Type → Type) where
   /-- The level of the top-level headers -/
@@ -148,21 +148,21 @@ defmethod Genre.toHtml (g : Genre) [ToHtml g m α] (options : Options m) (contex
 open LeanDoc.Examples
 
 /--
-info: LeanDoc.Html.tag
+info: LeanDoc.Output.Html.tag
   "section"
   #[]
-  (LeanDoc.Html.seq
-    #[LeanDoc.Html.tag "h1" #[] (LeanDoc.Html.seq #[LeanDoc.Html.text "More writing"]),
-      LeanDoc.Html.tag
+  (LeanDoc.Output.Html.seq
+    #[LeanDoc.Output.Html.tag "h1" #[] (LeanDoc.Output.Html.seq #[LeanDoc.Output.Html.text "More writing"]),
+      LeanDoc.Output.Html.tag
         "section"
         #[]
-        (LeanDoc.Html.seq
-          #[LeanDoc.Html.tag "h2" #[] (LeanDoc.Html.seq #[LeanDoc.Html.text "Section 1"]),
-            LeanDoc.Html.tag "p" #[] (LeanDoc.Html.seq #[LeanDoc.Html.text "Here's some code"]),
-            LeanDoc.Html.tag
+        (LeanDoc.Output.Html.seq
+          #[LeanDoc.Output.Html.tag "h2" #[] (LeanDoc.Output.Html.seq #[LeanDoc.Output.Html.text "Section 1"]),
+            LeanDoc.Output.Html.tag "p" #[] (LeanDoc.Output.Html.seq #[LeanDoc.Output.Html.text "Here's some code"]),
+            LeanDoc.Output.Html.tag
               "pre"
               #[]
-              (LeanDoc.Html.text "(define (zero f z) z)\n(define (succ n) (lambda (f x) (f (n f z))))\n")])])
+              (LeanDoc.Output.Html.text "(define (zero f z) z)\n(define (succ n) (lambda (f x) (f (n f z))))\n")])])
 -/
 #guard_msgs in
   #eval Genre.none.toHtml (m:=Id) {logError := fun _ => ()} () () e

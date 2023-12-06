@@ -2,7 +2,7 @@ import LeanDoc
 
 open LeanDoc.Genre (Blog)
 open LeanDoc.Genre.Blog (page_link htmlSpan htmlDiv blob)
-open LeanDoc Html
+open LeanDoc Output Html
 
 set_option pp.rawOnError true
 

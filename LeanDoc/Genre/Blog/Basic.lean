@@ -5,7 +5,7 @@ import LeanDoc.Doc.Html
 import LeanDoc.Method
 import LeanDoc.Genre.Blog.Highlighted
 
-open LeanDoc Doc Html
+open LeanDoc Doc Output Html
 
 namespace LeanDoc.Genre
 

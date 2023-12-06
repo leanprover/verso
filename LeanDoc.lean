@@ -8,4 +8,4 @@ import LeanDoc.Doc.Html
 import LeanDoc.Doc.Lsp
 import LeanDoc.Genre
 import LeanDoc.Parser
-import LeanDoc.Html
+import LeanDoc.Output.Html
