@@ -18,6 +18,10 @@ jobs:
 
       - uses: actions/checkout@v3
 
+      - name: lean version
+        run: |
+          lean --version
+
       - name: build
         run: |
           lake build
