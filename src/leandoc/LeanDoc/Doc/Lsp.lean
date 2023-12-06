@@ -36,8 +36,6 @@ defmethod Syntax.lspRange (text : FileMap) (s : Syntax) : Option Lsp.Range :=
   | _ => none
 
 
-
-
 open Lean.Lsp in
 instance : FromJson DocumentHighlightKind where
   fromJson?
