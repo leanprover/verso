@@ -816,8 +816,7 @@ mutual
     nodeFn ``text <|
       nodeFn strLitKind <|
         asStringFn (unescape := true) (quoted := true) <|
-          atomicFn (manyFn (chFn ' ') >> inlineTextChar) >>
-          manyFn inlineTextChar
+          many1Fn inlineTextChar
 
   partial def link (ctxt : InlineCtxt) :=
     nodeFn ``link <|
@@ -1196,7 +1195,7 @@ structure BlockCtxt where
   inLists : List InList := []
 deriving Inhabited, Repr
 
-def fakeAtom (str : String) : ParserFn := fun c s =>
+def fakeAtom (str : String) : ParserFn := fun _c s =>
   let atom := mkAtom SourceInfo.none str
   s.pushSyntax atom
 
@@ -2345,3 +2344,37 @@ All input consumed.
 -/
 #guard_msgs in
   #eval directive {} |>.test! " ::: multiPara\n foo\n\n * List item \n :::"
+
+/--
+info: Success! Final stack:
+  (LeanDoc.Syntax.text (str "\" \""))
+Remaining:
+"[\\[link\\]](https://link.com)"
+-/
+#guard_msgs in
+  #eval text |>.test! " [\\[link\\]](https://link.com)"
+
+/--
+info: Success! Final stack:
+  [(LeanDoc.Syntax.para
+    [(LeanDoc.Syntax.link
+      "["
+      [(LeanDoc.Syntax.text (str "\"[link A]\""))]
+      "]"
+      (LeanDoc.Syntax.url
+       "("
+       (str "\"https://example.com\"")
+       ")"))
+     (LeanDoc.Syntax.text (str "\" \""))
+     (LeanDoc.Syntax.link
+      "["
+      [(LeanDoc.Syntax.text (str "\"[link B]\""))]
+      "]"
+      (LeanDoc.Syntax.url
+       "("
+       (str "\"https://more.example.com\"")
+       ")"))])]
+All input consumed.
+-/
+#guard_msgs in
+  #eval blocks {} |>.test! "[\\[link A\\]](https://example.com) [\\[link B\\]](https://more.example.com)"
