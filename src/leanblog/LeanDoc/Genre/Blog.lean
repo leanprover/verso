@@ -290,7 +290,7 @@ def leanOutput : Doc.Elab.CodeBlockExpander
         if let some s := config.severity then
           if s != m.severity then
             throwErrorAt str s!"Expected severity {sev s}, but got {sev m.severity}"
-        return #[← `(Block.code none #[] 0 $(quote str.getString))]
+        return #[← ``(Block.other (Blog.BlockExt.htmlDiv $(quote (sev m.severity))) #[Block.code none #[] 0 $(quote str.getString)])]
     for m in messages do
       LeanDoc.Doc.Suggestion.saveSuggestion str (m.take 30 ++ "…") m
     throwErrorAt str "Didn't match - expected one of: {indentD (toMessageData messages)}\nbut got:{indentD (toMessageData str.getString)}"
