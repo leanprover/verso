@@ -56,7 +56,7 @@ defmethod Highlighted.Token.Kind.hover? : (tok : Highlighted.Token.Kind) → Opt
 
 
 defmethod Highlighted.Token.toHtml (tok : Highlighted.Token) : Html := {{
-  {{tok.pre}}<span class={{tok.kind.«class» ++ " token"}} "data-binding"={{tok.kind.data}}>{{tok.content}}{{tok.kind.hover?.getD .empty}}</span>{{tok.post}}
+  <span class={{tok.kind.«class» ++ " token"}} "data-binding"={{tok.kind.data}}>{{tok.content}}{{tok.kind.hover?.getD .empty}}</span>
 }}
 
 
@@ -67,7 +67,9 @@ defmethod Highlighted.Span.Kind.«class» : Highlighted.Span.Kind → String
 
 partial defmethod Highlighted.toHtml : Highlighted → Html
   | .token t => t.toHtml
-  | .span s hl => {{<span class={{s.«class» ++ " token"}}>{{toHtml hl}}</span>}}
+  | .text str => str
+  | .span s info hl => {{<span class={{"has-info " ++ s.«class»}}><span class="hover-container"><span class={{"hover-info message " ++ s.«class»}}>{{info}}</span></span>{{toHtml hl}}</span>}}
+  | .point s info => {{<span class={{"message " ++ s.«class»}}>{{info}}</span>}}
   | .seq hls => hls.map toHtml
 
 partial instance : GenreHtml Blog IO where

@@ -30,27 +30,8 @@ partial def bestD (sems : Array Highlighted.Token.Kind) (default : Highlighted.T
     default
 
 def fakeToken (meaning : Token.Kind) (tok : String) : Token where
-  pre := ""
   content := tok
-  post := ""
   kind := meaning
-
-def mkToken (meaning : Token.Kind) (info : SourceInfo)  (tok : String) : Token := Id.run do
-  let .original leading pos trailing endPos := info
-    | panic! "Syntax not original"
-  {
-    pre := leading.toString,
-    content := tok,
-    post := trailing.toString,
-    kind := meaning
-  }
-  -- hl.processWhitespace leading
-  -- openFor hl span.1
-  -- hl.start span meaning
-  -- hl.emit span tok
-  -- hl.stop span meaning
-  -- closeFor hl <| text.toPosition ⟨endPos.byteIdx + trailing.bsize⟩
-  -- hl.processWhitespace trailing
 
 
 namespace UnionFind
@@ -177,43 +158,185 @@ def infoExists [Monad m] [MonadInfoTree m] [MonadLiftT IO m] (stx : Syntax) : m 
   return false
 
 
+inductive Output where
+  | seq (emitted : Array Highlighted)
+  | span (kind : Highlighted.Span.Kind) (info : String)
 
-partial def highlight' [Inhabited (m Highlighted)] [Monad m] [MonadFileMap m] [MonadEnv m] [MonadInfoTree m] [MonadError m] [MonadLiftT IO m]
-    (ids : HashMap Lsp.RefIdent Lsp.RefIdent) (stx : Syntax) (inErr : Bool := false) (lookingAt : Option Name := none) : m Highlighted := do
+def Output.add (output : List Output) (hl : Highlighted) : List Output :=
+  match output with
+  | [] => [.seq #[hl]]
+  | .seq left :: more => .seq (left.push hl) :: more
+  | .span .. :: _ => .seq #[hl] :: output
+
+def Output.addToken (output : List Output) (token : Highlighted.Token) : List Output :=
+  Output.add output (.token token)
+
+def Output.addText (output : List Output) (str : String) : List Output :=
+  Output.add output (.text str)
+
+def Output.openSpan (output : List Output) (kind : Highlighted.Span.Kind) (info : String) : List Output :=
+  .span kind info :: output
+
+def Output.closeSpan (output : List Output) : List Output :=
+  let rec go (acc : Highlighted) : List Output → List Output
+    | [] => [.seq #[acc]]
+    | .span kind info :: more => Output.add more (.span kind info acc)
+    | .seq left :: more => go (.seq (left.push acc)) more
+  go .empty output
+
+defmethod Highlighted.fromOutput (output : List Output) : Highlighted :=
+  let rec go (acc : Highlighted) : List Output → Highlighted
+    | [] => acc
+    | .seq left :: more => go (.seq (left.push acc)) more
+    | .span kind info :: more => go (.span kind info acc) more
+  go .empty output
+
+structure HighlightState where
+  /-- Messages not yet displayed -/
+  messages : Array Message
+  nextMessage : Option (Fin messages.size)
+  /-- Output so far -/
+  output : List Output
+  /-- Messages being displayed -/
+  inMessages : List Message
+deriving Inhabited
+
+private defmethod Lean.Position.before (pos1 pos2 : Lean.Position) : Bool :=
+  pos1.line < pos2.line || (pos1.line == pos2.line && pos1.column < pos2.column)
+
+private defmethod Lean.Position.notAfter (pos1 pos2 : Lean.Position) : Bool :=
+  pos1.line < pos2.line || (pos1.line == pos2.line && pos1.column ≤ pos2.column)
+
+
+def HighlightState.ofMessages (messages : Array Message) : HighlightState := {
+  messages := sortedMessages
+  nextMessage := if h : 0 < sortedMessages.size then some ⟨0, h⟩ else none
+  output := []
+  inMessages := []
+}
+where
+  cmp (m1 m2 : Message) :=
+    if m1.pos.before m2.pos then true
+    else if m1.pos == m2.pos then
+      match m1.endPos, m2.endPos with
+      | none, none => true
+      | some _, none => false
+      | none, some _ => true
+      | some e1, some e2 => e2.before e1
+    else false
+  sortedMessages := messages.qsort cmp
+
+abbrev HighlightM (α : Type) : Type := StateT HighlightState TermElabM α
+
+instance : Inhabited (HighlightM α) where
+  default := fun _ => default
+
+def nextMessage? : HighlightM (Option Message) := do
+  let st ← get
+  match st.nextMessage with
+  | none => pure none
+  | some i => pure (some st.messages[i])
+
+def advanceMessages : HighlightM Unit := do
+  modify fun st =>
+    if let some ⟨i, _⟩ := st.nextMessage then
+      if h : i + 1 < st.messages.size
+        then {st with nextMessage := some ⟨i + 1, h⟩}
+        else {st with nextMessage := none}
+    else st
+
+def needsOpening (pos : Lean.Position) (message : Message) : Bool :=
+  message.pos.notAfter pos
+
+def needsClosing (pos : Lean.Position) (message : Message) : Bool :=
+  message.endPos.map pos.notAfter |>.getD true
+
+partial def openUntil (pos : Lean.Position) : HighlightM Unit := do
+  if let some msg ← nextMessage? then
+    if needsOpening pos msg then
+      advanceMessages
+      let kind :=
+        match msg.severity with
+        | .error => .error
+        | .warning => .warning
+        | .information => .info
+      let str ← contents msg
+      modify fun st => {st with
+        output := Output.openSpan st.output kind str
+        inMessages := msg :: st.inMessages
+      }
+      openUntil pos
+where
+  contents (message : Message) : IO String := do
+    let head := if message.caption != "" then message.caption ++ ":\n" else ""
+    pure <| head ++ (← message.data.toString)
+
+
+partial def closeUntil (pos : Lean.Position) : HighlightM Unit := do
+  let more ← modifyGet fun st =>
+    match st.inMessages with
+    | [] => (false, st)
+    | m :: ms =>
+      if needsClosing pos m then
+        (true, {st with output := Output.closeSpan st.output, inMessages := ms})
+      else (false, st)
+  if more then closeUntil pos
+
+def emitString (pos endPos : String.Pos) (string : String) : HighlightM Unit := do
+  let text ← getFileMap
+  openUntil <| text.toPosition pos
+  modify fun st => {st with output := Output.addText st.output string}
+  closeUntil <| text.toPosition endPos
+
+def emitString' (string : String) : HighlightM Unit :=
+  modify fun st => {st with output := Output.addText st.output string}
+
+def emitToken (info : SourceInfo) (token : Highlighted.Token) : HighlightM Unit := do
+  let .original leading pos trailing endPos := info
+    | throwError "Syntax not original, can't highlight"
+  emitString' leading.toString
+  let text ← getFileMap
+  openUntil <| text.toPosition pos
+  modify fun st => {st with output := Output.addToken st.output token}
+  closeUntil <| text.toPosition endPos
+  emitString' trailing.toString
+
+def emitToken' (token : Highlighted.Token) : HighlightM Unit := do
+  modify fun st => {st with output := Output.addToken st.output token}
+
+partial def highlight' (ids : HashMap Lsp.RefIdent Lsp.RefIdent) (stx : Syntax) (lookingAt : Option Name := none) : HighlightM Unit := do
   match stx with
   | `($e.%$tk$field:ident) =>
-      let hl1 ← highlight' ids e inErr
-      let pos := tk.getPos? true
-      let endPos := tk.getTailPos? true
-      let (some pos, some endPos) := (pos, endPos)
-        | throwErrorAt stx "Tried to highlight syntax not from the parser {repr stx}"
-      let hl2 := .token (mkToken .unknown tk.getHeadInfo <| (← getFileMap).source.extract pos endPos)
-      let hl3 ← highlight' ids field inErr
-      pure <| .seq #[hl1, hl2, hl3]
+      highlight' ids e
+      if let some ⟨pos, endPos⟩ := tk.getRange? then
+        emitToken tk.getHeadInfo <| .mk .unknown <| (← getFileMap).source.extract pos endPos
+      else
+        emitString' "."
+      highlight' ids field
   | _ =>
     match stx with
-    | .missing => pure .empty -- TODO emit unhighlighted string somehow?
+    | .missing => pure () -- TODO emit unhighlighted string
     | stx@(.ident i _ x _) =>
         match x.eraseMacroScopes with
         | .str (.str _ _) _ =>
           match stx.identComponents (nFields? := some 1) with
           | [y, field] =>
             if (← infoExists field) then
-              let hl1 ← highlight' ids y inErr
-              let hl2 := .token (fakeToken .unknown ".")
-              let hl3 ← highlight' ids field inErr
-              pure <| .seq #[hl1, hl2, hl3]
+              highlight' ids y
+              emitToken' <| fakeToken .unknown "."
+              highlight' ids field
             else
-              pure <| .token (mkToken (← identKind ids ⟨stx⟩) i x.toString)
-          | _ => pure <| .token (mkToken (← identKind ids ⟨stx⟩) i x.toString)
-        | _ => pure <| .token (mkToken (← identKind ids ⟨stx⟩) i x.toString)
+              emitToken i ⟨← identKind ids ⟨stx⟩, x.toString⟩
+          | _ => emitToken i ⟨← identKind ids ⟨stx⟩, x.toString⟩
+        | _ => emitToken i ⟨← identKind ids ⟨stx⟩, x.toString⟩
     | stx@(.atom i x) =>
       let docs ← match lookingAt with
         | none => pure none
         | some n => findDocString? (← getEnv) n
       if let .sort ← identKind ids ⟨stx⟩ then
-        return .token (mkToken .sort i x)
-      return (.token <| mkToken · i x) <|
+        emitToken i ⟨.sort, x⟩
+        return
+      emitToken i <| (⟨ ·,  x⟩) <|
         match x.get? 0 with
         | some '#' => .keyword lookingAt docs
         | some c =>
@@ -221,11 +344,11 @@ partial def highlight' [Inhabited (m Highlighted)] [Monad m] [MonadFileMap m] [M
           else .unknown
         | _ => .unknown
     | .node _ k children =>
-      .seq <$> children.mapM (highlight' ids · inErr (lookingAt := some k))
+      for child in children do
+        highlight' ids child (lookingAt := some k)
 
-
-def highlight [Inhabited (m Highlighted)] [Monad m] [MonadFileMap m] [MonadEnv m] [MonadInfoTree m] [MonadError m] [MonadLiftT IO m]
-    (stx : Syntax) (inErr : Bool := false) (lookingAt : Option Name := none) : m Highlighted := do
+def highlight (stx : Syntax) (messages : Array Message) : TermElabM Highlighted := do
   let modrefs := Lean.Server.findModuleRefs (← getFileMap) (← getInfoTrees).toArray
   let ids := build modrefs
-  highlight' ids stx inErr lookingAt
+  let ((), {output := output, ..}) ← StateT.run (highlight' ids stx) (.ofMessages messages)
+  pure <| .fromOutput output

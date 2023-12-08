@@ -23,18 +23,16 @@ instance : Quote Highlighted.Token.Kind where
     | .unknown => mkCApp ``unknown #[]
 
 structure Highlighted.Token where
-  pre : String
-  content : String
-  post : String
   kind : Token.Kind
+  content : String
 deriving Repr, Inhabited
 
 open Syntax in
 open Highlighted in
 instance : Quote Highlighted.Token where
   quote
-    | (.mk pre content post kind) =>
-      mkCApp ``Token.mk #[quote pre, quote content, quote post, quote kind]
+    | (.mk kind content) =>
+      mkCApp ``Token.mk #[quote kind, quote content]
 
 inductive Highlighted.Span.Kind where
   | error
@@ -52,13 +50,17 @@ instance : Quote Kind where
 
 inductive Highlighted where
   | token (tok : Highlighted.Token)
+  | text (str : String)
   | seq (highlights : Array Highlighted)
-  | span (kind : Highlighted.Span.Kind) (content : Highlighted)
+  -- TODO replace messages as strings with structured info
+  | span (kind : Highlighted.Span.Kind) (info : String) (content : Highlighted)
+  | point (kind : Highlighted.Span.Kind) (info : String)
 deriving Repr
 
 def Highlighted.empty : Highlighted := .seq #[]
 instance : Append Highlighted where
   append
+    | .text str1, .text str2 => .text (str1 ++ str2)
     | .seq xs, .seq ys => .seq (xs ++ ys)
     | .seq xs,  x => .seq (xs ++ #[x])
     | x, .seq xs => .seq (#[x] ++ xs)
@@ -74,5 +76,7 @@ where
 
   quote'
     | .token tok => mkCApp ``token #[quote tok]
+    | .text str => mkCApp ``text #[quote str]
     | .seq hls => mkCApp ``seq #[quoteArray ⟨quote'⟩ hls]
-    | .span k content => mkCApp ``span #[quote k, quote' content]
+    | .span k info content => mkCApp ``span #[quote k, quote info, quote' content]
+    | .point k info => mkCApp ``point #[quote k, quote info]
