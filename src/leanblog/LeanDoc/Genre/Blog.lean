@@ -6,6 +6,7 @@ import LeanDoc.Genre.Blog.Site
 import LeanDoc.Genre.Blog.Site.Syntax
 import LeanDoc.Genre.Blog.Template
 import LeanDoc.Genre.Blog.Theme
+import LeanDoc.Doc.Suggestion
 open LeanDoc.Output Html
 open Lean (RBMap)
 
@@ -141,7 +142,6 @@ def LeanBlockConfig.fromArgs [Monad m] [MonadInfoTree m] [MonadResolveName m] [M
       error := errorArg
     }
   else throwError "No arguments provided, expected at least a context name"
-
 where
   asName (name : Name) (v : Doc.Elab.RoleArgumentValue) : m Name := do
     match v with
@@ -240,6 +240,75 @@ def lean : CodeBlockExpander
       pure #[← ``(Block.other (Blog.BlockExt.highlightedCode $(quote x.getId) $(quote hls)) #[Block.code none #[] 0 $(quote str.getString)])]
     else
       pure #[]
+
+structure LeanOutputConfig where
+  name : Ident
+  severity : Option MessageSeverity
+
+def LeanOutputConfig.fromArgs [Monad m] [MonadInfoTree m] [MonadResolveName m] [MonadEnv m] [MonadError m] (args : Array RoleArgument) : m LeanOutputConfig := do
+  if h : 0 < args.size then
+    let .anonymous (.name outputName) := args[0]
+      | throwError s!"Expected output name, got {repr args[0]}"
+    let (severityArgs, args) := takeNamed `severity <| args.extract 1 args.size
+    let severityArg ← takeVal `severity severityArgs >>= Option.mapM (asSeverity `severity)
+
+    if !args.isEmpty then
+      throwError s!"Unexpected arguments: {repr args}"
+    pure {
+      name := outputName
+      severity := severityArg
+    }
+  else throwError "No arguments provided, expected at least a context name"
+where
+  asSeverity (name : Name) (v : Doc.Elab.RoleArgumentValue) : m MessageSeverity := do
+    match v with
+    | .name b => do
+      let b' ← resolveGlobalConstNoOverloadWithInfo b
+      if b' == ``MessageSeverity.error then pure MessageSeverity.error
+      else if b' == ``MessageSeverity.warning then pure MessageSeverity.warning
+      else if b' == ``MessageSeverity.information then pure MessageSeverity.information
+      else throwErrorAt b "Expected 'error' or 'warning' or 'information'"
+    | other => throwError "Expected severity for '{name}', got {repr other}"
+  takeVal {α} (key : Name) (vals : Array α) : m (Option α) := do
+    if vals.size = 0 then pure none
+    else if h : vals.size = 1 then
+      have : 0 < vals.size := by rw [h]; trivial
+      pure (some vals[0])
+    else throwError "Duplicate values for '{key}'"
+
+
+@[code_block_expander leanOutput]
+def leanOutput : Doc.Elab.CodeBlockExpander
+  | args, str => do
+    let config ← LeanOutputConfig.fromArgs args -- TODO actual parser for my args
+
+    let some savedInfo := messageContextExt.getState (← getEnv) |>.messages |>.find? config.name.getId
+      | throwErrorAt str "No saved info for name '{config.name.getId}'"
+    let messages ← liftM <| savedInfo.msgs.toArray.mapM contents
+    for m in savedInfo.msgs do
+      if mostlyEqual str.getString (← contents m) then
+        if let some s := config.severity then
+          if s != m.severity then
+            throwErrorAt str s!"Expected severity {sev s}, but got {sev m.severity}"
+        return #[← `(Block.code none #[] 0 $(quote str.getString))]
+    for m in messages do
+      LeanDoc.Doc.Suggestion.saveSuggestion str (m.take 30 ++ "…") m
+    throwErrorAt str "Didn't match - expected one of: {indentD (toMessageData messages)}\nbut got:{indentD (toMessageData str.getString)}"
+where
+  withNewline (str : String) := if str == "" || str.back != '\n' then str ++ "\n" else str
+
+  sev : MessageSeverity → String
+    | .error => "error"
+    | .information => "information"
+    | .warning => "warning"
+
+  contents (message : Message) : IO String := do
+    let head := if message.caption != "" then message.caption ++ ":\n" else ""
+    pure <| withNewline <| head ++ (← message.data.toString)
+
+  mostlyEqual (s1 s2 : String) : Bool :=
+    s1.trim == s2.trim
+
 
 
 private def filterString (p : Char → Bool) (str : String) : String := Id.run <| do
