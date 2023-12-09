@@ -239,12 +239,12 @@ private def unescapeStr (str : String) : String := Id.run do
       out := out.push c
   out
 
-private def asStringAux (quoted : Bool) (unescape : Bool) (startPos : String.Pos) : ParserFn := fun c s =>
+private def asStringAux (quoted : Bool) (startPos : String.Pos) (transform : String → String) : ParserFn := fun c s =>
   let input    := c.input
   let stopPos  := s.pos
   let leading  := mkEmptySubstringAt input startPos
   let val      := input.extract startPos stopPos
-  let val      := if unescape then unescapeStr val else val
+  let val      := transform val
   let trailing := mkEmptySubstringAt input stopPos
   let atom     :=
     mkAtom (SourceInfo.original leading startPos trailing (startPos + val)) <|
@@ -252,12 +252,12 @@ private def asStringAux (quoted : Bool) (unescape : Bool) (startPos : String.Pos
   s.pushSyntax atom
 
 /-- Match an arbitrary Parser and return the consumed String in a `Syntax.atom`. -/
-def asStringFn (p : ParserFn) (quoted := false) (unescape := false) : ParserFn := fun c s =>
+def asStringFn (p : ParserFn) (quoted := false) (transform : String → String := id ) : ParserFn := fun c s =>
   let startPos := s.pos
   let iniSz := s.stxStack.size
   let s := p c s
   if s.hasError then s
-  else asStringAux quoted unescape startPos c (s.shrinkStack iniSz)
+  else asStringAux quoted startPos transform c (s.shrinkStack iniSz)
 
 def checkCol0Fn (errorMsg : String) : ParserFn := fun c s =>
   let pos      := c.fileMap.toPosition s.pos
@@ -401,7 +401,7 @@ def inlineTextChar : ParserFn := fun c s =>
 /-- Return some inline text up to the next inline opener or the end of
 the line, whichever is first. Always consumes at least one
 logical character on success, taking escaping into account. -/
-def inlineText : ParserFn := asStringFn (unescape := true) <| atomicFn inlineTextChar >> manyFn inlineTextChar
+def inlineText : ParserFn := asStringFn (transform := unescapeStr) <| atomicFn inlineTextChar >> manyFn inlineTextChar
 
 /--
 info: Failure: unexpected end of input
@@ -473,7 +473,7 @@ Remaining:
 "*"
 -/
 #guard_msgs in
-#eval asStringFn (unescape := true) (many1Fn inlineTextChar) |>.test! "\\*\\**"
+#eval asStringFn (transform := unescapeStr) (many1Fn inlineTextChar) |>.test! "\\*\\**"
 
 /--
 info: Success! Final stack:
@@ -490,7 +490,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-#eval asStringFn (unescape := true) (many1Fn inlineTextChar) |>.test! "\\>"
+#eval asStringFn (transform := unescapeStr) (many1Fn inlineTextChar) |>.test! "\\>"
 
 
 /-- Block opener prefixes -/
@@ -815,7 +815,7 @@ mutual
   partial def text :=
     nodeFn ``text <|
       nodeFn strLitKind <|
-        asStringFn (unescape := true) (quoted := true) <|
+        asStringFn (transform := unescapeStr) (quoted := true) <|
           many1Fn inlineTextChar
 
   partial def link (ctxt : InlineCtxt) :=
@@ -1360,7 +1360,6 @@ Remaining: "** "
 #guard_msgs in
 #eval lookaheadUnorderedListIndicator {} (fun type => fakeAtom s! "{repr type}") |>.test! "** "
 
-
 mutual
   partial def listItem (ctxt : BlockCtxt) : ParserFn :=
     nodeFn ``li (bulletFn >> withCurrentColumn fun c => blocks {ctxt with minIndent := c})
@@ -1424,6 +1423,8 @@ mutual
       atomicFn (bol >> asStringFn (many1Fn (skipChFn '#')) >> skipChFn ' ' >> takeWhileFn (· == ' ') >> lookaheadFn (satisfyFn (· != '\n'))) >>
       textLine (allowNewlines := false)
 
+
+
   partial def codeBlock (ctxt : BlockCtxt) : ParserFn :=
     nodeFn ``codeblock <|
       -- Opener - leaves indent info and open token on the stack
@@ -1434,7 +1435,7 @@ mutual
           takeWhileFn (· == ' ') >>
           optionalFn nameAndArgs >>
           satisfyFn (· == '\n') "newline" >>
-          asStringFn (manyFn (codeFrom c fenceWidth)) >>
+          asStringFn (manyFn (codeFrom c fenceWidth)) (transform := deIndent c) >>
           closeFence c fenceWidth
 
   where
@@ -1444,6 +1445,13 @@ mutual
       | .node _ `column #[.atom _ col] =>
         if let some colNat := col.toNat? then p colNat c s else s.mkError s!"Internal error - not a Nat {col}"
       | other => s.mkError s!"Internal error - not a column node {other}"
+
+    deIndent (n : Nat) (str : String) : String := Id.run do
+      let str := if str != "" && str.back == '\n' then str.dropRight 1 else str
+      let mut out := ""
+      for line in str.splitOn "\n" do
+        out := out ++ line.drop n ++ "\n"
+      out
 
     codeFrom (col width : Nat) :=
       atomicFn (bol >> takeWhileFn (· == ' ') >> guardMinColumn col >>
@@ -1981,7 +1989,7 @@ info: Success! Final stack:
    (column "1")
    "```"
    [`scheme []]
-   " (define x 4)\n x\n"
+   "(define x 4)\nx\n"
    "```")
 All input consumed.
 -/
@@ -1991,10 +1999,24 @@ All input consumed.
 /--
 info: Success! Final stack:
   (LeanDoc.Syntax.codeblock
+   (column "0")
+   "```"
+   [`scheme []]
+   " (define x 4)\n x\n"
+   "```")
+All input consumed.
+-/
+#guard_msgs in
+  #eval codeBlock {} |>.test! "``` scheme\n (define x 4)\n x\n```"
+
+
+/--
+info: Success! Final stack:
+  (LeanDoc.Syntax.codeblock
    (column "1")
    "```"
    []
-   " (define x 4)\n x\n"
+   "(define x 4)\nx\n"
    "```")
 All input consumed.
 -/
@@ -2007,7 +2029,7 @@ info: Success! Final stack:
    (column "1")
    "```"
    []
-   " (define x 4)\n x\n"
+   "(define x 4)\nx\n"
    "```")
 All input consumed.
 -/
@@ -2078,7 +2100,7 @@ Final stack:
    (column "1")
    "```"
    [`scheme []]
-   ""
+   "\n"
    <missing>)
 Remaining: "(define x 4)\nx\n```"
 -/
@@ -2092,7 +2114,7 @@ Final stack:
    (column "1")
    "```"
    [`scheme []]
-   " (define x 4)\n x\n"
+   "(define x 4)\nx\n"
    <missing>)
 Remaining: "```"
 -/
@@ -2106,7 +2128,7 @@ Final stack:
    (column "1")
    "```"
    []
-   " (define x 4)\n x\n"
+   "(define x 4)\nx\n"
    <missing>)
 Remaining: "```"
 -/
@@ -2120,7 +2142,7 @@ Final stack:
    (column "1")
    "```"
    []
-   " (define x 4)\n x\n"
+   "(define x 4)\nx\n"
    <missing>)
 Remaining: "```"
 -/
