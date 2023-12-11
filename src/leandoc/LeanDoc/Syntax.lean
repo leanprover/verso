@@ -31,6 +31,8 @@ syntax (name:=bold) "*{" inline* "}" : inline
 syntax (name:=link) "link[" inline* "]" link_target : inline
 /-- Image -/
 syntax (name:=image) "image[" str* "]" link_target : inline
+/-- A footnote use -/
+syntax (name:=footnote) "[^" str "]" : inline
 /-- Line break -/
 syntax (name:=linebreak) "line!" : inline
 /-- Literal characters-/
@@ -56,23 +58,13 @@ syntax (name:=ol) "ol{" num list_item* "}" : block
 syntax (name:=codeblock) str : block
 /-- Quotation -/
 syntax (name:=blockquote) str : block
+/-- A link reference definition -/
+syntax (name:=link_ref)  "[" str "]:" str : block
+/-- A footnote definition -/
+syntax (name:=footnote_ref)  "[^" str "]:" inline* : block
 /-- Custom directive -/
 syntax (name:=directive) "directive{" ident argument* "}" "[" block* "]": block
 /-- A header -/
 syntax (name:=header) inline* : block
 
 syntax (name:=block_role) "role{" ident argument* "}" "[" block "]"  : block
-
-
-open LeanDoc.SyntaxUtils Lean Elab Term Std in
-macro "#seeStx" tm:term : command =>
-  `(#eval (ppSyntax <$> $tm : TermElabM Std.Format) )
-
-#seeStx `(inline| "foo")
-#seeStx `(inline| _{ "foo" "bar" })
-#seeStx `(inline| *{ "foo" "bar" })
-#seeStx `(inline| link[_{"FPiL" line! "book"}]("https://..."))
-#seeStx `(inline| code{ "foo" })
-
-
-end LeanDoc.Syntax

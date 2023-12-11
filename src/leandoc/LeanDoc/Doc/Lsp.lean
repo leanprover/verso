@@ -11,7 +11,7 @@ import Std.CodeAction.Basic
 import LeanDoc.Doc.Elab
 import LeanDoc.Syntax
 
-open LeanDoc.Doc.Elab (DocListInfo TOC)
+open LeanDoc.Doc.Elab (DocListInfo DocRefInfo TOC)
 
 open Lean
 
@@ -96,7 +96,7 @@ partial instance : FromJson Lean.Lsp.DocumentSymbolResult where
     pure ⟨syms⟩
 
 open Lean Server Lsp RequestM in
-def handleHl (params : DocumentHighlightParams) (prev : RequestTask DocumentHighlightResult) : RequestM (RequestTask DocumentHighlightResult) := do
+def handleDef (params : TextDocumentPositionParams) (prev : RequestTask (Array LocationLink)) : RequestM (RequestTask (Array LocationLink)) := do
   let doc ← readDoc
   let text := doc.meta.text
   let pos := text.lspPosToUtf8Pos params.position
@@ -106,17 +106,80 @@ def handleHl (params : DocumentHighlightParams) (prev : RequestTask DocumentHigh
         match info with
         | .ofCustomInfo ⟨stx, data⟩ =>
           if stx.containsPos pos then
-            data.get? DocListInfo
+            data.get? DocRefInfo
+          else none
+        | _ => none
+      if nodes.isEmpty then prev.get
+      else
+        let mut locs := #[]
+        for node in nodes do
+          match node with
+          | ⟨some defSite, _⟩ =>
+            let mut origin : Option Range := none
+            for stx in node.syntax do
+              if let some ⟨head, tail⟩ := stx.getRange? then
+                if pos ≥ head && pos ≤ tail then
+                  origin := stx.lspRange text
+                  break
+            let some target := defSite.lspRange text
+              | continue
+            locs := locs.push {originSelectionRange? := origin, targetRange := target, targetUri := params.textDocument.uri, targetSelectionRange := target}
+          | _ => continue
+        pure locs
+
+open Lean Server Lsp RequestM in
+def handleRefs (params : ReferenceParams) (prev : RequestTask (Array Location)) : RequestM (RequestTask (Array Location)) := do
+  let doc ← readDoc
+  let text := doc.meta.text
+  let pos := text.lspPosToUtf8Pos params.position
+  bindWaitFindSnap doc (·.endPos + ' ' >= pos) (notFoundX := pure prev) fun snap => do
+    withFallbackResponse prev <| pure <| Task.spawn <| fun () => do
+      let nodes := snap.infoTree.deepestNodes fun _ctxt info _arr =>
+        match info with
+        | .ofCustomInfo ⟨stx, data⟩ =>
+          if stx.containsPos pos then
+            data.get? DocRefInfo
+          else none
+        | _ => none
+      if nodes.isEmpty then prev.get
+      else
+        let mut locs := #[]
+        for node in nodes do
+          for stx in node.syntax do
+            if let some range := stx.lspRange text then
+              locs := locs.push {uri := params.textDocument.uri, range := range}
+        pure locs
+
+open Lean Server Lsp RequestM in
+def handleHl (params : DocumentHighlightParams) (prev : RequestTask DocumentHighlightResult) : RequestM (RequestTask DocumentHighlightResult) := do
+  let doc ← readDoc
+  let text := doc.meta.text
+  let pos := text.lspPosToUtf8Pos params.position
+  bindWaitFindSnap doc (·.endPos + ' ' >= pos) (notFoundX := pure prev) fun snap => do
+    withFallbackResponse prev <| pure <| Task.spawn <| fun () => do
+      let nodes : List (_ ⊕ _) := snap.infoTree.deepestNodes fun _ctxt info _arr =>
+        match info with
+        | .ofCustomInfo ⟨stx, data⟩ =>
+          if stx.containsPos pos then
+            (.inl <$> data.get? DocListInfo) <|> (.inr <$> data.get? DocRefInfo)
           else none
         | _ => none
       if nodes.isEmpty then prev.get
       else
         let mut hls := #[]
         for node in nodes do
-          let ⟨stxs⟩ := node
-          for s in stxs do
-            if let some r := s.lspRange text then
-              hls := hls.push ⟨r, none⟩
+          match node with
+          | .inl ⟨stxs⟩ =>
+            for s in stxs do
+              if let some r := s.lspRange text then
+                hls := hls.push ⟨r, none⟩
+          | .inr ⟨defSite, useSites⟩ =>
+            if let some s := defSite then
+              if let some r := s.lspRange text then
+                hls := hls.push ⟨r, none⟩
+            for s in useSites do
+              if let some r := s.lspRange text then
+                hls := hls.push ⟨r, none⟩
         pure hls
 
 open Lean Lsp
@@ -361,6 +424,8 @@ def renumberLists : CodeActionProvider := fun params snap => do
 
 open Lean Server Lsp in
 initialize
+  chainLspRequestHandler "textDocument/definition" TextDocumentPositionParams (Array LocationLink) handleDef
+  -- chainLspRequestHandler "textDocument/references" ReferenceParams (Array Location) handleRefs -- TODO make this work - right now it goes through the watchdog so we can't chain it
   chainLspRequestHandler "textDocument/documentHighlight" DocumentHighlightParams DocumentHighlightResult handleHl
   chainLspRequestHandler "textDocument/documentSymbol" DocumentSymbolParams DocumentSymbolResult handleSyms
   chainLspRequestHandler "textDocument/semanticTokens/full" SemanticTokensParams SemanticTokens handleTokensFull

@@ -820,10 +820,16 @@ mutual
 
   partial def link (ctxt : InlineCtxt) :=
     nodeFn ``link <|
-      (atomicFn (notInLink ctxt >> strFn "[" )) >>
+      (atomicFn (notInLink ctxt >> strFn "[" >> notFollowedByFn (chFn '^') "'^'" )) >>
       many1Fn (inline {ctxt with inLink := true}) >>
       strFn "]" >>
       linkTarget
+
+  partial def footnote (ctxt : InlineCtxt) :=
+    nodeFn ``footnote <|
+      (atomicFn (notInLink ctxt >> strFn "[^" )) >>
+      nodeFn `str (asStringFn (quoted := true) (many1Fn (satisfyEscFn (· != ']')))) >>
+      strFn "]"
 
   partial def linkTarget := ref <|> url
   where
@@ -857,7 +863,7 @@ mutual
       s.pushSyntax fakeClose
 
 
-  partial def delimitedInline (ctxt : InlineCtxt) : ParserFn := emph ctxt <|> bold ctxt <|> code <|> role ctxt <|> image <|> link ctxt
+  partial def delimitedInline (ctxt : InlineCtxt) : ParserFn := emph ctxt <|> bold ctxt <|> code <|> role ctxt <|> image <|> link ctxt <|> footnote ctxt
 
   partial def inline (ctxt : InlineCtxt) : ParserFn :=
     text <|> linebreak ctxt <|> delimitedInline ctxt
@@ -1183,6 +1189,22 @@ All input consumed.
 -/
 #guard_msgs in
 #eval role {} |>.test! "{hello world:=gaia}[there *is* _a meaning!_ ]"
+
+/--
+info: Success! Final stack:
+  (LeanDoc.Syntax.footnote "[^" (str "\"1\"") "]")
+All input consumed.
+-/
+#guard_msgs in
+#eval footnote {} |>.test! "[^1]"
+
+/--
+info: Success! Final stack:
+  (LeanDoc.Syntax.footnote "[^" (str "\"1\"") "]")
+All input consumed.
+-/
+#guard_msgs in
+#eval inline {} |>.test! "[^1]"
 
 structure InList where
   indentation : Nat
@@ -1526,9 +1548,22 @@ mutual
     eatSpaces := takeWhileFn (· == ' ')
     intro := guardMinColumn (ctxt.minIndent) >> withCurrentColumn fun c => atomicFn (chFn '{') >> withCurrentColumn fun c' => nameAndArgs (some c') >> nameArgWhitespace (some c)  >> chFn '}'
 
+  partial def linkRef (c : BlockCtxt) : ParserFn :=
+    nodeFn ``link_ref <|
+      atomicFn (ignoreFn (bol >> eatSpaces >> guardMinColumn c.minIndent) >> chFn '[' >> nodeFn strLitKind (asStringFn (quoted := true) (satisfyEscFn nameStart >> manyFn (satisfyEscFn (· != ']')))) >> strFn "]:") >>
+      eatSpaces >>
+      nodeFn strLitKind (asStringFn (quoted := true) (takeWhileFn (· != '\n'))) >>
+      ignoreFn (satisfyFn (· == '\n') "newline" <|> eoiFn)
+  where nameStart c := c != ']' && c != '^'
+
+  partial def footnoteRef (c : BlockCtxt) : ParserFn :=
+    nodeFn ``footnote_ref <|
+      atomicFn (ignoreFn (bol >> eatSpaces >> guardMinColumn c.minIndent) >> strFn "[^" >> nodeFn strLitKind (asStringFn (quoted := true) (many1Fn (satisfyEscFn (· != ']')))) >> strFn "]:") >>
+      eatSpaces >>
+      notFollowedByFn blockOpener "block opener" >> guardMinColumn c.minIndent >> textLine
 
   partial def block (c : BlockCtxt) : ParserFn :=
-    block_role c <|> unorderedList c <|> orderedList c <|> definitionList c <|> header c <|> codeBlock c <|> directive c <|> blockquote c <|> para c
+    block_role c <|> unorderedList c <|> orderedList c <|> definitionList c <|> header c <|> codeBlock c <|> directive c <|> blockquote c <|> linkRef c <|> footnoteRef c <|> para c
 
   partial def blocks (c : BlockCtxt) : ParserFn := sepByFn true (block c) (ignoreFn (manyFn blankLine))
 
@@ -1725,7 +1760,7 @@ All input consumed.
   #eval blocks {} |>.test! "* foo\n  * bar\n* more outer"
 
 /--
-info: Failure: unexpected end of input; expected ![, [ or expected beginning of line at ⟨2, 15⟩
+info: Failure: unexpected end of input; expected ![, [, [^ or expected beginning of line at ⟨2, 15⟩
 Final stack:
   [(LeanDoc.Syntax.dl
     [(LeanDoc.Syntax.desc
@@ -1737,7 +1772,7 @@ Final stack:
         (str "\"Let's say more!\""))]
       "=>"
       [(LeanDoc.Syntax.para
-        [(LeanDoc.Syntax.link <missing>)])
+        [(LeanDoc.Syntax.footnote <missing>)])
        <missing>])])]
 Remaining: ""
 -/
@@ -2273,7 +2308,7 @@ All input consumed.
 #guard_msgs in
 #eval block {} |>.test! "{\n    test\n arg}\nHere's a modified paragraph."
 /--
-info: Failure: '{'; expected ![, *, +, - or [
+info: Failure: '{'; expected ![, *, +, -, [ or [^
 Final stack:
   (LeanDoc.Syntax.block_role
    "{"
@@ -2281,7 +2316,7 @@ Final stack:
    [(arg.anon `arg)]
    "}"
    (LeanDoc.Syntax.para
-    [(LeanDoc.Syntax.link <missing>)]))
+    [(LeanDoc.Syntax.footnote <missing>)]))
 Remaining: "\n\nHere's a modified paragraph."
 -/
 #guard_msgs in
@@ -2400,3 +2435,91 @@ All input consumed.
 -/
 #guard_msgs in
   #eval blocks {} |>.test! "[\\[link A\\]](https://example.com) [\\[link B\\]](https://more.example.com)"
+
+
+/--
+info: Success! Final stack:
+  [(LeanDoc.Syntax.para
+    [(LeanDoc.Syntax.link
+      "["
+      [(LeanDoc.Syntax.text (str "\"My link\""))]
+      "]"
+      (LeanDoc.Syntax.ref
+       "["
+       (str "\"lean\"")
+       "]"))])
+   (LeanDoc.Syntax.link_ref
+    "["
+    (str "\"lean\"")
+    "]:"
+    (str "\"https://lean-lang.org\""))]
+All input consumed.
+-/
+#guard_msgs in
+  #eval blocks {} |>.test! "[My link][lean]\n\n[lean]: https://lean-lang.org"
+
+/--
+info: Failure: expected ( or [
+Final stack:
+  [(LeanDoc.Syntax.para
+    [(LeanDoc.Syntax.link
+      "["
+      [(LeanDoc.Syntax.text (str "\"My link\""))]
+      "]"
+      (LeanDoc.Syntax.ref
+       "["
+       (str "\"lean\"")
+       "]"))
+     (LeanDoc.Syntax.linebreak "\n")
+     (LeanDoc.Syntax.link
+      "["
+      [(LeanDoc.Syntax.text (str "\"lean\""))]
+      "]"
+      (LeanDoc.Syntax.url <missing>))])]
+Remaining: ": https://lean-lang.org"
+-/
+-- NB this is correct - blank lines are required here
+#guard_msgs in
+  #eval blocks {} |>.test! "[My link][lean]\n[lean]: https://lean-lang.org"
+
+/--
+info: Success! Final stack:
+  [(LeanDoc.Syntax.para
+    [(LeanDoc.Syntax.link
+      "["
+      [(LeanDoc.Syntax.text (str "\"My link\""))]
+      "]"
+      (LeanDoc.Syntax.ref
+       "["
+       (str "\"lean\"")
+       "]"))])
+   (LeanDoc.Syntax.link_ref
+    "["
+    (str "\"lean\"")
+    "]:"
+    (str "\"https://lean-lang.org\""))
+   (LeanDoc.Syntax.para
+    [(LeanDoc.Syntax.text (str "\"hello\""))])]
+All input consumed.
+-/
+#guard_msgs in
+  #eval blocks {} |>.test! "[My link][lean]\n\n[lean]: https://lean-lang.org\nhello"
+
+/--
+info: Success! Final stack:
+  [(LeanDoc.Syntax.para
+    [(LeanDoc.Syntax.text (str "\"Blah blah\""))
+     (LeanDoc.Syntax.footnote
+      "[^"
+      (str "\"1\"")
+      "]")])
+   (LeanDoc.Syntax.footnote_ref
+    "[^"
+    (str "\"1\"")
+    "]:"
+    [(LeanDoc.Syntax.text
+      (str "\"More can be said\""))])]
+All input consumed.
+-/
+#guard_msgs in
+  #eval blocks {} |>.test! "Blah blah[^1]\n\n[^1]: More can be said"

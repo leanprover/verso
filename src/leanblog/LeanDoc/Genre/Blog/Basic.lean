@@ -97,12 +97,9 @@ namespace Blog
 structure Post where
   date : Date
   authors : List String
-  content : Part Blog
+  content : Doc Blog
   draft : Bool
-deriving TypeName
-
-instance : Inhabited Post where
-  default := ⟨default, default, default, default⟩
+deriving TypeName, Inhabited
 
 partial def TraverseState.freshId (state : Blog.TraverseState) (path : List String) (hint : Lean.Name) : String := Id.run do
   let mut idStr := mangle (toString hint)

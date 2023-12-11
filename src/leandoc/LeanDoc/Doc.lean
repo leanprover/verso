@@ -54,6 +54,7 @@ inductive Inline (genre : Genre) : Type where
   | code (string : String)
   | linebreak (string : String)
   | link (content : Array (Inline genre)) (dest : LinkDest)
+  | footnote (name : String)
   | image (alt : String) (dest : LinkDest)
   | concat (content : Array (Inline genre))
   | other (container : genre.Inline) (content : Array (Inline genre))
@@ -61,8 +62,18 @@ inductive Inline (genre : Genre) : Type where
 private def reprArray (r : α → Nat → Format) (arr : Array α) : Format :=
   .bracket "#[" (.joinSep (arr.toList.map (r · max_prec)) ("," ++ .line)) "]"
 
+private def reprList (r : α → Nat → Format) (xs : List α) : Format :=
+  .bracket "[" (.joinSep (xs.map (r · max_prec)) ("," ++ .line)) "]"
+
+private def reprPair (x : α → Nat → Format) (y : β → Nat → Format) (v : α × β) : Format :=
+  .bracket "(" (x v.fst max_prec ++ ("," ++.line) ++ y v.snd max_prec) ")"
+
 private def reprCtor (c : Name) (args : List Format) : Format :=
   .nest 2 <| .group (.joinSep (.text s!"{c}" :: args) .line)
+
+private def reprHash [BEq α] [Hashable α] (k : α → Nat → Format) (v : β → Nat → Format) (h : Lean.HashMap α β) : Format :=
+  reprCtor ``Lean.HashMap.ofList [reprList (fun x _ => reprPair k v x) h.toList]
+
 
 partial def Inline.reprPrec [Repr g.Inline] (inline : Inline g) (prec : Nat) : Std.Format :=
     open Repr Std.Format in
@@ -78,6 +89,7 @@ partial def Inline.reprPrec [Repr g.Inline] (inline : Inline g) (prec : Nat) : S
             reprArray go content,
             reprArg dest
           ]
+        | .footnote name => reprCtor ``Inline.footnote [reprArg name]
         | .image content dest => reprCtor ``Inline.image [
             reprArg content,
             reprArg dest
@@ -175,6 +187,20 @@ partial def Part.reprPrec [Repr g.Inline] [Repr g.Block] [Repr g.PartMetadata] (
 
 instance [Repr g.Inline] [Repr g.Block] [Repr g.PartMetadata] : Repr (Part g) := ⟨Part.reprPrec⟩
 
+structure Doc (genre : Genre) where
+  content : Part genre
+  linkRefs : Lean.HashMap String String
+  footnotes : Lean.HashMap String (Array (Inline genre))
+deriving Inhabited
+
+instance [Repr k] [Repr v] [BEq k] [Hashable k] : Repr (Lean.HashMap k v) where
+  reprPrec h _n := reprCtor ``Lean.HashMap.ofList [reprArg h.toList]
+
+def Doc.reprPrec [Repr (Inline g)] [Repr (Part g)] (doc : Doc g) (prec : Nat) : Std.Format :=
+  reprCtor ``Doc.mk [reprArg doc.content, reprArg doc.linkRefs, reprArg doc.footnotes]
+
+instance [Repr g.Inline] [Repr g.Block] [Repr g.PartMetadata] [Repr (Part g)] : Repr (Doc g)  := ⟨Doc.reprPrec⟩
+
 class Traverse (g : Genre) (m : outParam (Type → Type)) where
   part [MonadReader g.TraverseContext m] [MonadState g.TraverseState m] : Part g → m Unit
   block [MonadReader g.TraverseContext m] [MonadState g.TraverseState m] : Block g → m Unit
@@ -187,8 +213,8 @@ class Traverse (g : Genre) (m : outParam (Type → Type)) where
 
 partial def Genre.traverse (g : Genre)
     [Traverse g m] [Monad m] [MonadReader g.TraverseContext m] [MonadState g.TraverseState m]
-    (top : Part g) : m (Part g) :=
-  part top
+    (top : Doc g) : m (Doc g) :=
+  doc top
 
 where
   inline (i : Doc.Inline g) : m (Doc.Inline g) := do
@@ -197,6 +223,7 @@ where
     | .emph content => .emph <$> content.mapM inline
     | .bold content => .bold <$> content.mapM inline
     | .link content ref => (.link · ref) <$> content.mapM inline
+    | .footnote name => pure <| .footnote name
     | .image alt ref => pure <| .image alt ref
     | .concat content => .concat <$> content.mapM inline
     | .other container content => do
@@ -230,3 +257,6 @@ where
         p := p'
     let .mk title titleString meta content subParts := p
     pure <| .mk (← title.mapM inline) titleString meta (← content.mapM block) (← subParts.mapM part)
+
+  doc (d : Doc g) : m (Doc g) := do
+    pure <| .mk (← part d.content) d.linkRefs (← d.footnotes.foldM (fun fs k v => do pure <| fs.insert k (← v.mapM inline)) .empty)

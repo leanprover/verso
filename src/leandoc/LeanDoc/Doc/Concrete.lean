@@ -51,14 +51,14 @@ def inlineStr := inStrLit <| textLine
 elab "inlines!" s:inlineStr : term => open Lean Elab Term in
   match s.raw with
   | `<low| [~_ ~(.node _ _ out) ] > => do
-    let tms ← DocElabM.run (.init (← `(foo))) <| out.mapM elabInline
+    let (tms, _) ← DocElabM.run {} (.init (← `(foo))) <| out.mapM elabInline
     elabTerm (← `(term| #[ $[$tms],* ] )) none
   | _ => throwUnsupportedSyntax
 
 set_option pp.rawOnError true
 
 /--
-info: #[Inline.text "Hello, ", Inline.emph #[Inline.bold #[Inline.text "emph"]]] : Array (Inline ?m.10489)
+info: #[Inline.text "Hello, ", Inline.emph #[Inline.bold #[Inline.text "emph"]]] : Array (Inline ?m.11031)
 -/
 #guard_msgs in
 #check inlines!"Hello, _*emph*_"
@@ -89,14 +89,22 @@ elab "#docs" "(" genre:term ")" n:ident title:inlineStr ":=" ":::::::" text:docu
   let ⟨`<low| [~_ ~(titleName@(.node _ _ titleParts))]>⟩ := title
     | dbg_trace "nope {ppSyntax title}" throwUnsupportedSyntax
   let titleString := inlinesToString (← getEnv) titleParts
-  let ((), st) ← liftTermElabM <| PartElabM.run (.init titleName) <| do
+  let ((), st, st') ← liftTermElabM <| PartElabM.run {} (.init titleName) <| do
     setTitle titleString (← liftDocElabM <| titleParts.mapM elabInline)
     for b in blocks do partCommand b
     closePartsUntil 0 endPos
     pure ()
-  let finished := st.partContext.toPartFrame.close endPos
+  let finished := st'.partContext.toPartFrame.close endPos
   pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
-  elabCommand (← `(def $n : Part $genre := $(← finished.toSyntax)))
+  for r in internalRefs st'.linkDefs st.linkRefs do
+    for stx in r.syntax do
+      pushInfoLeaf <| .ofCustomInfo {stx := stx , value := Dynamic.mk r}
+  for r in internalRefs st'.footnoteDefs st.footnoteRefs do
+    for stx in r.syntax do
+      pushInfoLeaf <| .ofCustomInfo {stx := stx , value := Dynamic.mk r}
+  let linkRefs : List (String × String) := st'.linkDefs.toList.map (fun (k, v) => (k, DocDef.val v))
+  let footnoteRefs : List (String × Array (TSyntax `term)) := st'.footnoteDefs.toList.map (fun (k, v) => (k, DocDef.val v))
+  elabCommand (← `(def $n : Doc $genre := {content := $(← finished.toSyntax), linkRefs := HashMap.ofList $(quote linkRefs), footnotes := HashMap.ofList $(quote footnoteRefs)}))
 
 
 elab "#doc" "(" genre:term ")" title:inlineStr "=>" text:document eof:eoi : term => open Lean Elab Term PartElabM DocElabM in do
@@ -107,14 +115,23 @@ elab "#doc" "(" genre:term ")" title:inlineStr "=>" text:document eof:eoi : term
   let ⟨`<low| [~_ ~(titleName@(.node _ _ titleParts))]>⟩ := title
     | dbg_trace "nope {ppSyntax title}" throwUnsupportedSyntax
   let titleString := inlinesToString (← getEnv) titleParts
-  let ((), st) ← PartElabM.run (.init titleName) <| do
+  let ((), st, st') ← PartElabM.run {} (.init titleName) <| do
     setTitle titleString (← liftDocElabM <| titleParts.mapM elabInline)
     for b in blocks do partCommand b
     closePartsUntil 0 endPos
     pure ()
-  let finished := st.partContext.toPartFrame.close endPos
+  let finished := st'.partContext.toPartFrame.close endPos
   pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
-  elabTerm (← `(($(← finished.toSyntax) : Part $genre))) none
+  for r in internalRefs st'.linkDefs st.linkRefs do
+    for stx in r.syntax do
+      pushInfoLeaf <| .ofCustomInfo {stx := stx , value := Dynamic.mk r}
+  for r in internalRefs st'.footnoteDefs st.footnoteRefs do
+    for stx in r.syntax do
+      pushInfoLeaf <| .ofCustomInfo {stx := stx , value := Dynamic.mk r}
+
+  let linkRefs : List (String × String) := st'.linkDefs.toList.map (fun (k, v) => (k, DocDef.val v))
+  let footnoteRefs : List (String × Array (TSyntax `term)) := st'.footnoteDefs.toList.map (fun (k, v) => (k, DocDef.val v))
+  elabTerm (← `(({content := $(← finished.toSyntax), linkRefs := HashMap.ofList $(quote linkRefs), footnotes := HashMap.ofList $(quote footnoteRefs) : Doc $genre}))) none
 
 
 macro "%doc" moduleName:ident : term =>
@@ -137,12 +154,21 @@ elab "#doc" "(" genre:term ")" title:inlineStr "=>" text:document eof:eoi : comm
   let ⟨`<low| [~_ ~(titleName@(.node _ _ titleParts))]>⟩ := title
     | dbg_trace "nope {ppSyntax title}" throwUnsupportedSyntax
   let titleString := inlinesToString (← getEnv) titleParts
-  let ((), st) ← liftTermElabM <| PartElabM.run (.init titleName) <| do
+  let ((), st, st') ← liftTermElabM <| PartElabM.run {} (.init titleName) <| do
     setTitle titleString (← liftDocElabM <| titleParts.mapM elabInline)
     for b in blocks do partCommand b
     closePartsUntil 0 endPos
     pure ()
-  let finished := st.partContext.toPartFrame.close endPos
+  let finished := st'.partContext.toPartFrame.close endPos
   pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
   let docName ← mkIdentFrom title <$> currentDocName
-  elabCommand (← `(def $docName : Part $genre := $(← finished.toSyntax)))
+  let linkRefs : List (String × String) := st'.linkDefs.toList.map (fun (k, v) => (k, DocDef.val v))
+  let footnoteRefs : List (String × Array (TSyntax `term)) := st'.footnoteDefs.toList.map (fun (k, v) => (k, DocDef.val v))
+  for r in internalRefs st'.linkDefs st.linkRefs do
+    for stx in r.syntax do
+      pushInfoLeaf <| .ofCustomInfo {stx := stx , value := Dynamic.mk r}
+  for r in internalRefs st'.footnoteDefs st.footnoteRefs do
+    for stx in r.syntax do
+      pushInfoLeaf <| .ofCustomInfo {stx := stx , value := Dynamic.mk r}
+
+  elabCommand (← `(def $docName : Doc $genre := {content := $(← finished.toSyntax), linkRefs := HashMap.ofList $(quote linkRefs), footnotes := HashMap.ofList $(quote footnoteRefs)}))

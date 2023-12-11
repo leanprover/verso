@@ -15,13 +15,15 @@ namespace LeanDoc.Doc.Html
 
 open LeanDoc Output Doc Html
 
-structure Options (m : Type → Type) where
+structure Options (g : Genre) (m : Type → Type) where
   /-- The level of the top-level headers -/
   headerLevel : Nat := 1
   logError : String → m Unit
+  refLinks : Lean.HashMap String String := {}
+  footnotes : Lean.HashMap String (Array (Inline g)) := {}
 
-abbrev HtmlT (genre : Genre) (m : Type → Type) (α : Type) : Type :=
-  ReaderT (Options m × genre.TraverseContext × genre.TraverseState) m α
+abbrev HtmlT (genre : Genre) (m : Type → Type) : Type → Type :=
+  ReaderT (Options genre m × genre.TraverseContext × genre.TraverseState) m
 
 instance [Functor m] : Functor (HtmlT genre m) where
   map f act := fun ρ => Functor.map f (act ρ)
@@ -30,17 +32,17 @@ instance [Monad m] : Monad (HtmlT genre m) where
   pure x := fun _ => pure x
   bind act k := fun ρ => (act ρ >>= fun x => k x ρ)
 
-instance [Pure m] : MonadReader (Options m × genre.TraverseContext × genre.TraverseState) (HtmlT genre m) where
+instance [Pure m] : MonadReader (Options genre m × genre.TraverseContext × genre.TraverseState) (HtmlT genre m) where
   read := fun ρ => pure ρ
 
-instance : MonadWithReader (Options m × genre.TraverseContext × genre.TraverseState) (HtmlT genre m) where
+instance : MonadWithReader (Options genre m × genre.TraverseContext × genre.TraverseState) (HtmlT genre m) where
   withReader f act := fun ρ => act (f ρ)
 
-def HtmlT.options [Monad m] : HtmlT genre m (Options m) := do
+def HtmlT.options [Monad m] : HtmlT genre m (Options genre m) := do
   let (opts, _, _) ← read
   pure opts
 
-def HtmlT.withOptions (opts : Options m → Options m) (act : HtmlT g m α) : HtmlT g m α :=
+def HtmlT.withOptions (opts : Options g m → Options g m) (act : HtmlT g m α) : HtmlT g m α :=
   withReader (fun (x, y, z) => (opts x, y, z)) act
 
 def HtmlT.context [Monad m] : HtmlT genre m genre.TraverseContext := do
@@ -68,16 +70,30 @@ class GenreHtml (genre : Genre) (m : Type → Type) where
 section
 open ToHtml
 
-defmethod LinkDest.str : LinkDest → String
-  | .url addr => addr
-  | .ref TODO => TODO
+defmethod LinkDest.str [Monad m] : LinkDest → HtmlT g m String
+  | .url addr => pure addr
+  | .ref name => do
+    let ({refLinks := refs, ..}, _, _) ← read
+    if let some url := refs.find? name then
+      pure url
+    else
+      logError s!"Unknown reference '{name}'"
+      pure ""
 
 partial def Inline.toHtml [Monad m] [GenreHtml g m] : Inline g → HtmlT g m Html
   | .text str => pure <| .text str
   | .link content dest => do
-    pure {{ <a href={{dest.str}}> {{← content.mapM toHtml}} </a> }}
+    pure {{ <a href={{← dest.str}}> {{← content.mapM toHtml}} </a> }}
   | .image alt dest => do
-    pure {{ <img src={{dest.str}} alt={{alt}}/> }}
+    pure {{ <img src={{← dest.str}} alt={{alt}}/> }}
+  | .footnote name => do
+    let ({footnotes := footnotes, ..}, _, _) ← read
+    if let some txt := footnotes.find? name then
+      pure {{ <details class="footnote"><summary>"["{{name}}"]"</summary>{{← txt.mapM toHtml}}</details>}}
+    else
+      let message := s!"Unknown footnote '{name}' - options were {footnotes.toList.map (·.fst)}"
+      logError message
+      pure {{<strong>{{message}}</strong>}}
   | .linebreak _str => pure .empty
   | .emph content => do
     pure {{ <em> {{← content.mapM toHtml }} </em> }}
@@ -137,12 +153,15 @@ partial def Part.toHtml [Monad m] [GenreHtml g m] (p : Part g) : HtmlT g m Html 
 instance [Monad m] [GenreHtml g m] : ToHtml g m (Part g) where
   toHtml := Part.toHtml
 
+instance [Monad m] [GenreHtml g m] : ToHtml g m (Doc g) where
+  toHtml (d : Doc g) := withReader (fun o => {o with fst.refLinks := d.linkRefs, fst.footnotes := d.footnotes}) (Part.toHtml d.content)
+
 instance : GenreHtml .none m where
   part _ m := nomatch m
   block _ x := nomatch x
   inline _ x := nomatch x
 
-defmethod Genre.toHtml (g : Genre) [ToHtml g m α] (options : Options m) (context : g.TraverseContext) (state : g.TraverseState) (x : α) : m Html :=
+defmethod Genre.toHtml (g : Genre) [ToHtml g m α] (options : Options g m) (context : g.TraverseContext) (state : g.TraverseState) (x : α) : m Html :=
   ToHtml.toHtml x (options, context, state)
 
 open LeanDoc.Examples

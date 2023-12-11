@@ -136,89 +136,156 @@ def PartContext.close (ctxt : PartContext) (endPos : String.Pos) : Option PartCo
 
 def PartContext.push (ctxt : PartContext) (fr : PartFrame) : PartContext := ⟨fr, ctxt.parents.push ctxt.toPartFrame⟩
 
+/-- References that must be local to the current blob of concrete document syntax -/
+structure DocDef (α : Type) where
+  defSite : Syntax
+  val : α
+
+structure DocUses where
+  useSites : Array Syntax := {}
+
+def DocUses.add (uses : DocUses) (loc : Syntax) : DocUses := {uses with useSites := uses.useSites.push loc}
+
 structure PartElabM.State where
   partContext : PartContext
-deriving Repr
+  linkDefs : HashMap String (DocDef String) := {}
+  footnoteDefs : HashMap String (DocDef (Array (TSyntax `term))) := {}
 
+structure DocElabM.State where
+  linkRefs : HashMap String DocUses := {}
+  footnoteRefs : HashMap String DocUses := {}
+
+/-- Custom info tree data to save footnote and reflink cross-references -/
+structure DocRefInfo where
+  defSite : Option Syntax
+  useSites : Array Syntax
+deriving TypeName, Repr
+
+def DocRefInfo.syntax (dri : DocRefInfo) : Array Syntax :=
+  (dri.defSite.map (#[·])|>.getD #[]) ++ dri.useSites
+
+def internalRefs (defs : HashMap String (DocDef α)) (refs : HashMap String DocUses) : Array DocRefInfo := Id.run do
+  let keys : HashSet String := defs.fold (fun soFar k _ => HashSet.insert soFar k) <| refs.fold (fun soFar k _ => soFar.insert k) {}
+  let mut refInfo := #[]
+  for k in keys do
+    refInfo := refInfo.push ⟨defs.find? k |>.map (·.defSite), refs.find? k |>.map (·.useSites) |>.getD #[]⟩
+  refInfo
 
 def PartElabM.State.init (title : Syntax) (expandedTitle : Option (String × Array (TSyntax `term)) := none) : PartElabM.State where
   partContext := {titleSyntax := title, expandedTitle, blocks := #[], priorParts := #[], parents := #[]}
 
-def PartElabM (α : Type) : Type := StateT PartElabM.State TermElabM α
+def PartElabM (α : Type) : Type := StateT DocElabM.State (StateT PartElabM.State TermElabM) α
 
-def PartElabM.run (st : PartElabM.State) (act : PartElabM α) : TermElabM (α × PartElabM.State) :=
-  StateT.run act st
+def PartElabM.run (st : DocElabM.State) (st' : PartElabM.State) (act : PartElabM α) : TermElabM (α × DocElabM.State × PartElabM.State) := do
+  let ((res, st), st') ← act st st'
+  pure (res, st, st')
 
+instance : MonadRef PartElabM := inferInstanceAs <| MonadRef (StateT DocElabM.State (StateT PartElabM.State TermElabM))
 
-instance : MonadRef PartElabM := inferInstanceAs <| MonadRef (StateT PartElabM.State TermElabM)
+instance : AddErrorMessageContext PartElabM := inferInstanceAs <| AddErrorMessageContext (StateT DocElabM.State (StateT PartElabM.State TermElabM))
 
-instance : AddErrorMessageContext PartElabM := inferInstanceAs <| AddErrorMessageContext (StateT PartElabM.State TermElabM)
+instance : MonadQuotation PartElabM := inferInstanceAs <| MonadQuotation (StateT DocElabM.State (StateT PartElabM.State TermElabM))
 
-instance : MonadQuotation PartElabM := inferInstanceAs <| MonadQuotation (StateT PartElabM.State TermElabM)
+instance : Monad PartElabM := inferInstanceAs <| Monad (StateT DocElabM.State (StateT PartElabM.State TermElabM))
 
-instance : Monad PartElabM := inferInstanceAs <| Monad (StateT PartElabM.State TermElabM)
+instance : MonadLift TermElabM PartElabM where
+  monadLift act := fun st st' => do return ((← act, st), st')
 
-instance : MonadLift TermElabM PartElabM := inferInstanceAs <| MonadLift TermElabM (StateT PartElabM.State TermElabM)
+instance : MonadExceptOf Exception PartElabM := inferInstanceAs <| MonadExceptOf Exception (StateT DocElabM.State (StateT PartElabM.State TermElabM))
 
-instance : MonadExceptOf Exception PartElabM := inferInstanceAs <| MonadExceptOf Exception (StateT PartElabM.State TermElabM)
+instance : MonadStateOf DocElabM.State PartElabM := inferInstanceAs <| MonadStateOf DocElabM.State (StateT DocElabM.State (StateT PartElabM.State TermElabM))
 
-instance : MonadState PartElabM.State PartElabM := inferInstanceAs <| MonadState PartElabM.State (StateT PartElabM.State TermElabM)
+instance : MonadStateOf PartElabM.State PartElabM := inferInstanceAs <| MonadStateOf PartElabM.State (StateT DocElabM.State (StateT PartElabM.State TermElabM))
 
-instance : MonadStateOf PartElabM.State PartElabM := inferInstanceAs <| MonadStateOf PartElabM.State (StateT PartElabM.State TermElabM)
+instance : MonadFinally PartElabM := inferInstanceAs <| MonadFinally (StateT DocElabM.State (StateT PartElabM.State TermElabM))
 
-instance : MonadStateOf PartElabM.State PartElabM := inferInstanceAs <| MonadStateOf PartElabM.State (StateT PartElabM.State TermElabM)
+instance : MonadRef PartElabM := inferInstanceAs <| MonadRef (StateT DocElabM.State (StateT PartElabM.State TermElabM))
 
-instance : MonadFinally PartElabM := inferInstanceAs <| MonadFinally (StateT PartElabM.State TermElabM)
+def DocElabM (α : Type) : Type := ReaderT PartElabM.State (StateT DocElabM.State TermElabM) α
 
-instance : MonadRef PartElabM := inferInstanceAs <| MonadRef (StateT PartElabM.State TermElabM)
+def DocElabM.run (st : DocElabM.State) (st' : PartElabM.State) (act : DocElabM α) : TermElabM (α × DocElabM.State) := do
+  StateT.run (act st') st
 
-def DocElabM (α : Type) : Type := ReaderT PartElabM.State TermElabM α
+instance : Inhabited (DocElabM α) := ⟨fun _ _ => default⟩
 
-def DocElabM.run (st : PartElabM.State) (act : DocElabM α) : TermElabM α :=
-  ReaderT.run act st
+instance : AddErrorMessageContext DocElabM := inferInstanceAs <| AddErrorMessageContext (ReaderT PartElabM.State (StateT DocElabM.State TermElabM))
 
-instance : Inhabited (DocElabM α) := inferInstanceAs <| Inhabited (ReaderT PartElabM.State TermElabM α)
+instance : MonadLift TermElabM DocElabM where
+  monadLift act := fun _ st' => do return (← act, st')
 
-instance : AddErrorMessageContext DocElabM := inferInstanceAs <| AddErrorMessageContext (ReaderT PartElabM.State TermElabM)
+instance : MonadRef DocElabM := inferInstanceAs <| MonadRef (ReaderT PartElabM.State (StateT DocElabM.State TermElabM))
 
-instance : MonadLift TermElabM DocElabM := inferInstanceAs <| MonadLift TermElabM (ReaderT PartElabM.State TermElabM)
+instance : MonadQuotation DocElabM := inferInstanceAs <| MonadQuotation (ReaderT PartElabM.State (StateT DocElabM.State TermElabM))
 
-instance : MonadRef DocElabM := inferInstanceAs <| MonadRef (ReaderT PartElabM.State TermElabM)
+instance : Monad DocElabM := inferInstanceAs <| Monad (ReaderT PartElabM.State (StateT DocElabM.State TermElabM))
 
-instance : MonadQuotation DocElabM := inferInstanceAs <| MonadQuotation (ReaderT PartElabM.State TermElabM)
+instance : MonadExceptOf Exception DocElabM := inferInstanceAs <| MonadExceptOf Exception (ReaderT PartElabM.State (StateT DocElabM.State TermElabM))
 
-instance : Monad DocElabM := inferInstanceAs <| Monad (ReaderT PartElabM.State TermElabM)
+instance : MonadReader PartElabM.State DocElabM := inferInstanceAs <| MonadReader PartElabM.State (ReaderT PartElabM.State (StateT DocElabM.State TermElabM))
 
-instance : MonadLift TermElabM DocElabM := inferInstanceAs <| MonadLift TermElabM (ReaderT PartElabM.State TermElabM)
+instance : MonadReaderOf PartElabM.State DocElabM := inferInstanceAs <| MonadReaderOf PartElabM.State (ReaderT PartElabM.State (StateT DocElabM.State TermElabM))
 
-instance : MonadExceptOf Exception DocElabM := inferInstanceAs <| MonadExceptOf Exception (ReaderT PartElabM.State TermElabM)
+instance : MonadStateOf DocElabM.State DocElabM := inferInstanceAs <| MonadStateOf DocElabM.State (ReaderT PartElabM.State (StateT DocElabM.State TermElabM))
 
-instance : MonadReader PartElabM.State DocElabM := inferInstanceAs <| MonadReader PartElabM.State (ReaderT PartElabM.State TermElabM)
+instance : MonadFinally DocElabM := inferInstanceAs <| MonadFinally (ReaderT PartElabM.State (StateT DocElabM.State TermElabM))
 
-instance : MonadReaderOf PartElabM.State DocElabM := inferInstanceAs <| MonadReaderOf PartElabM.State (ReaderT PartElabM.State TermElabM)
+instance : MonadRecDepth DocElabM where
+  withRecDepth n act := fun st st' => MonadRecDepth.withRecDepth n (act st st')
+  getRecDepth := fun _ st' => do return (← MonadRecDepth.getRecDepth, st')
+  getMaxRecDepth := fun _ st' => do return (← MonadRecDepth.getMaxRecDepth, st')
 
-instance : MonadReaderOf PartElabM.State DocElabM := inferInstanceAs <| MonadReaderOf PartElabM.State (ReaderT PartElabM.State TermElabM)
-
-instance : MonadFinally DocElabM := inferInstanceAs <| MonadFinally (ReaderT PartElabM.State TermElabM)
-
-instance : MonadRecDepth DocElabM := inferInstanceAs <| MonadRecDepth (ReaderT PartElabM.State TermElabM)
-
-def PartElabM.liftDocElabM (act : DocElabM α) : PartElabM α := do act.run (← get)
+def PartElabM.liftDocElabM (act : DocElabM α) : PartElabM α := do
+  let (out, st') ← act.run (← getThe DocElabM.State) (← getThe PartElabM.State)
+  set st'
+  pure out
 
 instance : MonadLift DocElabM PartElabM := ⟨PartElabM.liftDocElabM⟩
 
-def PartElabM.currentLevel : PartElabM Nat := do return (← get).partContext.level
+def PartElabM.currentLevel : PartElabM Nat := do return (← getThe State).partContext.level
 
-def PartElabM.setTitle (titlePreview : String) (titleInlines : Array (TSyntax `term)) : PartElabM Unit := modify fun st =>
+def PartElabM.setTitle (titlePreview : String) (titleInlines : Array (TSyntax `term)) : PartElabM Unit := modifyThe State fun st =>
   {st with partContext.expandedTitle := some (titlePreview, titleInlines)}
 
-def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := modify fun st =>
+def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := modifyThe State fun st =>
   {st with partContext.blocks := st.partContext.blocks.push block}
 
-def PartElabM.push (fr : PartFrame) : PartElabM Unit := modify fun st => {st with partContext := st.partContext.push fr}
+def PartElabM.addLinkDef (refName : TSyntax `str) (url : String) : PartElabM Unit := do
+  let strName := refName.getString
+  match (← getThe State).linkDefs.find? strName with
+  | none =>
+    modifyThe State fun st => {st with linkDefs := st.linkDefs.insert strName ⟨refName, url⟩}
+  | some ⟨_, url'⟩ =>
+    throwErrorAt refName "Already defined as '{url'}'"
+
+def DocElabM.addLinkRef (refName : TSyntax `str) : DocElabM Unit := do
+  let strName := refName.getString
+  match (← getThe State).linkRefs.find? strName with
+  | none =>
+    modifyThe State fun st => {st with linkRefs := st.linkRefs.insert strName ⟨#[refName]⟩}
+  | some ⟨uses⟩ =>
+    modifyThe State fun st => {st with linkRefs := st.linkRefs.insert strName ⟨uses.push refName⟩}
+
+def PartElabM.addFootnoteDef (refName : TSyntax `str) (content : Array (TSyntax `term)) : PartElabM Unit := do
+  let strName := refName.getString
+  match (← getThe State).footnoteDefs.find? strName with
+  | none =>
+    modifyThe State fun st => {st with footnoteDefs := st.footnoteDefs.insert strName ⟨refName, content⟩}
+  | some ⟨_, url'⟩ =>
+    throwErrorAt refName "Already defined as '{url'}'"
+
+def DocElabM.addFootnoteRef (refName : TSyntax `str) : DocElabM Unit := do
+  let strName := refName.getString
+  match (← getThe State).footnoteRefs.find? strName with
+  | none =>
+    modifyThe State fun st => {st with footnoteRefs := st.footnoteRefs.insert strName ⟨#[refName]⟩}
+  | some ⟨uses⟩ =>
+    modifyThe State fun st => {st with footnoteRefs := st.footnoteRefs.insert strName ⟨uses.push refName⟩}
+
+
+def PartElabM.push (fr : PartFrame) : PartElabM Unit := modifyThe State fun st => {st with partContext := st.partContext.push fr}
 
 def PartElabM.debug (msg : String) : PartElabM Unit := do
-  let st ← get
+  let st ← getThe State
   dbg_trace "DEBUG: {msg}"
   dbg_trace "  partContext: {repr st.partContext}"
   dbg_trace ""
@@ -228,8 +295,6 @@ def PartElabM.debug (msg : String) : PartElabM Unit := do
 structure DocListInfo where
   bullets : Array Syntax
 deriving Repr, TypeName
-
-
 
 abbrev InlineExpander := Syntax → DocElabM (TSyntax `term)
 

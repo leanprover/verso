@@ -31,12 +31,12 @@ def dirLinks : Dir Page → TemplateM (Array Html)
   | .pages subs =>
     subs.filterMapM fun
       | .page name _id txt .. =>
-        pure <| some {{<li><a href={{"/" ++ name}}>{{txt.titleString}}</a></li>}}
+        pure <| some {{<li><a href={{"/" ++ name}}>{{txt.content.titleString}}</a></li>}}
       | .static .. => pure none
   | .blog subs =>
     subs.mapM fun s => do
-      let url ← mkLink [(← currentConfig).postName s.date s.content.titleString]
-      return {{<li><a href={{url}}>{{s.content.titleString}}</a></li>}}
+      let url ← mkLink [(← currentConfig).postName s.date s.content.content.titleString]
+      return {{<li><a href={{url}}>{{s.content.content.titleString}}</a></li>}}
 where
   mkLink dest := do
     let dest' ← relative dest
@@ -91,7 +91,7 @@ def archiveEntry : Template := do
     | Date.mk y m d => {{<span class="date"> s!"{y}-{m}-{d}" </span>}}
     }}
     " — "
-    <span class="name">{{post.content.titleString}}</span>
+    <span class="name">{{post.content.content.titleString}}</span>
     </a>
   </li>
 }}]

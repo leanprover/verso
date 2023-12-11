@@ -12,6 +12,7 @@ namespace LeanDoc.Doc.Elab
 
 open Lean Elab
 open PartElabM
+open DocElabM
 open LeanDoc.Syntax
 
 def throwUnexpected [Monad m] [MonadError m] (stx : Syntax) : m α :=
@@ -27,7 +28,6 @@ partial def elabInline (inline : Syntax) : DocElabM (TSyntax `term) :=
     for e in exp do
       try
         let termStx ← withFreshMacroScope <| e stx
-
         return termStx
       catch
         | ex@(.internal id) =>
@@ -118,8 +118,20 @@ def _root_.LeanDoc.Syntax.link.expand : InlineExpander
       match dest with
       | `(link_target| ( $url )) =>
         ``(Inline.link #[$[$(← txt.mapM elabInline)],*] (LinkDest.url $url))
+      | `(link_target| [ $ref ]) => do
+        addLinkRef ref
+        -- Round-trip through quote to get rid of source locations, preventing unwanted IDE info
+        ``(Inline.link #[$[$(← txt.mapM elabInline)],*] (LinkDest.ref $(quote ref.getString)))
       | _ => withRef dest throwUnsupportedSyntax
   | _ => throwUnsupportedSyntax
+
+@[inline_expander LeanDoc.Syntax.footnote]
+def _root_.LeanDoc.Syntax.link.footnote : InlineExpander
+  | `(inline| [^ $name:str ]) => do
+    addFootnoteRef name
+    ``(Inline.footnote $(quote name.getString))
+  | _ => throwUnsupportedSyntax
+
 
 @[inline_expander LeanDoc.Syntax.image]
 def _root_.LeanDoc.Syntax.image.expand : InlineExpander
@@ -184,12 +196,24 @@ where
 partial def closePartsUntil (outer : Nat) (endPos : String.Pos) : PartElabM Unit := do
   let level ← currentLevel
   if outer ≤ level then
-    match (← get).partContext.close endPos with
+    match (← getThe PartElabM.State).partContext.close endPos with
     | some ctxt' =>
-      modify fun st => {st with partContext := ctxt'}
+      modifyThe PartElabM.State fun st => {st with partContext := ctxt'}
       if outer < level then
         closePartsUntil outer endPos
     | none => pure ()
+
+@[part_command LeanDoc.Syntax.footnote_ref]
+partial def _root_.LeanDoc.Syntax.footnote_ref.command : PartCommand
+  | `(block| [^ $name:str ]: $contents* ) =>
+    addFootnoteDef name =<< contents.mapM (elabInline ·.raw)
+  | _ => throwUnsupportedSyntax
+
+@[part_command LeanDoc.Syntax.link_ref]
+partial def _root_.LeanDoc.Syntax.link_ref.command : PartCommand
+  | `(block| [ $name:str ]: $url:str ) =>
+    addLinkDef name url.getString
+  | stx => dbg_trace  "{stx}"; throwUnsupportedSyntax
 
 
 @[part_command LeanDoc.Syntax.header]
@@ -305,7 +329,7 @@ def _root_.LeanDoc.Syntax.blockquote.expand : BlockExpander
 
 @[block_expander LeanDoc.Syntax.codeblock]
 def _root_.LeanDoc.Syntax.codeblock.expand : BlockExpander
-  | `<low|(LeanDoc.Syntax.codeblock (column ~(.atom _ col)) ~_open ~(.node _ `null #[nameStx, .node _ `null argsStx]) ~(.atom info contents) ~_close )> => do
+  | `<low|(LeanDoc.Syntax.codeblock (column ~(.atom _ _col)) ~_open ~(.node _ `null #[nameStx, .node _ `null argsStx]) ~(.atom info contents) ~_close )> => do
       let name ← resolveGlobalConstNoOverloadWithInfo nameStx
       let exp ← codeBlockExpandersFor name
       -- TODO typed syntax here
@@ -321,7 +345,7 @@ def _root_.LeanDoc.Syntax.codeblock.expand : BlockExpander
           | ex => throw ex
       dbg_trace "No code block expander for '{nameStx}' ---> '{name}'"
       throwUnsupportedSyntax
-  | `<low|(LeanDoc.Syntax.codeblock (column ~(.atom _ col)) ~_open ~(.node _ `null #[]) ~(.atom info contents) ~_close )> =>
+  | `<low|(LeanDoc.Syntax.codeblock (column ~(.atom _ col)) ~_open ~(.node _ `null #[]) ~(.atom _info contents) ~_close )> =>
     ``(Block.code Option.none #[] $(Syntax.mkNumLit col) $(quote contents))
   | _ =>
     throwUnsupportedSyntax
