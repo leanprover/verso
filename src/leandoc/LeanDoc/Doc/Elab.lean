@@ -70,29 +70,28 @@ def _root_.LeanDoc.Syntax.bold.expand : InlineExpander
     ``(Inline.bold #[$[$(← args.mapM elabInline)],*])
   | _ => throwUnsupportedSyntax
 
+def parseArgVal (val : TSyntax `arg_val) : DocElabM RoleArgumentValue := do
+  match val with
+  | `(arg_val| $s:str) => pure <| .string s.getString
+  | `(arg_val| $x:ident) => pure <| .name x
+  | `(arg_val| $n:num) => pure <| .int <| n.getNat
+  | other => throwErrorAt other "Can't decode argument '{repr other}'"
+
 def parseArgs (argStx : TSyntaxArray `argument) : DocElabM (Array RoleArgument) := do
   let mut argVals := #[]
   for arg in argStx do
     match arg.raw with
-    | `<low|(arg.anon ~v)> =>
-      match v with
-      | `($y:ident) => argVals := argVals.push <| .anonymous <| .name y
-      | other => dbg_trace "didn't parse arg val {repr other}"; pure ()
-    | `<low|(arg.named ~n ~_ ~v)> =>
-      match n with
-      | `($y:ident) =>
-        match v with
-        | `($z:ident) => argVals := argVals.push <| .named y.getId <| .name z
-        | `($s:str) => argVals := argVals.push <| .named y.getId <| .string s.getString
-        | other => dbg_trace "didn't parse arg val {repr other}"; pure ()
-      | other => dbg_trace "didn't parse arg name {repr other}"; pure ()
-    | other => dbg_trace "didn't parse arg {repr other}"; pure ()
+    | `(argument|$v:arg_val) =>
+      argVals := argVals.push (.anonymous (← parseArgVal v))
+    | `(argument| $x:ident := $v) =>
+      argVals := argVals.push (.named x.getId (← parseArgVal v))
+    | other => throwErrorAt other "Can't decode argument '{repr other}'"
   pure argVals
+
 
 @[inline_expander LeanDoc.Syntax.role]
 def _root_.LeanDoc.Syntax.role.expand : InlineExpander
   | inline@`(inline| role{$name $args*} [$subjects]) => do
-    --TODO arguments
       withRef inline <| withFreshMacroScope <| withIncRecDepth <| do
         let ⟨.node _ _ subjectArr⟩ := subjects
           | throwUnsupportedSyntax
