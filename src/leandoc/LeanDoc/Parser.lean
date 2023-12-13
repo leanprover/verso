@@ -580,26 +580,26 @@ def skipChFn (c : Char) : ParserFn :=
 
 def arg : ParserFn :=
     withCurrentStackSize fun iniSz =>
-      potentiallyNamed iniSz <|> ((docStrLitFn <|> docNumLitFn) >> mkAnon iniSz)
-
+      potentiallyNamed iniSz <|> (val >> mkAnon iniSz)
 where
-  mkNamed (iniSz : Nat) : ParserFn := fun _ s => s.mkNode `arg.named iniSz
-  mkAnon (iniSz : Nat) : ParserFn := fun _ s => s.mkNode `arg.anon iniSz
+  mkNamed (iniSz : Nat) : ParserFn := fun _ s => s.mkNode ``LeanDoc.Syntax.named iniSz
+  mkAnon (iniSz : Nat) : ParserFn := fun _ s => s.mkNode ``LeanDoc.Syntax.anon iniSz
   eatSpaces := takeWhileFn (· == ' ')
   potentiallyNamed iniSz :=
       atomicFn docIdentFn >> eatSpaces >>
        ((atomicFn (strFn ":=") >> eatSpaces >> val >> eatSpaces >> mkNamed iniSz) <|> mkAnon iniSz)
 /--
 info: Success! Final stack:
-  (arg.anon `x)
+  (LeanDoc.Syntax.anon `x)
 All input consumed.
 -/
 #guard_msgs in
   #eval arg.test! "x"
 
+
 /--
 info: Success! Final stack:
-  (arg.named `x ":=" (num "1"))
+  (LeanDoc.Syntax.named `x ":=" (num "1"))
 All input consumed.
 -/
 #guard_msgs in
@@ -607,7 +607,7 @@ All input consumed.
 
 /--
 info: Success! Final stack:
-  (arg.named `x ":=" `y)
+  (LeanDoc.Syntax.named `x ":=" `y)
 All input consumed.
 -/
 #guard_msgs in
@@ -615,7 +615,7 @@ All input consumed.
 
 /--
 info: Success! Final stack:
-  (arg.named `x ":=" (str "\"y\""))
+  (LeanDoc.Syntax.named `x ":=" (str "\"y\""))
 All input consumed.
 -/
 #guard_msgs in
@@ -635,7 +635,7 @@ Remaining: "\"y"
 
 /--
 info: Success! Final stack:
-  (arg.anon (num "42"))
+  (LeanDoc.Syntax.anon (num "42"))
 All input consumed.
 -/
 #guard_msgs in
@@ -675,7 +675,10 @@ def nameAndArgs (multiline : Option Nat := none) : ParserFn :=
 /--
 info: Success! Final stack:
  • `leanExample
- • [(arg.named `context ":=" (num "2"))]
+ • [(LeanDoc.Syntax.named
+      `context
+      ":="
+      (num "2"))]
 
 All input consumed.
 -/
@@ -684,7 +687,7 @@ All input consumed.
 /--
 info: Success! Final stack:
  • `leanExample
- • [(arg.anon `context)]
+ • [(LeanDoc.Syntax.anon `context)]
 
 All input consumed.
 -/
@@ -693,7 +696,8 @@ All input consumed.
 /--
 info: Success! Final stack:
  • `leanExample
- • [(arg.anon `context) (arg.anon `more)]
+ • [(LeanDoc.Syntax.anon `context)
+     (LeanDoc.Syntax.anon `more)]
 
 All input consumed.
 -/
@@ -702,8 +706,11 @@ All input consumed.
 /--
 info: Success! Final stack:
  • `leanExample
- • [(arg.anon `context)
-     (arg.named `more ":=" (str "\"stuff\""))]
+ • [(LeanDoc.Syntax.anon `context)
+     (LeanDoc.Syntax.named
+      `more
+      ":="
+      (str "\"stuff\""))]
 
 All input consumed.
 -/
@@ -714,8 +721,11 @@ All input consumed.
 /--
 info: Success! Final stack:
  • `leanExample
- • [(arg.anon `context)
-     (arg.named `more ":=" (str "\"stuff\""))]
+ • [(LeanDoc.Syntax.anon `context)
+     (LeanDoc.Syntax.named
+      `more
+      ":="
+      (str "\"stuff\""))]
 
 Remaining:
 "\n\nabc"
@@ -1156,7 +1166,7 @@ info: Success! Final stack:
   (LeanDoc.Syntax.role
    "{"
    `hello
-   [(arg.named `world ":=" `gaia)]
+   [(LeanDoc.Syntax.named `world ":=" `gaia)]
    "}"
    "["
    [(LeanDoc.Syntax.text (str "\"there\""))]
@@ -1171,7 +1181,7 @@ info: Success! Final stack:
   (LeanDoc.Syntax.role
    "{"
    `hello
-   [(arg.named `world ":=" `gaia)]
+   [(LeanDoc.Syntax.named `world ":=" `gaia)]
    "}"
    "["
    [(LeanDoc.Syntax.text (str "\"there \""))
@@ -2120,8 +2130,11 @@ Final stack:
    (column "0")
    "```"
    [`scheme
-    [(arg.named `dialect ":=" (str "\"chicken\""))
-     (arg.anon (num "43"))]]
+    [(LeanDoc.Syntax.named
+      `dialect
+      ":="
+      (str "\"chicken\""))
+     (LeanDoc.Syntax.anon (num "43"))]]
    <missing>)
 Remaining: "(define x 4)\nx\n```"
 -/
@@ -2298,7 +2311,7 @@ info: Success! Final stack:
   (LeanDoc.Syntax.block_role
    "{"
    `test
-   [(arg.anon `arg)]
+   [(LeanDoc.Syntax.anon `arg)]
    "}"
    (LeanDoc.Syntax.para
     [(LeanDoc.Syntax.text
@@ -2313,7 +2326,7 @@ Final stack:
   (LeanDoc.Syntax.block_role
    "{"
    `test
-   [(arg.anon `arg)]
+   [(LeanDoc.Syntax.anon `arg)]
    "}"
    (LeanDoc.Syntax.para
     [(LeanDoc.Syntax.footnote <missing>)]))
@@ -2344,7 +2357,7 @@ info: Success! Final stack:
   (LeanDoc.Syntax.directive
    ":::"
    `multiPara
-   [(arg.named
+   [(LeanDoc.Syntax.named
      `greatness
      ":="
      (str "\"amazing!\""))]
@@ -2357,6 +2370,7 @@ All input consumed.
 -/
 #guard_msgs in
   #eval directive {} |>.test! " ::: multiPara greatness:=\"amazing!\"\n foo\n :::"
+
 
 /--
 info: Success! Final stack:
@@ -2379,6 +2393,28 @@ All input consumed.
 -/
 #guard_msgs in
   #eval directive {} |>.test! " ::: multiPara\n foo\n \n \n \n  * List item \n :::"
+
+/--
+info: Success! Final stack:
+  (LeanDoc.Syntax.directive
+   ":::"
+   `multiPara
+   [(LeanDoc.Syntax.anon `thing)]
+   "\n"
+   "\n"
+   [(LeanDoc.Syntax.para
+     [(LeanDoc.Syntax.text (str "\"foo\""))])
+    (LeanDoc.Syntax.ul
+     [(LeanDoc.Syntax.li
+       (bullet (column "2") "*")
+       [(LeanDoc.Syntax.para
+         [(LeanDoc.Syntax.text
+           (str "\"List item \""))])])])]
+   ":::")
+All input consumed.
+-/
+#guard_msgs in
+  #eval directive {} |>.test! " ::: multiPara thing\n foo\n \n \n \n  * List item \n :::"
 
 /--
 info: Success! Final stack:

@@ -70,20 +70,20 @@ def _root_.LeanDoc.Syntax.bold.expand : InlineExpander
     ``(Inline.bold #[$[$(← args.mapM elabInline)],*])
   | _ => throwUnsupportedSyntax
 
-def parseArgVal (val : TSyntax `arg_val) : DocElabM RoleArgumentValue := do
+def parseArgVal (val : TSyntax `arg_val) : DocElabM ArgVal := do
   match val with
-  | `(arg_val| $s:str) => pure <| .string s.getString
-  | `(arg_val| $x:ident) => pure <| .name x
-  | `(arg_val| $n:num) => pure <| .int <| n.getNat
-  | other => throwErrorAt other "Can't decode argument '{repr other}'"
+  | `($s:str) => pure <| .str s.getString
+  | `($x:ident) => pure <| .name x
+  | `($n:num) => pure <| .num <| n.getNat
+  | other => throwErrorAt other "Can't decode argument value '{repr other}'"
 
-def parseArgs (argStx : TSyntaxArray `argument) : DocElabM (Array RoleArgument) := do
+def parseArgs (argStx : TSyntaxArray `argument) : DocElabM (Array Arg) := do
   let mut argVals := #[]
   for arg in argStx do
-    match arg.raw with
+    match arg with
     | `(argument|$v:arg_val) =>
-      argVals := argVals.push (.anonymous (← parseArgVal v))
-    | `(argument| $x:ident := $v) =>
+      argVals := argVals.push (.anon (← parseArgVal v))
+    | `(argument|$x:ident := $v) =>
       argVals := argVals.push (.named x.getId (← parseArgVal v))
     | other => throwErrorAt other "Can't decode argument '{repr other}'"
   pure argVals

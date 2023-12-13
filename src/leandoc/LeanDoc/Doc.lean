@@ -95,14 +95,14 @@ instance [Repr g.Inline] : Repr (Inline g) where
 
 
 inductive ArgVal where
-  | name (x : String)
+  | name (x : Lean.Ident)
   | str (text : String)
   | num (n : Nat)
 deriving Repr
 
 inductive Arg where
   | anon (value : ArgVal)
-  | named (name : String) (value : ArgVal)
+  | named (name : Name) (value : ArgVal)
 deriving Repr
 
 structure ListItem (α : Type u) where

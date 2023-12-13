@@ -9,9 +9,9 @@ import LeanDoc.SyntaxUtils
 namespace LeanDoc.Syntax
 
 declare_syntax_cat arg_val
-syntax str : arg_val
-syntax ident : arg_val
-syntax num : arg_val
+syntax (name:=arg_str) str : arg_val
+syntax (name:=arg_ident) ident : arg_val
+syntax (name:=arg_num) num : arg_val
 
 declare_syntax_cat argument
 syntax (name:=anon) arg_val : argument

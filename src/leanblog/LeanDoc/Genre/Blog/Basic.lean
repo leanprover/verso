@@ -83,6 +83,8 @@ structure Blog.TraverseState where
   targets : Lean.NameMap Blog.Info.Target := {}
   refs : Lean.NameMap Blog.Info.Ref := {}
   pageIds : Lean.NameMap (List String) := {}
+  scripts : Lean.HashSet String := {}
+  stylesheets : Lean.HashSet String := {}
 
 
 def Blog : Genre where
@@ -137,11 +139,13 @@ where
 
 instance : BEq TraverseState where
   beq
-    | ⟨u1, t1, r1, p1⟩, ⟨u2, t2, r2, p2⟩ =>
+    | ⟨u1, t1, r1, p1, s1, s1'⟩, ⟨u2, t2, r2, p2, s2, s2'⟩ =>
       u1.toList.map (fun p => {p with snd := p.snd.toList}) == u2.toList.map (fun p => {p with snd := p.snd.toList}) &&
       t1.toList == t2.toList &&
       r1.toList == r2.toList &&
-      p1.toList == p2.toList
+      p1.toList == p2.toList &&
+      s1.toList == s2.toList &&
+      s1'.toList == s2'.toList
 
 
 namespace Traverse
@@ -151,19 +155,155 @@ open Doc
 @[reducible]
 defmethod Blog.TraverseM := ReaderT Blog.TraverseContext (StateT Blog.TraverseState IO)
 
+def highlightingStyle : String := "
+.hl.lean .keyword {
+  font-weight : bold;
+}
+
+.hl.lean .var {
+  font-style: italic;
+  position: relative;
+}
+
+.hover-container {
+    width: 0;
+    height: 0;
+    position: relative;
+    display: inline;
+}
+
+.hl.lean .token .hover-info {
+  display: none;
+  position: absolute;
+  background-color: #e5e5e5;
+  border: 1px solid black;
+  padding: 0.5em;
+  z-index: 200;
+}
+
+.hl.lean .token:hover .hover-info {
+  display: inline-block;
+  position: absolute;
+  top: 1em;
+  font-weight: normal;
+  font-style: normal;
+}
+
+.hl.lean .has-info:hover .hover-info {
+  display: inline-block;
+  position: absolute;
+  top: 1em;
+  font-weight: normal;
+  font-style: normal;
+}
+
+
+.hl.lean .token {
+  transition: all 0.25s; /* Slight fade for highlights */
+}
+
+.hl.lean .token.binding-hl {
+  background-color: #eee;
+  border-radius: 2px;
+  transition: none;
+}
+
+
+.hl.lean .has-info {
+  text-decoration-style: wavy;
+  text-decoration-line: underline;
+  text-decoration-thickness: 0.1rem;
+}
+
+.hl.lean .has-info .hover-info {
+  display: none;
+  position: absolute;
+  transform: translate(0.25rem, 0.3rem);
+  border: 1px solid black;
+  padding: 0.5em;
+  z-index: 300;
+}
+
+.hl.lean .has-info.error {
+  text-decoration-color: red;
+}
+
+.hl.lean .has-info.error:hover {
+  background-color: #ffb3b3;
+}
+
+.hl.lean .has-info.error .hover-info {
+  background-color: #ffb3b3;
+}
+
+.error pre {
+    color: red;
+}
+
+.hl.lean .has-info.warning {
+  text-decoration-color: yellow;
+}
+
+.hl.lean .has-info.warning .hover-info {
+  background-color: yellow;
+}
+
+.hl.lean .has-info.info {
+  text-decoration-color: blue;
+}
+
+.hl.lean .has-info.info .hover-info {
+  background-color: #4777ff;
+}
+
+.hl.lean .info {
+  display: none;
+}
+"
+
+def highlightingJs : String :=
+"window.onload = () => {
+    for (const c of document.querySelectorAll(\".hl.lean .token\")) {
+        if (c.dataset.binding != \"\") {
+            c.addEventListener(\"mouseover\", (event) => {
+                const context = c.closest(\".hl.lean\").dataset.leanContext;
+                for (const example of document.querySelectorAll(\".hl.lean\")) {
+                    if (example.dataset.leanContext == context) {
+                        for (const tok of example.querySelectorAll(\".token\")) {
+                            if (c.dataset.binding == tok.dataset.binding) {
+                                tok.classList.add(\"binding-hl\");
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        c.addEventListener(\"mouseout\", (event) => {
+            for (const tok of document.querySelectorAll(\".hl.lean .token\")) {
+                tok.classList.remove(\"binding-hl\");
+            }
+        });
+    }
+}
+"
+
 instance : Traverse Blog Blog.TraverseM where
   part _ := pure ()
   block _ := pure ()
   inline _ := pure ()
   genrePart _ _ := pure none
-  genreBlock _ _ := pure none
+  genreBlock
+    | .highlightedCode .., _contents => do
+      modify fun st => {st with stylesheets := st.stylesheets.insert highlightingStyle, scripts := st.scripts.insert highlightingJs}
+      pure none
+    | _, _ => pure none
   genreInline
     | .label x, _contents => do
       -- Add as target if not already present
       if let none := (← get).targets.find? x then
         let path := (← read).path
         let htmlId := (← get).freshId path x
-        modify (fun st => {st with targets := st.targets.insert x ⟨path, htmlId⟩})
+        modify fun st => {st with targets := st.targets.insert x ⟨path, htmlId⟩}
       pure none
     | .ref _x, _contents =>
       -- TODO backreference

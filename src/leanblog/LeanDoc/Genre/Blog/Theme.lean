@@ -63,6 +63,7 @@ def primary : Template := do
     <html>
       <head>
         <title>{{← param (α := String) "title"}}</title>
+        {{← builtinHeader}}
         <link rel="stylesheet" href="/static/style.css"/>
       </head>
       <body>

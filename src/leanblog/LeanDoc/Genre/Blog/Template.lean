@@ -167,6 +167,8 @@ structure Context where
   config : Config
   path : List String
   params : Params
+  builtInStyles : Lean.HashSet String
+  builtInScripts : Lean.HashSet String
 
 end Template
 
@@ -196,6 +198,14 @@ def param [TypeName α] (key : String) : TemplateM α := do
   | some val =>
     if let some v := val.get? (α := α) then return v
     else throw <| .wrongParamType key (TypeName.typeName α)
+
+def builtinHeader : TemplateM Html := do
+  let mut out := .empty
+  for style in (← read).builtInStyles do
+    out := out ++ {{<style>"\n"{{style}}"\n"</style>"\n"}}
+  for script in (← read).builtInScripts do
+    out := out ++ {{<script>"\n"{{script}}"\n"</script>"\n"}}
+  pure out
 
 namespace Params
 

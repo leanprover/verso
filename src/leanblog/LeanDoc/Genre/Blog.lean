@@ -18,7 +18,7 @@ open LeanDoc Doc Elab
 
 @[role_expander htmlSpan]
 def htmlSpan : RoleExpander
-  | #[.named `«class» (.string classes)], stxs => do
+  | #[.named `«class» (.str classes)], stxs => do
     let args ← stxs.mapM elabInline
     let val ← ``(Inline.other (Blog.InlineExt.htmlSpan $(quote classes)) #[ $[ $args ],* ])
     pure #[val]
@@ -26,7 +26,7 @@ def htmlSpan : RoleExpander
 
 @[directive_expander htmlDiv]
 def htmlDiv : DirectiveExpander
-  | #[.named `«class» (.string classes)], stxs => do
+  | #[.named `«class» (.str classes)], stxs => do
     let args ← stxs.mapM elabBlock
     let val ← ``(Block.other (Blog.BlockExt.htmlDiv $(quote classes)) #[ $[ $args ],* ])
     pure #[val]
@@ -34,7 +34,7 @@ def htmlDiv : DirectiveExpander
 
 @[directive_expander blob]
 def blob : DirectiveExpander
-  | #[.anonymous (.name blobName)], stxs => do
+  | #[.anon (.name blobName)], stxs => do
     if h : stxs.size > 0 then logErrorAt stxs[0] "Expected no contents"
     let actualName ← resolveGlobalConstNoOverloadWithInfo blobName
     let val ← ``(Block.other (Blog.BlockExt.blob ($(mkIdentFrom blobName actualName) : Html)) #[])
@@ -43,7 +43,7 @@ def blob : DirectiveExpander
 
 @[role_expander blob]
 def inlineBlob : RoleExpander
-  | #[.anonymous (.name blobName)], stxs => do
+  | #[.anon (.name blobName)], stxs => do
     if h : stxs.size > 0 then logErrorAt stxs[0] "Expected no contents"
     let actualName ← resolveGlobalConstNoOverloadWithInfo blobName
     let val ← ``(Inline.other (Blog.InlineExt.blob ($(mkIdentFrom blobName actualName) : Html)) #[])
@@ -52,7 +52,7 @@ def inlineBlob : RoleExpander
 
 @[role_expander label]
 def label : RoleExpander
-  | #[.anonymous (.name l)], stxs => do
+  | #[.anon (.name l)], stxs => do
     let args ← stxs.mapM elabInline
     let val ← ``(Inline.other (Blog.InlineExt.label $(quote l.getId)) #[ $[ $args ],* ])
     pure #[val]
@@ -60,7 +60,7 @@ def label : RoleExpander
 
 @[role_expander ref]
 def ref : RoleExpander
-  | #[.anonymous (.name l)], stxs => do
+  | #[.anon (.name l)], stxs => do
     let args ← stxs.mapM elabInline
     let val ← ``(Inline.other (Blog.InlineExt.ref $(quote l.getId)) #[ $[ $args ],* ])
     pure #[val]
@@ -69,7 +69,7 @@ def ref : RoleExpander
 
 @[role_expander page_link]
 def page_link : RoleExpander
-  | #[.anonymous (.name page)], stxs => do
+  | #[.anon (.name page)], stxs => do
     let args ← stxs.mapM elabInline
     let pageName := mkIdentFrom page <| docName page.getId
     let val ← ``(Inline.other (Blog.InlineExt.pageref $(quote pageName.getId)) #[ $[ $args ],* ])
@@ -109,7 +109,7 @@ structure LeanBlockConfig where
   name : Option Name := none
   error : Option Bool := none
 
-def takeNamed (name : Name) (args : Array RoleArgument) : Array Doc.Elab.RoleArgumentValue × Array RoleArgument := Id.run do
+def takeNamed (name : Name) (args : Array Arg) : Array ArgVal × Array Arg := Id.run do
   let mut matching := #[]
   let mut remaining := #[]
   for arg in args do
@@ -120,9 +120,9 @@ def takeNamed (name : Name) (args : Array RoleArgument) : Array Doc.Elab.RoleArg
     remaining := remaining.push arg
   (matching, remaining)
 
-def LeanBlockConfig.fromArgs [Monad m] [MonadInfoTree m] [MonadResolveName m] [MonadEnv m] [MonadError m] (args : Array RoleArgument) : m LeanBlockConfig := do
+def LeanBlockConfig.fromArgs [Monad m] [MonadInfoTree m] [MonadResolveName m] [MonadEnv m] [MonadError m] (args : Array Arg) : m LeanBlockConfig := do
   if h : 0 < args.size then
-    let .anonymous (.name contextName) := args[0]
+    let .anon (.name contextName) := args[0]
       | throwError s!"Expected context name, got {repr args[0]}"
     let (showArgs, args) := takeNamed `show <| args.extract 1 args.size
     let showArg ← takeVal `show showArgs >>= Option.mapM (asBool `show)
@@ -143,12 +143,12 @@ def LeanBlockConfig.fromArgs [Monad m] [MonadInfoTree m] [MonadResolveName m] [M
     }
   else throwError "No arguments provided, expected at least a context name"
 where
-  asName (name : Name) (v : Doc.Elab.RoleArgumentValue) : m Name := do
+  asName (name : Name) (v : ArgVal) : m Name := do
     match v with
     | .name b => do
       pure b.getId
     | other => throwError "Expected Boolean for '{name}', got {repr other}"
-  asBool (name : Name) (v : Doc.Elab.RoleArgumentValue) : m Bool := do
+  asBool (name : Name) (v : ArgVal) : m Bool := do
     match v with
     | .name b => do
       let b' ← resolveGlobalConstNoOverloadWithInfo b
@@ -245,9 +245,9 @@ structure LeanOutputConfig where
   name : Ident
   severity : Option MessageSeverity
 
-def LeanOutputConfig.fromArgs [Monad m] [MonadInfoTree m] [MonadResolveName m] [MonadEnv m] [MonadError m] (args : Array RoleArgument) : m LeanOutputConfig := do
+def LeanOutputConfig.fromArgs [Monad m] [MonadInfoTree m] [MonadResolveName m] [MonadEnv m] [MonadError m] (args : Array Arg) : m LeanOutputConfig := do
   if h : 0 < args.size then
-    let .anonymous (.name outputName) := args[0]
+    let .anon (.name outputName) := args[0]
       | throwError s!"Expected output name, got {repr args[0]}"
     let (severityArgs, args) := takeNamed `severity <| args.extract 1 args.size
     let severityArg ← takeVal `severity severityArgs >>= Option.mapM (asSeverity `severity)
@@ -260,7 +260,7 @@ def LeanOutputConfig.fromArgs [Monad m] [MonadInfoTree m] [MonadResolveName m] [
     }
   else throwError "No arguments provided, expected at least a context name"
 where
-  asSeverity (name : Name) (v : Doc.Elab.RoleArgumentValue) : m MessageSeverity := do
+  asSeverity (name : Name) (v : ArgVal) : m MessageSeverity := do
     match v with
     | .name b => do
       let b' ← resolveGlobalConstNoOverloadWithInfo b

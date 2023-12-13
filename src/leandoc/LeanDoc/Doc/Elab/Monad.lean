@@ -371,18 +371,8 @@ unsafe def partCommandsForUnsafe (x : Name) : PartElabM (Array PartCommand) := d
 @[implemented_by partCommandsForUnsafe]
 opaque partCommandsFor (x : Name) : PartElabM (Array PartCommand)
 
-inductive RoleArgumentValue where
-  | string (str : String)
-  | int (int : Int)
-  | name (name : Ident)
-deriving Repr
 
-inductive RoleArgument where
-  | named (name : Name) (val : RoleArgumentValue)
-  | anonymous (val : RoleArgumentValue)
-deriving Repr
-
-abbrev RoleExpander := Array RoleArgument → Array Syntax → DocElabM (Array (TSyntax `term))
+abbrev RoleExpander := Array Arg → Array Syntax → DocElabM (Array (TSyntax `term))
 
 initialize roleExpanderAttr : KeyedDeclsAttribute RoleExpander ←
   mkDocExpanderAttribute `role_expander ``RoleExpander "Indicates that this function is used to implement a given role" `roleExpanderAttr
@@ -395,7 +385,7 @@ unsafe def roleExpandersForUnsafe (x : Name) : DocElabM (Array RoleExpander) := 
 opaque roleExpandersFor (x : Name) : DocElabM (Array RoleExpander)
 
 
-abbrev CodeBlockExpander := Array RoleArgument → TSyntax `str → DocElabM (Array (TSyntax `term))
+abbrev CodeBlockExpander := Array Arg → TSyntax `str → DocElabM (Array (TSyntax `term))
 
 initialize codeBlockExpanderAttr : KeyedDeclsAttribute CodeBlockExpander ←
   mkDocExpanderAttribute `code_block_expander ``CodeBlockExpander "Indicates that this function is used to implement a given code block" `codeBlockExpanderAttr
@@ -409,7 +399,7 @@ opaque codeBlockExpandersFor (x : Name) : DocElabM (Array CodeBlockExpander)
 
 
 
-abbrev DirectiveExpander := Array RoleArgument → Array Syntax → DocElabM (Array (TSyntax `term))
+abbrev DirectiveExpander := Array Arg → Array Syntax → DocElabM (Array (TSyntax `term))
 
 initialize directiveExpanderAttr : KeyedDeclsAttribute DirectiveExpander ←
   mkDocExpanderAttribute `directive_expander ``DirectiveExpander "Indicates that this function is used to implement a given directive" `directiveExpanderAttr
@@ -423,7 +413,7 @@ opaque directiveExpandersFor (x : Name) : DocElabM (Array DirectiveExpander)
 
 
 
-abbrev BlockRoleExpander := Array RoleArgument → Array Syntax → DocElabM (Array (TSyntax `term))
+abbrev BlockRoleExpander := Array Arg → Array Syntax → DocElabM (Array (TSyntax `term))
 
 initialize blockRoleExpanderAttr : KeyedDeclsAttribute BlockRoleExpander ←
   mkDocExpanderAttribute `blockRole_expander ``BlockRoleExpander "Indicates that this function is used to implement a given blockRole" `blockRoleExpanderAttr
