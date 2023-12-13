@@ -28,10 +28,11 @@ lean_exe «leandoc» where
   supportInterpreter := true
 
 lean_lib UsersGuide where
+  srcDir := "doc"
 
 @[default_target]
 lean_exe usersguide where
-  root := `UsersGuide
+  root := `UsersGuideMain
   -- Enables the use of the Lean interpreter by the executable (e.g.,
   -- `runFrontend`) at the expense of increased binary size on Linux.
   -- Remove this line if you do not need such functionality.

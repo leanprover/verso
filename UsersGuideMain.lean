@@ -1,7 +1,6 @@
 import LeanDoc.Genre.Manual
 
-import UsersGuide.Basic
-
+import UsersGuide
 
 open LeanDoc.Genre.Manual
 
