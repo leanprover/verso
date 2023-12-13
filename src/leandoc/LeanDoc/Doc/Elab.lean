@@ -113,34 +113,37 @@ def _root_.LeanDoc.Syntax.role.expand : InlineExpander
 @[inline_expander LeanDoc.Syntax.link]
 def _root_.LeanDoc.Syntax.link.expand : InlineExpander
   | `(inline| link[ $txt* ] $dest:link_target) => do
-    let destStx ←
+    let url : TSyntax `term ←
       match dest with
       | `(link_target| ( $url )) =>
-        ``(Inline.link #[$[$(← txt.mapM elabInline)],*] (LinkDest.url $url))
+        pure (↑ url)
       | `(link_target| [ $ref ]) => do
-        addLinkRef ref
         -- Round-trip through quote to get rid of source locations, preventing unwanted IDE info
-        ``(Inline.link #[$[$(← txt.mapM elabInline)],*] (LinkDest.ref $(quote ref.getString)))
-      | _ => withRef dest throwUnsupportedSyntax
+        addLinkRef ref
+      | _ => throwErrorAt dest "Couldn't parse link destination"
+    ``(Inline.link #[$[$(← txt.mapM elabInline)],*] $url)
   | _ => throwUnsupportedSyntax
 
 @[inline_expander LeanDoc.Syntax.footnote]
 def _root_.LeanDoc.Syntax.link.footnote : InlineExpander
   | `(inline| [^ $name:str ]) => do
-    addFootnoteRef name
-    ``(Inline.footnote $(quote name.getString))
+    ``(Inline.footnote $name $(← addFootnoteRef name))
   | _ => throwUnsupportedSyntax
 
 
 @[inline_expander LeanDoc.Syntax.image]
 def _root_.LeanDoc.Syntax.image.expand : InlineExpander
   | `(inline| image[ $alt:str* ] $dest:link_target) => do
-    let destStx ←
+    let altText := String.join (alt.map (·.getString) |>.toList)
+    let url : TSyntax `term ←
       match dest with
       | `(link_target| ( $url )) =>
-        let altText := String.join (alt.map (·.getString) |>.toList)
-        ``(Inline.image $(quote altText) (LinkDest.url $url))
-      | _ => withRef dest throwUnsupportedSyntax
+        pure (↑ url)
+      | `(link_target| [ $ref ]) => do
+        -- Round-trip through quote to get rid of source locations, preventing unwanted IDE info
+        addLinkRef ref
+      | _ => throwErrorAt dest "Couldn't parse link destination"
+    ``(Inline.image $(quote altText) $url)
   | _ => throwUnsupportedSyntax
 
 

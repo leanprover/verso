@@ -89,7 +89,7 @@ def inPage (here : Page) (act : GenerateM α) : GenerateM α :=
   withReader (fun c => {c with ctxt.path := c.ctxt.path ++ [here.name]}) act
 
 def inPost (here : Post) (act : GenerateM α) : GenerateM α :=
-  withReader (fun c => {c with ctxt.path := c.ctxt.path ++ [c.ctxt.config.postName here.date here.content.content.titleString ]}) act
+  withReader (fun c => {c with ctxt.path := c.ctxt.path ++ [c.ctxt.config.postName here.date here.content.titleString ]}) act
 
 
 
@@ -125,7 +125,7 @@ mutual
           if post.draft && !(← showDrafts) then continue
           inPost post <| do
             let ⟨baseTemplate, modParams⟩ := theme.adHocTemplates (Array.mk (← currentPath)) |>.getD ⟨theme.postTemplate, id⟩
-            let output ← Template.renderMany [baseTemplate, theme.primaryTemplate] <| modParams <| ← forPart post.content.content
+            let output ← Template.renderMany [baseTemplate, theme.primaryTemplate] <| modParams <| ← forPart post.content
             ensureDir (← currentDir)
             IO.println s!"Generating post {← currentDir}"
             IO.FS.withFile ((← currentDir).join "index.html") .write fun h => do
@@ -142,7 +142,7 @@ mutual
           some <$> ps.mapM fun p =>
             theme.archiveEntryTemplate.render (.ofList [("post", ⟨.mk p, #[]⟩)])
         else pure none
-      let pageParams : Template.Params ← forPart txt.content
+      let pageParams : Template.Params ← forPart txt
       let ⟨baseTemplate, modParams⟩ := theme.adHocTemplates (Array.mk (← currentPath)) |>.getD ⟨theme.pageTemplate, id⟩
       let output ← Template.renderMany [baseTemplate, theme.primaryTemplate] <| modParams <|
         match postList with
@@ -164,7 +164,7 @@ def Site.generate (theme : Theme) (site : Site): GenerateM Unit := do
   let root ← currentDir
   ensureDir root
   let ⟨baseTemplate, modParams⟩ := theme.adHocTemplates (Array.mk (← currentPath)) |>.getD ⟨theme.pageTemplate, id⟩
-  let output ← Template.renderMany [baseTemplate, theme.primaryTemplate] <| modParams <| ← forPart site.frontPage.content
+  let output ← Template.renderMany [baseTemplate, theme.primaryTemplate] <| modParams <| ← forPart site.frontPage
   let filename := root.join "index.html"
   IO.FS.withFile filename .write fun h => do
     h.putStrLn "<!DOCTYPE html>"

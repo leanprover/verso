@@ -19,8 +19,6 @@ structure Options (g : Genre) (m : Type → Type) where
   /-- The level of the top-level headers -/
   headerLevel : Nat := 1
   logError : String → m Unit
-  refLinks : Lean.HashMap String String := {}
-  footnotes : Lean.HashMap String (Array (Inline g)) := {}
 
 abbrev HtmlT (genre : Genre) (m : Type → Type) : Type → Type :=
   ReaderT (Options genre m × genre.TraverseContext × genre.TraverseState) m
@@ -70,30 +68,14 @@ class GenreHtml (genre : Genre) (m : Type → Type) where
 section
 open ToHtml
 
-defmethod LinkDest.str [Monad m] : LinkDest → HtmlT g m String
-  | .url addr => pure addr
-  | .ref name => do
-    let ({refLinks := refs, ..}, _, _) ← read
-    if let some url := refs.find? name then
-      pure url
-    else
-      logError s!"Unknown reference '{name}'"
-      pure ""
-
 partial def Inline.toHtml [Monad m] [GenreHtml g m] : Inline g → HtmlT g m Html
   | .text str => pure <| .text str
   | .link content dest => do
-    pure {{ <a href={{← dest.str}}> {{← content.mapM toHtml}} </a> }}
+    pure {{ <a href={{dest}}> {{← content.mapM toHtml}} </a> }}
   | .image alt dest => do
-    pure {{ <img src={{← dest.str}} alt={{alt}}/> }}
-  | .footnote name => do
-    let ({footnotes := footnotes, ..}, _, _) ← read
-    if let some txt := footnotes.find? name then
-      pure {{ <details class="footnote"><summary>"["{{name}}"]"</summary>{{← txt.mapM toHtml}}</details>}}
-    else
-      let message := s!"Unknown footnote '{name}' - options were {footnotes.toList.map (·.fst)}"
-      logError message
-      pure {{<strong>{{message}}</strong>}}
+    pure {{ <img src={{dest}} alt={{alt}}/> }}
+  | .footnote name content => do
+      pure {{ <details class="footnote"><summary>"["{{name}}"]"</summary>{{← content.mapM toHtml}}</details>}}
   | .linebreak _str => pure .empty
   | .emph content => do
     pure {{ <em> {{← content.mapM toHtml }} </em> }}
@@ -152,9 +134,6 @@ partial def Part.toHtml [Monad m] [GenreHtml g m] (p : Part g) : HtmlT g m Html 
 
 instance [Monad m] [GenreHtml g m] : ToHtml g m (Part g) where
   toHtml := Part.toHtml
-
-instance [Monad m] [GenreHtml g m] : ToHtml g m (Doc g) where
-  toHtml (d : Doc g) := withReader (fun o => {o with fst.refLinks := d.linkRefs, fst.footnotes := d.footnotes}) (Part.toHtml d.content)
 
 instance : GenreHtml .none m where
   part _ m := nomatch m

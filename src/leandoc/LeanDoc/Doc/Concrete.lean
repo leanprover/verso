@@ -9,6 +9,7 @@ import Lean
 import LeanDoc.Doc
 import LeanDoc.Doc.Elab
 import LeanDoc.Doc.Elab.Monad
+import LeanDoc.Doc.Lsp
 import LeanDoc.Parser
 import LeanDoc.SyntaxUtils
 
@@ -64,7 +65,7 @@ info: #[Inline.text "Hello, ", Inline.emph #[Inline.bold #[Inline.text "emph"]]]
 #check inlines!"Hello, _*emph*_"
 
 def document : Parser where
-  fn := rawFn <| LeanDoc.Parser.document (blockContext := {maxDirective := some 6})
+  fn := rawFn <| atomicFn <| LeanDoc.Parser.document (blockContext := {maxDirective := some 6})
 
 @[combinator_parenthesizer document] def document.parenthesizer := PrettyPrinter.Parenthesizer.visitToken
 @[combinator_formatter document] def document.formatter := PrettyPrinter.Formatter.visitAtom Name.anonymous
@@ -73,6 +74,14 @@ partial def findGenre [Monad m] [MonadInfoTree m] [MonadResolveName m] [MonadEnv
   | `($g:ident) => discard <| resolveGlobalConstNoOverloadWithInfo g -- Don't allow it to become an auto-argument
   | `(($e)) => findGenre e
   | _ => pure ()
+
+def saveRefs [Monad m] [MonadInfoTree m] (st : DocElabM.State) (st' : PartElabM.State) : m Unit := do
+  for r in internalRefs st'.linkDefs st.linkRefs do
+    for stx in r.syntax do
+      pushInfoLeaf <| .ofCustomInfo {stx := stx , value := Dynamic.mk r}
+  for r in internalRefs st'.footnoteDefs st.footnoteRefs do
+    for stx in r.syntax do
+      pushInfoLeaf <| .ofCustomInfo {stx := stx , value := Dynamic.mk r}
 
 elab "#docs" "(" genre:term ")" n:ident title:inlineStr ":=" ":::::::" text:document ":::::::" : command => open Lean Elab Command PartElabM DocElabM in do
   findGenre genre
@@ -96,15 +105,9 @@ elab "#docs" "(" genre:term ")" n:ident title:inlineStr ":=" ":::::::" text:docu
     pure ()
   let finished := st'.partContext.toPartFrame.close endPos
   pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
-  for r in internalRefs st'.linkDefs st.linkRefs do
-    for stx in r.syntax do
-      pushInfoLeaf <| .ofCustomInfo {stx := stx , value := Dynamic.mk r}
-  for r in internalRefs st'.footnoteDefs st.footnoteRefs do
-    for stx in r.syntax do
-      pushInfoLeaf <| .ofCustomInfo {stx := stx , value := Dynamic.mk r}
-  let linkRefs : List (String × String) := st'.linkDefs.toList.map (fun (k, v) => (k, DocDef.val v))
-  let footnoteRefs : List (String × Array (TSyntax `term)) := st'.footnoteDefs.toList.map (fun (k, v) => (k, DocDef.val v))
-  elabCommand (← `(def $n : Doc $genre := {content := $(← finished.toSyntax), linkRefs := HashMap.ofList $(quote linkRefs), footnotes := HashMap.ofList $(quote footnoteRefs)}))
+  saveRefs st st'
+
+  elabCommand (← `(def $n : Part $genre := $(← finished.toSyntax st'.linkDefs st'.footnoteDefs)))
 
 
 elab "#doc" "(" genre:term ")" title:inlineStr "=>" text:document eof:eoi : term => open Lean Elab Term PartElabM DocElabM in do
@@ -122,16 +125,8 @@ elab "#doc" "(" genre:term ")" title:inlineStr "=>" text:document eof:eoi : term
     pure ()
   let finished := st'.partContext.toPartFrame.close endPos
   pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
-  for r in internalRefs st'.linkDefs st.linkRefs do
-    for stx in r.syntax do
-      pushInfoLeaf <| .ofCustomInfo {stx := stx , value := Dynamic.mk r}
-  for r in internalRefs st'.footnoteDefs st.footnoteRefs do
-    for stx in r.syntax do
-      pushInfoLeaf <| .ofCustomInfo {stx := stx , value := Dynamic.mk r}
-
-  let linkRefs : List (String × String) := st'.linkDefs.toList.map (fun (k, v) => (k, DocDef.val v))
-  let footnoteRefs : List (String × Array (TSyntax `term)) := st'.footnoteDefs.toList.map (fun (k, v) => (k, DocDef.val v))
-  elabTerm (← `(({content := $(← finished.toSyntax), linkRefs := HashMap.ofList $(quote linkRefs), footnotes := HashMap.ofList $(quote footnoteRefs) : Doc $genre}))) none
+  saveRefs st st'
+  elabTerm (← `( ($(← finished.toSyntax st'.linkDefs st'.footnoteDefs) : Part $genre))) none
 
 
 macro "%doc" moduleName:ident : term =>
@@ -161,14 +156,6 @@ elab "#doc" "(" genre:term ")" title:inlineStr "=>" text:document eof:eoi : comm
     pure ()
   let finished := st'.partContext.toPartFrame.close endPos
   pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
+  saveRefs st st'
   let docName ← mkIdentFrom title <$> currentDocName
-  let linkRefs : List (String × String) := st'.linkDefs.toList.map (fun (k, v) => (k, DocDef.val v))
-  let footnoteRefs : List (String × Array (TSyntax `term)) := st'.footnoteDefs.toList.map (fun (k, v) => (k, DocDef.val v))
-  for r in internalRefs st'.linkDefs st.linkRefs do
-    for stx in r.syntax do
-      pushInfoLeaf <| .ofCustomInfo {stx := stx , value := Dynamic.mk r}
-  for r in internalRefs st'.footnoteDefs st.footnoteRefs do
-    for stx in r.syntax do
-      pushInfoLeaf <| .ofCustomInfo {stx := stx , value := Dynamic.mk r}
-
-  elabCommand (← `(def $docName : Doc $genre := {content := $(← finished.toSyntax), linkRefs := HashMap.ofList $(quote linkRefs), footnotes := HashMap.ofList $(quote footnoteRefs)}))
+  elabCommand (← `(def $docName : Part $genre := $(← finished.toSyntax st'.linkDefs st'.footnoteDefs)))

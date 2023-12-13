@@ -10,6 +10,9 @@ import LeanDoc.Output.Html
 import LeanDoc.Doc.Concrete
 import LeanDoc.Doc.Lsp
 
+import LeanDoc.Genre.Blog
+import LeanDoc.Genre.Manual
+
 open LeanDoc Doc Output Html Concrete ToHtml Elab Monad
 open Lean Elab Term
 
@@ -23,7 +26,7 @@ def vanish : RoleExpander
 def rev : RoleExpander
   | _args, stxs => .reverse <$> stxs.mapM elabInline
 
-def html [Monad m] (doc : Doc .none) : m Html := Genre.none.toHtml {logError := fun _ => pure ()} () () doc
+def html [Monad m] (doc : Part .none) : m Html := Genre.none.toHtml {logError := fun _ => pure ()} () () doc
 
 def main : IO Unit := do
   IO.println <| Html.asString <| Html.embody <| ← html <| #doc (.none) "My wonderful document" =>

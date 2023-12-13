@@ -55,6 +55,38 @@ def headerStxToString (env : Environment) : Syntax → String
   | headerStx => dbg_trace "didn't understand {headerStx} for string"
     "<missing>"
 
+
+/-- References that must be local to the current blob of concrete document syntax -/
+structure DocDef (α : Type) where
+  defSite : TSyntax `str
+  val : α
+
+structure DocUses where
+  useSites : Array Syntax := {}
+
+def DocUses.add (uses : DocUses) (loc : Syntax) : DocUses := {uses with useSites := uses.useSites.push loc}
+
+structure DocElabM.State where
+  linkRefs : HashMap String DocUses := {}
+  footnoteRefs : HashMap String DocUses := {}
+
+/-- Custom info tree data to save footnote and reflink cross-references -/
+structure DocRefInfo where
+  defSite : Option Syntax
+  useSites : Array Syntax
+deriving TypeName, Repr
+
+def DocRefInfo.syntax (dri : DocRefInfo) : Array Syntax :=
+  (dri.defSite.map (#[·])|>.getD #[]) ++ dri.useSites
+
+def internalRefs (defs : HashMap String (DocDef α)) (refs : HashMap String DocUses) : Array DocRefInfo := Id.run do
+  let keys : HashSet String := defs.fold (fun soFar k _ => HashSet.insert soFar k) <| refs.fold (fun soFar k _ => soFar.insert k) {}
+  let mut refInfo := #[]
+  for k in keys do
+    refInfo := refInfo.push ⟨defs.find? k |>.map (·.defSite), refs.find? k |>.map (·.useSites) |>.getD #[]⟩
+  refInfo
+
+
 inductive TOC where
   | mk (title : String) (titleSyntax : Syntax) (endPos : String.Pos) (children : Array TOC)
 deriving Repr, TypeName, Inhabited
@@ -99,10 +131,34 @@ inductive FinishedPart where
   | mk (titleSyntax : Syntax) (expandedTitle : Array (TSyntax `term)) (titlePreview : String) (blocks : Array (TSyntax `term)) (subParts : Array FinishedPart) (endPos : String.Pos)
 deriving Repr, BEq
 
-partial def FinishedPart.toSyntax [Monad m] [MonadQuotation m] : FinishedPart → m (TSyntax `term)
+private def linkRefName (ref : TSyntax `str) : TSyntax `ident :=
+  let str := ref.getString
+  let name : Name := .num (.str (.str .anonymous "link reference") str) 1
+  ⟨.ident .none str.toSubstring name []⟩
+
+private def footnoteRefName (ref : TSyntax `str) : TSyntax `ident :=
+  let str := ref.getString
+  let name : Name := .num (.str (.str .anonymous "footnote reference") str) 1
+  ⟨.ident .none str.toSubstring name []⟩
+
+open Lean.Parser.Term in
+partial def FinishedPart.toSyntax [Monad m] [MonadQuotation m]
+    (linkDefs : HashMap String (DocDef String)) (footnoteDefs : HashMap String (DocDef (Array (TSyntax `term))))
+    : FinishedPart → m (TSyntax `term)
   | .mk _titleStx titleInlines titleString blocks subParts _endPos => do
-    let subStx ← subParts.mapM toSyntax
-    ``(Part.mk #[$[$titleInlines],*] $(quote titleString) none #[$[$blocks],*] #[$[$subStx],*])
+    let subStx ← subParts.mapM (toSyntax {} {})
+    let body ← ``(Part.mk #[$[$titleInlines],*] $(quote titleString) none #[$[$blocks],*] #[$[$subStx],*])
+    bindFootnotes footnoteDefs (← bindLinks linkDefs body)
+where
+  bindLinks (linkDefs : HashMap String (DocDef String)) (body : TSyntax `term) : m (TSyntax `term) := do
+    let defs ← linkDefs.toArray.mapM fun (_, defn) =>
+      `(letIdDecl| $(linkRefName defn.defSite) := $(quote defn.val))
+    defs.foldlM (fun stx letDecl => `(let $letDecl:letIdDecl; $stx)) body
+  bindFootnotes (linkDefs : HashMap String (DocDef (Array (TSyntax `term)))) (body : TSyntax `term) : m (TSyntax `term) := do
+    let defs ← linkDefs.toArray.mapM fun (_, defn) =>
+      `(letIdDecl| $(footnoteRefName defn.defSite) := #[$[$defn.val],*])
+    defs.foldlM (fun stx letDecl => `(let $letDecl:letIdDecl; $stx)) body
+
 
 partial def FinishedPart.toTOC : FinishedPart → TOC
   | .mk titleStx _titleInlines titleString _blocks subParts endPos =>
@@ -136,40 +192,11 @@ def PartContext.close (ctxt : PartContext) (endPos : String.Pos) : Option PartCo
 
 def PartContext.push (ctxt : PartContext) (fr : PartFrame) : PartContext := ⟨fr, ctxt.parents.push ctxt.toPartFrame⟩
 
-/-- References that must be local to the current blob of concrete document syntax -/
-structure DocDef (α : Type) where
-  defSite : Syntax
-  val : α
-
-structure DocUses where
-  useSites : Array Syntax := {}
-
-def DocUses.add (uses : DocUses) (loc : Syntax) : DocUses := {uses with useSites := uses.useSites.push loc}
-
 structure PartElabM.State where
   partContext : PartContext
   linkDefs : HashMap String (DocDef String) := {}
   footnoteDefs : HashMap String (DocDef (Array (TSyntax `term))) := {}
 
-structure DocElabM.State where
-  linkRefs : HashMap String DocUses := {}
-  footnoteRefs : HashMap String DocUses := {}
-
-/-- Custom info tree data to save footnote and reflink cross-references -/
-structure DocRefInfo where
-  defSite : Option Syntax
-  useSites : Array Syntax
-deriving TypeName, Repr
-
-def DocRefInfo.syntax (dri : DocRefInfo) : Array Syntax :=
-  (dri.defSite.map (#[·])|>.getD #[]) ++ dri.useSites
-
-def internalRefs (defs : HashMap String (DocDef α)) (refs : HashMap String DocUses) : Array DocRefInfo := Id.run do
-  let keys : HashSet String := defs.fold (fun soFar k _ => HashSet.insert soFar k) <| refs.fold (fun soFar k _ => soFar.insert k) {}
-  let mut refInfo := #[]
-  for k in keys do
-    refInfo := refInfo.push ⟨defs.find? k |>.map (·.defSite), refs.find? k |>.map (·.useSites) |>.getD #[]⟩
-  refInfo
 
 def PartElabM.State.init (title : Syntax) (expandedTitle : Option (String × Array (TSyntax `term)) := none) : PartElabM.State where
   partContext := {titleSyntax := title, expandedTitle, blocks := #[], priorParts := #[], parents := #[]}
@@ -257,29 +284,34 @@ def PartElabM.addLinkDef (refName : TSyntax `str) (url : String) : PartElabM Uni
   | some ⟨_, url'⟩ =>
     throwErrorAt refName "Already defined as '{url'}'"
 
-def DocElabM.addLinkRef (refName : TSyntax `str) : DocElabM Unit := do
+def DocElabM.addLinkRef (refName : TSyntax `str) : DocElabM (TSyntax `term) := do
   let strName := refName.getString
   match (← getThe State).linkRefs.find? strName with
   | none =>
     modifyThe State fun st => {st with linkRefs := st.linkRefs.insert strName ⟨#[refName]⟩}
+    pure <| linkRefName refName
   | some ⟨uses⟩ =>
     modifyThe State fun st => {st with linkRefs := st.linkRefs.insert strName ⟨uses.push refName⟩}
+    pure <| linkRefName refName
+
 
 def PartElabM.addFootnoteDef (refName : TSyntax `str) (content : Array (TSyntax `term)) : PartElabM Unit := do
   let strName := refName.getString
   match (← getThe State).footnoteDefs.find? strName with
   | none =>
     modifyThe State fun st => {st with footnoteDefs := st.footnoteDefs.insert strName ⟨refName, content⟩}
-  | some ⟨_, url'⟩ =>
-    throwErrorAt refName "Already defined as '{url'}'"
+  | some ⟨_, content⟩ =>
+    throwErrorAt refName "Already defined as '{content}'"
 
-def DocElabM.addFootnoteRef (refName : TSyntax `str) : DocElabM Unit := do
+def DocElabM.addFootnoteRef (refName : TSyntax `str) : DocElabM (TSyntax `term) := do
   let strName := refName.getString
   match (← getThe State).footnoteRefs.find? strName with
   | none =>
     modifyThe State fun st => {st with footnoteRefs := st.footnoteRefs.insert strName ⟨#[refName]⟩}
+    pure <| footnoteRefName refName
   | some ⟨uses⟩ =>
     modifyThe State fun st => {st with footnoteRefs := st.footnoteRefs.insert strName ⟨uses.push refName⟩}
+    pure <| footnoteRefName refName
 
 
 def PartElabM.push (fr : PartFrame) : PartElabM Unit := modifyThe State fun st => {st with partContext := st.partContext.push fr}

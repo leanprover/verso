@@ -93,7 +93,7 @@ partial instance : GenreHtml Blog IO where
         pure {{<strong class="internal-error">s!"Can't find target {x}"</strong>}}
       | some tgt =>
         let addr := s!"{String.join ((← relative tgt.path).intersperse "/")}#{tgt.htmlId}"
-        go <| .link contents (.url addr)
+        go <| .link contents addr
     | .pageref x, contents => do
       match (← state).pageIds.find? x with
       | none =>
@@ -101,7 +101,7 @@ partial instance : GenreHtml Blog IO where
         pure {{<strong class="internal-error">s!"Can't find target {x}"</strong>}}
       | some path =>
         let addr := String.join ((← relative path).intersperse "/")
-        go <| .link contents (.url addr)
+        go <| .link contents addr
     | .htmlSpan classes, contents => do
       pure {{ <span class={{classes}}> {{← contents.mapM go}} </span> }}
     | .blob html, _ => pure html

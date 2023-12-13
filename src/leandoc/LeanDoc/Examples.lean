@@ -16,12 +16,7 @@ set_option pp.rawOnError true
 :::::::
 :::::::
 
-/--
-info: LeanDoc.Doc.Doc.mk
-  LeanDoc.Doc.Part.mk #[LeanDoc.Doc.Inline.text "Nothing"] "Nothing" none #[] #[]
-  Lean.HashMap.ofList []
-  Lean.HashMap.ofList []
--/
+/-- info: LeanDoc.Doc.Part.mk #[LeanDoc.Doc.Inline.text "Nothing"] "Nothing" none #[] #[] -/
 #guard_msgs in
   #eval noDoc
 
@@ -35,15 +30,12 @@ Hello, I'm a paragraph. Yes I am!
 
 
 /--
-info: LeanDoc.Doc.Doc.mk
-  LeanDoc.Doc.Part.mk
-    #[LeanDoc.Doc.Inline.text "My title here"]
-    "My title here"
-    none
-    #[LeanDoc.Doc.Block.para #[LeanDoc.Doc.Inline.text "Hello, I'm a paragraph. Yes I am!"]]
-    #[]
-  Lean.HashMap.ofList []
-  Lean.HashMap.ofList []
+info: LeanDoc.Doc.Part.mk
+  #[LeanDoc.Doc.Inline.text "My title here"]
+  "My title here"
+  none
+  #[LeanDoc.Doc.Block.para #[LeanDoc.Doc.Inline.text "Hello, I'm a paragraph. Yes I am!"]]
+  #[]
 -/
 #guard_msgs in
   #eval a
@@ -56,17 +48,13 @@ info: LeanDoc.Doc.Doc.mk
 :::::::
 
 /--
-info: LeanDoc.Doc.Doc.mk
-  LeanDoc.Doc.Part.mk
-    #[LeanDoc.Doc.Inline.text "My title here"]
-    "My title here"
-    none
-    #[LeanDoc.Doc.Block.ul
-        #[{ indent := 0,
-            contents := #[LeanDoc.Doc.Block.para #[LeanDoc.Doc.Inline.text "Just a list with one item"]] }]]
-    #[]
-  Lean.HashMap.ofList []
-  Lean.HashMap.ofList []
+info: LeanDoc.Doc.Part.mk
+  #[LeanDoc.Doc.Inline.text "My title here"]
+  "My title here"
+  none
+  #[LeanDoc.Doc.Block.ul
+      #[{ indent := 0, contents := #[LeanDoc.Doc.Block.para #[LeanDoc.Doc.Inline.text "Just a list with one item"]] }]]
+  #[]
 -/
 #guard_msgs in
   #eval a'
@@ -83,20 +71,17 @@ a paragraph
 :::::::
 
 /--
-info: LeanDoc.Doc.Doc.mk
-  LeanDoc.Doc.Part.mk
-    #[LeanDoc.Doc.Inline.text "My title here"]
-    "My title here"
-    none
-    #[]
-    #[LeanDoc.Doc.Part.mk
-        #[LeanDoc.Doc.Inline.text "Section 1"]
-        "Section 1"
-        none
-        #[LeanDoc.Doc.Block.para #[LeanDoc.Doc.Inline.text "a paragraph"]]
-        #[]]
-  Lean.HashMap.ofList []
-  Lean.HashMap.ofList []
+info: LeanDoc.Doc.Part.mk
+  #[LeanDoc.Doc.Inline.text "My title here"]
+  "My title here"
+  none
+  #[]
+  #[LeanDoc.Doc.Part.mk
+      #[LeanDoc.Doc.Inline.text "Section 1"]
+      "Section 1"
+      none
+      #[LeanDoc.Doc.Block.para #[LeanDoc.Doc.Inline.text "a paragraph"]]
+      #[]]
 -/
 #guard_msgs in
   #eval b
@@ -121,33 +106,30 @@ More text:
 :::::::
 
 /--
-info: LeanDoc.Doc.Doc.mk
-  LeanDoc.Doc.Part.mk
-    #[LeanDoc.Doc.Inline.text "My title here"]
-    "My title here"
-    none
-    #[]
-    #[LeanDoc.Doc.Part.mk
-        #[LeanDoc.Doc.Inline.text "Section 1"]
-        "Section 1"
-        none
-        #[LeanDoc.Doc.Block.para #[LeanDoc.Doc.Inline.text "a paragraph"]]
-        #[LeanDoc.Doc.Part.mk
-            #[LeanDoc.Doc.Inline.text "Section 1.1"]
-            "Section 1.1"
-            none
-            #[LeanDoc.Doc.Block.para #[LeanDoc.Doc.Inline.text "More text:"],
-              LeanDoc.Doc.Block.ul
-                #[{ indent := 0, contents := #[LeanDoc.Doc.Block.para #[LeanDoc.Doc.Inline.text "and a list"]] },
-                  { indent := 0,
-                    contents := #[LeanDoc.Doc.Block.para #[LeanDoc.Doc.Inline.text "with two"],
-                                  LeanDoc.Doc.Block.ul
-                                    #[{ indent := 1,
-                                        contents := #[LeanDoc.Doc.Block.para
-                                                        #[LeanDoc.Doc.Inline.text "and nested"]] }]] }]]
-            #[]]]
-  Lean.HashMap.ofList []
-  Lean.HashMap.ofList []
+info: LeanDoc.Doc.Part.mk
+  #[LeanDoc.Doc.Inline.text "My title here"]
+  "My title here"
+  none
+  #[]
+  #[LeanDoc.Doc.Part.mk
+      #[LeanDoc.Doc.Inline.text "Section 1"]
+      "Section 1"
+      none
+      #[LeanDoc.Doc.Block.para #[LeanDoc.Doc.Inline.text "a paragraph"]]
+      #[LeanDoc.Doc.Part.mk
+          #[LeanDoc.Doc.Inline.text "Section 1.1"]
+          "Section 1.1"
+          none
+          #[LeanDoc.Doc.Block.para #[LeanDoc.Doc.Inline.text "More text:"],
+            LeanDoc.Doc.Block.ul
+              #[{ indent := 0, contents := #[LeanDoc.Doc.Block.para #[LeanDoc.Doc.Inline.text "and a list"]] },
+                { indent := 0,
+                  contents := #[LeanDoc.Doc.Block.para #[LeanDoc.Doc.Inline.text "with two"],
+                                LeanDoc.Doc.Block.ul
+                                  #[{ indent := 1,
+                                      contents := #[LeanDoc.Doc.Block.para
+                                                      #[LeanDoc.Doc.Inline.text "and nested"]] }]] }]]
+          #[]]]
 -/
 #guard_msgs in
   #eval c
@@ -167,26 +149,23 @@ Also, 2 > 3.
 :::::::
 
 /--
-info: LeanDoc.Doc.Doc.mk
-  LeanDoc.Doc.Part.mk
-    #[LeanDoc.Doc.Inline.text "More writing"]
-    "More writing"
-    none
-    #[]
-    #[LeanDoc.Doc.Part.mk
-        #[LeanDoc.Doc.Inline.text "Section 1"]
-        "Section 1"
-        none
-        #[LeanDoc.Doc.Block.para #[LeanDoc.Doc.Inline.text "Here's a quote;"],
-          LeanDoc.Doc.Block.blockquote
-            #[(LeanDoc.Doc.Block.para #[LeanDoc.Doc.Inline.text "I like quotes"]),
-              (LeanDoc.Doc.Block.ul
-                 #[{ indent := 2,
-                     contents := #[LeanDoc.Doc.Block.para #[LeanDoc.Doc.Inline.text "Also with lists in them"]] }])],
-          LeanDoc.Doc.Block.para #[LeanDoc.Doc.Inline.text "Also, 2 > 3."]]
-        #[]]
-  Lean.HashMap.ofList []
-  Lean.HashMap.ofList []
+info: LeanDoc.Doc.Part.mk
+  #[LeanDoc.Doc.Inline.text "More writing"]
+  "More writing"
+  none
+  #[]
+  #[LeanDoc.Doc.Part.mk
+      #[LeanDoc.Doc.Inline.text "Section 1"]
+      "Section 1"
+      none
+      #[LeanDoc.Doc.Block.para #[LeanDoc.Doc.Inline.text "Here's a quote;"],
+        LeanDoc.Doc.Block.blockquote
+          #[(LeanDoc.Doc.Block.para #[LeanDoc.Doc.Inline.text "I like quotes"]),
+            (LeanDoc.Doc.Block.ul
+               #[{ indent := 2,
+                   contents := #[LeanDoc.Doc.Block.para #[LeanDoc.Doc.Inline.text "Also with lists in them"]] }])],
+        LeanDoc.Doc.Block.para #[LeanDoc.Doc.Inline.text "Also, 2 > 3."]]
+      #[]]
 -/
 #guard_msgs in
   #eval d
@@ -206,21 +185,18 @@ Here's some code
 :::::::
 
 /--
-info: LeanDoc.Doc.Doc.mk
-  LeanDoc.Doc.Part.mk
-    #[LeanDoc.Doc.Inline.text "More writing"]
-    "More writing"
-    none
-    #[]
-    #[LeanDoc.Doc.Part.mk
-        #[LeanDoc.Doc.Inline.text "Section 1"]
-        "Section 1"
-        none
-        #[LeanDoc.Doc.Block.para #[LeanDoc.Doc.Inline.text "Here's some code"],
-          LeanDoc.Doc.Block.code none #[] 0 "(define (zero f z) z)\n(define (succ n) (lambda (f x) (f (n f z))))\n"]
-        #[]]
-  Lean.HashMap.ofList []
-  Lean.HashMap.ofList []
+info: LeanDoc.Doc.Part.mk
+  #[LeanDoc.Doc.Inline.text "More writing"]
+  "More writing"
+  none
+  #[]
+  #[LeanDoc.Doc.Part.mk
+      #[LeanDoc.Doc.Inline.text "Section 1"]
+      "Section 1"
+      none
+      #[LeanDoc.Doc.Block.para #[LeanDoc.Doc.Inline.text "Here's some code"],
+        LeanDoc.Doc.Block.code none #[] 0 "(define (zero f z) z)\n(define (succ n) (lambda (f x) (f (n f z))))\n"]
+      #[]]
 -/
 #guard_msgs in
   #eval e
@@ -240,22 +216,19 @@ Here's some `code`!
 :::::::
 
 /--
-info: LeanDoc.Doc.Doc.mk
-  LeanDoc.Doc.Part.mk
-    #[LeanDoc.Doc.Inline.text "More code writing"]
-    "More code writing"
-    none
-    #[]
-    #[LeanDoc.Doc.Part.mk
-        #[LeanDoc.Doc.Inline.text "Section 1"]
-        "Section 1"
-        none
-        #[LeanDoc.Doc.Block.para
-            #[LeanDoc.Doc.Inline.text "Here's some ", LeanDoc.Doc.Inline.code "code", LeanDoc.Doc.Inline.text "!"],
-          LeanDoc.Doc.Block.code none #[] 0 "(define (zero f z) z)\n(define (succ n) (lambda (f x) (f (n f z))))\n"]
-        #[]]
-  Lean.HashMap.ofList []
-  Lean.HashMap.ofList []
+info: LeanDoc.Doc.Part.mk
+  #[LeanDoc.Doc.Inline.text "More code writing"]
+  "More code writing"
+  none
+  #[]
+  #[LeanDoc.Doc.Part.mk
+      #[LeanDoc.Doc.Inline.text "Section 1"]
+      "Section 1"
+      none
+      #[LeanDoc.Doc.Block.para
+          #[LeanDoc.Doc.Inline.text "Here's some ", LeanDoc.Doc.Inline.code "code", LeanDoc.Doc.Inline.text "!"],
+        LeanDoc.Doc.Block.code none #[] 0 "(define (zero f z) z)\n(define (succ n) (lambda (f x) (f (n f z))))\n"]
+      #[]]
 -/
 #guard_msgs in
   #eval f
@@ -272,23 +245,20 @@ Here's [a link][to here]!
 :::::::
 
 /--
-info: LeanDoc.Doc.Doc.mk
-  LeanDoc.Doc.Part.mk
-    #[LeanDoc.Doc.Inline.text "Ref link before"]
-    "Ref link before"
-    none
-    #[]
-    #[LeanDoc.Doc.Part.mk
-        #[LeanDoc.Doc.Inline.text "Section 1"]
-        "Section 1"
-        none
-        #[LeanDoc.Doc.Block.para
-            #[LeanDoc.Doc.Inline.text "Here's ",
-              LeanDoc.Doc.Inline.link #[(LeanDoc.Doc.Inline.text "a link")] (LeanDoc.Doc.LinkDest.ref "to here"),
-              LeanDoc.Doc.Inline.text "!"]]
-        #[]]
-  Lean.HashMap.ofList [("to here", "http://example.com")]
-  Lean.HashMap.ofList []
+info: LeanDoc.Doc.Part.mk
+  #[LeanDoc.Doc.Inline.text "Ref link before"]
+  "Ref link before"
+  none
+  #[]
+  #[LeanDoc.Doc.Part.mk
+      #[LeanDoc.Doc.Inline.text "Section 1"]
+      "Section 1"
+      none
+      #[LeanDoc.Doc.Block.para
+          #[LeanDoc.Doc.Inline.text "Here's ",
+            LeanDoc.Doc.Inline.link #[(LeanDoc.Doc.Inline.text "a link")] "http://example.com",
+            LeanDoc.Doc.Inline.text "!"]]
+      #[]]
 -/
 #guard_msgs in
   #eval g
@@ -305,23 +275,20 @@ Here's [a link][to here]!
 :::::::
 
 /--
-info: LeanDoc.Doc.Doc.mk
-  LeanDoc.Doc.Part.mk
-    #[LeanDoc.Doc.Inline.text "Ref link after"]
-    "Ref link after"
-    none
-    #[]
-    #[LeanDoc.Doc.Part.mk
-        #[LeanDoc.Doc.Inline.text "Section 1"]
-        "Section 1"
-        none
-        #[LeanDoc.Doc.Block.para
-            #[LeanDoc.Doc.Inline.text "Here's ",
-              LeanDoc.Doc.Inline.link #[(LeanDoc.Doc.Inline.text "a link")] (LeanDoc.Doc.LinkDest.ref "to here"),
-              LeanDoc.Doc.Inline.text "!"]]
-        #[]]
-  Lean.HashMap.ofList [("to here", "http://example.com")]
-  Lean.HashMap.ofList []
+info: LeanDoc.Doc.Part.mk
+  #[LeanDoc.Doc.Inline.text "Ref link after"]
+  "Ref link after"
+  none
+  #[]
+  #[LeanDoc.Doc.Part.mk
+      #[LeanDoc.Doc.Inline.text "Section 1"]
+      "Section 1"
+      none
+      #[LeanDoc.Doc.Block.para
+          #[LeanDoc.Doc.Inline.text "Here's ",
+            LeanDoc.Doc.Inline.link #[(LeanDoc.Doc.Inline.text "a link")] "http://example.com",
+            LeanDoc.Doc.Inline.text "!"]]
+      #[]]
 -/
 #guard_msgs in
   #eval g'

@@ -97,7 +97,7 @@ namespace Blog
 structure Post where
   date : Date
   authors : List String
-  content : Doc Blog
+  content : Part Blog
   draft : Bool
 deriving TypeName, Inhabited
 

@@ -10,7 +10,7 @@ inductive Dir α where
 deriving Inhabited
 
 defmethod Post.traverse1 (post : Post) : Blog.TraverseM Post :=
-  withReader (fun ctxt => {ctxt with path := ctxt.path ++ [ctxt.config.postName post.date post.content.content.titleString]}) <| do
+  withReader (fun ctxt => {ctxt with path := ctxt.path ++ [ctxt.config.postName post.date post.content.titleString]}) <| do
     let content' ← Blog.traverse post.content
     pure {post with content := content'}
 
@@ -20,7 +20,7 @@ def Dir.traverse1 (dir : Dir α) (sub : α → Blog.TraverseM α) : Blog.Travers
   | .blog posts => .blog <$> posts.mapM Post.traverse1
 
 inductive Page where
-  | page (name : String) (id : Lean.Name) (text : Doc Blog) (contents : Dir Page)
+  | page (name : String) (id : Lean.Name) (text : Part Blog) (contents : Dir Page)
   | static (name : String) (files : System.FilePath)
 
 instance : Inhabited Page where
@@ -41,7 +41,7 @@ partial def Page.traverse1 (nav : Page) : Blog.TraverseM Page := do
   | .static .. => pure nav
 
 structure Site where
-  frontPage : Doc Blog
+  frontPage : Part Blog
   contents : Dir Page
 
 def Site.traverse1 (site : Site) : Blog.TraverseM Site := do
@@ -69,7 +69,7 @@ class MonadPath (m : Type → Type u) where
 export MonadPath (currentPath)
 
 def postName [Monad m] [MonadConfig m] (post : Post) : m String := do
-  pure <| (← currentConfig).postName post.date post.content.content.titleString
+  pure <| (← currentConfig).postName post.date post.content.titleString
 
 def relative [Monad m] [MonadConfig m] [MonadPath m] (target : List String) : m (List String) := do
   return relativize (← currentPath) target

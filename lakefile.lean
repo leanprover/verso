@@ -15,9 +15,23 @@ lean_lib LeanBlog where
   srcDir := "src/leanblog"
   roots := #[`LeanDoc.Genre.Blog]
 
+lean_lib LeanManual where
+  srcDir := "src/manual"
+  roots := #[`LeanDoc.Genre.Manual]
+
 @[default_target]
 lean_exe «leandoc» where
   root := `Main
+  -- Enables the use of the Lean interpreter by the executable (e.g.,
+  -- `runFrontend`) at the expense of increased binary size on Linux.
+  -- Remove this line if you do not need such functionality.
+  supportInterpreter := true
+
+lean_lib UsersGuide where
+
+@[default_target]
+lean_exe usersguide where
+  root := `UsersGuide
   -- Enables the use of the Lean interpreter by the executable (e.g.,
   -- `runFrontend`) at the expense of increased binary size on Linux.
   -- Remove this line if you do not need such functionality.
