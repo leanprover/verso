@@ -155,6 +155,7 @@ open Doc
 @[reducible]
 defmethod Blog.TraverseM := ReaderT Blog.TraverseContext (StateT Blog.TraverseState IO)
 
+-- TODO CSS variables, and document it
 def highlightingStyle : String := "
 .hl.lean .keyword {
   font-weight : bold;
@@ -181,15 +182,8 @@ def highlightingStyle : String := "
   z-index: 200;
 }
 
-.hl.lean .token:hover .hover-info {
-  display: inline-block;
-  position: absolute;
-  top: 1em;
-  font-weight: normal;
-  font-style: normal;
-}
-
-.hl.lean .has-info:hover .hover-info {
+.hl.lean .has-info:hover > .hover-container > .hover-info,
+.hl.lean .token:hover > .hover-container > .hover-info:not(.has-info *) {
   display: inline-block;
   position: absolute;
   top: 1em;
@@ -232,7 +226,7 @@ def highlightingStyle : String := "
   background-color: #ffb3b3;
 }
 
-.hl.lean .has-info.error .hover-info {
+.hl.lean .has-info.error > .hover-container > .hover-info {
   background-color: #ffb3b3;
 }
 

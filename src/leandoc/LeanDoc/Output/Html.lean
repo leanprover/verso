@@ -11,7 +11,7 @@ namespace LeanDoc.Output
 open Lean
 
 inductive Html where
-  | text (string : String)
+  | text (escape : Bool) (string : String)
   | tag (name : String) (attrs : Array (String × String)) (contents : Html)
   | seq (contents : Array Html)
 deriving Repr, Inhabited, TypeName
@@ -70,6 +70,7 @@ scoped syntax "<" tag_name attrib* ">" html* "</" tag_name ">" : html
 scoped syntax  "<" tag_name attrib* "/" ">" : html
 scoped syntax str : html
 scoped syntax "s!" interpolatedStr(term) : html
+scoped syntax "r!" str : html
 
 scoped syntax "{{"  html+ "}}" : term
 scoped syntax "{{{" attrib* "}}}" : term
@@ -86,8 +87,9 @@ macro_rules
       | _ => throwUnsupported
     `(term| #[ $[$attrsOut],* ] )
   | `(term| {{ {{ $e:term }} }} ) => ``(($e : Html))
-  | `(term| {{ $s:str }} ) => ``(Html.text $s)
-  | `(term| {{ s! $s:interpolatedStr }} ) => ``(Html.text s!$s)
+  | `(term| {{ $s:str }} ) => ``(Html.text true $s)
+  | `(term| {{ s! $s:interpolatedStr }} ) => ``(Html.text true s!$s)
+  | `(term| {{ r! $s:str }} ) => ``(Html.text false $s)
   | `(term| {{ $html1:html $html2:html $htmls:html*}}) =>
     `({{$html1}} ++ {{$html2}} ++ Html.seq #[$[{{$htmls}}],*])
   | `(term| {{ <$tag:tag_name $[$extra]* > $content:html </ $tag':tag_name> }}) => do
@@ -100,7 +102,7 @@ macro_rules
     ``(Html.tag $(quote tag.tagName) {{{ $extra* }}} <| Html.fromArray #[$[ {{ $content }} ],*] )
   | `(term| {{ <$tag:tag_name $[$extra]* /> }}) => ``(Html.tag $(quote tag.tagName) {{{ $extra* }}} Html.empty )
 
-scoped instance : Coe String Html := ⟨.text⟩
+scoped instance : Coe String Html := ⟨.text true⟩
 
 def test : Html := {{
   <html>
@@ -117,14 +119,15 @@ info: LeanDoc.Output.Html.tag
   (LeanDoc.Output.Html.tag
     "body"
     #[("lang", "en"), ("class", "thing")]
-    (LeanDoc.Output.Html.tag "p" #[] (LeanDoc.Output.Html.text "foo bar")))
+    (LeanDoc.Output.Html.tag "p" #[] (LeanDoc.Output.Html.text true "foo bar")))
 -/
 #guard_msgs in
   #eval test
 
 open Std.Format in
 partial def format : Html → Std.Format
-  | .text str => .text (str.replace "<" "&lt;" |>.replace ">" "&gt;")
+  | .text true str => .text (str.replace "<" "&lt;" |>.replace ">" "&gt;")
+  | .text false str => .text str
   | .tag name attrs (.seq #[]) =>
       Format.group (("<" ++ name) ++ group (line.prefixJoin (attrs.toList.map fun (k, v) => group (k ++ "=" ++ Format.line ++ s!"\"{v}\""))) ++ "/>")
   | .tag "pre" attrs body =>
@@ -139,7 +142,8 @@ partial def format : Html → Std.Format
   | .seq arr => line.joinSep <| arr.toList.map Html.format
 
 partial def asString : Html → String
-  | .text str => str.replace "<" "&lt;" |>.replace ">" "&gt;"
+  | .text true str => str.replace "<" "&lt;" |>.replace ">" "&gt;"
+  | .text false str => str
   | .tag name attrs (.seq #[]) =>
     "<" ++ name ++ attrsAsString attrs ++ "/>"
   | .tag name attrs (.seq #[subElem]) =>

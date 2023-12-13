@@ -129,11 +129,11 @@ deriving instance TypeName for String
 
 
 instance : Coe String Template.Params.Val where
-  coe str := ⟨.mk str, #[.mk <| Html.text str]⟩
+  coe str := ⟨.mk str, #[.mk <| Html.text true str]⟩
 
 instance : Coe Html Template.Params.Val where
   coe
-   | .text str => ↑str
+   | .text true str => ↑str
    | other => ⟨.mk other, #[]⟩
 
 
@@ -202,9 +202,9 @@ def param [TypeName α] (key : String) : TemplateM α := do
 def builtinHeader : TemplateM Html := do
   let mut out := .empty
   for style in (← read).builtInStyles do
-    out := out ++ {{<style>"\n"{{style}}"\n"</style>"\n"}}
+    out := out ++ {{<style>"\n"{{.text false style}}"\n"</style>"\n"}}
   for script in (← read).builtInScripts do
-    out := out ++ {{<script>"\n"{{script}}"\n"</script>"\n"}}
+    out := out ++ {{<script>"\n"{{.text false script}}"\n"</script>"\n"}}
   pure out
 
 namespace Params

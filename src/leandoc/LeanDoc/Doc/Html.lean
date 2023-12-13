@@ -69,7 +69,7 @@ section
 open ToHtml
 
 partial def Inline.toHtml [Monad m] [GenreHtml g m] : Inline g → HtmlT g m Html
-  | .text str => pure <| .text str
+  | .text str => pure <| .text true str
   | .link content dest => do
     pure {{ <a href={{dest}}> {{← content.mapM toHtml}} </a> }}
   | .image alt dest => do
@@ -150,17 +150,22 @@ info: LeanDoc.Output.Html.tag
   "section"
   #[]
   (LeanDoc.Output.Html.seq
-    #[LeanDoc.Output.Html.tag "h1" #[] (LeanDoc.Output.Html.seq #[LeanDoc.Output.Html.text "More writing"]),
+    #[LeanDoc.Output.Html.tag "h1" #[] (LeanDoc.Output.Html.seq #[LeanDoc.Output.Html.text true "More writing"]),
       LeanDoc.Output.Html.tag
         "section"
         #[]
         (LeanDoc.Output.Html.seq
-          #[LeanDoc.Output.Html.tag "h2" #[] (LeanDoc.Output.Html.seq #[LeanDoc.Output.Html.text "Section 1"]),
-            LeanDoc.Output.Html.tag "p" #[] (LeanDoc.Output.Html.seq #[LeanDoc.Output.Html.text "Here's some code"]),
+          #[LeanDoc.Output.Html.tag "h2" #[] (LeanDoc.Output.Html.seq #[LeanDoc.Output.Html.text true "Section 1"]),
+            LeanDoc.Output.Html.tag
+              "p"
+              #[]
+              (LeanDoc.Output.Html.seq #[LeanDoc.Output.Html.text true "Here's some code"]),
             LeanDoc.Output.Html.tag
               "pre"
               #[]
-              (LeanDoc.Output.Html.text "(define (zero f z) z)\n(define (succ n) (lambda (f x) (f (n f z))))\n")])])
+              (LeanDoc.Output.Html.text
+                true
+                "(define (zero f z) z)\n(define (succ n) (lambda (f x) (f (n f z))))\n")])])
 -/
 #guard_msgs in
   #eval Genre.none.toHtml (m:=Id) {logError := fun _ => ()} () () e
