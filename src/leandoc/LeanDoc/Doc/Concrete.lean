@@ -143,19 +143,22 @@ def currentDocName [Monad m] [MonadEnv m] : m Name := do
 
 elab "#doc" "(" genre:term ")" title:inlineStr "=>" text:document eof:eoi : command => open Lean Elab Term Command PartElabM DocElabM in do
   findGenre genre
-  let endPos := eof.raw.getTailPos?.get!
-  let .node _ _ blocks := text.raw
-    | dbg_trace "nope {ppSyntax text.raw}" throwUnsupportedSyntax
-  let ⟨`<low| [~_ ~(titleName@(.node _ _ titleParts))]>⟩ := title
-    | dbg_trace "nope {ppSyntax title}" throwUnsupportedSyntax
-  let titleString := inlinesToString (← getEnv) titleParts
-  let ((), st, st') ← liftTermElabM <| PartElabM.run {} (.init titleName) <| do
-    setTitle titleString (← liftDocElabM <| titleParts.mapM elabInline)
-    for b in blocks do partCommand b
-    closePartsUntil 0 endPos
-    pure ()
-  let finished := st'.partContext.toPartFrame.close endPos
-  pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
-  saveRefs st st'
-  let docName ← mkIdentFrom title <$> currentDocName
-  elabCommand (← `(def $docName : Part $genre := $(← finished.toSyntax st'.linkDefs st'.footnoteDefs)))
+  if eof.raw.isMissing then
+    throwError "Syntax error prevents processing document"
+  else
+    let endPos := eof.raw.getTailPos?.get!
+    let .node _ _ blocks := text.raw
+      | dbg_trace "nope {ppSyntax text.raw}" throwUnsupportedSyntax
+    let ⟨`<low| [~_ ~(titleName@(.node _ _ titleParts))]>⟩ := title
+      | dbg_trace "nope {ppSyntax title}" throwUnsupportedSyntax
+    let titleString := inlinesToString (← getEnv) titleParts
+    let ((), st, st') ← liftTermElabM <| PartElabM.run {} (.init titleName) <| do
+      setTitle titleString (← liftDocElabM <| titleParts.mapM elabInline)
+      for b in blocks do partCommand b
+      closePartsUntil 0 endPos
+      pure ()
+    let finished := st'.partContext.toPartFrame.close endPos
+    pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
+    saveRefs st st'
+    let docName ← mkIdentFrom title <$> currentDocName
+    elabCommand (← `(def $docName : Part $genre := $(← finished.toSyntax st'.linkDefs st'.footnoteDefs)))
