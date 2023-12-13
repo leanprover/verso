@@ -195,16 +195,6 @@ where
     let blk ← liftDocElabM <| elabBlock cmd
     addBlock blk
 
-partial def closePartsUntil (outer : Nat) (endPos : String.Pos) : PartElabM Unit := do
-  let level ← currentLevel
-  if outer ≤ level then
-    match (← getThe PartElabM.State).partContext.close endPos with
-    | some ctxt' =>
-      modifyThe PartElabM.State fun st => {st with partContext := ctxt'}
-      if outer < level then
-        closePartsUntil outer endPos
-    | none => pure ()
-
 @[part_command LeanDoc.Syntax.footnote_ref]
 partial def _root_.LeanDoc.Syntax.footnote_ref.command : PartCommand
   | `(block| [^ $name:str ]: $contents* ) =>
@@ -217,6 +207,15 @@ partial def _root_.LeanDoc.Syntax.link_ref.command : PartCommand
     addLinkDef name url.getString
   | stx => dbg_trace  "{stx}"; throwUnsupportedSyntax
 
+partial def closePartsUntil (outer : Nat) (endPos : String.Pos) : PartElabM Unit := do
+  let level ← currentLevel
+  if outer ≤ level then
+    match (← getThe PartElabM.State).partContext.close endPos with
+    | some ctxt' =>
+      modifyThe PartElabM.State fun st => {st with partContext := ctxt'}
+      if outer < level then
+        closePartsUntil outer endPos
+    | none => pure ()
 
 @[part_command LeanDoc.Syntax.header]
 partial def _root_.LeanDoc.Syntax.header.command : PartCommand
@@ -232,7 +231,7 @@ partial def _root_.LeanDoc.Syntax.header.command : PartCommand
       pure ()
     else
       if let none := info.getPos? then dbg_trace "No start position for {stx}"
-      closePartsUntil ambientLevel info.getPos!
+      closePartsUntil headerLevel info.getPos!
 
     -- Start a new subpart
     push {
