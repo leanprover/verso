@@ -6,6 +6,7 @@ import LeanDoc.Genre.Blog.Site
 import LeanDoc.Genre.Blog.Site.Syntax
 import LeanDoc.Genre.Blog.Template
 import LeanDoc.Genre.Blog.Theme
+import LeanDoc.Doc.Lsp
 import LeanDoc.Doc.Suggestion
 open LeanDoc.Output Html
 open Lean (RBMap)
