@@ -250,9 +250,6 @@ def highlightingStyle : String := "
   background-color: #4777ff;
 }
 
-.hl.lean .info {
-  display: none;
-}
 "
 
 def highlightingJs : String :=
