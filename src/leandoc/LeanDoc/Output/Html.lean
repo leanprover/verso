@@ -145,7 +145,11 @@ partial def asString : Html → String
   | .text true str => str.replace "<" "&lt;" |>.replace ">" "&gt;"
   | .text false str => str
   | .tag name attrs (.seq #[]) =>
-    "<" ++ name ++ attrsAsString attrs ++ "/>"
+    -- TODO make this more elegant
+    if name == "script" then
+      "<" ++ name ++ attrsAsString attrs ++ "></script>"
+    else
+      "<" ++ name ++ attrsAsString attrs ++ "/>"
   | .tag name attrs (.seq #[subElem]) =>
     "<" ++ name ++ attrsAsString attrs ++ ">" ++ asString subElem ++ s!"</{name}>"
   | .tag "pre" attrs body =>

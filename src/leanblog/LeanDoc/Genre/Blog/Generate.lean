@@ -25,7 +25,7 @@ def Generate.Context.templateContext (ctxt : Generate.Context) (params : Templat
   params := params
   path := ctxt.ctxt.path
   builtInStyles := ctxt.xref.stylesheets
-  builtInScripts := ctxt.xref.scripts
+  builtInScripts := ctxt.xref.scripts.insert Traverse.renderMathJs
 
 abbrev GenerateM := ReaderT Generate.Context IO
 

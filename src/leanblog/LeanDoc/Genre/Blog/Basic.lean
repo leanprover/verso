@@ -278,6 +278,16 @@ def highlightingJs : String :=
 }
 "
 
+def renderMathJs : String :=
+"document.addEventListener(\"DOMContentLoaded\", () => {
+    for (const m of document.querySelectorAll(\".math.inline\")) {
+        katex.render(m.textContent, m, {throwOnError: false, displayMode: false});
+    }
+    for (const m of document.querySelectorAll(\".math.display\")) {
+        katex.render(m.textContent, m, {throwOnError: false, displayMode: true});
+    }
+});"
+
 instance : Traverse Blog Blog.TraverseM where
   part _ := pure ()
   block _ := pure ()
@@ -285,7 +295,10 @@ instance : Traverse Blog Blog.TraverseM where
   genrePart _ _ := pure none
   genreBlock
     | .highlightedCode .., _contents => do
-      modify fun st => {st with stylesheets := st.stylesheets.insert highlightingStyle, scripts := st.scripts.insert highlightingJs}
+      modify fun st => {st with
+        stylesheets := st.stylesheets.insert highlightingStyle,
+        scripts := st.scripts.insert highlightingJs
+      }
       pure none
     | _, _ => pure none
   genreInline

@@ -33,7 +33,13 @@ Like Markdown, Lean's markup has three primary syntactic categories:
 
 ## Description
 
+TODO build an extension to test the parsing here
+
 ### Inline Syntax
+
+
+
+TeX math can be included using a single or double dollar sign followed by code. Two dollar signs results in display-mode math, so `` $`\sum_{i=0}^{10} i` `` results in $`\sum_{i=0}^{10} i` while `` $$`\sum_{i=0}^{10} i` `` results in: $$`\sum_{i=0}^{10} i`
 
 ### Block Syntax
 

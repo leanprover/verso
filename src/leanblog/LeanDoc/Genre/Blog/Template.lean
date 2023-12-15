@@ -205,6 +205,11 @@ def builtinHeader : TemplateM Html := do
     out := out ++ {{<style>"\n"{{.text false style}}"\n"</style>"\n"}}
   for script in (← read).builtInScripts do
     out := out ++ {{<script>"\n"{{.text false script}}"\n"</script>"\n"}}
+  out := out ++ {{
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI+WdtXRGWt2kTvGFasHpSy3SV" crossorigin="anonymous"/>
+    <script defer="defer" src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG+vnGctmUb0ZY0l8" crossorigin="anonymous"></script>
+  }}
+
   pure out
 
 namespace Params

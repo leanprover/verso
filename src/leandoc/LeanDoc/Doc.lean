@@ -41,12 +41,16 @@ instance : Repr Genre.none.Inline where
 instance : Repr Genre.none.PartMetadata where
   reprPrec e _ := nomatch e
 
+inductive MathMode where | inline | display
+deriving Repr, BEq
 
 inductive Inline (genre : Genre) : Type where
   | text (string : String)
   | emph (content : Array (Inline genre))
   | bold (content : Array (Inline genre))
   | code (string : String)
+  /-- Embedded blobs of TeX math -/
+  | math (mode : MathMode) (string : String)
   | linebreak (string : String)
   | link (content : Array (Inline genre)) (url : String)
   | footnote (name : String) (content : Array (Inline genre))
@@ -75,6 +79,7 @@ partial def Inline.reprPrec [Repr g.Inline] (inline : Inline g) (prec : Nat) : S
         | .emph content => reprCtor ``Inline.emph [reprArray go content]
         | .bold content => reprCtor ``Inline.bold [reprArray go content]
         | .code str => reprCtor ``Inline.code [reprArg str]
+        | .math mode str => reprCtor ``Inline.math [reprArg mode, reprArg str]
         | .linebreak str => reprCtor ``Inline.linebreak [reprArg str]
         | .link content dest => reprCtor ``Inline.link [
             reprArray go content,
@@ -207,7 +212,7 @@ where
       match ← Traverse.genreInline container content with
       | .none => .other container <$> content.mapM inline
       | .some i' => inline i'
-    | .text .. | .linebreak .. | .code .. => pure i
+    | .text .. | .linebreak .. | .code .. | .math .. => pure i
 
   block (b : Doc.Block g) : m (Doc.Block g) := do
     Traverse.block b

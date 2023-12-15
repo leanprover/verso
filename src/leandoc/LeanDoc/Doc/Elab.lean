@@ -153,6 +153,20 @@ def _root_.LeanDoc.Syntax.code.expand : InlineExpander
     ``(Inline.code $s)
   | _ => throwUnsupportedSyntax
 
+
+@[inline_expander LeanDoc.Syntax.inline_math]
+def _root_.LeanDoc.Syntax.inline_math.expand : InlineExpander
+  |  `(inline| ${ code{ $s } }) =>
+    ``(Inline.math MathMode.inline $s)
+  | _ => throwUnsupportedSyntax
+
+@[inline_expander LeanDoc.Syntax.display_math]
+def _root_.LeanDoc.Syntax.display_math.expand : InlineExpander
+  |  `(inline| $${ code{ $s } }) =>
+    ``(Inline.math MathMode.display $s)
+  | _ => throwUnsupportedSyntax
+
+
 def elabBlock (block : Syntax) : DocElabM (TSyntax `term) :=
   withRef block <| withFreshMacroScope <| withIncRecDepth <| do
   match block with

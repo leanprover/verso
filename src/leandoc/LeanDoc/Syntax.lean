@@ -38,6 +38,8 @@ syntax (name:=linebreak) "line!" : inline
 /-- Literal characters-/
 syntax (name:=code) "code{" str "}" : inline
 syntax (name:=role) "role{" ident argument* "}" "[" inline "]"  : inline
+syntax (name:=inline_math) "${" inline "}" : inline
+syntax (name:=display_math) "$${" inline "}" : inline
 
 declare_syntax_cat list_item
 /-- List item -/

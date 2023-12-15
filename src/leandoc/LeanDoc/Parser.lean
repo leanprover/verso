@@ -304,6 +304,11 @@ Remaining:
 #guard_msgs in
 #eval nl.test! "\n "
 
+def fakeAtom (str : String) : ParserFn := fun _c s =>
+  let atom := mkAtom SourceInfo.none str
+  s.pushSyntax atom
+
+
 def strFn (str : String) : ParserFn := asStringFn <| fun c s =>
   let rec go (iter : String.Iterator) (s : ParserState) :=
     if iter.atEnd then s
@@ -395,6 +400,22 @@ def inlineTextChar : ParserFn := fun c s =>
       if h : c.input.atEnd i' then s
       else if c.input.get' i' h == '['
       then s.mkUnexpectedErrorAt "![" i
+      else s
+    | '$' =>
+      let s := s.next' c.input i h
+      let i' := s.pos
+      if h : c.input.atEnd i' then
+        s
+      else if c.input.get' i' h == '`' then
+        s.mkUnexpectedErrorAt "$`" i
+      else if c.input.get' i' h == '$' then
+        let s := s.next' c.input i' h
+        let i' := s.pos
+        if h : c.input.atEnd i' then
+          s
+        else if c.input.get' i' h == '`' then
+          s.mkUnexpectedErrorAt "$$`" i
+        else s
       else s
     | _ => s.next' c.input i h
 
@@ -820,6 +841,9 @@ mutual
         else if ch == '\n' then s.mkUnexpectedError "newline"
         else takeContentsFn maxCount c (s.next' c.input i h)
 
+  partial def math : ParserFn :=
+    atomicFn (nodeFn ``display_math <| strFn "$$" >> code >> fakeAtom "`") <|>
+    atomicFn (nodeFn ``inline_math <| strFn "$" >> code >> fakeAtom "`")
 
   -- Read a prefix of a line of text, stopping at a text-mode special character
   partial def text :=
@@ -873,7 +897,7 @@ mutual
       s.pushSyntax fakeClose
 
 
-  partial def delimitedInline (ctxt : InlineCtxt) : ParserFn := emph ctxt <|> bold ctxt <|> code <|> role ctxt <|> image <|> link ctxt <|> footnote ctxt
+  partial def delimitedInline (ctxt : InlineCtxt) : ParserFn := emph ctxt <|> bold ctxt <|> code <|> math <|> role ctxt <|> image <|> link ctxt <|> footnote ctxt
 
   partial def inline (ctxt : InlineCtxt) : ParserFn :=
     text <|> linebreak ctxt <|> delimitedInline ctxt
@@ -1215,6 +1239,60 @@ All input consumed.
 #guard_msgs in
 #eval inline {} |>.test! "[^1]"
 
+/--
+info: Success! Final stack:
+  (LeanDoc.Syntax.inline_math
+   "$"
+   (LeanDoc.Syntax.code
+    "`"
+    (str "\"\\\\frac{x}{4}\"")
+    "`")
+   "`")
+All input consumed.
+-/
+#guard_msgs in
+#eval inline {} |>.test! "$`\\frac{x}{4}`"
+
+/--
+info: Success! Final stack:
+  (LeanDoc.Syntax.display_math
+   "$$"
+   (LeanDoc.Syntax.code
+    "`"
+    (str "\"\\\\frac{x}{4}\"")
+    "`")
+   "`")
+All input consumed.
+-/
+#guard_msgs in
+#eval inline {} |>.test! "$$`\\frac{x}{4}`"
+
+/--
+info: Success! Final stack:
+  (LeanDoc.Syntax.text (str "\"$35.23\""))
+All input consumed.
+-/
+#guard_msgs in
+#eval inline {} |>.test! "$35.23"
+
+/--
+info: Success! Final stack:
+  (LeanDoc.Syntax.text (str "\"$\""))
+Remaining:
+"`code`"
+-/
+#guard_msgs in
+#eval inline {} |>.test! "\\$`code`"
+
+/--
+info: Success! Final stack:
+  (LeanDoc.Syntax.text (str "\"$$$\""))
+All input consumed.
+-/
+#guard_msgs in
+#eval inline {} |>.test! "$$$"
+
+
 structure InList where
   indentation : Nat
   type : OrderedListType ⊕ UnorderedListType
@@ -1225,10 +1303,6 @@ structure BlockCtxt where
   maxDirective : Option Nat := none
   inLists : List InList := []
 deriving Inhabited, Repr
-
-def fakeAtom (str : String) : ParserFn := fun _c s =>
-  let atom := mkAtom SourceInfo.none str
-  s.pushSyntax atom
 
 def lookaheadOrderedListIndicator (ctxt : BlockCtxt) (p : OrderedListType → Int → ParserFn) : ParserFn := fun c s =>
     let iniPos := s.pos
@@ -1772,7 +1846,7 @@ All input consumed.
   #eval blocks {} |>.test! "* foo\n  * bar\n* more outer"
 
 /--
-info: Failure: unexpected end of input; expected ![, [, [^ or expected beginning of line at ⟨2, 15⟩
+info: Failure: unexpected end of input; expected ![, $, $$, [, [^ or expected beginning of line at ⟨2, 15⟩
 Final stack:
   [(LeanDoc.Syntax.dl
     [(LeanDoc.Syntax.desc

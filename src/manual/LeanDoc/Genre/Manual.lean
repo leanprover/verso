@@ -60,12 +60,16 @@ def ensureDir (dir : System.FilePath) : IO Unit := do
 open IO.FS in
 def emitTeX (logError : String → IO Unit) (config : Config) (text : Part Manual) : IO Unit := do
   let opts : TeX.Options Manual IO := {headerLevels := #["chapter", "section", "subsection", "subsubsection", "paragraph"], headerLevel := some ⟨0, by simp_arith [Array.size, List.length]⟩, logError := logError}
-  let rendered ← text.toTeX (opts, (), ())
+  let frontMatter ← text.content.mapM (·.toTeX (opts, (), ()))
+  let chapters ← text.subParts.mapM (·.toTeX (opts, (), ()))
   let dir := config.destination.join "tex"
   ensureDir dir
   withFile (dir.join "main.tex") .write fun h => do
     h.putStrLn (preamble text.titleString ["author 1", "author 2"])
-    h.putStrLn rendered.asString
+    for b in frontMatter do
+      h.putStrLn b.asString
+    for c in chapters do
+      h.putStrLn c.asString
     h.putStrLn postamble
 
 def manualMain (text : Part Manual) (options : List String) : IO UInt32 := do

@@ -28,7 +28,7 @@ def logError [Monad m] (message : String) : TeXT g m Unit := do
 def header [Monad m] (name : TeX) : TeXT g m TeX := do
   let opts ← options
   let some i := opts.headerLevel
-    | logError "No more header nesting available"; return \TeX{\textbf{\Lean{name}}}
+    | logError s!"No more header nesting available at {name.asString}"; return \TeX{\textbf{\Lean{name}}}
   let header := opts.headerLevels[i]
   pure <| .raw (s!"\\{header}" ++ "{") ++ name ++ .raw "}"
 
@@ -62,6 +62,8 @@ partial defmethod Inline.toTeX [Monad m] [GenreTeX g m] : Inline g → TeXT g m 
     pure \TeX{\textbf{\Lean{← content.mapM toTeX}}}
   | .code str => do
     pure \TeX{s!"\\verb|{str}|"} --- TODO choose delimiter automatically
+  | .math .inline str => pure <| .raw s!"${str}$"
+  | .math .display str => pure <| .raw s!"\\[{str}\\]"
   | .concat inlines => inlines.mapM toTeX
   | .other container content => GenreTeX.inline Inline.toTeX container content
 

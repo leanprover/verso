@@ -82,6 +82,9 @@ partial def Inline.toHtml [Monad m] [GenreHtml g m] : Inline g → HtmlT g m Htm
   | .bold content => do
     pure {{ <strong> {{← content.mapM toHtml}} </strong> }}
   | .code str => pure {{ <code> {{str}} </code> }}
+  | .math mode str => do
+     let classes := "math " ++ match mode with | .inline => "inline" | .display => "display"
+     pure {{ <code class={{classes}}>{{str}}</code> }}
   | .concat inlines => inlines.mapM toHtml
   | .other container content => GenreHtml.inline Inline.toHtml container content
 
