@@ -10,6 +10,7 @@ inductive TeX where
   | raw (string : String)
   | command (name : String) (optArgs : Array TeX) (args : Array TeX)
   | environment (name : String)  (optArgs : Array TeX) (args : Array TeX) (content : Array TeX)
+  | paragraphBreak
   | seq (contents : Array TeX)
 deriving Repr, Inhabited
 
@@ -34,7 +35,8 @@ partial def asString (doc : TeX) : String :=
   | .environment name opt req content =>
     "\\begin{" ++ name ++ "}" ++ opt.foldl (· ++ "[" ++ ·.asString ++ "]") "" ++ req.foldl (· ++ "{" ++ ·.asString ++ "}") "" ++ "\n" ++
     String.join (content.map (·.asString) |>.toList) ++ "\n" ++
-    "\\end{" ++ name ++ "}\n"
+    "\\end{" ++ name ++ "}"
+  | .paragraphBreak => "\n\n"
   | .seq texs => String.join (texs.map (·.asString) |>.toList)
 where
   escape s := s.replace "\\" "\\\\" |>.replace "{" "\\{" |>.replace "}" "\\}" --TODO make correct!

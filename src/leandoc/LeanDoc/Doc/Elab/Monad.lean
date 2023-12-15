@@ -89,6 +89,7 @@ def internalRefs (defs : HashMap String (DocDef α)) (refs : HashMap String DocU
 
 inductive TOC where
   | mk (title : String) (titleSyntax : Syntax) (endPos : String.Pos) (children : Array TOC)
+  | included (name : Ident)
 deriving Repr, TypeName, Inhabited
 
 structure TocFrame where
@@ -129,6 +130,7 @@ def TocFrame.wrapAll (stack : Array TocFrame) (item : TOC) (endPos : String.Pos)
 
 inductive FinishedPart where
   | mk (titleSyntax : Syntax) (expandedTitle : Array (TSyntax `term)) (titlePreview : String) (blocks : Array (TSyntax `term)) (subParts : Array FinishedPart) (endPos : String.Pos)
+  | included (name : Ident)
 deriving Repr, BEq
 
 private def linkRefName (ref : TSyntax `str) : TSyntax `ident :=
@@ -149,6 +151,7 @@ partial def FinishedPart.toSyntax [Monad m] [MonadQuotation m]
     let subStx ← subParts.mapM (toSyntax {} {})
     let body ← ``(Part.mk #[$[$titleInlines],*] $(quote titleString) none #[$[$blocks],*] #[$[$subStx],*])
     bindFootnotes footnoteDefs (← bindLinks linkDefs body)
+  | .included name => pure name
 where
   bindLinks (linkDefs : HashMap String (DocDef String)) (body : TSyntax `term) : m (TSyntax `term) := do
     let defs ← linkDefs.toArray.mapM fun (_, defn) =>
@@ -163,6 +166,7 @@ where
 partial def FinishedPart.toTOC : FinishedPart → TOC
   | .mk titleStx _titleInlines titleString _blocks subParts endPos =>
     .mk titleString titleStx endPos (subParts.map toTOC)
+  | .included name => .included name
 
 structure PartFrame where
   titleSyntax : Syntax
@@ -275,6 +279,9 @@ def PartElabM.setTitle (titlePreview : String) (titleInlines : Array (TSyntax `t
 
 def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := modifyThe State fun st =>
   {st with partContext.blocks := st.partContext.blocks.push block}
+
+def PartElabM.addPart (finished : FinishedPart) : PartElabM Unit := modifyThe State fun st =>
+  {st with partContext.priorParts := st.partContext.priorParts.push finished}
 
 def PartElabM.addLinkDef (refName : TSyntax `str) (url : String) : PartElabM Unit := do
   let strName := refName.getString

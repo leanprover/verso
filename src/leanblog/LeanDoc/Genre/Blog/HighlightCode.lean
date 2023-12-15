@@ -336,7 +336,8 @@ partial def highlight' (ids : HashMap Lsp.RefIdent Lsp.RefIdent) (stx : Syntax) 
       if let .sort ← identKind ids ⟨stx⟩ then
         emitToken i ⟨.sort, x⟩
         return
-      emitToken i <| (⟨ ·,  x⟩) <|
+      else
+        emitToken i <| (⟨ ·,  x⟩) <|
         match x.get? 0 with
         | some '#' => .keyword lookingAt docs
         | some c =>

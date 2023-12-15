@@ -237,8 +237,8 @@ partial def handleSyms (_params : DocumentSymbolParams) (prev : RequestTask Docu
   --pure syms
   where
     combineAnswers (x y : Option DocumentSymbolResult) : DocumentSymbolResult := ⟨graftSymbols (x.getD ⟨{}⟩).syms (y.getD ⟨{}⟩).syms⟩
-    tocSym (text : FileMap) : TOC → Option DocumentSymbol
-      | .mk title titleStx endPos children => Id.run do
+    tocSym (text : FileMap) : TOC → Id (Option DocumentSymbol)
+      | .mk title titleStx endPos children => do
         let some selRange@⟨start, _⟩ := titleStx.lspRange text
           | return none
         let mut kids := #[]
@@ -251,6 +251,16 @@ partial def handleSyms (_params : DocumentSymbolParams) (prev : RequestTask Docu
           selectionRange := selRange,
           children? := kids
         }
+      | .included name => do
+        -- TODO Evaluate the name to find the actual included title
+        let some rng := name.raw.lspRange text
+          | return none
+        return some <| DocumentSymbol.mk {
+          name := toString name,
+          kind := SymbolKind.property,
+          range := rng
+          selectionRange := rng
+        }
     getSections text ss : Array DocumentSymbol := Id.run do
       let mut syms := #[]
       for snap in ss do
@@ -260,7 +270,7 @@ partial def handleSyms (_params : DocumentSymbolParams) (prev : RequestTask Docu
             data.get? TOC
           | _ => none
         for i in info do
-          if let some x := tocSym text i then syms := syms.push x
+          if let some x ← tocSym text i then syms := syms.push x
       pure syms
 
 -- Shamelessly cribbed from https://github.com/tydeu/lean4-alloy/blob/57792f4e8a9674f8b4b8b17742607a1db142d60e/Alloy/C/Server/SemanticTokens.lean

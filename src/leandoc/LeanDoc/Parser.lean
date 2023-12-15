@@ -922,8 +922,6 @@ Remaining: "_ aa_"
 #guard_msgs in
   #eval emph {} |>.test! "_ aa_"
 
-
-
 /--
 info: Success! Final stack:
   (LeanDoc.Syntax.code
@@ -1036,6 +1034,7 @@ Remaining: "\no `"
 -/
 #guard_msgs in
   #eval (inline {}).test! "` fo\no `"
+
 
 /--
 info: Success! Final stack:
@@ -1418,7 +1417,8 @@ mutual
       colonFn >>
       withCurrentColumn fun c => textLine >> ignoreFn (manyFn blankLine) >>
       fakeAtom "=>" >>
-      blocks1 { ctxt with minIndent := c}
+      blocks1 { ctxt with minIndent := c} >>
+      ignoreFn (manyFn blankLine)
   where
     colonFn := atomicFn <|
       takeWhileFn (· == ' ') >>
@@ -1539,6 +1539,8 @@ mutual
       notFollowedByFn (skipChFn ':') "extra :" >>
       takeWhileFn (· == ' ') >> (satisfyFn (· == '\n') "newline" <|> eoiFn)
 
+  -- This low-level definition is to get exactly the right amount of lookahead
+  -- together with column tracking
   partial def block_role (ctxt : BlockCtxt) : ParserFn := fun c s =>
     let iniPos := s.pos
     let iniSz := s.stxStack.size
@@ -1552,7 +1554,7 @@ mutual
       let s := (intro >> eatSpaces >> ignoreFn (satisfyFn (· == '\n') "newline" <|> eoiFn)) c s
       if s.hasError then restorePosOnErr s
       else
-        let s := block {ctxt with minIndent := col} c s
+        let s := (nodeFn nullKind <| atomicFn (ignoreFn (eatSpaces >> satisfyFn (· == '\n') "newline")) <|> block {ctxt with minIndent := col}) c s
         s.mkNode ``block_role iniSz
   where
     eatSpaces := takeWhileFn (· == ' ')
@@ -1827,6 +1829,31 @@ Remaining: ""
 -/
 #guard_msgs in
   #eval blocks {} |>.test! ": an excellent idea\n\n Let's say more!\n\n: more\n\n"
+
+/--
+info: Success! Final stack:
+  [(LeanDoc.Syntax.dl
+    [(LeanDoc.Syntax.desc
+      ":"
+      [(LeanDoc.Syntax.text
+        (str "\" an excellent idea\""))]
+      "=>"
+      [(LeanDoc.Syntax.para
+        [(LeanDoc.Syntax.text
+          (str "\"Let's say more!\""))])])
+     (LeanDoc.Syntax.desc
+      ":"
+      [(LeanDoc.Syntax.text (str "\" more\""))]
+      "=>"
+      [(LeanDoc.Syntax.para
+        [(LeanDoc.Syntax.text
+          (str "\"even more!\""))])])])]
+All input consumed.
+-/
+-- Test having lots of blank lines between items
+#guard_msgs in
+  #eval blocks {} |>.test! ": an excellent idea\n\n Let's say more!\n\n\n\n\n: more\n\n even more!"
+
 
 /--
 info: Success! Final stack:
@@ -2205,9 +2232,10 @@ info: Success! Final stack:
    `test
    []
    "}"
-   (LeanDoc.Syntax.para
-    [(LeanDoc.Syntax.text
-      (str "\"Here's a modified paragraph.\""))]))
+   [(LeanDoc.Syntax.para
+     [(LeanDoc.Syntax.text
+       (str
+        "\"Here's a modified paragraph.\""))])])
 All input consumed.
 -/
 #guard_msgs in
@@ -2219,9 +2247,10 @@ info: Success! Final stack:
    `test
    []
    "}"
-   (LeanDoc.Syntax.para
-    [(LeanDoc.Syntax.text
-      (str "\"Here's a modified paragraph.\""))]))
+   [(LeanDoc.Syntax.para
+     [(LeanDoc.Syntax.text
+       (str
+        "\"Here's a modified paragraph.\""))])])
 All input consumed.
 -/
 #guard_msgs in
@@ -2233,9 +2262,10 @@ info: Success! Final stack:
    `test
    []
    "}"
-   (LeanDoc.Syntax.para
-    [(LeanDoc.Syntax.text
-      (str "\"Here's a modified paragraph.\""))]))
+   [(LeanDoc.Syntax.para
+     [(LeanDoc.Syntax.text
+       (str
+        "\"Here's a modified paragraph.\""))])])
 All input consumed.
 -/
 #guard_msgs in
@@ -2248,7 +2278,7 @@ Final stack:
    `test
    []
    "}"
-   (LeanDoc.Syntax.para <missing>))
+   [(LeanDoc.Syntax.para <missing>)])
 Remaining: "Here's a modified paragraph."
 -/
 #guard_msgs in
@@ -2260,15 +2290,15 @@ info: Success! Final stack:
    `test
    []
    "}"
-   (LeanDoc.Syntax.blockquote
-    ">"
-    [(LeanDoc.Syntax.para
-      [(LeanDoc.Syntax.text
-        (str
-         "\"Here's a modified blockquote\""))])
-     (LeanDoc.Syntax.para
-      [(LeanDoc.Syntax.text
-        (str "\"with multiple paras\""))])]))
+   [(LeanDoc.Syntax.blockquote
+     ">"
+     [(LeanDoc.Syntax.para
+       [(LeanDoc.Syntax.text
+         (str
+          "\"Here's a modified blockquote\""))])
+      (LeanDoc.Syntax.para
+       [(LeanDoc.Syntax.text
+         (str "\"with multiple paras\""))])])])
 Remaining:
 "that ends"
 -/
@@ -2290,9 +2320,10 @@ info: Success! Final stack:
    `test
    []
    "}"
-   (LeanDoc.Syntax.para
-    [(LeanDoc.Syntax.text
-      (str "\"Here's a modified paragraph.\""))]))
+   [(LeanDoc.Syntax.para
+     [(LeanDoc.Syntax.text
+       (str
+        "\"Here's a modified paragraph.\""))])])
 All input consumed.
 -/
 #guard_msgs in
@@ -2313,27 +2344,27 @@ info: Success! Final stack:
    `test
    [(LeanDoc.Syntax.anon `arg)]
    "}"
-   (LeanDoc.Syntax.para
-    [(LeanDoc.Syntax.text
-      (str "\"Here's a modified paragraph.\""))]))
+   [(LeanDoc.Syntax.para
+     [(LeanDoc.Syntax.text
+       (str
+        "\"Here's a modified paragraph.\""))])])
 All input consumed.
 -/
 #guard_msgs in
 #eval block {} |>.test! "{\n    test\n arg}\nHere's a modified paragraph."
 /--
-info: Failure: '{'; expected ![, *, +, -, [ or [^
-Final stack:
+info: Success! Final stack:
   (LeanDoc.Syntax.block_role
    "{"
    `test
    [(LeanDoc.Syntax.anon `arg)]
    "}"
-   (LeanDoc.Syntax.para
-    [(LeanDoc.Syntax.footnote <missing>)]))
-Remaining: "\n\nHere's a modified paragraph."
+   [])
+Remaining:
+"\nHere's a non-modified paragraph."
 -/
 #guard_msgs in
-#eval block {} |>.test! "{\n    test\n arg}\n\n\nHere's a modified paragraph."
+#eval block {} |>.test! "{\n    test\n arg}\n\n\nHere's a non-modified paragraph."
 
 
 /--

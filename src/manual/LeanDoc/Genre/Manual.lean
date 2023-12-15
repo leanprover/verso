@@ -2,11 +2,13 @@ import LeanDoc.Doc
 import LeanDoc.Doc.Concrete
 import LeanDoc.Doc.TeX
 import LeanDoc.Output.TeX
+import LeanDoc.Doc.Lsp
+import LeanDoc.Doc.Elab
 
 import LeanDoc.Genre.Manual.TeX
 
 
-open LeanDoc.Doc
+open LeanDoc.Doc Elab
 
 open LeanDoc.Genre.Manual.TeX
 
@@ -15,19 +17,36 @@ namespace LeanDoc.Genre
 structure Manual.PartMetadata where
   authors : List String := []
 
+inductive Manual.Block where
+  | paragraph
+
 def Manual : Genre where
   PartMetadata := Manual.PartMetadata
-  Block := Empty
+  Block := Manual.Block
   Inline := Empty
   TraverseContext := Unit
   TraverseState := Unit
 
+namespace Manual
+
+open LeanDoc.Output.TeX in
 instance : TeX.GenreTeX Manual IO where
   part go _meta txt := go txt
-  block _go b _txt := nomatch b
+  block go
+    | .paragraph, content => do
+      pure <| .seq <| ← content.mapM fun b => do
+        pure <| .seq #[← go b, .raw "\n"]
   inline _go i _txt := nomatch i
 
-namespace Manual
+
+@[directive_expander paragraph]
+def paragraph : DirectiveExpander
+  | #[], stxs => do
+    let args ← stxs.mapM elabBlock
+    let val ← ``(Block.other Manual.Block.paragraph #[ $[ $args ],* ])
+    pure #[val]
+  | _, _ => Lean.Elab.throwUnsupportedSyntax
+
 
 structure Config where
   destination : System.FilePath := "_out"

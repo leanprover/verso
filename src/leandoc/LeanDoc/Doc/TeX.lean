@@ -67,7 +67,7 @@ partial defmethod Inline.toTeX [Monad m] [GenreTeX g m] : Inline g → TeXT g m 
 
 partial defmethod Block.toTeX [Monad m] [GenreTeX g m] : Block g → TeXT g m TeX
   | .para xs => do
-    pure <| (← xs.mapM Inline.toTeX) ++ TeX.raw "\n\n"
+    pure <| (← xs.mapM Inline.toTeX)
   | .blockquote bs => do
     pure \TeX{\begin{quotation} \Lean{← bs.mapM Block.toTeX} \end{quotation}}
   | .ul items => do
@@ -88,7 +88,7 @@ partial defmethod Part.toTeX [Monad m] [GenreTeX g m] (p : Part g) : TeXT g m Te
     pure \TeX{
       \Lean{← header (← p.title.mapM Inline.toTeX)}
       "\n\n"
-      \Lean{← p.content.mapM Block.toTeX}
+      \Lean{← p.content.mapM (fun b => do pure <| TeX.seq #[← Block.toTeX b, .paragraphBreak])}
       "\n\n"
       \Lean{← inHeader <| p.subParts.mapM Part.toTeX }
     }

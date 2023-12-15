@@ -192,6 +192,8 @@ def partCommand (cmd : Syntax) : PartElabM Unit :=
     fallback
 where
   fallback : PartElabM Unit := do
+    if (← getThe PartElabM.State).partContext.priorParts.size > 0 then
+      throwErrorAt cmd "Unexpected block"
     let blk ← liftDocElabM <| elabBlock cmd
     addBlock blk
 
@@ -243,6 +245,21 @@ partial def _root_.LeanDoc.Syntax.header.command : PartCommand
 
   | _ => throwUnsupportedSyntax
 
+
+@[part_command LeanDoc.Syntax.block_role]
+def includeSection : PartCommand
+  | `(block|block_role{include $_args* }[ $content ]) => throwErrorAt content "Unexpected block argument"
+  | `(block|block_role{include}) => throwError "Expected exactly one argument"
+  | `(block|block_role{include $arg1 $arg2 $args*}) => throwErrorAt arg2 "Expected exactly one argument"
+  | stx@`(block|block_role{include $args* }) => do
+    match (← parseArgs args) with
+    | #[.anon (.name x)] =>
+      let name ← resolved x
+      addPart <| .included name
+    | _ => throwErrorAt stx "Expected exactly one positional argument that is a name"
+  | stx => dbg_trace "Not {stx}"; Lean.Elab.throwUnsupportedSyntax
+where
+ resolved id := mkIdentFrom id <$> resolveGlobalConstNoOverload (mkIdentFrom id (docName id.getId))
 
 @[block_expander LeanDoc.Syntax.para]
 partial def _root_.LeanDoc.Syntax.para.expand : BlockExpander

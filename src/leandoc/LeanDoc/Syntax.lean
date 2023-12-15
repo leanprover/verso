@@ -67,4 +67,4 @@ syntax (name:=directive) "directive{" ident argument* "}" "[" block* "]": block
 /-- A header -/
 syntax (name:=header) inline* : block
 
-syntax (name:=block_role) "role{" ident argument* "}" "[" block "]"  : block
+syntax (name:=block_role) "block_role{" ident argument* "}" ("[" block "]")?  : block
