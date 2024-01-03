@@ -26,7 +26,31 @@ jobs:
         run: |
           lean --version
 
-      - name: build
+      - name: Build the project
         run: |
           lake build
 
+      - name: Install Dependencies
+        run: sudo apt update && sudo apt install -y pandoc texlive-latex-base texlive-latex-extra texlive-latex-recommended texlive-luatex fonts-dejavu
+
+
+      - name: Generate the manual
+        run: |
+          ./generate.sh
+          cp _out/tex/main.pdf ./manual.pdf
+
+      - name: Upload PDF to artifact storage
+        if: github.ref != 'refs/heads/main'
+        uses: actions/upload-artifact@v3
+        with:
+          name: "LeanDoc manual"
+          path: "manual.pdf"
+
+      - uses: "marvinpinto/action-automatic-releases@latest"
+        if: github.ref == 'refs/heads/main'
+        with:
+          repo_token: "${{ secrets.GITHUB_TOKEN }}"
+          automatic_release_tag: "latest"
+          title: "LeanDoc manual"
+          files: |
+            manual.pdf
