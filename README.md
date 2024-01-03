@@ -19,7 +19,7 @@ LeanDoc is a collection of libraries for representing documents in Lean paired w
  * Empower users to conveniently add their own features to the documentation language
  * Enable but not require extensions to be usable in multiple genres
 
-Please consult the in-progress LeanDoc manual for further details. Today, LeanDoc is usable for running a website and blog, while the other genres are still under development.
+Please consult the in-progress [LeanDoc manual](https://github.com/leanprover/leandoc/releases/download/latest/manual.pdf) for further details. Today, LeanDoc is usable for running a website and blog, while the other genres are still under development.
 
 ## Contributions
 
