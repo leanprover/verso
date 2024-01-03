@@ -250,6 +250,12 @@ def highlightingStyle : String := "
   background-color: #4777ff;
 }
 
+.hl.lean div.docstring {
+  font-family: sans-serif;
+  white-space: normal;
+  width: 40em;
+}
+
 "
 
 def highlightingJs : String :=
@@ -274,6 +280,15 @@ def highlightingJs : String :=
                 tok.classList.remove(\"binding-hl\");
             }
         });
+    }
+    /* Render docstrings */
+    for (const d of document.querySelectorAll(\"pre.docstring\")) {
+        const str = d.innerText;
+        const html = marked.parse(str);
+        const rendered = document.createElement(\"div\");
+        rendered.classList.add(\"docstring\");
+        rendered.innerHTML = html;
+        d.parentNode.replaceChild(rendered, d);
     }
 }
 "

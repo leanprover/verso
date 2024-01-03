@@ -50,7 +50,7 @@ defmethod Highlighted.Token.Kind.hover? : (tok : Highlighted.Token.Kind) → Opt
   | .const n doc | .keyword (some n) doc =>
     let docs := match doc with
       | none => .empty
-      | some txt => {{<hr/><p>{{txt}}</p>}}
+      | some txt => {{<hr/><pre class="docstring">{{txt}}</pre>}}
     some <| hover {{ {{toString n}} {{docs}} }}
   | _ => none
 
@@ -208,6 +208,7 @@ def builtinHeader : TemplateM Html := do
   out := out ++ {{
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI+WdtXRGWt2kTvGFasHpSy3SV" crossorigin="anonymous"/>
     <script defer="defer" src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG+vnGctmUb0ZY0l8" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js" integrity="sha384-zbcZAIxlvJtNE3Dp5nxLXdXtXyxwOdnILY1TDPVmKFhl4r4nSUG1r8bcFXGVa4Te" crossorigin="anonymous"></script>
   }}
 
   pure out
