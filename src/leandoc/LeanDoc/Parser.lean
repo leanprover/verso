@@ -282,7 +282,17 @@ def withCurrentColumn (p : Nat → ParserFn) : ParserFn := fun c s =>
 def bol : ParserFn := fun c s =>
   let position := c.fileMap.toPosition s.pos
   let col := position |>.column
-  if col == 0 then s else s.mkErrorAt s!"expected beginning of line at {position}" s.pos
+  if col == 0 then s else s.mkErrorAt s!"beginning of line at {position}" s.pos
+
+def bolThen (p : ParserFn) (description : String) : ParserFn := fun c s =>
+  let position := c.fileMap.toPosition s.pos
+  let col := position |>.column
+  if col == 0 then
+    let s := p c s
+    if s.hasError then
+      s.mkErrorAt description s.pos
+    else s
+  else s.mkErrorAt description s.pos
 
 
 def nl := satisfyFn (· == '\n') "newline"
@@ -522,6 +532,7 @@ def blockOpener := atomicFn <|
    atomicFn (strFn ": ") <|>
    atomicFn (atLeastFn 3 (chFn ':')) <|>
    atomicFn (atLeastFn 3 (chFn '`')) <|>
+   atomicFn (strFn "%%%") <|>
    atomicFn (chFn '>'))
 
 /--
@@ -1292,6 +1303,64 @@ All input consumed.
 #guard_msgs in
 #eval inline {} |>.test! "$$$"
 
+open Lean.Parser.Term in
+def metadataBlock : ParserFn :=
+  nodeFn ``metadata_block <|
+    opener >>
+    (sepByIndent (structInstFieldAbbrev <|> structInstField) ", " (allowTrailingSep := true) >> optEllipsis).fn >>
+    takeWhileFn (·.isWhitespace) >>
+    closer
+where
+  opener := atomicFn (bolThen (eatSpaces >> strFn "%%%") "%%% (at line beginning)") >> eatSpaces >> ignoreFn (chFn '\n')
+  closer := bolThen (eatSpaces >> strFn "%%%") "%%% (at line beginning)" >> eatSpaces >> ignoreFn (chFn '\n' <|> eoiFn)
+
+
+/--
+info: Success! Final stack:
+  (LeanDoc.Syntax.metadata_block
+   "%%%"
+   []
+   (Term.optEllipsis [])
+   "%%%")
+All input consumed.
+-/
+#guard_msgs in
+#eval metadataBlock |>.test! "%%%\n%%%\n"
+
+/--
+info: Success! Final stack:
+  (LeanDoc.Syntax.metadata_block
+   "%%%"
+   [(Term.structInstField
+     (Term.structInstLVal `foo [])
+     ":="
+     `bar)
+    []]
+   (Term.optEllipsis [])
+   "%%%")
+All input consumed.
+-/
+#guard_msgs in
+#eval metadataBlock |>.test! "%%%\nfoo := bar\n\n%%%\n"
+
+/--
+info: Success! Final stack:
+  (LeanDoc.Syntax.metadata_block
+   "%%%"
+   [(Term.structInstField
+     (Term.structInstLVal `foo [])
+     ":="
+     `bar)
+    []
+    (Term.structInstFieldAbbrev `x)
+    []]
+   (Term.optEllipsis [])
+   "%%%")
+All input consumed.
+-/
+#guard_msgs in
+#eval metadataBlock |>.test! "%%%\nfoo := bar\nx\n%%%\n"
+
 
 structure InList where
   indentation : Nat
@@ -1649,7 +1718,7 @@ mutual
       notFollowedByFn blockOpener "block opener" >> guardMinColumn c.minIndent >> textLine
 
   partial def block (c : BlockCtxt) : ParserFn :=
-    block_role c <|> unorderedList c <|> orderedList c <|> definitionList c <|> header c <|> codeBlock c <|> directive c <|> blockquote c <|> linkRef c <|> footnoteRef c <|> para c
+    block_role c <|> unorderedList c <|> orderedList c <|> definitionList c <|> header c <|> codeBlock c <|> directive c <|> blockquote c <|> linkRef c <|> footnoteRef c <|> para c <|> metadataBlock
 
   partial def blocks (c : BlockCtxt) : ParserFn := sepByFn true (block c) (ignoreFn (manyFn blankLine))
 
@@ -1859,7 +1928,7 @@ All input consumed.
   #eval blocks {} |>.test! "* foo\n  * bar\n* more outer"
 
 /--
-info: Failure: unexpected end of input; expected ![, $, $$, [, [^ or expected beginning of line at ⟨2, 15⟩
+info: Failure: unexpected end of input; expected ![, $, $$, %%% (at line beginning), [, [^ or beginning of line at ⟨2, 15⟩
 Final stack:
   [(LeanDoc.Syntax.dl
     [(LeanDoc.Syntax.desc
@@ -1870,8 +1939,7 @@ Final stack:
        (LeanDoc.Syntax.text
         (str "\"Let's say more!\""))]
       "=>"
-      [(LeanDoc.Syntax.para
-        [(LeanDoc.Syntax.footnote <missing>)])
+      [(LeanDoc.Syntax.metadata_block <missing>)
        <missing>])])]
 Remaining: ""
 -/
@@ -1895,7 +1963,7 @@ All input consumed.
   #eval blocks {} |>.test! ": an excellent idea\n\n    Let's say more!"
 
 /--
-info: Failure: unexpected end of input; expected expected column at least 1
+info: Failure: unexpected end of input; expected %%% (at line beginning) or expected column at least 1
 Final stack:
   [(LeanDoc.Syntax.dl
     [(LeanDoc.Syntax.desc
@@ -1910,7 +1978,9 @@ Final stack:
       ":"
       [(LeanDoc.Syntax.text (str "\" more\""))]
       "=>"
-      [(LeanDoc.Syntax.para <missing>)
+      [(LeanDoc.Syntax.metadata_block
+        <missing>
+        <missing>)
        <missing>])])]
 Remaining: ""
 -/
@@ -2358,14 +2428,16 @@ All input consumed.
 #guard_msgs in
 #eval block {} |>.test! " {test}\n Here's a modified paragraph."
 /--
-info: Failure: ':'; expected expected column at least 1
+info: Failure: ':'; expected %%% (at line beginning) or expected column at least 1
 Final stack:
   (LeanDoc.Syntax.block_role
    "{"
    `test
    []
    "}"
-   [(LeanDoc.Syntax.para <missing>)])
+   [(LeanDoc.Syntax.metadata_block
+     <missing>
+     <missing>)])
 Remaining: "Here's a modified paragraph."
 -/
 #guard_msgs in
@@ -2453,6 +2525,24 @@ Remaining:
 #guard_msgs in
 #eval block {} |>.test! "{\n    test\n arg}\n\n\nHere's a non-modified paragraph."
 
+/--
+info: Success! Final stack:
+  [(LeanDoc.Syntax.metadata_block
+    "%%%"
+    [(Term.structInstField
+      (Term.structInstLVal `foo [])
+      ":="
+      (num "53"))
+     []]
+    (Term.optEllipsis [])
+    "%%%")
+   (LeanDoc.Syntax.para
+    [(LeanDoc.Syntax.text
+      (str "\"Text/paragraph!\""))])]
+All input consumed.
+-/
+#guard_msgs in
+#eval blocks {} |>.test! "%%%\nfoo := 53\n%%%\nText/paragraph!"
 
 /--
 info: Success! Final stack:

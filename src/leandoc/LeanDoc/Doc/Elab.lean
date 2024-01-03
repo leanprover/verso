@@ -253,12 +253,24 @@ partial def _root_.LeanDoc.Syntax.header.command : PartCommand
     push {
       titleSyntax := stx,
       expandedTitle := some (titleString, titleBits),
+      metadata := none,
       blocks := #[],
       priorParts := #[]
     }
 
   | _ => throwUnsupportedSyntax
 
+@[part_command LeanDoc.Syntax.metadata_block]
+def _root_.LeanDoc.Syntax.metadata_block.command : PartCommand
+  | `(block| %%%%$tk $fieldOrAbbrev* $ellipsis:optEllipsis %%%) => do
+    let ctxt := (← getThe PartElabM.State).partContext
+    if ctxt.blocks.size > 0 || ctxt.priorParts.size > 0 then
+      throwErrorAt tk "Metadata blocks must precede both content and subsections"
+    if ctxt.metadata.isSome then
+      throwErrorAt tk "Metadata already provided for this section"
+    let stx ← `(term| { $(⟨fieldOrAbbrev⟩)* $ellipsis })
+    modifyThe PartElabM.State fun st => {st with partContext.metadata := some stx}
+  | _ => throwUnsupportedSyntax
 
 @[part_command LeanDoc.Syntax.block_role]
 def includeSection : PartCommand

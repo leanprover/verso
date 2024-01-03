@@ -5,7 +5,11 @@ open LeanDoc.Genre Manual
 
 set_option pp.rawOnError true
 
-#doc (Manual) "Documentation in Lean" =>
+#doc (Manual) "Writing Documentation in Lean" =>
+
+%%%
+authors := ["David Thrane Christiansen"]
+%%%
 
 Documentation can take many forms:
 

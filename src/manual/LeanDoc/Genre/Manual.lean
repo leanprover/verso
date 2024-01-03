@@ -16,6 +16,7 @@ namespace LeanDoc.Genre
 
 structure Manual.PartMetadata where
   authors : List String := []
+  date : Option String := none
 
 inductive Manual.Block where
   | paragraph
@@ -60,12 +61,14 @@ def ensureDir (dir : System.FilePath) : IO Unit := do
 open IO.FS in
 def emitTeX (logError : String → IO Unit) (config : Config) (text : Part Manual) : IO Unit := do
   let opts : TeX.Options Manual IO := {headerLevels := #["chapter", "section", "subsection", "subsubsection", "paragraph"], headerLevel := some ⟨0, by simp_arith [Array.size, List.length]⟩, logError := logError}
+  let authors := text.metadata.map (·.authors) |>.getD []
+  let date := text.metadata.bind (·.date) |>.getD ""
   let frontMatter ← text.content.mapM (·.toTeX (opts, (), ()))
   let chapters ← text.subParts.mapM (·.toTeX (opts, (), ()))
   let dir := config.destination.join "tex"
   ensureDir dir
   withFile (dir.join "main.tex") .write fun h => do
-    h.putStrLn (preamble text.titleString ["author 1", "author 2"])
+    h.putStrLn (preamble text.titleString authors date)
     for b in frontMatter do
       h.putStrLn b.asString
     for c in chapters do

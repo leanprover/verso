@@ -2,7 +2,7 @@ import LeanDoc.Genre.Blog.Site
 import LeanDoc.Genre.Blog.Template
 
 open LeanDoc.Genre.Blog Template
-open LeanDoc Output Html
+open LeanDoc Doc Output Html
 
 namespace LeanDoc.Genre.Blog
 
@@ -27,30 +27,30 @@ def Theme.override (path : Array String) (override : Template.Override) (theme :
 
 namespace Theme
 
-def dirLinks : Dir Page → TemplateM (Array Html)
-  | .pages subs =>
+def dirLinks : Site → TemplateM (Array Html)
+  | .page _ _ subs =>
     subs.filterMapM fun
-      | .page name _id txt .. =>
+      | .page name _id txt .. | .blog name _id txt .. =>
         pure <| some {{<li><a href={{"/" ++ name}}>{{txt.titleString}}</a></li>}}
       | .static .. => pure none
-  | .blog subs =>
+  | .blog _ _ subs =>
     subs.mapM fun s => do
-      let url ← mkLink [(← currentConfig).postName s.date s.content.titleString]
-      return {{<li><a href={{url}}>{{s.content.titleString}}</a></li>}}
+      let name ← s.postName'
+      let url ← mkLink [name]
+      return {{<li><a href={{url}}>{{s.contents.titleString}}</a></li>}}
 where
   mkLink dest := do
     let dest' ← relative dest
     return String.join (dest'.map (· ++ "/"))
 
 def topNav : Template := do
-  let ⟨_, topPages⟩ := (← read).site
-  return {{
-    <nav class="top" role="navigation">
-      <ol>
-        {{ ← dirLinks topPages }}
-      </ol>
-    </nav>
-  }}
+    pure {{
+      <nav class="top" role="navigation">
+        <ol>
+          {{ ← dirLinks (← read).site }}
+        </ol>
+      </nav>
+    }}
 
 namespace Default
 
@@ -80,19 +80,36 @@ def page : Template := do
     {{← param "content"}}
   }}
 
-def post : Template := page -- TODO author, date, etc
+def post : Template := do
+  pure {{
+    <h1>{{← param "title"}}</h1>
+    {{ match (← param? "metadata") with
+       | none => Html.empty
+       | some md => {{
+        <div class="metadata">
+          <div class="authors">
+            {{(md : Post.PartMetadata).authors.map ({{<span class="author">{{Html.text true ·}}</span>}}) |>.toArray}}
+          </div>
+          <div class="date">
+            s!"{md.date.year}-{md.date.month}-{md.date.day}"
+          </div>
+        </div>
+       }}
+     }}
+    {{← param "content"}}
+  }}
 
 def archiveEntry : Template := do
-  let post : Post ← param "post"
+  let post : BlogPost ← param "post"
   return #[{{
   <li>
-    <a href={{← postName post}}>
+    <a href={{← post.postName' }}>
     {{
-    match post.date with
-    | Date.mk y m d => {{<span class="date"> s!"{y}-{m}-{d}" </span>}}
+    match post.contents.metadata.map (·.date) with
+    | some {year := y, month := m, day := d : Date} => {{<span class="date"> s!"{y}-{m}-{d}" </span> " — "}}
+    | none => Html.empty
     }}
-    " — "
-    <span class="name">{{post.content.titleString}}</span>
+    <span class="name">{{post.contents.titleString}}</span>
     </a>
   </li>
 }}]

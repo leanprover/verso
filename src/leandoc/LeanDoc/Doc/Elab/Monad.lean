@@ -129,7 +129,7 @@ def TocFrame.wrapAll (stack : Array TocFrame) (item : TOC) (endPos : String.Pos)
   aux (stack.size - 1) item endPos
 
 inductive FinishedPart where
-  | mk (titleSyntax : Syntax) (expandedTitle : Array (TSyntax `term)) (titlePreview : String) (blocks : Array (TSyntax `term)) (subParts : Array FinishedPart) (endPos : String.Pos)
+  | mk (titleSyntax : Syntax) (expandedTitle : Array (TSyntax `term)) (titlePreview : String) (metadata : Option (TSyntax `term)) (blocks : Array (TSyntax `term)) (subParts : Array FinishedPart) (endPos : String.Pos)
   | included (name : Ident)
 deriving Repr, BEq
 
@@ -147,9 +147,13 @@ open Lean.Parser.Term in
 partial def FinishedPart.toSyntax [Monad m] [MonadQuotation m]
     (linkDefs : HashMap String (DocDef String)) (footnoteDefs : HashMap String (DocDef (Array (TSyntax `term))))
     : FinishedPart → m (TSyntax `term)
-  | .mk _titleStx titleInlines titleString blocks subParts _endPos => do
+  | .mk _titleStx titleInlines titleString metadata blocks subParts _endPos => do
     let subStx ← subParts.mapM (toSyntax {} {})
-    let body ← ``(Part.mk #[$[$titleInlines],*] $(quote titleString) none #[$[$blocks],*] #[$[$subStx],*])
+    let metaStx ←
+      match metadata with
+      | none => `(none)
+      | some stx => `(some $stx)
+    let body ← ``(Part.mk #[$[$titleInlines],*] $(quote titleString) $metaStx #[$[$blocks],*] #[$[$subStx],*])
     bindFootnotes footnoteDefs (← bindLinks linkDefs body)
   | .included name => pure name
 where
@@ -164,20 +168,21 @@ where
 
 
 partial def FinishedPart.toTOC : FinishedPart → TOC
-  | .mk titleStx _titleInlines titleString _blocks subParts endPos =>
+  | .mk titleStx _titleInlines titleString _metadata _blocks subParts endPos =>
     .mk titleString titleStx endPos (subParts.map toTOC)
   | .included name => .included name
 
 structure PartFrame where
   titleSyntax : Syntax
   expandedTitle : Option (String × Array (TSyntax `term)) := none
+  metadata : Option (TSyntax `term)
   blocks : Array (TSyntax `term)
   priorParts : Array FinishedPart
 deriving Repr
 
 def PartFrame.close (fr : PartFrame) (endPos : String.Pos) : FinishedPart :=
   let (titlePreview, titleInlines) := fr.expandedTitle.getD ("<anonymous>", #[])
-  .mk fr.titleSyntax titleInlines titlePreview fr.blocks fr.priorParts endPos
+  .mk fr.titleSyntax titleInlines titlePreview fr.metadata fr.blocks fr.priorParts endPos
 
 structure PartContext extends PartFrame where
   parents : Array PartFrame
@@ -191,6 +196,7 @@ def PartContext.close (ctxt : PartContext) (endPos : String.Pos) : Option PartCo
     blocks := fr.blocks,
     titleSyntax := fr.titleSyntax,
     expandedTitle := fr.expandedTitle,
+    metadata := fr.metadata
     priorParts := fr.priorParts.push <| ctxt.toPartFrame.close endPos
   }
 
@@ -203,7 +209,7 @@ structure PartElabM.State where
 
 
 def PartElabM.State.init (title : Syntax) (expandedTitle : Option (String × Array (TSyntax `term)) := none) : PartElabM.State where
-  partContext := {titleSyntax := title, expandedTitle, blocks := #[], priorParts := #[], parents := #[]}
+  partContext := {titleSyntax := title, expandedTitle, metadata := none, blocks := #[], priorParts := #[], parents := #[]}
 
 def PartElabM (α : Type) : Type := StateT DocElabM.State (StateT PartElabM.State TermElabM) α
 

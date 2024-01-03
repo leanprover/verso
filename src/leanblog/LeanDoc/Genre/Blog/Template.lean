@@ -17,12 +17,22 @@ private def next (xs : Array α) : Option (α × Array α) :=
   else
     none
 
-instance [Monad m] : MonadPath (HtmlT Blog m) where
+instance [Monad m] : MonadPath (HtmlT Post m) where
   currentPath := do
     let (_, ctxt, _) ← read
     pure ctxt.path
 
-instance [Monad m] : MonadConfig (HtmlT Blog m) where
+instance [Monad m] : MonadPath (HtmlT Page m) where
+  currentPath := do
+    let (_, ctxt, _) ← read
+    pure ctxt.path
+
+instance [Monad m] : MonadConfig (HtmlT Post m) where
+  currentConfig := do
+    let (_, ctxt, _) ← read
+    pure ctxt.config
+
+instance [Monad m] : MonadConfig (HtmlT Page m) where
   currentConfig := do
     let (_, ctxt, _) ← read
     pure ctxt.config
@@ -72,39 +82,53 @@ partial defmethod Highlighted.toHtml : Highlighted → Html
   | .point s info => {{<span class={{"message " ++ s.«class»}}>{{info}}</span>}}
   | .seq hls => hls.map toHtml
 
-partial instance : GenreHtml Blog IO where
-  part _ m := nomatch m
-  block go
-    | .highlightedCode contextName hls, _contents => do
-      pure {{ <pre class="hl lean" "data-lean-context"={{toString contextName}}> {{ hls.toHtml }} </pre> }}
-    | .htmlDiv classes, contents => do
-      pure {{ <div class={{classes}}> {{← contents.mapM go}} </div> }}
-    | .blob html, _ => pure html
-  inline go
-    | .label x, contents => do
-      let contentHtml ← contents.mapM go
-      let some tgt := (← state).targets.find? x
-        | panic! "No label for {x}"
-      pure {{ <span id={{tgt.htmlId}}> {{ contentHtml }} </span>}}
-    | .ref x, contents => do
-      match (← state).targets.find? x with
-      | none =>
-        HtmlT.logError "Can't find target {x}"
-        pure {{<strong class="internal-error">s!"Can't find target {x}"</strong>}}
-      | some tgt =>
-        let addr := s!"{String.join ((← relative tgt.path).intersperse "/")}#{tgt.htmlId}"
-        go <| .link contents addr
-    | .pageref x, contents => do
-      match (← state).pageIds.find? x with
-      | none =>
-        HtmlT.logError "Can't find target {x}"
-        pure {{<strong class="internal-error">s!"Can't find target {x}"</strong>}}
-      | some path =>
-        let addr := String.join ((← relative path).intersperse "/")
-        go <| .link contents addr
-    | .htmlSpan classes, contents => do
-      pure {{ <span class={{classes}}> {{← contents.mapM go}} </span> }}
-    | .blob html, _ => pure html
+def blockHtml (g : Genre) (go : Block g → HtmlT g IO Html) : Blog.BlockExt → Array (Block g) → HtmlT g IO Html
+  | .highlightedCode contextName hls, _contents => do
+    pure {{ <pre class="hl lean" "data-lean-context"={{toString contextName}}> {{ hls.toHtml }} </pre> }}
+  | .htmlDiv classes, contents => do
+    pure {{ <div class={{classes}}> {{← contents.mapM go}} </div> }}
+  | .blob html, _ => pure html
+
+def inlineHtml (g : Genre) [MonadConfig (HtmlT g IO)] [MonadPath (HtmlT g IO)]
+    (stateEq : g.TraverseState = Blog.TraverseState)
+    (go : Inline g → HtmlT g IO Html) : Blog.InlineExt → Array (Inline g) → HtmlT g IO Html
+  | .label x, contents => do
+    let contentHtml ← contents.mapM go
+    let st ← stateEq ▸ state
+    let some tgt := st.targets.find? x
+      | panic! "No label for {x}"
+    pure {{ <span id={{tgt.htmlId}}> {{ contentHtml }} </span>}}
+  | .ref x, contents => do
+    let st ← stateEq ▸ state
+    match st.targets.find? x with
+    | none =>
+      HtmlT.logError "Can't find target {x}"
+      pure {{<strong class="internal-error">s!"Can't find target {x}"</strong>}}
+    | some tgt =>
+      let addr := s!"{String.join ((← relative tgt.path).intersperse "/")}#{tgt.htmlId}"
+      go <| .link contents addr
+  | .pageref x, contents => do
+    let st ← stateEq ▸ state
+    match st.pageIds.find? x with
+    | none =>
+      HtmlT.logError "Can't find target {x}"
+      pure {{<strong class="internal-error">s!"Can't find target {x}"</strong>}}
+    | some path =>
+      let addr := String.join ((← relative path).intersperse "/")
+      go <| .link contents addr
+  | .htmlSpan classes, contents => do
+    pure {{ <span class={{classes}}> {{← contents.mapM go}} </span> }}
+  | .blob html, _ => pure html
+
+def blogGenreHtml (g : Genre) [MonadConfig (HtmlT g IO)] [MonadPath (HtmlT g IO)]
+    (eq1 : g.Block = Blog.BlockExt) (eq2 : g.Inline = Blog.InlineExt) (eq3 : g.TraverseState = Blog.TraverseState)
+    (partMeta : (Part g → HtmlT g IO Html) → g.PartMetadata → Part g → HtmlT g IO Html) : GenreHtml g IO where
+  part f m := partMeta f m
+  block := eq1 ▸ blockHtml g
+  inline := eq2 ▸ inlineHtml g eq3
+
+instance : GenreHtml Page IO := blogGenreHtml Page rfl rfl rfl (fun _ m => nomatch m)
+instance : GenreHtml Post IO := blogGenreHtml Post rfl rfl rfl fun go _metadata part => go part
 
 namespace LeanDoc.Genre.Blog.Template
 

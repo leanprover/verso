@@ -68,5 +68,7 @@ syntax (name:=footnote_ref)  "[^" str "]:" inline* : block
 syntax (name:=directive) "directive{" ident argument* "}" "[" block* "]": block
 /-- A header -/
 syntax (name:=header) inline* : block
-
+open Lean.Parser.Term in
+/-- Metadata for this section, defined by the current genre -/
+syntax (name:=metadata_block) "%%%" (structInstField <|> structInstFieldAbbrev)* optEllipsis "%%%" : block
 syntax (name:=block_role) "block_role{" ident argument* "}" ("[" block "]")?  : block

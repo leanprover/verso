@@ -73,35 +73,82 @@ structure TraverseContext where
   path : List String := {}
   config : Config
 
-end Blog
-
 
 deriving instance Ord for List -- TODO - upstream?
 
-structure Blog.TraverseState where
+structure TraverseState where
   usedIds : Lean.RBMap (List String) (Lean.HashSet String) compare := {}
   targets : Lean.NameMap Blog.Info.Target := {}
   refs : Lean.NameMap Blog.Info.Ref := {}
   pageIds : Lean.NameMap (List String) := {}
   scripts : Lean.HashSet String := {}
   stylesheets : Lean.HashSet String := {}
+  errors : Lean.HashSet String := {}
 
 
-def Blog : Genre where
+def Page : Genre where
   PartMetadata := Empty
   Block := Blog.BlockExt
   Inline := Blog.InlineExt
   TraverseContext := Blog.TraverseContext
   TraverseState := Blog.TraverseState
 
-namespace Blog
-
-structure Post where
-  date : Date
+structure Post.Meta where
+  date : Blog.Date
   authors : List String
-  content : Part Blog
-  draft : Bool
-deriving TypeName, Inhabited
+  draft : Bool := false
+deriving TypeName
+
+def Post : Genre where
+  PartMetadata := Post.Meta
+  Block := Blog.BlockExt
+  Inline := Blog.InlineExt
+  TraverseContext := Blog.TraverseContext
+  TraverseState := Blog.TraverseState
+
+instance : TypeName Post.PartMetadata := inferInstanceAs (TypeName Post.Meta)
+
+structure BlogPost where
+  id : Name
+  contents : Part Post
+deriving TypeName
+
+class BlogGenre (genre : Genre) where
+  traverseContextEq : genre.TraverseContext = Blog.TraverseContext := by rfl
+  traverseStateEq : genre.TraverseState = Blog.TraverseState := by rfl
+
+instance : BlogGenre Post where
+
+instance : BlogGenre Page where
+
+
+defmethod Part.postName [Monad m] [MonadConfig m] [MonadState TraverseState m]
+    (post : Part Post) : m String := do
+  let date ←
+    match post.metadata with
+    | none =>
+      modify fun st => { st with errors := st.errors.insert s!"Missing metadata block in post \"{post.titleString}\""}
+      pure {year := 1900, month := 1, day := 1}
+    | some ⟨date, _authors, _draft⟩ =>
+      pure date
+  pure <| (← currentConfig).postName date post.titleString
+
+defmethod Part.postName' [Monad m] [MonadConfig m]
+    (post : Part Post) : m String := do
+  let date : Date :=
+    match post.metadata with
+    | none =>
+      {year := 1900, month := 1, day := 1}
+    | some ⟨date, _authors, _draft⟩ =>
+      date
+  pure <| (← currentConfig).postName date post.titleString
+
+defmethod BlogPost.postName [Monad m] [MonadConfig m] [MonadState TraverseState m]
+    (post : BlogPost) : m String :=
+  post.contents.postName
+
+defmethod BlogPost.postName' [Monad m] [MonadConfig m] (post : BlogPost) : m String :=
+  post.contents.postName'
 
 partial def TraverseState.freshId (state : Blog.TraverseState) (path : List String) (hint : Lean.Name) : String := Id.run do
   let mut idStr := mangle (toString hint)
@@ -139,21 +186,24 @@ where
 
 instance : BEq TraverseState where
   beq
-    | ⟨u1, t1, r1, p1, s1, s1'⟩, ⟨u2, t2, r2, p2, s2, s2'⟩ =>
+    | ⟨u1, t1, r1, p1, s1, s1', err1⟩, ⟨u2, t2, r2, p2, s2, s2', err2⟩ =>
       u1.toList.map (fun p => {p with snd := p.snd.toList}) == u2.toList.map (fun p => {p with snd := p.snd.toList}) &&
       t1.toList == t2.toList &&
       r1.toList == r2.toList &&
       p1.toList == p2.toList &&
       s1.toList == s2.toList &&
-      s1'.toList == s2'.toList
+      s1'.toList == s2'.toList &&
+      err1.toList == err2.toList
 
+abbrev TraverseM := ReaderT Blog.TraverseContext (StateT Blog.TraverseState IO)
+
+instance : MonadConfig TraverseM where
+  currentConfig := do pure (← read).config
 
 namespace Traverse
 
 open Doc
 
-@[reducible]
-defmethod Blog.TraverseM := ReaderT Blog.TraverseContext (StateT Blog.TraverseState IO)
 
 -- TODO CSS variables, and document it
 def highlightingStyle : String := "
@@ -303,12 +353,7 @@ def renderMathJs : String :=
     }
 });"
 
-instance : Traverse Blog Blog.TraverseM where
-  part _ := pure ()
-  block _ := pure ()
-  inline _ := pure ()
-  genrePart _ _ := pure none
-  genreBlock
+def genreBlock (g : Genre) : Blog.BlockExt → Array (Block g) → Blog.TraverseM (Option (Block g))
     | .highlightedCode .., _contents => do
       modify fun st => {st with
         stylesheets := st.stylesheets.insert highlightingStyle,
@@ -316,7 +361,8 @@ instance : Traverse Blog Blog.TraverseM where
       }
       pure none
     | _, _ => pure none
-  genreInline
+
+def genreInline (g : Genre) : Blog.InlineExt → Array (Inline g) → Blog.TraverseM (Option (Inline g))
     | .label x, _contents => do
       -- Add as target if not already present
       if let none := (← get).targets.find? x then
@@ -331,4 +377,17 @@ instance : Traverse Blog Blog.TraverseM where
       -- TODO backreference
       pure none
     | .htmlSpan .., _ | .blob .., _ => pure none
+
+def traverser (g : Genre) (block : g.Block = Blog.BlockExt) (inline : g.Inline = Blog.InlineExt) : Traverse g Blog.TraverseM where
+  part _ := pure ()
+  block _ := pure ()
+  inline _ := pure ()
+  genrePart _ _ := pure none
+  genreBlock := block ▸ genreBlock g
+  genreInline := inline ▸ genreInline g
+
+instance : Traverse Page Blog.TraverseM := traverser Page rfl rfl
+
+instance : Traverse Post Blog.TraverseM := traverser Post rfl rfl
+
 end Traverse

@@ -4,52 +4,55 @@ import LeanDoc.Genre.Blog.Basic
 open LeanDoc Doc
 
 namespace LeanDoc.Genre.Blog
-inductive Dir α where
-  | pages (subPages : Array α)
-  | blog (posts : Array Post)
+
+defmethod BlogPost.traverse1 (post : BlogPost) : Blog.TraverseM BlogPost := do
+  let name ← post.postName
+  withReader (fun ctxt => {ctxt with path := ctxt.path ++ [name]}) <| do
+    let path ← (·.path) <$> read
+    modify (fun st => {st with pageIds := st.pageIds.insert post.id path})
+    pure {post with contents := ← Post.traverse post.contents}
+
+inductive Dir where
+  | page (name : String) (id : Lean.Name) (text : Part Page) (contents : Array Dir)
+  | blog (name : String) (id : Lean.Name) (text : Part Page) (contents : Array BlogPost)
+  | static (name : String) (files : System.FilePath)
 deriving Inhabited
 
-defmethod Post.traverse1 (post : Post) : Blog.TraverseM Post :=
-  withReader (fun ctxt => {ctxt with path := ctxt.path ++ [ctxt.config.postName post.date post.content.titleString]}) <| do
-    let content' ← Blog.traverse post.content
-    pure {post with content := content'}
-
-def Dir.traverse1 (dir : Dir α) (sub : α → Blog.TraverseM α) : Blog.TraverseM (Dir α) :=
-  match dir with
-  | .pages subs => .pages <$> subs.mapM sub
-  | .blog posts => .blog <$> posts.mapM Post.traverse1
-
-inductive Page where
-  | page (name : String) (id : Lean.Name) (text : Part Blog) (contents : Dir Page)
-  | static (name : String) (files : System.FilePath)
-
-instance : Inhabited Page where
-  default := .page default default default default
-
-def Page.name : Page → String
+def Dir.name : Dir → String
   | .page n .. => n
+  | .blog n .. => n
   | .static n .. => n
 
-partial def Page.traverse1 (nav : Page) : Blog.TraverseM Page := do
-  match nav with
+
+partial def Dir.traverse1 (dir : Dir) : Blog.TraverseM Dir := do
+  match dir with
   | .page name id txt contents =>
     withReader (fun ctxt => {ctxt with path := ctxt.path ++ [name]}) <| do
       let path ← (·.path) <$> read
       modify (fun st => {st with pageIds := st.pageIds.insert id path})
-      let txt' ← Blog.traverse txt
-      .page name id txt' <$> contents.traverse1 Page.traverse1
-  | .static .. => pure nav
+      let txt' ← Page.traverse txt
+      .page name id txt' <$> contents.mapM Dir.traverse1
+  | .blog name id txt posts =>
+    withReader (fun ctxt => {ctxt with path := ctxt.path ++ [name]}) <| do
+      let path ← (·.path) <$> read
+      modify (fun st => {st with pageIds := st.pageIds.insert id path})
+      let txt' ← Page.traverse txt
+      .blog name id txt' <$> posts.mapM BlogPost.traverse1
+  | .static .. => pure dir
 
-structure Site where
-  frontPage : Part Blog
-  contents : Dir Page
+inductive Site where
+  | page (id : Lean.Name) (text : Part Page) (contents : Array Dir)
+  | blog (id : Lean.Name) (text : Part Page) (contents : Array BlogPost)
 
+/-- Perform a single pass of the traverse step on a site -/
 def Site.traverse1 (site : Site) : Blog.TraverseM Site := do
-    let frontPage' ← Blog.traverse site.frontPage
-    let contents' ← site.contents.traverse1 Page.traverse1
-    pure ⟨frontPage', contents'⟩
+  match site with
+  | .page id txt contents =>
+    .page id <$> Page.traverse txt <*> contents.mapM Dir.traverse1
+  | .blog id txt posts =>
+    .blog id <$> Page.traverse txt <*> posts.mapM BlogPost.traverse1
 
-
+/-- Compute a fixed point of the traverse step on a site -/
 def Site.traverse (site : Site) (config : Config) : IO (Site × Blog.TraverseState) := do
   let topCtxt : Blog.TraverseContext := ⟨[], config⟩
   let mut state : Blog.TraverseState := {}
@@ -68,8 +71,6 @@ class MonadPath (m : Type → Type u) where
 
 export MonadPath (currentPath)
 
-def postName [Monad m] [MonadConfig m] (post : Post) : m String := do
-  pure <| (← currentConfig).postName post.date post.content.titleString
 
 def relative [Monad m] [MonadConfig m] [MonadPath m] (target : List String) : m (List String) := do
   return relativize (← currentPath) target
