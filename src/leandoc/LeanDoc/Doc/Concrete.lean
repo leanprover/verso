@@ -59,10 +59,10 @@ elab "inlines!" s:inlineStr : term => open Lean Elab Term in
 set_option pp.rawOnError true
 
 /--
-info: #[Inline.text "Hello, ", Inline.emph #[Inline.bold #[Inline.text "emph"]]] : Array (Inline ?m.11031)
+info: #[Inline.text "Hello, ", Inline.emph #[Inline.bold #[Inline.text "emph"]]] : Array (Inline Genre.none)
 -/
 #guard_msgs in
-#check inlines!"Hello, _*emph*_"
+#check (inlines!"Hello, _*emph*_" : Array (Inline .none))
 
 def document : Parser where
   fn := rawFn <| atomicFn <| LeanDoc.Parser.document (blockContext := {maxDirective := some 6})
