@@ -76,7 +76,7 @@ partial def Inline.toHtml [Monad m] [GenreHtml g m] : Inline g → HtmlT g m Htm
     pure {{ <img src={{dest}} alt={{alt}}/> }}
   | .footnote name content => do
       pure {{ <details class="footnote"><summary>"["{{name}}"]"</summary>{{← content.mapM toHtml}}</details>}}
-  | .linebreak _str => pure .empty
+  | .linebreak str => pure <| Html.text false str
   | .emph content => do
     pure {{ <em> {{← content.mapM toHtml }} </em> }}
   | .bold content => do

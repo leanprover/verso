@@ -1675,6 +1675,19 @@ All input consumed.
 info: Success! Final stack:
   [(LeanDoc.Syntax.para
     [(LeanDoc.Syntax.text
+      (str "\"Newlines are preserved\""))
+     (LeanDoc.Syntax.linebreak "\n")
+     (LeanDoc.Syntax.text
+      (str "\"in paragraphs.\""))])]
+All input consumed.
+-/
+#guard_msgs in
+  #eval blocks {} |>.test! "Newlines are preserved\nin paragraphs."
+
+/--
+info: Success! Final stack:
+  [(LeanDoc.Syntax.para
+    [(LeanDoc.Syntax.text
       (str
        "\"I can describe lists like this one:\""))])
    (LeanDoc.Syntax.ul
