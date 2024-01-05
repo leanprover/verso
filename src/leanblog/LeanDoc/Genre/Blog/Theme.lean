@@ -31,7 +31,10 @@ def dirLinks : Site → TemplateM (Array Html)
   | .page _ _ subs =>
     subs.filterMapM fun
       | .page name _id txt .. | .blog name _id txt .. =>
-        pure <| some {{<li><a href={{"/" ++ name}}>{{txt.titleString}}</a></li>}}
+        if txt.metadata.map (·.showInNav) |>.getD true then
+          pure <| some {{<li><a href={{"/" ++ name}}>{{txt.titleString}}</a></li>}}
+        else
+          pure none
       | .static .. => pure none
   | .blog _ _ subs =>
     subs.mapM fun s => do
@@ -43,10 +46,11 @@ where
     let dest' ← relative dest
     return String.join (dest'.map (· ++ "/"))
 
-def topNav : Template := do
+def topNav (homeLink : Option String := none) : Template := do
     pure {{
       <nav class="top" role="navigation">
         <ol>
+          {{homeLink.map ({{<li class="home"><a href="/">s!"{·}"</a></li>}}) |>.getD .empty}}
           {{ ← dirLinks (← read).site }}
         </ol>
       </nav>

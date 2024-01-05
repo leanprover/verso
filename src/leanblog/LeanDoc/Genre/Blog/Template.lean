@@ -127,7 +127,7 @@ def blogGenreHtml (g : Genre) [MonadConfig (HtmlT g IO)] [MonadPath (HtmlT g IO)
   block := eq1 ▸ blockHtml g
   inline := eq2 ▸ inlineHtml g eq3
 
-instance : GenreHtml Page IO := blogGenreHtml Page rfl rfl rfl (fun _ m => nomatch m)
+instance : GenreHtml Page IO := blogGenreHtml Page rfl rfl rfl fun go _metadata part => go part
 instance : GenreHtml Post IO := blogGenreHtml Post rfl rfl rfl fun go _metadata part => go part
 
 namespace LeanDoc.Genre.Blog.Template

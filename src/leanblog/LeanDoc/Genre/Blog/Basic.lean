@@ -85,9 +85,12 @@ structure TraverseState where
   stylesheets : Lean.HashSet String := {}
   errors : Lean.HashSet String := {}
 
+structure Page.Meta where
+  /-- Whether to hide this page/part from navigation entries -/
+  showInNav : Bool := true
 
 def Page : Genre where
-  PartMetadata := Empty
+  PartMetadata := Page.Meta
   Block := Blog.BlockExt
   Inline := Blog.InlineExt
   TraverseContext := Blog.TraverseContext
