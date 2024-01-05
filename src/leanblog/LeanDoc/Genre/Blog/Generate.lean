@@ -134,9 +134,13 @@ def writePage (theme : Theme) (params : Template.Params) (template : Template :=
     h.putStrLn output.asString
 
 def writeBlog (theme : Theme) (txt : Part Page) (posts : Array BlogPost) : GenerateM Unit := do
-  let postList ← posts.mapM fun p =>
-      theme.archiveEntryTemplate.render (.ofList [("post", ⟨.mk p, #[]⟩)])
-  let pageParams : Template.Params := (← forPart txt).insert "posts" ⟨.mk (Html.seq postList), #[]⟩
+  let postList := {{
+    <ul class="post-list">
+      {{← posts.mapM fun p =>
+        theme.archiveEntryTemplate.render (.ofList [("post", ⟨.mk p, #[]⟩)])}}
+    </ul>
+  }}
+  let pageParams : Template.Params := (← forPart txt).insert "posts" ⟨.mk postList, #[]⟩
   writePage theme pageParams
   for post in posts do
     if post.contents.metadata.map (·.draft) == some true && !(← showDrafts) then continue
