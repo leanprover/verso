@@ -109,23 +109,21 @@ def handleDef (params : TextDocumentPositionParams) (prev : RequestTask (Array L
             data.get? DocRefInfo
           else none
         | _ => none
-      if nodes.isEmpty then prev.get
-      else
-        let mut locs := #[]
-        for node in nodes do
-          match node with
-          | ⟨some defSite, _⟩ =>
-            let mut origin : Option Range := none
-            for stx in node.syntax do
-              if let some ⟨head, tail⟩ := stx.getRange? then
-                if pos ≥ head && pos ≤ tail then
-                  origin := stx.lspRange text
-                  break
-            let some target := defSite.lspRange text
-              | continue
-            locs := locs.push {originSelectionRange? := origin, targetRange := target, targetUri := params.textDocument.uri, targetSelectionRange := target}
-          | _ => continue
-        pure locs
+      let mut locs := #[]
+      for node in nodes do
+        match node with
+        | ⟨some defSite, _⟩ =>
+          let mut origin : Option Range := none
+          for stx in node.syntax do
+            if let some ⟨head, tail⟩ := stx.getRange? then
+              if pos ≥ head && pos ≤ tail then
+                origin := stx.lspRange text
+                break
+          let some target := defSite.lspRange text
+            | continue
+          locs := locs.push {originSelectionRange? := origin, targetRange := target, targetUri := params.textDocument.uri, targetSelectionRange := target}
+        | _ => continue
+      pure (locs ++ (← prev.get))
 
 open Lean Server Lsp RequestM in
 def handleRefs (params : ReferenceParams) (prev : RequestTask (Array Location)) : RequestM (RequestTask (Array Location)) := do
