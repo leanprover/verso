@@ -162,9 +162,13 @@ mutual
       writeBlog theme txt posts
     | .static _ file => do
       IO.println s!"Copying from {file} to {(← currentDir)}"
-      if ← (← currentDir).pathExists then
-        IO.FS.removeDirAll (← currentDir)
-      copyRecursively file (← currentDir)
+      let dest ← currentDir
+      if ← dest.pathExists then
+        if ← dest.isDir then
+          IO.FS.removeDirAll dest
+        else
+          IO.FS.removeFile dest
+      copyRecursively file dest
 
 
 end
