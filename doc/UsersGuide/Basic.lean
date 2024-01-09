@@ -1,7 +1,7 @@
-import LeanDoc.Genre.Manual
+import Verso.Genre.Manual
 import UsersGuide.Markup
 
-open LeanDoc.Genre Manual
+open Verso.Genre Manual
 
 set_option pp.rawOnError true
 

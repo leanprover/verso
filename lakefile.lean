@@ -3,24 +3,24 @@ open Lake DSL
 
 require std from git "https://github.com/leanprover/std4" @ "main"
 
-package «leandoc» where
+package verso where
   -- add package configuration options here
 
-lean_lib LeanDoc where
-  srcDir := "src/leandoc"
-  roots := #[`LeanDoc.Doc, `LeanDoc.Output, `LeanDoc.Parser, `LeanDoc.Examples, `LeanDoc.Method, `LeanDoc.Syntax, `LeanDoc.SyntaxUtils]
+lean_lib Verso where
+  srcDir := "src/verso"
+  roots := #[`Verso.Doc, `Verso.Output, `Verso.Parser, `Verso.Examples, `Verso.Method, `Verso.Syntax, `Verso.SyntaxUtils]
   -- add library configuration options here
 
-lean_lib LeanBlog where
-  srcDir := "src/leanblog"
-  roots := #[`LeanDoc.Genre.Blog]
+lean_lib VersoBlog where
+  srcDir := "src/verso-blog"
+  roots := #[`Verso.Genre.Blog]
 
-lean_lib LeanManual where
-  srcDir := "src/manual"
-  roots := #[`LeanDoc.Genre.Manual]
+lean_lib VersoManual where
+  srcDir := "src/verso-manual"
+  roots := #[`Verso.Genre.Manual]
 
 @[default_target]
-lean_exe «leandoc» where
+lean_exe «verso» where
   root := `Main
   -- Enables the use of the Lean interpreter by the executable (e.g.,
   -- `runFrontend`) at the expense of increased binary size on Linux.

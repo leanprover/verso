@@ -3,17 +3,17 @@ Copyright (c) 2023 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-import LeanDoc.Doc.Elab
-import LeanDoc.Doc.Html
-import LeanDoc.Output
-import LeanDoc.Output.Html
-import LeanDoc.Doc.Concrete
-import LeanDoc.Doc.Lsp
+import Verso.Doc.Elab
+import Verso.Doc.Html
+import Verso.Output
+import Verso.Output.Html
+import Verso.Doc.Concrete
+import Verso.Doc.Lsp
 
-import LeanDoc.Genre.Blog
-import LeanDoc.Genre.Manual
+import Verso.Genre.Blog
+import Verso.Genre.Manual
 
-open LeanDoc Doc Output Html Concrete ToHtml Elab Monad
+open Verso Doc Output Html Concrete ToHtml Elab Monad
 open Lean Elab Term
 
 set_option pp.rawOnError true

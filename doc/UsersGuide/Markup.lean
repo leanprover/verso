@@ -1,6 +1,6 @@
-import LeanDoc.Genre.Manual
+import Verso.Genre.Manual
 
-open LeanDoc.Genre
+open Verso.Genre
 
 #doc (Manual) "Lean Markup" =>
 

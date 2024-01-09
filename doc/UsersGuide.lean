@@ -1,4 +1,4 @@
-import LeanDoc.Genre.Manual
+import Verso.Genre.Manual
 
 import UsersGuide.Basic
 

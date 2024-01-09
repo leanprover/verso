@@ -43,7 +43,7 @@ jobs:
         if: github.ref != 'refs/heads/main'
         uses: actions/upload-artifact@v3
         with:
-          name: "LeanDoc manual"
+          name: "Verso manual"
           path: "manual.pdf"
 
       - uses: "marvinpinto/action-automatic-releases@latest"
@@ -51,6 +51,6 @@ jobs:
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
           automatic_release_tag: "latest"
-          title: "LeanDoc manual"
+          title: "Verso manual"
           files: |
             manual.pdf

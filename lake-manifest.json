@@ -10,5 +10,5 @@
    "inputRev": "main",
    "inherited": false,
    "configFile": "lakefile.lean"}],
- "name": "leandoc",
+ "name": "verso",
  "lakeDir": ".lake"}

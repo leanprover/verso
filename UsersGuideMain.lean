@@ -1,7 +1,7 @@
-import LeanDoc.Genre.Manual
+import Verso.Genre.Manual
 
 import UsersGuide
 
-open LeanDoc.Genre.Manual
+open Verso.Genre.Manual
 
 def main := manualMain (%doc UsersGuide.Basic)
