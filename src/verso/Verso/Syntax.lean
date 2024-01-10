@@ -34,7 +34,7 @@ syntax (name:=image) "image[" str* "]" link_target : inline
 /-- A footnote use -/
 syntax (name:=footnote) "[^" str "]" : inline
 /-- Line break -/
-syntax (name:=linebreak) "line!" : inline
+syntax (name:=linebreak) "line!" str : inline
 /-- Literal characters-/
 syntax (name:=code) "code{" str "}" : inline
 syntax (name:=role) "role{" ident argument* "}" "[" inline "]"  : inline
@@ -57,7 +57,7 @@ syntax (name:=dl) "dl{" desc_item* "}" : block
 /-- Ordered list -/
 syntax (name:=ol) "ol{" num list_item* "}" : block
 /-- Literal code -/
-syntax (name:=codeblock) str : block
+syntax (name:=codeblock) "```" str "```" : block
 /-- Quotation -/
 syntax (name:=blockquote) str : block
 /-- A link reference definition -/

@@ -266,6 +266,8 @@ instance : MonadStateOf DocElabM.State DocElabM := inferInstanceAs <| MonadState
 
 instance : MonadFinally DocElabM := inferInstanceAs <| MonadFinally (ReaderT PartElabM.State (StateT DocElabM.State TermElabM))
 
+instance : MonadEnv DocElabM := inferInstanceAs <| MonadEnv (ReaderT PartElabM.State (StateT DocElabM.State TermElabM))
+
 instance : MonadRecDepth DocElabM where
   withRecDepth n act := fun st st' => MonadRecDepth.withRecDepth n (act st st')
   getRecDepth := fun _ st' => do return (← MonadRecDepth.getRecDepth, st')
