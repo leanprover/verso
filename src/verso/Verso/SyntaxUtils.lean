@@ -51,6 +51,20 @@ defmethod ParserFn.test (p : ParserFn) (input : String) : IO String := do
 defmethod ParserFn.test! (p : ParserFn) (input : String) : IO Unit :=
   p.test input >>= IO.println
 
+defmethod ParserFn.parseString [Monad m] [MonadError m] [MonadEnv m] (p : ParserFn) (input : String) : m Syntax := do
+  let ictx := mkInputContext input "<input>"
+  let env ← getEnv
+  let pmctx : ParserModuleContext := {env := env, options := {}}
+  let s' := p.run ictx pmctx (getTokenTable env) (mkParserState input)
+  let stk := s'.stxStack.extract 0 s'.stxStack.size
+  if let some err := s'.errorMsg then
+    throwError err.toString
+  if h : ¬stk.size = 1 then
+    throwError "Expected single item in parser stack, got {ppStack stk}"
+  else
+    have : stk.size = 1 := Classical.byContradiction h
+    have : 0 < stk.size := by simp_arith [*]
+    pure stk[0]
 
 scoped instance : Quote SourceInfo `term where
   quote

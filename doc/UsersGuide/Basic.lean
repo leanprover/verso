@@ -5,7 +5,7 @@ open Verso.Genre Manual
 
 set_option pp.rawOnError true
 
-#doc (Manual) "Writing Documentation in Lean" =>
+#doc (Manual) "Writing Documentation in Lean with Verso" =>
 
 %%%
 authors := ["David Thrane Christiansen"]

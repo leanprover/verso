@@ -1,6 +1,52 @@
+import Verso.Syntax
 import Verso.Genre.Manual
+import Lean
 
-open Verso.Genre
+open Verso Genre
+
+open Lean in
+open Verso.Syntax in
+partial def preview [Monad m] [MonadError m] (stx : Syntax) : m String :=
+  match stx with
+  | `(inline| $s:str) => pure s.getString
+  | `(inline| line! $s:str) => pure s.getString
+  | `(inline| _{ $s:inline* }) => do
+    let contents ← s.toList.mapM (preview ∘ TSyntax.raw)
+    pure <| "<emph>" ++ String.join contents ++ "</emph>"
+  | `(inline| *{ $s:inline* }) => do
+    let contents ← s.toList.mapM (preview ∘ TSyntax.raw)
+    pure <| "<bold>" ++ String.join contents ++ "</bold>"
+  | `(inline| link[ $txt:inline* ]( $url:str )) => do
+    let contents ← txt.toList.mapM (preview ∘ TSyntax.raw)
+    pure s!"<a href=\"{url.getString}\">{String.join contents}</a>"
+  | `(inline| link[ $txt:inline* ][ $tgt:str ]) => do
+    let contents ← txt.toList.mapM (preview ∘ TSyntax.raw)
+    pure s!"<a href=\"(value of «{tgt.getString}»)\">{String.join contents}</a>"
+  | `(inline| code{ $code:str }) =>
+    pure s!"<code>{code.getString}</code>"
+  | `(block| para{ $i:inline* }) => do
+    let contents ← i.toList.mapM (preview ∘ TSyntax.raw)
+    pure <| String.join contents
+  | `(block| [ $ref:str ]: $url:str) =>
+    pure s!"where «{ref.getString}» := {url.getString}"
+  | other => do
+    if other.getKind = nullKind then
+      pure <| String.join <| (← other.args.toList.mapM preview).intersperse "\n\n"
+    else
+      throwErrorAt stx "Didn't understand {Verso.SyntaxUtils.ppSyntax stx} for preview"
+
+open Lean Verso Doc Elab Parser in
+@[code_block_expander markupPreview]
+def markupPreview : CodeBlockExpander
+  | #[], contents => do
+    let stx ← blocks {} |>.parseString contents.getString
+    let p ← preview stx
+    pure #[
+      ← ``(Block.code none #[] 0 $(quote contents.getString)),
+      ← ``(Block.code none #[] 0 $(quote <| toString <| p))
+    ]
+  | _, contents => throwErrorAt contents "Unexpected arguments"
+
 
 #doc (Manual) "Lean Markup" =>
 
@@ -33,10 +79,36 @@ Like Markdown, Lean's markup has three primary syntactic categories:
 
 ## Description
 
-TODO build an extension to test the parsing here
-
 ### Inline Syntax
 
+Emphasis is written with underscores:
+```markupPreview
+Here's some _emphasized_ text
+```
+Emphasis can be nested by using more underscores for the outer emphasis:
+```markupPreview
+Here's some __emphasized text with _extra_ emphasis__ inside
+```
+
+Strong emphasis (bold) is written with asterisks:
+```markupPreview
+Here's some *bold* text
+```
+
+Hyperlinks consist of the link text in square brackets followed by the target in parentheses:
+```markupPreview
+The [Lean website](https://lean-lang.org)
+```
+
+```markupPreview
+The [Lean website][lean]
+
+[lean]: https://lean-lang.org
+```
+
+```markupPreview
+The definition of `main`
+```
 
 
 TeX math can be included using a single or double dollar sign followed by code. Two dollar signs results in display-mode math, so `` $`\sum_{i=0}^{10} i` `` results in $`\sum_{i=0}^{10} i` while `` $$`\sum_{i=0}^{10} i` `` results in: $$`\sum_{i=0}^{10} i`

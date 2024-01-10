@@ -54,8 +54,8 @@ partial def _root_.Verso.Syntax.text.expand : InlineExpander := fun x =>
 
 @[inline_expander Verso.Syntax.linebreak]
 def _root_.linebreak.expand : InlineExpander
-  | `<low|(Verso.Syntax.linebreak ~(.atom _ s))> =>
-    ``(Inline.linebreak $(quote s))
+  | `(inline|line! $s:str) =>
+    ``(Inline.linebreak $(quote s.getString))
   | _ => throwUnsupportedSyntax
 
 @[inline_expander Verso.Syntax.emph]
@@ -289,7 +289,7 @@ where
 
 @[block_expander Verso.Syntax.para]
 partial def _root_.Verso.Syntax.para.expand : BlockExpander
-  | `<low|(Verso.Syntax.para ~(.node _ `null args) )> => do
+  | `(block| para{ $args:inline* }) => do
     ``(Block.para #[$[$(← args.mapM elabInline)],*])
   | _ =>
     throwUnsupportedSyntax
