@@ -52,7 +52,7 @@ namespace Template
 
 namespace Params
 def forPart [BlogGenre g] [GenreHtml g IO] [ToHtml g IO (Part g)] (txt : Part g) : GenerateM Params := do
-  let titleHtml := {{ <h1> {{ ← txt.title.mapM (GenerateM.toHtml g) }} </h1>}}
+  let titleHtml : Html ← txt.title.mapM (GenerateM.toHtml g)
   let preamble ← txt.content.mapM (GenerateM.toHtml g)
   let subParts ← txt.subParts.mapM (GenerateM.toHtml g)
   return ofList [
