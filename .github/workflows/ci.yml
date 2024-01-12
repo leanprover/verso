@@ -2,7 +2,7 @@ on:
   push:
   pull_request:
 
-name: continuous integration
+name: Continuous Integration
 
 jobs:
   build:
@@ -25,6 +25,12 @@ jobs:
       - name: lean version
         run: |
           lean --version
+
+      - name: Cache .lake
+        uses: actions/cache@v3
+        with:
+          path: .lake
+          key: ${{ runner.os }}-${{ hashFiles('lake-manifest.json') }}-${{ hashFiles('lean-toolchain') }}
 
       - name: Build the project
         run: |
