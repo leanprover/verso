@@ -36,9 +36,12 @@ jobs:
         run: |
           lake build
 
+      - name: Generate the example website
+        run: |
+          lake exe demosite --output _out/examples/demosite
+
       - name: Install Dependencies
         run: sudo apt update && sudo apt install -y pandoc texlive-latex-base texlive-latex-extra texlive-latex-recommended texlive-luatex fonts-dejavu
-
 
       - name: Generate the manual
         run: |
