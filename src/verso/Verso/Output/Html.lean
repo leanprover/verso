@@ -46,8 +46,36 @@ termination_by
 
 namespace Html
 
-declare_syntax_cat html
+/-- Void tags are those that cannot have child nodes - they must not have closing tags.
+
+See https://developer.mozilla.org/en-US/docs/Glossary/Void_element
+ -/
+def voidTags : List String :=
+  ["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"]
+
+/--
+Tags for which tag omission rules do not permit omitting the
+closing tag (the XHTML-style `<selfclosing/>` syntax is also invalid
+here)
+
+This was manually constructed by grepping through https://html.spec.whatwg.org/
+-/
+def mustClose : List String :=
+  ["b", "u", "mark", "bdi", "bdo", "span", "ins", "del", "picture", "iframe",
+   "object", "video", "audio", "map", "table", "form", "label", "button", "select",
+   "datalist", "textarea", "output", "progress", "meter", "fieldset", "legend",
+   "details", "summary", "dialog", "script", "noscript", "template", "slot",
+   "canvas", "title", "style", "article", "section", "nav", "aside", "h1",
+   "h2", "h3", "h4", "h5", "h6", "hgroup", "header", "footer", "address", "pre",
+   "blockquote", "ol", "ul", "menu", "dl", "figure", "figcaption", "main", "search",
+   "div", "a", "em", "strong", "small", "s", "cite", "q", "dfn", "abbr", "ruby",
+   "data", "time", "code", "var", "samp", "kbd", "sub", "sup", "i"]
+
 declare_syntax_cat tag_name
+scoped syntax ident : tag_name
+scoped syntax "section" : tag_name
+
+declare_syntax_cat html
 declare_syntax_cat attrib
 declare_syntax_cat attrib_val
 scoped syntax str : attrib_val
@@ -56,8 +84,6 @@ scoped syntax ident "=" attrib_val : attrib
 scoped syntax str "=" attrib_val : attrib
 scoped syntax "class" "=" attrib_val : attrib
 
-scoped syntax ident : tag_name
-scoped syntax "section" : tag_name
 
 partial def _root_.Lean.TSyntax.tagName : TSyntax `tag_name → String
   | ⟨.node _ _ #[.atom _ x]⟩ => x
@@ -67,7 +93,7 @@ partial def _root_.Lean.TSyntax.tagName : TSyntax `tag_name → String
 
 scoped syntax "{{" term "}}" : html
 scoped syntax "<" tag_name attrib* ">" html* "</" tag_name ">" : html
-scoped syntax  "<" tag_name attrib* "/" ">" : html
+scoped syntax "<" tag_name attrib* "/" ">" : html
 scoped syntax str : html
 scoped syntax "s!" interpolatedStr(term) : html
 scoped syntax "r!" str : html
@@ -87,18 +113,22 @@ macro_rules
       | _ => throwUnsupported
     `(term| #[ $[$attrsOut],* ] )
   | `(term| {{ {{ $e:term }} }} ) => ``(($e : Html))
-  | `(term| {{ $s:str }} ) => ``(Html.text true $s)
-  | `(term| {{ s! $s:interpolatedStr }} ) => ``(Html.text true s!$s)
-  | `(term| {{ r! $s:str }} ) => ``(Html.text false $s)
+  | `(term| {{ $text:str }} ) => ``(Html.text true $text)
+  | `(term| {{ s! $txt:interpolatedStr }} ) => ``(Html.text true s!$txt)
+  | `(term| {{ r! $txt:str }} ) => ``(Html.text false $txt)
   | `(term| {{ $html1:html $html2:html $htmls:html*}}) =>
     `({{$html1}} ++ {{$html2}} ++ Html.seq #[$[{{$htmls}}],*])
   | `(term| {{ <$tag:tag_name $[$extra]* > $content:html </ $tag':tag_name> }}) => do
     if tag.tagName != tag'.tagName then
       Macro.throwErrorAt tag' s!"Mismatched closing tag, expected {tag.tagName} but got {tag'.tagName}"
+    if tag.tagName ∈ voidTags then
+      Macro.throwErrorAt tag s!"'{tag.tagName}' doesn't allow contents"
     ``(Html.tag $(quote tag.tagName) {{{ $extra* }}} {{ $content }} )
   | `(term| {{ <$tag:tag_name $[$extra]* > $[$content:html]* </ $tag':tag_name> }}) => do
     if tag.tagName != tag'.tagName then
       Macro.throwErrorAt tag' s!"Mismatched closing tag, expected {tag.tagName} but got {tag'.tagName}"
+    if tag.tagName ∈ voidTags && content.size != 0 then
+      Macro.throwErrorAt tag s!"'{tag.tagName}' doesn't allow contents"
     ``(Html.tag $(quote tag.tagName) {{{ $extra* }}} <| Html.fromArray #[$[ {{ $content }} ],*] )
   | `(term| {{ <$tag:tag_name $[$extra]* /> }}) => ``(Html.tag $(quote tag.tagName) {{{ $extra* }}} Html.empty )
 
@@ -106,8 +136,11 @@ scoped instance : Coe String Html := ⟨.text true⟩
 
 def test : Html := {{
   <html>
+  <head>
+    <script></script>
+  </head>
   <body lang="en" class="thing">
-  <p> "foo bar" </p>
+  <p> "foo bar" <br/> "hey" </p>
   </body>
   </html>
 }}
@@ -116,13 +149,24 @@ def test : Html := {{
 info: Verso.Output.Html.tag
   "html"
   #[]
-  (Verso.Output.Html.tag
-    "body"
-    #[("lang", "en"), ("class", "thing")]
-    (Verso.Output.Html.tag "p" #[] (Verso.Output.Html.text true "foo bar")))
+  (Verso.Output.Html.seq
+    #[Verso.Output.Html.tag "head" #[] (Verso.Output.Html.tag "script" #[] (Verso.Output.Html.seq #[])),
+      Verso.Output.Html.tag
+        "body"
+        #[("lang", "en"), ("class", "thing")]
+        (Verso.Output.Html.tag
+          "p"
+          #[]
+          (Verso.Output.Html.seq
+            #[Verso.Output.Html.text true "foo bar", Verso.Output.Html.tag "br" #[] (Verso.Output.Html.seq #[]),
+              Verso.Output.Html.text true "hey"]))])
 -/
 #guard_msgs in
   #eval test
+
+/-- error: 'br' doesn't allow contents -/
+#guard_msgs in
+  #eval show Html from {{ <br>"foo" "foo"</br> }}
 
 open Std.Format in
 partial def format : Html → Std.Format
@@ -144,18 +188,17 @@ partial def format : Html → Std.Format
 partial def asString : Html → String
   | .text true str => str.replace "<" "&lt;" |>.replace ">" "&gt;"
   | .text false str => str
-  | .tag name attrs (.seq #[]) =>
-    -- TODO make this more elegant
-    if name == "script" then
-      "<" ++ name ++ attrsAsString attrs ++ "></script>"
-    else
-      "<" ++ name ++ attrsAsString attrs ++ "/>"
-  | .tag name attrs (.seq #[subElem]) =>
-    "<" ++ name ++ attrsAsString attrs ++ ">" ++ asString subElem ++ s!"</{name}>"
   | .tag "pre" attrs body =>
     "<pre" ++ attrsAsString attrs ++ ">\n" ++
     Html.asString body ++ "\n" ++
     "</pre>"
+  | .tag name attrs (.seq #[]) =>
+    if name ∈ mustClose then
+      "<" ++ name ++ attrsAsString attrs ++ "></" ++ name ++ ">"
+    else
+      "<" ++ name ++ attrsAsString attrs ++ ">"
+  | .tag name attrs (.seq #[subElem]) =>
+    "<" ++ name ++ attrsAsString attrs ++ ">" ++ asString subElem ++ s!"</{name}>"
   | .tag name attrs body =>
       "<" ++ name ++ attrsAsString attrs ++ ">" ++
       Html.asString body ++
@@ -163,3 +206,9 @@ partial def asString : Html → String
   | .seq elts => String.join (elts.toList.map Html.asString)
 where
   attrsAsString xs := String.join <| xs.toList.map (fun ⟨k, v⟩ => s!" {k}=\"{v}\"")
+
+/--
+info: "<html><head><script></script></head><body lang=\"en\" class=\"thing\"><p>foo bar<br>hey</p></body></html>"
+-/
+#guard_msgs in
+  #eval test.asString
