@@ -37,3 +37,17 @@ lean_exe usersguide where
   -- `runFrontend`) at the expense of increased binary size on Linux.
   -- Remove this line if you do not need such functionality.
   supportInterpreter := true
+
+-- A demo site that shows how to generate websites with Verso
+lean_lib DemoSite where
+  srcDir := "examples/website"
+  roots := #[`DemoSite]
+
+@[default_target]
+lean_exe demosite where
+  srcDir := "examples/website"
+  root := `DemoSiteMain
+  -- Enables the use of the Lean interpreter by the executable (e.g.,
+  -- `runFrontend`) at the expense of increased binary size on Linux.
+  -- Remove this line if you do not need such functionality.
+  supportInterpreter := true

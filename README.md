@@ -26,3 +26,23 @@ Please consult the in-progress [Verso manual](https://github.com/leanprover/vers
 The project is currently undergoing change at a rapid pace. If you'd like to contribute, please get in touch with David Thrane Christiansen and discuss your plans ahead of time, as there is not presently much extra time to onboard and supervise new contributors. This may change as the project matures.
 
 However, one goal of the project is that users should be able to implement their own extensions without needing to modify the Verso libraries. If you've attempted to implement your desired feature as an extension and run into a limitation, please open an issue so we can try to make the system more extensible.
+
+## Building Documentation
+
+To generate the Verso documentation, run `generate.sh`.
+
+## Examples
+
+The [`examples`](./examples) directory contains example documents built with the default Verso genres.
+
+To build the example website and place the results in `_out/examples/demosite`, run:
+```
+lake build
+lake exe demosite --output _out/examples/demosite
+```
+
+To view the output, a local server will be needed. One way to get such a server is to use the one from the Python standard library, e.g.
+```
+python3 -m http.server 8800 --directory _out/examples/demosite &
+```
+after which `http://localhost:8800/` will show the generated site.

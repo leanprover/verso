@@ -137,6 +137,7 @@ scoped instance : Coe String Html := ⟨.text true⟩
 def test : Html := {{
   <html>
   <head>
+    <meta charset="UTF-8"/>
     <script></script>
   </head>
   <body lang="en" class="thing">
@@ -150,7 +151,12 @@ info: Verso.Output.Html.tag
   "html"
   #[]
   (Verso.Output.Html.seq
-    #[Verso.Output.Html.tag "head" #[] (Verso.Output.Html.tag "script" #[] (Verso.Output.Html.seq #[])),
+    #[Verso.Output.Html.tag
+        "head"
+        #[]
+        (Verso.Output.Html.seq
+          #[Verso.Output.Html.tag "meta" #[("charset", "UTF-8")] (Verso.Output.Html.seq #[]),
+            Verso.Output.Html.tag "script" #[] (Verso.Output.Html.seq #[])]),
       Verso.Output.Html.tag
         "body"
         #[("lang", "en"), ("class", "thing")]
@@ -208,7 +214,7 @@ where
   attrsAsString xs := String.join <| xs.toList.map (fun ⟨k, v⟩ => s!" {k}=\"{v}\"")
 
 /--
-info: "<html><head><script></script></head><body lang=\"en\" class=\"thing\"><p>foo bar<br>hey</p></body></html>"
+info: "<html><head><meta charset=\"UTF-8\"><script></script></head><body lang=\"en\" class=\"thing\"><p>foo bar<br>hey</p></body></html>"
 -/
 #guard_msgs in
   #eval test.asString

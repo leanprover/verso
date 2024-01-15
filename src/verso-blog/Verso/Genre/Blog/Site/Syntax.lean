@@ -26,7 +26,8 @@ scoped syntax withPosition(ident (colGt blog_spec)) : site_spec
 scoped syntax withPosition(str ident (colGt (dir_spec <|> blog_spec))?) : page_spec
 
 /-- Include a static files directory -/
-scoped syntax "static" str " => " str : page_spec
+scoped syntax "static" str " ← " str : page_spec
+scoped syntax "static" str " <- " str : page_spec
 
 /-- A directory of pages -/
 scoped syntax "/" withPosition((colEq page_spec)+) : dir_spec
@@ -67,5 +68,7 @@ macro_rules
     ``(Dir.blog $name (%docName $id) (%doc $id) #[$[post $posts],*])
   | `(term| post $id:ident) => do
     `({id := (%docName $id), contents := (%doc $id) : BlogPost})
-  | `(term| page static $name:str => $d:str) =>
+  | `(term| page static $name:str ← $d:str) =>
+    ``(Dir.static $name $d)
+  | `(term| page static $name:str <- $d:str) =>
     ``(Dir.static $name $d)
