@@ -8,7 +8,7 @@ package verso where
 
 lean_lib Verso where
   srcDir := "src/verso"
-  roots := #[`Verso.Doc, `Verso.Output, `Verso.Parser, `Verso.Examples, `Verso.Method, `Verso.Syntax, `Verso.SyntaxUtils]
+  roots := #[`Verso]
   -- add library configuration options here
 
 lean_lib VersoBlog where
