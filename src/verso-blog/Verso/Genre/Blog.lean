@@ -318,12 +318,15 @@ private def filterString (p : Char → Bool) (str : String) : String := Id.run <
     if p c then out := out.push c
   pure out
 
-def blogMain (theme : Theme) (site : Site) (options : List String) : IO UInt32 := do
+def blogMain (theme : Theme) (site : Site) (relativizeUrls := true) (options : List String) : IO UInt32 := do
   let hasError ← IO.mkRef false
   let logError msg := do hasError.set true; IO.eprintln msg
   let cfg ← opts {logError := logError} options
   let (site, xref) ← site.traverse cfg
-  site.generate theme {site := site, ctxt := ⟨[], cfg⟩, xref := xref, dir := cfg.destination, config := cfg}
+  let rw := if relativizeUrls then
+      some <| relativize
+    else none
+  site.generate theme {site := site, ctxt := ⟨[], cfg⟩, xref := xref, dir := cfg.destination, config := cfg, rewriteHtml := rw}
   if (← hasError.get) then
     IO.eprintln "Errors were encountered!"
     return 1
@@ -335,3 +338,16 @@ where
     | ("--drafts"::more) => opts {cfg with showDrafts := true} more
     | (other :: _) => throw (↑ s!"Unknown option {other}")
     | [] => pure cfg
+  urlAttr (name : String) : Bool := name ∈ ["href", "src", "data", "poster"]
+  rwAttr (attr : String × String) : ReaderT TraverseContext Id (String × String) := do
+    if urlAttr attr.fst && "/".isPrefixOf attr.snd then
+      let path := (← read).path
+      pure { attr with
+        snd := String.join (List.replicate path.length "../") ++ attr.snd.drop 1
+      }
+    else
+      pure attr
+  rwTag (tag : String) (attrs : Array (String × String)) (content : Html) : ReaderT TraverseContext Id (Option Html) := do
+    pure <| some <| .tag tag (← attrs.mapM rwAttr) content
+  relativize _err ctxt html :=
+    pure <| html.visitM (m := ReaderT TraverseContext Id) (tag := rwTag) |>.run ctxt

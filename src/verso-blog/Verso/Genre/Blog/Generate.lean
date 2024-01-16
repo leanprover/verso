@@ -23,6 +23,7 @@ structure Generate.Context where
   /-- The root directory in which to generate the static site -/
   dir : System.FilePath
   config : Config
+  rewriteHtml : Option ((logError : String → IO Unit) → TraverseContext → Html → IO Html) := none
 
 def Generate.Context.templateContext (ctxt : Generate.Context) (params : Template.Params) : Template.Context where
   site := ctxt.site
@@ -33,6 +34,11 @@ def Generate.Context.templateContext (ctxt : Generate.Context) (params : Templat
   builtInScripts := ctxt.xref.scripts.insert Traverse.renderMathJs
 
 abbrev GenerateM := ReaderT Generate.Context IO
+
+def Generate.rewriteOutput (html : Html) : GenerateM Html := do
+  let {ctxt, config, rewriteHtml := some rewriter, ..} := (← read)
+    | pure html
+  rewriter config.logError ctxt html
 
 instance : MonadPath GenerateM where
   currentPath := do return (← read).ctxt.path
@@ -108,9 +114,9 @@ end Generate
 open Generate
 
 open IO.FS in
-partial def copyRecursively (src tgt : System.FilePath) : IO Unit := do
+partial def copyRecursively (src tgt : System.FilePath) : GenerateM Unit := do
   if (← src.metadata).type == .symlink then
-    pure () -- TODO
+    (← currentConfig).logError s!"Can't copy '{src}' - symlinks not currently supported"
   if ← src.isDir then
     ensureDir tgt
     for d in ← src.readDir do
@@ -128,7 +134,7 @@ open Template.Params (forPart)
 def writePage (theme : Theme) (params : Template.Params) (template : Template := theme.pageTemplate) : GenerateM Unit := do
   ensureDir <| (← currentDir)
   let ⟨baseTemplate, modParams⟩ := theme.adHocTemplates (Array.mk (← currentPath)) |>.getD ⟨template, id⟩
-  let output ← Template.renderMany [baseTemplate, theme.primaryTemplate] <| modParams <| params
+  let output ← rewriteOutput <| ← Template.renderMany [baseTemplate, theme.primaryTemplate] <| modParams <| params
   IO.FS.withFile ((← currentDir).join "index.html") .write fun h => do
     h.putStrLn "<!DOCTYPE html>"
     h.putStrLn output.asString
@@ -151,33 +157,30 @@ def writeBlog (theme : Theme) (txt : Part Page) (posts : Array BlogPost) : Gener
         | some md => (·.insert "metadata" ⟨.mk md, #[]⟩) <$> forPart post.contents
       writePage theme postParams (template := theme.postTemplate)
 
-mutual
-  partial def Dir.generate (theme : Theme) (dir : Dir) : GenerateM Unit :=
-    inDir dir <|
-    match dir with
-    | .page _ _ txt subPages => do
-      IO.println s!"Generating page {← currentDir}"
-      -- TODO more configurable template context
-      writePage theme (← forPart txt)
-      for p in subPages do
-        p.generate theme
-    | .blog _ _ txt posts => do
-      IO.println s!"Generating blog section {← currentDir}"
-      writeBlog theme txt posts
-    | .static _ file => do
-      IO.println s!"Copying from {file} to {(← currentDir)}"
-      let dest ← currentDir
-      if ← dest.pathExists then
-        if ← dest.isDir then
-          IO.FS.removeDirAll dest
-        else
-          IO.FS.removeFile dest
-      copyRecursively file dest
 
+partial def Dir.generate (theme : Theme) (dir : Dir) : GenerateM Unit :=
+  inDir dir <|
+  match dir with
+  | .page _ _ txt subPages => do
+    IO.println s!"Generating page '{← currentDir}'"
+    -- TODO more configurable template context
+    writePage theme (← forPart txt)
+    for p in subPages do
+      p.generate theme
+  | .blog _ _ txt posts => do
+    IO.println s!"Generating blog section '{← currentDir}'"
+    writeBlog theme txt posts
+  | .static _ file => do
+    IO.println s!"Copying from static '{file}' to '{(← currentDir)}'"
+    let dest ← currentDir
+    if ← dest.pathExists then
+      if ← dest.isDir then
+        IO.FS.removeDirAll dest
+      else
+        IO.FS.removeFile dest
+    copyRecursively file dest
 
-end
-
-def Site.generate (theme : Theme) (site : Site): GenerateM Unit := do
+def Site.generate (theme : Theme) (site : Site) : GenerateM Unit := do
   match site with
   | .page _ txt subPages =>
     writePage theme (← forPart txt)
