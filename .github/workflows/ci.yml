@@ -30,7 +30,11 @@ jobs:
         uses: actions/cache@v3
         with:
           path: .lake
-          key: ${{ runner.os }}-${{ hashFiles('lake-manifest.json') }}-${{ hashFiles('lean-toolchain') }}
+          key: ${{ runner.os }}-${{ hashFiles('lean-toolchain') }}-${{ hashFiles('lake-manifest.json') }}-${{ hashFiles('lakefile.lean') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ hashFiles('lean-toolchain') }}-${{ hashFiles('lake-manifest.json') }}-${{ hashFiles('lakefile.lean') }}
+            ${{ runner.os }}-${{ hashFiles('lean-toolchain') }}-${{ hashFiles('lake-manifest.json') }}-
+            ${{ runner.os }}-${{ hashFiles('lean-toolchain') }}-
 
       - name: Build the project
         run: |
