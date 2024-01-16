@@ -46,11 +46,26 @@ termination_by
 
 namespace Html
 
+/-- Visit the entire tree, applying rewrites in some monad. Return `none` to signal that no rewrites are to be performed. -/
+partial def visitM [Monad m]
+    (text : (escape : Bool) → String → m (Option Html) := (fun _ _ => pure none))
+    (tag : (name : String) → (attrs : Array (String × String)) → (contents : Html) → m (Option Html) := fun _ _ _ => pure none)
+    (seq : Array Html → m (Option Html) := fun _ => pure none)
+    (html : Html) : m Html :=
+  match html with
+  | .text esc str => do pure <| (← text esc str).getD html
+  | .tag name attrs contents => do
+    let contents' ← contents.visitM (text := text) (tag := tag) (seq := seq)
+    pure <| (← tag name attrs contents').getD (.tag name attrs contents')
+  | .seq elts => do
+    let elts' ← elts.mapM (visitM (text := text) (tag := tag) (seq := seq))
+    pure <| (← seq elts').getD (.seq elts')
+
 /-- Void tags are those that cannot have child nodes - they must not have closing tags.
 
 See https://developer.mozilla.org/en-US/docs/Glossary/Void_element
  -/
-def voidTags : List String :=
+private def voidTags : List String :=
   ["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"]
 
 /--
@@ -60,7 +75,7 @@ here)
 
 This was manually constructed by grepping through https://html.spec.whatwg.org/
 -/
-def mustClose : List String :=
+private def mustClose : List String :=
   ["b", "u", "mark", "bdi", "bdo", "span", "ins", "del", "picture", "iframe",
    "object", "video", "audio", "map", "table", "form", "label", "button", "select",
    "datalist", "textarea", "output", "progress", "meter", "fieldset", "legend",
