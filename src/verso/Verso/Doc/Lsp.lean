@@ -430,6 +430,41 @@ def renumberLists : CodeActionProvider := fun params snap => do
       }
     }
 
+deriving instance FromJson for FoldingRangeKind
+deriving instance FromJson for FoldingRange
+
+open Lean Server Lsp RequestM in
+def handleFolding (_params : FoldingRangeParams) (prev : RequestTask (Array FoldingRange)) : RequestM (RequestTask (Array FoldingRange)) := do
+  let doc ← readDoc
+  let text := doc.meta.text
+  -- bad: we have to wait on elaboration of the entire file before we can report document symbols
+  let t := doc.cmdSnaps.waitAll
+  let syms ← mapTask t fun (snaps, _) => pure <| getSections text snaps
+  mergeResponses syms prev (·.getD #[] ++ ·.getD #[])
+  --pure syms
+  where
+    getSections text ss : Array FoldingRange := Id.run do
+      let mut regions := #[]
+      for snap in ss do
+        let mut info := snap.infoTree.deepestNodes fun _ctxt info _arr =>
+          match info with
+          | .ofCustomInfo ⟨_stx, data⟩ =>
+            data.get? TOC
+          | _ => none
+        repeat
+          match info with
+          | .included _  :: more =>
+            info := more
+          | (.mk _ titleStx endPos children) :: more =>
+            if let some {start := {line := startLine, ..}, ..} := text.rangeOfStx? titleStx then
+              let {line := endLine, ..} := text.utf8PosToLspPos endPos
+              if endLine - 1 > startLine then
+                regions := regions.push {startLine := startLine, endLine := endLine - 1}
+            info := children.toList ++ more
+          | [] => break
+      pure regions
+
+
 open Lean Server Lsp in
 initialize
   chainLspRequestHandler "textDocument/definition" TextDocumentPositionParams (Array LocationLink) handleDef
@@ -438,3 +473,4 @@ initialize
   chainLspRequestHandler "textDocument/documentSymbol" DocumentSymbolParams DocumentSymbolResult handleSyms
   chainLspRequestHandler "textDocument/semanticTokens/full" SemanticTokensParams SemanticTokens handleTokensFull
   chainLspRequestHandler "textDocument/semanticTokens/range" SemanticTokensRangeParams SemanticTokens handleTokensRange
+  chainLspRequestHandler "textDocument/foldingRange" FoldingRangeParams (Array FoldingRange) handleFolding
