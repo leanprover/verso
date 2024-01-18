@@ -269,7 +269,7 @@ def _root_.Lean.Parser.ParserContext.currentColumn (c : ParserContext) (s : Pars
 
 def pushColumn : ParserFn := fun c s =>
   let col := c.fileMap.toPosition s.pos |>.column
-  s.pushSyntax <| Syntax.mkLit `column (toString col) SourceInfo.none
+  s.pushSyntax <| Syntax.mkLit `column (toString col) (SourceInfo.synthetic s.pos s.pos)
 
 def guardColumn (p : Nat → Bool) (message : String) : ParserFn := fun c s =>
   if p (c.currentColumn s) then s else s.mkErrorAt message s.pos

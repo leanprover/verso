@@ -341,6 +341,7 @@ def PartElabM.debug (msg : String) : PartElabM Unit := do
 /-- Custom info tree data to save the locations and identities of lists -/
 structure DocListInfo where
   bullets : Array Syntax
+  items : Array Syntax
 deriving Repr, TypeName
 
 abbrev InlineExpander := Syntax → DocElabM (TSyntax `term)
