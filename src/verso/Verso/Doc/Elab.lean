@@ -314,7 +314,7 @@ def _root_.Verso.Syntax.ul.expand : BlockExpander
       let (b, item) ← elabLi i
       bullets := bullets.push b
       items := items.push item
-    let info := DocListInfo.mk bullets
+    let info := DocListInfo.mk bullets itemStxs
     for b in bullets do
       pushInfoLeaf <| .ofCustomInfo {stx := b, value := Dynamic.mk info}
     ``(Block.ul #[$[$items],*])
@@ -330,7 +330,7 @@ def _root_.Verso.Syntax.ol.expand : BlockExpander
       let (b, item) ← elabLi i
       bullets := bullets.push b
       items := items.push item
-    let info := DocListInfo.mk bullets
+    let info := DocListInfo.mk bullets itemStxs
     for b in bullets do
       pushInfoLeaf <| .ofCustomInfo {stx := b, value := Dynamic.mk info}
     ``(Block.ol $(Syntax.mkNumLit start.getAtomVal) #[$[$items],*])
@@ -356,7 +356,7 @@ def _root_.Verso.Syntax.dl.expand : BlockExpander
       let (b, item) ← elabDesc i
       colons := colons.push b
       items := items.push item
-    let info := DocListInfo.mk colons
+    let info := DocListInfo.mk colons itemStxs
     for b in colons do
       pushInfoLeaf <| .ofCustomInfo {stx := b, value := Dynamic.mk info}
     ``(Block.dl #[$[$items],*])

@@ -167,8 +167,8 @@ def handleHl (params : DocumentHighlightParams) (prev : RequestTask DocumentHigh
         let mut hls := #[]
         for node in nodes do
           match node with
-          | .inl ⟨stxs⟩ =>
-            for s in stxs do
+          | .inl ⟨bulletStxs, _⟩ =>
+            for s in bulletStxs do
               if let some r := s.lspRange text then
                 hls := hls.push ⟨r, none⟩
           | .inr ⟨defSite, useSites⟩ =>
@@ -412,7 +412,7 @@ def renumberLists : CodeActionProvider := fun params snap => do
     let (some head, some tail) := (stx.getPos? true, stx.getTailPos? true) | result
     unless head ≤ endPos && startPos ≤ tail do return result
     result.push (ctx, listInfo)
-  pure <| lists.map fun (_, ⟨bulletStxs⟩) => {
+  pure <| lists.map fun (_, ⟨bulletStxs, _⟩) => {
       eager := {
         title := "Number from 1",
         kind? := some "quickfix",
@@ -439,10 +439,25 @@ def handleFolding (_params : FoldingRangeParams) (prev : RequestTask (Array Fold
   let text := doc.meta.text
   -- bad: we have to wait on elaboration of the entire file before we can report document symbols
   let t := doc.cmdSnaps.waitAll
-  let syms ← mapTask t fun (snaps, _) => pure <| getSections text snaps
-  mergeResponses syms prev (·.getD #[] ++ ·.getD #[])
-  --pure syms
-  where
+  let folds ← mapTask t fun (snaps, _) => pure <| getSections text snaps ++ getLists text snaps
+  combine folds prev
+where
+    combine := (mergeResponses · · (·.getD #[] ++ ·.getD #[]))
+    getLists text ss : Array FoldingRange := Id.run do
+      let mut lists := #[]
+      for snap in ss do
+        let snapLists := snap.infoTree.foldInfo (init := #[]) fun _ctx info result => Id.run do
+          let .ofCustomInfo ⟨_stx, data⟩ := info | result
+          let some listInfo := data.get? DocListInfo | result
+          if h : listInfo.items.size > 0 then
+            let some {start := {line := startLine, ..}, ..} := text.rangeOfStx? listInfo.items[0]
+              | result
+            let some {«end» := {line := endLine, ..}, ..} := text.rangeOfStx? listInfo.items.back
+              | result
+            result.push {startLine := startLine, endLine := endLine}
+          else result
+        lists := lists ++ snapLists
+      pure lists
     getSections text ss : Array FoldingRange := Id.run do
       let mut regions := #[]
       for snap in ss do
