@@ -67,6 +67,8 @@ termination_by input.size - i
 
 namespace Html
 
+def doctype := "<!DOCTYPE html>"
+
 /-- Visit the entire tree, applying rewrites in some monad. Return `none` to signal that no rewrites are to be performed. -/
 partial def visitM [Monad m]
     (text : (escape : Bool) → String → m (Option Html) := (fun _ _ => pure none))
