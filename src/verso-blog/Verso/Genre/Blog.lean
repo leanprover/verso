@@ -310,6 +310,15 @@ where
   mostlyEqual (s1 s2 : String) : Bool :=
     s1.trim == s2.trim
 
+open Lean Elab Command in
+elab "#defineLexerBlock" blockName:ident " ← " lexerName:ident : command => do
+  let lexer ← resolveGlobalConstNoOverloadWithInfo lexerName
+  elabCommand <| ← `(@[code_block_expander $blockName]
+    def $blockName : Doc.Elab.CodeBlockExpander
+      | #[], str => do
+        let out ← Verso.Genre.Blog.LexedText.highlight $(mkIdentFrom lexerName lexer) str.getString
+        return #[← ``(Block.other (Blog.BlockExt.lexedText $$(quote out)) #[])]
+      | _, str => throwErrorAt str "Expected no arguments")
 
 
 private def filterString (p : Char → Bool) (str : String) : String := Id.run <| do

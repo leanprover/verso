@@ -1,3 +1,26 @@
 h1, h2, h3, h4, h5, h6 {
     font-family: sans-serif;
 }
+
+.lexed.json .brace {
+    color: #0000aa;
+}
+.lexed.json .arr {
+    color: #008800;
+}
+.lexed.json .delim {
+    color: #808030;
+}
+.lexed.json .str {
+    text-decoration: underline;
+}
+.lexed.json .num {
+    font-weight: bold;
+}
+.lexed.json .null {
+    font-weight: bold;
+    color: #ff0000;
+}
+.lexed.json .bool {
+    color: #aa0;
+}

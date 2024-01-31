@@ -82,7 +82,14 @@ partial defmethod Highlighted.toHtml : Highlighted → Html
   | .point s info => {{<span class={{"message " ++ s.«class»}}>{{info}}</span>}}
   | .seq hls => hls.map toHtml
 
+defmethod LexedText.toHtml (text : LexedText) : Html :=
+  text.content.map fun
+    | (none, txt) => (txt : Html)
+    | (some cls, txt) => {{ <span class={{cls}}>{{txt}}</span>}}
+
 def blockHtml (g : Genre) (go : Block g → HtmlT g IO Html) : Blog.BlockExt → Array (Block g) → HtmlT g IO Html
+  | .lexedText content, _contents => do
+    pure {{ <pre class=s!"lexed {content.name}"> {{ content.toHtml }} </pre> }}
   | .highlightedCode contextName hls, _contents => do
     pure {{ <pre class="hl lean" "data-lean-context"={{toString contextName}}> {{ hls.toHtml }} </pre> }}
   | .htmlDiv classes, contents => do
