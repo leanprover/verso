@@ -94,6 +94,7 @@ declare_syntax_cat html
 declare_syntax_cat attrib
 declare_syntax_cat attrib_val
 scoped syntax str : attrib_val
+scoped syntax "s!" interpolatedStr(term) : attrib_val
 scoped syntax "{{" term "}}" : attrib_val
 scoped syntax ident "=" attrib_val : attrib
 scoped syntax str "=" attrib_val : attrib
@@ -121,9 +122,11 @@ macro_rules
   | `(term| {{{ $attrs* }}} ) => do
     let attrsOut ← attrs.mapM fun
       | `(attrib| $name:ident = $val:str) => `(term| ($(quote name.getId.toString), $val))
+      | `(attrib| $name:ident = s!$val:interpolatedStr) => `(term| ($(quote name.getId.toString), s!$val))
       | `(attrib| $name:ident = {{ $e }} ) => `(term| ($(quote name.getId.toString), $e))
       | `(attrib| $name:str = {{ $e }} ) => `(term| ($(quote name.getString), $e))
       | `(attrib| class = $val:str) => `(term| ("class", $val))
+      | `(attrib| class = s!$val:interpolatedStr) => `(term| ("class", s!$val))
       | `(attrib| class = {{ $e }}) => `(term| ("class", $e))
       | _ => throwUnsupported
     `(term| #[ $[$attrsOut],* ] )

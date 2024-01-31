@@ -4,6 +4,7 @@ import Verso.Doc
 import Verso.Doc.Html
 import Verso.Method
 import Verso.Genre.Blog.Highlighted
+import Verso.Genre.Blog.LexedText
 
 open Verso Doc Output Html
 
@@ -11,6 +12,7 @@ namespace Verso.Genre
 
 inductive Blog.BlockExt where
   | highlightedCode (contextName : Lean.Name) (highlighted : Highlighted)
+  | lexedText (content : LexedText)
   | htmlDiv (classes : String)
   | blob (html : Html)
 deriving Repr
