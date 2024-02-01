@@ -340,7 +340,12 @@ partial def highlight' (ids : HashMap Lsp.RefIdent Lsp.RefIdent) (stx : Syntax) 
       else
         emitToken i <| (⟨ ·,  x⟩) <|
         match x.get? 0 with
-        | some '#' => .keyword lookingAt docs
+        | some '#' =>
+          match x.get? ((0 : String.Pos) + '#') with
+          | some c =>
+            if c.isAlpha then .keyword lookingAt docs
+            else .unknown
+          | _ => .unknown
         | some c =>
           if c.isAlpha then .keyword lookingAt docs
           else .unknown
