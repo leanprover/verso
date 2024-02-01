@@ -42,14 +42,16 @@ open HtmlT
 defmethod Highlighted.Token.Kind.«class» : Highlighted.Token.Kind → String
   | .var _ => "var"
   | .sort  => "sort"
-  | .const _ _ => "const"
+  | .const _ _ _ => "const"
+  | .option _ _ => "option"
   | .docComment => "doc-comment"
   | .keyword _ _ => "keyword"
   | .unknown => "unknown"
 
 defmethod Highlighted.Token.Kind.data : Highlighted.Token.Kind → String
-  | .const n _ => "const-" ++ toString n
+  | .const n _ _ => "const-" ++ toString n
   | .var ⟨v⟩ => "var-" ++ toString v
+  | .option n _ => "option-" ++ toString n
   | _ => ""
 
 
@@ -58,7 +60,12 @@ def hover (content : Html) : Html := {{
 }}
 
 defmethod Highlighted.Token.Kind.hover? : (tok : Highlighted.Token.Kind) → Option Html
-  | .const n doc | .keyword (some n) doc =>
+  | .const _n sig doc =>
+    let docs := match doc with
+      | none => .empty
+      | some txt => {{<hr/><pre class="docstring">{{txt}}</pre>}}
+    some <| hover {{ {{sig}} {{docs}} }}
+  | .option n doc | .keyword (some n) doc =>
     let docs := match doc with
       | none => .empty
       | some txt => {{<hr/><pre class="docstring">{{txt}}</pre>}}

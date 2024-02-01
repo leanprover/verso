@@ -6,8 +6,9 @@ namespace Verso.Genre
 
 inductive Highlighted.Token.Kind where
   | keyword (name : Option Name) (docs : Option String)
-  | const (name : Name) (docs : Option String)
+  | const (name : Name) (signature : String) (docs : Option String)
   | var (name : FVarId)
+  | option (name : Name) (docs : Option String)
   | docComment
   | sort
   | unknown
@@ -18,7 +19,8 @@ open Syntax (mkCApp) in
 instance : Quote Highlighted.Token.Kind where
   quote
     | .keyword n docs => mkCApp ``keyword #[quote n, quote docs]
-    | .const n docs => mkCApp ``const #[quote n, quote docs]
+    | .const n sig docs => mkCApp ``const #[quote n, quote sig, quote docs]
+    | .option n docs => mkCApp ``option #[quote n, quote docs]
     | .var (.mk n) => mkCApp ``var #[mkCApp ``FVarId.mk #[quote n]]
     | .docComment => mkCApp ``docComment #[]
     | .sort => mkCApp ``sort #[]
