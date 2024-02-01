@@ -10,17 +10,18 @@ namespace Verso.Genre.Highlighted
 partial defmethod Highlighted.Token.Kind.priority : Highlighted.Token.Kind → Nat
   | .var .. => 2
   | .const .. => 5
+  | .option .. => 4
   | .sort => 4
   | .keyword _ _ => 3
   | .docComment => 1
   | .unknown => 0
 
 -- Find all info nodes whose canonical span matches the given syntax
-def infoForSyntax (t : InfoTree) (stx : Syntax) : List Info :=
-  t.collectNodesBottomUp fun _ info _ soFar =>
+def infoForSyntax (t : InfoTree) (stx : Syntax) : List (ContextInfo × Info) :=
+  t.collectNodesBottomUp fun ci info _ soFar =>
     if info.stx.getPos? true == stx.getPos? true &&
        info.stx.getTailPos? true == stx.getTailPos? true then
-      info :: soFar
+      (ci, info) :: soFar
     else soFar
 
 
@@ -105,47 +106,55 @@ where
       go more
 
 
-def identKind [Monad m] [MonadInfoTree m] [MonadLiftT IO m] [MonadFileMap m] [MonadEnv m] (ids : HashMap Lsp.RefIdent Lsp.RefIdent) (stx : TSyntax `ident) : m Token.Kind := do
+def identKind [Monad m] [MonadInfoTree m] [MonadLiftT IO m]  [MonadFileMap m] [MonadEnv m] [MonadMCtx m] (ids : HashMap Lsp.RefIdent Lsp.RefIdent) (stx : TSyntax `ident) : m Token.Kind := do
   let trees ← getInfoTrees
 
   let mut kind : Token.Kind := .unknown
 
   for t in trees do
-    for info in infoForSyntax t stx do
+    for (ci, info) in infoForSyntax t stx do
+      let runMeta {α} (act : MetaM α) : m α := ci.runMetaM info.lctx act
       match info with
-      | .ofTermInfo termInfo =>
-        match termInfo.expr with
+      | .ofTermInfo termInfo => do
+        let expr ← instantiateMVars termInfo.expr
+        let ty ← instantiateMVars (← runMeta <| Meta.inferType expr)
+        let tyStr := toString (← runMeta <| Meta.ppExpr ty)
+        match expr with
         | Expr.fvar id =>
           let seen ←
             if let some y := ids.find? (.fvar id) then
               match y with
               | .fvar x => pure <| .var x
               | .const x => do
+                let sig := toString (← runMeta (PrettyPrinter.ppSignature x)).1
                 let docs ← findDocString? (← getEnv) x
-                pure (.const x docs)
+                pure (.const x sig docs)
             else pure (.var id)
           if seen.priority > kind.priority then kind := seen
         | Expr.const name _ => --TODO universe vars
           let docs ← findDocString? (← getEnv) name
-          let seen := .const name docs
+          let sig := toString (← runMeta (PrettyPrinter.ppSignature name)).1
+          let seen := .const name sig docs
           if seen.priority > kind.priority then kind := seen
         | Expr.sort .. =>
           let seen := .sort
           if seen.priority > kind.priority then kind := seen
         | _ => continue
       | .ofFieldInfo fieldInfo =>
-          let docs ← findDocString? (← getEnv) fieldInfo.projName
-          let seen := .const fieldInfo.projName docs
-          if seen.priority > kind.priority then kind := seen
+        let ty ← instantiateMVars (← runMeta <| Meta.inferType fieldInfo.val)
+        let tyStr := toString (← runMeta <| Meta.ppExpr ty)
+        let docs ← findDocString? (← getEnv) fieldInfo.projName
+        let seen := .const fieldInfo.projName tyStr docs
+        if seen.priority > kind.priority then kind := seen
       | .ofFieldRedeclInfo _ => continue
       | .ofCustomInfo _ => continue
       | .ofMacroExpansionInfo _ => continue
       | .ofCompletionInfo _ => continue
       | .ofFVarAliasInfo _ => continue
       | .ofOptionInfo oi =>
-          let docs ← findDocString? (← getEnv) oi.declName
-          let seen := .const oi.declName docs
-          if seen.priority > kind.priority then kind := seen
+        let docs ← findDocString? (← getEnv) oi.declName
+        let seen := .option oi.declName docs
+        if seen.priority > kind.priority then kind := seen
       | .ofTacticInfo _ => continue
       | .ofUserWidgetInfo _ => continue
       | .ofCommandInfo _ => continue
