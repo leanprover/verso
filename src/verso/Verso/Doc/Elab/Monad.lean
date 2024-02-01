@@ -145,15 +145,19 @@ private def footnoteRefName (ref : TSyntax `str) : TSyntax `ident :=
 
 open Lean.Parser.Term in
 partial def FinishedPart.toSyntax [Monad m] [MonadQuotation m]
+    (genre : TSyntax `term)
     (linkDefs : HashMap String (DocDef String)) (footnoteDefs : HashMap String (DocDef (Array (TSyntax `term))))
     : FinishedPart → m (TSyntax `term)
   | .mk _titleStx titleInlines titleString metadata blocks subParts _endPos => do
-    let subStx ← subParts.mapM (toSyntax {} {})
+    let subStx ← subParts.mapM (toSyntax genre {} {})
     let metaStx ←
       match metadata with
       | none => `(none)
       | some stx => `(some $stx)
-    let body ← ``(Part.mk #[$[$titleInlines],*] $(quote titleString) $metaStx #[$[$blocks],*] #[$[$subStx],*])
+    -- Adding type annotations works around a limitation in list and aray elaboration, where intermediate
+    -- let bindings introduced by "chunking" the elaboration may fail to infer types
+    let typedBlocks ← blocks.mapM fun b => `(($b : Block $genre))
+    let body ← ``(Part.mk #[$[$titleInlines],*] $(quote titleString) $metaStx #[$typedBlocks,*] #[$[$subStx],*])
     bindFootnotes footnoteDefs (← bindLinks linkDefs body)
   | .included name => pure name
 where
