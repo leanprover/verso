@@ -28,4 +28,7 @@ example : Int := if True then 1 else 2
 def slowId : Nat → Nat
   | 0 => 0
   | n + 1 => slowId n + 1
+
+/-- An array literal -/
+example := #[1, 2, 3]
 ```
