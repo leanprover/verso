@@ -107,7 +107,7 @@ elab "#docs" "(" genre:term ")" n:ident title:inlineStr ":=" ":::::::" text:docu
   pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
   saveRefs st st'
 
-  elabCommand (← `(def $n : Part $genre := $(← finished.toSyntax st'.linkDefs st'.footnoteDefs)))
+  elabCommand (← `(def $n : Part $genre := $(← finished.toSyntax genre st'.linkDefs st'.footnoteDefs)))
 
 
 elab "#doc" "(" genre:term ")" title:inlineStr "=>" text:document eof:eoi : term => open Lean Elab Term PartElabM DocElabM in do
@@ -126,7 +126,7 @@ elab "#doc" "(" genre:term ")" title:inlineStr "=>" text:document eof:eoi : term
   let finished := st'.partContext.toPartFrame.close endPos
   pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
   saveRefs st st'
-  elabTerm (← `( ($(← finished.toSyntax st'.linkDefs st'.footnoteDefs) : Part $genre))) none
+  elabTerm (← `( ($(← finished.toSyntax genre st'.linkDefs st'.footnoteDefs) : Part $genre))) none
 
 
 macro "%doc" moduleName:ident : term =>
@@ -161,4 +161,4 @@ elab "#doc" "(" genre:term ")" title:inlineStr "=>" text:document eof:eoi : comm
     pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
     saveRefs st st'
     let docName ← mkIdentFrom title <$> currentDocName
-    elabCommand (← `(def $docName : Part $genre := $(← finished.toSyntax st'.linkDefs st'.footnoteDefs)))
+    elabCommand (← `(def $docName : Part $genre := $(← finished.toSyntax genre st'.linkDefs st'.footnoteDefs)))
