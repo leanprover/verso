@@ -43,6 +43,7 @@ defmethod Highlighted.Token.Kind.«class» : Highlighted.Token.Kind → String
   | .var _ => "var"
   | .sort  => "sort"
   | .const _ _ => "const"
+  | .docComment => "doc-comment"
   | .keyword _ _ => "keyword"
   | .unknown => "unknown"
 

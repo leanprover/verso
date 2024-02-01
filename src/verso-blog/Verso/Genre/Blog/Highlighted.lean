@@ -8,6 +8,7 @@ inductive Highlighted.Token.Kind where
   | keyword (name : Option Name) (docs : Option String)
   | const (name : Name) (docs : Option String)
   | var (name : FVarId)
+  | docComment
   | sort
   | unknown
 deriving Repr, Inhabited
@@ -19,6 +20,7 @@ instance : Quote Highlighted.Token.Kind where
     | .keyword n docs => mkCApp ``keyword #[quote n, quote docs]
     | .const n docs => mkCApp ``const #[quote n, quote docs]
     | .var (.mk n) => mkCApp ``var #[mkCApp ``FVarId.mk #[quote n]]
+    | .docComment => mkCApp ``docComment #[]
     | .sort => mkCApp ``sort #[]
     | .unknown => mkCApp ``unknown #[]
 

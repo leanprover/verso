@@ -12,6 +12,7 @@ partial defmethod Highlighted.Token.Kind.priority : Highlighted.Token.Kind → N
   | .const .. => 5
   | .sort => 4
   | .keyword _ _ => 3
+  | .docComment => 1
   | .unknown => 0
 
 -- Find all info nodes whose canonical span matches the given syntax
@@ -344,6 +345,12 @@ partial def highlight' (ids : HashMap Lsp.RefIdent Lsp.RefIdent) (stx : Syntax) 
           if c.isAlpha then .keyword lookingAt docs
           else .unknown
         | _ => .unknown
+    | .node _ ``Lean.Parser.Command.docComment #[.atom i1 opener, .atom i2 body] =>
+      if let .original leading pos ws _ := i1 then
+        if let .original ws' _ trailing endPos := i2 then
+          emitToken (.original leading pos trailing endPos) ⟨.docComment, opener ++ ws.toString ++ ws'.toString ++ body⟩
+          return
+      emitString' (opener ++ " " ++ body ++ "\n")
     | .node _ k children =>
       for child in children do
         highlight' ids child (lookingAt := some k)

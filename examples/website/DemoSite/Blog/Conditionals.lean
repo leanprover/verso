@@ -22,3 +22,10 @@ example := if true then 1 else 2
 example := if True then 1 else 2
 example : Int := if True then 1 else 2
 ```
+
+```lean demo
+/-- A recursive function -/
+def slowId : Nat → Nat
+  | 0 => 0
+  | n + 1 => slowId n + 1
+```
