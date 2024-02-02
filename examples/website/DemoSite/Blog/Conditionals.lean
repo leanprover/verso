@@ -36,3 +36,11 @@ example := #[1, 2, 3]
 
 example := 33
 ```
+
+I can also prove things about conditionals!
+```lean demo
+theorem lt_4 (b : Bool) : (if b then 1 else 2) < 4 := by
+  split
+  . skip; decide
+  . decide
+```
