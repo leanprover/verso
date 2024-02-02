@@ -108,7 +108,6 @@ where
 
 def identKind [Monad m] [MonadInfoTree m] [MonadLiftT IO m]  [MonadFileMap m] [MonadEnv m] [MonadMCtx m] (ids : HashMap Lsp.RefIdent Lsp.RefIdent) (stx : TSyntax `ident) : m Token.Kind := do
   let trees ← getInfoTrees
-
   let mut kind : Token.Kind := .unknown
 
   for t in trees do
@@ -117,19 +116,28 @@ def identKind [Monad m] [MonadInfoTree m] [MonadLiftT IO m]  [MonadFileMap m] [M
       match info with
       | .ofTermInfo termInfo => do
         let expr ← instantiateMVars termInfo.expr
-        let ty ← instantiateMVars (← runMeta <| Meta.inferType expr)
-        let tyStr := toString (← runMeta <| Meta.ppExpr ty)
         match expr with
         | Expr.fvar id =>
           let seen ←
             if let some y := ids.find? (.fvar id) then
               match y with
-              | .fvar x => pure <| .var x
-              | .const x => do
+              | .fvar x =>
+                let ty ← instantiateMVars (← runMeta <| Meta.inferType expr)
+                let tyStr := toString (← runMeta <| Meta.ppExpr ty)
+                if let some localDecl := termInfo.lctx.find? x then
+                  if localDecl.isAuxDecl then
+                    let e ← runMeta <| Meta.ppExpr expr
+                    pure (.const (toString e) tyStr none)
+                  else pure (.var x tyStr)
+                else pure (.var x tyStr)
+              | .const x =>
                 let sig := toString (← runMeta (PrettyPrinter.ppSignature x)).1
                 let docs ← findDocString? (← getEnv) x
                 pure (.const x sig docs)
-            else pure (.var id)
+            else
+              let ty ← instantiateMVars (← runMeta <| Meta.inferType expr)
+              let tyStr := toString (← runMeta <| Meta.ppExpr ty)
+              pure (.var id tyStr)
           if seen.priority > kind.priority then kind := seen
         | Expr.const name _ => --TODO universe vars
           let docs ← findDocString? (← getEnv) name
@@ -218,12 +226,15 @@ private defmethod Lean.Position.notAfter (pos1 pos2 : Lean.Position) : Bool :=
   pos1.line < pos2.line || (pos1.line == pos2.line && pos1.column ≤ pos2.column)
 
 
-def HighlightState.ofMessages (messages : Array Message) : HighlightState := {
-  messages := sortedMessages
-  nextMessage := if h : 0 < sortedMessages.size then some ⟨0, h⟩ else none
-  output := []
-  inMessages := []
-}
+def HighlightState.ofMessages [Monad m] [MonadFileMap m]
+    (stx : Syntax) (messages : Array Message) : m HighlightState := do
+  let msgs ← (·.qsort cmp) <$> messages.filterM (isRelevant stx)
+  pure {
+    messages := msgs,
+    nextMessage := if h : 0 < msgs.size then some ⟨0, h⟩ else none,
+    output := [],
+    inMessages := [],
+  }
 where
   cmp (m1 m2 : Message) :=
     if m1.pos.before m2.pos then true
@@ -234,7 +245,16 @@ where
       | none, some _ => true
       | some e1, some e2 => e2.before e1
     else false
-  sortedMessages := messages.qsort cmp
+
+  isRelevant (stx : Syntax) (msg : Message) : m Bool := do
+    let text ← getFileMap
+    let (some s, some e) := (stx.getPos?.map text.toPosition , stx.getTailPos?.map text.toPosition)
+      | return false
+    if let some e' := msg.endPos then
+      pure <| !(e'.before s) && !(e.before msg.pos)
+    else
+      pure <| !(msg.pos.before s) && !(e.before msg.pos)
+
 
 abbrev HighlightM (α : Type) : Type := StateT HighlightState TermElabM α
 
@@ -372,5 +392,6 @@ partial def highlight' (ids : HashMap Lsp.RefIdent Lsp.RefIdent) (stx : Syntax) 
 def highlight (stx : Syntax) (messages : Array Message) : TermElabM Highlighted := do
   let modrefs := Lean.Server.findModuleRefs (← getFileMap) (← getInfoTrees).toArray
   let ids := build modrefs
-  let ((), {output := output, ..}) ← StateT.run (highlight' ids stx) (.ofMessages messages)
+  let st ← HighlightState.ofMessages stx messages
+  let ((), {output := output, ..}) ← StateT.run (highlight' ids stx) st
   pure <| .fromOutput output

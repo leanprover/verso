@@ -29,6 +29,10 @@ def slowId : Nat → Nat
   | 0 => 0
   | n + 1 => slowId n + 1
 
+#eval slowId 5
+
 /-- An array literal -/
 example := #[1, 2, 3]
+
+example := 33
 ```
