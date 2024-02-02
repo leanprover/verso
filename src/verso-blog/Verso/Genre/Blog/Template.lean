@@ -85,10 +85,60 @@ defmethod Highlighted.Span.Kind.«class» : Highlighted.Span.Kind → String
   | .warning => "warning"
   | .error => "error"
 
+defmethod Highlighted.Goal.toHtml : Highlighted.Goal → Html
+  | {name, goalPrefix, hypotheses, conclusion} =>
+    let hypsHtml : Html :=
+      if hypotheses.size = 0 then .empty
+      else {{
+        <table class="hypotheses">
+          {{hypotheses.map fun
+              | (x,t) => {{
+                  <tr class="hypothesis">
+                    <td class="name">{{x.toString}}</td><td class="colon">":"</td>
+                    <td class="type">{{t}}</td>
+                  </tr>
+                }}
+          }}
+        </table>
+      }}
+    let conclHtml := {{
+        <span class="conclusion">
+          <span class="prefix">{{goalPrefix}}</span><span class="type">{{conclusion}}</span>
+        </span>
+      }}
+    {{
+      <div class="goal">
+        {{ match name with
+          | none => {{
+             {{hypsHtml}}
+             {{conclHtml}}
+            }}
+          | some n => {{
+              <details>
+                <summary><span class="goal-name">{{n.toString}}</span></summary>
+               {{hypsHtml}}
+               {{conclHtml}}
+              </details>
+            }}
+        }}
+      </div>
+    }}
+
 partial defmethod Highlighted.toHtml : Highlighted → Html
   | .token t => t.toHtml
   | .text str => str
   | .span s info hl => {{<span class={{"has-info " ++ s.«class»}}><span class="hover-container"><span class={{"hover-info message " ++ s.«class»}}>{{info}}</span></span>{{toHtml hl}}</span>}}
+  | .tactics info pos hl =>
+    let id := s!"tactic-state-{hash info}-{pos.byteIdx}"
+    {{
+      <span class="tactic">
+        <label «for»={{id}}>{{toHtml hl}}</label>
+        <input type="checkbox" class="tactic-toggle" id={{id}}></input>
+        <div class="tactic-state">
+          {{if info.isEmpty then {{"All goals completed! 🐙"}} else info.map (·.toHtml)}}
+        </div>
+      </span>
+    }}
   | .point s info => {{<span class={{"message " ++ s.«class»}}>{{info}}</span>}}
   | .seq hls => hls.map toHtml
 

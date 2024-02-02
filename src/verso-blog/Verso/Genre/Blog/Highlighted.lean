@@ -4,6 +4,22 @@ open Lean
 
 namespace Verso.Genre
 
+deriving instance Repr for Std.Format.FlattenBehavior
+deriving instance Repr for Std.Format
+
+structure Highlighted.Goal where
+  name : Option Name
+  goalPrefix : String
+  /-- The hypotheses - `some` means let-binding with value-/
+  hypotheses : Array (Name × String)
+  conclusion : String
+deriving Repr, BEq, Hashable
+
+instance : Quote Highlighted.Goal where
+  quote
+    | {name, goalPrefix, hypotheses, conclusion} =>
+      Syntax.mkCApp ``Highlighted.Goal.mk #[quote name, quote goalPrefix, quote hypotheses, quote conclusion]
+
 inductive Highlighted.Token.Kind where
   | keyword (name : Option Name) (docs : Option String)
   | const (name : Name) (signature : String) (docs : Option String)
@@ -58,6 +74,8 @@ inductive Highlighted where
   | seq (highlights : Array Highlighted)
   -- TODO replace messages as strings with structured info
   | span (kind : Highlighted.Span.Kind) (info : String) (content : Highlighted)
+  -- TODO structured representation of tactic state
+  | tactics (info : Array Highlighted.Goal) (pos : String.Pos) (content : Highlighted)
   | point (kind : Highlighted.Span.Kind) (info : String)
 deriving Repr
 
@@ -83,4 +101,6 @@ where
     | .text str => mkCApp ``text #[quote str]
     | .seq hls => mkCApp ``seq #[quoteArray ⟨quote'⟩ hls]
     | .span k info content => mkCApp ``span #[quote k, quote info, quote' content]
+    | .tactics info pos content =>
+      mkCApp ``tactics #[quote info, mkCApp ``String.Pos.mk #[quote pos.byteIdx], quote' content]
     | .point k info => mkCApp ``point #[quote k, quote info]

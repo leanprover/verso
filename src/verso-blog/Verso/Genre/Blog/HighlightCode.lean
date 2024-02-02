@@ -179,12 +179,14 @@ def infoExists [Monad m] [MonadInfoTree m] [MonadLiftT IO m] (stx : Syntax) : m 
 inductive Output where
   | seq (emitted : Array Highlighted)
   | span (kind : Highlighted.Span.Kind) (info : String)
+  | tactics (info : Array (Highlighted.Goal)) (pos : String.Pos)
 
 def Output.add (output : List Output) (hl : Highlighted) : List Output :=
   match output with
   | [] => [.seq #[hl]]
   | .seq left :: more => .seq (left.push hl) :: more
   | .span .. :: _ => .seq #[hl] :: output
+  | .tactics .. :: _ => .seq #[hl] :: output
 
 def Output.addToken (output : List Output) (token : Highlighted.Token) : List Output :=
   Output.add output (.token token)
@@ -195,10 +197,15 @@ def Output.addText (output : List Output) (str : String) : List Output :=
 def Output.openSpan (output : List Output) (kind : Highlighted.Span.Kind) (info : String) : List Output :=
   .span kind info :: output
 
+def Output.openTactic (output : List Output) (info : Array Highlighted.Goal) (pos : String.Pos) : List Output :=
+  .tactics info pos :: output
+
+
 def Output.closeSpan (output : List Output) : List Output :=
   let rec go (acc : Highlighted) : List Output → List Output
     | [] => [.seq #[acc]]
     | .span kind info :: more => Output.add more (.span kind info acc)
+    | .tactics info pos :: more => Output.add more (.tactics info pos acc)
     | .seq left :: more => go (.seq (left.push acc)) more
   go .empty output
 
@@ -207,7 +214,11 @@ defmethod Highlighted.fromOutput (output : List Output) : Highlighted :=
     | [] => acc
     | .seq left :: more => go (.seq (left.push acc)) more
     | .span kind info :: more => go (.span kind info acc) more
+    | .tactics info pos :: more => go (.tactics info pos acc) more
   go .empty output
+
+structure OpenTactic where
+  closesAt : Lean.Position
 
 structure HighlightState where
   /-- Messages not yet displayed -/
@@ -216,7 +227,7 @@ structure HighlightState where
   /-- Output so far -/
   output : List Output
   /-- Messages being displayed -/
-  inMessages : List Message
+  inMessages : List (Message ⊕ OpenTactic)
 deriving Inhabited
 
 private defmethod Lean.Position.before (pos1 pos2 : Lean.Position) : Bool :=
@@ -293,7 +304,7 @@ partial def openUntil (pos : Lean.Position) : HighlightM Unit := do
       let str ← contents msg
       modify fun st => {st with
         output := Output.openSpan st.output kind str
-        inMessages := msg :: st.inMessages
+        inMessages := .inl msg :: st.inMessages
       }
       openUntil pos
 where
@@ -306,8 +317,12 @@ partial def closeUntil (pos : Lean.Position) : HighlightM Unit := do
   let more ← modifyGet fun st =>
     match st.inMessages with
     | [] => (false, st)
-    | m :: ms =>
+    | .inl m :: ms =>
       if needsClosing pos m then
+        (true, {st with output := Output.closeSpan st.output, inMessages := ms})
+      else (false, st)
+    | .inr t :: ms =>
+      if pos.notAfter t.closesAt then
         (true, {st with output := Output.closeSpan st.output, inMessages := ms})
       else (false, st)
   if more then closeUntil pos
@@ -334,7 +349,91 @@ def emitToken (info : SourceInfo) (token : Highlighted.Token) : HighlightM Unit 
 def emitToken' (token : Highlighted.Token) : HighlightM Unit := do
   modify fun st => {st with output := Output.addToken st.output token}
 
+defmethod Info.isOriginal (i : Info) : Bool :=
+  match i.stx.getHeadInfo, i.stx.getTailInfo with
+  | .original .., .original .. => true
+  | _, _ => false
+
+partial def subsyntaxes (stx : Syntax) : Array Syntax := Id.run do
+  match stx with
+  | .node _ _ children =>
+    let mut stxs := children
+    for s in children.map subsyntaxes do
+      stxs := stxs ++ s
+    stxs
+  | _ => #[]
+
+def hasTactics (stx : Syntax) : HighlightM Bool := do
+  let trees ← getInfoTrees
+  for t in trees do
+    for (_, i) in infoForSyntax t stx do
+      if not i.isOriginal then continue
+      if let .ofTacticInfo _ := i then
+        return true
+  return false
+
+partial def childHasTactics (stx : Syntax) : HighlightM Bool := do
+  match stx with
+  | .node _ _ children =>
+    for s in children do
+      if ← hasTactics s then
+        return true
+      if ← childHasTactics s then
+        return true
+    pure false
+  | _ => pure false
+
+
+def findTactics (stx : Syntax) : HighlightM Unit := do
+  -- Only show tactic output for the most specific source spans possible
+  if ← childHasTactics stx then return ()
+  let trees ← getInfoTrees
+  let text ← getFileMap
+  for t in trees do
+    for i in infoForSyntax t stx do
+      if not i.2.isOriginal then continue
+      if let (ci, .ofTacticInfo tacticInfo) := i then
+        let some endPos := stx.getTailPos?
+          | continue
+        let endPosition := text.toPosition endPos
+        if !tacticInfo.goalsBefore.isEmpty && tacticInfo.goalsAfter.isEmpty then
+          modify fun st => {st with
+            output := Output.openTactic st.output #[] endPos,
+            inMessages := .inr ⟨endPosition⟩ :: st.inMessages
+          }
+          break
+        let goals := tacticInfo.goalsAfter
+        if goals.isEmpty then continue
+
+        let mut goalView : Array Highlighted.Goal := #[]
+        for g in goals do
+          let mut hyps := #[]
+          let some mvDecl := ci.mctx.findDecl? g
+            | continue
+          let name := if mvDecl.userName.isAnonymous then none else some mvDecl.userName
+          let lctx := mvDecl.lctx |>.sanitizeNames.run' {options := (← getOptions)}
+          let runMeta {α} (act : MetaM α) : HighlightM α := ci.runMetaM lctx act
+          for c in lctx.decls do
+            match c with
+            | none => continue
+            | some (.cdecl _index fvar name type _ _) =>
+              let tyStr := toString <| ← runMeta (Meta.ppExpr type)
+              hyps := hyps.push (name, tyStr)
+            | some (.ldecl _index fvar name type val _ _) =>
+              let tyValStr := toString <| Std.Format.group <|
+                (← runMeta (Meta.ppExpr type)) ++ " :=" ++
+                .nest 2 (.line ++ (← runMeta (Meta.ppExpr val)))
+              hyps := hyps.push (name, tyValStr)
+          let concl ← runMeta <| Meta.ppExpr mvDecl.type
+          goalView := goalView.push ⟨name, Meta.getGoalPrefix mvDecl, hyps, toString concl⟩
+        modify fun st => {st with
+          output := Output.openTactic st.output goalView endPos,
+          inMessages := .inr ⟨endPosition⟩ :: st.inMessages
+        }
+
+
 partial def highlight' (ids : HashMap Lsp.RefIdent Lsp.RefIdent) (stx : Syntax) (lookingAt : Option Name := none) : HighlightM Unit := do
+  findTactics stx
   match stx with
   | `($e.%$tk$field:ident) =>
       highlight' ids e

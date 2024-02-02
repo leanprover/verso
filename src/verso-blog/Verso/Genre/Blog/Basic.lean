@@ -234,11 +234,13 @@ def highlightingStyle : String := "
   background-color: #e5e5e5;
   border: 1px solid black;
   padding: 0.5em;
-  z-index: 200;
+  z-index: 300;
 }
 
-.hl.lean .has-info:hover > .hover-container > .hover-info,
-.hl.lean .token:hover > .hover-container > .hover-info:not(.has-info *) {
+.hl.lean .has-info:hover > .hover-container > .hover-info:not(.tactic *),
+.hl.lean .tactic:has(> .tactic-toggle:checked) .has-info:hover > .hover-container > .hover-info,
+.hl.lean .token:hover > .hover-container > .hover-info:not(.has-info *):not(.tactic *),
+.hl.lean .tactic:has(> .tactic-toggle:checked) .token:hover > .hover-container > .hover-info:not(.has-info *) {
   display: inline-block;
   position: absolute;
   top: 1em;
@@ -270,7 +272,7 @@ def highlightingStyle : String := "
   transform: translate(0.25rem, 0.3rem);
   border: 1px solid black;
   padding: 0.5em;
-  z-index: 300;
+  z-index: 400;
 }
 
 .hl.lean .has-info.error {
@@ -309,6 +311,109 @@ def highlightingStyle : String := "
   font-family: sans-serif;
   white-space: normal;
   width: 40em;
+}
+
+.hl.lean .tactic-state {
+  display: none;
+  position: relative;
+  left: 2em;
+  width: fit-content;
+  border: 1px solid #888888;
+  border-radius: 0.1em;
+  padding: 0.5em;
+  font-family: sans-serif;
+  background-color: #ffffff;
+  z-index: 200;
+}
+
+.hl.lean .tactic {
+  position: relative;
+}
+
+.hl.lean .tactic-toggle:checked ~ .tactic-state {
+  display: block;
+}
+
+.hl.lean .tactic:hover > .tactic-toggle:not(:checked) ~ .tactic-state {
+  display: block;
+  position: absolute;
+  left: 0;
+  transform: translate(0.25rem, 0);
+  z-index: 250;
+}
+
+.hl.lean .tactic > label {
+  position: relative;
+  transition: all 0.5s;
+}
+
+.hl.lean .tactic > label:hover {
+  border-bottom: 1px dotted #bbbbbb;
+}
+
+.hl.lean .tactic-toggle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 0;
+}
+
+.hl.lean .tactic > label::after {
+  content: \"\";
+  border: 1px solid #bbbbbb;
+  border-radius: 1em;
+  height: 0.25em;
+  vertical-align: middle;
+  width: 0.6em;
+  margin-left: 0.1em;
+  margin-right: 0.1em;
+  display: inline-block;
+  transition: all 0.5s;
+}
+
+.hl.lean .tactic > label:hover::after {
+  border: 1px solid #aaaaaa;
+  background-color: #aaaaaa;
+  transition: all 0.5s;
+}
+
+.hl.lean .tactic > label:has(+ .tactic-toggle:checked)::after {
+  border: 1px solid #999999;
+  background-color: #999999;
+  transition: all 0.5s;
+}
+
+.hl.lean .tactic-state .goal + .goal {
+  margin-top: 1.5em;
+}
+
+.hl.lean .tactic-state summary {
+  margin-left: -0.5em;
+}
+
+.hl.lean .tactic-state details {
+  padding-left: 0.5em;
+}
+
+.hl.lean .tactic-state .goal-name::before {
+  font-style: normal;
+  content: \"case \";
+}
+
+.hl.lean .tactic-state .goal-name {
+  font-style: italic;
+  font-family: monospace;
+}
+
+.hl.lean .tactic-state .hypotheses td.colon {
+  text-align: center;
+  width: 1em;
+}
+
+.hl.lean .tactic-state .hypotheses td.name,
+.hl.lean .tactic-state .hypotheses td.type,
+.hl.lean .tactic-state .conclusion .type {
+  font-family: monospace;
 }
 
 "
