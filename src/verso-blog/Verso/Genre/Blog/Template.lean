@@ -40,7 +40,7 @@ instance [Monad m] : MonadConfig (HtmlT Page m) where
 open HtmlT
 
 defmethod Highlighted.Token.Kind.«class» : Highlighted.Token.Kind → String
-  | .var _ => "var"
+  | .var _ _ => "var"
   | .sort  => "sort"
   | .const _ _ _ => "const"
   | .option _ _ => "option"
@@ -50,7 +50,7 @@ defmethod Highlighted.Token.Kind.«class» : Highlighted.Token.Kind → String
 
 defmethod Highlighted.Token.Kind.data : Highlighted.Token.Kind → String
   | .const n _ _ => "const-" ++ toString n
-  | .var ⟨v⟩ => "var-" ++ toString v
+  | .var ⟨v⟩ _ => "var-" ++ toString v
   | .option n _ => "option-" ++ toString n
   | _ => ""
 
@@ -70,6 +70,8 @@ defmethod Highlighted.Token.Kind.hover? : (tok : Highlighted.Token.Kind) → Opt
       | none => .empty
       | some txt => {{<hr/><pre class="docstring">{{txt}}</pre>}}
     some <| hover {{ {{toString n}} {{docs}} }}
+  | .var _ type =>
+    some <| hover {{ {{type}} }}
   | _ => none
 
 
