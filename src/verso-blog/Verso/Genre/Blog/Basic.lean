@@ -410,6 +410,10 @@ def highlightingStyle : String := "
   width: 1em;
 }
 
+.hl.lean .tactic-state .hypotheses td.name {
+  text-align: right;
+}
+
 .hl.lean .tactic-state .hypotheses td.name,
 .hl.lean .tactic-state .hypotheses td.type,
 .hl.lean .tactic-state .conclusion .type {

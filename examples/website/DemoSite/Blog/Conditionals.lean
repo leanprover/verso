@@ -44,3 +44,27 @@ theorem lt_4 (b : Bool) : (if b then 1 else 2) < 4 := by
   . skip; decide
   . decide
 ```
+
+It's also nice to write normal proofs sometimes.
+
+```lean demo
+def rev : List α → List α
+  | [] => []
+  | x :: xs => rev xs ++ [x]
+
+def revAcc (acc : List α) : List α → List α
+  | [] => acc
+  | x :: xs => revAcc (x :: acc) xs
+
+theorem rev_append_eq_revAcc (acc xs : List α) :
+    rev xs ++ acc = revAcc acc xs := by
+  induction xs generalizing acc with
+  | nil => simp [rev, revAcc]
+  | cons x xs ih =>
+    unfold rev
+    unfold revAcc
+    rw [List.append_assoc]
+    apply ih
+```
+
+Thank you for looking at my test/demo post.

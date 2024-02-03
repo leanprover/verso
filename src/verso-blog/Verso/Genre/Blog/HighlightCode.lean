@@ -200,6 +200,10 @@ def Output.openSpan (output : List Output) (kind : Highlighted.Span.Kind) (info 
 def Output.openTactic (output : List Output) (info : Array Highlighted.Goal) (pos : String.Pos) : List Output :=
   .tactics info pos :: output
 
+def Output.inTacticState (output : List Output) (info : Array Highlighted.Goal) : Bool :=
+  output.any fun
+    | .tactics info' _ => info == info'
+    | _ => false
 
 def Output.closeSpan (output : List Output) : List Output :=
   let rec go (acc : Highlighted) : List Output → List Output
@@ -322,7 +326,7 @@ partial def closeUntil (pos : Lean.Position) : HighlightM Unit := do
         (true, {st with output := Output.closeSpan st.output, inMessages := ms})
       else (false, st)
     | .inr t :: ms =>
-      if pos.notAfter t.closesAt then
+      if t.closesAt.before pos || t.closesAt == pos then
         (true, {st with output := Output.closeSpan st.output, inMessages := ms})
       else (false, st)
   if more then closeUntil pos
@@ -385,8 +389,9 @@ partial def childHasTactics (stx : Syntax) : HighlightM Bool := do
 
 
 def findTactics (stx : Syntax) : HighlightM Unit := do
-  -- Only show tactic output for the most specific source spans possible
-  if ← childHasTactics stx then return ()
+  -- Only show tactic output for the most specific source spans possible, with a few exceptions
+  if stx.getKind ∉ [``Lean.Parser.Tactic.rwSeq,``Lean.Parser.Tactic.simp] then
+    if ← childHasTactics stx then return ()
   let trees ← getInfoTrees
   let text ← getFileMap
   for t in trees do
@@ -414,22 +419,25 @@ def findTactics (stx : Syntax) : HighlightM Unit := do
           let lctx := mvDecl.lctx |>.sanitizeNames.run' {options := (← getOptions)}
           let runMeta {α} (act : MetaM α) : HighlightM α := ci.runMetaM lctx act
           for c in lctx.decls do
-            match c with
-            | none => continue
-            | some (.cdecl _index fvar name type _ _) =>
+            let some decl := c
+              | continue
+            if decl.isAuxDecl || decl.isImplementationDetail then continue
+            match decl with
+            | .cdecl _index _fvar name type _ _ =>
               let tyStr := toString <| ← runMeta (Meta.ppExpr type)
               hyps := hyps.push (name, tyStr)
-            | some (.ldecl _index fvar name type val _ _) =>
+            | .ldecl _index _fvar name type val _ _ =>
               let tyValStr := toString <| Std.Format.group <|
                 (← runMeta (Meta.ppExpr type)) ++ " :=" ++
                 .nest 2 (.line ++ (← runMeta (Meta.ppExpr val)))
               hyps := hyps.push (name, tyValStr)
           let concl ← runMeta <| Meta.ppExpr mvDecl.type
           goalView := goalView.push ⟨name, Meta.getGoalPrefix mvDecl, hyps, toString concl⟩
-        modify fun st => {st with
-          output := Output.openTactic st.output goalView endPos,
-          inMessages := .inr ⟨endPosition⟩ :: st.inMessages
-        }
+        if !Output.inTacticState (← get).output goalView then
+          modify fun st => {st with
+            output := Output.openTactic st.output goalView endPos,
+            inMessages := .inr ⟨endPosition⟩ :: st.inMessages
+          }
 
 
 partial def highlight' (ids : HashMap Lsp.RefIdent Lsp.RefIdent) (stx : Syntax) (lookingAt : Option Name := none) : HighlightM Unit := do
