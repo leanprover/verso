@@ -42,7 +42,7 @@ pre {
     font-family: monospace;
 }
 
-p {
+p, pre {
     line-height: 1.25;
 }
 
