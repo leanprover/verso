@@ -99,7 +99,7 @@ scoped syntax "{{" term "}}" : attrib_val
 scoped syntax ident "=" attrib_val : attrib
 scoped syntax str "=" attrib_val : attrib
 scoped syntax "class" "=" attrib_val : attrib
-
+scoped syntax "{{" term "}}" : attrib
 
 partial def _root_.Lean.TSyntax.tagName : TSyntax `tag_name → String
   | ⟨.node _ _ #[.atom _ x]⟩ => x
@@ -121,21 +121,22 @@ open Lean.Macro in
 macro_rules
   | `(term| {{{ $attrs* }}} ) => do
     let attrsOut ← attrs.mapM fun
-      | `(attrib| $name:ident = $val:str) => `(term| ($(quote name.getId.toString), $val))
-      | `(attrib| $name:ident = s!$val:interpolatedStr) => `(term| ($(quote name.getId.toString), s!$val))
-      | `(attrib| $name:ident = {{ $e }} ) => `(term| ($(quote name.getId.toString), $e))
-      | `(attrib| $name:str = {{ $e }} ) => `(term| ($(quote name.getString), $e))
-      | `(attrib| class = $val:str) => `(term| ("class", $val))
-      | `(attrib| class = s!$val:interpolatedStr) => `(term| ("class", s!$val))
-      | `(attrib| class = {{ $e }}) => `(term| ("class", $e))
+      | `(attrib| $name:ident = $val:str) => `(term| #[($(quote name.getId.toString), $val)])
+      | `(attrib| $name:ident = s!$val:interpolatedStr) => `(term| #[($(quote name.getId.toString), s!$val)])
+      | `(attrib| $name:ident = {{ $e }} ) => `(term| #[($(quote name.getId.toString), ($e : String))])
+      | `(attrib| $name:str = {{ $e }} ) => `(term| #[($(quote name.getString), ($e : String))])
+      | `(attrib| class = $val:str) => `(term| #[("class", $val)])
+      | `(attrib| class = s!$val:interpolatedStr) => `(term| #[("class", s!$val)])
+      | `(attrib| class = {{ $e }}) => `(term| #[("class", ($e : String))])
+      | `(attrib| {{ $e }}) => `(term| ($e : Array (String × String)))
       | _ => throwUnsupported
-    `(term| #[ $[$attrsOut],* ] )
+    `(term| #[ $[($attrsOut : Array (String × String))],* ].foldr (· ++ ·) #[] )
   | `(term| {{ {{ $e:term }} }} ) => ``(($e : Html))
   | `(term| {{ $text:str }} ) => ``(Html.text true $text)
   | `(term| {{ s! $txt:interpolatedStr }} ) => ``(Html.text true s!$txt)
   | `(term| {{ r! $txt:str }} ) => ``(Html.text false $txt)
   | `(term| {{ $html1:html $html2:html $htmls:html*}}) =>
-    `({{$html1}} ++ {{$html2}} ++ Html.seq #[$[{{$htmls}}],*])
+    `({{$html1}} ++ {{$html2}} ++ Html.seq #[$[({{$htmls}} : Html)],*])
   | `(term| {{ <$tag:tag_name $[$extra]* > $content:html </ $tag':tag_name> }}) => do
     if tag.tagName != tag'.tagName then
       Macro.throwErrorAt tag' s!"Mismatched closing tag, expected {tag.tagName} but got {tag'.tagName}"
@@ -147,7 +148,7 @@ macro_rules
       Macro.throwErrorAt tag' s!"Mismatched closing tag, expected {tag.tagName} but got {tag'.tagName}"
     if tag.tagName ∈ voidTags && content.size != 0 then
       Macro.throwErrorAt tag s!"'{tag.tagName}' doesn't allow contents"
-    ``(Html.tag $(quote tag.tagName) {{{ $extra* }}} <| Html.fromArray #[$[ {{ $content }} ],*] )
+    ``(Html.tag $(quote tag.tagName) {{{ $extra* }}} <| Html.fromArray #[$[ ({{ $content }} : Html) ],*] )
   | `(term| {{ <$tag:tag_name $[$extra]* /> }}) => ``(Html.tag $(quote tag.tagName) {{{ $extra* }}} Html.empty )
 
 scoped instance : Coe String Html := ⟨.text true⟩
