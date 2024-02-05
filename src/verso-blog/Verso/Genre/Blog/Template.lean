@@ -85,7 +85,7 @@ defmethod Highlighted.Span.Kind.«class» : Highlighted.Span.Kind → String
   | .warning => "warning"
   | .error => "error"
 
-defmethod Highlighted.Goal.toHtml : Highlighted.Goal → Html
+defmethod Highlighted.Goal.toHtml (index : Nat) : Highlighted.Goal → Html
   | {name, goalPrefix, hypotheses, conclusion} =>
     let hypsHtml : Html :=
       if hypotheses.size = 0 then .empty
@@ -114,7 +114,7 @@ defmethod Highlighted.Goal.toHtml : Highlighted.Goal → Html
              {{conclHtml}}
             }}
           | some n => {{
-              <details>
+              <details {{if index = 0 then #[("open", "open")] else #[]}}>
                 <summary><span class="goal-name">{{n.toString}}</span></summary>
                {{hypsHtml}}
                {{conclHtml}}
@@ -123,6 +123,14 @@ defmethod Highlighted.Goal.toHtml : Highlighted.Goal → Html
         }}
       </div>
     }}
+
+def _root_.Array.mapIndexed (arr : Array α) (f : Fin arr.size → α → β) : Array β :=
+  let rec go (acc : Array β) (i : Nat) :=
+    if h : i < arr.size then
+      go (acc.push (f ⟨i, h⟩ arr[i])) (i + 1)
+    else acc
+  go #[] 0
+termination_by go acc i => arr.size - i
 
 partial defmethod Highlighted.toHtml : Highlighted → Html
   | .token t => t.toHtml
@@ -135,7 +143,7 @@ partial defmethod Highlighted.toHtml : Highlighted → Html
         <label «for»={{id}}>{{toHtml hl}}</label>
         <input type="checkbox" class="tactic-toggle" id={{id}}></input>
         <div class="tactic-state">
-          {{if info.isEmpty then {{"All goals completed! 🐙"}} else info.map (·.toHtml)}}
+          {{if info.isEmpty then {{"All goals completed! 🐙"}} else info.mapIndexed (fun ⟨i, _⟩ x => x.toHtml i)}}
         </div>
       </span>
     }}
