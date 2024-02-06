@@ -41,8 +41,7 @@ def revFrom (i : Nat) (input : Array α) (output : Array α := #[]) : Array α :
   if h : i < input.size then
     revFrom (i+1) input (output.push input[i])
   else output
-termination_by
-  revFrom i input _ => input.size - i
+termination_by input.size - i
 
 namespace Html
 

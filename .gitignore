@@ -3,3 +3,4 @@
 /lake-packages/*
 /_site
 .DS_Store
+.lake

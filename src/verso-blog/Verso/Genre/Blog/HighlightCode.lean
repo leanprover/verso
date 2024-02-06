@@ -166,6 +166,7 @@ def identKind [Monad m] [MonadInfoTree m] [MonadLiftT IO m]  [MonadFileMap m] [M
       | .ofTacticInfo _ => continue
       | .ofUserWidgetInfo _ => continue
       | .ofCommandInfo _ => continue
+      | .ofOmissionInfo _ => continue
   pure kind
 
 def infoExists [Monad m] [MonadInfoTree m] [MonadLiftT IO m] (stx : Syntax) : m Bool := do
