@@ -492,6 +492,14 @@ partial def highlight' (ids : HashMap Lsp.RefIdent Lsp.RefIdent) (stx : Syntax) 
           emitToken (.original leading pos trailing endPos) ⟨.docComment, opener ++ ws.toString ++ ws'.toString ++ body⟩
           return
       emitString' (opener ++ " " ++ body ++ "\n")
+    | .node _ ``Lean.Parser.Term.dotIdent #[dot@(.atom i _), name@(.ident i' _ x _)] =>
+      match i, i' with
+      | .original leading pos _ _, .original _ _ trailing endPos =>
+        let info := .original leading pos trailing endPos
+        emitToken info ⟨← identKind ids ⟨stx⟩, s!".{x.toString}"⟩
+      | _, _ =>
+        highlight' ids dot
+        highlight' ids name
     | .node _ k children =>
       for child in children do
         highlight' ids child (lookingAt := some k)
