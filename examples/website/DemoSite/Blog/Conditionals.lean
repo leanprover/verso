@@ -67,4 +67,25 @@ theorem rev_append_eq_revAcc (acc xs : List α) :
     apply ih
 ```
 
+Here are some uses of various constructors:
+```lean demo
+def squish (n : Option Nat) : Nat :=
+  match n with
+  | none => 0
+  | some k => .succ k
+
+def squish' (n : Option Nat) : Nat :=
+  match n with
+  | .none => 0
+  | .some k => k.succ
+
+open Nat in
+def squish'' (n : Option Nat) : Nat :=
+  match n with
+  | none => 0
+  | some k => succ k
+
+```
+
+
 Thank you for looking at my test/demo post.
