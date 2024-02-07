@@ -188,8 +188,8 @@ def inlineHtml (g : Genre) [MonadConfig (HtmlT g IO)] [MonadPath (HtmlT g IO)]
     | none =>
       HtmlT.logError "Can't find target {x}"
       pure {{<strong class="internal-error">s!"Can't find target {x}"</strong>}}
-    | some path =>
-      let addr := String.join ((← relative path).intersperse "/")
+    | some meta =>
+      let addr := String.join ((← relative meta.path).intersperse "/")
       go <| .link contents addr
   | .htmlSpan classes, contents => do
     pure {{ <span class={{classes}}> {{← contents.mapM go}} </span> }}

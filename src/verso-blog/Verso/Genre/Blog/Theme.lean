@@ -15,6 +15,7 @@ structure Theme where
   pageTemplate : Template
   postTemplate : Template
   archiveEntryTemplate : Template
+  categoryTemplate : Template
   /--
   Customize the rendering of a given path by replacing the
   template and providing additional parameters
@@ -63,6 +64,19 @@ def primary : Template := do
     match (← param? "posts") with
     | none => Html.empty
     | some html => {{ <h2> "Posts" </h2> }} ++ html
+  let catList :=
+    match (← param? (α := Post.Categories) "categories") with
+    | none => Html.empty
+    | some ⟨cats⟩ => {{
+        <div class="categories">
+          <h2> "Categories" </h2>
+          <ul>
+          {{ cats.map fun (target, cat) =>
+            {{<li><a href={{target}}>{{Post.Category.name cat}}</a></li>}}
+          }}
+          </ul>
+        </div>
+      }}
   return {{
     <html>
       <head>
@@ -74,6 +88,7 @@ def primary : Template := do
         {{← topNav}}
         {{← param "content"}}
         {{postList}}
+        {{catList}}
       </body>
     </html>
   }}
@@ -97,17 +112,33 @@ def post : Template := do
           <div class="date">
             s!"{md.date.year}-{md.date.month}-{md.date.day}"
           </div>
+          {{if md.categories.isEmpty then Html.empty
+            else {{
+              <ul class="categories">
+                {{md.categories.toArray.map (fun cat => {{<li><a href=s!"../{cat.slug}">{{cat.name}}</a></li>}})}}
+              </ul>
+            }}
+          }}
         </div>
        }}
      }}
     {{← param "content"}}
   }}
 
+def category : Template := do
+  let category : Post.Category ← param "category"
+  pure {{
+    <h1>{{category.name}}</h1>
+  }}
+
 def archiveEntry : Template := do
   let post : BlogPost ← param "post"
+  let target ← if let some p := (← param? "path") then
+      pure <| p ++ "/" ++ (← post.postName')
+    else post.postName'
   return #[{{
   <li>
-    <a href={{← post.postName' }}>
+    <a href={{target}}>
     {{
     match post.contents.metadata.map (·.date) with
     | some {year := y, month := m, day := d : Date} => {{<span class="date"> s!"{y}-{m}-{d}" </span> " — "}}
@@ -126,4 +157,5 @@ def default : Theme where
   primaryTemplate := primary
   pageTemplate := page
   postTemplate := post
+  categoryTemplate := category
   archiveEntryTemplate := archiveEntry

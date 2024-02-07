@@ -33,9 +33,17 @@ where
     | arr, .seq hs => arr.append hs
     | arr, other => arr.push other
 
+def Html.fromList (htmls : List Html) : Html := Id.run do
+  let mut out := Html.empty
+  for elt in htmls do
+    out := out ++ elt
+  out
+
 instance : Coe (Array Html) Html where
   coe arr := Html.fromArray arr
 
+instance : Coe (List Html) Html where
+  coe arr := Html.fromList arr
 
 def revFrom (i : Nat) (input : Array α) (output : Array α := #[]) : Array α :=
   if h : i < input.size then
@@ -85,6 +93,13 @@ private def mustClose : List String :=
    "blockquote", "ol", "ul", "menu", "dl", "figure", "figcaption", "main", "search",
    "div", "a", "em", "strong", "small", "s", "cite", "q", "dfn", "abbr", "ruby",
    "data", "time", "code", "var", "samp", "kbd", "sub", "sup", "i"]
+
+/--
+  Tags to break the line after without risking weird results
+-/
+private def newlineAfter : List String := [
+  "p", "div", "li", "ul", "ol", "section", "header", "nav", "head", "body",
+  "script", "link", "meta", "html"] ++ [1,2,3,4,5,6].map (s!"h{·}")
 
 declare_syntax_cat tag_name
 scoped syntax ident : tag_name
@@ -210,30 +225,47 @@ partial def format : Html → Std.Format
     ]) ++ line ++ Format.group ("</" ++ name ++ ">")
   | .seq arr => line.joinSep <| arr.toList.map Html.format
 
-partial def asString : Html → String
+-- TODO nicely readable HTML output
+partial def asString (html : Html) (indent : Nat := 0) (breakLines := true) : String :=
+  match html with
   | .text true str => str.replace "<" "&lt;" |>.replace ">" "&gt;"
   | .text false str => str
   | .tag "pre" attrs body =>
     "<pre" ++ attrsAsString attrs ++ ">\n" ++
-    Html.asString body ++ "\n" ++
-    "</pre>"
+    Html.asString (indent := 0) (breakLines := false) body ++ "\n" ++
+    "</pre>" ++ newline indent
   | .tag name attrs (.seq #[]) =>
     if name ∈ mustClose then
-      "<" ++ name ++ attrsAsString attrs ++ "></" ++ name ++ ">"
+      "<" ++ name ++ attrsAsString attrs ++ "></" ++ name ++ ">" ++ breakline name
     else
-      "<" ++ name ++ attrsAsString attrs ++ ">"
+      "<" ++ name ++ attrsAsString attrs ++ ">" ++ breakline name
   | .tag name attrs (.seq #[subElem]) =>
-    "<" ++ name ++ attrsAsString attrs ++ ">" ++ asString subElem ++ s!"</{name}>"
+    "<" ++ name ++ attrsAsString attrs ++ ">" ++ breakline' name ++
+    asString subElem (indent := indent + 2) (breakLines := breakLines) ++
+    s!"</{name}>" ++ breakline name
   | .tag name attrs body =>
-      "<" ++ name ++ attrsAsString attrs ++ ">" ++
-      Html.asString body ++
-      s!"</{name}>"
-  | .seq elts => String.join (elts.toList.map Html.asString)
+      "<" ++ name ++ attrsAsString attrs ++ ">" ++ breakline' name ++
+      Html.asString body (indent := indent + 2) (breakLines := breakLines) ++
+      s!"</{name}>" ++ breakline name
+  | .seq elts => String.join (elts.toList.map (Html.asString · (indent := indent) (breakLines := breakLines)))
 where
+  newline i := "\n" ++ String.mk (List.replicate i ' ')
+  breakline tag := if breakLines && tag ∈ newlineAfter then newline indent else ""
+  breakline' tag := if breakLines && tag ∈ newlineAfter then newline (indent + 2) else ""
   attrsAsString xs := String.join <| xs.toList.map (fun ⟨k, v⟩ => s!" {k}=\"{v}\"")
 
 /--
-info: "<html><head><meta charset=\"UTF-8\"><script></script></head><body lang=\"en\" class=\"thing\"><p>foo bar<br>hey</p></body></html>"
+info: |
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <script></script>
+    </head>
+  <body lang="en" class="thing">
+    <p>
+      foo bar<br>hey</p>
+    </body>
+  </html>
 -/
 #guard_msgs in
-  #eval test.asString
+  #eval IO.println <| "|\n" ++ test.asString

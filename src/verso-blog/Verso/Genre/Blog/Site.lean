@@ -9,14 +9,16 @@ defmethod BlogPost.traverse1 (post : BlogPost) : Blog.TraverseM BlogPost := do
   let name ← post.postName
   withReader (fun ctxt => {ctxt with path := ctxt.path ++ [name]}) <| do
     let path ← (·.path) <$> read
-    modify (fun st => {st with pageIds := st.pageIds.insert post.id path})
+    modify fun st =>
+      {st with
+        pageIds := st.pageIds.insert post.id ⟨path, post.contents.titleString⟩}
     pure {post with contents := ← Post.traverse post.contents}
 
 inductive Dir where
   | page (name : String) (id : Lean.Name) (text : Part Page) (contents : Array Dir)
   | blog (name : String) (id : Lean.Name) (text : Part Page) (contents : Array BlogPost)
   | static (name : String) (files : System.FilePath)
-deriving Inhabited
+deriving Inhabited, Repr
 
 def Dir.name : Dir → String
   | .page n .. => n
@@ -29,13 +31,25 @@ partial def Dir.traverse1 (dir : Dir) : Blog.TraverseM Dir := do
   | .page name id txt contents =>
     withReader (fun ctxt => {ctxt with path := ctxt.path ++ [name]}) <| do
       let path ← (·.path) <$> read
-      modify (fun st => {st with pageIds := st.pageIds.insert id path})
+      modify (fun st => {st with pageIds := st.pageIds.insert id ⟨path, txt.titleString⟩})
       let txt' ← Page.traverse txt
       .page name id txt' <$> contents.mapM Dir.traverse1
   | .blog name id txt posts =>
     withReader (fun ctxt => {ctxt with path := ctxt.path ++ [name]}) <| do
       let path ← (·.path) <$> read
-      modify (fun st => {st with pageIds := st.pageIds.insert id path})
+      modify fun st =>
+        {st with pageIds := st.pageIds.insert id ⟨path, txt.titleString⟩}
+      modify fun st =>
+        {st with blogs := st.blogs.insert id <| st.blogs.find? id |>.getD {}}
+      -- We have to insert the posts into the categories here, rather than in
+      -- BlogPost.traverse1, because the categorization is local to this
+      -- particular sub-blog
+      for p in posts do
+        for cat in p.contents.metadata.map (·.categories) |>.getD [] do
+          modify fun st =>
+            let ⟨info⟩ := st.blogs.find? id |>.getD {}
+            let catPages := info.find? cat |>.getD {} |>.insert p.id
+            {st with blogs := st.blogs.insert id ⟨info.insert cat catPages⟩}
       let txt' ← Page.traverse txt
       .blog name id txt' <$> posts.mapM BlogPost.traverse1
   | .static .. => pure dir
@@ -43,6 +57,7 @@ partial def Dir.traverse1 (dir : Dir) : Blog.TraverseM Dir := do
 inductive Site where
   | page (id : Lean.Name) (text : Part Page) (contents : Array Dir)
   | blog (id : Lean.Name) (text : Part Page) (contents : Array BlogPost)
+deriving Repr
 
 /-- Perform a single pass of the traverse step on a site -/
 def Site.traverse1 (site : Site) : Blog.TraverseM Site := do

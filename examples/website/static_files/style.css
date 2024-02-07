@@ -92,6 +92,43 @@ h1, h2, h3, h4, h5, h6 {
     font-family: sans-serif;
 }
 
+div.category-directory {
+    margin-top: 2em;
+}
+
+div.category-directory h2 {
+    font-size: 100%;
+}
+
+div.category-directory li {
+    display: inline;
+    margin: 0;
+    padding: 0;
+    list-style-type: none;
+    font-size: 90%;
+}
+
+div.category-directory li:has( + li)::after {
+    content: ", ";
+}
+
+ul.categories li {
+    display: inline;
+    margin: 0;
+    padding: 0;
+    list-style-type: none;
+}
+
+ul.categories li:first-child::before {
+    content: "In: ";
+}
+
+
+ul.categories li:has( + li)::after {
+    content: ", ";
+}
+
+
 .lexed.json .brace {
     color: #0000aa;
 }
