@@ -10,6 +10,19 @@ def theme : Theme := { Theme.default with
       match (← param? "posts") with
       | none => Html.empty
       | some html => {{ <h2> "Posts" </h2> }} ++ html
+    let catList :=
+      match (← param? (α := Post.Categories) "categories") with
+      | none => Html.empty
+      | some ⟨cats⟩ => {{
+          <div class="category-directory">
+            <h2> "Categories" </h2>
+            <ul>
+            {{ cats.map fun (target, cat) =>
+              {{<li><a href={{target}}>{{Post.Category.name cat}}</a></li>}}
+            }}
+            </ul>
+          </div>
+        }}
     return {{
       <html>
         <head>
@@ -29,6 +42,7 @@ def theme : Theme := { Theme.default with
             <div class="wrap">
               {{ (← param "content") }}
               {{ postList }}
+              {{ catList }}
             </div>
           </div>
         </body>

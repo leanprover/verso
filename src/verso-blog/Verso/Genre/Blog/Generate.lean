@@ -139,23 +139,52 @@ def writePage (theme : Theme) (params : Template.Params) (template : Template :=
     h.putStrLn "<!DOCTYPE html>"
     h.putStrLn output.asString
 
-def writeBlog (theme : Theme) (txt : Part Page) (posts : Array BlogPost) : GenerateM Unit := do
-  let postList := {{
-    <ul class="post-list">
-      {{← posts.mapM fun p =>
-        theme.archiveEntryTemplate.render (.ofList [("post", ⟨.mk p, #[]⟩)])}}
-    </ul>
-  }}
-  let pageParams : Template.Params := (← forPart txt).insert "posts" ⟨.mk postList, #[]⟩
-  writePage theme pageParams
+
+def writeBlog (theme : Theme) (id : Lean.Name) (txt : Part Page) (posts : Array BlogPost) : GenerateM Unit := do
   for post in posts do
     if post.contents.metadata.map (·.draft) == some true && !(← showDrafts) then continue
+
     inPost post do
       IO.println s!"Generating post {← currentDir}"
       let postParams : Template.Params ← match post.contents.metadata with
         | none => forPart post.contents
         | some md => (·.insert "metadata" ⟨.mk md, #[]⟩) <$> forPart post.contents
       writePage theme postParams (template := theme.postTemplate)
+
+  let meta ←
+    match (← read).xref.blogs.find? id with
+    | none => logError s!"Blog {id} not found in traverse pass!"; pure {}
+    | some meta => pure meta
+
+  for (cat, contents) in meta.categories.toArray.qsort (·.1.name < ·.1.name) do
+    withReader (fun c => {c with ctxt.path := c.ctxt.path ++ [cat.slug]}) <| do
+      IO.println s!"Generating category page {← currentDir}"
+      let catPosts ← contents.toList.filterMapM (m := GenerateM) fun postId => do
+        let some addr := (← read).xref.pageIds.find? postId
+          | pure none
+        let some post := posts.find? (·.id == postId)
+          | pure none
+        pure <| some (addr, post)
+      let postList := {{
+        <ul class="post-list">
+          {{← catPosts.mapM fun (_addr, p) =>
+            theme.archiveEntryTemplate.render (.ofList [("path", ⟨.mk "..", #[]⟩), ("post", ⟨.mk p, #[]⟩)])}}
+        </ul>
+      }}
+      let catParams := Template.Params.ofList [("title", cat.name), ("category", ⟨.mk cat, #[]⟩), ("posts", ⟨.mk postList, #[]⟩)]
+      writePage theme catParams (template := theme.categoryTemplate)
+
+  let postList := {{
+    <ul class="post-list">
+      {{← posts.mapM fun p =>
+        theme.archiveEntryTemplate.render (.ofList [("post", ⟨.mk p, #[]⟩)])}}
+    </ul>
+  }}
+  let allCats : Post.Categories := .mk <| meta.categories.toArray.map fun (c, _) =>
+    (c.slug, c)
+  let pageParams : Template.Params := (← forPart txt).insert "posts" ⟨.mk postList, #[]⟩ |>.insert "categories" ⟨.mk allCats, #[]⟩
+  writePage theme pageParams
+
 
 
 partial def Dir.generate (theme : Theme) (dir : Dir) : GenerateM Unit :=
@@ -167,9 +196,9 @@ partial def Dir.generate (theme : Theme) (dir : Dir) : GenerateM Unit :=
     writePage theme (← forPart txt)
     for p in subPages do
       p.generate theme
-  | .blog _ _ txt posts => do
+  | .blog _ id txt posts => do
     IO.println s!"Generating blog section '{← currentDir}'"
-    writeBlog theme txt posts
+    writeBlog theme id txt posts
   | .static _ file => do
     IO.println s!"Copying from static '{file}' to '{(← currentDir)}'"
     let dest ← currentDir
@@ -186,5 +215,5 @@ def Site.generate (theme : Theme) (site : Site) : GenerateM Unit := do
     writePage theme (← forPart txt)
     for p in subPages do
       p.generate theme
-  | .blog _ txt posts =>
-    writeBlog theme txt posts
+  | .blog id txt posts =>
+    writeBlog theme id txt posts

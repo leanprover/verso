@@ -10,40 +10,88 @@ open Verso Doc Output Html
 
 namespace Verso.Genre
 
-inductive Blog.BlockExt where
+namespace Blog
+inductive BlockExt where
   | highlightedCode (contextName : Lean.Name) (highlighted : Highlighted)
   | lexedText (content : LexedText)
   | htmlDiv (classes : String)
   | blob (html : Html)
 deriving Repr
 
-inductive Blog.InlineExt where
+inductive InlineExt where
   | label (name : Lean.Name)
   | ref (name : Lean.Name)
   | pageref (name : Lean.Name)
   | htmlSpan (classes : String)
   | blob (html : Html)
+deriving Repr
 
-structure Blog.Info.Target where
+namespace Post
+
+structure Category where
+  name : String
+  slug : String
+deriving BEq, Hashable, DecidableEq, Repr, TypeName
+
+/-- Wrapper around `Array Category` that allows a `TypeName` instance and provides link targets -/
+structure Categories where
+  categories : Array (String × Post.Category)
+deriving TypeName, Repr
+
+end Post
+
+namespace Info
+
+structure Target where
   path : List String
   htmlId : String
 deriving BEq
 
-open Lean (Name Syntax)
+open Lean (Name Syntax HashSet HashMap)
 
-structure Blog.Info.Ref where
+structure Ref where
   sourceModule : Name
   sourceSyntax : Syntax
   resolved : Bool
 deriving BEq
 
-namespace Blog
+instance [BEq α] [Hashable α] [Repr α] [Repr β] : Repr (HashMap α β) where
+  reprPrec hm p :=
+    Repr.addAppParen (.group <| .nest 2 <| "HashMap.fromList" ++ .line ++ contents hm) p
+where contents hm := repr hm.toList
+
+instance [BEq α] [Hashable α] [Repr α] : Repr (HashSet α) where
+  reprPrec hs p :=
+    Repr.addAppParen (.group <| .nest 2 <| "HashSet.fromList" ++ .line ++ contents hs) p
+where contents hs := repr hs.toList
+
+structure ArchivesMeta where
+  /-- The categories used by posts in these archives -/
+  categories : HashMap Post.Category (HashSet Name) := .empty
+deriving Repr
+
+instance [BEq α] [Hashable α] : BEq (HashSet α) where
+  beq xs ys := xs.size == ys.size && ys.fold (fun pre y => pre && xs.contains y) true
+
+instance [BEq α] [Hashable α] [BEq β] : BEq (HashMap α β) where
+  beq xs ys := xs.size == ys.size && ys.fold (fun pre k v => pre && xs.findEntry? k == some (k, v)) true
+
+instance : BEq ArchivesMeta where
+  beq xs ys := xs.categories == ys.categories
+
+structure PageMeta where
+  path : List String
+  title : String
+deriving BEq, Hashable, TypeName, Repr
+
+end Info
+
 
 structure Date where
   year : Int
   month : Nat
   day : Nat
-deriving Inhabited
+deriving Inhabited, Repr
 
 def defaultPostName (date : Date) (title : String) : String :=
   s!"{date.year}-{date.month}-{date.day}-{slugify title}"
@@ -81,8 +129,9 @@ deriving instance Ord for List -- TODO - upstream?
 structure TraverseState where
   usedIds : Lean.RBMap (List String) (Lean.HashSet String) compare := {}
   targets : Lean.NameMap Blog.Info.Target := {}
+  blogs : Lean.NameMap Blog.Info.ArchivesMeta := {}
   refs : Lean.NameMap Blog.Info.Ref := {}
-  pageIds : Lean.NameMap (List String) := {}
+  pageIds : Lean.NameMap Blog.Info.PageMeta := {}
   scripts : Lean.HashSet String := {}
   stylesheets : Lean.HashSet String := {}
   errors : Lean.HashSet String := {}
@@ -90,6 +139,7 @@ structure TraverseState where
 structure Page.Meta where
   /-- Whether to hide this page/part from navigation entries -/
   showInNav : Bool := true
+deriving Repr
 
 def Page : Genre where
   PartMetadata := Page.Meta
@@ -98,11 +148,17 @@ def Page : Genre where
   TraverseContext := Blog.TraverseContext
   TraverseState := Blog.TraverseState
 
+instance : Repr Page.PartMetadata := inferInstanceAs (Repr Page.Meta)
+instance : Repr Page.Block := inferInstanceAs (Repr Blog.BlockExt)
+instance : Repr Page.Inline := inferInstanceAs (Repr Blog.InlineExt)
+
+
 structure Post.Meta where
   date : Blog.Date
   authors : List String
+  categories : List Post.Category := []
   draft : Bool := false
-deriving TypeName
+deriving TypeName, Repr
 
 def Post : Genre where
   PartMetadata := Post.Meta
@@ -111,12 +167,16 @@ def Post : Genre where
   TraverseContext := Blog.TraverseContext
   TraverseState := Blog.TraverseState
 
+instance : Repr Post.PartMetadata := inferInstanceAs (Repr Post.Meta)
+instance : Repr Post.Block := inferInstanceAs (Repr Blog.BlockExt)
+instance : Repr Post.Inline := inferInstanceAs (Repr Blog.InlineExt)
+
 instance : TypeName Post.PartMetadata := inferInstanceAs (TypeName Post.Meta)
 
 structure BlogPost where
-  id : Name
+  id : Lean.Name
   contents : Part Post
-deriving TypeName
+deriving TypeName, Repr
 
 class BlogGenre (genre : Genre) where
   traverseContextEq : genre.TraverseContext = Blog.TraverseContext := by rfl
@@ -134,7 +194,7 @@ defmethod Part.postName [Monad m] [MonadConfig m] [MonadState TraverseState m]
     | none =>
       modify fun st => { st with errors := st.errors.insert s!"Missing metadata block in post \"{post.titleString}\""}
       pure {year := 1900, month := 1, day := 1}
-    | some ⟨date, _authors, _draft⟩ =>
+    | some {date, ..} =>
       pure date
   pure <| (← currentConfig).postName date post.titleString
 
@@ -144,7 +204,7 @@ defmethod Part.postName' [Monad m] [MonadConfig m]
     match post.metadata with
     | none =>
       {year := 1900, month := 1, day := 1}
-    | some ⟨date, _authors, _draft⟩ =>
+    | some {date, ..}=>
       date
   pure <| (← currentConfig).postName date post.titleString
 
@@ -188,12 +248,12 @@ where
     pure out
 
 
-
 instance : BEq TraverseState where
   beq
-    | ⟨u1, t1, r1, p1, s1, s1', err1⟩, ⟨u2, t2, r2, p2, s2, s2', err2⟩ =>
+    | ⟨u1, t1, b1, r1, p1, s1, s1', err1⟩, ⟨u2, t2, b2, r2, p2, s2, s2', err2⟩ =>
       u1.toList.map (fun p => {p with snd := p.snd.toList}) == u2.toList.map (fun p => {p with snd := p.snd.toList}) &&
       t1.toList == t2.toList &&
+      b1.toList == b2.toList &&
       r1.toList == r2.toList &&
       p1.toList == p2.toList &&
       s1.toList == s2.toList &&
