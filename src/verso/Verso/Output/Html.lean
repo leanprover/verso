@@ -231,8 +231,8 @@ partial def asString (html : Html) (indent : Nat := 0) (breakLines := true) : St
   | .text true str => str.replace "<" "&lt;" |>.replace ">" "&gt;"
   | .text false str => str
   | .tag "pre" attrs body =>
-    "<pre" ++ attrsAsString attrs ++ ">\n" ++
-    Html.asString (indent := 0) (breakLines := false) body ++ "\n" ++
+    "<pre" ++ attrsAsString attrs ++ ">" ++
+    Html.asString (indent := 0) (breakLines := false) body ++
     "</pre>" ++ newline indent
   | .tag name attrs (.seq #[]) =>
     if name ∈ mustClose then
