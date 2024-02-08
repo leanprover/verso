@@ -24,6 +24,7 @@ inductive Highlighted.Token.Kind where
   | keyword (name : Option Name) (docs : Option String)
   | const (name : Name) (signature : String) (docs : Option String)
   | var (name : FVarId) (type : String)
+  | str (string : String)
   | option (name : Name) (docs : Option String)
   | docComment
   | sort
@@ -38,6 +39,7 @@ instance : Quote Highlighted.Token.Kind where
     | .const n sig docs => mkCApp ``const #[quote n, quote sig, quote docs]
     | .option n docs => mkCApp ``option #[quote n, quote docs]
     | .var (.mk n) type => mkCApp ``var #[mkCApp ``FVarId.mk #[quote n], quote type]
+    | .str s => mkCApp ``str #[quote s]
     | .docComment => mkCApp ``docComment #[]
     | .sort => mkCApp ``sort #[]
     | .unknown => mkCApp ``unknown #[]

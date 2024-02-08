@@ -9,6 +9,7 @@ namespace Verso.Genre.Highlighted
 
 partial defmethod Highlighted.Token.Kind.priority : Highlighted.Token.Kind → Nat
   | .var .. => 2
+  | .str .. => 3
   | .const .. => 5
   | .option .. => 4
   | .sort => 4
@@ -290,6 +291,12 @@ def advanceMessages : HighlightM Unit := do
         else {st with nextMessage := none}
     else st
 
+-- TODO take a closing position as well to avoid opening too early. Right now,
+-- we close too conservatively, leading to error spans that are too small. But
+-- not doing that leads to huge error spans! This si because an error on just
+-- the opening token of a syntax object is opened when visiting that syntax
+-- object. It should wait to open it until the syntax we're looking at is fully
+-- contained in the error span.
 def needsOpening (pos : Lean.Position) (message : Message) : Bool :=
   message.pos.notAfter pos
 
@@ -439,7 +446,6 @@ def findTactics (stx : Syntax) : HighlightM Unit := do
             inMessages := .inr ⟨endPosition⟩ :: st.inMessages
           }
 
-
 partial def highlight' (ids : HashMap Lsp.RefIdent Lsp.RefIdent) (stx : Syntax) (lookingAt : Option Name := none) : HighlightM Unit := do
   findTactics stx
   match stx with
@@ -486,6 +492,11 @@ partial def highlight' (ids : HashMap Lsp.RefIdent Lsp.RefIdent) (stx : Syntax) 
           if c.isAlpha then .keyword lookingAt docs
           else .unknown
         | _ => .unknown
+    | .node _ `str #[.atom i string] =>
+      if let some s := Syntax.decodeStrLit string then
+        emitToken i ⟨.str s, string⟩
+      else
+        emitToken i ⟨.unknown, string⟩
     | .node _ ``Lean.Parser.Command.docComment #[.atom i1 opener, .atom i2 body] =>
       if let .original leading pos ws _ := i1 then
         if let .original ws' _ trailing endPos := i2 then

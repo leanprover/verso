@@ -41,6 +41,7 @@ open HtmlT
 
 defmethod Highlighted.Token.Kind.«class» : Highlighted.Token.Kind → String
   | .var _ _ => "var"
+  | .str _ => "literal string"
   | .sort  => "sort"
   | .const _ _ _ => "const"
   | .option _ _ => "option"
@@ -72,6 +73,8 @@ defmethod Highlighted.Token.Kind.hover? : (tok : Highlighted.Token.Kind) → Opt
     some <| hover {{ {{toString n}} {{docs}} }}
   | .var _ type =>
     some <| hover {{ {{type}} }}
+  | .str s =>
+    some <| hover {{ <span class="literal string">{{s.quote}}</span>" : String"}}
   | _ => none
 
 
