@@ -17,7 +17,7 @@ partial defmethod Highlighted.Token.Kind.priority : Highlighted.Token.Kind → N
   | .const .. => 5
   | .option .. => 4
   | .sort => 4
-  | .keyword _ _ => 3
+  | .keyword _ _ _ => 3
   | .docComment => 1
   | .unknown => 0
 
@@ -417,12 +417,12 @@ partial def renderTagged [Monad m] [MonadLiftT IO m] [MonadMCtx m] [MonadEnv m]
     let mut toks : Array Highlighted := #[]
     let mut current := ""
     while !todo.isEmpty do
-      for kw in ["let", "fun", ":=", "=>", "do", "match", "with", "if", "then", "else", "break", "continue", "for", "in", "mut"] do
+      for kw in ["let", "fun", "do", "match", "with", "if", "then", "else", "break", "continue", "for", "in", "mut"] do
         if kw.isPrefixOf todo && tokenEnder (todo.drop kw.length) then
           if !current.isEmpty then
             toks := toks.push <| .text current
             current := ""
-          toks := toks.push <| .token ⟨.keyword none none, kw⟩
+          toks := toks.push <| .token ⟨.keyword none none none, kw⟩
           todo := todo.drop kw.length
           break
       let c := todo.get 0
@@ -521,7 +521,7 @@ def findTactics (ids : HashMap Lsp.RefIdent Lsp.RefIdent) (stx : Syntax) : Highl
           }
         return
 
-partial def highlight' (ids : HashMap Lsp.RefIdent Lsp.RefIdent) (stx : Syntax) (lookingAt : Option Name := none) : HighlightM Unit := do
+partial def highlight' (ids : HashMap Lsp.RefIdent Lsp.RefIdent) (stx : Syntax) (lookingAt : Option (Name × String.Pos) := none) : HighlightM Unit := do
   findTactics ids stx
   match stx with
   | `($e.%$tk$field:ident) =>
@@ -550,7 +550,9 @@ partial def highlight' (ids : HashMap Lsp.RefIdent Lsp.RefIdent) (stx : Syntax) 
     | stx@(.atom i x) =>
       let docs ← match lookingAt with
         | none => pure none
-        | some n => findDocString? (← getEnv) n
+        | some (n, _) => findDocString? (← getEnv) n
+      let name := lookingAt.map (·.1)
+      let occ := lookingAt.map fun (n, pos) => s!"{n}-{pos}"
       if let .sort ← identKind ids ⟨stx⟩ then
         emitToken i ⟨.sort, x⟩
         return
@@ -560,11 +562,11 @@ partial def highlight' (ids : HashMap Lsp.RefIdent Lsp.RefIdent) (stx : Syntax) 
         | some '#' =>
           match x.get? ((0 : String.Pos) + '#') with
           | some c =>
-            if c.isAlpha then .keyword lookingAt docs
+            if c.isAlpha then .keyword name occ docs
             else .unknown
           | _ => .unknown
         | some c =>
-          if c.isAlpha then .keyword lookingAt docs
+          if c.isAlpha then .keyword name occ docs
           else .unknown
         | _ => .unknown
     | .node _ `str #[.atom i string] =>
@@ -586,9 +588,10 @@ partial def highlight' (ids : HashMap Lsp.RefIdent Lsp.RefIdent) (stx : Syntax) 
       | _, _ =>
         highlight' ids dot
         highlight' ids name
-    | .node _ k children =>
+    | stx@(.node _ k children) =>
+      let pos := stx.getPos?
       for child in children do
-        highlight' ids child (lookingAt := some k)
+        highlight' ids child (lookingAt := pos.map (k, ·))
 
 def highlight (stx : Syntax) (messages : Array Message) : TermElabM Highlighted := do
   let modrefs := Lean.Server.findModuleRefs (← getFileMap) (← getInfoTrees).toArray
