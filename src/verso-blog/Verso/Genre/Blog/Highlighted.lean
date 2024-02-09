@@ -8,7 +8,8 @@ deriving instance Repr for Std.Format.FlattenBehavior
 deriving instance Repr for Std.Format
 
 inductive Highlighted.Token.Kind where
-  | keyword (name : Option Name) (docs : Option String)
+  | /-- `occurrence` is a unique identifier that unites the various keyword tokens from a given production -/
+    keyword (name : Option Name) (occurrence : Option String) (docs : Option String)
   | const (name : Name) (signature : String) (docs : Option String)
   | var (name : FVarId) (type : String)
   | str (string : String)
@@ -22,7 +23,7 @@ open Highlighted.Token.Kind in
 open Syntax (mkCApp) in
 instance : Quote Highlighted.Token.Kind where
   quote
-    | .keyword n docs => mkCApp ``keyword #[quote n, quote docs]
+    | .keyword n occ docs => mkCApp ``keyword #[quote n, quote occ, quote docs]
     | .const n sig docs => mkCApp ``const #[quote n, quote sig, quote docs]
     | .option n docs => mkCApp ``option #[quote n, quote docs]
     | .var (.mk n) type => mkCApp ``var #[mkCApp ``FVarId.mk #[quote n], quote type]

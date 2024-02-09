@@ -90,6 +90,19 @@ def squish'' (n : Option Nat) : Nat :=
 
 ```
 
+Here is a mutual block:
+```lean demo
+mutual
+  def f : Nat → Nat
+    | 0 => 1
+    | n + 1 => g n
+
+  def g : Nat → Nat
+    | 0 => 0
+    | n + 1 => f n
+end
+```
+
 Here is a proof with some lambdas and big terms in it, to check highlighting:
 ```lean demo
 def grow : Nat → α → α

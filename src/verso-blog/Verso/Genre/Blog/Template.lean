@@ -46,13 +46,14 @@ defmethod Highlighted.Token.Kind.«class» : Highlighted.Token.Kind → String
   | .const _ _ _ => "const"
   | .option _ _ => "option"
   | .docComment => "doc-comment"
-  | .keyword _ _ => "keyword"
+  | .keyword _ _ _ => "keyword"
   | .unknown => "unknown"
 
 defmethod Highlighted.Token.Kind.data : Highlighted.Token.Kind → String
   | .const n _ _ => "const-" ++ toString n
   | .var ⟨v⟩ _ => "var-" ++ toString v
   | .option n _ => "option-" ++ toString n
+  | .keyword _ (some occ) _ => "kw-occ-" ++ toString occ
   | _ => ""
 
 
@@ -66,11 +67,13 @@ defmethod Highlighted.Token.Kind.hover? : (tok : Highlighted.Token.Kind) → Opt
       | none => .empty
       | some txt => {{<hr/><pre class="docstring">{{txt}}</pre>}}
     some <| hover {{ <code>{{sig}}</code> {{docs}} }}
-  | .option n doc | .keyword (some n) doc =>
+  | .option n doc =>
     let docs := match doc with
       | none => .empty
       | some txt => {{<hr/><pre class="docstring">{{txt}}</pre>}}
     some <| hover {{ <code>{{toString n}}</code> {{docs}} }}
+  | .keyword _ _ none => none
+  | .keyword _ _ (some doc) => some <| hover {{<pre class="docstring">{{doc}}</pre>}}
   | .var _ type =>
     some <| hover {{ <code>{{type}}</code> }}
   | .str s =>
