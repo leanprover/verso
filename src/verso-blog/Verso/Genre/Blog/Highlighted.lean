@@ -7,19 +7,6 @@ namespace Verso.Genre
 deriving instance Repr for Std.Format.FlattenBehavior
 deriving instance Repr for Std.Format
 
-structure Highlighted.Goal where
-  name : Option Name
-  goalPrefix : String
-  /-- The hypotheses - `some` means let-binding with value-/
-  hypotheses : Array (Name × String)
-  conclusion : String
-deriving Repr, BEq, Hashable
-
-instance : Quote Highlighted.Goal where
-  quote
-    | {name, goalPrefix, hypotheses, conclusion} =>
-      Syntax.mkCApp ``Highlighted.Goal.mk #[quote name, quote goalPrefix, quote hypotheses, quote conclusion]
-
 inductive Highlighted.Token.Kind where
   | keyword (name : Option Name) (docs : Option String)
   | const (name : Name) (signature : String) (docs : Option String)
@@ -29,7 +16,7 @@ inductive Highlighted.Token.Kind where
   | docComment
   | sort
   | unknown
-deriving Repr, Inhabited
+deriving Repr, Inhabited, BEq, Hashable
 
 open Highlighted.Token.Kind in
 open Syntax (mkCApp) in
@@ -47,7 +34,7 @@ instance : Quote Highlighted.Token.Kind where
 structure Highlighted.Token where
   kind : Token.Kind
   content : String
-deriving Repr, Inhabited
+deriving Repr, Inhabited, BEq, Hashable
 
 open Syntax in
 open Highlighted in
@@ -56,11 +43,25 @@ instance : Quote Highlighted.Token where
     | (.mk kind content) =>
       mkCApp ``Token.mk #[quote kind, quote content]
 
+structure Highlighted.Goal (expr) where
+  name : Option Name
+  goalPrefix : String
+  /-- The hypotheses - `some` means let-binding with value-/
+  hypotheses : Array (Name × Token.Kind × expr)
+  conclusion : expr
+deriving Repr, BEq, Hashable
+
+instance [Quote expr] : Quote (Highlighted.Goal expr) where
+  quote
+    | {name, goalPrefix, hypotheses, conclusion} =>
+      Syntax.mkCApp ``Highlighted.Goal.mk #[quote name, quote goalPrefix, quote hypotheses, quote conclusion]
+
+
 inductive Highlighted.Span.Kind where
   | error
   | warning
   | info
-deriving Repr, DecidableEq, Inhabited
+deriving Repr, DecidableEq, Inhabited, BEq, Hashable
 
 open Highlighted Span Kind in
 open Syntax in
@@ -77,9 +78,9 @@ inductive Highlighted where
   -- TODO replace messages as strings with structured info
   | span (kind : Highlighted.Span.Kind) (info : String) (content : Highlighted)
   -- TODO structured representation of tactic state
-  | tactics (info : Array Highlighted.Goal) (pos : String.Pos) (content : Highlighted)
+  | tactics (info : Array (Highlighted.Goal Highlighted)) (pos : String.Pos) (content : Highlighted)
   | point (kind : Highlighted.Span.Kind) (info : String)
-deriving Repr
+deriving Repr, Inhabited, BEq, Hashable
 
 def Highlighted.empty : Highlighted := .seq #[]
 instance : Append Highlighted where
@@ -98,11 +99,13 @@ where
   quoteArray {α : _} (_inst : Quote α) (xs : Array α) : TSyntax `term :=
     mkCApp ``List.toArray #[quote xs.toList]
 
+  quoteHl {α} [Quote α] : Quote (Goal α) := inferInstance
+
   quote'
     | .token tok => mkCApp ``token #[quote tok]
     | .text str => mkCApp ``text #[quote str]
     | .seq hls => mkCApp ``seq #[quoteArray ⟨quote'⟩ hls]
     | .span k info content => mkCApp ``span #[quote k, quote info, quote' content]
     | .tactics info pos content =>
-      mkCApp ``tactics #[quote info, mkCApp ``String.Pos.mk #[quote pos.byteIdx], quote' content]
+      mkCApp ``tactics #[quoteArray (@quoteHl _ ⟨quote'⟩) info, mkCApp ``String.Pos.mk #[quote pos.byteIdx], quote' content]
     | .point k info => mkCApp ``point #[quote k, quote info]

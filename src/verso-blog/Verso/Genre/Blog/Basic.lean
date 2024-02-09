@@ -272,6 +272,7 @@ open Doc
 
 -- TODO CSS variables, and document it
 def highlightingStyle : String := "
+
 .hl.lean .keyword {
   font-weight : bold;
 }
@@ -295,6 +296,7 @@ def highlightingStyle : String := "
   border: 1px solid black;
   padding: 0.5em;
   z-index: 300;
+  font-size: inherit;
 }
 
 .hl.lean .has-info:hover > .hover-container > .hover-info:not(.tactic *),
@@ -313,7 +315,7 @@ def highlightingStyle : String := "
   transition: all 0.25s; /* Slight fade for highlights */
 }
 
-.hl.lean .token.binding-hl {
+.hl.lean .token.binding-hl, .hl.lean .literal.string:hover {
   background-color: #eee;
   border-radius: 2px;
   transition: none;
@@ -333,6 +335,7 @@ def highlightingStyle : String := "
   border: 1px solid black;
   padding: 0.5em;
   z-index: 400;
+  text-align: left;
 }
 
 .hl.lean .has-info.error {
@@ -371,6 +374,10 @@ def highlightingStyle : String := "
   font-family: sans-serif;
   white-space: normal;
   width: 40em;
+}
+
+.hl.lean code {
+  font-family: monospace;
 }
 
 .hl.lean .tactic-state {
@@ -467,7 +474,7 @@ def highlightingStyle : String := "
 
 .hl.lean .tactic-state .hypotheses td.colon {
   text-align: center;
-  width: 1em;
+  min-width: 1em;
 }
 
 .hl.lean .tactic-state .hypotheses td.name {
