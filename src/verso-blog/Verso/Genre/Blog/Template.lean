@@ -65,16 +65,16 @@ defmethod Highlighted.Token.Kind.hover? : (tok : Highlighted.Token.Kind) → Opt
     let docs := match doc with
       | none => .empty
       | some txt => {{<hr/><pre class="docstring">{{txt}}</pre>}}
-    some <| hover {{ {{sig}} {{docs}} }}
+    some <| hover {{ <code>{{sig}}</code> {{docs}} }}
   | .option n doc | .keyword (some n) doc =>
     let docs := match doc with
       | none => .empty
       | some txt => {{<hr/><pre class="docstring">{{txt}}</pre>}}
-    some <| hover {{ {{toString n}} {{docs}} }}
+    some <| hover {{ <code>{{toString n}}</code> {{docs}} }}
   | .var _ type =>
-    some <| hover {{ {{type}} }}
+    some <| hover {{ <code>{{type}}</code> }}
   | .str s =>
-    some <| hover {{ <span class="literal string">{{s.quote}}</span>" : String"}}
+    some <| hover {{ <code><span class="literal string">{{s.quote}}</span>" : String"</code>}}
   | _ => none
 
 
@@ -88,17 +88,17 @@ defmethod Highlighted.Span.Kind.«class» : Highlighted.Span.Kind → String
   | .warning => "warning"
   | .error => "error"
 
-defmethod Highlighted.Goal.toHtml (index : Nat) : Highlighted.Goal → Html
+defmethod Highlighted.Goal.toHtml (exprHtml : expr → Html) (index : Nat) : Highlighted.Goal expr → Html
   | {name, goalPrefix, hypotheses, conclusion} =>
     let hypsHtml : Html :=
       if hypotheses.size = 0 then .empty
       else {{
         <table class="hypotheses">
           {{hypotheses.map fun
-              | (x,t) => {{
+              | (x, k, t) => {{
                   <tr class="hypothesis">
-                    <td class="name">{{x.toString}}</td><td class="colon">":"</td>
-                    <td class="type">{{t}}</td>
+                    <td class="name">{{Highlighted.Token.toHtml ⟨k, x.toString⟩}}</td><td class="colon">":"</td>
+                    <td class="type">{{exprHtml t}}</td>
                   </tr>
                 }}
           }}
@@ -106,7 +106,7 @@ defmethod Highlighted.Goal.toHtml (index : Nat) : Highlighted.Goal → Html
       }}
     let conclHtml := {{
         <span class="conclusion">
-          <span class="prefix">{{goalPrefix}}</span><span class="type">{{conclusion}}</span>
+          <span class="prefix">{{goalPrefix}}</span><span class="type">{{exprHtml conclusion}}</span>
         </span>
       }}
     {{
@@ -146,7 +146,7 @@ partial defmethod Highlighted.toHtml : Highlighted → Html
         <label «for»={{id}}>{{toHtml hl}}</label>
         <input type="checkbox" class="tactic-toggle" id={{id}}></input>
         <div class="tactic-state">
-          {{if info.isEmpty then {{"All goals completed! 🐙"}} else info.mapIndexed (fun ⟨i, _⟩ x => x.toHtml i)}}
+          {{if info.isEmpty then {{"All goals completed! 🐙"}} else info.mapIndexed (fun ⟨i, _⟩ x => x.toHtml Highlighted.toHtml i)}}
         </div>
       </span>
     }}

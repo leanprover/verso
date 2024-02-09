@@ -90,5 +90,38 @@ def squish'' (n : Option Nat) : Nat :=
 
 ```
 
+Here is a proof with some lambdas and big terms in it, to check highlighting:
+```lean demo
+def grow : Nat → α → α
+  | 0 | 1 => fun x => x
+  | n + 2 =>
+    let f1 := grow n
+    let f2 := grow (n + 1)
+    f1 f2
+
+theorem grow_10_id {α} : grow (α := α) 6 = id := by
+  repeat unfold grow
+  all_goals sorry
+```
+
+Here is a proof with big terms in the context:
+```lean demo
+
+open Lean in
+def quotedStx [Monad m] [MonadQuotation m] [MonadRef m] (str : String) : m Syntax := do
+  let s ← `(a b c #[x, $(quote str), z])
+  pure s
+
+open Lean in
+example [Monad m] [MonadQuotation m] [MonadRef m] : ¬(quotedStx (m := m) = fun (x : String) => pure .missing) := by
+  unfold quotedStx
+  intro h
+  let g : String → m Syntax := fun str => do
+    let s ← `(a b c #[x, $(quote str), z])
+    pure s
+  have : g "hello" ≠ pure .missing := by skip; sorry
+  sorry
+```
+
 
 Thank you for looking at my test/demo post.
