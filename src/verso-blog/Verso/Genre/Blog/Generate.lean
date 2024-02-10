@@ -167,8 +167,8 @@ def writeBlog (theme : Theme) (id : Lean.Name) (txt : Part Page) (posts : Array 
         pure <| some (addr, post)
       let postList := {{
         <ul class="post-list">
-          {{← catPosts.mapM fun (_addr, p) =>
-            theme.archiveEntryTemplate.render (.ofList [("path", ⟨.mk "..", #[]⟩), ("post", ⟨.mk p, #[]⟩)])}}
+          {{← catPosts.mapM fun (_addr, p) => do
+            theme.archiveEntryTemplate.render (.ofList [("path", ⟨.mk "..", #[]⟩), ("post", ⟨.mk p, #[]⟩), ("summary", ⟨.mk (← summarize p), #[]⟩)])}}
         </ul>
       }}
       let catParams := Template.Params.ofList [("title", cat.name), ("category", ⟨.mk cat, #[]⟩), ("posts", ⟨.mk postList, #[]⟩)]
@@ -176,15 +176,19 @@ def writeBlog (theme : Theme) (id : Lean.Name) (txt : Part Page) (posts : Array 
 
   let postList := {{
     <ul class="post-list">
-      {{← posts.mapM fun p =>
-        theme.archiveEntryTemplate.render (.ofList [("post", ⟨.mk p, #[]⟩)])}}
+      {{← posts.mapM fun p => do
+        theme.archiveEntryTemplate.render (.ofList [("post", ⟨.mk p, #[]⟩), ("summary", ⟨.mk (← summarize p), #[]⟩)])}}
     </ul>
   }}
   let allCats : Post.Categories := .mk <| meta.categories.toArray.map fun (c, _) =>
     (c.slug, c)
   let pageParams : Template.Params := (← forPart txt).insert "posts" ⟨.mk postList, #[]⟩ |>.insert "categories" ⟨.mk allCats, #[]⟩
   writePage theme pageParams
-
+where
+  summarize (p : BlogPost) : GenerateM Html := do
+    let some block := p.summary
+      | return .empty
+    GenerateM.toHtml Post block
 
 
 partial def Dir.generate (theme : Theme) (dir : Dir) : GenerateM Unit :=

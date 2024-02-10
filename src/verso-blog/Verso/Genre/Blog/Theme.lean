@@ -133,21 +133,43 @@ def category : Template := do
 
 def archiveEntry : Template := do
   let post : BlogPost ← param "post"
+  let summary ← param "summary"
   let target ← if let some p := (← param? "path") then
       pure <| p ++ "/" ++ (← post.postName')
     else post.postName'
+  let catAddr ← do
+    if let some p := (← param? "path") then
+      pure <| fun slug => p ++ "/" ++ slug
+    else pure <| fun slug => slug
+
   return #[{{
-  <li>
-    <a href={{target}}>
-    {{
-    match post.contents.metadata.map (·.date) with
-    | some {year := y, month := m, day := d : Date} => {{<span class="date"> s!"{y}-{m}-{d}" </span> " — "}}
-    | none => Html.empty
-    }}
-    <span class="name">{{post.contents.titleString}}</span>
-    </a>
-  </li>
-}}]
+    <li>
+      <a href={{target}} class="title">
+        <span class="name">{{post.contents.titleString}}</span>
+      </a>
+      {{ match post.contents.metadata with
+         | none => Html.empty
+         | some md => {{
+          <div class="metadata">
+            <div class="authors">
+              {{(md : Post.PartMetadata).authors.map ({{<span class="author">{{Html.text true ·}}</span>}}) |>.toArray}}
+            </div>
+            <div class="date">
+              s!"{md.date.year}-{md.date.month}-{md.date.day}"
+            </div>
+            {{if md.categories.isEmpty then Html.empty
+              else {{
+                <ul class="categories">
+                  {{md.categories.toArray.map (fun cat => {{<li><a href=s!"{catAddr cat.slug}">{{cat.name}}</a></li>}})}}
+                </ul>
+              }}
+            }}
+          </div>
+         }}
+       }}
+      {{summary}}
+    </li>
+  }}]
 
 end Default
 
