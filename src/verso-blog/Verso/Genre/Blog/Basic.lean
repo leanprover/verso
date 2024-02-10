@@ -215,6 +215,9 @@ defmethod BlogPost.postName [Monad m] [MonadConfig m] [MonadState TraverseState 
 defmethod BlogPost.postName' [Monad m] [MonadConfig m] (post : BlogPost) : m String :=
   post.contents.postName'
 
+defmethod BlogPost.summary (post : BlogPost) : Option (Block Post) :=
+  post.contents.content.get? 0
+
 partial def TraverseState.freshId (state : Blog.TraverseState) (path : List String) (hint : Lean.Name) : String := Id.run do
   let mut idStr := mangle (toString hint)
   match state.usedIds.find? path with

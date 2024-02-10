@@ -89,6 +89,23 @@ div.metadata {
     margin-bottom: 1.5em;
 }
 
+.metadata .authors, .metadata .date {
+    display: inline-block;
+}
+
+.metadata .authors:has(+ .date)::after {
+    content: " | ";
+}
+
+
+.metadata .authors::before {
+    content: "By ";
+}
+
+.metadata .authors .author:has(+ .author)::after {
+    content: ", ";
+}
+
 h1, h2, h3, h4, h5, h6 {
     font-family: sans-serif;
 }
