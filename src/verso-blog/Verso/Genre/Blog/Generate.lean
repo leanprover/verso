@@ -186,9 +186,7 @@ def writeBlog (theme : Theme) (id : Lean.Name) (txt : Part Page) (posts : Array 
   writePage theme pageParams
 where
   summarize (p : BlogPost) : GenerateM Html := do
-    let some block := p.summary
-      | return .empty
-    GenerateM.toHtml Post block
+    Html.seq <$> p.summary.mapM (GenerateM.toHtml Post)
 
 
 partial def Dir.generate (theme : Theme) (dir : Dir) : GenerateM Unit :=

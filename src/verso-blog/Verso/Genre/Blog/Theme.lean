@@ -168,6 +168,7 @@ def archiveEntry : Template := do
          }}
        }}
       {{summary}}
+      <a href={{target}} class="read-more">"Read more"</a>
     </li>
   }}]
 

@@ -215,8 +215,46 @@ defmethod BlogPost.postName [Monad m] [MonadConfig m] [MonadState TraverseState 
 defmethod BlogPost.postName' [Monad m] [MonadConfig m] (post : BlogPost) : m String :=
   post.contents.postName'
 
-defmethod BlogPost.summary (post : BlogPost) : Option (Block Post) :=
-  post.contents.content.get? 0
+private def sumArrayWith (f : α → Nat) (arr : Array α) : Nat := Id.run do
+  let mut sum := 0
+  for x in arr do
+    sum := sum + f x
+  sum
+
+/-- An approximate word count for summary length limits -/
+partial defmethod Inline.wordCount : Inline genre → Nat
+  | .code str
+  | .text str => str.split (Char.isWhitespace) |>.filter (!·.isEmpty) |>.length
+  | .emph content
+  | .link content ..
+  | .concat content
+  | .other _ content
+  | .footnote _ (content : Array (Inline genre))
+  | .bold content => sumArrayWith wordCount content
+  | .math .. => 1
+  | .linebreak .. => 0
+  | .image _ _ => 1
+
+partial defmethod Block.wordCount : Block genre → Nat
+    | .para contents => sumArrayWith (·.wordCount) contents
+    | .ul items
+    | .ol _ items => sumArrayWith (fun ⟨_, bs⟩ => sumArrayWith wordCount bs) items
+    | .dl items => sumArrayWith (fun ⟨is, bs⟩ => sumArrayWith (·.wordCount) is + sumArrayWith wordCount bs) items
+    | .blockquote items
+    | .concat items => sumArrayWith wordCount items
+    | .other _ content => sumArrayWith wordCount content
+    | .code _ _ _ str => str.split (Char.isWhitespace) |>.filter (!·.isEmpty) |>.length
+
+defmethod BlogPost.summary (post : BlogPost) : Array (Block Post) := Id.run do
+  let mut out := #[]
+  let mut words := 100
+  for b in post.contents.content do
+    let wc := b.wordCount
+    if out.isEmpty || wc < words then
+      out := out.push b
+      words := words - wc
+    else break
+  out
 
 partial def TraverseState.freshId (state : Blog.TraverseState) (path : List String) (hint : Lean.Name) : String := Id.run do
   let mut idStr := mangle (toString hint)
