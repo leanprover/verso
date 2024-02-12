@@ -494,7 +494,11 @@ def findTactics (ids : HashMap Lsp.RefIdent Lsp.RefIdent) (stx : Syntax) : Highl
           let name := if mvDecl.userName.isAnonymous then none else some mvDecl.userName
           let lctx := mvDecl.lctx |>.sanitizeNames.run' {options := (← getOptions)}
 
-          let runMeta {α} (act : MetaM α) : HighlightM α := ci.runMetaM lctx act
+          -- Tell the delaborator to tag functions that are being applied. Otherwise,
+          -- functions have no tooltips or binding info in tactics.
+          -- cf https://leanprover.zulipchat.com/#narrow/stream/270676-lean4/topic/Function.20application.20delaboration/near/265800665
+          let ci' := {ci with options := ci.options.set `pp.tagAppFns true}
+          let runMeta {α} (act : MetaM α) : HighlightM α := ci'.runMetaM lctx act
           for c in lctx.decls do
             let some decl := c
               | continue
