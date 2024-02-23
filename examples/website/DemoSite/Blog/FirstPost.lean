@@ -21,10 +21,7 @@ def jsonHl : Highlighter where
 #defineLexerBlock json ← jsonHl
 
 #doc (Post) "First Post" =>
-%%%
-authors := ["Fictional Author"]
-date := {year := 2008, month := 2, day := 15}
-%%%
+
 
 This post introduces the blog and says what it will do.
 
@@ -34,4 +31,9 @@ Here is some syntax-highlighted JSON:
 {"one thing": ["and", "another"],
  "and numbers": 1.5,
  "and more": [true, false, null, {}]}
+```
+
+And a random code block:
+```
+hello
 ```

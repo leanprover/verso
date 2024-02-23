@@ -135,8 +135,9 @@ def _root_.Array.mapIndexed (arr : Array α) (f : Fin arr.size → α → β) : 
     if h : i < arr.size then
       go (acc.push (f ⟨i, h⟩ arr[i])) (i + 1)
     else acc
+  termination_by arr.size - i
   go #[] 0
-termination_by go acc i => arr.size - i
+
 
 partial defmethod Highlighted.toHtml : Highlighted → Html
   | .token t => t.toHtml

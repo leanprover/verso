@@ -262,13 +262,13 @@ partial def _root_.Verso.Syntax.header.command : PartCommand
 
 @[part_command Verso.Syntax.metadata_block]
 def _root_.Verso.Syntax.metadata_block.command : PartCommand
-  | `(block| %%%%$tk $fieldOrAbbrev* $ellipsis:optEllipsis %%%) => do
+  | `(block| %%%%$tk $fieldOrAbbrev*  %%%) => do
     let ctxt := (← getThe PartElabM.State).partContext
     if ctxt.blocks.size > 0 || ctxt.priorParts.size > 0 then
       throwErrorAt tk "Metadata blocks must precede both content and subsections"
     if ctxt.metadata.isSome then
       throwErrorAt tk "Metadata already provided for this section"
-    let stx ← `(term| { $(⟨fieldOrAbbrev⟩)* $ellipsis })
+    let stx ← `(term| { $fieldOrAbbrev* })
     modifyThe PartElabM.State fun st => {st with partContext.metadata := some stx}
   | _ => throwUnsupportedSyntax
 

@@ -11,7 +11,7 @@ namespace Verso.Method
 open Lean Parser Elab Command
 
 def method := leading_parser
-  declModifiers false >> "defmethod " >> declId >> ppIndent optDeclSig >> declVal >> optDefDeriving >> terminationSuffix
+  declModifiers false >> "defmethod " >> declId >> ppIndent optDeclSig >> declVal >> optDefDeriving
 
 /-- Like 'def', except the namespace is resolved to an existing unique
 name, and the resulting name is defined in that namespace.

@@ -5,7 +5,8 @@ Author: David Thrane Christiansen
 -/
 
 import Lean
-import Std.Tactic.GuardMsgs
+
+import Std
 
 import Verso.Parser.Lean
 import Verso.SyntaxUtils
@@ -328,7 +329,7 @@ def strFn (str : String) : ParserFn := asStringFn <| fun c s =>
   let iniPos := s.pos
   let iniSz := s.stxStack.size
   let s := go str.iter s
-  if s.hasError then s.mkErrorAt str iniPos (some iniSz) else s
+  if s.hasError then s.mkErrorAt s!"'{str}'" iniPos (some iniSz) else s
 
 
 inductive OrderedListType where
@@ -794,18 +795,40 @@ def linebreak (ctxt : InlineCtxt) :=
   else
     errorFn "Newlines not allowed here"
 
+def skipToNewline : ParserFn :=
+    takeUntilFn (· == '\n')
+
+def skipRestOfLine : ParserFn :=
+    skipToNewline >> (eoiFn <|> nl)
+
+def skipBlock : ParserFn :=
+  skipToNewline >> manyFn nonEmptyLine
+where
+  nonEmptyLine : ParserFn :=
+    chFn '\n' >>
+    takeWhileFn (fun c => c.isWhitespace && c != '\n') >>
+    satisfyFn (!·.isWhitespace) "non-whitespace" >> skipToNewline
+
+
+
+def recoverBlock (p : ParserFn) : ParserFn := recoverFn p fun _ => skipBlock
+def recoverLine (p : ParserFn) : ParserFn := recoverFn p fun _ => skipRestOfLine
+def recoverEol (p : ParserFn) : ParserFn := recoverFn p fun _ => skipToNewline
+def recoverSkip (p : ParserFn) : ParserFn := recoverFn p fun _ => skipFn
+
 mutual
   partial def emphLike (name : SyntaxNodeKind) (char : Char) (what plural : String) (getter : InlineCtxt → Option Nat) (setter : InlineCtxt → Option Nat → InlineCtxt) (ctxt : InlineCtxt) : ParserFn :=
     nodeFn name <|
     withCurrentColumn fun c =>
       atomicFn (asStringFn (asStringFn (opener ctxt) >> notFollowedByFn (chFn ' ' false <|> chFn '\n' false) "space or newline after opener")) >>
-      withCurrentColumn fun c' =>
-        let count := c' - c
-        manyFn (inline (setter ctxt (some count))) >>
-
-        asStringFn (atomicFn (noSpaceBefore >> repFn count (satisfyFn (· == char) s!"{count} {plural}")))
+      (recoverSkip <|
+        withCurrentColumn fun c' =>
+          let count := c' - c
+          manyFn (inline (setter ctxt (some count))) >>
+          asStringFn (atomicFn (noSpaceBefore >> repFn count (satisfyFn (· == char) s!"'{tok count}'"))))
 
   where
+    tok (count : Nat) : String := ⟨List.replicate count char⟩
     opener (ctxt : InlineCtxt) : ParserFn :=
       match getter ctxt with
       | none => many1Fn (satisfyFn (· == char) s!"any number of {char}s")
@@ -816,7 +839,7 @@ mutual
       else
         let prior := c.input.get (c.input.prev s.pos)
         if prior.isWhitespace then
-          s.mkError "closer without preceding space"
+          s.mkError s!"'{char}' without preceding space"
         else s
 
   partial def emph := emphLike ``emph '_' "emphasize" "underscores" (·.emphDepth) ({· with emphDepth := ·})
@@ -826,16 +849,17 @@ mutual
     nodeFn ``code <|
     withCurrentColumn fun c =>
       atomicFn opener >>
-      withCurrentColumn fun c' =>
-        let count := c' - c
-        nodeFn strLitKind (asStringFn (takeContentsFn (count - 1)) (quoted := true)) >>
-        asStringFn (atomicFn (repFn count (satisfyFn (· == '`') s!"{count} backticks"))) >>
-        notFollowedByFn (satisfyFn (· == '`') "`") "backtick"
+      (recoverBlock <|
+        withCurrentColumn fun c' =>
+          let count := c' - c
+          nodeFn strLitKind (asStringFn (takeContentsFn (count - 1)) (quoted := true)) >>
+          asStringFn (atomicFn (repFn count (satisfyFn (· == '`') s!"{count} backticks"))) >>
+          notFollowedByFn (satisfyFn (· == '`') "`") "backtick")
 
   where
     opener : ParserFn := asStringFn (many1Fn (satisfyFn (· == '`') s!"any number of backticks"))
     takeBackticksFn : Nat → ParserFn
-      | 0 => satisfyFn (· != '`') "expected non-backtick"
+      | 0 => satisfyFn (· != '`') "non-backtick"
       | n+1 => fun c s =>
         let i := s.pos
         if h : c.input.atEnd i then s.mkEOIError
@@ -867,22 +891,29 @@ mutual
   partial def link (ctxt : InlineCtxt) :=
     nodeFn ``link <|
       (atomicFn (notInLink ctxt >> strFn "[" >> notFollowedByFn (chFn '^') "'^'" )) >>
-      many1Fn (inline {ctxt with inLink := true}) >>
-      strFn "]" >>
-      linkTarget
+      (recoverEol <|
+        many1Fn (inline {ctxt with inLink := true}) >>
+        strFn "]" >> linkTarget)
 
   partial def footnote (ctxt : InlineCtxt) :=
     nodeFn ``footnote <|
       (atomicFn (notInLink ctxt >> strFn "[^" )) >>
-      nodeFn `str (asStringFn (quoted := true) (many1Fn (satisfyEscFn (· != ']')))) >>
-      strFn "]"
+      (recoverLine <|
+        nodeFn `str (asStringFn (quoted := true) (many1Fn (satisfyEscFn (fun c => c != ']' && c != '\n') "other than ']' or newline"))) >>
+        strFn "]")
 
   partial def linkTarget := ref <|> url
   where
-    notUrlEnd := satisfyEscFn (· ∉ ")\n".toList) >> takeUntilEscFn (· ∈ ")\n".toList)
-    notRefEnd := satisfyEscFn (· ∉ "]\n".toList) >> takeUntilEscFn (· ∈ "]\n".toList)
-    ref : ParserFn := nodeFn ``Verso.Syntax.ref ((atomicFn <| strFn "[") >> nodeFn strLitKind (asStringFn notRefEnd (quoted := true)) >> strFn "]")
-    url : ParserFn := nodeFn ``Verso.Syntax.url ((atomicFn <| strFn "(") >> nodeFn strLitKind (asStringFn notUrlEnd (quoted := true)) >> strFn ")")
+    notUrlEnd := satisfyEscFn (· ∉ ")\n".toList) "not ')' or newline" >> takeUntilEscFn (· ∈ ")\n".toList)
+    notRefEnd := satisfyEscFn (· ∉ "]\n".toList) "not ']' or newline" >> takeUntilEscFn (· ∈ "]\n".toList)
+    ref : ParserFn :=
+      nodeFn ``Verso.Syntax.ref <|
+        (atomicFn <| strFn "[") >>
+        recoverEol (nodeFn strLitKind (asStringFn notRefEnd (quoted := true)) >> strFn "]")
+    url : ParserFn :=
+      nodeFn ``Verso.Syntax.url <|
+        (atomicFn <| strFn "(") >>
+        recoverEol (nodeFn strLitKind (asStringFn notUrlEnd (quoted := true)) >> strFn ")")
 
   partial def notInLink (ctxt : InlineCtxt) : ParserFn := fun _ s =>
       if ctxt.inLink then s.mkError "Already in a link" else s
@@ -890,17 +921,18 @@ mutual
   partial def image : ParserFn :=
     nodeFn ``image <|
       atomicFn (strFn "![") >>
-      asStringFn (takeUntilEscFn (· ∈ "]\n".toList))>>
-      strFn "]" >>
-      linkTarget
+      (recoverSkip <|
+        asStringFn (takeUntilEscFn (· ∈ "]\n".toList))>>
+        strFn "]" >>
+        linkTarget)
 
   partial def role (ctxt : InlineCtxt) : ParserFn :=
     nodeFn ``role <|
-      intro >> (atomicFn nonBracketed <|> bracketed)
+      intro >> (bracketed <|> atomicFn nonBracketed)
   where
     eatSpaces := takeWhileFn (· == ' ')
-    intro := atomicFn (chFn '{') >> eatSpaces >> nameAndArgs >> eatSpaces >> chFn '}'
-    bracketed := atomicFn (chFn '[') >> manyFn (inline ctxt >> eatSpaces) >> chFn ']'
+    intro := atomicFn (chFn '{') >> recoverBlock (eatSpaces >> nameAndArgs >> eatSpaces >> chFn '}')
+    bracketed := atomicFn (chFn '[') >> recoverBlock (manyFn (inline ctxt >> eatSpaces) >> chFn ']')
     fakeOpen := mkAtom SourceInfo.none "["
     fakeClose := mkAtom SourceInfo.none "]"
     nonBracketed : ParserFn := fun c s =>
@@ -938,7 +970,7 @@ All input consumed.
   #eval emph {} |>.test! "_aa_"
 
 /--
-info: Failure: expected closer without preceding space
+info: Failure: expected '_' without preceding space
 Final stack:
   (Verso.Syntax.emph
    "_"
@@ -983,7 +1015,7 @@ All input consumed.
 /--
 info: Failure: unexpected end of input
 Final stack:
-  (Verso.Syntax.code "`" (str <missing>))
+  (Verso.Syntax.code "`" (str <missing>) [])
 Remaining: ""
 -/
 #guard_msgs in
@@ -1008,8 +1040,8 @@ All input consumed.
 /--
 info: Failure: newline
 Final stack:
-  (Verso.Syntax.code "`" (str <missing>))
-Remaining: "\no `"
+  (Verso.Syntax.code "`" (str <missing>) ["\n"])
+Remaining: ""
 -/
 #guard_msgs in
   #eval code.test! "` fo\no `"
@@ -1040,7 +1072,7 @@ All input consumed.
 /--
 info: Failure: unexpected end of input
 Final stack:
-  (Verso.Syntax.code "`" (str <missing>))
+  (Verso.Syntax.code "`" (str <missing>) [])
 Remaining: ""
 -/
 #guard_msgs in
@@ -1065,8 +1097,8 @@ All input consumed.
 /--
 info: Failure: newline
 Final stack:
-  (Verso.Syntax.code "`" (str <missing>))
-Remaining: "\no `"
+  (Verso.Syntax.code "`" (str <missing>) ["\n"])
+Remaining: ""
 -/
 #guard_msgs in
   #eval (inline {}).test! "` fo\no `"
@@ -1138,6 +1170,32 @@ All input consumed.
   #eval inline {} |>.test! "![](logo.png)"
 
 /--
+info: Failure: expected ')'
+Final stack:
+  (Verso.Syntax.image
+   "!["
+   ""
+   "]"
+   (Verso.Syntax.url
+    "("
+    (str "\"logo.png\"")
+    <missing>))
+Remaining: "\nabc"
+-/
+#guard_msgs in
+  #eval inline {} |>.test! "![](logo.png\nabc"
+
+/--
+info: Failure: expected ']'
+Final stack:
+  (Verso.Syntax.image "![" "abc" <missing>)
+Remaining: "\n123"
+-/
+#guard_msgs in
+  #eval inline {} |>.test! "![abc\n123"
+
+
+/--
 info: Success! Final stack:
   (Verso.Syntax.image
    "!["
@@ -1153,7 +1211,7 @@ All input consumed.
   #eval inline {} |>.test! "![alt text is good](logo.png)"
 
 /--
-info: Failure: expected ( or [
+info: Failure: expected '(' or '['
 Final stack:
   (Verso.Syntax.image
    "!["
@@ -1309,7 +1367,7 @@ open Lean.Parser.Term in
 def metadataBlock : ParserFn :=
   nodeFn ``metadata_block <|
     opener >>
-    (sepByIndent (structInstFieldAbbrev <|> structInstField) ", " (allowTrailingSep := true) >> optEllipsis).fn >>
+    metadataContents.fn >>
     takeWhileFn (·.isWhitespace) >>
     closer
 where
@@ -1319,11 +1377,7 @@ where
 
 /--
 info: Success! Final stack:
-  (Verso.Syntax.metadata_block
-   "%%%"
-   []
-   (Term.optEllipsis [])
-   "%%%")
+  (Verso.Syntax.metadata_block "%%%" [] "%%%")
 All input consumed.
 -/
 #guard_msgs in
@@ -1338,7 +1392,6 @@ info: Success! Final stack:
      ":="
      `bar)
     []]
-   (Term.optEllipsis [])
    "%%%")
 All input consumed.
 -/
@@ -1356,7 +1409,6 @@ info: Success! Final stack:
     []
     (Term.structInstFieldAbbrev `x)
     []]
-   (Term.optEllipsis [])
    "%%%")
 All input consumed.
 -/
@@ -1536,6 +1588,13 @@ Remaining: "** "
 #guard_msgs in
 #eval lookaheadUnorderedListIndicator {} (fun type => fakeAtom s! "{repr type}") |>.test! "** "
 
+
+def skipUntilDedent (indent : Nat) : ParserFn :=
+  skipRestOfLine >>
+  manyFn (chFn ' ' >> takeWhileFn (· == ' ') >> guardColumn (· ≥ indent) s!"indentation at {indent}" >> skipRestOfLine)
+
+def recoverUnindent (indent : Nat) (p : ParserFn) : ParserFn := recoverFn p (fun _ => skipUntilDedent indent)
+
 mutual
   partial def listItem (ctxt : BlockCtxt) : ParserFn :=
     nodeFn ``li (bulletFn >> withCurrentColumn fun c => blocks {ctxt with minIndent := c})
@@ -1601,7 +1660,7 @@ mutual
   partial def header (ctxt : BlockCtxt) : ParserFn :=
     nodeFn ``header <|
       guardMinColumn ctxt.minIndent >>
-      atomicFn (bol >> asStringFn (many1Fn (skipChFn '#')) >> skipChFn ' ' >> takeWhileFn (· == ' ') >> lookaheadFn (satisfyFn (· != '\n'))) >>
+      atomicFn (bol >> asStringFn (many1Fn (skipChFn '#')) >> skipChFn ' ' >> takeWhileFn (· == ' ') >> lookaheadFn (satisfyFn (· != '\n') "non-newline")) >>
       textLine (allowNewlines := false)
 
 
@@ -1610,15 +1669,15 @@ mutual
     nodeFn ``codeblock <|
       -- Opener - leaves indent info and open token on the stack
       atomicFn (takeWhileFn (· == ' ') >>  guardMinColumn ctxt.minIndent >> pushColumn >> asStringFn (atLeastFn 3 (skipChFn '`'))) >>
-      withIndentColumn fun c =>
-        withCurrentColumn fun c' =>
-          let fenceWidth := c' - c
-          takeWhileFn (· == ' ') >>
-          optionalFn nameAndArgs >>
-          satisfyFn (· == '\n') "newline" >>
-          asStringFn (manyFn (codeFrom c fenceWidth)) (transform := deIndent c) >>
-          closeFence c fenceWidth
-
+        withIndentColumn fun c =>
+          recoverUnindent c <|
+            withCurrentColumn fun c' =>
+              let fenceWidth := c' - c
+              takeWhileFn (· == ' ') >>
+              optionalFn nameAndArgs >>
+              satisfyFn (· == '\n') "newline" >>
+              asStringFn (manyFn (codeFrom c fenceWidth)) (transform := deIndent c) >>
+              closeFence c fenceWidth
   where
     withIndentColumn (p : Nat → ParserFn) : ParserFn := fun c s =>
       let colStx := s.stxStack.get! (s.stxStack.size - 2)
@@ -1694,7 +1753,7 @@ mutual
     let iniPos := s.pos
     let iniSz := s.stxStack.size
     let restorePosOnErr : ParserState → ParserState
-      | ⟨stack, lhsPrec, _, cache, some msg⟩ => ⟨stack, lhsPrec, iniPos, cache, some msg⟩
+      | ⟨stack, lhsPrec, _, cache, some msg, errs⟩ => ⟨stack, lhsPrec, iniPos, cache, some msg, errs⟩
       | other => other
     let s := eatSpaces c s
     if s.hasError then restorePosOnErr s
@@ -1711,15 +1770,15 @@ mutual
 
   partial def linkRef (c : BlockCtxt) : ParserFn :=
     nodeFn ``link_ref <|
-      atomicFn (ignoreFn (bol >> eatSpaces >> guardMinColumn c.minIndent) >> chFn '[' >> nodeFn strLitKind (asStringFn (quoted := true) (satisfyEscFn nameStart >> manyFn (satisfyEscFn (· != ']')))) >> strFn "]:") >>
+      atomicFn (ignoreFn (bol >> eatSpaces >> guardMinColumn c.minIndent) >> chFn '[' >> nodeFn strLitKind (asStringFn (quoted := true) (nameStart >> manyFn (satisfyEscFn (· != ']') "not ']'"))) >> strFn "]:") >>
       eatSpaces >>
       nodeFn strLitKind (asStringFn (quoted := true) (takeWhileFn (· != '\n'))) >>
       ignoreFn (satisfyFn (· == '\n') "newline" <|> eoiFn)
-  where nameStart c := c != ']' && c != '^'
+  where nameStart := satisfyEscFn (fun c => c != ']' && c != '^') "not ']' or '^'"
 
   partial def footnoteRef (c : BlockCtxt) : ParserFn :=
     nodeFn ``footnote_ref <|
-      atomicFn (ignoreFn (bol >> eatSpaces >> guardMinColumn c.minIndent) >> strFn "[^" >> nodeFn strLitKind (asStringFn (quoted := true) (many1Fn (satisfyEscFn (· != ']')))) >> strFn "]:") >>
+      atomicFn (ignoreFn (bol >> eatSpaces >> guardMinColumn c.minIndent) >> strFn "[^" >> nodeFn strLitKind (asStringFn (quoted := true) (many1Fn (satisfyEscFn (· != ']') "not ']'"))) >> strFn "]:") >>
       eatSpaces >>
       notFollowedByFn blockOpener "block opener" >> guardMinColumn c.minIndent >> textLine
 
@@ -1989,7 +2048,7 @@ All input consumed.
   #eval blocks {} |>.test! "* foo\n  * bar\n* more outer"
 
 /--
-info: Failure: unexpected end of input; expected ![, $, $$, %%% (at line beginning), [, [^ or beginning of line at ⟨2, 15⟩
+info: Failure: unexpected end of input; expected %%% (at line beginning), '![', '$$', '$', '[', '[^' or beginning of line at ⟨2, 15⟩
 Final stack:
   [(Verso.Syntax.dl
     [(Verso.Syntax.desc
@@ -2217,7 +2276,7 @@ All input consumed.
 
 -- Unlike Djot, we don't have precedence - these must be well-nested
 /--
-info: Failure: 1 underscores
+info: Failure: '_'
 Final stack:
   [(Verso.Syntax.para
     "para{"
@@ -2227,7 +2286,10 @@ Final stack:
        (Verso.Syntax.emph
         "_"
         [(Verso.Syntax.text (str "\"strong\""))]
-        <missing>)])])]
+        <missing>)]
+      "*")
+     (Verso.Syntax.text (str "\" not regular\""))]
+    "}")]
 Remaining: "* not regular_ emphasis"
 -/
 #guard_msgs in
@@ -2398,11 +2460,12 @@ Final stack:
    "```"
    [`scheme []]
    "(define x 4)\nx\n"
-   <missing>)
-Remaining: "````"
+   <missing>
+   [])
+Remaining: "more"
 -/
 #guard_msgs in
-  #eval codeBlock {} |>.test! "``` scheme\n(define x 4)\nx\n ````"
+  #eval codeBlock {} |>.test! "``` scheme\n(define x 4)\nx\n ````\nmore"
 
 /--
 info: Failure: newline
@@ -2416,11 +2479,16 @@ Final stack:
       ":="
       (str "\"chicken\""))
      (Verso.Syntax.anon (num "43"))]]
-   <missing>)
-Remaining: "(define x 4)\nx\n```"
+   <missing>
+   [])
+Remaining: "x\n```"
 -/
 #guard_msgs in
-  #eval codeBlock {} |>.test! "``` scheme dialect:=\"chicken\" 43\n(define x 4)\nx\n```"
+#eval codeBlock {} |>.test!
+"``` scheme dialect:=\"chicken\" 43
+(define x 4)
+x
+```"
 
 /--
 info: Failure: expected column 1
@@ -2430,8 +2498,9 @@ Final stack:
    "```"
    [`scheme []]
    "\n"
-   <missing>)
-Remaining: "(define x 4)\nx\n```"
+   <missing>
+   [])
+Remaining: "x\n```"
 -/
 #guard_msgs in
   #eval codeBlock {} |>.test! " ``` scheme\n(define x 4)\nx\n```"
@@ -2444,8 +2513,9 @@ Final stack:
    "```"
    [`scheme []]
    "(define x 4)\nx\n"
-   <missing>)
-Remaining: "```"
+   <missing>
+   [])
+Remaining: ""
 -/
 #guard_msgs in
   #eval codeBlock {} |>.test! " ``` scheme\n (define x 4)\n x\n```"
@@ -2458,8 +2528,9 @@ Final stack:
    "```"
    []
    "(define x 4)\nx\n"
-   <missing>)
-Remaining: "```"
+   <missing>
+   [])
+Remaining: ""
 -/
 #guard_msgs in
   #eval codeBlock {} |>.test! " ```\n (define x 4)\n x\n```"
@@ -2472,8 +2543,9 @@ Final stack:
    "```"
    []
    "(define x 4)\nx\n"
-   <missing>)
-Remaining: "```"
+   <missing>
+   [])
+Remaining: ""
 -/
 #guard_msgs in
   #eval codeBlock {} |>.test! " ```   \n (define x 4)\n x\n```"
@@ -2567,16 +2639,28 @@ Remaining:
 -/
 #guard_msgs in
 #eval block {} |>.test! "{test}\n> Here's a modified blockquote\n\n with multiple paras\n\nthat ends"
+
 /--
-info: Failure: expected identifier
+info: 2 failures:
+  @36: expected identifier
+    ""
+  @36: unexpected end of input; expected '![', '$$', '$', '[' or '[^'
+    ""
+
 Final stack:
   (Verso.Syntax.para
    "para{"
-   [(Verso.Syntax.role "{" <missing>)])
-Remaining: "\ntest}\nHere's a modified paragraph."
+   [(Verso.Syntax.role
+     "{"
+     <missing>
+     ["\n" "\n"]
+     "["
+     [(Verso.Syntax.footnote <missing>)]
+     "]")])
 -/
 #guard_msgs in
 #eval block {} |>.test! "{\ntest}\nHere's a modified paragraph."
+
 /--
 info: Success! Final stack:
   (Verso.Syntax.block_role
@@ -2593,16 +2677,28 @@ All input consumed.
 -/
 #guard_msgs in
 #eval block {} |>.test! "{\n test}\nHere's a modified paragraph."
+
 /--
-info: Failure: expected identifier
+info: 2 failures:
+  @44: expected identifier
+    ""
+  @44: unexpected end of input; expected '![', '$$', '$', '[' or '[^'
+    ""
+
 Final stack:
   (Verso.Syntax.para
    "para{"
-   [(Verso.Syntax.role "{" <missing>)])
-Remaining: "\n    test\narg}\nHere's a modified paragraph."
+   [(Verso.Syntax.role
+     "{"
+     <missing>
+     ["\n" "\n" "\n"]
+     "["
+     [(Verso.Syntax.footnote <missing>)]
+     "]")])
 -/
 #guard_msgs in
 #eval block {} |>.test! "{\n    test\narg}\nHere's a modified paragraph."
+
 /--
 info: Success! Final stack:
   (Verso.Syntax.block_role
@@ -2642,7 +2738,6 @@ info: Success! Final stack:
       ":="
       (num "53"))
      []]
-    (Term.optEllipsis [])
     "%%%")
    (Verso.Syntax.para
     "para{"
@@ -2833,7 +2928,7 @@ All input consumed.
   #eval blocks {} |>.test! "[My link][lean]\n\n[lean]: https://lean-lang.org"
 
 /--
-info: Failure: expected ( or [
+info: Failure: expected '(' or '['
 Final stack:
   [(Verso.Syntax.para
     "para{"
@@ -2849,8 +2944,9 @@ Final stack:
       "["
       [(Verso.Syntax.text (str "\"lean\""))]
       "]"
-      (Verso.Syntax.url <missing>))])]
-Remaining: ": https://lean-lang.org"
+      (Verso.Syntax.url <missing>))]
+    "}")]
+Remaining: ""
 -/
 #guard_msgs in
   #eval blocks {} |>.test! "[My link][lean]\n[lean]: https://lean-lang.org"
@@ -2902,3 +2998,213 @@ All input consumed.
 -/
 #guard_msgs in
   #eval blocks {} |>.test! "Blah blah[^1]\n\n[^1]: More can be said"
+
+
+-- A big test of error recovery
+
+/--
+info: 10 failures:
+  @38: expected ']'
+    "\n\n* [busted\n   link\n\n* [busted\n   _italics\n   link\n\n\n* [busted destination](hey\n\n* ![busted image alt text\n\n* ![busted image link](image.png\n\n* a *bold choice\n\n* very _italic *and bold, onto many\n   lines is OK* but don't forget...\n\na paragraph with [a bad link syntax](http://example.com\nis OK. The rest *works*.\n"
+  @57: expected ']'
+    "\n\n* [busted\n   _italics\n   link\n\n\n* [busted destination](hey\n\n* ![busted image alt text\n\n* ![busted image link](image.png\n\n* a *bold choice\n\n* very _italic *and bold, onto many\n   lines is OK* but don't forget...\n\na paragraph with [a bad link syntax](http://example.com\nis OK. The rest *works*.\n"
+  @88: '_'
+    "\n\n\n* [busted destination](hey\n\n* ![busted image alt text\n\n* ![busted image link](image.png\n\n* a *bold choice\n\n* very _italic *and bold, onto many\n   lines is OK* but don't forget...\n\na paragraph with [a bad link syntax](http://example.com\nis OK. The rest *works*.\n"
+  @88: expected ']'
+    "\n\n\n* [busted destination](hey\n\n* ![busted image alt text\n\n* ![busted image link](image.png\n\n* a *bold choice\n\n* very _italic *and bold, onto many\n   lines is OK* but don't forget...\n\na paragraph with [a bad link syntax](http://example.com\nis OK. The rest *works*.\n"
+  @117: expected ')'
+    "\n\n* ![busted image alt text\n\n* ![busted image link](image.png\n\n* a *bold choice\n\n* very _italic *and bold, onto many\n   lines is OK* but don't forget...\n\na paragraph with [a bad link syntax](http://example.com\nis OK. The rest *works*.\n"
+  @144: expected ']'
+    "\n\n* ![busted image link](image.png\n\n* a *bold choice\n\n* very _italic *and bold, onto many\n   lines is OK* but don't forget...\n\na paragraph with [a bad link syntax](http://example.com\nis OK. The rest *works*.\n"
+  @178: expected ')'
+    "\n\n* a *bold choice\n\n* very _italic *and bold, onto many\n   lines is OK* but don't forget...\n\na paragraph with [a bad link syntax](http://example.com\nis OK. The rest *works*.\n"
+  @196: '*'
+    "\n\n* very _italic *and bold, onto many\n   lines is OK* but don't forget...\n\na paragraph with [a bad link syntax](http://example.com\nis OK. The rest *works*.\n"
+  @269: '_'
+    "\n\na paragraph with [a bad link syntax](http://example.com\nis OK. The rest *works*.\n"
+  @326: expected ')'
+    "\nis OK. The rest *works*.\n"
+
+Final stack:
+  [(Verso.Syntax.para
+    "para{"
+    [(Verso.Syntax.linebreak
+      "line!"
+      (str "\"\\n\""))
+     (Verso.Syntax.text
+      (str "\"Error recovery tests:\""))]
+    "}")
+   (Verso.Syntax.ul
+    [(Verso.Syntax.li
+      (bullet (column "0") "*")
+      [(Verso.Syntax.para
+        "para{"
+        [(Verso.Syntax.link
+          "["
+          [(Verso.Syntax.text
+            (str "\"busted link\""))]
+          <missing>)]
+        "}")])
+     (Verso.Syntax.li
+      (bullet (column "0") "*")
+      [(Verso.Syntax.para
+        "para{"
+        [(Verso.Syntax.link
+          "["
+          [(Verso.Syntax.text (str "\"busted\""))
+           (Verso.Syntax.linebreak
+            "line!"
+            (str "\"\\n\""))
+           (Verso.Syntax.text
+            (str "\"   link\""))]
+          <missing>)]
+        "}")])
+     (Verso.Syntax.li
+      (bullet (column "0") "*")
+      [(Verso.Syntax.para
+        "para{"
+        [(Verso.Syntax.link
+          "["
+          [(Verso.Syntax.text (str "\"busted\""))
+           (Verso.Syntax.linebreak
+            "line!"
+            (str "\"\\n\""))
+           (Verso.Syntax.text (str "\"   \""))
+           (Verso.Syntax.emph
+            "_"
+            [(Verso.Syntax.text
+              (str "\"italics\""))
+             (Verso.Syntax.linebreak
+              "line!"
+              (str "\"\\n\""))
+             (Verso.Syntax.text
+              (str "\"   link\""))]
+            <missing>)]
+          <missing>)]
+        "}")])
+     (Verso.Syntax.li
+      (bullet (column "0") "*")
+      [(Verso.Syntax.para
+        "para{"
+        [(Verso.Syntax.link
+          "["
+          [(Verso.Syntax.text
+            (str "\"busted destination\""))]
+          "]"
+          (Verso.Syntax.url
+           "("
+           (str "\"hey\"")
+           <missing>))]
+        "}")])
+     (Verso.Syntax.li
+      (bullet (column "0") "*")
+      [(Verso.Syntax.para
+        "para{"
+        [(Verso.Syntax.image
+          "!["
+          "busted image alt text"
+          <missing>)]
+        "}")])
+     (Verso.Syntax.li
+      (bullet (column "0") "*")
+      [(Verso.Syntax.para
+        "para{"
+        [(Verso.Syntax.image
+          "!["
+          "busted image link"
+          "]"
+          (Verso.Syntax.url
+           "("
+           (str "\"image.png\"")
+           <missing>))]
+        "}")])
+     (Verso.Syntax.li
+      (bullet (column "0") "*")
+      [(Verso.Syntax.para
+        "para{"
+        [(Verso.Syntax.text (str "\"a \""))
+         (Verso.Syntax.bold
+          "*"
+          [(Verso.Syntax.text
+            (str "\"bold choice\""))]
+          <missing>)]
+        "}")])
+     (Verso.Syntax.li
+      (bullet (column "0") "*")
+      [(Verso.Syntax.para
+        "para{"
+        [(Verso.Syntax.text (str "\"very \""))
+         (Verso.Syntax.emph
+          "_"
+          [(Verso.Syntax.text (str "\"italic \""))
+           (Verso.Syntax.bold
+            "*"
+            [(Verso.Syntax.text
+              (str "\"and bold, onto many\""))
+             (Verso.Syntax.linebreak
+              "line!"
+              (str "\"\\n\""))
+             (Verso.Syntax.text
+              (str "\"   lines is OK\""))]
+            "*")
+           (Verso.Syntax.text
+            (str "\" but don't forget...\""))]
+          <missing>)]
+        "}")])])
+   (Verso.Syntax.para
+    "para{"
+    [(Verso.Syntax.text
+      (str "\"a paragraph with \""))
+     (Verso.Syntax.link
+      "["
+      [(Verso.Syntax.text
+        (str "\"a bad link syntax\""))]
+      "]"
+      (Verso.Syntax.url
+       "("
+       (str "\"http://example.com\"")
+       <missing>))
+     (Verso.Syntax.linebreak
+      "line!"
+      (str "\"\\n\""))
+     (Verso.Syntax.text
+      (str "\"is OK. The rest \""))
+     (Verso.Syntax.bold
+      "*"
+      [(Verso.Syntax.text (str "\"works\""))]
+      "*")
+     (Verso.Syntax.text (str "\".\""))
+     (Verso.Syntax.linebreak
+      "line!"
+      (str "\"\\n\""))]
+    "}")]
+-/
+#guard_msgs in
+#eval blocks {} |>.test!
+r#"
+Error recovery tests:
+
+* [busted link
+
+* [busted
+   link
+
+* [busted
+   _italics
+   link
+
+
+* [busted destination](hey
+
+* ![busted image alt text
+
+* ![busted image link](image.png
+
+* a *bold choice
+
+* very _italic *and bold, onto many
+   lines is OK* but don't forget...
+
+a paragraph with [a bad link syntax](http://example.com
+is OK. The rest *works*.
+"#
