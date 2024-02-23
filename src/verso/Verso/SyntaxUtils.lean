@@ -5,7 +5,6 @@ Author: David Thrane Christiansen
 -/
 
 import Lean
-import Std.Tactic.GuardMsgs
 
 import Verso.Method
 
@@ -43,10 +42,15 @@ defmethod ParserFn.test (p : ParserFn) (input : String) : IO String := do
 
   let remaining : String := if s'.pos ≥ input.endPos then "All input consumed." else s!"Remaining:\n{repr (input.extract s'.pos input.endPos)}"
 
-  if let some err := s'.errorMsg then
-    return s!"Failure: {err}\nFinal stack:\n{stk.pretty 50}\nRemaining: {repr $ input.extract s'.pos input.endPos}"
-  else
+  if s'.allErrors.isEmpty then
     return s!"Success! Final stack:\n{stk.pretty 50}\n{remaining}"
+  else if let #[(p, _, err)] := s'.allErrors then
+    return s!"Failure: {err}\nFinal stack:\n{stk.pretty 50}\nRemaining: {repr $ input.extract p input.endPos}"
+  else
+    let mut errors := ""
+    for (p, _, e) in s'.allErrors do
+      errors := errors ++ s!"  @{p}: {toString e}\n    {repr <| input.extract p input.endPos}\n"
+    return s!"{s'.allErrors.size} failures:\n{errors}\nFinal stack:\n{stk.pretty 50}"
 
 defmethod ParserFn.test! (p : ParserFn) (input : String) : IO Unit :=
   p.test input >>= IO.println

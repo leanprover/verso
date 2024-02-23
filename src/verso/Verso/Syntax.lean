@@ -69,6 +69,10 @@ syntax (name:=directive) "directive{" ident argument* "}" "[" block* "]": block
 /-- A header -/
 syntax (name:=header) inline* : block
 open Lean.Parser.Term in
+
+open Lean.Parser Term in
+def metadataContents := sepByIndent (structInstFieldAbbrev <|> structInstField) ", " (allowTrailingSep := true)
+
 /-- Metadata for this section, defined by the current genre -/
-syntax (name:=metadata_block) "%%%" (structInstField <|> structInstFieldAbbrev)* optEllipsis "%%%" : block
+syntax (name:=metadata_block) "%%%" metadataContents "%%%" : block
 syntax (name:=block_role) "block_role{" ident argument* "}" ("[" block "]")?  : block

@@ -70,6 +70,17 @@ def document : Parser where
 @[combinator_parenthesizer document] def document.parenthesizer := PrettyPrinter.Parenthesizer.visitToken
 @[combinator_formatter document] def document.formatter := PrettyPrinter.Formatter.visitAtom Name.anonymous
 
+/-- Advance the parser to EOF on failure so Lean doesn't try to parse further commands -/
+def completeDocument : Parser where
+  fn := rawFn <| atomicFn <| recoverFn Verso.Parser.document untilEoi
+where
+  untilEoi : RecoveryContext → ParserFn := fun _ c s =>
+    s.setPos c.input.endPos
+
+@[combinator_parenthesizer completeDocument] def completeDocument.parenthesizer := PrettyPrinter.Parenthesizer.visitToken
+@[combinator_formatter completeDocument] def completeDocument.formatter := PrettyPrinter.Formatter.visitAtom Name.anonymous
+
+
 partial def findGenre [Monad m] [MonadInfoTree m] [MonadResolveName m] [MonadEnv m] [MonadError m] : Syntax → m Unit
   | `($g:ident) => discard <| resolveGlobalConstNoOverloadWithInfo g -- Don't allow it to become an auto-argument
   | `(($e)) => findGenre e
@@ -110,7 +121,7 @@ elab "#docs" "(" genre:term ")" n:ident title:inlineStr ":=" ":::::::" text:docu
   elabCommand (← `(def $n : Part $genre := $(← finished.toSyntax genre st'.linkDefs st'.footnoteDefs)))
 
 
-elab "#doc" "(" genre:term ")" title:inlineStr "=>" text:document eof:eoi : term => open Lean Elab Term PartElabM DocElabM in do
+elab "#doc" "(" genre:term ")" title:inlineStr "=>" text:completeDocument eof:eoi : term => open Lean Elab Term PartElabM DocElabM in do
   findGenre genre
   let endPos := eof.raw.getTailPos?.get!
   let .node _ _ blocks := text.raw
@@ -141,7 +152,7 @@ def currentDocName [Monad m] [MonadEnv m] : m Name := do
   pure <| docName <| (← Lean.MonadEnv.getEnv).mainModule
 
 
-elab "#doc" "(" genre:term ")" title:inlineStr "=>" text:document eof:eoi : command => open Lean Elab Term Command PartElabM DocElabM in do
+elab "#doc" "(" genre:term ")" title:inlineStr "=>" text:completeDocument eof:eoi : command => open Lean Elab Term Command PartElabM DocElabM in do
   findGenre genre
   if eof.raw.isMissing then
     throwError "Syntax error prevents processing document"
