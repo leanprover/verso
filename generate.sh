@@ -4,6 +4,7 @@ echo "Building the user's guide as TeX and HTML"
 lake exe usersguide
 
 echo "Building the user's guide as PDF"
+mkdir -p _out/tex
 pushd _out/tex
 lualatex main
 lualatex main

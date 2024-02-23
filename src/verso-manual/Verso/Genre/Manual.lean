@@ -112,7 +112,7 @@ instance : Traverse Manual Manual.TraverseM where
   block _ := pure ()
   inline _ := pure ()
   genrePart
-    | {authors := _, date := _, slug := _}, _ => pure none
+    | {authors := _, date := _, tag := _}, _ => pure none
   genreBlock
     | .paragraph, _ => pure none
   genreInline i := nomatch i
