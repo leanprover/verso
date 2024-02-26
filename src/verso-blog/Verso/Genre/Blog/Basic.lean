@@ -642,7 +642,7 @@ def genreInline (g : Genre) : Blog.InlineExt → Array (Inline g) → Blog.Trave
     | .htmlSpan .., _ | .blob .., _ => pure none
 
 def traverser (g : Genre) (block : g.Block = Blog.BlockExt) (inline : g.Inline = Blog.InlineExt) : Traverse g Blog.TraverseM where
-  part _ := pure ()
+  part _ := pure none
   block _ := pure ()
   inline _ := pure ()
   genrePart _ _ := pure none

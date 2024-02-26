@@ -184,7 +184,7 @@ partial def Part.reprPrec [Repr g.Inline] [Repr g.Block] [Repr g.PartMetadata] (
 instance [Repr g.Inline] [Repr g.Block] [Repr g.PartMetadata] : Repr (Part g) := ⟨Part.reprPrec⟩
 
 class Traverse (g : Genre) (m : outParam (Type → Type)) where
-  part [MonadReader g.TraverseContext m] [MonadState g.TraverseState m] : Part g → m Unit
+  part [MonadReader g.TraverseContext m] [MonadState g.TraverseState m] : Part g → m (Option g.PartMetadata)
   block [MonadReader g.TraverseContext m] [MonadState g.TraverseState m] : Block g → m Unit
   inline [MonadReader g.TraverseContext m] [MonadState g.TraverseState m] : Inline g → m Unit
   genrePart [MonadReader g.TraverseContext m] [MonadState g.TraverseState m] : g.PartMetadata → Part g → m (Option (Part g))

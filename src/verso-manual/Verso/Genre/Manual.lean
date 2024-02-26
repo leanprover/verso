@@ -42,7 +42,7 @@ Tags are used to refer to parts through tables of contents, cross-references,
 and the like.
 
 During the traverse pass, the following steps occur:
- 1. user-provided tags are made globally unique, and saved as xref targets
+ 1. user-provided tags are ensured to be globally unique, and saved as xref targets
  2. internal tags are heuristically assigned to parts based on their section
     names
  3. internal tags are converted to unique external tags, but not provided for
@@ -53,33 +53,64 @@ inductive PartTag where
   | /-- A user-provided tag - respect this if possible -/ provided (name : String)
   | /-- A unique tag, suitable for inclusion in a document -/ private external (name : String)
   | /-- A machine-assigned tag -/ private internal (name : String)
+deriving BEq, Hashable, Repr
+
+instance : ToString PartTag where
+  toString := toString ∘ repr
 
 instance : Coe String PartTag where
   coe := .provided
+
+/-- An internal identifier assigned to a part during traversal. Users don't get to have influence
+  over these IDs, so they can be used to ensure uniqueness of tags.-/
+structure InternalId where
+  private mk ::
+  private id : Nat
+deriving BEq, Hashable
 
 structure PartMetadata where
   authors : List String := []
   date : Option String := none
   tag : Option PartTag := none
+  id : Option InternalId := none
 
 inductive Block where
   | paragraph
 
 structure TraverseState where
-  partSlugs : Lean.HashMap Slug Path := {}
+  partTags : Lean.HashMap PartTag Slug := {}
+  slugs : Lean.HashMap Slug Path := {}
+  ids : Lean.HashSet InternalId := {}
+  nextId : Nat := 0
   private contents : NameMap Json := {}
+
+def freshId [Monad m] [MonadStateOf TraverseState m] : m InternalId := do
+  let mut next : Nat := (← get).nextId
+  repeat
+    if (← get).ids.contains ⟨next⟩ then next := next + 1
+    else break
+  let i := ⟨next⟩
+  modify fun st => {st with ids := st.ids.insert i}
+  pure i
 
 defmethod Lean.HashMap.all [BEq α] [Hashable α] (hm : Lean.HashMap α β) (p : α → β → Bool) : Bool :=
   hm.fold (fun prev k v => prev && p k v) true
 
 instance : BEq TraverseState where
   beq x y :=
-    x.partSlugs.size == y.partSlugs.size &&
-    (x.partSlugs.all fun k v =>
-      match y.partSlugs.find? k with
+    x.partTags.size == y.partTags.size &&
+    (x.partTags.all fun k v =>
+      match y.partTags.find? k with
       | none => false
       | some v' => v == v'
     ) &&
+    x.slugs.size == y.slugs.size &&
+    (x.slugs.all fun k v =>
+      match y.slugs.find? k with
+      | none => false
+      | some v' => v == v'
+    ) &&
+    x.ids == y.ids &&
     x.contents.size == y.contents.size &&
     x.contents.all fun k v =>
       match y.contents.find? k with
@@ -108,11 +139,18 @@ namespace Manual
 abbrev TraverseM := ReaderT Manual.TraverseContext (StateT Manual.TraverseState IO)
 
 instance : Traverse Manual Manual.TraverseM where
-  part _ := pure ()
+  part p :=
+    if p.metadata.isNone then pure (some {}) else pure none
   block _ := pure ()
   inline _ := pure ()
   genrePart
-    | {authors := _, date := _, tag := _}, _ => pure none
+    | {authors := _, date := _, tag := some tag}, _ => do
+      match tag with
+      | .provided t =>
+        -- If the tag is already used
+        pure none
+      | _ => sorry
+    | _, _ => pure none
   genreBlock
     | .paragraph, _ => pure none
   genreInline i := nomatch i
@@ -204,28 +242,6 @@ def emitHtmlSingle (logError : String → IO Unit) (config : Config) (state : Tr
     h.putStrLn (Html.page text.titleString (Html.titlePage titleHtml authors ++ contents)).asString
 
 
-def emitHtmlMulti
-    (depth : Nat) (logError : String → IO Unit) (config : Config)
-    (state : TraverseState)
-    (text : Part Manual) : IO Unit := do
-  let authors := text.metadata.map (·.authors) |>.getD []
-  let date := text.metadata.bind (·.date) |>.getD ""
-  let ctxt := {}
-  let opts := {logError := logError}
-  let titleHtml ← Html.seq <$> text.title.mapM (Manual.toHtml opts ctxt state)
-  let frontMatter ← text.content.mapM (Manual.toHtml opts ctxt state)
-  let mut chapters : Array (Slug × Part Manual):= #[]
-  let dir := config.destination.join "html-multi"
-  ensureDir dir
-  IO.FS.withFile (dir.join "index.html") .write fun h => do
-    h.putStrLn (Html.page text.titleString (Html.titlePage titleHtml authors)).asString
-    h.putStrLn (preamble text.titleString authors date)
-    for b in frontMatter do
-      h.putStrLn b.asString
-  for (s, _c) in chapters do
-    IO.FS.withFile (dir.join s.toString |>.join "index.html") .write fun h => do
-      h.putStrLn "not yet"
-
 def manualMain (text : Part Manual) (options : List String) : IO UInt32 := do
   let hasError ← IO.mkRef false
   let logError msg := do hasError.set true; IO.eprintln msg
@@ -233,7 +249,6 @@ def manualMain (text : Part Manual) (options : List String) : IO UInt32 := do
   let (text, state) ← traverse text cfg
   emitTeX logError cfg state text
   emitHtmlSingle logError cfg state text
-  emitHtmlMulti 2 logError cfg state text
 
   if (← hasError.get) then
     IO.eprintln "Errors were encountered!"
