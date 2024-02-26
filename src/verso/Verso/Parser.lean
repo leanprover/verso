@@ -6,8 +6,6 @@ Author: David Thrane Christiansen
 
 import Lean
 
-import Std
-
 import Verso.Parser.Lean
 import Verso.SyntaxUtils
 import Verso.Syntax

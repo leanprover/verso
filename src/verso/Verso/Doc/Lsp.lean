@@ -6,7 +6,6 @@ Author: David Thrane Christiansen
 
 import Lean
 import Lean.Data.Lsp
-import Std.CodeAction.Basic
 
 import Verso.Doc.Elab
 import Verso.Syntax
@@ -433,6 +432,9 @@ def renumberLists : CodeActionProvider := fun params snap => do
 deriving instance FromJson for FoldingRangeKind
 deriving instance FromJson for FoldingRange
 
+private def rangeOfStx? (text : FileMap) (stx : Syntax) :=
+  Lean.FileMap.utf8RangeToLspRange text <$> Lean.Syntax.getRange? stx
+
 open Lean Server Lsp RequestM in
 def handleFolding (_params : FoldingRangeParams) (prev : RequestTask (Array FoldingRange)) : RequestM (RequestTask (Array FoldingRange)) := do
   let doc ← readDoc
@@ -450,9 +452,9 @@ where
           let .ofCustomInfo ⟨_stx, data⟩ := info | result
           let some listInfo := data.get? DocListInfo | result
           if h : listInfo.items.size > 0 then
-            let some {start := {line := startLine, ..}, ..} := text.rangeOfStx? listInfo.items[0]
+            let some {start := {line := startLine, ..}, ..} := rangeOfStx? text listInfo.items[0]
               | result
-            let some {«end» := {line := endLine, ..}, ..} := text.rangeOfStx? listInfo.items.back
+            let some {«end» := {line := endLine, ..}, ..} := rangeOfStx? text listInfo.items.back
               | result
             result.push {startLine := startLine, endLine := endLine}
           else result
@@ -471,7 +473,7 @@ where
           | .included _  :: more =>
             info := more
           | (.mk _ titleStx endPos children) :: more =>
-            if let some {start := {line := startLine, ..}, ..} := text.rangeOfStx? titleStx then
+            if let some {start := {line := startLine, ..}, ..} := rangeOfStx? text titleStx then
               let {line := endLine, ..} := text.utf8PosToLspPos endPos
               if endLine - 1 > startLine then
                 regions := regions.push {startLine := startLine, endLine := endLine - 1}
