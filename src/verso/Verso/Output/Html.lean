@@ -15,6 +15,21 @@ inductive Html where
   | seq (contents : Array Html)
 deriving Repr, Inhabited, TypeName
 
+open Syntax in
+partial instance : Quote Html where
+  quote := q
+where
+  quoteArray {α : _} (_inst : Quote α) (xs : Array α) : TSyntax `term :=
+    mkCApp ``List.toArray #[quote xs.toList]
+
+  q
+    | .text esc str =>
+      mkCApp ``Html.text #[quote esc, quote str]
+    | .tag name attrs contents =>
+      mkCApp ``Html.tag #[quote name, quote attrs, q contents]
+    | .seq contents =>
+      mkCApp ``Html.seq #[quoteArray ⟨q⟩ contents]
+
 def Html.empty : Html := .seq #[]
 
 def Html.append : Html → Html → Html

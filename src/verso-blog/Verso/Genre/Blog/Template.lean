@@ -167,6 +167,8 @@ def blockHtml (g : Genre) (go : Block g → HtmlT g IO Html) : Blog.BlockExt →
     pure {{ <pre class=s!"lexed {content.name}"> {{ content.toHtml }} </pre> }}
   | .highlightedCode contextName hls, _contents => do
     pure {{ <pre class="hl lean" "data-lean-context"={{toString contextName}}> {{ hls.toHtml }} </pre> }}
+  | .htmlDetails classes summary, contents => do
+    pure {{ <details class={{classes}}><summary>{{summary}}</summary> {{← contents.mapM go}}</details>}}
   | .htmlDiv classes, contents => do
     pure {{ <div class={{classes}}> {{← contents.mapM go}} </div> }}
   | .blob html, _ => pure html

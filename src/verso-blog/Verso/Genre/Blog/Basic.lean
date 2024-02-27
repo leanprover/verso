@@ -15,6 +15,7 @@ inductive BlockExt where
   | highlightedCode (contextName : Lean.Name) (highlighted : Highlighted)
   | lexedText (content : LexedText)
   | htmlDiv (classes : String)
+  | htmlDetails (classes : String) (summary : Html)
   | blob (html : Html)
 deriving Repr
 

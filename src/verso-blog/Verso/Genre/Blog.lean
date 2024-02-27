@@ -245,6 +245,7 @@ def lean : CodeBlockExpander
 structure LeanOutputConfig where
   name : Ident
   severity : Option MessageSeverity
+  summarize : Bool
 
 def LeanOutputConfig.fromArgs [Monad m] [MonadInfoTree m] [MonadResolveName m] [MonadEnv m] [MonadError m] (args : Array Arg) : m LeanOutputConfig := do
   if h : 0 < args.size then
@@ -253,11 +254,15 @@ def LeanOutputConfig.fromArgs [Monad m] [MonadInfoTree m] [MonadResolveName m] [
     let (severityArgs, args) := takeNamed `severity <| args.extract 1 args.size
     let severityArg ← takeVal `severity severityArgs >>= Option.mapM (asSeverity `severity)
 
+    let (summarizeArgs, args) := takeNamed `summarize args
+    let summarizeArg ← takeVal `summarize summarizeArgs >>= Option.mapM (asBool `summarize)
+
     if !args.isEmpty then
       throwError s!"Unexpected arguments: {repr args}"
     pure {
       name := outputName
       severity := severityArg
+      summarize := summarizeArg.getD false
     }
   else throwError "No arguments provided, expected at least a context name"
 where
@@ -270,6 +275,14 @@ where
       else if b' == ``MessageSeverity.information then pure MessageSeverity.information
       else throwErrorAt b "Expected 'error' or 'warning' or 'information'"
     | other => throwError "Expected severity for '{name}', got {repr other}"
+  asBool (name : Name) (v : ArgVal) : m Bool := do
+    match v with
+    | .name b => do
+      let b' ← resolveGlobalConstNoOverloadWithInfo b
+      if b' == ``true then pure true
+      else if b' == ``false then pure false
+      else throwErrorAt b "Expected 'true' or 'false'"
+    | other => throwError "Expected Boolean for '{name}', got {repr other}"
   takeVal {α} (key : Name) (vals : Array α) : m (Option α) := do
     if vals.size = 0 then pure none
     else if h : vals.size = 1 then
@@ -291,7 +304,16 @@ def leanOutput : Doc.Elab.CodeBlockExpander
         if let some s := config.severity then
           if s != m.severity then
             throwErrorAt str s!"Expected severity {sev s}, but got {sev m.severity}"
-        return #[← ``(Block.other (Blog.BlockExt.htmlDiv $(quote (sev m.severity))) #[Block.code none #[] 0 $(quote str.getString)])]
+        let content ← if config.summarize then
+            let lines := str.getString.splitOn "\n"
+            let pre := lines.take 3
+            let post := String.join (lines.drop 3 |>.intersperse "\n")
+            let preHtml : Html := pre.map (fun (l : String) => {{<code>{{l}}</code>}})
+            ``(Block.other (Blog.BlockExt.htmlDetails $(quote (sev m.severity)) $(quote preHtml)) #[Block.code none #[] 0 $(quote post)])
+          else
+            ``(Block.other (Blog.BlockExt.htmlDiv $(quote (sev m.severity))) #[Block.code none #[] 0 $(quote str.getString)])
+
+        return #[content]
     for m in messages do
       Verso.Doc.Suggestion.saveSuggestion str (m.take 30 ++ "…") m
     throwErrorAt str "Didn't match - expected one of: {indentD (toMessageData messages)}\nbut got:{indentD (toMessageData str.getString)}"
