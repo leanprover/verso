@@ -341,26 +341,29 @@ def highlightingStyle : String := "
   font-size: inherit;
 }
 
-.hl.lean .has-info:hover > .hover-container > .hover-info:not(.tactic *),
-.hl.lean .tactic:has(> .tactic-toggle:checked) .has-info:hover > .hover-container > .hover-info,
-.hl.lean .token:hover > .hover-container > .hover-info:not(.has-info *):not(.tactic *),
-.hl.lean .tactic:has(> .tactic-toggle:checked) .token:hover > .hover-container > .hover-info:not(.has-info *) {
-  display: inline-block;
-  position: absolute;
-  top: 1em;
-  font-weight: normal;
-  font-style: normal;
+@media (hover: hover) {
+  .hl.lean .has-info:hover > .hover-container > .hover-info:not(.tactic *),
+  .hl.lean .tactic:has(> .tactic-toggle:checked) .has-info:hover > .hover-container > .hover-info,
+  .hl.lean .token:hover > .hover-container > .hover-info:not(.has-info *):not(.tactic *),
+  .hl.lean .tactic:has(> .tactic-toggle:checked) .token:hover > .hover-container > .hover-info:not(.has-info *) {
+    display: inline-block;
+    position: absolute;
+    top: 1em;
+    font-weight: normal;
+    font-style: normal;
+  }
 }
-
 
 .hl.lean .token {
   transition: all 0.25s; /* Slight fade for highlights */
 }
 
-.hl.lean .token.binding-hl, .hl.lean .literal.string:hover {
-  background-color: #eee;
-  border-radius: 2px;
-  transition: none;
+@media (hover: hover) {
+  .hl.lean .token.binding-hl, .hl.lean .literal.string:hover {
+    background-color: #eee;
+    border-radius: 2px;
+    transition: none;
+  }
 }
 
 
@@ -384,8 +387,10 @@ def highlightingStyle : String := "
   text-decoration-color: red;
 }
 
-.hl.lean .has-info.error:hover {
-  background-color: #ffb3b3;
+@media (hover: hover) {
+  .hl.lean .has-info.error:hover {
+    background-color: #ffb3b3;
+  }
 }
 
 .hl.lean .has-info.error > .hover-container > .hover-info {
@@ -443,12 +448,14 @@ def highlightingStyle : String := "
   display: block;
 }
 
-.hl.lean .tactic:hover > .tactic-toggle:not(:checked) ~ .tactic-state {
-  display: block;
-  position: absolute;
-  left: 0;
-  transform: translate(0.25rem, 0);
-  z-index: 250;
+@media (hover: hover) {
+  .hl.lean .tactic:hover > .tactic-toggle:not(:checked) ~ .tactic-state {
+    display: block;
+    position: absolute;
+    left: 0;
+    transform: translate(0.25rem, 0);
+    z-index: 250;
+  }
 }
 
 .hl.lean .tactic > label {
@@ -456,8 +463,10 @@ def highlightingStyle : String := "
   transition: all 0.5s;
 }
 
-.hl.lean .tactic > label:hover {
-  border-bottom: 1px dotted #bbbbbb;
+@media (hover: hover) {
+  .hl.lean .tactic > label:hover {
+    border-bottom: 1px dotted #bbbbbb;
+  }
 }
 
 .hl.lean .tactic-toggle {
@@ -480,10 +489,12 @@ def highlightingStyle : String := "
   transition: all 0.5s;
 }
 
-.hl.lean .tactic > label:hover::after {
-  border: 1px solid #aaaaaa;
-  background-color: #aaaaaa;
-  transition: all 0.5s;
+@media (hover: hover) {
+  .hl.lean .tactic > label:hover::after {
+    border: 1px solid #aaaaaa;
+    background-color: #aaaaaa;
+    transition: all 0.5s;
+  }
 }
 
 .hl.lean .tactic > label:has(+ .tactic-toggle:checked)::after {
