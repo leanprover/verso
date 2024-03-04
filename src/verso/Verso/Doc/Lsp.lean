@@ -9,8 +9,12 @@ import Lean.Data.Lsp
 
 import Verso.Doc.Elab
 import Verso.Syntax
+import Verso.Hover
+
+namespace Verso.Lsp
 
 open Verso.Doc.Elab (DocListInfo DocRefInfo TOC)
+open Verso.Hover
 
 open Lean
 
@@ -23,16 +27,25 @@ def withFallbackResponse (resp : RequestTask α) (act : RequestM (RequestTask α
     return resp
 
 defmethod Syntax.containsPos (s : Syntax) (p : String.Pos) : Bool :=
-  match s.getHeadInfo with
-  | .original (pos := start) (endPos := stop) .. => p >= start && p < stop
-  | .synthetic (pos := start) (endPos := stop) .. => p >= start && p < stop
-  | _ => false
+  match span s.getHeadInfo, span s.getTailInfo with
+  | some (start, _), some (_, stop) => p >= start && p < stop
+  | _, _ => false
+where
+  span : SourceInfo → Option (String.Pos × String.Pos)
+    | .original (pos := start) (endPos := stop) .. => some (start, stop)
+    | .synthetic (pos := start) (endPos := stop) .. => some (start, stop)
+    | _ => none
+
 
 defmethod Syntax.lspRange (text : FileMap) (s : Syntax) : Option Lsp.Range :=
-  match s.getHeadInfo with
-  | .original (pos := start) (endPos := stop) .. => some ⟨text.utf8PosToLspPos start, text.utf8PosToLspPos stop⟩
-  | .synthetic (pos := start) (endPos := stop) .. => some ⟨text.utf8PosToLspPos start, text.utf8PosToLspPos stop⟩
-  | _ => none
+  match span s.getHeadInfo, span s.getTailInfo with
+  | some (start, _), some (_, stop) => some ⟨text.utf8PosToLspPos start, text.utf8PosToLspPos stop⟩
+  | _, _ => none
+where
+  span : SourceInfo → Option (String.Pos × String.Pos)
+    | .original (pos := start) (endPos := stop) .. => some (start, stop)
+    | .synthetic (pos := start) (endPos := stop) .. => some (start, stop)
+    | _ => none
 
 
 open Lean.Lsp in
@@ -481,6 +494,39 @@ where
           | [] => break
       pure regions
 
+open Lean Server Lsp RequestM in
+def handleHover (params : HoverParams) (prev : RequestTask (Option Hover)) : RequestM (RequestTask (Option Hover)) := do
+  let doc ← readDoc
+  let text := doc.meta.text
+  let pos := text.lspPosToUtf8Pos params.position
+  bindWaitFindSnap doc (·.endPos + ' ' >= pos) (notFoundX := pure prev) fun snap => do
+    withFallbackResponse prev <| pure <| Task.spawn <| fun () => do
+      let nodes : List (Syntax × CustomHover) := snap.infoTree.deepestNodes fun _ctxt info _arr =>
+        match info with
+        | .ofCustomInfo ⟨stx, data⟩ =>
+          if stx.containsPos pos then
+            (stx, ·) <$> data.get? CustomHover
+          else none
+        | _ => none
+      match nodes with
+      | [] => prev.get
+      | h :: hs =>
+        let mut best := h
+        for node@(stx, _) in hs do
+          if contains text best.fst stx then
+            best := node
+        pure <| some {
+          contents := {kind := .markdown, value := best.snd.markedString},
+          range? := best.fst.lspRange text
+        }
+  where
+    contains (text : FileMap) (stx1 stx2 : Syntax) : Bool :=
+      match stx1.lspRange text, stx2.lspRange text with
+      | none, none => false
+      | none, some _ => true
+      | some _, none => false
+      | some r1, some r2 => rangeContains r1 r2
+
 
 open Lean Server Lsp in
 initialize
@@ -491,3 +537,4 @@ initialize
   chainLspRequestHandler "textDocument/semanticTokens/full" SemanticTokensParams SemanticTokens handleTokensFull
   chainLspRequestHandler "textDocument/semanticTokens/range" SemanticTokensRangeParams SemanticTokens handleTokensRange
   chainLspRequestHandler "textDocument/foldingRange" FoldingRangeParams (Array FoldingRange) handleFolding
+  chainLspRequestHandler "textDocument/hover" HoverParams (Option Hover) handleHover

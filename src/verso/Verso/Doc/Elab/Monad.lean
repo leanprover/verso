@@ -154,7 +154,7 @@ partial def FinishedPart.toSyntax [Monad m] [MonadQuotation m]
       match metadata with
       | none => `(none)
       | some stx => `(some $stx)
-    -- Adding type annotations works around a limitation in list and aray elaboration, where intermediate
+    -- Adding type annotations works around a limitation in list and array elaboration, where intermediate
     -- let bindings introduced by "chunking" the elaboration may fail to infer types
     let typedBlocks ← blocks.mapM fun b => `(($b : Block $genre))
     let body ← ``(Part.mk #[$[$titleInlines],*] $(quote titleString) $metaStx #[$typedBlocks,*] #[$[$subStx],*])
@@ -252,6 +252,9 @@ instance : Inhabited (DocElabM α) := ⟨fun _ _ => default⟩
 instance : AddErrorMessageContext DocElabM := inferInstanceAs <| AddErrorMessageContext (ReaderT PartElabM.State (StateT DocElabM.State TermElabM))
 
 instance : MonadLift TermElabM DocElabM where
+  monadLift act := fun _ st' => do return (← act, st')
+
+instance : MonadLift IO DocElabM where
   monadLift act := fun _ st' => do return (← act, st')
 
 instance : MonadRef DocElabM := inferInstanceAs <| MonadRef (ReaderT PartElabM.State (StateT DocElabM.State TermElabM))
@@ -436,7 +439,7 @@ opaque directiveExpandersFor (x : Name) : DocElabM (Array DirectiveExpander)
 abbrev BlockRoleExpander := Array Arg → Array Syntax → DocElabM (Array (TSyntax `term))
 
 initialize blockRoleExpanderAttr : KeyedDeclsAttribute BlockRoleExpander ←
-  mkDocExpanderAttribute `blockRole_expander ``BlockRoleExpander "Indicates that this function is used to implement a given blockRole" `blockRoleExpanderAttr
+  mkDocExpanderAttribute `block_role_expander ``BlockRoleExpander "Indicates that this function is used to implement a given blockRole" `blockRoleExpanderAttr
 
 unsafe def blockRoleExpandersForUnsafe (x : Name) : DocElabM (Array BlockRoleExpander) := do
   let expanders := blockRoleExpanderAttr.getEntries (← getEnv) x

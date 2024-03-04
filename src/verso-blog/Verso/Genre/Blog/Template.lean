@@ -1,5 +1,7 @@
 import Lean
 
+import SubVerso.Highlighting
+
 import Verso.Doc
 import Verso.Doc.Html
 import Verso.Genre.Blog.Basic
@@ -10,6 +12,7 @@ open Lean (RBMap)
 
 open Verso Doc Output Html
 open Verso.Genre Blog
+open SubVerso.Highlighting
 
 private def next (xs : Array α) : Option (α × Array α) :=
   if _ : 0 < xs.size then
@@ -39,7 +42,7 @@ instance [Monad m] : MonadConfig (HtmlT Page m) where
 
 open HtmlT
 
-defmethod Highlighted.Token.Kind.«class» : Highlighted.Token.Kind → String
+defmethod Token.Kind.«class» : Token.Kind → String
   | .var _ _ => "var"
   | .str _ => "literal string"
   | .sort  => "sort"
@@ -49,7 +52,7 @@ defmethod Highlighted.Token.Kind.«class» : Highlighted.Token.Kind → String
   | .keyword _ _ _ => "keyword"
   | .unknown => "unknown"
 
-defmethod Highlighted.Token.Kind.data : Highlighted.Token.Kind → String
+defmethod Token.Kind.data : Token.Kind → String
   | .const n _ _ => "const-" ++ toString n
   | .var ⟨v⟩ _ => "var-" ++ toString v
   | .option n _ => "option-" ++ toString n
@@ -58,10 +61,10 @@ defmethod Highlighted.Token.Kind.data : Highlighted.Token.Kind → String
 
 
 def hover (content : Html) : Html := {{
-  <div class="hover-container"><div class="hover-info"> {{ content }} </div></div>
+  <span class="hover-container"><span class="hover-info"> {{ content }} </span></span>
 }}
 
-defmethod Highlighted.Token.Kind.hover? : (tok : Highlighted.Token.Kind) → Option Html
+defmethod Token.Kind.hover? : (tok : Token.Kind) → Option Html
   | .const _n sig doc =>
     let docs := match doc with
       | none => .empty
@@ -73,7 +76,7 @@ defmethod Highlighted.Token.Kind.hover? : (tok : Highlighted.Token.Kind) → Opt
       | some txt => {{<hr/><pre class="docstring">{{txt}}</pre>}}
     some <| hover {{ <code>{{toString n}}</code> {{docs}} }}
   | .keyword _ _ none => none
-  | .keyword _ _ (some doc) => some <| hover {{<pre class="docstring">{{doc}}</pre>}}
+  | .keyword _ _ (some doc) => some <| hover {{<code class="docstring">{{doc}}</code>}}
   | .var _ type =>
     some <| hover {{ <code>{{type}}</code> }}
   | .str s =>
@@ -81,7 +84,7 @@ defmethod Highlighted.Token.Kind.hover? : (tok : Highlighted.Token.Kind) → Opt
   | _ => none
 
 
-defmethod Highlighted.Token.toHtml (tok : Highlighted.Token) : Html := {{
+defmethod Token.toHtml (tok : Token) : Html := {{
   <span class={{tok.kind.«class» ++ " token"}} "data-binding"={{tok.kind.data}}>{{tok.content}}{{tok.kind.hover?.getD .empty}}</span>
 }}
 
@@ -100,7 +103,7 @@ defmethod Highlighted.Goal.toHtml (exprHtml : expr → Html) (index : Nat) : Hig
           {{hypotheses.map fun
               | (x, k, t) => {{
                   <tr class="hypothesis">
-                    <td class="name">{{Highlighted.Token.toHtml ⟨k, x.toString⟩}}</td><td class="colon">":"</td>
+                    <td class="name">{{Token.toHtml ⟨k, x.toString⟩}}</td><td class="colon">":"</td>
                     <td class="type">{{exprHtml t}}</td>
                   </tr>
                 }}
@@ -144,7 +147,7 @@ partial defmethod Highlighted.toHtml : Highlighted → Html
   | .text str => str
   | .span s info hl => {{<span class={{"has-info " ++ s.«class»}}><span class="hover-container"><span class={{"hover-info message " ++ s.«class»}}>{{info}}</span></span>{{toHtml hl}}</span>}}
   | .tactics info pos hl =>
-    let id := s!"tactic-state-{hash info}-{pos.byteIdx}"
+    let id := s!"tactic-state-{hash info}-{pos}"
     {{
       <span class="tactic">
         <label «for»={{id}}>{{toHtml hl}}</label>
@@ -166,7 +169,7 @@ def blockHtml (g : Genre) (go : Block g → HtmlT g IO Html) : Blog.BlockExt →
   | .lexedText content, _contents => do
     pure {{ <pre class=s!"lexed {content.name}"> {{ content.toHtml }} </pre> }}
   | .highlightedCode contextName hls, _contents => do
-    pure {{ <pre class="hl lean" "data-lean-context"={{toString contextName}}> {{ hls.toHtml }} </pre> }}
+    pure {{ <code class="hl lean block" "data-lean-context"={{toString contextName}}> {{ hls.toHtml }} </code> }}
   | .htmlDetails classes summary, contents => do
     pure {{ <details class={{classes}}><summary>{{summary}}</summary> {{← contents.mapM go}}</details>}}
   | .htmlDiv classes, contents => do
@@ -176,6 +179,8 @@ def blockHtml (g : Genre) (go : Block g → HtmlT g IO Html) : Blog.BlockExt →
 def inlineHtml (g : Genre) [MonadConfig (HtmlT g IO)] [MonadPath (HtmlT g IO)]
     (stateEq : g.TraverseState = Blog.TraverseState)
     (go : Inline g → HtmlT g IO Html) : Blog.InlineExt → Array (Inline g) → HtmlT g IO Html
+  | .highlightedCode contextName hls, _contents => do
+    pure {{ <code class="hl lean inline" "data-lean-context"={{toString contextName}}> {{ hls.toHtml }} </code> }}
   | .label x, contents => do
     let contentHtml ← contents.mapM go
     let st ← stateEq ▸ state

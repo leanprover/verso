@@ -1,12 +1,14 @@
 import Lean
 
+import SubVerso.Highlighting
+
 import Verso.Doc
 import Verso.Doc.Html
 import Verso.Method
-import Verso.Genre.Blog.Highlighted
 import Verso.Genre.Blog.LexedText
 
 open Verso Doc Output Html
+open SubVerso.Highlighting
 
 namespace Verso.Genre
 
@@ -20,6 +22,7 @@ inductive BlockExt where
 deriving Repr
 
 inductive InlineExt where
+  | highlightedCode (contextName : Lean.Name) (highlighted : Highlighted)
   | label (name : Lean.Name)
   | ref (name : Lean.Name)
   | pageref (name : Lean.Name)
@@ -315,6 +318,10 @@ open Doc
 -- TODO CSS variables, and document it
 def highlightingStyle : String := "
 
+.hl.lean {
+  white-space: pre;
+}
+
 .hl.lean .keyword {
   font-weight : bold;
 }
@@ -331,6 +338,10 @@ def highlightingStyle : String := "
     display: inline;
 }
 
+.hl.lean .hover-info {
+  white-space: normal;
+}
+
 .hl.lean .token .hover-info {
   display: none;
   position: absolute;
@@ -339,6 +350,10 @@ def highlightingStyle : String := "
   padding: 0.5em;
   z-index: 300;
   font-size: inherit;
+}
+
+.hl.lean .hover-info code {
+  white-space: pre;
 }
 
 @media (hover: hover) {
@@ -352,6 +367,14 @@ def highlightingStyle : String := "
     font-weight: normal;
     font-style: normal;
   }
+}
+
+.hl.lean.block {
+  display: block;
+}
+
+.hl.lean.inline {
+  display: inline-block;
 }
 
 .hl.lean .token {
@@ -566,7 +589,7 @@ def highlightingJs : String :=
         });
     }
     /* Render docstrings */
-    for (const d of document.querySelectorAll(\"pre.docstring\")) {
+    for (const d of document.querySelectorAll(\"code.docstring, pre.docstring\")) {
         const str = d.innerText;
         const html = marked.parse(str);
         const rendered = document.createElement(\"div\");
@@ -597,6 +620,12 @@ def genreBlock (g : Genre) : Blog.BlockExt → Array (Block g) → Blog.Traverse
     | _, _ => pure none
 
 def genreInline (g : Genre) : Blog.InlineExt → Array (Inline g) → Blog.TraverseM (Option (Inline g))
+    | .highlightedCode .., _contents => do
+      modify fun st => {st with
+        stylesheets := st.stylesheets.insert highlightingStyle,
+        scripts := st.scripts.insert highlightingJs
+      }
+      pure none
     | .label x, _contents => do
       -- Add as target if not already present
       if let none := (← get).targets.find? x then

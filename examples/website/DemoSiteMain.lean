@@ -56,6 +56,7 @@ def demoSite : Site := site DemoSite.Front /
   static "static" ← "examples/website/static_files"
   "about" DemoSite.About
   "blog" DemoSite.Blog with
+    DemoSite.Blog.Subprojects
     DemoSite.Blog.Conditionals
     DemoSite.Blog.FirstPost
 

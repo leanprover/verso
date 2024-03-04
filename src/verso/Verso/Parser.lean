@@ -1760,7 +1760,7 @@ mutual
       let s := (intro >> eatSpaces >> ignoreFn (satisfyFn (· == '\n') "newline" <|> eoiFn)) c s
       if s.hasError then restorePosOnErr s
       else
-        let s := (nodeFn nullKind <| atomicFn (ignoreFn (eatSpaces >> satisfyFn (· == '\n') "newline")) <|> block {ctxt with minIndent := col}) c s
+        let s := (nodeFn nullKind <| atomicFn (ignoreFn (eatSpaces >> (satisfyFn (· == '\n') "newline" <|> eoiFn))) <|> block {ctxt with minIndent := col}) c s
         s.mkNode ``block_role iniSz
   where
     eatSpaces := takeWhileFn (· == ' ')
@@ -2598,7 +2598,7 @@ All input consumed.
 #guard_msgs in
 #eval block {} |>.test! " {test}\n Here's a modified paragraph."
 /--
-info: Failure: ':'; expected %%% (at line beginning) or expected column at least 1
+info: Failure: ':'; expected %%% (at line beginning), expected column at least 1 or expected end of file
 Final stack:
   (Verso.Syntax.block_role
    "{"
