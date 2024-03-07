@@ -283,9 +283,29 @@ def includeSection : PartCommand
       let name ← resolved x
       addPart <| .included name
     | _ => throwErrorAt stx "Expected exactly one positional argument that is a name"
-  | stx => dbg_trace "Not {stx}"; Lean.Elab.throwUnsupportedSyntax
+  | stx => Lean.Elab.throwUnsupportedSyntax
 where
  resolved id := mkIdentFrom id <$> resolveGlobalConstNoOverload (mkIdentFrom id (docName id.getId))
+
+@[block_expander Verso.Syntax.block_role]
+def _root_.Verso.Syntax.block_role.expand : BlockExpander := fun block =>
+  match block with
+  | `(block|block_role{$name $args*}) => do
+    withRef block <| withFreshMacroScope <| withIncRecDepth <| do
+      let name ← resolveGlobalConstNoOverloadWithInfo name
+      let exp ← blockRoleExpandersFor name
+      let argVals ← parseArgs args
+      for e in exp do
+        try
+          let termStxs ← withFreshMacroScope <| e argVals #[]
+          return (← ``(Block.concat #[$[$termStxs],*]))
+        catch
+          | ex@(.internal id) =>
+            if id == unsupportedSyntaxExceptionId then pure ()
+            else throw ex
+          | ex => throw ex
+      throwUnsupportedSyntax
+  | _ => throwUnsupportedSyntax
 
 @[block_expander Verso.Syntax.para]
 partial def _root_.Verso.Syntax.para.expand : BlockExpander

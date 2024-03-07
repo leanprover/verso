@@ -1,13 +1,15 @@
+import SubVerso.Highlighting
+import SubVerso.Examples
+
 import Verso.Genre.Blog.Basic
 import Verso.Genre.Blog.Generate
-import Verso.Genre.Blog.Highlighted
-import Verso.Genre.Blog.HighlightCode
 import Verso.Genre.Blog.Site
 import Verso.Genre.Blog.Site.Syntax
 import Verso.Genre.Blog.Template
 import Verso.Genre.Blog.Theme
 import Verso.Doc.Lsp
 import Verso.Doc.Suggestion
+import Verso.Hover
 open Verso.Output Html
 open Lean (RBMap)
 
@@ -15,6 +17,8 @@ namespace Verso.Genre.Blog
 
 open Lean Elab
 open Verso Doc Elab
+
+open SubVerso.Examples (loadExamples Example)
 
 
 @[role_expander htmlSpan]
@@ -77,14 +81,19 @@ def page_link : RoleExpander
     pure #[val]
   | _, _ => throwUnsupportedSyntax
 
+inductive LeanExampleData where
+  | inline (commandState : Command.State) (parserState : Parser.ModuleParserState)
+  | subproject (loaded : NameMap Example)
+deriving Inhabited
+
 structure ExampleContext where
-  contexts : NameMap (Command.State × Parser.ModuleParserState) := {}
+  contexts : NameMap LeanExampleData := {}
 deriving Inhabited
 
 initialize exampleContextExt : EnvExtension ExampleContext ← registerEnvExtension (pure {})
 
 structure ExampleMessages where
-  messages : NameMap MessageLog := {}
+  messages : NameMap (MessageLog ⊕ List (MessageSeverity × String)) := {}
 deriving Inhabited
 
 initialize messageContextExt : EnvExtension ExampleMessages ← registerEnvExtension (pure {})
@@ -164,6 +173,83 @@ where
       pure (some vals[0])
     else throwError "Duplicate values for '{key}'"
 
+open System in
+@[block_role_expander leanExampleProject]
+def leanExampleProject : BlockRoleExpander
+  | #[.anon (.name name), .anon (.str projectDir)], #[] => do
+    if exampleContextExt.getState (← getEnv) |>.contexts |>.contains name.getId then
+      throwError "Example context '{name}' already defined in this module"
+    let path : FilePath := ⟨projectDir⟩
+    if path.isAbsolute then
+      throwError "Expected a relative path, got {path}"
+    let loadedExamples ← loadExamples path
+    let mut savedExamples := {}
+    for (mod, modExamples) in loadedExamples.toList do
+      for (exName, ex) in modExamples.toList do
+        savedExamples := savedExamples.insert (mod ++ exName) ex
+    modifyEnv fun env => exampleContextExt.modifyState env fun s => {s with
+      contexts := s.contexts.insert name.getId (.subproject savedExamples)
+    }
+    for (name, ex) in savedExamples.toList do
+      modifyEnv fun env => messageContextExt.modifyState env fun s => {s with messages := s.messages.insert name (.inr ex.messages) }
+    Verso.Hover.addCustomHover (← getRef) <| "Contains:\n" ++ String.join (savedExamples.toList.map (s!" * `{toString ·.fst}`\n"))
+    pure #[]
+  | _, more =>
+    if h : more.size > 0 then
+      throwErrorAt more[0] "Unexpected contents"
+    else
+      throwError "Unexpected arguments"
+where
+  getModExamples (mod : Name) (json : Json) : DocElabM (NameMap Example) := do
+    let .ok exs := json.getObj?
+      | throwError "Not an object: '{json}'"
+    let mut found := {}
+    for ⟨name, exJson⟩ in exs.toArray do
+      match FromJson.fromJson? exJson with
+      | .error err =>
+        throwError "Error deserializing example '{name}' in '{mod}': {err}\nfrom:\n{json}"
+      | .ok ex => found := found.insert (mod ++ name.toName) ex
+    pure found
+
+private def getSubproject (project : Ident) : TermElabM (NameMap Example) := do
+  let some ctxt := exampleContextExt.getState (← getEnv) |>.contexts |>.find? project.getId
+    | throwErrorAt project "Subproject '{project}' not loaded"
+  let .subproject projectExamples := ctxt
+    | throwErrorAt project "'{project}' is not loaded as a subproject"
+  Verso.Hover.addCustomHover project <| "Contains:\n" ++ String.join (projectExamples.toList.map (s!" * `{toString ·.fst}`\n"))
+  pure projectExamples
+
+@[block_role_expander leanCommand]
+def leanCommand : BlockRoleExpander
+  | #[.anon (.name project), .anon (.name exampleName)], #[] => do
+    let projectExamples ← getSubproject project
+    let some {highlighted := hls, original := str, ..} := projectExamples.find? exampleName.getId
+      | throwErrorAt exampleName "Example '{exampleName}' not found - options are {projectExamples.toList.map (·.fst)}"
+    Verso.Hover.addCustomHover exampleName s!"```lean\n{str}\n```"
+    pure #[← ``(Block.other (Blog.BlockExt.highlightedCode $(quote project.getId) (SubVerso.Highlighting.Highlighted.seq $(quote hls))) #[Block.code none #[] 0 $(quote str)])]
+  | _, more =>
+    if h : more.size > 0 then
+      throwErrorAt more[0] "Unexpected contents"
+    else
+      throwError "Unexpected arguments"
+
+@[role_expander leanTerm]
+def leanTerm : RoleExpander
+  | #[.anon (.name project)], #[arg] => do
+    let `(inline|code{ $name:str }) := arg
+      | throwErrorAt arg "Expected code literal with the example name"
+    let exampleName := name.getString.toName
+    let projectExamples ← getSubproject project
+    let some {highlighted := hls, original := str, ..} := projectExamples.find? exampleName
+      | throwErrorAt name "Example '{exampleName}' not found - options are {projectExamples.toList.map (·.fst)}"
+    Verso.Hover.addCustomHover arg s!"```lean\n{str}\n```"
+    pure #[← ``(Inline.other (Blog.InlineExt.highlightedCode $(quote project.getId) (SubVerso.Highlighting.Highlighted.seq $(quote hls))) #[Inline.code $(quote str)])]
+  | _, more =>
+    if h : more.size > 0 then
+      throwErrorAt more[0] "Unexpected contents"
+    else
+      throwError "Unexpected arguments"
+
 @[code_block_expander leanInit]
 def leanInit : CodeBlockExpander
   | args , str => do
@@ -175,7 +261,7 @@ def leanInit : CodeBlockExpander
     let opts := Options.empty -- .setBool `trace.Elab.info true
     if header[0].isNone then -- if the "prelude" option was not set, use the current env
       let commandState := configureCommandState (←getEnv) {}
-      modifyEnv <| fun env => exampleContextExt.modifyState env fun s => {s with contexts := s.contexts.insert config.exampleContext.getId (commandState, state)}
+      modifyEnv <| fun env => exampleContextExt.modifyState env fun s => {s with contexts := s.contexts.insert config.exampleContext.getId (.inline commandState  state)}
     else
       if header[1].getArgs.isEmpty then
         let (env, msgs) ← processHeader header opts msgs context 0
@@ -184,7 +270,7 @@ def leanInit : CodeBlockExpander
             logMessage msg
           liftM (m := IO) (throw <| IO.userError "Errors during import; aborting")
         let commandState := configureCommandState env {}
-        modifyEnv <| fun env => exampleContextExt.modifyState env fun s => {s with contexts := s.contexts.insert config.exampleContext.getId (commandState, state)}
+        modifyEnv <| fun env => exampleContextExt.modifyState env fun s => {s with contexts := s.contexts.insert config.exampleContext.getId (.inline commandState state)}
     if config.show.getD false then
       pure #[← ``(Block.code none #[] 0 $(quote str.getString))] -- TODO highlighting hack
     else pure #[]
@@ -192,13 +278,13 @@ where
   configureCommandState (env : Environment) (msg : MessageLog) : Command.State :=
     { Command.mkState env msg with infoState := { enabled := true } }
 
-open Verso.Genre.Highlighted in
+open SubVerso.Highlighting Highlighted in
 @[code_block_expander lean]
 def lean : CodeBlockExpander
   | args, str => do
     let config ← LeanBlockConfig.fromArgs args
     let x := config.exampleContext
-    let some (commandState, state) := exampleContextExt.getState (← getEnv) |>.contexts.find? x.getId
+    let some (.inline commandState state) := exampleContextExt.getState (← getEnv) |>.contexts.find? x.getId
       | throwErrorAt x "Can't find example context"
     let context := Parser.mkInputContext (← parserInputString str) (← getFileName)
     -- Process with empty messages to avoid duplicate output
@@ -223,9 +309,13 @@ def lean : CodeBlockExpander
         throwErrorAt str "No error expected in code block, one occurred"
 
     if config.keep.getD true && !(config.error.getD false) then
-      modifyEnv fun env => exampleContextExt.modifyState env fun st => {st with contexts := st.contexts.insert x.getId ({s.commandState with messages := {} }, s.parserState)}
+      modifyEnv fun env => exampleContextExt.modifyState env fun st => {st with
+        contexts := st.contexts.insert x.getId (.inline {s.commandState with messages := {} } s.parserState)
+      }
     if let some infoName := config.name then
-      modifyEnv fun env => messageContextExt.modifyState env fun st => {st with messages := st.messages.insert infoName s.commandState.messages}
+      modifyEnv fun env => messageContextExt.modifyState env fun st => {st with
+        messages := st.messages.insert infoName (.inl s.commandState.messages)
+      }
     let mut hls := Highlighted.empty
     let infoSt ← getInfoState
     let env ← getEnv
@@ -233,7 +323,7 @@ def lean : CodeBlockExpander
       setInfoState s.commandState.infoState
       setEnv s.commandState.env
       for cmd in s.commands do
-        hls := hls ++ (← highlight cmd s.commandState.messages.msgs.toArray)
+        hls := hls ++ (← highlight cmd s.commandState.messages.msgs.toArray s.commandState.infoState.trees)
     finally
       setInfoState infoSt
       setEnv env
@@ -298,29 +388,49 @@ def leanOutput : Doc.Elab.CodeBlockExpander
 
     let some savedInfo := messageContextExt.getState (← getEnv) |>.messages |>.find? config.name.getId
       | throwErrorAt str "No saved info for name '{config.name.getId}'"
-    let messages ← liftM <| savedInfo.msgs.toArray.mapM contents
-    for m in savedInfo.msgs do
-      if mostlyEqual str.getString (← contents m) then
-        if let some s := config.severity then
-          if s != m.severity then
-            throwErrorAt str s!"Expected severity {sev s}, but got {sev m.severity}"
-        let content ← if config.summarize then
-            let lines := str.getString.splitOn "\n"
-            let pre := lines.take 3
-            let post := String.join (lines.drop 3 |>.intersperse "\n")
-            let preHtml : Html := pre.map (fun (l : String) => {{<code>{{l}}</code>}})
-            ``(Block.other (Blog.BlockExt.htmlDetails $(quote (sev m.severity)) $(quote preHtml)) #[Block.code none #[] 0 $(quote post)])
-          else
-            ``(Block.other (Blog.BlockExt.htmlDiv $(quote (sev m.severity))) #[Block.code none #[] 0 $(quote str.getString)])
+    let messages ← match savedInfo with
+      | .inl log =>
+        let messages ← liftM <| log.msgs.toArray.mapM contents
+        for m in log.msgs do
+          if mostlyEqual str.getString (← contents m) then
+            if let some s := config.severity then
+              if s != m.severity then
+                throwErrorAt str s!"Expected severity {sevStr s}, but got {sevStr m.severity}"
+            let content ← if config.summarize then
+                let lines := str.getString.splitOn "\n"
+                let pre := lines.take 3
+                let post := String.join (lines.drop 3 |>.intersperse "\n")
+                let preHtml : Html := pre.map (fun (l : String) => {{<code>{{l}}</code>}})
+                ``(Block.other (Blog.BlockExt.htmlDetails $(quote (sevStr m.severity)) $(quote preHtml)) #[Block.code none #[] 0 $(quote post)])
+              else
+                ``(Block.other (Blog.BlockExt.htmlDiv $(quote (sevStr m.severity))) #[Block.code none #[] 0 $(quote str.getString)])
+            return #[content]
+        pure messages
+      | .inr msgs =>
+        let messages := msgs.toArray.map Prod.snd
+        for (sev, txt) in msgs do
+          if mostlyEqual str.getString txt then
+            if let some s := config.severity then
+              if s != sev then
+                throwErrorAt str s!"Expected severity {sevStr s}, but got {sevStr sev}"
+            let content ← if config.summarize then
+                let lines := str.getString.splitOn "\n"
+                let pre := lines.take 3
+                let post := String.join (lines.drop 3 |>.intersperse "\n")
+                let preHtml : Html := pre.map (fun (l : String) => {{<code>{{l}}</code>}})
+                ``(Block.other (Blog.BlockExt.htmlDetails $(quote (sevStr sev)) $(quote preHtml)) #[Block.code none #[] 0 $(quote post)])
+              else
+                ``(Block.other (Blog.BlockExt.htmlDiv $(quote (sevStr sev))) #[Block.code none #[] 0 $(quote str.getString)])
+            return #[content]
+        pure messages
 
-        return #[content]
     for m in messages do
       Verso.Doc.Suggestion.saveSuggestion str (m.take 30 ++ "…") m
     throwErrorAt str "Didn't match - expected one of: {indentD (toMessageData messages)}\nbut got:{indentD (toMessageData str.getString)}"
 where
   withNewline (str : String) := if str == "" || str.back != '\n' then str ++ "\n" else str
 
-  sev : MessageSeverity → String
+  sevStr : MessageSeverity → String
     | .error => "error"
     | .information => "information"
     | .warning => "warning"

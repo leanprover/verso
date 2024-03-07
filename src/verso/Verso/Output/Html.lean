@@ -247,6 +247,10 @@ partial def asString (html : Html) (indent : Nat := 0) (breakLines := true) : St
     "<pre" ++ attrsAsString attrs ++ ">" ++
     Html.asString (indent := 0) (breakLines := false) body ++
     "</pre>" ++ newline indent
+  | .tag "code" attrs body =>
+    "<code" ++ attrsAsString attrs ++ ">" ++
+    Html.asString (indent := 0) (breakLines := false) body ++
+    "</code>" ++ newline indent
   | .tag name attrs (.seq #[]) =>
     if name ∈ mustClose then
       "<" ++ name ++ attrsAsString attrs ++ "></" ++ name ++ ">" ++ breakline name

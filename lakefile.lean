@@ -1,6 +1,8 @@
 import Lake
 open Lake DSL
 
+require subverso from git "https://github.com/leanprover/subverso.git"@"main"
+
 package verso where
   -- add package configuration options here
 

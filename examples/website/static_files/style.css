@@ -43,7 +43,7 @@ pre {
     font-family: monospace;
 }
 
-p, pre {
+p, pre, code.block {
     line-height: 1.25;
 }
 
@@ -81,7 +81,7 @@ header {
     margin-bottom: 1.5em;
 }
 
-.main p, .main pre {
+.main p, .main pre, .main code.block {
   margin-bottom: 0.5em;
 }
 
@@ -146,6 +146,13 @@ ul.categories li:has( + li)::after {
     content: ", ";
 }
 
+/**************************/
+
+code {
+    font-family: monospace;
+}
+
+/**************************/
 
 .lexed.json .brace {
     color: #0000aa;
