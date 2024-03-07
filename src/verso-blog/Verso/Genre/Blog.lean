@@ -7,6 +7,7 @@ import Verso.Genre.Blog.Site
 import Verso.Genre.Blog.Site.Syntax
 import Verso.Genre.Blog.Template
 import Verso.Genre.Blog.Theme
+import Verso.Doc.ArgParse
 import Verso.Doc.Lsp
 import Verso.Doc.Suggestion
 import Verso.Hover
@@ -16,26 +17,28 @@ open Lean (RBMap)
 namespace Verso.Genre.Blog
 
 open Lean Elab
-open Verso Doc Elab
+open Verso ArgParse Doc Elab
 
 open SubVerso.Examples (loadExamples Example)
 
 
+def classArgs : ArgParse DocElabM String := .named `«class» .string false
+
 @[role_expander htmlSpan]
 def htmlSpan : RoleExpander
-  | #[.named `«class» (.str classes)], stxs => do
-    let args ← stxs.mapM elabInline
-    let val ← ``(Inline.other (Blog.InlineExt.htmlSpan $(quote classes)) #[ $[ $args ],* ])
+  | args, stxs => do
+    let classes ← classArgs.run args
+    let contents ← stxs.mapM elabInline
+    let val ← ``(Inline.other (Blog.InlineExt.htmlSpan $(quote classes)) #[$contents,*])
     pure #[val]
-  | _, _ => throwUnsupportedSyntax
 
 @[directive_expander htmlDiv]
 def htmlDiv : DirectiveExpander
-  | #[.named `«class» (.str classes)], stxs => do
-    let args ← stxs.mapM elabBlock
-    let val ← ``(Block.other (Blog.BlockExt.htmlDiv $(quote classes)) #[ $[ $args ],* ])
+  | args, stxs => do
+    let classes ← classArgs.run args
+    let contents ← stxs.mapM elabBlock
+    let val ← ``(Block.other (Blog.BlockExt.htmlDiv $(quote classes)) #[ $contents,* ])
     pure #[val]
-  | _, _ => throwUnsupportedSyntax
 
 @[directive_expander blob]
 def blob : DirectiveExpander
@@ -112,74 +115,13 @@ def parserInputString [Monad m] [MonadFileMap m] (str : TSyntax `str) : m String
   code := code ++ str.getString
   return code
 
-structure LeanBlockConfig where
-  exampleContext : Ident
-  «show» : Option Bool := none
-  keep : Option Bool := none
-  name : Option Name := none
-  error : Option Bool := none
-
-def takeNamed (name : Name) (args : Array Arg) : Array ArgVal × Array Arg := Id.run do
-  let mut matching := #[]
-  let mut remaining := #[]
-  for arg in args do
-    if let .named x v := arg then
-      if x == name then
-        matching := matching.push v
-        continue
-    remaining := remaining.push arg
-  (matching, remaining)
-
-def LeanBlockConfig.fromArgs [Monad m] [MonadInfoTree m] [MonadResolveName m] [MonadEnv m] [MonadError m] (args : Array Arg) : m LeanBlockConfig := do
-  if h : 0 < args.size then
-    let .anon (.name contextName) := args[0]
-      | throwError s!"Expected context name, got {repr args[0]}"
-    let (showArgs, args) := takeNamed `show <| args.extract 1 args.size
-    let showArg ← takeVal `show showArgs >>= Option.mapM (asBool `show)
-    let (keepArgs, args) := takeNamed `keep args
-    let keepArg ← takeVal `keep keepArgs >>= Option.mapM (asBool `keep)
-    let (nameArgs, args) := takeNamed `name args
-    let nameArg ← takeVal `keep nameArgs >>= Option.mapM (asName `name)
-    let (errorArgs, args) := takeNamed `error args
-    let errorArg ← takeVal `error errorArgs >>= Option.mapM (asBool `error)
-    if !args.isEmpty then
-      throwError s!"Unexpected arguments: {repr args}"
-    pure {
-      exampleContext := contextName
-      «show» := showArg
-      keep := keepArg
-      name := nameArg
-      error := errorArg
-    }
-  else throwError "No arguments provided, expected at least a context name"
-where
-  asName (name : Name) (v : ArgVal) : m Name := do
-    match v with
-    | .name b => do
-      pure b.getId
-    | other => throwError "Expected Boolean for '{name}', got {repr other}"
-  asBool (name : Name) (v : ArgVal) : m Bool := do
-    match v with
-    | .name b => do
-      let b' ← resolveGlobalConstNoOverloadWithInfo b
-      if b' == ``true then pure true
-      else if b' == ``false then pure false
-      else throwErrorAt b "Expected 'true' or 'false'"
-    | other => throwError "Expected Boolean for '{name}', got {repr other}"
-  takeVal {α} (key : Name) (vals : Array α) : m (Option α) := do
-    if vals.size = 0 then pure none
-    else if h : vals.size = 1 then
-      have : 0 < vals.size := by rw [h]; trivial
-      pure (some vals[0])
-    else throwError "Duplicate values for '{key}'"
-
 open System in
 @[block_role_expander leanExampleProject]
 def leanExampleProject : BlockRoleExpander
   | #[.anon (.name name), .anon (.str projectDir)], #[] => do
     if exampleContextExt.getState (← getEnv) |>.contexts |>.contains name.getId then
       throwError "Example context '{name}' already defined in this module"
-    let path : FilePath := ⟨projectDir⟩
+    let path : FilePath := ⟨projectDir.getString⟩
     if path.isAbsolute then
       throwError "Expected a relative path, got {path}"
     let loadedExamples ← loadExamples path
@@ -250,10 +192,21 @@ def leanTerm : RoleExpander
     else
       throwError "Unexpected arguments"
 
+
+structure LeanBlockConfig where
+  exampleContext : Ident
+  «show» : Option Bool := none
+  keep : Option Bool := none
+  name : Option Name := none
+  error : Option Bool := none
+
+def LeanBlockConfig.parse [Monad m] [MonadInfoTree m] [MonadResolveName m] [MonadEnv m] [MonadError m] : ArgParse m LeanBlockConfig :=
+  LeanBlockConfig.mk <$> .positional `exampleContext .ident <*> .named `show .bool true <*> .named `keep .bool true <*> .named `name .name true <*> .named `error .bool true
+
 @[code_block_expander leanInit]
 def leanInit : CodeBlockExpander
   | args , str => do
-    let config ← LeanBlockConfig.fromArgs args
+    let config ← LeanBlockConfig.parse.run args
     let context := Parser.mkInputContext (← parserInputString str) (← getFileName)
     let (header, state, msgs) ← Parser.parseHeader context
     for imp in header[1].getArgs do
@@ -282,7 +235,7 @@ open SubVerso.Highlighting Highlighted in
 @[code_block_expander lean]
 def lean : CodeBlockExpander
   | args, str => do
-    let config ← LeanBlockConfig.fromArgs args
+    let config ← LeanBlockConfig.parse.run args
     let x := config.exampleContext
     let some (.inline commandState state) := exampleContextExt.getState (← getEnv) |>.contexts.find? x.getId
       | throwErrorAt x "Can't find example context"
@@ -332,59 +285,40 @@ def lean : CodeBlockExpander
     else
       pure #[]
 
+
 structure LeanOutputConfig where
   name : Ident
   severity : Option MessageSeverity
   summarize : Bool
 
-def LeanOutputConfig.fromArgs [Monad m] [MonadInfoTree m] [MonadResolveName m] [MonadEnv m] [MonadError m] (args : Array Arg) : m LeanOutputConfig := do
-  if h : 0 < args.size then
-    let .anon (.name outputName) := args[0]
-      | throwError s!"Expected output name, got {repr args[0]}"
-    let (severityArgs, args) := takeNamed `severity <| args.extract 1 args.size
-    let severityArg ← takeVal `severity severityArgs >>= Option.mapM (asSeverity `severity)
-
-    let (summarizeArgs, args) := takeNamed `summarize args
-    let summarizeArg ← takeVal `summarize summarizeArgs >>= Option.mapM (asBool `summarize)
-
-    if !args.isEmpty then
-      throwError s!"Unexpected arguments: {repr args}"
-    pure {
-      name := outputName
-      severity := severityArg
-      summarize := summarizeArg.getD false
-    }
-  else throwError "No arguments provided, expected at least a context name"
+def LeanOutputConfig.parser [Monad m] [MonadInfoTree m] [MonadResolveName m] [MonadEnv m] [MonadError m] : ArgParse m LeanOutputConfig :=
+  LeanOutputConfig.mk <$> .positional `name output <*> .named `severity sev true <*> ((·.getD false) <$> .named `summarize .bool true)
 where
-  asSeverity (name : Name) (v : ArgVal) : m MessageSeverity := do
-    match v with
-    | .name b => do
-      let b' ← resolveGlobalConstNoOverloadWithInfo b
-      if b' == ``MessageSeverity.error then pure MessageSeverity.error
-      else if b' == ``MessageSeverity.warning then pure MessageSeverity.warning
-      else if b' == ``MessageSeverity.information then pure MessageSeverity.information
-      else throwErrorAt b "Expected 'error' or 'warning' or 'information'"
-    | other => throwError "Expected severity for '{name}', got {repr other}"
-  asBool (name : Name) (v : ArgVal) : m Bool := do
-    match v with
-    | .name b => do
-      let b' ← resolveGlobalConstNoOverloadWithInfo b
-      if b' == ``true then pure true
-      else if b' == ``false then pure false
-      else throwErrorAt b "Expected 'true' or 'false'"
-    | other => throwError "Expected Boolean for '{name}', got {repr other}"
-  takeVal {α} (key : Name) (vals : Array α) : m (Option α) := do
-    if vals.size = 0 then pure none
-    else if h : vals.size = 1 then
-      have : 0 < vals.size := by rw [h]; trivial
-      pure (some vals[0])
-    else throwError "Duplicate values for '{key}'"
-
+  output : ValDesc m Ident := {
+    description := "output name",
+    get := fun
+      | .name x => pure x
+      | other => throwError "Expected output name, got {repr other}"
+  }
+  opt {α} (p : ArgParse m α) : ArgParse m (Option α) := (some <$> p) <|> pure none
+  optDef {α} (fallback : α) (p : ArgParse m α) : ArgParse m α := p <|> pure fallback
+  sev : ValDesc m MessageSeverity := {
+    description := open MessageSeverity in m!"The expected severity: '{``error}', '{``warning}', or '{``information}'",
+    get := open MessageSeverity in fun
+      | .name b => do
+        let b' ← resolveGlobalConstNoOverloadWithInfo b
+        if b' == ``MessageSeverity.error then pure MessageSeverity.error
+        else if b' == ``MessageSeverity.warning then pure MessageSeverity.warning
+        else if b' == ``MessageSeverity.information then pure MessageSeverity.information
+        else throwErrorAt b "Expected '{``error}', '{``warning}', or '{``information}'"
+      | other => throwError "Expected severity, got {repr other}"
+  }
 
 @[code_block_expander leanOutput]
 def leanOutput : Doc.Elab.CodeBlockExpander
   | args, str => do
-    let config ← LeanOutputConfig.fromArgs args -- TODO actual parser for my args
+    --let config ← LeanOutputConfig.fromArgs args -- TODO actual parser for my args
+    let config ← LeanOutputConfig.parser.run args
 
     let some savedInfo := messageContextExt.getState (← getEnv) |>.messages |>.find? config.name.getId
       | throwErrorAt str "No saved info for name '{config.name.getId}'"

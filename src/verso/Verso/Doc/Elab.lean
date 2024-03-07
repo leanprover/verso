@@ -72,9 +72,9 @@ def _root_.Verso.Syntax.bold.expand : InlineExpander
 
 def parseArgVal (val : TSyntax `arg_val) : DocElabM ArgVal := do
   match val with
-  | `($s:str) => pure <| .str s.getString
+  | `($s:str) => pure <| .str s
   | `($x:ident) => pure <| .name x
-  | `($n:num) => pure <| .num <| n.getNat
+  | `($n:num) => pure <| .num n
   | other => throwErrorAt other "Can't decode argument value '{repr other}'"
 
 def parseArgs (argStx : TSyntaxArray `argument) : DocElabM (Array Arg) := do
@@ -84,7 +84,7 @@ def parseArgs (argStx : TSyntaxArray `argument) : DocElabM (Array Arg) := do
     | `(argument|$v:arg_val) =>
       argVals := argVals.push (.anon (← parseArgVal v))
     | `(argument|$x:ident := $v) =>
-      argVals := argVals.push (.named x.getId (← parseArgVal v))
+      argVals := argVals.push (.named arg x (← parseArgVal v))
     | other => throwErrorAt other "Can't decode argument '{repr other}'"
   pure argVals
 

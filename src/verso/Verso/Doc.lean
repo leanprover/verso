@@ -97,17 +97,18 @@ partial def Inline.reprPrec [Repr g.Inline] (inline : Inline g) (prec : Nat) : S
 instance [Repr g.Inline] : Repr (Inline g) where
   reprPrec := Inline.reprPrec
 
-
+open Lean in
 inductive ArgVal where
-  | name (x : Lean.Ident)
-  | str (text : String)
-  | num (n : Nat)
-deriving Repr
+  | name (x : Ident)
+  | str (text : StrLit)
+  | num (n : NumLit)
+deriving Repr, Inhabited
 
+open Lean in
 inductive Arg where
   | anon (value : ArgVal)
-  | named (name : Name) (value : ArgVal)
-deriving Repr
+  | named (stx : Syntax) (name : Ident) (value : ArgVal)
+deriving Repr, Inhabited
 
 structure ListItem (α : Type u) where
   indent : Nat

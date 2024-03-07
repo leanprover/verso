@@ -1,7 +1,13 @@
 import Verso.Genre.Blog
 import DemoSite.Categories
+import Lean
+
+open Lean.MessageSeverity
+
 open Verso Genre Blog
 open DemoSite
+
+
 
 set_option pp.rawOnError true
 
@@ -42,6 +48,6 @@ Version is:
 {leanCommand examples Examples.version}
 
 that is,
-```leanOutput Examples.version
+```leanOutput Examples.version severity := information
 "4.5.0"
 ```
