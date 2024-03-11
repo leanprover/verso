@@ -145,7 +145,7 @@ def _root_.Array.mapIndexed (arr : Array α) (f : Fin arr.size → α → β) : 
 partial defmethod Highlighted.toHtml : Highlighted → Html
   | .token t => t.toHtml
   | .text str => str
-  | .span s info hl => {{<span class={{"has-info " ++ s.«class»}}><span class="hover-container"><span class={{"hover-info message " ++ s.«class»}}>{{info}}</span></span>{{toHtml hl}}</span>}}
+  | .span s info hl => {{<span class={{"has-info " ++ s.«class»}}><span class="hover-container"><span class={{"hover-info message " ++ s.«class»}}><code>{{info}}</code></span></span>{{toHtml hl}}</span>}}
   | .tactics info pos hl =>
     let id := s!"tactic-state-{hash info}-{pos}"
     {{
