@@ -10,6 +10,7 @@ import Verso.Doc.Elab
 import Verso.Genre.Manual.Slug
 import Verso.Genre.Manual.TeX
 import Verso.Genre.Manual.Html
+import Verso.Genre.Manual.Html.Style
 
 open Lean (Name NameMap Json ToJson FromJson)
 
@@ -95,6 +96,13 @@ def freshId [Monad m] [MonadStateOf TraverseState m] : m InternalId := do
 
 defmethod Lean.HashMap.all [BEq α] [Hashable α] (hm : Lean.HashMap α β) (p : α → β → Bool) : Bool :=
   hm.fold (fun prev k v => prev && p k v) true
+
+defmethod Lean.HashSet.all [BEq α] [Hashable α] (hm : Lean.HashSet α) (p : α → Bool) : Bool :=
+  hm.fold (fun prev v => prev && p v) true
+
+
+instance [BEq α] [Hashable α] : BEq (Lean.HashSet α) where
+  beq xs ys := xs.size == ys.size && xs.all (ys.contains ·)
 
 instance : BEq TraverseState where
   beq x y :=
@@ -234,12 +242,17 @@ def emitHtmlSingle (logError : String → IO Unit) (config : Config) (state : Tr
   let opts := {logError := logError}
   let ctxt := {}
   let titleHtml ← Html.seq <$> text.title.mapM (Manual.toHtml opts ctxt state)
-  let contents ← Manual.toHtml opts ctxt state text
+  let introHtml ← Html.seq <$> text.content.mapM (Manual.toHtml opts ctxt state)
+  let contents ← Html.seq <$> text.subParts.mapM (Manual.toHtml {opts with headerLevel := 2} ctxt state)
+  let pageContent := open Verso.Output.Html in
+    {{<section>{{Html.titlePage titleHtml authors introHtml ++ contents}}</section>}}
   let dir := config.destination.join "html-single"
   ensureDir dir
+  IO.FS.withFile (dir.join "book.css") .write fun h => do
+    h.putStrLn Html.Css.pageStyle
   IO.FS.withFile (dir.join "index.html") .write fun h => do
     h.putStrLn Html.doctype
-    h.putStrLn (Html.page text.titleString (Html.titlePage titleHtml authors ++ contents)).asString
+    h.putStrLn (Html.page text.titleString pageContent).asString
 
 
 def manualMain (text : Part Manual) (options : List String) : IO UInt32 := do

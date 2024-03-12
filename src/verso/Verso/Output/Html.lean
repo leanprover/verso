@@ -116,9 +116,10 @@ private def newlineAfter : List String := [
   "p", "div", "li", "ul", "ol", "section", "header", "nav", "head", "body",
   "script", "link", "meta", "html"] ++ [1,2,3,4,5,6].map (s!"h{·}")
 
+open Lean.Parser (rawIdent)
+
 declare_syntax_cat tag_name
-scoped syntax ident : tag_name
-scoped syntax "section" : tag_name
+scoped syntax rawIdent : tag_name
 
 declare_syntax_cat html
 declare_syntax_cat attrib
@@ -126,9 +127,8 @@ declare_syntax_cat attrib_val
 scoped syntax str : attrib_val
 scoped syntax "s!" interpolatedStr(term) : attrib_val
 scoped syntax "{{" term "}}" : attrib_val
-scoped syntax ident "=" attrib_val : attrib
+scoped syntax rawIdent "=" attrib_val : attrib
 scoped syntax str "=" attrib_val : attrib
-scoped syntax "class" "=" attrib_val : attrib
 scoped syntax "{{" term "}}" : attrib
 
 partial def _root_.Lean.TSyntax.tagName : TSyntax `tag_name → String
@@ -155,9 +155,6 @@ macro_rules
       | `(attrib| $name:ident = s!$val:interpolatedStr) => `(term| #[($(quote name.getId.toString), s!$val)])
       | `(attrib| $name:ident = {{ $e }} ) => `(term| #[($(quote name.getId.toString), ($e : String))])
       | `(attrib| $name:str = {{ $e }} ) => `(term| #[($(quote name.getString), ($e : String))])
-      | `(attrib| class = $val:str) => `(term| #[("class", $val)])
-      | `(attrib| class = s!$val:interpolatedStr) => `(term| #[("class", s!$val)])
-      | `(attrib| class = {{ $e }}) => `(term| #[("class", ($e : String))])
       | `(attrib| {{ $e }}) => `(term| ($e : Array (String × String)))
       | _ => throwUnsupported
     `(term| #[ $[($attrsOut : Array (String × String))],* ].foldr (· ++ ·) #[] )
