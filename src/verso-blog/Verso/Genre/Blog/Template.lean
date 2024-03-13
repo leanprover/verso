@@ -211,13 +211,13 @@ def inlineHtml (g : Genre) [MonadConfig (HtmlT g IO)] [MonadPath (HtmlT g IO)]
 
 def blogGenreHtml (g : Genre) [MonadConfig (HtmlT g IO)] [MonadPath (HtmlT g IO)]
     (eq1 : g.Block = Blog.BlockExt) (eq2 : g.Inline = Blog.InlineExt) (eq3 : g.TraverseState = Blog.TraverseState)
-    (partMeta : (Part g → HtmlT g IO Html) → g.PartMetadata → Part g → HtmlT g IO Html) : GenreHtml g IO where
+    (partMeta : (Part g → Array (String × String) → HtmlT g IO Html) → g.PartMetadata → Part g → HtmlT g IO Html) : GenreHtml g IO where
   part f m := partMeta f m
   block := eq1 ▸ blockHtml g
   inline := eq2 ▸ inlineHtml g eq3
 
-instance : GenreHtml Page IO := blogGenreHtml Page rfl rfl rfl fun go _metadata part => go part
-instance : GenreHtml Post IO := blogGenreHtml Post rfl rfl rfl fun go _metadata part => go part
+instance : GenreHtml Page IO := blogGenreHtml Page rfl rfl rfl fun go _metadata part => go part #[]
+instance : GenreHtml Post IO := blogGenreHtml Post rfl rfl rfl fun go _metadata part => go part #[]
 
 namespace Verso.Genre.Blog.Template
 

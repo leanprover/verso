@@ -54,12 +54,14 @@ jobs:
         run: |
           ./generate.sh
           cp _out/tex/main.pdf ./manual.pdf
+          cp -r _out/html-single html-single-page
+          zip -r html-single-page.zip html-single-page
 
       - name: Upload PDF to artifact storage
         if: github.ref != 'refs/heads/main'
         uses: actions/upload-artifact@v3
         with:
-          name: "Verso manual"
+          name: "Verso manual (PDF)"
           path: "manual.pdf"
 
       - uses: "marvinpinto/action-automatic-releases@latest"
@@ -67,6 +69,22 @@ jobs:
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
           automatic_release_tag: "latest"
-          title: "Verso manual"
+          title: "Verso manual (PDF)"
           files: |
             manual.pdf
+
+      - name: Upload HTML to artifact storage
+        if: github.ref != 'refs/heads/main'
+        uses: actions/upload-artifact@v3
+        with:
+          name: "Verso manual (HTML, single-page)"
+          path: "html-single-page.zip"
+
+      - uses: "marvinpinto/action-automatic-releases@latest"
+        if: github.ref == 'refs/heads/main'
+        with:
+          repo_token: "${{ secrets.GITHUB_TOKEN }}"
+          automatic_release_tag: "latest"
+          title: "Verso manual (HTML, single-page)"
+          files: |
+            html-single-page.zip
