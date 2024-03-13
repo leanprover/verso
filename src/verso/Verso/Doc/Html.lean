@@ -56,7 +56,7 @@ class ToHtml (genre : Genre) (m : Type → Type) (α : Type u) where
   toHtml (val : α) : HtmlT genre m Html
 
 class GenreHtml (genre : Genre) (m : Type → Type) where
-  part (partHtml : Part genre → HtmlT genre m Html)
+  part (partHtml : Part genre → Array (String × String) → HtmlT genre m Html)
     (metadata : genre.PartMetadata) (contents : Part genre) : HtmlT genre m Html
   block (blockHtml : Block genre → HtmlT genre m Html)
     (container : genre.Block) (contents : Array (Block genre)) : HtmlT genre m Html
@@ -121,21 +121,22 @@ partial def Block.toHtml [Monad m] [GenreHtml g m] : Block g → HtmlT g m Html
 instance [Monad m] [GenreHtml g m] : ToHtml g m (Block g) where
   toHtml := Block.toHtml
 
-partial def Part.toHtml [Monad m] [GenreHtml g m] (p : Part g) : HtmlT g m Html :=
+partial def Part.toHtml [Monad m] [GenreHtml g m]
+    (p : Part g) (headerAttrs : Array (String × String) := #[]) : HtmlT g m Html :=
   match p.metadata with
   | .none => do
     pure {{
       <section>
-        {{ .tag s!"h{(← options).headerLevel}" #[] (.seq <| ← p.title.mapM ToHtml.toHtml ) }}
+        {{ .tag s!"h{(← options).headerLevel}" headerAttrs (.seq <| ← p.title.mapM ToHtml.toHtml ) }}
         {{← p.content.mapM ToHtml.toHtml  }}
         {{← withOptions (fun o => {o with headerLevel := o.headerLevel + 1}) <| p.subParts.mapM Part.toHtml }}
       </section>
     }}
   | some m =>
-    GenreHtml.part Part.toHtml m p.withoutMetadata
+    GenreHtml.part (fun p attrs => Part.toHtml p attrs) m p.withoutMetadata
 
 instance [Monad m] [GenreHtml g m] : ToHtml g m (Part g) where
-  toHtml := Part.toHtml
+  toHtml p := Part.toHtml p
 
 instance : GenreHtml .none m where
   part _ m := nomatch m

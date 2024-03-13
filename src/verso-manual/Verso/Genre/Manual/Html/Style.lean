@@ -75,16 +75,28 @@ p {
 
 #toc ol {
     counter-reset: part-number;
+    padding-left: 0.5em;
 }
 
 #toc ol li {
     list-style-type: none;
-    font-family: var(--structure-font-family);
+    font-family: var(--verso-structure-font-family);
+    font-size: 12px;
 }
 
 #toc ol li:not(.unnumbered)::before {
     counter-increment: part-number;
     content: counters(part-number, ".") ". ";
+}
+
+#toc a {
+    color: #333;
+    text-decoration: none;
+}
+
+#toc a:hover {
+    text-decoration: underline;
+    color: #000;
 }
 
 
@@ -105,6 +117,7 @@ header h1 {
     margin-bottom: 0.2em;
     text-align: center;
     grid-area: pagetitle;
+    font-size: 1.25em;
 }
 
 header #controls {

@@ -34,6 +34,7 @@ abbrev Path := Array String
 structure TraverseContext where
   /-- The current URL path - will be [] for non-HTML output or in the root -/
   path : Path := #[]
+  logError : String → IO Unit
 
 def TraverseContext.inFile (self : TraverseContext) (file : String) : TraverseContext :=
   {self with path := self.path.push file}
@@ -67,19 +68,29 @@ instance : Coe String PartTag where
 structure InternalId where
   private mk ::
   private id : Nat
-deriving BEq, Hashable
+deriving BEq, Hashable, Repr
+
+instance : ToString InternalId where
+  toString x := s!"#<{x.id}>"
 
 structure PartMetadata where
   authors : List String := []
   date : Option String := none
   tag : Option PartTag := none
   id : Option InternalId := none
+  number : Bool := true
+deriving BEq, Hashable, Repr
 
 inductive Block where
   | paragraph
+deriving BEq
+
+instance : BEq Empty where
+  beq := nofun
 
 structure TraverseState where
-  partTags : Lean.HashMap PartTag Slug := {}
+  partTags : Lean.HashMap PartTag InternalId := {}
+  externalTags : Lean.HashMap InternalId String := {}
   slugs : Lean.HashMap Slug Path := {}
   ids : Lean.HashSet InternalId := {}
   nextId : Nat := 0
@@ -93,6 +104,16 @@ def freshId [Monad m] [MonadStateOf TraverseState m] : m InternalId := do
   let i := ⟨next⟩
   modify fun st => {st with ids := st.ids.insert i}
   pure i
+
+def freshTag [Monad m] [MonadStateOf TraverseState m] (hint : String) (id : InternalId) : m PartTag := do
+  let mut next : String := s!"--part-{hint.sluggify.toString}-{id.id}"
+  repeat
+    if (← get).partTags.contains next then next := next ++ "-retry"
+    else break
+  let tag := PartTag.internal next
+  modify fun st => {st with partTags := st.partTags.insert tag id}
+  pure tag
+
 
 defmethod Lean.HashMap.all [BEq α] [Hashable α] (hm : Lean.HashMap α β) (p : α → β → Bool) : Bool :=
   hm.fold (fun prev k v => prev && p k v) true
@@ -143,22 +164,68 @@ def Manual : Genre where
   TraverseContext := Manual.TraverseContext
   TraverseState := Manual.TraverseState
 
+instance : BEq (Genre.PartMetadata Manual) := inferInstanceAs (BEq Manual.PartMetadata)
+instance : BEq (Genre.Block Manual) := inferInstanceAs (BEq Manual.Block)
+instance : BEq (Genre.Inline Manual) := ⟨nofun⟩
+
+instance : Repr (Genre.PartMetadata Manual) := inferInstanceAs (Repr Manual.PartMetadata)
+
 namespace Manual
 abbrev TraverseM := ReaderT Manual.TraverseContext (StateT Manual.TraverseState IO)
 
-instance : Traverse Manual Manual.TraverseM where
+def logError (err : String) : TraverseM Unit := do
+  (← read).logError err
+
+instance : Traverse Manual TraverseM where
   part p :=
     if p.metadata.isNone then pure (some {}) else pure none
   block _ := pure ()
   inline _ := pure ()
-  genrePart
-    | {authors := _, date := _, tag := some tag}, _ => do
-      match tag with
-      | .provided t =>
-        -- If the tag is already used
-        pure none
-      | _ => sorry
-    | _, _ => pure none
+  genrePart startMeta part := do
+    let mut meta := startMeta
+
+    -- First, assign a unique ID if there is none
+    let id ← if let some i := meta.id then pure i else
+      freshId
+    meta := {meta with id := some id}
+
+    match meta.tag with
+    | none =>
+      -- Assign an internal tag - the next round will make it external This is done in two rounds to
+      -- give priority to user-provided tags that might otherwise anticipate the name-mangling scheme
+      let tag ← freshTag part.titleString id
+      meta := {meta with tag := tag}
+    | some t =>
+      -- Ensure uniqueness
+      if let some id' := (← get).partTags.find? t then
+        if id != id' then logError s!"Duplicate tag '{t}'"
+      else
+        modify fun st => {st with partTags := st.partTags.insert t id}
+      match t with
+      | PartTag.external name =>
+        -- These are the actual IDs to use in generated HTML and links and such
+        modify fun st => {st with externalTags := st.externalTags.insert id name}
+      | PartTag.internal name =>
+        let mut attempt := name
+        repeat
+          if (← get).partTags.contains (PartTag.external attempt) then attempt := attempt ++ "-next"
+          else break
+        let t' := PartTag.external attempt
+        modify fun st => {st with partTags := st.partTags.insert t' id}
+        meta := {meta with tag := t'}
+      | PartTag.provided n =>
+        -- Convert to an external tag, and fail if we can't (users should control their link IDs)
+        let external := PartTag.external n
+        if let some id' := (← get).partTags.find? external then
+          if id != id' then logError s!"Duplicate tag '{t}'"
+        else
+          modify fun st => {st with partTags := st.partTags.insert external id}
+          meta := {meta with tag := external}
+
+    pure <|
+      if meta == startMeta then none
+      else pure (part.withMetadata meta)
+
   genreBlock
     | .paragraph, _ => pure none
   genreInline i := nomatch i
@@ -174,7 +241,12 @@ instance : TeX.GenreTeX Manual IO where
 
 open Verso.Output.Html in
 instance : Html.GenreHtml Manual IO where
-  part go meta txt := go txt
+  part go meta txt := do
+    let st ← Verso.Doc.Html.HtmlT.state
+    let attrs := match meta.id >>= st.externalTags.find? with
+      | none => #[]
+      | some t => #[("id", t)]
+    go txt attrs
   block go
     | .paragraph, content => do
       pure <| {{<div class="paragraph">{{← content.mapM go}}</div>}}
@@ -199,13 +271,13 @@ def ensureDir (dir : System.FilePath) : IO Unit := do
   if !(← dir.isDir) then
     throw (↑ s!"Not a directory: {dir}")
 
-def traverse (text : Part Manual) (config : Config) : IO (Part Manual × TraverseState) := do
-  let topCtxt := {}
+def traverse (logError : String → IO Unit) (text : Part Manual) (config : Config) : IO (Part Manual × TraverseState) := do
+  let topCtxt := {logError}
   let mut state : Manual.TraverseState := {}
   let mut text := text
   for _ in [0:config.maxTraversals] do
     let (text', state') ← StateT.run (ReaderT.run (Genre.traverse Manual text) topCtxt) state
-    if state' == state then
+    if text' == text && state' == state then
       return (text', state')
     else
       state := state'
@@ -221,7 +293,7 @@ def emitTeX (logError : String → IO Unit) (config : Config) (state : TraverseS
   }
   let authors := text.metadata.map (·.authors) |>.getD []
   let date := text.metadata.bind (·.date) |>.getD ""
-  let ctxt := {}
+  let ctxt := {logError}
   let frontMatter ← text.content.mapM (·.toTeX (opts, ctxt, state))
   let chapters ← text.subParts.mapM (·.toTeX (opts, ctxt, state))
   let dir := config.destination.join "tex"
@@ -236,30 +308,41 @@ def emitTeX (logError : String → IO Unit) (config : Config) (state : TraverseS
 
 open Verso.Output (Html)
 
+partial def toc (opts : Html.Options Manual IO) (ctxt : TraverseContext) (state : TraverseState) : Part Manual → IO Html.Toc
+  | .mk title sTitle meta _ sub => do
+    let titleHtml ← Html.seq <$> title.mapM (Manual.toHtml opts ctxt state)
+    let some {id := some id, number, ..} := meta
+      | throw <| .userError s!"No ID for {sTitle} - {repr meta}"
+    let some v := state.externalTags.find? id
+      | throw <| .userError s!"No external ID for {sTitle}"
+    let children ← sub.mapM (toc opts ctxt state)
+    pure <| .entry titleHtml v number children
+
 def emitHtmlSingle (logError : String → IO Unit) (config : Config) (state : TraverseState) (text : Part Manual) : IO Unit := do
   let authors := text.metadata.map (·.authors) |>.getD []
   let date := text.metadata.bind (·.date) |>.getD ""
   let opts := {logError := logError}
-  let ctxt := {}
+  let ctxt := {logError}
   let titleHtml ← Html.seq <$> text.title.mapM (Manual.toHtml opts ctxt state)
   let introHtml ← Html.seq <$> text.content.mapM (Manual.toHtml opts ctxt state)
   let contents ← Html.seq <$> text.subParts.mapM (Manual.toHtml {opts with headerLevel := 2} ctxt state)
   let pageContent := open Verso.Output.Html in
     {{<section>{{Html.titlePage titleHtml authors introHtml ++ contents}}</section>}}
+  let toc ← text.subParts.mapM (toc opts ctxt state)
   let dir := config.destination.join "html-single"
   ensureDir dir
   IO.FS.withFile (dir.join "book.css") .write fun h => do
     h.putStrLn Html.Css.pageStyle
   IO.FS.withFile (dir.join "index.html") .write fun h => do
     h.putStrLn Html.doctype
-    h.putStrLn (Html.page text.titleString pageContent).asString
+    h.putStrLn (Html.page toc text.titleString pageContent).asString
 
 
 def manualMain (text : Part Manual) (options : List String) : IO UInt32 := do
   let hasError ← IO.mkRef false
   let logError msg := do hasError.set true; IO.eprintln msg
   let cfg ← opts {} options
-  let (text, state) ← traverse text cfg
+  let (text, state) ← traverse logError text cfg
   emitTeX logError cfg state text
   emitHtmlSingle logError cfg state text
 

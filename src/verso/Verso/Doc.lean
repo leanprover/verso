@@ -43,6 +43,16 @@ instance : Repr Genre.none.PartMetadata where
 inductive MathMode where | inline | display
 deriving Repr, BEq
 
+private def arrayEq (eq : α → α → Bool) (xs ys : Array α) : Bool := Id.run do
+    if h : xs.size = ys.size then
+      for h' : i in [0:xs.size] do
+        have : i < ys.size := by
+          let ⟨_, h''⟩ := h'
+          simp [*] at h''; assumption
+        if !(eq xs[i] ys[i]) then return false
+      return true
+    else return false
+
 inductive Inline (genre : Genre) : Type where
   | text (string : String)
   | emph (content : Array (Inline genre))
@@ -56,6 +66,23 @@ inductive Inline (genre : Genre) : Type where
   | image (alt : String) (url : String)
   | concat (content : Array (Inline genre))
   | other (container : genre.Inline) (content : Array (Inline genre))
+
+partial def Inline.beq [BEq genre.Inline] : Inline genre → Inline genre → Bool
+  | .text str1, .text str2
+  | .code str1, .code str2
+  | .linebreak str1, .linebreak str2=> str1 == str2
+  | .emph c1, .emph c2
+  | .bold c1, .bold c2 => arrayEq beq c1 c2
+  | .math m1 str1, .math m2 str2 => m1 == m1 && str1 == str2
+  | .link txt1 url1, .link txt2 url2 => arrayEq beq txt1 txt2 && url1 == url2
+  | .footnote name1 content1, .footnote name2 content2 => name1 == name2 && arrayEq beq content1 content2
+  | .image alt1 url1, .image alt2 url2 => alt1 == alt2 && url1 == url2
+  | .concat c1, .concat c2 => arrayEq beq c1 c2
+  | .other container1 content1, .other container2 content2 => container1 == container2 && arrayEq beq content1 content2
+  | _, _ => false
+
+
+instance [BEq genre.Inline] : BEq (Inline genre) := ⟨Inline.beq⟩
 
 private def reprArray (r : α → Nat → Format) (arr : Array α) : Format :=
   .bracket "#[" (.joinSep (arr.toList.map (r · max_prec)) ("," ++ .line)) "]"
@@ -102,25 +129,25 @@ inductive ArgVal where
   | name (x : Ident)
   | str (text : StrLit)
   | num (n : NumLit)
-deriving Repr, Inhabited
+deriving Repr, Inhabited, BEq
 
 open Lean in
 inductive Arg where
   | anon (value : ArgVal)
   | named (stx : Syntax) (name : Ident) (value : ArgVal)
-deriving Repr, Inhabited
+deriving Repr, Inhabited, BEq
 
 structure ListItem (α : Type u) where
   indent : Nat
   contents : Array α
-deriving Repr
+deriving Repr, BEq
 
 def ListItem.reprPrec [Repr α] : ListItem α → Nat → Std.Format := Repr.reprPrec
 
 structure DescItem (α : Type u) (β : Type v) where
   term : Array α
   desc : Array β
-deriving Repr
+deriving Repr, BEq
 
 def DescItem.reprPrec [Repr α] [Repr β] : DescItem α β → Nat → Std.Format := Repr.reprPrec
 
@@ -133,6 +160,20 @@ inductive Block (genre : Genre) : Type where
   | blockquote (items : Array (Block genre))
   | concat (content : Array (Block genre))
   | other (container : genre.Block) (content : Array (Block genre))
+
+partial def Block.beq [BEq genre.Inline] [BEq genre.Block] : Block genre → Block genre → Bool
+  | .para c1, .para c2 => c1 == c2
+  | .code n1 a1 i1 c1, .code n2 a2 i2 c2 => n1 == n2 && a1 == a2 && i1 == i2 && c1 == c2
+  | .ul i1, .ul i2 => arrayEq (fun | ⟨indent1, c1⟩, ⟨indent2, c2⟩ => indent1 == indent2 && arrayEq beq c1 c2) i1 i2
+  | .ol n1 i1, .ol n2 i2 => n1 == n2 && arrayEq (fun | ⟨indent1, c1⟩, ⟨indent2, c2⟩ => indent1 == indent2 && arrayEq beq c1 c2) i1 i2
+  | .dl i1, .dl i2 =>
+    arrayEq (fun | ⟨t1, d1⟩, ⟨t2, d2⟩ => t1 == t2 && arrayEq beq d1 d2) i1 i2
+  | .blockquote i1, .blockquote i2 => arrayEq beq i1 i2
+  | .concat c1, .concat c2 => arrayEq beq c1 c2
+  | .other b1 c1, .other b2 c2 => b1 == b2 && arrayEq beq c1 c2
+  | _, _ => false
+
+instance [BEq genre.Inline] [BEq genre.Block] : BEq (Block genre) := ⟨Block.beq⟩
 
 partial def Block.reprPrec [Repr g.Inline] [Repr g.Block] (inline : Block g) (prec : Nat) : Std.Format :=
     open Repr Std.Format in
@@ -157,6 +198,12 @@ inductive Part (genre : Genre) : Type where
   | mk (title : Array (Inline genre)) (titleString : String) (metadata : Option genre.PartMetadata) (content : Array (Block genre)) (subParts : Array (Part genre))
 deriving Inhabited
 
+partial def Part.beq [BEq genre.Inline] [BEq genre.Block] [BEq genre.PartMetadata] : Part genre → Part genre → Bool
+  | .mk t1 ts1 m1 c1 s1, .mk t2 ts2 m2 c2 s2 =>
+    t1 == t2 && ts1 == ts2 && m1 == m2 && c1 == c2 && arrayEq beq s1 s2
+
+instance [BEq genre.Inline] [BEq genre.Block] [BEq genre.PartMetadata] : BEq (Part genre) := ⟨Part.beq⟩
+
 def Part.title : Part genre → Array (Inline genre)
   | .mk title .. => title
 def Part.titleString : Part genre → String
@@ -168,8 +215,16 @@ def Part.content  : Part genre → Array (Block genre)
 def Part.subParts : Part genre → Array (Part genre)
   | .mk _ _ _ _ subParts => subParts
 
+def Part.withoutSubparts : Part genre → Part genre
+  | .mk title titleString meta content _ => .mk title titleString meta content #[]
+
 def Part.withoutMetadata : Part genre → Part genre
   | .mk title titleString _ content subParts => .mk title titleString none content subParts
+
+def Part.withMetadata (part : Part genre) (newMeta : genre.PartMetadata) : Part genre :=
+  match part with
+  | .mk title titleString _ content subParts => .mk title titleString (some newMeta) content subParts
+
 
 partial def Part.reprPrec [Repr g.Inline] [Repr g.Block] [Repr g.PartMetadata] (part : Part g) (prec : Nat) : Std.Format :=
   open Std.Format in
@@ -233,7 +288,8 @@ where
     | .code .. => pure b
 
   part (p : Doc.Part g) : m (Doc.Part g) := do
-    let mut p := p
+    let meta' ← Traverse.part p
+    let mut p := meta'.map p.withMetadata |>.getD p
     if let some md := p.metadata then
       if let some p' ← Traverse.genrePart md p then
         p := p'
