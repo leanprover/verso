@@ -17,6 +17,7 @@ inductive BlockExt where
   | highlightedCode (contextName : Lean.Name) (highlighted : Highlighted)
   | lexedText (content : LexedText)
   | htmlDiv (classes : String)
+  | htmlWrapper (tag : String) (attributes : Array (String × String))
   | htmlDetails (classes : String) (summary : Html)
   | blob (html : Html)
 deriving Repr
@@ -374,7 +375,7 @@ def highlightingStyle : String := "
 }
 
 .hl.lean.inline {
-  display: inline-block;
+  display: inline;
 }
 
 .hl.lean .token {
@@ -444,6 +445,18 @@ def highlightingStyle : String := "
   font-family: sans-serif;
   white-space: normal;
   width: 40em;
+}
+
+.hl.lean .hover-info .sep {
+  display: block;
+  width: 95%;
+  margin-left: auto;
+  margin-right: auto;
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+  padding: 0;
+  height: 1px;
+  border-top: 1px solid #ccc;
 }
 
 .hl.lean code {

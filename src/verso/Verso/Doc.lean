@@ -131,6 +131,12 @@ inductive ArgVal where
   | num (n : NumLit)
 deriving Repr, Inhabited, BEq
 
+def ArgVal.syntax (argVal : ArgVal) : Lean.Syntax :=
+  match argVal with
+  | .name x => x
+  | .str txt => txt
+  | .num n => n
+
 open Lean in
 inductive Arg where
   | anon (value : ArgVal)

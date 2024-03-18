@@ -24,8 +24,13 @@ inductive ArgParse (m) : Type → Type 1 where
   | pure (val : α) : ArgParse m α
   | positional (nameHint : Name) (val : ValDesc m α) : ArgParse m α
   | named (name : Name) (val : ValDesc m α) (optional : Bool) : ArgParse m (if optional then Option α else α)
+  | anyNamed (name : String) (val : ValDesc m α) : ArgParse m (Ident × α)
+  | done : ArgParse m Unit
   | orElse (p1 : ArgParse m α) (p2 : Unit → ArgParse m α) : ArgParse m α
   | seq (p1 : ArgParse m (α → β)) (p2 : Unit → ArgParse m α) : ArgParse m β
+
+instance : Inhabited (ArgParse m α) where
+  default := .fail none none
 
 instance : Applicative (ArgParse m) where
   pure := ArgParse.pure
@@ -40,6 +45,8 @@ def ArgParse.describe : ArgParse m α → MessageData
   | .pure x => "No arguments expected"
   | .positional _x v => v.description
   | .named x v opt => if opt then "[" else "" ++ m!"{x} : {v.description}" ++ if opt then "]" else ""
+  | .anyNamed x v => s!"{x}: a named " ++ v.description
+  | .done => "no arguments remaining"
   | .orElse p1 p2 => p1.describe ++ " or " ++ (p2 ()).describe
   | .seq p1 p2 => p1.describe ++ " then " ++ (p2 ()).describe
 
@@ -91,6 +98,30 @@ def ArgParse.parse : ArgParse m α → ExceptT (Array Arg × Exception) (StateT 
     else match optional with
       | true => Pure.pure none
       | false => throw ((← get).remaining, .error (← getRef) m!"Named argument {x} ({vp.description}) not found")
+  | .anyNamed x vp => do
+    let initArgs := (← get).remaining
+    if h : initArgs.size > 0 then
+      match initArgs[0] with
+      | .anon _ =>
+        throw ((← get).remaining, .error (← getRef) m!"Name-argument pair '{x}' ({vp.description}) expected, got anonymous argument")
+      | .named stx y v =>
+        let val? : Except (Array Arg × Exception) _ ← liftM <|
+          try
+            Except.ok <$> vp.get v
+          catch exn => Pure.pure <| Except.error (initArgs, exn)
+        match val? with
+        | .ok val =>
+          modify fun s => {s with remaining := initArgs.extract 1 initArgs.size}
+          Pure.pure (y, val)
+        | .error e => throw e
+    else throw ((← get).remaining, .error (← getRef) m!"Name-argument pair '{x}' ({vp.description}) not found")
+  | .done => do
+    let args := (← get).remaining
+    if h : args.size > 0 then
+      match args[0] with
+      | .anon v => throw (args, .error v.syntax "Unexpected argument")
+      | .named stx _ _ => throw (args, .error stx "Unexpected argument")
+    else Pure.pure ()
   | .orElse p1 p2 =>
     try p1.parse
     catch

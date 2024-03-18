@@ -40,6 +40,22 @@ def htmlDiv : DirectiveExpander
     let val ← ``(Block.other (Blog.BlockExt.htmlDiv $(quote classes)) #[ $contents,* ])
     pure #[val]
 
+private partial def attrs : ArgParse DocElabM (Array (String × String)) := List.toArray <$> remaining attr
+where
+  remaining {m} {α} (p : ArgParse m α) : ArgParse m (List α) :=
+    (.done *> pure []) <|> ((· :: ·) <$> p <*> remaining p)
+  attr : ArgParse DocElabM (String × String) :=
+    (fun (k, v) => (k.getId.toString (escape := false), v)) <$> .anyNamed "attribute" .string
+
+@[directive_expander html]
+def html : DirectiveExpander
+  | args, stxs => do
+    let (name, attrs) ← ArgParse.run ((·, ·) <$> .positional `name .name <*> attrs) args
+    let tag := name.toString (escape := false)
+    let contents ← stxs.mapM elabBlock
+    let val ← ``(Block.other (Blog.BlockExt.htmlWrapper $(quote tag) $(quote attrs)) #[ $contents,* ])
+    pure #[val]
+
 @[directive_expander blob]
 def blob : DirectiveExpander
   | #[.anon (.name blobName)], stxs => do
@@ -84,9 +100,66 @@ def page_link : RoleExpander
     pure #[val]
   | _, _ => throwUnsupportedSyntax
 
+
+-- The assumption here is that suffixes are _mostly_ unique, so the arrays will likely be very
+-- small.
+structure NameSuffixMap (α : Type) : Type where
+  contents : NameMap (Array (Name × α)) := {}
+deriving Inhabited
+
+def NameSuffixMap.empty : NameSuffixMap α := {}
+
+def NameSuffixMap.insert (map : NameSuffixMap α) (key : Name) (val : α) : NameSuffixMap α := Id.run do
+  let some last := key.components.getLast?
+    | map
+  let mut arr := map.contents.find? last |>.getD #[]
+  for h : i in [0:arr.size] do
+    have : i < arr.size := by cases h; simp [*]
+    if arr[i].fst == key then
+      return {map with contents := map.contents.insert last (arr.set ⟨i, by assumption⟩ (key, val))}
+  return {map with contents := map.contents.insert last (arr.push (key, val))}
+
+def NameSuffixMap.toArray (map : NameSuffixMap α) : Array (Name × α) := Id.run do
+  let mut arr := #[]
+  for (_, arr') in map.contents.toList do
+    arr := arr ++ arr'
+  arr.qsort (fun x y => x.fst.toString < y.fst.toString)
+
+def NameSuffixMap.toList (map : NameSuffixMap α) : List (Name × α) := map.toArray.toList
+
+def NameSuffixMap.get (map : NameSuffixMap α) (key : Name) : Array (Name × α) := Id.run do
+  let ks := key.componentsRev
+  let some k' := ks.head?
+    | #[]
+  let some candidates := map.contents.find? k'
+    | #[]
+  let mut result := none
+  for (n, c) in candidates do
+    match matchLength ks n.componentsRev, result with
+    | none, _ => continue
+    | some l, none => result := some (l, #[(n, c)])
+    | some l, some (l', found) =>
+      if l > l' then result := some (l, #[(n, c)])
+      else if l == l' then result := some (l', found.push (n, c))
+      else continue
+  let res := result.map Prod.snd |>.getD #[]
+  res.qsort (fun x y => x.fst.toString < y.fst.toString)
+where
+  matchLength : List Name → List Name → Option Nat
+    | [], _ => some 0
+    | _ :: _, [] => none
+    | x::xs, y::ys =>
+      if x == y then
+        matchLength xs ys |>.map (· + 1)
+      else none
+
+/-- info: #[(`a.b.c, 1), (`a.c, 4), (`b.c, 6), (`c, 3)] -/
+#guard_msgs in
+#eval NameSuffixMap.empty |>.insert `a.b.c 1 |>.insert `b.c 2 |>.insert `c 3 |>.insert `a.c 4 |>.insert `a.b 5 |>.insert `b.c 6 |>.get `c
+
 inductive LeanExampleData where
   | inline (commandState : Command.State) (parserState : Parser.ModuleParserState)
-  | subproject (loaded : NameMap Example)
+  | subproject (loaded : NameSuffixMap Example)
 deriving Inhabited
 
 structure ExampleContext where
@@ -115,13 +188,15 @@ def parserInputString [Monad m] [MonadFileMap m] (str : TSyntax `str) : m String
   code := code ++ str.getString
   return code
 
+
 open System in
 @[block_role_expander leanExampleProject]
 def leanExampleProject : BlockRoleExpander
-  | #[.anon (.name name), .anon (.str projectDir)], #[] => do
-    if exampleContextExt.getState (← getEnv) |>.contexts |>.contains name.getId then
+  | args, #[] => do
+    let (name, projectDir) ← ArgParse.run ((·, ·) <$> .positional `name .name <*> .positional `projectDir .string) args
+    if exampleContextExt.getState (← getEnv) |>.contexts |>.contains name then
       throwError "Example context '{name}' already defined in this module"
-    let path : FilePath := ⟨projectDir.getString⟩
+    let path : FilePath := ⟨projectDir⟩
     if path.isAbsolute then
       throwError "Expected a relative path, got {path}"
     let loadedExamples ← loadExamples path
@@ -130,9 +205,9 @@ def leanExampleProject : BlockRoleExpander
       for (exName, ex) in modExamples.toList do
         savedExamples := savedExamples.insert (mod ++ exName) ex
     modifyEnv fun env => exampleContextExt.modifyState env fun s => {s with
-      contexts := s.contexts.insert name.getId (.subproject savedExamples)
+      contexts := s.contexts.insert name (.subproject savedExamples)
     }
-    for (name, ex) in savedExamples.toList do
+    for (name, ex) in savedExamples.toArray do
       modifyEnv fun env => messageContextExt.modifyState env fun s => {s with messages := s.messages.insert name (.inr ex.messages) }
     Verso.Hover.addCustomHover (← getRef) <| "Contains:\n" ++ String.join (savedExamples.toList.map (s!" * `{toString ·.fst}`\n"))
     pure #[]
@@ -140,7 +215,7 @@ def leanExampleProject : BlockRoleExpander
     if h : more.size > 0 then
       throwErrorAt more[0] "Unexpected contents"
     else
-      throwError "Unexpected arguments"
+      throwError "Unexpected contents"
 where
   getModExamples (mod : Name) (json : Json) : DocElabM (NameMap Example) := do
     let .ok exs := json.getObj?
@@ -153,7 +228,7 @@ where
       | .ok ex => found := found.insert (mod ++ name.toName) ex
     pure found
 
-private def getSubproject (project : Ident) : TermElabM (NameMap Example) := do
+private def getSubproject (project : Ident) : TermElabM (NameSuffixMap Example) := do
   let some ctxt := exampleContextExt.getState (← getEnv) |>.contexts |>.find? project.getId
     | throwErrorAt project "Subproject '{project}' not loaded"
   let .subproject projectExamples := ctxt
@@ -163,27 +238,55 @@ private def getSubproject (project : Ident) : TermElabM (NameMap Example) := do
 
 @[block_role_expander leanCommand]
 def leanCommand : BlockRoleExpander
-  | #[.anon (.name project), .anon (.name exampleName)], #[] => do
+  | args, #[] => do
+    let (project, exampleName) ← ArgParse.run ((·, ·) <$> .positional `project .ident <*> .positional `exampleName .ident) args
     let projectExamples ← getSubproject project
-    let some {highlighted := hls, original := str, ..} := projectExamples.find? exampleName.getId
-      | throwErrorAt exampleName "Example '{exampleName}' not found - options are {projectExamples.toList.map (·.fst)}"
+    let (hls, str) ←
+      match projectExamples.get exampleName.getId with
+      | #[(n', {highlighted := hls, original := str, ..})] =>
+        if n' ≠ exampleName.getId then
+          Suggestion.saveSuggestion exampleName n'.toString n'.toString
+        pure (hls, str)
+      | #[] =>
+        for (n, _) in projectExamples.toArray do
+          if FuzzyMatching.fuzzyMatch exampleName.getId.toString n.toString then
+            Suggestion.saveSuggestion exampleName n.toString n.toString
+        throwErrorAt exampleName "Example '{exampleName}' not found - options are {projectExamples.toList.map (·.fst)}"
+      | more =>
+        for (n, _) in more do
+          Suggestion.saveSuggestion exampleName n.toString n.toString
+        throwErrorAt exampleName "Example '{exampleName}' is ambiguous - options are {more.toList.map (·.fst)}"
     Verso.Hover.addCustomHover exampleName s!"```lean\n{str}\n```"
     pure #[← ``(Block.other (Blog.BlockExt.highlightedCode $(quote project.getId) (SubVerso.Highlighting.Highlighted.seq $(quote hls))) #[Block.code none #[] 0 $(quote str)])]
   | _, more =>
     if h : more.size > 0 then
       throwErrorAt more[0] "Unexpected contents"
     else
-      throwError "Unexpected arguments"
+      throwError "Unexpected contents"
 
 @[role_expander leanTerm]
 def leanTerm : RoleExpander
-  | #[.anon (.name project)], #[arg] => do
+  | args, #[arg] => do
+    let project ← ArgParse.run (.positional `project .ident) args
     let `(inline|code{ $name:str }) := arg
       | throwErrorAt arg "Expected code literal with the example name"
     let exampleName := name.getString.toName
     let projectExamples ← getSubproject project
-    let some {highlighted := hls, original := str, ..} := projectExamples.find? exampleName
-      | throwErrorAt name "Example '{exampleName}' not found - options are {projectExamples.toList.map (·.fst)}"
+    let (hls, str) ←
+      match projectExamples.get exampleName with
+      | #[(n', {highlighted := hls, original := str, ..})] =>
+        if n' ≠ exampleName then
+          Suggestion.saveSuggestion name n'.toString n'.toString
+        pure (hls, str)
+      | #[] =>
+        for (n, _) in projectExamples.toArray do
+          if FuzzyMatching.fuzzyMatch exampleName.toString n.toString then
+            Suggestion.saveSuggestion name n.toString n.toString
+        throwErrorAt name "Example '{exampleName}' not found - options are {projectExamples.toList.map (·.fst)}"
+      | more =>
+        for (n, _) in more do
+          Suggestion.saveSuggestion name n.toString n.toString
+        throwErrorAt name "Example '{exampleName}' is ambiguous - options are {more.toList.map (·.fst)}"
     Verso.Hover.addCustomHover arg s!"```lean\n{str}\n```"
     pure #[← ``(Inline.other (Blog.InlineExt.highlightedCode $(quote project.getId) (SubVerso.Highlighting.Highlighted.seq $(quote hls))) #[Inline.code $(quote str)])]
   | _, more =>
@@ -237,8 +340,10 @@ def lean : CodeBlockExpander
   | args, str => do
     let config ← LeanBlockConfig.parse.run args
     let x := config.exampleContext
-    let some (.inline commandState state) := exampleContextExt.getState (← getEnv) |>.contexts.find? x.getId
-      | throwErrorAt x "Can't find example context"
+    let (commandState, state) ← match exampleContextExt.getState (← getEnv) |>.contexts.find? x.getId with
+      | some (.inline commandState state) => pure (commandState, state)
+      | some (.subproject ..) => throwErrorAt x "Expected an example context for inline Lean, but found a subproject"
+      | none => throwErrorAt x "Can't find example context"
     let context := Parser.mkInputContext (← parserInputString str) (← getFileName)
     -- Process with empty messages to avoid duplicate output
     let s ← IO.processCommands context state { commandState with messages.msgs := {} }
