@@ -169,7 +169,7 @@ deriving Inhabited
 initialize exampleContextExt : EnvExtension ExampleContext ← registerEnvExtension (pure {})
 
 structure ExampleMessages where
-  messages : NameMap (MessageLog ⊕ List (MessageSeverity × String)) := {}
+  messages : NameSuffixMap (MessageLog ⊕ List (MessageSeverity × String)) := {}
 deriving Inhabited
 
 initialize messageContextExt : EnvExtension ExampleMessages ← registerEnvExtension (pure {})
@@ -236,26 +236,29 @@ private def getSubproject (project : Ident) : TermElabM (NameSuffixMap Example) 
   Verso.Hover.addCustomHover project <| "Contains:\n" ++ String.join (projectExamples.toList.map (s!" * `{toString ·.fst}`\n"))
   pure projectExamples
 
+def NameSuffixMap.getOrSuggest [Monad m] [MonadInfoTree m] [MonadError m]
+    (map : NameSuffixMap α) (key : Ident) : m (Name × α) := do
+  match map.get key.getId with
+  | #[(n', v)] =>
+    if n' ≠ key.getId then
+      Suggestion.saveSuggestion key n'.toString n'.toString
+    pure (n', v)
+  | #[] =>
+    for (n, _) in map.toArray do
+      if FuzzyMatching.fuzzyMatch key.getId.toString n.toString then
+        Suggestion.saveSuggestion key n.toString n.toString
+    throwErrorAt key "'{key}' not found - options are {map.toList.map (·.fst)}"
+  | more =>
+    for (n, _) in more do
+      Suggestion.saveSuggestion key n.toString n.toString
+    throwErrorAt key "'{key}' is ambiguous - options are {more.toList.map (·.fst)}"
+
 @[block_role_expander leanCommand]
 def leanCommand : BlockRoleExpander
   | args, #[] => do
     let (project, exampleName) ← ArgParse.run ((·, ·) <$> .positional `project .ident <*> .positional `exampleName .ident) args
     let projectExamples ← getSubproject project
-    let (hls, str) ←
-      match projectExamples.get exampleName.getId with
-      | #[(n', {highlighted := hls, original := str, ..})] =>
-        if n' ≠ exampleName.getId then
-          Suggestion.saveSuggestion exampleName n'.toString n'.toString
-        pure (hls, str)
-      | #[] =>
-        for (n, _) in projectExamples.toArray do
-          if FuzzyMatching.fuzzyMatch exampleName.getId.toString n.toString then
-            Suggestion.saveSuggestion exampleName n.toString n.toString
-        throwErrorAt exampleName "Example '{exampleName}' not found - options are {projectExamples.toList.map (·.fst)}"
-      | more =>
-        for (n, _) in more do
-          Suggestion.saveSuggestion exampleName n.toString n.toString
-        throwErrorAt exampleName "Example '{exampleName}' is ambiguous - options are {more.toList.map (·.fst)}"
+    let (_, {highlighted := hls, original := str, ..}) ← projectExamples.getOrSuggest exampleName
     Verso.Hover.addCustomHover exampleName s!"```lean\n{str}\n```"
     pure #[← ``(Block.other (Blog.BlockExt.highlightedCode $(quote project.getId) (SubVerso.Highlighting.Highlighted.seq $(quote hls))) #[Block.code none #[] 0 $(quote str)])]
   | _, more =>
@@ -272,21 +275,7 @@ def leanTerm : RoleExpander
       | throwErrorAt arg "Expected code literal with the example name"
     let exampleName := name.getString.toName
     let projectExamples ← getSubproject project
-    let (hls, str) ←
-      match projectExamples.get exampleName with
-      | #[(n', {highlighted := hls, original := str, ..})] =>
-        if n' ≠ exampleName then
-          Suggestion.saveSuggestion name n'.toString n'.toString
-        pure (hls, str)
-      | #[] =>
-        for (n, _) in projectExamples.toArray do
-          if FuzzyMatching.fuzzyMatch exampleName.toString n.toString then
-            Suggestion.saveSuggestion name n.toString n.toString
-        throwErrorAt name "Example '{exampleName}' not found - options are {projectExamples.toList.map (·.fst)}"
-      | more =>
-        for (n, _) in more do
-          Suggestion.saveSuggestion name n.toString n.toString
-        throwErrorAt name "Example '{exampleName}' is ambiguous - options are {more.toList.map (·.fst)}"
+    let (_, {highlighted := hls, original := str, ..}) ← projectExamples.getOrSuggest <| mkIdentFrom name exampleName
     Verso.Hover.addCustomHover arg s!"```lean\n{str}\n```"
     pure #[← ``(Inline.other (Blog.InlineExt.highlightedCode $(quote project.getId) (SubVerso.Highlighting.Highlighted.seq $(quote hls))) #[Inline.code $(quote str)])]
   | _, more =>
@@ -422,11 +411,9 @@ where
 @[code_block_expander leanOutput]
 def leanOutput : Doc.Elab.CodeBlockExpander
   | args, str => do
-    --let config ← LeanOutputConfig.fromArgs args -- TODO actual parser for my args
     let config ← LeanOutputConfig.parser.run args
 
-    let some savedInfo := messageContextExt.getState (← getEnv) |>.messages |>.find? config.name.getId
-      | throwErrorAt str "No saved info for name '{config.name.getId}'"
+    let (_, savedInfo) ← messageContextExt.getState (← getEnv) |>.messages |>.getOrSuggest config.name
     let messages ← match savedInfo with
       | .inl log =>
         let messages ← liftM <| log.msgs.toArray.mapM contents
