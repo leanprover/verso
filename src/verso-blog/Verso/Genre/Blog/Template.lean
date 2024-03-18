@@ -68,12 +68,12 @@ defmethod Token.Kind.hover? : (tok : Token.Kind) → Option Html
   | .const _n sig doc =>
     let docs := match doc with
       | none => .empty
-      | some txt => {{<hr/><pre class="docstring">{{txt}}</pre>}}
+      | some txt => {{<span class="sep"/><code class="docstring">{{txt}}</code>}}
     some <| hover {{ <code>{{sig}}</code> {{docs}} }}
   | .option n doc =>
     let docs := match doc with
       | none => .empty
-      | some txt => {{<hr/><pre class="docstring">{{txt}}</pre>}}
+      | some txt => {{<span class="sep"/><code class="docstring">{{txt}}</code>}}
     some <| hover {{ <code>{{toString n}}</code> {{docs}} }}
   | .keyword _ _ none => none
   | .keyword _ _ (some doc) => some <| hover {{<code class="docstring">{{doc}}</code>}}
@@ -172,6 +172,8 @@ def blockHtml (g : Genre) (go : Block g → HtmlT g IO Html) : Blog.BlockExt →
     pure {{ <code class="hl lean block" "data-lean-context"={{toString contextName}}> {{ hls.toHtml }} </code> }}
   | .htmlDetails classes summary, contents => do
     pure {{ <details class={{classes}}><summary>{{summary}}</summary> {{← contents.mapM go}}</details>}}
+  | .htmlWrapper name attrs, contents => do
+    Html.tag name attrs <$> contents.mapM go
   | .htmlDiv classes, contents => do
     pure {{ <div class={{classes}}> {{← contents.mapM go}} </div> }}
   | .blob html, _ => pure html
