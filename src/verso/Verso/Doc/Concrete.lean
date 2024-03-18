@@ -130,9 +130,18 @@ elab "#doc" "(" genre:term ")" title:inlineStr "=>" text:completeDocument eof:eo
     | dbg_trace "nope {ppSyntax title}" throwUnsupportedSyntax
   let titleString := inlinesToString (← getEnv) titleParts
   let ((), st, st') ← PartElabM.run {} (.init titleName) <| do
+    let mut errors := #[]
     setTitle titleString (← liftDocElabM <| titleParts.mapM elabInline)
-    for b in blocks do partCommand b
+    for b in blocks do
+      try
+        partCommand b
+      catch e =>
+        errors := errors.push e
     closePartsUntil 0 endPos
+    for e in errors do
+      match e with
+      | .error stx msg => logErrorAt stx msg
+      | oops@(.internal _ _) => throw oops
     pure ()
   let finished := st'.partContext.toPartFrame.close endPos
   pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
@@ -164,9 +173,16 @@ elab "#doc" "(" genre:term ")" title:inlineStr "=>" text:completeDocument eof:eo
       | dbg_trace "nope {ppSyntax title}" throwUnsupportedSyntax
     let titleString := inlinesToString (← getEnv) titleParts
     let ((), st, st') ← liftTermElabM <| PartElabM.run {} (.init titleName) <| do
+      let mut errors := #[]
       setTitle titleString (← liftDocElabM <| titleParts.mapM elabInline)
-      for b in blocks do partCommand b
+      for b in blocks do
+        try partCommand b
+        catch e => errors := errors.push e
       closePartsUntil 0 endPos
+      for e in errors do
+        match e with
+        | .error stx msg => logErrorAt stx msg
+        | oops@(.internal _ _) => throw oops
       pure ()
     let finished := st'.partContext.toPartFrame.close endPos
     pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
