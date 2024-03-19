@@ -267,6 +267,20 @@ def leanCommand : BlockRoleExpander
     else
       throwError "Unexpected contents"
 
+@[role_expander leanKw]
+def leanKw : RoleExpander
+  | args, #[arg] => do
+    ArgParse.run .done args
+    let `(inline|code{ $kw:str }) := arg
+      | throwErrorAt arg "Expected code literal with the keyword"
+    let hl : SubVerso.Highlighting.Highlighted := .token ⟨.keyword none none none, kw.getString⟩
+    pure #[← ``(Inline.other (Blog.InlineExt.customHighlight $(quote hl)) #[Inline.code $(quote kw.getString)])]
+  | _, more =>
+    if h : more.size > 0 then
+      throwErrorAt more[0] "Unexpected contents"
+    else
+      throwError "Unexpected arguments"
+
 @[role_expander leanTerm]
 def leanTerm : RoleExpander
   | args, #[arg] => do

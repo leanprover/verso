@@ -183,6 +183,8 @@ def inlineHtml (g : Genre) [MonadConfig (HtmlT g IO)] [MonadPath (HtmlT g IO)]
     (go : Inline g → HtmlT g IO Html) : Blog.InlineExt → Array (Inline g) → HtmlT g IO Html
   | .highlightedCode contextName hls, _contents => do
     pure {{ <code class="hl lean inline" "data-lean-context"={{toString contextName}}> {{ hls.toHtml }} </code> }}
+  | .customHighlight hls, _contents => do
+    pure {{ <code class="hl lean inline"> {{ hls.toHtml }} </code> }}
   | .label x, contents => do
     let contentHtml ← contents.mapM go
     let st ← stateEq ▸ state
