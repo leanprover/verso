@@ -24,6 +24,7 @@ deriving Repr
 
 inductive InlineExt where
   | highlightedCode (contextName : Lean.Name) (highlighted : Highlighted)
+  | customHighlight (highlighted : Highlighted)
   | label (name : Lean.Name)
   | ref (name : Lean.Name)
   | pageref (name : Lean.Name)
@@ -633,7 +634,7 @@ def genreBlock (g : Genre) : Blog.BlockExt → Array (Block g) → Blog.Traverse
     | _, _ => pure none
 
 def genreInline (g : Genre) : Blog.InlineExt → Array (Inline g) → Blog.TraverseM (Option (Inline g))
-    | .highlightedCode .., _contents => do
+    | .highlightedCode .., _contents | .customHighlight .., _contents => do
       modify fun st => {st with
         stylesheets := st.stylesheets.insert highlightingStyle,
         scripts := st.scripts.insert highlightingJs
