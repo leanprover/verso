@@ -141,6 +141,58 @@ def _root_.Array.mapIndexed (arr : Array α) (f : Fin arr.size → α → β) : 
   termination_by arr.size - i
   go #[] 0
 
+partial defmethod Highlighted.isEmpty (hl : Highlighted) : Bool :=
+  match hl with
+  | .text str => str.isEmpty
+  | .token .. => false
+  | .span _ _ hl => hl.isEmpty
+  | .tactics _ _ hl => hl.isEmpty
+  | .point .. => true
+  | .seq hls => hls.all isEmpty
+
+partial defmethod Highlighted.trimRight (hl : Highlighted) : Highlighted :=
+  match hl with
+  | .text str => .text str.trimRight
+  | .token .. => hl
+  | .span s info hl => .span s info hl.trimRight
+  | .tactics info pos hl => .tactics info pos hl.trimRight
+  | .point .. => hl
+  | .seq hls => Id.run do
+    let mut hls := hls
+    repeat
+      if h : hls.size > 0 then
+        have : hls.size - 1 < hls.size := by
+          apply Nat.sub_lt_of_pos_le
+          . simp
+          . exact h
+        if hls[hls.size - 1].isEmpty then
+          hls := hls.pop
+        else break
+      else break
+    if h : hls.size > 0 then
+      let i := hls.size - 1
+      have : i < hls.size := by
+        dsimp (config := {zetaDelta := true})
+        apply Nat.sub_lt_of_pos_le
+        . simp
+        . exact h
+      --dbg_trace repr hls[i]
+      .seq <| hls.set ⟨i, by assumption⟩ hls[i].trimRight
+    else hl
+
+partial defmethod Highlighted.trimLeft (hl : Highlighted) : Highlighted :=
+  match hl with
+  | .text str => .text str.trimLeft
+  | .token .. => hl
+  | .span s info hl => .span s info hl.trimLeft
+  | .tactics info pos hl => .tactics info pos hl.trimLeft
+  | .point .. => hl
+  | .seq hls =>
+    if h : hls.size > 0 then
+      .seq <| hls.set ⟨0, h⟩ hls[0].trimLeft
+    else hl
+
+defmethod Highlighted.trim (hl : Highlighted) : Highlighted := hl.trimLeft.trimRight
 
 partial defmethod Highlighted.toHtml : Highlighted → Html
   | .token t => t.toHtml
@@ -169,7 +221,7 @@ def blockHtml (g : Genre) (go : Block g → HtmlT g IO Html) : Blog.BlockExt →
   | .lexedText content, _contents => do
     pure {{ <pre class=s!"lexed {content.name}"> {{ content.toHtml }} </pre> }}
   | .highlightedCode contextName hls, _contents => do
-    pure {{ <code class="hl lean block" "data-lean-context"={{toString contextName}}> {{ hls.toHtml }} </code> }}
+    pure {{ <code class="hl lean block" "data-lean-context"={{toString contextName}}> {{ hls.trim.toHtml }} </code> }}
   | .htmlDetails classes summary, contents => do
     pure {{ <details class={{classes}}><summary>{{summary}}</summary> {{← contents.mapM go}}</details>}}
   | .htmlWrapper name attrs, contents => do
@@ -182,9 +234,9 @@ def inlineHtml (g : Genre) [MonadConfig (HtmlT g IO)] [MonadPath (HtmlT g IO)]
     (stateEq : g.TraverseState = Blog.TraverseState)
     (go : Inline g → HtmlT g IO Html) : Blog.InlineExt → Array (Inline g) → HtmlT g IO Html
   | .highlightedCode contextName hls, _contents => do
-    pure {{ <code class="hl lean inline" "data-lean-context"={{toString contextName}}> {{ hls.toHtml }} </code> }}
+    pure {{ <code class="hl lean inline" "data-lean-context"={{toString contextName}}> {{ hls.trim.toHtml }} </code> }}
   | .customHighlight hls, _contents => do
-    pure {{ <code class="hl lean inline"> {{ hls.toHtml }} </code> }}
+    pure {{ <code class="hl lean inline"> {{ hls.trim.toHtml }} </code> }}
   | .label x, contents => do
     let contentHtml ← contents.mapM go
     let st ← stateEq ▸ state

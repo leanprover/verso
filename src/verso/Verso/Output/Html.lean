@@ -245,11 +245,11 @@ partial def asString (html : Html) (indent : Nat := 0) (breakLines := true) : St
   | .tag "pre" attrs body =>
     "<pre" ++ attrsAsString attrs ++ ">" ++
     Html.asString (indent := 0) (breakLines := false) body ++
-    "</pre>" ++ newline indent
+    "</pre>" ++ breakline "pre"
   | .tag "code" attrs body =>
     "<code" ++ attrsAsString attrs ++ ">" ++
     Html.asString (indent := 0) (breakLines := false) body ++
-    "</code>" ++ newline indent
+    "</code>" ++ breakline "code"
   | .tag name attrs (.seq #[]) =>
     if name ∈ mustClose then
       "<" ++ name ++ attrsAsString attrs ++ "></" ++ name ++ ">" ++ breakline name
