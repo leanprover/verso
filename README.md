@@ -19,7 +19,7 @@ Verso is a collection of libraries for representing documents in Lean paired wit
  * Empower users to conveniently add their own features to the documentation language
  * Enable but not require extensions to be usable in multiple genres
 
-Please consult the in-progress [Verso manual](https://github.com/leanprover/verso/releases/download/latest/manual.pdf) for further details. Today, Verso is usable for running a website and blog, while the other genres are still under development.
+Please consult the in-progress Verso manual ([HTML](https://github.com/leanprover/verso/releases/download/latest/html-single-page.zip), [PDF](https://github.com/leanprover/verso/releases/download/latest/manual.pdf)) for further details. Today, Verso is usable for running a website and blog, while the other genres are still under development.
 
 ## Contributions
 
