@@ -374,6 +374,7 @@ def highlightingStyle : String := "
     top: 1em;
     font-weight: normal;
     font-style: normal;
+    width: min-content;
   }
 }
 
@@ -451,14 +452,19 @@ def highlightingStyle : String := "
 .hl.lean div.docstring {
   font-family: sans-serif;
   white-space: normal;
-  width: 40em;
+  width: max-content;
+  max-width: 40em;
+}
+
+.hl.lean div.docstring > :last-child {
+  margin-bottom: 0;
 }
 
 .hl.lean .hover-info .sep {
   display: block;
-  width: 95%;
-  margin-left: auto;
-  margin-right: auto;
+  width: auto;
+  margin-left: 1em;
+  margin-right: 1em;
   margin-top: 0.5em;
   margin-bottom: 0.5em;
   padding: 0;
