@@ -3,6 +3,8 @@ import Examples.Basic
 import SubVerso.Examples
 open SubVerso.Examples
 
+deriving instance Repr for Tree
+
 %example basic
 def t : Tree Nat := .branch (.branch .leaf 1 .leaf) 2 (.branch (.branch .leaf 3 .leaf) 4 .leaf)
 
