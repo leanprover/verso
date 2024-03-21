@@ -47,7 +47,7 @@ jobs:
           jobSummary: true
           args: --base './_out/examples/demosite' --no-progress --offline './_out/examples/demosite/**/*.html'
 
-      - name: Install Dependencies
+      - name: Install PDF Dependencies
         run: sudo apt update && sudo apt install -y pandoc texlive-latex-base texlive-latex-extra texlive-latex-recommended texlive-luatex fonts-dejavu
 
       - name: Generate the manual
@@ -57,34 +57,22 @@ jobs:
           cp -r _out/html-single html-single-page
           zip -r html-single-page.zip html-single-page
 
-      - name: Upload PDF to artifact storage
+      - name: Upload docs to artifact storage
         if: github.ref != 'refs/heads/main'
         uses: actions/upload-artifact@v3
         with:
-          name: "Verso manual (PDF)"
-          path: "manual.pdf"
+          name: "Verso manual (PDF and HTML)"
+          path: |
+            manual.pdf
+            html-single-page.zip
 
       - uses: "marvinpinto/action-automatic-releases@latest"
         if: github.ref == 'refs/heads/main'
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
           automatic_release_tag: "latest"
-          title: "Verso manual (PDF)"
+          title: "Verso manual (PDF and HTML)"
           files: |
             manual.pdf
-
-      - name: Upload HTML to artifact storage
-        if: github.ref != 'refs/heads/main'
-        uses: actions/upload-artifact@v3
-        with:
-          name: "Verso manual (HTML, single-page)"
-          path: "html-single-page.zip"
-
-      - uses: "marvinpinto/action-automatic-releases@latest"
-        if: github.ref == 'refs/heads/main'
-        with:
-          repo_token: "${{ secrets.GITHUB_TOKEN }}"
-          automatic_release_tag: "latest"
-          title: "Verso manual (HTML, single-page)"
-          files: |
             html-single-page.zip
+
