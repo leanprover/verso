@@ -34,3 +34,15 @@ Thus, Lean's documentation system supports multiple _genres_, each of which cons
 All genres use the same markup syntax, and they can share extensions to the markup language that don't rely on incompatible document structure additions.
 Mixing incompatible features results in an ordinary Lean type error.
 :::
+
+# Docstrings
+
+Docstrings can be included using the `docstring` directive. For instance,
+
+```
+{docstring Nat}
+```
+
+results in
+
+{docstring Nat}
