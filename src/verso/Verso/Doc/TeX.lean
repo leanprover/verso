@@ -20,6 +20,13 @@ structure Options (g : Genre) (m : Type → Type) where
   headerLevel : Option (Fin headerLevels.size)
   logError : String → m Unit
 
+def Options.reinterpret (lift : {α : _} → m α → m' α) (opts : Options g m) : Options g m' :=
+  {opts with
+    logError := fun msg => lift <| opts.logError msg}
+
+def Options.lift [MonadLiftT m m'] (opts : Options g m) : Options g m' :=
+  opts.reinterpret MonadLiftT.monadLift
+
 abbrev TeXT (genre : Genre) (m : Type → Type) : Type → Type :=
   ReaderT (Options genre m × genre.TraverseContext × genre.TraverseState) m
 

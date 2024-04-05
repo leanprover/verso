@@ -37,13 +37,6 @@ deriving DecidableEq, BEq, Hashable
 
 abbrev Path := Array String
 
-structure TraverseContext where
-  /-- The current URL path - will be [] for non-HTML output or in the root -/
-  path : Path := #[]
-  logError : String → IO Unit
-
-def TraverseContext.inFile (self : TraverseContext) (file : String) : TraverseContext :=
-  {self with path := self.path.push file}
 
 /--
 Tags are used to refer to parts through tables of contents, cross-references,
@@ -87,9 +80,19 @@ structure PartMetadata where
   number : Bool := true
 deriving BEq, Hashable, Repr
 
-inductive Block where
-  | paragraph
+structure Block where
+  name : Name
+  data : Json := Json.null
 deriving BEq
+
+def Block.paragraph : Block where
+  name := `Verso.Genre.Manual.Block.paragraph
+
+structure Inline where
+  name : Name
+  data : Json := Json.null
+deriving BEq
+
 
 instance : BEq Empty where
   beq := nofun
@@ -120,13 +123,11 @@ def freshTag [Monad m] [MonadStateOf TraverseState m] (hint : String) (id : Inte
   modify fun st => {st with partTags := st.partTags.insert tag id}
   pure tag
 
-
 defmethod Lean.HashMap.all [BEq α] [Hashable α] (hm : Lean.HashMap α β) (p : α → β → Bool) : Bool :=
   hm.fold (fun prev k v => prev && p k v) true
 
 defmethod Lean.HashSet.all [BEq α] [Hashable α] (hm : Lean.HashSet α) (p : α → Bool) : Bool :=
   hm.fold (fun prev v => prev && p v) true
-
 
 instance [BEq α] [Hashable α] : BEq (Lean.HashSet α) where
   beq xs ys := xs.size == ys.size && xs.all (ys.contains ·)
@@ -157,30 +158,129 @@ namespace TraverseState
 def set [ToJson α] (state : TraverseState) (name : Name) (value : α) : TraverseState :=
   {state with contents := state.contents.insert name (ToJson.toJson value)}
 
-def get? [FromJson α] (state : TraverseState) (name : Name) : Except String α :=
-  state.contents.find? name |>.map FromJson.fromJson? |>.getD (.error s!"No state entry for '{name}'")
+/-- Returns `none` if the key is not found, or `some (error e)` if JSON deserialization failed -/
+def get? [FromJson α] (state : TraverseState) (name : Name) : Option (Except String α) :=
+  state.contents.find? name |>.map FromJson.fromJson?
 
 end TraverseState
+
+structure TraverseContext where
+  /-- The current URL path - will be [] for non-HTML output or in the root -/
+  path : Path := #[]
+  logError : String → IO Unit
+
+def TraverseContext.inFile (self : TraverseContext) (file : String) : TraverseContext :=
+  {self with path := self.path.push file}
+
+abbrev BlockTraversal genre :=
+  Json → Array (Doc.Block genre) →
+  ReaderT TraverseContext (StateT TraverseState IO) (Option (Doc.Block genre))
+
+abbrev BlockToHtml (genre : Genre) (m) :=
+  (Doc.Block genre → Html.HtmlT genre m Output.Html) →
+    Json → Array (Doc.Block genre) → Html.HtmlT genre m Output.Html
+
+abbrev BlockToTeX (genre : Genre) (m) :=
+  (Doc.Block genre → TeX.TeXT genre m Output.TeX) →
+    Json → Array (Doc.Block genre) → TeX.TeXT genre m Output.TeX
+
+abbrev InlineTraversal genre :=
+  Json → Array (Doc.Inline genre) →
+  ReaderT TraverseContext (StateT TraverseState IO) (Option (Doc.Inline genre))
+
+abbrev InlineToHtml (genre : Genre) (m) :=
+  (Doc.Inline genre → Html.HtmlT genre m Output.Html) →
+    Json → Array (Doc.Inline genre) → Html.HtmlT genre m Output.Html
+
+abbrev InlineToTeX (genre : Genre) (m) :=
+  (Doc.Inline genre → TeX.TeXT genre m Output.TeX) →
+    Json → Array (Doc.Inline genre) → TeX.TeXT genre m Output.TeX
+
 end Manual
 
 def Manual : Genre where
   PartMetadata := Manual.PartMetadata
   Block := Manual.Block
-  Inline := Empty
+  Inline := Manual.Inline
   TraverseContext := Manual.TraverseContext
   TraverseState := Manual.TraverseState
 
 instance : BEq (Genre.PartMetadata Manual) := inferInstanceAs (BEq Manual.PartMetadata)
 instance : BEq (Genre.Block Manual) := inferInstanceAs (BEq Manual.Block)
-instance : BEq (Genre.Inline Manual) := ⟨nofun⟩
+instance : BEq (Genre.Inline Manual) := inferInstanceAs (BEq Manual.Inline)
 
 instance : Repr (Genre.PartMetadata Manual) := inferInstanceAs (Repr Manual.PartMetadata)
 
 namespace Manual
-abbrev TraverseM := ReaderT Manual.TraverseContext (StateT Manual.TraverseState IO)
+
+structure ExtensionImpls where
+  private mk ::
+  -- This is to work around recursion restrictions, not for real dynamism
+  inlineDescrs : NameMap Dynamic
+  blockDescrs : NameMap Dynamic
+
+structure InlineDescr where
+  traverse : InlineTraversal Manual
+  toHtml : Option (InlineToHtml Manual (ReaderT ExtensionImpls IO))
+  toTeX : Option (InlineToTeX Manual (ReaderT ExtensionImpls IO))
+deriving TypeName, Inhabited
+
+structure BlockDescr where
+  traverse : BlockTraversal Manual
+  toHtml : Option (BlockToHtml Manual (ReaderT ExtensionImpls IO))
+  toTeX : Option (BlockToTeX Manual (ReaderT ExtensionImpls IO))
+deriving TypeName, Inhabited
+
+private def fromDynamic! (dyn : Dynamic) : BlockDescr :=
+  dyn.get? BlockDescr |>.get!
+
+def ExtensionImpls.empty : ExtensionImpls := ⟨{}, {}⟩
+
+instance : EmptyCollection ExtensionImpls where
+  emptyCollection := .empty
+
+def ExtensionImpls.getInline? (impls : ExtensionImpls) (name : Name) : Option InlineDescr :=
+  impls.blockDescrs.find? name |>.map (·.get? InlineDescr |>.get!)
+
+def ExtensionImpls.getBlock? (impls : ExtensionImpls) (name : Name) : Option BlockDescr :=
+  impls.blockDescrs.find? name |>.map (·.get? BlockDescr |>.get!)
+
+def ExtensionImpls.insertInline (impls : ExtensionImpls) (name : Name) (desc : InlineDescr) : ExtensionImpls :=
+  {impls with
+    inlineDescrs := impls.inlineDescrs.insert name (.mk desc)}
+
+def ExtensionImpls.insertBlock (impls : ExtensionImpls) (name : Name) (desc : BlockDescr) : ExtensionImpls :=
+  {impls with
+    blockDescrs := impls.blockDescrs.insert name (.mk desc)}
+
+def ExtensionImpls.fromLists (inlineImpls : List (Name × InlineDescr)) (blockImpls : List (Name × BlockDescr)) : ExtensionImpls :=
+  inlineImpls.foldl (fun out (n, impl) => out.insertInline n impl) <| blockImpls.foldl (fun out (n, impl) => out.insertBlock n impl) {}
+
+def paragraph.descr : BlockDescr where
+  traverse := fun _ _ => pure none
+  toTeX :=
+    some <| fun go _ content => do
+      pure <| .seq <| ← content.mapM fun b => do
+        pure <| .seq #[← go b, .raw "\n"]
+  toHtml :=
+    open Verso.Output.Html in
+    some <| fun go _ content => do
+      pure <| {{<div class="paragraph">{{← content.mapM go}}</div>}}
+
+abbrev TraverseM := ReaderT ExtensionImpls (ReaderT Manual.TraverseContext (StateT Manual.TraverseState IO))
+
+def TraverseM.run
+    (impls : ExtensionImpls)
+    (ctxt : Manual.TraverseContext)
+    (state : Manual.TraverseState)
+    (act : TraverseM α) : IO (α × Manual.TraverseState) :=
+  act impls ctxt state
+
+instance : MonadReader Manual.TraverseContext TraverseM where
+  read := readThe _
 
 def logError (err : String) : TraverseM Unit := do
-  (← read).logError err
+  (← readThe Manual.TraverseContext).logError err
 
 instance : Traverse Manual TraverseM where
   part p :=
@@ -233,36 +333,64 @@ instance : Traverse Manual TraverseM where
       else pure (part.withMetadata meta)
 
   genreBlock
-    | .paragraph, _ => pure none
-  genreInline i := nomatch i
+    | ⟨name, data⟩, content => do
+      if let some impl := (← readThe ExtensionImpls).getBlock? name then
+        impl.traverse data content
+      else
+        logError s!"No block traversal implementation found for {name}"
+        pure none
+  genreInline
+    | ⟨name, data⟩, content => do
+      if let some impl := (← readThe ExtensionImpls).getInline? name then
+        impl.traverse data content
+      else
+        logError s!"No inline traversal implementation found for {name}"
+        pure none
 
 open Verso.Output.TeX in
-instance : TeX.GenreTeX Manual IO where
+instance : TeX.GenreTeX Manual (ReaderT ExtensionImpls IO) where
   part go _meta txt := go txt
-  block go
-    | .paragraph, content => do
-      pure <| .seq <| ← content.mapM fun b => do
-        pure <| .seq #[← go b, .raw "\n"]
-  inline _go i _txt := nomatch i
+  block go b content := do
+    let some descr := (← readThe ExtensionImpls).getBlock? b.name
+      | panic! s!"Unknown block {b.name} while rendering"
+    let some impl := descr.toTeX
+      | panic! s!"Block {b.name} doesn't support TeX"
+    impl go b.data content
+  inline go i content := do
+    let some descr := (← readThe ExtensionImpls).getInline? i.name
+      | panic! s!"Unknown inline {i.name} while rendering"
+    let some impl := descr.toTeX
+      | panic! s!"Inline {i.name} doesn't support TeX"
+    impl go i.data content
 
 open Verso.Output.Html in
-instance : Html.GenreHtml Manual IO where
+instance : Html.GenreHtml Manual (ReaderT ExtensionImpls IO) where
   part go meta txt := do
     let st ← Verso.Doc.Html.HtmlT.state
     let attrs := match meta.id >>= st.externalTags.find? with
       | none => #[]
       | some t => #[("id", t)]
     go txt attrs
-  block go
-    | .paragraph, content => do
-      pure <| {{<div class="paragraph">{{← content.mapM go}}</div>}}
-  inline _go i _txt := nomatch i
+
+  block go b content := do
+    let some descr := (← readThe ExtensionImpls).getBlock? b.name
+      | panic! "Unknown block {b.name} while rendering"
+    let some impl := descr.toHtml
+      | panic! "Block {b.name} doesn't support HTML"
+    impl go b.data content
+
+  inline go i content := do
+    let some descr := (← readThe ExtensionImpls).getInline? i.name
+      | panic! s!"Unknown inline {i.name} while rendering"
+    let some impl := descr.toHtml
+      | panic! s!"Inline {i.name} doesn't support HTML"
+    impl go i.data content
 
 @[directive_expander paragraph]
 def paragraph : DirectiveExpander
   | #[], stxs => do
     let args ← stxs.mapM elabBlock
-    let val ← ``(Block.other Manual.Block.paragraph #[ $[ $args ],* ])
+    let val ← ``(Block.other Block.paragraph #[ $[ $args ],* ])
     pure #[val]
   | _, _ => Lean.Elab.throwUnsupportedSyntax
 
@@ -277,12 +405,13 @@ def ensureDir (dir : System.FilePath) : IO Unit := do
   if !(← dir.isDir) then
     throw (↑ s!"Not a directory: {dir}")
 
-def traverse (logError : String → IO Unit) (text : Part Manual) (config : Config) : IO (Part Manual × TraverseState) := do
-  let topCtxt := {logError}
+def traverse (logError : String → IO Unit) (text : Part Manual) (config : Config) : ReaderT ExtensionImpls IO (Part Manual × TraverseState) := do
+  let topCtxt : Manual.TraverseContext := {logError}
   let mut state : Manual.TraverseState := {}
   let mut text := text
+  let ExtensionImpls ← readThe ExtensionImpls
   for _ in [0:config.maxTraversals] do
-    let (text', state') ← StateT.run (ReaderT.run (Genre.traverse Manual text) topCtxt) state
+    let (text', state') ← Genre.traverse Manual text |>.run ExtensionImpls topCtxt state
     if text' == text && state' == state then
       return (text', state')
     else
@@ -290,12 +419,13 @@ def traverse (logError : String → IO Unit) (text : Part Manual) (config : Conf
       text := text'
   return (text, state)
 
+
 open IO.FS in
-def emitTeX (logError : String → IO Unit) (config : Config) (state : TraverseState) (text : Part Manual) : IO Unit := do
-  let opts : TeX.Options Manual IO := {
+def emitTeX (logError : String → IO Unit) (config : Config) (state : TraverseState) (text : Part Manual) : ReaderT ExtensionImpls IO Unit := do
+  let opts : TeX.Options Manual (ReaderT ExtensionImpls IO) := {
     headerLevels := #["chapter", "section", "subsection", "subsubsection", "paragraph"],
     headerLevel := some ⟨0, by simp_arith [Array.size, List.length]⟩,
-    logError := logError
+    logError := fun msg => logError msg
   }
   let authors := text.metadata.map (·.authors) |>.getD []
   let date := text.metadata.bind (·.date) |>.getD ""
@@ -314,20 +444,20 @@ def emitTeX (logError : String → IO Unit) (config : Config) (state : TraverseS
 
 open Verso.Output (Html)
 
-partial def toc (opts : Html.Options Manual IO) (ctxt : TraverseContext) (state : TraverseState) : Part Manual → IO Html.Toc
+partial def toc (opts : Html.Options Manual (ReaderT ExtensionImpls IO)) (ctxt : TraverseContext) (state : TraverseState) : Part Manual → ReaderT ExtensionImpls IO Html.Toc
   | .mk title sTitle meta _ sub => do
-    let titleHtml ← Html.seq <$> title.mapM (Manual.toHtml opts ctxt state)
+    let titleHtml ← Html.seq <$> title.mapM (Manual.toHtml opts.lift ctxt state)
     let some {id := some id, number, ..} := meta
       | throw <| .userError s!"No ID for {sTitle} - {repr meta}"
     let some v := state.externalTags.find? id
       | throw <| .userError s!"No external ID for {sTitle}"
-    let children ← sub.mapM (toc opts ctxt state)
+    let children ← sub.mapM (toc  opts ctxt state)
     pure <| .entry titleHtml v number children
 
-def emitHtmlSingle (logError : String → IO Unit) (config : Config) (state : TraverseState) (text : Part Manual) : IO Unit := do
+def emitHtmlSingle (logError : String → IO Unit) (config : Config) (state : TraverseState) (text : Part Manual) : ReaderT ExtensionImpls IO Unit := do
   let authors := text.metadata.map (·.authors) |>.getD []
   let date := text.metadata.bind (·.date) |>.getD ""
-  let opts := {logError := logError}
+  let opts := {logError := fun msg => logError msg}
   let ctxt := {logError}
   let titleHtml ← Html.seq <$> text.title.mapM (Manual.toHtml opts ctxt state)
   let introHtml ← Html.seq <$> text.content.mapM (Manual.toHtml opts ctxt state)
@@ -344,7 +474,7 @@ def emitHtmlSingle (logError : String → IO Unit) (config : Config) (state : Tr
     h.putStrLn (Html.page toc text.titleString pageContent).asString
 
 
-def manualMain (text : Part Manual) (options : List String) : IO UInt32 := do
+def manualMain (extensionImpls : ExtensionImpls) (text : Part Manual) (options : List String) : IO UInt32 := (ReaderT.run · extensionImpls) do
   let hasError ← IO.mkRef false
   let logError msg := do hasError.set true; IO.eprintln msg
   let cfg ← opts {} options
