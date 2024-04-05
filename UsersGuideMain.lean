@@ -4,4 +4,7 @@ import UsersGuide
 
 open Verso.Genre.Manual
 
-def main := manualMain (%doc UsersGuide.Basic)
+-- TODO: metaprogram this away
+def impls := ExtensionImpls.fromLists [] [(``Block.paragraph, paragraph.descr)]
+
+def main := manualMain impls (%doc UsersGuide.Basic)
