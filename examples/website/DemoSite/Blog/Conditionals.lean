@@ -3,6 +3,8 @@ import DemoSite.Categories
 open Verso Genre Blog
 open DemoSite
 
+set_option trace.Elab.reuse true
+
 #doc (Post) "Conditional Expressions in Lean" =>
 
 %%%
@@ -10,6 +12,7 @@ authors := ["Fictional Author", "Another Fictional Author"]
 date := {year := 2024, month := 1, day := 15}
 categories := [examples, other]
 %%%
+
 
 Finally started blogging!
 This post describes the syntax and semantics of conditional expressions in Lean.
@@ -103,6 +106,12 @@ mutual
 end
 ```
 
+```lean demo
+--- foo
+example := 99
+```
+
+
 Here is a proof with some lambdas and big terms in it, to check highlighting:
 ```lean demo
 def grow : Nat → α → α
@@ -115,6 +124,7 @@ def grow : Nat → α → α
 theorem grow_10_id {α} : grow (α := α) 6 = id := by
   repeat unfold grow
   all_goals sorry
+
 ```
 
 Here is a proof with big terms in the context:

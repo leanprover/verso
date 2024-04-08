@@ -168,6 +168,48 @@ macro "%docName" moduleName:ident : term =>
 def currentDocName [Monad m] [MonadEnv m] : m Name := do
   pure <| docName <| (← Lean.MonadEnv.getEnv).mainModule
 
+open Language
+
+structure DocElabSnapshotState where
+  docState : DocElabM.State
+  partState : PartElabM.State
+  termState : Term.SavedState
+deriving Nonempty
+
+open Lean Elab Term
+private def getSnapshotState : PartElabM DocElabSnapshotState := do
+  pure ⟨← getThe _, ← getThe _,  ← saveState (m := TermElabM)⟩
+
+structure DocElabSnapshotData extends Language.Snapshot where
+  stx      : Syntax
+  finished : Task DocElabSnapshotState
+deriving Nonempty
+
+inductive DocElabSnapshot where
+  | mk (data : DocElabSnapshotData) (next : Array (SnapshotTask DocElabSnapshot))
+deriving TypeName, Nonempty
+
+partial instance : ToSnapshotTree DocElabSnapshot where
+  toSnapshotTree := go where
+    go := fun ⟨s, next⟩ => ⟨s.toSnapshot, next.map (·.map (sync := true) go)⟩
+
+
+abbrev DocElabSnapshot.data : DocElabSnapshot → DocElabSnapshotData
+  | .mk data _ => data
+
+abbrev DocElabSnapshot.next : DocElabSnapshot → Array (SnapshotTask DocElabSnapshot)
+  | .mk _ next => next
+
+private def exnMessage (exn : Exception) : TermElabM Message := do
+  match exn with
+  | .error ref msg =>
+    let ref    := replaceRef ref (← MonadLog.getRef)
+    let pos    := ref.getPos?.getD 0
+    let endPos := ref.getTailPos?.getD pos
+    let fileMap ← getFileMap
+    let msgData ← addMessageContext msg
+    pure { fileName := (← getFileName), pos := fileMap.toPosition pos, endPos := fileMap.toPosition endPos, data := msgData, severity := .error }
+  | oops@(.internal _ _) => throw oops
 
 elab "#doc" "(" genre:term ")" title:inlineStr "=>" text:completeDocument eof:eoi : command => open Lean Elab Term Command PartElabM DocElabM in do
   findGenreCmd genre
@@ -180,20 +222,73 @@ elab "#doc" "(" genre:term ")" title:inlineStr "=>" text:completeDocument eof:eo
     let ⟨`<low| [~_ ~(titleName@(.node _ _ titleParts))]>⟩ := title
       | dbg_trace "nope {ppSyntax title}" throwUnsupportedSyntax
     let titleString := inlinesToString (← getEnv) titleParts
-    let ((), st, st') ← liftTermElabM <| PartElabM.run {} (.init titleName) <| do
-      let mut errors := #[]
-      setTitle titleString (← liftDocElabM <| titleParts.mapM elabInline)
-      for b in blocks do
-        try partCommand b
-        catch e => errors := errors.push e
-      closePartsUntil 0 endPos
-      for e in errors do
-        match e with
-        | .error stx msg => logErrorAt stx msg
-        | oops@(.internal _ _) => throw oops
-      pure ()
-    let finished := st'.partContext.toPartFrame.close endPos
-    pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
-    saveRefs st st'
-    let docName ← mkIdentFrom title <$> currentDocName
-    elabCommand (← `(def $docName : Part $genre := $(← finished.toSyntax genre st'.linkDefs st'.footnoteDefs)))
+    let initState : PartElabM.State := .init titleName
+    let ctxt ← read
+    let some snap := ctxt.snap?
+      | throwErrorAt title "nope dawg"
+    withReader (fun ρ => {ρ with snap? := none}) do
+      let ((nextPromise, snapshotState), st, st') ← liftTermElabM <| PartElabM.run {} initState <| do
+        let mut oldSnap? := snap.old?.bind (·.get.toTyped? (α := DocElabSnapshot))
+
+        let mut nextPromise ← IO.Promise.new
+        snap.new.resolve <| DynamicSnapshot.ofTyped <| DocElabSnapshot.mk {
+            stx := ← `("I like to eat apples and bananas"),
+            finished := .pure <| ← getSnapshotState,
+            diagnostics := .empty
+          } #[{range? := text.raw.getRange?, task := nextPromise.result}]
+
+        setTitle titleString (← liftDocElabM <| titleParts.mapM elabInline)
+        let mut errors : MessageLog := .empty
+        for b in blocks do
+          let mut reuseState := false
+          if let some oldSnap := oldSnap? then
+            if let some next := oldSnap.next[0]? then
+              if next.get.data.stx.structRangeEqWithTraceReuse (← getOptions) b then
+                -- If they match, do nothing and advance the snapshot
+                let ⟨docState, partState, termState⟩ := next.get.data.finished.get
+                set docState
+                set partState
+                termState.restoreFull
+                errors := next.get.data.diagnostics.msgLog
+                oldSnap? := next.get
+                reuseState := true
+          let nextNextPromise ← IO.Promise.new
+          let updatedState ← IO.Promise.new
+          nextPromise.resolve <| DocElabSnapshot.mk {
+              stx := b,
+              finished := updatedState.result,
+              diagnostics := ⟨errors, none⟩
+            } #[{range? := b.getRange?, task := nextNextPromise.result}]
+
+          try
+            if not reuseState then
+              oldSnap? := none
+              try partCommand b
+              catch e => errors := errors.add <| ← exnMessage e
+
+            updatedState.resolve <| ← getSnapshotState
+            nextPromise := nextNextPromise
+          finally
+            -- In case of a fatal exception in partCommand, we need to make sure that the promise actually
+            -- gets resolved to avoid hanging forever. And the first resolve wins, so the second one is a
+            -- no-op the rest of the time.
+            nextPromise.resolve <| DocElabSnapshot.mk {
+                stx := b,
+                finished := .pure <| ← getSnapshotState,
+                diagnostics := ⟨errors, none⟩
+              } #[]
+            updatedState.resolve <| ← getSnapshotState -- some old state goes here
+
+        closePartsUntil 0 endPos
+
+        pure (nextPromise, ← getSnapshotState)
+      let finished := st'.partContext.toPartFrame.close endPos
+      pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
+      saveRefs st st'
+      let docName ← mkIdentFrom title <$> currentDocName
+      elabCommand (← `(def $docName : Part $genre := $(← finished.toSyntax genre st'.linkDefs st'.footnoteDefs)))
+      nextPromise.resolve <| DocElabSnapshot.mk {
+        stx := ← `(55.8),
+        finished := .pure snapshotState
+        diagnostics := .empty
+      } #[]
