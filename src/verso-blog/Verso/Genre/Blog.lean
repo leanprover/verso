@@ -66,7 +66,7 @@ def html : DirectiveExpander
 def blob : DirectiveExpander
   | #[.anon (.name blobName)], stxs => do
     if h : stxs.size > 0 then logErrorAt stxs[0] "Expected no contents"
-    let actualName ← resolveGlobalConstNoOverloadWithInfo blobName
+    let actualName ← realizeGlobalConstNoOverloadWithInfo blobName
     let val ← ``(Block.other (Blog.BlockExt.blob ($(mkIdentFrom blobName actualName) : Html)) #[])
     pure #[val]
   | _, _ => throwUnsupportedSyntax
@@ -75,7 +75,7 @@ def blob : DirectiveExpander
 def inlineBlob : RoleExpander
   | #[.anon (.name blobName)], stxs => do
     if h : stxs.size > 0 then logErrorAt stxs[0] "Expected no contents"
-    let actualName ← resolveGlobalConstNoOverloadWithInfo blobName
+    let actualName ← realizeGlobalConstNoOverloadWithInfo blobName
     let val ← ``(Inline.other (Blog.InlineExt.blob ($(mkIdentFrom blobName actualName) : Html)) #[])
     pure #[val]
   | _, _ => throwUnsupportedSyntax
@@ -312,7 +312,7 @@ structure LeanBlockConfig where
   name : Option Name := none
   error : Option Bool := none
 
-def LeanBlockConfig.parse [Monad m] [MonadInfoTree m] [MonadResolveName m] [MonadEnv m] [MonadError m] : ArgParse m LeanBlockConfig :=
+def LeanBlockConfig.parse [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m] : ArgParse m LeanBlockConfig :=
   LeanBlockConfig.mk <$> .positional `exampleContext .ident <*> .named `show .bool true <*> .named `keep .bool true <*> .named `name .name true <*> .named `error .bool true
 
 @[code_block_expander leanInit]
@@ -405,7 +405,7 @@ structure LeanOutputConfig where
   severity : Option MessageSeverity
   summarize : Bool
 
-def LeanOutputConfig.parser [Monad m] [MonadInfoTree m] [MonadResolveName m] [MonadEnv m] [MonadError m] : ArgParse m LeanOutputConfig :=
+def LeanOutputConfig.parser [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m] : ArgParse m LeanOutputConfig :=
   LeanOutputConfig.mk <$> .positional `name output <*> .named `severity sev true <*> ((·.getD false) <$> .named `summarize .bool true)
 where
   output : ValDesc m Ident := {
@@ -420,7 +420,7 @@ where
     description := open MessageSeverity in m!"The expected severity: '{``error}', '{``warning}', or '{``information}'",
     get := open MessageSeverity in fun
       | .name b => do
-        let b' ← resolveGlobalConstNoOverloadWithInfo b
+        let b' ← realizeGlobalConstNoOverloadWithInfo b
         if b' == ``MessageSeverity.error then pure MessageSeverity.error
         else if b' == ``MessageSeverity.warning then pure MessageSeverity.warning
         else if b' == ``MessageSeverity.information then pure MessageSeverity.information
@@ -490,7 +490,7 @@ where
 
 open Lean Elab Command in
 elab "#defineLexerBlock" blockName:ident " ← " lexerName:ident : command => do
-  let lexer ← resolveGlobalConstNoOverloadWithInfo lexerName
+  let lexer ← liftTermElabM <| realizeGlobalConstNoOverloadWithInfo lexerName
   elabCommand <| ← `(@[code_block_expander $blockName]
     def $blockName : Doc.Elab.CodeBlockExpander
       | #[], str => do

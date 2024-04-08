@@ -81,10 +81,18 @@ where
 @[combinator_formatter completeDocument] def completeDocument.formatter := PrettyPrinter.Formatter.visitAtom Name.anonymous
 
 
-partial def findGenre [Monad m] [MonadInfoTree m] [MonadResolveName m] [MonadEnv m] [MonadError m] : Syntax → m Unit
-  | `($g:ident) => discard <| resolveGlobalConstNoOverloadWithInfo g -- Don't allow it to become an auto-argument
-  | `(($e)) => findGenre e
+open Lean.Elab Command in
+partial def findGenreCmd : Syntax → Lean.Elab.Command.CommandElabM Unit
+  | `($g:ident) => discard <| liftTermElabM <| realizeGlobalConstNoOverloadWithInfo g -- Don't allow it to become an auto-argument
+  | `(($e)) => findGenreCmd e
   | _ => pure ()
+
+open Lean.Elab Term in
+partial def findGenreTm : Syntax → TermElabM Unit
+  | `($g:ident) => discard <| realizeGlobalConstNoOverloadWithInfo g -- Don't allow it to become an auto-argument
+  | `(($e)) => findGenreTm e
+  | _ => pure ()
+
 
 def saveRefs [Monad m] [MonadInfoTree m] (st : DocElabM.State) (st' : PartElabM.State) : m Unit := do
   for r in internalRefs st'.linkDefs st.linkRefs do
@@ -95,7 +103,7 @@ def saveRefs [Monad m] [MonadInfoTree m] (st : DocElabM.State) (st' : PartElabM.
       pushInfoLeaf <| .ofCustomInfo {stx := stx , value := Dynamic.mk r}
 
 elab "#docs" "(" genre:term ")" n:ident title:inlineStr ":=" ":::::::" text:document ":::::::" : command => open Lean Elab Command PartElabM DocElabM in do
-  findGenre genre
+  findGenreCmd genre
   let endTok :=
     match ← getRef with
     | .node _ _ t =>
@@ -122,7 +130,7 @@ elab "#docs" "(" genre:term ")" n:ident title:inlineStr ":=" ":::::::" text:docu
 
 
 elab "#doc" "(" genre:term ")" title:inlineStr "=>" text:completeDocument eof:eoi : term => open Lean Elab Term PartElabM DocElabM in do
-  findGenre genre
+  findGenreTm genre
   let endPos := eof.raw.getTailPos?.get!
   let .node _ _ blocks := text.raw
     | dbg_trace "nope {ppSyntax text.raw}" throwUnsupportedSyntax
@@ -162,7 +170,7 @@ def currentDocName [Monad m] [MonadEnv m] : m Name := do
 
 
 elab "#doc" "(" genre:term ")" title:inlineStr "=>" text:completeDocument eof:eoi : command => open Lean Elab Term Command PartElabM DocElabM in do
-  findGenre genre
+  findGenreCmd genre
   if eof.raw.isMissing then
     throwError "Syntax error prevents processing document"
   else
