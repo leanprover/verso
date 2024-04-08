@@ -95,7 +95,7 @@ def _root_.Verso.Syntax.role.expand : InlineExpander
       withRef inline <| withFreshMacroScope <| withIncRecDepth <| do
         let ⟨.node _ _ subjectArr⟩ := subjects
           | throwUnsupportedSyntax
-        let name ← resolveGlobalConstNoOverloadWithInfo name
+        let name ← realizeGlobalConstNoOverloadWithInfo name
         let exp ← roleExpandersFor name
         let argVals ← parseArgs args
         for e in exp do
@@ -292,7 +292,7 @@ def _root_.Verso.Syntax.block_role.expand : BlockExpander := fun block =>
   match block with
   | `(block|block_role{$name $args*}) => do
     withRef block <| withFreshMacroScope <| withIncRecDepth <| do
-      let name ← resolveGlobalConstNoOverloadWithInfo name
+      let name ← realizeGlobalConstNoOverloadWithInfo name
       let exp ← blockRoleExpandersFor name
       let argVals ← parseArgs args
       for e in exp do
@@ -394,7 +394,7 @@ def _root_.Verso.Syntax.blockquote.expand : BlockExpander
 @[block_expander Verso.Syntax.codeblock]
 def _root_.Verso.Syntax.codeblock.expand : BlockExpander
   | `<low|(Verso.Syntax.codeblock (column ~(.atom _ _col)) ~_open ~(.node _ `null #[nameStx, .node _ `null argsStx]) ~(.atom info contents) ~_close )> => do
-      let name ← resolveGlobalConstNoOverloadWithInfo nameStx
+      let name ← realizeGlobalConstNoOverloadWithInfo nameStx
       let exp ← codeBlockExpandersFor name
       -- TODO typed syntax here
       let args ← parseArgs <| argsStx.map (⟨·⟩)
@@ -417,7 +417,7 @@ def _root_.Verso.Syntax.codeblock.expand : BlockExpander
 @[block_expander Verso.Syntax.directive]
 def _root_.Verso.Syntax.directive.expand : BlockExpander
   | `<low|(Verso.Syntax.directive  ~_open ~nameStx ~(.node _ `null argsStx) ~_fake ~_fake' ~(.node _ `null contents) ~_close )> => do
-    let name ← resolveGlobalConstNoOverloadWithInfo nameStx
+    let name ← realizeGlobalConstNoOverloadWithInfo nameStx
     let exp ← directiveExpandersFor name
     -- TODO typed syntax here
     let args ← parseArgs <| argsStx.map (⟨·⟩)

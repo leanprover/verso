@@ -23,8 +23,6 @@ structure ValDesc (α) where
   description : MessageData
   get : ArgVal → m α
 
-
-
 inductive ArgParse (m) : Type → Type 1 where
   | fail (stx? : Option Syntax) (message? : Option MessageData) : ArgParse m α
   | pure (val : α) : ArgParse m α
@@ -150,13 +148,13 @@ where
     return none
 end
 
-variable {m} [Monad m] [MonadInfoTree m] [MonadResolveName m] [MonadEnv m] [MonadError m]
+variable {m} [Monad m] [MonadInfoTree m] [MonadResolveName m] [MonadEnv m] [MonadError m] [MonadLiftT CoreM m]
 
 def ValDesc.bool : ValDesc m Bool where
   description := m!"{true} or {false}"
   get
     | .name b => do
-      let b' ← resolveGlobalConstNoOverloadWithInfo b
+      let b' ← liftM <| realizeGlobalConstNoOverloadWithInfo b
       if b' == ``true then pure true
       else if b' == ``false then pure false
       else throwErrorAt b "Expected 'true' or 'false'"
