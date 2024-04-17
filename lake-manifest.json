@@ -4,7 +4,7 @@
  [{"url": "https://github.com/nomeata/subverso.git",
    "type": "git",
    "subDir": null,
-   "rev": "9a171eff7e84737acf5cea097d4a0b9393ba8194",
+   "rev": "d433172f093c0c1a2760efabcd166cf7c2fa05f8",
    "name": "subverso",
    "manifestFile": "lake-manifest.json",
    "inputRev": "joachim/lake-from-path",
