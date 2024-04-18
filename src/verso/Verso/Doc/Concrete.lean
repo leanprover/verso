@@ -13,6 +13,53 @@ import Verso.Doc.Lsp
 import Verso.Parser
 import Verso.SyntaxUtils
 
+-- Note (DTC, 2024-04-18):
+-- These are temporarily taken from PR #3636/#3940 and will need to be removed as incrementality becomes
+-- part of Lean
+namespace Lean
+/--
+Gets the end position information from a `SourceInfo`, if available.
+If `originalOnly` is true, then `.synthetic` syntax will also return `none`.
+-/
+def SourceInfo.getTailPos? (info : SourceInfo) (canonicalOnly := false) : Option String.Pos :=
+  match info, canonicalOnly with
+  | original (endPos := endPos) ..,  _
+  | synthetic (endPos := endPos) (canonical := true) .., _
+  | synthetic (endPos := endPos) .., false => some endPos
+  | _,                               _     => none
+
+def SourceInfo.getRange? (canonicalOnly := false) (info : SourceInfo) : Option String.Range :=
+  return ⟨(← info.getPos? canonicalOnly), (← info.getTailPos? canonicalOnly)⟩
+
+namespace Syntax
+/--
+Compare syntax structures and position ranges, but not whitespace.
+We generally assume that if syntax trees equal in this way generate the same elaboration output,
+including positions contained in e.g. diagnostics and the info tree.
+-/
+partial def structRangeEq : Syntax → Syntax → Bool
+  | .missing, .missing => true
+  | .node info k args, .node info' k' args' =>
+    info.getRange? == info'.getRange? && k == k' && args.isEqv args' structRangeEq
+  | .atom info val, .atom info' val' => info.getRange? == info'.getRange? && val == val'
+  | .ident info rawVal val preresolved, .ident info' rawVal' val' preresolved' =>
+    info.getRange? == info'.getRange? && rawVal == rawVal' && val == val' &&
+    preresolved == preresolved'
+  | _, _ => false
+
+/-- Like `structRangeEq` but prints trace on failure if `trace.Elab.reuse` is activated. -/
+def structRangeEqWithTraceReuse (opts : Options) (stx1 stx2 : Syntax) : Bool :=
+  if stx1.structRangeEq stx2 then
+    true
+  else
+    if opts.getBool `trace.Elab.reuse then
+      dbg_trace "reuse stopped: {stx1} != {stx2}"
+      false
+    else
+      false
+end Syntax
+end Lean
+
 namespace Verso.Doc.Concrete
 
 open Lean Parser
@@ -200,7 +247,7 @@ abbrev DocElabSnapshot.data : DocElabSnapshot → DocElabSnapshotData
 abbrev DocElabSnapshot.next : DocElabSnapshot → Array (SnapshotTask DocElabSnapshot)
   | .mk _ next => next
 
-private def exnMessage (exn : Exception) : TermElabM Message := do
+private def exnMessage [Monad m] [MonadLog m] [AddMessageContext m] [MonadExcept Exception m] (exn : Exception) : m Message := do
   match exn with
   | .error ref msg =>
     let ref    := replaceRef ref (← MonadLog.getRef)
@@ -210,6 +257,79 @@ private def exnMessage (exn : Exception) : TermElabM Message := do
     let msgData ← addMessageContext msg
     pure { fileName := (← getFileName), pos := fileMap.toPosition pos, endPos := fileMap.toPosition endPos, data := msgData, severity := .error }
   | oops@(.internal _ _) => throw oops
+
+open Lean Elab Command in
+def incrementallyElabCommand
+    [TypeName snapshot] [ToSnapshotTree snapshot] [Nonempty snapshot]
+    [Nonempty σ]
+    [Monad m] [MonadLiftT BaseIO m] [MonadExcept Exception m] [MonadLog m] [AddMessageContext m] [MonadFinally m]
+    (cmd : Syntax)
+    (steps : Array Syntax)
+    (initAct : m Unit)
+    (endAct : m Unit)
+    (handleStep : Syntax → m Unit)
+    (getState : m σ)
+    (setState : σ → m Unit)
+    (getNext : snapshot → Option (SnapshotTask snapshot))
+    (getData : snapshot → snapshotData)
+    (getStx : snapshotData → Syntax)
+    (getIncrState : snapshotData → Task σ)
+    (lift : {α : _} → m α → CommandElabM α)
+    (mkData : Syntax → Language.Snapshot → Task σ → snapshotData)
+    (dataSnap : snapshotData → Language.Snapshot)
+    (mkSnap : snapshotData → Array (SnapshotTask snapshot) → snapshot)
+    : CommandElabM (IO.Promise snapshot × σ) := do
+  if let some snap := (← read).snap? then
+    withReader (fun ρ => {ρ with snap? := none}) do
+      lift <| do
+        let mut oldSnap? := snap.old?.bind (·.val.get.toTyped? (α := snapshot))
+        let mut nextPromise ← IO.Promise.new
+        let initData := {diagnostics := .empty}
+        snap.new.resolve <| DynamicSnapshot.ofTyped <|
+          mkSnap (mkData cmd initData <| .pure (← getState))
+            #[{range? := cmd.getRange?, task := nextPromise.result}]
+        initAct
+        let mut errors : MessageLog := .empty
+        for b in steps do
+          let mut reuseState := false
+          if let some oldSnap := oldSnap? then
+            if let some next := getNext oldSnap then
+              -- if next.get.data.stx.structRangeEqWithTraceReuse (← getOptions) b then
+              if next.get |> getData |> getStx |>.structRangeEq b then
+                -- If they match, do nothing and advance the snapshot
+                let σ := next.get |> getData |> getIncrState |>.get
+                setState σ
+                errors := next.get |> getData |> dataSnap |>.diagnostics.msgLog
+                oldSnap? := next.get
+                reuseState := true
+          let nextNextPromise ← IO.Promise.new
+          let updatedState ← IO.Promise.new
+          nextPromise.resolve <| mkSnap (mkData b {diagnostics := ⟨errors, none⟩} updatedState.result)
+            #[{range? := b.getRange?, task := nextNextPromise.result}]
+
+          try
+            if not reuseState then
+              oldSnap? := none
+              try handleStep b
+              catch e => errors := errors.add <| ← exnMessage e
+
+            updatedState.resolve <| ← getState
+            nextPromise := nextNextPromise
+          finally
+            -- In case of a fatal exception in partCommand, we need to make sure that the promise actually
+            -- gets resolved to avoid hanging forever. And the first resolve wins, so the second one is a
+            -- no-op the rest of the time.
+            nextPromise.resolve <| mkSnap (mkData b {diagnostics := ⟨errors, none⟩} (.pure (← getState))) #[]
+            updatedState.resolve <| ← getState -- some old state goes here
+        endAct
+        pure (nextPromise, ← getState)
+  else -- incrementality not available - just do the action the easy way
+    lift <| do
+      initAct
+      for b in steps do
+        handleStep b
+      endAct
+      pure (← IO.Promise.new, ← getState)
 
 elab "#doc" "(" genre:term ")" title:inlineStr "=>" text:completeDocument eof:eoi : command => open Lean Elab Term Command PartElabM DocElabM in do
   findGenreCmd genre
@@ -223,72 +343,29 @@ elab "#doc" "(" genre:term ")" title:inlineStr "=>" text:completeDocument eof:eo
       | dbg_trace "nope {ppSyntax title}" throwUnsupportedSyntax
     let titleString := inlinesToString (← getEnv) titleParts
     let initState : PartElabM.State := .init titleName
-    let ctxt ← read
-    let some snap := ctxt.snap?
-      | throwErrorAt title "nope dawg"
-    withReader (fun ρ => {ρ with snap? := none}) do
-      let ((nextPromise, snapshotState), st, st') ← liftTermElabM <| PartElabM.run {} initState <| do
-        let mut oldSnap? := snap.old?.bind (·.get.toTyped? (α := DocElabSnapshot))
+    let (nextPromise, snapshotState@⟨st, st', _⟩) ←
+      incrementallyElabCommand text blocks
+        (initAct := do setTitle titleString (← liftDocElabM <| titleParts.mapM elabInline))
+        (endAct := closePartsUntil 0 endPos)
+        (handleStep := partCommand)
+        (getState := getSnapshotState)
+        (setState := fun ⟨docState, partState, termState⟩ => do set docState; set partState; termState.restoreFull)
+        (getNext := (·.next[0]?))
+        (getData := (·.data))
+        (getStx := (·.stx))
+        (getIncrState := (·.finished))
+        (lift := fun act => liftTermElabM <| Prod.fst <$> PartElabM.run {} initState act)
+        (mkData := fun stx snap => DocElabSnapshotData.mk snap stx)
+        (dataSnap := DocElabSnapshotData.toSnapshot)
+        (mkSnap := DocElabSnapshot.mk)
 
-        let mut nextPromise ← IO.Promise.new
-        snap.new.resolve <| DynamicSnapshot.ofTyped <| DocElabSnapshot.mk {
-            stx := ← `("I like to eat apples and bananas"),
-            finished := .pure <| ← getSnapshotState,
-            diagnostics := .empty
-          } #[{range? := text.raw.getRange?, task := nextPromise.result}]
-
-        setTitle titleString (← liftDocElabM <| titleParts.mapM elabInline)
-        let mut errors : MessageLog := .empty
-        for b in blocks do
-          let mut reuseState := false
-          if let some oldSnap := oldSnap? then
-            if let some next := oldSnap.next[0]? then
-              if next.get.data.stx.structRangeEqWithTraceReuse (← getOptions) b then
-                -- If they match, do nothing and advance the snapshot
-                let ⟨docState, partState, termState⟩ := next.get.data.finished.get
-                set docState
-                set partState
-                termState.restoreFull
-                errors := next.get.data.diagnostics.msgLog
-                oldSnap? := next.get
-                reuseState := true
-          let nextNextPromise ← IO.Promise.new
-          let updatedState ← IO.Promise.new
-          nextPromise.resolve <| DocElabSnapshot.mk {
-              stx := b,
-              finished := updatedState.result,
-              diagnostics := ⟨errors, none⟩
-            } #[{range? := b.getRange?, task := nextNextPromise.result}]
-
-          try
-            if not reuseState then
-              oldSnap? := none
-              try partCommand b
-              catch e => errors := errors.add <| ← exnMessage e
-
-            updatedState.resolve <| ← getSnapshotState
-            nextPromise := nextNextPromise
-          finally
-            -- In case of a fatal exception in partCommand, we need to make sure that the promise actually
-            -- gets resolved to avoid hanging forever. And the first resolve wins, so the second one is a
-            -- no-op the rest of the time.
-            nextPromise.resolve <| DocElabSnapshot.mk {
-                stx := b,
-                finished := .pure <| ← getSnapshotState,
-                diagnostics := ⟨errors, none⟩
-              } #[]
-            updatedState.resolve <| ← getSnapshotState -- some old state goes here
-
-        closePartsUntil 0 endPos
-
-        pure (nextPromise, ← getSnapshotState)
-      let finished := st'.partContext.toPartFrame.close endPos
-      pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
-      saveRefs st st'
-      let docName ← mkIdentFrom title <$> currentDocName
-      elabCommand (← `(def $docName : Part $genre := $(← finished.toSyntax genre st'.linkDefs st'.footnoteDefs)))
-      nextPromise.resolve <| DocElabSnapshot.mk {
-        stx := ← `(55.8),
-        finished := .pure snapshotState
-        diagnostics := .empty
-      } #[]
+    let finished := st'.partContext.toPartFrame.close endPos
+    pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
+    saveRefs st st'
+    let docName ← mkIdentFrom title <$> currentDocName
+    elabCommand (← `(def $docName : Part $genre := $(← finished.toSyntax genre st'.linkDefs st'.footnoteDefs)))
+    nextPromise.resolve <| DocElabSnapshot.mk {
+      stx := text,
+      finished := .pure snapshotState
+      diagnostics := .empty
+    } #[]
