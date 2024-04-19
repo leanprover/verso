@@ -4,7 +4,7 @@
  [{"url": "https://github.com/leanprover/subverso.git",
    "type": "git",
    "subDir": null,
-   "rev": "771681e14ea506d41aa0c6969ba3a34727d64ab0",
+   "rev": "3d2c5f27dcd33e2681ab16bc2e53eb9bf5d20daf",
    "name": "subverso",
    "manifestFile": "lake-manifest.json",
    "inputRev": "main",

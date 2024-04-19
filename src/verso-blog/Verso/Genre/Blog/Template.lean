@@ -151,7 +151,7 @@ partial defmethod Highlighted.isEmpty (hl : Highlighted) : Bool :=
   match hl with
   | .text str => str.isEmpty
   | .token .. => false
-  | .span _ _ hl => hl.isEmpty
+  | .span _ hl => hl.isEmpty
   | .tactics _ _ hl => hl.isEmpty
   | .point .. => true
   | .seq hls => hls.all isEmpty
@@ -160,7 +160,7 @@ partial defmethod Highlighted.trimRight (hl : Highlighted) : Highlighted :=
   match hl with
   | .text str => .text str.trimRight
   | .token .. => hl
-  | .span s info hl => .span s info hl.trimRight
+  | .span infos hl => .span infos hl.trimRight
   | .tactics info pos hl => .tactics info pos hl.trimRight
   | .point .. => hl
   | .seq hls => Id.run do
@@ -190,7 +190,7 @@ partial defmethod Highlighted.trimLeft (hl : Highlighted) : Highlighted :=
   match hl with
   | .text str => .text str.trimLeft
   | .token .. => hl
-  | .span s info hl => .span s info hl.trimLeft
+  | .span infos hl => .span infos hl.trimLeft
   | .tactics info pos hl => .tactics info pos hl.trimLeft
   | .point .. => hl
   | .seq hls =>
@@ -200,10 +200,38 @@ partial defmethod Highlighted.trimLeft (hl : Highlighted) : Highlighted :=
 
 defmethod Highlighted.trim (hl : Highlighted) : Highlighted := hl.trimLeft.trimRight
 
+def spanClass (infos : Array (Highlighted.Span.Kind × α)) : Option String := Id.run do
+  let mut k := none
+  for (k', _) in infos do
+    if let some k'' := k then k := maxKind k' k''
+    else k := k'
+  k.map (·.«class»)
+where
+  maxKind : Highlighted.Span.Kind → Highlighted.Span.Kind → Highlighted.Span.Kind
+    | .error, _ => .error
+    | .warning, .error => .error
+    | .warning, _ => .warning
+    | .info, other => other
+
 partial defmethod Highlighted.toHtml : Highlighted → Html
   | .token t => t.toHtml
   | .text str => str
-  | .span s info hl => {{<span class={{"has-info " ++ s.«class»}}><span class="hover-container"><span class={{"hover-info message " ++ s.«class»}}><code>{{info}}</code></span></span>{{toHtml hl}}</span>}}
+  | .span infos hl =>
+    if let some cls := spanClass infos then
+      {{<span class={{"has-info " ++ cls}}>
+          <span class="hover-container">
+            <span class={{"hover-info messages"}}>
+              {{ infos.map fun (s, info) => {{
+                <code class={{"message " ++ s.«class»}}>{{info}}</code> }}
+              }}
+            </span>
+          </span>
+          {{toHtml hl}}
+        </span>
+      }}
+    else
+      panic! "No highlights!"
+      --toHtml hl
   | .tactics info pos hl =>
     let id := s!"tactic-state-{hash info}-{pos}"
     {{

@@ -49,7 +49,7 @@ def elabMethodDecl : CommandElab := fun stx => do
       | .node info ``method args => pure (some (.node info ``Parser.Command.declaration args))
       | _ => pure none
     let decl' := open Parser.Command in
-      Syntax.node .none ``declaration #[decl[0][0], .node .none ``«def» decl[0].args[1:7]]
+      Syntax.node .none ``declaration #[decl[0][0], .node .none ``definition decl[0].args[1:7]]
     elabCommand decl'
 where
   inRoot : Name → Name
