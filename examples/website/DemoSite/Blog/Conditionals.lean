@@ -136,5 +136,27 @@ example [Monad m] [MonadQuotation m] [MonadRef m] : ¬(quotedStx (m := m) = fun 
   sorry
 ```
 
+It's possible to render a lot of info on one example:
+```lean demo
+elab "%much_info(" t:term ")" : term => open Lean Elab Term in do
+  for i in [0:20] do
+    logInfoAt t m!"Hello! ({i})"
+  logInfoAt t "Some multi-line\ninfo too"
+  elabTerm t none
+
+elab "%more_info(" t:term ")" : term => open Lean Elab Term in do
+  for i in [0:20] do
+    logInfoAt t m!"Hello again! ({i})"
+  logErrorAt t "And a great big error, much wider than the other info!"
+  elabTerm t none
+```
+
+````lean demo error:=true
+example := %much_info(22)
+
+example := %more_info(25)
+````
+
+The info gets stacked up, with the greatest severity highlighting the range in question.
 
 Thank you for looking at my test/demo post.
