@@ -340,10 +340,10 @@ def highlightingStyle : String := "
 }
 
 .hover-container {
-    width: 0;
-    height: 0;
-    position: relative;
-    display: inline;
+  width: 0;
+  height: 0;
+  position: relative;
+  display: inline;
 }
 
 .hl.lean .hover-info {
@@ -360,8 +360,34 @@ def highlightingStyle : String := "
   font-size: inherit;
 }
 
+.hl.lean .has-info .hover-info.messages {
+  max-height: 10em;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0;
+  background-color: #e5e5e5;
+}
+
 .hl.lean .hover-info code {
   white-space: pre;
+}
+
+.hl.lean .hover-info.messages > code {
+  padding: 0.5em;
+  display: block;
+  width: fit-content;
+}
+
+.hl.lean .hover-info.messages > code:only-child {
+  margin: 0;
+}
+
+.hl.lean .hover-info.messages > code {
+  margin: 0.1em;
+}
+
+.hl.lean .hover-info.messages > code:not(:first-child) {
+  margin-top: 0em;
 }
 
 @media (hover: hover) {
@@ -425,7 +451,7 @@ def highlightingStyle : String := "
   }
 }
 
-.hl.lean .has-info.error > .hover-container > .hover-info {
+.hl.lean .has-info > .hover-container > .hover-info > code.error {
   background-color: #ffb3b3;
 }
 
@@ -437,7 +463,13 @@ def highlightingStyle : String := "
   text-decoration-color: yellow;
 }
 
-.hl.lean .has-info.warning .hover-info {
+@media (hover: hover) {
+  .hl.lean .has-info.warning:hover {
+    background-color: yellow;
+  }
+}
+
+.hl.lean .has-info .hover-info.messages > code.warning {
   background-color: yellow;
 }
 
@@ -445,7 +477,14 @@ def highlightingStyle : String := "
   text-decoration-color: blue;
 }
 
-.hl.lean .has-info.info .hover-info {
+@media (hover: hover) {
+  .hl.lean .has-info.info:hover {
+    background-color: #4777ff;
+  }
+}
+
+
+.hl.lean .has-info .hover-info.messages > code.info {
   background-color: #4777ff;
 }
 
