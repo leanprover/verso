@@ -4,7 +4,9 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 
-import Lean
+import Lean.Elab.Command
+import Lean.Elab.Term
+import Lean.Language.Basic
 
 open Lean Language Elab Command
 
