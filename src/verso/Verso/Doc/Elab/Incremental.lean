@@ -127,6 +127,9 @@ class IncrementalSnapshot (snapshot : outParam Type) (σ : outParam Type) extend
   -/
   mkSnap : Task σ → snapshot
 
+private def freshSnapshot : CoreM Language.Snapshot := do
+  pure {diagnostics := ← Snapshot.Diagnostics.ofMessageLog (← Core.getAndEmptyMessageLog)}
+
 open Lean Elab Command in
 open IncrementalSnapshot in
 /--
@@ -186,8 +189,6 @@ def incrementallyElabCommand
         let mut oldSnap? := snap.old?.bind (·.val.get.toTyped? (α := Internal.IncrementalSnapshot))
         let mut nextPromise ← IO.Promise.new
 
-        let freshSnapshot : m Language.Snapshot := do
-          pure {diagnostics := ← Snapshot.Diagnostics.ofMessageLog (← Core.getAndEmptyMessageLog)}
         let initData : Language.Snapshot ← freshSnapshot
         snap.new.resolve <| DynamicSnapshot.ofTyped <|
           Internal.IncrementalSnapshot.mk initData (.mk <| mkSnap (.pure (← get))) (some {range? := cmd.getRange?, task := nextPromise.result}) cmd
@@ -228,11 +229,10 @@ def incrementallyElabCommand
             nextPromise.resolve <| .mk (← freshSnapshot) (.mk <| mkSnap (.pure (← get))) none b
             updatedState.resolve <| ← get -- some old state goes here
         endAct
-        let finalState ← get
 
+        let finalState ← get
         let allDone : CommandElabM Unit := do
-          let diags ← Snapshot.Diagnostics.ofMessageLog <| ← liftCoreM Core.getAndEmptyMessageLog
-          nextPromise.resolve <| .mk {diagnostics := diags} (.mk <| mkSnap (.pure finalState)) none cmd
+          nextPromise.resolve <| .mk (← liftCoreM freshSnapshot) (.mk <| mkSnap (.pure finalState)) none cmd
         pure (allDone, finalState)
   else -- incrementality not available - just do the action the easy way
     lift <| do
