@@ -222,7 +222,7 @@ elab "#doc" "(" genre:term ")" title:inlineStr "=>" text:completeDocument eof:eo
     let titleString := inlinesToString (← getEnv) titleParts
     let initState : PartElabM.State := .init titleName
     let (indicateFinished, ⟨st, st', _⟩) ←
-      incrementallyElabCommand text blocks
+      incrementallyElabCommand blocks
         (initAct := do setTitle titleString (← liftDocElabM <| titleParts.mapM elabInline))
         (endAct := closePartsUntil 0 endPos)
         (handleStep := partCommand)

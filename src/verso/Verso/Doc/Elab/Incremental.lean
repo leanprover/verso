@@ -148,10 +148,6 @@ The parameters are:
    will frequently be a transformed `TermElabM`. If so, its `MonadStateOf σ` instance must capture
    `TermElabM`'s state, e.g. via `saveState` and `TermState.restoreFull`.
 
- * `cmd` is the complete syntax of the command being elaborated. This is used only for displaying
-   interactive feedback to the user, and it should be a piece of syntax whose range encompasses all
-   the individual steps to be elaborated.
-
  * `steps` is the individual steps to incrementally elaborate. These should all be contained within
    `cmd`. They are saved in incremental snapshots and compared (with `Syntax.structRangeEq`) to
    determine whether the snapshot should be re-used or invalidated.
@@ -175,25 +171,27 @@ def incrementallyElabCommand
     [IncrementalSnapshot snapshot σ]
     [TypeName snapshot] [Nonempty snapshot]
     [Nonempty σ]
-    [Monad m] [MonadLiftT BaseIO m] [MonadExcept Exception m] [MonadLog m] [AddMessageContext m] [MonadFinally m] [MonadOptions m]
+    [Monad m] [MonadLiftT BaseIO m] [MonadLiftT CoreM m] [MonadExcept Exception m] [MonadLog m] [AddMessageContext m] [MonadFinally m] [MonadOptions m]
     [MonadStateOf σ m]
-    (cmd : Syntax)
     (steps : Array Syntax)
     (initAct : m Unit)
     (endAct : m Unit)
     (handleStep : Syntax → m Unit)
     (lift : {α : _} → m α → CommandElabM α)
     : CommandElabM (CommandElabM Unit × σ) := do
+  let cmd := mkNullNode steps
   if let some snap := (← read).snap? then
     withReader (fun ρ => {ρ with snap? := none}) do
       lift <| do
         let mut oldSnap? := snap.old?.bind (·.val.get.toTyped? (α := Internal.IncrementalSnapshot))
         let mut nextPromise ← IO.Promise.new
-        let initData : Language.Snapshot := {diagnostics := .empty}
+
+        let freshSnapshot : m Language.Snapshot := do
+          pure {diagnostics := ← Snapshot.Diagnostics.ofMessageLog (← Core.getAndEmptyMessageLog)}
+        let initData : Language.Snapshot ← freshSnapshot
         snap.new.resolve <| DynamicSnapshot.ofTyped <|
           Internal.IncrementalSnapshot.mk initData (.mk <| mkSnap (.pure (← get))) (some {range? := cmd.getRange?, task := nextPromise.result}) cmd
         initAct
-        let mut errors : MessageLog := .empty
         for b in steps do
           let mut reuseState := false
           if let some oldSnap := oldSnap? then
@@ -206,20 +204,20 @@ def incrementallyElabCommand
                 -- If they match, do nothing and advance the snapshot
                 let σ := data |> getIncrState |>.get
                 set σ
-                errors := next.get.toLeanSnapshot |>.diagnostics.msgLog
                 oldSnap? := next.get
                 reuseState := true
           let nextNextPromise ← IO.Promise.new
           let updatedState ← IO.Promise.new
+
           nextPromise.resolve <|
-            .mk {diagnostics := ⟨errors, none⟩} (.mk <| mkSnap updatedState.result)
+            .mk (← freshSnapshot) (.mk <| mkSnap updatedState.result)
               (some {range? := b.getRange?, task := nextNextPromise.result}) b
 
           try
             if not reuseState then
               oldSnap? := none
               try handleStep b
-              catch e => errors := errors.add <| ← exnMessage e
+              catch e => logMessage <| ← exnMessage e
 
             updatedState.resolve <| ← get
             nextPromise := nextNextPromise
@@ -227,12 +225,14 @@ def incrementallyElabCommand
             -- In case of a fatal exception in partCommand, we need to make sure that the promise actually
             -- gets resolved to avoid hanging forever. And the first resolve wins, so the second one is a
             -- no-op the rest of the time.
-            nextPromise.resolve <| .mk {diagnostics := ⟨errors, none⟩} (.mk <| mkSnap (.pure (← get))) none b
+            nextPromise.resolve <| .mk (← freshSnapshot) (.mk <| mkSnap (.pure (← get))) none b
             updatedState.resolve <| ← get -- some old state goes here
         endAct
         let finalState ← get
+
         let allDone : CommandElabM Unit := do
-          nextPromise.resolve <| .mk {diagnostics := ⟨errors, none⟩} (.mk <| mkSnap (.pure finalState)) none cmd
+          let diags ← Snapshot.Diagnostics.ofMessageLog <| ← liftCoreM Core.getAndEmptyMessageLog
+          nextPromise.resolve <| .mk {diagnostics := diags} (.mk <| mkSnap (.pure finalState)) none cmd
         pure (allDone, finalState)
   else -- incrementality not available - just do the action the easy way
     lift <| do
