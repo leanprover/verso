@@ -8,10 +8,13 @@ import Lean
 
 import Verso.Doc
 import Verso.Doc.Elab
+import Verso.Doc.Elab.Incremental
 import Verso.Doc.Elab.Monad
 import Verso.Doc.Lsp
 import Verso.Parser
 import Verso.SyntaxUtils
+
+
 
 namespace Verso.Doc.Concrete
 
@@ -168,6 +171,43 @@ macro "%docName" moduleName:ident : term =>
 def currentDocName [Monad m] [MonadEnv m] : m Name := do
   pure <| docName <| (← Lean.MonadEnv.getEnv).mainModule
 
+open Language
+
+/--
+The complete state of `PartElabM`, suitable for saving and restoration during incremental
+elaboration
+-/
+structure DocElabSnapshotState where
+  docState : DocElabM.State
+  partState : PartElabM.State
+  termState : Term.SavedState
+deriving Nonempty
+
+structure DocElabSnapshot where
+  finished : Task DocElabSnapshotState
+deriving Nonempty, TypeName
+
+instance : IncrementalSnapshot DocElabSnapshot DocElabSnapshotState where
+  getIncrState snap := snap.finished
+  mkSnap := DocElabSnapshot.mk
+
+instance : MonadStateOf DocElabSnapshotState PartElabM where
+  get := getter
+  set := setter
+  -- Not great for linearity, but incrementality breaks that anyway and that's the only use case for
+  -- this instance.
+  modifyGet f := do
+    let s ← getter
+    let (val, s') := f s
+    setter s'
+    pure val
+where
+  getter := do pure ⟨← getThe _, ← getThe _,  ← saveState (m := TermElabM)⟩
+  setter
+    | ⟨docState, partState, termState⟩ => do
+      set docState
+      set partState
+      termState.restoreFull
 
 elab "#doc" "(" genre:term ")" title:inlineStr "=>" text:completeDocument eof:eoi : command => open Lean Elab Term Command PartElabM DocElabM in do
   findGenreCmd genre
@@ -180,20 +220,17 @@ elab "#doc" "(" genre:term ")" title:inlineStr "=>" text:completeDocument eof:eo
     let ⟨`<low| [~_ ~(titleName@(.node _ _ titleParts))]>⟩ := title
       | dbg_trace "nope {ppSyntax title}" throwUnsupportedSyntax
     let titleString := inlinesToString (← getEnv) titleParts
-    let ((), st, st') ← liftTermElabM <| PartElabM.run {} (.init titleName) <| do
-      let mut errors := #[]
-      setTitle titleString (← liftDocElabM <| titleParts.mapM elabInline)
-      for b in blocks do
-        try partCommand b
-        catch e => errors := errors.push e
-      closePartsUntil 0 endPos
-      for e in errors do
-        match e with
-        | .error stx msg => logErrorAt stx msg
-        | oops@(.internal _ _) => throw oops
-      pure ()
+    let initState : PartElabM.State := .init titleName
+    let (indicateFinished, ⟨st, st', _⟩) ←
+      incrementallyElabCommand blocks
+        (initAct := do setTitle titleString (← liftDocElabM <| titleParts.mapM elabInline))
+        (endAct := closePartsUntil 0 endPos)
+        (handleStep := partCommand)
+        (lift := fun act => liftTermElabM <| Prod.fst <$> PartElabM.run {} initState act)
+
     let finished := st'.partContext.toPartFrame.close endPos
     pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
     saveRefs st st'
     let docName ← mkIdentFrom title <$> currentDocName
     elabCommand (← `(def $docName : Part $genre := $(← finished.toSyntax genre st'.linkDefs st'.footnoteDefs)))
+    indicateFinished
