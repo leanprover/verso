@@ -183,31 +183,13 @@ structure DocElabSnapshotState where
   termState : Term.SavedState
 deriving Nonempty
 
-structure DocElabSnapshotData extends Language.Snapshot where
-  stx      : Syntax
+structure DocElabSnapshot where
   finished : Task DocElabSnapshotState
-deriving Nonempty
-
-inductive DocElabSnapshot where
-  | mk (data : DocElabSnapshotData) (next : Option (SnapshotTask DocElabSnapshot))
-deriving TypeName, Nonempty
-
-partial instance : ToSnapshotTree DocElabSnapshot where
-  toSnapshotTree := go where
-    go := fun ⟨s, next⟩ => ⟨s.toSnapshot, next.map (·.map (sync := true) go) |>.toArray⟩
-
-abbrev DocElabSnapshot.data : DocElabSnapshot → DocElabSnapshotData
-  | .mk data _ => data
-
-abbrev DocElabSnapshot.next : DocElabSnapshot → Option (SnapshotTask DocElabSnapshot)
-  | .mk _ next => next
+deriving Nonempty, TypeName
 
 instance : IncrementalSnapshot DocElabSnapshot DocElabSnapshotState where
-  getNext snap := snap.next
-  getStx snap := snap.data.stx
-  getIncrState snap := snap.data.finished
-  toLeanSnapshot snap := snap.data.toSnapshot
-  mkSnap stx snap res := DocElabSnapshot.mk (DocElabSnapshotData.mk snap stx res)
+  getIncrState snap := snap.finished
+  mkSnap := DocElabSnapshot.mk
 
 instance : MonadStateOf DocElabSnapshotState PartElabM where
   get := getter
@@ -239,7 +221,7 @@ elab "#doc" "(" genre:term ")" title:inlineStr "=>" text:completeDocument eof:eo
       | dbg_trace "nope {ppSyntax title}" throwUnsupportedSyntax
     let titleString := inlinesToString (← getEnv) titleParts
     let initState : PartElabM.State := .init titleName
-    let (nextPromise, snapshotState@⟨st, st', _⟩) ←
+    let (indicateFinished, ⟨st, st', _⟩) ←
       incrementallyElabCommand text blocks
         (initAct := do setTitle titleString (← liftDocElabM <| titleParts.mapM elabInline))
         (endAct := closePartsUntil 0 endPos)
@@ -251,8 +233,4 @@ elab "#doc" "(" genre:term ")" title:inlineStr "=>" text:completeDocument eof:eo
     saveRefs st st'
     let docName ← mkIdentFrom title <$> currentDocName
     elabCommand (← `(def $docName : Part $genre := $(← finished.toSyntax genre st'.linkDefs st'.footnoteDefs)))
-    nextPromise.resolve <| DocElabSnapshot.mk {
-      stx := text,
-      finished := .pure snapshotState
-      diagnostics := .empty
-    } none
+    indicateFinished

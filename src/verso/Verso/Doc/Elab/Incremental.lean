@@ -70,36 +70,62 @@ private def exnMessage [Monad m] [MonadLog m] [AddMessageContext m] [MonadExcept
     pure { fileName := (← getFileName), pos := fileMap.toPosition pos, endPos := fileMap.toPosition endPos, data := msgData, severity := .error }
   | oops@(.internal _ _) => throw oops
 
+namespace Internal
+inductive IncrementalSnapshot where
+  | mk
+    (underlying : Language.Snapshot)
+    (data : Dynamic)
+    (next : Option (SnapshotTask IncrementalSnapshot))
+    («syntax» : Syntax)
+deriving TypeName, Nonempty
+
+partial
+instance : ToSnapshotTree IncrementalSnapshot where
+  toSnapshotTree := go where
+    go := fun
+      | .mk s _ next _ => ⟨s, next.map (·.map (sync := true) go) |>.toArray⟩
+
+/--
+The Lean elaboration framework's snapshot (needed to provide incremental diagnostics)
+-/
+def IncrementalSnapshot.toLeanSnapshot : (snap : IncrementalSnapshot) → Language.Snapshot
+  | .mk underlying _ _ _ => underlying
+
+def IncrementalSnapshot.data [TypeName α] : IncrementalSnapshot → Option α
+  | .mk _ data _ _ => data.get? α
+
+def IncrementalSnapshot.typeName : IncrementalSnapshot → Name
+  | .mk _ data _ _ => data.typeName
+
+/--
+A task that will provide the next state on demand, if relevant. Incremental elaboration traverses
+the chain of next states until it finds one that can't be reused.
+-/
+def IncrementalSnapshot.next : (snap : IncrementalSnapshot) → Option (SnapshotTask IncrementalSnapshot)
+  | .mk _ _ next _ => next
+
+/--
+The specific piece of syntax that gave rise to this incremental snapshot.
+-/
+def IncrementalSnapshot.syntax : (snap : IncrementalSnapshot) → Syntax
+  | .mk _ _ _ stx => stx
+
+end Internal
 /--
 Describes the relationship between a DSL's incremental snapshot type, the DSL elaborator's own
 internal state, and the state used by Lean's incremental elaboration framework.
 -/
-class IncrementalSnapshot (snapshot : outParam Type) (σ : outParam Type) where
-  /--
-  A task that will provide the next state on demand, if relevant. Incremental elaboration traverses
-  the chain of next states until it finds one that can't be reused.
-  -/
-  getNext : snapshot → Option (SnapshotTask snapshot)
-  /--
-  The specific piece of syntax that gave rise to this incremental snapshot.
-  -/
-  getStx : snapshot → Syntax
+class IncrementalSnapshot (snapshot : outParam Type) (σ : outParam Type) extends TypeName snapshot where
   /--
   The incremental DSL elaboration state computed as a result of this snapshot.
   -/
   getIncrState : snapshot → Task σ
+
   /--
-  The Lean elaboration framework's snapshot (needed to provide incremental diagnostics)
+  How should a snapshot be constructed? The parameter is a task that will compute the updated state
+  during incremental elaboration.
   -/
-  toLeanSnapshot : snapshot → Language.Snapshot
-  /--
-  How should a snapshot be constructed? The parameters are:
-    * The syntax giving rise to this specific snapshot
-    * A Lean snapshot
-    * A task that will compute the updated state from the syntax during incremental elaboration
-    * The next snapshot in the chain, if one exists. The final DSL snapshot will have `none` here.
-  -/
-  mkSnap : Syntax → Language.Snapshot → Task σ → Option (SnapshotTask snapshot) → snapshot
+  mkSnap : Task σ → snapshot
 
 open Lean Elab Command in
 open IncrementalSnapshot in
@@ -139,17 +165,17 @@ The parameters are:
 
  * `lift` is a means of running the DSL's monad inside `CommandElabM`.
 
-The caller is responsible for resolving the returned promise to indicate to Lean that the command is
-fully elaborated. This should be the last thing it does after any further state changes.
+The caller is responsible for invoking the returned `CommandElabM` action to indicate to Lean that
+it is finished. This should be the last thing it does after any further state changes.
 
 Ordinary exceptions thrown by `handleStep` are caught and logged incrementally, unless they
 represent unrecoverable internal Lean errors, in which case incremental elaboration is terminated.
 -/
 def incrementallyElabCommand
     [IncrementalSnapshot snapshot σ]
-    [TypeName snapshot] [ToSnapshotTree snapshot] [Nonempty snapshot]
+    [TypeName snapshot] [Nonempty snapshot]
     [Nonempty σ]
-    [Monad m] [MonadLiftT BaseIO m] [MonadExcept Exception m] [MonadLog m] [AddMessageContext m] [MonadFinally m]
+    [Monad m] [MonadLiftT BaseIO m] [MonadExcept Exception m] [MonadLog m] [AddMessageContext m] [MonadFinally m] [MonadOptions m]
     [MonadStateOf σ m]
     (cmd : Syntax)
     (steps : Array Syntax)
@@ -157,34 +183,37 @@ def incrementallyElabCommand
     (endAct : m Unit)
     (handleStep : Syntax → m Unit)
     (lift : {α : _} → m α → CommandElabM α)
-    : CommandElabM (IO.Promise snapshot × σ) := do
+    : CommandElabM (CommandElabM Unit × σ) := do
   if let some snap := (← read).snap? then
     withReader (fun ρ => {ρ with snap? := none}) do
       lift <| do
-        let mut oldSnap? := snap.old?.bind (·.val.get.toTyped? (α := snapshot))
+        let mut oldSnap? := snap.old?.bind (·.val.get.toTyped? (α := Internal.IncrementalSnapshot))
         let mut nextPromise ← IO.Promise.new
-        let initData := {diagnostics := .empty}
+        let initData : Language.Snapshot := {diagnostics := .empty}
         snap.new.resolve <| DynamicSnapshot.ofTyped <|
-          mkSnap cmd initData (.pure (← get)) (some {range? := cmd.getRange?, task := nextPromise.result})
+          Internal.IncrementalSnapshot.mk initData (.mk <| mkSnap (.pure (← get))) (some {range? := cmd.getRange?, task := nextPromise.result}) cmd
         initAct
         let mut errors : MessageLog := .empty
         for b in steps do
           let mut reuseState := false
           if let some oldSnap := oldSnap? then
-            if let some next := getNext oldSnap then
+            if let some next := oldSnap.next then
               -- if next.get.data.stx.structRangeEqWithTraceReuse (← getOptions) b then
-              if next.get |> getStx |>.structRangeEq b then
+              if next.get.syntax |>.structRangeEq b then
+                let some data := next.get.data (α := snapshot)
+                  | logErrorAt next.get.syntax
+                      m!"Internal error: failed to re-used incremental state. Expected '{TypeName.typeName snapshot}' but got a '{next.get.typeName}'"
                 -- If they match, do nothing and advance the snapshot
-                let σ := next.get |> getIncrState |>.get
+                let σ := data |> getIncrState |>.get
                 set σ
-                errors := next.get |> toLeanSnapshot |>.diagnostics.msgLog
+                errors := next.get.toLeanSnapshot |>.diagnostics.msgLog
                 oldSnap? := next.get
                 reuseState := true
           let nextNextPromise ← IO.Promise.new
           let updatedState ← IO.Promise.new
           nextPromise.resolve <|
-            mkSnap b {diagnostics := ⟨errors, none⟩} updatedState.result
-              (some {range? := b.getRange?, task := nextNextPromise.result})
+            .mk {diagnostics := ⟨errors, none⟩} (.mk <| mkSnap updatedState.result)
+              (some {range? := b.getRange?, task := nextNextPromise.result}) b
 
           try
             if not reuseState then
@@ -198,14 +227,17 @@ def incrementallyElabCommand
             -- In case of a fatal exception in partCommand, we need to make sure that the promise actually
             -- gets resolved to avoid hanging forever. And the first resolve wins, so the second one is a
             -- no-op the rest of the time.
-            nextPromise.resolve <| mkSnap b {diagnostics := ⟨errors, none⟩} (.pure (← get)) none
+            nextPromise.resolve <| .mk {diagnostics := ⟨errors, none⟩} (.mk <| mkSnap (.pure (← get))) none b
             updatedState.resolve <| ← get -- some old state goes here
         endAct
-        pure (nextPromise, ← get)
+        let finalState ← get
+        let allDone : CommandElabM Unit := do
+          nextPromise.resolve <| .mk {diagnostics := ⟨errors, none⟩} (.mk <| mkSnap (.pure finalState)) none cmd
+        pure (allDone, finalState)
   else -- incrementality not available - just do the action the easy way
     lift <| do
       initAct
       for b in steps do
         handleStep b
       endAct
-      pure (← IO.Promise.new, ← get)
+      pure (pure (), ← get)
