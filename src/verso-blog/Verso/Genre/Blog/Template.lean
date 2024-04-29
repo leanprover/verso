@@ -152,7 +152,7 @@ partial defmethod Highlighted.isEmpty (hl : Highlighted) : Bool :=
   | .text str => str.isEmpty
   | .token .. => false
   | .span _ hl => hl.isEmpty
-  | .tactics _ _ hl => hl.isEmpty
+  | .tactics _ _ _ hl => hl.isEmpty
   | .point .. => true
   | .seq hls => hls.all isEmpty
 
@@ -161,7 +161,7 @@ partial defmethod Highlighted.trimRight (hl : Highlighted) : Highlighted :=
   | .text str => .text str.trimRight
   | .token .. => hl
   | .span infos hl => .span infos hl.trimRight
-  | .tactics info pos hl => .tactics info pos hl.trimRight
+  | .tactics info startPos endPos hl => .tactics info startPos endPos hl.trimRight
   | .point .. => hl
   | .seq hls => Id.run do
     let mut hls := hls
@@ -191,7 +191,7 @@ partial defmethod Highlighted.trimLeft (hl : Highlighted) : Highlighted :=
   | .text str => .text str.trimLeft
   | .token .. => hl
   | .span infos hl => .span infos hl.trimLeft
-  | .tactics info pos hl => .tactics info pos hl.trimLeft
+  | .tactics info startPos endPos hl => .tactics info startPos endPos hl.trimLeft
   | .point .. => hl
   | .seq hls =>
     if h : hls.size > 0 then
@@ -232,8 +232,8 @@ partial defmethod Highlighted.toHtml : Highlighted → Html
     else
       panic! "No highlights!"
       --toHtml hl
-  | .tactics info pos hl =>
-    let id := s!"tactic-state-{hash info}-{pos}"
+  | .tactics info startPos endPos hl =>
+    let id := s!"tactic-state-{hash info}-{startPos}-{endPos}"
     {{
       <span class="tactic">
         <label «for»={{id}}>{{toHtml hl}}</label>
