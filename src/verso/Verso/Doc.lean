@@ -4,14 +4,15 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 
-import Lean
+import Lean.Data.Json
 
 namespace Verso
 
 namespace Doc
 
 open Std (Format)
-open Lean (Name)
+open Lean (Name Json ToJson FromJson)
+open Lean.Json (getObj?)
 
 def docName (moduleName : Name) : Name :=
   id <| .str moduleName "the canonical document object name"
@@ -42,7 +43,7 @@ instance : Repr Genre.none.PartMetadata where
   reprPrec e _ := nomatch e
 
 inductive MathMode where | inline | display
-deriving Repr, BEq
+deriving Repr, BEq, Hashable, ToJson, FromJson
 
 private def arrayEq (eq : α → α → Bool) (xs ys : Array α) : Bool := Id.run do
     if h : xs.size = ys.size then
@@ -68,6 +69,56 @@ inductive Inline (genre : Genre) : Type where
   | concat (content : Array (Inline genre))
   | other (container : genre.Inline) (content : Array (Inline genre))
 
+private partial def Inline.toJson [ToJson genre.Inline] : Inline genre → Json
+  | .text str => json% {"text": $str}
+  | .emph content => json% {"emph": $(content.map toJson)}
+  | .bold content => json% {"bold": $(content.map toJson)}
+  | .code str => json% {"code": $str}
+  | .math mode str => json% {"math": {"mode": $mode, "str": $str}}
+  | .linebreak str => json% {"linebreak": $str}
+  | .link content url => json% {"link": {"content" : $(content.map toJson), "url": $url}}
+  | .footnote name content => json% {"footnote": { "name": $name, "content" : $(content.map toJson)}}
+  | .image alt url => json% {"image":{"alt": $alt, "url": $url}}
+  | .concat content => json% {"concat": $(content.map toJson)}
+  | .other container content => json%{"other": {"container": $container, "content": $(content.map toJson)}}
+
+instance [ToJson genre.Inline] : ToJson (Inline genre) where
+  toJson := Inline.toJson
+
+private partial def Inline.fromJson? [FromJson genre.Inline] (json : Json) : Except String (Inline genre) := do
+  let obj ← json.getObj?
+  if let #[⟨k, v⟩] := obj.toArray then
+    match k with
+    | "text" => text <$> FromJson.fromJson? v
+    | "emph" =>
+      let arr : Array Json ← FromJson.fromJson? v
+      emph <$> arr.mapM fromJson?
+    | "bold" =>
+      let arr : Array Json ← FromJson.fromJson? v
+      bold <$> arr.mapM fromJson?
+    | "code" => code <$> FromJson.fromJson? v
+    | "math" => math <$> FromJson.fromJson? (← v.getObjVal? "mode") <*> FromJson.fromJson? (← v.getObjVal? "str")
+    | "linebreak" => linebreak <$> FromJson.fromJson? v
+    | "link" =>
+      let arr : Array Json ← v.getObjValAs? (Array Json) "content"
+      link <$> arr.mapM fromJson? <*> FromJson.fromJson? (← v.getObjVal? "url")
+    | "footnote" =>
+      let arr : Array Json ← v.getObjValAs? (Array Json) "content"
+      footnote <$> FromJson.fromJson? (← v.getObjVal? "name") <*> arr.mapM fromJson?
+    | "image" => image <$> FromJson.fromJson? (← v.getObjVal? "alt") <*> FromJson.fromJson? (← v.getObjVal? "url")
+    | "concat" =>
+      let arr : Array Json ← FromJson.fromJson? v
+      concat <$> arr.mapM fromJson?
+    | "other" =>
+      let arr : Array Json ← v.getObjValAs? (Array Json) "content"
+      other <$> FromJson.fromJson? (← v.getObjVal? "container") <*> arr.mapM fromJson?
+    | nonKey => throw s!"Expected a key that's a constructor name of 'Inline', got '{nonKey}'"
+  else
+    throw "Expected a one-field object"
+
+instance [FromJson genre.Inline] : FromJson (Inline genre) where
+  fromJson? := Inline.fromJson?
+
 partial def Inline.beq [BEq genre.Inline] : Inline genre → Inline genre → Bool
   | .text str1, .text str2
   | .code str1, .code str2
@@ -82,8 +133,23 @@ partial def Inline.beq [BEq genre.Inline] : Inline genre → Inline genre → Bo
   | .other container1 content1, .other container2 content2 => container1 == container2 && arrayEq beq content1 content2
   | _, _ => false
 
-
 instance [BEq genre.Inline] : BEq (Inline genre) := ⟨Inline.beq⟩
+
+private partial def Inline.hashCode [Hashable genre.Inline] : Inline genre → UInt64
+  | .text str => mixHash 11 <| hash str
+  | .code str => mixHash 13 <| hash str
+  | .linebreak str => mixHash 17 <| hash str
+  | .emph c => mixHash 19 <| hash (c.map hashCode)
+  | .bold c => mixHash 23 <| hash (c.map hashCode)
+  | .math m str => mixHash 29 <| mixHash (hash m) (hash str)
+  | .link txt url => mixHash 31 <| mixHash (hash <| txt.map hashCode) (hash url)
+  | .footnote name c => mixHash 37 <| mixHash (hash name) (hash <| c.map hashCode)
+  | .image alt url => mixHash 41 <| mixHash (hash alt) (hash url)
+  | .concat c => mixHash 43 <| hash (c.map hashCode)
+  | .other container content => mixHash 47 <| mixHash (hash container) (hash <| content.map hashCode)
+
+instance [Hashable genre.Inline] : Hashable (Inline genre) where
+  hash := Inline.hashCode
 
 private def reprArray (r : α → Nat → Format) (arr : Array α) : Format :=
   .bracket "#[" (.joinSep (arr.toList.map (r · max_prec)) ("," ++ .line)) "]"
@@ -149,6 +215,11 @@ structure ListItem (α : Type u) where
   contents : Array α
 deriving Repr, BEq
 
+private def ListItem.toJson (blockToJson : ToJson α) : ListItem α → Json
+  | ⟨i, xs⟩ => json% {"indent": $i, "contents": $(xs.map blockToJson.toJson)}
+
+instance [inst : ToJson α] : ToJson (ListItem α) := ⟨ListItem.toJson inst⟩
+
 def ListItem.reprPrec [Repr α] : ListItem α → Nat → Std.Format := Repr.reprPrec
 
 structure DescItem (α : Type u) (β : Type v) where
@@ -156,11 +227,17 @@ structure DescItem (α : Type u) (β : Type v) where
   desc : Array β
 deriving Repr, BEq
 
+private def DescItem.toJson (inlineToJson : ToJson α) (blockToJson : ToJson β) : DescItem α β → Json
+  | ⟨term, desc⟩ => json% {"term": $(term.map inlineToJson.toJson), "contents": $(desc.map blockToJson.toJson)}
+
+instance [inst : ToJson α] : ToJson (ListItem α) := ⟨ListItem.toJson inst⟩
+
+
 def DescItem.reprPrec [Repr α] [Repr β] : DescItem α β → Nat → Std.Format := Repr.reprPrec
 
 inductive Block (genre : Genre) : Type where
   | para (contents : Array (Inline genre))
-  | code (name : Option String) (args : Array Arg) (indent : Nat) (content : String)
+  | code (content : String)
   | ul (items : Array (ListItem (Block genre)))
   | ol (start : Int) (items : Array (ListItem (Block genre)))
   | dl (items : Array (DescItem (Inline genre) (Block genre)))
@@ -168,9 +245,21 @@ inductive Block (genre : Genre) : Type where
   | concat (content : Array (Block genre))
   | other (container : genre.Block) (content : Array (Block genre))
 
+private partial def Block.toJson [ToJson genre.Inline] [ToJson genre.Block] : Block genre → Json
+  | .para contents => json% {"para": $contents}
+  | .code content => json%{"code": $content}
+  | .ul items => json% {"ul": $(items.map (ListItem.toJson ⟨Block.toJson⟩))}
+  | .ol start items => json% {"ol": {"start": $start, "items": $(items.map (ListItem.toJson ⟨Block.toJson⟩))}}
+  | .dl items => json% {"dl": $(items.map (DescItem.toJson ⟨Inline.toJson⟩ ⟨Block.toJson⟩))}
+  | .blockquote content => json% {"blockquote": $(content.map toJson)}
+  | .concat content => json% {"concat": $(content.map toJson)}
+  | .other container content => json% {"other": {"container": $container, "content": $(content.map toJson)}}
+
+instance [ToJson genre.Inline] [ToJson genre.Block] : ToJson (Block genre) := ⟨Block.toJson⟩
+
 partial def Block.beq [BEq genre.Inline] [BEq genre.Block] : Block genre → Block genre → Bool
   | .para c1, .para c2 => c1 == c2
-  | .code n1 a1 i1 c1, .code n2 a2 i2 c2 => n1 == n2 && a1 == a2 && i1 == i2 && c1 == c2
+  | .code c1, .code c2 => c1 == c2
   | .ul i1, .ul i2 => arrayEq (fun | ⟨indent1, c1⟩, ⟨indent2, c2⟩ => indent1 == indent2 && arrayEq beq c1 c2) i1 i2
   | .ol n1 i1, .ol n2 i2 => n1 == n2 && arrayEq (fun | ⟨indent1, c1⟩, ⟨indent2, c2⟩ => indent1 == indent2 && arrayEq beq c1 c2) i1 i2
   | .dl i1, .dl i2 =>
@@ -188,7 +277,7 @@ partial def Block.reprPrec [Repr g.Inline] [Repr g.Block] (inline : Block g) (pr
       (addAppParen · p) <|
         match i with
         | para contents => reprCtor ``Block.para [reprArg contents]
-        | code name args indent content => reprCtor ``Block.code [reprArg name, reprArg args, reprArg indent, reprArg content]
+        | code content => reprCtor ``Block.code [reprArg content]
         | ul items => reprCtor ``Block.ul [reprArray (@ListItem.reprPrec _ ⟨go⟩) items]
         | ol start items => reprCtor ``Block.ol [reprArg start, reprArray (@ListItem.reprPrec _ ⟨go⟩) items]
         | dl items => reprCtor ``Block.dl [reprArray (@DescItem.reprPrec _ _ _ ⟨go⟩) items]

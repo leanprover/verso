@@ -34,14 +34,14 @@ def Block.paragraph : Block where
   name := `Verso.Genre.Manual.Block.paragraph
 
 def paragraph.descr : BlockDescr where
-  traverse := fun _ _ => pure none
+  traverse := fun _ _ _ => pure none
   toTeX :=
-    some <| fun go _ content => do
+    some <| fun _ go _ _ content => do
       pure <| .seq <| ← content.mapM fun b => do
         pure <| .seq #[← go b, .raw "\n"]
   toHtml :=
     open Verso.Output.Html in
-    some <| fun go _ content => do
+    some <| fun _ go _ _ content => do
       pure <| {{<div class="paragraph">{{← content.mapM go}}</div>}}
 
 
@@ -130,7 +130,7 @@ def emitHtmlSingle (logError : String → IO Unit) (config : Config) (state : Tr
     h.putStrLn Html.Css.pageStyle
   IO.FS.withFile (dir.join "index.html") .write fun h => do
     h.putStrLn Html.doctype
-    h.putStrLn (Html.page toc text.titleString pageContent).asString
+    h.putStrLn (Html.page toc text.titleString pageContent state.extraCss state.extraJs).asString
 
 
 def manualMain (extensionImpls : ExtensionImpls) (text : Part Manual) (options : List String) : IO UInt32 := (ReaderT.run · extensionImpls) do

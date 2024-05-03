@@ -5,6 +5,7 @@ Author: David Thrane Christiansen
 -/
 import Verso.Doc.Concrete
 
+set_option guard_msgs.diff true
 
 namespace Verso.Examples
 
@@ -192,7 +193,7 @@ info: Verso.Doc.Part.mk
       "Section 1"
       none
       #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "Here's some code"],
-        Verso.Doc.Block.code none #[] 0 "(define (zero f z) z)\n(define (succ n) (lambda (f x) (f (n f z))))\n"]
+        Verso.Doc.Block.code "(define (zero f z) z)\n(define (succ n) (lambda (f x) (f (n f z))))\n"]
       #[]]
 -/
 #guard_msgs in
@@ -224,7 +225,7 @@ info: Verso.Doc.Part.mk
       none
       #[Verso.Doc.Block.para
           #[Verso.Doc.Inline.text "Here's some ", Verso.Doc.Inline.code "code", Verso.Doc.Inline.text "!"],
-        Verso.Doc.Block.code none #[] 0 "(define (zero f z) z)\n(define (succ n) (lambda (f x) (f (n f z))))\n"]
+        Verso.Doc.Block.code "(define (zero f z) z)\n(define (succ n) (lambda (f x) (f (n f z))))\n"]
       #[]]
 -/
 #guard_msgs in

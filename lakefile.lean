@@ -51,3 +51,18 @@ lean_exe demosite where
   -- `runFrontend`) at the expense of increased binary size on Linux.
   -- Remove this line if you do not need such functionality.
   supportInterpreter := true
+
+
+-- An example of a textbook project built in Verso
+lean_lib DemoTextbook where
+  srcDir := "examples/textbook"
+  roots := #[`DemoTextbook]
+
+@[default_target]
+lean_exe demotextbook where
+  srcDir := "examples/textbook"
+  root := `DemoTextbookMain
+  -- Enables the use of the Lean interpreter by the executable (e.g.,
+  -- `runFrontend`) at the expense of increased binary size on Linux.
+  -- Remove this line if you do not need such functionality.
+  supportInterpreter := true

@@ -266,7 +266,7 @@ def leanCommand : BlockRoleExpander
     let projectExamples ← getSubproject project
     let (_, {highlighted := hls, original := str, ..}) ← projectExamples.getOrSuggest exampleName
     Verso.Hover.addCustomHover exampleName s!"```lean\n{str}\n```"
-    pure #[← ``(Block.other (Blog.BlockExt.highlightedCode $(quote project.getId) (SubVerso.Highlighting.Highlighted.seq $(quote hls))) #[Block.code none #[] 0 $(quote str)])]
+    pure #[← ``(Block.other (Blog.BlockExt.highlightedCode $(quote project.getId) (SubVerso.Highlighting.Highlighted.seq $(quote hls))) #[Block.code $(quote str)])]
   | _, more =>
     if h : more.size > 0 then
       throwErrorAt more[0] "Unexpected contents"
@@ -337,7 +337,7 @@ def leanInit : CodeBlockExpander
         let commandState := configureCommandState env {}
         modifyEnv <| fun env => exampleContextExt.modifyState env fun s => {s with contexts := s.contexts.insert config.exampleContext.getId (.inline commandState state)}
     if config.show.getD false then
-      pure #[← ``(Block.code none #[] 0 $(quote str.getString))] -- TODO highlighting hack
+      pure #[← ``(Block.code $(quote str.getString))] -- TODO highlighting hack
     else pure #[]
 where
   configureCommandState (env : Environment) (msg : MessageLog) : Command.State :=
@@ -395,7 +395,7 @@ def lean : CodeBlockExpander
       setInfoState infoSt
       setEnv env
     if config.show.getD true then
-      pure #[← ``(Block.other (Blog.BlockExt.highlightedCode $(quote x.getId) $(quote hls)) #[Block.code none #[] 0 $(quote str.getString)])]
+      pure #[← ``(Block.other (Blog.BlockExt.highlightedCode $(quote x.getId) $(quote hls)) #[Block.code $(quote str.getString)])]
     else
       pure #[]
 
@@ -447,9 +447,9 @@ def leanOutput : Doc.Elab.CodeBlockExpander
                 let pre := lines.take 3
                 let post := String.join (lines.drop 3 |>.intersperse "\n")
                 let preHtml : Html := pre.map (fun (l : String) => {{<code>{{l}}</code>}})
-                ``(Block.other (Blog.BlockExt.htmlDetails $(quote (sevStr m.severity)) $(quote preHtml)) #[Block.code none #[] 0 $(quote post)])
+                ``(Block.other (Blog.BlockExt.htmlDetails $(quote (sevStr m.severity)) $(quote preHtml)) #[Block.code $(quote post)])
               else
-                ``(Block.other (Blog.BlockExt.htmlDiv $(quote (sevStr m.severity))) #[Block.code none #[] 0 $(quote str.getString)])
+                ``(Block.other (Blog.BlockExt.htmlDiv $(quote (sevStr m.severity))) #[Block.code $(quote str.getString)])
             return #[content]
         pure messages
       | .inr msgs =>
@@ -464,9 +464,9 @@ def leanOutput : Doc.Elab.CodeBlockExpander
                 let pre := lines.take 3
                 let post := String.join (lines.drop 3 |>.intersperse "\n")
                 let preHtml : Html := pre.map (fun (l : String) => {{<code>{{l}}</code>}})
-                ``(Block.other (Blog.BlockExt.htmlDetails $(quote (sevStr sev)) $(quote preHtml)) #[Block.code none #[] 0 $(quote post)])
+                ``(Block.other (Blog.BlockExt.htmlDetails $(quote (sevStr sev)) $(quote preHtml)) #[Block.code $(quote post)])
               else
-                ``(Block.other (Blog.BlockExt.htmlDiv $(quote (sevStr sev))) #[Block.code none #[] 0 $(quote str.getString)])
+                ``(Block.other (Blog.BlockExt.htmlDiv $(quote (sevStr sev))) #[Block.code $(quote str.getString)])
             return #[content]
         pure messages
 

@@ -9,6 +9,7 @@ import Verso.Examples
 import Verso.Output.Html
 import Verso.Method
 
+set_option guard_msgs.diff true
 
 namespace Verso.Doc.Html
 
@@ -63,11 +64,15 @@ class ToHtml (genre : Genre) (m : Type → Type) (α : Type u) where
   toHtml (val : α) : HtmlT genre m Html
 
 class GenreHtml (genre : Genre) (m : Type → Type) where
-  part (partHtml : Part genre → Array (String × String) → HtmlT genre m Html)
+  part
+    (partHtml : Part genre → Array (String × String) → HtmlT genre m Html)
     (metadata : genre.PartMetadata) (contents : Part genre) : HtmlT genre m Html
-  block (blockHtml : Block genre → HtmlT genre m Html)
+  block
+    (inlineHtml : Inline genre → HtmlT genre m Html)
+    (blockHtml : Block genre → HtmlT genre m Html)
     (container : genre.Block) (contents : Array (Block genre)) : HtmlT genre m Html
-  inline (inlineHtml : Inline genre → HtmlT genre m Html)
+  inline
+    (inlineHtml : Inline genre → HtmlT genre m Html)
     (container : genre.Inline) (contents : Array (Inline genre)) : HtmlT genre m Html
 
 
@@ -118,11 +123,9 @@ partial def Block.toHtml [Monad m] [GenreHtml g m] : Block g → HtmlT g m Html
         }}
       </dl>
     }}
-  | .code (some name) _ _ content => do
-    pure #[{{ <pre class={{"language-" ++ name}}> {{ content }} </pre>}}]
-  | .code none _ _ content => pure #[{{ <pre> {{ content }} </pre>}}]
+  | .code content => pure #[{{ <pre> {{ content }} </pre>}}]
   | .concat items => Html.seq <$> items.mapM Block.toHtml
-  | .other container content => GenreHtml.block Block.toHtml container content
+  | .other container content => GenreHtml.block Inline.toHtml Block.toHtml container content
 
 
 instance [Monad m] [GenreHtml g m] : ToHtml g m (Block g) where
@@ -147,7 +150,7 @@ instance [Monad m] [GenreHtml g m] : ToHtml g m (Part g) where
 
 instance : GenreHtml .none m where
   part _ m := nomatch m
-  block _ x := nomatch x
+  block _ _ x := nomatch x
   inline _ x := nomatch x
 
 defmethod Genre.toHtml (g : Genre) [ToHtml g m α] (options : Options g m) (context : g.TraverseContext) (state : g.TraverseState) (x : α) : m Html :=

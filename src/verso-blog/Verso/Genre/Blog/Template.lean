@@ -251,17 +251,17 @@ defmethod LexedText.toHtml (text : LexedText) : Html :=
     | (none, txt) => (txt : Html)
     | (some cls, txt) => {{ <span class={{cls}}>{{txt}}</span>}}
 
-def blockHtml (g : Genre) (go : Block g → HtmlT g IO Html) : Blog.BlockExt → Array (Block g) → HtmlT g IO Html
+def blockHtml (g : Genre) (_goI : Inline g → HtmlT g IO Html) (goB : Block g → HtmlT g IO Html) : Blog.BlockExt → Array (Block g) → HtmlT g IO Html
   | .lexedText content, _contents => do
     pure {{ <pre class=s!"lexed {content.name}"> {{ content.toHtml }} </pre> }}
   | .highlightedCode contextName hls, _contents => do
     pure {{ <code class="hl lean block" "data-lean-context"={{toString contextName}}> {{ hls.trim.toHtml }} </code> }}
   | .htmlDetails classes summary, contents => do
-    pure {{ <details class={{classes}}><summary>{{summary}}</summary> {{← contents.mapM go}}</details>}}
+    pure {{ <details class={{classes}}><summary>{{summary}}</summary> {{← contents.mapM goB}}</details>}}
   | .htmlWrapper name attrs, contents => do
-    Html.tag name attrs <$> contents.mapM go
+    Html.tag name attrs <$> contents.mapM goB
   | .htmlDiv classes, contents => do
-    pure {{ <div class={{classes}}> {{← contents.mapM go}} </div> }}
+    pure {{ <div class={{classes}}> {{← contents.mapM goB}} </div> }}
   | .blob html, _ => pure html
 
 def inlineHtml (g : Genre) [MonadConfig (HtmlT g IO)] [MonadPath (HtmlT g IO)]

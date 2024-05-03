@@ -24,9 +24,9 @@ def docstring (name : Name) : Block where
 end Block
 
 def docstring.descr : BlockDescr where
-  traverse _ _ := pure none
-  toHtml := some <| fun go _info contents => contents.mapM go
-  toTeX := some <| fun go _info contents => contents.mapM go
+  traverse _ _ _ := pure none
+  toHtml := some <| fun _goI goB _id _info contents => contents.mapM goB
+  toTeX := some <| fun _goI goB _id _info contents => contents.mapM goB
 
 
 
@@ -42,6 +42,6 @@ def docstring : BlockRoleExpander
       match ← Lean.findDocString? (← getEnv) name with
       | none => throwErrorAt x "No docs found for '{x}'"
       | some docs =>
-        pure #[← ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.docstring $(quote name)) #[Verso.Doc.Block.code none #[] 0 $(quote docs)])]
+        pure #[← ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.docstring $(quote name)) #[Verso.Doc.Block.code $(quote docs)])]
     | _ => throwError "Expected exactly one positional argument that is a name"
   | _, more => throwErrorAt more[0]! "Unexpected block argument"

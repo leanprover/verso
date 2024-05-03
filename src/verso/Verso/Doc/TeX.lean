@@ -57,7 +57,7 @@ where
 
 class GenreTeX (genre : Genre) (m : Type → Type) where
   part (partTeX : Part genre → TeXT genre m TeX) (metadata : genre.PartMetadata) (contents : Part genre) : TeXT genre m TeX
-  block (blockTeX : Block genre → TeXT genre m TeX) (container : genre.Block) (contents : Array (Block genre)) : TeXT genre m TeX
+  block (inlineTeX : Inline genre → TeXT genre m TeX) (blockTeX : Block genre → TeXT genre m TeX) (container : genre.Block) (contents : Array (Block genre)) : TeXT genre m TeX
   inline (inlineTeX : Inline genre → TeXT genre m TeX) (container : genre.Inline) (contents : Array (Inline genre)) : TeXT genre m TeX
 
 partial defmethod Inline.toTeX [Monad m] [GenreTeX g m] : Inline g → TeXT g m TeX
@@ -87,14 +87,14 @@ partial defmethod Block.toTeX [Monad m] [GenreTeX g m] : Block g → TeXT g m Te
     pure \TeX{\begin{quotation} \Lean{← bs.mapM Block.toTeX} \end{quotation}}
   | .ul items => do
     pure \TeX{\begin{itemize} \Lean{← items.mapM fun li => do pure \TeX{\item " " \Lean{← li.contents.mapM Block.toTeX}}} \end{itemize} }
-  | .ol start items => do -- TODO start numbering here
+  | .ol _start items => do -- TODO start numbering here
     pure \TeX{\begin{enumerate} \Lean{← items.mapM fun li => do pure \TeX{\item " " \Lean{← li.contents.mapM Block.toTeX}}} \end{enumerate} }
   | .dl items => do
     pure \TeX{\begin{description} \Lean{← items.mapM fun li => do pure \TeX{\item[\Lean{← li.term.mapM Inline.toTeX}] " " \Lean{← li.desc.mapM Block.toTeX}}} \end{description} }
-  | .code _ _ _ content => do
+  | .code content => do
     pure \TeX{\begin{verbatim} \Lean{.raw content} \end{verbatim}}
   | .concat items => TeX.seq <$> items.mapM Block.toTeX
-  | .other container content => GenreTeX.block Block.toTeX container content
+  | .other container content => GenreTeX.block Inline.toTeX Block.toTeX container content
 
 
 partial defmethod Part.toTeX [Monad m] [GenreTeX g m] (p : Part g) : TeXT g m TeX :=
