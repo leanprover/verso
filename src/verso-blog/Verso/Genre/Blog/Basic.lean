@@ -255,7 +255,7 @@ partial defmethod Block.wordCount : Block genre → Nat
     | .blockquote items
     | .concat items => sumArrayWith wordCount items
     | .other _ content => sumArrayWith wordCount content
-    | .code _ _ _ str => str.split (Char.isWhitespace) |>.filter (!·.isEmpty) |>.length
+    | .code str => str.split (Char.isWhitespace) |>.filter (!·.isEmpty) |>.length
 
 defmethod BlogPost.summary (post : BlogPost) : Array (Block Post) := Id.run do
   let mut out := #[]

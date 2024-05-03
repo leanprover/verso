@@ -17,8 +17,8 @@ partial def Toc.html (depth : Option Nat) : Toc → Html
     if depth = some 0 then .empty
     else
       {{
-        <li>
-          <a href=s!"#{id}" {{if !num then #[("class", "unnumbered")] else #[]}}>{{title}}</a>
+        <li {{if !num then #[("class", "unnumbered")] else #[]}}>
+          <a href=s!"#{id}">{{title}}</a>
           {{if children.isEmpty then .empty
             else {{<ol> {{children.map (·.html (depth.map Nat.pred))}} </ol>}} }}
         </li>
@@ -34,11 +34,14 @@ def titlePage (title : Html) (authors : List String) (intro : Html) : Html := {{
   </div>
 }}
 
-def page (toc : Array Toc) (textTitle : String) (contents : Html) : Html := {{
+def page (toc : Array Toc) (textTitle : String) (contents : Html) (extraCss : Lean.HashSet String) (extraJs : Lean.HashSet String) : Html := {{
 <html>
   <head>
+    <meta charset="utf-8"/>
     <title>{{textTitle}}</title>
     <link rel="stylesheet" href="book.css" />
+    {{extraCss.toArray.map ({{<style>{{Html.text false ·}}</style>}})}}
+    {{extraJs.toArray.map ({{<script>{{Html.text false ·}}</script>}})}}
   </head>
   <body>
     <div class="with-toc">

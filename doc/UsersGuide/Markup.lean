@@ -2,6 +2,8 @@ import Verso.Syntax
 import Verso.Genre.Manual
 import Lean
 
+set_option guard_msgs.diff true
+
 open Verso Genre
 
 open Lean in
@@ -42,8 +44,8 @@ def markupPreview : CodeBlockExpander
     let stx ← blocks {} |>.parseString contents.getString
     let p ← preview stx
     pure #[
-      ← ``(Block.code none #[] 0 $(quote contents.getString)),
-      ← ``(Block.code none #[] 0 $(quote <| toString <| p))
+      ← ``(Block.code $(quote contents.getString)),
+      ← ``(Block.code $(quote <| toString <| p))
     ]
   | _, contents => throwErrorAt contents "Unexpected arguments"
 

@@ -88,16 +88,44 @@ def parseArgs (argStx : TSyntaxArray `argument) : DocElabM (Array Arg) := do
     | other => throwErrorAt other "Can't decode argument '{repr other}'"
   pure argVals
 
+open Lean.Parser.Term in
+def appFallback
+    (stx : Syntax)
+    (name : Ident) (resolvedName : Name)
+    (argVals : Array Arg) (subjectArr : Option (Array Syntax))
+    : DocElabM Term := do
+  let f := mkIdentFrom name resolvedName
+  let valStx : ArgVal → DocElabM Term := fun
+    | .str s => pure s
+    | .num n => pure n
+    | .name x => pure x
 
+  let argStx : Array Syntax ← argVals.mapM fun
+    | .anon v => valStx v
+    | .named _orig y v => do `(namedArgument|($y := $(← valStx v))) -- TODO location
+  let subs ← subjectArr.mapM (·.mapM elabInline)
+  let arrArg ← match subs with
+    | some ss => (#[·]) <$> `(#[$ss,*])
+    | none => pure #[]
+  let appStx :=
+    Syntax.node2 stx.getHeadInfo ``app
+      f (.node .none nullKind <| argStx ++ arrArg)
+  return ⟨appStx⟩
+
+open Lean.Parser.Term in
 @[inline_expander Verso.Syntax.role]
 def _root_.Verso.Syntax.role.expand : InlineExpander
   | inline@`(inline| role{$name $args*} [$subjects]) => do
       withRef inline <| withFreshMacroScope <| withIncRecDepth <| do
         let ⟨.node _ _ subjectArr⟩ := subjects
           | throwUnsupportedSyntax
-        let name ← realizeGlobalConstNoOverloadWithInfo name
-        let exp ← roleExpandersFor name
+        let resolvedName ← realizeGlobalConstNoOverloadWithInfo name
+        let exp ← roleExpandersFor resolvedName
         let argVals ← parseArgs args
+        if exp.isEmpty then
+          -- If no expanders are registered, then try elaborating just as a
+          -- function application node
+          return ← appFallback inline name resolvedName argVals subjectArr
         for e in exp do
           try
             let termStxs ← withFreshMacroScope <| e argVals subjectArr
@@ -292,9 +320,11 @@ def _root_.Verso.Syntax.block_role.expand : BlockExpander := fun block =>
   match block with
   | `(block|block_role{$name $args*}) => do
     withRef block <| withFreshMacroScope <| withIncRecDepth <| do
-      let name ← realizeGlobalConstNoOverloadWithInfo name
-      let exp ← blockRoleExpandersFor name
+      let resolvedName ← realizeGlobalConstNoOverloadWithInfo name
+      let exp ← blockRoleExpandersFor resolvedName
       let argVals ← parseArgs args
+      if exp.isEmpty then
+        return ← appFallback block name resolvedName argVals none
       for e in exp do
         try
           let termStxs ← withFreshMacroScope <| e argVals #[]
@@ -410,7 +440,7 @@ def _root_.Verso.Syntax.codeblock.expand : BlockExpander
       dbg_trace "No code block expander for '{nameStx}' ---> '{name}'"
       throwUnsupportedSyntax
   | `<low|(Verso.Syntax.codeblock (column ~(.atom _ col)) ~_open ~(.node _ `null #[]) ~(.atom _info contents) ~_close )> =>
-    ``(Block.code Option.none #[] $(Syntax.mkNumLit col) $(quote contents))
+    ``(Block.code $(quote contents))
   | _ =>
     throwUnsupportedSyntax
 

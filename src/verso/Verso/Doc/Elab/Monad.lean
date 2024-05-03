@@ -383,9 +383,6 @@ opaque blockExpandersFor (x : Name) : DocElabM (Array BlockExpander)
 
 
 
-
-
-
 abbrev PartCommand := Syntax → PartElabM Unit
 
 initialize partCommandAttr : KeyedDeclsAttribute PartCommand ←
