@@ -109,7 +109,7 @@ def appFallback
     | none => pure #[]
   let appStx :=
     Syntax.node2 stx.getHeadInfo ``app
-      f (.node .none nullKind <| argStx ++ arrArg)
+      f (.node .none nullKind <| arrArg ++ argStx)
   return ⟨appStx⟩
 
 open Lean.Parser.Term in
