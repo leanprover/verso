@@ -66,3 +66,12 @@ lean_exe demotextbook where
   -- `runFrontend`) at the expense of increased binary size on Linux.
   -- Remove this line if you do not need such functionality.
   supportInterpreter := true
+
+-- An example of a minimal nontrivial custom genre
+lean_lib SimplePage where
+  srcDir := "examples/custom-genre"
+  roots := #[`SimplePage]
+
+lean_exe simplepage where
+  srcDir := "examples/custom-genre"
+  root := `SimplePageMain

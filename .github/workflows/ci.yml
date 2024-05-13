@@ -40,6 +40,10 @@ jobs:
         run: |
           lake exe demosite --output _out/examples/demosite
 
+      - name: Generate the example genre's document
+        run: |
+          lake exe simplepage
+
       - name: Check internal links on the example website
         uses: lycheeverse/lychee-action@v1.9.0
         with:
