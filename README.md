@@ -59,6 +59,17 @@ To generate the Verso documentation for Verso itself, run `generate.sh`.
 The [`examples`](./examples) directory contains example documents
 built with the default Verso genres.
 
+### Custom Genre
+
+A minimal example of a Verso genre that includes nontrivial
+cross-references can be found in
+[`examples/custom-genre`](./examples/custom-genre). To build and run
+it, with the output being placed in `./index.html`, use:
+
+```
+lake exe simplepage
+```
+
 ### Website
 
 To build the example website and place the results in
