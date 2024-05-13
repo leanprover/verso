@@ -15,6 +15,9 @@ def impls := ExtensionImpls.fromLists
   [(``DemoTextbook.Exts.index, DemoTextbook.Exts.index.descr),
    (``DemoTextbook.Exts.see, DemoTextbook.Exts.see.descr),
    (``DemoTextbook.Exts.seeAlso, DemoTextbook.Exts.seeAlso.descr)]
-  [(``Block.paragraph, paragraph.descr), (``Block.docstring, docstring.descr), (``DemoTextbook.Exts.theIndex, DemoTextbook.Exts.theIndex.descr)]
+  [(``Block.paragraph, paragraph.descr),
+   (``Block.docstring, docstring.descr),
+   (``DemoTextbook.Exts.theIndex, DemoTextbook.Exts.theIndex.descr),
+   (``DemoTextbook.Exts.lean, DemoTextbook.Exts.lean.descr)]
 
 def main := manualMain impls (%doc DemoTextbook)

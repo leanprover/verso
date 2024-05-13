@@ -246,6 +246,9 @@ instance : MonadFinally PartElabM := inferInstanceAs <| MonadFinally (StateT Doc
 
 instance : MonadRef PartElabM := inferInstanceAs <| MonadRef (StateT DocElabM.State (StateT PartElabM.State TermElabM))
 
+def PartElabM.withFileMap (fileMap : FileMap) (act : PartElabM α) : PartElabM α :=
+  fun ρ σ ctxt σ' mctxt rw cctxt => act ρ σ ctxt σ' mctxt rw {cctxt with fileMap := fileMap}
+
 def DocElabM (α : Type) : Type := ReaderT PartElabM.State (StateT DocElabM.State TermElabM) α
 
 def DocElabM.run (st : DocElabM.State) (st' : PartElabM.State) (act : DocElabM α) : TermElabM (α × DocElabM.State) := do
@@ -278,6 +281,11 @@ instance : MonadStateOf DocElabM.State DocElabM := inferInstanceAs <| MonadState
 instance : MonadFinally DocElabM := inferInstanceAs <| MonadFinally (ReaderT PartElabM.State (StateT DocElabM.State TermElabM))
 
 instance : MonadEnv DocElabM := inferInstanceAs <| MonadEnv (ReaderT PartElabM.State (StateT DocElabM.State TermElabM))
+
+instance : MonadFileMap DocElabM := inferInstanceAs <| MonadFileMap (ReaderT PartElabM.State (StateT DocElabM.State TermElabM))
+
+def DocElabM.withFileMap (fileMap : FileMap) (act : DocElabM α) : DocElabM α :=
+  fun ρ σ ctxt σ' mctxt rw cctxt => act ρ σ ctxt σ' mctxt rw {cctxt with fileMap := fileMap}
 
 instance : MonadRecDepth DocElabM where
   withRecDepth n act := fun st st' => MonadRecDepth.withRecDepth n (act st st')
