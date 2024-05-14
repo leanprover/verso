@@ -132,8 +132,9 @@ def emitHtmlSingle (logError : String → IO Unit) (config : Config) (state : Tr
     h.putStrLn Html.doctype
     h.putStrLn (Html.page toc text.titleString pageContent state.extraCss state.extraJs).asString
 
+abbrev ExtraStep := TraverseContext → TraverseState → IO Unit
 
-def manualMain (extensionImpls : ExtensionImpls) (text : Part Manual) (options : List String) : IO UInt32 := (ReaderT.run · extensionImpls) do
+def manualMain (extensionImpls : ExtensionImpls) (text : Part Manual) (options : List String) (extraSteps : List ExtraStep := []) : IO UInt32 := (ReaderT.run · extensionImpls) do
   let hasError ← IO.mkRef false
   let logError msg := do hasError.set true; IO.eprintln msg
   let cfg ← opts {} options

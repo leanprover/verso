@@ -9,13 +9,15 @@ import Lean.Elab.InfoTree
 import Verso
 import Verso.Doc.ArgParse
 import Verso.Genre.Manual
+import Verso.Code
 
 import SubVerso.Examples.Slice
 import SubVerso.Highlighting
 
 open Lean Elab
-open Verso ArgParse Doc Elab Genre.Manual
+open Verso ArgParse Doc Elab Genre.Manual Html Code
 open SubVerso.Examples.Slice
+open SubVerso.Highlighting Highlighted
 
 namespace DemoTextbook.Exts
 
@@ -29,11 +31,18 @@ def lean.descr : BlockDescr where
     some <| fun _ go _ _ content => do
       pure <| .seq <| ← content.mapM fun b => do
         pure <| .seq #[← go b, .raw "\n"]
-  extraCss := none
+  extraCss := highlightingStyle
+  extraJs := highlightingJs
   toHtml :=
     open Verso.Output.Html in
-    some <| fun _ goB _ _ content => do
-      content.mapM goB
+    some <| fun _ _ _ data _ => do
+      match FromJson.fromJson? data with
+      | .error err =>
+        HtmlT.logError <| "Couldn't deserialize Lean code while rendering HTML: " ++ err
+        pure .empty
+      | .ok (hl : Highlighted) =>
+        pure <| hl.blockHtml "exercises"
+
 
 
 def parserInputString [Monad m] [MonadFileMap m] (str : TSyntax `str) : m String := do
@@ -59,7 +68,6 @@ structure LeanBlockConfig where
 def LeanBlockConfig.parse [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m] : ArgParse m LeanBlockConfig :=
   LeanBlockConfig.mk <$> .named `show .bool true <*> .named `keep .bool true <*> .named `name .name true <*> .named `error .bool true
 
-open SubVerso.Highlighting Highlighted in
 @[code_block_expander lean]
 def lean : CodeBlockExpander
   | args, str => do

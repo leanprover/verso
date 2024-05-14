@@ -13,6 +13,7 @@ import Verso.Doc.Html
 import Verso.Genre.Blog.Basic
 import Verso.Genre.Blog.Site
 import Verso.Output.Html
+import Verso.Code
 
 open Lean (RBMap)
 
@@ -48,204 +49,6 @@ instance [Monad m] : MonadConfig (HtmlT Page m) where
 
 open HtmlT
 
-defmethod Token.Kind.«class» : Token.Kind → String
-  | .var _ _ => "var"
-  | .str _ => "literal string"
-  | .sort  => "sort"
-  | .const _ _ _ => "const"
-  | .option _ _ => "option"
-  | .docComment => "doc-comment"
-  | .keyword _ _ _ => "keyword"
-  | .unknown => "unknown"
-
-defmethod Token.Kind.data : Token.Kind → String
-  | .const n _ _ => "const-" ++ toString n
-  | .var ⟨v⟩ _ => "var-" ++ toString v
-  | .option n _ => "option-" ++ toString n
-  | .keyword _ (some occ) _ => "kw-occ-" ++ toString occ
-  | _ => ""
-
-
-def hover (content : Html) : Html := {{
-  <span class="hover-container"><span class="hover-info"> {{ content }} </span></span>
-}}
-
-defmethod Token.Kind.hover? : (tok : Token.Kind) → Option Html
-  | .const _n sig doc =>
-    let docs := match doc with
-      | none => .empty
-      | some txt => {{<span class="sep"/><code class="docstring">{{txt}}</code>}}
-    some <| hover {{ <code>{{sig}}</code> {{docs}} }}
-  | .option n doc =>
-    let docs := match doc with
-      | none => .empty
-      | some txt => {{<span class="sep"/><code class="docstring">{{txt}}</code>}}
-    some <| hover {{ <code>{{toString n}}</code> {{docs}} }}
-  | .keyword _ _ none => none
-  | .keyword _ _ (some doc) => some <| hover {{<code class="docstring">{{doc}}</code>}}
-  | .var _ type =>
-    some <| hover {{ <code>{{type}}</code> }}
-  | .str s =>
-    some <| hover {{ <code><span class="literal string">{{s.quote}}</span>" : String"</code>}}
-  | _ => none
-
-
-defmethod Token.toHtml (tok : Token) : Html := {{
-  <span class={{tok.kind.«class» ++ " token"}} "data-binding"={{tok.kind.data}}>{{tok.content}}{{tok.kind.hover?.getD .empty}}</span>
-}}
-
-
-defmethod Highlighted.Span.Kind.«class» : Highlighted.Span.Kind → String
-  | .info => "info"
-  | .warning => "warning"
-  | .error => "error"
-
-defmethod Highlighted.Goal.toHtml (exprHtml : expr → Html) (index : Nat) : Highlighted.Goal expr → Html
-  | {name, goalPrefix, hypotheses, conclusion} =>
-    let hypsHtml : Html :=
-      if hypotheses.size = 0 then .empty
-      else {{
-        <table class="hypotheses">
-          {{hypotheses.map fun
-              | (x, k, t) => {{
-                  <tr class="hypothesis">
-                    <td class="name">{{Token.toHtml ⟨k, x.toString⟩}}</td><td class="colon">":"</td>
-                    <td class="type">{{exprHtml t}}</td>
-                  </tr>
-                }}
-          }}
-        </table>
-      }}
-    let conclHtml := {{
-        <span class="conclusion">
-          <span class="prefix">{{goalPrefix}}</span><span class="type">{{exprHtml conclusion}}</span>
-        </span>
-      }}
-    {{
-      <div class="goal">
-        {{ match name with
-          | none => {{
-             {{hypsHtml}}
-             {{conclHtml}}
-            }}
-          | some n => {{
-              <details {{if index = 0 then #[("open", "open")] else #[]}}>
-                <summary><span class="goal-name">{{n.toString}}</span></summary>
-               {{hypsHtml}}
-               {{conclHtml}}
-              </details>
-            }}
-        }}
-      </div>
-    }}
-
-def _root_.Array.mapIndexed (arr : Array α) (f : Fin arr.size → α → β) : Array β :=
-  let rec go (acc : Array β) (i : Nat) :=
-    if h : i < arr.size then
-      go (acc.push (f ⟨i, h⟩ arr[i])) (i + 1)
-    else acc
-  termination_by arr.size - i
-  go #[] 0
-
-partial defmethod Highlighted.isEmpty (hl : Highlighted) : Bool :=
-  match hl with
-  | .text str => str.isEmpty
-  | .token .. => false
-  | .span _ hl => hl.isEmpty
-  | .tactics _ _ _ hl => hl.isEmpty
-  | .point .. => true
-  | .seq hls => hls.all isEmpty
-
-partial defmethod Highlighted.trimRight (hl : Highlighted) : Highlighted :=
-  match hl with
-  | .text str => .text str.trimRight
-  | .token .. => hl
-  | .span infos hl => .span infos hl.trimRight
-  | .tactics info startPos endPos hl => .tactics info startPos endPos hl.trimRight
-  | .point .. => hl
-  | .seq hls => Id.run do
-    let mut hls := hls
-    repeat
-      if h : hls.size > 0 then
-        have : hls.size - 1 < hls.size := by
-          apply Nat.sub_lt_of_pos_le
-          . simp
-          . exact h
-        if hls[hls.size - 1].isEmpty then
-          hls := hls.pop
-        else break
-      else break
-    if h : hls.size > 0 then
-      let i := hls.size - 1
-      have : i < hls.size := by
-        dsimp (config := {zetaDelta := true})
-        apply Nat.sub_lt_of_pos_le
-        . simp
-        . exact h
-      --dbg_trace repr hls[i]
-      .seq <| hls.set ⟨i, by assumption⟩ hls[i].trimRight
-    else hl
-
-partial defmethod Highlighted.trimLeft (hl : Highlighted) : Highlighted :=
-  match hl with
-  | .text str => .text str.trimLeft
-  | .token .. => hl
-  | .span infos hl => .span infos hl.trimLeft
-  | .tactics info startPos endPos hl => .tactics info startPos endPos hl.trimLeft
-  | .point .. => hl
-  | .seq hls =>
-    if h : hls.size > 0 then
-      .seq <| hls.set ⟨0, h⟩ hls[0].trimLeft
-    else hl
-
-defmethod Highlighted.trim (hl : Highlighted) : Highlighted := hl.trimLeft.trimRight
-
-def spanClass (infos : Array (Highlighted.Span.Kind × α)) : Option String := Id.run do
-  let mut k := none
-  for (k', _) in infos do
-    if let some k'' := k then k := maxKind k' k''
-    else k := k'
-  k.map (·.«class»)
-where
-  maxKind : Highlighted.Span.Kind → Highlighted.Span.Kind → Highlighted.Span.Kind
-    | .error, _ => .error
-    | .warning, .error => .error
-    | .warning, _ => .warning
-    | .info, other => other
-
-partial defmethod Highlighted.toHtml : Highlighted → Html
-  | .token t => t.toHtml
-  | .text str => str
-  | .span infos hl =>
-    if let some cls := spanClass infos then
-      {{<span class={{"has-info " ++ cls}}>
-          <span class="hover-container">
-            <span class={{"hover-info messages"}}>
-              {{ infos.map fun (s, info) => {{
-                <code class={{"message " ++ s.«class»}}>{{info}}</code> }}
-              }}
-            </span>
-          </span>
-          {{toHtml hl}}
-        </span>
-      }}
-    else
-      panic! "No highlights!"
-      --toHtml hl
-  | .tactics info startPos endPos hl =>
-    let id := s!"tactic-state-{hash info}-{startPos}-{endPos}"
-    {{
-      <span class="tactic">
-        <label «for»={{id}}>{{toHtml hl}}</label>
-        <input type="checkbox" class="tactic-toggle" id={{id}}></input>
-        <div class="tactic-state">
-          {{if info.isEmpty then {{"All goals completed! 🐙"}} else info.mapIndexed (fun ⟨i, _⟩ x => x.toHtml Highlighted.toHtml i)}}
-        </div>
-      </span>
-    }}
-  | .point s info => {{<span class={{"message " ++ s.«class»}}>{{info}}</span>}}
-  | .seq hls => hls.map toHtml
-
 defmethod LexedText.toHtml (text : LexedText) : Html :=
   text.content.map fun
     | (none, txt) => (txt : Html)
@@ -254,8 +57,7 @@ defmethod LexedText.toHtml (text : LexedText) : Html :=
 def blockHtml (g : Genre) (_goI : Inline g → HtmlT g IO Html) (goB : Block g → HtmlT g IO Html) : Blog.BlockExt → Array (Block g) → HtmlT g IO Html
   | .lexedText content, _contents => do
     pure {{ <pre class=s!"lexed {content.name}"> {{ content.toHtml }} </pre> }}
-  | .highlightedCode contextName hls, _contents => do
-    pure {{ <code class="hl lean block" "data-lean-context"={{toString contextName}}> {{ hls.trim.toHtml }} </code> }}
+  | .highlightedCode contextName hls, _contents => pure <| hls.blockHtml (toString contextName)
   | .htmlDetails classes summary, contents => do
     pure {{ <details class={{classes}}><summary>{{summary}}</summary> {{← contents.mapM goB}}</details>}}
   | .htmlWrapper name attrs, contents => do
@@ -267,10 +69,8 @@ def blockHtml (g : Genre) (_goI : Inline g → HtmlT g IO Html) (goB : Block g �
 def inlineHtml (g : Genre) [MonadConfig (HtmlT g IO)] [MonadPath (HtmlT g IO)]
     (stateEq : g.TraverseState = Blog.TraverseState)
     (go : Inline g → HtmlT g IO Html) : Blog.InlineExt → Array (Inline g) → HtmlT g IO Html
-  | .highlightedCode contextName hls, _contents => do
-    pure {{ <code class="hl lean inline" "data-lean-context"={{toString contextName}}> {{ hls.trim.toHtml }} </code> }}
-  | .customHighlight hls, _contents => do
-    pure {{ <code class="hl lean inline"> {{ hls.trim.toHtml }} </code> }}
+  | .highlightedCode contextName hls, _contents => pure <| hls.inlineHtml (some <| toString contextName)
+  | .customHighlight hls, _contents => pure <| hls.inlineHtml none
   | .label x, contents => do
     let contentHtml ← contents.mapM go
     let st ← stateEq ▸ state

@@ -20,4 +20,7 @@ def impls := ExtensionImpls.fromLists
    (``DemoTextbook.Exts.theIndex, DemoTextbook.Exts.theIndex.descr),
    (``DemoTextbook.Exts.lean, DemoTextbook.Exts.lean.descr)]
 
-def main := manualMain impls (%doc DemoTextbook)
+def buildExercises (ctxt : TraverseContext) (state : TraverseState) : IO Unit :=
+  IO.println "Placeholder generator for output exercise and solution Lean code"
+
+def main := manualMain impls (%doc DemoTextbook) (extraSteps := [buildExercises])

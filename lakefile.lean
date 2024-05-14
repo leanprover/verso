@@ -11,6 +11,10 @@ lean_lib Verso where
   roots := #[`Verso]
   -- add library configuration options here
 
+lean_lib VersoCodeHighlighting where
+  srcDir := "src/code-highlighting"
+  roots := #[`Verso.Code]
+
 lean_lib VersoBlog where
   srcDir := "src/verso-blog"
   roots := #[`Verso.Genre.Blog]
@@ -18,6 +22,8 @@ lean_lib VersoBlog where
 lean_lib VersoManual where
   srcDir := "src/verso-manual"
   roots := #[`Verso.Genre.Manual]
+
+
 
 @[default_target]
 lean_exe «verso» where
