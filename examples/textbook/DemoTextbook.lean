@@ -6,9 +6,10 @@ Author: David Thrane Christiansen
 
 import Verso.Genre.Manual
 import DemoTextbook.Exts.Index
+import DemoTextbook.Exts.Exercises
 
 open Verso.Genre Manual
-open DemoTextbook.Exts (index theIndex see seeAlso)
+open DemoTextbook.Exts (index theIndex see seeAlso lean)
 
 set_option pp.rawOnError true
 
@@ -34,6 +35,28 @@ Lorem ipsum dolor {index}[dolor] sit amet, consectetur adipiscing elit, sed {ind
 This is done using the `{index}[term]` syntax. Sub-terms {index subterm:="sub-term"}[entry] can be added using the `subterm` parameter to `index`.
 
 Multiple index {index}[index] targets for a term also work.
+
+# Exercises
+
+This book format supports Lean examples {index subterm:="embedded Lean"}[example] and exercises.
+
+```lean
+def five : Nat := 5
+```
+
+```lean
+theorem five_eq_5 : five = 5 := by
+  -- !! begin solution
+  skip; skip
+  skip
+  have := True.intro
+  skip; sorry
+  -- !! end solution
+  -- !! begin exercise
+  have : "a" = "a" := by rfl
+  rfl
+  -- !! end exercise
+```
 
 # Index
 %%%
