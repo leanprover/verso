@@ -7,22 +7,53 @@ Author: David Thrane Christiansen
 namespace Verso.Genre.Manual.TeX
 
 def preamble (title : String) (authors : List String) (date : String) : String :=
-"
-\\documentclass{book}
+r##"
+\documentclass{memoir}
 
-\\title{" ++ title ++ "}
-\\author{" ++ String.join (authors.intersperse " \\and ") ++ "}
-\\date{" ++ date ++ "}
+\usepackage{sourcecodepro}
+\usepackage{sourcesanspro}
+\usepackage{sourceserifpro}
 
-\\begin{document}
+\makechapterstyle{lean}{%
+\renewcommand*{\chaptitlefont}{\sffamily\HUGE}
+\renewcommand*{\chapnumfont}{\chaptitlefont}
+% allow for 99 chapters!
+\settowidth{\chapindent}{\chapnumfont 999}
+\renewcommand*{\printchaptername}{}
+\renewcommand*{\chapternamenum}{}
+\renewcommand*{\chapnumfont}{\chaptitlefont}
+\renewcommand*{\printchapternum}{%
+\noindent\llap{\makebox[\chapindent][l]{%
+\chapnumfont \thechapter}}}
+\renewcommand*{\afterchapternum}{}
+}
 
-\\frontmatter
+\chapterstyle{lean}
 
-\\maketitle
+\setsecheadstyle{\sffamily\bfseries\Large}
+\setsubsecheadstyle{\sffamily\bfseries\large}
+\setsubsubsecheadstyle{\sffamily\bfseries}
 
-\\tableofcontents
+\renewcommand{\cftchapterfont}{\normalfont\sffamily}
+\renewcommand{\cftsectionfont}{\normalfont\sffamily}
+\renewcommand{\cftchapterpagefont}{\normalfont\sffamily}
+\renewcommand{\cftsectionpagefont}{\normalfont\sffamily}
 
-\\mainmatter
-"
+\title{\sffamily "## ++ title ++ r##"}
+\author{\sffamily "## ++ String.join (authors.intersperse r##" \and "##) ++ r##"}
+\date{\sffamily "## ++ date ++ r##"}
+
+\begin{document}
+
+\frontmatter
+
+\begin{titlingpage}
+\maketitle
+\end{titlingpage}
+
+\tableofcontents
+
+\mainmatter
+"##
 
 def postamble : String := "\\end{document}"
