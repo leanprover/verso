@@ -40,7 +40,7 @@ partial def asString (doc : TeX) : String :=
   | .environment name opt req content =>
     "\\begin{" ++ name ++ "}" ++ opt.foldl (· ++ "[" ++ ·.asString ++ "]") "" ++ req.foldl (· ++ "{" ++ ·.asString ++ "}") "" ++ "\n" ++
     String.join (content.map (·.asString) |>.toList) ++ "\n" ++
-    "\\end{" ++ name ++ "}"
+    "\\end{" ++ name ++ "}\n"
   | .paragraphBreak => "\n\n"
   | .seq texs => String.join (texs.map (·.asString) |>.toList)
 where

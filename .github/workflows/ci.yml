@@ -58,7 +58,7 @@ jobs:
           find . -name lake-manifest.json -print0 | xargs -0 jq -e -s 'map(.packages[] | select(.name == "subverso").rev) | .[0] as $x | all(.[]; . == $x)'
 
       - name: Install PDF Dependencies
-        run: sudo apt update && sudo apt install -y pandoc texlive-latex-base texlive-latex-extra texlive-latex-recommended texlive-luatex fonts-dejavu
+        run: sudo apt update && sudo apt install -y pandoc texlive-latex-base texlive-latex-extra texlive-latex-recommended texlive-luatex fonts-dejavu texlive-fonts-recommended texlive-fonts-extra
 
       - name: Generate the manual
         run: |

@@ -95,6 +95,8 @@ def emitTeX (logError : String → IO Unit) (config : Config) (state : TraverseS
   ensureDir dir
   withFile (dir.join "main.tex") .write fun h => do
     h.putStrLn (preamble text.titleString authors date)
+    if frontMatter.size > 0 then
+      h.putStrLn "\\chapter*{Introduction}"
     for b in frontMatter do
       h.putStrLn b.asString
     for c in chapters do
