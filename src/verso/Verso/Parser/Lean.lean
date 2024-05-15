@@ -10,7 +10,7 @@ Authors: Leonardo de Moura, Sebastian Ullrich
  the parser framework, or perhaps it could be refactored to have two
  layers. Please don't blame the authors.-/
 
-import Lean
+import Lean.Parser
 
 open Lean Parser Syntax
 

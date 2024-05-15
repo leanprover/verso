@@ -3,12 +3,13 @@ Copyright (c) 2023-2024 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-
-import Lean
+import Lean.Parser
 
 import Verso.Parser.Lean
 import Verso.SyntaxUtils
 import Verso.Syntax
+
+set_option guard_msgs.diff true
 
 namespace Verso.Parser
 
@@ -930,7 +931,7 @@ mutual
   where
     eatSpaces := takeWhileFn (· == ' ')
     intro := atomicFn (chFn '{') >> recoverBlock (eatSpaces >> nameAndArgs >> eatSpaces >> chFn '}')
-    bracketed := atomicFn (chFn '[') >> recoverBlock (manyFn (inline ctxt >> eatSpaces) >> chFn ']')
+    bracketed := atomicFn (chFn '[') >> recoverBlock (manyFn (inline ctxt) >> chFn ']')
     fakeOpen := mkAtom SourceInfo.none "["
     fakeClose := mkAtom SourceInfo.none "]"
     nonBracketed : ParserFn := fun c s =>
@@ -1258,6 +1259,29 @@ All input consumed.
 info: Success! Final stack:
   (Verso.Syntax.role
    "{"
+   `ref
+   [(Verso.Syntax.anon `other)]
+   "}"
+   "["
+   [(Verso.Syntax.role
+     "{"
+     `leanKw
+     []
+     "}"
+     "["
+     [(Verso.Syntax.code "`" (str "\"cmd\"") "`")]
+     "]")
+    (Verso.Syntax.text (str "\" is great\""))]
+   "]")
+All input consumed.
+-/
+#guard_msgs in
+#eval role {} |>.test! "{ref other}[{leanKw}`cmd` is great]"
+
+/--
+info: Success! Final stack:
+  (Verso.Syntax.role
+   "{"
    `hello
    [(Verso.Syntax.named `world ":=" `gaia)]
    "}"
@@ -1282,10 +1306,12 @@ info: Success! Final stack:
      "*"
      [(Verso.Syntax.text (str "\"is\""))]
      "*")
+    (Verso.Syntax.text (str "\" \""))
     (Verso.Syntax.emph
      "_"
      [(Verso.Syntax.text (str "\"a meaning!\""))]
-     "_")]
+     "_")
+    (Verso.Syntax.text (str "\" \""))]
    "]")
 All input consumed.
 -/
