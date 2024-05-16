@@ -83,3 +83,8 @@ and normalized matching:
 Tree.branch   (Tree.branch (Tree.leaf) 4 (Tree.branch (Tree.leaf) 3 (Tree.leaf)))
   2   (Tree.branch (Tree.leaf) 1 (Tree.leaf))
 ```
+
+
+Here's a signature, highlighted and laid out:
+
+{leanCommand examples Nat.rec}
