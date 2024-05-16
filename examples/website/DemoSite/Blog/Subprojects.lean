@@ -57,3 +57,29 @@ that is,
 ```leanOutput Examples.version severity := information
 "4.5.0"
 ```
+
+Comparing output modulo whitespace differences, with exact:
+
+```leanOutput Examples.basic
+Tree.branch
+  (Tree.branch (Tree.leaf) 4 (Tree.branch (Tree.leaf) 3 (Tree.leaf)))
+  2
+  (Tree.branch (Tree.leaf) 1 (Tree.leaf))
+```
+
+lax:
+```leanOutput Examples.basic whitespace := lax
+Tree.branch
+  (Tree.branch
+    (Tree.leaf)
+    4
+    (Tree.branch (Tree.leaf) 3 (Tree.leaf)))
+  2
+  (Tree.branch (Tree.leaf) 1 (Tree.leaf))
+```
+
+and normalized matching:
+```leanOutput Examples.basic whitespace := normalized
+Tree.branch   (Tree.branch (Tree.leaf) 4 (Tree.branch (Tree.leaf) 3 (Tree.leaf)))
+  2   (Tree.branch (Tree.leaf) 1 (Tree.leaf))
+```

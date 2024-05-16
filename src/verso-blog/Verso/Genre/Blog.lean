@@ -399,14 +399,21 @@ def lean : CodeBlockExpander
     else
       pure #[]
 
+open Lean.Elab.Tactic.GuardMsgs
+export WhitespaceMode (exact lax normalized)
 
 structure LeanOutputConfig where
   name : Ident
   severity : Option MessageSeverity
   summarize : Bool
+  whitespace : WhitespaceMode
 
 def LeanOutputConfig.parser [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m] : ArgParse m LeanOutputConfig :=
-  LeanOutputConfig.mk <$> .positional `name output <*> .named `severity sev true <*> ((·.getD false) <$> .named `summarize .bool true)
+  LeanOutputConfig.mk <$>
+    .positional `name output <*>
+    .named `severity sev true <*>
+    ((·.getD false) <$> .named `summarize .bool true) <*>
+    ((·.getD .exact) <$> .named `whitespace ws true)
 where
   output : ValDesc m Ident := {
     description := "output name",
@@ -427,6 +434,17 @@ where
         else throwErrorAt b "Expected '{``error}', '{``warning}', or '{``information}'"
       | other => throwError "Expected severity, got {repr other}"
   }
+  ws : ValDesc m WhitespaceMode := {
+    description := open WhitespaceMode in m!"The expected whitespace mode: '{``exact}', '{``normalized}', or '{``lax}'",
+    get := open WhitespaceMode in fun
+      | .name b => do
+        let b' ← realizeGlobalConstNoOverloadWithInfo b
+        if b' == ``WhitespaceMode.exact then pure WhitespaceMode.exact
+        else if b' == ``WhitespaceMode.normalized then pure WhitespaceMode.normalized
+        else if b' == ``WhitespaceMode.lax then pure WhitespaceMode.lax
+        else throwErrorAt b "Expected '{``exact}', '{``normalized}', or '{``lax}'"
+      | other => throwError "Expected whitespace mode, got {repr other}"
+  }
 
 @[code_block_expander leanOutput]
 def leanOutput : Doc.Elab.CodeBlockExpander
@@ -438,7 +456,7 @@ def leanOutput : Doc.Elab.CodeBlockExpander
       | .inl log =>
         let messages ← liftM <| log.msgs.toArray.mapM contents
         for m in log.msgs do
-          if mostlyEqual str.getString (← contents m) then
+          if mostlyEqual config.whitespace str.getString (← contents m) then
             if let some s := config.severity then
               if s != m.severity then
                 throwErrorAt str s!"Expected severity {sevStr s}, but got {sevStr m.severity}"
@@ -455,7 +473,7 @@ def leanOutput : Doc.Elab.CodeBlockExpander
       | .inr msgs =>
         let messages := msgs.toArray.map Prod.snd
         for (sev, txt) in msgs do
-          if mostlyEqual str.getString txt then
+          if mostlyEqual config.whitespace str.getString txt then
             if let some s := config.severity then
               if s != sev then
                 throwErrorAt str s!"Expected severity {sevStr s}, but got {sevStr sev}"
@@ -485,8 +503,8 @@ where
     let head := if message.caption != "" then message.caption ++ ":\n" else ""
     pure <| withNewline <| head ++ (← message.data.toString)
 
-  mostlyEqual (s1 s2 : String) : Bool :=
-    s1.trim == s2.trim
+  mostlyEqual (ws : WhitespaceMode) (s1 s2 : String) : Bool :=
+    ws.apply s1.trim == ws.apply s2.trim
 
 open Lean Elab Command in
 elab "#defineLexerBlock" blockName:ident " ← " lexerName:ident : command => do
