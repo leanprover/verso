@@ -35,7 +35,7 @@ Here's a tree:
 
 {leanCommand examples Examples.Basic.Tree}
 
-They can be flipped around:
+They can be flipped around with {leanTerm examples}`FLIP`:
 
 {leanCommand examples Examples.Basic.Tree.flip}
 

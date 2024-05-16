@@ -18,3 +18,5 @@ def Tree.flip : Tree α → Tree α
   | .leaf => .leaf
   | .branch l v r => %ex{flopped}{.branch r.flip v l.flip}
 %end
+
+%show_name Tree.flip as FLIP
