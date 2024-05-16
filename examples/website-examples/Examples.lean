@@ -43,3 +43,12 @@ termination_by foo n k => k - n
 %example version
 #eval Lean.versionString
 %end
+
+%signature Nat.rec
+Nat.rec.{u} {motive : Nat → Sort u}
+  (zero : motive Nat.zero)
+  (succ :
+    (n : Nat) →
+    motive n →
+    motive (Nat.succ n))
+  (t : Nat) : motive t
