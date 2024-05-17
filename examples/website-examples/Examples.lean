@@ -27,8 +27,15 @@ theorem Tree.flip_flip_id (t : Tree α) : t.flip.flip = t := by
   | leaf => rfl
   | branch l v r ih1 ih2 =>
     simp only [flip]
-    rw [ih1]
-    rw [ih2]
+    rw [ih1]; rw [ih2]
+
+-- Show more tactic combinators and placement of proof states
+theorem Tree.flip_flip_id' (t : Tree α) : t.flip.flip = t := by
+  induction t
+  case leaf => rfl
+  next l v r ih1 ih2 =>
+    simp only [flip]
+    rw [ih1]; . rw [ih2]
 %end
 
 %example oldterm
