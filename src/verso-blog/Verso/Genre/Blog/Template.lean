@@ -90,7 +90,7 @@ def inlineHtml (g : Genre) [MonadConfig (HtmlT g IO)] [MonadPath (HtmlT g IO)]
     let st ← stateEq ▸ state
     match st.pageIds.find? x with
     | none =>
-      HtmlT.logError "Can't find target {x}"
+      HtmlT.logError s!"Can't find target {x} - options are {st.pageIds.toList.map (·.fst)}"
       pure {{<strong class="internal-error">s!"Can't find target {x}"</strong>}}
     | some meta =>
       let addr := String.join ((← relative meta.path).intersperse "/")
