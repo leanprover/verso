@@ -129,6 +129,7 @@ def grow : Nat → α → α
 
 theorem grow_10_id {α} : grow (α := α) 6 = id := by
   repeat unfold grow
+  sleep 10
   all_goals sorry
 
 ```

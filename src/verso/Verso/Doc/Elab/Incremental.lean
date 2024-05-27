@@ -10,53 +10,6 @@ import Lean.Language.Basic
 
 open Lean Language Elab Command
 
--- Note (DTC, 2024-04-18):
--- These are temporarily taken from PR #3636/#3940 and will need to be removed as incrementality becomes
--- part of Lean
-namespace Lean
-/--
-Gets the end position information from a `SourceInfo`, if available.
-If `originalOnly` is true, then `.synthetic` syntax will also return `none`.
--/
-def SourceInfo.getTailPos? (info : SourceInfo) (canonicalOnly := false) : Option String.Pos :=
-  match info, canonicalOnly with
-  | original (endPos := endPos) ..,  _
-  | synthetic (endPos := endPos) (canonical := true) .., _
-  | synthetic (endPos := endPos) .., false => some endPos
-  | _,                               _     => none
-
-def SourceInfo.getRange? (canonicalOnly := false) (info : SourceInfo) : Option String.Range :=
-  return ⟨(← info.getPos? canonicalOnly), (← info.getTailPos? canonicalOnly)⟩
-
-namespace Syntax
-/--
-Compare syntax structures and position ranges, but not whitespace.
-We generally assume that if syntax trees equal in this way generate the same elaboration output,
-including positions contained in e.g. diagnostics and the info tree.
--/
-partial def structRangeEq : Syntax → Syntax → Bool
-  | .missing, .missing => true
-  | .node info k args, .node info' k' args' =>
-    info.getRange? == info'.getRange? && k == k' && args.isEqv args' structRangeEq
-  | .atom info val, .atom info' val' => info.getRange? == info'.getRange? && val == val'
-  | .ident info rawVal val preresolved, .ident info' rawVal' val' preresolved' =>
-    info.getRange? == info'.getRange? && rawVal == rawVal' && val == val' &&
-    preresolved == preresolved'
-  | _, _ => false
-
-/-- Like `structRangeEq` but prints trace on failure if `trace.Elab.reuse` is activated. -/
-def structRangeEqWithTraceReuse (opts : Options) (stx1 stx2 : Syntax) : Bool :=
-  if stx1.structRangeEq stx2 then
-    true
-  else
-    if opts.getBool `trace.Elab.reuse then
-      dbg_trace "reuse stopped: {stx1} != {stx2}"
-      false
-    else
-      false
-end Syntax
-end Lean
-
 namespace Verso.Elab
 
 private def exnMessage [Monad m] [MonadLog m] [AddMessageContext m] [MonadExcept Exception m] (exn : Exception) : m Message := do
