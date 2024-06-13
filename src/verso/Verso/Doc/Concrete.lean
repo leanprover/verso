@@ -207,7 +207,7 @@ where
     | ⟨docState, partState, termState⟩ => do
       set docState
       set partState
-      termState.restoreFull
+      termState.restore
 
 elab "#doc" "(" genre:term ")" title:inlineStr "=>" text:completeDocument eof:eoi : command => open Lean Elab Term Command PartElabM DocElabM in do
   findGenreCmd genre

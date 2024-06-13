@@ -188,7 +188,7 @@ def parserInputString [Monad m] [MonadFileMap m] (str : TSyntax `str) : m String
   while !iter.atEnd do
     if iter.curr == '\n' then code := code.push '\n'
     else
-      for _ in [0:iter.curr.utf8Size.toNat] do
+      for _ in [0:iter.curr.utf8Size] do
         code := code.push ' '
     iter := iter.next
   code := code ++ str.getString
@@ -355,22 +355,22 @@ def lean : CodeBlockExpander
       | none => throwErrorAt x "Can't find example context"
     let context := Parser.mkInputContext (← parserInputString str) (← getFileName)
     -- Process with empty messages to avoid duplicate output
-    let s ← IO.processCommands context state { commandState with messages.msgs := {} }
+    let s ← IO.processCommands context state { commandState with messages.unreported := {} }
     for t in s.commandState.infoState.trees do
       pushInfoTree t
 
     match config.error with
     | none =>
-      for msg in s.commandState.messages.msgs do
+      for msg in s.commandState.messages.toArray do
         logMessage msg
     | some true =>
       if s.commandState.messages.hasErrors then
-        for msg in s.commandState.messages.errorsToWarnings.msgs do
+        for msg in s.commandState.messages.errorsToWarnings.toArray do
           logMessage msg
       else
         throwErrorAt str "Error expected in code block, but none occurred"
     | some false =>
-      for msg in s.commandState.messages.msgs do
+      for msg in s.commandState.messages.toArray do
         logMessage msg
       if s.commandState.messages.hasErrors then
         throwErrorAt str "No error expected in code block, one occurred"
@@ -390,7 +390,7 @@ def lean : CodeBlockExpander
       setInfoState s.commandState.infoState
       setEnv s.commandState.env
       for cmd in s.commands do
-        hls := hls ++ (← highlight cmd s.commandState.messages.msgs.toArray s.commandState.infoState.trees)
+        hls := hls ++ (← highlight cmd s.commandState.messages.toArray s.commandState.infoState.trees)
     finally
       setInfoState infoSt
       setEnv env
@@ -454,8 +454,8 @@ def leanOutput : Doc.Elab.CodeBlockExpander
     let (_, savedInfo) ← messageContextExt.getState (← getEnv) |>.messages |>.getOrSuggest config.name
     let messages ← match savedInfo with
       | .inl log =>
-        let messages ← liftM <| log.msgs.toArray.mapM contents
-        for m in log.msgs do
+        let messages ← liftM <| log.toArray.mapM contents
+        for m in log.toArray do
           if mostlyEqual config.whitespace str.getString (← contents m) then
             if let some s := config.severity then
               if s != m.severity then
