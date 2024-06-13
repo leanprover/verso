@@ -12,7 +12,7 @@ Writing about Lean takes many forms, including but not limited to:
 Each of these genres needs different tool support than the others, and
 many different ways of writing about Lean have come into existence,
 including LeanInk, customizations to mdbook and Sphinx, bespoke Python
-document management scripts, doc-gen. But many these tools share
+document management scripts, doc-gen. But many of these tools share
 overlapping concerns - most want to include accurately highlighted
 Lean source code, include links to official descriptions of Lean
 features, and have internal hyperlinking.
