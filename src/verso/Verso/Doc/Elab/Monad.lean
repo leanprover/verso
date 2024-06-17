@@ -16,6 +16,10 @@ namespace Verso.Doc.Elab
 open Lean Elab
 open Verso.SyntaxUtils
 
+initialize registerTraceClass `Elab.Verso
+initialize registerTraceClass `Elab.Verso.part
+initialize registerTraceClass `Elab.Verso.block
+
 -- For use in IDE features and previews and such
 @[inline_to_string Verso.Syntax.text]
 def _root_.Verso.Syntax.text.inline_to_string : InlineToString
@@ -271,6 +275,8 @@ instance : MonadQuotation DocElabM := inferInstanceAs <| MonadQuotation (ReaderT
 instance : Monad DocElabM := inferInstanceAs <| Monad (ReaderT PartElabM.State (StateT DocElabM.State TermElabM))
 
 instance : MonadExceptOf Exception DocElabM := inferInstanceAs <| MonadExceptOf Exception (ReaderT PartElabM.State (StateT DocElabM.State TermElabM))
+
+instance : MonadAlwaysExcept Exception DocElabM := inferInstanceAs <| MonadAlwaysExcept Exception (ReaderT PartElabM.State (StateT DocElabM.State TermElabM))
 
 instance : MonadReader PartElabM.State DocElabM := inferInstanceAs <| MonadReader PartElabM.State (ReaderT PartElabM.State (StateT DocElabM.State TermElabM))
 

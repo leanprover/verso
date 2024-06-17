@@ -196,6 +196,7 @@ def _root_.Verso.Syntax.display_math.expand : InlineExpander
 
 
 def elabBlock (block : Syntax) : DocElabM (TSyntax `term) :=
+  withTraceNode `Elab.Verso.block (fun _ => pure m!"Block {block}") <|
   withRef block <| withFreshMacroScope <| withIncRecDepth <| do
   match block with
   | .missing =>
@@ -216,6 +217,7 @@ def elabBlock (block : Syntax) : DocElabM (TSyntax `term) :=
     throwUnexpected block
 
 def partCommand (cmd : Syntax) : PartElabM Unit :=
+  withTraceNode `Elab.Verso.part (fun _ => pure m!"Part modification {cmd}") <|
   withRef cmd <| withFreshMacroScope <| do
   match cmd with
   | stx@(.node _ kind _) =>
@@ -319,6 +321,7 @@ where
 def _root_.Verso.Syntax.block_role.expand : BlockExpander := fun block =>
   match block with
   | `(block|block_role{$name $args*}) => do
+    withTraceNode `Elab.Verso.block (fun _ => pure m!"Block role {name}") <|
     withRef block <| withFreshMacroScope <| withIncRecDepth <| do
       let resolvedName ← realizeGlobalConstNoOverloadWithInfo name
       let exp ← blockRoleExpandersFor resolvedName
