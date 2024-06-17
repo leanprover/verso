@@ -175,6 +175,45 @@ where
       `(letIdDecl| $(footnoteRefName defn.defSite) := #[$[$defn.val],*])
     defs.foldlM (fun stx letDecl => `(let $letDecl:letIdDecl; $stx)) body
 
+structure ToSyntaxState where
+  gensymCounter : Nat := 0
+
+open Lean Elab Command
+partial def FinishedPart.toSyntax' [Monad m] [MonadQuotation m] [MonadLiftT CommandElabM m]
+    (rootName : Name)
+    (genre : TSyntax `term)
+    (linkDefs : HashMap String (DocDef String))
+    (footnoteDefs : HashMap String (DocDef (Array (TSyntax `term))))
+    (finishedPart : FinishedPart) : m (TSyntax `term) := do
+  for (_, defn) in linkDefs.toArray do
+    elabCommand (← `(def $(linkRefName defn.defSite) := $(quote defn.val)))
+  for (_, defn) in footnoteDefs.toArray do
+    elabCommand (← `(def $(footnoteRefName defn.defSite) := #[$[$defn.val],*]))
+
+  let gensym (src : Syntax) (hint := "gensym") : StateT ToSyntaxState m (TSyntax `ident) :=
+    modifyGet fun (st : ToSyntaxState) =>
+      let n : Name := .str rootName s!"{hint}{st.gensymCounter}"
+      (mkIdentFrom src n, {st with gensymCounter := st.gensymCounter + 1})
+
+  let rec helper : FinishedPart → StateT ToSyntaxState m (TSyntax `term)
+      | .mk titleStx titleInlines titleString metadata blocks subParts _endPos => do
+        let subStx ← subParts.mapM (toSyntax genre {} {})
+        let mut blockNames := #[]
+        for b in blocks do
+          let n ← gensym b
+          elabCommand (← `(def $n : Block $genre := $b))
+          blockNames := blockNames.push n
+        let metaStx ←
+          match metadata with
+          | none => `(none)
+          | some stx => `(some $stx)
+        -- Adding type annotations works around a limitation in list and array elaboration, where intermediate
+        -- let bindings introduced by "chunking" the elaboration may fail to infer types
+        let partName ← gensym titleStx
+        elabCommand (← `(def $partName : Part $genre := Part.mk #[$[$titleInlines],*] $(quote titleString) $metaStx #[$blockNames,*] #[$[$subStx],*]))
+        pure partName
+      | .included name => pure name
+  StateT.run' (helper finishedPart) {}
 
 partial def FinishedPart.toTOC : FinishedPart → TOC
   | .mk titleStx _titleInlines titleString _metadata _blocks subParts endPos =>

@@ -235,5 +235,5 @@ elab "#doc" "(" genre:term ")" title:inlineStr "=>" text:completeDocument eof:eo
       saveRefs st st'
       let n ← currentDocName
       let docName := mkIdentFrom title n
-      elabCommand (← `(def $docName : Part $genre := $(← finished.toSyntax genre st'.linkDefs st'.footnoteDefs)))
+      elabCommand (← `(def $docName : Part $genre := $(← finished.toSyntax' n genre st'.linkDefs st'.footnoteDefs)))
       indicateFinished
