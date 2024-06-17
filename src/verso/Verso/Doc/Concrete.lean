@@ -222,15 +222,18 @@ elab "#doc" "(" genre:term ")" title:inlineStr "=>" text:completeDocument eof:eo
     let titleString := inlinesToString (← getEnv) titleParts
     let initState : PartElabM.State := .init titleName
     let (indicateFinished, ⟨st, st', _⟩) ←
+      withTraceNode `Elab.Verso (fun _ => pure m!"Document AST elab") <|
       incrementallyElabCommand blocks
         (initAct := do setTitle titleString (← liftDocElabM <| titleParts.mapM elabInline))
         (endAct := closePartsUntil 0 endPos)
         (handleStep := partCommand)
         (lift := fun act => liftTermElabM <| Prod.fst <$> PartElabM.run {} initState act)
 
-    let finished := st'.partContext.toPartFrame.close endPos
-    pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
-    saveRefs st st'
-    let docName ← mkIdentFrom title <$> currentDocName
-    elabCommand (← `(def $docName : Part $genre := $(← finished.toSyntax genre st'.linkDefs st'.footnoteDefs)))
-    indicateFinished
+    withTraceNode `Elab.Verso (fun _ => pure m!"Document def") do
+      let finished := st'.partContext.toPartFrame.close endPos
+      pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
+      saveRefs st st'
+      let n ← currentDocName
+      let docName := mkIdentFrom title n
+      elabCommand (← `(def $docName : Part $genre := $(← finished.toSyntax genre st'.linkDefs st'.footnoteDefs)))
+      indicateFinished

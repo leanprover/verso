@@ -10,6 +10,12 @@ open Verso Genre Blog
 open DemoSite
 
 set_option trace.Elab.reuse true
+set_option pp.rawOnError true
+--set_option trace.Elab.command true
+-- set_option trace.profiler true
+-- set_option trace.profiler.threshold 1
+-- set_option trace.Elab.Verso true
+-- set_option trace.SubVerso.Highlighting.Code true
 
 #doc (Post) "Conditional Expressions in Lean" =>
 
@@ -133,6 +139,7 @@ theorem grow_10_id {α} : grow (α := α) 6 = id := by
   all_goals sorry
 
 ```
+
 
 Here is a proof with big terms in the context:
 ```lean demo

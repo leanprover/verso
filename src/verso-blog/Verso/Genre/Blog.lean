@@ -194,11 +194,13 @@ def parserInputString [Monad m] [MonadFileMap m] (str : TSyntax `str) : m String
   code := code ++ str.getString
   return code
 
+initialize registerTraceClass `Elab.Verso.block.lean
+
 
 open System in
 @[block_role_expander leanExampleProject]
 def leanExampleProject : BlockRoleExpander
-  | args, #[] => do
+  | args, #[] => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"Loading example project") <| do
     let (name, projectDir) ← ArgParse.run ((·, ·) <$> .positional `name .name <*> .positional `projectDir .string) args
     if exampleContextExt.getState (← getEnv) |>.contexts |>.contains name then
       throwError "Example context '{name}' already defined in this module"
@@ -261,7 +263,7 @@ def NameSuffixMap.getOrSuggest [Monad m] [MonadInfoTree m] [MonadError m]
 
 @[block_role_expander leanCommand]
 def leanCommand : BlockRoleExpander
-  | args, #[] => do
+  | args, #[] => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"leanCommand") <| do
     let (project, exampleName) ← ArgParse.run ((·, ·) <$> .positional `project .ident <*> .positional `exampleName .ident) args
     let projectExamples ← getSubproject project
     let (_, {highlighted := hls, original := str, ..}) ← projectExamples.getOrSuggest exampleName
@@ -289,7 +291,7 @@ def leanKw : RoleExpander
 
 @[role_expander leanTerm]
 def leanTerm : RoleExpander
-  | args, #[arg] => do
+  | args, #[arg] => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"leanTerm") <| do
     let project ← ArgParse.run (.positional `project .ident) args
     let `(inline|code{ $name:str }) := arg
       | throwErrorAt arg "Expected code literal with the example name"
@@ -317,7 +319,7 @@ def LeanBlockConfig.parse [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [Mona
 
 @[code_block_expander leanInit]
 def leanInit : CodeBlockExpander
-  | args , str => do
+  | args , str => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"leanInit") <| do
     let config ← LeanBlockConfig.parse.run args
     let context := Parser.mkInputContext (← parserInputString str) (← getFileName)
     let (header, state, msgs) ← Parser.parseHeader context
@@ -346,7 +348,7 @@ where
 open SubVerso.Highlighting Highlighted in
 @[code_block_expander lean]
 def lean : CodeBlockExpander
-  | args, str => do
+  | args, str => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"lean block") <| do
     let config ← LeanBlockConfig.parse.run args
     let x := config.exampleContext
     let (commandState, state) ← match exampleContextExt.getState (← getEnv) |>.contexts.find? x.getId with
@@ -355,7 +357,9 @@ def lean : CodeBlockExpander
       | none => throwErrorAt x "Can't find example context"
     let context := Parser.mkInputContext (← parserInputString str) (← getFileName)
     -- Process with empty messages to avoid duplicate output
-    let s ← IO.processCommands context state { commandState with messages.unreported := {} }
+    let s ←
+      withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"Elaborating commands") <|
+      IO.processCommands context state { commandState with messages.unreported := {} }
     for t in s.commandState.infoState.trees do
       pushInfoTree t
 
@@ -383,21 +387,25 @@ def lean : CodeBlockExpander
       modifyEnv fun env => messageContextExt.modifyState env fun st => {st with
         messages := st.messages.insert infoName (.inl s.commandState.messages)
       }
-    let mut hls := Highlighted.empty
-    let infoSt ← getInfoState
-    let env ← getEnv
-    try
-      setInfoState s.commandState.infoState
-      setEnv s.commandState.env
-      for cmd in s.commands do
-        hls := hls ++ (← highlight cmd s.commandState.messages.toArray s.commandState.infoState.trees)
-    finally
-      setInfoState infoSt
-      setEnv env
-    if config.show.getD true then
-      pure #[← ``(Block.other (Blog.BlockExt.highlightedCode $(quote x.getId) $(quote hls)) #[Block.code $(quote str.getString)])]
-    else
-      pure #[]
+    withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"Highlighting syntax") do
+      let mut hls := Highlighted.empty
+      let infoSt ← getInfoState
+      let env ← getEnv
+      try
+        setInfoState s.commandState.infoState
+        setEnv s.commandState.env
+        let msgs := s.commandState.messages.toArray
+        for cmd in s.commands do
+          hls := hls ++
+            (← withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"Highlighting {cmd}") <|
+              highlight cmd msgs s.commandState.infoState.trees)
+      finally
+        setInfoState infoSt
+        setEnv env
+      if config.show.getD true then
+        pure #[← ``(Block.other (Blog.BlockExt.highlightedCode $(quote x.getId) $(quote hls)) #[Block.code $(quote str.getString)])]
+      else
+        pure #[]
 
 open Lean.Elab.Tactic.GuardMsgs
 export WhitespaceMode (exact lax normalized)
@@ -448,7 +456,7 @@ where
 
 @[code_block_expander leanOutput]
 def leanOutput : Doc.Elab.CodeBlockExpander
-  | args, str => do
+  | args, str => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"leanOutput") <| do
     let config ← LeanOutputConfig.parser.run args
 
     let (_, savedInfo) ← messageContextExt.getState (← getEnv) |>.messages |>.getOrSuggest config.name
