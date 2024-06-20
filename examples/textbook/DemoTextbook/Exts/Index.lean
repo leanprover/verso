@@ -97,7 +97,7 @@ def index.descr : InlineDescr where
       | none => modify (·.set indexState {entries := (Lean.HashSet.empty.insert (entry, id)) : Index})
       pure none
   toTeX :=
-    some <| fun go id _ content => do
+    some <| fun go _id _ content => do
       pure <| .seq <| ← content.mapM fun b => do
         pure <| .seq #[← go b, .raw "\n"]
   toHtml :=
@@ -319,7 +319,7 @@ def theIndex.descr : BlockDescr where
   extraCss := some indexCss
   toHtml :=
     open Verso.Output.Html in
-    some <| fun goI goB _ _ content => do
+    some <| fun goI _goB _ _ _content => do
       let ist : Option (Except String Index) := (← read).2.2.get? indexState
       match ist with
       | some (.error err) =>
