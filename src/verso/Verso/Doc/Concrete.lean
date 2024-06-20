@@ -160,17 +160,6 @@ elab "#doc" "(" genre:term ")" title:inlineStr "=>" text:completeDocument eof:eo
   elabTerm (← `( ($(← finished.toSyntax genre st'.linkDefs st'.footnoteDefs) : Part $genre))) none
 
 
-macro "%doc" moduleName:ident : term =>
-  pure <| mkIdentFrom moduleName <| docName moduleName.getId
-
-macro "%docName" moduleName:ident : term =>
-  let n := mkIdentFrom moduleName (docName moduleName.getId) |>.getId
-  pure <| quote n
-
-
-def currentDocName [Monad m] [MonadEnv m] : m Name := do
-  pure <| docName <| (← Lean.MonadEnv.getEnv).mainModule
-
 open Language
 
 /--
@@ -235,5 +224,5 @@ elab "#doc" "(" genre:term ")" title:inlineStr "=>" text:completeDocument eof:eo
       saveRefs st st'
       let n ← currentDocName
       let docName := mkIdentFrom title n
-      elabCommand (← `(def $docName : Part $genre := $(← finished.toSyntax' n genre st'.linkDefs st'.footnoteDefs)))
+      elabCommand (← `(def $docName : Part $genre := $(← finished.toSyntax' genre st'.linkDefs st'.footnoteDefs)))
       indicateFinished

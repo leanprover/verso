@@ -138,18 +138,18 @@ inductive FinishedPart where
   | included (name : Ident)
 deriving Repr, BEq
 
-private def linkRefName (ref : TSyntax `str) : TSyntax `ident :=
+private def linkRefName (docName : Name) (ref : TSyntax `str) : TSyntax `ident :=
   let str := ref.getString
-  let name : Name := .num (.str (.str .anonymous "link reference") str) 1
+  let name : Name := .str (.str docName "link reference") str
   ⟨.ident .none str.toSubstring name []⟩
 
-private def footnoteRefName (ref : TSyntax `str) : TSyntax `ident :=
+private def footnoteRefName (docName : Name) (ref : TSyntax `str) : TSyntax `ident :=
   let str := ref.getString
-  let name : Name := .num (.str (.str .anonymous "footnote reference") str) 1
+  let name : Name := .str (.str docName "footnote reference") str
   ⟨.ident .none str.toSubstring name []⟩
 
 open Lean.Parser.Term in
-partial def FinishedPart.toSyntax [Monad m] [MonadQuotation m]
+partial def FinishedPart.toSyntax [Monad m] [MonadQuotation m] [MonadEnv m]
     (genre : TSyntax `term)
     (linkDefs : HashMap String (DocDef String)) (footnoteDefs : HashMap String (DocDef (Array (TSyntax `term))))
     : FinishedPart → m (TSyntax `term)
@@ -167,37 +167,40 @@ partial def FinishedPart.toSyntax [Monad m] [MonadQuotation m]
   | .included name => pure name
 where
   bindLinks (linkDefs : HashMap String (DocDef String)) (body : TSyntax `term) : m (TSyntax `term) := do
-    let defs ← linkDefs.toArray.mapM fun (_, defn) =>
-      `(letIdDecl| $(linkRefName defn.defSite) := $(quote defn.val))
+    let defs ← linkDefs.toArray.mapM fun (_, defn) => do
+      `(letIdDecl| $(linkRefName (← currentDocName) defn.defSite) := $(quote defn.val))
     defs.foldlM (fun stx letDecl => `(let $letDecl:letIdDecl; $stx)) body
   bindFootnotes (linkDefs : HashMap String (DocDef (Array (TSyntax `term)))) (body : TSyntax `term) : m (TSyntax `term) := do
-    let defs ← linkDefs.toArray.mapM fun (_, defn) =>
-      `(letIdDecl| $(footnoteRefName defn.defSite) := #[$[$defn.val],*])
+    let defs ← linkDefs.toArray.mapM fun (_, defn) => do
+      `(letIdDecl| $(footnoteRefName (← currentDocName) defn.defSite) := #[$[$defn.val],*])
     defs.foldlM (fun stx letDecl => `(let $letDecl:letIdDecl; $stx)) body
 
 structure ToSyntaxState where
   gensymCounter : Nat := 0
 
 open Lean Elab Command
-partial def FinishedPart.toSyntax' [Monad m] [MonadQuotation m] [MonadLiftT CommandElabM m]
-    (rootName : Name)
+partial def FinishedPart.toSyntax' [Monad m] [MonadQuotation m] [MonadLiftT CommandElabM m] [MonadEnv m]
     (genre : TSyntax `term)
     (linkDefs : HashMap String (DocDef String))
     (footnoteDefs : HashMap String (DocDef (Array (TSyntax `term))))
     (finishedPart : FinishedPart) : m (TSyntax `term) := do
+  let rootName ← currentDocName
   for (_, defn) in linkDefs.toArray do
-    elabCommand (← `(def $(linkRefName defn.defSite) := $(quote defn.val)))
+    elabCommand (← `(def $(linkRefName rootName defn.defSite) := $(quote defn.val)))
   for (_, defn) in footnoteDefs.toArray do
-    elabCommand (← `(def $(footnoteRefName defn.defSite) := #[$[$defn.val],*]))
+    elabCommand (← `(def $(footnoteRefName rootName defn.defSite) := #[$[$defn.val],*]))
 
-  let gensym (src : Syntax) (hint := "gensym") : StateT ToSyntaxState m (TSyntax `ident) :=
+  let HelperM := ReaderT Name (StateT ToSyntaxState m)
+
+  let gensym (src : Syntax) (hint := "gensym") : HelperM (TSyntax `ident) :=
     modifyGet fun (st : ToSyntaxState) =>
       let n : Name := .str rootName s!"{hint}{st.gensymCounter}"
       (mkIdentFrom src n, {st with gensymCounter := st.gensymCounter + 1})
 
-  let rec helper : FinishedPart → StateT ToSyntaxState m (TSyntax `term)
+  let rec helper : FinishedPart → HelperM (TSyntax `term)
       | .mk titleStx titleInlines titleString metadata blocks subParts _endPos => do
-        let subStx ← subParts.mapM (toSyntax genre {} {})
+        let partName ← gensym titleStx (hint := titleString)
+        let subStx ← subParts.mapM helper
         let mut blockNames := #[]
         for b in blocks do
           let n ← gensym b
@@ -207,13 +210,10 @@ partial def FinishedPart.toSyntax' [Monad m] [MonadQuotation m] [MonadLiftT Comm
           match metadata with
           | none => `(none)
           | some stx => `(some $stx)
-        -- Adding type annotations works around a limitation in list and array elaboration, where intermediate
-        -- let bindings introduced by "chunking" the elaboration may fail to infer types
-        let partName ← gensym titleStx
         elabCommand (← `(def $partName : Part $genre := Part.mk #[$[$titleInlines],*] $(quote titleString) $metaStx #[$blockNames,*] #[$[$subStx],*]))
         pure partName
       | .included name => pure name
-  StateT.run' (helper finishedPart) {}
+  StateT.run' (ReaderT.run (helper finishedPart) rootName) {}
 
 partial def FinishedPart.toTOC : FinishedPart → TOC
   | .mk titleStx _titleInlines titleString _metadata _blocks subParts endPos =>
@@ -368,10 +368,10 @@ def DocElabM.addLinkRef (refName : TSyntax `str) : DocElabM (TSyntax `term) := d
   match (← getThe State).linkRefs.find? strName with
   | none =>
     modifyThe State fun st => {st with linkRefs := st.linkRefs.insert strName ⟨#[refName]⟩}
-    pure <| linkRefName refName
+    pure <| linkRefName (← currentDocName) refName
   | some ⟨uses⟩ =>
     modifyThe State fun st => {st with linkRefs := st.linkRefs.insert strName ⟨uses.push refName⟩}
-    pure <| linkRefName refName
+    pure <| linkRefName (← currentDocName) refName
 
 
 def PartElabM.addFootnoteDef (refName : TSyntax `str) (content : Array (TSyntax `term)) : PartElabM Unit := do
@@ -387,10 +387,10 @@ def DocElabM.addFootnoteRef (refName : TSyntax `str) : DocElabM (TSyntax `term) 
   match (← getThe State).footnoteRefs.find? strName with
   | none =>
     modifyThe State fun st => {st with footnoteRefs := st.footnoteRefs.insert strName ⟨#[refName]⟩}
-    pure <| footnoteRefName refName
+    pure <| footnoteRefName (← currentDocName) refName
   | some ⟨uses⟩ =>
     modifyThe State fun st => {st with footnoteRefs := st.footnoteRefs.insert strName ⟨uses.push refName⟩}
-    pure <| footnoteRefName refName
+    pure <| footnoteRefName (← currentDocName) refName
 
 
 def PartElabM.push (fr : PartFrame) : PartElabM Unit := modifyThe State fun st => {st with partContext := st.partContext.push fr}
