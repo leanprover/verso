@@ -50,7 +50,7 @@ def inStrLit (p : ParserFn) : Parser where
 @[combinator_parenthesizer inStrLit] def inStrLit.parenthesizer := PrettyPrinter.Parenthesizer.visitToken
 @[combinator_formatter inStrLit] def inStrLit.formatter := PrettyPrinter.Formatter.visitAtom Name.anonymous
 
-def inlineStr := inStrLit <| textLine
+def inlineStr := withAntiquot (mkAntiquot "inlineStr" `inlineStr) (inStrLit <| textLine)
 
 elab "inlines!" s:inlineStr : term => open Lean Elab Term in
   match s.raw with
@@ -198,7 +198,7 @@ where
       set partState
       termState.restore
 
-elab "#doc" "(" genre:term ")" title:inlineStr "=>" text:completeDocument eof:eoi : command => open Lean Elab Term Command PartElabM DocElabM in do
+elab (name := completeDoc) "#doc" "(" genre:term ")" title:inlineStr "=>" text:completeDocument eof:eoi : command => open Lean Elab Term Command PartElabM DocElabM in do
   findGenreCmd genre
   if eof.raw.isMissing then
     throwError "Syntax error prevents processing document"
@@ -226,3 +226,27 @@ elab "#doc" "(" genre:term ")" title:inlineStr "=>" text:completeDocument eof:eo
       let docName := mkIdentFrom title n
       elabCommand (← `(def $docName : Part $genre := $(← finished.toSyntax' genre st'.linkDefs st'.footnoteDefs)))
       indicateFinished
+
+/--
+Make the single elaborator for some syntax kind become incremental
+
+This is useful because `elab` doesn't create an accessible name for the generated elaborator. It's
+possible to predict it and apply the attribute, but this seems fragile - better to look it up.
+Placing the attribute before `elab` itself doesn't work because the attribute ends up on the
+`syntax` declaration. Seperate elaborators don't work if the syntax rule in question ends with an
+EOF - `elab` provides a representation of it (which can be checked via `isMissing` to see if the
+parser went all the way), but that's not present in the parser's own syntax objects. Quoting `eoi`
+doesn't  work because the parser wants to read to the end of the file.
+-/
+scoped elab "elab" &"incremental" kind:ident : command =>
+  open Lean Elab Command Term in do
+  let k ← liftTermElabM <| realizeGlobalConstNoOverloadWithInfo kind
+  let elabs := commandElabAttribute.getEntries (← getEnv) k
+  match elabs with
+  | [] => throwErrorAt kind "No elaborators for '{k}'"
+  | [x] =>
+    let elabName := mkIdentFrom kind x.declName
+    elabCommand (← `(attribute [incremental] $elabName))
+  | _ => throwErrorAt kind "Multiple elaborators for '{k}'"
+
+elab incremental completeDoc

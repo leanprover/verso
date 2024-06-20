@@ -9,7 +9,7 @@ import DemoSite.Categories
 open Verso Genre Blog
 open DemoSite
 
-set_option trace.Elab.reuse true
+-- set_option trace.Elab.reuse true
 set_option pp.rawOnError true
 --set_option trace.Elab.command true
 -- set_option trace.profiler true

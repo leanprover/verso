@@ -80,8 +80,11 @@ class IncrementalSnapshot (snapshot : outParam Type) (σ : outParam Type) extend
   -/
   mkSnap : Task σ → snapshot
 
-private def freshSnapshot : CoreM Language.Snapshot := do
-  pure {diagnostics := ← Snapshot.Diagnostics.ofMessageLog (← Core.getAndEmptyMessageLog)}
+private def freshSnapshot (ownMessageLog := true) : CoreM Language.Snapshot := do
+  if ownMessageLog then
+    pure {diagnostics := ← Snapshot.Diagnostics.ofMessageLog (← Core.getAndEmptyMessageLog)}
+  else
+    pure {diagnostics := ← Snapshot.Diagnostics.ofMessageLog .empty}
 
 open Lean Elab Command in
 open IncrementalSnapshot in
@@ -179,13 +182,13 @@ def incrementallyElabCommand
             -- In case of a fatal exception in partCommand, we need to make sure that the promise actually
             -- gets resolved to avoid hanging forever. And the first resolve wins, so the second one is a
             -- no-op the rest of the time.
-            nextPromise.resolve <| .mk (← freshSnapshot) (.mk <| mkSnap (.pure (← get))) none b
+            nextPromise.resolve <| .mk (← freshSnapshot (ownMessageLog := false)) (.mk <| mkSnap (.pure (← get))) none b
             updatedState.resolve <| ← get -- some old state goes here
         endAct
 
         let finalState ← get
         let allDone : CommandElabM Unit := do
-          nextPromise.resolve <| .mk (← liftCoreM freshSnapshot) (.mk <| mkSnap (.pure finalState)) none cmd
+          nextPromise.resolve <| .mk (← liftCoreM (freshSnapshot (ownMessageLog := false))) (.mk <| mkSnap (.pure finalState)) none cmd
         pure (allDone, finalState)
   else -- incrementality not available - just do the action the easy way
     lift <| do
