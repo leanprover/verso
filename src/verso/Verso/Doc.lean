@@ -116,7 +116,7 @@ partial def Inline.beq [BEq genre.Inline] : Inline genre → Inline genre → Bo
   | .linebreak str1, .linebreak str2=> str1 == str2
   | .emph c1, .emph c2
   | .bold c1, .bold c2 => arrayEq beq c1 c2
-  | .math m1 str1, .math m2 str2 => m1 == m1 && str1 == str2
+  | .math m1 str1, .math m2 str2 => m1 == m2 && str1 == str2
   | .link txt1 url1, .link txt2 url2 => arrayEq beq txt1 txt2 && url1 == url2
   | .footnote name1 content1, .footnote name2 content2 => name1 == name2 && arrayEq beq content1 content2
   | .image alt1 url1, .image alt2 url2 => alt1 == alt2 && url1 == url2
@@ -313,7 +313,7 @@ def Part.withMetadata (part : Part genre) (newMeta : genre.PartMetadata) : Part 
   | .mk title titleString _ content subParts => .mk title titleString (some newMeta) content subParts
 
 
-partial def Part.reprPrec [Repr g.Inline] [Repr g.Block] [Repr g.PartMetadata] (part : Part g) (prec : Nat) : Std.Format :=
+partial def Part.reprPrec [Repr g.Inline] [Repr g.Block] [Repr g.PartMetadata] (part : Part g) (_prec : Nat) : Std.Format :=
   open Std.Format in
   reprCtor ``Part.mk [
       reprArg part.title,

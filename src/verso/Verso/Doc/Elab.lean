@@ -313,7 +313,7 @@ def includeSection : PartCommand
       let name ← resolved x
       addPart <| .included name
     | _ => throwErrorAt stx "Expected exactly one positional argument that is a name"
-  | stx => Lean.Elab.throwUnsupportedSyntax
+  | _ => Lean.Elab.throwUnsupportedSyntax
 where
  resolved id := mkIdentFrom id <$> resolveGlobalConstNoOverload (mkIdentFrom id (docName id.getId))
 
@@ -442,7 +442,7 @@ def _root_.Verso.Syntax.codeblock.expand : BlockExpander
           | ex => throw ex
       dbg_trace "No code block expander for '{nameStx}' ---> '{name}'"
       throwUnsupportedSyntax
-  | `<low|(Verso.Syntax.codeblock (column ~(.atom _ col)) ~_open ~(.node _ `null #[]) ~(.atom _info contents) ~_close )> =>
+  | `<low|(Verso.Syntax.codeblock (column ~(.atom _ _col)) ~_open ~(.node _ `null #[]) ~(.atom _info contents) ~_close )> =>
     ``(Block.code $(quote contents))
   | _ =>
     throwUnsupportedSyntax

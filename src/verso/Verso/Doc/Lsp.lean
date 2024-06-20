@@ -93,6 +93,7 @@ instance : FromJson Lean.Lsp.SymbolKind where
 
 deriving instance FromJson for Lean.Lsp.DocumentSymbolAux
 open Lean Lsp in
+set_option linter.unusedVariables false in -- it doesn't like the `inst` name here
 partial def symFromJson? (j : Json) : Except String DocumentSymbol := do
   let fromJ : {α : _} → [inst : FromJson α] → FromJson (Lean.Lsp.DocumentSymbolAux α) := inferInstance
   DocumentSymbol.mk <$> @FromJson.fromJson? _ (fromJ (inst:=⟨symFromJson?⟩)) j
@@ -342,7 +343,7 @@ partial def handleTokens (prev : RequestTask SemanticTokens) (beginPos endPos : 
       {leans with data := encodeTokenEntries (toks ++ mine |>.qsort (·.ordLt ·))}
 
 where
-  mkTok (text : FileMap) (type : SemanticTokenType) (stx : Syntax) : Array SemanticTokenEntry := Id.run do
+  mkTok (text : FileMap) (tokenType : SemanticTokenType) (stx : Syntax) : Array SemanticTokenEntry := Id.run do
     let (some startPos, some endPos) := (stx.getPos?, stx.getTailPos?)
       | return #[]
     let startLspPos := text.utf8PosToLspPos startPos
@@ -354,7 +355,7 @@ where
         line := startLspPos.line,
         startChar := startLspPos.character,
         length := endLspPos.character - startLspPos.character,
-        type := type.toNat,
+        type := tokenType.toNat,
         modifierMask := 0
       }]
     else #[]
