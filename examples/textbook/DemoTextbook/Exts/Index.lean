@@ -84,7 +84,8 @@ def indexState := `DemoTextbook.Exts.Index
 def index.descr : InlineDescr where
   traverse id data _contents := do
     -- TODO use internal tags in the first round to respect users' assignments (cf part tag assignment)
-    let _ ← Verso.Genre.Manual.externalTag id "--index"
+    let path ← (·.path) <$> read
+    let _ ← Verso.Genre.Manual.externalTag id path "--index"
     match FromJson.fromJson? data with
     | .error err =>
       logError err
@@ -103,7 +104,7 @@ def index.descr : InlineDescr where
   toHtml :=
     open Verso.Output.Html in
     some <| fun _go id inl _content => do
-      let some t := (←read).2.2.externalTags.find? id
+      let some (_, t) := (← read).2.2.externalTags.find? id
         | panic! s!"Untagged index target with data {inl}"
       return {{<span id={{t}}></span>}}
 

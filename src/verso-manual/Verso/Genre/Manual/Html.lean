@@ -6,19 +6,22 @@ Author: David Thrane Christiansen
 
 import Verso.Output.Html
 
+import Verso.Genre.Manual.Basic
+
 namespace Verso.Genre.Manual.Html
 open Verso.Output Html
 
 inductive Toc where
-  | entry (title : Html) (id : String) (number : Bool) (children : Array Toc)
+  | entry (title : Html) (path : Path) (id : String) (number : Bool) (children : Array Toc)
 
 partial def Toc.html (depth : Option Nat) : Toc → Html
-  | .entry title id num children =>
+  | .entry title path id num children =>
     if depth = some 0 then .empty
     else
+      let page := if path.isEmpty then "/" else path.map ("/" ++ ·) |>.toList |> String.join
       {{
         <li {{if !num then #[("class", "unnumbered")] else #[]}}>
-          <a href=s!"#{id}">{{title}}</a>
+          <a href=s!"{page}#{id}">{{title}}</a>
           {{if children.isEmpty then .empty
             else {{<ol> {{children.map (·.html (depth.map Nat.pred))}} </ol>}} }}
         </li>
@@ -34,19 +37,19 @@ def titlePage (title : Html) (authors : List String) (intro : Html) : Html := {{
   </div>
 }}
 
-def page (toc : Array Toc) (textTitle : String) (contents : Html) (extraCss : Lean.HashSet String) (extraJs : Lean.HashSet String) : Html := {{
+def page (toc : Array Toc) (textTitle : String) (htmlTitle : Html) (contents : Html) (extraCss : Lean.HashSet String) (extraJs : Lean.HashSet String) : Html := {{
 <html>
   <head>
     <meta charset="utf-8"/>
     <title>{{textTitle}}</title>
-    <link rel="stylesheet" href="book.css" />
+    <link rel="stylesheet" href="/book.css" />
     {{extraCss.toArray.map ({{<style>{{Html.text false ·}}</style>}})}}
     {{extraJs.toArray.map ({{<script>{{Html.text false ·}}</script>}})}}
   </head>
   <body>
     <div class="with-toc">
       <header>
-        <h1>{{textTitle}}</h1>
+        <h1>{{htmlTitle}}</h1>
         <div id="controls">
           <label for="toggle-toc" id="toggle-toc-click">"📖"</label>
         </div>
@@ -55,7 +58,7 @@ def page (toc : Array Toc) (textTitle : String) (contents : Html) (extraCss : Le
         </div>
       </header>
       <nav id="toc">
-        <input type="checkbox" id="toggle-toc"/>
+        <input type="checkbox" id="toggle-toc" checked="checked"/>
         <ol>{{toc.map (·.html (some 3))}}</ol>
       </nav>
       <main>

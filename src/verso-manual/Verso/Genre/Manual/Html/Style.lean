@@ -126,6 +126,15 @@ header h1 {
     font-size: 1.25em;
 }
 
+header h1 a, header h1 a:link, header h1 a:visited {
+    text-decoration: inherit;
+    color: inherit;
+}
+
+header h1 a:hover {
+    text-decoration: underline;
+}
+
 header #controls {
     grid-area: controls;
 }
@@ -165,5 +174,19 @@ main > section {
 
 main section {
     max-width: var(--verso-content-max-width);
+}
+
+main .section-toc li {
+    font-weight: bold;
+    font-family: var(--verso-structure-font-family);
+}
+
+main .section-toc a, main .section-toc a:visited {
+    color: inherit;
+    text-decoration: none;
+}
+
+main .section-toc a:hover {
+    text-decoration: underline;
 }
 "####
