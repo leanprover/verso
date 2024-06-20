@@ -43,3 +43,7 @@ And a random code block:
 ```
 hello
 ```
+
+Verso supports [links][named link] defined later!
+
+[named link]: https://lean-lang.org

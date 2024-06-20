@@ -5,6 +5,7 @@ Author: David Thrane Christiansen
 -/
 
 import Lean.Data.Json
+import Verso.Doc.Name
 
 namespace Verso
 
@@ -13,9 +14,6 @@ namespace Doc
 open Std (Format)
 open Lean (Name Json ToJson FromJson)
 open Lean.Json (getObj?)
-
-def docName (moduleName : Name) : Name :=
-  id <| .str moduleName "the canonical document object name"
 
 structure Genre : Type 1 where
   PartMetadata : Type
