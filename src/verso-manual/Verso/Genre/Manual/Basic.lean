@@ -70,14 +70,15 @@ structure PartMetadata where
   authors : List String := []
   date : Option String := none
   tag : Option PartTag := none
+  /-- If this part ends up as the root of a file, use this name for it -/
+  file : Option String := none
   id : Option InternalId := none
   number : Bool := true
 deriving BEq, Hashable, Repr
 
 structure TraverseState where
   partTags : Lean.HashMap PartTag InternalId := {}
-  externalTags : Lean.HashMap InternalId String := {}
-  slugs : Lean.HashMap Slug Path := {}
+  externalTags : Lean.HashMap InternalId (Path × String) := {}
   ids : Lean.HashSet InternalId := {}
   nextId : Nat := 0
   extraCss : Lean.HashSet String := {}
@@ -122,12 +123,6 @@ instance : BEq TraverseState where
     x.externalTags.size == y.externalTags.size &&
     (x.externalTags.all fun k v =>
       match y.externalTags.find? k with
-      | none => false
-      | some v' => v == v'
-    ) &&
-    x.slugs.size == y.slugs.size &&
-    (x.slugs.all fun k v =>
-      match y.slugs.find? k with
       | none => false
       | some v' => v == v'
     ) &&
@@ -302,8 +297,8 @@ instance : MonadReader Manual.TraverseContext TraverseM where
 def logError [Monad m] [MonadLiftT IO m] [MonadReaderOf Manual.TraverseContext m] (err : String) : m Unit := do
   (← readThe Manual.TraverseContext).logError err
 
-def externalTag [Monad m] [MonadState TraverseState m] (id : InternalId) (name : String) : m PartTag := do
-  if let some t := (← get).externalTags.find? id then
+def externalTag [Monad m] [MonadState TraverseState m] (id : InternalId) (path : Path) (name : String) : m PartTag := do
+  if let some (_, t) := (← get).externalTags.find? id then
     return PartTag.external t
   else
     let mut attempt := name
@@ -313,7 +308,7 @@ def externalTag [Monad m] [MonadState TraverseState m] (id : InternalId) (name :
     let t' := PartTag.external attempt
     modify fun st => {st with
       partTags := st.partTags.insert t' id,
-      externalTags := st.externalTags.insert id attempt
+      externalTags := st.externalTags.insert id (path, attempt)
     }
     pure t'
 
@@ -342,12 +337,13 @@ instance : Traverse Manual TraverseM where
         if id != id' then logError s!"Duplicate tag '{t}'"
       else
         modify fun st => {st with partTags := st.partTags.insert t id}
+      let path := (← readThe TraverseContext).path
       match t with
       | PartTag.external name =>
         -- These are the actual IDs to use in generated HTML and links and such
-        modify fun st => {st with externalTags := st.externalTags.insert id name}
+        modify fun st => {st with externalTags := st.externalTags.insert id (path, name)}
       | PartTag.internal name =>
-        meta := {meta with tag := ← externalTag id name}
+        meta := {meta with tag := ← externalTag id path name}
       | PartTag.provided n =>
         -- Convert to an external tag, and fail if we can't (users should control their link IDs)
         let external := PartTag.external n
@@ -420,7 +416,7 @@ instance : Html.GenreHtml Manual (ReaderT ExtensionImpls IO) where
     let st ← Verso.Doc.Html.HtmlT.state
     let attrs := match meta.id >>= st.externalTags.find? with
       | none => #[]
-      | some t => #[("id", t)]
+      | some (_, t) => #[("id", t)]
     go txt attrs
 
   block goI goB b content := do
