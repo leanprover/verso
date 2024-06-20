@@ -4,6 +4,7 @@ open Lake DSL
 require subverso from git "https://github.com/leanprover/subverso.git"@"main"
 
 package verso where
+  precompileModules := true
   -- add package configuration options here
 
 lean_lib Verso where
