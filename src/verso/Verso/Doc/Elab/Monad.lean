@@ -408,6 +408,7 @@ structure DocListInfo where
   items : Array Syntax
 deriving Repr, TypeName
 
+
 abbrev InlineExpander := Syntax → DocElabM (TSyntax `term)
 
 initialize inlineExpanderAttr : KeyedDeclsAttribute InlineExpander ←

@@ -81,6 +81,11 @@ def Inline.index : Inline where
 
 def indexState := `DemoTextbook.Exts.Index
 
+def index (args : Array (Doc.Inline Manual)) (subterm : Option String := none) (index : Option String := none) : Doc.Inline Manual :=
+  let entry : Index.Entry := {term := .concat args, subterm := subterm.map Doc.Inline.text, index}
+  Doc.Inline.other {Inline.index with data := ToJson.toJson entry} #[]
+
+@[inline_extension index]
 def index.descr : InlineDescr where
   traverse id data _contents := do
     -- TODO use internal tags in the first round to respect users' assignments (cf part tag assignment)
@@ -108,10 +113,6 @@ def index.descr : InlineDescr where
         | panic! s!"Untagged index target with data {inl}"
       return {{<span id={{t}}></span>}}
 
-def index (args : Array (Doc.Inline Manual)) (subterm : Option String := none) (index : Option String := none) : Doc.Inline Manual :=
-  let entry : Index.Entry := {term := .concat args, subterm := subterm.map Doc.Inline.text, index}
-  Doc.Inline.other {Inline.index with data := ToJson.toJson entry} #[]
-
 def Inline.see : Inline where
   name := `DemoTextbook.Exts.see
 
@@ -123,6 +124,7 @@ def seeAlso (args : Array (Doc.Inline Manual)) (target : String) (subterm : Opti
   let data : Index.See := {source := .concat args, target := .text target, subTarget := subterm.map .text, also := true, index}
   Doc.Inline.other {Inline.see with data := ToJson.toJson data} #[]
 
+@[inline_extension see]
 def see.descr : InlineDescr where
   traverse _id data _contents := do
     match FromJson.fromJson? data with
@@ -310,6 +312,10 @@ def Index.render (index : Index) : Array (IndexCat × Array RenderedEntry) := Id
   pure grouped
 
 
+def theIndex (index : Option String := none) : Doc.Block Manual :=
+  Doc.Block.other {Block.theIndex with data := ToJson.toJson index} #[]
+
+@[block_extension theIndex]
 def theIndex.descr : BlockDescr where
   traverse _ _ _ := do
     pure none
@@ -411,6 +417,3 @@ where
       width: auto;
     }
     "###
-
-def theIndex (index : Option String := none) : Doc.Block Manual :=
-  Doc.Block.other {Block.theIndex with data := ToJson.toJson index} #[]
