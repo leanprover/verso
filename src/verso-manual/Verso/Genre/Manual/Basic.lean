@@ -198,6 +198,7 @@ abbrev InlineToTeX (genre : Genre) (m) :=
 structure ExtensionImpls where
   private mk ::
   -- This is to work around recursion restrictions, not for real dynamism
+  -- They are expected to be `InlineDescr` and `BlockDescr`, respectively
   inlineDescrs : NameMap Dynamic
   blockDescrs : NameMap Dynamic
 
@@ -256,8 +257,83 @@ structure BlockDescr where
   toTeX : Option (BlockToTeX Manual (ReaderT ExtensionImpls IO))
 deriving TypeName, Inhabited
 
-private def fromDynamic! (dyn : Dynamic) : BlockDescr :=
-  dyn.get? BlockDescr |>.get!
+open Lean in
+initialize inlineExtensionExt
+    : PersistentEnvExtension (Name × Name) (Name × Name) (NameMap Name) ←
+  registerPersistentEnvExtension {
+    mkInitial := pure {},
+    addImportedFn := fun _ => pure {},
+    addEntryFn := fun as (src, tgt) => as.insert src tgt,
+    exportEntriesFn := fun es =>
+      es.fold (fun a src tgt => a.push (src, tgt)) #[] |>.qsort (Name.quickLt ·.1 ·.1)
+  }
+
+open Lean in
+initialize blockExtensionExt
+    : PersistentEnvExtension (Name × Name) (Name × Name) (NameMap Name) ←
+  registerPersistentEnvExtension {
+    mkInitial := pure {},
+    addImportedFn := fun _ => pure {},
+    addEntryFn := fun as (src, tgt) => as.insert src tgt,
+    exportEntriesFn := fun es =>
+      es.fold (fun a src tgt => a.push (src, tgt)) #[] |>.qsort (Name.quickLt ·.1 ·.1)
+  }
+
+syntax (name := inline_extension) "inline_extension" ident : attr
+syntax (name := block_extension) "block_extension" ident : attr
+
+open Lean in
+initialize
+  let register (name) (strName : String) (ext : PersistentEnvExtension (Name × Name) (Name × Name) (NameMap Name)) (get : Syntax → Option Ident) := do
+    registerBuiltinAttribute {
+      name := name,
+      ref := by exact decl_name%,
+      add := fun decl stx kind => do
+        unless kind == AttributeKind.global do throwError "invalid attribute '{name}', must be global"
+        unless ((← getEnv).getModuleIdxFor? decl).isNone do
+          throwError "invalid attribute '{name}', declaration is in an imported module"
+        let some extIdent := get stx
+          | throwError "invalid syntax for '{name}' attribute"
+
+        let extName ← Lean.Elab.realizeGlobalConstNoOverloadWithInfo extIdent
+
+        modifyEnv fun env => ext.addEntry env (extName.eraseMacroScopes, decl.eraseMacroScopes) -- TODO check that it's not already there
+
+      descr := s!"Registers a definition as the description of {strName}"
+    }
+  register `inline_extension "an inline extension" inlineExtensionExt fun | `(attr|inline_extension $extIdent) => extIdent | _ => none
+  register `block_extension "a block extension" blockExtensionExt fun | `(attr|block_extension $extIdent) => extIdent | _ => none
+
+
+open Lean in
+private def nameAndDef [Monad m] [MonadRef m] [MonadQuotation m] (ext : Name × Name) : m Term := do
+  let quoted : Term := quote ext.fst
+  let ident ← mkCIdentFromRef ext.snd
+  `(($quoted, $(⟨ident⟩)))
+
+open Lean Elab Term in
+scoped elab "inline_extensions%" : term => do
+  let env ← getEnv
+  let mut exts := #[]
+  for (ext, descr) in inlineExtensionExt.getState env do
+    exts := exts.push (ext, descr)
+  for imported in inlineExtensionExt.toEnvExtension.getState env |>.importedEntries do
+    for x in imported do
+      exts := exts.push x
+  let stx ← `([$[($(← exts.mapM nameAndDef) : Name × InlineDescr)],*])
+  elabTerm stx none
+
+open Lean Elab Term in
+scoped elab "block_extensions%" : term => do
+  let env ← getEnv
+  let mut exts := #[]
+  for (ext, descr) in blockExtensionExt.getState env do
+    exts := exts.push (ext, descr)
+  for imported in blockExtensionExt.toEnvExtension.getState env |>.importedEntries do
+    for x in imported do
+      exts := exts.push x
+  let stx ← `([$[($(← exts.mapM nameAndDef) : Name × BlockDescr)],*])
+  elabTerm stx none
 
 def ExtensionImpls.empty : ExtensionImpls := ⟨{}, {}⟩
 
@@ -281,6 +357,8 @@ def ExtensionImpls.insertBlock (impls : ExtensionImpls) (name : Name) (desc : Bl
 def ExtensionImpls.fromLists (inlineImpls : List (Name × InlineDescr)) (blockImpls : List (Name × BlockDescr)) : ExtensionImpls :=
   inlineImpls.foldl (fun out (n, impl) => out.insertInline n impl) <| blockImpls.foldl (fun out (n, impl) => out.insertBlock n impl) {}
 
+open Lean Elab Term in
+elab "extension_impls%" : term => do elabTerm (← ``(ExtensionImpls.fromLists inline_extensions% block_extensions%)) none
 
 abbrev TraverseM := ReaderT ExtensionImpls (ReaderT Manual.TraverseContext (StateT Manual.TraverseState IO))
 
@@ -395,7 +473,7 @@ instance : TeX.GenreTeX Manual (ReaderT ExtensionImpls IO) where
   part go _meta txt := go txt
   block goI goB b content := do
     let some id := b.id
-      | panic! "Block {b.name} wasn't assigned an ID during traversal"
+      | panic! s!"Block {b.name} wasn't assigned an ID during traversal"
     let some descr := (← readThe ExtensionImpls).getBlock? b.name
       | panic! s!"Unknown block {b.name} while rendering"
     let some impl := descr.toTeX
@@ -421,11 +499,11 @@ instance : Html.GenreHtml Manual (ReaderT ExtensionImpls IO) where
 
   block goI goB b content := do
     let some id := b.id
-      | panic! "Block {b.name} wasn't assigned an ID during traversal"
+      | panic! s!"Block {b.name} wasn't assigned an ID during traversal"
     let some descr := (← readThe ExtensionImpls).getBlock? b.name
-      | panic! "Unknown block {b.name} while rendering"
+      | panic! s!"Unknown block {b.name} while rendering"
     let some impl := descr.toHtml
-      | panic! "Block {b.name} doesn't support HTML"
+      | panic! s!"Block {b.name} doesn't support HTML"
     impl goI goB id b.data content
 
   inline go i content := do

@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 echo "Building the user's guide as TeX and HTML"
 lake exe usersguide --depth 2
 

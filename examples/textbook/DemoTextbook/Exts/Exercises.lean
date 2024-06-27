@@ -24,24 +24,6 @@ namespace DemoTextbook.Exts
 def Block.lean : Block where
   name := `DemoTextbook.Exts.lean
 
-def lean.descr : BlockDescr where
-  traverse _ _ _ := do
-    pure none
-  toTeX :=
-    some <| fun _ go _ _ content => do
-      pure <| .seq <| ← content.mapM fun b => do
-        pure <| .seq #[← go b, .raw "\n"]
-  extraCss := highlightingStyle
-  extraJs := highlightingJs
-  toHtml :=
-    open Verso.Output.Html in
-    some <| fun _ _ _ data _ => do
-      match FromJson.fromJson? data with
-      | .error err =>
-        HtmlT.logError <| "Couldn't deserialize Lean code while rendering HTML: " ++ err
-        pure .empty
-      | .ok (hl : Highlighted) =>
-        pure <| hl.blockHtml "exercises"
 
 
 
@@ -142,3 +124,23 @@ def lean : CodeBlockExpander
       pure #[← `(Block.other {Block.lean with data := ToJson.toJson $(quote hls)} #[Block.code $(quote str.getString)])]
     else
       pure #[]
+
+@[block_extension lean]
+def lean.descr : BlockDescr where
+  traverse _ _ _ := do
+    pure none
+  toTeX :=
+    some <| fun _ go _ _ content => do
+      pure <| .seq <| ← content.mapM fun b => do
+        pure <| .seq #[← go b, .raw "\n"]
+  extraCss := highlightingStyle
+  extraJs := highlightingJs
+  toHtml :=
+    open Verso.Output.Html in
+    some <| fun _ _ _ data _ => do
+      match FromJson.fromJson? data with
+      | .error err =>
+        HtmlT.logError <| "Couldn't deserialize Lean code while rendering HTML: " ++ err
+        pure .empty
+      | .ok (hl : Highlighted) =>
+        pure <| hl.blockHtml "exercises"

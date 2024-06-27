@@ -23,12 +23,11 @@ def docstring (name : Name) : Block where
 
 end Block
 
+@[block_extension Block.docstring]
 def docstring.descr : BlockDescr where
   traverse _ _ _ := pure none
   toHtml := some <| fun _goI goB _id _info contents => contents.mapM goB
   toTeX := some <| fun _goI goB _id _info contents => contents.mapM goB
-
-
 
 open Verso.Doc.Elab
 
