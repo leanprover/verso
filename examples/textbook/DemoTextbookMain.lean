@@ -10,9 +10,7 @@ import DemoTextbook
 
 open Verso.Genre.Manual
 
-def impls := ExtensionImpls.fromLists inline_extensions% block_extensions%
-
 def buildExercises (_ctxt : TraverseContext) (_state : TraverseState) : IO Unit :=
   IO.println "Placeholder generator for output exercise and solution Lean code"
 
-def main := manualMain impls (%doc DemoTextbook) (extraSteps := [buildExercises])
+def main := manualMain (%doc DemoTextbook) (extraSteps := [buildExercises])

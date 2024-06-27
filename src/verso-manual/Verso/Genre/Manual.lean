@@ -33,6 +33,7 @@ namespace Manual
 def Block.paragraph : Block where
   name := `Verso.Genre.Manual.Block.paragraph
 
+@[block_extension Block.paragraph]
 def paragraph.descr : BlockDescr where
   traverse := fun _ _ _ => pure none
   toTeX :=
@@ -220,23 +221,29 @@ where
 
 abbrev ExtraStep := TraverseContext → TraverseState → IO Unit
 
-def manualMain (extensionImpls : ExtensionImpls) (text : Part Manual) (options : List String) (extraSteps : List ExtraStep := []) : IO UInt32 := (ReaderT.run · extensionImpls) do
-  let hasError ← IO.mkRef false
-  let logError msg := do hasError.set true; IO.eprintln msg
-  let cfg ← opts {} options
 
-  emitTeX logError cfg text
-  emitHtmlSingle logError cfg text
-  emitHtmlMulti logError cfg text
+def manualMain (text : Part Manual) (extensionImpls : ExtensionImpls := by exact extension_impls%) (options : List String) (extraSteps : List ExtraStep := []) : IO UInt32 :=
+  ReaderT.run go extensionImpls
 
-  if (← hasError.get) then
-    IO.eprintln "Errors were encountered!"
-    return 1
-  else
-    return 0
 where
   opts (cfg : Config)
     | ("--output"::dir::more) => opts {cfg with destination := dir} more
     | ("--depth"::n::more) => opts {cfg with htmlDepth := n.toNat!} more
     | (other :: _) => throw (↑ s!"Unknown option {other}")
     | [] => pure cfg
+
+
+  go : ReaderT ExtensionImpls IO UInt32 := do
+    let hasError ← IO.mkRef false
+    let logError msg := do hasError.set true; IO.eprintln msg
+    let cfg ← opts {} options
+
+    emitTeX logError cfg text
+    emitHtmlSingle logError cfg text
+    emitHtmlMulti logError cfg text
+
+    if (← hasError.get) then
+      IO.eprintln "Errors were encountered!"
+      return 1
+    else
+      return 0

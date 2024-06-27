@@ -297,7 +297,7 @@ initialize
 
         let extName ← Lean.Elab.realizeGlobalConstNoOverloadWithInfo extIdent
 
-        modifyEnv fun env => ext.addEntry env (extName, decl) -- TODO check that it's not already there
+        modifyEnv fun env => ext.addEntry env (extName.eraseMacroScopes, decl.eraseMacroScopes) -- TODO check that it's not already there
 
       descr := s!"Registers a definition as the description of {strName}"
     }
@@ -312,7 +312,7 @@ private def nameAndDef [Monad m] [MonadRef m] [MonadQuotation m] (ext : Name × 
   `(($quoted, $(⟨ident⟩)))
 
 open Lean Elab Term in
-elab "inline_extensions%" : term => do
+scoped elab "inline_extensions%" : term => do
   let env ← getEnv
   let mut exts := #[]
   for (ext, descr) in inlineExtensionExt.getState env do
@@ -324,7 +324,7 @@ elab "inline_extensions%" : term => do
   elabTerm stx none
 
 open Lean Elab Term in
-elab "block_extensions%" : term => do
+scoped elab "block_extensions%" : term => do
   let env ← getEnv
   let mut exts := #[]
   for (ext, descr) in blockExtensionExt.getState env do
@@ -357,6 +357,8 @@ def ExtensionImpls.insertBlock (impls : ExtensionImpls) (name : Name) (desc : Bl
 def ExtensionImpls.fromLists (inlineImpls : List (Name × InlineDescr)) (blockImpls : List (Name × BlockDescr)) : ExtensionImpls :=
   inlineImpls.foldl (fun out (n, impl) => out.insertInline n impl) <| blockImpls.foldl (fun out (n, impl) => out.insertBlock n impl) {}
 
+open Lean Elab Term in
+elab "extension_impls%" : term => do elabTerm (← ``(ExtensionImpls.fromLists inline_extensions% block_extensions%)) none
 
 abbrev TraverseM := ReaderT ExtensionImpls (ReaderT Manual.TraverseContext (StateT Manual.TraverseState IO))
 
