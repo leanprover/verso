@@ -395,7 +395,7 @@ instance : TeX.GenreTeX Manual (ReaderT ExtensionImpls IO) where
   part go _meta txt := go txt
   block goI goB b content := do
     let some id := b.id
-      | panic! "Block {b.name} wasn't assigned an ID during traversal"
+      | panic! s!"Block {b.name} wasn't assigned an ID during traversal"
     let some descr := (← readThe ExtensionImpls).getBlock? b.name
       | panic! s!"Unknown block {b.name} while rendering"
     let some impl := descr.toTeX
@@ -421,11 +421,11 @@ instance : Html.GenreHtml Manual (ReaderT ExtensionImpls IO) where
 
   block goI goB b content := do
     let some id := b.id
-      | panic! "Block {b.name} wasn't assigned an ID during traversal"
+      | panic! s!"Block {b.name} wasn't assigned an ID during traversal"
     let some descr := (← readThe ExtensionImpls).getBlock? b.name
-      | panic! "Unknown block {b.name} while rendering"
+      | panic! s!"Unknown block {b.name} while rendering"
     let some impl := descr.toHtml
-      | panic! "Block {b.name} doesn't support HTML"
+      | panic! s!"Block {b.name} doesn't support HTML"
     impl goI goB id b.data content
 
   inline go i content := do
