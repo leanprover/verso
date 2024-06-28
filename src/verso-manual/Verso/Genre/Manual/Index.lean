@@ -8,13 +8,13 @@ import Lean.Data.Json
 import Lean.Data.Json.FromToJson
 
 import Verso
-import Verso.Genre.Manual
+import Verso.Genre.Manual.Basic
 
 open Verso Genre Manual
 open Verso.Doc.Elab
-open Lean (ToJson FromJson)
+open Lean (ToJson FromJson HashSet)
 
-namespace DemoTextbook.Exts.Index
+namespace Verso.Genre.Manual.Index
 
 
 /-
@@ -60,12 +60,12 @@ deriving BEq, Hashable, ToJson, FromJson
 
 end Index
 
-instance [BEq α] [Hashable α] : Hashable (Lean.HashSet α) where
+instance [BEq α] [Hashable α] : Hashable (HashSet α) where
   hash xs := hash xs.toArray
 
 structure Index where
-  entries : Lean.HashSet (Index.Entry × InternalId) := {}
-  see : Lean.HashSet Index.See := {}
+  entries : HashSet (Index.Entry × InternalId) := {}
+  see : HashSet Index.See := {}
 deriving BEq, Hashable
 
 instance : ToJson Index where
@@ -74,16 +74,25 @@ instance : ToJson Index where
 instance : FromJson Index where
   fromJson? v := do
     let ((entries : Array _), (sees : Array _)) ← FromJson.fromJson? v
-    pure ⟨Lean.HashSet.insertMany {} entries, Lean.HashSet.insertMany {} sees⟩
+    pure ⟨HashSet.insertMany {} entries, HashSet.insertMany {} sees⟩
 
 def Inline.index : Inline where
-  name := `DemoTextbook.Exts.index
+  name := `Verso.Manual.index
 
-def indexState := `DemoTextbook.Exts.Index
+def indexState := `Verso.Manual.index
 
 def index (args : Array (Doc.Inline Manual)) (subterm : Option String := none) (index : Option String := none) : Doc.Inline Manual :=
   let entry : Index.Entry := {term := .concat args, subterm := subterm.map Doc.Inline.text, index}
   Doc.Inline.other {Inline.index with data := ToJson.toJson entry} #[]
+
+/-- Adds an internal identifier as a target for a given index entry -/
+def Index.addEntry [Monad m] [MonadState TraverseState m] [MonadLiftT IO m] [MonadReaderOf TraverseContext m]
+    (id : InternalId) (entry : Index.Entry) : m Unit := do
+  let ist : Option (Except String Index) := (← get).get? indexState
+  match ist with
+  | some (.error err) => logError err
+  | some (.ok v) => modify (·.set indexState {v with entries := v.entries.insert (entry, id)})
+  | none => modify (·.set indexState {entries := (HashSet.empty.insert (entry, id)) : Index})
 
 @[inline_extension index]
 def index.descr : InlineDescr where
@@ -96,11 +105,7 @@ def index.descr : InlineDescr where
       logError err
       return none
     | .ok (entry : Index.Entry) =>
-      let ist : Option (Except String Index) := (← get).get? indexState
-      match ist with
-      | some (.error err) => logError err; return none
-      | some (.ok v) => modify (·.set indexState {v with entries := v.entries.insert (entry, id)})
-      | none => modify (·.set indexState {entries := (Lean.HashSet.empty.insert (entry, id)) : Index})
+      Index.addEntry id entry
       pure none
   toTeX :=
     some <| fun go _id _ content => do
@@ -147,7 +152,7 @@ def see.descr : InlineDescr where
 def seeAlso.descr : InlineDescr := see.descr
 
 def Block.theIndex : Block where
-  name := `DemoTextbook.Exts.theIndex
+  name := `Verso.Genre.Manual.theIndex
 
 structure RenderedEntryId where
   toString : String
@@ -183,16 +188,28 @@ def RenderedEntry.toHtml [Monad m] (inlineHtml : Doc.Inline Manual → Doc.Html.
     else pure .empty
   pure <| termPart ++ subPart
 where
-oneTerm id term links := do
-  let (_, _, xref) ← read
-  let termHtml ← ({{<span id={{id.toString}}>{{·}}</span>}}) <$> inlineHtml term
-  match links.size with
-  | 0 => pure termHtml
-  | 1 => pure {{<a href=s!"#{xref.externalTags.find! links[0]!}">{{termHtml}}</a>}}
-  | _ =>
-    let links := links.mapIdx fun i id =>
-      {{" " <a href=s!"#{xref.externalTags.find! id}"> s!"({i.val})" </a>}}
-    pure {{ {{termHtml}} {{links}} }}
+  oneTerm id term links : Doc.Html.HtmlT Manual m Html := do
+    let (_, _, xref) ← read
+    let termHtml ← ({{<span id={{id.toString}}>{{·}}</span>}}) <$> inlineHtml term
+    match h : links.size with
+    | 0 => pure termHtml
+    | 1 =>
+      if let some (path, htmlId) := xref.externalTags.find? links[0] then
+        let addr := String.join (path.map ("/" ++ ·) |>.toList)
+        pure {{<a href=s!"{addr}#{htmlId}">{{termHtml}}</a>}}
+      else
+        Doc.Html.HtmlT.logError s!"No external tag for {id.toString}"
+        pure .empty
+    | _ =>
+      let links ← links.mapIdxM fun i id => do
+        if let some (path, htmlId) := xref.externalTags.find? id then
+          let addr := String.join (path.map ("/" ++ ·) |>.toList)
+          pure {{" " <a href=s!"{addr}#{htmlId}"> s!"({i.val})" </a>}}
+        else
+          Doc.Html.HtmlT.logError s!"No external tag for {id}"
+          pure .empty
+
+      pure {{ {{termHtml}} {{links}} }}
 
 -- TODO this is probably the wrong comparison. Eventually, this will have to be configurable
 -- due to localization.

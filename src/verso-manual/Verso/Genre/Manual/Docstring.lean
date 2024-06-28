@@ -6,6 +6,7 @@ Author: David Thrane Christiansen
 
 import Lean
 import Verso.Genre.Manual.Basic
+import Verso.Genre.Manual.Index
 import Verso.Code
 import Verso.Doc.Elab.Monad
 import Verso.Doc.ArgParse
@@ -25,25 +26,116 @@ namespace Verso.Genre.Manual
 
 namespace Block
 
-def docstring (name : Name) (signature : Option Highlighted) : Block where
+namespace Docstring
+deriving instance ToJson for BinderInfo
+deriving instance FromJson for BinderInfo
+deriving instance ToJson for DefinitionSafety
+deriving instance FromJson for DefinitionSafety
+
+
+structure FieldInfo where
+  fieldName  : Name
+  projFn     : Name
+  /-- It is `some parentStructName` if it is a subobject, and `parentStructName` is the name of the parent structure -/
+  subobject? : Option Name
+  binderInfo : BinderInfo
+  autoParam  : Bool
+deriving Inhabited, Repr, ToJson, FromJson
+
+open Syntax (mkCApp) in
+instance : Quote BinderInfo where
+  quote
+    | .default => mkCApp ``BinderInfo.default #[]
+    | .implicit => mkCApp ``BinderInfo.implicit #[]
+    | .instImplicit => mkCApp ``BinderInfo.instImplicit #[]
+    | .strictImplicit => mkCApp ``BinderInfo.strictImplicit #[]
+
+open Syntax (mkCApp) in
+instance : Quote DefinitionSafety where
+  quote
+    | .safe => mkCApp ``DefinitionSafety.safe #[]
+    | .unsafe => mkCApp ``DefinitionSafety.unsafe #[]
+    | .partial => mkCApp ``DefinitionSafety.partial #[]
+
+open Syntax (mkCApp) in
+instance : Quote FieldInfo where
+  quote fi :=
+    mkCApp ``FieldInfo.mk #[quote fi.fieldName, quote fi.projFn, quote fi.subobject?, quote fi.binderInfo, quote fi.autoParam]
+
+inductive DeclType where
+  | structure (fieldNames : Array Name) (fieldInfo : Array FieldInfo) (parents : Array Name) (ancestors : Array Name)
+  | def (safety : DefinitionSafety)
+  | other
+deriving ToJson, FromJson
+
+open Syntax (mkCApp) in
+instance : Quote DeclType where
+  quote
+    | .structure fields infos parents ancestors => mkCApp ``DeclType.«structure» #[quote fields, quote infos, quote parents, quote ancestors]
+    | .def safety => mkCApp ``DeclType.def #[quote safety]
+    | .other => mkCApp ``DeclType.other #[]
+
+def DeclType.label : DeclType → String
+  | .structure .. => "structure"
+  | .def .safe => "def"
+  | .def .unsafe => "unsafe def"
+  | .def .partial => "partial def"
+  | other => ""
+
+def DeclType.ofName (env : Environment) (c : Name) : DeclType :=
+  if let some info := getStructureInfo? env c then
+    let parents := getParentStructures env c
+    let ancestors := getAllParentStructures env c
+    let fieldInfo := info.fieldInfo.map fun {fieldName, projFn, subobject?, binderInfo, autoParam?} =>
+      {fieldName, projFn, subobject?, binderInfo, autoParam := autoParam?.isSome}
+    .structure info.fieldNames fieldInfo parents ancestors
+  else if let some info := env.find? c then
+    match info with
+    | .defnInfo di => .def di.safety
+    | _ => .other
+  else
+    .other
+end Docstring
+
+def docstring (name : Name) (declType : Docstring.DeclType) (signature : Option Highlighted) : Block where
   name := `Verso.Genre.Manual.Block.docstring
-  data := ToJson.toJson (name, signature)
+  data := ToJson.toJson (name, declType, signature)
 
 end Block
 
+
+
+
 @[block_extension Block.docstring]
 def docstring.descr : BlockDescr where
-  traverse _ _ _ := pure none
-  toHtml := some <| fun _goI goB _id info contents =>
+  traverse id info _ := do
+    let .ok (name, _declType, _signature) := FromJson.fromJson? (α := Name × Block.Docstring.DeclType × Option Highlighted) info
+      | do logError "Failed to deserialize docstring data"; pure none
+    let path ← (·.path) <$> read
+    let _ ← Verso.Genre.Manual.externalTag id path name.toString
+    Index.addEntry id {term := Doc.Inline.code name.toString}
+    if name.getPrefix != .anonymous then
+      Index.addEntry id {term := Doc.Inline.code name.getString!, subterm := some <| Doc.Inline.code name.toString}
+
+    pure none
+  toHtml := some <| fun _goI goB id info contents =>
     open Verso.Doc.Html in
     open Verso.Output Html in do
-      let .ok (name, signature) := FromJson.fromJson? info
-        | do Verso.Doc.Html.HtmlT.logError ""; pure .empty
+      let .ok (name, declType, signature) := FromJson.fromJson? (α := Name × Block.Docstring.DeclType × Option Highlighted) info
+        | do Verso.Doc.Html.HtmlT.logError "Failed to deserialize docstring data"; pure .empty
       let x : Html := Html.text true <| Name.toString name
       let sig : Html := Option.map Highlighted.toHtml signature |>.getD {{ {{x}} }}
 
+      let (_, _, xref) ← read
+      let idAttr :=
+        if let some (_, htmlId) := xref.externalTags.find? id then
+          #[("id", htmlId)]
+        else #[]
+
+
       return {{
-        <div class="docstring">
+        <div class="namedocs" {{idAttr}}>
+          <span class="label">{{declType.label}}</span>
           <pre class="signature hl lean block">{{sig}}</pre>
           <div class="text">
             {{← contents.mapM goB}}
@@ -52,13 +144,40 @@ def docstring.descr : BlockDescr where
       }}
   toTeX := some <| fun _goI goB _id _info contents => contents.mapM goB
   extraCss := [highlightingStyle, r#"
-.docstring .text {
-  padding-left : 1em;
-  padding-right : 1em;
+.namedocs {
+  position: relative;
+  border: solid 2px transparent;
+  background-clip: padding-box;
+  box-sizing: border-box;
+  background-color: white;
+  border-radius: 0.5em;
+  padding: 1.5em;
 }
-.docstring .signature {
+.namedocs:before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 1em;
+  max-height: 10em;
+  z-index: -1;
+  border-radius: inherit;
+  background: linear-gradient(to bottom, #98B2C0, white);
+  margin: -2px;
+}
+.namedocs .text {
+}
+.namedocs .signature {
   font-family: var(--verso-code-font-family);
   font-size: larger;
+  margin-top: 0;
+}
+.namedocs .label {
+  font-size: smaller;
+  position: absolute;
+  right: 1em;
+  top: 1em;
 }
 "#]
   extraJs := [highlightingJs]
@@ -163,7 +282,7 @@ def ppSignature (c : Name) : MetaM FormatWithInfos := do
       | `(bracketedBinder|[$ty]) => argDoc := argDoc ++ "[" ++ .group (← ppTerm ty) ++ "]"
       | _ => return ⟨← ppTerm ⟨stx⟩, infos⟩
       argDoc := argDoc ++ .line
-    doc := .group (doc ++ .nest 4 (.group (.group (behavior := .fill) argDoc) ++ .line ++ ": " ++ (← ppTerm ret)))
+    doc := .group (doc ++ .nest 4 (.group (.group (behavior := .fill) argDoc) ++ ": " ++ (← ppTerm ret)))
 
     return ⟨doc, infos⟩
   | _ => return ⟨← ppTerm ⟨stx⟩, infos⟩  -- HACK: not a term
@@ -181,6 +300,9 @@ def docstring : BlockRoleExpander
         let some ast := MD4Lean.parse docs
           | throwErrorAt x "Failed to parse docstring as Markdown"
         let blockStx ← ast.blocks.mapM Markdown.blockFromMarkdown
+
+        let declType := Block.Docstring.DeclType.ofName (← getEnv) name
+
         let ⟨fmt, infos⟩ ← withOptions (·.setInt `format.width 60 |>.setBool `pp.tagAppFns true) <| ppSignature name
         let tt := Lean.Widget.TaggedText.prettyTagged (w := 80) fmt
         let ctx := {
@@ -194,6 +316,6 @@ def docstring : BlockRoleExpander
         }
         let sig := Lean.Widget.tagCodeInfos ctx infos tt
         let signature ← some <$> renderTagged {} sig
-        pure #[← ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.docstring $(quote name) $(quote signature)) #[$blockStx,*])]
+        pure #[← ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.docstring $(quote name) $(quote declType) $(quote signature)) #[$blockStx,*])]
     | _ => throwError "Expected exactly one positional argument that is a name"
   | _, more => throwErrorAt more[0]! "Unexpected block argument"

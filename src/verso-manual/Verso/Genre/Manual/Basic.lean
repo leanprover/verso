@@ -379,7 +379,7 @@ def externalTag [Monad m] [MonadState TraverseState m] (id : InternalId) (path :
   if let some (_, t) := (← get).externalTags.find? id then
     return PartTag.external t
   else
-    let mut attempt := name
+    let mut attempt := name.sluggify.toString
     repeat
       if (← get).partTags.contains (PartTag.external attempt) then attempt := attempt ++ "-next"
       else break
