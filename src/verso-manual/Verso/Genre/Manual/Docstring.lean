@@ -163,7 +163,7 @@ def ppSignature (c : Name) : MetaM FormatWithInfos := do
       | `(bracketedBinder|[$ty]) => argDoc := argDoc ++ "[" ++ .group (← ppTerm ty) ++ "]"
       | _ => return ⟨← ppTerm ⟨stx⟩, infos⟩
       argDoc := argDoc ++ .line
-    doc := doc ++ .nest 4 (.group (.group (behavior := .fill) argDoc) ++ .line ++ ": " ++ (← ppTerm ret))
+    doc := .group (doc ++ .nest 4 (.group (.group (behavior := .fill) argDoc) ++ .line ++ ": " ++ (← ppTerm ret)))
 
     return ⟨doc, infos⟩
   | _ => return ⟨← ppTerm ⟨stx⟩, infos⟩  -- HACK: not a term
