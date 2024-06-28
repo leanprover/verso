@@ -240,8 +240,8 @@ structure InlineDescr where
   traverse : InlineTraversal Manual
 
   toHtml : Option (InlineToHtml Manual (ReaderT ExtensionImpls IO))
-  extraJs : Option String := none
-  extraCss : Option String := none
+  extraJs : List String := []
+  extraCss : List String := []
 
   toTeX : Option (InlineToTeX Manual (ReaderT ExtensionImpls IO))
 
@@ -251,8 +251,8 @@ structure BlockDescr where
   traverse : BlockTraversal Manual
 
   toHtml : Option (BlockToHtml Manual (ReaderT ExtensionImpls IO))
-  extraJs : Option String := none
-  extraCss : Option String := none
+  extraJs : List String := []
+  extraCss : List String := []
 
   toTeX : Option (BlockToTeX Manual (ReaderT ExtensionImpls IO))
 deriving TypeName, Inhabited
@@ -439,9 +439,9 @@ instance : Traverse Manual TraverseM where
     | ⟨name, id?, data⟩, content => do
       if let some id := id? then
         if let some impl := (← readThe ExtensionImpls).getBlock? name then
-          if let some js := impl.extraJs then
+          for js in impl.extraJs do
             modify fun s => {s with extraJs := s.extraJs.insert js}
-          if let some css := impl.extraCss then
+          for css in impl.extraCss do
             modify fun s => {s with extraCss := s.extraCss.insert css}
           impl.traverse id data content
         else
@@ -455,9 +455,9 @@ instance : Traverse Manual TraverseM where
     | ⟨name, id?, data⟩, content => do
       if let some id := id? then
         if let some impl := (← readThe ExtensionImpls).getInline? name then
-          if let some js := impl.extraJs then
+          for js in impl.extraJs do
             modify fun s => {s with extraJs := s.extraJs.insert js}
-          if let some css := impl.extraCss then
+          for css in impl.extraCss do
             modify fun s => {s with extraCss := s.extraCss.insert css}
           impl.traverse id data content
         else

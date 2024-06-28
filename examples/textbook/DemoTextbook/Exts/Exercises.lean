@@ -133,8 +133,8 @@ def lean.descr : BlockDescr where
     some <| fun _ go _ _ content => do
       pure <| .seq <| ← content.mapM fun b => do
         pure <| .seq #[← go b, .raw "\n"]
-  extraCss := highlightingStyle
-  extraJs := highlightingJs
+  extraCss := [highlightingStyle]
+  extraJs := [highlightingJs]
   toHtml :=
     open Verso.Output.Html in
     some <| fun _ _ _ data _ => do

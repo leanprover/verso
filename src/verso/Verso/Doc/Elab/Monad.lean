@@ -329,6 +329,10 @@ instance : MonadEnv DocElabM := inferInstanceAs <| MonadEnv (ReaderT PartElabM.S
 
 instance : MonadFileMap DocElabM := inferInstanceAs <| MonadFileMap (ReaderT PartElabM.State (StateT DocElabM.State TermElabM))
 
+instance : MonadOptions DocElabM := inferInstanceAs <| MonadOptions (ReaderT PartElabM.State (StateT DocElabM.State TermElabM))
+
+instance : MonadWithOptions DocElabM := inferInstanceAs <| MonadWithOptions (ReaderT PartElabM.State (StateT DocElabM.State TermElabM))
+
 def DocElabM.withFileMap (fileMap : FileMap) (act : DocElabM α) : DocElabM α :=
   fun ρ σ ctxt σ' mctxt rw cctxt => act ρ σ ctxt σ' mctxt rw {cctxt with fileMap := fileMap}
 

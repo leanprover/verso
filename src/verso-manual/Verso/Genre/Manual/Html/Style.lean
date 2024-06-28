@@ -12,6 +12,7 @@ def pageStyle : String := r####"
 :root {
     --verso-structure-font-family: "Helvetica Neue","Segoe UI",Arial,sans-serif;
     --verso-text-font-family: Georgia, Times, "Times New Roman", serif;
+    --verso-code-font-family: monospace;
     --verso-content-max-width: 45em;
     --verso-toc-background-color: #fafafa;
 }
@@ -33,6 +34,10 @@ h1, h2, h3, h4, h5, h6 {
 
 p {
     font-family: var(--verso-text-font-family);
+}
+
+pre, code {
+    font-family: var(--verso-code-font-family);
 }
 
 /******** Page Layout ********/
