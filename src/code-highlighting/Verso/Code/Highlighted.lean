@@ -546,13 +546,15 @@ def highlightingJs : String :=
         });
     }
     /* Render docstrings */
-    for (const d of document.querySelectorAll(\"code.docstring, pre.docstring\")) {
-        const str = d.innerText;
-        const html = marked.parse(str);
-        const rendered = document.createElement(\"div\");
-        rendered.classList.add(\"docstring\");
-        rendered.innerHTML = html;
-        d.parentNode.replaceChild(rendered, d);
+    if ('undefined' !== typeof marked) {
+        for (const d of document.querySelectorAll(\"code.docstring, pre.docstring\")) {
+            const str = d.innerText;
+            const html = marked.parse(str);
+            const rendered = document.createElement(\"div\");
+            rendered.classList.add(\"docstring\");
+            rendered.innerHTML = html;
+            d.parentNode.replaceChild(rendered, d);
+        }
     }
 }
 "

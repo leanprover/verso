@@ -18,6 +18,7 @@ import Verso.Genre.Manual.Slug
 import Verso.Genre.Manual.TeX
 import Verso.Genre.Manual.Html
 import Verso.Genre.Manual.Html.Style
+import Verso.Genre.Manual.Index
 import Verso.Genre.Manual.Docstring
 
 open Lean (Name NameMap Json ToJson FromJson)
@@ -69,18 +70,17 @@ def ensureDir (dir : System.FilePath) : IO Unit := do
 def traverseMulti (depth : Nat) (path : Path) (part : Part Manual) : TraverseM (Part Manual) :=
   match depth with
   | 0 => Genre.traverse Manual part
-  | d + 1 => do
-    let (.mk _ titleStr meta _ _) := part
-    let path' := path.push (meta.bind (·.file) |>.getD (titleStr.sluggify.toString))
-    MonadWithReaderOf.withReader ({· with path := path' : TraverseContext}) do
-      dbg_trace s!"{titleStr} - {path'}"
-      let meta' ← Verso.Doc.Traverse.part (g := Manual) part
-      let mut p := meta'.map part.withMetadata |>.getD part
-      if let some md := p.metadata then
-        if let some p' ← Traverse.genrePart md p then
-          p := p'
-      let .mk title titleString meta content subParts := p
-      pure <| .mk (← title.mapM traverseInline) titleString meta (← content.mapM traverseBlock) (← subParts.mapM <| traverseMulti d path' )
+  | d + 1 => MonadWithReaderOf.withReader ({· with path := path : TraverseContext}) do
+    let meta' ← Verso.Doc.Traverse.part (g := Manual) part
+    let mut p := meta'.map part.withMetadata |>.getD part
+    if let some md := p.metadata then
+      if let some p' ← Traverse.genrePart md p then
+        p := p'
+    let .mk title titleString meta content subParts := p
+    let subParts' ← subParts.mapM fun p => do
+      let path' := path.push (p.metadata.bind (·.file) |>.getD (p.titleString.sluggify.toString))
+      MonadWithReaderOf.withReader ({· with path := path' : TraverseContext}) (traverseMulti d path' p)
+    pure <| .mk (← title.mapM traverseInline) titleString meta (← content.mapM traverseBlock) subParts'
 where
   traverseInline := Verso.Doc.Genre.traverse.inline Manual
   traverseBlock := Verso.Doc.Genre.traverse.block Manual
