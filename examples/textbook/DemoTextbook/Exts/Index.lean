@@ -323,7 +323,7 @@ def theIndex.descr : BlockDescr where
     some <| fun _ go _ _ content => do
       pure <| .seq <| ← content.mapM fun b => do
         pure <| .seq #[← go b, .raw "\n"]
-  extraCss := some indexCss
+  extraCss := [indexCss]
   toHtml :=
     open Verso.Output.Html in
     some <| fun goI _goB _ _ _content => do

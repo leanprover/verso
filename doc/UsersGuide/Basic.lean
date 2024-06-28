@@ -40,9 +40,9 @@ Mixing incompatible features results in an ordinary Lean type error.
 Docstrings can be included using the `docstring` directive. For instance,
 
 ```
-{docstring Nat}
+{docstring List.forM}
 ```
 
 results in
 
-{docstring Nat}
+{docstring List.forM}
