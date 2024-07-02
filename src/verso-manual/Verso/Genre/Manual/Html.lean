@@ -37,12 +37,13 @@ def titlePage (title : Html) (authors : List String) (intro : Html) : Html := {{
   </div>
 }}
 
-def page (toc : Array Toc) (textTitle : String) (htmlTitle : Html) (contents : Html) (extraCss : Lean.HashSet String) (extraJs : Lean.HashSet String) : Html := {{
+def page (toc : Array Toc) (textTitle : String) (htmlTitle : Html) (contents : Html) (extraCss : Lean.HashSet String) (extraJs : Lean.HashSet String) (extraStylesheets : List String := []) : Html := {{
 <html>
   <head>
     <meta charset="utf-8"/>
     <title>{{textTitle}}</title>
     <link rel="stylesheet" href="/book.css" />
+    {{extraStylesheets.map (fun url => {{<link rel="stylesheet" href={{url}}/> }})}}
     {{extraCss.toArray.map ({{<style>{{Html.text false ·}}</style>}})}}
     {{extraJs.toArray.map ({{<script>{{Html.text false ·}}</script>}})}}
   </head>

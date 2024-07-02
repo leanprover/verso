@@ -12,6 +12,7 @@ import Verso.Output.TeX
 import Verso.Output.Html
 import Verso.Doc.Lsp
 import Verso.Doc.Elab
+import Verso.FS
 
 import Verso.Genre.Manual.Basic
 import Verso.Genre.Manual.Slug
@@ -22,6 +23,8 @@ import Verso.Genre.Manual.Index
 import Verso.Genre.Manual.Docstring
 
 open Lean (Name NameMap Json ToJson FromJson)
+
+open Verso.FS
 
 open Verso.Doc Elab
 
@@ -60,6 +63,8 @@ structure Config where
   destination : System.FilePath := "_out"
   maxTraversals : Nat := 20
   htmlDepth := 0
+  extraFiles : List (System.FilePath × String) := []
+  extraCss : List String := []
 
 def ensureDir (dir : System.FilePath) : IO Unit := do
   if !(← dir.pathExists) then
@@ -155,9 +160,11 @@ def emitHtmlSingle (logError : String → IO Unit) (config : Config) (text : Par
   ensureDir dir
   IO.FS.withFile (dir.join "book.css") .write fun h => do
     h.putStrLn Html.Css.pageStyle
+  for (src, dest) in config.extraFiles do
+    copyRecursively logError src (dir.join dest)
   IO.FS.withFile (dir.join "index.html") .write fun h => do
     h.putStrLn Html.doctype
-    h.putStrLn (Html.page toc text.titleString titleHtml pageContent state.extraCss state.extraJs).asString
+    h.putStrLn (Html.page toc text.titleString titleHtml pageContent state.extraCss state.extraJs (extraStylesheets := config.extraCss)).asString
 
  open Verso.Output.Html in
 def emitHtmlMulti (logError : String → IO Unit) (config : Config) (text : Part Manual) : ReaderT ExtensionImpls IO Unit := do
@@ -172,6 +179,8 @@ def emitHtmlMulti (logError : String → IO Unit) (config : Config) (text : Part
   ensureDir root
   IO.FS.withFile (root.join "book.css") .write fun h => do
     h.putStrLn Html.Css.pageStyle
+  for (src, dest) in config.extraFiles do
+    copyRecursively logError src (root.join dest)
   emitPart titleHtml authors toc opts ctxt state true config.htmlDepth root text
 where
   emitPart (bookTitle : Html) (authors : List String) (bookContents)
@@ -198,7 +207,7 @@ where
     ensureDir dir
     IO.FS.withFile (dir.join "index.html") .write fun h => do
       h.putStrLn Html.doctype
-      h.putStrLn (relativize ctxt.path <| Html.page bookContents part.titleString pageTitle pageContent state.extraCss state.extraJs).asString
+      h.putStrLn (relativize ctxt.path <| Html.page bookContents part.titleString pageTitle pageContent state.extraCss state.extraJs (extraStylesheets := config.extraCss)).asString
     if depth > 0 then
       for p in part.subParts do
         let nextFile := p.metadata.bind (·.file) |>.getD (p.titleString.sluggify.toString)
@@ -222,7 +231,11 @@ where
 abbrev ExtraStep := TraverseContext → TraverseState → IO Unit
 
 
-def manualMain (text : Part Manual) (extensionImpls : ExtensionImpls := by exact extension_impls%) (options : List String) (extraSteps : List ExtraStep := []) : IO UInt32 :=
+def manualMain (text : Part Manual)
+    (extensionImpls : ExtensionImpls := by exact extension_impls%)
+    (options : List String)
+    (config : Config := {})
+    (extraSteps : List ExtraStep := []) : IO UInt32 :=
   ReaderT.run go extensionImpls
 
 where
@@ -236,7 +249,7 @@ where
   go : ReaderT ExtensionImpls IO UInt32 := do
     let hasError ← IO.mkRef false
     let logError msg := do hasError.set true; IO.eprintln msg
-    let cfg ← opts {} options
+    let cfg ← opts config options
 
     emitTeX logError cfg text
     emitHtmlSingle logError cfg text

@@ -4,11 +4,12 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 
+import Verso.FS
 import Verso.Genre.Blog.Basic
 import Verso.Genre.Blog.Template
 import Verso.Genre.Blog.Theme
 
-open Verso Doc Output Html HtmlT
+open Verso Doc Output Html HtmlT FS
 
 namespace Verso.Genre.Blog
 
@@ -102,12 +103,6 @@ def currentDir : GenerateM System.FilePath := do
 
 def showDrafts : GenerateM Bool := (·.config.showDrafts) <$> read
 
-def ensureDir (dir : System.FilePath) : IO Unit := do
-  if !(← dir.pathExists) then
-    IO.FS.createDirAll dir
-  if !(← dir.isDir) then
-    throw (↑ s!"Not a directory: {dir}")
-
 def inDir (here : Dir) (act : GenerateM α) : GenerateM α :=
   withReader (fun c => {c with ctxt.path := c.ctxt.path ++ [here.name]}) act
 
@@ -119,21 +114,6 @@ end Generate
 
 open Generate
 
-open IO.FS in
-partial def copyRecursively (src tgt : System.FilePath) : GenerateM Unit := do
-  if (← src.metadata).type == .symlink then
-    (← currentConfig).logError s!"Can't copy '{src}' - symlinks not currently supported"
-  if ← src.isDir then
-    ensureDir tgt
-    for d in ← src.readDir do
-      copyRecursively d.path (tgt.join d.fileName)
-  else
-    withFile src .read fun h =>
-      withFile tgt .write fun h' => do
-        let mut buf ← h.read 1024
-        while !buf.isEmpty do
-          h'.write buf
-          buf ← h.read 1024
 
 open Template.Params (forPart)
 
@@ -215,7 +195,7 @@ partial def Dir.generate (theme : Theme) (dir : Dir) : GenerateM Unit :=
         IO.FS.removeDirAll dest
       else
         IO.FS.removeFile dest
-    copyRecursively file dest
+    copyRecursively (← currentConfig).logError file dest
 
 def Site.generate (theme : Theme) (site : Site) : GenerateM Unit := do
   match site with
