@@ -38,6 +38,7 @@ p {
 
 pre, code {
     font-family: var(--verso-code-font-family);
+    font-variant-ligatures: none;
 }
 
 /******** Page Layout ********/
@@ -121,6 +122,7 @@ header {
     display: grid;
     grid-template-columns: 1fr auto 1fr;
     grid-template-areas: "controls pagetitle print";
+    align-items: center;
 }
 
 header h1 {

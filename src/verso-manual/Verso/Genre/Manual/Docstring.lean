@@ -175,6 +175,7 @@ def docstring.descr : BlockDescr where
 }
 .namedocs .label {
   font-size: smaller;
+  font-family: var(--verso-structure-font-family);
   position: absolute;
   right: 1em;
   top: 1em;
