@@ -305,12 +305,16 @@ def _root_.Verso.Syntax.metadata_block.command : PartCommand
 @[part_command Verso.Syntax.block_role]
 def includeSection : PartCommand
   | `(block|block_role{include $_args* }[ $content ]) => throwErrorAt content "Unexpected block argument"
-  | `(block|block_role{include}) => throwError "Expected exactly one argument"
-  | `(block|block_role{include $arg1 $arg2 $args*}) => throwErrorAt arg2 "Expected exactly one argument"
+  | `(block|block_role{include}) => throwError "Expected an argument"
+  | `(block|block_role{include $arg1 $arg2 $arg3 $args*}) => throwErrorAt arg2 "Expected one or two arguments"
   | stx@`(block|block_role{include $args* }) => do
     match (← parseArgs args) with
     | #[.anon (.name x)] =>
       let name ← resolved x
+      addPart <| .included name
+    | #[.anon (.num lvl), .anon (.name x)] =>
+      let name ← resolved x
+      closePartsUntil lvl.getNat stx.getHeadInfo.getPos!
       addPart <| .included name
     | _ => throwErrorAt stx "Expected exactly one positional argument that is a name"
   | _ => Lean.Elab.throwUnsupportedSyntax
