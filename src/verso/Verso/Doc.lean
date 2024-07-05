@@ -201,6 +201,11 @@ inductive Arg where
   | named (stx : Syntax) (name : Ident) (value : ArgVal)
 deriving Repr, Inhabited, BEq
 
+open Lean in
+def Arg.syntax : Arg → Syntax
+  | .anon v => v.syntax
+  | .named stx _ _ => stx
+
 structure ListItem (α : Type u) where
   indent : Nat
   contents : Array α

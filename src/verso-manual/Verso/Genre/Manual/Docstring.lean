@@ -104,6 +104,16 @@ def docstring (name : Name) (declType : Docstring.DeclType) (signature : Option 
 end Block
 
 
+instance [BEq α] [Hashable α] [FromJson α] : FromJson (HashSet α) where
+  fromJson? v := do
+    let xs ← v.getArr?
+    let vs ← xs.mapM fromJson?
+    pure <| HashSet.insertMany {} vs
+
+instance [BEq α] [Hashable α] [ToJson α] : ToJson (HashSet α) where
+  toJson v :=
+    .arr <| v.toArray.map toJson
+
 
 
 @[block_extension Block.docstring]
@@ -116,6 +126,15 @@ def docstring.descr : BlockDescr where
     Index.addEntry id {term := Doc.Inline.code name.toString}
     if name.getPrefix != .anonymous then
       Index.addEntry id {term := Doc.Inline.code name.getString!, subterm := some <| Doc.Inline.code name.toString}
+
+    -- Save a backreference
+    match (← get).get? `Verso.Genre.Manual.docstring with
+    | some (.error e) => logError e
+    | some (.ok (v : Json)) =>
+      let found : HashSet InternalId := (v.getObjVal? name.toString).bind fromJson? |>.toOption |>.getD {}
+      modify (·.set `Verso.Genre.Manual.docstring <|  v.setObjVal! name.toString (toJson (found.insert id)))
+    | none =>
+      modify (·.set `Verso.Genre.Manual.docstring <| Json.mkObj [] |>.setObjVal! name.toString (toJson [id]))
 
     pure none
   toHtml := some <| fun _goI goB id info contents =>
@@ -294,29 +313,117 @@ def docstring : BlockRoleExpander
   | args, #[] => do
     match args with
     | #[.anon (.name x)] =>
-      let name ← resolveGlobalConstNoOverload x
-      match ← Lean.findDocString? (← getEnv) name with
-      | none => throwErrorAt x "No docs found for '{x}'"
+      let name ← Elab.realizeGlobalConstNoOverloadWithInfo x
+      let blockStx ← match ← Lean.findDocString? (← getEnv) name with
+      | none => logWarningAt x m!"No docs found for '{x}'"; pure #[]
       | some docs =>
         let some ast := MD4Lean.parse docs
           | throwErrorAt x "Failed to parse docstring as Markdown"
-        let blockStx ← ast.blocks.mapM Markdown.blockFromMarkdown
+        ast.blocks.mapM Markdown.blockFromMarkdown
 
-        let declType := Block.Docstring.DeclType.ofName (← getEnv) name
+      let declType := Block.Docstring.DeclType.ofName (← getEnv) name
 
-        let ⟨fmt, infos⟩ ← withOptions (·.setInt `format.width 60 |>.setBool `pp.tagAppFns true) <| ppSignature name
-        let tt := Lean.Widget.TaggedText.prettyTagged (w := 80) fmt
-        let ctx := {
-          env           := (← getEnv)
-          mctx          := (← getMCtx)
-          options       := (← getOptions)
-          currNamespace := (← getCurrNamespace)
-          openDecls     := (← getOpenDecls)
-          fileMap       := default
-          ngen          := (← getNGen)
-        }
-        let sig := Lean.Widget.tagCodeInfos ctx infos tt
-        let signature ← some <$> renderTagged {} sig
-        pure #[← ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.docstring $(quote name) $(quote declType) $(quote signature)) #[$blockStx,*])]
+      let ⟨fmt, infos⟩ ← withOptions (·.setInt `format.width 60 |>.setBool `pp.tagAppFns true) <| ppSignature name
+      let tt := Lean.Widget.TaggedText.prettyTagged (w := 80) fmt
+      let ctx := {
+        env           := (← getEnv)
+        mctx          := (← getMCtx)
+        options       := (← getOptions)
+        currNamespace := (← getCurrNamespace)
+        openDecls     := (← getOpenDecls)
+        fileMap       := default
+        ngen          := (← getNGen)
+      }
+      let sig := Lean.Widget.tagCodeInfos ctx infos tt
+      let signature ← some <$> renderTagged {} sig
+      pure #[← ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.docstring $(quote name) $(quote declType) $(quote signature)) #[$blockStx,*])]
     | _ => throwError "Expected exactly one positional argument that is a name"
   | _, more => throwErrorAt more[0]! "Unexpected block argument"
+
+def Block.progress (namespaces exceptions : Array Name) (present : List (Name × List Name)) : Block where
+  name := `Verso.Genre.Manual.Block.progress
+  data := toJson (namespaces, exceptions, present)
+
+@[directive_expander progress]
+def progress : DirectiveExpander
+  | args, blocks => do
+    if h : args.size > 0 then
+      throwErrorAt args[0].syntax  "Expected 0 arguments"
+    let mut namespaces : NameSet := {}
+    let mut exceptions : NameSet := {}
+    for block in blocks do
+      match block with
+      | `<low|(Verso.Syntax.codeblock (column ~_col) ~_open ~(.node _ `null #[nameStx, .node _ `null argsStx]) ~(.atom _info contents) ~_close )> =>
+        match nameStx.getId with
+        | `namespace =>
+          for str in contents.split Char.isWhitespace do
+            if !str.isEmpty then
+              namespaces := namespaces.insert str.toName
+        | `exceptions =>
+          for str in contents.split Char.isWhitespace do
+            if !str.isEmpty then
+              exceptions := exceptions.insert str.toName
+        | _ => throwErrorAt nameStx "Expected 'namespace' or 'exceptions'"
+      | _ => throwErrorAt block "Expected code block named 'namespace' or 'exceptions'"
+    let mut present : NameMap NameSet := {}
+    for ns in namespaces do
+      present := present.insert ns {}
+    for (x, info) in (← getEnv).constants do
+      if ignore x then continue
+      if exceptions.contains x then continue
+      match info with
+      | .thmInfo _ => continue -- don't document theorems
+      | _ => pure ()
+      if ← Meta.isInstance x then continue
+      let mut ns := x
+      while !ns.isAnonymous && !(ns.getString!.get 0 |>.isUpper) do
+        ns := ns.getPrefix
+      if let some v := present.find? ns then
+        present := present.insert ns (v.insert x)
+    let present' := present.toList.map (fun x => (x.1, x.2.toList))
+    pure #[← ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.progress $(quote namespaces.toArray) $(quote exceptions.toArray) $(quote present')) #[])]
+where
+  ignore (x : Name) : Bool :=
+    isPrivateName x ||
+    x.hasNum ||
+    x.isInternalOrNum ||
+    let str := x.getString!
+    str ∈ ["sizeOf_spec", "sizeOf_eq", "brecOn", "ind", "ofNat_toCtorIdx", "inj", "injEq", "induct"] ||
+    "proof_".isPrefixOf str && (str.drop 6).all (·.isDigit) ||
+    "match_".isPrefixOf str && (str.drop 6).all (·.isDigit) ||
+    "eq_".isPrefixOf str && (str.drop 3).all (·.isDigit)
+
+@[block_extension Block.progress]
+def progress.descr : BlockDescr where
+  traverse _ _ _ := pure none
+  toHtml := some fun goI goB id info _blocks => open Output.Html in do
+    let documented ← match ((← Doc.Html.HtmlT.state).get? `Verso.Genre.Manual.docstring).getD (pure <| .mkObj []) >>= Json.getObj? with
+      | .error e =>
+        Doc.Html.HtmlT.logError e
+        pure .leaf
+      | .ok v =>
+        pure v
+    let mut ok : NameSet := {}
+    for ⟨name, _⟩ in documented.toArray do
+      let x := name.toName
+      ok := ok.insert x
+
+    let .ok ((namespaces : Array Name), (exceptions : Array Name), (present : List (Name × List Name))) := fromJson? info
+      | panic! "Can't deserialize progress bar state"
+
+    let check : NameMap (List Name) := present.foldr (init := {}) (fun x z => z.insert x.1 <| x.2)
+
+    return {{
+      <dl>
+        {{namespaces.map fun ns =>
+          let wanted := check.findD ns []
+          let notDocumented := wanted.filter (!ok.contains ·)
+          let percent := notDocumented.length.toFloat * 100.0 / wanted.length.toFloat
+          {{
+            <dt><code>{{ns.toString}}</code></dt>
+            <dd><details><summary><progress id=s!"prog-{ns}" value=s!"{100 - percent.toUInt8.toNat}" min="0" max="100"></progress> <label for=s!"prog-ns">s!"Missing {percent}%"</label></summary> {{notDocumented |>.map (·.toString) |> String.intercalate ", " }}</details></dd>
+          }}
+        }}
+      </dl>
+    }}
+  toTeX := some (fun _ _ _ _ _ => pure <| Output.TeX.text "Unsupported")
