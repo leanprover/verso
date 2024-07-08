@@ -32,8 +32,16 @@ h1, h2, h3, h4, h5, h6 {
     margin-top: 1.5rem;
 }
 
-p {
+p, dt, dd {
     font-family: var(--verso-text-font-family);
+}
+
+dt {
+    font-weight: bold;
+}
+
+dd > p:first-child {
+    margin-top: 0;
 }
 
 pre, code {
