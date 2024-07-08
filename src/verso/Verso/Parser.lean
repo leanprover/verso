@@ -47,6 +47,8 @@ def atLeastFn (n : Nat) (p : ParserFn) : ParserFn := fun c s =>
 
 def skipFn : ParserFn := fun _ s => s
 
+def eatSpaces := takeWhileFn (· == ' ')
+
 def repFn : Nat → ParserFn → ParserFn
   | 0, _ => skipFn
   | n+1, p => p >> repFn n p
@@ -605,6 +607,14 @@ Remaining:
 #guard_msgs in
   #eval val.test! "\"a b c\t d\"\n"
 
+/--
+info: Success! Final stack:
+  (num "43")
+Remaining:
+"\n\"foo\""
+-/
+#guard_msgs in
+#eval val.test! "43\n\"foo\""
 
 def withCurrentStackSize (p : Nat → ParserFn) : ParserFn := fun c s =>
   p s.stxStack.size c s
@@ -613,16 +623,47 @@ def withCurrentStackSize (p : Nat → ParserFn) : ParserFn := fun c s =>
 def skipChFn (c : Char) : ParserFn :=
   satisfyFn (· == c) c.toString
 
+def skipToNewline : ParserFn :=
+    takeUntilFn (· == '\n')
+
+def skipToSpace : ParserFn :=
+    takeUntilFn (· == ' ')
+
+def skipRestOfLine : ParserFn :=
+    skipToNewline >> (eoiFn <|> nl)
+
+def skipBlock : ParserFn :=
+  skipToNewline >> manyFn nonEmptyLine >> takeWhileFn (· == '\n')
+where
+  nonEmptyLine : ParserFn :=
+    chFn '\n' >>
+    takeWhileFn (fun c => c.isWhitespace && c != '\n') >>
+    satisfyFn (!·.isWhitespace) "non-whitespace" >> skipToNewline
+
+def recoverBlock (p : ParserFn) (final : ParserFn := skipFn) : ParserFn := recoverFn p fun _ => ignoreFn skipBlock >> final
+def recoverLine (p : ParserFn) : ParserFn := recoverFn p fun _ => ignoreFn <| skipRestOfLine
+def recoverWs (p : ParserFn) : ParserFn := recoverFn p fun _ => ignoreFn <| takeUntilFn (fun c =>  c == ' ' || c == '\n')
+def recoverEol (p : ParserFn) : ParserFn := recoverFn p fun _ => ignoreFn <| skipToNewline
+def recoverSkip (p : ParserFn) : ParserFn := recoverFn p fun _ => skipFn
+
+
 def arg : ParserFn :=
     withCurrentStackSize fun iniSz =>
-      potentiallyNamed iniSz <|> (val >> mkAnon iniSz)
+      withParens iniSz <|> potentiallyNamed iniSz <|> (val >> mkAnon iniSz)
 where
   mkNamed (iniSz : Nat) : ParserFn := fun _ s => s.mkNode ``Verso.Syntax.named iniSz
   mkAnon (iniSz : Nat) : ParserFn := fun _ s => s.mkNode ``Verso.Syntax.anon iniSz
-  eatSpaces := takeWhileFn (· == ' ')
   potentiallyNamed iniSz :=
       atomicFn docIdentFn >> eatSpaces >>
        ((atomicFn (strFn ":=") >> eatSpaces >> val >> eatSpaces >> mkNamed iniSz) <|> mkAnon iniSz)
+  withParens iniSz :=
+    atomicFn (ignoreFn (strFn "(")) >> eatSpaces >>
+    recoverWs docIdentFn >> eatSpaces >>
+    recoverWs (strFn ":=") >> eatSpaces >>
+    recoverWs val >> eatSpaces >>
+    recoverEol (ignoreFn (strFn ")")) >> eatSpaces >>
+    mkNamed iniSz
+
 /--
 info: Success! Final stack:
   (Verso.Syntax.anon `x)
@@ -642,11 +683,46 @@ All input consumed.
 
 /--
 info: Success! Final stack:
+  (Verso.Syntax.named `x ":=" (num "1"))
+All input consumed.
+-/
+#guard_msgs in
+  #eval arg.test! "(x:=1)"
+
+/--
+info: Failure: '
+'; expected '(', identifier or numeral
+Final stack:
+  <missing>
+Remaining: "\n(x:=1)"
+-/
+#guard_msgs in
+  #eval arg.test! "\n(x:=1)"
+
+/--
+info: Success! Final stack:
+  (Verso.Syntax.named `x ":=" (num "1"))
+Remaining:
+"\n"
+-/
+#guard_msgs in
+  #eval arg.test! "(x:=1)\n"
+
+/--
+info: Success! Final stack:
   (Verso.Syntax.named `x ":=" `y)
 All input consumed.
 -/
 #guard_msgs in
   #eval arg.test! "x:=y"
+
+/--
+info: Success! Final stack:
+  (Verso.Syntax.named `x ":=" `y)
+All input consumed.
+-/
+#guard_msgs in
+  #eval arg.test! "(x:=y)"
 
 /--
 info: Success! Final stack:
@@ -669,6 +745,20 @@ Remaining: "\"y"
   #eval arg.test! "x:=\"y"
 
 /--
+info: 2 failures:
+  @7: unterminated string literal; expected identifier or numeral
+    ""
+  @7: expected ')'
+    ""
+
+Final stack:
+  (Verso.Syntax.named `x ":=" <missing>)
+-/
+#guard_msgs in
+  #eval arg.test! "(x:=\"y)"
+
+
+/--
 info: Success! Final stack:
   (Verso.Syntax.anon (num "42"))
 All input consumed.
@@ -676,6 +766,58 @@ All input consumed.
 #guard_msgs in
 #eval arg.test! "42"
 
+/--
+info: 4 failures:
+  @4: expected identifier
+    ""
+  @4: expected ':='
+    ""
+  @4: unexpected end of input; expected identifier, numeral or string literal
+    ""
+  @4: expected ')'
+    ""
+
+Final stack:
+  (Verso.Syntax.named
+   <missing>
+   <missing>
+   <missing>)
+-/
+#guard_msgs in
+#eval arg.test! "(42)"
+
+/--
+info: 3 failures:
+  @6: expected ':='
+    ""
+  @6: unexpected end of input; expected identifier, numeral or string literal
+    ""
+  @6: expected ')'
+    ""
+
+Final stack:
+  (Verso.Syntax.named `x <missing> <missing>)
+-/
+#guard_msgs in
+#eval arg.test! "(x 42)"
+
+/--
+info: Failure: expected ')'
+Final stack:
+  (Verso.Syntax.named `x ":=" (num "42"))
+Remaining: "\n)"
+-/
+#guard_msgs in
+#eval arg.test! "(x := 42\n)"
+
+/--
+info: Failure: expected ')'
+Final stack:
+  (Verso.Syntax.named `x ":=" (num "42"))
+Remaining: "\na"
+-/
+#guard_msgs in
+#eval arg.test! "(x := 42\na"
 
 /--
 info: Success! Final stack:
@@ -685,8 +827,6 @@ Remaining:
 -/
 #guard_msgs in
 #eval docIdentFn.test! "x\n"
-
-def eatSpaces := takeWhileFn (· == ' ')
 
 /--
 
@@ -699,13 +839,23 @@ def nameArgWhitespace : (multiline : Option Nat) → ParserFn
   | none => eatSpaces
   | some n => takeWhileFn (fun c => c == ' ' || c == '\n') >> guardMinColumn n
 
+
+/--
+info: Success! Final stack:
+ empty
+Remaining:
+"\n"
+-/
+#guard_msgs in
+#eval nameArgWhitespace none |>.test! " \n"
+
+
 def args (multiline : Option Nat := none) : ParserFn :=
-  sepByFn true arg <| nameArgWhitespace multiline
+  sepByFn true arg (nameArgWhitespace multiline)
 
 def nameAndArgs (multiline : Option Nat := none) : ParserFn :=
   nameArgWhitespace multiline >> docIdentFn >>
   nameArgWhitespace multiline >> args (multiline := multiline)
-
 
 /--
 info: Success! Final stack:
@@ -716,6 +866,72 @@ All input consumed.
 -/
 #guard_msgs in
 #eval nameAndArgs.test! "leanExample context := 2"
+
+/--
+info: Success! Final stack:
+ • `scheme
+ • [(Verso.Syntax.named
+      `dialect
+      ":="
+      (str "\"chicken\""))
+     (Verso.Syntax.anon (num "43"))]
+
+All input consumed.
+-/
+#guard_msgs in
+#eval nameAndArgs.test! "scheme dialect:=\"chicken\" 43"
+
+
+/--
+info: Success! Final stack:
+  [(Verso.Syntax.anon (num "43"))]
+Remaining:
+"\n\"foo\""
+-/
+#guard_msgs in
+#eval args.test! "43\n\"foo\""
+
+/--
+info: Success! Final stack:
+  [(Verso.Syntax.named
+    `dialect
+    ":="
+    (str "\"chicken\""))
+   (Verso.Syntax.anon (num "43"))]
+Remaining:
+"\nfoo"
+-/
+#guard_msgs in
+#eval args.test! "dialect:=\"chicken\" 43\nfoo"
+
+/--
+info: Success! Final stack:
+  [(Verso.Syntax.named
+    `dialect
+    ":="
+    (str "\"chicken\""))
+   (Verso.Syntax.anon (num "43"))]
+Remaining:
+"\n(foo)"
+-/
+#guard_msgs in
+#eval args.test! "dialect:=\"chicken\" 43\n(foo)"
+
+/--
+info: Success! Final stack:
+ • `scheme
+ • [(Verso.Syntax.named
+      `dialect
+      ":="
+      (str "\"chicken\""))
+     (Verso.Syntax.anon (num "43"))]
+
+Remaining:
+"\n(foo)"
+-/
+#guard_msgs in
+#eval nameAndArgs.test! "scheme dialect:=\"chicken\" 43\n(foo)"
+
 /--
 info: Success! Final stack:
  • `leanExample
@@ -796,27 +1012,6 @@ def linebreak (ctxt : InlineCtxt) :=
           atomicFn (chFn '\n' >> lookaheadFn (manyFn (chFn ' ') >> notFollowedByFn (chFn '\n' <|> blockOpener) "newline"))
   else
     errorFn "Newlines not allowed here"
-
-def skipToNewline : ParserFn :=
-    takeUntilFn (· == '\n')
-
-def skipRestOfLine : ParserFn :=
-    skipToNewline >> (eoiFn <|> nl)
-
-def skipBlock : ParserFn :=
-  skipToNewline >> manyFn nonEmptyLine >> takeWhileFn (· == '\n')
-where
-  nonEmptyLine : ParserFn :=
-    chFn '\n' >>
-    takeWhileFn (fun c => c.isWhitespace && c != '\n') >>
-    satisfyFn (!·.isWhitespace) "non-whitespace" >> skipToNewline
-
-
-
-def recoverBlock (p : ParserFn) (final : ParserFn := skipFn) : ParserFn := recoverFn p fun _ => ignoreFn skipBlock >> final
-def recoverLine (p : ParserFn) : ParserFn := recoverFn p fun _ => ignoreFn <| skipRestOfLine
-def recoverEol (p : ParserFn) : ParserFn := recoverFn p fun _ => ignoreFn <| skipToNewline
-def recoverSkip (p : ParserFn) : ParserFn := recoverFn p fun _ => skipFn
 
 mutual
   partial def emphLike (name : SyntaxNodeKind) (char : Char) (what plural : String) (getter : InlineCtxt → Option Nat) (setter : InlineCtxt → Option Nat → InlineCtxt) (ctxt : InlineCtxt) : ParserFn :=
@@ -932,7 +1127,6 @@ mutual
     nodeFn ``role <|
       intro >> (bracketed <|> atomicFn nonBracketed)
   where
-    eatSpaces := takeWhileFn (· == ' ')
     intro := atomicFn (chFn '{') >> recoverBlock (eatSpaces >> nameAndArgs >> eatSpaces >> chFn '}')
     bracketed := atomicFn (chFn '[') >> recoverBlock (manyFn (inline ctxt) >> chFn ']')
     fakeOpen := mkAtom SourceInfo.none "["
@@ -2529,8 +2723,7 @@ Remaining: "more"
   #eval codeBlock {} |>.test! "``` scheme\n(define x 4)\nx\n ````\nmore"
 
 /--
-info: Failure: newline
-Final stack:
+info: Success! Final stack:
   (Verso.Syntax.codeblock
    (column "0")
    "```"
@@ -2540,12 +2733,56 @@ Final stack:
       ":="
       (str "\"chicken\""))
      (Verso.Syntax.anon (num "43"))]]
-   <missing>)
-Remaining: "x\n```"
+   "(define x 4)\nx\n"
+   "```")
+All input consumed.
 -/
 #guard_msgs in
 #eval codeBlock {} |>.test!
 "``` scheme dialect:=\"chicken\" 43
+(define x 4)
+x
+```"
+
+/--
+info: Success! Final stack:
+  (Verso.Syntax.codeblock
+   (column "0")
+   "```"
+   [`scheme
+    [(Verso.Syntax.named
+      `dialect
+      ":="
+      (str "\"chicken\""))]]
+   "(define x 4)\nx\n"
+   "```")
+All input consumed.
+-/
+#guard_msgs in
+#eval codeBlock {} |>.test!
+"``` scheme (dialect:=\"chicken\")
+(define x 4)
+x
+```"
+
+/--
+info: Failure: expected ')'
+Final stack:
+  (Verso.Syntax.codeblock
+   (column "0")
+   "```"
+   [`scheme
+    [(Verso.Syntax.named
+      `dialect
+      ":="
+      (str "\"chicken\""))]]
+   "(define x 4)\nx\n"
+   "```")
+Remaining: "\n(define x 4)\nx\n```"
+-/
+#guard_msgs in
+#eval codeBlock {} |>.test!
+"``` scheme (dialect:=\"chicken\"
 (define x 4)
 x
 ```"
