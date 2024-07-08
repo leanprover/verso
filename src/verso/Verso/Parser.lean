@@ -318,6 +318,9 @@ def fakeAtom (str : String) : ParserFn := fun _c s =>
   let atom := mkAtom SourceInfo.none str
   s.pushSyntax atom
 
+def pushMissing : ParserFn := fun _c s =>
+  s.pushSyntax .missing
+
 
 def strFn (str : String) : ParserFn := asStringFn <| fun c s =>
   let rec go (iter : String.Iterator) (s : ParserState) :=
@@ -801,7 +804,7 @@ def skipRestOfLine : ParserFn :=
     skipToNewline >> (eoiFn <|> nl)
 
 def skipBlock : ParserFn :=
-  skipToNewline >> manyFn nonEmptyLine
+  skipToNewline >> manyFn nonEmptyLine >> takeWhileFn (· == '\n')
 where
   nonEmptyLine : ParserFn :=
     chFn '\n' >>
@@ -810,9 +813,9 @@ where
 
 
 
-def recoverBlock (p : ParserFn) : ParserFn := recoverFn p fun _ => skipBlock
-def recoverLine (p : ParserFn) : ParserFn := recoverFn p fun _ => skipRestOfLine
-def recoverEol (p : ParserFn) : ParserFn := recoverFn p fun _ => skipToNewline
+def recoverBlock (p : ParserFn) (final : ParserFn := skipFn) : ParserFn := recoverFn p fun _ => ignoreFn skipBlock >> final
+def recoverLine (p : ParserFn) : ParserFn := recoverFn p fun _ => ignoreFn <| skipRestOfLine
+def recoverEol (p : ParserFn) : ParserFn := recoverFn p fun _ => ignoreFn <| skipToNewline
 def recoverSkip (p : ParserFn) : ParserFn := recoverFn p fun _ => skipFn
 
 mutual
@@ -848,7 +851,7 @@ mutual
     nodeFn ``code <|
     withCurrentColumn fun c =>
       atomicFn opener >>
-      (recoverBlock <|
+      (recoverBlock (final := pushMissing) <|
         withCurrentColumn fun c' =>
           let count := c' - c
           nodeFn strLitKind (asStringFn (takeContentsFn (count - 1)) (quoted := true)) >>
@@ -1014,7 +1017,10 @@ All input consumed.
 /--
 info: Failure: unexpected end of input
 Final stack:
-  (Verso.Syntax.code "`" (str <missing>) [])
+  (Verso.Syntax.code
+   "`"
+   (str <missing>)
+   <missing>)
 Remaining: ""
 -/
 #guard_msgs in
@@ -1039,7 +1045,10 @@ All input consumed.
 /--
 info: Failure: newline
 Final stack:
-  (Verso.Syntax.code "`" (str <missing>) ["\n"])
+  (Verso.Syntax.code
+   "`"
+   (str <missing>)
+   <missing>)
 Remaining: ""
 -/
 #guard_msgs in
@@ -1071,7 +1080,10 @@ All input consumed.
 /--
 info: Failure: unexpected end of input
 Final stack:
-  (Verso.Syntax.code "`" (str <missing>) [])
+  (Verso.Syntax.code
+   "`"
+   (str <missing>)
+   <missing>)
 Remaining: ""
 -/
 #guard_msgs in
@@ -1096,7 +1108,10 @@ All input consumed.
 /--
 info: Failure: newline
 Final stack:
-  (Verso.Syntax.code "`" (str <missing>) ["\n"])
+  (Verso.Syntax.code
+   "`"
+   (str <missing>)
+   <missing>)
 Remaining: ""
 -/
 #guard_msgs in
@@ -1617,7 +1632,7 @@ def skipUntilDedent (indent : Nat) : ParserFn :=
   skipRestOfLine >>
   manyFn (chFn ' ' >> takeWhileFn (· == ' ') >> guardColumn (· ≥ indent) s!"indentation at {indent}" >> skipRestOfLine)
 
-def recoverUnindent (indent : Nat) (p : ParserFn) : ParserFn := recoverFn p (fun _ => skipUntilDedent indent)
+def recoverUnindent (indent : Nat) (p : ParserFn) (finish : ParserFn := skipFn) : ParserFn := recoverFn p (fun _ => ignoreFn (skipUntilDedent indent) >> finish)
 
 mutual
   partial def listItem (ctxt : BlockCtxt) : ParserFn :=
@@ -1645,7 +1660,9 @@ mutual
       colonFn >>
       withCurrentColumn fun c => textLine >> ignoreFn (manyFn blankLine) >>
       fakeAtom "=>" >>
-      blocks1 { ctxt with minIndent := c} >>
+      takeWhileFn (· == ' ') >>
+      recoverSkip (guardColumn (· ≥ c) s!"indentation at least {c}" >>
+        blocks1 { ctxt with minIndent := c}) >>
       ignoreFn (manyFn blankLine)
   where
     colonFn := atomicFn <|
@@ -2111,7 +2128,7 @@ All input consumed.
   #eval blocks {} |>.test! ": an excellent idea\n\n    Let's say more!"
 
 /--
-info: Failure: unexpected end of input; expected %%% (at line beginning) or expected column at least 1
+info: Failure: expected indentation at least 1
 Final stack:
   [(Verso.Syntax.dl
     [(Verso.Syntax.desc
@@ -2128,10 +2145,7 @@ Final stack:
       ":"
       [(Verso.Syntax.text (str "\" more\""))]
       "=>"
-      [(Verso.Syntax.metadata_block
-        <missing>
-        <missing>)
-       <missing>])])]
+      <missing>)])]
 Remaining: ""
 -/
 #guard_msgs in
@@ -2190,6 +2204,30 @@ All input consumed.
 -/
 #guard_msgs in
   #eval blocks {} |>.test! ": an excellent idea\n\n Let's say more!\n\n: more\n\n stuff"
+
+/--
+info: Failure: expected indentation at least 1
+Final stack:
+  [(Verso.Syntax.dl
+    [(Verso.Syntax.desc
+      ":"
+      [(Verso.Syntax.text
+        (str "\" an excellent idea\""))]
+      "=>"
+      <missing>)])
+   (Verso.Syntax.para
+    "para{"
+    [(Verso.Syntax.text
+      (str "\"Let's say more!\""))]
+    "}")
+   (Verso.Syntax.para
+    "para{"
+    [(Verso.Syntax.text (str "\"hello\""))]
+    "}")]
+Remaining: "Let's say more!\n\nhello"
+-/
+#guard_msgs in
+  #eval blocks {} |>.test! ": an excellent idea\n\nLet's say more!\n\nhello"
 
 /--
 info: Success! Final stack:
@@ -2484,8 +2522,7 @@ Final stack:
    "```"
    [`scheme []]
    "(define x 4)\nx\n"
-   <missing>
-   [])
+   <missing>)
 Remaining: "more"
 -/
 #guard_msgs in
@@ -2503,8 +2540,7 @@ Final stack:
       ":="
       (str "\"chicken\""))
      (Verso.Syntax.anon (num "43"))]]
-   <missing>
-   [])
+   <missing>)
 Remaining: "x\n```"
 -/
 #guard_msgs in
@@ -2522,8 +2558,7 @@ Final stack:
    "```"
    [`scheme []]
    "\n"
-   <missing>
-   [])
+   <missing>)
 Remaining: "x\n```"
 -/
 #guard_msgs in
@@ -2537,8 +2572,7 @@ Final stack:
    "```"
    [`scheme []]
    "(define x 4)\nx\n"
-   <missing>
-   [])
+   <missing>)
 Remaining: ""
 -/
 #guard_msgs in
@@ -2552,8 +2586,7 @@ Final stack:
    "```"
    []
    "(define x 4)\nx\n"
-   <missing>
-   [])
+   <missing>)
 Remaining: ""
 -/
 #guard_msgs in
@@ -2567,8 +2600,7 @@ Final stack:
    "```"
    []
    "(define x 4)\nx\n"
-   <missing>
-   [])
+   <missing>)
 Remaining: ""
 -/
 #guard_msgs in
@@ -2677,7 +2709,6 @@ Final stack:
    [(Verso.Syntax.role
      "{"
      <missing>
-     ["\n" "\n"]
      "["
      [(Verso.Syntax.footnote <missing>)]
      "]")])
@@ -2715,7 +2746,6 @@ Final stack:
    [(Verso.Syntax.role
      "{"
      <missing>
-     ["\n" "\n" "\n"]
      "["
      [(Verso.Syntax.footnote <missing>)]
      "]")])
