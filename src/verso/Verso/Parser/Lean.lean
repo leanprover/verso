@@ -125,7 +125,7 @@ def docNumLitFn : ParserFn := fun c s =>
       else
         docDecimalNumberFn startPos c (s.setPos i)
     else if curr.isDigit then
-      decimalNumberFn startPos c (s.next input startPos)
+      docDecimalNumberFn startPos c (s.next input startPos)
     else
       s.mkError "numeral"
 
