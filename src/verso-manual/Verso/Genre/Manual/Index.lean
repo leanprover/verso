@@ -77,9 +77,9 @@ instance : FromJson Index where
     pure ⟨HashSet.insertMany {} entries, HashSet.insertMany {} sees⟩
 
 def Inline.index : Inline where
-  name := `Verso.Manual.index
+  name := `Verso.Genre.Manual.index
 
-def indexState := `Verso.Manual.index
+def indexState := `Verso.Genre.Manual.index
 
 def index (args : Array (Doc.Inline Manual)) (subterm : Option String := none) (index : Option String := none) : Doc.Inline Manual :=
   let entry : Index.Entry := {term := .concat args, subterm := subterm.map Doc.Inline.text, index}
@@ -119,7 +119,7 @@ def index.descr : InlineDescr where
       return {{<span id={{t}}></span>}}
 
 def Inline.see : Inline where
-  name := `DemoTextbook.Exts.see
+  name := `Verso.Genre.Manual.see
 
 def see (args : Array (Doc.Inline Manual)) (target : String) (subterm : Option String := none) (index : Option String := none) : Doc.Inline Manual :=
   let data : Index.See := {source := .concat args, target := .text target, subTarget := subterm.map .text, also := false, index}
