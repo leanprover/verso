@@ -39,6 +39,21 @@ private partial def normString (term : String) : String := Id.run do
   if str.endsWith "s" then str := str.dropRight 1
   String.intercalate " " (str.split (fun c => c.isWhitespace || c == '-') |>.filter (!·.isEmpty))
 
+/--
+Defines a technical term.
+
+Internally, these definitions are saved according to a key that is derived by stripping formatting
+information from the arguments in `args`, and then normalizing the resulting string by:
+
+ 1. lowercasing it
+ 2. replacing trailing `"ies"` with `"y"`
+ 3. replacing consecutive runs of whitespace and/or hyphens with a single space
+
+Call with `(normalize := false)` to disable normalization, and `(key := some k)` to use `k` instead
+of the automatically-derived key.
+
+Uses of `tech` use the same process to derive a key, and the key is matched against the `deftech` table.
+-/
 def deftech (args : Array (Doc.Inline Manual))
     (key : Option String := none) (normalize : Bool := true)
     : Doc.Inline Manual :=
@@ -82,7 +97,19 @@ def deftech.descr : InlineDescr where
 def Inline.tech : Inline where
   name := `Verso.Genre.Manual.tech
 
+/--
+Emits a reference to a technical term defined with `deftech.`
 
+Internally, these terms are found according to a key that is derived by stripping formatting
+information from the arguments in `args`, and then normalizing the resulting string by:
+
+ 1. lowercasing it
+ 2. replacing trailing `"ies"` with `"y"`
+ 3. replacing consecutive runs of whitespace and/or hyphens with a single space
+
+Call with `(normalize := false)` to disable normalization, and `(key := some k)` to use `k` instead
+of the automatically-derived key.
+-/
 def tech (args : Array (Doc.Inline Manual))
     (key : Option String := none) (normalize : Bool := true)
     : Doc.Inline Manual :=
