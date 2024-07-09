@@ -374,6 +374,7 @@ where
     main .theIndex {
       column-width: 14em;
       padding-left: 0;
+      font-family: var(--verso-text-font-family);
     }
 
     main .theIndex nav {
