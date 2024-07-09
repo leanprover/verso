@@ -20,6 +20,7 @@ import Verso.Genre.Manual.TeX
 import Verso.Genre.Manual.Html
 import Verso.Genre.Manual.Html.Style
 import Verso.Genre.Manual.Index
+import Verso.Genre.Manual.Glossary
 import Verso.Genre.Manual.Docstring
 
 open Lean (Name NameMap Json ToJson FromJson)
