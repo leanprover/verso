@@ -163,9 +163,18 @@ def emitHtmlSingle (logError : String → IO Unit) (config : Config) (text : Par
     h.putStrLn Html.Css.pageStyle
   for (src, dest) in config.extraFiles do
     copyRecursively logError src (dir.join dest)
+  for (name, contents) in state.extraJsFiles do
+    ensureDir (dir.join "-verso-js")
+    IO.FS.withFile (dir.join "-verso-js" |>.join name) .write fun h => do
+      h.putStr contents
+  for (name, contents) in state.extraCssFiles do
+    ensureDir (dir.join "-verso-css")
+    IO.FS.withFile (dir.join "-verso-css" |>.join name) .write fun h => do
+      h.putStr contents
+
   IO.FS.withFile (dir.join "index.html") .write fun h => do
     h.putStrLn Html.doctype
-    h.putStrLn (Html.page toc text.titleString titleHtml pageContent state.extraCss state.extraJs (extraStylesheets := config.extraCss)).asString
+    h.putStrLn (Html.page toc text.titleString titleHtml pageContent state.extraCss state.extraJs (extraStylesheets := config.extraCss ++ state.extraCssFiles.toList.map ("/-verso-css/" ++ ·.1)) (extraJsFiles := state.extraJsFiles.map (·.1))).asString
 
  open Verso.Output.Html in
 def emitHtmlMulti (logError : String → IO Unit) (config : Config) (text : Part Manual) : ReaderT ExtensionImpls IO Unit := do
@@ -182,6 +191,14 @@ def emitHtmlMulti (logError : String → IO Unit) (config : Config) (text : Part
     h.putStrLn Html.Css.pageStyle
   for (src, dest) in config.extraFiles do
     copyRecursively logError src (root.join dest)
+  for (name, contents) in state.extraJsFiles do
+    ensureDir (root.join "-verso-js")
+    IO.FS.withFile (root.join "-verso-js" |>.join name) .write fun h => do
+      h.putStr contents
+  for (name, contents) in state.extraCssFiles do
+    ensureDir (root.join "-verso-css")
+    IO.FS.withFile (root.join "-verso-css" |>.join name) .write fun h => do
+      h.putStr contents
   emitPart titleHtml authors toc opts ctxt state true config.htmlDepth root text
 where
   emitPart (bookTitle : Html) (authors : List String) (bookContents)
@@ -208,7 +225,7 @@ where
     ensureDir dir
     IO.FS.withFile (dir.join "index.html") .write fun h => do
       h.putStrLn Html.doctype
-      h.putStrLn (relativize ctxt.path <| Html.page bookContents part.titleString pageTitle pageContent state.extraCss state.extraJs (extraStylesheets := config.extraCss)).asString
+      h.putStrLn (relativize ctxt.path <| Html.page bookContents part.titleString pageTitle pageContent state.extraCss state.extraJs (extraStylesheets := config.extraCss ++ state.extraCssFiles.toList.map ("/-verso-css/" ++ ·.1)) (extraJsFiles := state.extraJsFiles.map (·.1))).asString
     if depth > 0 then
       for p in part.subParts do
         let nextFile := p.metadata.bind (·.file) |>.getD (p.titleString.sluggify.toString)

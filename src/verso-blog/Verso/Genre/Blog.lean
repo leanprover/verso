@@ -540,6 +540,12 @@ def blogMain (theme : Theme) (site : Site) (relativizeUrls := true) (options : L
       some <| relativize
     else none
   site.generate theme {site := site, ctxt := ⟨[], cfg⟩, xref := xref, dir := cfg.destination, config := cfg, rewriteHtml := rw}
+  for (name, content) in xref.jsFiles do
+    FS.ensureDir (cfg.destination.join "-verso-js")
+    IO.FS.writeFile (cfg.destination.join "-verso-js" |>.join name) content
+  for (name, content) in xref.cssFiles do
+    FS.ensureDir (cfg.destination.join "-verso-css")
+    IO.FS.writeFile (cfg.destination.join "-verso-css" |>.join name) content
   if (← hasError.get) then
     IO.eprintln "Errors were encountered!"
     return 1

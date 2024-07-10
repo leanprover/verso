@@ -282,6 +282,7 @@ def highlightingStyle : String := "
   margin-top: 0em;
 }
 
+/*
 @media (hover: hover) {
   .hl.lean .has-info:hover > .hover-container > .hover-info:not(.tactic *),
   .hl.lean .tactic:has(> .tactic-toggle:checked) .has-info:hover > .hover-container > .hover-info,
@@ -295,6 +296,7 @@ def highlightingStyle : String := "
     width: min-content;
   }
 }
+*/
 
 .hl.lean.block {
   display: block;
@@ -383,7 +385,6 @@ def highlightingStyle : String := "
 .hl.lean div.docstring {
   font-family: sans-serif;
   white-space: normal;
-  width: max-content;
   max-width: 40em;
 }
 
@@ -420,6 +421,17 @@ def highlightingStyle : String := "
   z-index: 200;
 }
 
+.hl.lean.popup .tactic-state {
+  position: static;
+  display: block;
+  width: auto;
+  border: none;
+  padding: 0.5em;
+  font-family: sans-serif;
+  background-color: #ffffff;
+}
+
+
 .hl.lean .tactic {
   position: relative;
 }
@@ -428,6 +440,7 @@ def highlightingStyle : String := "
   display: block;
 }
 
+/*
 @media (hover: hover) {
   .hl.lean .tactic:hover > .tactic-toggle:not(:checked) ~ .tactic-state {
     display: block;
@@ -437,6 +450,7 @@ def highlightingStyle : String := "
     z-index: 250;
   }
 }
+*/
 
 .hl.lean .tactic > label {
   position: relative;
@@ -469,6 +483,7 @@ def highlightingStyle : String := "
   transition: all 0.5s;
 }
 
+/*
 @media (hover: hover) {
   .hl.lean .tactic > label:hover::after {
     border: 1px solid #aaaaaa;
@@ -476,6 +491,7 @@ def highlightingStyle : String := "
     transition: all 0.5s;
   }
 }
+*/
 
 .hl.lean .tactic > label:has(+ .tactic-toggle:checked)::after {
   border: 1px solid #999999;
@@ -520,6 +536,96 @@ def highlightingStyle : String := "
   font-family: monospace;
 }
 
+.tippy-box[data-theme~='lean'] {
+  background-color: #e5e5e5;
+  color: black;
+  border: 1px solid black;
+}
+.tippy-box[data-theme~='lean'][data-placement^='top'] > .tippy-arrow::before {
+  border-top-color: #e5e5e5;
+}
+.tippy-box[data-theme~='lean'][data-placement^='bottom'] > .tippy-arrow::before {
+  border-bottom-color: #e5e5e5;
+}
+.tippy-box[data-theme~='lean'][data-placement^='left'] > .tippy-arrow::before {
+  border-left-color: #e5e5e5;
+}
+.tippy-box[data-theme~='lean'][data-placement^='right'] > .tippy-arrow::before {
+  border-right-color: #e5e5e5;
+}
+
+.tippy-box[data-theme~='warning'] {
+  background-color: #efd871;
+  color: black;
+  border: 1px solid black;
+}
+.tippy-box[data-theme~='warning'][data-placement^='top'] > .tippy-arrow::before {
+  border-top-color: #efd871;
+}
+.tippy-box[data-theme~='warning'][data-placement^='bottom'] > .tippy-arrow::before {
+  border-bottom-color: #efd871;
+}
+.tippy-box[data-theme~='warning'][data-placement^='left'] > .tippy-arrow::before {
+  border-left-color: #efd871;
+}
+.tippy-box[data-theme~='warning'][data-placement^='right'] > .tippy-arrow::before {
+  border-right-color: #efd871;
+}
+
+.tippy-box[data-theme~='error'] {
+  background-color: #f7a7af;
+  color: black;
+  border: 1px solid black;
+}
+.tippy-box[data-theme~='error'][data-placement^='top'] > .tippy-arrow::before {
+  border-top-color: #f7a7af;
+}
+.tippy-box[data-theme~='error'][data-placement^='bottom'] > .tippy-arrow::before {
+  border-bottom-color: #f7a7af;
+}
+.tippy-box[data-theme~='error'][data-placement^='left'] > .tippy-arrow::before {
+  border-left-color: #f7a7af;
+}
+.tippy-box[data-theme~='error'][data-placement^='right'] > .tippy-arrow::before {
+  border-right-color: #f7a7af;
+}
+
+.tippy-box[data-theme~='info'] {
+  background-color: #99b3c2;
+  color: black;
+  border: 1px solid black;
+}
+.tippy-box[data-theme~='info'][data-placement^='top'] > .tippy-arrow::before {
+  border-top-color: #99b3c2;
+}
+.tippy-box[data-theme~='info'][data-placement^='bottom'] > .tippy-arrow::before {
+  border-bottom-color: #99b3c2;
+}
+.tippy-box[data-theme~='info'][data-placement^='left'] > .tippy-arrow::before {
+  border-left-color: #99b3c2;
+}
+.tippy-box[data-theme~='info'][data-placement^='right'] > .tippy-arrow::before {
+  border-right-color: #99b3c2;
+}
+
+.tippy-box[data-theme~='tactic'] {
+  background-color: white;
+  color: black;
+  border: 1px solid black;
+}
+.tippy-box[data-theme~='tactic'][data-placement^='top'] > .tippy-arrow::before {
+  border-top-color: white;
+}
+.tippy-box[data-theme~='tactic'][data-placement^='bottom'] > .tippy-arrow::before {
+  border-bottom-color: white;
+}
+.tippy-box[data-theme~='tactic'][data-placement^='left'] > .tippy-arrow::before {
+  border-left-color: white;
+}
+.tippy-box[data-theme~='tactic'][data-placement^='right'] > .tippy-arrow::before {
+  border-right-color: white;
+}
+
 "
 
 def highlightingJs : String :=
@@ -556,5 +662,79 @@ def highlightingJs : String :=
             d.parentNode.replaceChild(rendered, d);
         }
     }
+    const defaultTippyProps = {
+      /* DEBUG -- remove the space: * /
+      onHide(any) { return false; },
+      trigger: \"click\",
+      // */
+      theme: \"lean\",
+      maxWidth: \"none\",
+      onShow(inst) {
+        if (inst.reference.querySelector(\".hover-info\")) {
+          let parent = inst.reference.parentNode;
+          while (parent) {
+            if (parent._tippy) {
+              if (parent._tippy.state.isVisible) {
+                return false;
+              }
+            }
+            parent = parent.parentNode;
+          }
+        } else { // Nothing to show here!
+          return false;
+        }
+      },
+      content (tgt) {
+        const content = document.createElement(\"span\");
+        const hoverInfo = tgt.querySelector(\".hover-info\");
+        if (hoverInfo) {
+          content.appendChild(hoverInfo.cloneNode(true));
+          content.className = \"hl lean\";
+          content.style.display = \"block\";
+          // Temporary hack until dedup works
+          for (const doc of content.querySelectorAll(\"code.docstring\")) {
+            const doc2 = document.createElement(\"p\");
+            for (const e of doc.childNodes) {
+              e.remove();
+              doc2.append(e);
+            }
+            doc.replaceWith(doc2);
+          }
+        }
+        return content;
+      }
+    };
+    const addTippy = (selector, props) => {
+      tippy(selector, Object.assign({}, defaultTippyProps, props));
+    };
+    addTippy('.hl.lean .const.token, .hl.lean .keyword.token', {theme: 'lean'});
+    addTippy('.hl.lean .has-info.warning', {theme: 'warning'});
+    addTippy('.hl.lean .has-info.info', {theme: 'info'});
+    addTippy('.hl.lean .has-info.error', {theme: 'error'});
+
+    tippy('.hl.lean .tactic', {
+      allowHtml: true,
+      /* DEBUG -- remove the space: * /
+      onHide(any) { return false; },
+      trigger: \"click\",
+      // */
+      maxWidth: \"none\",
+      onShow(inst) {
+        if (inst.reference.querySelector(\"input.tactic-toggle\").checked) {
+          return false;
+        }
+      },
+      theme: \"tactic\",
+      placement: 'bottom-start',
+      content (tgt) {
+        const content = document.createElement(\"span\");
+        const state = tgt.querySelector(\".tactic-state\").cloneNode(true);
+        state.style.display = \"block\";
+        content.appendChild(state);
+        content.style.display = \"block\";
+        content.className = \"hl lean popup\";
+        return content;
+      }
+    });
 }
 "
