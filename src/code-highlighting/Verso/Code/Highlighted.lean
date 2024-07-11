@@ -776,44 +776,31 @@ window.onload = () => {
           content.style.overflowX = \"hidden\";
           const hoverId = tgt.dataset.versoHover;
           const hoverInfo = tgt.querySelector(\".hover-info\");
-          if (hoverId) {
-            if (versoDocData) {
-              // TODO stop doing an implicit conversion from string to number here
-              let data = versoDocData[hoverId];
-              if (data) {
-                const info = document.createElement(\"span\");
-                info.className = \"hover-info\";
-                info.style.display = \"block\";
-                info.innerHTML = data;
-                content.appendChild(info);
-                /* Render docstrings - TODO server-side */
-                if ('undefined' !== typeof marked) {
-                    for (const d of content.querySelectorAll(\"code.docstring, pre.docstring\")) {
-                        const str = d.innerText;
-                        const html = marked.parse(str);
-                        const rendered = document.createElement(\"div\");
-                        rendered.classList.add(\"docstring\");
-                        rendered.innerHTML = html;
-                        d.parentNode.replaceChild(rendered, d);
-                    }
-                }
-              } else {
-                content.innerHTML = \"Failed to load doc ID: \" + hoverId;
+          if (hoverId) { // Docstrings from the table
+            // TODO stop doing an implicit conversion from string to number here
+            let data = versoDocData[hoverId];
+            if (data) {
+              const info = document.createElement(\"span\");
+              info.className = \"hover-info\";
+              info.style.display = \"block\";
+              info.innerHTML = data;
+              content.appendChild(info);
+              /* Render docstrings - TODO server-side */
+              if ('undefined' !== typeof marked) {
+                  for (const d of content.querySelectorAll(\"code.docstring, pre.docstring\")) {
+                      const str = d.innerText;
+                      const html = marked.parse(str);
+                      const rendered = document.createElement(\"div\");
+                      rendered.classList.add(\"docstring\");
+                      rendered.innerHTML = html;
+                      d.parentNode.replaceChild(rendered, d);
+                  }
               }
             } else {
-              content.innerHTML = \"Loading docs...\";
+              content.innerHTML = \"Failed to load doc ID: \" + hoverId;
             }
-          } else if (hoverInfo) {
+          } else if (hoverInfo) { // The inline info, still used for compiler messages
             content.appendChild(hoverInfo.cloneNode(true));
-            // Temporary hack until dedup works
-            for (const doc of content.querySelectorAll(\"code.docstring\")) {
-              const doc2 = document.createElement(\"p\");
-              for (const e of doc.childNodes) {
-                e.remove();
-                doc2.append(e);
-              }
-              doc.replaceWith(doc2);
-            }
           }
           return content;
         }
