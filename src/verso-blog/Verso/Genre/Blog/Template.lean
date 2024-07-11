@@ -57,7 +57,7 @@ defmethod LexedText.toHtml (text : LexedText) : Html :=
 def blockHtml (g : Genre) (_goI : Inline g → HtmlT g IO Html) (goB : Block g → HtmlT g IO Html) : Blog.BlockExt → Array (Block g) → HtmlT g IO Html
   | .lexedText content, _contents => do
     pure {{ <pre class=s!"lexed {content.name}"> {{ content.toHtml }} </pre> }}
-  | .highlightedCode contextName hls, _contents => pure <| hls.blockHtml (toString contextName)
+  | .highlightedCode contextName hls, _contents => hls.blockHtml (toString contextName)
   | .htmlDetails classes summary, contents => do
     pure {{ <details class={{classes}}><summary>{{summary}}</summary> {{← contents.mapM goB}}</details>}}
   | .htmlWrapper name attrs, contents => do
@@ -69,8 +69,8 @@ def blockHtml (g : Genre) (_goI : Inline g → HtmlT g IO Html) (goB : Block g �
 def inlineHtml (g : Genre) [MonadConfig (HtmlT g IO)] [MonadPath (HtmlT g IO)]
     (stateEq : g.TraverseState = Blog.TraverseState)
     (go : Inline g → HtmlT g IO Html) : Blog.InlineExt → Array (Inline g) → HtmlT g IO Html
-  | .highlightedCode contextName hls, _contents => pure <| hls.inlineHtml (some <| toString contextName)
-  | .customHighlight hls, _contents => pure <| hls.inlineHtml none
+  | .highlightedCode contextName hls, _contents => hls.inlineHtml (some <| toString contextName)
+  | .customHighlight hls, _contents => hls.inlineHtml none
   | .label x, contents => do
     let contentHtml ← contents.mapM go
     let st ← stateEq ▸ state
@@ -172,6 +172,8 @@ structure Context where
   params : Params
   builtInStyles : Lean.HashSet String
   builtInScripts : Lean.HashSet String
+  jsFiles : Array String
+  cssFiles : Array String
 
 end Template
 
@@ -208,6 +210,10 @@ def builtinHeader : TemplateM Html := do
     out := out ++ {{<style>"\n"{{.text false style}}"\n"</style>"\n"}}
   for script in (← read).builtInScripts do
     out := out ++ {{<script>"\n"{{.text false script}}"\n"</script>"\n"}}
+  for js in (← read).jsFiles do
+    out := out ++ {{<script src=s!"/-verso-js/{js}"></script>}}
+  for css in (← read).cssFiles do
+    out := out ++ {{<link rel="stylesheet" href=s!"/-verso-css/{css}"/>}}
   out := out ++ {{
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI+WdtXRGWt2kTvGFasHpSy3SV" crossorigin="anonymous"/>
     <script defer="defer" src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG+vnGctmUb0ZY0l8" crossorigin="anonymous"></script>

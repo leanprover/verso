@@ -255,7 +255,7 @@ def docstring.descr : BlockDescr where
       let .ok (name, declType, signature) := FromJson.fromJson? (α := Name × Block.Docstring.DeclType × Option Highlighted) info
         | do Verso.Doc.Html.HtmlT.logError "Failed to deserialize docstring data"; pure .empty
       let x : Html := Html.text true <| Name.toString name
-      let sig : Html := Option.map Highlighted.toHtml signature |>.getD {{ {{x}} }}
+      let sig : Html ← Option.map Highlighted.toHtml signature |>.getD (pure {{ {{x}} }})
 
       let (_, _, xref) ← read
       let idAttr :=
@@ -280,7 +280,7 @@ def docstring.descr : BlockDescr where
             else pure {{
                 <h1>"Constructor"</h1>
                 <table>
-                  <tr><td><code class="hl lean inline">{{ctor.signature.toHtml}}</code></td></tr>
+                  <tr><td><code class="hl lean inline">{{← ctor.signature.toHtml}}</code></td></tr>
                   {{ ← if let some d := ctor.docstring? then do
                       pure {{<tr><td>{{← md2html d}}</td></tr>}}
                     else pure Html.empty
@@ -307,9 +307,9 @@ def docstring.descr : BlockDescr where
 
                  pure <| {{
                   <tr>
-                    <td><code class="hl lean inline">{{i.fieldName.toHtml}}</code></td>
+                    <td><code class="hl lean inline">{{← i.fieldName.toHtml}}</code></td>
                     <td>":"</td>
-                    <td><code class="hl lean inline">{{ i.type.toHtml }}</code></td>
+                    <td><code class="hl lean inline">{{←  i.type.toHtml }}</code></td>
                   </tr>
                 }} ++ docRow
               }}

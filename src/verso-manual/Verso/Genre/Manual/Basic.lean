@@ -83,6 +83,8 @@ structure TraverseState where
   nextId : Nat := 0
   extraCss : Lean.HashSet String := {}
   extraJs : Lean.HashSet String := {}
+  extraJsFiles : Array (String × String) := #[]
+  extraCssFiles : Array (String × String) := #[]
   private contents : NameMap Json := {}
 
 def freshId [Monad m] [MonadStateOf TraverseState m] : m InternalId := do
@@ -130,6 +132,8 @@ instance : BEq TraverseState where
     x.nextId == y.nextId &&
     x.extraCss == y.extraCss &&
     x.extraJs == y.extraJs &&
+    x.extraJsFiles == y.extraJsFiles &&
+    x.extraCssFiles == y.extraCssFiles &&
     x.contents.size == y.contents.size &&
     x.contents.all fun k v =>
       match y.contents.find? k with
@@ -241,7 +245,9 @@ structure InlineDescr where
 
   toHtml : Option (InlineToHtml Manual (ReaderT ExtensionImpls IO))
   extraJs : List String := []
+  extraJsFiles : List (String × String) := []
   extraCss : List String := []
+  extraCssFiles : List (String × String) := []
 
   toTeX : Option (InlineToTeX Manual (ReaderT ExtensionImpls IO))
 
@@ -252,7 +258,9 @@ structure BlockDescr where
 
   toHtml : Option (BlockToHtml Manual (ReaderT ExtensionImpls IO))
   extraJs : List String := []
+  extraJsFiles : List (String × String) := []
   extraCss : List String := []
+  extraCssFiles : List (String × String) := []
 
   toTeX : Option (BlockToTeX Manual (ReaderT ExtensionImpls IO))
 deriving TypeName, Inhabited
@@ -443,6 +451,13 @@ instance : Traverse Manual TraverseM where
             modify fun s => {s with extraJs := s.extraJs.insert js}
           for css in impl.extraCss do
             modify fun s => {s with extraCss := s.extraCss.insert css}
+          for (name, js) in impl.extraJsFiles do
+            unless (← get).extraJsFiles.any (·.1 == name) do
+              modify fun s => {s with extraJsFiles := s.extraJsFiles.push (name, js)}
+          for (name, js) in impl.extraCssFiles do
+            unless (← get).extraCssFiles.any (·.1 == name) do
+              modify fun s => {s with extraCssFiles := s.extraCssFiles.push (name, js)}
+
           impl.traverse id data content
         else
           logError s!"No block traversal implementation found for {name}"
@@ -459,6 +474,13 @@ instance : Traverse Manual TraverseM where
             modify fun s => {s with extraJs := s.extraJs.insert js}
           for css in impl.extraCss do
             modify fun s => {s with extraCss := s.extraCss.insert css}
+          for (name, js) in impl.extraJsFiles do
+            unless (← get).extraJsFiles.any (·.1 == name) do
+              modify fun s => {s with extraJsFiles := s.extraJsFiles.push (name, js)}
+          for (name, js) in impl.extraCssFiles do
+            unless (← get).extraCssFiles.any (·.1 == name) do
+              modify fun s => {s with extraCssFiles := s.extraCssFiles.push (name, js)}
+
           impl.traverse id data content
         else
           logError s!"No inline traversal implementation found for {name}"

@@ -11,7 +11,7 @@ import Verso.Method
 import Verso.Genre.Blog.LexedText
 import Verso.Code
 
-open Verso Doc Output Html Code
+open Verso Doc Output Html Code Highlighted.WebAssets
 open SubVerso.Highlighting
 
 namespace Verso.Genre
@@ -144,7 +144,19 @@ structure TraverseState where
   pageIds : Lean.NameMap Blog.Info.PageMeta := {}
   scripts : Lean.HashSet String := {}
   stylesheets : Lean.HashSet String := {}
+  jsFiles : Array (String × String) := #[]
+  cssFiles : Array (String × String) := #[]
   errors : Lean.HashSet String := {}
+
+def TraverseState.addJsFile (st : TraverseState) (name content : String) :=
+  if st.jsFiles.all (·.1 != name) then
+    {st with jsFiles := st.jsFiles.push (name, content)}
+  else st
+
+def TraverseState.addCssFile (st : TraverseState) (name content : String) :=
+  if st.cssFiles.all (·.1 != name) then
+    {st with cssFiles := st.cssFiles.push (name, content)}
+  else st
 
 structure Page.Meta where
   /-- Whether to hide this page/part from navigation entries -/
@@ -301,7 +313,7 @@ where
 
 instance : BEq TraverseState where
   beq
-    | ⟨u1, t1, b1, r1, p1, s1, s1', err1⟩, ⟨u2, t2, b2, r2, p2, s2, s2', err2⟩ =>
+    | ⟨u1, t1, b1, r1, p1, s1, s1', js1, css1, err1⟩, ⟨u2, t2, b2, r2, p2, s2, s2', js2, css2, err2⟩ =>
       u1.toList.map (fun p => {p with snd := p.snd.toList}) == u2.toList.map (fun p => {p with snd := p.snd.toList}) &&
       t1.toList == t2.toList &&
       b1.toList == b2.toList &&
@@ -309,6 +321,10 @@ instance : BEq TraverseState where
       p1.toList == p2.toList &&
       s1.toList == s2.toList &&
       s1'.toList == s2'.toList &&
+      js1.size == js2.size &&
+      js1.all (js2.contains ·) &&
+      css1.size == css2.size &&
+      css1.all (css2.contains ·) &&
       err1.toList == err2.toList
 
 abbrev TraverseM := ReaderT Blog.TraverseContext (StateT Blog.TraverseState IO)
@@ -335,7 +351,7 @@ def genreBlock (g : Genre) : Blog.BlockExt → Array (Block g) → Blog.Traverse
       modify fun st => {st with
         stylesheets := st.stylesheets.insert highlightingStyle,
         scripts := st.scripts.insert highlightingJs
-      }
+      } |>.addJsFile "popper.js" popper |>.addJsFile "tippy.js" tippy |>.addCssFile "tippy-border.css" tippy.border.css
       pure none
     | _, _ => pure none
 
@@ -344,7 +360,7 @@ def genreInline (g : Genre) : Blog.InlineExt → Array (Inline g) → Blog.Trave
       modify fun st => {st with
         stylesheets := st.stylesheets.insert highlightingStyle,
         scripts := st.scripts.insert highlightingJs
-      }
+      } |>.addJsFile "popper.js" popper |>.addJsFile "tippy.js" tippy |>.addCssFile "tippy-border.css" tippy.border.css
       pure none
     | .label x, _contents => do
       -- Add as target if not already present

@@ -31,6 +31,8 @@ open Verso.Doc Elab
 
 open Verso.Genre.Manual.TeX
 
+open Verso.Code.Hover (Dedup)
+
 namespace Verso.Genre
 
 namespace Manual
@@ -134,9 +136,12 @@ def emitTeX (logError : String → IO Unit) (config : Config) (text : Part Manua
 
 open Verso.Output (Html)
 
-partial def toc (depth : Nat) (opts : Html.Options Manual (ReaderT ExtensionImpls IO)) (ctxt : TraverseContext) (state : TraverseState) : Part Manual → ReaderT ExtensionImpls IO Html.Toc
+instance : Inhabited (StateT (Dedup Html) (ReaderT ExtensionImpls IO) Html.Toc) where
+  default := fun _ => default
+
+partial def toc (depth : Nat) (opts : Html.Options Manual IO) (ctxt : TraverseContext) (state : TraverseState) : Part Manual → StateT (Dedup Html) (ReaderT ExtensionImpls IO) Html.Toc
   | .mk title sTitle meta _ sub => do
-    let titleHtml ← Html.seq <$> title.mapM (Manual.toHtml opts.lift ctxt state)
+    let titleHtml ← Html.seq <$> title.mapM (Manual.toHtml (m := ReaderT ExtensionImpls IO) opts.lift ctxt state ·)
     let some {id := some id, number, ..} := meta
       | throw <| .userError s!"No ID for {sTitle} - {repr meta}"
     let some (_, v) := state.externalTags.find? id
@@ -146,52 +151,75 @@ partial def toc (depth : Nat) (opts : Html.Options Manual (ReaderT ExtensionImpl
     pure <| .entry titleHtml ctxt'.path v number children
 
 def emitHtmlSingle (logError : String → IO Unit) (config : Config) (text : Part Manual) : ReaderT ExtensionImpls IO Unit := do
-  let (text, state) ← traverse logError text {config with htmlDepth := 0}
-  let authors := text.metadata.map (·.authors) |>.getD []
-  let date := text.metadata.bind (·.date) |>.getD ""
-  let opts := {logError := fun msg => logError msg}
-  let ctxt := {logError}
-  let titleHtml ← Html.seq <$> text.title.mapM (Manual.toHtml opts ctxt state)
-  let introHtml ← Html.seq <$> text.content.mapM (Manual.toHtml opts ctxt state)
-  let contents ← Html.seq <$> text.subParts.mapM (Manual.toHtml {opts with headerLevel := 2} ctxt state)
-  let pageContent := open Verso.Output.Html in
-    {{<section>{{Html.titlePage titleHtml authors introHtml ++ contents}}</section>}}
-  let toc ← text.subParts.mapM (toc 0 opts ctxt state)
   let dir := config.destination.join "html-single"
   ensureDir dir
-  IO.FS.withFile (dir.join "book.css") .write fun h => do
-    h.putStrLn Html.Css.pageStyle
-  for (src, dest) in config.extraFiles do
-    copyRecursively logError src (dir.join dest)
-  IO.FS.withFile (dir.join "index.html") .write fun h => do
-    h.putStrLn Html.doctype
-    h.putStrLn (Html.page toc text.titleString titleHtml pageContent state.extraCss state.extraJs (extraStylesheets := config.extraCss)).asString
+  let ((), docs) ← emitContent dir .empty
+  IO.FS.writeFile (dir.join "-verso-docs.json") (toString docs.docJson)
+where
+  emitContent (dir : System.FilePath) : StateT (Dedup Html) (ReaderT ExtensionImpls IO) Unit := do
+    let (text, state) ← traverse logError text {config with htmlDepth := 0}
+    let authors := text.metadata.map (·.authors) |>.getD []
+    let date := text.metadata.bind (·.date) |>.getD ""
+    let opts : Html.Options Manual IO := {logError := fun msg => logError msg}
+    let ctxt := {logError}
+    let titleHtml ← Html.seq <$> text.title.mapM (Manual.toHtml opts.lift ctxt state)
+    let introHtml ← Html.seq <$> text.content.mapM (Manual.toHtml opts.lift ctxt state)
+    let contents ← Html.seq <$> text.subParts.mapM (Manual.toHtml {opts.lift with headerLevel := 2} ctxt state ·)
+    let pageContent := open Verso.Output.Html in
+      {{<section>{{Html.titlePage titleHtml authors introHtml ++ contents}}</section>}}
+    let toc ← text.subParts.mapM (toc 0 opts ctxt state)
+    IO.FS.withFile (dir.join "book.css") .write fun h => do
+      h.putStrLn Html.Css.pageStyle
+    for (src, dest) in config.extraFiles do
+      copyRecursively logError src (dir.join dest)
+    for (name, contents) in state.extraJsFiles do
+      ensureDir (dir.join "-verso-js")
+      IO.FS.withFile (dir.join "-verso-js" |>.join name) .write fun h => do
+        h.putStr contents
+    for (name, contents) in state.extraCssFiles do
+      ensureDir (dir.join "-verso-css")
+      IO.FS.withFile (dir.join "-verso-css" |>.join name) .write fun h => do
+        h.putStr contents
+    IO.FS.withFile (dir.join "index.html") .write fun h => do
+      h.putStrLn Html.doctype
+      h.putStrLn (Html.page toc text.titleString titleHtml pageContent state.extraCss state.extraJs (extraStylesheets := config.extraCss ++ state.extraCssFiles.toList.map ("/-verso-css/" ++ ·.1)) (extraJsFiles := state.extraJsFiles.map (·.1))).asString
 
  open Verso.Output.Html in
 def emitHtmlMulti (logError : String → IO Unit) (config : Config) (text : Part Manual) : ReaderT ExtensionImpls IO Unit := do
-  let (text, state) ← traverse logError text config
-  let authors := text.metadata.map (·.authors) |>.getD []
-  let date := text.metadata.bind (·.date) |>.getD ""
-  let opts := {logError := fun msg => logError msg}
-  let ctxt := {logError}
-  let toc ← text.subParts.mapM (toc config.htmlDepth opts ctxt state)
-  let titleHtml ← Html.seq <$> text.title.mapM (Manual.toHtml opts ctxt state)
   let root := config.destination.join "html-multi"
   ensureDir root
-  IO.FS.withFile (root.join "book.css") .write fun h => do
-    h.putStrLn Html.Css.pageStyle
-  for (src, dest) in config.extraFiles do
-    copyRecursively logError src (root.join dest)
-  emitPart titleHtml authors toc opts ctxt state true config.htmlDepth root text
+  let ((), docs) ← emitContent root Dedup.empty
+  IO.FS.writeFile (root.join "-verso-docs.json") (toString docs.docJson)
 where
+  emitContent (root : System.FilePath) : StateT (Dedup Html) (ReaderT ExtensionImpls IO) Unit := do
+    let (text, state) ← traverse logError text config
+    let authors := text.metadata.map (·.authors) |>.getD []
+    let date := text.metadata.bind (·.date) |>.getD ""
+    let opts : Html.Options _ IO := {logError := fun msg => logError msg}
+    let ctxt := {logError}
+    let toc ← text.subParts.mapM (toc config.htmlDepth opts ctxt state)
+    let titleHtml ← Html.seq <$> text.title.mapM (Manual.toHtml opts.lift ctxt state ·)
+    IO.FS.withFile (root.join "book.css") .write fun h => do
+      h.putStrLn Html.Css.pageStyle
+    for (src, dest) in config.extraFiles do
+      copyRecursively logError src (root.join dest)
+    for (name, contents) in state.extraJsFiles do
+      ensureDir (root.join "-verso-js")
+      IO.FS.withFile (root.join "-verso-js" |>.join name) .write fun h => do
+        h.putStr contents
+    for (name, contents) in state.extraCssFiles do
+      ensureDir (root.join "-verso-css")
+      IO.FS.withFile (root.join "-verso-css" |>.join name) .write fun h => do
+        h.putStr contents
+    emitPart titleHtml authors toc opts.lift ctxt state true config.htmlDepth root text
   emitPart (bookTitle : Html) (authors : List String) (bookContents)
       (opts ctxt state)
-      (root : Bool) (depth : Nat) (dir : System.FilePath) (part : Part Manual) : ReaderT ExtensionImpls IO Unit := do
-    let titleHtml ← Html.seq <$> part.title.mapM (Manual.toHtml opts ctxt state)
-    let introHtml ← Html.seq <$> part.content.mapM (Manual.toHtml opts ctxt state)
+      (root : Bool) (depth : Nat) (dir : System.FilePath) (part : Part Manual) : StateT (Dedup Html) (ReaderT ExtensionImpls IO) Unit := do
+    let titleHtml ← Html.seq <$> part.title.mapM (Manual.toHtml opts.lift ctxt state)
+    let introHtml ← Html.seq <$> part.content.mapM (Manual.toHtml opts.lift ctxt state)
     let contents ←
       if depth == 0 then
-        Html.seq <$> part.subParts.mapM (Manual.toHtml {opts with headerLevel := 2} ctxt state)
+        Html.seq <$> part.subParts.mapM (Manual.toHtml {opts.lift with headerLevel := 2} ctxt state)
       else pure .empty
     let pageContent ←
       if root then
@@ -208,7 +236,7 @@ where
     ensureDir dir
     IO.FS.withFile (dir.join "index.html") .write fun h => do
       h.putStrLn Html.doctype
-      h.putStrLn (relativize ctxt.path <| Html.page bookContents part.titleString pageTitle pageContent state.extraCss state.extraJs (extraStylesheets := config.extraCss)).asString
+      h.putStrLn (relativize ctxt.path <| Html.page bookContents part.titleString pageTitle pageContent state.extraCss state.extraJs (extraStylesheets := config.extraCss ++ state.extraCssFiles.toList.map ("/-verso-css/" ++ ·.1)) (extraJsFiles := state.extraJsFiles.map (·.1))).asString
     if depth > 0 then
       for p in part.subParts do
         let nextFile := p.metadata.bind (·.file) |>.getD (p.titleString.sluggify.toString)

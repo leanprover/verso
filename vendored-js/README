@@ -1,0 +1,8 @@
+This directory contains "vendored" dependencies, redistributed according to their licenses (both
+MIT).
+
+They are:
+
+tippy.js - https://github.com/atomiks/tippyjs
+
+popper.js - https://popper.js.org/docs/v2/

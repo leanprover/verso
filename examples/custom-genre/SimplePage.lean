@@ -248,13 +248,16 @@ def render (doc : Part SimplePage) : IO UInt32 := do
     IO.eprintln str
 
   IO.println "Rendering HTML"
+  -- toHtml returns both deduplicated hover contents and the actual content.
+  -- Since we're not rendering Lean code, we can ignore the hover contents.
+  let (content, _) ← SimplePage.toHtml {logError} context state doc .empty
   let html := {{
     <html>
       <head>
         <title>{{doc.titleString}}</title>
         <meta charset="utf-8"/>
       </head>
-      <body>{{← SimplePage.toHtml {logError} context state doc}}</body>
+      <body>{{ content }}</body>
     </html>
   }}
 
