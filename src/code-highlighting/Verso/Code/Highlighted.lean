@@ -3,14 +3,51 @@ Copyright (c) 2024 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
+import Lean.Data.Json
 import SubVerso.Highlighting
 import Verso.Method
 import Verso.Output.Html
 
 open SubVerso.Highlighting
 open Verso.Output Html
+open Lean (Json)
 
 namespace Verso.Code
+
+namespace Hover
+
+structure Dedup (α) extends BEq α, Hashable α where
+  nextId : Nat := 0
+  contentId : Lean.HashMap Nat α := {}
+  idContent : Lean.HashMap α Nat := {}
+
+variable {α}
+variable [BEq α] [Hashable α]
+
+def Dedup.empty : Dedup α := {}
+
+instance : Inhabited (Dedup α) where
+  default := .empty
+
+def Dedup.insert (table : Dedup α) (val : α) : Nat × Dedup α :=
+  if let some id := table.idContent.find? val then (id, table)
+  else
+    let id := table.nextId
+    (id, {table with nextId := id + 1, contentId := table.contentId.insert id val, idContent := table.idContent.insert val id})
+
+def Dedup.get? (table : Dedup α) (id : Nat) : Option α := table.contentId.find? id
+
+def Dedup.docJson (table : Dedup Html) : Json :=
+  table.contentId.fold (init := .mkObj []) fun out id html => out.setObjVal! (toString id) (.str html.asString)
+end Hover
+
+open Hover
+
+abbrev HighlightHtmlM α := StateT (Dedup Html) Id α
+
+
+def addHover (content : Html) : HighlightHtmlM Nat := modifyGet fun st => st.insert content
+
 
 partial defmethod Highlighted.isEmpty (hl : Highlighted) : Bool :=
   match hl with
@@ -65,28 +102,29 @@ partial defmethod Highlighted.trimLeft (hl : Highlighted) : Highlighted :=
 
 defmethod Highlighted.trim (hl : Highlighted) : Highlighted := hl.trimLeft.trimRight
 
-def hover (content : Html) : Html := {{
-  <span class="hover-container"><span class="hover-info"> {{ content }} </span></span>
-}}
+-- def hover (content : Html) : Html := {{
+--   <span class="hover-container"><span class="hover-info"> {{ content }} </span></span>
+-- }}
 
-defmethod Token.Kind.hover? : (tok : Token.Kind) → Option Html
+defmethod Token.Kind.hover? : (tok : Token.Kind) → HighlightHtmlM (Option Nat)
   | .const _n sig doc =>
-    let docs := match doc with
+    let docs :=
+      match doc with
       | none => .empty
       | some txt => {{<span class="sep"/><code class="docstring">{{txt}}</code>}}
-    some <| hover {{ <code>{{sig}}</code> {{docs}} }}
+    some <$> addHover {{ <code>{{sig}}</code> {{docs}} }}
   | .option n doc =>
     let docs := match doc with
       | none => .empty
       | some txt => {{<span class="sep"/><code class="docstring">{{txt}}</code>}}
-    some <| hover {{ <code>{{toString n}}</code> {{docs}} }}
-  | .keyword _ _ none => none
-  | .keyword _ _ (some doc) => some <| hover {{<code class="docstring">{{doc}}</code>}}
+    some <$> addHover {{ <code>{{toString n}}</code> {{docs}} }}
+  | .keyword _ _ none => pure none
+  | .keyword _ _ (some doc) => some <$> addHover {{<code class="docstring">{{doc}}</code>}}
   | .var _ type =>
-    some <| hover {{ <code>{{type}}</code> }}
+    some <$> addHover {{ <code>{{type}}</code> }}
   | .str s =>
-    some <| hover {{ <code><span class="literal string">{{s.quote}}</span>" : String"</code>}}
-  | _ => none
+    some <$> addHover {{ <code><span class="literal string">{{s.quote}}</span>" : String"</code>}}
+  | _ => pure none
 
 
 defmethod Highlighted.Span.Kind.«class» : Highlighted.Span.Kind → String
@@ -111,32 +149,35 @@ defmethod Token.Kind.data : Token.Kind → String
   | .keyword _ (some occ) _ => "kw-occ-" ++ toString occ
   | _ => ""
 
-defmethod Token.toHtml (tok : Token) : Html := {{
-  <span class={{tok.kind.«class» ++ " token"}} "data-binding"={{tok.kind.data}}>{{tok.content}}{{tok.kind.hover?.getD .empty}}</span>
-}}
+defmethod Token.toHtml (tok : Token) : HighlightHtmlM Html := do
+  let hoverId ← tok.kind.hover?
+  let hoverAttr := hoverId.map (fun i => #[("data-verso-hover", toString i)]) |>.getD #[]
+  pure {{
+    <span class={{tok.kind.«class» ++ " token"}} "data-binding"={{tok.kind.data}} {{hoverAttr}}>{{tok.content}}</span>
+  }}
 
-defmethod Highlighted.Goal.toHtml (exprHtml : expr → Html) (index : Nat) : Highlighted.Goal expr → Html
-  | {name, goalPrefix, hypotheses, conclusion} =>
-    let hypsHtml : Html :=
-      if hypotheses.size = 0 then .empty
-      else {{
+defmethod Highlighted.Goal.toHtml (exprHtml : expr → HighlightHtmlM Html) (index : Nat) : Highlighted.Goal expr → HighlightHtmlM Html
+  | {name, goalPrefix, hypotheses, conclusion} => do
+    let hypsHtml : Html ←
+      if hypotheses.size = 0 then pure .empty
+      else pure {{
         <table class="hypotheses">
-          {{hypotheses.map fun
-              | (x, k, t) => {{
+          {{← hypotheses.mapM fun
+              | (x, k, t) => do pure {{
                   <tr class="hypothesis">
-                    <td class="name">{{Token.toHtml ⟨k, x.toString⟩}}</td><td class="colon">":"</td>
-                    <td class="type">{{exprHtml t}}</td>
+                    <td class="name">{{← Token.toHtml ⟨k, x.toString⟩}}</td><td class="colon">":"</td>
+                    <td class="type">{{← exprHtml t}}</td>
                   </tr>
                 }}
           }}
         </table>
       }}
-    let conclHtml := {{
+    let conclHtml ← do pure {{
         <span class="conclusion">
-          <span class="prefix">{{goalPrefix}}</span><span class="type">{{exprHtml conclusion}}</span>
+          <span class="prefix">{{goalPrefix}}</span><span class="type">{{← exprHtml conclusion}}</span>
         </span>
       }}
-    {{
+    pure {{
       <div class="goal">
         {{ match name with
           | none => {{
@@ -173,12 +214,19 @@ def _root_.Array.mapIndexed (arr : Array α) (f : Fin arr.size → α → β) : 
     out := out.push (f ⟨i, h.right⟩ arr[i])
   out
 
-partial defmethod Highlighted.toHtml : Highlighted → Html
+def _root_.Array.mapIndexedM [Monad m] (arr : Array α) (f : Fin arr.size → α → m β) : m (Array β) := do
+  let mut out := #[]
+  for h : i in [:arr.size] do
+    out := out.push (← f ⟨i, h.right⟩ arr[i])
+  pure out
+
+
+partial defmethod Highlighted.toHtml : Highlighted → HighlightHtmlM Html
   | .token t => t.toHtml
-  | .text str => str
+  | .text str => pure str
   | .span infos hl =>
-    if let some cls := spanClass infos then
-      {{<span class={{"has-info " ++ cls}}>
+    if let some cls := spanClass infos then do
+      pure {{<span class={{"has-info " ++ cls}}>
           <span class="hover-container">
             <span class={{"hover-info messages"}}>
               {{ infos.map fun (s, info) => {{
@@ -186,34 +234,37 @@ partial defmethod Highlighted.toHtml : Highlighted → Html
               }}
             </span>
           </span>
-          {{toHtml hl}}
+          {{← toHtml hl}}
         </span>
       }}
     else
       panic! "No highlights!"
       --toHtml hl
-  | .tactics info startPos endPos hl =>
+  | .tactics info startPos endPos hl => do
     let id := s!"tactic-state-{hash info}-{startPos}-{endPos}"
-    {{
+    pure {{
       <span class="tactic">
-        <label «for»={{id}}>{{toHtml hl}}</label>
+        <label «for»={{id}}>{{← toHtml hl}}</label>
         <input type="checkbox" class="tactic-toggle" id={{id}}></input>
         <div class="tactic-state">
-          {{if info.isEmpty then {{"All goals completed! 🐙"}} else info.mapIndexed (fun ⟨i, _⟩ x => x.toHtml toHtml i)}}
+          {{← if info.isEmpty then
+              pure {{"All goals completed! 🐙"}}
+            else
+              .seq <$> info.mapIndexedM (fun ⟨i, _⟩ x => x.toHtml toHtml i)}}
         </div>
       </span>
     }}
-  | .point s info => {{<span class={{"message " ++ s.«class»}}>{{info}}</span>}}
-  | .seq hls => hls.map toHtml
+  | .point s info => pure {{<span class={{"message " ++ s.«class»}}>{{info}}</span>}}
+  | .seq hls => hls.mapM toHtml
 
-defmethod Highlighted.blockHtml (contextName : String) (code : Highlighted) : Html :=
-  {{ <code class="hl lean block" "data-lean-context"={{toString contextName}}> {{ code.trim.toHtml }} </code> }}
+defmethod Highlighted.blockHtml (contextName : String) (code : Highlighted) : HighlightHtmlM Html := do
+  pure {{ <code class="hl lean block" "data-lean-context"={{toString contextName}}> {{ ← code.trim.toHtml }} </code> }}
 
-defmethod Highlighted.inlineHtml (contextName : Option String) (code : Highlighted) : Html :=
+defmethod Highlighted.inlineHtml (contextName : Option String) (code : Highlighted) : HighlightHtmlM Html := do
   if let some ctx := contextName then
-    {{ <code class="hl lean inline" "data-lean-context"={{toString ctx}}> {{ code.trim.toHtml }} </code> }}
+    pure {{ <code class="hl lean inline" "data-lean-context"={{toString ctx}}> {{ ← code.trim.toHtml }} </code> }}
   else
-    {{ <code class="hl lean inline"> {{ code.trim.toHtml }} </code> }}
+    pure {{ <code class="hl lean inline"> {{ ← code.trim.toHtml }} </code> }}
 
 -- TODO CSS variables, and document them
 def highlightingStyle : String := "
@@ -252,12 +303,13 @@ def highlightingStyle : String := "
   font-size: inherit;
 }
 
-.hl.lean .has-info .hover-info.messages {
+.hl.lean .hover-info.messages {
   max-height: 10em;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 0;
-  background-color: #e5e5e5;
+  scrollbar-gutter: stable;
+  padding: 0 0.5em 0 0;
+  display: block;
 }
 
 .hl.lean .hover-info code {
@@ -345,8 +397,14 @@ def highlightingStyle : String := "
   }
 }
 
-.hl.lean .has-info > .hover-container > .hover-info > code.error {
-  background-color: #ffb3b3;
+.hl.lean .hover-info.messages > code.error {
+  background-color: #e5e5e5;
+  border-left: 0.2em solid #ffb3b3;
+}
+
+.tippy-box[data-theme~='error'] .hl.lean .hover-info.messages > code.error {
+  background: none;
+  border: none;
 }
 
 .error pre {
@@ -354,18 +412,29 @@ def highlightingStyle : String := "
 }
 
 .hl.lean .has-info.warning {
-  text-decoration-color: yellow;
+  text-decoration-color: #efd871;
 }
 
 @media (hover: hover) {
   .hl.lean .has-info.warning:hover {
-    background-color: yellow;
+    background-color: #efd871;
   }
 }
 
-.hl.lean .has-info .hover-info.messages > code.warning {
-  background-color: yellow;
+.hl.lean .hover-info.messages > code.warning {
+  background-color: #efd871;
 }
+
+.hl.lean .hover-info.messages > code.error {
+  background-color: #e5e5e5;
+  border-left: 0.2em solid #efd871;
+}
+
+.tippy-box[data-theme~='warning'] .hl.lean .hover-info.messages > code.warning {
+  background: none;
+  border: none;
+}
+
 
 .hl.lean .has-info.info {
   text-decoration-color: blue;
@@ -378,14 +447,21 @@ def highlightingStyle : String := "
 }
 
 
-.hl.lean .has-info .hover-info.messages > code.info {
-  background-color: #4777ff;
+.hl.lean .hover-info.messages > code.info {
+  background-color: #e5e5e5;
+  border-left: 0.2em solid #4777ff;
+}
+
+.tippy-box[data-theme~='info'] .hl.lean .hover-info.messages > code.info {
+  background: none;
+  border: none;
 }
 
 .hl.lean div.docstring {
   font-family: sans-serif;
   white-space: normal;
   max-width: 40em;
+  width: max-content;
 }
 
 .hl.lean div.docstring > :last-child {
@@ -629,7 +705,8 @@ def highlightingStyle : String := "
 "
 
 def highlightingJs : String :=
-"window.onload = () => {
+"
+window.onload = () => {
     for (const c of document.querySelectorAll(\".hl.lean .token\")) {
         if (c.dataset.binding != \"\") {
             c.addEventListener(\"mouseover\", (event) => {
@@ -662,79 +739,117 @@ def highlightingJs : String :=
             d.parentNode.replaceChild(rendered, d);
         }
     }
-    const defaultTippyProps = {
-      /* DEBUG -- remove the space: * /
-      onHide(any) { return false; },
-      trigger: \"click\",
-      // */
-      theme: \"lean\",
-      maxWidth: \"none\",
-      onShow(inst) {
-        if (inst.reference.querySelector(\".hover-info\")) {
-          let parent = inst.reference.parentNode;
-          while (parent) {
-            if (parent._tippy) {
-              if (parent._tippy.state.isVisible) {
-                return false;
+    // Add hovers
+    fetch(\"/-verso-docs.json\").then((resp) => resp.json()).then((versoDocData) => {
+
+      const defaultTippyProps = {
+        /* DEBUG -- remove the space: * /
+        onHide(any) { return false; },
+        trigger: \"click\",
+        // */
+        theme: \"lean\",
+        maxWidth: \"none\",
+        interactive: true,
+        delay: [100, null],
+        ignoreAttributes: true,
+        onShow(inst) {
+          if (inst.reference.querySelector(\".hover-info\") || \"versoHover\" in inst.reference.dataset) {
+            let parent = inst.reference.parentNode;
+            while (parent) {
+              if (parent._tippy) {
+                if (parent._tippy.state.isVisible) {
+                  return false;
+                }
               }
+              parent = parent.parentNode;
             }
-            parent = parent.parentNode;
+          } else { // Nothing to show here!
+            return false;
           }
-        } else { // Nothing to show here!
-          return false;
-        }
-      },
-      content (tgt) {
-        const content = document.createElement(\"span\");
-        const hoverInfo = tgt.querySelector(\".hover-info\");
-        if (hoverInfo) {
-          content.appendChild(hoverInfo.cloneNode(true));
+        },
+        content (tgt) {
+          const content = document.createElement(\"span\");
           content.className = \"hl lean\";
           content.style.display = \"block\";
-          // Temporary hack until dedup works
-          for (const doc of content.querySelectorAll(\"code.docstring\")) {
-            const doc2 = document.createElement(\"p\");
-            for (const e of doc.childNodes) {
-              e.remove();
-              doc2.append(e);
+          content.style.maxHeight = \"300px\";
+          content.style.overflowY = \"auto\";
+          content.style.overflowX = \"hidden\";
+          const hoverId = tgt.dataset.versoHover;
+          const hoverInfo = tgt.querySelector(\".hover-info\");
+          if (hoverId) {
+            if (versoDocData) {
+              // TODO stop doing an implicit conversion from string to number here
+              let data = versoDocData[hoverId];
+              if (data) {
+                const info = document.createElement(\"span\");
+                info.className = \"hover-info\";
+                info.style.display = \"block\";
+                info.innerHTML = data;
+                content.appendChild(info);
+                /* Render docstrings - TODO server-side */
+                if ('undefined' !== typeof marked) {
+                    for (const d of content.querySelectorAll(\"code.docstring, pre.docstring\")) {
+                        const str = d.innerText;
+                        const html = marked.parse(str);
+                        const rendered = document.createElement(\"div\");
+                        rendered.classList.add(\"docstring\");
+                        rendered.innerHTML = html;
+                        d.parentNode.replaceChild(rendered, d);
+                    }
+                }
+              } else {
+                content.innerHTML = \"Failed to load doc ID: \" + hoverId;
+              }
+            } else {
+              content.innerHTML = \"Loading docs...\";
             }
-            doc.replaceWith(doc2);
+          } else if (hoverInfo) {
+            content.appendChild(hoverInfo.cloneNode(true));
+            // Temporary hack until dedup works
+            for (const doc of content.querySelectorAll(\"code.docstring\")) {
+              const doc2 = document.createElement(\"p\");
+              for (const e of doc.childNodes) {
+                e.remove();
+                doc2.append(e);
+              }
+              doc.replaceWith(doc2);
+            }
           }
+          return content;
         }
-        return content;
-      }
-    };
-    const addTippy = (selector, props) => {
-      tippy(selector, Object.assign({}, defaultTippyProps, props));
-    };
-    addTippy('.hl.lean .const.token, .hl.lean .keyword.token', {theme: 'lean'});
-    addTippy('.hl.lean .has-info.warning', {theme: 'warning'});
-    addTippy('.hl.lean .has-info.info', {theme: 'info'});
-    addTippy('.hl.lean .has-info.error', {theme: 'error'});
+      };
+      const addTippy = (selector, props) => {
+        tippy(selector, Object.assign({}, defaultTippyProps, props));
+      };
+      addTippy('.hl.lean .const.token, .hl.lean .keyword.token', {theme: 'lean'});
+      addTippy('.hl.lean .has-info.warning', {theme: 'warning'});
+      addTippy('.hl.lean .has-info.info', {theme: 'info'});
+      addTippy('.hl.lean .has-info.error', {theme: 'error'});
 
-    tippy('.hl.lean .tactic', {
-      allowHtml: true,
-      /* DEBUG -- remove the space: * /
-      onHide(any) { return false; },
-      trigger: \"click\",
-      // */
-      maxWidth: \"none\",
-      onShow(inst) {
-        if (inst.reference.querySelector(\"input.tactic-toggle\").checked) {
-          return false;
+      tippy('.hl.lean .tactic', {
+        allowHtml: true,
+        /* DEBUG -- remove the space: * /
+        onHide(any) { return false; },
+        trigger: \"click\",
+        // */
+        maxWidth: \"none\",
+        onShow(inst) {
+          if (inst.reference.querySelector(\"input.tactic-toggle\").checked) {
+            return false;
+          }
+        },
+        theme: \"tactic\",
+        placement: 'bottom-start',
+        content (tgt) {
+          const content = document.createElement(\"span\");
+          const state = tgt.querySelector(\".tactic-state\").cloneNode(true);
+          state.style.display = \"block\";
+          content.appendChild(state);
+          content.style.display = \"block\";
+          content.className = \"hl lean popup\";
+          return content;
         }
-      },
-      theme: \"tactic\",
-      placement: 'bottom-start',
-      content (tgt) {
-        const content = document.createElement(\"span\");
-        const state = tgt.querySelector(\".tactic-state\").cloneNode(true);
-        state.style.display = \"block\";
-        content.appendChild(state);
-        content.style.display = \"block\";
-        content.className = \"hl lean popup\";
-        return content;
-      }
-    });
+      });
+  });
 }
 "

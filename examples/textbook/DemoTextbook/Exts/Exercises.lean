@@ -143,4 +143,4 @@ def lean.descr : BlockDescr where
         HtmlT.logError <| "Couldn't deserialize Lean code while rendering HTML: " ++ err
         pure .empty
       | .ok (hl : Highlighted) =>
-        pure <| hl.blockHtml "exercises"
+        hl.blockHtml "exercises"

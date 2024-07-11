@@ -10,6 +10,7 @@ import Verso.Genre.Blog.Template
 import Verso.Genre.Blog.Theme
 
 open Verso Doc Output Html HtmlT FS
+open Verso.Code.Hover (Dedup)
 
 namespace Verso.Genre.Blog
 
@@ -42,7 +43,10 @@ def Generate.Context.templateContext (ctxt : Generate.Context) (params : Templat
   jsFiles := ctxt.xref.jsFiles.map (·.1)
   cssFiles := ctxt.xref.cssFiles.map (·.1)
 
-abbrev GenerateM := ReaderT Generate.Context IO
+abbrev GenerateM := ReaderT Generate.Context (StateT (Dedup Html) IO)
+
+instance : MonadLift IO GenerateM where
+  monadLift act := fun _ st => (·, st) <$> act
 
 def Generate.rewriteOutput (html : Html) : GenerateM Html := do
   let {ctxt, config, rewriteHtml := some rewriter, ..} := (← read)

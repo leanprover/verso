@@ -539,7 +539,9 @@ def blogMain (theme : Theme) (site : Site) (relativizeUrls := true) (options : L
   let rw := if relativizeUrls then
       some <| relativize
     else none
-  site.generate theme {site := site, ctxt := ⟨[], cfg⟩, xref := xref, dir := cfg.destination, config := cfg, rewriteHtml := rw}
+  let initGenCtx : Generate.Context := {site := site, ctxt := ⟨[], cfg⟩, xref := xref, dir := cfg.destination, config := cfg, rewriteHtml := rw}
+  let ((), docs) ← site.generate theme initGenCtx .empty
+  IO.FS.writeFile (cfg.destination.join "-verso-docs.json") (toString docs.docJson)
   for (name, content) in xref.jsFiles do
     FS.ensureDir (cfg.destination.join "-verso-js")
     IO.FS.writeFile (cfg.destination.join "-verso-js" |>.join name) content

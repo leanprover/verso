@@ -13,7 +13,7 @@ inductive Html where
   | text (escape : Bool) (string : String)
   | tag (name : String) (attrs : Array (String × String)) (contents : Html)
   | seq (contents : Array Html)
-deriving Repr, Inhabited, TypeName
+deriving Repr, Inhabited, TypeName, BEq, Hashable
 
 open Syntax in
 partial instance : Quote Html where

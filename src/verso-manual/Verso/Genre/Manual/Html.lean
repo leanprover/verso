@@ -43,6 +43,7 @@ def page (toc : Array Toc) (textTitle : String) (htmlTitle : Html) (contents : H
     <meta charset="utf-8"/>
     <title>{{textTitle}}</title>
     <link rel="stylesheet" href="/book.css" />
+    <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js" integrity="sha384-zbcZAIxlvJtNE3Dp5nxLXdXtXyxwOdnILY1TDPVmKFhl4r4nSUG1r8bcFXGVa4Te" crossorigin="anonymous"></script>
     {{extraJsFiles.map ({{<script src=s!"/-verso-js/{·}"></script>}})}}
     {{extraStylesheets.map (fun url => {{<link rel="stylesheet" href={{url}}/> }})}}
     {{extraCss.toArray.map ({{<style>{{Html.text false ·}}</style>}})}}

@@ -57,7 +57,7 @@ defmethod LexedText.toHtml (text : LexedText) : Html :=
 def blockHtml (g : Genre) (_goI : Inline g → HtmlT g IO Html) (goB : Block g → HtmlT g IO Html) : Blog.BlockExt → Array (Block g) → HtmlT g IO Html
   | .lexedText content, _contents => do
     pure {{ <pre class=s!"lexed {content.name}"> {{ content.toHtml }} </pre> }}
-  | .highlightedCode contextName hls, _contents => pure <| hls.blockHtml (toString contextName)
+  | .highlightedCode contextName hls, _contents => hls.blockHtml (toString contextName)
   | .htmlDetails classes summary, contents => do
     pure {{ <details class={{classes}}><summary>{{summary}}</summary> {{← contents.mapM goB}}</details>}}
   | .htmlWrapper name attrs, contents => do
@@ -69,8 +69,8 @@ def blockHtml (g : Genre) (_goI : Inline g → HtmlT g IO Html) (goB : Block g �
 def inlineHtml (g : Genre) [MonadConfig (HtmlT g IO)] [MonadPath (HtmlT g IO)]
     (stateEq : g.TraverseState = Blog.TraverseState)
     (go : Inline g → HtmlT g IO Html) : Blog.InlineExt → Array (Inline g) → HtmlT g IO Html
-  | .highlightedCode contextName hls, _contents => pure <| hls.inlineHtml (some <| toString contextName)
-  | .customHighlight hls, _contents => pure <| hls.inlineHtml none
+  | .highlightedCode contextName hls, _contents => hls.inlineHtml (some <| toString contextName)
+  | .customHighlight hls, _contents => hls.inlineHtml none
   | .label x, contents => do
     let contentHtml ← contents.mapM go
     let st ← stateEq ▸ state
