@@ -105,3 +105,11 @@ a server is to use the one from the Python standard library, e.g.
 python3 -m http.server 8880 --directory _out/examples/demotextbook/html-single &
 ```
 after which `http://localhost:8880/` will show the generated site.
+
+## Licenses
+
+Verso is licensed under the Apache license - please see the file [LICENSE](./LICENSE) for details.
+
+Verso additionally includes third-party software made available under the MIT
+license. These components, and their copyright and licensing information, are
+in the [vendored-js](./vendored-js/) directory.
