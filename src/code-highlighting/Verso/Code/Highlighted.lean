@@ -271,6 +271,8 @@ def highlightingStyle : String := "
 
 .hl.lean {
   white-space: pre;
+  font-weight: normal;
+  font-style: normal;
 }
 
 .hl.lean .keyword {
