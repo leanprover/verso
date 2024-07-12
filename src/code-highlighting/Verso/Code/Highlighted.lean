@@ -759,6 +759,9 @@ window.onload = () => {
     }
     // Add hovers
     fetch(\"/-verso-docs.json\").then((resp) => resp.json()).then((versoDocData) => {
+      //The singleton addon should work here, but letting the instances override all the necessary properties
+      // led to mysterious breakage. Thus this kludge.
+      var visibleHovers = new Set();
 
       const defaultTippyProps = {
         /* DEBUG -- remove the space: * /
@@ -770,7 +773,11 @@ window.onload = () => {
         interactive: true,
         delay: [100, null],
         ignoreAttributes: true,
+        onHide(inst) {visibleHovers.delete(inst)},
+        onDestroy(inst) {visibleHovers.delete(inst)},
         onShow(inst) {
+          visibleHovers.forEach((h) => h.hide());
+          visibleHovers.add(inst);
           if (inst.reference.querySelector(\".hover-info\") || \"versoHover\" in inst.reference.dataset) {
             if (blockedByTactic(inst.reference)) { return false };
           } else { // Nothing to show here!
@@ -815,6 +822,7 @@ window.onload = () => {
           return content;
         }
       };
+
       const addTippy = (selector, props) => {
         tippy(selector, Object.assign({}, defaultTippyProps, props));
       };
@@ -831,6 +839,9 @@ window.onload = () => {
         // */
         maxWidth: \"none\",
         onShow(inst) {
+          visibleHovers.forEach((h) => h.hide());
+          visibleHovers.add(inst);
+
           if (inst.reference.querySelector(\"input.tactic-toggle\").checked) {
             return false;
           }
