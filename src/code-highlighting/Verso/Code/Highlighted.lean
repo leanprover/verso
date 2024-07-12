@@ -709,9 +709,25 @@ def highlightingStyle : String := "
 def highlightingJs : String :=
 "
 window.onload = () => {
+    // Don't show hovers inside of closed tactic states
+    function blockedByTactic(elem) {
+      let parent = elem.parentNode;
+      while (parent && \"classList\" in parent) {
+        if (parent.classList.contains(\"tactic\")) {
+          const toggle = parent.querySelector(\"input.tactic-toggle\");
+          if (toggle) {
+            return !toggle.checked;
+          }
+        }
+        parent = parent.parentNode;
+      }
+      return false;
+    }
+
     for (const c of document.querySelectorAll(\".hl.lean .token\")) {
         if (c.dataset.binding != \"\") {
             c.addEventListener(\"mouseover\", (event) => {
+                if (blockedByTactic(c)) {return;}
                 const context = c.closest(\".hl.lean\").dataset.leanContext;
                 for (const example of document.querySelectorAll(\".hl.lean\")) {
                     if (example.dataset.leanContext == context) {
@@ -756,15 +772,7 @@ window.onload = () => {
         ignoreAttributes: true,
         onShow(inst) {
           if (inst.reference.querySelector(\".hover-info\") || \"versoHover\" in inst.reference.dataset) {
-            let parent = inst.reference.parentNode;
-            while (parent) {
-              if (parent._tippy) {
-                if (parent._tippy.state.isVisible) {
-                  return false;
-                }
-              }
-              parent = parent.parentNode;
-            }
+            if (blockedByTactic(inst.reference)) { return false };
           } else { // Nothing to show here!
             return false;
           }
