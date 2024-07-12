@@ -839,7 +839,7 @@ window.onload = () => {
       const addTippy = (selector, props) => {
         tippy(selector, Object.assign({}, defaultTippyProps, props));
       };
-      addTippy('.hl.lean .const.token, .hl.lean .keyword.token', {theme: 'lean'});
+      addTippy('.hl.lean .const.token, .hl.lean .keyword.token, .hl.lean .literal.token', {theme: 'lean'});
       addTippy('.hl.lean .has-info.warning', {theme: 'warning'});
       addTippy('.hl.lean .has-info.info', {theme: 'info'});
       addTippy('.hl.lean .has-info.error', {theme: 'error'});
