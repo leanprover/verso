@@ -315,7 +315,7 @@ def highlightingStyle : String := "
 }
 
 .hl.lean .hover-info code {
-  white-space: pre;
+  white-space: pre-wrap;
 }
 
 .hl.lean .hover-info.messages > code {
