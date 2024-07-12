@@ -546,6 +546,9 @@ def highlightingStyle : String := "
   top: 0;
   left: 0;
   opacity: 0;
+  height: 0;
+  width: 0;
+  z-index: -10;
 }
 
 .hl.lean .tactic > label::after {
@@ -709,6 +712,7 @@ def highlightingStyle : String := "
 def highlightingJs : String :=
 "
 window.onload = () => {
+
     // Don't show hovers inside of closed tactic states
     function blockedByTactic(elem) {
       let parent = elem.parentNode;
@@ -720,6 +724,20 @@ window.onload = () => {
           }
         }
         parent = parent.parentNode;
+      }
+      return false;
+    }
+
+    function blockedByTippy(elem) {
+      // Don't show a new hover until the old ones are all closed.
+      // Scoped to the nearest \"top-level block\" to avoid being O(n) in the size of the document.
+      var block = elem;
+      const topLevel = new Set([\"section\", \"body\", \"html\", \"nav\", \"header\"]);
+      while (block.parentNode && !topLevel.has(block.parentNode.nodeName.toLowerCase())) {
+        block = block.parentNode;
+      }
+      for (const child of block.querySelectorAll(\".token, .has-info\")) {
+        if (child._tippy && child._tippy.state.isVisible) { return true };
       }
       return false;
     }
@@ -759,9 +777,6 @@ window.onload = () => {
     }
     // Add hovers
     fetch(\"/-verso-docs.json\").then((resp) => resp.json()).then((versoDocData) => {
-      //The singleton addon should work here, but letting the instances override all the necessary properties
-      // led to mysterious breakage. Thus this kludge.
-      var visibleHovers = new Set();
 
       const defaultTippyProps = {
         /* DEBUG -- remove the space: * /
@@ -770,16 +785,14 @@ window.onload = () => {
         // */
         theme: \"lean\",
         maxWidth: \"none\",
+        appendTo: () => document.body,
         interactive: true,
         delay: [100, null],
         ignoreAttributes: true,
-        onHide(inst) {visibleHovers.delete(inst)},
-        onDestroy(inst) {visibleHovers.delete(inst)},
         onShow(inst) {
-          visibleHovers.forEach((h) => h.hide());
-          visibleHovers.add(inst);
           if (inst.reference.querySelector(\".hover-info\") || \"versoHover\" in inst.reference.dataset) {
             if (blockedByTactic(inst.reference)) { return false };
+            if (blockedByTippy(inst.reference)) { return false; }
           } else { // Nothing to show here!
             return false;
           }
@@ -839,12 +852,11 @@ window.onload = () => {
         // */
         maxWidth: \"none\",
         onShow(inst) {
-          visibleHovers.forEach((h) => h.hide());
-          visibleHovers.add(inst);
-
-          if (inst.reference.querySelector(\"input.tactic-toggle\").checked) {
+          const toggle = inst.reference.querySelector(\"input.tactic-toggle\");
+          if (toggle && toggle.checked) {
             return false;
           }
+          if (blockedByTippy(inst.reference)) { return false; }
         },
         theme: \"tactic\",
         placement: 'bottom-start',
