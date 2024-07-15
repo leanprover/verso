@@ -635,59 +635,60 @@ def highlightingStyle : String := "
   border-right-color: #e5e5e5;
 }
 
+.tippy-box[data-theme~='message'][data-placement^='top'] > .tippy-arrow::before {
+  border-top-color: #e5e5e5;
+  border-width: 11px 11px 0;
+}
+.tippy-box[data-theme~='message'][data-placement^='top'] > .tippy-arrow::after {
+  bottom: -11px;
+  border-width: 11px 11px 0;
+}
+.tippy-box[data-theme~='message'][data-placement^='bottom'] > .tippy-arrow::before {
+  border-width: 0 11px 11px;
+}
+.tippy-box[data-theme~='message'][data-placement^='bottom'] > .tippy-arrow::after {
+  top: -11px;
+  border-width: 0 11px 11px;
+}
+.tippy-box[data-theme~='message'][data-placement^='left'] > .tippy-arrow::before {
+  border-left-color: #e5e5e5;
+  border-width: 11px 0 11px 11px;
+}
+.tippy-box[data-theme~='message'][data-placement^='left'] > .tippy-arrow::after {
+  right: -11px;
+  border-width: 11px 0 11px 11px;
+}
+
+.tippy-box[data-theme~='message'][data-placement^='right'] > .tippy-arrow::before {
+  border-right-color: #e5e5e5;
+  border-width: 11px 11px 11px 0;
+}
+.tippy-box[data-theme~='message'][data-placement^='right'] > .tippy-arrow::after {
+  left: -11px;
+  border-width: 11px 11px 11px 0;
+}
+
+
+
 .tippy-box[data-theme~='warning'] {
-  background-color: #efd871;
+  background-color: #e5e5e5;
   color: black;
-  border: 1px solid black;
-}
-.tippy-box[data-theme~='warning'][data-placement^='top'] > .tippy-arrow::before {
-  border-top-color: #efd871;
-}
-.tippy-box[data-theme~='warning'][data-placement^='bottom'] > .tippy-arrow::before {
-  border-bottom-color: #efd871;
-}
-.tippy-box[data-theme~='warning'][data-placement^='left'] > .tippy-arrow::before {
-  border-left-color: #efd871;
-}
-.tippy-box[data-theme~='warning'][data-placement^='right'] > .tippy-arrow::before {
-  border-right-color: #efd871;
+  border: 3px solid #efd871;
 }
 
 .tippy-box[data-theme~='error'] {
-  background-color: #f7a7af;
+  background-color: #e5e5e5;
   color: black;
-  border: 1px solid black;
-}
-.tippy-box[data-theme~='error'][data-placement^='top'] > .tippy-arrow::before {
-  border-top-color: #f7a7af;
-}
-.tippy-box[data-theme~='error'][data-placement^='bottom'] > .tippy-arrow::before {
-  border-bottom-color: #f7a7af;
-}
-.tippy-box[data-theme~='error'][data-placement^='left'] > .tippy-arrow::before {
-  border-left-color: #f7a7af;
-}
-.tippy-box[data-theme~='error'][data-placement^='right'] > .tippy-arrow::before {
-  border-right-color: #f7a7af;
+  border: 3px solid #f7a7af;
 }
 
 .tippy-box[data-theme~='info'] {
-  background-color: #99b3c2;
+  background-color: #e5e5e5;
   color: black;
-  border: 1px solid black;
+  border: 3px solid #99b3c2;
 }
-.tippy-box[data-theme~='info'][data-placement^='top'] > .tippy-arrow::before {
-  border-top-color: #99b3c2;
-}
-.tippy-box[data-theme~='info'][data-placement^='bottom'] > .tippy-arrow::before {
-  border-bottom-color: #99b3c2;
-}
-.tippy-box[data-theme~='info'][data-placement^='left'] > .tippy-arrow::before {
-  border-left-color: #99b3c2;
-}
-.tippy-box[data-theme~='info'][data-placement^='right'] > .tippy-arrow::before {
-  border-right-color: #99b3c2;
-}
+
+
 
 .tippy-box[data-theme~='tactic'] {
   background-color: white;
@@ -840,9 +841,9 @@ window.onload = () => {
         tippy(selector, Object.assign({}, defaultTippyProps, props));
       };
       addTippy('.hl.lean .const.token, .hl.lean .keyword.token, .hl.lean .literal.token', {theme: 'lean'});
-      addTippy('.hl.lean .has-info.warning', {theme: 'warning'});
-      addTippy('.hl.lean .has-info.info', {theme: 'info'});
-      addTippy('.hl.lean .has-info.error', {theme: 'error'});
+      addTippy('.hl.lean .has-info.warning', {theme: 'warning message'});
+      addTippy('.hl.lean .has-info.info', {theme: 'info message'});
+      addTippy('.hl.lean .has-info.error', {theme: 'error message'});
 
       tippy('.hl.lean .tactic', {
         allowHtml: true,
