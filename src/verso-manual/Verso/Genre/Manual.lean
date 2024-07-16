@@ -37,6 +37,42 @@ namespace Verso.Genre
 
 namespace Manual
 
+def Inline.ref : Inline where
+  name := `Verso.Genre.Manual.Inline.ref
+
+@[inline_extension Inline.ref]
+def ref.descr : InlineDescr where
+  traverse := fun _ info content => do
+    match FromJson.fromJson? info with
+    | .error e =>
+      logError e; pure none
+    | .ok (name, none) =>
+      if let some (path, htmlId) := (← get).resolveTag name then
+        let dest := String.join (path.map ("/" ++ ·) |>.toList) ++ "#" ++ htmlId
+        pure <| some <| .other {Inline.ref with data := ToJson.toJson (name, some dest)} content
+      else pure none
+    | .ok (_, some (dest : String)) =>
+      pure none
+
+  toTeX :=
+    some <| fun go _ _ content => do
+      pure <| .seq <| ← content.mapM fun b => do
+        pure <| .seq #[← go b, .raw "\n"]
+  toHtml :=
+    open Verso.Output.Html in
+    some <| fun go _ info content => do
+      match FromJson.fromJson? info with
+      | .error e =>
+        Html.HtmlT.logError e; content.mapM go
+      | .ok (name, none) =>
+        Html.HtmlT.logError ("No destination found for tag '" ++ name ++ "'"); content.mapM go
+      | .ok (_, some dest) =>
+        pure {{<a href={{dest}}>{{← content.mapM go}}</a>}}
+
+def ref (content : Array (Doc.Inline Manual)) (tag : String) : Doc.Inline Manual :=
+  let data : (String × Option String) := (tag, none)
+  .other {Inline.ref with data := ToJson.toJson data} content
+
 def Block.paragraph : Block where
   name := `Verso.Genre.Manual.Block.paragraph
 
@@ -51,7 +87,6 @@ def paragraph.descr : BlockDescr where
     open Verso.Output.Html in
     some <| fun _ go _ _ content => do
       pure <| {{<div class="paragraph">{{← content.mapM go}}</div>}}
-
 
 @[directive_expander paragraph]
 def paragraph : DirectiveExpander
