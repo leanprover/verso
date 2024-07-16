@@ -399,6 +399,13 @@ def externalTag [Monad m] [MonadState TraverseState m] (id : InternalId) (path :
     }
     pure t'
 
+def TraverseState.resolveTag (st : TraverseState) (tag : String) : Option (Path × String) :=
+  if let some id := st.partTags[PartTag.external tag]? then
+    if let some x := st.externalTags[id]? then
+      pure x
+    else panic! s!"No location for ID {id}, but it came from external tag '{tag}'"
+  else none
+
 instance : Traverse Manual TraverseM where
   part p :=
     if p.metadata.isNone then pure (some {}) else pure none
@@ -437,7 +444,9 @@ instance : Traverse Manual TraverseM where
         if let some id' := (← get).partTags[external]? then
           if id != id' then logError s!"Duplicate tag '{t}'"
         else
-          modify fun st => {st with partTags := st.partTags.insert external id}
+          modify fun st => {st with
+            partTags := st.partTags.insert external id,
+            externalTags := st.externalTags.insert id (path, n)}
           meta := {meta with tag := external}
 
     pure <|

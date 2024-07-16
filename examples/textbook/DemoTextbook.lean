@@ -35,6 +35,7 @@ This is done using the `{index}[term]` syntax. Sub-terms {index subterm:="sub-te
 
 Multiple index {index}[index] targets for a term also work.
 
+{ref "index"}[Index link]
 
 # Exercises
 
@@ -61,6 +62,7 @@ theorem five_eq_5 : five = 5 := by
 # Index
 %%%
 number := false
+tag := "index"
 %%%
 
 {theIndex}
