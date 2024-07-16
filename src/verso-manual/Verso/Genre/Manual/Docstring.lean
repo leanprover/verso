@@ -4,7 +4,6 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 
-import Lean
 import Verso.Genre.Manual.Basic
 import Verso.Genre.Manual.Index
 import Verso.Genre.Manual.Markdown
@@ -259,7 +258,7 @@ def docstring.descr : BlockDescr where
 
       let (_, _, xref) ← read
       let idAttr :=
-        if let some (_, htmlId) := xref.externalTags.find? id then
+        if let some (_, htmlId) := xref.externalTags[id]? then
           #[("id", htmlId)]
         else #[]
 

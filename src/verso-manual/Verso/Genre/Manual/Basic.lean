@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 
-import Lean
+import Std.Data.HashSet
 import Verso.Doc
 import Verso.Doc.Html
 import Verso.Doc.TeX
@@ -13,6 +13,7 @@ import Verso.Output.Html
 import Verso.Output.TeX
 
 open Lean (Name Json NameMap ToJson FromJson)
+open Std (HashSet HashMap)
 open Verso.Doc
 open Verso.Output
 
@@ -77,12 +78,12 @@ structure PartMetadata where
 deriving BEq, Hashable, Repr
 
 structure TraverseState where
-  partTags : Lean.HashMap PartTag InternalId := {}
-  externalTags : Lean.HashMap InternalId (Path × String) := {}
-  ids : Lean.HashSet InternalId := {}
+  partTags : HashMap PartTag InternalId := {}
+  externalTags : HashMap InternalId (Path × String) := {}
+  ids : HashSet InternalId := {}
   nextId : Nat := 0
-  extraCss : Lean.HashSet String := {}
-  extraJs : Lean.HashSet String := {}
+  extraCss : HashSet String := {}
+  extraJs : HashSet String := {}
   extraJsFiles : Array (String × String) := #[]
   extraCssFiles : Array (String × String) := #[]
   private contents : NameMap Json := {}
@@ -105,26 +106,26 @@ def freshTag [Monad m] [MonadStateOf TraverseState m] (hint : String) (id : Inte
   modify fun st => {st with partTags := st.partTags.insert tag id}
   pure tag
 
-defmethod Lean.HashMap.all [BEq α] [Hashable α] (hm : Lean.HashMap α β) (p : α → β → Bool) : Bool :=
+defmethod HashMap.all [BEq α] [Hashable α] (hm : HashMap α β) (p : α → β → Bool) : Bool :=
   hm.fold (fun prev k v => prev && p k v) true
 
-defmethod Lean.HashSet.all [BEq α] [Hashable α] (hm : Lean.HashSet α) (p : α → Bool) : Bool :=
+defmethod HashSet.all [BEq α] [Hashable α] (hm : HashSet α) (p : α → Bool) : Bool :=
   hm.fold (fun prev v => prev && p v) true
 
-instance [BEq α] [Hashable α] : BEq (Lean.HashSet α) where
+instance [BEq α] [Hashable α] : BEq (HashSet α) where
   beq xs ys := xs.size == ys.size && xs.all (ys.contains ·)
 
 instance : BEq TraverseState where
   beq x y :=
     x.partTags.size == y.partTags.size &&
     (x.partTags.all fun k v =>
-      match y.partTags.find? k with
+      match y.partTags[k]? with
       | none => false
       | some v' => v == v'
     ) &&
     x.externalTags.size == y.externalTags.size &&
     (x.externalTags.all fun k v =>
-      match y.externalTags.find? k with
+      match y.externalTags[k]? with
       | none => false
       | some v' => v == v'
     ) &&
@@ -384,7 +385,7 @@ def logError [Monad m] [MonadLiftT IO m] [MonadReaderOf Manual.TraverseContext m
   (← readThe Manual.TraverseContext).logError err
 
 def externalTag [Monad m] [MonadState TraverseState m] (id : InternalId) (path : Path) (name : String) : m PartTag := do
-  if let some (_, t) := (← get).externalTags.find? id then
+  if let some (_, t) := (← get).externalTags[id]? then
     return PartTag.external t
   else
     let mut attempt := name.sluggify.toString
@@ -419,7 +420,7 @@ instance : Traverse Manual TraverseM where
       meta := {meta with tag := tag}
     | some t =>
       -- Ensure uniqueness
-      if let some id' := (← get).partTags.find? t then
+      if let some id' := (← get).partTags[t]? then
         if id != id' then logError s!"Duplicate tag '{t}'"
       else
         modify fun st => {st with partTags := st.partTags.insert t id}
@@ -433,7 +434,7 @@ instance : Traverse Manual TraverseM where
       | PartTag.provided n =>
         -- Convert to an external tag, and fail if we can't (users should control their link IDs)
         let external := PartTag.external n
-        if let some id' := (← get).partTags.find? external then
+        if let some id' := (← get).partTags[external]? then
           if id != id' then logError s!"Duplicate tag '{t}'"
         else
           modify fun st => {st with partTags := st.partTags.insert external id}
@@ -514,7 +515,7 @@ open Verso.Output.Html in
 instance : Html.GenreHtml Manual (ReaderT ExtensionImpls IO) where
   part go meta txt := do
     let st ← Verso.Doc.Html.HtmlT.state
-    let attrs := match meta.id >>= st.externalTags.find? with
+    let attrs := match meta.id >>= st.externalTags.get? with
       | none => #[]
       | some (_, t) => #[("id", t)]
     go txt attrs

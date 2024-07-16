@@ -4,8 +4,8 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 
-import Lean
 import Lean.Data.Lsp
+import Lean.Server
 
 import Verso.Doc.Elab
 import Verso.Syntax

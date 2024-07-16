@@ -4,7 +4,9 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 
-import Lean
+import Std.Data.HashMap
+import Std.Data.HashSet
+
 import Verso.Doc
 import Verso.Doc.Elab.ExpanderAttribute
 import Verso.Doc.Elab.InlineString
@@ -13,7 +15,9 @@ import Verso.Syntax
 
 namespace Verso.Doc.Elab
 
-open Lean Elab
+open Lean hiding HashMap HashSet
+open Lean.Elab
+open Std (HashMap HashSet)
 open Verso.SyntaxUtils
 
 initialize registerTraceClass `Elab.Verso
@@ -88,7 +92,7 @@ def internalRefs (defs : HashMap String (DocDef α)) (refs : HashMap String DocU
   let keys : HashSet String := defs.fold (fun soFar k _ => HashSet.insert soFar k) <| refs.fold (fun soFar k _ => soFar.insert k) {}
   let mut refInfo := #[]
   for k in keys do
-    refInfo := refInfo.push ⟨defs.find? k |>.map (·.defSite), refs.find? k |>.map (·.useSites) |>.getD #[]⟩
+    refInfo := refInfo.push ⟨defs[k]? |>.map (·.defSite), refs[k]? |>.map (·.useSites) |>.getD #[]⟩
   refInfo
 
 
@@ -178,7 +182,8 @@ where
 structure ToSyntaxState where
   gensymCounter : Nat := 0
 
-open Lean Elab Command
+open Command
+
 partial def FinishedPart.toSyntax' [Monad m] [MonadQuotation m] [MonadLiftT CommandElabM m] [MonadEnv m]
     (genre : TSyntax `term)
     (linkDefs : HashMap String (DocDef String))
@@ -361,7 +366,7 @@ def PartElabM.addPart (finished : FinishedPart) : PartElabM Unit := modifyThe St
 
 def PartElabM.addLinkDef (refName : TSyntax `str) (url : String) : PartElabM Unit := do
   let strName := refName.getString
-  match (← getThe State).linkDefs.find? strName with
+  match (← getThe State).linkDefs[strName]? with
   | none =>
     modifyThe State fun st => {st with linkDefs := st.linkDefs.insert strName ⟨refName, url⟩}
   | some ⟨_, url'⟩ =>
@@ -369,7 +374,7 @@ def PartElabM.addLinkDef (refName : TSyntax `str) (url : String) : PartElabM Uni
 
 def DocElabM.addLinkRef (refName : TSyntax `str) : DocElabM (TSyntax `term) := do
   let strName := refName.getString
-  match (← getThe State).linkRefs.find? strName with
+  match (← getThe State).linkRefs[strName]? with
   | none =>
     modifyThe State fun st => {st with linkRefs := st.linkRefs.insert strName ⟨#[refName]⟩}
     pure <| linkRefName (← currentDocName) refName
@@ -380,7 +385,7 @@ def DocElabM.addLinkRef (refName : TSyntax `str) : DocElabM (TSyntax `term) := d
 
 def PartElabM.addFootnoteDef (refName : TSyntax `str) (content : Array (TSyntax `term)) : PartElabM Unit := do
   let strName := refName.getString
-  match (← getThe State).footnoteDefs.find? strName with
+  match (← getThe State).footnoteDefs[strName]? with
   | none =>
     modifyThe State fun st => {st with footnoteDefs := st.footnoteDefs.insert strName ⟨refName, content⟩}
   | some ⟨_, content⟩ =>
@@ -388,7 +393,7 @@ def PartElabM.addFootnoteDef (refName : TSyntax `str) (content : Array (TSyntax 
 
 def DocElabM.addFootnoteRef (refName : TSyntax `str) : DocElabM (TSyntax `term) := do
   let strName := refName.getString
-  match (← getThe State).footnoteRefs.find? strName with
+  match (← getThe State).footnoteRefs[strName]? with
   | none =>
     modifyThe State fun st => {st with footnoteRefs := st.footnoteRefs.insert strName ⟨#[refName]⟩}
     pure <| footnoteRefName (← currentDocName) refName

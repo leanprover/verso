@@ -1,4 +1,4 @@
-name: Check for copyright header
+name: Check for copyright header and too-big Lean imports
 
 on: [pull_request]
 
@@ -7,6 +7,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
+
+    - name: Don't 'import Lean', use precise imports
+      run: |
+        ! (find . -name "*.lean" -type f -print0 | xargs -0 grep -E -n '^import Lean$')
 
     - name: Verify .lean files start with a copyright header.
       run: |

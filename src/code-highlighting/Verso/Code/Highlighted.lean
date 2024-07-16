@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 import Lean.Data.Json
+import Std.Data.HashMap
 import SubVerso.Highlighting
 import Verso.Method
 import Verso.Output.Html
@@ -11,6 +12,8 @@ import Verso.Output.Html
 open SubVerso.Highlighting
 open Verso.Output Html
 open Lean (Json)
+open Std (HashMap)
+
 
 namespace Verso.Code
 
@@ -18,24 +21,28 @@ namespace Hover
 
 structure Dedup (α) extends BEq α, Hashable α where
   nextId : Nat := 0
-  contentId : Lean.HashMap Nat α := {}
-  idContent : Lean.HashMap α Nat := {}
+  contentId : HashMap Nat α := {}
+  idContent : HashMap α Nat := {}
 
 variable {α}
-variable [BEq α] [Hashable α]
 
-def Dedup.empty : Dedup α := {}
+def Dedup.empty [BEq α] [Hashable α] : Dedup α := {}
 
-instance : Inhabited (Dedup α) where
+instance [BEq α] [Hashable α] : Inhabited (Dedup α) where
   default := .empty
 
 def Dedup.insert (table : Dedup α) (val : α) : Nat × Dedup α :=
-  if let some id := table.idContent.find? val then (id, table)
+  if let some id := table.idContent[val]? then (id, table)
   else
     let id := table.nextId
-    (id, {table with nextId := id + 1, contentId := table.contentId.insert id val, idContent := table.idContent.insert val id})
+    let _ := table.toBEq
+    let _ := table.toHashable
+    (id, {table with
+            nextId := id + 1,
+            contentId := table.contentId.insert id val,
+            idContent := table.idContent.insert val id})
 
-def Dedup.get? (table : Dedup α) (id : Nat) : Option α := table.contentId.find? id
+def Dedup.get? (table : Dedup α) (id : Nat) : Option α := table.contentId[id]?
 
 def Dedup.docJson (table : Dedup Html) : Json :=
   table.contentId.fold (init := .mkObj []) fun out id html => out.setObjVal! (toString id) (.str html.asString)

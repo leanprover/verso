@@ -3,12 +3,13 @@ Copyright (c) 2023-2024 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-
+import Std.Data.HashSet
 import Verso.Output.Html
 
 import Verso.Genre.Manual.Basic
 
 namespace Verso.Genre.Manual.Html
+open Std (HashSet)
 open Verso.Output Html
 
 inductive Toc where
@@ -37,7 +38,7 @@ def titlePage (title : Html) (authors : List String) (intro : Html) : Html := {{
   </div>
 }}
 
-def page (toc : Array Toc) (textTitle : String) (htmlTitle : Html) (contents : Html) (extraCss : Lean.HashSet String) (extraJs : Lean.HashSet String) (extraStylesheets : List String := []) (extraJsFiles : Array String := #[]) : Html := {{
+def page (toc : Array Toc) (textTitle : String) (htmlTitle : Html) (contents : Html) (extraCss : HashSet String) (extraJs : HashSet String) (extraStylesheets : List String := []) (extraJsFiles : Array String := #[]) : Html := {{
 <html>
   <head>
     <meta charset="utf-8"/>

@@ -3,6 +3,9 @@ Copyright (c) 2023-2024 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
+import Std.Data.HashMap
+import Std.Data.HashSet
+
 import SubVerso.Highlighting
 
 import Verso.Doc
@@ -10,6 +13,8 @@ import Verso.Doc.Html
 import Verso.Method
 import Verso.Genre.Blog.LexedText
 import Verso.Code
+
+open Std (HashSet HashMap)
 
 open Verso Doc Output Html Code Highlighted.WebAssets
 open SubVerso.Highlighting
@@ -57,23 +62,13 @@ structure Target where
   htmlId : String
 deriving BEq
 
-open Lean (Name Syntax HashSet HashMap)
+open Lean (Name Syntax)
 
 structure Ref where
   sourceModule : Name
   sourceSyntax : Syntax
   resolved : Bool
 deriving BEq
-
-instance [BEq α] [Hashable α] [Repr α] [Repr β] : Repr (HashMap α β) where
-  reprPrec hm p :=
-    Repr.addAppParen (.group <| .nest 2 <| "HashMap.fromList" ++ .line ++ contents hm) p
-where contents hm := repr hm.toList
-
-instance [BEq α] [Hashable α] [Repr α] : Repr (HashSet α) where
-  reprPrec hs p :=
-    Repr.addAppParen (.group <| .nest 2 <| "HashSet.fromList" ++ .line ++ contents hs) p
-where contents hs := repr hs.toList
 
 structure ArchivesMeta where
   /-- The categories used by posts in these archives -/
@@ -84,7 +79,7 @@ instance [BEq α] [Hashable α] : BEq (HashSet α) where
   beq xs ys := xs.size == ys.size && ys.fold (fun pre y => pre && xs.contains y) true
 
 instance [BEq α] [Hashable α] [BEq β] : BEq (HashMap α β) where
-  beq xs ys := xs.size == ys.size && ys.fold (fun pre k v => pre && xs.findEntry? k == some (k, v)) true
+  beq xs ys := xs.size == ys.size && ys.fold (fun pre k v => pre && xs[k]? == some v) true
 
 instance : BEq ArchivesMeta where
   beq xs ys := xs.categories == ys.categories
@@ -95,7 +90,6 @@ structure PageMeta where
 deriving BEq, Hashable, TypeName, Repr
 
 end Info
-
 
 structure Date where
   year : Int
@@ -137,16 +131,16 @@ structure TraverseContext where
 deriving instance Ord for List -- TODO - upstream?
 
 structure TraverseState where
-  usedIds : Lean.RBMap (List String) (Lean.HashSet String) compare := {}
+  usedIds : Lean.RBMap (List String) (HashSet String) compare := {}
   targets : Lean.NameMap Blog.Info.Target := {}
   blogs : Lean.NameMap Blog.Info.ArchivesMeta := {}
   refs : Lean.NameMap Blog.Info.Ref := {}
   pageIds : Lean.NameMap Blog.Info.PageMeta := {}
-  scripts : Lean.HashSet String := {}
-  stylesheets : Lean.HashSet String := {}
+  scripts : HashSet String := {}
+  stylesheets : HashSet String := {}
   jsFiles : Array (String × String) := #[]
   cssFiles : Array (String × String) := #[]
-  errors : Lean.HashSet String := {}
+  errors : HashSet String := {}
 
 def TraverseState.addJsFile (st : TraverseState) (name content : String) :=
   if st.jsFiles.all (·.1 != name) then
@@ -173,7 +167,6 @@ def Page : Genre where
 instance : Repr Page.PartMetadata := inferInstanceAs (Repr Page.Meta)
 instance : Repr Page.Block := inferInstanceAs (Repr Blog.BlockExt)
 instance : Repr Page.Inline := inferInstanceAs (Repr Blog.InlineExt)
-
 
 structure Post.Meta where
   date : Blog.Date
