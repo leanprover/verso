@@ -54,7 +54,7 @@ partial def Dir.traverse1 (dir : Dir) : Blog.TraverseM Dir := do
         for cat in p.contents.metadata.map (·.categories) |>.getD [] do
           modify fun st =>
             let ⟨info⟩ := st.blogs.find? id |>.getD {}
-            let catPages := info.find? cat |>.getD {} |>.insert p.id
+            let catPages := info.getD cat {} |>.insert p.id
             {st with blogs := st.blogs.insert id ⟨info.insert cat catPages⟩}
       let txt' ← Page.traverse txt
       .blog name id txt' <$> posts.mapM BlogPost.traverse1

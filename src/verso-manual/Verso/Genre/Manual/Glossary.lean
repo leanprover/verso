@@ -90,7 +90,7 @@ def deftech.descr : InlineDescr where
   toHtml :=
     open Verso.Output.Html in
     some <| fun go id inl content => do
-      let some (_, t) := (← read).2.2.externalTags.find? id
+      let some (_, t) := (← read).2.2.externalTags[id]?
         | panic! s!"Untagged index target with data {inl}"
       return {{<span id={{t}}>{{← content.mapM go}}</span>}}
 
@@ -145,7 +145,7 @@ def tech.descr : InlineDescr where
           | .error e => HtmlT.logError e; content.mapM go
           | .ok id =>
             let xref ← Doc.Html.HtmlT.state
-            if let some (path, htmlId) := xref.externalTags.find? id then
+            if let some (path, htmlId) := xref.externalTags.get? id then
               let addr := String.join (path.map ("/" ++ ·) |>.toList)
               pure {{<a class="technical-term" href=s!"{addr}#{htmlId}">{{← content.mapM go}}</a>}}
             else

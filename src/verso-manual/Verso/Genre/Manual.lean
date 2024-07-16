@@ -144,7 +144,7 @@ partial def toc (depth : Nat) (opts : Html.Options Manual IO) (ctxt : TraverseCo
     let titleHtml ← Html.seq <$> title.mapM (Manual.toHtml (m := ReaderT ExtensionImpls IO) opts.lift ctxt state ·)
     let some {id := some id, number, ..} := meta
       | throw <| .userError s!"No ID for {sTitle} - {repr meta}"
-    let some (_, v) := state.externalTags.find? id
+    let some (_, v) := state.externalTags[id]?
       | throw <| .userError s!"No external ID for {sTitle}"
     let ctxt' := if depth > 0 then {ctxt with path := ctxt.path.push (meta.bind (·.file) |>.getD (sTitle.sluggify.toString))} else ctxt
     let children ← sub.mapM (toc (depth - 1) opts ctxt' state)

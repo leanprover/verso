@@ -6,13 +6,16 @@ Author: David Thrane Christiansen
 
 import Lean.Data.Json
 import Lean.Data.Json.FromToJson
+import Std.Data.HashMap
+import Std.Data.HashSet
 
 import Verso
 import Verso.Genre.Manual.Basic
 
 open Verso Genre Manual
 open Verso.Doc.Elab
-open Lean (ToJson FromJson HashSet)
+open Lean (ToJson FromJson)
+open Std (HashMap HashSet)
 
 namespace Verso.Genre.Manual.Index
 
@@ -60,13 +63,10 @@ deriving BEq, Hashable, ToJson, FromJson
 
 end Index
 
-instance [BEq α] [Hashable α] : Hashable (HashSet α) where
-  hash xs := hash xs.toArray
 
 structure Index where
   entries : HashSet (Index.Entry × InternalId) := {}
   see : HashSet Index.See := {}
-deriving BEq, Hashable
 
 instance : ToJson Index where
   toJson | ⟨entries, see⟩ => ToJson.toJson (entries.toArray, see.toArray)
@@ -114,7 +114,7 @@ def index.descr : InlineDescr where
   toHtml :=
     open Verso.Output.Html in
     some <| fun _go id inl _content => do
-      let some (_, t) := (← read).2.2.externalTags.find? id
+      let some (_, t) := (← read).2.2.externalTags.get? id
         | panic! s!"Untagged index target with data {inl}"
       return {{<span id={{t}}></span>}}
 
@@ -141,7 +141,7 @@ def see.descr : InlineDescr where
       match ist with
       | some (.error err) => logError err; return none
       | some (.ok v) => modify (·.set indexState {v with see := v.see.insert see})
-      | none => modify (·.set indexState {entries := {}, see := (Lean.HashSet.empty.insert see) : Index})
+      | none => modify (·.set indexState {entries := {}, see := (HashSet.empty.insert see) : Index})
       pure none
   toTeX :=
     some <| fun _ _ _ _ => do
@@ -194,7 +194,7 @@ where
     match h : links.size with
     | 0 => pure termHtml
     | 1 =>
-      if let some (path, htmlId) := xref.externalTags.find? links[0] then
+      if let some (path, htmlId) := xref.externalTags[links[0]]? then
         let addr := String.join (path.map ("/" ++ ·) |>.toList)
         pure {{<a href=s!"{addr}#{htmlId}">{{termHtml}}</a>}}
       else
@@ -202,7 +202,7 @@ where
         pure .empty
     | _ =>
       let links ← links.mapIdxM fun i id => do
-        if let some (path, htmlId) := xref.externalTags.find? id then
+        if let some (path, htmlId) := xref.externalTags[id]? then
           let addr := String.join (path.map ("/" ++ ·) |>.toList)
           pure {{" " <a href=s!"{addr}#{htmlId}"> s!"({i.val})" </a>}}
         else

@@ -4,9 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 
-import Lean
 import Verso.Parser
-
 
 namespace Verso.Genre.Blog
 

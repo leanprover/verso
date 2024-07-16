@@ -1,6 +1,5 @@
 import Verso.Syntax
 import Verso.Genre.Manual
-import Lean
 
 set_option guard_msgs.diff true
 

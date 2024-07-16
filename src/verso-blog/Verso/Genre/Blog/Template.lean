@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 
-import Lean
+import Std.Data.HashSet
 
 import SubVerso.Highlighting
 
@@ -15,6 +15,7 @@ import Verso.Genre.Blog.Site
 import Verso.Output.Html
 import Verso.Code
 
+open Std (HashSet)
 open Lean (RBMap)
 
 open Verso Doc Output Html
@@ -170,8 +171,8 @@ structure Context where
   config : Config
   path : List String
   params : Params
-  builtInStyles : Lean.HashSet String
-  builtInScripts : Lean.HashSet String
+  builtInStyles : HashSet String
+  builtInScripts : HashSet String
   jsFiles : Array String
   cssFiles : Array String
 

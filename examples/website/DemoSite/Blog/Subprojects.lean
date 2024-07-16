@@ -6,7 +6,6 @@ Author: David Thrane Christiansen
 
 import Verso.Genre.Blog
 import DemoSite.Categories
-import Lean
 
 open Lean.MessageSeverity
 
