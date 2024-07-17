@@ -38,14 +38,14 @@ def titlePage (title : Html) (authors : List String) (intro : Html) : Html := {{
   </div>
 }}
 
-def page (toc : Array Toc) (textTitle : String) (htmlTitle : Html) (contents : Html) (extraCss : HashSet String) (extraJs : HashSet String) (extraStylesheets : List String := []) (extraJsFiles : Array String := #[]) : Html := {{
+def page (toc : Array Toc) (textTitle : String) (htmlTitle : Html) (contents : Html) (extraCss : HashSet String) (extraJs : HashSet String) (extraStylesheets : List String := []) (extraScripts : List String := []) (extraJsFiles : Array String := #[]) : Html := {{
 <html>
   <head>
     <meta charset="utf-8"/>
     <title>{{textTitle}}</title>
     <link rel="stylesheet" href="/book.css" />
     <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js" integrity="sha384-zbcZAIxlvJtNE3Dp5nxLXdXtXyxwOdnILY1TDPVmKFhl4r4nSUG1r8bcFXGVa4Te" crossorigin="anonymous"></script>
-    {{extraJsFiles.map ({{<script src=s!"/-verso-js/{·}"></script>}})}}
+    {{extraJsFiles.map ({{<script src=s!"{·}"></script>}})}}
     {{extraStylesheets.map (fun url => {{<link rel="stylesheet" href={{url}}/> }})}}
     {{extraCss.toArray.map ({{<style>{{Html.text false ·}}</style>}})}}
     {{extraJs.toArray.map ({{<script>{{Html.text false ·}}</script>}})}}
