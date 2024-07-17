@@ -97,6 +97,14 @@ structure Date where
   day : Nat
 deriving Inhabited, Repr
 
+-- FIXME replace this primitive implementation with proper ISO 8601
+-- date formatting when available
+def Date.toIso8601String (date : Date) : String :=
+  s!"{date.year}-{pad date.month}-{pad date.day}"
+where
+  pad (n : Nat) : String :=
+    (if n ≤ 9 then "0" else "") ++ toString n
+
 def defaultPostName (date : Date) (title : String) : String :=
   s!"{date.year}-{date.month}-{date.day}-{slugify title}"
 where
