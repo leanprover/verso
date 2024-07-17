@@ -116,7 +116,7 @@ def post : Template := do
             {{(md : Post.PartMetadata).authors.map ({{<span class="author">{{Html.text true ·}}</span>}}) |>.toArray}}
           </div>
           <div class="date">
-            s!"{md.date.year}-{md.date.month}-{md.date.day}"
+            {{md.date.toIso8601String}}
           </div>
           {{if md.categories.isEmpty then Html.empty
             else {{
@@ -161,7 +161,7 @@ def archiveEntry : Template := do
               {{(md : Post.PartMetadata).authors.map ({{<span class="author">{{Html.text true ·}}</span>}}) |>.toArray}}
             </div>
             <div class="date">
-              s!"{md.date.year}-{md.date.month}-{md.date.day}"
+              {{md.date.toIso8601String}}
             </div>
             {{if md.categories.isEmpty then Html.empty
               else {{
