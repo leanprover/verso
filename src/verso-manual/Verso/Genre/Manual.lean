@@ -101,8 +101,12 @@ structure Config where
   destination : System.FilePath := "_out"
   maxTraversals : Nat := 20
   htmlDepth := 0
+  emitTeX : Bool := true
+  emitHtmlSingle : Bool := true
+  emitHtmlMulti : Bool := true
   extraFiles : List (System.FilePath × String) := []
   extraCss : List String := []
+  extraJs : List String := []
 
 def ensureDir (dir : System.FilePath) : IO Unit := do
   if !(← dir.pathExists) then
@@ -217,7 +221,7 @@ where
         h.putStr contents
     IO.FS.withFile (dir.join "index.html") .write fun h => do
       h.putStrLn Html.doctype
-      h.putStrLn (Html.page toc text.titleString titleHtml pageContent state.extraCss state.extraJs (extraStylesheets := config.extraCss ++ state.extraCssFiles.toList.map ("/-verso-css/" ++ ·.1)) (extraJsFiles := state.extraJsFiles.map (·.1))).asString
+      h.putStrLn (Html.page toc text.titleString titleHtml pageContent state.extraCss state.extraJs (extraStylesheets := config.extraCss ++ state.extraCssFiles.toList.map ("/-verso-css/" ++ ·.1)) (extraJsFiles := config.extraJs.toArray ++ state.extraJsFiles.map ("/-verso-js/" ++ ·.1))).asString
 
  open Verso.Output.Html in
 def emitHtmlMulti (logError : String → IO Unit) (config : Config) (text : Part Manual) : ReaderT ExtensionImpls IO Unit := do
@@ -271,7 +275,7 @@ where
     ensureDir dir
     IO.FS.withFile (dir.join "index.html") .write fun h => do
       h.putStrLn Html.doctype
-      h.putStrLn (relativize ctxt.path <| Html.page bookContents part.titleString pageTitle pageContent state.extraCss state.extraJs (extraStylesheets := config.extraCss ++ state.extraCssFiles.toList.map ("/-verso-css/" ++ ·.1)) (extraJsFiles := state.extraJsFiles.map (·.1))).asString
+      h.putStrLn (relativize ctxt.path <| Html.page bookContents part.titleString pageTitle pageContent state.extraCss state.extraJs (extraStylesheets := config.extraCss ++ state.extraCssFiles.toList.map ("/-verso-css/" ++ ·.1)) (extraJsFiles := config.extraJs.toArray ++ state.extraJsFiles.map ("/-verso-js/" ++ ·.1))).asString
     if depth > 0 then
       for p in part.subParts do
         let nextFile := p.metadata.bind (·.file) |>.getD (p.titleString.sluggify.toString)
@@ -306,18 +310,23 @@ where
   opts (cfg : Config)
     | ("--output"::dir::more) => opts {cfg with destination := dir} more
     | ("--depth"::n::more) => opts {cfg with htmlDepth := n.toNat!} more
+    | ("--with-tex"::more) => opts {cfg with emitTeX := true} more
+    | ("--without-tex"::more) => opts {cfg with emitTeX := false} more
+    | ("--with-html-single"::more) => opts {cfg with emitHtmlSingle := true} more
+    | ("--without-html-single"::more) => opts {cfg with emitHtmlSingle := false} more
+    | ("--with-html-multi"::more) => opts {cfg with emitHtmlMulti := true} more
+    | ("--without-html-multi"::more) => opts {cfg with emitHtmlMulti := false} more
     | (other :: _) => throw (↑ s!"Unknown option {other}")
     | [] => pure cfg
-
 
   go : ReaderT ExtensionImpls IO UInt32 := do
     let hasError ← IO.mkRef false
     let logError msg := do hasError.set true; IO.eprintln msg
     let cfg ← opts config options
 
-    emitTeX logError cfg text
-    emitHtmlSingle logError cfg text
-    emitHtmlMulti logError cfg text
+    if cfg.emitTeX then emitTeX logError cfg text
+    if cfg.emitHtmlSingle then emitHtmlSingle logError cfg text
+    if cfg.emitHtmlMulti then emitHtmlMulti logError cfg text
 
     if (← hasError.get) then
       IO.eprintln "Errors were encountered!"
