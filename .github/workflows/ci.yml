@@ -58,7 +58,35 @@ jobs:
           find . -name lake-manifest.json -print0 | xargs -0 jq -e -s 'map(.packages[] | select(.name == "subverso").rev) | .[0] as $x | all(.[]; . == $x)'
 
       - name: Install PDF Dependencies
-        run: sudo apt update && sudo apt install -y pandoc texlive-latex-base texlive-latex-extra texlive-latex-recommended texlive-luatex fonts-dejavu texlive-fonts-recommended texlive-fonts-extra
+        uses: teatimeguest/setup-texlive-action@v3
+        with:
+          packages: |
+            scheme-minimal
+            latex-bin
+            xpatch
+            xparse
+            array
+            booktabs
+            footmisc
+            environ
+            hyperref
+            titlesec
+            tocloft
+            enumitem
+            fmtcount
+            glossaries
+            datatool
+            caption
+            babel
+            fontspec
+            textcase
+            memoir
+            sourcecodepro
+            sourcesanspro
+            sourceserifpro
+
+      - name: Check `tlmgr` version
+        run: tlmgr --version
 
       - name: Generate the manual
         run: |
