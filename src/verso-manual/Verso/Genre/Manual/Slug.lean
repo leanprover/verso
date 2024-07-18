@@ -8,10 +8,18 @@ import Verso.Method
 
 namespace Verso.Genre.Manual
 open Verso.Method
+open Lean (ToJson FromJson)
 
 structure Slug where
+  private mk ::
   toString : String
-deriving BEq, Hashable, DecidableEq, Ord
+deriving BEq, Hashable, DecidableEq, Ord, Repr
+
+instance : ToJson Slug where
+  toJson | ⟨str⟩ => ToJson.toJson str
+
+instance : FromJson Slug where
+  fromJson? v := Slug.mk <$> FromJson.fromJson? v
 
 namespace Slug
 
@@ -32,7 +40,6 @@ instance : DecidableRel (@LE.le Slug _) := fun s1 s2 =>
 instance : Coe String Slug where
   coe := (⟨·⟩)
 
-
 defmethod String.sluggify (str : String) : Slug := Id.run do
   let mut s := ""
   for c in str.data do
@@ -43,6 +50,8 @@ defmethod String.sluggify (str : String) : Slug := Id.run do
     else if c == ' ' || c == '-' then
       s := s.push '-'
   ⟨s⟩
+
+def ofString (str : String) : Slug := str.sluggify
 
 partial def unique (used : Lean.HashSet Slug) (slug : Slug) : Slug :=
   if !(used.contains slug) then slug

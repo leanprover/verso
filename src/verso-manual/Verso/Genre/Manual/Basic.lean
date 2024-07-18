@@ -40,17 +40,17 @@ During the traverse pass, the following steps occur:
 Note that internal invariants about uniqueness of names can be violated by editing the JSON
 serialization. This may lead to unexpected results.
 -/
-inductive PartTag where --TODO provided should take a slug
-  | /-- A user-provided tag - respect this if possible -/ provided (name : String)
+inductive Tag where
+  | /-- A user-provided tag - respect this if possible -/ provided (name : Slug)
   | /-- A unique tag, suitable for inclusion in a document -/ private external (name : String)
   | /-- A machine-assigned tag -/ private internal (name : String)
 deriving BEq, Hashable, Repr, ToJson, FromJson
 
-instance : ToString PartTag where
+instance : ToString Tag where
   toString := toString ∘ repr
 
-instance : Coe String PartTag where
-  coe := .provided
+instance : Coe String Tag where
+  coe := .provided ∘ Slug.ofString
 
 /--
 An internal identifier assigned to a part during traversal. Users don't get to have influence
@@ -70,7 +70,7 @@ instance : ToString InternalId where
 structure PartMetadata where
   authors : List String := []
   date : Option String := none
-  tag : Option PartTag := none
+  tag : Option Tag := none
   /-- If this part ends up as the root of a file, use this name for it -/
   file : Option String := none
   id : Option InternalId := none
@@ -78,7 +78,7 @@ structure PartMetadata where
 deriving BEq, Hashable, Repr
 
 structure TraverseState where
-  partTags : HashMap PartTag InternalId := {}
+  tags : HashMap Tag InternalId := {}
   externalTags : HashMap InternalId (Path × String) := {}
   ids : HashSet InternalId := {}
   nextId : Nat := 0
@@ -97,13 +97,13 @@ def freshId [Monad m] [MonadStateOf TraverseState m] : m InternalId := do
   modify fun st => {st with ids := st.ids.insert i}
   pure i
 
-def freshTag [Monad m] [MonadStateOf TraverseState m] (hint : String) (id : InternalId) : m PartTag := do
+def freshTag [Monad m] [MonadStateOf TraverseState m] (hint : String) (id : InternalId) : m Tag := do
   let mut next : String := s!"--part-{hint.sluggify.toString}-{id.id}"
   repeat
-    if (← get).partTags.contains next then next := next ++ "-retry"
+    if (← get).tags.contains next then next := next ++ "-retry"
     else break
-  let tag := PartTag.internal next
-  modify fun st => {st with partTags := st.partTags.insert tag id}
+  let tag := Tag.internal next
+  modify fun st => {st with tags := st.tags.insert tag id}
   pure tag
 
 defmethod HashMap.all [BEq α] [Hashable α] (hm : HashMap α β) (p : α → β → Bool) : Bool :=
@@ -117,9 +117,9 @@ instance [BEq α] [Hashable α] : BEq (HashSet α) where
 
 instance : BEq TraverseState where
   beq x y :=
-    x.partTags.size == y.partTags.size &&
-    (x.partTags.all fun k v =>
-      match y.partTags[k]? with
+    x.tags.size == y.tags.size &&
+    (x.tags.all fun k v =>
+      match y.tags[k]? with
       | none => false
       | some v' => v == v'
     ) &&
@@ -384,23 +384,23 @@ instance : MonadReader Manual.TraverseContext TraverseM where
 def logError [Monad m] [MonadLiftT IO m] [MonadReaderOf Manual.TraverseContext m] (err : String) : m Unit := do
   (← readThe Manual.TraverseContext).logError err
 
-def externalTag [Monad m] [MonadState TraverseState m] (id : InternalId) (path : Path) (name : String) : m PartTag := do
+def externalTag [Monad m] [MonadState TraverseState m] (id : InternalId) (path : Path) (name : String) : m Tag := do
   if let some (_, t) := (← get).externalTags[id]? then
-    return PartTag.external t
+    return Tag.external t
   else
     let mut attempt := name.sluggify.toString
     repeat
-      if (← get).partTags.contains (PartTag.external attempt) then attempt := attempt ++ "-next"
+      if (← get).tags.contains (Tag.external attempt) then attempt := attempt ++ "-next"
       else break
-    let t' := PartTag.external attempt
+    let t' := Tag.external attempt
     modify fun st => {st with
-      partTags := st.partTags.insert t' id,
+      tags := st.tags.insert t' id,
       externalTags := st.externalTags.insert id (path, attempt)
     }
     pure t'
 
 def TraverseState.resolveTag (st : TraverseState) (tag : String) : Option (Path × String) :=
-  if let some id := st.partTags[PartTag.external tag]? then
+  if let some id := st.tags[Tag.external tag]? then
     if let some x := st.externalTags[id]? then
       pure x
     else panic! s!"No location for ID {id}, but it came from external tag '{tag}'"
@@ -427,26 +427,26 @@ instance : Traverse Manual TraverseM where
       meta := {meta with tag := tag}
     | some t =>
       -- Ensure uniqueness
-      if let some id' := (← get).partTags[t]? then
+      if let some id' := (← get).tags[t]? then
         if id != id' then logError s!"Duplicate tag '{t}'"
       else
-        modify fun st => {st with partTags := st.partTags.insert t id}
+        modify fun st => {st with tags := st.tags.insert t id}
       let path := (← readThe TraverseContext).path
       match t with
-      | PartTag.external name =>
+      | Tag.external name =>
         -- These are the actual IDs to use in generated HTML and links and such
         modify fun st => {st with externalTags := st.externalTags.insert id (path, name)}
-      | PartTag.internal name =>
+      | Tag.internal name =>
         meta := {meta with tag := ← externalTag id path name}
-      | PartTag.provided n =>
+      | Tag.provided n =>
         -- Convert to an external tag, and fail if we can't (users should control their link IDs)
-        let external := PartTag.external n
-        if let some id' := (← get).partTags[external]? then
+        let external := Tag.external n.toString
+        if let some id' := (← get).tags[external]? then
           if id != id' then logError s!"Duplicate tag '{t}'"
         else
           modify fun st => {st with
-            partTags := st.partTags.insert external id,
-            externalTags := st.externalTags.insert id (path, n)}
+            tags := st.tags.insert external id,
+            externalTags := st.externalTags.insert id (path, n.toString)}
           meta := {meta with tag := external}
 
     pure <|
