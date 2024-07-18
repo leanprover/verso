@@ -78,6 +78,7 @@ jobs:
             datatool
             caption
             babel
+            fontspec
             memoir
             sourcecodepro
             sourcesanspro
