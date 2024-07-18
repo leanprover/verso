@@ -79,6 +79,7 @@ jobs:
             caption
             babel
             fontspec
+            textcase
             memoir
             sourcecodepro
             sourcesanspro
