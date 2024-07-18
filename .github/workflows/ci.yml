@@ -65,6 +65,7 @@ jobs:
             latex-bin
             xpatch
             xparse
+            array
             memoir
             sourcecodepro
             sourcesanspro
