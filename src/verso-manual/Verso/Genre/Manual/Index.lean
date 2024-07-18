@@ -272,7 +272,7 @@ def Index.render (index : Index) : Array (IndexCat × Array RenderedEntry) := Id
     let (term, rid, links, subterms) ←
       if let some vals := terms.find? key then pure vals
       else
-        let defaultRId := key.sluggify.unique usedIds |>.toString
+        let defaultRId := key.sluggify.unique usedIds
         usedIds := usedIds.insert defaultRId
         (e.term, ⟨s!"---entry-{defaultRId}"⟩, #[], {})
 
@@ -281,7 +281,7 @@ def Index.render (index : Index) : Array (IndexCat × Array RenderedEntry) := Id
       let (k', term', rid', links') ←
         if let some e := subterms.findEntry? k then pure e
         else
-          let defaultRId := "{key}---{k}".sluggify.unique usedIds |>.toString
+          let defaultRId := "{key}---{k}".sluggify.unique usedIds
           usedIds := usedIds.insert defaultRId
           (k, sub, ⟨s!"---entry-{defaultRId}"⟩, #[])
       terms := terms.insert key (term, rid, links, subterms.insert k' (term', rid', links'.push id))
