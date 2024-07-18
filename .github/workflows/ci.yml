@@ -64,6 +64,7 @@ jobs:
             scheme-minimal
             latex-bin
             xpatch
+            xparse
             memoir
             sourcecodepro
             sourcesanspro
