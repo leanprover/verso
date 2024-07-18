@@ -77,9 +77,54 @@ structure PartMetadata where
   number : Bool := true
 deriving BEq, Hashable, Repr
 
+/--
+A documented object, described in specific locations in the document.
+-/
+structure Object where
+  /--
+  The canonical string name used to construct a cross-reference to this object, also from external
+  sites. Should be stable over time.
+  -/
+  canonicalName : String
+  /-- Extra data that can be used e.g. for rendering a domain index -/
+  data : HashSet Json := {}
+  /-- The IDs of the description site(s) -/
+  ids : HashSet InternalId := {}
+deriving Inhabited
+
+instance : BEq Object where
+  beq
+    | {canonicalName := n1, data := d1, ids := i1}, {canonicalName := n2, data := d2, ids := i2} =>
+      n1 == n2 &&
+      d1.size == d2.size && d1.fold (init := true) (fun soFar v => soFar && d2.contains v) &&
+      i1.size == i2.size && i1.fold (init := true) (fun soFar v => soFar && i2.contains v)
+
+def Object.addId (id : InternalId) (object : Object) : Object :=
+  {object with ids := object.ids.insert id}
+
+def Object.addData [ToJson α] (data : α) (object : Object) : Object :=
+  {object with data := object.data.insert (ToJson.toJson data)}
+
+structure Domain where
+  objects : Lean.RBMap String Object compare := {}
+deriving Inhabited
+
+instance : BEq Domain where
+  beq
+    | ⟨d1⟩, ⟨d2⟩ => d1.size == d2.size && d1.all (fun k v => d2.find? k == some v)
+
+def Domain.insertId (canonicalName : String) (id : InternalId) (domain : Domain) : Domain :=
+  let obj := domain.objects.find? canonicalName |>.getD {canonicalName} |>.addId id
+  ⟨domain.objects.insert canonicalName obj⟩
+
+def Domain.insertData [ToJson α] (canonicalName : String) (data : α) (domain : Domain) : Domain :=
+  let obj := domain.objects.find? canonicalName |>.getD {canonicalName} |>.addData data
+  ⟨domain.objects.insert canonicalName obj⟩
+
 structure TraverseState where
   tags : HashMap Tag InternalId := {}
   externalTags : HashMap InternalId (Path × String) := {}
+  domains : NameMap Domain := {}
   ids : HashSet InternalId := {}
   nextId : Nat := 0
   extraCss : HashSet String := {}
