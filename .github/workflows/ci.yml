@@ -66,6 +66,18 @@ jobs:
             xpatch
             xparse
             array
+            booktabs
+            footmisc
+            environ
+            hyperref
+            titlesec
+            tocloft
+            enumitem
+            fmtcount
+            glossaries
+            datatool
+            caption
+            babel
             memoir
             sourcecodepro
             sourcesanspro
