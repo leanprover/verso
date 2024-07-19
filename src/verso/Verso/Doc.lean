@@ -330,7 +330,32 @@ partial def Part.reprPrec [Repr g.Inline] [Repr g.Block] [Repr g.PartMetadata] (
 
 instance [Repr g.Inline] [Repr g.Block] [Repr g.PartMetadata] : Repr (Part g) := ⟨Part.reprPrec⟩
 
+/--
+Genre-specific traversal.
+
+The traversal pass is where cross-references are resolved. The traversal pass repeatedly applies a
+genre-specific stateful computation until a fixed point is reached, both with respect to the state
+and the document. Traversal may update the state or rewrite parts of the document.
+
+The methods `part`, `block`, and `inline` provide effects to be carried out before traversing the
+given level of the AST, and `part` allows the part's metadata to be updated.
+
+`genrePart` is carried out after `part`. It allows genre-specific rewriting of the entire part based
+on genre-specific metadata. This is typically used to construct a table of contents or permalinks,
+but it can in principle arbitrarily rewrite the part. `inPart` is used to locally transform the
+genre's traversal context along the lines of `withReader`, and can be used to keep track of e.g. the
+current position in the table of contents.
+
+`genreBlock` and `genreInline` are invoked when traversal encounters `Block.other` and
+`Inline.other`. It may rewrite them, or have state effects.
+
+-/
 class Traverse (g : Genre) (m : outParam (Type → Type)) where
+  /--
+  How to modify the context while traversing the contents a given part.
+  This is applied after `part` and `genrePart` have rewritten the text, if applicable.
+  -/
+  inPart : Part g → g.TraverseContext → g.TraverseContext := fun _ => id
   part [MonadReader g.TraverseContext m] [MonadState g.TraverseState m] : Part g → m (Option g.PartMetadata)
   block [MonadReader g.TraverseContext m] [MonadState g.TraverseState m] : Block g → m Unit
   inline [MonadReader g.TraverseContext m] [MonadState g.TraverseState m] : Inline g → m Unit
@@ -341,7 +366,9 @@ class Traverse (g : Genre) (m : outParam (Type → Type)) where
 
 
 partial def Genre.traverse (g : Genre)
-    [Traverse g m] [Monad m] [MonadReader g.TraverseContext m] [MonadState g.TraverseState m]
+    [Traverse g m] [Monad m]
+    [MonadReader g.TraverseContext m] [MonadWithReader g.TraverseContext m]
+    [MonadState g.TraverseState m]
     (top : Part g) : m (Part g) :=
   part top
 
@@ -386,4 +413,6 @@ where
       if let some p' ← Traverse.genrePart md p then
         p := p'
     let .mk title titleString meta content subParts := p
-    pure <| .mk (← title.mapM inline) titleString meta (← content.mapM block) (← subParts.mapM part)
+    let (content', subParts') ← withReader (Traverse.inPart p) <|
+      (·,·) <$> content.mapM block <*> subParts.mapM part
+    pure <| .mk (← title.mapM inline) titleString meta content' subParts'

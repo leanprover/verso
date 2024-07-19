@@ -43,15 +43,18 @@ def Inline.ref : Inline where
 @[inline_extension Inline.ref]
 def ref.descr : InlineDescr where
   traverse := fun _ info content => do
-    match FromJson.fromJson? info with
+
+    match FromJson.fromJson? (α := String × Option Name × Option String) info with
     | .error e =>
       logError e; pure none
-    | .ok (name, none) =>
-      if let some (path, htmlId) := (← get).resolveTag name then
+    | .ok (name, domain, none) =>
+      let domain := domain.getD `Verso.Genre.Manual.section
+      match (← get).resolveDomainObject domain name with
+      | .error _ => return none
+      | .ok (path, htmlId) =>
         let dest := String.join (path.map ("/" ++ ·) |>.toList) ++ "#" ++ htmlId
-        pure <| some <| .other {Inline.ref with data := ToJson.toJson (name, some dest)} content
-      else pure none
-    | .ok (_, some (dest : String)) =>
+        return some <| .other {Inline.ref with data := ToJson.toJson (name, some domain, some dest)} content
+    | .ok (_, domain, some (dest : String)) =>
       pure none
 
   toTeX :=
@@ -61,16 +64,16 @@ def ref.descr : InlineDescr where
   toHtml :=
     open Verso.Output.Html in
     some <| fun go _ info content => do
-      match FromJson.fromJson? info with
+      match FromJson.fromJson? (α := String × Option Name × Option String) info with
       | .error e =>
         Html.HtmlT.logError e; content.mapM go
-      | .ok (name, none) =>
-        Html.HtmlT.logError ("No destination found for tag '" ++ name ++ "'"); content.mapM go
-      | .ok (_, some dest) =>
+      | .ok (name, domain, none) =>
+        Html.HtmlT.logError ("No destination found for tag '" ++ name ++ "' in " ++ toString domain); content.mapM go
+      | .ok (_, _, some dest) =>
         pure {{<a href={{dest}}>{{← content.mapM go}}</a>}}
 
-def ref (content : Array (Doc.Inline Manual)) (tag : String) : Doc.Inline Manual :=
-  let data : (String × Option String) := (tag, none)
+def ref (content : Array (Doc.Inline Manual)) (canonicalName : String) (domain : Option Name := none) : Doc.Inline Manual :=
+  let data : (String × Option Name × Option String) := (canonicalName, domain, none)
   .other {Inline.ref with data := ToJson.toJson data} content
 
 def Block.paragraph : Block where
@@ -117,17 +120,18 @@ def ensureDir (dir : System.FilePath) : IO Unit := do
 def traverseMulti (depth : Nat) (path : Path) (part : Part Manual) : TraverseM (Part Manual) :=
   match depth with
   | 0 => Genre.traverse Manual part
-  | d + 1 => MonadWithReaderOf.withReader ({· with path := path : TraverseContext}) do
+  | d + 1 => withReader ({· with path := path : TraverseContext}) do
     let meta' ← Verso.Doc.Traverse.part (g := Manual) part
     let mut p := meta'.map part.withMetadata |>.getD part
     if let some md := p.metadata then
       if let some p' ← Traverse.genrePart md p then
         p := p'
     let .mk title titleString meta content subParts := p
-    let subParts' ← subParts.mapM fun p => do
+    let content' ← withReader (·.inPart p) <| content.mapM traverseBlock
+    let subParts' ← withReader (·.inPart p) <| subParts.mapM fun p => do
       let path' := path.push (p.metadata.bind (·.file) |>.getD (p.titleString.sluggify.toString))
-      MonadWithReaderOf.withReader ({· with path := path' : TraverseContext}) (traverseMulti d path' p)
-    pure <| .mk (← title.mapM traverseInline) titleString meta (← content.mapM traverseBlock) subParts'
+      withReader ({· with path := path' : TraverseContext}) (traverseMulti d path' p)
+    pure <| .mk (← title.mapM traverseInline) titleString meta content' subParts'
 where
   traverseInline := Verso.Doc.Genre.traverse.inline Manual
   traverseBlock := Verso.Doc.Genre.traverse.block Manual
@@ -189,6 +193,17 @@ partial def toc (depth : Nat) (opts : Html.Options Manual IO) (ctxt : TraverseCo
     let children ← sub.mapM (toc (depth - 1) opts ctxt' state)
     pure <| .entry titleHtml ctxt'.path v number children
 
+def emitXrefs (dir : System.FilePath) (state : TraverseState) : IO Unit := do
+  let mut out : Json := Json.mkObj []
+  for (n, dom) in state.domains do
+    out := out.setObjVal! n.toString <| Json.mkObj <| dom.objects.toList.map fun (x, y) =>
+      (x, ToJson.toJson <| y.ids.toList.filterMap (jsonRef y.data <$> state.externalTags[·]?))
+  ensureDir dir
+  IO.FS.writeFile (dir.join "xref.json") (toString out)
+where
+  jsonRef (data : Json) (ref : Path × String) : Json :=
+    Json.mkObj [("address", String.join (ref.1.map ("/" ++ ·)).toList), ("id", ref.2), ("data", data)]
+
 def emitHtmlSingle (logError : String → IO Unit) (config : Config) (text : Part Manual) : ReaderT ExtensionImpls IO Unit := do
   let dir := config.destination.join "html-single"
   ensureDir dir
@@ -197,6 +212,7 @@ def emitHtmlSingle (logError : String → IO Unit) (config : Config) (text : Par
 where
   emitContent (dir : System.FilePath) : StateT (Dedup Html) (ReaderT ExtensionImpls IO) Unit := do
     let (text, state) ← traverse logError text {config with htmlDepth := 0}
+    emitXrefs dir state
     let authors := text.metadata.map (·.authors) |>.getD []
     let date := text.metadata.bind (·.date) |>.getD ""
     let opts : Html.Options Manual IO := {logError := fun msg => logError msg}
@@ -223,7 +239,7 @@ where
       h.putStrLn Html.doctype
       h.putStrLn (Html.page toc text.titleString titleHtml pageContent state.extraCss state.extraJs (extraStylesheets := config.extraCss ++ state.extraCssFiles.toList.map ("/-verso-css/" ++ ·.1)) (extraJsFiles := config.extraJs.toArray ++ state.extraJsFiles.map ("/-verso-js/" ++ ·.1))).asString
 
- open Verso.Output.Html in
+open Verso.Output.Html in
 def emitHtmlMulti (logError : String → IO Unit) (config : Config) (text : Part Manual) : ReaderT ExtensionImpls IO Unit := do
   let root := config.destination.join "html-multi"
   ensureDir root
@@ -232,6 +248,7 @@ def emitHtmlMulti (logError : String → IO Unit) (config : Config) (text : Part
 where
   emitContent (root : System.FilePath) : StateT (Dedup Html) (ReaderT ExtensionImpls IO) Unit := do
     let (text, state) ← traverse logError text config
+    emitXrefs root state
     let authors := text.metadata.map (·.authors) |>.getD []
     let date := text.metadata.bind (·.date) |>.getD ""
     let opts : Html.Options _ IO := {logError := fun msg => logError msg}

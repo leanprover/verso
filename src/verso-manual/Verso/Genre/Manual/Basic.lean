@@ -87,7 +87,7 @@ structure Object where
   -/
   canonicalName : String
   /-- Extra data that can be used e.g. for rendering a domain index -/
-  data : HashSet Json := {}
+  data : Json := .null
   /-- The IDs of the description site(s) -/
   ids : HashSet InternalId := {}
 deriving Inhabited
@@ -96,14 +96,18 @@ instance : BEq Object where
   beq
     | {canonicalName := n1, data := d1, ids := i1}, {canonicalName := n2, data := d2, ids := i2} =>
       n1 == n2 &&
-      d1.size == d2.size && d1.fold (init := true) (fun soFar v => soFar && d2.contains v) &&
+      d1 == d2 &&
       i1.size == i2.size && i1.fold (init := true) (fun soFar v => soFar && i2.contains v)
 
 def Object.addId (id : InternalId) (object : Object) : Object :=
   {object with ids := object.ids.insert id}
 
-def Object.addData [ToJson α] (data : α) (object : Object) : Object :=
-  {object with data := object.data.insert (ToJson.toJson data)}
+def Object.setData (data : Json) (object : Object) : Object :=
+  {object with data := data}
+
+def Object.modifyData (f : Json → Json) (object : Object) : Object :=
+  {object with data := f object.data}
+
 
 structure Domain where
   objects : Lean.RBMap String Object compare := {}
@@ -117,9 +121,16 @@ def Domain.insertId (canonicalName : String) (id : InternalId) (domain : Domain)
   let obj := domain.objects.find? canonicalName |>.getD {canonicalName} |>.addId id
   ⟨domain.objects.insert canonicalName obj⟩
 
-def Domain.insertData [ToJson α] (canonicalName : String) (data : α) (domain : Domain) : Domain :=
-  let obj := domain.objects.find? canonicalName |>.getD {canonicalName} |>.addData data
+def Domain.setData  (canonicalName : String) (data : Json) (domain : Domain) : Domain :=
+  let obj := domain.objects.find? canonicalName |>.getD {canonicalName} |>.setData data
   ⟨domain.objects.insert canonicalName obj⟩
+
+def Domain.modifyData  (canonicalName : String) (f : Json → Json) (domain : Domain) : Domain :=
+  let obj := domain.objects.find? canonicalName |>.getD {canonicalName} |>.modifyData f
+  ⟨domain.objects.insert canonicalName obj⟩
+
+def Domain.get? (canonicalName : String) (domain : Domain) : Option Object :=
+  domain.objects.find? canonicalName
 
 structure TraverseState where
   tags : HashMap Tag InternalId := {}
@@ -143,13 +154,18 @@ def freshId [Monad m] [MonadStateOf TraverseState m] : m InternalId := do
   pure i
 
 def freshTag [Monad m] [MonadStateOf TraverseState m] (hint : String) (id : InternalId) : m Tag := do
-  let mut next : String := s!"--part-{hint.sluggify.toString}-{id.id}"
+  let strPart : String := hint.sluggify.toString
+  let mut numPart : Option Nat := none
   repeat
-    if (← get).tags.contains next then next := next ++ "-retry"
+    let attempt := tagStr strPart numPart
+    if (← get).tags.contains  attempt then
+      numPart := some <| numPart.map (· + 1) |>.getD 0
     else break
-  let tag := Tag.internal next
+  let tag := tagStr strPart numPart
   modify fun st => {st with tags := st.tags.insert tag id}
   pure tag
+where
+  tagStr (strPart : String) (numPart : Option Nat) := Tag.internal s!"{strPart}{numPart.map (s!"-{·}") |>.getD ""}"
 
 defmethod HashMap.all [BEq α] [Hashable α] (hm : HashMap α β) (p : α → β → Bool) : Bool :=
   hm.fold (fun prev k v => prev && p k v) true
@@ -195,15 +211,25 @@ def set [ToJson α] (state : TraverseState) (name : Name) (value : α) : Travers
 def get? [FromJson α] (state : TraverseState) (name : Name) : Option (Except String α) :=
   state.contents.find? name |>.map FromJson.fromJson?
 
+def saveDomainObject (state : TraverseState) (domain : Name) (canonicalName : String) (id : InternalId) : TraverseState :=
+  {state with
+    domains :=
+      state.domains.insert domain (state.domains.find? domain |>.getD {} |>.insertId canonicalName id)}
+
+def saveDomainObjectData (state : TraverseState) (domain : Name) (canonicalName : String) (data : Json) : TraverseState :=
+  {state with
+    domains :=
+      state.domains.insert domain (state.domains.find? domain |>.getD {} |>.setData canonicalName data)}
+
+def modifyDomainObjectData (state : TraverseState) (domain : Name) (canonicalName : String) (f : Json → Json) : TraverseState :=
+  {state with
+    domains :=
+      state.domains.insert domain (state.domains.find? domain |>.getD {} |>.modifyData canonicalName f)}
+
+def getDomainObject? (state : TraverseState) (domain : Name) (canonicalName : String) : Option Object :=
+  state.domains.find? domain >>= fun d => d.get? canonicalName
+
 end TraverseState
-
-structure TraverseContext where
-  /-- The current URL path - will be [] for non-HTML output or in the root -/
-  path : Path := #[]
-  logError : String → IO Unit
-
-def TraverseContext.inFile (self : TraverseContext) (file : String) : TraverseContext :=
-  {self with path := self.path.push file}
 
 
 structure Block where
@@ -217,6 +243,20 @@ structure Inline where
   id : Option InternalId := none
   data : Json := Json.null
 deriving BEq, Hashable, ToJson, FromJson
+
+structure PartHeader where
+  titleString : String
+  metadata : Option PartMetadata
+
+structure TraverseContext where
+  /-- The current URL path - will be [] for non-HTML output or in the root -/
+  path : Path := #[]
+  /-- The path from the root to the current header -/
+  headers : Array PartHeader := #[]
+  logError : String → IO Unit
+
+def TraverseContext.inFile (self : TraverseContext) (file : String) : TraverseContext :=
+  {self with path := self.path.push file}
 
 abbrev BlockTraversal genre :=
   InternalId → Json → Array (Doc.Block genre) →
@@ -276,6 +316,12 @@ instance : ToJson (Genre.Block Manual) := inferInstanceAs (ToJson Manual.Block)
 instance : FromJson (Genre.Inline Manual) := inferInstanceAs (FromJson Manual.Inline)
 
 namespace Manual
+
+def PartHeader.ofPart (part : Part Manual) : PartHeader :=
+  {titleString := part.titleString, metadata := part.metadata}
+
+def TraverseContext.inPart (self : TraverseContext) (part : Part Manual) : TraverseContext :=
+  {self with headers := self.headers.push <| .ofPart part}
 
 structure InlineDescr where
   /--
@@ -426,6 +472,9 @@ def TraverseM.run
 instance : MonadReader Manual.TraverseContext TraverseM where
   read := readThe _
 
+instance : MonadWithReader Manual.TraverseContext TraverseM where
+  withReader := withTheReader Manual.TraverseContext
+
 def logError [Monad m] [MonadLiftT IO m] [MonadReaderOf Manual.TraverseContext m] (err : String) : m Unit := do
   (← readThe Manual.TraverseContext).logError err
 
@@ -444,6 +493,26 @@ def externalTag [Monad m] [MonadState TraverseState m] (id : InternalId) (path :
     }
     pure t'
 
+def TraverseState.resolveId (st : TraverseState) (id : InternalId) : Option (Path × String) :=
+  if let some x := st.externalTags[id]? then
+      pure x
+  else none
+
+def TraverseState.resolveDomainObject (st : TraverseState) (domain : Name) (canonicalName : String) : Except String (Path × String) := do
+  if let some obj := st.getDomainObject? domain canonicalName then
+    match obj.ids.size with
+      | 0 =>
+        throw s!"No link target registered for {canonicalName} in {domain}"
+      | 1 =>
+        let id := obj.ids.toArray[0]!
+        if let some dest := st.resolveId id then
+          return dest
+        else
+          throw s!"No link target registered for id {id} from {canonicalName} in {domain}"
+      | more =>
+        throw s!"Ref {canonicalName} in {domain} has {more} targets, can only link to one"
+  else throw s!"Not found: {canonicalName} in {domain}"
+
 def TraverseState.resolveTag (st : TraverseState) (tag : String) : Option (Path × String) :=
   if let some id := st.tags[Tag.external tag]? then
     if let some x := st.externalTags[id]? then
@@ -454,21 +523,22 @@ def TraverseState.resolveTag (st : TraverseState) (tag : String) : Option (Path 
 instance : Traverse Manual TraverseM where
   part p :=
     if p.metadata.isNone then pure (some {}) else pure none
+  inPart p := (·.inPart p)
   block _ := pure ()
   inline _ := pure ()
   genrePart startMeta part := do
     let mut meta := startMeta
 
     -- First, assign a unique ID if there is none
-    let id ← if let some i := meta.id then pure i else
-      freshId
+    let id ← if let some i := meta.id then pure i else freshId
     meta := {meta with id := some id}
 
     match meta.tag with
     | none =>
       -- Assign an internal tag - the next round will make it external This is done in two rounds to
       -- give priority to user-provided tags that might otherwise anticipate the name-mangling scheme
-      let tag ← freshTag part.titleString id
+      let what := (← read).headers.map (·.titleString ++ "--") |>.push part.titleString |>.foldl (init := "") (· ++ ·)
+      let tag ← freshTag what id
       meta := {meta with tag := tag}
     | some t =>
       -- Ensure uniqueness
@@ -481,6 +551,9 @@ instance : Traverse Manual TraverseM where
       | Tag.external name =>
         -- These are the actual IDs to use in generated HTML and links and such
         modify fun st => {st with externalTags := st.externalTags.insert id (path, name)}
+        let jsonMetadata := Json.arr ((← read).inPart part |>.headers.map (Json.str ·.titleString))
+        modify (·.saveDomainObject `Verso.Genre.Manual.section name id
+                 |>.saveDomainObjectData `Verso.Genre.Manual.section name jsonMetadata)
       | Tag.internal name =>
         meta := {meta with tag := ← externalTag id path name}
       | Tag.provided n =>
@@ -490,8 +563,9 @@ instance : Traverse Manual TraverseM where
           if id != id' then logError s!"Duplicate tag '{t}'"
         else
           modify fun st => {st with
-            tags := st.tags.insert external id,
-            externalTags := st.externalTags.insert id (path, n.toString)}
+              tags := st.tags.insert external id,
+              externalTags := st.externalTags.insert id (path, n.toString)
+            }
           meta := {meta with tag := external}
 
     pure <|

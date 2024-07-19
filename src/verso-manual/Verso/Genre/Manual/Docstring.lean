@@ -247,6 +247,9 @@ def docstring.descr : BlockDescr where
     | none =>
       modify (·.set `Verso.Genre.Manual.docstring <| Json.mkObj [] |>.setObjVal! name.toString (toJson [id]))
 
+    -- Save a new-style backreference
+    modify fun st => st.saveDomainObject `Verso.Manual.doc name.toString id
+
     pure none
   toHtml := some <| fun _goI goB id info contents =>
     open Verso.Doc.Html in
