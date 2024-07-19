@@ -20,6 +20,9 @@ Documentation can take many forms:
 {include UsersGuide.Markup}
 
 # Genres
+%%%
+tag := "genres"
+%%%
 
 :::paragraph
 Documentation comes in many forms, and no one system is suitable for representing all of them.
@@ -36,6 +39,9 @@ Mixing incompatible features results in an ordinary Lean type error.
 :::
 
 # Docstrings
+%%%
+tag := "docstrings"
+%%%
 
 Docstrings can be included using the `docstring` directive. For instance,
 

@@ -3,7 +3,7 @@ import Verso.Genre.Manual
 
 set_option guard_msgs.diff true
 
-open Verso Genre
+open Verso Genre Manual
 
 open Lean in
 open Verso.Syntax in
@@ -139,3 +139,8 @@ In Lean's markup, it is always a link, and it is an error if `here` is not defin
 In Lean's markup, every document already has a title, so there's no need to use the highest level header (`#`) to specify one.
 Additionally, all documents are required to use `#` for their top-level header, `##` for the next level, and so forth, because a single file may represent a section, a chapter, or even a whole book.
 Authors should not need to maintain a global mapping from header levels to document structures, so Lean's markup automatically assigns these based on the structure of the document.
+
+### Genre-Specific Extensions
+
+Markdown has no standard way for specific tools or styles of writing to express domain- or {ref "genres"}[genre]-specific concepts.
+Lean's markup provides standard syntaxes to use for this purpose, enabling compositional extensions.

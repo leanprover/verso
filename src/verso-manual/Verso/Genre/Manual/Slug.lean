@@ -21,12 +21,13 @@ def asSlug (str : String) : String :=
       let c := iter.curr
       loop iter.next <|
         if c ∈ Slug.validChars then acc.push c
+        else if c.isWhitespace then acc.push '-'
         else acc
   loop str.iter ""
 
 def Slug.WF (str : String) : Prop := ∀ c, c ∈ str.data → c ∈ validChars
 
-theorem Slug.wf_push : c ∈ validChars → WF str → WF (str.push c) := by
+theorem Slug.wf_push (c str) : c ∈ validChars → WF str → WF (str.push c) := by
   unfold WF
   intro _ wf _ mem
   simp only [String.data_push, List.mem_append, List.mem_singleton] at mem
@@ -46,7 +47,13 @@ theorem Slug.asSlug_loop_valid : WF acc → WF (asSlug.loop iter acc) := by
     . simp; intro h; cases h
       . apply wfAcc; assumption
       . simp [*]
-    . apply wfAcc
+    . split
+      . intro inPushDash
+        simp at inPushDash
+        cases inPushDash
+        . simp [*]
+        . simp [*, validChars]
+      . apply wfAcc
 
 theorem Slug.asSlug_valid : WF (asSlug str) := by
   unfold asSlug
