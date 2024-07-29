@@ -2,7 +2,7 @@
 
 Writing about Lean takes many forms, including but not limited to:
 
- * Instructional books such as ...
+ * Instructional books such as [Theorem Proving in Lean](https://lean-lang.org/theorem_proving_in_lean4/), [Functional Programming in Lean](https://lean-lang.org/functional_programming_in_lean/), and [Mathematics in Lean](https://leanprover-community.github.io/mathematics_in_lean/index.html)
  * Software documentation, such as the Lean users' manual
  * In-source API documentation that is both displayed in IDEs and included in larger documents
  * Descriptions of formalization efforts that connect the formal artifact to mathematical text and guide the formalization, such as those made with Blueprint
@@ -12,8 +12,8 @@ Writing about Lean takes many forms, including but not limited to:
 Each of these genres needs different tool support than the others, and
 many different ways of writing about Lean have come into existence,
 including LeanInk, customizations to mdbook and Sphinx, bespoke Python
-document management scripts, doc-gen. But many of these tools share
-overlapping concerns - most want to include accurately highlighted
+document management scripts, and doc-gen. But many of these tools share
+overlapping concerns: most want to include accurately highlighted
 Lean source code, include links to official descriptions of Lean
 features, and have internal hyperlinking.
 
@@ -54,7 +54,21 @@ try to make the system more extensible.
 
 To generate the Verso documentation for Verso itself, run `generate.sh`.
 
-## Examples
+## Highlighted Lean Code in Verso
+
+Because Lean's parser is extensible, regular-expression-based syntax
+highlighting is incapable of accurately identifying keywords or other
+tokens. Verso includes libraries that can be used to include accurately
+highlighted Lean code in documents, with support for generating HTML
+with rich annotations. In particular, tactic proofs are annotated with
+their proof states, so the proof can be understood without having to
+open the file in a full Lean environment.
+
+The user interface used to implement the display of proof states is
+inspired by the excellent [Alectryon](https://github.com/cpitclaudel/alectryon)
+by [Clément Pit-Claudel](https://pit-claudel.fr/clement/).
+
+## Examples of Verso
 
 The [`examples`](./examples) directory contains example documents
 built with the default Verso genres.
