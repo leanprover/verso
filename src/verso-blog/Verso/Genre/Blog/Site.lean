@@ -4,9 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 
-import Verso.Doc
 
-open Verso Doc
 
 namespace Verso.Genre.Blog
 
