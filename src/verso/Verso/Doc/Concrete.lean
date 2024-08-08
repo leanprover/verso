@@ -127,7 +127,6 @@ elab "#docs" "(" genre:term ")" n:ident title:inlineStr ":=" ":::::::" text:docu
 
   elabCommand (← `(def $n : Part $genre := $(← finished.toSyntax genre st'.linkDefs st'.footnoteDefs)))
 
-
 elab "#doc" "(" genre:term ")" title:inlineStr "=>" text:completeDocument eof:eoi : term => open Lean Elab Term PartElabM DocElabM in do
   findGenreTm genre
   let endPos := eof.raw.getTailPos?.get!
