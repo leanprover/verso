@@ -6,6 +6,8 @@ Author: David Thrane Christiansen
 
 import Verso.SyntaxUtils
 
+open Lean.Parser (rawIdent)
+
 namespace Verso.Syntax
 
 declare_syntax_cat arg_val
@@ -65,7 +67,7 @@ syntax (name:=link_ref)  "[" str "]:" str : block
 /-- A footnote definition -/
 syntax (name:=footnote_ref)  "[^" str "]:" inline* : block
 /-- Custom directive -/
-syntax (name:=directive) "directive{" ident argument* "}" "[" block* "]": block
+syntax (name:=directive) "directive{" rawIdent argument* "}" "[" block* "]": block
 /-- A header -/
 syntax (name:=header) inline* : block
 open Lean.Parser.Term in
@@ -75,4 +77,4 @@ def metadataContents := sepByIndent (structInstFieldAbbrev <|> structInstField) 
 
 /-- Metadata for this section, defined by the current genre -/
 syntax (name:=metadata_block) "%%%" metadataContents "%%%" : block
-syntax (name:=block_role) "block_role{" ident argument* "}" ("[" block "]")?  : block
+syntax (name:=block_role) "block_role{" rawIdent argument* "}" ("[" block "]")?  : block
