@@ -10,7 +10,5 @@ import Verso.Genre.Blog.Site
 
 open Verso.Genre Blog
 
-
-
 instance [Monad m] : MonadPath m where
   currentPath := pure []
