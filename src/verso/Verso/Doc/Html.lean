@@ -5,7 +5,6 @@ Author: David Thrane Christiansen
 -/
 
 import Verso.Doc
-import Verso.Examples
 import Verso.Output.Html
 import Verso.Method
 import Verso.Code.Highlighted
@@ -148,33 +147,3 @@ instance : GenreHtml .none m where
 
 defmethod Genre.toHtml (g : Genre) [ToHtml g m α] (options : Options g m) (context : g.TraverseContext) (state : g.TraverseState) (x : α) : StateT (Dedup Html) m Html :=
   ToHtml.toHtml x (options, context, state)
-
-open Verso.Examples
-
-/--
-info: Verso.Output.Html.tag
-  "section"
-  #[]
-  (Verso.Output.Html.seq
-    #[Verso.Output.Html.tag "h1" #[] (Verso.Output.Html.seq #[Verso.Output.Html.text true "More writing"]),
-      Verso.Output.Html.tag
-        "section"
-        #[]
-        (Verso.Output.Html.seq
-          #[Verso.Output.Html.tag "h2" #[] (Verso.Output.Html.seq #[Verso.Output.Html.text true "Section 1"]),
-            Verso.Output.Html.tag "p" #[] (Verso.Output.Html.seq #[Verso.Output.Html.text true "Here's some code"]),
-            Verso.Output.Html.tag
-              "pre"
-              #[]
-              (Verso.Output.Html.text true "(define (zero f z) z)\n(define (succ n) (lambda (f x) (f (n f z))))\n")])])
--/
-#guard_msgs in
-  #eval Genre.none.toHtml (m:=Id) {logError := fun _ => ()} () () e |>.run .empty |>.fst
-end
-
-def embody (content : Html) : Html := {{
-<html>
-<head></head>
-<body> {{ content }} </body>
-</html>
-}}
