@@ -25,8 +25,6 @@ def Block.lean : Block where
   name := `DemoTextbook.Exts.lean
 
 
-
-
 def parserInputString [Monad m] [MonadFileMap m] (str : TSyntax `str) : m String := do
   let preString := (← getFileMap).source.extract 0 (str.raw.getPos?.getD 0)
   let mut code := ""
@@ -73,9 +71,9 @@ def lean : CodeBlockExpander
 
       -- dbg_trace "Unsliced is {cmd}"
       let slices : Slices ← DocElabM.withFileMap (FileMap.ofString altStr) (sliceSyntax cmd)
-      let sol := slices.sliced.findD "solution" slices.residual
+      let sol := slices.sliced.getD "solution" slices.residual
       solutions := solutions.push sol
-      let ex := slices.sliced.findD "exercise" slices.residual
+      let ex := slices.sliced.getD "exercise" slices.residual
       exercises := exercises.push ex
 
       cmdState ← withInfoTreeContext (mkInfoTree := pure ∘ InfoTree.node (.ofCommandInfo {elaborator := `DemoTextbook.Exts.lean, stx := cmd})) do

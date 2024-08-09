@@ -3,6 +3,7 @@ Copyright (c) 2024 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
+import Std.Data.HashSet
 
 import Verso.Genre.Manual.Basic
 import Verso.Genre.Manual.Index
@@ -15,7 +16,8 @@ import SubVerso.Highlighting
 
 import MD4Lean
 
-open Lean
+open Lean hiding HashSet
+open Std (HashSet)
 
 open Verso.Doc.Elab.PartElabM
 open Verso.Code
