@@ -265,12 +265,12 @@ def IndexCat.compare : IndexCat → IndexCat → Ordering
 def Index.render (index : Index) : Array (IndexCat × Array RenderedEntry) := Id.run do
   -- First consolidate entries
   let mut usedIds := {}
-  let mut terms : Lean.HashMap String (Doc.Inline Manual × RenderedEntryId × Array InternalId × Lean.HashMap String (Doc.Inline Manual × RenderedEntryId × Array InternalId)) := {}
+  let mut terms : HashMap String (Doc.Inline Manual × RenderedEntryId × Array InternalId × HashMap String (Doc.Inline Manual × RenderedEntryId × Array InternalId)) := {}
   for (e, id) in index.entries do
     let key := sortingKey e.term
 
     let (term, rid, links, subterms) ←
-      if let some vals := terms.find? key then pure vals
+      if let some vals := terms[key]? then pure vals
       else
         let defaultRId := key.sluggify.unique usedIds
         usedIds := usedIds.insert defaultRId
@@ -279,7 +279,7 @@ def Index.render (index : Index) : Array (IndexCat × Array RenderedEntry) := Id
     if let some sub := e.subterm then
       let k := sortingKey sub
       let (k', term', rid', links') ←
-        if let some e := subterms.findEntry? k then pure e
+        if let some e := subterms[k]? then pure (k, e)
         else
           let defaultRId := "{key}---{k}".sluggify.unique usedIds
           usedIds := usedIds.insert defaultRId
@@ -289,16 +289,16 @@ def Index.render (index : Index) : Array (IndexCat × Array RenderedEntry) := Id
       terms := terms.insert key (term, rid, links.push id, subterms)
 
   -- Then find internal xrefs
-  let mut xrefs : Lean.HashMap String (Array (RenderedEntryId × Bool × Doc.Inline Manual)) := {}
+  let mut xrefs : HashMap String (Array (RenderedEntryId × Bool × Doc.Inline Manual)) := {}
   for {source, target, subTarget, also, ..} in index.see do
-    let some (_, tgtId, _, subs) := terms.find? (sortingKey target)
+    let some (_, tgtId, _, subs) := terms[sortingKey target]?
       | continue
     let key := sortingKey source
-    let old := xrefs.findD key #[]
+    let old := xrefs.getD key #[]
 
     if let some st := subTarget then
       let linkText := Doc.Inline.concat #[target, .text ";", st]
-      let some (_, subTgtId, _) := subs.find? (sortingKey st)
+      let some (_, subTgtId, _) := subs[sortingKey st]?
         | continue
       xrefs := xrefs.insert key <| old.push (subTgtId, also, linkText)
     else
@@ -316,7 +316,7 @@ def Index.render (index : Index) : Array (IndexCat × Array RenderedEntry) := Id
       term := term,
       links := links,
       subterms := subs.qsort (·.1 < ·.1),
-      see := xrefs.findD key #[] |>.qsort (sortingKey ·.2.2 < sortingKey ·.2.2)
+      see := xrefs.getD key #[] |>.qsort (sortingKey ·.2.2 < sortingKey ·.2.2)
     }
 
   entries := entries.qsort (RenderedEntry.compare · · |>.isLE)
