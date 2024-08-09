@@ -23,7 +23,7 @@ partial def Toc.html (depth : Option Nat) : Toc → Html
       {{
         <li {{if !num then #[("class", "unnumbered")] else #[]}}>
           <a href=s!"{page}#{id}">{{title}}</a>
-          {{if children.isEmpty then .empty
+          {{if children.isEmpty || depth == some 1 then .empty
             else {{<ol> {{children.map (·.html (depth.map Nat.pred))}} </ol>}} }}
         </li>
       }}
