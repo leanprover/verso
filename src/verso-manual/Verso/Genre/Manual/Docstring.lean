@@ -127,6 +127,7 @@ instance : Quote DocName where
 inductive DeclType where
   | structure (constructor : DocName) (fieldNames : Array Name) (fieldInfo : Array FieldInfo) (parents : Array Name) (ancestors : Array Name)
   | def (safety : DefinitionSafety)
+  | inductive (constructors : Array DocName) (numArgs : Nat) (propOnly : Bool)
   | other
 deriving ToJson, FromJson
 
@@ -135,6 +136,7 @@ instance : Quote DeclType where
   quote
     | .structure ctor fields infos parents ancestors => mkCApp ``DeclType.«structure» #[quote ctor, quote fields, quote infos, quote parents, quote ancestors]
     | .def safety => mkCApp ``DeclType.def #[quote safety]
+    | .inductive ctors numArgs propOnly => mkCApp ``DeclType.inductive #[quote ctors, quote numArgs, quote propOnly]
     | .other => mkCApp ``DeclType.other #[]
 
 def DeclType.label : DeclType → String
@@ -142,6 +144,9 @@ def DeclType.label : DeclType → String
   | .def .safe => "def"
   | .def .unsafe => "unsafe def"
   | .def .partial => "partial def"
+  | .inductive _ _ false => "inductive type"
+  | .inductive _ 0 true => "inductive proposition"
+  | .inductive _ _ true => "inductive predicate"
   | other => ""
 
 example := Meta.mkProjection
@@ -188,11 +193,21 @@ def DeclType.ofName (c : Name) : MetaM DeclType := do
                 let fieldName' := Highlighted.token ⟨.const projFn projType.pretty (← findDocString? env projFn), fieldName.toString⟩
                 pure {fieldName := fieldName', type := ← renderTagged {} type', projFn, subobject?, binderInfo, autoParam := autoParam?.isSome, docString? := ← findDocString? env projFn}
         return .structure (← DocName.ofName ctor.name) info.fieldNames fieldInfo.reverse parents ancestors
-      else return .other
+      else
+        let ctors ← ii.ctors.mapM DocName.ofName
+        let t ← inferType <| .const c (ii.levelParams.map .param)
+        let t' ← reduceAll t
+        return .inductive ctors.toArray (ii.numIndices + ii.numParams) (isPred t')
     | _ => return .other
   else
     return .other
-
+where
+  isPred : Expr → Bool
+    | .sort u => u.isZero
+    | .forallE _ _ e _ => isPred e
+    | .mdata _ e => isPred e
+    | .letE _ _ _ e _ => isPred e
+    | _ => false
 end Docstring
 
 
@@ -267,67 +282,13 @@ def docstring.descr : BlockDescr where
           #[("id", htmlId)]
         else #[]
 
-      let md2html (str : String) : HtmlT Manual (ReaderT ExtensionImpls IO) Html := do
-        let some md := MD4Lean.parse str
-          | HtmlT.logError "Markdown parsing failed for {str}"
-            pure <| Html.text true str
-        match md.blocks.mapM blockFromMarkdown' with
-        | .error e => HtmlT.logError e; pure <| Html.text true str
-        | .ok blks => blks.mapM goB
-
-      let more : Html ← do
-        match declType with
-        | .structure ctor _fields infos _parents _ancestors =>
-          let ctorRow ←
-            if isPrivateName ctor.name then
-              pure Html.empty
-            else pure {{
-                <h1>"Constructor"</h1>
-                <table>
-                  <tr><td><code class="hl lean inline">{{← ctor.signature.toHtml}}</code></td></tr>
-                  {{ ← if let some d := ctor.docstring? then do
-                      pure {{<tr><td>{{← md2html d}}</td></tr>}}
-                    else pure Html.empty
-                  }}
-                </table>
-              }}
-          pure <| {{
-            {{ ctorRow }}
-            <h1>"Fields"</h1>
-            <table>
-              {{← infos.mapM fun i => do
-                let docRow ←
-                  if let some doc := i.docString? then do
-                    let doc ← md2html doc
-                    pure {{
-                      <tr>
-                        <td colspan="2"></td>
-                        <td> {{ doc }}
-                        </td>
-                      </tr>
-                    }}
-                    else
-                      pure Html.empty
-
-                 pure <| {{
-                  <tr>
-                    <td><code class="hl lean inline">{{← i.fieldName.toHtml}}</code></td>
-                    <td>":"</td>
-                    <td><code class="hl lean inline">{{←  i.type.toHtml }}</code></td>
-                  </tr>
-                }} ++ docRow
-              }}
-            </table>
-          }}
-        | _ => pure .empty
-
       return {{
         <div class="namedocs" {{idAttr}}>
           <span class="label">{{declType.label}}</span>
           <pre class="signature hl lean block">{{sig}}</pre>
           <div class="text">
             {{← contents.mapM goB}}
-            {{ more }}
+            {{← moreDeclHtml goB declType}}
           </div>
         </div>
       }}
@@ -373,8 +334,99 @@ def docstring.descr : BlockDescr where
   font-size: inherit;
   font-weight: bold;
 }
+.namedocs > .text > .constructors {
+  text-indent: -1ex;
+}
+.namedocs > .text > .constructors > li {
+  display: block;
+}
+.namedocs > .text > .constructors > li::before {
+  content: '|';
+  width: 1ex;
+  display: inline-block;
+  font-size: larger;
+}
+.namedocs > .text > .constructors > li > .doc {
+  text-indent: 0;
+}
+
 "#]
   extraJs := [highlightingJs]
+where
+  md2html (goB) (str : String) : Verso.Doc.Html.HtmlT Manual (ReaderT ExtensionImpls IO) Verso.Output.Html :=
+    open Verso.Doc.Html in
+    open Verso.Output Html in do
+    let some md := MD4Lean.parse str
+      | HtmlT.logError "Markdown parsing failed for {str}"
+        pure <| Html.text true str
+    match md.blocks.mapM blockFromMarkdown' with
+    | .error e => HtmlT.logError e; pure <| Html.text true str
+    | .ok blks => blks.mapM goB
+  moreDeclHtml (goB)
+    | .structure ctor _fields infos _parents _ancestors =>
+      open Verso.Doc.Html in
+      open Verso.Output Html in do
+      let ctorRow ←
+        if isPrivateName ctor.name then
+          pure Html.empty
+        else pure {{
+            <h1>"Constructor"</h1>
+            <table>
+              <tr><td><code class="hl lean inline">{{← ctor.signature.toHtml}}</code></td></tr>
+              {{ ← if let some d := ctor.docstring? then do
+                  pure {{<tr><td>{{← md2html goB d}}</td></tr>}}
+                else pure Html.empty
+              }}
+            </table>
+          }}
+      pure <| {{
+        {{ ctorRow }}
+        <h1>"Fields"</h1>
+        <table>
+          {{← infos.mapM fun i => do
+            let docRow ←
+              if let some doc := i.docString? then do
+                let doc ← md2html goB doc
+                pure {{
+                  <tr>
+                    <td colspan="2"></td>
+                    <td> {{ doc }}
+                    </td>
+                  </tr>
+                }}
+                else
+                  pure Html.empty
+
+             pure <| {{
+              <tr>
+                <td><code class="hl lean inline">{{← i.fieldName.toHtml}}</code></td>
+                <td>":"</td>
+                <td><code class="hl lean inline">{{←  i.type.toHtml }}</code></td>
+              </tr>
+            }} ++ docRow
+          }}
+        </table>
+      }}
+    | .inductive ctors _ _ =>
+      open Verso.Doc.Html in
+      open Verso.Output Html in do
+      pure {{
+        <h1>"Constructors"</h1>
+        <ul class="constructors">
+          {{← ctors.mapM fun c => do
+              pure {{
+                <li>
+                  <code class="hl lean inline">{{← c.signature.toHtml}}</code>
+                  {{← if let some d := c.docstring? then do
+                      pure {{<div class="doc">{{← md2html goB d}}</div>}}
+                    else pure Html.empty
+                  }}
+                </li>
+              }}
+          }}
+        </ul>
+      }}
+    | _ => pure .empty
 
 open Verso.Doc.Elab
 
