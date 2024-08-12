@@ -353,7 +353,9 @@ def PartElabM.liftDocElabM (act : DocElabM α) : PartElabM α := do
 
 instance : MonadLift DocElabM PartElabM := ⟨PartElabM.liftDocElabM⟩
 
-def PartElabM.currentLevel : PartElabM Nat := do return (← getThe State).partContext.level
+def PartElabM.State.currentLevel (state : PartElabM.State) : Nat := state.partContext.level
+
+def PartElabM.currentLevel : PartElabM Nat := do return (← getThe State).currentLevel
 
 def PartElabM.setTitle (titlePreview : String) (titleInlines : Array (TSyntax `term)) : PartElabM Unit := modifyThe State fun st =>
   {st with partContext.expandedTitle := some (titlePreview, titleInlines)}

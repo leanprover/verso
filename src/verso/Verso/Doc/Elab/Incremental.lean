@@ -118,7 +118,7 @@ The parameters are:
 
  * `handleStep` describes the DSL's elaboration procedure for a single step from `steps`.
 
- * `lift` is a means of running the DSL's monad inside `CommandElabM`.
+ * `run` is a means of running the DSL's monad inside `CommandElabM`.
 
 The caller is responsible for invoking the returned `CommandElabM` action to indicate to Lean that
 it is finished. This should be the last thing it does after any further state changes.
@@ -134,14 +134,14 @@ def incrementallyElabCommand
     [MonadStateOf σ m]
     (steps : Array Syntax)
     (initAct : m Unit)
-    (endAct : m Unit)
+    (endAct : σ → CommandElabM Unit)
     (handleStep : Syntax → m Unit)
-    (lift : {α : _} → m α → CommandElabM α)
-    : CommandElabM (CommandElabM Unit × σ) := do
+    (run : {α : _} → m α → CommandElabM α)
+    : CommandElabM Unit := do
   let cmd := mkNullNode steps
   if let some snap := (← read).snap? then
     withReader (fun ρ => {ρ with snap? := none}) do
-      lift <| do
+      let (finalState, nextPromise) ← run <| do
         let mut oldSnap? := snap.old?.bind (·.val.get.toTyped? (α := Internal.IncrementalSnapshot))
         let mut nextPromise ← IO.Promise.new
 
@@ -153,14 +153,17 @@ def incrementallyElabCommand
           let mut reuseState := false
           if let some oldSnap := oldSnap? then
             if let some next := oldSnap.next then
+              -- The message log of a snapshot contains the messages that are present at the
+              -- beginning of its elaboration, so its message log should be restored whether or not
+              -- we'll re-use its state.
+              Core.setMessageLog next.get.toLeanSnapshot.diagnostics.msgLog
               if next.get.syntax.structRangeEqWithTraceReuse (← getOptions) b then
-              --if next.get.syntax |>.structRangeEq b then
                 let some data := next.get.data (α := snapshot)
                   | logErrorAt next.get.syntax
                       m!"Internal error: failed to re-used incremental state. Expected '{TypeName.typeName snapshot}' but got a '{next.get.typeName}'"
-                -- If they match, do nothing and advance the snapshot
-                let σ := data |> getIncrState |>.get
-                set σ
+                -- If they match, restore the state, do nothing, and advance the snapshot
+                let st := getIncrState data |>.get
+                set st
                 oldSnap? := next.get
                 reuseState := true
           let nextNextPromise ← IO.Promise.new
@@ -184,16 +187,17 @@ def incrementallyElabCommand
             -- no-op the rest of the time.
             nextPromise.resolve <| .mk (← freshSnapshot (ownMessageLog := false)) (.mk <| mkSnap (.pure (← get))) none b
             updatedState.resolve <| ← get -- some old state goes here
-        endAct
 
-        let finalState ← get
-        let allDone : CommandElabM Unit := do
-          nextPromise.resolve <| .mk (← liftCoreM (freshSnapshot (ownMessageLog := false))) (.mk <| mkSnap (.pure finalState)) none cmd
-        pure (allDone, finalState)
+        pure (← get, nextPromise)
+      try
+        withReader ({ · with snap? := none }) <| endAct finalState
+      finally
+        nextPromise.resolve <| .mk (← liftCoreM (freshSnapshot (ownMessageLog := false))) (.mk <| mkSnap (.pure finalState)) none cmd
+
   else -- incrementality not available - just do the action the easy way
-    lift <| do
+    let finalState ← run <| do
       initAct
       for b in steps do
         handleStep b
-      endAct
-      pure (pure (), ← get)
+      get
+    endAct finalState
