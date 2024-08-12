@@ -17,10 +17,15 @@ abbrev M := StateT (Array Syntax) TermElabM
 
 
 def myElabTerm (stx : Syntax) : M Unit := do
-  logInfoAt stx m!"hello {stx}"
-  let stx := ⟨stx⟩
-  modifyThe (Array Syntax) (·.push (← `(($stx, $stx))))
-  IO.sleep 500
+  let stx : Term := ⟨stx⟩
+  match stx with
+  | `("magic") =>
+    modifyThe (Array Syntax) (·.push (← `(($stx, $stx))))
+    IO.sleep 500
+  | _ =>
+    logInfoAt stx m!"hello {stx}"
+    modifyThe (Array Syntax) (·.push (← `(($stx, $stx))))
+    IO.sleep 500
 
 
 declare_syntax_cat bullet
@@ -43,33 +48,18 @@ syntax (name := mklist) "make_list" ident bullets : command
 @[command_elab mklist, incremental]
 def elabMkList : CommandElab
   | `(make_list $x:ident $entries:bullets) => do
-    let (done, st') ← incrementallyElabCommand entries.getBullets (logInfo "Beginning") (logInfo "Done") myElabTerm fun act => do
-      let (val, _) ← liftTermElabM <| act #[]
-      pure val
-    elabCommand (← `(def $x := [$[$(st'.map (⟨·⟩))],*]))
-    logInfo "Defined it!"
-    done
+    incrementallyElabCommand entries.getBullets (logInfo "Beginning") myElabTerm
+      (run := fun act => do
+        let (val, _) ← liftTermElabM <| act #[]
+        pure val)
+      (endAct := fun st => do
+        elabCommand (← `(def $x := [$[$(st.map (⟨·⟩))],*]))
+        logInfo "Defined it!")
   | _ => throwUnsupportedSyntax
 
 
 
 set_option trace.Elab.reuse true
-
-
--- Incrementality issue reproducer!
---
--- To experience:
--- 1. Restart the file
--- 2. Edit "d" below to be "(d ())", but don't restart the file
---
--- Observations:
---  * Messages from earlier lines "a"-"c" are not shown anymore
---  * The expected elaboration error for ("d" ()) is not shown at all, but its output is
---  * From time to time, editing the file gets elaboration stuck entirely - probably an unresolved
---    promise somewhere?
---  * The expected elaboration error from "(d ())" never appears, even when restarting the file.
---    Removing the `incremental` attribute above fixes this problem, but elaboration does still seem
---    to get stuck with the whole file yellow sometimes (e.g. while editing this comment right now).
 
 make_list foo
   * "a"
@@ -78,11 +68,19 @@ make_list foo
 
   * "c"
 
-  * "d"
+  * ("d" ())
 
   * "e"
 
-  * "f"
+  * "e'"
+
+  * ("f" ())
+
+  * "magi"
+
+  * "aaaaaa"
+
+  * "magi"
 
 
 #eval foo
