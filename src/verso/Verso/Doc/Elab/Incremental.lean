@@ -153,8 +153,8 @@ def incrementallyElabCommand
           let mut reuseState := false
           if let some oldSnap := oldSnap? then
             if let some next := oldSnap.next then
-              -- if next.get.data.stx.structRangeEqWithTraceReuse (← getOptions) b then
-              if next.get.syntax |>.structRangeEq b then
+              if next.get.syntax.structRangeEqWithTraceReuse (← getOptions) b then
+              --if next.get.syntax |>.structRangeEq b then
                 let some data := next.get.data (α := snapshot)
                   | logErrorAt next.get.syntax
                       m!"Internal error: failed to re-used incremental state. Expected '{TypeName.typeName snapshot}' but got a '{next.get.typeName}'"
