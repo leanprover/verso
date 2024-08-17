@@ -191,7 +191,10 @@ where
     | ⟨docState, partState, termState⟩ => do
       set docState
       set partState
-      termState.restore
+      -- SavedState.restore doesn't  restore enough state, so dig in!
+      set termState.elab
+      (show MetaM Unit from set termState.meta.meta)
+      (show CoreM Unit from set termState.meta.core.toState)
 
 elab (name := completeDoc) "#doc" "(" genre:term ")" title:inlineStr "=>" text:completeDocument eof:eoi : command => open Lean Elab Term Command PartElabM DocElabM in do
   findGenreCmd genre
