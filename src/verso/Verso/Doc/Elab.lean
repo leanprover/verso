@@ -252,6 +252,17 @@ partial def _root_.Verso.Syntax.link_ref.command : PartCommand
     addLinkDef name url.getString
   | stx => dbg_trace  "{stx}"; throwUnsupportedSyntax
 
+partial def PartElabM.State.close (endPos : String.Pos) (state : PartElabM.State) : Option PartElabM.State :=
+  state.partContext.close endPos |>.map ({state with partContext := ·})
+
+partial def PartElabM.State.closeAll (endPos : String.Pos) (state : PartElabM.State) : PartElabM.State :=
+  match state.close endPos with
+  | none => state
+  | some state' =>
+    if state'.currentLevel > 0 then
+      state'.closeAll endPos
+    else state'
+
 partial def closePartsUntil (outer : Nat) (endPos : String.Pos) : PartElabM Unit := do
   let level ← currentLevel
   if outer ≤ level then
