@@ -182,6 +182,12 @@ open Verso.Output (Html)
 instance : Inhabited (StateT (Dedup Html) (ReaderT ExtensionImpls IO) Html.Toc) where
   default := fun _ => default
 
+/--
+Generate a ToC structure for a document.
+
+Here, `depth` is the current depth at which pages no longer recieve their own HTML files, not the
+depth of the table of contents in the document (which is controlled by a parameter to `Toc.html`).
+-/
 partial def toc (depth : Nat) (opts : Html.Options Manual IO) (ctxt : TraverseContext) (state : TraverseState) : Part Manual → StateT (Dedup Html) (ReaderT ExtensionImpls IO) Html.Toc
   | .mk title sTitle meta _ sub => do
     let titleHtml ← Html.seq <$> title.mapM (Manual.toHtml (m := ReaderT ExtensionImpls IO) opts.lift ctxt state ·)
@@ -189,7 +195,11 @@ partial def toc (depth : Nat) (opts : Html.Options Manual IO) (ctxt : TraverseCo
       | throw <| .userError s!"No ID for {sTitle} - {repr meta}"
     let some (_, v) := state.externalTags[id]?
       | throw <| .userError s!"No external ID for {sTitle}"
-    let ctxt' := if depth > 0 then {ctxt with path := ctxt.path.push (meta.bind (·.file) |>.getD (sTitle.sluggify.toString))} else ctxt
+    let ctxt' :=
+      -- When depth is 0, no more HTML files will be generated
+      if depth > 0 then
+        {ctxt with path := ctxt.path.push (meta.bind (·.file) |>.getD (sTitle.sluggify.toString))}
+      else ctxt
     let children ← sub.mapM (toc (depth - 1) opts ctxt' state)
     pure <| .entry titleHtml ctxt'.path v number children
 
@@ -277,15 +287,14 @@ where
       if depth == 0 then
         Html.seq <$> part.subParts.mapM (Manual.toHtml {opts.lift with headerLevel := 2} ctxt state)
       else pure .empty
-    let pageContent ←
+    let subToc ← part.subParts.mapM (toc depth opts ctxt state)
+    let pageContent :=
       if root then
-        let subToc := (← part.subParts.mapM (toc 1 opts ctxt state)).map (·.html (some depth))
-        let subTocHtml := if subToc.size > 0 then {{<ol class="section-toc">{{subToc}}</ol>}} else .empty
-        pure {{<section>{{Html.titlePage titleHtml authors introHtml ++ contents}} {{subTocHtml}}</section>}}
+        let subTocHtml := if subToc.size > 0 then {{<ol class="section-toc">{{subToc.map (·.html (some 2))}}</ol>}} else .empty
+        {{<section>{{Html.titlePage titleHtml authors introHtml ++ contents}} {{subTocHtml}}</section>}}
       else
-        let subToc := (← part.subParts.mapM (toc depth opts ctxt state)).map (·.html (some depth))
-        let subTocHtml := if subToc.size > 0 then {{<ol class="section-toc">{{subToc}}</ol>}} else .empty
-        pure {{<section><h1>{{titleHtml}}</h1> {{introHtml}} {{contents}} {{subTocHtml}}</section>}}
+        let subTocHtml := if subToc.size > 0 then {{<ol class="section-toc">{{subToc.map (·.html none)}}</ol>}} else .empty
+        {{<section><h1>{{titleHtml}}</h1> {{introHtml}} {{contents}} {{subTocHtml}}</section>}}
     let thisFile := part.metadata.bind (·.file) |>.getD (part.titleString.sluggify.toString)
     let dir := if root then dir else dir.join thisFile
     let pageTitle := if root then bookTitle else {{<a href="/">{{bookTitle}}</a>}}

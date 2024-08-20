@@ -14,12 +14,20 @@ open Verso.Output Html
 
 inductive Toc where
   | entry (title : Html) (path : Path) (id : String) (number : Bool) (children : Array Toc)
+deriving Repr
 
+/--
+Convert a `Toc` to `HTML`.
+
+The `depth` is a limit for the tree depth of the generated HTML (`none` for no limit).
+-/
 partial def Toc.html (depth : Option Nat) : Toc → Html
   | .entry title path id num children =>
     if depth = some 0 then .empty
     else
-      let page := if path.isEmpty then "/" else path.map ("/" ++ ·) |>.toList |> String.join
+      let page :=
+        if path.isEmpty then "/"
+        else path.map ("/" ++ ·) |>.toList |> String.join
       {{
         <li {{if !num then #[("class", "unnumbered")] else #[]}}>
           <a href=s!"{page}#{id}">{{title}}</a>
