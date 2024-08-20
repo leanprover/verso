@@ -10,8 +10,8 @@ import SubVerso.Highlighting
 
 import Verso.Doc
 import Verso.Doc.Html
-import Verso.Genre.Blog.Basic
-import Verso.Genre.Blog.Site
+import VersoBlog.Basic
+import VersoBlog.Site
 import Verso.Output.Html
 import Verso.Code
 

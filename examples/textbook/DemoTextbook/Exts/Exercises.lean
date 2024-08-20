@@ -6,9 +6,8 @@ Author: David Thrane Christiansen
 import Lean.Elab.Command
 import Lean.Elab.InfoTree
 
-import Verso
 import Verso.Doc.ArgParse
-import Verso.Genre.Manual
+import VersoManual
 import Verso.Code
 
 import SubVerso.Examples.Slice

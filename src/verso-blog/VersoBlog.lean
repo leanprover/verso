@@ -7,12 +7,12 @@ Author: David Thrane Christiansen
 import SubVerso.Highlighting
 import SubVerso.Examples
 
-import Verso.Genre.Blog.Basic
-import Verso.Genre.Blog.Generate
-import Verso.Genre.Blog.Site
-import Verso.Genre.Blog.Site.Syntax
-import Verso.Genre.Blog.Template
-import Verso.Genre.Blog.Theme
+import VersoBlog.Basic
+import VersoBlog.Generate
+import VersoBlog.Site
+import VersoBlog.Site.Syntax
+import VersoBlog.Template
+import VersoBlog.Theme
 import Verso.Doc.ArgParse
 import Verso.Doc.Lsp
 import Verso.Doc.Suggestion

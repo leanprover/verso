@@ -8,23 +8,20 @@ package verso where
   precompileModules := true
   -- add package configuration options here
 
+@[default_target]
 lean_lib Verso where
   srcDir := "src/verso"
   roots := #[`Verso]
-  -- add library configuration options here
 
-lean_lib VersoCodeHighlighting where
-  srcDir := "src/code-highlighting"
-  roots := #[`Verso.Code]
-
+@[default_target]
 lean_lib VersoBlog where
   srcDir := "src/verso-blog"
-  roots := #[`Verso.Genre.Blog]
+  roots := #[`VersoBlog]
 
+@[default_target]
 lean_lib VersoManual where
   srcDir := "src/verso-manual"
-  roots := #[`Verso.Genre.Manual]
-
+  roots := #[`VersoManual]
 
 
 @[default_target]

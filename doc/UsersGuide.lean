@@ -1,5 +1,3 @@
-import Verso.Genre.Manual
+import VersoManual
 
 import UsersGuide.Basic
-
-

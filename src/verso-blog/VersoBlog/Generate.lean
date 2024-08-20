@@ -5,9 +5,9 @@ Author: David Thrane Christiansen
 -/
 
 import Verso.FS
-import Verso.Genre.Blog.Basic
-import Verso.Genre.Blog.Template
-import Verso.Genre.Blog.Theme
+import VersoBlog.Basic
+import VersoBlog.Template
+import VersoBlog.Theme
 
 open Verso Doc Output Html HtmlT FS
 open Verso.Code.Hover (Dedup)

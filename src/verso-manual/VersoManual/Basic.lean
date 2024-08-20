@@ -8,7 +8,7 @@ import Std.Data.HashSet
 import Verso.Doc
 import Verso.Doc.Html
 import Verso.Doc.TeX
-import Verso.Genre.Manual.Slug
+import VersoManual.Slug
 import Verso.Output.Html
 import Verso.Output.TeX
 

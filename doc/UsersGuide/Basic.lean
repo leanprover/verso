@@ -1,4 +1,4 @@
-import Verso.Genre.Manual
+import VersoManual
 import UsersGuide.Markup
 
 open Verso.Genre Manual
