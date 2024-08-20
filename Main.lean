@@ -10,8 +10,8 @@ import Verso.Output.Html
 import Verso.Doc.Concrete
 import Verso.Doc.Lsp
 
-import Verso.Genre.Blog
-import Verso.Genre.Manual
+import VersoBlog
+import VersoManual
 
 open Verso Doc Output Html Concrete ToHtml Elab Monad
 open Lean Elab Term

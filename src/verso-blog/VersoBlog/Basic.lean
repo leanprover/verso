@@ -11,7 +11,7 @@ import SubVerso.Highlighting
 import Verso.Doc
 import Verso.Doc.Html
 import Verso.Method
-import Verso.Genre.Blog.LexedText
+import VersoBlog.LexedText
 import Verso.Code
 
 open Std (HashSet HashMap)

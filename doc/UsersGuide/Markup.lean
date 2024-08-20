@@ -1,5 +1,5 @@
 import Verso.Syntax
-import Verso.Genre.Manual
+import VersoManual
 
 set_option guard_msgs.diff true
 

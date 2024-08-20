@@ -5,9 +5,9 @@ Author: David Thrane Christiansen
 -/
 import Std.Data.HashSet
 
-import Verso.Genre.Manual.Basic
-import Verso.Genre.Manual.Index
-import Verso.Genre.Manual.Markdown
+import VersoManual.Basic
+import VersoManual.Index
+import VersoManual.Markdown
 import Verso.Code
 import Verso.Doc.Elab.Monad
 import Verso.Doc.ArgParse

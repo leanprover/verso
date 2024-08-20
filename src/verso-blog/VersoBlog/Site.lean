@@ -5,7 +5,7 @@ Author: David Thrane Christiansen
 -/
 
 import Verso.Doc
-import Verso.Genre.Blog.Basic
+import VersoBlog.Basic
 
 open Verso Doc
 

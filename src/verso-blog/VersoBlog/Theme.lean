@@ -4,8 +4,8 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 
-import Verso.Genre.Blog.Site
-import Verso.Genre.Blog.Template
+import VersoBlog.Site
+import VersoBlog.Template
 
 open Verso.Genre.Blog Template
 open Verso Doc Output Html

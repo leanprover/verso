@@ -7,8 +7,7 @@ Author: David Thrane Christiansen
 import Lean.Data.Json
 import Lean.Data.Json.FromToJson
 
-import Verso
-import Verso.Genre.Manual.Basic
+import VersoManual.Basic
 
 open Verso Genre Manual
 open Verso.Doc.Elab

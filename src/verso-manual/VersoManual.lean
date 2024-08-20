@@ -14,14 +14,14 @@ import Verso.Doc.Lsp
 import Verso.Doc.Elab
 import Verso.FS
 
-import Verso.Genre.Manual.Basic
-import Verso.Genre.Manual.Slug
-import Verso.Genre.Manual.TeX
-import Verso.Genre.Manual.Html
-import Verso.Genre.Manual.Html.Style
-import Verso.Genre.Manual.Index
-import Verso.Genre.Manual.Glossary
-import Verso.Genre.Manual.Docstring
+import VersoManual.Basic
+import VersoManual.Slug
+import VersoManual.TeX
+import VersoManual.Html
+import VersoManual.Html.Style
+import VersoManual.Index
+import VersoManual.Glossary
+import VersoManual.Docstring
 
 open Lean (Name NameMap Json ToJson FromJson)
 

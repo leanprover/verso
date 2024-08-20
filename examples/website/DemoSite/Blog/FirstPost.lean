@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 
-import Verso.Genre.Blog
+import VersoBlog
 import Verso.Parser
 import Lean.Parser
 open Verso Genre Blog LexedText

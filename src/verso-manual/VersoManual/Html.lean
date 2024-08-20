@@ -6,7 +6,7 @@ Author: David Thrane Christiansen
 import Std.Data.HashSet
 import Verso.Output.Html
 
-import Verso.Genre.Manual.Basic
+import VersoManual.Basic
 
 namespace Verso.Genre.Manual.Html
 open Std (HashSet)
