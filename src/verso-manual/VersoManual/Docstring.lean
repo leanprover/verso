@@ -245,7 +245,11 @@ def docstring.descr : BlockDescr where
       Index.addEntry id {term := Doc.Inline.code name.getString!, subterm := some <| Doc.Inline.code name.toString}
 
     match declType with
-    | .structure _ctor fields fieldInfos _parents _ancestors =>
+    | .structure ctor fields fieldInfos _parents _ancestors =>
+      Index.addEntry id {
+        term := Doc.Inline.code ctor.name.toString,
+        subterm := some <| Doc.Inline.concat #[Doc.Inline.text "Constructor of ", Doc.Inline.code name.toString]
+      }
       for (f, i) in fields.zip fieldInfos do
         Index.addEntry id {term := Doc.Inline.code i.projFn.toString}
         if i.projFn.getPrefix != .anonymous then
@@ -253,6 +257,12 @@ def docstring.descr : BlockDescr where
             term := Doc.Inline.code f.toString,
             subterm := some <| Doc.Inline.concat #[Doc.Inline.code i.projFn.toString, Doc.Inline.text " (structure field)"]
           }
+    | .inductive ctors _ _ =>
+      for c in ctors do
+        Index.addEntry id {
+          term := Doc.Inline.code c.name.toString,
+          subterm := some <| Doc.Inline.concat #[Doc.Inline.text "Constructor of ", Doc.Inline.code name.toString]
+        }
     | _ => pure ()
 
     -- Save a backreference
