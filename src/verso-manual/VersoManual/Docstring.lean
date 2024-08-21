@@ -125,7 +125,7 @@ instance : Quote DocName where
     | {name, signature, docstring?} => mkCApp ``DocName.mk #[quote name, quote signature, quote docstring?]
 
 inductive DeclType where
-  | structure (constructor : DocName) (fieldNames : Array Name) (fieldInfo : Array FieldInfo) (parents : Array Name) (ancestors : Array Name)
+  | structure (isClass : Bool) (constructor : DocName) (fieldNames : Array Name) (fieldInfo : Array FieldInfo) (parents : Array Name) (ancestors : Array Name)
   | def (safety : DefinitionSafety)
   | inductive (constructors : Array DocName) (numArgs : Nat) (propOnly : Bool)
   | other
@@ -134,13 +134,15 @@ deriving ToJson, FromJson
 open Syntax (mkCApp) in
 instance : Quote DeclType where
   quote
-    | .structure ctor fields infos parents ancestors => mkCApp ``DeclType.«structure» #[quote ctor, quote fields, quote infos, quote parents, quote ancestors]
+    | .structure isClass ctor fields infos parents ancestors =>
+      mkCApp ``DeclType.«structure» #[quote isClass, quote ctor, quote fields, quote infos, quote parents, quote ancestors]
     | .def safety => mkCApp ``DeclType.def #[quote safety]
     | .inductive ctors numArgs propOnly => mkCApp ``DeclType.inductive #[quote ctors, quote numArgs, quote propOnly]
     | .other => mkCApp ``DeclType.other #[]
 
 def DeclType.label : DeclType → String
-  | .structure .. => "structure"
+  | .structure false .. => "structure"
+  | .structure true .. => "type class"
   | .def .safe => "def"
   | .def .unsafe => "unsafe def"
   | .def .partial => "partial def"
@@ -192,7 +194,7 @@ def DeclType.ofName (c : Name) : MetaM DeclType := do
                 let projType ← withOptions (·.setInt `format.width 40 |>.setBool `pp.tagAppFns true) <| ppExpr type
                 let fieldName' := Highlighted.token ⟨.const projFn projType.pretty (← findDocString? env projFn), fieldName.toString⟩
                 pure {fieldName := fieldName', type := ← renderTagged {} type', projFn, subobject?, binderInfo, autoParam := autoParam?.isSome, docString? := ← findDocString? env projFn}
-        return .structure (← DocName.ofName ctor.name) info.fieldNames fieldInfo.reverse parents ancestors
+        return .structure (isClass env c) (← DocName.ofName ctor.name) info.fieldNames fieldInfo.reverse parents ancestors
       else
         let ctors ← ii.ctors.mapM DocName.ofName
         let t ← inferType <| .const c (ii.levelParams.map .param)
@@ -245,18 +247,27 @@ def docstring.descr : BlockDescr where
       Index.addEntry id {term := Doc.Inline.code name.getString!, subterm := some <| Doc.Inline.code name.toString}
 
     match declType with
-    | .structure ctor fields fieldInfos _parents _ancestors =>
-      Index.addEntry id {
-        term := Doc.Inline.code ctor.name.toString,
-        subterm := some <| Doc.Inline.concat #[Doc.Inline.text "Constructor of ", Doc.Inline.code name.toString]
-      }
-      for (f, i) in fields.zip fieldInfos do
-        Index.addEntry id {term := Doc.Inline.code i.projFn.toString}
-        if i.projFn.getPrefix != .anonymous then
-          Index.addEntry id {
-            term := Doc.Inline.code f.toString,
-            subterm := some <| Doc.Inline.concat #[Doc.Inline.code i.projFn.toString, Doc.Inline.text " (structure field)"]
-          }
+    | .structure isClass ctor fields fieldInfos _parents _ancestors =>
+      if isClass then
+        for (f, i) in fields.zip fieldInfos do
+          Index.addEntry id {term := Doc.Inline.code i.projFn.toString}
+          if i.projFn.getPrefix != .anonymous then
+            Index.addEntry id {
+              term := Doc.Inline.code f.toString,
+              subterm := some <| Doc.Inline.concat #[Doc.Inline.code i.projFn.toString, Doc.Inline.text " (class method)"]
+            }
+      else
+        Index.addEntry id {
+          term := Doc.Inline.code ctor.name.toString,
+          subterm := some <| Doc.Inline.concat #[Doc.Inline.text "Constructor of ", Doc.Inline.code name.toString]
+        }
+        for (f, i) in fields.zip fieldInfos do
+          Index.addEntry id {term := Doc.Inline.code i.projFn.toString}
+          if i.projFn.getPrefix != .anonymous then
+            Index.addEntry id {
+              term := Doc.Inline.code f.toString,
+              subterm := some <| Doc.Inline.concat #[Doc.Inline.code i.projFn.toString, Doc.Inline.text " (structure field)"]
+            }
     | .inductive ctors _ _ =>
       for c in ctors do
         Index.addEntry id {
@@ -373,7 +384,7 @@ where
     | .error e => HtmlT.logError e; pure <| Html.text true str
     | .ok blks => blks.mapM goB
   moreDeclHtml (goB)
-    | .structure ctor _fields infos _parents _ancestors =>
+    | .structure false ctor _fields infos _parents _ancestors =>
       open Verso.Doc.Html in
       open Verso.Output Html in do
       let ctorRow ←
@@ -417,6 +428,51 @@ where
           }}
         </table>
       }}
+    | .structure true ctor _fields infos _parents _ancestors =>
+      open Verso.Doc.Html in
+      open Verso.Output Html in do
+      let ctorRow ←
+        if isPrivateName ctor.name then
+          pure Html.empty
+        else pure {{
+            <h1>"Instance Constructor"</h1>
+            <table>
+              <tr><td><code class="hl lean inline">{{← ctor.signature.toHtml}}</code></td></tr>
+              {{ ← if let some d := ctor.docstring? then do
+                  pure {{<tr><td>{{← md2html goB d}}</td></tr>}}
+                else pure Html.empty
+              }}
+            </table>
+          }}
+      pure <| {{
+        {{ ctorRow }}
+        <h1>"Methods"</h1>
+        <table>
+          {{← infos.mapM fun i => do
+            let docRow ←
+              if let some doc := i.docString? then do
+                let doc ← md2html goB doc
+                pure {{
+                  <tr>
+                    <td colspan="2"></td>
+                    <td> {{ doc }}
+                    </td>
+                  </tr>
+                }}
+                else
+                  pure Html.empty
+
+             pure <| {{
+              <tr>
+                <td><code class="hl lean inline">{{← i.fieldName.toHtml}}</code></td>
+                <td>":"</td>
+                <td><code class="hl lean inline">{{←  i.type.toHtml }}</code></td>
+              </tr>
+            }} ++ docRow
+          }}
+        </table>
+      }}
+
     | .inductive ctors _ _ =>
       open Verso.Doc.Html in
       open Verso.Output Html in do
