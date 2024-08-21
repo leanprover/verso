@@ -1954,6 +1954,7 @@ mutual
           satisfyFn (· == '\n') "newline" >>
           fakeAtom "\n" >>
           fakeAtom "\n" >>
+          ignoreFn (manyFn blankLine) >>
           blocks {ctxt with minIndent := c, maxDirective := fenceWidth} >>
           closeFence c fenceWidth
 
@@ -3057,6 +3058,24 @@ All input consumed.
 -/
 #guard_msgs in
   #eval directive {} |>.test! ":::: multiPara\nfoo\n::::"
+
+/--
+info: Success! Final stack:
+  (Verso.Syntax.directive
+   "::::"
+   `multiPara
+   []
+   "\n"
+   "\n"
+   [(Verso.Syntax.para
+     "para{"
+     [(Verso.Syntax.text (str "\"foo\""))]
+     "}")]
+   "::::")
+All input consumed.
+-/
+#guard_msgs in
+  #eval directive {} |>.test! ":::: multiPara\n\n\nfoo\n::::"
 
 /--
 info: Success! Final stack:
