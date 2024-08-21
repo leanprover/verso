@@ -177,6 +177,11 @@ def ValDesc.name : ValDesc m Name where
     | .name x => pure x.getId
     | other => throwError "Expected string, got {repr other}"
 
+def ValDesc.resolvedName : ValDesc m Name where
+  description := m!"a resolved name"
+  get
+    | .name x => realizeGlobalConstNoOverloadWithInfo x
+    | other => throwError "Expected string, got {repr other}"
 
 def ArgParse.run [Monad m] [MonadInfoTree m] [MonadResolveName m] [MonadEnv m] [MonadError m] [MonadLiftT IO m] (p : ArgParse m α) (args : Array Arg) : m α := do
   match ← p.parse _ ⟨args, #[]⟩ with
