@@ -84,6 +84,7 @@ def ppSignature (c : Name) : MetaM FormatWithInfos := do
 structure FieldInfo where
   fieldName : Highlighted
   type : Highlighted
+  name : Name
   projFn : Name
   /-- It is `some parentStructName` if it is a subobject, and `parentStructName` is the name of the parent structure -/
   subobject? : Option Name
@@ -110,8 +111,8 @@ instance : Quote DefinitionSafety where
 open Syntax (mkCApp) in
 instance : Quote FieldInfo where
   quote
-    | {fieldName, type, projFn, subobject?, binderInfo, autoParam, docString?} =>
-      mkCApp ``FieldInfo.mk #[quote fieldName, quote type, quote projFn, quote subobject?, quote binderInfo, quote autoParam, quote docString?]
+    | {fieldName, type, name, projFn, subobject?, binderInfo, autoParam, docString?} =>
+      mkCApp ``FieldInfo.mk #[quote fieldName, quote type, quote name, quote projFn, quote subobject?, quote binderInfo, quote autoParam, quote docString?]
 
 structure DocName where
   name : Name
@@ -187,14 +188,15 @@ def DeclType.ofName (c : Name) : MetaM DeclType := do
         let fieldInfo ←
           forallTelescopeReducing ii.type fun params _ =>
             withLocalDeclD `self (mkAppN (mkConst c (ii.levelParams.map mkLevelParam)) params) fun s =>
-              info.fieldInfo.mapM fun {fieldName, projFn, subobject?, binderInfo, autoParam?} => do
+              (info.fieldNames.zip info.fieldInfo).mapM fun (name, {fieldName, projFn, subobject?, binderInfo, autoParam?}) => do
                 let proj ← mkProjection s fieldName
                 let type ← inferType proj >>= instantiateMVars
                 let type' ← withOptions (·.setInt `format.width 40 |>.setBool `pp.tagAppFns true) <| (Widget.ppExprTagged type)
                 let projType ← withOptions (·.setInt `format.width 40 |>.setBool `pp.tagAppFns true) <| ppExpr type
                 let fieldName' := Highlighted.token ⟨.const projFn projType.pretty (← findDocString? env projFn), fieldName.toString⟩
-                pure {fieldName := fieldName', type := ← renderTagged {} none type', projFn, subobject?, binderInfo, autoParam := autoParam?.isSome, docString? := ← findDocString? env projFn}
+                pure {fieldName := fieldName', type := ← renderTagged {} none type', name, projFn, subobject?, binderInfo, autoParam := autoParam?.isSome, docString? := ← findDocString? env projFn}
         return .structure (isClass env c) (← DocName.ofName ctor.name) info.fieldNames fieldInfo parents ancestors
+
       else
         let ctors ← ii.ctors.mapM DocName.ofName
         let t ← inferType <| .const c (ii.levelParams.map .param)
@@ -261,8 +263,11 @@ def docstring.descr : BlockDescr where
           term := Doc.Inline.code ctor.name.toString,
           subterm := some <| Doc.Inline.concat #[Doc.Inline.text "Constructor of ", Doc.Inline.code name.toString]
         }
+        modify fun st => st.saveDomainObject `Verso.Manual.doc ctor.name.toString id
+
         for (f, i) in fields.zip fieldInfos do
           Index.addEntry id {term := Doc.Inline.code i.projFn.toString}
+          modify fun st => st.saveDomainObject `Verso.Manual.doc i.projFn.toString id
           if i.projFn.getPrefix != .anonymous then
             Index.addEntry id {
               term := Doc.Inline.code f.toString,
@@ -274,6 +279,7 @@ def docstring.descr : BlockDescr where
           term := Doc.Inline.code c.name.toString,
           subterm := some <| Doc.Inline.concat #[Doc.Inline.text "Constructor of ", Doc.Inline.code name.toString]
         }
+        modify fun st => st.saveDomainObject `Verso.Manual.doc c.name.toString id
     | _ => pure ()
 
     -- Save a backreference
@@ -290,14 +296,14 @@ def docstring.descr : BlockDescr where
 
     pure none
   toHtml := some <| fun _goI goB id info contents =>
-    open Verso.Doc.Html in
+    open Verso.Doc.Html HtmlT in
     open Verso.Output Html in do
       let .ok (name, declType, signature) := FromJson.fromJson? (α := Name × Block.Docstring.DeclType × Option Highlighted) info
         | do Verso.Doc.Html.HtmlT.logError "Failed to deserialize docstring data"; pure .empty
       let x : Html := Html.text true <| Name.toString name
       let sig : Html ← Option.map Highlighted.toHtml signature |>.getD (pure {{ {{x}} }})
 
-      let (_, _, xref) ← read
+      let xref ← state
       let idAttr :=
         if let some (_, htmlId) := xref.externalTags[id]? then
           #[("id", htmlId)]
@@ -384,7 +390,7 @@ where
     | .error e => HtmlT.logError e; pure <| Html.text true str
     | .ok blks => blks.mapM goB
   moreDeclHtml (goB)
-    | .structure false ctor _fields infos _parents _ancestors =>
+    | .structure false ctor fields infos _parents _ancestors =>
       open Verso.Doc.Html in
       open Verso.Output Html in do
       let ctorRow ←

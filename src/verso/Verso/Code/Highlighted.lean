@@ -50,11 +50,31 @@ end Hover
 
 open Hover
 
-abbrev HighlightHtmlM α := StateT (Dedup Html) Id α
+open Lean (Name) in
+structure LinkTargets where
+  var : Name → Option String := fun _ => none
+  sort : String → Option String := fun _ => none
+  const : Name → Option String := fun _ => none
+  option : Name → Option String := fun _ => none
+  keyword : Name → String → Option String := fun _ _ => none
+
+abbrev HighlightHtmlM α := ReaderT LinkTargets (StateT (Dedup Html) Id) α
 
 
 def addHover (content : Html) : HighlightHtmlM Nat := modifyGet fun st => st.insert content
 
+open Lean in
+open Verso.Output.Html in
+def constLink (constName : Name) (content : Html) : HighlightHtmlM Html := do
+  if let some tgt := (← readThe LinkTargets).const constName then
+    pure {{<a href={{tgt}}>{{content}}</a>}}
+  else
+    pure content
+
+defmethod Token.Kind.addLink (tok : Token.Kind) (content : Html) : HighlightHtmlM Html := do
+  match tok with
+  | .const x .. => constLink x content
+  | _ => pure content
 
 partial defmethod Highlighted.isEmpty (hl : Highlighted) : Bool :=
   match hl with
@@ -113,17 +133,18 @@ defmethod Highlighted.trim (hl : Highlighted) : Highlighted := hl.trimLeft.trimR
 --   <span class="hover-container"><span class="hover-info"> {{ content }} </span></span>
 -- }}
 
-defmethod Token.Kind.hover? : (tok : Token.Kind) → HighlightHtmlM (Option Nat)
+defmethod Token.Kind.hover? (tok : Token.Kind) : HighlightHtmlM (Option Nat) :=
+  match tok with
   | .const _n sig doc =>
     let docs :=
       match doc with
       | none => .empty
-      | some txt => {{<span class="sep"/><code class="docstring">{{txt}}</code>}}
+      | some txt => separatedDocs txt
     some <$> addHover {{ <code>{{sig}}</code> {{docs}} }}
   | .option n doc =>
     let docs := match doc with
       | none => .empty
-      | some txt => {{<span class="sep"/><code class="docstring">{{txt}}</code>}}
+      | some txt => separatedDocs txt
     some <$> addHover {{ <code>{{toString n}}</code> {{docs}} }}
   | .keyword _ _ none => pure none
   | .keyword _ _ (some doc) => some <$> addHover {{<code class="docstring">{{doc}}</code>}}
@@ -132,7 +153,9 @@ defmethod Token.Kind.hover? : (tok : Token.Kind) → HighlightHtmlM (Option Nat)
   | .str s =>
     some <$> addHover {{ <code><span class="literal string">{{s.quote}}</span>" : String"</code>}}
   | _ => pure none
-
+where
+  separatedDocs txt :=
+    {{<span class="sep"/><code class="docstring">{{txt}}</code>}}
 
 defmethod Highlighted.Span.Kind.«class» : Highlighted.Span.Kind → String
   | .info => "info"
@@ -159,7 +182,7 @@ defmethod Token.Kind.data : Token.Kind → String
 defmethod Token.toHtml (tok : Token) : HighlightHtmlM Html := do
   let hoverId ← tok.kind.hover?
   let hoverAttr := hoverId.map (fun i => #[("data-verso-hover", toString i)]) |>.getD #[]
-  pure {{
+  tok.kind.addLink {{
     <span class={{tok.kind.«class» ++ " token"}} "data-binding"={{tok.kind.data}} {{hoverAttr}}>{{tok.content}}</span>
   }}
 
@@ -296,6 +319,15 @@ def highlightingStyle : String := "
   height: 0;
   position: relative;
   display: inline;
+}
+
+.hl.lean a {
+  color: inherit;
+  text-decoration: currentcolor underline dotted;
+}
+
+.hl.lean a:hover {
+  text-decoration: currentcolor underline solid;
 }
 
 .hl.lean .hover-info {

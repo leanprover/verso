@@ -26,7 +26,7 @@ def vanish : RoleExpander
 def rev : RoleExpander
   | _args, stxs => .reverse <$> stxs.mapM elabInline
 
-def html [Monad m] (doc : Part .none) : m Html := (·.fst) <$> Genre.none.toHtml {logError := fun _ => pure ()} () () doc .empty
+def html [Monad m] (doc : Part .none) : m Html := (·.fst) <$> Genre.none.toHtml {logError := fun _ => pure ()} () () {} doc .empty
 
 def main : IO Unit := do
   IO.println <| Html.asString <| Html.embody <| ← html <| #doc (.none) "My wonderful document" =>

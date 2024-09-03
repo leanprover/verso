@@ -87,9 +87,9 @@ def deftech.descr : InlineDescr where
       pure <| .seq <| ← content.mapM fun b => do
         pure <| .seq #[← go b, .raw "\n"]
   toHtml :=
-    open Verso.Output.Html in
+    open Verso.Output.Html Doc.Html.HtmlT in
     some <| fun go id inl content => do
-      let some (_, t) := (← read).2.2.externalTags[id]?
+      let some (_, t) := (← state).externalTags[id]?
         | panic! s!"Untagged index target with data {inl}"
       return {{<span id={{t}}>{{← content.mapM go}}</span>}}
 
