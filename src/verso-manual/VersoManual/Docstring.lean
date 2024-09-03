@@ -170,7 +170,7 @@ def DocName.ofName (c : Name) : MetaM DocName := do
     }
     let sig := Lean.Widget.tagCodeInfos ctx infos tt
 
-    pure ⟨c, ← renderTagged {} sig, ← findDocString? env c⟩
+    pure ⟨c, ← renderTagged {} none sig, ← findDocString? env c⟩
   else pure ⟨c, Highlighted.seq #[], none⟩
 
 open Meta in
@@ -193,8 +193,8 @@ def DeclType.ofName (c : Name) : MetaM DeclType := do
                 let type' ← withOptions (·.setInt `format.width 40 |>.setBool `pp.tagAppFns true) <| (Widget.ppExprTagged type)
                 let projType ← withOptions (·.setInt `format.width 40 |>.setBool `pp.tagAppFns true) <| ppExpr type
                 let fieldName' := Highlighted.token ⟨.const projFn projType.pretty (← findDocString? env projFn), fieldName.toString⟩
-                pure {fieldName := fieldName', type := ← renderTagged {} type', projFn, subobject?, binderInfo, autoParam := autoParam?.isSome, docString? := ← findDocString? env projFn}
-        return .structure (isClass env c) (← DocName.ofName ctor.name) info.fieldNames fieldInfo.reverse parents ancestors
+                pure {fieldName := fieldName', type := ← renderTagged {} none type', projFn, subobject?, binderInfo, autoParam := autoParam?.isSome, docString? := ← findDocString? env projFn}
+        return .structure (isClass env c) (← DocName.ofName ctor.name) info.fieldNames fieldInfo parents ancestors
       else
         let ctors ← ii.ctors.mapM DocName.ofName
         let t ← inferType <| .const c (ii.levelParams.map .param)
@@ -524,7 +524,7 @@ def docstring : BlockRoleExpander
         ngen          := (← getNGen)
       }
       let sig := Lean.Widget.tagCodeInfos ctx infos tt
-      let signature ← some <$> renderTagged {} sig
+      let signature ← some <$> renderTagged {} none sig
       pure #[← ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.docstring $(quote name) $(quote declType) $(quote signature)) #[$blockStx,*])]
     | _ => throwError "Expected exactly one positional argument that is a name"
   | _, more => throwErrorAt more[0]! "Unexpected block argument"
