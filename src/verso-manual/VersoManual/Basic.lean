@@ -527,6 +527,12 @@ def TraverseState.linkTargets (state : TraverseState) : Code.LinkTargets where
       path.map ("/" ++ ·) |>.toList |> (String.join · ++ "#" ++ htmlId) |> some
     | .error _ =>
       none
+  option := fun x =>
+    match state.resolveDomainObject `Verso.Manual.doc.option x.toString with
+    | .ok (path, htmlId) =>
+      path.map ("/" ++ ·) |>.toList |> (String.join · ++ "#" ++ htmlId) |> some
+    | .error _ =>
+      none
 
 
 instance : Traverse Manual TraverseM where
