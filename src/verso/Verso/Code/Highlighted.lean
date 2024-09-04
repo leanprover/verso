@@ -50,13 +50,13 @@ end Hover
 
 open Hover
 
-open Lean (Name) in
+open Lean (Name FVarId Level) in
 structure LinkTargets where
-  var : Name → Option String := fun _ => none
-  sort : String → Option String := fun _ => none
+  var : FVarId → Option String := fun _ => none
+  sort : Level → Option String := fun _ => none
   const : Name → Option String := fun _ => none
   option : Name → Option String := fun _ => none
-  keyword : Name → String → Option String := fun _ _ => none
+  keyword : Name → Option String := fun _ => none
 
 abbrev HighlightHtmlM α := ReaderT LinkTargets (StateT (Dedup Html) Id) α
 
@@ -71,9 +71,37 @@ def constLink (constName : Name) (content : Html) : HighlightHtmlM Html := do
   else
     pure content
 
+open Lean in
+open Verso.Output.Html in
+def optionLink (optionName : Name) (content : Html) : HighlightHtmlM Html := do
+  if let some tgt := (← readThe LinkTargets).option optionName then
+    pure {{<a href={{tgt}}>{{content}}</a>}}
+  else
+    pure content
+
+open Lean in
+open Verso.Output.Html in
+def varLink (varName : FVarId) (content : Html) : HighlightHtmlM Html := do
+  if let some tgt := (← readThe LinkTargets).var varName then
+    pure {{<a href={{tgt}}>{{content}}</a>}}
+  else
+    pure content
+
+open Lean in
+open Verso.Output.Html in
+def kwLink (kind : Name) (content : Html) : HighlightHtmlM Html := do
+  if let some tgt := (← readThe LinkTargets).keyword kind then
+    pure {{<a href={{tgt}}>{{content}}</a>}}
+  else
+    pure content
+
+
 defmethod Token.Kind.addLink (tok : Token.Kind) (content : Html) : HighlightHtmlM Html := do
   match tok with
   | .const x .. => constLink x content
+  | .option o .. => optionLink o content
+  | .var x .. => varLink x content
+  | .keyword (some k) .. => kwLink k content
   | _ => pure content
 
 partial defmethod Highlighted.isEmpty (hl : Highlighted) : Bool :=
@@ -141,11 +169,11 @@ defmethod Token.Kind.hover? (tok : Token.Kind) : HighlightHtmlM (Option Nat) :=
       | none => .empty
       | some txt => separatedDocs txt
     some <$> addHover {{ <code>{{sig}}</code> {{docs}} }}
-  | .option n doc =>
+  | .option optName _declName doc =>
     let docs := match doc with
       | none => .empty
       | some txt => separatedDocs txt
-    some <$> addHover {{ <code>{{toString n}}</code> {{docs}} }}
+    some <$> addHover {{ <code>{{toString optName}}</code> {{docs}} }}
   | .keyword _ _ none => pure none
   | .keyword _ _ (some doc) => some <$> addHover {{<code class="docstring">{{doc}}</code>}}
   | .var _ type =>
@@ -167,7 +195,7 @@ defmethod Token.Kind.«class» : Token.Kind → String
   | .str _ => "literal string"
   | .sort  => "sort"
   | .const _ _ _ => "const"
-  | .option _ _ => "option"
+  | .option _ _ _ => "option"
   | .docComment => "doc-comment"
   | .keyword _ _ _ => "keyword"
   | .unknown => "unknown"
@@ -175,7 +203,7 @@ defmethod Token.Kind.«class» : Token.Kind → String
 defmethod Token.Kind.data : Token.Kind → String
   | .const n _ _ => "const-" ++ toString n
   | .var ⟨v⟩ _ => "var-" ++ toString v
-  | .option n _ => "option-" ++ toString n
+  | .option n _ _ => "option-" ++ toString n
   | .keyword _ (some occ) _ => "kw-occ-" ++ toString occ
   | _ => ""
 
@@ -879,7 +907,7 @@ window.onload = () => {
       const addTippy = (selector, props) => {
         tippy(selector, Object.assign({}, defaultTippyProps, props));
       };
-      addTippy('.hl.lean .const.token, .hl.lean .keyword.token, .hl.lean .literal.token', {theme: 'lean'});
+      addTippy('.hl.lean .const.token, .hl.lean .keyword.token, .hl.lean .literal.token, .hl.lean .option.token', {theme: 'lean'});
       addTippy('.hl.lean .has-info.warning', {theme: 'warning message'});
       addTippy('.hl.lean .has-info.info', {theme: 'info message'});
       addTippy('.hl.lean .has-info.error', {theme: 'error message'});
