@@ -607,7 +607,7 @@ def optionDocs.descr : BlockDescr where
         | do Verso.Doc.Html.HtmlT.logError "Failed to deserialize docstring data"; pure .empty
       let x : Html := Html.text true <| Name.toString name
 
-      let (_, _, xref) ← read
+      let xref ← HtmlT.state
       let idAttr :=
         if let some (_, htmlId) := xref.externalTags[id]? then
           #[("id", htmlId)]
