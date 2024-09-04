@@ -11,23 +11,23 @@ import VersoBlog.Theme
 
 open Verso Doc Output Html HtmlT FS
 open Verso.Code.Hover (Dedup)
+open Verso.Code (LinkTargets)
 
 namespace Verso.Genre.Blog
 
 instance [Monad m] : MonadConfig (HtmlT Post m) where
   currentConfig := do
-    let (_, ctxt, _) ← read
-    pure ctxt.config
+    return (← context).config
 
 instance [Monad m] : MonadConfig (HtmlT Page m) where
   currentConfig := do
-    let (_, ctxt, _) ← read
-    pure ctxt.config
+    return (← context).config
 
 structure Generate.Context where
   site : Site
   ctxt : TraverseContext
   xref : TraverseState
+  linkTargets : LinkTargets
   /-- The root directory in which to generate the static site -/
   dir : System.FilePath
   config : Config
@@ -61,10 +61,13 @@ instance : MonadConfig GenerateM where
 
 open BlogGenre in
 def GenerateM.toHtml (g : Genre) [BlogGenre g] [ToHtml g IO α] (x : α) : GenerateM Html := do
-  let {ctxt := ctxt, xref := state, ..} ← read
-  g.toHtml (m := IO) {logError := fun x => ctxt.config.logError x, headerLevel := 2}
+  let {ctxt := ctxt, xref := state, linkTargets, ..} ← read
+  g.toHtml
+    (m := IO)
+    {logError := fun x => ctxt.config.logError x, headerLevel := 2}
     (BlogGenre.traverseContextEq (genre := g) ▸ ctxt)
     (traverseStateEq (genre := g) ▸ state)
+    linkTargets
     x
 
 namespace Template

@@ -520,6 +520,21 @@ def TraverseState.resolveTag (st : TraverseState) (tag : String) : Option (Path 
     else panic! s!"No location for ID {id}, but it came from external tag '{tag}'"
   else none
 
+def TraverseState.linkTargets (state : TraverseState) : Code.LinkTargets where
+  const := fun x =>
+    match state.resolveDomainObject `Verso.Manual.doc x.toString with
+    | .ok (path, htmlId) =>
+      path.map ("/" ++ ·) |>.toList |> (String.join · ++ "#" ++ htmlId) |> some
+    | .error _ =>
+      none
+  option := fun x =>
+    match state.resolveDomainObject `Verso.Manual.doc.option x.toString with
+    | .ok (path, htmlId) =>
+      path.map ("/" ++ ·) |>.toList |> (String.join · ++ "#" ++ htmlId) |> some
+    | .error _ =>
+      none
+
+
 instance : Traverse Manual TraverseM where
   part p :=
     if p.metadata.isNone then pure (some {}) else pure none

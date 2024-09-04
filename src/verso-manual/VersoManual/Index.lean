@@ -113,7 +113,7 @@ def index.descr : InlineDescr where
   toHtml :=
     open Verso.Output.Html in
     some <| fun _go id inl _content => do
-      let some (_, t) := (← read).2.2.externalTags.get? id
+      let some (_, t) := (← read).traverseState.externalTags.get? id
         | panic! s!"Untagged index target with data {inl}"
       return {{<span id={{t}}></span>}}
 
@@ -187,8 +187,8 @@ def RenderedEntry.toHtml [Monad m] (inlineHtml : Doc.Inline Manual → Doc.Html.
     else pure .empty
   pure <| termPart ++ subPart
 where
-  oneTerm id term links : Doc.Html.HtmlT Manual m Html := do
-    let (_, _, xref) ← read
+  oneTerm id term links : Doc.Html.HtmlT Manual m Html := open Doc.Html HtmlT in do
+    let xref ← state
     let termHtml ← ({{<span id={{id.toString}}>{{·}}</span>}}) <$> inlineHtml term
     match h : links.size with
     | 0 => pure termHtml
@@ -197,7 +197,7 @@ where
         let addr := String.join (path.map ("/" ++ ·) |>.toList)
         pure {{<a href=s!"{addr}#{htmlId}">{{termHtml}}</a>}}
       else
-        Doc.Html.HtmlT.logError s!"No external tag for {id.toString}"
+        HtmlT.logError s!"No external tag for {id.toString}"
         pure .empty
     | _ =>
       let links ← links.mapIdxM fun i id => do
@@ -205,7 +205,7 @@ where
           let addr := String.join (path.map ("/" ++ ·) |>.toList)
           pure {{" " <a href=s!"{addr}#{htmlId}"> s!"({i.val})" </a>}}
         else
-          Doc.Html.HtmlT.logError s!"No external tag for {id}"
+          HtmlT.logError s!"No external tag for {id}"
           pure .empty
 
       pure {{ {{termHtml}} {{links}} }}
@@ -341,9 +341,9 @@ def theIndex.descr : BlockDescr where
         pure <| .seq #[← go b, .raw "\n"]
   extraCss := [indexCss]
   toHtml :=
-    open Verso.Output.Html in
+    open Verso.Output.Html Doc.Html HtmlT in
     some <| fun goI _goB _ _ _content => do
-      let ist : Option (Except String Index) := (← read).2.2.get? indexState
+      let ist : Option (Except String Index) := (← state).get? indexState
       match ist with
       | some (.error err) =>
         Verso.Doc.Html.HtmlT.logError err

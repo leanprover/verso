@@ -18,7 +18,7 @@ import Verso.Code
 open Std (HashSet)
 open Lean (RBMap)
 
-open Verso Doc Output Html
+open Verso Doc Output Html HtmlT
 open Verso.Genre Blog
 open SubVerso.Highlighting
 
@@ -30,23 +30,19 @@ private def next (xs : Array α) : Option (α × Array α) :=
 
 instance [Monad m] : MonadPath (HtmlT Post m) where
   currentPath := do
-    let (_, ctxt, _) ← read
-    pure ctxt.path
+    return (← context).path
 
 instance [Monad m] : MonadPath (HtmlT Page m) where
   currentPath := do
-    let (_, ctxt, _) ← read
-    pure ctxt.path
+    return (← context).path
 
 instance [Monad m] : MonadConfig (HtmlT Post m) where
   currentConfig := do
-    let (_, ctxt, _) ← read
-    pure ctxt.config
+    return (← context).config
 
 instance [Monad m] : MonadConfig (HtmlT Page m) where
   currentConfig := do
-    let (_, ctxt, _) ← read
-    pure ctxt.config
+    return (← context).config
 
 open HtmlT
 

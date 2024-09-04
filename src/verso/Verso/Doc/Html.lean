@@ -30,26 +30,35 @@ def Options.reinterpret (lift : {α : _} → m α → m' α) (opts : Options g m
 def Options.lift [MonadLiftT m m'] (opts : Options g m) : Options g m' :=
   opts.reinterpret MonadLiftT.monadLift
 
+structure HtmlT.Context (genre : Genre) (m : Type → Type) where
+  options : Options genre m
+  traverseContext : genre.TraverseContext
+  traverseState : genre.TraverseState
+  linkTargets : Code.LinkTargets
+
 abbrev HtmlT (genre : Genre) (m : Type → Type) : Type → Type :=
-  ReaderT (Options genre m × genre.TraverseContext × genre.TraverseState) (StateT (Dedup Html) m)
+  ReaderT (HtmlT.Context genre m) (StateT (Dedup Html) m)
 
 def HtmlT.options [Monad m] : HtmlT genre m (Options genre m) := do
-  let (opts, _, _) ← read
-  pure opts
+  return (← read).options
 
 def HtmlT.withOptions (opts : Options g m → Options g m) (act : HtmlT g m α) : HtmlT g m α :=
-  withReader (fun (x, y, z) => (opts x, y, z)) act
+  withReader (fun ctxt => {ctxt with options := opts ctxt.options}) act
 
 def HtmlT.context [Monad m] : HtmlT genre m genre.TraverseContext := do
-  let (_, ctxt, _) ← read
-  pure ctxt
+  return (← read).traverseContext
 
-def HtmlT.state [Monad m] : HtmlT genre m genre.TraverseState := read >>= fun (_, _, state) => pure state
+def HtmlT.state [Monad m] : HtmlT genre m genre.TraverseState := do
+  return (← read).traverseState
+
+def HtmlT.linkTargets [Monad m] : HtmlT genre m Code.LinkTargets := do
+  return (← read).linkTargets
+
 
 def HtmlT.logError [Monad m] (message : String) : HtmlT genre m Unit := do (← options).logError message
 
 instance [Monad m] : MonadLift HighlightHtmlM (HtmlT genre m) where
-  monadLift act := modifyGet act
+  monadLift act := do modifyGet (act (← HtmlT.linkTargets))
 
 open HtmlT
 
@@ -146,8 +155,8 @@ instance : GenreHtml .none m where
   block _ _ x := nomatch x
   inline _ x := nomatch x
 
-defmethod Genre.toHtml (g : Genre) [ToHtml g m α] (options : Options g m) (context : g.TraverseContext) (state : g.TraverseState) (x : α) : StateT (Dedup Html) m Html :=
-  ToHtml.toHtml x (options, context, state)
+defmethod Genre.toHtml (g : Genre) [ToHtml g m α] (options : Options g m) (context : g.TraverseContext) (state : g.TraverseState) (linkTargets : Code.LinkTargets) (x : α) : StateT (Dedup Html) m Html :=
+  ToHtml.toHtml x ⟨options, context, state, linkTargets⟩
 
 open Verso.Examples
 
@@ -169,7 +178,7 @@ info: Verso.Output.Html.tag
               (Verso.Output.Html.text true "(define (zero f z) z)\n(define (succ n) (lambda (f x) (f (n f z))))\n")])])
 -/
 #guard_msgs in
-  #eval Genre.none.toHtml (m:=Id) {logError := fun _ => ()} () () e |>.run .empty |>.fst
+  #eval Genre.none.toHtml (m:=Id) {logError := fun _ => ()} () () {} e |>.run .empty |>.fst
 end
 
 def embody (content : Html) : Html := {{
