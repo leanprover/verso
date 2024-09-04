@@ -212,6 +212,7 @@ where
     | .mdata _ e => isPred e
     | .letE _ _ _ e _ => isPred e
     | _ => false
+
 end Docstring
 
 
@@ -234,6 +235,64 @@ instance [BEq α] [Hashable α] [ToJson α] : ToJson (HashSet α) where
   toJson v :=
     .arr <| v.toArray.map toJson
 
+def docstringStyle := r#"
+.namedocs {
+  position: relative;
+  border: solid 2px transparent;
+  background-clip: padding-box;
+  box-sizing: border-box;
+  background-color: white;
+  border-radius: 0.5em;
+  padding: 1.5em;
+}
+.namedocs:before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 1em;
+  max-height: 10em;
+  z-index: -1;
+  border-radius: inherit;
+  background: linear-gradient(to bottom, #98B2C0, white);
+  margin: -2px;
+}
+.namedocs .text {
+}
+.namedocs .signature {
+  font-family: var(--verso-code-font-family);
+  font-size: larger;
+  margin-top: 0;
+}
+.namedocs .label {
+  font-size: smaller;
+  font-family: var(--verso-structure-font-family);
+  position: absolute;
+  right: 1em;
+  top: 1em;
+}
+.namedocs h1 {
+  font-size: inherit;
+  font-weight: bold;
+}
+.namedocs > .text > .constructors {
+  text-indent: -1ex;
+}
+.namedocs > .text > .constructors > li {
+  display: block;
+}
+.namedocs > .text > .constructors > li::before {
+  content: '|';
+  width: 1ex;
+  display: inline-block;
+  font-size: larger;
+}
+.namedocs > .text > .constructors > li > .doc {
+  text-indent: 0;
+}
+
+"#
 
 open Verso.Genre.Manual.Markdown in
 @[block_extension Block.docstring]
@@ -320,64 +379,7 @@ def docstring.descr : BlockDescr where
         </div>
       }}
   toTeX := some <| fun _goI goB _id _info contents => contents.mapM goB
-  extraCss := [highlightingStyle, r#"
-.namedocs {
-  position: relative;
-  border: solid 2px transparent;
-  background-clip: padding-box;
-  box-sizing: border-box;
-  background-color: white;
-  border-radius: 0.5em;
-  padding: 1.5em;
-}
-.namedocs:before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 1em;
-  max-height: 10em;
-  z-index: -1;
-  border-radius: inherit;
-  background: linear-gradient(to bottom, #98B2C0, white);
-  margin: -2px;
-}
-.namedocs .text {
-}
-.namedocs .signature {
-  font-family: var(--verso-code-font-family);
-  font-size: larger;
-  margin-top: 0;
-}
-.namedocs .label {
-  font-size: smaller;
-  font-family: var(--verso-structure-font-family);
-  position: absolute;
-  right: 1em;
-  top: 1em;
-}
-.namedocs h1 {
-  font-size: inherit;
-  font-weight: bold;
-}
-.namedocs > .text > .constructors {
-  text-indent: -1ex;
-}
-.namedocs > .text > .constructors > li {
-  display: block;
-}
-.namedocs > .text > .constructors > li::before {
-  content: '|';
-  width: 1ex;
-  display: inline-block;
-  font-size: larger;
-}
-.namedocs > .text > .constructors > li > .doc {
-  text-indent: 0;
-}
-
-"#]
+  extraCss := [highlightingStyle, docstringStyle]
   extraJs := [highlightingJs]
 where
   md2html (goB) (str : String) : Verso.Doc.Html.HtmlT Manual (ReaderT ExtensionImpls IO) Verso.Output.Html :=
@@ -502,7 +504,6 @@ where
 
 open Verso.Doc.Elab
 
-
 @[block_role_expander docstring]
 def docstring : BlockRoleExpander
   | args, #[] => do
@@ -534,6 +535,97 @@ def docstring : BlockRoleExpander
       pure #[← ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.docstring $(quote name) $(quote declType) $(quote signature)) #[$blockStx,*])]
     | _ => throwError "Expected exactly one positional argument that is a name"
   | _, more => throwErrorAt more[0]! "Unexpected block argument"
+
+def Block.optionDocs (name : Name) (defaultValue : Option Highlighted) : Block where
+  name := `Verso.Genre.Manual.optionDocs
+  data := ToJson.toJson (name, defaultValue)
+
+open Lean Elab Term in
+elab "docs_for%" name:ident : term => do
+  let x ← realizeGlobalConstNoOverloadWithInfo name
+  if let some docs ← findDocString? (← getEnv) x then
+    pure <| .lit <| .strVal docs
+  else
+    throwErrorAt name "No docs for {x}"
+
+open Lean Elab Term in
+elab "sig_for%" name:ident : term => do
+  let x ← realizeGlobalConstNoOverloadWithInfo name
+  let ⟨fmt, _infos⟩ ← withOptions (·.setBool `pp.tagAppFns true) <| Block.Docstring.ppSignature x
+  let tt := Lean.Widget.TaggedText.prettyTagged (w := 48) fmt
+  pure <| .lit <| .strVal tt.stripTags
+
+
+def highlightDataValue (v : DataValue) : Highlighted :=
+  .token <|
+    match v with
+    | .ofString (v : String) => ⟨.str v, toString v⟩
+    | .ofBool b =>
+      if b then
+        ⟨.const ``true (sig_for% true) (some <| docs_for% true), "true"⟩
+      else
+        ⟨.const ``false (sig_for% false) (some <| docs_for% false), "false"⟩
+    | .ofName (v : Name) => ⟨.unknown, v.toString⟩
+    | .ofNat (v : Nat) => ⟨.unknown, toString v⟩
+    | .ofInt (v : Int) => ⟨.unknown, toString v⟩
+    | .ofSyntax (v : Syntax) => ⟨.unknown, toString v⟩ -- TODO
+
+
+@[block_role_expander optionDocs]
+def optionDocs : BlockRoleExpander
+  | args, #[] => do
+    let #[.anon (.name x)] := args
+      | throwError "Expected exactly one positional argument that is a name"
+    let optDecl ← getOptionDecl x.getId
+    let some mdAst := MD4Lean.parse optDecl.descr
+      | throwErrorAt x "Failed to parse docstring as Markdown"
+    let contents ← mdAst.blocks.mapM Markdown.blockFromMarkdown
+    pure #[← ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.optionDocs $(quote x.getId) $(quote <| highlightDataValue optDecl.defValue)) #[$contents,*])]
+
+  | _, more => throwErrorAt more[0]! "Unexpected block argument"
+
+open Verso.Genre.Manual.Markdown in
+@[block_extension optionDocs]
+def optionDocs.descr : BlockDescr where
+  traverse id info _ := do
+    let .ok (name, _defaultValue) := FromJson.fromJson? (α := Name × Highlighted) info
+      | do logError "Failed to deserialize docstring data"; pure none
+
+    let path ← (·.path) <$> read
+    let _ ← Verso.Genre.Manual.externalTag id path name.toString
+    Index.addEntry id {term := Doc.Inline.code name.toString}
+    if name.getPrefix != .anonymous then
+      Index.addEntry id {term := Doc.Inline.code name.getString!, subterm := some <| Doc.Inline.code name.toString}
+
+    modify fun st => st.saveDomainObject `Verso.Manual.doc.option name.toString id
+
+    pure none
+  toHtml := some <| fun _goI goB id info contents =>
+    open Verso.Doc.Html in
+    open Verso.Output Html in do
+      let .ok (name, defaultValue) := FromJson.fromJson? (α := Name × Highlighted) info
+        | do Verso.Doc.Html.HtmlT.logError "Failed to deserialize docstring data"; pure .empty
+      let x : Html := Html.text true <| Name.toString name
+
+      let (_, _, xref) ← read
+      let idAttr :=
+        if let some (_, htmlId) := xref.externalTags[id]? then
+          #[("id", htmlId)]
+        else #[]
+
+      return {{
+        <div class="namedocs" {{idAttr}}>
+          <span class="label">"option"</span>
+          <pre class="signature hl lean block">{{x}}</pre>
+          <div class="text">
+            <p>"Default value: " <code class="hl lean inline">{{← defaultValue.toHtml}}</code></p>
+            {{← contents.mapM goB}}
+          </div>
+        </div>
+      }}
+  toTeX := some <| fun _goI goB _id _info contents => contents.mapM goB
+  extraCss := [highlightingStyle, docstringStyle]
+  extraJs := [highlightingJs]
 
 def Block.progress (namespaces exceptions : Array Name) (present : List (Name × List Name)) : Block where
   name := `Verso.Genre.Manual.Block.progress
