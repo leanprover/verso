@@ -238,39 +238,33 @@ instance [BEq α] [Hashable α] [ToJson α] : ToJson (HashSet α) where
 def docstringStyle := r#"
 .namedocs {
   position: relative;
-  border: solid 2px transparent;
-  background-clip: padding-box;
-  box-sizing: border-box;
-  background-color: white;
-  border-radius: 0.5em;
-  padding: 1.5em;
+  border: solid 2px #99b3c0;
+  background-color: #99b3c0;
+  padding-left: 1px;
+  padding-right: 1px;
+  padding-bottom: 1px;
+  padding-top: 1.5em;
+  margin-bottom: 1em;
 }
-.namedocs:before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 1em;
-  max-height: 10em;
-  z-index: -1;
-  border-radius: inherit;
-  background: linear-gradient(to bottom, #98B2C0, white);
-  margin: -2px;
-}
+
 .namedocs .text {
+  background-color: white;
+  padding: 1.5em;
+  margin-top: 0.5em;
 }
 .namedocs .signature {
   font-family: var(--verso-code-font-family);
   font-size: larger;
   margin-top: 0;
+  margin-left: 1.5em;
+  margin-right: 1.5em;
 }
 .namedocs .label {
   font-size: smaller;
   font-family: var(--verso-structure-font-family);
   position: absolute;
-  right: 1em;
-  top: 1em;
+  right: 0.5em;
+  top: 0.5em;
 }
 .namedocs h1 {
   font-size: inherit;
