@@ -21,6 +21,7 @@ open Std (HashSet)
 
 open Verso.Doc.Elab.PartElabM
 open Verso.Code
+open Verso.ArgParse
 
 open SubVerso.Highlighting
 
@@ -152,7 +153,6 @@ def DeclType.label : DeclType → String
   | .inductive _ _ true => "inductive predicate"
   | other => ""
 
-example := Meta.mkProjection
 
 open Meta in
 def DocName.ofName (c : Name) : MetaM DocName := do
@@ -620,6 +620,168 @@ def optionDocs.descr : BlockDescr where
   toTeX := some <| fun _goI goB _id _info contents => contents.mapM goB
   extraCss := [highlightingStyle, docstringStyle]
   extraJs := [highlightingJs]
+
+open Lean.Syntax in
+instance : Quote NameSet where
+  quote xs := mkCApp ``RBTree.fromList #[quote xs.toList, ⟨mkHole .missing⟩]
+
+instance : ToJson NameSet where
+  toJson xs := toJson (xs.toArray : Array Name)
+
+instance : FromJson NameSet where
+  fromJson? xs := do
+    let arr ← fromJson? (α := Array Name) xs
+    pure <| RBTree.fromArray arr _
+
+open Lean.Elab.Tactic.Doc in
+deriving instance ToJson for TacticDoc
+open Lean.Elab.Tactic.Doc in
+deriving instance FromJson for TacticDoc
+
+open Lean.Elab.Tactic.Doc in
+open Lean.Syntax in
+instance : Quote TacticDoc where
+  quote
+    | .mk internalName userName tags docString extensionDocs =>
+      mkCApp ``TacticDoc.mk #[quote internalName, quote userName, quote tags, quote docString, quote extensionDocs]
+
+def Block.tactic (name : Lean.Elab.Tactic.Doc.TacticDoc) : Block where
+  name := `Verso.Genre.Manual.tactic
+  data := ToJson.toJson (name)
+
+structure TacticDocsOptions where
+ name : String ⊕ Name
+
+def TacticDocsOptions.parse [Monad m] [MonadError m] : ArgParse m TacticDocsOptions :=
+  TacticDocsOptions.mk <$> .positional `name strOrName
+where
+  strOrName : ValDesc m (String ⊕ Name) := {
+    description := m!"First token in tactic, or canonical parser name"
+    get := fun
+      | .name x => pure (.inr x.getId)
+      | .str s => pure (.inl s.getString)
+      | .num n => throwErrorAt n "Expected tactic name (either first token as string, or internal parser name)"
+  }
+
+
+open Lean Elab Term Parser Tactic Doc in
+private def getTactic (name : String ⊕ Name) : TermElabM TacticDoc := do
+  for t in ← allTacticDocs do
+    if .inr t.internalName == name || .inl t.userName == name then
+      return t
+  let n : MessageData :=
+    match name with
+    | .inl x => x
+    | .inr x => x
+  throwError m!"Tactic not found: {n}"
+
+open Lean Elab Term Parser Tactic Doc in
+private def getTactic? (name : String ⊕ Name) : TermElabM (Option TacticDoc) := do
+  for t in ← allTacticDocs do
+    if .inr t.internalName == name || .inl t.userName == name then
+      return some t
+  return none
+
+
+@[directive_expander tactic]
+def tactic : DirectiveExpander
+  | args, more => do
+    let opts ← TacticDocsOptions.parse.run args
+    let tactic ← getTactic opts.name
+    let some mdAst := tactic.docString >>= MD4Lean.parse
+      | throwError "Failed to parse docstring as Markdown"
+    let contents ← mdAst.blocks.mapM Markdown.blockFromMarkdown
+    let userContents ← more.mapM elabBlock
+    pure #[← ``(Verso.Doc.Block.other (Block.tactic $(quote tactic)) #[$(contents ++ userContents),*])]
+
+open Verso.Genre.Manual.Markdown in
+open Lean Elab Term Parser Tactic Doc in
+@[block_extension tactic]
+def tactic.descr : BlockDescr where
+  traverse id info _ := do
+    let .ok tactic := FromJson.fromJson? (α := TacticDoc) info
+      | do logError "Failed to deserialize docstring data"; pure none
+    let path ← (·.path) <$> read
+    let _ ← Verso.Genre.Manual.externalTag id path tactic.userName
+    Index.addEntry id {term := Doc.Inline.code tactic.userName}
+
+    modify fun st => st.saveDomainObject `Verso.Manual.doc.tactic tactic.internalName.toString id
+
+    pure none
+  toHtml := some <| fun _goI goB id info contents =>
+    open Verso.Doc.Html in
+    open Verso.Output Html in do
+      let .ok tactic := FromJson.fromJson? (α := TacticDoc) info
+        | do Verso.Doc.Html.HtmlT.logError "Failed to deserialize tactic data"; pure .empty
+      let x : Highlighted := .token ⟨.keyword tactic.internalName none tactic.docString, tactic.userName⟩
+
+      let xref ← HtmlT.state
+      let idAttr :=
+        if let some (_, htmlId) := xref.externalTags[id]? then
+          #[("id", htmlId)]
+        else #[]
+
+      return {{
+        <div class="namedocs" {{idAttr}}>
+          <span class="label">"tactic"</span>
+          <pre class="signature hl lean block">{{← x.toHtml}}</pre>
+          <div class="text">
+            {{← contents.mapM goB}}
+          </div>
+        </div>
+      }}
+  toTeX := some <| fun _goI goB _id _info contents => contents.mapM goB
+  extraCss := [highlightingStyle, docstringStyle]
+  extraJs := [highlightingJs]
+
+
+def Inline.tactic : Inline where
+  name := `Verso.Genre.Manual.tacticInline
+
+deriving instance Repr for NameSet
+deriving instance Repr for Lean.Elab.Tactic.Doc.TacticDoc
+
+@[role_expander tactic]
+def tacticInline : RoleExpander
+  | args, inlines => do
+    let () ← ArgParse.done.run args
+    let #[arg] := inlines
+      | throwError "Expected exactly one argument"
+    let `(inline|code{ $tac:str }) := arg
+      | throwErrorAt arg "Expected code literal with the option name"
+    let tacTok := tac.getString
+    let tacName := tac.getString.toName
+    let some tacticDoc := (← getTactic? (.inl tacTok)) <|> (← getTactic? (.inr tacName))
+      | throwErrorAt tac "Didn't find tactic named {tac}"
+    dbg_trace repr tacticDoc
+
+    let hl : Highlighted := tacToken tacticDoc
+
+    pure #[← `(Verso.Doc.Inline.other {Inline.tactic with data := ToJson.toJson $(quote hl)} #[Verso.Doc.Inline.code $(quote tacticDoc.userName)])]
+where
+  tacToken (t : Lean.Elab.Tactic.Doc.TacticDoc) : Highlighted :=
+    .token ⟨.keyword t.internalName none t.docString, t.userName⟩
+
+@[inline_extension tacticInline]
+def tacticInline.descr : InlineDescr where
+  traverse _ _ _ := do
+    pure none
+  toTeX :=
+    some <| fun go _ _ content => do
+      pure <| .seq <| ← content.mapM fun b => do
+        pure <| .seq #[← go b, .raw "\n"]
+  extraCss := [highlightingStyle, docstringStyle]
+  extraJs := [highlightingJs]
+  toHtml :=
+    open Verso.Output.Html Verso.Doc.Html in
+    some <| fun _ _ data _ => do
+      match FromJson.fromJson? data with
+      | .error err =>
+        HtmlT.logError <| "Couldn't deserialize Lean tactic code while rendering HTML: " ++ err
+        pure .empty
+      | .ok (hl : Highlighted) =>
+        hl.inlineHtml "examples"
+
 
 def Block.progress (namespaces exceptions : Array Name) (present : List (Name × List Name)) : Block where
   name := `Verso.Genre.Manual.Block.progress
