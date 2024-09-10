@@ -782,9 +782,13 @@ def tacticInline.descr : InlineDescr where
         hl.inlineHtml "examples"
 
 
-def Block.progress (namespaces exceptions : Array Name) (present : List (Name × List Name)) : Block where
+def Block.progress
+    (namespaces exceptions : Array Name)
+    (present : List (Name × List Name))
+    (tactics : Array String) :
+    Block where
   name := `Verso.Genre.Manual.Block.progress
-  data := toJson (namespaces, exceptions, present)
+  data := toJson (namespaces, exceptions, present, tactics)
 
 @[directive_expander progress]
 def progress : DirectiveExpander
@@ -823,7 +827,9 @@ def progress : DirectiveExpander
       if let some v := present.find? ns then
         present := present.insert ns (v.insert x)
     let present' := present.toList.map (fun x => (x.1, x.2.toList))
-    pure #[← ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.progress $(quote namespaces.toArray) $(quote exceptions.toArray) $(quote present')) #[])]
+    let allTactics := (← Elab.Tactic.Doc.allTacticDocs).map (·.internalName.toString)
+
+    pure #[← ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.progress $(quote namespaces.toArray) $(quote exceptions.toArray) $(quote present') $(quote allTactics)) #[])]
 where
   ignore (x : Name) : Bool :=
     isPrivateName x ||
@@ -850,10 +856,16 @@ def progress.descr : BlockDescr where
       let x := name.toName
       ok := ok.insert x
 
-    let .ok ((namespaces : Array Name), (exceptions : Array Name), (present : List (Name × List Name))) := fromJson? info
+    let .ok ((namespaces : Array Name), (exceptions : Array Name), (present : List (Name × List Name)), (allTactics : Array String)) := fromJson? info
       | panic! "Can't deserialize progress bar state"
 
     let check : NameMap (List Name) := present.foldr (init := {}) (fun x z => z.insert x.1 <| x.2)
+
+    let undocTactics ← allTactics.filterM fun un => do
+      let st ← Doc.Html.HtmlT.state (genre := Manual)
+      pure !(TraverseState.getDomainObject? st `Verso.Manual.doc.tactic un).isSome
+
+    let tacticPercent := undocTactics.size.toFloat * 100.0 / allTactics.size.toFloat
 
     return {{
       <dl>
@@ -866,6 +878,10 @@ def progress.descr : BlockDescr where
             <dd><details><summary><progress id=s!"prog-{ns}" value=s!"{100 - percent.toUInt8.toNat}" min="0" max="100"></progress> <label for=s!"prog-ns">s!"Missing {percent}%"</label></summary> {{notDocumented |>.map (·.toString) |> String.intercalate ", " }}</details></dd>
           }}
         }}
+        <dt>"Tactics"</dt>
+        <dd>
+          <details><summary><progress id="progress-tactics" value=s!"{100 - tacticPercent.toUInt8.toNat}" min="0" max="100"></progress><label for="progress-tactics">s!"Missing {tacticPercent}% ({undocTactics.size}/{allTactics.size})"</label></summary> {{ undocTactics.toList |> String.intercalate ", "}}</details>
+        </dd>
       </dl>
     }}
   toTeX := some (fun _ _ _ _ _ => pure <| Output.TeX.text "Unsupported")
