@@ -16,7 +16,6 @@ namespace Verso.Doc.Html
 
 open Verso Output Doc Html
 open Verso.Code (HighlightHtmlM)
-open Verso.Code.Hover
 
 structure Options (g : Genre) (m : Type → Type) where
   /-- The level of the top-level headers -/
@@ -35,9 +34,10 @@ structure HtmlT.Context (genre : Genre) (m : Type → Type) where
   traverseContext : genre.TraverseContext
   traverseState : genre.TraverseState
   linkTargets : Code.LinkTargets
+  codeOptions : Code.HighlightHtmlM.Options
 
 abbrev HtmlT (genre : Genre) (m : Type → Type) : Type → Type :=
-  ReaderT (HtmlT.Context genre m) (StateT (Dedup Html) m)
+  ReaderT (HtmlT.Context genre m) (StateT (Verso.Code.Hover.State Html) m)
 
 def HtmlT.options [Monad m] : HtmlT genre m (Options genre m) := do
   return (← read).options
@@ -54,11 +54,14 @@ def HtmlT.state [Monad m] : HtmlT genre m genre.TraverseState := do
 def HtmlT.linkTargets [Monad m] : HtmlT genre m Code.LinkTargets := do
   return (← read).linkTargets
 
+def HtmlT.codeOptions [Monad m] : HtmlT genre m Code.HighlightHtmlM.Options := do
+  return (← read).codeOptions
+
 
 def HtmlT.logError [Monad m] (message : String) : HtmlT genre m Unit := do (← options).logError message
 
 instance [Monad m] : MonadLift HighlightHtmlM (HtmlT genre m) where
-  monadLift act := do modifyGet (act (← HtmlT.linkTargets))
+  monadLift act := do modifyGet (act ⟨← HtmlT.linkTargets, ← HtmlT.codeOptions⟩)
 
 open HtmlT
 
@@ -155,8 +158,11 @@ instance : GenreHtml .none m where
   block _ _ x := nomatch x
   inline _ x := nomatch x
 
-defmethod Genre.toHtml (g : Genre) [ToHtml g m α] (options : Options g m) (context : g.TraverseContext) (state : g.TraverseState) (linkTargets : Code.LinkTargets) (x : α) : StateT (Dedup Html) m Html :=
-  ToHtml.toHtml x ⟨options, context, state, linkTargets⟩
+defmethod Genre.toHtml (g : Genre) [ToHtml g m α]
+    (options : Options g m) (context : g.TraverseContext) (state : g.TraverseState)
+    (linkTargets : Code.LinkTargets) (codeOptions : Code.HighlightHtmlM.Options)
+    (x : α) : StateT (Verso.Code.Hover.State Html) m Html :=
+  ToHtml.toHtml x ⟨options, context, state, linkTargets, codeOptions⟩
 
 open Verso.Examples
 
@@ -178,7 +184,7 @@ info: Verso.Output.Html.tag
               (Verso.Output.Html.text true "(define (zero f z) z)\n(define (succ n) (lambda (f x) (f (n f z))))\n")])])
 -/
 #guard_msgs in
-  #eval Genre.none.toHtml (m:=Id) {logError := fun _ => ()} () () {} e |>.run .empty |>.fst
+  #eval Genre.none.toHtml (m:=Id) {logError := fun _ => ()} () () {} {} e |>.run .empty |>.fst
 end
 
 def embody (content : Html) : Html := {{

@@ -753,7 +753,6 @@ def tacticInline : RoleExpander
     let tacName := tac.getString.toName
     let some tacticDoc := (← getTactic? (.inl tacTok)) <|> (← getTactic? (.inr tacName))
       | throwErrorAt tac "Didn't find tactic named {tac}"
-    dbg_trace repr tacticDoc
 
     let hl : Highlighted := tacToken tacticDoc
 
