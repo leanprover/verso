@@ -10,7 +10,7 @@ import VersoBlog.Template
 import VersoBlog.Theme
 
 open Verso Doc Output Html HtmlT FS
-open Verso.Code.Hover (Dedup)
+open Verso.Code.Hover (State)
 open Verso.Code (LinkTargets)
 
 namespace Verso.Genre.Blog
@@ -43,7 +43,7 @@ def Generate.Context.templateContext (ctxt : Generate.Context) (params : Templat
   jsFiles := ctxt.xref.jsFiles.map (·.1)
   cssFiles := ctxt.xref.cssFiles.map (·.1)
 
-abbrev GenerateM := ReaderT Generate.Context (StateT (Dedup Html) IO)
+abbrev GenerateM := ReaderT Generate.Context (StateT (State Html) IO)
 
 instance : MonadLift IO GenerateM where
   monadLift act := fun _ st => (·, st) <$> act
@@ -68,7 +68,9 @@ def GenerateM.toHtml (g : Genre) [BlogGenre g] [ToHtml g IO α] (x : α) : Gener
     (BlogGenre.traverseContextEq (genre := g) ▸ ctxt)
     (traverseStateEq (genre := g) ▸ state)
     linkTargets
+    {}
     x
+
 
 namespace Template
 

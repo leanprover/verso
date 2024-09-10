@@ -18,7 +18,6 @@ open Std (HashMap)
 namespace Verso.Code
 
 namespace Hover
-
 structure Dedup (α) extends BEq α, Hashable α where
   nextId : Nat := 0
   contentId : HashMap Nat α := {}
@@ -46,6 +45,25 @@ def Dedup.get? (table : Dedup α) (id : Nat) : Option α := table.contentId[id]?
 
 def Dedup.docJson (table : Dedup Html) : Json :=
   table.contentId.fold (init := .mkObj []) fun out id html => out.setObjVal! (toString id) (.str html.asString)
+
+structure IdSupply where
+  nextId : Nat := 0
+
+def IdSupply.unique (supply : IdSupply) : String × IdSupply :=
+  (s!"--verso-unique-{supply.nextId}", {supply with nextId := supply.nextId + 1})
+
+structure State (α) where
+  dedup : Dedup α
+  idSupply : IdSupply
+
+def State.empty [BEq α] [Hashable α] : State α := ⟨{}, {}⟩
+
+instance [BEq α] [Hashable α] : EmptyCollection (State α) where
+  emptyCollection := .empty
+
+instance [BEq α] [Hashable α] : Inhabited (State α) where
+  default := {}
+
 end Hover
 
 open Hover
@@ -58,15 +76,42 @@ structure LinkTargets where
   option : Name → Option String := fun _ => none
   keyword : Name → Option String := fun _ => none
 
-abbrev HighlightHtmlM α := ReaderT LinkTargets (StateT (Dedup Html) Id) α
+inductive HighlightHtmlM.CollapseGoals where
+  | subsequent
+  | always
+  | never
 
+structure HighlightHtmlM.Options where
+  inlineProofStates : Bool := true
+  collapseGoals : CollapseGoals := .subsequent
 
-def addHover (content : Html) : HighlightHtmlM Nat := modifyGet fun st => st.insert content
+structure HighlightHtmlM.Context where
+  linkTargets : LinkTargets
+  options : HighlightHtmlM.Options
+
+abbrev HighlightHtmlM α := ReaderT HighlightHtmlM.Context (StateT (State Html) Id) α
+
+def addHover (content : Html) : HighlightHtmlM Nat := modifyGet fun st =>
+  let (hoverId, dedup) := st.dedup.insert content
+  (hoverId, {st with dedup := dedup})
+
+def uniqueId : HighlightHtmlM String := modifyGet fun st =>
+  let (id, idSupply) := st.idSupply.unique
+  (id, {st with idSupply := idSupply})
+
+def withCollapsedSubgoals (policy : HighlightHtmlM.CollapseGoals) (act : HighlightHtmlM α) : HighlightHtmlM α :=
+  withReader (fun ctx => {ctx with options := {ctx.options with collapseGoals := policy} }) act
+
+def linkTargets : HighlightHtmlM LinkTargets := do
+  return (← readThe HighlightHtmlM.Context).linkTargets
+
+def options : HighlightHtmlM HighlightHtmlM.Options := do
+  return (← readThe HighlightHtmlM.Context).options
 
 open Lean in
 open Verso.Output.Html in
 def constLink (constName : Name) (content : Html) : HighlightHtmlM Html := do
-  if let some tgt := (← readThe LinkTargets).const constName then
+  if let some tgt := (← linkTargets).const constName then
     pure {{<a href={{tgt}}>{{content}}</a>}}
   else
     pure content
@@ -74,7 +119,7 @@ def constLink (constName : Name) (content : Html) : HighlightHtmlM Html := do
 open Lean in
 open Verso.Output.Html in
 def optionLink (optionName : Name) (content : Html) : HighlightHtmlM Html := do
-  if let some tgt := (← readThe LinkTargets).option optionName then
+  if let some tgt := (← linkTargets).option optionName then
     pure {{<a href={{tgt}}>{{content}}</a>}}
   else
     pure content
@@ -82,7 +127,7 @@ def optionLink (optionName : Name) (content : Html) : HighlightHtmlM Html := do
 open Lean in
 open Verso.Output.Html in
 def varLink (varName : FVarId) (content : Html) : HighlightHtmlM Html := do
-  if let some tgt := (← readThe LinkTargets).var varName then
+  if let some tgt := (← linkTargets).var varName then
     pure {{<a href={{tgt}}>{{content}}</a>}}
   else
     pure content
@@ -90,7 +135,7 @@ def varLink (varName : FVarId) (content : Html) : HighlightHtmlM Html := do
 open Lean in
 open Verso.Output.Html in
 def kwLink (kind : Name) (content : Html) : HighlightHtmlM Html := do
-  if let some tgt := (← readThe LinkTargets).keyword kind then
+  if let some tgt := (← linkTargets).keyword kind then
     pure {{<a href={{tgt}}>{{content}}</a>}}
   else
     pure content
@@ -219,39 +264,50 @@ defmethod Highlighted.Goal.toHtml (exprHtml : expr → HighlightHtmlM Html) (ind
     let hypsHtml : Html ←
       if hypotheses.size = 0 then pure .empty
       else pure {{
-        <table class="hypotheses">
+        <span class="hypotheses">
           {{← hypotheses.mapM fun
               | (x, k, t) => do pure {{
-                  <tr class="hypothesis">
-                    <td class="name">{{← Token.toHtml ⟨k, x.toString⟩}}</td><td class="colon">":"</td>
-                    <td class="type">{{← exprHtml t}}</td>
-                  </tr>
+                  <span class="hypothesis">
+                    <span class="name">{{← Token.toHtml ⟨k, x.toString⟩}}</span><span class="colon">":"</span>
+                    <span class="type">{{← exprHtml t}}</span>
+                  </span>
                 }}
           }}
-        </table>
+        </span>
       }}
     let conclHtml ← do pure {{
         <span class="conclusion">
           <span class="prefix">{{goalPrefix}}</span><span class="type">{{← exprHtml conclusion}}</span>
         </span>
       }}
+    let collapsePolicy := (← options).collapseGoals
+    let id ← uniqueId
     pure {{
-      <div class="goal">
+      <span class="goal">
         {{ match name with
           | none => {{
              {{hypsHtml}}
              {{conclHtml}}
             }}
           | some n => {{
-              <details {{if index = 0 then #[("open", "open")] else #[]}}>
-                <summary><span class="goal-name">{{n.toString}}</span></summary>
+              <span class="labeled-case" {{openAttr collapsePolicy index}}>
+                <label class="case-label">
+                  <input type="checkbox" id={{id}} {{openAttr collapsePolicy index}}/>
+                  <span for={{id}} class="goal-name">{{n.toString}}</span>
+                </label>
                {{hypsHtml}}
                {{conclHtml}}
-              </details>
+              </span>
             }}
         }}
-      </div>
+      </span>
     }}
+  where
+    openAttr policy index :=
+      match policy with
+      | .always => #[]
+      | .never => #[("checked", "checked")]
+      | .subsequent => if index = 0 then #[("checked", "checked")] else #[]
 
 def spanClass (infos : Array (Highlighted.Span.Kind × α)) : Option String := Id.run do
   let mut k := none
@@ -299,19 +355,22 @@ partial defmethod Highlighted.toHtml : Highlighted → HighlightHtmlM Html
       panic! "No highlights!"
       --toHtml hl
   | .tactics info startPos endPos hl => do
-    let id := s!"tactic-state-{hash info}-{startPos}-{endPos}"
-    pure {{
-      <span class="tactic">
-        <label «for»={{id}}>{{← toHtml hl}}</label>
-        <input type="checkbox" class="tactic-toggle" id={{id}}></input>
-        <div class="tactic-state">
-          {{← if info.isEmpty then
-              pure {{"All goals completed! 🐙"}}
-            else
-              .seq <$> info.mapIndexedM (fun ⟨i, _⟩ x => x.toHtml toHtml i)}}
-        </div>
-      </span>
-    }}
+    if (← options).inlineProofStates then
+      let id := s!"tactic-state-{hash info}-{startPos}-{endPos}"
+      pure {{
+        <span class="tactic">
+          <label «for»={{id}}>{{← toHtml hl}}</label>
+          <input type="checkbox" class="tactic-toggle" id={{id}}></input>
+          <span class="tactic-state">
+            {{← if info.isEmpty then
+                pure {{"All goals completed! 🐙"}}
+              else
+                .seq <$> info.mapIndexedM (fun ⟨i, _⟩ x => x.toHtml toHtml i)}}
+          </span>
+        </span>
+      }}
+    else
+      toHtml hl
   | .point s info => pure {{<span class={{"message " ++ s.«class»}}>{{info}}</span>}}
   | .seq hls => hls.mapM toHtml
 
@@ -659,6 +718,61 @@ def highlightingStyle : String := "
   padding-left: 0.5em;
 }
 
+.hl.lean .case-label {
+  display: block;
+  position: relative;
+}
+
+.hl.lean .case-label input[type=\"checkbox\"] {
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 0;
+  height: 0;
+  width: 0;
+  z-index: -10;
+}
+
+.hl.lean .case-label:has(input[type=\"checkbox\"])::before {
+  width: 1em;
+  height: 1em;
+  display: inline-block;
+  background-color: black;
+  content: ' ';
+  transition: ease 0.2s;
+  margin-right: 0.7em;
+  clip-path: polygon(100% 0, 0 0, 50% 100%);
+  width: 0.6em;
+  height: 0.6em;
+}
+
+.hl.lean .case-label:has(input[type=\"checkbox\"]:not(:checked))::before {
+  transform: rotate(-90deg);
+}
+
+.hl.lean .case-label:has(input[type=\"checkbox\"]) {
+
+}
+
+.hl.lean .case-label:has(input[type=\"checkbox\"]:checked) {
+
+}
+
+
+.hl.lean .tactic-state .labeled-case > :not(:first-child) {
+  max-height: 0px;
+  display: block;
+  overflow: hidden;
+  transition: max-height 0.1s ease-in;
+  margin-left: 0.5em;
+  margin-top: 0.1em;
+}
+
+.hl.lean .labeled-case:has(.case-label input[type=\"checkbox\"]:checked) > :not(:first-child) {
+  max-height: 100%;
+}
+
+
 .hl.lean .tactic-state .goal-name::before {
   font-style: normal;
   content: \"case \";
@@ -669,17 +783,30 @@ def highlightingStyle : String := "
   font-family: monospace;
 }
 
-.hl.lean .tactic-state .hypotheses td.colon {
+.hl.lean .tactic-state .hypotheses {
+  display: table;
+}
+
+.hl.lean .tactic-state .hypothesis {
+  display: table-row;
+}
+
+.hl.lean .tactic-state .hypothesis > * {
+  display: table-cell;
+}
+
+
+.hl.lean .tactic-state .hypotheses .colon {
   text-align: center;
   min-width: 1em;
 }
 
-.hl.lean .tactic-state .hypotheses td.name {
+.hl.lean .tactic-state .hypotheses .name {
   text-align: right;
 }
 
-.hl.lean .tactic-state .hypotheses td.name,
-.hl.lean .tactic-state .hypotheses td.type,
+.hl.lean .tactic-state .hypotheses .name,
+.hl.lean .tactic-state .hypotheses .type,
 .hl.lean .tactic-state .conclusion .type {
   font-family: monospace;
 }

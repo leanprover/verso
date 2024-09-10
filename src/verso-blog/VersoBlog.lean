@@ -548,8 +548,8 @@ def blogMain (theme : Theme) (site : Site) (relativizeUrls := true) (options : L
     rewriteHtml := rw,
     linkTargets := {}
   }
-  let ((), docs) ← site.generate theme initGenCtx .empty
-  IO.FS.writeFile (cfg.destination.join "-verso-docs.json") (toString docs.docJson)
+  let ((), st) ← site.generate theme initGenCtx .empty
+  IO.FS.writeFile (cfg.destination.join "-verso-docs.json") (toString st.dedup.docJson)
   for (name, content) in xref.jsFiles do
     FS.ensureDir (cfg.destination.join "-verso-js")
     IO.FS.writeFile (cfg.destination.join "-verso-js" |>.join name) content
