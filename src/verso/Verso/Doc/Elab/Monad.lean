@@ -47,6 +47,12 @@ def _root_.Verso.Syntax.bold.inline_to_string : InlineToString
     some <| String.intercalate " " (Array.map (inlineToString env) args).toList
   | _, _ => none
 
+@[inline_to_string Verso.Syntax.code]
+def _root_.Verso.Syntax.code.inline_to_string : InlineToString
+  | _, `(inline| code{ $str }) =>
+    some str.getString
+  | _, _ => none
+
 
 def inlinesToString (env : Environment) (inlines : Array Syntax)  : String :=
   String.intercalate " " (inlines.map (inlineToString env)).toList

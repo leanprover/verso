@@ -22,6 +22,7 @@ import VersoManual.Html.Style
 import VersoManual.Index
 import VersoManual.Glossary
 import VersoManual.Docstring
+import VersoManual.WordCount
 
 open Lean (Name NameMap Json ToJson FromJson)
 
@@ -30,6 +31,7 @@ open Verso.FS
 open Verso.Doc Elab
 
 open Verso.Genre.Manual.TeX
+open Verso.Genre.Manual.WordCount
 
 open Verso.Code (LinkTargets)
 open Verso.Code.Hover (Dedup State)
@@ -108,6 +110,7 @@ structure Config where
   emitTeX : Bool := true
   emitHtmlSingle : Bool := true
   emitHtmlMulti : Bool := true
+  wordCount : Option System.FilePath := none
   extraFiles : List (System.FilePath × String) := []
   extraCss : List String := []
   extraJs : List String := []
@@ -218,7 +221,15 @@ where
   jsonRef (data : Json) (ref : Path × String) : Json :=
     Json.mkObj [("address", String.join (ref.1.map ("/" ++ ·)).toList), ("id", ref.2), ("data", data)]
 
-
+def wordCount
+    (wcPath : System.FilePath)
+    (logError : String → IO Unit) (config : Config)
+    (text : Part Manual) : ReaderT ExtensionImpls IO Unit := do
+  let (text, _) ← traverse logError text config
+  IO.FS.writeFile wcPath (wordCountReport skip "" 2 text |>.snd)
+where
+  -- Skip included docstrings for word count purposes
+  skip n := [`Verso.Genre.Manual.Block.docstring].contains n
 
 def emitHtmlSingle
     (logError : String → IO Unit) (config : Config)
@@ -351,6 +362,8 @@ where
     | ("--without-html-single"::more) => opts {cfg with emitHtmlSingle := false} more
     | ("--with-html-multi"::more) => opts {cfg with emitHtmlMulti := true} more
     | ("--without-html-multi"::more) => opts {cfg with emitHtmlMulti := false} more
+    | ("--with-word-count"::file::more) => opts {cfg with wordCount := some file} more
+    | ("--without-word-count"::more) => opts {cfg with wordCount := none} more
     | (other :: _) => throw (↑ s!"Unknown option {other}")
     | [] => pure cfg
 
@@ -362,6 +375,8 @@ where
     if cfg.emitTeX then emitTeX logError cfg text
     if cfg.emitHtmlSingle then emitHtmlSingle logError cfg text
     if cfg.emitHtmlMulti then emitHtmlMulti logError cfg text
+    if let some wcFile := cfg.wordCount then
+      wordCount wcFile logError cfg text
 
     if (← hasError.get) then
       IO.eprintln "Errors were encountered!"
