@@ -59,6 +59,7 @@ inductive Inline (genre : Genre) : Type where
   | image (alt : String) (url : String)
   | concat (content : Array (Inline genre))
   | other (container : genre.Inline) (content : Array (Inline genre))
+deriving Inhabited
 
 private partial def Inline.toJson [ToJson genre.Inline] : Inline genre → Json
   | .text str => json% {"text": $str}
@@ -209,7 +210,7 @@ def Arg.syntax : Arg → Syntax
 structure ListItem (α : Type u) where
   indent : Nat
   contents : Array α
-deriving Repr, BEq
+deriving Repr, BEq, Inhabited
 
 private def ListItem.toJson (blockToJson : ToJson α) : ListItem α → Json
   | ⟨i, xs⟩ => json% {"indent": $i, "contents": $(xs.map blockToJson.toJson)}
@@ -221,7 +222,7 @@ def ListItem.reprPrec [Repr α] : ListItem α → Nat → Std.Format := Repr.rep
 structure DescItem (α : Type u) (β : Type v) where
   term : Array α
   desc : Array β
-deriving Repr, BEq
+deriving Repr, BEq, Inhabited
 
 private def DescItem.toJson (inlineToJson : ToJson α) (blockToJson : ToJson β) : DescItem α β → Json
   | ⟨term, desc⟩ => json% {"term": $(term.map inlineToJson.toJson), "contents": $(desc.map blockToJson.toJson)}
@@ -240,6 +241,7 @@ inductive Block (genre : Genre) : Type where
   | blockquote (items : Array (Block genre))
   | concat (content : Array (Block genre))
   | other (container : genre.Block) (content : Array (Block genre))
+deriving Inhabited
 
 private partial def Block.toJson [ToJson genre.Inline] [ToJson genre.Block] : Block genre → Json
   | .para contents => json% {"para": $contents}
