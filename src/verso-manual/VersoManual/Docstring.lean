@@ -30,6 +30,7 @@ namespace Verso.Genre.Manual
 namespace Block
 
 namespace Docstring
+
 deriving instance ToJson for BinderInfo
 deriving instance FromJson for BinderInfo
 deriving instance ToJson for DefinitionSafety
@@ -252,6 +253,11 @@ def docstringStyle := r#"
   padding: 1.5em;
   margin-top: 0.5em;
 }
+
+.namedocs .text > pre {
+  overflow-x: auto;
+}
+
 .namedocs .signature {
   font-family: var(--verso-code-font-family);
   font-size: larger;
@@ -382,7 +388,7 @@ where
     let some md := MD4Lean.parse str
       | HtmlT.logError "Markdown parsing failed for {str}"
         pure <| Html.text true str
-    match md.blocks.mapM blockFromMarkdown' with
+    match md.blocks.mapM (blockFromMarkdown' · Markdown.strongEmphHeaders') with
     | .error e => HtmlT.logError e; pure <| Html.text true str
     | .ok blks => blks.mapM goB
   moreDeclHtml (goB)
@@ -509,7 +515,7 @@ def docstring : BlockRoleExpander
       | some docs =>
         let some ast := MD4Lean.parse docs
           | throwErrorAt x "Failed to parse docstring as Markdown"
-        ast.blocks.mapM Markdown.blockFromMarkdown
+        ast.blocks.mapM (Markdown.blockFromMarkdown · Markdown.strongEmphHeaders)
 
       let declType ← Block.Docstring.DeclType.ofName name
 
@@ -573,7 +579,7 @@ def optionDocs : BlockRoleExpander
     let optDecl ← getOptionDecl x.getId
     let some mdAst := MD4Lean.parse optDecl.descr
       | throwErrorAt x "Failed to parse docstring as Markdown"
-    let contents ← mdAst.blocks.mapM Markdown.blockFromMarkdown
+    let contents ← mdAst.blocks.mapM (Markdown.blockFromMarkdown · Markdown.strongEmphHeaders)
     pure #[← ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.optionDocs $(quote x.getId) $(quote <| highlightDataValue optDecl.defValue)) #[$contents,*])]
 
   | _, more => throwErrorAt more[0]! "Unexpected block argument"
@@ -682,7 +688,6 @@ private def getTactic? (name : String ⊕ Name) : TermElabM (Option TacticDoc) :
       return some t
   return none
 
-
 @[directive_expander tactic]
 def tactic : DirectiveExpander
   | args, more => do
@@ -690,7 +695,7 @@ def tactic : DirectiveExpander
     let tactic ← getTactic opts.name
     let some mdAst := tactic.docString >>= MD4Lean.parse
       | throwError "Failed to parse docstring as Markdown"
-    let contents ← mdAst.blocks.mapM Markdown.blockFromMarkdown
+    let contents ← mdAst.blocks.mapM (Markdown.blockFromMarkdown · Markdown.strongEmphHeaders)
     let userContents ← more.mapM elabBlock
     pure #[← ``(Verso.Doc.Block.other (Block.tactic $(quote tactic)) #[$(contents ++ userContents),*])]
 
