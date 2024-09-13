@@ -651,15 +651,16 @@ instance : Quote TacticDoc where
     | .mk internalName userName tags docString extensionDocs =>
       mkCApp ``TacticDoc.mk #[quote internalName, quote userName, quote tags, quote docString, quote extensionDocs]
 
-def Block.tactic (name : Lean.Elab.Tactic.Doc.TacticDoc) : Block where
+def Block.tactic (name : Lean.Elab.Tactic.Doc.TacticDoc) («show» : Option String) : Block where
   name := `Verso.Genre.Manual.tactic
-  data := ToJson.toJson (name)
+  data := ToJson.toJson (name, «show»)
 
 structure TacticDocsOptions where
- name : String ⊕ Name
+  name : String ⊕ Name
+  «show» : Option String
 
 def TacticDocsOptions.parse [Monad m] [MonadError m] : ArgParse m TacticDocsOptions :=
-  TacticDocsOptions.mk <$> .positional `name strOrName
+  TacticDocsOptions.mk <$> .positional `name strOrName <*> .named `show .string true
 where
   strOrName : ValDesc m (String ⊕ Name) := {
     description := m!"First token in tactic, or canonical parser name"
@@ -693,22 +694,24 @@ def tactic : DirectiveExpander
   | args, more => do
     let opts ← TacticDocsOptions.parse.run args
     let tactic ← getTactic opts.name
+    if tactic.userName == tactic.internalName.toString && opts.show.isNone then
+      throwError "No `show` option provided, but the tactic has no user-facing token name"
     let some mdAst := tactic.docString >>= MD4Lean.parse
       | throwError "Failed to parse docstring as Markdown"
     let contents ← mdAst.blocks.mapM (Markdown.blockFromMarkdown · Markdown.strongEmphHeaders)
     let userContents ← more.mapM elabBlock
-    pure #[← ``(Verso.Doc.Block.other (Block.tactic $(quote tactic)) #[$(contents ++ userContents),*])]
+    pure #[← ``(Verso.Doc.Block.other (Block.tactic $(quote tactic) $(quote opts.show)) #[$(contents ++ userContents),*])]
 
 open Verso.Genre.Manual.Markdown in
 open Lean Elab Term Parser Tactic Doc in
 @[block_extension tactic]
 def tactic.descr : BlockDescr where
   traverse id info _ := do
-    let .ok tactic := FromJson.fromJson? (α := TacticDoc) info
+    let .ok (tactic, «show») := FromJson.fromJson? (α := TacticDoc × Option String) info
       | do logError "Failed to deserialize docstring data"; pure none
     let path ← (·.path) <$> read
-    let _ ← Verso.Genre.Manual.externalTag id path tactic.userName
-    Index.addEntry id {term := Doc.Inline.code tactic.userName}
+    let _ ← Verso.Genre.Manual.externalTag id path <| show.getD tactic.userName
+    Index.addEntry id {term := Doc.Inline.code <| show.getD tactic.userName}
 
     modify fun st => st.saveDomainObject `Verso.Manual.doc.tactic tactic.internalName.toString id
 
@@ -716,9 +719,9 @@ def tactic.descr : BlockDescr where
   toHtml := some <| fun _goI goB id info contents =>
     open Verso.Doc.Html in
     open Verso.Output Html in do
-      let .ok tactic := FromJson.fromJson? (α := TacticDoc) info
+      let .ok (tactic, «show») := FromJson.fromJson? (α := TacticDoc × Option String) info
         | do Verso.Doc.Html.HtmlT.logError "Failed to deserialize tactic data"; pure .empty
-      let x : Highlighted := .token ⟨.keyword tactic.internalName none tactic.docString, tactic.userName⟩
+      let x : Highlighted := .token ⟨.keyword tactic.internalName none tactic.docString, show.getD tactic.userName⟩
 
       let xref ← HtmlT.state
       let idAttr :=
