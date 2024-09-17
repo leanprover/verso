@@ -288,7 +288,7 @@ instance : MonadQuotation PartElabM := inferInstanceAs <| MonadQuotation (StateT
 instance : Monad PartElabM := inferInstanceAs <| Monad (StateT DocElabM.State (StateT PartElabM.State TermElabM))
 
 instance : MonadLift TermElabM PartElabM where
-  monadLift act := fun st st' => do return ((← act, st), st')
+  monadLift act := fun st st' => do return ((← Term.withDeclName (← currentDocName) act, st), st')
 
 instance : MonadExceptOf Exception PartElabM := inferInstanceAs <| MonadExceptOf Exception (StateT DocElabM.State (StateT PartElabM.State TermElabM))
 
@@ -313,7 +313,7 @@ instance : Inhabited (DocElabM α) := ⟨fun _ _ => default⟩
 instance : AddErrorMessageContext DocElabM := inferInstanceAs <| AddErrorMessageContext (ReaderT PartElabM.State (StateT DocElabM.State TermElabM))
 
 instance : MonadLift TermElabM DocElabM where
-  monadLift act := fun _ st' => do return (← act, st')
+  monadLift act := fun _ st' => do return (← Term.withDeclName (← currentDocName) act, st')
 
 instance : MonadLift IO DocElabM where
   monadLift act := fun _ st' => do return (← act, st')
