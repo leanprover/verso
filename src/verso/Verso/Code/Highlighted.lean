@@ -293,7 +293,7 @@ defmethod Highlighted.Goal.toHtml (exprHtml : expr → HighlightHtmlM Html) (ind
               <span class="labeled-case" {{openAttr collapsePolicy index}}>
                 <label class="case-label">
                   <input type="checkbox" id={{id}} {{openAttr collapsePolicy index}}/>
-                  <span for={{id}} class="goal-name">{{n.toString}}</span>
+                  <span for={{id}} class="goal-name">{{n.eraseMacroScopes.toString}}</span>
                 </label>
                {{hypsHtml}}
                {{conclHtml}}
