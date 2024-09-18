@@ -358,7 +358,7 @@ def docstring.descr : BlockDescr where
     open Verso.Doc.Html HtmlT in
     open Verso.Output Html in do
       let .ok (name, declType, signature) := FromJson.fromJson? (α := Name × Block.Docstring.DeclType × Option Highlighted) info
-        | do Verso.Doc.Html.HtmlT.logError "Failed to deserialize docstring data"; pure .empty
+        | do Verso.Doc.Html.HtmlT.logError "Failed to deserialize docstring data while generating HTML"; pure .empty
       let x : Html := Html.text true <| Name.toString name
       let sig : Html ← Option.map Highlighted.toHtml signature |>.getD (pure {{ {{x}} }})
 
@@ -589,7 +589,7 @@ open Verso.Genre.Manual.Markdown in
 def optionDocs.descr : BlockDescr where
   traverse id info _ := do
     let .ok (name, _defaultValue) := FromJson.fromJson? (α := Name × Highlighted) info
-      | do logError "Failed to deserialize docstring data"; pure none
+      | do logError "Failed to deserialize docstring data while traversing an option"; pure none
 
     let path ← (·.path) <$> read
     let _ ← Verso.Genre.Manual.externalTag id path name.toString
@@ -604,7 +604,7 @@ def optionDocs.descr : BlockDescr where
     open Verso.Doc.Html in
     open Verso.Output Html in do
       let .ok (name, defaultValue) := FromJson.fromJson? (α := Name × Highlighted) info
-        | do Verso.Doc.Html.HtmlT.logError "Failed to deserialize docstring data"; pure .empty
+        | do Verso.Doc.Html.HtmlT.logError "Failed to deserialize docstring data while generating HTML for an option"; pure .empty
       let x : Html := Html.text true <| Name.toString name
 
       let xref ← HtmlT.state
@@ -708,7 +708,7 @@ open Lean Elab Term Parser Tactic Doc in
 def tactic.descr : BlockDescr where
   traverse id info _ := do
     let .ok (tactic, «show») := FromJson.fromJson? (α := TacticDoc × Option String) info
-      | do logError "Failed to deserialize docstring data"; pure none
+      | do logError "Failed to deserialize docstring data while traversing a tactic"; pure none
     let path ← (·.path) <$> read
     let _ ← Verso.Genre.Manual.externalTag id path <| show.getD tactic.userName
     Index.addEntry id {term := Doc.Inline.code <| show.getD tactic.userName}
@@ -720,7 +720,7 @@ def tactic.descr : BlockDescr where
     open Verso.Doc.Html in
     open Verso.Output Html in do
       let .ok (tactic, «show») := FromJson.fromJson? (α := TacticDoc × Option String) info
-        | do Verso.Doc.Html.HtmlT.logError "Failed to deserialize tactic data"; pure .empty
+        | do Verso.Doc.Html.HtmlT.logError "Failed to deserialize tactic data while generating HTML for a tactic"; pure .empty
       let x : Highlighted := .token ⟨.keyword tactic.internalName none tactic.docString, show.getD tactic.userName⟩
 
       let xref ← HtmlT.state
@@ -789,6 +789,81 @@ def tacticInline.descr : InlineDescr where
       | .ok (hl : Highlighted) =>
         hl.inlineHtml "examples"
 
+-- TODO implement a system upstream like the one for normal tactics
+def Block.conv (name : Name) («show» : String) (docs? : Option String) : Block where
+  name := `Verso.Genre.Manual.conv
+  data := ToJson.toJson (name, «show», docs?)
+
+structure ConvTacticDoc where
+  name : Name
+  docs? : Option String
+
+open Lean Elab Term Parser Tactic Doc in
+def getConvTactic (name : String ⊕ Name) : TermElabM ConvTacticDoc := do
+  let .inr kind := name
+    | throwError "Strings not yet supported here"
+  let parserState := parserExtension.getState (← getEnv)
+  let some convs := parserState.categories.find? `conv
+    | throwError "Couldn't find conv tactic list"
+  for k in convs.kinds do
+    if kind.isSuffixOf k.1 then
+      return ⟨kind, ← findDocString? (← getEnv) kind⟩
+  throwError m!"Conv tactic not found: {kind}"
+
+@[directive_expander conv]
+def conv : DirectiveExpander
+  | args, more => do
+    let opts ← TacticDocsOptions.parse.run args
+    let tactic ← getConvTactic opts.name
+    let contents ← if let some d := tactic.docs? then
+        let some mdAst := MD4Lean.parse d
+          | throwError "Failed to parse docstring as Markdown"
+        mdAst.blocks.mapM (Markdown.blockFromMarkdown · Markdown.strongEmphHeaders)
+      else pure #[]
+    let userContents ← more.mapM elabBlock
+    let some toShow := opts.show
+      | throwError "An explicit 'show' is mandatory for conv docs (for now)"
+    pure #[← ``(Verso.Doc.Block.other (Block.conv $(quote tactic.name) $(quote toShow) $(quote tactic.docs?)) #[$(contents ++ userContents),*])]
+
+open Verso.Genre.Manual.Markdown in
+open Lean Elab Term Parser Tactic Doc in
+@[block_extension conv]
+def conv.descr : BlockDescr where
+  traverse id info _ := do
+    let .ok (name, «show», _docs?) := FromJson.fromJson? (α := Name × String × Option String) info
+      | do logError "Failed to deserialize conv docstring data"; pure none
+    let path ← (·.path) <$> read
+    let _ ← Verso.Genre.Manual.externalTag id path <| name.toString
+    Index.addEntry id {term := Doc.Inline.code <| «show»}
+
+    modify fun st => st.saveDomainObject `Verso.Manual.doc.tactic.conv name.toString id
+
+    pure none
+  toHtml := some <| fun _goI goB id info contents =>
+    open Verso.Doc.Html in
+    open Verso.Output Html in do
+      let .ok (name, «show», docs?) := FromJson.fromJson? (α := Name × String × Option String) info
+        | do Verso.Doc.Html.HtmlT.logError "Failed to deserialize conv tactic data"; pure .empty
+      let x : Highlighted := .token ⟨.keyword (some name) none docs?, «show»⟩
+
+      let xref ← HtmlT.state
+      let idAttr :=
+        if let some (_, htmlId) := xref.externalTags[id]? then
+          #[("id", htmlId)]
+        else #[]
+
+      return {{
+        <div class="namedocs" {{idAttr}}>
+          <span class="label">"conv tactic"</span>
+          <pre class="signature hl lean block">{{← x.toHtml}}</pre>
+          <div class="text">
+            {{← contents.mapM goB}}
+          </div>
+        </div>
+      }}
+  toTeX := some <| fun _goI goB _id _info contents => contents.mapM goB
+  extraCss := [highlightingStyle, docstringStyle]
+  extraJs := [highlightingJs]
 
 def Block.progress
     (namespaces exceptions : Array Name)
