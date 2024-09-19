@@ -805,9 +805,9 @@ def getConvTactic (name : String ⊕ Name) : TermElabM ConvTacticDoc := do
   let parserState := parserExtension.getState (← getEnv)
   let some convs := parserState.categories.find? `conv
     | throwError "Couldn't find conv tactic list"
-  for k in convs.kinds do
-    if kind.isSuffixOf k.1 then
-      return ⟨kind, ← findDocString? (← getEnv) kind⟩
+  for ⟨k, ()⟩ in convs.kinds do
+    if kind.isSuffixOf k then
+      return ⟨k, ← findDocString? (← getEnv) k⟩
   throwError m!"Conv tactic not found: {kind}"
 
 @[directive_expander conv]
