@@ -868,7 +868,7 @@ def conv.descr : BlockDescr where
 def Block.progress
     (namespaces exceptions : Array Name)
     (present : List (Name × List Name))
-    (tactics : Array String) :
+    (tactics : Array Name) :
     Block where
   name := `Verso.Genre.Manual.Block.progress
   data := toJson (namespaces, exceptions, present, tactics)
@@ -910,7 +910,7 @@ def progress : DirectiveExpander
       if let some v := present.find? ns then
         present := present.insert ns (v.insert x)
     let present' := present.toList.map (fun x => (x.1, x.2.toList))
-    let allTactics := (← Elab.Tactic.Doc.allTacticDocs).map (·.internalName.toString)
+    let allTactics : Array Name := (← Elab.Tactic.Doc.allTacticDocs).map (fun t => t.internalName)
 
     pure #[← ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.progress $(quote namespaces.toArray) $(quote exceptions.toArray) $(quote present') $(quote allTactics)) #[])]
 where
@@ -939,14 +939,14 @@ def progress.descr : BlockDescr where
       let x := name.toName
       ok := ok.insert x
 
-    let .ok ((namespaces : Array Name), (exceptions : Array Name), (present : List (Name × List Name)), (allTactics : Array String)) := fromJson? info
+    let .ok ((namespaces : Array Name), (exceptions : Array Name), (present : List (Name × List Name)), (allTactics : Array Name)) := fromJson? info
       | panic! "Can't deserialize progress bar state"
 
     let check : NameMap (List Name) := present.foldr (init := {}) (fun x z => z.insert x.1 <| x.2)
 
-    let undocTactics ← allTactics.filterM fun un => do
+    let undocTactics ← allTactics.filterM fun tacticName => do
       let st ← Doc.Html.HtmlT.state (genre := Manual)
-      pure !(TraverseState.getDomainObject? st `Verso.Manual.doc.tactic un).isSome
+      pure <| (TraverseState.getDomainObject? st `Verso.Manual.doc.tactic tacticName.toString).isNone && tacticName ∉ exceptions
 
     let tacticPercent := undocTactics.size.toFloat * 100.0 / allTactics.size.toFloat
 
@@ -963,7 +963,12 @@ def progress.descr : BlockDescr where
         }}
         <dt>"Tactics"</dt>
         <dd>
-          <details><summary><progress id="progress-tactics" value=s!"{100 - tacticPercent.toUInt8.toNat}" min="0" max="100"></progress><label for="progress-tactics">s!"Missing {tacticPercent}% ({undocTactics.size}/{allTactics.size})"</label></summary> {{ undocTactics.toList |> String.intercalate ", "}}</details>
+          <details>
+            <summary>
+              <progress id="progress-tactics" value=s!"{100 - tacticPercent.toUInt8.toNat}" min="0" max="100"></progress>
+              <label for="progress-tactics">s!"Missing {tacticPercent}% ({undocTactics.size}/{allTactics.size})"</label>
+            </summary>
+            {{ undocTactics.map (·.toString) |>.toList |> String.intercalate ", "}}</details>
         </dd>
       </dl>
     }}
