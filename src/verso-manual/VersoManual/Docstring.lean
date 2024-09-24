@@ -37,7 +37,8 @@ deriving instance ToJson for DefinitionSafety
 deriving instance FromJson for DefinitionSafety
 
 open Lean.PrettyPrinter Delaborator in
-def ppSignature (c : Name) : MetaM FormatWithInfos := do
+def ppSignature (c : Name) (showNamespace : Bool := true) (openDecls : List OpenDecl := []) : MetaM FormatWithInfos :=
+  MonadWithReaderOf.withReader (fun (ρ : Core.Context) => {ρ with openDecls := ρ.openDecls ++ openDecls}) <|do
   let decl ← getConstInfo c
   let e := .const c (decl.levelParams.map mkLevelParam)
   let (stx, infos) ← delabCore e (delab := delabConstWithSignature)
@@ -47,7 +48,9 @@ def ppSignature (c : Name) : MetaM FormatWithInfos := do
     match nameUniv with
     | `($x:ident.{$uni,*}) =>
       let unis : List Format ← uni.getElems.toList.mapM (ppCategory `level ·.raw)
-      doc := Std.Format.text x.getId.toString ++ ".{" ++ .joinSep unis ", " ++ "}"
+      doc := Std.Format.text (nameString x.getId showNamespace) ++ ".{" ++ .joinSep unis ", " ++ "}"
+    | `($x:ident) =>
+      doc := Std.Format.text (nameString x.getId showNamespace)
     | _ => doc ← ppTerm nameUniv
     let `(declSig| $args* : $ret) := argsRet
       | return ⟨← ppTerm ⟨stx⟩, infos⟩  -- HACK: not a term
@@ -58,7 +61,7 @@ def ppSignature (c : Name) : MetaM FormatWithInfos := do
       | `(binderIdent|$x:hole) => argDoc := argDoc ++ (← ppTerm ⟨x⟩)
       | `(bracketedBinder|($xs:ident* $[: $ty]?)) =>
         let xs' ← xs.toList.mapM (fun (x : Ident) => ppTerm x)
-        argDoc := argDoc ++ "(" ++ .joinSep xs' " "
+        argDoc := argDoc ++ "(" ++ .nest 1 (.fill (.joinSep xs' .line))
         if let some t := ty then
           argDoc := argDoc ++ " : " ++ .group (← ppTerm t)
         argDoc := argDoc ++ ")"
@@ -82,6 +85,9 @@ def ppSignature (c : Name) : MetaM FormatWithInfos := do
     return ⟨doc, infos⟩
   | _ => return ⟨← ppTerm ⟨stx⟩, infos⟩  -- HACK: not a term
 
+where
+  nameString (x : Name) (showNamespace : Bool) :=
+    if showNamespace then x.toString else x.getString!
 
 structure FieldInfo where
   fieldName : Highlighted
@@ -154,12 +160,15 @@ def DeclType.label : DeclType → String
   | .inductive _ _ true => "inductive predicate"
   | other => ""
 
+set_option pp.fullNames false in
+#check List.nil
 
 open Meta in
-def DocName.ofName (c : Name) : MetaM DocName := do
+def DocName.ofName (c : Name) (showNamespace := true) (openDecls : List OpenDecl := []) : MetaM DocName := do
   let env ← getEnv
   if let some _ := env.find? c then
-    let ⟨fmt, infos⟩ ← withOptions (·.setBool `pp.tagAppFns true) <| ppSignature c
+    let ⟨fmt, infos⟩ ← withOptions (·.setBool `pp.tagAppFns true) <|
+      ppSignature c (showNamespace := showNamespace) (openDecls := openDecls)
     let tt := Lean.Widget.TaggedText.prettyTagged (w := 48) fmt
     let ctx := {
       env           := (← getEnv)
@@ -199,7 +208,7 @@ def DeclType.ofName (c : Name) : MetaM DeclType := do
         return .structure (isClass env c) (← DocName.ofName ctor.name) info.fieldNames fieldInfo parents ancestors
 
       else
-        let ctors ← ii.ctors.mapM DocName.ofName
+        let ctors ← ii.ctors.mapM (DocName.ofName (showNamespace := false) (openDecls := [.explicit c.getPrefix c.getString!.toName]))
         let t ← inferType <| .const c (ii.levelParams.map .param)
         let t' ← reduceAll t
         return .inductive ctors.toArray (ii.numIndices + ii.numParams) (isPred t')
