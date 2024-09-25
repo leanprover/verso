@@ -62,10 +62,25 @@ the uniqueness of internal IDs. Please don't do that - your program may break un
 structure InternalId where
   private mk ::
   private id : Nat
-deriving BEq, Hashable, Repr, ToJson, FromJson, Inhabited
+deriving BEq, Hashable, Repr, ToJson, FromJson, Inhabited, Ord
+
+instance : LT InternalId where
+  lt x y := Ord.compare x y = .lt
+
+instance : LE InternalId where
+  le x y := x < y ∨ x = y
 
 instance : ToString InternalId where
   toString x := s!"#<{x.id}>"
+
+/-- When rendering multi-page HTML, should splitting pages follow the depth setting? -/
+inductive HtmlSplitMode where
+  | /-- Follow the main setting -/ default
+  |  /-- Do not split here nor in child parts -/ never
+deriving BEq, Hashable, Repr, ToJson, FromJson
+
+instance : Inhabited HtmlSplitMode := ⟨.default⟩
+
 
 structure PartMetadata where
   authors : List String := []
@@ -75,6 +90,7 @@ structure PartMetadata where
   file : Option String := none
   id : Option InternalId := none
   number : Bool := true
+  htmlSplit : HtmlSplitMode := .default
 deriving BEq, Hashable, Repr
 
 /--
@@ -244,6 +260,39 @@ structure Inline where
   data : Json := Json.null
 deriving BEq, Hashable, ToJson, FromJson
 
+private partial def cmpJson : (j1 j2 : Json) → Ordering
+  | .null, .null => .eq
+  | .null, _ => .lt
+  | _, .null => .gt
+  | .bool b1, .bool b2 => Ord.compare b1 b2
+  | .bool _, _ => .lt
+  | _, .bool _ => .gt
+  | .str s1, .str s2 => Ord.compare s1 s2
+  | .str _, _ => .lt
+  | _, .str _ => .gt
+  | .num n1, .num n2 => Ord.compare n1 n2
+  | .num _, _ => .lt
+  | _, .num _ => .gt
+  | .arr xs, .arr ys =>
+    Ord.compare xs.size ys.size |>.then (Id.run do
+      for ⟨x, _⟩ in xs.attach, ⟨y, _⟩ in ys.attach do
+        let o := cmpJson x y
+        if o != .eq then return o
+      .eq)
+  | .arr _, _ => .lt
+  | _, .arr _ => .gt
+  | .obj o1, .obj o2 =>
+    let k1 := o1.toArray.qsort (·.1 < ·.1)
+    let k2 := o2.toArray.qsort (·.1 < ·.1)
+    Ord.compare k1.size k2.size |>.then (Id.run do
+      for ⟨kx, x⟩ in k1, ⟨ky, y⟩ in k2 do
+        let o := Ord.compare kx ky |>.then (cmpJson x y)
+        if o != .eq then return o
+      .eq)
+
+instance : Ord Inline where
+  compare i1 i2 := i1.name.cmp i2.name |>.then (Ord.compare i1.id i2.id) |>.then (cmpJson i1.data i2.data)
+
 structure PartHeader where
   titleString : String
   metadata : Option PartMetadata
@@ -304,6 +353,8 @@ def Manual : Genre where
 instance : BEq (Genre.PartMetadata Manual) := inferInstanceAs (BEq Manual.PartMetadata)
 instance : BEq (Genre.Block Manual) := inferInstanceAs (BEq Manual.Block)
 instance : BEq (Genre.Inline Manual) := inferInstanceAs (BEq Manual.Inline)
+
+instance : Ord (Genre.Inline Manual) := inferInstanceAs (Ord Manual.Inline)
 
 instance : Hashable (Genre.Block Manual) := inferInstanceAs (Hashable Manual.Block)
 instance : Hashable (Genre.Inline Manual) := inferInstanceAs (Hashable Manual.Inline)

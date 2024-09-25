@@ -34,7 +34,7 @@ instance : Repr Genre.none.PartMetadata where
   reprPrec e _ := nomatch e
 
 inductive MathMode where | inline | display
-deriving Repr, BEq, Hashable, ToJson, FromJson
+deriving Repr, BEq, Hashable, Ord, ToJson, FromJson
 
 private def arrayEq (eq : α → α → Bool) (xs ys : Array α) : Bool := Id.run do
     if h : xs.size = ys.size then
@@ -142,6 +142,57 @@ private partial def Inline.hashCode [Hashable genre.Inline] : Inline genre → U
 
 instance [Hashable genre.Inline] : Hashable (Inline genre) where
   hash := Inline.hashCode
+
+private def Inline.compare [Ord genre.Inline] : (i1 i2 : Inline genre) → Ordering
+  | .text str1, .text str2 => Ord.compare str1 str2
+  | .text _, _ => .lt
+  | _, .text _ => .gt
+  | .code str1, .code str2 => Ord.compare str1 str2
+  | .code _, _ => .lt
+  | _, .code _ => .gt
+  | .linebreak str1, .linebreak str2 => Ord.compare str1 str2
+  | .linebreak _, _ => .lt
+  | _, .linebreak _ => .gt
+  | .emph c1, .emph c2 => arr c1 c2
+  | .emph _, _ => .lt
+  | _, .emph _ => .gt
+  | .bold c1, .bold c2 => arr c1 c2
+  | .bold _, _ => .lt
+  | _, .bold _ => .gt
+  | .math m1 c1, .math m2 c2 =>
+    Ord.compare m1 m2 |>.then (Ord.compare c1 c2)
+  | .math .., _ => .lt
+  | _, .math .. => .gt
+  | .link txt1 url1, .link txt2 url2 =>
+    arr txt1 txt2 |>.then (Ord.compare url1 url2)
+  | .link .., _ => .lt
+  | _, .link .. => .gt
+  | .footnote name1 c1, .footnote name2 c2 =>
+    arr c1 c2 |>.then (Ord.compare name1 name2)
+  | .footnote .., _ => .lt
+  | _, .footnote .. => .gt
+  | .image alt1 url1, .image alt2 url2 =>
+    Ord.compare alt1 alt2 |>.then (Ord.compare url1 url2)
+  | .image .., _ => .lt
+  | _, .image .. => .gt
+  | .concat c1, .concat c2 => arr c1 c2
+  | .concat _, _ => .lt
+  | _, .concat _ => .gt
+  | .other o1 c1, .other o2 c2 =>
+    Ord.compare o1 o2 |>.then (arr c1 c2)
+where
+  arr xs ys :=
+    match Ord.compare xs.size ys.size with
+      | .eq => Id.run do
+        for ⟨x, _⟩ in xs.attach, ⟨y, _⟩ in ys.attach do
+          let o := compare x y
+          if o != .eq then return o
+        return .eq
+      | .lt => .lt
+      | .gt => .gt
+
+instance [Ord genre.Inline] : Ord (Inline genre) where
+  compare := Inline.compare
 
 private def reprArray (r : α → Nat → Format) (arr : Array α) : Format :=
   .bracket "#[" (.joinSep (arr.toList.map (r · max_prec)) ("," ++ .line)) "]"
