@@ -46,7 +46,13 @@ structure Entry where
   /-- Use a different index than the default one for this entry? -/
   index : Option String := none
 
-deriving BEq, Hashable, ToJson, FromJson
+deriving BEq, Hashable, ToJson, FromJson, Ord
+
+instance instLtEntry : LT Entry where
+  lt x y := Ord.compare x y = .lt
+
+instance : DecidableRel (@LT.lt Entry instLtEntry) :=
+  fun _ _ => inferInstance
 
 structure See where
   source : Doc.Inline Manual
@@ -58,7 +64,10 @@ structure See where
   -/
   also : Bool := false
   index : Option String := none
-deriving BEq, Hashable, ToJson, FromJson
+deriving BEq, Hashable, ToJson, FromJson, Ord
+
+instance : LT See where
+  lt x y := Ord.compare x y = .lt
 
 end Index
 
@@ -68,7 +77,9 @@ structure Index where
   see : HashSet Index.See := {}
 
 instance : ToJson Index where
-  toJson | ⟨entries, see⟩ => ToJson.toJson (entries.toArray, see.toArray)
+  toJson | ⟨entries, see⟩ => ToJson.toJson (entries.toArray.qsort cmpEntry, see.toArray.qsort (· < ·))
+where
+  cmpEntry | (e1, id1), (e2, id2) => e1 < e2 || (e1 == e2 && id1 < id2)
 
 instance : FromJson Index where
   fromJson? v := do

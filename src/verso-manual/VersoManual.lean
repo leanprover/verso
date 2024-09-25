@@ -40,6 +40,10 @@ namespace Verso.Genre
 
 namespace Manual
 
+defmethod Part.htmlSplit (part : Part Manual) : HtmlSplitMode :=
+  part.metadata.map (·.htmlSplit) |>.getD .default
+
+
 def Inline.ref : Inline where
   name := `Verso.Genre.Manual.Inline.ref
 
@@ -124,18 +128,22 @@ def ensureDir (dir : System.FilePath) : IO Unit := do
 def traverseMulti (depth : Nat) (path : Path) (part : Part Manual) : TraverseM (Part Manual) :=
   match depth with
   | 0 => Genre.traverse Manual part
-  | d + 1 => withReader ({· with path := path : TraverseContext}) do
-    let meta' ← Verso.Doc.Traverse.part (g := Manual) part
-    let mut p := meta'.map part.withMetadata |>.getD part
-    if let some md := p.metadata then
-      if let some p' ← Traverse.genrePart md p then
-        p := p'
-    let .mk title titleString meta content subParts := p
-    let content' ← withReader (·.inPart p) <| content.mapM traverseBlock
-    let subParts' ← withReader (·.inPart p) <| subParts.mapM fun p => do
-      let path' := path.push (p.metadata.bind (·.file) |>.getD (p.titleString.sluggify.toString))
-      withReader ({· with path := path' : TraverseContext}) (traverseMulti d path' p)
-    pure <| .mk (← title.mapM traverseInline) titleString meta content' subParts'
+  | d + 1 =>
+    if part.htmlSplit == .never then
+      Genre.traverse Manual part
+    else
+      withReader ({· with path := path : TraverseContext}) do
+        let meta' ← Verso.Doc.Traverse.part (g := Manual) part
+        let mut p := meta'.map part.withMetadata |>.getD part
+        if let some md := p.metadata then
+          if let some p' ← Traverse.genrePart md p then
+            p := p'
+        let .mk title titleString meta content subParts := p
+        let content' ← withReader (·.inPart p) <| content.mapM traverseBlock
+        let subParts' ← withReader (·.inPart p) <| subParts.mapM fun p => do
+          let path' := path.push (p.metadata.bind (·.file) |>.getD (p.titleString.sluggify.toString))
+          withReader ({· with path := path' : TraverseContext}) (traverseMulti d path' p)
+        pure <| .mk (← title.mapM traverseInline) titleString meta content' subParts'
 where
   traverseInline := Verso.Doc.Genre.traverse.inline Manual
   traverseBlock := Verso.Doc.Genre.traverse.block Manual
@@ -186,6 +194,7 @@ open Verso.Output (Html)
 instance : Inhabited (StateT (State Html) (ReaderT ExtensionImpls IO) Html.Toc) where
   default := fun _ => default
 
+
 /--
 Generate a ToC structure for a document.
 
@@ -202,12 +211,19 @@ partial def toc (depth : Nat) (opts : Html.Options Manual IO)
       | throw <| .userError s!"No ID for {sTitle} - {repr meta}"
     let some (_, v) := state.externalTags[id]?
       | throw <| .userError s!"No external ID for {sTitle}"
+
     let ctxt' :=
-      -- When depth is 0, no more HTML files will be generated
+      -- When depth is 0 or we reach an unsplittable part, no more HTML files will be generated
       if depth > 0 then
         {ctxt with path := ctxt.path.push (meta.bind (·.file) |>.getD (sTitle.sluggify.toString))}
       else ctxt
-    let children ← sub.mapM (toc (depth - 1) opts ctxt' state linkTargets)
+
+    let splitPolicy := meta.map (·.htmlSplit) |>.getD .default
+    let depth' := match splitPolicy with
+      | .default => depth - 1
+      | .never => 0
+
+    let children ← sub.mapM (toc depth' opts ctxt' state linkTargets)
     pure <| .entry titleHtml ctxt'.path v number children
 
 def emitXrefs (dir : System.FilePath) (state : TraverseState) : IO Unit := do
@@ -301,10 +317,12 @@ where
   emitPart (bookTitle : Html) (authors : List String) (bookContents)
       (opts ctxt state linkTargets codeOptions)
       (root : Bool) (depth : Nat) (dir : System.FilePath) (part : Part Manual) : StateT (State Html) (ReaderT ExtensionImpls IO) Unit := do
+    let thisFile := part.metadata.bind (·.file) |>.getD (part.titleString.sluggify.toString)
+    let dir := if root then dir else dir.join thisFile
     let titleHtml ← Html.seq <$> part.title.mapM (Manual.toHtml opts.lift ctxt state linkTargets codeOptions)
     let introHtml ← Html.seq <$> part.content.mapM (Manual.toHtml opts.lift ctxt state linkTargets codeOptions)
     let contents ←
-      if depth == 0 then
+      if depth == 0 || part.htmlSplit == .never then
         Html.seq <$> part.subParts.mapM (Manual.toHtml {opts.lift with headerLevel := 2} ctxt state linkTargets codeOptions)
       else pure .empty
     let subToc ← part.subParts.mapM (toc depth opts ctxt state linkTargets)
@@ -313,19 +331,19 @@ where
         let subTocHtml := if subToc.size > 0 then {{<ol class="section-toc">{{subToc.map (·.html (some 2))}}</ol>}} else .empty
         {{<section>{{Html.titlePage titleHtml authors introHtml ++ contents}} {{subTocHtml}}</section>}}
       else
-        let subTocHtml := if depth > 0 && subToc.size > 0 then {{<ol class="section-toc">{{subToc.map (·.html none)}}</ol>}} else .empty
+        let subTocHtml := if (depth > 0 && part.htmlSplit != .never) && subToc.size > 0 then {{<ol class="section-toc">{{subToc.map (·.html none)}}</ol>}} else .empty
         {{<section><h1>{{titleHtml}}</h1> {{introHtml}} {{contents}} {{subTocHtml}}</section>}}
-    let thisFile := part.metadata.bind (·.file) |>.getD (part.titleString.sluggify.toString)
-    let dir := if root then dir else dir.join thisFile
+
     let pageTitle := if root then bookTitle else {{<a href="/">{{bookTitle}}</a>}}
     ensureDir dir
     IO.FS.withFile (dir.join "index.html") .write fun h => do
       h.putStrLn Html.doctype
       h.putStrLn (relativize ctxt.path <| Html.page bookContents part.titleString pageTitle pageContent state.extraCss state.extraJs (extraStylesheets := config.extraCss ++ state.extraCssFiles.toList.map ("/-verso-css/" ++ ·.1)) (extraJsFiles := config.extraJs.toArray ++ state.extraJsFiles.map ("/-verso-js/" ++ ·.1))).asString
-    if depth > 0 then
+    if depth > 0 ∧ part.htmlSplit != .never then
       for p in part.subParts do
         let nextFile := p.metadata.bind (·.file) |>.getD (p.titleString.sluggify.toString)
         emitPart bookTitle authors bookContents opts {ctxt with path := ctxt.path.push nextFile} state linkTargets {} false (depth - 1) dir p
+  termination_by depth
 
   urlAttr (name : String) : Bool := name ∈ ["href", "src", "data", "poster"]
   rwAttr (attr : String × String) : ReaderT Path Id (String × String) := do
