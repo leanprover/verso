@@ -186,9 +186,6 @@ where
 defmethod HashMap.all [BEq α] [Hashable α] (hm : HashMap α β) (p : α → β → Bool) : Bool :=
   hm.fold (fun prev k v => prev && p k v) true
 
-defmethod HashSet.all [BEq α] [Hashable α] (hm : HashSet α) (p : α → Bool) : Bool :=
-  hm.fold (fun prev v => prev && p v) true
-
 instance [BEq α] [Hashable α] : BEq (HashSet α) where
   beq xs ys := xs.size == ys.size && xs.all (ys.contains ·)
 
