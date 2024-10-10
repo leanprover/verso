@@ -5,6 +5,7 @@ Author: David Thrane Christiansen
 -/
 
 import Verso.Doc
+import Verso.Doc.ArgParse
 import Verso.Doc.Concrete
 import Verso.Doc.TeX
 import Verso.Doc.Html
@@ -24,7 +25,7 @@ import VersoManual.Glossary
 import VersoManual.Docstring
 import VersoManual.WordCount
 
-open Lean (Name NameMap Json ToJson FromJson)
+open Lean (Name NameMap Json ToJson FromJson MonadError quote)
 
 open Verso.FS
 
@@ -35,6 +36,8 @@ open Verso.Genre.Manual.WordCount
 
 open Verso.Code (LinkTargets)
 open Verso.Code.Hover (Dedup State)
+
+open Verso.ArgParse
 
 namespace Verso.Genre
 
@@ -79,9 +82,20 @@ def ref.descr : InlineDescr where
       | .ok (_, _, some dest) =>
         pure {{<a href={{dest}}>{{← content.mapM go}}</a>}}
 
-def ref (content : Array (Doc.Inline Manual)) (canonicalName : String) (domain : Option Name := none) : Doc.Inline Manual :=
-  let data : (String × Option Name × Option String) := (canonicalName, domain, none)
-  .other {Inline.ref with data := ToJson.toJson data} content
+structure RefConfig where
+  canonicalName : String
+  domain : Option Name := none
+
+def RefConfig.parse [Monad m] [MonadError m] : ArgParse m RefConfig :=
+  RefConfig.mk <$> .positional `canonicalName .string <*> (some <$> .positional `domain .name <|> pure none)
+
+@[role_expander ref]
+def ref : RoleExpander
+  | args, content => do
+    let config ← RefConfig.parse.run args
+    let content ← content.mapM elabInline
+    let data : (String × Option Name × Option String) := (config.canonicalName, config.domain, none)
+    pure #[← `(Doc.Inline.other {Inline.ref with data := ToJson.toJson ($(quote data) : (String × Option Name × Option String))} #[$[$content],*])]
 
 def Block.paragraph : Block where
   name := `Verso.Genre.Manual.Block.paragraph
