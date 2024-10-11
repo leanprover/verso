@@ -208,7 +208,7 @@ defmethod Highlighted.trim (hl : Highlighted) : Highlighted := hl.trimLeft.trimR
 
 defmethod Token.Kind.hover? (tok : Token.Kind) : HighlightHtmlM (Option Nat) :=
   match tok with
-  | .const _n sig doc =>
+  | .const _n sig doc | .anonCtor _n sig doc =>
     let docs :=
       match doc with
       | none => .empty
@@ -236,17 +236,18 @@ defmethod Highlighted.Span.Kind.«class» : Highlighted.Span.Kind → String
   | .error => "error"
 
 defmethod Token.Kind.«class» : Token.Kind → String
-  | .var _ _ => "var"
-  | .str _ => "literal string"
+  | .var .. => "var"
+  | .str .. => "literal string"
   | .sort  => "sort"
-  | .const _ _ _ => "const"
-  | .option _ _ _ => "option"
+  | .const .. => "const"
+  | .option .. => "option"
   | .docComment => "doc-comment"
-  | .keyword _ _ _ => "keyword"
+  | .keyword .. => "keyword"
+  | .anonCtor .. => "unknown"
   | .unknown => "unknown"
 
 defmethod Token.Kind.data : Token.Kind → String
-  | .const n _ _ => "const-" ++ toString n
+  | .const n _ _ | .anonCtor n _ _ => "const-" ++ toString n
   | .var ⟨v⟩ _ => "var-" ++ toString v
   | .option n _ _ => "option-" ++ toString n
   | .keyword _ (some occ) _ => "kw-occ-" ++ toString occ
