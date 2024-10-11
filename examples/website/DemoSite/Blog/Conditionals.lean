@@ -52,6 +52,12 @@ def slowId : Nat → Nat
 /-- An array literal -/
 example := #[1, 2, 3]
 
+/-- An anonymous constructor -/
+example : Fin 5 := ⟨2, by omega⟩
+
+/-- An explicit constructor -/
+example : Fin 5 := .mk 2 (by omega)
+
 example := 33
 ```
 
