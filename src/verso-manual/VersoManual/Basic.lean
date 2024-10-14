@@ -41,8 +41,8 @@ Note that internal invariants about uniqueness of names can be violated by editi
 serialization. This may lead to unexpected results.
 -/
 inductive Tag where
-  | /-- A user-provided tag - respect this if possible -/ provided (name : Slug)
-  | /-- A unique tag, suitable for inclusion in a document -/ private external (name : String)
+  | /-- A user-provided tag - respect this if possible -/ provided (name : String)
+  | /-- A unique tag, suitable for inclusion in a document -/ private external (name : Slug)
   | /-- A machine-assigned tag -/ private internal (name : String)
 deriving BEq, Hashable, Repr, ToJson, FromJson
 
@@ -50,7 +50,7 @@ instance : ToString Tag where
   toString := toString ∘ repr
 
 instance : Coe String Tag where
-  coe := .provided ∘ Slug.ofString
+  coe := .provided
 
 /--
 An internal identifier assigned to a part during traversal. Users don't get to have influence
@@ -127,30 +127,35 @@ def Object.modifyData (f : Json → Json) (object : Object) : Object :=
 
 structure Domain where
   objects : Lean.RBMap String Object compare := {}
+  title : Option String := none
+  description : Option String := none
 deriving Inhabited
 
 instance : BEq Domain where
   beq
-    | ⟨d1⟩, ⟨d2⟩ => d1.size == d2.size && d1.all (fun k v => d2.find? k == some v)
+    | ⟨d1, t1, desc1⟩, ⟨d2, t2, desc2⟩ =>
+      d1.size == d2.size && d1.all (fun k v => d2.find? k == some v) &&
+      t1 == t2 &&
+      desc1 == desc2
 
 def Domain.insertId (canonicalName : String) (id : InternalId) (domain : Domain) : Domain :=
   let obj := domain.objects.find? canonicalName |>.getD {canonicalName} |>.addId id
-  ⟨domain.objects.insert canonicalName obj⟩
+  {domain with objects := domain.objects.insert canonicalName obj}
 
 def Domain.setData  (canonicalName : String) (data : Json) (domain : Domain) : Domain :=
   let obj := domain.objects.find? canonicalName |>.getD {canonicalName} |>.setData data
-  ⟨domain.objects.insert canonicalName obj⟩
+  {domain with objects := domain.objects.insert canonicalName obj}
 
 def Domain.modifyData  (canonicalName : String) (f : Json → Json) (domain : Domain) : Domain :=
   let obj := domain.objects.find? canonicalName |>.getD {canonicalName} |>.modifyData f
-  ⟨domain.objects.insert canonicalName obj⟩
+  {domain with objects := domain.objects.insert canonicalName obj}
 
 def Domain.get? (canonicalName : String) (domain : Domain) : Option Object :=
   domain.objects.find? canonicalName
 
 structure TraverseState where
   tags : HashMap Tag InternalId := {}
-  externalTags : HashMap InternalId (Path × String) := {}
+  externalTags : HashMap InternalId (Path × Slug) := {}
   domains : NameMap Domain := {}
   ids : HashSet InternalId := {}
   nextId : Nat := 0
@@ -169,7 +174,7 @@ def freshId [Monad m] [MonadStateOf TraverseState m] : m InternalId := do
   modify fun st => {st with ids := st.ids.insert i}
   pure i
 
-def freshTag [Monad m] [MonadStateOf TraverseState m] (hint : String) (id : InternalId) : m Tag := do
+def freshTag [Monad m] [MonadStateOf TraverseState m] (hint : String) (id : InternalId) : m String := do
   let strPart : String := hint.sluggify.toString
   let mut numPart : Option Nat := none
   repeat
@@ -178,10 +183,10 @@ def freshTag [Monad m] [MonadStateOf TraverseState m] (hint : String) (id : Inte
       numPart := some <| numPart.map (· + 1) |>.getD 0
     else break
   let tag := tagStr strPart numPart
-  modify fun st => {st with tags := st.tags.insert tag id}
+  modify fun st => {st with tags := st.tags.insert (Tag.internal tag) id}
   pure tag
 where
-  tagStr (strPart : String) (numPart : Option Nat) := Tag.internal s!"{strPart}{numPart.map (s!"-{·}") |>.getD ""}"
+  tagStr (strPart : String) (numPart : Option Nat) := s!"{strPart}{numPart.map (s!"-{·}") |>.getD ""}"
 
 defmethod HashMap.all [BEq α] [Hashable α] (hm : HashMap α β) (p : α → β → Bool) : Bool :=
   hm.fold (fun prev k v => prev && p k v) true
@@ -242,6 +247,16 @@ def modifyDomainObjectData (state : TraverseState) (domain : Name) (canonicalNam
 def getDomainObject? (state : TraverseState) (domain : Name) (canonicalName : String) : Option Object :=
   state.domains.find? domain >>= fun d => d.get? canonicalName
 
+def setDomainTitle (state : TraverseState) (domain : Name) (title : String) : TraverseState :=
+  {state with domains := state.domains.insert domain {state.domains.find? domain |>.getD {} with title := some title}}
+
+def setDomainDescription (state : TraverseState) (domain : Name) (description : String) : TraverseState :=
+  {state with domains := state.domains.insert domain {state.domains.find? domain |>.getD {} with description := some description}}
+
+def htmlId (state : TraverseState) (id : InternalId) : Array (String × String) :=
+  if let some (_, htmlId) := state.externalTags[id]? then
+    #[("id", htmlId.toString)]
+  else #[]
 end TraverseState
 
 
@@ -372,6 +387,8 @@ def TraverseContext.inPart (self : TraverseContext) (part : Part Manual) : Trave
   {self with headers := self.headers.push <| .ofPart part}
 
 structure InlineDescr where
+  init : TraverseState → TraverseState := id
+
   /--
   Given the contents of the `data` field of the corresponding `Manual.Inline` and the contained
   inline elements, carry out the traversal pass.
@@ -391,9 +408,13 @@ structure InlineDescr where
 
   toTeX : Option (InlineToTeX Manual (ReaderT ExtensionImpls IO))
 
-deriving TypeName, Inhabited
+deriving TypeName
+
+instance : Inhabited InlineDescr := ⟨⟨id, default, default, default, default, default, default, default⟩⟩
 
 structure BlockDescr where
+  init : TraverseState → TraverseState := id
+
   traverse : BlockTraversal Manual
 
   toHtml : Option (BlockToHtml Manual (ReaderT ExtensionImpls IO))
@@ -403,7 +424,9 @@ structure BlockDescr where
   extraCssFiles : List (String × String) := []
 
   toTeX : Option (BlockToTeX Manual (ReaderT ExtensionImpls IO))
-deriving TypeName, Inhabited
+deriving TypeName
+
+instance : Inhabited BlockDescr := ⟨⟨id, default, default, default, default, default, default, default⟩⟩
 
 open Lean in
 initialize inlineExtensionExt
@@ -526,13 +549,19 @@ instance : MonadWithReader Manual.TraverseContext TraverseM where
 def logError [Monad m] [MonadLiftT IO m] [MonadReaderOf Manual.TraverseContext m] (err : String) : m Unit := do
   (← readThe Manual.TraverseContext).logError err
 
+/--
+Get or create the external tag assigned to an ID.
+
+If the external tag already exists, it is returned. If it needs creating, then the provided path is
+saved as its target and the string argument is used as a basis for the tag.
+-/
 def externalTag [Monad m] [MonadState TraverseState m] (id : InternalId) (path : Path) (name : String) : m Tag := do
   if let some (_, t) := (← get).externalTags[id]? then
     return Tag.external t
   else
-    let mut attempt := name.sluggify.toString
+    let mut attempt := name.sluggify
     repeat
-      if (← get).tags.contains (Tag.external attempt) then attempt := attempt ++ "-next"
+      if (← get).tags.contains (Tag.external attempt) then attempt := attempt.toString ++ "-next" |>.sluggify
       else break
     let t' := Tag.external attempt
     modify fun st => {st with
@@ -541,12 +570,12 @@ def externalTag [Monad m] [MonadState TraverseState m] (id : InternalId) (path :
     }
     pure t'
 
-def TraverseState.resolveId (st : TraverseState) (id : InternalId) : Option (Path × String) :=
+def TraverseState.resolveId (st : TraverseState) (id : InternalId) : Option (Path × Slug) :=
   if let some x := st.externalTags[id]? then
       pure x
   else none
 
-def TraverseState.resolveDomainObject (st : TraverseState) (domain : Name) (canonicalName : String) : Except String (Path × String) := do
+def TraverseState.resolveDomainObject (st : TraverseState) (domain : Name) (canonicalName : String) : Except String (Path × Slug) := do
   if let some obj := st.getDomainObject? domain canonicalName then
     match obj.ids.size with
       | 0 =>
@@ -561,7 +590,7 @@ def TraverseState.resolveDomainObject (st : TraverseState) (domain : Name) (cano
         throw s!"Ref {canonicalName} in {domain} has {more} targets, can only link to one"
   else throw s!"Not found: {canonicalName} in {domain}"
 
-def TraverseState.resolveTag (st : TraverseState) (tag : String) : Option (Path × String) :=
+def TraverseState.resolveTag (st : TraverseState) (tag : Slug) : Option (Path × Slug) :=
   if let some id := st.tags[Tag.external tag]? then
     if let some x := st.externalTags[id]? then
       pure x
@@ -572,23 +601,23 @@ def TraverseState.linkTargets (state : TraverseState) : Code.LinkTargets where
   const := fun x =>
     match state.resolveDomainObject `Verso.Manual.doc x.toString with
     | .ok (path, htmlId) =>
-      path.map ("/" ++ ·) |>.toList |> (String.join · ++ "#" ++ htmlId) |> some
+      path.map ("/" ++ ·) |>.toList |> (String.join · ++ "#" ++ htmlId.toString) |> some
     | .error _ =>
       none
   option := fun x =>
     match state.resolveDomainObject `Verso.Manual.doc.option x.toString with
     | .ok (path, htmlId) =>
-      path.map ("/" ++ ·) |>.toList |> (String.join · ++ "#" ++ htmlId) |> some
+      path.map ("/" ++ ·) |>.toList |> (String.join · ++ "#" ++ htmlId.toString) |> some
     | .error _ =>
       none
   keyword := fun k =>
     match state.resolveDomainObject `Verso.Manual.doc.tactic k.toString with
     | .ok (path, htmlId) =>
-      path.map ("/" ++ ·) |>.toList |> (String.join · ++ "#" ++ htmlId) |> some
+      path.map ("/" ++ ·) |>.toList |> (String.join · ++ "#" ++ htmlId.toString) |> some
     | .error _ =>
       none
 
-
+def sectionDomain := `Verso.Genre.Manual.section
 
 instance : Traverse Manual TraverseM where
   part p :=
@@ -613,7 +642,8 @@ instance : Traverse Manual TraverseM where
     | some t =>
       -- Ensure uniqueness
       if let some id' := (← get).tags[t]? then
-        if id != id' then logError s!"Duplicate tag '{t}'"
+        if id != id' then
+          logError s!"Duplicate tag '{t}'"
       else
         modify fun st => {st with tags := st.tags.insert t id}
       let path := (← readThe TraverseContext).path
@@ -621,22 +651,23 @@ instance : Traverse Manual TraverseM where
       | Tag.external name =>
         -- These are the actual IDs to use in generated HTML and links and such
         modify fun st => {st with externalTags := st.externalTags.insert id (path, name)}
-        let jsonMetadata := Json.arr ((← read).inPart part |>.headers.map (Json.str ·.titleString))
-        modify (·.saveDomainObject `Verso.Genre.Manual.section name id
-                 |>.saveDomainObjectData `Verso.Genre.Manual.section name jsonMetadata)
       | Tag.internal name =>
         meta := {meta with tag := ← externalTag id path name}
       | Tag.provided n =>
+        let slug := n.sluggify
         -- Convert to an external tag, and fail if we can't (users should control their link IDs)
-        let external := Tag.external n.toString
+        let external := Tag.external slug
         if let some id' := (← get).tags[external]? then
           if id != id' then logError s!"Duplicate tag '{t}'"
         else
           modify fun st => {st with
               tags := st.tags.insert external id,
-              externalTags := st.externalTags.insert id (path, n.toString)
+              externalTags := st.externalTags.insert id (path, slug)
             }
           meta := {meta with tag := external}
+        let jsonMetadata := Json.arr ((← read).inPart part |>.headers.map (Json.str ·.titleString))
+        modify (·.saveDomainObject sectionDomain n id
+                 |>.saveDomainObjectData sectionDomain n jsonMetadata)
 
     pure <|
       if meta == startMeta then none
@@ -713,9 +744,7 @@ open Verso.Output.Html in
 instance : Html.GenreHtml Manual (ReaderT ExtensionImpls IO) where
   part go meta txt := do
     let st ← Verso.Doc.Html.HtmlT.state
-    let attrs := match meta.id >>= st.externalTags.get? with
-      | none => #[]
-      | some (_, t) => #[("id", t)]
+    let attrs := meta.id.map (st.htmlId) |>.getD #[]
     go txt attrs
 
   block goI goB b content := do

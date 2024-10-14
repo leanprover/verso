@@ -126,7 +126,7 @@ def index.descr : InlineDescr where
     some <| fun _go id inl _content => do
       let some (_, t) := (← read).traverseState.externalTags.get? id
         | panic! s!"Untagged index target with data {inl}"
-      return {{<span id={{t}}></span>}}
+      return {{<span id={{t.toString}}></span>}}
 
 def Inline.see : Inline where
   name := `Verso.Genre.Manual.see

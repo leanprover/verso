@@ -22,6 +22,7 @@ import VersoManual.Html.Style
 import VersoManual.Index
 import VersoManual.Glossary
 import VersoManual.Docstring
+import VersoManual.WebAssets
 import VersoManual.WordCount
 
 open Lean (Name NameMap Json ToJson FromJson)
@@ -55,11 +56,11 @@ def ref.descr : InlineDescr where
     | .error e =>
       logError e; pure none
     | .ok (name, domain, none) =>
-      let domain := domain.getD `Verso.Genre.Manual.section
+      let domain := domain.getD sectionDomain
       match (← get).resolveDomainObject domain name with
       | .error _ => return none
       | .ok (path, htmlId) =>
-        let dest := String.join (path.map ("/" ++ ·) |>.toList) ++ "#" ++ htmlId
+        let dest := String.join (path.map ("/" ++ ·) |>.toList) ++ "#" ++ htmlId.toString
         return some <| .other {Inline.ref with data := ToJson.toJson (name, some domain, some dest)} content
     | .ok (_, domain, some (dest : String)) =>
       pure none
@@ -152,9 +153,16 @@ def traverse (logError : String → IO Unit) (text : Part Manual) (config : Conf
   let topCtxt : Manual.TraverseContext := {logError}
   let mut state : Manual.TraverseState := {}
   let mut text := text
-  let ExtensionImpls ← readThe ExtensionImpls
+  let extensionImpls ← readThe ExtensionImpls
+  state := state.setDomainTitle sectionDomain "Sections or chapters of the manual"
+  for ⟨_, b⟩ in extensionImpls.blockDescrs do
+    if let some descr := b.get? BlockDescr then
+      state := descr.init state
+  for ⟨_, i⟩ in extensionImpls.inlineDescrs do
+    if let some descr := i.get? InlineDescr then
+      state := descr.init state
   for _ in [0:config.maxTraversals] do
-    let (text', state') ← traverseMulti config.htmlDepth #[] text |>.run ExtensionImpls topCtxt state
+    let (text', state') ← traverseMulti config.htmlDepth #[] text |>.run extensionImpls topCtxt state
     if text' == text && state' == state then
       return (text', state')
     else
@@ -224,18 +232,42 @@ partial def toc (depth : Nat) (opts : Html.Options Manual IO)
       | .never => 0
 
     let children ← sub.mapM (toc depth' opts ctxt' state linkTargets)
-    pure <| .entry titleHtml ctxt'.path v number children
+    pure <| .entry titleHtml ctxt'.path v.toString number children
 
-def emitXrefs (dir : System.FilePath) (state : TraverseState) : IO Unit := do
+def page (toc : Array Html.Toc) (textTitle : String) (htmlTitle contents : Html) (state : TraverseState) (config : Config) (extraJs : List String := []) : Html :=
+  Html.page toc textTitle htmlTitle contents
+    state.extraCss (state.extraJs.insertMany extraJs)
+    (extraStylesheets := config.extraCss ++ state.extraCssFiles.toList.map ("/-verso-css/" ++ ·.1))
+    (extraJsFiles := config.extraJs.toArray ++ state.extraJsFiles.map ("/-verso-js/" ++ ·.1))
+
+open Output.Html in
+def xref (toc : Array Html.Toc) (xrefJson : String) (findJs : String) (state : TraverseState) (config : Config) : Html :=
+  page toc "Cross-Reference Redirection" "Cross-Reference Redirection" {{
+    <section>
+      <h1 id="title"></h1>
+      <div id="message"></div>
+    </section>
+  }}
+  state
+  config
+  (extraJs := [s!"let xref = {xrefJson};\n" ++ findJs])
+
+def emitXrefs (toc : Array Html.Toc) (dir : System.FilePath) (state : TraverseState) (config : Config) : IO Unit := do
   let mut out : Json := Json.mkObj []
   for (n, dom) in state.domains do
-    out := out.setObjVal! n.toString <| Json.mkObj <| dom.objects.toList.map fun (x, y) =>
-      (x, ToJson.toJson <| y.ids.toList.filterMap (jsonRef y.data <$> state.externalTags[·]?))
+    out := out.setObjVal! n.toString <| Json.mkObj [
+      ("title", Json.str <| dom.title.getD n.toString),
+      ("description", dom.description.map Json.str |>.getD Json.null),
+      ("contents", Json.mkObj <| dom.objects.toList.map fun (x, y) =>
+        (x, ToJson.toJson <| y.ids.toList.filterMap (jsonRef y.data <$> state.externalTags[·]?)))]
   ensureDir dir
-  IO.FS.writeFile (dir.join "xref.json") (toString out)
+  let xrefJson := toString out
+  IO.FS.writeFile (dir.join "xref.json") xrefJson
+  ensureDir (dir / "find")
+  IO.FS.writeFile (dir / "find" / "index.html") (Html.doctype ++ (Html.relativize #["find"] <| xref toc xrefJson find.js state config).asString)
 where
-  jsonRef (data : Json) (ref : Path × String) : Json :=
-    Json.mkObj [("address", String.join (ref.1.map ("/" ++ ·)).toList), ("id", ref.2), ("data", data)]
+  jsonRef (data : Json) (ref : Path × Slug) : Json :=
+    Json.mkObj [("address", String.join (ref.1.map ("/" ++ ·)).toList), ("id", ref.2.toString), ("data", data)]
 
 def wordCount
     (wcPath : System.FilePath)
@@ -257,7 +289,6 @@ def emitHtmlSingle
 where
   emitContent (dir : System.FilePath) : StateT (State Html) (ReaderT ExtensionImpls IO) Unit := do
     let (text, state) ← traverse logError text {config with htmlDepth := 0}
-    emitXrefs dir state
     let authors := text.metadata.map (·.authors) |>.getD []
     let date := text.metadata.bind (·.date) |>.getD ""
     let opts : Html.Options Manual IO := {logError := fun msg => logError msg}
@@ -268,6 +299,7 @@ where
     let pageContent := open Verso.Output.Html in
       {{<section>{{Html.titlePage titleHtml authors introHtml ++ contents}}</section>}}
     let toc ← text.subParts.mapM (toc 0 opts ctxt state state.linkTargets)
+    emitXrefs toc dir state config
     IO.FS.withFile (dir.join "book.css") .write fun h => do
       h.putStrLn Html.Css.pageStyle
     for (src, dest) in config.extraFiles do
@@ -282,7 +314,7 @@ where
         h.putStr contents
     IO.FS.withFile (dir.join "index.html") .write fun h => do
       h.putStrLn Html.doctype
-      h.putStrLn (Html.page toc text.titleString titleHtml pageContent state.extraCss state.extraJs (extraStylesheets := config.extraCss ++ state.extraCssFiles.toList.map ("/-verso-css/" ++ ·.1)) (extraJsFiles := config.extraJs.toArray ++ state.extraJsFiles.map ("/-verso-js/" ++ ·.1))).asString
+      h.putStrLn (page toc text.titleString titleHtml pageContent state config).asString
 
 open Verso.Output.Html in
 def emitHtmlMulti (logError : String → IO Unit) (config : Config)
@@ -294,7 +326,6 @@ def emitHtmlMulti (logError : String → IO Unit) (config : Config)
 where
   emitContent (root : System.FilePath) : StateT (State Html) (ReaderT ExtensionImpls IO) Unit := do
     let (text, state) ← traverse logError text config
-    emitXrefs root state
     let authors := text.metadata.map (·.authors) |>.getD []
     let date := text.metadata.bind (·.date) |>.getD ""
     let opts : Html.Options _ IO := {logError := fun msg => logError msg}
@@ -314,6 +345,7 @@ where
       IO.FS.withFile (root.join "-verso-css" |>.join name) .write fun h => do
         h.putStr contents
     emitPart titleHtml authors toc opts.lift ctxt state state.linkTargets {} true config.htmlDepth root text
+    emitXrefs toc root state config
   emitPart (bookTitle : Html) (authors : List String) (bookContents)
       (opts ctxt state linkTargets codeOptions)
       (root : Bool) (depth : Nat) (dir : System.FilePath) (part : Part Manual) : StateT (State Html) (ReaderT ExtensionImpls IO) Unit := do
@@ -338,26 +370,13 @@ where
     ensureDir dir
     IO.FS.withFile (dir.join "index.html") .write fun h => do
       h.putStrLn Html.doctype
-      h.putStrLn (relativize ctxt.path <| Html.page bookContents part.titleString pageTitle pageContent state.extraCss state.extraJs (extraStylesheets := config.extraCss ++ state.extraCssFiles.toList.map ("/-verso-css/" ++ ·.1)) (extraJsFiles := config.extraJs.toArray ++ state.extraJsFiles.map ("/-verso-js/" ++ ·.1))).asString
+      h.putStrLn (Html.relativize ctxt.path <| page bookContents part.titleString pageTitle pageContent state config).asString
     if depth > 0 ∧ part.htmlSplit != .never then
       for p in part.subParts do
         let nextFile := p.metadata.bind (·.file) |>.getD (p.titleString.sluggify.toString)
         emitPart bookTitle authors bookContents opts {ctxt with path := ctxt.path.push nextFile} state linkTargets {} false (depth - 1) dir p
   termination_by depth
 
-  urlAttr (name : String) : Bool := name ∈ ["href", "src", "data", "poster"]
-  rwAttr (attr : String × String) : ReaderT Path Id (String × String) := do
-    if urlAttr attr.fst && "/".isPrefixOf attr.snd then
-      let path := (← read)
-      pure { attr with
-        snd := String.join (List.replicate path.size "../") ++ attr.snd.drop 1
-      }
-    else
-      pure attr
-  rwTag (tag : String) (attrs : Array (String × String)) (content : Html) : ReaderT Path Id (Option Html) := do
-    pure <| some <| .tag tag (← attrs.mapM rwAttr) content
-  relativize (path : Path) (html : Html) : Html :=
-    html.visitM (m := ReaderT Path Id) (tag := rwTag) |>.run path
 
 
 abbrev ExtraStep := TraverseContext → TraverseState → IO Unit

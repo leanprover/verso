@@ -27,6 +27,11 @@ open SubVerso.Highlighting
 
 namespace Verso.Genre.Manual
 
+def docstringDomain := `Verso.Genre.Manual.doc
+def tacticDomain := `Verso.Genre.Manual.doc.tactic
+def optionDomain := `Verso.Genre.Manual.doc.option
+def convDomain := `Verso.Genre.Manual.doc.tactic.conv
+
 namespace Block
 
 namespace Docstring
@@ -306,6 +311,10 @@ def docstringStyle := r#"
 open Verso.Genre.Manual.Markdown in
 @[block_extension Block.docstring]
 def docstring.descr : BlockDescr where
+  init st := st
+    |>.setDomainTitle docstringDomain "Lean constant reference"
+    |>.setDomainDescription docstringDomain "Documentation for Lean constants"
+
   traverse id info _ := do
     let .ok (name, declType, _signature) := FromJson.fromJson? (α := Name × Block.Docstring.DeclType × Option Highlighted) info
       | do logError "Failed to deserialize docstring data"; pure none
@@ -331,11 +340,11 @@ def docstring.descr : BlockDescr where
           term := Doc.Inline.code ctor.name.toString,
           subterm := some <| Doc.Inline.concat #[Doc.Inline.text "Constructor of ", Doc.Inline.code name.toString]
         }
-        modify fun st => st.saveDomainObject `Verso.Manual.doc ctor.name.toString id
+        modify fun st => st.saveDomainObject docstringDomain ctor.name.toString id
 
         for (f, i) in fields.zip fieldInfos do
           Index.addEntry id {term := Doc.Inline.code i.projFn.toString}
-          modify fun st => st.saveDomainObject `Verso.Manual.doc i.projFn.toString id
+          modify fun st => st.saveDomainObject docstringDomain i.projFn.toString id
           if i.projFn.getPrefix != .anonymous then
             Index.addEntry id {
               term := Doc.Inline.code f.toString,
@@ -347,7 +356,7 @@ def docstring.descr : BlockDescr where
           term := Doc.Inline.code c.name.toString,
           subterm := some <| Doc.Inline.concat #[Doc.Inline.text "Constructor of ", Doc.Inline.code name.toString]
         }
-        modify fun st => st.saveDomainObject `Verso.Manual.doc c.name.toString id
+        modify fun st => st.saveDomainObject docstringDomain c.name.toString id
     | _ => pure ()
 
     -- Save a backreference
@@ -360,7 +369,7 @@ def docstring.descr : BlockDescr where
       modify (·.set `Verso.Genre.Manual.docstring <| Json.mkObj [] |>.setObjVal! name.toString (toJson [id]))
 
     -- Save a new-style backreference
-    modify fun st => st.saveDomainObject `Verso.Manual.doc name.toString id
+    modify fun st => st.saveDomainObject docstringDomain name.toString id
 
     pure none
   toHtml := some <| fun _goI goB id info contents =>
@@ -372,10 +381,7 @@ def docstring.descr : BlockDescr where
       let sig : Html ← Option.map Highlighted.toHtml signature |>.getD (pure {{ {{x}} }})
 
       let xref ← state
-      let idAttr :=
-        if let some (_, htmlId) := xref.externalTags[id]? then
-          #[("id", htmlId)]
-        else #[]
+      let idAttr := xref.htmlId id
 
       return {{
         <div class="namedocs" {{idAttr}}>
@@ -596,6 +602,9 @@ def optionDocs : BlockRoleExpander
 open Verso.Genre.Manual.Markdown in
 @[block_extension optionDocs]
 def optionDocs.descr : BlockDescr where
+  init st := st
+    |>.setDomainTitle optionDomain "Compiler options"
+
   traverse id info _ := do
     let .ok (name, _defaultValue) := FromJson.fromJson? (α := Name × Highlighted) info
       | do logError "Failed to deserialize docstring data while traversing an option"; pure none
@@ -606,7 +615,7 @@ def optionDocs.descr : BlockDescr where
     if name.getPrefix != .anonymous then
       Index.addEntry id {term := Doc.Inline.code name.getString!, subterm := some <| Doc.Inline.code name.toString}
 
-    modify fun st => st.saveDomainObject `Verso.Manual.doc.option name.toString id
+    modify fun st => st.saveDomainObject optionDomain name.toString id
 
     pure none
   toHtml := some <| fun _goI goB id info contents =>
@@ -617,10 +626,7 @@ def optionDocs.descr : BlockDescr where
       let x : Html := Html.text true <| Name.toString name
 
       let xref ← HtmlT.state
-      let idAttr :=
-        if let some (_, htmlId) := xref.externalTags[id]? then
-          #[("id", htmlId)]
-        else #[]
+      let idAttr := xref.htmlId id
 
       return {{
         <div class="namedocs" {{idAttr}}>
@@ -715,6 +721,10 @@ open Verso.Genre.Manual.Markdown in
 open Lean Elab Term Parser Tactic Doc in
 @[block_extension tactic]
 def tactic.descr : BlockDescr where
+  init st := st
+    |>.setDomainTitle tacticDomain "Tactic Documentation"
+    |>.setDomainDescription tacticDomain "Detailed descriptions of tactics"
+
   traverse id info _ := do
     let .ok (tactic, «show») := FromJson.fromJson? (α := TacticDoc × Option String) info
       | do logError "Failed to deserialize docstring data while traversing a tactic"; pure none
@@ -722,7 +732,7 @@ def tactic.descr : BlockDescr where
     let _ ← Verso.Genre.Manual.externalTag id path <| show.getD tactic.userName
     Index.addEntry id {term := Doc.Inline.code <| show.getD tactic.userName}
 
-    modify fun st => st.saveDomainObject `Verso.Manual.doc.tactic tactic.internalName.toString id
+    modify fun st => st.saveDomainObject tacticDomain tactic.internalName.toString id
 
     pure none
   toHtml := some <| fun _goI goB id info contents =>
@@ -733,10 +743,7 @@ def tactic.descr : BlockDescr where
       let x : Highlighted := .token ⟨.keyword tactic.internalName none tactic.docString, show.getD tactic.userName⟩
 
       let xref ← HtmlT.state
-      let idAttr :=
-        if let some (_, htmlId) := xref.externalTags[id]? then
-          #[("id", htmlId)]
-        else #[]
+      let idAttr := xref.htmlId id
 
       return {{
         <div class="namedocs" {{idAttr}}>
@@ -838,6 +845,9 @@ open Verso.Genre.Manual.Markdown in
 open Lean Elab Term Parser Tactic Doc in
 @[block_extension conv]
 def conv.descr : BlockDescr where
+  init st := st
+    |>.setDomainTitle convDomain "Conversion Tactics" |>.setDomainDescription convDomain "Tatics for performing targeted rewriting of subterms"
+
   traverse id info _ := do
     let .ok (name, «show», _docs?) := FromJson.fromJson? (α := Name × String × Option String) info
       | do logError "Failed to deserialize conv docstring data"; pure none
@@ -845,7 +855,7 @@ def conv.descr : BlockDescr where
     let _ ← Verso.Genre.Manual.externalTag id path <| name.toString
     Index.addEntry id {term := Doc.Inline.code <| «show»}
 
-    modify fun st => st.saveDomainObject `Verso.Manual.doc.tactic.conv name.toString id
+    modify fun st => st.saveDomainObject convDomain name.toString id
 
     pure none
   toHtml := some <| fun _goI goB id info contents =>
@@ -856,10 +866,7 @@ def conv.descr : BlockDescr where
       let x : Highlighted := .token ⟨.keyword (some name) none docs?, «show»⟩
 
       let xref ← HtmlT.state
-      let idAttr :=
-        if let some (_, htmlId) := xref.externalTags[id]? then
-          #[("id", htmlId)]
-        else #[]
+      let idAttr := xref.htmlId id
 
       return {{
         <div class="namedocs" {{idAttr}}>
@@ -955,7 +962,7 @@ def progress.descr : BlockDescr where
 
     let undocTactics ← allTactics.filterM fun tacticName => do
       let st ← Doc.Html.HtmlT.state (genre := Manual)
-      pure <| (TraverseState.getDomainObject? st `Verso.Manual.doc.tactic tacticName.toString).isNone && tacticName ∉ exceptions
+      pure <| (TraverseState.getDomainObject? st tacticDomain tacticName.toString).isNone && tacticName ∉ exceptions
 
     let tacticPercent := undocTactics.size.toFloat * 100.0 / allTactics.size.toFloat
 
