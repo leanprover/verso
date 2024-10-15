@@ -19,6 +19,7 @@ import VersoManual.Slug
 import VersoManual.TeX
 import VersoManual.Html
 import VersoManual.Html.Style
+import VersoManual.Draft
 import VersoManual.Index
 import VersoManual.Glossary
 import VersoManual.Docstring
@@ -119,6 +120,7 @@ structure Config where
   extraFiles : List (System.FilePath × String) := []
   extraCss : List String := []
   extraJs : List String := []
+  draft : Bool := false
 
 def ensureDir (dir : System.FilePath) : IO Unit := do
   if !(← dir.pathExists) then
@@ -150,7 +152,7 @@ where
   traverseBlock := Verso.Doc.Genre.traverse.block Manual
 
 def traverse (logError : String → IO Unit) (text : Part Manual) (config : Config) : ReaderT ExtensionImpls IO (Part Manual × TraverseState) := do
-  let topCtxt : Manual.TraverseContext := {logError}
+  let topCtxt : Manual.TraverseContext := {logError, draft := config.draft}
   let mut state : Manual.TraverseState := {}
   let mut text := text
   let extensionImpls ← readThe ExtensionImpls
@@ -401,6 +403,7 @@ where
     | ("--without-html-multi"::more) => opts {cfg with emitHtmlMulti := false} more
     | ("--with-word-count"::file::more) => opts {cfg with wordCount := some file} more
     | ("--without-word-count"::more) => opts {cfg with wordCount := none} more
+    | ("--draft"::more) => opts {cfg with draft := true} more
     | (other :: _) => throw (↑ s!"Unknown option {other}")
     | [] => pure cfg
 

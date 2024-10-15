@@ -314,6 +314,8 @@ structure TraverseContext where
   path : Path := #[]
   /-- The path from the root to the current header -/
   headers : Array PartHeader := #[]
+  /-- Whether the current build is a draft (used for hiding TODOs, etc from public builds) -/
+  draft : Bool := false
   logError : String → IO Unit
 
 def TraverseContext.inFile (self : TraverseContext) (file : String) : TraverseContext :=
@@ -548,6 +550,9 @@ instance : MonadWithReader Manual.TraverseContext TraverseM where
 
 def logError [Monad m] [MonadLiftT IO m] [MonadReaderOf Manual.TraverseContext m] (err : String) : m Unit := do
   (← readThe Manual.TraverseContext).logError err
+
+def isDraft [Functor m] [MonadReaderOf Manual.TraverseContext m] : m Bool :=
+  (·.draft) <$> (readThe Manual.TraverseContext)
 
 /--
 Get or create the external tag assigned to an ID.
