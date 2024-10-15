@@ -46,7 +46,11 @@ def titlePage (title : Html) (authors : List String) (intro : Html) : Html := {{
   </div>
 }}
 
-def page (toc : Array Toc) (textTitle : String) (htmlTitle : Html) (contents : Html) (extraCss : HashSet String) (extraJs : HashSet String) (extraStylesheets : List String := []) (extraScripts : List String := []) (extraJsFiles : Array String := #[]) : Html := {{
+def page (toc : Array Toc) (textTitle : String) (htmlTitle : Html) (contents : Html)
+    (extraCss : HashSet String)
+    (extraJs : HashSet String)
+    (extraStylesheets : List String := [])
+    (extraJsFiles : Array String := #[]) : Html := {{
 <html>
   <head>
     <meta charset="utf-8"/>
@@ -80,3 +84,18 @@ def page (toc : Array Toc) (textTitle : String) (htmlTitle : Html) (contents : H
   </body>
 </html>
 }}
+
+def relativize (path : Path) (html : Html) : Html :=
+  html.visitM (m := ReaderT Path Id) (tag := rwTag) |>.run path
+where
+  urlAttr (name : String) : Bool := name ∈ ["href", "src", "data", "poster"]
+  rwAttr (attr : String × String) : ReaderT Path Id (String × String) := do
+    if urlAttr attr.fst && "/".isPrefixOf attr.snd then
+      let path := (← read)
+      pure { attr with
+        snd := String.join (List.replicate path.size "../") ++ attr.snd.drop 1
+      }
+    else
+      pure attr
+  rwTag (tag : String) (attrs : Array (String × String)) (content : Html) : ReaderT Path Id (Option Html) := do
+    pure <| some <| .tag tag (← attrs.mapM rwAttr) content

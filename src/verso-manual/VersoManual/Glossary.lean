@@ -91,7 +91,7 @@ def deftech.descr : InlineDescr where
     some <| fun go id inl content => do
       let some (_, t) := (← state).externalTags[id]?
         | panic! s!"Untagged index target with data {inl}"
-      return {{<span id={{t}}>{{← content.mapM go}}</span>}}
+      return {{<span id={{t.toString}}>{{← content.mapM go}}</span>}}
 
 def Inline.tech : Inline where
   name := `Verso.Genre.Manual.tech

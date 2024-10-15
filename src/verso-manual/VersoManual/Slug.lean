@@ -11,8 +11,27 @@ open Verso.Method
 open Lean (ToJson FromJson)
 open Std (HashSet)
 
-def Slug.validChars := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-".toList
+def Slug.validChars := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_".toList
 
+def mangle (c : Char) : String :=
+  match c with
+  | '<' => "_LT_"
+  | '>' => "_GT_"
+  | ';' => "_SEMI_"
+  | '‹' => "_FLQ_"
+  | '›' => "_FRQ_"
+  | '«' => "_FLQQ_"
+  | '»' => "_FLQQ_"
+  | '⟨' => "_LANGLE_"
+  | '⟩' => "_RANGLE_"
+  | '(' => "_LPAR_"
+  | ')' => "_RPAR_"
+  | '[' => "_LSQ_"
+  | ']' => "_RSQ_"
+  | '→' => "_ARR_"
+  | '↦' => "_MAPSTO_"
+  | '⊢' => "_VDASH_"
+  | _ => "___"
 
 def asSlug (str : String) : String :=
   let rec loop (iter : String.Iterator) (acc : String) : String :=
@@ -22,10 +41,15 @@ def asSlug (str : String) : String :=
       loop iter.next <|
         if c ∈ Slug.validChars then acc.push c
         else if c.isWhitespace then acc.push '-'
-        else acc
+        else acc ++ mangle c
   loop str.iter ""
 
-def Slug.WF (str : String) : Prop := ∀ c, c ∈ str.data → c ∈ validChars
+def Slug.WF (str : String) : Prop :=
+  ∀ c, c ∈ str.data → c ∈ validChars
+
+theorem Slug.wf_mangle : WF (mangle c) := by
+  unfold mangle
+  split <;> simp [WF, validChars]
 
 theorem Slug.wf_push (c str) : c ∈ validChars → WF str → WF (str.push c) := by
   unfold WF
@@ -34,6 +58,12 @@ theorem Slug.wf_push (c str) : c ∈ validChars → WF str → WF (str.push c) :
   cases mem
   . apply wf; assumption
   . simp [*]
+
+theorem Slug.wf_append (str1 str2) : WF str1 → WF str2 → WF (str1 ++ str2) := by
+  unfold WF
+  intro wf1 wf2 _ mem
+  simp only [String.data_append, List.mem_append] at mem
+  cases mem <;> simp [*]
 
 theorem Slug.asSlug_loop_valid : WF acc → WF (asSlug.loop iter acc) := by
   intro wfAcc
@@ -53,7 +83,9 @@ theorem Slug.asSlug_loop_valid : WF acc → WF (asSlug.loop iter acc) := by
         cases inPushDash
         . simp [*]
         . simp [*, validChars]
-      . apply wfAcc
+      . apply wf_append
+        . assumption
+        . apply wf_mangle
 
 theorem Slug.asSlug_valid : WF (asSlug str) := by
   unfold asSlug
