@@ -27,7 +27,7 @@ jobs:
           lean --version
 
       - name: Cache .lake
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: .lake
           key: ${{ runner.os }}-${{ hashFiles('lake-manifest.json') }}-${{ hashFiles('lean-toolchain') }}
