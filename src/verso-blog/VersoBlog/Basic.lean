@@ -386,7 +386,11 @@ def traverser (g : Genre) (block : g.Block = Blog.BlockExt) (inline : g.Inline =
   genreBlock := block ▸ genreBlock g
   genreInline := inline ▸ genreInline g
 
+instance : TraversePart Page := {}
+
 instance : Traverse Page Blog.TraverseM := traverser Page rfl rfl
+
+instance : TraversePart Post := {}
 
 instance : Traverse Post Blog.TraverseM := traverser Post rfl rfl
 

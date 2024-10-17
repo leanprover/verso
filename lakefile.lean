@@ -73,10 +73,12 @@ lean_exe demotextbook where
   supportInterpreter := true
 
 -- An example of a minimal nontrivial custom genre
+@[default_target]
 lean_lib SimplePage where
   srcDir := "examples/custom-genre"
   roots := #[`SimplePage]
 
+@[default_target]
 lean_exe simplepage where
   srcDir := "examples/custom-genre"
   root := `SimplePageMain

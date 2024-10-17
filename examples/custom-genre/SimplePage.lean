@@ -154,6 +154,8 @@ supply an instance of `Traverse` for their genre, which provides both customizat
 implement traversal for the provided part metadata, block extensions, and inline extensions.
 -/
 
+instance : TraversePart SimplePage := {}
+
 instance : Traverse SimplePage TraverseM where
   part _ := pure none
   block _ := pure ()
@@ -200,7 +202,7 @@ instance : GenreHtml SimplePage IO where
     -- It's important that this not include the metadata in the recursive call, or the generator
     -- will loop (the metadata's presence is what triggers the call to `GenreHtml.part`)
     let part' := .mk title titleString none content' subParts
-    recur part' #[("id", metadata.tag)]
+    recur part' (fun lvl title => .tag s!"h{lvl}" #[("id", metadata.tag)] title)
   -- There are no genre-specific blocks, so no code is needed here
   block _ _ blkExt := nomatch blkExt
   inline recur

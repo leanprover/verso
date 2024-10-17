@@ -81,6 +81,14 @@ deriving BEq, Hashable, Repr, ToJson, FromJson
 
 instance : Inhabited HtmlSplitMode := ⟨.default⟩
 
+-- TODO: delete after PR #5747 is merged
+instance : Hashable Char where
+  hash c := c.val.toUInt64
+
+inductive Numbering where
+  | /-- Ordinary numbering -/nat (n : Nat)
+  | /-- Letter numbering, used e.g. for appendices -/ letter (char : Char)
+deriving DecidableEq, Hashable, Repr
 
 structure PartMetadata where
   authors : List String := []
@@ -89,7 +97,10 @@ structure PartMetadata where
   /-- If this part ends up as the root of a file, use this name for it -/
   file : Option String := none
   id : Option InternalId := none
+  /-- Should this section be numbered? If `false`, then it's like `\section*` in LaTeX -/
   number : Bool := true
+  /-- Which number has been assigned? -/
+  assignedNumber : Option Numbering := none
   htmlSplit : HtmlSplitMode := .default
 deriving BEq, Hashable, Repr
 
@@ -386,6 +397,9 @@ def PartHeader.ofPart (part : Part Manual) : PartHeader :=
 def TraverseContext.inPart (self : TraverseContext) (part : Part Manual) : TraverseContext :=
   {self with headers := self.headers.push <| .ofPart part}
 
+def TraverseContext.sectionNumber (self : TraverseContext) : Array (Option Numbering) :=
+  self.headers.map (·.metadata |>.getD {} |>.assignedNumber)
+
 structure InlineDescr where
   init : TraverseState → TraverseState := id
 
@@ -619,10 +633,12 @@ def TraverseState.linkTargets (state : TraverseState) : Code.LinkTargets where
 
 def sectionDomain := `Verso.Genre.Manual.section
 
+instance : TraversePart Manual where
+  inPart p := (·.inPart p)
+
 instance : Traverse Manual TraverseM where
   part p :=
     if p.metadata.isNone then pure (some {}) else pure none
-  inPart p := (·.inPart p)
   block _ := pure ()
   inline _ := pure ()
   genrePart startMeta part := do
@@ -632,6 +648,7 @@ instance : Traverse Manual TraverseM where
     let id ← if let some i := meta.id then pure i else freshId
     meta := {meta with id := some id}
 
+    -- Next, assign a tag, prioritizing user-chosen external IDs
     match meta.tag with
     | none =>
       -- Assign an internal tag - the next round will make it external This is done in two rounds to
@@ -669,9 +686,29 @@ instance : Traverse Manual TraverseM where
         modify (·.saveDomainObject sectionDomain n id
                  |>.saveDomainObjectData sectionDomain n jsonMetadata)
 
+    -- Assign section numbers to subsections
+    let mut i := 1
+    let mut subs := #[]
+    let mut modifiedSubs := false
+    for s in part.subParts do
+      let mut subMeta := s.metadata.getD {}
+      if subMeta.number then
+        if subMeta.assignedNumber != some (.nat i) then
+          subMeta := {subMeta with assignedNumber := some (.nat i)}
+        i := i + 1
+      else
+        if subMeta.assignedNumber.isSome then
+          subMeta := {subMeta with assignedNumber := none}
+      if s.metadata == some subMeta then
+        subs := subs.push s
+      else
+        subs := subs.push <| s.withMetadata subMeta
+        modifiedSubs := true
+
+
     pure <|
-      if meta == startMeta then none
-      else pure (part.withMetadata meta)
+      if not modifiedSubs && meta == startMeta then none
+      else pure (part |>.withMetadata meta |>.withSubparts subs)
 
   genreBlock
     | ⟨name, id?, data⟩, content => do
@@ -740,12 +777,32 @@ instance : TeX.GenreTeX Manual (ReaderT ExtensionImpls IO) where
       | panic! s!"Inline {i.name} doesn't support TeX"
     impl go id i.data content
 
+def sectionNumberString (num : Array Numbering) : String := Id.run do
+  let mut out := ""
+  for n in num do
+    out := out ++
+      match n with
+      | .nat n => s!"{n}."
+      | .letter a => s!"{a}."
+  out
+
+def sectionString (ctxt : TraverseContext) : Option String :=
+  ctxt.sectionNumber.mapM id |>.map sectionNumberString
+
+def sectionHtml (ctxt : TraverseContext) : Html :=
+  match sectionString ctxt with
+  | none => .empty
+  | some s => .text true (s ++ " ")
+
 open Verso.Output.Html in
 instance : Html.GenreHtml Manual (ReaderT ExtensionImpls IO) where
   part go meta txt := do
     let st ← Verso.Doc.Html.HtmlT.state
     let attrs := meta.id.map (st.htmlId) |>.getD #[]
-    go txt attrs
+    let ctxt ← Verso.Doc.Html.HtmlT.context
+    let sectionNumber : Html := sectionHtml ctxt
+    let mkHeader lvl content := .tag s!"h{lvl}" attrs (sectionNumber ++ content)
+    go txt mkHeader
 
   block goI goB b content := do
     let some id := b.id

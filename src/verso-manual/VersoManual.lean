@@ -212,10 +212,11 @@ depth of the table of contents in the document (which is controlled by a paramet
 partial def toc (depth : Nat) (opts : Html.Options Manual IO)
     (ctxt : TraverseContext)
     (state : TraverseState)
-    (linkTargets : LinkTargets) : Part Manual → StateT (State Html) (ReaderT ExtensionImpls IO) Html.Toc
+    (linkTargets : LinkTargets) :
+    Part Manual → StateT (State Html) (ReaderT ExtensionImpls IO) Html.Toc
   | .mk title sTitle meta _ sub => do
     let titleHtml ← Html.seq <$> title.mapM (Manual.toHtml (m := ReaderT ExtensionImpls IO) opts.lift ctxt state linkTargets {} ·)
-    let some {id := some id, number, ..} := meta
+    let some {id := some id, ..} := meta
       | throw <| .userError s!"No ID for {sTitle} - {repr meta}"
     let some (_, v) := state.externalTags[id]?
       | throw <| .userError s!"No external ID for {sTitle}"
@@ -231,8 +232,8 @@ partial def toc (depth : Nat) (opts : Html.Options Manual IO)
       | .default => depth - 1
       | .never => 0
 
-    let children ← sub.mapM (toc depth' opts ctxt' state linkTargets)
-    pure <| .entry titleHtml ctxt'.path v.toString number children
+    let children ← sub.mapM (fun p => toc depth' opts (ctxt'.inPart p) state linkTargets p)
+    pure <| .entry titleHtml ctxt'.path v.toString (ctxt.sectionNumber.mapM _root_.id) children
 
 def page (toc : Array Html.Toc) (textTitle : String) (htmlTitle contents : Html) (state : TraverseState) (config : Config) (extraJs : List String := []) : Html :=
   Html.page toc textTitle htmlTitle contents
@@ -330,7 +331,7 @@ where
     let date := text.metadata.bind (·.date) |>.getD ""
     let opts : Html.Options _ IO := {logError := fun msg => logError msg}
     let ctxt := {logError}
-    let toc ← text.subParts.mapM (toc config.htmlDepth opts ctxt state state.linkTargets)
+    let toc ← text.subParts.mapM (fun p => toc config.htmlDepth opts (ctxt.inPart p) state state.linkTargets p)
     let titleHtml ← Html.seq <$> text.title.mapM (Manual.toHtml opts.lift ctxt state state.linkTargets {} ·)
     IO.FS.withFile (root.join "book.css") .write fun h => do
       h.putStrLn Html.Css.pageStyle
@@ -351,13 +352,14 @@ where
       (root : Bool) (depth : Nat) (dir : System.FilePath) (part : Part Manual) : StateT (State Html) (ReaderT ExtensionImpls IO) Unit := do
     let thisFile := part.metadata.bind (·.file) |>.getD (part.titleString.sluggify.toString)
     let dir := if root then dir else dir.join thisFile
-    let titleHtml ← Html.seq <$> part.title.mapM (Manual.toHtml opts.lift ctxt state linkTargets codeOptions)
+    let sectionNum := sectionHtml ctxt
+    let titleHtml := sectionNum ++ (← Html.seq <$> part.title.mapM (Manual.toHtml opts.lift ctxt state linkTargets codeOptions))
     let introHtml ← Html.seq <$> part.content.mapM (Manual.toHtml opts.lift ctxt state linkTargets codeOptions)
     let contents ←
       if depth == 0 || part.htmlSplit == .never then
-        Html.seq <$> part.subParts.mapM (Manual.toHtml {opts.lift with headerLevel := 2} ctxt state linkTargets codeOptions)
+        Html.seq <$> part.subParts.mapM (fun p => Manual.toHtml {opts.lift with headerLevel := 2} (ctxt.inPart p) state linkTargets codeOptions p)
       else pure .empty
-    let subToc ← part.subParts.mapM (toc depth opts ctxt state linkTargets)
+    let subToc ← part.subParts.mapM (fun p => toc depth opts (ctxt.inPart p) state linkTargets p)
     let pageContent :=
       if root then
         let subTocHtml := if subToc.size > 0 then {{<ol class="section-toc">{{subToc.map (·.html (some 2))}}</ol>}} else .empty
@@ -374,7 +376,7 @@ where
     if depth > 0 ∧ part.htmlSplit != .never then
       for p in part.subParts do
         let nextFile := p.metadata.bind (·.file) |>.getD (p.titleString.sluggify.toString)
-        emitPart bookTitle authors bookContents opts {ctxt with path := ctxt.path.push nextFile} state linkTargets {} false (depth - 1) dir p
+        emitPart bookTitle authors bookContents opts ({ctxt with path := ctxt.path.push nextFile}.inPart p) state linkTargets {} false (depth - 1) dir p
   termination_by depth
 
 
