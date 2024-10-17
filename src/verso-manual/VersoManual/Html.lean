@@ -13,7 +13,7 @@ open Std (HashSet)
 open Verso.Output Html
 
 inductive Toc where
-  | entry (title : Html) (path : Path) (id : String) (number : Bool) (children : Array Toc)
+  | entry (title : Html) (path : Path) (id : String) (number : Option (Array Numbering)) (children : Array Toc)
 deriving Repr
 
 /--
@@ -28,9 +28,13 @@ partial def Toc.html (depth : Option Nat) : Toc → Html
       let page :=
         if path.isEmpty then "/"
         else path.map ("/" ++ ·) |>.toList |> String.join
+      let sectionNum :=
+        match num with
+        | none => {{<span class="unnumbered"></span>}}
+        | some ns => {{<span class="number">{{sectionNumberString ns}}</span>" "}}
       {{
-        <li {{if !num then #[("class", "unnumbered")] else #[]}}>
-          <a href=s!"{page}#{id}">{{title}}</a>
+        <li>
+          <a href=s!"{page}#{id}">{{sectionNum}}{{title}}</a>
           {{if children.isEmpty || depth == some 1 then .empty
             else {{<ol> {{children.map (·.html (depth.map Nat.pred))}} </ol>}} }}
         </li>

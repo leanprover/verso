@@ -65,12 +65,25 @@ instance [Monad m] : MonadLift HighlightHtmlM (HtmlT genre m) where
 
 open HtmlT
 
+def mkPartHeader (level : Nat) (contents : Html) (headerAttrs : Array (String × String) := #[]) : Html :=
+  .tag s!"h{level}" headerAttrs contents
+
 class ToHtml (genre : Genre) (m : Type → Type) (α : Type u) where
   toHtml (val : α) : HtmlT genre m Html
 
 class GenreHtml (genre : Genre) (m : Type → Type) where
+  /--
+  Customizable rendering of parts for genres.
+
+  The `partHtml` parameter is a callback to re-invoke HTML generation. Its `mkHeader` parameter
+  should create a suitable `h` tag, when provided with a level and contents. The default version
+  does only this; customized versions may add HTML `id` attributes, section numbering, etc.
+
+  Instances should not return tags other than `hN` at the provided level, because this custom
+  version is used only when the part's metadata is not `none`.
+  -/
   part
-    (partHtml : Part genre → Array (String × String) → HtmlT genre m Html)
+    (partHtml : Part genre → (mkHeader : Nat → Html → Html := mkPartHeader) → HtmlT genre m Html)
     (metadata : genre.PartMetadata) (contents : Part genre) : HtmlT genre m Html
   block
     (inlineHtml : Inline genre → HtmlT genre m Html)
@@ -136,21 +149,24 @@ partial def Block.toHtml [Monad m] [GenreHtml g m] : Block g → HtmlT g m Html
 instance [Monad m] [GenreHtml g m] : ToHtml g m (Block g) where
   toHtml := Block.toHtml
 
-partial def Part.toHtml [Monad m] [GenreHtml g m]
-    (p : Part g) (headerAttrs : Array (String × String) := #[]) : HtmlT g m Html :=
+partial def Part.toHtml [Monad m] [GenreHtml g m] [TraversePart g]
+    (p : Part g) (mkHeader : Nat → Html → Html := mkPartHeader) : HtmlT g m Html :=
   match p.metadata with
   | .none => do
     pure {{
       <section>
-        {{ .tag s!"h{(← options).headerLevel}" headerAttrs (.seq <| ← p.title.mapM ToHtml.toHtml ) }}
+        {{ mkHeader (← options).headerLevel (.seq <| ← p.title.mapM ToHtml.toHtml) }}
         {{← p.content.mapM ToHtml.toHtml  }}
-        {{← withOptions (fun o => {o with headerLevel := o.headerLevel + 1}) <| p.subParts.mapM Part.toHtml }}
+        {{← withOptions (fun o => {o with headerLevel := o.headerLevel + 1}) <|
+          p.subParts.mapM fun subPart =>
+            withReader (fun ctxt => {ctxt with traverseContext := TraversePart.inPart subPart ctxt.traverseContext}) <|
+              Part.toHtml (mkHeader := mkPartHeader) subPart }}
       </section>
     }}
   | some m =>
-    GenreHtml.part (fun p attrs => Part.toHtml p attrs) m p.withoutMetadata
+    GenreHtml.part (fun p mkHeader => Part.toHtml p (mkHeader := mkHeader)) m p.withoutMetadata
 
-instance [Monad m] [GenreHtml g m] : ToHtml g m (Part g) where
+instance [Monad m] [GenreHtml g m] [TraversePart g] : ToHtml g m (Part g) where
   toHtml p := Part.toHtml p
 
 instance : GenreHtml .none m where

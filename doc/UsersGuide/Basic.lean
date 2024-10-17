@@ -52,3 +52,10 @@ Docstrings can be included using the `docstring` directive. For instance,
 results in
 
 {docstring List.forM}
+
+# Index
+%%%
+number := false
+%%%
+
+{theIndex}

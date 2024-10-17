@@ -94,7 +94,6 @@ pre, code {
 }
 
 #toc ol {
-    counter-reset: part-number;
     padding-left: 0.5em;
 }
 
@@ -102,12 +101,59 @@ pre, code {
     list-style-type: none;
     font-family: var(--verso-structure-font-family);
     font-size: 12px;
+    padding: 0;
 }
 
-#toc ol li:not(.unnumbered)::before {
-    counter-increment: part-number;
-    content: counters(part-number, ".") ". ";
+#toc > ol > li {
+    margin-left: 1.5em;
+    position: relative;
+    margin-bottom: 1ex;
 }
+
+#toc > ol > li > a > .number, #toc > ol > li > a > .unnumbered {
+    width: 1.5em;
+    position: absolute;
+    left: -1.5em;
+    box-sizing: border-box;
+    font-variant-numeric: tabular-nums;
+}
+
+#toc > ol > li > ol > li {
+    margin-left: 2.25em;
+    position: relative;
+    margin-bottom: 0.5ex;
+}
+
+#toc > ol > li > ol > li > a > .number, #toc > ol > li > ol > li > a > .unnumbered {
+  width: 2.25em;
+  position: absolute;
+  left: -2.25em;
+  box-sizing: border-box;
+  font-variant-numeric: tabular-nums;
+}
+
+
+#toc > ol > li > ol > li > a > .number, #toc > ol > li > ol > li > a > .unnumbered {
+  width: 2.25em;
+  position: absolute;
+  left: -2.25em;
+  box-sizing: border-box;
+  font-variant-numeric: tabular-nums;
+}
+
+#toc > ol > li > ol > li > ol > li > a > .number, #toc > ol > li > ol > li > ol > li > a > .unnumbered {
+    width: 3.5em;
+    position: absolute;
+    left: -3.5em;
+    box-sizing: border-box;
+    font-variant-numeric: tabular-nums;
+}
+
+#toc > ol > li > ol > li > ol > li {
+    margin-left: 3.5em;
+    position: relative;
+}
+
 
 #toc a {
     color: #333;
@@ -117,11 +163,6 @@ pre, code {
 #toc a:hover {
     text-decoration: underline;
     color: #000;
-}
-
-
-main section {
-    counter-reset: part-number;
 }
 
 /******** Headerline ********/
@@ -191,9 +232,26 @@ main section {
     max-width: var(--verso-content-max-width);
 }
 
+main ol.section-toc, main .section-toc ol {
+    list-style-type: none;
+}
+
+main ol.section-toc {
+    padding-left: 0;
+}
+
+main .section-toc > li {
+    padding-bottom: 0.25em;
+}
+
+main .section-toc ol {
+    padding-left: 0.5em
+}
+
 main .section-toc li {
     font-weight: bold;
     font-family: var(--verso-structure-font-family);
+    margin-left: 1em;
 }
 
 main .section-toc a, main .section-toc a:visited {
