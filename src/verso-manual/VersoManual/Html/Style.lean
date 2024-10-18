@@ -62,10 +62,23 @@ pre, code {
     overflow: hidden;
 }
 
-.with-toc #toc {
-    overflow-y: auto;
+.with-toc #toc-area {
     grid-area: toc;
     height: 100vh;
+    display: grid;
+    grid-template-columns: auto;
+    grid-template-rows: min-content 1fr;
+    grid-template-areas:  "toggle" "tocnav";
+
+}
+
+.with-toc #top-menu {
+    grid-area: toggle;
+}
+
+.with-toc #toc {
+    overflow-y: auto;
+    grid-area: tocnav;
 }
 
 .with-toc > header {
@@ -77,19 +90,37 @@ pre, code {
     overflow-y: auto;
 }
 
-/******** Table of Contents ********/
-
-#toc {
-    width: 0em;
-    transition: 0.4s;
-    background-color: var(--verso-toc-background-color);
+.with-toc > #top-menu {
+    grid-area: burger
 }
 
-#toc:has(>#toggle-toc:checked) {
+/******** Table of Contents ********/
+
+#toc-area {
+    background-color: var(--verso-toc-background-color);
+    width: 0em;
+    transition: 0.4s;
+}
+
+#toc-area > * {
+  width: 15em;
+}
+
+#toc-area:has(#toggle-toc:checked) {
     width: 15em;
 }
 
-#toc #toggle-toc {
+#toc {
+    transition: transform 0.4s, width 0.1s linear 0.4s;
+    transform: translateX(-20em);
+}
+
+#toc-area:has(#toggle-toc:checked) #toc {
+    transform: translateX(0);
+}
+
+
+#toggle-toc {
     display: none;
 }
 
@@ -235,6 +266,7 @@ header #print {
     text-align: right;
 }
 
+/*
 header #print > *, header #controls > * {
     height: 3em;
     width: 3em;
@@ -243,11 +275,39 @@ header #print > *, header #controls > * {
     text-align: center;
     vertical-align: center;
 }
+*/
 
 
-header #toggle-toc-click {
+#toggle-toc-click {
     cursor: pointer;
+    width: 1em;
+    height: 1em;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 0.5em;
 }
+
+#toggle-toc-click .line {
+    display: block;
+    height: 0.3em;
+    width: 100%;
+    border-radius: 0.2em;
+    background: #0e2431;
+    transition: transform 0.4s ease-in-out;
+    transform-origin: center left;
+}
+
+#toc-area:has(#toggle-toc:checked) #toggle-toc-click .line1 {
+    transform: rotate(45deg);
+}
+#toc-area:has(#toggle-toc:checked) #toggle-toc-click .line2 {
+    transform: scale(0);
+}
+#toc-area:has(#toggle-toc:checked) #toggle-toc-click .line3 {
+    transform: rotate(-45deg);
+}
+
 
 /******** Text ********/
 
