@@ -22,6 +22,7 @@ open Std (HashSet)
 open Verso.Doc.Elab.PartElabM
 open Verso.Code
 open Verso.ArgParse
+open Verso.Code.Highlighted.WebAssets
 
 open SubVerso.Highlighting
 
@@ -396,6 +397,8 @@ def docstring.descr : BlockDescr where
   toTeX := some <| fun _goI goB _id _info contents => contents.mapM goB
   extraCss := [highlightingStyle, docstringStyle]
   extraJs := [highlightingJs]
+  extraJsFiles := [("popper.js", popper), ("tippy.js", tippy)]
+  extraCssFiles := [("tippy-border.css", tippy.border.css)]
 where
   md2html (goB) (str : String) : Verso.Doc.Html.HtmlT Manual (ReaderT ExtensionImpls IO) Verso.Output.Html :=
     open Verso.Doc.Html in
