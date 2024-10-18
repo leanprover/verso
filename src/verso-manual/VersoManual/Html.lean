@@ -134,40 +134,44 @@ def page
     (extraCss : HashSet String)
     (extraJs : HashSet String)
     (extraStylesheets : List String := [])
-    (extraJsFiles : Array String := #[]) : Html := {{
-<html>
-  <head>
-    <meta charset="utf-8"/>
-    <title>{{textTitle}}</title>
-    <link rel="stylesheet" href="/book.css" />
-    <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js" integrity="sha384-zbcZAIxlvJtNE3Dp5nxLXdXtXyxwOdnILY1TDPVmKFhl4r4nSUG1r8bcFXGVa4Te" crossorigin="anonymous"></script>
-    {{extraJsFiles.map ({{<script src=s!"{·}"></script>}})}}
-    {{extraStylesheets.map (fun url => {{<link rel="stylesheet" href={{url}}/> }})}}
-    {{extraCss.toArray.map ({{<style>{{Html.text false ·}}</style>}})}}
-    {{extraJs.toArray.map ({{<script>{{Html.text false ·}}</script>}})}}
-  </head>
-  <body>
-    <div class="with-toc">
-      <header>
-        <h1>{{htmlTitle}}</h1>
-        <div id="controls">
-          <label for="toggle-toc" id="toggle-toc-click">"📖"</label>
+    (extraJsFiles : Array String := #[]) : Html :=
+  let relativeRoot :=
+    String.join <| "./" :: path.toList.map (fun _ => "../")
+  {{
+    <html>
+      <head>
+        <meta charset="utf-8"/>
+        <title>{{textTitle}}</title>
+        <link rel="stylesheet" href="/book.css" />
+        <script>s!"const __versoSiteRoot =\"{relativeRoot}\""</script>
+        <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js" integrity="sha384-zbcZAIxlvJtNE3Dp5nxLXdXtXyxwOdnILY1TDPVmKFhl4r4nSUG1r8bcFXGVa4Te" crossorigin="anonymous"></script>
+        {{extraJsFiles.map ({{<script src=s!"{·}"></script>}})}}
+        {{extraStylesheets.map (fun url => {{<link rel="stylesheet" href={{url}}/> }})}}
+        {{extraCss.toArray.map ({{<style>{{Html.text false ·}}</style>}})}}
+        {{extraJs.toArray.map ({{<script>{{Html.text false ·}}</script>}})}}
+      </head>
+      <body>
+        <div class="with-toc">
+          <header>
+            <h1>{{htmlTitle}}</h1>
+            <div id="controls">
+              <label for="toggle-toc" id="toggle-toc-click">"📖"</label>
+            </div>
+            <div id="print">
+              <span>"🖨"</span>
+            </div>
+          </header>
+          <nav id="toc">
+            <input type="checkbox" id="toggle-toc" checked="checked"/>
+            {{toc.localHtml path}}
+          </nav>
+          <main>
+            {{contents}}
+          </main>
         </div>
-        <div id="print">
-          <span>"🖨"</span>
-        </div>
-      </header>
-      <nav id="toc">
-        <input type="checkbox" id="toggle-toc" checked="checked"/>
-        {{toc.localHtml path}}
-      </nav>
-      <main>
-        {{contents}}
-      </main>
-    </div>
-  </body>
-</html>
-}}
+      </body>
+    </html>
+  }}
 
 def relativize (path : Path) (html : Html) : Html :=
   html.visitM (m := ReaderT Path Id) (tag := rwTag) |>.run path
