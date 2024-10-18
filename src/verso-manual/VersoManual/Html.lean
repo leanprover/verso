@@ -59,7 +59,7 @@ partial def Toc.html (depth : Option Nat) : Toc → Html
 partial def Toc.localHtml (path : Path) (toc : Toc) : Html := Id.run do
   let mut idCounter := 0
   let mut toc := toc
-  let mut out : Html := splitTocElem true false idCounter (linkify #[] none toc.title) toc.children
+  let mut out : Html := splitTocElem true path.isEmpty idCounter (linkify #[] none toc.title) toc.children
   let mut currentPath := #[]
   for lvl in path do
     currentPath := currentPath.push lvl
