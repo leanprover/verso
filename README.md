@@ -36,6 +36,10 @@ Please consult the in-progress Verso manual
 for further details. Today, Verso is usable for running a website and
 blog, while the other genres are still under development.
 
+Verso's design is primarily inspired by
+[Scribble](https://docs.racket-lang.org/scribble/index.html) and
+[Sphinx](https://www.sphinx-doc.org/en/master/).
+
 ## Contributions
 
 The project is currently undergoing change at a rapid pace. If you'd

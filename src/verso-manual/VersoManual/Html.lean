@@ -16,6 +16,22 @@ inductive Toc where
   | entry (title : Html) (path : Path) (id : String) (number : Option (Array Numbering)) (children : Array Toc)
 deriving Repr
 
+def Toc.title : Toc → Html
+ | .entry title .. => title
+
+def Toc.path : Toc → Path
+ | .entry _ path .. => path
+
+def Toc.id : Toc → Option String
+ | .entry _ _ id .. => id
+
+def Toc.sectionNum : Toc → Option (Array Numbering)
+ | .entry _ _ _ num .. => num
+
+def Toc.children : Toc → Array Toc
+ | .entry _ _ _ _ children => children
+
+
 /--
 Convert a `Toc` to `HTML`.
 
@@ -40,6 +56,68 @@ partial def Toc.html (depth : Option Nat) : Toc → Html
         </li>
       }}
 
+partial def Toc.localHtml (path : Path) (toc : Toc) : Html := Id.run do
+  let mut idCounter := 0
+  let mut toc := toc
+  let mut out : Html := splitTocElem true false idCounter (linkify #[] none toc.title) toc.children
+  let mut currentPath := #[]
+  for lvl in path do
+    currentPath := currentPath.push lvl
+    if let some nextStep := toc.children.find? (·.path == currentPath) then
+      idCounter := idCounter + 1
+      toc := nextStep
+      let title := sectionNum toc.sectionNum ++ " " ++ toc.title
+      -- In the last position, when `path == currentPath`, the ToC should default to open
+      out := out ++ splitTocElem false (path == currentPath) idCounter (linkify currentPath toc.id title) toc.children
+    else break
+  {{<div class="split-tocs">{{out}}</div>}}
+where
+  splitTocElem (isTop thisPage : Bool) (id : Nat) (title : Html) (children : Array Toc) :=
+    let toggleId := s!"--verso-manual-toc-{id}"
+    let «class» := if isTop then "split-toc book" else "split-toc"
+    let checked := if thisPage then #[("checked", "checked")] else #[]
+    {{
+      <div class={{«class»}}>
+        <div class="title">
+          <label for={{toggleId}} class="toggle-split-toc">
+            <input
+              type="checkbox"
+              class="toggle-split-toc"
+              id={{toggleId}}
+              {{checked}}/>
+          </label>
+          {{title}}
+        </div>
+        <table>
+          {{children.map fun c =>
+            let current :=
+              if c.path.isPrefixOf path && !thisPage then
+                #[("class", "current")]
+              else #[]
+            {{<tr {{current}}>
+                <td class="num">
+                  {{if let some ns := c.sectionNum then sectionNumberString ns else .empty}}
+                </td>
+                <td>
+                  {{linkify c.path c.id c.title}}
+                </td>
+              </tr>}}
+          }}
+        </table>
+      </div>
+    }}
+  toUrl (path : Path) : String :=
+    if path.isEmpty then "/" else String.join <| path.toList.map ("/" ++ ·)
+  linkify (path : Path) (id : Option String) (html : Html) :=
+    match html with
+    | .tag "a" _ _ => html
+    | other => {{<a href=s!"{toUrl path}{id.map ("#" ++ ·) |>.getD ""}">{{other}}</a>}}
+  sectionNum num :=
+      match num with
+      | none => {{<span class="unnumbered"></span>}}
+      | some ns => {{<span class="number">{{sectionNumberString ns}}</span>" "}}
+
+
 def titlePage (title : Html) (authors : List String) (intro : Html) : Html := {{
   <div class="titlepage">
     <h1>{{title}}</h1>
@@ -50,7 +128,9 @@ def titlePage (title : Html) (authors : List String) (intro : Html) : Html := {{
   </div>
 }}
 
-def page (toc : Array Toc) (textTitle : String) (htmlTitle : Html) (contents : Html)
+def page
+    (toc : Toc) (path : Path)
+    (textTitle : String) (htmlTitle : Html) (contents : Html)
     (extraCss : HashSet String)
     (extraJs : HashSet String)
     (extraStylesheets : List String := [])
@@ -79,7 +159,7 @@ def page (toc : Array Toc) (textTitle : String) (htmlTitle : Html) (contents : H
       </header>
       <nav id="toc">
         <input type="checkbox" id="toggle-toc" checked="checked"/>
-        <ol>{{toc.map (·.html (some 3))}}</ol>
+        {{toc.localHtml path}}
       </nav>
       <main>
         {{contents}}

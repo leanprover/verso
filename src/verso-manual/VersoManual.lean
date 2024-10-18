@@ -237,15 +237,16 @@ partial def toc (depth : Nat) (opts : Html.Options Manual IO)
     let children ← sub.mapM (fun p => toc depth' opts (ctxt'.inPart p) state linkTargets p)
     pure <| .entry titleHtml ctxt'.path v.toString (ctxt.sectionNumber.mapM _root_.id) children
 
-def page (toc : Array Html.Toc) (textTitle : String) (htmlTitle contents : Html) (state : TraverseState) (config : Config) (extraJs : List String := []) : Html :=
-  Html.page toc textTitle htmlTitle contents
+def page (toc : Array Html.Toc) (path : Path) (textTitle : String) (htmlTitle contents : Html) (state : TraverseState) (config : Config) (extraJs : List String := []) : Html :=
+  let toc := .entry htmlTitle #[] "" (some #[]) toc
+  Html.page toc path textTitle htmlTitle contents
     state.extraCss (state.extraJs.insertMany extraJs)
     (extraStylesheets := config.extraCss ++ state.extraCssFiles.toList.map ("/-verso-css/" ++ ·.1))
     (extraJsFiles := config.extraJs.toArray ++ state.extraJsFiles.map ("/-verso-js/" ++ ·.1))
 
 open Output.Html in
 def xref (toc : Array Html.Toc) (xrefJson : String) (findJs : String) (state : TraverseState) (config : Config) : Html :=
-  page toc "Cross-Reference Redirection" "Cross-Reference Redirection" {{
+  page toc #["find"] "Cross-Reference Redirection" "Cross-Reference Redirection" {{
     <section>
       <h1 id="title"></h1>
       <div id="message"></div>
@@ -317,7 +318,7 @@ where
         h.putStr contents
     IO.FS.withFile (dir.join "index.html") .write fun h => do
       h.putStrLn Html.doctype
-      h.putStrLn (page toc text.titleString titleHtml pageContent state config).asString
+      h.putStrLn (page toc ctxt.path text.titleString titleHtml pageContent state config).asString
 
 open Verso.Output.Html in
 def emitHtmlMulti (logError : String → IO Unit) (config : Config)
@@ -374,7 +375,7 @@ where
     ensureDir dir
     IO.FS.withFile (dir.join "index.html") .write fun h => do
       h.putStrLn Html.doctype
-      h.putStrLn (Html.relativize ctxt.path <| page bookContents part.titleString pageTitle pageContent state config).asString
+      h.putStrLn (Html.relativize ctxt.path <| page bookContents ctxt.path part.titleString pageTitle pageContent state config).asString
     if depth > 0 ∧ part.htmlSplit != .never then
       for p in part.subParts do
         let nextFile := p.metadata.bind (·.file) |>.getD (p.titleString.sluggify.toString)

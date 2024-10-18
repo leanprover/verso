@@ -93,68 +93,6 @@ pre, code {
     display: none;
 }
 
-#toc ol {
-    padding-left: 0.5em;
-}
-
-#toc ol li {
-    list-style-type: none;
-    font-family: var(--verso-structure-font-family);
-    font-size: 12px;
-    padding: 0;
-}
-
-#toc > ol > li {
-    margin-left: 1.5em;
-    position: relative;
-    margin-bottom: 1ex;
-}
-
-#toc > ol > li > a > .number, #toc > ol > li > a > .unnumbered {
-    width: 1.5em;
-    position: absolute;
-    left: -1.5em;
-    box-sizing: border-box;
-    font-variant-numeric: tabular-nums;
-}
-
-#toc > ol > li > ol > li {
-    margin-left: 2.25em;
-    position: relative;
-    margin-bottom: 0.5ex;
-}
-
-#toc > ol > li > ol > li > a > .number, #toc > ol > li > ol > li > a > .unnumbered {
-  width: 2.25em;
-  position: absolute;
-  left: -2.25em;
-  box-sizing: border-box;
-  font-variant-numeric: tabular-nums;
-}
-
-
-#toc > ol > li > ol > li > a > .number, #toc > ol > li > ol > li > a > .unnumbered {
-  width: 2.25em;
-  position: absolute;
-  left: -2.25em;
-  box-sizing: border-box;
-  font-variant-numeric: tabular-nums;
-}
-
-#toc > ol > li > ol > li > ol > li > a > .number, #toc > ol > li > ol > li > ol > li > a > .unnumbered {
-    width: 3.5em;
-    position: absolute;
-    left: -3.5em;
-    box-sizing: border-box;
-    font-variant-numeric: tabular-nums;
-}
-
-#toc > ol > li > ol > li > ol > li {
-    margin-left: 3.5em;
-    position: relative;
-}
-
-
 #toc a {
     color: #333;
     text-decoration: none;
@@ -163,6 +101,103 @@ pre, code {
 #toc a:hover {
     text-decoration: underline;
     color: #000;
+}
+
+#toc .split-tocs {
+    padding-left: 0.5em;
+    padding-right: 0.5em;
+    margin-top: 1.5em;
+}
+
+#toc .split-toc.book {
+    margin-bottom: 1.5em;
+}
+
+#toc .split-toc.book .title {
+    font-weight: 600;
+}
+
+#toc .split-toc {
+    margin-bottom: 1em;
+    font-family: var(--verso-structure-font-family);
+}
+
+
+#toc .split-toc label.toggle-split-toc {
+}
+
+#toc .split-toc .title {
+    display: flex;
+    flex-wrap: nowrap;
+}
+
+#toc .split-toc label.toggle-split-toc input[type="checkbox"] {
+    display: inline-block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    opacity: 0;
+    height: 0;
+    width: 0;
+    z-index: -10;
+}
+
+#toc .split-toc label.toggle-split-toc::before {
+    width: 1em;
+    height: 1em;
+    display: inline-block;
+    background-color: black;
+    content: ' ';
+    transition: ease 0.2s;
+    margin-right: 0.5em;
+    clip-path: polygon(100% 0, 0 0, 50% 100%);
+    width: 0.6em;
+    height: 0.6em;
+}
+
+#toc .split-toc label.toggle-split-toc:has(input[type="checkbox"]:not(:checked))::before {
+  transform: rotate(-90deg);
+}
+
+#toc .split-toc > :not(:first-child) {
+    max-height: 0px;
+    display: block;
+    overflow: hidden;
+    transition: all 0.1s ease-in;
+    margin-left: 0.25em;
+}
+
+#toc .split-toc:has(.toggle-split-toc input[type="checkbox"]:not(:checked)) > :not(:first-child) {
+    padding: 0;
+    margin: 0;
+}
+
+#toc .split-toc:has(.toggle-split-toc input[type="checkbox"]:checked) > :not(:first-child) {
+    max-height: 100%;
+}
+
+#toc .split-toc table {
+    border-left: 1px dotted;
+    padding-left: 1.2em;
+    padding-top: 0.2em;
+}
+
+#toc .split-toc tr {
+    padding-top: 0.1em;
+}
+
+#toc .split-toc td {
+    vertical-align: top;
+    font-size: 90%;
+}
+
+#toc .split-toc .current td:not(.num) {
+    text-decoration-line: underline;
+    text-decoration-style: dotted;
+}
+
+#toc .split-toc td.num {
+    font-variant-numeric: tabular-nums;
 }
 
 /******** Headerline ********/
