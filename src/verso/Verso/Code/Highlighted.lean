@@ -972,7 +972,8 @@ window.onload = () => {
         }
     }
     // Add hovers
-    fetch(\"/-verso-docs.json\").then((resp) => resp.json()).then((versoDocData) => {
+    let siteRoot = __versoSiteRoot ? __versoSiteRoot : \"/\";
+    fetch(siteRoot + \"-verso-docs.json\").then((resp) => resp.json()).then((versoDocData) => {
 
       const defaultTippyProps = {
         /* DEBUG -- remove the space: * /
