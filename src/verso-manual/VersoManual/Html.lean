@@ -154,17 +154,20 @@ def page
         <div class="with-toc">
           <header>
             <h1>{{htmlTitle}}</h1>
-            <div id="controls">
-              <label for="toggle-toc" id="toggle-toc-click">"📖"</label>
-            </div>
-            <div id="print">
-              <span>"🖨"</span>
-            </div>
           </header>
-          <nav id="toc">
-            <input type="checkbox" id="toggle-toc" checked="checked"/>
-            {{toc.localHtml path}}
-          </nav>
+          <div id="toc-area">
+            <div id="top-menu">
+              <label for="toggle-toc" id="toggle-toc-click">
+                <span class="line line1"/>
+                <span class="line line2"/>
+                <span class="line line3"/>
+              </label>
+            </div>
+            <nav id="toc">
+              <input type="checkbox" id="toggle-toc" checked="checked"/>
+              {{toc.localHtml path}}
+            </nav>
+          </div>
           <main>
             {{contents}}
           </main>
