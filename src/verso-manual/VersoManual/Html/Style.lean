@@ -24,6 +24,9 @@ def pageStyle : String := r####"
     --verso-toc-background-color: #fafafa;
     --verso-toc-text-color: black;
 
+    /* How long should the ToC animation take? */
+    --verso-toc-transition-time: 0.4s;
+
     /** Variables that control the “burger menu” appearance **/
     --verso-burger-height: 1.25em;
     --verso-burger-width: 1.25em;
@@ -116,7 +119,7 @@ pre, code {
     background-color: var(--verso-toc-background-color);
     color: var(--verso-toc-text-color);
     width: 0em;
-    transition: 0.4s;
+    transition: var(--verso-toc-transition-time);
 }
 
 #toc-area > * {
@@ -128,7 +131,7 @@ pre, code {
 }
 
 #toc {
-    transition: transform 0.4s, width 0.1s linear 0.4s;
+    transition: transform var(--verso-toc-transition-time), width 0.1s linear var(--verso-toc-transition-time);
     transform: translateX(-20em);
 }
 
@@ -314,7 +317,7 @@ header #print > *, header #controls > * {
     background-color: var(--verso-burger-toc-hidden-color);
     /* The background color has a transition in case a theme needs to override the line color
        when the ToC menu is open */
-    transition: background-color 0.4s ease-in-out, transform 0.4s ease-in-out;
+    transition: background-color var(--verso-toc-transition-time) ease-in-out, transform var(--verso-toc-transition-time) ease-in-out;
 }
 
 #toc-area:has(#toggle-toc:checked) #toggle-toc-click .line {
