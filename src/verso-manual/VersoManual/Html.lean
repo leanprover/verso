@@ -62,7 +62,7 @@ partial def Toc.localHtml (path : Path) (toc : Toc) : Html := Id.run do
   let mut toc := toc
   let mut fallbackId : Nat := 0
   let rootId := "----bookRoot"
-  let mut out : Html := splitTocElem true path.isEmpty rootId (linkify #[] none toc.title) toc.children
+  let mut out : Html := splitTocElem true path.isEmpty rootId .empty (linkify #[] none toc.title) toc.children
   let mut currentPath := #[]
   for lvl in path do
     currentPath := currentPath.push lvl
@@ -73,19 +73,18 @@ partial def Toc.localHtml (path : Path) (toc : Toc) : Html := Id.run do
         else
           fallbackId := fallbackId + 1
           pure s!"----header{fallbackId}"
-      let title := sectionNum toc.sectionNum ++ " " ++ toc.title
       -- In the last position, when `path == currentPath`, the ToC should default to open
-      out := out ++ splitTocElem false (path == currentPath) entryId (linkify currentPath toc.id title) toc.children
+      out := out ++ splitTocElem false (path == currentPath) entryId (sectionNum toc.sectionNum) (linkify currentPath toc.id toc.title) toc.children
     else break
   {{<div class="split-tocs">{{out}}</div>}}
 where
-  splitTocElem (isTop thisPage : Bool) (chapterId : String) (title : Html) (children : Array Toc) :=
+  splitTocElem (isTop thisPage : Bool) (chapterId : String) («section» : Html) (title : Html) (children : Array Toc) :=
     let toggleId := s!"--verso-manual-toc-{chapterId}"
     let «class» := if isTop then "split-toc book" else "split-toc"
     let checked := if thisPage then #[("checked", "checked")] else #[]
     {{
       <div class={{«class»}}>
-        <div class={{"title" ++ if thisPage && !isTop then " current" else ""}}>
+        <div class="title">
           {{if children.isEmpty then {{
               <span class="no-toggle"/>
             }}
@@ -99,7 +98,10 @@ where
               </label>
             }}
           }}
-          {{title}}
+          {{«section»}}
+          <span class={{if thisPage && !isTop then "current" else ""}}>
+            {{title}}
+          </span>
         </div>
         {{if children.isEmpty then .empty
           else {{
@@ -137,7 +139,7 @@ where
   sectionNum num :=
       match num with
       | none => {{<span class="unnumbered"></span>}}
-      | some ns => {{<span class="number">{{sectionNumberString ns}}</span>" "}}
+      | some ns => {{<span class="number">{{sectionNumberString ns}}</span>" "}}
 
 
 def titlePage (title : Html) (authors : List String) (intro : Html) : Html := {{
