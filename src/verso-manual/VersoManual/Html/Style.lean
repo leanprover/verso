@@ -255,7 +255,7 @@ pre, code {
     font-size: 90%;
 }
 
-#toc .split-toc .current td:not(.num), #toc .split-toc .title.current {
+#toc .split-toc .current td:not(.num), #toc .split-toc .title .current {
     text-decoration-line: underline;
     text-decoration-style: dotted;
 }
