@@ -382,13 +382,14 @@ def theIndex.descr : BlockDescr where
 where
   indexCss := r###"
     main .theIndex {
-      column-width: 14em;
       padding-left: 0;
       font-family: var(--verso-text-font-family);
     }
 
     main .theIndex nav {
-      column-span: all;
+      position: sticky;
+      top: 0;
+      background: white;
     }
 
     main .theIndex nav ol {
@@ -427,6 +428,9 @@ where
 
     main .theIndex .division > ol {
       padding-left: 0;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 3em;
     }
 
    main .theIndex .division > ol > li {
@@ -436,7 +440,6 @@ where
     main .theIndex .division ol ol {
       padding-left: 1em;
     }
-
 
     main .theIndex .division {
       break-inside: avoid;
