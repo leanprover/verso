@@ -406,3 +406,25 @@ main .section-toc a:hover {
     text-decoration: underline;
 }
 "####
+
+def pageStyleJs : String := r####"
+function saveCheckboxesInit() {
+  for (checkbox of document.querySelectorAll('#toc input[type="checkbox"]')) {
+    const value = localStorage.getItem(checkbox.id);
+    if (value === "true") {
+        checkbox.checked = true;
+    } else if (value === "false") {
+        checkbox.checked = false;
+    } // if not found, do nothing
+    checkbox.addEventListener("change", persistCheckbox);
+  }
+}
+
+function persistCheckbox() {
+  const value = this.checked; // in a handler, 'this' is the element with the handler on it
+  const id = this.id;
+  localStorage.setItem(this.id, value ? "true" : "false");
+}
+
+window.addEventListener("DOMContentLoaded", saveCheckboxesInit);
+"####
