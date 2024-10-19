@@ -26,11 +26,19 @@ jobs:
         run: |
           lean --version
 
+      - name: Compute short SHA
+        id: shortSHA
+        run: echo "short_sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
       - name: Cache .lake
         uses: actions/cache@v4
         with:
           path: .lake
-          key: ${{ runner.os }}-${{ hashFiles('lake-manifest.json') }}-${{ hashFiles('lean-toolchain') }}
+          # The SHA is in the key to get the most recent cache possible, rather than just saving a single one for each Lean/deps version and not touching it.
+          key: ${{ runner.os }}-${{ hashFiles('lake-manifest.json') }}-${{ hashFiles('lean-toolchain') }}-${{ steps.shortSHA.outputs.short_sha }}
+          # Try to restore cache for same OS/Lean/deps, but don't get less specific, because Lake isn't always happy to get build product version mismatches
+          restore-keys: |
+            ${{ runner.os }}-${{ hashFiles('lake-manifest.json') }}-${{ hashFiles('lean-toolchain') }}-
 
       - name: Build the project
         run: |
