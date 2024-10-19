@@ -119,7 +119,7 @@ pre, code {
     background-color: var(--verso-toc-background-color);
     color: var(--verso-toc-text-color);
     width: 0em;
-    transition: var(--verso-toc-transition-time);
+    transition: width var(--verso-toc-transition-time);
 }
 
 #toc-area > * {
