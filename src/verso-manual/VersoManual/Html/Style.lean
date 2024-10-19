@@ -155,13 +155,13 @@ pre, code {
 }
 
 #toc .split-tocs {
-    padding-left: 0.5em;
+    padding-left: 0;
     padding-right: 0.5em;
     margin-top: 1.5em;
 }
 
 #toc .split-toc.book {
-    margin-bottom: 1.5em;
+    margin-bottom: 2em;
 }
 
 #toc .split-toc.book .title {
@@ -169,7 +169,7 @@ pre, code {
 }
 
 #toc .split-toc {
-    margin-bottom: 1em;
+    margin-bottom: 1.5em;
     font-family: var(--verso-structure-font-family);
 }
 
@@ -193,29 +193,46 @@ pre, code {
     z-index: -10;
 }
 
+:root {
+    --verso-toc-triangle-width: 0.6em;
+    --verso-toc-triangle-height: 0.6em;
+    --verso-toc-triangle-left-space: 0.5em;
+    --verso-toc-triangle-margin: 0.5em;
+}
+
 #toc .split-toc label.toggle-split-toc::before {
-    width: 1em;
-    height: 1em;
+    width: calc(var(--verso-toc-triangle-width) + var(--verso-toc-triangle-left-space));
+    height: var(--verso-toc-triangle-height);
     display: inline-block;
     background-color: black;
     content: ' ';
     transition: ease 0.2s;
-    margin-right: 0.5em;
-    clip-path: polygon(100% 0, 0 0, 50% 100%);
-    width: 0.6em;
-    height: 0.6em;
+    margin-right: var(--verso-toc-triangle-margin);
+    clip-path: polygon(100% 0, var(--verso-toc-triangle-left-space) 0, calc(var(--verso-toc-triangle-left-space) + calc(calc(100% - var(--verso-toc-triangle-left-space)) / 2)) 100%);
+    transform-origin:
+        /* X axis: left spacing plus half the width to get the center*/
+        calc(var(--verso-toc-triangle-left-space) + calc(var(--verso-toc-triangle-width) / 2))
+        /* Y axis */
+        center;
 }
 
 #toc .split-toc label.toggle-split-toc:has(input[type="checkbox"]:not(:checked))::before {
-  transform: rotate(-90deg);
+    transform: rotate(-90deg);
+}
+
+#toc .split-toc .no-toggle {
+    /* Line up triangle-less content with the triangled content */
+    width: calc(var(--verso-toc-triangle-width) + var(--verso-toc-triangle-left-space));
+    margin-right: var(--verso-toc-triangle-margin);
+    display: inline-block;
 }
 
 #toc .split-toc > :not(:first-child) {
     max-height: 0px;
     display: block;
     overflow: hidden;
-    transition: all 0.1s ease-in;
-    margin-left: 0.25em;
+    /* Line it up with the point of the disclosure triangle */
+    margin-left: calc(var(--verso-toc-triangle-left-space) + calc(var(--verso-toc-triangle-width) / 2));
 }
 
 #toc .split-toc:has(.toggle-split-toc input[type="checkbox"]:not(:checked)) > :not(:first-child) {
@@ -238,7 +255,7 @@ pre, code {
     font-size: 90%;
 }
 
-#toc .split-toc .current td:not(.num) {
+#toc .split-toc .current td:not(.num), #toc .split-toc .title.current {
     text-decoration-line: underline;
     text-decoration-style: dotted;
 }
