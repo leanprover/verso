@@ -233,10 +233,6 @@ pre, code {
     padding-top: 0.2em;
 }
 
-#toc .split-toc tr {
-    padding-top: 0.1em;
-}
-
 #toc .split-toc td {
     vertical-align: top;
     font-size: 90%;
@@ -249,6 +245,11 @@ pre, code {
 
 #toc .split-toc td.num {
     font-variant-numeric: tabular-nums;
+}
+
+/* Add a bit of visual space between numbered and unnumbered rows */
+#toc .split-toc tr:has(+ tr.unnumbered) td, #toc .split-toc tr.unnumbered:has(+ tr.numbered) td {
+  padding-bottom: 0.5em;
 }
 
 /******** Headerline ********/

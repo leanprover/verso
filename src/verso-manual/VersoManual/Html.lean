@@ -90,13 +90,18 @@ where
         </div>
         <table>
           {{children.map fun c =>
-            let current :=
-              if c.path.isPrefixOf path && !thisPage then
-                #[("class", "current")]
-              else #[]
-            {{<tr {{current}}>
+            let classes := String.intercalate " " <|
+              (if c.path.isPrefixOf path && !thisPage then
+                ["current"]
+               else []) ++
+              (if c.sectionNum.isSome then
+                ["numbered"]
+               else ["unnumbered"])
+
+            {{<tr class={{classes}}>
                 <td class="num">
-                  {{if let some ns := c.sectionNum then sectionNumberString ns else .empty}}
+                  {{if let some ns := c.sectionNum then sectionNumberString ns
+                    else .empty}}
                 </td>
                 <td>
                   {{linkify c.path c.id c.title}}
