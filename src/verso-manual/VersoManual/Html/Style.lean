@@ -73,22 +73,16 @@ pre, code {
 .with-toc {
     display: grid;
     grid-template-columns: min-content auto;
-    grid-template-rows: min-content 1fr;
+    grid-template-rows: auto;
     grid-template-areas:
-        "toc header"
         "toc text";
     height: 100vh;
     overflow: hidden;
 }
 
-.with-toc #toc-area {
+.with-toc #toc {
     grid-area: toc;
     height: 100vh;
-    display: grid;
-    grid-template-columns: auto;
-    grid-template-rows: min-content 1fr;
-    grid-template-areas:  "toggle" "tocnav";
-
 }
 
 .with-toc #top-menu {
@@ -97,7 +91,6 @@ pre, code {
 
 .with-toc #toc {
     overflow-y: auto;
-    grid-area: tocnav;
 }
 
 .with-toc > header {
@@ -115,18 +108,18 @@ pre, code {
 
 /******** Table of Contents ********/
 
-#toc-area {
+#toc {
     background-color: var(--verso-toc-background-color);
     color: var(--verso-toc-text-color);
     width: 0em;
     transition: width var(--verso-toc-transition-time);
 }
 
-#toc-area > * {
+#toc {
   width: 15em;
 }
 
-#toc-area:has(#toggle-toc:checked) {
+#toc:has(#toggle-toc:checked) {
     width: 15em;
 }
 
@@ -135,7 +128,7 @@ pre, code {
     transform: translateX(-20em);
 }
 
-#toc-area:has(#toggle-toc:checked) #toc {
+#toc:has(#toggle-toc:checked) {
     transform: translateX(0);
 }
 
@@ -269,6 +262,13 @@ pre, code {
   padding-bottom: 0.5em;
 }
 
+#logo {
+  max-width: min(80%, calc(100% - calc(var(--verso-burger-width) + 1em)));
+  max-height: 4em;
+  display: block;
+  margin-left: calc(var(--verso-burger-width) + 1em); /* Make space for the menu button */
+}
+
 /******** Headerline ********/
 
 header {
@@ -321,10 +321,12 @@ header #print > *, header #controls > * {
     box-sizing: content-box;
     width: var(--verso-burger-height);
     height: var(--verso-burger-height);
-    display: flex;
+    display: inline-flex;
     flex-direction: column;
     justify-content: space-between;
     padding: 0.5em;
+    position: absolute;
+    z-index: 100; /* Show on top of ToC/content */
 }
 
 #toggle-toc-click .line {
@@ -338,19 +340,19 @@ header #print > *, header #controls > * {
     transition: background-color var(--verso-toc-transition-time) ease-in-out, transform var(--verso-toc-transition-time) ease-in-out;
 }
 
-#toc-area:has(#toggle-toc:checked) #toggle-toc-click .line {
+body:has(#toggle-toc:checked) #toggle-toc-click .line {
     background-color: var(--verso-burger-toc-visible-color);
 }
 
-#toc-area:has(#toggle-toc:checked) #toggle-toc-click .line1 {
+body:has(#toggle-toc:checked) #toggle-toc-click .line1 {
     transform:
         translateY(calc(calc(var(--verso-burger-height) - var(--verso-burger-line-width)) / 2))
         rotate(45deg);
 }
-#toc-area:has(#toggle-toc:checked) #toggle-toc-click .line2 {
+body:has(#toggle-toc:checked) #toggle-toc-click .line2 {
     transform: scaleX(0);
 }
-#toc-area:has(#toggle-toc:checked) #toggle-toc-click .line3 {
+body:has(#toggle-toc:checked) #toggle-toc-click .line3 {
     transform:
         translateY(calc(-1 * calc(calc(var(--verso-burger-height) - var(--verso-burger-line-width)) / 2)))
         rotate(-45deg);

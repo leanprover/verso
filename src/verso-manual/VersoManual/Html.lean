@@ -155,6 +155,7 @@ def page
     (textTitle : String) (htmlTitle : Html) (contents : Html)
     (extraCss : HashSet String)
     (extraJs : HashSet String)
+    (logo : Option String := none)
     (extraStylesheets : List String := [])
     (extraJsFiles : Array String := #[]) : Html :=
   let relativeRoot :=
@@ -174,23 +175,17 @@ def page
         {{extraJs.toArray.map ({{<script>{{Html.text false ·}}</script>}})}}
       </head>
       <body>
+        <label for="toggle-toc" id="toggle-toc-click">
+          <span class="line line1"/>
+          <span class="line line2"/>
+          <span class="line line3"/>
+        </label>
         <div class="with-toc">
-          <header>
-            <h1>{{htmlTitle}}</h1>
-          </header>
-          <div id="toc-area">
-            <div id="top-menu">
-              <label for="toggle-toc" id="toggle-toc-click">
-                <span class="line line1"/>
-                <span class="line line2"/>
-                <span class="line line3"/>
-              </label>
-            </div>
-            <nav id="toc">
-              <input type="checkbox" id="toggle-toc" checked="checked"/>
-              {{toc.localHtml path}}
-            </nav>
-          </div>
+          <nav id="toc">
+            <input type="checkbox" id="toggle-toc" checked="checked"/>
+            {{if let some url := logo then {{<img src={{url}} id="logo"/>}} else .empty }}
+            {{toc.localHtml path}}
+          </nav>
           <main>
             {{contents}}
           </main>
