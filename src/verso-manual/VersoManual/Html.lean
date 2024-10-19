@@ -78,37 +78,47 @@ where
     let checked := if thisPage then #[("checked", "checked")] else #[]
     {{
       <div class={{«class»}}>
-        <div class="title">
-          <label for={{toggleId}} class="toggle-split-toc">
-            <input
-              type="checkbox"
-              class="toggle-split-toc"
-              id={{toggleId}}
-              {{checked}}/>
-          </label>
+        <div class={{"title" ++ if thisPage && !isTop then " current" else ""}}>
+          {{if children.isEmpty then {{
+              <span class="no-toggle"/>
+            }}
+            else {{
+              <label for={{toggleId}} class="toggle-split-toc">
+                <input
+                  type="checkbox"
+                  class="toggle-split-toc"
+                  id={{toggleId}}
+                  {{checked}}/>
+              </label>
+            }}
+          }}
           {{title}}
         </div>
-        <table>
-          {{children.map fun c =>
-            let classes := String.intercalate " " <|
-              (if c.path.isPrefixOf path && !thisPage then
-                ["current"]
-               else []) ++
-              (if c.sectionNum.isSome then
-                ["numbered"]
-               else ["unnumbered"])
+        {{if children.isEmpty then .empty
+          else {{
+            <table>
+              {{children.map fun c =>
+                let classes := String.intercalate " " <|
+                  (if c.path.isPrefixOf path && !thisPage then
+                    ["current"]
+                   else []) ++
+                  (if c.sectionNum.isSome then
+                    ["numbered"]
+                   else ["unnumbered"])
 
-            {{<tr class={{classes}}>
-                <td class="num">
-                  {{if let some ns := c.sectionNum then sectionNumberString ns
-                    else .empty}}
-                </td>
-                <td>
-                  {{linkify c.path c.id c.title}}
-                </td>
-              </tr>}}
+                {{<tr class={{classes}}>
+                    <td class="num">
+                      {{if let some ns := c.sectionNum then sectionNumberString ns
+                        else .empty}}
+                    </td>
+                    <td>
+                      {{linkify c.path c.id c.title}}
+                    </td>
+                  </tr>}}
+              }}
+            </table>
           }}
-        </table>
+        }}
       </div>
     }}
   toUrl (path : Path) : String :=
