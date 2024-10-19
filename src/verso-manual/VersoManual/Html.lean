@@ -7,10 +7,12 @@ import Std.Data.HashSet
 import Verso.Output.Html
 
 import VersoManual.Basic
+import VersoManual.Html.Style
 
 namespace Verso.Genre.Manual.Html
 open Std (HashSet)
 open Verso.Output Html
+open Verso.Genre.Manual.Html.Css (pageStyleJs)
 
 inductive Toc where
   | entry (title : Html) (path : Path) (id : String) (number : Option (Array Numbering)) (children : Array Toc)
@@ -57,23 +59,28 @@ partial def Toc.html (depth : Option Nat) : Toc → Html
       }}
 
 partial def Toc.localHtml (path : Path) (toc : Toc) : Html := Id.run do
-  let mut idCounter := 0
   let mut toc := toc
-  let mut out : Html := splitTocElem true path.isEmpty idCounter (linkify #[] none toc.title) toc.children
+  let mut fallbackId : Nat := 0
+  let rootId := "----bookRoot"
+  let mut out : Html := splitTocElem true path.isEmpty rootId (linkify #[] none toc.title) toc.children
   let mut currentPath := #[]
   for lvl in path do
     currentPath := currentPath.push lvl
     if let some nextStep := toc.children.find? (·.path == currentPath) then
-      idCounter := idCounter + 1
       toc := nextStep
+      let entryId ←
+        if let some i := toc.id then pure i
+        else
+          fallbackId := fallbackId + 1
+          pure s!"----header{fallbackId}"
       let title := sectionNum toc.sectionNum ++ " " ++ toc.title
       -- In the last position, when `path == currentPath`, the ToC should default to open
-      out := out ++ splitTocElem false (path == currentPath) idCounter (linkify currentPath toc.id title) toc.children
+      out := out ++ splitTocElem false (path == currentPath) entryId (linkify currentPath toc.id title) toc.children
     else break
   {{<div class="split-tocs">{{out}}</div>}}
 where
-  splitTocElem (isTop thisPage : Bool) (id : Nat) (title : Html) (children : Array Toc) :=
-    let toggleId := s!"--verso-manual-toc-{id}"
+  splitTocElem (isTop thisPage : Bool) (chapterId : String) (title : Html) (children : Array Toc) :=
+    let toggleId := s!"--verso-manual-toc-{chapterId}"
     let «class» := if isTop then "split-toc book" else "split-toc"
     let checked := if thisPage then #[("checked", "checked")] else #[]
     {{
@@ -158,6 +165,7 @@ def page
         <meta charset="utf-8"/>
         <title>{{textTitle}}</title>
         <link rel="stylesheet" href="/book.css" />
+        <script>{{pageStyleJs}}</script>
         <script>s!"const __versoSiteRoot =\"{relativeRoot}\""</script>
         <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js" integrity="sha384-zbcZAIxlvJtNE3Dp5nxLXdXtXyxwOdnILY1TDPVmKFhl4r4nSUG1r8bcFXGVa4Te" crossorigin="anonymous"></script>
         {{extraJsFiles.map ({{<script src=s!"{·}"></script>}})}}
