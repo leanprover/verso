@@ -10,11 +10,27 @@ def pageStyle : String := r####"
 /******** Customizability ********/
 
 :root {
+    /** Typography **/
+    /* The font family used for headers, ToC entries, etc */
     --verso-structure-font-family: "Helvetica Neue","Segoe UI",Arial,sans-serif;
+    /* The font family used for body text */
     --verso-text-font-family: Georgia, Times, "Times New Roman", serif;
+    /* The font family used for code */
     --verso-code-font-family: monospace;
+    /* What's the maximum line width, for legibility? */
     --verso-content-max-width: 45em;
+
+    /** Table of Contents appearance **/
     --verso-toc-background-color: #fafafa;
+    --verso-toc-text-color: black;
+
+    /** Variables that control the “burger menu” appearance **/
+    --verso-burger-height: 1.25em;
+    --verso-burger-width: 1.25em;
+    --verso-burger-line-width: 0.2em;
+    --verso-burger-line-radius: 0.2em;
+    --verso-burger-toc-visible-color: var(--verso-toc-text-color);
+    --verso-burger-toc-hidden-color: #0e2431;
 }
 
 /******** Reset ********/
@@ -98,6 +114,7 @@ pre, code {
 
 #toc-area {
     background-color: var(--verso-toc-background-color);
+    color: var(--verso-toc-text-color);
     width: 0em;
     transition: 0.4s;
 }
@@ -277,11 +294,12 @@ header #print > *, header #controls > * {
 }
 */
 
-
 #toggle-toc-click {
     cursor: pointer;
-    width: 1em;
-    height: 1em;
+    /* This is the default, but it's needed to make the math work out so nice to be explicit: */
+    box-sizing: content-box;
+    width: var(--verso-burger-height);
+    height: var(--verso-burger-height);
     display: flex;
     flex-direction: column;
     justify-content: space-between;
@@ -290,22 +308,31 @@ header #print > *, header #controls > * {
 
 #toggle-toc-click .line {
     display: block;
-    height: 0.3em;
+    height: var(--verso-burger-line-width);
     width: 100%;
-    border-radius: 0.2em;
-    background: #0e2431;
-    transition: transform 0.4s ease-in-out;
-    transform-origin: center left;
+    border-radius: var(--verso-burger-line-radius);
+    background-color: var(--verso-burger-toc-hidden-color);
+    /* The background color has a transition in case a theme needs to override the line color
+       when the ToC menu is open */
+    transition: background-color 0.4s ease-in-out, transform 0.4s ease-in-out;
+}
+
+#toc-area:has(#toggle-toc:checked) #toggle-toc-click .line {
+    background-color: var(--verso-burger-toc-visible-color);
 }
 
 #toc-area:has(#toggle-toc:checked) #toggle-toc-click .line1 {
-    transform: rotate(45deg);
+    transform:
+        translateY(calc(calc(var(--verso-burger-height) - var(--verso-burger-line-width)) / 2))
+        rotate(45deg);
 }
 #toc-area:has(#toggle-toc:checked) #toggle-toc-click .line2 {
-    transform: scale(0);
+    transform: scaleX(0);
 }
 #toc-area:has(#toggle-toc:checked) #toggle-toc-click .line3 {
-    transform: rotate(-45deg);
+    transform:
+        translateY(calc(-1 * calc(calc(var(--verso-burger-height) - var(--verso-burger-line-width)) / 2)))
+        rotate(-45deg);
 }
 
 
