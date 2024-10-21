@@ -111,25 +111,28 @@ pre, code {
 #toc {
     background-color: var(--verso-toc-background-color);
     color: var(--verso-toc-text-color);
-    width: 0em;
-    transition: width var(--verso-toc-transition-time);
 }
 
 #toc {
   width: 15em;
 }
 
-#toc:has(#toggle-toc:checked) {
-    width: 15em;
-}
 
 #toc {
-    transition: transform var(--verso-toc-transition-time), width 0.1s linear var(--verso-toc-transition-time);
+    /* Here, the width transition is delayed until after the translation has pushed
+       the ToC off the screen. */
+    transition: transform var(--verso-toc-transition-time) ease, width 0.1s linear var(--verso-toc-transition-time);
     transform: translateX(-20em);
+    width: 0;
 }
 
 #toc:has(#toggle-toc:checked) {
+    /* Here, the width transition must happen first, before the translation animation,
+       so the translation is delayed.
+     */
+    transition: transform var(--verso-toc-transition-time) ease 0.1s, width 0.1s linear;
     transform: translateX(0);
+    width: 15em;
 }
 
 
