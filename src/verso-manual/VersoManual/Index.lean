@@ -205,16 +205,16 @@ where
     | 0 => pure termHtml
     | 1 =>
       if let some (path, htmlId) := xref.externalTags[links[0]]? then
-        let addr := String.join (path.map ("/" ++ ·) |>.toList)
-        pure {{<a href=s!"{addr}#{htmlId}">{{termHtml}}</a>}}
+        let addr := path.link (some htmlId.toString)
+        pure {{<a href={{addr}}>{{termHtml}}</a>}}
       else
         HtmlT.logError s!"No external tag for {id.toString}"
         pure .empty
     | _ =>
       let links ← links.mapIdxM fun i id => do
         if let some (path, htmlId) := xref.externalTags[id]? then
-          let addr := String.join (path.map ("/" ++ ·) |>.toList)
-          pure {{" " <a href=s!"{addr}#{htmlId}"> s!"({i.val})" </a>}}
+          let addr := path.link (some htmlId.toString)
+          pure {{" " <a href={{addr}}> s!"({i.val})" </a>}}
         else
           HtmlT.logError s!"No external tag for {id}"
           pure .empty

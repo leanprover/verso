@@ -27,6 +27,18 @@ deriving DecidableEq, BEq, Hashable
 
 abbrev Path := Array String
 
+def Path.link (path : Path) (htmlId : Option String := none) : String :=
+  "/" ++ String.join (path.toList.map (· ++ "/")) ++
+  (htmlId.map ("#" ++ ·)).getD ""
+
+/-- info: "/" -/
+#guard_msgs in
+#eval Path.link #[]
+
+/-- info: "/a/b/" -/
+#guard_msgs in
+#eval Path.link #["a", "b"]
+
 
 /--
 Tags are used to refer to parts through tables of contents, cross-references, and the like.
@@ -620,19 +632,19 @@ def TraverseState.linkTargets (state : TraverseState) : Code.LinkTargets where
   const := fun x =>
     match state.resolveDomainObject `Verso.Manual.doc x.toString with
     | .ok (path, htmlId) =>
-      path.map ("/" ++ ·) |>.toList |> (String.join · ++ "#" ++ htmlId.toString) |> some
+      some <| path.link (some htmlId.toString)
     | .error _ =>
       none
   option := fun x =>
     match state.resolveDomainObject `Verso.Manual.doc.option x.toString with
     | .ok (path, htmlId) =>
-      path.map ("/" ++ ·) |>.toList |> (String.join · ++ "#" ++ htmlId.toString) |> some
+      some <| path.link (some htmlId.toString)
     | .error _ =>
       none
   keyword := fun k =>
     match state.resolveDomainObject `Verso.Manual.doc.tactic k.toString with
     | .ok (path, htmlId) =>
-      path.map ("/" ++ ·) |>.toList |> (String.join · ++ "#" ++ htmlId.toString) |> some
+      some <| path.link (some htmlId.toString)
     | .error _ =>
       none
 

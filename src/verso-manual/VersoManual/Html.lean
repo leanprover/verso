@@ -45,7 +45,7 @@ partial def Toc.html (depth : Option Nat) : Toc → Html
     else
       let page :=
         if path.isEmpty then "/"
-        else path.map ("/" ++ ·) |>.toList |> String.join
+        else path.link
       let sectionNum :=
         match num with
         | none => {{<span class="unnumbered"></span>}}
@@ -130,12 +130,10 @@ where
         }}
       </div>
     }}
-  toUrl (path : Path) : String :=
-    if path.isEmpty then "/" else String.join <| path.toList.map ("/" ++ ·)
   linkify (path : Path) (id : Option String) (html : Html) :=
     match html with
     | .tag "a" _ _ => html
-    | other => {{<a href=s!"{toUrl path}{id.map ("#" ++ ·) |>.getD ""}">{{other}}</a>}}
+    | other => {{<a href={{path.link id}}>{{other}}</a>}}
   sectionNum num :=
       match num with
       | none => {{<span class="unnumbered"></span>}}
