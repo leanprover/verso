@@ -276,10 +276,11 @@ def docstringStyle := r#"
 .namedocs .signature {
   font-family: var(--verso-code-font-family);
   font-size: larger;
-  margin-top: 0;
-  margin-left: 1.5em;
+  margin-top: 0 !important;
+  margin-left: 1.5em !important;
   margin-right: 1.5em;
 }
+
 .namedocs .label {
   font-size: smaller;
   font-family: var(--verso-structure-font-family);
