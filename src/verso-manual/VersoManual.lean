@@ -61,7 +61,7 @@ def ref.descr : InlineDescr where
       match (← get).resolveDomainObject domain name with
       | .error _ => return none
       | .ok (path, htmlId) =>
-        let dest := String.join (path.map ("/" ++ ·) |>.toList) ++ "#" ++ htmlId.toString
+        let dest := path.link (some htmlId.toString)
         return some <| .other {Inline.ref with data := ToJson.toJson (name, some domain, some dest)} content
     | .ok (_, domain, some (dest : String)) =>
       pure none

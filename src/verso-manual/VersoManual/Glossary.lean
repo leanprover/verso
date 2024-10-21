@@ -145,8 +145,8 @@ def tech.descr : InlineDescr where
           | .ok id =>
             let xref ← Doc.Html.HtmlT.state
             if let some (path, htmlId) := xref.externalTags.get? id then
-              let addr := String.join (path.map ("/" ++ ·) |>.toList)
-              pure {{<a class="technical-term" href=s!"{addr}#{htmlId}">{{← content.mapM go}}</a>}}
+              let addr := path.link (some htmlId.toString)
+              pure {{<a class="technical-term" href={{addr}}>{{← content.mapM go}}</a>}}
             else
               Doc.Html.HtmlT.logError s!"No external tag for {id}"
               content.mapM go
