@@ -58,7 +58,55 @@ partial def Toc.html (depth : Option Nat) : Toc → Html
         </li>
       }}
 
-partial def Toc.localHtml (path : Path) (toc : Toc) : Html := Id.run do
+def Toc.navButtons (path : Path) (toc : Toc) : Html :=
+  let (prev, parent, next) := findNav path toc
+  {{
+    <nav id="local-buttons">
+      {{button prev {{<span class="arrow">"←"</span><span class="where">"Prev"</span>}} "prev"}}
+      {{button parent {{<span class="arrow">"↑"</span><span class="where">"Up"</span>}} }}
+      {{button next {{<span class="where">"Next"</span><span class="arrow">"→"</span>}} "next"}}
+    </nav>
+  }}
+
+where
+  button (toc : Option Toc) (label : Html) (rel : Option String := none) : Html :=
+    if let some dest := toc then
+      let relAttr := rel.map (fun r => #[("rel", r)]) |>.getD #[]
+      {{
+        <a class="local-button active" href={{dest.path.link dest.id}} {{relAttr}}>
+          {{label}}
+        </a>
+      }}
+    else
+      {{<span class="local-button inactive">{{label}}</span>}}
+
+  findNav (path : Path) (toc : Toc) : (Option Toc × Option Toc × Option Toc) := Id.run do
+    let mut parent := none
+    let mut here := toc
+    let mut currentPath := #[]
+    for lvl in path do
+      currentPath := currentPath.push lvl
+      parent := some here
+      for h : i in [0:toc.children.size] do
+        if currentPath.isPrefixOf toc.children[i].path then
+          here := toc.children[i]
+          if here.path == path then
+            let prev :=
+              if i > 0 then
+                have : i - 1 < toc.children.size := by
+                  let ⟨_, lt⟩ := h
+                  simp only at lt
+                  omega
+                some toc.children[i-1]
+              else none
+            let next := toc.children[i+1]?
+            return (prev, parent, next)
+          break
+    return (none, none, none)
+
+
+
+def Toc.localHtml (path : Path) (toc : Toc) : Html := Id.run do
   let mut toc := toc
   let mut fallbackId : Nat := 0
   let rootId := "----bookRoot"
@@ -184,6 +232,7 @@ def page
           <nav id="toc">
             <input type="checkbox" id="toggle-toc" checked="checked"/>
             {{if let some url := logo then {{<img src={{url}} id="logo"/>}} else .empty }}
+            {{toc.navButtons path}}
             {{toc.localHtml path}}
           </nav>
           <main>

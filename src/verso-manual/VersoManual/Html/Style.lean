@@ -265,6 +265,59 @@ pre, code {
   padding-bottom: 0.5em;
 }
 
+#local-buttons {
+    margin-top: 2.5em;
+    font-weight: bold;
+    font-family: var(--verso-structure-font-family);
+    display: flex;
+    justify-content: space-between;
+    margin-left: 0.5em;
+    margin-right: 0.5em
+}
+
+#local-buttons > * {
+    width: 4.5em;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#local-buttons .local-button .where {
+    margin: 0 0.3em;
+}
+
+.local-button.active {
+    color: var(--verso-toc-text-color);
+    border: 1px solid var(--verso-toc-background-color);
+}
+
+.local-button.inactive {
+    color: color-mix(in srgb, var(--verso-toc-text-color), var(--verso-toc-background-color));
+    border: 1px solid var(--verso-toc-background-color);
+    cursor: default;
+}
+
+
+#local-buttons a.local-button.active {
+    text-decoration: none;
+}
+
+#local-buttons a.local-button.active:hover {
+    text-decoration: none;
+    background-color: color-mix(in srgb, white, var(--verso-toc-background-color));
+    border-color: color-mix(in srgb, var(--verso-toc-text-color) 30%, var(--verso-toc-background-color) 70%);
+}
+
+#local-buttons .local-button.inactive:hover {
+
+}
+
+
+#local-buttons .arrow {
+    font-family: var(--verso-code-font-family);
+    font-size: 150%;
+}
+
 #logo {
   max-width: min(80%, calc(100% - calc(var(--verso-burger-width) + 1em)));
   max-height: 4em;
