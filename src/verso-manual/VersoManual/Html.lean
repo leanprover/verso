@@ -87,19 +87,20 @@ where
     for lvl in path do
       currentPath := currentPath.push lvl
       parent := some here
-      for h : i in [0:toc.children.size] do
-        if currentPath.isPrefixOf toc.children[i].path then
-          here := toc.children[i]
+      let children := here.children
+      for h : i in [0:children.size] do
+        if currentPath.isPrefixOf children[i].path then
+          here := children[i]
           if here.path == path then
             let prev :=
               if i > 0 then
-                have : i - 1 < toc.children.size := by
+                have : i - 1 < children.size := by
                   let ⟨_, lt⟩ := h
                   simp only at lt
                   omega
-                some toc.children[i-1]
+                some children[i-1]
               else none
-            let next := toc.children[i+1]?
+            let next := children[i+1]?
             return (prev, parent, next)
           break
     return (none, none, none)
