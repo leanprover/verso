@@ -387,6 +387,7 @@ def docstring.descr : BlockDescr where
 
       return {{
         <div class="namedocs" {{idAttr}}>
+          {{permalink id xref false}}
           <span class="label">{{declType.label}}</span>
           <pre class="signature hl lean block">{{sig}}</pre>
           <div class="text">

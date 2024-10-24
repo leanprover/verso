@@ -150,20 +150,28 @@ def Object.modifyData (f : Json → Json) (object : Object) : Object :=
 
 structure Domain where
   objects : Lean.RBMap String Object compare := {}
+  objectsById : Lean.RBMap InternalId (HashSet String) compare := {}
   title : Option String := none
   description : Option String := none
 deriving Inhabited
 
 instance : BEq Domain where
   beq
-    | ⟨d1, t1, desc1⟩, ⟨d2, t2, desc2⟩ =>
+    | ⟨d1, byId1, t1, desc1⟩, ⟨d2, byId2, t2, desc2⟩ =>
       d1.size == d2.size && d1.all (fun k v => d2.find? k == some v) &&
+      byId1.size == byId2.size && byId1.all (fun k v =>
+        if let some xs := byId2.find? k then
+          xs.size == v.size && xs.all v.contains
+        else false) &&
       t1 == t2 &&
       desc1 == desc2
 
 def Domain.insertId (canonicalName : String) (id : InternalId) (domain : Domain) : Domain :=
   let obj := domain.objects.find? canonicalName |>.getD {canonicalName} |>.addId id
-  {domain with objects := domain.objects.insert canonicalName obj}
+  let idObjs := domain.objectsById.find? id |>.getD {} |>.insert canonicalName
+  {domain with
+    objects := domain.objects.insert canonicalName obj
+    objectsById := domain.objectsById.insert id idObjs}
 
 def Domain.setData  (canonicalName : String) (data : Json) (domain : Domain) : Domain :=
   let obj := domain.objects.find? canonicalName |>.getD {canonicalName} |>.setData data
@@ -672,7 +680,7 @@ instance : Traverse Manual TraverseM where
       -- give priority to user-provided tags that might otherwise anticipate the name-mangling scheme
       let what := (← read).headers.map (·.titleString ++ "--") |>.push part.titleString |>.foldl (init := "") (· ++ ·)
       let tag ← freshTag what id
-      meta := {meta with tag := tag}
+      meta := {meta with tag := Tag.internal tag}
     | some t =>
       -- Ensure uniqueness
       if let some id' := (← get).tags[t]? then
@@ -811,6 +819,33 @@ def sectionHtml (ctxt : TraverseContext) : Html :=
   | none => .empty
   | some s => .text true (s ++ " ")
 
+open Html in
+/--
+Create a permalink widget for sharing links to content.
+
+If the provided state contains a canonical name for the object with the given ID in some domain,
+then the returned HTML can be used to indicate this to users and give them a stable link to the
+content. If the object has multiple names, or has names in multiple domains, then one of them is
+selected arbitrarily. The returned HTML should be included within the HTML that represents the
+object, rather than adjacent to it.
+-/
+def permalink (id : InternalId) (st : TraverseState) (inline : Bool := true) : Html := Id.run do
+  let mut candidates := #[]
+  for (dom, {objectsById, ..}) in st.domains do
+    if let some canonicalNames := objectsById.find? id then
+      for n in canonicalNames do
+        candidates := candidates.push (dom, n)
+  if h : candidates.size = 0 then .empty
+  else
+    -- If there's multiple, select one arbitrarily.
+    let (domain, canonicalName) := candidates[0]
+    let classes := "permalink-widget " ++ if inline then "inline" else "block"
+    {{<span class={{classes}}>
+        <a href=s!"/find/?domain={domain}&name={canonicalName}" title="Permalink">"🔗"</a>
+      </span>
+    }}
+
+
 open Verso.Output.Html in
 instance : Html.GenreHtml Manual (ReaderT ExtensionImpls IO) where
   part go meta txt := do
@@ -818,7 +853,11 @@ instance : Html.GenreHtml Manual (ReaderT ExtensionImpls IO) where
     let attrs := meta.id.map (st.htmlId) |>.getD #[]
     let ctxt ← Verso.Doc.Html.HtmlT.context
     let sectionNumber : Html := sectionHtml ctxt
-    let mkHeader lvl content := .tag s!"h{lvl}" attrs (sectionNumber ++ content)
+    let permalink? m :=
+      if let some id := m.id then permalink id st
+      else .empty
+    let mkHeader lvl content :=
+      .tag s!"h{lvl}" attrs (sectionNumber ++ content ++ permalink? meta)
     go txt mkHeader
 
   block goI goB b content := do

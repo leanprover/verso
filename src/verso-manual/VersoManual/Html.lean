@@ -105,8 +105,6 @@ where
           break
     return (none, none, none)
 
-
-
 def Toc.localHtml (path : Path) (toc : Toc) : Html := Id.run do
   let mut toc := toc
   let mut fallbackId : Nat := 0
@@ -187,7 +185,6 @@ where
       match num with
       | none => {{<span class="unnumbered"></span>}}
       | some ns => {{<span class="number">{{sectionNumberString ns}}</span>" "}}
-
 
 def titlePage (title : Html) (authors : List String) (intro : Html) : Html := {{
   <div class="titlepage">
