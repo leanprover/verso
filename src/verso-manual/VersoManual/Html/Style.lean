@@ -463,6 +463,49 @@ main .section-toc a, main .section-toc a:visited {
 main .section-toc a:hover {
     text-decoration: underline;
 }
+
+/******** Permalink widgets ********/
+
+.permalink-widget.inline {
+  display: none;
+  text-decoration: none;
+  font-size: 50%;
+  vertical-align: 10%;
+  margin-left: 0.5em;
+}
+
+:hover > .permalink-widget.inline {
+  display: inline-block;
+}
+
+
+:has(> .permalink-widget.block) {
+    position: relative;
+}
+
+:hover > .permalink-widget.block {
+    opacity: 1;
+}
+
+.permalink-widget.block {
+    position: absolute;
+    right: -1.5em;
+    top: 0;
+    opacity: 0.1;
+    transition: opacity 0.5s;
+}
+
+.permalink-widget > a {
+  /* Don't show the colors here */
+  color: transparent;
+  text-shadow: 0 0 0 gray;
+  text-decoration: none;
+}
+
+.permalink-widget > a:hover {
+  text-decoration: none;
+}
+
 "####
 
 def pageStyleJs : String := r####"

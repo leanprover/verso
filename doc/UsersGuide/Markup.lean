@@ -50,6 +50,9 @@ def markupPreview : CodeBlockExpander
 
 
 #doc (Manual) "Lean Markup" =>
+%%%
+tag := "lean-markup"
+%%%
 
 Lean's documentation markup language is a close relative of Markdown, but it's not identical to it.
 

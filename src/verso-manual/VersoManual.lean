@@ -359,7 +359,12 @@ where
     let thisFile := part.metadata.bind (·.file) |>.getD (part.titleString.sluggify.toString)
     let dir := if root then dir else dir.join thisFile
     let sectionNum := sectionHtml ctxt
-    let titleHtml := sectionNum ++ (← Html.seq <$> part.title.mapM (Manual.toHtml opts.lift ctxt state linkTargets codeOptions))
+    let titleHtml :=
+      sectionNum ++
+      (← Html.seq <$> part.title.mapM (Manual.toHtml opts.lift ctxt state linkTargets codeOptions)) ++
+      if let some id := part.metadata.bind (·.id) then
+        permalink id state
+      else .empty
     let introHtml ← Html.seq <$> part.content.mapM (Manual.toHtml opts.lift ctxt state linkTargets codeOptions)
     let contents ←
       if depth == 0 || part.htmlSplit == .never then
