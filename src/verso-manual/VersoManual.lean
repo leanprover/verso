@@ -123,6 +123,10 @@ structure Config where
   draft : Bool := false
   /-- The URL from which to draw the logo to show, if any -/
   logo : Option String := none
+  /-- URL for source link -/
+  sourceLink : Option String := none
+  /-- URL for issue reports -/
+  issueLink : Option String := none
 
 def ensureDir (dir : System.FilePath) : IO Unit := do
   if !(← dir.pathExists) then
@@ -244,6 +248,8 @@ def page (toc : Array Html.Toc) (path : Path) (textTitle : String) (htmlTitle co
   Html.page toc path textTitle htmlTitle contents
     state.extraCss (state.extraJs.insertMany extraJs)
     (logo := config.logo)
+    (repoLink := config.sourceLink)
+    (issueLink := config.issueLink)
     (extraStylesheets := config.extraCss ++ state.extraCssFiles.toList.map ("/-verso-css/" ++ ·.1))
     (extraJsFiles := config.extraJs.toArray ++ state.extraJsFiles.map ("/-verso-js/" ++ ·.1))
 
