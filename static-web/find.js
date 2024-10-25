@@ -4,6 +4,7 @@ let name = params.get("name");
 console.log("Domains: " + domains);
 console.log("name: " + name);
 if(name) {
+    let siteRoot = __versoSiteRoot ? __versoSiteRoot : "";
     let options = [];
     if (domains && domains.length > 0) {
         for (const i in domains) {
@@ -41,14 +42,14 @@ if(name) {
             document.querySelector("#message").innerHTML = "<p>Searched domains:</p>" + "<ul>" + domains.map(x => "<li><code>" + x + "</code>: " + xref[x]['title'] + "</li>\n").join('') + "</ul>";
         });
     } else if (options.length == 1) {
-        let addr = options[0]['address'] + "#" + options[0]['id'];
+        let addr = siteRoot + options[0]['address'] + "#" + options[0]['id'];
         window.location.replace(addr);
     } else {
         addEventListener('DOMContentLoaded', event => {
             document.title = "Ambiguous: '" + name + "'";
             document.querySelector("#title").innerHTML = "Ambiguous: name '" + name + "'";
             document.querySelector("#message").innerHTML = "<p>Options:</p><ul>" +
-                options.map((x, idx) => '<li><p><a href="' + x['address'] + '#' + x['id'] + '">From ' + xref[x['domain']]['title'] + '</a></p></li>').join('\n') +
+                options.map((x, idx) => '<li><p><a href="' + siteRoot + x['address'] + '#' + x['id'] + '">From ' + xref[x['domain']]['title'] + '</a></p></li>').join('\n') +
                 "</ul>";
         });
     }

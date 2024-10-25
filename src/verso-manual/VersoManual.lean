@@ -280,7 +280,7 @@ def emitXrefs (toc : Array Html.Toc) (dir : System.FilePath) (state : TraverseSt
   IO.FS.writeFile (dir / "find" / "index.html") (Html.doctype ++ (Html.relativize #["find"] <| xref toc xrefJson find.js state config).asString)
 where
   jsonRef (data : Json) (ref : Path × Slug) : Json :=
-    Json.mkObj [("address", String.join (ref.1.map ("/" ++ ·)).toList), ("id", ref.2.toString), ("data", data)]
+    Json.mkObj [("address", ref.1.link), ("id", ref.2.toString), ("data", data)]
 
 def wordCount
     (wcPath : System.FilePath)
