@@ -635,6 +635,7 @@ def optionDocs.descr : BlockDescr where
 
       return {{
         <div class="namedocs" {{idAttr}}>
+          {{permalink id xref false}}
           <span class="label">"option"</span>
           <pre class="signature hl lean block">{{x}}</pre>
           <div class="text">
@@ -752,6 +753,7 @@ def tactic.descr : BlockDescr where
 
       return {{
         <div class="namedocs" {{idAttr}}>
+          {{permalink id xref false}}
           <span class="label">"tactic"</span>
           <pre class="signature hl lean block">{{← x.toHtml}}</pre>
           <div class="text">
@@ -875,6 +877,7 @@ def conv.descr : BlockDescr where
 
       return {{
         <div class="namedocs" {{idAttr}}>
+          {{permalink id xref false}}
           <span class="label">"conv tactic"</span>
           <pre class="signature hl lean block">{{← x.toHtml}}</pre>
           <div class="text">
