@@ -205,6 +205,8 @@ def page
     (extraCss : HashSet String)
     (extraJs : HashSet String)
     (logo : Option String := none)
+    (repoLink : Option String := none)
+    (issueLink : Option String := none)
     (extraStylesheets : List String := [])
     (extraJsFiles : Array String := #[]) : Html :=
   let relativeRoot :=
@@ -232,9 +234,23 @@ def page
         <div class="with-toc">
           <nav id="toc">
             <input type="checkbox" id="toggle-toc" checked="checked"/>
-            {{if let some url := logo then {{<img src={{url}} id="logo"/>}} else .empty }}
-            {{toc.navButtons path}}
-            {{toc.localHtml path}}
+            <div class="first">
+              {{if let some url := logo then {{<img src={{url}} id="logo"/>}} else .empty }}
+              {{toc.navButtons path}}
+              {{toc.localHtml path}}
+            </div>
+            <div class="last">
+              {{ if repoLink.isSome || issueLink.isSome then {{
+                <ul id="meta-links">
+                  {{if let some url := repoLink then
+                    {{ <li><a href={{url}}>"Source Code"</a></li> }}
+                    else .empty}}
+                  {{if let some url := issueLink then
+                    {{ <li><a href={{url}}>"Report Issues"</a></li> }}
+                    else .empty}}
+                </ul>
+                }} else .empty }}
+            </div>
           </nav>
           <main>
             {{contents}}

@@ -111,6 +111,9 @@ pre, code {
 #toc {
     background-color: var(--verso-toc-background-color);
     color: var(--verso-toc-text-color);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
 }
 
 #toc {
@@ -414,6 +417,18 @@ body:has(#toggle-toc:checked) #toggle-toc-click .line3 {
         rotate(-45deg);
 }
 
+
+#meta-links {
+    list-style-type: none;
+    font-family: var(--verso-structure-font-family);
+    font-size: 90%;
+    display: flex;
+    justify-content: space-between;
+    padding: 0 1em;
+}
+#meta-links li {
+    display: inline-block;
+}
 
 /******** Text ********/
 
