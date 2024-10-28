@@ -127,6 +127,12 @@ structure Config where
   sourceLink : Option String := none
   /-- URL for issue reports -/
   issueLink : Option String := none
+  /--
+  URL to put in the base tag.
+
+  The tag is described here: https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+  -/
+  baseURL : Option String := none
 
 def ensureDir (dir : System.FilePath) : IO Unit := do
   if !(← dir.pathExists) then
@@ -247,11 +253,19 @@ def page (toc : Array Html.Toc) (path : Path) (textTitle : String) (htmlTitle co
   let toc := .entry htmlTitle #[] "" (some #[]) toc
   Html.page toc path textTitle htmlTitle contents
     state.extraCss (state.extraJs.insertMany extraJs)
+    (base := config.baseURL)
     (logo := config.logo)
     (repoLink := config.sourceLink)
     (issueLink := config.issueLink)
     (extraStylesheets := config.extraCss ++ state.extraCssFiles.toList.map ("/-verso-css/" ++ ·.1))
     (extraJsFiles := config.extraJs.toArray ++ state.extraJsFiles.map ("/-verso-js/" ++ ·.1))
+
+def Config.relativize (config : Config) (path : Path) (html : Html) : Html :=
+  if let some _ := config.baseURL then
+    -- Make all absolute URLS be relative to the site root, because that'll make them `base`-relative
+    Html.relativize #[] html
+  else
+    Html.relativize path html
 
 open Output.Html in
 def xref (toc : Array Html.Toc) (xrefJson : String) (findJs : String) (state : TraverseState) (config : Config) : Html :=
@@ -277,7 +291,7 @@ def emitXrefs (toc : Array Html.Toc) (dir : System.FilePath) (state : TraverseSt
   let xrefJson := toString out
   IO.FS.writeFile (dir.join "xref.json") xrefJson
   ensureDir (dir / "find")
-  IO.FS.writeFile (dir / "find" / "index.html") (Html.doctype ++ (Html.relativize #["find"] <| xref toc xrefJson find.js state config).asString)
+  IO.FS.writeFile (dir / "find" / "index.html") (Html.doctype ++ (config.relativize #["find"] <| xref toc xrefJson find.js state config).asString)
 where
   jsonRef (data : Json) (ref : Path × Slug) : Json :=
     Json.mkObj [("address", ref.1.link), ("id", ref.2.toString), ("data", data)]
@@ -327,7 +341,7 @@ where
         h.putStr contents
     IO.FS.withFile (dir.join "index.html") .write fun h => do
       h.putStrLn Html.doctype
-      h.putStrLn (page toc ctxt.path text.titleString titleHtml pageContent state config).asString
+      h.putStrLn (config.relativize ctxt.path <| page toc ctxt.path text.titleString titleHtml pageContent state config).asString
 
 open Verso.Output.Html in
 def emitHtmlMulti (logError : String → IO Unit) (config : Config)
@@ -389,14 +403,12 @@ where
     ensureDir dir
     IO.FS.withFile (dir.join "index.html") .write fun h => do
       h.putStrLn Html.doctype
-      h.putStrLn (Html.relativize ctxt.path <| page bookContents ctxt.path part.titleString pageTitle pageContent state config).asString
+      h.putStrLn (config.relativize ctxt.path <| page bookContents ctxt.path part.titleString pageTitle pageContent state config).asString
     if depth > 0 ∧ part.htmlSplit != .never then
       for p in part.subParts do
         let nextFile := p.metadata.bind (·.file) |>.getD (p.titleString.sluggify.toString)
         emitPart bookTitle authors bookContents opts ({ctxt with path := ctxt.path.push nextFile}.inPart p) state linkTargets {} false (depth - 1) dir p
   termination_by depth
-
-
 
 abbrev ExtraStep := TraverseContext → TraverseState → IO Unit
 
@@ -420,6 +432,7 @@ where
     | ("--without-html-multi"::more) => opts {cfg with emitHtmlMulti := false} more
     | ("--with-word-count"::file::more) => opts {cfg with wordCount := some file} more
     | ("--without-word-count"::more) => opts {cfg with wordCount := none} more
+    | ("--site-base-urlg"::base::more) => opts {cfg with baseURL := some base} more
     | ("--draft"::more) => opts {cfg with draft := true} more
     | (other :: _) => throw (↑ s!"Unknown option {other}")
     | [] => pure cfg
