@@ -201,21 +201,23 @@ def page
     (textTitle : String) (htmlTitle : Html) (contents : Html)
     (extraCss : HashSet String)
     (extraJs : HashSet String)
+    (base : Option String := none)
     (logo : Option String := none)
     (repoLink : Option String := none)
     (issueLink : Option String := none)
     (extraStylesheets : List String := [])
     (extraJsFiles : Array String := #[]) : Html :=
   let relativeRoot :=
-    String.join <| "./" :: path.toList.map (fun _ => "../")
+    base.getD (String.join <| "./" :: path.toList.map (fun _ => "../"))
   {{
     <html>
       <head>
+        {{base.map ({{<base href={{·}}/>}}) |>.getD .empty}}
         <meta charset="utf-8"/>
         <title>{{textTitle}}</title>
         <link rel="stylesheet" href="/book.css" />
         <script>{{pageStyleJs}}</script>
-        <script>s!"const __versoSiteRoot =\"{relativeRoot}\""</script>
+        <script>s!"const __versoSiteRoot = \"{relativeRoot}\""</script>
         <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js" integrity="sha384-zbcZAIxlvJtNE3Dp5nxLXdXtXyxwOdnILY1TDPVmKFhl4r4nSUG1r8bcFXGVa4Te" crossorigin="anonymous"></script>
         {{extraJsFiles.map ({{<script src=s!"{·}"></script>}})}}
         {{extraStylesheets.map (fun url => {{<link rel="stylesheet" href={{url}}/> }})}}
@@ -270,4 +272,5 @@ where
     else
       pure attr
   rwTag (tag : String) (attrs : Array (String × String)) (content : Html) : ReaderT Path Id (Option Html) := do
-    pure <| some <| .tag tag (← attrs.mapM rwAttr) content
+    if tag == "base" then pure none
+    else pure <| some <| .tag tag (← attrs.mapM rwAttr) content
