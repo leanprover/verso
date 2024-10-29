@@ -432,7 +432,7 @@ where
     | ("--without-html-multi"::more) => opts {cfg with emitHtmlMulti := false} more
     | ("--with-word-count"::file::more) => opts {cfg with wordCount := some file} more
     | ("--without-word-count"::more) => opts {cfg with wordCount := none} more
-    | ("--site-base-urlg"::base::more) => opts {cfg with baseURL := some base} more
+    | ("--site-base-url"::base::more) => opts {cfg with baseURL := some base} more
     | ("--draft"::more) => opts {cfg with draft := true} more
     | (other :: _) => throw (↑ s!"Unknown option {other}")
     | [] => pure cfg
