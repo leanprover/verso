@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 import Lean.Parser
+import Verso.Parser
 
 namespace Verso.Output
 
@@ -118,18 +119,69 @@ private def newlineAfter : List String := [
 
 open Lean.Parser (rawIdent)
 
+section
+def attributeNameKind := `Verso.Output.Html.attributeName
+
+open Lean.Parser
+open Verso.Parser
+def attributeNameFn : ParserFn :=
+  atomicFn <|
+    nodeFn attributeNameKind <|
+      asStringFn <| andthenFn (satisfyFn versoAttributeNameChar) (manyFn attributeNameCharFn)
+where
+  -- A slight divergence from the spec for the sake of quasiquotation syntax:
+  -- attribute names can't start with a few special characters that the spec allows but that
+  -- are very obscure and make parser errors much worse.
+  versoAttributeNameChar (c : Char) : Bool := c ∉ ['{', '}', '<', '"', '\''] && attributeNameChar c
+  -- https://html.spec.whatwg.org/multipage/syntax.html#attributes-2
+  attributeNameChar (c : Char) : Bool :=
+    !(isControl c) && c ∉ [' ', '"', '\'', '>', '/', '='] && !(isNonChar c)
+  -- https://infra.spec.whatwg.org/#control
+  isControl (c : Char) :=
+    let n := c.toNat
+    n ≥ 0x007f && n ≤ 0x009f
+  -- https://infra.spec.whatwg.org/#noncharacter
+  isNonChar (c : Char) :=
+    let n := c.toNat
+    (n ≥ 0xfdd0 && n ≤ 0xfdef) ||
+    n ∈ [0xFFFE, 0xFFFF, 0x1FFFE, 0x1FFFF, 0x2FFFE, 0x2FFFF, 0x3FFFE, 0x3FFFF, 0x4FFFE,
+      0x4FFFF, 0x5FFFE, 0x5FFFF, 0x6FFFE, 0x6FFFF, 0x7FFFE, 0x7FFFF, 0x8FFFE, 0x8FFFF,
+      0x9FFFE, 0x9FFFF, 0xAFFFE, 0xAFFFF, 0xBFFFE, 0xBFFFF, 0xCFFFE, 0xCFFFF, 0xDFFFE,
+      0xDFFFF, 0xEFFFE, 0xEFFFF, 0xFFFFE, 0xFFFFF, 0x10FFFE, 0x10FFFF]
+  attributeNameCharFn := satisfyFn attributeNameChar "attribute name"
+
+
+def attributeNameNoAntiquot : Parser where
+  fn := andthenFn attributeNameFn (takeWhileFn Char.isWhitespace)
+
+def attributeName : Parser :=
+  withAntiquot (mkAntiquot "attributeName" attributeNameKind) attributeNameNoAntiquot
+
+@[combinator_parenthesizer attributeName]
+def attributeName.parenthesizer := PrettyPrinter.Parenthesizer.visitToken
+
+@[combinator_formatter attributeName]
+def attributeName.formatter := PrettyPrinter.Formatter.visitAtom Name.anonymous
+
+defmethod TSyntax.getAttributeName (stx : TSyntax attributeNameKind) : String :=
+  if let ⟨.node _ _ #[.atom _ name]⟩ := stx then
+    name
+  else panic! "Not an attribute name"
+
+end
+
 declare_syntax_cat tag_name
 scoped syntax rawIdent : tag_name
 
 declare_syntax_cat html
 declare_syntax_cat attrib
 declare_syntax_cat attrib_val
-scoped syntax str : attrib_val
-scoped syntax "s!" interpolatedStr(term) : attrib_val
-scoped syntax "{{" term "}}" : attrib_val
-scoped syntax rawIdent "=" attrib_val : attrib
-scoped syntax str "=" attrib_val : attrib
-scoped syntax "{{" term "}}" : attrib
+scoped syntax (name := attrib_val_str) str : attrib_val
+scoped syntax (name := attrib_val_str_interp) "s!" interpolatedStr(term) : attrib_val
+scoped syntax (name := attrib_val_antiquote) "{{" term "}}" : attrib_val
+scoped syntax (name := attrStrNamed) str " = " attrib_val : attrib
+scoped syntax (name := attrRawNamed) attributeName " = " attrib_val : attrib
+scoped syntax (name := attrAntiquoted) "{{" term "}}" : attrib
 
 partial def _root_.Lean.TSyntax.tagName : TSyntax `tag_name → String
   | ⟨.node _ _ #[.atom _ x]⟩ => x
@@ -145,17 +197,19 @@ scoped syntax "s!" interpolatedStr(term) : html
 scoped syntax "r!" str : html
 
 scoped syntax "{{"  html+ "}}" : term
-scoped syntax "{{{" attrib* "}}}" : term
+scoped syntax "<<<" (attrib ppSpace) * ">>>" : term
 
 open Lean.Macro in
 macro_rules
-  | `(term| {{{ $attrs* }}} ) => do
+  | `(term| <<< $attrs* >>> ) => do
     let attrsOut ← attrs.mapM fun
-      | `(attrib| $name:ident = $val:str) => `(term| #[($(quote name.getId.toString), $val)])
-      | `(attrib| $name:ident = s!$val:interpolatedStr) => `(term| #[($(quote name.getId.toString), s!$val)])
-      | `(attrib| $name:ident = {{ $e }} ) => `(term| #[($(quote name.getId.toString), ($e : String))])
-      | `(attrib| $name:str = {{ $e }} ) => `(term| #[($(quote name.getString), ($e : String))])
-      | `(attrib| {{ $e }}) => `(term| ($e : Array (String × String)))
+      | `(attrib| $name:attributeName = $val:str) => `(term| #[($(quote name.getAttributeName), $val)])
+      | `(attrib| $name:attributeName = s!$val:interpolatedStr) => `(term| #[($(quote name.getAttributeName), s!$val)])
+      | `(attrib| $name:attributeName = {{ $e }} ) => `(term| #[($(quote name.getAttributeName), ($e : String))])
+      | `(attrStrNamed| $name:str = $val:str) => `(term| #[($(quote name.getString), $val)])
+      | `(attrStrNamed| $name:str = s!$val:interpolatedStr) => `(term| #[($(quote name.getString), s!$val)])
+      | `(attrStrNamed| $name:str = {{ $e }} ) => `(term| #[($(quote name.getString), ($e : String))])
+      | `(attrAntiquoted| {{ $e }}) => `(term| ($e : Array (String × String)))
       | _ => throwUnsupported
     `(term| #[ $[($attrsOut : Array (String × String))],* ].foldr (· ++ ·) #[] )
   | `(term| {{ {{ $e:term }} }} ) => ``(($e : Html))
@@ -169,16 +223,29 @@ macro_rules
       Macro.throwErrorAt tag' s!"Mismatched closing tag, expected {tag.tagName} but got {tag'.tagName}"
     if tag.tagName ∈ voidTags then
       Macro.throwErrorAt tag s!"'{tag.tagName}' doesn't allow contents"
-    ``(Html.tag $(quote tag.tagName) {{{ $extra* }}} {{ $content }} )
+    ``(Html.tag $(quote tag.tagName) <<< $extra* >>> {{ $content }} )
   | `(term| {{ <$tag:tag_name $[$extra]* > $[$content:html]* </ $tag':tag_name> }}) => do
     if tag.tagName != tag'.tagName then
       Macro.throwErrorAt tag' s!"Mismatched closing tag, expected {tag.tagName} but got {tag'.tagName}"
     if tag.tagName ∈ voidTags && content.size != 0 then
       Macro.throwErrorAt tag s!"'{tag.tagName}' doesn't allow contents"
-    ``(Html.tag $(quote tag.tagName) {{{ $extra* }}} <| Html.fromArray #[$[ ({{ $content }} : Html) ],*] )
-  | `(term| {{ <$tag:tag_name $[$extra]* /> }}) => ``(Html.tag $(quote tag.tagName) {{{ $extra* }}} Html.empty )
+    ``(Html.tag $(quote tag.tagName) <<< $extra* >>> <| Html.fromArray #[$[ ({{ $content }} : Html) ],*] )
+  | `(term| {{ <$tag:tag_name $[$extra]* /> }}) => ``(Html.tag $(quote tag.tagName) <<< $extra* >>> Html.empty )
 
 scoped instance : Coe String Html := ⟨.text true⟩
+
+def testAttrs := <<< charset="UTF-8" charset = "UTF-8" a="b" a-b-c="44" {{#[("x", "y")]}} >>>
+
+/-- info: #[("charset", "UTF-8"), ("charset", "UTF-8"), ("a", "b"), ("a-b-c", "44"), ("x", "y")] -/
+#guard_msgs in
+#eval testAttrs
+
+def testAttrsAntiquotes :=
+  <<< charset={{"UTF" ++ "-8"}} "charset" = "UTF-8" a="b" a-b-c="44" {{#[("x", "y")]}} >>>
+
+/-- info: #[("charset", "UTF-8"), ("charset", "UTF-8"), ("a", "b"), ("a-b-c", "44"), ("x", "y")] -/
+#guard_msgs in
+#eval testAttrsAntiquotes
 
 def test : Html := {{
   <html>
@@ -186,7 +253,7 @@ def test : Html := {{
     <meta charset="UTF-8"/>
     <script></script>
   </head>
-  <body lang="en" class="thing">
+  <body lang="en" class="thing" data-foo="data foo">
   <p> "foo bar" <br/> "hey" </p>
   </body>
   </html>
@@ -205,7 +272,7 @@ info: Verso.Output.Html.tag
             Verso.Output.Html.tag "script" #[] (Verso.Output.Html.seq #[])]),
       Verso.Output.Html.tag
         "body"
-        #[("lang", "en"), ("class", "thing")]
+        #[("lang", "en"), ("class", "thing"), ("data-foo", "data foo")]
         (Verso.Output.Html.tag
           "p"
           #[]
@@ -277,7 +344,7 @@ info: |
     <meta charset="UTF-8">
     <script></script>
     </head>
-  <body lang="en" class="thing">
+  <body lang="en" class="thing" data-foo="data foo">
     <p>
       foo bar<br>hey</p>
     </body>
