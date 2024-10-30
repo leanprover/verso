@@ -19,6 +19,8 @@ def pageStyle : String := r####"
     --verso-code-font-family: monospace;
     /* What's the maximum line width, for legibility? */
     --verso-content-max-width: 45em;
+    /* How much space to add on the sides of content for small screens and to place widgets. */
+    --verso-content-padding-x: 1.5em;
 
     /** Table of Contents appearance **/
     --verso-toc-background-color: #fafafa;
@@ -443,6 +445,7 @@ main .authors {
 main > section {
     margin: auto;
     position: relative;
+    padding: var(--verso-content-padding-x);
 }
 
 main section {
@@ -505,7 +508,7 @@ main .section-toc a:hover {
 
 .permalink-widget.block {
     position: absolute;
-    right: -1.5em;
+    right: calc(-1 * var(--verso-content-padding-x));
     top: 0;
     opacity: 0.1;
     transition: opacity 0.5s;
