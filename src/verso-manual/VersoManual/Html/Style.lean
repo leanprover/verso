@@ -442,6 +442,7 @@ main .authors {
 
 main > section {
     margin: auto;
+    position: relative;
 }
 
 main section {
