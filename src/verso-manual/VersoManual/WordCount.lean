@@ -124,7 +124,7 @@ def separatedNumber (n : Nat) : String :=
 #eval separatedNumber 4002
 
 partial def wordCountReport (skip : Name → Bool) (indent : String) (depth : Nat) (p : Part Manual) : Nat × String := Id.run do
-  let subReports := p.subParts.mapIdx fun ⟨i, _⟩ p =>
+  let subReports := p.subParts.mapIdx fun i p =>
     wordCountReport skip s!"{indent}{i+1}." (depth - 1) p
   let subCount := subReports.foldr (init := 0) (·.1 + ·)
   let (here, str) := partLine p subCount
