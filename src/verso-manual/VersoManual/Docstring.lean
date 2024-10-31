@@ -199,7 +199,7 @@ def DeclType.ofName (c : Name) : MetaM DeclType := do
     | .inductInfo ii =>
       if let some info := getStructureInfo? env c then
         let ctor := getStructureCtor env c
-        let parents := getParentStructures env c
+        let parents := getStructureParentInfo env c |>.map (·.structName)
         let ancestors := getAllParentStructures env c
         let fieldInfo ←
           forallTelescopeReducing ii.type fun params _ =>

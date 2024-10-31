@@ -214,7 +214,7 @@ where
       let links ← links.mapIdxM fun i id => do
         if let some (path, htmlId) := xref.externalTags[id]? then
           let addr := path.link (some htmlId.toString)
-          pure {{" " <a href={{addr}}> s!"({i.val})" </a>}}
+          pure {{" " <a href={{addr}}> s!"({i})" </a>}}
         else
           HtmlT.logError s!"No external tag for {id}"
           pure .empty
