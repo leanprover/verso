@@ -249,10 +249,11 @@ partial def toc (depth : Nat) (opts : Html.Options Manual IO)
     let children ← sub.mapM (fun p => toc depth' opts (ctxt'.inPart p) state linkTargets p)
     pure <| .entry titleHtml ctxt'.path v.toString (ctxt.sectionNumber.mapM _root_.id) children
 
-def page (toc : Array Html.Toc) (path : Path) (textTitle : String) (htmlTitle contents : Html) (state : TraverseState) (config : Config) (extraJs : List String := []) : Html :=
+def page (toc : Array Html.Toc) (path : Path) (textTitle : String) (htmlTitle contents : Html) (state : TraverseState) (config : Config) (showNavButtons : Bool := true) (extraJs : List String := []) : Html :=
   let toc := .entry htmlTitle #[] "" (some #[]) toc
   Html.page toc path textTitle htmlTitle contents
     state.extraCss (state.extraJs.insertMany extraJs)
+    (showNavButtons := showNavButtons)
     (base := config.baseURL)
     (logo := config.logo)
     (repoLink := config.sourceLink)
@@ -320,12 +321,28 @@ where
     let date := text.metadata.bind (·.date) |>.getD ""
     let opts : Html.Options Manual IO := {logError := fun msg => logError msg}
     let ctxt := {logError}
-    let titleHtml ← Html.seq <$> text.title.mapM (Manual.toHtml opts.lift ctxt state state.linkTargets {})
-    let introHtml ← Html.seq <$> text.content.mapM (Manual.toHtml opts.lift ctxt state state.linkTargets {})
-    let contents ← Html.seq <$> text.subParts.mapM (Manual.toHtml {opts.lift with headerLevel := 2} ctxt state state.linkTargets {} ·)
+    let linkTargets := state.linkTargets
+    let titleHtml ← Html.seq <$> text.title.mapM (Manual.toHtml opts.lift ctxt state linkTargets {})
+    let introHtml ← Html.seq <$> text.content.mapM (Manual.toHtml opts.lift ctxt state linkTargets {})
+    let bookToc ← text.subParts.mapM (fun p => toc 0 opts (ctxt.inPart p) state linkTargets p)
+    let bookTocHtml := open Verso.Output.Html in
+      if bookToc.size > 0 then {{
+        <section>
+        <h2>"Table of Contents"</h2>
+        <ol class="section-toc">{{bookToc.map (·.html (some 2))}}</ol>
+        </section>
+      }} else .empty
+    let contents ←
+      Html.seq <$>
+      text.subParts.mapM fun p =>
+        Manual.toHtml {opts.lift with headerLevel := 2} (ctxt.inPart p) state linkTargets {} p
     let pageContent := open Verso.Output.Html in
-      {{<section>{{Html.titlePage titleHtml authors introHtml ++ contents}}</section>}}
-    let toc ← text.subParts.mapM (toc 0 opts ctxt state state.linkTargets)
+      {{<section>
+          {{Html.titlePage titleHtml authors introHtml}}
+          {{bookTocHtml}}
+          {{contents}}
+        </section>}}
+    let toc ← text.subParts.mapM (toc 0 opts ctxt state linkTargets)
     emitXrefs toc dir state config
     IO.FS.withFile (dir.join "book.css") .write fun h => do
       h.putStrLn Html.Css.pageStyle
@@ -341,7 +358,9 @@ where
         h.putStr contents
     IO.FS.withFile (dir.join "index.html") .write fun h => do
       h.putStrLn Html.doctype
-      h.putStrLn (config.relativize ctxt.path <| page toc ctxt.path text.titleString titleHtml pageContent state config).asString
+      h.putStrLn
+        (config.relativize ctxt.path <|
+          page toc ctxt.path text.titleString titleHtml pageContent state config (showNavButtons := false)).asString
 
 open Verso.Output.Html in
 def emitHtmlMulti (logError : String → IO Unit) (config : Config)
