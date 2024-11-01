@@ -19,8 +19,6 @@ def pageStyle : String := r####"
     --verso-code-font-family: monospace;
     /* What's the maximum line width, for legibility? */
     --verso-content-max-width: 45em;
-    /* How much space to add on the sides of content for small screens and to place widgets. */
-    --verso-content-padding-x: 1.5em;
 
     /** Table of Contents appearance **/
     --verso-toc-background-color: #fafafa;
@@ -36,6 +34,14 @@ def pageStyle : String := r####"
     --verso-burger-line-radius: 0.2em;
     --verso-burger-toc-visible-color: var(--verso-toc-text-color);
     --verso-burger-toc-hidden-color: #0e2431;
+}
+
+/******** Global parameters not intended for customization by themes ********/
+
+:root {
+    /* How much space to add on the sides of content for small screens and to place widgets. */
+    --verso--content-padding-x: 1.5em;
+
 }
 
 /******** Reset ********/
@@ -445,7 +451,7 @@ main .authors {
 main > section {
     margin: auto;
     position: relative;
-    padding: var(--verso-content-padding-x);
+    padding: var(--verso--content-padding-x);
 }
 
 main section {
@@ -508,7 +514,7 @@ main .section-toc a:hover {
 
 .permalink-widget.block {
     position: absolute;
-    right: calc(-1 * var(--verso-content-padding-x));
+    right: calc(-1 * var(--verso--content-padding-x));
     top: 0;
     opacity: 0.1;
     transition: opacity 0.5s;
