@@ -201,6 +201,7 @@ def page
     (textTitle : String) (htmlTitle : Html) (contents : Html)
     (extraCss : HashSet String)
     (extraJs : HashSet String)
+    (showNavButtons : Bool := true)
     (base : Option String := none)
     (logo : Option String := none)
     (repoLink : Option String := none)
@@ -235,7 +236,7 @@ def page
             <input type="checkbox" id="toggle-toc" checked="checked"/>
             <div class="first">
               {{if let some url := logo then {{<img src={{url}} id="logo"/>}} else .empty }}
-              {{toc.navButtons path}}
+              {{if showNavButtons then toc.navButtons path else .empty}}
               {{toc.localHtml path}}
             </div>
             <div class="last">

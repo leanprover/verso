@@ -98,9 +98,16 @@ instance : Hashable Char where
   hash c := c.val.toUInt64
 
 inductive Numbering where
-  | /-- Ordinary numbering -/nat (n : Nat)
-  | /-- Letter numbering, used e.g. for appendices -/ letter (char : Char)
+  | /-- Ordinary numbering -/
+    nat (n : Nat)
+  | /-- Letter numbering, used e.g. for appendices -/
+    letter (char : Char)
 deriving DecidableEq, Hashable, Repr
+
+instance : ToString Numbering where
+  toString
+    | .nat n => toString n
+    | .letter a => toString a
 
 structure PartMetadata where
   authors : List String := []
