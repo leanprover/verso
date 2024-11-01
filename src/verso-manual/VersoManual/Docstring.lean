@@ -772,25 +772,32 @@ def Inline.tactic : Inline where
 deriving instance Repr for NameSet
 deriving instance Repr for Lean.Elab.Tactic.Doc.TacticDoc
 
+structure TacticInlineOptions where
+  «show» : Option String
+
+def TacticInlineOptions.parse [Monad m] [MonadError m] : ArgParse m TacticInlineOptions :=
+  TacticInlineOptions.mk <$> .named `show .string true
+
 @[role_expander tactic]
 def tacticInline : RoleExpander
   | args, inlines => do
-    let () ← ArgParse.done.run args
+    let {«show»} ← TacticInlineOptions.parse.run args
     let #[arg] := inlines
       | throwError "Expected exactly one argument"
     let `(inline|code{ $tac:str }) := arg
-      | throwErrorAt arg "Expected code literal with the option name"
+      | throwErrorAt arg "Expected code literal with the tactic name"
     let tacTok := tac.getString
     let tacName := tac.getString.toName
     let some tacticDoc := (← getTactic? (.inl tacTok)) <|> (← getTactic? (.inr tacName))
       | throwErrorAt tac "Didn't find tactic named {tac}"
 
-    let hl : Highlighted := tacToken tacticDoc
+    let hl : Highlighted := tacToken tacticDoc «show»
 
     pure #[← `(Verso.Doc.Inline.other {Inline.tactic with data := ToJson.toJson $(quote hl)} #[Verso.Doc.Inline.code $(quote tacticDoc.userName)])]
 where
-  tacToken (t : Lean.Elab.Tactic.Doc.TacticDoc) : Highlighted :=
-    .token ⟨.keyword t.internalName none t.docString, t.userName⟩
+  tacToken (t : Lean.Elab.Tactic.Doc.TacticDoc) (overrideStr : Option String) : Highlighted :=
+    .token ⟨.keyword t.internalName none t.docString, overrideStr.getD t.userName⟩
+
 
 @[inline_extension tacticInline]
 def tacticInline.descr : InlineDescr where
