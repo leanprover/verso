@@ -85,20 +85,20 @@ structure SimplePage.TraverseContext where
   month : Nat
   year : Nat
 
-def hashMapEqBy [BEq α] [Hashable α] (eq : β → β → Bool) (xs ys : Lean.HashMap α β) : Bool :=
+def hashMapEqBy [BEq α] [Hashable α] (eq : β → β → Bool) (xs ys : Std.HashMap α β) : Bool :=
     xs.size == ys.size &&
-    xs.fold (fun soFar k v => soFar && (ys.find? k |>.map (eq v) |>.getD false)) true
+    xs.fold (fun soFar k v => soFar && (ys[k]? |>.map (eq v) |>.getD false)) true
 
-def hashSetEq [BEq α] [Hashable α] (xs ys : Lean.HashSet α) : Bool :=
+def hashSetEq [BEq α] [Hashable α] (xs ys : Std.HashSet α) : Bool :=
     xs.size == ys.size &&
     xs.fold (fun soFar x => soFar && ys.contains x) true
 
 structure SimplePage.TraverseState where
   /-- A mapping from header IDs to incoming link IDs -/
-  refTargets : Lean.HashMap String (Lean.HashSet Nat) := {}
+  refTargets : Std.HashMap String (Std.HashSet Nat) := {}
 
   /-- All the part tags in the document -/
-  partTags : Lean.HashSet String := {}
+  partTags : Std.HashSet String := {}
 
   /-- The next unique link tag to assign -/
   nextLinkTag : Nat := 0
@@ -178,7 +178,7 @@ instance : Traverse SimplePage TraverseM where
     | .inr ⟨dest, some t⟩, _ => do
       modify fun st =>
         {st with
-          refTargets := st.refTargets.insert dest (st.refTargets.findD dest .empty |>.insert t)}
+          refTargets := st.refTargets.insert dest (st.refTargets.getD dest .empty |>.insert t)}
       pure none
 
 /-! # Producing Output -/
@@ -194,7 +194,7 @@ instance : GenreHtml SimplePage IO where
   -- When rendering a part to HTMl, extract the incoming links from the final traversal state and
   -- insert back-references
   part recur metadata | (.mk title titleString _ content subParts) => do
-    let incoming := (← HtmlT.state).refTargets.find? metadata.tag
+    let incoming := (← HtmlT.state).refTargets[metadata.tag]?
     let content' := if let some i := incoming then
       let links := i.toArray.map fun t => ListItem.mk 0 #[Doc.Block.para #[Doc.Inline.link #[.text "(link)"] s!"#link-{t}"]]
       #[Doc.Block.para #[.text "Incoming links:"], Doc.Block.ul links] ++ content

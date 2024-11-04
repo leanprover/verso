@@ -1,7 +1,10 @@
 import Lake
 open Lake DSL
 
-require subverso from git "https://github.com/leanprover/subverso.git"@"main"
+-- This must be moved back to
+-- require subverso from git "https://github.com/leanprover/subverso.git"@"main"
+-- before we merge this PR.
+require subverso from git "https://github.com/kim-em/subverso.git"@"bump_to_v4.14.0-rc1"
 require MD4Lean from git "https://github.com/david-christiansen/md4lean"@"parser"
 
 package verso where
