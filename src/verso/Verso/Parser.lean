@@ -225,7 +225,7 @@ Remaining:
 def ignoreFn (p : ParserFn) : ParserFn := fun c s =>
   let iniSz := s.stxStack.size
   let s' := p c s
-  s'.shrinkStack iniSz
+  s'.takeStack iniSz
 
 private def unescapeStr (str : String) : String := Id.run do
   let mut out := ""
@@ -259,7 +259,7 @@ def asStringFn (p : ParserFn) (quoted := false) (transform : String → String :
   let iniSz := s.stxStack.size
   let s := p c s
   if s.hasError then s
-  else asStringAux quoted startPos transform c (s.shrinkStack iniSz)
+  else asStringAux quoted startPos transform c (s.takeStack iniSz)
 
 def checkCol0Fn (errorMsg : String) : ParserFn := fun c s =>
   let pos      := c.fileMap.toPosition s.pos
@@ -1664,11 +1664,11 @@ def lookaheadOrderedListIndicator (ctxt : BlockCtxt) (p : OrderedListType → In
     let iniPos := s.pos
     let iniSz := s.stxStack.size
     let s := (bol >> takeWhileFn (· == ' ') >> guardMinColumn ctxt.minIndent) c s
-    if s.hasError then s.setPos iniPos |>.shrinkStack iniSz
+    if s.hasError then s.setPos iniPos |>.takeStack iniSz
     else
     let numPos := s.pos
     let s := ignoreFn (takeWhile1Fn (·.isDigit) "digits") c s
-    if s.hasError then {s with pos := iniPos}.shrinkStack iniSz else
+    if s.hasError then {s with pos := iniPos}.takeStack iniSz else
     let digits := c.input.extract numPos s.pos
     match digits.toNat? with
     | none => {s.mkError s!"digits, got '{digits}'" with pos := iniPos}
@@ -1688,7 +1688,7 @@ def lookaheadOrderedListIndicator (ctxt : BlockCtxt) (p : OrderedListType → In
             let leading := mkEmptySubstringAt c.input numPos
             let trailing := mkEmptySubstringAt c.input i
             let num := Syntax.mkNumLit digits (info := .original leading numPos trailing i)
-            p type n c (s.shrinkStack iniSz |>.setPos numPos |>.pushSyntax num)
+            p type n c (s.takeStack iniSz |>.setPos numPos |>.pushSyntax num)
 /--
 info: Success! Final stack:
  • (num "1")
@@ -1758,8 +1758,8 @@ def lookaheadUnorderedListIndicator (ctxt : BlockCtxt) (p : UnorderedListType �
   let iniSz := s.stxStack.size
   let s := (bol >> takeWhileFn (· == ' ') >> guardMinColumn ctxt.minIndent) c s
   let bulletPos := s.pos
-  if s.hasError then s.setPos iniPos |>.shrinkStack iniSz
-  else if h : c.input.atEnd s.pos then s.mkEOIError.setPos iniPos |>.shrinkStack iniSz
+  if s.hasError then s.setPos iniPos |>.takeStack iniSz
+  else if h : c.input.atEnd s.pos then s.mkEOIError.setPos iniPos |>.takeStack iniSz
   else let (s, type) : (_ × UnorderedListType) := match c.input.get' s.pos h with
     | '*' => (s.next' c.input s.pos h, .asterisk)
     | '-' => (s.next' c.input s.pos h, .dash)
@@ -1769,7 +1769,7 @@ def lookaheadUnorderedListIndicator (ctxt : BlockCtxt) (p : UnorderedListType �
   else
     let s := (chFn ' ') c s
     if s.hasError then s.setPos iniPos
-    else p type c (s.shrinkStack iniSz |>.setPos bulletPos)
+    else p type c (s.takeStack iniSz |>.setPos bulletPos)
 
 /--
 info: Success! Final stack:

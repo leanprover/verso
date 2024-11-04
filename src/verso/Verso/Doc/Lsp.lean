@@ -468,7 +468,7 @@ where
           if h : listInfo.items.size > 0 then
             let some {start := {line := startLine, ..}, ..} := rangeOfStx? text listInfo.items[0]
               | result
-            let some {«end» := {line := endLine, ..}, ..} := rangeOfStx? text listInfo.items.back
+            let some {«end» := {line := endLine, ..}, ..} := rangeOfStx? text listInfo.items.back!
               | result
             result.push {startLine := startLine, endLine := endLine}
           else result
