@@ -485,6 +485,7 @@ def highlightingStyle : String := "
 
 .hl.lean.inline {
   display: inline;
+  white-space: pre-wrap;
 }
 
 .hl.lean .token {
