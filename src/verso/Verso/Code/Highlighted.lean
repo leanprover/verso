@@ -972,7 +972,7 @@ window.onload = () => {
         }
     }
     // Add hovers
-    let siteRoot = __versoSiteRoot ? __versoSiteRoot : \"/\";
+    let siteRoot = typeof __versoSiteRoot !== 'undefined' ? __versoSiteRoot : \"/\";
     fetch(siteRoot + \"-verso-docs.json\").then((resp) => resp.json()).then((versoDocData) => {
 
       const defaultTippyProps = {

@@ -4,7 +4,7 @@ let name = params.get("name");
 console.log("Domains: " + domains);
 console.log("name: " + name);
 if(name) {
-    let siteRoot = __versoSiteRoot ? __versoSiteRoot : "";
+    let siteRoot = typeof __versoSiteRoot !== 'undefined' ? __versoSiteRoot : "";
     let options = [];
     if (domains && domains.length > 0) {
         for (const i in domains) {
