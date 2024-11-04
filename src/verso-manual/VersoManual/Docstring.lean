@@ -200,7 +200,7 @@ def DeclType.ofName (c : Name) : MetaM DeclType := do
       if let some info := getStructureInfo? env c then
         let ctor := getStructureCtor env c
         let parents := getStructureParentInfo env c |>.map (·.structName)
-        let ancestors := getAllParentStructures env c
+        let ancestors ← getAllParentStructures c
         let fieldInfo ←
           forallTelescopeReducing ii.type fun params _ =>
             withLocalDeclD `self (mkAppN (mkConst c (ii.levelParams.map mkLevelParam)) params) fun s =>
@@ -412,7 +412,7 @@ where
     | .error e => HtmlT.logError e; pure <| Html.text true str
     | .ok blks => blks.mapM goB
   moreDeclHtml (goB)
-    | .structure false ctor fields infos _parents _ancestors =>
+    | .structure false ctor _ infos _parents _ancestors =>
       open Verso.Doc.Html in
       open Verso.Output Html in do
       let ctorRow ←
@@ -958,7 +958,7 @@ where
 @[block_extension Block.progress]
 def progress.descr : BlockDescr where
   traverse _ _ _ := pure none
-  toHtml := some fun goI goB id info _blocks => open Output.Html in do
+  toHtml := some fun _ _ _ info _blocks => open Output.Html in do
     let documented ← match ((← Doc.Html.HtmlT.state).get? `Verso.Genre.Manual.docstring).getD (pure <| .mkObj []) >>= Json.getObj? with
       | .error e =>
         Doc.Html.HtmlT.logError e

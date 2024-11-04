@@ -27,7 +27,7 @@ instance [WordCount α] : WordCount (Array α) where
     return c
 
 instance : WordCount String where
-  countWords skip (str : String) := Id.run do
+  countWords _ (str : String) := Id.run do
     let mut wc := 0
     let mut iter := str.iter
     let mut state := false

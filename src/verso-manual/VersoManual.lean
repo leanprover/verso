@@ -63,7 +63,7 @@ def ref.descr : InlineDescr where
       | .ok (path, htmlId) =>
         let dest := path.link (some htmlId.toString)
         return some <| .other {Inline.ref with data := ToJson.toJson (name, some domain, some dest)} content
-    | .ok (_, domain, some (dest : String)) =>
+    | .ok (_name, _domain, some (_linkDest : String)) =>
       pure none
 
   toTeX :=
@@ -318,7 +318,7 @@ where
   emitContent (dir : System.FilePath) : StateT (State Html) (ReaderT ExtensionImpls IO) Unit := do
     let (text, state) ← traverse logError text {config with htmlDepth := 0}
     let authors := text.metadata.map (·.authors) |>.getD []
-    let date := text.metadata.bind (·.date) |>.getD ""
+    let _date := text.metadata.bind (·.date) |>.getD "" -- TODO
     let opts : Html.Options Manual IO := {logError := fun msg => logError msg}
     let ctxt := {logError}
     let linkTargets := state.linkTargets
@@ -373,7 +373,7 @@ where
   emitContent (root : System.FilePath) : StateT (State Html) (ReaderT ExtensionImpls IO) Unit := do
     let (text, state) ← traverse logError text config
     let authors := text.metadata.map (·.authors) |>.getD []
-    let date := text.metadata.bind (·.date) |>.getD ""
+    let _date := text.metadata.bind (·.date) |>.getD "" -- TODO
     let opts : Html.Options _ IO := {logError := fun msg => logError msg}
     let ctxt := {logError}
     let toc ← text.subParts.mapM (fun p => toc config.htmlDepth opts (ctxt.inPart p) state state.linkTargets p)
@@ -431,7 +431,7 @@ where
 
 abbrev ExtraStep := TraverseContext → TraverseState → IO Unit
 
-
+set_option linter.unusedVariables false in -- `extraSteps` is not implemented yet
 def manualMain (text : Part Manual)
     (extensionImpls : ExtensionImpls := by exact extension_impls%)
     (options : List String)
