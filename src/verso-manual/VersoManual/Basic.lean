@@ -643,21 +643,26 @@ def TraverseState.resolveTag (st : TraverseState) (tag : Slug) : Option (Path ×
     else panic! s!"No location for ID {id}, but it came from external tag '{tag}'"
   else none
 
+def docstringDomain := `Verso.Genre.Manual.doc
+def tacticDomain := `Verso.Genre.Manual.doc.tactic
+def optionDomain := `Verso.Genre.Manual.doc.option
+def convDomain := `Verso.Genre.Manual.doc.tactic.conv
+
 def TraverseState.linkTargets (state : TraverseState) : Code.LinkTargets where
   const := fun x =>
-    match state.resolveDomainObject `Verso.Manual.doc x.toString with
+    match state.resolveDomainObject docstringDomain x.toString with
     | .ok (path, htmlId) =>
       some <| path.link (some htmlId.toString)
     | .error _ =>
       none
   option := fun x =>
-    match state.resolveDomainObject `Verso.Manual.doc.option x.toString with
+    match state.resolveDomainObject optionDomain x.toString with
     | .ok (path, htmlId) =>
       some <| path.link (some htmlId.toString)
     | .error _ =>
       none
   keyword := fun k =>
-    match state.resolveDomainObject `Verso.Manual.doc.tactic k.toString with
+    match state.resolveDomainObject tacticDomain k.toString with
     | .ok (path, htmlId) =>
       some <| path.link (some htmlId.toString)
     | .error _ =>

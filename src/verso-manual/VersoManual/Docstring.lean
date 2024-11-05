@@ -28,11 +28,6 @@ open SubVerso.Highlighting
 
 namespace Verso.Genre.Manual
 
-def docstringDomain := `Verso.Genre.Manual.doc
-def tacticDomain := `Verso.Genre.Manual.doc.tactic
-def optionDomain := `Verso.Genre.Manual.doc.option
-def convDomain := `Verso.Genre.Manual.doc.tactic.conv
-
 namespace Block
 
 namespace Docstring
