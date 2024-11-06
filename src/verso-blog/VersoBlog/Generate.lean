@@ -67,6 +67,7 @@ def GenerateM.toHtml (g : Genre) [BlogGenre g] [ToHtml g IO α] (x : α) : Gener
     {logError := fun x => ctxt.config.logError x, headerLevel := 2}
     (BlogGenre.traverseContextEq (genre := g) ▸ ctxt)
     (traverseStateEq (genre := g) ▸ state)
+    {}
     linkTargets
     {}
     x

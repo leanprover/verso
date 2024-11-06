@@ -3,6 +3,7 @@ Copyright (c) 2024 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
+import Lean.Data.OpenDecl
 import Lean.Data.Json
 import Std.Data.HashMap
 import SubVerso.Highlighting
@@ -87,6 +88,7 @@ structure HighlightHtmlM.Options where
 
 structure HighlightHtmlM.Context where
   linkTargets : LinkTargets
+  definitionIds : Lean.NameMap String
   options : HighlightHtmlM.Options
 
 abbrev HighlightHtmlM α := ReaderT HighlightHtmlM.Context (StateT (State Html) Id) α
@@ -143,7 +145,7 @@ def kwLink (kind : Name) (content : Html) : HighlightHtmlM Html := do
 
 defmethod Token.Kind.addLink (tok : Token.Kind) (content : Html) : HighlightHtmlM Html := do
   match tok with
-  | .const x .. => constLink x content
+  | .const x _ _ false => constLink x content
   | .option o .. => optionLink o content
   | .var x .. => varLink x content
   | .keyword (some k) .. => kwLink k content
@@ -202,13 +204,9 @@ partial defmethod Highlighted.trimLeft (hl : Highlighted) : Highlighted :=
 
 defmethod Highlighted.trim (hl : Highlighted) : Highlighted := hl.trimLeft.trimRight
 
--- def hover (content : Html) : Html := {{
---   <span class="hover-container"><span class="hover-info"> {{ content }} </span></span>
--- }}
-
 defmethod Token.Kind.hover? (tok : Token.Kind) : HighlightHtmlM (Option Nat) :=
   match tok with
-  | .const _n sig doc | .anonCtor _n sig doc =>
+  | .const _n sig doc _ | .anonCtor _n sig doc =>
     let docs :=
       match doc with
       | none => .empty
@@ -247,17 +245,25 @@ defmethod Token.Kind.«class» : Token.Kind → String
   | .unknown => "unknown"
 
 defmethod Token.Kind.data : Token.Kind → String
-  | .const n _ _ | .anonCtor n _ _ => "const-" ++ toString n
+  | .const n _ _ _ | .anonCtor n _ _ => "const-" ++ toString n
   | .var ⟨v⟩ _ => "var-" ++ toString v
   | .option n _ _ => "option-" ++ toString n
   | .keyword _ (some occ) _ => "kw-occ-" ++ toString occ
   | _ => ""
 
+defmethod Token.Kind.idAttr : Token.Kind → HighlightHtmlM (Array (String × String))
+  | .const n _ _ true => do
+    if let some id := (← read).definitionIds.find? n then
+      pure #[("id", id)]
+    else pure #[]
+  | _ => pure #[]
+
 defmethod Token.toHtml (tok : Token) : HighlightHtmlM Html := do
   let hoverId ← tok.kind.hover?
+  let idAttr ← tok.kind.idAttr
   let hoverAttr := hoverId.map (fun i => #[("data-verso-hover", toString i)]) |>.getD #[]
   tok.kind.addLink {{
-    <span class={{tok.kind.«class» ++ " token"}} "data-binding"={{tok.kind.data}} {{hoverAttr}}>{{tok.content}}</span>
+    <span class={{tok.kind.«class» ++ " token"}} "data-binding"={{tok.kind.data}} {{hoverAttr}} {{idAttr}}>{{tok.content}}</span>
   }}
 
 defmethod Highlighted.Goal.toHtml (exprHtml : expr → HighlightHtmlM Html) (index : Nat) : Highlighted.Goal expr → HighlightHtmlM Html
