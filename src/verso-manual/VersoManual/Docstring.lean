@@ -28,11 +28,6 @@ open SubVerso.Highlighting
 
 namespace Verso.Genre.Manual
 
-def docstringDomain := `Verso.Genre.Manual.doc
-def tacticDomain := `Verso.Genre.Manual.doc.tactic
-def optionDomain := `Verso.Genre.Manual.doc.option
-def convDomain := `Verso.Genre.Manual.doc.tactic.conv
-
 namespace Block
 
 namespace Docstring
@@ -187,7 +182,7 @@ def DocName.ofName (c : Name) (showNamespace := true) (openDecls : List OpenDecl
     }
     let sig := Lean.Widget.tagCodeInfos ctx infos tt
 
-    pure ⟨c, ← renderTagged {} none sig, ← findDocString? env c⟩
+    pure ⟨c, ← renderTagged none sig ⟨{}, false⟩, ← findDocString? env c⟩
   else pure ⟨c, Highlighted.seq #[], none⟩
 
 open Meta in
@@ -209,8 +204,8 @@ def DeclType.ofName (c : Name) : MetaM DeclType := do
                 let type ← inferType proj >>= instantiateMVars
                 let type' ← withOptions (·.setInt `format.width 40 |>.setBool `pp.tagAppFns true) <| (Widget.ppExprTagged type)
                 let projType ← withOptions (·.setInt `format.width 40 |>.setBool `pp.tagAppFns true) <| ppExpr type
-                let fieldName' := Highlighted.token ⟨.const projFn projType.pretty (← findDocString? env projFn), fieldName.toString⟩
-                pure {fieldName := fieldName', type := ← renderTagged {} none type', name, projFn, subobject?, binderInfo, autoParam := autoParam?.isSome, docString? := ← findDocString? env projFn}
+                let fieldName' := Highlighted.token ⟨.const projFn projType.pretty (← findDocString? env projFn) false, fieldName.toString⟩
+                pure {fieldName := fieldName', type := ← renderTagged none type' ⟨{}, false⟩, name, projFn, subobject?, binderInfo, autoParam := autoParam?.isSome, docString? := ← findDocString? env projFn}
         return .structure (isClass env c) (← DocName.ofName ctor.name) info.fieldNames fieldInfo parents ancestors
 
       else
@@ -551,7 +546,7 @@ def docstring : BlockRoleExpander
         ngen          := (← getNGen)
       }
       let sig := Lean.Widget.tagCodeInfos ctx infos tt
-      let signature ← some <$> renderTagged {} none sig
+      let signature ← some <$> renderTagged none sig ⟨{}, false⟩
       pure #[← ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.docstring $(quote name) $(quote declType) $(quote signature)) #[$blockStx,*])]
     | _ => throwError "Expected exactly one positional argument that is a name"
   | _, more => throwErrorAt more[0]! "Unexpected block argument"
@@ -582,9 +577,9 @@ def highlightDataValue (v : DataValue) : Highlighted :=
     | .ofString (v : String) => ⟨.str v, toString v⟩
     | .ofBool b =>
       if b then
-        ⟨.const ``true (sig_for% true) (some <| docs_for% true), "true"⟩
+        ⟨.const ``true (sig_for% true) (some <| docs_for% true) false, "true"⟩
       else
-        ⟨.const ``false (sig_for% false) (some <| docs_for% false), "false"⟩
+        ⟨.const ``false (sig_for% false) (some <| docs_for% false) false, "false"⟩
     | .ofName (v : Name) => ⟨.unknown, v.toString⟩
     | .ofNat (v : Nat) => ⟨.unknown, toString v⟩
     | .ofInt (v : Int) => ⟨.unknown, toString v⟩

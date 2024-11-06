@@ -33,6 +33,11 @@ structure HtmlT.Context (genre : Genre) (m : Type → Type) where
   options : Options genre m
   traverseContext : genre.TraverseContext
   traverseState : genre.TraverseState
+  /--
+  If this name is defined while rendering this HTML, what ID should be placed on the defining
+  occurrence for later cross-referencing?
+  -/
+  definitionIds : Lean.NameMap String
   linkTargets : Code.LinkTargets
   codeOptions : Code.HighlightHtmlM.Options
 
@@ -51,6 +56,9 @@ def HtmlT.context [Monad m] : HtmlT genre m genre.TraverseContext := do
 def HtmlT.state [Monad m] : HtmlT genre m genre.TraverseState := do
   return (← read).traverseState
 
+def HtmlT.definitionIds [Monad m] : HtmlT genre m (Lean.NameMap String) := do
+  return (← read).definitionIds
+
 def HtmlT.linkTargets [Monad m] : HtmlT genre m Code.LinkTargets := do
   return (← read).linkTargets
 
@@ -61,7 +69,7 @@ def HtmlT.codeOptions [Monad m] : HtmlT genre m Code.HighlightHtmlM.Options := d
 def HtmlT.logError [Monad m] (message : String) : HtmlT genre m Unit := do (← options).logError message
 
 instance [Monad m] : MonadLift HighlightHtmlM (HtmlT genre m) where
-  monadLift act := do modifyGet (act ⟨← HtmlT.linkTargets, ← HtmlT.codeOptions⟩)
+  monadLift act := do modifyGet (act ⟨← HtmlT.linkTargets, ← HtmlT.definitionIds, ← HtmlT.codeOptions⟩)
 
 open HtmlT
 
@@ -176,9 +184,10 @@ instance : GenreHtml .none m where
 
 defmethod Genre.toHtml (g : Genre) [ToHtml g m α]
     (options : Options g m) (context : g.TraverseContext) (state : g.TraverseState)
+    (definitionIds : Lean.NameMap String)
     (linkTargets : Code.LinkTargets) (codeOptions : Code.HighlightHtmlM.Options)
     (x : α) : StateT (Verso.Code.Hover.State Html) m Html :=
-  ToHtml.toHtml x ⟨options, context, state, linkTargets, codeOptions⟩
+  ToHtml.toHtml x ⟨options, context, state, definitionIds, linkTargets, codeOptions⟩
 
 open Verso.Examples
 
@@ -200,7 +209,7 @@ info: Verso.Output.Html.tag
               (Verso.Output.Html.text true "(define (zero f z) z)\n(define (succ n) (lambda (f x) (f (n f z))))\n")])])
 -/
 #guard_msgs in
-  #eval Genre.none.toHtml (m:=Id) {logError := fun _ => ()} () () {} {} e |>.run .empty |>.fst
+  #eval Genre.none.toHtml (m:=Id) {logError := fun _ => ()} () () {} {} {} e |>.run .empty |>.fst
 end
 
 def embody (content : Html) : Html := {{

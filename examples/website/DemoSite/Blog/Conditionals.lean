@@ -129,6 +129,18 @@ end
 example := 99
 ```
 
+Here's an inductive type and a structure:
+```lean demo
+inductive A where
+  | a1 | a2
+  | a3 (n : Nat)
+  | a4 : (n : Nat) → n = 3 → A
+
+structure S where
+  x : A
+  y : String
+```
+
 
 Here is a proof with some lambdas and big terms in it, to check highlighting:
 ```lean demo
