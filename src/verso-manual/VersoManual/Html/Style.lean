@@ -18,7 +18,7 @@ def pageStyle : String := r####"
     /* The font family used for code */
     --verso-code-font-family: monospace;
     /* What's the maximum line width, for legibility? */
-    --verso-content-max-width: 45em;
+    --verso-content-max-width: 45rem;
 
     /** Table of Contents appearance **/
     --verso-toc-background-color: #fafafa;
@@ -28,10 +28,10 @@ def pageStyle : String := r####"
     --verso-toc-transition-time: 0.4s;
 
     /** Variables that control the “burger menu” appearance **/
-    --verso-burger-height: 1.25em;
-    --verso-burger-width: 1.25em;
-    --verso-burger-line-width: 0.2em;
-    --verso-burger-line-radius: 0.2em;
+    --verso-burger-height: 1.25rem;
+    --verso-burger-width: 1.25rem;
+    --verso-burger-line-width: 0.2rem;
+    --verso-burger-line-radius: 0.2rem;
     --verso-burger-toc-visible-color: var(--verso-toc-text-color);
     --verso-burger-toc-hidden-color: #0e2431;
 }
@@ -40,7 +40,7 @@ def pageStyle : String := r####"
 
 :root {
     /* How much space to add on the sides of content for small screens and to place widgets. */
-    --verso--content-padding-x: 1.5em;
+    --verso--content-padding-x: 1.5rem;
 
 }
 
@@ -125,7 +125,7 @@ pre, code {
 }
 
 #toc {
-  width: 15em;
+  width: 15rem;
 }
 
 
@@ -133,7 +133,7 @@ pre, code {
     /* Here, the width transition is delayed until after the translation has pushed
        the ToC off the screen. */
     transition: transform var(--verso-toc-transition-time) ease, width 0.1s linear var(--verso-toc-transition-time);
-    transform: translateX(-20em);
+    transform: translateX(-20rem);
     width: 0;
 }
 
@@ -143,7 +143,7 @@ pre, code {
      */
     transition: transform var(--verso-toc-transition-time) ease 0.1s, width 0.1s linear;
     transform: translateX(0);
-    width: 15em;
+    width: 15rem;
 }
 
 
@@ -163,12 +163,12 @@ pre, code {
 
 #toc .split-tocs {
     padding-left: 0;
-    padding-right: 0.5em;
-    margin-top: 1.5em;
+    padding-right: 0.5rem;
+    margin-top: 1.5rem;
 }
 
 #toc .split-toc.book {
-    margin-bottom: 2em;
+    margin-bottom: 2rem;
 }
 
 #toc .split-toc.book .title {
@@ -176,7 +176,7 @@ pre, code {
 }
 
 #toc .split-toc {
-    margin-bottom: 1.5em;
+    margin-bottom: 1.5rem;
     font-family: var(--verso-structure-font-family);
 }
 
@@ -201,10 +201,10 @@ pre, code {
 }
 
 :root {
-    --verso-toc-triangle-width: 0.6em;
-    --verso-toc-triangle-height: 0.6em;
-    --verso-toc-triangle-left-space: 0.5em;
-    --verso-toc-triangle-margin: 0.5em;
+    --verso-toc-triangle-width: 0.6rem;
+    --verso-toc-triangle-height: 0.6rem;
+    --verso-toc-triangle-left-space: 0.5rem;
+    --verso-toc-triangle-margin: 0.5rem;
 }
 
 #toc .split-toc label.toggle-split-toc::before {
@@ -253,8 +253,8 @@ pre, code {
 
 #toc .split-toc table {
     border-left: 1px dotted;
-    padding-left: 1.2em;
-    padding-top: 0.2em;
+    padding-left: 1.2rem;
+    padding-top: 0.2rem;
 }
 
 #toc .split-toc td {
@@ -273,28 +273,28 @@ pre, code {
 
 /* Add a bit of visual space between numbered and unnumbered rows */
 #toc .split-toc tr:has(+ tr.unnumbered) td, #toc .split-toc tr.unnumbered:has(+ tr.numbered) td {
-  padding-bottom: 0.5em;
+  padding-bottom: 0.5rem;
 }
 
 #local-buttons {
-    margin-top: 2.5em;
+    margin-top: 2.5rem;
     font-weight: bold;
     font-family: var(--verso-structure-font-family);
     display: flex;
     justify-content: space-between;
-    margin-left: 0.5em;
-    margin-right: 0.5em
+    margin-left: 0.5rem;
+    margin-right: 0.5rem
 }
 
 #local-buttons > * {
-    width: 4.5em;
+    width: 4.5rem;
     display: flex;
     justify-content: center;
     align-items: center;
 }
 
 #local-buttons .local-button .where {
-    margin: 0 0.3em;
+    margin: 0 0.3rem;
 }
 
 .local-button.active {
@@ -330,10 +330,10 @@ pre, code {
 }
 
 #logo {
-  max-width: min(80%, calc(100% - calc(var(--verso-burger-width) + 1em)));
-  max-height: 4em;
+  max-width: min(80%, calc(100% - calc(var(--verso-burger-width) + 1rem)));
+  max-height: 4rem;
   display: block;
-  margin-left: calc(var(--verso-burger-width) + 1em); /* Make space for the menu button */
+  margin-left: calc(var(--verso-burger-width) + 1rem); /* Make space for the menu button */
 }
 
 /******** Headerline ********/
@@ -346,11 +346,11 @@ header {
 }
 
 header h1 {
-    margin-top: 0.2em;
-    margin-bottom: 0.2em;
+    margin-top: 0.2rem;
+    margin-bottom: 0.2rem;
     text-align: center;
     grid-area: pagetitle;
-    font-size: 1.25em;
+    font-size: 1.25rem;
 }
 
 header h1 a, header h1 a:link, header h1 a:visited {
@@ -373,9 +373,9 @@ header #print {
 
 /*
 header #print > *, header #controls > * {
-    height: 3em;
-    width: 3em;
-    line-height: 3em;
+    height: 3rem;
+    width: 3rem;
+    line-height: 3rem;
     display: inline-block;
     text-align: center;
     vertical-align: center;
@@ -391,7 +391,7 @@ header #print > *, header #controls > * {
     display: inline-flex;
     flex-direction: column;
     justify-content: space-between;
-    padding: 0.5em;
+    padding: 0.5rem;
     position: absolute;
     z-index: 100; /* Show on top of ToC/content */
 }
@@ -432,7 +432,7 @@ body:has(#toggle-toc:checked) #toggle-toc-click .line3 {
     font-size: 90%;
     display: flex;
     justify-content: space-between;
-    padding: 0 1em;
+    padding: 0 1rem;
 }
 #meta-links li {
     display: inline-block;
@@ -467,17 +467,17 @@ main ol.section-toc {
 }
 
 main .section-toc > li {
-    padding-bottom: 0.25em;
+    padding-bottom: 0.25rem;
 }
 
 main .section-toc ol {
-    padding-left: 0.5em
+    padding-left: 0.5rem
 }
 
 main .section-toc li {
     font-weight: bold;
     font-family: var(--verso-structure-font-family);
-    margin-left: 1em;
+    margin-left: 1rem;
 }
 
 main .section-toc a, main .section-toc a:visited {
@@ -496,7 +496,7 @@ main .section-toc a:hover {
   text-decoration: none;
   font-size: 50%;
   vertical-align: 10%;
-  margin-left: 0.5em;
+  margin-left: 0.5rem;
 }
 
 :hover > .permalink-widget.inline {

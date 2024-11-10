@@ -401,8 +401,8 @@ where
     }
 
     main .theIndex nav ol li a {
-      margin-left: 0.5em;
-      margin-right: 0.5em;
+      margin-left: 0.5rem;
+      margin-right: 0.5rem;
     }
 
     main .theIndex nav ol li:first-child a {
@@ -430,15 +430,15 @@ where
       padding-left: 0;
       display: flex;
       flex-wrap: wrap;
-      gap: 3em;
+      gap: 3rem;
     }
 
    main .theIndex .division > ol > li {
-      margin-bottom: 0.5em;
+      margin-bottom: 0.5rem;
     }
 
     main .theIndex .division ol ol {
-      padding-left: 1em;
+      padding-left: 1rem;
     }
 
     main .theIndex .division {

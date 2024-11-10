@@ -254,14 +254,14 @@ def docstringStyle := r#"
   padding-left: 1px;
   padding-right: 1px;
   padding-bottom: 1px;
-  padding-top: 1.5em;
-  margin-bottom: 1em;
+  padding-top: 1.5rem;
+  margin-bottom: 1rem;
 }
 
 .namedocs .text {
   background-color: white;
-  padding: 1.5em;
-  margin-top: 0.5em;
+  padding: 1.5rem;
+  margin-top: 0.5rem;
 }
 
 .namedocs .text > pre {
@@ -272,16 +272,16 @@ def docstringStyle := r#"
   font-family: var(--verso-code-font-family);
   font-size: larger;
   margin-top: 0 !important;
-  margin-left: 1.5em !important;
-  margin-right: 1.5em;
+  margin-left: 1.5rem !important;
+  margin-right: 1.5rem;
 }
 
 .namedocs .label {
   font-size: smaller;
   font-family: var(--verso-structure-font-family);
   position: absolute;
-  right: 0.5em;
-  top: 0.5em;
+  right: 0.5rem;
+  top: 0.5rem;
 }
 .namedocs h1 {
   font-size: inherit;
