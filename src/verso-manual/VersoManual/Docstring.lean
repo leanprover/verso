@@ -316,12 +316,6 @@ def docstring.descr : BlockDescr where
     let .ok (name, declType, _signature) := FromJson.fromJson? (α := Name × Block.Docstring.DeclType × Option Highlighted) info
       | do logError "Failed to deserialize docstring data"; pure none
 
-    let path ← (·.path) <$> read
-    let _ ← Verso.Genre.Manual.externalTag id path name.toString
-    Index.addEntry id {term := Doc.Inline.code name.toString}
-    if name.getPrefix != .anonymous then
-      Index.addEntry id {term := Doc.Inline.code name.getString!, subterm := some <| Doc.Inline.code name.toString}
-
     match declType with
     | .structure isClass ctor fields fieldInfos _parents _ancestors =>
       if isClass then
@@ -333,27 +327,15 @@ def docstring.descr : BlockDescr where
               subterm := some <| Doc.Inline.concat #[Doc.Inline.code i.projFn.toString, Doc.Inline.text " (class method)"]
             }
       else
-        Index.addEntry id {
-          term := Doc.Inline.code ctor.name.toString,
-          subterm := some <| Doc.Inline.concat #[Doc.Inline.text "Constructor of ", Doc.Inline.code name.toString]
-        }
-        modify fun st => st.saveDomainObject docstringDomain ctor.name.toString id
+        saveRef id ctor.name <| some <| Doc.Inline.concat #[Doc.Inline.text "Constructor of ", Doc.Inline.code name.toString]
 
         for (f, i) in fields.zip fieldInfos do
-          Index.addEntry id {term := Doc.Inline.code i.projFn.toString}
-          modify fun st => st.saveDomainObject docstringDomain i.projFn.toString id
-          if i.projFn.getPrefix != .anonymous then
-            Index.addEntry id {
-              term := Doc.Inline.code f.toString,
-              subterm := some <| Doc.Inline.concat #[Doc.Inline.code i.projFn.toString, Doc.Inline.text " (structure field)"]
-            }
+          saveRef id i.projFn
+            (some <| Doc.Inline.concat #[Doc.Inline.code i.projFn.toString, Doc.Inline.text " (structure field)"])
+            (showName := some f.toString)
     | .inductive ctors _ _ =>
       for c in ctors do
-        Index.addEntry id {
-          term := Doc.Inline.code c.name.toString,
-          subterm := some <| Doc.Inline.concat #[Doc.Inline.text "Constructor of ", Doc.Inline.code name.toString]
-        }
-        modify fun st => st.saveDomainObject docstringDomain c.name.toString id
+        saveRef id c.name <| some <| Doc.Inline.concat #[Doc.Inline.text "Constructor of ", Doc.Inline.code name.toString]
     | _ => pure ()
 
     -- Save a backreference
@@ -367,6 +349,9 @@ def docstring.descr : BlockDescr where
 
     -- Save a new-style backreference
     modify fun st => st.saveDomainObject docstringDomain name.toString id
+    saveRef id name none
+    if name.getPrefix != .anonymous then
+      Index.addEntry id {term := Doc.Inline.code name.getString!, subterm := some <| Doc.Inline.code name.toString}
 
     pure none
   toHtml := some <| fun _goI goB id info contents =>
@@ -516,6 +501,20 @@ where
         </ul>
       }}
     | _ => pure .empty
+
+  saveRef
+      (id : InternalId) (name : Name)
+      (subterm : Option (Doc.Inline Manual))
+      (showName : Option String := none) :
+      ReaderT TraverseContext (StateT TraverseState IO) Unit := do
+    let path ← (·.path) <$> read
+    let _ ← Verso.Genre.Manual.externalTag id path name.toString
+    Index.addEntry id {
+      term := Doc.Inline.code (showName.getD name.toString),
+      subterm := subterm
+    }
+    modify (·.saveDomainObject docstringDomain name.toString id)
+
 
 open Verso.Doc.Elab
 

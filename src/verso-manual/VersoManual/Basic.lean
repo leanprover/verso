@@ -660,7 +660,7 @@ def TraverseState.definitionIds (state : TraverseState) : NameMap String := Id.r
 
 def TraverseState.linkTargets (state : TraverseState) : Code.LinkTargets where
   const := fun x =>
-    match state.resolveDomainObject `Verso.Manual.doc x.toString with
+    match state.resolveDomainObject docstringDomain x.toString with
     | .ok (path, htmlId) =>
       some <| path.link (some htmlId.toString)
     | .error _ =>
@@ -670,13 +670,13 @@ def TraverseState.linkTargets (state : TraverseState) : Code.LinkTargets where
       | .error _ =>
         none
   option := fun x =>
-    match state.resolveDomainObject `Verso.Manual.doc.option x.toString with
+    match state.resolveDomainObject optionDomain x.toString with
     | .ok (path, htmlId) =>
       some <| path.link (some htmlId.toString)
     | .error _ =>
       none
   keyword := fun k =>
-    match state.resolveDomainObject `Verso.Manual.doc.tactic k.toString with
+    match state.resolveDomainObject tacticDomain k.toString with
     | .ok (path, htmlId) =>
       some <| path.link (some htmlId.toString)
     | .error _ =>
