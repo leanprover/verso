@@ -516,15 +516,23 @@ main .section-toc a:hover {
 /******** Permalink widgets ********/
 
 .permalink-widget.inline {
-  display: none;
-  text-decoration: none;
-  font-size: 50%;
-  vertical-align: 10%;
-  margin-left: 0.5rem;
+    opacity: 0;
+    text-decoration: none;
+    font-size: 50%;
+    vertical-align: 10%;
+    margin-left: 0.5rem;
+    width: 0;
+    position: relative;
+}
+
+.permalink-widget.inline > a {
+    position: absolute;
+    bottom: 0;
+    left: 0;
 }
 
 :hover > .permalink-widget.inline {
-  display: inline-block;
+    opacity: 1;
 }
 
 
