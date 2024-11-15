@@ -487,7 +487,9 @@ main ol.section-toc, main .section-toc ol {
 }
 
 main ol.section-toc {
-    padding-left: 0;
+    /* This is to "undo" the text-indent: -3rem on the LI elements, which indents
+       subsequent lines but not the section number. */
+    padding-left: 3rem;
 }
 
 main .section-toc > li {
@@ -502,6 +504,8 @@ main .section-toc li {
     font-weight: bold;
     font-family: var(--verso-structure-font-family);
     margin-left: 1rem;
+    /* Indent text that isn't a section number */
+    text-indent: -3rem;
 }
 
 main .section-toc a, main .section-toc a:visited {
