@@ -369,17 +369,6 @@ header #print {
     text-align: right;
 }
 
-/*
-header #print > *, header #controls > * {
-    height: 3rem;
-    width: 3rem;
-    line-height: 3rem;
-    display: inline-block;
-    text-align: center;
-    vertical-align: center;
-}
-*/
-
 #toggle-toc-click {
     cursor: pointer;
     /* This is the default, but it's needed to make the math work out so nice to be explicit: */
