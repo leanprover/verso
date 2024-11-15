@@ -843,7 +843,8 @@ def sectionString (ctxt : TraverseContext) : Option String :=
 def sectionHtml (ctxt : TraverseContext) : Html :=
   match sectionString ctxt with
   | none => .empty
-  | some s => .text true (s ++ " ")
+   -- Non-breaking space because section numbers shouldn't end up on a line alone
+  | some s => .text true (s ++ " ")
 
 open Html in
 /--

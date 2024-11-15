@@ -433,17 +433,17 @@ def highlightingStyle : String := "
   position: absolute;
   background-color: #e5e5e5;
   border: 1px solid black;
-  padding: 0.5em;
+  padding: 0.5rem;
   z-index: 300;
   font-size: inherit;
 }
 
 .hl.lean .hover-info.messages {
-  max-height: 10em;
+  max-height: 10rem;
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-gutter: stable;
-  padding: 0 0.5em 0 0;
+  padding: 0 0.5rem 0 0;
   display: block;
 }
 
@@ -452,7 +452,7 @@ def highlightingStyle : String := "
 }
 
 .hl.lean .hover-info.messages > code {
-  padding: 0.5em;
+  padding: 0.5rem;
   display: block;
   width: fit-content;
 }
@@ -462,11 +462,11 @@ def highlightingStyle : String := "
 }
 
 .hl.lean .hover-info.messages > code {
-  margin: 0.1em;
+  margin: 0.1rem;
 }
 
 .hl.lean .hover-info.messages > code:not(:first-child) {
-  margin-top: 0em;
+  margin-top: 0rem;
 }
 
 /*
@@ -477,7 +477,7 @@ def highlightingStyle : String := "
   .hl.lean .tactic:has(> .tactic-toggle:checked) .token:hover > .hover-container > .hover-info:not(.has-info *) {
     display: inline-block;
     position: absolute;
-    top: 1em;
+    top: 1rem;
     font-weight: normal;
     font-style: normal;
     width: min-content;
@@ -491,7 +491,7 @@ def highlightingStyle : String := "
 
 .hl.lean.inline {
   display: inline;
-  white-space: pre-wrap;
+  white-space: pre-line;
 }
 
 .hl.lean .token {
@@ -518,7 +518,7 @@ def highlightingStyle : String := "
   position: absolute;
   transform: translate(0.25rem, 0.3rem);
   border: 1px solid black;
-  padding: 0.5em;
+  padding: 0.5rem;
   z-index: 400;
   text-align: left;
 }
@@ -535,7 +535,7 @@ def highlightingStyle : String := "
 
 .hl.lean .hover-info.messages > code.error {
   background-color: #e5e5e5;
-  border-left: 0.2em solid #ffb3b3;
+  border-left: 0.2rem solid #ffb3b3;
 }
 
 .tippy-box[data-theme~='error'] .hl.lean .hover-info.messages > code.error {
@@ -563,7 +563,7 @@ def highlightingStyle : String := "
 
 .hl.lean .hover-info.messages > code.error {
   background-color: #e5e5e5;
-  border-left: 0.2em solid #efd871;
+  border-left: 0.2rem solid #efd871;
 }
 
 .tippy-box[data-theme~='warning'] .hl.lean .hover-info.messages > code.warning {
@@ -585,7 +585,7 @@ def highlightingStyle : String := "
 
 .hl.lean .hover-info.messages > code.info {
   background-color: #e5e5e5;
-  border-left: 0.2em solid #4777ff;
+  border-left: 0.2rem solid #4777ff;
 }
 
 .tippy-box[data-theme~='info'] .hl.lean .hover-info.messages > code.info {
@@ -596,7 +596,7 @@ def highlightingStyle : String := "
 .hl.lean div.docstring {
   font-family: sans-serif;
   white-space: normal;
-  max-width: 40em;
+  max-width: 40rem;
   width: max-content;
 }
 
@@ -607,10 +607,10 @@ def highlightingStyle : String := "
 .hl.lean .hover-info .sep {
   display: block;
   width: auto;
-  margin-left: 1em;
-  margin-right: 1em;
-  margin-top: 0.5em;
-  margin-bottom: 0.5em;
+  margin-left: 1rem;
+  margin-right: 1rem;
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
   padding: 0;
   height: 1px;
   border-top: 1px solid #ccc;
@@ -623,11 +623,11 @@ def highlightingStyle : String := "
 .hl.lean .tactic-state {
   display: none;
   position: relative;
-  left: 2em;
+  left: 2rem;
   width: fit-content;
   border: 1px solid #888888;
-  border-radius: 0.1em;
-  padding: 0.5em;
+  border-radius: 0.1rem;
+  padding: 0.5rem;
   font-family: sans-serif;
   background-color: #ffffff;
   z-index: 200;
@@ -638,7 +638,7 @@ def highlightingStyle : String := "
   display: block;
   width: auto;
   border: none;
-  padding: 0.5em;
+  padding: 0.5rem;
   font-family: sans-serif;
   background-color: #ffffff;
 }
@@ -688,12 +688,12 @@ def highlightingStyle : String := "
 .hl.lean .tactic > label::after {
   content: \"\";
   border: 1px solid #bbbbbb;
-  border-radius: 1em;
-  height: 0.25em;
+  border-radius: 1rem;
+  height: 0.25rem;
   vertical-align: middle;
-  width: 0.6em;
-  margin-left: 0.1em;
-  margin-right: 0.1em;
+  width: 0.6rem;
+  margin-left: 0.1rem;
+  margin-right: 0.1rem;
   display: inline-block;
   transition: all 0.5s;
 }
@@ -715,15 +715,15 @@ def highlightingStyle : String := "
 }
 
 .hl.lean .tactic-state .goal + .goal {
-  margin-top: 1.5em;
+  margin-top: 1.5rem;
 }
 
 .hl.lean .tactic-state summary {
-  margin-left: -0.5em;
+  margin-left: -0.5rem;
 }
 
 .hl.lean .tactic-state details {
-  padding-left: 0.5em;
+  padding-left: 0.5rem;
 }
 
 .hl.lean .case-label {
@@ -742,16 +742,16 @@ def highlightingStyle : String := "
 }
 
 .hl.lean .case-label:has(input[type=\"checkbox\"])::before {
-  width: 1em;
-  height: 1em;
+  width: 1rem;
+  height: 1rem;
   display: inline-block;
   background-color: black;
   content: ' ';
   transition: ease 0.2s;
-  margin-right: 0.7em;
+  margin-right: 0.7rem;
   clip-path: polygon(100% 0, 0 0, 50% 100%);
-  width: 0.6em;
-  height: 0.6em;
+  width: 0.6rem;
+  height: 0.6rem;
 }
 
 .hl.lean .case-label:has(input[type=\"checkbox\"]:not(:checked))::before {
@@ -772,8 +772,8 @@ def highlightingStyle : String := "
   display: block;
   overflow: hidden;
   transition: max-height 0.1s ease-in;
-  margin-left: 0.5em;
-  margin-top: 0.1em;
+  margin-left: 0.5rem;
+  margin-top: 0.1rem;
 }
 
 .hl.lean .labeled-case:has(.case-label input[type=\"checkbox\"]:checked) > :not(:first-child) {
@@ -806,7 +806,7 @@ def highlightingStyle : String := "
 
 .hl.lean .tactic-state .hypotheses .colon {
   text-align: center;
-  min-width: 1em;
+  min-width: 1rem;
 }
 
 .hl.lean .tactic-state .hypotheses .name {
