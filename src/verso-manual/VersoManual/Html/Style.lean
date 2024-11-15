@@ -92,17 +92,12 @@ pre, code {
 /******** Page Layout ********/
 
 .with-toc #toc {
-    height: 100vh;
     position: fixed;
     z-index: 10;
 }
 
 /** Non-mobile **/
 @media screen and (min-width: 701px) {
-    .with-toc #toc {
-        height: 100vh;
-    }
-
     .with-toc > main {
         /* NB main > section also has padding that's added to this in practice */
         padding-left: var(--verso-toc-width);
@@ -128,7 +123,7 @@ pre, code {
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    height: 100vh;
+    height: 100dvh;
     width: var(--verso-toc-width);
 }
 
