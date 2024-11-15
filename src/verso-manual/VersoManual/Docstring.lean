@@ -283,6 +283,16 @@ def docstringStyle := r#"
   right: 0.5rem;
   top: 0.5rem;
 }
+
+/* Sticking content into the right margin is not good on narrow screens,
+   so move the label to the left to make space for the permalink widget. */
+
+@media screen and (max-width: 700px) {
+  .namedocs:has(.permalink-widget.block) .label {
+    right: 1.5rem;
+  }
+}
+
 .namedocs h1 {
   font-size: inherit;
   font-weight: bold;

@@ -86,6 +86,7 @@ dd > p:first-child {
 pre, code {
     font-family: var(--verso-code-font-family);
     font-variant-ligatures: none;
+    overflow-x: auto;
 }
 
 /******** Page Layout ********/
@@ -554,6 +555,15 @@ main .section-toc a:hover {
     top: 0;
     opacity: 0.1;
     transition: opacity 0.5s;
+}
+
+/* On narrow screens, float the widget over the block instead of
+   putting it in the margin to avoid horizontal scrolling. */
+@media screen and (max-width: 700px) {
+    .permalink-widget.block {
+        right: 0;
+        opacity: 1;
+    }
 }
 
 .permalink-widget > a {
