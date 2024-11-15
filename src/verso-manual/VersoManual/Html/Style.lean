@@ -27,13 +27,25 @@ def pageStyle : String := r####"
     /* How long should the ToC animation take? */
     --verso-toc-transition-time: 0.4s;
 
+    /* How wide should the ToC be on non-mobile? */
+    --verso-toc-width: 15rem;
+
     /** Variables that control the “burger menu” appearance **/
     --verso-burger-height: 1.25rem;
     --verso-burger-width: 1.25rem;
     --verso-burger-line-width: 0.2rem;
     --verso-burger-line-radius: 0.2rem;
     --verso-burger-toc-visible-color: var(--verso-toc-text-color);
+    --verso-burger-toc-visible-shadow-color: #ffffff;
     --verso-burger-toc-hidden-color: #0e2431;
+    --verso-burger-toc-hidden-shadow-color: #ffffff;
+
+    /* The "burger menu" may need to get bigger for mobile screens */
+    --verso-mobile-burger-height: 2rem;
+    --verso-mobile-burger-width: 2rem;
+    --verso-mobile-burger-line-width: 0.4rem;
+    --verso-mobile-burger-line-radius: 0.4rem;
+
 }
 
 /******** Global parameters not intended for customization by themes ********/
@@ -78,40 +90,33 @@ pre, code {
 
 /******** Page Layout ********/
 
-.with-toc {
-    display: grid;
-    grid-template-columns: min-content auto;
-    grid-template-rows: auto;
-    grid-template-areas:
-        "toc text";
-    height: 100vh;
-    overflow: hidden;
-}
-
 .with-toc #toc {
-    grid-area: toc;
     height: 100vh;
+    position: fixed;
+    z-index: 10;
 }
 
-.with-toc #top-menu {
-    grid-area: toggle;
+/** Non-mobile **/
+@media screen and (min-width: 701px) {
+    .with-toc #toc {
+        height: 100vh;
+    }
+
+    .with-toc > main {
+        /* NB main > section also has padding that's added to this in practice */
+        padding-left: var(--verso-toc-width);
+    }
+}
+
+/** Mobile **/
+@media screen and (max-width: 700px) {
+    .with-toc > main {
+        padding-left: 1.5rem;
+    }
 }
 
 .with-toc #toc {
     overflow-y: auto;
-}
-
-.with-toc > header {
-    grid-area: header;
-}
-
-.with-toc > main {
-    grid-area: text;
-    overflow-y: auto;
-}
-
-.with-toc > #top-menu {
-    grid-area: burger
 }
 
 /******** Table of Contents ********/
@@ -122,10 +127,8 @@ pre, code {
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-}
-
-#toc {
-  width: 15rem;
+    height: 100vh;
+    width: var(--verso-toc-width);
 }
 
 
@@ -134,7 +137,6 @@ pre, code {
        the ToC off the screen. */
     transition: transform var(--verso-toc-transition-time) ease, width 0.1s linear var(--verso-toc-transition-time);
     transform: translateX(-20rem);
-    width: 0;
 }
 
 #toc:has(#toggle-toc:checked) {
@@ -143,7 +145,6 @@ pre, code {
      */
     transition: transform var(--verso-toc-transition-time) ease 0.1s, width 0.1s linear;
     transform: translateX(0);
-    width: 15rem;
 }
 
 
@@ -334,6 +335,7 @@ pre, code {
   max-height: 4rem;
   display: block;
   margin-left: calc(var(--verso-burger-width) + 1rem); /* Make space for the menu button */
+  transition: height var(--verso-toc-transition-time) ease-in-out;
 }
 
 /******** Headerline ********/
@@ -386,25 +388,48 @@ header #print > *, header #controls > * {
     cursor: pointer;
     /* This is the default, but it's needed to make the math work out so nice to be explicit: */
     box-sizing: content-box;
-    width: var(--verso-burger-height);
+    width: var(--verso-burger-width);
     height: var(--verso-burger-height);
     display: inline-flex;
     flex-direction: column;
     justify-content: space-between;
     padding: 0.5rem;
-    position: absolute;
+    position: fixed;
     z-index: 100; /* Show on top of ToC/content */
+    filter: drop-shadow(1px 1px var(--verso-burger-toc-hidden-shadow-color)) drop-shadow(-1px -1px var(--verso-burger-toc-hidden-shadow-color));
+    transition:
+        height var(--verso-toc-transition-time) ease-in-out,
+        width var(--verso-toc-transition-time) ease-in-out;
+}
+
+body:has(#toggle-toc:checked) #toggle-toc-click {
+    filter: drop-shadow(1px 1px var(--verso-burger-toc-visible-shadow-color)) drop-shadow(-1px -1px var(--verso-burger-toc-visible-shadow-color));
+}
+
+@media screen and (max-width: 700px) {
+    body {
+        --verso-burger-width: var(--verso-mobile-burger-width);
+        --verso-burger-height: var(--verso-mobile-burger-height);
+        --verso-burger-line-width: var(--verso-mobile-burger-line-width);
+        --verso-burger-line-radius: var(--verso-mobile-burger-line-radius);
+    }
 }
 
 #toggle-toc-click .line {
     display: block;
-    height: var(--verso-burger-line-width);
+    position: relative;
     width: 100%;
+    height: var(--verso-burger-line-width);
     border-radius: var(--verso-burger-line-radius);
     background-color: var(--verso-burger-toc-hidden-color);
     /* The background color has a transition in case a theme needs to override the line color
        when the ToC menu is open */
-    transition: background-color var(--verso-toc-transition-time) ease-in-out, transform var(--verso-toc-transition-time) ease-in-out;
+    transition:
+        background-color var(--verso-toc-transition-time) ease-in-out,
+        height var(--verso-toc-transition-time) ease-in-out,
+        width var(--verso-toc-transition-time) ease-in-out,
+        transform var(--verso-toc-transition-time) ease-in-out;
+    z-index: 15;
 }
 
 body:has(#toggle-toc:checked) #toggle-toc-click .line {
@@ -449,7 +474,6 @@ main .authors {
 }
 
 main > section {
-    margin: auto;
     position: relative;
     padding: var(--verso--content-padding-x);
 }
