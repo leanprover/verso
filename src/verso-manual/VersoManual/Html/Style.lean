@@ -19,6 +19,10 @@ def pageStyle : String := r####"
     --verso-code-font-family: monospace;
     /* What's the maximum line width, for legibility? */
     --verso-content-max-width: 45rem;
+    /* Desktop font size */
+    --verso-font-size: 18px;
+    /* Mobile font size */
+    --verso-mobile-font-size: 16px;
 
     /** Table of Contents appearance **/
     --verso-toc-background-color: #fafafa;
@@ -41,10 +45,10 @@ def pageStyle : String := r####"
     --verso-burger-toc-hidden-shadow-color: #ffffff;
 
     /* The "burger menu" may need to get bigger for mobile screens */
-    --verso-mobile-burger-height: 2rem;
-    --verso-mobile-burger-width: 2rem;
-    --verso-mobile-burger-line-width: 0.4rem;
-    --verso-mobile-burger-line-radius: 0.4rem;
+    --verso-mobile-burger-height: 1.5rem;
+    --verso-mobile-burger-width: 1.5rem;
+    --verso-mobile-burger-line-width: 0.3rem;
+    --verso-mobile-burger-line-radius: 0.3rem;
 
 }
 
@@ -54,6 +58,18 @@ def pageStyle : String := r####"
     /* How much space to add on the sides of content for small screens and to place widgets. */
     --verso--content-padding-x: 1.5rem;
 
+}
+
+/******** Root font size - this is what rem is based on *********/
+
+html {
+    font-size: var(--verso-font-size);
+}
+
+@media screen and (max-width: 700px) {
+    html {
+        font-size: var(--verso-mobile-font-size);
+    }
 }
 
 /******** Reset ********/
@@ -337,39 +353,6 @@ pre, code {
 }
 
 /******** Headerline ********/
-
-header {
-    display: grid;
-    grid-template-columns: 1fr auto 1fr;
-    grid-template-areas: "controls pagetitle print";
-    align-items: center;
-}
-
-header h1 {
-    margin-top: 0.2rem;
-    margin-bottom: 0.2rem;
-    text-align: center;
-    grid-area: pagetitle;
-    font-size: 1.25rem;
-}
-
-header h1 a, header h1 a:link, header h1 a:visited {
-    text-decoration: inherit;
-    color: inherit;
-}
-
-header h1 a:hover {
-    text-decoration: underline;
-}
-
-header #controls {
-    grid-area: controls;
-}
-
-header #print {
-    grid-area: print;
-    text-align: right;
-}
 
 #toggle-toc-click {
     cursor: pointer;
