@@ -114,11 +114,9 @@ pre, code {
 }
 
 /** Non-mobile **/
-@media screen and (min-width: 701px) {
-    .with-toc > main {
-        /* NB main > section also has padding that's added to this in practice */
-        padding-left: var(--verso-toc-width);
-    }
+.with-toc > main {
+    /* NB main > section also has padding that's added to this in practice */
+    padding-left: var(--verso-toc-width);
 }
 
 /** Mobile **/
