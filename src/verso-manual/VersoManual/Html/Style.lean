@@ -439,7 +439,7 @@ body:has(#toggle-toc:checked) #toggle-toc-click .line3 {
 For words that are too long to fit on the screen, it's better to wrap than to have horizontal scrolling
 */
 main h1, main h2, main h3, main h4, main h5, main h6 {
-  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 main h1 {
@@ -528,6 +528,15 @@ main .section-toc a, main .section-toc a:visited {
 
 main .section-toc a:hover {
     text-decoration: underline;
+}
+
+/******** Manual-specific changes to highlighted Lean code ********/
+
+/* Don't scroll horizontally due to long identifiers (e.g. option names) */
+@media screen and (max-width: 700px) {
+    .hl.lean.inline {
+        overflow-wrap: break-word;
+    }
 }
 
 /******** Permalink widgets ********/
