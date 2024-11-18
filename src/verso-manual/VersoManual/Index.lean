@@ -369,11 +369,14 @@ def theIndex.descr : BlockDescr where
           let hdr := Output.Html.tag s!"h{h}" #[("id", s!"---index-hdr-{cat.id}")] (cat.header)
           let xs' ← xs.mapM (fun e => do return {{<li>{{← e.toHtml goI}}</li>}})
           return {{<div class="division">{{hdr ++ {{<ol>{{xs'}}</ol>}} }}</div>}}
+        let path := (← read).traverseContext.path
         return {{
           <div class="theIndex">
             <nav>
               <ol>
-                {{ r.map fun (cat, _) => {{<li><a href=s!"#---index-hdr-{cat.id}">{{cat.header}}</a></li>}} }}
+                {{ r.map fun (cat, _) =>
+                    let href := path.link (htmlId := s!"---index-hdr-{cat.id}")
+                    {{<li><a href={{href}}>{{cat.header}}</a></li>}} }}
               </ol>
             </nav>
             {{out}}
