@@ -184,10 +184,6 @@ deriving BEq, Hashable, Repr, ToJson, FromJson
 
 instance : Inhabited HtmlSplitMode := ⟨.default⟩
 
--- TODO: delete after PR #5747 is merged
-instance : Hashable Char where
-  hash c := c.val.toUInt64
-
 inductive Numbering where
   | /-- Ordinary numbering -/
     nat (n : Nat)
