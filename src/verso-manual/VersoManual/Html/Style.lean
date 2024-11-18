@@ -67,6 +67,7 @@ body {
 
 h1, h2, h3, h4, h5, h6 {
     font-family: var(--verso-structure-font-family);
+    font-weight: bold;
     text-rendering: optimizeLegibility;
     margin-top: 1.5rem;
 }
@@ -450,6 +451,49 @@ body:has(#toggle-toc:checked) #toggle-toc-click .line3 {
 }
 
 /******** Text ********/
+
+/*
+For words that are too long to fit on the screen, it's better to wrap than to have horizontal scrolling
+*/
+main h1, main h2, main h3, main h4, main h5, main h6 {
+  word-break: break-word;
+}
+
+main h1 {
+  font-size: 2rem;
+  line-height: 1.5;
+  margin-bottom: 1.25rem;
+}
+
+main h2 {
+  font-size: 1.6rem;
+  line-height: 1.5;
+  margin-bottom: 1rem;
+}
+
+main h3 {
+  font-size: 1.4rem;
+  line-height: 1.5;
+  margin-bottom: 0.2rem;
+}
+
+main h4 {
+  font-size: 1.2rem;
+  line-height: 1.25;
+  margin-bottom: 0.2rem;
+}
+
+main h5 {
+  font-size: 1rem;
+  line-height: 1.25;
+  margin-bottom: 0.2rem;
+}
+
+main h6 {
+  font-size: 1rem;
+  line-height: 1.15;
+  margin-bottom: 0rem;
+}
 
 main .titlepage h1 {
     text-align: center;
