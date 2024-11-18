@@ -261,6 +261,8 @@ def page
     </html>
   }}
 
+
+
 def relativize (path : Path) (html : Html) : Html :=
   html.visitM (m := ReaderT Path Id) (tag := rwTag) |>.run path
 where
@@ -269,7 +271,7 @@ where
     if urlAttr attr.fst && "/".isPrefixOf attr.snd then
       let path := (← read)
       pure { attr with
-        snd := String.join (List.replicate path.size "../") ++ attr.snd.drop 1
+        snd := path.relativize attr.snd
       }
     else
       pure attr
