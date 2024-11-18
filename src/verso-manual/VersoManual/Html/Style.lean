@@ -330,7 +330,8 @@ pre, code {
   max-width: min(80%, calc(100% - calc(var(--verso-burger-width) + 1rem)));
   max-height: 4rem;
   display: block;
-  margin-left: calc(var(--verso-burger-width) + 1rem); /* Make space for the menu button */
+  margin-left: auto;
+  margin-right: 0.5rem;
   transition: height var(--verso-toc-transition-time) ease-in-out;
 }
 
