@@ -541,6 +541,9 @@ def docstring : BlockRoleExpander
           | throwErrorAt x "Failed to parse docstring as Markdown"
         ast.blocks.mapM (Markdown.blockFromMarkdown · Markdown.strongEmphHeaders)
 
+      if Lean.Linter.isDeprecated (← getEnv) name then
+        logInfoAt x m!"'{x}' is deprecated"
+
       let declType ← Block.Docstring.DeclType.ofName name
 
       let ⟨fmt, infos⟩ ← withOptions (·.setBool `pp.tagAppFns true) <| Block.Docstring.ppSignature name
@@ -935,8 +938,11 @@ def progress : DirectiveExpander
     for (x, info) in (← getEnv).constants do
       if ignore x then continue
       if exceptions.contains x then continue
+      if Lean.Linter.isDeprecated (← getEnv) x then continue
+      if ← isProjectionFn x then continue
       match info with
       | .thmInfo _ => continue -- don't document theorems
+      | .ctorInfo _ => continue -- constructors are documented as children of their types
       | _ => pure ()
       if ← Meta.isInstance x then continue
       let mut ns := x
