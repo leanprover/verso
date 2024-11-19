@@ -626,11 +626,17 @@ def pageStyleJs : String := r####"
 function saveCheckboxesInit() {
   for (checkbox of document.querySelectorAll('#toc input[type="checkbox"]')) {
     const value = localStorage.getItem(checkbox.id);
-    if (value === "true") {
+
+    // Treat the ToC toggle specially, because it should always default to
+    // closed on mobile-width screens but respect user preference on desktop-width.
+    if (checkbox.id === "toggle-toc" && window.matchMedia("(max-width: 700px)").matches) {
+        checkbox.checked = false;
+    } else if (value === "true") {
         checkbox.checked = true;
     } else if (value === "false") {
         checkbox.checked = false;
     } // if not found, do nothing
+
     checkbox.addEventListener("change", persistCheckbox);
   }
 }
