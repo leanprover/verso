@@ -158,6 +158,12 @@ pre, code {
     transform: translateX(0);
 }
 
+/* Disable ToC transition on mobile */
+@media screen and (max-width: 700px) {
+    #toc, #toc:has(#toggle-toc:checked) {
+        transition: none;
+    }
+}
 
 #toggle-toc {
     display: none;
@@ -417,7 +423,6 @@ body:has(#toggle-toc:checked) #toggle-toc-click .line3 {
         translateY(calc(-1 * calc(calc(var(--verso-burger-height) - var(--verso-burger-line-width)) / 2)))
         rotate(-45deg);
 }
-
 
 #meta-links {
     list-style-type: none;
