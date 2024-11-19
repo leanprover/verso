@@ -446,13 +446,13 @@ main h1, main h2, main h3, main h4, main h5, main h6 {
 }
 
 main h1 {
-  font-size: 2rem;
+  font-size: 2.3rem;
   line-height: 1.5;
-  margin-bottom: 1.25rem;
+  margin-bottom: 1.3rem;
 }
 
 main h2 {
-  font-size: 1.6rem;
+  font-size: 1.7rem;
   line-height: 1.5;
   margin-bottom: 1rem;
 }
@@ -477,6 +477,7 @@ main h5 {
 
 main h6 {
   font-size: 1rem;
+  font-weight: 500;
   line-height: 1.15;
   margin-bottom: 0rem;
 }
