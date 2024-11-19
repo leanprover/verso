@@ -133,6 +133,7 @@ structure Config where
   The tag is described here: https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
   -/
   baseURL : Option String := none
+  verbose : Bool := false
 
 def ensureDir (dir : System.FilePath) : IO Unit := do
   if !(← dir.pathExists) then
@@ -167,6 +168,8 @@ def traverse (logError : String → IO Unit) (text : Part Manual) (config : Conf
   let topCtxt : Manual.TraverseContext := {logError, draft := config.draft}
   let mut state : Manual.TraverseState := {}
   let mut text := text
+  if config.verbose then
+    IO.println "Initializing extensions"
   let extensionImpls ← readThe ExtensionImpls
   state := state.setDomainTitle sectionDomain "Sections or chapters of the manual"
   for ⟨_, b⟩ in extensionImpls.blockDescrs do
@@ -175,8 +178,14 @@ def traverse (logError : String → IO Unit) (text : Part Manual) (config : Conf
   for ⟨_, i⟩ in extensionImpls.inlineDescrs do
     if let some descr := i.get? InlineDescr then
       state := descr.init state
-  for _ in [0:config.maxTraversals] do
+  for i in [0:config.maxTraversals] do
+    if config.verbose then
+      IO.println s!"Traversal pass {i}"
+    let startTime ← IO.monoMsNow
     let (text', state') ← traverseMulti config.htmlDepth #[] text |>.run extensionImpls topCtxt state
+    let endTime ← IO.monoMsNow
+    if config.verbose then
+      IO.println s!"  ... pass {i} completed in {endTime - startTime} ms"
     if text' == text && state' == state then
       return (text', state')
     else
@@ -202,6 +211,8 @@ def emitTeX (logError : String → IO Unit) (config : Config) (text : Part Manua
   let dir := config.destination.join "tex"
   ensureDir dir
   withFile (dir.join "main.tex") .write fun h => do
+    if config.verbose then
+      IO.println s!"Saving {dir.join "main.tex"}"
     h.putStrLn (preamble text.titleString authors date)
     if frontMatter.size > 0 then
       h.putStrLn "\\chapter*{Introduction}"
@@ -359,6 +370,8 @@ where
       IO.FS.withFile (dir.join "-verso-css" |>.join name) .write fun h => do
         h.putStr contents
     IO.FS.withFile (dir.join "index.html") .write fun h => do
+      if config.verbose then
+        IO.println s!"Saving {dir.join "index.html"}"
       h.putStrLn Html.doctype
       h.putStrLn
         (config.relativize ctxt.path <|
@@ -425,6 +438,8 @@ where
     let pageTitle := if root then bookTitle else {{<a href="/">{{bookTitle}}</a>}}
     ensureDir dir
     IO.FS.withFile (dir.join "index.html") .write fun h => do
+      if config.verbose then
+        IO.println s!"Saving {dir.join "index.html"}"
       h.putStrLn Html.doctype
       h.putStrLn (config.relativize ctxt.path <| page bookContents ctxt.path part.titleString pageTitle pageContent state config).asString
     if depth > 0 ∧ part.htmlSplit != .never then
@@ -457,6 +472,7 @@ where
     | ("--without-word-count"::more) => opts {cfg with wordCount := none} more
     | ("--site-base-url"::base::more) => opts {cfg with baseURL := some base} more
     | ("--draft"::more) => opts {cfg with draft := true} more
+    | ("--verbose"::more) => opts {cfg with verbose := true} more
     | (other :: _) => throw (↑ s!"Unknown option {other}")
     | [] => pure cfg
 
@@ -465,10 +481,21 @@ where
     let logError msg := do hasError.set true; IO.eprintln msg
     let cfg ← opts config options
 
-    if cfg.emitTeX then emitTeX logError cfg text
-    if cfg.emitHtmlSingle then emitHtmlSingle logError cfg text
-    if cfg.emitHtmlMulti then emitHtmlMulti logError cfg text
+    if cfg.emitTeX then
+      if cfg.verbose then
+        IO.println s!"Saving TeX"
+      emitTeX logError cfg text
+    if cfg.emitHtmlSingle then
+      if cfg.verbose then
+        IO.println s!"Saving single-page HTML"
+      emitHtmlSingle logError cfg text
+    if cfg.emitHtmlMulti then
+      if cfg.verbose then
+        IO.println s!"Saving multi-page HTML"
+      emitHtmlMulti logError cfg text
     if let some wcFile := cfg.wordCount then
+      if cfg.verbose then
+        IO.println s!"Saving word counts to {wcFile}"
       wordCount wcFile logError cfg text
 
     if (← hasError.get) then
