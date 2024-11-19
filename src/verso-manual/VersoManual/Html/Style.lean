@@ -130,7 +130,25 @@ pre, code {
     overflow-y: auto;
 }
 
+
 /******** Table of Contents ********/
+
+/* This backdrop should be hidden on desktop browsers, and show up when the ToC is open on mobile browsers */
+.toc-backdrop {
+    display: none;
+}
+
+@media screen and (max-width: 700px) {
+    .toc-backdrop {
+        display: block;
+    }
+    body:has(#toggle-toc:checked) .toc-backdrop {
+        position: fixed; inset: 0; background-color: #aaa8; z-index: 1;
+    }
+    html:has(#toggle-toc:checked) {
+        overflow: hidden;
+    }
+}
 
 #toc {
     background-color: var(--verso-toc-background-color);
