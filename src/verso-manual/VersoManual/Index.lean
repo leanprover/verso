@@ -342,6 +342,77 @@ def Index.render (index : Index) : Array (IndexCat × Array RenderedEntry) := Id
 def theIndex (index : Option String := none) : Doc.Block Manual :=
   Doc.Block.other {Block.theIndex with data := ToJson.toJson index} #[]
 
+open Verso.Output Html in
+partial def softHyphenateIdentifiers (html : Html) : Html :=
+  html.visitM (m := Id) (tag := rwTag)
+where
+  rwTag
+    | "code", attrs, content => pure (some (.tag "code" attrs (rwText content)))
+    | _, _, _ => pure none
+
+  addShy (xs : Array Html) : Array Html :=
+    if xs.isEmpty then xs
+    else if let some (Verso.Output.Html.tag "wbr" ..) := xs.back? then xs
+    else  xs.push (.text false "&shy;")
+
+  rwText
+    | .seq xs => .seq (xs.map rwText)
+    | .tag t attrs x => .tag t attrs (rwText x)
+    | .text esc str => Id.run do
+      let mut strs : Array Html := #[]
+      let mut prior : Option Char := none
+      let mut start := str.iter
+      let mut iter := str.iter
+      while h : iter.hasNext do
+        let current := iter.curr' h
+        if prior == some '.' && current != '.' then
+          strs := strs.push (.text esc <| start.extract iter)
+          -- Break lines after dots without hyphens
+          strs := strs.push {{<wbr/>}}
+          start := iter
+        else if current.isUpper then
+          if prior.map (·.isLower) |>.getD false then
+            if !strs.isEmpty then
+              strs := addShy strs
+            strs := strs.push (.text esc <| start.extract iter)
+            start := iter
+
+        prior := some current
+        iter := iter.next
+
+
+      if start.pos != iter.pos then
+        strs := addShy strs
+        strs := strs.push (.text esc <| start.extract iter)
+
+      if h : strs.size = 1 then strs[0] else .seq strs
+
+/-- info: "blahNotCode<code><a>foo&shy;Bar&shy;Baz</a></code>" -/
+#guard_msgs in
+open Verso.Output Html in
+#eval softHyphenateIdentifiers {{"blahNotCode"<code><a>"fooBarBaz"</a></code>}} |>.asString
+
+/-- info: "<code>abc.<wbr>def.<wbr>ghi.<wbr>jkl</code>" -/
+#guard_msgs in
+open Verso.Output Html in
+#eval softHyphenateIdentifiers {{<code>"abc.def.ghi.jkl"</code>}} |>.asString
+
+/-- info: "<code>ABC.<wbr>DEF</code>" -/
+#guard_msgs in
+open Verso.Output Html in
+#eval softHyphenateIdentifiers {{<code>"ABC.DEF"</code>}} |>.asString
+
+/-- info: "blahNotCode<code><a>fooBa.<wbr>rBaz.<wbr>ab&shy;CD</a></code>" -/
+#guard_msgs in
+open Verso.Output Html in
+#eval softHyphenateIdentifiers {{"blahNotCode"<code><a>"fooBa.rBaz.abCD"</a></code>}} |>.asString
+
+/-- info: "blahNotCode<code><a>fooBa...<wbr>rBaz.<wbr>ab&shy;CD</a></code>" -/
+#guard_msgs in
+open Verso.Output Html in
+#eval softHyphenateIdentifiers {{"blahNotCode"<code><a>"fooBa...rBaz.abCD"</a></code>}} |>.asString
+
+
 @[block_extension theIndex]
 def theIndex.descr : BlockDescr where
   traverse _ _ _ := do
@@ -364,11 +435,12 @@ def theIndex.descr : BlockDescr where
         return .empty
       | some (.ok v) =>
         let r := v.render
-        let out ← r.mapM fun (cat, xs) => do
+        let out ← r.mapM fun (cat, entries) => do
           let h := (← read).1.headerLevel + 1
           let hdr := Output.Html.tag s!"h{h}" #[("id", s!"---index-hdr-{cat.id}")] (cat.header)
-          let xs' ← xs.mapM (fun e => do return {{<li>{{← e.toHtml goI}}</li>}})
-          return {{<div class="division">{{hdr ++ {{<ol>{{xs'}}</ol>}} }}</div>}}
+          let entries' ← entries.mapM fun e => do
+            return softHyphenateIdentifiers {{<li>{{← e.toHtml goI}}</li>}}
+          return {{<div class="division">{{hdr ++ {{<ol>{{entries'}}</ol>}} }}</div>}}
         let path := (← read).traverseContext.path
         return {{
           <div class="theIndex">
@@ -393,6 +465,8 @@ where
       position: sticky;
       top: 0;
       background: white;
+      font-family: var(--verso-structure-font-family);
+      font-size: 1.25rem;
     }
 
     main .theIndex nav ol {
@@ -404,12 +478,20 @@ where
     }
 
     main .theIndex nav ol li a {
-      margin-left: 0.5rem;
-      margin-right: 0.5rem;
+      /* Padding instead of margin to have a bigger click target */
+      padding-left: 0.5rem;
+      padding-right: 0.5rem;
+    }
+    /* Increase the size of the touch target on phones */
+    @media screen and (max-width: 700px) {
+      main .theIndex nav ol li a {
+        padding-left: 0.75rem;
+        padding-right: 0.75rem;
+      }
     }
 
     main .theIndex nav ol li:first-child a {
-      margin-left: 0;
+      padding-left: 0;
     }
 
     main .theIndex nav ol li + li:before {
@@ -433,7 +515,16 @@ where
       padding-left: 0;
       display: flex;
       flex-wrap: wrap;
-      gap: 3rem;
+      gap: 2rem 3rem;
+      overflow-wrap: break-word;
+    }
+
+    @media screen and (max-width: 700px) {
+      main .theindex .division > ol {
+        flex-direction: column;
+        flex-wrap: nowrap;
+        gap: 1rem;
+      }
     }
 
    main .theIndex .division > ol > li {
