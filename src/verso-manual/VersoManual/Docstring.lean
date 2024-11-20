@@ -936,10 +936,8 @@ def progress : DirectiveExpander
     for ns in namespaces do
       present := present.insert ns {}
     for (x, info) in (← getEnv).constants do
-      if ignore x then continue
+      if ignore (← getEnv) x then continue
       if exceptions.contains x then continue
-      if Lean.Linter.isDeprecated (← getEnv) x then continue
-      if ← isProjectionFn x then continue
       match info with
       | .thmInfo _ => continue -- don't document theorems
       | .ctorInfo _ => continue -- constructors are documented as children of their types
@@ -955,10 +953,16 @@ def progress : DirectiveExpander
 
     pure #[← ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.progress $(quote namespaces.toArray) $(quote exceptions.toArray) $(quote present') $(quote allTactics)) #[])]
 where
-  ignore (x : Name) : Bool :=
+  ignore (env : Environment) (x : Name) : Bool :=
     isPrivateName x ||
+    isAuxRecursor env x ||
+    isNoConfusion env x ||
+    isRecCore env x ||
+    env.isProjectionFn x ||
+    Lean.Linter.isDeprecated env x ||
     x.hasNum ||
     x.isInternalOrNum ||
+    (`noConfusionType).isSuffixOf x ||
     let str := x.getString!
     str ∈ ["sizeOf_spec", "sizeOf_eq", "brecOn", "ind", "ofNat_toCtorIdx", "inj", "injEq", "induct"] ||
     "proof_".isPrefixOf str && (str.drop 6).all (·.isDigit) ||
@@ -999,7 +1003,23 @@ def progress.descr : BlockDescr where
           let percent := notDocumented.length.toFloat * 100.0 / wanted.length.toFloat
           {{
             <dt><code>{{ns.toString}}</code></dt>
-            <dd><details><summary><progress id=s!"prog-{ns}" value=s!"{100 - percent.toUInt8.toNat}" min="0" max="100"></progress> <label for=s!"prog-ns">s!"Missing {percent}%"</label></summary> {{notDocumented |>.map (·.toString) |> String.intercalate ", " }}</details></dd>
+            <dd>
+              <details>
+                <summary>
+                  <progress id=s!"prog-{ns}" value=s!"{100 - percent.toUInt8.toNat}" min="0" max="100"></progress>
+                  <label for=s!"prog-ns">s!"Missing {percent}%"</label>
+                </summary>
+                {{notDocumented |>.map (·.toString) |> String.intercalate ", " }}
+                <pre>
+                  {{ notDocumented.map ("{docstring " ++ ·.toString ++ "}\n") |> String.join }}
+                </pre>
+                <pre>
+                  "```exceptions\n"
+                  {{ notDocumented.map (·.toString ++ "\n") |> String.join }}
+                  "```\n"
+                </pre>
+              </details>
+            </dd>
           }}
         }}
         <dt>"Tactics"</dt>
@@ -1009,7 +1029,16 @@ def progress.descr : BlockDescr where
               <progress id="progress-tactics" value=s!"{100 - tacticPercent.toUInt8.toNat}" min="0" max="100"></progress>
               <label for="progress-tactics">s!"Missing {tacticPercent}% ({undocTactics.size}/{allTactics.size})"</label>
             </summary>
-            {{ undocTactics.map (·.toString) |>.toList |> String.intercalate ", "}}</details>
+            {{ undocTactics.map (·.toString) |>.toList |> String.intercalate ", " }}
+            <pre>
+              {{ undocTactics.map ("{docstring " ++ ·.toString ++ "}\n") |>.toList |> String.join }}
+            </pre>
+            <pre>
+              "```exceptions\n"
+              {{ undocTactics.map (·.toString ++ "\n") |>.toList |> String.join }}
+              "```\n"
+            </pre>
+          </details>
         </dd>
       </dl>
     }}
