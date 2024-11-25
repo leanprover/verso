@@ -259,10 +259,18 @@ partial def toc (depth : Nat) (opts : Html.Options Manual IO)
       | .never => 0
 
     let children ← sub.mapM (fun p => toc depth' opts (ctxt'.inPart p) state definitionIds linkTargets p)
-    pure <| .entry titleHtml ctxt'.path v.toString (ctxt.sectionNumber.mapM _root_.id) children
+    pure {
+      title := titleHtml,
+      path := ctxt'.path,
+      id := v.toString,
+      sectionNum := ctxt.sectionNumber.mapM _root_.id,
+      children := children.toList
+    }
 
-def page (toc : Array Html.Toc) (path : Path) (textTitle : String) (htmlTitle contents : Html) (state : TraverseState) (config : Config) (showNavButtons : Bool := true) (extraJs : List String := []) : Html :=
-  let toc := .entry htmlTitle #[] "" (some #[]) toc
+def page (toc : List Html.Toc) (path : Path) (textTitle : String) (htmlTitle contents : Html) (state : TraverseState) (config : Config) (showNavButtons : Bool := true) (extraJs : List String := []) : Html :=
+  let toc := {
+    title := htmlTitle, path := #[], id := "" , sectionNum := some #[], children := toc
+  }
   Html.page toc path textTitle htmlTitle contents
     state.extraCss (state.extraJs.insertMany extraJs)
     (showNavButtons := showNavButtons)
@@ -281,7 +289,7 @@ def Config.relativize (config : Config) (path : Path) (html : Html) : Html :=
     Html.relativize path html
 
 open Output.Html in
-def xref (toc : Array Html.Toc) (xrefJson : String) (findJs : String) (state : TraverseState) (config : Config) : Html :=
+def xref (toc : List Html.Toc) (xrefJson : String) (findJs : String) (state : TraverseState) (config : Config) : Html :=
   page toc #["find"] "Cross-Reference Redirection" "Cross-Reference Redirection" {{
     <section>
       <h1 id="title"></h1>
@@ -292,7 +300,7 @@ def xref (toc : Array Html.Toc) (xrefJson : String) (findJs : String) (state : T
   config
   (extraJs := [s!"let xref = {xrefJson};\n" ++ findJs])
 
-def emitXrefs (toc : Array Html.Toc) (dir : System.FilePath) (state : TraverseState) (config : Config) : IO Unit := do
+def emitXrefs (toc : List Html.Toc) (dir : System.FilePath) (state : TraverseState) (config : Config) : IO Unit := do
   let mut out : Json := Json.mkObj []
   for (n, dom) in state.domains do
     out := out.setObjVal! n.toString <| Json.mkObj [
@@ -355,7 +363,7 @@ where
           {{bookTocHtml}}
           {{contents}}
         </section>}}
-    let toc ← text.subParts.mapM (toc 0 opts ctxt state definitionIds linkTargets)
+    let toc := (← text.subParts.mapM (toc 0 opts ctxt state definitionIds linkTargets)).toList
     emitXrefs toc dir state config
     IO.FS.withFile (dir.join "book.css") .write fun h => do
       h.putStrLn Html.Css.pageStyle
@@ -393,7 +401,8 @@ where
     let ctxt := {logError}
     let definitionIds := state.definitionIds
     let linkTargets := state.linkTargets
-    let toc ← text.subParts.mapM (fun p => toc config.htmlDepth opts (ctxt.inPart p) state definitionIds linkTargets p)
+    let toc ← text.subParts.toList.mapM fun p =>
+      toc config.htmlDepth opts (ctxt.inPart p) state definitionIds linkTargets p
     let titleHtml ← Html.seq <$> text.title.mapM (Manual.toHtml opts.lift ctxt state definitionIds linkTargets {} ·)
     IO.FS.withFile (root.join "book.css") .write fun h => do
       h.putStrLn Html.Css.pageStyle
