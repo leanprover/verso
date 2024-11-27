@@ -122,7 +122,7 @@ def NameSuffixMap.insert (map : NameSuffixMap α) (key : Name) (val : α) : Name
   for h : i in [0:arr.size] do
     have : i < arr.size := by cases h; simp [*]
     if arr[i].fst == key then
-      return {map with contents := map.contents.insert last (arr.set ⟨i, by assumption⟩ (key, val))}
+      return {map with contents := map.contents.insert last (arr.set i (key, val))}
   return {map with contents := map.contents.insert last (arr.push (key, val))}
 
 def NameSuffixMap.toArray (map : NameSuffixMap α) : Array (Name × α) := Id.run do

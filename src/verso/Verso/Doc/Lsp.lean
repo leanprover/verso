@@ -215,7 +215,7 @@ mutual
     while h : i < outer.size do
       let sym := outer[i]
       if let some sym' := graftSymbolOnto inner sym then
-        return outer.set ⟨i, h⟩ sym'
+        return outer.set i sym'
       i := i + 1
     return outer.push inner
 end

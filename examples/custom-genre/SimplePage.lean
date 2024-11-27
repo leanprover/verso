@@ -141,7 +141,7 @@ def renderDate (day month year : Nat) :=
   s!"{padTo 4 year'}-{padTo 2 month'}-{padTo 2 day'}"
 where
   padTo n str :=
-    (n - str.length).fold (fun _ s => s.push '0') "" ++ str
+    (n - str.length).fold (fun _ _ s => s.push '0') "" ++ str
 
 /-- info: "1984-07-12" -/
 #guard_msgs in
