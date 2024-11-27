@@ -187,7 +187,7 @@ partial defmethod Highlighted.trimRight (hl : Highlighted) : Highlighted :=
         . simp
         . exact h
       --dbg_trace repr hls[i]
-      .seq <| hls.set ⟨i, by assumption⟩ hls[i].trimRight
+      .seq <| hls.set i hls[i].trimRight
     else hl
 
 partial defmethod Highlighted.trimLeft (hl : Highlighted) : Highlighted :=
@@ -199,7 +199,7 @@ partial defmethod Highlighted.trimLeft (hl : Highlighted) : Highlighted :=
   | .point .. => hl
   | .seq hls =>
     if h : hls.size > 0 then
-      .seq <| hls.set ⟨0, h⟩ hls[0].trimLeft
+      .seq <| hls.set 0 hls[0].trimLeft
     else hl
 
 defmethod Highlighted.trim (hl : Highlighted) : Highlighted := hl.trimLeft.trimRight
