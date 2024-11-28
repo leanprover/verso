@@ -37,6 +37,31 @@ deriving instance FromJson for BinderInfo
 deriving instance ToJson for DefinitionSafety
 deriving instance FromJson for DefinitionSafety
 
+private def nameString (x : Name) (showNamespace : Bool) :=
+  if showNamespace then x.toString
+  else
+    match x with
+    | .str _ s => s
+    | _ => x.toString
+
+open Lean.PrettyPrinter Delaborator in
+def ppName (c : Name) (showNamespace : Bool := true) (openDecls : List OpenDecl := []) : MetaM FormatWithInfos :=
+  MonadWithReaderOf.withReader (fun (ρ : Core.Context) => {ρ with openDecls := ρ.openDecls ++ openDecls}) <|do
+  let decl ← getConstInfo c
+  let e := .const c (decl.levelParams.map mkLevelParam)
+  let (stx, infos) ← withOptions (pp.universes.set · true |> (pp.fullNames.set · true)) <|
+    delabCore e (delab := delabConst)
+  -- The special-casing here is to allow the `showNamespace` setting to work. This is perhaps too
+  -- big of a hammer...
+  match stx with
+    | `($x:ident.{$uni,*}) =>
+      let unis : List Format ← uni.getElems.toList.mapM (ppCategory `level ·.raw)
+      return ⟨Std.Format.tag SubExpr.Pos.root (.text (nameString x.getId showNamespace)) ++ ".{" ++ .joinSep unis ", " ++ "}", infos⟩
+    | `($x:ident) =>
+      return ⟨Std.Format.tag SubExpr.Pos.root (Std.Format.text (nameString x.getId showNamespace)), infos⟩
+    | _ =>
+      return ⟨← ppTerm stx, infos⟩
+
 open Lean.PrettyPrinter Delaborator in
 def ppSignature (c : Name) (showNamespace : Bool := true) (openDecls : List OpenDecl := []) : MetaM FormatWithInfos :=
   MonadWithReaderOf.withReader (fun (ρ : Core.Context) => {ρ with openDecls := ρ.openDecls ++ openDecls}) <|do
@@ -86,10 +111,6 @@ def ppSignature (c : Name) (showNamespace : Bool := true) (openDecls : List Open
     return ⟨doc, infos⟩
   | _ => return ⟨← ppTerm ⟨stx⟩, infos⟩  -- HACK: not a term
 
-where
-  nameString (x : Name) (showNamespace : Bool) :=
-    if showNamespace then x.toString else x.getString!
-
 structure FieldInfo where
   fieldName : Highlighted
   type : Highlighted
@@ -125,6 +146,7 @@ instance : Quote FieldInfo where
 
 structure DocName where
   name : Name
+  hlName : Highlighted
   signature : Highlighted
   docstring? : Option String
 deriving ToJson, FromJson
@@ -132,7 +154,7 @@ deriving ToJson, FromJson
 open Syntax (mkCApp) in
 instance : Quote DocName where
   quote
-    | {name, signature, docstring?} => mkCApp ``DocName.mk #[quote name, quote signature, quote docstring?]
+    | {name, hlName, signature, docstring?} => mkCApp ``DocName.mk #[quote name, quote hlName, quote signature, quote docstring?]
 
 inductive DeclType where
   | structure (isClass : Bool) (constructor : DocName) (fieldNames : Array Name) (fieldInfo : Array FieldInfo) (parents : Array Name) (ancestors : Array Name)
@@ -168,9 +190,6 @@ open Meta in
 def DocName.ofName (c : Name) (showNamespace := true) (openDecls : List OpenDecl := []) : MetaM DocName := do
   let env ← getEnv
   if let some _ := env.find? c then
-    let ⟨fmt, infos⟩ ← withOptions (·.setBool `pp.tagAppFns true) <|
-      ppSignature c (showNamespace := showNamespace) (openDecls := openDecls)
-    let tt := Lean.Widget.TaggedText.prettyTagged (w := 48) fmt
     let ctx := {
       env           := (← getEnv)
       mctx          := (← getMCtx)
@@ -180,14 +199,28 @@ def DocName.ofName (c : Name) (showNamespace := true) (openDecls : List OpenDecl
       fileMap       := default
       ngen          := (← getNGen)
     }
-    let sig := Lean.Widget.tagCodeInfos ctx infos tt
 
-    pure ⟨c, ← renderTagged none sig ⟨{}, false⟩, ← findDocString? env c⟩
-  else pure ⟨c, Highlighted.seq #[], none⟩
+    let ⟨fmt, infos⟩ ← withOptions (·.setBool `pp.tagAppFns true) <|
+      ppSignature c (showNamespace := showNamespace) (openDecls := openDecls)
+    let ttSig := Lean.Widget.TaggedText.prettyTagged (w := 40) fmt
+    let sig := Lean.Widget.tagCodeInfos ctx infos ttSig
+
+    let ⟨fmt, infos⟩ ← withOptions (·.setBool `pp.tagAppFns true) <|
+      ppName c (showNamespace := showNamespace) (openDecls := openDecls)
+    let ttName := Lean.Widget.TaggedText.prettyTagged (w := 40) fmt
+    let name := Lean.Widget.tagCodeInfos ctx infos ttName
+
+    pure ⟨c, ← renderTagged none name ⟨{}, false⟩, ← renderTagged none sig ⟨{}, false⟩, ← findDocString? env c⟩
+  else
+    pure ⟨c, .token ⟨.const c "" none false, c.toString⟩, Highlighted.seq #[], none⟩
 
 open Meta in
 def DeclType.ofName (c : Name) : MetaM DeclType := do
   let env ← getEnv
+  let openDecls : List OpenDecl :=
+    match c with
+    | .str _ s => [.explicit c.getPrefix s.toName]
+    | _ => []
   if let some info := env.find? c then
     match info with
     | .defnInfo di => return .def di.safety
@@ -206,10 +239,10 @@ def DeclType.ofName (c : Name) : MetaM DeclType := do
                 let projType ← withOptions (·.setInt `format.width 40 |>.setBool `pp.tagAppFns true) <| ppExpr type
                 let fieldName' := Highlighted.token ⟨.const projFn projType.pretty (← findDocString? env projFn) false, fieldName.toString⟩
                 pure {fieldName := fieldName', type := ← renderTagged none type' ⟨{}, false⟩, name, projFn, subobject?, binderInfo, autoParam := autoParam?.isSome, docString? := ← findDocString? env projFn}
-        return .structure (isClass env c) (← DocName.ofName ctor.name) info.fieldNames fieldInfo parents ancestors
+        return .structure (isClass env c) (← DocName.ofName (showNamespace := false) (openDecls := openDecls) ctor.name) info.fieldNames fieldInfo parents ancestors
 
       else
-        let ctors ← ii.ctors.mapM (DocName.ofName (showNamespace := false) (openDecls := [.explicit c.getPrefix c.getString!.toName]))
+        let ctors ← ii.ctors.mapM (DocName.ofName (showNamespace := false) (openDecls := openDecls))
         let t ← inferType <| .const c (ii.levelParams.map .param)
         let t' ← reduceAll t
         return .inductive ctors.toArray (ii.numIndices + ii.numParams) (isPred t')
@@ -312,6 +345,9 @@ def docstringStyle := r#"
 .namedocs > .text > .constructors > li > .doc {
   text-indent: 0;
 }
+.namedocs .methods td, .namedocs .fields td {
+  vertical-align: top;
+}
 
 "#
 
@@ -329,13 +365,12 @@ def docstring.descr : BlockDescr where
     match declType with
     | .structure isClass ctor fields fieldInfos _parents _ancestors =>
       if isClass then
+        saveRef id ctor.name <| some <| Doc.Inline.concat #[Doc.Inline.text "Instance constructor of ", Doc.Inline.code name.toString]
+
         for (f, i) in fields.zip fieldInfos do
-          Index.addEntry id {term := Doc.Inline.code i.projFn.toString}
-          if i.projFn.getPrefix != .anonymous then
-            Index.addEntry id {
-              term := Doc.Inline.code f.toString,
-              subterm := some <| Doc.Inline.concat #[Doc.Inline.code i.projFn.toString, Doc.Inline.text " (class method)"]
-            }
+          saveRef id i.projFn
+            (some <| Doc.Inline.concat #[Doc.Inline.code i.projFn.toString, Doc.Inline.text " (class method)"])
+            (showName := some f.toString)
       else
         saveRef id ctor.name <| some <| Doc.Inline.concat #[Doc.Inline.text "Constructor of ", Doc.Inline.code name.toString]
 
@@ -421,7 +456,7 @@ where
       pure <| {{
         {{ ctorRow }}
         <h1>"Fields"</h1>
-        <table>
+        <table class="fields">
           {{← infos.mapM fun i => do
             let docRow ←
               if let some doc := i.docString? then do
@@ -439,7 +474,7 @@ where
              pure <| {{
               <tr>
                 <td><code class="hl lean inline">{{← i.fieldName.toHtml}}</code></td>
-                <td>":"</td>
+                <td><code>" : "</code></td>
                 <td><code class="hl lean inline">{{←  i.type.toHtml }}</code></td>
               </tr>
             }} ++ docRow
@@ -452,10 +487,11 @@ where
       let ctorRow ←
         if isPrivateName ctor.name then
           pure Html.empty
-        else pure {{
+        else
+          pure {{
             <h1>"Instance Constructor"</h1>
             <table>
-              <tr><td><code class="hl lean inline">{{← ctor.signature.toHtml}}</code></td></tr>
+              <tr><td><code class="hl lean inline">{{← ctor.hlName.toHtml}}</code></td></tr>
               {{ ← if let some d := ctor.docstring? then do
                   pure {{<tr><td>{{← md2html goB d}}</td></tr>}}
                 else pure Html.empty
@@ -465,7 +501,7 @@ where
       pure <| {{
         {{ ctorRow }}
         <h1>"Methods"</h1>
-        <table>
+        <table class="methods">
           {{← infos.mapM fun i => do
             let docRow ←
               if let some doc := i.docString? then do
@@ -483,8 +519,8 @@ where
              pure <| {{
               <tr>
                 <td><code class="hl lean inline">{{← i.fieldName.toHtml}}</code></td>
-                <td>":"</td>
-                <td><code class="hl lean inline">{{←  i.type.toHtml }}</code></td>
+                <td><code>" : "</code></td>
+                <td><code class="hl lean inline">{{← i.type.toHtml }}</code></td>
               </tr>
             }} ++ docRow
           }}
