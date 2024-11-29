@@ -37,6 +37,37 @@ deriving instance FromJson for BinderInfo
 deriving instance ToJson for DefinitionSafety
 deriving instance FromJson for DefinitionSafety
 
+private def nameString (x : Name) (showNamespace : Bool) :=
+  if showNamespace then x.toString
+  else
+    match x with
+    | .str _ s => s
+    | _ => x.toString
+
+open Lean.PrettyPrinter Delaborator in
+def ppName (c : Name) (showUniverses := true) (showNamespace : Bool := true) (openDecls : List OpenDecl := []) : MetaM FormatWithInfos :=
+  MonadWithReaderOf.withReader (fun (ρ : Core.Context) => {ρ with openDecls := ρ.openDecls ++ openDecls}) <|do
+  let decl ← getConstInfo c
+  let e := .const c (decl.levelParams.map mkLevelParam)
+  let (stx, infos) ← withOptions (pp.universes.set · true |> (pp.fullNames.set · true)) <|
+    delabCore e (delab := delabConst)
+  -- The special-casing here is to allow the `showNamespace` setting to work. This is perhaps too
+  -- big of a hammer...
+  match stx with
+    | `($x:ident.{$uni,*}) =>
+      let unis : Format ← do
+        if showUniverses then
+          let us ← uni.getElems.toList.mapM (ppCategory `level ·.raw)
+          pure <| ".{" ++ Format.joinSep us ", " ++ "}"
+        else
+          pure .nil
+
+      return ⟨Std.Format.tag SubExpr.Pos.root (.text (nameString x.getId showNamespace)) ++ unis, infos⟩
+    | `($x:ident) =>
+      return ⟨Std.Format.tag SubExpr.Pos.root (Std.Format.text (nameString x.getId showNamespace)), infos⟩
+    | _ =>
+      return ⟨← ppTerm stx, infos⟩
+
 open Lean.PrettyPrinter Delaborator in
 def ppSignature (c : Name) (showNamespace : Bool := true) (openDecls : List OpenDecl := []) : MetaM FormatWithInfos :=
   MonadWithReaderOf.withReader (fun (ρ : Core.Context) => {ρ with openDecls := ρ.openDecls ++ openDecls}) <|do
@@ -86,14 +117,27 @@ def ppSignature (c : Name) (showNamespace : Bool := true) (openDecls : List Open
     return ⟨doc, infos⟩
   | _ => return ⟨← ppTerm ⟨stx⟩, infos⟩  -- HACK: not a term
 
-where
-  nameString (x : Name) (showNamespace : Bool) :=
-    if showNamespace then x.toString else x.getString!
+structure DocName where
+  name : Name
+  hlName : Highlighted
+  signature : Highlighted
+  docstring? : Option String
+deriving ToJson, FromJson, Repr
+
+open Syntax (mkCApp) in
+instance : Quote DocName where
+  quote
+    | {name, hlName, signature, docstring?} => mkCApp ``DocName.mk #[quote name, quote hlName, quote signature, quote docstring?]
+
 
 structure FieldInfo where
   fieldName : Highlighted
+  /--
+  What is the path by which the field was inherited?
+  [] if not inherited.
+  -/
+  fieldFrom : List DocName
   type : Highlighted
-  name : Name
   projFn : Name
   /-- It is `some parentStructName` if it is a subobject, and `parentStructName` is the name of the parent structure -/
   subobject? : Option Name
@@ -120,23 +164,25 @@ instance : Quote DefinitionSafety where
 open Syntax (mkCApp) in
 instance : Quote FieldInfo where
   quote
-    | {fieldName, type, name, projFn, subobject?, binderInfo, autoParam, docString?} =>
-      mkCApp ``FieldInfo.mk #[quote fieldName, quote type, quote name, quote projFn, quote subobject?, quote binderInfo, quote autoParam, quote docString?]
+    | .mk fieldName fieldFrom? type projFn subobject? binderInfo autoParam docString? =>
+      mkCApp ``FieldInfo.mk #[quote fieldName, quote fieldFrom?, quote type, quote projFn, quote subobject?, quote binderInfo, quote autoParam, quote docString?]
 
-structure DocName where
+structure ParentInfo where
+  projFn : Name
   name : Name
-  signature : Highlighted
-  docstring? : Option String
+  parent : Highlighted
+  index : Nat
 deriving ToJson, FromJson
 
 open Syntax (mkCApp) in
-instance : Quote DocName where
+instance : Quote ParentInfo where
   quote
-    | {name, signature, docstring?} => mkCApp ``DocName.mk #[quote name, quote signature, quote docstring?]
+    | .mk projFn name parent index => mkCApp ``ParentInfo.mk #[quote projFn, quote name, quote parent, quote index]
 
 inductive DeclType where
-  | structure (isClass : Bool) (constructor : DocName) (fieldNames : Array Name) (fieldInfo : Array FieldInfo) (parents : Array Name) (ancestors : Array Name)
+  | structure (isClass : Bool) (constructor : DocName) (fieldNames : Array Name) (fieldInfo : Array FieldInfo) (parents : Array ParentInfo) (ancestors : Array Name)
   | def (safety : DefinitionSafety)
+  | opaque (safety : DefinitionSafety)
   | inductive (constructors : Array DocName) (numArgs : Nat) (propOnly : Bool)
   | other
 deriving ToJson, FromJson
@@ -147,6 +193,7 @@ instance : Quote DeclType where
     | .structure isClass ctor fields infos parents ancestors =>
       mkCApp ``DeclType.«structure» #[quote isClass, quote ctor, quote fields, quote infos, quote parents, quote ancestors]
     | .def safety => mkCApp ``DeclType.def #[quote safety]
+    | .opaque safety => mkCApp ``DeclType.opaque #[quote safety]
     | .inductive ctors numArgs propOnly => mkCApp ``DeclType.inductive #[quote ctors, quote numArgs, quote propOnly]
     | .other => mkCApp ``DeclType.other #[]
 
@@ -156,6 +203,8 @@ def DeclType.label : DeclType → String
   | .def .safe => "def"
   | .def .unsafe => "unsafe def"
   | .def .partial => "partial def"
+  | .opaque .unsafe => "unsafe opaque"
+  | .opaque _ => "opaque"
   | .inductive _ _ false => "inductive type"
   | .inductive _ 0 true => "inductive proposition"
   | .inductive _ _ true => "inductive predicate"
@@ -165,12 +214,9 @@ set_option pp.fullNames false in
 #check List.nil
 
 open Meta in
-def DocName.ofName (c : Name) (showNamespace := true) (openDecls : List OpenDecl := []) : MetaM DocName := do
+def DocName.ofName (c : Name) (showUniverses := true) (showNamespace := true) (openDecls : List OpenDecl := []) : MetaM DocName := do
   let env ← getEnv
   if let some _ := env.find? c then
-    let ⟨fmt, infos⟩ ← withOptions (·.setBool `pp.tagAppFns true) <|
-      ppSignature c (showNamespace := showNamespace) (openDecls := openDecls)
-    let tt := Lean.Widget.TaggedText.prettyTagged (w := 48) fmt
     let ctx := {
       env           := (← getEnv)
       mctx          := (← getMCtx)
@@ -180,39 +226,111 @@ def DocName.ofName (c : Name) (showNamespace := true) (openDecls : List OpenDecl
       fileMap       := default
       ngen          := (← getNGen)
     }
-    let sig := Lean.Widget.tagCodeInfos ctx infos tt
 
-    pure ⟨c, ← renderTagged none sig ⟨{}, false⟩, ← findDocString? env c⟩
-  else pure ⟨c, Highlighted.seq #[], none⟩
+    let ⟨fmt, infos⟩ ← withOptions (·.setBool `pp.tagAppFns true) <|
+      ppSignature c (showNamespace := showNamespace) (openDecls := openDecls)
+    let ttSig := Lean.Widget.TaggedText.prettyTagged (w := 40) fmt
+    let sig := Lean.Widget.tagCodeInfos ctx infos ttSig
+
+    let ⟨fmt, infos⟩ ← withOptions (·.setBool `pp.tagAppFns true) <|
+      ppName c (showUniverses := showUniverses) (showNamespace := showNamespace) (openDecls := openDecls)
+    let ttName := Lean.Widget.TaggedText.prettyTagged (w := 40) fmt
+    let name := Lean.Widget.tagCodeInfos ctx infos ttName
+
+    pure ⟨c, ← renderTagged none name ⟨{}, false⟩, ← renderTagged none sig ⟨{}, false⟩, ← findDocString? env c⟩
+  else
+    pure ⟨c, .token ⟨.const c "" none false, c.toString⟩, Highlighted.seq #[], none⟩
+
+partial def getStructurePathToBaseStructureAux (env : Environment) (baseStructName : Name) (structName : Name) (path : List Name) : Option (List Name) :=
+  if baseStructName == structName then
+    some path.reverse
+  else
+    if let some info := getStructureInfo? env structName then
+      -- Prefer subobject projections
+      (info.fieldInfo.findSome? fun field =>
+        match field.subobject? with
+        | none                  => none
+        | some parentStructName => getStructurePathToBaseStructureAux env baseStructName parentStructName (parentStructName :: path))
+      -- Otherwise, consider other parents
+      <|> info.parentInfo.findSome? fun parent =>
+        if parent.subobject then
+          none
+        else
+          getStructurePathToBaseStructureAux env baseStructName parent.structName (parent.structName :: path)
+    else none
+
+/--
+If `baseStructName` is an ancestor structure for `structName`, then return a sequence of projection functions
+to go from `structName` to `baseStructName`. Returns `[]` if `baseStructName == structName`.
+-/
+def getStructurePathToBaseStructure? (env : Environment) (baseStructName : Name) (structName : Name) : Option (List Name) :=
+  getStructurePathToBaseStructureAux env baseStructName structName []
+
 
 open Meta in
 def DeclType.ofName (c : Name) : MetaM DeclType := do
   let env ← getEnv
+  let openDecls : List OpenDecl :=
+    match c with
+    | .str _ s => [.explicit c.getPrefix s.toName]
+    | _ => []
   if let some info := env.find? c then
     match info with
     | .defnInfo di => return .def di.safety
     | .inductInfo ii =>
       if let some info := getStructureInfo? env c then
         let ctor := getStructureCtor env c
-        let parents := getStructureParentInfo env c |>.map (·.structName)
+        let parentProjFns := getStructureParentInfo env c |>.map (·.projFn)
+        let parents ←
+          forallTelescopeReducing ii.type fun params _ =>
+            withLocalDeclD `self (mkAppN (mkConst c (ii.levelParams.map mkLevelParam)) params) fun s => do
+              let selfType ← inferType s >>= whnf
+              let .const _structName us := selfType.getAppFn
+                | pure #[]
+              let params := selfType.getAppArgs
+
+              parentProjFns.mapIdxM fun i parentProj => do
+                let proj := mkApp (mkAppN (.const parentProj us) params) s
+                let type ← inferType proj >>= instantiateMVars
+                let projType ← withOptions (·.setInt `format.width 40 |>.setBool `pp.tagAppFns true) <| Widget.ppExprTagged type
+                if let .const parentName _  := type.getAppFn then
+                  pure ⟨parentProj, parentName, ← renderTagged none projType ⟨{}, false⟩, i⟩
+                else
+                  pure ⟨parentProj, .anonymous, ← renderTagged none projType ⟨{}, false⟩, i⟩
         let ancestors ← getAllParentStructures c
+        let allFields := getStructureFieldsFlattened env c (includeSubobjectFields := true)
         let fieldInfo ←
           forallTelescopeReducing ii.type fun params _ =>
             withLocalDeclD `self (mkAppN (mkConst c (ii.levelParams.map mkLevelParam)) params) fun s =>
-              (info.fieldNames.zip info.fieldInfo).mapM fun (name, {fieldName, projFn, subobject?, binderInfo, autoParam?}) => do
+              allFields.mapM fun fieldName => do
                 let proj ← mkProjection s fieldName
                 let type ← inferType proj >>= instantiateMVars
                 let type' ← withOptions (·.setInt `format.width 40 |>.setBool `pp.tagAppFns true) <| (Widget.ppExprTagged type)
                 let projType ← withOptions (·.setInt `format.width 40 |>.setBool `pp.tagAppFns true) <| ppExpr type
-                let fieldName' := Highlighted.token ⟨.const projFn projType.pretty (← findDocString? env projFn) false, fieldName.toString⟩
-                pure {fieldName := fieldName', type := ← renderTagged none type' ⟨{}, false⟩, name, projFn, subobject?, binderInfo, autoParam := autoParam?.isSome, docString? := ← findDocString? env projFn}
-        return .structure (isClass env c) (← DocName.ofName ctor.name) info.fieldNames fieldInfo parents ancestors
+                let fieldFrom? := findField? env c fieldName
+                let fieldPath? := fieldFrom? >>= (getStructurePathToBaseStructure? env · c)
+                let fieldFrom ← fieldPath?.getD [] |>.mapM (DocName.ofName (showUniverses := false))
+                let subobject? := isSubobjectField? env (fieldFrom?.getD c) fieldName
+                let fieldInfo? := getFieldInfo? env (fieldFrom?.getD c) fieldName
+
+                let binderInfo := fieldInfo?.map (·.binderInfo) |>.getD BinderInfo.default
+                let autoParam := fieldInfo?.map (·.autoParam?.isSome) |>.getD false
+
+                if let some projFn := getProjFnForField? env c fieldName then
+                  let docString? ← findDocString? env projFn
+                  let fieldName' := Highlighted.token ⟨.const projFn projType.pretty docString? true, fieldName.toString⟩
+                  pure { fieldName := fieldName', fieldFrom, type := ← renderTagged none type' ⟨{}, false⟩, subobject?,  projFn, binderInfo, autoParam, docString?}
+                else
+                  let fieldName' := Highlighted.token ⟨.unknown, fieldName.toString⟩
+                  pure { fieldName := fieldName', fieldFrom, type := ← renderTagged none type' ⟨{}, false⟩, subobject?,  projFn := .anonymous, binderInfo, autoParam, docString? := none}
+        return .structure (isClass env c) (← DocName.ofName (showNamespace := true) ctor.name) info.fieldNames fieldInfo parents ancestors
 
       else
-        let ctors ← ii.ctors.mapM (DocName.ofName (showNamespace := false) (openDecls := [.explicit c.getPrefix c.getString!.toName]))
+        let ctors ← ii.ctors.mapM (DocName.ofName (showNamespace := false) (openDecls := openDecls))
         let t ← inferType <| .const c (ii.levelParams.map .param)
         let t' ← reduceAll t
         return .inductive ctors.toArray (ii.numIndices + ii.numParams) (isPred t')
+    | .opaqueInfo oi => return .opaque (if oi.isUnsafe then .unsafe else .safe)
     | _ => return .other
   else
     return .other
@@ -312,8 +430,64 @@ def docstringStyle := r#"
 .namedocs > .text > .constructors > li > .doc {
   text-indent: 0;
 }
+.namedocs .methods td, .namedocs .fields td {
+  vertical-align: top;
+}
+.namedocs .inheritance td {
+  vertical-align: top;
+  font-size: smaller;
+  font-family: var(--verso-structure-font-family);
+}
+.namedocs .inheritance ol {
+  display: inline-block;
+  margin: 0;
+  padding: 0;
+}
+.namedocs .inheritance ol li {
+  list-style-type: none;
+  display: inline-block;
+}
+.namedocs .inheritance ol li::after {
+  content: " > "
+}
+.namedocs .inheritance ol li:last-child::after {
+  content: "";
+}
 
-"#
+.namedocs .extends {
+  display: inline;
+  margin: 0;
+  padding: 0;
+}
+.namedocs .extends li {
+  list-style-type: none;
+  display: inline-block;
+  padding-right: 1rem;
+}
+
+.namedocs:has(input[data-parent-idx="0"]) tr[data-inherited-from="0"] {
+  display: none;
+}
+
+.namedocs:has(input[data-parent-idx="0"]:checked) tr[data-inherited-from="0"] {
+  display: table-row;
+}
+"# ++ Id.run do
+  let mut str := ""
+  for i in [0:50] do
+    str := str ++ mkFilterRule i
+  str
+where
+  mkFilterRule (i : Nat) : String :=
+    ".namedocs:has(input[data-parent-idx=\"" ++ toString i ++ "\"]) tr[data-inherited-from=\"" ++ toString i ++ "\"] {
+  display: none;
+}
+.namedocs:has(input[data-parent-idx=\"" ++ toString i ++ "\"]:checked) tr[data-inherited-from=\"" ++ toString i ++"\"] {
+  display: table-row;
+}
+
+"
+
 
 open Verso.Genre.Manual.Markdown in
 @[block_extension Block.docstring]
@@ -327,16 +501,14 @@ def docstring.descr : BlockDescr where
       | do logError "Failed to deserialize docstring data"; pure none
 
     match declType with
-    | .structure isClass ctor fields fieldInfos _parents _ancestors =>
-      if isClass then
+    | .structure true ctor fields fieldInfos _parents _ancestors =>
+        saveRef id ctor.name <| some <| Doc.Inline.concat #[Doc.Inline.text "Instance constructor of ", Doc.Inline.code name.toString]
+
         for (f, i) in fields.zip fieldInfos do
-          Index.addEntry id {term := Doc.Inline.code i.projFn.toString}
-          if i.projFn.getPrefix != .anonymous then
-            Index.addEntry id {
-              term := Doc.Inline.code f.toString,
-              subterm := some <| Doc.Inline.concat #[Doc.Inline.code i.projFn.toString, Doc.Inline.text " (class method)"]
-            }
-      else
+          saveRef id i.projFn
+            (some <| Doc.Inline.concat #[Doc.Inline.code i.projFn.toString, Doc.Inline.text " (class method)"])
+            (showName := some f.toString)
+    | .structure false ctor fields fieldInfos _parents _ancestors =>
         saveRef id ctor.name <| some <| Doc.Inline.concat #[Doc.Inline.text "Constructor of ", Doc.Inline.code name.toString]
 
         for (f, i) in fields.zip fieldInfos do
@@ -382,7 +554,7 @@ def docstring.descr : BlockDescr where
           <pre class="signature hl lean block">{{sig}}</pre>
           <div class="text">
             {{← contents.mapM goB}}
-            {{← moreDeclHtml goB declType}}
+            {{← moreDeclHtml name goB declType}}
           </div>
         </div>
       }}
@@ -401,33 +573,71 @@ where
     match md.blocks.mapM (blockFromMarkdown' · Markdown.strongEmphHeaders') with
     | .error e => HtmlT.logError e; pure <| Html.text true str
     | .ok blks => blks.mapM goB
-  moreDeclHtml (goB)
-    | .structure false ctor _ infos _parents _ancestors =>
+  moreDeclHtml name (goB)
+    | .structure isClass ctor _ infos parents ancestors =>
       open Verso.Doc.Html in
       open Verso.Output Html in do
+      let parentRow ← do
+        if parents.isEmpty then pure .empty
+        else pure {{
+            <h1>"Extends"</h1>
+            <ul class="extends">
+              {{← parents.mapM fun parent => do
+                let filterId := s!"{parent.index}-{parent.name}-{name}"
+                pure {{
+                  <li>
+                    <input type="checkbox" id={{filterId}} checked="checked" data-parent-idx={{toString parent.index}}/>
+                    <label for={{filterId}}><code class="hl lean inline">{{← parent.parent.toHtml}}</code></label>
+                  </li>}}
+              }}
+            </ul>
+          }}
       let ctorRow ←
         if isPrivateName ctor.name then
           pure Html.empty
         else pure {{
-            <h1>"Constructor"</h1>
+            <h1>{{if isClass then "Instance Constructor" else "Constructor"}}</h1>
             <table>
-              <tr><td><code class="hl lean inline">{{← ctor.signature.toHtml}}</code></td></tr>
+              <tr><td><code class="hl lean inline">{{← ctor.hlName.toHtml}}</code></td></tr>
               {{ ← if let some d := ctor.docstring? then do
                   pure {{<tr><td>{{← md2html goB d}}</td></tr>}}
                 else pure Html.empty
               }}
             </table>
           }}
-      pure <| {{
+      let infos := infos.filter (·.subobject?.isNone)
+      pure {{
         {{ ctorRow }}
-        <h1>"Fields"</h1>
-        <table>
+        {{ parentRow }}
+        <h1>{{if isClass then "Methods" else "Fields"}}</h1>
+        <table class={{if isClass then "methods" else "fields"}}>
           {{← infos.mapM fun i => do
-            let docRow ←
+            let inheritedAttrVal : Option String :=
+              i.fieldFrom.head?.bind (fun n => parents.findIdx? (·.name == n.name)) |>.map toString
+            let inheritedAttr : Array (String × String) := inheritedAttrVal.map (fun i => #[("data-inherited-from", i)]) |>.getD #[]
+
+            let inheritedRow : Html ←
+              if i.fieldFrom.isEmpty then pure Html.empty
+              else
+                  pure {{
+                    <tr class="inheritance" {{inheritedAttr}}>
+                      <td colspan="2"></td>
+                      <td>
+                        "Inherited from "
+                        <ol>
+                        {{ ← i.fieldFrom.mapM fun p => do
+                            pure {{<li><code class="hl lean inline">{{ ← p.hlName.toHtml }}</code></li>}}
+                        }}
+                        </ol>
+                      </td>
+                    </tr>
+                  }}
+
+            let docRow : Html ←
               if let some doc := i.docString? then do
                 let doc ← md2html goB doc
                 pure {{
-                  <tr>
+                  <tr class="doc" {{inheritedAttr}}>
                     <td colspan="2"></td>
                     <td> {{ doc }}
                     </td>
@@ -437,56 +647,12 @@ where
                   pure Html.empty
 
              pure <| {{
-              <tr>
+              <tr {{inheritedAttr}}>
                 <td><code class="hl lean inline">{{← i.fieldName.toHtml}}</code></td>
-                <td>":"</td>
-                <td><code class="hl lean inline">{{←  i.type.toHtml }}</code></td>
+                <td><code>" : "</code></td>
+                <td><code class="hl lean inline">{{← i.type.toHtml }}</code></td>
               </tr>
-            }} ++ docRow
-          }}
-        </table>
-      }}
-    | .structure true ctor _fields infos _parents _ancestors =>
-      open Verso.Doc.Html in
-      open Verso.Output Html in do
-      let ctorRow ←
-        if isPrivateName ctor.name then
-          pure Html.empty
-        else pure {{
-            <h1>"Instance Constructor"</h1>
-            <table>
-              <tr><td><code class="hl lean inline">{{← ctor.signature.toHtml}}</code></td></tr>
-              {{ ← if let some d := ctor.docstring? then do
-                  pure {{<tr><td>{{← md2html goB d}}</td></tr>}}
-                else pure Html.empty
-              }}
-            </table>
-          }}
-      pure <| {{
-        {{ ctorRow }}
-        <h1>"Methods"</h1>
-        <table>
-          {{← infos.mapM fun i => do
-            let docRow ←
-              if let some doc := i.docString? then do
-                let doc ← md2html goB doc
-                pure {{
-                  <tr>
-                    <td colspan="2"></td>
-                    <td> {{ doc }}
-                    </td>
-                  </tr>
-                }}
-                else
-                  pure Html.empty
-
-             pure <| {{
-              <tr>
-                <td><code class="hl lean inline">{{← i.fieldName.toHtml}}</code></td>
-                <td>":"</td>
-                <td><code class="hl lean inline">{{←  i.type.toHtml }}</code></td>
-              </tr>
-            }} ++ docRow
+            }} ++ inheritedRow ++ docRow
           }}
         </table>
       }}
