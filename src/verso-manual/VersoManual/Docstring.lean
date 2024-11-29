@@ -182,6 +182,7 @@ instance : Quote ParentInfo where
 inductive DeclType where
   | structure (isClass : Bool) (constructor : DocName) (fieldNames : Array Name) (fieldInfo : Array FieldInfo) (parents : Array ParentInfo) (ancestors : Array Name)
   | def (safety : DefinitionSafety)
+  | opaque (safety : DefinitionSafety)
   | inductive (constructors : Array DocName) (numArgs : Nat) (propOnly : Bool)
   | other
 deriving ToJson, FromJson
@@ -192,6 +193,7 @@ instance : Quote DeclType where
     | .structure isClass ctor fields infos parents ancestors =>
       mkCApp ``DeclType.«structure» #[quote isClass, quote ctor, quote fields, quote infos, quote parents, quote ancestors]
     | .def safety => mkCApp ``DeclType.def #[quote safety]
+    | .opaque safety => mkCApp ``DeclType.opaque #[quote safety]
     | .inductive ctors numArgs propOnly => mkCApp ``DeclType.inductive #[quote ctors, quote numArgs, quote propOnly]
     | .other => mkCApp ``DeclType.other #[]
 
@@ -201,6 +203,8 @@ def DeclType.label : DeclType → String
   | .def .safe => "def"
   | .def .unsafe => "unsafe def"
   | .def .partial => "partial def"
+  | .opaque .unsafe => "unsafe opaque"
+  | .opaque _ => "opaque"
   | .inductive _ _ false => "inductive type"
   | .inductive _ 0 true => "inductive proposition"
   | .inductive _ _ true => "inductive predicate"
@@ -326,6 +330,7 @@ def DeclType.ofName (c : Name) : MetaM DeclType := do
         let t ← inferType <| .const c (ii.levelParams.map .param)
         let t' ← reduceAll t
         return .inductive ctors.toArray (ii.numIndices + ii.numParams) (isPred t')
+    | .opaqueInfo oi => return .opaque (if oi.isUnsafe then .unsafe else .safe)
     | _ => return .other
   else
     return .other
