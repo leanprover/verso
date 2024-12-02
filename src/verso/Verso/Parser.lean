@@ -1610,7 +1610,10 @@ where
 
 /--
 info: Success! Final stack:
-  (Verso.Syntax.metadata_block "%%%" [] "%%%")
+  (Verso.Syntax.metadata_block
+   "%%%"
+   (Term.structInstFields [])
+   "%%%")
 All input consumed.
 -/
 #guard_msgs in
@@ -1620,11 +1623,11 @@ All input consumed.
 info: Success! Final stack:
   (Verso.Syntax.metadata_block
    "%%%"
-   [(Term.structInstField
-     (Term.structInstLVal `foo [])
-     ":="
-     `bar)
-    []]
+   (Term.structInstFields
+    [(Term.structInstField
+      (Term.structInstLVal `foo [])
+      [[] [] (Term.structInstFieldDef ":=" `bar)])
+     []])
    "%%%")
 All input consumed.
 -/
@@ -1635,13 +1638,15 @@ All input consumed.
 info: Success! Final stack:
   (Verso.Syntax.metadata_block
    "%%%"
-   [(Term.structInstField
-     (Term.structInstLVal `foo [])
-     ":="
-     `bar)
-    []
-    (Term.structInstFieldAbbrev `x)
-    []]
+   (Term.structInstFields
+    [(Term.structInstField
+      (Term.structInstLVal `foo [])
+      [[] [] (Term.structInstFieldDef ":=" `bar)])
+     []
+     (Term.structInstField
+      (Term.structInstLVal `x [])
+      [])
+     []])
    "%%%")
 All input consumed.
 -/
@@ -3025,11 +3030,15 @@ Remaining:
 info: Success! Final stack:
   [(Verso.Syntax.metadata_block
     "%%%"
-    [(Term.structInstField
-      (Term.structInstLVal `foo [])
-      ":="
-      (num "53"))
-     []]
+    (Term.structInstFields
+     [(Term.structInstField
+       (Term.structInstLVal `foo [])
+       [[]
+        []
+        (Term.structInstFieldDef
+         ":="
+         (num "53"))])
+      []])
     "%%%")
    (Verso.Syntax.para
     "para{"
