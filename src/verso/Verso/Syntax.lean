@@ -73,7 +73,7 @@ syntax (name:=header) inline* : block
 open Lean.Parser.Term in
 
 open Lean.Parser Term in
-def metadataContents := sepByIndent (structInstFieldAbbrev <|> structInstField) ", " (allowTrailingSep := true)
+def metadataContents := structInstFields (sepByIndent structInstField ", " (allowTrailingSep := true))
 
 /-- Metadata for this section, defined by the current genre -/
 syntax (name:=metadata_block) "%%%" metadataContents "%%%" : block
