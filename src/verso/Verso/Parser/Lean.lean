@@ -141,12 +141,12 @@ def docMkIdResult (startPos : String.Pos) (val : Name) : ParserFn := fun c s =>
   let atom            := mkIdent info rawVal val
   s.pushSyntax atom
 
-partial def docIdentFn : ParserFn :=
+partial def docIdentFn (reportAs : String := "identifier") : ParserFn :=
   let rec parse (startPos : String.Pos) (r : Name) : ParserFn:= fun c s =>
     let input := c.input
     let i     := s.pos
     if h : input.atEnd i then
-      s.mkEOIError ["identifier"]
+      s.mkEOIError [reportAs]
     else
       let curr := input.get' i h
       if isIdBeginEscape curr then
@@ -174,7 +174,7 @@ partial def docIdentFn : ParserFn :=
         else
           docMkIdResult startPos r c s
       else
-        s.mkErrorAt "identifier" startPos
+        s.mkErrorAt reportAs startPos
   fun c s =>
     let startPos := s.pos
     parse startPos .anonymous c s

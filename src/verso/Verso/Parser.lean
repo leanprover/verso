@@ -112,7 +112,7 @@ All input consumed.
   #eval atMostFn 3 (chFn 'a') "small A" |>.test! "aaa"
 
 /--
-info: Failure: unexpected small A
+info: Failure @3 (⟨1, 3⟩): unexpected small A
 Final stack:
   ["a" "a" "a" <missing>]
 Remaining: "a"
@@ -121,7 +121,7 @@ Remaining: "a"
   #eval atMostFn 3 (chFn 'a') "small A" |>.test! "aaaa"
 
 /--
-info: Failure: unexpected end of input
+info: Failure @0 (⟨1, 0⟩): unexpected end of input
 Final stack:
   [<missing>]
 Remaining: ""
@@ -130,7 +130,7 @@ Remaining: ""
   #eval atLeastFn 3 (chFn 'a') |>.test! ""
 
 /--
-info: Failure: unexpected end of input
+info: Failure @2 (⟨1, 2⟩): unexpected end of input
 Final stack:
   ["a" "a" <missing>]
 Remaining: ""
@@ -175,7 +175,7 @@ Remaining:
 #guard_msgs in
 #eval satisfyEscFn Char.isAlpha |>.test! "abc"
 /--
-info: Failure: unexpected character
+info: Failure @0 (⟨1, 0⟩): unexpected character
 Final stack:
   <missing>
 Remaining: "0abc"
@@ -440,7 +440,7 @@ logical character on success, taking escaping into account. -/
 def inlineText : ParserFn := asStringFn (transform := unescapeStr) <| atomicFn inlineTextChar >> manyFn inlineTextChar
 
 /--
-info: Failure: unexpected end of input
+info: Failure @0 (⟨1, 0⟩): unexpected end of input
 Final stack:
   <missing>
 Remaining: ""
@@ -467,7 +467,7 @@ Remaining:
 #eval inlineTextChar |>.test! "abc"
 
 /--
-info: Failure: '['
+info: Failure @0 (⟨1, 0⟩): '['
 Final stack:
   <missing>
 Remaining: "[abc"
@@ -494,7 +494,7 @@ Remaining:
 #eval asStringFn (many1Fn inlineTextChar) |>.test! "!!![abc"
 
 /--
-info: Failure: '*'
+info: Failure @0 (⟨1, 0⟩): '*'
 Final stack:
   [<missing>]
 Remaining: "*"
@@ -582,7 +582,7 @@ All input consumed.
 #guard_msgs in
   #eval val.test! "3"
 /--
-info: Failure: unexpected end of input; expected identifier, numeral or string literal
+info: Failure @0 (⟨1, 0⟩): unexpected end of input; expected identifier, numeral or string literal
 Final stack:
   <missing>
 Remaining: ""
@@ -641,10 +641,28 @@ where
     satisfyFn (!·.isWhitespace) "non-whitespace" >> skipToNewline
 
 def recoverBlock (p : ParserFn) (final : ParserFn := skipFn) : ParserFn := recoverFn p fun _ => ignoreFn skipBlock >> final
+def recoverBlockWith (stxs : Array Syntax) (p : ParserFn) : ParserFn :=
+  recoverFn p fun rctx =>
+    ignoreFn skipBlock >>
+    show ParserFn from
+      fun _ s => stxs.foldl (init := s.takeStack rctx.initialSize) (·.pushSyntax ·)
 def recoverLine (p : ParserFn) : ParserFn := recoverFn p fun _ => ignoreFn <| skipRestOfLine
 def recoverWs (p : ParserFn) : ParserFn := recoverFn p fun _ => ignoreFn <| takeUntilFn (fun c =>  c == ' ' || c == '\n')
 def recoverEol (p : ParserFn) : ParserFn := recoverFn p fun _ => ignoreFn <| skipToNewline
+def recoverEolWith (stxs : Array Syntax) (p : ParserFn) : ParserFn :=
+  recoverFn p fun rctx =>
+    ignoreFn skipToNewline >>
+    show ParserFn from
+      fun _ s => stxs.foldl (init := s.takeStack rctx.initialSize) (·.pushSyntax ·)
 def recoverSkip (p : ParserFn) : ParserFn := recoverFn p fun _ => skipFn
+def recoverSkipWith (stxs : Array Syntax) (p : ParserFn) : ParserFn :=
+  recoverFn p fun rctx =>
+    show ParserFn from
+      fun _ s => stxs.foldl (init := s.takeStack rctx.initialSize) (·.pushSyntax ·)
+def recoverHereWith (stxs : Array Syntax) (p : ParserFn) : ParserFn :=
+  recoverFn p fun rctx =>
+    show ParserFn from
+      fun _ s => stxs.foldl (init := s.restore rctx.initialSize rctx.initialPos) (·.pushSyntax ·)
 
 
 def arg : ParserFn :=
@@ -658,7 +676,7 @@ where
        ((atomicFn (strFn ":=") >> eatSpaces >> val >> eatSpaces >> mkNamed iniSz) <|> mkAnon iniSz)
   withParens iniSz :=
     atomicFn (ignoreFn (strFn "(")) >> eatSpaces >>
-    recoverWs docIdentFn >> eatSpaces >>
+    recoverWs (docIdentFn (reportAs := "argument name"))  >> eatSpaces >>
     recoverWs (strFn ":=") >> eatSpaces >>
     recoverWs val >> eatSpaces >>
     recoverEol (ignoreFn (strFn ")")) >> eatSpaces >>
@@ -690,7 +708,7 @@ All input consumed.
   #eval arg.test! "(x:=1)"
 
 /--
-info: Failure: '
+info: Failure @0 (⟨1, 0⟩): '
 '; expected '(', identifier or numeral
 Final stack:
   <missing>
@@ -733,7 +751,7 @@ All input consumed.
   #eval arg.test! "x:=\"y\""
 
 /--
-info: Failure: unterminated string literal; expected identifier or numeral
+info: Failure @3 (⟨1, 3⟩): unterminated string literal; expected identifier or numeral
 Final stack:
  • `x
  • ":="
@@ -746,9 +764,9 @@ Remaining: "\"y"
 
 /--
 info: 2 failures:
-  @7: unterminated string literal; expected identifier or numeral
+  @7 (⟨1, 7⟩): expected ')'
     ""
-  @7: expected ')'
+  @7 (⟨1, 7⟩): unterminated string literal; expected identifier or numeral
     ""
 
 Final stack:
@@ -768,13 +786,13 @@ All input consumed.
 
 /--
 info: 4 failures:
-  @4: expected identifier
+  @4 (⟨1, 4⟩): expected ')'
     ""
-  @4: expected ':='
+  @4 (⟨1, 4⟩): expected ':='
     ""
-  @4: unexpected end of input; expected identifier, numeral or string literal
+  @4 (⟨1, 4⟩): expected argument name
     ""
-  @4: expected ')'
+  @4 (⟨1, 4⟩): unexpected end of input; expected identifier, numeral or string literal
     ""
 
 Final stack:
@@ -788,11 +806,11 @@ Final stack:
 
 /--
 info: 3 failures:
-  @6: expected ':='
+  @6 (⟨1, 6⟩): expected ')'
     ""
-  @6: unexpected end of input; expected identifier, numeral or string literal
+  @6 (⟨1, 6⟩): expected ':='
     ""
-  @6: expected ')'
+  @6 (⟨1, 6⟩): unexpected end of input; expected identifier, numeral or string literal
     ""
 
 Final stack:
@@ -802,7 +820,7 @@ Final stack:
 #eval arg.test! "(x 42)"
 
 /--
-info: Failure: expected ')'
+info: Failure @8 (⟨1, 8⟩): expected ')'
 Final stack:
   (Verso.Syntax.named `x ":=" (num "42"))
 Remaining: "\n)"
@@ -811,7 +829,7 @@ Remaining: "\n)"
 #eval arg.test! "(x := 42\n)"
 
 /--
-info: Failure: expected ')'
+info: Failure @8 (⟨1, 8⟩): expected ')'
 Final stack:
   (Verso.Syntax.named `x ":=" (num "42"))
 Remaining: "\na"
@@ -853,8 +871,8 @@ Remaining:
 def args (multiline : Option Nat := none) : ParserFn :=
   sepByFn true arg (nameArgWhitespace multiline)
 
-def nameAndArgs (multiline : Option Nat := none) : ParserFn :=
-  nameArgWhitespace multiline >> docIdentFn >>
+def nameAndArgs (multiline : Option Nat := none) (reportNameAs : String := "identifier") : ParserFn :=
+  nameArgWhitespace multiline >> docIdentFn (reportAs := reportNameAs) >>
   nameArgWhitespace multiline >> args (multiline := multiline)
 
 /--
@@ -1046,33 +1064,41 @@ mutual
     nodeFn ``code <|
     withCurrentColumn fun c =>
       atomicFn opener >>
-      (recoverBlock (final := pushMissing) <|
+      (recoverEol <| atomicFn <|
         withCurrentColumn fun c' =>
           let count := c' - c
-          nodeFn strLitKind (asStringFn (takeContentsFn (count - 1)) (quoted := true)) >>
-          asStringFn (atomicFn (repFn count (satisfyFn (· == '`') s!"{count} backticks"))) >>
+          nodeFn strLitKind (asStringFn (many1Fn <| codeContentsFn (count - 1)) (quoted := true)) >>
+          asStringFn (atomicFn (repFn count (satisfyFn (· == '`') s!"expected '{String.mk (.replicate count '`')}' to close inline code"))) >>
           notFollowedByFn (satisfyFn (· == '`') "`") "backtick")
 
   where
     opener : ParserFn := asStringFn (many1Fn (satisfyFn (· == '`') s!"any number of backticks"))
     takeBackticksFn : Nat → ParserFn
-      | 0 => satisfyFn (· != '`') "non-backtick"
-      | n+1 => fun c s =>
-        let i := s.pos
-        if h : c.input.atEnd i then s.mkEOIError
-        else
-          if c.input.get' i h == '`' then
-            takeBackticksFn n c (s.next' c.input i h)
-          else s.next' c.input i h
+      | 0 => satisfyFn (fun _ => false)
+      | n+1 => optionalFn (chFn '`' >> takeBackticksFn n)
+    codeContentsFn (maxCount : Nat) : ParserFn :=
+      atomicFn (asStringFn (satisfyFn (maxCount > 0 && · == '`') >> atMostFn (maxCount - 1) (chFn '`') s!"at most {maxCount} backticks")) <|>
+      satisfyFn (· ∉ ['`', '\n']) "expected character other than '`' or newline"
     takeContentsFn (maxCount : Nat) : ParserFn := fun c s =>
       let i := s.pos
       if h : c.input.atEnd i then s.mkEOIError
       else
         let ch := c.input.get' i h
-        if ch == '`' then
+        let s := s.next' c.input i h
+        let i := s.pos
+        if ch == '\\' then
+          if h : c.input.atEnd i then s.mkEOIError
+          else
+            let ch := c.input.get' i h
+            let s := s.next' c.input i h
+            if ch ∈ ['`', '\\'] then takeContentsFn maxCount c s
+            else
+              s.mkError "expected 'n', '\\', or '`'"
+        else if ch == '`' then
           optionalFn (atomicFn (takeBackticksFn maxCount) >> takeContentsFn maxCount) c s
-        else if ch == '\n' then s.mkUnexpectedError "newline"
-        else takeContentsFn maxCount c (s.next' c.input i h)
+        else if ch == '\n' then
+          s.mkError "unexpected newline"
+        else takeContentsFn maxCount c s
 
   partial def math : ParserFn :=
     atomicFn (nodeFn ``display_math <| strFn "$$" >> code >> fakeAtom "`") <|>
@@ -1166,7 +1192,7 @@ All input consumed.
   #eval emph {} |>.test! "_aa_"
 
 /--
-info: Failure: expected '_' without preceding space
+info: Failure @4 (⟨1, 4⟩): expected '_' without preceding space
 Final stack:
   (Verso.Syntax.emph
    "_"
@@ -1178,13 +1204,76 @@ Remaining: "_"
   #eval emph {} |>.test! "_aa _"
 
 /--
-info: Failure: unexpected space or newline after opener
+info: Failure @0 (⟨1, 0⟩): unexpected space or newline after opener
 Final stack:
   (Verso.Syntax.emph "_" <missing>)
 Remaining: "_ aa_"
 -/
 #guard_msgs in
   #eval emph {} |>.test! "_ aa_"
+
+
+/--
+info: Failure @0 (⟨1, 0⟩): expected character other than '`' or newline
+Final stack:
+  [<missing>]
+Remaining: "`a"
+-/
+#guard_msgs in
+#eval (asStringFn <| many1Fn <| code.codeContentsFn 0).test! "`a"
+
+/--
+info: Success! Final stack:
+  "`"
+Remaining:
+"a"
+-/
+#guard_msgs in
+#eval (asStringFn <| code.codeContentsFn 1).test! "`a"
+
+/--
+info: Success! Final stack:
+  "a"
+All input consumed.
+-/
+#guard_msgs in
+#eval (asStringFn <| code.codeContentsFn 1).test! "a"
+
+
+/--
+info: Success! Final stack:
+  "`a"
+All input consumed.
+-/
+#guard_msgs in
+#eval (asStringFn <| many1Fn <| code.codeContentsFn 1).test! "`a"
+
+/--
+info: Success! Final stack:
+  "aaa`b``c"
+Remaining:
+"```de````"
+-/
+#guard_msgs in
+#eval (asStringFn <| many1Fn <| code.codeContentsFn 2).test! "aaa`b``c```de````"
+
+/--
+info: Success! Final stack:
+  "aaa`"
+Remaining:
+"\nb``c```de````"
+-/
+#guard_msgs in
+#eval (asStringFn <| many1Fn <| code.codeContentsFn 2).test! "aaa`\nb``c```de````"
+
+/--
+info: Success! Final stack:
+  "aaa`\\nb``c"
+Remaining:
+"```de````"
+-/
+#guard_msgs in
+#eval (asStringFn <| many1Fn <| code.codeContentsFn 2).test! "aaa`\\nb``c```de````"
 
 /--
 info: Success! Final stack:
@@ -1209,11 +1298,11 @@ All input consumed.
   #eval code.test! "``foo `stuff` bar``"
 
 /--
-info: Failure: unexpected end of input
+info: Failure @4 (⟨1, 4⟩): unexpected end of input
 Final stack:
   (Verso.Syntax.code
    "`"
-   (str <missing>)
+   (str "\"foo\"")
    <missing>)
 Remaining: ""
 -/
@@ -1237,13 +1326,13 @@ All input consumed.
   #eval code.test! "` foo `"
 
 /--
-info: Failure: newline
+info: Failure @4 (⟨1, 4⟩): expected '`' to close inline code
 Final stack:
   (Verso.Syntax.code
    "`"
-   (str <missing>)
+   (str "\" fo\"")
    <missing>)
-Remaining: ""
+Remaining: "\no `"
 -/
 #guard_msgs in
   #eval code.test! "` fo\no `"
@@ -1272,11 +1361,11 @@ All input consumed.
   #eval (inline {}).test! "``foo `stuff` bar``"
 
 /--
-info: Failure: unexpected end of input
+info: Failure @4 (⟨1, 4⟩): unexpected end of input
 Final stack:
   (Verso.Syntax.code
    "`"
-   (str <missing>)
+   (str "\"foo\"")
    <missing>)
 Remaining: ""
 -/
@@ -1300,16 +1389,28 @@ All input consumed.
   #eval (inline {}).test! "` foo `"
 
 /--
-info: Failure: newline
+info: Failure @4 (⟨1, 4⟩): expected '`' to close inline code
 Final stack:
   (Verso.Syntax.code
    "`"
-   (str <missing>)
+   (str "\" fo\"")
    <missing>)
-Remaining: ""
+Remaining: "\no `"
 -/
 #guard_msgs in
   #eval (inline {}).test! "` fo\no `"
+
+/--
+info: Failure @5 (⟨1, 5⟩): expected '``' to close inline code
+Final stack:
+  (Verso.Syntax.code
+   "``"
+   (str "\" fo\"")
+   <missing>)
+Remaining: "\no `"
+-/
+#guard_msgs in
+  #eval (inline {}).test! "`` fo\no `"
 
 
 /--
@@ -1378,7 +1479,7 @@ All input consumed.
   #eval inline {} |>.test! "![](logo.png)"
 
 /--
-info: Failure: expected ')'
+info: Failure @12 (⟨1, 12⟩): expected ')'
 Final stack:
   (Verso.Syntax.image
    "!["
@@ -1394,7 +1495,7 @@ Remaining: "\nabc"
   #eval inline {} |>.test! "![](logo.png\nabc"
 
 /--
-info: Failure: expected ']'
+info: Failure @5 (⟨1, 5⟩): expected ']'
 Final stack:
   (Verso.Syntax.image "![" "abc" <missing>)
 Remaining: "\n123"
@@ -1419,7 +1520,7 @@ All input consumed.
   #eval inline {} |>.test! "![alt text is good](logo.png)"
 
 /--
-info: Failure: expected '(' or '['
+info: Failure @19 (⟨1, 19⟩): expected '(' or '['
 Final stack:
   (Verso.Syntax.image
    "!["
@@ -1715,7 +1816,7 @@ Remaining:
 #guard_msgs in
 #eval lookaheadOrderedListIndicator {} (fun type i => fakeAtom s!"{repr type} {i}") |>.test! "2. "
 /--
-info: Failure: unexpected end of input
+info: Failure @0 (⟨1, 0⟩): unexpected end of input
 Final stack:
   <missing>
 Remaining: "2."
@@ -1733,7 +1834,7 @@ Remaining:
 #guard_msgs in
 #eval lookaheadOrderedListIndicator {} (fun type i => fakeAtom s!"{repr type} {i}") |>.test! "2) "
 /--
-info: Failure: digits
+info: Failure @0 (⟨1, 0⟩): digits
 Final stack:
  empty
 Remaining: "-23) "
@@ -1741,7 +1842,7 @@ Remaining: "-23) "
 #guard_msgs in
 #eval lookaheadOrderedListIndicator {} (fun type i => fakeAtom s!"{repr type} {i}") |>.test! "-23) "
 /--
-info: Failure: digits
+info: Failure @0 (⟨1, 0⟩): digits
 Final stack:
  empty
 Remaining: "a-23) "
@@ -1749,7 +1850,7 @@ Remaining: "a-23) "
 #guard_msgs in
 #eval lookaheadOrderedListIndicator {} (fun type i => fakeAtom s!"{repr type} {i}") |>.test! "a-23) "
 /--
-info: Failure: unexpected ' '; expected ')' or '.'
+info: Failure @0 (⟨1, 0⟩): unexpected ' '; expected ')' or '.'
 Final stack:
  empty
 Remaining: "23 ) "
@@ -1810,7 +1911,7 @@ Remaining:
 #eval lookaheadUnorderedListIndicator {} (fun type => fakeAtom s! "{repr type}") |>.test! " * "
 
 /--
-info: Failure: unexpected end of input
+info: Failure @0 (⟨1, 0⟩): unexpected end of input
 Final stack:
   <missing>
 Remaining: " *"
@@ -1818,7 +1919,7 @@ Remaining: " *"
 #guard_msgs in
 #eval lookaheadUnorderedListIndicator {} (fun type => fakeAtom s! "{repr type}") |>.test! " *"
 /--
-info: Failure: ' '
+info: Failure @0 (⟨1, 0⟩): ' '
 Final stack:
   <missing>
 Remaining: "** "
@@ -1948,45 +2049,62 @@ mutual
     nodeFn ``directive <|
       -- Opener - leaves indent info and open token on the stack
       atomicFn
-        (takeWhileFn (· == ' ') >> guardMinColumn ctxt.minIndent >> pushColumn >> asStringFn (atLeastFn 3 (skipChFn ':')) >>
-         guardOpenerSize) >>
-      withIndentColumn fun c =>
-        withCurrentColumn fun c' =>
-          let fenceWidth := c' - c
-          dropIndentColumn >> -- TODO kludge
-          takeWhileFn (· == ' ') >>
-          nameAndArgs >>
-          satisfyFn (· == '\n') "newline" >>
-          fakeAtom "\n" >>
-          fakeAtom "\n" >>
-          ignoreFn (manyFn blankLine) >>
-          blocks {ctxt with minIndent := c, maxDirective := fenceWidth} >>
-          closeFence c fenceWidth
+        (eatSpaces >> guardMinColumn ctxt.minIndent >>
+          asStringFn (atLeastFn 3 (skipChFn ':')) >>
+         guardOpenerSize >>
+         eatSpaces >>
+         recoverEolWith #[.missing, .node .none nullKind #[]] (nameAndArgs (reportNameAs := "directive name (identifier)") >>
+         satisfyFn (· == '\n') "newline")) >>
+       fakeAtom "\n" >>
+       fakeAtom "\n" >>
+       ignoreFn (manyFn blankLine) >>
+        (withFencePos 4 fun ⟨l, col⟩ =>
+          withFenceSize 4 fun fenceWidth =>
+            blocks {ctxt with minIndent := col, maxDirective := fenceWidth} >>
+            recoverHereWith #[.missing]
+              (closeFence l fenceWidth >>
+               withFence 0 fun info _ c s =>
+                if (c.fileMap.toPosition info.getPos!).column != col then
+                  s.mkErrorAt s!"closing '{String.mk <| List.replicate fenceWidth ':'}' from directive on line {l} at column {col}, but it's at column {(c.fileMap.toPosition info.getPos!).column}" info.getPos!
+                else
+                  s))
 
   where
-    withIndentColumn (p : Nat → ParserFn) : ParserFn := fun c s =>
-      let colStx := s.stxStack.get! (s.stxStack.size - 2)
-      match colStx with
-      | .node _ `column #[.atom _ col] =>
-        if let some colNat := col.toNat? then p colNat c s else s.mkError s!"Internal error - not a Nat {col}"
-      | other => s.mkError s!"Internal error - not a column node {other}"
+    withFence (atDepth : Nat) (p : SourceInfo → String → ParserFn) : ParserFn := fun c s =>
+        match s.stxStack.get! (s.stxStack.size - (atDepth + 1)) with
+        | .atom info str =>
+          if str.all (· == ':') then
+            p info str c s
+          else
+            s.mkError s!"Internal error - index {atDepth} wasn't the directive fence - it was the atom {str}"
+        | .missing => s.pushSyntax .missing
+        | stx =>
+          s.mkError s!"Internal error - index {atDepth} wasn't the directive fence - it was {stx}"
 
-    dropIndentColumn : ParserFn := fun _ s =>
-      let top := s.stxStack.get! (s.stxStack.size - 1)
-      let s := {s with stxStack := s.stxStack.pop.pop}
-      s.pushSyntax top
+    withFenceSize (atDepth : Nat) (p : Nat → ParserFn) : ParserFn :=
+      withFence atDepth fun _ str => p str.length
 
-    guardOpenerSize : ParserFn := withIndentColumn fun c => withCurrentColumn fun c' =>
-      match ctxt.maxDirective with
-      | none => skipFn
-      | some m => if c' - c < m then skipFn else fun _ s => s.mkError "Too many ':'s here"
+    withFencePos (atDepth : Nat) (p : Position → ParserFn) : ParserFn :=
+      withFence atDepth fun info _ c s => p (c.fileMap.toPosition info.getPos!) c s
 
-    closeFence (col width : Nat) :=
-      atomicFn
-        (bol >> takeWhileFn (· == ' ') >> (withCurrentColumn fun c'=> guardColumn (· == col) s!"column {col} (got {c'})") >>
-         asStringFn (repFn width (skipChFn ':'))) >>
-      notFollowedByFn (skipChFn ':') "extra :" >>
-      takeWhileFn (· == ' ') >> (satisfyFn (· == '\n') "newline" <|> eoiFn)
+    withIndentColumn (atDepth : Nat) (p : Nat → ParserFn) : ParserFn :=
+      withFence atDepth fun info _ c s =>
+        let col := c.fileMap.toPosition info.getPos! |>.column
+        p col c s
+
+    guardOpenerSize : ParserFn := withFenceSize 0 fun x =>
+        if let some m := ctxt.maxDirective then
+          if x < m then skipFn else fun _ s => s.mkError "Too many ':'s here"
+        else skipFn
+
+    closeFence (line width : Nat) :=
+      let str := String.mk (.replicate width ':')
+      bolThen (description := s!"closing '{str}' for directive from line {line}")
+        (eatSpaces >>
+         asStringFn (strFn str) >> notFollowedByFn (chFn ':') "':'" >>
+         eatSpaces >>
+         (ignoreFn <| atomicFn (satisfyFn (· == '\n') "newline") <|> eoiFn))
+
 
   -- This low-level definition is to get exactly the right amount of lookahead
   -- together with column tracking
@@ -2289,7 +2407,7 @@ All input consumed.
   #eval blocks {} |>.test! "* foo\n  * bar\n* more outer"
 
 /--
-info: Failure: unexpected end of input; expected %%% (at line beginning), '![', '$$', '$', '[', '[^' or beginning of line at ⟨2, 15⟩
+info: Failure @35 (⟨2, 15⟩): unexpected end of input; expected %%% (at line beginning), '![', '$$', '$', '[', '[^' or beginning of line at ⟨2, 15⟩
 Final stack:
   [(Verso.Syntax.dl
     [(Verso.Syntax.desc
@@ -2328,7 +2446,7 @@ All input consumed.
   #eval blocks {} |>.test! ": an excellent idea\n\n    Let's say more!"
 
 /--
-info: Failure: expected indentation at least 1
+info: Failure @47 (⟨7, 0⟩): expected indentation at least 1
 Final stack:
   [(Verso.Syntax.dl
     [(Verso.Syntax.desc
@@ -2406,7 +2524,7 @@ All input consumed.
   #eval blocks {} |>.test! ": an excellent idea\n\n Let's say more!\n\n: more\n\n stuff"
 
 /--
-info: Failure: expected indentation at least 1
+info: Failure @21 (⟨3, 0⟩): expected indentation at least 1
 Final stack:
   [(Verso.Syntax.dl
     [(Verso.Syntax.desc
@@ -2538,7 +2656,7 @@ All input consumed.
 
 -- Unlike Djot, we don't have precedence - these must be well-nested
 /--
-info: Failure: '_'
+info: Failure @16 (⟨1, 16⟩): '_'
 Final stack:
   [(Verso.Syntax.para
     "para{"
@@ -2594,6 +2712,212 @@ All input consumed.
 -/
 #guard_msgs in
 #eval blocks {} |>.test! "> Quotation\nand contained"
+
+/--
+info: Failure @64 (⟨3, 52⟩): expected '`' to close inline code
+Final stack:
+  [(Verso.Syntax.para
+    "para{"
+    [(Verso.Syntax.text (str "\"Attention:\""))]
+    "}")
+   (Verso.Syntax.para
+    "para{"
+    [(Verso.Syntax.text
+      (str
+       "\"Here is a paragraph with an unterminated \""))
+     (Verso.Syntax.code
+      "`"
+      (str "\"code block\"")
+      <missing>)
+     (Verso.Syntax.linebreak
+      "line!"
+      (str "\"\\n\""))
+     (Verso.Syntax.text
+      (str
+       "\"that would be super annoying without error recovery in the\""))
+     (Verso.Syntax.linebreak
+      "line!"
+      (str "\"\\n\""))
+     (Verso.Syntax.text (str "\"parser.\""))]
+    "}")
+   (Verso.Syntax.para
+    "para{"
+    [(Verso.Syntax.text (str "\"Yep.\""))]
+    "}")]
+Remaining: "\nthat would be super annoying without error recovery in the\nparser.\n\nYep."
+-/
+#guard_msgs in
+#eval blocks {} |>.test!
+  "Attention:
+
+Here is a paragraph with an unterminated `code block
+that would be super annoying without error recovery in the
+parser.
+
+Yep."
+
+/--
+info: 3 failures:
+  @73 (⟨9, 3⟩): expected directive name (identifier)
+    "\n"
+  @74 (⟨10, 0⟩): expected closing ':::' for directive from line 9
+    ""
+  @74 (⟨10, 0⟩): expected closing '::::' for directive from line 3
+    ""
+
+Final stack:
+  [(Verso.Syntax.para
+    "para{"
+    [(Verso.Syntax.text
+      (str
+       "\"Here's some error recovery for directives.\""))]
+    "}")
+   (Verso.Syntax.directive
+    "::::"
+    `foo
+    []
+    "\n"
+    "\n"
+    [(Verso.Syntax.para
+      "para{"
+      [(Verso.Syntax.text (str "\"Indeed.\""))]
+      "}")
+     (Verso.Syntax.para
+      "para{"
+      [(Verso.Syntax.text (str "\"It is.\""))]
+      "}")
+     (Verso.Syntax.directive
+      ":::"
+      <missing>
+      []
+      "\n"
+      "\n"
+      []
+      <missing>)]
+    <missing>)]
+-/
+#guard_msgs in
+#eval blocks {} |>.test!
+  "Here's some error recovery for directives.
+
+::::foo
+
+Indeed.
+
+It is.
+
+:::
+"
+
+/--
+info: 3 failures:
+  @68 (⟨8, 0⟩): expected closing ':::' from directive on line 3 at column 0, but it's at column 1
+    " :::\n"
+  @72 (⟨8, 4⟩): expected directive name (identifier)
+    "\n"
+  @73 (⟨9, 0⟩): expected closing ':::' for directive from line 8
+    ""
+
+Final stack:
+  [(Verso.Syntax.para
+    "para{"
+    [(Verso.Syntax.text
+      (str
+       "\"Here's some error recovery for directives.\""))]
+    "}")
+   (Verso.Syntax.directive
+    ":::"
+    `foo
+    []
+    "\n"
+    "\n"
+    [(Verso.Syntax.para
+      "para{"
+      [(Verso.Syntax.text (str "\"Indeed.\""))]
+      "}")
+     (Verso.Syntax.para
+      "para{"
+      [(Verso.Syntax.text (str "\"It is.\""))]
+      "}")]
+    <missing>)
+   (Verso.Syntax.directive
+    ":::"
+    <missing>
+    []
+    "\n"
+    "\n"
+    []
+    <missing>)]
+-/
+#guard_msgs in
+#eval blocks {} |>.test!
+  "Here's some error recovery for directives.
+
+:::foo
+
+Indeed.
+
+It is.
+ :::
+"
+
+/--
+info: 2 failures:
+  @71 (⟨8, 0⟩): expected closing '::::' for directive from line 3
+    ":::: a\n\nx\n"
+  @81 (⟨11, 0⟩): expected closing '::::' for directive from line 8
+    ""
+
+Final stack:
+  [(Verso.Syntax.para
+    "para{"
+    [(Verso.Syntax.text
+      (str
+       "\"Here's some error recovery for directives.\""))]
+    "}")
+   (Verso.Syntax.directive
+    "::::"
+    `foo
+    [(Verso.Syntax.anon (num "5"))]
+    "\n"
+    "\n"
+    [(Verso.Syntax.para
+      "para{"
+      [(Verso.Syntax.text (str "\"Indeed.\""))]
+      "}")
+     (Verso.Syntax.para
+      "para{"
+      [(Verso.Syntax.text (str "\"It is.\""))]
+      "}")]
+    <missing>)
+   (Verso.Syntax.directive
+    "::::"
+    `a
+    []
+    "\n"
+    "\n"
+    [(Verso.Syntax.para
+      "para{"
+      [(Verso.Syntax.text (str "\"x\""))
+       (Verso.Syntax.linebreak
+        "line!"
+        (str "\"\\n\""))]
+      "}")]
+    <missing>)]
+-/
+#guard_msgs in
+#eval blocks {} |>.test!
+  "Here's some error recovery for directives.
+
+::::foo 5
+
+Indeed.
+
+It is.
+:::: a
+
+x
+"
 
 /--
 info: Success! Final stack:
@@ -2715,7 +3039,7 @@ All input consumed.
 
 
 /--
-info: Failure: expected column 0
+info: Failure @32 (⟨5, 0⟩): expected column 0
 Final stack:
   (Verso.Syntax.codeblock
    (column "0")
@@ -2772,7 +3096,7 @@ x
 ```"
 
 /--
-info: Failure: expected ')'
+info: Failure @30 (⟨1, 30⟩): expected ')'
 Final stack:
   (Verso.Syntax.codeblock
    (column "0")
@@ -2794,7 +3118,7 @@ x
 ```"
 
 /--
-info: Failure: expected column 1
+info: Failure @25 (⟨3, 0⟩): expected column 1
 Final stack:
   (Verso.Syntax.codeblock
    (column "1")
@@ -2808,7 +3132,7 @@ Remaining: "x\n```"
   #eval codeBlock {} |>.test! " ``` scheme\n(define x 4)\nx\n```"
 
 /--
-info: Failure: expected column 1
+info: Failure @32 (⟨4, 3⟩): expected column 1
 Final stack:
   (Verso.Syntax.codeblock
    (column "1")
@@ -2822,7 +3146,7 @@ Remaining: ""
   #eval codeBlock {} |>.test! " ``` scheme\n (define x 4)\n x\n```"
 
 /--
-info: Failure: expected column 1
+info: Failure @25 (⟨4, 3⟩): expected column 1
 Final stack:
   (Verso.Syntax.codeblock
    (column "1")
@@ -2836,7 +3160,7 @@ Remaining: ""
   #eval codeBlock {} |>.test! " ```\n (define x 4)\n x\n```"
 
 /--
-info: Failure: expected column 1
+info: Failure @28 (⟨4, 3⟩): expected column 1
 Final stack:
   (Verso.Syntax.codeblock
    (column "1")
@@ -2899,7 +3223,7 @@ All input consumed.
 #guard_msgs in
 #eval block {} |>.test! " {test}\n Here's a modified paragraph."
 /--
-info: Failure: ':'; expected %%% (at line beginning), expected column at least 1 or expected end of file
+info: Failure @8 (⟨2, 0⟩): ':'; expected %%% (at line beginning), expected column at least 1 or expected end of file
 Final stack:
   (Verso.Syntax.block_role
    "{"
@@ -2913,6 +3237,7 @@ Remaining: "Here's a modified paragraph."
 -/
 #guard_msgs in
 #eval block {} |>.test! " {test}\nHere's a modified paragraph."
+
 /--
 info: Success! Final stack:
   (Verso.Syntax.block_role
@@ -2941,9 +3266,9 @@ Remaining:
 
 /--
 info: 2 failures:
-  @36: expected identifier
+  @36 (⟨3, 28⟩): expected identifier
     ""
-  @36: unexpected end of input; expected '![', '$$', '$', '[' or '[^'
+  @36 (⟨3, 28⟩): unexpected end of input; expected '![', '$$', '$', '[' or '[^'
     ""
 
 Final stack:
@@ -2978,9 +3303,9 @@ All input consumed.
 
 /--
 info: 2 failures:
-  @44: expected identifier
+  @44 (⟨4, 28⟩): expected identifier
     ""
-  @44: unexpected end of input; expected '![', '$$', '$', '[' or '[^'
+  @44 (⟨4, 28⟩): unexpected end of input; expected '![', '$$', '$', '[' or '[^'
     ""
 
 Final stack:
@@ -3247,7 +3572,7 @@ All input consumed.
   #eval blocks {} |>.test! "[My link][lean]\n\n[lean]: https://lean-lang.org"
 
 /--
-info: Failure: expected '(' or '['
+info: Failure @45 (⟨2, 29⟩): expected '(' or '['
 Final stack:
   [(Verso.Syntax.para
     "para{"
@@ -3323,25 +3648,25 @@ All input consumed.
 
 /--
 info: 10 failures:
-  @38: expected ']'
+  @38 (⟨4, 14⟩): expected ']'
     "\n\n* [busted\n   link\n\n* [busted\n   _italics\n   link\n\n\n* [busted destination](hey\n\n* ![busted image alt text\n\n* ![busted image link](image.png\n\n* a *bold choice\n\n* very _italic *and bold, onto many\n   lines is OK* but don't forget...\n\na paragraph with [a bad link syntax](http://example.com\nis OK. The rest *works*.\n"
-  @57: expected ']'
+  @57 (⟨7, 7⟩): expected ']'
     "\n\n* [busted\n   _italics\n   link\n\n\n* [busted destination](hey\n\n* ![busted image alt text\n\n* ![busted image link](image.png\n\n* a *bold choice\n\n* very _italic *and bold, onto many\n   lines is OK* but don't forget...\n\na paragraph with [a bad link syntax](http://example.com\nis OK. The rest *works*.\n"
-  @88: '_'
+  @88 (⟨11, 7⟩): '_'
     "\n\n\n* [busted destination](hey\n\n* ![busted image alt text\n\n* ![busted image link](image.png\n\n* a *bold choice\n\n* very _italic *and bold, onto many\n   lines is OK* but don't forget...\n\na paragraph with [a bad link syntax](http://example.com\nis OK. The rest *works*.\n"
-  @88: expected ']'
+  @88 (⟨11, 7⟩): expected ']'
     "\n\n\n* [busted destination](hey\n\n* ![busted image alt text\n\n* ![busted image link](image.png\n\n* a *bold choice\n\n* very _italic *and bold, onto many\n   lines is OK* but don't forget...\n\na paragraph with [a bad link syntax](http://example.com\nis OK. The rest *works*.\n"
-  @117: expected ')'
+  @117 (⟨14, 26⟩): expected ')'
     "\n\n* ![busted image alt text\n\n* ![busted image link](image.png\n\n* a *bold choice\n\n* very _italic *and bold, onto many\n   lines is OK* but don't forget...\n\na paragraph with [a bad link syntax](http://example.com\nis OK. The rest *works*.\n"
-  @144: expected ']'
+  @144 (⟨16, 25⟩): expected ']'
     "\n\n* ![busted image link](image.png\n\n* a *bold choice\n\n* very _italic *and bold, onto many\n   lines is OK* but don't forget...\n\na paragraph with [a bad link syntax](http://example.com\nis OK. The rest *works*.\n"
-  @178: expected ')'
+  @178 (⟨18, 32⟩): expected ')'
     "\n\n* a *bold choice\n\n* very _italic *and bold, onto many\n   lines is OK* but don't forget...\n\na paragraph with [a bad link syntax](http://example.com\nis OK. The rest *works*.\n"
-  @196: '*'
+  @196 (⟨20, 16⟩): '*'
     "\n\n* very _italic *and bold, onto many\n   lines is OK* but don't forget...\n\na paragraph with [a bad link syntax](http://example.com\nis OK. The rest *works*.\n"
-  @269: '_'
+  @269 (⟨23, 35⟩): '_'
     "\n\na paragraph with [a bad link syntax](http://example.com\nis OK. The rest *works*.\n"
-  @326: expected ')'
+  @326 (⟨25, 55⟩): expected ')'
     "\nis OK. The rest *works*.\n"
 
 Final stack:

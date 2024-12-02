@@ -64,16 +64,16 @@ info: #[Inline.text "Hello, ", Inline.emph #[Inline.bold #[Inline.text "emph"]]]
 #check (inlines!"Hello, _*emph*_" : Array (Inline .none))
 
 def document : Parser where
-  fn := rawFn <| atomicFn <| Verso.Parser.document (blockContext := {maxDirective := some 6})
+  fn := atomicFn <| Verso.Parser.document (blockContext := {maxDirective := some 6})
 
 @[combinator_parenthesizer document] def document.parenthesizer := PrettyPrinter.Parenthesizer.visitToken
 @[combinator_formatter document] def document.formatter := PrettyPrinter.Formatter.visitAtom Name.anonymous
 
 /-- Advance the parser to EOF on failure so Lean doesn't try to parse further commands -/
 def completeDocument : Parser where
-  fn := rawFn <| atomicFn <| recoverFn Verso.Parser.document untilEoi
+  fn := (recoverFn Verso.Parser.document fun _ => skipFn) >> untilEoi
 where
-  untilEoi : RecoveryContext → ParserFn := fun _ c s =>
+  untilEoi : ParserFn := fun c s =>
     s.setPos c.input.endPos
 
 @[combinator_parenthesizer completeDocument] def completeDocument.parenthesizer := PrettyPrinter.Parenthesizer.visitToken
@@ -196,31 +196,28 @@ where
       (show MetaM Unit from set termState.meta.meta)
       (show CoreM Unit from set termState.meta.core.toState)
 
-elab (name := completeDoc) "#doc" "(" genre:term ")" title:inlineStr "=>" text:completeDocument eof:eoi : command => open Lean Elab Term Command PartElabM DocElabM in do
+elab (name := completeDoc) "#doc" "(" genre:term ")" title:inlineStr "=>" text:completeDocument eoi : command => open Lean Elab Term Command PartElabM DocElabM in do
   findGenreCmd genre
-  if eof.raw.isMissing then
-    throwError "Syntax error prevents processing document"
-  else
-    let endPos := eof.raw.getTailPos?.get!
-    let .node _ _ blocks := text.raw
-      | dbg_trace "nope {ppSyntax text.raw}" throwUnsupportedSyntax
-    let ⟨`<low| [~_ ~(titleName@(.node _ _ titleParts))]>⟩ := title
-      | dbg_trace "nope {ppSyntax title}" throwUnsupportedSyntax
-    let titleString := inlinesToString (← getEnv) titleParts
-    let initState : PartElabM.State := .init titleName
-    withTraceNode `Elab.Verso (fun _ => pure m!"Document AST elab") <|
-      incrementallyElabCommand blocks
-        (initAct := do setTitle titleString (← liftDocElabM <| titleParts.mapM elabInline))
-        (endAct := fun ⟨st, st', _⟩ => withTraceNode `Elab.Verso (fun _ => pure m!"Document def") do
-          let st' := st'.closeAll endPos
-          let finished := st'.partContext.toPartFrame.close endPos
-          pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
-          saveRefs st st'
-          let n ← currentDocName
-          let docName := mkIdentFrom title n
-          elabCommand (← `(def $docName : Part $genre := $(← finished.toSyntax' genre st'.linkDefs st'.footnoteDefs))))
-        (handleStep := partCommand)
-        (run := fun act => liftTermElabM <| Prod.fst <$> PartElabM.run {} initState act)
+  let endPos := (← getFileMap).source.endPos
+  let .node _ _ blocks := text.raw
+    | dbg_trace "nope {ppSyntax text.raw}" throwUnsupportedSyntax
+  let ⟨`<low| [~_ ~(titleName@(.node _ _ titleParts))]>⟩ := title
+    | dbg_trace "nope {ppSyntax title}" throwUnsupportedSyntax
+  let titleString := inlinesToString (← getEnv) titleParts
+  let initState : PartElabM.State := .init titleName
+  withTraceNode `Elab.Verso (fun _ => pure m!"Document AST elab") <|
+    incrementallyElabCommand blocks
+      (initAct := do setTitle titleString (← liftDocElabM <| titleParts.mapM elabInline))
+      (endAct := fun ⟨st, st', _⟩ => withTraceNode `Elab.Verso (fun _ => pure m!"Document def") do
+        let st' := st'.closeAll endPos
+        let finished := st'.partContext.toPartFrame.close endPos
+        pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
+        saveRefs st st'
+        let n ← currentDocName
+        let docName := mkIdentFrom title n
+        elabCommand (← `(def $docName : Part $genre := $(← finished.toSyntax' genre st'.linkDefs st'.footnoteDefs))))
+      (handleStep := partCommand)
+      (run := fun act => liftTermElabM <| Prod.fst <$> PartElabM.run {} initState act)
 
 /--
 Make the single elaborator for some syntax kind become incremental
