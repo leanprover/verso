@@ -162,7 +162,7 @@ def handleRefs (params : ReferenceParams) (prev : RequestTask (Array Location)) 
         pure locs
 
 open Lean Server Lsp RequestM in
-def handleHl (params : DocumentHighlightParams) (prev : RequestTask DocumentHighlightResult) : RequestM (RequestTask DocumentHighlightResult) := do
+partial def handleHl (params : DocumentHighlightParams) (prev : RequestTask DocumentHighlightResult) : RequestM (RequestTask DocumentHighlightResult) := do
   let doc ← readDoc
   let text := doc.meta.text
   let pos := text.lspPosToUtf8Pos params.position
@@ -175,7 +175,13 @@ def handleHl (params : DocumentHighlightParams) (prev : RequestTask DocumentHigh
             (.inl <$> data.get? DocListInfo) <|> (.inr <$> data.get? DocRefInfo)
           else none
         | _ => none
-      if nodes.isEmpty then prev.get
+      if nodes.isEmpty then
+        if let some hls := syntactic text pos snap.stx then
+          let hls := hls.filterMap (·.lspRange text) |>.map (⟨·, none⟩)
+          if hls.isEmpty then prev.get
+          else pure hls
+        else
+          prev.get
       else
         let mut hls := #[]
         for node in nodes do
@@ -192,6 +198,41 @@ def handleHl (params : DocumentHighlightParams) (prev : RequestTask DocumentHigh
               if let some r := s.lspRange text then
                 hls := hls.push ⟨r, none⟩
         pure hls
+where
+  -- Unfortunately, VS Code doesn't do the right thing, so many of these highlights don't work there:
+  --   https://github.com/microsoft/vscode/issues/127007
+  -- Tested in Emacs and the problem isn't server side.
+  syntactic (text : FileMap) (pos : String.Pos) (stx : Syntax) : Option (Array Syntax) := do
+    if includes stx pos |>.getD true then
+      match stx with
+        | `<low|(Verso.Syntax.directive  ~opener ~_name ~_args ~_fake ~_fake' ~_contents ~closer )>
+        | `<low|(Verso.Syntax.codeblock ~_ ~opener ~_ ~_ ~closer )> =>
+          if (includes opener pos).getD false || (includes closer pos).getD false then
+            return #[opener, closer]
+        | _ =>
+          match stx with
+          | `(inline| ${%$opener1 code{%$opener2 $_ }%$closer1 }%$closer2)
+          | `(inline| $${%$opener1 code{%$opener2 $_ }%$closer1 }%$closer2)
+          | `(inline| link[%$opener1 $_* ]%$closer1 (%$opener2 $_ )%$closer2)
+          | `(inline| link[%$opener1 $_* ]%$closer1 [%$opener2 $_ ]%$closer2) =>
+            if (includes opener1 pos).getD false || (includes closer1 pos).getD false || (includes opener2 pos).getD false || (includes closer2 pos).getD false then
+              return #[opener1, closer1, opener2, closer2]
+          |  `(inline| code{%$opener $_ }%$closer) =>
+            if (includes opener pos).getD false || (includes closer pos).getD false then
+              return #[opener, closer]
+          | `(inline| role{%$opener1 $name $_* }%$closer1 [%$opener2 $subjects ]%$closer2) =>
+            if (includes opener1 pos).getD false || (includes closer1 pos).getD false ||
+               (includes opener2 pos).getD false || (includes closer2 pos).getD false ||
+               (includes name pos).getD false then
+              return #[opener1, closer1, opener2, closer2, subjects.raw]
+          | _ => pure ()
+      if let .node _ _ contents := stx then
+        for s in contents do
+          if let some r := syntactic text pos s then return r
+    failure
+
+  includes (stx : Syntax) (pos : String.Pos) : Option Bool :=
+    stx.getRange?.map (fun r => pos ≥ r.start && pos < r.stop)
 
 open Lean Lsp
 
