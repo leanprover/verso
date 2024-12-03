@@ -10,10 +10,12 @@ import Lean.Server
 import Verso.Doc.Elab
 import Verso.Syntax
 import Verso.Hover
+import Verso.Doc.PointOfInterest
 
 namespace Verso.Lsp
 
 open Verso.Doc.Elab (DocListInfo DocRefInfo TOC)
+open Verso.Doc (PointOfInterest)
 open Verso.Hover
 
 open Lean
@@ -285,7 +287,9 @@ partial def handleSyms (_params : DocumentSymbolParams) (prev : RequestTask Docu
   let t := doc.cmdSnaps.waitAll
   let syms ← mapTask t fun (snaps, _) => do
       return { syms := getSections text snaps : DocumentSymbolResult }
-  mergeResponses syms prev combineAnswers
+  let syms' ← mapTask t fun (snaps, _) => do
+      return { syms := ofInterest text snaps : DocumentSymbolResult }
+  mergeResponses (← mergeResponses syms syms' combineAnswers) prev combineAnswers
   --pure syms
   where
     combineAnswers (x y : Option DocumentSymbolResult) : DocumentSymbolResult := ⟨graftSymbols (x.getD ⟨{}⟩).syms (y.getD ⟨{}⟩).syms⟩
@@ -324,6 +328,19 @@ partial def handleSyms (_params : DocumentSymbolParams) (prev : RequestTask Docu
         for i in info do
           if let some x ← tocSym text i then syms := syms.push x
       pure syms
+    ofInterest (text : FileMap) (ss : List Snapshots.Snapshot) : Array DocumentSymbol := Id.run do
+      let mut syms := #[]
+      for snap in ss do
+        let info := snap.infoTree.deepestNodes fun _ctxt info _arr =>
+          match info with
+          | .ofCustomInfo ⟨stx, data⟩ =>
+            data.get? PointOfInterest |>.map (stx, ·)
+          | _ => none
+        for (stx, ⟨title⟩) in info do
+          if let some rng := stx.lspRange text then
+            syms := syms.push <| .mk {name := title, kind := .constant, range := rng, selectionRange := rng}
+      pure syms
+
 
 -- Shamelessly cribbed from https://github.com/tydeu/lean4-alloy/blob/57792f4e8a9674f8b4b8b17742607a1db142d60e/Alloy/C/Server/SemanticTokens.lean
 structure SemanticTokenEntry where
