@@ -11,6 +11,7 @@ import VersoManual.Markdown
 import Verso.Code
 import Verso.Doc.Elab.Monad
 import Verso.Doc.ArgParse
+import Verso.Doc.PointOfInterest
 
 import SubVerso.Highlighting
 
@@ -700,6 +701,7 @@ def docstring : BlockRoleExpander
     match args with
     | #[.anon (.name x)] =>
       let name ← Elab.realizeGlobalConstNoOverloadWithInfo x
+      Doc.PointOfInterest.save x name.toString
       let blockStx ← match ← Lean.findDocString? (← getEnv) name with
       | none => logWarningAt x m!"No docs found for '{x}'"; pure #[]
       | some docs =>
@@ -770,6 +772,7 @@ def optionDocs : BlockRoleExpander
     let #[.anon (.name x)] := args
       | throwError "Expected exactly one positional argument that is a name"
     let optDecl ← getOptionDecl x.getId
+    Doc.PointOfInterest.save x optDecl.declName.toString
     let some mdAst := MD4Lean.parse optDecl.descr
       | throwErrorAt x "Failed to parse docstring as Markdown"
     let contents ← mdAst.blocks.mapM (Markdown.blockFromMarkdown · Markdown.strongEmphHeaders)
@@ -888,6 +891,7 @@ def tactic : DirectiveExpander
   | args, more => do
     let opts ← TacticDocsOptions.parse.run args
     let tactic ← getTactic opts.name
+    Doc.PointOfInterest.save (← getRef) tactic.userName
     if tactic.userName == tactic.internalName.toString && opts.show.isNone then
       throwError "No `show` option provided, but the tactic has no user-facing token name"
     let some mdAst := tactic.docString >>= MD4Lean.parse
@@ -1018,6 +1022,7 @@ def conv : DirectiveExpander
   | args, more => do
     let opts ← TacticDocsOptions.parse.run args
     let tactic ← getConvTactic opts.name
+    Doc.PointOfInterest.save (← getRef) tactic.name.toString
     let contents ← if let some d := tactic.docs? then
         let some mdAst := MD4Lean.parse d
           | throwError "Failed to parse docstring as Markdown"
