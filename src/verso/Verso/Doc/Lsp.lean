@@ -443,6 +443,82 @@ def renumberLists : CodeActionProvider := fun params snap => do
       }
     }
 
+partial def directiveResizings (startPos endPos : String.Pos) (text : FileMap) (parents : Array (Syntax × Syntax)) (subject : Syntax) : StateM (Array (Bool × Syntax × Syntax × TextEditBatch)) Unit := do
+  match subject with
+  | `<low|(Verso.Syntax.directive  ~opener ~_name ~_args ~_fake ~_fake' ~(.node _ `null contents) ~closer )> =>
+    let parents := parents.push (opener, closer)
+    if inRange opener || inRange closer then
+      if let some edit := parents.flatMapM getIncreases then
+        modify (·.push (true, opener, closer, edit))
+      if let some edit := getDecreases (opener, closer) contents then
+        modify (·.push (false, opener, closer, edit))
+    else
+      for s in contents do directiveResizings startPos endPos text parents s
+  | stx@(.node _ _ contents) =>
+    if inRange stx then
+      for s in contents do
+        directiveResizings startPos endPos text parents s
+  | _ => pure ()
+where
+  inRange (stx : Syntax) : Bool :=
+    if let some ⟨stxStart, stxEnd⟩ := stx.getRange? then
+      -- if the syntax starts before the selection, then it should end after the selection begins
+      if stxStart ≤ startPos then stxEnd ≥ startPos
+      -- otherwise there's only an overlap if it starts within the selection
+      else stxStart ≤ endPos
+    else false
+
+  getIncreases (stxs : Syntax × Syntax) : Option TextEditBatch := do
+    return #[← getIncrease stxs.1, ← getIncrease stxs.2]
+  getIncrease : Syntax → Option TextEdit
+  | stx@(.atom _ colons) =>
+    if let some r := stx.lspRange text then
+      some {range := r, newText := colons.push ':'}
+    else none
+  | _ => none
+
+  getDecreases (stxs : Syntax × Syntax) (children : Array Syntax) : Option TextEditBatch := do
+    let outer := #[← getDecrease stxs.1, ← getDecrease stxs.2]
+    let inner ← children.flatMapM getDecreasesIn
+    pure (outer ++ inner)
+
+  getDecreasesIn : Syntax → Option TextEditBatch
+    | `<low|(Verso.Syntax.directive  ~opener ~_name ~_args ~_fake ~_fake' ~(.node _ `null contents) ~closer )> => do
+      getDecreases (opener, closer) contents
+    | .node _ _ children => children.flatMapM getDecreasesIn
+    | _ => pure #[]
+
+  getDecrease : Syntax → Option TextEdit
+  | stx@(.atom _ colons) => do
+    if let some r := stx.lspRange text then
+      if colons.length > 3 then
+        return {range := r, newText := colons.drop 1}
+    failure
+  | _ => none
+
+
+open Lean Server Lsp RequestM in
+@[code_action_provider]
+def resizeDirectives : CodeActionProvider := fun params snap => do
+  let doc ← readDoc
+  let text := doc.meta.text
+  let startPos := text.lspPosToUtf8Pos params.range.start
+  let endPos := text.lspPosToUtf8Pos params.range.end
+  let ((), directives) := directiveResizings startPos endPos text #[] snap.stx |>.run #[]
+  pure <| directives.map fun (which, _, _, edits) => {
+    eager := {
+      title := (if which then "More" else "Less") ++ " Colons",
+      kind? := some "refactor.rewrite",
+      isPreferred? := some true,
+      edit? :=
+        some <| .ofTextDocumentEdit {
+          textDocument := doc.versionedIdentifier,
+          edits := edits
+        }
+    }
+  }
+
+
 deriving instance FromJson for FoldingRangeKind
 deriving instance FromJson for FoldingRange
 
@@ -450,16 +526,16 @@ private def rangeOfStx? (text : FileMap) (stx : Syntax) :=
   Lean.FileMap.utf8RangeToLspRange text <$> Lean.Syntax.getRange? stx
 
 open Lean Server Lsp RequestM in
-def handleFolding (_params : FoldingRangeParams) (prev : RequestTask (Array FoldingRange)) : RequestM (RequestTask (Array FoldingRange)) := do
+partial def handleFolding (_params : FoldingRangeParams) (prev : RequestTask (Array FoldingRange)) : RequestM (RequestTask (Array FoldingRange)) := do
   let doc ← readDoc
   let text := doc.meta.text
-  -- bad: we have to wait on elaboration of the entire file before we can report document symbols
+  -- bad: we have to wait on elaboration of the entire file before we can report folding
   let t := doc.cmdSnaps.waitAll
-  let folds ← mapTask t fun (snaps, _) => pure <| getSections text snaps ++ getLists text snaps
+  let folds ← mapTask t fun (snaps, _) => pure <| getSections text snaps ++ getSyntactic text snaps
   combine folds prev
 where
     combine := (mergeResponses · · (·.getD #[] ++ ·.getD #[]))
-    getLists text ss : Array FoldingRange := Id.run do
+    getLists (text : FileMap) (ss : List Snapshots.Snapshot) : Array FoldingRange := Id.run do
       let mut lists := #[]
       for snap in ss do
         let snapLists := snap.infoTree.foldInfo (init := #[]) fun _ctx info result => Id.run do
@@ -474,7 +550,26 @@ where
           else result
         lists := lists ++ snapLists
       pure lists
-    getSections text ss : Array FoldingRange := Id.run do
+
+    getSyntactic text ss : Array FoldingRange :=
+      ss.foldl (init := #[]) (· ++ getFromSyntax text ·.stx)
+
+    getFromSyntax text (stx : Syntax) : Array FoldingRange :=
+      match stx with
+      | .node _ k children =>
+        let here :=
+          if isFoldable k then
+            if let some {start := {line:=startLine, ..}, «end» := {line := endLine, ..}} := rangeOfStx? text stx then
+              #[{startLine, endLine}]
+            else #[]
+          else #[]
+        children.flatMap (getFromSyntax text) ++ here
+      | _ => #[]
+    isFoldable : Name → Bool
+      | `Verso.Syntax.codeblock | `Verso.Syntax.directive | `Verso.Syntax.metadata_block | `Verso.Syntax.blockquote
+      | `Verso.Syntax.ol | `Verso.Syntax.ul | `Verso.Syntax.dl => true
+      | _ => false
+    getSections (text : FileMap) (ss : List Snapshots.Snapshot) : Array FoldingRange := Id.run do
       let mut regions := #[]
       for snap in ss do
         let mut info := snap.infoTree.deepestNodes fun _ctxt info _arr =>
