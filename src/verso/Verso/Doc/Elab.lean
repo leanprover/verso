@@ -329,7 +329,7 @@ def includeSection : PartCommand
     | _ => throwErrorAt stx "Expected exactly one positional argument that is a name"
   | _ => Lean.Elab.throwUnsupportedSyntax
 where
- resolved id := mkIdentFrom id <$> resolveGlobalConstNoOverload (mkIdentFrom id (docName id.getId))
+ resolved id := mkIdentFrom id <$> realizeGlobalConstNoOverloadWithInfo (mkIdentFrom id (docName id.getId))
 
 @[block_expander Verso.Syntax.block_role]
 def _root_.Verso.Syntax.block_role.expand : BlockExpander := fun block =>

@@ -43,6 +43,9 @@ instance : Alternative (ArgParse m) where
   failure := ArgParse.fail none none
   orElse := ArgParse.orElse
 
+def ArgParse.namedD {m} (name : Name) (val : ValDesc m α) (default : α) : ArgParse m α :=
+  named name val true <&> (·.getD default)
+
 def ArgParse.describe : ArgParse m α → MessageData
   | .fail _ msg? => msg?.getD "Cannot succeed"
   | .pure x => "No arguments expected"

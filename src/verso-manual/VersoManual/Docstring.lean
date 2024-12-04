@@ -701,7 +701,7 @@ def docstring : BlockRoleExpander
     match args with
     | #[.anon (.name x)] =>
       let name ← Elab.realizeGlobalConstNoOverloadWithInfo x
-      Doc.PointOfInterest.save x name.toString
+      Doc.PointOfInterest.save (← getRef) name.toString (detail? := some "Documentation")
       let blockStx ← match ← Lean.findDocString? (← getEnv) name with
       | none => logWarningAt x m!"No docs found for '{x}'"; pure #[]
       | some docs =>

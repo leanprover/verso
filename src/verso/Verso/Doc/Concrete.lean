@@ -196,6 +196,10 @@ where
       (show MetaM Unit from set termState.meta.meta)
       (show CoreM Unit from set termState.meta.core.toState)
 
+open Lean.Parser.Command in
+instance : Quote String (k := ``docComment) where
+  quote str := ⟨.node .none ``docComment #[ .atom .none "/--", .atom .none (str ++ "-/")]⟩
+
 elab (name := completeDoc) "#doc" "(" genre:term ")" title:inlineStr "=>" text:completeDocument eoi : command => open Lean Elab Term Command PartElabM DocElabM in do
   findGenreCmd genre
   let endPos := (← getFileMap).source.endPos
@@ -215,7 +219,8 @@ elab (name := completeDoc) "#doc" "(" genre:term ")" title:inlineStr "=>" text:c
         saveRefs st st'
         let n ← currentDocName
         let docName := mkIdentFrom title n
-        elabCommand (← `(def $docName : Part $genre := $(← finished.toSyntax' genre st'.linkDefs st'.footnoteDefs))))
+        let titleStr : TSyntax ``Lean.Parser.Command.docComment := quote titleString
+        elabCommand (← `($titleStr:docComment def $docName : Part $genre := $(← finished.toSyntax' genre st'.linkDefs st'.footnoteDefs))))
       (handleStep := partCommand)
       (run := fun act => liftTermElabM <| Prod.fst <$> PartElabM.run {} initState act)
 

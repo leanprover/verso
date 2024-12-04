@@ -12,8 +12,14 @@ open Lean Elab Server RequestM
 
 structure PointOfInterest where
   title : String
+  selectionRange : Option String.Range := none
+  kind : Lean.Lsp.SymbolKind := .constant
+  detail? : Option String
 
 deriving TypeName
 
-def PointOfInterest.save [Monad m] [MonadInfoTree m] (stx : Syntax) (title : String) : m Unit := do
-  pushInfoLeaf <| .ofCustomInfo {stx := stx, value := Dynamic.mk (PointOfInterest.mk title)}
+def PointOfInterest.save [Monad m] [MonadInfoTree m] (stx : Syntax) (title : String)
+    (selectionRange : Syntax := stx)
+    (kind : Lean.Lsp.SymbolKind := .constant)
+    (detail? : Option String := none) : m Unit := do
+  pushInfoLeaf <| .ofCustomInfo {stx := stx, value := Dynamic.mk (PointOfInterest.mk title selectionRange.getRange? kind detail?)}

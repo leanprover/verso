@@ -53,6 +53,18 @@ def _root_.Verso.Syntax.code.inline_to_string : InlineToString
     some str.getString
   | _, _ => none
 
+@[inline_to_string Verso.Syntax.role]
+def _root_.Verso.Syntax.role.inline_to_string : InlineToString
+  | env, `(inline| role{ $_ $_* }[ $body ]) =>
+    inlineToString env body
+  | _, _ => none
+
+@[inline_to_string null]
+def nullInline_to_string : InlineToString
+  | env, .node _ _ contents =>
+    return String.join <| contents.toList.map (inlineToString env)
+  | _, _ => none
+
 
 def inlinesToString (env : Environment) (inlines : Array Syntax)  : String :=
   String.intercalate " " (inlines.map (inlineToString env)).toList
