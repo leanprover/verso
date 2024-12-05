@@ -1043,7 +1043,7 @@ window.onload = () => {
       const addTippy = (selector, props) => {
         tippy(selector, Object.assign({}, defaultTippyProps, props));
       };
-      addTippy('.hl.lean .const.token, .hl.lean .keyword.token, .hl.lean .literal.token, .hl.lean .option.token', {theme: 'lean'});
+      addTippy('.hl.lean .const.token, .hl.lean .keyword.token, .hl.lean .literal.token, .hl.lean .option.token, .hl.lean .var.token', {theme: 'lean'});
       addTippy('.hl.lean .has-info.warning', {theme: 'warning message'});
       addTippy('.hl.lean .has-info.info', {theme: 'info message'});
       addTippy('.hl.lean .has-info.error', {theme: 'error message'});

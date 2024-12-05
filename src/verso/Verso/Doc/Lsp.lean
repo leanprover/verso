@@ -11,6 +11,7 @@ import Verso.Doc.Elab
 import Verso.Syntax
 import Verso.Hover
 import Verso.Doc.PointOfInterest
+import Verso.Doc.Name
 
 namespace Verso.Lsp
 
@@ -242,29 +243,62 @@ def rangeContains (outer inner : Lsp.Range) :=
   outer.start < inner.start && inner.«end» ≤ outer.«end» ||
   outer.start == inner.start && inner.«end» < outer.«end»
 
-mutual
-  partial def graftSymbolOnto (inner outer : DocumentSymbol) : Option DocumentSymbol :=
-    match outer, inner with
-    | .mk s1, .mk s2 =>
-      if rangeContains s1.range s2.range then
-        -- add as child
-        some <| .mk {s1 with children? := some (graftSymbolInto inner (s1.children?.getD #[])) }
-      else
-        -- signal peer
-        none
+-- mutual
+--   partial def graftSymbolOnto (inner outer : DocumentSymbol) : Option DocumentSymbol :=
+--     match outer, inner with
+--     | .mk s1, .mk s2 =>
+--       if rangeContains s1.range s2.range then
+--         -- add as child
+--         some <| .mk {s1 with children? := some (graftSymbolInto inner (s1.children?.getD #[])) }
+--       else
+--         -- signal peer
+--         none
 
-  partial def graftSymbolInto (inner : DocumentSymbol) (outer : Array DocumentSymbol) : Array DocumentSymbol := Id.run do
-    let mut i := 0
-    while h : i < outer.size do
-      let sym := outer[i]
-      if let some sym' := graftSymbolOnto inner sym then
-        return outer.set i sym'
-      i := i + 1
-    return outer.push inner
-end
+--   partial def graftSymbolInto (inner : DocumentSymbol) (outer : Array DocumentSymbol) : Array DocumentSymbol := Id.run do
+--     let mut i := 0
+--     while h : i < outer.size do
+--       let sym := outer[i]
+--       if let some sym' := graftSymbolOnto inner sym then
+--         return outer.set i sym'
+--       i := i + 1
+--     return outer.push inner
+-- end
 
-def graftSymbols (inner outer : Array DocumentSymbol) : Array DocumentSymbol :=
-  inner.foldr graftSymbolInto outer
+-- def graftSymbols (inner outer : Array DocumentSymbol) : Array DocumentSymbol :=
+--   inner.foldr graftSymbolInto outer
+
+partial def mergeInto (sym : DocumentSymbol) (existing : Array DocumentSymbol) : Array DocumentSymbol := Id.run do
+  let ⟨sym⟩ := sym
+  for h : i in [0:existing.size] do
+    let ⟨e⟩ := existing[i]
+    have : i < existing.size := by get_elem_tactic
+    have : i ≤ existing.size := by omega
+    let children := e.children?.getD #[]
+
+    -- the symbol to be inserted belongs before the current symbol
+    if sym.range.end ≤ e.range.start then
+      return existing.insertIdx i ⟨sym⟩
+    -- the symbol to be inserted intersects the current symbol but neither contains the other
+    else if sym.range.start < e.range.start && sym.range.end ≤ e.range.end then
+      return existing.insertIdx i ⟨sym⟩
+    else if sym.range.start ≥ e.range.start && sym.range.start < e.range.end && sym.range.end > e.range.end then
+      return existing.insertIdx (i + 1) ⟨sym⟩
+    -- The symbol to be inserted is inside the existing one
+    else if sym.range.start ≥ e.range.start && sym.range.end ≤ e.range.end then
+      return existing.set i ⟨{e with children? := some (mergeInto ⟨sym⟩ children)}⟩
+    -- The symbol to be inserted encompasses the existing one
+    else if sym.range.start ≤ e.range.start && sym.range.end ≥ e.range.end then
+      let (inside, outside) := existing.partition (fun ⟨e⟩ => sym.range.start ≤ e.range.start && sym.range.end ≥ e.range.end)
+      let (pre, post) := outside.partition (fun ⟨e⟩ => sym.range.end ≤ e.range.start)
+      return pre ++ inside.foldr (init := #[⟨sym⟩]) mergeInto ++ post
+    -- The symbol to be inserted is after the existing one
+    else
+      continue
+  -- If we got through the loop, then the new symbol belongs at the end
+  return existing.push ⟨sym⟩
+
+def mergeManyInto (syms : Array DocumentSymbol) (existing : Array DocumentSymbol) : Array DocumentSymbol :=
+  syms.foldr (init := existing) mergeInto
 
 open Lean Server Lsp RequestM in
 def mergeResponses (docTask : RequestTask α) (leanTask : RequestTask β) (f : Option α → Option β → γ) : RequestM (RequestTask γ) := do
@@ -286,20 +320,21 @@ partial def handleSyms (_params : DocumentSymbolParams) (prev : RequestTask Docu
   -- bad: we have to wait on elaboration of the entire file before we can report document symbols
   let t := doc.cmdSnaps.waitAll
   let syms ← mapTask t fun (snaps, _) => do
-      return { syms := getSections text snaps : DocumentSymbolResult }
+      return { syms := (← getSections text snaps) : DocumentSymbolResult }
   let syms' ← mapTask t fun (snaps, _) => do
       return { syms := ofInterest text snaps : DocumentSymbolResult }
   mergeResponses (← mergeResponses syms syms' combineAnswers) prev combineAnswers
   --pure syms
   where
-    combineAnswers (x y : Option DocumentSymbolResult) : DocumentSymbolResult := ⟨graftSymbols (x.getD ⟨{}⟩).syms (y.getD ⟨{}⟩).syms⟩
-    tocSym (text : FileMap) : TOC → Id (Option DocumentSymbol)
+    combineAnswers (x y : Option DocumentSymbolResult) : DocumentSymbolResult :=
+      ⟨mergeManyInto (x.getD ⟨{}⟩).syms (y.getD ⟨{}⟩).syms⟩
+    tocSym (env) (text : FileMap) : TOC → IO (Option DocumentSymbol)
       | .mk title titleStx endPos children => do
         let some selRange@⟨start, _⟩ := titleStx.lspRange text
           | return none
         let mut kids := #[]
         for c in children do
-          if let some s := tocSym text c then kids := kids.push s
+          if let some s ← tocSym env text c then kids := kids.push s
         return some <| DocumentSymbol.mk {
           name := title,
           kind := SymbolKind.string,
@@ -308,16 +343,17 @@ partial def handleSyms (_params : DocumentSymbolParams) (prev : RequestTask Docu
           children? := kids
         }
       | .included name => do
-        -- TODO Evaluate the name to find the actual included title
+        let title := (← findDocString? env name.getId).getD (toString <| Verso.Doc.unDocName name.getId)
         let some rng := name.raw.lspRange text
           | return none
         return some <| DocumentSymbol.mk {
-          name := toString name,
+          name := title,
           kind := SymbolKind.property,
-          range := rng
-          selectionRange := rng
+          range := rng,
+          selectionRange := rng,
+          detail? := some s!"Included from {name.getId}"
         }
-    getSections text ss : Array DocumentSymbol := Id.run do
+    getSections text ss : IO (Array DocumentSymbol) := do
       let mut syms := #[]
       for snap in ss do
         let info := snap.infoTree.deepestNodes fun _ctxt info _arr =>
@@ -326,7 +362,7 @@ partial def handleSyms (_params : DocumentSymbolParams) (prev : RequestTask Docu
             data.get? TOC
           | _ => none
         for i in info do
-          if let some x ← tocSym text i then syms := syms.push x
+          if let some x ← tocSym snap.env text i then syms := syms.push x
       pure syms
     ofInterest (text : FileMap) (ss : List Snapshots.Snapshot) : Array DocumentSymbol := Id.run do
       let mut syms := #[]
@@ -336,11 +372,27 @@ partial def handleSyms (_params : DocumentSymbolParams) (prev : RequestTask Docu
           | .ofCustomInfo ⟨stx, data⟩ =>
             data.get? PointOfInterest |>.map (stx, ·)
           | _ => none
-        for (stx, ⟨title⟩) in info do
+        for (stx, {title, selectionRange, kind, detail?}) in info do
           if let some rng := stx.lspRange text then
-            syms := syms.push <| .mk {name := title, kind := .constant, range := rng, selectionRange := rng}
+            -- Truncate the inner to the outer if the user made a mistake with it
+            let selectionRange := truncate rng (selectionRange.map text.utf8RangeToLspRange |>.getD rng)
+            let sym := .mk {
+              name := title,
+              range := rng,
+              selectionRange,
+              detail?,
+              kind
+            }
+            -- mergeInto is needed here to keep the tree invariant
+            syms := mergeInto sym syms
       pure syms
-
+    truncate (outer inner : Range) : Range :=
+      if inner.start < outer.start && inner.end < outer.end then outer
+      else if inner.start > outer.end then outer
+      else
+        let start := if outer.start > inner.start then outer.start else inner.start
+        let «end» := if outer.start < inner.start then outer.start else inner.start
+        ⟨start, «end»⟩
 
 -- Shamelessly cribbed from https://github.com/tydeu/lean4-alloy/blob/57792f4e8a9674f8b4b8b17742607a1db142d60e/Alloy/C/Server/SemanticTokens.lean
 structure SemanticTokenEntry where
@@ -501,23 +553,39 @@ def renumberLists : CodeActionProvider := fun params snap => do
       }
     }
 
-partial def directiveResizings (startPos endPos : String.Pos) (text : FileMap) (parents : Array (Syntax × Syntax)) (subject : Syntax) : StateM (Array (Bool × Syntax × Syntax × TextEditBatch)) Unit := do
+partial def directiveResizings
+    (startPos endPos : String.Pos)
+    (startLine endLine : Nat)
+    (text : FileMap)
+    (parents : Array (Syntax × Syntax))
+    (subject : Syntax) :
+    StateM (Array (Bool × Syntax × Syntax × TextEditBatch)) Unit := do
   match subject with
   | `<low|(Verso.Syntax.directive  ~opener ~_name ~_args ~_fake ~_fake' ~(.node _ `null contents) ~closer )> =>
     let parents := parents.push (opener, closer)
-    if inRange opener || inRange closer then
+    if onLine opener || onLine closer then
       if let some edit := parents.flatMapM getIncreases then
         modify (·.push (true, opener, closer, edit))
       if let some edit := getDecreases (opener, closer) contents then
         modify (·.push (false, opener, closer, edit))
     else
-      for s in contents do directiveResizings startPos endPos text parents s
+      for s in contents do directiveResizings startPos endPos startLine endLine text parents s
   | stx@(.node _ _ contents) =>
     if inRange stx then
       for s in contents do
-        directiveResizings startPos endPos text parents s
+        directiveResizings startPos endPos startLine endLine text parents s
   | _ => pure ()
 where
+  onLine (stx : Syntax) : Bool := Id.run do
+    if startLine != endLine then return false
+    let some stxPos := stx.getPos?
+      | false
+    let some stxTailPos := stx.getTailPos?
+      | false
+    let ⟨{line := stxStartLine, ..}, {line := stxEndLine, ..}⟩ :=
+      text.utf8RangeToLspRange ⟨stxPos, stxTailPos⟩
+    if stxStartLine != stxEndLine then return false
+    startLine == stxStartLine
   inRange (stx : Syntax) : Bool :=
     if let some ⟨stxStart, stxEnd⟩ := stx.getRange? then
       -- if the syntax starts before the selection, then it should end after the selection begins
@@ -562,7 +630,10 @@ def resizeDirectives : CodeActionProvider := fun params snap => do
   let text := doc.meta.text
   let startPos := text.lspPosToUtf8Pos params.range.start
   let endPos := text.lspPosToUtf8Pos params.range.end
-  let ((), directives) := directiveResizings startPos endPos text #[] snap.stx |>.run #[]
+  let ((), directives) :=
+    (directiveResizings startPos endPos
+      params.range.start.line params.range.end.line
+      text #[] snap.stx).run #[]
   pure <| directives.map fun (which, _, _, edits) => {
     eager := {
       title := (if which then "More" else "Less") ++ " Colons",
@@ -575,6 +646,7 @@ def resizeDirectives : CodeActionProvider := fun params snap => do
         }
     }
   }
+
 
 
 deriving instance FromJson for FoldingRangeKind

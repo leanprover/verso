@@ -8,12 +8,21 @@ import Lean.Data.Json
 import Lean.Data.Json.FromToJson
 
 import VersoManual.Basic
+import Verso.Doc.ArgParse
 
-open Verso Genre Manual
+open Verso Genre Manual ArgParse
 open Verso.Doc.Elab
 open Lean (Json ToJson FromJson HashSet)
 
 namespace Verso.Genre.Manual
+
+
+structure TechArgs where
+  key : Option String
+  normalize : Bool
+
+def TechArgs.parse [Monad m] [Lean.MonadError m] [MonadLiftT Lean.CoreM m] : ArgParse m TechArgs :=
+  TechArgs.mk <$> .named `key .string true <*> .namedD `normalize .bool true
 
 
 private def glossaryState := `Verso.Genre.Manual.glossary
@@ -38,6 +47,8 @@ private partial def normString (term : String) : String := Id.run do
   if str.endsWith "s" then str := str.dropRight 1
   String.intercalate " " (str.split (fun c => c.isWhitespace || c == '-') |>.filter (!·.isEmpty))
 
+
+open Lean in
 /--
 Defines a technical term.
 
@@ -53,11 +64,27 @@ of the automatically-derived key.
 
 Uses of `tech` use the same process to derive a key, and the key is matched against the `deftech` table.
 -/
-def deftech (args : Array (Doc.Inline Manual))
-    (key : Option String := none) (normalize : Bool := true)
-    : Doc.Inline Manual :=
-  let k := key.getD (techString (.concat args))
-  Doc.Inline.other {Inline.deftech with data := if normalize then normString k else k} args
+@[role_expander deftech]
+def deftech : RoleExpander
+  | args, content => do
+    let {key, normalize} ← TechArgs.parse.run args
+
+
+    -- Heuristically guess at the string and key (usually works)
+    let str := inlineToString (← getEnv) <| mkNullNode content
+    let k := key.getD str
+    let k := if normalize then normString k else k
+    Doc.PointOfInterest.save (← getRef) str
+      (detail? := some s!"Def (key {k})")
+      (kind := .key)
+
+    let content ← content.mapM elabInline
+
+    let stx ←
+      `(let content : Array (Doc.Inline Verso.Genre.Manual) := #[$content,*]
+        let k := ($(quote key) : Option String).getD (techString (Doc.Inline.concat content))
+        Doc.Inline.other {Inline.deftech with data := if $(quote normalize) then normString k else k} content)
+    return #[stx]
 
 /-- Adds an internal identifier as a target for a given glossary entry -/
 def Glossary.addEntry [Monad m] [MonadState TraverseState m] [MonadLiftT IO m] [MonadReaderOf TraverseContext m]
@@ -96,6 +123,7 @@ def deftech.descr : InlineDescr where
 def Inline.tech : Inline where
   name := `Verso.Genre.Manual.tech
 
+open Lean in
 /--
 Emits a reference to a technical term defined with `deftech.`
 
@@ -109,11 +137,26 @@ information from the arguments in `args`, and then normalizing the resulting str
 Call with `(normalize := false)` to disable normalization, and `(key := some k)` to use `k` instead
 of the automatically-derived key.
 -/
-def tech (args : Array (Doc.Inline Manual))
-    (key : Option String := none) (normalize : Bool := true)
-    : Doc.Inline Manual :=
-  let k := key.getD (techString (.concat args))
-  Doc.Inline.other {Inline.tech with data := if normalize then normString k else k} args
+@[role_expander tech]
+def tech : RoleExpander
+  | args, content => do
+    let {key, normalize} ← TechArgs.parse.run args
+
+    -- Heuristically guess at the string and key (usually works)
+    let str := inlineToString (← getEnv) <| mkNullNode content
+    let k := key.getD str
+    let k := if normalize then normString k else k
+    Doc.PointOfInterest.save (← getRef) str
+      (detail? := some s!"Use (key {k})")
+      (kind := .key)
+
+    let content ← content.mapM elabInline
+
+    let stx ←
+      `(let content : Array (Doc.Inline Verso.Genre.Manual) := #[$content,*]
+        let k := ($(quote key) : Option String).getD (techString (Doc.Inline.concat content))
+        Doc.Inline.other {Inline.tech with data := if $(quote normalize) then normString k else k} content)
+    return #[stx]
 
 @[inline_extension tech]
 def tech.descr : InlineDescr where
