@@ -249,7 +249,7 @@ private def asStringAux (quoted : Bool) (startPos : String.Pos) (transform : Str
   let val      := transform val
   let trailing := mkEmptySubstringAt input stopPos
   let atom     :=
-    mkAtom (SourceInfo.original leading startPos trailing (startPos + val)) <|
+    mkAtom (SourceInfo.original leading startPos trailing stopPos) <|
       if quoted then val.quote else val
   s.pushSyntax atom
 
