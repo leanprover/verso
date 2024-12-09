@@ -314,14 +314,14 @@ partial def Toc.html (depth : Option Nat) : Toc → Html
     else
       let page :=
         if path.isEmpty then "/"
-        else path.link
+        else path.link id
       let sectionNum :=
         match sectionNum with
         | none => {{<span class="unnumbered"></span>}}
         | some ns => {{<span class="number">{{sectionNumberString ns}}</span>" "}}
       {{
         <li>
-          <a href=s!"{page}#{id}">{{sectionNum}}{{title}}</a>
+          <a href={{page}}>{{sectionNum}}{{title}}</a>
           {{if children.isEmpty || depth == some 1 then .empty
             else {{<ol> {{children.map (·.html (depth.map Nat.pred))}} </ol>}} }}
         </li>
