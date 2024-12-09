@@ -460,18 +460,21 @@ def docstringStyle := r#"
   margin: 0;
   padding: 0;
 }
+
 .namedocs .extends li {
   list-style-type: none;
   display: inline-block;
+}
+
+.namedocs .extends li label {
   padding-right: 1rem;
 }
 
-.namedocs:has(input[data-parent-idx="0"]) tr[data-inherited-from="0"] {
-  display: none;
-}
-
-.namedocs:has(input[data-parent-idx="0"]:checked) tr[data-inherited-from="0"] {
-  display: table-row;
+.namedocs:has(input[data-parent-idx]) tr[data-inherited-from] {
+  transition-property: opacity, display;
+  transition-duration: 0.4s;
+  transition-behavior: allow-discrete;
+  @starting-style { opacity: 0 !important; }
 }
 "# ++ Id.run do
   let mut str := ""
@@ -482,11 +485,16 @@ where
   mkFilterRule (i : Nat) : String :=
     ".namedocs:has(input[data-parent-idx=\"" ++ toString i ++ "\"]) tr[data-inherited-from=\"" ++ toString i ++ "\"] {
   display: none;
+  opacity: 0;
 }
 .namedocs:has(input[data-parent-idx=\"" ++ toString i ++ "\"]:checked) tr[data-inherited-from=\"" ++ toString i ++"\"] {
   display: table-row;
+  transform: none;
+  opacity: 1;
 }
-
+.namedocs:has(input[data-parent-idx=\"" ++ toString i ++ "\"]:checked):has(tr.inheritance[data-inherited-from=\"" ++ toString i ++"\"] .parent:hover) tr[data-inherited-from]:not([data-inherited-from=\"" ++ toString i ++"\"]) {
+  opacity: 0.5;
+}
 "
 
 
@@ -621,9 +629,9 @@ where
               if i.fieldFrom.isEmpty then pure Html.empty
               else
                   pure {{
-                    <tr class="inheritance" {{inheritedAttr}}>
+                    <tr class=s!"inheritance from{inheritedAttrVal.getD "_"}" {{inheritedAttr}}>
                       <td colspan="2"></td>
-                      <td>
+                      <td class="parent">
                         "Inherited from "
                         <ol>
                         {{ ← i.fieldFrom.mapM fun p => do
