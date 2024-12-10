@@ -732,6 +732,7 @@ def TraverseState.resolveTag (st : TraverseState) (tag : Slug) : Option (Path ×
 
 def docstringDomain := `Verso.Genre.Manual.doc
 def tacticDomain := `Verso.Genre.Manual.doc.tactic
+def syntaxKindDomain := `Verso.Genre.Manual.doc.syntaxKind
 def optionDomain := `Verso.Genre.Manual.doc.option
 def convDomain := `Verso.Genre.Manual.doc.tactic.conv
 def exampleDomain := `Verso.Genre.Manual.example
@@ -763,11 +764,10 @@ def TraverseState.linkTargets (state : TraverseState) : Code.LinkTargets where
     | .error _ =>
       none
   keyword := fun k =>
-    match state.resolveDomainObject tacticDomain k.toString with
-    | .ok (path, htmlId) =>
-      some <| path.link (some htmlId.toString)
-    | .error _ =>
-      none
+    ((state.resolveDomainObject tacticDomain k.toString).toOption <|>
+     (state.resolveDomainObject syntaxKindDomain k.toString).toOption) <&>
+    fun (path, htmlId) => path.link (some htmlId.toString)
+
 
 def sectionDomain := `Verso.Genre.Manual.section
 
