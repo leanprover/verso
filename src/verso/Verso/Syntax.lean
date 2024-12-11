@@ -37,7 +37,8 @@ syntax (name:=image) "image[" str* "]" link_target : inline
 syntax (name:=footnote) "[^" str "]" : inline
 /-- Line break -/
 syntax (name:=linebreak) "line!" str : inline
-/-- Literal characters-/
+/-- Literal code. If the first and last characters are space, and it contains at least one non-space
+  character, then the resulting string has a single space stripped from each end.-/
 syntax (name:=code) "code{" str "}" : inline
 syntax (name:=role) "role{" ident argument* "}" "[" inline "]"  : inline
 syntax (name:=inline_math) "${" inline "}" : inline
