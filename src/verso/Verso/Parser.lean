@@ -68,6 +68,14 @@ Remaining:
 #guard_msgs in
   #eval repFn 3 (chFn 'b' >> chFn 'a') |>.test! "bababaaab"
 
+/-- Like `satisfyFn`, but no special handling of EOI -/
+partial def satisfyFn' (p : Char → Bool) (errorMsg : String := "unexpected character") : ParserFn := fun c s =>
+  let i := s.pos
+  if h : c.input.atEnd i then s.mkUnexpectedError errorMsg
+  else if p (c.input.get' i h) then s.next' c.input i h
+  else s.mkUnexpectedError errorMsg
+
+
 partial def atMostAux (n : Nat) (p : ParserFn) (msg : String) : ParserFn := fun c s => Id.run do
   let iniSz  := s.stackSize
   let iniPos := s.pos
@@ -1064,21 +1072,41 @@ mutual
     nodeFn ``code <|
     withCurrentColumn fun c =>
       atomicFn opener >>
-      (recoverEol <| atomicFn <|
+      (recoverHereWith #[.missing, .missing] <| atomicFn <|
         withCurrentColumn fun c' =>
           let count := c' - c
-          nodeFn strLitKind (asStringFn (many1Fn <| codeContentsFn (count - 1)) (quoted := true)) >>
-          asStringFn (atomicFn (repFn count (satisfyFn (· == '`') s!"expected '{String.mk (.replicate count '`')}' to close inline code"))) >>
-          notFollowedByFn (satisfyFn (· == '`') "`") "backtick")
-
+          nodeFn strLitKind
+            (asStringFn (many1Fn <| codeContentsFn (count - 1)) (quoted := true) >>
+             normFn) >>
+          closer count)
   where
     opener : ParserFn := asStringFn (many1Fn (satisfyFn (· == '`') s!"any number of backticks"))
+    closer (count : Nat) : ParserFn :=
+      asStringFn (atomicFn (repFn count (satisfyFn' (· == '`') s!"expected '{String.mk (.replicate count '`')}' to close inline code"))) >>
+      notFollowedByFn (satisfyFn (· == '`') "`") "backtick"
     takeBackticksFn : Nat → ParserFn
       | 0 => satisfyFn (fun _ => false)
       | n+1 => optionalFn (chFn '`' >> takeBackticksFn n)
     codeContentsFn (maxCount : Nat) : ParserFn :=
       atomicFn (asStringFn (satisfyFn (maxCount > 0 && · == '`') >> atMostFn (maxCount - 1) (chFn '`') s!"at most {maxCount} backticks")) <|>
-      satisfyFn (· ∉ ['`', '\n']) "expected character other than '`' or newline"
+      satisfyFn (· != '`') "expected character other than backtick ('`')"
+    normFn : ParserFn := fun c s => Id.run <| do
+      let str := s.stxStack.back
+      if let .atom info str := str then
+        if str.startsWith "\" " && str.endsWith " \"" then
+          let str := "\"" ++ (str.drop 2 |>.dropRight 2) ++ "\""
+          if str.any (· != ' ') then
+            let info : SourceInfo :=
+              match info with
+              | .none => .none
+              | .synthetic start stop c => .synthetic (start + ⟨1⟩) (stop - ⟨1⟩) c
+              | .original leading start trailing stop =>
+                .original
+                  {leading with stopPos := leading.stopPos + ⟨1⟩} (start + ⟨1⟩)
+                  {trailing with startPos := trailing.startPos - ⟨1⟩} (stop - ⟨1⟩)
+            return s.popSyntax.pushSyntax (.atom info str)
+      return s
+
     takeContentsFn (maxCount : Nat) : ParserFn := fun c s =>
       let i := s.pos
       if h : c.input.atEnd i then s.mkEOIError
@@ -1214,7 +1242,7 @@ Remaining: "_ aa_"
 
 
 /--
-info: Failure @0 (⟨1, 0⟩): expected character other than '`' or newline
+info: Failure @0 (⟨1, 0⟩): expected character other than backtick ('`')
 Final stack:
   [<missing>]
 Remaining: "`a"
@@ -1259,9 +1287,9 @@ Remaining:
 
 /--
 info: Success! Final stack:
-  "aaa`"
+  "aaa`\nb``c"
 Remaining:
-"\nb``c```de````"
+"```de````"
 -/
 #guard_msgs in
 #eval (asStringFn <| many1Fn <| code.codeContentsFn 2).test! "aaa`\nb``c```de````"
@@ -1298,13 +1326,10 @@ All input consumed.
   #eval code.test! "``foo `stuff` bar``"
 
 /--
-info: Failure @4 (⟨1, 4⟩): unexpected end of input
+info: Failure @1 (⟨1, 1⟩): expected '`' to close inline code
 Final stack:
-  (Verso.Syntax.code
-   "`"
-   (str "\"foo\"")
-   <missing>)
-Remaining: ""
+  (Verso.Syntax.code "`" <missing> <missing>)
+Remaining: "foo"
 -/
 #guard_msgs in
   #eval code.test! "`foo"
@@ -1319,24 +1344,27 @@ All input consumed.
 
 /--
 info: Success! Final stack:
-  (Verso.Syntax.code "`" (str "\" foo \"") "`")
+  (Verso.Syntax.code "`" (str "\"foo\"") "`")
 All input consumed.
 -/
 #guard_msgs in
   #eval code.test! "` foo `"
 
 /--
-info: Failure @4 (⟨1, 4⟩): expected '`' to close inline code
-Final stack:
-  (Verso.Syntax.code
-   "`"
-   (str "\" fo\"")
-   <missing>)
-Remaining: "\no `"
+info: Success! Final stack:
+  (Verso.Syntax.code "`" (str "\"fo\\no\"") "`")
+All input consumed.
 -/
 #guard_msgs in
   #eval code.test! "` fo\no `"
 
+/--
+info: Success! Final stack:
+  (Verso.Syntax.code "``" (str "\"`x\"") "``")
+All input consumed.
+-/
+#guard_msgs in
+#eval code.test! "`` `x ``"
 
 /--
 info: Success! Final stack:
@@ -1361,13 +1389,10 @@ All input consumed.
   #eval (inline {}).test! "``foo `stuff` bar``"
 
 /--
-info: Failure @4 (⟨1, 4⟩): unexpected end of input
+info: Failure @1 (⟨1, 1⟩): expected '`' to close inline code
 Final stack:
-  (Verso.Syntax.code
-   "`"
-   (str "\"foo\"")
-   <missing>)
-Remaining: ""
+  (Verso.Syntax.code "`" <missing> <missing>)
+Remaining: "foo"
 -/
 #guard_msgs in
   #eval (inline {}).test! "`foo"
@@ -1382,32 +1407,25 @@ All input consumed.
 
 /--
 info: Success! Final stack:
-  (Verso.Syntax.code "`" (str "\" foo \"") "`")
+  (Verso.Syntax.code "`" (str "\"foo\"") "`")
 All input consumed.
 -/
 #guard_msgs in
   #eval (inline {}).test! "` foo `"
 
 /--
-info: Failure @4 (⟨1, 4⟩): expected '`' to close inline code
-Final stack:
-  (Verso.Syntax.code
-   "`"
-   (str "\" fo\"")
-   <missing>)
-Remaining: "\no `"
+info: Success! Final stack:
+  (Verso.Syntax.code "`" (str "\"fo\\no\"") "`")
+All input consumed.
 -/
 #guard_msgs in
   #eval (inline {}).test! "` fo\no `"
 
 /--
-info: Failure @5 (⟨1, 5⟩): expected '``' to close inline code
+info: Failure @2 (⟨1, 2⟩): expected '``' to close inline code
 Final stack:
-  (Verso.Syntax.code
-   "``"
-   (str "\" fo\"")
-   <missing>)
-Remaining: "\no `"
+  (Verso.Syntax.code "``" <missing> <missing>)
+Remaining: " fo\no `"
 -/
 #guard_msgs in
   #eval (inline {}).test! "`` fo\no `"
@@ -1657,6 +1675,26 @@ All input consumed.
 -/
 #guard_msgs in
 #eval inline {} |>.test! "$`\\frac{x}{4}`"
+
+/--
+info: Success! Final stack:
+  (Verso.Syntax.inline_math
+   "$"
+   (Verso.Syntax.code
+    "`"
+    (str "\"\\\\frac{\\n  x\\n}{\\n  4\\n}\\n\"")
+    "`")
+   "`")
+All input consumed.
+-/
+#guard_msgs in
+#eval inline {} |>.test! "$`\\frac{
+  x
+}{
+  4
+}
+`"
+
 
 /--
 info: Success! Final stack:
@@ -2714,7 +2752,7 @@ All input consumed.
 #eval blocks {} |>.test! "> Quotation\nand contained"
 
 /--
-info: Failure @64 (⟨3, 52⟩): expected '`' to close inline code
+info: Failure @54 (⟨3, 42⟩): expected '`' to close inline code
 Final stack:
   [(Verso.Syntax.para
     "para{"
@@ -2725,10 +2763,8 @@ Final stack:
     [(Verso.Syntax.text
       (str
        "\"Here is a paragraph with an unterminated \""))
-     (Verso.Syntax.code
-      "`"
-      (str "\"code block\"")
-      <missing>)
+     (Verso.Syntax.code "`" <missing> <missing>)
+     (Verso.Syntax.text (str "\"code block\""))
      (Verso.Syntax.linebreak
       "line!"
       (str "\"\\n\""))
@@ -2744,7 +2780,7 @@ Final stack:
     "para{"
     [(Verso.Syntax.text (str "\"Yep.\""))]
     "}")]
-Remaining: "\nthat would be super annoying without error recovery in the\nparser.\n\nYep."
+Remaining: "code block\nthat would be super annoying without error recovery in the\nparser.\n\nYep."
 -/
 #guard_msgs in
 #eval blocks {} |>.test!
