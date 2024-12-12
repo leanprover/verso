@@ -2055,7 +2055,7 @@ mutual
               takeWhileFn (· == ' ') >>
               optionalFn nameAndArgs >>
               satisfyFn (· == '\n') "newline" >>
-              asStringFn (manyFn (codeFrom c fenceWidth)) (transform := deIndent c) >>
+              asStringFn (manyFn (atomicFn blankLine <|> codeFrom c fenceWidth)) (transform := deIndent c) >>
               closeFence c fenceWidth
   where
     withIndentColumn (p : Nat → ParserFn) : ParserFn := fun c s =>
@@ -3209,6 +3209,150 @@ Remaining: ""
 #guard_msgs in
   #eval codeBlock {} |>.test! " ```   \n (define x 4)\n x\n```"
 
+/--
+info: Success! Final stack:
+  (Verso.Syntax.ul
+   [(Verso.Syntax.li
+     (bullet (column "1") "*")
+     [(Verso.Syntax.para
+       "para{"
+       [(Verso.Syntax.text
+         (str "\"Here's a bullet\""))]
+       "}")])
+    (Verso.Syntax.li
+     (bullet (column "1") "*")
+     [(Verso.Syntax.para
+       "para{"
+       [(Verso.Syntax.text
+         (str
+          "\"and another with some code in it\""))]
+       "}")
+      (Verso.Syntax.codeblock
+       (column "4")
+       "````"
+       [`lean []]
+       "hey\n\nthere\n"
+       "````")])
+    (Verso.Syntax.li
+     (bullet (column "1") "*")
+     [(Verso.Syntax.para
+       "para{"
+       [(Verso.Syntax.text
+         (str "\"and another one\""))
+        (Verso.Syntax.linebreak
+         "line!"
+         (str "\"\\n\""))]
+       "}")])])
+All input consumed.
+-/
+#guard_msgs in
+#eval block {} |>.test!
+  " * Here's a bullet
+ * and another with some code in it
+    ````lean
+    hey
+
+    there
+    ````
+ * and another one
+"
+
+/--
+info: Success! Final stack:
+  (Verso.Syntax.ul
+   [(Verso.Syntax.li
+     (bullet (column "0") "*")
+     [(Verso.Syntax.para
+       "para{"
+       [(Verso.Syntax.code
+         "`"
+         (str "\"structure\"")
+         "`")
+        (Verso.Syntax.text (str "\" and \""))
+        (Verso.Syntax.code
+         "`"
+         (str "\"inductive\"")
+         "`")
+        (Verso.Syntax.text (str "\" commands\""))]
+       "}")
+      (Verso.Syntax.ul
+       [(Verso.Syntax.li
+         (bullet (column "2") "*")
+         [(Verso.Syntax.para
+           "para{"
+           [(Verso.Syntax.link
+             "["
+             [(Verso.Syntax.text
+               (str "\"#5842\""))]
+             "]"
+             (Verso.Syntax.url
+              "("
+              (str
+               "\"https://github.com/leanprover/lean4/pull/5842\"")
+              ")"))
+            (Verso.Syntax.text (str "\" and \""))
+            (Verso.Syntax.link
+             "["
+             [(Verso.Syntax.text
+               (str "\"#5783\""))]
+             "]"
+             (Verso.Syntax.url
+              "("
+              (str
+               "\"https://github.com/leanprover/lean4/pull/5783\"")
+              ")"))
+            (Verso.Syntax.text
+             (str
+              "\" implement a feature where the \""))
+            (Verso.Syntax.code
+             "`"
+             (str "\"structure\"")
+             "`")
+            (Verso.Syntax.text
+             (str
+              "\" command can now define recursive inductive types:\""))]
+           "}")
+          (Verso.Syntax.codeblock
+           (column "4")
+           "```"
+           [`lean []]
+           "structure Tree where\n  n : Nat\n  children : Fin n → Tree\n\ndef Tree.size : Tree → Nat\n  | {n, children} => Id.run do\n    let mut s := 0\n    for h : i in [0 : n] do\n      s := s + (children ⟨i, h.2⟩).size\n    pure s\n"
+           "```")])
+        (Verso.Syntax.li
+         (bullet (column "2") "*")
+         [(Verso.Syntax.para
+           "para{"
+           [(Verso.Syntax.link
+             "["
+             [(Verso.Syntax.text
+               (str "\"#5814\""))]
+             "]"
+             (Verso.Syntax.url
+              "("
+              (str
+               "\"https://github.com/leanprover/lean4/pull/5814\"")
+              ")"))
+            (Verso.Syntax.text (str "\" \""))]
+           "}")])])])])
+All input consumed.
+-/
+#guard_msgs in
+#eval block {} |>.test!
+r##"* `structure` and `inductive` commands
+  * [#5842](https://github.com/leanprover/lean4/pull/5842) and [#5783](https://github.com/leanprover/lean4/pull/5783) implement a feature where the `structure` command can now define recursive inductive types:
+    ```lean
+    structure Tree where
+      n : Nat
+      children : Fin n → Tree
+
+    def Tree.size : Tree → Nat
+      | {n, children} => Id.run do
+        let mut s := 0
+        for h : i in [0 : n] do
+          s := s + (children ⟨i, h.2⟩).size
+        pure s
+    ```
+  * [#5814](https://github.com/leanprover/lean4/pull/5814) "##
 
 /--
 info: Success! Final stack:
