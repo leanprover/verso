@@ -300,6 +300,27 @@ partial def mergeInto (sym : DocumentSymbol) (existing : Array DocumentSymbol) :
 def mergeManyInto (syms : Array DocumentSymbol) (existing : Array DocumentSymbol) : Array DocumentSymbol :=
   syms.foldr (init := existing) mergeInto
 
+/--
+The Lean VS Code mode can't deal with symbols whose names are "falsy" - this recovers more
+robustly, removing empty strings and arrays.
+-/
+partial def removeFalsy (sym : DocumentSymbol) : DocumentSymbol :=
+  match sym with
+  | ⟨sym'⟩ =>
+    ⟨{sym' with
+        name := if sym'.name.trim.isEmpty then "<no name>" else sym'.name,
+        detail? := do
+          let detail ← sym'.detail?
+          if detail.trim.isEmpty then
+            none
+          else
+            pure detail
+        children? :=
+          match sym'.children? with
+          | none | some #[] => none
+          | some more => some (more.map removeFalsy)
+      }⟩
+
 open Lean Server Lsp RequestM in
 def mergeResponses (docTask : RequestTask α) (leanTask : RequestTask β) (f : Option α → Option β → γ) : RequestM (RequestTask γ) := do
   bindTask docTask fun
@@ -323,7 +344,10 @@ partial def handleSyms (_params : DocumentSymbolParams) (prev : RequestTask Docu
       return { syms := (← getSections text snaps) : DocumentSymbolResult }
   let syms' ← mapTask t fun (snaps, _) => do
       return { syms := ofInterest text snaps : DocumentSymbolResult }
-  mergeResponses (← mergeResponses syms syms' combineAnswers) prev combineAnswers
+  let out ← mergeResponses (← mergeResponses syms syms' combineAnswers) prev combineAnswers
+  mapTask out fun
+    | .error e => throw e
+    | .ok ⟨vs⟩ => pure ⟨vs.map removeFalsy⟩
   --pure syms
   where
     combineAnswers (x y : Option DocumentSymbolResult) : DocumentSymbolResult :=
