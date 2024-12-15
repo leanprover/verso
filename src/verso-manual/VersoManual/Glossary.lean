@@ -150,12 +150,16 @@ def tech : RoleExpander
       (detail? := some s!"Use (key {k})")
       (kind := .key)
 
+    let filename ← getFileName
+    let line := (← getFileMap).utf8PosToLspPos <$> (← getRef).getPos?
+    let loc : String := filename ++ (line.map (fun ⟨line, col⟩ => s!":{line}:{col}")).getD ""
+
     let content ← content.mapM elabInline
 
     let stx ←
       `(let content : Array (Doc.Inline Verso.Genre.Manual) := #[$content,*]
         let k := ($(quote key) : Option String).getD (techString (Doc.Inline.concat content))
-        Doc.Inline.other {Inline.tech with data := if $(quote normalize) then normString k else k} content)
+        Doc.Inline.other {Inline.tech with data := Json.arr #[Json.str (if $(quote normalize) then normString k else k), Json.str $(quote loc)]} content)
     return #[stx]
 
 @[inline_extension tech]
@@ -169,18 +173,18 @@ def tech.descr : InlineDescr where
     open Verso.Output.Html in
     open Doc.Html in
     some <| fun go _id info content => do
-      let .ok (key : String) := FromJson.fromJson? info
-        | HtmlT.logError s!"Failed to decode glossary key from {info}"
+      let Json.arr #[.str key, .str loc] := info
+        | HtmlT.logError s!"Failed to decode glossary key and location from {info}"
           content.mapM go
       match (← Doc.Html.HtmlT.state).get? glossaryState with
       | none =>
-        HtmlT.logError s!"No glossary entries defined (looking up {info})"
+        HtmlT.logError s!"{loc}: No glossary entries defined (looking up {info})"
         content.mapM go
       | some (.error e) => HtmlT.logError e; content.mapM go
       | some (.ok (tech : Json)) =>
         match tech.getObjValD key with
         | .null =>
-          HtmlT.logError s!"No term def with key {key}"
+          HtmlT.logError s!"{loc}: No term def with key \"{key}\""
           content.mapM go
         | v =>
           match FromJson.fromJson? v with
@@ -191,7 +195,7 @@ def tech.descr : InlineDescr where
               let addr := path.link (some htmlId.toString)
               pure {{<a class="technical-term" href={{addr}}>{{← content.mapM go}}</a>}}
             else
-              Doc.Html.HtmlT.logError s!"No external tag for {id}"
+              Doc.Html.HtmlT.logError s!"{loc}: No external tag for {id}"
               content.mapM go
   extraCss := [
     r#"
