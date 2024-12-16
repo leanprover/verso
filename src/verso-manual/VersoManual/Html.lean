@@ -505,7 +505,7 @@ def page
                   let logoHtml := {{<img src={{url}}/>}}
                   let logoDest :=
                     if let some root := logoLink then root
-                    else relativeRoot
+                    else "/"
                   {{<a href={{logoDest}} id="logo">{{logoHtml}}</a>}}
                 else .empty }}
               {{if showNavButtons then toc.navButtons path else .empty}}
