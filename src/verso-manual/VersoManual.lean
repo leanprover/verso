@@ -123,6 +123,8 @@ structure Config where
   draft : Bool := false
   /-- The URL from which to draw the logo to show, if any -/
   logo : Option String := none
+  /-- The URL that the logo should link to, if any (default is site root) -/
+  logoLink : Option String := none
   /-- URL for source link -/
   sourceLink : Option String := none
   /-- URL for issue reports -/
@@ -276,6 +278,7 @@ def page (toc : List Html.Toc) (path : Path) (textTitle : String) (htmlTitle con
     (showNavButtons := showNavButtons)
     (base := config.baseURL)
     (logo := config.logo)
+    (logoLink := config.logoLink)
     (repoLink := config.sourceLink)
     (issueLink := config.issueLink)
     (extraStylesheets := config.extraCss ++ state.extraCssFiles.toList.map ("/-verso-css/" ++ ·.1))
@@ -479,11 +482,14 @@ where
     | ("--without-html-multi"::more) => opts {cfg with emitHtmlMulti := false} more
     | ("--with-word-count"::file::more) => opts {cfg with wordCount := some file} more
     | ("--without-word-count"::more) => opts {cfg with wordCount := none} more
-    | ("--site-base-url"::base::more) => opts {cfg with baseURL := some base} more
+    | ("--site-base-url"::base::more) => opts {cfg with baseURL := some (fixBase base)} more
     | ("--draft"::more) => opts {cfg with draft := true} more
     | ("--verbose"::more) => opts {cfg with verbose := true} more
     | (other :: _) => throw (↑ s!"Unknown option {other}")
     | [] => pure cfg
+
+  fixBase (base : String) : String :=
+    if base.takeRight 1 != "/" then base ++ "/" else base
 
   go : ReaderT ExtensionImpls IO UInt32 := do
     let hasError ← IO.mkRef false

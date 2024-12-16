@@ -129,6 +129,10 @@ def relativize (path : Path) (url : String) : String := Id.run do
 #guard_msgs in
 #eval Path.relativize #["a", "b", "c", "d", "e"] "/a/b/c"
 
+/-- info: "" -/
+#guard_msgs in
+#eval Path.relativize #[] "/"
+
 end Path
 
 /--
