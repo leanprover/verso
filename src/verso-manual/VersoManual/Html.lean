@@ -467,6 +467,7 @@ def page
     (showNavButtons : Bool := true)
     (base : Option String := none)
     (logo : Option String := none)
+    (logoLink : Option String := none)
     (repoLink : Option String := none)
     (issueLink : Option String := none)
     (extraStylesheets : List String := [])
@@ -500,7 +501,13 @@ def page
           <nav id="toc">
             <input type="checkbox" id="toggle-toc" checked="checked"/>
             <div class="first">
-              {{if let some url := logo then {{<img src={{url}} id="logo"/>}} else .empty }}
+              {{if let some url := logo then
+                  let logoHtml := {{<img src={{url}}/>}}
+                  let logoDest :=
+                    if let some root := logoLink then root
+                    else relativeRoot
+                  {{<a href={{logoDest}} id="logo">{{logoHtml}}</a>}}
+                else .empty }}
               {{if showNavButtons then toc.navButtons path else .empty}}
               {{toc.localHtml path}}
             </div>

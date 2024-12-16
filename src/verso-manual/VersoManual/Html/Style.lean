@@ -374,6 +374,14 @@ pre, code {
   transition: height var(--verso-toc-transition-time) ease-in-out;
 }
 
+#logo img {
+  object-fit: contain;
+  max-width: 100%;
+  max-height: 4rem;
+  margin-left: auto;
+  display: block;
+}
+
 /******** Headerline ********/
 
 #toggle-toc-click {
