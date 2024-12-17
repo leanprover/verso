@@ -92,6 +92,9 @@ jobs:
             sourcecodepro
             sourcesanspro
             sourceserifpro
+            fvextra
+            upquote
+            lineno
 
       - name: Check `tlmgr` version
         run: tlmgr --version
