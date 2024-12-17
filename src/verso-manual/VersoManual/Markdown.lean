@@ -25,6 +25,11 @@ generate nested `Part`s, but rather some custom node or some formatted text.
 private structure HeaderHandlers (m : Type u → Type w) (block : Type u) (inline : Type v) : Type (max u v w) where
   levels : List (Array inline → m block) := []
 
+structure MDContext (m : Type u → Type w) (block : Type u) (inline : Type u) : Type (max u w) where
+  headerHandlers : HeaderHandlers m block inline
+  elabInlineCode : Option (String → m inline)
+  elabBlockCode : Option (String → m block)
+
 def attrText : AttrText → Except String String
   | .normal str => pure str
   | .nullchar => throw "Null character"
@@ -40,7 +45,28 @@ def attr' (val : Array AttrText) : Except String String := do
   | .error e => .error e
   | .ok s => pure s
 
-partial def inlineFromMarkdown [Monad m] [MonadQuotation m] [MonadError m] : Text → m Term
+private structure MDState where
+  /-- A mapping from document header levels to actual nesting levels -/
+  inHeaders : List (Nat × Nat) := []
+deriving Inhabited
+
+private abbrev MDT m block inline α := ReaderT (MDContext m block inline) (StateT MDState m) α
+
+instance {block inline} [Monad m] : MonadLift m (MDT m block inline) where
+  monadLift act := fun _ s => act <&> (·, s)
+
+instance {block inline} [Monad m] [AddMessageContext m] : AddMessageContext (MDT m block inline) where
+  addMessageContext msg := (addMessageContext msg : m _)
+
+
+instance {block inline} [AddMessageContext m] [Monad m] [MonadError m] : MonadError (MDT m block inline) where
+  throw e := throw (m := m) e
+  tryCatch a b := fun r s => do
+    tryCatch (a r s) fun e => b e r s
+
+
+
+partial def inlineFromMarkdown [Monad m] [MonadQuotation m] [AddMessageContext m] [MonadError m] : Text → MDT m Term Term Term
   | .normal str | .br str | .softbr str => ``(Verso.Doc.Inline.text $(quote str))
   | .nullchar => throwError "Unexpected null character in parsed Markdown"
   | .del _ => throwError "Unexpected strikethrough in parsed Markdown"
@@ -50,7 +76,12 @@ partial def inlineFromMarkdown [Monad m] [MonadQuotation m] [MonadError m] : Tex
   | .latexMath m => ``(Verso.Doc.Inline.math Verso.Doc.MathMode.inline $(quote <| String.join m.toList))
   | .latexMathDisplay m =>  ``(Verso.Doc.Inline.math Verso.Doc.MathMode.display $(quote <| String.join m.toList))
   | .u txt => throwError "Unexpected underline around {repr txt} in parsed Markdown"
-  | .code str => ``(Verso.Doc.Inline.code $(quote <| String.join str.toList))
+  | .code strs => do
+    let str := String.join strs.toList
+    if let some f := (← read).elabInlineCode then
+      f str
+    else
+      ``(Verso.Doc.Inline.code $(quote str))
   | .entity ent => throwError s!"Unsupported entity {ent} in parsed Markdown"
   | .img .. => throwError s!"Unexpected image in parsed Markdown"
   | .wikiLink .. => throwError s!"Unexpected wiki-style link in parsed Markdown"
@@ -70,12 +101,6 @@ partial def inlineFromMarkdown' : Text → Except String (Doc.Inline g)
   | .img .. => .error s!"Unexpected image in parsed Markdown"
   | .wikiLink .. => .error s!"Unexpected wiki-style link in parsed Markdown"
 
-private structure MDState where
-  /-- A mapping from document header levels to actual nesting levels -/
-  inHeaders : List (Nat × Nat) := []
-deriving Inhabited
-
-private abbrev MDT m block inline α := ReaderT (HeaderHandlers m block inline) (StateT MDState m) α
 
 instance [Monad m] [MonadError m] : MonadError (MDT m b i) where
   throw ex := fun _ρ _σ => throw ex
@@ -102,14 +127,19 @@ private partial def getHeaderLevel [Monad m] (level : Nat) : MDT m b i Nat := do
 
 private def getHeader  [Monad m] (level : Nat) : MDT m b i (Except String (Array i → m b)) := do
   let lvl ← getHeaderLevel level
-  match (← read).levels.get? lvl with
+  match (← read).headerHandlers.levels.get? lvl with
   | none => pure (throw s!"Unexpected header with nesting level {lvl} in parsed Markdown")
   | some f => pure (pure f)
 
-private partial def blockFromMarkdownAux [Monad m] [MonadQuotation m] [MonadError m] : MD4Lean.Block → MDT m Term Term Term
+private partial def blockFromMarkdownAux [Monad m] [AddMessageContext m] [MonadQuotation m] [MonadError m] : MD4Lean.Block → MDT m Term Term Term
   | .p txt => do ``(Verso.Doc.Block.para #[$[$(← txt.mapM (inlineFromMarkdown ·))],*])
   | .blockquote bs => do ``(Verso.Doc.Block.blockquote #[$[$(← bs.mapM blockFromMarkdownAux )],*])
-  | .code _ _ _ strs => do ``(Verso.Doc.Block.code $(quote <| String.join strs.toList))
+  | .code _ _ _ strs => do
+    let str := String.join strs.toList
+    if let some f := (← read).elabBlockCode then
+      f str
+    else
+      ``(Verso.Doc.Block.code $(quote str))
   | .ul _ _ items => do ``(Verso.Doc.Block.ul #[$[$(← items.mapM itemFromMarkdown)],*])
   | .ol _ i _ items => do
     let itemStx ← items.mapM itemFromMarkdown
@@ -129,10 +159,13 @@ where
     else ``(Verso.Doc.ListItem.mk #[$[$(← item.contents.mapM blockFromMarkdownAux)],*])
 
 
-def blockFromMarkdown [Monad m] [MonadQuotation m] [MonadError m]
+def blockFromMarkdown [Monad m] [MonadQuotation m] [MonadError m] [AddMessageContext m]
     (md : MD4Lean.Block)
-    (handleHeaders : List (Array Term → m Term) := []) : m Term :=
-  (·.fst) <$> blockFromMarkdownAux md ⟨handleHeaders⟩ {}
+    (handleHeaders : List (Array Term → m Term) := [])
+    (elabInlineCode : Option (String → m Term) := none)
+    (elabBlockCode : Option (String → m Term) := none) : m Term :=
+  let ctxt := {headerHandlers := ⟨handleHeaders⟩, elabInlineCode, elabBlockCode}
+  (·.fst) <$> blockFromMarkdownAux md ctxt {}
 
 def strongEmphHeaders [Monad m] [MonadQuotation m] : List (Array Term → m Term) := [
   fun stxs => ``(Verso.Doc.Block.para #[Verso.Doc.Inline.bold #[$stxs,*]]),
@@ -162,8 +195,11 @@ where
 
 def blockFromMarkdown'
     (md : MD4Lean.Block)
-    (handleHeaders : List (Array (Doc.Inline g) → Except String (Doc.Block g)) := []) : Except String (Doc.Block g) :=
-  (·.fst) <$> blockFromMarkdownAux' md ⟨handleHeaders⟩ {}
+    (handleHeaders : List (Array (Doc.Inline g) → Except String (Doc.Block g)) := [])
+    (elabInlineCode : Option (String → Except String (Doc.Inline g)) := none)
+    (elabBlockCode : Option (String → Except String (Doc.Block g)) := none) :
+  Except String (Doc.Block g) :=
+  (·.fst) <$> blockFromMarkdownAux' md ⟨⟨handleHeaders⟩, elabInlineCode, elabBlockCode⟩ {}
 
 def strongEmphHeaders' : List (Array (Doc.Inline g) → Except String (Doc.Block g)) := [
   fun inls => pure <| .para #[.bold inls],

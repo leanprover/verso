@@ -15,6 +15,41 @@ open Verso.Output Html
 open Lean (Json)
 open Std (HashMap)
 
+namespace SubVerso.Highlighting
+/--
+Remove n levels of indentation from highlighted code.
+-/
+partial def Highlighted.deIndent (n : Nat) (hl : Highlighted) : Highlighted :=
+  (remove hl).run' (some n)
+where
+  remove (hl : Highlighted) : StateM (Option Nat) Highlighted := do
+    match hl with
+    | .token t =>
+      set (none : Option Nat)
+      return .token t
+    | .span i x => .span i <$> remove x
+    | .seq xs => .seq <$> xs.mapM remove
+    | .text s =>
+      let mut s' := ""
+      let mut iter := s.iter
+      while h : iter.hasNext do
+        let c := iter.curr' h
+        iter := iter.next
+        match c with
+        | '\n' =>
+          set (some n)
+        | ' ' =>
+          if let some (i + 1) ← get then
+            set (some i)
+            continue
+        | _ => set (none : Option Nat)
+        s' := s'.push c
+      return .text s'
+    | .point p s => return .point p s
+    | .tactics gs x y hl => .tactics gs x y <$> remove hl
+
+end SubVerso.Highlighting
+
 
 namespace Verso.Code
 

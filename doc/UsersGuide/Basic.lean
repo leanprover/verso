@@ -53,6 +53,28 @@ results in
 
 {docstring List.forM}
 
+## More Docstring Examples
+
+{docstring Lean.Syntax}
+
+{docstring List}
+
+{docstring String}
+
+{docstring Subtype}
+
+{docstring OfNat}
+
+{docstring Monad}
+
+:::tactic "induction"
+:::
+
+:::tactic "simp"
+:::
+
+{docstring Nat}
+
 # Index
 %%%
 number := false
