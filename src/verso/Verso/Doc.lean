@@ -47,6 +47,7 @@ private def arrayEq (eq : α → α → Bool) (xs ys : Array α) : Bool := Id.ru
       return true
     else return false
 
+
 inductive Inline (genre : Genre) : Type where
   | text (string : String)
   | emph (content : Array (Inline genre))
