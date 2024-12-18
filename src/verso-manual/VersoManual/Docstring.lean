@@ -825,7 +825,7 @@ def leanFromMarkdown.blockdescr : BlockDescr where
         hl.blockHtml "docstring-examples"
 
 open Lean Elab Term in
-def tryElabCodeTermWith (mk : Highlighted → String → DocElabM α) (str : String) : DocElabM α := do
+def tryElabCodeTermWith (mk : Highlighted → String → DocElabM α) (str : String) (ignoreElabErrors := false) : DocElabM α := do
   let loc := (← getRef).getPos?.map (← getFileMap).utf8PosToLspPos
   let src :=
     if let some ⟨line, col⟩ := loc then s!"<docstring at {← getFileName}:{line}:{col}>"
@@ -852,7 +852,7 @@ def tryElabCodeTermWith (mk : Highlighted → String → DocElabM α) (str : Str
         pure (← Core.getMessageLog, tree', e')
       finally
         Core.setMessageLog initMsgs
-    if newMsgs.hasErrors then
+    if newMsgs.hasErrors && !ignoreElabErrors then
       for msg in newMsgs.errorsToWarnings.toArray do
         logMessage msg
       throwError m!"Didn't elaborate {stx} as term"
@@ -860,15 +860,67 @@ def tryElabCodeTermWith (mk : Highlighted → String → DocElabM α) (str : Str
     let hls := (← highlight stx #[] (PersistentArray.empty.push tree))
     mk hls str
 
-open Lean Elab Term in
-def tryElabInlineCodeTerm : String → DocElabM Term :=
-  tryElabCodeTermWith fun hls str =>
-    ``(Verso.Doc.Inline.other (Inline.leanFromMarkdown $(quote hls)) #[Verso.Doc.Inline.code $(quote str)])
+
+declare_syntax_cat doc_metavar
+scoped syntax (name := docMetavar) term ":" term : doc_metavar
+
 
 open Lean Elab Term in
-def tryElabBlockCodeTerm : String → DocElabM Term :=
-  tryElabCodeTermWith fun hls str =>
-    ``(Verso.Doc.Block.other (Block.leanFromMarkdown $(quote hls)) #[Verso.Doc.Block.code $(quote str)])
+def tryElabCodeMetavarTermWith (mk : Highlighted → String → DocElabM α) (str : String) (ignoreElabErrors := false) : DocElabM α := do
+  let loc := (← getRef).getPos?.map (← getFileMap).utf8PosToLspPos
+  let src :=
+    if let some ⟨line, col⟩ := loc then s!"<docstring at {← getFileName}:{line}:{col}>"
+    else s!"<docstring at {← getFileName} (unknown line)>"
+  match Parser.runParserCategory (← getEnv) `doc_metavar str src with
+  | .error e => throw (.error (← getRef) e)
+  | .ok stx =>
+    if let `(doc_metavar|$pat:term : $ty:term) := stx then
+      let (newMsgs, tree, _e') ← do
+        let initMsgs ← Core.getMessageLog
+        try
+          Core.resetMessageLog
+          -- TODO open decls/current namespace
+          let (tree', e') ← fun _ => do
+            let stx' : Term ← `(($pat : $ty))
+            let e ← withReader ({· with autoBoundImplicit := true}) <| elabTerm stx' none
+            Term.synthesizeSyntheticMVarsNoPostponing
+            let e' ← Term.levelMVarToParam (← instantiateMVars e)
+            Term.synthesizeSyntheticMVarsNoPostponing
+            let e' ← instantiateMVars e'
+            let ctx := PartialContextInfo.commandCtx {
+              env := ← getEnv, fileMap := ← getFileMap, mctx := ← getMCtx, currNamespace := ← getCurrNamespace,
+              openDecls := ← getOpenDecls, options := ← getOptions, ngen := ← getNGen
+            }
+            pure (InfoTree.context ctx (.node (Info.ofCommandInfo ⟨`Verso.Genre.Manual.docstring, stx⟩) (← getInfoState).trees), e')
+          pure (← Core.getMessageLog, tree', e')
+        finally
+          Core.setMessageLog initMsgs
+      if newMsgs.hasErrors && !ignoreElabErrors then
+        for msg in newMsgs.errorsToWarnings.toArray do
+          logMessage msg
+        throwError m!"Didn't elaborate {pat} : {ty} as term"
+
+      let hls := (← highlight stx #[] (PersistentArray.empty.push tree))
+      mk hls str
+    else throwError "Not a doc metavar: {stx}"
+
+open Lean Elab Term in
+def tryElabInlineCodeTerm (str : String) (ignoreElabErrors := false) : DocElabM Term :=
+  tryElabCodeTermWith (ignoreElabErrors := ignoreElabErrors) (fun hls str =>
+    ``(Verso.Doc.Inline.other (Inline.leanFromMarkdown $(quote hls)) #[Verso.Doc.Inline.code $(quote str)]))
+    str
+
+open Lean Elab Term in
+def tryElabInlineCodeMetavarTerm (str : String) (ignoreElabErrors := false) : DocElabM Term :=
+  tryElabCodeMetavarTermWith (ignoreElabErrors := ignoreElabErrors) (fun hls str =>
+    ``(Verso.Doc.Inline.other (Inline.leanFromMarkdown $(quote hls)) #[Verso.Doc.Inline.code $(quote str)]))
+    str
+
+open Lean Elab Term in
+def tryElabBlockCodeTerm (str : String)  (ignoreElabErrors := false) : DocElabM Term :=
+  tryElabCodeTermWith (ignoreElabErrors := ignoreElabErrors) (fun hls str =>
+    ``(Verso.Doc.Block.other (Block.leanFromMarkdown $(quote hls)) #[Verso.Doc.Block.code $(quote str)]))
+    str
 
 private def indentColumn (str : String) : Nat := Id.run do
   let mut i : Option Nat := none
@@ -900,7 +952,7 @@ private def indentColumn (str : String) : Nat := Id.run do
 #eval indentColumn "   abc\n\n  def\n    a"
 
 open Lean Elab Term in
-def tryElabBlockCodeCommand (str : String) : DocElabM Term := do
+def tryElabBlockCodeCommand (str : String) (ignoreElabErrors := false) : DocElabM Term := do
     let loc := (← getRef).getPos?.map (← getFileMap).utf8PosToLspPos
     let src :=
       if let some ⟨line, col⟩ := loc then s!"<docstring at {← getFileName}:{line}:{col}>"
@@ -923,13 +975,12 @@ def tryElabBlockCodeCommand (str : String) : DocElabM Term := do
 
       cmdState ← withInfoTreeContext (mkInfoTree := pure ∘ InfoTree.node (.ofCommandInfo {elaborator := `Manual.Meta.lean, stx := cmd})) do
         match (← liftM <| EIO.toIO' <| (Command.elabCommand cmd cctx).run cmdState) with
-        | Except.error e => Lean.logError e.toMessageData; return cmdState
+        | Except.error e =>
+          unless ignoreElabErrors do Lean.logError e.toMessageData
+          return cmdState
         | Except.ok ((), s) => return s
 
       if Parser.isTerminalCommand cmd then break
-
-    for msg in cmdState.messages.unreported do
-      logMessage msg
 
     if cmdState.messages.hasErrors then
       throwError "Errors found in command"
@@ -941,7 +992,6 @@ def tryElabBlockCodeCommand (str : String) : DocElabM Term := do
     hls := hls.deIndent (indentColumn str)
 
     ``(Verso.Doc.Block.other (Block.leanFromMarkdown $(quote hls)) #[Verso.Doc.Block.code $(quote str)])
-
 
 
 open Lean Elab Term in
@@ -964,52 +1014,110 @@ where
     pure <| .token ⟨.const name sig docs false, str⟩
 
 open Lean Elab Term in
-def tryElabInlineCode (decls : List Name) (str : String) : DocElabM Term := do
-  match decls with
-  | decl :: decls =>
-    -- This brings the parameters into scope, so the term elaboration version catches them!
-    Meta.forallTelescopeReducing (← getConstInfo decl).type fun _ _ =>
-      tryElabInlineCode decls str
-  | [] =>
-    try
-      tryElabInlineCodeName str <|>
-      tryElabInlineCodeTerm str
-    catch
-      | .error ref e =>
-        logWarningAt ref e
-        ``(Verso.Doc.Inline.code $(quote str))
-      | e =>
+private def attempt (counter : IO.Ref Nat) (str : String) (xs : List (String → DocElabM α)) : DocElabM α := do
+  let str' := (← counter.get).fold (init := str) (fun _ _ s => "\n" ++ s)
+  counter.modify (· + 1)
+  match xs with
+  | [] => throwError "No attempt succeeded"
+  | [x] => x str'
+  | x::y::xs =>
+    try x str'
+    catch e =>
+      if isAutoBoundImplicitLocalException? e |>.isSome then
+        throw e
+      else attempt counter str (y::xs)
+
+open Lean Elab Term in
+def tryElabInlineCode (counter : IO.Ref Nat) (str : String) : DocElabM Term := do
+  try
+    attempt counter str [
+      tryElabInlineCodeName ,
+      tryElabInlineCodeTerm ,
+      tryElabInlineCodeMetavarTerm ,
+      withReader (fun ctx => {ctx with autoBoundImplicit := true}) ∘ tryElabInlineCodeTerm,
+      tryElabInlineCodeTerm (ignoreElabErrors := true)
+    ]
+  catch
+    | .error ref e =>
+      logWarningAt ref e
+      ``(Verso.Doc.Inline.code $(quote str))
+    | e =>
+      if isAutoBoundImplicitLocalException? e |>.isSome then
+        throw e
+      else
         logWarning m!"Internal exception uncaught: {e.toMessageData}"
         ``(Verso.Doc.Inline.code $(quote str))
 
 open Lean Elab Term in
-def tryElabBlockCode (decls : List Name) (str : String) : DocElabM Term := do
-  match decls with
-  | decl :: decls =>
-    -- This brings the parameters into scope, so the term elaboration version catches them!
-    Meta.forallTelescopeReducing (← getConstInfo decl).type fun _ _ =>
-      tryElabBlockCode decls str
-  | [] =>
-    try
-      tryElabBlockCodeCommand str <|> tryElabBlockCodeTerm str
-    catch
-      | .error ref e =>
-        logWarningAt ref e
-        ``(Verso.Doc.Block.code $(quote str))
-      | e =>
+def tryElabBlockCode (counter : IO.Ref Nat) (str : String) : DocElabM Term := do
+  try
+    attempt counter str [
+      tryElabBlockCodeCommand,
+      tryElabBlockCodeTerm,
+      tryElabBlockCodeCommand (ignoreElabErrors := true),
+      withReader (fun ctx => {ctx with autoBoundImplicit := true}) ∘
+        tryElabBlockCodeTerm (ignoreElabErrors := true)
+    ]
+  catch
+    | .error ref e =>
+      logWarningAt ref e
+      ``(Verso.Doc.Block.code $(quote str))
+    | e =>
+      if isAutoBoundImplicitLocalException? e |>.isSome then
+        throw e
+      else
         logWarning m!"Internal exception uncaught: {e.toMessageData}"
         ``(Verso.Doc.Block.code $(quote str))
 
+open Lean Elab Term in
 /--
 Heuristically elaborate Lean fragments in Markdown code. The provided names are used as signatures,
 from left to right, with the names bound by the signature being available in the local scope in
 which the Lean fragments are elaborated.
 -/
-def blockFromMarkdownWithLean (names : List Name) (b : MD4Lean.Block) : DocElabM Term :=
-  Markdown.blockFromMarkdown b
-    (handleHeaders := Markdown.strongEmphHeaders)
-    (elabInlineCode := tryElabInlineCode names)
-    (elabBlockCode := tryElabBlockCode names)
+def blockFromMarkdownWithLean (names : List Name) (b : MD4Lean.Block) : DocElabM Term := do
+  try
+    match names with
+    | decl :: decls =>
+      -- This brings the parameters into scope, so the term elaboration version catches them!
+      Meta.forallTelescopeReducing (← getConstInfo decl).type fun _ _ =>
+        blockFromMarkdownWithLean decls b
+    | [] =>
+      -- It'd be silly for some weird edge case to block on this feature...
+      let rec loop (max : Nat) (s : SavedState) : DocElabM Term := do
+        match max with
+        | k + 1 =>
+          try
+            -- Count all elaboration attempts, so that identifiers can have a unique range. This is
+            -- a horrible hack to work around the fact that the deduplication code borrowed from the
+            -- language server considers identifiers with the same range to be identical. This is a
+            -- good assumption for real code, but not for snippets extracted from Markdown.
+            let counter ← IO.mkRef 0
+            let res ←
+              Markdown.blockFromMarkdown b
+                (handleHeaders := Markdown.strongEmphHeaders)
+                (elabInlineCode := tryElabInlineCode counter)
+                (elabBlockCode := tryElabBlockCode counter)
+            discard <| addAutoBoundImplicits #[]
+            synthesizeSyntheticMVarsUsingDefault
+
+            return res
+          catch e =>
+            if let some n := isAutoBoundImplicitLocalException? e then
+              s.restore (restoreInfo := true)
+              Meta.withLocalDecl n .implicit (← Meta.mkFreshTypeMVar) fun x =>
+                withReader (fun ctx => { ctx with autoBoundImplicits := ctx.autoBoundImplicits.push x } ) do
+                  loop k (← (saveState : TermElabM _))
+            else throw e
+        | 0 => throwError "Ran out of local name attempts"
+      let s ← (saveState : TermElabM _)
+      try
+        loop 40 s
+      finally
+        (s.restore : TermElabM _)
+  catch _ =>
+    Markdown.blockFromMarkdown b
+      (handleHeaders := Markdown.strongEmphHeaders)
 
 @[block_role_expander docstring]
 def docstring : BlockRoleExpander
