@@ -366,7 +366,7 @@ partial defmethod Highlighted.toHtml : Highlighted → HighlightHtmlM Html
       let id := s!"tactic-state-{hash info}-{startPos}-{endPos}"
       pure {{
         <span class="tactic">
-          <label «for»={{id}}>{{← toHtml hl}}</label>
+          <label for={{id}}>{{← toHtml hl}}</label>
           <input type="checkbox" class="tactic-toggle" id={{id}}></input>
           <span class="tactic-state">
             {{← if info.isEmpty then
