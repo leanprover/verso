@@ -37,14 +37,11 @@ inductive MathMode where | inline | display
 deriving Repr, BEq, Hashable, Ord, ToJson, FromJson
 
 private def arrayEq (eq : α → α → Bool) (xs ys : Array α) : Bool := Id.run do
-    if h : xs.size = ys.size then
-      for h' : i in [0:xs.size] do
-        have : i < ys.size := by
-          let ⟨_, h''⟩ := h'
-          simp [*] at h''; assumption
-        if !(eq xs[i] ys[i]) then return false
-      return true
-    else return false
+  if xs.size = ys.size then
+    for x in xs, y in ys do
+      if !(eq x y) then return false
+    return true
+  else return false
 
 inductive Inline (genre : Genre) : Type where
   | text (string : String)

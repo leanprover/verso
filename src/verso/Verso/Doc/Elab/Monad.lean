@@ -324,6 +324,9 @@ instance : Inhabited (DocElabM α) := ⟨fun _ _ => default⟩
 
 instance : AddErrorMessageContext DocElabM := inferInstanceAs <| AddErrorMessageContext (ReaderT PartElabM.State (StateT DocElabM.State TermElabM))
 
+instance [MonadWithReaderOf ρ TermElabM] : MonadWithReaderOf ρ DocElabM :=
+  inferInstanceAs <| MonadWithReaderOf ρ (ReaderT PartElabM.State (StateT DocElabM.State TermElabM))
+
 instance : MonadLift TermElabM DocElabM where
   monadLift act := fun _ st' => do return (← Term.withDeclName (← currentDocName) act, st')
 
@@ -335,6 +338,10 @@ instance : MonadRef DocElabM := inferInstanceAs <| MonadRef (ReaderT PartElabM.S
 instance : MonadQuotation DocElabM := inferInstanceAs <| MonadQuotation (ReaderT PartElabM.State (StateT DocElabM.State TermElabM))
 
 instance : Monad DocElabM := inferInstanceAs <| Monad (ReaderT PartElabM.State (StateT DocElabM.State TermElabM))
+
+instance : MonadControl TermElabM DocElabM :=
+  let ⟨stM, liftWith, restoreM⟩ := inferInstanceAs <| MonadControlT TermElabM (ReaderT PartElabM.State (StateT DocElabM.State TermElabM))
+  {stM, liftWith, restoreM := (· >>= restoreM)}
 
 instance : MonadExceptOf Exception DocElabM := inferInstanceAs <| MonadExceptOf Exception (ReaderT PartElabM.State (StateT DocElabM.State TermElabM))
 
