@@ -459,6 +459,21 @@ def titlePage (title : Html) (authors : List String) (intro : Html) : Html := {{
   </div>
 }}
 
+/--
+If the current address has no trailing slash, then add it. Otherwise, relative URLs don't work right
+on servers that don't do this step.
+
+This is a hack - it only helps clients with JS enabled, and should really be fixed in the server
+configuration. But not all hosts allow this to happen, and most clients have JS enabled.
+-/
+def addSlashJs : String :=
+r#"(function(){
+  const {protocol:proto, host:hostName, pathname:path, search:srch, hash:hsh} = window.location;
+  if !(path.endsWith("/") || path.endsWith(".html")) {
+    window.location.replace(`${proto}//${hostName}${path}/${srch}${hsh}`);
+  }
+})()"#
+
 def page
     (toc : Toc) (path : Path)
     (textTitle : String) (htmlTitle : Html) (contents : Html)
@@ -477,6 +492,9 @@ def page
   {{
     <html>
       <head>
+        <script>
+          {{addSlashJs}}
+        </script>
         {{base.map ({{<base href={{·}}/>}}) |>.getD .empty}}
         <meta charset="utf-8"/>
         <meta name="viewport" content="height=device-height, width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1"/>
