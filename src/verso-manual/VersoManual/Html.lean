@@ -469,7 +469,7 @@ configuration. But not all hosts allow this to happen, and most clients have JS 
 def addSlashJs : String :=
 r#"(function(){
   const {protocol:proto, host:hostName, pathname:path, search:srch, hash:hsh} = window.location;
-  if !(path.endsWith("/") || path.endsWith(".html")) {
+  if (!(path.endsWith("/") || path.endsWith(".html"))) {
     window.location.replace(`${proto}//${hostName}${path}/${srch}${hsh}`);
   }
 })()"#
