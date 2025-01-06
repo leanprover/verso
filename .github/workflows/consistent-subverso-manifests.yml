@@ -1,0 +1,18 @@
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+
+name: Consistent Subverso dependencies
+
+jobs:
+  build:
+    name: consistency
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for consistent Subverso versions in all manifests
+        run: |
+          echo "Subverso versions:"
+          find . -name lake-manifest.json -print0 | xargs -0 jq '.packages[] | select(.name == "subverso") | {"file": input_filename, "subverso": .rev}'
+          find . -name lake-manifest.json -print0 | xargs -0 jq -e -s 'map(.packages[] | select(.name == "subverso").rev) | .[0] as $x | all(.[]; . == $x)'
