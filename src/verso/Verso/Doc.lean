@@ -40,8 +40,9 @@ private def arrayEq (eq : α → α → Bool) (xs ys : Array α) : Bool := Id.ru
     if h : xs.size = ys.size then
       for h' : i in [0:xs.size] do
         have : i < ys.size := by
-          let ⟨_, h''⟩ := h'
-          simp [*] at h''; assumption
+          have : i < xs.size := by get_elem_tactic
+          rw [← h]
+          assumption
         if !(eq xs[i] ys[i]) then return false
       return true
     else return false

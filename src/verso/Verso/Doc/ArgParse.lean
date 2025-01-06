@@ -186,7 +186,7 @@ def ValDesc.resolvedName : ValDesc m Name where
     | .name x => realizeGlobalConstNoOverloadWithInfo x
     | other => throwError "Expected string, got {repr other}"
 
-def ArgParse.run [Monad m] [MonadInfoTree m] [MonadResolveName m] [MonadEnv m] [MonadError m] [MonadLiftT IO m] (p : ArgParse m α) (args : Array Arg) : m α := do
+def ArgParse.run [Monad m] [MonadInfoTree m] [MonadResolveName m] [MonadEnv m] [MonadError m] [MonadLiftT BaseIO m] (p : ArgParse m α) (args : Array Arg) : m α := do
   match ← p.parse _ ⟨args, #[]⟩ with
   | (.ok v, ⟨more, info⟩) =>
     if more.size = 0 then

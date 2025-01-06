@@ -120,7 +120,7 @@ def NameSuffixMap.insert (map : NameSuffixMap α) (key : Name) (val : α) : Name
     | map
   let mut arr := map.contents.find? last |>.getD #[]
   for h : i in [0:arr.size] do
-    have : i < arr.size := by cases h; simp [*]
+    have : i < arr.size := by get_elem_tactic
     if arr[i].fst == key then
       return {map with contents := map.contents.insert last (arr.set i (key, val))}
   return {map with contents := map.contents.insert last (arr.push (key, val))}
