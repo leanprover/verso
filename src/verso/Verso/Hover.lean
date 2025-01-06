@@ -32,7 +32,7 @@ structure CustomHover where
   markedString : String
 deriving TypeName
 
-def addCustomHover [Monad m] [MonadInfoTree m] [MonadLiftT IO m] (stx : Syntax) (hover : UserHover) : m Unit := do
+def addCustomHover [Monad m] [MonadInfoTree m] [MonadLiftT BaseIO m] (stx : Syntax) (hover : UserHover) : m Unit := do
   let txt ← match hover with
     | .markdown str => pure str
     | .messageData m => m.toString

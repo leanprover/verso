@@ -332,13 +332,13 @@ where
 def _root_.Array.mapIndexed (arr : Array α) (f : Fin arr.size → α → β) : Array β := Id.run do
   let mut out := #[]
   for h : i in [:arr.size] do
-    out := out.push (f ⟨i, h.right⟩ arr[i])
+    out := out.push (f ⟨i, by get_elem_tactic⟩ arr[i])
   out
 
 def _root_.Array.mapIndexedM [Monad m] (arr : Array α) (f : Fin arr.size → α → m β) : m (Array β) := do
   let mut out := #[]
   for h : i in [:arr.size] do
-    out := out.push (← f ⟨i, h.right⟩ arr[i])
+    out := out.push (← f ⟨i, by get_elem_tactic⟩ arr[i])
   pure out
 
 
