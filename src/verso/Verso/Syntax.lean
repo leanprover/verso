@@ -20,7 +20,9 @@ syntax (name:=anon) arg_val : argument
 syntax (name:=named) ident ":=" arg_val : argument
 
 declare_syntax_cat link_target
+/-- A reference to a URL -/
 syntax (name:=url) "(" str ")" : link_target
+/-- A named reference -/
 syntax (name:=ref) "[" str "]" : link_target
 
 declare_syntax_cat inline
@@ -40,17 +42,20 @@ syntax (name:=linebreak) "line!" str : inline
 /-- Literal code. If the first and last characters are space, and it contains at least one non-space
   character, then the resulting string has a single space stripped from each end.-/
 syntax (name:=code) "code{" str "}" : inline
+/-- A _role_: an extension to the Verso document language in an inline position -/
 syntax (name:=role) "role{" ident argument* "}" "[" inline "]"  : inline
+/-- Inline mathematical notation (equivalent to LaTeX's `$` notation) -/
 syntax (name:=inline_math) "${" inline "}" : inline
+/-- Display-mode mathematical notation -/
 syntax (name:=display_math) "$${" inline "}" : inline
 
 declare_syntax_cat list_item
 /-- List item -/
-syntax (name:=li) "*" str : list_item
+syntax (name:=li) "*" inline* : list_item
 
 declare_syntax_cat block
 declare_syntax_cat desc_item
-syntax (name:=desc) ":" inline+ "=>" block+ : desc_item
+syntax (name:=desc) ":" inline* "=>" block* : desc_item
 
 syntax (name:=para) "para{" inline+ "}" : block
 /-- Unordered List -/
@@ -60,9 +65,9 @@ syntax (name:=dl) "dl{" desc_item* "}" : block
 /-- Ordered list -/
 syntax (name:=ol) "ol{" num list_item* "}" : block
 /-- Literal code -/
-syntax (name:=codeblock) "```" str "```" : block
+syntax (name:=codeblock) "```" (ident argument*)? "|" str "```" : block
 /-- Quotation -/
-syntax (name:=blockquote) str : block
+syntax (name:=blockquote) "blockquote{" block* "}" : block
 /-- A link reference definition -/
 syntax (name:=link_ref)  "[" str "]:" str : block
 /-- A footnote definition -/
@@ -70,7 +75,7 @@ syntax (name:=footnote_ref)  "[^" str "]:" inline* : block
 /-- Custom directive -/
 syntax (name:=directive) "directive{" rawIdent argument* "}" "[" block* "]": block
 /-- A header -/
-syntax (name:=header) inline* : block
+syntax (name:=header) "header(" num ")" "{" inline+ "}" : block
 open Lean.Parser.Term in
 
 open Lean.Parser Term in

@@ -77,7 +77,7 @@ instance [WordCount α] [WordCount β] : WordCount (DescItem α β) where
   countWords skip | ⟨dt, dd⟩ => countWords skip dt + countWords skip dd
 
 instance [WordCount α] : WordCount (ListItem α) where
-  countWords skip | ⟨_, item⟩ => countWords skip item
+  countWords skip | ⟨item⟩ => countWords skip item
 
 partial instance : WordCount (Verso.Doc.Block Manual) where
   countWords skip b := blockWordCount skip b

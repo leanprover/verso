@@ -32,7 +32,7 @@ def _root_.Verso.Syntax.text.inline_to_string : InlineToString
 
 @[inline_to_string Verso.Syntax.linebreak]
 def _root_.Verso.Syntax.linebreak.inline_to_string : InlineToString
-  | _, `<low|(Verso.Syntax.linebreak ~_ )> => some " "
+  | _, `(inline|line! $_) => some " "
   | _, _ => none
 
 @[inline_to_string Verso.Syntax.emph]
@@ -77,7 +77,7 @@ def inlineSyntaxToString (env : Environment) (inlines : Syntax) : String :=
       "<missing>"
 
 def headerStxToString (env : Environment) : Syntax → String
-  | `<low|(Verso.Syntax.header ~(.atom _ _hashes ) ~(.node _ `null inlines) ) > => inlinesToString env inlines
+  | `(block|header($_){$inlines*}) => inlinesToString env inlines
   | headerStx => dbg_trace "didn't understand {headerStx} for string"
     "<missing>"
 

@@ -261,7 +261,7 @@ partial defmethod Inline.wordCount : Inline genre → Nat
 partial defmethod Block.wordCount : Block genre → Nat
     | .para contents => sumArrayWith (·.wordCount) contents
     | .ul items
-    | .ol _ items => sumArrayWith (fun ⟨_, bs⟩ => sumArrayWith wordCount bs) items
+    | .ol _ items => sumArrayWith (fun ⟨bs⟩ => sumArrayWith wordCount bs) items
     | .dl items => sumArrayWith (fun ⟨is, bs⟩ => sumArrayWith (·.wordCount) is + sumArrayWith wordCount bs) items
     | .blockquote items
     | .concat items => sumArrayWith wordCount items
