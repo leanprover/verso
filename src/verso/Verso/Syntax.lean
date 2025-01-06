@@ -6,6 +6,20 @@ Author: David Thrane Christiansen
 
 import Verso.SyntaxUtils
 
+/-!
+
+This file contains an internal syntax that's used to represent Verso documents. It's primarily
+intended for use in quasiquotations that match against the output of the Verso parser, though it
+does serve to document the expected format of the syntax data produced by the parser. A later step
+transforms the syntax in this module into the actual syntax of Verso documents, potentially invoking
+user-written metaprograms. This step is defined in the module `Verso.Doc.Elab`.
+
+Syntax for Verso is typically produced by the parser in the module `Verso.Parser`. A variety of ways
+of using this parser in Lean code are defined in `Verso.Doc.Concrete`, of which `#docs` and `#doc`
+are most likely to be generally useful.
+
+-/
+
 open Lean.Parser (rawIdent)
 
 namespace Verso.Syntax
