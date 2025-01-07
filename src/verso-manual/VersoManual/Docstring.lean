@@ -827,7 +827,7 @@ def leanFromMarkdown.blockdescr : BlockDescr where
         hl.blockHtml "docstring-examples"
 
 open Lean Elab Term in
-def tryElabCodeTermWith (mk : Highlighted → String → DocElabM α) (str : String) (ignoreElabErrors := false) : DocElabM α := do
+def tryElabCodeTermWith (mk : Highlighted → String → DocElabM α) (str : String) (ignoreElabErrors := false) (identOnly := false) : DocElabM α := do
   let loc := (← getRef).getPos?.map (← getFileMap).utf8PosToLspPos
   let src :=
     if let some ⟨line, col⟩ := loc then s!"<docstring at {← getFileName}:{line}:{col}>"
@@ -837,6 +837,8 @@ def tryElabCodeTermWith (mk : Highlighted → String → DocElabM α) (str : Str
   | .ok stx => DocElabM.withFileMap (.ofString str) <| do
     if stx.isIdent && (← readThe Term.Context).autoBoundImplicit then
       throwError m!"Didn't elaborate {stx} as term to avoid spurious auto-implicits"
+    if identOnly && !stx.isIdent then
+      throwError m!"Didn't elaborate {stx} as term because only identifiers are wanted here"
     let (newMsgs, tree, e) ← do
       let initMsgs ← Core.getMessageLog
       try
@@ -910,8 +912,8 @@ def tryElabCodeMetavarTermWith (mk : Highlighted → String → DocElabM α) (st
       throwError "Not a doc metavar: {stx}"
 
 open Lean Elab Term in
-def tryElabInlineCodeTerm (str : String) (ignoreElabErrors := false) : DocElabM Term :=
-  tryElabCodeTermWith (ignoreElabErrors := ignoreElabErrors) (fun hls str =>
+def tryElabInlineCodeTerm (str : String) (ignoreElabErrors := false) (identOnly := false) : DocElabM Term :=
+  tryElabCodeTermWith (ignoreElabErrors := ignoreElabErrors) (identOnly := identOnly) (fun hls str =>
     ``(Verso.Doc.Inline.other (Inline.leanFromMarkdown $(quote hls)) #[Verso.Doc.Inline.code $(quote str)]))
     str
 
@@ -1132,6 +1134,8 @@ def tryElabInlineCode (priorWord : Option String) (str : String) : DocElabM Term
   try
     attempt str <| wordElab priorWord ++ [
       tryElabInlineCodeName,
+      -- When identifiers have the same name as tactics, prefer the identifiers
+      tryElabInlineCodeTerm (identOnly := true),
       tryParseInlineCodeTactic,
       tryParseInlineCodeAttribute (validate := true),
       tryElabInlineCodeTerm,
