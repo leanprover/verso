@@ -953,6 +953,16 @@ where
   optTok (name declName : Name) (descr : String) : Highlighted :=
     .token ⟨.option name declName descr, name.toString⟩
 
+def tryTacticName (str : String) : DocElabM Term := do
+  let tactics ← Elab.Tactic.Doc.allTacticDocs
+  for t in tactics do
+    if t.userName == str then
+      let hl : Highlighted := tacToken t
+      return ← ``(Verso.Doc.Inline.other (Inline.leanFromMarkdown $(quote hl)) #[Verso.Doc.Inline.code $(quote str)])
+  throwError "Not a tactic name: {str}"
+where
+  tacToken (t : Lean.Elab.Tactic.Doc.TacticDoc) : Highlighted :=
+    .token ⟨.keyword t.internalName none t.docString, str⟩
 
 open Lean Elab Term in
 open Lean.Parser in
@@ -1152,6 +1162,7 @@ def tryElabInlineCode (priorWord : Option String) (str : String) : DocElabM Term
       tryInlineOption,
       tryElabInlineCodeTerm,
       tryElabInlineCodeMetavarTerm,
+      tryTacticName,
       withReader (fun ctx => {ctx with autoBoundImplicit := true}) ∘ tryElabInlineCodeTerm,
       tryElabInlineCodeTerm (ignoreElabErrors := true),
       tryHighlightKeywords
