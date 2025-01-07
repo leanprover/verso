@@ -78,6 +78,8 @@ They include heuristic elaboration of code items in their Markdown that attempts
 
 {docstring Nat}
 
+{optionDocs pp.deepTerms.threshold}
+
 # Index
 %%%
 number := false

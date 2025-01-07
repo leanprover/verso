@@ -944,6 +944,17 @@ def tryParseInlineCodeTactic (str : String) : DocElabM Term := do
     ``(Verso.Doc.Inline.other (Inline.leanFromMarkdown $(quote hls)) #[Verso.Doc.Inline.code $(quote str)])
 
 open Lean Elab Term in
+def tryInlineOption (str : String) : DocElabM Term := do
+  let optName := str.trim.toName
+  let optDecl ← getOptionDecl optName
+  let hl : Highlighted := optTok optName optDecl.declName optDecl.descr
+  ``(Verso.Doc.Inline.other (Inline.leanFromMarkdown $(quote hl)) #[Verso.Doc.Inline.code $(quote str)])
+where
+  optTok (name declName : Name) (descr : String) : Highlighted :=
+    .token ⟨.option name declName descr, name.toString⟩
+
+
+open Lean Elab Term in
 open Lean.Parser in
 def tryHighlightKeywords (str : String) : DocElabM Term := do
   let loc := (← getRef).getPos?.map (← getFileMap).utf8PosToLspPos
@@ -1138,6 +1149,7 @@ def tryElabInlineCode (priorWord : Option String) (str : String) : DocElabM Term
       tryElabInlineCodeTerm (identOnly := true),
       tryParseInlineCodeTactic,
       tryParseInlineCodeAttribute (validate := true),
+      tryInlineOption,
       tryElabInlineCodeTerm,
       tryElabInlineCodeMetavarTerm,
       withReader (fun ctx => {ctx with autoBoundImplicit := true}) ∘ tryElabInlineCodeTerm,
