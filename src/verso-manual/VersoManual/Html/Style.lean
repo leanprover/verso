@@ -104,6 +104,7 @@ pre, code {
     font-family: var(--verso-code-font-family);
     font-variant-ligatures: none;
     overflow-x: auto;
+    overflow-y: clip;
 }
 
 /******** Page Layout ********/

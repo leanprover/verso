@@ -285,7 +285,7 @@ def page (toc : List Html.Toc) (path : Path) (textTitle : String) (htmlTitle con
     (extraJsFiles := config.extraJs.toArray ++ state.extraJsFiles.map ("/-verso-js/" ++ ·.1))
 
 def Config.relativize (config : Config) (path : Path) (html : Html) : Html :=
-  if let some _ := config.baseURL then
+  if config.baseURL.isSome then
     -- Make all absolute URLS be relative to the site root, because that'll make them `base`-relative
     Html.relativize #[] html
   else

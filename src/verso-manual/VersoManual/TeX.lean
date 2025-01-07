@@ -14,6 +14,9 @@ r##"
 \usepackage{sourcesanspro}
 \usepackage{sourceserifpro}
 
+\usepackage{fancyvrb}
+\usepackage{fvextra}
+
 \makechapterstyle{lean}{%
 \renewcommand*{\chaptitlefont}{\sffamily\HUGE}
 \renewcommand*{\chapnumfont}{\chaptitlefont}

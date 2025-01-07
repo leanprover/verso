@@ -74,7 +74,7 @@ partial defmethod Inline.toTeX [Monad m] [GenreTeX g m] : Inline g → TeXT g m 
   | .bold content => do
     pure \TeX{\textbf{\Lean{← content.mapM toTeX}}}
   | .code str => do
-    pure \TeX{s!"\\verb|{str}|"} --- TODO choose delimiter automatically
+    pure \TeX{s!"\\Verb|{str}|"} --- TODO choose delimiter automatically
   | .math .inline str => pure <| .raw s!"${str}$"
   | .math .display str => pure <| .raw s!"\\[{str}\\]"
   | .concat inlines => inlines.mapM toTeX

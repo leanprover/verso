@@ -53,6 +53,33 @@ results in
 
 {docstring List.forM}
 
+## More Docstring Examples
+
+Here are some docstrings as rendered by Verso.
+They include heuristic elaboration of code items in their Markdown that attempts to guess what was meant.
+
+{docstring Lean.Syntax}
+
+{docstring List}
+
+{docstring String}
+
+{docstring Subtype}
+
+{docstring OfNat}
+
+{docstring Monad}
+
+:::tactic "induction"
+:::
+
+:::tactic "simp"
+:::
+
+{docstring Nat}
+
+{optionDocs pp.deepTerms.threshold}
+
 # Index
 %%%
 number := false

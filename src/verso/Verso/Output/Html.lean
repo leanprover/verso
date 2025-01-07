@@ -283,6 +283,15 @@ info: Verso.Output.Html.tag
 #guard_msgs in
   #eval test
 
+def leanKwTest : Html := {{
+  <label for="foo">"Blah"</label>
+}}
+
+/-- info: Verso.Output.Html.tag "label" #[("for", "foo")] (Verso.Output.Html.text true "Blah") -/
+#guard_msgs in
+  #eval leanKwTest
+
+
 /-- error: 'br' doesn't allow contents -/
 #guard_msgs in
   #eval show Html from {{ <br>"foo" "foo"</br> }}
