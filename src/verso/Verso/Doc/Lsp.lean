@@ -208,20 +208,22 @@ where
   syntactic (text : FileMap) (pos : String.Pos) (stx : Syntax) : Option (Array Syntax) := do
     if includes stx pos |>.getD true then
       match stx with
-        | `(block|directive{%$opener $_name $_args*}[$_contents*]%$closer )
+        | `(block|:::%$opener $_name $_args* {$_contents*}%$closer )
         | `(block|```%$opener | $_contents ```%$closer)
         | `(block|```%$opener $_name $_args* | $_contents ```%$closer) =>
           if (includes opener pos).getD false || (includes closer pos).getD false then
             return #[opener, closer]
         | _ =>
           match stx with
-          | `(inline| ${%$opener1 code{%$opener2 $_ }%$closer1 }%$closer2)
-          | `(inline| $${%$opener1 code{%$opener2 $_ }%$closer1 }%$closer2)
+          | `(inline| \math%$opener1 code(%$opener2 $_ )%$closer1)
+          | `(inline| \displaymath%$opener1 code(%$opener2 $_ )%$closer1) =>
+            if (includes opener1 pos).getD false || (includes closer1 pos).getD false || (includes opener2 pos).getD false then
+              return #[opener1, closer1, opener2]
           | `(inline| link[%$opener1 $_* ]%$closer1 (%$opener2 $_ )%$closer2)
           | `(inline| link[%$opener1 $_* ]%$closer1 [%$opener2 $_ ]%$closer2) =>
             if (includes opener1 pos).getD false || (includes closer1 pos).getD false || (includes opener2 pos).getD false || (includes closer2 pos).getD false then
               return #[opener1, closer1, opener2, closer2]
-          |  `(inline| code{%$opener $_ }%$closer) =>
+          |  `(inline| code(%$opener $_ )%$closer) =>
             if (includes opener pos).getD false || (includes closer pos).getD false then
               return #[opener, closer]
           | `(inline| role{%$opener1 $name $_* }%$closer1 [%$opener2 $subjects ]%$closer2) =>
@@ -586,7 +588,7 @@ partial def directiveResizings
     (parents : Array (Syntax × Syntax))
     (subject : Syntax) :
     StateM (Array (Bool × Syntax × Syntax × TextEditBatch)) Unit := do
-  if let `(block|directive{%$opener $_name $_args*}[$contents*]%$closer ) := subject then
+  if let `(block|:::%$opener $_name $_args* { $contents* }%$closer ) := subject then
     let parents := parents.push (opener, closer)
     if onLine opener || onLine closer then
       if let some edit := parents.flatMapM getIncreases then
@@ -634,7 +636,7 @@ where
     pure (outer ++ inner)
 
   getDecreasesIn (stx : Syntax) : Option TextEditBatch :=
-    if let `(block|directive{%$opener $_name $_args*}[$contents*]%$closer) := stx then
+    if let `(block|:::%$opener $_name $_args* {$contents*}%$closer) := stx then
       getDecreases (opener, closer) contents
     else if let .node _ _ children := stx then children.flatMapM getDecreasesIn
     else pure #[]

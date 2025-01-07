@@ -1165,8 +1165,8 @@ mutual
         else takeContentsFn maxCount c s
 
   partial def math : ParserFn :=
-    atomicFn (nodeFn ``display_math <| strFn "$$" >> code >> fakeAtom "`") <|>
-    atomicFn (nodeFn ``inline_math <| strFn "$" >> code >> fakeAtom "`")
+    atomicFn (nodeFn ``display_math <| strFn "$$" >> code) <|>
+    atomicFn (nodeFn ``inline_math <| strFn "$" >> code)
 
   -- Read a prefix of a line of text, stopping at a text-mode special character
   partial def text :=
@@ -1209,7 +1209,7 @@ mutual
     nodeFn ``image <|
       atomicFn (strFn "![") >>
       (recoverSkip <|
-        asStringFn (takeUntilEscFn (· ∈ "]\n".toList))>>
+        asStringFn (takeUntilEscFn (· ∈ "]\n".toList)) >>
         strFn "]" >>
         linkTarget)
 
@@ -1705,8 +1705,7 @@ info: Success! Final stack:
    (Verso.Syntax.code
     "`"
     (str "\"\\\\frac{x}{4}\"")
-    "`")
-   "`")
+    "`"))
 All input consumed.
 -/
 #guard_msgs in
@@ -1719,8 +1718,7 @@ info: Success! Final stack:
    (Verso.Syntax.code
     "`"
     (str "\"\\\\frac{\\n  x\\n}{\\n  4\\n}\\n\"")
-    "`")
-   "`")
+    "`"))
 All input consumed.
 -/
 #guard_msgs in
@@ -1739,8 +1737,7 @@ info: Success! Final stack:
    (Verso.Syntax.code
     "`"
     (str "\"\\\\frac{x}{4}\"")
-    "`")
-   "`")
+    "`"))
 All input consumed.
 -/
 #guard_msgs in
@@ -2056,9 +2053,10 @@ mutual
 
   partial def orderedList (ctxt : BlockCtxt) : ParserFn :=
     nodeFn ``ol <|
-      fakeAtom "ol{" >>
+      fakeAtom "ol(" >>
       lookaheadOrderedListIndicator ctxt fun type _start => -- TODO? Validate list numbering?
         withCurrentColumn fun c =>
+          fakeAtom ")" >> fakeAtom "{" >>
           many1Fn (listItem {ctxt with minIndent := c + 1 , inLists := ⟨c, .inl type⟩  :: ctxt.inLists}) >>
           fakeAtom "}"
 
@@ -2148,10 +2146,9 @@ mutual
          recoverEolWith #[.missing, .node .none nullKind #[]] (nameAndArgs (reportNameAs := "directive name (identifier)") >>
          satisfyFn (· == '\n') "newline")) >>
        fakeAtom "\n" >>
-       fakeAtom "\n" >>
        ignoreFn (manyFn blankLine) >>
-        (withFencePos 4 fun ⟨l, col⟩ =>
-          withFenceSize 4 fun fenceWidth =>
+        (withFencePos 3 fun ⟨l, col⟩ =>
+          withFenceSize 3 fun fenceWidth =>
             blocks {ctxt with minIndent := col, maxDirective := fenceWidth} >>
             recoverHereWith #[.missing]
               (closeFence l fenceWidth >>
@@ -2394,8 +2391,10 @@ info: Success! Final stack:
   [(Verso.Syntax.blockquote
     ">"
     [(Verso.Syntax.ol
-      "ol{"
+      "ol("
       (num "1")
+      ")"
+      "{"
       [(Verso.Syntax.li
         "1."
         [(Verso.Syntax.para
@@ -2843,8 +2842,10 @@ Remaining: "Let's say more!\n\nhello"
 /--
 info: Success! Final stack:
   [(Verso.Syntax.ol
-    "ol{"
+    "ol("
     (num "1")
+    ")"
+    "{"
     [(Verso.Syntax.li
       "1."
       [(Verso.Syntax.para
@@ -2866,8 +2867,10 @@ All input consumed.
 /--
 info: Success! Final stack:
   [(Verso.Syntax.ol
-    "ol{"
+    "ol("
     (num "1")
+    ")"
+    "{"
     [(Verso.Syntax.li
       "1."
       [(Verso.Syntax.para
@@ -2883,8 +2886,10 @@ All input consumed.
 /--
 info: Success! Final stack:
   [(Verso.Syntax.ol
-    "ol{"
+    "ol("
     (num "1")
+    ")"
+    "{"
     [(Verso.Syntax.li
       "1."
       [(Verso.Syntax.para
@@ -2893,8 +2898,10 @@ info: Success! Final stack:
         "}")])]
     "}")
    (Verso.Syntax.ol
-    "ol{"
+    "ol("
     (num "2")
+    ")"
+    "{"
     [(Verso.Syntax.li
       "2."
       [(Verso.Syntax.para
@@ -2910,8 +2917,10 @@ All input consumed.
 /--
 info: Success! Final stack:
   [(Verso.Syntax.ol
-    "ol{"
+    "ol("
     (num "1")
+    ")"
+    "{"
     [(Verso.Syntax.li
       "1."
       [(Verso.Syntax.para
@@ -3116,7 +3125,6 @@ Final stack:
     `foo
     []
     "\n"
-    "\n"
     [(Verso.Syntax.para
       "para{"
       [(Verso.Syntax.text (str "\"Indeed.\""))]
@@ -3129,7 +3137,6 @@ Final stack:
       ":::"
       <missing>
       []
-      "\n"
       "\n"
       []
       <missing>)]
@@ -3169,7 +3176,6 @@ Final stack:
     `foo
     []
     "\n"
-    "\n"
     [(Verso.Syntax.para
       "para{"
       [(Verso.Syntax.text (str "\"Indeed.\""))]
@@ -3183,7 +3189,6 @@ Final stack:
     ":::"
     <missing>
     []
-    "\n"
     "\n"
     []
     <missing>)]
@@ -3219,7 +3224,6 @@ Final stack:
     `foo
     [(Verso.Syntax.anon (num "5"))]
     "\n"
-    "\n"
     [(Verso.Syntax.para
       "para{"
       [(Verso.Syntax.text (str "\"Indeed.\""))]
@@ -3233,7 +3237,6 @@ Final stack:
     "::::"
     `a
     []
-    "\n"
     "\n"
     [(Verso.Syntax.para
       "para{"
@@ -3872,7 +3875,6 @@ info: Success! Final stack:
    `multiPara
    []
    "\n"
-   "\n"
    [(Verso.Syntax.para
      "para{"
      [(Verso.Syntax.text (str "\"foo\""))]
@@ -3889,7 +3891,6 @@ info: Success! Final stack:
    "::::"
    `multiPara
    []
-   "\n"
    "\n"
    [(Verso.Syntax.para
      "para{"
@@ -3911,7 +3912,6 @@ info: Success! Final stack:
      ":="
      (str "\"amazing!\""))]
    "\n"
-   "\n"
    [(Verso.Syntax.para
      "para{"
      [(Verso.Syntax.text (str "\"foo\""))]
@@ -3929,7 +3929,6 @@ info: Success! Final stack:
    ":::"
    `multiPara
    []
-   "\n"
    "\n"
    [(Verso.Syntax.para
      "para{"
@@ -3958,7 +3957,6 @@ info: Success! Final stack:
    `multiPara
    [(Verso.Syntax.anon `thing)]
    "\n"
-   "\n"
    [(Verso.Syntax.para
      "para{"
      [(Verso.Syntax.text (str "\"foo\""))]
@@ -3985,7 +3983,6 @@ info: Success! Final stack:
    ":::"
    `multiPara
    []
-   "\n"
    "\n"
    [(Verso.Syntax.para
      "para{"

@@ -59,13 +59,13 @@ def _root_.linebreak.expand : InlineExpander
 
 @[inline_expander Verso.Syntax.emph]
 def _root_.Verso.Syntax.emph.expand : InlineExpander
-  | `(inline| _{ $args* }) => do
+  | `(inline| _[ $args* ]) => do
     ``(Inline.emph #[$[$(← args.mapM elabInline)],*])
   | _ => throwUnsupportedSyntax
 
 @[inline_expander Verso.Syntax.bold]
 def _root_.Verso.Syntax.bold.expand : InlineExpander
-  | `(inline| *{ $args* }) => do
+  | `(inline| *[ $args* ]) => do
     ``(Inline.bold #[$[$(← args.mapM elabInline)],*])
   | _ => throwUnsupportedSyntax
 
@@ -153,15 +153,15 @@ def _root_.Verso.Syntax.link.expand : InlineExpander
 
 @[inline_expander Verso.Syntax.footnote]
 def _root_.Verso.Syntax.link.footnote : InlineExpander
-  | `(inline| [^ $name:str ]) => do
+  | `(inline| footnote( $name:str )) => do
     ``(Inline.footnote $name $(← addFootnoteRef name))
   | _ => throwUnsupportedSyntax
 
 
 @[inline_expander Verso.Syntax.image]
 def _root_.Verso.Syntax.image.expand : InlineExpander
-  | `(inline| image[ $alt:str* ] $dest:link_target) => do
-    let altText := String.join (alt.map (·.getString) |>.toList)
+  | `(inline| image( $alt:str ) $dest:link_target) => do
+    let altText := alt.getString
     let url : TSyntax `term ←
       match dest with
       | `(link_target| ( $url )) =>
@@ -176,20 +176,20 @@ def _root_.Verso.Syntax.image.expand : InlineExpander
 
 @[inline_expander Verso.Syntax.code]
 def _root_.Verso.Syntax.code.expand : InlineExpander
-  |  `(inline| code{ $s }) =>
+  |  `(inline| code( $s )) =>
     ``(Inline.code $s)
   | _ => throwUnsupportedSyntax
 
 
 @[inline_expander Verso.Syntax.inline_math]
 def _root_.Verso.Syntax.inline_math.expand : InlineExpander
-  |  `(inline| ${ code{ $s } }) =>
+  |  `(inline| \math code( $s )) =>
     ``(Inline.math MathMode.inline $s)
   | _ => throwUnsupportedSyntax
 
 @[inline_expander Verso.Syntax.display_math]
 def _root_.Verso.Syntax.display_math.expand : InlineExpander
-  |  `(inline| $${ code{ $s } }) =>
+  |  `(inline| \displaymath code( $s )) =>
     ``(Inline.math MathMode.display $s)
   | _ => throwUnsupportedSyntax
 
@@ -356,7 +356,7 @@ def _root_.Verso.Syntax.block_role.expand : BlockExpander := fun block =>
 
 @[block_expander Verso.Syntax.para]
 partial def _root_.Verso.Syntax.para.expand : BlockExpander
-  | `(block| para{ $args:inline* }) => do
+  | `(block| para[ $args:inline* ]) => do
     ``(Block.para #[$[$(← args.mapM elabInline)],*])
   | _ =>
     throwUnsupportedSyntax
@@ -390,7 +390,7 @@ def _root_.Verso.Syntax.ul.expand : BlockExpander
 
 @[block_expander Verso.Syntax.ol]
 def _root_.Verso.Syntax.ol.expand : BlockExpander
-  | `(block|ol{ $start:num $itemStxs*}) => do
+  | `(block|ol($start:num){$itemStxs*}) => do
     let mut bullets : Array Syntax := #[]
     let mut items : Array (TSyntax `term) := #[]
     for i in itemStxs do
@@ -432,7 +432,7 @@ def _root_.Verso.Syntax.dl.expand : BlockExpander
 
 @[block_expander Verso.Syntax.blockquote]
 def _root_.Verso.Syntax.blockquote.expand : BlockExpander
-  | `(block|blockquote{$innerBlocks*}) => do
+  | `(block|> $innerBlocks*) => do
     ``(Block.blockquote #[$[$(← innerBlocks.mapM elabBlock)],*])
   | _ =>
     throwUnsupportedSyntax
@@ -463,7 +463,7 @@ def _root_.Verso.Syntax.codeblock.expand : BlockExpander
 
 @[block_expander Verso.Syntax.directive]
 def _root_.Verso.Syntax.directive.expand : BlockExpander
-  | `(block|directive{$nameStx $argsStx*}[$contents*]) => do
+  | `(block| ::: $nameStx:ident $argsStx* { $contents:block* } ) => do
     let name ← realizeGlobalConstNoOverloadWithInfo nameStx
     let exp ← directiveExpandersFor name
     let args ← parseArgs argsStx

@@ -11,10 +11,10 @@ partial def preview [Monad m] [MonadError m] (stx : Syntax) : m String :=
   match stx with
   | `(inline| $s:str) => pure s.getString
   | `(inline| line! $s:str) => pure s.getString
-  | `(inline| _{ $s:inline* }) => do
+  | `(inline| _[ $s:inline* ]) => do
     let contents ← s.toList.mapM (preview ∘ TSyntax.raw)
     pure <| "<emph>" ++ String.join contents ++ "</emph>"
-  | `(inline| *{ $s:inline* }) => do
+  | `(inline| *[ $s:inline* ]) => do
     let contents ← s.toList.mapM (preview ∘ TSyntax.raw)
     pure <| "<bold>" ++ String.join contents ++ "</bold>"
   | `(inline| link[ $txt:inline* ]( $url:str )) => do
@@ -23,9 +23,9 @@ partial def preview [Monad m] [MonadError m] (stx : Syntax) : m String :=
   | `(inline| link[ $txt:inline* ][ $tgt:str ]) => do
     let contents ← txt.toList.mapM (preview ∘ TSyntax.raw)
     pure s!"<a href=\"(value of «{tgt.getString}»)\">{String.join contents}</a>"
-  | `(inline| code{ $code:str }) =>
+  | `(inline| code( $code:str )) =>
     pure s!"<code>{code.getString}</code>"
-  | `(block| para{ $i:inline* }) => do
+  | `(block| para[ $i:inline* ]) => do
     let contents ← i.toList.mapM (preview ∘ TSyntax.raw)
     pure <| String.join contents
   | `(block| [ $ref:str ]: $url:str) =>

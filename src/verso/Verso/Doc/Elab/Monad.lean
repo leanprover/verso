@@ -37,19 +37,19 @@ def _root_.Verso.Syntax.linebreak.inline_to_string : InlineToString
 
 @[inline_to_string Verso.Syntax.emph]
 def _root_.Verso.Syntax.emph.inline_to_string : InlineToString
-  | env, `(inline| _{ $args* }) =>
+  | env, `(inline| _[ $args* ]) =>
     some <| String.intercalate " " (Array.map (inlineToString env) args).toList
   | _, _ => none
 
 @[inline_to_string Verso.Syntax.bold]
 def _root_.Verso.Syntax.bold.inline_to_string : InlineToString
-  | env, `(inline| *{ $args* }) =>
+  | env, `(inline| *[ $args* ]) =>
     some <| String.intercalate " " (Array.map (inlineToString env) args).toList
   | _, _ => none
 
 @[inline_to_string Verso.Syntax.code]
 def _root_.Verso.Syntax.code.inline_to_string : InlineToString
-  | _, `(inline| code{ $str }) =>
+  | _, `(inline| code( $str )) =>
     some str.getString
   | _, _ => none
 
@@ -184,7 +184,7 @@ partial def FinishedPart.toSyntax [Monad m] [MonadQuotation m] [MonadEnv m]
     -- Adding type annotations works around a limitation in list and array elaboration, where intermediate
     -- let bindings introduced by "chunking" the elaboration may fail to infer types
     let typedBlocks ← blocks.mapM fun b => `(($b : Block $genre))
-    let body ← ``(Part.mk #[$[$titleInlines],*] $(quote titleString) $metaStx #[$typedBlocks,*] #[$[$subStx],*])
+    let body ← ``(Part.mk #[$titleInlines,*] $(quote titleString) $metaStx #[$typedBlocks,*] #[$subStx,*])
     bindFootnotes footnoteDefs (← bindLinks linkDefs body)
   | .included name => pure name
 where

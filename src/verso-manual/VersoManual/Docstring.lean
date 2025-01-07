@@ -969,7 +969,7 @@ def tacticInline : RoleExpander
     let {«show»} ← TacticInlineOptions.parse.run args
     let #[arg] := inlines
       | throwError "Expected exactly one argument"
-    let `(inline|code{ $tac:str }) := arg
+    let `(inline|code( $tac:str )) := arg
       | throwErrorAt arg "Expected code literal with the tactic name"
     let tacTok := tac.getString
     let tacName := tac.getString.toName
