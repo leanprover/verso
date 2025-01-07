@@ -953,8 +953,8 @@ where
   optTok (name declName : Name) (descr : String) : Highlighted :=
     .token ⟨.option name declName descr, name.toString⟩
 
-def tryTacticName (str : String) : DocElabM Term := do
-  let tactics ← Elab.Tactic.Doc.allTacticDocs
+open Lean Elab in
+def tryTacticName (tactics : Array Tactic.Doc.TacticDoc) (str : String) : DocElabM Term := do
   for t in tactics do
     if t.userName == str then
       let hl : Highlighted := tacToken t
@@ -966,13 +966,12 @@ where
 
 open Lean Elab Term in
 open Lean.Parser in
-def tryHighlightKeywords (str : String) : DocElabM Term := do
+def tryHighlightKeywords (extraKeywords : Array String) (str : String) : DocElabM Term := do
   let loc := (← getRef).getPos?.map (← getFileMap).utf8PosToLspPos
   let src :=
     if let some ⟨line, col⟩ := loc then s!"<docstring at {← getFileName}:{line}:{col}>"
     else s!"<docstring at {← getFileName} (unknown line)>"
   let p : Parser := {fn := simpleFn}
-  let extraKeywords := (← Tactic.Doc.allTacticDocs).map (·.userName) |>.toList
   match runParser extraKeywords (← getEnv) (← getOptions) p str src (prec := 0) with
   | .error e => throwError "Not keyword-highlightable"
   | .ok stx => DocElabM.withFileMap (.ofString str) <| do
@@ -982,7 +981,7 @@ where
 
   simpleFn := andthenFn whitespace <| nodeFn nullKind <| manyFn tokenFn
 
-  runParser (extraKeywords : List String) (env : Environment) (opts : Lean.Options) (p : Parser) (input : String) (fileName : String := "<example>") (prec : Nat := 0) : Except (List (Position × String)) Syntax :=
+  runParser (extraKeywords : Array String) (env : Environment) (opts : Lean.Options) (p : Parser) (input : String) (fileName : String := "<example>") (prec : Nat := 0) : Except (List (Position × String)) Syntax :=
     let ictx := mkInputContext input fileName
     let p' := adaptCacheableContext ({· with prec}) p
     let tokens := extraKeywords.foldl (init := getTokenTable env) (fun x tk => x.insert tk tk)
@@ -1151,7 +1150,8 @@ private def attempt (str : String) (xs : List (String → DocElabM α)) : DocEla
 
 
 open Lean Elab Term in
-def tryElabInlineCode (priorWord : Option String) (str : String) : DocElabM Term := do
+def tryElabInlineCode (allTactics : Array Tactic.Doc.TacticDoc) (extraKeywords : Array String)
+    (priorWord : Option String) (str : String) : DocElabM Term := do
   try
     attempt str <| wordElab priorWord ++ [
       tryElabInlineCodeName,
@@ -1162,10 +1162,10 @@ def tryElabInlineCode (priorWord : Option String) (str : String) : DocElabM Term
       tryInlineOption,
       tryElabInlineCodeTerm,
       tryElabInlineCodeMetavarTerm,
-      tryTacticName,
+      tryTacticName allTactics,
       withReader (fun ctx => {ctx with autoBoundImplicit := true}) ∘ tryElabInlineCodeTerm,
       tryElabInlineCodeTerm (ignoreElabErrors := true),
-      tryHighlightKeywords
+      tryHighlightKeywords extraKeywords
     ]
   catch
     | .error ref e =>
@@ -1213,6 +1213,8 @@ which the Lean fragments are elaborated.
 def blockFromMarkdownWithLean (names : List Name) (b : MD4Lean.Block) : DocElabM Term := do
   unless (← Docstring.getElabMarkdown) do
     return (← Markdown.blockFromMarkdown b (handleHeaders := Markdown.strongEmphHeaders))
+  let tactics ← Elab.Tactic.Doc.allTacticDocs
+  let keywords := tactics.map (·.userName)
   try
     match names with
     | decl :: decls =>
@@ -1228,7 +1230,7 @@ def blockFromMarkdownWithLean (names : List Name) (b : MD4Lean.Block) : DocElabM
             let res ←
               Markdown.blockFromMarkdown b
                 (handleHeaders := Markdown.strongEmphHeaders)
-                (elabInlineCode := tryElabInlineCode)
+                (elabInlineCode := tryElabInlineCode tactics keywords)
                 (elabBlockCode := tryElabBlockCode)
             synthesizeSyntheticMVarsUsingDefault
 
