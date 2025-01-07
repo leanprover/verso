@@ -8,10 +8,12 @@ import Std.Data.HashSet
 import VersoManual.Basic
 import VersoManual.Index
 import VersoManual.Markdown
+import VersoManual.Docstring.Config
 import Verso.Code
 import Verso.Doc.Elab.Monad
 import Verso.Doc.ArgParse
 import Verso.Doc.PointOfInterest
+
 
 import SubVerso.Highlighting
 
@@ -832,13 +834,15 @@ def tryElabCodeTermWith (mk : Highlighted → String → DocElabM α) (str : Str
     else s!"<docstring at {← getFileName} (unknown line)>"
   match Parser.runParserCategory (← getEnv) `term str src with
   | .error e => throw (.error (← getRef) e)
-  | .ok stx =>
+  | .ok stx => DocElabM.withFileMap (.ofString str) <| do
+    if stx.isIdent && (← readThe Term.Context).autoBoundImplicit then
+      throwError m!"Didn't elaborate {stx} as term to avoid spurious auto-implicits"
     let (newMsgs, tree, e) ← do
       let initMsgs ← Core.getMessageLog
       try
         Core.resetMessageLog
         -- TODO open decls/current namespace
-        let (tree', e') ← fun _ => do
+        let (tree', e') ← do
           let e ← Elab.Term.elabTerm (catchExPostpone := true) stx none
           Term.synthesizeSyntheticMVarsNoPostponing
           let e' ← Term.levelMVarToParam (← instantiateMVars e)
@@ -857,7 +861,7 @@ def tryElabCodeTermWith (mk : Highlighted → String → DocElabM α) (str : Str
         logMessage msg
       throwError m!"Didn't elaborate {stx} as term"
 
-    let hls := (← highlight stx #[] (PersistentArray.empty.push tree))
+    let hls ← highlight stx #[] (PersistentArray.empty.push tree)
     mk hls str
 
 
@@ -873,14 +877,14 @@ def tryElabCodeMetavarTermWith (mk : Highlighted → String → DocElabM α) (st
     else s!"<docstring at {← getFileName} (unknown line)>"
   match Parser.runParserCategory (← getEnv) `doc_metavar str src with
   | .error e => throw (.error (← getRef) e)
-  | .ok stx =>
+  | .ok stx => DocElabM.withFileMap (.ofString str) <| do
     if let `(doc_metavar|$pat:term : $ty:term) := stx then
-      let (newMsgs, tree, _e') ← do
+      let (newMsgs, tree, e') ← do
         let initMsgs ← Core.getMessageLog
         try
           Core.resetMessageLog
           -- TODO open decls/current namespace
-          let (tree', e') ← fun _ => do
+          let (tree', e') ← do
             let stx' : Term ← `(($pat : $ty))
             let e ← withReader ({· with autoBoundImplicit := true}) <| elabTerm stx' none
             Term.synthesizeSyntheticMVarsNoPostponing
@@ -900,9 +904,10 @@ def tryElabCodeMetavarTermWith (mk : Highlighted → String → DocElabM α) (st
           logMessage msg
         throwError m!"Didn't elaborate {pat} : {ty} as term"
 
-      let hls := (← highlight stx #[] (PersistentArray.empty.push tree))
+      let hls ← highlight stx #[] (PersistentArray.empty.push tree)
       mk hls str
-    else throwError "Not a doc metavar: {stx}"
+    else
+      throwError "Not a doc metavar: {stx}"
 
 open Lean Elab Term in
 def tryElabInlineCodeTerm (str : String) (ignoreElabErrors := false) : DocElabM Term :=
@@ -921,6 +926,36 @@ def tryElabBlockCodeTerm (str : String)  (ignoreElabErrors := false) : DocElabM 
   tryElabCodeTermWith (ignoreElabErrors := ignoreElabErrors) (fun hls str =>
     ``(Verso.Doc.Block.other (Block.leanFromMarkdown $(quote hls)) #[Verso.Doc.Block.code $(quote str)]))
     str
+
+open Lean Elab Term in
+def tryParseInlineCodeTactic (str : String) : DocElabM Term := do
+  let loc := (← getRef).getPos?.map (← getFileMap).utf8PosToLspPos
+  let src :=
+    if let some ⟨line, col⟩ := loc then s!"<docstring at {← getFileName}:{line}:{col}>"
+    else s!"<docstring at {← getFileName} (unknown line)>"
+  match Parser.runParserCategory (← getEnv) `tactic str src with
+  | .error e => throw (.error (← getRef) e)
+  | .ok stx => DocElabM.withFileMap (.ofString str) <| do
+    let hls ← highlight stx #[] (PersistentArray.empty)
+    ``(Verso.Doc.Inline.other (Inline.leanFromMarkdown $(quote hls)) #[Verso.Doc.Inline.code $(quote str)])
+
+declare_syntax_cat braces_attr
+syntax attr : braces_attr
+syntax "[" attr "]" : braces_attr
+syntax "@[" attr "]" : braces_attr
+
+open Lean Elab Term in
+def tryParseInlineCodeAttribute (str : String) : DocElabM Term := do
+  let loc := (← getRef).getPos?.map (← getFileMap).utf8PosToLspPos
+  let src :=
+    if let some ⟨line, col⟩ := loc then s!"<docstring at {← getFileName}:{line}:{col}>"
+    else s!"<docstring at {← getFileName} (unknown line)>"
+  match Parser.runParserCategory (← getEnv) `braces_attr str src with
+  | .error e => throw (.error (← getRef) e)
+  | .ok stx => DocElabM.withFileMap (.ofString str) <| do
+    let hls ← highlight stx #[] (PersistentArray.empty)
+    ``(Verso.Doc.Inline.other (Inline.leanFromMarkdown $(quote hls)) #[Verso.Doc.Inline.code $(quote str)])
+
 
 private def indentColumn (str : String) : Nat := Id.run do
   let mut i : Option Nat := none
@@ -985,11 +1020,11 @@ def tryElabBlockCodeCommand (str : String) (ignoreElabErrors := false) : DocElab
     if cmdState.messages.hasErrors then
       throwError "Errors found in command"
 
-    let mut hls := Highlighted.empty
-    for cmd in cmds do
-      hls := hls ++ (← highlight cmd cmdState.messages.toArray cmdState.infoState.trees)
-
-    hls := hls.deIndent (indentColumn str)
+    let hls ← DocElabM.withFileMap (.ofString str) do
+      let mut hls := Highlighted.empty
+      for cmd in cmds do
+        hls := hls ++ (← highlight cmd cmdState.messages.toArray cmdState.infoState.trees)
+      pure <| hls.deIndent (indentColumn str)
 
     ``(Verso.Doc.Block.other (Block.leanFromMarkdown $(quote hls)) #[Verso.Doc.Block.code $(quote str)])
 
@@ -1021,19 +1056,26 @@ private def attempt (counter : IO.Ref Nat) (str : String) (xs : List (String →
   | [] => throwError "No attempt succeeded"
   | [x] => x str'
   | x::y::xs =>
-    try x str'
+    let info ← getInfoState
+    try
+      setInfoState {}
+      x str'
     catch e =>
       if isAutoBoundImplicitLocalException? e |>.isSome then
         throw e
       else attempt counter str (y::xs)
+    finally
+      setInfoState info
 
 open Lean Elab Term in
-def tryElabInlineCode (counter : IO.Ref Nat) (str : String) : DocElabM Term := do
+def tryElabInlineCode (counter : IO.Ref Nat) (priorWord : Option String) (str : String) : DocElabM Term := do
   try
-    attempt counter str [
-      tryElabInlineCodeName ,
-      tryElabInlineCodeTerm ,
-      tryElabInlineCodeMetavarTerm ,
+    attempt counter str <| wordElab priorWord ++ [
+      tryElabInlineCodeName,
+      tryParseInlineCodeTactic,
+      tryParseInlineCodeAttribute,
+      tryElabInlineCodeTerm,
+      tryElabInlineCodeMetavarTerm,
       withReader (fun ctx => {ctx with autoBoundImplicit := true}) ∘ tryElabInlineCodeTerm,
       tryElabInlineCodeTerm (ignoreElabErrors := true)
     ]
@@ -1047,6 +1089,11 @@ def tryElabInlineCode (counter : IO.Ref Nat) (str : String) : DocElabM Term := d
       else
         logWarning m!"Internal exception uncaught: {e.toMessageData}"
         ``(Verso.Doc.Inline.code $(quote str))
+where
+  wordElab
+    | some "attribute" => [tryParseInlineCodeAttribute]
+    | some "tactic" => [tryParseInlineCodeTactic]
+    | _ => []
 
 open Lean Elab Term in
 def tryElabBlockCode (counter : IO.Ref Nat) (str : String) : DocElabM Term := do
@@ -1076,6 +1123,8 @@ from left to right, with the names bound by the signature being available in the
 which the Lean fragments are elaborated.
 -/
 def blockFromMarkdownWithLean (names : List Name) (b : MD4Lean.Block) : DocElabM Term := do
+  unless (← Docstring.getElabMarkdown) do
+    return (← Markdown.blockFromMarkdown b (handleHeaders := Markdown.strongEmphHeaders))
   try
     match names with
     | decl :: decls =>
@@ -1098,8 +1147,9 @@ def blockFromMarkdownWithLean (names : List Name) (b : MD4Lean.Block) : DocElabM
                 (handleHeaders := Markdown.strongEmphHeaders)
                 (elabInlineCode := tryElabInlineCode counter)
                 (elabBlockCode := tryElabBlockCode counter)
-            discard <| addAutoBoundImplicits #[]
             synthesizeSyntheticMVarsUsingDefault
+
+            discard <| addAutoBoundImplicits #[]
 
             return res
           catch e =>

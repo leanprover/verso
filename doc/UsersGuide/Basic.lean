@@ -55,6 +55,9 @@ results in
 
 ## More Docstring Examples
 
+Here are some docstrings as rendered by Verso.
+They include heuristic elaboration of code items in their Markdown that attempts to guess what was meant.
+
 {docstring Lean.Syntax}
 
 {docstring List}

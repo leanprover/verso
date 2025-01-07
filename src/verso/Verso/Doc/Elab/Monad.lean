@@ -355,6 +355,8 @@ instance : MonadStateOf DocElabM.State DocElabM := inferInstanceAs <| MonadState
 
 instance : MonadFinally DocElabM := inferInstanceAs <| MonadFinally (ReaderT PartElabM.State (StateT DocElabM.State TermElabM))
 
+instance : MonadInfoTree DocElabM := inferInstanceAs <| MonadInfoTree (ReaderT PartElabM.State (StateT DocElabM.State TermElabM))
+
 instance : MonadEnv DocElabM := inferInstanceAs <| MonadEnv (ReaderT PartElabM.State (StateT DocElabM.State TermElabM))
 
 instance : MonadFileMap DocElabM := inferInstanceAs <| MonadFileMap (ReaderT PartElabM.State (StateT DocElabM.State TermElabM))
