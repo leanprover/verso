@@ -1209,7 +1209,7 @@ mutual
     nodeFn ``image <|
       atomicFn (strFn "![") >>
       (recoverSkip <|
-        asStringFn (takeUntilEscFn (· ∈ "]\n".toList)) >>
+        nodeFn strLitKind (asStringFn (takeUntilEscFn (· ∈ "]\n".toList)) (quoted := true)) >>
         strFn "]" >>
         linkTarget)
 
@@ -1521,7 +1521,7 @@ All input consumed.
 info: Success! Final stack:
   (Verso.Syntax.image
    "!["
-   ""
+   (str "\"\"")
    "]"
    (Verso.Syntax.url
     "("
@@ -1537,7 +1537,7 @@ info: Failure @12 (⟨1, 12⟩): expected ')'
 Final stack:
   (Verso.Syntax.image
    "!["
-   ""
+   (str "\"\"")
    "]"
    (Verso.Syntax.url
     "("
@@ -1551,7 +1551,10 @@ Remaining: "\nabc"
 /--
 info: Failure @5 (⟨1, 5⟩): expected ']'
 Final stack:
-  (Verso.Syntax.image "![" "abc" <missing>)
+  (Verso.Syntax.image
+   "!["
+   (str "\"abc\"")
+   <missing>)
 Remaining: "\n123"
 -/
 #guard_msgs in
@@ -1562,7 +1565,7 @@ Remaining: "\n123"
 info: Success! Final stack:
   (Verso.Syntax.image
    "!["
-   "alt text is good"
+   (str "\"alt text is good\"")
    "]"
    (Verso.Syntax.url
     "("
@@ -1578,7 +1581,7 @@ info: Failure @19 (⟨1, 19⟩): expected '(' or '['
 Final stack:
   (Verso.Syntax.image
    "!["
-   "alt text is good"
+   (str "\"alt text is good\"")
    "]"
    (Verso.Syntax.url <missing>))
 Remaining: "](logo.png)"
@@ -2309,7 +2312,7 @@ info: Success! Final stack:
     "para{"
     [(Verso.Syntax.image
       "!["
-      "Lean logo"
+      (str "\"Lean logo\"")
       "]"
       (Verso.Syntax.url
        "("
@@ -4240,7 +4243,7 @@ Final stack:
         "para{"
         [(Verso.Syntax.image
           "!["
-          "busted image alt text"
+          (str "\"busted image alt text\"")
           <missing>)]
         "}")])
      (Verso.Syntax.li
@@ -4249,7 +4252,7 @@ Final stack:
         "para{"
         [(Verso.Syntax.image
           "!["
-          "busted image link"
+          (str "\"busted image link\"")
           "]"
           (Verso.Syntax.url
            "("
