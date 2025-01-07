@@ -35,8 +35,5 @@ deriving TypeName
 def addCustomHover [Monad m] [MonadInfoTree m] [MonadLiftT BaseIO m] (stx : Syntax) (hover : UserHover) : m Unit := do
   let txt ← match hover with
     | .markdown str => pure str
-     -- TODO Change signature to MonadLiftT BaseIO m and remove the below ascription. This
-     -- formulation is for a bit wider compatibility in December 2024, but after another release it
-     -- can go away.
-    | .messageData m => (m.toString : IO String)
+    | .messageData m => m.toString
   pushInfoLeaf <| .ofCustomInfo ⟨stx, .mk <| CustomHover.mk txt⟩
