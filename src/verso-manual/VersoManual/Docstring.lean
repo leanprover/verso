@@ -936,8 +936,48 @@ def tryParseInlineCodeTactic (str : String) : DocElabM Term := do
   match Parser.runParserCategory (← getEnv) `tactic str src with
   | .error e => throw (.error (← getRef) e)
   | .ok stx => DocElabM.withFileMap (.ofString str) <| do
+    -- TODO try actually running the tactic - if the parameters are simple enough, then it may work
+    -- and give better highlights
     let hls ← highlight stx #[] (PersistentArray.empty)
     ``(Verso.Doc.Inline.other (Inline.leanFromMarkdown $(quote hls)) #[Verso.Doc.Inline.code $(quote str)])
+
+open Lean Elab Term in
+open Lean.Parser in
+def tryHighlightKeywords (str : String) : DocElabM Term := do
+  let loc := (← getRef).getPos?.map (← getFileMap).utf8PosToLspPos
+  let src :=
+    if let some ⟨line, col⟩ := loc then s!"<docstring at {← getFileName}:{line}:{col}>"
+    else s!"<docstring at {← getFileName} (unknown line)>"
+  let p : Parser := {fn := simpleFn}
+  match runParser (← getEnv) (← getOptions) p str src (prec := 0) with
+  | .error e => throwError "Not keyword-highlightable"
+  | .ok stx => DocElabM.withFileMap (.ofString str) <| do
+    let hls ← highlight stx #[] (PersistentArray.empty)
+    ``(Verso.Doc.Inline.other (Inline.leanFromMarkdown $(quote hls)) #[Verso.Doc.Inline.code $(quote str)])
+where
+  extraKeywords := ["simp", "induction"]
+
+  simpleFn := andthenFn whitespace <| nodeFn nullKind <| manyFn tokenFn
+
+  runParser (env : Environment) (opts : Lean.Options) (p : Parser) (input : String) (fileName : String := "<example>") (prec : Nat := 0) : Except (List (Position × String)) Syntax :=
+    let ictx := mkInputContext input fileName
+    let p' := adaptCacheableContext ({· with prec}) p
+    let tokens := extraKeywords.foldl (init := getTokenTable env) (fun x tk => x.insert tk tk)
+    let s := p'.fn.run ictx { env, options := opts } tokens (mkParserState input)
+    if !s.allErrors.isEmpty then
+      Except.error (toErrorMsg ictx s)
+    else if ictx.input.atEnd s.pos then
+      Except.ok s.stxStack.back
+    else
+      Except.error (toErrorMsg ictx (s.mkError "end of input"))
+
+  toErrorMsg (ctx : InputContext) (s : ParserState) : List (Position × String) := Id.run do
+    let mut errs := []
+    for (pos, _stk, err) in s.allErrors do
+      let pos := ctx.fileMap.toPosition pos
+      errs := (pos, toString err) :: errs
+    errs.reverse
+
 
 declare_syntax_cat braces_attr
 syntax (name := plain) attr : braces_attr
@@ -1097,7 +1137,8 @@ def tryElabInlineCode (priorWord : Option String) (str : String) : DocElabM Term
       tryElabInlineCodeTerm,
       tryElabInlineCodeMetavarTerm,
       withReader (fun ctx => {ctx with autoBoundImplicit := true}) ∘ tryElabInlineCodeTerm,
-      tryElabInlineCodeTerm (ignoreElabErrors := true)
+      tryElabInlineCodeTerm (ignoreElabErrors := true),
+      tryHighlightKeywords
     ]
   catch
     | .error ref e =>
