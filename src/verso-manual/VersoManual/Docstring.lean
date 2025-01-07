@@ -949,17 +949,17 @@ def tryHighlightKeywords (str : String) : DocElabM Term := do
     if let some ⟨line, col⟩ := loc then s!"<docstring at {← getFileName}:{line}:{col}>"
     else s!"<docstring at {← getFileName} (unknown line)>"
   let p : Parser := {fn := simpleFn}
-  match runParser (← getEnv) (← getOptions) p str src (prec := 0) with
+  let extraKeywords := (← Tactic.Doc.allTacticDocs).map (·.userName) |>.toList
+  match runParser extraKeywords (← getEnv) (← getOptions) p str src (prec := 0) with
   | .error e => throwError "Not keyword-highlightable"
   | .ok stx => DocElabM.withFileMap (.ofString str) <| do
     let hls ← highlight stx #[] (PersistentArray.empty)
     ``(Verso.Doc.Inline.other (Inline.leanFromMarkdown $(quote hls)) #[Verso.Doc.Inline.code $(quote str)])
 where
-  extraKeywords := ["simp", "induction"]
 
   simpleFn := andthenFn whitespace <| nodeFn nullKind <| manyFn tokenFn
 
-  runParser (env : Environment) (opts : Lean.Options) (p : Parser) (input : String) (fileName : String := "<example>") (prec : Nat := 0) : Except (List (Position × String)) Syntax :=
+  runParser (extraKeywords : List String) (env : Environment) (opts : Lean.Options) (p : Parser) (input : String) (fileName : String := "<example>") (prec : Nat := 0) : Except (List (Position × String)) Syntax :=
     let ictx := mkInputContext input fileName
     let p' := adaptCacheableContext ({· with prec}) p
     let tokens := extraKeywords.foldl (init := getTokenTable env) (fun x tk => x.insert tk tk)
