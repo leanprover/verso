@@ -969,7 +969,7 @@ def tacticInline : RoleExpander
     let {«show»} ← TacticInlineOptions.parse.run args
     let #[arg] := inlines
       | throwError "Expected exactly one argument"
-    let `(inline|code{ $tac:str }) := arg
+    let `(inline|code( $tac:str )) := arg
       | throwErrorAt arg "Expected code literal with the tactic name"
     let tacTok := tac.getString
     let tacName := tac.getString.toName
@@ -1099,7 +1099,8 @@ def progress : DirectiveExpander
     let mut exceptions : NameSet := {}
     for block in blocks do
       match block with
-      | `<low|(Verso.Syntax.codeblock (column ~_col) ~_open ~(.node _ `null #[nameStx, .node _ `null argsStx]) ~(.atom _info contents) ~_close )> =>
+      | `(block|```$nameStx:ident $argsStx* | $contents```) =>
+        let contents := contents.getString
         match nameStx.getId with
         | `namespace =>
           for str in contents.split Char.isWhitespace do

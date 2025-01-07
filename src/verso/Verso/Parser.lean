@@ -235,6 +235,17 @@ def ignoreFn (p : ParserFn) : ParserFn := fun c s =>
   let s' := p c s
   s'.takeStack iniSz
 
+def withInfoSyntaxFn (p : ParserFn) (infoP : SourceInfo → ParserFn) : ParserFn := fun c s =>
+  let iniSz := s.stxStack.size
+  let startPos := s.pos
+  let s := p c s
+  let input    := c.input
+  let stopPos  := s.pos
+  let leading  := mkEmptySubstringAt input startPos
+  let trailing := mkEmptySubstringAt input stopPos
+  let info     := SourceInfo.original leading startPos trailing stopPos
+  infoP info c (s.takeStack iniSz)
+
 private def unescapeStr (str : String) : String := Id.run do
   let mut out := ""
   let mut iter := str.iter
@@ -304,6 +315,31 @@ def bolThen (p : ParserFn) (description : String) : ParserFn := fun c s =>
     else s
   else s.mkErrorAt description s.pos
 
+/--
+We can only start a nestable block if we're immediately after a newline followed by a sequence of nestable block openers
+-/
+def onlyBlockOpeners : ParserFn := fun c s =>
+  let position := c.fileMap.toPosition s.pos
+  let lineStart := c.fileMap.lineStart position.line
+  let ok : Bool := Id.run do
+    let mut iter := {c.input.iter with i := lineStart}
+    while iter.i < s.pos && iter.hasNext do
+      if iter.curr.isDigit then
+        while iter.curr.isDigit && iter.i < s.pos && iter.hasNext do
+          iter := iter.next
+        if !iter.hasNext then return false
+        else if iter.curr == '.' || iter.curr == ')' then iter := iter.next
+      else if iter.curr == ' ' then iter := iter.next
+      else if iter.curr == '>' then iter := iter.next
+      else if iter.curr == '*' then iter := iter.next
+      else if iter.curr == '+' then iter := iter.next
+      else if iter.curr == '-' then iter := iter.next
+      else return false
+    true
+
+  if ok then s
+  else s.mkErrorAt s!"beginning of line or sequence of nestable block openers at {position}" s.pos
+
 
 def nl := satisfyFn (· == '\n') "newline"
 
@@ -324,8 +360,8 @@ Remaining:
 #guard_msgs in
 #eval nl.test! "\n "
 
-def fakeAtom (str : String) : ParserFn := fun _c s =>
-  let atom := mkAtom SourceInfo.none str
+def fakeAtom (str : String) (info : SourceInfo := SourceInfo.none) : ParserFn := fun _c s =>
+  let atom := mkAtom info str
   s.pushSyntax atom
 
 def pushMissing : ParserFn := fun _c s =>
@@ -1129,8 +1165,8 @@ mutual
         else takeContentsFn maxCount c s
 
   partial def math : ParserFn :=
-    atomicFn (nodeFn ``display_math <| strFn "$$" >> code >> fakeAtom "`") <|>
-    atomicFn (nodeFn ``inline_math <| strFn "$" >> code >> fakeAtom "`")
+    atomicFn (nodeFn ``display_math <| strFn "$$" >> code) <|>
+    atomicFn (nodeFn ``inline_math <| strFn "$" >> code)
 
   -- Read a prefix of a line of text, stopping at a text-mode special character
   partial def text :=
@@ -1173,7 +1209,7 @@ mutual
     nodeFn ``image <|
       atomicFn (strFn "![") >>
       (recoverSkip <|
-        asStringFn (takeUntilEscFn (· ∈ "]\n".toList))>>
+        nodeFn strLitKind (asStringFn (takeUntilEscFn (· ∈ "]\n".toList)) (quoted := true)) >>
         strFn "]" >>
         linkTarget)
 
@@ -1485,7 +1521,7 @@ All input consumed.
 info: Success! Final stack:
   (Verso.Syntax.image
    "!["
-   ""
+   (str "\"\"")
    "]"
    (Verso.Syntax.url
     "("
@@ -1501,7 +1537,7 @@ info: Failure @12 (⟨1, 12⟩): expected ')'
 Final stack:
   (Verso.Syntax.image
    "!["
-   ""
+   (str "\"\"")
    "]"
    (Verso.Syntax.url
     "("
@@ -1515,7 +1551,10 @@ Remaining: "\nabc"
 /--
 info: Failure @5 (⟨1, 5⟩): expected ']'
 Final stack:
-  (Verso.Syntax.image "![" "abc" <missing>)
+  (Verso.Syntax.image
+   "!["
+   (str "\"abc\"")
+   <missing>)
 Remaining: "\n123"
 -/
 #guard_msgs in
@@ -1526,7 +1565,7 @@ Remaining: "\n123"
 info: Success! Final stack:
   (Verso.Syntax.image
    "!["
-   "alt text is good"
+   (str "\"alt text is good\"")
    "]"
    (Verso.Syntax.url
     "("
@@ -1542,7 +1581,7 @@ info: Failure @19 (⟨1, 19⟩): expected '(' or '['
 Final stack:
   (Verso.Syntax.image
    "!["
-   "alt text is good"
+   (str "\"alt text is good\"")
    "]"
    (Verso.Syntax.url <missing>))
 Remaining: "](logo.png)"
@@ -1669,8 +1708,7 @@ info: Success! Final stack:
    (Verso.Syntax.code
     "`"
     (str "\"\\\\frac{x}{4}\"")
-    "`")
-   "`")
+    "`"))
 All input consumed.
 -/
 #guard_msgs in
@@ -1683,8 +1721,7 @@ info: Success! Final stack:
    (Verso.Syntax.code
     "`"
     (str "\"\\\\frac{\\n  x\\n}{\\n  4\\n}\\n\"")
-    "`")
-   "`")
+    "`"))
 All input consumed.
 -/
 #guard_msgs in
@@ -1703,8 +1740,7 @@ info: Success! Final stack:
    (Verso.Syntax.code
     "`"
     (str "\"\\\\frac{x}{4}\"")
-    "`")
-   "`")
+    "`"))
 All input consumed.
 -/
 #guard_msgs in
@@ -1807,7 +1843,7 @@ deriving Inhabited, Repr
 def lookaheadOrderedListIndicator (ctxt : BlockCtxt) (p : OrderedListType → Int → ParserFn) : ParserFn := fun c s =>
     let iniPos := s.pos
     let iniSz := s.stxStack.size
-    let s := (bol >> takeWhileFn (· == ' ') >> guardMinColumn ctxt.minIndent) c s
+    let s := (onlyBlockOpeners >> takeWhileFn (· == ' ') >> guardMinColumn ctxt.minIndent) c s
     if s.hasError then s.setPos iniPos |>.takeStack iniSz
     else
     let numPos := s.pos
@@ -1896,11 +1932,10 @@ Remaining: "23 ) "
 #guard_msgs in
 #eval lookaheadOrderedListIndicator {} (fun type i => fakeAtom s!"{repr type} {i}") |>.test! "23 ) "
 
-
 def lookaheadUnorderedListIndicator (ctxt : BlockCtxt) (p : UnorderedListType → ParserFn) : ParserFn := fun c s =>
   let iniPos := s.pos
   let iniSz := s.stxStack.size
-  let s := (bol >> takeWhileFn (· == ' ') >> guardMinColumn ctxt.minIndent) c s
+  let s := (onlyBlockOpeners >> takeWhileFn (· == ' ') >> guardMinColumn ctxt.minIndent) c s
   let bulletPos := s.pos
   if s.hasError then s.setPos iniPos |>.takeStack iniSz
   else if h : c.input.atEnd s.pos then s.mkEOIError.setPos iniPos |>.takeStack iniSz
@@ -1980,15 +2015,13 @@ mutual
       match ctxt.inLists.head? with
       | none => fun _ s => s.mkError "not in a list"
       | some ⟨col, .inr type⟩ =>
-        atomicFn <| nodeFn `bullet <|
+        atomicFn <|
           takeWhileFn (· == ' ') >>
-          pushColumn >>
           guardColumn (· == col) s!"indentation at {col}" >>
           unorderedListIndicator type >> ignoreFn (lookaheadFn (chFn ' '))
       | some ⟨col, .inl type⟩ =>
-        atomicFn <| nodeFn `bullet <|
+        atomicFn <|
           takeWhileFn (· == ' ') >>
-          pushColumn >>
           guardColumn (· == col) s!"indentation at {col}" >>
           orderedListIndicator type >> ignoreFn (lookaheadFn (chFn ' '))
 
@@ -2015,19 +2048,28 @@ mutual
 
   partial def unorderedList (ctxt : BlockCtxt) : ParserFn :=
     nodeFn ``ul <|
-      lookaheadUnorderedListIndicator ctxt (fun type => withCurrentColumn (fun c => many1Fn (listItem {ctxt with minIndent := c + 1 , inLists := ⟨c, .inr type⟩  :: ctxt.inLists})))
+      lookaheadUnorderedListIndicator ctxt fun type =>
+        withCurrentColumn fun c =>
+          fakeAtom "ul{" >>
+          many1Fn (listItem {ctxt with minIndent := c + 1 , inLists := ⟨c, .inr type⟩  :: ctxt.inLists}) >>
+          fakeAtom "}"
 
   partial def orderedList (ctxt : BlockCtxt) : ParserFn :=
     nodeFn ``ol <|
+      fakeAtom "ol(" >>
       lookaheadOrderedListIndicator ctxt fun type _start => -- TODO? Validate list numbering?
         withCurrentColumn fun c =>
-          many1Fn (listItem {ctxt with minIndent := c + 1 , inLists := ⟨c, .inl type⟩  :: ctxt.inLists})
+          fakeAtom ")" >> fakeAtom "{" >>
+          many1Fn (listItem {ctxt with minIndent := c + 1 , inLists := ⟨c, .inl type⟩  :: ctxt.inLists}) >>
+          fakeAtom "}"
 
 
   partial def definitionList (ctxt : BlockCtxt) : ParserFn :=
     nodeFn ``dl <|
-      atomicFn (bol >> takeWhileFn (· == ' ') >> ignoreFn (lookaheadFn (chFn ':' >> chFn ' ')) >> guardMinColumn ctxt.minIndent) >>
-      withCurrentColumn (fun c => many1Fn (descItem {ctxt with minIndent := c}))
+      atomicFn (onlyBlockOpeners >> takeWhileFn (· == ' ') >> ignoreFn (lookaheadFn (chFn ':' >> chFn ' ')) >> guardMinColumn ctxt.minIndent) >>
+      fakeAtom "ul{" >>
+      withCurrentColumn (fun c => many1Fn (descItem {ctxt with minIndent := c})) >>
+      fakeAtom "}"
 
   partial def para (ctxt : BlockCtxt) : ParserFn :=
     nodeFn ``para <|
@@ -2039,30 +2081,43 @@ mutual
   partial def header (ctxt : BlockCtxt) : ParserFn :=
     nodeFn ``header <|
       guardMinColumn ctxt.minIndent >>
-      atomicFn (bol >> asStringFn (many1Fn (skipChFn '#')) >> skipChFn ' ' >> takeWhileFn (· == ' ') >> lookaheadFn (satisfyFn (· != '\n') "non-newline")) >>
-      textLine (allowNewlines := false)
+      atomicFn (bol >>
+        withCurrentColumn fun c =>
+          withInfoSyntaxFn (many1Fn (skipChFn '#')) (fun info => fakeAtom "header(" (info := info)) >>
+          withCurrentColumn fun c' =>
+            skipChFn ' ' >> takeWhileFn (· == ' ') >> lookaheadFn (satisfyFn (· != '\n') "non-newline") >>
+            (show ParserFn from fun _ s => s.pushSyntax <| Syntax.mkNumLit (toString <| c' - c - 1)) >>
+            fakeAtom ")") >>
+      fakeAtom "{" >>
+      textLine (allowNewlines := false) >>
+      fakeAtom "}"
+
 
 
 
   partial def codeBlock (ctxt : BlockCtxt) : ParserFn :=
     nodeFn ``codeblock <|
       -- Opener - leaves indent info and open token on the stack
-      atomicFn (takeWhileFn (· == ' ') >>  guardMinColumn ctxt.minIndent >> pushColumn >> asStringFn (atLeastFn 3 (skipChFn '`'))) >>
+      atomicFn (takeWhileFn (· == ' ') >> guardMinColumn ctxt.minIndent >> pushColumn >> asStringFn (atLeastFn 3 (skipChFn '`'))) >>
         withIndentColumn fun c =>
           recoverUnindent c <|
             withCurrentColumn fun c' =>
               let fenceWidth := c' - c
               takeWhileFn (· == ' ') >>
               optionalFn nameAndArgs >>
-              satisfyFn (· == '\n') "newline" >>
-              asStringFn (manyFn (atomicFn blankLine <|> codeFrom c fenceWidth)) (transform := deIndent c) >>
+              asStringFn (satisfyFn (· == '\n') "newline") >>
+              nodeFn strLitKind (asStringFn (manyFn (atomicFn blankLine <|> codeFrom c fenceWidth)) (transform := deIndent c) (quoted := true)) >>
               closeFence c fenceWidth
   where
     withIndentColumn (p : Nat → ParserFn) : ParserFn := fun c s =>
       let colStx := s.stxStack.get! (s.stxStack.size - 2)
       match colStx with
       | .node _ `column #[.atom _ col] =>
-        if let some colNat := col.toNat? then p colNat c s else s.mkError s!"Internal error - not a Nat {col}"
+        if let some colNat := col.toNat? then
+          let opener := s.stxStack.get! (s.stxStack.size - 1)
+          p colNat c (s.popSyntax.popSyntax.pushSyntax opener)
+        else
+          s.mkError s!"Internal error - not a Nat {col}"
       | other => s.mkError s!"Internal error - not a column node {other}"
 
     deIndent (n : Nat) (str : String) : String := Id.run do
@@ -2094,10 +2149,9 @@ mutual
          recoverEolWith #[.missing, .node .none nullKind #[]] (nameAndArgs (reportNameAs := "directive name (identifier)") >>
          satisfyFn (· == '\n') "newline")) >>
        fakeAtom "\n" >>
-       fakeAtom "\n" >>
        ignoreFn (manyFn blankLine) >>
-        (withFencePos 4 fun ⟨l, col⟩ =>
-          withFenceSize 4 fun fenceWidth =>
+        (withFencePos 3 fun ⟨l, col⟩ =>
+          withFenceSize 3 fun fenceWidth =>
             blocks {ctxt with minIndent := col, maxDirective := fenceWidth} >>
             recoverHereWith #[.missing]
               (closeFence l fenceWidth >>
@@ -2232,18 +2286,20 @@ info: Success! Final stack:
        "\"I can describe lists like this one:\""))]
     "}")
    (Verso.Syntax.ul
+    "ul{"
     [(Verso.Syntax.li
-      (bullet (column "0") "*")
+      "*"
       [(Verso.Syntax.para
         "para{"
         [(Verso.Syntax.text (str "\"a\""))]
         "}")])
      (Verso.Syntax.li
-      (bullet (column "0") "*")
+      "*"
       [(Verso.Syntax.para
         "para{"
         [(Verso.Syntax.text (str "\"b\""))]
-        "}")])])]
+        "}")])]
+    "}")]
 All input consumed.
 -/
 #guard_msgs in
@@ -2256,7 +2312,7 @@ info: Success! Final stack:
     "para{"
     [(Verso.Syntax.image
       "!["
-      "Lean logo"
+      (str "\"Lean logo\"")
       "]"
       (Verso.Syntax.url
        "("
@@ -2279,7 +2335,7 @@ All input consumed.
 /--
 info: Success! Final stack:
   (Verso.Syntax.li
-   (bullet (column "0") "*")
+   "*"
    [(Verso.Syntax.para
      "para{"
      [(Verso.Syntax.text (str "\"foo\""))]
@@ -2293,21 +2349,23 @@ Remaining:
 /--
 info: Success! Final stack:
   [(Verso.Syntax.ul
+    "ul{"
     [(Verso.Syntax.li
-      (bullet (column "0") "*")
+      "*"
       [(Verso.Syntax.para
         "para{"
         [(Verso.Syntax.text (str "\"foo\""))]
         "}")])
      (Verso.Syntax.li
-      (bullet (column "0") "*")
+      "*"
       [(Verso.Syntax.para
         "para{"
         [(Verso.Syntax.text (str "\"bar\""))
          (Verso.Syntax.linebreak
           "line!"
           (str "\"\\n\""))]
-        "}")])])]
+        "}")])]
+    "}")]
 All input consumed.
 -/
 #guard_msgs in
@@ -2315,9 +2373,185 @@ All input consumed.
 
 /--
 info: Success! Final stack:
-  [(Verso.Syntax.ul
+  [(Verso.Syntax.blockquote
+    ">"
+    [(Verso.Syntax.ul
+      "ul{"
+      [(Verso.Syntax.li
+        "*"
+        [(Verso.Syntax.para
+          "para{"
+          [(Verso.Syntax.text (str "\"foo\""))]
+          "}")])]
+      "}")])]
+All input consumed.
+-/
+#guard_msgs in
+#eval blocks {} |>.test! "> * foo"
+
+/--
+info: Success! Final stack:
+  [(Verso.Syntax.blockquote
+    ">"
+    [(Verso.Syntax.ol
+      "ol("
+      (num "1")
+      ")"
+      "{"
+      [(Verso.Syntax.li
+        "1."
+        [(Verso.Syntax.para
+          "para{"
+          [(Verso.Syntax.text (str "\"foo\""))]
+          "}")])]
+      "}")])]
+All input consumed.
+-/
+#guard_msgs in
+#eval blocks {} |>.test! "> 1. foo"
+
+
+/--
+info: Success! Final stack:
+  [(Verso.Syntax.blockquote
+    ">"
+    [(Verso.Syntax.ul
+      "ul{"
+      [(Verso.Syntax.li
+        "*"
+        [(Verso.Syntax.para
+          "para{"
+          [(Verso.Syntax.text (str "\"foo\""))]
+          "}")])]
+      "}")
+     (Verso.Syntax.ul
+      "ul{"
+      [(Verso.Syntax.li
+        "*"
+        [(Verso.Syntax.para
+          "para{"
+          [(Verso.Syntax.text (str "\"foo\""))]
+          "}")])]
+      "}")])]
+All input consumed.
+-/
+#guard_msgs in
+#eval blocks {} |>.test! "> * foo\n\n\n * foo"
+
+/--
+info: Success! Final stack:
+  [(Verso.Syntax.blockquote
+    ">"
+    [(Verso.Syntax.para
+      "para{"
+      [(Verso.Syntax.text
+        (str "\"I like quotes\""))]
+      "}")
+     (Verso.Syntax.ul
+      "ul{"
+      [(Verso.Syntax.li
+        "*"
+        [(Verso.Syntax.para
+          "para{"
+          [(Verso.Syntax.text
+            (str "\"Also with lists in them\""))]
+          "}")])]
+      "}")])
+   (Verso.Syntax.para
+    "para{"
+    [(Verso.Syntax.text (str "\"Abc\""))]
+    "}")]
+All input consumed.
+-/
+#guard_msgs in
+#eval blocks {} |>.test! "> I like quotes\n  * Also with lists in them\n\nAbc"
+
+/--
+info: Success! Final stack:
+  [(Verso.Syntax.blockquote
+    ">"
+    [(Verso.Syntax.ul
+      "ul{"
+      [(Verso.Syntax.li
+        "*"
+        [(Verso.Syntax.para
+          "para{"
+          [(Verso.Syntax.text (str "\"foo\""))]
+          "}")])
+       (Verso.Syntax.li
+        "*"
+        [(Verso.Syntax.para
+          "para{"
+          [(Verso.Syntax.text (str "\"foo\""))]
+          "}")])]
+      "}")])]
+All input consumed.
+-/
+#guard_msgs in
+#eval blocks {} |>.test! "> * foo\n\n\n  * foo"
+
+/--
+info: Success! Final stack:
+  [(Verso.Syntax.blockquote
+    ">"
+    [(Verso.Syntax.blockquote
+      ">"
+      [(Verso.Syntax.ul
+        "ul{"
+        [(Verso.Syntax.li
+          "*"
+          [(Verso.Syntax.para
+            "para{"
+            [(Verso.Syntax.text (str "\"foo\""))]
+            "}")])]
+        "}")])
+     (Verso.Syntax.ul
+      "ul{"
+      [(Verso.Syntax.li
+        "*"
+        [(Verso.Syntax.para
+          "para{"
+          [(Verso.Syntax.text (str "\"foo\""))]
+          "}")])]
+      "}")])]
+All input consumed.
+-/
+#guard_msgs in
+#eval blocks {} |>.test! "> > * foo\n\n\n * foo"
+
+/--
+info: Success! Final stack:
+  [(Verso.Syntax.blockquote
+    ">"
+    [(Verso.Syntax.ul
+      "ul{"
+      [(Verso.Syntax.li
+        "*"
+        [(Verso.Syntax.para
+          "para{"
+          [(Verso.Syntax.text (str "\"foo\""))]
+          "}")])]
+      "}")])
+   (Verso.Syntax.ul
+    "ul{"
     [(Verso.Syntax.li
-      (bullet (column "0") "*")
+      "*"
+      [(Verso.Syntax.para
+        "para{"
+        [(Verso.Syntax.text (str "\"foo\""))]
+        "}")])]
+    "}")]
+All input consumed.
+-/
+#guard_msgs in
+#eval blocks {} |>.test! "> * foo\n\n\n* foo"
+
+/--
+info: Success! Final stack:
+  [(Verso.Syntax.ul
+    "ul{"
+    [(Verso.Syntax.li
+      "*"
       [(Verso.Syntax.para
         "para{"
         [(Verso.Syntax.text (str "\"foo\""))
@@ -2325,7 +2559,8 @@ info: Success! Final stack:
           "line!"
           (str "\"\\n\""))
          (Verso.Syntax.text (str "\"  thing\""))]
-        "}")])])]
+        "}")])]
+    "}")]
 Remaining:
 "* bar\n"
 -/
@@ -2335,21 +2570,23 @@ Remaining:
 /--
 info: Success! Final stack:
   [(Verso.Syntax.ul
+    "ul{"
     [(Verso.Syntax.li
-      (bullet (column "0") "+")
+      "+"
       [(Verso.Syntax.para
         "para{"
         [(Verso.Syntax.text (str "\"foo\""))]
         "}")])
      (Verso.Syntax.li
-      (bullet (column "0") "+")
+      "+"
       [(Verso.Syntax.para
         "para{"
         [(Verso.Syntax.text (str "\"bar\""))
          (Verso.Syntax.linebreak
           "line!"
           (str "\"\\n\""))]
-        "}")])])]
+        "}")])]
+    "}")]
 All input consumed.
 -/
 #guard_msgs in
@@ -2359,21 +2596,23 @@ All input consumed.
 /--
 info: Success! Final stack:
   [(Verso.Syntax.ul
+    "ul{"
     [(Verso.Syntax.li
-      (bullet (column "0") "*")
+      "*"
       [(Verso.Syntax.para
         "para{"
         [(Verso.Syntax.text (str "\"foo\""))]
         "}")])
      (Verso.Syntax.li
-      (bullet (column "0") "*")
+      "*"
       [(Verso.Syntax.para
         "para{"
         [(Verso.Syntax.text (str "\"bar\""))
          (Verso.Syntax.linebreak
           "line!"
           (str "\"\\n\""))]
-        "}")])])]
+        "}")])]
+    "}")]
 All input consumed.
 -/
 #guard_msgs in
@@ -2382,8 +2621,9 @@ All input consumed.
 /--
 info: Success! Final stack:
   [(Verso.Syntax.ul
+    "ul{"
     [(Verso.Syntax.li
-      (bullet (column "0") "*")
+      "*"
       [(Verso.Syntax.para
         "para{"
         [(Verso.Syntax.text (str "\"foo\""))
@@ -2403,14 +2643,15 @@ info: Success! Final stack:
         [(Verso.Syntax.text (str "\"abc\""))]
         "}")])
      (Verso.Syntax.li
-      (bullet (column "0") "*")
+      "*"
       [(Verso.Syntax.para
         "para{"
         [(Verso.Syntax.text (str "\"bar\""))
          (Verso.Syntax.linebreak
           "line!"
           (str "\"\\n\""))]
-        "}")])])]
+        "}")])]
+    "}")]
 All input consumed.
 -/
 #guard_msgs in
@@ -2419,35 +2660,40 @@ All input consumed.
 /--
 info: Success! Final stack:
   [(Verso.Syntax.ul
+    "ul{"
     [(Verso.Syntax.li
-      (bullet (column "0") "*")
+      "*"
       [(Verso.Syntax.para
         "para{"
         [(Verso.Syntax.text (str "\"foo\""))]
         "}")
        (Verso.Syntax.ul
+        "ul{"
         [(Verso.Syntax.li
-          (bullet (column "2") "*")
+          "*"
           [(Verso.Syntax.para
             "para{"
             [(Verso.Syntax.text (str "\"bar\""))]
-            "}")])])])
+            "}")])]
+        "}")])
      (Verso.Syntax.li
-      (bullet (column "0") "*")
+      "*"
       [(Verso.Syntax.para
         "para{"
         [(Verso.Syntax.text
           (str "\"more outer\""))]
-        "}")])])]
+        "}")])]
+    "}")]
 All input consumed.
 -/
 #guard_msgs in
   #eval blocks {} |>.test! "* foo\n  * bar\n* more outer"
 
 /--
-info: Failure @35 (⟨2, 15⟩): unexpected end of input; expected %%% (at line beginning), '![', '$$', '$', '[', '[^' or beginning of line at ⟨2, 15⟩
+info: Failure @35 (⟨2, 15⟩): unexpected end of input; expected %%% (at line beginning), '![', '$$', '$', '[', '[^', beginning of line at ⟨2, 15⟩ or beginning of line or sequence of nestable block openers at ⟨2, 15⟩
 Final stack:
   [(Verso.Syntax.dl
+    "ul{"
     [(Verso.Syntax.desc
       ":"
       [(Verso.Syntax.text
@@ -2459,7 +2705,8 @@ Final stack:
         (str "\"Let's say more!\""))]
       "=>"
       [(Verso.Syntax.metadata_block <missing>)
-       <missing>])])]
+       <missing>])]
+    "}")]
 Remaining: ""
 -/
 #guard_msgs in
@@ -2468,6 +2715,7 @@ Remaining: ""
 /--
 info: Success! Final stack:
   [(Verso.Syntax.dl
+    "ul{"
     [(Verso.Syntax.desc
       ":"
       [(Verso.Syntax.text
@@ -2477,7 +2725,8 @@ info: Success! Final stack:
         "para{"
         [(Verso.Syntax.text
           (str "\"Let's say more!\""))]
-        "}")])])]
+        "}")])]
+    "}")]
 All input consumed.
 -/
 #guard_msgs in
@@ -2487,6 +2736,7 @@ All input consumed.
 info: Failure @47 (⟨7, 0⟩): expected indentation at least 1
 Final stack:
   [(Verso.Syntax.dl
+    "ul{"
     [(Verso.Syntax.desc
       ":"
       [(Verso.Syntax.text
@@ -2501,7 +2751,8 @@ Final stack:
       ":"
       [(Verso.Syntax.text (str "\" more\""))]
       "=>"
-      <missing>)])]
+      <missing>)]
+    "}")]
 Remaining: ""
 -/
 #guard_msgs in
@@ -2510,6 +2761,7 @@ Remaining: ""
 /--
 info: Success! Final stack:
   [(Verso.Syntax.dl
+    "ul{"
     [(Verso.Syntax.desc
       ":"
       [(Verso.Syntax.text
@@ -2528,7 +2780,8 @@ info: Success! Final stack:
         "para{"
         [(Verso.Syntax.text
           (str "\"even more!\""))]
-        "}")])])]
+        "}")])]
+    "}")]
 All input consumed.
 -/
 #guard_msgs in
@@ -2538,6 +2791,7 @@ All input consumed.
 /--
 info: Success! Final stack:
   [(Verso.Syntax.dl
+    "ul{"
     [(Verso.Syntax.desc
       ":"
       [(Verso.Syntax.text
@@ -2555,7 +2809,8 @@ info: Success! Final stack:
       [(Verso.Syntax.para
         "para{"
         [(Verso.Syntax.text (str "\"stuff\""))]
-        "}")])])]
+        "}")])]
+    "}")]
 All input consumed.
 -/
 #guard_msgs in
@@ -2565,12 +2820,14 @@ All input consumed.
 info: Failure @21 (⟨3, 0⟩): expected indentation at least 1
 Final stack:
   [(Verso.Syntax.dl
+    "ul{"
     [(Verso.Syntax.desc
       ":"
       [(Verso.Syntax.text
         (str "\" an excellent idea\""))]
       "=>"
-      <missing>)])
+      <missing>)]
+    "}")
    (Verso.Syntax.para
     "para{"
     [(Verso.Syntax.text
@@ -2588,19 +2845,23 @@ Remaining: "Let's say more!\n\nhello"
 /--
 info: Success! Final stack:
   [(Verso.Syntax.ol
+    "ol("
     (num "1")
+    ")"
+    "{"
     [(Verso.Syntax.li
-      (bullet (column "0") "1.")
+      "1."
       [(Verso.Syntax.para
         "para{"
         [(Verso.Syntax.text (str "\"Hello\""))]
         "}")])
      (Verso.Syntax.li
-      (bullet (column "0") "2.")
+      "2."
       [(Verso.Syntax.para
         "para{"
         [(Verso.Syntax.text (str "\"World\""))]
-        "}")])])]
+        "}")])]
+    "}")]
 All input consumed.
 -/
 #guard_msgs in
@@ -2609,13 +2870,17 @@ All input consumed.
 /--
 info: Success! Final stack:
   [(Verso.Syntax.ol
+    "ol("
     (num "1")
+    ")"
+    "{"
     [(Verso.Syntax.li
-      (bullet (column "1") "1.")
+      "1."
       [(Verso.Syntax.para
         "para{"
         [(Verso.Syntax.text (str "\"Hello\""))]
-        "}")])])]
+        "}")])]
+    "}")]
 All input consumed.
 -/
 #guard_msgs in
@@ -2624,21 +2889,29 @@ All input consumed.
 /--
 info: Success! Final stack:
   [(Verso.Syntax.ol
+    "ol("
     (num "1")
+    ")"
+    "{"
     [(Verso.Syntax.li
-      (bullet (column "0") "1.")
+      "1."
       [(Verso.Syntax.para
         "para{"
         [(Verso.Syntax.text (str "\"Hello\""))]
-        "}")])])
+        "}")])]
+    "}")
    (Verso.Syntax.ol
+    "ol("
     (num "2")
+    ")"
+    "{"
     [(Verso.Syntax.li
-      (bullet (column "1") "2.")
+      "2."
       [(Verso.Syntax.para
         "para{"
         [(Verso.Syntax.text (str "\"World\""))]
-        "}")])])]
+        "}")])]
+    "}")]
 All input consumed.
 -/
 #guard_msgs in
@@ -2647,19 +2920,23 @@ All input consumed.
 /--
 info: Success! Final stack:
   [(Verso.Syntax.ol
+    "ol("
     (num "1")
+    ")"
+    "{"
     [(Verso.Syntax.li
-      (bullet (column "1") "1.")
+      "1."
       [(Verso.Syntax.para
         "para{"
         [(Verso.Syntax.text (str "\"Hello\""))]
         "}")])
      (Verso.Syntax.li
-      (bullet (column "1") "2.")
+      "2."
       [(Verso.Syntax.para
         "para{"
         [(Verso.Syntax.text (str "\"World\""))]
-        "}")])])]
+        "}")])]
+    "}")]
 All input consumed.
 -/
 #guard_msgs in
@@ -2713,11 +2990,16 @@ Remaining: "* not regular_ emphasis"
 #guard_msgs in
   #eval blocks {} |>.test! "*This is _strong* not regular_ emphasis"
 
+
 /--
 info: Success! Final stack:
   (Verso.Syntax.header
-   "#"
-   [(Verso.Syntax.text (str "\"Header!\""))])
+   "header("
+   (num "0")
+   ")"
+   "{"
+   [(Verso.Syntax.text (str "\"Header!\""))]
+   "}")
 All input consumed.
 -/
 #guard_msgs in
@@ -2726,12 +3008,30 @@ All input consumed.
 /--
 info: Success! Final stack:
   [(Verso.Syntax.header
-    "#"
-    [(Verso.Syntax.text (str "\"Header!\""))])]
+    "header("
+    (num "0")
+    ")"
+    "{"
+    [(Verso.Syntax.text (str "\"Header!\""))]
+    "}")]
 All input consumed.
 -/
 #guard_msgs in
   #eval blocks {} |>.test! "# Header!\n"
+
+/--
+info: Success! Final stack:
+  [(Verso.Syntax.header
+    "header("
+    (num "1")
+    ")"
+    "{"
+    [(Verso.Syntax.text (str "\"Header!\""))]
+    "}")]
+All input consumed.
+-/
+#guard_msgs in
+  #eval blocks {} |>.test! "## Header!\n"
 
 /--
 info: Success! Final stack:
@@ -2813,7 +3113,6 @@ Final stack:
     `foo
     []
     "\n"
-    "\n"
     [(Verso.Syntax.para
       "para{"
       [(Verso.Syntax.text (str "\"Indeed.\""))]
@@ -2826,7 +3125,6 @@ Final stack:
       ":::"
       <missing>
       []
-      "\n"
       "\n"
       []
       <missing>)]
@@ -2866,7 +3164,6 @@ Final stack:
     `foo
     []
     "\n"
-    "\n"
     [(Verso.Syntax.para
       "para{"
       [(Verso.Syntax.text (str "\"Indeed.\""))]
@@ -2880,7 +3177,6 @@ Final stack:
     ":::"
     <missing>
     []
-    "\n"
     "\n"
     []
     <missing>)]
@@ -2916,7 +3212,6 @@ Final stack:
     `foo
     [(Verso.Syntax.anon (num "5"))]
     "\n"
-    "\n"
     [(Verso.Syntax.para
       "para{"
       [(Verso.Syntax.text (str "\"Indeed.\""))]
@@ -2930,7 +3225,6 @@ Final stack:
     "::::"
     `a
     []
-    "\n"
     "\n"
     [(Verso.Syntax.para
       "para{"
@@ -2996,10 +3290,10 @@ All input consumed.
 /--
 info: Success! Final stack:
   (Verso.Syntax.codeblock
-   (column "1")
    "```"
    [`scheme []]
-   "(define x 4)\nx\n"
+   "\n"
+   (str "\"(define x 4)\\nx\\n\"")
    "```")
 All input consumed.
 -/
@@ -3009,10 +3303,10 @@ All input consumed.
 /--
 info: Success! Final stack:
   (Verso.Syntax.codeblock
-   (column "0")
    "```"
    [`scheme []]
-   " (define x 4)\n x\n"
+   "\n"
+   (str "\" (define x 4)\\n x\\n\"")
    "```")
 All input consumed.
 -/
@@ -3023,10 +3317,10 @@ All input consumed.
 /--
 info: Success! Final stack:
   (Verso.Syntax.codeblock
-   (column "1")
    "```"
    []
-   "(define x 4)\nx\n"
+   "\n"
+   (str "\"(define x 4)\\nx\\n\"")
    "```")
 All input consumed.
 -/
@@ -3036,10 +3330,10 @@ All input consumed.
 /--
 info: Success! Final stack:
   (Verso.Syntax.codeblock
-   (column "1")
    "```"
    []
-   "(define x 4)\nx\n"
+   "\n"
+   (str "\"(define x 4)\\nx\\n\"")
    "```")
 All input consumed.
 -/
@@ -3050,10 +3344,10 @@ All input consumed.
 /--
 info: Success! Final stack:
   (Verso.Syntax.codeblock
-   (column "0")
    "```"
    [`scheme []]
-   " (define x 4)\n x\n"
+   "\n"
+   (str "\" (define x 4)\\n x\\n\"")
    "```")
 All input consumed.
 -/
@@ -3063,10 +3357,10 @@ All input consumed.
 /--
 info: Success! Final stack:
   (Verso.Syntax.codeblock
-   (column "0")
    "```"
    [`scheme []]
-   "(define x 4)\nx\n"
+   "\n"
+   (str "\"(define x 4)\\nx\\n\"")
    "```")
 All input consumed.
 -/
@@ -3078,10 +3372,10 @@ All input consumed.
 info: Failure @32 (⟨5, 0⟩): expected column 0
 Final stack:
   (Verso.Syntax.codeblock
-   (column "0")
    "```"
    [`scheme []]
-   "(define x 4)\nx\n"
+   "\n"
+   (str "\"(define x 4)\\nx\\n\"")
    <missing>)
 Remaining: "more"
 -/
@@ -3091,7 +3385,6 @@ Remaining: "more"
 /--
 info: Success! Final stack:
   (Verso.Syntax.codeblock
-   (column "0")
    "```"
    [`scheme
     [(Verso.Syntax.named
@@ -3099,7 +3392,8 @@ info: Success! Final stack:
       ":="
       (str "\"chicken\""))
      (Verso.Syntax.anon (num "43"))]]
-   "(define x 4)\nx\n"
+   "\n"
+   (str "\"(define x 4)\\nx\\n\"")
    "```")
 All input consumed.
 -/
@@ -3113,14 +3407,14 @@ x
 /--
 info: Success! Final stack:
   (Verso.Syntax.codeblock
-   (column "0")
    "```"
    [`scheme
     [(Verso.Syntax.named
       `dialect
       ":="
       (str "\"chicken\""))]]
-   "(define x 4)\nx\n"
+   "\n"
+   (str "\"(define x 4)\\nx\\n\"")
    "```")
 All input consumed.
 -/
@@ -3135,14 +3429,14 @@ x
 info: Failure @30 (⟨1, 30⟩): expected ')'
 Final stack:
   (Verso.Syntax.codeblock
-   (column "0")
    "```"
    [`scheme
     [(Verso.Syntax.named
       `dialect
       ":="
       (str "\"chicken\""))]]
-   "(define x 4)\nx\n"
+   "\n"
+   (str "\"(define x 4)\\nx\\n\"")
    "```")
 Remaining: "\n(define x 4)\nx\n```"
 -/
@@ -3157,10 +3451,10 @@ x
 info: Failure @25 (⟨3, 0⟩): expected column 1
 Final stack:
   (Verso.Syntax.codeblock
-   (column "1")
    "```"
    [`scheme []]
    "\n"
+   (str "\"\\n\"")
    <missing>)
 Remaining: "x\n```"
 -/
@@ -3171,10 +3465,10 @@ Remaining: "x\n```"
 info: Failure @32 (⟨4, 3⟩): expected column 1
 Final stack:
   (Verso.Syntax.codeblock
-   (column "1")
    "```"
    [`scheme []]
-   "(define x 4)\nx\n"
+   "\n"
+   (str "\"(define x 4)\\nx\\n\"")
    <missing>)
 Remaining: ""
 -/
@@ -3185,10 +3479,10 @@ Remaining: ""
 info: Failure @25 (⟨4, 3⟩): expected column 1
 Final stack:
   (Verso.Syntax.codeblock
-   (column "1")
    "```"
    []
-   "(define x 4)\nx\n"
+   "\n"
+   (str "\"(define x 4)\\nx\\n\"")
    <missing>)
 Remaining: ""
 -/
@@ -3199,10 +3493,10 @@ Remaining: ""
 info: Failure @28 (⟨4, 3⟩): expected column 1
 Final stack:
   (Verso.Syntax.codeblock
-   (column "1")
    "```"
    []
-   "(define x 4)\nx\n"
+   "\n"
+   (str "\"(define x 4)\\nx\\n\"")
    <missing>)
 Remaining: ""
 -/
@@ -3212,15 +3506,16 @@ Remaining: ""
 /--
 info: Success! Final stack:
   (Verso.Syntax.ul
+   "ul{"
    [(Verso.Syntax.li
-     (bullet (column "1") "*")
+     "*"
      [(Verso.Syntax.para
        "para{"
        [(Verso.Syntax.text
          (str "\"Here's a bullet\""))]
        "}")])
     (Verso.Syntax.li
-     (bullet (column "1") "*")
+     "*"
      [(Verso.Syntax.para
        "para{"
        [(Verso.Syntax.text
@@ -3228,13 +3523,13 @@ info: Success! Final stack:
           "\"and another with some code in it\""))]
        "}")
       (Verso.Syntax.codeblock
-       (column "4")
        "````"
        [`lean []]
-       "hey\n\nthere\n"
+       "\n"
+       (str "\"hey\\n\\nthere\\n\"")
        "````")])
     (Verso.Syntax.li
-     (bullet (column "1") "*")
+     "*"
      [(Verso.Syntax.para
        "para{"
        [(Verso.Syntax.text
@@ -3242,7 +3537,8 @@ info: Success! Final stack:
         (Verso.Syntax.linebreak
          "line!"
          (str "\"\\n\""))]
-       "}")])])
+       "}")])]
+   "}")
 All input consumed.
 -/
 #guard_msgs in
@@ -3260,8 +3556,9 @@ All input consumed.
 /--
 info: Success! Final stack:
   (Verso.Syntax.ul
+   "ul{"
    [(Verso.Syntax.li
-     (bullet (column "0") "*")
+     "*"
      [(Verso.Syntax.para
        "para{"
        [(Verso.Syntax.code
@@ -3276,8 +3573,9 @@ info: Success! Final stack:
         (Verso.Syntax.text (str "\" commands\""))]
        "}")
       (Verso.Syntax.ul
+       "ul{"
        [(Verso.Syntax.li
-         (bullet (column "2") "*")
+         "*"
          [(Verso.Syntax.para
            "para{"
            [(Verso.Syntax.link
@@ -3313,13 +3611,14 @@ info: Success! Final stack:
               "\" command can now define recursive inductive types:\""))]
            "}")
           (Verso.Syntax.codeblock
-           (column "4")
            "```"
            [`lean []]
-           "structure Tree where\n  n : Nat\n  children : Fin n → Tree\n\ndef Tree.size : Tree → Nat\n  | {n, children} => Id.run do\n    let mut s := 0\n    for h : i in [0 : n] do\n      s := s + (children ⟨i, h.2⟩).size\n    pure s\n"
+           "\n"
+           (str
+            "\"structure Tree where\\n  n : Nat\\n  children : Fin n → Tree\\n\\ndef Tree.size : Tree → Nat\\n  | {n, children} => Id.run do\\n    let mut s := 0\\n    for h : i in [0 : n] do\\n      s := s + (children ⟨i, h.2⟩).size\\n    pure s\\n\"")
            "```")])
         (Verso.Syntax.li
-         (bullet (column "2") "*")
+         "*"
          [(Verso.Syntax.para
            "para{"
            [(Verso.Syntax.link
@@ -3333,7 +3632,9 @@ info: Success! Final stack:
                "\"https://github.com/leanprover/lean4/pull/5814\"")
               ")"))
             (Verso.Syntax.text (str "\" \""))]
-           "}")])])])])
+           "}")])]
+       "}")])]
+   "}")
 All input consumed.
 -/
 #guard_msgs in
@@ -3562,7 +3863,6 @@ info: Success! Final stack:
    `multiPara
    []
    "\n"
-   "\n"
    [(Verso.Syntax.para
      "para{"
      [(Verso.Syntax.text (str "\"foo\""))]
@@ -3579,7 +3879,6 @@ info: Success! Final stack:
    "::::"
    `multiPara
    []
-   "\n"
    "\n"
    [(Verso.Syntax.para
      "para{"
@@ -3601,7 +3900,6 @@ info: Success! Final stack:
      ":="
      (str "\"amazing!\""))]
    "\n"
-   "\n"
    [(Verso.Syntax.para
      "para{"
      [(Verso.Syntax.text (str "\"foo\""))]
@@ -3620,19 +3918,20 @@ info: Success! Final stack:
    `multiPara
    []
    "\n"
-   "\n"
    [(Verso.Syntax.para
      "para{"
      [(Verso.Syntax.text (str "\"foo\""))]
      "}")
     (Verso.Syntax.ul
+     "ul{"
      [(Verso.Syntax.li
-       (bullet (column "2") "*")
+       "*"
        [(Verso.Syntax.para
          "para{"
          [(Verso.Syntax.text
            (str "\"List item \""))]
-         "}")])])]
+         "}")])]
+     "}")]
    ":::")
 All input consumed.
 -/
@@ -3646,19 +3945,20 @@ info: Success! Final stack:
    `multiPara
    [(Verso.Syntax.anon `thing)]
    "\n"
-   "\n"
    [(Verso.Syntax.para
      "para{"
      [(Verso.Syntax.text (str "\"foo\""))]
      "}")
     (Verso.Syntax.ul
+     "ul{"
      [(Verso.Syntax.li
-       (bullet (column "2") "*")
+       "*"
        [(Verso.Syntax.para
          "para{"
          [(Verso.Syntax.text
            (str "\"List item \""))]
-         "}")])])]
+         "}")])]
+     "}")]
    ":::")
 All input consumed.
 -/
@@ -3672,19 +3972,20 @@ info: Success! Final stack:
    `multiPara
    []
    "\n"
-   "\n"
    [(Verso.Syntax.para
      "para{"
      [(Verso.Syntax.text (str "\"foo\""))]
      "}")
     (Verso.Syntax.ul
+     "ul{"
      [(Verso.Syntax.li
-       (bullet (column "1") "*")
+       "*"
        [(Verso.Syntax.para
          "para{"
          [(Verso.Syntax.text
            (str "\"List item \""))]
-         "}")])])]
+         "}")])]
+     "}")]
    ":::")
 All input consumed.
 -/
@@ -3859,8 +4160,9 @@ Final stack:
       (str "\"Error recovery tests:\""))]
     "}")
    (Verso.Syntax.ul
+    "ul{"
     [(Verso.Syntax.li
-      (bullet (column "0") "*")
+      "*"
       [(Verso.Syntax.para
         "para{"
         [(Verso.Syntax.link
@@ -3870,7 +4172,7 @@ Final stack:
           <missing>)]
         "}")])
      (Verso.Syntax.li
-      (bullet (column "0") "*")
+      "*"
       [(Verso.Syntax.para
         "para{"
         [(Verso.Syntax.link
@@ -3884,7 +4186,7 @@ Final stack:
           <missing>)]
         "}")])
      (Verso.Syntax.li
-      (bullet (column "0") "*")
+      "*"
       [(Verso.Syntax.para
         "para{"
         [(Verso.Syntax.link
@@ -3907,7 +4209,7 @@ Final stack:
           <missing>)]
         "}")])
      (Verso.Syntax.li
-      (bullet (column "0") "*")
+      "*"
       [(Verso.Syntax.para
         "para{"
         [(Verso.Syntax.link
@@ -3921,21 +4223,21 @@ Final stack:
            <missing>))]
         "}")])
      (Verso.Syntax.li
-      (bullet (column "0") "*")
+      "*"
       [(Verso.Syntax.para
         "para{"
         [(Verso.Syntax.image
           "!["
-          "busted image alt text"
+          (str "\"busted image alt text\"")
           <missing>)]
         "}")])
      (Verso.Syntax.li
-      (bullet (column "0") "*")
+      "*"
       [(Verso.Syntax.para
         "para{"
         [(Verso.Syntax.image
           "!["
-          "busted image link"
+          (str "\"busted image link\"")
           "]"
           (Verso.Syntax.url
            "("
@@ -3943,7 +4245,7 @@ Final stack:
            <missing>))]
         "}")])
      (Verso.Syntax.li
-      (bullet (column "0") "*")
+      "*"
       [(Verso.Syntax.para
         "para{"
         [(Verso.Syntax.text (str "\"a \""))
@@ -3954,7 +4256,7 @@ Final stack:
           <missing>)]
         "}")])
      (Verso.Syntax.li
-      (bullet (column "0") "*")
+      "*"
       [(Verso.Syntax.para
         "para{"
         [(Verso.Syntax.text (str "\"very \""))
@@ -3974,7 +4276,8 @@ Final stack:
            (Verso.Syntax.text
             (str "\" but don't forget...\""))]
           <missing>)]
-        "}")])])
+        "}")])]
+    "}")
    (Verso.Syntax.para
     "para{"
     [(Verso.Syntax.text
@@ -4032,3 +4335,382 @@ Error recovery tests:
 a paragraph with [a bad link syntax](http://example.com
 is OK. The rest *works*.
 "#
+
+section
+-- Test that the antiquotes match the parser's output
+open Lean Elab Command
+
+set_option pp.rawOnError true
+
+/--
+info: "This is a paragraph."
+---
+info: line!"\n"
+---
+info: "Two lines."
+-/
+#guard_msgs in
+#eval show CommandElabM Unit from do
+  let stx : TSyntax `block := ⟨← block {} |>.parseString "This is a paragraph.\nTwo lines."⟩
+  if let `(block|para[$txt*]) := stx then
+    for t in txt do logInfo t
+  else logError m!"Didn't match {stx}"
+
+/--
+info: [Error pretty printing syntax: format: uncaught backtrack exception. Falling back to raw printer.]
+(Verso.Syntax.li "*" [(Verso.Syntax.para "para{" [(Verso.Syntax.text (str "\"One\""))] "}")])
+---
+info: [Error pretty printing syntax: format: uncaught backtrack exception. Falling back to raw printer.]
+(Verso.Syntax.li
+ "*"
+ [(Verso.Syntax.para "para{" [(Verso.Syntax.text (str "\"Two\""))] "}")
+  (Verso.Syntax.ul
+   "ul{"
+   [(Verso.Syntax.li "*" [(Verso.Syntax.para "para{" [(Verso.Syntax.text (str "\"A\""))] "}")])]
+   "}")])
+-/
+#guard_msgs in
+#eval show CommandElabM Unit from do
+  let stx : TSyntax `block := ⟨← block {} |>.parseString "* One\n* Two\n  * A"⟩
+  if let `(block|ul{$items*}) := stx then
+    for t in items do logInfo t
+  else logError m!"Didn't match {stx}"
+
+/--
+info: 1
+---
+info: [Error pretty printing syntax: format: uncaught backtrack exception. Falling back to raw printer.]
+(Verso.Syntax.li "1." [(Verso.Syntax.para "para{" [(Verso.Syntax.text (str "\"One\""))] "}")])
+---
+info: [Error pretty printing syntax: format: uncaught backtrack exception. Falling back to raw printer.]
+(Verso.Syntax.li
+ "2."
+ [(Verso.Syntax.para "para{" [(Verso.Syntax.text (str "\"Two\""))] "}")
+  (Verso.Syntax.ol
+   "ol("
+   (num "1")
+   ")"
+   "{"
+   [(Verso.Syntax.li "1)" [(Verso.Syntax.para "para{" [(Verso.Syntax.text (str "\"A\""))] "}")])]
+   "}")])
+-/
+#guard_msgs in
+#eval show CommandElabM Unit from do
+  let stx : TSyntax `block := ⟨← block {} |>.parseString "1. One\n2. Two\n  1) A"⟩
+  if let `(block|ol($n){$items*}) := stx then
+    logInfo n
+    for t in items do logInfo t
+  else logError m!"Didn't match {stx}"
+
+/--
+info: [Error pretty printing syntax: format: uncaught backtrack exception. Falling back to raw printer.]
+(Verso.Syntax.desc
+ ":"
+ [(Verso.Syntax.text (str "\" One\""))]
+ "=>"
+ [(Verso.Syntax.para "para{" [(Verso.Syntax.text (str "\"En\""))] "}")])
+---
+info: [Error pretty printing syntax: format: uncaught backtrack exception. Falling back to raw printer.]
+(Verso.Syntax.desc
+ ":"
+ [(Verso.Syntax.text (str "\" Two\""))]
+ "=>"
+ [(Verso.Syntax.para "para{" [(Verso.Syntax.text (str "\"To\""))] "}")])
+-/
+#guard_msgs in
+#eval show CommandElabM Unit from do
+  let stx : TSyntax `block := ⟨← block {} |>.parseString ": One\n\n En\n\n: Two\n\n  To"⟩
+  if let `(block|dl{$items*}) := stx then
+    for t in items do logInfo t
+  else logError m!"Didn't match {stx}"
+
+/-- info: "Code\n" -/
+#guard_msgs in
+#eval show CommandElabM Unit from do
+  let stx : TSyntax `block := ⟨← block {} |>.parseString "```\nCode\n```\n"⟩
+  if let `(block|``` | $s ```) := stx then
+    logInfo s
+  else logError m!"Didn't match {stx}"
+
+/--
+info: lean
+---
+info: hasArg:=true
+---
+info: "Code\n"
+-/
+#guard_msgs in
+#eval show CommandElabM Unit from do
+  let stx : TSyntax `block := ⟨← block {} |>.parseString "```lean (hasArg := true)\nCode\n```\n"⟩
+  if let `(block|``` $n $args* | $s ```) := stx then
+    logInfo n
+    for a in args do logInfo a
+    logInfo s
+  else logError m!"Didn't match {stx}"
+
+/--
+info: [Error pretty printing syntax: format: uncaught backtrack exception. Falling back to raw printer.]
+(Verso.Syntax.ul
+ "ul{"
+ [(Verso.Syntax.li "*" [(Verso.Syntax.para "para{" [(Verso.Syntax.text (str "\"Abc\""))] "}")])]
+ "}")
+-/
+#guard_msgs in
+#eval show CommandElabM Unit from do
+  let stx : TSyntax `block := ⟨← block {} |>.parseString "> * Abc"⟩
+  if let `(block|> $blks*) := stx then
+    for b in blks do logInfo b
+  else logError m!"Didn't match {stx}"
+
+/--
+info: "lean"
+---
+info: "https://lean-lang.org"
+-/
+#guard_msgs in
+#eval show CommandElabM Unit from do
+  let stx : TSyntax `block := ⟨← block {} |>.parseString "[lean]: https://lean-lang.org"⟩
+  if let `(block|[$x]: $url) := stx then
+    logInfo x
+    logInfo url
+  else logError m!"Didn't match {stx}"
+
+/--
+info: "lean"
+---
+info: "see "
+---
+info: [Error pretty printing syntax: format: uncaught backtrack exception. Falling back to raw printer.]
+(Verso.Syntax.link
+ "["
+ [(Verso.Syntax.text (str "\"the website\""))]
+ "]"
+ (Verso.Syntax.url "(" (str "\"https://lean-lang.org\"") ")"))
+-/
+#guard_msgs in
+#eval show CommandElabM Unit from do
+  let stx : TSyntax `block := ⟨← block {} |>.parseString "[^lean]: see [the website](https://lean-lang.org)"⟩
+  if let `(block|[^$name]: $txt*) := stx then
+    logInfo name
+    for t in txt do logInfo t
+  else logError m!"Didn't match {stx}"
+
+/--
+info: paragraph
+---
+info: [Error pretty printing syntax: format: uncaught backtrack exception. Falling back to raw printer.]
+(Verso.Syntax.para "para{" [(Verso.Syntax.text (str "\"blah blah:\""))] "}")
+---
+info: [Error pretty printing syntax: format: uncaught backtrack exception. Falling back to raw printer.]
+(Verso.Syntax.ul
+ "ul{"
+ [(Verso.Syntax.li
+   "*"
+   [(Verso.Syntax.para
+     "para{"
+     [(Verso.Syntax.text (str "\"List\""))
+      (Verso.Syntax.linebreak "line!" (str "\"\\n\""))
+      (Verso.Syntax.text (str "\"More\""))]
+     "}")])]
+ "}")
+-/
+#guard_msgs in
+#eval show CommandElabM Unit from do
+  let stx : TSyntax `block := ⟨← block {} |>.parseString ":::paragraph\nblah blah:\n * List\nMore\n:::"⟩
+  if let `(block|:::$x $args* {$bs*}) := stx then
+    logInfo x
+    for a in args do logInfo a
+    for b in bs do logInfo b
+  else logError m!"Didn't match {stx}"
+
+/--
+info: 1
+---
+info: "Header!"
+-/
+#guard_msgs in
+#eval show CommandElabM Unit from do
+  let stx : TSyntax `block := ⟨← block {} |>.parseString "## Header!\n"⟩
+  if let `(block|header($n){$inlines}) := stx then
+    logInfo n
+    logInfo inlines
+  else logError "Didn't match"
+
+
+-- Inlines
+
+/-- info: "abc" -/
+#guard_msgs in
+#eval show CommandElabM Unit from do
+  let stx : TSyntax `block := ⟨← inline {} |>.parseString "abc"⟩
+  if let `(inline|$s:str) := stx then
+    logInfo s
+  else logError m!"Didn't match {stx}"
+
+/-- info: "abc" -/
+#guard_msgs in
+#eval show CommandElabM Unit from do
+  let stx : TSyntax `block := ⟨← inline {} |>.parseString "_abc_"⟩
+  if let `(inline|_[$i*]) := stx then
+    for x in i do logInfo x
+  else logError m!"Didn't match {stx}"
+
+/-- info: "abc" -/
+#guard_msgs in
+#eval show CommandElabM Unit from do
+  let stx : TSyntax `block := ⟨← inline {} |>.parseString "*abc*"⟩
+  if let `(inline|*[$i*]) := stx then
+    for x in i do logInfo x
+  else logError m!"Didn't match {stx}"
+
+/--
+info: "abc"
+---
+info: "http://lean-lang.org"
+-/
+#guard_msgs in
+#eval show CommandElabM Unit from do
+  let stx : TSyntax `block := ⟨← inline {} |>.parseString "[abc](http://lean-lang.org)"⟩
+  if let `(inline|link[$i*]($url)) := stx then
+    for x in i do logInfo x
+    logInfo url
+  else logError m!"Didn't match {stx}"
+
+/--
+info: "abc"
+---
+info: "lean"
+-/
+#guard_msgs in
+#eval show CommandElabM Unit from do
+  let stx : TSyntax `block := ⟨← inline {} |>.parseString "[abc][lean]"⟩
+  if let `(inline|link[$i*][$ref]) := stx then
+    for x in i do logInfo x
+    logInfo ref
+  else logError m!"Didn't match {stx}"
+
+/-- info: "note" -/
+#guard_msgs in
+#eval show CommandElabM Unit from do
+  let stx : TSyntax `block := ⟨← inline {} |>.parseString "[^note]"⟩
+  if let `(inline|footnote($ref)) := stx then
+    logInfo ref
+  else logError m!"Didn't match {stx}"
+
+/-- info: "\n" -/
+#guard_msgs in
+#eval show CommandElabM Unit from do
+  let stx : TSyntax `block := ⟨← inline {} |>.parseString "\n"⟩
+  if let `(inline|line! $s) := stx then
+    logInfo s
+  else logError m!"Didn't match {stx}"
+
+/-- info: "abc" -/
+#guard_msgs in
+#eval show CommandElabM Unit from do
+  let stx : TSyntax `block := ⟨← inline {} |>.parseString "`abc`"⟩
+  if let `(inline|code($s)) := stx then
+    logInfo s
+  else logError m!"Didn't match {stx}"
+
+/--
+info: role
+---
+info: [Error pretty printing syntax: format: uncaught backtrack exception. Falling back to raw printer.]
+(Verso.Syntax.code "`" (str "\"abc\"") "`")
+-/
+#guard_msgs in
+#eval show CommandElabM Unit from do
+  let stx : TSyntax `block := ⟨← inline {} |>.parseString "{role}`abc`"⟩
+  if let `(inline|role{$x $args*}[$is*]) := stx then
+    logInfo x
+    for arg in args do logInfo arg
+    for i in is do logInfo i
+  else logError m!"Didn't match {stx}"
+
+/--
+info: role
+---
+info: 1
+---
+info: 2
+---
+info: [Error pretty printing syntax: format: uncaught backtrack exception. Falling back to raw printer.]
+(Verso.Syntax.emph "_" [(Verso.Syntax.text (str "\"abc\""))] "_")
+-/
+#guard_msgs in
+#eval show CommandElabM Unit from do
+  let stx : TSyntax `block := ⟨← inline {} |>.parseString "{role 1 2}_abc_"⟩
+  if let `(inline|role{$x $args*}[$is*]) := stx then
+    logInfo x
+    for arg in args do logInfo arg
+    for i in is do logInfo i
+  else logError m!"Didn't match {stx}"
+
+/--
+info: role
+---
+info: "abc "
+---
+info: [Error pretty printing syntax: format: uncaught backtrack exception. Falling back to raw printer.]
+(Verso.Syntax.link "[" [(Verso.Syntax.text (str "\"abc\""))] "]" (Verso.Syntax.url "(" (str "\"url\"") ")"))
+---
+info: " abc"
+-/
+#guard_msgs in
+#eval show CommandElabM Unit from do
+  let stx : TSyntax `block := ⟨← inline {} |>.parseString "{role}[abc [abc](url) abc]"⟩
+  if let `(inline|role{$x $args*}[$is*]) := stx then
+    logInfo x
+    for arg in args do logInfo arg
+    for i in is do logInfo i
+  else logError m!"Didn't match {stx}"
+
+/-- info: "2+s" -/
+#guard_msgs in
+#eval show CommandElabM Unit from do
+  let stx : TSyntax `block := ⟨← inline {} |>.parseString "$`2+s`"⟩
+  if let `(inline|\math code($s)) := stx then
+    logInfo s
+  else logError m!"Didn't match {stx}"
+
+/-- info: "2+s" -/
+#guard_msgs in
+#eval show CommandElabM Unit from do
+  let stx : TSyntax `block := ⟨← inline {} |>.parseString "$$`2+s`"⟩
+  if let `(inline|\displaymath code($s)) := stx then
+    logInfo s
+  else logError m!"Didn't match {stx}"
+
+-- List items
+/--
+info: [Error pretty printing syntax: format: uncaught backtrack exception. Falling back to raw printer.]
+(Verso.Syntax.para "para{" [(Verso.Syntax.text (str "\"A\""))] "}")
+---
+info: [Error pretty printing syntax: format: uncaught backtrack exception. Falling back to raw printer.]
+(Verso.Syntax.para "para{" [(Verso.Syntax.text (str "\"B\""))] "}")
+-/
+#guard_msgs in
+#eval show CommandElabM Unit from do
+  let stx : TSyntax `block := ⟨← block {} |>.parseString "* A\n* B"⟩
+  if let `(block|ul{ * $as* * $bs*}) := stx then
+    for x in as do logInfo x
+    for x in bs do logInfo x
+  else logError m!"Didn't match {stx}"
+
+/--
+info: " A"
+---
+info: [Error pretty printing syntax: format: uncaught backtrack exception. Falling back to raw printer.]
+(Verso.Syntax.para "para{" [(Verso.Syntax.text (str "\"B\""))] "}")
+-/
+#guard_msgs in
+#eval show CommandElabM Unit from do
+  let stx : TSyntax `block := ⟨← block {} |>.parseString ": A\n\n B"⟩
+  if let `(block|dl{ : $as* => $bs*}) := stx then
+    for x in as do logInfo x
+    for x in bs do logInfo x
+  else logError m!"Didn't match {stx}"
+
+
+end

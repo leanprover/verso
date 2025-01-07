@@ -208,19 +208,22 @@ where
   syntactic (text : FileMap) (pos : String.Pos) (stx : Syntax) : Option (Array Syntax) := do
     if includes stx pos |>.getD true then
       match stx with
-        | `<low|(Verso.Syntax.directive  ~opener ~_name ~_args ~_fake ~_fake' ~_contents ~closer )>
-        | `<low|(Verso.Syntax.codeblock ~_ ~opener ~_ ~_ ~closer )> =>
+        | `(block|:::%$opener $_name $_args* {$_contents*}%$closer )
+        | `(block|```%$opener | $_contents ```%$closer)
+        | `(block|```%$opener $_name $_args* | $_contents ```%$closer) =>
           if (includes opener pos).getD false || (includes closer pos).getD false then
             return #[opener, closer]
         | _ =>
           match stx with
-          | `(inline| ${%$opener1 code{%$opener2 $_ }%$closer1 }%$closer2)
-          | `(inline| $${%$opener1 code{%$opener2 $_ }%$closer1 }%$closer2)
+          | `(inline| \math%$opener1 code(%$opener2 $_ )%$closer1)
+          | `(inline| \displaymath%$opener1 code(%$opener2 $_ )%$closer1) =>
+            if (includes opener1 pos).getD false || (includes closer1 pos).getD false || (includes opener2 pos).getD false then
+              return #[opener1, closer1, opener2]
           | `(inline| link[%$opener1 $_* ]%$closer1 (%$opener2 $_ )%$closer2)
           | `(inline| link[%$opener1 $_* ]%$closer1 [%$opener2 $_ ]%$closer2) =>
             if (includes opener1 pos).getD false || (includes closer1 pos).getD false || (includes opener2 pos).getD false || (includes closer2 pos).getD false then
               return #[opener1, closer1, opener2, closer2]
-          |  `(inline| code{%$opener $_ }%$closer) =>
+          |  `(inline| code(%$opener $_ )%$closer) =>
             if (includes opener pos).getD false || (includes closer pos).getD false then
               return #[opener, closer]
           | `(inline| role{%$opener1 $name $_* }%$closer1 [%$opener2 $subjects ]%$closer2) =>
@@ -501,7 +504,8 @@ where
     | ``Verso.Syntax.emph | ``Verso.Syntax.bold =>
       mkTok text .keyword stx[0] ++ go snap text stx[1] ++ mkTok text .keyword stx[2]
     | ``Verso.Syntax.header =>
-      mkTok text .keyword stx[0] ++ go snap text stx[1]
+      -- "header(" level ")" "{" contents "}", with source info for hash marks on "header(" token
+      mkTok text .keyword stx[0] ++ go snap text stx[4]
     | ``Verso.Syntax.link =>
       mkTok text .keyword stx[0] ++ go snap text stx[1] ++ mkTok text .keyword stx[2] ++
       mkTok text .keyword stx[3][0] ++ mkTok text .keyword stx[3][2]
@@ -584,8 +588,7 @@ partial def directiveResizings
     (parents : Array (Syntax × Syntax))
     (subject : Syntax) :
     StateM (Array (Bool × Syntax × Syntax × TextEditBatch)) Unit := do
-  match subject with
-  | `<low|(Verso.Syntax.directive  ~opener ~_name ~_args ~_fake ~_fake' ~(.node _ `null contents) ~closer )> =>
+  if let `(block|:::%$opener $_name $_args* { $contents* }%$closer ) := subject then
     let parents := parents.push (opener, closer)
     if onLine opener || onLine closer then
       if let some edit := parents.flatMapM getIncreases then
@@ -594,11 +597,11 @@ partial def directiveResizings
         modify (·.push (false, opener, closer, edit))
     else
       for s in contents do directiveResizings startPos endPos startLine endLine text parents s
-  | stx@(.node _ _ contents) =>
-    if inRange stx then
+  else if let .node _ _ contents := subject then
+    if inRange subject then
       for s in contents do
         directiveResizings startPos endPos startLine endLine text parents s
-  | _ => pure ()
+  else pure ()
 where
   onLine (stx : Syntax) : Bool := Id.run do
     if startLine != endLine then return false
@@ -632,11 +635,11 @@ where
     let inner ← children.flatMapM getDecreasesIn
     pure (outer ++ inner)
 
-  getDecreasesIn : Syntax → Option TextEditBatch
-    | `<low|(Verso.Syntax.directive  ~opener ~_name ~_args ~_fake ~_fake' ~(.node _ `null contents) ~closer )> => do
+  getDecreasesIn (stx : Syntax) : Option TextEditBatch :=
+    if let `(block|:::%$opener $_name $_args* {$contents*}%$closer) := stx then
       getDecreases (opener, closer) contents
-    | .node _ _ children => children.flatMapM getDecreasesIn
-    | _ => pure #[]
+    else if let .node _ _ children := stx then children.flatMapM getDecreasesIn
+    else pure #[]
 
   getDecrease : Syntax → Option TextEdit
   | stx@(.atom _ colons) => do

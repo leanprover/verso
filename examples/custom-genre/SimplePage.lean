@@ -196,7 +196,7 @@ instance : GenreHtml SimplePage IO where
   part recur metadata | (.mk title titleString _ content subParts) => do
     let incoming := (← HtmlT.state).refTargets[metadata.tag]?
     let content' := if let some i := incoming then
-      let links := i.toArray.map fun t => ListItem.mk 0 #[Doc.Block.para #[Doc.Inline.link #[.text "(link)"] s!"#link-{t}"]]
+      let links := i.toArray.map fun t => ListItem.mk #[Doc.Block.para #[Doc.Inline.link #[.text "(link)"] s!"#link-{t}"]]
       #[Doc.Block.para #[.text "Incoming links:"], Doc.Block.ul links] ++ content
     else content
     -- It's important that this not include the metadata in the recursive call, or the generator

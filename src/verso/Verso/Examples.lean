@@ -51,8 +51,7 @@ info: Verso.Doc.Part.mk
   #[Verso.Doc.Inline.text "My title here"]
   "My title here"
   none
-  #[Verso.Doc.Block.ul
-      #[{ indent := 0, contents := #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "Just a list with one item"]] }]]
+  #[Verso.Doc.Block.ul #[{ contents := #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "Just a list with one item"]] }]]
   #[]
 -/
 #guard_msgs in
@@ -121,16 +120,109 @@ info: Verso.Doc.Part.mk
           none
           #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "More text:"],
             Verso.Doc.Block.ul
-              #[{ indent := 0, contents := #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "and a list"]] },
-                { indent := 0,
-                  contents := #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "with two"],
+              #[{ contents := #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "and a list"]] },
+                { contents := #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "with two"],
                                 Verso.Doc.Block.ul
-                                  #[{ indent := 1,
-                                      contents := #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "and nested"]] }]] }]]
+                                  #[{ contents := #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "and nested"]] }]] }]]
           #[]]]
 -/
 #guard_msgs in
   #eval c
+
+#docs (.none) c' "My title here" :=
+:::::::
+
+# Section 1
+
+a paragraph
+
+## Section 1.1
+
+More text:
+
+1. and a list
+2. with two
+ * and nested
+
+
+
+:::::::
+
+/--
+info: Verso.Doc.Part.mk
+  #[Verso.Doc.Inline.text "My title here"]
+  "My title here"
+  none
+  #[]
+  #[Verso.Doc.Part.mk
+      #[Verso.Doc.Inline.text "Section 1"]
+      "Section 1"
+      none
+      #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "a paragraph"]]
+      #[Verso.Doc.Part.mk
+          #[Verso.Doc.Inline.text "Section 1.1"]
+          "Section 1.1"
+          none
+          #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "More text:"],
+            Verso.Doc.Block.ol
+              1
+              #[{ contents := #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "and a list"]] },
+                { contents := #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "with two"]] }],
+            Verso.Doc.Block.ul #[{ contents := #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "and nested"]] }]]
+          #[]]]
+-/
+#guard_msgs in
+  #eval c'
+
+#docs (.none) c'' "My title here" :=
+:::::::
+
+# Section 1
+
+a paragraph
+
+## Section 1.1
+
+More text:
+
+: A list
+
+  a list
+
+: With stuff
+
+ * and nested
+
+
+:::::::
+
+/--
+info: Verso.Doc.Part.mk
+  #[Verso.Doc.Inline.text "My title here"]
+  "My title here"
+  none
+  #[]
+  #[Verso.Doc.Part.mk
+      #[Verso.Doc.Inline.text "Section 1"]
+      "Section 1"
+      none
+      #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "a paragraph"]]
+      #[Verso.Doc.Part.mk
+          #[Verso.Doc.Inline.text "Section 1.1"]
+          "Section 1.1"
+          none
+          #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "More text:"],
+            Verso.Doc.Block.dl
+              #[{ term := #[Verso.Doc.Inline.text " A list"],
+                  desc := #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "a list"]] },
+                { term := #[Verso.Doc.Inline.text " With stuff"],
+                  desc := #[Verso.Doc.Block.ul
+                              #[{ contents := #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "and nested"]] }]] }]]
+          #[]]]
+-/
+#guard_msgs in
+  #eval c''
+
 
 #docs (.none) d "More writing" :=
 :::::::
@@ -160,8 +252,7 @@ info: Verso.Doc.Part.mk
         Verso.Doc.Block.blockquote
           #[(Verso.Doc.Block.para #[Verso.Doc.Inline.text "I like quotes"]),
             (Verso.Doc.Block.ul
-               #[{ indent := 2,
-                   contents := #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "Also with lists in them"]] }])],
+               #[{ contents := #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "Also with lists in them"]] }])],
         Verso.Doc.Block.para #[Verso.Doc.Inline.text "Also, 2 > 3."]]
       #[]]
 -/

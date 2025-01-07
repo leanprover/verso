@@ -260,12 +260,11 @@ def Arg.syntax : Arg → Syntax
   | .named stx _ _ => stx
 
 structure ListItem (α : Type u) where
-  indent : Nat
   contents : Array α
 deriving Repr, BEq, Inhabited
 
 private def ListItem.toJson (blockToJson : ToJson α) : ListItem α → Json
-  | ⟨i, xs⟩ => json% {"indent": $i, "contents": $(xs.map blockToJson.toJson)}
+  | ⟨xs⟩ => json% {"contents": $(xs.map blockToJson.toJson)}
 
 instance [inst : ToJson α] : ToJson (ListItem α) := ⟨ListItem.toJson inst⟩
 
@@ -310,8 +309,8 @@ instance [ToJson genre.Inline] [ToJson genre.Block] : ToJson (Block genre) := �
 partial def Block.beq [BEq genre.Inline] [BEq genre.Block] : Block genre → Block genre → Bool
   | .para c1, .para c2 => c1 == c2
   | .code c1, .code c2 => c1 == c2
-  | .ul i1, .ul i2 => arrayEq (fun | ⟨indent1, c1⟩, ⟨indent2, c2⟩ => indent1 == indent2 && arrayEq beq c1 c2) i1 i2
-  | .ol n1 i1, .ol n2 i2 => n1 == n2 && arrayEq (fun | ⟨indent1, c1⟩, ⟨indent2, c2⟩ => indent1 == indent2 && arrayEq beq c1 c2) i1 i2
+  | .ul i1, .ul i2 => arrayEq (fun | ⟨c1⟩, ⟨c2⟩ => arrayEq beq c1 c2) i1 i2
+  | .ol n1 i1, .ol n2 i2 => n1 == n2 && arrayEq (fun | ⟨c1⟩, ⟨c2⟩ => arrayEq beq c1 c2) i1 i2
   | .dl i1, .dl i2 =>
     arrayEq (fun | ⟨t1, d1⟩, ⟨t2, d2⟩ => t1 == t2 && arrayEq beq d1 d2) i1 i2
   | .blockquote i1, .blockquote i2 => arrayEq beq i1 i2
@@ -456,9 +455,9 @@ where
     match b with
     | .para contents => .para <$> contents.mapM inline
     | .ul items => .ul <$> items.mapM fun
-      | ListItem.mk n contents => ListItem.mk n <$> contents.mapM block
+      | ListItem.mk contents => ListItem.mk <$> contents.mapM block
     | .ol start items => .ol start <$> items.mapM fun
-      | ListItem.mk n contents => ListItem.mk n <$> contents.mapM block
+      | ListItem.mk contents => ListItem.mk <$> contents.mapM block
     | .dl items => .dl <$> items.mapM fun
       | DescItem.mk t d => DescItem.mk <$> t.mapM inline <*> d.mapM block
     | .blockquote items => .blockquote <$> items.mapM block

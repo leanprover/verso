@@ -59,13 +59,13 @@ def _root_.linebreak.expand : InlineExpander
 
 @[inline_expander Verso.Syntax.emph]
 def _root_.Verso.Syntax.emph.expand : InlineExpander
-  | `(inline| _{ $args* }) => do
+  | `(inline| _[ $args* ]) => do
     ``(Inline.emph #[$[$(← args.mapM elabInline)],*])
   | _ => throwUnsupportedSyntax
 
 @[inline_expander Verso.Syntax.bold]
 def _root_.Verso.Syntax.bold.expand : InlineExpander
-  | `(inline| *{ $args* }) => do
+  | `(inline| *[ $args* ]) => do
     ``(Inline.bold #[$[$(← args.mapM elabInline)],*])
   | _ => throwUnsupportedSyntax
 
@@ -114,20 +114,18 @@ def appFallback
 open Lean.Parser.Term in
 @[inline_expander Verso.Syntax.role]
 def _root_.Verso.Syntax.role.expand : InlineExpander
-  | inline@`(inline| role{$name $args*} [$subjects]) => do
+  | inline@`(inline| role{$name $args*} [$subjects*]) => do
       withRef inline <| withFreshMacroScope <| withIncRecDepth <| do
-        let ⟨.node _ _ subjectArr⟩ := subjects
-          | throwUnsupportedSyntax
         let resolvedName ← realizeGlobalConstNoOverloadWithInfo name
         let exp ← roleExpandersFor resolvedName
         let argVals ← parseArgs args
         if exp.isEmpty then
           -- If no expanders are registered, then try elaborating just as a
           -- function application node
-          return ← appFallback inline name resolvedName argVals subjectArr
+          return ← appFallback inline name resolvedName argVals subjects
         for e in exp do
           try
-            let termStxs ← withFreshMacroScope <| e argVals subjectArr
+            let termStxs ← withFreshMacroScope <| e argVals subjects
             return (← ``(Inline.concat #[$[$termStxs],*]))
           catch
             | ex@(.internal id) =>
@@ -153,15 +151,15 @@ def _root_.Verso.Syntax.link.expand : InlineExpander
 
 @[inline_expander Verso.Syntax.footnote]
 def _root_.Verso.Syntax.link.footnote : InlineExpander
-  | `(inline| [^ $name:str ]) => do
+  | `(inline| footnote( $name:str )) => do
     ``(Inline.footnote $name $(← addFootnoteRef name))
   | _ => throwUnsupportedSyntax
 
 
 @[inline_expander Verso.Syntax.image]
 def _root_.Verso.Syntax.image.expand : InlineExpander
-  | `(inline| image[ $alt:str* ] $dest:link_target) => do
-    let altText := String.join (alt.map (·.getString) |>.toList)
+  | `(inline| image( $alt:str ) $dest:link_target) => do
+    let altText := alt.getString
     let url : TSyntax `term ←
       match dest with
       | `(link_target| ( $url )) =>
@@ -176,20 +174,20 @@ def _root_.Verso.Syntax.image.expand : InlineExpander
 
 @[inline_expander Verso.Syntax.code]
 def _root_.Verso.Syntax.code.expand : InlineExpander
-  |  `(inline| code{ $s }) =>
+  |  `(inline| code( $s )) =>
     ``(Inline.code $s)
   | _ => throwUnsupportedSyntax
 
 
 @[inline_expander Verso.Syntax.inline_math]
 def _root_.Verso.Syntax.inline_math.expand : InlineExpander
-  |  `(inline| ${ code{ $s } }) =>
+  |  `(inline| \math code( $s )) =>
     ``(Inline.math MathMode.inline $s)
   | _ => throwUnsupportedSyntax
 
 @[inline_expander Verso.Syntax.display_math]
 def _root_.Verso.Syntax.display_math.expand : InlineExpander
-  |  `(inline| $${ code{ $s } }) =>
+  |  `(inline| \displaymath code( $s )) =>
     ``(Inline.math MathMode.display $s)
   | _ => throwUnsupportedSyntax
 
@@ -275,19 +273,19 @@ partial def closePartsUntil (outer : Nat) (endPos : String.Pos) : PartElabM Unit
 
 @[part_command Verso.Syntax.header]
 partial def _root_.Verso.Syntax.header.command : PartCommand
-  | stx@(`<low|(Verso.Syntax.header ~(.atom info hashes ) ~(.node _ `null inlines) ) >) => do
+  | stx@`(block|header($headerLevel){$inlines*}) => do
     let titleBits ← liftDocElabM <| inlines.mapM elabInline
     let titleString := headerStxToString (← getEnv) stx
-    let headerLevel := hashes.length
     let ambientLevel ← currentLevel
-    if headerLevel > ambientLevel + 1 then throwErrorAt stx "Wrong header nesting"
+    let headerLevel := headerLevel.getNat + 1
+    if headerLevel > ambientLevel + 1 then throwErrorAt stx "Wrong header nesting - got {headerLevel} but expected at most {ambientLevel}"
     -- New subheader?
     if headerLevel == ambientLevel + 1 then
       -- Prelude is done!
       pure ()
     else
-      if let none := info.getPos? then dbg_trace "No start position for {stx}"
-      closePartsUntil headerLevel info.getPos!
+      if let none := stx.getPos? then dbg_trace "No start position for {stx}"
+      closePartsUntil headerLevel stx.getPos!
 
     -- Start a new subpart
     push {
@@ -356,7 +354,7 @@ def _root_.Verso.Syntax.block_role.expand : BlockExpander := fun block =>
 
 @[block_expander Verso.Syntax.para]
 partial def _root_.Verso.Syntax.para.expand : BlockExpander
-  | `(block| para{ $args:inline* }) => do
+  | `(block| para[ $args:inline* ]) => do
     ``(Block.para #[$[$(← args.mapM elabInline)],*])
   | _ =>
     throwUnsupportedSyntax
@@ -365,8 +363,8 @@ partial def _root_.Verso.Syntax.para.expand : BlockExpander
 def elabLi (block : Syntax) : DocElabM (Syntax × TSyntax `term) :=
   withRef block <|
   match block with
-  | `<low|(Verso.Syntax.li (bullet (column ~(.atom _ n)) ~dot) ~(.node _ `null args) )> => do
-    let item ← ``(ListItem.mk $(Syntax.mkNumLit n) #[$[$(← args.mapM elabBlock)],*])
+  | `(list_item|*%$dot $contents:inline*) => do
+    let item ← ``(ListItem.mk #[$[$(← contents.mapM elabBlock)],*])
     pure (dot, item)
   | _ =>
     dbg_trace "unexpected block {block}"
@@ -374,7 +372,7 @@ def elabLi (block : Syntax) : DocElabM (Syntax × TSyntax `term) :=
 
 @[block_expander Verso.Syntax.ul]
 def _root_.Verso.Syntax.ul.expand : BlockExpander
-  | `<low|(Verso.Syntax.ul ~(.node _ `null itemStxs) )> => do
+  | `(block|ul{$itemStxs*}) => do
     let mut bullets : Array Syntax := #[]
     let mut items : Array (TSyntax `term) := #[]
     for i in itemStxs do
@@ -384,13 +382,13 @@ def _root_.Verso.Syntax.ul.expand : BlockExpander
     let info := DocListInfo.mk bullets itemStxs
     for b in bullets do
       pushInfoLeaf <| .ofCustomInfo {stx := b, value := Dynamic.mk info}
-    ``(Block.ul #[$[$items],*])
+    ``(Block.ul #[$items,*])
   | _ =>
     throwUnsupportedSyntax
 
 @[block_expander Verso.Syntax.ol]
 def _root_.Verso.Syntax.ol.expand : BlockExpander
-  | `<low|(Verso.Syntax.ol (num ~start) ~(.node _ `null itemStxs) )> => do
+  | `(block|ol($start:num){$itemStxs*}) => do
     let mut bullets : Array Syntax := #[]
     let mut items : Array (TSyntax `term) := #[]
     for i in itemStxs do
@@ -400,14 +398,14 @@ def _root_.Verso.Syntax.ol.expand : BlockExpander
     let info := DocListInfo.mk bullets itemStxs
     for b in bullets do
       pushInfoLeaf <| .ofCustomInfo {stx := b, value := Dynamic.mk info}
-    ``(Block.ol $(Syntax.mkNumLit start.getAtomVal) #[$[$items],*])
+    ``(Block.ol $start #[$items,*])
   | _ =>
     throwUnsupportedSyntax
 
 def elabDesc (block : Syntax) : DocElabM (Syntax × TSyntax `term) :=
   withRef block <|
   match block with
-  | `<low|(Verso.Syntax.desc ~colon ~(.node _ `null dts) ~_ ~(.node _ `null dds))> => do
+  | `(desc_item|:%$colon $dts* => $dds*) => do
     let item ← ``(DescItem.mk #[$[$(← dts.mapM elabInline)],*] #[$[$(← dds.mapM elabBlock)],*])
     pure (colon, item)
   | _ =>
@@ -416,7 +414,7 @@ def elabDesc (block : Syntax) : DocElabM (Syntax × TSyntax `term) :=
 
 @[block_expander Verso.Syntax.dl]
 def _root_.Verso.Syntax.dl.expand : BlockExpander
-  | `<low|(Verso.Syntax.dl ~(.node _ `null itemStxs) )> => do
+  | `(block|dl{$itemStxs*}) => do
     let mut colons : Array Syntax := #[]
     let mut items : Array (TSyntax `term) := #[]
     for i in itemStxs do
@@ -432,7 +430,7 @@ def _root_.Verso.Syntax.dl.expand : BlockExpander
 
 @[block_expander Verso.Syntax.blockquote]
 def _root_.Verso.Syntax.blockquote.expand : BlockExpander
-  | `<low|(Verso.Syntax.blockquote ~_ ~(.node _ `null innerBlocks) )> => do
+  | `(block|> $innerBlocks*) => do
     ``(Block.blockquote #[$[$(← innerBlocks.mapM elabBlock)],*])
   | _ =>
     throwUnsupportedSyntax
@@ -440,14 +438,14 @@ def _root_.Verso.Syntax.blockquote.expand : BlockExpander
 
 @[block_expander Verso.Syntax.codeblock]
 def _root_.Verso.Syntax.codeblock.expand : BlockExpander
-  | `<low|(Verso.Syntax.codeblock (column ~(.atom _ _col)) ~_open ~(.node _ `null #[nameStx, .node _ `null argsStx]) ~(.atom info contents) ~_close )> => do
+  | `(block|``` $nameStx:ident $argsStx* | $contents:str ```) => do
       let name ← realizeGlobalConstNoOverloadWithInfo nameStx
       let exp ← codeBlockExpandersFor name
       -- TODO typed syntax here
       let args ← parseArgs <| argsStx.map (⟨·⟩)
       for e in exp do
         try
-          let termStxs ← withFreshMacroScope <| e args (Syntax.mkStrLit (info:=info) contents)
+          let termStxs ← withFreshMacroScope <| e args contents
           return (← ``(Block.concat #[$[$termStxs],*]))
         catch
           | ex@(.internal id) =>
@@ -456,18 +454,17 @@ def _root_.Verso.Syntax.codeblock.expand : BlockExpander
           | ex => throw ex
       dbg_trace "No code block expander for '{nameStx}' ---> '{name}'"
       throwUnsupportedSyntax
-  | `<low|(Verso.Syntax.codeblock (column ~(.atom _ _col)) ~_open ~(.node _ `null #[]) ~(.atom _info contents) ~_close )> =>
-    ``(Block.code $(quote contents))
+  | `(block|``` | $contents:str ```) =>
+    ``(Block.code $(quote contents.getString))
   | _ =>
     throwUnsupportedSyntax
 
 @[block_expander Verso.Syntax.directive]
 def _root_.Verso.Syntax.directive.expand : BlockExpander
-  | `<low|(Verso.Syntax.directive  ~_open ~nameStx ~(.node _ `null argsStx) ~_fake ~_fake' ~(.node _ `null contents) ~_close )> => do
+  | `(block| ::: $nameStx:ident $argsStx* { $contents:block* } ) => do
     let name ← realizeGlobalConstNoOverloadWithInfo nameStx
     let exp ← directiveExpandersFor name
-    -- TODO typed syntax here
-    let args ← parseArgs <| argsStx.map (⟨·⟩)
+    let args ← parseArgs argsStx
     for e in exp do
       try
         let termStxs ← withFreshMacroScope <| e args contents

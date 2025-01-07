@@ -279,7 +279,7 @@ def leanCommand : BlockRoleExpander
 def leanKw : RoleExpander
   | args, #[arg] => do
     ArgParse.run .done args
-    let `(inline|code{ $kw:str }) := arg
+    let `(inline|code( $kw:str )) := arg
       | throwErrorAt arg "Expected code literal with the keyword"
     let hl : SubVerso.Highlighting.Highlighted := .token ⟨.keyword none none none, kw.getString⟩
     pure #[← ``(Inline.other (Blog.InlineExt.customHighlight $(quote hl)) #[Inline.code $(quote kw.getString)])]
@@ -293,7 +293,7 @@ def leanKw : RoleExpander
 def leanTerm : RoleExpander
   | args, #[arg] => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"leanTerm") <| do
     let project ← ArgParse.run (.positional `project .ident) args
-    let `(inline|code{ $name:str }) := arg
+    let `(inline|code( $name:str )) := arg
       | throwErrorAt arg "Expected code literal with the example name"
     let exampleName := name.getString.toName
     let projectExamples ← getSubproject project

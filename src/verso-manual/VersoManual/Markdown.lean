@@ -126,7 +126,7 @@ private partial def blockFromMarkdownAux [Monad m] [MonadQuotation m] [MonadErro
 where
   itemFromMarkdown [Monad m] [MonadQuotation m] [MonadError m] (item : MD4Lean.Li MD4Lean.Block) : MDT m Term Term Term := do
     if item.isTask then throwError "Tasks unsupported"
-    else ``(Verso.Doc.ListItem.mk 0 #[$[$(← item.contents.mapM blockFromMarkdownAux)],*])
+    else ``(Verso.Doc.ListItem.mk #[$[$(← item.contents.mapM blockFromMarkdownAux)],*])
 
 
 def blockFromMarkdown [Monad m] [MonadQuotation m] [MonadError m]
@@ -157,7 +157,7 @@ private partial def blockFromMarkdownAux' : MD4Lean.Block → MDT (Except String
 where
   itemFromMarkdown (item : MD4Lean.Li MD4Lean.Block) : MDT (Except String) (Doc.Block g) (Doc.Inline g) (Doc.ListItem _) := do
     if item.isTask then .error "Tasks unsupported"
-    else .mk 0 <$> item.contents.mapM blockFromMarkdownAux'
+    else .mk <$> item.contents.mapM blockFromMarkdownAux'
 
 
 def blockFromMarkdown'
