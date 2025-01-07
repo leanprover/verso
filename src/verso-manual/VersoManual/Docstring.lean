@@ -940,12 +940,18 @@ def tryParseInlineCodeTactic (str : String) : DocElabM Term := do
     ``(Verso.Doc.Inline.other (Inline.leanFromMarkdown $(quote hls)) #[Verso.Doc.Inline.code $(quote str)])
 
 declare_syntax_cat braces_attr
-syntax attr : braces_attr
-syntax "[" attr "]" : braces_attr
-syntax "@[" attr "]" : braces_attr
+syntax (name := plain) attr : braces_attr
+syntax (name := bracketed) "[" attr "]" : braces_attr
+syntax (name := atBracketed) "@[" attr "]" : braces_attr
+
+private def getAttr : Syntax → Syntax
+  | `(plain| $a)
+  | `(bracketed| [ $a ] )
+  | `(atBracketed| @[ $a ]) => a
+  | _ => .missing
 
 open Lean Elab Term in
-def tryParseInlineCodeAttribute (str : String) : DocElabM Term := do
+def tryParseInlineCodeAttribute (validate := true) (str : String) : DocElabM Term := do
   let loc := (← getRef).getPos?.map (← getFileMap).utf8PosToLspPos
   let src :=
     if let some ⟨line, col⟩ := loc then s!"<docstring at {← getFileName}:{line}:{col}>"
@@ -953,8 +959,23 @@ def tryParseInlineCodeAttribute (str : String) : DocElabM Term := do
   match Parser.runParserCategory (← getEnv) `braces_attr str src with
   | .error e => throw (.error (← getRef) e)
   | .ok stx => DocElabM.withFileMap (.ofString str) <| do
-    let hls ← highlight stx #[] (PersistentArray.empty)
-    ``(Verso.Doc.Inline.other (Inline.leanFromMarkdown $(quote hls)) #[Verso.Doc.Inline.code $(quote str)])
+    let inner := getAttr stx
+    if validate then
+      let attrName ←
+        match inner.getKind with
+        | `Lean.Parser.Attr.simple => pure inner[0].getId
+        | .str (.str (.str (.str .anonymous "Lean") "Parser") "Attr") k => pure k.toName
+        | other =>
+          let allAttrs := attributeExtension.getState (← getEnv) |>.map |>.toArray |>.map (·.fst) |>.qsort (·.toString < ·.toString)
+          throwError "Failed to process attribute kind: {stx.getKind} {isAttribute (← getEnv) stx.getKind} {allAttrs |> repr}"
+      match getAttributeImpl (← getEnv) attrName with
+      | .error e => throwError e
+      | .ok _ =>
+        let hls ← highlight stx #[] (PersistentArray.empty)
+        ``(Verso.Doc.Inline.other (Inline.leanFromMarkdown $(quote hls)) #[Verso.Doc.Inline.code $(quote str)])
+    else
+      let hls ← highlight stx #[] (PersistentArray.empty)
+      ``(Verso.Doc.Inline.other (Inline.leanFromMarkdown $(quote hls)) #[Verso.Doc.Inline.code $(quote str)])
 
 
 private def indentColumn (str : String) : Nat := Id.run do
@@ -1049,31 +1070,30 @@ where
     pure <| .token ⟨.const name sig docs false, str⟩
 
 open Lean Elab Term in
-private def attempt (counter : IO.Ref Nat) (str : String) (xs : List (String → DocElabM α)) : DocElabM α := do
-  let str' := (← counter.get).fold (init := str) (fun _ _ s => "\n" ++ s)
-  counter.modify (· + 1)
+private def attempt (str : String) (xs : List (String → DocElabM α)) : DocElabM α := do
   match xs with
   | [] => throwError "No attempt succeeded"
-  | [x] => x str'
+  | [x] => x str
   | x::y::xs =>
     let info ← getInfoState
     try
       setInfoState {}
-      x str'
+      x str
     catch e =>
       if isAutoBoundImplicitLocalException? e |>.isSome then
         throw e
-      else attempt counter str (y::xs)
+      else attempt str (y::xs)
     finally
       setInfoState info
 
+
 open Lean Elab Term in
-def tryElabInlineCode (counter : IO.Ref Nat) (priorWord : Option String) (str : String) : DocElabM Term := do
+def tryElabInlineCode (priorWord : Option String) (str : String) : DocElabM Term := do
   try
-    attempt counter str <| wordElab priorWord ++ [
+    attempt str <| wordElab priorWord ++ [
       tryElabInlineCodeName,
       tryParseInlineCodeTactic,
-      tryParseInlineCodeAttribute,
+      tryParseInlineCodeAttribute (validate := true),
       tryElabInlineCodeTerm,
       tryElabInlineCodeMetavarTerm,
       withReader (fun ctx => {ctx with autoBoundImplicit := true}) ∘ tryElabInlineCodeTerm,
@@ -1091,14 +1111,14 @@ def tryElabInlineCode (counter : IO.Ref Nat) (priorWord : Option String) (str : 
         ``(Verso.Doc.Inline.code $(quote str))
 where
   wordElab
-    | some "attribute" => [tryParseInlineCodeAttribute]
+    | some "attribute" => [tryParseInlineCodeAttribute (validate := false)]
     | some "tactic" => [tryParseInlineCodeTactic]
     | _ => []
 
 open Lean Elab Term in
-def tryElabBlockCode (counter : IO.Ref Nat) (str : String) : DocElabM Term := do
+def tryElabBlockCode (str : String) : DocElabM Term := do
   try
-    attempt counter str [
+    attempt str [
       tryElabBlockCodeCommand,
       tryElabBlockCodeTerm,
       tryElabBlockCodeCommand (ignoreElabErrors := true),
@@ -1137,16 +1157,11 @@ def blockFromMarkdownWithLean (names : List Name) (b : MD4Lean.Block) : DocElabM
         match max with
         | k + 1 =>
           try
-            -- Count all elaboration attempts, so that identifiers can have a unique range. This is
-            -- a horrible hack to work around the fact that the deduplication code borrowed from the
-            -- language server considers identifiers with the same range to be identical. This is a
-            -- good assumption for real code, but not for snippets extracted from Markdown.
-            let counter ← IO.mkRef 0
             let res ←
               Markdown.blockFromMarkdown b
                 (handleHeaders := Markdown.strongEmphHeaders)
-                (elabInlineCode := tryElabInlineCode counter)
-                (elabBlockCode := tryElabBlockCode counter)
+                (elabInlineCode := tryElabInlineCode)
+                (elabBlockCode := tryElabBlockCode)
             synthesizeSyntheticMVarsUsingDefault
 
             discard <| addAutoBoundImplicits #[]
