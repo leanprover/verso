@@ -114,20 +114,18 @@ def appFallback
 open Lean.Parser.Term in
 @[inline_expander Verso.Syntax.role]
 def _root_.Verso.Syntax.role.expand : InlineExpander
-  | inline@`(inline| role{$name $args*} [$subjects]) => do
+  | inline@`(inline| role{$name $args*} [$subjects*]) => do
       withRef inline <| withFreshMacroScope <| withIncRecDepth <| do
-        let ⟨.node _ _ subjectArr⟩ := subjects
-          | throwUnsupportedSyntax
         let resolvedName ← realizeGlobalConstNoOverloadWithInfo name
         let exp ← roleExpandersFor resolvedName
         let argVals ← parseArgs args
         if exp.isEmpty then
           -- If no expanders are registered, then try elaborating just as a
           -- function application node
-          return ← appFallback inline name resolvedName argVals subjectArr
+          return ← appFallback inline name resolvedName argVals subjects
         for e in exp do
           try
-            let termStxs ← withFreshMacroScope <| e argVals subjectArr
+            let termStxs ← withFreshMacroScope <| e argVals subjects
             return (← ``(Inline.concat #[$[$termStxs],*]))
           catch
             | ex@(.internal id) =>

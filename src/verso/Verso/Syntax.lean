@@ -93,7 +93,7 @@ syntax (name:=linebreak) "line!" str : inline
   character, then the resulting string has a single space stripped from each end.-/
 syntax (name:=code) "code(" str ")" : inline
 /-- A _role_: an extension to the Verso document language in an inline position -/
-syntax (name:=role) "role{" ident argument* "}" "[" inline "]"  : inline
+syntax (name:=role) "role{" ident argument* "}" "[" inline* "]"  : inline
 /-- Inline mathematical notation (equivalent to LaTeX's `$` notation) -/
 syntax (name:=inline_math) "\\math" code : inline
 /-- Display-mode mathematical notation -/
