@@ -1781,11 +1781,13 @@ def progress.descr : BlockDescr where
 
     let tacticPercent := undocTactics.size.toFloat * 100.0 / allTactics.size.toFloat
 
+    let namespaces := namespaces.qsort (·.toString ≤ ·.toString)
+
     return {{
       <dl>
         {{namespaces.map fun ns =>
           let wanted := check.findD ns []
-          let notDocumented := wanted.filter (!ok.contains ·)
+          let notDocumented := wanted.filter (!ok.contains ·) |>.mergeSort (fun x y => x.toString < y.toString)
           let percent := notDocumented.length.toFloat * 100.0 / wanted.length.toFloat
           {{
             <dt><code>{{ns.toString}}</code></dt>
@@ -1797,7 +1799,7 @@ def progress.descr : BlockDescr where
                 </summary>
                 {{notDocumented |>.map (·.toString) |> String.intercalate ", " }}
                 <pre>
-                  {{ notDocumented.map ("{docstring " ++ ·.toString ++ "}\n") |> String.join }}
+                  {{ notDocumented.map ("{docstring " ++ ·.toString ++ "}\n\n") |> String.join }}
                 </pre>
                 <pre>
                   "```exceptions\n"
