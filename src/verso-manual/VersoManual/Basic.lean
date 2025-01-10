@@ -773,6 +773,18 @@ def TraverseState.linkTargets (state : TraverseState) : Code.LinkTargets where
      (state.resolveDomainObject syntaxKindDomain k.toString).toOption) <&>
     fun (path, htmlId) => path.link (some htmlId.toString)
 
+def sectionNumberString (num : Array Numbering) : String := Id.run do
+  let mut out := ""
+  for n in num do
+    out := out ++
+      match n with
+      | .nat n => s!"{n}."
+      | .letter a => s!"{a}."
+  out
+
+def sectionString (ctxt : TraverseContext) : Option String :=
+  ctxt.sectionNumber.mapM id |>.map sectionNumberString
+
 
 def sectionDomain := `Verso.Genre.Manual.section
 
@@ -825,9 +837,17 @@ instance : Traverse Manual TraverseM where
               externalTags := st.externalTags.insert id (path, slug)
             }
           meta := {meta with tag := external}
-        let jsonMetadata := Json.arr ((← read).inPart part |>.headers.map (Json.str ·.titleString))
+        let jsonMetadata :=
+          Json.arr ((← read).inPart part |>.headers.map (fun h => json%{"title": $h.titleString, "number": $(h.metadata.bind (·.assignedNumber) |>.map toString)}))
+        let title := (← read).inPart part |>.headers |>.back? |>.map (·.titleString)
+        -- During the traverse pass, the root section (which is unnumbered) is in the header stack.
+        -- Including it causes all sections to be unnumbered, so it needs to be dropped here.
+        -- TODO: harmonize this situation with HTML generation and give it a clean API
+        let num :=
+          ((← read).inPart part |>.headers[1:]).toArray.map (fun (h : PartHeader) => h.metadata.bind (·.assignedNumber))
+            |>.mapM _root_.id |>.map sectionNumberString
         modify (·.saveDomainObject sectionDomain n id
-                 |>.saveDomainObjectData sectionDomain n jsonMetadata)
+                 |>.saveDomainObjectData sectionDomain n (json%{"context": $jsonMetadata, "title": $title, "sectionNum": $num}))
 
     -- Assign section numbers to subsections
     let mut i := 1
@@ -920,17 +940,6 @@ instance : TeX.GenreTeX Manual (ReaderT ExtensionImpls IO) where
       | panic! s!"Inline {i.name} doesn't support TeX"
     impl go id i.data content
 
-def sectionNumberString (num : Array Numbering) : String := Id.run do
-  let mut out := ""
-  for n in num do
-    out := out ++
-      match n with
-      | .nat n => s!"{n}."
-      | .letter a => s!"{a}."
-  out
-
-def sectionString (ctxt : TraverseContext) : Option String :=
-  ctxt.sectionNumber.mapM id |>.map sectionNumberString
 
 def sectionHtml (ctxt : TraverseContext) : Html :=
   match sectionString ctxt with
