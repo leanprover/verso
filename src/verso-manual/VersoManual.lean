@@ -120,6 +120,8 @@ structure Config where
   extraFiles : List (System.FilePath × String) := []
   extraCss : List String := []
   extraJs : List String := []
+  /-- Extra elements to add to every page's `head` tag -/
+  extraHead : Array Output.Html := #[]
   draft : Bool := false
   /-- The URL from which to draw the logo to show, if any -/
   logo : Option String := none
@@ -283,6 +285,7 @@ def page (toc : List Html.Toc) (path : Path) (textTitle : String) (htmlTitle con
     (issueLink := config.issueLink)
     (extraStylesheets := config.extraCss ++ state.extraCssFiles.toList.map ("/-verso-css/" ++ ·.1))
     (extraJsFiles := config.extraJs.toArray ++ state.extraJsFiles.map ("/-verso-js/" ++ ·.1))
+    (extraHead := config.extraHead)
 
 def Config.relativize (config : Config) (path : Path) (html : Html) : Html :=
   if config.baseURL.isSome then
@@ -471,7 +474,7 @@ def manualMain (text : Part Manual)
   ReaderT.run go extensionImpls
 
 where
-  opts (cfg : Config)
+  opts (cfg : Config) : List String → ReaderT ExtensionImpls IO Config
     | ("--output"::dir::more) => opts {cfg with destination := dir} more
     | ("--depth"::n::more) => opts {cfg with htmlDepth := n.toNat!} more
     | ("--with-tex"::more) => opts {cfg with emitTeX := true} more

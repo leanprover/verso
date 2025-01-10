@@ -479,6 +479,7 @@ def page
     (textTitle : String) (htmlTitle : Html) (contents : Html)
     (extraCss : HashSet String)
     (extraJs : HashSet String)
+    (extraHead : Array Html := #[])
     (showNavButtons : Bool := true)
     (base : Option String := none)
     (logo : Option String := none)
@@ -507,6 +508,7 @@ def page
         {{extraStylesheets.map (fun url => {{<link rel="stylesheet" href={{url}}/> }})}}
         {{extraCss.toArray.map ({{<style>{{Html.text false ·}}</style>}})}}
         {{extraJs.toArray.map ({{<script>{{Html.text false ·}}</script>}})}}
+        {{extraHead}}
       </head>
       <body>
         <label for="toggle-toc" id="toggle-toc-click">
