@@ -1666,6 +1666,7 @@ def conv.descr : BlockDescr where
     Index.addEntry id {term := Doc.Inline.code <| «show»}
 
     modify fun st => st.saveDomainObject convDomain name.toString id
+    modify fun st => st.saveDomainObjectData convDomain name.toString (json%{"userName": $«show»})
 
     pure none
   toHtml := some <| fun _goI goB id info contents =>
