@@ -1529,7 +1529,10 @@ def tactic.descr : BlockDescr where
     let _ ← Verso.Genre.Manual.externalTag id path <| show.getD tactic.userName
     Index.addEntry id {term := Doc.Inline.code <| show.getD tactic.userName}
 
-    modify fun st => st.saveDomainObject tacticDomain tactic.internalName.toString id
+    modify fun st =>
+      st
+        |>.saveDomainObject tacticDomain tactic.internalName.toString id
+        |>.saveDomainObjectData tacticDomain tactic.internalName.toString (json%{"userName": $tactic.userName})
 
     pure none
   toHtml := some <| fun _goI goB id info contents =>
