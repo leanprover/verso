@@ -69,7 +69,6 @@ def deftech : RoleExpander
   | args, content => do
     let {key, normalize} ← TechArgs.parse.run args
 
-
     -- Heuristically guess at the string and key (usually works)
     let str := inlineToString (← getEnv) <| mkNullNode content
     let k := key.getD str
@@ -82,8 +81,9 @@ def deftech : RoleExpander
 
     let stx ←
       `(let content : Array (Doc.Inline Verso.Genre.Manual) := #[$content,*]
-        let k := ($(quote key) : Option String).getD (techString (Doc.Inline.concat content))
-        Doc.Inline.other {Inline.deftech with data := if $(quote normalize) then normString k else k} content)
+        let asString : String := techString (Doc.Inline.concat content)
+        let k : String := ($(quote key) : Option String).getD asString
+        Doc.Inline.other {Inline.deftech with data := ToJson.toJson (if $(quote normalize) then normString k else k, asString)} content)
     return #[stx]
 
 /-- Adds an internal identifier as a target for a given glossary entry -/
@@ -98,6 +98,10 @@ def Glossary.addEntry [Monad m] [MonadState TraverseState m] [MonadLiftT IO m] [
 
 @[inline_extension deftech]
 def deftech.descr : InlineDescr where
+  init st := st
+    |>.setDomainTitle technicalTermDomain "Terminology"
+    |>.setDomainDescription technicalTermDomain "Definitions of technical terms"
+
   traverse id data _contents := do
     -- TODO use internal tags in the first round to respect users' assignments (cf part tag assignment)
     let path ← (·.path) <$> read
@@ -106,9 +110,15 @@ def deftech.descr : InlineDescr where
     | .error err =>
       logError err
       return none
-    | .ok (key : String) =>
+    | .ok ((key, term) : (String × String) ) =>
       Glossary.addEntry id key
+      modify fun st =>
+        st
+          |>.saveDomainObject technicalTermDomain key id
+          |>.saveDomainObjectData technicalTermDomain key (json%{"term": $term})
+
       pure none
+
   toTeX :=
     some <| fun go _id _ content => do
       pure <| .seq <| ← content.mapM fun b => do

@@ -736,6 +736,7 @@ def TraverseState.resolveTag (st : TraverseState) (tag : Slug) : Option (Path ×
 
 def docstringDomain := `Verso.Genre.Manual.doc
 def tacticDomain := `Verso.Genre.Manual.doc.tactic
+def technicalTermDomain := `Verso.Genre.Manual.doc.tech
 def syntaxKindDomain := `Verso.Genre.Manual.doc.syntaxKind
 def optionDomain := `Verso.Genre.Manual.doc.option
 def convDomain := `Verso.Genre.Manual.doc.tactic.conv
