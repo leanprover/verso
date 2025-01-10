@@ -1655,7 +1655,8 @@ open Lean Elab Term Parser Tactic Doc in
 @[block_extension conv]
 def conv.descr : BlockDescr where
   init st := st
-    |>.setDomainTitle convDomain "Conversion Tactics" |>.setDomainDescription convDomain "Tatics for performing targeted rewriting of subterms"
+    |>.setDomainTitle convDomain "Conversion Tactics"
+    |>.setDomainDescription convDomain "Tactics for performing targeted rewriting of subterms"
 
   traverse id info _ := do
     let .ok (name, «show», _docs?) := FromJson.fromJson? (α := Name × String × Option String) info
