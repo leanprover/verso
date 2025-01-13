@@ -73,18 +73,16 @@ end Index
 
 
 structure Index where
-  entries : HashSet (Index.Entry × InternalId) := {}
-  see : HashSet Index.See := {}
+  entries : Array (Index.Entry × InternalId) := #[]
+  see : Array Index.See := {}
 
 instance : ToJson Index where
-  toJson | ⟨entries, see⟩ => ToJson.toJson (entries.toArray.qsort cmpEntry, see.toArray.qsort (· < ·))
-where
-  cmpEntry | (e1, id1), (e2, id2) => e1 < e2 || (e1 == e2 && id1 < id2)
+  toJson | ⟨entries, see⟩ => ToJson.toJson (entries, see)
 
 instance : FromJson Index where
   fromJson? v := do
     let ((entries : Array _), (sees : Array _)) ← FromJson.fromJson? v
-    pure ⟨HashSet.insertMany {} entries, HashSet.insertMany {} sees⟩
+    pure ⟨entries, sees⟩
 
 def Inline.index : Inline where
   name := `Verso.Genre.Manual.index
@@ -101,8 +99,12 @@ def Index.addEntry [Monad m] [MonadState TraverseState m] [MonadLiftT IO m] [Mon
   let ist : Option (Except String Index) := (← get).get? indexState
   match ist with
   | some (.error err) => logError err
-  | some (.ok v) => modify (·.set indexState {v with entries := v.entries.insert (entry, id)})
-  | none => modify (·.set indexState {entries := (HashSet.empty.insert (entry, id)) : Index})
+  | some (.ok v) =>
+    modify fun i =>
+      i.set indexState {v with entries := v.entries.binInsert cmpEntry (entry, id)}
+  | none => modify (·.set indexState {entries := #[(entry, id)] : Index})
+where
+  cmpEntry | (e1, id1), (e2, id2) => e1 < e2 || (e1 == e2 && id1 < id2)
 
 @[inline_extension index]
 def index.descr : InlineDescr where
@@ -150,8 +152,8 @@ def see.descr : InlineDescr where
       let ist : Option (Except String Index) := (← get).get? indexState
       match ist with
       | some (.error err) => logError err; return none
-      | some (.ok v) => modify (·.set indexState {v with see := v.see.insert see})
-      | none => modify (·.set indexState {entries := {}, see := (HashSet.empty.insert see) : Index})
+      | some (.ok v) => modify (·.set indexState {v with see := v.see.binInsert (· < ·) see})
+      | none => modify (·.set indexState {entries := {}, see := #[see] : Index})
       pure none
   toTeX :=
     some <| fun _ _ _ _ => do
