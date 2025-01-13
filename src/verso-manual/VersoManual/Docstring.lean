@@ -1688,13 +1688,45 @@ def conv.descr : BlockDescr where
   extraCss := [highlightingStyle, docstringStyle]
   extraJs := [highlightingJs]
 
+/--
+A progress tracker that shows how many symbols are documented.
+
+The parameter `present` tracks which names' docs are present in the manual, sorted by namespace. The
+set of names in each namespace is encoded as a string with space separation to prevent running out
+of heartbeats while quoting larger data structures.
+-/
 def Block.progress
     (namespaces exceptions : Array Name)
-    (present : List (Name × List Name))
+    (present : List (Name × String))
     (tactics : Array Name) :
     Block where
   name := `Verso.Genre.Manual.Block.progress
   data := toJson (namespaces, exceptions, present, tactics)
+
+private def ignore (env : Environment) (x : Name) : Bool :=
+    isPrivateName x ||
+    isAuxRecursor env x ||
+    isNoConfusion env x ||
+    isRecCore env x ||
+    env.isProjectionFn x ||
+    Lean.Linter.isDeprecated env x ||
+    x.hasNum ||
+    x.isInternalOrNum ||
+    (`noConfusionType).isSuffixOf x ||
+    let str := x.getString!
+    str ∈ ["sizeOf_spec", "sizeOf_eq", "brecOn", "ind", "ofNat_toCtorIdx", "inj", "injEq", "induct"] ||
+    "proof_".isPrefixOf str && (str.drop 6).all (·.isDigit) ||
+    "match_".isPrefixOf str && (str.drop 6).all (·.isDigit) ||
+    "eq_".isPrefixOf str && (str.drop 3).all (·.isDigit)
+
+open Lean Elab Command in
+#eval show CommandElabM Unit from do
+  let mut names := #[]
+  for (x, _) in (← getEnv).constants do
+    if x matches .str .anonymous _ && !(ignore (← getEnv) x) then
+      names := names.push x
+  names := names.qsort (·.toString < ·.toString)
+  elabCommand <| ← `(private def $(mkIdent `allRootNames) : Array Name := #[$(names.map (quote · : Name → Term)),*])
 
 @[directive_expander progress]
 def progress : DirectiveExpander
@@ -1719,6 +1751,8 @@ def progress : DirectiveExpander
         | _ => throwErrorAt nameStx "Expected 'namespace' or 'exceptions'"
       | _ => throwErrorAt block "Expected code block named 'namespace' or 'exceptions'"
     let mut present : NameMap NameSet := {}
+    let mut rootPresent : NameSet := {}
+
     for ns in namespaces do
       present := present.insert ns {}
     for (x, info) in (← getEnv).constants do
@@ -1729,31 +1763,23 @@ def progress : DirectiveExpander
       | .ctorInfo _ => continue -- constructors are documented as children of their types
       | _ => pure ()
       if ← Meta.isInstance x then continue
-      let mut ns := x
-      while !ns.isAnonymous && !(ns.getString!.get 0 |>.isUpper) do
-        ns := ns.getPrefix
-      if let some v := present.find? ns then
-        present := present.insert ns (v.insert x)
-    let present' := present.toList.map (fun x => (x.1, x.2.toList))
+      if let .str .anonymous s := x then
+        if let some v := present.find? `_root_ then
+          present := present.insert `_root_ (v.insert x)
+        else
+          present := present.insert `_root_ (NameSet.empty.insert x)
+      else
+        let mut ns := x
+        while !ns.isAnonymous && !(ns.getString!.get 0 |>.isUpper) do
+          ns := ns.getPrefix
+        if let some v := present.find? ns then
+          present := present.insert ns (v.insert x)
+
+    let present' := present.toList.map (fun x => (x.1, String.intercalate " " (x.2.toList.map Name.toString)))
     let allTactics : Array Name := (← Elab.Tactic.Doc.allTacticDocs).map (fun t => t.internalName)
 
     pure #[← ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.progress $(quote namespaces.toArray) $(quote exceptions.toArray) $(quote present') $(quote allTactics)) #[])]
-where
-  ignore (env : Environment) (x : Name) : Bool :=
-    isPrivateName x ||
-    isAuxRecursor env x ||
-    isNoConfusion env x ||
-    isRecCore env x ||
-    env.isProjectionFn x ||
-    Lean.Linter.isDeprecated env x ||
-    x.hasNum ||
-    x.isInternalOrNum ||
-    (`noConfusionType).isSuffixOf x ||
-    let str := x.getString!
-    str ∈ ["sizeOf_spec", "sizeOf_eq", "brecOn", "ind", "ofNat_toCtorIdx", "inj", "injEq", "induct"] ||
-    "proof_".isPrefixOf str && (str.drop 6).all (·.isDigit) ||
-    "match_".isPrefixOf str && (str.drop 6).all (·.isDigit) ||
-    "eq_".isPrefixOf str && (str.drop 3).all (·.isDigit)
+
 
 @[block_extension Block.progress]
 def progress.descr : BlockDescr where
@@ -1770,10 +1796,12 @@ def progress.descr : BlockDescr where
       let x := name.toName
       ok := ok.insert x
 
-    let .ok ((namespaces : Array Name), (exceptions : Array Name), (present : List (Name × List Name)), (allTactics : Array Name)) := fromJson? info
+
+    let .ok ((namespaces : Array Name), (exceptions : Array Name), (present : List (Name × String)), (allTactics : Array Name)) := fromJson? info
       | panic! "Can't deserialize progress bar state"
 
-    let check : NameMap (List Name) := present.foldr (init := {}) (fun x z => z.insert x.1 <| x.2)
+    let check : NameMap (List Name) := present.foldr (init := {}) (fun x z => z.insert x.1 <| (x.2.splitOn " ").map String.toName)
+    let check := check.insert `_root_ allRootNames.toList
 
     let undocTactics ← allTactics.filterM fun tacticName => do
       let st ← Doc.Html.HtmlT.state (genre := Manual)
