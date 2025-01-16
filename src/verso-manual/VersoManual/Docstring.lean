@@ -1469,9 +1469,10 @@ def Block.tactic (name : Lean.Elab.Tactic.Doc.TacticDoc) («show» : Option Stri
 structure TacticDocsOptions where
   name : String ⊕ Name
   «show» : Option String
+  replace : Bool
 
-def TacticDocsOptions.parse [Monad m] [MonadError m] : ArgParse m TacticDocsOptions :=
-  TacticDocsOptions.mk <$> .positional `name strOrName <*> .named `show .string true
+def TacticDocsOptions.parse [Monad m] [MonadError m] [MonadLiftT CoreM m] : ArgParse m TacticDocsOptions :=
+  TacticDocsOptions.mk <$> .positional `name strOrName <*> .named `show .string true <*> (.named `replace .bool true <&> (·.getD false))
 where
   strOrName : ValDesc m (String ⊕ Name) := {
     description := m!"First token in tactic, or canonical parser name"
@@ -1508,9 +1509,12 @@ def tactic : DirectiveExpander
     Doc.PointOfInterest.save (← getRef) tactic.userName
     if tactic.userName == tactic.internalName.toString && opts.show.isNone then
       throwError "No `show` option provided, but the tactic has no user-facing token name"
-    let some mdAst := tactic.docString >>= MD4Lean.parse
-      | throwError "Failed to parse docstring as Markdown"
-    let contents ← mdAst.blocks.mapM (blockFromMarkdownWithLean [])
+    let contents ←
+      if opts.replace then pure #[]
+      else
+        let some mdAst := tactic.docString >>= MD4Lean.parse
+          | throwError "Failed to parse docstring as Markdown"
+        mdAst.blocks.mapM (blockFromMarkdownWithLean [])
     let userContents ← more.mapM elabBlock
     pure #[← ``(Verso.Doc.Block.other (Block.tactic $(quote tactic) $(quote opts.show)) #[$(contents ++ userContents),*])]
 
