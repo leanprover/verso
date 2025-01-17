@@ -1344,6 +1344,25 @@ where
       pure #[← ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.docstringSection "Constructors") #[$ctorSigs,*])]
     | _ => pure #[]
 
+@[block_role_expander includeDocstring]
+def includeDocstring : BlockRoleExpander
+  | args, #[] => do
+    let name ← (ArgParse.positional `name .resolvedName).run args
+    let blockStx ←
+      match ← Lean.findDocString? (← getEnv) name with
+      | none => throwError m!"No docs found for '{name}'"; pure #[]
+      | some docs =>
+        let some ast := MD4Lean.parse docs
+          | throwError "Failed to parse docstring as Markdown"
+
+        ast.blocks.mapM (blockFromMarkdownWithLean [name])
+
+    if Lean.Linter.isDeprecated (← getEnv) name then
+      logInfo m!"'{name}' is deprecated"
+
+    pure blockStx
+
+  | _args, more => throwErrorAt more[0]! "Unexpected block argument"
 
 def Block.optionDocs (name : Name) (defaultValue : Option Highlighted) : Block where
   name := `Verso.Genre.Manual.optionDocs
