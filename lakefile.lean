@@ -2,7 +2,7 @@ import Lake
 open Lake DSL
 
 require subverso from git "https://github.com/leanprover/subverso.git"@"main"
-require MD4Lean from git "https://github.com/david-christiansen/md4lean"@"parser"
+require MD4Lean from git "https://github.com/acmepjz/md4lean"@"main"
 
 package verso where
   precompileModules := true
