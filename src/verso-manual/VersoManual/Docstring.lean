@@ -1152,6 +1152,8 @@ private def attempt (str : String) (xs : List (String → DocElabM α)) : DocEla
 open Lean Elab Term in
 def tryElabInlineCode (allTactics : Array Tactic.Doc.TacticDoc) (extraKeywords : Array String)
     (priorWord : Option String) (str : String) : DocElabM Term := do
+  -- Don't try to show Lake commands as terms
+  if "lake ".isPrefixOf str then return (← ``(Verso.Doc.Inline.code $(quote str)))
   try
     attempt str <| wordElab priorWord ++ [
       tryElabInlineCodeName,
@@ -1344,18 +1346,31 @@ where
       pure #[← ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.docstringSection "Constructors") #[$ctorSigs,*])]
     | _ => pure #[]
 
+structure IncludeDocstringOpts where
+  name : Name
+  elaborate : Bool
+
+def IncludeDocstringOpts.parse [Monad m] [MonadError m] [MonadLiftT CoreM m] : ArgParse m IncludeDocstringOpts :=
+  IncludeDocstringOpts.mk <$> .positional `name .resolvedName <*> .namedD `elab .bool true
+
 @[block_role_expander includeDocstring]
 def includeDocstring : BlockRoleExpander
   | args, #[] => do
-    let name ← (ArgParse.positional `name .resolvedName).run args
+    let {name, elaborate} ← IncludeDocstringOpts.parse.run args
+
+    let fromMd :=
+      if elaborate then
+        blockFromMarkdownWithLean [name]
+      else
+        Markdown.blockFromMarkdown (handleHeaders := Markdown.strongEmphHeaders)
+
     let blockStx ←
       match ← Lean.findDocString? (← getEnv) name with
       | none => throwError m!"No docs found for '{name}'"; pure #[]
       | some docs =>
         let some ast := MD4Lean.parse docs
           | throwError "Failed to parse docstring as Markdown"
-
-        ast.blocks.mapM (blockFromMarkdownWithLean [name])
+        ast.blocks.mapM fromMd
 
     if Lean.Linter.isDeprecated (← getEnv) name then
       logInfo m!"'{name}' is deprecated"
