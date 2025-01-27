@@ -1152,6 +1152,8 @@ private def attempt (str : String) (xs : List (String → DocElabM α)) : DocEla
 open Lean Elab Term in
 def tryElabInlineCode (allTactics : Array Tactic.Doc.TacticDoc) (extraKeywords : Array String)
     (priorWord : Option String) (str : String) : DocElabM Term := do
+  -- Don't try to show Lake commands as terms
+  if "lake ".isPrefixOf str then return (← ``(Verso.Doc.Inline.code $(quote str)))
   try
     attempt str <| wordElab priorWord ++ [
       tryElabInlineCodeName,
@@ -1344,6 +1346,38 @@ where
       pure #[← ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.docstringSection "Constructors") #[$ctorSigs,*])]
     | _ => pure #[]
 
+structure IncludeDocstringOpts where
+  name : Name
+  elaborate : Bool
+
+def IncludeDocstringOpts.parse [Monad m] [MonadError m] [MonadLiftT CoreM m] : ArgParse m IncludeDocstringOpts :=
+  IncludeDocstringOpts.mk <$> .positional `name .resolvedName <*> .namedD `elab .bool true
+
+@[block_role_expander includeDocstring]
+def includeDocstring : BlockRoleExpander
+  | args, #[] => do
+    let {name, elaborate} ← IncludeDocstringOpts.parse.run args
+
+    let fromMd :=
+      if elaborate then
+        blockFromMarkdownWithLean [name]
+      else
+        Markdown.blockFromMarkdown (handleHeaders := Markdown.strongEmphHeaders)
+
+    let blockStx ←
+      match ← Lean.findDocString? (← getEnv) name with
+      | none => throwError m!"No docs found for '{name}'"; pure #[]
+      | some docs =>
+        let some ast := MD4Lean.parse docs
+          | throwError "Failed to parse docstring as Markdown"
+        ast.blocks.mapM fromMd
+
+    if Lean.Linter.isDeprecated (← getEnv) name then
+      logInfo m!"'{name}' is deprecated"
+
+    pure blockStx
+
+  | _args, more => throwErrorAt more[0]! "Unexpected block argument"
 
 def Block.optionDocs (name : Name) (defaultValue : Option Highlighted) : Block where
   name := `Verso.Genre.Manual.optionDocs
@@ -1469,9 +1503,10 @@ def Block.tactic (name : Lean.Elab.Tactic.Doc.TacticDoc) («show» : Option Stri
 structure TacticDocsOptions where
   name : String ⊕ Name
   «show» : Option String
+  replace : Bool
 
-def TacticDocsOptions.parse [Monad m] [MonadError m] : ArgParse m TacticDocsOptions :=
-  TacticDocsOptions.mk <$> .positional `name strOrName <*> .named `show .string true
+def TacticDocsOptions.parse [Monad m] [MonadError m] [MonadLiftT CoreM m] : ArgParse m TacticDocsOptions :=
+  TacticDocsOptions.mk <$> .positional `name strOrName <*> .named `show .string true <*> (.named `replace .bool true <&> (·.getD false))
 where
   strOrName : ValDesc m (String ⊕ Name) := {
     description := m!"First token in tactic, or canonical parser name"
@@ -1508,9 +1543,12 @@ def tactic : DirectiveExpander
     Doc.PointOfInterest.save (← getRef) tactic.userName
     if tactic.userName == tactic.internalName.toString && opts.show.isNone then
       throwError "No `show` option provided, but the tactic has no user-facing token name"
-    let some mdAst := tactic.docString >>= MD4Lean.parse
-      | throwError "Failed to parse docstring as Markdown"
-    let contents ← mdAst.blocks.mapM (blockFromMarkdownWithLean [])
+    let contents ←
+      if opts.replace then pure #[]
+      else
+        let some mdAst := tactic.docString >>= MD4Lean.parse
+          | throwError "Failed to parse docstring as Markdown"
+        mdAst.blocks.mapM (blockFromMarkdownWithLean [])
     let userContents ← more.mapM elabBlock
     pure #[← ``(Verso.Doc.Block.other (Block.tactic $(quote tactic) $(quote opts.show)) #[$(contents ++ userContents),*])]
 
@@ -1693,13 +1731,45 @@ def conv.descr : BlockDescr where
   extraCss := [highlightingStyle, docstringStyle]
   extraJs := [highlightingJs]
 
+/--
+A progress tracker that shows how many symbols are documented.
+
+The parameter `present` tracks which names' docs are present in the manual, sorted by namespace. The
+set of names in each namespace is encoded as a string with space separation to prevent running out
+of heartbeats while quoting larger data structures.
+-/
 def Block.progress
     (namespaces exceptions : Array Name)
-    (present : List (Name × List Name))
+    (present : List (Name × String))
     (tactics : Array Name) :
     Block where
   name := `Verso.Genre.Manual.Block.progress
   data := toJson (namespaces, exceptions, present, tactics)
+
+private def ignore (env : Environment) (x : Name) : Bool :=
+    isPrivateName x ||
+    isAuxRecursor env x ||
+    isNoConfusion env x ||
+    isRecCore env x ||
+    env.isProjectionFn x ||
+    Lean.Linter.isDeprecated env x ||
+    x.hasNum ||
+    x.isInternalOrNum ||
+    (`noConfusionType).isSuffixOf x ||
+    let str := x.getString!
+    str ∈ ["sizeOf_spec", "sizeOf_eq", "brecOn", "ind", "ofNat_toCtorIdx", "inj", "injEq", "induct"] ||
+    "proof_".isPrefixOf str && (str.drop 6).all (·.isDigit) ||
+    "match_".isPrefixOf str && (str.drop 6).all (·.isDigit) ||
+    "eq_".isPrefixOf str && (str.drop 3).all (·.isDigit)
+
+open Lean Elab Command in
+#eval show CommandElabM Unit from do
+  let mut names := #[]
+  for (x, _) in (← getEnv).constants do
+    if x matches .str .anonymous _ && !(ignore (← getEnv) x) then
+      names := names.push x
+  names := names.qsort (·.toString < ·.toString)
+  elabCommand <| ← `(private def $(mkIdent `allRootNames) : Array Name := #[$(names.map (quote · : Name → Term)),*])
 
 @[directive_expander progress]
 def progress : DirectiveExpander
@@ -1724,6 +1794,8 @@ def progress : DirectiveExpander
         | _ => throwErrorAt nameStx "Expected 'namespace' or 'exceptions'"
       | _ => throwErrorAt block "Expected code block named 'namespace' or 'exceptions'"
     let mut present : NameMap NameSet := {}
+    let mut rootPresent : NameSet := {}
+
     for ns in namespaces do
       present := present.insert ns {}
     for (x, info) in (← getEnv).constants do
@@ -1734,31 +1806,23 @@ def progress : DirectiveExpander
       | .ctorInfo _ => continue -- constructors are documented as children of their types
       | _ => pure ()
       if ← Meta.isInstance x then continue
-      let mut ns := x
-      while !ns.isAnonymous && !(ns.getString!.get 0 |>.isUpper) do
-        ns := ns.getPrefix
-      if let some v := present.find? ns then
-        present := present.insert ns (v.insert x)
-    let present' := present.toList.map (fun x => (x.1, x.2.toList))
+      if let .str .anonymous s := x then
+        if let some v := present.find? `_root_ then
+          present := present.insert `_root_ (v.insert x)
+        else
+          present := present.insert `_root_ (NameSet.empty.insert x)
+      else
+        let mut ns := x
+        while !ns.isAnonymous && !(ns.getString!.get 0 |>.isUpper) do
+          ns := ns.getPrefix
+        if let some v := present.find? ns then
+          present := present.insert ns (v.insert x)
+
+    let present' := present.toList.map (fun x => (x.1, String.intercalate " " (x.2.toList.map Name.toString)))
     let allTactics : Array Name := (← Elab.Tactic.Doc.allTacticDocs).map (fun t => t.internalName)
 
     pure #[← ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.progress $(quote namespaces.toArray) $(quote exceptions.toArray) $(quote present') $(quote allTactics)) #[])]
-where
-  ignore (env : Environment) (x : Name) : Bool :=
-    isPrivateName x ||
-    isAuxRecursor env x ||
-    isNoConfusion env x ||
-    isRecCore env x ||
-    env.isProjectionFn x ||
-    Lean.Linter.isDeprecated env x ||
-    x.hasNum ||
-    x.isInternalOrNum ||
-    (`noConfusionType).isSuffixOf x ||
-    let str := x.getString!
-    str ∈ ["sizeOf_spec", "sizeOf_eq", "brecOn", "ind", "ofNat_toCtorIdx", "inj", "injEq", "induct"] ||
-    "proof_".isPrefixOf str && (str.drop 6).all (·.isDigit) ||
-    "match_".isPrefixOf str && (str.drop 6).all (·.isDigit) ||
-    "eq_".isPrefixOf str && (str.drop 3).all (·.isDigit)
+
 
 @[block_extension Block.progress]
 def progress.descr : BlockDescr where
@@ -1775,10 +1839,12 @@ def progress.descr : BlockDescr where
       let x := name.toName
       ok := ok.insert x
 
-    let .ok ((namespaces : Array Name), (exceptions : Array Name), (present : List (Name × List Name)), (allTactics : Array Name)) := fromJson? info
+
+    let .ok ((namespaces : Array Name), (exceptions : Array Name), (present : List (Name × String)), (allTactics : Array Name)) := fromJson? info
       | panic! "Can't deserialize progress bar state"
 
-    let check : NameMap (List Name) := present.foldr (init := {}) (fun x z => z.insert x.1 <| x.2)
+    let check : NameMap (List Name) := present.foldr (init := {}) (fun x z => z.insert x.1 <| (x.2.splitOn " ").map String.toName)
+    let check := check.insert `_root_ allRootNames.toList
 
     let undocTactics ← allTactics.filterM fun tacticName => do
       let st ← Doc.Html.HtmlT.state (genre := Manual)
@@ -1786,11 +1852,13 @@ def progress.descr : BlockDescr where
 
     let tacticPercent := undocTactics.size.toFloat * 100.0 / allTactics.size.toFloat
 
+    let namespaces := namespaces.qsort (·.toString ≤ ·.toString)
+
     return {{
       <dl>
         {{namespaces.map fun ns =>
           let wanted := check.findD ns []
-          let notDocumented := wanted.filter (!ok.contains ·)
+          let notDocumented := wanted.filter (!ok.contains ·) |>.mergeSort (fun x y => x.toString < y.toString)
           let percent := notDocumented.length.toFloat * 100.0 / wanted.length.toFloat
           {{
             <dt><code>{{ns.toString}}</code></dt>
@@ -1802,7 +1870,7 @@ def progress.descr : BlockDescr where
                 </summary>
                 {{notDocumented |>.map (·.toString) |> String.intercalate ", " }}
                 <pre>
-                  {{ notDocumented.map ("{docstring " ++ ·.toString ++ "}\n") |> String.join }}
+                  {{ notDocumented.map ("{docstring " ++ ·.toString ++ "}\n\n") |> String.join }}
                 </pre>
                 <pre>
                   "```exceptions\n"
