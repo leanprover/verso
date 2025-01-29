@@ -111,7 +111,7 @@ pre, code {
 
 .with-toc #toc {
     position: fixed;
-    z-index: 10;
+    z-index: 9;
 }
 
 /** Non-mobile **/
