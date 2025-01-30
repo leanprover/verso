@@ -1567,7 +1567,10 @@ def tactic.descr : BlockDescr where
     let _ ← Verso.Genre.Manual.externalTag id path <| show.getD tactic.userName
     Index.addEntry id {term := Doc.Inline.code <| show.getD tactic.userName}
 
-    modify fun st => st.saveDomainObject tacticDomain tactic.internalName.toString id
+    modify fun st =>
+      st
+        |>.saveDomainObject tacticDomain tactic.internalName.toString id
+        |>.saveDomainObjectData tacticDomain tactic.internalName.toString (json%{"userName": $tactic.userName})
 
     pure none
   toHtml := some <| fun _goI goB id info contents =>
@@ -1690,7 +1693,8 @@ open Lean Elab Term Parser Tactic Doc in
 @[block_extension conv]
 def conv.descr : BlockDescr where
   init st := st
-    |>.setDomainTitle convDomain "Conversion Tactics" |>.setDomainDescription convDomain "Tatics for performing targeted rewriting of subterms"
+    |>.setDomainTitle convDomain "Conversion Tactics"
+    |>.setDomainDescription convDomain "Tactics for performing targeted rewriting of subterms"
 
   traverse id info _ := do
     let .ok (name, «show», _docs?) := FromJson.fromJson? (α := Name × String × Option String) info
@@ -1700,6 +1704,7 @@ def conv.descr : BlockDescr where
     Index.addEntry id {term := Doc.Inline.code <| «show»}
 
     modify fun st => st.saveDomainObject convDomain name.toString id
+    modify fun st => st.saveDomainObjectData convDomain name.toString (json%{"userName": $«show»})
 
     pure none
   toHtml := some <| fun _goI goB id info contents =>

@@ -80,6 +80,17 @@ They include heuristic elaboration of code items in their Markdown that attempts
 
 {optionDocs pp.deepTerms.threshold}
 
+# Technical Terminology
+
+The `deftech` role can be used to annotate the definition of a {tech}[technical term].
+Elsewhere in the document, `tech` can be used to annotate a use site of a technical term.
+A {deftech}_technical term_ is a term with a specific meaning that's used precisely, like this one.
+References to technical terms are valid both before and after their definition sites.
+
+{docstring deftech}
+
+{docstring tech}
+
 # Index
 %%%
 number := false
