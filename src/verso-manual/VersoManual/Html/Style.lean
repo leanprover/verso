@@ -111,7 +111,7 @@ pre, code {
 
 .with-toc #toc {
     position: fixed;
-    z-index: 9;
+    z-index: 10;
 }
 
 /** Non-mobile **/
@@ -144,7 +144,7 @@ pre, code {
         display: block;
     }
     body:has(#toggle-toc:checked) .toc-backdrop {
-        position: fixed; inset: 0; background-color: #aaa8; z-index: 1;
+        position: fixed; inset: 0; background-color: #aaa8; z-index: 9;
     }
     html:has(#toggle-toc:checked) {
         overflow: hidden;
