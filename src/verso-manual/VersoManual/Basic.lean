@@ -1,5 +1,5 @@
 /-
-Copyright (c) 2024 Lean FRO LLC. All rights reserved.
+Copyright (c) 2024-2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
@@ -9,6 +9,7 @@ import Verso.Doc
 import Verso.Doc.Html
 import Verso.Doc.TeX
 import VersoManual.Slug
+import VersoManual.LicenseInfo
 import Verso.Output.Html
 import Verso.Output.TeX
 
@@ -292,6 +293,7 @@ structure TraverseState where
   extraJs : HashSet String := {}
   extraJsFiles : Array (String × String) := #[]
   extraCssFiles : Array (String × String) := #[]
+  licenseInfo : HashSet LicenseInfo := {}
   private contents : NameMap Json := {}
 
 def freshId [Monad m] [MonadStateOf TraverseState m] : m InternalId := do
@@ -347,7 +349,8 @@ instance : BEq TraverseState where
     x.contents.all fun k v =>
       match y.contents.find? k with
       | none => false
-      | some v' => v == v'
+      | some v' => v == v' &&
+    x.licenseInfo == y.licenseInfo
 
 namespace TraverseState
 
@@ -386,6 +389,10 @@ def htmlId (state : TraverseState) (id : InternalId) : Array (String × String) 
   if let some (_, htmlId) := state.externalTags[id]? then
     #[("id", htmlId.toString)]
   else #[]
+
+/-- Add an open-source license used in the generated HTML/JavaScript -/
+def addLicenseInfo (state : TraverseState) (licenseInfo : LicenseInfo) : TraverseState :=
+  {state with licenseInfo := state.licenseInfo.insert licenseInfo}
 end TraverseState
 
 
@@ -539,12 +546,13 @@ structure InlineDescr where
   extraJsFiles : List (String × String) := []
   extraCss : List String := []
   extraCssFiles : List (String × String) := []
+  licenseInfo : List LicenseInfo := []
 
   toTeX : Option (InlineToTeX Manual (ReaderT ExtensionImpls IO))
 
 deriving TypeName
 
-instance : Inhabited InlineDescr := ⟨⟨id, default, default, default, default, default, default, default⟩⟩
+instance : Inhabited InlineDescr := ⟨⟨id, default, default, default, default, default, default, default, default⟩⟩
 
 structure BlockDescr where
   init : TraverseState → TraverseState := id
@@ -556,11 +564,12 @@ structure BlockDescr where
   extraJsFiles : List (String × String) := []
   extraCss : List String := []
   extraCssFiles : List (String × String) := []
+  licenseInfo : List LicenseInfo := []
 
   toTeX : Option (BlockToTeX Manual (ReaderT ExtensionImpls IO))
 deriving TypeName
 
-instance : Inhabited BlockDescr := ⟨⟨id, default, default, default, default, default, default, default⟩⟩
+instance : Inhabited BlockDescr := ⟨⟨id, default, default, default, default, default, default, default, default⟩⟩
 
 open Lean in
 initialize inlineExtensionExt
@@ -887,6 +896,8 @@ instance : Traverse Manual TraverseM where
           for (name, js) in impl.extraCssFiles do
             unless (← get).extraCssFiles.any (·.1 == name) do
               modify fun s => {s with extraCssFiles := s.extraCssFiles.push (name, js)}
+          for licenseInfo in impl.licenseInfo do
+            modify (·.addLicenseInfo licenseInfo)
 
           impl.traverse id data content
         else
@@ -910,6 +921,8 @@ instance : Traverse Manual TraverseM where
           for (name, js) in impl.extraCssFiles do
             unless (← get).extraCssFiles.any (·.1 == name) do
               modify fun s => {s with extraCssFiles := s.extraCssFiles.push (name, js)}
+          for licenseInfo in impl.licenseInfo do
+            modify (·.addLicenseInfo licenseInfo)
 
           impl.traverse id data content
         else

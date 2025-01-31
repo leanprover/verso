@@ -17,7 +17,7 @@ Documentation can take many forms:
  * Tutorials
  * Etc
 
-{include UsersGuide.Markup}
+{include 0 UsersGuide.Markup}
 
 # Genres
 %%%
@@ -97,3 +97,13 @@ number := false
 %%%
 
 {theIndex}
+
+
+# Dependencies
+%%%
+number := false
+%%%
+
+This document contains the following open-source libraries, or code derived from them:
+
+{licenseInfo}
