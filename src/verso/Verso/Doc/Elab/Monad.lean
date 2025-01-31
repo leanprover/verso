@@ -55,8 +55,8 @@ def _root_.Verso.Syntax.code.inline_to_string : InlineToString
 
 @[inline_to_string Verso.Syntax.role]
 def _root_.Verso.Syntax.role.inline_to_string : InlineToString
-  | env, `(inline| role{ $_ $_* }[ $body ]) =>
-    inlineToString env body
+  | env, `(inline| role{ $_ $_* }[ $body* ]) =>
+    String.join (body.toList.map (inlineToString env <| ·.raw))
   | _, _ => none
 
 @[inline_to_string null]
