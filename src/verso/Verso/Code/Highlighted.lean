@@ -258,6 +258,8 @@ defmethod Token.Kind.hover? (tok : Token.Kind) : HighlightHtmlM (Option Nat) :=
     some <$> addHover {{ <code>{{type}}</code> }}
   | .str s =>
     some <$> addHover {{ <code><span class="literal string">{{s.quote}}</span>" : String"</code>}}
+  | .withType t =>
+    some <$> addHover {{ <code>{{t}}</code> }}
   | _ => pure none
 where
   separatedDocs txt :=
@@ -278,6 +280,7 @@ defmethod Token.Kind.«class» : Token.Kind → String
   | .keyword .. => "keyword"
   | .anonCtor .. => "unknown"
   | .unknown => "unknown"
+  | .withType .. => "typed"
 
 defmethod Token.Kind.data : Token.Kind → String
   | .const n _ _ _ | .anonCtor n _ _ => "const-" ++ toString n
@@ -534,7 +537,7 @@ def highlightingStyle : String := "
 }
 
 @media (hover: hover) {
-  .hl.lean .token.binding-hl, .hl.lean .literal.string:hover {
+  .hl.lean .token.binding-hl, .hl.lean .literal.string:hover, .hl.lean .token.typed:hover {
     background-color: #eee;
     border-radius: 2px;
     transition: none;
@@ -1078,7 +1081,7 @@ window.onload = () => {
       const addTippy = (selector, props) => {
         tippy(selector, Object.assign({}, defaultTippyProps, props));
       };
-      addTippy('.hl.lean .const.token, .hl.lean .keyword.token, .hl.lean .literal.token, .hl.lean .option.token, .hl.lean .var.token', {theme: 'lean'});
+      addTippy('.hl.lean .const.token, .hl.lean .keyword.token, .hl.lean .literal.token, .hl.lean .option.token, .hl.lean .var.token, .hl.lean .typed.token', {theme: 'lean'});
       addTippy('.hl.lean .has-info.warning', {theme: 'warning message'});
       addTippy('.hl.lean .has-info.info', {theme: 'info message'});
       addTippy('.hl.lean .has-info.error', {theme: 'error message'});
