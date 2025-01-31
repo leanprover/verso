@@ -6,6 +6,7 @@ Author: David Thrane Christiansen
 import Std.Data.HashSet
 
 import VersoManual.Basic
+import VersoManual.HighlightedCode
 import VersoManual.Index
 import VersoManual.Markdown
 import VersoManual.Docstring.Config
@@ -684,7 +685,7 @@ def constructorSignature.descr : BlockDescr where
 
 open Verso.Genre.Manual.Markdown in
 @[block_extension Block.docstring]
-def docstring.descr : BlockDescr where
+def docstring.descr : BlockDescr := withHighlighting {
   init st := st
     |>.setDomainTitle docstringDomain "Lean constant reference"
     |>.setDomainDescription docstringDomain "Documentation for Lean constants"
@@ -751,10 +752,8 @@ def docstring.descr : BlockDescr where
         </div>
       }}
   toTeX := some <| fun _goI goB _id _info contents => contents.mapM goB
-  extraCss := [highlightingStyle, docstringStyle]
-  extraJs := [highlightingJs]
-  extraJsFiles := [("popper.js", popper), ("tippy.js", tippy)]
-  extraCssFiles := [("tippy-border.css", tippy.border.css)]
+  extraCss := [docstringStyle]
+}
 where
   saveRef
       (id : InternalId) (name : Name)
@@ -783,16 +782,12 @@ def Block.leanFromMarkdown (hls : Highlighted) : Block where
 
 
 @[inline_extension leanFromMarkdown]
-def leanFromMarkdown.inlinedescr : InlineDescr where
+def leanFromMarkdown.inlinedescr : InlineDescr := withHighlighting {
   traverse _id _data _ := pure none
   toTeX :=
     some <| fun go _ _ content => do
       pure <| .seq <| ← content.mapM fun b => do
         pure <| .seq #[← go b, .raw "\n"]
-  extraCss := [highlightingStyle]
-  extraJs := [highlightingJs]
-  extraJsFiles := [("popper.js", popper), ("tippy.js", tippy)]
-  extraCssFiles := [("tippy-border.css", tippy.border.css)]
   toHtml :=
     open Verso.Output Html in
     open Verso.Doc.Html in
@@ -803,18 +798,15 @@ def leanFromMarkdown.inlinedescr : InlineDescr where
         pure .empty
       | .ok (hl : Highlighted) =>
         hl.inlineHtml "docstring-examples"
+}
 
 @[block_extension leanFromMarkdown]
-def leanFromMarkdown.blockdescr : BlockDescr where
+def leanFromMarkdown.blockdescr : BlockDescr := withHighlighting {
   traverse _id _data _ := pure none
   toTeX :=
     some <| fun goI goB _ _ content => do
       pure <| .seq <| ← content.mapM fun b => do
         pure <| .seq #[← goB b, .raw "\n"]
-  extraCss := [highlightingStyle]
-  extraJs := [highlightingJs]
-  extraJsFiles := [("popper.js", popper), ("tippy.js", tippy)]
-  extraCssFiles := [("tippy-border.css", tippy.border.css)]
   toHtml :=
     open Verso.Output Html in
     open Verso.Doc.Html in
@@ -825,6 +817,7 @@ def leanFromMarkdown.blockdescr : BlockDescr where
         pure .empty
       | .ok (hl : Highlighted) =>
         hl.blockHtml "docstring-examples"
+}
 
 open Lean Elab Term in
 def tryElabCodeTermWith (mk : Highlighted → String → DocElabM α) (str : String) (ignoreElabErrors := false) (identOnly := false) : DocElabM α := do
@@ -1555,7 +1548,7 @@ def tactic : DirectiveExpander
 open Verso.Genre.Manual.Markdown in
 open Lean Elab Term Parser Tactic Doc in
 @[block_extension tactic]
-def tactic.descr : BlockDescr where
+def tactic.descr : BlockDescr := withHighlighting {
   init st := st
     |>.setDomainTitle tacticDomain "Tactic Documentation"
     |>.setDomainDescription tacticDomain "Detailed descriptions of tactics"
@@ -1594,9 +1587,8 @@ def tactic.descr : BlockDescr where
         </div>
       }}
   toTeX := some <| fun _goI goB _id _info contents => contents.mapM goB
-  extraCss := [highlightingStyle, docstringStyle]
-  extraJs := [highlightingJs]
-
+  extraCss := [docstringStyle]
+}
 
 def Inline.tactic : Inline where
   name := `Verso.Genre.Manual.tacticInline
@@ -1632,15 +1624,14 @@ where
 
 
 @[inline_extension tacticInline]
-def tacticInline.descr : InlineDescr where
+def tacticInline.descr : InlineDescr := withHighlighting {
   traverse _ _ _ := do
     pure none
   toTeX :=
     some <| fun go _ _ content => do
       pure <| .seq <| ← content.mapM fun b => do
         pure <| .seq #[← go b, .raw "\n"]
-  extraCss := [highlightingStyle, docstringStyle]
-  extraJs := [highlightingJs]
+  extraCss := [docstringStyle]
   toHtml :=
     open Verso.Output.Html Verso.Doc.Html in
     some <| fun _ _ data _ => do
@@ -1650,6 +1641,7 @@ def tacticInline.descr : InlineDescr where
         pure .empty
       | .ok (hl : Highlighted) =>
         hl.inlineHtml "examples"
+}
 
 -- TODO implement a system upstream like the one for normal tactics
 def Block.conv (name : Name) («show» : String) (docs? : Option String) : Block where
@@ -1691,7 +1683,7 @@ def conv : DirectiveExpander
 open Verso.Genre.Manual.Markdown in
 open Lean Elab Term Parser Tactic Doc in
 @[block_extension conv]
-def conv.descr : BlockDescr where
+def conv.descr : BlockDescr := withHighlighting {
   init st := st
     |>.setDomainTitle convDomain "Conversion Tactics"
     |>.setDomainDescription convDomain "Tactics for performing targeted rewriting of subterms"
@@ -1728,9 +1720,8 @@ def conv.descr : BlockDescr where
         </div>
       }}
   toTeX := some <| fun _goI goB _id _info contents => contents.mapM goB
-  extraCss := [highlightingStyle, docstringStyle]
-  extraJs := [highlightingJs]
-
+  extraCss := [docstringStyle]
+}
 /--
 A progress tracker that shows how many symbols are documented.
 

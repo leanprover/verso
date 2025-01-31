@@ -21,6 +21,7 @@ import VersoManual.Html
 import VersoManual.Html.Style
 import VersoManual.Draft
 import VersoManual.Index
+import VersoManual.License
 import VersoManual.Glossary
 import VersoManual.Docstring
 import VersoManual.WebAssets
@@ -120,6 +121,7 @@ structure Config where
   extraFiles : List (System.FilePath × String) := []
   extraCss : List String := []
   extraJs : List String := []
+  licenseInfo : List LicenseInfo := []
   /-- Extra elements to add to every page's `head` tag -/
   extraHead : Array Output.Html := #[]
   draft : Bool := false
@@ -170,7 +172,7 @@ where
 
 def traverse (logError : String → IO Unit) (text : Part Manual) (config : Config) : ReaderT ExtensionImpls IO (Part Manual × TraverseState) := do
   let topCtxt : Manual.TraverseContext := {logError, draft := config.draft}
-  let mut state : Manual.TraverseState := {}
+  let mut state : Manual.TraverseState := {licenseInfo := .ofList config.licenseInfo}
   let mut text := text
   if config.verbose then
     IO.println "Initializing extensions"

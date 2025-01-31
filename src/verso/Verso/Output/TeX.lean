@@ -29,6 +29,8 @@ instance : Append TeX where
 
 namespace TeX
 
+def empty : TeX := .seq #[]
+
 partial def asString (doc : TeX) : String :=
   match doc with
   | .text str => escape str
