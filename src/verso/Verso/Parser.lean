@@ -233,7 +233,7 @@ Remaining:
 def ignoreFn (p : ParserFn) : ParserFn := fun c s =>
   let iniSz := s.stxStack.size
   let s' := p c s
-  s'.takeStack iniSz
+  s'.shrinkStack iniSz
 
 def withInfoSyntaxFn (p : ParserFn) (infoP : SourceInfo → ParserFn) : ParserFn := fun c s =>
   let iniSz := s.stxStack.size
@@ -244,7 +244,7 @@ def withInfoSyntaxFn (p : ParserFn) (infoP : SourceInfo → ParserFn) : ParserFn
   let leading  := mkEmptySubstringAt input startPos
   let trailing := mkEmptySubstringAt input stopPos
   let info     := SourceInfo.original leading startPos trailing stopPos
-  infoP info c (s.takeStack iniSz)
+  infoP info c (s.shrinkStack iniSz)
 
 private def unescapeStr (str : String) : String := Id.run do
   let mut out := ""
@@ -278,7 +278,7 @@ def asStringFn (p : ParserFn) (quoted := false) (transform : String → String :
   let iniSz := s.stxStack.size
   let s := p c s
   if s.hasError then s
-  else asStringAux quoted startPos transform c (s.takeStack iniSz)
+  else asStringAux quoted startPos transform c (s.shrinkStack iniSz)
 
 def checkCol0Fn (errorMsg : String) : ParserFn := fun c s =>
   let pos      := c.fileMap.toPosition s.pos
@@ -689,7 +689,7 @@ def recoverBlockWith (stxs : Array Syntax) (p : ParserFn) : ParserFn :=
   recoverFn p fun rctx =>
     ignoreFn skipBlock >>
     show ParserFn from
-      fun _ s => stxs.foldl (init := s.takeStack rctx.initialSize) (·.pushSyntax ·)
+      fun _ s => stxs.foldl (init := s.shrinkStack rctx.initialSize) (·.pushSyntax ·)
 def recoverLine (p : ParserFn) : ParserFn := recoverFn p fun _ => ignoreFn <| skipRestOfLine
 def recoverWs (p : ParserFn) : ParserFn := recoverFn p fun _ => ignoreFn <| takeUntilFn (fun c =>  c == ' ' || c == '\n')
 def recoverEol (p : ParserFn) : ParserFn := recoverFn p fun _ => ignoreFn <| skipToNewline
@@ -697,12 +697,12 @@ def recoverEolWith (stxs : Array Syntax) (p : ParserFn) : ParserFn :=
   recoverFn p fun rctx =>
     ignoreFn skipToNewline >>
     show ParserFn from
-      fun _ s => stxs.foldl (init := s.takeStack rctx.initialSize) (·.pushSyntax ·)
+      fun _ s => stxs.foldl (init := s.shrinkStack rctx.initialSize) (·.pushSyntax ·)
 def recoverSkip (p : ParserFn) : ParserFn := recoverFn p fun _ => skipFn
 def recoverSkipWith (stxs : Array Syntax) (p : ParserFn) : ParserFn :=
   recoverFn p fun rctx =>
     show ParserFn from
-      fun _ s => stxs.foldl (init := s.takeStack rctx.initialSize) (·.pushSyntax ·)
+      fun _ s => stxs.foldl (init := s.shrinkStack rctx.initialSize) (·.pushSyntax ·)
 def recoverHereWith (stxs : Array Syntax) (p : ParserFn) : ParserFn :=
   recoverFn p fun rctx =>
     show ParserFn from
@@ -1844,11 +1844,11 @@ def lookaheadOrderedListIndicator (ctxt : BlockCtxt) (p : OrderedListType → In
     let iniPos := s.pos
     let iniSz := s.stxStack.size
     let s := (onlyBlockOpeners >> takeWhileFn (· == ' ') >> guardMinColumn ctxt.minIndent) c s
-    if s.hasError then s.setPos iniPos |>.takeStack iniSz
+    if s.hasError then s.setPos iniPos |>.shrinkStack iniSz
     else
     let numPos := s.pos
     let s := ignoreFn (takeWhile1Fn (·.isDigit) "digits") c s
-    if s.hasError then {s with pos := iniPos}.takeStack iniSz else
+    if s.hasError then {s with pos := iniPos}.shrinkStack iniSz else
     let digits := c.input.extract numPos s.pos
     match digits.toNat? with
     | none => {s.mkError s!"digits, got '{digits}'" with pos := iniPos}
@@ -1868,7 +1868,7 @@ def lookaheadOrderedListIndicator (ctxt : BlockCtxt) (p : OrderedListType → In
             let leading := mkEmptySubstringAt c.input numPos
             let trailing := mkEmptySubstringAt c.input i
             let num := Syntax.mkNumLit digits (info := .original leading numPos trailing i)
-            p type n c (s.takeStack iniSz |>.setPos numPos |>.pushSyntax num)
+            p type n c (s.shrinkStack iniSz |>.setPos numPos |>.pushSyntax num)
 /--
 info: Success! Final stack:
  • (num "1")
@@ -1937,8 +1937,8 @@ def lookaheadUnorderedListIndicator (ctxt : BlockCtxt) (p : UnorderedListType �
   let iniSz := s.stxStack.size
   let s := (onlyBlockOpeners >> takeWhileFn (· == ' ') >> guardMinColumn ctxt.minIndent) c s
   let bulletPos := s.pos
-  if s.hasError then s.setPos iniPos |>.takeStack iniSz
-  else if h : c.input.atEnd s.pos then s.mkEOIError.setPos iniPos |>.takeStack iniSz
+  if s.hasError then s.setPos iniPos |>.shrinkStack iniSz
+  else if h : c.input.atEnd s.pos then s.mkEOIError.setPos iniPos |>.shrinkStack iniSz
   else let (s, type) : (_ × UnorderedListType) := match c.input.get' s.pos h with
     | '*' => (s.next' c.input s.pos h, .asterisk)
     | '-' => (s.next' c.input s.pos h, .dash)
@@ -1948,7 +1948,7 @@ def lookaheadUnorderedListIndicator (ctxt : BlockCtxt) (p : UnorderedListType �
   else
     let s := (chFn ' ') c s
     if s.hasError then s.setPos iniPos
-    else p type c (s.takeStack iniSz |>.setPos bulletPos)
+    else p type c (s.shrinkStack iniSz |>.setPos bulletPos)
 
 /--
 info: Success! Final stack:
