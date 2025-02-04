@@ -1,0 +1,83 @@
+name = "verso"
+precompileModules = true
+defaultTargets = ["Verso", "VersoBlog", "VersoManual", "verso", "usersguide", "demosite", "demotextbook", "SimplePage", "simplepage"]
+
+[[require]]
+name = "subverso"
+git = "https://github.com/leanprover/subverso.git"
+rev = "main"
+
+[[require]]
+name = "MD4Lean"
+git = "https://github.com/acmepjz/md4lean"
+rev = "main"
+
+[[lean_lib]]
+name = "Verso"
+srcDir = "src/verso"
+
+[[lean_lib]]
+name = "VersoBlog"
+srcDir = "src/verso-blog"
+
+[[lean_lib]]
+name = "VersoManual"
+srcDir = "src/verso-manual"
+
+[[lean_lib]]
+name = "UsersGuide"
+srcDir = "doc"
+
+# A demo site that shows how to generate websites with Verso
+[[lean_lib]]
+name = "DemoSite"
+srcDir = "examples/website"
+
+# An example of a textbook project built in Verso
+[[lean_lib]]
+name = "DemoTextbook"
+srcDir = "examples/textbook"
+
+# An example of a minimal nontrivial custom genre
+[[lean_lib]]
+name = "SimplePage"
+srcDir = "examples/custom-genre"
+
+[[lean_exe]]
+name = "verso"
+root = "Main"
+# Enables the use of the Lean interpreter by the executable (e.g.,
+# `runFrontend`) at the expense of increased binary size on Linux.
+# Remove this line if you do not need such functionality.
+supportInterpreter = true
+
+[[lean_exe]]
+name = "usersguide"
+root = "UsersGuideMain"
+# Enables the use of the Lean interpreter by the executable (e.g.,
+# `runFrontend`) at the expense of increased binary size on Linux.
+# Remove this line if you do not need such functionality.
+supportInterpreter = true
+
+[[lean_exe]]
+name = "demosite"
+srcDir = "examples/website"
+root = "DemoSiteMain"
+# Enables the use of the Lean interpreter by the executable (e.g.,
+# `runFrontend`) at the expense of increased binary size on Linux.
+# Remove this line if you do not need such functionality.
+supportInterpreter = true
+
+[[lean_exe]]
+name = "demotextbook"
+srcDir = "examples/textbook"
+root = "DemoTextbookMain"
+# Enables the use of the Lean interpreter by the executable (e.g.,
+# `runFrontend`) at the expense of increased binary size on Linux.
+# Remove this line if you do not need such functionality.
+supportInterpreter = true
+
+[[lean_exe]]
+name = "simplepage"
+srcDir = "examples/custom-genre"
+root = "SimplePageMain"
