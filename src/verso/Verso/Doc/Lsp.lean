@@ -459,34 +459,47 @@ def decodeLeanTokens (data : Array Nat) : Array SemanticTokenEntry := Id.run do
 deriving instance Repr, BEq for SemanticTokenType
 
 open Lean Server Lsp RequestM in
-partial def handleTokens (prev : RequestTask SemanticTokens) (beginPos endPos : String.Pos) : RequestM (RequestTask SemanticTokens) := do
+partial def handleTokens (prev : RequestTask SemanticTokens)
+    (beginPos : String.Pos) (endPos? : Option String.Pos) :
+    RequestM (RequestTask (LspResponse SemanticTokens)) := do
   let doc ← readDoc
   let text := doc.meta.text
-  let t := doc.cmdSnaps.waitUntil (·.endPos >= endPos)
-  let toks ←
-    mapTask t fun (snaps, _) => do
-      let mut toks := #[]
-      for s in snaps do
-        if s.endPos <= beginPos then continue
-        toks := toks ++ go s text s.stx
-      pure toks
-
-  mergeResponses toks prev fun
-    | none, none => SemanticTokens.mk none #[]
-    | some xs, none => SemanticTokens.mk none <| encodeTokenEntries <| xs.qsort (·.ordLt ·)
-    | none, some r => r
-    | some mine, some leans =>
-      let toks := decodeLeanTokens leans.data
-      {leans with data := encodeTokenEntries (toks ++ mine |>.qsort (·.ordLt ·))}
-
+  if let some endPos := endPos? then
+    let t := doc.cmdSnaps.waitUntil (·.endPos >= endPos)
+    let toks : RequestTask (Array SemanticTokenEntry) ←
+      mapTask t fun (snaps, _) => pure <| snapshotsTokens text snaps
+    let response ← mergeIntoPrev toks
+    return response.map fun t =>
+      t.map ({ response := ·, isComplete := true })
+  else
+    let (snaps, _, isComplete) ← doc.cmdSnaps.getFinishedPrefixWithTimeout 2000
+    let toks : Array SemanticTokenEntry := snapshotsTokens text snaps
+    let response ← mergeIntoPrev (.pure toks)
+    return response.map fun t =>
+      t.map ({ response := ·, isComplete := isComplete })
 where
+  snapshotTokens (text : FileMap) (snap) : Array SemanticTokenEntry :=
+    if snap.endPos <= beginPos then #[] else go text snap.stx
+
+  snapshotsTokens (text : FileMap) (snaps : List _) : (Array SemanticTokenEntry) :=
+    snaps.foldl (init := #[]) fun toks snap => toks ++ snapshotTokens text snap
+
+  mergeIntoPrev (toks : RequestTask (Array SemanticTokenEntry)) :=
+    mergeResponses toks prev fun
+      | none, none => SemanticTokens.mk none #[]
+      | some xs, none => SemanticTokens.mk none <| encodeTokenEntries <| xs.qsort (·.ordLt ·)
+      | none, some r => r
+      | some mine, some leans =>
+        let toks := decodeLeanTokens leans.data
+        {leans with data := encodeTokenEntries (toks ++ mine |>.qsort (·.ordLt ·))}
+
   mkTok (text : FileMap) (tokenType : SemanticTokenType) (stx : Syntax) : Array SemanticTokenEntry := Id.run do
     let (some startPos, some endPos) := (stx.getPos?, stx.getTailPos?)
       | return #[]
     let startLspPos := text.utf8PosToLspPos startPos
     let endLspPos := text.utf8PosToLspPos endPos
-    -- VS Code has a limitation where tokens can't span lines The
-    -- parser obeys an invariant that nothing spans a line, so we can
+    -- VS Code has a limitation where tokens can't span lines. The
+    -- parser obeys an invariant that no token spans a line, so we can
     -- bail, rather than resorting to workarounds.
     if startLspPos.line == endLspPos.line then #[{
         line := startLspPos.line,
@@ -497,46 +510,131 @@ where
       }]
     else #[]
 
-  go (snap : Snapshots.Snapshot) (text : FileMap) (stx : Syntax) : Array SemanticTokenEntry := Id.run do
-    match stx.getKind with
-    | ``Verso.Syntax.text =>
+  go (text : FileMap) (stx : Syntax) : Array SemanticTokenEntry := Id.run do
+    match stx with
+    | `(inline|$s:str) =>
       mkTok text .string stx
-    | ``Verso.Syntax.emph | ``Verso.Syntax.bold =>
-      mkTok text .keyword stx[0] ++ go snap text stx[1] ++ mkTok text .keyword stx[2]
-    | ``Verso.Syntax.header =>
-      -- "header(" level ")" "{" contents "}", with source info for hash marks on "header(" token
-      mkTok text .keyword stx[0] ++ go snap text stx[4]
-    | ``Verso.Syntax.link =>
-      mkTok text .keyword stx[0] ++ go snap text stx[1] ++ mkTok text .keyword stx[2] ++
-      mkTok text .keyword stx[3][0] ++ mkTok text .keyword stx[3][2]
-    | ``Verso.Syntax.role =>
-      mkTok text .keyword stx[0] ++ -- {
-      mkTok text .function stx[1] ++ -- roleName
-      go snap text stx[2] ++  -- args
-      mkTok text .keyword stx[3] ++ -- }
-      mkTok text .keyword stx[4] ++ -- [
-      go snap text stx[5] ++
-      mkTok text .keyword stx[6] -- ]
-    | ``Verso.Syntax.named =>
-      mkTok text .keyword stx[1] -- :=
-    | ``Verso.Syntax.li =>
-      mkTok text .keyword stx[0][1] ++
-      go snap text stx[1]
-    | ``Verso.Syntax.desc =>
-      mkTok text .keyword stx[0] ++ go snap text stx[1] ++
-      mkTok text .keyword stx[2] ++ go snap text stx[3]
-    | ``Verso.Syntax.directive =>
-      mkTok text .keyword stx[0] ++ -- :::
-      mkTok text .function stx[1] ++ -- name
-      go snap text stx[2] ++  -- args
-      mkTok text .keyword stx[4] ++ -- only in meta code
-      mkTok text .keyword stx[4] ++ -- only in meta code
-      go snap text stx[5] ++
-      mkTok text .keyword stx[6] -- :::
+    | `(inline|_[%$s $inlines* ]%$e) | `(inline|*[%$s $inlines* ]%$e) =>
+      mkTok text .keyword s ++ go text (mkNullNode inlines) ++ mkTok text .keyword e
+    | `(inline|role{%$s $f $args*}%$e [%$s' $inlines* ]%$e') =>
+      mkTok text .keyword s ++
+      mkTok text .function f ++
+      go text (mkNullNode args) ++
+      mkTok text .keyword e ++
+      mkTok text .keyword s' ++
+      go text (mkNullNode inlines) ++
+      mkTok text .keyword e'
+    | `(inline|link[%$s $inlines* ]%$e (%$s' $tgt )%$e')
+    | `(inline|link[%$s $inlines* ]%$e [%$s' $tgt ]%$e') =>
+      mkTok text .keyword s ++
+      go text (mkNullNode inlines) ++
+      mkTok text .keyword e ++
+      mkTok text .keyword s' ++
+      mkTok text .parameter tgt ++
+      mkTok text .keyword e'
+    | `(inline|image(%$s $alt )%$e (%$s' $tgt )%$e')
+    | `(inline|image(%$s $alt )%$e [%$s' $tgt ]%$e') =>
+      mkTok text .keyword s ++
+      go text alt ++
+      mkTok text .keyword e ++
+      mkTok text .keyword s' ++
+      mkTok text .parameter tgt ++
+      mkTok text .keyword e'
+    | `(inline|footnote(%$s $note )%$e) =>
+      mkTok text .keyword s ++
+      mkTok text .parameter note ++
+      mkTok text .keyword e
+    | `(inline|code(%$s $_str )%$e) =>
+      mkTok text .keyword s ++
+      -- None for str, so Lean's can pass through
+      mkTok text .keyword e
+    | `(inline|\math%$m code(%$s $str )%$e)
+    | `(inline|\displaymath%$m code(%$s $str )%$e) =>
+      mkTok text .keyword m ++
+      mkTok text .keyword s ++
+       -- Enum member arbitrarily chosen for uniqueness
+      mkTok text .enumMember str ++
+      mkTok text .keyword e
+    | `(desc_item| :%$s $inlines* =>%$e $blocks*) =>
+      mkTok text .keyword s ++
+      go text (mkNullNode inlines) ++
+      mkTok text .keyword e ++
+      go text (mkNullNode blocks)
+    | `(list_item| *%$bulletOrNum $contents*) =>
+      mkTok text .keyword bulletOrNum ++
+      go text (mkNullNode contents)
+    | `(block| :::%$s $f $args* {%$s' $body* }%$e) =>
+      mkTok text .keyword s ++
+      mkTok text .function f ++
+      go text (mkNullNode args) ++
+      mkTok text .keyword s' ++
+      go text (mkNullNode body) ++
+      mkTok text .keyword e
+    | `(block| ```%$s $f $args* |%$s' $_code ```%$e) =>
+      mkTok text .keyword s ++
+      mkTok text .function f ++
+      go text (mkNullNode args) ++
+      mkTok text .keyword s' ++
+      -- No token for the code, because we want Lean's tokens to shine through
+      mkTok text .keyword e
+    | `(block| >%$s $blocks*) =>
+      mkTok text .keyword s ++ go text (mkNullNode blocks)
+    | `(block|header(%$s $n )%$e {%$s' $txt* }%$e') =>
+      mkTok text .keyword s ++
+      go text n ++
+      mkTok text .keyword e ++
+      mkTok text .keyword s' ++
+      go text (mkNullNode txt) ++
+      mkTok text .keyword e'
+    | `(block|[^%$s $n ]:%$e $txt*) =>
+      mkTok text .keyword s ++
+      mkTok text .parameter n ++
+      mkTok text .keyword e ++
+      go text (mkNullNode txt)
+    | `(block|[%$s $n ]:%$e $url) =>
+      mkTok text .keyword s ++
+      mkTok text .parameter n ++
+      mkTok text .keyword e ++
+      mkTok text .parameter url
+    | `(block| %%%%$s $_defs* %%%%$e) =>
+      mkTok text .keyword s ++
+      -- No tokens for defs, because Lean should supply them
+      mkTok text .keyword e
+    | `(block| block_role{%$s $f $args* }%$e) =>
+      mkTok text .keyword s ++
+      mkTok text .function f ++
+      go text (mkNullNode args) ++
+      mkTok text .keyword e
+    | `(block| block_role{%$s $f $args* }%$e [%$s' $block ]%$e') =>
+      mkTok text .keyword s ++
+      mkTok text .function f ++
+      go text (mkNullNode args) ++
+      mkTok text .keyword e ++
+      mkTok text .keyword s' ++
+      go text block ++
+      mkTok text .keyword e'
+    | `(argument| $x:ident :=%$eq $v:arg_val) =>
+      mkTok text .parameter x ++
+      mkTok text .keyword eq ++
+      go text v
+    | `(argument| $v:arg_val) =>
+      go text v
+    -- In the next three cases, no token is returned. This is to allow Lean's to shine through, if
+    -- there are any. It would be nice to add a priority mechanism to fall back to these defaults if
+    -- Lean didn't provide any.
+    | `(arg_val| $v:num) =>
+      --mkTok text .number v
+      #[]
+    | `(arg_val| $v:ident) =>
+      -- mkTok text .variable v
+      #[]
+    | `(arg_val| $v:str) =>
+      -- mkTok text .string v
+      #[]
     | _ =>
       let mut out := #[]
       for arg in stx.getArgs do
-        out := out ++ go snap text arg
+        out := out ++ go text arg
       return out
 
 open Lean Server Lsp RequestM in
@@ -545,10 +643,22 @@ def handleTokensRange (params : SemanticTokensRangeParams) (prev : RequestTask S
   let text := doc.meta.text
   let beginPos := text.lspPosToUtf8Pos params.range.start
   let endPos := text.lspPosToUtf8Pos params.range.end
-  handleTokens prev beginPos endPos
+  handleTokens prev beginPos endPos <&> fun t => t.map (fun r => r.map LspResponse.response)
 
 open Lean Server Lsp RequestM in
-def handleTokensFull (_params : SemanticTokensParams) (prev : RequestTask SemanticTokens) : RequestM (RequestTask SemanticTokens) := handleTokens prev 0 ⟨1 <<< 31⟩
+def handleTokensFull (_params : SemanticTokensParams) (prev : RequestTask SemanticTokens) : RequestM (RequestTask SemanticTokens) :=
+  handleTokens prev 0 none <&> fun t => t.map (fun r => r.map LspResponse.response)
+
+open Lean Server Lsp RequestM in
+open Lean.Server.FileWorker in
+def handleTokensFullStateful
+    (_params : SemanticTokensParams) (prev : LspResponse SemanticTokens) (st : SemanticTokensState) :
+    RequestM (LspResponse SemanticTokens × SemanticTokensState) := do
+  let t ← handleTokens (.pure prev.response) 0 none
+  match t.get with
+  | .error e => throw e
+  | .ok r => return (r, st)
+
 
 open Lean Server Lsp RequestM in
 @[code_action_provider]
@@ -780,6 +890,13 @@ def handleHover (params : HoverParams) (prev : RequestTask (Option Hover)) : Req
       | some _, none => false
       | some r1, some r2 => rangeContains r1 r2
 
+section handlers
+
+open Lean Server Lsp
+
+open Lean.Server.FileWorker
+
+
 
 open Lean Server Lsp in
 initialize
@@ -787,7 +904,9 @@ initialize
   -- chainLspRequestHandler "textDocument/references" ReferenceParams (Array Location) handleRefs -- TODO make this work - right now it goes through the watchdog so we can't chain it
   chainLspRequestHandler "textDocument/documentHighlight" DocumentHighlightParams DocumentHighlightResult handleHl
   chainLspRequestHandler "textDocument/documentSymbol" DocumentSymbolParams DocumentSymbolResult handleSyms
-  chainLspRequestHandler "textDocument/semanticTokens/full" SemanticTokensParams SemanticTokens handleTokensFull
-  chainLspRequestHandler "textDocument/semanticTokens/range" SemanticTokensRangeParams SemanticTokens handleTokensRange
   chainLspRequestHandler "textDocument/foldingRange" FoldingRangeParams (Array FoldingRange) handleFolding
   chainLspRequestHandler "textDocument/hover" HoverParams (Option Hover) handleHover
+  chainLspRequestHandler "textDocument/semanticTokens/range" SemanticTokensRangeParams SemanticTokens handleTokensRange
+  chainStatefulLspRequestHandler "textDocument/semanticTokens/full" SemanticTokensParams SemanticTokens SemanticTokensState handleTokensFullStateful handleSemanticTokensDidChange
+
+end handlers

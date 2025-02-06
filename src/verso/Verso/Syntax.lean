@@ -99,11 +99,6 @@ syntax (name:=inline_math) "\\math" code : inline
 /-- Display-mode mathematical notation -/
 syntax (name:=display_math) "\\displaymath" code : inline
 
-/-- Items from both ordered and unordered lists -/
-declare_syntax_cat list_item
-/-- List item -/
-syntax (name:=li) "*" inline* : list_item
-
 /--
 Block-level elements, such as paragraphs, headers, and lists.
 
@@ -120,6 +115,11 @@ Conventions:
    newline-separated for directives and code)
 -/
 declare_syntax_cat block
+
+/-- Items from both ordered and unordered lists -/
+declare_syntax_cat list_item
+/-- List item -/
+syntax (name:=li) "*" block* : list_item
 
 /-- A description of an item -/
 declare_syntax_cat desc_item

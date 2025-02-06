@@ -17,11 +17,11 @@ open Verso.Syntax
 def throwUnexpected [Monad m] [MonadError m] (stx : Syntax) : m α :=
   throwErrorAt stx "unexpected syntax{indentD stx}"
 
-partial def elabInline (inline : Syntax) : DocElabM (TSyntax `term) :=
+partial def elabInline (inline : TSyntax `inline) : DocElabM (TSyntax `term) :=
   withRef inline <| withFreshMacroScope <| withIncRecDepth <| do
-  match inline with
+  match inline.raw with
   | .missing =>
-    ``(sorryAx Inline (synthetic := true))
+    ``(sorryAx (Inline _) (synthetic := true))
   | stx@(.node _ kind _) =>
     let exp ← inlineExpandersFor kind
     for e in exp do
@@ -91,7 +91,7 @@ open Lean.Parser.Term in
 def appFallback
     (stx : Syntax)
     (name : Ident) (resolvedName : Name)
-    (argVals : Array Arg) (subjectArr : Option (Array Syntax))
+    (argVals : Array Arg) (subjectArr : Option (Array (TSyntax `inline)))
     : DocElabM Term := do
   let f := mkIdentFrom name resolvedName
   let valStx : ArgVal → DocElabM Term := fun
@@ -192,10 +192,10 @@ def _root_.Verso.Syntax.display_math.expand : InlineExpander
   | _ => throwUnsupportedSyntax
 
 
-def elabBlock (block : Syntax) : DocElabM (TSyntax `term) :=
+def elabBlock (block : TSyntax `block) : DocElabM (TSyntax `term) :=
   withTraceNode `Elab.Verso.block (fun _ => pure m!"Block {block}") <|
   withRef block <| withFreshMacroScope <| withIncRecDepth <| do
-  match block with
+  match block.raw with
   | .missing =>
     ``(sorryAx Block (synthetic := true))
   | stx@(.node _ kind _) =>
@@ -213,10 +213,10 @@ def elabBlock (block : Syntax) : DocElabM (TSyntax `term) :=
   | _ =>
     throwUnexpected block
 
-def partCommand (cmd : Syntax) : PartElabM Unit :=
+def partCommand (cmd : TSyntax `block) : PartElabM Unit :=
   withTraceNode `Elab.Verso.part (fun _ => pure m!"Part modification {cmd}") <|
   withRef cmd <| withFreshMacroScope <| do
-  match cmd with
+  match cmd.raw with
   | stx@(.node _ kind _) =>
     let exp ← partCommandsFor kind
     for e in exp do
@@ -241,7 +241,7 @@ where
 @[part_command Verso.Syntax.footnote_ref]
 partial def _root_.Verso.Syntax.footnote_ref.command : PartCommand
   | `(block| [^ $name:str ]: $contents* ) =>
-    addFootnoteDef name =<< contents.mapM (elabInline ·.raw)
+    addFootnoteDef name =<< contents.mapM (elabInline ·)
   | _ => throwUnsupportedSyntax
 
 @[part_command Verso.Syntax.link_ref]
@@ -363,7 +363,7 @@ partial def _root_.Verso.Syntax.para.expand : BlockExpander
 def elabLi (block : Syntax) : DocElabM (Syntax × TSyntax `term) :=
   withRef block <|
   match block with
-  | `(list_item|*%$dot $contents:inline*) => do
+  | `(list_item|*%$dot $contents:block*) => do
     let item ← ``(ListItem.mk #[$[$(← contents.mapM elabBlock)],*])
     pure (dot, item)
   | _ =>

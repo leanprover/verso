@@ -488,7 +488,7 @@ unsafe def partCommandsForUnsafe (x : Name) : PartElabM (Array PartCommand) := d
 opaque partCommandsFor (x : Name) : PartElabM (Array PartCommand)
 
 
-abbrev RoleExpander := Array Arg → Array Syntax → DocElabM (Array (TSyntax `term))
+abbrev RoleExpander := Array Arg → TSyntaxArray `inline → DocElabM (Array (TSyntax `term))
 
 initialize roleExpanderAttr : KeyedDeclsAttribute RoleExpander ←
   mkDocExpanderAttribute `role_expander ``RoleExpander "Indicates that this function is used to implement a given role" `roleExpanderAttr
@@ -515,7 +515,7 @@ opaque codeBlockExpandersFor (x : Name) : DocElabM (Array CodeBlockExpander)
 
 
 
-abbrev DirectiveExpander := Array Arg → Array Syntax → DocElabM (Array (TSyntax `term))
+abbrev DirectiveExpander := Array Arg → TSyntaxArray `block → DocElabM (Array (TSyntax `term))
 
 initialize directiveExpanderAttr : KeyedDeclsAttribute DirectiveExpander ←
   mkDocExpanderAttribute `directive_expander ``DirectiveExpander "Indicates that this function is used to implement a given directive" `directiveExpanderAttr

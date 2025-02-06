@@ -51,9 +51,11 @@ def inlineStr := withAntiquot (mkAntiquot "inlineStr" `inlineStr) (inStrLit <| t
 elab "inlines!" s:inlineStr : term => open Lean Elab Term in
   match s.raw with
   | `<low| [~_ ~(.node _ _ out) ] > => do
-    let (tms, _) ← DocElabM.run {} (.init (← `(foo))) <| out.mapM elabInline
+    let (tms, _) ← DocElabM.run {} (.init (← `(foo))) <| out.mapM (elabInline ⟨·⟩)
     elabTerm (← `(term| #[ $[$tms],* ] )) none
   | _ => throwUnsupportedSyntax
+
+
 
 set_option pp.rawOnError true
 
@@ -117,8 +119,8 @@ elab "#docs" "(" genre:term ")" n:ident title:inlineStr ":=" ":::::::" text:docu
     | dbg_trace "nope {ppSyntax title}" throwUnsupportedSyntax
   let titleString := inlinesToString (← getEnv) titleParts
   let ((), st, st') ← liftTermElabM <| PartElabM.run {} (.init titleName) <| do
-    setTitle titleString (← liftDocElabM <| titleParts.mapM elabInline)
-    for b in blocks do partCommand b
+    setTitle titleString (← liftDocElabM <| titleParts.mapM (elabInline ⟨·⟩))
+    for b in blocks do partCommand ⟨b⟩
     closePartsUntil 0 endPos
     pure ()
   let finished := st'.partContext.toPartFrame.close endPos
@@ -137,10 +139,10 @@ elab "#doc" "(" genre:term ")" title:inlineStr "=>" text:completeDocument eoi : 
   let titleString := inlinesToString (← getEnv) titleParts
   let ((), st, st') ← PartElabM.run {} (.init titleName) <| do
     let mut errors := #[]
-    setTitle titleString (← liftDocElabM <| titleParts.mapM elabInline)
+    setTitle titleString (← liftDocElabM <| titleParts.mapM (elabInline ⟨·⟩))
     for b in blocks do
       try
-        partCommand b
+        partCommand ⟨b⟩
       catch e =>
         errors := errors.push e
     closePartsUntil 0 endPos
@@ -211,7 +213,7 @@ elab (name := completeDoc) "#doc" "(" genre:term ")" title:inlineStr "=>" text:c
   let initState : PartElabM.State := .init titleName
   withTraceNode `Elab.Verso (fun _ => pure m!"Document AST elab") <|
     incrementallyElabCommand blocks
-      (initAct := do setTitle titleString (← liftDocElabM <| titleParts.mapM elabInline))
+      (initAct := do setTitle titleString (← liftDocElabM <| titleParts.mapM (elabInline ⟨·⟩)))
       (endAct := fun ⟨st, st', _⟩ => withTraceNode `Elab.Verso (fun _ => pure m!"Document def") do
         let st' := st'.closeAll endPos
         let finished := st'.partContext.toPartFrame.close endPos
@@ -221,7 +223,7 @@ elab (name := completeDoc) "#doc" "(" genre:term ")" title:inlineStr "=>" text:c
         let docName := mkIdentFrom title n
         let titleStr : TSyntax ``Lean.Parser.Command.docComment := quote titleString
         elabCommand (← `($titleStr:docComment def $docName : Part $genre := $(← finished.toSyntax' genre st'.linkDefs st'.footnoteDefs))))
-      (handleStep := partCommand)
+      (handleStep := (partCommand ⟨·⟩))
       (run := fun act => liftTermElabM <| Prod.fst <$> PartElabM.run {} initState act)
 
 /--
