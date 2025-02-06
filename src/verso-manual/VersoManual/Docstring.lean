@@ -1229,7 +1229,7 @@ def blockFromMarkdownWithLean (names : List Name) (b : MD4Lean.Block) : DocElabM
                 (elabBlockCode := tryElabBlockCode)
             synthesizeSyntheticMVarsUsingDefault
 
-            discard <| addAutoBoundImplicits #[]
+            discard <| addAutoBoundImplicits #[] (inlayHintPos? := none)
 
             return res
           catch e =>
