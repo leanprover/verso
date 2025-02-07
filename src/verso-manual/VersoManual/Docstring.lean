@@ -1814,7 +1814,6 @@ def progress : DirectiveExpander
 
     pure #[← ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.progress $(quote namespaces.toArray) $(quote exceptions.toArray) $(quote present') $(quote allTactics)) #[])]
 
-
 @[block_extension Block.progress]
 def progress.descr : BlockDescr where
   traverse _ _ _ := pure none
@@ -1834,7 +1833,9 @@ def progress.descr : BlockDescr where
     let .ok ((namespaces : Array Name), (exceptions : Array Name), (present : List (Name × String)), (allTactics : Array Name)) := fromJson? info
       | panic! "Can't deserialize progress bar state"
 
-    let check : NameMap (List Name) := present.foldr (init := {}) (fun x z => z.insert x.1 <| (x.2.splitOn " ").map String.toName)
+    let check : NameMap (List Name) := present.foldr (init := {}) fun (ns, names) z =>
+      -- The filter is needed here because `"".splitOn " " = [""]`
+      z.insert ns (names.splitOn " " |>.filter (!·.isEmpty) |>.map String.toName)
     let check := check.insert `_root_ allRootNames.toList
 
     let undocTactics ← allTactics.filterM fun tacticName => do
@@ -1850,14 +1851,16 @@ def progress.descr : BlockDescr where
         {{namespaces.map fun ns =>
           let wanted := check.findD ns []
           let notDocumented := wanted.filter (!ok.contains ·) |>.mergeSort (fun x y => x.toString < y.toString)
-          let percent := notDocumented.length.toFloat * 100.0 / wanted.length.toFloat
+          let percentMissing :=
+            if wanted.isEmpty then 0
+            else notDocumented.length.toFloat * 100.0 / wanted.length.toFloat
           {{
             <dt><code>{{ns.toString}}</code></dt>
             <dd>
               <details>
                 <summary>
-                  <progress id=s!"prog-{ns}" value=s!"{100 - percent.toUInt8.toNat}" min="0" max="100"></progress>
-                  <label for=s!"prog-ns">s!"Missing {percent}%"</label>
+                  <progress id=s!"prog-{ns}" value=s!"{100 - percentMissing.toUInt8.toNat}" min="0" max="100"></progress>
+                  <label for=s!"prog-ns">s!"Missing {percentMissing}%"</label>
                 </summary>
                 {{notDocumented |>.map (·.toString) |> String.intercalate ", " }}
                 <pre>
