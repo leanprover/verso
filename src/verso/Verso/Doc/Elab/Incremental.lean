@@ -24,12 +24,18 @@ private def exnMessage [Monad m] [MonadLog m] [AddMessageContext m] [MonadExcept
   | oops@(.internal _ _) => throw oops
 
 namespace Internal
-inductive IncrementalSnapshot where
-  | mk
-    (underlying : Language.Snapshot)
-    (data : Dynamic)
-    (next : Option (SnapshotTask IncrementalSnapshot))
-    («syntax» : Syntax)
+structure IncrementalSnapshot where
+  underlying : Language.Snapshot
+  dynData : Dynamic
+  /--
+  A task that will provide the next state on demand, if relevant. Incremental elaboration traverses
+  the chain of next states until it finds one that can't be reused.
+  -/
+  next : Option (SnapshotTask IncrementalSnapshot)
+  /--
+  The specific piece of syntax that gave rise to this incremental snapshot.
+  -/
+  «syntax» : Syntax
 deriving TypeName, Nonempty
 
 partial
@@ -41,27 +47,14 @@ instance : ToSnapshotTree IncrementalSnapshot where
 /--
 The Lean elaboration framework's snapshot (needed to provide incremental diagnostics)
 -/
-def IncrementalSnapshot.toLeanSnapshot : (snap : IncrementalSnapshot) → Language.Snapshot
-  | .mk underlying _ _ _ => underlying
+def IncrementalSnapshot.toLeanSnapshot (snap : IncrementalSnapshot) : Language.Snapshot :=
+  snap.underlying
 
-def IncrementalSnapshot.data [TypeName α] : IncrementalSnapshot → Option α
-  | .mk _ data _ _ => data.get? α
+def IncrementalSnapshot.data [TypeName α] (snap : IncrementalSnapshot) : Option α :=
+  snap.dynData.get? α
 
 def IncrementalSnapshot.typeName : IncrementalSnapshot → Name
   | .mk _ data _ _ => data.typeName
-
-/--
-A task that will provide the next state on demand, if relevant. Incremental elaboration traverses
-the chain of next states until it finds one that can't be reused.
--/
-def IncrementalSnapshot.next : (snap : IncrementalSnapshot) → Option (SnapshotTask IncrementalSnapshot)
-  | .mk _ _ next _ => next
-
-/--
-The specific piece of syntax that gave rise to this incremental snapshot.
--/
-def IncrementalSnapshot.syntax : (snap : IncrementalSnapshot) → Syntax
-  | .mk _ _ _ stx => stx
 
 end Internal
 /--
