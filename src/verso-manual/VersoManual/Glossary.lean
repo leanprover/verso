@@ -103,14 +103,15 @@ def deftech.descr : InlineDescr where
     |>.setDomainDescription technicalTermDomain "Definitions of technical terms"
 
   traverse id data _contents := do
-    -- TODO use internal tags in the first round to respect users' assignments (cf part tag assignment)
+    -- A round with internal tags is not needed here because users's don't get to pick IDs
     let path ← (·.path) <$> read
-    let _ ← Verso.Genre.Manual.externalTag id path "--tech"
     match FromJson.fromJson? data with
     | .error err =>
       logError err
       return none
     | .ok ((key, term) : (String × String) ) =>
+      let termSlug := term.sluggify.toString
+      let _ ← Verso.Genre.Manual.externalTag id path s!"--tech-term-{termSlug}"
       Glossary.addEntry id key
       modify fun st =>
         st
