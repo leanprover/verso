@@ -51,7 +51,7 @@ where
   remaining {m} {α} (p : ArgParse m α) : ArgParse m (List α) :=
     (.done *> pure []) <|> ((· :: ·) <$> p <*> remaining p)
   attr : ArgParse DocElabM (String × String) :=
-    (fun (k, v) => (k.getId.toString (escape := false), v)) <$> .anyNamed "attribute" .string
+    (fun (k, v) => (k.getId.toString (escape := false), v)) <$> .anyNamed `attribute .string
 
 @[directive_expander html]
 def html : DirectiveExpander
