@@ -170,7 +170,7 @@ structure DocElabSnapshotState where
 deriving Nonempty
 
 structure DocElabSnapshot where
-  finished : Task DocElabSnapshotState
+  finished : Task (Option DocElabSnapshotState)
 deriving Nonempty, TypeName
 
 instance : IncrementalSnapshot DocElabSnapshot DocElabSnapshotState where

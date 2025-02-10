@@ -24,46 +24,47 @@ private def exnMessage [Monad m] [MonadLog m] [AddMessageContext m] [MonadExcept
   | oops@(.internal _ _) => throw oops
 
 namespace Internal
-inductive IncrementalSnapshot where
-  | mk
-    (underlying : Language.Snapshot)
-    (data : Dynamic)
-    (next : Option (SnapshotTask IncrementalSnapshot))
-    («syntax» : Syntax)
+structure IncrementalSnapshot where
+  underlying : Language.Snapshot
+  dynData : Dynamic
+  /--
+  A task that will provide the next state on demand, if relevant. Incremental elaboration traverses
+  the chain of next states until it finds one that can't be reused.
+  -/
+  next : Option (SnapshotTask (Option IncrementalSnapshot))
+  /--
+  The specific piece of syntax that gave rise to this incremental snapshot.
+  -/
+  «syntax» : Syntax
 deriving TypeName, Nonempty
 
-partial
-instance : ToSnapshotTree IncrementalSnapshot where
-  toSnapshotTree := go where
-    go := fun
-      | .mk s _ next _ => ⟨s, next.map (·.map (sync := true) go) |>.toArray⟩
 
 /--
 The Lean elaboration framework's snapshot (needed to provide incremental diagnostics)
 -/
-def IncrementalSnapshot.toLeanSnapshot : (snap : IncrementalSnapshot) → Language.Snapshot
-  | .mk underlying _ _ _ => underlying
+def IncrementalSnapshot.toLeanSnapshot (snap : IncrementalSnapshot) : Language.Snapshot :=
+  snap.underlying
 
-def IncrementalSnapshot.data [TypeName α] : IncrementalSnapshot → Option α
-  | .mk _ data _ _ => data.get? α
+def IncrementalSnapshot.data [TypeName α] (snap : IncrementalSnapshot) : Option α :=
+  snap.dynData.get? α
 
-def IncrementalSnapshot.typeName : IncrementalSnapshot → Name
-  | .mk _ data _ _ => data.typeName
+def IncrementalSnapshot.typeName (snap : IncrementalSnapshot) : Name :=
+  snap.dynData.typeName
 
-/--
-A task that will provide the next state on demand, if relevant. Incremental elaboration traverses
-the chain of next states until it finds one that can't be reused.
--/
-def IncrementalSnapshot.next : (snap : IncrementalSnapshot) → Option (SnapshotTask IncrementalSnapshot)
-  | .mk _ _ next _ => next
+partial
+instance : ToSnapshotTree IncrementalSnapshot where
+  toSnapshotTree := go
+where
+  go (snap : IncrementalSnapshot) : SnapshotTree := {
+    element := snap.toLeanSnapshot,
+    children :=
+      Option.toArray <| snap.next.map fun task =>
+        task.map (sync := true) (·.map go |>.getD default)
+  }
 
-/--
-The specific piece of syntax that gave rise to this incremental snapshot.
--/
-def IncrementalSnapshot.syntax : (snap : IncrementalSnapshot) → Syntax
-  | .mk _ _ _ stx => stx
 
 end Internal
+
 /--
 Describes the relationship between a DSL's incremental snapshot type, the DSL elaborator's own
 internal state, and the state used by Lean's incremental elaboration framework.
@@ -72,13 +73,13 @@ class IncrementalSnapshot (snapshot : outParam Type) (σ : outParam Type) extend
   /--
   The incremental DSL elaboration state computed as a result of this snapshot.
   -/
-  getIncrState : snapshot → Task σ
+  getIncrState : snapshot → Task (Option σ)
 
   /--
   How should a snapshot be constructed? The parameter is a task that will compute the updated state
   during incremental elaboration.
   -/
-  mkSnap : Task σ → snapshot
+  mkSnap : Task (Option σ) → snapshot
 
 private def freshSnapshot (ownMessageLog := true) : CoreM Language.Snapshot := do
   if ownMessageLog then
@@ -146,40 +147,50 @@ def incrementallyElabCommand
         let mut nextPromise ← IO.Promise.new
 
         let initData : Language.Snapshot ← freshSnapshot
-        snap.new.resolve <| DynamicSnapshot.ofTyped <|
-          Internal.IncrementalSnapshot.mk initData (.mk <| mkSnap (.pure (← get))) (some {range? := cmd.getRange?, task := nextPromise.result}) cmd
+        snap.new.resolve <| DynamicSnapshot.ofTyped <| show Internal.IncrementalSnapshot from {
+          underlying := initData,
+          dynData := .mk <| mkSnap (.pure (← get)),
+          next := some {range? := cmd.getRange?, task := nextPromise.result?},
+          «syntax» := cmd
+        }
         initAct
         for b in steps do
           let mut reuseState := false
           if let some oldSnap := oldSnap? then
             if let some next := oldSnap.next then
-              -- The message log of a snapshot contains the messages that are present at the
-              -- beginning of its elaboration, so its message log should be restored whether or not
-              -- we'll re-use its state.
-              Core.setMessageLog next.get.toLeanSnapshot.diagnostics.msgLog
-              if next.get.syntax.structRangeEqWithTraceReuse (← getOptions) b then
-                let some data := next.get.data (α := snapshot)
-                  | logErrorAt next.get.syntax
-                      m!"Internal error: failed to re-used incremental state. Expected '{TypeName.typeName snapshot}' but got a '{next.get.typeName}'"
-                -- If they match, restore the state, do nothing, and advance the snapshot
-                let st := getIncrState data |>.get
-                set st
-                oldSnap? := next.get
-                reuseState := true
+              if let some next := next.get then
+                -- The message log of a snapshot contains the messages that are present at the
+                -- beginning of its elaboration, so its message log should be restored whether or not
+                -- we'll re-use its state.
+                Core.setMessageLog next.toLeanSnapshot.diagnostics.msgLog
+                if next.syntax.structRangeEqWithTraceReuse (← getOptions) b then
+                  let some data := next.data (α := snapshot)
+                    | logErrorAt next.syntax
+                        m!"Internal error: failed to re-used incremental state. Expected '{TypeName.typeName snapshot}' but got a '{next.typeName}'"
+                  -- If they match, restore the state, do nothing, and advance the snapshot
+                  let st := getIncrState data |>.get
+                  if let some st := st then
+                    set st
+                    reuseState := true
+                  oldSnap? := next
+
           let nextNextPromise ← IO.Promise.new
           let updatedState ← IO.Promise.new
 
-          nextPromise.resolve <|
-            .mk (← freshSnapshot) (.mk <| mkSnap updatedState.result)
-              (some {range? := b.getRange?, task := nextNextPromise.result}) b
+          nextPromise.resolve {
+            underlying := (← freshSnapshot),
+            dynData := (.mk <| mkSnap <| updatedState.result?),
+            next := (some {range? := b.getRange?, task := nextNextPromise.result?})
+            «syntax» := b
+          }
 
           try
             if not reuseState then
               oldSnap? := none
               try handleStep b
-              catch e => logMessage <| ← exnMessage e
+              catch e => logMessage (← exnMessage e)
 
-            updatedState.resolve <| ← get
+            updatedState.resolve (← get)
             nextPromise := nextNextPromise
           finally
             -- In case of a fatal exception in partCommand, we need to make sure that the promise actually
