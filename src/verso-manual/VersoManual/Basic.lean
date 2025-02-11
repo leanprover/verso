@@ -565,11 +565,16 @@ structure BlockDescr where
   extraCss : List String := []
   extraCssFiles : List (String × String) := []
   licenseInfo : List LicenseInfo := []
+  /--
+  Should this block be an entry in the page-local ToC? If so, how should it be represented?
+  -/
+  localContentItem : InternalId → Json → Array (Doc.Block Manual) → Option Verso.Output.Html :=
+    fun _ _ _ => none
 
   toTeX : Option (BlockToTeX Manual (ReaderT ExtensionImpls IO))
 deriving TypeName
 
-instance : Inhabited BlockDescr := ⟨⟨id, default, default, default, default, default, default, default, default⟩⟩
+instance : Inhabited BlockDescr := ⟨⟨id, default, default, default, default, default, default, default, default, default⟩⟩
 
 open Lean in
 initialize inlineExtensionExt

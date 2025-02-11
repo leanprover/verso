@@ -368,7 +368,7 @@ where
     else none
 
 
-def Toc.localHtml (path : Path) (toc : Toc) : Html := Id.run do
+def Toc.localHtml (path : Path) (toc : Toc) (localItems : Array Html) : Html := Id.run do
   let mut toc := toc
   let mut fallbackId : Nat := 0
   let rootId := "----bookRoot"
@@ -383,19 +383,25 @@ def Toc.localHtml (path : Path) (toc : Toc) : Html := Id.run do
         else
           fallbackId := fallbackId + 1
           pure s!"----header{fallbackId}"
-      -- In the last position, when `path == currentPath`, the ToC should default to open
-      out := out ++ splitTocElem false (path == currentPath) entryId (sectionNum toc.sectionNum) (linkify currentPath toc.id toc.title) toc.children
+      -- In the last position, when `path == currentPath`, the ToC should default to open and show local items if possible
+      if path == currentPath then
+        if localItems.isEmpty then
+          out := out ++ splitTocElem false true entryId (sectionNum toc.sectionNum) (linkify currentPath toc.id toc.title) toc.children
+        else
+          out := out ++ splitTocLocalElem false entryId (sectionNum toc.sectionNum) (linkify currentPath toc.id toc.title) localItems
+      else
+        out := out ++ splitTocElem false false entryId (sectionNum toc.sectionNum) (linkify currentPath toc.id toc.title) toc.children
     else break
   {{<div class="split-tocs">{{out}}</div>}}
 where
-  splitTocElem (isTop thisPage : Bool) (chapterId : String) («section» : Html) (title : Html) (children : List Toc) :=
+  splitTocWrapper (isTop thisPage : Bool) (chapterId : String) («section» : Html) (title : Html) (children : Option Html) :=
     let toggleId := s!"--verso-manual-toc-{chapterId}"
     let «class» := if isTop then "split-toc book" else "split-toc"
     let checked := if thisPage then #[("checked", "checked")] else #[]
     {{
       <div class={{«class»}}>
         <div class="title">
-          {{if children.isEmpty then {{
+          {{if children.isNone then {{
               <span class="no-toggle"/>
             }}
             else {{
@@ -413,33 +419,52 @@ where
             {{title}}
           </span>
         </div>
-        {{if children.isEmpty then .empty
-          else {{
-            <table>
-              {{children.map fun c =>
-                let classes := String.intercalate " " <|
-                  (if c.path.isPrefixOf path && !thisPage then
-                    ["current"]
-                   else []) ++
-                  (if c.sectionNum.isSome then
-                    ["numbered"]
-                   else ["unnumbered"])
-
-                {{<tr class={{classes}}>
-                    <td class="num">
-                      {{if let some ns := c.sectionNum then sectionNumberString ns
-                        else .empty}}
-                    </td>
-                    <td>
-                      {{linkify c.path c.id c.title}}
-                    </td>
-                  </tr>}}
-              }}
-            </table>
-          }}
+        {{if let some children := children then children
+          else .empty
         }}
       </div>
     }}
+  splitTocElem (isTop thisPage : Bool) (chapterId : String) («section» : Html) (title : Html) (children : List Toc) :=
+    let children :=
+      if children.isEmpty then none
+      else some {{
+        <table>
+          {{children.map fun c =>
+            let classes := String.intercalate " " <|
+              (if c.path.isPrefixOf path && !thisPage then
+                ["current"]
+               else []) ++
+              (if c.sectionNum.isSome then
+                ["numbered"]
+               else ["unnumbered"])
+
+            {{<tr class={{classes}}>
+                <td class="num">
+                  {{if let some ns := c.sectionNum then sectionNumberString ns
+                    else .empty}}
+                </td>
+                <td>
+                  {{linkify c.path c.id c.title}}
+                </td>
+              </tr>}}
+          }}
+        </table>
+      }}
+
+    splitTocWrapper isTop thisPage chapterId «section» title children
+
+  splitTocLocalElem (isTop : Bool) (chapterId : String) («section» : Html) (title : Html) (children : Array Html) :=
+    let children :=
+      if children.isEmpty then none
+      else some {{
+        <ol>
+          {{children.map ({{<li>{{·}}</li>}})}}
+        </ol>
+      }}
+
+    splitTocWrapper isTop true chapterId «section» title children
+
+
   linkify (path : Path) (id : Option String) (html : Html) :=
     match html with
     | .tag "a" _ _ => html
@@ -479,6 +504,7 @@ def page
     (textTitle : String) (htmlTitle : Html) (contents : Html)
     (extraCss : HashSet String)
     (extraJs : HashSet String)
+    (localItems : Array Html)
     (extraHead : Array Html := #[])
     (showNavButtons : Bool := true)
     (base : Option String := none)
@@ -490,6 +516,9 @@ def page
     (extraJsFiles : Array String := #[]) : Html :=
   let relativeRoot :=
     base.getD (String.join <| "./" :: path.toList.map (fun _ => "../"))
+  -- let localItems :=
+  --   if localItems.size = 0 then .empty
+  --   else {{<nav class="split-toc"><div class="title"><a href="">{{htmlTitle}}</a></div><ol>{{localItems.map fun name => {{<li>{{name}}</li>}} }}</ol></nav>}}
   {{
     <html>
       <head>
@@ -529,7 +558,7 @@ def page
                   {{<a href={{logoDest}} id="logo">{{logoHtml}}</a>}}
                 else .empty }}
               {{if showNavButtons then toc.navButtons path else .empty}}
-              {{toc.localHtml path}}
+              {{toc.localHtml path localItems}}
             </div>
             <div class="last">
               {{ if repoLink.isSome || issueLink.isSome then {{

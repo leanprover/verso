@@ -11,7 +11,9 @@ set_option pp.rawOnError true
 authors := ["David Thrane Christiansen"]
 %%%
 
+
 Documentation can take many forms:
+
 
  * References
  * Tutorials
@@ -23,6 +25,7 @@ Documentation can take many forms:
 %%%
 tag := "genres"
 %%%
+
 
 :::paragraph
 Documentation comes in many forms, and no one system is suitable for representing all of them.
@@ -70,11 +73,14 @@ They include heuristic elaboration of code items in their Markdown that attempts
 
 {docstring Monad}
 
+
+
 :::tactic "induction"
 :::
 
 :::tactic "simp"
 :::
+
 
 {docstring Nat}
 
