@@ -458,7 +458,14 @@ where
         Html.seq <$> part.subParts.mapM (fun p => Manual.toHtml {opts.lift with headerLevel := 2} (ctxt.inPart p) state definitionIds linkTargets codeOptions p)
       else pure .empty
 
-    let thisPageToc : Array Html ← localContents (← read) opts.lift ctxt state (includeTitle := false) (includeSubparts := (depth == 0 || part.htmlSplit == .never)) part <&> (·.map (·.toHtml))
+    let includeSubparts := if (depth == 0 || part.htmlSplit == .never) then .all else .depth 0
+    let thisPageToc : Array LocalContentItem ← localContents (← read) opts.lift ctxt state (includeTitle := false) (includeSubparts := includeSubparts) part
+
+    -- If there's no elements, then get rid of the contents entirely. This causes the ToC generation code in the HTML to fall back to the ordinary collapsible ones.
+    -- These look inconsistent if there's no non-section elements.
+    let thisPageToc := if thisPageToc.filter (·.header?.isNone) |>.isEmpty then #[] else thisPageToc
+
+    let thisPageToc : Array Html := thisPageToc.map (·.toHtml)
 
     let subToc ← part.subParts.mapM (fun p => toc depth opts (ctxt.inPart p) state definitionIds linkTargets p)
     let pageContent :=

@@ -51,7 +51,7 @@ structure HeaderStatus where
 open Verso.Output in
 structure LocalContentItem where
   header? : Option HeaderStatus
-  slug : Slug
+  dest : String
   linkText : Html
 
 partial def fromNone : Doc.Inline Genre.none → Doc.Inline Manual
@@ -82,19 +82,19 @@ partial def toNone : Doc.Inline Manual → Doc.Inline Genre.none
 open Verso.Output Html
 
 def LocalContentItem.toHtml (item : LocalContentItem) : Html :=
-  let txt := {{<a href=s!"#{item.slug.toString}">{{item.linkText}}</a>}}
+  let txt := {{<a href={{item.dest}}>{{item.linkText}}</a>}}
   if let some ⟨level, numbering⟩ := item.header? then
     let numHtml := if let some l := numbering then {{<span class="level-num">{{l}}</span>" "}} else .empty
     {{<span class=s!"header head-{level}">{{numHtml}}{{txt}}</span>}}
   else
     txt
 
-partial def blockItem? (impls : ExtensionImpls) (xref : TraverseState ) (blk : Block) (contents : Array (Doc.Block Manual)) : Option LocalContentItem := do
+partial def blockItem? (impls : ExtensionImpls) (xref : TraverseState) (blk : Block) (contents : Array (Doc.Block Manual)) : Option LocalContentItem := do
   let impl ← impls.getBlock? blk.name
   let id ← blk.id
   let name ← impl.localContentItem id blk.data contents
-  let (_path, slug) ← xref.externalTags[id]? -- TODO validate path
-  return ⟨none, slug, name⟩
+  let (path, slug) ← xref.externalTags[id]?
+  return ⟨none, path.link slug.toString, name⟩
 
 partial def blockContents (impls : ExtensionImpls) (xref : TraverseState) (acc : Array LocalContentItem) (b : Doc.Block Manual) : Array LocalContentItem := Id.run do
   match b with
@@ -124,11 +124,30 @@ partial def blockContents (impls : ExtensionImpls) (xref : TraverseState) (acc :
       acc := blockContents impls xref acc b
     acc
 
+inductive SubpartSpec where
+  | none
+  | depth : Nat → SubpartSpec
+  | all
+deriving DecidableEq, Ord, Repr
+
+def SubpartSpec.isNone : SubpartSpec → Bool
+  | .none => true
+  | _ => false
+
+def SubpartSpec.decr : SubpartSpec → SubpartSpec
+  | .none => .none
+  | .depth 0 => .none
+  | .depth (n + 1) => .depth n
+  | .all => .all
+
+instance : LT SubpartSpec := Ord.toLT inferInstance
+instance : LE SubpartSpec := Ord.toLE inferInstance
+
 partial def localContents
     (impls : ExtensionImpls) (opts : Html.Options Manual (ReaderT ExtensionImpls IO)) (ctxt : TraverseContext) (xref : TraverseState)
     (p : Part Manual)
     (sectionNumPrefix : Option String := none)
-    (includeTitle : Bool := true) (includeSubparts : Bool := true) (fromLevel : Nat := 0) : StateT (Code.Hover.State Html) (ReaderT ExtensionImpls IO) (Array (LocalContentItem)) := do
+    (includeTitle : Bool := true) (includeSubparts : SubpartSpec := .all) (fromLevel : Nat := 0) : StateT (Code.Hover.State Html) (ReaderT ExtensionImpls IO) (Array (LocalContentItem)) := do
   let sectionNumPrefix := sectionNumPrefix <|> sectionString ctxt
   let mut out := #[]
 
@@ -137,17 +156,20 @@ partial def localContents
     let partDest : Option (LocalContentItem) := do
       let m ← p.metadata
       let id ← m.id
-      let (_, slug) ← xref.externalTags[id]?
+      let (path, slug) ← xref.externalTags[id]?
       let num := sectionString ctxt |>.map (withoutPrefix · sectionNumPrefix)
 
-      return ⟨some ⟨fromLevel, num⟩, slug, html⟩
+      return ⟨some ⟨fromLevel, num⟩, path.link slug.toString, html⟩
     out := out ++ partDest.toArray
 
-  for b in p.content do
-    out := blockContents impls xref out b
-  if includeSubparts then
+  if includeSubparts > .none then
+    for b in p.content do
+      out := blockContents impls xref out b
+
+  if includeSubparts > .none then
     for p' in p.subParts do
-      out := out ++ (← localContents impls opts (ctxt.inPart p') xref p' (sectionNumPrefix := sectionNumPrefix) (fromLevel := fromLevel + 1))
+      out := out ++ (← localContents impls opts (ctxt.inPart p') xref p' (sectionNumPrefix := sectionNumPrefix) (includeSubparts := includeSubparts.decr) (fromLevel := fromLevel + 1))
+
   return out
 where
   withoutPrefix (str : String) (prefix? : Option String) : String :=
