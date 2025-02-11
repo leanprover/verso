@@ -545,6 +545,8 @@ def docstringStyle := r#"
   transition-behavior: allow-discrete;
   @starting-style { opacity: 0 !important; }
 }
+
+#this-page-items .tactic-name { font-weight: bold; }
 "# ++ Id.run do
   let mut str := ""
   for i in [0:50] do
@@ -751,6 +753,13 @@ def docstring.descr : BlockDescr := withHighlighting {
           </div>
         </div>
       }}
+
+  localContentItem := fun _id info _contents => open Verso.Output.Html in do
+    let .ok (name, _declType, _signature) := FromJson.fromJson? (α := Name × Block.Docstring.DeclType × Option Highlighted) info
+      | failure
+    pure #[{{<code>{{name.getString!}}</code>}}]
+
+
   toTeX := some <| fun _goI goB _id _info contents => contents.mapM goB
   extraCss := [docstringStyle]
 }
@@ -1461,6 +1470,10 @@ def optionDocs.descr : BlockDescr where
           </div>
         </div>
       }}
+  localContentItem := fun _id info _contents => open Verso.Output.Html in do
+    let .ok (name, _defaultValue) := FromJson.fromJson? (α := Name × Highlighted) info
+      | failure
+    pure #[{{<code>{{name.toString}}</code>}}]
   toTeX := some <| fun _goI goB _id _info contents => contents.mapM goB
   extraCss := [highlightingStyle, docstringStyle]
   extraJs := [highlightingJs]
@@ -1545,6 +1558,13 @@ def tactic : DirectiveExpander
     let userContents ← more.mapM elabBlock
     pure #[← ``(Verso.Doc.Block.other (Block.tactic $(quote tactic) $(quote opts.show)) #[$(contents ++ userContents),*])]
 
+
+
+def Inline.tactic : Inline where
+  name := `Verso.Genre.Manual.tacticInline
+
+
+
 open Verso.Genre.Manual.Markdown in
 open Lean Elab Term Parser Tactic Doc in
 @[block_extension tactic]
@@ -1586,12 +1606,14 @@ def tactic.descr : BlockDescr := withHighlighting {
           </div>
         </div>
       }}
+  localContentItem := fun _id info _contents => open Verso.Output.Html in do
+    let .ok (tactic, «show») := FromJson.fromJson? (α := TacticDoc × Option String) info
+      | failure
+    pure #[{{<code class="tactic-name">{{show.getD tactic.userName}}</code>}}]
   toTeX := some <| fun _goI goB _id _info contents => contents.mapM goB
   extraCss := [docstringStyle]
 }
 
-def Inline.tactic : Inline where
-  name := `Verso.Genre.Manual.tacticInline
 
 deriving instance Repr for NameSet
 deriving instance Repr for Lean.Elab.Tactic.Doc.TacticDoc
@@ -1719,6 +1741,11 @@ def conv.descr : BlockDescr := withHighlighting {
           </div>
         </div>
       }}
+  localContentItem := fun _id info _contents => open Verso.Output.Html in do
+    let .ok (_name, «show», _docs?) := FromJson.fromJson? (α := Name × String × Option String) info
+      | failure
+    pure #[{{<code class="tactic-name">{{«show»}}</code>}}]
+
   toTeX := some <| fun _goI goB _id _info contents => contents.mapM goB
   extraCss := [docstringStyle]
 }

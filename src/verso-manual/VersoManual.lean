@@ -26,6 +26,7 @@ import VersoManual.Glossary
 import VersoManual.Docstring
 import VersoManual.WebAssets
 import VersoManual.WordCount
+import VersoManual.LocalContents
 
 open Lean (Name NameMap Json ToJson FromJson)
 
@@ -273,9 +274,13 @@ partial def toc (depth : Nat) (opts : Html.Options Manual IO)
       children := children.toList
     }
 
-def page (toc : List Html.Toc) (path : Path) (textTitle : String) (htmlTitle contents : Html) (state : TraverseState) (config : Config) (showNavButtons : Bool := true) (extraJs : List String := []) : Html :=
+def page (toc : List Html.Toc)
+    (path : Path) (textTitle : String) (htmlBookTitle htmlTitle contents : Html)
+    (state : TraverseState) (config : Config)
+    (localItems : Array Html)
+    (showNavButtons : Bool := true) (extraJs : List String := []) : Html :=
   let toc := {
-    title := htmlTitle, path := #[], id := "" , sectionNum := some #[], children := toc
+    title := htmlBookTitle, path := #[], id := "" , sectionNum := some #[], children := toc
   }
   Html.page toc path textTitle htmlTitle contents
     state.extraCss (state.extraJs.insertMany extraJs)
@@ -285,6 +290,7 @@ def page (toc : List Html.Toc) (path : Path) (textTitle : String) (htmlTitle con
     (logoLink := config.logoLink)
     (repoLink := config.sourceLink)
     (issueLink := config.issueLink)
+    (localItems := localItems)
     (extraStylesheets := config.extraCss ++ state.extraCssFiles.toList.map ("/-verso-css/" ++ ·.1))
     (extraJsFiles := config.extraJs.toArray ++ state.extraJsFiles.map ("/-verso-js/" ++ ·.1))
     (extraHead := config.extraHead)
@@ -298,7 +304,7 @@ def Config.relativize (config : Config) (path : Path) (html : Html) : Html :=
 
 open Output.Html in
 def xref (toc : List Html.Toc) (xrefJson : String) (findJs : String) (state : TraverseState) (config : Config) : Html :=
-  page toc #["find"] "Cross-Reference Redirection" "Cross-Reference Redirection" {{
+  page toc #["find"] "Cross-Reference Redirection" "Cross-Reference Redirection" "Cross-Reference Redirection" {{
     <section>
       <h1 id="title"></h1>
       <div id="message"></div>
@@ -306,6 +312,7 @@ def xref (toc : List Html.Toc) (xrefJson : String) (findJs : String) (state : Tr
   }}
   state
   config
+  (localItems := #[])
   (extraJs := [s!"let xref = {xrefJson};\n" ++ findJs])
 
 def emitXrefs (toc : List Html.Toc) (dir : System.FilePath) (state : TraverseState) (config : Config) : IO Unit := do
@@ -372,6 +379,7 @@ where
           {{contents}}
         </section>}}
     let toc := (← text.subParts.mapM (toc 0 opts ctxt state definitionIds linkTargets)).toList
+    let thisPageToc : Array Html ← localContents (← read) opts.lift ctxt state text <&> (·.map (·.toHtml))
     emitXrefs toc dir state config
     IO.FS.withFile (dir.join "book.css") .write fun h => do
       h.putStrLn Html.Css.pageStyle
@@ -389,9 +397,8 @@ where
       if config.verbose then
         IO.println s!"Saving {dir.join "index.html"}"
       h.putStrLn Html.doctype
-      h.putStrLn
-        (config.relativize ctxt.path <|
-          page toc ctxt.path text.titleString titleHtml pageContent state config (showNavButtons := false)).asString
+      h.putStrLn <| Html.asString <| config.relativize ctxt.path <|
+        page toc ctxt.path text.titleString titleHtml titleHtml pageContent state config thisPageToc (showNavButtons := false)
 
 open Verso.Output.Html in
 def emitHtmlMulti (logError : String → IO Unit) (config : Config)
@@ -401,6 +408,10 @@ def emitHtmlMulti (logError : String → IO Unit) (config : Config)
   let ((), st) ← emitContent root {}
   IO.FS.writeFile (root.join "-verso-docs.json") (toString st.dedup.docJson)
 where
+  /--
+  Emits the data used by all pages in the site, such as JS and CSS, and then emits the root page
+  (and thus its children).
+  -/
   emitContent (root : System.FilePath) : StateT (State Html) (ReaderT ExtensionImpls IO) Unit := do
     let (text, state) ← traverse logError text config
     let authors := text.metadata.map (·.authors) |>.getD []
@@ -426,15 +437,18 @@ where
         h.putStr contents
     emitPart titleHtml authors toc opts.lift ctxt state definitionIds linkTargets {} true config.htmlDepth root text
     emitXrefs toc root state config
+  /--
+  Emits HTML for a given part, and its children if the splitting threshold is not yet reached.
+  -/
   emitPart (bookTitle : Html) (authors : List String) (bookContents)
       (opts ctxt state definitionIds linkTargets codeOptions)
       (root : Bool) (depth : Nat) (dir : System.FilePath) (part : Part Manual) : StateT (State Html) (ReaderT ExtensionImpls IO) Unit := do
     let thisFile := part.metadata.bind (·.file) |>.getD (part.titleString.sluggify.toString)
     let dir := if root then dir else dir.join thisFile
     let sectionNum := sectionHtml ctxt
+    let pageTitleHtml := sectionNum ++ (← Html.seq <$> part.title.mapM (Manual.toHtml opts.lift ctxt state definitionIds linkTargets codeOptions))
     let titleHtml :=
-      sectionNum ++
-      (← Html.seq <$> part.title.mapM (Manual.toHtml opts.lift ctxt state definitionIds linkTargets codeOptions)) ++
+      pageTitleHtml ++
       if let some id := part.metadata.bind (·.id) then
         permalink id state
       else .empty
@@ -443,6 +457,9 @@ where
       if depth == 0 || part.htmlSplit == .never then
         Html.seq <$> part.subParts.mapM (fun p => Manual.toHtml {opts.lift with headerLevel := 2} (ctxt.inPart p) state definitionIds linkTargets codeOptions p)
       else pure .empty
+
+    let thisPageToc : Array Html ← localContents (← read) opts.lift ctxt state (includeTitle := false) (includeSubparts := (depth == 0 || part.htmlSplit == .never)) part <&> (·.map (·.toHtml))
+
     let subToc ← part.subParts.mapM (fun p => toc depth opts (ctxt.inPart p) state definitionIds linkTargets p)
     let pageContent :=
       if root then
@@ -452,13 +469,13 @@ where
         let subTocHtml := if (depth > 0 && part.htmlSplit != .never) && subToc.size > 0 then {{<ol class="section-toc">{{subToc.map (·.html none)}}</ol>}} else .empty
         {{<section><h1>{{titleHtml}}</h1> {{introHtml}} {{contents}} {{subTocHtml}}</section>}}
 
-    let pageTitle := if root then bookTitle else {{<a href="/">{{bookTitle}}</a>}}
     ensureDir dir
     IO.FS.withFile (dir.join "index.html") .write fun h => do
       if config.verbose then
         IO.println s!"Saving {dir.join "index.html"}"
       h.putStrLn Html.doctype
-      h.putStrLn (config.relativize ctxt.path <| page bookContents ctxt.path part.titleString pageTitle pageContent state config).asString
+      h.putStrLn <| Html.asString <| config.relativize ctxt.path <|
+        page bookContents ctxt.path part.titleString bookTitle pageTitleHtml pageContent state config thisPageToc
     if depth > 0 ∧ part.htmlSplit != .never then
       for p in part.subParts do
         let nextFile := p.metadata.bind (·.file) |>.getD (p.titleString.sluggify.toString)

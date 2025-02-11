@@ -237,6 +237,7 @@ pre, code {
     z-index: -10;
 }
 
+
 :root {
     --verso-toc-triangle-width: 0.6rem;
     --verso-toc-triangle-height: 0.6rem;
@@ -297,6 +298,26 @@ pre, code {
 #toc .split-toc td {
     vertical-align: top;
     font-size: 90%;
+}
+
+#toc .split-toc > ol {
+    border-left: 1px dotted;
+    list-style-type: none;
+    padding-left: 0.5rem;
+    margin-left: 0;
+    margin-right: 0;
+    margin-bottom: 0.5rem;
+    margin-top: 0.5rem;
+    font-size: 0.9rem;
+}
+
+#toc .split-toc > ol > li {
+    text-indent: -1.5rem;
+    padding-left: 2.5rem;
+}
+
+#toc .split-toc > ol > li:has(.header) {
+    padding-left: 2rem;
 }
 
 #toc .split-toc .current td:not(.num), #toc .split-toc .title .current {
