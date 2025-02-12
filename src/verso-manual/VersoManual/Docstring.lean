@@ -72,54 +72,57 @@ def ppName (c : Name) (showUniverses := true) (showNamespace : Bool := true) (op
     | _ =>
       return ⟨← ppTerm stx, infos⟩
 
+def stripNS : Syntax → Syntax
+  | .ident info substr x pre => .ident info substr x.getString!.toName pre
+  | .node info kind args => .node info kind (args.map stripNS)
+  | other => other
+
+def stripInfo : Syntax → Syntax
+  | .ident _ substr x pre => .ident .none substr x.getString!.toName pre
+  | .node _ kind args => .node .none kind (args.map stripInfo)
+  | .atom _ x => .atom .none x
+  | .missing => .missing
+
+
+/--
+Strip an explicit `_root_` from each identifier, to work around configuration problems in the pretty
+printer
+-/
+def stripRootPrefix (stx : Syntax) : Syntax :=
+  stx.rewriteBottomUp fun
+  | .ident info substr x pre => .ident info substr (x.replacePrefix `_root_ .anonymous) pre
+  | s => s
+
 open Lean.PrettyPrinter Delaborator in
-def ppSignature (c : Name) (showNamespace : Bool := true) (openDecls : List OpenDecl := []) : MetaM FormatWithInfos :=
+/--
+Postprocess Lean's own `ppSignature` to remove the namespace (used for constructors) and any
+`_root_` prefixes that have snuck in. The latter is not strictly correctness preserving, but it's an
+expedient hack. It also removes the info from the constant's name if requested, to avoid unwanted
+linking from a definition site to itself.
+-/
+def ppSignature (c : Name) (showNamespace : Bool := true) (openDecls : List OpenDecl := []) (constantInfo : Bool := true) : MetaM FormatWithInfos :=
   withTheReader Core.Context (fun ρ => {ρ with openDecls := ρ.openDecls ++ openDecls}) <| do
   let decl ← getConstInfo c
   let e := .const c (decl.levelParams.map mkLevelParam)
   let (stx, infos) ← delabCore e (delab := delabConstWithSignature)
-  match stx with
-  | `(declSigWithId|$nameUniv $argsRet:declSig ) => do
-    let mut doc : Std.Format := .nil
-    match nameUniv with
-    | `($x:ident.{$uni,*}) =>
-      let unis : List Format ← uni.getElems.toList.mapM (ppCategory `level ·.raw)
-      doc := Std.Format.text (nameString x.getId showNamespace) ++ ".{" ++ .joinSep unis ", " ++ "}"
-    | `($x:ident) =>
-      doc := Std.Format.text (nameString x.getId showNamespace)
-    | _ => doc ← ppTerm nameUniv
-    let `(declSig| $args* : $ret) := argsRet
-      | return ⟨← ppTerm ⟨stx⟩, infos⟩  -- HACK: not a term
-    let mut argDoc := .line
-    for arg in args do
-      match arg with
-      | `(binderIdent|$x:ident) => argDoc := argDoc ++ (← ppTerm x)
-      | `(binderIdent|$x:hole) => argDoc := argDoc ++ (← ppTerm ⟨x⟩)
-      | `(bracketedBinder|($xs:ident* $[: $ty]?)) =>
-        let xs' ← xs.toList.mapM (fun (x : Ident) => ppTerm x)
-        argDoc := argDoc ++ "(" ++ .nest 1 (.fill (.joinSep xs' .line))
-        if let some t := ty then
-          argDoc := argDoc ++ " : " ++ .group (← ppTerm t)
-        argDoc := argDoc ++ ")"
-      | `(bracketedBinder|{$xs:ident* $[: $ty]?}) =>
-        let xs' ← xs.toList.mapM (fun (x : Ident) => ppTerm x)
-        argDoc := argDoc ++ "{" ++ .joinSep xs' " "
-        if let some t := ty then
-          argDoc := argDoc ++ " : " ++ .group (← ppTerm t)
-        argDoc := argDoc ++ "}"
-      | `(bracketedBinder|⦃$xs:ident* $[: $ty]?⦄) =>
-        let xs' ← xs.toList.mapM (fun (x : Ident) => ppTerm x)
-        argDoc := argDoc ++ "⦃" ++ .joinSep xs' " "
-        if let some t := ty then
-          argDoc := argDoc ++ " : " ++ .group (← ppTerm t)
-        argDoc := argDoc ++ "⦄"
-      | `(bracketedBinder|[$ty]) => argDoc := argDoc ++ "[" ++ .group (← ppTerm ty) ++ "]"
-      | _ => return ⟨← ppTerm ⟨stx⟩, infos⟩
-      argDoc := argDoc ++ .line
-    doc := .group (doc ++ .nest 4 (.group (.group (behavior := .fill) argDoc) ++ ": " ++ (← ppTerm ret)))
+  let stx : Syntax ←
+    stripRootPrefix <$>
+    if showNamespace then pure stx.raw
+    else
+      match stx with
+      | `(declSigWithId|$nameUniv $argsRet:declSig ) => do
+        `(declSigWithId|$(⟨stripNS nameUniv⟩) $argsRet) <&> (·.raw)
+      | _ => pure stx.raw
+  let stx : Syntax ←
+    if constantInfo then pure stx
+    else
+      match stx with
+      | `(declSigWithId|$nameUniv $argsRet:declSig ) => do
+        `(declSigWithId|$(⟨stripInfo nameUniv⟩) $argsRet) <&> (·.raw)
+      | _ => pure stx
 
-    return ⟨doc, infos⟩
-  | _ => return ⟨← ppTerm ⟨stx⟩, infos⟩  -- HACK: not a term
+  return ⟨← ppTerm ⟨stx⟩, infos⟩  -- HACK: not a term
+
 
 structure DocName where
   name : Name
@@ -230,9 +233,10 @@ def DeclType.label : DeclType → String
   | .inductive _ _ true => "inductive predicate"
   | other => ""
 
+deriving instance Repr for OpenDecl
 
 open Meta in
-def DocName.ofName (c : Name) (ppWidth : Nat := 40) (showUniverses := true) (showNamespace := true) (openDecls : List OpenDecl := []) : MetaM DocName := do
+def DocName.ofName (c : Name) (ppWidth : Nat := 40) (showUniverses := true) (showNamespace := true) (constantInfo := false) (openDecls : List OpenDecl := []) : MetaM DocName := do
   let env ← getEnv
   if let some _ := env.find? c then
     let ctx := {
@@ -246,9 +250,10 @@ def DocName.ofName (c : Name) (ppWidth : Nat := 40) (showUniverses := true) (sho
     }
 
     let ⟨fmt, infos⟩ ← withOptions (·.setBool `pp.tagAppFns true) <|
-      ppSignature c (showNamespace := showNamespace) (openDecls := openDecls)
+      ppSignature c (showNamespace := showNamespace) (openDecls := openDecls) (constantInfo := constantInfo)
 
     let ttSig := Lean.Widget.TaggedText.prettyTagged (w := ppWidth) fmt
+
     let sig := Lean.Widget.tagCodeInfos ctx infos ttSig
 
     let ⟨fmt, infos⟩ ← withOptions (·.setBool `pp.tagAppFns true) <|
@@ -256,9 +261,9 @@ def DocName.ofName (c : Name) (ppWidth : Nat := 40) (showUniverses := true) (sho
     let ttName := Lean.Widget.TaggedText.prettyTagged (w := ppWidth) fmt
     let name := Lean.Widget.tagCodeInfos ctx infos ttName
 
-    pure ⟨c, ← renderTagged none name ⟨{}, false⟩, ← renderTagged none sig ⟨{}, false⟩, ← findDocString? env c⟩
+    pure { name := c, hlName := (← renderTagged none name ⟨{}, false⟩), signature := (← renderTagged none sig ⟨{}, false⟩), docstring? := (← findDocString? env c) }
   else
-    pure ⟨c, .token ⟨.const c "" none false, c.toString⟩, Highlighted.seq #[], none⟩
+    pure { name := c, hlName := .token ⟨.const c "" none false, c.toString⟩, signature := Highlighted.seq #[], docstring? := none }
 
 partial def getStructurePathToBaseStructureAux (env : Environment) (baseStructName : Name) (structName : Name) (path : List Name) : Option (List Name) :=
   if baseStructName == structName then
@@ -1279,7 +1284,7 @@ def docstring : BlockRoleExpander
 
       let declType ← Block.Docstring.DeclType.ofName name
 
-      let ⟨fmt, infos⟩ ← withOptions (·.setBool `pp.tagAppFns true) <| Block.Docstring.ppSignature name
+      let ⟨fmt, infos⟩ ← withOptions (·.setBool `pp.tagAppFns true) <| Block.Docstring.ppSignature name (constantInfo := false)
       let tt := Lean.Widget.TaggedText.prettyTagged (w := 48) fmt
       let ctx := {
         env           := (← getEnv)
