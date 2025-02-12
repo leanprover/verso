@@ -312,6 +312,10 @@ instance : MonadFinally PartElabM := inferInstanceAs <| MonadFinally (StateT Doc
 
 instance : MonadRef PartElabM := inferInstanceAs <| MonadRef (StateT DocElabM.State (StateT PartElabM.State TermElabM))
 
+instance : MonadWithReaderOf Core.Context PartElabM := inferInstanceAs <| MonadWithReaderOf Core.Context (StateT DocElabM.State (StateT PartElabM.State TermElabM))
+
+instance : MonadWithReaderOf Term.Context PartElabM := inferInstanceAs <| MonadWithReaderOf Term.Context (StateT DocElabM.State (StateT PartElabM.State TermElabM))
+
 def PartElabM.withFileMap (fileMap : FileMap) (act : PartElabM α) : PartElabM α :=
   fun ρ σ ctxt σ' mctxt rw cctxt => act ρ σ ctxt σ' mctxt rw {cctxt with fileMap := fileMap}
 
@@ -347,8 +351,6 @@ instance : MonadExceptOf Exception DocElabM := inferInstanceAs <| MonadExceptOf 
 
 instance : MonadAlwaysExcept Exception DocElabM := inferInstanceAs <| MonadAlwaysExcept Exception (ReaderT PartElabM.State (StateT DocElabM.State TermElabM))
 
-instance : MonadReader PartElabM.State DocElabM := inferInstanceAs <| MonadReader PartElabM.State (ReaderT PartElabM.State (StateT DocElabM.State TermElabM))
-
 instance : MonadReaderOf PartElabM.State DocElabM := inferInstanceAs <| MonadReaderOf PartElabM.State (ReaderT PartElabM.State (StateT DocElabM.State TermElabM))
 
 instance : MonadStateOf DocElabM.State DocElabM := inferInstanceAs <| MonadStateOf DocElabM.State (ReaderT PartElabM.State (StateT DocElabM.State TermElabM))
@@ -364,6 +366,12 @@ instance : MonadFileMap DocElabM := inferInstanceAs <| MonadFileMap (ReaderT Par
 instance : MonadOptions DocElabM := inferInstanceAs <| MonadOptions (ReaderT PartElabM.State (StateT DocElabM.State TermElabM))
 
 instance : MonadWithOptions DocElabM := inferInstanceAs <| MonadWithOptions (ReaderT PartElabM.State (StateT DocElabM.State TermElabM))
+
+instance : MonadWithReaderOf Core.Context DocElabM := inferInstanceAs <| MonadWithReaderOf Core.Context (ReaderT PartElabM.State (StateT DocElabM.State TermElabM))
+
+instance : MonadWithReaderOf Term.Context DocElabM := inferInstanceAs <| MonadWithReaderOf Term.Context (ReaderT PartElabM.State (StateT DocElabM.State TermElabM))
+
+instance : MonadReader PartElabM.State DocElabM := inferInstanceAs <| MonadReader PartElabM.State (ReaderT PartElabM.State (StateT DocElabM.State TermElabM))
 
 def DocElabM.withFileMap (fileMap : FileMap) (act : DocElabM α) : DocElabM α :=
   fun ρ σ ctxt σ' mctxt rw cctxt => act ρ σ ctxt σ' mctxt rw {cctxt with fileMap := fileMap}

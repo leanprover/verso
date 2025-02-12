@@ -883,7 +883,7 @@ def tryElabCodeMetavarTermWith (mk : Highlighted → String → DocElabM α) (st
   | .error e => throw (.error (← getRef) e)
   | .ok stx => DocElabM.withFileMap (.ofString str) <| do
     if let `(doc_metavar|$pat:term : $ty:term) := stx then
-      let (newMsgs, tree, e') ← do
+      let (newMsgs, tree, e') ← show TermElabM _ from do
         let initMsgs ← Core.getMessageLog
         try
           Core.resetMessageLog
@@ -1167,7 +1167,7 @@ def tryElabInlineCode (allTactics : Array Tactic.Doc.TacticDoc) (extraKeywords :
       tryElabInlineCodeTerm,
       tryElabInlineCodeMetavarTerm,
       tryTacticName allTactics,
-      withReader (fun ctx => {ctx with autoBoundImplicit := true}) ∘ tryElabInlineCodeTerm,
+      withTheReader Term.Context (fun ctx => {ctx with autoBoundImplicit := true}) ∘ tryElabInlineCodeTerm,
       tryElabInlineCodeTerm (ignoreElabErrors := true),
       tryHighlightKeywords extraKeywords
     ]
@@ -1194,7 +1194,7 @@ def tryElabBlockCode (str : String) : DocElabM Term := do
       tryElabBlockCodeCommand,
       tryElabBlockCodeTerm,
       tryElabBlockCodeCommand (ignoreElabErrors := true),
-      withReader (fun ctx => {ctx with autoBoundImplicit := true}) ∘
+      withTheReader Term.Context (fun ctx => {ctx with autoBoundImplicit := true}) ∘
         tryElabBlockCodeTerm (ignoreElabErrors := true)
     ]
   catch
@@ -1245,7 +1245,7 @@ def blockFromMarkdownWithLean (names : List Name) (b : MD4Lean.Block) : DocElabM
             if let some n := isAutoBoundImplicitLocalException? e then
               s.restore (restoreInfo := true)
               Meta.withLocalDecl n .implicit (← Meta.mkFreshTypeMVar) fun x =>
-                withReader (fun ctx => { ctx with autoBoundImplicits := ctx.autoBoundImplicits.push x } ) do
+                withTheReader Term.Context (fun ctx => { ctx with autoBoundImplicits := ctx.autoBoundImplicits.push x } ) do
                   loop k (← (saveState : TermElabM _))
             else throw e
         | 0 => throwError "Ran out of local name attempts"
