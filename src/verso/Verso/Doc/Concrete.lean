@@ -223,7 +223,10 @@ elab (name := completeDoc) "#doc" "(" genre:term ")" title:inlineStr "=>" text:c
         let docName := mkIdentFrom title n
         let titleStr : TSyntax ``Lean.Parser.Command.docComment := quote titleString
         elabCommand (← `($titleStr:docComment def $docName : Part $genre := $(← finished.toSyntax' genre st'.linkDefs st'.footnoteDefs))))
-      (handleStep := (partCommand ⟨·⟩))
+      -- The heartbeat count is reset for each top-level Verso block because they are analogous to Lean commands.
+      (handleStep := fun block => do
+        let heartbeats ← IO.getNumHeartbeats
+        withTheReader Core.Context ({· with initHeartbeats := heartbeats}) (partCommand ⟨block⟩))
       (run := fun act => liftTermElabM <| Prod.fst <$> PartElabM.run {} initState act)
 
 /--
