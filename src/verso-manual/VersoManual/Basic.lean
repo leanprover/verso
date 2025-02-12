@@ -945,7 +945,7 @@ instance : TeX.GenreTeX Manual (ReaderT ExtensionImpls IO) where
     let some id := b.id
       | panic! s!"Block {b.name} wasn't assigned an ID during traversal"
     let some descr := (← readThe ExtensionImpls).getBlock? b.name
-      | panic! s!"Unknown block {b.name} while rendering"
+      | panic! s!"Unknown block {b.name} while rendering.\n\nKnown blocks: {(← readThe ExtensionImpls).blockDescrs.toArray |>.map (·.fst) |>.qsort (·.toString < ·.toString)}"
     let some impl := descr.toTeX
       | panic! s!"Block {b.name} doesn't support TeX"
     impl goI goB id b.data content
@@ -953,7 +953,7 @@ instance : TeX.GenreTeX Manual (ReaderT ExtensionImpls IO) where
     let some id := i.id
       | panic! "Inline {i.name} wasn't assigned an ID during traversal"
     let some descr := (← readThe ExtensionImpls).getInline? i.name
-      | panic! s!"Unknown inline {i.name} while rendering"
+      | panic! s!"Unknown inline {i.name} while rendering.\n\nKnown inlines: {(← readThe ExtensionImpls).inlineDescrs.toArray |>.map (·.fst) |>.qsort (·.toString < ·.toString)}"
     let some impl := descr.toTeX
       | panic! s!"Inline {i.name} doesn't support TeX"
     impl go id i.data content
@@ -1010,7 +1010,7 @@ instance : Html.GenreHtml Manual (ReaderT ExtensionImpls IO) where
     let some id := b.id
       | panic! s!"Block {b.name} wasn't assigned an ID during traversal"
     let some descr := (← readThe ExtensionImpls).getBlock? b.name
-      | panic! s!"Unknown block {b.name} while rendering"
+      | panic! s!"Unknown block {b.name} while rendering HTML.\n\nKnown blocks: {(← readThe ExtensionImpls).blockDescrs.toArray |>.map (·.fst) |>.qsort (·.toString < ·.toString)}"
     let some impl := descr.toHtml
       | panic! s!"Block {b.name} doesn't support HTML"
     impl goI goB id b.data content
@@ -1019,7 +1019,7 @@ instance : Html.GenreHtml Manual (ReaderT ExtensionImpls IO) where
     let some id := i.id
       | panic! "Inline {i.name} wasn't assigned an ID during traversal"
     let some descr := (← readThe ExtensionImpls).getInline? i.name
-      | panic! s!"Unknown inline {i.name} while rendering"
+      | panic! s!"Unknown inline {i.name} with data {i.data} while rendering HTML.\n\nKnown inlines: {(← readThe ExtensionImpls).inlineDescrs.toArray |>.map (·.fst) |>.qsort (·.toString < ·.toString)}"
     let some impl := descr.toHtml
       | panic! s!"Inline {i.name} doesn't support HTML"
     impl go id i.data content

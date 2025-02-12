@@ -144,15 +144,16 @@ instance : LT SubpartSpec := Ord.toLT inferInstance
 instance : LE SubpartSpec := Ord.toLE inferInstance
 
 partial def localContents
-    (impls : ExtensionImpls) (opts : Html.Options Manual (ReaderT ExtensionImpls IO)) (ctxt : TraverseContext) (xref : TraverseState)
+    (opts : Html.Options Manual (ReaderT ExtensionImpls IO)) (ctxt : TraverseContext) (xref : TraverseState)
     (p : Part Manual)
     (sectionNumPrefix : Option String := none)
-    (includeTitle : Bool := true) (includeSubparts : SubpartSpec := .all) (fromLevel : Nat := 0) : StateT (Code.Hover.State Html) (ReaderT ExtensionImpls IO) (Array (LocalContentItem)) := do
+    (includeTitle : Bool := true) (includeSubparts : SubpartSpec := .all) (fromLevel : Nat := 0) :
+    StateT (Code.Hover.State Html) (ReaderT ExtensionImpls IO) (Array (LocalContentItem)) := do
   let sectionNumPrefix := sectionNumPrefix <|> sectionString ctxt
   let mut out := #[]
 
   if includeTitle then
-    let (html, _) ← p.title.mapM (Manual.toHtml opts ctxt xref {} {} {} ·) |>.run {} {}
+    let (html, _) ← p.title.mapM (Manual.toHtml opts ctxt xref {} {} {} ·) |>.run {}
     let partDest : Option (LocalContentItem) := do
       let m ← p.metadata
       let id ← m.id
@@ -164,11 +165,11 @@ partial def localContents
 
   if includeSubparts > .none then
     for b in p.content do
-      out := blockContents impls xref out b
+      out := blockContents (← readThe ExtensionImpls) xref out b
 
   if includeSubparts > .none then
     for p' in p.subParts do
-      out := out ++ (← localContents impls opts (ctxt.inPart p') xref p' (sectionNumPrefix := sectionNumPrefix) (includeSubparts := includeSubparts.decr) (fromLevel := fromLevel + 1))
+      out := out ++ (← localContents opts (ctxt.inPart p') xref p' (sectionNumPrefix := sectionNumPrefix) (includeSubparts := includeSubparts.decr) (fromLevel := fromLevel + 1))
 
   return out
 where
