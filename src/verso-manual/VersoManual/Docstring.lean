@@ -78,7 +78,7 @@ def stripNS : Syntax → Syntax
   | other => other
 
 def stripInfo : Syntax → Syntax
-  | .ident _ substr x pre => .ident .none substr x.getString!.toName pre
+  | .ident _ substr x pre => .ident .none substr x pre
   | .node _ kind args => .node .none kind (args.map stripInfo)
   | .atom _ x => .atom .none x
   | .missing => .missing
