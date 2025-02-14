@@ -609,18 +609,21 @@ Remaining:
 #guard_msgs in
 #eval ignoreFn blockOpener |>.test! " + abc"
 
-def val : ParserFn := docNumLitFn <|> docIdentFn <|> docStrLitFn
+def val : ParserFn :=
+    nodeFn ``arg_num docNumLitFn <|>
+    nodeFn ``arg_ident docIdentFn <|>
+    nodeFn ``arg_str docStrLitFn
 
 /--
 info: Success! Final stack:
-  (num "1")
+  (Verso.Syntax.arg_num (num "1"))
 All input consumed.
 -/
 #guard_msgs in
   #eval val.test! "1"
 /--
 info: Success! Final stack:
-  (num "3")
+  (Verso.Syntax.arg_num (num "3"))
 All input consumed.
 -/
 #guard_msgs in
@@ -628,7 +631,7 @@ All input consumed.
 /--
 info: Failure @0 (⟨1, 0⟩): unexpected end of input; expected identifier, numeral or string literal
 Final stack:
-  <missing>
+  (Verso.Syntax.arg_str <missing>)
 Remaining: ""
 -/
 #guard_msgs in
@@ -636,7 +639,7 @@ Remaining: ""
 
 /--
 info: Success! Final stack:
-  (str "\"a b c\t d\"")
+  (Verso.Syntax.arg_str (str "\"a b c\t d\""))
 All input consumed.
 -/
 #guard_msgs in
@@ -644,7 +647,7 @@ All input consumed.
 
 /--
 info: Success! Final stack:
-  (str "\"a b c\t d\"")
+  (Verso.Syntax.arg_str (str "\"a b c\t d\""))
 Remaining:
 "\n"
 -/
@@ -653,7 +656,7 @@ Remaining:
 
 /--
 info: Success! Final stack:
-  (num "43")
+  (Verso.Syntax.arg_num (num "43"))
 Remaining:
 "\n\"foo\""
 -/
@@ -715,9 +718,10 @@ def arg : ParserFn :=
 where
   mkNamed (iniSz : Nat) : ParserFn := fun _ s => s.mkNode ``Verso.Syntax.named iniSz
   mkAnon (iniSz : Nat) : ParserFn := fun _ s => s.mkNode ``Verso.Syntax.anon iniSz
+  mkIdent (iniSz : Nat) : ParserFn := fun _ s => s.mkNode ``Verso.Syntax.arg_ident iniSz
   potentiallyNamed iniSz :=
       atomicFn docIdentFn >> eatSpaces >>
-       ((atomicFn (strFn ":=") >> eatSpaces >> val >> eatSpaces >> mkNamed iniSz) <|> mkAnon iniSz)
+       ((atomicFn (strFn ":=") >> eatSpaces >> val >> eatSpaces >> mkNamed iniSz) <|> (mkIdent iniSz >> mkAnon iniSz))
   withParens iniSz :=
     atomicFn (ignoreFn (strFn "(")) >> eatSpaces >>
     recoverWs (docIdentFn (reportAs := "argument name"))  >> eatSpaces >>
@@ -728,7 +732,7 @@ where
 
 /--
 info: Success! Final stack:
-  (Verso.Syntax.anon `x)
+  (Verso.Syntax.anon (Verso.Syntax.arg_ident `x))
 All input consumed.
 -/
 #guard_msgs in
@@ -737,7 +741,10 @@ All input consumed.
 
 /--
 info: Success! Final stack:
-  (Verso.Syntax.named `x ":=" (num "1"))
+  (Verso.Syntax.named
+   `x
+   ":="
+   (Verso.Syntax.arg_num (num "1")))
 All input consumed.
 -/
 #guard_msgs in
@@ -745,7 +752,10 @@ All input consumed.
 
 /--
 info: Success! Final stack:
-  (Verso.Syntax.named `x ":=" (num "1"))
+  (Verso.Syntax.named
+   `x
+   ":="
+   (Verso.Syntax.arg_num (num "1")))
 All input consumed.
 -/
 #guard_msgs in
@@ -755,7 +765,7 @@ All input consumed.
 info: Failure @0 (⟨1, 0⟩): '
 '; expected '(', identifier or numeral
 Final stack:
-  <missing>
+  (Verso.Syntax.arg_str <missing>)
 Remaining: "\n(x:=1)"
 -/
 #guard_msgs in
@@ -763,7 +773,10 @@ Remaining: "\n(x:=1)"
 
 /--
 info: Success! Final stack:
-  (Verso.Syntax.named `x ":=" (num "1"))
+  (Verso.Syntax.named
+   `x
+   ":="
+   (Verso.Syntax.arg_num (num "1")))
 Remaining:
 "\n"
 -/
@@ -772,7 +785,10 @@ Remaining:
 
 /--
 info: Success! Final stack:
-  (Verso.Syntax.named `x ":=" `y)
+  (Verso.Syntax.named
+   `x
+   ":="
+   (Verso.Syntax.arg_ident `y))
 All input consumed.
 -/
 #guard_msgs in
@@ -780,7 +796,10 @@ All input consumed.
 
 /--
 info: Success! Final stack:
-  (Verso.Syntax.named `x ":=" `y)
+  (Verso.Syntax.named
+   `x
+   ":="
+   (Verso.Syntax.arg_ident `y))
 All input consumed.
 -/
 #guard_msgs in
@@ -788,7 +807,10 @@ All input consumed.
 
 /--
 info: Success! Final stack:
-  (Verso.Syntax.named `x ":=" (str "\"y\""))
+  (Verso.Syntax.named
+   `x
+   ":="
+   (Verso.Syntax.arg_str (str "\"y\"")))
 All input consumed.
 -/
 #guard_msgs in
@@ -799,7 +821,7 @@ info: Failure @3 (⟨1, 3⟩): unterminated string literal; expected identifier 
 Final stack:
  • `x
  • ":="
- • <missing>
+ • (Verso.Syntax.arg_str <missing>)
 
 Remaining: "\"y"
 -/
@@ -814,7 +836,10 @@ info: 2 failures:
     ""
 
 Final stack:
-  (Verso.Syntax.named `x ":=" <missing>)
+  (Verso.Syntax.named
+   `x
+   ":="
+   (Verso.Syntax.arg_str <missing>))
 -/
 #guard_msgs in
   #eval arg.test! "(x:=\"y)"
@@ -822,7 +847,8 @@ Final stack:
 
 /--
 info: Success! Final stack:
-  (Verso.Syntax.anon (num "42"))
+  (Verso.Syntax.anon
+   (Verso.Syntax.arg_num (num "42")))
 All input consumed.
 -/
 #guard_msgs in
@@ -843,7 +869,7 @@ Final stack:
   (Verso.Syntax.named
    <missing>
    <missing>
-   <missing>)
+   (Verso.Syntax.arg_str <missing>))
 -/
 #guard_msgs in
 #eval arg.test! "(42)"
@@ -858,7 +884,10 @@ info: 3 failures:
     ""
 
 Final stack:
-  (Verso.Syntax.named `x <missing> <missing>)
+  (Verso.Syntax.named
+   `x
+   <missing>
+   (Verso.Syntax.arg_str <missing>))
 -/
 #guard_msgs in
 #eval arg.test! "(x 42)"
@@ -866,7 +895,10 @@ Final stack:
 /--
 info: Failure @8 (⟨1, 8⟩): expected ')'
 Final stack:
-  (Verso.Syntax.named `x ":=" (num "42"))
+  (Verso.Syntax.named
+   `x
+   ":="
+   (Verso.Syntax.arg_num (num "42")))
 Remaining: "\n)"
 -/
 #guard_msgs in
@@ -875,7 +907,10 @@ Remaining: "\n)"
 /--
 info: Failure @8 (⟨1, 8⟩): expected ')'
 Final stack:
-  (Verso.Syntax.named `x ":=" (num "42"))
+  (Verso.Syntax.named
+   `x
+   ":="
+   (Verso.Syntax.arg_num (num "42")))
 Remaining: "\na"
 -/
 #guard_msgs in
@@ -922,7 +957,10 @@ def nameAndArgs (multiline : Option Nat := none) (reportNameAs : String := "iden
 /--
 info: Success! Final stack:
  • `leanExample
- • [(Verso.Syntax.named `context ":=" (num "2"))]
+ • [(Verso.Syntax.named
+      `context
+      ":="
+      (Verso.Syntax.arg_num (num "2")))]
 
 All input consumed.
 -/
@@ -935,8 +973,9 @@ info: Success! Final stack:
  • [(Verso.Syntax.named
       `dialect
       ":="
-      (str "\"chicken\""))
-     (Verso.Syntax.anon (num "43"))]
+      (Verso.Syntax.arg_str (str "\"chicken\"")))
+     (Verso.Syntax.anon
+      (Verso.Syntax.arg_num (num "43")))]
 
 All input consumed.
 -/
@@ -946,7 +985,8 @@ All input consumed.
 
 /--
 info: Success! Final stack:
-  [(Verso.Syntax.anon (num "43"))]
+  [(Verso.Syntax.anon
+    (Verso.Syntax.arg_num (num "43")))]
 Remaining:
 "\n\"foo\""
 -/
@@ -958,8 +998,9 @@ info: Success! Final stack:
   [(Verso.Syntax.named
     `dialect
     ":="
-    (str "\"chicken\""))
-   (Verso.Syntax.anon (num "43"))]
+    (Verso.Syntax.arg_str (str "\"chicken\"")))
+   (Verso.Syntax.anon
+    (Verso.Syntax.arg_num (num "43")))]
 Remaining:
 "\nfoo"
 -/
@@ -971,8 +1012,9 @@ info: Success! Final stack:
   [(Verso.Syntax.named
     `dialect
     ":="
-    (str "\"chicken\""))
-   (Verso.Syntax.anon (num "43"))]
+    (Verso.Syntax.arg_str (str "\"chicken\"")))
+   (Verso.Syntax.anon
+    (Verso.Syntax.arg_num (num "43")))]
 Remaining:
 "\n(foo)"
 -/
@@ -985,8 +1027,9 @@ info: Success! Final stack:
  • [(Verso.Syntax.named
       `dialect
       ":="
-      (str "\"chicken\""))
-     (Verso.Syntax.anon (num "43"))]
+      (Verso.Syntax.arg_str (str "\"chicken\"")))
+     (Verso.Syntax.anon
+      (Verso.Syntax.arg_num (num "43")))]
 
 Remaining:
 "\n(foo)"
@@ -997,7 +1040,8 @@ Remaining:
 /--
 info: Success! Final stack:
  • `leanExample
- • [(Verso.Syntax.anon `context)]
+ • [(Verso.Syntax.anon
+      (Verso.Syntax.arg_ident `context))]
 
 All input consumed.
 -/
@@ -1006,8 +1050,10 @@ All input consumed.
 /--
 info: Success! Final stack:
  • `leanExample
- • [(Verso.Syntax.anon `context)
-     (Verso.Syntax.anon `more)]
+ • [(Verso.Syntax.anon
+      (Verso.Syntax.arg_ident `context))
+     (Verso.Syntax.anon
+      (Verso.Syntax.arg_ident `more))]
 
 All input consumed.
 -/
@@ -1016,11 +1062,12 @@ All input consumed.
 /--
 info: Success! Final stack:
  • `leanExample
- • [(Verso.Syntax.anon `context)
+ • [(Verso.Syntax.anon
+      (Verso.Syntax.arg_ident `context))
      (Verso.Syntax.named
       `more
       ":="
-      (str "\"stuff\""))]
+      (Verso.Syntax.arg_str (str "\"stuff\"")))]
 
 All input consumed.
 -/
@@ -1031,11 +1078,12 @@ All input consumed.
 /--
 info: Success! Final stack:
  • `leanExample
- • [(Verso.Syntax.anon `context)
+ • [(Verso.Syntax.anon
+      (Verso.Syntax.arg_ident `context))
      (Verso.Syntax.named
       `more
       ":="
-      (str "\"stuff\""))]
+      (Verso.Syntax.arg_str (str "\"stuff\"")))]
 
 Remaining:
 "\n\nabc"
@@ -1627,7 +1675,8 @@ info: Success! Final stack:
   (Verso.Syntax.role
    "{"
    `ref
-   [(Verso.Syntax.anon `other)]
+   [(Verso.Syntax.anon
+     (Verso.Syntax.arg_ident `other))]
    "}"
    "["
    [(Verso.Syntax.role
@@ -1650,7 +1699,10 @@ info: Success! Final stack:
   (Verso.Syntax.role
    "{"
    `hello
-   [(Verso.Syntax.named `world ":=" `gaia)]
+   [(Verso.Syntax.named
+     `world
+     ":="
+     (Verso.Syntax.arg_ident `gaia))]
    "}"
    "["
    [(Verso.Syntax.text (str "\"there\""))]
@@ -1665,7 +1717,10 @@ info: Success! Final stack:
   (Verso.Syntax.role
    "{"
    `hello
-   [(Verso.Syntax.named `world ":=" `gaia)]
+   [(Verso.Syntax.named
+     `world
+     ":="
+     (Verso.Syntax.arg_ident `gaia))]
    "}"
    "["
    [(Verso.Syntax.text (str "\"there \""))
@@ -3210,7 +3265,8 @@ Final stack:
    (Verso.Syntax.directive
     "::::"
     `foo
-    [(Verso.Syntax.anon (num "5"))]
+    [(Verso.Syntax.anon
+      (Verso.Syntax.arg_num (num "5")))]
     "\n"
     [(Verso.Syntax.para
       "para{"
@@ -3390,8 +3446,9 @@ info: Success! Final stack:
     [(Verso.Syntax.named
       `dialect
       ":="
-      (str "\"chicken\""))
-     (Verso.Syntax.anon (num "43"))]]
+      (Verso.Syntax.arg_str (str "\"chicken\"")))
+     (Verso.Syntax.anon
+      (Verso.Syntax.arg_num (num "43")))]]
    "\n"
    (str "\"(define x 4)\\nx\\n\"")
    "```")
@@ -3412,7 +3469,8 @@ info: Success! Final stack:
     [(Verso.Syntax.named
       `dialect
       ":="
-      (str "\"chicken\""))]]
+      (Verso.Syntax.arg_str
+       (str "\"chicken\"")))]]
    "\n"
    (str "\"(define x 4)\\nx\\n\"")
    "```")
@@ -3434,7 +3492,8 @@ Final stack:
     [(Verso.Syntax.named
       `dialect
       ":="
-      (str "\"chicken\""))]]
+      (Verso.Syntax.arg_str
+       (str "\"chicken\"")))]]
    "\n"
    (str "\"(define x 4)\\nx\\n\"")
    "```")
@@ -3807,7 +3866,8 @@ info: Success! Final stack:
   (Verso.Syntax.block_role
    "{"
    `test
-   [(Verso.Syntax.anon `arg)]
+   [(Verso.Syntax.anon
+     (Verso.Syntax.arg_ident `arg))]
    "}"
    [(Verso.Syntax.para
      "para{"
@@ -3823,7 +3883,8 @@ info: Success! Final stack:
   (Verso.Syntax.block_role
    "{"
    `test
-   [(Verso.Syntax.anon `arg)]
+   [(Verso.Syntax.anon
+     (Verso.Syntax.arg_ident `arg))]
    "}"
    [])
 Remaining:
@@ -3898,7 +3959,7 @@ info: Success! Final stack:
    [(Verso.Syntax.named
      `greatness
      ":="
-     (str "\"amazing!\""))]
+     (Verso.Syntax.arg_str (str "\"amazing!\"")))]
    "\n"
    [(Verso.Syntax.para
      "para{"
@@ -3943,7 +4004,8 @@ info: Success! Final stack:
   (Verso.Syntax.directive
    ":::"
    `multiPara
-   [(Verso.Syntax.anon `thing)]
+   [(Verso.Syntax.anon
+     (Verso.Syntax.arg_ident `thing))]
    "\n"
    [(Verso.Syntax.para
      "para{"
