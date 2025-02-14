@@ -172,7 +172,7 @@ where
   getNamed (args : Array Arg) (x : Name) : Option (Syntax × ArgVal × Array Arg) := Id.run do
     for h : i in [0:args.size] do
       if let .named stx y v := args[i] then
-        if y.getId == x then return some (stx, v, args.extract 0 i ++ args.extract (i+1) args.size)
+        if y.getId.eraseMacroScopes == x then return some (stx, v, args.extract 0 i ++ args.extract (i+1) args.size)
     return none
   getPositional (args : Array Arg) : Option (ArgVal × Array Arg) := Id.run do
     for h : i in [0:args.size] do
@@ -205,10 +205,15 @@ def ValDesc.ident : ValDesc m Ident where
     | .name x => pure x
     | other => throwError "Expected identifier, got { toMessageData other}"
 
+/--
+Parses a name as an argument value.
+
+The name is returned without macro scopes.
+-/
 def ValDesc.name : ValDesc m Name where
   description := m!"a name"
   get
-    | .name x => pure x.getId
+    | .name x => pure x.getId.eraseMacroScopes
     | other => throwError "Expected identifier, got {other}"
 
 def ValDesc.resolvedName : ValDesc m Name where
