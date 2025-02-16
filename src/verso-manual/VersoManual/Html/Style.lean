@@ -20,7 +20,7 @@ def pageStyle : String := r####"
     /* What's the maximum line width, for legibility? */
     --verso-content-max-width: 45rem;
     /* Desktop font size */
-    --verso-font-size: 18px;
+    --verso-font-size: 16px;
     /* Mobile font size */
     --verso-mobile-font-size: 16px;
 
