@@ -90,6 +90,7 @@ h1, h2, h3, h4, h5, h6 {
 
 p, dt, dd {
     font-family: var(--verso-text-font-family);
+    line-height: 1.45;
 }
 
 dt {
