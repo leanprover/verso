@@ -1084,7 +1084,7 @@ def tryElabBlockCodeCommand (str : String) (ignoreElabErrors := false) : DocElab
       else s!"<docstring at {← getFileName} (unknown line)>"
 
     let ictx := Parser.mkInputContext str src
-    let cctx : Command.Context := { fileName := ← getFileName, fileMap := FileMap.ofString str, tacticCache? := none, snap? := none, cancelTk? := none}
+    let cctx : Command.Context := { fileName := ← getFileName, fileMap := FileMap.ofString str, snap? := none, cancelTk? := none}
 
     let mut cmdState : Command.State := {env := ← getEnv, maxRecDepth := ← MonadRecDepth.getMaxRecDepth, scopes := [{header := ""}]}
     let mut pstate := {pos := 0, recovering := false}

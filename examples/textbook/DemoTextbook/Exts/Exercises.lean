@@ -55,7 +55,7 @@ def lean : CodeBlockExpander
     let altStr ← parserInputString str
 
     let ictx := Parser.mkInputContext altStr (← getFileName)
-    let cctx : Command.Context := { fileName := ← getFileName, fileMap := FileMap.ofString altStr, tacticCache? := none, snap? := none, cancelTk? := none}
+    let cctx : Command.Context := { fileName := ← getFileName, fileMap := FileMap.ofString altStr, snap? := none, cancelTk? := none}
     let mut cmdState : Command.State := {env := ← getEnv, maxRecDepth := ← MonadRecDepth.getMaxRecDepth, scopes := [{header := ""}, {header := ""}]}
     let mut pstate := {pos := 0, recovering := false}
     let mut exercises := #[]

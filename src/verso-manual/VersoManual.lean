@@ -207,7 +207,7 @@ def emitTeX (logError : String → IO Unit) (config : Config) (text : Part Manua
   let (text, state) ← traverse logError text config
   let opts : TeX.Options Manual (ReaderT ExtensionImpls IO) := {
     headerLevels := #["chapter", "section", "subsection", "subsubsection", "paragraph"],
-    headerLevel := some ⟨0, by simp_arith [Array.size, List.length]⟩,
+    headerLevel := some ⟨0, by simp +arith [Array.size, List.length]⟩,
     logError := fun msg => logError msg
   }
   let authors := text.metadata.map (·.authors) |>.getD []
