@@ -547,12 +547,17 @@ structure InlineDescr where
   extraCss : List String := []
   extraCssFiles : List (String × String) := []
   licenseInfo : List LicenseInfo := []
+  /--
+  Should this inline be an entry in the page-local ToC? If so, how should it be represented?
+  -/
+  localContentItem : InternalId → Json → Array (Doc.Inline Manual) → Option Verso.Output.Html :=
+    fun _ _ _ => none
 
   toTeX : Option (InlineToTeX Manual (ReaderT ExtensionImpls IO))
 
 deriving TypeName
 
-instance : Inhabited InlineDescr := ⟨⟨id, default, default, default, default, default, default, default, default⟩⟩
+instance : Inhabited InlineDescr := ⟨⟨id, default, default, default, default, default, default, default, default, default⟩⟩
 
 structure BlockDescr where
   init : TraverseState → TraverseState := id
