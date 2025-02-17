@@ -154,7 +154,8 @@ def incrementallyElabCommand
           «syntax» := cmd
         }
         initAct
-        for b in steps do
+        for h : i in [0:steps.size] do
+          let b := steps[i]
           let mut reuseState := false
           if let some oldSnap := oldSnap? then
             if let some next := oldSnap.next then
@@ -180,7 +181,7 @@ def incrementallyElabCommand
           nextPromise.resolve {
             underlying := (← freshSnapshot),
             dynData := (.mk <| mkSnap <| updatedState.result?),
-            next := (some {stx? := some b, task := nextNextPromise.result?})
+            next := (some {stx? := some (mkNullNode <| steps.extract i steps.size), task := nextNextPromise.result?})
             «syntax» := b
           }
 
