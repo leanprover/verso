@@ -121,7 +121,12 @@ partial def blockItem? (impls : ExtensionImpls) (xref : TraverseState) (blk : Bl
 
 partial def blockContents (impls : ExtensionImpls) (xref : TraverseState) (acc : Array LocalContentItem) (b : Doc.Block Manual) : Array LocalContentItem := Id.run do
   match b with
-  | .para .. | .code .. => acc
+  | .para txt =>
+    let mut acc := acc
+    for i in txt do
+      acc := inlineContents impls xref acc i
+    acc
+  | .code .. => acc
   | .concat xs | .blockquote xs =>
     let mut acc := acc
     for x in xs do
@@ -136,6 +141,8 @@ partial def blockContents (impls : ExtensionImpls) (xref : TraverseState) (acc :
   | .dl xs =>
     let mut acc := acc
     for x in xs do
+      for i in x.term do
+        acc := inlineContents impls xref acc i
       for y in x.desc do
         acc := blockContents impls xref acc y
     acc
