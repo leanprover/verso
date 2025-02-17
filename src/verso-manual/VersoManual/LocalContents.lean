@@ -89,6 +89,29 @@ def LocalContentItem.toHtml (item : LocalContentItem) : Html :=
   else
     txt
 
+partial def inlineItem? (impls : ExtensionImpls) (xref : TraverseState) (blk : Inline) (contents : Array (Doc.Inline Manual)) : Option LocalContentItem := do
+  let impl ← impls.getInline? blk.name
+  let id ← blk.id
+  let name ← impl.localContentItem id blk.data contents
+  let (path, slug) ← xref.externalTags[id]?
+  return ⟨none, path.link slug.toString, name⟩
+
+partial def inlineContents (impls : ExtensionImpls) (xref : TraverseState) (acc : Array LocalContentItem) (i : Doc.Inline Manual) : Array LocalContentItem := Id.run do
+  match i with
+  | .concat xs | .footnote _ xs | .link xs _ | .bold xs | .emph xs =>
+    let mut acc := acc
+    for x in xs do
+      acc := inlineContents impls xref acc x
+    acc
+  | .other inl is =>
+    let mut acc := acc
+    if let some item := inlineItem? impls xref inl is then
+      acc := acc.push item
+    for i in is do
+      acc := inlineContents impls xref acc i
+    acc
+  | .image .. | .linebreak .. | .math .. | .code .. | .text ..=> acc
+
 partial def blockItem? (impls : ExtensionImpls) (xref : TraverseState) (blk : Block) (contents : Array (Doc.Block Manual)) : Option LocalContentItem := do
   let impl ← impls.getBlock? blk.name
   let id ← blk.id
