@@ -61,11 +61,9 @@ defmethod ParserFn.parseString [Monad m] [MonadError m] [MonadEnv m] (p : Parser
   let stk := s'.stxStack.extract 0 s'.stxStack.size
   if let some err := s'.errorMsg then
     throwError err.toString
-  if h : ¬stk.size = 1 then
+  if h : stk.size ≠ 1 then
     throwError "Expected single item in parser stack, got {ppStack stk}"
   else
-    have : stk.size = 1 := Classical.byContradiction h
-    have : 0 < stk.size := by simp_arith [*]
     pure stk[0]
 
 scoped instance : Quote SourceInfo `term where

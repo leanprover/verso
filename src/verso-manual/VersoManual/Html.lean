@@ -47,7 +47,7 @@ def preorder (toc : Toc) : List Toc :=
     have := List.sizeOf_lt_of_mem h
     have : sizeOf toc.children < sizeOf toc := by
       cases toc
-      simp_arith
+      simp +arith
     preorder t
 termination_by toc
 
@@ -152,7 +152,7 @@ def down? (self : Zipper) : Option Zipper :=
 theorem up_smaller_context (z : Zipper) {p : z.context ≠ []} : sizeOf (z.up p).context < sizeOf z.context := by
   simp only [up, List.reverse_cons, List.append_assoc, List.singleton_append]
   split
-  . simp_all_arith
+  . simp_all +arith
   . contradiction
 
 /-- Reconstructs the ToC that corresponds to a zipper by repeatedly moving upwards. -/

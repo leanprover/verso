@@ -150,7 +150,7 @@ def incrementallyElabCommand
         snap.new.resolve <| DynamicSnapshot.ofTyped <| show Internal.IncrementalSnapshot from {
           underlying := initData,
           dynData := .mk <| mkSnap (.pure (← get)),
-          next := some {range? := cmd.getRange?, task := nextPromise.result?},
+          next := some {stx? := some cmd, task := nextPromise.result?},
           «syntax» := cmd
         }
         initAct
@@ -180,7 +180,7 @@ def incrementallyElabCommand
           nextPromise.resolve {
             underlying := (← freshSnapshot),
             dynData := (.mk <| mkSnap <| updatedState.result?),
-            next := (some {range? := b.getRange?, task := nextNextPromise.result?})
+            next := (some {stx? := some b, task := nextNextPromise.result?})
             «syntax» := b
           }
 
