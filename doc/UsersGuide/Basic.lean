@@ -86,6 +86,8 @@ They include heuristic elaboration of code items in their Markdown that attempts
 
 {optionDocs pp.deepTerms.threshold}
 
+{docstring Thunk}
+
 # Technical Terminology
 
 The `deftech` role can be used to annotate the definition of a {tech}[technical term].

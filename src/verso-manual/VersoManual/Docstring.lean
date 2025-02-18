@@ -136,6 +136,20 @@ instance : Quote DocName where
   quote
     | {name, hlName, signature, docstring?} => mkCApp ``DocName.mk #[quote name, quote hlName, quote signature, quote docstring?]
 
+inductive Visibility where
+  | «public» | «private» | «protected»
+deriving Inhabited, Repr, ToJson, FromJson, DecidableEq, Ord
+
+open Syntax (mkCApp) in
+open Visibility in
+instance : Quote Visibility where
+  quote
+    | .public => mkCApp ``public #[]
+    | .private => mkCApp ``«private» #[]
+    | .protected => mkCApp ``«protected» #[]
+
+def Visibility.of (env : Environment) (n : Name) : Visibility :=
+  if isPrivateName n then .private else if isProtected env n then .protected else .public
 
 structure FieldInfo where
   fieldName : Highlighted
@@ -151,6 +165,7 @@ structure FieldInfo where
   binderInfo : BinderInfo
   autoParam  : Bool
   docString? : Option String
+  visibility : Visibility
 deriving Inhabited, Repr, ToJson, FromJson
 
 open Syntax (mkCApp) in
@@ -165,17 +180,8 @@ instance : Quote BinderInfo where
 open Syntax (mkCApp) in
 instance : Quote FieldInfo where
   quote
-    | ⟨fieldName, fieldFrom, type, projFn, subobject?, binderInfo, autoParam, docString⟩ =>
-      mkCApp ``FieldInfo.mk #[quote fieldName, quote fieldFrom, quote type, quote projFn, quote subobject?, quote binderInfo, quote autoParam, quote docString]
-
-
-open Syntax (mkCApp) in
-instance : Quote BinderInfo where
-  quote
-    | .default => mkCApp ``BinderInfo.default #[]
-    | .implicit => mkCApp ``BinderInfo.implicit #[]
-    | .instImplicit => mkCApp ``BinderInfo.instImplicit #[]
-    | .strictImplicit => mkCApp ``BinderInfo.strictImplicit #[]
+    | ⟨fieldName, fieldFrom, type, projFn, subobject?, binderInfo, autoParam, docString, visibility⟩ =>
+      mkCApp ``FieldInfo.mk #[quote fieldName, quote fieldFrom, quote type, quote projFn, quote subobject?, quote binderInfo, quote autoParam, quote docString, quote visibility]
 
 open Syntax (mkCApp) in
 instance : Quote DefinitionSafety where
@@ -184,11 +190,6 @@ instance : Quote DefinitionSafety where
     | .unsafe => mkCApp ``DefinitionSafety.unsafe #[]
     | .partial => mkCApp ``DefinitionSafety.partial #[]
 
-open Syntax (mkCApp) in
-instance : Quote FieldInfo where
-  quote
-    | .mk fieldName fieldFrom? type projFn subobject? binderInfo autoParam docString? =>
-      mkCApp ``FieldInfo.mk #[quote fieldName, quote fieldFrom?, quote type, quote projFn, quote subobject?, quote binderInfo, quote autoParam, quote docString?]
 
 structure ParentInfo where
   projFn : Name
@@ -342,11 +343,13 @@ def DeclType.ofName (c : Name) : MetaM DeclType := do
 
                 if let some projFn := getProjFnForField? env c fieldName then
                   let docString? ← findDocString? env projFn
+                  let visibility := Visibility.of env projFn
                   let fieldName' := Highlighted.token ⟨.const projFn projType.pretty docString? true, fieldName.toString⟩
-                  pure { fieldName := fieldName', fieldFrom, type := ← renderTagged none type' ⟨{}, false⟩, subobject?,  projFn, binderInfo, autoParam, docString?}
+
+                  pure { fieldName := fieldName', fieldFrom, type := ← renderTagged none type' ⟨{}, false⟩, subobject?,  projFn, binderInfo, autoParam, docString?, visibility}
                 else
                   let fieldName' := Highlighted.token ⟨.unknown, fieldName.toString⟩
-                  pure { fieldName := fieldName', fieldFrom, type := ← renderTagged none type' ⟨{}, false⟩, subobject?,  projFn := .anonymous, binderInfo, autoParam, docString? := none}
+                  pure { fieldName := fieldName', fieldFrom, type := ← renderTagged none type' ⟨{}, false⟩, subobject?,  projFn := .anonymous, binderInfo, autoParam, docString? := none, visibility := .public}
         return .structure (isClass env c) (← DocName.ofName (showNamespace := true) ctor.name) info.fieldNames fieldInfo parents ancestors
 
       else
@@ -383,9 +386,10 @@ def internalSignature (name : Highlighted) (signature : Option Highlighted) : Bl
   name := `Verso.Genre.Manual.Block.internalSignature
   data := ToJson.toJson (name, signature)
 
-def fieldSignature (name : Highlighted) (signature : Highlighted) (inheritedFrom : Option Nat) (inheritance : Array Highlighted) : Block where
+open Docstring in
+def fieldSignature (visibility : Visibility) (name : Highlighted) (signature : Highlighted) (inheritedFrom : Option Nat) (inheritance : Array Highlighted) : Block where
   name := `Verso.Genre.Manual.Block.fieldSignature
-  data := ToJson.toJson (name, signature, inheritedFrom, inheritance)
+  data := ToJson.toJson (visibility, name, signature, inheritedFrom, inheritance)
 
 def inheritance (within : Name) (inheritance : Array Block.Docstring.ParentInfo) : Block where
   name := `Verso.Genre.Manual.Block.inheritance
@@ -637,7 +641,7 @@ def inheritance.descr : BlockDescr where
             </ul>
           }}
 
-
+open Block.Docstring (Visibility) in
 @[block_extension Block.fieldSignature]
 def fieldSignature.descr : BlockDescr where
   traverse _ _ _ := pure none
@@ -645,14 +649,19 @@ def fieldSignature.descr : BlockDescr where
   toHtml := some fun _goI goB _id info contents =>
     open Verso.Doc.Html HtmlT in
     open Verso.Output Html in do
-      let .ok (name, signature, inheritedFrom, parents) := FromJson.fromJson? (α := Highlighted × Highlighted × Option Nat × Array Highlighted) info
+      let .ok (visibility, name, signature, inheritedFrom, parents) := FromJson.fromJson? (α := Visibility × Highlighted × Highlighted × Option Nat × Array Highlighted) info
         | do Verso.Doc.Html.HtmlT.logError "Failed to deserialize docstring section data while generating HTML"; pure .empty
       let inheritedAttr : Array (String × String) :=
         inheritedFrom.map (fun i => #[("data-inherited-from", toString i)]) |>.getD #[]
+      let visibility : Html :=
+        match visibility with
+        | .public => .empty
+        | .private => {{<span class="keyword">"private"</span>" "}}
+        | .protected => .empty
       return {{
         <section class="subdocs" {{inheritedAttr}}>
           <pre class="name-and-type hl lean">
-            {{← name.toHtml}} " : " {{ ← signature.toHtml}}
+            {{visibility}}{{← name.toHtml}} " : " {{ ← signature.toHtml}}
           </pre>
           {{← if inheritedFrom.isSome then do
               pure {{
@@ -1336,7 +1345,7 @@ where
               mdAst.blocks.mapM (blockFromMarkdownWithLean [name, constructor.name])
             else
               pure (#[] : Array Term)
-          ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.fieldSignature $(quote i.fieldName) $(quote i.type) $(quote inheritedFrom) $(quote <| parents.map (·.parent))) #[$sigDesc,*])
+          ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.fieldSignature $(quote i.visibility) $(quote i.fieldName) $(quote i.type) $(quote inheritedFrom) $(quote <| parents.map (·.parent))) #[$sigDesc,*])
         ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.docstringSection $(quote header)) #[$fieldSigs,*])
       pure <| #[ctorRow] ++ parentsRow.toArray ++ [fieldsRow]
     | .inductive ctors .. => do
