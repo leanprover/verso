@@ -21,12 +21,13 @@ def ppSyntax (stx : Syntax) : Std.Format := .nest 2 <| stx.formatStx (some 50) f
 
 def ppStack (elts : Array Syntax) (number : Bool := false) : Std.Format := Id.run do
   let mut stk : Format := .nil
-  match elts.size with
-  | 0 => stk := " empty"
-  | 1 => stk := "  " ++ ppSyntax (elts.get! 0)
-  | n =>
-    for i in [0:n] do
-      let tm := ppSyntax (elts.get! i)
+  if h : elts.size = 0 then
+    stk := " empty"
+  else if elts.size = 1 then
+    stk := "  " ++ ppSyntax elts[0]
+  else
+    for h : i in [0:elts.size] do
+      let tm := ppSyntax (elts[i])
       let num := if number then .text s!"[{i}] " else .nil
       stk := stk ++ .group (" • " ++ num ++ nest 2 (.group tm)) ++ line
   pure stk
