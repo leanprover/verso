@@ -30,6 +30,39 @@ open Verso.Code.Highlighted.WebAssets
 
 open SubVerso.Highlighting
 
+namespace Verso.ArgParse
+
+open Lean Elab
+open Verso.Genre.Manual.Docstring
+open Verso.Doc.Suggestion
+
+variable {m} [Monad m] [MonadOptions m] [MonadEnv m] [MonadLiftT CoreM m] [MonadError m] [MonadLog m] [AddMessageContext m] [MonadInfoTree m]
+
+def ValDesc.documentableName : ValDesc m (Ident × Name) where
+  description := m!"a name with documentation"
+  get
+    | .name n => do
+      let x ← realizeGlobalConstNoOverloadWithInfo n
+      if !(← getAllowDeprecated) then
+        if Lean.Linter.isDeprecated (← getEnv) x then
+          let newName := Lean.Linter.getDeprecatedNewName (← getEnv) x
+          let newNameText :=
+            match newName with
+            | none => m!""
+            | some new => m!" Use '{new}' instead."
+          newName.forM fun x => saveSuggestion n x.toString x.toString
+          Lean.logErrorAt n <|
+            .tagged ``Lean.Linter.deprecatedAttr <|
+            m!"'{x}' is deprecated.{newNameText}\n\n" ++
+            m!"Set option 'verso.docstring.allowDeprecated' to '{true}' to allow documentation for deprecated names."
+      else
+        -- Defer to default Lean deprecation warnings and settings if it's not a hard error
+        Lean.Linter.checkDeprecated x
+      pure (n, x)
+    | other => throwError "Expected identifier, got {other}"
+
+end Verso.ArgParse
+
 namespace Verso.Genre.Manual
 
 namespace Block
@@ -1275,40 +1308,39 @@ def blockFromMarkdownWithLean (names : List Name) (b : MD4Lean.Block) : DocElabM
 @[block_role_expander docstring]
 def docstring : BlockRoleExpander
   | args, #[] => do
-    match args with
-    | #[.anon (.name x)] =>
-      let name ← Elab.realizeGlobalConstNoOverloadWithInfo x
-      Doc.PointOfInterest.save (← getRef) name.toString (detail? := some "Documentation")
-      let blockStx ←
-        match ← Lean.findDocString? (← getEnv) name with
-        | none => logWarningAt x m!"No docs found for '{x}'"; pure #[]
-        | some docs =>
-          let some ast := MD4Lean.parse docs
-            | throwErrorAt x "Failed to parse docstring as Markdown"
+    let (x, name) ← (ArgParse.positional `name .documentableName).run args
 
-          ast.blocks.mapM (blockFromMarkdownWithLean [name])
+    Doc.PointOfInterest.save (← getRef) name.toString (detail? := some "Documentation")
+    let blockStx ←
+      match ← Lean.findDocString? (← getEnv) name with
+      | none => logWarningAt x m!"No docs found for '{x}'"; pure #[]
+      | some docs =>
+        let some ast := MD4Lean.parse docs
+          | throwErrorAt x "Failed to parse docstring as Markdown"
 
-      if Lean.Linter.isDeprecated (← getEnv) name then
-        logInfoAt x m!"'{x}' is deprecated"
+        ast.blocks.mapM (blockFromMarkdownWithLean [name])
 
-      let declType ← Block.Docstring.DeclType.ofName name
+    if !(← Docstring.getAllowDeprecated) && Lean.Linter.isDeprecated (← getEnv) name then
+      Lean.logError m!"'{name}' is deprecated.\n\nSet option 'verso.docstring.allowDeprecated' to 'true' to allow documentation for deprecated names."
 
-      let ⟨fmt, infos⟩ ← withOptions (·.setBool `pp.tagAppFns true) <| Block.Docstring.ppSignature name (constantInfo := false)
-      let tt := Lean.Widget.TaggedText.prettyTagged (w := 48) fmt
-      let ctx := {
-        env           := (← getEnv)
-        mctx          := (← getMCtx)
-        options       := (← getOptions)
-        currNamespace := (← getCurrNamespace)
-        openDecls     := (← getOpenDecls)
-        fileMap       := default
-        ngen          := (← getNGen)
-      }
-      let sig := Lean.Widget.tagCodeInfos ctx infos tt
-      let signature ← some <$> renderTagged none sig ⟨{}, false⟩
-      let extras ← getExtras name declType
-      pure #[← ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.docstring $(quote name) $(quote declType) $(quote signature)) #[$(blockStx ++ extras),*])]
-    | _ => throwError "Expected exactly one positional argument that is a name"
+
+    let declType ← Block.Docstring.DeclType.ofName name
+
+    let ⟨fmt, infos⟩ ← withOptions (·.setBool `pp.tagAppFns true) <| Block.Docstring.ppSignature name (constantInfo := false)
+    let tt := Lean.Widget.TaggedText.prettyTagged (w := 48) fmt
+    let ctx := {
+      env           := (← getEnv)
+      mctx          := (← getMCtx)
+      options       := (← getOptions)
+      currNamespace := (← getCurrNamespace)
+      openDecls     := (← getOpenDecls)
+      fileMap       := default
+      ngen          := (← getNGen)
+    }
+    let sig := Lean.Widget.tagCodeInfos ctx infos tt
+    let signature ← some <$> renderTagged none sig ⟨{}, false⟩
+    let extras ← getExtras name declType
+    pure #[← ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.docstring $(quote name) $(quote declType) $(quote signature)) #[$(blockStx ++ extras),*])]
   | _, more => throwErrorAt more[0]! "Unexpected block argument"
 where
   getExtras (name : Name) (declType : Block.Docstring.DeclType) : DocElabM (Array Term) :=
@@ -1362,12 +1394,20 @@ where
       pure #[← ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.docstringSection "Constructors") #[$ctorSigs,*])]
     | _ => pure #[]
 
+section
+variable {m}
+variable [Monad m] [MonadError m] [MonadLiftT CoreM m] [MonadEnv m]
+variable [MonadLog m] [AddMessageContext m] [MonadOptions m] [MonadWithOptions m]
+variable [Lean.Elab.MonadInfoTree m]
+
 structure IncludeDocstringOpts where
   name : Name
   elaborate : Bool
 
-def IncludeDocstringOpts.parse [Monad m] [MonadError m] [MonadLiftT CoreM m] : ArgParse m IncludeDocstringOpts :=
-  IncludeDocstringOpts.mk <$> .positional `name .resolvedName <*> .namedD `elab .bool true
+def IncludeDocstringOpts.parse : ArgParse m IncludeDocstringOpts :=
+  IncludeDocstringOpts.mk <$> (.positional `name .documentableName <&> (·.2)) <*> .namedD `elab .bool true
+
+end
 
 @[block_role_expander includeDocstring]
 def includeDocstring : BlockRoleExpander
@@ -1387,9 +1427,6 @@ def includeDocstring : BlockRoleExpander
         let some ast := MD4Lean.parse docs
           | throwError "Failed to parse docstring as Markdown"
         ast.blocks.mapM fromMd
-
-    if Lean.Linter.isDeprecated (← getEnv) name then
-      logInfo m!"'{name}' is deprecated"
 
     pure blockStx
 
