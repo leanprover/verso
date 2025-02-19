@@ -141,6 +141,17 @@ structure Config where
   -/
   baseURL : Option String := none
   verbose : Bool := false
+  /--
+  How deep should the local table of contents on each non-leaf HTML page?
+  `none` means "unlimited".
+  -/
+  sectionTocDepth : Option Nat := some 1
+  /--
+  How deep should the local table of contents on the root HTML page?
+  `none` means "unlimited".
+  -/
+  rootTocDepth : Option Nat := some 1
+
 
 def ensureDir (dir : System.FilePath) : IO Unit := do
   if !(← dir.pathExists) then
@@ -365,7 +376,7 @@ where
       if bookToc.size > 0 then {{
         <section>
         <h2>"Table of Contents"</h2>
-        <ol class="section-toc">{{bookToc.map (·.html (some 2))}}</ol>
+        <ol class="section-toc">{{bookToc.map (·.html config.rootTocDepth)}}</ol>
         </section>
       }} else .empty
     let contents ←
@@ -470,10 +481,19 @@ where
     let subToc ← part.subParts.mapM (fun p => toc depth opts (ctxt.inPart p) state definitionIds linkTargets p)
     let pageContent :=
       if root then
-        let subTocHtml := if subToc.size > 0 then {{<ol class="section-toc">{{subToc.map (·.html (some 2))}}</ol>}} else .empty
+        let subTocHtml := if subToc.size > 0 then {{
+            <section>
+            <h2>"Contents"</h2>
+            <ol class="section-toc">{{subToc.map (·.html config.rootTocDepth)}}</ol>
+            </section>
+          }}
+        else .empty
         {{<section>{{Html.titlePage titleHtml authors introHtml ++ contents}} {{subTocHtml}}</section>}}
       else
-        let subTocHtml := if (depth > 0 && part.htmlSplit != .never) && subToc.size > 0 then {{<ol class="section-toc">{{subToc.map (·.html none)}}</ol>}} else .empty
+        let subTocHtml :=
+          if (depth > 0 && part.htmlSplit != .never) && subToc.size > 0 then
+            {{<ol class="section-toc">{{subToc.map (·.html config.sectionTocDepth)}}</ol>}}
+          else .empty
         {{<section><h1>{{titleHtml}}</h1> {{introHtml}} {{contents}} {{subTocHtml}}</section>}}
 
     ensureDir dir
