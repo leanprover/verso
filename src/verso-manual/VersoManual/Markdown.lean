@@ -136,7 +136,7 @@ private partial def getHeaderLevel [Monad m] (level : Nat) : MDT m b i Nat := do
 
 private def getHeader  [Monad m] (level : Nat) : MDT m b i (Except String (Array i → m b)) := do
   let lvl ← getHeaderLevel level
-  match (← read).headerHandlers.levels.get? lvl with
+  match (← read).headerHandlers.levels[lvl]? with
   | none => pure (throw s!"Unexpected header with nesting level {lvl} in parsed Markdown")
   | some f => pure (pure f)
 
