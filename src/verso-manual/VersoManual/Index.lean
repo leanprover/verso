@@ -468,7 +468,6 @@ where
       top: 0;
       background: white;
       font-family: var(--verso-structure-font-family);
-      font-size: 1.25rem;
     }
 
     main .theIndex nav ol {
