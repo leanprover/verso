@@ -522,17 +522,9 @@ where
     main .theIndex .division > ol {
       padding-left: 0;
       display: flex;
-      flex-wrap: wrap;
-      gap: 2rem 3rem;
+      flex-direction: column;
+      gap: 1rem;
       overflow-wrap: break-word;
-    }
-
-    @media screen and (max-width: 700px) {
-      main .theindex .division > ol {
-        flex-direction: column;
-        flex-wrap: nowrap;
-        gap: 1rem;
-      }
     }
 
    main .theIndex .division > ol > li {
