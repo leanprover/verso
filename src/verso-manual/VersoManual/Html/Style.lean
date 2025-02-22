@@ -169,7 +169,10 @@ header {
         display: block;
     }
     body:has(#toggle-toc:checked) .toc-backdrop {
-        position: fixed; inset: 0; background-color: #aaa8; z-index: 9;
+        position: fixed;
+        inset: 0;
+        background-color: #aaa8;
+        z-index: 9;
     }
     html:has(#toggle-toc:checked) {
         overflow: hidden;
@@ -408,14 +411,14 @@ header {
 }
 
 #logo {
-  max-height: 100%;
-  display: block;
+    max-height: 100%;
+    display: block;
 }
 
 #logo img {
-  object-fit: contain;
-  max-height: var(--verso-logo-height);
-  display: block;
+    object-fit: contain;
+    max-height: var(--verso-logo-height);
+    display: block;
 }
 
 /******** Headerline ********/
