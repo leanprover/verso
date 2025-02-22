@@ -186,26 +186,14 @@ header {
     width: var(--verso-toc-width);
 }
 
-
-#toc {
-    /* Here, the width transition is delayed until after the translation has pushed
-       the ToC off the screen. */
-    transition: transform var(--verso-toc-transition-time) ease, width 0.1s linear var(--verso-toc-transition-time);
-    transform: translateX(-20rem);
-}
-
-#toc:has(#toggle-toc:checked) {
-    /* Here, the width transition must happen first, before the translation animation,
-       so the translation is delayed.
-     */
-    transition: transform var(--verso-toc-transition-time) ease 0.1s, width 0.1s linear;
-    transform: translateX(0);
-}
-
-/* Disable ToC transition on mobile */
 @media screen and (max-width: 700px) {
-    #toc, #toc:has(#toggle-toc:checked) {
-        transition: none;
+    #toc {
+        /* Push the toc off the page on mobile */
+        right: 100%;
+    }
+
+    #toc:has(#toggle-toc:checked) {
+        transform: translateX(var(--verso-toc-width));
     }
 }
 
@@ -360,13 +348,20 @@ header {
 }
 
 #local-buttons {
-    margin-top: 2.5rem;
+    margin-top: 1rem;
     font-weight: bold;
     font-family: var(--verso-structure-font-family);
     display: flex;
     justify-content: space-between;
     margin-left: 0.5rem;
     margin-right: 0.5rem
+}
+
+@media screen and (max-width: 700px) {
+    /* Make room for the toggle button on mobile */
+    #local-buttons {
+        margin-top: 2.5rem;
+    }
 }
 
 #local-buttons > * {
@@ -426,28 +421,33 @@ header {
 /******** Headerline ********/
 
 #toggle-toc-click {
-    cursor: pointer;
-    /* This is the default, but it's needed to make the math work out so nice to be explicit: */
-    box-sizing: content-box;
-    width: var(--verso-burger-width);
-    height: var(--verso-burger-height);
-    display: inline-flex;
-    flex-direction: column;
-    justify-content: space-between;
-    padding: 0.5rem;
-    position: fixed;
-    z-index: 100; /* Show on top of ToC/content */
-    filter: drop-shadow(1px 1px var(--verso-burger-toc-hidden-shadow-color)) drop-shadow(-1px -1px var(--verso-burger-toc-hidden-shadow-color));
-    transition:
-        height var(--verso-toc-transition-time) ease-in-out,
-        width var(--verso-toc-transition-time) ease-in-out;
-}
-
-body:has(#toggle-toc:checked) #toggle-toc-click {
-    filter: drop-shadow(1px 1px var(--verso-burger-toc-visible-shadow-color)) drop-shadow(-1px -1px var(--verso-burger-toc-visible-shadow-color));
+    /* Hidden on desktop */
+    display: none;
 }
 
 @media screen and (max-width: 700px) {
+    #toggle-toc-click {
+        display: inline-flex;
+        cursor: pointer;
+        /* This is the default, but it's needed to make the math work out so nice to be explicit: */
+        box-sizing: content-box;
+        width: var(--verso-burger-width);
+        height: var(--verso-burger-height);
+        flex-direction: column;
+        justify-content: space-between;
+        padding: 0.5rem;
+        position: fixed;
+        z-index: 100; /* Show on top of ToC/content */
+        filter: drop-shadow(1px 1px var(--verso-burger-toc-hidden-shadow-color)) drop-shadow(-1px -1px var(--verso-burger-toc-hidden-shadow-color));
+        transition:
+            height var(--verso-toc-transition-time) ease-in-out,
+            width var(--verso-toc-transition-time) ease-in-out;
+    }
+
+    body:has(#toggle-toc:checked) #toggle-toc-click {
+        filter: drop-shadow(1px 1px var(--verso-burger-toc-visible-shadow-color)) drop-shadow(-1px -1px var(--verso-burger-toc-visible-shadow-color));
+    }
+
     body {
         --verso-burger-width: var(--verso-mobile-burger-width);
         --verso-burger-height: var(--verso-mobile-burger-height);
