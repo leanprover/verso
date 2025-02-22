@@ -470,6 +470,13 @@ where
       font-family: var(--verso-structure-font-family);
     }
 
+    @media screen and (max-width: 700px) {
+      /* On mobile, the sticky index takes up half the screen. */
+      main .theIndex nav {
+        position: static;
+      }
+    }
+
     main .theIndex nav ol {
       padding: 0;
     }
