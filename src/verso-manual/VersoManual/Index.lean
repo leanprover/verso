@@ -465,7 +465,7 @@ where
 
     main .theIndex nav {
       position: sticky;
-      top: 0;
+      top: var(--verso-header-height);
       background: white;
       font-family: var(--verso-structure-font-family);
     }

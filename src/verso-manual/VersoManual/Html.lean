@@ -540,6 +540,15 @@ def page
         {{extraHead}}
       </head>
       <body>
+        <header>
+          {{if let some url := logo then
+              let logoHtml := {{<img src={{url}}/>}}
+              let logoDest :=
+                if let some root := logoLink then root
+                else "/"
+              {{<a href={{logoDest}} id="logo">{{logoHtml}}</a>}}
+            else .empty }}
+        </header>
         <label for="toggle-toc" id="toggle-toc-click">
           <span class="line line1"/>
           <span class="line line2"/>
@@ -550,13 +559,6 @@ def page
           <nav id="toc">
             <input type="checkbox" id="toggle-toc" checked="checked"/>
             <div class="first">
-              {{if let some url := logo then
-                  let logoHtml := {{<img src={{url}}/>}}
-                  let logoDest :=
-                    if let some root := logoLink then root
-                    else "/"
-                  {{<a href={{logoDest}} id="logo">{{logoHtml}}</a>}}
-                else .empty }}
               {{if showNavButtons then toc.navButtons path else .empty}}
               {{toc.localHtml path localItems}}
             </div>
