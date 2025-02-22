@@ -24,6 +24,11 @@ def pageStyle : String := r####"
     /* Mobile font size */
     --verso-mobile-font-size: 16px;
 
+    /** Header appearance */
+    --verso-header-height: 3rem;
+    /* Height of the displayed logo */
+    --verso-logo-height: var(--verso-header-height);
+
     /** Table of Contents appearance **/
     --verso-toc-background-color: #fafafa;
     --verso-toc-text-color: black;
@@ -109,6 +114,25 @@ pre, code {
 }
 
 /******** Page Layout ********/
+
+header {
+	position: fixed;
+	top: 0;
+	z-index: 99;
+	left: 0;
+	right: 0;
+	background: white;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	height: var(--verso-header-height);
+	box-shadow: 0 0px 6px lightgray;
+    padding: 0 .5rem;
+}
+
+.with-toc {
+    margin-top: var(--verso-header-height);
+}
 
 .with-toc #toc {
     position: fixed;
@@ -389,19 +413,13 @@ pre, code {
 }
 
 #logo {
-  max-width: min(80%, calc(100% - calc(var(--verso-burger-width) + 1rem)));
-  max-height: 4rem;
+  max-height: 100%;
   display: block;
-  margin-left: auto;
-  margin-right: 0.5rem;
-  transition: height var(--verso-toc-transition-time) ease-in-out;
 }
 
 #logo img {
   object-fit: contain;
-  max-width: 100%;
-  max-height: 4rem;
-  margin-left: auto;
+  max-height: var(--verso-logo-height);
   display: block;
 }
 
