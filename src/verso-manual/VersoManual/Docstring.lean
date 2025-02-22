@@ -458,9 +458,16 @@ def docstringStyle := r#"
 }
 
 .namedocs .text {
+  /* Causes margins on child elements to collapse inside the element, such
+     that the margins don't extend into parent with the background color.
+     The effect is that weird borders in the definition box don't happen anymore. */
+  display: flow-root;
   background-color: white;
-  padding: 1.5rem;
-  margin-top: 0.5rem;
+  /* If there is no text, still show a white box. */
+  min-height: 3rem;
+  /* Add a padding. this is the same as the margin applied to the first and last child.
+     The effect is that the padding looks the same size on all sides. */
+  padding: 0 1.5rem;
 }
 
 .namedocs .text > pre {
@@ -526,6 +533,13 @@ def docstringStyle := r#"
   padding-left: 1rem;
 }
 
+/* These margins work together with the padding on .text */
+.namedocs .text > :first-child {
+  margin-top: 1.5rem;
+}
+.namedocs .text > :last-child {
+  margin-bottom: 1.5rem;
+}
 
 .namedocs .methods td, .namedocs .fields td {
   vertical-align: top;
