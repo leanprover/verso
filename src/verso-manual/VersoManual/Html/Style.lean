@@ -199,6 +199,7 @@ main [id] {
     #toc {
         /* Push the toc off the page on mobile */
         right: 100%;
+        transition: transform var(--verso-toc-transition-time) ease;
     }
 
     #toc:has(#toggle-toc:checked) {
