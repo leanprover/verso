@@ -361,62 +361,40 @@ main [id] {
   padding-bottom: 0.5rem;
 }
 
-#local-buttons {
-    margin-top: 1rem;
+.prev-next-buttons {
     font-weight: bold;
     font-family: var(--verso-structure-font-family);
     display: flex;
     justify-content: space-between;
-    margin-left: 0.5rem;
-    margin-right: 0.5rem
+    flex-wrap: wrap;
+    max-width: var(--verso-content-max-width);
 }
 
-@media screen and (max-width: 700px) {
-    /* Make room for the toggle button on mobile */
-    #local-buttons {
-        margin-top: 2.5rem;
-    }
-}
-
-#local-buttons > * {
-    width: 4.5rem;
+.prev-next-buttons > * {
     display: flex;
+    flex-grow: 1;
     justify-content: center;
     align-items: center;
+    color: black;
+    text-decoration: none;
 }
 
-#local-buttons .local-button .where {
+.prev-next-buttons > [rel=prev] {
+    justify-content: start;
+}
+
+.prev-next-buttons > [rel=next] {
+    justify-content: end;
+}
+
+.prev-next-buttons .local-button .where {
     margin: 0 0.3rem;
+    /* Fix the position relative to the arrows. */
+    position: relative;
+    top: 0.1rem;
 }
 
-.local-button.active {
-    color: var(--verso-toc-text-color);
-    border: 1px solid var(--verso-toc-background-color);
-}
-
-.local-button.inactive {
-    color: color-mix(in srgb, var(--verso-toc-text-color), var(--verso-toc-background-color));
-    border: 1px solid var(--verso-toc-background-color);
-    cursor: default;
-}
-
-
-#local-buttons a.local-button.active {
-    text-decoration: none;
-}
-
-#local-buttons a.local-button.active:hover {
-    text-decoration: none;
-    background-color: color-mix(in srgb, white, var(--verso-toc-background-color));
-    border-color: color-mix(in srgb, var(--verso-toc-text-color) 30%, var(--verso-toc-background-color) 70%);
-}
-
-#local-buttons .local-button.inactive:hover {
-
-}
-
-
-#local-buttons .arrow {
+.prev-next-buttons .arrow {
     font-family: var(--verso-code-font-family);
     font-size: 150%;
 }
@@ -571,9 +549,14 @@ main .authors {
     text-align: center;
 }
 
+/******** Main content ********/
+
+.content-wrapper {
+    padding: var(--verso--content-padding-x);
+}
+
 main > section {
     position: relative;
-    padding: var(--verso--content-padding-x);
 }
 
 main section {
