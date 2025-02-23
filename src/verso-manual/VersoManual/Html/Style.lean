@@ -20,7 +20,7 @@ def pageStyle : String := r####"
     /* What's the maximum line width, for legibility? */
     --verso-content-max-width: 45rem;
     /* Desktop font size */
-    --verso-font-size: 18px;
+    --verso-font-size: 16px;
     /* Mobile font size */
     --verso-mobile-font-size: 16px;
 
@@ -90,6 +90,7 @@ h1, h2, h3, h4, h5, h6 {
 
 p, dt, dd {
     font-family: var(--verso-text-font-family);
+    line-height: 1.45;
 }
 
 dt {
