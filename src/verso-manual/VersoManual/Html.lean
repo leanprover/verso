@@ -557,7 +557,7 @@ def page
         <div class="with-toc">
           <div class="toc-backdrop" onclick="document.getElementById('toggle-toc-click')?.click()"></div>
           <nav id="toc">
-            <input type="checkbox" id="toggle-toc" checked="checked"/>
+            <input type="checkbox" id="toggle-toc" />
             <div class="first">
               {{if showNavButtons then toc.navButtons path else .empty}}
               {{toc.localHtml path localItems}}
