@@ -470,10 +470,24 @@ where
       font-family: var(--verso-structure-font-family);
     }
 
+    main .theIndex [id] {
+      /* This needs the combined height of the index header and the page header. We
+         know the height of the page header, but the index header height varies, so
+         we use the maximum height it gets which also works well for readers with
+         wide screens */
+      scroll-margin-top: calc(var(--verso-header-height) + 7.5rem);
+    }
+
     @media screen and (max-width: 700px) {
       /* On mobile, the sticky index takes up half the screen. */
       main .theIndex nav {
         position: static;
+      }
+
+      main .theIndex [id] {
+        /* On mobile, the index header is not sticky, so we just need to
+        be below the page header. */
+        scroll-margin-top: var(--verso-header-height);
       }
     }
 
