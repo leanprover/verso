@@ -185,7 +185,7 @@ header {
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    height: 100dvh;
+    height: calc(100dvh - var(--verso-header-height));
     width: var(--verso-toc-width);
 }
 
