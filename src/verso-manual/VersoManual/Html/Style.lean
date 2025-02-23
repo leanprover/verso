@@ -134,6 +134,12 @@ header {
     margin-top: var(--verso-header-height);
 }
 
+main [id] {
+  /* When jumping to something, display it below the header. We also add a little
+     whitespace, so it's easier to see that you are indeed viewing the whole item. */
+  scroll-margin-top: calc(var(--verso-header-height) + 1rem);
+}
+
 .with-toc #toc {
     position: fixed;
     z-index: 10;
