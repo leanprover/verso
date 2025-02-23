@@ -680,31 +680,3 @@ main .section-toc a:hover {
 }
 
 "####
-
-def pageStyleJs : String := r####"
-function saveCheckboxesInit() {
-  for (checkbox of document.querySelectorAll('#toc input[type="checkbox"]')) {
-    const value = localStorage.getItem(checkbox.id);
-
-    // Treat the ToC toggle specially, because it should always default to
-    // closed on mobile-width screens but respect user preference on desktop-width.
-    if (checkbox.id === "toggle-toc" && window.matchMedia("(max-width: 700px)").matches) {
-        checkbox.checked = false;
-    } else if (value === "true") {
-        checkbox.checked = true;
-    } else if (value === "false") {
-        checkbox.checked = false;
-    } // if not found, do nothing
-
-    checkbox.addEventListener("change", persistCheckbox);
-  }
-}
-
-function persistCheckbox() {
-  const value = this.checked; // in a handler, 'this' is the element with the handler on it
-  const id = this.id;
-  localStorage.setItem(this.id, value ? "true" : "false");
-}
-
-window.addEventListener("DOMContentLoaded", saveCheckboxesInit);
-"####

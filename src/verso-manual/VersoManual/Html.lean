@@ -12,7 +12,6 @@ import VersoManual.Html.Style
 namespace Verso.Genre.Manual.Html
 open Std (HashSet)
 open Verso.Output Html
-open Verso.Genre.Manual.Html.Css (pageStyleJs)
 
 structure Toc.Meta where
   title : Html
@@ -369,10 +368,11 @@ where
 
 
 def Toc.localHtml (path : Path) (toc : Toc) (localItems : Array Html) : Html := Id.run do
+  -- We want the last two levels of ToC to be open, so it's possible to navigate both in the local page and see your location in the chapter.
   let mut toc := toc
   let mut fallbackId : Nat := 0
   let rootId := "----bookRoot"
-  let mut out : Html := splitTocElem true path.isEmpty rootId .empty (linkify #[] none toc.title) toc.children
+  let mut out : Html := splitTocElem true (path.size ≤ 1) path.isEmpty rootId .empty (linkify #[] none toc.title) toc.children
   let mut currentPath := #[]
   for lvl in path do
     currentPath := currentPath.push lvl
@@ -386,18 +386,18 @@ def Toc.localHtml (path : Path) (toc : Toc) (localItems : Array Html) : Html := 
       -- In the last position, when `path == currentPath`, the ToC should default to open and show local items if possible
       if path == currentPath then
         if localItems.isEmpty then
-          out := out ++ splitTocElem false true entryId (sectionNum toc.sectionNum) (linkify currentPath toc.id toc.title) toc.children
+          out := out ++ splitTocElem false true true entryId (sectionNum toc.sectionNum) (linkify currentPath toc.id toc.title) toc.children
         else
-          out := out ++ splitTocLocalElem false entryId (sectionNum toc.sectionNum) (linkify currentPath toc.id toc.title) localItems
+          out := out ++ splitTocLocalElem false true entryId (sectionNum toc.sectionNum) (linkify currentPath toc.id toc.title) localItems
       else
-        out := out ++ splitTocElem false false entryId (sectionNum toc.sectionNum) (linkify currentPath toc.id toc.title) toc.children
+        out := out ++ splitTocElem false (path.size - currentPath.size == 1) false entryId (sectionNum toc.sectionNum) (linkify currentPath toc.id toc.title) toc.children
     else break
   {{<div class="split-tocs">{{out}}</div>}}
 where
-  splitTocWrapper (isTop thisPage : Bool) (chapterId : String) («section» : Html) (title : Html) (children : Option Html) :=
+  splitTocWrapper (isTop isOpen thisPage : Bool) (chapterId : String) («section» : Html) (title : Html) (children : Option Html) :=
     let toggleId := s!"--verso-manual-toc-{chapterId}"
     let «class» := if isTop then "split-toc book" else "split-toc"
-    let checked := if thisPage then #[("checked", "checked")] else #[]
+    let checked := if isOpen then #[("checked", "checked")] else #[]
     {{
       <div class={{«class»}}>
         <div class="title">
@@ -424,7 +424,7 @@ where
         }}
       </div>
     }}
-  splitTocElem (isTop thisPage : Bool) (chapterId : String) («section» : Html) (title : Html) (children : List Toc) :=
+  splitTocElem (isTop isOpen thisPage : Bool) (chapterId : String) («section» : Html) (title : Html) (children : List Toc) :=
     let children :=
       if children.isEmpty then none
       else some {{
@@ -451,9 +451,9 @@ where
         </table>
       }}
 
-    splitTocWrapper isTop thisPage chapterId «section» title children
+    splitTocWrapper isTop isOpen thisPage chapterId «section» title children
 
-  splitTocLocalElem (isTop : Bool) (chapterId : String) («section» : Html) (title : Html) (children : Array Html) :=
+  splitTocLocalElem (isTop isOpen : Bool) (chapterId : String) («section» : Html) (title : Html) (children : Array Html) :=
     let children :=
       if children.isEmpty then none
       else some {{
@@ -462,7 +462,7 @@ where
         </ol>
       }}
 
-    splitTocWrapper isTop true chapterId «section» title children
+    splitTocWrapper isTop isOpen true chapterId «section» title children
 
 
   linkify (path : Path) (id : Option String) (html : Html) :=
@@ -530,7 +530,6 @@ def page
         <meta name="viewport" content="height=device-height, width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1"/>
         <title>{{textTitle}}</title>
         <link rel="stylesheet" href="/book.css" />
-        <script>{{pageStyleJs}}</script>
         <script>s!"const __versoSiteRoot = \"{relativeRoot}\""</script>
         <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js" integrity="sha384-zbcZAIxlvJtNE3Dp5nxLXdXtXyxwOdnILY1TDPVmKFhl4r4nSUG1r8bcFXGVa4Te" crossorigin="anonymous"></script>
         {{extraJsFiles.map ({{<script src=s!"{·}"></script>}})}}
