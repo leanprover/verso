@@ -58,6 +58,24 @@ try to make the system more extensible.
 
 To generate the Verso documentation for Verso itself, run `generate.sh`.
 
+### Customization of manuals built with Verso
+
+To change the point at which the title moves from the header bar to
+the ToC, add something like the following css to your theme file.
+
+```css
+/* Move the title from the header to the toc when there is not enough room. */
+@media screen and (max-width: 1200px) {
+  .toc-title {
+    display: block;
+  }
+
+  .header-title {
+    display: none;
+  }
+}
+```
+
 ## Highlighted Lean Code in Verso
 
 Because Lean's parser is extensible, regular-expression-based syntax
