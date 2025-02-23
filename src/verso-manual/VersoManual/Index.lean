@@ -465,10 +465,30 @@ where
 
     main .theIndex nav {
       position: sticky;
-      top: 0;
+      top: var(--verso-header-height);
       background: white;
       font-family: var(--verso-structure-font-family);
-      font-size: 1.25rem;
+    }
+
+    main .theIndex [id] {
+      /* This needs the combined height of the index header and the page header. We
+         know the height of the page header, but the index header height varies, so
+         we use the maximum height it gets which also works well for readers with
+         wide screens */
+      scroll-margin-top: calc(var(--verso-header-height) + 7.5rem);
+    }
+
+    @media screen and (max-width: 700px) {
+      /* On mobile, the sticky index takes up half the screen. */
+      main .theIndex nav {
+        position: static;
+      }
+
+      main .theIndex [id] {
+        /* On mobile, the index header is not sticky, so we just need to
+        be below the page header. */
+        scroll-margin-top: var(--verso-header-height);
+      }
     }
 
     main .theIndex nav ol {
@@ -516,17 +536,9 @@ where
     main .theIndex .division > ol {
       padding-left: 0;
       display: flex;
-      flex-wrap: wrap;
-      gap: 2rem 3rem;
+      flex-direction: column;
+      gap: 1rem;
       overflow-wrap: break-word;
-    }
-
-    @media screen and (max-width: 700px) {
-      main .theindex .division > ol {
-        flex-direction: column;
-        flex-wrap: nowrap;
-        gap: 1rem;
-      }
     }
 
    main .theIndex .division > ol > li {

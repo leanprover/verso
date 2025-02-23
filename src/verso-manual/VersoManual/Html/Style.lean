@@ -24,6 +24,11 @@ def pageStyle : String := r####"
     /* Mobile font size */
     --verso-mobile-font-size: 16px;
 
+    /** Header appearance */
+    --verso-header-height: 3rem;
+    /* Height of the displayed logo */
+    --verso-logo-height: var(--verso-header-height);
+
     /** Table of Contents appearance **/
     --verso-toc-background-color: #fafafa;
     --verso-toc-text-color: black;
@@ -110,6 +115,31 @@ pre, code {
 
 /******** Page Layout ********/
 
+header {
+	position: fixed;
+	top: 0;
+	z-index: 99;
+	left: 0;
+	right: 0;
+	background: white;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	height: var(--verso-header-height);
+	box-shadow: 0 0px 6px lightgray;
+    padding: 0 .5rem;
+}
+
+.with-toc {
+    margin-top: var(--verso-header-height);
+}
+
+main [id] {
+  /* When jumping to something, display it below the header. We also add a little
+     whitespace, so it's easier to see that you are indeed viewing the whole item. */
+  scroll-margin-top: calc(var(--verso-header-height) + 1rem);
+}
+
 .with-toc #toc {
     position: fixed;
     z-index: 10;
@@ -145,7 +175,10 @@ pre, code {
         display: block;
     }
     body:has(#toggle-toc:checked) .toc-backdrop {
-        position: fixed; inset: 0; background-color: #aaa8; z-index: 9;
+        position: fixed;
+        inset: 0;
+        background-color: #aaa8;
+        z-index: 9;
     }
     html:has(#toggle-toc:checked) {
         overflow: hidden;
@@ -158,30 +191,19 @@ pre, code {
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    height: 100dvh;
+    height: calc(100dvh - var(--verso-header-height));
     width: var(--verso-toc-width);
 }
 
-
-#toc {
-    /* Here, the width transition is delayed until after the translation has pushed
-       the ToC off the screen. */
-    transition: transform var(--verso-toc-transition-time) ease, width 0.1s linear var(--verso-toc-transition-time);
-    transform: translateX(-20rem);
-}
-
-#toc:has(#toggle-toc:checked) {
-    /* Here, the width transition must happen first, before the translation animation,
-       so the translation is delayed.
-     */
-    transition: transform var(--verso-toc-transition-time) ease 0.1s, width 0.1s linear;
-    transform: translateX(0);
-}
-
-/* Disable ToC transition on mobile */
 @media screen and (max-width: 700px) {
-    #toc, #toc:has(#toggle-toc:checked) {
-        transition: none;
+    #toc {
+        /* Push the toc off the page on mobile */
+        right: 100%;
+        transition: transform var(--verso-toc-transition-time) ease;
+    }
+
+    #toc:has(#toggle-toc:checked) {
+        transform: translateX(var(--verso-toc-width));
     }
 }
 
@@ -336,13 +358,20 @@ pre, code {
 }
 
 #local-buttons {
-    margin-top: 2.5rem;
+    margin-top: 1rem;
     font-weight: bold;
     font-family: var(--verso-structure-font-family);
     display: flex;
     justify-content: space-between;
     margin-left: 0.5rem;
     margin-right: 0.5rem
+}
+
+@media screen and (max-width: 700px) {
+    /* Make room for the toggle button on mobile */
+    #local-buttons {
+        margin-top: 2.5rem;
+    }
 }
 
 #local-buttons > * {
@@ -389,47 +418,46 @@ pre, code {
 }
 
 #logo {
-  max-width: min(80%, calc(100% - calc(var(--verso-burger-width) + 1rem)));
-  max-height: 4rem;
-  display: block;
-  margin-left: auto;
-  margin-right: 0.5rem;
-  transition: height var(--verso-toc-transition-time) ease-in-out;
+    max-height: 100%;
+    display: block;
 }
 
 #logo img {
-  object-fit: contain;
-  max-width: 100%;
-  max-height: 4rem;
-  margin-left: auto;
-  display: block;
+    object-fit: contain;
+    max-height: var(--verso-logo-height);
+    display: block;
 }
 
 /******** Headerline ********/
 
 #toggle-toc-click {
-    cursor: pointer;
-    /* This is the default, but it's needed to make the math work out so nice to be explicit: */
-    box-sizing: content-box;
-    width: var(--verso-burger-width);
-    height: var(--verso-burger-height);
-    display: inline-flex;
-    flex-direction: column;
-    justify-content: space-between;
-    padding: 0.5rem;
-    position: fixed;
-    z-index: 100; /* Show on top of ToC/content */
-    filter: drop-shadow(1px 1px var(--verso-burger-toc-hidden-shadow-color)) drop-shadow(-1px -1px var(--verso-burger-toc-hidden-shadow-color));
-    transition:
-        height var(--verso-toc-transition-time) ease-in-out,
-        width var(--verso-toc-transition-time) ease-in-out;
-}
-
-body:has(#toggle-toc:checked) #toggle-toc-click {
-    filter: drop-shadow(1px 1px var(--verso-burger-toc-visible-shadow-color)) drop-shadow(-1px -1px var(--verso-burger-toc-visible-shadow-color));
+    /* Hidden on desktop */
+    display: none;
 }
 
 @media screen and (max-width: 700px) {
+    #toggle-toc-click {
+        display: inline-flex;
+        cursor: pointer;
+        /* This is the default, but it's needed to make the math work out so nice to be explicit: */
+        box-sizing: content-box;
+        width: var(--verso-burger-width);
+        height: var(--verso-burger-height);
+        flex-direction: column;
+        justify-content: space-between;
+        padding: 0.5rem;
+        position: fixed;
+        z-index: 100; /* Show on top of ToC/content */
+        filter: drop-shadow(1px 1px var(--verso-burger-toc-hidden-shadow-color)) drop-shadow(-1px -1px var(--verso-burger-toc-hidden-shadow-color));
+        transition:
+            height var(--verso-toc-transition-time) ease-in-out,
+            width var(--verso-toc-transition-time) ease-in-out;
+    }
+
+    body:has(#toggle-toc:checked) #toggle-toc-click {
+        filter: drop-shadow(1px 1px var(--verso-burger-toc-visible-shadow-color)) drop-shadow(-1px -1px var(--verso-burger-toc-visible-shadow-color));
+    }
+
     body {
         --verso-burger-width: var(--verso-mobile-burger-width);
         --verso-burger-height: var(--verso-mobile-burger-height);
@@ -651,32 +679,4 @@ main .section-toc a:hover {
   text-decoration: none;
 }
 
-"####
-
-def pageStyleJs : String := r####"
-function saveCheckboxesInit() {
-  for (checkbox of document.querySelectorAll('#toc input[type="checkbox"]')) {
-    const value = localStorage.getItem(checkbox.id);
-
-    // Treat the ToC toggle specially, because it should always default to
-    // closed on mobile-width screens but respect user preference on desktop-width.
-    if (checkbox.id === "toggle-toc" && window.matchMedia("(max-width: 700px)").matches) {
-        checkbox.checked = false;
-    } else if (value === "true") {
-        checkbox.checked = true;
-    } else if (value === "false") {
-        checkbox.checked = false;
-    } // if not found, do nothing
-
-    checkbox.addEventListener("change", persistCheckbox);
-  }
-}
-
-function persistCheckbox() {
-  const value = this.checked; // in a handler, 'this' is the element with the handler on it
-  const id = this.id;
-  localStorage.setItem(this.id, value ? "true" : "false");
-}
-
-window.addEventListener("DOMContentLoaded", saveCheckboxesInit);
 "####
