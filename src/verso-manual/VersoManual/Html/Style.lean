@@ -12,9 +12,9 @@ def pageStyle : String := r####"
 :root {
     /** Typography **/
     /* The font family used for headers, ToC entries, etc */
-    --verso-structure-font-family: "Helvetica Neue","Segoe UI",Arial,sans-serif;
+    --verso-structure-font-family: "Helvetica Neue","Segoe UI", "Roboto", Arial,sans-serif;
     /* The font family used for body text */
-    --verso-text-font-family: Georgia, Times, "Times New Roman", serif;
+    --verso-text-font-family: "Helvetica Neue","Segoe UI", "Roboto", Arial,sans-serif;
     /* The font family used for code */
     --verso-code-font-family: monospace;
     /* What's the maximum line width, for legibility? */
