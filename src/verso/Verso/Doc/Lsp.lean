@@ -117,7 +117,7 @@ def handleDef (params : TextDocumentPositionParams) (prev : RequestTask (Array L
   let text := doc.meta.text
   let pos := text.lspPosToUtf8Pos params.position
   bindWaitFindSnap doc (·.endPos + ' ' >= pos) (notFoundX := pure prev) fun snap => do
-    withFallbackResponse prev <| pure <| Task.spawn <| fun () => do
+    withFallbackResponse prev <| pure <| ServerTask.mk <| Task.spawn <| fun () => do
       let nodes := snap.infoTree.deepestNodes fun _ctxt info _arr =>
         match info with
         | .ofCustomInfo ⟨stx, data⟩ =>
@@ -125,7 +125,7 @@ def handleDef (params : TextDocumentPositionParams) (prev : RequestTask (Array L
             data.get? DocRefInfo
           else none
         | _ => none
-      let mut locs := #[]
+      let mut locs : Array LocationLink := #[]
       for node in nodes do
         match node with
         | ⟨some defSite, _⟩ =>
@@ -157,7 +157,7 @@ def handleRefs (params : ReferenceParams) (prev : RequestTask (Array Location)) 
         | _ => none
       if nodes.isEmpty then prev.get
       else
-        let mut locs := #[]
+        let mut locs : Array Location := #[]
         for node in nodes do
           for stx in node.syntax do
             if let some range := stx.lspRange text then
@@ -175,12 +175,12 @@ partial def handleHl (params : DocumentHighlightParams) (prev : RequestTask Docu
         match info with
         | .ofCustomInfo ⟨stx, data⟩ =>
           if stx.containsPos pos then
-            (.inl <$> data.get? DocListInfo) <|> (.inr <$> data.get? DocRefInfo)
+            (Sum.inl <$> data.get? DocListInfo) <|> (Sum.inr <$> data.get? DocRefInfo)
           else none
         | _ => none
       if nodes.isEmpty then
         if let some hls := syntactic text pos snap.stx then
-          let hls := hls.filterMap (·.lspRange text) |>.map (⟨·, none⟩)
+          let hls := hls.filterMap (fun stx : Syntax => stx.lspRange text) |>.map ({range := · : DocumentHighlight})
           if hls.isEmpty then prev.get
           else pure hls
         else
@@ -191,15 +191,15 @@ partial def handleHl (params : DocumentHighlightParams) (prev : RequestTask Docu
           match node with
           | .inl ⟨bulletStxs, _⟩ =>
             for s in bulletStxs do
-              if let some r := s.lspRange text then
-                hls := hls.push ⟨r, none⟩
+              if let some range := s.lspRange text then
+                hls := hls.push {range : DocumentHighlight}
           | .inr ⟨defSite, useSites⟩ =>
             if let some s := defSite then
-              if let some r := s.lspRange text then
-                hls := hls.push ⟨r, none⟩
+              if let some range := s.lspRange text then
+                hls := hls.push {range : DocumentHighlight}
             for s in useSites do
-              if let some r := s.lspRange text then
-                hls := hls.push ⟨r, none⟩
+              if let some range := s.lspRange text then
+                hls := hls.push {range : DocumentHighlight}
         pure hls
 where
   -- Unfortunately, VS Code doesn't do the right thing, so many of these highlights don't work there:
@@ -326,16 +326,21 @@ partial def removeFalsy (sym : DocumentSymbol) : DocumentSymbol :=
 
 open Lean Server Lsp RequestM in
 def mergeResponses (docTask : RequestTask α) (leanTask : RequestTask β) (f : Option α → Option β → γ) : RequestM (RequestTask γ) := do
-  bindTask docTask fun
+  pure <| docTask.bindCheap fun
   | .ok docResult =>
-    bindTask leanTask fun
+    leanTask.bindCheap fun
     | .ok leanResult =>
-      pure <| Task.pure <| pure <| f (some docResult) (some leanResult)
-    | .error _ => pure <| Task.pure <| pure <| f (some docResult) none
+      .mk <| .pure <| pure <| f (some docResult) (some leanResult)
+    | .error _ => .mk <| .pure <| pure <| f (some docResult) none
   | .error _ =>
-    bindTask leanTask fun
-    | .ok leanResult => pure <| Task.pure <| pure <| f none (some leanResult)
-    | .error e => throw e
+    leanTask.bindCheap fun
+    | .ok leanResult => .mk <| .pure <| pure <| f none (some leanResult)
+    | .error e => .pure <| throw e
+
+-- In Lean 4.18.0, this function has type IO, but we need a BaseIO version here. TODO: modify the
+-- type upstream, then delete this shim.
+def findSimpleDocStringCompat? (env : Environment) (declName : Name) : BaseIO (Option String) :=
+  pure <| docStringExt.find? env declName
 
 open Lean Server Lsp RequestM in
 partial def handleSyms (_params : DocumentSymbolParams) (prev : RequestTask DocumentSymbolResult) : RequestM (RequestTask DocumentSymbolResult) := do
@@ -343,19 +348,22 @@ partial def handleSyms (_params : DocumentSymbolParams) (prev : RequestTask Docu
   let text := doc.meta.text
   -- bad: we have to wait on elaboration of the entire file before we can report document symbols
   let t := doc.cmdSnaps.waitAll
-  let syms ← mapTask t fun (snaps, _) => do
-      return { syms := (← getSections text snaps) : DocumentSymbolResult }
-  let syms' ← mapTask t fun (snaps, _) => do
-      return { syms := ofInterest text snaps : DocumentSymbolResult }
+  let syms : RequestTask DocumentSymbolResult ←
+    fun _ : RequestContext =>
+      BaseIO.toEIO <| ServerTask.mk <$> BaseIO.mapTask (t := t.task) fun (snaps, _) => do
+        let sections ← getSections text snaps
+        return Except.ok { syms := sections : DocumentSymbolResult }
+  let syms' := t.mapCheap fun (snaps, _) => do
+    return { syms := ofInterest text snaps : DocumentSymbolResult }
   let out ← mergeResponses (← mergeResponses syms syms' combineAnswers) prev combineAnswers
-  mapTask out fun
+  pure <| out.mapCheap fun
     | .error e => throw e
     | .ok ⟨vs⟩ => pure ⟨vs.map removeFalsy⟩
   --pure syms
   where
     combineAnswers (x y : Option DocumentSymbolResult) : DocumentSymbolResult :=
       ⟨mergeManyInto (x.getD ⟨{}⟩).syms (y.getD ⟨{}⟩).syms⟩
-    tocSym (env) (text : FileMap) : TOC → IO (Option DocumentSymbol)
+    tocSym (env) (text : FileMap) : TOC → BaseIO (Option DocumentSymbol)
       | .mk title titleStx endPos children => do
         let some selRange@⟨start, _⟩ := titleStx.lspRange text
           | return none
@@ -370,7 +378,7 @@ partial def handleSyms (_params : DocumentSymbolParams) (prev : RequestTask Docu
           children? := kids
         }
       | .included name => do
-        let title := (← findDocString? env name.getId).getD (toString <| Verso.Doc.unDocName name.getId)
+        let title := (← findSimpleDocStringCompat? env name.getId).getD (toString <| Verso.Doc.unDocName name.getId)
         let some rng := name.raw.lspRange text
           | return none
         return some <| DocumentSymbol.mk {
@@ -380,8 +388,8 @@ partial def handleSyms (_params : DocumentSymbolParams) (prev : RequestTask Docu
           selectionRange := rng,
           detail? := some s!"Included from {name.getId}"
         }
-    getSections text ss : IO (Array DocumentSymbol) := do
-      let mut syms := #[]
+    getSections text (ss : List Snapshots.Snapshot) : BaseIO (Array DocumentSymbol) := do
+      let mut syms : Array DocumentSymbol := #[]
       for snap in ss do
         let info := snap.infoTree.deepestNodes fun _ctxt info _arr =>
           match info with
@@ -466,16 +474,16 @@ partial def handleTokens (prev : RequestTask SemanticTokens)
   let text := doc.meta.text
   if let some endPos := endPos? then
     let t := doc.cmdSnaps.waitUntil (·.endPos >= endPos)
-    let toks : RequestTask (Array SemanticTokenEntry) ←
-      mapTask t fun (snaps, _) => pure <| snapshotsTokens text snaps
+    let toks : RequestTask (Array SemanticTokenEntry) :=
+      t.mapCheap fun (snaps, _) => pure <| snapshotsTokens text snaps
     let response ← mergeIntoPrev toks
-    return response.map fun t =>
+    return response.mapCheap fun t =>
       t.map ({ response := ·, isComplete := true })
   else
     let (snaps, _, isComplete) ← doc.cmdSnaps.getFinishedPrefixWithTimeout 2000
     let toks : Array SemanticTokenEntry := snapshotsTokens text snaps
     let response ← mergeIntoPrev (.pure toks)
-    return response.map fun t =>
+    return response.mapCheap fun t =>
       t.map ({ response := ·, isComplete := isComplete })
 where
   snapshotTokens (text : FileMap) (snap) : Array SemanticTokenEntry :=
@@ -643,11 +651,11 @@ def handleTokensRange (params : SemanticTokensRangeParams) (prev : RequestTask S
   let text := doc.meta.text
   let beginPos := text.lspPosToUtf8Pos params.range.start
   let endPos := text.lspPosToUtf8Pos params.range.end
-  handleTokens prev beginPos endPos <&> fun t => t.map (fun r => r.map LspResponse.response)
+  handleTokens prev beginPos endPos <&> fun t => t.mapCheap (fun r => r.map LspResponse.response)
 
 open Lean Server Lsp RequestM in
 def handleTokensFull (_params : SemanticTokensParams) (prev : RequestTask SemanticTokens) : RequestM (RequestTask SemanticTokens) :=
-  handleTokens prev 0 none <&> fun t => t.map (fun r => r.map LspResponse.response)
+  handleTokens prev 0 none <&> fun t => t.mapCheap (fun r => r.map LspResponse.response)
 
 open Lean Server Lsp RequestM in
 open Lean.Server.FileWorker in
@@ -798,7 +806,7 @@ partial def handleFolding (_params : FoldingRangeParams) (prev : RequestTask (Ar
   let text := doc.meta.text
   -- bad: we have to wait on elaboration of the entire file before we can report folding
   let t := doc.cmdSnaps.waitAll
-  let folds ← mapTask t fun (snaps, _) => pure <| getSections text snaps ++ getSyntactic text snaps
+  let folds := t.mapCheap fun (snaps, _) => pure <| getSections text snaps ++ getSyntactic text snaps
   combine folds prev
 where
     combine := (mergeResponses · · (·.getD #[] ++ ·.getD #[]))
