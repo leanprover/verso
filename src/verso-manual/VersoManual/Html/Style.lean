@@ -130,6 +130,10 @@ header {
     padding: 0 .5rem;
 }
 
+:root:has(header:empty) {
+    --verso-header-height: 0px;
+}
+
 .with-toc {
     margin-top: var(--verso-header-height);
 }
