@@ -463,8 +463,6 @@ def docstringStyle := r#"
      The effect is that weird borders in the definition box don't happen anymore. */
   display: flow-root;
   background-color: white;
-  /* If there is no text, still show a white box. */
-  min-height: 3rem;
   /* Add a padding. this is the same as the margin applied to the first and last child.
      The effect is that the padding looks the same size on all sides. */
   padding: 0 1.5rem;
