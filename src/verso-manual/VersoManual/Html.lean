@@ -501,7 +501,10 @@ r#"(function(){
 
 def page
     (toc : Toc) (path : Path)
-    (textTitle : String) (htmlTitle : Html) (contents : Html)
+    (textTitle : String)
+    (htmlTitle : Html)
+    (bookTitle : Html)
+    (contents : Html)
     (extraCss : HashSet String)
     (extraJs : HashSet String)
     (localItems : Array Html)
@@ -550,8 +553,7 @@ def page
               else .empty }}
           </div>
           <div class="header-title-wrapper">
-            -- TODO should be checked by someone better at lean. At least the title should be 'the title of the book', but I don't know where to find that.
-            <a href={{if let some dest := logoLink then dest else "/"}} class="header-title"><h1>"The Lean Language Reference"</h1></a>
+            <a href={{if let some dest := logoLink then dest else "/"}} class="header-title"><h1>{{bookTitle}}</h1></a>
           </div>
         </header>
         <label for="toggle-toc" id="toggle-toc-click">
@@ -563,9 +565,8 @@ def page
           <div class="toc-backdrop" onclick="document.getElementById('toggle-toc-click')?.click()"></div>
           <nav id="toc">
             <input type="checkbox" id="toggle-toc" />
-            -- TODO same as above
-            <a href={{if let some dest := logoLink then dest else "/"}} class="toc-title"><h1>"The Lean Language Reference"</h1></a>
             <div class="first">
+              <a href={{if let some dest := logoLink then dest else "/"}} class="toc-title"><h1>{{bookTitle}}</h1></a>
               {{if showNavButtons then toc.navButtons path else .empty}}
               {{toc.localHtml path localItems}}
             </div>
