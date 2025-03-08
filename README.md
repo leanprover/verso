@@ -58,10 +58,12 @@ try to make the system more extensible.
 
 To generate the Verso documentation for Verso itself, run `generate.sh`.
 
-### Customization of manuals built with Verso
+### Customization of Manual Genre HTML
 
-To change the point at which the title moves from the header bar to
-the ToC, add something like the following css to your theme file.
+The title of the book being written in the manual genre is displayed either
+at the top of the screen or in the table of contents, depending on screen
+width. Books with very long titles may wish to change the threshold at which
+this occurs using the following CSS:
 
 ```css
 /* Move the title from the header to the toc when there is not enough room. */
@@ -75,6 +77,10 @@ the ToC, add something like the following css to your theme file.
   }
 }
 ```
+
+Vary the value `1200px` until there's space for the title. This CSS should be
+saved in a served static file and added to the `extraCss` field in the `config`
+parameter to `manualMain`.
 
 ## Highlighted Lean Code in Verso
 
