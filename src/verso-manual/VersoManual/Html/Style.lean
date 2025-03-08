@@ -172,10 +172,11 @@ header {
     .header-title {
         display: none;
     }
-
-    /* Hide the header if there is no logo, the title is hidden, and no other elements have been added to it */
-    :root:has(header > .header-logo-wrapper:empty):has(header > .header-title-wrapper:last-child:nth-child(2)) {
-        --verso-header-height: 0px;
+    @media screen and (min-width: 700px) {
+        /* Hide the header if there is no logo, no burger, the title is hidden, and no other elements have been added to it */
+        :root:has(header > .header-logo-wrapper:empty):has(header > .header-title-wrapper:last-child:nth-child(2)) {
+            --verso-header-height: 0px;
+        }
     }
 }
 

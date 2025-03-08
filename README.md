@@ -76,9 +76,11 @@ this occurs using the following CSS:
     display: none;
   }
 
-  /* Hide the header bar if there is no logo, the title is hidden, and no other elements have been added to it */
-  :root:has(header > .header-logo-wrapper:empty):has(header > .header-title-wrapper:last-child:nth-child(2)) {
-    --verso-header-height: 0px;
+  @media screen and (min-width: 1200px) {
+    /* Hide the header bar if there is no logo, no "burger menu", the title is hidden, and no other elements have been added to it */
+    :root:has(header > .header-logo-wrapper:empty):has(header > .header-title-wrapper:last-child:nth-child(2)) {
+      --verso-header-height: 0px;
+    }
   }
 }
 ```
