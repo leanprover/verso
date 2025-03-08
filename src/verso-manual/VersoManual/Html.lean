@@ -329,13 +329,15 @@ partial def Toc.html (depth : Option Nat) : Toc → Html
 def Toc.navButtons (path : Path) (toc : Toc) : Html :=
   let z := Zipper.followPath toc.onlyPages path
   let prev := z.bind Zipper.prev |>.map (·.focus)
-  let parent := z.bind Zipper.up? |>.map (·.focus)
   let next := z.bind Zipper.next |>.map (·.focus)
   {{
-    <nav id="local-buttons">
-      {{button prev {{<span class="arrow">"←"</span><span class="where">"Prev"</span>}} "prev"}}
-      {{button parent {{<span class="arrow">"↑"</span><span class="where">"Up"</span>}} }}
-      {{button next {{<span class="where">"Next"</span><span class="arrow">"→"</span>}} "next"}}
+    <nav class="prev-next-buttons">
+      {{if let some somePrev := prev
+          then button prev {{<span class="arrow">"←"</span><span class="where">{{getTitle somePrev |>.getD ""}}</span>}} "prev"
+          else .empty}}
+      {{if let some someNext := next
+          then button next {{<span class="where">{{getTitle someNext |>.getD "Next"}}</span><span class="arrow">"→"</span>}} "next"
+          else .empty}}
     </nav>
   }}
 
@@ -567,7 +569,6 @@ def page
             <input type="checkbox" id="toggle-toc" />
             <div class="first">
               <a href={{if let some dest := logoLink then dest else "/"}} class="toc-title"><h1>{{bookTitle}}</h1></a>
-              {{if showNavButtons then toc.navButtons path else .empty}}
               {{toc.localHtml path localItems}}
             </div>
             <div class="last">
@@ -584,7 +585,11 @@ def page
             </div>
           </nav>
           <main>
-            {{contents}}
+            <div class="content-wrapper">
+              {{if showNavButtons then toc.navButtons path else .empty}}
+              {{contents}}
+              {{if showNavButtons then toc.navButtons path else .empty}}
+            </div>
           </main>
         </div>
       </body>
