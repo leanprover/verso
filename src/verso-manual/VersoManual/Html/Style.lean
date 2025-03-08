@@ -123,11 +123,60 @@ header {
 	right: 0;
 	background: white;
 	display: flex;
-	justify-content: space-between;
 	align-items: center;
 	height: var(--verso-header-height);
 	box-shadow: 0 0px 6px lightgray;
-    padding: 0 .5rem;
+    /* This padding is for the search bar. Should probably live with the search bar. */
+    padding-right: .5rem;
+}
+
+.header-logo-wrapper {
+    /* Make the logo always take up the same space as the toc */
+    flex-basis: var(--verso-toc-width);
+    /* Make padding be included in the width calculation */
+    box-sizing: border-box;
+    /* Add padding so it doesn't sit at the very edge of the screen. */
+    padding-left: .5rem;
+}
+
+@media screen and (max-width: 700px) {
+    .header-logo-wrapper {
+        display: none;
+    }
+}
+
+.header-title-wrapper {
+    /* The title wrapper grows to fill up the header */
+    flex: 1;
+    /* And adds the padding of the content */
+    padding-left: var(--verso--content-padding-x);
+}
+
+.header-title {
+    text-decoration: none;
+    color: black;
+    font-size: 2rem;
+    font-weight: bold;
+}
+
+.header-title h1 {
+    margin: 0;
+    font-size: inherit;
+    font-weight: inherit;
+    text-wrap: nowrap;
+}
+
+@media screen and (max-width: 1100px) {
+    /* Hide the title, but not the wrapper, on smaller screens. The wrapper is necessary to make the other elements in the header
+       appear in the right place. The 1100 px matches the one on the toc title. */
+    .header-title {
+        display: none;
+    }
+
+    /* Hide the header if there is no logo, the title is hidden, and no other elements have been added to it */
+    :root:has(header > .header-logo-wrapper:empty):has(header > .header-title-wrapper:last-child:nth-child(2)) {
+        --verso-header-height: 0px;
+    }
 }
 
 :root:has(header:empty) {
@@ -158,7 +207,7 @@ main [id] {
 /** Mobile **/
 @media screen and (max-width: 700px) {
     .with-toc > main {
-        padding-left: 1.5rem;
+        padding-left: 0;
     }
 }
 
@@ -223,6 +272,23 @@ main [id] {
 #toc a:hover {
     text-decoration: underline;
     color: #000;
+}
+
+.toc-title {
+    /* The ToC title is displayed when there is no room for the title in the header. */
+    display: none;
+    padding: 0 .5rem;
+}
+
+.toc-title h1 {
+    margin-bottom: 0;
+}
+
+/* Display the ToC title on smaller screens. The 1100 matches the one on the header title. */
+@media screen and (max-width: 1100px) {
+    .toc-title {
+        display: block;
+    }
 }
 
 #toc .split-tocs {
@@ -430,6 +496,8 @@ main [id] {
         padding: 0.5rem;
         position: fixed;
         z-index: 100; /* Show on top of ToC/content */
+        /* Calculation to make it sit in the middle of the header. The .5rem is the padding added to #toggle-toc-click. */
+        top: calc((var(--verso-header-height) - var(--verso-burger-height) - 2 * .5rem) / 2);
         filter: drop-shadow(1px 1px var(--verso-burger-toc-hidden-shadow-color)) drop-shadow(-1px -1px var(--verso-burger-toc-hidden-shadow-color));
         transition:
             height var(--verso-toc-transition-time) ease-in-out,
@@ -557,6 +625,13 @@ main .authors {
 
 main > section {
     position: relative;
+}
+
+@media screen and (max-width: 700px) {
+    /* Remove extra margin on mobile. */
+    main > section > :first-child {
+        margin-top: 0;
+    }
 }
 
 main section {

@@ -293,7 +293,7 @@ def page (toc : List Html.Toc)
   let toc := {
     title := htmlBookTitle, path := #[], id := "" , sectionNum := some #[], children := toc
   }
-  Html.page toc path textTitle htmlTitle contents
+  Html.page toc path textTitle htmlTitle htmlBookTitle contents
     state.extraCss (state.extraJs.insertMany extraJs)
     (showNavButtons := showNavButtons)
     (base := config.baseURL)

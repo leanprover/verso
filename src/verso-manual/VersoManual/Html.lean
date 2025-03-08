@@ -418,7 +418,7 @@ where
           }}
           {{«section»}}
           <span class={{if thisPage && !isTop then "current" else ""}}>
-            {{title}}
+            {{if isTop then "Table of Contents" else title}}
           </span>
         </div>
         {{if let some children := children then children
@@ -503,7 +503,10 @@ r#"(function(){
 
 def page
     (toc : Toc) (path : Path)
-    (textTitle : String) (htmlTitle : Html) (contents : Html)
+    (textTitle : String)
+    (htmlTitle : Html)
+    (bookTitle : Html)
+    (contents : Html)
     (extraCss : HashSet String)
     (extraJs : HashSet String)
     (localItems : Array Html)
@@ -542,13 +545,18 @@ def page
       </head>
       <body>
         <header>
-          {{if let some url := logo then
-              let logoHtml := {{<img src={{url}}/>}}
-              let logoDest :=
-                if let some root := logoLink then root
-                else "/"
-              {{<a href={{logoDest}} id="logo">{{logoHtml}}</a>}}
-            else .empty }}
+          <div class="header-logo-wrapper">
+            {{if let some url := logo then
+                let logoHtml := {{<img src={{url}}/>}}
+                let logoDest :=
+                  if let some root := logoLink then root
+                  else "/"
+                {{<a href={{logoDest}} id="logo">{{logoHtml}}</a>}}
+              else .empty }}
+          </div>
+          <div class="header-title-wrapper">
+            <a href={{if let some dest := logoLink then dest else "/"}} class="header-title"><h1>{{bookTitle}}</h1></a>
+          </div>
         </header>
         <label for="toggle-toc" id="toggle-toc-click">
           <span class="line line1"/>
@@ -560,6 +568,7 @@ def page
           <nav id="toc">
             <input type="checkbox" id="toggle-toc" />
             <div class="first">
+              <a href={{if let some dest := logoLink then dest else "/"}} class="toc-title"><h1>{{bookTitle}}</h1></a>
               {{toc.localHtml path localItems}}
             </div>
             <div class="last">
