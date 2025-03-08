@@ -158,7 +158,7 @@ main [id] {
 /** Mobile **/
 @media screen and (max-width: 700px) {
     .with-toc > main {
-        padding-left: 1.5rem;
+        padding-left: 0;
     }
 }
 
@@ -371,13 +371,6 @@ main [id] {
     margin-right: 0.5rem
 }
 
-@media screen and (max-width: 700px) {
-    /* Make room for the toggle button on mobile */
-    #local-buttons {
-        margin-top: 2.5rem;
-    }
-}
-
 #local-buttons > * {
     width: 4.5rem;
     display: flex;
@@ -452,6 +445,8 @@ main [id] {
         padding: 0.5rem;
         position: fixed;
         z-index: 100; /* Show on top of ToC/content */
+        /* Calculation to make it sit in the middle of the header. The .5rem is the padding added to #toggle-toc-click. */
+        top: calc((var(--verso-header-height) - var(--verso-burger-height) - 2 * .5rem) / 2);
         filter: drop-shadow(1px 1px var(--verso-burger-toc-hidden-shadow-color)) drop-shadow(-1px -1px var(--verso-burger-toc-hidden-shadow-color));
         transition:
             height var(--verso-toc-transition-time) ease-in-out,
@@ -574,6 +569,13 @@ main .authors {
 main > section {
     position: relative;
     padding: var(--verso--content-padding-x);
+}
+
+@media screen and (max-width: 700px) {
+    /* Remove extra margin on mobile. */
+    main > section > :first-child {
+        margin-top: 0;
+    }
 }
 
 main section {
