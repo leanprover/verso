@@ -60,10 +60,10 @@ To generate the Verso documentation for Verso itself, run `generate.sh`.
 
 ### Customization of Manual Genre HTML
 
-The title of the book being written in the manual genre is displayed either
-at the top of the screen or in the table of contents, depending on screen
-width. Books with very long titles may wish to change the threshold at which
-this occurs using the following CSS:
+The title of the book being written in the manual genre can be displayed
+either at the top of the screen or in the table of contents, depending on
+screen width. Books with long titles may wish to add a threshold at which
+the title moves to the table of contents using the following CSS:
 
 ```css
 /* Move the title from the header to the toc when there is not enough room. */
@@ -74,13 +74,6 @@ this occurs using the following CSS:
 
   .header-title {
     display: none;
-  }
-
-  @media screen and (min-width: 1200px) {
-    /* Hide the header bar if there is no logo, no "burger menu", the title is hidden, and no other elements have been added to it */
-    :root:has(header > .header-logo-wrapper:empty):has(header > .header-title-wrapper:last-child:nth-child(2)) {
-      --verso-header-height: 0px;
-    }
   }
 }
 ```

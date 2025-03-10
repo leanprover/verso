@@ -166,20 +166,6 @@ header {
     text-wrap: nowrap;
 }
 
-@media screen and (max-width: 1100px) {
-    /* Hide the title, but not the wrapper, on smaller screens. The wrapper is necessary to make the other elements in the header
-       appear in the right place. The 1100 px matches the one on the toc title. */
-    .header-title {
-        display: none;
-    }
-    @media screen and (min-width: 700px) {
-        /* Hide the header if there is no logo, no burger, the title is hidden, and no other elements have been added to it */
-        :root:has(header > .header-logo-wrapper:empty):has(header > .header-title-wrapper:last-child:nth-child(2)) {
-            --verso-header-height: 0px;
-        }
-    }
-}
-
 :root:has(header:empty) {
     --verso-header-height: 0px;
 }
@@ -276,20 +262,13 @@ main [id] {
 }
 
 .toc-title {
-    /* The ToC title is displayed when there is no room for the title in the header. */
+    /* The ToC title can be displayed when there is no room for the title in the header. */
     display: none;
     padding: 0 .5rem;
 }
 
 .toc-title h1 {
     margin-bottom: 0;
-}
-
-/* Display the ToC title on smaller screens. The 1100 matches the one on the header title. */
-@media screen and (max-width: 1100px) {
-    .toc-title {
-        display: block;
-    }
 }
 
 #toc .split-tocs {
