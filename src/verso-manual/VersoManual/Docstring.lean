@@ -1826,8 +1826,10 @@ def Block.progress
   name := `Verso.Genre.Manual.Block.progress
   data := toJson (namespaces, exceptions, present, tactics)
 
-private def ignore (env : Environment) (x : Name) : Bool :=
-    isPrivateName x ||
+private def ignore [Monad m] [MonadLiftT CoreM m] [MonadEnv m] (x : Name) : m Bool := do
+  if (← Meta.Simp.isSimproc x) then return true
+  let env ← getEnv
+  return isPrivateName x ||
     isAuxRecursor env x ||
     isNoConfusion env x ||
     isRecCore env x ||
@@ -1846,7 +1848,7 @@ open Lean Elab Command in
 #eval show CommandElabM Unit from do
   let mut names := #[]
   for (x, _) in (← getEnv).constants do
-    if x matches .str .anonymous _ && !(ignore (← getEnv) x) then
+    if x matches .str .anonymous _ && !(← liftTermElabM <| ignore x) then
       names := names.push x
   names := names.qsort (·.toString < ·.toString)
   elabCommand <| ← `(private def $(mkIdent `allRootNames) : Array Name := #[$(names.map (quote · : Name → Term)),*])
@@ -1879,7 +1881,7 @@ def progress : DirectiveExpander
     for ns in namespaces do
       present := present.insert ns {}
     for (x, info) in (← getEnv).constants do
-      if ignore (← getEnv) x then continue
+      if (← ignore x) then continue
       if exceptions.contains x then continue
       match info with
       | .thmInfo _ => continue -- don't document theorems
