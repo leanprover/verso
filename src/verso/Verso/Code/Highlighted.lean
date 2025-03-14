@@ -548,7 +548,7 @@ def highlightingStyle : String := "
 .hl.lean .has-info {
   text-decoration-style: wavy;
   text-decoration-line: underline;
-  text-decoration-thickness: 0.1rem;
+  text-decoration-thickness: from-font;
 }
 
 .hl.lean .has-info .hover-info {
