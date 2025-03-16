@@ -126,8 +126,6 @@ header {
 	align-items: center;
 	height: var(--verso-header-height);
 	box-shadow: 0 0px 6px lightgray;
-    /* This padding is for the search bar. Should probably live with the search bar. */
-    padding-right: .5rem;
 }
 
 .header-logo-wrapper {
@@ -148,7 +146,10 @@ header {
 .header-title-wrapper {
     /* The title wrapper grows to fill up the header */
     flex: 1;
-    /* And adds the padding of the content */
+}
+
+@media screen and (max-width: 1500px) {
+    /* Add the padding of the content when the content moves to the left */
     padding-left: var(--verso--content-padding-x);
 }
 
@@ -157,6 +158,17 @@ header {
     color: black;
     font-size: 2rem;
     font-weight: bold;
+    display: block;
+    margin: 0 auto;
+    max-width: var(--verso-content-max-width);
+}
+
+@media screen and (max-width: 1500px) {
+    /* Move the title to the left, to align with the content that does the same. */
+    .header-title {
+        margin: 0;
+        max-width: unset;
+    }
 }
 
 .header-title h1 {
@@ -601,6 +613,16 @@ main .authors {
 
 .content-wrapper {
     padding: var(--verso--content-padding-x);
+    max-width: var(--verso-content-max-width);
+    margin: 0 auto;
+}
+
+@media screen and (max-width: 1500px) {
+    /* Left align the content when less than 1500px, to make room for the footnotes on the right. */
+    .content-wrapper {
+        margin: 0;
+        max-width: unset;
+    }
 }
 
 main > section {
