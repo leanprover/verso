@@ -62,7 +62,13 @@ def pageStyle : String := r####"
 :root {
     /* How much space to add on the sides of content for small screens and to place widgets. */
     --verso--content-padding-x: 1.5rem;
+}
 
+@media screen and (max-width: 700px) {
+  :root {
+    /* Reduce the standard padding on mobile */
+    --verso--content-padding-x: 1rem;
+  }
 }
 
 /******** Root font size - this is what rem is based on *********/
