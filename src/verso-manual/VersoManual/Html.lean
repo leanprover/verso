@@ -334,10 +334,10 @@ def Toc.navButtons (path : Path) (toc : Toc) : Html :=
     <nav class="prev-next-buttons">
       {{if let some somePrev := prev
           then button prev {{<span class="arrow">"←"</span><span class="where">{{getTitle somePrev |>.getD ""}}</span>}} "prev"
-          else .empty}}
+          else {{<div></div>}}}}
       {{if let some someNext := next
           then button next {{<span class="where">{{getTitle someNext |>.getD "Next"}}</span><span class="arrow">"→"</span>}} "next"
-          else .empty}}
+          else {{<div></div>}}}}
     </nav>
   }}
 
