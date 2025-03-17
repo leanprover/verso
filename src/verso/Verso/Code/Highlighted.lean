@@ -260,6 +260,8 @@ defmethod Token.Kind.hover? (tok : Token.Kind) : HighlightHtmlM (Option Nat) :=
     some <$> addHover {{ <code><span class="literal string">{{s.quote}}</span>" : String"</code>}}
   | .withType t =>
     some <$> addHover {{ <code>{{t}}</code> }}
+  | .sort _ (some doc) =>
+    some <$> addHover {{<code class="docstring">{{doc}}</code>}}
   | _ => pure none
 where
   separatedDocs txt :=
@@ -273,7 +275,7 @@ defmethod Highlighted.Span.Kind.«class» : Highlighted.Span.Kind → String
 defmethod Token.Kind.«class» : Token.Kind → String
   | .var .. => "var"
   | .str .. => "literal string"
-  | .sort  => "sort"
+  | .sort .. => "sort"
   | .const .. => "const"
   | .option .. => "option"
   | .docComment => "doc-comment"
@@ -640,6 +642,10 @@ def highlightingStyle : String := "
 
 .hl.lean div.docstring > :last-child {
   margin-bottom: 0;
+}
+
+.hl.lean div.docstring > :first-child {
+  margin-top: 0;
 }
 
 .hl.lean .hover-info .sep {
