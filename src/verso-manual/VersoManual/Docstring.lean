@@ -524,6 +524,7 @@ def docstringStyle := r#"
   padding-left: 0.5rem;
   float: left;
   margin-top: 0;
+  max-width: calc(100% - 1rem);
 }
 .namedocs > .text .constructor .docs {
   clear: both;
