@@ -418,7 +418,7 @@ main [id] {
 
 .prev-next-buttons > * {
     display: flex;
-    flex-grow: 1;
+    flex: 1;
     justify-content: center;
     align-items: center;
     color: black;
