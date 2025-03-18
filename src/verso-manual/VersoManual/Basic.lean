@@ -204,13 +204,17 @@ instance : ToString Numbering where
 structure PartMetadata where
   authors : List String := []
   date : Option String := none
+  /-- The main tag for the part, used for cross-references. -/
   tag : Option Tag := none
   /-- If this part ends up as the root of a file, use this name for it -/
   file : Option String := none
+  /-- The internal unique ID, assigned during traversal. -/
   id : Option InternalId := none
   /-- Should this section be numbered? If `false`, then it's like `\section*` in LaTeX -/
   number : Bool := true
-  /-- Which number has been assigned? -/
+  /-- If `true`, the part is only rendered in draft mode. -/
+  draft : Bool := false
+  /-- Which number has been assigned? This field is set during traversal. -/
   assignedNumber : Option Numbering := none
   htmlSplit : HtmlSplitMode := .default
 deriving BEq, Hashable, Repr

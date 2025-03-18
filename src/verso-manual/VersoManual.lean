@@ -159,6 +159,16 @@ def ensureDir (dir : System.FilePath) : IO Unit := do
   if !(← dir.isDir) then
     throw (↑ s!"Not a directory: {dir}")
 
+/--
+Removes all parts that are specified as draft-only.
+-/
+partial def removeDraftParts (part : Part Manual) : Part Manual :=
+  let sub := part.subParts.filter fun p =>
+    if let some meta := p.metadata then
+      !meta.draft
+    else true
+  part.withSubparts (sub.map removeDraftParts)
+
 def traverseMulti (depth : Nat) (path : Path) (part : Part Manual) : TraverseM (Part Manual) :=
   match depth with
   | 0 => Genre.traverse Manual part
@@ -186,6 +196,8 @@ def traverse (logError : String → IO Unit) (text : Part Manual) (config : Conf
   let topCtxt : Manual.TraverseContext := {logError, draft := config.draft}
   let mut state : Manual.TraverseState := {licenseInfo := .ofList config.licenseInfo}
   let mut text := text
+  if !config.draft then
+    text := removeDraftParts text
   if config.verbose then
     IO.println "Initializing extensions"
   let extensionImpls ← readThe ExtensionImpls

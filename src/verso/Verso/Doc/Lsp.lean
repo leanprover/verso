@@ -520,7 +520,7 @@ where
 
   go (text : FileMap) (stx : Syntax) : Array SemanticTokenEntry := Id.run do
     match stx with
-    | `(inline|$s:str) =>
+    | `(inline|$_s:str) =>
       mkTok text .string stx
     | `(inline|_[%$s $inlines* ]%$e) | `(inline|*[%$s $inlines* ]%$e) =>
       mkTok text .keyword s ++ go text (mkNullNode inlines) ++ mkTok text .keyword e
@@ -630,13 +630,13 @@ where
     -- In the next three cases, no token is returned. This is to allow Lean's to shine through, if
     -- there are any. It would be nice to add a priority mechanism to fall back to these defaults if
     -- Lean didn't provide any.
-    | `(arg_val| $v:num) =>
+    | `(arg_val| $_v:num) =>
       --mkTok text .number v
       #[]
-    | `(arg_val| $v:ident) =>
+    | `(arg_val| $_v:ident) =>
       -- mkTok text .variable v
       #[]
-    | `(arg_val| $v:str) =>
+    | `(arg_val| $_v:str) =>
       -- mkTok text .string v
       #[]
     | _ =>
