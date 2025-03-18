@@ -178,7 +178,7 @@ instance : Traverse SimplePage TraverseM where
     | .inr ⟨dest, some t⟩, _ => do
       modify fun st =>
         {st with
-          refTargets := st.refTargets.insert dest (st.refTargets.getD dest .empty |>.insert t)}
+          refTargets := st.refTargets.insert dest (st.refTargets.getD dest {} |>.insert t)}
       pure none
 
 /-! # Producing Output -/

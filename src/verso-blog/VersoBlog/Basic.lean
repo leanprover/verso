@@ -72,7 +72,7 @@ deriving BEq
 
 structure ArchivesMeta where
   /-- The categories used by posts in these archives -/
-  categories : HashMap Post.Category (HashSet Name) := .empty
+  categories : HashMap Post.Category (HashSet Name) := {}
 deriving Repr
 
 instance [BEq α] [Hashable α] : BEq (HashSet α) where
