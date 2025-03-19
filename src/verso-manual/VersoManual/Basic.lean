@@ -553,9 +553,16 @@ structure InlineDescr where
   licenseInfo : List LicenseInfo := []
   /--
   Should this inline be an entry in the page-local ToC? If so, how should it be represented?
+
+  Entries should be returned as a preference-ordered array of representations. Each representation
+  consists of a string and some HTML; the string should represent the HTML's content if all
+  formatting were stripped. Items are compared for string equality, with later suggestions used in
+  case of overlap, but the HTML is what's displayed.
+
+  The empty array means that the block should not be included.
   -/
-  localContentItem : InternalId → Json → Array (Doc.Inline Manual) → Option Verso.Output.Html :=
-    fun _ _ _ => none
+  localContentItem : InternalId → Json → Array (Doc.Inline Manual) → Array (String × Verso.Output.Html) :=
+    fun _ _ _ => #[]
 
   toTeX : Option (InlineToTeX Manual (ReaderT ExtensionImpls IO))
 
@@ -576,9 +583,16 @@ structure BlockDescr where
   licenseInfo : List LicenseInfo := []
   /--
   Should this block be an entry in the page-local ToC? If so, how should it be represented?
+
+  Entries should be returned as a preference-ordered array of representations. Each representation
+  consists of a string and some HTML; the string should represent the HTML's content if all
+  formatting were stripped. Items are compared for string equality, with later suggestions used in
+  case of overlap, but the HTML is what's displayed.
+
+  The empty array means that the block should not be included.
   -/
-  localContentItem : InternalId → Json → Array (Doc.Block Manual) → Option Verso.Output.Html :=
-    fun _ _ _ => none
+  localContentItem : InternalId → Json → Array (Doc.Block Manual) → Array (String × Verso.Output.Html) :=
+    fun _ _ _ => #[]
 
   toTeX : Option (BlockToTeX Manual (ReaderT ExtensionImpls IO))
 deriving TypeName

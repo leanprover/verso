@@ -821,10 +821,11 @@ def docstring.descr : BlockDescr := withHighlighting {
         </div>
       }}
 
-  localContentItem := fun _id info _contents => open Verso.Output.Html in do
+  localContentItem := fun _id info _contents => open Verso.Output.Html in Id.run do
     let .ok (name, _declType, _signature) := FromJson.fromJson? (α := Name × Block.Docstring.DeclType × Option Highlighted) info
-      | failure
-    pure #[{{<code>{{name.getString!}}</code>}}]
+      | #[]
+    let names := #[name.getString!, name.toString]
+    names.map fun s => (s, {{<code>{{s}}</code>}})
 
 
   toTeX := some <| fun _goI goB _id _info contents => contents.mapM goB
@@ -1543,10 +1544,10 @@ def optionDocs.descr : BlockDescr where
           </div>
         </div>
       }}
-  localContentItem := fun _id info _contents => open Verso.Output.Html in do
+  localContentItem := fun _id info _contents => open Verso.Output.Html in Id.run do
     let .ok (name, _defaultValue) := FromJson.fromJson? (α := Name × Highlighted) info
-      | failure
-    pure #[{{<code>{{name.toString}}</code>}}]
+      | #[]
+    #[(name.toString, {{<code>{{name.toString}}</code>}}), (s!"{name.toString} (Option)", {{<code>{{name.toString}}</code>" (Option)"}})]
   toTeX := some <| fun _goI goB _id _info contents => contents.mapM goB
   extraCss := [highlightingStyle, docstringStyle]
   extraJs := [highlightingJs]
@@ -1679,10 +1680,11 @@ def tactic.descr : BlockDescr := withHighlighting {
           </div>
         </div>
       }}
-  localContentItem := fun _id info _contents => open Verso.Output.Html in do
+  localContentItem := fun _id info _contents => open Verso.Output.Html in Id.run do
     let .ok (tactic, «show») := FromJson.fromJson? (α := TacticDoc × Option String) info
-      | failure
-    pure #[{{<code class="tactic-name">{{show.getD tactic.userName}}</code>}}]
+      | #[]
+    let str := show.getD tactic.userName
+    pure #[(str, {{<code class="tactic-name">{{str}}</code>}})]
   toTeX := some <| fun _goI goB _id _info contents => contents.mapM goB
   extraCss := [docstringStyle]
 }
@@ -1814,10 +1816,10 @@ def conv.descr : BlockDescr := withHighlighting {
           </div>
         </div>
       }}
-  localContentItem := fun _id info _contents => open Verso.Output.Html in do
+  localContentItem := fun _id info _contents => open Verso.Output.Html in Id.run do
     let .ok (_name, «show», _docs?) := FromJson.fromJson? (α := Name × String × Option String) info
-      | failure
-    pure #[{{<code class="tactic-name">{{«show»}}</code>}}]
+      | #[]
+    pure #[(«show», {{<code class="tactic-name">{{«show»}}</code>}})]
 
   toTeX := some <| fun _goI goB _id _info contents => contents.mapM goB
   extraCss := [docstringStyle]

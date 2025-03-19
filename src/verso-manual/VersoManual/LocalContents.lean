@@ -52,7 +52,8 @@ open Verso.Output in
 structure LocalContentItem where
   header? : Option HeaderStatus
   dest : String
-  linkText : Html
+  linkTexts : Array (String × Html)
+  linkTexts_nonempty : linkTexts.size > 0
 
 partial def fromNone : Doc.Inline Genre.none → Doc.Inline Manual
   | .text s => .text s
@@ -67,7 +68,7 @@ partial def fromNone : Doc.Inline Genre.none → Doc.Inline Manual
   | .footnote x xs => .footnote x (xs.map fromNone)
 
 partial def toNone : Doc.Inline Manual → Doc.Inline Genre.none
-  | .other i is => .concat (is.map toNone)
+  | .other _ is => .concat (is.map toNone)
   | .text s => .text s
   | .concat xs => .concat (xs.map toNone)
   | .image alt dest => .image alt dest
@@ -82,7 +83,8 @@ partial def toNone : Doc.Inline Manual → Doc.Inline Genre.none
 open Verso.Output Html
 
 def LocalContentItem.toHtml (item : LocalContentItem) : Html :=
-  let txt := {{<a href={{item.dest}}>{{item.linkText}}</a>}}
+  have := item.linkTexts_nonempty
+  let txt := {{<a href={{item.dest}}>{{item.linkTexts[0].2}}</a>}}
   if let some ⟨level, numbering⟩ := item.header? then
     let numHtml := if let some l := numbering then {{<span class="level-num">{{l}}</span>" "}} else .empty
     {{<span class=s!"header head-{level}">{{numHtml}}{{txt}}</span>}}
@@ -92,9 +94,11 @@ def LocalContentItem.toHtml (item : LocalContentItem) : Html :=
 partial def inlineItem? (impls : ExtensionImpls) (xref : TraverseState) (blk : Inline) (contents : Array (Doc.Inline Manual)) : Option LocalContentItem := do
   let impl ← impls.getInline? blk.name
   let id ← blk.id
-  let name ← impl.localContentItem id blk.data contents
-  let (path, slug) ← xref.externalTags[id]?
-  return ⟨none, path.link slug.toString, name⟩
+  let names := impl.localContentItem id blk.data contents
+  if h : names.size > 0 then
+    let (path, slug) ← xref.externalTags[id]?
+    return ⟨none, path.link slug.toString, names, h⟩
+  else failure
 
 partial def inlineContents (impls : ExtensionImpls) (xref : TraverseState) (acc : Array LocalContentItem) (i : Doc.Inline Manual) : Array LocalContentItem := Id.run do
   match i with
@@ -115,9 +119,11 @@ partial def inlineContents (impls : ExtensionImpls) (xref : TraverseState) (acc 
 partial def blockItem? (impls : ExtensionImpls) (xref : TraverseState) (blk : Block) (contents : Array (Doc.Block Manual)) : Option LocalContentItem := do
   let impl ← impls.getBlock? blk.name
   let id ← blk.id
-  let name ← impl.localContentItem id blk.data contents
-  let (path, slug) ← xref.externalTags[id]?
-  return ⟨none, path.link slug.toString, name⟩
+  let names := impl.localContentItem id blk.data contents
+  if h : names.size > 0 then
+    let (path, slug) ← xref.externalTags[id]?
+    return ⟨none, path.link slug.toString, names, h⟩
+  else failure
 
 partial def blockContents (impls : ExtensionImpls) (xref : TraverseState) (acc : Array LocalContentItem) (b : Doc.Block Manual) : Array LocalContentItem := Id.run do
   match b with
@@ -154,6 +160,33 @@ partial def blockContents (impls : ExtensionImpls) (xref : TraverseState) (acc :
       acc := blockContents impls xref acc b
     acc
 
+def uniquifyLocalItems (items : Array LocalContentItem) : Array LocalContentItem := Id.run do
+  let mut items := items
+  for j in [0:15] do -- Upper bound on rounds - more than 3 is unlikely, so this should just save us from malicious code
+    let ambiguous :=
+      items
+        |>.groupByKey (fun x => have := x.linkTexts_nonempty; x.linkTexts[0].1)
+        |>.filter (fun _ arr => arr.size > 1)
+        |>.keys
+        |> Std.HashSet.ofList
+    if ambiguous.isEmpty then break
+    let mut items' := #[]
+    let mut changed := false
+    for i in items do
+      have := i.linkTexts_nonempty
+      if i.linkTexts[0].1 ∈ ambiguous then
+        -- Attempt to take the next preference
+        if h : i.linkTexts.size > 1 then
+          items' := items'.push { i with
+            linkTexts := i.linkTexts.drop 1,
+            linkTexts_nonempty := by simp; omega
+          }
+          changed := true
+          continue
+      items' := items'.push i
+    if changed then items := items' else break
+  return items
+
 inductive SubpartSpec where
   | none
   | depth : Nat → SubpartSpec
@@ -173,24 +206,23 @@ def SubpartSpec.decr : SubpartSpec → SubpartSpec
 instance : LT SubpartSpec := Ord.toLT inferInstance
 instance : LE SubpartSpec := Ord.toLE inferInstance
 
-partial def localContents
+partial def localContentsCore
     (opts : Html.Options Manual (ReaderT ExtensionImpls IO)) (ctxt : TraverseContext) (xref : TraverseState)
-    (p : Part Manual)
-    (sectionNumPrefix : Option String := none)
-    (includeTitle : Bool := true) (includeSubparts : SubpartSpec := .all) (fromLevel : Nat := 0) :
-    StateT (Code.Hover.State Html) (ReaderT ExtensionImpls IO) (Array (LocalContentItem)) := do
+    (p : Part Manual) (sectionNumPrefix : Option String)
+    (includeTitle : Bool) (includeSubparts : SubpartSpec) (fromLevel : Nat) :
+    StateT (Code.Hover.State Html) (ReaderT ExtensionImpls IO) (Array LocalContentItem) := do
   let sectionNumPrefix := sectionNumPrefix <|> sectionString ctxt
   let mut out := #[]
 
   if includeTitle then
     let (html, _) ← p.title.mapM (Manual.toHtml opts ctxt xref {} {} {} ·) |>.run {}
-    let partDest : Option (LocalContentItem) := do
+    let partDest : Option LocalContentItem := do
       let m ← p.metadata
       let id ← m.id
       let (path, slug) ← xref.externalTags[id]?
       let num := sectionString ctxt |>.map (withoutPrefix · sectionNumPrefix)
 
-      return ⟨some ⟨fromLevel, num⟩, path.link slug.toString, html⟩
+      return ⟨some ⟨fromLevel, num⟩, path.link slug.toString, #[(p.titleString, html)], by simp⟩
     out := out ++ partDest.toArray
 
   if includeSubparts > .none then
@@ -199,9 +231,24 @@ partial def localContents
 
   if includeSubparts > .none then
     for p' in p.subParts do
-      out := out ++ (← localContents opts (ctxt.inPart p') xref p' (sectionNumPrefix := sectionNumPrefix) (includeSubparts := includeSubparts.decr) (fromLevel := fromLevel + 1))
+      -- In the recursive cases, `includeTitle` is `true` because all the sections and subsections
+      -- on the page should be listed in the local ToC
+      out := out ++ (← localContentsCore opts (ctxt.inPart p') xref p' sectionNumPrefix true includeSubparts.decr (fromLevel + 1))
 
   return out
 where
   withoutPrefix (str : String) (prefix? : Option String) : String :=
     prefix?.bind (str.dropPrefix? · |>.map Substring.toString) |>.getD str
+
+def localContents
+    (opts : Html.Options Manual (ReaderT ExtensionImpls IO)) (ctxt : TraverseContext) (xref : TraverseState)
+    (p : Part Manual)
+    (sectionNumPrefix : Option String := none)
+    (includeTitle : Bool := true) (includeSubparts : SubpartSpec := .all) (fromLevel : Nat := 0) :
+    StateT (Code.Hover.State Html) (ReaderT ExtensionImpls IO) (Array LocalContentItem) :=
+  uniquifyLocalItems <$>
+    localContentsCore opts ctxt xref p
+      (sectionNumPrefix := sectionNumPrefix)
+      (includeTitle := includeTitle)
+      (includeSubparts := includeSubparts)
+      (fromLevel := fromLevel)
