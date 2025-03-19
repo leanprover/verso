@@ -237,7 +237,10 @@ instance : Quote ParentInfo where
     | .mk projFn name parent index => mkCApp ``ParentInfo.mk #[quote projFn, quote name, quote parent, quote index]
 
 inductive DeclType where
-  | structure (isClass : Bool) (constructor : DocName) (fieldNames : Array Name) (fieldInfo : Array FieldInfo) (parents : Array ParentInfo) (ancestors : Array Name)
+  /--
+  A structure or class. The `constructor` field is `none` when the constructor is private.
+  -/
+  | structure (isClass : Bool) (constructor : Option DocName) (fieldNames : Array Name) (fieldInfo : Array FieldInfo) (parents : Array ParentInfo) (ancestors : Array Name)
   | def (safety : DefinitionSafety)
   | opaque (safety : DefinitionSafety)
   | inductive (constructors : Array DocName) (numArgs : Nat) (propOnly : Bool)
@@ -383,7 +386,10 @@ def DeclType.ofName (c : Name) : MetaM DeclType := do
                 else
                   let fieldName' := Highlighted.token ⟨.unknown, fieldName.toString⟩
                   pure { fieldName := fieldName', fieldFrom, type := ← renderTagged none type' ⟨{}, false⟩, subobject?,  projFn := .anonymous, binderInfo, autoParam, docString? := none, visibility := .public}
-        return .structure (isClass env c) (← DocName.ofName (showNamespace := true) ctor.name) info.fieldNames fieldInfo parents ancestors
+
+        let ctor? ← if isPrivateName ctor.name then pure none else some <$> DocName.ofName (showNamespace := true) ctor.name
+
+        return .structure (isClass env c) ctor? info.fieldNames fieldInfo parents ancestors
 
       else
         let ctors ← ii.ctors.mapM (DocName.ofName (ppWidth := 60) (showNamespace := false) (openDecls := openDecls))
@@ -756,15 +762,17 @@ def docstring.descr : BlockDescr := withHighlighting {
       | do logError "Failed to deserialize docstring data"; pure none
 
     match declType with
-    | .structure true ctor fields fieldInfos _parents _ancestors =>
-        saveRef id ctor.name <| some <| Doc.Inline.concat #[Doc.Inline.text "Instance constructor of ", Doc.Inline.code name.toString]
+    | .structure true ctor? fields fieldInfos _parents _ancestors =>
+        if let some ctor := ctor? then
+          saveRef id ctor.name <| some <| Doc.Inline.concat #[Doc.Inline.text "Instance constructor of ", Doc.Inline.code name.toString]
 
         for (f, i) in fields.zip fieldInfos do
           saveRef id i.projFn
             (some <| Doc.Inline.concat #[Doc.Inline.code i.projFn.toString, Doc.Inline.text " (class method)"])
             (showName := some f.toString)
-    | .structure false ctor fields fieldInfos _parents _ancestors =>
-        saveRef id ctor.name <| some <| Doc.Inline.concat #[Doc.Inline.text "Constructor of ", Doc.Inline.code name.toString]
+    | .structure false ctor? fields fieldInfos _parents _ancestors =>
+        if let some ctor := ctor? then
+          saveRef id ctor.name <| some <| Doc.Inline.concat #[Doc.Inline.text "Constructor of ", Doc.Inline.code name.toString]
 
         for (f, i) in fields.zip fieldInfos do
           saveRef id i.projFn
@@ -1357,17 +1365,19 @@ def docstring : BlockRoleExpander
 where
   getExtras (name : Name) (declType : Block.Docstring.DeclType) : DocElabM (Array Term) :=
     match declType with
-    | .structure isClass constructor _ fieldInfo parents _ => do
-      let ctorRow : Term ← do
+    | .structure isClass constructor? _ fieldInfo parents _ => do
+
+      let ctorRow : Option Term ← constructor?.mapM fun constructor => do
         let header := if isClass then "Instance Constructor" else "Constructor"
-        let sigDesc ←
+        let sigDesc : Array Term ←
           if let some docs := constructor.docstring? then
             let some mdAst := MD4Lean.parse docs
               | throwError "Failed to parse docstring as Markdown"
             mdAst.blocks.mapM (blockFromMarkdownWithLean [name, constructor.name])
-          else pure #[]
+          else pure (#[] : Array Term)
         let sig ← `(Verso.Doc.Block.other (Verso.Genre.Manual.Block.internalSignature $(quote constructor.hlName) none) #[$sigDesc,*])
         ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.docstringSection $(quote header)) #[$sig])
+
       let parentsRow : Option Term ← do
         if parents.isEmpty then pure none
         else
@@ -1386,12 +1396,12 @@ where
             if let some docs := i.docString? then
               let some mdAst := MD4Lean.parse docs
                 | throwError "Failed to parse docstring as Markdown"
-              mdAst.blocks.mapM (blockFromMarkdownWithLean [name, constructor.name])
+              mdAst.blocks.mapM (blockFromMarkdownWithLean <| name :: (constructor?.map ([·.name])).getD [])
             else
               pure (#[] : Array Term)
           ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.fieldSignature $(quote i.visibility) $(quote i.fieldName) $(quote i.type) $(quote inheritedFrom) $(quote <| parents.map (·.parent))) #[$sigDesc,*])
         ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.docstringSection $(quote header)) #[$fieldSigs,*])
-      pure <| #[ctorRow] ++ parentsRow.toArray ++ [fieldsRow]
+      pure <| ctorRow.toArray ++ parentsRow.toArray ++ [fieldsRow]
     | .inductive ctors .. => do
       let ctorSigs : Array Term ←
         -- Elaborate constructor docs in the type's NS
