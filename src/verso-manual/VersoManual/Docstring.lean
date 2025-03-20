@@ -454,12 +454,9 @@ instance [BEq α] [Hashable α] [ToJson α] : ToJson (HashSet α) where
 def docstringStyle := r#"
 .namedocs {
   position: relative;
-  border: solid 2px #99b3c0;
-  background-color: #99b3c0;
-  padding-left: 1px;
-  padding-right: 1px;
-  padding-bottom: 1px;
-  padding-top: 1.5rem;
+  border-left: solid 3px #d2dfe5;
+  background-color: #d2dfe5;
+  padding-top: .75rem;
   margin-bottom: 1rem;
 }
 
@@ -471,7 +468,7 @@ def docstringStyle := r#"
   background-color: white;
   /* Add a padding. this is the same as the margin applied to the first and last child.
      The effect is that the padding looks the same size on all sides. */
-  padding: 0 1.5rem;
+  padding: 0 1rem;
 }
 
 .namedocs .text > pre {
@@ -481,34 +478,24 @@ def docstringStyle := r#"
 .namedocs .signature {
   font-family: var(--verso-code-font-family);
   margin-top: 0 !important;
-  margin-left: 1.5rem !important;
-  margin-right: 1.5rem;
+  margin-left: 1rem !important;
+  margin-bottom: .75rem !important;
 }
 
 .namedocs .label {
   font-size: smaller;
   font-family: var(--verso-structure-font-family);
-  position: absolute;
-  right: 0.5rem;
-  top: 0.5rem;
-}
-
-/* Sticking content into the right margin is not good on narrow screens,
-   so move the label to the left to make space for the permalink widget. */
-
-@media screen and (max-width: 700px) {
-  .namedocs:has(.permalink-widget.block) .label {
-    right: 1.5rem;
-  }
+  margin-left: 1rem;
 }
 
 .namedocs h1 {
   font-size: inherit;
   font-weight: bold;
+  margin-top: 1rem;
+  margin-bottom: 1rem;
 }
 
 .namedocs > .text .constructor {
-  padding-left: 0.5rem;
   padding-top: 0;
   padding-right: 0;
   padding-bottom: 0;
@@ -539,10 +526,10 @@ def docstringStyle := r#"
 
 /* These margins work together with the padding on .text */
 .namedocs .text > :first-child {
-  margin-top: 1.5rem;
+  margin-top: 1rem;
 }
 .namedocs .text > :last-child {
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
 }
 
 .namedocs .methods td, .namedocs .fields td {
