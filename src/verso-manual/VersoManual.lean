@@ -134,12 +134,7 @@ structure Config where
   sourceLink : Option String := none
   /-- URL for issue reports -/
   issueLink : Option String := none
-  /--
-  URL to put in the base tag.
-
-  The tag is described here: https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-  -/
-  baseURL : Option String := none
+  /-- Be verbose while generating output -/
   verbose : Bool := false
   /--
   How deep should the local table of contents on each non-leaf HTML page?
@@ -308,7 +303,6 @@ def page (toc : List Html.Toc)
   Html.page toc path textTitle htmlTitle htmlBookTitle contents
     state.extraCss (state.extraJs.insertMany extraJs)
     (showNavButtons := showNavButtons)
-    (base := config.baseURL)
     (logo := config.logo)
     (logoLink := config.logoLink)
     (repoLink := config.sourceLink)
@@ -318,12 +312,9 @@ def page (toc : List Html.Toc)
     (extraJsFiles := config.extraJs.toArray ++ state.extraJsFiles.map ("/-verso-js/" ++ ·.1))
     (extraHead := config.extraHead)
 
-def Config.relativize (config : Config) (path : Path) (html : Html) : Html :=
-  if config.baseURL.isSome then
-    -- Make all absolute URLS be relative to the site root, because that'll make them `base`-relative
+def relativizeLinks (html : Html) : Html :=
+    -- Make all absolute URLS be relative to the site root, because that'll make them `<base>`-relative
     Html.relativize #[] html
-  else
-    Html.relativize path html
 
 open Output.Html in
 def xref (toc : List Html.Toc) (xrefJson : String) (findJs : String) (state : TraverseState) (config : Config) : Html :=
@@ -350,7 +341,7 @@ def emitXrefs (toc : List Html.Toc) (dir : System.FilePath) (state : TraverseSta
   let xrefJson := toString out
   IO.FS.writeFile (dir.join "xref.json") xrefJson
   ensureDir (dir / "find")
-  IO.FS.writeFile (dir / "find" / "index.html") (Html.doctype ++ (config.relativize #["find"] <| xref toc xrefJson find.js state config).asString)
+  IO.FS.writeFile (dir / "find" / "index.html") (Html.doctype ++ (relativizeLinks <| xref toc xrefJson find.js state config).asString)
 where
   jsonRef (data : Json) (ref : Path × Slug) : Json :=
     Json.mkObj [("address", ref.1.link), ("id", ref.2.toString), ("data", data)]
@@ -420,7 +411,7 @@ where
       if config.verbose then
         IO.println s!"Saving {dir.join "index.html"}"
       h.putStrLn Html.doctype
-      h.putStrLn <| Html.asString <| config.relativize ctxt.path <|
+      h.putStrLn <| Html.asString <| relativizeLinks <|
         page toc ctxt.path text.titleString titleHtml titleHtml pageContent state config thisPageToc (showNavButtons := false)
 
 open Verso.Output.Html in
@@ -513,7 +504,7 @@ where
       if config.verbose then
         IO.println s!"Saving {dir.join "index.html"}"
       h.putStrLn Html.doctype
-      h.putStrLn <| Html.asString <| config.relativize ctxt.path <|
+      h.putStrLn <| Html.asString <| relativizeLinks <|
         page bookContents ctxt.path part.titleString bookTitle pageTitleHtml pageContent state config thisPageToc
     if depth > 0 ∧ part.htmlSplit != .never then
       for p in part.subParts do
@@ -543,7 +534,6 @@ where
     | ("--without-html-multi"::more) => opts {cfg with emitHtmlMulti := false} more
     | ("--with-word-count"::file::more) => opts {cfg with wordCount := some file} more
     | ("--without-word-count"::more) => opts {cfg with wordCount := none} more
-    | ("--site-base-url"::base::more) => opts {cfg with baseURL := some (fixBase base)} more
     | ("--draft"::more) => opts {cfg with draft := true} more
     | ("--verbose"::more) => opts {cfg with verbose := true} more
     | (other :: _) => throw (↑ s!"Unknown option {other}")
