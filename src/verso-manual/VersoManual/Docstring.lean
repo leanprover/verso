@@ -65,6 +65,19 @@ end Verso.ArgParse
 
 namespace Verso.Genre.Manual
 
+def getDocString?
+    [Monad m] [MonadLiftT IO m] [MonadOptions m] [MonadLog m] [AddMessageContext m]
+    (env : Environment) (declName : Name) :
+    m (Option String) := do
+  let docs? ← findDocString? env declName
+  if docs?.isNone then
+    if !(← Verso.Genre.Manual.Docstring.getAllowMissing) then
+      Lean.logError m!"'{declName}' is not documented.\n\nSet option 'verso.docstring.allowMissing' to 'true' to allow missing docstrings."
+    else
+      Lean.logWarning m!"'{declName}' is not documented.\n\nSet option 'verso.docstring.allowMissing' to 'false' to disallow missing docstrings."
+  return docs?
+
+
 namespace Block
 
 namespace Docstring
@@ -273,7 +286,7 @@ def DeclType.label : DeclType → String
 deriving instance Repr for OpenDecl
 
 open Meta in
-def DocName.ofName (c : Name) (ppWidth : Nat := 40) (showUniverses := true) (showNamespace := true) (constantInfo := false) (openDecls : List OpenDecl := []) : MetaM DocName := do
+def DocName.ofName (c : Name) (ppWidth : Nat := 40) (showUniverses := true) (showNamespace := true) (constantInfo := false) (openDecls : List OpenDecl := []) (checkDocstring : Bool := true) : MetaM DocName := do
   let env ← getEnv
   if let some _ := env.find? c then
     let ctx := {
@@ -298,7 +311,9 @@ def DocName.ofName (c : Name) (ppWidth : Nat := 40) (showUniverses := true) (sho
     let ttName := Lean.Widget.TaggedText.prettyTagged (w := ppWidth) fmt
     let name := Lean.Widget.tagCodeInfos ctx infos ttName
 
-    pure { name := c, hlName := (← renderTagged none name ⟨{}, false⟩), signature := (← renderTagged none sig ⟨{}, false⟩), docstring? := (← findDocString? env c) }
+    let docstring? ← if checkDocstring then  getDocString? env c else Lean.findDocString? env c
+
+    pure { name := c, hlName := (← renderTagged none name ⟨{}, false⟩), signature := (← renderTagged none sig ⟨{}, false⟩), docstring? }
   else
     pure { name := c, hlName := .token ⟨.const c "" none false, c.toString⟩, signature := Highlighted.seq #[], docstring? := none }
 
@@ -329,7 +344,7 @@ def getStructurePathToBaseStructure? (env : Environment) (baseStructName : Name)
 
 
 open Meta in
-def DeclType.ofName (c : Name) : MetaM DeclType := do
+def DeclType.ofName (c : Name) (hideFields : Bool := false) : MetaM DeclType := do
   let env ← getEnv
   let openDecls : List OpenDecl :=
     match c with
@@ -359,11 +374,11 @@ def DeclType.ofName (c : Name) : MetaM DeclType := do
                 else
                   pure ⟨parentProj, .anonymous, ← renderTagged none projType ⟨{}, false⟩, i⟩
         let ancestors ← getAllParentStructures c
-        let allFields := getStructureFieldsFlattened env c (includeSubobjectFields := true)
+        let allFields := if hideFields then #[] else getStructureFieldsFlattened env c (includeSubobjectFields := true)
         let fieldInfo ←
           forallTelescopeReducing ii.type fun params _ =>
             withLocalDeclD `self (mkAppN (mkConst c (ii.levelParams.map mkLevelParam)) params) fun s =>
-              allFields.mapM fun fieldName => do
+              allFields.filterMapM fun fieldName => do
                 let proj ← mkProjection s fieldName
                 let type ← inferType proj >>= instantiateMVars
                 let type' ← withOptions (·.setInt `format.width 40 |>.setBool `pp.tagAppFns true) <| (Widget.ppExprTagged type)
@@ -378,16 +393,24 @@ def DeclType.ofName (c : Name) : MetaM DeclType := do
                 let autoParam := fieldInfo?.map (·.autoParam?.isSome) |>.getD false
 
                 if let some projFn := getProjFnForField? env c fieldName then
-                  let docString? ← findDocString? env projFn
-                  let visibility := Visibility.of env projFn
-                  let fieldName' := Highlighted.token ⟨.const projFn projType.pretty docString? true, fieldName.toString⟩
+                  if isPrivateName projFn then
+                    pure none
+                  else
+                    let docString? ←
+                      -- Don't complain about missing docstrings for subobject projections
+                      if subobject?.isSome then findDocString? env projFn
+                      else getDocString? env projFn
+                    let visibility := Visibility.of env projFn
+                    let fieldName' := Highlighted.token ⟨.const projFn projType.pretty docString? true, fieldName.toString⟩
 
-                  pure { fieldName := fieldName', fieldFrom, type := ← renderTagged none type' ⟨{}, false⟩, subobject?,  projFn, binderInfo, autoParam, docString?, visibility}
+                    pure <| some { fieldName := fieldName', fieldFrom, type := ← renderTagged none type' ⟨{}, false⟩, subobject?,  projFn, binderInfo, autoParam, docString?, visibility}
                 else
                   let fieldName' := Highlighted.token ⟨.unknown, fieldName.toString⟩
-                  pure { fieldName := fieldName', fieldFrom, type := ← renderTagged none type' ⟨{}, false⟩, subobject?,  projFn := .anonymous, binderInfo, autoParam, docString? := none, visibility := .public}
+                  pure <| some { fieldName := fieldName', fieldFrom, type := ← renderTagged none type' ⟨{}, false⟩, subobject?,  projFn := .anonymous, binderInfo, autoParam, docString? := none, visibility := .public}
 
-        let ctor? ← if isPrivateName ctor.name then pure none else some <$> DocName.ofName (showNamespace := true) ctor.name
+        let ctor? ←
+          if isPrivateName ctor.name then pure none
+          else some <$> DocName.ofName (showNamespace := true) (checkDocstring := false) ctor.name
 
         return .structure (isClass env c) ctor? info.fieldNames fieldInfo parents ancestors
 
@@ -1326,42 +1349,63 @@ def blockFromMarkdownWithLean (names : List Name) (b : MD4Lean.Block) : DocElabM
     Markdown.blockFromMarkdown b
       (handleHeaders := Markdown.strongEmphHeaders)
 
+structure DocstringConfig where
+  name : Ident × Name
+  /--
+  Ignores the option `verso.docstring.allowMissing` and allows _this_ docstring to be missing.
+  -/
+  allowMissing : Option Bool := none
+  /-- Suppress the fields of a structure. -/
+  hideFields : Bool := false
+
+section
+variable [Monad m] [MonadOptions m] [MonadEnv m] [MonadLiftT CoreM m] [MonadError m]
+variable [MonadLog m] [AddMessageContext m] [Elab.MonadInfoTree m]
+
+def DocstringConfig.parse : ArgParse m DocstringConfig :=
+  DocstringConfig.mk <$> .positional `name .documentableName <*> .named `allowMissing .bool true <*> .namedD `hideFields .bool false
+
+end
+
 @[block_role_expander docstring]
 def docstring : BlockRoleExpander
   | args, #[] => do
-    let (x, name) ← (ArgParse.positional `name .documentableName).run args
+    let ⟨(x, name), allowMissing, hideFields⟩ ← DocstringConfig.parse.run args
 
-    Doc.PointOfInterest.save (← getRef) name.toString (detail? := some "Documentation")
-    let blockStx ←
-      match ← Lean.findDocString? (← getEnv) name with
-      | none => logWarningAt x m!"No docs found for '{x}'"; pure #[]
-      | some docs =>
-        let some ast := MD4Lean.parse docs
-          | throwErrorAt x "Failed to parse docstring as Markdown"
+    let opts : Options → Options := allowMissing.map (fun b opts => verso.docstring.allowMissing.set opts b) |>.getD id
 
-        ast.blocks.mapM (blockFromMarkdownWithLean [name])
+    withOptions opts do
+      Doc.PointOfInterest.save (← getRef) name.toString (detail? := some "Documentation")
+      let blockStx ←
+        match ← getDocString? (← getEnv) name with
+        | none => pure #[]
+        | some docs =>
+          let some ast := MD4Lean.parse docs
+            | throwErrorAt x "Failed to parse docstring as Markdown"
 
-    if !(← Docstring.getAllowDeprecated) && Lean.Linter.isDeprecated (← getEnv) name then
-      Lean.logError m!"'{name}' is deprecated.\n\nSet option 'verso.docstring.allowDeprecated' to 'true' to allow documentation for deprecated names."
+          ast.blocks.mapM (blockFromMarkdownWithLean [name])
+
+      if !(← Docstring.getAllowDeprecated) && Lean.Linter.isDeprecated (← getEnv) name then
+        Lean.logError m!"'{name}' is deprecated.\n\nSet option 'verso.docstring.allowDeprecated' to 'true' to allow documentation for deprecated names."
 
 
-    let declType ← Block.Docstring.DeclType.ofName name
+      let declType ← Block.Docstring.DeclType.ofName name (hideFields := hideFields)
 
-    let ⟨fmt, infos⟩ ← withOptions (·.setBool `pp.tagAppFns true) <| Block.Docstring.ppSignature name (constantInfo := false)
-    let tt := Lean.Widget.TaggedText.prettyTagged (w := 48) fmt
-    let ctx := {
-      env           := (← getEnv)
-      mctx          := (← getMCtx)
-      options       := (← getOptions)
-      currNamespace := (← getCurrNamespace)
-      openDecls     := (← getOpenDecls)
-      fileMap       := default
-      ngen          := (← getNGen)
-    }
-    let sig := Lean.Widget.tagCodeInfos ctx infos tt
-    let signature ← some <$> renderTagged none sig ⟨{}, false⟩
-    let extras ← getExtras name declType
-    pure #[← ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.docstring $(quote name) $(quote declType) $(quote signature)) #[$(blockStx ++ extras),*])]
+      let ⟨fmt, infos⟩ ← withOptions (·.setBool `pp.tagAppFns true) <| Block.Docstring.ppSignature name (constantInfo := false)
+      let tt := Lean.Widget.TaggedText.prettyTagged (w := 48) fmt
+      let ctx := {
+        env           := (← getEnv)
+        mctx          := (← getMCtx)
+        options       := (← getOptions)
+        currNamespace := (← getCurrNamespace)
+        openDecls     := (← getOpenDecls)
+        fileMap       := default
+        ngen          := (← getNGen)
+      }
+      let sig := Lean.Widget.tagCodeInfos ctx infos tt
+      let signature ← some <$> renderTagged none sig ⟨{}, false⟩
+      let extras ← getExtras name declType
+      pure #[← ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.docstring $(quote name) $(quote declType) $(quote signature)) #[$(blockStx ++ extras),*])]
   | _, more => throwErrorAt more[0]! "Unexpected block argument"
 where
   getExtras (name : Name) (declType : Block.Docstring.DeclType) : DocElabM (Array Term) :=
@@ -1444,8 +1488,8 @@ def includeDocstring : BlockRoleExpander
         Markdown.blockFromMarkdown (handleHeaders := Markdown.strongEmphHeaders)
 
     let blockStx ←
-      match ← Lean.findDocString? (← getEnv) name with
-      | none => throwError m!"No docs found for '{name}'"; pure #[]
+      match ← getDocString? (← getEnv) name with
+      | none => pure #[]
       | some docs =>
         let some ast := MD4Lean.parse docs
           | throwError "Failed to parse docstring as Markdown"
@@ -1584,9 +1628,14 @@ structure TacticDocsOptions where
   name : String ⊕ Name
   «show» : Option String
   replace : Bool
+  allowMissing : Option Bool
 
 def TacticDocsOptions.parse [Monad m] [MonadError m] [MonadLiftT CoreM m] : ArgParse m TacticDocsOptions :=
-  TacticDocsOptions.mk <$> .positional `name strOrName <*> .named `show .string true <*> (.named `replace .bool true <&> (·.getD false))
+  TacticDocsOptions.mk <$>
+    .positional `name strOrName <*>
+    .named `show .string true <*>
+    .namedD `replace .bool false <*>
+    .named `allowMissing .bool true
 where
   strOrName : ValDesc m (String ⊕ Name) := {
     description := m!"First token in tactic, or canonical parser name"
@@ -1750,22 +1799,23 @@ structure ConvTacticDoc where
   docs? : Option String
 
 open Lean Elab Term Parser Tactic Doc in
-def getConvTactic (name : String ⊕ Name) : TermElabM ConvTacticDoc := do
-  let .inr kind := name
-    | throwError "Strings not yet supported here"
-  let parserState := parserExtension.getState (← getEnv)
-  let some convs := parserState.categories.find? `conv
-    | throwError "Couldn't find conv tactic list"
-  for ⟨k, ()⟩ in convs.kinds do
-    if kind.isSuffixOf k then
-      return ⟨k, ← findDocString? (← getEnv) k⟩
-  throwError m!"Conv tactic not found: {kind}"
+def getConvTactic (name : String ⊕ Name) (allowMissing : Option Bool) : TermElabM ConvTacticDoc :=
+  withOptions (allowMissing.map (fun b opts => verso.docstring.allowMissing.set opts b) |>.getD id) do
+    let .inr kind := name
+      | throwError "Strings not yet supported here"
+    let parserState := parserExtension.getState (← getEnv)
+    let some convs := parserState.categories.find? `conv
+      | throwError "Couldn't find conv tactic list"
+    for ⟨k, ()⟩ in convs.kinds do
+      if kind.isSuffixOf k then
+        return ⟨k, ← getDocString? (← getEnv) k⟩
+    throwError m!"Conv tactic not found: {kind}"
 
 @[directive_expander conv]
 def conv : DirectiveExpander
   | args, more => do
     let opts ← TacticDocsOptions.parse.run args
-    let tactic ← getConvTactic opts.name
+    let tactic ← getConvTactic opts.name opts.allowMissing
     Doc.PointOfInterest.save (← getRef) tactic.name.toString
     let contents ← if let some d := tactic.docs? then
         let some mdAst := MD4Lean.parse d
