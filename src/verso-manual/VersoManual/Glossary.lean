@@ -12,10 +12,9 @@ import Verso.Doc.ArgParse
 
 open Verso Genre Manual ArgParse
 open Verso.Doc.Elab
-open Lean (Json ToJson FromJson HashSet)
+open Lean (Json ToJson FromJson)
 
 namespace Verso.Genre.Manual
-
 
 structure TechArgs where
   key : Option String

@@ -20,7 +20,7 @@ import SubVerso.Highlighting
 
 import MD4Lean
 
-open Lean hiding HashSet
+open Lean
 open Std (HashSet)
 
 open Verso.Doc.Elab.PartElabM
