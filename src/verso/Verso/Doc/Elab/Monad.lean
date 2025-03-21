@@ -15,7 +15,7 @@ import Verso.Syntax
 
 namespace Verso.Doc.Elab
 
-open Lean hiding HashMap HashSet
+open Lean
 open Lean.Elab
 open Std (HashMap HashSet)
 open Verso.SyntaxUtils
