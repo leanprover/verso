@@ -512,30 +512,25 @@ def page
     (localItems : Array Html)
     (extraHead : Array Html := #[])
     (showNavButtons : Bool := true)
-    (base : Option String := none)
     (logo : Option String := none)
     (logoLink : Option String := none)
     (repoLink : Option String := none)
     (issueLink : Option String := none)
     (extraStylesheets : List String := [])
     (extraJsFiles : Array String := #[]) : Html :=
-  let relativeRoot :=
-    base.getD (String.join <| "./" :: path.toList.map (fun _ => "../"))
-  -- let localItems :=
-  --   if localItems.size = 0 then .empty
-  --   else {{<nav class="split-toc"><div class="title"><a href="">{{htmlTitle}}</a></div><ol>{{localItems.map fun name => {{<li>{{name}}</li>}} }}</ol></nav>}}
+  let relativeRoot := String.join <| "./" :: path.toList.map (fun _ => "../")
   {{
     <html>
       <head>
         <script>
           {{addSlashJs}}
         </script>
-        {{base.map ({{<base href={{·}}/>}}) |>.getD .empty}}
+        <base href={{relativeRoot}}/>
         <meta charset="utf-8"/>
         <meta name="viewport" content="height=device-height, width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1"/>
         <title>{{textTitle}}</title>
         <link rel="stylesheet" href="/book.css" />
-        <script>s!"const __versoSiteRoot = \"{relativeRoot}\""</script>
+        <script>s!"const __versoSiteRoot = document.baseURI;"</script>
         <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js" integrity="sha384-zbcZAIxlvJtNE3Dp5nxLXdXtXyxwOdnILY1TDPVmKFhl4r4nSUG1r8bcFXGVa4Te" crossorigin="anonymous"></script>
         {{extraJsFiles.map ({{<script src=s!"{·}"></script>}})}}
         {{extraStylesheets.map (fun url => {{<link rel="stylesheet" href={{url}}/> }})}}

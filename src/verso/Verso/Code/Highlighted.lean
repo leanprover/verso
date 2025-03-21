@@ -1024,7 +1024,8 @@ window.onload = () => {
     }
     // Add hovers
     let siteRoot = typeof __versoSiteRoot !== 'undefined' ? __versoSiteRoot : \"/\";
-    fetch(siteRoot + \"-verso-docs.json\").then((resp) => resp.json()).then((versoDocData) => {
+    let docsJson = siteRoot + \"-verso-docs.json\";
+    fetch(docsJson).then((resp) => resp.json()).then((versoDocData) => {
 
       const defaultTippyProps = {
         /* DEBUG -- remove the space: * /
