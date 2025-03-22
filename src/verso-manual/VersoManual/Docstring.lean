@@ -509,6 +509,7 @@ def docstringStyle := r#"
 }
 
 .namedocs .label {
+  display: block;
   font-size: smaller;
   font-family: var(--verso-structure-font-family);
   position: absolute;
@@ -642,7 +643,7 @@ where
   opacity: 0;
 }
 .namedocs:has(input[data-parent-idx=\"" ++ toString i ++ "\"]:checked) [data-inherited-from=\"" ++ toString i ++"\"] {
-  display: table-row;
+  display: block;
   transform: none;
   opacity: 1;
 }

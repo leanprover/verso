@@ -55,6 +55,8 @@ def pageStyle : String := r####"
     --verso-mobile-burger-line-width: 0.3rem;
     --verso-mobile-burger-line-radius: 0.3rem;
 
+    /* Colors */
+    --verso-warning-color: #e7a71d; /* 2.11 contrast ratio for white, 9.94 for black */
 }
 
 /******** Global parameters not intended for customization by themes ********/
