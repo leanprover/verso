@@ -11,7 +11,7 @@ open Verso.Method
 open Lean (ToJson FromJson)
 open Std (HashSet)
 
-def Slug.validChars := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_".toList
+def Slug.validChars := HashSet.ofList "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_".toList
 
 def mangle (c : Char) : String :=
   match c with
@@ -45,25 +45,48 @@ def asSlug (str : String) : String :=
   loop str.iter ""
 
 def Slug.WF (str : String) : Prop :=
-  ∀ c, c ∈ str.data → c ∈ validChars
+  str.toList.all (· ∈ validChars)
+
+instance : Decidable (c ∈ Slug.validChars) := inferInstance
+
+instance [DecidablePred p] : Decidable (String.all s (p ·)) :=
+  if h : String.all s (p ·) then isTrue h else isFalse h
+
+@[simp]
+theorem String.empty_all_eq_true : "".all p = true := by
+  simp [String.all, String.any, String.endPos, String.utf8ByteSize, String.utf8ByteSize.go, String.anyAux]
+
+@[simp]
+theorem String.Pos.add_0_eq_size {c : Char} : (0 : String.Pos) + c = ⟨c.utf8Size⟩ := by
+  simp only [HAdd.hAdd, String.Pos.byteIdx_zero, String.Pos.mk.injEq]
+  show 0 + c.utf8Size = c.utf8Size
+  simp
+
+instance : DecidablePred Slug.WF := fun str =>
+  if h : str.toList.all (· ∈ Slug.validChars) then isTrue (by unfold Slug.WF; exact h) else isFalse h
 
 theorem Slug.wf_mangle : WF (mangle c) := by
   unfold mangle
-  split <;> simp [WF, validChars]
+  split <;> simp [WF, validChars] <;>
+    and_intros <;> simp [HashSet.mem_iff_contains]
 
 theorem Slug.wf_push (c str) : c ∈ validChars → WF str → WF (str.push c) := by
   unfold WF
-  intro _ wf _ mem
-  simp only [String.data_push, List.mem_append, List.mem_singleton] at mem
-  cases mem
-  . apply wf; assumption
-  . simp [*]
+  cases str
+  intro mem wf
+  simp only [String.toList, String.data_push, List.all_append, List.all_cons, List.all_nil,
+    Bool.and_true, Bool.and_eq_true, List.all_eq_true, decide_eq_true_eq]
+  and_intros <;> simp at wf <;> assumption
 
 theorem Slug.wf_append (str1 str2) : WF str1 → WF str2 → WF (str1 ++ str2) := by
   unfold WF
-  intro wf1 wf2 _ mem
-  simp only [String.data_append, List.mem_append] at mem
-  cases mem <;> simp [*]
+  cases str1; cases str2
+  intro wf1 wf2
+  simp only [String.toList, String.data_append, List.all_append, Bool.and_eq_true, List.all_eq_true,
+    decide_eq_true_eq]
+  simp only [String.toList, List.all_eq_true, decide_eq_true_eq] at wf1
+  simp only [String.toList, List.all_eq_true, decide_eq_true_eq] at wf2
+  and_intros <;> assumption
 
 theorem Slug.asSlug_loop_valid : WF acc → WF (asSlug.loop iter acc) := by
   intro wfAcc
@@ -71,26 +94,29 @@ theorem Slug.asSlug_loop_valid : WF acc → WF (asSlug.loop iter acc) := by
   case case2 iter acc notEnd c ih =>
     apply ih
     unfold WF
-    intro c'
-    unfold WF at wfAcc
+    simp only [WF, String.toList, List.all_eq_true, decide_eq_true_eq] at wfAcc
     split
-    . simp; intro h; cases h
-      . apply wfAcc; assumption
-      . simp [*]
+    . simp only [String.toList, String.data_push, List.all_append, List.all_cons, List.all_nil,
+      Bool.and_true, Bool.and_eq_true, List.all_eq_true, decide_eq_true_eq]
+      and_intros <;> assumption
     . split
-      . intro inPushDash
-        simp at inPushDash
-        cases inPushDash
-        . simp [*]
-        . simp [*, validChars]
-      . apply wf_append
+      . simp only [String.toList, ↓Char.isValue, String.data_push, List.all_append, List.all_cons,
+        List.all_nil, Bool.and_true, Bool.and_eq_true, List.all_eq_true, decide_eq_true_eq]
+        and_intros
         . assumption
-        . apply wf_mangle
+        . simp [validChars, HashSet.mem_iff_contains]
+      . simp only [String.toList, String.data_append, List.all_append, Bool.and_eq_true,
+        List.all_eq_true, decide_eq_true_eq]
+        and_intros
+        . assumption
+        . intro c' mem
+          have := wf_mangle (c := c)
+          simp [WF] at this; apply this; assumption
 
 theorem Slug.asSlug_valid : WF (asSlug str) := by
   unfold asSlug
   apply asSlug_loop_valid
-  unfold WF; intro c h; cases h
+  simp [WF]
 
 structure Slug where
   private mk ::
@@ -130,11 +156,18 @@ defmethod String.sluggify (str : String) : Slug :=
 
 def ofString (str : String) : Slug := str.sluggify
 
-partial def unique (used : HashSet Slug) (slug : Slug) : Slug :=
+/--
+Returns a slug that's not present in `used`, starting with `slug` and appending consecutive numbers
+until it becomes unique.
+
+The consecutive numbers start at `startCount`, which is `1` by default. Callers with reason to
+believe that there will be many collisions may provide an alternative starting value.
+-/
+partial def unique (used : HashSet Slug) (slug : Slug) (startCount : Nat := 1) : Slug :=
   if !(used.contains slug) then slug
   else
     let rec attempt (i : Nat) :=
       let slug' := s!"{slug.toString}{i}".sluggify
       if !(used.contains slug') then slug'
       else attempt (i + 1)
-    attempt 1
+    attempt startCount
