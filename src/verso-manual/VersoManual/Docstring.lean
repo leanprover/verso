@@ -486,6 +486,7 @@ def docstringStyle := r#"
 }
 
 .namedocs .label {
+  display: block;
   font-size: smaller;
   font-family: var(--verso-structure-font-family);
   position: absolute;
