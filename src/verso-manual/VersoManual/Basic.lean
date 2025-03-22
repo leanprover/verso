@@ -170,7 +170,14 @@ the uniqueness of internal IDs. Please don't do that - your program may break un
 structure InternalId where
   private mk ::
   private id : Nat
-deriving BEq, Hashable, Repr, ToJson, FromJson, Inhabited, Ord
+deriving BEq, Hashable, Repr, Inhabited, Ord
+
+instance : ToJson InternalId where
+  toJson | ⟨n⟩ => .num n
+
+instance : FromJson InternalId where
+  fromJson? v := do
+    return ⟨←  v.getNat?⟩
 
 instance : LT InternalId where
   lt x y := Ord.compare x y = .lt

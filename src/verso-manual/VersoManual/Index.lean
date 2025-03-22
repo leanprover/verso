@@ -19,6 +19,13 @@ open Std (HashMap HashSet)
 namespace Verso.Genre.Manual.Index
 
 
+partial def sortingKey : Doc.Inline g → String
+  | .text str | .code str | .math _ str => str
+  | .linebreak _ => " "
+  | .emph i | .bold i | .concat i | .link i _ | .other _ i => String.join (i.toList.map sortingKey)
+  | .image .. | .footnote .. => ""
+
+
 /-
 
 An index has the following components:
@@ -77,12 +84,24 @@ structure Index where
   see : Array Index.See := {}
 
 instance : ToJson Index where
-  toJson | ⟨entries, see⟩ => ToJson.toJson (entries, see)
+  toJson
+    | ⟨entries, see⟩ =>
+      .arr #[
+        .arr (entries.map (fun (e, i) => .arr #[ToJson.toJson e, ToJson.toJson i])),
+        ToJson.toJson see
+      ]
 
 instance : FromJson Index where
-  fromJson? v := do
-    let ((entries : Array _), (sees : Array _)) ← FromJson.fromJson? v
-    pure ⟨entries, sees⟩
+  fromJson?
+    | .arr #[entries, see] => do
+      let entries ← entries.getArr?
+      let (entries : Array _) ← entries.mapM fun
+        | .arr #[e, i] => do
+          return (← FromJson.fromJson? e, ← FromJson.fromJson? i)
+        | _ => throw "Expected two-element array as index entry"
+      let (sees : Array _) ← FromJson.fromJson? see
+      pure ⟨entries, sees⟩
+    | _ => throw "Expected two-element array for Index"
 
 def Inline.index : Inline where
   name := `Verso.Genre.Manual.index
@@ -96,22 +115,36 @@ def index (args : Array (Doc.Inline Manual)) (subterm : Option String := none) (
 /-- Adds an internal identifier as a target for a given index entry -/
 def Index.addEntry [Monad m] [MonadState TraverseState m] [MonadLiftT IO m] [MonadReaderOf TraverseContext m]
     (id : InternalId) (entry : Index.Entry) : m Unit := do
-  let ist : Option (Except String Index) := (← get).get? indexState
+  let ist : Option (Except String Lean.Json) := (← get).get? indexState
+  -- This function works directly with the JSON serialization of the index. Otherwise, there's a
+  -- quadratic overhead from serialization/deserialization with each entry.
   match ist with
   | some (.error err) => logError err
   | some (.ok v) =>
-    modify fun i =>
-      i.set indexState {v with entries := v.entries.binInsert cmpEntry (entry, id)}
+    match v.getArr? with
+    | .error err => logError err
+    | .ok xs =>
+      let #[.arr entries, see] := xs
+        | logError "Expected two elements for index state with first being an array"
+      let entries' := entries.binInsert cmpEntry (.arr #[ToJson.toJson entry, ToJson.toJson id])
+      modify fun i =>
+        i.set indexState (Lean.Json.arr #[.arr entries', see])
   | none => modify (·.set indexState {entries := #[(entry, id)] : Index})
 where
-  cmpEntry | (e1, id1), (e2, id2) => e1 < e2 || (e1 == e2 && id1 < id2)
+  cmpEntry
+    | .arr #[e1, id1], .arr #[e2, id2] =>
+      if let (.ok (id1 : InternalId), .ok (id2 : InternalId)) := (FromJson.fromJson? id1, FromJson.fromJson? id2) then
+        id1 < id2 || (id1 == id2 && toString e1 < toString e2)
+      else panic! "Malformed index entry JSON for ID"
+    | _, _ => panic! "Malformed index entry JSON"
+
 
 @[inline_extension index]
 def index.descr : InlineDescr where
-  traverse id data _contents := do
+  traverse id data contents := do
     -- TODO use internal tags in the first round to respect users' assignments (cf part tag assignment)
     let path ← (·.path) <$> read
-    let _ ← Verso.Genre.Manual.externalTag id path "--index"
+    let _ ← Verso.Genre.Manual.externalTag id path ("--index-" ++ Index.sortingKey (.concat contents))
     match FromJson.fromJson? data with
     | .error err =>
       logError err
@@ -228,12 +261,6 @@ where
 def RenderedEntry.compare (e1 e2 : RenderedEntry) : Ordering :=
   Ord.compare e1.sorting e2.sorting
 
-partial def sortingKey : Doc.Inline g → String
-  | .text str | .code str | .math _ str => str
-  | .linebreak _ => " "
-  | .emph i | .bold i | .concat i | .link i _ => String.join (i.toList.map sortingKey)
-  | .image .. | .other .. | .footnote .. => ""
-
 inductive IndexCat where
   | symbolic
   | digit
@@ -279,7 +306,7 @@ def Index.render (index : Index) : Array (IndexCat × Array RenderedEntry) := Id
   let mut usedIds := {}
   let mut terms : HashMap String (Doc.Inline Manual × RenderedEntryId × Array InternalId × HashMap String (Doc.Inline Manual × RenderedEntryId × Array InternalId)) := {}
   for (e, id) in index.entries do
-    let key := sortingKey e.term
+    let key := sortingKey (e.term ++ (e.subterm |>.map (.text "-" ++ ·) |>.getD (.concat #[])))
 
     let (term, rid, links, subterms) ←
       if let some vals := terms[key]? then pure vals

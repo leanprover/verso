@@ -63,6 +63,17 @@ inductive Inline (genre : Genre) : Type where
   | other (container : genre.Inline) (content : Array (Inline genre))
 deriving Inhabited
 
+instance : Append (Inline genre) where
+  append
+    | .concat #[], x => x
+    | x, .concat #[] => x
+    | .concat xs, .concat ys => .concat (xs ++ ys)
+    | .concat xs, x => .concat (xs.push x)
+    | x, .concat xs => .concat (#[x] ++ xs)
+    | x, y => .concat #[x, y]
+
+def Inline.empty : Inline genre := .concat #[]
+
 private partial def Inline.toJson [ToJson genre.Inline] : Inline genre → Json
   | .text str => json% {"text": $str}
   | .emph content => json% {"emph": $(content.map toJson)}
@@ -294,6 +305,17 @@ inductive Block (genre : Genre) : Type where
   | concat (content : Array (Block genre))
   | other (container : genre.Block) (content : Array (Block genre))
 deriving Inhabited
+
+instance : Append (Block genre) where
+  append
+    | .concat #[], x => x
+    | x, .concat #[] => x
+    | .concat xs, .concat ys => .concat (xs ++ ys)
+    | .concat xs, x => .concat (xs.push x)
+    | x, .concat xs => .concat (#[x] ++ xs)
+    | x, y => .concat #[x, y]
+
+def Block.empty : Block genre := .concat #[]
 
 private partial def Block.toJson [ToJson genre.Inline] [ToJson genre.Block] : Block genre → Json
   | .para contents => json% {"para": $contents}
