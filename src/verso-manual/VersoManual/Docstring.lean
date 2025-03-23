@@ -344,7 +344,10 @@ def getStructurePathToBaseStructure? (env : Environment) (baseStructName : Name)
 
 
 open Meta in
-def DeclType.ofName (c : Name) (hideFields : Bool := false) : MetaM DeclType := do
+def DeclType.ofName (c : Name)
+    (hideFields : Bool := false)
+    (hideStructureConstructor : Bool := false) :
+    MetaM DeclType := do
   let env ← getEnv
   let openDecls : List OpenDecl :=
     match c with
@@ -409,7 +412,7 @@ def DeclType.ofName (c : Name) (hideFields : Bool := false) : MetaM DeclType := 
                   pure <| some { fieldName := fieldName', fieldFrom, type := ← renderTagged none type' ⟨{}, false⟩, subobject?,  projFn := .anonymous, binderInfo, autoParam, docString? := none, visibility := .public}
 
         let ctor? ←
-          if isPrivateName ctor.name then pure none
+          if hideStructureConstructor || isPrivateName ctor.name then pure none
           else some <$> DocName.ofName (showNamespace := true) (checkDocstring := false) ctor.name
 
         return .structure (isClass env c) ctor? info.fieldNames fieldInfo parents ancestors
@@ -436,9 +439,9 @@ end Docstring
 
 
 
-def docstring (name : Name) (declType : Docstring.DeclType) (signature : Option Highlighted) : Block where
+def docstring (name : Name) (declType : Docstring.DeclType) (signature : Option Highlighted) (customLabel : Option String) : Block where
   name := `Verso.Genre.Manual.Block.docstring
-  data := ToJson.toJson (name, declType, signature)
+  data := ToJson.toJson (name, declType, signature, customLabel)
 
 def docstringSection (header : String) : Block where
   name := `Verso.Genre.Manual.Block.docstringSection
@@ -782,7 +785,8 @@ def docstring.descr : BlockDescr := withHighlighting {
     |>.setDomainDescription docstringDomain "Documentation for Lean constants"
 
   traverse id info _ := do
-    let .ok (name, declType, _signature) := FromJson.fromJson? (α := Name × Block.Docstring.DeclType × Option Highlighted) info
+    let .ok (name, declType, _signature, _customLabel) :=
+      FromJson.fromJson? (α := Name × Block.Docstring.DeclType × Option Highlighted × Option String) info
       | do logError "Failed to deserialize docstring data"; pure none
 
     match declType with
@@ -826,7 +830,7 @@ def docstring.descr : BlockDescr := withHighlighting {
   toHtml := some <| fun _goI goB id info contents =>
     open Verso.Doc.Html HtmlT in
     open Verso.Output Html in do
-      let .ok (name, declType, signature) := FromJson.fromJson? (α := Name × Block.Docstring.DeclType × Option Highlighted) info
+      let .ok (name, declType, signature, customLabel) := FromJson.fromJson? (α := Name × Block.Docstring.DeclType × Option Highlighted × Option String) info
         | do Verso.Doc.Html.HtmlT.logError "Failed to deserialize docstring data while generating HTML"; pure .empty
       let x : Html := Html.text true <| Name.toString name
       let sig : Html ← Option.map Highlighted.toHtml signature |>.getD (pure {{ {{x}} }})
@@ -837,7 +841,7 @@ def docstring.descr : BlockDescr := withHighlighting {
       return {{
         <div class="namedocs" {{idAttr}}>
           {{permalink id xref false}}
-          <span class="label">{{declType.label}}</span>
+          <span class="label">{{customLabel.getD declType.label}}</span>
           <pre class="signature hl lean block">{{sig}}</pre>
           <div class="text">
             {{← contents.mapM goB}}
@@ -1358,20 +1362,29 @@ structure DocstringConfig where
   allowMissing : Option Bool := none
   /-- Suppress the fields of a structure. -/
   hideFields : Bool := false
+  /-- Suppress the constructor of a structure or class. -/
+  hideStructureConstructor : Bool := false
+  /-- Label to show instead of the default. -/
+  label : Option String := none
 
 section
 variable [Monad m] [MonadOptions m] [MonadEnv m] [MonadLiftT CoreM m] [MonadError m]
 variable [MonadLog m] [AddMessageContext m] [Elab.MonadInfoTree m]
 
 def DocstringConfig.parse : ArgParse m DocstringConfig :=
-  DocstringConfig.mk <$> .positional `name .documentableName <*> .named `allowMissing .bool true <*> .namedD `hideFields .bool false
+  DocstringConfig.mk <$>
+    .positional `name .documentableName <*>
+    .named `allowMissing .bool true <*>
+    .namedD `hideFields .bool false <*>
+    .namedD `hideStructureConstructor .bool false <*>
+    .named `label .string true
 
 end
 
 @[block_role_expander docstring]
 def docstring : BlockRoleExpander
   | args, #[] => do
-    let ⟨(x, name), allowMissing, hideFields⟩ ← DocstringConfig.parse.run args
+    let ⟨(x, name), allowMissing, hideFields, hideCtor, customLabel⟩ ← DocstringConfig.parse.run args
 
     let opts : Options → Options := allowMissing.map (fun b opts => verso.docstring.allowMissing.set opts b) |>.getD id
 
@@ -1390,7 +1403,7 @@ def docstring : BlockRoleExpander
         Lean.logError m!"'{name}' is deprecated.\n\nSet option 'verso.docstring.allowDeprecated' to 'true' to allow documentation for deprecated names."
 
 
-      let declType ← Block.Docstring.DeclType.ofName name (hideFields := hideFields)
+      let declType ← Block.Docstring.DeclType.ofName name (hideFields := hideFields) (hideStructureConstructor := hideCtor)
 
       let ⟨fmt, infos⟩ ← withOptions (·.setBool `pp.tagAppFns true) <| Block.Docstring.ppSignature name (constantInfo := false)
       let tt := Lean.Widget.TaggedText.prettyTagged (w := 48) fmt
@@ -1406,7 +1419,7 @@ def docstring : BlockRoleExpander
       let sig := Lean.Widget.tagCodeInfos ctx infos tt
       let signature ← some <$> renderTagged none sig ⟨{}, false⟩
       let extras ← getExtras name declType
-      pure #[← ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.docstring $(quote name) $(quote declType) $(quote signature)) #[$(blockStx ++ extras),*])]
+      pure #[← ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.docstring $(quote name) $(quote declType) $(quote signature) $(quote customLabel)) #[$(blockStx ++ extras),*])]
   | _, more => throwErrorAt more[0]! "Unexpected block argument"
 where
   getExtras (name : Name) (declType : Block.Docstring.DeclType) : DocElabM (Array Term) :=
@@ -1431,8 +1444,7 @@ where
           let inh ← ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.inheritance $(quote name) $(quote parents)) #[])
           some <$> ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.docstringSection $(quote header)) #[$inh])
 
-
-      let fieldsRow : Term ← do
+      let fieldsRow : Option Term ← do
         let header := if isClass then "Methods" else "Fields"
         let fieldInfo := fieldInfo.filter (·.subobject?.isNone)
         let fieldSigs : Array Term ← fieldInfo.mapM fun i => do
@@ -1446,8 +1458,10 @@ where
             else
               pure (#[] : Array Term)
           ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.fieldSignature $(quote i.visibility) $(quote i.fieldName) $(quote i.type) $(quote inheritedFrom) $(quote <| parents.map (·.parent))) #[$sigDesc,*])
-        ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.docstringSection $(quote header)) #[$fieldSigs,*])
-      pure <| ctorRow.toArray ++ parentsRow.toArray ++ [fieldsRow]
+        if fieldSigs.isEmpty then pure none
+        else some <$> ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.docstringSection $(quote header)) #[$fieldSigs,*])
+
+      pure <| ctorRow.toArray ++ parentsRow.toArray ++ fieldsRow.toArray
     | .inductive ctors .. => do
       let ctorSigs : Array Term ←
         -- Elaborate constructor docs in the type's NS

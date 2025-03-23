@@ -73,6 +73,8 @@ They include heuristic elaboration of code items in their Markdown that attempts
 
 {docstring Monad}
 
+{docstring Float (label := "type") (hideFields := true) (hideStructureConstructor := true)}
+
 
 
 :::tactic "induction"
