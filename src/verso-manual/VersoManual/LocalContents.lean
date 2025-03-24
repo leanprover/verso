@@ -46,7 +46,7 @@ scoped elab "local_content_recognizer_fun" : term => do
 structure HeaderStatus where
   level : Nat
   numbering : Option String
-
+deriving Repr
 
 open Verso.Output in
 structure LocalContentItem where
@@ -54,6 +54,7 @@ structure LocalContentItem where
   dest : String
   linkTexts : Array (String × Html)
   linkTexts_nonempty : linkTexts.size > 0
+deriving Repr
 
 partial def fromNone : Doc.Inline Genre.none → Doc.Inline Manual
   | .text s => .text s
@@ -91,74 +92,70 @@ def LocalContentItem.toHtml (item : LocalContentItem) : Html :=
   else
     txt
 
-partial def inlineItem? (impls : ExtensionImpls) (xref : TraverseState) (blk : Inline) (contents : Array (Doc.Inline Manual)) : Option LocalContentItem := do
-  let impl ← impls.getInline? blk.name
-  let id ← blk.id
-  let names := impl.localContentItem id blk.data contents
-  if h : names.size > 0 then
-    let (path, slug) ← xref.externalTags[id]?
-    return ⟨none, path.link slug.toString, names, h⟩
-  else failure
+section GetItems
 
-partial def inlineContents (impls : ExtensionImpls) (xref : TraverseState) (acc : Array LocalContentItem) (i : Doc.Inline Manual) : Array LocalContentItem := Id.run do
+structure LocalItemState where
+  errors : Array String
+  items : Array LocalContentItem
+
+def LocalItemState.save (item : LocalContentItem) (st : LocalItemState) : LocalItemState :=
+  {st with items := st.items.push item}
+
+def LocalItemState.logError (error : String) (st : LocalItemState) : LocalItemState :=
+  {st with errors := st.errors.push error}
+
+variable [Monad m] [MonadState LocalItemState m]
+variable (impls : ExtensionImpls) (xref : TraverseState)
+
+partial def inlineItem (inl : Inline) (contents : Array (Doc.Inline Manual)) : m Unit := do
+  if let some impl := impls.getInline? inl.name then
+    if let some id := inl.id then
+    match impl.localContentItem id inl.data contents with
+    | .error e => modify (·.logError s!"Error generating local ToC item for '{inl.name}': {e}")
+    | .ok names =>
+      if h : names.size > 0 then
+        if let some (path, slug) := xref.externalTags[id]? then
+          modify (·.save ⟨none, path.link slug.toString, names, h⟩)
+
+partial def inlineContents (i : Doc.Inline Manual) : m Unit := do
   match i with
   | .concat xs | .footnote _ xs | .link xs _ | .bold xs | .emph xs =>
-    let mut acc := acc
-    for x in xs do
-      acc := inlineContents impls xref acc x
-    acc
+    xs.forM inlineContents
   | .other inl is =>
-    let mut acc := acc
-    if let some item := inlineItem? impls xref inl is then
-      acc := acc.push item
-    for i in is do
-      acc := inlineContents impls xref acc i
-    acc
-  | .image .. | .linebreak .. | .math .. | .code .. | .text ..=> acc
+    inlineItem impls xref inl is
+    is.forM inlineContents
+  | .image .. | .linebreak .. | .math .. | .code .. | .text ..=> pure ()
 
-partial def blockItem? (impls : ExtensionImpls) (xref : TraverseState) (blk : Block) (contents : Array (Doc.Block Manual)) : Option LocalContentItem := do
-  let impl ← impls.getBlock? blk.name
-  let id ← blk.id
-  let names := impl.localContentItem id blk.data contents
-  if h : names.size > 0 then
-    let (path, slug) ← xref.externalTags[id]?
-    return ⟨none, path.link slug.toString, names, h⟩
-  else failure
+partial def blockItem (blk : Block) (contents : Array (Doc.Block Manual)) : m Unit := do
+  if let some impl := impls.getBlock? blk.name then
+    if let some id := blk.id then
+      match impl.localContentItem id blk.data contents with
+      | .error e => modify (·.logError s!"Error generating local ToC item for '{blk.name}': {e}")
+      | .ok names =>
+        if h : names.size > 0 then
+          if let some (path, slug) := xref.externalTags[id]? then
+            modify (·.save ⟨none, path.link slug.toString, names, h⟩)
 
-partial def blockContents (impls : ExtensionImpls) (xref : TraverseState) (acc : Array LocalContentItem) (b : Doc.Block Manual) : Array LocalContentItem := Id.run do
+partial def blockContents (b : Doc.Block Manual) : m Unit := do
   match b with
   | .para txt =>
-    let mut acc := acc
-    for i in txt do
-      acc := inlineContents impls xref acc i
-    acc
-  | .code .. => acc
+    txt.forM (inlineContents impls xref)
+  | .code .. => pure ()
   | .concat xs | .blockquote xs =>
-    let mut acc := acc
-    for x in xs do
-      acc := blockContents impls xref acc x
-    acc
+    xs.forM blockContents
   | .ul xs | .ol _ xs =>
-    let mut acc := acc
-    for x in xs do
-      for y in x.contents do
-        acc := blockContents impls xref acc y
-    acc
+    xs.forM (·.contents.forM blockContents)
   | .dl xs =>
-    let mut acc := acc
     for x in xs do
       for i in x.term do
-        acc := inlineContents impls xref acc i
+        inlineContents impls xref i
       for y in x.desc do
-        acc := blockContents impls xref acc y
-    acc
+        blockContents  y
   | .other blk bs =>
-    let mut acc := acc
-    if let some item := blockItem? impls xref blk bs then
-      acc := acc.push item
-    for b in bs do
-      acc := blockContents impls xref acc b
-    acc
+    blockItem impls xref blk bs
+    bs.forM blockContents
+
+end GetItems
 
 def uniquifyLocalItems (items : Array LocalContentItem) : Array LocalContentItem := Id.run do
   let mut items := items
@@ -187,11 +184,28 @@ def uniquifyLocalItems (items : Array LocalContentItem) : Array LocalContentItem
     if changed then items := items' else break
   return items
 
+
+/--
+How far down the tree should be traversed when collecting local items?
+-/
 inductive SubpartSpec where
+  /-- Include only the part itself, as a header. -/
   | none
-  | depth : Nat → SubpartSpec
+  /-- Include `n` levels of content below the current header. -/
+  | depth (n : Nat) : SubpartSpec
+  /-- Include all levels of content below the current header. -/
   | all
-deriving DecidableEq, Ord, Repr
+deriving DecidableEq, Repr
+
+instance : Ord SubpartSpec where
+  compare
+    | .none, .none => .eq
+    | .none, _ => .lt
+    | .depth _, .none => .gt
+    | .depth n, .depth n' => compare n n'
+    | .depth _, .all => .lt
+    | .all, .all => .eq
+    | .all, _ => .gt
 
 def SubpartSpec.isNone : SubpartSpec → Bool
   | .none => true
@@ -210,9 +224,8 @@ partial def localContentsCore
     (opts : Html.Options Manual (ReaderT ExtensionImpls IO)) (ctxt : TraverseContext) (xref : TraverseState)
     (p : Part Manual) (sectionNumPrefix : Option String)
     (includeTitle : Bool) (includeSubparts : SubpartSpec) (fromLevel : Nat) :
-    StateT (Code.Hover.State Html) (ReaderT ExtensionImpls IO) (Array LocalContentItem) := do
+    StateT LocalItemState (StateT (Code.Hover.State Html) (ReaderT ExtensionImpls IO)) Unit := do
   let sectionNumPrefix := sectionNumPrefix <|> sectionString ctxt
-  let mut out := #[]
 
   if includeTitle then
     let (html, _) ← p.title.mapM (Manual.toHtml opts ctxt xref {} {} {} ·) |>.run {}
@@ -223,19 +236,15 @@ partial def localContentsCore
       let num := sectionString ctxt |>.map (withoutPrefix · sectionNumPrefix)
 
       return ⟨some ⟨fromLevel, num⟩, path.link slug.toString, #[(p.titleString, html)], by simp⟩
-    out := out ++ partDest.toArray
+    if let some here := partDest then modify (·.save here)
 
   if includeSubparts > .none then
     for b in p.content do
-      out := blockContents (← readThe ExtensionImpls) xref out b
-
-  if includeSubparts > .none then
+      blockContents (← readThe ExtensionImpls) xref b
     for p' in p.subParts do
       -- In the recursive cases, `includeTitle` is `true` because all the sections and subsections
       -- on the page should be listed in the local ToC
-      out := out ++ (← localContentsCore opts (ctxt.inPart p') xref p' sectionNumPrefix true includeSubparts.decr (fromLevel + 1))
-
-  return out
+      localContentsCore opts (ctxt.inPart p') xref p' sectionNumPrefix true includeSubparts.decr (fromLevel + 1)
 where
   withoutPrefix (str : String) (prefix? : Option String) : String :=
     prefix?.bind (str.dropPrefix? · |>.map Substring.toString) |>.getD str
@@ -245,10 +254,13 @@ def localContents
     (p : Part Manual)
     (sectionNumPrefix : Option String := none)
     (includeTitle : Bool := true) (includeSubparts : SubpartSpec := .all) (fromLevel : Nat := 0) :
-    StateT (Code.Hover.State Html) (ReaderT ExtensionImpls IO) (Array LocalContentItem) :=
-  uniquifyLocalItems <$>
-    localContentsCore opts ctxt xref p
-      (sectionNumPrefix := sectionNumPrefix)
-      (includeTitle := includeTitle)
-      (includeSubparts := includeSubparts)
-      (fromLevel := fromLevel)
+    StateT (Code.Hover.State Html) (ReaderT ExtensionImpls IO) (Array String × Array LocalContentItem) := do
+  let ((), ⟨errs, items⟩) ←
+    StateT.run
+      (localContentsCore opts ctxt xref p
+        (sectionNumPrefix := sectionNumPrefix)
+        (includeTitle := includeTitle)
+        (includeSubparts := includeSubparts)
+        (fromLevel := fromLevel))
+      ⟨#[], #[]⟩
+  return (errs, uniquifyLocalItems items)

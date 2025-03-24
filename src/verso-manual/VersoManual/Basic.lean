@@ -568,8 +568,8 @@ structure InlineDescr where
 
   The empty array means that the block should not be included.
   -/
-  localContentItem : InternalId → Json → Array (Doc.Inline Manual) → Array (String × Verso.Output.Html) :=
-    fun _ _ _ => #[]
+  localContentItem : InternalId → Json → Array (Doc.Inline Manual) → Except String (Array (String × Verso.Output.Html)) :=
+    fun _ _ _ => pure #[]
 
   toTeX : Option (InlineToTeX Manual (ReaderT ExtensionImpls IO))
 
@@ -594,12 +594,13 @@ structure BlockDescr where
   Entries should be returned as a preference-ordered array of representations. Each representation
   consists of a string and some HTML; the string should represent the HTML's content if all
   formatting were stripped. Items are compared for string equality, with later suggestions used in
-  case of overlap, but the HTML is what's displayed.
+  case of overlap, but the HTML is what's displayed. Exceptions are logged as errors during HTML
+  generation.
 
   The empty array means that the block should not be included.
   -/
-  localContentItem : InternalId → Json → Array (Doc.Block Manual) → Array (String × Verso.Output.Html) :=
-    fun _ _ _ => #[]
+  localContentItem : InternalId → Json → Array (Doc.Block Manual) → Except String (Array (String × Verso.Output.Html)) :=
+    fun _ _ _ => pure #[]
 
   toTeX : Option (BlockToTeX Manual (ReaderT ExtensionImpls IO))
 deriving TypeName
