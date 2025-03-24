@@ -393,7 +393,10 @@ where
           {{contents}}
         </section>}}
     let toc := (← text.subParts.mapM (toc 0 opts ctxt state definitionIds linkTargets)).toList
-    let thisPageToc : Array Html ← localContents opts.lift ctxt state text <&> (·.map (·.toHtml))
+    let thisPageToc : Array Html ← do
+      let (errs, items) ← localContents opts.lift ctxt state text
+      for e in errs do logError e
+      pure <| items.map (·.toHtml)
     emitXrefs toc dir state config
     IO.FS.withFile (dir.join "book.css") .write fun h => do
       h.putStrLn Html.Css.pageStyle
@@ -473,7 +476,10 @@ where
       else pure .empty
 
     let includeSubparts := if (depth == 0 || part.htmlSplit == .never) then .all else .depth 0
-    let thisPageToc : Array LocalContentItem ← localContents opts.lift ctxt state (includeTitle := false) (includeSubparts := includeSubparts) part
+    let thisPageToc : Array LocalContentItem ← do
+      let (errs, items) ← localContents opts.lift ctxt state (includeTitle := false) (includeSubparts := includeSubparts) part
+      for e in errs do logError e
+      pure items
 
     -- If there's no elements, then get rid of the contents entirely. This causes the ToC generation code in the HTML to fall back to the ordinary collapsible ones.
     -- These look inconsistent if there's no non-section elements.
