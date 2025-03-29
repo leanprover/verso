@@ -481,13 +481,11 @@ instance [BEq α] [Hashable α] [ToJson α] : ToJson (HashSet α) where
 def docstringStyle := r#"
 .namedocs {
   position: relative;
-  border: solid 2px #99b3c0;
-  background-color: #99b3c0;
-  padding-left: 1px;
-  padding-right: 1px;
-  padding-bottom: 1px;
-  padding-top: 1.5rem;
-  margin-bottom: 1rem;
+  border: solid 1px #98B2C0;
+  border-radius: .5rem;
+  padding-top: var(--verso--box-padding);
+  margin-top: var(--verso--box-vertical-margin);
+  margin-bottom: var(--verso--box-vertical-margin);
 }
 
 .namedocs .text {
@@ -495,10 +493,10 @@ def docstringStyle := r#"
      that the margins don't extend into parent with the background color.
      The effect is that weird borders in the definition box don't happen anymore. */
   display: flow-root;
-  background-color: white;
   /* Add a padding. this is the same as the margin applied to the first and last child.
      The effect is that the padding looks the same size on all sides. */
-  padding: 0 1.5rem;
+  padding: 0 var(--verso--box-padding);
+  border-top: 1px solid #98B2C0;
 }
 
 .namedocs .text > pre {
@@ -508,35 +506,32 @@ def docstringStyle := r#"
 .namedocs .signature {
   font-family: var(--verso-code-font-family);
   margin-top: 0 !important;
-  margin-left: 1.5rem !important;
-  margin-right: 1.5rem;
+  margin-left: var(--verso--box-padding) !important;
+  margin-bottom: .75rem !important;
 }
 
 .namedocs .label {
   display: block;
-  font-size: smaller;
+  font-size: small;
   font-family: var(--verso-structure-font-family);
   position: absolute;
-  right: 0.5rem;
-  top: 0.5rem;
-}
-
-/* Sticking content into the right margin is not good on narrow screens,
-   so move the label to the left to make space for the permalink widget. */
-
-@media screen and (max-width: 700px) {
-  .namedocs:has(.permalink-widget.block) .label {
-    right: 1.5rem;
-  }
+  top: -0.65rem;
+  left: 1rem;
+  background: #fff;
+  padding: 0 .5rem .125rem;
+  border: 1px solid #98B2C0;
+  border-radius: 1rem;
+  color: #555;
 }
 
 .namedocs h1 {
   font-size: inherit;
-  font-weight: bold;
+  font-weight: bold
+  margin-top: 1rem;
+  margin-bottom: 1rem;
 }
 
 .namedocs > .text .constructor {
-  padding-left: 0.5rem;
   padding-top: 0;
   padding-right: 0;
   padding-bottom: 0;
@@ -567,10 +562,10 @@ def docstringStyle := r#"
 
 /* These margins work together with the padding on .text */
 .namedocs .text > :first-child {
-  margin-top: 1.5rem;
+  margin-top: var(--verso--box-padding);
 }
 .namedocs .text > :last-child {
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--verso--box-padding);
 }
 
 .namedocs .methods td, .namedocs .fields td {
