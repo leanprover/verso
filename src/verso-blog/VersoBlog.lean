@@ -366,16 +366,22 @@ def lean : CodeBlockExpander
     match config.error with
     | none =>
       for msg in s.commandState.messages.toArray do
-        logMessage msg
+        -- These errors break the build! Silence everything else to clean up output, but keep these.
+        if msg.severity != .error then
+          logMessage {msg with isSilent := true}
+        else
+          logMessage msg
     | some true =>
       if s.commandState.messages.hasErrors then
+        -- Nothing breaks the build here, so silence them all
         for msg in s.commandState.messages.errorsToWarnings.toArray do
-          logMessage msg
+          logMessage {msg with isSilent := true}
       else
         throwErrorAt str "Error expected in code block, but none occurred"
     | some false =>
       for msg in s.commandState.messages.toArray do
-        logMessage msg
+        -- Nothing breaks the build here, so silence them all
+        logMessage {msg with isSilent := true}
       if s.commandState.messages.hasErrors then
         throwErrorAt str "No error expected in code block, one occurred"
 
@@ -394,7 +400,7 @@ def lean : CodeBlockExpander
       try
         setInfoState s.commandState.infoState
         setEnv s.commandState.env
-        let msgs := s.commandState.messages.toArray
+        let msgs := s.commandState.messages.toArray.filter (!·.isSilent)
         for cmd in s.commands do
           hls := hls ++
             (← withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"Highlighting {cmd}") <|
