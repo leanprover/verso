@@ -1,0 +1,10 @@
+name = "lit-lean-example"
+defaultTargets = ["LitLean"]
+
+[[require]]
+name = "subverso"
+git = "https://github.com/leanprover/subverso"
+rev = "main"
+
+[[lean_lib]]
+name = "LitLean"

@@ -59,19 +59,19 @@ def resolvedDocName [Monad m] [MonadResolveName m] [MonadEnv m] [MonadError m] (
 
 macro_rules
   | `(term| site $id:ident) => do
-    ``(Site.page (%docName $id) (%doc $id) #[])
+    ``(Site.page (%docName? $id) (%doc? $id) #[])
   | `(term| site $id:ident / $pages:page_spec*) =>
-    ``(Site.page (%docName $id) (%doc $id) #[$[page $pages],*])
+    ``(Site.page (%docName? $id) (%doc? $id) #[$[page $pages],*])
   | `(term| site $id:ident with $posts:post_spec*) =>
-    ``(Site.blog (%docName $id) (%doc $id) #[$[post $posts],*])
+    ``(Site.blog (%docName? $id) (%doc? $id) #[$[post $posts],*])
   | `(term| page $name:str $id:ident) =>
-    ``(Dir.page $name (%docName $id) (%doc $id) #[])
+    ``(Dir.page $name (%docName? $id) (%doc? $id) #[])
   | `(term| page $name:str $id:ident / $pages:page_spec*) => do
-    ``(Dir.page $name (%docName $id) (%doc $id) #[$[page $pages],*])
+    ``(Dir.page $name (%docName? $id) (%doc? $id) #[$[page $pages],*])
   | `(term| page $name:str $id:ident with $posts:post_spec*) => do
-    ``(Dir.blog $name (%docName $id) (%doc $id) #[$[post $posts],*])
+    ``(Dir.blog $name (%docName? $id) (%doc? $id) #[$[post $posts],*])
   | `(term| post $id:ident) => do
-    `({id := (%docName $id), contents := (%doc $id) : BlogPost})
+    `({id := (%docName? $id), contents := (%doc? $id) : BlogPost})
   | `(term| page static $name:str ← $d:str) =>
     ``(Dir.static $name $d)
   | `(term| page static $name:str <- $d:str) =>

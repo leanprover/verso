@@ -8,6 +8,7 @@ import SubVerso.Highlighting
 import SubVerso.Examples
 
 import VersoBlog.Basic
+import VersoBlog.LiterateLeanPage
 import VersoBlog.Generate
 import VersoBlog.Site
 import VersoBlog.Site.Syntax
