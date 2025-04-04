@@ -64,6 +64,10 @@ def pageStyle : String := r####"
 :root {
     /* How much space to add on the sides of content for small screens and to place widgets. */
     --verso--content-padding-x: 1.5rem;
+
+    /* Vertical margin for definition boxes and examples */
+    --verso--box-vertical-margin: 1.5rem;
+    --verso--box-padding: 1rem;
 }
 
 @media screen and (max-width: 700px) {
