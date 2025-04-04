@@ -1174,7 +1174,7 @@ mutual
     codeContentsFn (maxCount : Nat) : ParserFn :=
       atomicFn (asStringFn (satisfyFn (maxCount > 0 && · == '`') >> atMostFn (maxCount - 1) (chFn '`') s!"at most {maxCount} backticks")) <|>
       satisfyFn (· != '`') "expected character other than backtick ('`')"
-    normFn : ParserFn := fun c s => Id.run <| do
+    normFn : ParserFn := fun _c s => Id.run <| do
       let str := s.stxStack.back
       if let .atom info str := str then
         if str.startsWith "\" " && str.endsWith " \"" then
