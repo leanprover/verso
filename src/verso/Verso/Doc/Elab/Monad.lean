@@ -289,6 +289,8 @@ def PartElabM.run (st : DocElabM.State) (st' : PartElabM.State) (act : PartElabM
   let ((res, st), st') ← act st st'
   pure (res, st, st')
 
+instance : Alternative PartElabM := inferInstanceAs <| Alternative (StateT DocElabM.State (StateT PartElabM.State TermElabM))
+
 instance : MonadRef PartElabM := inferInstanceAs <| MonadRef (StateT DocElabM.State (StateT PartElabM.State TermElabM))
 
 instance : MonadAlwaysExcept Exception PartElabM := inferInstanceAs <| MonadAlwaysExcept Exception (StateT DocElabM.State (StateT PartElabM.State TermElabM))
@@ -336,6 +338,8 @@ instance : MonadLift TermElabM DocElabM where
 
 instance : MonadLift IO DocElabM where
   monadLift act := fun _ st' => do return (← act, st')
+
+instance : Alternative DocElabM := inferInstanceAs <| Alternative (ReaderT PartElabM.State (StateT DocElabM.State TermElabM))
 
 instance : MonadRef DocElabM := inferInstanceAs <| MonadRef (ReaderT PartElabM.State (StateT DocElabM.State TermElabM))
 

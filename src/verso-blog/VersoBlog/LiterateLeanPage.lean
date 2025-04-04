@@ -126,11 +126,10 @@ def Helper.fromModule
         stderr := .inherit
       }
       proc.takeStdin
-    let procIn := IO.FS.Stream.ofHandle procIn
-    let procOut := IO.FS.Stream.ofHandle proc.stdout
-    let mutex ← Std.Mutex.new ()
+    let mutex ← Std.Mutex.new (IO.FS.Stream.ofHandle procIn, IO.FS.Stream.ofHandle proc.stdout)
     pure <| fun tm ty? => do
       mutex.atomically do
+        let (procIn, procOut) ← get
         if let some code ← proc.tryWait then
           throw <| .userError s!"Process terminated: {code}"
         send procIn (Request.term tm ty?)
@@ -404,18 +403,19 @@ prevented elaboration of inline elements.
 syntax "def_literate_post " ident " from " ident " in " str " as " inlineStr (" with " term)?: command
 
 
+open Verso Doc in
+open Lean Elab Command in
+elab_rules : command
+  | `(def_literate_page $x from $mod in $path as $title $[with $metadata]?) =>
+    withScope (fun sc => {sc with opts := Elab.async.set sc.opts false}) do
+      let genre ← `(Page)
+      elabLiteratePage x path mod title genre metadata
+
 
 open Verso Doc in
 open Lean Elab Command in
 elab_rules : command
-  | `(def_literate_page $x from $mod in $path as $title $[with $metadata]?) => do
-    let genre ← `(Page)
-    elabLiteratePage x path mod title genre metadata
-
-
-open Verso Doc in
-open Lean Elab Command in
-elab_rules : command
-  | `(def_literate_post $x from $mod in $path as $title $[with $metadata]?) => do
-    let genre ← `(Post)
-    elabLiteratePage x path mod title genre metadata
+  | `(def_literate_post $x from $mod in $path as $title $[with $metadata]?) =>
+    withScope (fun sc => {sc with opts := Elab.async.set sc.opts false}) do
+      let genre ← `(Post)
+      elabLiteratePage x path mod title genre metadata
