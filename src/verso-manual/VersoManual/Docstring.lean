@@ -250,6 +250,9 @@ instance : Quote ParentInfo where
   quote
     | .mk projFn name parent index => mkCApp ``ParentInfo.mk #[quote projFn, quote name, quote parent, quote index]
 
+deriving instance ToJson for QuotKind
+deriving instance FromJson for QuotKind
+
 inductive DeclType where
   /--
   A structure or class. The `constructor` field is `none` when the constructor is private.
@@ -258,8 +261,21 @@ inductive DeclType where
   | def (safety : DefinitionSafety)
   | opaque (safety : DefinitionSafety)
   | inductive (constructors : Array DocName) (numArgs : Nat) (propOnly : Bool)
+  | axiom (safety : DefinitionSafety)
+  | theorem
+  | ctor (ofInductive : Name) (safety : DefinitionSafety)
+  | recursor (safety : DefinitionSafety)
+  | quotPrim (kind : QuotKind)
   | other
 deriving ToJson, FromJson
+
+open Syntax (mkCApp) in
+instance : Quote QuotKind where
+  quote
+    | .ind => mkCApp ``QuotKind.ind #[]
+    | .lift => mkCApp ``QuotKind.lift #[]
+    | .ctor => mkCApp ``QuotKind.ctor #[]
+    | .type => mkCApp ``QuotKind.type #[]
 
 open Syntax (mkCApp) in
 instance : Quote DeclType where
@@ -269,6 +285,11 @@ instance : Quote DeclType where
     | .def safety => mkCApp ``DeclType.def #[quote safety]
     | .opaque safety => mkCApp ``DeclType.opaque #[quote safety]
     | .inductive ctors numArgs propOnly => mkCApp ``DeclType.inductive #[quote ctors, quote numArgs, quote propOnly]
+    | .axiom safety => mkCApp ``DeclType.axiom #[quote safety]
+    | .theorem => mkCApp ``DeclType.theorem #[]
+    | .ctor ofType safety => mkCApp ``DeclType.ctor #[quote ofType, quote safety]
+    | .recursor safety => mkCApp ``DeclType.recursor #[quote safety]
+    | .quotPrim kind => mkCApp ``DeclType.quotPrim #[quote kind]
     | .other => mkCApp ``DeclType.other #[]
 
 def DeclType.label : DeclType → String
@@ -282,7 +303,14 @@ def DeclType.label : DeclType → String
   | .inductive _ _ false => "inductive type"
   | .inductive _ 0 true => "inductive proposition"
   | .inductive _ _ true => "inductive predicate"
-  | other => ""
+  | .axiom .unsafe => "axiom"
+  | .axiom _ => "axiom"
+  | .theorem => "theorem"
+  | .ctor n _ => s!"constructor of {n}"
+  | .quotPrim _ => "primitive"
+  | .recursor .unsafe => "unsafe recursor"
+  | .recursor _ => "recursor"
+  | .other => ""
 
 deriving instance Repr for OpenDecl
 
@@ -424,7 +452,11 @@ def DeclType.ofName (c : Name)
         let t' ← reduceAll t
         return .inductive ctors.toArray (ii.numIndices + ii.numParams) (isPred t')
     | .opaqueInfo oi => return .opaque (if oi.isUnsafe then .unsafe else .safe)
-    | _ => return .other
+    | .axiomInfo ai => return .axiom (if ai.isUnsafe then .unsafe else .safe)
+    | .thmInfo _ => return .theorem
+    | .recInfo ri => return .recursor (if ri.isUnsafe then .unsafe else .safe)
+    | .ctorInfo ci => return .ctor ci.induct (if ci.isUnsafe then .unsafe else .safe)
+    | .quotInfo qi => return .quotPrim qi.kind
   else
     return .other
 where
@@ -839,10 +871,15 @@ def docstring.descr : BlockDescr := withHighlighting {
       let xref ← state
       let idAttr := xref.htmlId id
 
+      let label := customLabel.getD declType.label
+
+      if label == "" then
+        Doc.Html.HtmlT.logError s!"Missing label for '{name}': supply one with 'label := \"LABEL\"'"
+
       return {{
         <div class="namedocs" {{idAttr}}>
           {{permalink id xref false}}
-          <span class="label">{{customLabel.getD declType.label}}</span>
+          <span class="label">{{label}}</span>
           <pre class="signature hl lean block">{{sig}}</pre>
           <div class="text">
             {{← contents.mapM goB}}
@@ -910,7 +947,7 @@ def leanFromMarkdown.inlinedescr : InlineDescr := withHighlighting {
 def leanFromMarkdown.blockdescr : BlockDescr := withHighlighting {
   traverse _id _data _ := pure none
   toTeX :=
-    some <| fun goI goB _ _ content => do
+    some <| fun _goI goB _ _ content => do
       pure <| .seq <| ← content.mapM fun b => do
         pure <| .seq #[← goB b, .raw "\n"]
   toHtml :=
@@ -938,7 +975,7 @@ def tryElabCodeTermWith (mk : Highlighted → String → DocElabM α) (str : Str
       throwError m!"Didn't elaborate {stx} as term to avoid spurious auto-implicits"
     if identOnly && !stx.isIdent then
       throwError m!"Didn't elaborate {stx} as term because only identifiers are wanted here"
-    let (newMsgs, tree, e) ← do
+    let (newMsgs, tree, _e) ← do
       let initMsgs ← Core.getMessageLog
       try
         Core.resetMessageLog
@@ -980,7 +1017,7 @@ def tryElabCodeMetavarTermWith (mk : Highlighted → String → DocElabM α) (st
   | .error e => throw (.error (← getRef) e)
   | .ok stx => DocElabM.withFileMap (.ofString str) <| do
     if let `(doc_metavar|$pat:term : $ty:term) := stx then
-      let (newMsgs, tree, e') ← show TermElabM _ from do
+      let (newMsgs, tree, _e') ← show TermElabM _ from do
         let initMsgs ← Core.getMessageLog
         try
           Core.resetMessageLog
@@ -1072,7 +1109,7 @@ def tryHighlightKeywords (extraKeywords : Array String) (str : String) : DocElab
     else s!"<docstring at {← getFileName} (unknown line)>"
   let p : Parser := {fn := simpleFn}
   match runParser extraKeywords (← getEnv) (← getOptions) p str src (prec := 0) with
-  | .error e => throwError "Not keyword-highlightable"
+  | .error _e => throwError "Not keyword-highlightable"
   | .ok stx => DocElabM.withFileMap (.ofString str) <| do
     let hls ← highlight stx #[] (PersistentArray.empty)
     ``(Verso.Doc.Inline.other (Inline.leanFromMarkdown $(quote hls)) #[Verso.Doc.Inline.code $(quote str)])
@@ -1426,7 +1463,6 @@ where
   getExtras (name : Name) (declType : Block.Docstring.DeclType) : DocElabM (Array Term) :=
     match declType with
     | .structure isClass constructor? _ fieldInfo parents _ => do
-
       let ctorRow : Option Term ← constructor?.mapM fun constructor => do
         let header := if isClass then "Instance Constructor" else "Constructor"
         let sigDesc : Array Term ←
