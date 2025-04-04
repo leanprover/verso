@@ -85,7 +85,7 @@ def inlineHtml (g : Genre) [MonadConfig (HtmlT g IO)] [MonadPath (HtmlT g IO)]
       go <| .link contents addr
   | .pageref x, contents => do
     let st ← stateEq ▸ state
-    match st.pageIds.find? x with
+    match st.pageIds.find? x <|> st.pageIds.find? (docName x) with
     | none =>
       HtmlT.logError s!"Can't find target {x} - options are {st.pageIds.toList.map (·.fst)}"
       pure {{<strong class="internal-error">s!"Can't find target {x}"</strong>}}

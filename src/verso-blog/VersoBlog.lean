@@ -102,8 +102,7 @@ def ref : RoleExpander
 def page_link : RoleExpander
   | #[.anon (.name page)], stxs => do
     let args ← stxs.mapM elabInline
-    let pageName := mkIdentFrom page <| docName page.getId
-    let val ← ``(Inline.other (Blog.InlineExt.pageref $(quote pageName.getId)) #[ $[ $args ],* ])
+    let val ← ``(Inline.other (Blog.InlineExt.pageref $(quote page.getId)) #[ $[ $args ],* ])
     pure #[val]
   | _, _ => throwUnsupportedSyntax
 
