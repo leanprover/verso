@@ -27,6 +27,7 @@ import VersoManual.Docstring
 import VersoManual.WebAssets
 import VersoManual.WordCount
 import VersoManual.LocalContents
+import VersoManual.InlineLean
 
 open Lean (Name NameMap Json ToJson FromJson)
 
@@ -87,11 +88,7 @@ def ref (content : Array (Doc.Inline Manual)) (canonicalName : String) (domain :
   let data : (String × Option Name × Option String) := (canonicalName, domain, none)
   .other {Inline.ref with data := ToJson.toJson data} content
 
-def Block.paragraph : Block where
-  name := `Verso.Genre.Manual.Block.paragraph
-
-@[block_extension Block.paragraph]
-def paragraph.descr : BlockDescr where
+block_extension Block.paragraph where
   traverse := fun _ _ _ => pure none
   toTeX :=
     some <| fun _ go _ _ content => do

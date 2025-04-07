@@ -408,13 +408,13 @@ end TraverseState
 
 
 structure Block where
-  name : Name
+  name : Name := by exact decl_name%
   id : Option InternalId := none
   data : Json := Json.null
 deriving BEq, Hashable, ToJson, FromJson
 
 structure Inline where
-  name : Name
+  name : Name := by exact decl_name%
   id : Option InternalId := none
   data : Json := Json.null
 deriving BEq, Hashable, ToJson, FromJson
@@ -654,6 +654,51 @@ initialize
   register `inline_extension "an inline extension" inlineExtensionExt fun | `(attr|inline_extension $extIdent) => extIdent | _ => none
   register `block_extension "a block extension" blockExtensionExt fun | `(attr|block_extension $extIdent) => extIdent | _ => none
 
+
+open Lean.Parser Term in
+def extContents := structInstFields (sepByIndent Term.structInstField "; " (allowTrailingSep := true))
+
+syntax "block_extension" ident (ppSpace bracketedBinder)* ppIndent(ppSpace "where" extContents) : command
+syntax "inline_extension" ident (ppSpace bracketedBinder)* ppIndent(ppSpace "where" extContents) : command
+
+def isDataField : Lean.TSyntax ``Lean.Parser.Term.structInstField → Bool
+  | `(Lean.Parser.Term.structInstField|data := $_) => true
+  | `(Lean.Parser.Term.structInstField|data) => true
+  | _ => false
+
+open Lean Elab Command in
+elab_rules : command
+  | `(block_extension $x $args* where $contents;*) => do
+    let (data, nonData) := (contents : Array _).partition isDataField
+    if data.size > 1 then
+      for x in data do
+        logErrorAt x "Multiple 'data' fields found"
+    let cmd1 ←
+      `(command| def $x $args* : Block where $data;*)
+    let descrName := x.getId ++ `descr |> mkIdentFrom x
+    let cmd2 ←
+      `(command|
+        @[block_extension $x]
+        private def $descrName : BlockDescr where $nonData;*)
+    elabCommand cmd1
+    elabCommand cmd2
+
+open Lean Elab Command in
+elab_rules : command
+  | `(inline_extension $x $args* where $contents;*) => do
+    let (data, nonData) := (contents : Array _).partition isDataField
+    if data.size > 1 then
+      for x in data do
+        logErrorAt x "Multiple 'data' fields found"
+    let cmd1 ←
+      `(command| def $x $args* : Inline where $data;*)
+    let descrName := x.getId ++ `descr |> mkIdentFrom x
+    let cmd2 ←
+      `(command|
+        @[inline_extension $x]
+        private def $descrName : InlineDescr where $nonData;*)
+    elabCommand cmd1
+    elabCommand cmd2
 
 open Lean in
 private def nameAndDef [Monad m] [MonadRef m] [MonadQuotation m] (ext : Name × Name) : m Term := do

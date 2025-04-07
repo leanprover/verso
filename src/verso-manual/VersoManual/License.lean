@@ -85,16 +85,6 @@ SOFTWARE.
 
 end Licenses
 
-def Block.licenseInfo : Block where
-  name := `Verso.Genre.Manual.licenseInfo
-
-@[block_role_expander licenseInfo]
-def licenseInfo : BlockRoleExpander
-  | args, contents => do
-    if let some first := contents[0]? then
-      throwErrorAt first "Unexpected contents"
-    ArgParse.done.run args
-    return #[← ``(Block.other Block.licenseInfo #[])]
 
 open Verso.Output Html
 
@@ -150,8 +140,7 @@ where
           .empty
       {{<section>{{hdrHtml}}{{paragraphedHtml txt}}</section>}}
 
-@[block_extension licenseInfo]
-def lean.descr : BlockDescr where
+block_extension Block.licenseInfo where
   traverse _ _ _ := do
     pure none
   toTeX := some <| fun _ _ _ _ _ => pure .empty
@@ -163,3 +152,11 @@ def lean.descr : BlockDescr where
       let allLicenses := allLicenses.qsort (·.dependency.trim.toLower < ·.dependency.trim.toLower)
 
       return allLicenses.map (·.toHtml headerLevel)
+
+@[block_role_expander licenseInfo]
+def licenseInfo : BlockRoleExpander
+  | args, contents => do
+    if let some first := contents[0]? then
+      throwErrorAt first "Unexpected contents"
+    ArgParse.done.run args
+    return #[← ``(Block.other Block.licenseInfo #[])]

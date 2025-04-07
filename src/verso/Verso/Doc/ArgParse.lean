@@ -6,6 +6,9 @@ Author: David Thrane Christiansen
 
 import Verso.Doc
 import Verso.Hover
+import Lean.Parser
+import Lean.Elab.GuardMsgs
+import Verso.Parser
 
 open Lean Elab
 open Verso Doc
@@ -222,10 +225,77 @@ def ValDesc.resolvedName : ValDesc m Name where
     | .name x => realizeGlobalConstNoOverloadWithInfo x
     | other => throwError "Expected identifier, got {other}"
 
+/-- Associates a new description with a parser for better error messages. -/
 def ValDesc.as (what : MessageData) (desc : ValDesc m α) : ValDesc m α :=
   {desc with description := what}
 
-def ArgParse.run [Monad m] [MonadInfoTree m] [MonadResolveName m] [MonadEnv m] [MonadError m] [MonadLiftT BaseIO m] (p : ArgParse m α) (args : Array Arg) : m α := do
+/--
+Parses a natural number.
+-/
+def ValDesc.nat : ValDesc m Nat where
+  description := m!"a name"
+  get
+    | .num n => pure n.getNat
+    | other => throwError "Expected string, got {repr other}"
+
+open Lean.Parser in
+/--
+Parses a sequence of Verso inline elements from a string literal. Returns a FileMap within which
+they can be related to their original source.
+-/
+def ValDesc.inlinesString [MonadFileMap m] : ValDesc m (FileMap × TSyntaxArray `inline) where
+  description := m!"a string that contains a sequence of inline elements"
+  get
+    | .str s => open Lean.Parser in do
+      let text ← getFileMap
+      let input := s.getString
+      let ictxt := mkInputContext input s!"string literal on line {s.raw.getPos?.map ((s!" on line {text.toPosition · |>.line}")) |>.getD ""}"
+      let env ← getEnv
+      let pmctx : ParserModuleContext := {env, options := {}}
+      let p := Parser.textLine
+      let s' := p.run ictxt pmctx (getTokenTable env) (mkParserState input)
+      if s'.allErrors.isEmpty then
+        if s'.stxStack.size = 1 then
+          match s'.stxStack.back with
+          | .node _ _ contents => pure (FileMap.ofString input, contents.map (⟨·⟩))
+          | other => throwError "Unexpected syntax from Verso parser. Expected a node, got {other}"
+        else throwError "Unexpected internal stack size from Verso parser. Expected 1, got {s'.stxStack.size}"
+      else
+        let mut msg := "Failed to parse:"
+        for (p, _, e) in s'.allErrors do
+          let {line, column} := text.toPosition p
+          msg := msg ++ s!"  {line}:{column}: {toString e}\n    {repr <| input.extract p input.endPos}\n"
+        throwError msg
+    | other => throwError "Expected string, got {repr other}"
+
+def ValDesc.messageSeverity : ValDesc m MessageSeverity where
+  description :=
+    open MessageSeverity in
+    m!"The expected severity: '{``error}', '{``warning}', or '{``information}'"
+  get := open MessageSeverity in fun
+    | .name b => do
+      let b' ← realizeGlobalConstNoOverloadWithInfo b
+      if b' == ``error then pure .error
+      else if b' == ``warning then pure .warning
+      else if b' == ``information then pure .information
+      else throwErrorAt b "Expected '{``error}', '{``warning}', or '{``information}'"
+    | other => throwError "Expected severity, got {repr other}"
+
+open Lean.Elab.Tactic.GuardMsgs in
+def ValDesc.whitespaceMode : ValDesc m WhitespaceMode where
+  description :=
+    open WhitespaceMode in
+    m!"The expected whitespace mode: '{``exact}', '{``normalized}', or '{``lax}'"
+  get := open WhitespaceMode in fun
+    | .name b => do
+      let b' ← realizeGlobalConstNoOverloadWithInfo b
+      if b' == ``exact then pure .exact
+      else if b' == ``normalized then pure .normalized
+      else if b' == ``lax then pure .lax
+      else throwErrorAt b "Expected '{``exact}', '{``normalized}', or '{``lax}'"
+    | other => throwError "Expected whitespace mode, got {repr other}"
+
+def ArgParse.run [MonadLiftT BaseIO m] (p : ArgParse m α) (args : Array Arg) : m α := do
   match ← p.parse _ ⟨args, #[]⟩ with
   | (.ok v, ⟨more, info⟩) =>
     if more.size = 0 then
