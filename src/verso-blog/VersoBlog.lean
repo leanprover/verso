@@ -26,6 +26,8 @@ namespace Verso.Genre.Blog
 open Lean Elab
 open Verso ArgParse Doc Elab
 
+open Verso.SyntaxUtils (parserInputString)
+
 open SubVerso.Examples (loadExamples Example)
 
 
@@ -179,20 +181,6 @@ structure ExampleMessages where
 deriving Inhabited
 
 initialize messageContextExt : EnvExtension ExampleMessages ← registerEnvExtension (pure {})
-
--- FIXME this is a horrid kludge - find a way to systematically rewrite srclocs?
-def parserInputString [Monad m] [MonadFileMap m] (str : TSyntax `str) : m String := do
-  let preString := (← getFileMap).source.extract 0 (str.raw.getPos?.getD 0)
-  let mut code := ""
-  let mut iter := preString.iter
-  while !iter.atEnd do
-    if iter.curr == '\n' then code := code.push '\n'
-    else
-      for _ in [0:iter.curr.utf8Size] do
-        code := code.push ' '
-    iter := iter.next
-  code := code ++ str.getString
-  return code
 
 initialize registerTraceClass `Elab.Verso.block.lean
 

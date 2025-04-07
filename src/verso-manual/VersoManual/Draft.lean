@@ -20,11 +20,29 @@ open Std (HashMap HashSet)
 
 namespace Verso.Genre.Manual
 
-def Inline.draft : Inline where
-  name := `Verso.Genre.Manual.draft
+inline_extension Inline.draft where
+  traverse _id _data _contents := do
+    if (← isDraft) then
+      pure none
+    else
+      pure (some <| .concat #[])
+  toTeX := none
+  toHtml :=
+    open Verso.Output.Html in
+    some <| fun go _ _ content => do
+      content.mapM go
 
-def Block.draft : Block where
-  name := `Verso.Genre.Manual.draft
+block_extension Block.draft where
+  traverse _id _data _contents := do
+    if (← isDraft) then
+      pure none
+    else
+      pure (some <| .concat #[])
+  toTeX := none
+  toHtml :=
+    open Verso.Output.Html in
+    some <| fun _ goB _ _ content => do
+      content.mapM goB
 
 /-- Hide draft-only content when in not in draft mode -/
 @[role_expander draft]
@@ -39,29 +57,3 @@ def draftBlock : DirectiveExpander
   | args, contents => do
     ArgParse.done.run args
     pure #[← ``(Verso.Doc.Block.other Block.draft #[$[$(← contents.mapM elabBlock)],*])]
-
-@[inline_extension draft]
-def draft.descr : InlineDescr where
-  traverse _id _data _contents := do
-    if (← isDraft) then
-      pure none
-    else
-      pure (some <| .concat #[])
-  toTeX := none
-  toHtml :=
-    open Verso.Output.Html in
-    some <| fun go _ _ content => do
-      content.mapM go
-
-@[block_extension draft]
-def draft.blockDescr : BlockDescr where
-  traverse _id _data _contents := do
-    if (← isDraft) then
-      pure none
-    else
-      pure (some <| .concat #[])
-  toTeX := none
-  toHtml :=
-    open Verso.Output.Html in
-    some <| fun _ goB _ _ content => do
-      content.mapM goB
