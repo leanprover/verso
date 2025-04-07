@@ -755,4 +755,22 @@ main .section-toc a:hover {
   text-decoration: none;
 }
 
+/*
+Don't shrink code blocks when there's marginalia that overlaps
+*/
+@media screen and (700px < width <= 1400px) {
+  .hl.lean.block {
+    clear: right;
+  }
+}
+
+/*
+Don't shrink doc blocks when there's marginalia that overlaps
+*/
+@media screen and (700px < width <= 1400px) {
+  .namedocs {
+    clear: right;
+  }
+}
+
 "####

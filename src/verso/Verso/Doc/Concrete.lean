@@ -59,7 +59,7 @@ def saveRefs [Monad m] [MonadInfoTree m] (st : DocElabM.State) (st' : PartElabM.
     for stx in r.syntax do
       pushInfoLeaf <| .ofCustomInfo {stx := stx , value := Dynamic.mk r}
 
-elab "#docs" "(" genre:term ")" n:ident title:inlineStr ":=" ":::::::" text:document ":::::::" : command => open Lean Elab Command PartElabM DocElabM in do
+elab "#docs" "(" genre:term ")" n:ident title:str ":=" ":::::::" text:document ":::::::" : command => open Lean Elab Command PartElabM DocElabM in do
   findGenreCmd genre
   let endTok :=
     match ← getRef with
@@ -71,10 +71,10 @@ elab "#docs" "(" genre:term ")" n:ident title:inlineStr ":=" ":::::::" text:docu
   let endPos := endTok.getPos!
   let .node _ _ blocks := text.raw
     | dbg_trace "nope {ppSyntax text.raw}" throwUnsupportedSyntax
-  let ⟨`<low| [~_ ~(titleName@(.node _ _ titleParts))]>⟩ := title
-    | dbg_trace "nope {ppSyntax title}" throwUnsupportedSyntax
+
+  let titleParts ← stringToInlines title
   let titleString := inlinesToString (← getEnv) titleParts
-  let ((), st, st') ← liftTermElabM <| PartElabM.run {} (.init titleName) <| do
+  let ((), st, st') ← liftTermElabM <| PartElabM.run {} (.init (.node .none nullKind titleParts)) <| do
     setTitle titleString (← liftDocElabM <| titleParts.mapM (elabInline ⟨·⟩))
     for b in blocks do partCommand ⟨b⟩
     closePartsUntil 0 endPos
@@ -85,15 +85,14 @@ elab "#docs" "(" genre:term ")" n:ident title:inlineStr ":=" ":::::::" text:docu
 
   elabCommand (← `(def $n : Part $genre := $(← finished.toSyntax genre st'.linkDefs st'.footnoteDefs)))
 
-elab "#doc" "(" genre:term ")" title:inlineStr "=>" text:completeDocument eoi : term => open Lean Elab Term PartElabM DocElabM in do
+elab "#doc" "(" genre:term ")" title:str "=>" text:completeDocument eoi : term => open Lean Elab Term PartElabM DocElabM in do
   findGenreTm genre
   let endPos := (← getFileMap).source.endPos
   let .node _ _ blocks := text.raw
     | dbg_trace "nope {ppSyntax text.raw}" throwUnsupportedSyntax
-  let ⟨`<low| [~_ ~(titleName@(.node _ _ titleParts))]>⟩ := title
-    | dbg_trace "nope {ppSyntax title}" throwUnsupportedSyntax
+  let titleParts ← stringToInlines title
   let titleString := inlinesToString (← getEnv) titleParts
-  let ((), st, st') ← PartElabM.run {} (.init titleName) <| do
+  let ((), st, st') ← PartElabM.run {} (.init (.node .none nullKind titleParts)) <| do
     let mut errors := #[]
     setTitle titleString (← liftDocElabM <| titleParts.mapM (elabInline ⟨·⟩))
     for b in blocks do
@@ -158,15 +157,14 @@ open Lean.Parser.Command in
 instance : Quote String (k := ``docComment) where
   quote str := ⟨.node .none ``docComment #[ .atom .none "/--", .atom .none (str ++ "-/")]⟩
 
-elab (name := completeDoc) "#doc" "(" genre:term ")" title:inlineStr "=>" text:completeDocument eoi : command => open Lean Elab Term Command PartElabM DocElabM in do
+elab (name := completeDoc) "#doc" "(" genre:term ")" title:str "=>" text:completeDocument eoi : command => open Lean Elab Term Command PartElabM DocElabM in do
   findGenreCmd genre
   let endPos := (← getFileMap).source.endPos
   let .node _ _ blocks := text.raw
     | dbg_trace "nope {ppSyntax text.raw}" throwUnsupportedSyntax
-  let ⟨`<low| [~_ ~(titleName@(.node _ _ titleParts))]>⟩ := title
-    | dbg_trace "nope {ppSyntax title}" throwUnsupportedSyntax
+  let titleParts ← stringToInlines title
   let titleString := inlinesToString (← getEnv) titleParts
-  let initState : PartElabM.State := .init titleName
+  let initState : PartElabM.State := .init (.node .none nullKind titleParts)
   withTraceNode `Elab.Verso (fun _ => pure m!"Document AST elab") <|
     incrementallyElabCommand blocks
       (initAct := do setTitle titleString (← liftDocElabM <| titleParts.mapM (elabInline ⟨·⟩)))

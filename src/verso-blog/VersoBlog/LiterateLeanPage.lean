@@ -13,6 +13,7 @@ open Lean
 
 open SubVerso.Highlighting
 open SubVerso.Helper
+open Verso.Doc.Concrete (stringToInlines)
 
 namespace Verso.Genre.Blog.Literate
 
@@ -331,16 +332,16 @@ where
 open Verso Doc in
 open Lean Elab Command in
 open PartElabM in
-def elabLiteratePage (x : Ident) (path : StrLit) (mod : Ident) (title : TSyntax `inlineStr) (genre : Term) (metadata? : Option Term): CommandElabM Unit := do
+def elabLiteratePage (x : Ident) (path : StrLit) (mod : Ident) (title : StrLit) (genre : Term) (metadata? : Option Term): CommandElabM Unit := do
 
-  let ⟨`<low| [~_ ~(titleName@(.node _ _ titleParts))]>⟩ := title
-    | throwErrorAt title "Couldn't parse title inlines: {repr title}"
+
+  let titleParts ← stringToInlines title
   let titleString := inlinesToString (← getEnv) titleParts
-
+  let initState : PartElabM.State := .init (.node .none nullKind titleParts)
 
   let jsons ← loadLiteratePage path.getString mod.getId.toString
 
-  let ((), _st, st') ← liftTermElabM <| PartElabM.run {} (.init titleName) <| do
+  let ((), _st, st') ← liftTermElabM <| PartElabM.run {} initState <| do
     setTitle titleString (← liftDocElabM <| titleParts.mapM (elabInline ⟨·⟩))
     if let some metadata := metadata? then
       modifyThe PartElabM.State fun st => {st with partContext.metadata := some metadata}
@@ -383,7 +384,7 @@ directory that contains a toolchain file and a Lake configuration (`lakefile.tom
 Set the option `verso.literateMarkdown.logInlines` to `true` to see the error messages that
 prevented elaboration of inline elements.
 -/
-syntax "def_literate_page " ident " from " ident " in " str " as " inlineStr (" with " term)? : command
+syntax "def_literate_page " ident " from " ident " in " str " as " str (" with " term)? : command
 /--
 Creates a post from a literate Lean module with Markdown module docstrings in it, performing a
 best-effort conversion from a large subset of Markdown to Verso documents. Inline code elements are
@@ -400,7 +401,7 @@ directory that contains a toolchain file and a Lake configuration (`lakefile.tom
 Set the option `verso.literateMarkdown.logInlines` to `true` to see the error messages that
 prevented elaboration of inline elements.
 -/
-syntax "def_literate_post " ident " from " ident " in " str " as " inlineStr (" with " term)?: command
+syntax "def_literate_post " ident " from " ident " in " str " as " str (" with " term)?: command
 
 
 open Verso Doc in

@@ -28,6 +28,8 @@ import VersoManual.WebAssets
 import VersoManual.WordCount
 import VersoManual.LocalContents
 import VersoManual.InlineLean
+import VersoManual.Marginalia
+import VersoManual.Bibliography
 
 open Lean (Name NameMap Json ToJson FromJson)
 
