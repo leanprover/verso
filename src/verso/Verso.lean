@@ -22,6 +22,7 @@ import Verso.Doc.TeX
 import Verso.Examples
 import Verso.ExpectString
 import Verso.Hover
+import Verso.Instances
 import Verso.Method
 import Verso.Output
 import Verso.Output.Html

@@ -125,9 +125,6 @@ def getD [TypeName α] (value : Val) (default : α) : α :=
 
 end Params.Val
 
-deriving instance TypeName for String
-
-
 instance : Coe String Template.Params.Val where
   coe str := ⟨.mk str, #[.mk <| Html.text true str]⟩
 

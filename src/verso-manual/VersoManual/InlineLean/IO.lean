@@ -12,6 +12,7 @@ import Verso.FS
 import Verso.Doc.ArgParse
 import Verso.Doc.Elab.Monad
 import Verso.Code
+import Verso.Instances
 
 import SubVerso.Highlighting
 import SubVerso.Examples
@@ -39,22 +40,7 @@ inductive FileType where
   | input (file : System.FilePath)
   | output (file : System.FilePath)
   | other (file : System.FilePath)
-deriving ToJson, FromJson, Repr, BEq, DecidableEq
-
-open Syntax (mkCApp) in
-instance : Quote System.FilePath where
-  quote | ⟨f⟩ => mkCApp ``System.FilePath.mk #[quote f]
-
-open Syntax (mkCApp) in
-open FileType in
-instance : Quote FileType where
-  quote := fun
-    | stdin => mkCApp ``stdin #[]
-    | stdout => mkCApp ``stdout #[]
-    | stderr => mkCApp ``stderr #[]
-    | input f => mkCApp ``input #[quote f]
-    | output f => mkCApp ``output #[quote f]
-    | other f => mkCApp ``other #[quote f]
+deriving ToJson, FromJson, Repr, BEq, DecidableEq, Quote
 
 
 def Block.exampleFile (type : FileType) : Block where
@@ -515,7 +501,9 @@ def ioLean : CodeBlockExpander
     let opts ← Config.parse.run args
     let x ← saveLeanCode str
     if opts.show then
-      pure #[← ``(Block.other (Block.lean $x) #[Block.code $(quote str.getString)])]
+      let range := Syntax.getRange? str
+      let range := range.map (← getFileMap).utf8RangeToLspRange
+      pure #[← ``(Block.other (Block.lean $x (some $(quote (← getFileName))) (some $(quote range))) #[Block.code $(quote str.getString)])]
     else
       pure #[]
 

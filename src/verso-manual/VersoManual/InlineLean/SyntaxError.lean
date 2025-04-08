@@ -21,19 +21,6 @@ open Lean Elab
 
 namespace Verso.Genre.Manual.InlineLean
 
-open Syntax (mkCApp) in
-open MessageSeverity in
-instance : Quote MessageSeverity where
-  quote
-    | .error => mkCApp ``error #[]
-    | .information => mkCApp ``information #[]
-    | .warning => mkCApp ``warning #[]
-
-open Syntax (mkCApp) in
-open Position in
-instance : Quote Position where
-  quote
-    | ⟨line, column⟩ => mkCApp ``Position.mk #[quote line, quote column]
 
 block_extension Block.syntaxError where
   traverse _ _ _ := pure none

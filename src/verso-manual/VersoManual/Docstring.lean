@@ -83,10 +83,7 @@ namespace Block
 
 namespace Docstring
 
-deriving instance ToJson for BinderInfo
-deriving instance FromJson for BinderInfo
-deriving instance ToJson for DefinitionSafety
-deriving instance FromJson for DefinitionSafety
+
 
 private def nameString (x : Name) (showNamespace : Bool) :=
   if showNamespace then x.toString
@@ -176,24 +173,11 @@ structure DocName where
   hlName : Highlighted
   signature : Highlighted
   docstring? : Option String
-deriving ToJson, FromJson, Repr
-
-open Syntax (mkCApp) in
-instance : Quote DocName where
-  quote
-    | {name, hlName, signature, docstring?} => mkCApp ``DocName.mk #[quote name, quote hlName, quote signature, quote docstring?]
+deriving ToJson, FromJson, Repr, Quote
 
 inductive Visibility where
   | «public» | «private» | «protected»
-deriving Inhabited, Repr, ToJson, FromJson, DecidableEq, Ord
-
-open Syntax (mkCApp) in
-open Visibility in
-instance : Quote Visibility where
-  quote
-    | .public => mkCApp ``public #[]
-    | .private => mkCApp ``«private» #[]
-    | .protected => mkCApp ``«protected» #[]
+deriving Inhabited, Repr, ToJson, FromJson, DecidableEq, Ord, Quote
 
 def Visibility.of (env : Environment) (n : Name) : Visibility :=
   if isPrivateName n then .private else if isProtected env n then .protected else .public
@@ -213,29 +197,7 @@ structure FieldInfo where
   autoParam  : Bool
   docString? : Option String
   visibility : Visibility
-deriving Inhabited, Repr, ToJson, FromJson
-
-open Syntax (mkCApp) in
-open BinderInfo in
-instance : Quote BinderInfo where
-  quote
-    | .default => mkCApp ``BinderInfo.default #[]
-    | .implicit => mkCApp ``implicit #[]
-    | .instImplicit => mkCApp ``instImplicit #[]
-    | .strictImplicit => mkCApp ``strictImplicit #[]
-
-open Syntax (mkCApp) in
-instance : Quote FieldInfo where
-  quote
-    | ⟨fieldName, fieldFrom, type, projFn, subobject?, binderInfo, autoParam, docString, visibility⟩ =>
-      mkCApp ``FieldInfo.mk #[quote fieldName, quote fieldFrom, quote type, quote projFn, quote subobject?, quote binderInfo, quote autoParam, quote docString, quote visibility]
-
-open Syntax (mkCApp) in
-instance : Quote DefinitionSafety where
-  quote
-    | .safe => mkCApp ``DefinitionSafety.safe #[]
-    | .unsafe => mkCApp ``DefinitionSafety.unsafe #[]
-    | .partial => mkCApp ``DefinitionSafety.partial #[]
+deriving Inhabited, Repr, ToJson, FromJson, Quote
 
 
 structure ParentInfo where
@@ -243,15 +205,7 @@ structure ParentInfo where
   name : Name
   parent : Highlighted
   index : Nat
-deriving ToJson, FromJson
-
-open Syntax (mkCApp) in
-instance : Quote ParentInfo where
-  quote
-    | .mk projFn name parent index => mkCApp ``ParentInfo.mk #[quote projFn, quote name, quote parent, quote index]
-
-deriving instance ToJson for QuotKind
-deriving instance FromJson for QuotKind
+deriving ToJson, FromJson, Quote
 
 inductive DeclType where
   /--
@@ -267,30 +221,7 @@ inductive DeclType where
   | recursor (safety : DefinitionSafety)
   | quotPrim (kind : QuotKind)
   | other
-deriving ToJson, FromJson
-
-open Syntax (mkCApp) in
-instance : Quote QuotKind where
-  quote
-    | .ind => mkCApp ``QuotKind.ind #[]
-    | .lift => mkCApp ``QuotKind.lift #[]
-    | .ctor => mkCApp ``QuotKind.ctor #[]
-    | .type => mkCApp ``QuotKind.type #[]
-
-open Syntax (mkCApp) in
-instance : Quote DeclType where
-  quote
-    | .structure isClass ctor fields infos parents ancestors =>
-      mkCApp ``DeclType.«structure» #[quote isClass, quote ctor, quote fields, quote infos, quote parents, quote ancestors]
-    | .def safety => mkCApp ``DeclType.def #[quote safety]
-    | .opaque safety => mkCApp ``DeclType.opaque #[quote safety]
-    | .inductive ctors numArgs propOnly => mkCApp ``DeclType.inductive #[quote ctors, quote numArgs, quote propOnly]
-    | .axiom safety => mkCApp ``DeclType.axiom #[quote safety]
-    | .theorem => mkCApp ``DeclType.theorem #[]
-    | .ctor ofType safety => mkCApp ``DeclType.ctor #[quote ofType, quote safety]
-    | .recursor safety => mkCApp ``DeclType.recursor #[quote safety]
-    | .quotPrim kind => mkCApp ``DeclType.quotPrim #[quote kind]
-    | .other => mkCApp ``DeclType.other #[]
+deriving ToJson, FromJson, Quote
 
 def DeclType.label : DeclType → String
   | .structure false .. => "structure"
@@ -311,8 +242,6 @@ def DeclType.label : DeclType → String
   | .recursor .unsafe => "unsafe recursor"
   | .recursor _ => "recursor"
   | .other => ""
-
-deriving instance Repr for OpenDecl
 
 open Meta in
 def DocName.ofName (c : Name) (ppWidth : Nat := 40) (showUniverses := true) (showNamespace := true) (constantInfo := false) (openDecls : List OpenDecl := []) (checkDocstring : Bool := true) : MetaM DocName := do
@@ -1645,29 +1574,6 @@ def optionDocs.descr : BlockDescr where
   extraCss := [highlightingStyle, docstringStyle]
   extraJs := [highlightingJs]
 
-open Lean.Syntax in
-instance : Quote NameSet where
-  quote xs := mkCApp ``RBTree.fromList #[quote xs.toList, ⟨mkHole .missing⟩]
-
-instance : ToJson NameSet where
-  toJson xs := toJson (xs.toArray : Array Name)
-
-instance : FromJson NameSet where
-  fromJson? xs := do
-    let arr ← fromJson? (α := Array Name) xs
-    pure <| RBTree.fromArray arr _
-
-open Lean.Elab.Tactic.Doc in
-deriving instance ToJson for TacticDoc
-open Lean.Elab.Tactic.Doc in
-deriving instance FromJson for TacticDoc
-
-open Lean.Elab.Tactic.Doc in
-open Lean.Syntax in
-instance : Quote TacticDoc where
-  quote
-    | .mk internalName userName tags docString extensionDocs =>
-      mkCApp ``TacticDoc.mk #[quote internalName, quote userName, quote tags, quote docString, quote extensionDocs]
 
 def Block.tactic (name : Lean.Elab.Tactic.Doc.TacticDoc) («show» : Option String) : Block where
   name := `Verso.Genre.Manual.tactic
@@ -1785,10 +1691,6 @@ def tactic.descr : BlockDescr := withHighlighting {
   toTeX := some <| fun _goI goB _id _info contents => contents.mapM goB
   extraCss := [docstringStyle]
 }
-
-
-deriving instance Repr for NameSet
-deriving instance Repr for Lean.Elab.Tactic.Doc.TacticDoc
 
 structure TacticInlineOptions where
   «show» : Option String

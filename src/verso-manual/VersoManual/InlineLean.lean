@@ -223,7 +223,9 @@ def lean : CodeBlockExpander
         hls := hls.deIndent col
 
       if config.show.getD true then
-        pure #[← ``(Block.other (Block.lean $(quote hls)) #[Block.code $(quote str.getString)])]
+        let range := Syntax.getRange? str
+        let range := range.map (← getFileMap).utf8RangeToLspRange
+        pure #[← ``(Block.other (Block.lean $(quote hls) (some $(quote (← getFileName))) $(quote range)) #[Block.code $(quote str.getString)])]
       else
         pure #[]
     finally
@@ -351,7 +353,9 @@ def leanTerm : CodeBlockExpander
         else hls
 
       if config.show.getD true then
-        pure #[← ``(Block.other (Block.lean $(quote hls)) #[Block.code $(quote str.getString)])]
+        let range := Syntax.getRange? str
+        let range := range.map (← getFileMap).utf8RangeToLspRange
+        pure #[← ``(Block.other (Block.lean $(quote hls) (some $(quote (← getFileName))) $(quote range)) #[Block.code $(quote str.getString)])]
       else
         pure #[]
 where

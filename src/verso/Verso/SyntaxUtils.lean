@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 
+import Verso.Instances
 import Verso.Method
 
 namespace Verso.SyntaxUtils
@@ -55,19 +56,6 @@ defmethod ParserFn.test! (p : ParserFn) (input : String) : IO Unit :=
   p.test input >>= IO.println
 
 
-scoped instance : Quote SourceInfo `term where
-  quote
-   | .none =>
-     ⟨Syntax.mkCApp ``SourceInfo.none #[]⟩
-   | .synthetic pos endPos canonical =>
-     ⟨Syntax.mkCApp ``SourceInfo.synthetic #[quotePos pos, quotePos endPos, quote canonical]⟩
-   | .original leading pos trailing pos' =>
-     ⟨Syntax.mkCApp ``SourceInfo.original #[quote leading, quotePos pos, quote trailing, quotePos pos']⟩
-where
-  quotePos : String.Pos → TSyntax `term
-    | ⟨idx⟩ => Syntax.mkCApp `String.Pos.mk #[quote idx]
-
-
 /-- A more convenient concrete syntax for low-level syntax objects,
 without needing to involve the Lean parser. Useful when working at the
 ParserFn level.-/
@@ -117,17 +105,8 @@ structure SyntaxError where
   pos : Position
   endPos : Position
   text : String
-deriving ToJson, FromJson, BEq, Repr
+deriving ToJson, FromJson, BEq, Repr, Quote
 
-open Lean.Syntax in
-instance : Quote Position where
-  quote
-    | .mk l c => mkCApp ``Position.mk #[quote l, quote c]
-
-open Lean.Syntax in
-instance : Quote SyntaxError where
-  quote
-    | .mk pos endPos txt => mkCApp ``SyntaxError.mk #[quote pos, quote endPos, quote txt]
 
 
 -- Based on mkErrorMessage used in Lean upstream - keep them in synch for best UX

@@ -36,6 +36,8 @@ inductive ArgParse (m) : Type → Type 1 where
   | done : ArgParse m Unit
   | orElse (p1 : ArgParse m α) (p2 : Unit → ArgParse m α) : ArgParse m α
   | seq (p1 : ArgParse m (α → β)) (p2 : Unit → ArgParse m α) : ArgParse m β
+  /-- Returns all remaining arguments. This is useful for consuming some, then forwarding the rest. -/
+  | remaining : ArgParse m (Array Arg)
 
 instance : Inhabited (ArgParse m α) where
   default := .fail none none
@@ -60,6 +62,7 @@ def ArgParse.describe : ArgParse m α → MessageData
   | .done => "no arguments remaining"
   | .orElse p1 p2 => p1.describe ++ " or " ++ (p2 ()).describe
   | .seq p1 p2 => p1.describe ++ " then " ++ (p2 ()).describe
+  | .remaining => "any arguments"
 
 scoped instance [Monad m] [MonadError m] : MonadError (StateT σ m) where
   throw e := fun _ => throw e
@@ -171,6 +174,9 @@ def ArgParse.parse : ArgParse m α → ExceptT (Array Arg × Exception) (StateT 
           | e2@(args2, _) =>
             if args2.size < args1.size then throw e1 else throw e2
   | .seq p1 p2 => Seq.seq p1.parse (fun () => p2 () |>.parse)
+  | .remaining => modifyGet fun s =>
+    let r := s.remaining
+    (r, {s with remaining := #[]})
 where
   getNamed (args : Array Arg) (x : Name) : Option (Syntax × ArgVal × Array Arg) := Id.run do
     for h : i in [0:args.size] do
