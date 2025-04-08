@@ -54,18 +54,6 @@ defmethod ParserFn.test (p : ParserFn) (input : String) : IO String := do
 defmethod ParserFn.test! (p : ParserFn) (input : String) : IO Unit :=
   p.test input >>= IO.println
 
-defmethod ParserFn.parseString [Monad m] [MonadError m] [MonadEnv m] (p : ParserFn) (input : String) : m Syntax := do
-  let ictx := mkInputContext input "<input>"
-  let env ← getEnv
-  let pmctx : ParserModuleContext := {env := env, options := {}}
-  let s' := p.run ictx pmctx (getTokenTable env) (mkParserState input)
-  let stk := s'.stxStack.extract 0 s'.stxStack.size
-  if let some err := s'.errorMsg then
-    throwError err.toString
-  if h : stk.size ≠ 1 then
-    throwError "Expected single item in parser stack, got {ppStack stk}"
-  else
-    pure stk[0]
 
 scoped instance : Quote SourceInfo `term where
   quote
@@ -174,6 +162,25 @@ where
     s.toSubarray.findSomeRevM? (m := Id) fun stx =>
       if let .original (trailing := trailing) .. := stx.getTailInfo then pure (some trailing)
         else none
+
+defmethod ParserFn.parseString [Monad m] [MonadError m] [MonadEnv m] (p : ParserFn) (input : String) : m Syntax := do
+  let ictx := mkInputContext input "<input>"
+  let env ← getEnv
+  let pmctx : ParserModuleContext := {env := env, options := {}}
+  let s' := p.run ictx pmctx (getTokenTable env) (mkParserState input)
+  let stk := s'.stxStack.extract 0 s'.stxStack.size
+  if let some err := s'.errorMsg then
+    throwError err.toString
+  if s'.recoveredErrors.size > 0 then
+    throwError String.intercalate "\n" <| Std.HashSet.toList <| Std.HashSet.ofArray <|
+      s'.recoveredErrors.map fun (p, s, e) =>
+        let err := mkSyntaxError ictx p s e
+        err.text
+  if h : stk.size ≠ 1 then
+    throwError "Expected single item in parser stack, got {ppStack stk}"
+  else
+    pure stk[0]
+
 
 open Lean.Parser in
 /--

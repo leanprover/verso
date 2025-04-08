@@ -18,49 +18,25 @@ open Lean Parser
 
 open Verso Parser SyntaxUtils Doc Elab
 
-defmethod ParserFn.inStringLiteral (p : ParserFn) : ParserFn := fun c s =>
-  let s' := strLitFn c s
-  if s'.hasError then s'
-  else
-    let strLit : TSyntax `str := ⟨s'.stxStack.back⟩
-    let afterQuote := s.next c.input s.pos
-    let iniSz := afterQuote.stxStack.size
-    let s'' := adaptUncacheableContextFn (replaceInputFrom s.pos strLit.getString) p c {afterQuote with pos := s.pos}
-    if s''.hasError then s'' -- TODO update source locations for string decoding
-    else
-      let out := s''.stxStack.extract iniSz s''.stxStack.size
-      let s'' := {s' with stxStack := s'.stxStack ++ out}
-      s''.mkNode nullKind iniSz
-where
-  replaceInputFrom (p : String.Pos) new (c : ParserContextCore) := {c with input := c.input.extract 0 p ++ new }
+open Lean Elab Term in
+def stringToInlines [Monad m] [MonadError m] [MonadEnv m] [MonadQuotation m] (s : StrLit) : m (Array Syntax) :=
+  withRef s do
+    return (← textLine.parseString s.getString).args
 
-def eosFn : ParserFn := fun c s =>
-  let i := s.pos
-  if c.input.atEnd i then s
-  else s.mkError "end of string literal"
+syntax:max (name := inlinesLit) "inlines!" noWs str : term
 
-
-def inStrLit (p : ParserFn) : Parser where
-  fn := p.inStringLiteral
-
-@[combinator_parenthesizer inStrLit] def inStrLit.parenthesizer := PrettyPrinter.Parenthesizer.visitToken
-@[combinator_formatter inStrLit] def inStrLit.formatter := PrettyPrinter.Formatter.visitAtom Name.anonymous
-
-def inlineStr := withAntiquot (mkAntiquot "inlineStr" `inlineStr) (inStrLit <| textLine)
-
-elab "inlines!" s:inlineStr : term => open Lean Elab Term in
-  match s.raw with
-  | `<low| [~_ ~(.node _ _ out) ] > => do
-    let (tms, _) ← DocElabM.run {} (.init (← `(foo))) <| out.mapM (elabInline ⟨·⟩)
-    elabTerm (← `(term| #[ $[$tms],* ] )) none
-  | _ => throwUnsupportedSyntax
-
+open Lean Elab Term in
+elab_rules : term
+  | `(inlines!$s) => do
+    let inls ← stringToInlines s
+    let (tms, _) ← DocElabM.run {} (.init (← `(foo))) <| inls.mapM (elabInline ⟨·⟩)
+    elabTerm (← `(term|Inline.concat #[ $[$tms],* ] )) none
 
 
 set_option pp.rawOnError true
 
 /--
-info: #[Inline.text "Hello, ", Inline.emph #[Inline.bold #[Inline.text "emph"]]] : Array (Inline Genre.none)
+info: Inline.concat #[Inline.text "Hello, ", Inline.emph #[Inline.bold #[Inline.text "emph"]]] : Inline Genre.none
 -/
 #guard_msgs in
-#check (inlines!"Hello, _*emph*_" : Array (Inline .none))
+#check (inlines!"Hello, _*emph*_" : Inline .none)
