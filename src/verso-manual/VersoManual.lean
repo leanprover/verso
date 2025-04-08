@@ -86,6 +86,9 @@ def ref.descr : InlineDescr where
       | .ok (_, _, some dest) =>
         pure {{<a href={{dest}}>{{← content.mapM go}}</a>}}
 
+/--
+Inserts a reference to the provided tag.
+-/
 def ref (content : Array (Doc.Inline Manual)) (canonicalName : String) (domain : Option Name := none) : Doc.Inline Manual :=
   let data : (String × Option Name × Option String) := (canonicalName, domain, none)
   .other {Inline.ref with data := ToJson.toJson data} content
@@ -357,13 +360,14 @@ where
 
 def emitHtmlSingle
     (logError : String → IO Unit) (config : Config)
-    (text : Part Manual) : ReaderT ExtensionImpls IO Unit := do
+    (text : Part Manual) : ReaderT ExtensionImpls IO (Part Manual × TraverseState) := do
   let dir := config.destination.join "html-single"
   ensureDir dir
-  let ((), st) ← emitContent dir .empty
+  let (traverseOut, st) ← emitContent dir .empty
   IO.FS.writeFile (dir.join "-verso-docs.json") (toString st.dedup.docJson)
+  pure traverseOut
 where
-  emitContent (dir : System.FilePath) : StateT (State Html) (ReaderT ExtensionImpls IO) Unit := do
+  emitContent (dir : System.FilePath) : StateT (State Html) (ReaderT ExtensionImpls IO) (Part Manual × TraverseState) := do
     let (text, state) ← traverse logError text {config with htmlDepth := 0}
     let authors := text.metadata.map (·.authors) |>.getD []
     let _date := text.metadata.bind (·.date) |>.getD "" -- TODO
@@ -415,20 +419,22 @@ where
       h.putStrLn Html.doctype
       h.putStrLn <| Html.asString <| relativizeLinks <|
         page toc ctxt.path text.titleString titleHtml titleHtml pageContent state config thisPageToc (showNavButtons := false)
+    pure (text, state)
 
 open Verso.Output.Html in
 def emitHtmlMulti (logError : String → IO Unit) (config : Config)
-    (text : Part Manual) : ReaderT ExtensionImpls IO Unit := do
+    (text : Part Manual) : ReaderT ExtensionImpls IO (Part Manual × TraverseState) := do
   let root := config.destination.join "html-multi"
   ensureDir root
-  let ((), st) ← emitContent root {}
+  let (traverseOut, st) ← emitContent root {}
   IO.FS.writeFile (root.join "-verso-docs.json") (toString st.dedup.docJson)
+  pure traverseOut
 where
   /--
   Emits the data used by all pages in the site, such as JS and CSS, and then emits the root page
   (and thus its children).
   -/
-  emitContent (root : System.FilePath) : StateT (State Html) (ReaderT ExtensionImpls IO) Unit := do
+  emitContent (root : System.FilePath) : StateT (State Html) (ReaderT ExtensionImpls IO) (Part Manual × TraverseState) := do
     let (text, state) ← traverse logError text config
     let authors := text.metadata.map (·.authors) |>.getD []
     let _date := text.metadata.bind (·.date) |>.getD "" -- TODO
@@ -453,6 +459,7 @@ where
         h.putStr contents
     emitPart titleHtml authors toc opts.lift ctxt state definitionIds linkTargets {} true config.htmlDepth root text
     emitXrefs toc root state config
+    pure (text, state)
   /--
   Emits HTML for a given part, and its children if the splitting threshold is not yet reached.
   -/
@@ -517,9 +524,23 @@ where
         emitPart bookTitle authors bookContents opts ({ctxt with path := ctxt.path.push nextFile}.inPart p) state definitionIds linkTargets {} false (depth - 1) dir p
   termination_by depth
 
-abbrev ExtraStep := TraverseContext → TraverseState → IO Unit
 
-set_option linter.unusedVariables false in -- `extraSteps` is not implemented yet
+inductive Mode where | single | multi
+
+/--
+Extra steps to be performed after building the manual.
+
+`ExtraStep` is short for `Mode → (String → IO Unit) → Config → TraverseState → Part Manual → IO Unit`.
+
+The parameters are:
+ * A mode, which is whether the HTML was generated in one or multiple files
+ * An error logger
+ * The configuration, as determined from the initial value passed to `manualMain` and modified via the command line
+ * The final state of the traversal pass
+ * The final text, post-traversal
+-/
+abbrev ExtraStep := Mode → (String → IO Unit) → Config → TraverseState → Part Manual → IO Unit
+
 def manualMain (text : Part Manual)
     (extensionImpls : ExtensionImpls := by exact extension_impls%)
     (options : List String)
@@ -559,11 +580,15 @@ where
     if cfg.emitHtmlSingle then
       if cfg.verbose then
         IO.println s!"Saving single-page HTML"
-      emitHtmlSingle logError cfg text
+      let (text', traverseState) ← emitHtmlSingle logError cfg text
+      for step in extraSteps do
+        step .single logError config traverseState text'
     if cfg.emitHtmlMulti then
       if cfg.verbose then
         IO.println s!"Saving multi-page HTML"
-      emitHtmlMulti logError cfg text
+      let (text', traverseState) ← emitHtmlMulti logError cfg text
+      for step in extraSteps do
+        step .multi logError config traverseState text'
     if let some wcFile := cfg.wordCount then
       if cfg.verbose then
         IO.println s!"Saving word counts to {wcFile}"

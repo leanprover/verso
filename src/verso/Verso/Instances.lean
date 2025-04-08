@@ -6,6 +6,7 @@ Author: David Thrane Christiansen
 
 import Lean.Parser.Term
 import Lean.Elab.Command
+import Lean.Elab.Tactic.Doc
 
 import Verso.Instances.Deriving
 
@@ -48,9 +49,6 @@ deriving instance Quote for DefinitionSafety
 deriving instance ToJson for DefinitionSafety
 deriving instance FromJson for DefinitionSafety
 
-section
-open Lean.Elab.Tactic.Doc
-
 instance : Quote NameSet where
   quote xs := mkCApp ``RBTree.fromList #[quote xs.toList, ⟨mkHole .missing⟩]
 instance : ToJson NameSet where
@@ -60,6 +58,9 @@ instance : FromJson NameSet where
     let arr ← fromJson? (α := Array Name) xs
     pure <| RBTree.fromArray arr _
 deriving instance Repr for NameSet
+
+section
+open Lean.Elab.Tactic.Doc
 
 deriving instance Quote for TacticDoc
 deriving instance ToJson for TacticDoc
