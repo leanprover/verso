@@ -13,13 +13,7 @@ abbrev LexedText.Highlighted := Array (Option String × String)
 structure LexedText where
   name : String
   content : LexedText.Highlighted
-deriving Repr, Inhabited, BEq, DecidableEq
-
-open Lean in
-open Syntax (mkCApp) in
-instance : Quote LexedText where
-  quote text :=
-    mkCApp ``LexedText.mk #[quote text.name, quote text.content]
+deriving Repr, Inhabited, BEq, DecidableEq, Lean.Quote
 
 namespace LexedText
 

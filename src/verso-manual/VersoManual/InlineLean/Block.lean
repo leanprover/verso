@@ -18,12 +18,12 @@ open SubVerso.Highlighting
 
 namespace Verso.Genre.Manual.InlineLean
 
-block_extension Block.lean (hls : Highlighted) where
+block_extension Block.lean (hls : Highlighted) (file : Option System.FilePath := none) (range : Option Lsp.Range := none) where
   data :=
     let defined := hls.definedNames.toArray
-    Json.arr #[ToJson.toJson hls, ToJson.toJson defined]
+    Json.arr #[ToJson.toJson hls, ToJson.toJson defined, ToJson.toJson file, ToJson.toJson range]
   traverse id data _ := do
-    let .arr #[_, defined] := data
+    let .arr #[_, defined, _, _] := data
       | logError "Expected two-element JSON for Lean code" *> pure none
     match FromJson.fromJson? defined with
     | .error err =>
@@ -46,8 +46,8 @@ block_extension Block.lean (hls : Highlighted) where
   toHtml :=
     open Verso.Output.Html in
     some <| fun _ _ _ data _ => do
-      let .arr #[hlJson, _] := data
-        | HtmlT.logError "Expected two-element JSON for Lean code" *> pure .empty
+      let .arr #[hlJson, _, _, _] := data
+        | HtmlT.logError "Expected four-element JSON for Lean code" *> pure .empty
       match FromJson.fromJson? hlJson with
       | .error err =>
         HtmlT.logError <| "Couldn't deserialize Lean code block while rendering HTML: " ++ err

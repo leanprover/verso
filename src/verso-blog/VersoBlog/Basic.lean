@@ -135,9 +135,6 @@ structure TraverseContext where
   path : List String := {}
   config : Config
 
-
-deriving instance Ord for List -- TODO - upstream?
-
 structure TraverseState where
   usedIds : Lean.RBMap (List String) (HashSet String) compare := {}
   targets : Lean.NameMap Blog.Info.Target := {}

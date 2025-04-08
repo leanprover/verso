@@ -32,8 +32,6 @@ def getScopes [Monad m] [MonadEnv m] [MonadOptions m] [MonadResolveName m] : m (
 def setScopes [Monad m] [MonadEnv m] (scopes : List Scope) : m Unit := do
   modifyEnv (leanSampleScopes.setState · scopes)
 
-deriving instance Repr for OpenDecl
-
 /--
 Runs an elaborator action with the current namespace and open declarations that have been found via
 inline Lean blocks.

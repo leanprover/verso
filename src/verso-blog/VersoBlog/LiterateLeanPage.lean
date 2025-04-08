@@ -203,11 +203,6 @@ def getFirstMessage : Highlighted → Option (Highlighted.Span.Kind × String)
   | .text ..
   | .token .. => failure
 
-instance : Quote Int where
-  quote
-    | .ofNat n => Syntax.mkCApp ``Int.ofNat #[quote n]
-    | .negSucc n => Syntax.mkCApp ``Int.negSucc #[quote n]
-
 open Verso Doc Elab PartElabM in
 open Lean.Parser.Command in
 partial def docFromMod (genre : Term) (project : System.FilePath) (mod : String) (content : Array Json) : PartElabM Unit := do

@@ -10,6 +10,7 @@ import Verso.Doc.Elab
 import Verso.Doc.Elab.Incremental
 import Verso.Doc.Elab.Monad
 import Verso.Doc.Lsp
+import Verso.Instances
 import Verso.Parser
 import Verso.SyntaxUtils
 
@@ -152,10 +153,6 @@ where
       set termState.elab
       (show MetaM Unit from set termState.meta.meta)
       (show CoreM Unit from set termState.meta.core.toState)
-
-open Lean.Parser.Command in
-instance : Quote String (k := ``docComment) where
-  quote str := ⟨.node .none ``docComment #[ .atom .none "/--", .atom .none (str ++ "-/")]⟩
 
 elab (name := completeDoc) "#doc" "(" genre:term ")" title:str "=>" text:completeDocument eoi : command => open Lean Elab Term Command PartElabM DocElabM in do
   findGenreCmd genre
