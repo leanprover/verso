@@ -28,7 +28,7 @@ private structure HeaderHandlers (m : Type u → Type w) (block : Type u) (inlin
 structure MDContext (m : Type u → Type w) (block : Type u) (inline : Type u) : Type (max u w) where
   headerHandlers : HeaderHandlers m block inline
   elabInlineCode : Option (Option String → String → m inline)
-  elabBlockCode : Option (String → m block)
+  elabBlockCode : Option (Option String → Option String → String → m block)
 
 def attrText : AttrText → Except String String
   | .normal str => pure str
@@ -145,10 +145,12 @@ private partial def blockFromMarkdownAux [Monad m] [AddMessageContext m] [MonadQ
     let inlines ← (txt.mapM (inlineFromMarkdown ·)).run' none
     ``(Verso.Doc.Block.para #[$inlines,*])
   | .blockquote bs => do ``(Verso.Doc.Block.blockquote #[$[$(← bs.mapM blockFromMarkdownAux )],*])
-  | .code _ _ _ strs => do
+  | .code info lang _ strs => do
+    let info? := (attr' info).toOption
+    let lang? := (attr' lang).toOption
     let str := String.join strs.toList
     if let some f := (← read).elabBlockCode then
-      f str
+      f info? lang? str
     else
       ``(Verso.Doc.Block.code $(quote str))
   | .ul _ _ items => do ``(Verso.Doc.Block.ul #[$[$(← items.mapM itemFromMarkdown)],*])
@@ -174,7 +176,7 @@ def blockFromMarkdown [Monad m] [MonadQuotation m] [MonadError m] [AddMessageCon
     (md : MD4Lean.Block)
     (handleHeaders : List (Array Term → m Term) := [])
     (elabInlineCode : Option (Option String → String → m Term) := none)
-    (elabBlockCode : Option (String → m Term) := none) : m Term :=
+    (elabBlockCode : Option (Option String → Option String → String → m Term) := none) : m Term :=
   let ctxt := {headerHandlers := ⟨handleHeaders⟩, elabInlineCode, elabBlockCode}
   (·.fst) <$> blockFromMarkdownAux md ctxt {}
 
@@ -208,7 +210,7 @@ def blockFromMarkdown'
     (md : MD4Lean.Block)
     (handleHeaders : List (Array (Doc.Inline g) → Except String (Doc.Block g)) := [])
     (elabInlineCode : Option (Option String → String → Except String (Doc.Inline g)) := none)
-    (elabBlockCode : Option (String → Except String (Doc.Block g)) := none) :
+    (elabBlockCode : Option (Option String → Option String → String → Except String (Doc.Block g)) := none) :
   Except String (Doc.Block g) :=
   (·.fst) <$> blockFromMarkdownAux' md ⟨⟨handleHeaders⟩, elabInlineCode, elabBlockCode⟩ {}
 
