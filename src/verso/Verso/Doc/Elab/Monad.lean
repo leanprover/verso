@@ -215,10 +215,14 @@ partial def FinishedPart.toSyntax' [Monad m] [MonadQuotation m] [MonadLiftT Comm
 
   let HelperM := ReaderT Name (StateT ToSyntaxState m)
 
-  let gensym (src : Syntax) (hint := "gensym") : HelperM (TSyntax `ident) :=
-    modifyGet fun (st : ToSyntaxState) =>
-      let n : Name := .str rootName s!"{hint}{st.gensymCounter}"
-      (mkIdentFrom src n, {st with gensymCounter := st.gensymCounter + 1})
+  let rec gensym (src : Syntax) (hint := "gensym") : HelperM (TSyntax `ident) := do
+    let x ←
+      modifyGet fun (st : ToSyntaxState) =>
+        let n : Name := .str rootName s!"{hint}{st.gensymCounter}"
+        (mkIdentFrom src n, {st with gensymCounter := st.gensymCounter + 1})
+    if (← getEnv).contains x.getId then
+      gensym src (hint := hint)
+    else pure x
 
   let rec helper : FinishedPart → HelperM (TSyntax `term)
       | .mk titleStx titleInlines titleString metadata blocks subParts _endPos => do

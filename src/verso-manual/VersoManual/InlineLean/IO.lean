@@ -503,7 +503,7 @@ def ioLean : CodeBlockExpander
     if opts.show then
       let range := Syntax.getRange? str
       let range := range.map (← getFileMap).utf8RangeToLspRange
-      pure #[← ``(Block.other (Block.lean $x (some $(quote (← getFileName))) (some $(quote range))) #[Block.code $(quote str.getString)])]
+      pure #[← ``(Block.other (Block.lean $x (some $(quote (← getFileName))) $(quote range)) #[Block.code $(quote str.getString)])]
     else
       pure #[]
 
