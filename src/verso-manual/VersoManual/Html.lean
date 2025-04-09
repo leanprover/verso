@@ -361,8 +361,8 @@ where
   safeTags := ["code", "span", "a"]
 
   getHtmlTitle : Html → Option String
-  | .text e s => some s
-  | .seq es => (String.join ∘ (·.toList)) <$> es.attach.mapM (fun ⟨e, p⟩ => getHtmlTitle e)
+  | .text _e s => some s
+  | .seq es => (String.join ∘ (·.toList)) <$> es.mapM getHtmlTitle
   | .tag t _ e =>
     if t ∈ safeTags then
       getHtmlTitle e
