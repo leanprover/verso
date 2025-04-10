@@ -24,7 +24,7 @@ def jsonHl : Highlighter where
     token `ident (many1Fn (satisfyFn (· ∉ "() \t\n".toList)))
   tokenClass := fun s => some (toString s.getKind)
 
-#defineLexerBlock json ← jsonHl
+define_lexed_text json ← jsonHl
 
 #doc (Post) "First Post" =>
 

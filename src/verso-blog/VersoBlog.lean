@@ -509,7 +509,7 @@ where
     ws.apply s1.trim == ws.apply s2.trim
 
 open Lean Elab Command in
-elab "#defineLexerBlock" blockName:ident " ← " lexerName:ident : command => do
+elab "define_lexed_text" blockName:ident " ← " lexerName:ident : command => do
   let lexer ← liftTermElabM <| realizeGlobalConstNoOverloadWithInfo lexerName
   elabCommand <| ← `(@[code_block_expander $blockName]
     def $blockName : Doc.Elab.CodeBlockExpander
@@ -517,6 +517,14 @@ elab "#defineLexerBlock" blockName:ident " ← " lexerName:ident : command => do
         let out ← Verso.Genre.Blog.LexedText.highlight $(mkIdentFrom lexerName lexer) str.getString
         return #[← ``(Block.other (Blog.BlockExt.lexedText $$(quote out)) #[])]
       | _, str => throwErrorAt str "Expected no arguments")
+  elabCommand <| ← `(@[role_expander $blockName]
+    def $(mkIdent <| blockName.getId ++ `role) : Doc.Elab.RoleExpander
+      | #[], #[inl] => do
+        let `(inline|code($$str)) := inl
+          | throwErrorAt inl "Expected code"
+        let out ← Verso.Genre.Blog.LexedText.highlight $(mkIdentFrom lexerName lexer) str.getString
+        return #[← ``(Inline.other (Blog.InlineExt.lexedText $$(quote out)) #[])]
+      | _, str => throwError "Expected no arguments and a single code element")
 
 
 private def filterString (p : Char → Bool) (str : String) : String := Id.run <| do

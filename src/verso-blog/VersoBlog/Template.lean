@@ -67,6 +67,8 @@ def inlineHtml (g : Genre) [MonadConfig (HtmlT g IO)] [MonadPath (HtmlT g IO)]
     (stateEq : g.TraverseState = Blog.TraverseState)
     (go : Inline g → HtmlT g IO Html) : Blog.InlineExt → Array (Inline g) → HtmlT g IO Html
   | .highlightedCode contextName hls, _contents => hls.inlineHtml (some <| toString contextName)
+  | .lexedText content, _contents => do
+    pure {{ <code class=s!"lexed {content.name}"> {{ content.toHtml }} </code> }}
   | .customHighlight hls, _contents => hls.inlineHtml none
   | .label x, contents => do
     let contentHtml ← contents.mapM go
