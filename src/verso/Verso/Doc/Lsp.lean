@@ -449,41 +449,133 @@ def decodeLeanTokens (data : Array Nat) : Array SemanticTokenEntry := Id.run do
 
 deriving instance Repr, BEq for SemanticTokenType
 
-open Lean Server Lsp RequestM in
-partial def handleTokens (prev : RequestTask SemanticTokens)
-    (beginPos : String.Pos) (endPos? : Option String.Pos) :
-    RequestM (RequestTask (LspResponse SemanticTokens)) := do
-  let doc ← readDoc
-  let text := doc.meta.text
-  if let some endPos := endPos? then
-    let t := doc.cmdSnaps.waitUntil (·.endPos >= endPos)
-    let toks : RequestTask (Array SemanticTokenEntry) :=
-      t.mapCheap fun (snaps, _) => pure <| snapshotsTokens text snaps
-    let response ← mergeIntoPrev toks
-    return response.mapCheap fun t =>
-      t.map ({ response := ·, isComplete := true })
-  else
-    let (snaps, _, isComplete) ← doc.cmdSnaps.getFinishedPrefixWithTimeout 2000
-    let toks : Array SemanticTokenEntry := snapshotsTokens text snaps
-    let response ← mergeIntoPrev (.pure toks)
-    return response.mapCheap fun t =>
-      t.map ({ response := ·, isComplete := isComplete })
+partial def versoTokens (text : FileMap) (stx : Syntax) : Array SemanticTokenEntry := Id.run do
+  match stx with
+  | `(inline|$_s:str) =>
+    mkTok text .string stx
+  | `(inline|_[%$s $inlines* ]%$e) | `(inline|*[%$s $inlines* ]%$e) =>
+    mkTok text .keyword s ++ versoTokens text (mkNullNode inlines) ++ mkTok text .keyword e
+  | `(inline|role{%$s $f $args*}%$e [%$s' $inlines* ]%$e') =>
+    mkTok text .keyword s ++
+    mkTok text .function f ++
+    versoTokens text (mkNullNode args) ++
+    mkTok text .keyword e ++
+    mkTok text .keyword s' ++
+    versoTokens text (mkNullNode inlines) ++
+    mkTok text .keyword e'
+  | `(inline|link[%$s $inlines* ]%$e (%$s' $tgt )%$e')
+  | `(inline|link[%$s $inlines* ]%$e [%$s' $tgt ]%$e') =>
+    mkTok text .keyword s ++
+    versoTokens text (mkNullNode inlines) ++
+    mkTok text .keyword e ++
+    mkTok text .keyword s' ++
+    mkTok text .parameter tgt ++
+    mkTok text .keyword e'
+  | `(inline|image(%$s $alt )%$e (%$s' $tgt )%$e')
+  | `(inline|image(%$s $alt )%$e [%$s' $tgt ]%$e') =>
+    mkTok text .keyword s ++
+    versoTokens text alt ++
+    mkTok text .keyword e ++
+    mkTok text .keyword s' ++
+    mkTok text .parameter tgt ++
+    mkTok text .keyword e'
+  | `(inline|footnote(%$s $note )%$e) =>
+    mkTok text .keyword s ++
+    mkTok text .parameter note ++
+    mkTok text .keyword e
+  | `(inline|code(%$s $_str )%$e) =>
+    mkTok text .keyword s ++
+    -- None for str, so Lean's can pass through
+    mkTok text .keyword e
+  | `(inline|\math%$m code(%$s $str )%$e)
+  | `(inline|\displaymath%$m code(%$s $str )%$e) =>
+    mkTok text .keyword m ++
+    mkTok text .keyword s ++
+     -- Enum member arbitrarily chosen for uniqueness
+    mkTok text .enumMember str ++
+    mkTok text .keyword e
+  | `(desc_item| :%$s $inlines* =>%$e $blocks*) =>
+    mkTok text .keyword s ++
+    versoTokens text (mkNullNode inlines) ++
+    mkTok text .keyword e ++
+    versoTokens text (mkNullNode blocks)
+  | `(list_item| *%$bulletOrNum $contents*) =>
+    mkTok text .keyword bulletOrNum ++
+    versoTokens text (mkNullNode contents)
+  | `(block| :::%$s $f $args* {%$s' $body* }%$e) =>
+    mkTok text .keyword s ++
+    mkTok text .function f ++
+    versoTokens text (mkNullNode args) ++
+    mkTok text .keyword s' ++
+    versoTokens text (mkNullNode body) ++
+    mkTok text .keyword e
+  | `(block| ```%$s $f $args* |%$s' $_code ```%$e) =>
+    mkTok text .keyword s ++
+    mkTok text .function f ++
+    versoTokens text (mkNullNode args) ++
+    mkTok text .keyword s' ++
+    -- No token for the code, because we want Lean's tokens to shine through
+    mkTok text .keyword e
+  | `(block| >%$s $blocks*) =>
+    mkTok text .keyword s ++ versoTokens text (mkNullNode blocks)
+  | `(block|header(%$s $n )%$e {%$s' $txt* }%$e') =>
+    mkTok text .keyword s ++
+    versoTokens text n ++
+    mkTok text .keyword e ++
+    mkTok text .keyword s' ++
+    versoTokens text (mkNullNode txt) ++
+    mkTok text .keyword e'
+  | `(block|[^%$s $n ]:%$e $txt*) =>
+    mkTok text .keyword s ++
+    mkTok text .parameter n ++
+    mkTok text .keyword e ++
+    versoTokens text (mkNullNode txt)
+  | `(block|[%$s $n ]:%$e $url) =>
+    mkTok text .keyword s ++
+    mkTok text .parameter n ++
+    mkTok text .keyword e ++
+    mkTok text .parameter url
+  | `(block| %%%%$s $_defs* %%%%$e) =>
+    mkTok text .keyword s ++
+    -- No tokens for defs, because Lean should supply them
+    mkTok text .keyword e
+  | `(block| block_role{%$s $f $args* }%$e) =>
+    mkTok text .keyword s ++
+    mkTok text .function f ++
+    versoTokens text (mkNullNode args) ++
+    mkTok text .keyword e
+  | `(block| block_role{%$s $f $args* }%$e [%$s' $block ]%$e') =>
+    mkTok text .keyword s ++
+    mkTok text .function f ++
+    versoTokens text (mkNullNode args) ++
+    mkTok text .keyword e ++
+    mkTok text .keyword s' ++
+    versoTokens text block ++
+    mkTok text .keyword e'
+  | `(argument| $x:ident :=%$eq $v:arg_val) =>
+    mkTok text .parameter x ++
+    mkTok text .keyword eq ++
+    versoTokens text v
+  | `(argument| $v:arg_val) =>
+    versoTokens text v
+  -- In the next three cases, no token is returned. This is to allow Lean's to shine through, if
+  -- there are any. It would be nice to add a priority mechanism to fall back to these defaults if
+  -- Lean didn't provide any.
+  | `(arg_val| $_v:num) =>
+    --mkTok text .number v
+    #[]
+  | `(arg_val| $_v:ident) =>
+    -- mkTok text .variable v
+    #[]
+  | `(arg_val| $_v:str) =>
+    -- mkTok text .string v
+    #[]
+  | _ =>
+    let mut out := #[]
+    for arg in stx.getArgs do
+      out := out ++ versoTokens text arg
+    return out
 where
-  snapshotTokens (text : FileMap) (snap) : Array SemanticTokenEntry :=
-    if snap.endPos <= beginPos then #[] else go text snap.stx
-
-  snapshotsTokens (text : FileMap) (snaps : List _) : (Array SemanticTokenEntry) :=
-    snaps.foldl (init := #[]) fun toks snap => toks ++ snapshotTokens text snap
-
-  mergeIntoPrev (toks : RequestTask (Array SemanticTokenEntry)) :=
-    mergeResponses toks prev fun
-      | none, none => SemanticTokens.mk none #[]
-      | some xs, none => SemanticTokens.mk none <| encodeTokenEntries <| xs.qsort (·.ordLt ·)
-      | none, some r => r
-      | some mine, some leans =>
-        let toks := decodeLeanTokens leans.data
-        {leans with data := encodeTokenEntries (toks ++ mine |>.qsort (·.ordLt ·))}
-
   mkTok (text : FileMap) (tokenType : SemanticTokenType) (stx : Syntax) : Array SemanticTokenEntry := Id.run do
     let (some startPos, some endPos) := (stx.getPos?, stx.getTailPos?)
       | return #[]
@@ -501,132 +593,44 @@ where
       }]
     else #[]
 
-  go (text : FileMap) (stx : Syntax) : Array SemanticTokenEntry := Id.run do
-    match stx with
-    | `(inline|$_s:str) =>
-      mkTok text .string stx
-    | `(inline|_[%$s $inlines* ]%$e) | `(inline|*[%$s $inlines* ]%$e) =>
-      mkTok text .keyword s ++ go text (mkNullNode inlines) ++ mkTok text .keyword e
-    | `(inline|role{%$s $f $args*}%$e [%$s' $inlines* ]%$e') =>
-      mkTok text .keyword s ++
-      mkTok text .function f ++
-      go text (mkNullNode args) ++
-      mkTok text .keyword e ++
-      mkTok text .keyword s' ++
-      go text (mkNullNode inlines) ++
-      mkTok text .keyword e'
-    | `(inline|link[%$s $inlines* ]%$e (%$s' $tgt )%$e')
-    | `(inline|link[%$s $inlines* ]%$e [%$s' $tgt ]%$e') =>
-      mkTok text .keyword s ++
-      go text (mkNullNode inlines) ++
-      mkTok text .keyword e ++
-      mkTok text .keyword s' ++
-      mkTok text .parameter tgt ++
-      mkTok text .keyword e'
-    | `(inline|image(%$s $alt )%$e (%$s' $tgt )%$e')
-    | `(inline|image(%$s $alt )%$e [%$s' $tgt ]%$e') =>
-      mkTok text .keyword s ++
-      go text alt ++
-      mkTok text .keyword e ++
-      mkTok text .keyword s' ++
-      mkTok text .parameter tgt ++
-      mkTok text .keyword e'
-    | `(inline|footnote(%$s $note )%$e) =>
-      mkTok text .keyword s ++
-      mkTok text .parameter note ++
-      mkTok text .keyword e
-    | `(inline|code(%$s $_str )%$e) =>
-      mkTok text .keyword s ++
-      -- None for str, so Lean's can pass through
-      mkTok text .keyword e
-    | `(inline|\math%$m code(%$s $str )%$e)
-    | `(inline|\displaymath%$m code(%$s $str )%$e) =>
-      mkTok text .keyword m ++
-      mkTok text .keyword s ++
-       -- Enum member arbitrarily chosen for uniqueness
-      mkTok text .enumMember str ++
-      mkTok text .keyword e
-    | `(desc_item| :%$s $inlines* =>%$e $blocks*) =>
-      mkTok text .keyword s ++
-      go text (mkNullNode inlines) ++
-      mkTok text .keyword e ++
-      go text (mkNullNode blocks)
-    | `(list_item| *%$bulletOrNum $contents*) =>
-      mkTok text .keyword bulletOrNum ++
-      go text (mkNullNode contents)
-    | `(block| :::%$s $f $args* {%$s' $body* }%$e) =>
-      mkTok text .keyword s ++
-      mkTok text .function f ++
-      go text (mkNullNode args) ++
-      mkTok text .keyword s' ++
-      go text (mkNullNode body) ++
-      mkTok text .keyword e
-    | `(block| ```%$s $f $args* |%$s' $_code ```%$e) =>
-      mkTok text .keyword s ++
-      mkTok text .function f ++
-      go text (mkNullNode args) ++
-      mkTok text .keyword s' ++
-      -- No token for the code, because we want Lean's tokens to shine through
-      mkTok text .keyword e
-    | `(block| >%$s $blocks*) =>
-      mkTok text .keyword s ++ go text (mkNullNode blocks)
-    | `(block|header(%$s $n )%$e {%$s' $txt* }%$e') =>
-      mkTok text .keyword s ++
-      go text n ++
-      mkTok text .keyword e ++
-      mkTok text .keyword s' ++
-      go text (mkNullNode txt) ++
-      mkTok text .keyword e'
-    | `(block|[^%$s $n ]:%$e $txt*) =>
-      mkTok text .keyword s ++
-      mkTok text .parameter n ++
-      mkTok text .keyword e ++
-      go text (mkNullNode txt)
-    | `(block|[%$s $n ]:%$e $url) =>
-      mkTok text .keyword s ++
-      mkTok text .parameter n ++
-      mkTok text .keyword e ++
-      mkTok text .parameter url
-    | `(block| %%%%$s $_defs* %%%%$e) =>
-      mkTok text .keyword s ++
-      -- No tokens for defs, because Lean should supply them
-      mkTok text .keyword e
-    | `(block| block_role{%$s $f $args* }%$e) =>
-      mkTok text .keyword s ++
-      mkTok text .function f ++
-      go text (mkNullNode args) ++
-      mkTok text .keyword e
-    | `(block| block_role{%$s $f $args* }%$e [%$s' $block ]%$e') =>
-      mkTok text .keyword s ++
-      mkTok text .function f ++
-      go text (mkNullNode args) ++
-      mkTok text .keyword e ++
-      mkTok text .keyword s' ++
-      go text block ++
-      mkTok text .keyword e'
-    | `(argument| $x:ident :=%$eq $v:arg_val) =>
-      mkTok text .parameter x ++
-      mkTok text .keyword eq ++
-      go text v
-    | `(argument| $v:arg_val) =>
-      go text v
-    -- In the next three cases, no token is returned. This is to allow Lean's to shine through, if
-    -- there are any. It would be nice to add a priority mechanism to fall back to these defaults if
-    -- Lean didn't provide any.
-    | `(arg_val| $_v:num) =>
-      --mkTok text .number v
-      #[]
-    | `(arg_val| $_v:ident) =>
-      -- mkTok text .variable v
-      #[]
-    | `(arg_val| $_v:str) =>
-      -- mkTok text .string v
-      #[]
-    | _ =>
-      let mut out := #[]
-      for arg in stx.getArgs do
-        out := out ++ go text arg
-      return out
+def mergeTokens (mine : Array SemanticTokenEntry) (leans : SemanticTokens) : Array Nat:=
+  let toks := decodeLeanTokens leans.data
+  encodeTokenEntries (toks ++ mine |>.qsort (·.ordLt ·))
+
+open Lean Server Lsp RequestM in
+def snapshotTokens (beginPos : String.Pos) (text : FileMap) (snap : Snapshots.Snapshot) : Array SemanticTokenEntry :=
+  if snap.endPos <= beginPos then #[] else versoTokens text snap.stx
+
+open Lean Server Lsp RequestM in
+def snapshotsTokens (beginPos : String.Pos) (text : FileMap) (snaps : List Snapshots.Snapshot) : Array SemanticTokenEntry :=
+  snaps.foldl (init := #[]) fun toks snap => toks ++ snapshotTokens beginPos text snap
+
+open Lean Server Lsp RequestM in
+partial def handleTokens (prev : RequestTask SemanticTokens)
+    (beginPos : String.Pos) (endPos? : Option String.Pos) :
+    RequestM (RequestTask (LspResponse SemanticTokens)) := do
+  let doc ← readDoc
+  let text := doc.meta.text
+  if let some endPos := endPos? then
+    let t := doc.cmdSnaps.waitUntil (·.endPos >= endPos)
+    let toks : RequestTask (Array SemanticTokenEntry) :=
+      t.mapCheap fun (snaps, _) => pure <| snapshotsTokens beginPos text snaps
+    let response ← mergeIntoPrev toks
+    return response.mapCheap fun t =>
+      t.map ({ response := ·, isComplete := true })
+  else
+    let (snaps, _, isComplete) ← doc.cmdSnaps.getFinishedPrefixWithTimeout 2000
+    let toks : Array SemanticTokenEntry := snapshotsTokens beginPos text snaps
+    let response ← mergeIntoPrev (.pure toks)
+    return response.mapCheap fun t =>
+      t.map ({ response := ·, isComplete := isComplete })
+where
+  mergeIntoPrev (toks : RequestTask (Array SemanticTokenEntry)) :=
+    mergeResponses toks prev fun
+      | none, none => SemanticTokens.mk none #[]
+      | some xs, none => SemanticTokens.mk none <| encodeTokenEntries <| xs.qsort (·.ordLt ·)
+      | none, some r => r
+      | some mine, some leans => {leans with data := mergeTokens mine leans}
 
 open Lean Server Lsp RequestM in
 def handleTokensRange (params : SemanticTokensRangeParams) (prev : RequestTask SemanticTokens) : RequestM (RequestTask SemanticTokens) := do
@@ -645,10 +649,15 @@ open Lean.Server.FileWorker in
 def handleTokensFullStateful
     (_params : SemanticTokensParams) (prev : LspResponse SemanticTokens) (st : SemanticTokensState) :
     RequestM (LspResponse SemanticTokens × SemanticTokensState) := do
-  let t ← handleTokens (.pure prev.response) 0 none
-  match t.get with
-  | .error e => throw e
-  | .ok r => return (r, st)
+  let doc ← readDoc
+  let text := doc.meta.text
+  let (snaps, _, isComplete) ← doc.cmdSnaps.getFinishedPrefixWithTimeout 2000
+  RequestM.checkCancelled
+  let toks : Array SemanticTokenEntry := snapshotsTokens 0 text snaps
+  RequestM.checkCancelled
+  let response := {prev with data := mergeTokens toks prev.response}
+  RequestM.checkCancelled
+  return ({response, isComplete}, st)
 
 
 open Lean Server Lsp RequestM in
