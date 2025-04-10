@@ -59,7 +59,7 @@ where
     element := snap.toLeanSnapshot,
     children :=
       Option.toArray <| snap.next.map fun task =>
-        task.map (sync := true) (·.map go |>.getD default)
+        task.map (·.map go |>.getD default)
   }
 
 

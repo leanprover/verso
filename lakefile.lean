@@ -2,6 +2,7 @@ import Lake
 open Lake DSL
 
 require subverso from git "https://github.com/leanprover/subverso.git"@"main"
+-- Until issues with libraries in Lake nightlies get worked out
 require MD4Lean from git "https://github.com/david-christiansen/md4lean"@"explicit-link"
 
 package verso where
