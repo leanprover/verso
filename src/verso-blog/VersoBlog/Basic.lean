@@ -33,6 +33,7 @@ deriving Repr
 
 inductive InlineExt where
   | highlightedCode (contextName : Lean.Name) (highlighted : Highlighted)
+  | lexedText (content : LexedText)
   | customHighlight (highlighted : Highlighted)
   | label (name : Lean.Name)
   | ref (name : Lean.Name)
@@ -373,7 +374,7 @@ def genreInline (g : Genre) : Blog.InlineExt → Array (Inline g) → Blog.Trave
     | .pageref _x, _contents =>
       -- TODO backreference
       pure none
-    | .htmlSpan .., _ | .blob .., _ => pure none
+    | .htmlSpan .., _ | .blob .., _ | .lexedText .., _ => pure none
 
 def traverser (g : Genre) (block : g.Block = Blog.BlockExt) (inline : g.Inline = Blog.InlineExt) : Traverse g Blog.TraverseM where
   part _ := pure none
