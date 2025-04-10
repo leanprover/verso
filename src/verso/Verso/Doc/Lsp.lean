@@ -131,7 +131,7 @@ def handleDef (params : TextDocumentPositionParams) (prev : RequestTask (Array L
   let text := doc.meta.text
   let pos := text.lspPosToUtf8Pos params.position
   bindWaitFindSnap doc (·.endPos + ' ' >= pos) (notFoundX := pure prev) fun snap => do
-    withFallbackAs (!·.isEmpty) prev <| pure <| ServerTask.mk <| Task.spawn <| fun () => do
+    withFallbackAs (!·.isEmpty) prev <| pure <| prev.mapCheap fun prevLocs => do
       let nodes := snap.infoTree.deepestNodes fun _ctxt info _arr =>
         match info with
         | .ofCustomInfo ⟨stx, data⟩ =>
@@ -153,7 +153,7 @@ def handleDef (params : TextDocumentPositionParams) (prev : RequestTask (Array L
             | continue
           locs := locs.push {originSelectionRange? := origin, targetRange := target, targetUri := params.textDocument.uri, targetSelectionRange := target}
         | _ => continue
-      pure (locs ++ (← prev.get))
+      pure (locs ++ prevLocs.toOption.getD #[])
 
 open Lean Server Lsp RequestM in
 def handleRefs (params : ReferenceParams) (prev : RequestTask (Array Location)) : RequestM (RequestTask (Array Location)) := do
