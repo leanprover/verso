@@ -2,16 +2,20 @@ import Lake
 open Lake DSL
 
 require subverso from git "https://github.com/leanprover/subverso.git"@"main"
-require MD4Lean from git "https://github.com/acmepjz/md4lean"@"main"
+-- Until issues with libraries in Lake nightlies get worked out
+require MD4Lean from git "https://github.com/david-christiansen/md4lean"@"explicit-link"
 
 package verso where
   precompileModules := false -- temporarily disabled to work around an issue with nightly-2025-03-30
   -- add package configuration options here
+  dynlibs := #[`@MD4Lean/MD4Lean:shared, `@MD4Lean/md4cShared]
+
 
 @[default_target]
 lean_lib Verso where
   srcDir := "src/verso"
   roots := #[`Verso]
+  needs :=  #[`@MD4Lean/MD4Lean]
 
 @[default_target]
 lean_lib VersoBlog where
@@ -22,7 +26,6 @@ lean_lib VersoBlog where
 lean_lib VersoManual where
   srcDir := "src/verso-manual"
   roots := #[`VersoManual]
-
 
 @[default_target]
 lean_exe «verso» where

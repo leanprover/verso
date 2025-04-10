@@ -21,13 +21,27 @@ open Verso.Hover
 
 open Lean
 
+
 open Lean Server in
-def withFallbackResponse (resp : RequestTask α) (act : RequestM (RequestTask α)) : RequestM (RequestTask α) :=
+/--
+Runs `act` to handle a request. If the result satisfies `accept`, then it is returned.
+
+If the result does not satisfy request, then it is handled by the prior response `resp`. If it
+fails, then the error is logged and `resp` is used.
+-/
+def withFallbackAs (accept : α → Bool) (resp : RequestTask α) (act : RequestM (RequestTask α)) : RequestM (RequestTask α) := do
   try
-    act
+    RequestM.bindTaskCheap (← act) fun
+      | .error e => do
+        (← read).hLog.putStrLn s!"Doc LSP request failed: {e.message}"
+        pure resp
+      | .ok v =>
+        if accept v then pure (RequestTask.pure v)
+        else pure resp
   catch e =>
-    (← read).hLog.putStrLn s!"Doc LSP request failed: {e.message}"
+    (← read).hLog.putStrLn s!"Creating doc LSP request failed: {e.message}"
     return resp
+
 
 defmethod Syntax.containsPos (s : Syntax) (p : String.Pos) : Bool :=
   match span s.getHeadInfo, span s.getTailInfo with
@@ -117,7 +131,7 @@ def handleDef (params : TextDocumentPositionParams) (prev : RequestTask (Array L
   let text := doc.meta.text
   let pos := text.lspPosToUtf8Pos params.position
   bindWaitFindSnap doc (·.endPos + ' ' >= pos) (notFoundX := pure prev) fun snap => do
-    withFallbackResponse prev <| pure <| ServerTask.mk <| Task.spawn <| fun () => do
+    withFallbackAs (!·.isEmpty) prev <| pure <| prev.mapCheap fun prevLocs => do
       let nodes := snap.infoTree.deepestNodes fun _ctxt info _arr =>
         match info with
         | .ofCustomInfo ⟨stx, data⟩ =>
@@ -139,7 +153,7 @@ def handleDef (params : TextDocumentPositionParams) (prev : RequestTask (Array L
             | continue
           locs := locs.push {originSelectionRange? := origin, targetRange := target, targetUri := params.textDocument.uri, targetSelectionRange := target}
         | _ => continue
-      pure (locs ++ (← prev.get))
+      pure (locs ++ prevLocs.toOption.getD #[])
 
 open Lean Server Lsp RequestM in
 def handleRefs (params : ReferenceParams) (prev : RequestTask (Array Location)) : RequestM (RequestTask (Array Location)) := do
@@ -147,7 +161,7 @@ def handleRefs (params : ReferenceParams) (prev : RequestTask (Array Location)) 
   let text := doc.meta.text
   let pos := text.lspPosToUtf8Pos params.position
   bindWaitFindSnap doc (·.endPos + ' ' >= pos) (notFoundX := pure prev) fun snap => do
-    withFallbackResponse prev <| pure <| Task.spawn <| fun () => do
+    withFallbackAs (!·.isEmpty) prev <| pure <| Task.spawn fun () => show Except RequestError _ from do
       let nodes := snap.infoTree.deepestNodes fun _ctxt info _arr =>
         match info with
         | .ofCustomInfo ⟨stx, data⟩ =>
@@ -155,22 +169,22 @@ def handleRefs (params : ReferenceParams) (prev : RequestTask (Array Location)) 
             data.get? DocRefInfo
           else none
         | _ => none
-      if nodes.isEmpty then prev.get
+      if nodes.isEmpty then return #[]
       else
         let mut locs : Array Location := #[]
         for node in nodes do
           for stx in node.syntax do
             if let some range := stx.lspRange text then
               locs := locs.push {uri := params.textDocument.uri, range := range}
-        pure locs
+        pure <| locs
 
 open Lean Server Lsp RequestM in
 partial def handleHl (params : DocumentHighlightParams) (prev : RequestTask DocumentHighlightResult) : RequestM (RequestTask DocumentHighlightResult) := do
   let doc ← readDoc
   let text := doc.meta.text
   let pos := text.lspPosToUtf8Pos params.position
-  bindWaitFindSnap doc (·.endPos + ' ' >= pos) (notFoundX := pure prev) fun snap => do
-    withFallbackResponse prev <| pure <| Task.spawn <| fun () => do
+  bindWaitFindSnap doc (·.endPos + ' ' >= pos) (notFoundX := pure prev) fun snap =>
+    withFallbackAs (!·.isEmpty) prev <| pure <| Task.spawn fun () => show Except RequestError _ from do
       let nodes : List (_ ⊕ _) := snap.infoTree.deepestNodes fun _ctxt info _arr =>
         match info with
         | .ofCustomInfo ⟨stx, data⟩ =>
@@ -180,11 +194,9 @@ partial def handleHl (params : DocumentHighlightParams) (prev : RequestTask Docu
         | _ => none
       if nodes.isEmpty then
         if let some hls := syntactic text pos snap.stx then
-          let hls := hls.filterMap (fun stx : Syntax => stx.lspRange text) |>.map ({range := · : DocumentHighlight})
-          if hls.isEmpty then prev.get
-          else pure hls
+          return hls.filterMap (fun stx : Syntax => stx.lspRange text) |>.map ({range := · : DocumentHighlight})
         else
-          prev.get
+          return #[]
       else
         let mut hls := #[]
         for node in nodes do
@@ -245,30 +257,6 @@ open Lean Lsp
 def rangeContains (outer inner : Lsp.Range) :=
   outer.start < inner.start && inner.«end» ≤ outer.«end» ||
   outer.start == inner.start && inner.«end» < outer.«end»
-
--- mutual
---   partial def graftSymbolOnto (inner outer : DocumentSymbol) : Option DocumentSymbol :=
---     match outer, inner with
---     | .mk s1, .mk s2 =>
---       if rangeContains s1.range s2.range then
---         -- add as child
---         some <| .mk {s1 with children? := some (graftSymbolInto inner (s1.children?.getD #[])) }
---       else
---         -- signal peer
---         none
-
---   partial def graftSymbolInto (inner : DocumentSymbol) (outer : Array DocumentSymbol) : Array DocumentSymbol := Id.run do
---     let mut i := 0
---     while h : i < outer.size do
---       let sym := outer[i]
---       if let some sym' := graftSymbolOnto inner sym then
---         return outer.set i sym'
---       i := i + 1
---     return outer.push inner
--- end
-
--- def graftSymbols (inner outer : Array DocumentSymbol) : Array DocumentSymbol :=
---   inner.foldr graftSymbolInto outer
 
 partial def mergeInto (sym : DocumentSymbol) (existing : Array DocumentSymbol) : Array DocumentSymbol := Id.run do
   let ⟨sym⟩ := sym
@@ -345,24 +333,19 @@ def findSimpleDocStringCompat? (env : Environment) (declName : Name) : BaseIO (O
 open Lean Server Lsp RequestM in
 partial def handleSyms (_params : DocumentSymbolParams) (prev : RequestTask DocumentSymbolResult) : RequestM (RequestTask DocumentSymbolResult) := do
   let doc ← readDoc
-  let text := doc.meta.text
-  -- bad: we have to wait on elaboration of the entire file before we can report document symbols
   let t := doc.cmdSnaps.waitAll
-  let syms : RequestTask DocumentSymbolResult ←
-    fun _ : RequestContext =>
-      BaseIO.toEIO <| ServerTask.mk <$> BaseIO.mapTask (t := t.task) fun (snaps, _) => do
-        let sections ← getSections text snaps
-        return Except.ok { syms := sections : DocumentSymbolResult }
-  let syms' := t.mapCheap fun (snaps, _) => do
-    return { syms := ofInterest text snaps : DocumentSymbolResult }
-  let out ← mergeResponses (← mergeResponses syms syms' combineAnswers) prev combineAnswers
-  pure <| out.mapCheap fun
-    | .error e => throw e
-    | .ok ⟨vs⟩ => pure ⟨vs.map removeFalsy⟩
-  --pure syms
+  bindTaskCostly t fun (snaps, _) => do
+    let text := doc.meta.text
+    let syms : DocumentSymbolResult := { syms := ← getSections text snaps }
+    let syms' : DocumentSymbolResult := { syms := ofInterest text snaps }
+    let out ← mergeResponses (.pure <| combineAnswers' syms syms') prev combineAnswers
+    pure <| out.mapCheap (·.map fun ⟨vs⟩ => ⟨vs.map removeFalsy⟩)
+
   where
     combineAnswers (x y : Option DocumentSymbolResult) : DocumentSymbolResult :=
       ⟨mergeManyInto (x.getD ⟨{}⟩).syms (y.getD ⟨{}⟩).syms⟩
+    combineAnswers' (x y : DocumentSymbolResult) : DocumentSymbolResult :=
+      ⟨mergeManyInto x.syms y.syms⟩
     tocSym (env) (text : FileMap) : TOC → BaseIO (Option DocumentSymbol)
       | .mk title titleStx endPos children => do
         let some selRange@⟨start, _⟩ := titleStx.lspRange text
@@ -871,7 +854,7 @@ def handleHover (params : HoverParams) (prev : RequestTask (Option Hover)) : Req
   let text := doc.meta.text
   let pos := text.lspPosToUtf8Pos params.position
   bindWaitFindSnap doc (·.endPos + ' ' >= pos) (notFoundX := pure prev) fun snap => do
-    withFallbackResponse prev <| pure <| Task.spawn <| fun () => do
+    withFallbackAs (·.isSome) prev <| pure <| Task.spawn fun () => show Except RequestError (Option Hover) from do
       let nodes : List (Syntax × CustomHover) := snap.infoTree.deepestNodes fun _ctxt info _arr =>
         match info with
         | .ofCustomInfo ⟨stx, data⟩ =>
@@ -880,7 +863,7 @@ def handleHover (params : HoverParams) (prev : RequestTask (Option Hover)) : Req
           else none
         | _ => none
       match nodes with
-      | [] => prev.get
+      | [] => pure none
       | h :: hs =>
         let mut best := h
         for node@(stx, _) in hs do
