@@ -18,6 +18,7 @@ import Verso.Doc.ArgParse
 import Verso.Doc.Lsp
 import Verso.Doc.Suggestion
 import Verso.Hover
+import Verso.WithoutAsync
 open Verso.Output Html
 open Lean (RBMap)
 
@@ -336,7 +337,7 @@ where
 open SubVerso.Highlighting Highlighted in
 @[code_block_expander lean]
 def lean : CodeBlockExpander
-  | args, str => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"lean block") <| do
+  | args, str => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"lean block") <| withoutAsync do
     let config ← LeanBlockConfig.parse.run args
     let x := config.exampleContext
     let (commandState, state) ← match exampleContextExt.getState (← getEnv) |>.contexts.find? x.getId with
@@ -400,6 +401,153 @@ def lean : CodeBlockExpander
         pure #[← ``(Block.other (Blog.BlockExt.highlightedCode $(quote x.getId) $(quote hls)) #[Block.code $(quote str.getString)])]
       else
         pure #[]
+
+
+structure LeanInlineConfig where
+  exampleContext : Ident
+  /-- The expected type of the term -/
+  type : Option StrLit
+  /-- Universe variables allowed in the term -/
+  universes : Option StrLit
+
+def LeanInlineConfig.parse [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m] : ArgParse m LeanInlineConfig :=
+  LeanInlineConfig.mk <$> .positional `exampleContext .ident <*> .named `type strLit true <*> .named `universes strLit true
+where
+  strLit : ValDesc m StrLit := {
+    description := "string literal containing an expected type",
+    get
+      | .str s => pure s
+      | other => throwError "Expected string, got {repr other}"
+  }
+
+open Lean Elab Command in
+/--
+Runs an elaborator action with the current namespace and open declarations that have been found via
+inline Lean blocks.
+-/
+def runWithOpenDecls (scopes : List Scope) (act : TermElabM α) : TermElabM α := do
+  let scope := scopes.head!
+  withTheReader Core.Context ({· with currNamespace := scope.currNamespace, openDecls := scope.openDecls}) do
+    let initNames := (← getThe Term.State).levelNames
+    try
+      modifyThe Term.State ({· with levelNames := scope.levelNames})
+      act
+    finally
+      modifyThe Term.State ({· with levelNames := initNames})
+
+open Lean Elab Command in
+/--
+Runs an elaborator action with the section variables that have been established via inline Lean code.
+
+This is a version of `Lean.Elab.Command.runTermElabM`.
+-/
+
+def runWithVariables (scopes : List Scope) (elabFn : Array Expr → TermElabM α) : TermElabM α := do
+  let scope := scopes.head!
+  Term.withAutoBoundImplicit do
+    let msgLog ← Core.getMessageLog
+    Term.elabBinders scope.varDecls fun xs => do
+      -- We need to synthesize postponed terms because this is a checkpoint for the auto-bound implicit feature
+      -- If we don't use this checkpoint here, then auto-bound implicits in the postponed terms will not be handled correctly.
+      Term.synthesizeSyntheticMVarsNoPostponing
+      let mut sectionFVars := {}
+      for uid in scope.varUIds, x in xs do
+        sectionFVars := sectionFVars.insert uid x
+      withReader ({ · with sectionFVars := sectionFVars }) do
+        -- We don't want to store messages produced when elaborating `(getVarDecls s)` because they have already been saved when we elaborated the `variable`(s) command.
+        -- So, we use `Core.resetMessageLog`.
+        Core.setMessageLog msgLog
+        let someType := mkSort levelZero
+        Term.addAutoBoundImplicits' xs someType fun xs _ =>
+          Term.withoutAutoBoundImplicit <| elabFn xs
+
+private def withInfoTreeContext {m α} [Monad m] [MonadInfoTree m] [MonadFinally m] (x : m α) (mkInfoTree : PersistentArray InfoTree → m InfoTree) : m (α × InfoTree) := do
+    let treesSaved ← getResetInfoTrees
+    MonadFinally.tryFinally' x fun _ => do
+      let st ← getInfoState
+      let tree ← mkInfoTree st.trees
+      modifyInfoTrees fun _ => treesSaved.push tree
+      pure tree
+where
+  modifyInfoTrees {m} [Monad m] [MonadInfoTree m] (f : PersistentArray InfoTree → PersistentArray InfoTree) : m Unit :=
+    modifyInfoState fun s => { s with trees := f s.trees }
+
+open SubVerso.Highlighting Highlighted in
+@[role_expander lean]
+def leanInline : RoleExpander
+  | args, elts => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"lean block") <| do
+    let config ← LeanInlineConfig.parse.run args
+    let #[code] := elts
+      | throwError "Expected precisely one code element"
+    let `(inline|code( $str:str )) := code
+      | throwErrorAt code "Expected an inline code element"
+    let x := config.exampleContext
+    let (commandState, _) ← match exampleContextExt.getState (← getEnv) |>.contexts.find? x.getId with
+      | some (.inline commandState state) => pure (commandState, state)
+      | some (.subproject ..) => throwErrorAt x "Expected an example context for inline Lean, but found a subproject"
+      | none => throwErrorAt x "Can't find example context"
+
+    let {env, scopes, ngen, ..} := commandState
+    let {openDecls, currNamespace, opts, ..} := scopes.head!
+
+
+    let altStr ← parserInputString str
+
+    let leveller {α} : TermElabM α → TermElabM α :=
+      if let some us := config.universes then
+        let us :=
+          us.getString.splitOn " " |>.filterMap fun (s : String) =>
+            if s.isEmpty then none else some s.toName
+        Elab.Term.withLevelNames us
+      else id
+
+    match Parser.runParserCategory env `term altStr (← getFileName) with
+    | .error e => throwErrorAt str e
+    | .ok stx => withOptions (fun _ => opts) <| runWithOpenDecls scopes <| runWithVariables scopes fun _ => do
+      let (newMsgs, type, tree) ← do
+        let initMsgs ← Core.getMessageLog
+        try
+          Core.resetMessageLog
+          let (tree', t) ← do
+
+            let expectedType ← config.type.mapM fun (s : StrLit) => do
+              match Parser.runParserCategory env `term s.getString (← getFileName) with
+              | .error e => throwErrorAt str e
+              | .ok stx => withEnableInfoTree false do
+                let t ← leveller <| Elab.Term.elabType stx
+                Term.synthesizeSyntheticMVarsNoPostponing
+                let t ← instantiateMVars t
+                if t.hasExprMVar || t.hasLevelMVar then
+                  throwErrorAt s "Type contains metavariables: {t}"
+                pure t
+
+            let e ← leveller <| Elab.Term.elabTerm (catchExPostpone := true) stx expectedType
+            Term.synthesizeSyntheticMVarsNoPostponing
+            let e ← Term.levelMVarToParam (← instantiateMVars e)
+            let t ← Meta.inferType e >>= instantiateMVars >>= (Meta.ppExpr ·)
+            let t := Std.Format.group <| (← Meta.ppExpr e) ++ (" :" ++ .line) ++ t
+
+            Term.synthesizeSyntheticMVarsNoPostponing
+            let ctx := PartialContextInfo.commandCtx {
+              env, fileMap := ← getFileMap, mctx := ← getMCtx, currNamespace, openDecls, options := opts, ngen
+            }
+            pure <| (InfoTree.context ctx (.node (Info.ofCommandInfo ⟨`VersoBlog.leanInline, code⟩) (← getInfoState).trees), t)
+          pure (← Core.getMessageLog, t, tree')
+        finally
+          Core.setMessageLog initMsgs
+      pushInfoTree tree
+
+      if let `(inline|role{%$s $f $_*}%$e[$_*]) ← getRef then
+        Hover.addCustomHover (mkNullNode #[s, e]) type
+        Hover.addCustomHover f type
+
+      for msg in newMsgs.toArray do
+          logMessage {msg with
+            isSilent := msg.isSilent || msg.severity != .error
+          }
+      let hls := (← highlight stx #[] (PersistentArray.empty.push tree))
+
+      pure #[← ``(Inline.other (Blog.InlineExt.highlightedCode $(quote config.exampleContext.getId) $(quote hls)) #[Inline.code $(quote str.getString)])]
 
 open Lean.Elab.Tactic.GuardMsgs
 export WhitespaceMode (exact lax normalized)

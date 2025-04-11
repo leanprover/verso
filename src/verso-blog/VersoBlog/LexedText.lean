@@ -35,7 +35,10 @@ def highlight (hl : Highlighter) (str : String) : IO LexedText := do
   let pmctx : ParserModuleContext := {env := env, options := {}}
   let mut s := mkParserState str
   repeat
-    if str.atEnd s.pos then break
+    if str.atEnd s.pos then
+      if let some txt := unHl then
+        out := out.push (none, txt)
+      break
     let s' := hl.lexer.run ictx pmctx {} s
     if s'.hasError then
       let c := str.get! s.pos

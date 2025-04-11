@@ -7,7 +7,6 @@ import Lean.Elab.InfoTree.Types
 
 import Verso
 import VersoManual.Basic
-import VersoManual.WithoutAsync
 import SubVerso.Examples
 
 open SubVerso.Highlighting

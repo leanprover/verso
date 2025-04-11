@@ -11,7 +11,6 @@ import SubVerso.Highlighting
 import SubVerso.Examples
 
 import Verso
-import VersoManual.WithoutAsync
 
 import VersoManual.Basic
 import VersoManual.InlineLean.Block
