@@ -23,25 +23,22 @@ open Lean
 
 
 open Lean Server in
+
+open Lean Server in
 /--
 Runs `act` to handle a request. If the result satisfies `accept`, then it is returned.
 
 If the result does not satisfy request, then it is handled by the prior response `resp`. If it
 fails, then the error is logged and `resp` is used.
 -/
-def withFallbackAs (accept : α → Bool) (resp : RequestTask α) (act : RequestM (RequestTask α)) : RequestM (RequestTask α) := do
-  try
-    RequestM.bindTaskCheap (← act) fun
-      | .error e => do
-        (← read).hLog.putStrLn s!"Doc LSP request failed: {e.message}"
-        pure resp
-      | .ok v =>
-        if accept v then pure (RequestTask.pure v)
-        else pure resp
-  catch e =>
-    (← read).hLog.putStrLn s!"Creating doc LSP request failed: {e.message}"
-    return resp
-
+def withFallbackAs (accept : α → Bool) (resp : RequestTask α) (act : RequestM α) : RequestM (RequestTask α) := do
+  RequestM.bindTaskCostly (← act.asTask) fun
+    | .error e => do
+      (← read).hLog.putStrLn s!"Doc LSP request failed: {e.message}"
+      pure resp
+    | .ok v =>
+      if accept v then pure (.pure v)
+      else pure resp
 
 defmethod Syntax.containsPos (s : Syntax) (p : String.Pos) : Bool :=
   match span s.getHeadInfo, span s.getTailInfo with
@@ -52,7 +49,6 @@ where
     | .original (pos := start) (endPos := stop) .. => some (start, stop)
     | .synthetic (pos := start) (endPos := stop) .. => some (start, stop)
     | _ => none
-
 
 defmethod Syntax.lspRange (text : FileMap) (s : Syntax) : Option Lsp.Range :=
   match span s.getHeadInfo, span s.getTailInfo with
@@ -131,7 +127,7 @@ def handleDef (params : TextDocumentPositionParams) (prev : RequestTask (Array L
   let text := doc.meta.text
   let pos := text.lspPosToUtf8Pos params.position
   bindWaitFindSnap doc (·.endPos + ' ' >= pos) (notFoundX := pure prev) fun snap => do
-    withFallbackAs (!·.isEmpty) prev <| pure <| prev.mapCheap fun prevLocs => do
+    RequestM.mapTaskCostly prev fun prevLocs => do
       let nodes := snap.infoTree.deepestNodes fun _ctxt info _arr =>
         match info with
         | .ofCustomInfo ⟨stx, data⟩ =>
@@ -161,7 +157,7 @@ def handleRefs (params : ReferenceParams) (prev : RequestTask (Array Location)) 
   let text := doc.meta.text
   let pos := text.lspPosToUtf8Pos params.position
   bindWaitFindSnap doc (·.endPos + ' ' >= pos) (notFoundX := pure prev) fun snap => do
-    withFallbackAs (!·.isEmpty) prev <| pure <| Task.spawn fun () => show Except RequestError _ from do
+    withFallbackAs (!·.isEmpty) prev <| do
       let nodes := snap.infoTree.deepestNodes fun _ctxt info _arr =>
         match info with
         | .ofCustomInfo ⟨stx, data⟩ =>
@@ -184,7 +180,7 @@ partial def handleHl (params : DocumentHighlightParams) (prev : RequestTask Docu
   let text := doc.meta.text
   let pos := text.lspPosToUtf8Pos params.position
   bindWaitFindSnap doc (·.endPos + ' ' >= pos) (notFoundX := pure prev) fun snap =>
-    withFallbackAs (!·.isEmpty) prev <| pure <| Task.spawn fun () => show Except RequestError _ from do
+    withFallbackAs (!·.isEmpty) prev <| do
       let nodes : List (_ ⊕ _) := snap.infoTree.deepestNodes fun _ctxt info _arr =>
         match info with
         | .ofCustomInfo ⟨stx, data⟩ =>
@@ -314,14 +310,14 @@ partial def removeFalsy (sym : DocumentSymbol) : DocumentSymbol :=
 
 open Lean Server Lsp RequestM in
 def mergeResponses (docTask : RequestTask α) (leanTask : RequestTask β) (f : Option α → Option β → γ) : RequestM (RequestTask γ) := do
-  pure <| docTask.bindCheap fun
+  pure <| docTask.bindCostly fun
   | .ok docResult =>
-    leanTask.bindCheap fun
+    leanTask.bindCostly fun
     | .ok leanResult =>
       .mk <| .pure <| pure <| f (some docResult) (some leanResult)
     | .error _ => .mk <| .pure <| pure <| f (some docResult) none
   | .error _ =>
-    leanTask.bindCheap fun
+    leanTask.bindCostly fun
     | .ok leanResult => .mk <| .pure <| pure <| f none (some leanResult)
     | .error e => .pure <| throw e
 
@@ -339,7 +335,7 @@ partial def handleSyms (_params : DocumentSymbolParams) (prev : RequestTask Docu
     let syms : DocumentSymbolResult := { syms := ← getSections text snaps }
     let syms' : DocumentSymbolResult := { syms := ofInterest text snaps }
     let out ← mergeResponses (.pure <| combineAnswers' syms syms') prev combineAnswers
-    pure <| out.mapCheap (·.map fun ⟨vs⟩ => ⟨vs.map removeFalsy⟩)
+    pure <| out.mapCostly (·.map fun ⟨vs⟩ => ⟨vs.map removeFalsy⟩)
 
   where
     combineAnswers (x y : Option DocumentSymbolResult) : DocumentSymbolResult :=
@@ -605,25 +601,55 @@ open Lean Server Lsp RequestM in
 def snapshotsTokens (beginPos : String.Pos) (text : FileMap) (snaps : List Snapshots.Snapshot) : Array SemanticTokenEntry :=
   snaps.foldl (init := #[]) fun toks snap => toks ++ snapshotTokens beginPos text snap
 
+open Lean Server Lsp IO in
+partial def getFinishedPrefixWithTimeout' (xs : AsyncList ε α) (timeoutMs : UInt32)
+    (cancelTks : List (ServerTask Unit) := []) : BaseIO (ServerTask (List α × Option ε × Bool)) := do
+  let timeoutTask : ServerTask (Unit ⊕ Except ε (AsyncList ε α)) ←
+    if timeoutMs == 0 then
+      pure <| ServerTask.pure (Sum.inl ())
+    else
+      ServerTask.BaseIO.asTask do
+        IO.sleep timeoutMs
+        return .inl ()
+  go timeoutTask xs
+where
+  go (timeoutTask : ServerTask (Unit ⊕ Except ε (AsyncList ε α)))
+      (xs : AsyncList ε α) : BaseIO (ServerTask (List α × Option ε × Bool)) := do
+    match xs with
+    | .cons hd tl =>
+      let tlTask ← go timeoutTask tl
+      pure <| tlTask.mapCheap fun ⟨tl, e?, isComplete⟩ => ⟨hd :: tl, e?, isComplete⟩
+    | .nil => return .pure ⟨[], none, true⟩
+    | .delayed tl =>
+      let tl : ServerTask (Except ε (AsyncList ε α)) := tl
+      let tl := tl.mapCheap .inr
+      let cancelTks := cancelTks.map (·.mapCheap .inl)
+      let r ← ServerTask.waitAny (tl :: cancelTks ++ [timeoutTask])
+      match r with
+      | .inl _ => return ⟨[], none, false⟩ -- Timeout or cancellation - stop waiting
+      | .inr (.ok tl) => go timeoutTask tl
+      | .inr (.error e) => return ⟨[], some e, true⟩
+
 open Lean Server Lsp RequestM in
 partial def handleTokens (prev : RequestTask SemanticTokens)
     (beginPos : String.Pos) (endPos? : Option String.Pos) :
     RequestM (RequestTask (LspResponse SemanticTokens)) := do
+  let ctx ← read
   let doc ← readDoc
   let text := doc.meta.text
   if let some endPos := endPos? then
     let t := doc.cmdSnaps.waitUntil (·.endPos >= endPos)
     let toks : RequestTask (Array SemanticTokenEntry) :=
-      t.mapCheap fun (snaps, _) => pure <| snapshotsTokens beginPos text snaps
+      t.mapCostly fun (snaps, _) => pure <| snapshotsTokens beginPos text snaps
     let response ← mergeIntoPrev toks
     return response.mapCheap fun t =>
       t.map ({ response := ·, isComplete := true })
   else
-    let (snaps, _, isComplete) ← doc.cmdSnaps.getFinishedPrefixWithTimeout 2000
+    let (snaps, _, isComplete) ← doc.cmdSnaps.getFinishedPrefixWithTimeout 2000 (cancelTks := ctx.cancelTk.cancellationTasks)
     let toks : Array SemanticTokenEntry := snapshotsTokens beginPos text snaps
     let response ← mergeIntoPrev (.pure toks)
-    return response.mapCheap fun t =>
-      t.map ({ response := ·, isComplete := isComplete })
+    pure <| response.mapCheap fun t => t.map ({ response := ·, isComplete := isComplete })
+
 where
   mergeIntoPrev (toks : RequestTask (Array SemanticTokenEntry)) :=
     mergeResponses toks prev fun
@@ -638,11 +664,14 @@ def handleTokensRange (params : SemanticTokensRangeParams) (prev : RequestTask S
   let text := doc.meta.text
   let beginPos := text.lspPosToUtf8Pos params.range.start
   let endPos := text.lspPosToUtf8Pos params.range.end
-  handleTokens prev beginPos endPos <&> fun t => t.mapCheap (fun r => r.map LspResponse.response)
+  handleTokens prev beginPos endPos <&> fun t => t.mapCheap (LspResponse.response <$> ·)
 
 open Lean Server Lsp RequestM in
 def handleTokensFull (_params : SemanticTokensParams) (prev : RequestTask SemanticTokens) : RequestM (RequestTask SemanticTokens) :=
-  handleTokens prev 0 none <&> fun t => t.mapCheap (fun r => r.map LspResponse.response)
+  handleTokens prev 0 none <&> fun t => t.mapCheap (LspResponse.response <$> ·)
+
+open Lean.Server in
+
 
 open Lean Server Lsp RequestM in
 open Lean.Server.FileWorker in
@@ -798,7 +827,8 @@ partial def handleFolding (_params : FoldingRangeParams) (prev : RequestTask (Ar
   let text := doc.meta.text
   -- bad: we have to wait on elaboration of the entire file before we can report folding
   let t := doc.cmdSnaps.waitAll
-  let folds := t.mapCheap fun (snaps, _) => pure <| getSections text snaps ++ getSyntactic text snaps
+  let folds := t.mapCostly fun (snaps, _) =>
+    pure <| getSections text snaps ++ getSyntactic text snaps ++ getLists text snaps
   combine folds prev
 where
     combine := (mergeResponses · · (·.getD #[] ++ ·.getD #[]))
@@ -863,7 +893,7 @@ def handleHover (params : HoverParams) (prev : RequestTask (Option Hover)) : Req
   let text := doc.meta.text
   let pos := text.lspPosToUtf8Pos params.position
   bindWaitFindSnap doc (·.endPos + ' ' >= pos) (notFoundX := pure prev) fun snap => do
-    withFallbackAs (·.isSome) prev <| pure <| Task.spawn fun () => show Except RequestError (Option Hover) from do
+    withFallbackAs (·.isSome) prev <| do
       let nodes : List (Syntax × CustomHover) := snap.infoTree.deepestNodes fun _ctxt info _arr =>
         match info with
         | .ofCustomInfo ⟨stx, data⟩ =>
