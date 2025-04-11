@@ -7,7 +7,6 @@ import Lean.Elab.InfoTree.Types
 
 import Verso
 import VersoManual.Basic
-import VersoManual.WithoutAsync
 import VersoManual.InlineLean.Outputs
 import SubVerso.Examples
 

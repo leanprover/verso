@@ -5,7 +5,6 @@ Author: David Thrane Christiansen
 -/
 import Verso
 import VersoManual.Basic
-import VersoManual.WithoutAsync
 
 open SubVerso.Highlighting
 

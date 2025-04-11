@@ -11,7 +11,7 @@ import SubVerso.Compat
 
 open Lean Elab Command
 
-namespace Verso.Genre.Manual
+namespace Verso
 
 def commandWithoutAsync : (act : CommandElabM α) → CommandElabM α :=
   SubVerso.Compat.commandWithoutAsync

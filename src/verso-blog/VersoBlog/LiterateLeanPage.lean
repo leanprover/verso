@@ -17,6 +17,9 @@ open Verso.Doc.Concrete (stringToInlines)
 
 namespace Verso.Genre.Blog.Literate
 
+structure LitPageConfig where
+  header : Bool := false
+
 open System in
 def loadModuleContent
     (leanProject : FilePath) (mod : String)
@@ -355,13 +358,16 @@ def getFirstMessage : Highlighted → Option (Highlighted.Span.Kind × String)
 
 open Verso Doc Elab PartElabM in
 open Lean.Parser.Command in
-partial def docFromMod (project : System.FilePath) (mod : String) (content : Array Json) (rewriter : Array (List Pat × List Template)) : PartElabM Unit := do
+partial def docFromMod (project : System.FilePath) (mod : String) (config : LitPageConfig) (content : Array Json) (rewriter : Array (List Pat × List Template)) : PartElabM Unit := do
   let mut mdHeaders : Array Nat := #[]
   let helper ← Helper.fromModule project mod
   for cmd in content do
     let (kind, hl) ← phrase cmd
     match kind with
-    | ``Lean.Parser.Module.header => pure ()
+    | ``Lean.Parser.Module.header =>
+      if config.header then
+        addBlock (← ``(Block.other (BlockExt.highlightedCode `name $(quote hl)) Array.mkArray0))
+      else pure ()
     | ``moduleDoc =>
       let str ← getModuleDocString hl
       let some ⟨mdBlocks⟩ := MD4Lean.parse str
@@ -493,7 +499,7 @@ syntax rewrites := "rewriting " ("| " url_case)+
 open Verso Doc in
 open Lean Elab Command in
 open PartElabM in
-def elabLiteratePage (x : Ident) (path : StrLit) (mod : Ident) (title : StrLit) (genre : Term) (metadata? : Option Term) (rw : Option (TSyntax ``rewrites)) : CommandElabM Unit :=
+def elabLiteratePage (x : Ident) (path : StrLit) (mod : Ident) (config : LitPageConfig) (title : StrLit) (genre : Term) (metadata? : Option Term) (rw : Option (TSyntax ``rewrites)) : CommandElabM Unit :=
   withTraceNode `verso.blog.literate (fun _ => pure m!"Literate '{title.getString}'") do
 
   let rewriter ← rw.mapM fun
@@ -514,7 +520,7 @@ def elabLiteratePage (x : Ident) (path : StrLit) (mod : Ident) (title : StrLit) 
       modifyThe PartElabM.State fun st => {st with partContext.metadata := some metadata}
 
     withTraceNode `verso.blog.literate.renderMod (fun _ => pure m!"Rendering '{mod}'") <|
-      docFromMod path.getString mod.getId.toString jsons rewriter
+      docFromMod path.getString mod.getId.toString config jsons rewriter
 
   let finished := st'.partContext.toPartFrame.close 0
   let finished :=
@@ -546,6 +552,7 @@ def ofRewrites [Monad m] [MonadQuotation m] : TSyntax ``rewrites → m Term
       `(fun s => (url_subst(s) $case) <|> $next s)
   | _ => pure ⟨.missing⟩
 
+open Lean.Parser.Tactic
 
 /--
 Creates a page from a literate Lean module with Markdown module docstrings in it, performing a
@@ -563,7 +570,7 @@ directory that contains a toolchain file and a Lake configuration (`lakefile.tom
 Set the option `verso.literateMarkdown.logInlines` to `true` to see the error messages that
 prevented elaboration of inline elements.
 -/
-syntax "def_literate_page " ident " from " ident " in " str " as " str (" with " term)? (rewrites)? : command
+syntax "def_literate_page " ident optConfig " from " ident " in " str " as " str (" with " term)? (rewrites)? : command
 /--
 Creates a post from a literate Lean module with Markdown module docstrings in it, performing a
 best-effort conversion from a large subset of Markdown to Verso documents. Inline code elements are
@@ -580,22 +587,29 @@ directory that contains a toolchain file and a Lake configuration (`lakefile.tom
 Set the option `verso.literateMarkdown.logInlines` to `true` to see the error messages that
 prevented elaboration of inline elements.
 -/
-syntax "def_literate_post " ident " from " ident " in " str " as " str (" with " term)? (rewrites)? : command
+syntax "def_literate_post " ident optConfig " from " ident " in " str " as " str (" with " term)? (rewrites)? : command
 
+
+
+declare_config_elab litPageConfig LitPageConfig
 
 open Verso Doc in
 open Lean Elab Command in
 elab_rules : command
-  | `(def_literate_page $x from $mod in $path as $title $[with $metadata]? $[$rw:rewrites]?) => do
+  | `(def_literate_page $x $cfg:optConfig from $mod in $path as $title $[with $metadata]? $[$rw:rewrites]?) => do
+    let (config, _) ← liftTermElabM <| do
+      litPageConfig cfg |>.run {elaborator := `x} |>.run {goals := []}
     withScope (fun sc => {sc with opts := Elab.async.set sc.opts false}) do
       let genre ← `(Page)
-      elabLiteratePage x path mod title genre metadata rw
+      elabLiteratePage x path mod config title genre metadata rw
 
 
 open Verso Doc in
 open Lean Elab Command in
 elab_rules : command
-  | `(def_literate_post $x from $mod in $path as $title $[with $metadata]? $[$rw:rewrites]?) =>
+  | `(def_literate_post $x $cfg:optConfig from $mod in $path as $title $[with $metadata]? $[$rw:rewrites]?) => do
+    let (config, _) ← liftTermElabM <| do
+      litPageConfig cfg |>.run {elaborator := `x} |>.run {goals := []}
     withScope (fun sc => {sc with opts := Elab.async.set sc.opts false}) do
       let genre ← `(Post)
-      elabLiteratePage x path mod title genre metadata rw
+      elabLiteratePage x path mod config title genre metadata rw

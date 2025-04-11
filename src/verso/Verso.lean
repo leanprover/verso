@@ -31,3 +31,4 @@ import Verso.Parser
 import Verso.Parser.Lean
 import Verso.Syntax
 import Verso.SyntaxUtils
+import Verso.WithoutAsync
