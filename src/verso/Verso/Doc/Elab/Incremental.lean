@@ -141,6 +141,7 @@ def incrementallyElabCommand
     : CommandElabM Unit := do
   let cmd := mkNullNode steps
   if let some snap := (← read).snap? then
+    let cancelTk? := (← read).cancelTk?
     withReader (fun ρ => {ρ with snap? := none}) do
       let (finalState, nextPromise) ← run <| do
         let mut oldSnap? := snap.old?.bind (·.val.get.toTyped? (α := Internal.IncrementalSnapshot))
@@ -150,7 +151,7 @@ def incrementallyElabCommand
         snap.new.resolve <| DynamicSnapshot.ofTyped <| show Internal.IncrementalSnapshot from {
           underlying := initData,
           dynData := .mk <| mkSnap (.pure (← get)),
-          next := some {stx? := some cmd, task := nextPromise.result?},
+          next := some {stx? := some cmd, task := nextPromise.result?, cancelTk?},
           «syntax» := cmd
         }
         initAct
@@ -181,7 +182,7 @@ def incrementallyElabCommand
           nextPromise.resolve {
             underlying := (← freshSnapshot),
             dynData := (.mk <| mkSnap <| updatedState.result?),
-            next := (some {stx? := some (mkNullNode <| steps.extract i steps.size), task := nextNextPromise.result?})
+            next := (some {stx? := some (mkNullNode <| steps.extract i steps.size), task := nextNextPromise.result?, cancelTk?})
             «syntax» := b
           }
 

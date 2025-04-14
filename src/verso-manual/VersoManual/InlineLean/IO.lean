@@ -22,7 +22,6 @@ import VersoManual.InlineLean.IO.Context
 import VersoManual.InlineLean.Block
 
 
-
 open Lean Elab
 open Verso ArgParse Doc Elab Genre.Manual Html Code Highlighted.WebAssets
 open SubVerso.Highlighting Highlighted
@@ -213,8 +212,9 @@ where
 
 namespace IOExample
 
+open SubVerso in
 private def getSubversoDir : IO System.FilePath := do
-  let srcSearchPath ← initSrcSearchPath
+  let srcSearchPath ← Compat.initSrcSearchPath
   let libSearchPath := (← IO.getEnv "LEAN_PATH")
     |>.map System.SearchPath.parse
     |>.getD []
