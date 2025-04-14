@@ -8,6 +8,7 @@ set_option pp.rawOnError true
 #doc (Manual) "Writing Documentation in Lean with Verso" =>
 
 %%%
+shortTitle := "Documentation with Verso"
 authors := ["David Thrane Christiansen"]
 %%%
 
@@ -57,6 +58,9 @@ results in
 {docstring List.forM}
 
 ## More Docstring Examples
+%%%
+shortTitle := "More Docstrings"
+%%%
 
 Here are some docstrings as rendered by Verso.
 They include heuristic elaboration of code items in their Markdown that attempts to guess what was meant.
@@ -91,6 +95,10 @@ They include heuristic elaboration of code items in their Markdown that attempts
 {docstring Thunk}
 
 # Technical Terminology
+%%%
+shortTitle := "Glossary"
+tag := "tech-terms"
+%%%
 
 The `deftech` role can be used to annotate the definition of a {tech}[technical term].
 Elsewhere in the document, `tech` can be used to annotate a use site of a technical term.
