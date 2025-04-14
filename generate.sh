@@ -3,7 +3,7 @@
 set -e
 
 echo "Building the user's guide as TeX and HTML"
-lake exe usersguide --depth 2
+lake exe usersguide --with-html-multi --with-html-single --with-tex
 
 echo "Building the user's guide as PDF"
 mkdir -p _out/tex
