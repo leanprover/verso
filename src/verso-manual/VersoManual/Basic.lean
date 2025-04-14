@@ -209,6 +209,10 @@ instance : ToString Numbering where
     | .letter a => toString a
 
 structure PartMetadata where
+  /--
+  A shorter title to be shown in titlebars and tables of contents.
+  -/
+  shortTitle : Option String := none
   authors : List String := []
   date : Option String := none
   /-- The main tag for the part, used for cross-references. -/
@@ -928,16 +932,25 @@ instance : Traverse Manual TraverseM where
             }
           meta := {meta with tag := external}
         let jsonMetadata :=
-          Json.arr ((← read).inPart part |>.headers.map (fun h => json%{"title": $h.titleString, "number": $(h.metadata.bind (·.assignedNumber) |>.map toString)}))
+          Json.arr ((← read).inPart part |>.headers.map (fun h => json%{
+            "title": $h.titleString,
+            "shortTitle": $(h.metadata.bind (·.shortTitle)),
+            "number": $(h.metadata.bind (·.assignedNumber) |>.map toString)
+          }))
         let title := (← read).inPart part |>.headers |>.back? |>.map (·.titleString)
+        let shortTitle := (← read).inPart part |>.headers |>.back? |>.bind (·.metadata) |>.bind (·.shortTitle)
         -- During the traverse pass, the root section (which is unnumbered) is in the header stack.
         -- Including it causes all sections to be unnumbered, so it needs to be dropped here.
         -- TODO: harmonize this situation with HTML generation and give it a clean API
         let num :=
           ((← read).inPart part |>.headers[1:]).toArray.map (fun (h : PartHeader) => h.metadata.bind (·.assignedNumber))
             |>.mapM _root_.id |>.map sectionNumberString
-        modify (·.saveDomainObject sectionDomain n id
-                 |>.saveDomainObjectData sectionDomain n (json%{"context": $jsonMetadata, "title": $title, "sectionNum": $num}))
+        modify (·.saveDomainObject sectionDomain n id |>.saveDomainObjectData sectionDomain n (json%{
+          "context": $jsonMetadata,
+          "title": $title,
+          "shortTitle": $shortTitle,
+          "sectionNum": $num
+        }))
 
     -- Assign section numbers to subsections
     let mut i := 1

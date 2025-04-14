@@ -269,6 +269,7 @@ partial def toc (depth : Nat) (opts : Html.Options Manual IO)
     Part Manual → StateT (State Html) (ReaderT ExtensionImpls IO) Html.Toc
   | .mk title sTitle meta _ sub => do
     let titleHtml ← Html.seq <$> title.mapM (Manual.toHtml (m := ReaderT ExtensionImpls IO) opts.lift ctxt state definitionIds linkTargets {} ·)
+
     let some {id := some id, ..} := meta
       | throw <| .userError s!"No ID for {sTitle} - {repr meta}"
     let some (_, v) := state.externalTags[id]?
@@ -288,6 +289,7 @@ partial def toc (depth : Nat) (opts : Html.Options Manual IO)
     let children ← sub.mapM (fun p => toc depth' opts (ctxt'.inPart p) state definitionIds linkTargets p)
     pure {
       title := titleHtml,
+      shortTitle := meta.bind (·.shortTitle) |>.map Html.ofString,
       path := ctxt'.path,
       id := v.toString,
       sectionNum := ctxt.sectionNumber.mapM _root_.id,
@@ -295,14 +297,14 @@ partial def toc (depth : Nat) (opts : Html.Options Manual IO)
     }
 
 def page (toc : List Html.Toc)
-    (path : Path) (textTitle : String) (htmlBookTitle htmlTitle contents : Html)
+    (path : Path) (textTitle : String) (htmlBookTitle contents : Html)
     (state : TraverseState) (config : Config)
     (localItems : Array Html)
     (showNavButtons : Bool := true) (extraJs : List String := []) : Html :=
   let toc := {
     title := htmlBookTitle, path := #[], id := "" , sectionNum := some #[], children := toc
   }
-  Html.page toc path textTitle htmlTitle htmlBookTitle contents
+  Html.page toc path textTitle htmlBookTitle contents
     state.extraCss (state.extraJs.insertMany extraJs)
     (showNavButtons := showNavButtons)
     (logo := config.logo)
@@ -320,7 +322,7 @@ def relativizeLinks (html : Html) : Html :=
 
 open Output.Html in
 def xref (toc : List Html.Toc) (xrefJson : String) (findJs : String) (state : TraverseState) (config : Config) : Html :=
-  page toc #["find"] "Cross-Reference Redirection" "Cross-Reference Redirection" "Cross-Reference Redirection" {{
+  page toc #["find"] "Cross-Reference Redirection" "Cross-Reference Redirection" {{
     <section>
       <h1 id="title"></h1>
       <div id="message"></div>
@@ -409,6 +411,11 @@ where
       ensureDir (dir.join "-verso-js")
       IO.FS.withFile (dir.join "-verso-js" |>.join name) .write fun h => do
         h.putStr contents
+    let titleToShow : Html :=
+      open Verso.Output.Html in
+      if let some alt := text.metadata.bind (·.shortTitle) then
+        alt
+      else titleHtml
     for (name, contents) in state.extraCssFiles do
       ensureDir (dir.join "-verso-css")
       IO.FS.withFile (dir.join "-verso-css" |>.join name) .write fun h => do
@@ -418,7 +425,7 @@ where
         IO.println s!"Saving {dir.join "index.html"}"
       h.putStrLn Html.doctype
       h.putStrLn <| Html.asString <| relativizeLinks <|
-        page toc ctxt.path text.titleString titleHtml titleHtml pageContent state config thisPageToc (showNavButtons := false)
+        page toc ctxt.path text.titleString titleToShow pageContent state config thisPageToc (showNavButtons := false)
     pure (text, state)
 
 open Verso.Output.Html in
@@ -445,6 +452,11 @@ where
     let toc ← text.subParts.toList.mapM fun p =>
       toc config.htmlDepth opts (ctxt.inPart p) state definitionIds linkTargets p
     let titleHtml ← Html.seq <$> text.title.mapM (Manual.toHtml opts.lift ctxt state definitionIds linkTargets {} ·)
+    let titleToShow : Html :=
+      open Verso.Output.Html in
+      if let some alt := text.metadata.bind (·.shortTitle) then
+        alt
+      else titleHtml
     IO.FS.withFile (root.join "book.css") .write fun h => do
       h.putStrLn Html.Css.pageStyle
     for (src, dest) in config.extraFiles do
@@ -457,7 +469,7 @@ where
       ensureDir (root.join "-verso-css")
       IO.FS.withFile (root.join "-verso-css" |>.join name) .write fun h => do
         h.putStr contents
-    emitPart titleHtml authors toc opts.lift ctxt state definitionIds linkTargets {} true config.htmlDepth root text
+    emitPart titleToShow authors toc opts.lift ctxt state definitionIds linkTargets {} true config.htmlDepth root text
     emitXrefs toc root state config
     pure (text, state)
   /--
@@ -517,7 +529,7 @@ where
         IO.println s!"Saving {dir.join "index.html"}"
       h.putStrLn Html.doctype
       h.putStrLn <| Html.asString <| relativizeLinks <|
-        page bookContents ctxt.path part.titleString bookTitle pageTitleHtml pageContent state config thisPageToc
+        page bookContents ctxt.path part.titleString bookTitle pageContent state config thisPageToc
     if depth > 0 ∧ part.htmlSplit != .never then
       for p in part.subParts do
         let nextFile := p.metadata.bind (·.file) |>.getD (p.titleString.sluggify.toString)

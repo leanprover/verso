@@ -15,6 +15,7 @@ open Verso.Output Html
 
 structure Toc.Meta where
   title : Html
+  shortTitle : Option Html := none
   path : Path
   id : Option String
   sectionNum : Option (Array Numbering)
@@ -308,7 +309,7 @@ Convert a `Toc` to `HTML`.
 The `depth` is a limit for the tree depth of the generated HTML (`none` for no limit).
 -/
 partial def Toc.html (depth : Option Nat) : Toc → Html
-  | {title, path, id, sectionNum, children} =>
+  | {title, shortTitle := _, path, id, sectionNum, children} =>
     if depth = some 0 then .empty
     else
       let page :=
@@ -368,13 +369,14 @@ where
       getHtmlTitle e
     else none
 
+def Toc.titleInToc (toc : Toc) : Html := toc.shortTitle.getD toc.title
 
 def Toc.localHtml (path : Path) (toc : Toc) (localItems : Array Html) : Html := Id.run do
   -- We want the last two levels of ToC to be open, so it's possible to navigate both in the local page and see your location in the chapter.
   let mut toc := toc
   let mut fallbackId : Nat := 0
   let rootId := "----bookRoot"
-  let mut out : Html := splitTocElem true (path.size ≤ 1) path.isEmpty rootId .empty (linkify #[] none toc.title) toc.children
+  let mut out : Html := splitTocElem true (path.size ≤ 1) path.isEmpty rootId .empty (linkify #[] none (toc.titleInToc)) toc.children
   let mut currentPath := #[]
   for lvl in path do
     currentPath := currentPath.push lvl
@@ -388,11 +390,11 @@ def Toc.localHtml (path : Path) (toc : Toc) (localItems : Array Html) : Html := 
       -- In the last position, when `path == currentPath`, the ToC should default to open and show local items if possible
       if path == currentPath then
         if localItems.isEmpty then
-          out := out ++ splitTocElem false true true entryId (sectionNum toc.sectionNum) (linkify currentPath toc.id toc.title) toc.children
+          out := out ++ splitTocElem false true true entryId (sectionNum toc.sectionNum) (linkify currentPath toc.id toc.titleInToc) toc.children
         else
-          out := out ++ splitTocLocalElem false true entryId (sectionNum toc.sectionNum) (linkify currentPath toc.id toc.title) localItems
+          out := out ++ splitTocLocalElem false true entryId (sectionNum toc.sectionNum) (linkify currentPath toc.id toc.titleInToc) localItems
       else
-        out := out ++ splitTocElem false (path.size - currentPath.size == 1) false entryId (sectionNum toc.sectionNum) (linkify currentPath toc.id toc.title) toc.children
+        out := out ++ splitTocElem false (path.size - currentPath.size == 1) false entryId (sectionNum toc.sectionNum) (linkify currentPath toc.id toc.titleInToc) toc.children
     else break
   {{<div class="split-tocs">{{out}}</div>}}
 where
@@ -446,7 +448,7 @@ where
                     else .empty}}
                 </td>
                 <td>
-                  {{linkify c.path c.id c.title}}
+                  {{linkify c.path c.id c.titleInToc}}
                 </td>
               </tr>}}
           }}
@@ -504,7 +506,6 @@ r#"(function(){
 def page
     (toc : Toc) (path : Path)
     (textTitle : String)
-    (_htmlTitle : Html)
     (bookTitle : Html)
     (contents : Html)
     (extraCss : HashSet String)

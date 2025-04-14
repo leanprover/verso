@@ -228,14 +228,21 @@ partial def localContentsCore
   let sectionNumPrefix := sectionNumPrefix <|> sectionString ctxt
 
   if includeTitle then
-    let (html, _) ← p.title.mapM (Manual.toHtml opts ctxt xref {} {} {} ·) |>.run {}
+    let shortTitle := p.metadata.bind (·.shortTitle)
+    let titleHtml ←
+      if let some title := shortTitle then
+        pure (Html.ofString title)
+      else
+        let (html, _) ← p.title.mapM (Manual.toHtml opts ctxt xref {} {} {} ·) |>.run {}
+        pure html
+
     let partDest : Option LocalContentItem := do
       let m ← p.metadata
       let id ← m.id
       let (path, slug) ← xref.externalTags[id]?
       let num := sectionString ctxt |>.map (withoutPrefix · sectionNumPrefix)
 
-      return ⟨some ⟨fromLevel, num⟩, path.link slug.toString, #[(p.titleString, html)], by simp⟩
+      return ⟨some ⟨fromLevel, num⟩, path.link slug.toString, #[(shortTitle.getD p.titleString, titleHtml)], by simp⟩
     if let some here := partDest then modify (·.save here)
 
   if includeSubparts > .none then

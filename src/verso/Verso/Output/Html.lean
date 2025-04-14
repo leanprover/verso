@@ -33,6 +33,8 @@ where
 
 def Html.empty : Html := .seq #[]
 
+def Html.ofString : String → Html := .text true
+
 def Html.append : Html → Html → Html
   | .seq xs, .seq ys => .seq (xs ++ ys)
   | .seq xs, other => .seq (xs.push other)
