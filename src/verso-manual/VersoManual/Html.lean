@@ -504,7 +504,7 @@ r#"(function(){
 def page
     (toc : Toc) (path : Path)
     (textTitle : String)
-    (htmlTitle : Html)
+    (_htmlTitle : Html)
     (bookTitle : Html)
     (contents : Html)
     (extraCss : HashSet String)

@@ -28,6 +28,9 @@ This post demonstrates mixing highlighted examples from multiple Lean versions.
 
 {leanExampleProject examples "examples/website-examples"}
 
+{leanExampleModule exampleMod "examples/website-examples" Examples}
+
+
 # Foo
 
 Here's a tree:
@@ -87,3 +90,8 @@ Tree.branch   (Tree.branch (Tree.leaf) 4 (Tree.branch (Tree.leaf) 3 (Tree.leaf))
 Here's a signature, highlighted and laid out:
 
 {leanCommand examples Nat.rec}
+
+
+Here's a command included from a line number:
+
+{leanCommandAt exampleMod 25}

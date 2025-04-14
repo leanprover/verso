@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 import SubVerso.Helper
+import SubVerso.Module
 import VersoBlog.Basic
 import VersoBlog.LiterateLeanPage.Options
 import MD4Lean
@@ -13,6 +14,7 @@ open Lean
 
 open SubVerso.Highlighting
 open SubVerso.Helper
+open SubVerso.Module
 open Verso.Doc.Concrete (stringToInlines)
 
 namespace Verso.Genre.Blog.Literate
@@ -23,7 +25,7 @@ structure LitPageConfig where
 open System in
 def loadModuleContent
     (leanProject : FilePath) (mod : String)
-    (overrideToolchain : Option String := none) : IO (Array Json) := do
+    (overrideToolchain : Option String := none) : IO (Array ModuleItem) := do
 
   let projectDir := ((← IO.currentDir) / leanProject).normalize
 
@@ -49,7 +51,7 @@ def loadModuleContent
       "ELAN_TOOLCHAIN", "DYLD_LIBRARY_PATH", "LD_LIBRARY_PATH"]
 
 
-  let json ← IO.FS.withTempFile fun h f => do
+  IO.FS.withTempFile fun h f => do
     let cmd := "elan"
     let args := #["run", "--install", toolchain, "lake", "env", "which", "subverso-extract-mod"]
 
@@ -76,14 +78,14 @@ def loadModuleContent
     }
     if res.exitCode != 0 then reportFail projectDir cmd args res
     h.rewind
-    match Json.parse (← h.readToEnd) with
+
+    let .ok (.arr json) := Json.parse (← h.readToEnd)
+      | throw <| IO.userError s!"Expected JSON array"
+    match json.mapM fromJson? with
     | .error err =>
-      throw <| .userError s!"Couldn't parse JSON from output file: {err}"
-    | .ok val =>
-      let .arr xs := val
-        | throw <| .userError s!"Expected a JSON array as a result of module extraction but got:\n{val}"
-      pure xs
-  return json
+      throw <| IO.userError s!"Couldn't parse JSON from output file: {err}\nIn:\n{json}"
+    | .ok val => pure val
+
 where
   decorateOut (name : String) (out : String) : String :=
     if out.isEmpty then "" else s!"\n{name}:\n{out}\n"
@@ -202,9 +204,8 @@ where
       decorateOut "stderr" res.stderr
 
 
-def loadLiteratePage (root : System.FilePath) (module : String) : IO (Array Json) := do
-  let json ← loadModuleContent root module
-  pure json
+def loadLiteratePage (root : System.FilePath) (module : String) : IO (Array ModuleItem) := do
+  loadModuleContent root module
 
 
 inductive Pat where
@@ -322,23 +323,6 @@ where getString : Highlighted → m String
   | .span _ hl => getModuleDocString hl
   | .seq hls => do return (← hls.mapM getString).foldl (init := "") (· ++ ·)
   | .token ⟨_, txt⟩ => pure txt
-
-
-open Verso Doc in
-open Lean.Parser.Command in
-open SubVerso.Highlighting in
-def phrase (content : Json) : m (Name × Highlighted) := do
-  let kind ←
-    match content.getObjValAs? String "kind" with
-    | .error e => throwError e
-    | .ok v => pure (String.toName v)
-  let code ←
-    match content.getObjValAs? Highlighted "code" with
-    | .error e => throwError e
-    | .ok v => pure v
-  return (kind, code)
-
-
 end
 
 def getFirstMessage : Highlighted → Option (Highlighted.Span.Kind × String)
@@ -356,20 +340,34 @@ def getFirstMessage : Highlighted → Option (Highlighted.Span.Kind × String)
   | .text ..
   | .token .. => failure
 
+partial def examplesFromMod [Monad m] [MonadError m]
+    (mod : String) (content : Array ModuleItem) : m (Array (Name × Option (Position × Position) × Highlighted)) := do
+  let modname := mod.toName
+  let mut examples : Array (Name × Option (Position × Position) × Highlighted) := #[]
+  let mut complete : Highlighted := .empty
+  for item in content do
+    let {defines, code, range, ..} := item
+    complete := complete ++ code
+    for x in defines do
+      examples := examples.push (modname ++ x, range, code)
+  return examples
+
 open Verso Doc Elab PartElabM in
 open Lean.Parser.Command in
-partial def docFromMod (project : System.FilePath) (mod : String) (config : LitPageConfig) (content : Array Json) (rewriter : Array (List Pat × List Template)) : PartElabM Unit := do
+partial def docFromMod (project : System.FilePath) (mod : String)
+    (config : LitPageConfig) (content : Array ModuleItem)
+    (rewriter : Array (List Pat × List Template)) : PartElabM Unit := do
   let mut mdHeaders : Array Nat := #[]
   let helper ← Helper.fromModule project mod
   for cmd in content do
-    let (kind, hl) ← phrase cmd
+    let {kind, code, ..} := cmd
     match kind with
     | ``Lean.Parser.Module.header =>
       if config.header then
-        addBlock (← ``(Block.other (BlockExt.highlightedCode `name $(quote hl)) Array.mkArray0))
+        addBlock (← ``(Block.other (BlockExt.highlightedCode `name $(quote code)) Array.mkArray0))
       else pure ()
     | ``moduleDoc =>
-      let str ← getModuleDocString hl
+      let str ← getModuleDocString code
       let some ⟨mdBlocks⟩ := MD4Lean.parse str
         | throwError m!"Failed to parse Markdown: {str}"
       for b in mdBlocks do
@@ -397,15 +395,15 @@ partial def docFromMod (project : System.FilePath) (mod : String) (config : LitP
         | other =>
           addBlock (← ofBlock helper other)
     | ``eval | ``evalBang | ``reduceCmd | ``print | ``printAxioms | ``printEqns | ``«where» | ``version | ``synth | ``check =>
-      addBlock (← ``(Block.other (BlockExt.highlightedCode `name $(quote hl)) Array.mkArray0))
-      if let some (k, msg) := getFirstMessage hl then
+      addBlock (← ``(Block.other (BlockExt.highlightedCode `name $(quote code)) Array.mkArray0))
+      if let some (k, msg) := getFirstMessage code then
         let sev := match k with
           | .error => "error"
           | .info => "information"
           | .warning => "warning"
         addBlock (← ``(Block.other (Blog.BlockExt.htmlDiv $(quote sev)) (Array.mkArray1 (Block.code $(quote msg)))))
     | _ =>
-      addBlock (← ``(Block.other (BlockExt.highlightedCode `name $(quote hl)) Array.mkArray0))
+      addBlock (← ``(Block.other (BlockExt.highlightedCode `name $(quote code)) Array.mkArray0))
   closePartsUntil 0 ⟨0⟩ -- TODO endPos?
 where
   arr (xs : Array Term) : PartElabM Term := do
@@ -511,7 +509,7 @@ def elabLiteratePage (x : Ident) (path : StrLit) (mod : Ident) (config : LitPage
   let titleString := inlinesToString (← getEnv) titleParts
   let initState : PartElabM.State := .init (.node .none nullKind titleParts)
 
-  let jsons ← withTraceNode `verso.blog.literate.loadMod (fun _ => pure m!"Loading '{mod}' in '{path}'") <|
+  let items ← withTraceNode `verso.blog.literate.loadMod (fun _ => pure m!"Loading '{mod}' in '{path}'") <|
     loadLiteratePage path.getString mod.getId.toString
 
   let ((), _st, st') ← liftTermElabM <| PartElabM.run {} initState <| do
@@ -520,7 +518,8 @@ def elabLiteratePage (x : Ident) (path : StrLit) (mod : Ident) (config : LitPage
       modifyThe PartElabM.State fun st => {st with partContext.metadata := some metadata}
 
     withTraceNode `verso.blog.literate.renderMod (fun _ => pure m!"Rendering '{mod}'") <|
-      docFromMod path.getString mod.getId.toString config jsons rewriter
+      docFromMod path.getString mod.getId.toString config items rewriter
+
 
   let finished := st'.partContext.toPartFrame.close 0
   let finished :=
