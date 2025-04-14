@@ -291,24 +291,32 @@ def leanCommand : BlockRoleExpander
 structure LeanCommandAtArgs where
   project : Ident
   line : Nat
+  endLine? : Option Nat
 
 def LeanCommandAtArgs.parse [Monad m] [MonadError m] : ArgParse m LeanCommandAtArgs :=
-  LeanCommandAtArgs.mk <$> .positional `project .ident <*> .positional `line .nat
+  LeanCommandAtArgs.mk <$> .positional `project .ident <*> .positional `line .nat <*> (some <$> .positional `endLine .nat <|> pure none)
+
+private def useRange (startLine : Nat) (endLine? : Option Nat) (range : Position × Position) : Bool :=
+  let startLine' := range.1.line
+  let endLine' := range.2.line
+  if let some endLine := endLine? then
+    !(endLine' < startLine || endLine < startLine') -- not disjoint regions
+  else
+    startLine ≥ startLine' && startLine ≤ endLine' -- point is in region
 
 @[block_role_expander leanCommandAt]
 def leanCommandAt : BlockRoleExpander
   | args, #[] => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"leanCommand") <| do
-    let {project, line} ← LeanCommandAtArgs.parse.run args
+    let {project, line, endLine?} ← LeanCommandAtArgs.parse.run args
     let projectExamples ← getModule project
 
     let mut hls := #[]
     let mut ranges := #[]
 
-    let line' := line - 1 -- 0 vs 1-indexed
     for ex in projectExamples do
-      if let some ⟨start, stop⟩ := ex.range then
-        ranges := ranges.push (start.line+1, stop.line+1)
-        if line' ≥ start.line && line' ≤ stop.line then
+      if let some r@⟨start, stop⟩ := ex.range then
+        ranges := ranges.push (start.line, stop.line)
+        if useRange line endLine? r then
           hls := hls.push ex.code
 
     if hls.isEmpty then
