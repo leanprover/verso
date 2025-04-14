@@ -116,9 +116,9 @@ def paragraph : DirectiveExpander
 structure Config where
   destination : System.FilePath := "_out"
   maxTraversals : Nat := 20
-  htmlDepth := 0
-  emitTeX : Bool := true
-  emitHtmlSingle : Bool := true
+  htmlDepth := 2
+  emitTeX : Bool := false
+  emitHtmlSingle : Bool := false
   emitHtmlMulti : Bool := true
   wordCount : Option System.FilePath := none
   extraFiles : List (System.FilePath × String) := []
