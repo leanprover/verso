@@ -30,7 +30,7 @@ open Verso ArgParse Doc Elab
 open Verso.SyntaxUtils (parserInputString)
 
 open SubVerso.Examples (loadExamples Example)
-
+open SubVerso.Module (ModuleItem)
 
 def classArgs : ArgParse DocElabM String := .named `«class» .string false
 
@@ -166,9 +166,12 @@ where
 #guard_msgs in
 #eval NameSuffixMap.empty |>.insert `a.b.c 1 |>.insert `b.c 2 |>.insert `c 3 |>.insert `a.c 4 |>.insert `a.b 5 |>.insert `b.c 6 |>.get `c
 
+section
+
 inductive LeanExampleData where
   | inline (commandState : Command.State) (parserState : Parser.ModuleParserState)
   | subproject (loaded : NameSuffixMap Example)
+  | module (positioned : Array ModuleItem)
 deriving Inhabited
 
 structure ExampleContext where
@@ -201,6 +204,7 @@ def leanExampleProject : BlockRoleExpander
     for (mod, modExamples) in loadedExamples.toList do
       for (exName, ex) in modExamples.toList do
         savedExamples := savedExamples.insert (mod ++ exName) ex
+
     modifyEnv fun env => exampleContextExt.modifyState env fun s => {s with
       contexts := s.contexts.insert name (.subproject savedExamples)
     }
@@ -213,17 +217,30 @@ def leanExampleProject : BlockRoleExpander
       throwErrorAt more[0] "Unexpected contents"
     else
       throwError "Unexpected contents"
-where
-  getModExamples (mod : Name) (json : Json) : DocElabM (NameMap Example) := do
-    let .ok exs := json.getObj?
-      | throwError "Not an object: '{json}'"
-    let mut found := {}
-    for ⟨name, exJson⟩ in exs.toArray do
-      match FromJson.fromJson? exJson with
-      | .error err =>
-        throwError "Error deserializing example '{name}' in '{mod}': {err}\nfrom:\n{json}"
-      | .ok ex => found := found.insert (mod ++ name.toName) ex
-    pure found
+
+open System in
+@[block_role_expander leanExampleModule]
+def leanExampleModule : BlockRoleExpander
+  | args, #[] => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"Loading example project") <| do
+    let (name, projectDir, module) ←
+      ArgParse.run ((·, ·, ·) <$> .positional `name .name <*> .positional `projectDir .string <*> .positional `module .name) args
+    if exampleContextExt.getState (← getEnv) |>.contexts |>.contains name then
+      throwError "Example context '{name}' already defined in this module"
+    let path : FilePath := ⟨projectDir⟩
+    if path.isAbsolute then
+      throwError "Expected a relative path, got {path}"
+    let loadedExamples ← Literate.loadModuleContent projectDir module.toString
+
+    modifyEnv fun env => exampleContextExt.modifyState env fun s => {s with
+      contexts := s.contexts.insert name (.module loadedExamples)
+    }
+    pure #[]
+  | _, more =>
+    if h : more.size > 0 then
+      throwErrorAt more[0] "Unexpected contents"
+    else
+      throwError "Unexpected contents"
+
 
 private def getSubproject (project : Ident) : TermElabM (NameSuffixMap Example) := do
   let some ctxt := exampleContextExt.getState (← getEnv) |>.contexts |>.find? project.getId
@@ -232,6 +249,13 @@ private def getSubproject (project : Ident) : TermElabM (NameSuffixMap Example) 
     | throwErrorAt project "'{project}' is not loaded as a subproject"
   Verso.Hover.addCustomHover project <| "Contains:\n" ++ String.join (projectExamples.toList.map (s!" * `{toString ·.fst}`\n"))
   pure projectExamples
+
+private def getModule (project : Ident) : TermElabM (Array ModuleItem) := do
+  let some ctxt := exampleContextExt.getState (← getEnv) |>.contexts |>.find? project.getId
+    | throwErrorAt project "Subproject '{project}' not loaded"
+  let .module modExamples := ctxt
+    | throwErrorAt project "'{project}' is not loaded as a subproject"
+  pure modExamples
 
 def NameSuffixMap.getOrSuggest [Monad m] [MonadInfoTree m] [MonadError m]
     (map : NameSuffixMap α) (key : Ident) : m (Name × α) := do
@@ -258,6 +282,41 @@ def leanCommand : BlockRoleExpander
     let (_, {highlighted := hls, original := str, ..}) ← projectExamples.getOrSuggest exampleName
     Verso.Hover.addCustomHover exampleName s!"```lean\n{str}\n```"
     pure #[← ``(Block.other (Blog.BlockExt.highlightedCode $(quote project.getId) (SubVerso.Highlighting.Highlighted.seq $(quote hls))) #[Block.code $(quote str)])]
+  | _, more =>
+    if h : more.size > 0 then
+      throwErrorAt more[0] "Unexpected contents"
+    else
+      throwError "Unexpected contents"
+
+structure LeanCommandAtArgs where
+  project : Ident
+  line : Nat
+
+def LeanCommandAtArgs.parse [Monad m] [MonadError m] : ArgParse m LeanCommandAtArgs :=
+  LeanCommandAtArgs.mk <$> .positional `project .ident <*> .positional `line .nat
+
+@[block_role_expander leanCommandAt]
+def leanCommandAt : BlockRoleExpander
+  | args, #[] => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"leanCommand") <| do
+    let {project, line} ← LeanCommandAtArgs.parse.run args
+    let projectExamples ← getModule project
+
+    let mut hls := #[]
+    let mut ranges := #[]
+
+    let line' := line - 1 -- 0 vs 1-indexed
+    for ex in projectExamples do
+      if let some ⟨start, stop⟩ := ex.range then
+        ranges := ranges.push (start.line+1, stop.line+1)
+        if line' ≥ start.line && line' ≤ stop.line then
+          hls := hls.push ex.code
+
+    if hls.isEmpty then
+      let rangeDoc : Std.Format :=
+        ranges.map (fun (l, l') => s!"{l}–{l'}") |>.toList |> (.group <| Std.Format.joinSep · ("," ++ .line))
+      Lean.logError m!"No example found on line {line}. Valid lines are: {indentD rangeDoc}"
+
+    pure #[← ``(Block.other (Blog.BlockExt.highlightedCode $(quote project.getId) (SubVerso.Highlighting.Highlighted.seq $(quote hls))) #[])]
   | _, more =>
     if h : more.size > 0 then
       throwErrorAt more[0] "Unexpected contents"
@@ -343,6 +402,7 @@ def lean : CodeBlockExpander
     let (commandState, state) ← match exampleContextExt.getState (← getEnv) |>.contexts.find? x.getId with
       | some (.inline commandState state) => pure (commandState, state)
       | some (.subproject ..) => throwErrorAt x "Expected an example context for inline Lean, but found a subproject"
+      | some (.module ..) => throwErrorAt x "Expected an example context for inline Lean, but found a module"
       | none => throwErrorAt x "Can't find example context"
     let context := Parser.mkInputContext (← parserInputString str) (← getFileName)
     -- Process with empty messages to avoid duplicate output
@@ -485,6 +545,7 @@ def leanInline : RoleExpander
     let (commandState, _) ← match exampleContextExt.getState (← getEnv) |>.contexts.find? x.getId with
       | some (.inline commandState state) => pure (commandState, state)
       | some (.subproject ..) => throwErrorAt x "Expected an example context for inline Lean, but found a subproject"
+      | some (.module ..) => throwErrorAt x "Expected an example context for inline Lean, but found a module"
       | none => throwErrorAt x "Can't find example context"
 
     let {env, scopes, ngen, ..} := commandState
