@@ -103,11 +103,12 @@ def ref : RoleExpander
 
 @[role_expander page_link]
 def page_link : RoleExpander
-  | #[.anon (.name page)], stxs => do
-    let args ← stxs.mapM elabInline
-    let val ← ``(Inline.other (Blog.InlineExt.pageref $(quote page.getId)) #[ $[ $args ],* ])
+  | args, stxs => do
+    let (page, id?) ← ArgParse.run ((·, ·) <$> .positional `page .name <*> (some <$> .positional `id .string <|> pure none)) args
+    let inls ← stxs.mapM elabInline
+    let val ← ``(Inline.other (Blog.InlineExt.pageref $(quote page) $(quote id?)) #[ $[ $inls ],* ])
     pure #[val]
-  | _, _ => throwUnsupportedSyntax
+
 
 
 -- The assumption here is that suffixes are _mostly_ unique, so the arrays will likely be very

@@ -37,7 +37,7 @@ inductive InlineExt where
   | customHighlight (highlighted : Highlighted)
   | label (name : Lean.Name)
   | ref (name : Lean.Name)
-  | pageref (name : Lean.Name)
+  | pageref (name : Lean.Name) (id? : Option String)
   | htmlSpan (classes : String)
   | blob (html : Html)
 deriving Repr
@@ -161,6 +161,8 @@ def TraverseState.addCssFile (st : TraverseState) (name content : String) :=
 structure Page.Meta where
   /-- Whether to hide this page/part from navigation entries -/
   showInNav : Bool := true
+  /-- The HTML ID to assign to the header -/
+  htmlId : Option String := none
 deriving Repr
 
 def Page : Genre where
@@ -179,6 +181,7 @@ structure Post.Meta where
   authors : List String
   categories : List Post.Category := []
   draft : Bool := false
+  htmlId : Option String := none
 deriving TypeName, Repr
 
 def Post : Genre where
@@ -371,7 +374,7 @@ def genreInline (g : Genre) : Blog.InlineExt → Array (Inline g) → Blog.Trave
     | .ref _x, _contents =>
       -- TODO backreference
       pure none
-    | .pageref _x, _contents =>
+    | .pageref _x _id?, _contents =>
       -- TODO backreference
       pure none
     | .htmlSpan .., _ | .blob .., _ | .lexedText .., _ => pure none

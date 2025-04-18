@@ -85,14 +85,14 @@ def inlineHtml (g : Genre) [MonadConfig (HtmlT g IO)] [MonadPath (HtmlT g IO)]
     | some tgt =>
       let addr := s!"{String.join ((← relative tgt.path).intersperse "/")}#{tgt.htmlId}"
       go <| .link contents addr
-  | .pageref x, contents => do
+  | .pageref x id?, contents => do
     let st ← stateEq ▸ state
     match st.pageIds.find? x <|> st.pageIds.find? (docName x) with
     | none =>
       HtmlT.logError s!"Can't find target {x} - options are {st.pageIds.toList.map (·.fst)}"
       pure {{<strong class="internal-error">s!"Can't find target {x}"</strong>}}
     | some meta =>
-      let addr := String.join ((← relative meta.path).intersperse "/")
+      let addr := String.join ((← relative meta.path).intersperse "/") ++ (id?.map ("#" ++ ·) |>.getD "")
       go <| .link contents addr
   | .htmlSpan classes, contents => do
     pure {{ <span class={{classes}}> {{← contents.mapM go}} </span> }}
@@ -105,8 +105,13 @@ def blogGenreHtml (g : Genre) [MonadConfig (HtmlT g IO)] [MonadPath (HtmlT g IO)
   block := eq1 ▸ blockHtml g
   inline := eq2 ▸ inlineHtml g eq3
 
-instance : GenreHtml Page IO := blogGenreHtml Page rfl rfl rfl fun go _metadata part => go part
-instance : GenreHtml Post IO := blogGenreHtml Post rfl rfl rfl fun go _metadata part => go part
+private def mkHd (htmlId : Option String) (lvl : Nat) (contents : Html)  : Html :=
+  mkPartHeader lvl contents (htmlId.map (fun x => #[("id", x)]) |>.getD #[])
+
+instance : GenreHtml Page IO := blogGenreHtml Page rfl rfl rfl fun go metadata part =>
+  go part (mkHd metadata.htmlId)
+instance : GenreHtml Post IO := blogGenreHtml Post rfl rfl rfl fun go metadata part =>
+  go part (mkHd metadata.htmlId)
 
 namespace Verso.Genre.Blog.Template
 
