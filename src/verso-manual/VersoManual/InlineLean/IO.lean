@@ -214,7 +214,7 @@ where
 namespace IOExample
 
 private def getSubversoDir : IO System.FilePath := do
-  let srcSearchPath ← initSrcSearchPath
+  let srcSearchPath ← getSrcSearchPath
   let libSearchPath := (← IO.getEnv "LEAN_PATH")
     |>.map System.SearchPath.parse
     |>.getD []
