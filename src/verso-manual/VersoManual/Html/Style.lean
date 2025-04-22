@@ -480,6 +480,31 @@ main [id] {
     display: block;
 }
 
+/******** Width-dependent layout elements ********/
+
+.narrow-only {
+    display: none;
+}
+
+@media screen and (max-width: 500px) {
+    .wide-only {
+        display: none;
+    }
+    .narrow-only {
+        display: revert;
+    }
+}
+
+@media screen and (min-width: 700px) and (max-width: 920px){
+    .wide-only {
+        display: none;
+    }
+    .narrow-only {
+        display: revert;
+    }
+}
+
+
 /******** Headerline ********/
 
 #toggle-toc-click {

@@ -79,7 +79,9 @@ They include heuristic elaboration of code items in their Markdown that attempts
 
 {docstring Float (label := "type") (hideFields := true) (hideStructureConstructor := true)}
 
+{docstring Array.forM}
 
+{docstring Array.forRevM}
 
 :::tactic "induction"
 :::
