@@ -65,10 +65,10 @@ theorem String.Pos.add_0_eq_size {c : Char} : (0 : String.Pos) + c = ⟨c.utf8Si
 instance : DecidablePred Slug.WF := fun str =>
   if h : str.toList.all (· ∈ Slug.validChars) then isTrue (by unfold Slug.WF; exact h) else isFalse h
 
+@[simp]
 theorem Slug.wf_mangle : WF (mangle c) := by
   unfold mangle
-  split <;> simp [WF, validChars] <;>
-    and_intros <;> simp [HashSet.mem_iff_contains]
+  split <;> dsimp [WF, validChars] <;> simp
 
 theorem Slug.wf_push (c str) : c ∈ validChars → WF str → WF (str.push c) := by
   unfold WF
@@ -82,10 +82,8 @@ theorem Slug.wf_append (str1 str2) : WF str1 → WF str2 → WF (str1 ++ str2) :
   unfold WF
   cases str1; cases str2
   intro wf1 wf2
-  simp only [String.toList, String.data_append, List.all_append, Bool.and_eq_true, List.all_eq_true,
-    decide_eq_true_eq]
-  simp only [String.toList, List.all_eq_true, decide_eq_true_eq] at wf1
-  simp only [String.toList, List.all_eq_true, decide_eq_true_eq] at wf2
+  simp only [String.toList, String.data_append, List.all_append, Bool.and_eq_true, List.all_eq_true, decide_eq_true_eq]
+  simp only [String.toList, List.all_eq_true, decide_eq_true_eq] at wf1 wf2
   and_intros <;> assumption
 
 theorem Slug.asSlug_loop_valid : WF acc → WF (asSlug.loop iter acc) := by
@@ -104,14 +102,15 @@ theorem Slug.asSlug_loop_valid : WF acc → WF (asSlug.loop iter acc) := by
         List.all_nil, Bool.and_true, Bool.and_eq_true, List.all_eq_true, decide_eq_true_eq]
         and_intros
         . assumption
-        . simp [validChars, HashSet.mem_iff_contains]
+        . simp [validChars]
       . simp only [String.toList, String.data_append, List.all_append, Bool.and_eq_true,
         List.all_eq_true, decide_eq_true_eq]
         and_intros
         . assumption
         . intro c' mem
-          have := wf_mangle (c := c)
-          simp [WF] at this; apply this; assumption
+          have : WF (mangle c) := wf_mangle
+          simp only [WF, String.toList, List.all_eq_true, decide_eq_true_eq] at this
+          simp [*]
 
 theorem Slug.asSlug_valid : WF (asSlug str) := by
   unfold asSlug
