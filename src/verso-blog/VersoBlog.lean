@@ -380,14 +380,16 @@ def leanInit : CodeBlockExpander
     let config ← LeanBlockConfig.parse.run args
     let context := Parser.mkInputContext (← parserInputString str) (← getFileName)
     let (header, state, msgs) ← Parser.parseHeader context
-    for imp in header[1].getArgs do
+    if !header.raw[0].isNone then
+      throwErrorAt header "Modules not yet supported here"
+    for imp in header.raw[2].getArgs do
       logErrorAt imp "Imports not yet supported here"
     let opts := Options.empty -- .setBool `trace.Elab.info true
-    if header[0].isNone then -- if the "prelude" option was not set, use the current env
+    if header.raw[1].isNone then -- if the "prelude" option was not set, use the current env
       let commandState := configureCommandState (←getEnv) {}
       modifyEnv <| fun env => exampleContextExt.modifyState env fun s => {s with contexts := s.contexts.insert config.exampleContext.getId (.inline commandState  state)}
     else
-      if header[1].getArgs.isEmpty then
+      if header.raw[2].getArgs.isEmpty then
         let (env, msgs) ← processHeader header opts msgs context 0
         if msgs.hasErrors then
           for msg in msgs.toList do
