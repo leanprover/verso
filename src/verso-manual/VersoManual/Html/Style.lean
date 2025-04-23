@@ -18,7 +18,7 @@ def pageStyle : String := r####"
     /* The font family used for code */
     --verso-code-font-family: monospace;
     /* What's the maximum line width, for legibility? */
-    --verso-content-max-width: 45rem;
+    --verso-content-max-width: 47rem;
     /* Desktop font size */
     --verso-font-size: 16px;
     /* Mobile font size */
@@ -37,7 +37,7 @@ def pageStyle : String := r####"
     --verso-toc-transition-time: 0.4s;
 
     /* How wide should the ToC be on non-mobile? */
-    --verso-toc-width: 15rem;
+    --verso-toc-width: 18rem;
 
     /** Variables that control the “burger menu” appearance **/
     --verso-burger-height: 1.25rem;
@@ -179,6 +179,14 @@ header {
     /* Move the title to the left, to align with the content that does the same. */
     .header-title {
         margin: 0;
+        max-width: unset;
+    }
+}
+
+@media screen and (max-width: 700px) {
+    /* There's no header logo on mobile, so the title just needs to reserve space for the burger */
+    .header-title {
+        margin-left: calc(var(--verso-burger-width) + 1.5rem); /* There's 0.5 rem padding on the burger, and we want some space */
         max-width: unset;
     }
 }
@@ -394,7 +402,6 @@ main [id] {
 
 #toc .split-toc td {
     vertical-align: top;
-    font-size: 90%;
 }
 
 #toc .split-toc > ol {
