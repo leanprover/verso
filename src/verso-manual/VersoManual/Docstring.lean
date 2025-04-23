@@ -79,6 +79,13 @@ def getDocString?
   return docs?
 
 
+structure Signature where
+  /-- The signature formatted for wider screens, such as desktop displays -/
+  wide : Highlighted
+  /-- The signature formatted for narrower screens, such as mobile displays -/
+  narrow : Highlighted
+deriving ToJson, FromJson, Quote
+
 namespace Block
 
 namespace Docstring
@@ -399,9 +406,7 @@ where
 end Docstring
 
 
-
-
-def docstring (name : Name) (declType : Docstring.DeclType) (signature : Option Highlighted) (customLabel : Option String) : Block where
+def docstring (name : Name) (declType : Docstring.DeclType) (signature : Signature) (customLabel : Option String) : Block where
   name := `Verso.Genre.Manual.Block.docstring
   data := ToJson.toJson (name, declType, signature, customLabel)
 
@@ -427,6 +432,30 @@ def constructorSignature (signature : Highlighted) : Block where
   data := ToJson.toJson signature
 
 end Block
+
+def Signature.forName [Monad m] [MonadWithOptions m] [MonadEnv m] [MonadMCtx m] [MonadOptions m] [MonadResolveName m] [MonadNameGenerator m] [MonadLiftT MetaM m] [MonadLiftT IO m] [MonadFileMap m] [Alternative m] (name : Name) : m Signature := do
+  let (⟨fmt, infos⟩ : FormatWithInfos) ← withOptions (·.setBool `pp.tagAppFns true) <| Block.Docstring.ppSignature name (constantInfo := false)
+
+  let ctx := {
+    env           := (← getEnv)
+    mctx          := (← getMCtx)
+    options       := (← getOptions)
+    currNamespace := (← getCurrNamespace)
+    openDecls     := (← getOpenDecls)
+    fileMap       := default
+    ngen          := (← getNGen)
+  }
+
+  let ttNarrow := Lean.Widget.TaggedText.prettyTagged (w := 42) fmt
+  let sigNarrow := Lean.Widget.tagCodeInfos ctx infos ttNarrow
+
+  let ttWide := Lean.Widget.TaggedText.prettyTagged (w := 72) fmt
+  let sigWide := Lean.Widget.tagCodeInfos ctx infos ttWide
+
+  return {
+    wide := ← renderTagged none sigWide ⟨{}, false⟩
+    narrow := ← renderTagged none sigNarrow ⟨{}, false⟩
+  }
 
 
 instance [BEq α] [Hashable α] [FromJson α] : FromJson (HashSet α) where
@@ -734,6 +763,11 @@ def constructorSignature.descr : BlockDescr where
         </div>
       }}
 
+open Verso.Output Html in
+def Signature.toHtml  : Signature → HighlightHtmlM Html
+  | {wide, narrow} => do
+    return {{<div class="wide-only">{{← wide.toHtml}}</div><div class="narrow-only">{{← narrow.toHtml}}</div>}}
+
 open Verso.Genre.Manual.Markdown in
 @[block_extension Block.docstring]
 def docstring.descr : BlockDescr := withHighlighting {
@@ -743,7 +777,7 @@ def docstring.descr : BlockDescr := withHighlighting {
 
   traverse id info _ := do
     let .ok (name, declType, _signature, _customLabel) :=
-      FromJson.fromJson? (α := Name × Block.Docstring.DeclType × Option Highlighted × Option String) info
+      FromJson.fromJson? (α := Name × Block.Docstring.DeclType × Signature × Option String) info
       | do logError "Failed to deserialize docstring data"; pure none
 
     match declType with
@@ -787,10 +821,9 @@ def docstring.descr : BlockDescr := withHighlighting {
   toHtml := some <| fun _goI goB id info contents =>
     open Verso.Doc.Html HtmlT in
     open Verso.Output Html in do
-      let .ok (name, declType, signature, customLabel) := FromJson.fromJson? (α := Name × Block.Docstring.DeclType × Option Highlighted × Option String) info
+      let .ok (name, declType, signature, customLabel) := FromJson.fromJson? (α := Name × Block.Docstring.DeclType × Signature × Option String) info
         | do Verso.Doc.Html.HtmlT.logError "Failed to deserialize docstring data while generating HTML"; pure .empty
-      let x : Html := Html.text true <| Name.toString name
-      let sig : Html ← Option.map Highlighted.toHtml signature |>.getD (pure {{ {{x}} }})
+      let sig : Html ← signature.toHtml
 
       let xref ← state
       let idAttr := xref.htmlId id
@@ -813,7 +846,7 @@ def docstring.descr : BlockDescr := withHighlighting {
 
   localContentItem := fun _id info _contents => open Verso.Output.Html in do
     let  (name, _declType, _signature, _customLabel) ←
-      FromJson.fromJson? (α := Name × Block.Docstring.DeclType × Option Highlighted × Option String) info
+      FromJson.fromJson? (α := Name × Block.Docstring.DeclType × Signature × Option String) info
     let names := #[name.getString!, name.toString]
     pure <| names.map fun s => (s, {{<code>{{s}}</code>}})
 
@@ -1367,19 +1400,8 @@ def docstring : BlockRoleExpander
 
       let declType ← Block.Docstring.DeclType.ofName name (hideFields := hideFields) (hideStructureConstructor := hideCtor)
 
-      let ⟨fmt, infos⟩ ← withOptions (·.setBool `pp.tagAppFns true) <| Block.Docstring.ppSignature name (constantInfo := false)
-      let tt := Lean.Widget.TaggedText.prettyTagged (w := 48) fmt
-      let ctx := {
-        env           := (← getEnv)
-        mctx          := (← getMCtx)
-        options       := (← getOptions)
-        currNamespace := (← getCurrNamespace)
-        openDecls     := (← getOpenDecls)
-        fileMap       := default
-        ngen          := (← getNGen)
-      }
-      let sig := Lean.Widget.tagCodeInfos ctx infos tt
-      let signature ← some <$> renderTagged none sig ⟨{}, false⟩
+      let signature ← Signature.forName name
+
       let extras ← getExtras name declType
       pure #[← ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.docstring $(quote name) $(quote declType) $(quote signature) $(quote customLabel)) #[$(blockStx ++ extras),*])]
   | _, more => throwErrorAt more[0]! "Unexpected block argument"
