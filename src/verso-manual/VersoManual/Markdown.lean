@@ -10,6 +10,8 @@ import Lean.Exception
 
 import Verso.Doc
 
+import VersoManual.Basic
+
 open MD4Lean
 open Lean
 
@@ -109,7 +111,6 @@ partial def inlineFromMarkdown' : Text → Except String (Doc.Inline g)
   | .entity ent => .error s!"Unsupported entity {ent} in parsed Markdown"
   | .img .. => .error s!"Unexpected image in parsed Markdown"
   | .wikiLink .. => .error s!"Unexpected wiki-style link in parsed Markdown"
-
 
 instance [Monad m] [MonadError m] : MonadError (MDT m b i) where
   throw ex := fun _ρ _σ => throw ex
@@ -218,3 +219,60 @@ def strongEmphHeaders' : List (Array (Doc.Inline g) → Except String (Doc.Block
   fun inls => pure <| .para #[.bold inls],
   fun inls => pure <| .para #[.emph inls]
 ]
+
+open Verso.Doc.Elab
+
+/--
+Updates the active sections given a new header with `level`.
+-/
+private partial def closeSections (level : Nat) : MDT PartElabM b i Unit := do
+  let hdrs := (← getThe MDState).inHeaders
+  match hdrs with
+  | [] => modifyThe MDState ({· with inHeaders := [(level, 0)]})
+  | (docLevel, nesting) :: more =>
+    if level ≤ docLevel then
+      if let some ctxt' := (← getThe PartElabM.State).partContext.close default then -- FIXME: source position!
+        modifyThe PartElabM.State fun st => {st with partContext := ctxt'}
+        closeSections level
+      if level < docLevel then
+        modifyThe MDState ({· with inHeaders := more})
+    else
+      modifyThe MDState ({· with inHeaders := (level, nesting + 1) :: hdrs})
+
+private partial def partFromMarkdownAux : MD4Lean.Block → MDT PartElabM Term Term Unit
+  | .header level txt => do
+    closeSections level
+    let txtStxs ← txt.mapM inlineFromMarkdown |>.run' none
+    let env ← getEnv
+    let titleTexts := txtStxs.map (Verso.Doc.Elab.inlineToString env)
+    let titleText := titleTexts.foldl (· ++ ·) ""
+    PartElabM.push {
+      titleSyntax := quote (k := `str) titleText
+      expandedTitle := some (titleText, txtStxs)
+      metadata := none
+      blocks := #[]
+      priorParts := #[]
+    }
+  | b => do
+    PartElabM.addBlock (← blockFromMarkdownAux b)
+
+/--
+Adds blocks from Markdown, treating top-level headers as new parts.
+
+Note that `handleHeaders` is still used for elaborating headers that appear
+nested within blocks (e.g., blockquotes).
+
+`currentHeaderLevels` gives a list of headers within which elaboration is
+occurring and which can be terminated by the current elaboration. Typically,
+these are taken from a previous iteration of `partFromMarkdown`, but they can
+also be specified manually as `(headerLevel, nestingLevel)` pairs.
+-/
+def partFromMarkdown
+    (md : MD4Lean.Block)
+    (currentHeaderLevels : List (Nat × Nat) := [])
+    (handleHeaders : List (Array Term → PartElabM Term) := [])
+    (elabInlineCode : Option (Option String → String → PartElabM Term) := none)
+    (elabBlockCode : Option (Option String → Option String → String → PartElabM Term) := none) : PartElabM (List (Nat × Nat)) := do
+  let ctxt := {headerHandlers := ⟨handleHeaders⟩, elabInlineCode, elabBlockCode}
+  let (_, { inHeaders }) ← (partFromMarkdownAux md |>.run ctxt |>.run {inHeaders := currentHeaderLevels})
+  return inHeaders
