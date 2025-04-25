@@ -23,17 +23,25 @@ partial def elabInline (inline : TSyntax `inline) : DocElabM (TSyntax `term) :=
   | .missing =>
     ``(sorryAx (Inline _) (synthetic := true))
   | stx@(.node _ kind _) =>
-    let exp ← inlineExpandersFor kind
-    for e in exp do
-      try
-        let termStx ← withFreshMacroScope <| e stx
-        return termStx
-      catch
-        | ex@(.internal id) =>
-          if id == unsupportedSyntaxExceptionId then pure ()
-          else throw ex
-        | ex => throw ex
-    throwUnexpected stx
+    let env ← getEnv
+    let result ← match (← liftMacroM (expandMacroImpl? env stx)) with
+    | some (_decl, stxNew?) => -- TODO terminfo here? Right now, we suppress most uses of it.
+      let stxNew ← liftMacroM <| liftExcept stxNew?
+      withMacroExpansionInfo stx stxNew <|
+        withRef stxNew <|
+          elabInline ⟨stxNew⟩
+    | none =>
+      let exp ← inlineExpandersFor kind
+      for e in exp do
+        try
+          let termStx ← withFreshMacroScope <| e stx
+          return termStx
+        catch
+          | ex@(.internal id) =>
+            if id == unsupportedSyntaxExceptionId then pure ()
+            else throw ex
+          | ex => throw ex
+      throwUnexpected stx
   | other =>
     throwUnexpected other
 
@@ -191,25 +199,33 @@ def _root_.Verso.Syntax.display_math.expand : InlineExpander
     ``(Inline.math MathMode.display $s)
   | _ => throwUnsupportedSyntax
 
-
-def elabBlock (block : TSyntax `block) : DocElabM (TSyntax `term) :=
+open Lean.Elab.Term in
+partial def elabBlock (block : TSyntax `block) : DocElabM (TSyntax `term) :=
   withTraceNode `Elab.Verso.block (fun _ => pure m!"Block {block}") <|
   withRef block <| withFreshMacroScope <| withIncRecDepth <| do
   match block.raw with
   | .missing =>
     ``(sorryAx Block (synthetic := true))
   | stx@(.node _ kind _) =>
-    let exp ← blockExpandersFor kind
-    for e in exp do
-      try
-        let termStx ← withFreshMacroScope <| e stx
-        return termStx
-      catch
-        | ex@(.internal id) =>
-          if id == unsupportedSyntaxExceptionId then continue
-          else throw ex
-        | ex => throw ex
-    throwUnexpected block
+    let env ← getEnv
+    let result ← match (← liftMacroM (expandMacroImpl? env stx)) with
+    | some (_decl, stxNew?) => -- TODO terminfo here? Right now, we suppress most uses of it.
+      let stxNew ← liftMacroM <| liftExcept stxNew?
+      withMacroExpansionInfo stx stxNew <|
+        withRef stxNew <|
+          elabBlock ⟨stxNew⟩
+    | none =>
+      let exp ← blockExpandersFor kind
+      for e in exp do
+        try
+          let termStx ← withFreshMacroScope <| e stx
+          return termStx
+        catch
+          | ex@(.internal id) =>
+            if id == unsupportedSyntaxExceptionId then continue
+            else throw ex
+          | ex => throw ex
+      throwUnexpected block
   | _ =>
     throwUnexpected block
 
