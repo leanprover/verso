@@ -220,6 +220,24 @@ def strongEmphHeaders' : List (Array (Doc.Inline g) → Except String (Doc.Block
   fun inls => pure <| .para #[.emph inls]
 ]
 
+private partial def stringFromMarkdownText : Text → Except String String
+  | .normal str | .br str | .softbr str => pure str
+  | .nullchar => .error "Unepxected null character in parsed Markdown"
+  | .del _ => .error "Unexpected strikethrough in parsed Markdown"
+  | .em txt => arrToStr <| txt.mapM stringFromMarkdownText
+  | .strong txt => arrToStr <| txt.mapM stringFromMarkdownText
+  | .a _ _ _ txt => arrToStr <| txt.mapM stringFromMarkdownText
+  | .latexMath m => pure <| String.join m.toList
+  | .latexMathDisplay m =>  pure <| String.join m.toList
+  | .u txt => .error s!"Unexpected underline around {repr txt} in parsed Markdown:"
+  | .code str => pure <| String.join str.toList
+  | .entity ent => .error s!"Unsupported entity {ent} in parsed Markdown"
+  | .img .. => .error s!"Unexpected image in parsed Markdown"
+  | .wikiLink .. => .error s!"Unexpected wiki-style link in parsed Markdown"
+where
+  arrToStr (x : Except String (Array String)) : Except String String :=
+    return String.join (← x).toList
+
 open Verso.Doc.Elab
 
 /--
@@ -243,8 +261,9 @@ private partial def partFromMarkdownAux : MD4Lean.Block → MDT PartElabM Term T
   | .header level txt => do
     closeSections level
     let txtStxs ← txt.mapM inlineFromMarkdown |>.run' none
-    let env ← getEnv
-    let titleTexts := txtStxs.map (Verso.Doc.Elab.inlineToString env)
+    let titleTexts ← match txt.mapM stringFromMarkdownText with
+      | .ok t => pure t
+      | .error e => throwError m!"Invalid Markdown in header:\n{e}"
     let titleText := titleTexts.foldl (· ++ ·) ""
     PartElabM.push {
       titleSyntax := quote (k := `str) titleText
