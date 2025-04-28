@@ -127,6 +127,8 @@ structure Config where
   licenseInfo : List LicenseInfo := []
   /-- Extra elements to add to every page's `head` tag -/
   extraHead : Array Output.Html := #[]
+  /-- Extra elements to add to every page's contents -/
+  extraContents : Array Output.Html := #[]
   draft : Bool := false
   /-- The URL from which to draw the logo to show, if any -/
   logo : Option String := none
@@ -315,6 +317,7 @@ def page (toc : List Html.Toc)
     (extraStylesheets := config.extraCss ++ state.extraCssFiles.toList.map ("/-verso-css/" ++ ·.1))
     (extraJsFiles := config.extraJs.toArray ++ state.extraJsFiles.map ("/-verso-js/" ++ ·.1))
     (extraHead := config.extraHead)
+    (extraContents := config.extraContents)
 
 def relativizeLinks (html : Html) : Html :=
     -- Make all absolute URLS be relative to the site root, because that'll make them `<base>`-relative
