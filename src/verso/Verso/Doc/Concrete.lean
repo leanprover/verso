@@ -178,7 +178,7 @@ elab (name := completeDoc) "#doc" "(" genre:term ")" title:str "=>" text:complet
       (handleStep := fun block => do
         let heartbeats ← IO.getNumHeartbeats
         withTheReader Core.Context ({· with initHeartbeats := heartbeats}) (partCommand ⟨block⟩))
-      (run := fun act => liftTermElabM <| Prod.fst <$> PartElabM.run {} initState act)
+      (run := fun act => runTermElabM fun _ => Prod.fst <$> PartElabM.run {} initState act)
 
 /--
 Make the single elaborator for some syntax kind become incremental

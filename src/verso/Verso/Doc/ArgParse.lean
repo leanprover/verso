@@ -25,9 +25,10 @@ structure ValDesc (α) where
   description : MessageData
   get : ArgVal → m α
 
-inductive ArgParse (m) : Type → Type 1 where
+inductive ArgParse (m : Type → Type) : Type → Type 1 where
   | fail (stx? : Option Syntax) (message? : Option MessageData) : ArgParse m α
   | pure (val : α) : ArgParse m α
+  | lift (desc : String) (act : m α) : ArgParse m α
   | positional (nameHint : Name) (val : ValDesc m α) (doc? : Option MessageData := none) :
     ArgParse m α
   | named (name : Name) (val : ValDesc m α) (optional : Bool) (doc? : Option MessageData := none) :
@@ -56,6 +57,7 @@ def ArgParse.namedD {m} (name : Name) (val : ValDesc m α) (default : α) : ArgP
 def ArgParse.describe : ArgParse m α → MessageData
   | .fail _ msg? => msg?.getD "Cannot succeed"
   | .pure x => "No arguments expected"
+  | .lift desc act => desc
   | .positional _x v _ => v.description
   | .named x v opt _ => if opt then "[" else "" ++ m!"{x} : {v.description}" ++ if opt then "]" else ""
   | .anyNamed x v _ => s!"{x}: a named " ++ v.description
@@ -94,6 +96,7 @@ def ArgParse.parse : ArgParse m α → ExceptT (Array Arg × Exception) (StateT 
     let msg := msg?.getD "failed"
     throw ((← get).remaining, .error stx msg)
   | .pure x => Pure.pure x
+  | .lift desc act => act
   | .positional x vp doc? => do
     let initArgs := (← get).remaining
     if let some (v, args') := getPositional initArgs then
@@ -165,12 +168,16 @@ def ArgParse.parse : ArgParse m α → ExceptT (Array Arg × Exception) (StateT 
       | .anon v => throw (args, .error v.syntax m!"Unexpected argument {v}")
       | .named stx x _ => throw (args, .error stx m!"Unexpected named argument '{x.getId}'")
     else Pure.pure ()
-  | .orElse p1 p2 =>
-    try p1.parse
+  | .orElse p1 p2 => do
+    let s ← get
+    try
+      p1.parse
     catch
       | e1@(args1, _) =>
-        try (p2 ()).parse
-          catch
+        try
+          set s
+          (p2 ()).parse
+        catch
           | e2@(args2, _) =>
             if args2.size < args1.size then throw e1 else throw e2
   | .seq p1 p2 => Seq.seq p1.parse (fun () => p2 () |>.parse)
