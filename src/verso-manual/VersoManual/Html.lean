@@ -512,6 +512,7 @@ def page
     (extraJs : HashSet String)
     (localItems : Array Html)
     (extraHead : Array Html := #[])
+    (extraContents : Array Html := #[])
     (showNavButtons : Bool := true)
     (logo : Option String := none)
     (logoLink : Option String := none)
@@ -584,6 +585,7 @@ def page
             <div class="content-wrapper">
               {{if showNavButtons then toc.navButtons path else .empty}}
               {{contents}}
+              {{extraContents}}
               {{if showNavButtons then toc.navButtons path else .empty}}
             </div>
           </main>
