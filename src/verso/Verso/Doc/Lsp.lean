@@ -634,7 +634,6 @@ open Lean Server Lsp RequestM in
 partial def handleTokens (prev : RequestTask SemanticTokens)
     (beginPos : String.Pos) (endPos? : Option String.Pos) :
     RequestM (RequestTask (LspResponse SemanticTokens)) := do
-  let ctx ← read
   let doc ← readDoc
   let text := doc.meta.text
   if let some endPos := endPos? then
@@ -645,7 +644,7 @@ partial def handleTokens (prev : RequestTask SemanticTokens)
     return response.mapCheap fun t =>
       t.map ({ response := ·, isComplete := true })
   else
-    let (snaps, _, isComplete) ← doc.cmdSnaps.getFinishedPrefixWithTimeout 2000 (cancelTks := ctx.cancelTk.cancellationTasks)
+    let (snaps, _, isComplete) ← doc.cmdSnaps.getFinishedPrefixWithTimeout 2000
     let toks : Array SemanticTokenEntry := snapshotsTokens beginPos text snaps
     let response ← mergeIntoPrev (.pure toks)
     pure <| response.mapCheap fun t => t.map ({ response := ·, isComplete := isComplete })

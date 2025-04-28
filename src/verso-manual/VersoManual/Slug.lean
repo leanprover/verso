@@ -68,7 +68,7 @@ instance : DecidablePred Slug.WF := fun str =>
 @[simp]
 theorem Slug.wf_mangle : WF (mangle c) := by
   unfold mangle
-  split <;> dsimp [WF, validChars] <;> simp
+  split <;> dsimp [WF, validChars] <;> simp [HashSet.mem_iff_contains]
 
 theorem Slug.wf_push (c str) : c ∈ validChars → WF str → WF (str.push c) := by
   unfold WF
@@ -102,7 +102,7 @@ theorem Slug.asSlug_loop_valid : WF acc → WF (asSlug.loop iter acc) := by
         List.all_nil, Bool.and_true, Bool.and_eq_true, List.all_eq_true, decide_eq_true_eq]
         and_intros
         . assumption
-        . simp [validChars]
+        . simp [validChars, HashSet.mem_iff_contains]
       . simp only [String.toList, String.data_append, List.all_append, Bool.and_eq_true,
         List.all_eq_true, decide_eq_true_eq]
         and_intros
