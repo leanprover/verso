@@ -243,13 +243,15 @@ open Verso.Doc.Elab
 /--
 Updates the active sections given a new header with `level`.
 -/
-private partial def closeSections (level : Nat) : MDT PartElabM b i Unit := do
+private partial def closeSections {m} [Monad m]
+    [MonadStateOf PartElabM.State m]
+    (level : Nat) : MDT m b i Unit := do
   let hdrs := (← getThe MDState).inHeaders
   match hdrs with
   | [] => modifyThe MDState ({· with inHeaders := [(level, 0)]})
   | (docLevel, nesting) :: more =>
     if level ≤ docLevel then
-      if let some ctxt' := (← getThe PartElabM.State).partContext.close default then -- FIXME: source position!
+      if let some ctxt' := (← getThe PartElabM.State).partContext.close default then -- TODO: source position!
         modifyThe PartElabM.State fun st => {st with partContext := ctxt'}
         closeSections level
       if level < docLevel then
@@ -257,7 +259,10 @@ private partial def closeSections (level : Nat) : MDT PartElabM b i Unit := do
     else
       modifyThe MDState ({· with inHeaders := (level, nesting + 1) :: hdrs})
 
-private partial def partFromMarkdownAux : MD4Lean.Block → MDT PartElabM Term Term Unit
+private partial def partFromMarkdownAux {m} [Monad m]
+    [MonadLiftT PartElabM m] [MonadStateOf PartElabM.State m]
+    [MonadQuotation m] [AddMessageContext m] [MonadError m]
+    : MD4Lean.Block → MDT m Term Term Unit
   | .header level txt => do
     closeSections level
     let txtStxs ← txt.mapM inlineFromMarkdown |>.run' none
@@ -286,12 +291,14 @@ occurring and which can be terminated by the current elaboration. Typically,
 these are taken from a previous iteration of `partFromMarkdown`, but they can
 also be specified manually as `(headerLevel, nestingLevel)` pairs.
 -/
-def partFromMarkdown
+def addPartFromMarkdown {m} [Monad m]
+    [MonadLiftT PartElabM m] [MonadStateOf PartElabM.State m]
+    [MonadQuotation m] [AddMessageContext m] [MonadError m]
     (md : MD4Lean.Block)
     (currentHeaderLevels : List (Nat × Nat) := [])
-    (handleHeaders : List (Array Term → PartElabM Term) := [])
-    (elabInlineCode : Option (Option String → String → PartElabM Term) := none)
-    (elabBlockCode : Option (Option String → Option String → String → PartElabM Term) := none) : PartElabM (List (Nat × Nat)) := do
+    (handleHeaders : List (Array Term → m Term) := [])
+    (elabInlineCode : Option (Option String → String → m Term) := none)
+    (elabBlockCode : Option (Option String → Option String → String → m Term) := none) : m (List (Nat × Nat)) := do
   let ctxt := {headerHandlers := ⟨handleHeaders⟩, elabInlineCode, elabBlockCode}
   let (_, { inHeaders }) ← (partFromMarkdownAux md |>.run ctxt |>.run {inHeaders := currentHeaderLevels})
   return inHeaders
