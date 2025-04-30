@@ -638,6 +638,7 @@ where
 end
 
 
+open SubVerso.Examples.Messages in
 @[code_block_expander leanOutput]
 def leanOutput : CodeBlockExpander
  | args, str => do

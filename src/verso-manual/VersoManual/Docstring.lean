@@ -278,7 +278,9 @@ def DocName.ofName (c : Name) (ppWidth : Nat := 40) (showUniverses := true) (sho
 
     let docstring? ← if checkDocstring then  getDocString? env c else Lean.findDocString? env c
 
-    pure { name := c, hlName := (← renderTagged none name ⟨{}, false⟩), signature := (← renderTagged none sig ⟨{}, false⟩), docstring? }
+    let hlCtx : SubVerso.Highlighting.Context := ⟨{}, false, []⟩
+
+    pure { name := c, hlName := (← renderTagged none name hlCtx), signature := (← renderTagged none sig hlCtx), docstring? }
   else
     pure { name := c, hlName := .token ⟨.const c "" none false, c.toString⟩, signature := Highlighted.seq #[], docstring? := none }
 
@@ -314,6 +316,7 @@ def DeclType.ofName (c : Name)
     (hideStructureConstructor : Bool := false) :
     MetaM DeclType := do
   let env ← getEnv
+  let hlCtx : SubVerso.Highlighting.Context := ⟨{}, false, []⟩
   let openDecls : List OpenDecl :=
     match c with
     | .str _ s => [.explicit c.getPrefix s.toName]
@@ -338,9 +341,9 @@ def DeclType.ofName (c : Name)
                 let type ← inferType proj >>= instantiateMVars
                 let projType ← withOptions (·.setInt `format.width 40 |>.setBool `pp.tagAppFns true) <| Widget.ppExprTagged type
                 if let .const parentName _  := type.getAppFn then
-                  pure ⟨parentProj, parentName, ← renderTagged none projType ⟨{}, false⟩, i⟩
+                  pure ⟨parentProj, parentName, ← renderTagged none projType hlCtx, i⟩
                 else
-                  pure ⟨parentProj, .anonymous, ← renderTagged none projType ⟨{}, false⟩, i⟩
+                  pure ⟨parentProj, .anonymous, ← renderTagged none projType hlCtx, i⟩
         let ancestors ← getAllParentStructures c
         let allFields := if hideFields then #[] else getStructureFieldsFlattened env c (includeSubobjectFields := true)
         let fieldInfo ←
@@ -371,10 +374,10 @@ def DeclType.ofName (c : Name)
                     let visibility := Visibility.of env projFn
                     let fieldName' := Highlighted.token ⟨.const projFn projType.pretty docString? true, fieldName.toString⟩
 
-                    pure <| some { fieldName := fieldName', fieldFrom, type := ← renderTagged none type' ⟨{}, false⟩, subobject?,  projFn, binderInfo, autoParam, docString?, visibility}
+                    pure <| some { fieldName := fieldName', fieldFrom, type := ← renderTagged none type' hlCtx, subobject?,  projFn, binderInfo, autoParam, docString?, visibility}
                 else
                   let fieldName' := Highlighted.token ⟨.unknown, fieldName.toString⟩
-                  pure <| some { fieldName := fieldName', fieldFrom, type := ← renderTagged none type' ⟨{}, false⟩, subobject?,  projFn := .anonymous, binderInfo, autoParam, docString? := none, visibility := .public}
+                  pure <| some { fieldName := fieldName', fieldFrom, type := ← renderTagged none type' hlCtx, subobject?,  projFn := .anonymous, binderInfo, autoParam, docString? := none, visibility := .public}
 
         let ctor? ←
           if hideStructureConstructor || isPrivateName ctor.name then pure none
@@ -452,9 +455,11 @@ def Signature.forName [Monad m] [MonadWithOptions m] [MonadEnv m] [MonadMCtx m] 
   let ttWide := Lean.Widget.TaggedText.prettyTagged (w := 72) fmt
   let sigWide := Lean.Widget.tagCodeInfos ctx infos ttWide
 
+  let hlCtx : SubVerso.Highlighting.Context := ⟨{}, false, []⟩
+
   return {
-    wide := ← renderTagged none sigWide ⟨{}, false⟩
-    narrow := ← renderTagged none sigNarrow ⟨{}, false⟩
+    wide := ← renderTagged none sigWide hlCtx
+    narrow := ← renderTagged none sigNarrow hlCtx
   }
 
 
