@@ -59,7 +59,7 @@ where
     element := snap.toLeanSnapshot,
     children :=
       Option.toArray <| snap.next.map fun task =>
-        task.map (sync := true) (·.map go |>.getD default)
+        task.map (·.map go |>.getD default)
   }
 
 
@@ -140,7 +140,8 @@ def incrementallyElabCommand
     (run : {α : _} → m α → CommandElabM α)
     : CommandElabM Unit := do
   let cmd := mkNullNode steps
-  if let some snap := (← read).snap? then
+  let ctx ← read
+  if let some snap := ctx.snap? then
     withReader (fun ρ => {ρ with snap? := none}) do
       let (finalState, nextPromise) ← run <| do
         let mut oldSnap? := snap.old?.bind (·.val.get.toTyped? (α := Internal.IncrementalSnapshot))
@@ -150,7 +151,11 @@ def incrementallyElabCommand
         snap.new.resolve <| DynamicSnapshot.ofTyped <| show Internal.IncrementalSnapshot from {
           underlying := initData,
           dynData := .mk <| mkSnap (.pure (← get)),
-          next := some {stx? := some cmd, task := nextPromise.result?},
+          next := some {
+            stx? := some cmd,
+            task := nextPromise.result?,
+            cancelTk? := ctx.cancelTk?
+          },
           «syntax» := cmd
         }
         initAct
@@ -181,7 +186,11 @@ def incrementallyElabCommand
           nextPromise.resolve {
             underlying := (← freshSnapshot),
             dynData := (.mk <| mkSnap <| updatedState.result?),
-            next := (some {stx? := some (mkNullNode <| steps.extract i steps.size), task := nextNextPromise.result?})
+            next := some {
+              stx? := some (mkNullNode <| steps.extract i steps.size),
+              task := nextNextPromise.result?,
+              cancelTk? := ctx.cancelTk?
+            },
             «syntax» := b
           }
 
