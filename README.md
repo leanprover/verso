@@ -144,7 +144,7 @@ lake exe demotextbook --output _out/examples/demotextbook
 To view the output, a local server will be needed. One way to get such
 a server is to use the one from the Python standard library, e.g.
 ```
-python3 -m http.server 8880 --directory _out/examples/demotextbook/html-single &
+python3 -m http.server 8880 --directory _out/examples/demotextbook/html-multi &
 ```
 after which `http://localhost:8880/` will show the generated site.
 
