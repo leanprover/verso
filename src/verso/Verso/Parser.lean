@@ -2122,16 +2122,16 @@ mutual
   partial def definitionList (ctxt : BlockCtxt) : ParserFn :=
     nodeFn ``dl <|
       atomicFn (onlyBlockOpeners >> takeWhileFn (· == ' ') >> ignoreFn (lookaheadFn (chFn ':' >> chFn ' ')) >> guardMinColumn ctxt.minIndent) >>
-      fakeAtom "ul{" >>
+      withInfoSyntaxFn skip.fn (fun info => fakeAtom "ul{" info) >>
       withCurrentColumn (fun c => many1Fn (descItem {ctxt with minIndent := c})) >>
-      fakeAtom "}"
+      withInfoSyntaxFn skip.fn (fun info => fakeAtom "}" info)
 
   partial def para (ctxt : BlockCtxt) : ParserFn :=
     nodeFn ``para <|
       atomicFn (takeWhileFn (· == ' ') >> notFollowedByFn blockOpener "block opener" >> guardMinColumn ctxt.minIndent) >>
-      fakeAtom "para{" >>
+      withInfoSyntaxFn skip.fn (fun info => fakeAtom "para{" (info := info)) >>
       textLine >>
-      fakeAtom "}"
+      withInfoSyntaxFn skip.fn (fun info => fakeAtom "}" (info := info))
 
   partial def header (ctxt : BlockCtxt) : ParserFn :=
     nodeFn ``header <|

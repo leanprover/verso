@@ -263,7 +263,7 @@ Generate a ToC structure for a document.
 Here, `depth` is the current depth at which pages no longer recieve their own HTML files, not the
 depth of the table of contents in the document (which is controlled by a parameter to `Toc.html`).
 -/
-partial def toc (depth : Nat) (opts : Html.Options Manual IO)
+partial def toc (depth : Nat) (opts : Html.Options IO)
     (ctxt : TraverseContext)
     (state : TraverseState)
     (definitionIds : NameMap String)
@@ -376,7 +376,7 @@ where
     let (text, state) ← traverse logError text {config with htmlDepth := 0}
     let authors := text.metadata.map (·.authors) |>.getD []
     let _date := text.metadata.bind (·.date) |>.getD "" -- TODO
-    let opts : Html.Options Manual IO := {logError := fun msg => logError msg}
+    let opts : Html.Options IO := {logError := fun msg => logError msg}
     let ctxt := {logError}
     let definitionIds := state.definitionIds
     let linkTargets := state.linkTargets
@@ -448,7 +448,7 @@ where
     let (text, state) ← traverse logError text config
     let authors := text.metadata.map (·.authors) |>.getD []
     let _date := text.metadata.bind (·.date) |>.getD "" -- TODO
-    let opts : Html.Options _ IO := {logError := fun msg => logError msg}
+    let opts : Html.Options IO := {logError := fun msg => logError msg}
     let ctxt := {logError}
     let definitionIds := state.definitionIds
     let linkTargets := state.linkTargets

@@ -17,20 +17,20 @@ namespace Verso.Doc.Html
 open Verso Output Doc Html
 open Verso.Code (HighlightHtmlM)
 
-structure Options (g : Genre) (m : Type → Type) where
+structure Options  (m : Type → Type) where
   /-- The level of the top-level headers -/
   headerLevel : Nat := 1
   logError : String → m Unit
 
-def Options.reinterpret (lift : {α : _} → m α → m' α) (opts : Options g m) : Options g m' :=
+def Options.reinterpret (lift : {α : _} → m α → m' α) (opts : Options m) : Options m' :=
   {opts with
     logError := fun msg => lift <| opts.logError msg}
 
-def Options.lift [MonadLiftT m m'] (opts : Options g m) : Options g m' :=
+def Options.lift [MonadLiftT m m'] (opts : Options m) : Options m' :=
   opts.reinterpret MonadLiftT.monadLift
 
 structure HtmlT.Context (genre : Genre) (m : Type → Type) where
-  options : Options genre m
+  options : Options m
   traverseContext : genre.TraverseContext
   traverseState : genre.TraverseState
   /--
@@ -41,13 +41,36 @@ structure HtmlT.Context (genre : Genre) (m : Type → Type) where
   linkTargets : Code.LinkTargets
   codeOptions : Code.HighlightHtmlM.Options
 
+def HtmlT.Context.reinterpret (lift : {α : _} → m α → m' α) (ctx : HtmlT.Context g m) : HtmlT.Context g m' :=
+  {ctx with
+    options := ctx.options.reinterpret lift}
+
+def HtmlT.Context.lift [MonadLiftT m m'] (ctx : HtmlT.Context g m) : HtmlT.Context g m' :=
+  ctx.reinterpret monadLift
+
+
+def HtmlT.Context.cast {g1 g2 : Genre}
+    (ctx : HtmlT.Context g1 m)
+    (context_eq : g1.TraverseContext = g2.TraverseContext := by trivial)
+    (state_eq : g1.TraverseState = g2.TraverseState := by trivial) : HtmlT.Context g2 m :=
+  {ctx with
+    traverseContext := context_eq ▸ ctx.traverseContext,
+    traverseState := state_eq ▸ ctx.traverseState }
+
 abbrev HtmlT (genre : Genre) (m : Type → Type) : Type → Type :=
   ReaderT (HtmlT.Context genre m) (StateT (Verso.Code.Hover.State Html) m)
 
-def HtmlT.options [Monad m] : HtmlT genre m (Options genre m) := do
+def HtmlT.cast {g1 g2 : Genre} (act : HtmlT g1 m α)
+    (context_eq : g1.TraverseContext = g2.TraverseContext := by trivial)
+    (state_eq : g1.TraverseState = g2.TraverseState := by trivial) :
+    HtmlT g2 m α :=
+  fun ρ σ =>
+    act (ρ.cast context_eq.symm state_eq.symm) σ
+
+def HtmlT.options [Monad m] : HtmlT genre m (Options m) := do
   return (← read).options
 
-def HtmlT.withOptions (opts : Options g m → Options g m) (act : HtmlT g m α) : HtmlT g m α :=
+def HtmlT.withOptions (opts : Options m → Options m) (act : HtmlT g m α) : HtmlT g m α :=
   withReader (fun ctxt => {ctxt with options := opts ctxt.options}) act
 
 def HtmlT.context [Monad m] : HtmlT genre m genre.TraverseContext := do
@@ -183,7 +206,7 @@ instance : GenreHtml .none m where
   inline _ x := nomatch x
 
 defmethod Genre.toHtml (g : Genre) [ToHtml g m α]
-    (options : Options g m) (context : g.TraverseContext) (state : g.TraverseState)
+    (options : Options m) (context : g.TraverseContext) (state : g.TraverseState)
     (definitionIds : Lean.NameMap String)
     (linkTargets : Code.LinkTargets) (codeOptions : Code.HighlightHtmlM.Options)
     (x : α) : StateT (Verso.Code.Hover.State Html) m Html :=
