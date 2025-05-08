@@ -15,13 +15,15 @@ import VersoBlog.LexedText
 import Verso.Code
 
 open Std (HashSet HashMap)
+open Lean (Json)
 
-open Verso Doc Output Html Code Highlighted.WebAssets
+open Verso Doc Output Html Code
 open SubVerso.Highlighting
 
 namespace Verso.Genre
 
 namespace Blog
+
 inductive BlockExt where
   | highlightedCode (contextName : Lean.Name) (highlighted : Highlighted)
   | lexedText (content : LexedText)
@@ -29,7 +31,7 @@ inductive BlockExt where
   | htmlWrapper (tag : String) (attributes : Array (String × String))
   | htmlDetails (classes : String) (summary : Html)
   | blob (html : Html)
-deriving Repr
+  | component (name : Lean.Name) (data : Json)
 
 inductive InlineExt where
   | highlightedCode (contextName : Lean.Name) (highlighted : Highlighted)
@@ -40,7 +42,15 @@ inductive InlineExt where
   | pageref (name : Lean.Name) (id? : Option String)
   | htmlSpan (classes : String)
   | blob (html : Html)
-deriving Repr
+  | component (name : Lean.Name) (data : Json)
+
+section
+local instance : Repr Json where
+  reprPrec v := Repr.addAppParen v.render
+
+deriving instance Repr for BlockExt
+deriving instance Repr for InlineExt
+end
 
 namespace Post
 
@@ -129,12 +139,29 @@ class MonadConfig (m : Type → Type u) where
 
 export MonadConfig (currentConfig)
 
-def logError [Monad m] [MonadConfig m] [MonadLift IO m] (message : String) : m Unit := do
+def logError [Monad m] [MonadConfig m] [MonadLiftT IO m] (message : String) : m Unit := do
   (← currentConfig).logError message
+
+structure Components where
+  /--
+  Implementations of all block-level components.
+
+  These will always be of type `BlockComponent`; the use of `Dynamic` breaks a cycle here.
+  -/
+  blocks : Lean.NameMap Dynamic := {}
+  /--
+  Implementations of all inline-level components.
+
+  These will always be of type `InlineComponent`; the use of `Dynamic` breaks a cycle here.
+  -/
+  inlines : Lean.NameMap Dynamic := {}
+deriving Inhabited
+
 
 structure TraverseContext where
   path : List String := {}
   config : Config
+  components : Components
 
 structure TraverseState where
   usedIds : Lean.RBMap (List String) (HashSet String) compare := {}
@@ -203,12 +230,20 @@ structure BlogPost where
 deriving TypeName, Repr
 
 class BlogGenre (genre : Genre) where
-  traverseContextEq : genre.TraverseContext = Blog.TraverseContext := by rfl
-  traverseStateEq : genre.TraverseState = Blog.TraverseState := by rfl
+  context_eq : genre.TraverseContext = Blog.TraverseContext := by rfl
+  state_eq : genre.TraverseState = Blog.TraverseState := by rfl
+  block_eq : genre.Block = Blog.BlockExt := by rfl
+  inline_eq : genre.Inline = Blog.InlineExt := by rfl
 
 instance : BlogGenre Post where
 
 instance : BlogGenre Page where
+
+def BlogGenre.blockComponent [bg : BlogGenre g] (name : Lean.Name) (json : Json) (content : Array (Block g)) : Block g :=
+  Block.other (bg.block_eq ▸ BlockExt.component name json) content
+
+def BlogGenre.inlineComponent [bg : BlogGenre g] (name : Lean.Name) (json : Json) (content : Array (Inline g)) : Inline g :=
+  Inline.other (bg.inline_eq ▸ InlineExt.component name json) content
 
 
 defmethod Part.postName [Monad m] [MonadConfig m] [MonadState TraverseState m]
@@ -333,66 +368,3 @@ abbrev TraverseM := ReaderT Blog.TraverseContext (StateT Blog.TraverseState IO)
 
 instance : MonadConfig TraverseM where
   currentConfig := do pure (← read).config
-
-namespace Traverse
-
-open Doc
-
-def renderMathJs : String :=
-"document.addEventListener(\"DOMContentLoaded\", () => {
-    for (const m of document.querySelectorAll(\".math.inline\")) {
-        katex.render(m.textContent, m, {throwOnError: false, displayMode: false});
-    }
-    for (const m of document.querySelectorAll(\".math.display\")) {
-        katex.render(m.textContent, m, {throwOnError: false, displayMode: true});
-    }
-});"
-
-def genreBlock (g : Genre) : Blog.BlockExt → Array (Block g) → Blog.TraverseM (Option (Block g))
-    | .highlightedCode .., _contents => do
-      modify fun st => {st with
-        stylesheets := st.stylesheets.insert highlightingStyle,
-        scripts := st.scripts.insert highlightingJs
-      } |>.addJsFile "popper.js" popper |>.addJsFile "tippy.js" tippy |>.addCssFile "tippy-border.css" tippy.border.css
-      pure none
-    | _, _ => pure none
-
-def genreInline (g : Genre) : Blog.InlineExt → Array (Inline g) → Blog.TraverseM (Option (Inline g))
-    | .highlightedCode .., _contents | .customHighlight .., _contents => do
-      modify fun st => {st with
-        stylesheets := st.stylesheets.insert highlightingStyle,
-        scripts := st.scripts.insert highlightingJs
-      } |>.addJsFile "popper.js" popper |>.addJsFile "tippy.js" tippy |>.addCssFile "tippy-border.css" tippy.border.css
-      pure none
-    | .label x, _contents => do
-      -- Add as target if not already present
-      if let none := (← get).targets.find? x then
-        let path := (← read).path
-        let htmlId := (← get).freshId path x
-        modify fun st => {st with targets := st.targets.insert x ⟨path, htmlId⟩}
-      pure none
-    | .ref _x, _contents =>
-      -- TODO backreference
-      pure none
-    | .pageref _x _id?, _contents =>
-      -- TODO backreference
-      pure none
-    | .htmlSpan .., _ | .blob .., _ | .lexedText .., _ => pure none
-
-def traverser (g : Genre) (block : g.Block = Blog.BlockExt) (inline : g.Inline = Blog.InlineExt) : Traverse g Blog.TraverseM where
-  part _ := pure none
-  block _ := pure ()
-  inline _ := pure ()
-  genrePart _ _ := pure none
-  genreBlock := block ▸ genreBlock g
-  genreInline := inline ▸ genreInline g
-
-instance : TraversePart Page := {}
-
-instance : Traverse Page Blog.TraverseM := traverser Page rfl rfl
-
-instance : TraversePart Post := {}
-
-instance : Traverse Post Blog.TraverseM := traverser Post rfl rfl
-
-end Traverse

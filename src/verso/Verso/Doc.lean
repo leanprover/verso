@@ -247,6 +247,19 @@ partial def Inline.reprPrec [Repr g.Inline] (inline : Inline g) (prec : Nat) : S
 instance [Repr g.Inline] : Repr (Inline g) where
   reprPrec := Inline.reprPrec
 
+def Inline.cast (inlines_eq : g1.Inline = g2.Inline) : Inline g1 → Inline g2
+  | .other i xs => .other (inlines_eq ▸ i) (xs.map (cast inlines_eq))
+  | .concat xs => .concat (xs.map (cast inlines_eq))
+  | .bold xs => .bold (xs.map (cast inlines_eq))
+  | .emph xs => .emph (xs.map (cast inlines_eq))
+  | .link xs href => .link (xs.map (cast inlines_eq)) href
+  | .footnote ref xs => .footnote ref (xs.map (cast inlines_eq))
+  | .image x y => .image x y
+  | .code x => .code x
+  | .text x => .text x
+  | .linebreak x => .linebreak x
+  | .math x y => .math x y
+
 open Lean in
 inductive ArgVal where
   | name (x : Ident)
@@ -360,6 +373,16 @@ partial def Block.reprPrec [Repr g.Inline] [Repr g.Block] (inline : Block g) (pr
 
 instance [Repr g.Inline] [Repr g.Block] : Repr (Block g) where
   reprPrec b p := Block.reprPrec b p
+
+partial def Block.cast (inlines_eq : g1.Inline = g2.Inline) (blocks_eq : g1.Block = g2.Block) : Block g1 → Block g2
+  | .para xs => .para (xs.map (Inline.cast inlines_eq))
+  | .code x => .code x
+  | .ul xs => .ul (xs.map fun ⟨ys⟩ => ⟨ys.map (Block.cast inlines_eq blocks_eq)⟩)
+  | .ol n xs => .ol n (xs.map fun ⟨ys⟩ => ⟨ys.map (Block.cast inlines_eq blocks_eq)⟩)
+  | .dl xs => .dl (xs.map fun ⟨dt, dd⟩ => ⟨dt.map (Inline.cast inlines_eq), dd.map (Block.cast inlines_eq blocks_eq)⟩)
+  | .blockquote x => .blockquote (x.map (cast inlines_eq blocks_eq))
+  | .concat xs => .concat (xs.map (cast inlines_eq blocks_eq))
+  | .other x xs => .other (blocks_eq ▸ x) (xs.map (cast inlines_eq blocks_eq))
 
 
 inductive Part (genre : Genre) : Type where

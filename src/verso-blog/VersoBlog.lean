@@ -14,6 +14,7 @@ import VersoBlog.Site
 import VersoBlog.Site.Syntax
 import VersoBlog.Template
 import VersoBlog.Theme
+import VersoBlog.Traverse
 import Verso.Doc.ArgParse
 import Verso.Doc.Lsp
 import Verso.Doc.Suggestion
@@ -753,24 +754,28 @@ private def filterString (p : Char → Bool) (str : String) : String := Id.run <
     if p c then out := out.push c
   pure out
 
-def blogMain (theme : Theme) (site : Site) (relativizeUrls := true) (options : List String) : IO UInt32 := do
+open Template in
+def blogMain (theme : Theme) (site : Site) (relativizeUrls := true) (options : List String)
+    (components : Components := by exact %registered_components) :
+    IO UInt32 := do
   let hasError ← IO.mkRef false
   let logError msg := do hasError.set true; IO.eprintln msg
   let cfg ← opts {logError := logError} options
-  let (site, xref) ← site.traverse cfg
+  let (site, xref) ← site.traverse cfg components
   let rw := if relativizeUrls then
       some <| relativize
     else none
   let initGenCtx : Generate.Context := {
     site := site,
-    ctxt := ⟨[], cfg⟩,
+    ctxt := { path := [], config := cfg, components },
     xref := xref,
     dir := cfg.destination,
     config := cfg,
     rewriteHtml := rw,
-    linkTargets := {}
+    linkTargets := {},
+    components := components
   }
-  let ((), st) ← site.generate theme initGenCtx .empty
+  let (((), st), _) ← site.generate theme initGenCtx .empty {}
   IO.FS.writeFile (cfg.destination.join "-verso-docs.json") (toString st.dedup.docJson)
   for (name, content) in xref.jsFiles do
     FS.ensureDir (cfg.destination.join "-verso-js")
