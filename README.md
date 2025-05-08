@@ -40,6 +40,26 @@ Verso's design is primarily inspired by
 [Scribble](https://docs.racket-lang.org/scribble/index.html) and
 [Sphinx](https://www.sphinx-doc.org/en/master/).
 
+## Branches and Tags
+
+The workflow described in this section helps Verso development work
+well with the automation surrounding Lean releases. Please follow it!
+In the past, the `main` branch tracked upstream Lean closely, but
+these procedures make it easier to coordinate PRs across many
+repositories.
+
+When a Lean release is created, a correponding tag for the compatible
+version of Verso is also created. For example, the `v4.19.0` tag
+should be used for projects that are built in Lean 4.19.0.
+
+The two most important branches are `main` and `nightly-testing`. The
+`main` branch of this repository is intended to work with releases or
+release candidates of Lean, while `nightly-testing` tracks Lean
+nightlies. When a Lean release candidate is created, `nightly-testing`
+is made to work with it, and then its commits are rebased onto `main`.
+When the corresponding release is created, the toolchain file on
+`main` is updated and the tag is created.
+
 ## Contributions
 
 The project is currently undergoing change at a rapid pace. If you'd
