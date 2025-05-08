@@ -12,6 +12,7 @@ import Verso.Doc
 import Verso.Doc.Html
 import VersoBlog.Basic
 import VersoBlog.Site
+import VersoBlog.Component
 import Verso.Output.Html
 import Verso.Code
 
@@ -21,97 +22,6 @@ open Lean (RBMap)
 open Verso Doc Output Html HtmlT
 open Verso.Genre Blog
 open SubVerso.Highlighting
-
-private def next (xs : Array α) : Option (α × Array α) :=
-  if _ : 0 < xs.size then
-    some (xs[0], xs.extract 1 xs.size)
-  else
-    none
-
-instance [Monad m] : MonadPath (HtmlT Post m) where
-  currentPath := do
-    return (← context).path
-
-instance [Monad m] : MonadPath (HtmlT Page m) where
-  currentPath := do
-    return (← context).path
-
-instance [Monad m] : MonadConfig (HtmlT Post m) where
-  currentConfig := do
-    return (← context).config
-
-instance [Monad m] : MonadConfig (HtmlT Page m) where
-  currentConfig := do
-    return (← context).config
-
-open HtmlT
-
-defmethod LexedText.toHtml (text : LexedText) : Html :=
-  text.content.map fun
-    | (none, txt) => (txt : Html)
-    | (some cls, txt) => {{ <span class={{cls}}>{{txt}}</span>}}
-
-def blockHtml (g : Genre) (_goI : Inline g → HtmlT g IO Html) (goB : Block g → HtmlT g IO Html) : Blog.BlockExt → Array (Block g) → HtmlT g IO Html
-  | .lexedText content, _contents => do
-    pure {{ <pre class=s!"lexed {content.name}"> {{ content.toHtml }} </pre> }}
-  | .highlightedCode contextName hls, _contents => hls.blockHtml (toString contextName)
-  | .htmlDetails classes summary, contents => do
-    pure {{ <details class={{classes}}><summary>{{summary}}</summary> {{← contents.mapM goB}}</details>}}
-  | .htmlWrapper name attrs, contents => do
-    Html.tag name attrs <$> contents.mapM goB
-  | .htmlDiv classes, contents => do
-    pure {{ <div class={{classes}}> {{← contents.mapM goB}} </div> }}
-  | .blob html, _ => pure html
-
-def inlineHtml (g : Genre) [MonadConfig (HtmlT g IO)] [MonadPath (HtmlT g IO)]
-    (stateEq : g.TraverseState = Blog.TraverseState)
-    (go : Inline g → HtmlT g IO Html) : Blog.InlineExt → Array (Inline g) → HtmlT g IO Html
-  | .highlightedCode contextName hls, _contents => hls.inlineHtml (some <| toString contextName)
-  | .lexedText content, _contents => do
-    pure {{ <code class=s!"lexed {content.name}"> {{ content.toHtml }} </code> }}
-  | .customHighlight hls, _contents => hls.inlineHtml none
-  | .label x, contents => do
-    let contentHtml ← contents.mapM go
-    let st ← stateEq ▸ state
-    let some tgt := st.targets.find? x
-      | panic! "No label for {x}"
-    pure {{ <span id={{tgt.htmlId}}> {{ contentHtml }} </span>}}
-  | .ref x, contents => do
-    let st ← stateEq ▸ state
-    match st.targets.find? x with
-    | none =>
-      HtmlT.logError "Can't find target {x}"
-      pure {{<strong class="internal-error">s!"Can't find target {x}"</strong>}}
-    | some tgt =>
-      let addr := s!"{String.join ((← relative tgt.path).intersperse "/")}#{tgt.htmlId}"
-      go <| .link contents addr
-  | .pageref x id?, contents => do
-    let st ← stateEq ▸ state
-    match st.pageIds.find? x <|> st.pageIds.find? (docName x) with
-    | none =>
-      HtmlT.logError s!"Can't find target {x} - options are {st.pageIds.toList.map (·.fst)}"
-      pure {{<strong class="internal-error">s!"Can't find target {x}"</strong>}}
-    | some meta =>
-      let addr := String.join ((← relative meta.path).intersperse "/") ++ (id?.map ("#" ++ ·) |>.getD "")
-      go <| .link contents addr
-  | .htmlSpan classes, contents => do
-    pure {{ <span class={{classes}}> {{← contents.mapM go}} </span> }}
-  | .blob html, _ => pure html
-
-def blogGenreHtml (g : Genre) [MonadConfig (HtmlT g IO)] [MonadPath (HtmlT g IO)]
-    (eq1 : g.Block = Blog.BlockExt) (eq2 : g.Inline = Blog.InlineExt) (eq3 : g.TraverseState = Blog.TraverseState)
-    (partMeta : (Part g → (mkHeader : Nat → Html → Html := mkPartHeader) → HtmlT g IO Html) → g.PartMetadata → Part g → HtmlT g IO Html) : GenreHtml g IO where
-  part f m := partMeta (fun p mkHd => f p mkHd) m
-  block := eq1 ▸ blockHtml g
-  inline := eq2 ▸ inlineHtml g eq3
-
-private def mkHd (htmlId : Option String) (lvl : Nat) (contents : Html)  : Html :=
-  mkPartHeader lvl contents (htmlId.map (fun x => #[("id", x)]) |>.getD #[])
-
-instance : GenreHtml Page IO := blogGenreHtml Page rfl rfl rfl fun go metadata part =>
-  go part (mkHd metadata.htmlId)
-instance : GenreHtml Post IO := blogGenreHtml Post rfl rfl rfl fun go metadata part =>
-  go part (mkHd metadata.htmlId)
 
 namespace Verso.Genre.Blog.Template
 
@@ -145,6 +55,197 @@ def Params := RBMap String Params.Val compare
 
 instance : EmptyCollection Params := inferInstanceAs <| EmptyCollection (RBMap _ _ _)
 
+inductive Error where
+  | missingParam (param : String)
+  | wrongParamType (param : String) (type : Lean.Name)
+
+def saveJs [Monad m] [MonadStateOf Component.State m] (js : String) : m Unit := do
+  modify fun s => {s with headerJs := s.headerJs.insert js}
+
+def saveCss [Monad m] [MonadStateOf Component.State m] (css : String) : m Unit := do
+  modify fun s => {s with headerCss := s.headerCss.insert css}
+
+
+open Lean Elab Term in
+scoped macro "%registered_components" : term => do
+  ``(Components.fromLists %registered_block_components %registered_inline_components)
+
+class MonadComponents (m : Type → Type) where
+  componentImpls : m Components
+  saveJs : String → m Unit
+  saveCss : String → m Unit
+
+
+instance [MonadReaderOf Components m] [MonadStateOf Component.State m] : MonadComponents m where
+  componentImpls := read
+  saveJs js := modify fun s => { s with headerJs := s.headerJs.insert js }
+  saveCss css := modify fun s => { s with headerCss := s.headerCss.insert css }
+
+structure Context where
+  site : Site
+  config : Config
+  path : List String
+  params : Params
+  builtInStyles : HashSet String
+  builtInScripts : HashSet String
+  jsFiles : Array String
+  cssFiles : Array String
+  components : Components
+
+end Template
+
+abbrev TemplateT (m : Type → Type) (α : Type) : Type :=
+  ReaderT Template.Context (StateT Component.State m) α
+
+instance [Monad m] : Template.MonadComponents (TemplateT m) where
+  componentImpls := do return (← read).components
+  saveJs js := modifyThe Component.State fun s => { s with headerJs := s.headerJs.insert js }
+  saveCss css := modifyThe Component.State fun s => { s with headerCss := s.headerCss.insert css }
+
+abbrev TemplateM (α : Type) : Type := TemplateT (Except Template.Error) α
+
+end Verso.Genre.Blog
+
+private def next (xs : Array α) : Option (α × Array α) :=
+  if _ : 0 < xs.size then
+    some (xs[0], xs.extract 1 xs.size)
+  else
+    none
+
+instance [Monad m] : MonadPath (HtmlT Post m) where
+  currentPath := do
+    return (← context).path
+
+instance [Monad m] : MonadPath (HtmlT Page m) where
+  currentPath := do
+    return (← context).path
+
+instance [Monad m] : MonadConfig (HtmlT Post m) where
+  currentConfig := do
+    return (← context).config
+
+instance [Monad m] : MonadConfig (HtmlT Page m) where
+  currentConfig := do
+    return (← context).config
+
+open HtmlT
+
+defmethod LexedText.toHtml (text : LexedText) : Html :=
+  text.content.map fun
+    | (none, txt) => (txt : Html)
+    | (some cls, txt) => {{ <span class={{cls}}>{{txt}}</span>}}
+
+instance [Pure m] : MonadLift Id m where
+  monadLift x := pure x
+
+def blockHtml (g : Genre)
+    [bg : BlogGenre g]
+    (goI : Inline g → HtmlM g Html)
+    (goB : Block g → HtmlM g Html)
+    : Blog.BlockExt → Array (Block g) → HtmlM g Html
+  | .lexedText content, _contents => do
+    pure {{ <pre class=s!"lexed {content.name}"> {{ content.toHtml }} </pre> }}
+  | .highlightedCode contextName hls, _contents => hls.blockHtml (toString contextName)
+  | .htmlDetails classes summary, contents => do
+    pure {{ <details class={{classes}}><summary>{{summary}}</summary> {{← contents.mapM goB}}</details>}}
+  | .htmlWrapper name attrs, contents => do
+    Html.tag name attrs <$> contents.mapM goB
+  | .htmlDiv classes, contents => do
+    pure {{ <div class={{classes}}> {{← contents.mapM goB}} </div> }}
+  | .blob html, _ => pure html
+  | .component name json, contents => do
+    let ⟨_, _, _, _⟩ := bg
+    match (← readThe Components).blocks.find? name with
+    | none =>
+      HtmlT.logError s!"No component implementation found for '{name}' in {(← readThe Components).blocks.toList.map (·.fst)}"
+      pure .empty
+    | some dyn =>
+      let some {toHtml := impl, ..} := dyn.get? BlockComponent
+        | HtmlT.logError s!"Wrong type for block components: {dyn.typeName}"; pure .empty
+      let id ← modifyGetThe Component.State fun s => s.freshId
+      impl ⟨id⟩ json
+        (fun x => goI (x.cast bg.inline_eq.symm) |>.cast)
+        (fun x => goB (x.cast bg.inline_eq.symm bg.block_eq.symm) |>.cast)
+        (contents.map (·.cast bg.inline_eq bg.block_eq)) |>.cast (by simp [Page, *]) (by simp [Page, *])
+
+def inlineHtml (g : Genre) [bg : BlogGenre g]
+    [MonadConfig (HtmlM g)] [MonadPath (HtmlM g)]
+    (go : Inline g → HtmlM g Html) :
+    Blog.InlineExt → Array (Inline g) → HtmlM g Html
+  | .highlightedCode contextName hls, _contents => hls.inlineHtml (some <| toString contextName)
+  | .lexedText content, _contents => do
+    pure {{ <code class=s!"lexed {content.name}"> {{ content.toHtml }} </code> }}
+  | .customHighlight hls, _contents => do
+    hls.inlineHtml none
+  | .label x, contents => do
+    let contentHtml ← contents.mapM go
+    let st ← bg.state_eq ▸ state
+    let some tgt := st.targets.find? x
+      | panic! "No label for {x}"
+    pure {{ <span id={{tgt.htmlId}}> {{ contentHtml }} </span>}}
+  | .ref x, contents => do
+    let st ← bg.state_eq ▸ state
+    match st.targets.find? x with
+    | none =>
+      HtmlT.logError "Can't find target {x}"
+      pure {{<strong class="internal-error">s!"Can't find target {x}"</strong>}}
+    | some tgt =>
+      let addr := s!"{String.join ((← relative tgt.path).intersperse "/")}#{tgt.htmlId}"
+      go <| .link contents addr
+  | .pageref x id?, contents => do
+    let st ← bg.state_eq ▸ state
+    match st.pageIds.find? x <|> st.pageIds.find? (docName x) with
+    | none =>
+      HtmlT.logError s!"Can't find target {x} - options are {st.pageIds.toList.map (·.fst)}"
+      pure {{<strong class="internal-error">s!"Can't find target {x}"</strong>}}
+    | some meta =>
+      let addr := String.join ((← relative meta.path).intersperse "/") ++ (id?.map ("#" ++ ·) |>.getD "")
+      go <| .link contents addr
+  | .htmlSpan classes, contents => do
+    pure {{ <span class={{classes}}> {{← contents.mapM go}} </span> }}
+  | .blob html, _ => pure html
+  | .component name json, contents => do
+    let ⟨_, _, _, _⟩ := bg
+    match (← readThe Components).inlines.find? name with
+    | none =>
+      HtmlT.logError s!"No component implementation found for '{name}' in {(← readThe Components).inlines.toList.map (·.fst)}"
+      pure .empty
+    | some dyn =>
+      let some {toHtml := impl, ..} := dyn.get? InlineComponent
+        | HtmlT.logError s!"Wrong type for block components: {dyn.typeName}"; pure .empty
+      let id ← modifyGetThe Component.State fun s => s.freshId
+      impl ⟨id⟩ json
+        (fun x => go (x.cast bg.inline_eq.symm) |>.cast)
+        (contents.map (·.cast bg.inline_eq)) |>.cast bg.context_eq.symm bg.state_eq.symm
+
+
+open Verso.Genre.Blog (TemplateT)
+
+def blogGenreHtml
+    (g : Genre) [bg : BlogGenre g]
+    [MonadConfig (HtmlM g)] [MonadPath (HtmlM g)]
+    (partMeta :
+      (Part g → (mkHeader : Nat → Html → Html := mkPartHeader) →
+        HtmlM g Html) →
+      g.PartMetadata → Part g →
+      HtmlM g Html) :
+    GenreHtml g ComponentM where
+  part f := partMeta (fun p mkHd => f p mkHd)
+  block := bg.block_eq ▸ blockHtml g
+  inline := bg.inline_eq ▸ inlineHtml g
+
+
+private def mkHd (htmlId : Option String) (lvl : Nat) (contents : Html)  : Html :=
+  mkPartHeader lvl contents (htmlId.map (fun x => #[("id", x)]) |>.getD #[])
+
+instance : GenreHtml Page ComponentM := blogGenreHtml Page fun go metadata part =>
+   go part (mkHd metadata.htmlId)
+
+instance : GenreHtml Post ComponentM := blogGenreHtml Post fun go metadata part =>
+   go part (mkHd metadata.htmlId)
+
+namespace Verso.Genre.Blog.Template
+
 namespace Params
 
 def ofList (params : List (String × Val)) : Params :=
@@ -162,23 +263,8 @@ def erase (params : Params) (key : String) : Params :=
 
 end Params
 
-inductive Error where
-  | missingParam (param : String)
-  | wrongParamType (param : String) (type : Lean.Name)
-
-structure Context where
-  site : Site
-  config : Config
-  path : List String
-  params : Params
-  builtInStyles : HashSet String
-  builtInScripts : HashSet String
-  jsFiles : Array String
-  cssFiles : Array String
-
 end Template
 
-abbrev TemplateM (α : Type) : Type := ReaderT Template.Context (Except Template.Error) α
 
 abbrev Template := TemplateM Html
 
@@ -191,7 +277,8 @@ instance : MonadConfig TemplateM where
 namespace Template
 
 def param? [TypeName α] (key : String) : TemplateM (Option α) := do
-  match (← read).params.find? key with
+  let ctx ← readThe Context
+  match ctx.params.find? key with
   | none => return none
   | some val =>
     if let some v := val.get? (α := α) then return (some v)
@@ -221,7 +308,13 @@ def builtinHeader : TemplateM Html := do
     <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js" integrity="sha384-zbcZAIxlvJtNE3Dp5nxLXdXtXyxwOdnILY1TDPVmKFhl4r4nSUG1r8bcFXGVa4Te" crossorigin="anonymous"></script>
   }}
 
+  -- Components
+  for style in (← get).headerCss do
+    out := out ++ {{<style>"\n"{{.text false style}}"\n"</style>"\n"}}
+  for script in (← get).headerJs do
+    out := out ++ {{<script>"\n"{{.text false script}}"\n"</script>"\n"}}
   pure out
+
 
 namespace Params
 
