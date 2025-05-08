@@ -6,6 +6,7 @@ Author: David Thrane Christiansen
 
 import Verso.Doc
 import VersoBlog.Basic
+import VersoBlog.Traverse
 
 open Verso Doc
 
@@ -74,8 +75,11 @@ def Site.traverse1 (site : Site) : Blog.TraverseM Site := do
     .blog id <$> Page.traverse txt <*> posts.mapM BlogPost.traverse1
 
 /-- Compute a fixed point of the traverse step on a site -/
-def Site.traverse (site : Site) (config : Config) : IO (Site × Blog.TraverseState) := do
-  let topCtxt : Blog.TraverseContext := ⟨[], config⟩
+def Site.traverse
+    (site : Site) (config : Config)
+    (components : Components) :
+    IO (Site × Blog.TraverseState) := do
+  let topCtxt : Blog.TraverseContext := {path := [], config, components}
   let mut state : Blog.TraverseState := {}
   let mut site := site
   repeat -- TODO add max iterations

@@ -221,7 +221,7 @@ instance : LT SubpartSpec := Ord.toLT inferInstance
 instance : LE SubpartSpec := Ord.toLE inferInstance
 
 partial def localContentsCore
-    (opts : Html.Options Manual (ReaderT ExtensionImpls IO)) (ctxt : TraverseContext) (xref : TraverseState)
+    (opts : Html.Options (ReaderT ExtensionImpls IO)) (ctxt : TraverseContext) (xref : TraverseState)
     (p : Part Manual) (sectionNumPrefix : Option String)
     (includeTitle : Bool) (includeSubparts : SubpartSpec) (fromLevel : Nat) :
     StateT LocalItemState (StateT (Code.Hover.State Html) (ReaderT ExtensionImpls IO)) Unit := do
@@ -257,7 +257,7 @@ where
     prefix?.bind (str.dropPrefix? · |>.map Substring.toString) |>.getD str
 
 def localContents
-    (opts : Html.Options Manual (ReaderT ExtensionImpls IO)) (ctxt : TraverseContext) (xref : TraverseState)
+    (opts : Html.Options (ReaderT ExtensionImpls IO)) (ctxt : TraverseContext) (xref : TraverseState)
     (p : Part Manual)
     (sectionNumPrefix : Option String := none)
     (includeTitle : Bool := true) (includeSubparts : SubpartSpec := .all) (fromLevel : Nat := 0) :
