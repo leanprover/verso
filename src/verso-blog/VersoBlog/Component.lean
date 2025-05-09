@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 import VersoBlog.Basic
+import Verso.Doc.ArgParse
 import Std.Data.HashSet
 
 open Verso Genre Blog
@@ -194,7 +195,20 @@ scoped elab "%registered_inline_components" : term => do
 open Lean.Parser Term in
 def extContents := structInstFields (sepByIndent Term.structInstField "; " (allowTrailingSep := true))
 
-syntax (docComment)? "block_component " ident (ppSpace bracketedBinder)* ppIndent(ppSpace "where" extContents) : command
+/--
+Defines a new block component.
+
+The `toHtml` field is mandatory, while `traverse`, `cssFiles`, and `jsFiles` are optional. The
+component's parameters are in scope for `toHtml`, but they must have `ToJson` and `FromJson`
+instances.
+
+The `+directive` option just after the `block_component` keyword causes a directive to be generate
+that expands into a use of the component. The directive's arguments are passed as the arguments to
+the component. If this option is provided, then the parameter's types must additionally have
+`FromArgVal` instances.
+-/
+syntax (docComment)? "block_component " ("+" noWs &"directive")? ident (ppSpace bracketedBinder)* ppIndent(ppSpace "where" extContents) : command
+
 syntax (docComment)? "inline_component " ident (ppSpace bracketedBinder)* ppIndent(ppSpace "where" extContents) : command
 
 
@@ -269,14 +283,41 @@ def deJson [Monad m] [MonadQuotation m]
         return Html.empty
       | .ok v => pure v)
 
+open Verso.ArgParse in
+class FromArgVal (α : Type) (m : Type → Type) where
+  fromArgVal : ValDesc m α
+
+section
+open Verso.ArgParse
+open Lean
+variable [Monad m] [MonadError m]
+
+instance : FromArgVal String m where
+  fromArgVal := .string
+
+instance : FromArgVal Nat m where
+  fromArgVal := .nat
+
+instance : FromArgVal Ident m where
+  fromArgVal := .ident
+
+instance : FromArgVal Name m where
+  fromArgVal := .name
+
+instance [MonadLiftT CoreM m] : FromArgVal Bool m where
+  fromArgVal := .bool
+
+end
 
 open Lean Elab Command in
+open Verso.ArgParse in
 elab_rules : command
-  | `(command|$[$doc:docComment]? block_component $x $args* where $contents;*) => do
+  | `(command|$[$doc:docComment]? block_component $[+directive%$dirTok]? $x $args* where $contents;*) => do
     let argNames := args.flatMap argNamesTypes
     let cmd1 ←
       `(command|$[$doc:docComment]? def $x:ident {g} [bg : BlogGenre g] $args* : Array (Doc.Block g) → Doc.Block g := bg.blockComponent decl_name% (.arr #[$[toJson $(argNames.map (·.1))],*]))
     let compName := x.getId ++ `comp |> mkIdentFrom x
+    let dirName := x.getId ++ `directive |> mkIdentFrom x
     let (toHtml?, other) ← splitToHtml contents
     let noJson ← argNames.mapM deJson
     let arr : TSyntax `Lean.Parser.Term.doSeqItem ←
@@ -301,6 +342,23 @@ elab_rules : command
           $other;*)
     elabCommand cmd1
     elabCommand cmd2
+    if dirTok.isSome then
+      let argPat : Term ← argNames.foldrM (init := ← `(Unit.unit)) fun (x, _) y =>
+        `(($x, $y))
+      let argP : Term ← argNames.foldrM (init := ← `(.done)) fun (x, t) y =>
+        `((·, ·) <$> .positional $(quote x.getId) (FromArgVal.fromArgVal (α := $t)) <*> $y)
+      let qArgs : Term ← argNames.foldlM (init := x) fun tm (x, _) =>
+        `($tm $$(quote $x))
+      let cmd3 ←
+        `(command|
+          @[directive_expander $x]
+          def $dirName : DirectiveExpander
+            | args, blocks => do
+              let $argPat:term ← ArgParse.run $argP args
+              pure #[← `($qArgs #[$$(← blocks.mapM elabBlock),*])]
+              )
+      elabCommand cmd3
+
 
 open Lean Elab Command in
 elab_rules : command

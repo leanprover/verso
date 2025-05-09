@@ -69,6 +69,17 @@ where
       `(Block.other (.component $(quote `image) (.arr #[$alt, $url])) #[$(← elabBlock desc), $(← descs.mapM elabBlock),*])
     | stx => throwErrorAt stx "Expected an image and description, got {stx}"
 
+block_component +directive button' (onclick : String) where
+  toHtml id _ _ goB contents := do
+    saveJs <| "window.addEventListener('load', () => {" ++
+      s!"document.getElementById('{id}').onclick = () => " ++
+      "{ alert(" ++ onclick.quote ++ ");};});"
+    pure {{
+      <button id={{id}}>
+        {{← contents.mapM goB}}
+      </button>
+    }}
+
 
 inline_component button (onclick : String) where
   toHtml id _ goI contents := do
@@ -89,8 +100,6 @@ def buttonImpl : RoleExpander
 
 end
 
-set_option pp.rawOnError true
-
 #doc (Page) "About Me" =>
 
 I am a hypothetical user of the blog genre, describing my work on my personal site.
@@ -108,5 +117,14 @@ It contains things. {button ""}[like a button! *hooray!*]
 : ![abc](abc)
 
   bar
+
+:::
+
+
+:::button' "foo"
+
+Here's a button
+
+and a paragraph
 
 :::
