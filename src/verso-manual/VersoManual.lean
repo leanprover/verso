@@ -30,6 +30,7 @@ import VersoManual.LocalContents
 import VersoManual.InlineLean
 import VersoManual.Marginalia
 import VersoManual.Bibliography
+import VersoManual.Table
 
 open Lean (Name NameMap Json ToJson FromJson)
 
