@@ -1912,8 +1912,8 @@ def lookaheadOrderedListIndicator (ctxt : BlockCtxt) (p : OrderedListType → In
       if h : c.input.atEnd i then {s.mkEOIError with pos := iniPos}
       else
         let (s, next, type) := match c.input.get' i h with
-          | '.' => (s.next' c.input i h, chFn ' ', OrderedListType.numDot)
-          | ')' => (s.next' c.input i h, chFn ' ', OrderedListType.parenAfter)
+          | '.' => (s.next' c.input i h, (chFn ' ' <|> chFn '\n'), OrderedListType.numDot)
+          | ')' => (s.next' c.input i h, (chFn ' ' <|> chFn '\n'), OrderedListType.parenAfter)
           | other => (s.setError {unexpected := s!"unexpected '{other}'", expected := ["'.'", "')'"]}, skipFn, .numDot)
         if s.hasError then {s with pos := iniPos}
         else
@@ -2001,7 +2001,7 @@ def lookaheadUnorderedListIndicator (ctxt : BlockCtxt) (p : UnorderedListType �
     | other => (s.setError {expected := ["*", "-", "+"], unexpected := s!"'{other}'"}, .plus)
   if s.hasError then s.setPos iniPos
   else
-    let s := (chFn ' ') c s
+    let s := (chFn ' ' <|> chFn '\n') c s
     if s.hasError then s.setPos iniPos
     else p type c (s.shrinkStack iniSz |>.setPos bulletPos)
 
@@ -2064,7 +2064,7 @@ def recoverUnindent (indent : Nat) (p : ParserFn) (finish : ParserFn := skipFn) 
 
 mutual
   partial def listItem (ctxt : BlockCtxt) : ParserFn :=
-    nodeFn ``li (bulletFn >> withCurrentColumn fun c => blocks {ctxt with minIndent := c})
+    nodeFn ``li (bulletFn >> withCurrentColumn fun c => ignoreFn (manyFn (chFn ' ' <|> chFn '\n')) >> blocks1 {ctxt with minIndent := c})
   where
     bulletFn :=
       match ctxt.inLists.head? with
@@ -2073,12 +2073,12 @@ mutual
         atomicFn <|
           takeWhileFn (· == ' ') >>
           guardColumn (· == col) s!"indentation at {col}" >>
-          unorderedListIndicator type >> ignoreFn (lookaheadFn (chFn ' '))
+          unorderedListIndicator type >> ignoreFn (lookaheadFn (chFn ' ' <|> chFn '\n'))
       | some ⟨col, .inl type⟩ =>
         atomicFn <|
           takeWhileFn (· == ' ') >>
           guardColumn (· == col) s!"indentation at {col}" >>
-          orderedListIndicator type >> ignoreFn (lookaheadFn (chFn ' '))
+          orderedListIndicator type >> ignoreFn (lookaheadFn (chFn ' ' <|> chFn '\n'))
 
 
   partial def descItem (ctxt : BlockCtxt) : ParserFn :=
@@ -2399,7 +2399,193 @@ Remaining:
 "* bar\n"
 -/
 #guard_msgs in
-  #eval listItem {inLists:=[⟨0, .inr .asterisk⟩]} |>.test! "* foo\n* bar\n"
+#eval listItem {inLists:=[⟨0, .inr .asterisk⟩]} |>.test! "* foo\n* bar\n"
+
+/--
+info: Success! Final stack:
+  [(Verso.Syntax.ul
+    "ul{"
+    [(Verso.Syntax.li
+      "*"
+      [(Verso.Syntax.ul
+        "ul{"
+        [(Verso.Syntax.li
+          "*"
+          [(Verso.Syntax.para
+            "para{"
+            [(Verso.Syntax.text (str "\"A1\""))]
+            "}")])
+         (Verso.Syntax.li
+          "*"
+          [(Verso.Syntax.para
+            "para{"
+            [(Verso.Syntax.text (str "\"A2\""))]
+            "}")])]
+        "}")])
+     (Verso.Syntax.li
+      "*"
+      [(Verso.Syntax.para
+        "para{"
+        [(Verso.Syntax.text (str "\"B\""))]
+        "}")
+       (Verso.Syntax.ul
+        "ul{"
+        [(Verso.Syntax.li
+          "*"
+          [(Verso.Syntax.para
+            "para{"
+            [(Verso.Syntax.text (str "\"B1\""))]
+            "}")])
+         (Verso.Syntax.li
+          "*"
+          [(Verso.Syntax.para
+            "para{"
+            [(Verso.Syntax.text (str "\"B2\""))]
+            "}")])]
+        "}")])]
+    "}")]
+All input consumed.
+-/
+#guard_msgs in
+#eval blocks {} |>.test! "* * A1\n  * A2\n* B\n * B1\n * B2"
+
+/--
+info: Success! Final stack:
+  [(Verso.Syntax.ul
+    "ul{"
+    [(Verso.Syntax.li
+      "*"
+      [(Verso.Syntax.ul
+        "ul{"
+        [(Verso.Syntax.li
+          "*"
+          [(Verso.Syntax.para
+            "para{"
+            [(Verso.Syntax.text (str "\"A1\""))]
+            "}")])
+         (Verso.Syntax.li
+          "*"
+          [(Verso.Syntax.para
+            "para{"
+            [(Verso.Syntax.text (str "\"A2\""))
+             (Verso.Syntax.linebreak
+              "line!"
+              (str "\"\\n\""))]
+            "}")])]
+        "}")])
+     (Verso.Syntax.li
+      "*"
+      [(Verso.Syntax.ul
+        "ul{"
+        [(Verso.Syntax.li
+          "*"
+          [(Verso.Syntax.para
+            "para{"
+            [(Verso.Syntax.text (str "\"B1\""))]
+            "}")])]
+        "}")])]
+    "}")]
+All input consumed.
+-/
+#guard_msgs in
+#eval blocks {} |>.test! "* \n * A1\n * A2\n*\n * B1"
+
+/--
+info: Success! Final stack:
+  [(Verso.Syntax.ul
+    "ul{"
+    [(Verso.Syntax.li
+      "*"
+      [(Verso.Syntax.ul
+        "ul{"
+        [(Verso.Syntax.li
+          "*"
+          [(Verso.Syntax.para
+            "para{"
+            [(Verso.Syntax.text (str "\"A1\""))]
+            "}")])
+         (Verso.Syntax.li
+          "*"
+          [(Verso.Syntax.para
+            "para{"
+            [(Verso.Syntax.text (str "\"A2\""))
+             (Verso.Syntax.linebreak
+              "line!"
+              (str "\"\\n\""))]
+            "}")])]
+        "}")])
+     (Verso.Syntax.li
+      "*"
+      [(Verso.Syntax.ul
+        "ul{"
+        [(Verso.Syntax.li
+          "*"
+          [(Verso.Syntax.para
+            "para{"
+            [(Verso.Syntax.text (str "\"B1\""))]
+            "}")])]
+        "}")])]
+    "}")]
+All input consumed.
+-/
+#guard_msgs in
+#eval blocks {} |>.test! "*\n * A1\n * A2\n*\n * B1"
+
+/--
+info: Failure @2 (⟨2, 0⟩): ':'; expected %%% (at line beginning) or expected column at least 1
+Final stack:
+  [(Verso.Syntax.ul
+    "ul{"
+    [(Verso.Syntax.li
+      "*"
+      [(Verso.Syntax.metadata_block
+        <missing>
+        <missing>)
+       <missing>])])]
+Remaining: "abc"
+-/
+#guard_msgs in
+#eval blocks {} |>.test! "*\nabc"
+
+/--
+info: Success! Final stack:
+  [(Verso.Syntax.ul
+    "ul{"
+    [(Verso.Syntax.li
+      "*"
+      [(Verso.Syntax.para
+        "para{"
+        [(Verso.Syntax.text (str "\"abc\""))]
+        "}")
+       (Verso.Syntax.para
+        "para{"
+        [(Verso.Syntax.text (str "\"def\""))]
+        "}")])]
+    "}")]
+All input consumed.
+-/
+#guard_msgs in
+#eval blocks {} |>.test! "*\n abc\n\n def"
+
+/--
+info: Success! Final stack:
+  [(Verso.Syntax.ul
+    "ul{"
+    [(Verso.Syntax.li
+      "*"
+      [(Verso.Syntax.para
+        "para{"
+        [(Verso.Syntax.text (str "\"abc\""))]
+        "}")])]
+    "}")
+   (Verso.Syntax.para
+    "para{"
+    [(Verso.Syntax.text (str "\"def\""))]
+    "}")]
+All input consumed.
+-/
+#guard_msgs in
+#eval blocks {} |>.test! "*\n abc\n\ndef"
 
 /--
 info: Success! Final stack:
