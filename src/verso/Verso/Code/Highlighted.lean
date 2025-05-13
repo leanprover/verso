@@ -17,7 +17,7 @@ open Std (HashMap)
 
 namespace SubVerso.Highlighting
 /--
-Remove n levels of indentation from highlighted code.
+Removes n levels of indentation from highlighted code.
 -/
 partial def Highlighted.deIndent (n : Nat) (hl : Highlighted) : Highlighted :=
   (remove hl).run' (some n)
@@ -126,6 +126,14 @@ structure HighlightHtmlM.Context where
   definitionIds : Lean.NameMap String
   options : HighlightHtmlM.Options
 
+/--
+Monad used to render highlighted Verso code to HTML.
+
+The monad enables the following features:
+1. Conveying options of type `HighlightHtmlM.Options` that govern the display of a particular piece of code.
+2. Conveying document-wide configurations, in particular policies for hyperlinking identifiers.
+3. De-duplicating hovers, which can greatly reduce the size of generated HTML.
+-/
 abbrev HighlightHtmlM α := ReaderT HighlightHtmlM.Context (StateT (State Html) Id) α
 
 def addHover (content : Html) : HighlightHtmlM Nat := modifyGet fun st =>
@@ -186,15 +194,9 @@ defmethod Token.Kind.addLink (tok : Token.Kind) (content : Html) : HighlightHtml
   | .keyword (some k) .. => kwLink k content
   | _ => pure content
 
-partial defmethod Highlighted.isEmpty (hl : Highlighted) : Bool :=
-  match hl with
-  | .text str => str.isEmpty
-  | .token .. => false
-  | .span _ hl => hl.isEmpty
-  | .tactics _ _ _ hl => hl.isEmpty
-  | .point .. => true
-  | .seq hls => hls.all isEmpty
-
+/--
+Removes trailing whitespace from highlighted code.
+-/
 partial defmethod Highlighted.trimRight (hl : Highlighted) : Highlighted :=
   match hl with
   | .text str => .text str.trimRight
@@ -205,26 +207,19 @@ partial defmethod Highlighted.trimRight (hl : Highlighted) : Highlighted :=
   | .seq hls => Id.run do
     let mut hls := hls
     repeat
-      if h : hls.size > 0 then
-        have : hls.size - 1 < hls.size := by
-          apply Nat.sub_lt_of_pos_le
-          . simp
-          . exact h
-        if hls[hls.size - 1].isEmpty then
+      if let some last := hls.back? then
+        let last := last.trimRight
+        if last.isEmpty then
           hls := hls.pop
-        else break
+        else
+          hls := hls.set! (hls.size - 1) last
+          break
       else break
-    if h : hls.size > 0 then
-      let i := hls.size - 1
-      have : i < hls.size := by
-        dsimp (config := {zetaDelta := true})
-        apply Nat.sub_lt_of_pos_le
-        . simp
-        . exact h
-      --dbg_trace repr hls[i]
-      .seq <| hls.set i hls[i].trimRight
-    else hl
+    .seq hls
 
+/--
+Removes leading whitespace from highlighted code.
+-/
 partial defmethod Highlighted.trimLeft (hl : Highlighted) : Highlighted :=
   match hl with
   | .text str => .text str.trimLeft
@@ -232,11 +227,22 @@ partial defmethod Highlighted.trimLeft (hl : Highlighted) : Highlighted :=
   | .span infos hl => .span infos hl.trimLeft
   | .tactics info startPos endPos hl => .tactics info startPos endPos hl.trimLeft
   | .point .. => hl
-  | .seq hls =>
-    if h : hls.size > 0 then
-      .seq <| hls.set 0 hls[0].trimLeft
-    else hl
+  | .seq hls => Id.run do
+    let mut hls := hls
+    repeat
+      if h : hls.size > 0 then
+        let first := hls[0].trimLeft
+        if first.isEmpty then
+          hls := hls.drop 1
+        else
+          hls := hls.set 0 first
+          break
+      else break
+    .seq hls
 
+/--
+Removes leading and trailing whitespace from highlighted code.
+-/
 defmethod Highlighted.trim (hl : Highlighted) : Highlighted := hl.trimLeft.trimRight
 
 defmethod Token.Kind.hover? (tok : Token.Kind) : HighlightHtmlM (Option Nat) :=
