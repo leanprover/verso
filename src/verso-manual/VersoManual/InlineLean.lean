@@ -170,7 +170,7 @@ def lean : CodeBlockExpander
   | args, str => withoutAsync <| do
     let config ← LeanBlockConfig.parse.run args
 
-    PointOfInterest.save (← getRef) ((config.name.map toString).getD (abbrevFirstLine 20 str.getString))
+    PointOfInterest.save (← getRef) ((config.name.map (·.toString)).getD (abbrevFirstLine 20 str.getString))
       (kind := Lsp.SymbolKind.file)
       (detail? := some ("Lean code" ++ config.outlineMeta))
 
