@@ -117,7 +117,7 @@ private def mustClose : List String :=
    "div", "a", "em", "strong", "small", "s", "cite", "q", "dfn", "abbr", "ruby",
    "data", "time", "code", "var", "samp", "kbd", "sub", "sup", "i"] ++
   -- SVG tags begin here
-  #["altGlyph", "a", "altGlyphDef", "altGlyphItem", "animate", "animateColor",
+  ["altGlyph", "a", "altGlyphDef", "altGlyphItem", "animate", "animateColor",
    "animateMotion", "animateTransform", "circle", "clipPath", "color-profile",
    "cursor", "defs", "desc", "ellipse", "feBlend", "feColorMatrix",
    "feComponentTransfer", "feComposite", "feConvolveMatrix", "feDiffuseLighting",
