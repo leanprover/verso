@@ -30,16 +30,15 @@ instance : Quote TableConfig.Alignment where
     | .right => mkCApp ``right #[]
 
 namespace TableConfig
+
 /-- HTML class name for alignment -/
 def Alignment.htmlClass : Alignment → String
   | .left => "left-align"
   | .right => "right-align"
   | .center => "center-align"
+
 end TableConfig
 
-def Block.table (columns : Nat) (header : Bool) (tag : Option String) (alignment : Option TableConfig.Alignment) (assignedTag : Option Tag := none) : Block where
-  name := `Manual.table
-  data := ToJson.toJson (columns, header, tag, assignedTag, alignment)
 
 structure TableConfig where
   /-- Name for refs -/
@@ -47,6 +46,88 @@ structure TableConfig where
   header : Bool := false
   /-- Alignment in the text (`none` means defer to stylesheet default) -/
   alignment : Option TableConfig.Alignment := none
+
+block_extension Block.table (columns : Nat) (header : Bool) (tag : Option String) (alignment : Option TableConfig.Alignment) (assignedTag : Option Tag := none) where
+  data := ToJson.toJson (columns, header, tag, assignedTag, alignment)
+
+  traverse id data contents := do
+    match FromJson.fromJson? data (α := Nat × Bool × Option String × Option Tag × Option TableConfig.Alignment) with
+    | .error e => logError s!"Error deserializing table data: {e}"; pure none
+    | .ok (_, _, none, _) => pure none
+    | .ok (c, hdr, some x, none, align) =>
+      let path ← (·.path) <$> read
+      let tag ← Verso.Genre.Manual.externalTag id path x
+      pure <| some <| Block.other {Block.table c hdr (some x) (assignedTag := some tag) align with id := some id} contents
+    | .ok (_, _, some _, some _, _) => pure none
+
+  toTeX := none
+
+  toHtml :=
+    open Verso.Doc.Html in
+    open Verso.Output.Html in
+    some <| fun goI goB id data blocks => do
+      match FromJson.fromJson? data (α := Nat × Bool × Option String × Option Tag × Option TableConfig.Alignment) with
+      | .error e =>
+        HtmlT.logError s!"Error deserializing table data: {e}"
+        return .empty
+      | .ok (columns, header, _, _, align) =>
+      if let #[.ul items] := blocks then
+        let xref ← HtmlT.state
+        let attrs := xref.htmlId id
+        let «class» := "tabular" ++ (align.map (" " ++ ·.htmlClass)).getD ""
+        let mut items := items
+        let mut rows := #[]
+        while items.size > 0 do
+          rows := rows.push (items.take columns |>.map (·.contents))
+          items := items.extract columns items.size
+
+        return {{
+          <table class={{«class»}} {{attrs}}>
+            {{← rows.mapIdxM fun i r => do
+              let cols ← Output.Html.seq <$> r.mapM fun c => do
+                let cell : Output.Html ← c.mapM goB
+                if header && i == 0 then
+                  pure {{<th>{{cell}}</th>}}
+                else
+                  pure {{<td>{{cell}}</td>}}
+              pure {{<tr>{{cols}}</tr>}}
+            }}
+          </table>
+        }}
+
+      else
+        HtmlT.logError "Malformed table"
+        return .empty
+
+  extraCss := [
+r##"
+table.tabular {
+  margin: auto;
+  border-spacing: 1rem;
+}
+table.tabular.left-align {
+  margin-right: auto;
+  margin-left: 0;
+}
+table.tabular.center-align {
+  margin: auto;
+}
+table.tabular.right-align {
+  margin-left auto;
+  margin-right: 0;
+}
+table.tabular td, table.tabular th {
+  text-align: left;
+  vertical-align: top;
+}
+table.tabular td > p:first-child, table.tabular th > p:first-child {
+  margin-top: 0;
+}
+table.tabular td > p:last-child, table.tabular th > p:first-child {
+  margin-bottom: 0;
+}
+"##
+  ]
 
 
 def TableConfig.parse [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m] [MonadFileMap m] : ArgParse m TableConfig :=
@@ -98,82 +179,3 @@ where
   getLi
     | `(list_item| * $content* ) => pure content
     | other => throwErrorAt other "Expected list item"
-
-
-@[block_extension table]
-def table.descr : BlockDescr where
-  traverse id data contents := do
-    match FromJson.fromJson? data (α := Nat × Bool × Option String × Option Tag × Option TableConfig.Alignment) with
-    | .error e => logError s!"Error deserializing table data: {e}"; pure none
-    | .ok (_, _, none, _) => pure none
-    | .ok (c, hdr, some x, none, align) =>
-      let path ← (·.path) <$> read
-      let tag ← Verso.Genre.Manual.externalTag id path x
-      pure <| some <| Block.other {Block.table c hdr (some x) (assignedTag := some tag) align with id := some id} contents
-    | .ok (_, _, some _, some _, _) => pure none
-  toTeX := none
-  toHtml :=
-    open Verso.Doc.Html in
-    open Verso.Output.Html in
-    some <| fun goI goB id data blocks => do
-      match FromJson.fromJson? data (α := Nat × Bool × Option String × Option Tag × Option TableConfig.Alignment) with
-      | .error e =>
-        HtmlT.logError s!"Error deserializing table data: {e}"
-        return .empty
-      | .ok (columns, header, _, _, align) =>
-      if let #[.ul items] := blocks then
-        let xref ← HtmlT.state
-        let attrs := xref.htmlId id
-        let «class» := "tabular" ++ (align.map (" " ++ ·.htmlClass)).getD ""
-        let mut items := items
-        let mut rows := #[]
-        while items.size > 0 do
-          rows := rows.push (items.take columns |>.map (·.contents))
-          items := items.extract columns items.size
-
-        return {{
-          <table class={{«class»}} {{attrs}}>
-            {{← rows.mapIdxM fun i r => do
-              let cols ← Output.Html.seq <$> r.mapM fun c => do
-                let cell : Output.Html ← c.mapM goB
-                if header && i == 0 then
-                  pure {{<th>{{cell}}</th>}}
-                else
-                  pure {{<td>{{cell}}</td>}}
-              pure {{<tr>{{cols}}</tr>}}
-            }}
-          </table>
-        }}
-
-      else
-        HtmlT.logError "Malformed table"
-        return .empty
-  extraCss := [
-r##"
-table.tabular {
-  margin: auto;
-  border-spacing: 1rem;
-}
-table.tabular.left-align {
-  margin-right: auto;
-  margin-left: 0;
-}
-table.tabular.center-align {
-  margin: auto;
-}
-table.tabular.right-align {
-  margin-left auto;
-  margin-right: 0;
-}
-table.tabular td, table.tabular th {
-  text-align: left;
-  vertical-align: top;
-}
-table.tabular td > p:first-child, table.tabular th > p:first-child {
-  margin-top: 0;
-}
-table.tabular td > p:last-child, table.tabular th > p:first-child {
-  margin-bottom: 0;
-}
-"##
-  ]
