@@ -155,7 +155,7 @@ textbook project in Verso and a place where features can be developed
 for upstreaming into the manual genre proper.
 
 To build the example website and place the results in
-`_out/examples/demosite`, run:
+`_out/examples/demotextbook`, run:
 ```
 lake build
 lake exe demotextbook --output _out/examples/demotextbook
