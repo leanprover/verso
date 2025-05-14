@@ -28,11 +28,18 @@ register_option verso.exampleModule : String := {
   group := "verso"
 }
 
+register_option verso.externalExamples.suppressedNamespaces : String := {
+  defValue := "",
+  descr := "Namespaces to be hidden in term metadata (separated by spaces)",
+  group := "verso"
+}
+
+
 variable [Monad m] [MonadLift IO m] [MonadEnv m] [MonadOptions m] [MonadError m] [MonadTrace m] [AddMessageContext m] [MonadFinally m] [MonadAlwaysExcept ε m]
 
 
 open System in
-def loadModuleContent' (projectDir : String) (mod : String) : m (Array ModuleItem) := do
+def loadModuleContent' (projectDir : String) (mod : String) (suppressNamespaces : List String) : m (Array ModuleItem) := do
 
   let projectDir : FilePath := projectDir
 
@@ -89,7 +96,11 @@ def loadModuleContent' (projectDir : String) (mod : String) : m (Array ModuleIte
         if res.exitCode != 0 then reportFail projectDir cmd args res
 
     withTraceNode `Elab.Verso (fun _ => pure m!"loadModuleContent': extracting '{mod}'") do
-      let args := #["run", "--install", toolchain, "lake", "env", "subverso-extract-mod", mod, f.toString]
+      let suppressArgs := suppressNamespaces.toArray.flatMap (#["--suppress-namespace", ·])
+      let args :=
+        #["run", "--install", toolchain, "lake", "env", "subverso-extract-mod"] ++
+        suppressArgs ++
+        #[mod, f.toString]
       let res ← IO.Process.output {
         cmd, args, cwd := projectDir
         -- Unset Lake's environment variables
@@ -128,13 +139,19 @@ def getProjectDir : m String := do
     | throwError "No example project specified - use `set_option verso.exampleProject \"DIR\" to set it.`"
   return projectDir
 
+def getSuppress : m (List String) := do
+  let some nss ← verso.externalExamples.suppressedNamespaces.get? <$> getOptions
+    | return []
+  return nss.splitOn " "
+
 def loadModuleContent [MonadAlwaysExcept ε m] (mod : String) : m (Array ModuleItem) :=
   withTraceNode `Elab.Verso (fun _ => pure m!"Loading example module {mod}") <| do
     let modName := mod.toName
     if let some m := (loadedModulesExt.getState (← getEnv)).find? modName then return m
     else
       let projectDir ← getProjectDir
+      let suppress ← getSuppress
 
-      let items ← loadModuleContent' projectDir mod
+      let items ← loadModuleContent' projectDir mod suppress
       modifyEnv (loadedModulesExt.modifyState · (·.insert modName items))
       return items
