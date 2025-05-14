@@ -65,7 +65,7 @@ block_extension Block.table (columns : Nat) (header : Bool) (tag : Option String
   toHtml :=
     open Verso.Doc.Html in
     open Verso.Output.Html in
-    some <| fun goI goB id data blocks => do
+    some <| fun _goI goB id data blocks => do
       match FromJson.fromJson? data (α := Nat × Bool × Option String × Option Tag × Option TableConfig.Alignment) with
       | .error e =>
         HtmlT.logError s!"Error deserializing table data: {e}"

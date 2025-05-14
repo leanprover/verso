@@ -283,31 +283,6 @@ def deJson [Monad m] [MonadQuotation m]
         return Html.empty
       | .ok v => pure v)
 
-open Verso.ArgParse in
-class FromArgVal (α : Type) (m : Type → Type) where
-  fromArgVal : ValDesc m α
-
-section
-open Verso.ArgParse
-open Lean
-variable [Monad m] [MonadError m]
-
-instance : FromArgVal String m where
-  fromArgVal := .string
-
-instance : FromArgVal Nat m where
-  fromArgVal := .nat
-
-instance : FromArgVal Ident m where
-  fromArgVal := .ident
-
-instance : FromArgVal Name m where
-  fromArgVal := .name
-
-instance [MonadLiftT CoreM m] : FromArgVal Bool m where
-  fromArgVal := .bool
-
-end
 
 open Lean Elab Command in
 open Verso.ArgParse in

@@ -25,6 +25,14 @@ structure ValDesc (α) where
   description : MessageData
   get : ArgVal → m α
 
+/--
+A canonical way to convert a Verso argument into a given type.
+-/
+class FromArgVal (α : Type) (m : Type → Type) where
+  fromArgVal : ValDesc m α
+
+export FromArgVal (fromArgVal)
+
 inductive ArgParse (m : Type → Type) : Type → Type 1 where
   | fail (stx? : Option Syntax) (message? : Option MessageData) : ArgParse m α
   | pure (val : α) : ArgParse m α
@@ -40,6 +48,28 @@ inductive ArgParse (m : Type → Type) : Type → Type 1 where
   /-- Returns all remaining arguments. This is useful for consuming some, then forwarding the rest. -/
   | remaining : ArgParse m (Array Arg)
 
+/--
+A canonical way to convert a sequence of Verso arguments into a given type.
+-/
+class FromArgs (α : Type) (m : Type → Type) where
+  fromArgs : ArgParse m α
+
+export FromArgs (fromArgs)
+
+def ArgParse.positional' {m} [FromArgVal α m] (nameHint : Name) (doc? : Option MessageData := none) : ArgParse m α :=
+  .positional nameHint fromArgVal (doc? := doc?)
+
+def ArgParse.named' {m} [FromArgVal α m]
+    (name : Name) (optional : Bool) (doc? : Option MessageData := none) :
+    ArgParse m (if optional then Option α else α) :=
+  .named name fromArgVal optional (doc? := doc?)
+
+def ArgParse.anyNamed' {m} [FromArgVal α m]
+    (name : Name) (doc? : Option MessageData := none) :
+    ArgParse m (Ident × α) :=
+  .anyNamed name fromArgVal (doc? := doc?)
+
+
 instance : Inhabited (ArgParse m α) where
   default := .fail none none
 
@@ -53,6 +83,9 @@ instance : Alternative (ArgParse m) where
 
 def ArgParse.namedD {m} (name : Name) (val : ValDesc m α) (default : α) : ArgParse m α :=
   named name val true <&> (·.getD default)
+
+def ArgParse.namedD' {m} [FromArgVal α m] (name : Name) (default : α) : ArgParse m α :=
+  namedD name fromArgVal default
 
 def ArgParse.describe : ArgParse m α → MessageData
   | .fail _ msg? => msg?.getD "Cannot succeed"
@@ -90,7 +123,7 @@ structure ParseState where
   info : Array (Syntax × Name × MessageData)
 
 -- NB the order of ExceptT and StateT is important here
-def ArgParse.parse : ArgParse m α → ExceptT (Array Arg × Exception) (StateT ParseState m) α
+def ArgParse.parseArgs : ArgParse m α → ExceptT (Array Arg × Exception) (StateT ParseState m) α
   | .fail stx? msg? => do
     let stx ← stx?.getDM getRef
     let msg := msg?.getD "failed"
@@ -171,16 +204,16 @@ def ArgParse.parse : ArgParse m α → ExceptT (Array Arg × Exception) (StateT 
   | .orElse p1 p2 => do
     let s ← get
     try
-      p1.parse
+      p1.parseArgs
     catch
       | e1@(args1, _) =>
         try
           set s
-          (p2 ()).parse
+          (p2 ()).parseArgs
         catch
           | e2@(args2, _) =>
             if args2.size < args1.size then throw e1 else throw e2
-  | .seq p1 p2 => Seq.seq p1.parse (fun () => p2 () |>.parse)
+  | .seq p1 p2 => Seq.seq p1.parseArgs (fun () => p2 () |>.parseArgs)
   | .remaining => modifyGet fun s =>
     let r := s.remaining
     (r, {s with remaining := #[]})
@@ -209,17 +242,26 @@ def ValDesc.bool : ValDesc m Bool where
       else throwErrorAt b "Expected 'true' or 'false'"
     | other => throwError "Expected Boolean, got {other}"
 
+instance : FromArgVal Bool m where
+  fromArgVal := .bool
+
 def ValDesc.string : ValDesc m String where
   description := m!"a string"
   get
     | .str s => pure s.getString
     | other => throwError "Expected string, got {toMessageData other}"
 
+instance : FromArgVal String m where
+  fromArgVal := .string
+
 def ValDesc.ident : ValDesc m Ident where
   description := m!"an identifier"
   get
     | .name x => pure x
     | other => throwError "Expected identifier, got { toMessageData other}"
+
+instance : FromArgVal Ident m where
+  fromArgVal := .ident
 
 /--
 Parses a name as an argument value.
@@ -231,6 +273,9 @@ def ValDesc.name : ValDesc m Name where
   get
     | .name x => pure x.getId.eraseMacroScopes
     | other => throwError "Expected identifier, got {other}"
+
+instance : FromArgVal Name m where
+  fromArgVal := .name
 
 def ValDesc.resolvedName : ValDesc m Name where
   description := m!"a resolved name"
@@ -250,6 +295,9 @@ def ValDesc.nat : ValDesc m Nat where
   get
     | .num n => pure n.getNat
     | other => throwError "Expected string, got {repr other}"
+
+instance : FromArgVal Nat m where
+  fromArgVal := .nat
 
 open Lean.Parser in
 /--
@@ -294,6 +342,9 @@ def ValDesc.messageSeverity : ValDesc m MessageSeverity where
       else throwErrorAt b "Expected '{``error}', '{``warning}', or '{``information}'"
     | other => throwError "Expected severity, got {repr other}"
 
+instance : FromArgVal MessageSeverity m where
+  fromArgVal := .messageSeverity
+
 open Lean.Elab.Tactic.GuardMsgs in
 def ValDesc.whitespaceMode : ValDesc m WhitespaceMode where
   description :=
@@ -308,8 +359,40 @@ def ValDesc.whitespaceMode : ValDesc m WhitespaceMode where
       else throwErrorAt b "Expected '{``exact}', '{``normalized}', or '{``lax}'"
     | other => throwError "Expected whitespace mode, got {repr other}"
 
+/--
+A value with the syntax that denotes it in source code.
+
+Used to provide error messages or other feedback at the right location.
+-/
+structure WithSyntax (α) where
+  val : α
+  «syntax» : Syntax
+
+/--
+Parses a value along with its original syntax, which can be useful for providing error messages or
+other feedback at the right location.
+-/
+def ValDesc.withSyntax (desc : ValDesc m α) : ValDesc m (WithSyntax α) where
+  description := desc.description
+  get v := (WithSyntax.mk · v.syntax) <$> desc.get v
+
+instance [FromArgVal α m] : FromArgVal (WithSyntax α) m where
+  fromArgVal := .withSyntax FromArgVal.fromArgVal
+
+/--
+Parses a string literal.
+-/
+def ValDesc.strLit [Monad m] [MonadError m] : ValDesc m StrLit where
+  description := m!"a string"
+  get
+    | .str s => pure s
+    | other => throwError "Expected string, got {toMessageData other}"
+
+instance : FromArgVal StrLit m where
+  fromArgVal := .strLit
+
 def ArgParse.run [MonadLiftT BaseIO m] (p : ArgParse m α) (args : Array Arg) : m α := do
-  match ← p.parse _ ⟨args, #[]⟩ with
+  match ← p.parseArgs _ ⟨args, #[]⟩ with
   | (.ok v, ⟨more, info⟩) =>
     if more.size = 0 then
       for (loc, name, what) in info do
@@ -322,3 +405,9 @@ def ArgParse.run [MonadLiftT BaseIO m] (p : ArgParse m α) (args : Array Arg) : 
       throwError "Unexpected arguments: {.group <| indentD errs}"
   | (.error e, st) =>
     throw e.snd
+
+def parse [MonadLiftT BaseIO m] [FromArgs α m] (args : Array Arg) : m α := do
+  ArgParse.run fromArgs args
+
+def parseThe (α) [MonadLiftT BaseIO m] [FromArgs α m] (args : Array Arg) : m α := do
+  ArgParse.run fromArgs args
