@@ -273,6 +273,11 @@ where
   separatedDocs txt :=
     {{<span class="sep"/><code class="docstring">{{txt}}</code>}}
 
+defmethod Lean.MessageSeverity.«class» : Lean.MessageSeverity → String
+  | .information => "information"
+  | .warning => "warning"
+  | .error => "error"
+
 defmethod Highlighted.Span.Kind.«class» : Highlighted.Span.Kind → String
   | .info => "info"
   | .warning => "warning"
