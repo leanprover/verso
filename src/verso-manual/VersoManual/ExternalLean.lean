@@ -312,12 +312,11 @@ def module : CodeBlockExpander
     let {module := moduleName, anchor?, warningsAsErrors} ← parseThe CodeContext args
     let modStr := moduleName.getId.toString
     let items ← loadModuleContent modStr
-    let highlighted := Highlighted.seq (items.map (·.code))
-    let highlighted := if warningsAsErrors then warningsToErrors highlighted else highlighted
     if let some anchor := anchor? then
       try
         let {anchors, ..} ← anchored moduleName anchor
         if let some hl := anchors[anchor.getId.toString]? then
+          let hl := if warningsAsErrors then warningsToErrors hl else hl
           let _ ← ExpectString.expectString "module contents" code (hl.toString |> withNl)
             (useLine := fun l => !l.trim.isEmpty)
           for (sev, msg, _) in allInfo hl do
@@ -334,6 +333,8 @@ def module : CodeBlockExpander
           return #[← ``(sorryAx _ true)]
         | e => throw e
     else
+      let highlighted := Highlighted.seq (items.map (·.code))
+      let highlighted := if warningsAsErrors then warningsToErrors highlighted else highlighted
       let _ ← ExpectString.expectString "module contents" code (highlighted.toString |> withNl)
         (useLine := fun l => !l.trim.isEmpty)
       for (sev, msg, _) in allInfo highlighted do
