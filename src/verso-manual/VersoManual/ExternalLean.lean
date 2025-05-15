@@ -80,16 +80,9 @@ A specification of which module to look in to find example code.
 structure CodeModuleContext where
   /-- The module's name. -/
   module : Ident
-  /--
-  Whether to convert warnings to errors.
-
-  This can be useful if errors are converted to warnings in the module itself, allowing a build to
-  succeed.
-  -/
-  warningsAsErrors : Bool
 
 instance : FromArgs CodeModuleContext m where
-  fromArgs := CodeModuleContext.mk <$> moduleOrDefault <*> .namedD' `warningsAsErrors false
+  fromArgs := CodeModuleContext.mk <$> moduleOrDefault
 
 /--
 A specification of which module to look in to find example code, potentially made more specific with
@@ -309,14 +302,13 @@ Includes the contents of the specified example module.
 @[code_block_expander module]
 def module : CodeBlockExpander
   | args, code => withTraceNode `Elab.Verso (fun _ => pure m!"module") <| do
-    let {module := moduleName, anchor?, warningsAsErrors} ← parseThe CodeContext args
+    let {module := moduleName, anchor?} ← parseThe CodeContext args
     let modStr := moduleName.getId.toString
     let items ← loadModuleContent modStr
     if let some anchor := anchor? then
       try
         let {anchors, ..} ← anchored moduleName anchor
         if let some hl := anchors[anchor.getId.toString]? then
-          let hl := if warningsAsErrors then warningsToErrors hl else hl
           let _ ← ExpectString.expectString "module contents" code (hl.toString |> withNl)
             (useLine := fun l => !l.trim.isEmpty)
           for (sev, msg, _) in allInfo hl do
@@ -334,7 +326,6 @@ def module : CodeBlockExpander
         | e => throw e
     else
       let highlighted := Highlighted.seq (items.map (·.code))
-      let highlighted := if warningsAsErrors then warningsToErrors highlighted else highlighted
       let _ ← ExpectString.expectString "module contents" code (highlighted.toString |> withNl)
         (useLine := fun l => !l.trim.isEmpty)
       for (sev, msg, _) in allInfo highlighted do
@@ -358,13 +349,12 @@ Includes the contents of the specified example module.
 @[role_expander module]
 def moduleInline : RoleExpander
   | args, inls => withTraceNode `Elab.Verso (fun _ => pure m!"moduleInline") <| do
-    let {module := moduleName, anchor?, warningsAsErrors} ← parseThe CodeContext args
+    let {module := moduleName, anchor?} ← parseThe CodeContext args
     let code? ← oneCodeStr? inls
 
     let modStr := moduleName.getId.toString
     let items ← loadModuleContent modStr
     let highlighted := Highlighted.seq (items.map (·.code))
-    let highlighted := if warningsAsErrors then warningsToErrors highlighted else highlighted
 
     if let some anchor := anchor? then
       try
@@ -422,7 +412,7 @@ Quotes the first instance of the given name from the module.
 @[role_expander moduleName]
 def moduleName : RoleExpander
   | args, inls => withTraceNode `Elab.Verso (fun _ => pure m!"moduleName") <| do
-    let {module := moduleName, anchor?, warningsAsErrors, show?} ← parseThe NameContext args
+    let {module := moduleName, anchor?, show?} ← parseThe NameContext args
     let name ← oneCodeStr inls
     let nameStr := name.getString
 
@@ -444,7 +434,6 @@ def moduleName : RoleExpander
             | .error ref e => logErrorAt ref e; return #[← ``(sorryAx _ true)]
             | e => throw e
       else pure highlighted
-    let fragment := if warningsAsErrors then warningsToErrors fragment else fragment
 
     if let some tok@⟨k, _txt⟩ := fragment.matchingName? nameStr then
       let tok := show?.map (⟨k, ·.getId.toString⟩) |>.getD tok
@@ -465,13 +454,12 @@ Quotes the first term that matches the provided string.
 @[role_expander moduleTerm]
 def moduleTerm : RoleExpander
   | args, inls => withTraceNode `Elab.Verso (fun _ => pure m!"moduleTerm") <| do
-    let {module := moduleName, anchor?, warningsAsErrors} ← parseThe CodeContext args
+    let {module := moduleName, anchor?} ← parseThe CodeContext args
     let term ← oneCodeStr inls
 
     let modStr := moduleName.getId.toString
     let items ← loadModuleContent modStr
     let highlighted := Highlighted.seq (items.map (·.code))
-    let highlighted := if warningsAsErrors then warningsToErrors highlighted else highlighted
     let fragment ←
       if let some anchor := anchor? then
         try
@@ -511,7 +499,7 @@ Displays output from the example module.
 @[code_block_expander moduleOut]
 def moduleOut : CodeBlockExpander
   | args, str => withTraceNode `Elab.Verso (fun _ => pure m!"moduleOut") <| do
-    let {module := moduleName, anchor?, warningsAsErrors, severity} ← parseThe MessageContext args
+    let {module := moduleName, anchor?, severity} ← parseThe MessageContext args
 
     let modStr := moduleName.getId.toString
     let items ← loadModuleContent modStr
@@ -531,7 +519,6 @@ def moduleOut : CodeBlockExpander
           | .error ref e => logErrorAt ref e; return #[← ``(sorryAx _ true)]
           | e => throw e
       else pure highlighted
-    let fragment := if warningsAsErrors then warningsToErrors fragment else fragment
 
     let infos : Array _ := allInfo fragment
 
@@ -573,7 +560,7 @@ def moduleOutRole : RoleExpander
   | args, inls => withTraceNode `Elab.Verso (fun _ => pure m!"moduleOutRole") <| do
     let str? ← oneCodeStr? inls
 
-    let {module := moduleName, anchor?, warningsAsErrors, severity} ← parseThe MessageContext args
+    let {module := moduleName, anchor?, severity} ← parseThe MessageContext args
 
     let modStr := moduleName.getId.toString
     let items ← loadModuleContent modStr
@@ -593,7 +580,6 @@ def moduleOutRole : RoleExpander
           | .error ref e => logErrorAt ref e; return #[← ``(sorryAx _ true)]
           | e => throw e
       else pure highlighted
-    let fragment := if warningsAsErrors then warningsToErrors fragment else fragment
 
     let infos := allInfo fragment
 
