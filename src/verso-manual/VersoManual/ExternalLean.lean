@@ -12,6 +12,7 @@ import SubVerso.Examples.Messages
 set_option linter.missingDocs true
 
 open Lean
+open Lean.Meta.Hint
 
 open Verso Log Doc Elab ArgParse Genre.Manual Code Output Html Highlighted WebAssets
 open SubVerso.Highlighting
@@ -226,31 +227,33 @@ inline_extension Inline.leanOutput (severity : MessageSeverity) (message : Strin
         else pure {{<span class={{sev.class}}>{{plainHtml}}</span>}}
 
 /--
-Adds up to 10 suggestions.
-
-`loc` is the location at which the edit should occur, `candidates` are the valid inputs, and `input`
-is the provided input. Suggestions are added if they are "sufficiently close" to the input.
-
-A suggestion is sufficiently close if
- * the input is shorter than 5 and their Levenshtein distance is 1 or less,
- * the input is shorter than 10 and their distance is 2 or less, or
- * the distance is shorter than 3
--/
-def smartSuggestions (loc : Syntax) (candidates : Array String) (input : String) : DocElabM Unit :=
-  let threshold := if input.length < 5 then 1 else if input.length < 10 then 2 else 3
-  let toks := candidates.filterMap fun t =>
-    EditDistance.levenshtein t input threshold <&> (t, ·)
-  let toks := toks.qsort (fun x y => x.2 < y.2 || (x.2 == y.2 && x.1 < y.1))
-  let toks := toks.take 10
-  -- TODO test thresholds/sorting
-  for (t, _) in toks do
-    Suggestion.saveSuggestion loc t t
-
-
-/--
 Adds a newline to a string if it doesn't already end with one.
 -/
 def withNl (s : String) : String := if s.endsWith "\n" then s else s ++ "\n"
+
+/--
+Default suggestion threshold function: a suggestion is sufficiently close if
+ * the input is shorter than 5 and their Levenshtein distance is 1 or less,
+ * the input is shorter than 10 and their distance is 2 or less, or
+ * the distance is shorter than 3.
+-/
+def suggestionThreshold (input _candidate : String) := if input.length < 5 then 1 else if input.length < 10 then 2 else 3
+
+/--
+Adds up to 10 suggestions.
+
+`loc` is the location at which the edit should occur, `candidates` are the valid inputs, and `input`
+is the provided input. Suggestions are added if they are "sufficiently close" to the input, as
+determined by `threshold`.
+-/
+def smartSuggestions (candidates : Array String) (input : String) (threshold := suggestionThreshold) : Array Suggestion :=
+  let toks := candidates.filterMap fun t =>
+    let limit := threshold input t
+    EditDistance.levenshtein t input limit <&> (t, ·)
+  let toks := toks.qsort (fun x y => x.2 < y.2 || (x.2 == y.2 && x.1 < y.1))
+  let toks := toks.take 10
+  -- TODO test thresholds/sorting
+  toks.map fun (t, _) => {suggestion := t}
 
 /-- Converts all warnings to errors. -/
 def warningsToErrors (hl : Highlighted) : Highlighted :=
@@ -297,45 +300,69 @@ def anchored
   | .ok anchors => return anchors
 
 /--
+Reports a missing anchor error.
+-/
+def anchorNotFound (anchorName : Ident) (allAnchors : List String) : DocElabM Term := do
+  let anchorStr := anchorName.getId.toString
+
+  let toSuggest := allAnchors.filterMap fun x =>
+    EditDistance.levenshtein anchorStr x 30 <&> (·, x)
+
+  let toSuggest := toSuggest.toArray.qsort (fun x y => x.1 < y.1) |>.map (·.snd)
+  let toSuggest := toSuggest.map ({suggestion := ·})
+  let h ←
+    if toSuggest.isEmpty then pure m!""
+    else MessageData.hint "Use a defined anchor" (some {ref := anchorName, suggestions := toSuggest})
+  logErrorAt anchorName m!"Anchor not found{h}"
+  ``(sorryAx _ true)
+
+private def sevStr : MessageSeverity → String
+  | .error => "error"
+  | .warning => "warning"
+  | .information => "info"
+
+
+/--
+Silently logs all the messages in `hl`.
+-/
+def logInfos (hl : Highlighted) : DocElabM Unit := do
+  for (sev, msg, _) in allInfo hl do
+    logSilentInfo m!"{sevStr sev}:\n{msg}"
+
+/--
+Given a module name and an anchor name, loads the resulting code and invokes `k` on it, failing if
+the code can't be found.
+-/
+def withAnchored (moduleName : Ident) (anchor? : Option Ident)
+    (k : Highlighted → DocElabM (Array Term)) : DocElabM (Array Term) := do
+  let modStr := moduleName.getId.toString
+  let items ← loadModuleContent modStr
+  let highlighted := Highlighted.seq (items.map (·.code))
+
+  if let some anchor := anchor? then
+    try
+      let {anchors, ..} ← anchored moduleName anchor
+      if let some hl := anchors[anchor.getId.toString]? then
+        k hl
+      else
+        return #[← anchorNotFound anchor anchors.keys]
+    catch
+      | .error ref e => logErrorAt ref e; return #[← ``(sorryAx _ true)]
+      | e => throw e
+  else
+    k highlighted
+
+/--
 Includes the contents of the specified example module.
 -/
 @[code_block_expander module]
 def module : CodeBlockExpander
   | args, code => withTraceNode `Elab.Verso (fun _ => pure m!"module") <| do
     let {module := moduleName, anchor?} ← parseThe CodeContext args
-    let modStr := moduleName.getId.toString
-    let items ← loadModuleContent modStr
-    if let some anchor := anchor? then
-      try
-        let {anchors, ..} ← anchored moduleName anchor
-        if let some hl := anchors[anchor.getId.toString]? then
-          let _ ← ExpectString.expectString "module contents" code (hl.toString |> withNl)
-            (useLine := fun l => !l.trim.isEmpty)
-          for (sev, msg, _) in allInfo hl do
-            logSilentInfo m!"{sevStr sev}:\n{msg}"
-          return #[← ``(Block.other (Block.lean $(quote hl)) #[])]
-        else
-          logErrorAt anchor "Anchor not found"
-          for x in anchors.keys do
-            Suggestion.saveSuggestion anchor x x
-          return #[]
-      catch
-        | .error ref e =>
-          logErrorAt ref e
-          return #[← ``(sorryAx _ true)]
-        | e => throw e
-    else
-      let highlighted := Highlighted.seq (items.map (·.code))
-      let _ ← ExpectString.expectString "module contents" code (highlighted.toString |> withNl)
-        (useLine := fun l => !l.trim.isEmpty)
-      for (sev, msg, _) in allInfo highlighted do
-        logSilentInfo m!"{sevStr sev}:\n{msg}"
-      return #[← ``(Block.other (Block.lean $(quote highlighted)) #[])]
-where
-  sevStr
-    | .error => "error"
-    | .warning => "warning"
-    | .information => "info"
+    withAnchored moduleName anchor? fun hl => do
+      logInfos hl
+      _ ← ExpectString.expectString "module contents" code (hl.toString |> withNl) (useLine := fun l => !l.trim.isEmpty)
+      pure #[← ``(Block.other (Block.lean $(quote hl)) #[])]
 
 macro_rules
   | `(block|```anchor $arg:arg_val $args* | $s ```) =>
@@ -352,38 +379,12 @@ def moduleInline : RoleExpander
     let {module := moduleName, anchor?} ← parseThe CodeContext args
     let code? ← oneCodeStr? inls
 
-    let modStr := moduleName.getId.toString
-    let items ← loadModuleContent modStr
-    let highlighted := Highlighted.seq (items.map (·.code))
+    withAnchored moduleName anchor? fun hl => do
+      logInfos hl
+      if let some code := code? then
+        let _ ← ExpectString.expectString "code" code (hl.toString.trim)
 
-    if let some anchor := anchor? then
-      try
-        let {anchors, ..} ← anchored moduleName anchor
-        if let some hl := anchors[anchor.getId.toString]? then
-          if let some code := code? then
-            let _ ← ExpectString.expectString "code" code (hl.toString.trim)
-
-            for (sev, msg, _) in allInfo hl do
-              logSilentInfo m!"{sevStr sev}:\n{msg}"
-
-          return #[← ``(Inline.other (Inline.lean $(quote hl)) #[])]
-        else
-          logErrorAt anchor "Anchor not found"
-          for x in anchors.keys do
-            Suggestion.saveSuggestion anchor x x
-          return #[]
-      catch
-        | .error ref e =>
-          logErrorAt ref e
-          return #[← ``(sorryAx _ true)]
-        | e => throw e
-    else
-      return #[← ``(Inline.other (Inline.lean $(quote highlighted)) #[])]
-where
-  sevStr
-    | .error => "error"
-    | .warning => "warning"
-    | .information => "info"
+      pure #[← ``(Inline.other (Inline.lean $(quote hl)) #[])]
 
 macro_rules
   | `(inline|role{ anchor $arg:arg_val $args* } [%$t1 $s ]%$t2) =>
@@ -416,37 +417,36 @@ def moduleName : RoleExpander
     let name ← oneCodeStr inls
     let nameStr := name.getString
 
-    let modStr := moduleName.getId.toString
-    let items ← loadModuleContent modStr
-    let highlighted := Highlighted.seq (items.map (·.code))
-    let fragment ←
-      if let some anchor := anchor? then
-        try
-          let {anchors, ..} ← anchored moduleName anchor
-          if let some hl := anchors[anchor.getId.toString]? then
-            pure hl
-          else
-            logErrorAt anchor "Anchor not found"
-            for x in anchors.keys do
-              Suggestion.saveSuggestion anchor x x
-            return #[← ``(sorryAx _ true)]
-          catch
-            | .error ref e => logErrorAt ref e; return #[← ``(sorryAx _ true)]
-            | e => throw e
-      else pure highlighted
+    withAnchored moduleName anchor? fun hl => do
+      if let some tok@⟨k, _txt⟩ := hl.matchingName? nameStr then
+        let tok := show?.map (⟨k, ·.getId.toString⟩) |>.getD tok
+        return #[← ``(Inline.other (Inline.lean $(quote (Highlighted.token tok))) #[])]
+      else
+        -- TODO test thresholds/sorting
+        let ss := smartSuggestions (allNames hl |>.toArray) nameStr
+        let h ←
+          if ss.isEmpty then pure m!""
+          else MessageData.hint "Use a known name" (some {ref := name, suggestions := ss})
+        logErrorAt name m!"'{nameStr}' not found in:{indentD <| ExpectString.abbreviateString (maxLength := 100) hl.toString}{h}"
 
-    if let some tok@⟨k, _txt⟩ := fragment.matchingName? nameStr then
-      let tok := show?.map (⟨k, ·.getId.toString⟩) |>.getD tok
-      return #[← ``(Inline.other (Inline.lean $(quote (Highlighted.token tok))) #[])]
-    else
-      logErrorAt name m!"'{nameStr}' not found in:{indentD fragment.toString}"
-      -- TODO test thresholds/sorting
-      smartSuggestions name (allNames fragment |>.toArray) nameStr
-      return #[← ``(sorryAx _ true)]
+        return #[← ``(sorryAx _ true)]
+
 
 macro_rules
   | `(inline|role{%$rs anchorName $a:arg_val $arg* }%$re [%$s $str* ]%$e) =>
     `(inline|role{%$rs moduleName $arg*  anchor:=$a }%$re [%$s $str* ]%$e)
+
+private def suggestTerms (hl : Highlighted) (input : String) : Array Suggestion := Id.run do
+  let ns := allTokens hl
+  let delimTokens : Array String := #["def", "axiom", "example", "theorem", ":=", "inductive", "where", "structure", "class", "instance"]
+  let tms := hl.split (· ∈ delimTokens) |>.filterMap fun h => do
+
+    let s := h.toString.trim
+    guard (s.length < 80)
+    return s
+  let out := ns.insertMany tms
+  smartSuggestions out.toArray input (threshold := (max ·.length ·.length))
+
 
 /--
 Quotes the first term that matches the provided string.
@@ -457,29 +457,14 @@ def moduleTerm : RoleExpander
     let {module := moduleName, anchor?} ← parseThe CodeContext args
     let term ← oneCodeStr inls
 
-    let modStr := moduleName.getId.toString
-    let items ← loadModuleContent modStr
-    let highlighted := Highlighted.seq (items.map (·.code))
-    let fragment ←
-      if let some anchor := anchor? then
-        try
-          let {anchors, ..} ← anchored moduleName anchor
-          if let some hl := anchors[anchor.getId.toString]? then
-            pure hl
-          else
-            logErrorAt anchor "Anchor not found"
-            for x in anchors.keys do
-              Suggestion.saveSuggestion anchor x x
-            return #[← ``(sorryAx _ true)]
-        catch
-          | .error ref e => logErrorAt ref e; return #[← ``(sorryAx _ true)]
-          | e => throw e
-      else pure highlighted
-
-      if let some e := fragment.matchingExpr? term.getString then
+    withAnchored moduleName anchor? fun hl => do
+      if let some e := hl.matchingExpr? term.getString then
+        logInfos e
         return #[← ``(Inline.other (Inline.lean $(quote e)) #[])]
       else
-        logErrorAt term m!"Not found: '{term.getString}' in{indentD fragment.toString}"
+        let suggs := suggestTerms hl term.getString
+        let h ← MessageData.hint "Use one of these" (some <| {ref := term, suggestions := suggs})
+        logErrorAt term (m!"Not found: '{term.getString}' in: {indentD <| ExpectString.abbreviateString (maxLength := 100) <| hl.toString}" ++ h)
         return #[← ``(sorryAx _ true)]
 
 macro_rules
@@ -493,6 +478,11 @@ private def severityName {m} [Monad m] [MonadEnv m] [MonadResolveName m] : Messa
 
 deriving instance Repr for MessageSeverity
 
+private def severityHint (wanted : String) (stx : Syntax) : DocElabM MessageData := do
+  if stx.getHeadInfo matches .original .. then
+    MessageData.hint m!"Use '{wanted}'" (some {ref := stx, suggestions := #[wanted]})
+  else pure m!""
+
 /--
 Displays output from the example module.
 -/
@@ -501,45 +491,29 @@ def moduleOut : CodeBlockExpander
   | args, str => withTraceNode `Elab.Verso (fun _ => pure m!"moduleOut") <| do
     let {module := moduleName, anchor?, severity} ← parseThe MessageContext args
 
-    let modStr := moduleName.getId.toString
-    let items ← loadModuleContent modStr
-    let highlighted := Highlighted.seq (items.map (·.code))
-    let fragment ←
-      if let some anchor := anchor? then
-        try
-          let {anchors, ..} ← anchored moduleName anchor
-          if let some hl := anchors[anchor.getId.toString]? then
-            pure hl
+    withAnchored moduleName anchor? fun hl => do
+      let infos : Array _ := allInfo hl
+
+      for (sev, msg, _) in infos do
+        if messagesMatch msg str.getString then
+          if sev == severity.1 then
+            return #[← ``(Block.other (Block.leanOutput $(quote sev) $(quote msg)) #[])]
           else
-            logErrorAt anchor "Anchor not found"
-            for x in anchors.keys do
-              Suggestion.saveSuggestion anchor x x
-            return #[← ``(sorryAx _ true)]
-        catch
-          | .error ref e => logErrorAt ref e; return #[← ``(sorryAx _ true)]
-          | e => throw e
-      else pure highlighted
+          let wanted ← severityName sev
+            throwError "Mismatched severity. Expected '{repr severity.1}', got '{wanted}'.{← severityHint wanted severity.2}"
 
-    let infos : Array _ := allInfo fragment
+      let suggs : Array Suggestion := infos.map fun (sev, msg, _) => {
+        suggestion := msg,
+        preInfo? := s!"{sevStr sev}: "
+      }
+      let h ←
+        if suggs.isEmpty then pure m!""
+        else MessageData.hint "Use one of these." (some {ref := (← getRef), suggestions := suggs})
 
-    for (sev, msg, _) in infos do
-      if messagesMatch msg str.getString then
-        if sev == severity.1 then
-          return #[← ``(Block.other (Block.leanOutput $(quote sev) $(quote msg)) #[])]
-        else
-        let wanted ← severityName sev
-          if severity.2.getHeadInfo matches .original .. then
-            Suggestion.saveSuggestion severity.2 wanted wanted
-          throwError "Mismatched severity. Expected '{repr severity.1}', got '{wanted}'."
+      let err := m!"Expected one of:{indentD (m!"\n".joinSep <| infos.toList.map (·.2.1))}\nbut got:{indentD str.getString}" ++ h
+      logErrorAt str err
 
-    -- Didn't find it. Add suggestions.
-    for (_, msg, _) in infos do
-      Suggestion.saveSuggestion str (ExpectString.abbreviateString msg) (withNl msg)
-
-    let err := m!"Expected one of:{indentD (m!"\n".joinSep <| infos.toList.map (·.2.1))}\nbut got:{indentD str.getString}"
-    logErrorAt str err
-
-    return #[← ``(sorryAx _ true)]
+      return #[← ``(sorryAx _ true)]
 
 macro_rules
   | `(block|```moduleInfo $arg* | $s ```) =>
@@ -562,56 +536,42 @@ def moduleOutRole : RoleExpander
 
     let {module := moduleName, anchor?, severity} ← parseThe MessageContext args
 
-    let modStr := moduleName.getId.toString
-    let items ← loadModuleContent modStr
-    let highlighted := Highlighted.seq (items.map (·.code))
-    let fragment ←
-      if let some anchor := anchor? then
-        try
-          let {anchors, ..} ← anchored moduleName anchor
-          if let some hl := anchors[anchor.getId.toString]? then
-            pure hl
-          else
-            logErrorAt anchor "Anchor not found"
-            for x in anchors.keys do
-              Suggestion.saveSuggestion anchor x x
-            return #[← ``(sorryAx _ true)]
-        catch
-          | .error ref e => logErrorAt ref e; return #[← ``(sorryAx _ true)]
-          | e => throw e
-      else pure highlighted
+    withAnchored moduleName anchor? fun hl => do
+      let infos := allInfo hl
+      if let some str := str? then
+        for (sev, msg, _) in infos do
+          if messagesMatch msg str.getString then
+            if sev == severity.1 then
+              return #[← ``(Inline.other (Inline.leanOutput $(quote sev) $(quote msg) true) #[])]
+            else
+              let wanted ← severityName sev
+              throwError "Mismatched severity. Expected '{repr severity.1}', got '{wanted}'.{← severityHint wanted severity.2}"
 
-    let infos := allInfo fragment
+        let ref :=
+          if let `(inline|role{ $_ $_* }[ $x ]) := (← getRef) then x.raw else str
 
-    if let some str := str? then
-      for (sev, msg, _) in infos do
-        if messagesMatch msg str.getString then
-          if sev == severity.1 then
-            return #[← ``(Inline.other (Inline.leanOutput $(quote sev) $(quote msg) true) #[])]
-          else
-          let wanted ← severityName sev
-            if severity.2.getHeadInfo matches .original .. then
-              Suggestion.saveSuggestion severity.2 wanted wanted
-            throwError "Mismatched severity. Expected '{repr severity.1}', got '{wanted}'."
+        let suggs : Array Suggestion := infos.map fun (sev, msg, _) => {
+          suggestion := quoteCode msg.trim,
+          preInfo? := s!"{sevStr sev}: "
+        }
+        let h ←
+          if suggs.isEmpty then pure m!""
+          else MessageData.hint "Use one of these." (some {ref := ref, suggestions := suggs})
 
-      -- Didn't find it. Add suggestions.
-      for (_, msg, _) in infos do
-        Suggestion.saveSuggestion str (quoteCode <| ExpectString.abbreviateString msg.trim) msg.trim
+        let err := m!"Expected one of:{indentD (m!"\n".joinSep <| infos.toList.map (·.2.1))}\nbut got:{indentD str.getString}"
+        logErrorAt str (err ++ h)
+      else
+        let err := m!"Expected one of:{indentD (m!"\n".joinSep <| infos.toList.map (·.2.1))}"
+        Lean.logError m!"No expected term provided. {err}"
+        if let `(inline|role{$_ $_*} [%$tok1 $contents* ]%$tok2) := (← getRef) then
+          let stx :=
+            if tok1.getHeadInfo matches .original .. && tok2.getHeadInfo matches .original .. then
+              mkNullNode #[tok1, tok2]
+            else mkNullNode contents
+          for (_, msg, _) in infos do
+            Suggestion.saveSuggestion stx (quoteCode <| ExpectString.abbreviateString msg.trim) (quoteCode msg.trim)
 
-      let err := m!"Expected one of:{indentD (m!"\n".joinSep <| infos.toList.map (·.2.1))}\nbut got:{indentD str.getString}"
-      logErrorAt str err
-    else
-      let err := m!"Expected one of:{indentD (m!"\n".joinSep <| infos.toList.map (·.2.1))}"
-      Lean.logError m!"No expected term provided. {err}"
-      if let `(inline|role{$_ $_*} [%$tok1 $contents* ]%$tok2) := (← getRef) then
-        let stx :=
-          if tok1.getHeadInfo matches .original .. && tok2.getHeadInfo matches .original .. then
-            mkNullNode #[tok1, tok2]
-          else mkNullNode contents
-        for (_, msg, _) in infos do
-          Suggestion.saveSuggestion stx (quoteCode <| ExpectString.abbreviateString msg.trim) (quoteCode msg.trim)
-
-    return #[← ``(sorryAx _ true)]
+      return #[← ``(sorryAx _ true)]
 
 where
   quoteCode (str : String) : String := Id.run do
