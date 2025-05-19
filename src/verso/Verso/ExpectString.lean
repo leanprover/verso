@@ -7,16 +7,14 @@ Author: David Thrane Christiansen
 import Lean.Elab.Command
 import Lean.Elab.InfoTree
 import Lean.Util.Diff
-
-import Verso.Doc.Suggestion
+import Lean.Meta.Hint
 
 open Lean Elab
-open Verso Doc
 
 namespace Verso.ExpectString
 
 variable {m : Type → Type} [Monad m] [MonadLog m] [AddMessageContext m] [MonadOptions m]
-variable [MonadInfoTree m]
+variable [MonadInfoTree m] [MonadLiftT CoreM m]
 
 def abbreviateString (what : String) (maxLength : Nat := 30) : String :=
   if what.length > maxLength then
@@ -46,8 +44,12 @@ def expectString (what : String) (expected : StrLit) (actual : String)
 
   unless expectedLines.map preEq == actualLines.map preEq do
     let diff := Diff.diff expectedLines actualLines
-    logErrorAt expected m!"Mismatched {what} output:\n{Diff.linesToString diff}"
-    Suggestion.saveSuggestion expected (abbreviateString actual) actual
+    let ss : Meta.Hint.Suggestions := {
+      ref := expected,
+      suggestions := #[{suggestion := .string actual}]
+    }
+    let h : MessageData ← MessageData.hint "Replace with actual value" (suggestions? := some ss)
+    logErrorAt expected m!"Mismatched {what} output:\n{Diff.linesToString diff}{h}"
     return false
 
   return true

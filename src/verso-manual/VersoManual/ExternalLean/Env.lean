@@ -5,15 +5,17 @@ Author: David Thrane Christiansen
 -/
 
 import Lean.Environment
+import Std.Data.HashMap
 
 import SubVerso.Module
 
 open Lean
+open Std
 
 open SubVerso Highlighting Module Highlighted
 
 namespace Verso.Genre.Manual.ExternalLean
 
-initialize loadedModulesExt : (EnvExtension (NameMap (Array ModuleItem))) ← registerEnvExtension (pure {})
+initialize loadedModulesExt : (EnvExtension (NameMap (HashMap (List String) (Array ModuleItem)))) ← registerEnvExtension (pure {})
 
-initialize loadedModuleAnchorExt : (EnvExtension (NameMap AnchoredExamples)) ← registerEnvExtension (pure {})
+initialize loadedModuleAnchorExt : (EnvExtension (NameMap (HashMap (List String) AnchoredExamples))) ← registerEnvExtension (pure {})
