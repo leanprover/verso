@@ -202,6 +202,8 @@ where
       (· ++ {{<em>"et al"</em>}}) <$> go (Bibliography.lastName p.authors[0])
     else andList <$> p.authors.mapM (go ∘ Bibliography.lastName)
 
+private def arrayOrd (ord : Ord α) : Ord (Array α) := inferInstance
+
 private partial def cmpCite : Json → Json → Ordering
   | .null, .null => .eq
   | .null, _ => .lt
@@ -215,7 +217,8 @@ private partial def cmpCite : Json → Json → Ordering
   | .bool b1, .bool b2 => Ord.compare b1 b2
   | .bool _, _ => .lt
   | _, .bool _ => .gt
-  | .arr a1, .arr a2 => (@Ord.arrayOrd _ ⟨cmpCite⟩).compare a1 a2
+  | .arr a1, .arr a2 =>
+    arrayOrd ⟨cmpCite⟩ |>.compare a1 a2
   | .arr _, _ => .lt
   | _, .arr _ => .gt
   | .obj o1, .obj o2 =>
@@ -224,7 +227,7 @@ private partial def cmpCite : Json → Json → Ordering
     let inst : Ord (String × Json) := Ord.lex inst1 inst2
     let a1 := o1.toArray.map (fun x => (x.1, x.2)) |>.qsort (inst.compare · · == .lt)
     let a2 := o2.toArray.map (fun x => (x.1, x.2)) |>.qsort (inst.compare · · == .lt)
-    (Ord.arrayOrd).compare a1 a2
+    (arrayOrd inst).compare a1 a2
 
 
 inline_extension Inline.cite (citations : List Citable) (style : Style := .parenthetical) where
