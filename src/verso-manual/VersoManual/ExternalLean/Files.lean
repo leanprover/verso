@@ -35,6 +35,10 @@ register_option verso.externalExamples.suppressedNamespaces : String := {
 }
 
 
+initialize registerTraceClass `Elab.Verso.Genre.Manual.ExternalLean
+
+initialize registerTraceClass `Elab.Verso.Genre.Manual.ExternalLean.loadModule
+
 variable [Monad m] [MonadLift IO m] [MonadEnv m] [MonadOptions m] [MonadError m] [MonadTrace m] [AddMessageContext m] [MonadFinally m] [MonadAlwaysExcept ε m]
 
 
@@ -69,8 +73,8 @@ def loadModuleContent' (projectDir : String) (mod : String) (suppressNamespaces 
   try
     let cmd := "elan"
 
-    withTraceNode `Elab.Verso (fun _ => pure m!"loadModuleContent': building example project") do
-      let args := #["run", "--install", toolchain, "lake", "build"]
+    withTraceNode `Elab.Verso.Genre.Manual.ExternalLean.loadModule (fun _ => pure m!"loadModuleContent': building example project's module") do
+      let args := #["run", "--install", toolchain, "lake", "build", "+" ++ mod]
       let res ← IO.Process.output {
         cmd, args, cwd := projectDir
         -- Unset Lake's environment variables
@@ -78,7 +82,7 @@ def loadModuleContent' (projectDir : String) (mod : String) (suppressNamespaces 
       }
       if res.exitCode != 0 then reportFail projectDir cmd args res
 
-    withTraceNode `Elab.Verso (fun _ => pure m!"loadModuleContent': building subverso-extract-mod") do
+    withTraceNode `Elab.Verso.Genre.Manual.ExternalLean.loadModule (fun _ => pure m!"loadModuleContent': building subverso-extract-mod") do
       let args := #["run", "--install", toolchain, "lake", "env", "which", "subverso-extract-mod"]
       let res ← IO.Process.output {
         cmd, args, cwd := projectDir
@@ -95,7 +99,7 @@ def loadModuleContent' (projectDir : String) (mod : String) (suppressNamespaces 
         }
         if res.exitCode != 0 then reportFail projectDir cmd args res
 
-    withTraceNode `Elab.Verso (fun _ => pure m!"loadModuleContent': extracting '{mod}'") do
+    withTraceNode `Elab.Verso.Genre.Manual.ExternalLean.loadModule (fun _ => pure m!"loadModuleContent': extracting '{mod}'") do
       let suppressArgs := suppressNamespaces.toArray.flatMap (#["--suppress-namespace", ·])
       let args :=
         #["run", "--install", toolchain, "lake", "env", "subverso-extract-mod"] ++
@@ -145,13 +149,26 @@ def getSuppress : m (List String) := do
   return nss.splitOn " "
 
 def loadModuleContent [MonadAlwaysExcept ε m] (mod : String) : m (Array ModuleItem) :=
-  withTraceNode `Elab.Verso (fun _ => pure m!"Loading example module {mod}") <| do
+  withTraceNode `Elab.Verso.Genre.Manual.ExternalLean (fun _ => pure m!"Loading example module {mod}") <| do
     let modName := mod.toName
-    if let some m := (loadedModulesExt.getState (← getEnv)).find? modName then return m
-    else
-      let projectDir ← getProjectDir
-      let suppress ← getSuppress
+    let suppress ← getSuppress
+    if let some ms := (loadedModulesExt.getState (← getEnv)).find? modName then
+      if let some m := ms[suppress]? then
+        trace[Elab.Verso.Genre.Manual.ExternalLean] m!"Cache hit for {mod}"
+        return m
 
+    let traceMsg (r : Except ε (Array ModuleItem × Nat)) : m MessageData :=
+      match r with
+      | .error .. => pure m!"Cache miss for {mod} but failed to load it"
+      | .ok (_, ms) => pure m!"Cache miss for {mod}, loaded in {ms.toFloat / 1000.0}s"
+    Prod.fst <$> withTraceNode `Elab.Verso.Genre.Manual.ExternalLean.loadModule traceMsg do
+      let projectDir ← getProjectDir
+      let ms1 ← IO.monoMsNow
       let items ← loadModuleContent' projectDir mod suppress
-      modifyEnv (loadedModulesExt.modifyState · (·.insert modName items))
-      return items
+      let ms2 ← IO.monoMsNow
+      modifyEnv fun env =>
+        loadedModulesExt.modifyState env fun st =>
+          let forMod := st.find? modName |>.getD {}
+          let forMod := forMod.insert suppress items
+          st.insert modName forMod
+      return (items, ms2 - ms1)
