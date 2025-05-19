@@ -240,18 +240,18 @@ Default suggestion threshold function: a suggestion is sufficiently close if
 def suggestionThreshold (input _candidate : String) := if input.length < 5 then 1 else if input.length < 10 then 2 else 3
 
 /--
-Adds up to 10 suggestions.
+Adds up to `count` suggestions.
 
 `loc` is the location at which the edit should occur, `candidates` are the valid inputs, and `input`
 is the provided input. Suggestions are added if they are "sufficiently close" to the input, as
 determined by `threshold`.
 -/
-def smartSuggestions (candidates : Array String) (input : String) (threshold := suggestionThreshold) : Array Suggestion :=
+def smartSuggestions (candidates : Array String) (input : String) (count : Nat := 10) (threshold := suggestionThreshold) : Array Suggestion :=
   let toks := candidates.filterMap fun t =>
     let limit := threshold input t
     EditDistance.levenshtein t input limit <&> (t, ·)
   let toks := toks.qsort (fun x y => x.2 < y.2 || (x.2 == y.2 && x.1 < y.1))
-  let toks := toks.take 10
+  let toks := toks.take count
   -- TODO test thresholds/sorting
   toks.map fun (t, _) => {suggestion := t}
 
@@ -284,13 +284,15 @@ Loads the contents of a module, parsed by anchor. The results are cached.
 -/
 def anchored
     [Monad m] [MonadEnv m] [MonadLift IO m] [MonadError m] [MonadOptions m]
-    [MonadTrace m] [AddMessageContext m] [MonadAlwaysExcept ε m] [MonadFinally m]
+    [MonadTrace m] [AddMessageContext m] [MonadAlwaysExcept ε m] [MonadFinally m] [MonadQuotation m]
     (moduleName : Ident) (blame : Syntax) :
     m Highlighted.AnchoredExamples := do
   let modName := moduleName.getId
   let modStr := modName.toString
 
-  if let some cached := (loadedModuleAnchorExt.getState (← getEnv)).find? modName then return cached
+  if let some cached := (loadedModuleAnchorExt.getState (← getEnv)).find? modName then
+    if let some cached' := cached[← getSuppress]? then
+      return cached'
 
   let items ← loadModuleContent modStr
   let highlighted := Highlighted.seq (items.map (·.code))
@@ -352,6 +354,35 @@ def withAnchored (moduleName : Ident) (anchor? : Option Ident)
   else
     k highlighted
 
+private def editCodeBlock [Monad m] [MonadFileMap m] (stx : Syntax) (newContents : String) : m (Option String) := do
+  let txt ← getFileMap
+  let some rng := stx.getRange?
+    | pure none
+  let { start := {line := l1, ..}, .. } := txt.utf8RangeToLspRange rng
+  let line1 := txt.source.extract (txt.lineStart (l1 + 1)) (txt.lineStart (l1 + 2))
+  if line1.startsWith "```" then
+    return some s!"{delims}{line1.dropWhile (· == '`') |>.trim}\n{withNl newContents}{delims}"
+  else
+    return none
+where
+  delims : String := Id.run do
+    let mut n := 3
+    let mut run := none
+    let mut iter := newContents.iter
+    while h : iter.hasNext do
+      let c := iter.curr' h
+      iter := iter.next
+      if c == '`' then
+        run := some (run.getD 0 + 1)
+      else if let some k := run then
+        if k > n then n := k
+        run := none
+    if let some k := run then
+      if k > n then n := k
+    n.fold (fun _ _ s => s.push '`') ""
+
+
+
 /--
 Includes the contents of the specified example module.
 -/
@@ -361,7 +392,16 @@ def module : CodeBlockExpander
     let {module := moduleName, anchor?} ← parseThe CodeContext args
     withAnchored moduleName anchor? fun hl => do
       logInfos hl
-      _ ← ExpectString.expectString "module contents" code (hl.toString |> withNl) (useLine := fun l => !l.trim.isEmpty)
+      let hlString := hl.toString
+      if code.getString.trim.isEmpty && !hlString.trim.isEmpty then
+        let ref ← getRef
+        let h ←
+          if let some s ← editCodeBlock ref hlString then
+            MessageData.hint m!"" (some {ref := ref, suggestions := #[{suggestion := s, messageData? := hlString}]})
+          else pure m!""
+        logErrorAt code <| m!"Missing module contents." ++ h
+      else
+        _ ← ExpectString.expectString "module contents" code (hlString |> withNl) (useLine := fun l => !l.trim.isEmpty)
       pure #[← ``(Block.other (Block.lean $(quote hl)) #[])]
 
 macro_rules
@@ -437,15 +477,18 @@ macro_rules
     `(inline|role{%$rs moduleName $arg*  anchor:=$a }%$re [%$s $str* ]%$e)
 
 private def suggestTerms (hl : Highlighted) (input : String) : Array Suggestion := Id.run do
-  let ns := allTokens hl
   let delimTokens : Array String := #["def", "axiom", "example", "theorem", ":=", "inductive", "where", "structure", "class", "instance"]
-  let tms := hl.split (· ∈ delimTokens) |>.filterMap fun h => do
+  let ns := allTokens hl |>.filter (· ∉ #[":", "[", "]", "=>", "match", "(", ")", "{", "}", ",", "with", ":=", "=", "by", "#[", ";", "@", "if", "then", "else"] ++ delimTokens)
 
+  let tms := hl.split (· ∈ delimTokens) |>.filterMap fun h => do
+    let more := h.split (· == "=") |>.map (·.toString)
     let s := h.toString.trim
+    let s := if let some s' := s.dropPrefix? ": " then s'.toString.trimLeft else s
     guard (s.length < 80)
-    return s
+    return #[s] ++ if more.size > 1 then more.map (fun x => (x.dropPrefix? ": " |>.map (·.toString)).getD "") else #[]
+  let tms := tms.flatten
   let out := ns.insertMany tms
-  smartSuggestions out.toArray input (threshold := (max ·.length ·.length))
+  smartSuggestions out.toArray input (threshold := (max ·.length ·.length)) (count := 15)
 
 
 /--
@@ -470,6 +513,26 @@ def moduleTerm : RoleExpander
 macro_rules
   | `(inline|role{%$rs anchorTerm $a:arg_val $arg* }%$re [%$s $str* ]%$e) =>
     `(inline|role{%$rs moduleTerm $arg*  anchor:=$a }%$re [%$s $str* ]%$e)
+
+@[code_block_expander moduleTerm, inherit_doc moduleTerm]
+def moduleTermBlock : CodeBlockExpander
+  | args, term => withTraceNode `Elab.Verso (fun _ => pure m!"moduleTerm") <| do
+    let {module := moduleName, anchor?} ← parseThe CodeContext args
+
+    withAnchored moduleName anchor? fun hl => do
+      let str := term.getString.trim
+      if let some e := hl.matchingExpr? str then
+        logInfos e
+        return #[← ``(Block.other (Block.lean $(quote e)) #[])]
+      else
+        let suggs := suggestTerms hl str
+        let h ← MessageData.hint "Use one of these" (some <| {ref := term, suggestions := suggs})
+        logErrorAt term (m!"Not found: '{str}' in: {indentD <| ExpectString.abbreviateString (maxLength := 100) <| hl.toString}" ++ h)
+        return #[← ``(sorryAx _ true)]
+
+macro_rules
+  | `(block|```anchorTerm $a:arg_val $args* | $s ```) =>
+    `(block|```moduleTerm anchor := $a:arg_val $args* | $s ```)
 
 private def severityName {m} [Monad m] [MonadEnv m] [MonadResolveName m] : MessageSeverity → m String
   | .error => unresolveNameGlobal ``MessageSeverity.error <&> (·.toString)
@@ -503,12 +566,12 @@ def moduleOut : CodeBlockExpander
             throwError "Mismatched severity. Expected '{repr severity.1}', got '{wanted}'.{← severityHint wanted severity.2}"
 
       let suggs : Array Suggestion := infos.map fun (sev, msg, _) => {
-        suggestion := msg,
+        suggestion := withNl msg,
         preInfo? := s!"{sevStr sev}: "
       }
       let h ←
         if suggs.isEmpty then pure m!""
-        else MessageData.hint "Use one of these." (some {ref := (← getRef), suggestions := suggs})
+        else MessageData.hint "Use one of these." (some {ref := str, suggestions := suggs})
 
       let err := m!"Expected one of:{indentD (m!"\n".joinSep <| infos.toList.map (·.2.1))}\nbut got:{indentD str.getString}" ++ h
       logErrorAt str err
