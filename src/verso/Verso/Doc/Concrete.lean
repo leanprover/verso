@@ -166,7 +166,7 @@ scoped syntax (name := addLastBlockCmd) block term:max str : command
 
 def versoBlockCommandFn (genre : Term) (title : String) : ParserFn := fun c s =>
   let iniSz  := s.stackSize
-  let s := Verso.Parser.block {} c s
+  let s := (recoverBlockWith #[.missing] (Verso.Parser.block {})) c s
   let s := ignoreFn (manyFn blankLine) c s
   let i := s.pos
   if c.input.atEnd i then
@@ -195,7 +195,7 @@ open Lean Elab Command in
 def runVersoBlock (block : TSyntax `block) : CommandElabM Unit := do
   -- The original command parser must be restored here in case one of the Verso blocks is parsing
   -- Lean code during its elaboration.
-  let versoCmdFn := (categoryParserFnExtension.getState (← getEnv)) `command
+  let versoCmdFn := (categoryParserFnExtension.getState (← getEnv))
   try
     modifyEnv fun env => categoryParserFnExtension.setState env (originalCatParserExt.getState env)
     let env ← getEnv
@@ -205,7 +205,7 @@ def runVersoBlock (block : TSyntax `block) : CommandElabM Unit := do
     modifyEnv fun env =>
       partStateExt.setState (docStateExt.setState env docState') (some partState')
   finally
-    modifyEnv (replaceCategoryFn `command versoCmdFn)
+    modifyEnv (categoryParserFnExtension.setState · versoCmdFn)
 
 open Lean Elab Command in
 @[command_elab addBlockCmd]
