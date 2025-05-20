@@ -95,7 +95,7 @@ def DocUses.add (uses : DocUses) (loc : Syntax) : DocUses := {uses with useSites
 structure DocElabM.State where
   linkRefs : HashMap String DocUses := {}
   footnoteRefs : HashMap String DocUses := {}
-deriving Nonempty
+deriving Inhabited
 
 /-- Custom info tree data to save footnote and reflink cross-references -/
 structure DocRefInfo where
@@ -253,7 +253,7 @@ structure PartFrame where
   metadata : Option (TSyntax `term)
   blocks : Array (TSyntax `term)
   priorParts : Array FinishedPart
-deriving Repr, Nonempty
+deriving Repr, Inhabited
 
 def PartFrame.close (fr : PartFrame) (endPos : String.Pos) : FinishedPart :=
   let (titlePreview, titleInlines) := fr.expandedTitle.getD ("<anonymous>", #[])
@@ -261,7 +261,7 @@ def PartFrame.close (fr : PartFrame) (endPos : String.Pos) : FinishedPart :=
 
 structure PartContext extends PartFrame where
   parents : Array PartFrame
-deriving Repr, Nonempty
+deriving Repr, Inhabited
 
 def PartContext.level (ctxt : PartContext) : Nat := ctxt.parents.size
 def PartContext.close (ctxt : PartContext) (endPos : String.Pos) : Option PartContext := do
@@ -281,8 +281,7 @@ structure PartElabM.State where
   partContext : PartContext
   linkDefs : HashMap String (DocDef String) := {}
   footnoteDefs : HashMap String (DocDef (Array (TSyntax `term))) := {}
-deriving Nonempty
-
+deriving Inhabited
 
 def PartElabM.State.init (title : Syntax) (expandedTitle : Option (String × Array (TSyntax `term)) := none) : PartElabM.State where
   partContext := {titleSyntax := title, expandedTitle, metadata := none, blocks := #[], priorParts := #[], parents := #[]}

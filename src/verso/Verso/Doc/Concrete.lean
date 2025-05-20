@@ -154,7 +154,91 @@ where
       (show MetaM Unit from set termState.meta.meta)
       (show CoreM Unit from set termState.meta.core.toState)
 
-elab (name := completeDoc) "#doc" "(" genre:term ")" title:str "=>" text:completeDocument eoi : command => open Lean Elab Term Command PartElabM DocElabM in do
+open Lean Parser in
+def replaceCategoryFn (cat : Name) (p : ParserFn) (env : Environment) : Environment :=
+  categoryParserFnExtension.modifyState env fun st =>
+    fun cat' =>
+      if cat == cat' then p else st cat'
+
+scoped syntax (name := addBlockCmd) block : command
+scoped syntax (name := addLastBlockCmd) block term:max str : command
+
+def versoBlockCommandFn (genre : Term) (title : String) : ParserFn := fun c s =>
+  let iniSz  := s.stackSize
+  let s := Verso.Parser.block {} c s
+  let s := ignoreFn (manyFn blankLine) c s
+  let i := s.pos
+  if c.input.atEnd i then
+    let s := s.pushSyntax genre
+    let s := s.pushSyntax (Syntax.mkStrLit title)
+    s.mkNode ``addLastBlockCmd iniSz
+  else
+    s.mkNode ``addBlockCmd iniSz
+
+
+initialize docStateExt : EnvExtension DocElabM.State ← registerEnvExtension (pure {})
+initialize partStateExt : EnvExtension (Option PartElabM.State) ← registerEnvExtension (pure none)
+initialize originalCommandParserExt : EnvExtension ParserFn ← registerEnvExtension (pure whitespace)
+
+
+elab (name := replaceDoc) "#doc" "(" genre:term ")" title:str "=>" : command => open Lean Parser Elab Command in do
+  findGenreCmd genre
+  let titleParts ← stringToInlines title
+  let titleString := inlinesToString (← getEnv) titleParts
+  let initState : PartElabM.State := .init (.node .none nullKind titleParts)
+  modifyEnv (partStateExt.setState · (some initState))
+  modifyEnv fun env => originalCommandParserExt.setState env ((categoryParserFnExtension.getState env) `command)
+  modifyEnv (replaceCategoryFn `command (versoBlockCommandFn genre titleString))
+
+open Lean Elab Command in
+def runVersoBlock (block : TSyntax `block) : CommandElabM Unit := do
+  -- The original command parser must be restored here in case one of the Verso blocks is parsing
+  -- Lean code during its elaboration.
+  let versoCmdFn := (categoryParserFnExtension.getState (← getEnv)) `command
+  try
+    modifyEnv fun env => replaceCategoryFn `command (originalCommandParserExt.getState env) env
+    let env ← getEnv
+    let some partState := partStateExt.getState env
+      | throwErrorAt block "State not initialized"
+    let ((), docState', partState') ← runTermElabM fun _ => partCommand block |>.run (docStateExt.getState env) partState
+    modifyEnv fun env =>
+      partStateExt.setState (docStateExt.setState env docState') (some partState')
+    -- Save any command parser changes introduced by the block
+    modifyEnv fun env =>
+      originalCommandParserExt.setState env ((categoryParserFnExtension.getState env) `command)
+  finally
+    modifyEnv (replaceCategoryFn `command versoCmdFn)
+
+open Lean Elab Command in
+@[command_elab addBlockCmd]
+def elabVersoBlock : CommandElab
+  | `(addBlockCmd|$b:block) => do
+    runVersoBlock b
+  | _ => throwUnsupportedSyntax
+
+open Lean Elab Command in
+@[command_elab addLastBlockCmd]
+def elabVersoLastBlock : CommandElab
+  | `(addLastBlockCmd|$b:block $genre:term $title:str) => do
+    runVersoBlock b
+    -- Finish up the document
+    let txt ← getFileMap
+    let endPos := txt.source.endPos
+    let some partState ← partStateExt.getState <$> getEnv
+      | throwError "Document state not initialized"
+    let partState := partState.closeAll endPos
+    let finished := partState.partContext.toPartFrame.close endPos
+    pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
+    saveRefs (docStateExt.getState (← getEnv)) partState
+    let n ← currentDocName
+    let docName := mkIdentFrom title n
+    let titleString := title.getString
+    let titleStr : TSyntax ``Lean.Parser.Command.docComment := quote titleString
+    elabCommand (← `($titleStr:docComment def $docName : Part $genre := $(← finished.toSyntax' genre partState.linkDefs partState.footnoteDefs)))
+  | _ => throwUnsupportedSyntax
+
+
+elab (name := completeDoc) "#old_doc" "(" genre:term ")" title:str "=>" text:completeDocument eoi : command => open Lean Elab Term Command PartElabM DocElabM in do
   findGenreCmd genre
   let endPos := (← getFileMap).source.endPos
   let .node _ _ blocks := text.raw
