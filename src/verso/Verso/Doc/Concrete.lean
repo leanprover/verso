@@ -154,11 +154,12 @@ where
       (show MetaM Unit from set termState.meta.meta)
       (show CoreM Unit from set termState.meta.core.toState)
 
+private def ifCat (cat : Name) (p : ParserFn) (fallback : Name → ParserFn) (n : Name) : ParserFn :=
+  if n == cat then p else fallback n
+
 open Lean Parser in
 def replaceCategoryFn (cat : Name) (p : ParserFn) (env : Environment) : Environment :=
-  categoryParserFnExtension.modifyState env fun st =>
-    fun cat' =>
-      if cat == cat' then p else st cat'
+  categoryParserFnExtension.modifyState env fun st => ifCat cat p st
 
 scoped syntax (name := addBlockCmd) block : command
 scoped syntax (name := addLastBlockCmd) block term:max str : command
@@ -178,7 +179,7 @@ def versoBlockCommandFn (genre : Term) (title : String) : ParserFn := fun c s =>
 
 initialize docStateExt : EnvExtension DocElabM.State ← registerEnvExtension (pure {})
 initialize partStateExt : EnvExtension (Option PartElabM.State) ← registerEnvExtension (pure none)
-initialize originalCommandParserExt : EnvExtension ParserFn ← registerEnvExtension (pure whitespace)
+initialize originalCatParserExt : EnvExtension CategoryParserFn ← registerEnvExtension (pure <| fun _ => whitespace)
 
 
 elab (name := replaceDoc) "#doc" "(" genre:term ")" title:str "=>" : command => open Lean Parser Elab Command in do
@@ -187,7 +188,7 @@ elab (name := replaceDoc) "#doc" "(" genre:term ")" title:str "=>" : command => 
   let titleString := inlinesToString (← getEnv) titleParts
   let initState : PartElabM.State := .init (.node .none nullKind titleParts)
   modifyEnv (partStateExt.setState · (some initState))
-  modifyEnv fun env => originalCommandParserExt.setState env ((categoryParserFnExtension.getState env) `command)
+  modifyEnv fun env => originalCatParserExt.setState env (categoryParserFnExtension.getState env)
   modifyEnv (replaceCategoryFn `command (versoBlockCommandFn genre titleString))
 
 open Lean Elab Command in
@@ -196,16 +197,13 @@ def runVersoBlock (block : TSyntax `block) : CommandElabM Unit := do
   -- Lean code during its elaboration.
   let versoCmdFn := (categoryParserFnExtension.getState (← getEnv)) `command
   try
-    modifyEnv fun env => replaceCategoryFn `command (originalCommandParserExt.getState env) env
+    modifyEnv fun env => categoryParserFnExtension.setState env (originalCatParserExt.getState env)
     let env ← getEnv
     let some partState := partStateExt.getState env
       | throwErrorAt block "State not initialized"
     let ((), docState', partState') ← runTermElabM fun _ => partCommand block |>.run (docStateExt.getState env) partState
     modifyEnv fun env =>
       partStateExt.setState (docStateExt.setState env docState') (some partState')
-    -- Save any command parser changes introduced by the block
-    modifyEnv fun env =>
-      originalCommandParserExt.setState env ((categoryParserFnExtension.getState env) `command)
   finally
     modifyEnv (replaceCategoryFn `command versoCmdFn)
 
