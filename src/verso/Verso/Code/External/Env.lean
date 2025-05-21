@@ -14,7 +14,7 @@ open Std
 
 open SubVerso Highlighting Module Highlighted
 
-namespace Verso.Genre.Manual.ExternalLean
+namespace Verso.Code.External
 
 initialize loadedModulesExt : (EnvExtension (NameMap (HashMap (List String) (Array ModuleItem)))) ← registerEnvExtension (pure {})
 
