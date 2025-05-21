@@ -329,7 +329,9 @@ info: Verso.Doc.Part.mk
 
 [to here]: http://example.com
 
-Here's [a link][to here]!
+Here's [a link][to here][^note]!
+
+[^note]: The footnote text
 
 :::::::
 
@@ -345,7 +347,8 @@ info: Verso.Doc.Part.mk
       none
       #[Verso.Doc.Block.para
           #[Verso.Doc.Inline.text "Here's ",
-            Verso.Doc.Inline.link #[(Verso.Doc.Inline.text "a link")] "http://example.com", Verso.Doc.Inline.text "!"]]
+            Verso.Doc.Inline.link #[(Verso.Doc.Inline.text "a link")] "http://example.com",
+            Verso.Doc.Inline.footnote "note" #[(Verso.Doc.Inline.text "The footnote text")], Verso.Doc.Inline.text "!"]]
       #[]]
 -/
 #guard_msgs in
@@ -356,7 +359,9 @@ info: Verso.Doc.Part.mk
 
 # Section 1
 
-Here's [a link][to here]!
+[^note]: The footnote text
+
+Here's [a link][to here][^note]!
 
 [to here]: http://example.com
 
@@ -374,8 +379,13 @@ info: Verso.Doc.Part.mk
       none
       #[Verso.Doc.Block.para
           #[Verso.Doc.Inline.text "Here's ",
-            Verso.Doc.Inline.link #[(Verso.Doc.Inline.text "a link")] "http://example.com", Verso.Doc.Inline.text "!"]]
+            Verso.Doc.Inline.link #[(Verso.Doc.Inline.text "a link")] "http://example.com",
+            Verso.Doc.Inline.footnote "note" #[(Verso.Doc.Inline.text "The footnote text")], Verso.Doc.Inline.text "!"]]
       #[]]
 -/
 #guard_msgs in
   #eval g'
+
+/-- info: true -/
+#guard_msgs in
+#eval toString (repr g) == (toString (repr g')).replace "after" "before"
