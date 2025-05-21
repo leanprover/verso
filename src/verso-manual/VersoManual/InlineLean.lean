@@ -613,6 +613,7 @@ structure LeanOutputConfig where
   summarize : Bool
   whitespace : WhitespaceMode
   normalizeMetas : Bool
+  allowDiff : Nat
 
 section
 variable [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m]
@@ -624,7 +625,8 @@ def LeanOutputConfig.parser  : ArgParse m LeanOutputConfig :=
     .named `severity .messageSeverity true <*>
     ((·.getD false) <$> .named `summarize .bool true) <*>
     ((·.getD .exact) <$> .named `whitespace .whitespaceMode true) <*>
-    .namedD `normalizeMetas .bool true
+    .namedD `normalizeMetas .bool true <*>
+    .namedD `allowDiff .nat 0
 where
   output : ValDesc m Ident := {
     description := "output name",
@@ -658,15 +660,38 @@ def leanOutput : CodeBlockExpander
         normalizeMetavars str.getString
       else str.getString
 
-    for (sev, txt) in msgs do
-      let actual :=
-        if config.normalizeMetas then
-          normalizeMetavars txt
-        else txt
-      if mostlyEqual config.whitespace expected actual then
+    if config.allowDiff == 0 then
+      for (sev, txt) in msgs do
+        let actual :=
+          if config.normalizeMetas then
+            normalizeMetavars txt
+          else txt
+        if mostlyEqual config.whitespace expected actual then
+          if let some s := config.severity then
+            if s != sev then
+              throwErrorAt str s!"Expected severity {sevStr s}, but got {sevStr sev}"
+          if config.show then
+            let content ← `(Block.other {Block.leanOutput with data := ToJson.toJson ($(quote sev), $(quote txt), $(quote config.summarize))} #[Block.code $(quote str.getString)])
+            return #[content]
+          else return #[]
+    else
+      let mut best : Option (Nat × String × MessageSeverity × String) := none
+      for (sev, txt) in msgs do
+        let actual :=
+          if config.normalizeMetas then
+            normalizeMetavars txt
+          else txt
+        let (d, d') := diffSize config.whitespace expected actual
+        if d ≤ config.allowDiff then
+          if let some (n, _, _) := best then
+            if d < n then best := (d, d', sev, txt)
+          else best := (d, d', sev, txt)
+      if let some (d, d', sev, txt) := best then
         if let some s := config.severity then
           if s != sev then
             throwErrorAt str s!"Expected severity {sevStr s}, but got {sevStr sev}"
+
+        Log.logSilentInfo m!"Diff is {d} lines:\n{d'}"
         if config.show then
           let content ← `(Block.other {Block.leanOutput with data := ToJson.toJson ($(quote sev), $(quote txt), $(quote config.summarize))} #[Block.code $(quote str.getString)])
           return #[content]
@@ -685,7 +710,15 @@ where
   mostlyEqual (ws : WhitespaceMode) (s1 s2 : String) : Bool :=
     ws.apply s1.trim == ws.apply s2.trim
 
-
+  diffSize (ws : WhitespaceMode) (s1 s2 : String) : (Nat × String) :=
+    let s1 := ws.apply s1.trim |>.splitOn "\n" |>.toArray
+    let s2 := ws.apply s2.trim |>.splitOn "\n" |>.toArray
+    let d := Diff.diff s1 s2
+    let insDel := d.filter fun
+      | (.insert, _) => true
+      | (.delete, _) => true
+      | _ => false
+    (insDel.size, Diff.linesToString d)
 
 
 inline_extension Inline.name where

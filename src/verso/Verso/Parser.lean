@@ -1113,10 +1113,10 @@ deriving Inhabited
 /--
 A linebreak that isn't a block break (that is, there's non-space content on the next line)
 -/
-def linebreak (ctxt : InlineCtxt) :=
+def linebreak (ctxt : InlineCtxt) : ParserFn :=
   if ctxt.allowNewlines then
     nodeFn ``linebreak <|
-      andthenFn (fakeAtom "line!") <|
+      andthenFn (withInfoSyntaxFn skip.fn (fun info => fakeAtom "line!" info)) <|
         nodeFn strLitKind <|
         asStringFn (quoted := true) <|
           atomicFn (chFn '\n' >> lookaheadFn (manyFn (chFn ' ') >> notFollowedByFn (chFn '\n' <|> blockOpener) "newline"))
