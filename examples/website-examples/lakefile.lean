@@ -14,4 +14,6 @@ package «examples» where
 
 @[default_target]
 lean_lib «Examples» where
-  -- add library configuration options here
+
+@[default_target]
+lean_lib «AnchorExamples» where
