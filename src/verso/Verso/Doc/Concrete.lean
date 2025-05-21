@@ -191,7 +191,17 @@ elab (name := replaceDoc) "#doc" "(" genre:term ")" title:str "=>" : command => 
   let titleParts ← stringToInlines title
   let titleString := inlinesToString (← getEnv) titleParts
   let initState : PartElabM.State := .init (.node .none nullKind titleParts)
+
+  let (titleInlines, docState) ← runTermElabM <| fun _ => do
+    let g ← Term.elabTerm genre (some (.const ``Doc.Genre [])) >>= instantiateMVars
+    titleParts.mapM (elabInline ⟨·⟩) |>.run genre g {} initState
+  modifyEnv (docStateExt.setState · docState)
+
+  let initState := { initState with
+    partContext.expandedTitle := some (titleString, titleInlines)
+  }
   modifyEnv (partStateExt.setState · (some initState))
+
   modifyEnv fun env => originalCatParserExt.setState env (categoryParserFnExtension.getState env)
   modifyEnv (replaceCategoryFn `command (versoBlockCommandFn genre titleString))
 
