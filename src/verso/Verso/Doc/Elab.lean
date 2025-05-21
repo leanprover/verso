@@ -185,7 +185,7 @@ def _root_.Verso.Syntax.image.expand : InlineExpander
 @[inline_expander Verso.Syntax.code]
 def _root_.Verso.Syntax.code.expand : InlineExpander
   |  `(inline| code( $s )) =>
-    ``(Inline.code $s)
+    ``(Inline.code $(quote s.getString))
   | _ => throwUnsupportedSyntax
 
 
