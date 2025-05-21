@@ -675,21 +675,23 @@ def leanOutput : CodeBlockExpander
             return #[content]
           else return #[]
     else
-      let mut best : Option (Nat × MessageSeverity × String) := none
+      let mut best : Option (Nat × String × MessageSeverity × String) := none
       for (sev, txt) in msgs do
         let actual :=
           if config.normalizeMetas then
             normalizeMetavars txt
           else txt
-        let d := diffSize config.whitespace expected actual
+        let (d, d') := diffSize config.whitespace expected actual
         if d ≤ config.allowDiff then
           if let some (n, _, _) := best then
-            if d < n then best := (d, sev, txt)
-          else best := (d, sev, txt)
-      if let some (_, sev, txt) := best then
+            if d < n then best := (d, d', sev, txt)
+          else best := (d, d', sev, txt)
+      if let some (d, d', sev, txt) := best then
         if let some s := config.severity then
           if s != sev then
             throwErrorAt str s!"Expected severity {sevStr s}, but got {sevStr sev}"
+
+        Log.logSilentInfo m!"Diff is {d} lines:\n{d'}"
         if config.show then
           let content ← `(Block.other {Block.leanOutput with data := ToJson.toJson ($(quote sev), $(quote txt), $(quote config.summarize))} #[Block.code $(quote str.getString)])
           return #[content]
@@ -708,7 +710,7 @@ where
   mostlyEqual (ws : WhitespaceMode) (s1 s2 : String) : Bool :=
     ws.apply s1.trim == ws.apply s2.trim
 
-  diffSize (ws : WhitespaceMode) (s1 s2 : String) : Nat :=
+  diffSize (ws : WhitespaceMode) (s1 s2 : String) : (Nat × String) :=
     let s1 := ws.apply s1.trim |>.splitOn "\n" |>.toArray
     let s2 := ws.apply s2.trim |>.splitOn "\n" |>.toArray
     let d := Diff.diff s1 s2
@@ -716,7 +718,7 @@ where
       | (.insert, _) => true
       | (.delete, _) => true
       | _ => false
-    insDel.size
+    (insDel.size, Diff.linesToString d)
 
 
 inline_extension Inline.name where
