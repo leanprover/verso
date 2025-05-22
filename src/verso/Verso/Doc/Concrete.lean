@@ -180,13 +180,31 @@ def versoBlockCommandFn (genre : Term) (title : String) : ParserFn := fun c s =>
   else
     s.mkNode ``addBlockCmd iniSz
 
-
 initialize docStateExt : EnvExtension DocElabM.State ← registerEnvExtension (pure {})
 initialize partStateExt : EnvExtension (Option PartElabM.State) ← registerEnvExtension (pure none)
 initialize originalCatParserExt : EnvExtension CategoryParserFn ← registerEnvExtension (pure <| fun _ => whitespace)
 
+open Lean Elab Command in
+def finishDoc (genre : Term) (title : StrLit) : CommandElabM Unit:= do
+  -- Finish up the document
+  let txt ← getFileMap
+  let endPos := txt.source.endPos
+  let some partState ← partStateExt.getState <$> getEnv
+    | throwError "Document state not initialized"
+  let partState := partState.closeAll endPos
+  let finished := partState.partContext.toPartFrame.close endPos
+  pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
+  saveRefs (docStateExt.getState (← getEnv)) partState
+  let n ← currentDocName
+  let docName := mkIdentFrom title n
+  let titleString := title.getString
+  let titleStr : TSyntax ``Lean.Parser.Command.docComment := quote titleString
+  elabCommand (← `($titleStr:docComment def $docName : Part $genre := $(← finished.toSyntax' genre)))
 
-elab (name := replaceDoc) "#doc" "(" genre:term ")" title:str "=>" : command => open Lean Parser Elab Command in do
+syntax (name := replaceDoc) "#doc" "(" term ")" str "=>" : command
+
+elab_rules :command
+  | `(command|#doc ( $genre:term ) $title:str =>%$tok) => open Lean Parser Elab Command in do
   findGenreCmd genre
   let titleParts ← stringToInlines title
   let titleString := inlinesToString (← getEnv) titleParts
@@ -201,6 +219,13 @@ elab (name := replaceDoc) "#doc" "(" genre:term ")" title:str "=>" : command => 
     partContext.expandedTitle := some (titleString, titleInlines)
   }
   modifyEnv (partStateExt.setState · (some initState))
+
+  -- If there's no blocks after the =>, then the command parser never gets called, so it needs special-casing here
+  if let some stopPos := tok.getTailPos? then
+    let txt ← getFileMap
+    if txt.source.extract stopPos txt.source.endPos |>.all (·.isWhitespace) then
+      finishDoc genre title
+      return
 
   modifyEnv fun env => originalCatParserExt.setState env (categoryParserFnExtension.getState env)
   modifyEnv (replaceCategoryFn `command (versoBlockCommandFn genre titleString))
@@ -237,22 +262,8 @@ def elabVersoLastBlock : CommandElab
   | `(addLastBlockCmd| $b:block $genre:term $title:str) => do
     runVersoBlock genre b
     -- Finish up the document
-    let txt ← getFileMap
-    let endPos := txt.source.endPos
-    let some partState ← partStateExt.getState <$> getEnv
-      | throwError "Document state not initialized"
-    let partState := partState.closeAll endPos
-    let finished := partState.partContext.toPartFrame.close endPos
-    pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
-    saveRefs (docStateExt.getState (← getEnv)) partState
-    let n ← currentDocName
-    let docName := mkIdentFrom title n
-    let titleString := title.getString
-    let titleStr : TSyntax ``Lean.Parser.Command.docComment := quote titleString
-    elabCommand (← `($titleStr:docComment def $docName : Part $genre := $(← finished.toSyntax' genre)))
-
+    finishDoc genre title
   | _ => throwUnsupportedSyntax
-
 
 elab (name := completeDoc) "#old_doc" "(" genre:term ")" title:str "=>" text:completeDocument eoi : command => open Lean Elab Term Command PartElabM DocElabM in do
   findGenreCmd genre

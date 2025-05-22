@@ -34,7 +34,7 @@ In these projects, examples are selected using specially-formatted comments, and
 Here's a tree:
 
 ```anchor t
-def t : Tree Nat :=
+def someTree : Tree Nat :=
   .branch (.branch .leaf 1 .leaf) 2 (.branch (.branch .leaf 3 .leaf) 4 .leaf)
 ```
 
@@ -45,10 +45,32 @@ And here's just part of its definition:
 
 It's left branch is {anchorTerm tDef}`.branch .leaf 1 .leaf` which includes a reference to {anchorName tDef}`.leaf`.
 
-Checking types works too:
+Including output works:
 ```anchor tflip
-#check Tree.flip
+#eval someTree.flip
 ```
 ```anchorInfo tflip
-Tree.flip.{u_1} {α : Type u_1} (a✝ : Tree α) : Tree α
+Tree.branch
+  (Tree.branch (Tree.leaf) 4 (Tree.branch (Tree.leaf) 3 (Tree.leaf)))
+  2
+  (Tree.branch (Tree.leaf) 1 (Tree.leaf))
+```
+
+As does proofs and parts of proofs:
+```anchor proof1
+theorem Tree.flip_flip_eq_id : flip ∘ flip = (id : Tree α → Tree α) := by
+  funext t
+  induction t with
+  | leaf => rfl
+  | branch l v r ih1 ih2 =>
+    simp_all [flip]
+```
+Focusing on a branch:
+```anchor proof1a
+  | branch l v r ih1 ih2 =>
+    simp_all [flip]
+```
+Or just one part:
+```anchorTerm proof1a
+branch l v r ih1 ih2
 ```

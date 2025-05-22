@@ -42,6 +42,14 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ hashFiles('lake-manifest.json') }}-${{ hashFiles('lean-toolchain') }}-
 
+      # This was failing CI from clang crashing, so do it first for fast turnaround
+      - name: Build the website examples subproject
+        run: |
+          pushd examples/website-examples
+          lake build
+          lake build :examples
+          popd
+
       - name: Build the project
         run: |
           lake build
