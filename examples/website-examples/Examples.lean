@@ -44,7 +44,7 @@ def foo (n k : Nat) : Nat :=
   if n < k then
     1 + foo (n + 1) k
   else 0
-termination_by k - n
+termination_by foo n k => k - n
 %end
 
 %example version
