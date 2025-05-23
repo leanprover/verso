@@ -1,5 +1,5 @@
 /-
-Copyright (c) 2023-2024 Lean FRO LLC. All rights reserved.
+Copyright (c) 2023-2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
@@ -10,6 +10,7 @@ import Verso.Doc.TeX
 import Verso.Doc.Html
 import Verso.Output.TeX
 import Verso.Output.Html
+import Verso.Output.Html.KaTeX
 import Verso.Doc.Lsp
 import Verso.Doc.Elab
 import Verso.FS
@@ -124,8 +125,16 @@ structure Config where
   emitHtmlMulti : Bool := true
   wordCount : Option System.FilePath := none
   extraFiles : List (System.FilePath × String) := []
+  /-- Extra CSS to be included inline into every `<head>` -/
   extraCss : List String := []
+  /-- Extra JS to be included inline into every `<head>` -/
   extraJs : List String := []
+  /-- Extra CSS to be written to the filesystem in the Verso data directory and loaded by each `<head>` -/
+  extraCssFiles : Array (String × String) := #[]
+  /-- Extra JS to be written to the filesystem in the Verso data directory and loaded by each `<head>` -/
+  extraJsFiles : Array (String × String) := #[]
+  /-- Extra files to be placed in the Verso data directory -/
+  extraDataFiles : Array (String × ByteArray) := #[]
   licenseInfo : List LicenseInfo := []
   /-- Extra elements to add to every page's `head` tag -/
   extraHead : Array Output.Html := #[]
@@ -195,7 +204,11 @@ where
 
 def traverse (logError : String → IO Unit) (text : Part Manual) (config : Config) : ReaderT ExtensionImpls IO (Part Manual × TraverseState) := do
   let topCtxt : Manual.TraverseContext := {logError, draft := config.draft}
-  let mut state : Manual.TraverseState := {licenseInfo := .ofList config.licenseInfo}
+  let mut state : Manual.TraverseState := {
+    licenseInfo := .ofList config.licenseInfo,
+    extraCssFiles := config.extraCssFiles,
+    extraJsFiles := config.extraJsFiles
+  }
   let mut text := text
   if !config.draft then
     text := removeDraftParts text
@@ -316,8 +329,10 @@ def page (toc : List Html.Toc)
     (repoLink := config.sourceLink)
     (issueLink := config.issueLink)
     (localItems := localItems)
-    (extraStylesheets := config.extraCss ++ state.extraCssFiles.toList.map ("/-verso-css/" ++ ·.1))
-    (extraJsFiles := config.extraJs.toArray ++ state.extraJsFiles.map ("/-verso-js/" ++ ·.1))
+    -- The extra CSS and JS in the config is not take here because it's used to initialize the
+    -- traverse state and is thus already present.
+    (extraStylesheets := config.extraCss ++ state.extraCssFiles.toList.map ("/-verso-data/" ++ ·.1))
+    (extraJsFiles := config.extraJs.toArray ++ state.extraJsFiles.map ("/-verso-data/" ++ ·.1))
     (extraHead := config.extraHead)
     (extraContents := config.extraContents)
 
@@ -413,8 +428,9 @@ where
     for (src, dest) in config.extraFiles do
       copyRecursively logError src (dir.join dest)
     for (name, contents) in state.extraJsFiles do
-      ensureDir (dir.join "-verso-js")
-      IO.FS.withFile (dir.join "-verso-js" |>.join name) .write fun h => do
+      ensureDir (dir.join "-verso-data")
+      (dir / "-verso-data" / name).parent |>.forM fun d => ensureDir d
+      IO.FS.withFile (dir.join "-verso-data" |>.join name) .write fun h => do
         h.putStr contents
     let titleToShow : Html :=
       open Verso.Output.Html in
@@ -422,9 +438,15 @@ where
         alt
       else titleHtml
     for (name, contents) in state.extraCssFiles do
-      ensureDir (dir.join "-verso-css")
-      IO.FS.withFile (dir.join "-verso-css" |>.join name) .write fun h => do
+      ensureDir (dir.join "-verso-data")
+      (dir / "-verso-data" / name).parent |>.forM fun d => ensureDir d
+      IO.FS.withFile (dir.join "-verso-data" |>.join name) .write fun h => do
         h.putStr contents
+    for (name, contents) in config.extraDataFiles do
+      ensureDir (dir.join "-verso-data")
+      (dir / "-verso-data" / name).parent |>.forM fun d => ensureDir d
+      IO.FS.writeBinFile (dir.join "-verso-data" |>.join name) contents
+
     IO.FS.withFile (dir.join "index.html") .write fun h => do
       if config.verbose then
         IO.println s!"Saving {dir.join "index.html"}"
@@ -467,13 +489,20 @@ where
     for (src, dest) in config.extraFiles do
       copyRecursively logError src (root.join dest)
     for (name, contents) in state.extraJsFiles do
-      ensureDir (root.join "-verso-js")
-      IO.FS.withFile (root.join "-verso-js" |>.join name) .write fun h => do
+      ensureDir (root.join "-verso-data")
+      (root / "-verso-data" / name).parent |>.forM fun d => ensureDir d
+      IO.FS.withFile (root.join "-verso-data" |>.join name) .write fun h => do
         h.putStr contents
     for (name, contents) in state.extraCssFiles do
-      ensureDir (root.join "-verso-css")
-      IO.FS.withFile (root.join "-verso-css" |>.join name) .write fun h => do
+      ensureDir (root.join "-verso-data")
+      (root / "-verso-data" / name).parent |>.forM fun d => ensureDir d
+      IO.FS.withFile (root.join "-verso-data" |>.join name) .write fun h => do
         h.putStr contents
+    for (name, contents) in config.extraDataFiles do
+      ensureDir (root.join "-verso-data")
+      (root / "-verso-data" / name).parent |>.forM fun d => ensureDir d
+      IO.FS.writeBinFile (root.join "-verso-data" |>.join name) contents
+
     emitPart titleToShow authors toc opts.lift ctxt state definitionIds linkTargets {} true config.htmlDepth root text
     emitXrefs toc root state config
     pure (text, state)
@@ -542,6 +571,19 @@ where
   termination_by depth
 
 
+open Verso.Output.Html in
+/--
+Adds a bundled version of KaTeX to the document
+-/
+def Config.addKaTeX (config : Config) : Config :=
+  {config with
+    extraCssFiles := config.extraCssFiles.push ("katex/katex.css", katex.css),
+    extraJsFiles := config.extraJsFiles ++ #[("katex/katex.js", katex.js), ("katex/math.js", math.js)],
+    extraDataFiles := config.extraDataFiles ++ katexFonts,
+    licenseInfo := Licenses.KaTeX :: config.licenseInfo
+  }
+
+
 inductive Mode where | single | multi
 
 /--
@@ -558,10 +600,11 @@ The parameters are:
 -/
 abbrev ExtraStep := Mode → (String → IO Unit) → Config → TraverseState → Part Manual → IO Unit
 
+
 def manualMain (text : Part Manual)
     (extensionImpls : ExtensionImpls := by exact extension_impls%)
     (options : List String)
-    (config : Config := {})
+    (config : Config := Config.addKaTeX {})
     (extraSteps : List ExtraStep := []) : IO UInt32 :=
   ReaderT.run go extensionImpls
 
