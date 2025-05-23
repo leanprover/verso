@@ -323,7 +323,8 @@ def module : CodeBlockExpander
         let ref ← getRef
         let h ←
           if let some s ← editCodeBlock ref hlString then
-            MessageData.hint m!"" (some {ref := ref, suggestions := #[{suggestion := s, messageData? := hlString}]})
+            let sugg := hlString.splitOn "\n" |>.map (Std.Format.text ·) |> Std.Format.nil.joinSuffix
+            MessageData.hint m!"" (some {ref := ref, suggestions := #[{suggestion := s, messageData? := sugg}]})
           else pure m!""
         logErrorAt code <| m!"Missing module contents." ++ h
       else
@@ -454,7 +455,11 @@ def moduleTerm : RoleExpander
       else
         let suggs := suggestTerms hl term.getString
         let h ← MessageData.hint "Use one of these" (some <| {ref := term, suggestions := suggs})
-        logErrorAt term (m!"Not found: '{term.getString}'\nin:{indentD <| ExpectString.abbreviateString (maxLength := 100) <| hl.toString}\n" ++ h)
+        let expectedString := ExpectString.abbreviateString (maxLength := 100) <| hl.toString
+        let mut msg := m!"Not found: `{term.getString}`\n"
+        msg := msg ++ m!"in:{indentD <| m!"\n".joinSep <| (m!"{·}") <$> expectedString.splitOn "\n"}"
+        msg := msg ++ h
+        logErrorAt term msg
         return #[← ``(sorryAx _ true)]
 
 macro_rules
@@ -516,7 +521,7 @@ def moduleOut : CodeBlockExpander
 
       let suggs : Array Suggestion := infos.map fun (sev, msg, _) => {
         suggestion := withNl msg,
-        preInfo? := s!"{sevStr sev}:\n"
+        preInfo? := some s!"{sevStr sev}: "
       }
 
       let mut err : MessageData := "Expected"
