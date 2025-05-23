@@ -64,6 +64,7 @@ def loadModuleContent' (projectDir : String) (mod : String) (suppressNamespaces 
   let lakeVars :=
     #["LAKE", "LAKE_HOME", "LAKE_PKG_URL_MAP",
       "LEAN_SYSROOT", "LEAN_AR", "LEAN_PATH", "LEAN_SRC_PATH",
+      "LEAN", "ELAN", "ELAN_HOME", "LEAN_GITHASH",
       "ELAN_TOOLCHAIN", "DYLD_LIBRARY_PATH", "LD_LIBRARY_PATH"]
 
 
