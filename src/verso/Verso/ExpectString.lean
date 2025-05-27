@@ -23,6 +23,34 @@ def abbreviateString (what : String) (maxLength : Nat := 30) : String :=
     what
 
 /--
+Expects that a string matches some expected form from the document, returning `MessageData` for further processing.
+
+No errors are logged.
+
+If the strings don't match, then a diff is displayed as an error, and a code action to replace the
+expected string with the actual one is offered. Strings are compared one line at a time, and only
+strings that match `useLine` are considered (by default, all are considered). Lines are compared
+modulo `preEq`. The parameter `what` is used in the error message header, in a context "Mismatched
+`what` output:".
+
+`SubVerso.Examples.Messages.normalizeMetavars` and `SubVerso.Examples.Messages.normalizeLineNums`
+are good candidates for `preEq`.
+
+Errors are logged, not thrown; the returned `Bool` indicates whether an error was logged.
+-/
+def expectStringOrDiff (expected : StrLit) (actual : String)
+    (preEq : String → String := id)
+    (useLine : String → Bool := fun _ => true) : m (Option MessageData) := do
+  let expectedLines := expected.getString.splitOn "\n" |>.filter useLine |>.toArray
+  let actualLines := actual.splitOn "\n" |>.filter useLine |>.toArray
+
+  unless expectedLines.map preEq == actualLines.map preEq do
+    let diff := Diff.diff expectedLines actualLines
+    return some m!"{Diff.linesToString diff}"
+
+  return none
+
+/--
 Expects that a string matches some expected form from the document.
 
 If the strings don't match, then a diff is displayed as an error, and a code action to replace the
