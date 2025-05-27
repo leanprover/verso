@@ -436,6 +436,7 @@ def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := withRef block
     synthesizeSyntheticMVarsNoPostponing
     let t ← instantiateMVars t
     let type ← instantiateMVars type
+    let t ← ensureHasType (some type) t
     let decl := Declaration.defnDecl {
       name := n,
       levelParams := levelParams,
