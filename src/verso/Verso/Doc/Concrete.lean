@@ -10,6 +10,7 @@ import Verso.Doc.Elab
 import Verso.Doc.Elab.Incremental
 import Verso.Doc.Elab.Monad
 import Verso.Doc.Lsp
+import Verso.Hooks
 import Verso.Instances
 import Verso.Parser
 import Verso.SyntaxUtils
@@ -87,6 +88,11 @@ elab "#docs" "(" genre:term ")" n:ident title:str ":=" ":::::::" text:document "
   saveRefs st st'
 
   elabCommand (← `(def $n : Part $genre := $(← finished.toSyntax genre)))
+
+  let mut docState := st
+  for hook in (← documentFinishedHooks) do
+    let ((), docState') ← runTermElabM fun _ => hook ⟨genre, g⟩ st' docState
+    docState := docState'
 
 elab "#doc" "(" genre:term ")" title:str "=>" text:completeDocument eoi : term => open Lean Elab Term PartElabM DocElabM in do
   findGenreTm genre
@@ -192,14 +198,21 @@ def finishDoc (genre : Term) (title : StrLit) : CommandElabM Unit:= do
   let some partState ← partStateExt.getState <$> getEnv
     | throwError "Document state not initialized"
   let partState := partState.closeAll endPos
-  let finished := partState.partContext.toPartFrame.close endPos
-  pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
-  saveRefs (docStateExt.getState (← getEnv)) partState
-  let n ← currentDocName
-  let docName := mkIdentFrom title n
-  let titleString := title.getString
-  let titleStr : TSyntax ``Lean.Parser.Command.docComment := quote titleString
-  elabCommand (← `($titleStr:docComment def $docName : Part $genre := $(← finished.toSyntax' genre)))
+  try
+    let finished := partState.partContext.toPartFrame.close endPos
+    pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
+    saveRefs (docStateExt.getState (← getEnv)) partState
+    let n ← currentDocName
+    let docName := mkIdentFrom title n
+    let titleString := title.getString
+    let titleStr : TSyntax ``Lean.Parser.Command.docComment := quote titleString
+    elabCommand (← `($titleStr:docComment def $docName : Part $genre := $(← finished.toSyntax' genre)))
+  finally
+    let mut docState := docStateExt.getState (← getEnv)
+    let genreExpr ← runTermElabM fun _ => Term.elabTerm genre (some (.const ``Doc.Genre [])) >>= instantiateExprMVars
+    for hook in (← documentFinishedHooks) do
+      let ((), docState') ← runTermElabM fun _ => hook ⟨genre, genreExpr⟩ partState docState
+      docState := docState'
 
 syntax (name := replaceDoc) "#doc" "(" term ")" str "=>" : command
 
@@ -285,7 +298,12 @@ elab (name := completeDoc) "#old_doc" "(" genre:term ")" title:str "=>" text:com
         let n ← currentDocName
         let docName := mkIdentFrom title n
         let titleStr : TSyntax ``Lean.Parser.Command.docComment := quote titleString
-        elabCommand (← `($titleStr:docComment def $docName : Part $genre := $(← finished.toSyntax' genre))))
+        elabCommand (← `($titleStr:docComment def $docName : Part $genre := $(← finished.toSyntax' genre)))
+        let mut docState := st
+        for hook in (← documentFinishedHooks) do
+          let ((), docState') ← runTermElabM fun _ => hook ⟨genre, g⟩ st' docState
+          docState := docState')
+
       -- The heartbeat count is reset for each top-level Verso block because they are analogous to Lean commands.
       (handleStep := fun block => do
         let heartbeats ← IO.getNumHeartbeats
