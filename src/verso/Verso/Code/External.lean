@@ -29,6 +29,11 @@ open Std
 
 namespace Verso.Code.External
 
+register_option verso.examples.suggest : Bool := {
+  defValue := true,
+  descr := "Whether to suggest potentially-matching code examples"
+}
+
 /--
 A genre that supports loading and displaying external Lean code samples.
 -/
@@ -172,14 +177,14 @@ Adds up to `count` suggestions.
 is the provided input. Suggestions are added if they are "sufficiently close" to the input, as
 determined by `threshold`.
 -/
-def smartSuggestions (candidates : Array String) (input : String) (count : Nat := 10) (threshold := suggestionThreshold) : Array Suggestion :=
+def smartSuggestions (candidates : Array String) (input : String) (count : Nat := 10) (threshold := suggestionThreshold) : Array String :=
   let toks := candidates.filterMap fun t =>
     let limit := threshold input t
     EditDistance.levenshtein t input limit <&> (t, ·)
   let toks := toks.qsort (fun x y => x.2 < y.2 || (x.2 == y.2 && x.1 < y.1))
   let toks := toks.take count
   -- TODO test thresholds/sorting
-  toks.map fun (t, _) => {suggestion := t}
+  toks.map fun (t, _) => t
 
 /-- Converts all warnings to errors. -/
 def warningsToErrors (hl : Highlighted) : Highlighted :=
@@ -215,9 +220,10 @@ def anchored
     m Highlighted.AnchoredExamples := do
   let modName := moduleName.getId
   let modStr := modName.toString
+  let suppress ← getSuppress
 
   if let some cached := (loadedModuleAnchorExt.getState (← getEnv)).find? modName then
-    if let some cached' := cached[← getSuppress]? then
+    if let some cached' := cached[suppress]? then
       return cached'
 
   let items ← loadModuleContent modStr
@@ -225,7 +231,11 @@ def anchored
 
   match highlighted.anchored with
   | .error e => throwErrorAt blame e
-  | .ok anchors => return anchors
+  | .ok anchors =>
+    modifyEnv fun env => loadedModuleAnchorExt.modifyState env fun mods =>
+      let v := (mods.find? modName).getD {}
+      mods.insert modName (v.insert suppress anchors)
+    return anchors
 
 /--
 Reports a missing anchor error.
@@ -307,6 +317,10 @@ where
       if k > n then n := k
     n.fold (fun _ _ s => s.push '`') ""
 
+def codeBlockSuggestion (newBlock : String) : Suggestion :=
+  let sugg := newBlock.splitOn "\n" |>.map (Std.Format.text ·) |> Std.Format.nil.joinSuffix
+  {suggestion := newBlock, messageData? := sugg}
+
 /--
 Includes the contents of the specified example module.
 
@@ -323,12 +337,16 @@ def module : CodeBlockExpander
         let ref ← getRef
         let h ←
           if let some s ← editCodeBlock ref hlString then
-            let sugg := hlString.splitOn "\n" |>.map (Std.Format.text ·) |> Std.Format.nil.joinSuffix
-            MessageData.hint m!"" (some {ref := ref, suggestions := #[{suggestion := s, messageData? := sugg}]})
+            MessageData.hint m!"" (some {ref := ref, suggestions := #[codeBlockSuggestion s]})
           else pure m!""
-        logErrorAt code <| m!"Missing module contents." ++ h
-      else
-        _ ← ExpectString.expectString "module contents" code (hlString |> withNl) (useLine := fun l => !l.trim.isEmpty)
+        logErrorAt ref <| m!"Missing code." ++ h
+      else if let some mismatch ← ExpectString.expectStringOrDiff code (hlString |> withNl) (useLine := fun l => !l.trim.isEmpty) then
+        let ref ← getRef
+        let h ←
+          if let some s ← editCodeBlock ref hlString then
+            MessageData.hint m!"" (some {ref := ref, suggestions := #[codeBlockSuggestion s]})
+          else pure m!""
+        logErrorAt code <| m!"Mismatched code:{indentD mismatch}" ++ h
       pure #[← ``(leanBlock $(quote hl))]
 
 macro_rules
@@ -409,7 +427,7 @@ def moduleName : RoleExpander
         let ss := smartSuggestions (allNames hl |>.toArray) nameStr
         let h ←
           if ss.isEmpty then pure m!""
-          else MessageData.hint "Use a known name" (some {ref := name, suggestions := ss})
+          else MessageData.hint "Use a known name" (some {ref := name, suggestions := ss.map (fun s => {suggestion := .string s})})
         logErrorAt name m!"'{nameStr}' not found in:{indentD <| ExpectString.abbreviateString (maxLength := 100) hl.toString}{h}"
 
         return #[← ``(sorryAx _ true)]
@@ -420,11 +438,11 @@ macro_rules
     `(inline|role{%$rs moduleName $arg*  anchor:=$a }%$re [%$s $str* ]%$e)
 
 
-private def suggestTerms (hl : Highlighted) (input : String) : Array Suggestion := Id.run do
+private def suggestTerms (hl : Highlighted) (input : String) : Array String := Id.run do
   let delimTokens : Array String := #["def", "axiom", "example", "theorem", ":=", "inductive", "where", "structure", "class", "instance"]
   let ns := allTokens hl |>.filter (· ∉ #[":", "[", "]", "=>", "match", "(", ")", "{", "}", ",", "with", ":=", "=", "by", "#[", ";", "@", "if", "then", "else"] ++ delimTokens)
 
-  let lines := hl.lines.map ({suggestion := ·.toString.trim})
+  let lines := hl.lines.map (·.toString.trim) |>.filter (·.any (· ∉ [' ', '(', ')', '=', ':']))
 
   let tms := hl.split (· ∈ delimTokens) |>.filterMap fun h => do
     let more := h.split (· == "=") |>.map (·.toString)
@@ -434,7 +452,7 @@ private def suggestTerms (hl : Highlighted) (input : String) : Array Suggestion 
     return #[s] ++ if more.size > 1 then more.map (fun x => (x.dropPrefix? ": " |>.map (·.toString)).getD "") else #[]
   let tms := tms.flatten
   let out := ns.insertMany tms
-  lines ++ smartSuggestions out.toArray input (threshold := (max ·.length ·.length)) (count := 15)
+  lines ++ (smartSuggestions out.toArray input (threshold := (max ·.length ·.length)) (count := 15))
 
 
 /--
@@ -449,12 +467,21 @@ def moduleTerm : RoleExpander
     let term ← oneCodeStr inls
 
     withAnchored moduleName anchor? fun hl => do
-      if let some e := hl.matchingExpr? term.getString then
+      if term.getString.trim.isEmpty then
+        let suggs := suggestTerms hl term.getString
+        let h ← MessageData.hint "Use one of these" (some <| {ref := term, suggestions := suggs.map ({suggestion := .string ·})})
+        let expectedString := ExpectString.abbreviateString (maxLength := 100) <| hl.toString
+        let mut msg := m!"No expected term provided.\n"
+        msg := msg ++ m!"in:{indentD <| m!"\n".joinSep <| (m!"{·}") <$> expectedString.splitOn "\n"}"
+        msg := msg ++ h
+        logErrorAt term msg
+        return #[← ``(sorryAx _ true)]
+      else if let some e := hl.matchingExpr? term.getString then
         logInfos e
         return #[← ``(leanInline $(quote e))]
       else
         let suggs := suggestTerms hl term.getString
-        let h ← MessageData.hint "Use one of these" (some <| {ref := term, suggestions := suggs})
+        let h ← MessageData.hint "Use one of these" (some <| {ref := term, suggestions := suggs.map ({suggestion := .string ·})})
         let expectedString := ExpectString.abbreviateString (maxLength := 100) <| hl.toString
         let mut msg := m!"Not found: `{term.getString}`\n"
         msg := msg ++ m!"in:{indentD <| m!"\n".joinSep <| (m!"{·}") <$> expectedString.splitOn "\n"}"
@@ -473,12 +500,28 @@ def moduleTermBlock : CodeBlockExpander
 
     withAnchored moduleName anchor? fun hl => do
       let str := term.getString.trim
+      if str.isEmpty then
+        let ref ← getRef
+        let suggs := suggestTerms hl str
+        let suggs ← suggs.filterMapM fun s =>
+          editCodeBlock ref s
+        let h ←
+          if suggs.size > 0 then
+            MessageData.hint m!"Use one of these" (some {ref := ref, suggestions := suggs.map ({suggestion := .string ·})})
+          else pure m!""
+        let wanted := String.trim <| ExpectString.abbreviateString (maxLength := 100) <| hl.toString
+        let wanted := wanted.splitOn "\n" |>.map (Std.Format.text ·) |> Std.Format.nil.joinSuffix
+        logErrorAt term (m!"No sub-term of the following was specified: {indentD <| wanted}" ++ h)
+        return #[← ``(sorryAx _ true)]
       if let some e := hl.matchingExpr? str then
         logInfos e
         return #[← ``(leanBlock $(quote e))]
       else
+        let ref ← getRef
         let suggs := suggestTerms hl str
-        let h ← MessageData.hint "Use one of these" (some <| {ref := term, suggestions := suggs})
+        let suggs ← suggs.filterMapM fun s =>
+          editCodeBlock ref s
+        let h ← MessageData.hint "Use one of these" (some <| {ref := ref, suggestions := suggs.map ({suggestion := .string ·})})
         logErrorAt term (m!"Not found: '{str}' in: {indentD <| ExpectString.abbreviateString (maxLength := 100) <| hl.toString}" ++ h)
         return #[← ``(sorryAx _ true)]
 
@@ -524,6 +567,8 @@ def moduleOut : CodeBlockExpander
         preInfo? := some s!"{sevStr sev}: "
       }
 
+      let ref ← getRef
+
       let mut err : MessageData := "Expected"
 
       err := err ++ (m!"\nor".joinSep <| infos.toList.map fun (_, msg, _) => indentD msg ++ "\n")
@@ -537,7 +582,7 @@ def moduleOut : CodeBlockExpander
       else if suggs.size > 1 then
         err := err ++ (← MessageData.hint "Use one of these:\n" (some {ref := str, suggestions := suggs}))
 
-      logErrorAt str err
+      logErrorAt ref err
 
       return #[← ``(sorryAx _ true)]
 
@@ -632,3 +677,114 @@ macro_rules
     `(inline|role{%$rs moduleOut MessageSeverity.error anchor:=$a $arg*}%$re [%$s $str* ]%$e)
   | `(inline|role{%$rs anchorWarning $a:arg_val $arg*}%$re [%$s $str* ]%$e) =>
     `(inline|role{%$rs moduleOut MessageSeverity.warning anchor:=$a $arg*}%$re [%$s $str* ]%$e)
+
+/--
+Explicitly indicates that a code element is intended to be literal character values without any
+further semantics.
+-/
+@[role_expander lit]
+def lit : RoleExpander
+  | args, inls => do
+    ArgParse.done.run args
+    let kw ← oneCodeStr inls
+    return #[← ``(Inline.code $(quote kw.getString))]
+
+
+private def hasSubstring (s pattern : String) : Bool :=
+  if h : pattern.endPos.1 = 0 then false
+  else
+    have hPatt := Nat.zero_lt_of_ne_zero h
+    let rec loop (pos : String.Pos) :=
+      if h : pos.byteIdx + pattern.endPos.byteIdx > s.endPos.byteIdx then
+        false
+      else
+        have := Nat.lt_of_lt_of_le (Nat.add_lt_add_left hPatt _) (Nat.ge_of_not_lt h)
+        if s.substrEq pos pattern 0 pattern.endPos.byteIdx then
+          have := Nat.sub_lt_sub_left this (Nat.add_lt_add_left hPatt _)
+          true
+        else
+          have := Nat.sub_lt_sub_left this (s.lt_next pos)
+          loop (s.next pos)
+      termination_by s.endPos.1 - pos.1
+    loop 0
+
+
+/--
+Internal detail of anchor suggestion mechanism.
+-/
+@[inline_expander Verso.Syntax.code]
+private def suggest : InlineExpander
+  |  `(inline| code( $str )) => do
+    let str' := str.getString
+
+    unless verso.examples.suggest.get (← getOptions) do
+      return (← ``(Inline.code $(quote str')))
+
+    let anchors := loadedModuleAnchorExt.getState (← getEnv)
+    let mut termSuggestions : NameMap (HashSet String) := {}
+    let mut nameSuggestions : NameMap (HashSet String) := {}
+    for (modName, modAnchors) in anchors do
+      for (_, examples) in modAnchors do
+        for (anchorName, anchorContents) in examples.anchors.toArray do
+
+          if str'.all (fun c => !c.isWhitespace) then
+            if let some _ := anchorContents.matchingName? str' then
+              nameSuggestions := nameSuggestions.insert modName <|
+                ((nameSuggestions.find? modName).getD {}).insert anchorName
+
+          if let some _ := anchorContents.matchingExpr? str' then
+            termSuggestions :=
+              termSuggestions.insert modName <|
+                ((termSuggestions.find? modName).getD {}).insert anchorName
+
+    let mut defaultSuggestions : Array (String × String) := #[]
+    let mut otherSuggestions : Array (String × String × String) := #[]
+    let modName? := (verso.exampleModule.get? (← getOptions)).map (·.toName)
+
+    if let some modName := modName? then
+      let mut names : HashSet String := {}
+      for xs in nameSuggestions.find? modName do
+        for x in xs do
+          defaultSuggestions := defaultSuggestions.push  ("anchorName", x)
+          names := names.insert x
+      for xs in termSuggestions.find? modName do
+        for x in xs do
+          unless x ∈ names do
+            defaultSuggestions := defaultSuggestions.push ("anchorTerm", x)
+
+    let mut names : HashSet (Name × String) := {}
+    for (m, xs) in nameSuggestions do
+      if modName?.isEqSome m then continue
+      for x in xs do
+        otherSuggestions := otherSuggestions.push ("anchorName", x, m.toString)
+        names := names.insert (m, x)
+    for (m, xs) in termSuggestions do
+      if modName?.isEqSome m then continue
+      for x in xs do
+        unless (m, x) ∈ names do
+          otherSuggestions := otherSuggestions.push ("anchorTerm", x, m.toString)
+
+    let text ← getFileMap
+    let region? := (← getRef).getPos? |>.map fun p =>
+      let {line, ..} := text.utf8PosToLspPos p
+      text.source.extract (text.lineStart (line - 4)) (text.lineStart (line + 4))
+    let region := region?.getD ""
+
+    let (close, far) := defaultSuggestions.partition (fun (_, x) => hasSubstring region x)
+    let close := close.qsortOrd
+    let far := far.qsortOrd
+
+    let suggestions : Array Meta.Hint.Suggestion :=
+      close.map (fun (r, x) => {suggestion := .string ("{" ++ r ++ " " ++ x ++ "}`" ++ str' ++ "`"), postInfo? := some " (used nearby)"}) ++
+      far.map (fun (r, x) => {suggestion := .string ("{" ++ r ++ " " ++ x ++ "}`" ++ str' ++ "`")}) ++
+      otherSuggestions.map (fun (r, x, m) => "{" ++ r ++ " " ++ x ++ s!" (module:={m})" ++ "}`" ++ str' ++ "`")
+
+    if suggestions.isEmpty then
+      let h ← MessageData.hint m!"Add the `lit` role to indicate that it denotes literal characters:" <| some {ref := ← getRef, suggestions := #["{lit}`" ++ str' ++ "`"]}
+      logWarning <| m!"Code element is missing a role." ++ h
+    else
+      let h ← MessageData.hint m!"Try one of these:" <| some {ref := ← getRef, suggestions}
+      logWarning <| m!"Code element could be highlighted." ++ h
+
+    return (← ``(Inline.code $(quote str.getString)))
+  | _ => Elab.throwUnsupportedSyntax
