@@ -30,7 +30,7 @@ open Std
 namespace Verso.Code.External
 
 register_option verso.examples.suggest : Bool := {
-  defValue := true,
+  defValue := false,
   descr := "Whether to suggest potentially-matching code examples"
 }
 
@@ -718,7 +718,8 @@ private def suggest : InlineExpander
     let str' := str.getString
 
     unless verso.examples.suggest.get (← getOptions) do
-      return (← ``(Inline.code $(quote str')))
+      -- Delegate to the next handler
+      Elab.throwUnsupportedSyntax
 
     let anchors := loadedModuleAnchorExt.getState (← getEnv)
     let mut termSuggestions : NameMap (HashSet String) := {}
