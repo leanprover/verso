@@ -83,35 +83,21 @@ def loadModuleContent' (projectDir : String) (mod : String) (suppressNamespaces 
       }
       if res.exitCode != 0 then reportFail projectDir cmd args res
 
-    withTraceNode `Elab.Verso.Code.External.loadModule (fun _ => pure m!"loadModuleContent': building subverso-extract-mod") do
-      let args := #["run", "--install", toolchain, "lake", "env", "which", "subverso-extract-mod"]
-      let res ← IO.Process.output {
-        cmd, args, cwd := projectDir
-        -- Unset Lake's environment variables
-        env := lakeVars.map (·, none)
-      }
-      if res.exitCode != 0 then
-        let args := #["run", "--install", toolchain, "lake", "build", "subverso-extract-mod"]
-
+    withTraceNode `Elab.Verso.Code.External.loadModule (fun _ => pure m!"loadModuleContent': extracting '{mod}'") do
+      IO.FS.withTempFile fun h f' => do
+        h.putStrLn <| " ".intercalate suppressNamespaces
+        h.flush
+        h.rewind
+        let args :=
+          #["run", "--install", toolchain, "lake", "exe", "subverso-extract-mod"] ++
+          #["--suppress-namespaces", f'.toString] ++
+          #[mod, f.toString]
         let res ← IO.Process.output {
           cmd, args, cwd := projectDir
           -- Unset Lake's environment variables
           env := lakeVars.map (·, none)
         }
         if res.exitCode != 0 then reportFail projectDir cmd args res
-
-    withTraceNode `Elab.Verso.Code.External.loadModule (fun _ => pure m!"loadModuleContent': extracting '{mod}'") do
-      let suppressArgs := suppressNamespaces.toArray.flatMap (#["--suppress-namespace", ·])
-      let args :=
-        #["run", "--install", toolchain, "lake", "env", "subverso-extract-mod"] ++
-        suppressArgs ++
-        #[mod, f.toString]
-      let res ← IO.Process.output {
-        cmd, args, cwd := projectDir
-        -- Unset Lake's environment variables
-        env := lakeVars.map (·, none)
-      }
-      if res.exitCode != 0 then reportFail projectDir cmd args res
 
     h.rewind
 
@@ -147,6 +133,7 @@ def getProjectDir : m String := do
 def getSuppress : m (List String) := do
   let some nss ← verso.externalExamples.suppressedNamespaces.get? <$> getOptions
     | return []
+  let nss := nss.dropWhile (· == '"') |>.dropRightWhile (· == '"') -- Strings getting double-quoted for some reason
   return nss.splitOn " "
 
 def loadModuleContent [MonadAlwaysExcept ε m] (mod : String) : m (Array ModuleItem) :=
