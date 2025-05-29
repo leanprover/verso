@@ -395,7 +395,7 @@ def _root_.Array.mapIndexedM [Monad m] (arr : Array α) (f : Fin arr.size → α
 
 partial defmethod Highlighted.toHtml : Highlighted → HighlightHtmlM Html
   | .token t => t.toHtml
-  | .text str => pure str
+  | .text str => pure {{<span class="text">{{str}}</span>}}
   | .span infos hl =>
     if let some cls := spanClass infos then do
       pure {{<span class={{"has-info " ++ cls}}>
@@ -558,7 +558,7 @@ def highlightingStyle : String := "
 }
 
 
-.hl.lean .has-info {
+.hl.lean .has-info .token:not(.tactic-state):not(.tactic-state *), .hl.lean .has-info .text:not(.tactic-state):not(.tactic-state *) {
   text-decoration-style: wavy;
   text-decoration-line: underline;
   text-decoration-thickness: from-font;
@@ -574,7 +574,7 @@ def highlightingStyle : String := "
   text-align: left;
 }
 
-.hl.lean .has-info.error {
+.hl.lean .has-info.error :not(.tactic-state):not(.tactic-state *){
   text-decoration-color: red;
 }
 
@@ -598,7 +598,7 @@ def highlightingStyle : String := "
     color: red;
 }
 
-.hl.lean .has-info.warning {
+.hl.lean .has-info.warning :not(.tactic-state):not(.tactic-state *) {
   text-decoration-color: var(--verso-warning-color);
 }
 
@@ -623,7 +623,7 @@ def highlightingStyle : String := "
 }
 
 
-.hl.lean .has-info.info {
+.hl.lean .has-info.info :not(.tactic-state):not(.tactic-state *) {
   text-decoration-color: blue;
 }
 
@@ -945,8 +945,6 @@ def highlightingStyle : String := "
   border: 3px solid #99b3c2;
 }
 
-
-
 .tippy-box[data-theme~='tactic'] {
   background-color: white;
   color: black;
@@ -1038,19 +1036,42 @@ window.onload = () => {
     let docsJson = siteRoot + \"-verso-docs.json\";
     fetch(docsJson).then((resp) => resp.json()).then((versoDocData) => {
 
+      function hideParentTooltips(element) {
+        let parent = element.parentElement;
+        while (parent) {
+          const tippyInstance = parent._tippy;
+          if (tippyInstance) {
+            tippyInstance.hide();
+          }
+          parent = parent.parentElement;
+        }
+      }
+
+
+
       const defaultTippyProps = {
         /* DEBUG -- remove the space: * /
         onHide(any) { return false; },
         trigger: \"click\",
         // */
-        theme: \"lean\",
+        /* theme: \"lean\", */
         maxWidth: \"none\",
         appendTo: () => document.body,
         interactive: true,
         delay: [100, null],
-        ignoreAttributes: true,
+        /* ignoreAttributes: true, */
+        followCursor: 'initial',
         onShow(inst) {
-          if (inst.reference.querySelector(\".hover-info\") || \"versoHover\" in inst.reference.dataset) {
+          if (inst.reference.className == 'tactic') {
+
+            const toggle = inst.reference.querySelector(\"input.tactic-toggle\");
+            if (toggle && toggle.checked) {
+              return false;
+            }
+            hideParentTooltips(inst.reference);
+            //if (blockedByTippy(inst.reference)) { return false; }
+
+          } else if (inst.reference.querySelector(\".hover-info\") || \"versoHover\" in inst.reference.dataset) {
             if (blockedByTactic(inst.reference)) { return false };
             if (blockedByTippy(inst.reference)) { return false; }
           } else { // Nothing to show here!
@@ -1059,57 +1080,82 @@ window.onload = () => {
         },
         content (tgt) {
           const content = document.createElement(\"span\");
-          content.className = \"hl lean\";
-          content.style.display = \"block\";
-          content.style.maxHeight = \"300px\";
-          content.style.overflowY = \"auto\";
-          content.style.overflowX = \"hidden\";
-          const hoverId = tgt.dataset.versoHover;
-          const hoverInfo = tgt.querySelector(\".hover-info\");
-          if (hoverId) { // Docstrings from the table
-            // TODO stop doing an implicit conversion from string to number here
-            let data = versoDocData[hoverId];
-            if (data) {
-              const info = document.createElement(\"span\");
-              info.className = \"hover-info\";
-              info.style.display = \"block\";
-              info.innerHTML = data;
-              content.appendChild(info);
-              /* Render docstrings - TODO server-side */
-              if ('undefined' !== typeof marked) {
-                  for (const d of content.querySelectorAll(\"code.docstring, pre.docstring\")) {
-                      const str = d.innerText;
-                      const html = marked.parse(str);
-                      const rendered = document.createElement(\"div\");
-                      rendered.classList.add(\"docstring\");
-                      rendered.innerHTML = html;
-                      d.parentNode.replaceChild(rendered, d);
-                  }
+          if (tgt.className == 'tactic') {
+            const state = tgt.querySelector(\".tactic-state\").cloneNode(true);
+            state.style.display = \"block\";
+            content.appendChild(state);
+            content.style.display = \"block\";
+            content.className = \"hl lean popup\";
+          } else {
+            content.className = \"hl lean\";
+            content.style.display = \"block\";
+            content.style.maxHeight = \"300px\";
+            content.style.overflowY = \"auto\";
+            content.style.overflowX = \"hidden\";
+            const hoverId = tgt.dataset.versoHover;
+            const hoverInfo = tgt.querySelector(\".hover-info\");
+            if (hoverId) { // Docstrings from the table
+              // TODO stop doing an implicit conversion from string to number here
+              let data = versoDocData[hoverId];
+              if (data) {
+                const info = document.createElement(\"span\");
+                info.className = \"hover-info\";
+                info.style.display = \"block\";
+                info.innerHTML = data;
+                content.appendChild(info);
+                /* Render docstrings - TODO server-side */
+                if ('undefined' !== typeof marked) {
+                    for (const d of content.querySelectorAll(\"code.docstring, pre.docstring\")) {
+                        const str = d.innerText;
+                        const html = marked.parse(str);
+                        const rendered = document.createElement(\"div\");
+                        rendered.classList.add(\"docstring\");
+                        rendered.innerHTML = html;
+                        d.parentNode.replaceChild(rendered, d);
+                    }
+                }
+              } else {
+                content.innerHTML = \"Failed to load doc ID: \" + hoverId;
               }
-            } else {
-              content.innerHTML = \"Failed to load doc ID: \" + hoverId;
+            } else if (hoverInfo) { // The inline info, still used for compiler messages
+              content.appendChild(hoverInfo.cloneNode(true));
             }
-          } else if (hoverInfo) { // The inline info, still used for compiler messages
-            content.appendChild(hoverInfo.cloneNode(true));
           }
           return content;
         }
       };
 
+
+
       const addTippy = (selector, props) => {
         tippy(selector, Object.assign({}, defaultTippyProps, props));
       };
-      addTippy('.hl.lean .const.token, .hl.lean .keyword.token, .hl.lean .literal.token, .hl.lean .option.token, .hl.lean .var.token, .hl.lean .typed.token', {theme: 'lean'});
-      addTippy('.hl.lean .has-info.warning', {theme: 'warning message'});
-      addTippy('.hl.lean .has-info.info', {theme: 'info message'});
-      addTippy('.hl.lean .has-info.error', {theme: 'error message'});
+      document.querySelectorAll('.hl.lean .const.token, .hl.lean .keyword.token, .hl.lean .literal.token, .hl.lean .option.token, .hl.lean .var.token, .hl.lean .typed.token').forEach(element => {
+        element.setAttribute('data-tippy-theme', 'lean');
+      });
+      document.querySelectorAll('.hl.lean .has-info.warning').forEach(element => {
+        element.setAttribute('data-tippy-theme', 'warning message');
+      });
+      document.querySelectorAll('.hl.lean .has-info.info').forEach(element => {
+        element.setAttribute('data-tippy-theme', 'info message');
+      });
+      document.querySelectorAll('.hl.lean .has-info.error').forEach(element => {
+        element.setAttribute('data-tippy-theme', 'error message');
+      });
+      document.querySelectorAll('.hl.lean .tactic').forEach(element => {
+        element.setAttribute('data-tippy-theme', 'tactic');
+      });
+      let insts = tippy('.hl.lean .const.token, .hl.lean .keyword.token, .hl.lean .literal.token, .hl.lean .option.token, .hl.lean .var.token, .hl.lean .typed.token, .hl.lean .has-info, .hl.lean .tactic', defaultTippyProps);
 
+
+
+      /*
       tippy('.hl.lean .tactic', {
         allowHtml: true,
-        /* DEBUG -- remove the space: * /
+
         onHide(any) { return false; },
         trigger: \"click\",
-        // */
+
         maxWidth: \"none\",
         onShow(inst) {
           const toggle = inst.reference.querySelector(\"input.tactic-toggle\");
@@ -1118,8 +1164,6 @@ window.onload = () => {
           }
           if (blockedByTippy(inst.reference)) { return false; }
         },
-        theme: \"tactic\",
-        placement: 'bottom-start',
         content (tgt) {
           const content = document.createElement(\"span\");
           const state = tgt.querySelector(\".tactic-state\").cloneNode(true);
@@ -1130,6 +1174,7 @@ window.onload = () => {
           return content;
         }
       });
+      */
   });
 }
 "

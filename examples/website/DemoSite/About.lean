@@ -72,8 +72,8 @@ where
 block_component +directive button' (onclick : String) where
   toHtml id _ _ goB contents := do
     saveJs <| "window.addEventListener('load', () => {" ++
-      s!"document.getElementById('{id}').onclick = () => " ++
-      "{ alert(" ++ onclick.quote ++ ");};});"
+      s!"document.getElementById('{id}')?.addEventListener('click', () => " ++
+      "{ alert(" ++ onclick.quote ++ ");})});"
     pure {{
       <button id={{id}}>
         {{← contents.mapM goB}}
@@ -84,8 +84,8 @@ block_component +directive button' (onclick : String) where
 inline_component button (onclick : String) where
   toHtml id _ goI contents := do
     saveJs <| "window.addEventListener('load', () => {" ++
-      s!"document.getElementById('{id}').onclick = () => " ++
-      "{ alert('hello');};});"
+      s!"document.getElementById('{id}')?.addEventListener('click', () => " ++
+      "{ alert('hello');});});"
     pure {{
       <button id={{id}}>
         {{← contents.mapM goI}}
