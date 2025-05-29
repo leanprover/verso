@@ -395,7 +395,7 @@ def _root_.Array.mapIndexedM [Monad m] (arr : Array α) (f : Fin arr.size → α
 
 partial defmethod Highlighted.toHtml : Highlighted → HighlightHtmlM Html
   | .token t => t.toHtml
-  | .text str => pure {{<span class="text">{{str}}</span>}}
+  | .text str => pure {{<span class="inter-text">{{str}}</span>}}
   | .span infos hl =>
     if let some cls := spanClass infos then do
       pure {{<span class={{"has-info " ++ cls}}>
@@ -558,7 +558,7 @@ def highlightingStyle : String := "
 }
 
 
-.hl.lean .has-info .token:not(.tactic-state):not(.tactic-state *), .hl.lean .has-info .text:not(.tactic-state):not(.tactic-state *) {
+.hl.lean .has-info .token:not(.tactic-state):not(.tactic-state *), .hl.lean .has-info .inter-text:not(.tactic-state):not(.tactic-state *) {
   text-decoration-style: wavy;
   text-decoration-line: underline;
   text-decoration-thickness: from-font;
