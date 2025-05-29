@@ -35,10 +35,13 @@ Here are some examples:
 ```
 
 
-```lean demo
+```lean demo (error := true)
 example := if true then 1 else 2
 example := if True then 1 else 2
 example : Int := if True then 1 else 2
+example : 2 < 5 := by
+  constructor
+  constructor
 ```
 
 ```lean demo
