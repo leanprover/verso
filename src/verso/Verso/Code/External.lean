@@ -237,6 +237,26 @@ def anchored
       mods.insert modName (v.insert suppress anchors)
     return anchors
 
+open MessageData (hint)
+
+/-
+Creates a hint message with associated code action suggestions at a specified location.
+
+The arguments are as follows:
+* `ref`: the syntax location for the code action suggestions. Will be overridden by the `span?`
+  field on any suggestions that specify it.
+* `hint`: the main message of the hint, which precedes its code action suggestions.
+* `suggestions`: the suggestions to display.
+* `codeActionPrefix?`: if specified, text to display in place of "Try this: " in the code action
+  label
+-/
+def hintAt (ref : Syntax) (hint : MessageData) (suggestions : Array Suggestion) (codeActionPrefix? : Option String := none) : CoreM MessageData :=
+  -- The @ guards against upstream signature changes going unnoticed
+  @MessageData.hint hint suggestions (ref? := some ref) (codeActionPrefix? := codeActionPrefix?)
+
+local instance : Coe (Array String) (Array Suggestion) where
+  coe xs := xs.map ({suggestion := .string ·})
+
 /--
 Reports a missing anchor error.
 -/
@@ -247,10 +267,9 @@ def anchorNotFound (anchorName : Ident) (allAnchors : List String) : DocElabM Te
     EditDistance.levenshtein anchorStr x 30 <&> (·, x)
 
   let toSuggest := toSuggest.toArray.qsort (fun x y => x.1 < y.1) |>.map (·.snd)
-  let toSuggest := toSuggest.map ({suggestion := ·})
   let h ←
     if toSuggest.isEmpty then pure m!"No anchors defined in module."
-    else MessageData.hint "Use a defined anchor" (some {ref := anchorName, suggestions := toSuggest})
+    else hintAt anchorName "Use a defined anchor" toSuggest
   logErrorAt anchorName m!"Anchor not found.\n\n{h}"
   ``(sorryAx _ true)
 
@@ -337,14 +356,14 @@ def module : CodeBlockExpander
         let ref ← getRef
         let h ←
           if let some s ← editCodeBlock ref hlString then
-            MessageData.hint m!"" (some {ref := ref, suggestions := #[codeBlockSuggestion s]})
+            hint m!"" #[codeBlockSuggestion s]
           else pure m!""
         logErrorAt ref <| m!"Missing code." ++ h
       else if let some mismatch ← ExpectString.expectStringOrDiff code (hlString |> withNl) (useLine := fun l => !l.trim.isEmpty) then
         let ref ← getRef
         let h ←
           if let some s ← editCodeBlock ref hlString then
-            MessageData.hint m!"" (some {ref := ref, suggestions := #[codeBlockSuggestion s]})
+            hint m!"" #[codeBlockSuggestion s]
           else pure m!""
         logErrorAt code <| m!"Mismatched code:{indentD mismatch}" ++ h
       pure #[← ``(leanBlock $(quote hl))]
@@ -427,7 +446,7 @@ def moduleName : RoleExpander
         let ss := smartSuggestions (allNames hl |>.toArray) nameStr
         let h ←
           if ss.isEmpty then pure m!""
-          else MessageData.hint "Use a known name" (some {ref := name, suggestions := ss.map (fun s => {suggestion := .string s})})
+          else hintAt name "Use a known name" ss
         logErrorAt name m!"'{nameStr}' not found in:{indentD <| ExpectString.abbreviateString (maxLength := 100) hl.toString}{h}"
 
         return #[← ``(sorryAx _ true)]
@@ -469,7 +488,7 @@ def moduleTerm : RoleExpander
     withAnchored moduleName anchor? fun hl => do
       if term.getString.trim.isEmpty then
         let suggs := suggestTerms hl term.getString
-        let h ← MessageData.hint "Use one of these" (some <| {ref := term, suggestions := suggs.map ({suggestion := .string ·})})
+        let h ← hintAt term "Use one of these" suggs
         let expectedString := ExpectString.abbreviateString (maxLength := 100) <| hl.toString
         let mut msg := m!"No expected term provided.\n"
         msg := msg ++ m!"in:{indentD <| m!"\n".joinSep <| (m!"{·}") <$> expectedString.splitOn "\n"}"
@@ -481,7 +500,7 @@ def moduleTerm : RoleExpander
         return #[← ``(leanInline $(quote e))]
       else
         let suggs := suggestTerms hl term.getString
-        let h ← MessageData.hint "Use one of these" (some <| {ref := term, suggestions := suggs.map ({suggestion := .string ·})})
+        let h ← hintAt term "Use one of these" suggs
         let expectedString := ExpectString.abbreviateString (maxLength := 100) <| hl.toString
         let mut msg := m!"Not found: `{term.getString}`\n"
         msg := msg ++ m!"in:{indentD <| m!"\n".joinSep <| (m!"{·}") <$> expectedString.splitOn "\n"}"
@@ -507,7 +526,7 @@ def moduleTermBlock : CodeBlockExpander
           editCodeBlock ref s
         let h ←
           if suggs.size > 0 then
-            MessageData.hint m!"Use one of these" (some {ref := ref, suggestions := suggs.map ({suggestion := .string ·})})
+            hint m!"Use one of these" suggs
           else pure m!""
         let wanted := String.trim <| ExpectString.abbreviateString (maxLength := 100) <| hl.toString
         let wanted := wanted.splitOn "\n" |>.map (Std.Format.text ·) |> Std.Format.nil.joinSuffix
@@ -521,7 +540,7 @@ def moduleTermBlock : CodeBlockExpander
         let suggs := suggestTerms hl str
         let suggs ← suggs.filterMapM fun s =>
           editCodeBlock ref s
-        let h ← MessageData.hint "Use one of these" (some <| {ref := ref, suggestions := suggs.map ({suggestion := .string ·})})
+        let h ← hint "Use one of these" suggs
         logErrorAt term (m!"Not found: '{str}' in: {indentD <| ExpectString.abbreviateString (maxLength := 100) <| hl.toString}" ++ h)
         return #[← ``(sorryAx _ true)]
 
@@ -538,7 +557,7 @@ deriving instance Repr for MessageSeverity
 
 private def severityHint (wanted : String) (stx : Syntax) : DocElabM MessageData := do
   if stx.getHeadInfo matches .original .. then
-    MessageData.hint m!"Use '{wanted}'" (some {ref := stx, suggestions := #[wanted]})
+    hintAt stx m!"Use '{wanted}'" #[wanted]
   else pure m!""
 
 /--
@@ -578,9 +597,9 @@ def moduleOut : CodeBlockExpander
       else
         err := err ++ m!"but got:{indentD str.getString.trim}"
       if suggs.size = 1 then
-        err := err ++ (← MessageData.hint "Use this:\n" (some {ref := str, suggestions := suggs}))
+        err := err ++ (← hintAt str "Use this:\n" suggs)
       else if suggs.size > 1 then
-        err := err ++ (← MessageData.hint "Use one of these:\n" (some {ref := str, suggestions := suggs}))
+        err := err ++ (← hintAt str "Use one of these:\n" suggs)
 
       logErrorAt ref err
 
@@ -627,7 +646,7 @@ def moduleOutRole : RoleExpander
         }
         let h ←
           if suggs.isEmpty then pure m!""
-          else MessageData.hint "Use one of these." (some {ref := ref, suggestions := suggs})
+          else hintAt ref "Use one of these." suggs
 
         let err :=
           m!"Expected one of:{indentD (m!"\n".joinSep <| infos.toList.map (·.2.1))}" ++
@@ -781,10 +800,10 @@ private def suggest : InlineExpander
       otherSuggestions.map (fun (r, x, m) => "{" ++ r ++ " " ++ x ++ s!" (module:={m})" ++ "}`" ++ str' ++ "`")
 
     if suggestions.isEmpty then
-      let h ← MessageData.hint m!"Add the `lit` role to indicate that it denotes literal characters:" <| some {ref := ← getRef, suggestions := #["{lit}`" ++ str' ++ "`"]}
+      let h ← hint m!"Add the `lit` role to indicate that it denotes literal characters:" #["{lit}`" ++ str' ++ "`"]
       logWarning <| m!"Code element is missing a role." ++ h
     else
-      let h ← MessageData.hint m!"Try one of these:" <| some {ref := ← getRef, suggestions}
+      let h ← hint m!"Try one of these:" suggestions
       logWarning <| m!"Code element could be highlighted." ++ h
 
     return (← ``(Inline.code $(quote str.getString)))
