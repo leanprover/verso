@@ -72,11 +72,8 @@ def expectString (what : String) (expected : StrLit) (actual : String)
 
   unless expectedLines.map preEq == actualLines.map preEq do
     let diff := Diff.diff expectedLines actualLines
-    let ss : Meta.Hint.Suggestions := {
-      ref := expected,
-      suggestions := #[{suggestion := .string actual}]
-    }
-    let h : MessageData ← MessageData.hint "Replace with actual value" (suggestions? := some ss)
+
+    let h : MessageData ← MessageData.hint "Replace with actual value" #[{suggestion := .string actual}] (ref? := some expected)
     logErrorAt expected m!"Mismatched {what} output:\n{Diff.linesToString diff}{h}"
     return false
 
