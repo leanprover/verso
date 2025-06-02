@@ -13,4 +13,4 @@ package «examples» where
   -- add package configuration options here
 
 @[default_target]
-lean_lib «Examples» where
+lean_lib «AnchorExamples» where
