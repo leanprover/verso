@@ -74,14 +74,20 @@ def loadModuleContent' (projectDir : String) (mod : String) (suppressNamespaces 
   try
     let cmd := "elan"
 
-    withTraceNode `Elab.Verso.Code.External.loadModule (fun _ => pure m!"loadModuleContent': building example project's module") do
-      let args := #["run", "--install", toolchain, "lake", "build", "+" ++ mod]
-      let res ← IO.Process.output {
-        cmd, args, cwd := projectDir
-        -- Unset Lake's environment variables
-        env := lakeVars.map (·, none)
-      }
-      if res.exitCode != 0 then reportFail projectDir cmd args res
+    let runCmd' (args : Array String) : m Unit := do
+        let res ← IO.Process.output {
+          cmd, args, cwd := projectDir
+          -- Unset Lake's environment variables
+          env := lakeVars.map (·, none)
+        }
+        if res.exitCode != 0 then reportFail projectDir cmd args res
+
+    let runCmd (trace : MessageData) (args : Array String) : m Unit :=
+      withTraceNode `Elab.Verso.Code.External.loadModule (fun _ => pure trace) (runCmd' args)
+
+    runCmd m!"loadModuleContent': building subverso" #["run", "--install", toolchain, "lake", "build", "subverso-extract-mod"]
+
+    runCmd m!"loadModuleContent': building example project's module" #["run", "--install", toolchain, "lake", "build", "+" ++ mod]
 
     withTraceNode `Elab.Verso.Code.External.loadModule (fun _ => pure m!"loadModuleContent': extracting '{mod}'") do
       IO.FS.withTempFile fun h f' => do
@@ -92,12 +98,7 @@ def loadModuleContent' (projectDir : String) (mod : String) (suppressNamespaces 
           #["run", "--install", toolchain, "lake", "exe", "subverso-extract-mod"] ++
           #["--suppress-namespaces", f'.toString] ++
           #[mod, f.toString]
-        let res ← IO.Process.output {
-          cmd, args, cwd := projectDir
-          -- Unset Lake's environment variables
-          env := lakeVars.map (·, none)
-        }
-        if res.exitCode != 0 then reportFail projectDir cmd args res
+        runCmd' args
 
     h.rewind
 
