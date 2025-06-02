@@ -142,11 +142,13 @@ lake exe demosite --output _out/examples/demosite
 ```
 
 To view the output, a local server will be needed. One way to get such
-a server is to use the one from the Python standard library, e.g.
+a server is to use the Python script included in this repository:
 ```
-python3 -m http.server 8800 --directory _out/examples/demosite &
+python3 ./server.py 8880 --directory _out/examples/demosite &
 ```
 after which `http://localhost:8800/` will show the generated site.
+
+
 
 ### Textbook
 
