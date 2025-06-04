@@ -432,14 +432,16 @@ partial defmethod Highlighted.toHtml : Highlighted → HighlightHtmlM Html
   | .point s info => pure {{<span class={{"message " ++ s.«class»}}>{{info}}</span>}}
   | .seq hls => hls.mapM toHtml
 
-defmethod Highlighted.blockHtml (contextName : String) (code : Highlighted) : HighlightHtmlM Html := do
-  pure {{ <code class="hl lean block" "data-lean-context"={{toString contextName}}> {{ ← code.trim.toHtml }} </code> }}
+defmethod Highlighted.blockHtml (contextName : String) (code : Highlighted) (trim : Bool := true) : HighlightHtmlM Html := do
+  let code := if trim then code.trim else code
+  pure {{ <code class="hl lean block" "data-lean-context"={{toString contextName}}> {{ ← code.toHtml }} </code> }}
 
-defmethod Highlighted.inlineHtml (contextName : Option String) (code : Highlighted) : HighlightHtmlM Html := do
+defmethod Highlighted.inlineHtml (contextName : Option String) (code : Highlighted) (trim : Bool := true) : HighlightHtmlM Html := do
+  let code := if trim then code.trim else code
   if let some ctx := contextName then
-    pure {{ <code class="hl lean inline" "data-lean-context"={{toString ctx}}> {{ ← code.trim.toHtml }} </code> }}
+    pure {{ <code class="hl lean inline" "data-lean-context"={{toString ctx}}> {{ ← code.toHtml }} </code> }}
   else
-    pure {{ <code class="hl lean inline"> {{ ← code.trim.toHtml }} </code> }}
+    pure {{ <code class="hl lean inline"> {{ ← code.toHtml }} </code> }}
 
 -- TODO CSS variables, and document them
 def highlightingStyle : String := "
