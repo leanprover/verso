@@ -651,6 +651,7 @@ main .titlepage h1 {
 
 main .authors {
     text-align: center;
+    font-family: var(--verso-structure-font-family);
 }
 
 /******** Main content ********/

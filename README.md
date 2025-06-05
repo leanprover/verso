@@ -142,11 +142,13 @@ lake exe demosite --output _out/examples/demosite
 ```
 
 To view the output, a local server will be needed. One way to get such
-a server is to use the one from the Python standard library, e.g.
+a server is to use the Python script included in this repository:
 ```
-python3 -m http.server 8800 --directory _out/examples/demosite &
+python3 ./server.py 8880 --directory _out/examples/demosite &
 ```
 after which `http://localhost:8800/` will show the generated site.
+
+
 
 ### Textbook
 
@@ -155,7 +157,7 @@ textbook project in Verso and a place where features can be developed
 for upstreaming into the manual genre proper.
 
 To build the example website and place the results in
-`_out/examples/demosite`, run:
+`_out/examples/demotextbook`, run:
 ```
 lake build
 lake exe demotextbook --output _out/examples/demotextbook
@@ -164,7 +166,7 @@ lake exe demotextbook --output _out/examples/demotextbook
 To view the output, a local server will be needed. One way to get such
 a server is to use the one from the Python standard library, e.g.
 ```
-python3 -m http.server 8880 --directory _out/examples/demotextbook/html-single &
+python3 -m http.server 8880 --directory _out/examples/demotextbook/html-multi &
 ```
 after which `http://localhost:8880/` will show the generated site.
 
