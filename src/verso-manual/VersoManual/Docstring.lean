@@ -269,12 +269,12 @@ def DocName.ofName (c : Name) (ppWidth : Nat := 40) (showUniverses := true) (sho
 
     let ttSig := Lean.Widget.TaggedText.prettyTagged (w := ppWidth) fmt
 
-    let sig := Lean.Widget.tagCodeInfos ctx infos ttSig
+    let sig ← Lean.Widget.tagCodeInfos ctx infos ttSig
 
     let ⟨fmt, infos⟩ ← withOptions (·.setBool `pp.tagAppFns true) <|
       ppName c (showUniverses := showUniverses) (showNamespace := showNamespace) (openDecls := openDecls)
     let ttName := Lean.Widget.TaggedText.prettyTagged (w := ppWidth) fmt
-    let name := Lean.Widget.tagCodeInfos ctx infos ttName
+    let name ← Lean.Widget.tagCodeInfos ctx infos ttName
 
     let docstring? ← if checkDocstring then  getDocString? env c else Lean.findDocString? env c
 
@@ -436,7 +436,7 @@ def constructorSignature (signature : Highlighted) : Block where
 
 end Block
 
-def Signature.forName [Monad m] [MonadWithOptions m] [MonadEnv m] [MonadMCtx m] [MonadOptions m] [MonadResolveName m] [MonadNameGenerator m] [MonadLiftT MetaM m] [MonadLiftT IO m] [MonadFileMap m] [Alternative m] (name : Name) : m Signature := do
+def Signature.forName [Monad m] [MonadWithOptions m] [MonadEnv m] [MonadMCtx m] [MonadOptions m] [MonadResolveName m] [MonadNameGenerator m] [MonadLiftT MetaM m] [MonadLiftT BaseIO m] [MonadLiftT IO m] [MonadFileMap m] [Alternative m] (name : Name) : m Signature := do
   let (⟨fmt, infos⟩ : FormatWithInfos) ← withOptions (·.setBool `pp.tagAppFns true) <| Block.Docstring.ppSignature name (constantInfo := false)
 
   let ctx := {
@@ -450,10 +450,10 @@ def Signature.forName [Monad m] [MonadWithOptions m] [MonadEnv m] [MonadMCtx m] 
   }
 
   let ttNarrow := Lean.Widget.TaggedText.prettyTagged (w := 42) fmt
-  let sigNarrow := Lean.Widget.tagCodeInfos ctx infos ttNarrow
+  let sigNarrow ← Lean.Widget.tagCodeInfos ctx infos ttNarrow
 
   let ttWide := Lean.Widget.TaggedText.prettyTagged (w := 72) fmt
-  let sigWide := Lean.Widget.tagCodeInfos ctx infos ttWide
+  let sigWide ← Lean.Widget.tagCodeInfos ctx infos ttWide
 
   let hlCtx : SubVerso.Highlighting.Context := ⟨{}, false, []⟩
 

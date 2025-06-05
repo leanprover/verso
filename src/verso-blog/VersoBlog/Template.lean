@@ -198,7 +198,7 @@ def inlineHtml (g : Genre) [bg : BlogGenre g]
     | none =>
       HtmlT.logError s!"Can't find target {x} - options are {st.pageIds.toList.map (·.fst)}"
       pure {{<strong class="internal-error">s!"Can't find target {x}"</strong>}}
-    | some meta =>
+    | some «meta» =>
       let addr := String.join ((← relative meta.path).intersperse "/") ++ (id?.map ("#" ++ ·) |>.getD "")
       go <| .link contents addr
   | .htmlSpan classes, contents => do

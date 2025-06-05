@@ -528,11 +528,11 @@ def elabLiteratePage (x : Ident) (path : StrLit) (mod : Ident) (config : LitPage
   let finished := st'.partContext.toPartFrame.close 0
   let finished :=
     -- Obey the Markdown convention of a single top-level header being the title of the document, if it's been followed
-    if let .mk _ _ _ meta #[] #[p] _ := finished then
+    if let .mk _ _ _ «meta» #[] #[p] _ := finished then
       match p with
       | .mk t1 t2 t3 _ bs ps pos =>
         -- Propagate metadata fields
-        FinishedPart.mk t1 t2 t3 meta bs ps pos
+        FinishedPart.mk t1 t2 t3 «meta» bs ps pos
       | _ => p
     else finished
 

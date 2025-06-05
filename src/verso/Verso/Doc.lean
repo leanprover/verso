@@ -407,10 +407,10 @@ def Part.subParts : Part genre → Array (Part genre)
   | .mk _ _ _ _ subParts => subParts
 
 def Part.withoutSubparts : Part genre → Part genre
-  | .mk title titleString meta content _ => .mk title titleString meta content #[]
+  | .mk title titleString metadata content _ => .mk title titleString metadata content #[]
 
 def Part.withSubparts : Part genre → Array (Part genre) → Part genre
-  | .mk title titleString meta content _, newSubs => .mk title titleString meta content newSubs
+  | .mk title titleString metadata content _, newSubs => .mk title titleString metadata content newSubs
 
 def Part.withoutMetadata : Part genre → Part genre
   | .mk title titleString _ content subParts => .mk title titleString none content subParts
@@ -520,7 +520,7 @@ where
     if let some md := p.metadata then
       if let some p' ← Traverse.genrePart md p then
         p := p'
-    let .mk title titleString meta content subParts := p
+    let .mk title titleString metadata content subParts := p
     let (content', subParts') ← withReader (TraversePart.inPart p) <|
       (·,·) <$> content.mapM block <*> subParts.mapM part
-    pure <| .mk (← title.mapM inline) titleString meta content' subParts'
+    pure <| .mk (← title.mapM inline) titleString metadata content' subParts'

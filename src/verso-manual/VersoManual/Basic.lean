@@ -891,11 +891,11 @@ instance : Traverse Manual TraverseM where
   block _ := pure ()
   inline _ := pure ()
   genrePart startMeta part := do
-    let mut meta := startMeta
+    let mut «meta» := startMeta
 
     -- First, assign a unique ID if there is none
     let id ← if let some i := meta.id then pure i else freshId
-    meta := {meta with id := some id}
+    «meta» := {«meta» with id := some id}
 
     -- Next, assign a tag, prioritizing user-chosen external IDs
     match meta.tag with
@@ -904,7 +904,7 @@ instance : Traverse Manual TraverseM where
       -- give priority to user-provided tags that might otherwise anticipate the name-mangling scheme
       let what := (← read).headers.map (·.titleString ++ "--") |>.push part.titleString |>.foldl (init := "") (· ++ ·)
       let tag ← freshTag what id
-      meta := {meta with tag := Tag.internal tag}
+      «meta» := {«meta» with tag := Tag.internal tag}
     | some t =>
       -- Ensure uniqueness
       if let some id' := (← get).tags[t]? then
@@ -918,7 +918,7 @@ instance : Traverse Manual TraverseM where
         -- These are the actual IDs to use in generated HTML and links and such
         modify fun st => {st with externalTags := st.externalTags.insert id (path, name)}
       | Tag.internal name =>
-        meta := {meta with tag := ← externalTag id path name}
+        «meta» := {«meta» with tag := ← externalTag id path name}
       | Tag.provided n =>
         let slug := n.sluggify
         -- Convert to an external tag, and fail if we can't (users should control their link IDs)
@@ -930,7 +930,7 @@ instance : Traverse Manual TraverseM where
               tags := st.tags.insert external id,
               externalTags := st.externalTags.insert id (path, slug)
             }
-          meta := {meta with tag := external}
+          «meta» := {«meta» with tag := external}
         let jsonMetadata :=
           Json.arr ((← read).inPart part |>.headers.map (fun h => json%{
             "title": $h.titleString,
@@ -973,8 +973,8 @@ instance : Traverse Manual TraverseM where
 
 
     pure <|
-      if not modifiedSubs && meta == startMeta then none
-      else pure (part |>.withMetadata meta |>.withSubparts subs)
+      if not modifiedSubs && «meta» == startMeta then none
+      else pure (part |>.withMetadata «meta» |>.withSubparts subs)
 
   genreBlock
     | ⟨name, id?, data⟩, content => do
@@ -1083,7 +1083,7 @@ def permalink (id : InternalId) (st : TraverseState) (inline : Bool := true) : H
 
 open Verso.Output.Html in
 instance : Html.GenreHtml Manual (ReaderT ExtensionImpls IO) where
-  part go meta txt := do
+  part go «meta» txt := do
     let st ← Verso.Doc.Html.HtmlT.state
     let attrs := meta.id.map (st.htmlId) |>.getD #[]
     let ctxt ← Verso.Doc.Html.HtmlT.context
@@ -1092,7 +1092,7 @@ instance : Html.GenreHtml Manual (ReaderT ExtensionImpls IO) where
       if let some id := m.id then permalink id st
       else .empty
     let mkHeader lvl content :=
-      .tag s!"h{lvl}" attrs (sectionNumber ++ content ++ permalink? meta)
+      .tag s!"h{lvl}" attrs (sectionNumber ++ content ++ permalink? «meta»)
     go txt mkHeader
 
   block goI goB b content := do
