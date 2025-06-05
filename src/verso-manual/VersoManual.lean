@@ -174,7 +174,7 @@ Removes all parts that are specified as draft-only.
 -/
 partial def removeDraftParts (part : Part Manual) : Part Manual :=
   let sub := part.subParts.filter fun p =>
-    if let some meta := p.metadata then
+    if let some «meta» := p.metadata then
       !meta.draft
     else true
   part.withSubparts (sub.map removeDraftParts)
@@ -192,12 +192,12 @@ def traverseMulti (depth : Nat) (path : Path) (part : Part Manual) : TraverseM (
         if let some md := p.metadata then
           if let some p' ← Traverse.genrePart md p then
             p := p'
-        let .mk title titleString meta content subParts := p
+        let .mk title titleString «meta» content subParts := p
         let content' ← withReader (·.inPart p) <| content.mapM traverseBlock
         let subParts' ← withReader (·.inPart p) <| subParts.mapM fun p => do
           let path' := path.push (p.metadata.bind (·.file) |>.getD (p.titleString.sluggify.toString))
           withReader ({· with path := path' : TraverseContext}) (traverseMulti d path' p)
-        pure <| .mk (← title.mapM traverseInline) titleString meta content' subParts'
+        pure <| .mk (← title.mapM traverseInline) titleString «meta» content' subParts'
 where
   traverseInline := Verso.Doc.Genre.traverse.inline Manual
   traverseBlock := Verso.Doc.Genre.traverse.block Manual
@@ -284,11 +284,11 @@ partial def toc (depth : Nat) (opts : Html.Options IO)
     (definitionIds : NameMap String)
     (linkTargets : LinkTargets) :
     Part Manual → StateT (State Html) (ReaderT ExtensionImpls IO) Html.Toc
-  | .mk title sTitle meta _ sub => do
+  | .mk title sTitle «meta» _ sub => do
     let titleHtml ← Html.seq <$> title.mapM (Manual.toHtml (m := ReaderT ExtensionImpls IO) opts.lift ctxt state definitionIds linkTargets {} ·)
 
-    let some {id := some id, ..} := meta
-      | throw <| .userError s!"No ID for {sTitle} - {repr meta}"
+    let some {id := some id, ..} := «meta»
+      | throw <| .userError s!"No ID for {sTitle} - {repr «meta»}"
     let some (_, v) := state.externalTags[id]?
       | throw <| .userError s!"No external ID for {sTitle}"
 
