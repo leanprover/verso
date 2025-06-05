@@ -12,7 +12,7 @@ import Verso.Output.Html
 
 open SubVerso.Highlighting
 open Verso.Output Html
-open Lean (Json)
+open Lean (Json ToJson FromJson Quote)
 open Std (HashMap)
 
 namespace SubVerso.Highlighting
@@ -117,8 +117,25 @@ inductive HighlightHtmlM.CollapseGoals where
   | always
   | never
 
+inductive HighlightHtmlM.VisibleProofStates where
+  | none
+  /--
+  Make the given states visible.
+
+  States are identified by the range included in the `Highlighted.tactics` constructor.
+  -/
+  | states (ranges : Array (Nat × Nat))
+  | all
+deriving ToJson, FromJson, Repr, Quote
+
+def HighlightHtmlM.VisibleProofStates.isVisible : HighlightHtmlM.VisibleProofStates → Nat → Nat → Bool
+  | .none, _, _ => false
+  | .all, _, _ => true
+  | .states xs, b, e => (b, e) ∈ xs
+
 structure HighlightHtmlM.Options where
   inlineProofStates : Bool := true
+  visibleProofStates : VisibleProofStates := .none
   collapseGoals : CollapseGoals := .subsequent
 
 structure HighlightHtmlM.Context where
@@ -146,6 +163,9 @@ def uniqueId : HighlightHtmlM String := modifyGet fun st =>
 
 def withCollapsedSubgoals (policy : HighlightHtmlM.CollapseGoals) (act : HighlightHtmlM α) : HighlightHtmlM α :=
   withReader (fun ctx => {ctx with options := {ctx.options with collapseGoals := policy} }) act
+
+def withVisibleProofStates (policy : HighlightHtmlM.VisibleProofStates) (act : HighlightHtmlM α) : HighlightHtmlM α :=
+  withReader (fun ctx => {ctx with options := {ctx.options with visibleProofStates := policy} }) act
 
 def linkTargets : HighlightHtmlM LinkTargets := do
   return (← readThe HighlightHtmlM.Context).linkTargets
@@ -414,11 +434,14 @@ partial defmethod Highlighted.toHtml : Highlighted → HighlightHtmlM Html
       --toHtml hl
   | .tactics info startPos endPos hl => do
     if (← options).inlineProofStates then
+      let visibleStates := (← options).visibleProofStates
+      let checkedAttr :=
+        if visibleStates.isVisible startPos endPos then #[("checked", "checked")] else #[]
       let id := s!"tactic-state-{hash info}-{startPos}-{endPos}"
       pure {{
         <span class="tactic">
           <label for={{id}}>{{← toHtml hl}}</label>
-          <input type="checkbox" class="tactic-toggle" id={{id}}></input>
+          <input type="checkbox" class="tactic-toggle" id={{id}} {{checkedAttr}}></input>
           <span class="tactic-state">
             {{← if info.isEmpty then
                 pure {{"All goals completed! 🐙"}}
