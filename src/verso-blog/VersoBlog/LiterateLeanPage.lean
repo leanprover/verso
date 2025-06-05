@@ -312,18 +312,23 @@ section
 variable [Monad m] [MonadError m] [MonadQuotation m]
 
 
-partial def getModuleDocString (hl : Highlighted) : m String := do
+
+partial def getCommentString (pref : String) (hl : Highlighted) : m String := do
   let str := (← getString hl).trim
-  let str := str.stripPrefix "/-!" |>.stripSuffix "-/" |>.trim
+  let str := str.stripPrefix pref |>.stripSuffix "-/" |>.trim
   pure str
 where getString : Highlighted → m String
   | .text txt => pure txt
   | .tactics .. => throwError "Tactics found in module docstring!"
   | .point .. => pure ""
-  | .span _ hl => getModuleDocString hl
+  | .span _ hl => getCommentString pref hl
   | .seq hls => do return (← hls.mapM getString).foldl (init := "") (· ++ ·)
   | .token ⟨_, txt⟩ => pure txt
+
+partial def getModuleDocString : Highlighted -> m String := getCommentString "/-!"
+partial def getDocCommentString : Highlighted -> m String := getCommentString "/--"
 end
+
 
 def getFirstMessage : Highlighted → Option (Highlighted.Span.Kind × String)
   | .span msgs x =>
@@ -394,6 +399,28 @@ partial def docFromMod (project : System.FilePath) (mod : String)
           }
         | other =>
           addBlock (← ofBlock helper other)
+    | ``declaration =>
+      match code with
+      | .seq s =>
+        -- Find the index corresponding to the docComment
+        let docCommentIdx := s.findIdx? (fun
+          | (.token ⟨.docComment, _⟩) => True
+          | _ => false)
+        match docCommentIdx with
+        | some i =>
+          let str ← getDocCommentString s[i]!
+          let codeBefore := Highlighted.seq s[:i]
+          addBlock (← ``(Block.other (BlockExt.highlightedCode `name $(quote codeBefore)) Array.mkArray0))
+          let some ⟨mdBlocks⟩ := MD4Lean.parse str
+            | throwError m!"Failed to parse Markdown: {str}"
+          for b in mdBlocks do
+              addBlock (← ofBlock helper b)
+          let codeAfter := Highlighted.seq s[i+1:]
+          addBlock (← ``(Block.other (BlockExt.highlightedCode `name $(quote codeAfter)) Array.mkArray0))
+        | none =>
+          -- No docComment attached to declaration, render definition as usual
+          addBlock (← ``(Block.other (BlockExt.highlightedCode `name $(quote code)) Array.mkArray0))
+      | _ => addBlock (← ``(Block.other (BlockExt.highlightedCode `name $(quote code)) Array.mkArray0))
     | ``eval | ``evalBang | ``reduceCmd | ``print | ``printAxioms | ``printEqns | ``«where» | ``version | ``synth | ``check =>
       addBlock (← ``(Block.other (BlockExt.highlightedCode `name $(quote code)) Array.mkArray0))
       if let some (k, msg) := getFirstMessage code then
