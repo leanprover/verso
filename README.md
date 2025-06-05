@@ -58,7 +58,12 @@ release candidates of Lean, while `nightly-testing` tracks Lean
 nightlies. When a Lean release candidate is created, `nightly-testing`
 is made to work with it, and then its commits are rebased onto `main`.
 When the corresponding release is created, the toolchain file on
-`main` is updated and the tag is created.
+`main` is updated and the tag is created. To the extent possible,
+development occurs on `main`; it is regularly merged into
+`nightly-testing`.
+
+When a Lean release occurs, the adaptation changes are squash-merged
+into `main` before the tag is created.
 
 ## Contributions
 
