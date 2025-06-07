@@ -408,15 +408,14 @@ partial def docFromMod (project : System.FilePath) (mod : String)
           | _ => false)
         match docCommentIdx with
         | some i =>
-          let str ← getDocCommentString s[i]!
-          let codeBefore := Highlighted.seq s[:i]
-          addBlock (← ``(Block.other (BlockExt.highlightedCode `name $(quote codeBefore)) Array.mkArray0))
-          let some ⟨mdBlocks⟩ := MD4Lean.parse str
-            | throwError m!"Failed to parse Markdown: {str}"
-          for b in mdBlocks do
-              addBlock (← ofBlock helper b)
-          let codeAfter := Highlighted.seq s[i+1:]
-          addBlock (← ``(Block.other (BlockExt.highlightedCode `name $(quote codeAfter)) Array.mkArray0))
+          let codeBefore ← ``(Block.other
+            (BlockExt.highlightedCode `name $(quote (Highlighted.seq s[:i]))) Array.mkArray0)
+          let some ⟨mdBlocks⟩ := MD4Lean.parse (← getDocCommentString s[i]!)
+            | throwError m!"Failed to parse Markdown: {← getDocCommentString s[i]!}"
+          let docCommentBlocks ← mdBlocks.mapM (fun b => ofBlock helper b)
+          let codeAfter ←``(Block.other (BlockExt.highlightedCode `name $(quote (Highlighted.seq s[i+1:]))) Array.mkArray0)
+          let blocks := #[codeBefore] ++ docCommentBlocks ++ #[codeAfter]
+          addBlock (← ``(Block.other (BlockExt.htmlDiv "declaration") #[$blocks,*]))
         | none =>
           -- No docComment attached to declaration, render definition as usual
           addBlock (← ``(Block.other (BlockExt.highlightedCode `name $(quote code)) Array.mkArray0))
