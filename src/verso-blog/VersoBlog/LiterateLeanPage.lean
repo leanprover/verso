@@ -399,7 +399,9 @@ partial def docFromMod (project : System.FilePath) (mod : String)
           }
         | other =>
           addBlock (← ofBlock helper other)
-    | ``declaration =>
+    -- Lemma is purposefully unchecked, such that it can be matched on when a project
+    -- is dependent on mathlib
+    | ``declaration | `lemma =>
       match code with
       | .seq s =>
         -- Find the index corresponding to the docComment
