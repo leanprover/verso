@@ -13,7 +13,17 @@ register_option verso.literateMarkdown.logInlines : Bool := {
   descr := "Whether to log failures to elaborate inline code items in Markdown comments."
 }
 
+register_option verso.literateMarkdown.convertDoccomments : Bool := {
+  defValue := false
+  group := "doc"
+  descr := "Whether to convert doccomments on definitions to text ."
+}
+
+
 namespace Verso.Genre.Blog.Literate
 
 def getLogInlines [Monad m] [MonadOptions m] : m Bool := do
   return (← getOptions).get verso.literateMarkdown.logInlines.name verso.literateMarkdown.logInlines.defValue
+
+def getConvertDoccomments [Monad m] [MonadOptions m] : m Bool := do
+  return (← getOptions).get verso.literateMarkdown.convertDoccomments.name verso.literateMarkdown.convertDoccomments.defValue

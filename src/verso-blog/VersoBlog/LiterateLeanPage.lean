@@ -402,8 +402,9 @@ partial def docFromMod (project : System.FilePath) (mod : String)
     -- Lemma is purposefully unchecked, such that it can be matched on when a project
     -- is dependent on mathlib
     | ``declaration | `lemma =>
-      match code with
-      | .seq s =>
+      -- Only convert doccomments if the option is turned on
+      match (← getConvertDoccomments), code with
+      | true, .seq s =>
         -- Find the index corresponding to the docComment
         let docCommentIdx := s.findIdx? (fun
           | (.token ⟨.docComment, _⟩) => True
@@ -421,7 +422,7 @@ partial def docFromMod (project : System.FilePath) (mod : String)
         | none =>
           -- No docComment attached to declaration, render definition as usual
           addBlock (← ``(Block.other (BlockExt.highlightedCode `name $(quote code)) Array.mkArray0))
-      | _ => addBlock (← ``(Block.other (BlockExt.highlightedCode `name $(quote code)) Array.mkArray0))
+      | _, _ => addBlock (← ``(Block.other (BlockExt.highlightedCode `name $(quote code)) Array.mkArray0))
     | ``eval | ``evalBang | ``reduceCmd | ``print | ``printAxioms | ``printEqns | ``«where» | ``version | ``synth | ``check =>
       addBlock (← ``(Block.other (BlockExt.highlightedCode `name $(quote code)) Array.mkArray0))
       if let some (k, msg) := getFirstMessage code then
@@ -613,6 +614,8 @@ directory that contains a toolchain file and a Lake configuration (`lakefile.tom
 
 Set the option `verso.literateMarkdown.logInlines` to `true` to see the error messages that
 prevented elaboration of inline elements.
+Set the option `verso.literateMarkdown.convertDoccomments` to `true` to convert doccomments in
+a similar way as the module docstrings, except without allowing headers.
 -/
 syntax "def_literate_post " ident optConfig " from " ident " in " str " as " str (" with " term)? (rewrites)? : command
 

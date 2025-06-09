@@ -9,6 +9,8 @@ import DemoSite
 
 open Verso Genre Blog Site Syntax
 
+set_option verso.literateMarkdown.convertDoccomments true 
+
 open Output Html Template Theme in
 def theme : Theme := { Theme.default with
   primaryTemplate := do
