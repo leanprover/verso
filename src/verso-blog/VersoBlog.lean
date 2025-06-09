@@ -753,7 +753,13 @@ private def filterString (p : Char → Bool) (str : String) : String := Id.run <
     if p c then out := out.push c
   pure out
 
-def blogMain (theme : Theme) (site : Site) (relativizeUrls := true) (options : List String) : IO UInt32 := do
+/-- Purposefully only map constants, the others are not available in the same way -/
+private def docgenLinkTargets (base : String) : Code.LinkTargets where
+  const name := .some <| s!"{base}/find?pattern={name}#doc"
+
+open Template in
+def blogMain (theme : Theme) (site : Site) (relativizeUrls := true) (options : List String) :
+    IO UInt32 := do
   let hasError ← IO.mkRef false
   let logError msg := do hasError.set true; IO.eprintln msg
   let cfg ← opts {logError := logError} options
@@ -768,7 +774,7 @@ def blogMain (theme : Theme) (site : Site) (relativizeUrls := true) (options : L
     dir := cfg.destination,
     config := cfg,
     rewriteHtml := rw,
-    linkTargets := {}
+    linkTargets := (cfg.docgenUrl.map docgenLinkTargets).getD {},
   }
   let ((), st) ← site.generate theme initGenCtx .empty
   IO.FS.writeFile (cfg.destination.join "-verso-docs.json") (toString st.dedup.docJson)
@@ -787,6 +793,7 @@ where
   opts (cfg : Config)
     | ("--output"::dir::more) => opts {cfg with destination := dir} more
     | ("--drafts"::more) => opts {cfg with showDrafts := true} more
+    | ("--docgen-url"::url::more) => opts {cfg with docgenUrl := .some url} more
     | (other :: _) => throw (↑ s!"Unknown option {other}")
     | [] => pure cfg
   urlAttr (name : String) : Bool := name ∈ ["href", "src", "data", "poster"]
