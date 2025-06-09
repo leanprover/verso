@@ -407,7 +407,7 @@ partial def docFromMod (project : System.FilePath) (mod : String)
       | true, .seq s =>
         -- Find the index corresponding to the docComment
         let docCommentIdx := s.findIdx? (fun
-          | (.token ⟨.docComment, _⟩) => True
+          | (.token ⟨.docComment, _⟩) => true
           | _ => false)
         match docCommentIdx with
         | some i =>
