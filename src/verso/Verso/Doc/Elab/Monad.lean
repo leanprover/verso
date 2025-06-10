@@ -12,6 +12,7 @@ import Lean.Elab.DeclUtil
 import Verso.Doc
 import Verso.Doc.Elab.ExpanderAttribute
 import Verso.Doc.Elab.InlineString
+import Verso.Hover
 import Verso.SyntaxUtils
 import Verso.Syntax
 
@@ -535,6 +536,18 @@ structure DocListInfo where
   bullets : Array Syntax
   items : Array Syntax
 deriving Repr, TypeName
+
+
+def closes (openTok closeTok : Syntax) : DocElabM Unit := do
+  let (.original _ pos _ _) := openTok.getHeadInfo
+    | return ()
+  let (.original ..) := closeTok.getHeadInfo
+    | return ()
+  let text ← getFileMap
+  let {line, ..} := text.utf8PosToLspPos pos
+  let lineStr := text.source.extract (text.lineStart (line + 1)) (text.lineStart (line + 2)) |>.trim
+  let lineStr := if lineStr.startsWith "`" || lineStr.endsWith "`" then " " ++ lineStr ++ " " else lineStr
+  Hover.addCustomHover closeTok (.markdown s!"Closes line {line + 1}: ``````````{lineStr}``````````")
 
 
 abbrev InlineExpander := Syntax → DocElabM (TSyntax `term)
