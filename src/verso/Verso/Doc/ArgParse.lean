@@ -122,6 +122,11 @@ structure ParseState where
   remaining : Array Arg
   info : Array (Syntax × Name × MessageData)
 
+private def firstOriginal (stxs : Array Syntax) : Syntax := Id.run do
+  for stx in stxs do
+    if stx.getRange? (canonicalOnly := true) |>.isSome then return stx
+  return .missing
+
 -- NB the order of ExceptT and StateT is important here
 def ArgParse.parseArgs : ArgParse m α → ExceptT (Array Arg × Exception) (StateT ParseState m) α
   | .fail stx? msg? => do
@@ -154,18 +159,20 @@ def ArgParse.parseArgs : ArgParse m α → ExceptT (Array Arg × Exception) (Sta
     else throw ((← get).remaining, .error (← getRef) m!"Positional argument '{x}' ({vp.description}) not found")
   | .named x vp optional doc? => do
     let initArgs := (← get).remaining
-    if let some (stx, v, args') := getNamed initArgs x then
+    if let some (stx, n, v, args') := getNamed initArgs x then
       let val? : Except (Array Arg × Exception) _ ← liftM <|
         try
           Except.ok <$> withRef v.syntax (vp.get v)
         catch exn => Pure.pure <| Except.error (initArgs, exn)
+      -- This is needed to apply hovers correctly when a macro expands a positional argument into a named one
+      let pos := firstOriginal #[stx, n, v.syntax]
       match val? with
       | .ok val =>
         modify fun s => {s with remaining := args'}
         if let some d := doc? then
-          modify fun s => {s with info := s.info.push (stx, x, d)}
+          modify fun s => {s with info := s.info.push (pos, x, d)}
         else
-          modify fun s => {s with info := s.info.push (stx, x, vp.description)}
+          modify fun s => {s with info := s.info.push (pos, x, vp.description)}
         Pure.pure <| match optional with
           | true => some val
           | false => val
@@ -218,10 +225,10 @@ def ArgParse.parseArgs : ArgParse m α → ExceptT (Array Arg × Exception) (Sta
     let r := s.remaining
     (r, {s with remaining := #[]})
 where
-  getNamed (args : Array Arg) (x : Name) : Option (Syntax × ArgVal × Array Arg) := Id.run do
+  getNamed (args : Array Arg) (x : Name) : Option (Syntax × Ident × ArgVal × Array Arg) := Id.run do
     for h : i in [0:args.size] do
       if let .named stx y v := args[i] then
-        if y.getId.eraseMacroScopes == x then return some (stx, v, args.extract 0 i ++ args.extract (i+1) args.size)
+        if y.getId.eraseMacroScopes == x then return some (stx, y, v, args.extract 0 i ++ args.extract (i+1) args.size)
     return none
   getPositional (args : Array Arg) : Option (ArgVal × Array Arg) := Id.run do
     for h : i in [0:args.size] do
@@ -396,7 +403,8 @@ def ArgParse.run [MonadLiftT BaseIO m] (p : ArgParse m α) (args : Array Arg) : 
   | (.ok v, ⟨more, info⟩) =>
     if more.size = 0 then
       for (loc, name, what) in info do
-        Verso.Hover.addCustomHover loc m!"{name}: {what}"
+        if loc.getHeadInfo matches (.original ..) then
+          Verso.Hover.addCustomHover loc m!"{name}: {what}"
       return v
     else if h : more.size = 1 then
       throwErrorAt more[0].syntax "Unexpected argument {more[0]}"
