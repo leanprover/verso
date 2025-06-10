@@ -201,10 +201,17 @@ def _root_.Verso.Syntax.display_math.expand : InlineExpander
     ``(Inline.math MathMode.display $s)
   | _ => throwUnsupportedSyntax
 
+def decorateClosing : TSyntax `block → DocElabM Unit
+  | `(block|:::%$s $_ $_* { $_* }%$e)
+  | `(block|```%$s $_ $_* | $_ ```%$e)
+  | `(block|%%%%$s $_* %%%%$e) => closes s e
+  | _ => pure ()
+
 open Lean.Elab.Term in
 partial def elabBlock (block : TSyntax `block) : DocElabM (TSyntax `term) :=
   withTraceNode `Elab.Verso.block (fun _ => pure m!"Block {block}") <|
   withRef block <| withFreshMacroScope <| withIncRecDepth <| do
+  decorateClosing block
   match block.raw with
   | .missing =>
     ``(sorryAx Block (synthetic := true))
@@ -477,7 +484,7 @@ def _root_.Verso.Syntax.codeblock.expand : BlockExpander
             else throw ex
           | ex => throw ex
       throwUnsupportedSyntax
-  | `(block|``` | $contents:str ```) =>
+  | `(block|``` | $contents:str ```) => do
     ``(Block.code $(quote contents.getString))
   | _ =>
     throwUnsupportedSyntax
