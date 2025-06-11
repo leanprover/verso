@@ -147,12 +147,14 @@ block_extension Block.paragraph where
     some <| fun _ go _ _ content => do
       pure <| {{<div class="paragraph">{{← content.mapM go}}</div>}}
 
-@[directive_expander paragraph]
-def paragraph : DirectiveExpander
+open Lean.Meta in
+@[directive_elab paragraph]
+def paragraph : DirectiveElab
   | #[], stxs => do
-    let args ← stxs.mapM elabBlock
-    let val ← ``(Block.other Block.paragraph #[ $[ $args ],* ])
-    pure #[val]
+    let ⟨_, g⟩ ← readThe DocElabContext
+    let bt ← DocElabM.blockType
+    let args ← stxs.mapM elabBlock'
+    return Lean.mkApp3 (.const ``Block.other []) g (← mkAppM ``Block.paragraph #[]) (← mkArrayLit bt args.toList)
   | _, _ => Lean.Elab.throwUnsupportedSyntax
 
 

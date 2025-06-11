@@ -10,7 +10,7 @@ set_option linter.missingDocs true
 
 namespace Verso.Multi
 open Verso.Method
-open Lean (ToJson FromJson)
+open Lean (ToJson FromJson ToExpr)
 open Std (HashSet)
 
 /-- The characters allowed in slugs. -/
@@ -71,7 +71,7 @@ theorem String.Pos.add_0_eq_size {c : Char} : (0 : String.Pos) + c = ⟨c.utf8Si
   show 0 + c.utf8Size = c.utf8Size
   simp
 
-instance : DecidablePred Slug.WF := fun str =>
+instance Slug.WF.decide : DecidablePred Slug.WF := fun str =>
   if h : str.toList.all (· ∈ Slug.validChars) then isTrue (by unfold Slug.WF; exact h) else isFalse h
 
 @[simp]
@@ -171,6 +171,8 @@ defmethod String.sluggify (str : String) : Slug :=
 Converts a string to a slug.
 -/
 def ofString (str : String) : Slug := str.sluggify
+
+def ofString' (str : String) (wf : WF str := by decide) : Slug := ⟨str, wf⟩
 
 /--
 Returns a slug that's not present in `used`, starting with `slug` and appending consecutive numbers

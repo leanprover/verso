@@ -12,6 +12,8 @@ import Verso.Doc.Lsp
 import Verso.Parser
 import Verso.SyntaxUtils
 
+set_option guard_msgs.diff true
+
 namespace Verso.Doc.Concrete
 
 open Lean Parser
@@ -30,9 +32,8 @@ elab_rules : term
   | `(inlines!%$tk$s) => do
     let inls ← stringToInlines s
     let g ← Meta.mkFreshExprMVar (some (.const ``Verso.Doc.Genre []))
-    let (tms, _) ← DocElabM.run tk g {} (.init (← `(foo))) <| inls.mapM (elabInline ⟨·⟩)
-    elabTerm (← `(term|Inline.concat #[ $[$tms],* ] )) none
-
+    let (tms, _) ← DocElabM.run tk g {} (.init (← `(foo))) <| inls.mapM (elabInline' ⟨·⟩)
+    Meta.mkAppM ``Inline.concat #[← Meta.mkArrayLit (.app (.const ``Inline []) g) tms.toList]
 
 set_option pp.rawOnError true
 
