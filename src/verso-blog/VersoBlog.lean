@@ -783,7 +783,7 @@ private def filterString (p : Char → Bool) (str : String) : String := Id.run <
   pure out
 
 open Template in
-def blogMain (theme : Theme) (site : Site) (relativizeUrls := true) (linkTargets := {})
+def blogMain (theme : Theme) (site : Site) (relativizeUrls := true) (linkTargets : Code.LinkTargets := {})
     (options : List String) (components : Components := by exact %registered_components) :
     IO UInt32 := do
   let hasError ← IO.mkRef false
