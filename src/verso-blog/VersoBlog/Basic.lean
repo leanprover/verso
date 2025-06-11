@@ -132,7 +132,6 @@ structure Config where
   showDrafts : Bool := false
   postName : Date → String → String := defaultPostName
   logError : String → IO Unit
-  docgenUrl : Option String := .none
 deriving Inhabited
 
 class MonadConfig (m : Type → Type u) where
