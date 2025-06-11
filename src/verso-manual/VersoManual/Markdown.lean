@@ -220,22 +220,22 @@ def strongEmphHeaders' : List (Array (Doc.Inline g) → Except String (Doc.Block
   fun inls => pure <| .para #[.emph inls]
 ]
 
-private partial def stringFromMarkdownText : Text → Except String String
+partial def stringFromMarkdownText : Text → Except String String
   | .normal str | .br str | .softbr str => pure str
   | .nullchar => .error "Unepxected null character in parsed Markdown"
   | .del _ => .error "Unexpected strikethrough in parsed Markdown"
-  | .em txt => arrToStr <| txt.mapM stringFromMarkdownText
-  | .strong txt => arrToStr <| txt.mapM stringFromMarkdownText
-  | .a _ _ _ txt => arrToStr <| txt.mapM stringFromMarkdownText
+  | .em txt => joinArrM <| txt.mapM stringFromMarkdownText
+  | .strong txt => joinArrM <| txt.mapM stringFromMarkdownText
+  | .a _ _ _ txt => joinArrM <| txt.mapM stringFromMarkdownText
   | .latexMath m => pure <| String.join m.toList
   | .latexMathDisplay m =>  pure <| String.join m.toList
   | .u txt => .error s!"Unexpected underline around {repr txt} in parsed Markdown:"
-  | .code str => pure <| String.join str.toList
+  | .code strs => pure <| String.join strs.toList
   | .entity ent => .error s!"Unsupported entity {ent} in parsed Markdown"
   | .img .. => .error s!"Unexpected image in parsed Markdown"
   | .wikiLink .. => .error s!"Unexpected wiki-style link in parsed Markdown"
 where
-  arrToStr (x : Except String (Array String)) : Except String String :=
+  joinArrM (x : Except String (Array String)) : Except String String :=
     return String.join (← x).toList
 
 open Verso.Doc.Elab
