@@ -80,7 +80,7 @@ def demoSite : Site := site DemoSite.Front /
 
 
 def linkTargets : Code.LinkTargets where
-  const n := s!"http://constlink/{n}"
-  definition d := s!"http:/deflink/{d}"
+  const n := s!"http://site.example/constlink/{n}"
+  definition d := s!"http://site.example/deflink/{d}"
 
 def main := blogMain theme demoSite (linkTargets := linkTargets)
