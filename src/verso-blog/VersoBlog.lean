@@ -14,6 +14,7 @@ import VersoBlog.Site
 import VersoBlog.Site.Syntax
 import VersoBlog.Template
 import VersoBlog.Theme
+import VersoBlog.Traverse
 import Verso.Doc.ArgParse
 import Verso.Doc.Lsp
 import Verso.Doc.Suggestion
@@ -294,8 +295,8 @@ structure LeanCommandAtArgs where
   line : Nat
   endLine? : Option Nat
 
-def LeanCommandAtArgs.parse [Monad m] [MonadError m] : ArgParse m LeanCommandAtArgs :=
-  LeanCommandAtArgs.mk <$> .positional `project .ident <*> .positional `line .nat <*> (some <$> .positional `endLine .nat <|> pure none)
+instance [Monad m] [MonadError m] : FromArgs LeanCommandAtArgs m where
+  fromArgs := LeanCommandAtArgs.mk <$> .positional `project .ident <*> .positional `line .nat <*> (some <$> .positional `endLine .nat <|> pure none)
 
 private def useRange (startLine : Nat) (endLine? : Option Nat) (range : Position × Position) : Bool :=
   let startLine' := range.1.line
@@ -308,7 +309,7 @@ private def useRange (startLine : Nat) (endLine? : Option Nat) (range : Position
 @[block_role_expander leanCommandAt]
 def leanCommandAt : BlockRoleExpander
   | args, #[] => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"leanCommand") <| do
-    let {project, line, endLine?} ← LeanCommandAtArgs.parse.run args
+    let {project, line, endLine?} ← parseThe LeanCommandAtArgs args
     let projectExamples ← getModule project
 
     let mut hls := #[]
@@ -371,13 +372,13 @@ structure LeanBlockConfig where
   name : Option Name := none
   error : Option Bool := none
 
-def LeanBlockConfig.parse [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m] : ArgParse m LeanBlockConfig :=
-  LeanBlockConfig.mk <$> .positional `exampleContext .ident <*> .named `show .bool true <*> .named `keep .bool true <*> .named `name .name true <*> .named `error .bool true
+instance [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m] : FromArgs LeanBlockConfig m where
+  fromArgs := LeanBlockConfig.mk <$> .positional `exampleContext .ident <*> .named `show .bool true <*> .named `keep .bool true <*> .named `name .name true <*> .named `error .bool true
 
 @[code_block_expander leanInit]
 def leanInit : CodeBlockExpander
   | args , str => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"leanInit") <| do
-    let config ← LeanBlockConfig.parse.run args
+    let config ← parseThe LeanBlockConfig args
     let context := Parser.mkInputContext (← parserInputString str) (← getFileName)
     let (header, state, msgs) ← Parser.parseHeader context
     if !header.raw[0].isNone then
@@ -408,7 +409,7 @@ open SubVerso.Highlighting Highlighted in
 @[code_block_expander lean]
 def lean : CodeBlockExpander
   | args, str => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"lean block") <| withoutAsync do
-    let config ← LeanBlockConfig.parse.run args
+    let config ← parseThe LeanBlockConfig args
     let x := config.exampleContext
     let (commandState, state) ← match exampleContextExt.getState (← getEnv) |>.contexts.find? x.getId with
       | some (.inline commandState state) => pure (commandState, state)
@@ -481,8 +482,8 @@ structure LeanInlineConfig where
   /-- Universe variables allowed in the term -/
   universes : Option StrLit
 
-def LeanInlineConfig.parse [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m] : ArgParse m LeanInlineConfig :=
-  LeanInlineConfig.mk <$> .positional `exampleContext .ident <*> .named `type strLit true <*> .named `universes strLit true
+instance [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m] : FromArgs LeanInlineConfig m where
+  fromArgs := LeanInlineConfig.mk <$> .positional `exampleContext .ident <*> .named `type strLit true <*> .named `universes strLit true
 where
   strLit : ValDesc m StrLit := {
     description := "string literal containing an expected type",
@@ -547,7 +548,7 @@ open SubVerso.Highlighting Highlighted in
 @[role_expander lean]
 def leanInline : RoleExpander
   | args, elts => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"lean block") <| do
-    let config ← LeanInlineConfig.parse.run args
+    let config ← parseThe LeanInlineConfig args
     let #[code] := elts
       | throwError "Expected precisely one code element"
     let `(inline|code( $str:str )) := code
@@ -630,12 +631,13 @@ structure LeanOutputConfig where
   summarize : Bool
   whitespace : WhitespaceMode
 
-def LeanOutputConfig.parser [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m] : ArgParse m LeanOutputConfig :=
-  LeanOutputConfig.mk <$>
-    .positional `name output <*>
-    .named `severity sev true <*>
-    ((·.getD false) <$> .named `summarize .bool true) <*>
-    ((·.getD .exact) <$> .named `whitespace ws true)
+instance [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m] : FromArgs LeanOutputConfig m where
+  fromArgs :=
+    LeanOutputConfig.mk <$>
+      .positional `name output <*>
+      .named `severity sev true <*>
+      ((·.getD false) <$> .named `summarize .bool true) <*>
+      ((·.getD .exact) <$> .named `whitespace ws true)
 where
   output : ValDesc m Ident := {
     description := "output name",
@@ -668,10 +670,37 @@ where
       | other => throwError "Expected whitespace mode, got {repr other}"
   }
 
+private def leanOutputBlock [bg : BlogGenre genre] (severity : MessageSeverity) (message : String) (summarize : Bool := false) : Block genre :=
+  if summarize then
+    let lines := message.splitOn "\n"
+    let pre := lines.take 3
+    let post := String.join (lines.drop 3 |>.intersperse "\n")
+    let preHtml : Html := pre.map (fun (l : String) => {{<code>{{l}}</code>}})
+    Block.other (bg.block_eq ▸ BlockExt.htmlDetails (sevStr severity) preHtml) #[Block.code post]
+  else
+    Block.other (bg.block_eq ▸ BlockExt.htmlDiv (sevStr severity)) #[Block.code message]
+where
+  sevStr : MessageSeverity → String
+    | .error => "error"
+    | .information => "information"
+    | .warning => "warning"
+
+private def leanOutputInline [bg : BlogGenre genre] (severity : MessageSeverity) (message : String) (plain : Bool) : Inline genre :=
+  if plain then
+    Inline.code message
+  else
+    Inline.other (bg.inline_eq ▸ InlineExt.htmlSpan (sevStr severity)) #[Inline.code message]
+where
+  sevStr : MessageSeverity → String
+    | .error => "error"
+    | .information => "information"
+    | .warning => "warning"
+
+
 @[code_block_expander leanOutput]
 def leanOutput : Doc.Elab.CodeBlockExpander
   | args, str => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"leanOutput") <| do
-    let config ← LeanOutputConfig.parser.run args
+    let config ← parseThe LeanOutputConfig args
 
     let (_, savedInfo) ← messageContextExt.getState (← getEnv) |>.messages |>.getOrSuggest config.name
     let messages ← match savedInfo with
@@ -754,25 +783,28 @@ private def filterString (p : Char → Bool) (str : String) : String := Id.run <
   pure out
 
 open Template in
-def blogMain (theme : Theme) (site : Site) (relativizeUrls := true) (linkTargets : Code.LinkTargets := {}) (options : List String) :
+def blogMain (theme : Theme) (site : Site) (relativizeUrls := true)
+    (linkTargets := {}) (options : List String)
+    (components : Components := by exact %registered_components) :
     IO UInt32 := do
   let hasError ← IO.mkRef false
   let logError msg := do hasError.set true; IO.eprintln msg
   let cfg ← opts {logError := logError} options
-  let (site, xref) ← site.traverse cfg
+  let (site, xref) ← site.traverse cfg components
   let rw := if relativizeUrls then
       some <| relativize
     else none
   let initGenCtx : Generate.Context := {
     site := site,
-    ctxt := ⟨[], cfg⟩,
+    ctxt := { path := [], config := cfg, components },
     xref := xref,
     dir := cfg.destination,
     config := cfg,
     rewriteHtml := rw,
     linkTargets := linkTargets,
+    components := components
   }
-  let ((), st) ← site.generate theme initGenCtx .empty
+  let (((), st), _) ← site.generate theme initGenCtx .empty {}
   IO.FS.writeFile (cfg.destination.join "-verso-docs.json") (toString st.dedup.docJson)
   for (name, content) in xref.jsFiles do
     FS.ensureDir (cfg.destination.join "-verso-js")
@@ -804,3 +836,15 @@ where
     pure <| some <| .tag tag (← attrs.mapM rwAttr) content
   relativize _err ctxt html :=
     pure <| html.visitM (m := ReaderT TraverseContext Id) (tag := rwTag) |>.run ctxt
+
+open Verso.Code.External
+
+instance [bg : BlogGenre genre] : ExternalCode genre where
+  leanInline hl :=
+    Inline.other (bg.inline_eq ▸ InlineExt.highlightedCode `verso hl) #[]
+  leanBlock hl :=
+    Block.other (bg.block_eq ▸ BlockExt.highlightedCode `verso hl) #[]
+  leanOutputInline severity message plain :=
+    leanOutputInline severity message plain
+  leanOutputBlock severity message (summarize := false) :=
+    leanOutputBlock severity message (summarize := summarize)

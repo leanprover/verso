@@ -651,6 +651,7 @@ main .titlepage h1 {
 
 main .authors {
     text-align: center;
+    font-family: var(--verso-structure-font-family);
 }
 
 /******** Main content ********/
@@ -803,6 +804,86 @@ Don't shrink doc blocks when there's marginalia that overlaps
   .namedocs {
     clear: right;
   }
+}
+
+
+section > p, section > ul, section > ol {
+    margin-top: 1rem;
+    margin-bottom: 1rem;
+}
+
+div.paragraph > p:not(:first-child),
+div.paragraph > ul:not(:first-child),
+div.paragraph > ol:not(:first-child),
+div.paragraph > code.hl.lean.block:not(:first-child),
+div.paragraph > pre.syntax-error:not(:first-child),
+div.paragraph > dl:not(:first-child) {
+  margin-top: 0.5rem;
+}
+
+div.paragraph > p:not(:last-child),
+div.paragraph > ul:not(:last-child),
+div.paragraph > ol:not(:last-child),
+div.paragraph > code.hl.lean.block:not(:last-child),
+div.paragraph > pre.syntax-error:not(:last-child),
+div.paragraph > dl:not(:last-child) {
+  margin-bottom: 0.5rem;
+}
+
+
+
+/*
+Don't impose margins on lists or list items from their contents.
+*/
+main section li > :first-child {
+  margin-top: 0;
+}
+main section li > :last-child {
+  margin-bottom: 0;
+}
+main section li:not(:first-child) {
+  margin-top: 0.5rem;
+}
+main section li:not(:last-child) {
+  margin-bottom: 0.5rem;
+}
+main section li ol {
+  margin-top: .5rem;
+}
+
+.hl.lean.block {
+    margin-top: 1em;
+    margin-bottom: 1em;
+    margin-left: 0.75em;
+}
+
+.error pre, .information pre, .warning pre,
+.error code, .information code, .warning code {
+    overflow-x: auto;
+    margin: 0px;
+}
+
+.information pre, .error pre, .warning pre,
+.information code, .error code, .warning code {
+  margin: 0.5em .85em;
+  border-left: 0.2em solid red;
+  padding: 0 0.45em;
+}
+
+/* Different color for warning */
+.warning pre, .warning code {
+    border-color: var(--verso-warning-color);
+}
+
+/* Different color for information */
+.information pre, .information code {
+    border-color: #0000c0;
+}
+
+
+/* TODO: fix upstream */
+.hl.lean code {
+    font-family: var(--verso-code-font-family) !important;
 }
 
 "####

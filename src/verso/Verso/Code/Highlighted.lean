@@ -12,12 +12,12 @@ import Verso.Output.Html
 
 open SubVerso.Highlighting
 open Verso.Output Html
-open Lean (Json)
+open Lean (Json ToJson FromJson Quote)
 open Std (HashMap)
 
 namespace SubVerso.Highlighting
 /--
-Remove n levels of indentation from highlighted code.
+Removes n levels of indentation from highlighted code.
 -/
 partial def Highlighted.deIndent (n : Nat) (hl : Highlighted) : Highlighted :=
   (remove hl).run' (some n)
@@ -118,8 +118,25 @@ inductive HighlightHtmlM.CollapseGoals where
   | always
   | never
 
+inductive HighlightHtmlM.VisibleProofStates where
+  | none
+  /--
+  Make the given states visible.
+
+  States are identified by the range included in the `Highlighted.tactics` constructor.
+  -/
+  | states (ranges : Array (Nat × Nat))
+  | all
+deriving ToJson, FromJson, Repr, Quote
+
+def HighlightHtmlM.VisibleProofStates.isVisible : HighlightHtmlM.VisibleProofStates → Nat → Nat → Bool
+  | .none, _, _ => false
+  | .all, _, _ => true
+  | .states xs, b, e => (b, e) ∈ xs
+
 structure HighlightHtmlM.Options where
   inlineProofStates : Bool := true
+  visibleProofStates : VisibleProofStates := .none
   collapseGoals : CollapseGoals := .subsequent
 
 structure HighlightHtmlM.Context where
@@ -127,6 +144,14 @@ structure HighlightHtmlM.Context where
   definitionIds : Lean.NameMap String
   options : HighlightHtmlM.Options
 
+/--
+Monad used to render highlighted Verso code to HTML.
+
+The monad enables the following features:
+1. Conveying options of type `HighlightHtmlM.Options` that govern the display of a particular piece of code.
+2. Conveying document-wide configurations, in particular policies for hyperlinking identifiers.
+3. De-duplicating hovers, which can greatly reduce the size of generated HTML.
+-/
 abbrev HighlightHtmlM α := ReaderT HighlightHtmlM.Context (StateT (State Html) Id) α
 
 def addHover (content : Html) : HighlightHtmlM Nat := modifyGet fun st =>
@@ -139,6 +164,9 @@ def uniqueId : HighlightHtmlM String := modifyGet fun st =>
 
 def withCollapsedSubgoals (policy : HighlightHtmlM.CollapseGoals) (act : HighlightHtmlM α) : HighlightHtmlM α :=
   withReader (fun ctx => {ctx with options := {ctx.options with collapseGoals := policy} }) act
+
+def withVisibleProofStates (policy : HighlightHtmlM.VisibleProofStates) (act : HighlightHtmlM α) : HighlightHtmlM α :=
+  withReader (fun ctx => {ctx with options := {ctx.options with visibleProofStates := policy} }) act
 
 def linkTargets : HighlightHtmlM LinkTargets := do
   return (← readThe HighlightHtmlM.Context).linkTargets
@@ -195,15 +223,9 @@ defmethod Token.Kind.addLink (tok : Token.Kind) (content : Html) : HighlightHtml
   | .keyword (some k) .. => kwLink k content
   | _ => pure content
 
-partial defmethod Highlighted.isEmpty (hl : Highlighted) : Bool :=
-  match hl with
-  | .text str => str.isEmpty
-  | .token .. => false
-  | .span _ hl => hl.isEmpty
-  | .tactics _ _ _ hl => hl.isEmpty
-  | .point .. => true
-  | .seq hls => hls.all isEmpty
-
+/--
+Removes trailing whitespace from highlighted code.
+-/
 partial defmethod Highlighted.trimRight (hl : Highlighted) : Highlighted :=
   match hl with
   | .text str => .text str.trimRight
@@ -214,26 +236,19 @@ partial defmethod Highlighted.trimRight (hl : Highlighted) : Highlighted :=
   | .seq hls => Id.run do
     let mut hls := hls
     repeat
-      if h : hls.size > 0 then
-        have : hls.size - 1 < hls.size := by
-          apply Nat.sub_lt_of_pos_le
-          . simp
-          . exact h
-        if hls[hls.size - 1].isEmpty then
+      if let some last := hls.back? then
+        let last := last.trimRight
+        if last.isEmpty then
           hls := hls.pop
-        else break
+        else
+          hls := hls.set! (hls.size - 1) last
+          break
       else break
-    if h : hls.size > 0 then
-      let i := hls.size - 1
-      have : i < hls.size := by
-        dsimp (config := {zetaDelta := true})
-        apply Nat.sub_lt_of_pos_le
-        . simp
-        . exact h
-      --dbg_trace repr hls[i]
-      .seq <| hls.set i hls[i].trimRight
-    else hl
+    .seq hls
 
+/--
+Removes leading whitespace from highlighted code.
+-/
 partial defmethod Highlighted.trimLeft (hl : Highlighted) : Highlighted :=
   match hl with
   | .text str => .text str.trimLeft
@@ -241,11 +256,22 @@ partial defmethod Highlighted.trimLeft (hl : Highlighted) : Highlighted :=
   | .span infos hl => .span infos hl.trimLeft
   | .tactics info startPos endPos hl => .tactics info startPos endPos hl.trimLeft
   | .point .. => hl
-  | .seq hls =>
-    if h : hls.size > 0 then
-      .seq <| hls.set 0 hls[0].trimLeft
-    else hl
+  | .seq hls => Id.run do
+    let mut hls := hls
+    repeat
+      if h : hls.size > 0 then
+        let first := hls[0].trimLeft
+        if first.isEmpty then
+          hls := hls.drop 1
+        else
+          hls := hls.set 0 first
+          break
+      else break
+    .seq hls
 
+/--
+Removes leading and trailing whitespace from highlighted code.
+-/
 defmethod Highlighted.trim (hl : Highlighted) : Highlighted := hl.trimLeft.trimRight
 
 defmethod Token.Kind.hover? (tok : Token.Kind) : HighlightHtmlM (Option Nat) :=
@@ -275,6 +301,11 @@ defmethod Token.Kind.hover? (tok : Token.Kind) : HighlightHtmlM (Option Nat) :=
 where
   separatedDocs txt :=
     {{<span class="sep"/><code class="docstring">{{txt}}</code>}}
+
+defmethod Lean.MessageSeverity.«class» : Lean.MessageSeverity → String
+  | .information => "information"
+  | .warning => "warning"
+  | .error => "error"
 
 defmethod Highlighted.Span.Kind.«class» : Highlighted.Span.Kind → String
   | .info => "info"
@@ -393,7 +424,7 @@ def _root_.Array.mapIndexedM [Monad m] (arr : Array α) (f : Fin arr.size → α
 
 partial defmethod Highlighted.toHtml : Highlighted → HighlightHtmlM Html
   | .token t => t.toHtml
-  | .text str => pure str
+  | .text str => pure {{<span class="inter-text">{{str}}</span>}}
   | .span infos hl =>
     if let some cls := spanClass infos then do
       pure {{<span class={{"has-info " ++ cls}}>
@@ -412,11 +443,14 @@ partial defmethod Highlighted.toHtml : Highlighted → HighlightHtmlM Html
       --toHtml hl
   | .tactics info startPos endPos hl => do
     if (← options).inlineProofStates then
+      let visibleStates := (← options).visibleProofStates
+      let checkedAttr :=
+        if visibleStates.isVisible startPos endPos then #[("checked", "checked")] else #[]
       let id := s!"tactic-state-{hash info}-{startPos}-{endPos}"
       pure {{
         <span class="tactic">
           <label for={{id}}>{{← toHtml hl}}</label>
-          <input type="checkbox" class="tactic-toggle" id={{id}}></input>
+          <input type="checkbox" class="tactic-toggle" id={{id}} {{checkedAttr}}></input>
           <span class="tactic-state">
             {{← if info.isEmpty then
                 pure {{"All goals completed! 🐙"}}
@@ -430,14 +464,16 @@ partial defmethod Highlighted.toHtml : Highlighted → HighlightHtmlM Html
   | .point s info => pure {{<span class={{"message " ++ s.«class»}}>{{info}}</span>}}
   | .seq hls => hls.mapM toHtml
 
-defmethod Highlighted.blockHtml (contextName : String) (code : Highlighted) : HighlightHtmlM Html := do
-  pure {{ <code class="hl lean block" "data-lean-context"={{toString contextName}}> {{ ← code.trim.toHtml }} </code> }}
+defmethod Highlighted.blockHtml (contextName : String) (code : Highlighted) (trim : Bool := true) : HighlightHtmlM Html := do
+  let code := if trim then code.trim else code
+  pure {{ <code class="hl lean block" "data-lean-context"={{toString contextName}}> {{ ← code.toHtml }} </code> }}
 
-defmethod Highlighted.inlineHtml (contextName : Option String) (code : Highlighted) : HighlightHtmlM Html := do
+defmethod Highlighted.inlineHtml (contextName : Option String) (code : Highlighted) (trim : Bool := true) : HighlightHtmlM Html := do
+  let code := if trim then code.trim else code
   if let some ctx := contextName then
-    pure {{ <code class="hl lean inline" "data-lean-context"={{toString ctx}}> {{ ← code.trim.toHtml }} </code> }}
+    pure {{ <code class="hl lean inline" "data-lean-context"={{toString ctx}}> {{ ← code.toHtml }} </code> }}
   else
-    pure {{ <code class="hl lean inline"> {{ ← code.trim.toHtml }} </code> }}
+    pure {{ <code class="hl lean inline"> {{ ← code.toHtml }} </code> }}
 
 -- TODO CSS variables, and document them
 def highlightingStyle : String := "
@@ -556,7 +592,7 @@ def highlightingStyle : String := "
 }
 
 
-.hl.lean .has-info {
+.hl.lean .has-info .token:not(.tactic-state):not(.tactic-state *), .hl.lean .has-info .inter-text:not(.tactic-state):not(.tactic-state *) {
   text-decoration-style: wavy;
   text-decoration-line: underline;
   text-decoration-thickness: from-font;
@@ -572,7 +608,7 @@ def highlightingStyle : String := "
   text-align: left;
 }
 
-.hl.lean .has-info.error {
+.hl.lean .has-info.error :not(.tactic-state):not(.tactic-state *){
   text-decoration-color: red;
 }
 
@@ -596,7 +632,7 @@ def highlightingStyle : String := "
     color: red;
 }
 
-.hl.lean .has-info.warning {
+.hl.lean .has-info.warning :not(.tactic-state):not(.tactic-state *) {
   text-decoration-color: var(--verso-warning-color);
 }
 
@@ -621,7 +657,7 @@ def highlightingStyle : String := "
 }
 
 
-.hl.lean .has-info.info {
+.hl.lean .has-info.info :not(.tactic-state):not(.tactic-state *) {
   text-decoration-color: blue;
 }
 
@@ -943,8 +979,6 @@ def highlightingStyle : String := "
   border: 3px solid #99b3c2;
 }
 
-
-
 .tippy-box[data-theme~='tactic'] {
   background-color: white;
   color: black;
@@ -1036,19 +1070,42 @@ window.onload = () => {
     let docsJson = siteRoot + \"-verso-docs.json\";
     fetch(docsJson).then((resp) => resp.json()).then((versoDocData) => {
 
+      function hideParentTooltips(element) {
+        let parent = element.parentElement;
+        while (parent) {
+          const tippyInstance = parent._tippy;
+          if (tippyInstance) {
+            tippyInstance.hide();
+          }
+          parent = parent.parentElement;
+        }
+      }
+
+
+
       const defaultTippyProps = {
         /* DEBUG -- remove the space: * /
         onHide(any) { return false; },
         trigger: \"click\",
         // */
-        theme: \"lean\",
+        /* theme: \"lean\", */
         maxWidth: \"none\",
         appendTo: () => document.body,
         interactive: true,
         delay: [100, null],
-        ignoreAttributes: true,
+        /* ignoreAttributes: true, */
+        followCursor: 'initial',
         onShow(inst) {
-          if (inst.reference.querySelector(\".hover-info\") || \"versoHover\" in inst.reference.dataset) {
+          if (inst.reference.className == 'tactic') {
+
+            const toggle = inst.reference.querySelector(\"input.tactic-toggle\");
+            if (toggle && toggle.checked) {
+              return false;
+            }
+            hideParentTooltips(inst.reference);
+            //if (blockedByTippy(inst.reference)) { return false; }
+
+          } else if (inst.reference.querySelector(\".hover-info\") || \"versoHover\" in inst.reference.dataset) {
             if (blockedByTactic(inst.reference)) { return false };
             if (blockedByTippy(inst.reference)) { return false; }
           } else { // Nothing to show here!
@@ -1057,57 +1114,82 @@ window.onload = () => {
         },
         content (tgt) {
           const content = document.createElement(\"span\");
-          content.className = \"hl lean\";
-          content.style.display = \"block\";
-          content.style.maxHeight = \"300px\";
-          content.style.overflowY = \"auto\";
-          content.style.overflowX = \"hidden\";
-          const hoverId = tgt.dataset.versoHover;
-          const hoverInfo = tgt.querySelector(\".hover-info\");
-          if (hoverId) { // Docstrings from the table
-            // TODO stop doing an implicit conversion from string to number here
-            let data = versoDocData[hoverId];
-            if (data) {
-              const info = document.createElement(\"span\");
-              info.className = \"hover-info\";
-              info.style.display = \"block\";
-              info.innerHTML = data;
-              content.appendChild(info);
-              /* Render docstrings - TODO server-side */
-              if ('undefined' !== typeof marked) {
-                  for (const d of content.querySelectorAll(\"code.docstring, pre.docstring\")) {
-                      const str = d.innerText;
-                      const html = marked.parse(str);
-                      const rendered = document.createElement(\"div\");
-                      rendered.classList.add(\"docstring\");
-                      rendered.innerHTML = html;
-                      d.parentNode.replaceChild(rendered, d);
-                  }
+          if (tgt.className == 'tactic') {
+            const state = tgt.querySelector(\".tactic-state\").cloneNode(true);
+            state.style.display = \"block\";
+            content.appendChild(state);
+            content.style.display = \"block\";
+            content.className = \"hl lean popup\";
+          } else {
+            content.className = \"hl lean\";
+            content.style.display = \"block\";
+            content.style.maxHeight = \"300px\";
+            content.style.overflowY = \"auto\";
+            content.style.overflowX = \"hidden\";
+            const hoverId = tgt.dataset.versoHover;
+            const hoverInfo = tgt.querySelector(\".hover-info\");
+            if (hoverId) { // Docstrings from the table
+              // TODO stop doing an implicit conversion from string to number here
+              let data = versoDocData[hoverId];
+              if (data) {
+                const info = document.createElement(\"span\");
+                info.className = \"hover-info\";
+                info.style.display = \"block\";
+                info.innerHTML = data;
+                content.appendChild(info);
+                /* Render docstrings - TODO server-side */
+                if ('undefined' !== typeof marked) {
+                    for (const d of content.querySelectorAll(\"code.docstring, pre.docstring\")) {
+                        const str = d.innerText;
+                        const html = marked.parse(str);
+                        const rendered = document.createElement(\"div\");
+                        rendered.classList.add(\"docstring\");
+                        rendered.innerHTML = html;
+                        d.parentNode.replaceChild(rendered, d);
+                    }
+                }
+              } else {
+                content.innerHTML = \"Failed to load doc ID: \" + hoverId;
               }
-            } else {
-              content.innerHTML = \"Failed to load doc ID: \" + hoverId;
+            } else if (hoverInfo) { // The inline info, still used for compiler messages
+              content.appendChild(hoverInfo.cloneNode(true));
             }
-          } else if (hoverInfo) { // The inline info, still used for compiler messages
-            content.appendChild(hoverInfo.cloneNode(true));
           }
           return content;
         }
       };
 
+
+
       const addTippy = (selector, props) => {
         tippy(selector, Object.assign({}, defaultTippyProps, props));
       };
-      addTippy('.hl.lean .const.token, .hl.lean .keyword.token, .hl.lean .literal.token, .hl.lean .option.token, .hl.lean .var.token, .hl.lean .typed.token', {theme: 'lean'});
-      addTippy('.hl.lean .has-info.warning', {theme: 'warning message'});
-      addTippy('.hl.lean .has-info.info', {theme: 'info message'});
-      addTippy('.hl.lean .has-info.error', {theme: 'error message'});
+      document.querySelectorAll('.hl.lean .const.token, .hl.lean .keyword.token, .hl.lean .literal.token, .hl.lean .option.token, .hl.lean .var.token, .hl.lean .typed.token').forEach(element => {
+        element.setAttribute('data-tippy-theme', 'lean');
+      });
+      document.querySelectorAll('.hl.lean .has-info.warning').forEach(element => {
+        element.setAttribute('data-tippy-theme', 'warning message');
+      });
+      document.querySelectorAll('.hl.lean .has-info.info').forEach(element => {
+        element.setAttribute('data-tippy-theme', 'info message');
+      });
+      document.querySelectorAll('.hl.lean .has-info.error').forEach(element => {
+        element.setAttribute('data-tippy-theme', 'error message');
+      });
+      document.querySelectorAll('.hl.lean .tactic').forEach(element => {
+        element.setAttribute('data-tippy-theme', 'tactic');
+      });
+      let insts = tippy('.hl.lean .const.token, .hl.lean .keyword.token, .hl.lean .literal.token, .hl.lean .option.token, .hl.lean .var.token, .hl.lean .typed.token, .hl.lean .has-info, .hl.lean .tactic', defaultTippyProps);
 
+
+
+      /*
       tippy('.hl.lean .tactic', {
         allowHtml: true,
-        /* DEBUG -- remove the space: * /
+
         onHide(any) { return false; },
         trigger: \"click\",
-        // */
+
         maxWidth: \"none\",
         onShow(inst) {
           const toggle = inst.reference.querySelector(\"input.tactic-toggle\");
@@ -1116,8 +1198,6 @@ window.onload = () => {
           }
           if (blockedByTippy(inst.reference)) { return false; }
         },
-        theme: \"tactic\",
-        placement: 'bottom-start',
         content (tgt) {
           const content = document.createElement(\"span\");
           const state = tgt.querySelector(\".tactic-state\").cloneNode(true);
@@ -1128,6 +1208,7 @@ window.onload = () => {
           return content;
         }
       });
+      */
   });
 }
 "

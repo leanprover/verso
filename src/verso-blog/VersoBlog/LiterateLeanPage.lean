@@ -48,6 +48,7 @@ def loadModuleContent
   let lakeVars :=
     #["LAKE", "LAKE_HOME", "LAKE_PKG_URL_MAP",
       "LEAN_SYSROOT", "LEAN_AR", "LEAN_PATH", "LEAN_SRC_PATH",
+      "LEAN_GITHASH",
       "ELAN_TOOLCHAIN", "DYLD_LIBRARY_PATH", "LD_LIBRARY_PATH"]
 
 
@@ -133,6 +134,7 @@ def Helper.fromModule
   let lakeVars :=
     #["LAKE", "LAKE_HOME", "LAKE_PKG_URL_MAP",
       "LEAN_SYSROOT", "LEAN_AR", "LEAN_PATH", "LEAN_SRC_PATH",
+      "LEAN_GITHASH",
       "ELAN_TOOLCHAIN", "DYLD_LIBRARY_PATH", "LD_LIBRARY_PATH"]
 
   let cmd := "elan"
@@ -512,7 +514,9 @@ def elabLiteratePage (x : Ident) (path : StrLit) (mod : Ident) (config : LitPage
   let items ← withTraceNode `verso.blog.literate.loadMod (fun _ => pure m!"Loading '{mod}' in '{path}'") <|
     loadLiteratePage path.getString mod.getId.toString
 
-  let ((), _st, st') ← liftTermElabM <| PartElabM.run {} initState <| do
+  let g ← runTermElabM fun _ => Term.elabTerm genre (some (.const ``Doc.Genre []))
+
+  let ((), _st, st') ← liftTermElabM <| PartElabM.run genre g {} initState <| do
     setTitle titleString (← liftDocElabM <| titleParts.mapM (elabInline ⟨·⟩))
     if let some metadata := metadata? then
       modifyThe PartElabM.State fun st => {st with partContext.metadata := some metadata}
@@ -532,7 +536,7 @@ def elabLiteratePage (x : Ident) (path : StrLit) (mod : Ident) (config : LitPage
       | _ => p
     else finished
 
-  elabCommand <| ← `(def $x : Part $genre := $(← finished.toSyntax' genre st'.linkDefs st'.footnoteDefs))
+  elabCommand <| ← `(def $x : Part $genre := $(← finished.toSyntax' genre))
 
 end Literate
 open Literate

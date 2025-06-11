@@ -42,7 +42,7 @@ structure InProceedings where
   editors : Option (Array (Doc.Inline Manual)) := none
   series : Option (Doc.Inline Manual) := none
   url : Option String := none
-deriving ToJson, FromJson, BEq, Hashable
+deriving ToJson, FromJson, BEq, Hashable, Ord
 
 structure Thesis where
   title : Doc.Inline Manual
@@ -58,17 +58,25 @@ structure ArXiv where
   authors : Array (Doc.Inline Manual)
   year : Int
   id : String
-deriving ToJson, FromJson, BEq, Hashable
+deriving ToJson, FromJson, BEq, Hashable, Ord
 
-section
-attribute [local instance] Ord.arrayOrd
-deriving instance Ord for InProceedings, ArXiv
-end
+structure Article where
+  title : Doc.Inline Manual
+  authors : Array (Doc.Inline Manual)
+  journal : Doc.Inline Manual
+  year : Int
+  month : Option (Doc.Inline Manual)
+  volume : Doc.Inline Manual
+  number : Doc.Inline Manual
+  pages : Option (Nat × Nat) := none
+  url : Option String := none
+deriving ToJson, FromJson, BEq, Hashable, Ord
 
 inductive Citable where
   | inProceedings : InProceedings → Citable
   | thesis : Thesis → Citable
   | arXiv : ArXiv → Citable
+  | article : Article → Citable
 deriving ToJson, FromJson, BEq, Hashable, Ord
 
 instance : Coe InProceedings Citable where
@@ -80,20 +88,24 @@ instance : Coe Thesis Citable where
 instance : Coe ArXiv Citable where
   coe := .arXiv
 
+instance : Coe Article Citable where
+  coe := .article
+
 def Citable.authors : Citable → Array (Doc.Inline Manual)
-  | .inProceedings p | .arXiv p => p.authors
+  | .inProceedings p | .arXiv p | .article p => p.authors
   | .thesis p => #[p.author]
 
 def Citable.title : Citable → Doc.Inline Manual
-  | .inProceedings p | .arXiv p | .thesis p => p.title
+  | .inProceedings p | .arXiv p | .thesis p | .article p => p.title
 
 def Citable.year : Citable → Int
-  | .inProceedings p | .arXiv p | .thesis p => p.year
+  | .inProceedings p | .arXiv p | .thesis p | .article p => p.year
 
 def Citable.url : Citable → Option String
   | .inProceedings p => p.url
   | .thesis p => p.url
   | .arXiv p => some s!"https://arxiv.org/abs/{p.id}"
+  | .article p => p.url
 
 
 private def slugString : Doc.Inline Manual → String
@@ -144,9 +156,12 @@ where
 
 def Citable.bibHtml (go : Doc.Inline Genre.Manual → HtmlT Manual (ReaderT ExtensionImpls IO) Html) (c : Citable) : HtmlT Manual (ReaderT ExtensionImpls IO) Html :=   wrap <$> open Html in do
   match c with
-  |  .inProceedings p =>
+  | .inProceedings p =>
     let authors ← andList <$> p.authors.mapM go
     return {{ {{authors}} s!", {p.year}. " {{ link {{"“" {{← go p.title}} "”"}} }} ". In " <em>{{← go p.booktitle}}"."</em>{{(← p.series.mapM go).map ({{" (" {{·}} ")" }}) |>.getD .empty}} }}
+  | .article p =>
+    let authors ← andList <$> p.authors.mapM go
+    return {{ {{authors}} " (" {{(← p.month.mapM go).map (· ++ {{" "}}) |>.getD .empty}}s!"{p.year}" "). " {{ link {{"“" {{← go p.title}} "”"}} }} ". " <em>{{← go p.journal}}"."</em> <strong>{{← go p.volume}}</strong>" "{{← go p.number}} {{p.pages.map (fun (x, y) => s!"pp. {x}–{y}") |>.getD .empty }}  "."}}
   | .thesis p =>
     return {{ {{← go p.author}} s!", {p.year}. " <em>{{link (← go p.title)}}</em> ". " {{← go p.degree}} ", " {{← go p.university}} }}
   | .arXiv p =>
@@ -187,6 +202,8 @@ where
       (· ++ {{<em>"et al"</em>}}) <$> go (Bibliography.lastName p.authors[0])
     else andList <$> p.authors.mapM (go ∘ Bibliography.lastName)
 
+private def arrayOrd (ord : Ord α) : Ord (Array α) := inferInstance
+
 private partial def cmpCite : Json → Json → Ordering
   | .null, .null => .eq
   | .null, _ => .lt
@@ -200,7 +217,8 @@ private partial def cmpCite : Json → Json → Ordering
   | .bool b1, .bool b2 => Ord.compare b1 b2
   | .bool _, _ => .lt
   | _, .bool _ => .gt
-  | .arr a1, .arr a2 => (@Ord.arrayOrd _ ⟨cmpCite⟩).compare a1 a2
+  | .arr a1, .arr a2 =>
+    arrayOrd ⟨cmpCite⟩ |>.compare a1 a2
   | .arr _, _ => .lt
   | _, .arr _ => .gt
   | .obj o1, .obj o2 =>
@@ -209,7 +227,7 @@ private partial def cmpCite : Json → Json → Ordering
     let inst : Ord (String × Json) := Ord.lex inst1 inst2
     let a1 := o1.toArray.map (fun x => (x.1, x.2)) |>.qsort (inst.compare · · == .lt)
     let a2 := o2.toArray.map (fun x => (x.1, x.2)) |>.qsort (inst.compare · · == .lt)
-    (Ord.arrayOrd).compare a1 a2
+    (arrayOrd inst).compare a1 a2
 
 
 inline_extension Inline.cite (citations : List Citable) (style : Style := .parenthetical) where
@@ -252,7 +270,7 @@ where
 
 end Bibliography
 
-export Verso.Genre.Manual.Bibliography (InProceedings Thesis ArXiv)
+export Verso.Genre.Manual.Bibliography (InProceedings Thesis ArXiv Article)
 
 open Bibliography
 

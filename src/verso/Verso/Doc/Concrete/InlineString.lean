@@ -27,9 +27,10 @@ syntax:max (name := inlinesLit) "inlines!" noWs str : term
 
 open Lean Elab Term in
 elab_rules : term
-  | `(inlines!$s) => do
+  | `(inlines!%$tk$s) => do
     let inls ← stringToInlines s
-    let (tms, _) ← DocElabM.run {} (.init (← `(foo))) <| inls.mapM (elabInline ⟨·⟩)
+    let g ← Meta.mkFreshExprMVar (some (.const ``Verso.Doc.Genre []))
+    let (tms, _) ← DocElabM.run tk g {} (.init (← `(foo))) <| inls.mapM (elabInline ⟨·⟩)
     elabTerm (← `(term|Inline.concat #[ $[$tms],* ] )) none
 
 

@@ -1,7 +1,7 @@
 import Lake
 open Lake DSL
 
-require subverso from git "https://github.com/leanprover/subverso.git"@"main"
+require subverso from git "https://github.com/leanprover/subverso"@"main"
 require MD4Lean from git "https://github.com/acmepjz/md4lean"@"main"
 
 package verso where
@@ -65,9 +65,17 @@ lean_lib DemoTextbook where
 lean_exe demotextbook where
   srcDir := "examples/textbook"
   root := `DemoTextbookMain
-  -- Enables the use of the Lean interpreter by the executable (e.g.,
-  -- `runFrontend`) at the expense of increased binary size on Linux.
-  -- Remove this line if you do not need such functionality.
+  supportInterpreter := true
+
+-- An example of a package documentation project built in Verso
+lean_lib PackageManual where
+  srcDir := "examples/package-manual"
+  roots := #[`PackageManual]
+
+@[default_target]
+lean_exe packagedocs where
+  srcDir := "examples/package-manual"
+  root := `PackageManualMain
   supportInterpreter := true
 
 -- An example of a minimal nontrivial custom genre

@@ -73,6 +73,7 @@ def demoSite : Site := site DemoSite.Front /
   "PHOAS" litPage
   "blog" DemoSite.Blog with
     litPost
+    DemoSite.Blog.AnchorBased
     DemoSite.Blog.Subprojects
     DemoSite.Blog.Conditionals
     DemoSite.Blog.FirstPost

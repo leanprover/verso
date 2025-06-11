@@ -32,6 +32,7 @@ structure Generate.Context where
   dir : System.FilePath
   config : Config
   rewriteHtml : Option ((logError : String → IO Unit) → TraverseContext → Html → IO Html) := none
+  components : Components := {}
 
 def Generate.Context.templateContext (ctxt : Generate.Context) (params : Template.Params) : Template.Context where
   site := ctxt.site
@@ -42,8 +43,14 @@ def Generate.Context.templateContext (ctxt : Generate.Context) (params : Templat
   builtInScripts := ctxt.xref.scripts.insert Traverse.renderMathJs
   jsFiles := ctxt.xref.jsFiles.map (·.1)
   cssFiles := ctxt.xref.cssFiles.map (·.1)
+  components := ctxt.components
 
-abbrev GenerateM := ReaderT Generate.Context (StateT (State Html) IO)
+abbrev GenerateM := ReaderT Generate.Context (StateT (State Html) (StateT Component.State IO))
+
+instance : Template.MonadComponents GenerateM where
+  componentImpls := do return (← read).components
+  saveJs js := modifyThe Component.State fun s => {s with headerJs := s.headerJs.insert js}
+  saveCss css := modifyThe Component.State fun s => {s with headerCss := s.headerCss.insert css}
 
 instance : MonadLift IO GenerateM where
   monadLift act := fun _ st => (·, st) <$> act
@@ -60,23 +67,32 @@ instance : MonadConfig GenerateM where
   currentConfig := do return (← read).config
 
 open BlogGenre in
-def GenerateM.toHtml (g : Genre) [BlogGenre g] [ToHtml g IO α] (x : α) : GenerateM Html := do
+def GenerateM.toHtml (g : Genre)
+    [bg : BlogGenre g] [ToHtml g ComponentM α]
+    (x : α) : GenerateM Html := do
   let {ctxt := ctxt, xref := state, linkTargets, ..} ← read
-  g.toHtml
-    (m := IO)
+  let (out, st') ← g.toHtml
+    (m := ComponentM)
     {logError := fun x => ctxt.config.logError x, headerLevel := 2}
-    (BlogGenre.traverseContextEq (genre := g) ▸ ctxt)
-    (traverseStateEq (genre := g) ▸ state)
+    (bg.context_eq ▸ ctxt)
+    (bg.state_eq ▸ state)
     {}
     linkTargets
     {}
     x
+    (← get)
+    (← Template.MonadComponents.componentImpls)
+  set st'
+  return out
 
 
 namespace Template
 
 namespace Params
-def forPart [BlogGenre g] [GenreHtml g IO] [ToHtml g IO (Part g)] (txt : Part g) : GenerateM Params := do
+
+def forPart [BlogGenre g] [GenreHtml g ComponentM]
+    [ToHtml g ComponentM (Part g)]
+    (txt : Part g) : GenerateM Params := do
   let titleHtml : Html ← txt.title.mapM (GenerateM.toHtml g)
   let preamble ← txt.content.mapM (GenerateM.toHtml g)
   let subParts ← txt.subParts.mapM (GenerateM.toHtml g)
@@ -87,13 +103,15 @@ def forPart [BlogGenre g] [GenreHtml g IO] [ToHtml g IO (Part g)] (txt : Part g)
 end Params
 
 def render (template : Template) (params : Params) : GenerateM Html := do
-  match template ((← read).templateContext params) with
+  match template ((← read).templateContext params) (← getThe _) with
   | .error err =>
     let message := match err with
     | .missingParam p => ↑ s!"Missing parameter: '{p}'"
     | .wrongParamType p t => ↑ s!"Parameter '{p}' doesn't have a {t} fallback"
     throw message
-  | .ok v => pure v
+  | .ok (v, st') =>
+    set st'
+    pure v
 
 def renderMany (templates : List Template) (params : Params) : GenerateM Html := do
     let mut params := params
@@ -136,7 +154,6 @@ def writePage (theme : Theme) (params : Template.Params) (template : Template :=
   IO.FS.withFile ((← currentDir).join "index.html") .write fun h => do
     h.putStrLn "<!DOCTYPE html>"
     h.putStrLn output.asString
-
 
 def writeBlog (theme : Theme) (id : Lean.Name) (txt : Part Page) (posts : Array BlogPost) : GenerateM Unit := do
   for post in posts do

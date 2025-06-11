@@ -66,7 +66,7 @@ Remaining:
 "aab"
 -/
 #guard_msgs in
-  #eval repFn 3 (chFn 'b' >> chFn 'a') |>.test! "bababaaab"
+#eval repFn 3 (chFn 'b' >> chFn 'a') |>.test! "bababaaab"
 
 /-- Like `satisfyFn`, but no special handling of EOI -/
 partial def satisfyFn' (p : Char → Bool) (errorMsg : String := "unexpected character") : ParserFn := fun c s =>
@@ -100,7 +100,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval atMostFn 3 (chFn 'a') "small A" |>.test! ""
+#eval atMostFn 3 (chFn 'a') "small A" |>.test! ""
 
 /--
 info: Success! Final stack:
@@ -109,7 +109,7 @@ Remaining:
 "bc"
 -/
 #guard_msgs in
-  #eval atMostFn 3 (chFn 'a') "small A" |>.test! "abc"
+#eval atMostFn 3 (chFn 'a') "small A" |>.test! "abc"
 
 /--
 info: Success! Final stack:
@@ -117,7 +117,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval atMostFn 3 (chFn 'a') "small A" |>.test! "aaa"
+#eval atMostFn 3 (chFn 'a') "small A" |>.test! "aaa"
 
 /--
 info: Failure @3 (⟨1, 3⟩): unexpected small A
@@ -126,7 +126,7 @@ Final stack:
 Remaining: "a"
 -/
 #guard_msgs in
-  #eval atMostFn 3 (chFn 'a') "small A" |>.test! "aaaa"
+#eval atMostFn 3 (chFn 'a') "small A" |>.test! "aaaa"
 
 /--
 info: Failure @0 (⟨1, 0⟩): unexpected end of input
@@ -135,7 +135,7 @@ Final stack:
 Remaining: ""
 -/
 #guard_msgs in
-  #eval atLeastFn 3 (chFn 'a') |>.test! ""
+#eval atLeastFn 3 (chFn 'a') |>.test! ""
 
 /--
 info: Failure @2 (⟨1, 2⟩): unexpected end of input
@@ -144,7 +144,7 @@ Final stack:
 Remaining: ""
 -/
 #guard_msgs in
-  #eval atLeastFn 3 (chFn 'a') |>.test! "aa"
+#eval atLeastFn 3 (chFn 'a') |>.test! "aa"
 
 /--
 info: Success! Final stack:
@@ -152,7 +152,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval atLeastFn 3 (chFn 'a') |>.test! "aaa"
+#eval atLeastFn 3 (chFn 'a') |>.test! "aaa"
 
 /--
 info: Success! Final stack:
@@ -160,7 +160,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval atLeastFn 3 (chFn 'a') |>.test! "aaaaaa"
+#eval atLeastFn 3 (chFn 'a') |>.test! "aaaaaa"
 
 /-- Like `satisfyFn`, but allows any escape sequence through -/
 partial def satisfyEscFn (p : Char → Bool) (errorMsg : String := "unexpected character") : ParserFn := fun c s =>
@@ -620,14 +620,14 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval val.test! "1"
+#eval val.test! "1"
 /--
 info: Success! Final stack:
   (Verso.Syntax.arg_num (num "3"))
 All input consumed.
 -/
 #guard_msgs in
-  #eval val.test! "3"
+#eval val.test! "3"
 /--
 info: Failure @0 (⟨1, 0⟩): unexpected end of input; expected identifier, numeral or string literal
 Final stack:
@@ -635,7 +635,7 @@ Final stack:
 Remaining: ""
 -/
 #guard_msgs in
-  #eval val.test! ""
+#eval val.test! ""
 
 /--
 info: Success! Final stack:
@@ -643,7 +643,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval val.test! "\"a b c\t d\""
+#eval val.test! "\"a b c\t d\""
 
 /--
 info: Success! Final stack:
@@ -652,7 +652,7 @@ Remaining:
 "\n"
 -/
 #guard_msgs in
-  #eval val.test! "\"a b c\t d\"\n"
+#eval val.test! "\"a b c\t d\"\n"
 
 /--
 info: Success! Final stack:
@@ -736,7 +736,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval arg.test! "x"
+#eval arg.test! "x"
 
 
 /--
@@ -748,7 +748,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval arg.test! "x:=1"
+#eval arg.test! "x:=1"
 
 /--
 info: Success! Final stack:
@@ -759,7 +759,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval arg.test! "(x:=1)"
+#eval arg.test! "(x:=1)"
 
 /--
 info: Failure @0 (⟨1, 0⟩): '
@@ -769,7 +769,7 @@ Final stack:
 Remaining: "\n(x:=1)"
 -/
 #guard_msgs in
-  #eval arg.test! "\n(x:=1)"
+#eval arg.test! "\n(x:=1)"
 
 /--
 info: Success! Final stack:
@@ -781,7 +781,7 @@ Remaining:
 "\n"
 -/
 #guard_msgs in
-  #eval arg.test! "(x:=1)\n"
+#eval arg.test! "(x:=1)\n"
 
 /--
 info: Success! Final stack:
@@ -792,7 +792,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval arg.test! "x:=y"
+#eval arg.test! "x:=y"
 
 /--
 info: Success! Final stack:
@@ -803,7 +803,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval arg.test! "(x:=y)"
+#eval arg.test! "(x:=y)"
 
 /--
 info: Success! Final stack:
@@ -814,7 +814,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval arg.test! "x:=\"y\""
+#eval arg.test! "x:=\"y\""
 
 /--
 info: Failure @3 (⟨1, 3⟩): unterminated string literal; expected identifier or numeral
@@ -826,7 +826,7 @@ Final stack:
 Remaining: "\"y"
 -/
 #guard_msgs in
-  #eval arg.test! "x:=\"y"
+#eval arg.test! "x:=\"y"
 
 /--
 info: 2 failures:
@@ -842,7 +842,7 @@ Final stack:
    (Verso.Syntax.arg_str <missing>))
 -/
 #guard_msgs in
-  #eval arg.test! "(x:=\"y)"
+#eval arg.test! "(x:=\"y)"
 
 
 /--
@@ -1113,10 +1113,10 @@ deriving Inhabited
 /--
 A linebreak that isn't a block break (that is, there's non-space content on the next line)
 -/
-def linebreak (ctxt : InlineCtxt) :=
+def linebreak (ctxt : InlineCtxt) : ParserFn :=
   if ctxt.allowNewlines then
     nodeFn ``linebreak <|
-      andthenFn (fakeAtom "line!") <|
+      andthenFn (withInfoSyntaxFn skip.fn (fun info => fakeAtom "line!" info)) <|
         nodeFn strLitKind <|
         asStringFn (quoted := true) <|
           atomicFn (chFn '\n' >> lookaheadFn (manyFn (chFn ' ') >> notFollowedByFn (chFn '\n' <|> blockOpener) "newline"))
@@ -1290,7 +1290,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval text.test! "abc "
+#eval text.test! "abc "
 
 /--
 info: Success! Final stack:
@@ -1301,7 +1301,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval emph {} |>.test! "_aa_"
+#eval emph {} |>.test! "_aa_"
 
 /--
 info: Failure @4 (⟨1, 4⟩): expected '_' without preceding space
@@ -1313,7 +1313,7 @@ Final stack:
 Remaining: "_"
 -/
 #guard_msgs in
-  #eval emph {} |>.test! "_aa _"
+#eval emph {} |>.test! "_aa _"
 
 /--
 info: Failure @0 (⟨1, 0⟩): unexpected space or newline after opener
@@ -1322,7 +1322,7 @@ Final stack:
 Remaining: "_ aa_"
 -/
 #guard_msgs in
-  #eval emph {} |>.test! "_ aa_"
+#eval emph {} |>.test! "_ aa_"
 
 
 /--
@@ -1396,7 +1396,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval code.test! "``foo bar``"
+#eval code.test! "``foo bar``"
 
 /--
 info: Success! Final stack:
@@ -1407,7 +1407,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval code.test! "``foo `stuff` bar``"
+#eval code.test! "``foo `stuff` bar``"
 
 /--
 info: Failure @1 (⟨1, 1⟩): expected '`' to close inline code
@@ -1416,7 +1416,7 @@ Final stack:
 Remaining: "foo"
 -/
 #guard_msgs in
-  #eval code.test! "`foo"
+#eval code.test! "`foo"
 
 /--
 info: Success! Final stack:
@@ -1424,7 +1424,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval code.test! "` foo`"
+#eval code.test! "` foo`"
 
 /--
 info: Success! Final stack:
@@ -1432,7 +1432,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval code.test! "` foo `"
+#eval code.test! "` foo `"
 
 /--
 info: Success! Final stack:
@@ -1440,7 +1440,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval code.test! "` fo\no `"
+#eval code.test! "` fo\no `"
 
 /--
 info: Success! Final stack:
@@ -1459,7 +1459,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval (inline {}).test! "``foo bar``"
+#eval (inline {}).test! "``foo bar``"
 
 /--
 info: Success! Final stack:
@@ -1470,7 +1470,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval (inline {}).test! "``foo `stuff` bar``"
+#eval (inline {}).test! "``foo `stuff` bar``"
 
 /--
 info: Failure @1 (⟨1, 1⟩): expected '`' to close inline code
@@ -1479,7 +1479,7 @@ Final stack:
 Remaining: "foo"
 -/
 #guard_msgs in
-  #eval (inline {}).test! "`foo"
+#eval (inline {}).test! "`foo"
 
 /--
 info: Success! Final stack:
@@ -1487,7 +1487,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval (inline {}).test! "` foo`"
+#eval (inline {}).test! "` foo`"
 
 /--
 info: Success! Final stack:
@@ -1495,7 +1495,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval (inline {}).test! "` foo `"
+#eval (inline {}).test! "` foo `"
 
 /--
 info: Success! Final stack:
@@ -1503,7 +1503,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval (inline {}).test! "` fo\no `"
+#eval (inline {}).test! "` fo\no `"
 
 /--
 info: Failure @2 (⟨1, 2⟩): expected '``' to close inline code
@@ -1512,7 +1512,7 @@ Final stack:
 Remaining: " fo\no `"
 -/
 #guard_msgs in
-  #eval (inline {}).test! "`` fo\no `"
+#eval (inline {}).test! "`` fo\no `"
 
 
 /--
@@ -1524,7 +1524,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval bold {} |>.test! "**aa**"
+#eval bold {} |>.test! "**aa**"
 
 /--
 info: Success! Final stack:
@@ -1539,7 +1539,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval inline {} |>.test! "**aa\nbb**"
+#eval inline {} |>.test! "**aa\nbb**"
 
 /--
 info: Success! Final stack:
@@ -1548,7 +1548,7 @@ Remaining:
 "* b"
 -/
 #guard_msgs in
-  #eval inline {} |>.test! "a * b"
+#eval inline {} |>.test! "a * b"
 
 /--
 info: Success! Final stack:
@@ -1563,7 +1563,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval inline {} |>.test! "[Wikipedia](https://en.wikipedia.org)"
+#eval inline {} |>.test! "[Wikipedia](https://en.wikipedia.org)"
 
 /--
 info: Success! Final stack:
@@ -1578,7 +1578,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval inline {} |>.test! "![](logo.png)"
+#eval inline {} |>.test! "![](logo.png)"
 
 /--
 info: Failure @12 (⟨1, 12⟩): expected ')'
@@ -1594,7 +1594,7 @@ Final stack:
 Remaining: "\nabc"
 -/
 #guard_msgs in
-  #eval inline {} |>.test! "![](logo.png\nabc"
+#eval inline {} |>.test! "![](logo.png\nabc"
 
 /--
 info: Failure @5 (⟨1, 5⟩): expected ']'
@@ -1606,7 +1606,7 @@ Final stack:
 Remaining: "\n123"
 -/
 #guard_msgs in
-  #eval inline {} |>.test! "![abc\n123"
+#eval inline {} |>.test! "![abc\n123"
 
 
 /--
@@ -1622,7 +1622,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval inline {} |>.test! "![alt text is good](logo.png)"
+#eval inline {} |>.test! "![alt text is good](logo.png)"
 
 /--
 info: Failure @19 (⟨1, 19⟩): expected '(' or '['
@@ -1635,7 +1635,7 @@ Final stack:
 Remaining: "](logo.png)"
 -/
 #guard_msgs in
-  #eval inline {} |>.test! "![alt text is good]](logo.png)"
+#eval inline {} |>.test! "![alt text is good]](logo.png)"
 
 /--
 info: Success! Final stack:
@@ -1856,7 +1856,9 @@ info: Success! Final stack:
    (Term.structInstFields
     [(Term.structInstField
       (Term.structInstLVal `foo [])
-      [[] [] (Term.structInstFieldDef ":=" `bar)])
+      [[]
+       []
+       (Term.structInstFieldDef ":=" [] `bar)])
      []])
    "%%%")
 All input consumed.
@@ -1871,7 +1873,9 @@ info: Success! Final stack:
    (Term.structInstFields
     [(Term.structInstField
       (Term.structInstLVal `foo [])
-      [[] [] (Term.structInstFieldDef ":=" `bar)])
+      [[]
+       []
+       (Term.structInstFieldDef ":=" [] `bar)])
      []
      (Term.structInstField
       (Term.structInstLVal `x [])
@@ -1912,8 +1916,8 @@ def lookaheadOrderedListIndicator (ctxt : BlockCtxt) (p : OrderedListType → In
       if h : c.input.atEnd i then {s.mkEOIError with pos := iniPos}
       else
         let (s, next, type) := match c.input.get' i h with
-          | '.' => (s.next' c.input i h, chFn ' ', OrderedListType.numDot)
-          | ')' => (s.next' c.input i h, chFn ' ', OrderedListType.parenAfter)
+          | '.' => (s.next' c.input i h, (chFn ' ' <|> chFn '\n'), OrderedListType.numDot)
+          | ')' => (s.next' c.input i h, (chFn ' ' <|> chFn '\n'), OrderedListType.parenAfter)
           | other => (s.setError {unexpected := s!"unexpected '{other}'", expected := ["'.'", "')'"]}, skipFn, .numDot)
         if s.hasError then {s with pos := iniPos}
         else
@@ -2001,7 +2005,7 @@ def lookaheadUnorderedListIndicator (ctxt : BlockCtxt) (p : UnorderedListType �
     | other => (s.setError {expected := ["*", "-", "+"], unexpected := s!"'{other}'"}, .plus)
   if s.hasError then s.setPos iniPos
   else
-    let s := (chFn ' ') c s
+    let s := (chFn ' ' <|> chFn '\n') c s
     if s.hasError then s.setPos iniPos
     else p type c (s.shrinkStack iniSz |>.setPos bulletPos)
 
@@ -2064,7 +2068,7 @@ def recoverUnindent (indent : Nat) (p : ParserFn) (finish : ParserFn := skipFn) 
 
 mutual
   partial def listItem (ctxt : BlockCtxt) : ParserFn :=
-    nodeFn ``li (bulletFn >> withCurrentColumn fun c => blocks {ctxt with minIndent := c})
+    nodeFn ``li (bulletFn >> withCurrentColumn fun c => ignoreFn (manyFn (chFn ' ' <|> chFn '\n')) >> blocks1 {ctxt with minIndent := c})
   where
     bulletFn :=
       match ctxt.inLists.head? with
@@ -2073,12 +2077,12 @@ mutual
         atomicFn <|
           takeWhileFn (· == ' ') >>
           guardColumn (· == col) s!"indentation at {col}" >>
-          unorderedListIndicator type >> ignoreFn (lookaheadFn (chFn ' '))
+          unorderedListIndicator type >> ignoreFn (lookaheadFn (chFn ' ' <|> chFn '\n'))
       | some ⟨col, .inl type⟩ =>
         atomicFn <|
           takeWhileFn (· == ' ') >>
           guardColumn (· == col) s!"indentation at {col}" >>
-          orderedListIndicator type >> ignoreFn (lookaheadFn (chFn ' '))
+          orderedListIndicator type >> ignoreFn (lookaheadFn (chFn ' ' <|> chFn '\n'))
 
 
   partial def descItem (ctxt : BlockCtxt) : ParserFn :=
@@ -2122,16 +2126,16 @@ mutual
   partial def definitionList (ctxt : BlockCtxt) : ParserFn :=
     nodeFn ``dl <|
       atomicFn (onlyBlockOpeners >> takeWhileFn (· == ' ') >> ignoreFn (lookaheadFn (chFn ':' >> chFn ' ')) >> guardMinColumn ctxt.minIndent) >>
-      fakeAtom "ul{" >>
+      withInfoSyntaxFn skip.fn (fun info => fakeAtom "ul{" info) >>
       withCurrentColumn (fun c => many1Fn (descItem {ctxt with minIndent := c})) >>
-      fakeAtom "}"
+      withInfoSyntaxFn skip.fn (fun info => fakeAtom "}" info)
 
   partial def para (ctxt : BlockCtxt) : ParserFn :=
     nodeFn ``para <|
       atomicFn (takeWhileFn (· == ' ') >> notFollowedByFn blockOpener "block opener" >> guardMinColumn ctxt.minIndent) >>
-      fakeAtom "para{" >>
+      withInfoSyntaxFn skip.fn (fun info => fakeAtom "para{" (info := info)) >>
       textLine >>
-      fakeAtom "}"
+      withInfoSyntaxFn skip.fn (fun info => fakeAtom "}" (info := info))
 
   partial def header (ctxt : BlockCtxt) : ParserFn :=
     nodeFn ``header <|
@@ -2313,7 +2317,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval blocks {} |>.test! "This is just some textual content. How is it?\n\nMore?"
+#eval blocks {} |>.test! "This is just some textual content. How is it?\n\nMore?"
 
 /--
 info: Success! Final stack:
@@ -2330,7 +2334,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval blocks {} |>.test! "Newlines are preserved\nin paragraphs."
+#eval blocks {} |>.test! "Newlines are preserved\nin paragraphs."
 
 /--
 info: Success! Final stack:
@@ -2358,7 +2362,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval blocks {} |>.test! "I can describe lists like this one:\n\n* a\n* b"
+#eval blocks {} |>.test! "I can describe lists like this one:\n\n* a\n* b"
 
 
 /--
@@ -2383,7 +2387,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval document |>.test! "\n![Lean logo](/static/lean_logo.svg)\n\nThis is an example website/blog, for testing purposes."
+#eval document |>.test! "\n![Lean logo](/static/lean_logo.svg)\n\nThis is an example website/blog, for testing purposes."
 
 
 
@@ -2399,7 +2403,193 @@ Remaining:
 "* bar\n"
 -/
 #guard_msgs in
-  #eval listItem {inLists:=[⟨0, .inr .asterisk⟩]} |>.test! "* foo\n* bar\n"
+#eval listItem {inLists:=[⟨0, .inr .asterisk⟩]} |>.test! "* foo\n* bar\n"
+
+/--
+info: Success! Final stack:
+  [(Verso.Syntax.ul
+    "ul{"
+    [(Verso.Syntax.li
+      "*"
+      [(Verso.Syntax.ul
+        "ul{"
+        [(Verso.Syntax.li
+          "*"
+          [(Verso.Syntax.para
+            "para{"
+            [(Verso.Syntax.text (str "\"A1\""))]
+            "}")])
+         (Verso.Syntax.li
+          "*"
+          [(Verso.Syntax.para
+            "para{"
+            [(Verso.Syntax.text (str "\"A2\""))]
+            "}")])]
+        "}")])
+     (Verso.Syntax.li
+      "*"
+      [(Verso.Syntax.para
+        "para{"
+        [(Verso.Syntax.text (str "\"B\""))]
+        "}")
+       (Verso.Syntax.ul
+        "ul{"
+        [(Verso.Syntax.li
+          "*"
+          [(Verso.Syntax.para
+            "para{"
+            [(Verso.Syntax.text (str "\"B1\""))]
+            "}")])
+         (Verso.Syntax.li
+          "*"
+          [(Verso.Syntax.para
+            "para{"
+            [(Verso.Syntax.text (str "\"B2\""))]
+            "}")])]
+        "}")])]
+    "}")]
+All input consumed.
+-/
+#guard_msgs in
+#eval blocks {} |>.test! "* * A1\n  * A2\n* B\n * B1\n * B2"
+
+/--
+info: Success! Final stack:
+  [(Verso.Syntax.ul
+    "ul{"
+    [(Verso.Syntax.li
+      "*"
+      [(Verso.Syntax.ul
+        "ul{"
+        [(Verso.Syntax.li
+          "*"
+          [(Verso.Syntax.para
+            "para{"
+            [(Verso.Syntax.text (str "\"A1\""))]
+            "}")])
+         (Verso.Syntax.li
+          "*"
+          [(Verso.Syntax.para
+            "para{"
+            [(Verso.Syntax.text (str "\"A2\""))
+             (Verso.Syntax.linebreak
+              "line!"
+              (str "\"\\n\""))]
+            "}")])]
+        "}")])
+     (Verso.Syntax.li
+      "*"
+      [(Verso.Syntax.ul
+        "ul{"
+        [(Verso.Syntax.li
+          "*"
+          [(Verso.Syntax.para
+            "para{"
+            [(Verso.Syntax.text (str "\"B1\""))]
+            "}")])]
+        "}")])]
+    "}")]
+All input consumed.
+-/
+#guard_msgs in
+#eval blocks {} |>.test! "* \n * A1\n * A2\n*\n * B1"
+
+/--
+info: Success! Final stack:
+  [(Verso.Syntax.ul
+    "ul{"
+    [(Verso.Syntax.li
+      "*"
+      [(Verso.Syntax.ul
+        "ul{"
+        [(Verso.Syntax.li
+          "*"
+          [(Verso.Syntax.para
+            "para{"
+            [(Verso.Syntax.text (str "\"A1\""))]
+            "}")])
+         (Verso.Syntax.li
+          "*"
+          [(Verso.Syntax.para
+            "para{"
+            [(Verso.Syntax.text (str "\"A2\""))
+             (Verso.Syntax.linebreak
+              "line!"
+              (str "\"\\n\""))]
+            "}")])]
+        "}")])
+     (Verso.Syntax.li
+      "*"
+      [(Verso.Syntax.ul
+        "ul{"
+        [(Verso.Syntax.li
+          "*"
+          [(Verso.Syntax.para
+            "para{"
+            [(Verso.Syntax.text (str "\"B1\""))]
+            "}")])]
+        "}")])]
+    "}")]
+All input consumed.
+-/
+#guard_msgs in
+#eval blocks {} |>.test! "*\n * A1\n * A2\n*\n * B1"
+
+/--
+info: Failure @2 (⟨2, 0⟩): ':'; expected %%% (at line beginning) or expected column at least 1
+Final stack:
+  [(Verso.Syntax.ul
+    "ul{"
+    [(Verso.Syntax.li
+      "*"
+      [(Verso.Syntax.metadata_block
+        <missing>
+        <missing>)
+       <missing>])])]
+Remaining: "abc"
+-/
+#guard_msgs in
+#eval blocks {} |>.test! "*\nabc"
+
+/--
+info: Success! Final stack:
+  [(Verso.Syntax.ul
+    "ul{"
+    [(Verso.Syntax.li
+      "*"
+      [(Verso.Syntax.para
+        "para{"
+        [(Verso.Syntax.text (str "\"abc\""))]
+        "}")
+       (Verso.Syntax.para
+        "para{"
+        [(Verso.Syntax.text (str "\"def\""))]
+        "}")])]
+    "}")]
+All input consumed.
+-/
+#guard_msgs in
+#eval blocks {} |>.test! "*\n abc\n\n def"
+
+/--
+info: Success! Final stack:
+  [(Verso.Syntax.ul
+    "ul{"
+    [(Verso.Syntax.li
+      "*"
+      [(Verso.Syntax.para
+        "para{"
+        [(Verso.Syntax.text (str "\"abc\""))]
+        "}")])]
+    "}")
+   (Verso.Syntax.para
+    "para{"
+    [(Verso.Syntax.text (str "\"def\""))]
+    "}")]
+All input consumed.
+-/
+#guard_msgs in
+#eval blocks {} |>.test! "*\n abc\n\ndef"
 
 /--
 info: Success! Final stack:
@@ -2424,7 +2614,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval blocks {} |>.test! "* foo\n* bar\n"
+#eval blocks {} |>.test! "* foo\n* bar\n"
 
 /--
 info: Success! Final stack:
@@ -2620,7 +2810,7 @@ Remaining:
 "* bar\n"
 -/
 #guard_msgs in
-  #eval blocks {} |>.test! "* foo\n  thing* bar\n"
+#eval blocks {} |>.test! "* foo\n  thing* bar\n"
 
 /--
 info: Success! Final stack:
@@ -2645,7 +2835,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval blocks {} |>.test! "+ foo\n+ bar\n"
+#eval blocks {} |>.test! "+ foo\n+ bar\n"
 
 
 /--
@@ -2671,7 +2861,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval blocks {} |>.test! "* foo\n\n* bar\n"
+#eval blocks {} |>.test! "* foo\n\n* bar\n"
 
 /--
 info: Success! Final stack:
@@ -2710,7 +2900,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval blocks {} |>.test! "* foo\n  stuff\n\n > more \n\n abc\n\n\n* bar\n"
+#eval blocks {} |>.test! "* foo\n  stuff\n\n > more \n\n abc\n\n\n* bar\n"
 
 /--
 info: Success! Final stack:
@@ -2742,7 +2932,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval blocks {} |>.test! "* foo\n  * bar\n* more outer"
+#eval blocks {} |>.test! "* foo\n  * bar\n* more outer"
 
 /--
 info: Failure @35 (⟨2, 15⟩): unexpected end of input; expected %%% (at line beginning), '![', '$$', '$', '[', '[^', beginning of line at ⟨2, 15⟩ or beginning of line or sequence of nestable block openers at ⟨2, 15⟩
@@ -2765,7 +2955,7 @@ Final stack:
 Remaining: ""
 -/
 #guard_msgs in
-  #eval blocks {} |>.test! ": an excellent idea\nLet's say more!"
+#eval blocks {} |>.test! ": an excellent idea\nLet's say more!"
 
 /--
 info: Success! Final stack:
@@ -2785,7 +2975,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval blocks {} |>.test! ": an excellent idea\n\n    Let's say more!"
+#eval blocks {} |>.test! ": an excellent idea\n\n    Let's say more!"
 
 /--
 info: Failure @47 (⟨7, 0⟩): expected indentation at least 1
@@ -2811,7 +3001,7 @@ Final stack:
 Remaining: ""
 -/
 #guard_msgs in
-  #eval blocks {} |>.test! ": an excellent idea\n\n Let's say more!\n\n: more\n\n"
+#eval blocks {} |>.test! ": an excellent idea\n\n Let's say more!\n\n: more\n\n"
 
 /--
 info: Success! Final stack:
@@ -2840,7 +3030,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval blocks {} |>.test! ": an excellent idea\n\n Let's say more!\n\n\n\n\n: more\n\n even more!"
+#eval blocks {} |>.test! ": an excellent idea\n\n Let's say more!\n\n\n\n\n: more\n\n even more!"
 
 
 /--
@@ -2869,7 +3059,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval blocks {} |>.test! ": an excellent idea\n\n Let's say more!\n\n: more\n\n stuff"
+#eval blocks {} |>.test! ": an excellent idea\n\n Let's say more!\n\n: more\n\n stuff"
 
 /--
 info: Failure @21 (⟨3, 0⟩): expected indentation at least 1
@@ -2895,7 +3085,7 @@ Final stack:
 Remaining: "Let's say more!\n\nhello"
 -/
 #guard_msgs in
-  #eval blocks {} |>.test! ": an excellent idea\n\nLet's say more!\n\nhello"
+#eval blocks {} |>.test! ": an excellent idea\n\nLet's say more!\n\nhello"
 
 /--
 info: Success! Final stack:
@@ -2920,7 +3110,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
- #eval blocks {} |>.test! "1. Hello\n\n2. World"
+#eval blocks {} |>.test! "1. Hello\n\n2. World"
 
 /--
 info: Success! Final stack:
@@ -2939,7 +3129,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
- #eval blocks {} |>.test! " 1. Hello"
+#eval blocks {} |>.test! " 1. Hello"
 
 /--
 info: Success! Final stack:
@@ -2970,7 +3160,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
- #eval blocks {} |>.test! "1. Hello\n\n 2. World"
+#eval blocks {} |>.test! "1. Hello\n\n 2. World"
 
 /--
 info: Success! Final stack:
@@ -2995,7 +3185,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
- #eval blocks {} |>.test! " 1. Hello\n\n 2. World"
+#eval blocks {} |>.test! " 1. Hello\n\n 2. World"
 
 /--
 info: Success! Final stack:
@@ -3011,7 +3201,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval blocks {} |>.test! "> hey\n"
+#eval blocks {} |>.test! "> hey\n"
 
 /--
 info: Success! Final stack:
@@ -3022,7 +3212,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval blocks {} |>.test! "n\\*k "
+#eval blocks {} |>.test! "n\\*k "
 
 -- Unlike Djot, we don't have precedence - these must be well-nested
 /--
@@ -3043,7 +3233,7 @@ Final stack:
 Remaining: "* not regular_ emphasis"
 -/
 #guard_msgs in
-  #eval blocks {} |>.test! "*This is _strong* not regular_ emphasis"
+#eval blocks {} |>.test! "*This is _strong* not regular_ emphasis"
 
 
 /--
@@ -3058,7 +3248,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval header {} |>.test! "# Header!"
+#eval header {} |>.test! "# Header!"
 
 /--
 info: Success! Final stack:
@@ -3072,7 +3262,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval blocks {} |>.test! "# Header!\n"
+#eval blocks {} |>.test! "# Header!\n"
 
 /--
 info: Success! Final stack:
@@ -3086,7 +3276,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval blocks {} |>.test! "## Header!\n"
+#eval blocks {} |>.test! "## Header!\n"
 
 /--
 info: Success! Final stack:
@@ -3354,7 +3544,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval codeBlock {} |>.test! " ``` scheme\n (define x 4)\n x\n ```"
+#eval codeBlock {} |>.test! " ``` scheme\n (define x 4)\n x\n ```"
 
 /--
 info: Success! Final stack:
@@ -3367,7 +3557,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval codeBlock {} |>.test! "``` scheme\n (define x 4)\n x\n```"
+#eval codeBlock {} |>.test! "``` scheme\n (define x 4)\n x\n```"
 
 
 /--
@@ -3381,7 +3571,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval codeBlock {} |>.test! " ``` \n (define x 4)\n x\n ```"
+#eval codeBlock {} |>.test! " ``` \n (define x 4)\n x\n ```"
 
 /--
 info: Success! Final stack:
@@ -3394,7 +3584,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval codeBlock {} |>.test! " ```\n (define x 4)\n x\n ```"
+#eval codeBlock {} |>.test! " ```\n (define x 4)\n x\n ```"
 
 
 /--
@@ -3408,7 +3598,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval codeBlock {} |>.test! "``` scheme\n (define x 4)\n x\n```\n"
+#eval codeBlock {} |>.test! "``` scheme\n (define x 4)\n x\n```\n"
 
 /--
 info: Success! Final stack:
@@ -3421,7 +3611,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval codeBlock {} |>.test! "``` scheme\n(define x 4)\nx\n```"
+#eval codeBlock {} |>.test! "``` scheme\n(define x 4)\nx\n```"
 
 
 /--
@@ -3436,7 +3626,7 @@ Final stack:
 Remaining: "more"
 -/
 #guard_msgs in
-  #eval codeBlock {} |>.test! "``` scheme\n(define x 4)\nx\n ````\nmore"
+#eval codeBlock {} |>.test! "``` scheme\n(define x 4)\nx\n ````\nmore"
 
 /--
 info: Success! Final stack:
@@ -3518,7 +3708,7 @@ Final stack:
 Remaining: "x\n```"
 -/
 #guard_msgs in
-  #eval codeBlock {} |>.test! " ``` scheme\n(define x 4)\nx\n```"
+#eval codeBlock {} |>.test! " ``` scheme\n(define x 4)\nx\n```"
 
 /--
 info: Failure @32 (⟨4, 3⟩): expected column 1
@@ -3532,7 +3722,7 @@ Final stack:
 Remaining: ""
 -/
 #guard_msgs in
-  #eval codeBlock {} |>.test! " ``` scheme\n (define x 4)\n x\n```"
+#eval codeBlock {} |>.test! " ``` scheme\n (define x 4)\n x\n```"
 
 /--
 info: Failure @25 (⟨4, 3⟩): expected column 1
@@ -3546,7 +3736,7 @@ Final stack:
 Remaining: ""
 -/
 #guard_msgs in
-  #eval codeBlock {} |>.test! " ```\n (define x 4)\n x\n```"
+#eval codeBlock {} |>.test! " ```\n (define x 4)\n x\n```"
 
 /--
 info: Failure @28 (⟨4, 3⟩): expected column 1
@@ -3560,7 +3750,7 @@ Final stack:
 Remaining: ""
 -/
 #guard_msgs in
-  #eval codeBlock {} |>.test! " ```   \n (define x 4)\n x\n```"
+#eval codeBlock {} |>.test! " ```   \n (define x 4)\n x\n```"
 
 /--
 info: Success! Final stack:
@@ -3904,6 +4094,7 @@ info: Success! Final stack:
         []
         (Term.structInstFieldDef
          ":="
+         []
          (num "53"))])
       []])
     "%%%")
@@ -3932,7 +4123,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval directive {} |>.test! ":::: multiPara\nfoo\n::::"
+#eval directive {} |>.test! ":::: multiPara\nfoo\n::::"
 
 /--
 info: Success! Final stack:
@@ -3949,7 +4140,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval directive {} |>.test! ":::: multiPara\n\n\nfoo\n::::"
+#eval directive {} |>.test! ":::: multiPara\n\n\nfoo\n::::"
 
 /--
 info: Success! Final stack:
@@ -3969,7 +4160,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval directive {} |>.test! " ::: multiPara greatness:=\"amazing!\"\n foo\n :::"
+#eval directive {} |>.test! " ::: multiPara greatness:=\"amazing!\"\n foo\n :::"
 
 
 /--
@@ -3997,7 +4188,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval directive {} |>.test! " ::: multiPara\n foo\n \n \n \n  * List item \n :::"
+#eval directive {} |>.test! " ::: multiPara\n foo\n \n \n \n  * List item \n :::"
 
 /--
 info: Success! Final stack:
@@ -4025,7 +4216,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval directive {} |>.test! " ::: multiPara thing\n foo\n \n \n \n  * List item \n :::"
+#eval directive {} |>.test! " ::: multiPara thing\n foo\n \n \n \n  * List item \n :::"
 
 /--
 info: Success! Final stack:
@@ -4052,7 +4243,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval directive {} |>.test! " ::: multiPara\n foo\n\n * List item \n :::"
+#eval directive {} |>.test! " ::: multiPara\n foo\n\n * List item \n :::"
 
 /--
 info: Success! Final stack:
@@ -4061,7 +4252,7 @@ Remaining:
 "[\\[link\\]](https://link.com)"
 -/
 #guard_msgs in
-  #eval text |>.test! " [\\[link\\]](https://link.com)"
+#eval text |>.test! " [\\[link\\]](https://link.com)"
 
 /--
 info: Success! Final stack:
@@ -4088,7 +4279,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval blocks {} |>.test! "[\\[link A\\]](https://example.com) [\\[link B\\]](https://more.example.com)"
+#eval blocks {} |>.test! "[\\[link A\\]](https://example.com) [\\[link B\\]](https://more.example.com)"
 
 
 /--
@@ -4112,7 +4303,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval blocks {} |>.test! "[My link][lean]\n\n[lean]: https://lean-lang.org"
+#eval blocks {} |>.test! "[My link][lean]\n\n[lean]: https://lean-lang.org"
 
 /--
 info: Failure @45 (⟨2, 29⟩): expected '(' or '['
@@ -4136,7 +4327,7 @@ Final stack:
 Remaining: ""
 -/
 #guard_msgs in
-  #eval blocks {} |>.test! "[My link][lean]\n[lean]: https://lean-lang.org"
+#eval blocks {} |>.test! "[My link][lean]\n[lean]: https://lean-lang.org"
 
 /--
 info: Success! Final stack:
@@ -4163,7 +4354,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval blocks {} |>.test! "[My link][lean]\n\n[lean]: https://lean-lang.org\nhello"
+#eval blocks {} |>.test! "[My link][lean]\n\n[lean]: https://lean-lang.org\nhello"
 
 /--
 info: Success! Final stack:
@@ -4184,7 +4375,7 @@ info: Success! Final stack:
 All input consumed.
 -/
 #guard_msgs in
-  #eval blocks {} |>.test! "Blah blah[^1]\n\n[^1]: More can be said"
+#eval blocks {} |>.test! "Blah blah[^1]\n\n[^1]: More can be said"
 
 
 -- A big test of error recovery
