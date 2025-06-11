@@ -8,7 +8,7 @@ import Verso.Method
 
 namespace Verso.Genre.Manual
 open Verso.Method
-open Lean (ToJson FromJson)
+open Lean (ToJson FromJson ToExpr)
 open Std (HashSet)
 
 def Slug.validChars := HashSet.ofList "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_".toList
@@ -62,7 +62,7 @@ theorem String.Pos.add_0_eq_size {c : Char} : (0 : String.Pos) + c = ⟨c.utf8Si
   show 0 + c.utf8Size = c.utf8Size
   simp
 
-instance : DecidablePred Slug.WF := fun str =>
+instance Slug.WF.decide : DecidablePred Slug.WF := fun str =>
   if h : str.toList.all (· ∈ Slug.validChars) then isTrue (by unfold Slug.WF; exact h) else isFalse h
 
 @[simp]
@@ -154,6 +154,8 @@ defmethod String.sluggify (str : String) : Slug :=
   ⟨asSlug str, asSlug_valid⟩
 
 def ofString (str : String) : Slug := str.sluggify
+
+def ofString' (str : String) (wf : WF str := by decide) : Slug := ⟨str, wf⟩
 
 /--
 Returns a slug that's not present in `used`, starting with `slug` and appending consecutive numbers

@@ -5,6 +5,7 @@ Author: David Thrane Christiansen
 -/
 
 import Lean.Data.Json
+import Lean.ToExpr
 import Verso.Doc.Name
 
 namespace Verso
@@ -12,7 +13,7 @@ namespace Verso
 namespace Doc
 
 open Std (Format)
-open Lean (Name Json ToJson FromJson)
+open Lean (Name Json ToJson FromJson ToExpr)
 open Lean.Json (getObj?)
 
 structure Genre : Type 1 where
@@ -34,7 +35,7 @@ instance : Repr Genre.none.PartMetadata where
   reprPrec e _ := nomatch e
 
 inductive MathMode where | inline | display
-deriving Repr, BEq, Hashable, Ord, ToJson, FromJson
+deriving Repr, BEq, Hashable, Ord, ToJson, FromJson, ToExpr
 
 private def arrayEq (eq : α → α → Bool) (xs ys : Array α) : Bool := Id.run do
     if h : xs.size = ys.size then

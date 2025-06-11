@@ -17,6 +17,47 @@ open Verso.Syntax
 def throwUnexpected [Monad m] [MonadError m] (stx : Syntax) : m α :=
   throwErrorAt stx "unexpected syntax{indentD stx}"
 
+partial def elabInline' (inline : TSyntax `inline) : DocElabM Expr :=
+  withRef inline <| withFreshMacroScope <| withIncRecDepth <| do
+  let t ← inlineType
+  match inline.raw with
+  | .missing =>
+    Meta.mkLabeledSorry t true true
+  | stx@(.node _ kind _) =>
+    let env ← getEnv
+    let result ← match (← liftMacroM (expandMacroImpl? env stx)) with
+    | some (_decl, stxNew?) => -- TODO terminfo here? Right now, we suppress most uses of it.
+      let stxNew ← liftMacroM <| liftExcept stxNew?
+      withMacroExpansionInfo stx stxNew <|
+        withRef stxNew <|
+          elabInline' ⟨stxNew⟩
+    | none =>
+      let exp ← inlineExpandersFor kind
+      for e in exp do
+        try
+          let termStx ← withFreshMacroScope <| e stx
+          return (← Term.elabTerm termStx (some t))
+        catch
+          | ex@(.internal id) =>
+            if id == unsupportedSyntaxExceptionId then pure ()
+            else throw ex
+          | ex => throw ex
+
+      let exp ← inlineElabsFor kind
+      for e in exp do
+        try
+          let expr ← withFreshMacroScope <| e stx
+          return expr
+        catch
+          | ex@(.internal id) =>
+            if id == unsupportedSyntaxExceptionId then pure ()
+            else throw ex
+          | ex => throw ex
+
+      throwUnexpected stx
+  | other =>
+    throwUnexpected other
+
 partial def elabInline (inline : TSyntax `inline) : DocElabM (TSyntax `term) :=
   withRef inline <| withFreshMacroScope <| withIncRecDepth <| do
   match inline.raw with
@@ -41,40 +82,54 @@ partial def elabInline (inline : TSyntax `inline) : DocElabM (TSyntax `term) :=
             if id == unsupportedSyntaxExceptionId then pure ()
             else throw ex
           | ex => throw ex
+
+      let exp ← inlineElabsFor kind
+      for e in exp do
+        try
+          let expr ← withFreshMacroScope <| e stx
+          let n ← defineInline expr
+          return mkIdentFrom stx n
+        catch
+          | ex@(.internal id) =>
+            if id == unsupportedSyntaxExceptionId then pure ()
+            else throw ex
+          | ex => throw ex
+
       throwUnexpected stx
   | other =>
     throwUnexpected other
 
-@[inline_expander Verso.Syntax.text]
-partial def _root_.Verso.Syntax.text.expand : InlineExpander := fun x =>
+private def mkInline (ctor : Name) : DocElabM Expr := do
+    let ⟨_, g⟩ ← readThe DocElabContext
+    return .app (.const ctor []) g
+
+private def mkInlineArr (ctor : Name) (xs : Array Expr) : DocElabM Expr := do
+    let ⟨_, g⟩ ← readThe DocElabContext
+    return mkApp2 (.const ctor []) g (← Meta.mkArrayLit (← inlineType) xs.toList)
+
+@[inline_elab Verso.Syntax.text]
+partial def _root_.Verso.Syntax.text.elab : InlineElab := fun x =>
   match x with
   | `(inline| $s:str) => do
-    -- Erase the source locations from the string literal to prevent unwanted hover info
-    ``(Inline.text $(⟨deleteInfo s.raw⟩))
-  | _ => throwUnsupportedSyntax
-  where
-    deleteInfo : Syntax → Syntax
-      | .node _ k args => .node .none k (args.map deleteInfo)
-      | .atom _ val => .atom .none val
-      | .ident _ rawVal val preres => .ident .none rawVal val preres
-      | .missing => .missing
-
-@[inline_expander Verso.Syntax.linebreak]
-def _root_.linebreak.expand : InlineExpander
-  | `(inline|line! $s:str) =>
-    ``(Inline.linebreak $(quote s.getString))
+    return .app (← mkInline ``Inline.text) (toExpr s.getString)
   | _ => throwUnsupportedSyntax
 
-@[inline_expander Verso.Syntax.emph]
-def _root_.Verso.Syntax.emph.expand : InlineExpander
+@[inline_elab Verso.Syntax.linebreak]
+def _root_.linebreak.elab : InlineElab
+  | `(inline|line! $s:str) => do
+    return .app (← mkInline ``Inline.linebreak) (toExpr s.getString)
+  | _ => throwUnsupportedSyntax
+
+@[inline_elab Verso.Syntax.emph]
+def _root_.Verso.Syntax.emph.elab : InlineElab
   | `(inline| _[ $args* ]) => do
-    ``(Inline.emph #[$[$(← args.mapM elabInline)],*])
+    mkInlineArr ``Inline.emph (← args.mapM elabInline')
   | _ => throwUnsupportedSyntax
 
-@[inline_expander Verso.Syntax.bold]
-def _root_.Verso.Syntax.bold.expand : InlineExpander
+@[inline_elab Verso.Syntax.bold]
+def _root_.Verso.Syntax.bold.elab : InlineElab
   | `(inline| *[ $args* ]) => do
-    ``(Inline.bold #[$[$(← args.mapM elabInline)],*])
+    mkInlineArr ``Inline.bold (← args.mapM elabInline')
   | _ => throwUnsupportedSyntax
 
 def parseArgVal (val : TSyntax `arg_val) : DocElabM ArgVal := do
@@ -119,44 +174,60 @@ def appFallback
       f (.node .none nullKind <| arrArg ++ argStx)
   return ⟨appStx⟩
 
+
+
 open Lean.Parser.Term in
-@[inline_expander Verso.Syntax.role]
-def _root_.Verso.Syntax.role.expand : InlineExpander
+@[inline_elab Verso.Syntax.role]
+def _root_.Verso.Syntax.role.elab : InlineElab
   | inline@`(inline| role{$name $args*} [$subjects*]) => do
       withRef inline <| withFreshMacroScope <| withIncRecDepth <| do
         let ⟨genre, _⟩ ← readThe DocElabContext
+        let it ← inlineType
         let resolvedName ← realizeGlobalConstNoOverloadWithInfo name
         let exp ← roleExpandersFor resolvedName
+        let exp' ← roleElabsFor resolvedName
         let argVals ← parseArgs args
-        if exp.isEmpty then
+        if exp.isEmpty && exp'.isEmpty then
           -- If no expanders are registered, then try elaborating just as a
           -- function application node
-          return ← appFallback inline name resolvedName argVals subjects
+          let appStx ← appFallback inline name resolvedName argVals subjects
+          return (← Term.elabTerm appStx (some it))
+
         for e in exp do
           try
             let termStxs ← withFreshMacroScope <| e argVals subjects
             let termStxs ← termStxs.mapM fun t => (``(($t : Inline $(⟨genre⟩))))
-            return (← ``(Inline.concat (genre := $(⟨genre⟩)) #[$[$termStxs],*]))
+            return (← Term.elabTerm (← ``(Inline.concat (genre := $(⟨genre⟩)) #[$[$termStxs],*])) (some it))
           catch
             | ex@(.internal id) =>
               if id == unsupportedSyntaxExceptionId then pure ()
               else throw ex
             | ex => throw ex
+
+        for e in exp' do
+          try
+            return (← withFreshMacroScope <| e argVals subjects)
+          catch
+            | ex@(.internal id) =>
+              if id == unsupportedSyntaxExceptionId then pure ()
+              else throw ex
+            | ex => throw ex
+
         throwUnsupportedSyntax
   | _ => throwUnsupportedSyntax
 
-@[inline_expander Verso.Syntax.link]
-def _root_.Verso.Syntax.link.expand : InlineExpander
+@[inline_elab Verso.Syntax.link]
+def _root_.Verso.Syntax.link.expand : InlineElab
   | `(inline| link[ $txt* ] $dest:link_target) => do
-    let url : TSyntax `term ←
+    let url : Expr ←
       match dest with
       | `(link_target| ( $url )) =>
-        pure (↑ url)
+        Term.elabTerm (↑ url) none
       | `(link_target| [ $ref ]) => do
         -- Round-trip through quote to get rid of source locations, preventing unwanted IDE info
-        addLinkRef ref
+        Term.elabTerm (← addLinkRef ref) none
       | _ => throwErrorAt dest "Couldn't parse link destination"
-    ``(Inline.link #[$[$(← txt.mapM elabInline)],*] $url)
+    return .app (← mkInlineArr ``Inline.link (← txt.mapM elabInline')) url
   | _ => throwUnsupportedSyntax
 
 @[inline_expander Verso.Syntax.footnote]
@@ -208,6 +279,50 @@ def decorateClosing : TSyntax `block → DocElabM Unit
   | _ => pure ()
 
 open Lean.Elab.Term in
+partial def elabBlock' (block : TSyntax `block) : DocElabM Expr :=
+  withTraceNode `Elab.Verso.block (fun _ => pure m!"Block {block}") <|
+  withRef block <| withFreshMacroScope <| withIncRecDepth <| do
+  let ⟨_, g⟩ ← readThe DocElabContext
+  let type : Expr := .app (.const ``Doc.Block []) g
+  decorateClosing block
+  match block.raw with
+  | .missing =>
+    Meta.mkSorry type true
+  | stx@(.node _ kind _) =>
+    let env ← getEnv
+    let result ← match (← liftMacroM (expandMacroImpl? env stx)) with
+    | some (_decl, stxNew?) => -- TODO terminfo here? Right now, we suppress most uses of it.
+      let stxNew ← liftMacroM <| liftExcept stxNew?
+      withMacroExpansionInfo stx stxNew <|
+        withRef stxNew <|
+          elabBlock' ⟨stxNew⟩
+    | none =>
+      let exp ← blockExpandersFor kind
+      for e in exp do
+        try
+          let termStx ← withFreshMacroScope <| e stx
+          return (← elabTerm termStx (some type))
+        catch
+          | ex@(.internal id) =>
+            if id == unsupportedSyntaxExceptionId then continue
+            else throw ex
+          | ex => throw ex
+      let exp ← blockElabsFor kind
+      for e in exp do
+        try
+          let b ← withFreshMacroScope <| e stx
+          return b
+        catch
+          | ex@(.internal id) =>
+            if id == unsupportedSyntaxExceptionId then continue
+            else throw ex
+          | ex => throw ex
+
+      throwUnexpected block
+  | _ =>
+    throwUnexpected block
+
+open Lean.Elab.Term in
 partial def elabBlock (block : TSyntax `block) : DocElabM (TSyntax `term) :=
   withTraceNode `Elab.Verso.block (fun _ => pure m!"Block {block}") <|
   withRef block <| withFreshMacroScope <| withIncRecDepth <| do
@@ -229,6 +344,17 @@ partial def elabBlock (block : TSyntax `block) : DocElabM (TSyntax `term) :=
         try
           let termStx ← withFreshMacroScope <| e stx
           return termStx
+        catch
+          | ex@(.internal id) =>
+            if id == unsupportedSyntaxExceptionId then continue
+            else throw ex
+          | ex => throw ex
+      let exp ← blockElabsFor kind
+      for e in exp do
+        try
+          let b ← withFreshMacroScope <| e stx
+          let n ← defineBlock b
+          return mkIdentFrom stx n
         catch
           | ex@(.internal id) =>
             if id == unsupportedSyntaxExceptionId then continue
@@ -260,8 +386,8 @@ where
   fallback : PartElabM Unit := do
     if (← getThe PartElabM.State).partContext.priorParts.size > 0 then
       throwErrorAt cmd "Unexpected block"
-    let blk ← liftDocElabM <| elabBlock cmd
-    addBlock blk
+    let blk ← liftDocElabM <| elabBlock' cmd
+    addBlockExpr blk
 
 @[part_command Verso.Syntax.footnote_ref]
 partial def _root_.Verso.Syntax.footnote_ref.command : PartCommand
@@ -354,8 +480,8 @@ def includeSection : PartCommand
 where
  resolved id := mkIdentFrom id <$> realizeGlobalConstNoOverloadWithInfo (mkIdentFrom id (docName id.getId))
 
-@[block_expander Verso.Syntax.block_role]
-def _root_.Verso.Syntax.block_role.expand : BlockExpander := fun block =>
+@[block_elab Verso.Syntax.block_role]
+def _root_.Verso.Syntax.block_role.elab : BlockElab := fun block =>
   match block with
   | `(block|block_role{$name $args*}) => do
     withTraceNode `Elab.Verso.block (fun _ => pure m!"Block role {name}") <|
@@ -363,46 +489,52 @@ def _root_.Verso.Syntax.block_role.expand : BlockExpander := fun block =>
       let ⟨genre, _⟩ ← readThe DocElabContext
       let resolvedName ← realizeGlobalConstNoOverloadWithInfo name
       let exp ← blockRoleExpandersFor resolvedName
+      let elabs ← blockRoleElabsFor resolvedName
       let argVals ← parseArgs args
-      if exp.isEmpty then
-        return ← appFallback block name resolvedName argVals none
+      if exp.isEmpty && elabs.isEmpty then
+        return (← Term.elabTerm (← appFallback block name resolvedName argVals none) (some (← blockType)))
       for e in exp do
         try
           let termStxs ← withFreshMacroScope <| e argVals #[]
-          return (← ``(Block.concat (genre := $(⟨genre⟩)) #[$[$termStxs],*]))
+          return (← Term.elabTerm (← ``(Block.concat (genre := $(⟨genre⟩)) #[$[$termStxs],*])) (some (← blockType)))
         catch
           | ex@(.internal id) =>
             if id == unsupportedSyntaxExceptionId then pure ()
             else throw ex
           | ex => throw ex
+      for e in elabs do
+        try
+          return (← withFreshMacroScope <| e argVals #[])
+        catch
+          | ex@(.internal id) =>
+            if id == unsupportedSyntaxExceptionId then pure ()
+            else throw ex
+          | ex => throw ex
+
       throwUnsupportedSyntax
   | _ => throwUnsupportedSyntax
 
-@[block_expander Verso.Syntax.para]
-partial def _root_.Verso.Syntax.para.expand : BlockExpander
+@[block_elab Verso.Syntax.para]
+partial def _root_.Verso.Syntax.para.elab : BlockElab
   | `(block| para[ $args:inline* ]) => do
-    let ⟨genre, _⟩ ← readThe DocElabContext
-    ``(Block.para (genre := $(⟨genre⟩)) #[$[$(← args.mapM elabInline)],*])
+    Meta.mkAppM ``Block.para #[← Meta.mkArrayLit (← inlineType) (← args.mapM elabInline').toList]
   | _ =>
     throwUnsupportedSyntax
 
-
-def elabLi (block : Syntax) : DocElabM (Syntax × TSyntax `term) :=
+def elabLi (block : Syntax) : DocElabM (Syntax × Expr) :=
   withRef block <|
   match block with
   | `(list_item|*%$dot $contents:block*) => do
-    let ⟨genre, _⟩ ← readThe DocElabContext
-    let item ← ``(ListItem.mk (α := Block $(⟨genre⟩)) #[$[$(← contents.mapM elabBlock)],*])
+    let item ← Meta.mkAppM ``ListItem.mk #[(← Meta.mkArrayLit (← DocElabM.blockType) (← contents.mapM elabBlock').toList)]
     pure (dot, item)
   | _ =>
     throwUnsupportedSyntax
 
-@[block_expander Verso.Syntax.ul]
-def _root_.Verso.Syntax.ul.expand : BlockExpander
+@[block_elab Verso.Syntax.ul]
+def _root_.Verso.Syntax.ul.elab : BlockElab
   | `(block|ul{$itemStxs*}) => do
-    let ⟨genre, _⟩ ← readThe DocElabContext
     let mut bullets : Array Syntax := #[]
-    let mut items : Array (TSyntax `term) := #[]
+    let mut items : Array Expr := #[]
     for i in itemStxs do
       let (b, item) ← elabLi i
       bullets := bullets.push b
@@ -410,16 +542,16 @@ def _root_.Verso.Syntax.ul.expand : BlockExpander
     let info := DocListInfo.mk bullets itemStxs
     for b in bullets do
       pushInfoLeaf <| .ofCustomInfo {stx := b, value := Dynamic.mk info}
-    ``(Block.ul (genre := $(⟨genre⟩)) #[$items,*])
+    let t ← Meta.mkAppM ``ListItem #[← DocElabM.blockType]
+    Meta.mkAppM ``Block.ul #[← Meta.mkArrayLit t items.toList]
   | _ =>
     throwUnsupportedSyntax
 
-@[block_expander Verso.Syntax.ol]
-def _root_.Verso.Syntax.ol.expand : BlockExpander
+@[block_elab Verso.Syntax.ol]
+def _root_.Verso.Syntax.ol.elab : BlockElab
   | `(block|ol($start:num){$itemStxs*}) => do
-    let ⟨genre, _⟩ ← readThe DocElabContext
     let mut bullets : Array Syntax := #[]
-    let mut items : Array (TSyntax `term) := #[]
+    let mut items : Array Expr := #[]
     for i in itemStxs do
       let (b, item) ← elabLi i
       bullets := bullets.push b
@@ -427,26 +559,29 @@ def _root_.Verso.Syntax.ol.expand : BlockExpander
     let info := DocListInfo.mk bullets itemStxs
     for b in bullets do
       pushInfoLeaf <| .ofCustomInfo {stx := b, value := Dynamic.mk info}
-    ``(Block.ol (genre := $(⟨genre⟩)) $start #[$items,*])
+    let t ← Meta.mkAppM ``ListItem #[← DocElabM.blockType]
+    Meta.mkAppM ``Block.ol #[toExpr (Int.ofNat start.getNat), ← Meta.mkArrayLit t items.toList]
   | _ =>
     throwUnsupportedSyntax
 
-def elabDesc (block : Syntax) : DocElabM (Syntax × TSyntax `term) :=
+def elabDesc (block : Syntax) : DocElabM (Syntax × Expr) :=
   withRef block <|
   match block with
   | `(desc_item|:%$colon $dts* => $dds*) => do
-    let ⟨genre, _⟩ ← readThe DocElabContext
-    let item ← ``(DescItem.mk (α := Inline $(⟨genre⟩)) (β := Block $(⟨genre⟩))  #[$[$(← dts.mapM elabInline)],*] #[$[$(← dds.mapM elabBlock)],*])
+    let ⟨_, g⟩ ← readThe DocElabContext
+    let it := .app (.const ``Inline []) g
+    let bt := .app (.const ``Block []) g
+    let item := mkApp4 (.const ``DescItem.mk [0, 0]) it bt (← Meta.mkArrayLit it (← dts.mapM elabInline').toList) (← Meta.mkArrayLit bt (← dds.mapM elabBlock').toList)
     pure (colon, item)
   | _ =>
     throwUnsupportedSyntax
 
-@[block_expander Verso.Syntax.dl]
-def _root_.Verso.Syntax.dl.expand : BlockExpander
+@[block_elab Verso.Syntax.dl]
+def _root_.Verso.Syntax.dl.elab : BlockElab
   | `(block|dl{$itemStxs*}) => do
-    let ⟨genre, _⟩ ← readThe DocElabContext
+    let ⟨_, g⟩ ← readThe DocElabContext
     let mut colons : Array Syntax := #[]
-    let mut items : Array (TSyntax `term) := #[]
+    let mut items : Array Expr := #[]
     for i in itemStxs do
       let (b, item) ← elabDesc i
       colons := colons.push b
@@ -454,57 +589,91 @@ def _root_.Verso.Syntax.dl.expand : BlockExpander
     let info := DocListInfo.mk colons itemStxs
     for b in colons do
       pushInfoLeaf <| .ofCustomInfo {stx := b, value := Dynamic.mk info}
-    ``(Block.dl (genre := $(⟨genre⟩)) #[$[$items],*])
+    let it := .app (.const ``Inline []) g
+    let bt := .app (.const ``Block []) g
+    let itemType := mkApp2 (.const ``DescItem [0, 0]) it bt
+    return mkApp2 (.const ``Block.dl []) g (← Meta.mkArrayLit itemType items.toList)
   | _ =>
     throwUnsupportedSyntax
 
-@[block_expander Verso.Syntax.blockquote]
-def _root_.Verso.Syntax.blockquote.expand : BlockExpander
+@[block_elab Verso.Syntax.blockquote]
+def _root_.Verso.Syntax.blockquote.elab : BlockElab
   | `(block|> $innerBlocks*) => do
-    ``(Block.blockquote #[$[$(← innerBlocks.mapM elabBlock)],*])
+    let ⟨_, g⟩ ← readThe DocElabContext
+    let bt ← blockType
+    return mkApp2 (.const ``Block.blockquote []) g (← Meta.mkArrayLit bt (← innerBlocks.mapM elabBlock').toList)
   | _ =>
     throwUnsupportedSyntax
 
 
-@[block_expander Verso.Syntax.codeblock]
-def _root_.Verso.Syntax.codeblock.expand : BlockExpander
+@[block_elab Verso.Syntax.codeblock]
+def _root_.Verso.Syntax.codeblock.expand : BlockElab
   | `(block|``` $nameStx:ident $argsStx* | $contents:str ```) => do
-      let ⟨genre, _⟩ ← readThe DocElabContext
+      let ⟨_, g⟩ ← readThe DocElabContext
       let name ← realizeGlobalConstNoOverloadWithInfo nameStx
-      let exp ← codeBlockExpandersFor name
       -- TODO typed syntax here
       let args ← parseArgs <| argsStx.map (⟨·⟩)
+      let bt ← blockType
+
+      let exp ← codeBlockExpandersFor name
       for e in exp do
         try
           let termStxs ← withFreshMacroScope <| e args contents
-          return (← ``(Block.concat (genre := $(⟨genre⟩)) #[$[$termStxs],*]))
+          let blks ← termStxs.mapM (Term.elabTerm · (some bt))
+          return mkApp2 (.const ``Block.concat []) g (← Meta.mkArrayLit bt blks.toList)
         catch
           | ex@(.internal id) =>
             if id == unsupportedSyntaxExceptionId then pure ()
             else throw ex
           | ex => throw ex
+
+      let exp ← codeBlockElabsFor name
+      for e in exp do
+        try
+          let blk ← withFreshMacroScope <| e args contents
+          return blk
+        catch
+          | ex@(.internal id) =>
+            if id == unsupportedSyntaxExceptionId then pure ()
+            else throw ex
+          | ex => throw ex
+
       throwUnsupportedSyntax
   | `(block|``` | $contents:str ```) => do
-    ``(Block.code $(quote contents.getString))
+    let ⟨_, g⟩ ← readThe DocElabContext
+    return mkApp2 (.const ``Block.code []) g (toExpr contents.getString)
   | _ =>
     throwUnsupportedSyntax
 
-@[block_expander Verso.Syntax.directive]
-def _root_.Verso.Syntax.directive.expand : BlockExpander
+@[block_elab Verso.Syntax.directive]
+def _root_.Verso.Syntax.directive.expand : BlockElab
   | `(block| ::: $nameStx:ident $argsStx* { $contents:block* } ) => do
+
     let ⟨genre, _⟩ ← readThe DocElabContext
     let name ← realizeGlobalConstNoOverloadWithInfo nameStx
-    let exp ← directiveExpandersFor name
     let args ← parseArgs argsStx
+
+    let exp ← directiveExpandersFor name
     for e in exp do
       try
         let termStxs ← withFreshMacroScope <| e args contents
-        return (← ``(Block.concat (genre := $(⟨genre⟩)) #[$[$termStxs],*]))
+        return (← Term.elabTerm (← ``(Block.concat (genre := $(⟨genre⟩)) #[$[$termStxs],*])) (← blockType))
       catch
         | ex@(.internal id) =>
           if id == unsupportedSyntaxExceptionId then pure ()
           else throw ex
         | ex => throw ex
+
+    let exp ← directiveElabsFor name
+    for e in exp do
+      try
+        return (← withFreshMacroScope <| e args contents)
+      catch
+        | ex@(.internal id) =>
+          if id == unsupportedSyntaxExceptionId then pure ()
+          else throw ex
+        | ex => throw ex
+
     throwUnsupportedSyntax
   | _ =>
     throwUnsupportedSyntax

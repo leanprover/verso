@@ -1,7 +1,7 @@
 import VersoManual
 import UsersGuide.Markup
 
-open Verso.Genre Manual
+open Verso.Genre Manual InlineLean
 
 set_option pp.rawOnError true
 
@@ -42,7 +42,68 @@ All genres use the same markup syntax, and they can share extensions to the mark
 Mixing incompatible features results in an ordinary Lean type error.
 :::
 
-# Docstrings
+# The Manual Genre
+
+## Tables
+
+Tables can be written using the `table` directive.
+````
+:::table
+* * 1, 1
+  * 1, 2
+* * 2, 1
+  * 2, 2
+* * 3, 1
+  * 3, 2
+:::
+````
+produces
+:::table
+* * 1, 1
+  * 1, 2
+* * 2, 1
+  * 2, 2
+* * 3, 1
+  * 3, 2
+:::
+
+## Inline Lean Code
+
+The namespace `Verso.Genre.Manual.InlineLean` contains the `lean` code block:
+
+`````
+```lean (name := twoPlusTwo)
+#check 2 + 2
+```
+`````
+results in
+```lean (name := twoPlusTwo)
+#check 2 + 2
+```
+
+and
+
+`````
+```leanOutput (name := twoPlusTwo)
+#check 2 + 2
+```
+`````
+
+results in
+
+`````
+```leanOutput twoPlusTwo
+2 + 2 : Nat
+```
+`````
+results in
+```leanOutput twoPlusTwo
+2 + 2 : Nat
+```
+
+
+
+## Docstrings
 %%%
 tag := "docstrings"
 %%%
@@ -57,7 +118,7 @@ results in
 
 {docstring List.forM}
 
-## More Docstring Examples
+### More Docstring Examples
 %%%
 shortTitle := "More Docstrings"
 %%%
@@ -96,7 +157,7 @@ They include heuristic elaboration of code items in their Markdown that attempts
 
 {docstring Thunk}
 
-# Technical Terminology
+## Technical Terminology
 %%%
 shortTitle := "Glossary"
 tag := "tech-terms"
