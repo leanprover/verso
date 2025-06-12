@@ -99,7 +99,7 @@ partial def inlineFromMarkdown [Monad m] [MonadQuotation m] [AddMessageContext m
 
 partial def inlineFromMarkdown' : Text → Except String (Doc.Inline g)
   | .normal str | .br str | .softbr str => pure <| .text str
-  | .nullchar => .error "Unepxected null character in parsed Markdown"
+  | .nullchar => .error "Unexpected null character in parsed Markdown"
   | .del _ => .error "Unexpected strikethrough in parsed Markdown"
   | .em txt => .emph <$> txt.mapM inlineFromMarkdown'
   | .strong txt => .bold <$> txt.mapM inlineFromMarkdown'
@@ -222,7 +222,7 @@ def strongEmphHeaders' : List (Array (Doc.Inline g) → Except String (Doc.Block
 
 partial def stringFromMarkdownText : Text → Except String String
   | .normal str | .br str | .softbr str => pure str
-  | .nullchar => .error "Unepxected null character in parsed Markdown"
+  | .nullchar => .error "Unexpected null character in parsed Markdown"
   | .del _ => .error "Unexpected strikethrough in parsed Markdown"
   | .em txt => joinArrM <| txt.mapM stringFromMarkdownText
   | .strong txt => joinArrM <| txt.mapM stringFromMarkdownText
