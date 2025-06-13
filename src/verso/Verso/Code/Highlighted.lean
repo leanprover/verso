@@ -723,7 +723,6 @@ def highlightingStyle : String := "
   padding: 0.5rem;
   font-family: sans-serif;
   background-color: #ffffff;
-  z-index: 200;
 }
 
 .hl.lean.popup .tactic-state {
