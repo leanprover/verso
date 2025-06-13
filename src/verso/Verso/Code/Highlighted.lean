@@ -112,6 +112,7 @@ structure LinkTargets where
   const : Name → Option String := fun _ => none
   option : Name → Option String := fun _ => none
   keyword : Name → Option String := fun _ => none
+  definition : Name → Option String := fun _ => none
 
 inductive HighlightHtmlM.CollapseGoals where
   | subsequent
@@ -206,10 +207,18 @@ def kwLink (kind : Name) (content : Html) : HighlightHtmlM Html := do
   else
     pure content
 
+open Lean in
+open Verso.Output.Html in
+def defLink (defName : Name) (content : Html) : HighlightHtmlM Html := do
+  if let some tgt := (← linkTargets).definition defName then
+    pure {{<a href={{tgt}}>{{content}}</a>}}
+  else
+    pure content
 
 defmethod Token.Kind.addLink (tok : Token.Kind) (content : Html) : HighlightHtmlM Html := do
   match tok with
   | .const x _ _ false => constLink x content
+  | .const x _ _ true => defLink x content
   | .option o .. => optionLink o content
   | .var x .. => varLink x content
   | .keyword (some k) .. => kwLink k content
