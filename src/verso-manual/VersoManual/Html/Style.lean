@@ -830,7 +830,9 @@ div.paragraph > dl:not(:last-child) {
   margin-bottom: 0.5rem;
 }
 
-
+ol li::marker {
+  font-family: var(--verso-text-font-family);
+}
 
 /*
 Don't impose margins on lists or list items from their contents.

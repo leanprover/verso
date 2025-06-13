@@ -16,6 +16,7 @@ open Lean (Json ToJson FromJson Quote)
 open Std (HashMap)
 
 namespace SubVerso.Highlighting
+
 /--
 Removes n levels of indentation from highlighted code.
 -/
@@ -85,8 +86,8 @@ def Dedup.docJson (table : Dedup Html) : Json :=
 structure IdSupply where
   nextId : Nat := 0
 
-def IdSupply.unique (supply : IdSupply) : String × IdSupply :=
-  (s!"--verso-unique-{supply.nextId}", {supply with nextId := supply.nextId + 1})
+def IdSupply.unique (supply : IdSupply) (base := "--verso-unique") : String × IdSupply :=
+  (s!"{base}-{supply.nextId}", {supply with nextId := supply.nextId + 1})
 
 structure State (α) where
   dedup : Dedup α
@@ -157,8 +158,8 @@ def addHover (content : Html) : HighlightHtmlM Nat := modifyGet fun st =>
   let (hoverId, dedup) := st.dedup.insert content
   (hoverId, {st with dedup := dedup})
 
-def uniqueId : HighlightHtmlM String := modifyGet fun st =>
-  let (id, idSupply) := st.idSupply.unique
+def uniqueId (base := "--verso-unique") : HighlightHtmlM String := modifyGet fun st =>
+  let (id, idSupply) := st.idSupply.unique (base := base)
   (id, {st with idSupply := idSupply})
 
 def withCollapsedSubgoals (policy : HighlightHtmlM.CollapseGoals) (act : HighlightHtmlM α) : HighlightHtmlM α :=
@@ -286,8 +287,22 @@ defmethod Token.Kind.hover? (tok : Token.Kind) : HighlightHtmlM (Option Nat) :=
     some <$> addHover {{ <code><span class="literal string">{{s.quote}}</span>" : String"</code>}}
   | .withType t =>
     some <$> addHover {{ <code>{{t}}</code> }}
-  | .sort _ (some doc) =>
+  | .sort (some doc) =>
     some <$> addHover {{<code class="docstring">{{doc}}</code>}}
+  | .levelConst i =>
+    some <$> addHover {{<code class="docstring">s!"The universe level {i}"</code>}}
+  | .levelVar x =>
+    some <$> addHover {{<code class="docstring">s!"The universe parameter {x}"</code>}}
+  | .levelOp op =>
+    let doc? :=
+      match op with
+      | "max" =>
+        some "The maximum of two universes."
+      | "imax" =>
+        some "The impredicative maximum of two universes:\n\n * `imax 0 u = 0`\n * `imax (v+1) u = max (v+1) u`"
+      | _ => none
+    doc?.mapM fun doc =>
+     addHover {{<code class="docstring">{{doc}}</code>}}
   | _ => pure none
 where
   separatedDocs txt :=
@@ -314,12 +329,19 @@ defmethod Token.Kind.«class» : Token.Kind → String
   | .anonCtor .. => "unknown"
   | .unknown => "unknown"
   | .withType .. => "typed"
+  | .levelConst .. => "level-const"
+  | .levelVar .. => "level-var"
+  | .levelOp .. => "level-op"
 
 defmethod Token.Kind.data : Token.Kind → String
   | .const n _ _ _ | .anonCtor n _ _ => "const-" ++ toString n
   | .var ⟨v⟩ _ => "var-" ++ toString v
   | .option n _ _ => "option-" ++ toString n
   | .keyword _ (some occ) _ => "kw-occ-" ++ toString occ
+  | .sort (some d) => s!"sort-{hash d}" -- equal docstrings as a proxy for the same operator
+  | .levelVar x => s!"level-var-{x}"
+  | .levelConst i => s!"level-const-{i}"
+  | .levelOp op => s!"level-op-{op}"
   | _ => ""
 
 defmethod Token.Kind.idAttr : Token.Kind → HighlightHtmlM (Array (String × String))
@@ -334,7 +356,7 @@ defmethod Token.toHtml (tok : Token) : HighlightHtmlM Html := do
   let idAttr ← tok.kind.idAttr
   let hoverAttr := hoverId.map (fun i => #[("data-verso-hover", toString i)]) |>.getD #[]
   tok.kind.addLink {{
-    <span class={{tok.kind.«class» ++ " token"}} "data-binding"={{tok.kind.data}} {{hoverAttr}} {{idAttr}}>{{tok.content}}</span>
+    <span class={{tok.kind.«class» ++ " token"}} data-binding={{tok.kind.data}} {{hoverAttr}} {{idAttr}}>{{tok.content}}</span>
   }}
 
 defmethod Highlighted.Goal.toHtml (exprHtml : expr → HighlightHtmlM Html) (index : Nat) : Highlighted.Goal expr → HighlightHtmlM Html
@@ -412,7 +434,6 @@ def _root_.Array.mapIndexedM [Monad m] (arr : Array α) (f : Fin arr.size → α
     out := out.push (← f ⟨i, by get_elem_tactic⟩ arr[i])
   pure out
 
-
 partial defmethod Highlighted.toHtml : Highlighted → HighlightHtmlM Html
   | .token t => t.toHtml
   | .text str => pure {{<span class="inter-text">{{str}}</span>}}
@@ -437,7 +458,7 @@ partial defmethod Highlighted.toHtml : Highlighted → HighlightHtmlM Html
       let visibleStates := (← options).visibleProofStates
       let checkedAttr :=
         if visibleStates.isVisible startPos endPos then #[("checked", "checked")] else #[]
-      let id := s!"tactic-state-{hash info}-{startPos}-{endPos}"
+      let id ← uniqueId (base := s!"tactic-state-{hash info}-{startPos}-{endPos}")
       pure {{
         <span class="tactic">
           <label for={{id}}>{{← toHtml hl}}</label>
@@ -544,22 +565,6 @@ def highlightingStyle : String := "
 .hl.lean .hover-info.messages > code:not(:first-child) {
   margin-top: 0rem;
 }
-
-/*
-@media (hover: hover) {
-  .hl.lean .has-info:hover > .hover-container > .hover-info:not(.tactic *),
-  .hl.lean .tactic:has(> .tactic-toggle:checked) .has-info:hover > .hover-container > .hover-info,
-  .hl.lean .token:hover > .hover-container > .hover-info:not(.has-info *):not(.tactic *),
-  .hl.lean .tactic:has(> .tactic-toggle:checked) .token:hover > .hover-container > .hover-info:not(.has-info *) {
-    display: inline-block;
-    position: absolute;
-    top: 1rem;
-    font-weight: normal;
-    font-style: normal;
-    width: min-content;
-  }
-}
-*/
 
 .hl.lean.block {
   display: block;
@@ -703,7 +708,6 @@ def highlightingStyle : String := "
 .hl.lean .tactic-state {
   display: none;
   position: relative;
-  left: 2rem;
   width: fit-content;
   border: 1px solid #888888;
   border-radius: 0.1rem;
@@ -726,32 +730,26 @@ def highlightingStyle : String := "
 
 .hl.lean .tactic {
   position: relative;
+  display: inline-grid;
+  grid-template-columns: 1fr;
+  vertical-align: top;
 }
 
 .hl.lean .tactic-toggle:checked ~ .tactic-state {
-  display: block;
+  display: inline-block;
+  vertical-align: top;
+  grid-row: 2;
+  justify-self: start;
 }
-
-/*
-@media (hover: hover) {
-  .hl.lean .tactic:hover > .tactic-toggle:not(:checked) ~ .tactic-state {
-    display: block;
-    position: absolute;
-    left: 0;
-    transform: translate(0.25rem, 0);
-    z-index: 250;
-  }
-}
-*/
 
 .hl.lean .tactic > label {
   position: relative;
-  transition: all 0.5s;
+  grid-row: 1;
 }
 
 @media (hover: hover) {
-  .hl.lean .tactic > label:hover {
-    border-bottom: 1px dotted #bbbbbb;
+  .hl.lean .tactic:has(.tactic-toggle:not(:checked)) > label:hover {
+    background-color: #eeeeee;
   }
 }
 
@@ -1151,11 +1149,7 @@ window.onload = () => {
       };
 
 
-
-      const addTippy = (selector, props) => {
-        tippy(selector, Object.assign({}, defaultTippyProps, props));
-      };
-      document.querySelectorAll('.hl.lean .const.token, .hl.lean .keyword.token, .hl.lean .literal.token, .hl.lean .option.token, .hl.lean .var.token, .hl.lean .typed.token').forEach(element => {
+      document.querySelectorAll('.hl.lean .const.token, .hl.lean .keyword.token, .hl.lean .literal.token, .hl.lean .option.token, .hl.lean .var.token, .hl.lean .typed.token, .hl.lean .level-var, .hl.lean .level-const, .hl.lean .level-op, .hl.lean .sort').forEach(element => {
         element.setAttribute('data-tippy-theme', 'lean');
       });
       document.querySelectorAll('.hl.lean .has-info.warning').forEach(element => {
@@ -1170,36 +1164,7 @@ window.onload = () => {
       document.querySelectorAll('.hl.lean .tactic').forEach(element => {
         element.setAttribute('data-tippy-theme', 'tactic');
       });
-      let insts = tippy('.hl.lean .const.token, .hl.lean .keyword.token, .hl.lean .literal.token, .hl.lean .option.token, .hl.lean .var.token, .hl.lean .typed.token, .hl.lean .has-info, .hl.lean .tactic', defaultTippyProps);
-
-
-
-      /*
-      tippy('.hl.lean .tactic', {
-        allowHtml: true,
-
-        onHide(any) { return false; },
-        trigger: \"click\",
-
-        maxWidth: \"none\",
-        onShow(inst) {
-          const toggle = inst.reference.querySelector(\"input.tactic-toggle\");
-          if (toggle && toggle.checked) {
-            return false;
-          }
-          if (blockedByTippy(inst.reference)) { return false; }
-        },
-        content (tgt) {
-          const content = document.createElement(\"span\");
-          const state = tgt.querySelector(\".tactic-state\").cloneNode(true);
-          state.style.display = \"block\";
-          content.appendChild(state);
-          content.style.display = \"block\";
-          content.className = \"hl lean popup\";
-          return content;
-        }
-      });
-      */
+      let insts = tippy('.hl.lean .const.token, .hl.lean .keyword.token, .hl.lean .literal.token, .hl.lean .option.token, .hl.lean .var.token, .hl.lean .typed.token, .hl.lean .has-info, .hl.lean .tactic, .hl.lean .level-var, .hl.lean .level-const, .hl.lean .level-op, .hl.lean .sort', defaultTippyProps);
   });
 }
 "
