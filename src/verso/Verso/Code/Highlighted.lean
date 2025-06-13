@@ -308,7 +308,7 @@ defmethod Token.Kind.hover? (tok : Token.Kind) : HighlightHtmlM (Option Nat) :=
       | "max" =>
         some "The maximum of two universes."
       | "imax" =>
-        some "The impredicative maximum of two universes:\n\n * `imax 0 u = 0`\n * `imax (v+1) u = max (v+1) u`"
+        some "The impredicative maximum of two universes:\n\n * `imax u 0 = 0`\n * `imax u (v+1) = max u (v+1)`"
       | _ => none
     doc?.mapM fun doc =>
      addHover {{<code class="docstring">{{doc}}</code>}}
