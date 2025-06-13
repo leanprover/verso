@@ -1178,8 +1178,9 @@ mutual
       let str := s.stxStack.back
       if let .atom info str := str then
         if str.startsWith "\" " && str.endsWith " \"" then
-          let str := "\"" ++ (str.drop 2 |>.dropRight 2) ++ "\""
-          if str.any (· != ' ') then
+          let core := str.drop 2 |>.dropRight 2
+          if core.any (· != ' ') then
+            let str := "\"" ++ core ++ "\""
             let info : SourceInfo :=
               match info with
               | .none => .none
@@ -1397,6 +1398,39 @@ All input consumed.
 -/
 #guard_msgs in
 #eval code.test! "``foo bar``"
+
+/--
+info: Success! Final stack:
+  (Verso.Syntax.code "`" (str "\" \"") "`")
+All input consumed.
+-/
+#guard_msgs in
+#eval code.test! "` `"
+
+/--
+info: Success! Final stack:
+  (Verso.Syntax.code "`" (str "\"  \"") "`")
+All input consumed.
+-/
+#guard_msgs in
+#eval code.test! "`  `"
+
+/--
+info: Success! Final stack:
+  (Verso.Syntax.code "`" (str "\"   \"") "`")
+All input consumed.
+-/
+#guard_msgs in
+#eval code.test! "`   `"
+
+
+/--
+info: Success! Final stack:
+  (Verso.Syntax.code "`" (str "\"x\"") "`")
+All input consumed.
+-/
+#guard_msgs in
+#eval code.test! "` x `"
 
 /--
 info: Success! Final stack:
