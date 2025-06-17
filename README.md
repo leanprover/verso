@@ -151,7 +151,7 @@ a server is to use the Python script included in this repository:
 ```
 python3 ./server.py 8880 --directory _out/examples/demosite &
 ```
-after which `http://localhost:8800/` will show the generated site.
+after which `http://localhost:8880/` will show the generated site.
 
 
 
