@@ -4,9 +4,12 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 import Verso
+import MultiVerso.Slug
 import VersoManual.Basic
 
+
 open Lean
+open Verso.Multi
 
 namespace Verso.Genre.Manual
 
@@ -114,8 +117,8 @@ partial def inlineItem (inl : Inline) (contents : Array (Doc.Inline Manual)) : m
     | .error e => modify (·.logError s!"Error generating local ToC item for '{inl.name}': {e}")
     | .ok names =>
       if h : names.size > 0 then
-        if let some (path, slug) := xref.externalTags[id]? then
-          modify (·.save ⟨none, path.link slug.toString, names, h⟩)
+        if let some dest := xref.externalTags[id]? then
+          modify (·.save ⟨none, dest.link, names, h⟩)
 
 partial def inlineContents (i : Doc.Inline Manual) : m Unit := do
   match i with
@@ -133,8 +136,8 @@ partial def blockItem (blk : Block) (contents : Array (Doc.Block Manual)) : m Un
       | .error e => modify (·.logError s!"Error generating local ToC item for '{blk.name}': {e}")
       | .ok names =>
         if h : names.size > 0 then
-          if let some (path, slug) := xref.externalTags[id]? then
-            modify (·.save ⟨none, path.link slug.toString, names, h⟩)
+          if let some dest := xref.externalTags[id]? then
+            modify (·.save ⟨none, dest.link, names, h⟩)
 
 partial def blockContents (b : Doc.Block Manual) : m Unit := do
   match b with
@@ -239,10 +242,10 @@ partial def localContentsCore
     let partDest : Option LocalContentItem := do
       let m ← p.metadata
       let id ← m.id
-      let (path, slug) ← xref.externalTags[id]?
+      let dest ← xref.externalTags[id]?
       let num := sectionString ctxt |>.map (withoutPrefix · sectionNumPrefix)
 
-      return ⟨some ⟨fromLevel, num⟩, path.link slug.toString, #[(shortTitle.getD p.titleString, titleHtml)], by simp⟩
+      return ⟨some ⟨fromLevel, num⟩, dest.link, #[(shortTitle.getD p.titleString, titleHtml)], by simp⟩
     if let some here := partDest then modify (·.save here)
 
   if includeSubparts > .none then

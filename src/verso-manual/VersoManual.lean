@@ -15,8 +15,9 @@ import Verso.Doc.Lsp
 import Verso.Doc.Elab
 import Verso.FS
 
+import MultiVerso
+
 import VersoManual.Basic
-import VersoManual.Slug
 import VersoManual.TeX
 import VersoManual.Html
 import VersoManual.Html.Style
@@ -39,7 +40,7 @@ open Lean (Name NameMap Json ToJson FromJson)
 open Verso.FS
 
 open Verso.Doc Elab
-
+open Verso.Multi
 open Verso.Genre.Manual.TeX
 open Verso.Genre.Manual.WordCount
 
@@ -68,9 +69,8 @@ def ref.descr : InlineDescr where
       let domain := domain.getD sectionDomain
       match (← get).resolveDomainObject domain name with
       | .error _ => return none
-      | .ok (path, htmlId) =>
-        let dest := path.link (some htmlId.toString)
-        return some <| .other {Inline.ref with data := ToJson.toJson (name, some domain, some dest)} content
+      | .ok dest =>
+        return some <| .other {Inline.ref with data := ToJson.toJson (name, some domain, some dest.link)} content
     | .ok (_name, _domain, some (_linkDest : String)) =>
       pure none
 
@@ -289,7 +289,7 @@ partial def toc (depth : Nat) (opts : Html.Options IO)
 
     let some {id := some id, ..} := meta
       | throw <| .userError s!"No ID for {sTitle} - {repr meta}"
-    let some (_, v) := state.externalTags[id]?
+    let some {htmlId := v, ..} := state.externalTags[id]?
       | throw <| .userError s!"No external ID for {sTitle}"
 
     let ctxt' :=
@@ -354,21 +354,12 @@ def xref (toc : List Html.Toc) (xrefJson : String) (findJs : String) (state : Tr
   (extraJs := [s!"let xref = {xrefJson};\n" ++ findJs])
 
 def emitXrefs (toc : List Html.Toc) (dir : System.FilePath) (state : TraverseState) (config : Config) : IO Unit := do
-  let mut out : Json := Json.mkObj []
-  for (n, dom) in state.domains do
-    out := out.setObjVal! n.toString <| Json.mkObj [
-      ("title", Json.str <| dom.title.getD n.toString),
-      ("description", dom.description.map Json.str |>.getD Json.null),
-      ("contents", Json.mkObj <| dom.objects.toList.map fun (x, y) =>
-        (x, ToJson.toJson <| y.ids.toList.filterMap (jsonRef y.data <$> state.externalTags[·]?)))]
+  let out := xrefJson state.domains state.externalTags
   ensureDir dir
   let xrefJson := toString out
   IO.FS.writeFile (dir.join "xref.json") xrefJson
   ensureDir (dir / "find")
   IO.FS.writeFile (dir / "find" / "index.html") (Html.doctype ++ (relativizeLinks <| xref toc xrefJson find.js state config).asString)
-where
-  jsonRef (data : Json) (ref : Path × Slug) : Json :=
-    Json.mkObj [("address", ref.1.link), ("id", ref.2.toString), ("data", data)]
 
 def wordCount
     (wcPath : System.FilePath)

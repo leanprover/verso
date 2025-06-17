@@ -5,20 +5,26 @@ Author: David Thrane Christiansen
 -/
 
 import Std.Data.HashSet
+import Std.Data.TreeSet
 import Verso.Doc
 import Verso.Doc.Html
 import Verso.Doc.TeX
-import VersoManual.Slug
+import MultiVerso
+import MultiVerso.Slug
 import VersoManual.LicenseInfo
 import Verso.Output.Html
 import Verso.Output.TeX
 
 open Lean (Name Json NameMap ToJson FromJson)
-open Std (HashSet HashMap)
+open Std (HashSet HashMap TreeSet)
 open Verso.Doc
+open Verso.Multi
 open Verso.Output
 
 namespace Verso.Genre.Manual
+
+export Verso.Multi (InternalId)
+
 inductive Output where
   | /-- LaTeX -/
     tex
@@ -26,115 +32,6 @@ inductive Output where
     html (depth : Nat)
 deriving DecidableEq, BEq, Hashable
 
-/-- A path through the site.
-
-#[] is the root, and #[x,y,z] is s!"/{x}/{y}/{z}/". The trailing slash is important here.
--/
-abbrev Path := Array String
-
-namespace Path
-
-def link (path : Path) (htmlId : Option String := none) : String :=
-  "/" ++ String.join (path.toList.map (· ++ "/")) ++
-  (htmlId.map ("#" ++ ·)).getD ""
-
-/-- info: "/" -/
-#guard_msgs in
-#eval link #[]
-
-/-- info: "/a/b/" -/
-#guard_msgs in
-#eval link #["a", "b"]
-
-/-- info: "/a/b/#c" -/
-#guard_msgs in
-#eval link #["a", "b"] (htmlId := some "c")
-
-/--
-Make the URL relative to the path.
-
-This relies on the assumption that the path has only directory-like entries. In particular, the path
-`#["a", "b"]` is `/a/b/`. If the browser is on `/a/b/`, then `../c/` is `/a/c/`, but if it's on
-`/a/b`, then `../c/` is `/c/`.
--/
-def relativize (path : Path) (url : String) : String := Id.run do
-  if "/".isPrefixOf url then
-    let mut path := path.toSubarray
-    let mut url := url.toSubstring.drop 1
-    while h : path.size > 0 do
-      -- Get rid of the common prefix of the paths, to avoid unnecessary "../"s
-      if let some url' := url.dropPrefix? (path[0] ++ "/").toSubstring then
-        path := path.drop 1
-        url := url'
-      else break
-    String.join (List.replicate path.size "../") ++ url.toString
-  else url
-
-/- Tests for relativization. -/
-
-/-- info: "a/b/c/" -/
-#guard_msgs in
-#eval Path.relativize #[] "/a/b/c/"
-/-- info: "a/b/c/#foo" -/
-#guard_msgs in
-#eval Path.relativize #[] "/a/b/c/#foo"
-/-- info: "a/b/c#foo" -/
-#guard_msgs in
-#eval Path.relativize #[] "/a/b/c#foo"
-
-/-- info: "b/c/" -/
-#guard_msgs in
-#eval Path.relativize #["a"] "/a/b/c/"
-/-- info: "b/c/#foo" -/
-#guard_msgs in
-#eval Path.relativize #["a"] "/a/b/c/#foo"
-/-- info: "b/c#foo" -/
-#guard_msgs in
-#eval Path.relativize #["a"] "/a/b/c#foo"
-
-/-- info: "c/" -/
-#guard_msgs in
-#eval Path.relativize #["a", "b"] "/a/b/c/"
-/-- info: "c/#foo" -/
-#guard_msgs in
-#eval Path.relativize #["a", "b"] "/a/b/c/#foo"
-/-- info: "c#foo" -/
-#guard_msgs in
-#eval Path.relativize #["a", "b"] "/a/b/c#foo"
-
-/-- info: "../../aa/b/c#foo" -/
-#guard_msgs in
-#eval Path.relativize #["a", "b"] "/aa/b/c#foo"
-
-/-- info: "../" -/
-#guard_msgs in
-#eval Path.relativize #["a", "b", "c", "d"] "/a/b/c/"
-/-- info: "../../c" -/
-#guard_msgs in
-#eval Path.relativize #["a", "b", "c", "d"] "/a/b/c"
-
-/-- info: "../#foo" -/
-#guard_msgs in
-#eval Path.relativize #["a", "b", "c", "d"] "/a/b/c/#foo"
-/-- info: "../../" -/
-#guard_msgs in
-#eval Path.relativize #["a", "b", "c", "d", "e"] "/a/b/c/"
-/-- info: "../../#foo" -/
-#guard_msgs in
-#eval Path.relativize #["a", "b", "c", "d", "e"] "/a/b/c/#foo"
-/-- info: "../../../c#foo" -/
-#guard_msgs in
-#eval Path.relativize #["a", "b", "c", "d", "e"] "/a/b/c#foo"
-
-/-- info: "../../../c" -/
-#guard_msgs in
-#eval Path.relativize #["a", "b", "c", "d", "e"] "/a/b/c"
-
-/-- info: "" -/
-#guard_msgs in
-#eval Path.relativize #[] "/"
-
-end Path
 
 /--
 Tags are used to refer to parts through tables of contents, cross-references, and the like.
@@ -160,33 +57,7 @@ instance : ToString Tag where
 instance : Coe String Tag where
   coe := .provided
 
-/--
-An internal identifier assigned to a part during traversal. Users don't get to have influence
-over these IDs, so they can be used to ensure uniqueness of tags.
 
-Even though the constructor is private, there is a JSON serialization that can be used to undermine
-the uniqueness of internal IDs. Please don't do that - your program may break unpredictably.
--/
-structure InternalId where
-  private mk ::
-  private id : Nat
-deriving BEq, Hashable, Repr, Inhabited, Ord
-
-instance : ToJson InternalId where
-  toJson | ⟨n⟩ => .num n
-
-instance : FromJson InternalId where
-  fromJson? v := do
-    return ⟨←  v.getNat?⟩
-
-instance : LT InternalId where
-  lt x y := Ord.compare x y = .lt
-
-instance : LE InternalId where
-  le x y := x < y ∨ x = y
-
-instance : ToString InternalId where
-  toString x := s!"#<{x.id}>"
 
 /-- When rendering multi-page HTML, should splitting pages follow the depth setting? -/
 inductive HtmlSplitMode where
@@ -230,80 +101,13 @@ structure PartMetadata where
   htmlSplit : HtmlSplitMode := .default
 deriving BEq, Hashable, Repr
 
-/--
-A documented object, described in specific locations in the document.
--/
-structure Object where
-  /--
-  The canonical string name used to construct a cross-reference to this object, also from external
-  sites. Should be stable over time.
-  -/
-  canonicalName : String
-  /-- Extra data that can be used e.g. for rendering a domain index -/
-  data : Json := .null
-  /-- The IDs of the description site(s) -/
-  ids : HashSet InternalId := {}
-deriving Inhabited
 
-instance : BEq Object where
-  beq
-    | {canonicalName := n1, data := d1, ids := i1}, {canonicalName := n2, data := d2, ids := i2} =>
-      n1 == n2 &&
-      d1 == d2 &&
-      i1.size == i2.size && i1.fold (init := true) (fun soFar v => soFar && i2.contains v)
-
-def Object.addId (id : InternalId) (object : Object) : Object :=
-  {object with ids := object.ids.insert id}
-
-def Object.setData (data : Json) (object : Object) : Object :=
-  {object with data := data}
-
-def Object.modifyData (f : Json → Json) (object : Object) : Object :=
-  {object with data := f object.data}
-
-
-structure Domain where
-  objects : Lean.RBMap String Object compare := {}
-  objectsById : Lean.RBMap InternalId (HashSet String) compare := {}
-  title : Option String := none
-  description : Option String := none
-deriving Inhabited
-
-instance : BEq Domain where
-  beq
-    | ⟨d1, byId1, t1, desc1⟩, ⟨d2, byId2, t2, desc2⟩ =>
-      d1.size == d2.size && d1.all (fun k v => d2.find? k == some v) &&
-      byId1.size == byId2.size && byId1.all (fun k v =>
-        if let some xs := byId2.find? k then
-          xs.size == v.size && xs.all v.contains
-        else false) &&
-      t1 == t2 &&
-      desc1 == desc2
-
-def Domain.insertId (canonicalName : String) (id : InternalId) (domain : Domain) : Domain :=
-  let obj := domain.objects.find? canonicalName |>.getD {canonicalName} |>.addId id
-  let idObjs := domain.objectsById.find? id |>.getD {} |>.insert canonicalName
-  {domain with
-    objects := domain.objects.insert canonicalName obj
-    objectsById := domain.objectsById.insert id idObjs}
-
-def Domain.setData  (canonicalName : String) (data : Json) (domain : Domain) : Domain :=
-  let obj := domain.objects.find? canonicalName |>.getD {canonicalName} |>.setData data
-  {domain with objects := domain.objects.insert canonicalName obj}
-
-def Domain.modifyData  (canonicalName : String) (f : Json → Json) (domain : Domain) : Domain :=
-  let obj := domain.objects.find? canonicalName |>.getD {canonicalName} |>.modifyData f
-  {domain with objects := domain.objects.insert canonicalName obj}
-
-def Domain.get? (canonicalName : String) (domain : Domain) : Option Object :=
-  domain.objects.find? canonicalName
 
 structure TraverseState where
   tags : HashMap Tag InternalId := {}
-  externalTags : HashMap InternalId (Path × Slug) := {}
+  externalTags : HashMap InternalId Link := {}
   domains : NameMap Domain := {}
-  ids : HashSet InternalId := {}
-  nextId : Nat := 0
+  ids : TreeSet InternalId := {}
   extraCss : HashSet String := {}
   extraJs : HashSet String := {}
   extraJsFiles : Array (String × String) := #[]
@@ -312,13 +116,7 @@ structure TraverseState where
   private contents : NameMap Json := {}
 
 def freshId [Monad m] [MonadStateOf TraverseState m] : m InternalId := do
-  let mut next : Nat := (← get).nextId
-  repeat
-    if (← get).ids.contains ⟨next⟩ then next := next + 1
-    else break
-  let i := ⟨next⟩
-  modify fun st => {st with ids := st.ids.insert i}
-  pure i
+  return InternalId.fresh (← get).ids
 
 def freshTag [Monad m] [MonadStateOf TraverseState m] (hint : String) (id : InternalId) : m String := do
   let strPart : String := hint.sluggify.toString
@@ -340,6 +138,10 @@ defmethod HashMap.all [BEq α] [Hashable α] (hm : HashMap α β) (p : α → β
 instance [BEq α] [Hashable α] : BEq (HashSet α) where
   beq xs ys := xs.size == ys.size && xs.all (ys.contains ·)
 
+instance [BEq α] [Ord α] : BEq (TreeSet α) where
+  beq xs ys := xs.size == ys.size && xs.all (ys.contains ·)
+
+
 instance : BEq TraverseState where
   beq x y :=
     x.tags.size == y.tags.size &&
@@ -355,7 +157,6 @@ instance : BEq TraverseState where
       | some v' => v == v'
     ) &&
     x.ids == y.ids &&
-    x.nextId == y.nextId &&
     x.extraCss == y.extraCss &&
     x.extraJs == y.extraJs &&
     x.extraJsFiles == y.extraJsFiles &&
@@ -401,7 +202,7 @@ def setDomainDescription (state : TraverseState) (domain : Name) (description : 
   {state with domains := state.domains.insert domain {state.domains.find? domain |>.getD {} with description := some description}}
 
 def htmlId (state : TraverseState) (id : InternalId) : Array (String × String) :=
-  if let some (_, htmlId) := state.externalTags[id]? then
+  if let some {htmlId, ..} := state.externalTags[id]? then
     #[("id", htmlId.toString)]
   else #[]
 
@@ -787,7 +588,7 @@ If the external tag already exists, it is returned. If it needs creating, then t
 saved as its target and the string argument is used as a basis for the tag.
 -/
 def externalTag [Monad m] [MonadState TraverseState m] (id : InternalId) (path : Path) (name : String) : m Tag := do
-  if let some (_, t) := (← get).externalTags[id]? then
+  if let some { htmlId := t, .. } := (← get).externalTags[id]? then
     return Tag.external t
   else
     let mut attempt := name.sluggify
@@ -797,16 +598,16 @@ def externalTag [Monad m] [MonadState TraverseState m] (id : InternalId) (path :
     let t' := Tag.external attempt
     modify fun st => {st with
       tags := st.tags.insert t' id,
-      externalTags := st.externalTags.insert id (path, attempt)
+      externalTags := st.externalTags.insert id { path, htmlId := attempt }
     }
     pure t'
 
-def TraverseState.resolveId (st : TraverseState) (id : InternalId) : Option (Path × Slug) :=
+def TraverseState.resolveId (st : TraverseState) (id : InternalId) : Option Link :=
   if let some x := st.externalTags[id]? then
       pure x
   else none
 
-def TraverseState.resolveDomainObject (st : TraverseState) (domain : Name) (canonicalName : String) : Except String (Path × Slug) := do
+def TraverseState.resolveDomainObject (st : TraverseState) (domain : Name) (canonicalName : String) : Except String Link := do
   if let some obj := st.getDomainObject? domain canonicalName then
     match obj.ids.size with
       | 0 =>
@@ -821,7 +622,7 @@ def TraverseState.resolveDomainObject (st : TraverseState) (domain : Name) (cano
         throw s!"Ref {canonicalName} in {domain} has {more} targets, can only link to one"
   else throw s!"Not found: {canonicalName} in {domain}"
 
-def TraverseState.resolveTag (st : TraverseState) (tag : Slug) : Option (Path × Slug) :=
+def TraverseState.resolveTag (st : TraverseState) (tag : Slug) : Option Link :=
   if let some id := st.tags[Tag.external tag]? then
     if let some x := st.externalTags[id]? then
       pure x
@@ -840,7 +641,7 @@ def TraverseState.definitionIds (state : TraverseState) : NameMap String := Id.r
   if let some examples := state.domains.find? exampleDomain then
     let mut idMap := {}
     for (x, _) in examples.objects do
-      if let .ok (_, slug) := state.resolveDomainObject exampleDomain x then
+      if let .ok { htmlId := slug, .. } := state.resolveDomainObject exampleDomain x then
         idMap := idMap.insert x.toName slug.toString
     return idMap
   else return {}
@@ -848,24 +649,24 @@ def TraverseState.definitionIds (state : TraverseState) : NameMap String := Id.r
 def TraverseState.linkTargets (state : TraverseState) : Code.LinkTargets where
   const := fun x =>
     match state.resolveDomainObject docstringDomain x.toString with
-    | .ok (path, htmlId) =>
-      some <| path.link (some htmlId.toString)
+    | .ok dest =>
+      some dest.link
     | .error _ =>
       match state.resolveDomainObject exampleDomain x.toString with
-      | .ok (path, htmlId) =>
-        some <| path.link (some htmlId.toString)
+      | .ok dest =>
+        some dest.link
       | .error _ =>
         none
   option := fun x =>
     match state.resolveDomainObject optionDomain x.toString with
-    | .ok (path, htmlId) =>
-      some <| path.link (some htmlId.toString)
+    | .ok dest =>
+      some dest.link
     | .error _ =>
       none
   keyword := fun k =>
     ((state.resolveDomainObject tacticDomain k.toString).toOption <|>
      (state.resolveDomainObject syntaxKindDomain k.toString).toOption) <&>
-    fun (path, htmlId) => path.link (some htmlId.toString)
+    Link.link
 
 def sectionNumberString (num : Array Numbering) : String := Id.run do
   let mut out := ""
@@ -916,7 +717,7 @@ instance : Traverse Manual TraverseM where
       match t with
       | Tag.external name =>
         -- These are the actual IDs to use in generated HTML and links and such
-        modify fun st => {st with externalTags := st.externalTags.insert id (path, name)}
+        modify fun st => {st with externalTags := st.externalTags.insert id { path, htmlId := name } }
       | Tag.internal name =>
         meta := {meta with tag := ← externalTag id path name}
       | Tag.provided n =>
@@ -928,7 +729,7 @@ instance : Traverse Manual TraverseM where
         else
           modify fun st => {st with
               tags := st.tags.insert external id,
-              externalTags := st.externalTags.insert id (path, slug)
+              externalTags := st.externalTags.insert id { path, htmlId := slug }
             }
           meta := {meta with tag := external}
         let jsonMetadata :=
@@ -1067,7 +868,7 @@ object, rather than adjacent to it.
 def permalink (id : InternalId) (st : TraverseState) (inline : Bool := true) : Html := Id.run do
   let mut candidates := #[]
   for (dom, {objectsById, ..}) in st.domains do
-    if let some canonicalNames := objectsById.find? id then
+    if let some canonicalNames := objectsById[id]? then
       for n in canonicalNames do
         candidates := candidates.push (dom, n)
   if h : candidates.size = 0 then .empty

@@ -13,6 +13,11 @@ lean_lib Verso where
   roots := #[`Verso]
 
 @[default_target]
+lean_lib MultiVerso where
+  srcDir := "src/multi-verso"
+  roots := #[`MultiVerso]
+
+@[default_target]
 lean_lib VersoBlog where
   srcDir := "src/verso-blog"
   roots := #[`VersoBlog]

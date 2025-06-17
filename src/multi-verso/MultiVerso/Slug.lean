@@ -6,14 +6,14 @@ Author: David Thrane Christiansen
 import Std.Data.HashSet
 import Verso.Method
 
-namespace Verso.Genre.Manual
+namespace Verso.Multi
 open Verso.Method
 open Lean (ToJson FromJson)
 open Std (HashSet)
 
 def Slug.validChars := HashSet.ofList "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_".toList
 
-def mangle (c : Char) : String :=
+private def mangle (c : Char) : String :=
   match c with
   | '<' => "_LT_"
   | '>' => "_GT_"

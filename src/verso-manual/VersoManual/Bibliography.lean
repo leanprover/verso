@@ -9,12 +9,15 @@ import Lean.Elab.InfoTree.Types
 
 import Verso.Output.Html
 import Verso.Output.TeX
+import MultiVerso.Path
+import MultiVerso.Slug
 import VersoManual.Basic
 import VersoManual.Marginalia
 
 
 open Lean Elab
 open Verso Doc Elab Html
+open Verso.Multi
 open Verso.Output Html
 open Verso.Genre Manual
 open Verso.ArgParse
