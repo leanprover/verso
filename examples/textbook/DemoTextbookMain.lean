@@ -15,17 +15,35 @@ open Std (HashMap)
 
 open DemoTextbook
 
+
+-- Computes the path of this very `main`, to ensure that examples get names relative to it
+open Lean Elab Term Command in
+#eval show CommandElabM Unit from do
+  let here := (← liftTermElabM (readThe Lean.Core.Context)).fileName
+  elabCommand (← `(private def $(mkIdent `mainFileName) : System.FilePath := $(quote here)))
+
+/--
+Extract the marked exercises and example code.
+-/
 partial def buildExercises (mode : Mode) (logError : String → IO Unit) (cfg : Config) (_state : TraverseState) (text : Part Manual) : IO Unit := do
   let .multi := mode
     | pure ()
-  let code := (← part text  |>.run {}).snd
+  let code := (← part text |>.run {}).snd
   let dest := cfg.destination / "example-code"
+  let some mainDir := mainFileName.parent
+    | throw <| IO.userError "Can't find directory of `DemoTextbookMain.lean`"
+
   IO.FS.createDirAll <| dest
   for ⟨fn, f⟩ in code do
-    let fn := dest / fn
-    fn.parent.forM IO.FS.createDirAll
-    if (← fn.pathExists) then IO.FS.removeFile fn
-    IO.FS.writeFile fn f
+    -- Make sure the path is relative to that of this one
+    if let some fn' := fn.dropPrefix? mainDir.toString then
+      let fn' := fn'.toString.dropWhile (· ∈ System.FilePath.pathSeparators)
+      let fn := dest / fn'
+      fn.parent.forM IO.FS.createDirAll
+      if (← fn.pathExists) then IO.FS.removeFile fn
+      IO.FS.writeFile fn f
+    else
+      logError s!"Couldn't save example code. The path '{fn}' is not underneath '{mainDir}'."
 
 where
   part : Part Manual → StateT (HashMap String String) IO Unit
