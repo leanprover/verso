@@ -35,7 +35,7 @@ import VersoManual.Marginalia
 import VersoManual.Bibliography
 import VersoManual.Table
 
-open Lean (Name NameMap Json ToJson FromJson)
+open Lean (Name NameMap Json ToJson FromJson quote)
 
 open Verso.FS
 
@@ -46,6 +46,7 @@ open Verso.Genre.Manual.WordCount
 
 open Verso.Code (LinkTargets)
 open Verso.Code.Hover (Dedup State)
+open Verso.ArgParse
 
 namespace Verso.Genre
 
@@ -54,26 +55,20 @@ namespace Manual
 defmethod Part.htmlSplit (part : Part Manual) : HtmlSplitMode :=
   part.metadata.map (·.htmlSplit) |>.getD .default
 
-
-def Inline.ref : Inline where
-  name := `Verso.Genre.Manual.Inline.ref
-
-@[inline_extension Inline.ref]
-def ref.descr : InlineDescr where
+inline_extension Inline.ref (canonicalName : String) (domain : Option Name) (remote : Option Name) (resolvedDestination : Option String := none) where
+  data := ToJson.toJson (canonicalName, domain, remote, resolvedDestination)
   traverse := fun _ info content => do
-
-    match FromJson.fromJson? (α := String × Option Name × Option String) info with
+    match FromJson.fromJson? (α := String × Option Name × Option Name × Option String) info with
     | .error e =>
       logError e; pure none
-    | .ok (name, domain, none) =>
+    | .ok (name, domain, remote, none) =>
       let domain := domain.getD sectionDomain
-      match (← get).resolveDomainObject domain name with
+      match (← get).resolveDomainObject domain name remote with
       | .error _ => return none
       | .ok dest =>
-        return some <| .other {Inline.ref with data := ToJson.toJson (name, some domain, some dest.link)} content
-    | .ok (_name, _domain, some (_linkDest : String)) =>
+        return some <| .other (Inline.ref name (some domain) remote (some dest.link)) content
+    | .ok (_name, _domain, _remote, some (_linkDest : String)) =>
       pure none
-
   toTeX :=
     some <| fun go _ _ content => do
       pure <| .seq <| ← content.mapM fun b => do
@@ -81,20 +76,49 @@ def ref.descr : InlineDescr where
   toHtml :=
     open Verso.Output.Html in
     some <| fun go _ info content => do
-      match FromJson.fromJson? (α := String × Option Name × Option String) info with
+      match FromJson.fromJson? (α := String × Option Name × Option Name × Option String) info with
       | .error e =>
         Html.HtmlT.logError e; content.mapM go
-      | .ok (name, domain, none) =>
+      | .ok (name, domain, none, none) =>
         Html.HtmlT.logError ("No destination found for tag '" ++ name ++ "' in " ++ toString domain); content.mapM go
-      | .ok (_, _, some dest) =>
+      | .ok (name, domain, some remote, none) =>
+        Html.HtmlT.logError ("No destination found for remote '" ++ remote.toString ++ "' tag '" ++ name ++ "' in " ++ toString domain); content.mapM go
+      | .ok (_, _, _, some dest) =>
         pure {{<a href={{dest}}>{{← content.mapM go}}</a>}}
 
+section
+open Lean
+variable {m} [Monad m] [MonadError m]
+
+structure RoleArgs where
+  canonicalName : String
+  domain : Option Name
+  remote : Option Name := none
+
+instance : FromArgs RoleArgs m where
+  fromArgs :=
+    RoleArgs.mk <$>
+      .positional `canonicalName (ValDesc.string.as "canonical name (string literal)") <*>
+      .named' `domain true <*>
+      .named `remote stringOrName true
+where
+  stringOrName : ValDesc m Name := {
+    description := "remote name (string or identifier)"
+    get
+      | .str s => pure s.getString.toName
+      | .name n => pure n.getId
+      | .num n => throwErrorAt n "Expected name or string literal, got {n.getNat}"
+  }
+end
 /--
 Inserts a reference to the provided tag.
 -/
-def ref (content : Array (Doc.Inline Manual)) (canonicalName : String) (domain : Option Name := none) : Doc.Inline Manual :=
-  let data : (String × Option Name × Option String) := (canonicalName, domain, none)
-  .other {Inline.ref with data := ToJson.toJson data} content
+@[role_expander ref]
+def ref : RoleExpander
+  | args, content => do
+    let {canonicalName, domain, remote} ← parseThe RoleArgs args
+    let content ← content.mapM elabInline
+    return #[← ``(Inline.other (Inline.ref $(quote canonicalName) $(quote domain) $(quote remote)) #[$content,*])]
 
 block_extension Block.paragraph where
   traverse := fun _ _ _ => pure none
@@ -161,6 +185,10 @@ structure Config where
   `none` means "unlimited".
   -/
   rootTocDepth : Option Nat := some 1
+  /--
+  Location of the remote config file.
+  -/
+  remoteConfigFile : Option System.FilePath := none
 
 
 def ensureDir (dir : System.FilePath) : IO Unit := do
@@ -204,10 +232,15 @@ where
 
 def traverse (logError : String → IO Unit) (text : Part Manual) (config : Config) : ReaderT ExtensionImpls IO (Part Manual × TraverseState) := do
   let topCtxt : Manual.TraverseContext := {logError, draft := config.draft}
+  let remoteData ← updateRemotes false config.remoteConfigFile (if config.verbose then IO.println else fun _ => pure ())
+  let remoteContent := remoteData.map fun _name (_root, data) => data
+  let remoteRoots := remoteData.map fun _name (root, _data) => root
   let mut state : Manual.TraverseState := {
     licenseInfo := .ofList config.licenseInfo,
     extraCssFiles := config.extraCssFiles,
-    extraJsFiles := config.extraJsFiles
+    extraJsFiles := config.extraJsFiles,
+    remoteContent := remoteContent,
+    remoteRoots := remoteRoots
   }
   let mut text := text
   if !config.draft then

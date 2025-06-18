@@ -107,6 +107,9 @@ structure TraverseState where
   tags : HashMap Tag InternalId := {}
   externalTags : HashMap InternalId Link := {}
   domains : NameMap Domain := {}
+  remoteContent : HashMap String (NameMap RefDomain)
+  /-- Site roots for remote links -/
+  remoteRoots : HashMap String String
   ids : TreeSet InternalId := {}
   extraCss : HashSet String := {}
   extraJs : HashSet String := {}
@@ -607,20 +610,37 @@ def TraverseState.resolveId (st : TraverseState) (id : InternalId) : Option Link
       pure x
   else none
 
-def TraverseState.resolveDomainObject (st : TraverseState) (domain : Name) (canonicalName : String) : Except String Link := do
-  if let some obj := st.getDomainObject? domain canonicalName then
-    match obj.ids.size with
-      | 0 =>
-        throw s!"No link target registered for {canonicalName} in {domain}"
-      | 1 =>
-        let id := obj.ids.toArray[0]!
-        if let some dest := st.resolveId id then
-          return dest
-        else
-          throw s!"No link target registered for id {id} from {canonicalName} in {domain}"
-      | more =>
-        throw s!"Ref {canonicalName} in {domain} has {more} targets, can only link to one"
-  else throw s!"Not found: {canonicalName} in {domain}"
+def TraverseState.resolveDomainObject (st : TraverseState) (domain : Name) (canonicalName : String) (remote : Option Name := none) : Except String Link := do
+  if let some remote := remote then
+    let some data := st.remoteContent[remote.toString]?
+      | throw s!"Remote {remote} not found"
+    let some dom := data.find? domain
+      | throw s!"Remote {remote} has no domain '{domain}'"
+    let some v := dom.contents[canonicalName]?
+      | throw s!"Remote {remote} domain '{domain}' does not define '{canonicalName}'"
+    let some root := st.remoteRoots[remote.toString]?
+      | throw s!"Remote {remote} has no site root specified"
+    match h : v.size with
+    | 0 =>
+      throw s!"No link target registered for {canonicalName} in {domain} in remote {remote}"
+    | 1 =>
+      return {v[0].link with root := some root}
+    | more =>
+      throw s!"Ref {canonicalName} in {domain} in remote {remote} has {more} targets, can only link to one"
+  else
+    if let some obj := st.getDomainObject? domain canonicalName then
+      match obj.ids.size with
+        | 0 =>
+          throw s!"No link target registered for {canonicalName} in {domain}"
+        | 1 =>
+          let id := obj.ids.toArray[0]!
+          if let some dest := st.resolveId id then
+            return dest
+          else
+            throw s!"No link target registered for id {id} from {canonicalName} in {domain}"
+        | more =>
+          throw s!"Ref {canonicalName} in {domain} has {more} targets, can only link to one"
+    else throw s!"Not found: {canonicalName} in {domain}"
 
 def TraverseState.resolveTag (st : TraverseState) (tag : Slug) : Option Link :=
   if let some id := st.tags[Tag.external tag]? then

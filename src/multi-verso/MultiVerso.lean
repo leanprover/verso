@@ -283,14 +283,14 @@ private def getConfig (project : System.FilePath) (configFile : Option System.Fi
 /--
 Updates the remote Verso data, fetching according to the configuration.
 -/
-def update (manual : Bool) (configFile : Option System.FilePath) (logVerbose : String → IO Unit) : IO (HashMap String (NameMap RefDomain)) := do
+def updateRemotes (manual : Bool) (configFile : Option System.FilePath) (logVerbose : String → IO Unit) : IO (HashMap String (String × (NameMap RefDomain))) := do
   let project ← findProject "."
   let config ← getConfig project configFile
 
   IO.FS.createDirAll config.outputDir
   let manifestPath := config.outputDir / "verso-xref-manifest.json"
   let xrefsPath := config.outputDir / "verso-xref.json"
-  let mut values : HashMap String (NameMap RefDomain) := {}
+  let mut values : HashMap String (String × (NameMap RefDomain)) := {}
   let mut metadata : HashMap String RemoteMeta := {}
   let oldManifest : Manifest ←
     try
@@ -318,7 +318,7 @@ def update (manual : Bool) (configFile : Option System.FilePath) (logVerbose : S
           found := oldXrefs[name]?
           if let some v := found then
             logVerbose s!"Used saved xref database for {name}, next update at {prior + d |>.toDateTimeString}"
-            values := values.insert name v
+            values := values.insert name (root, v)
             metadata := metadata.insert name { lastUpdated := (← Std.Time.PlainDateTime.now) }
             continue
       | .manual =>
@@ -327,7 +327,7 @@ def update (manual : Bool) (configFile : Option System.FilePath) (logVerbose : S
           found := oldXrefs[name]?
           if let some v := found then
             logVerbose s!"Used saved xref database for {name}, which is to be manually updated"
-            values := values.insert name v
+            values := values.insert name (root, v)
             metadata := metadata.insert name { lastUpdated := (← Std.Time.PlainDateTime.now) }
             continue
 
@@ -350,13 +350,13 @@ def update (manual : Bool) (configFile : Option System.FilePath) (logVerbose : S
           break
       catch | _ => continue
     if let some v := found then
-      values := values.insert name v
+      values := values.insert name (root, v)
       metadata := metadata.insert name { lastUpdated := (← Std.Time.PlainDateTime.now) }
     else throw <| IO.userError s!"No source found for {name}"
 
   let manifest : Manifest := {config with metadata}
   IO.FS.writeFile manifestPath (manifest.toJson.render.pretty 78)
   let valuesJson : Json := .mkObj <| values.toList.map fun (k, v) =>
-    (k, .mkObj <| v.toList.map fun ⟨d, o⟩ => (d.toString, o.toJson))
+    (k, .mkObj <| v.snd.toList.map fun ⟨d, o⟩ => (d.toString, o.toJson))
   IO.FS.writeFile xrefsPath (valuesJson.render.pretty 78)
   return values

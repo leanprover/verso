@@ -49,7 +49,7 @@ def processArgs (args : List String) : Except String (CliConfig × Command) :=
 
 def handle (cliConfig : CliConfig) : Command → IO UInt32
   | .update => do
-    discard <| update true cliConfig.configFile cliConfig.logVerbose
+    discard <| updateRemotes true cliConfig.configFile cliConfig.logVerbose
     return 0
 
 
