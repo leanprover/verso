@@ -24,7 +24,7 @@ inductive XrefSource where
   necessarily exist.
   -/
   | default
-deriving BEq
+deriving BEq, Repr
 
 def XrefSource.toJson (source : XrefSource) : Json :=
   match source with
@@ -46,6 +46,32 @@ def XrefSource.fromJson? (json : Json) : Except String XrefSource :=
       throw s!"Expected a singleton object with either a 'local' or 'remote' field mapped to a string, got {json.compress}"
   | other => throw s!"Expected the string \"default\" or an object, got {other.compress}"
 
+inductive UpdateFrequency where
+  | manual
+  | days (days : Day.Offset)
+deriving BEq, Repr
+
+def UpdateFrequency.toJson (freq : UpdateFrequency) : Json :=
+  match freq with
+  | .manual => .str "manual"
+  | .days i => json%{"days": $i.toInt}
+
+def UpdateFrequency.fromJson? (freq : Json) : Except String UpdateFrequency := do
+  match freq with
+  | .str "manual" =>
+    return .manual
+  | .obj o =>
+    match o.toArray with
+    | #[⟨"days", i⟩] =>
+      let i ← i.getInt?
+      return .days (.ofInt i)
+    | _ => pure ()
+  | _ => pure ()
+  throw <| "Expected \"manual\" or `{\"days\": i}`, got " ++ freq.compress
+
+instance : ToJson UpdateFrequency := ⟨UpdateFrequency.toJson⟩
+instance : FromJson UpdateFrequency := ⟨UpdateFrequency.fromJson?⟩
+
 /--
 A remote collection of documentation.
 -/
@@ -58,36 +84,47 @@ structure Remote where
   `[]` is equivalent to `[.default]`.
   -/
   sources : List XrefSource
-deriving BEq
+  /--
+  How frequently should Verso check for updates?
+  -/
+  updateFrequency : UpdateFrequency
+deriving BEq, Repr
 
 def Remote.toJson (remote : Remote) : Json :=
   if remote.sources.isEmpty then
-    json%{"root": $remote.root}
+    json%{"root": $remote.root, "updateFrequency": $remote.updateFrequency}
   else
     json%{
       "root": $remote.root,
-      "sources": $(remote.sources.map (·.toJson))
+      "sources": $(remote.sources.map (·.toJson)),
+      "updateFrequency": $remote.updateFrequency
     }
 
 def Remote.fromJson? (json : Json) : Except String Remote := do
   let root ← json.getObjValAs? String "root"
   let sources := json.getObjValD "sources"
+  let updateFrequency ← json.getObjVal? "updateFrequency"
+  let updateFrequency ←
+    if updateFrequency.isNull then pure .manual
+    else FromJson.fromJson? updateFrequency
   if sources.isNull then
-    pure {root, sources := []}
+    pure {root, updateFrequency, sources := []}
   else
     let .arr sources := sources
       | throw s!"Expected array of sources, got {sources.compress}"
     let sources ← sources.mapM XrefSource.fromJson?
-    pure {root, sources := sources.toList}
+    pure {root, updateFrequency, sources := sources.toList}
 
 structure RemoteMeta where
   lastUpdated : PlainDateTime
+deriving Repr
 
 structure Config where
   /-- A mapping from external source names to their root URLs. -/
   sources : HashMap String Remote
   /-- A relative directory that governs where to store Verso cross-reference data -/
   outputDir : System.FilePath
+deriving Repr
 
 def Config.fromJson? (json : Json) : Except String Config := do
   let version ← json.getObjVal? "version"
@@ -105,6 +142,7 @@ def Config.fromJson? (json : Json) : Except String Config := do
 
 structure Manifest extends Config where
   metadata : HashMap String RemoteMeta
+deriving Repr
 
 def Manifest.toJson (manifest : Manifest) : Json :=
   let sources := Json.mkObj <|
@@ -116,5 +154,14 @@ def Manifest.toJson (manifest : Manifest) : Json :=
         (name, json)
   json%{
     "version": 0,
-    "sources": $sources
+    "sources": $sources,
+    "outputDir" : $manifest.outputDir
   }
+
+def Manifest.fromJson? (json : Json) : Except String Manifest := do
+  let config ← Config.fromJson? json
+  let sourcesJson ← json.getObjVal? "sources"
+  let metadata ← HashMap.ofList <$> config.sources.toList.mapM fun (k, _) => do
+    let updated ← PlainDateTime.fromDateTimeString (← (← sourcesJson.getObjVal? k).getObjValAs? String "updated")
+    pure (k, {lastUpdated := updated})
+  pure {config with metadata}

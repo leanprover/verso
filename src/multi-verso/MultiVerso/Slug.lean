@@ -6,11 +6,14 @@ Author: David Thrane Christiansen
 import Std.Data.HashSet
 import Verso.Method
 
+set_option linter.missingDocs true
+
 namespace Verso.Multi
 open Verso.Method
 open Lean (ToJson FromJson)
 open Std (HashSet)
 
+/-- The characters allowed in slugs. -/
 def Slug.validChars := HashSet.ofList "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_".toList
 
 private def mangle (c : Char) : String :=
@@ -33,6 +36,9 @@ private def mangle (c : Char) : String :=
   | '⊢' => "_VDASH_"
   | _ => "___"
 
+/--
+Converts a string to a valid slug, mangling as appropriate.
+-/
 def asSlug (str : String) : String :=
   let rec loop (iter : String.Iterator) (acc : String) : String :=
     if iter.atEnd then acc
@@ -44,6 +50,9 @@ def asSlug (str : String) : String :=
         else acc ++ mangle c
   loop str.iter ""
 
+/--
+A slug is well-formed if all its characters are valid.
+-/
 def Slug.WF (str : String) : Prop :=
   str.toList.all (· ∈ validChars)
 
@@ -117,9 +126,14 @@ theorem Slug.asSlug_valid : WF (asSlug str) := by
   apply asSlug_loop_valid
   simp [WF]
 
+/--
+A slug is a well-formed string.
+-/
 structure Slug where
   private mk ::
+  /-- Converts the slug to the underlying string. -/
   toString : String
+  /-- The underlying string is well-formed. -/
   wf : Slug.WF toString
 deriving BEq, Hashable, DecidableEq, Ord, Repr
 
@@ -153,6 +167,9 @@ instance : DecidableRel (@LE.le Slug _) := fun s1 s2 =>
 defmethod String.sluggify (str : String) : Slug :=
   ⟨asSlug str, asSlug_valid⟩
 
+/--
+Converts a string to a slug.
+-/
 def ofString (str : String) : Slug := str.sluggify
 
 /--

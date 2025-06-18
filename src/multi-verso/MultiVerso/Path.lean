@@ -4,9 +4,11 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 
+set_option linter.missingDocs true
+
 namespace Verso.Multi
 
-/-- A path through the site.
+/-- An absolute path through the site.
 
 #[] is the root, and #[x,y,z] is s!"/{x}/{y}/{z}/". The trailing slash is important here.
 -/
@@ -14,6 +16,9 @@ abbrev Path := Array String
 
 namespace Path
 
+/--
+Retrieves a string that can be used as a link.
+-/
 def link (path : Path) (htmlId : Option String := none) : String :=
   "/" ++ String.join (path.toList.map (· ++ "/")) ++
   (htmlId.map ("#" ++ ·)).getD ""
