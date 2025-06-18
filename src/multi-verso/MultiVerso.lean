@@ -1,3 +1,9 @@
+/-
+Copyright (c) 2023-2025 Lean FRO LLC. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+Author: David Thrane Christiansen
+-/
+
 import Lean.Data.Json
 
 import Std.Data.TreeMap
@@ -5,6 +11,7 @@ import Std.Data.HashSet
 
 import MultiVerso.InternalId
 import MultiVerso.Link
+import MultiVerso.Manifest
 import MultiVerso.Path
 import MultiVerso.Slug
 
@@ -27,6 +34,18 @@ structure Object where
   /-- The IDs of the description site(s) -/
   ids : HashSet InternalId := {}
 deriving Inhabited
+
+open Format in
+instance : Repr Object where
+  reprPrec v _ :=
+    let {canonicalName, data, ids} := v
+    nest 2 <| group <| line.joinSep [
+      text "{",
+      nest 2 <| group <| "canonicalName :=" ++ line ++ repr canonicalName ++ ",",
+      nest 2 <| group <| "data :=" ++ line ++ group ("json%"++ data.render) ++ ",",
+      nest 2 <| group <| "ids :=" ++ line ++ group (line.joinSep ("{" :: ids.toList.map toString) ++ "}"),
+      text "}"
+    ]
 
 instance : BEq Object where
   beq
@@ -54,7 +73,7 @@ structure Domain where
   objectsById : TreeMap InternalId (HashSet String) := {}
   title : Option String := none
   description : Option String := none
-deriving Inhabited
+deriving Inhabited, Repr
 
 instance : BEq Domain where
   beq
@@ -96,3 +115,49 @@ def xrefJson {Links} {valid} [GetElem? Links InternalId Link valid]
 where
   jsonRef (data : Json) (ref : Link) : Json :=
     Json.mkObj [("address", ref.path.link), ("id", ref.htmlId.toString), ("data", data)]
+
+structure RefObject where
+  link : Link
+  data : Json
+
+open Format in
+instance : Repr RefObject where
+  reprPrec v _ :=
+    let {link, data} := v
+    nest 2 <| group <| line.joinSep [
+      text "{",
+      nest 2 <| group <| "link :=" ++ line ++ repr link ++ ",",
+      nest 2 <| group <| "data :=" ++ line ++ group ("json%"++ data.render) ++ ",",
+      text "}"
+    ]
+
+structure RefDomain where
+  title : Option String := none
+  description : Option String := none
+  contents : HashMap String (Array RefObject)
+deriving Inhabited, Repr
+
+
+def fromXrefJson (json : Json) : Except String (NameMap RefDomain) := do
+  let json ← json.getObj?
+  let mut out := {}
+  let json := json.toArray
+  for ⟨domainName, v⟩ in json do
+    let domainName := domainName.toName
+    let title ← v.getObjValAs? (Option String) "title"
+    let description ← v.getObjValAs? (Option String) "title"
+    let contentsJson ← v.getObjVal? "contents"
+    let contentsJson ← contentsJson.getObj?
+    let mut contents : HashMap String (Array RefObject) := {}
+    for ⟨canonicalName, v⟩ in contentsJson.toArray do
+      let .arr v := v
+        | throw s!"Expected JSON array, got {v.compress}"
+      let v ← v.mapM fun x => do
+        let address ← x.getObjValAs? String "address"
+        let address := address.stripPrefix "/" |>.stripSuffix "/" |>.splitOn "/" |>.toArray
+        let htmlId ← x.getObjValAs? String "id"
+        let data ← x.getObjVal? "data"
+        pure {link := {path := address, htmlId := htmlId.sluggify}, data : RefObject}
+      contents := contents.insert canonicalName v
+    out := out.insert domainName {title, description, contents}
+  return out
