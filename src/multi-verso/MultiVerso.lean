@@ -303,7 +303,12 @@ def updateRemotes (manual : Bool) (configFile : Option System.FilePath) (logVerb
   logVerbose s!"Loading project config. Project is '{project}'."
   if let some f := configFile then
     logVerbose s!"Config override is {f}."
-  let config ← getConfig project configFile
+  let config ←
+    try
+      getConfig project configFile
+    catch e =>
+      logVerbose s!"Didn't load remote data config. No remote data to be used. Error: {e}"
+      return {}
 
   logVerbose s!"Creating remote data cache directory {config.outputDir}"
   IO.FS.createDirAll config.outputDir
