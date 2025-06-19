@@ -123,17 +123,87 @@ by [Clément Pit-Claudel](https://pit-claudel.fr/clement/).
 
 ## Cross-Document Cross-References
 
+**Experimental**
+
 In genres that support it, Verso allows linking to other Verso
 documents based on _semantic_ information about what is being linked
-to.
+to, rather than specific URLs. For example, it's possible to link to
+"the documentation for `Monad`" rather than
+`https://example.com/docs/lib/#Monad`.  To support this, Verso emits a
+cross-referencing database that describes the available link targets.
 
-TODO:
- - Domain
- - Object
- - xref.json
- - Remotes
- - How to configure
- - `verso sync` and update frequency
+Documented information is organized into _domains_, which are
+essentially namespaces. Documents may define whatever domains they
+like, and some are provided with Verso. For instance, domains might be
+"compiler options" or "constant names" or "syntax categories", but
+they might also be "chapters and sections", "technical terminology",
+or topics specific to a given document such as "biographies of
+historical mathematicians".
+
+Domains contain _objects_, which are identified by a _canonical
+name_. For constants, the canonical name is their fully-qualified name
+in the environment, while for technical terminology, it's a normalized
+form of the term with plural markers removed. Objects may additionally
+have arbitrary metadata associated with them, such as the titles of
+sections or their position in a table of contents.
+
+Some Verso genres that produce HTML emit a file `xref.json` in the
+root of the site. These are the genres that support incoming
+cross-references. In a verso project, a site that should be linked to
+is referred to as a _remote_, by analogy to Git remotes.
+
+To link to other Verso documents, do the following:
+ 1. Create a configuration file that describes the remotes to be used
+    (see later in this section for an example). It should be called
+    `verso-sources.json` and be in the same directory as the
+    `lean-toolchain` file.
+ 2. Run `lake exe verso sync` to download a local mirror of the
+    remote's cross-reference information.
+ 3. Use the configured name for the remote in the `ref` role to link
+    to it, e.g. `{ref "canonicalName" (remote := "lean-reference")}[link text]`
+
+Each remote has an update frequency. When building a document, if the
+remote is configured to be updated automatically and hasn't been
+updated in the specified duration, its cross-references are
+fetched. `verso sync` always updates remotes.
+
+When the structure of a remote document changes, but the documented
+objects are still present, then rebuilding the current document is
+sufficient to fix all broken links. If two documents depend on each
+other, then this process may need to be run on both. If documented
+objects are removed, then it is an error.
+
+Downloaded remote information is stored in `.verso` in the project
+root. The file `verso-xref.json` contains the local copy of each
+remote's cross-reference database, while `verso-xref-manifest.json`
+tracks when each was updated.
+
+Configuration files are presently JSON, but the plan is to move them
+to TOML. While JSON does not support comments, this example file
+includes them for explanation:
+
+```json
+{ "version": 0, // Version specifier for the configuration file format
+  // Configured remotes. Keys are their internal names, used by the author.
+  "sources": {
+    "manual": {
+      // The root of the source. xref.json should be here, and all
+      // links will be relative to this:
+      "root": "https://lean-lang.org/doc/reference/latest/",
+      // How often should it be updated?
+      // * "manual" means only when running verso sync,
+      // * {"days": N} means every N days
+      "updateFrequency": "manual",
+      // Ultra-short name shown to readers to disambiguate link texts
+      // (e.g. when linking to multiple versions of the same document)
+      "shortName": "latest",
+      // Longer name shown to readers to explain links
+      "longName": "Lean Language Reference"
+    }
+  }
+}
+```
+
 
 ## Examples of Verso
 
