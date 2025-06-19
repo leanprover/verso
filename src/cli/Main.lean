@@ -23,17 +23,17 @@ def CliConfig.logVerbose (msg : String) (config : CliConfig) : IO Unit := do
   if config.verbose then IO.println msg else pure ()
 
 inductive Command where
-  | update
+  | sync
 
 def Command.name : Command → String
-  | .update => "update"
+  | sync => "sync"
 
 def processArgs (args : List String) : Except String (CliConfig × Command) :=
   let rec loop (config : CliConfig) (command : Option Command) : List String → Except String (CliConfig × Command)
-    | "update" :: more =>
+    | "sync" :: more =>
       if let some cmd := command then
         throw s!"Unexpected subcommand 'update': subcommand is already {cmd.name}"
-      else loop config (some .update) more
+      else loop config (some .sync) more
     | ["--config"] => throw "Missing configuration file after '--config'"
     | "--config" :: cfg :: more =>
       loop {config with configFile := some cfg} command more
@@ -48,7 +48,7 @@ def processArgs (args : List String) : Except String (CliConfig × Command) :=
 
 
 def handle (cliConfig : CliConfig) : Command → IO UInt32
-  | .update => do
+  | .sync => do
     discard <| updateRemotes true cliConfig.configFile cliConfig.logVerbose
     return 0
 

@@ -14,12 +14,14 @@ import MultiVerso.Slug
 import VersoManual.LicenseInfo
 import Verso.Output.Html
 import Verso.Output.TeX
+import Verso.BEq
 
 open Lean (Name Json NameMap ToJson FromJson)
 open Std (HashSet HashMap TreeSet)
 open Verso.Doc
 open Verso.Multi
 open Verso.Output
+open Verso.BEq
 
 namespace Verso.Genre.Manual
 
@@ -102,12 +104,32 @@ structure PartMetadata where
 deriving BEq, Hashable, Repr
 
 
+def Domains := NameMap Domain
+def Domains.contents : Domains → NameMap Domain := id
+
+instance : BEq Domains where
+  beq := ptrEqThen fun x y =>
+    x.size == y.size &&
+    x.all fun k v => y.find? k |>.isEqSome v
+
+instance : GetElem Domains Name Domain (fun ds d => ds.contents.contains d) where
+  getElem ds d _ok := ds.contents.find! d
+
+instance : GetElem? Domains Name Domain (fun ds d => ds.contents.contains d) where
+  getElem? ds d := ds.contents.find? d
+
+instance : EmptyCollection Domains := ⟨({} : NameMap Domain)⟩
+
+instance : ForIn m Domains (Name × Domain) :=
+  inferInstanceAs (ForIn m (NameMap Domain) (Name × Domain))
+
+def StringSet := HashSet String
 
 structure TraverseState where
   tags : HashMap Tag InternalId := {}
   externalTags : HashMap InternalId Link := {}
-  domains : NameMap Domain := {}
-  remoteContent : HashMap String RemoteInfo
+  domains : Domains := {}
+  remoteContent : AllRemotes
   ids : TreeSet InternalId := {}
   extraCss : HashSet String := {}
   extraJs : HashSet String := {}
@@ -136,37 +158,32 @@ where
 defmethod HashMap.all [BEq α] [Hashable α] (hm : HashMap α β) (p : α → β → Bool) : Bool :=
   hm.fold (fun prev k v => prev && p k v) true
 
-instance [BEq α] [Hashable α] : BEq (HashSet α) where
-  beq xs ys := xs.size == ys.size && xs.all (ys.contains ·)
+local instance [BEq α] [Hashable α] : BEq (HashSet α) where
+  beq := ptrEqThen fun xs ys => xs.size == ys.size && xs.all (ys.contains ·)
 
-instance [BEq α] [Ord α] : BEq (TreeSet α) where
-  beq xs ys := xs.size == ys.size && xs.all (ys.contains ·)
+local instance [BEq α] [Ord α] : BEq (TreeSet α) where
+  beq := ptrEqThen fun xs ys => xs.size == ys.size && xs.all (ys.contains ·)
 
 
 instance : BEq TraverseState where
-  beq x y :=
-    x.tags.size == y.tags.size &&
-    (x.tags.all fun k v =>
-      match y.tags[k]? with
-      | none => false
-      | some v' => v == v'
-    ) &&
+  beq := ptrEqThen fun x y =>
+    ptrEqThen' x.tags y.tags (fun t1 t2 =>
+      t1.size == t2.size && t1.all (t2[·]?.isEqSome ·)) &&
     x.externalTags.size == y.externalTags.size &&
     (x.externalTags.all fun k v =>
       match y.externalTags[k]? with
       | none => false
-      | some v' => v == v'
-    ) &&
+      | some v' => v == v') &&
+    x.domains == y.domains &&
+    x.remoteContent == y.remoteContent &&
     x.ids == y.ids &&
     x.extraCss == y.extraCss &&
     x.extraJs == y.extraJs &&
     x.extraJsFiles == y.extraJsFiles &&
     x.extraCssFiles == y.extraCssFiles &&
-    x.contents.size == y.contents.size &&
-    x.contents.all fun k v =>
-      match y.contents.find? k with
-      | none => false
-      | some v' => v == v' &&
+    ptrEqThen' x.contents y.contents (fun c1 c2 =>
+      c1.size == c2.size &&
+      c1.all (c2.find? · |>.isEqSome ·)) &&
     x.licenseInfo == y.licenseInfo
 
 namespace TraverseState
@@ -646,13 +663,32 @@ def TraverseState.resolveTag (st : TraverseState) (tag : Slug) : Option Link :=
     else panic! s!"No location for ID {id}, but it came from external tag '{tag}'"
   else none
 
-def docstringDomain := `Verso.Genre.Manual.doc
-def tacticDomain := `Verso.Genre.Manual.doc.tactic
-def technicalTermDomain := `Verso.Genre.Manual.doc.tech
-def syntaxKindDomain := `Verso.Genre.Manual.doc.syntaxKind
-def optionDomain := `Verso.Genre.Manual.doc.option
-def convDomain := `Verso.Genre.Manual.doc.tactic.conv
-def exampleDomain := `Verso.Genre.Manual.example
+/--
+A representation of domains.
+
+A domain is a particular namespace of documentable entities.
+
+Generally, domains are identified by their name, but having a representation for them
+means that they can be used with Lean's standard namespace features and have docstrings.
+-/
+structure Domain where
+  name : Name := by exact decl_name%
+
+def doc : Domain := {}
+def doc.tactic : Domain := {}
+def doc.tech : Domain := {}
+def doc.syntaxKind : Domain := {}
+def doc.option : Domain := {}
+def doc.tactic.conv : Domain := {}
+def «example» : Domain := {}
+
+def docstringDomain := ``Verso.Genre.Manual.doc
+def tacticDomain := ``Verso.Genre.Manual.doc.tactic
+def technicalTermDomain := ``Verso.Genre.Manual.doc.tech
+def syntaxKindDomain := ``Verso.Genre.Manual.doc.syntaxKind
+def optionDomain := ``Verso.Genre.Manual.doc.option
+def convDomain := ``Verso.Genre.Manual.doc.tactic.conv
+def exampleDomain := ``Verso.Genre.Manual.example
 
 def TraverseState.definitionIds (state : TraverseState) : NameMap String := Id.run do
   if let some examples := state.domains.find? exampleDomain then

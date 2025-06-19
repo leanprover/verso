@@ -92,17 +92,26 @@ structure Domain where
   description : Option String := none
 deriving Inhabited, Repr
 
-instance : BEq Domain where
-  beq
-    | ⟨d1, byId1, t1, desc1⟩, ⟨d2, byId2, t2, desc2⟩ =>
+private def Domain.structBeq : Domain → Domain → Bool
+  | ⟨d1, byId1, t1, desc1⟩, ⟨d2, byId2, t2, desc2⟩ =>
+    d1.size == d2.size && d1.all (fun k v => d2[k]?.isEqSome v) &&
+    byId1.size == byId2.size && byId1.all (fun k v =>
+      if let some xs := byId2[k]? then
+        xs.size == v.size && xs.all v.contains
+      else false) &&
+    t1 == t2 &&
+    desc1 == desc2
 
-      d1.size == d2.size && d1.all (fun k v => d2[k]?.isEqSome v) &&
-      byId1.size == byId2.size && byId1.all (fun k v =>
-        if let some xs := byId2[k]? then
-          xs.size == v.size && xs.all v.contains
-        else false) &&
-      t1 == t2 &&
-      desc1 == desc2
+private unsafe def Domain.fastBeq (x y : Domain) : Bool :=
+  if ptrEq x y then true else Domain.structBeq x y
+
+/--
+Compares two domains for equality.
+-/
+@[implemented_by Domain.fastBeq]
+def Domain.beq (x y : Domain) : Bool := Domain.structBeq x y
+
+instance : BEq Domain := ⟨Domain.beq⟩
 
 /--
 Registers the fact that the given ID refers to the object with the given canonical name.
@@ -157,6 +166,7 @@ structure RefObject where
   link : RemoteLink
   /-- Metadata saved for the object. -/
   data : Json
+deriving BEq
 
 open Format in
 instance : Repr RefObject where
@@ -192,6 +202,26 @@ structure RefDomain where
   -/
   contents : HashMap String (Array RefObject)
 deriving Inhabited, Repr
+
+private def RefDomain.structEq (x y : RefDomain) :=
+  let ⟨t1, d1, c1⟩ := x
+  let ⟨t2, d2, c2⟩ := y
+  t1 == t2 && d1 == d2 &&
+  c1.size == c2.size &&
+  c1.fold (init := true) fun soFar k v =>
+    soFar && c2[k]?.isEqSome v
+
+private unsafe def RefDomain.fastEq (x y : RefDomain) :=
+  if ptrEq x y then true
+  else structEq x y
+
+/--
+Boolean equality of reference domains.
+-/
+@[implemented_by RefDomain.fastEq]
+def RefDomain.beq := RefDomain.structEq
+
+instance : BEq RefDomain := ⟨RefDomain.beq⟩
 
 /--
 Converts a reference domain to the official interchange format.
@@ -295,10 +325,75 @@ structure RemoteInfo where
   /-- The documented items in the remote. -/
   domains : NameMap RefDomain
 
+private def RemoteInfo.structBEq (x y : RemoteInfo) : Bool :=
+  let ⟨root1, x1, y1, doms1⟩ := x
+  let ⟨root2, x2, y2, doms2⟩ := y
+  root1 == root2 &&
+  x1 == x2 &&
+  y1 == y2 &&
+  doms1.size == doms2.size &&
+  doms1.fold (init := true) fun soFar k v =>
+    soFar && (doms2.find? k).isEqSome v
+
+private unsafe def RemoteInfo.fastBEq (x y : RemoteInfo) : Bool :=
+  if ptrEq x y then true else RemoteInfo.structBEq x y
+
+/--
+Boolean equality of information about remote documents.
+-/
+@[implemented_by RemoteInfo.fastBEq]
+def RemoteInfo.beq (x y : RemoteInfo) : Bool := RemoteInfo.structBEq x y
+
+instance : BEq RemoteInfo := ⟨RemoteInfo.beq⟩
+
+/--
+All remote data that was loaded.
+-/
+structure AllRemotes where
+  /-- The remote data -/
+  allRemotes : HashMap String RemoteInfo := {}
+
+instance : GetElem AllRemotes String RemoteInfo (fun x y => y ∈ x.allRemotes) where
+  getElem x y z := GetElem.getElem x.allRemotes y z
+
+instance : GetElem? AllRemotes String RemoteInfo (fun x y => y ∈ x.allRemotes) where
+  getElem? x y := GetElem?.getElem? x.allRemotes y
+
+private def AllRemotes.structBeq (x y : AllRemotes) : Bool :=
+  let ⟨x⟩ := x
+  let ⟨y⟩ := y
+  x.size == y.size &&
+  x.fold (init := true) fun soFar k v =>
+    soFar && y[k]?.isEqSome v
+
+private unsafe def AllRemotes.fastBeq (x y : AllRemotes) : Bool :=
+  if ptrEq x y then true
+  else
+    x.allRemotes.size == y.allRemotes.size &&
+    x.allRemotes.fold (init := true) fun soFar k v =>
+      soFar && y.allRemotes[k]?.isEqSome v
+
+/--
+Boolean equality of full remote document information.
+
+In compiled code, this uses pointer equality tests first, because these values are not expected to
+change during the traversal pass.
+-/
+@[implemented_by AllRemotes.fastBeq]
+def AllRemotes.beq (x y : AllRemotes) : Bool := AllRemotes.structBeq x y
+
+/--
+Returns an array of name-remote info pairs, in some order.b
+-/
+def AllRemotes.toArray (all : AllRemotes) : Array (String × RemoteInfo) :=
+  all.allRemotes.toArray
+
+instance : BEq AllRemotes := ⟨AllRemotes.beq⟩
+
 /--
 Updates the remote Verso data, fetching according to the configuration.
 -/
-def updateRemotes (manual : Bool) (configFile : Option System.FilePath) (logVerbose : String → IO Unit) : IO (HashMap String RemoteInfo) := do
+def updateRemotes (manual : Bool) (configFile : Option System.FilePath) (logVerbose : String → IO Unit) : IO AllRemotes := do
   let project ← findProject "."
   logVerbose s!"Loading project config. Project is '{project}'."
   if let some f := configFile then
@@ -352,7 +447,7 @@ def updateRemotes (manual : Bool) (configFile : Option System.FilePath) (logVerb
         unless manual do
           found := oldXrefs[name]?
           if let some domains := found then
-            logVerbose s!"Used saved xref database for {name}, which is to be manually updated"
+            logVerbose s!"Used saved xref database for {name}, which is to be manually synchronized"
             values := values.insert name { root, shortName, longName, domains }
             metadata := metadata.insert name { lastUpdated := (← Std.Time.PlainDateTime.now) }
             continue
@@ -386,4 +481,4 @@ def updateRemotes (manual : Bool) (configFile : Option System.FilePath) (logVerb
   let valuesJson : Json := .mkObj <| values.toList.map fun (k, v) =>
     (k, .mkObj <| v.domains.toList.map fun ⟨d, o⟩ => (d.toString, o.toJson))
   IO.FS.writeFile xrefsPath (valuesJson.render.pretty 78)
-  return values
+  return ⟨values⟩

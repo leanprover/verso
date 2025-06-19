@@ -121,6 +121,20 @@ The user interface used to implement the display of proof states is
 inspired by the excellent [Alectryon](https://github.com/cpitclaudel/alectryon)
 by [Clément Pit-Claudel](https://pit-claudel.fr/clement/).
 
+## Cross-Document Cross-References
+
+In genres that support it, Verso allows linking to other Verso
+documents based on _semantic_ information about what is being linked
+to.
+
+TODO:
+ - Domain
+ - Object
+ - xref.json
+ - Remotes
+ - How to configure
+ - `verso sync` and update frequency
+
 ## Examples of Verso
 
 The [`examples`](./examples) directory contains example documents
