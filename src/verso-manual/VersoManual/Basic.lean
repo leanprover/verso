@@ -699,21 +699,33 @@ def TraverseState.definitionIds (state : TraverseState) : NameMap String := Id.r
     return idMap
   else return {}
 
-def TraverseState.linkTargets (state : TraverseState) : Code.LinkTargets where
-  const := fun x =>
-    fromDomain docstringDomain x.toString "doc" s!"Documentation for {x}" ++
-    fromRemoteDomain docstringDomain x.toString (s!"doc ({·})") (s!"Documentation for {x} in {·}") ++
-    fromDomain exampleDomain x.toString "def" s!"Definition of example {x}"
-  option := fun x =>
-    fromDomain optionDomain x.toString "doc" s!"Documentation for option {x}"
-  keyword := fun k =>
-    fromDomain tacticDomain k.toString "doc" "Documentation for tactic" ++
-    fromDomain syntaxKindDomain k.toString "doc" "Documentation for syntax"
+def TraverseState.linksFromDomain
+    (domain : Name) (canonicalName : String)
+    (shortDescription description : String)
+    (state : TraverseState) : Array Code.CodeLink :=
+  state.resolveDomainObject domain canonicalName |>.toOption |>.toArray |>.map fun l =>
+    { shortDescription, description, href := l.link }
 
+def TraverseState.localTargets (state : TraverseState) : Code.LinkTargets where
+  const := fun x =>
+    state.linksFromDomain docstringDomain x.toString "doc" s!"Documentation for {x}" ++
+    state.linksFromDomain exampleDomain x.toString "def" s!"Definition of example {x}"
+  option := fun x =>
+    state.linksFromDomain optionDomain x.toString "doc" s!"Documentation for option {x}"
+  keyword := fun k =>
+    state.linksFromDomain tacticDomain k.toString "doc" "Documentation for tactic" ++
+    state.linksFromDomain syntaxKindDomain k.toString "doc" "Documentation for syntax"
+
+
+def TraverseState.remoteTargets (state : TraverseState) : Code.LinkTargets where
+  const := fun x =>
+    fromRemoteDomain docstringDomain x.toString (s!"doc ({·})") (s!"Documentation for {x} in {·}")
+  option := fun x =>
+    fromRemoteDomain optionDomain x.toString (s!"doc ({·})") (s!"Documentation for option {x} in {·}")
+  keyword := fun k =>
+    fromRemoteDomain tacticDomain k.toString (s!"doc ({·})") (s!"Documentation for tactic in {·}") ++
+    fromRemoteDomain syntaxKindDomain k.toString (s!"doc ({·})") (s!"Documentation for syntax in {·}")
 where
-  fromDomain (domain : Name) (canonicalName : String) (shortDescription description : String) : Array Code.CodeLink :=
-    state.resolveDomainObject domain canonicalName |>.toOption |>.toArray |>.map fun l =>
-      { shortDescription, description, href := l.link }
 
   fromRemoteDomain (domain : Name) (canonicalName : String) (shortDescription description : String → String) : Array Code.CodeLink := Id.run do
     state.remoteContent.toArray.filterMap fun (r, info) =>
@@ -722,7 +734,6 @@ where
         description := description info.longName,
         href := l.link
       }
-
 
 
 def sectionNumberString (num : Array Numbering) : String := Id.run do

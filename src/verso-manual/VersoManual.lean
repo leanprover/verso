@@ -202,6 +202,10 @@ structure Config where
   Location of the remote config file.
   -/
   remoteConfigFile : Option System.FilePath := none
+  /--
+  How to insert links in rendered code
+  -/
+  linkTargets : TraverseState → LinkTargets := TraverseState.localTargets
 
 
 def ensureDir (dir : System.FilePath) : IO Unit := do
@@ -431,7 +435,7 @@ where
     let opts : Html.Options IO := {logError := fun msg => logError msg}
     let ctxt := {logError}
     let definitionIds := state.definitionIds
-    let linkTargets := state.linkTargets
+    let linkTargets := config.linkTargets state
     let titleHtml ← Html.seq <$> text.title.mapM (Manual.toHtml opts.lift ctxt state definitionIds linkTargets {})
     let introHtml ← Html.seq <$> text.content.mapM (Manual.toHtml opts.lift ctxt state definitionIds linkTargets {})
     let bookToc ← text.subParts.mapM (fun p => toc 0 opts (ctxt.inPart p) state definitionIds linkTargets p)
@@ -510,7 +514,7 @@ where
     let opts : Html.Options IO := {logError := fun msg => logError msg}
     let ctxt := {logError}
     let definitionIds := state.definitionIds
-    let linkTargets := state.linkTargets
+    let linkTargets := config.linkTargets state
     let toc ← text.subParts.toList.mapM fun p =>
       toc config.htmlDepth opts (ctxt.inPart p) state definitionIds linkTargets p
     let titleHtml ← Html.seq <$> text.title.mapM (Manual.toHtml opts.lift ctxt state definitionIds linkTargets {} ·)
