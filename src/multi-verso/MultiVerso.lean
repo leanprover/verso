@@ -288,12 +288,14 @@ where
     throw <| IO.userError "No 'lean-toolchain' found in a parent directory"
 
 private def fetchRemote (project : System.FilePath) (root : String) (url : String) : IO (NameMap RefDomain) := do
-  let json ←
-    IO.Process.run {
+  let json ← do
+    let out ← IO.Process.output {
       cmd := "curl",
-      args := #[url]
+      args := #["--silent", "--show-error", "--fail", url]
       cwd := project
     }
+    if out.exitCode ≠ 0 then throw <| IO.userError out.stderr
+    pure out.stdout
   let json ← Json.parse json |> IO.ofExcept
   fromXrefJson root json |> IO.ofExcept
 
@@ -454,6 +456,7 @@ def updateRemotes (manual : Bool) (configFile : Option System.FilePath) (logVerb
 
     let sources := if sources.isEmpty then [.default] else sources
 
+    let mut errors := #[]
     for s in sources do
       try
         match s with
@@ -469,11 +472,13 @@ def updateRemotes (manual : Bool) (configFile : Option System.FilePath) (logVerb
           let out ← fetchRemote project root url
           found := some out
           break
-      catch | _ => continue
+      catch
+        | e =>
+          errors := errors.push e
     if let some domains := found then
       values := values.insert name {root, shortName, longName, domains}
       metadata := metadata.insert name { lastUpdated := (← Std.Time.PlainDateTime.now) }
-    else throw <| IO.userError s!"No source found for {name}"
+    else throw <| IO.userError s!"No source found for {name}. Errors encountered:{String.join <| errors.toList.map (s!"\n * {·}")}"
 
   let manifest : Manifest := {config with metadata}
   logVerbose s!"Saving manifest to {manifestPath}"
