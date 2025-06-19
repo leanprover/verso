@@ -79,6 +79,14 @@ structure Remote where
   /-- The root URL for the documentation. -/
   root : String
   /--
+  A short name to show users, e.g. in generated link text.
+  -/
+  shortName : String
+  /--
+  A longer name to show users, e.g. in generated link text.
+  -/
+  longName : String
+  /--
   Sources to be attempted in order.
 
   `[]` is equivalent to `[.default]`.
@@ -91,29 +99,42 @@ structure Remote where
 deriving BEq, Repr
 
 def Remote.toJson (remote : Remote) : Json :=
-  if remote.sources.isEmpty then
-    json%{"root": $remote.root, "updateFrequency": $remote.updateFrequency}
-  else
-    json%{
+  let json := json%{
       "root": $remote.root,
-      "sources": $(remote.sources.map (·.toJson)),
+      "shortName": $remote.shortName,
+      "longName": $remote.longName,
       "updateFrequency": $remote.updateFrequency
     }
+  if remote.sources.isEmpty then
+    json
+  else
+    json.setObjVal! "sources" (.arr (remote.sources.toArray.map (·.toJson)))
 
-def Remote.fromJson? (json : Json) : Except String Remote := do
-  let root ← json.getObjValAs? String "root"
+def Remote.fromJson? (remote : String) (json : Json) : Except String Remote := do
+  let root ← getField? json "root"
+  let shortName ← getField? json "shortName"
+  let longName ← getField? json "longName"
   let sources := json.getObjValD "sources"
   let updateFrequency ← json.getObjVal? "updateFrequency"
   let updateFrequency ←
     if updateFrequency.isNull then pure .manual
     else FromJson.fromJson? updateFrequency
   if sources.isNull then
-    pure {root, updateFrequency, sources := []}
+    pure {root, shortName, longName, updateFrequency, sources := []}
   else
     let .arr sources := sources
       | throw s!"Expected array of sources, got {sources.compress}"
     let sources ← sources.mapM XrefSource.fromJson?
-    pure {root, updateFrequency, sources := sources.toList}
+    pure {root, shortName, longName, updateFrequency, sources := sources.toList}
+where
+  getField? {α} [FromJson α] (json : Json) (field : String) : Except String α := do
+    let v := json.getObjValD field
+    if v.isNull then throw s!"Remote '{remote}' missing field '{field}'"
+    else
+      try
+        FromJson.fromJson? v
+      catch
+        | e => throw s!"Remote '{remote}' field '{field}': {e}"
 
 structure RemoteMeta where
   lastUpdated : PlainDateTime
@@ -134,7 +155,7 @@ def Config.fromJson? (json : Json) : Except String Config := do
   let sources ← sources.getObj?
   let sources := sources.toArray.toList
   let sources ← sources.mapM fun ⟨name, remoteJson⟩ => do
-    let remote ← Remote.fromJson? remoteJson
+    let remote ← Remote.fromJson? name remoteJson
     pure (name, remote)
   let outputDir := json.getObjValD "output"
   let outputDir ← if outputDir.isNull then pure ".verso" else FromJson.fromJson? outputDir

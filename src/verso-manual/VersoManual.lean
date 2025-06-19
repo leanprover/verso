@@ -55,19 +55,32 @@ namespace Manual
 defmethod Part.htmlSplit (part : Part Manual) : HtmlSplitMode :=
   part.metadata.map (·.htmlSplit) |>.getD .default
 
-inline_extension Inline.ref (canonicalName : String) (domain : Option Name) (remote : Option Name) (resolvedDestination : Option String := none) where
-  data := ToJson.toJson (canonicalName, domain, remote, resolvedDestination)
+private structure RefInfo where
+  canonicalName : String
+  domain : Option Name
+  remote : Option String
+  resolvedDestination : Option String := none
+deriving BEq, ToJson, FromJson
+
+inline_extension Inline.ref (canonicalName : String) (domain : Option Name) (remote : Option String) (resolvedDestination : Option String := none) where
+  data := ToJson.toJson (RefInfo.mk canonicalName domain remote resolvedDestination)
   traverse := fun _ info content => do
-    match FromJson.fromJson? (α := String × Option Name × Option Name × Option String) info with
+    match FromJson.fromJson? (α := RefInfo) info with
     | .error e =>
       logError e; pure none
-    | .ok (name, domain, remote, none) =>
+    | .ok { canonicalName := name, domain, remote := none, resolvedDestination := none } =>
       let domain := domain.getD sectionDomain
-      match (← get).resolveDomainObject domain name remote with
+      match (← get).resolveDomainObject domain name with
       | .error _ => return none
       | .ok dest =>
-        return some <| .other (Inline.ref name (some domain) remote (some dest.link)) content
-    | .ok (_name, _domain, _remote, some (_linkDest : String)) =>
+        return some <| .other (Inline.ref name (some domain) none (some dest.link)) content
+    | .ok { canonicalName := name, domain, remote := some remote, resolvedDestination := none } =>
+      let domain := domain.getD sectionDomain
+      match (← get).resolveRemoteObject domain name remote with
+      | .error _ => return none
+      | .ok dest =>
+        return some <| .other (Inline.ref name (some domain) (some remote) (some dest.link)) content
+    | .ok {resolvedDestination := some _, ..} =>
       pure none
   toTeX :=
     some <| fun go _ _ content => do
@@ -76,14 +89,14 @@ inline_extension Inline.ref (canonicalName : String) (domain : Option Name) (rem
   toHtml :=
     open Verso.Output.Html in
     some <| fun go _ info content => do
-      match FromJson.fromJson? (α := String × Option Name × Option Name × Option String) info with
+      match FromJson.fromJson? (α := RefInfo) info with
       | .error e =>
         Html.HtmlT.logError e; content.mapM go
-      | .ok (name, domain, none, none) =>
+      | .ok { canonicalName := name, domain, remote := none, resolvedDestination := none } =>
         Html.HtmlT.logError ("No destination found for tag '" ++ name ++ "' in " ++ toString domain); content.mapM go
-      | .ok (name, domain, some remote, none) =>
-        Html.HtmlT.logError ("No destination found for remote '" ++ remote.toString ++ "' tag '" ++ name ++ "' in " ++ toString domain); content.mapM go
-      | .ok (_, _, _, some dest) =>
+      | .ok { canonicalName := name, domain, remote := some remote, resolvedDestination := none } =>
+        Html.HtmlT.logError ("No destination found for remote '" ++ remote ++ "' tag '" ++ name ++ "' in " ++ toString domain); content.mapM go
+      | .ok {resolvedDestination := some dest, ..} =>
         pure {{<a href={{dest}}>{{← content.mapM go}}</a>}}
 
 section
@@ -93,7 +106,7 @@ variable {m} [Monad m] [MonadError m]
 structure RoleArgs where
   canonicalName : String
   domain : Option Name
-  remote : Option Name := none
+  remote : Option String := none
 
 instance : FromArgs RoleArgs m where
   fromArgs :=
@@ -102,11 +115,11 @@ instance : FromArgs RoleArgs m where
       .named' `domain true <*>
       .named `remote stringOrName true
 where
-  stringOrName : ValDesc m Name := {
+  stringOrName : ValDesc m String := {
     description := "remote name (string or identifier)"
     get
-      | .str s => pure s.getString.toName
-      | .name n => pure n.getId
+      | .str s => pure s.getString
+      | .name n => pure n.getId.toString
       | .num n => throwErrorAt n "Expected name or string literal, got {n.getNat}"
   }
 end
@@ -232,15 +245,13 @@ where
 
 def traverse (logError : String → IO Unit) (text : Part Manual) (config : Config) : ReaderT ExtensionImpls IO (Part Manual × TraverseState) := do
   let topCtxt : Manual.TraverseContext := {logError, draft := config.draft}
-  let remoteData ← updateRemotes false config.remoteConfigFile (if config.verbose then IO.println else fun _ => pure ())
-  let remoteContent := remoteData.map fun _name (_root, data) => data
-  let remoteRoots := remoteData.map fun _name (root, _data) => root
+  if config.verbose then IO.println "Updating remote data"
+  let remoteContent ← updateRemotes false config.remoteConfigFile (if config.verbose then IO.println else fun _ => pure ())
   let mut state : Manual.TraverseState := {
     licenseInfo := .ofList config.licenseInfo,
     extraCssFiles := config.extraCssFiles,
     extraJsFiles := config.extraJsFiles,
-    remoteContent := remoteContent,
-    remoteRoots := remoteRoots
+    remoteContent
   }
   let mut text := text
   if !config.draft then
@@ -671,6 +682,7 @@ where
       if cfg.verbose then
         IO.println s!"Saving multi-page HTML"
       let (text', traverseState) ← emitHtmlMulti logError cfg text
+      if cfg.verbose then IO.println s!"Executing {extraSteps.length} extra steps"
       for step in extraSteps do
         step .multi logError config traverseState text'
     if let some wcFile := cfg.wordCount then

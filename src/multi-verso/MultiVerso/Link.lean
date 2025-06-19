@@ -17,10 +17,6 @@ namespace Verso.Multi
 /-- A link to a given piece of content -/
 structure Link where
   /--
-  The part of the link to be prepended to the path, if present. Only used on links to other sites.
-  -/
-  root : Option String := none
-  /--
   The path from the site root to the current page.
   -/
   path : Path
@@ -30,7 +26,17 @@ deriving ToJson, FromJson, BEq, Ord, Repr
 
 /-- Constructs a link URL suitable for an `<a>` tag. -/
 def Link.link (link : Link) : String :=
-  let addr := link.path.link (htmlId := some link.htmlId.toString)
-  if let some root := link.root then
-    root.stripSuffix "/" ++ addr
-  else addr
+  link.path.link (htmlId := some link.htmlId.toString)
+
+
+/-- A link to a piece of content on another site -/
+structure RemoteLink extends Link where
+  /--
+  The part of the link to be prepended to the path, if present. Only used on links to other sites.
+  -/
+  root : String
+deriving ToJson, FromJson, BEq, Ord, Repr
+
+@[inherit_doc Link.link]
+def RemoteLink.link (link : RemoteLink) : String :=
+  link.root.stripSuffix "/" ++ link.toLink.link

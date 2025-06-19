@@ -154,7 +154,7 @@ An object loaded from a cross-reference database.
 -/
 structure RefObject where
   /-- The object's link destination. -/
-  link : Link
+  link : RemoteLink
   /-- Metadata saved for the object. -/
   data : Json
 
@@ -207,7 +207,7 @@ def RefDomain.toJson (domain : RefDomain) : Json :=
 /--
 Loads a set of reference domains from a cross-reference database in JSON format.
 -/
-def fromXrefJson (json : Json) : Except String (NameMap RefDomain) := do
+def fromXrefJson (root : String) (json : Json) : Except String (NameMap RefDomain) := do
   let json ← json.getObj?
   let mut out := {}
   let json := json.toArray
@@ -226,7 +226,7 @@ def fromXrefJson (json : Json) : Except String (NameMap RefDomain) := do
         let address := address.stripPrefix "/" |>.stripSuffix "/" |>.splitOn "/" |>.toArray
         let htmlId ← x.getObjValAs? String "id"
         let data ← x.getObjVal? "data"
-        pure {link := {path := address, htmlId := htmlId.sluggify}, data : RefObject}
+        pure {link := {root, path := address, htmlId := htmlId.sluggify}, data : RefObject}
       contents := contents.insert canonicalName v
     out := out.insert domainName {title, description, contents}
   return out
@@ -257,7 +257,7 @@ where
       return (← findProject parent)
     throw <| IO.userError "No 'lean-toolchain' found in a parent directory"
 
-private def fetchRemote (project : System.FilePath) (url : String) : IO (NameMap RefDomain) := do
+private def fetchRemote (project : System.FilePath) (root : String) (url : String) : IO (NameMap RefDomain) := do
   let json ←
     IO.Process.run {
       cmd := "curl",
@@ -265,12 +265,12 @@ private def fetchRemote (project : System.FilePath) (url : String) : IO (NameMap
       cwd := project
     }
   let json ← Json.parse json |> IO.ofExcept
-  fromXrefJson json |> IO.ofExcept
+  fromXrefJson root json |> IO.ofExcept
 
-private def fetchFile (project : System.FilePath) (file : System.FilePath) : IO (NameMap RefDomain) := do
+private def fetchFile (project : System.FilePath) (root : String) (file : System.FilePath) : IO (NameMap RefDomain) := do
   let json ← IO.FS.readFile (project / file)
   let json ← Json.parse json |> IO.ofExcept
-  fromXrefJson json |> IO.ofExcept
+  fromXrefJson root json |> IO.ofExcept
 
 private def getConfig (project : System.FilePath) (configFile : Option System.FilePath) : IO Config := do
     let configFile : System.FilePath :=
@@ -278,19 +278,38 @@ private def getConfig (project : System.FilePath) (configFile : Option System.Fi
       else project / "verso-sources.json"
     let configJson ← IO.FS.readFile configFile
     let configJson ← Json.parse configJson |> IO.ofExcept
-    Config.fromJson? configJson |> IO.ofExcept
+    match Config.fromJson? configJson with
+    | .error e => throw <| IO.userError s!"Error reading {configFile}: {e}"
+    | .ok v => pure v
+
+/--
+Information about a remote document
+-/
+structure RemoteInfo where
+  /-- The root of the document's URLs. -/
+  root : String
+  /-- A short name to show in short links (e.g. "v4.20" or a package name). -/
+  shortName : String
+  /-- A long name to show in longer links (e.g. "Lean Language Reference version 4.20"). -/
+  longName : String
+  /-- The documented items in the remote. -/
+  domains : NameMap RefDomain
 
 /--
 Updates the remote Verso data, fetching according to the configuration.
 -/
-def updateRemotes (manual : Bool) (configFile : Option System.FilePath) (logVerbose : String → IO Unit) : IO (HashMap String (String × (NameMap RefDomain))) := do
+def updateRemotes (manual : Bool) (configFile : Option System.FilePath) (logVerbose : String → IO Unit) : IO (HashMap String RemoteInfo) := do
   let project ← findProject "."
+  logVerbose s!"Loading project config. Project is '{project}'."
+  if let some f := configFile then
+    logVerbose s!"Config override is {f}."
   let config ← getConfig project configFile
 
+  logVerbose s!"Creating remote data cache directory {config.outputDir}"
   IO.FS.createDirAll config.outputDir
   let manifestPath := config.outputDir / "verso-xref-manifest.json"
   let xrefsPath := config.outputDir / "verso-xref.json"
-  let mut values : HashMap String (String × (NameMap RefDomain)) := {}
+  let mut values : HashMap String RemoteInfo := {}
   let mut metadata : HashMap String RemoteMeta := {}
   let oldManifest : Manifest ←
     try
@@ -306,9 +325,11 @@ def updateRemotes (manual : Bool) (configFile : Option System.FilePath) (logVerb
       let json ← IO.ofExcept <| Json.parse (← IO.FS.readFile xrefsPath) >>= Json.getObj?
       let json := json.toArray
       json.foldlM (init := ({} : HashMap String (NameMap RefDomain))) fun xs ⟨k, v⟩ =>
-        xs.insert k <$> IO.ofExcept (fromXrefJson v)
+        if let some remote := config.sources[k]? then
+          xs.insert k <$> IO.ofExcept (fromXrefJson remote.root v)
+        else pure xs
     catch | _ => pure {}
-  for (name, {root, updateFrequency, sources}) in config.sources do
+  for (name, {root, shortName, longName, updateFrequency, sources}) in config.sources do
     let mut found : Option (NameMap RefDomain) := none
     let lastUpdated := oldManifest.metadata[name]? |>.map (·.lastUpdated)
     if let some prior := lastUpdated then
@@ -316,18 +337,18 @@ def updateRemotes (manual : Bool) (configFile : Option System.FilePath) (logVerb
       | .days d =>
         if compare (prior + d) (← Std.Time.PlainDateTime.now) |>.isGE then
           found := oldXrefs[name]?
-          if let some v := found then
+          if let some domains := found then
             logVerbose s!"Used saved xref database for {name}, next update at {prior + d |>.toDateTimeString}"
-            values := values.insert name (root, v)
+            values := values.insert name { root, shortName, longName, domains }
             metadata := metadata.insert name { lastUpdated := (← Std.Time.PlainDateTime.now) }
             continue
       | .manual =>
         -- If this is an automatic update, attempt to use the saved value
         unless manual do
           found := oldXrefs[name]?
-          if let some v := found then
+          if let some domains := found then
             logVerbose s!"Used saved xref database for {name}, which is to be manually updated"
-            values := values.insert name (root, v)
+            values := values.insert name { root, shortName, longName, domains }
             metadata := metadata.insert name { lastUpdated := (← Std.Time.PlainDateTime.now) }
             continue
 
@@ -337,26 +358,27 @@ def updateRemotes (manual : Bool) (configFile : Option System.FilePath) (logVerb
       try
         match s with
         | .default =>
-          let out ← fetchRemote project (root ++ "/" ++ "xref.json")
+          let out ← fetchRemote project root (root ++ "/" ++ "xref.json")
           found := some out
           break
         | .localOverride f =>
-          let out ← fetchFile project f
+          let out ← fetchFile project root f
           found := some out
           break
         | .remoteOverride url =>
-          let out ← fetchRemote project url
+          let out ← fetchRemote project root url
           found := some out
           break
       catch | _ => continue
-    if let some v := found then
-      values := values.insert name (root, v)
+    if let some domains := found then
+      values := values.insert name {root, shortName, longName, domains}
       metadata := metadata.insert name { lastUpdated := (← Std.Time.PlainDateTime.now) }
     else throw <| IO.userError s!"No source found for {name}"
 
   let manifest : Manifest := {config with metadata}
+  logVerbose s!"Saving manifest to {manifestPath}"
   IO.FS.writeFile manifestPath (manifest.toJson.render.pretty 78)
   let valuesJson : Json := .mkObj <| values.toList.map fun (k, v) =>
-    (k, .mkObj <| v.snd.toList.map fun ⟨d, o⟩ => (d.toString, o.toJson))
+    (k, .mkObj <| v.domains.toList.map fun ⟨d, o⟩ => (d.toString, o.toJson))
   IO.FS.writeFile xrefsPath (valuesJson.render.pretty 78)
   return values

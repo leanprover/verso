@@ -105,14 +105,56 @@ end Hover
 
 open Hover
 
+structure CodeLink where
+  /-- A very short description to show in hovers, like `"doc"` or `"src"` -/
+  shortDescription : String
+  /-- A longer description (at most one sentence) to describe the destination -/
+  description : String
+  /-- The actual link destination -/
+  href : String
+
+instance : ToJson CodeLink where
+  toJson l := json%{"short": $l.shortDescription, "long": $l.description, "href": $l.href}
+
+def CodeLink.inlineHtml (link : CodeLink) (text : Html) : Html :=
+  {{<a href={{link.href}} title={{link.description}}>{{text}}</a>}}
+
+def CodeLink.menuHtml (link : CodeLink) : Html :=
+  {{<a href={{link.href}} title={{link.description}}>{{link.shortDescription}}</a>}}
+
+def CodeLink.manyHtml (links : Array CodeLink) (text : Html) : Html :=
+  if h : links.size = 1 then
+    {{<a href={{links[0].href}} title={{links[0].description}}>{{text}}</a>}}
+  else if h : links.size > 1 then
+    let linkData := Json.arr (links.map ToJson.toJson) |>.compress
+    {{<a href={{links[0].href}} title={{links[0].description}} data-verso-links={{linkData}}>{{text}}</a>}}
+  else text
+
 open Lean (Name FVarId Level) in
+/--
+Instructions for computing link targets for various code elements.
+
+Each kind of link may have multiple destinations. The first is the default link, while the remainder
+are considered alternates.
+-/
 structure LinkTargets where
-  var : FVarId → Option String := fun _ => none
-  sort : Level → Option String := fun _ => none
-  const : Name → Option String := fun _ => none
-  option : Name → Option String := fun _ => none
-  keyword : Name → Option String := fun _ => none
-  definition : Name → Option String := fun _ => none
+  var : FVarId → Array CodeLink := fun _ => #[]
+  sort : Level → Array CodeLink := fun _ => #[]
+  const : Name → Array CodeLink := fun _ => #[]
+  option : Name → Array CodeLink := fun _ => #[]
+  keyword : Name → Array CodeLink := fun _ => #[]
+  definition : Name → Array CodeLink := fun _ => #[]
+
+def LinkTargets.augment (tgts1 tgts2 : LinkTargets) : LinkTargets where
+  var fv := tgts1.var fv ++ tgts2.var fv
+  sort l := tgts1.sort l ++ tgts2.sort l
+  const n := tgts1.const n ++ tgts2.const n
+  option o := tgts1.option o ++ tgts2.option o
+  keyword kw := tgts1.keyword kw ++ tgts2.keyword kw
+  definition x := tgts1.definition x ++ tgts2.definition x
+
+instance : Append LinkTargets where
+  append := LinkTargets.augment
 
 inductive HighlightHtmlM.CollapseGoals where
   | subsequent
@@ -178,42 +220,28 @@ def options : HighlightHtmlM HighlightHtmlM.Options := do
 open Lean in
 open Verso.Output.Html in
 def constLink (constName : Name) (content : Html) : HighlightHtmlM Html := do
-  if let some tgt := (← linkTargets).const constName then
-    pure {{<a href={{tgt}}>{{content}}</a>}}
-  else
-    pure content
+  return CodeLink.manyHtml ((← linkTargets).const constName) content
+
 
 open Lean in
 open Verso.Output.Html in
 def optionLink (optionName : Name) (content : Html) : HighlightHtmlM Html := do
-  if let some tgt := (← linkTargets).option optionName then
-    pure {{<a href={{tgt}}>{{content}}</a>}}
-  else
-    pure content
+  return CodeLink.manyHtml ((← linkTargets).option optionName) content
 
 open Lean in
 open Verso.Output.Html in
 def varLink (varName : FVarId) (content : Html) : HighlightHtmlM Html := do
-  if let some tgt := (← linkTargets).var varName then
-    pure {{<a href={{tgt}}>{{content}}</a>}}
-  else
-    pure content
+  return CodeLink.manyHtml ((← linkTargets).var varName) content
 
 open Lean in
 open Verso.Output.Html in
 def kwLink (kind : Name) (content : Html) : HighlightHtmlM Html := do
-  if let some tgt := (← linkTargets).keyword kind then
-    pure {{<a href={{tgt}}>{{content}}</a>}}
-  else
-    pure content
+  return CodeLink.manyHtml ((← linkTargets).keyword kind) content
 
 open Lean in
 open Verso.Output.Html in
 def defLink (defName : Name) (content : Html) : HighlightHtmlM Html := do
-  if let some tgt := (← linkTargets).definition defName then
-    pure {{<a href={{tgt}}>{{content}}</a>}}
-  else
-    pure content
+  return CodeLink.manyHtml ((← linkTargets).definition defName) content
 
 defmethod Token.Kind.addLink (tok : Token.Kind) (content : Html) : HighlightHtmlM Html := do
   match tok with
@@ -994,6 +1022,21 @@ def highlightingStyle : String := "
   border-right-color: white;
 }
 
+.extra-doc-links {
+  list-style-type: none;
+  margin-left: 0;
+  padding: 0;
+}
+
+.extra-doc-links > li {
+  display: inline-block;
+}
+
+.extra-doc-links > li:not(:last-child)::after {
+  content: '|';
+  display: inline-block;
+  margin: 0 0.25em;
+}
 "
 
 def highlightingJs : String :=
@@ -1150,6 +1193,22 @@ window.onload = () => {
               }
             } else if (hoverInfo) { // The inline info, still used for compiler messages
               content.appendChild(hoverInfo.cloneNode(true));
+            }
+            const extraLinks = tgt.parentElement.dataset['versoLinks'];
+            if (extraLinks) {
+              try {
+                const extras = JSON.parse(extraLinks);
+                const links = document.createElement('ul');
+                links.className = 'extra-doc-links';
+                extras.forEach((l) => {
+                  const li = document.createElement('li');
+                  li.innerHTML = \"<a href=\\\"\" + l['href'] + \"\\\" title=\\\"\" + l.long + \"\\\">\" + l.short + \"</a>\";
+                  links.appendChild(li);
+                });
+                content.appendChild(links);
+              } catch (error) {
+                console.error(error);
+              }
             }
           }
           return content;
