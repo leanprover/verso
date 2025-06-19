@@ -67,50 +67,42 @@ def loadModuleContent' (projectDir : String) (mod : String) (suppressNamespaces 
       "LEAN", "ELAN", "ELAN_HOME", "LEAN_GITHASH",
       "ELAN_TOOLCHAIN", "DYLD_LIBRARY_PATH", "LD_LIBRARY_PATH"]
 
+  let cmd := "elan"
+  let runCmd' (args : Array String) : m Unit := do
+      let res ← IO.Process.output {
+        cmd, args, cwd := projectDir
+        -- Unset Lake's environment variables
+        env :=
+          lakeVars.map (·, none) ++
+          #[("SUBVERSO_SUPPRESS_NAMESPACES", some (" ".intercalate suppressNamespaces))]
+      }
+      if res.exitCode != 0 then reportFail projectDir cmd args res
+
+  let runCmd (trace : MessageData) (args : Array String) : m Unit :=
+    withTraceNode `Elab.Verso.Code.External.loadModule (fun _ => pure trace) (runCmd' args)
 
   let toolchainFile ← IO.FS.Handle.mk toolchainfile .read
+  -- Lake tends to get in trouble if used concurrently, so build the Lean code with a lock.
   toolchainFile.lock (exclusive := true)
-  let (h, f) ← IO.FS.createTempFile
   try
-    let cmd := "elan"
-
-    let runCmd' (args : Array String) : m Unit := do
-        let res ← IO.Process.output {
-          cmd, args, cwd := projectDir
-          -- Unset Lake's environment variables
-          env := lakeVars.map (·, none)
-        }
-        if res.exitCode != 0 then reportFail projectDir cmd args res
-
-    let runCmd (trace : MessageData) (args : Array String) : m Unit :=
-      withTraceNode `Elab.Verso.Code.External.loadModule (fun _ => pure trace) (runCmd' args)
-
-    runCmd m!"loadModuleContent': building subverso" #["run", "--install", toolchain, "lake", "build", "subverso-extract-mod"]
-
-    runCmd m!"loadModuleContent': building example project's module" #["run", "--install", toolchain, "lake", "build", "+" ++ mod]
-
-    withTraceNode `Elab.Verso.Code.External.loadModule (fun _ => pure m!"loadModuleContent': extracting '{mod}'") do
-      IO.FS.withTempFile fun h f' => do
-        h.putStrLn <| " ".intercalate suppressNamespaces
-        h.flush
-        h.rewind
-        let args :=
-          #["run", "--install", toolchain, "lake", "exe", "subverso-extract-mod"] ++
-          #["--suppress-namespaces", f'.toString] ++
-          #[mod, f.toString]
-        runCmd' args
-
-    h.rewind
-
-    let .ok (.arr json) := Json.parse (← h.readToEnd)
-      | throwError s!"Expected JSON array"
-    match json.mapM fromJson? with
-    | .error err =>
-      throwError s!"Couldn't parse JSON from output file: {err}\nIn:\n{json}"
-    | .ok val => pure val
+    runCmd m!"loadModuleContent': building extractor" #["run", "--install", toolchain, "lake", "build", "subverso-extract-mod"]
+    runCmd m!"loadModuleContent': building highlighted example" #["run", "--install", toolchain, "lake", "build", "+" ++ mod ++ ":highlighted"]
   finally
     toolchainFile.unlock
-    IO.FS.removeFile f
+
+
+
+  let hlDir := ("build" : System.FilePath) / "highlighted"
+  let hlFile :=
+    (mod.split (· == '.')).foldl (init := hlDir) (· / ·) |>.addExtension "json"
+  let json ← IO.FS.readFile (projectDir / ".lake" / hlFile)
+  let .ok (.arr json) := Json.parse json
+    | throwError s!"Expected JSON array"
+  match json.mapM fromJson? with
+  | .error err =>
+    throwError s!"Couldn't parse JSON from output file: {err}\nIn:\n{json}"
+  | .ok val => pure val
+
 
 where
   decorateOut (name : String) (out : String) : String :=
