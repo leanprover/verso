@@ -80,7 +80,9 @@ def Site.traverse
     (components : Components) :
     IO (Site × Blog.TraverseState) := do
   let topCtxt : Blog.TraverseContext := {path := [], config, components}
-  let mut state : Blog.TraverseState := {}
+  let logVerbose := (if config.verbose then (fun _ => pure ()) else IO.println)
+  let remoteContent ← Multi.updateRemotes false config.remoteInfoConfigPath logVerbose
+  let mut state : Blog.TraverseState := {remoteContent}
   let mut site := site
   repeat -- TODO add max iterations
     let (site', state') ← StateT.run (ReaderT.run site.traverse1 topCtxt) state

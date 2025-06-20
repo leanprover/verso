@@ -783,8 +783,8 @@ private def filterString (p : Char → Bool) (str : String) : String := Id.run <
   pure out
 
 open Template in
-def blogMain (theme : Theme) (site : Site) (relativizeUrls := true) (options : List String)
-    (components : Components := by exact %registered_components) :
+def blogMain (theme : Theme) (site : Site) (relativizeUrls := true) (linkTargets : Code.LinkTargets := {})
+    (options : List String) (components : Components := by exact %registered_components) :
     IO UInt32 := do
   let hasError ← IO.mkRef false
   let logError msg := do hasError.set true; IO.eprintln msg
@@ -800,7 +800,7 @@ def blogMain (theme : Theme) (site : Site) (relativizeUrls := true) (options : L
     dir := cfg.destination,
     config := cfg,
     rewriteHtml := rw,
-    linkTargets := {},
+    linkTargets := linkTargets,
     components := components
   }
   let (((), st), _) ← site.generate theme initGenCtx .empty {}

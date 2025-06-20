@@ -24,6 +24,7 @@ import Verso.ExpectString
 import Verso.Hooks
 import Verso.Hover
 import Verso.Instances
+import Verso.Linters
 import Verso.Log
 import Verso.Method
 import Verso.Output

@@ -16,6 +16,7 @@ open Lean (Json ToJson FromJson Quote)
 open Std (HashMap)
 
 namespace SubVerso.Highlighting
+
 /--
 Removes n levels of indentation from highlighted code.
 -/
@@ -85,8 +86,8 @@ def Dedup.docJson (table : Dedup Html) : Json :=
 structure IdSupply where
   nextId : Nat := 0
 
-def IdSupply.unique (supply : IdSupply) : String × IdSupply :=
-  (s!"--verso-unique-{supply.nextId}", {supply with nextId := supply.nextId + 1})
+def IdSupply.unique (supply : IdSupply) (base := "--verso-unique") : String × IdSupply :=
+  (s!"{base}-{supply.nextId}", {supply with nextId := supply.nextId + 1})
 
 structure State (α) where
   dedup : Dedup α
@@ -104,13 +105,56 @@ end Hover
 
 open Hover
 
+structure CodeLink where
+  /-- A very short description to show in hovers, like `"doc"` or `"src"` -/
+  shortDescription : String
+  /-- A longer description (at most one sentence) to describe the destination -/
+  description : String
+  /-- The actual link destination -/
+  href : String
+
+instance : ToJson CodeLink where
+  toJson l := json%{"short": $l.shortDescription, "long": $l.description, "href": $l.href}
+
+def CodeLink.inlineHtml (link : CodeLink) (text : Html) : Html :=
+  {{<a href={{link.href}} title={{link.description}}>{{text}}</a>}}
+
+def CodeLink.menuHtml (link : CodeLink) : Html :=
+  {{<a href={{link.href}} title={{link.description}}>{{link.shortDescription}}</a>}}
+
+def CodeLink.manyHtml (links : Array CodeLink) (text : Html) : Html :=
+  if h : links.size = 1 then
+    {{<a href={{links[0].href}} title={{links[0].description}}>{{text}}</a>}}
+  else if h : links.size > 1 then
+    let linkData := Json.arr (links.map ToJson.toJson) |>.compress
+    {{<a href={{links[0].href}} title={{links[0].description}} data-verso-links={{linkData}}>{{text}}</a>}}
+  else text
+
 open Lean (Name FVarId Level) in
+/--
+Instructions for computing link targets for various code elements.
+
+Each kind of link may have multiple destinations. The first is the default link, while the remainder
+are considered alternates.
+-/
 structure LinkTargets where
-  var : FVarId → Option String := fun _ => none
-  sort : Level → Option String := fun _ => none
-  const : Name → Option String := fun _ => none
-  option : Name → Option String := fun _ => none
-  keyword : Name → Option String := fun _ => none
+  var : FVarId → Array CodeLink := fun _ => #[]
+  sort : Level → Array CodeLink := fun _ => #[]
+  const : Name → Array CodeLink := fun _ => #[]
+  option : Name → Array CodeLink := fun _ => #[]
+  keyword : Name → Array CodeLink := fun _ => #[]
+  definition : Name → Array CodeLink := fun _ => #[]
+
+def LinkTargets.augment (tgts1 tgts2 : LinkTargets) : LinkTargets where
+  var fv := tgts1.var fv ++ tgts2.var fv
+  sort l := tgts1.sort l ++ tgts2.sort l
+  const n := tgts1.const n ++ tgts2.const n
+  option o := tgts1.option o ++ tgts2.option o
+  keyword kw := tgts1.keyword kw ++ tgts2.keyword kw
+  definition x := tgts1.definition x ++ tgts2.definition x
+
+instance : Append LinkTargets where
+  append := LinkTargets.augment
 
 inductive HighlightHtmlM.CollapseGoals where
   | subsequent
@@ -157,8 +201,8 @@ def addHover (content : Html) : HighlightHtmlM Nat := modifyGet fun st =>
   let (hoverId, dedup) := st.dedup.insert content
   (hoverId, {st with dedup := dedup})
 
-def uniqueId : HighlightHtmlM String := modifyGet fun st =>
-  let (id, idSupply) := st.idSupply.unique
+def uniqueId (base := "--verso-unique") : HighlightHtmlM String := modifyGet fun st =>
+  let (id, idSupply) := st.idSupply.unique (base := base)
   (id, {st with idSupply := idSupply})
 
 def withCollapsedSubgoals (policy : HighlightHtmlM.CollapseGoals) (act : HighlightHtmlM α) : HighlightHtmlM α :=
@@ -176,39 +220,33 @@ def options : HighlightHtmlM HighlightHtmlM.Options := do
 open Lean in
 open Verso.Output.Html in
 def constLink (constName : Name) (content : Html) : HighlightHtmlM Html := do
-  if let some tgt := (← linkTargets).const constName then
-    pure {{<a href={{tgt}}>{{content}}</a>}}
-  else
-    pure content
+  return CodeLink.manyHtml ((← linkTargets).const constName) content
+
 
 open Lean in
 open Verso.Output.Html in
 def optionLink (optionName : Name) (content : Html) : HighlightHtmlM Html := do
-  if let some tgt := (← linkTargets).option optionName then
-    pure {{<a href={{tgt}}>{{content}}</a>}}
-  else
-    pure content
+  return CodeLink.manyHtml ((← linkTargets).option optionName) content
 
 open Lean in
 open Verso.Output.Html in
 def varLink (varName : FVarId) (content : Html) : HighlightHtmlM Html := do
-  if let some tgt := (← linkTargets).var varName then
-    pure {{<a href={{tgt}}>{{content}}</a>}}
-  else
-    pure content
+  return CodeLink.manyHtml ((← linkTargets).var varName) content
 
 open Lean in
 open Verso.Output.Html in
 def kwLink (kind : Name) (content : Html) : HighlightHtmlM Html := do
-  if let some tgt := (← linkTargets).keyword kind then
-    pure {{<a href={{tgt}}>{{content}}</a>}}
-  else
-    pure content
+  return CodeLink.manyHtml ((← linkTargets).keyword kind) content
 
+open Lean in
+open Verso.Output.Html in
+def defLink (defName : Name) (content : Html) : HighlightHtmlM Html := do
+  return CodeLink.manyHtml ((← linkTargets).definition defName) content
 
 defmethod Token.Kind.addLink (tok : Token.Kind) (content : Html) : HighlightHtmlM Html := do
   match tok with
   | .const x _ _ false => constLink x content
+  | .const x _ _ true => defLink x content
   | .option o .. => optionLink o content
   | .var x .. => varLink x content
   | .keyword (some k) .. => kwLink k content
@@ -286,8 +324,22 @@ defmethod Token.Kind.hover? (tok : Token.Kind) : HighlightHtmlM (Option Nat) :=
     some <$> addHover {{ <code><span class="literal string">{{s.quote}}</span>" : String"</code>}}
   | .withType t =>
     some <$> addHover {{ <code>{{t}}</code> }}
-  | .sort _ (some doc) =>
+  | .sort (some doc) =>
     some <$> addHover {{<code class="docstring">{{doc}}</code>}}
+  | .levelConst i =>
+    some <$> addHover {{<code class="docstring">s!"The universe level {i}"</code>}}
+  | .levelVar x =>
+    some <$> addHover {{<code class="docstring">s!"The universe parameter {x}"</code>}}
+  | .levelOp op =>
+    let doc? :=
+      match op with
+      | "max" =>
+        some "The maximum of two universes."
+      | "imax" =>
+        some "The impredicative maximum of two universes:\n\n * `imax u 0 = 0`\n * `imax u (v+1) = max u (v+1)`"
+      | _ => none
+    doc?.mapM fun doc =>
+     addHover {{<code class="docstring">{{doc}}</code>}}
   | _ => pure none
 where
   separatedDocs txt :=
@@ -314,12 +366,19 @@ defmethod Token.Kind.«class» : Token.Kind → String
   | .anonCtor .. => "unknown"
   | .unknown => "unknown"
   | .withType .. => "typed"
+  | .levelConst .. => "level-const"
+  | .levelVar .. => "level-var"
+  | .levelOp .. => "level-op"
 
 defmethod Token.Kind.data : Token.Kind → String
   | .const n _ _ _ | .anonCtor n _ _ => "const-" ++ toString n
   | .var ⟨v⟩ _ => "var-" ++ toString v
   | .option n _ _ => "option-" ++ toString n
   | .keyword _ (some occ) _ => "kw-occ-" ++ toString occ
+  | .sort (some d) => s!"sort-{hash d}" -- equal docstrings as a proxy for the same operator
+  | .levelVar x => s!"level-var-{x}"
+  | .levelConst i => s!"level-const-{i}"
+  | .levelOp op => s!"level-op-{op}"
   | _ => ""
 
 defmethod Token.Kind.idAttr : Token.Kind → HighlightHtmlM (Array (String × String))
@@ -334,7 +393,7 @@ defmethod Token.toHtml (tok : Token) : HighlightHtmlM Html := do
   let idAttr ← tok.kind.idAttr
   let hoverAttr := hoverId.map (fun i => #[("data-verso-hover", toString i)]) |>.getD #[]
   tok.kind.addLink {{
-    <span class={{tok.kind.«class» ++ " token"}} "data-binding"={{tok.kind.data}} {{hoverAttr}} {{idAttr}}>{{tok.content}}</span>
+    <span class={{tok.kind.«class» ++ " token"}} data-binding={{tok.kind.data}} {{hoverAttr}} {{idAttr}}>{{tok.content}}</span>
   }}
 
 defmethod Highlighted.Goal.toHtml (exprHtml : expr → HighlightHtmlM Html) (index : Nat) : Highlighted.Goal expr → HighlightHtmlM Html
@@ -412,7 +471,6 @@ def _root_.Array.mapIndexedM [Monad m] (arr : Array α) (f : Fin arr.size → α
     out := out.push (← f ⟨i, by get_elem_tactic⟩ arr[i])
   pure out
 
-
 partial defmethod Highlighted.toHtml : Highlighted → HighlightHtmlM Html
   | .token t => t.toHtml
   | .text str => pure {{<span class="inter-text">{{str}}</span>}}
@@ -437,7 +495,7 @@ partial defmethod Highlighted.toHtml : Highlighted → HighlightHtmlM Html
       let visibleStates := (← options).visibleProofStates
       let checkedAttr :=
         if visibleStates.isVisible startPos endPos then #[("checked", "checked")] else #[]
-      let id := s!"tactic-state-{hash info}-{startPos}-{endPos}"
+      let id ← uniqueId (base := s!"tactic-state-{hash info}-{startPos}-{endPos}")
       pure {{
         <span class="tactic">
           <label for={{id}}>{{← toHtml hl}}</label>
@@ -544,22 +602,6 @@ def highlightingStyle : String := "
 .hl.lean .hover-info.messages > code:not(:first-child) {
   margin-top: 0rem;
 }
-
-/*
-@media (hover: hover) {
-  .hl.lean .has-info:hover > .hover-container > .hover-info:not(.tactic *),
-  .hl.lean .tactic:has(> .tactic-toggle:checked) .has-info:hover > .hover-container > .hover-info,
-  .hl.lean .token:hover > .hover-container > .hover-info:not(.has-info *):not(.tactic *),
-  .hl.lean .tactic:has(> .tactic-toggle:checked) .token:hover > .hover-container > .hover-info:not(.has-info *) {
-    display: inline-block;
-    position: absolute;
-    top: 1rem;
-    font-weight: normal;
-    font-style: normal;
-    width: min-content;
-  }
-}
-*/
 
 .hl.lean.block {
   display: block;
@@ -703,14 +745,12 @@ def highlightingStyle : String := "
 .hl.lean .tactic-state {
   display: none;
   position: relative;
-  left: 2rem;
   width: fit-content;
   border: 1px solid #888888;
   border-radius: 0.1rem;
   padding: 0.5rem;
   font-family: sans-serif;
   background-color: #ffffff;
-  z-index: 200;
 }
 
 .hl.lean.popup .tactic-state {
@@ -726,32 +766,26 @@ def highlightingStyle : String := "
 
 .hl.lean .tactic {
   position: relative;
+  display: inline-grid;
+  grid-template-columns: 1fr;
+  vertical-align: top;
 }
 
 .hl.lean .tactic-toggle:checked ~ .tactic-state {
-  display: block;
+  display: inline-block;
+  vertical-align: top;
+  grid-row: 2;
+  justify-self: start;
 }
-
-/*
-@media (hover: hover) {
-  .hl.lean .tactic:hover > .tactic-toggle:not(:checked) ~ .tactic-state {
-    display: block;
-    position: absolute;
-    left: 0;
-    transform: translate(0.25rem, 0);
-    z-index: 250;
-  }
-}
-*/
 
 .hl.lean .tactic > label {
   position: relative;
-  transition: all 0.5s;
+  grid-row: 1;
 }
 
 @media (hover: hover) {
-  .hl.lean .tactic > label:hover {
-    border-bottom: 1px dotted #bbbbbb;
+  .hl.lean .tactic:has(.tactic-toggle:not(:checked)) > label:hover {
+    background-color: #eeeeee;
   }
 }
 
@@ -988,6 +1022,21 @@ def highlightingStyle : String := "
   border-right-color: white;
 }
 
+.extra-doc-links {
+  list-style-type: none;
+  margin-left: 0;
+  padding: 0;
+}
+
+.extra-doc-links > li {
+  display: inline-block;
+}
+
+.extra-doc-links > li:not(:last-child)::after {
+  content: '|';
+  display: inline-block;
+  margin: 0 0.25em;
+}
 "
 
 def highlightingJs : String :=
@@ -1145,17 +1194,29 @@ window.onload = () => {
             } else if (hoverInfo) { // The inline info, still used for compiler messages
               content.appendChild(hoverInfo.cloneNode(true));
             }
+            const extraLinks = tgt.parentElement.dataset['versoLinks'];
+            if (extraLinks) {
+              try {
+                const extras = JSON.parse(extraLinks);
+                const links = document.createElement('ul');
+                links.className = 'extra-doc-links';
+                extras.forEach((l) => {
+                  const li = document.createElement('li');
+                  li.innerHTML = \"<a href=\\\"\" + l['href'] + \"\\\" title=\\\"\" + l.long + \"\\\">\" + l.short + \"</a>\";
+                  links.appendChild(li);
+                });
+                content.appendChild(links);
+              } catch (error) {
+                console.error(error);
+              }
+            }
           }
           return content;
         }
       };
 
 
-
-      const addTippy = (selector, props) => {
-        tippy(selector, Object.assign({}, defaultTippyProps, props));
-      };
-      document.querySelectorAll('.hl.lean .const.token, .hl.lean .keyword.token, .hl.lean .literal.token, .hl.lean .option.token, .hl.lean .var.token, .hl.lean .typed.token').forEach(element => {
+      document.querySelectorAll('.hl.lean .const.token, .hl.lean .keyword.token, .hl.lean .literal.token, .hl.lean .option.token, .hl.lean .var.token, .hl.lean .typed.token, .hl.lean .level-var, .hl.lean .level-const, .hl.lean .level-op, .hl.lean .sort').forEach(element => {
         element.setAttribute('data-tippy-theme', 'lean');
       });
       document.querySelectorAll('.hl.lean .has-info.warning').forEach(element => {
@@ -1170,36 +1231,7 @@ window.onload = () => {
       document.querySelectorAll('.hl.lean .tactic').forEach(element => {
         element.setAttribute('data-tippy-theme', 'tactic');
       });
-      let insts = tippy('.hl.lean .const.token, .hl.lean .keyword.token, .hl.lean .literal.token, .hl.lean .option.token, .hl.lean .var.token, .hl.lean .typed.token, .hl.lean .has-info, .hl.lean .tactic', defaultTippyProps);
-
-
-
-      /*
-      tippy('.hl.lean .tactic', {
-        allowHtml: true,
-
-        onHide(any) { return false; },
-        trigger: \"click\",
-
-        maxWidth: \"none\",
-        onShow(inst) {
-          const toggle = inst.reference.querySelector(\"input.tactic-toggle\");
-          if (toggle && toggle.checked) {
-            return false;
-          }
-          if (blockedByTippy(inst.reference)) { return false; }
-        },
-        content (tgt) {
-          const content = document.createElement(\"span\");
-          const state = tgt.querySelector(\".tactic-state\").cloneNode(true);
-          state.style.display = \"block\";
-          content.appendChild(state);
-          content.style.display = \"block\";
-          content.className = \"hl lean popup\";
-          return content;
-        }
-      });
-      */
+      let insts = tippy('.hl.lean .const.token, .hl.lean .keyword.token, .hl.lean .literal.token, .hl.lean .option.token, .hl.lean .var.token, .hl.lean .typed.token, .hl.lean .has-info, .hl.lean .tactic, .hl.lean .level-var, .hl.lean .level-const, .hl.lean .level-op, .hl.lean .sort', defaultTippyProps);
   });
 }
 "

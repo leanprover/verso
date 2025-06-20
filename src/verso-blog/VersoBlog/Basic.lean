@@ -8,16 +8,21 @@ import Std.Data.HashSet
 
 import SubVerso.Highlighting
 
+
+import Verso.Code
 import Verso.Doc
 import Verso.Doc.Html
 import Verso.Method
+import MultiVerso
+
+
 import VersoBlog.LexedText
-import Verso.Code
 
 open Std (HashSet HashMap)
 open Lean (Json)
 
 open Verso Doc Output Html Code
+open Verso.Multi
 open SubVerso.Highlighting
 
 namespace Verso.Genre
@@ -132,6 +137,8 @@ structure Config where
   showDrafts : Bool := false
   postName : Date → String → String := defaultPostName
   logError : String → IO Unit
+  remoteInfoConfigPath : Option System.FilePath := none
+  verbose : Bool := false
 deriving Inhabited
 
 class MonadConfig (m : Type → Type u) where
@@ -174,6 +181,7 @@ structure TraverseState where
   jsFiles : Array (String × String) := #[]
   cssFiles : Array (String × String) := #[]
   errors : HashSet String := {}
+  remoteContent : AllRemotes
 
 def TraverseState.addJsFile (st : TraverseState) (name content : String) :=
   if st.jsFiles.all (·.1 != name) then
@@ -350,7 +358,8 @@ where
 
 instance : BEq TraverseState where
   beq
-    | ⟨u1, t1, b1, r1, p1, s1, s1', js1, css1, err1⟩, ⟨u2, t2, b2, r2, p2, s2, s2', js2, css2, err2⟩ =>
+    | ⟨u1, t1, b1, r1, p1, s1, s1', js1, css1, err1, rem1⟩,
+      ⟨u2, t2, b2, r2, p2, s2, s2', js2, css2, err2, rem2⟩ =>
       u1.toList.map (fun p => {p with snd := p.snd.toList}) == u2.toList.map (fun p => {p with snd := p.snd.toList}) &&
       t1.toList == t2.toList &&
       b1.toList == b2.toList &&
@@ -362,7 +371,8 @@ instance : BEq TraverseState where
       js1.all (js2.contains ·) &&
       css1.size == css2.size &&
       css1.all (css2.contains ·) &&
-      err1.toList == err2.toList
+      err1.toList == err2.toList &&
+      rem1 == rem2
 
 abbrev TraverseM := ReaderT Blog.TraverseContext (StateT Blog.TraverseState IO)
 

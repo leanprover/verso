@@ -90,7 +90,10 @@ block_extension Block.table (columns : Nat) (header : Bool) (tag : Option String
                   pure {{<th>{{cell}}</th>}}
                 else
                   pure {{<td>{{cell}}</td>}}
-              pure {{<tr>{{cols}}</tr>}}
+              if header && i == 0 then
+                pure {{<thead><tr>{{cols}}</tr></thead>}}
+              else
+                pure {{<tr>{{cols}}</tr>}}
             }}
           </table>
         }}
