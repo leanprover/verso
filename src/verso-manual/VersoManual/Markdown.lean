@@ -30,7 +30,7 @@ private structure HeaderHandlers (m : Type u → Type w) (block : Type u) (inlin
 structure MDContext (m : Type u → Type w) (block : Type u) (inline : Type u) : Type (max u w) where
   headerHandlers : HeaderHandlers m block inline
   elabInlineCode : Option (Option String → String → m inline)
-  elabBlockCode : Option (Option String → Option String → String → m block)
+  elabBlockCode : Option ((info? lang? : Option String) → String → m block)
 
 def attrText : AttrText → Except String String
   | .normal str => pure str
