@@ -177,7 +177,7 @@ def blockFromMarkdown [Monad m] [MonadQuotation m] [MonadError m] [AddMessageCon
     (md : MD4Lean.Block)
     (handleHeaders : List (Array Term → m Term) := [])
     (elabInlineCode : Option (Option String → String → m Term) := none)
-    (elabBlockCode : Option (Option String → Option String → String → m Term) := none) : m Term :=
+    (elabBlockCode : Option ((info? lang? : Option String) → String → m Term) := none) : m Term :=
   let ctxt := {headerHandlers := ⟨handleHeaders⟩, elabInlineCode, elabBlockCode}
   (·.fst) <$> blockFromMarkdownAux md ctxt {}
 
