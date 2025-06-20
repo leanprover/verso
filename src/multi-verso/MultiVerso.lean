@@ -394,6 +394,9 @@ instance : BEq AllRemotes := ⟨AllRemotes.beq⟩
 
 /--
 Updates the remote Verso data, fetching according to the configuration.
+
+`manual` should be `true` when a user is explicitly asking for a sync, not as part of something like
+executing a document renderer.
 -/
 def updateRemotes (manual : Bool) (configFile : Option System.FilePath) (logVerbose : String → IO Unit) : IO AllRemotes := do
   let project ← findProject "."
@@ -442,7 +445,6 @@ def updateRemotes (manual : Bool) (configFile : Option System.FilePath) (logVerb
           if let some domains := found then
             logVerbose s!"Used saved xref database for {name}, next update at {prior + d |>.toDateTimeString}"
             values := values.insert name { root, shortName, longName, domains }
-            metadata := metadata.insert name { lastUpdated := (← Std.Time.PlainDateTime.now) }
             continue
       | .manual =>
         -- If this is an automatic update, attempt to use the saved value
@@ -451,7 +453,6 @@ def updateRemotes (manual : Bool) (configFile : Option System.FilePath) (logVerb
           if let some domains := found then
             logVerbose s!"Used saved xref database for {name}, which is to be manually synchronized"
             values := values.insert name { root, shortName, longName, domains }
-            metadata := metadata.insert name { lastUpdated := (← Std.Time.PlainDateTime.now) }
             continue
 
     let sources := if sources.isEmpty then [.default] else sources
