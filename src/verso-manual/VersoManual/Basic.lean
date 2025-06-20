@@ -140,8 +140,13 @@ structure TraverseState where
   licenseInfo : HashSet LicenseInfo := {}
   private contents : NameMap Json := {}
 
+/--
+Returns a fresh internal ID.
+-/
 def freshId [Monad m] [MonadStateOf TraverseState m] : m InternalId := do
-  return InternalId.fresh (← get).ids
+  modifyGet fun st =>
+    let (i, ids) := InternalId.fresh st.ids
+    (i, {st with ids})
 
 def freshTag [Monad m] [MonadStateOf TraverseState m] (hint : String) (id : InternalId) : m String := do
   let strPart : String := hint.sluggify.toString

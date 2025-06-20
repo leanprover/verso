@@ -118,8 +118,15 @@ Registers the fact that the given ID refers to the object with the given canonic
 -/
 def Domain.insertId (canonicalName : String) (id : InternalId) (domain : Domain) : Domain :=
   { domain with
-    objects := domain.objects.alter canonicalName (·.getD {canonicalName} |>.addId id)
-    objectsById := domain.objectsById.alter id (·.getD {} |>.insert canonicalName) }
+    objects :=
+      domain.objects.alter canonicalName fun
+        | none => some { canonicalName, ids := {id} }
+        | some o => some (o.addId id)
+    objectsById :=
+      domain.objectsById.alter id fun
+        | none => some {canonicalName}
+        | some ns => ns.insert canonicalName
+  }
 
 /--
 Sets the `data` field of the object with the given canonical name, replacing existing data.

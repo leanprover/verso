@@ -43,10 +43,10 @@ instance : ToString InternalId where
   toString x := s!"#<{x.id}>"
 
 /--
-Returns a fresh ID that's not contained in the provided set of used IDs.
+Returns a fresh ID that's not contained in the provided set of used IDs along with the updated set.
 -/
-def InternalId.fresh (used : TreeSet InternalId) : InternalId := Id.run do
+def InternalId.fresh (used : TreeSet InternalId) : (InternalId × TreeSet InternalId) := Id.run do
   let mut i : InternalId := used.max?.map (⟨·.id + 1⟩) |>.getD ⟨0⟩
   while used.contains i do
     i := ⟨i.id + 1⟩
-  return i
+  return (i, used.insert i)
