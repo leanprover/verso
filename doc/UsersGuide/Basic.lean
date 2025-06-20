@@ -42,8 +42,6 @@ All genres use the same markup syntax, and they can share extensions to the mark
 Mixing incompatible features results in an ordinary Lean type error.
 :::
 
-{ref "wf-rel" (remote := manual)}[foo]
-
 # Docstrings
 %%%
 tag := "docstrings"
