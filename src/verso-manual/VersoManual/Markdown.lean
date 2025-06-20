@@ -283,8 +283,9 @@ private partial def partFromMarkdownAux {m} [Monad m]
 /--
 Adds blocks from Markdown, treating top-level headers as new parts.
 
-Note that `handleHeaders` is still used for elaborating headers that appear
-nested within blocks (e.g., blockquotes).
+`handleHeaders` provides a means of elaborating headers that appear
+nested within blocks (e.g., blockquotes), with one element for each supported
+level of nesting.
 
 `currentHeaderLevels` gives a list of headers within which elaboration is
 occurring and which can be terminated by the current elaboration. Typically,
