@@ -62,6 +62,9 @@ private structure RefInfo where
   resolvedDestination : Option String := none
 deriving BEq, ToJson, FromJson
 
+defmethod Part.htmlToc (part : Part Manual) : Bool :=
+  part.metadata.map (·.htmlToc) |>.getD true
+
 inline_extension Inline.ref (canonicalName : String) (domain : Option Name) (remote : Option String) (resolvedDestination : Option String := none) where
   data := ToJson.toJson (RefInfo.mk canonicalName domain remote resolvedDestination)
   traverse := fun _ info content => do
@@ -591,7 +594,7 @@ where
         {{<section>{{Html.titlePage titleHtml authors introHtml ++ contents}} {{subTocHtml}}</section>}}
       else
         let subTocHtml :=
-          if (depth > 0 && part.htmlSplit != .never) && subToc.size > 0 then
+          if (depth > 0 && part.htmlSplit != .never) && subToc.size > 0 && part.htmlToc then
             {{<ol class="section-toc">{{subToc.map (·.html config.sectionTocDepth)}}</ol>}}
           else .empty
         {{<section><h1>{{titleHtml}}</h1> {{introHtml}} {{contents}} {{subTocHtml}}</section>}}

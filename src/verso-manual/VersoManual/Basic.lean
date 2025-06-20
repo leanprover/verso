@@ -100,6 +100,8 @@ structure PartMetadata where
   draft : Bool := false
   /-- Which number has been assigned? This field is set during traversal. -/
   assignedNumber : Option Numbering := none
+  /-- If `true`, this part will display a list of subparts that are separate HTML pages. -/
+  htmlToc := true
   htmlSplit : HtmlSplitMode := .default
 deriving BEq, Hashable, Repr
 
