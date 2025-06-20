@@ -4,14 +4,16 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 import Std.Data.HashSet
+
 import Verso.Output.Html
+import MultiVerso.Path
 
 import VersoManual.Basic
 import VersoManual.Html.Style
 
 namespace Verso.Genre.Manual.Html
 open Std (HashSet)
-open Verso.Output Html
+open Verso.Output Html Multi
 
 structure Toc.Meta where
   title : Html
@@ -19,7 +21,6 @@ structure Toc.Meta where
   path : Path
   id : Option String
   sectionNum : Option (Array Numbering)
-
 deriving Repr
 
 structure Toc extends Toc.Meta where

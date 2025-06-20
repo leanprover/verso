@@ -10,8 +10,10 @@ import Std.Data.HashMap
 import Std.Data.HashSet
 
 import VersoManual.Basic
+import MultiVerso
 
 open Verso Genre Manual
+open Verso.Multi
 open Verso.Doc.Elab
 open Lean (ToJson FromJson)
 open Std (HashMap HashSet)
@@ -159,9 +161,9 @@ def index.descr : InlineDescr where
   toHtml :=
     open Verso.Output.Html in
     some <| fun _go id inl _content => do
-      let some (_, t) := (← read).traverseState.externalTags.get? id
+      let some link := (← read).traverseState.externalTags.get? id
         | panic! s!"Untagged index target with data {inl}"
-      return {{<span id={{t.toString}}></span>}}
+      return {{<span id={{link.htmlId.toString}}></span>}}
 
 def Inline.see : Inline where
   name := `Verso.Genre.Manual.see
@@ -239,16 +241,16 @@ where
     match h : links.size with
     | 0 => pure termHtml
     | 1 =>
-      if let some (path, htmlId) := xref.externalTags[links[0]]? then
-        let addr := path.link (some htmlId.toString)
+      if let some dest := xref.externalTags[links[0]]? then
+        let addr := dest.link
         pure {{<a href={{addr}}>{{termHtml}}</a>}}
       else
         HtmlT.logError s!"No external tag for {id.toString}"
         pure .empty
     | _ =>
       let links ← links.mapIdxM fun i id => do
-        if let some (path, htmlId) := xref.externalTags[id]? then
-          let addr := path.link (some htmlId.toString)
+        if let some (dest : Link) := xref.externalTags[id]? then
+          let addr := dest.link
           pure {{" " <a href={{addr}}> s!"({i})" </a>}}
         else
           HtmlT.logError s!"No external tag for {id}"

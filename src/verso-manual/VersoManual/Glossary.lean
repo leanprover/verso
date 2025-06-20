@@ -126,9 +126,9 @@ def deftech.descr : InlineDescr where
   toHtml :=
     open Verso.Output.Html Doc.Html.HtmlT in
     some <| fun go id inl content => do
-      let some (_, t) := (← state).externalTags[id]?
+      let some link := (← state).externalTags[id]?
         | panic! s!"Untagged index target with data {inl}"
-      return {{<span id={{t.toString}} class="def-technical-term">{{← content.mapM go}}</span>}}
+      return {{<span id={{link.htmlId.toString}} class="def-technical-term">{{← content.mapM go}}</span>}}
 
 def Inline.tech : Inline where
   name := `Verso.Genre.Manual.tech
@@ -201,8 +201,8 @@ def tech.descr : InlineDescr where
           | .error e => HtmlT.logError e; content.mapM go
           | .ok id =>
             let xref ← Doc.Html.HtmlT.state
-            if let some (path, htmlId) := xref.externalTags.get? id then
-              let addr := path.link (some htmlId.toString)
+            if let some link := xref.externalTags.get? id then
+              let addr := link.link
               pure {{<a class="technical-term" href={{addr}}>{{← content.mapM go}}</a>}}
             else
               Doc.Html.HtmlT.logError s!"{loc}: No external tag for {id}"

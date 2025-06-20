@@ -15,8 +15,9 @@ import Verso.Doc.Lsp
 import Verso.Doc.Elab
 import Verso.FS
 
+import MultiVerso
+
 import VersoManual.Basic
-import VersoManual.Slug
 import VersoManual.TeX
 import VersoManual.Html
 import VersoManual.Html.Style
@@ -34,17 +35,18 @@ import VersoManual.Marginalia
 import VersoManual.Bibliography
 import VersoManual.Table
 
-open Lean (Name NameMap Json ToJson FromJson)
+open Lean (Name NameMap Json ToJson FromJson quote)
 
 open Verso.FS
 
 open Verso.Doc Elab
-
+open Verso.Multi
 open Verso.Genre.Manual.TeX
 open Verso.Genre.Manual.WordCount
 
 open Verso.Code (LinkTargets)
 open Verso.Code.Hover (Dedup State)
+open Verso.ArgParse
 
 namespace Verso.Genre
 
@@ -53,30 +55,36 @@ namespace Manual
 defmethod Part.htmlSplit (part : Part Manual) : HtmlSplitMode :=
   part.metadata.map (·.htmlSplit) |>.getD .default
 
+private structure RefInfo where
+  canonicalName : String
+  domain : Option Name
+  remote : Option String
+  resolvedDestination : Option String := none
+deriving BEq, ToJson, FromJson
+
 defmethod Part.htmlToc (part : Part Manual) : Bool :=
   part.metadata.map (·.htmlToc) |>.getD true
 
-
-def Inline.ref : Inline where
-  name := `Verso.Genre.Manual.Inline.ref
-
-@[inline_extension Inline.ref]
-def ref.descr : InlineDescr where
+inline_extension Inline.ref (canonicalName : String) (domain : Option Name) (remote : Option String) (resolvedDestination : Option String := none) where
+  data := ToJson.toJson (RefInfo.mk canonicalName domain remote resolvedDestination)
   traverse := fun _ info content => do
-
-    match FromJson.fromJson? (α := String × Option Name × Option String) info with
+    match FromJson.fromJson? (α := RefInfo) info with
     | .error e =>
       logError e; pure none
-    | .ok (name, domain, none) =>
+    | .ok { canonicalName := name, domain, remote := none, resolvedDestination := none } =>
       let domain := domain.getD sectionDomain
       match (← get).resolveDomainObject domain name with
       | .error _ => return none
-      | .ok (path, htmlId) =>
-        let dest := path.link (some htmlId.toString)
-        return some <| .other {Inline.ref with data := ToJson.toJson (name, some domain, some dest)} content
-    | .ok (_name, _domain, some (_linkDest : String)) =>
+      | .ok dest =>
+        return some <| .other (Inline.ref name (some domain) none (some dest.link)) content
+    | .ok { canonicalName := name, domain, remote := some remote, resolvedDestination := none } =>
+      let domain := domain.getD sectionDomain
+      match (← get).resolveRemoteObject domain name remote with
+      | .error _ => return none
+      | .ok dest =>
+        return some <| .other (Inline.ref name (some domain) (some remote) (some dest.link)) content
+    | .ok {resolvedDestination := some _, ..} =>
       pure none
-
   toTeX :=
     some <| fun go _ _ content => do
       pure <| .seq <| ← content.mapM fun b => do
@@ -84,20 +92,49 @@ def ref.descr : InlineDescr where
   toHtml :=
     open Verso.Output.Html in
     some <| fun go _ info content => do
-      match FromJson.fromJson? (α := String × Option Name × Option String) info with
+      match FromJson.fromJson? (α := RefInfo) info with
       | .error e =>
         Html.HtmlT.logError e; content.mapM go
-      | .ok (name, domain, none) =>
+      | .ok { canonicalName := name, domain, remote := none, resolvedDestination := none } =>
         Html.HtmlT.logError ("No destination found for tag '" ++ name ++ "' in " ++ toString domain); content.mapM go
-      | .ok (_, _, some dest) =>
+      | .ok { canonicalName := name, domain, remote := some remote, resolvedDestination := none } =>
+        Html.HtmlT.logError ("No destination found for remote '" ++ remote ++ "' tag '" ++ name ++ "' in " ++ toString domain); content.mapM go
+      | .ok {resolvedDestination := some dest, ..} =>
         pure {{<a href={{dest}}>{{← content.mapM go}}</a>}}
 
+section
+open Lean
+variable {m} [Monad m] [MonadError m]
+
+structure RoleArgs where
+  canonicalName : String
+  domain : Option Name
+  remote : Option String := none
+
+instance : FromArgs RoleArgs m where
+  fromArgs :=
+    RoleArgs.mk <$>
+      .positional `canonicalName (ValDesc.string.as "canonical name (string literal)") <*>
+      .named' `domain true <*>
+      .named `remote stringOrName true
+where
+  stringOrName : ValDesc m String := {
+    description := "remote name (string or identifier)"
+    get
+      | .str s => pure s.getString
+      | .name n => pure n.getId.toString
+      | .num n => throwErrorAt n "Expected name or string literal, got {n.getNat}"
+  }
+end
 /--
 Inserts a reference to the provided tag.
 -/
-def ref (content : Array (Doc.Inline Manual)) (canonicalName : String) (domain : Option Name := none) : Doc.Inline Manual :=
-  let data : (String × Option Name × Option String) := (canonicalName, domain, none)
-  .other {Inline.ref with data := ToJson.toJson data} content
+@[role_expander ref]
+def ref : RoleExpander
+  | args, content => do
+    let {canonicalName, domain, remote} ← parseThe RoleArgs args
+    let content ← content.mapM elabInline
+    return #[← ``(Inline.other (Inline.ref $(quote canonicalName) $(quote domain) $(quote remote)) #[$content,*])]
 
 block_extension Block.paragraph where
   traverse := fun _ _ _ => pure none
@@ -164,6 +201,14 @@ structure Config where
   `none` means "unlimited".
   -/
   rootTocDepth : Option Nat := some 1
+  /--
+  Location of the remote config file.
+  -/
+  remoteConfigFile : Option System.FilePath := none
+  /--
+  How to insert links in rendered code
+  -/
+  linkTargets : TraverseState → LinkTargets := TraverseState.localTargets
 
 
 def ensureDir (dir : System.FilePath) : IO Unit := do
@@ -207,10 +252,13 @@ where
 
 def traverse (logError : String → IO Unit) (text : Part Manual) (config : Config) : ReaderT ExtensionImpls IO (Part Manual × TraverseState) := do
   let topCtxt : Manual.TraverseContext := {logError, draft := config.draft}
+  if config.verbose then IO.println "Updating remote data"
+  let remoteContent ← updateRemotes false config.remoteConfigFile (if config.verbose then IO.println else fun _ => pure ())
   let mut state : Manual.TraverseState := {
     licenseInfo := .ofList config.licenseInfo,
     extraCssFiles := config.extraCssFiles,
-    extraJsFiles := config.extraJsFiles
+    extraJsFiles := config.extraJsFiles,
+    remoteContent
   }
   let mut text := text
   if !config.draft then
@@ -292,7 +340,7 @@ partial def toc (depth : Nat) (opts : Html.Options IO)
 
     let some {id := some id, ..} := meta
       | throw <| .userError s!"No ID for {sTitle} - {repr meta}"
-    let some (_, v) := state.externalTags[id]?
+    let some {htmlId := v, ..} := state.externalTags[id]?
       | throw <| .userError s!"No external ID for {sTitle}"
 
     let ctxt' :=
@@ -357,21 +405,12 @@ def xref (toc : List Html.Toc) (xrefJson : String) (findJs : String) (state : Tr
   (extraJs := [s!"let xref = {xrefJson};\n" ++ findJs])
 
 def emitXrefs (toc : List Html.Toc) (dir : System.FilePath) (state : TraverseState) (config : Config) : IO Unit := do
-  let mut out : Json := Json.mkObj []
-  for (n, dom) in state.domains do
-    out := out.setObjVal! n.toString <| Json.mkObj [
-      ("title", Json.str <| dom.title.getD n.toString),
-      ("description", dom.description.map Json.str |>.getD Json.null),
-      ("contents", Json.mkObj <| dom.objects.toList.map fun (x, y) =>
-        (x, ToJson.toJson <| y.ids.toList.filterMap (jsonRef y.data <$> state.externalTags[·]?)))]
+  let out := xrefJson state.domains state.externalTags
   ensureDir dir
   let xrefJson := toString out
   IO.FS.writeFile (dir.join "xref.json") xrefJson
   ensureDir (dir / "find")
   IO.FS.writeFile (dir / "find" / "index.html") (Html.doctype ++ (relativizeLinks <| xref toc xrefJson find.js state config).asString)
-where
-  jsonRef (data : Json) (ref : Path × Slug) : Json :=
-    Json.mkObj [("address", ref.1.link), ("id", ref.2.toString), ("data", data)]
 
 def wordCount
     (wcPath : System.FilePath)
@@ -399,7 +438,7 @@ where
     let opts : Html.Options IO := {logError := fun msg => logError msg}
     let ctxt := {logError}
     let definitionIds := state.definitionIds
-    let linkTargets := state.linkTargets
+    let linkTargets := config.linkTargets state
     let titleHtml ← Html.seq <$> text.title.mapM (Manual.toHtml opts.lift ctxt state definitionIds linkTargets {})
     let introHtml ← Html.seq <$> text.content.mapM (Manual.toHtml opts.lift ctxt state definitionIds linkTargets {})
     let bookToc ← text.subParts.mapM (fun p => toc 0 opts (ctxt.inPart p) state definitionIds linkTargets p)
@@ -478,7 +517,7 @@ where
     let opts : Html.Options IO := {logError := fun msg => logError msg}
     let ctxt := {logError}
     let definitionIds := state.definitionIds
-    let linkTargets := state.linkTargets
+    let linkTargets := config.linkTargets state
     let toc ← text.subParts.toList.mapM fun p =>
       toc config.htmlDepth opts (ctxt.inPart p) state definitionIds linkTargets p
     let titleHtml ← Html.seq <$> text.title.mapM (Manual.toHtml opts.lift ctxt state definitionIds linkTargets {} ·)
@@ -650,6 +689,7 @@ where
       if cfg.verbose then
         IO.println s!"Saving multi-page HTML"
       let (text', traverseState) ← emitHtmlMulti logError cfg text
+      if cfg.verbose then IO.println s!"Executing {extraSteps.length} extra steps"
       for step in extraSteps do
         step .multi logError config traverseState text'
     if let some wcFile := cfg.wordCount then
