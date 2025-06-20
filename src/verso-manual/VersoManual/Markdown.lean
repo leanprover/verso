@@ -251,7 +251,7 @@ private partial def closeSections {m} [Monad m]
   | [] => modifyThe MDState ({· with inHeaders := [(level, 0)]})
   | (docLevel, nesting) :: more =>
     if level ≤ docLevel then
-      if let some ctxt' := (← getThe PartElabM.State).partContext.close default then -- TODO: source position!
+      if let some ctxt' := (← getThe PartElabM.State).partContext.close default then -- Markdown parser provides no source position
         modifyThe PartElabM.State fun st => {st with partContext := ctxt'}
         closeSections level
       if level < docLevel then
