@@ -259,7 +259,7 @@ private partial def closeSections {m} [Monad m]
     else
       modifyThe MDState ({· with inHeaders := (level, nesting + 1) :: hdrs})
 
-private partial def partFromMarkdownAux {m} [Monad m]
+private partial def addPartFromMarkdownAux {m} [Monad m]
     [MonadLiftT PartElabM m] [MonadStateOf PartElabM.State m]
     [MonadQuotation m] [AddMessageContext m] [MonadError m]
     : MD4Lean.Block → MDT m Term Term Unit
@@ -289,8 +289,10 @@ level of nesting.
 
 `currentHeaderLevels` gives a list of headers within which elaboration is
 occurring and which can be terminated by the current elaboration. Typically,
-these are taken from a previous iteration of `partFromMarkdown`, but they can
-also be specified manually as `(headerLevel, nestingLevel)` pairs.
+these are taken from a previous execution of `addPartFromMarkdown`, but they can
+also be specified manually as `(headerLevel, nestingLevel)` pairs, where
+`headerLevel` is the Markdown header level and `nestingLevel` the corresponding
+Verso nesting level of a preceding header.
 -/
 def addPartFromMarkdown {m} [Monad m]
     [MonadLiftT PartElabM m] [MonadStateOf PartElabM.State m]
@@ -301,5 +303,5 @@ def addPartFromMarkdown {m} [Monad m]
     (elabInlineCode : Option (Option String → String → m Term) := none)
     (elabBlockCode : Option (Option String → Option String → String → m Term) := none) : m (List (Nat × Nat)) := do
   let ctxt := {headerHandlers := ⟨handleHeaders⟩, elabInlineCode, elabBlockCode}
-  let (_, { inHeaders }) ← (partFromMarkdownAux md |>.run ctxt |>.run {inHeaders := currentHeaderLevels})
+  let (_, { inHeaders }) ← (addPartFromMarkdownAux md |>.run ctxt |>.run {inHeaders := currentHeaderLevels})
   return inHeaders
