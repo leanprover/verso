@@ -23,6 +23,24 @@ register_option linter.typography.dashes : Bool := {
   descr := "if true, generate em and en dash suggestions"
 }
 
+/-- Generates asterisk and underscore minimization suggestions -/
+register_option linter.verso.markup.emph : Bool := {
+  defValue := true
+  descr := "if true, generate suggestions to minimize markup for emphasis"
+}
+
+/-- Generates backtick minimization suggestions -/
+register_option linter.verso.markup.code : Bool := {
+  defValue := true
+  descr := "if true, generate suggestions to minimize markup for inline code elements"
+}
+
+/-- Generates backtick minimization suggestions for code blocks -/
+register_option linter.verso.markup.codeBlock : Bool := {
+  defValue := true
+  descr := "if true, generate suggestions to minimize markup for code block elements"
+}
+
 namespace Verso.Linter
 
 private inductive PunctuationState where
@@ -109,3 +127,91 @@ def typography : Linter where
       | _ => pure none
 
 initialize addLinter typography
+
+private def longestRunOf (string : Substring) (char : Char) : Nat := Id.run do
+  let mut best := 0
+  let mut curr : Option Nat := none
+  let mut iter := { string.str.iter with i := string.startPos }
+  while h : iter.hasNext ∧ iter.i < string.stopPos do
+    let c := iter.curr' h.1
+    iter := iter.next' h.1
+    if c == char then
+      if let some n := curr then
+        curr := some (n + 1)
+      else
+        curr := some 1
+    else
+      if let some n := curr then
+        best := max n best
+        curr := none
+  if let some n := curr then
+    best := max n best
+  return best
+
+private def lintDelimited (linter : Lean.Option Bool) (text : FileMap) (tk1 tk2 : Syntax) (delimChar : Char) (minimal : Nat := 1) : CommandElabM Unit := do
+  unless getLinterValue linter (← getLinterOptions) do return
+  let some ⟨start1, stop1⟩ := tk1.getRange?
+    | pure ()
+  let some ⟨start2, stop2⟩ := tk2.getRange?
+    | pure ()
+  let opener := text.source.extract start1 stop1
+  let closer := text.source.extract start2 stop2
+  let length := opener.length
+  if closer.length ≠ length then return
+  if length ≤ minimal then return
+  let contents := { text.source.toSubstring with startPos := stop1, stopPos := start2 }
+  let biggest := longestRunOf contents delimChar
+  if biggest < length - 1 then
+    let delim := String.mk (List.replicate (max (biggest + 1) minimal) delimChar)
+    let replacement := (delim ++ contents.toString ++ delim)
+    let strLit :=
+      Syntax.mkStrLit (text.source.extract start1 stop2)
+        (info := .original {str := text.source, startPos := start1, stopPos := start1} start1 {str := text.source, startPos := stop2, stopPos := stop2} stop2)
+    let h ← liftTermElabM <| MessageData.hint m!"Use the minimal number of '{delimChar}'s" #[{suggestion := replacement}] (ref? := strLit)
+    let note :=
+      if opener == "**" then MessageData.note m!"In Verso, emphasis is indicated with `_` and bold with `*`."
+      else m!""
+    logLint linter strLit (m!"Unnecessary '{delimChar}'" ++ note ++ h)
+
+/--
+Lints for unnecessary extra `*` and `_` on emhasis inlines
+-/
+def emphasisMinimization : Linter where
+  run := withSetOptionIn fun stx => do
+    unless (`Verso.Doc.Concrete).isPrefixOf stx.getKind do return
+    unless getLinterValue linter.verso.markup.emph (← getLinterOptions) do return
+
+    let text ← getFileMap
+
+    discard <| stx.replaceM fun
+      | `(inline|_[%$tk1 $e* ]%$tk2) => do
+        lintDelimited linter.verso.markup.emph text tk1 tk2 '_'
+        pure none
+      | `(inline|*[%$tk1 $e* ]%$tk2) => do
+        lintDelimited linter.verso.markup.emph text tk1 tk2 '*'
+        pure none
+      | _ => pure none
+
+initialize addLinter emphasisMinimization
+
+/--
+Lints for unnecessary extra backticks on code
+-/
+def codeMinimization : Linter where
+  run := withSetOptionIn fun stx => do
+    unless (`Verso.Doc.Concrete).isPrefixOf stx.getKind do return
+    let opts ← getLinterOptions
+    unless getLinterValue linter.verso.markup.code opts || getLinterValue linter.verso.markup.codeBlock opts do return
+
+    let text ← getFileMap
+
+    discard <| stx.replaceM fun
+      | `(inline|code(%$tk1 $_ )%$tk2) => do
+        lintDelimited linter.verso.markup.code text tk1 tk2 '`'
+        pure none
+      | `(block|```%$tk1 $[$_ $_*]? | $_ ```%$tk2) => do
+        lintDelimited linter.verso.markup.codeBlock text tk1 tk2 '`' (minimal := 3)
+        pure none
+      | _ => pure none
+
+initialize addLinter codeMinimization
