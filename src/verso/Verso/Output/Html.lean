@@ -367,7 +367,8 @@ where
   newline i := "\n" ++ String.mk (List.replicate i ' ')
   breakline tag := if breakLines && tag ∈ newlineAfter then newline indent else ""
   breakline' tag := if breakLines && tag ∈ newlineAfter then newline (indent + 2) else ""
-  attrsAsString xs := String.join <| xs.toList.map (fun ⟨k, v⟩ => s!" {k}=\"{v}\"")
+  attrsAsString xs := String.join <| xs.toList.map (fun ⟨k, v⟩ => s!" {k}=\"{escapeAttr v}\"")
+  escapeAttr str := str |>.replace "&" "&amp;" |>.replace "\"" "&quot;"
 
 /--
 info: |

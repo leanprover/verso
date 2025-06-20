@@ -437,6 +437,7 @@ def moduleName : RoleExpander
 
     withAnchored moduleName anchor? fun hl => do
       if let some tok@⟨k, _txt⟩ := hl.matchingName? nameStr then
+
         let tok := show?.map (⟨k, ·.getId.toString⟩) |>.getD tok
         if let some h := tokenHover tok then
           Hover.addCustomHover name (.markdown h)
@@ -459,6 +460,10 @@ macro_rules
 
 private def suggestTerms (hl : Highlighted) (input : String) : Array String := Id.run do
   let delimTokens : Array String := #["def", "axiom", "example", "theorem", ":=", "inductive", "where", "structure", "class", "instance"]
+
+  -- Avoid performance issues with processing very large documents
+  let hl := hl.take 1000
+
   let ns := allTokens hl |>.filter (· ∉ #[":", "[", "]", "=>", "match", "(", ")", "{", "}", ",", "with", ":=", "=", "by", "#[", ";", "@", "if", "then", "else"] ++ delimTokens)
 
   let lines := hl.lines.map (·.toString.trim) |>.filter (·.any (· ∉ [' ', '(', ')', '=', ':']))
