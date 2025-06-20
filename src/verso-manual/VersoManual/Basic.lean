@@ -682,7 +682,9 @@ def doc.tech : Domain := {}
 def doc.syntaxKind : Domain := {}
 def doc.option : Domain := {}
 def doc.tactic.conv : Domain := {}
-def «example» : Domain := {}
+
+-- Protected to avoid taking up good namespace
+protected def «example» : Domain := {}
 
 def docstringDomain := ``Verso.Genre.Manual.doc
 def tacticDomain := ``Verso.Genre.Manual.doc.tactic
