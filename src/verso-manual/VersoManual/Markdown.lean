@@ -268,7 +268,7 @@ private partial def addPartFromMarkdownAux {m} [Monad m]
     let txtStxs ← txt.mapM inlineFromMarkdown |>.run' none
     let titleTexts ← match txt.mapM stringFromMarkdownText with
       | .ok t => pure t
-      | .error e => throwError m!"Invalid Markdown in header:\n{e}"
+      | .error e => throwError m!"Unsupported Markdown in header:\n{e}"
     let titleText := titleTexts.foldl (· ++ ·) ""
     PartElabM.push {
       titleSyntax := quote (k := `str) titleText
