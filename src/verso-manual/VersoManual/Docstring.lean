@@ -1310,7 +1310,7 @@ def tryElabInlineCodeStrict (allTactics : Array Tactic.Doc.TacticDoc) (extraKeyw
   ] priorWord str
 
 open Lean Elab Term in
-def tryElabBlockCode (_ _ : Option String) (str : String) : DocElabM Term := do
+def tryElabBlockCode (_info? _lang? : Option String) (str : String) : DocElabM Term := do
   try
     attempt str [
       tryElabBlockCodeCommand,
