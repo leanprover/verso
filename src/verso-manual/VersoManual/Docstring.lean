@@ -1248,25 +1248,12 @@ private def attempt (str : String) (xs : List (String → DocElabM α)) : DocEla
 
 
 open Lean Elab Term in
-def tryElabInlineCode (allTactics : Array Tactic.Doc.TacticDoc) (extraKeywords : Array String)
+def tryElabInlineCodeUsing (elabs : List (String → DocElabM Term))
     (priorWord : Option String) (str : String) : DocElabM Term := do
   -- Don't try to show Lake commands as terms
   if "lake ".isPrefixOf str then return (← ``(Verso.Doc.Inline.code $(quote str)))
   try
-    attempt str <| wordElab priorWord ++ [
-      tryElabInlineCodeName,
-      -- When identifiers have the same name as tactics, prefer the identifiers
-      tryElabInlineCodeTerm (identOnly := true),
-      tryParseInlineCodeTactic,
-      tryParseInlineCodeAttribute (validate := true),
-      tryInlineOption,
-      tryElabInlineCodeTerm,
-      tryElabInlineCodeMetavarTerm,
-      tryTacticName allTactics,
-      withTheReader Term.Context (fun ctx => {ctx with autoBoundImplicit := true}) ∘ tryElabInlineCodeTerm,
-      tryElabInlineCodeTerm (ignoreElabErrors := true),
-      tryHighlightKeywords extraKeywords
-    ]
+    attempt str <| wordElab priorWord ++ elabs
   catch
     | .error ref e =>
       logWarningAt ref e
@@ -1283,8 +1270,47 @@ where
     | some "tactic" => [tryParseInlineCodeTactic]
     | _ => []
 
+open Elab in
+def tryElabInlineCode (allTactics : Array Tactic.Doc.TacticDoc) (extraKeywords : Array String)
+    (priorWord : Option String) (str : String) : DocElabM Term :=
+  tryElabInlineCodeUsing [
+    tryElabInlineCodeName,
+    -- When identifiers have the same name as tactics, prefer the identifiers
+    tryElabInlineCodeTerm (identOnly := true),
+    tryParseInlineCodeTactic,
+    tryParseInlineCodeAttribute (validate := true),
+    tryInlineOption,
+    tryElabInlineCodeTerm,
+    tryElabInlineCodeMetavarTerm,
+    tryTacticName allTactics,
+    withTheReader Term.Context (fun ctx => {ctx with autoBoundImplicit := true}) ∘ tryElabInlineCodeTerm,
+    tryElabInlineCodeTerm (ignoreElabErrors := true),
+    tryHighlightKeywords extraKeywords
+  ] priorWord str
+
+open Elab in
+/--
+Like `tryElabInlineCode`, but prefers producing un-highlighted code blocks to
+displaying metavariable-typed terms (e.g., through auto-bound implicits or
+elaboration failures).
+-/
+def tryElabInlineCodeStrict (allTactics : Array Tactic.Doc.TacticDoc) (extraKeywords : Array String)
+    (priorWord : Option String) (str : String) : DocElabM Term :=
+  tryElabInlineCodeUsing [
+    tryElabInlineCodeName,
+    -- When identifiers have the same name as tactics, prefer the identifiers
+    tryElabInlineCodeTerm (identOnly := true),
+    tryParseInlineCodeTactic,
+    tryParseInlineCodeAttribute (validate := true),
+    tryInlineOption,
+    tryElabInlineCodeTerm,
+    tryElabInlineCodeMetavarTerm,
+    tryTacticName allTactics,
+    tryHighlightKeywords extraKeywords
+  ] priorWord str
+
 open Lean Elab Term in
-def tryElabBlockCode (str : String) : DocElabM Term := do
+def tryElabBlockCode (_info? _lang? : Option String) (str : String) : DocElabM Term := do
   try
     attempt str [
       tryElabBlockCodeCommand,
