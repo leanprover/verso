@@ -53,6 +53,9 @@ namespace Manual
 defmethod Part.htmlSplit (part : Part Manual) : HtmlSplitMode :=
   part.metadata.map (·.htmlSplit) |>.getD .default
 
+defmethod Part.htmlToc (part : Part Manual) : Bool :=
+  part.metadata.map (·.htmlToc) |>.getD true
+
 
 def Inline.ref : Inline where
   name := `Verso.Genre.Manual.Inline.ref
@@ -552,7 +555,7 @@ where
         {{<section>{{Html.titlePage titleHtml authors introHtml ++ contents}} {{subTocHtml}}</section>}}
       else
         let subTocHtml :=
-          if (depth > 0 && part.htmlSplit != .never) && subToc.size > 0 then
+          if (depth > 0 && part.htmlSplit != .never) && subToc.size > 0 && part.htmlToc then
             {{<ol class="section-toc">{{subToc.map (·.html config.sectionTocDepth)}}</ol>}}
           else .empty
         {{<section><h1>{{titleHtml}}</h1> {{introHtml}} {{contents}} {{subTocHtml}}</section>}}
