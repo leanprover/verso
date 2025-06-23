@@ -78,7 +78,7 @@ partial def headerTagLinter : Linter where
               if s.stxStack.size = 1 then
                 pure (s.stxStack.get! 0)
               else return none
-          if let`(block|%%%%$tk $fieldOrAbbrev* %%%%$tk2) := nextStx then
+          if let`(block|%%%%$tk1 $fieldOrAbbrev* %%%%$tk2) := nextStx then
             let metadataStx ← `(term| { $fieldOrAbbrev* })
             let isMissing ← runTermElabM fun _ => do
               let type := .const `Verso.Genre.Manual.PartMetadata []
@@ -88,17 +88,17 @@ partial def headerTagLinter : Linter where
               | Option.none _ => pure true
               | _ => pure false
             -- The syntactic check is to disable the linter when an explicit `none` is used
-            if isMissing then -- && noFieldIsTag fieldOrAbbrev then
+            if isMissing && noFieldIsTag fieldOrAbbrev then
               let name := suggestId inls
               -- Find the beginning of the line after the token
-              let some ⟨start, stop⟩ := tk.getRange?
+              let some ⟨start1, stop1⟩ := tk1.getRange?
                 | return none
               let some ⟨start2, stop2⟩ := tk2.getRange?
                 | return none
               let blockStr := text.source.extract start stop
               let suggestions : Array Meta.Hint.Suggestion := #[
-                s!"{blockStr}\n%%%\ntag := \"{name}\"" ++ text.source.extract stop stop2,
-                s!"{blockStr}\n%%%\ntag := none" ++ text.source.extract stop stop2
+                s!"{blockStr}\n%%%\ntag := \"{name}\"" ++ text.source.extract stop1 stop2,
+                s!"{blockStr}\n%%%\ntag := none" ++ text.source.extract stop1 stop2
               ]
 
               let h ← runTermElabM fun _ => MessageData.hint "Add a tag to the metadata block or explicitly indicate that no tag is desired:" suggestions (ref? := some <| mkNullNode #[block, nextStx])
@@ -111,7 +111,7 @@ where
   noFieldIsTag (xs : Array (TSyntax `Lean.Parser.Term.structInstField)) : Bool :=
     xs.all fun
       | `(Lean.Parser.Term.structInstField|$x:ident)
-      | `(Lean.Parser.Term.structInstField|$x:ident := $_ ) => dbg_trace x; x.getId ≠ `tag
+      | `(Lean.Parser.Term.structInstField|$x:ident := $_ ) => x.getId ≠ `tag
       | _ => true
 
   suggestId (name : TSyntaxArray `inline) : String :=
