@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 import VersoBlog.Basic
+import VersoBlog.Component.Ext
 import Verso.Doc.ArgParse
 import Std.Data.HashSet
 
@@ -37,29 +38,8 @@ instance : Coe ComponentId String where
 instance : ToString ComponentId where
   toString := ComponentId.id
 
-open Lean in
-initialize blockComponentExt
-    : PersistentEnvExtension (Name × Name) (Name × Name) (NameMap Name) ←
-  registerPersistentEnvExtension {
-    mkInitial := pure {},
-    addImportedFn := fun _ => pure {},
-    addEntryFn := fun as (src, tgt) => as.insert src tgt,
-    exportEntriesFn := fun es =>
-      es.fold (fun a src tgt => a.push (src, tgt)) #[] |>.qsort (Name.quickLt ·.1 ·.1)
-  }
 syntax (name := block_component) "block_component" ident : attr
 
-
-open Lean in
-initialize inlineComponentExt
-    : PersistentEnvExtension (Name × Name) (Name × Name) (NameMap Name) ←
-  registerPersistentEnvExtension {
-    mkInitial := pure {},
-    addImportedFn := fun _ => pure {},
-    addEntryFn := fun as (src, tgt) => as.insert src tgt,
-    exportEntriesFn := fun es =>
-      es.fold (fun a src tgt => a.push (src, tgt)) #[] |>.qsort (Name.quickLt ·.1 ·.1)
-  }
 syntax (name := inline_component) "inline_component" ident : attr
 
 open Lean in

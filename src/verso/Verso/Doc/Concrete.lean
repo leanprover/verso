@@ -216,7 +216,7 @@ def finishDoc (genre : Term) (title : StrLit) : CommandElabM Unit:= do
 
 syntax (name := replaceDoc) "#doc" "(" term ")" str "=>" : command
 
-elab_rules :command
+elab_rules : command
   | `(command|#doc ( $genre:term ) $title:str =>%$tok) => open Lean Parser Elab Command in do
   findGenreCmd genre
   let titleParts ← stringToInlines title

@@ -10,6 +10,8 @@ import Lean.Exception
 
 import Verso.Doc
 
+import VersoManual.Basic
+
 open MD4Lean
 open Lean
 
@@ -28,7 +30,7 @@ private structure HeaderHandlers (m : Type u → Type w) (block : Type u) (inlin
 structure MDContext (m : Type u → Type w) (block : Type u) (inline : Type u) : Type (max u w) where
   headerHandlers : HeaderHandlers m block inline
   elabInlineCode : Option (Option String → String → m inline)
-  elabBlockCode : Option (String → m block)
+  elabBlockCode : Option ((info? lang? : Option String) → String → m block)
 
 def attrText : AttrText → Except String String
   | .normal str => pure str
@@ -97,7 +99,7 @@ partial def inlineFromMarkdown [Monad m] [MonadQuotation m] [AddMessageContext m
 
 partial def inlineFromMarkdown' : Text → Except String (Doc.Inline g)
   | .normal str | .br str | .softbr str => pure <| .text str
-  | .nullchar => .error "Unepxected null character in parsed Markdown"
+  | .nullchar => .error "Unexpected null character in parsed Markdown"
   | .del _ => .error "Unexpected strikethrough in parsed Markdown"
   | .em txt => .emph <$> txt.mapM inlineFromMarkdown'
   | .strong txt => .bold <$> txt.mapM inlineFromMarkdown'
@@ -109,7 +111,6 @@ partial def inlineFromMarkdown' : Text → Except String (Doc.Inline g)
   | .entity ent => .error s!"Unsupported entity {ent} in parsed Markdown"
   | .img .. => .error s!"Unexpected image in parsed Markdown"
   | .wikiLink .. => .error s!"Unexpected wiki-style link in parsed Markdown"
-
 
 instance [Monad m] [MonadError m] : MonadError (MDT m b i) where
   throw ex := fun _ρ _σ => throw ex
@@ -145,10 +146,12 @@ private partial def blockFromMarkdownAux [Monad m] [AddMessageContext m] [MonadQ
     let inlines ← (txt.mapM (inlineFromMarkdown ·)).run' none
     ``(Verso.Doc.Block.para #[$inlines,*])
   | .blockquote bs => do ``(Verso.Doc.Block.blockquote #[$[$(← bs.mapM blockFromMarkdownAux )],*])
-  | .code _ _ _ strs => do
+  | .code info lang _ strs => do
+    let info? := (attr' info).toOption
+    let lang? := (attr' lang).toOption
     let str := String.join strs.toList
     if let some f := (← read).elabBlockCode then
-      f str
+      f info? lang? str
     else
       ``(Verso.Doc.Block.code $(quote str))
   | .ul _ _ items => do ``(Verso.Doc.Block.ul #[$[$(← items.mapM itemFromMarkdown)],*])
@@ -174,7 +177,7 @@ def blockFromMarkdown [Monad m] [MonadQuotation m] [MonadError m] [AddMessageCon
     (md : MD4Lean.Block)
     (handleHeaders : List (Array Term → m Term) := [])
     (elabInlineCode : Option (Option String → String → m Term) := none)
-    (elabBlockCode : Option (String → m Term) := none) : m Term :=
+    (elabBlockCode : Option ((info? lang? : Option String) → String → m Term) := none) : m Term :=
   let ctxt := {headerHandlers := ⟨handleHeaders⟩, elabInlineCode, elabBlockCode}
   (·.fst) <$> blockFromMarkdownAux md ctxt {}
 
@@ -208,7 +211,7 @@ def blockFromMarkdown'
     (md : MD4Lean.Block)
     (handleHeaders : List (Array (Doc.Inline g) → Except String (Doc.Block g)) := [])
     (elabInlineCode : Option (Option String → String → Except String (Doc.Inline g)) := none)
-    (elabBlockCode : Option (String → Except String (Doc.Block g)) := none) :
+    (elabBlockCode : Option (Option String → Option String → String → Except String (Doc.Block g)) := none) :
   Except String (Doc.Block g) :=
   (·.fst) <$> blockFromMarkdownAux' md ⟨⟨handleHeaders⟩, elabInlineCode, elabBlockCode⟩ {}
 
@@ -216,3 +219,89 @@ def strongEmphHeaders' : List (Array (Doc.Inline g) → Except String (Doc.Block
   fun inls => pure <| .para #[.bold inls],
   fun inls => pure <| .para #[.emph inls]
 ]
+
+partial def stringFromMarkdownText : Text → Except String String
+  | .normal str | .br str | .softbr str => pure str
+  | .nullchar => .error "Unexpected null character in parsed Markdown"
+  | .del _ => .error "Unexpected strikethrough in parsed Markdown"
+  | .em txt => joinArrM <| txt.mapM stringFromMarkdownText
+  | .strong txt => joinArrM <| txt.mapM stringFromMarkdownText
+  | .a _ _ _ txt => joinArrM <| txt.mapM stringFromMarkdownText
+  | .latexMath m => pure <| String.join m.toList
+  | .latexMathDisplay m =>  pure <| String.join m.toList
+  | .u txt => .error s!"Unexpected underline around {repr txt} in parsed Markdown:"
+  | .code strs => pure <| String.join strs.toList
+  | .entity ent => .error s!"Unsupported entity {ent} in parsed Markdown"
+  | .img .. => .error s!"Unexpected image in parsed Markdown"
+  | .wikiLink .. => .error s!"Unexpected wiki-style link in parsed Markdown"
+where
+  joinArrM (x : Except String (Array String)) : Except String String :=
+    return String.join (← x).toList
+
+open Verso.Doc.Elab
+
+/--
+Updates the active sections given a new header with `level`.
+-/
+private partial def closeSections {m} [Monad m]
+    [MonadStateOf PartElabM.State m]
+    (level : Nat) : MDT m b i Unit := do
+  let hdrs := (← getThe MDState).inHeaders
+  match hdrs with
+  | [] => modifyThe MDState ({· with inHeaders := [(level, 0)]})
+  | (docLevel, nesting) :: more =>
+    if level ≤ docLevel then
+      if let some ctxt' := (← getThe PartElabM.State).partContext.close default then -- Markdown parser provides no source position
+        modifyThe PartElabM.State fun st => {st with partContext := ctxt'}
+        closeSections level
+      if level < docLevel then
+        modifyThe MDState ({· with inHeaders := more})
+    else
+      modifyThe MDState ({· with inHeaders := (level, nesting + 1) :: hdrs})
+
+private partial def addPartFromMarkdownAux {m} [Monad m]
+    [MonadLiftT PartElabM m] [MonadStateOf PartElabM.State m]
+    [MonadQuotation m] [AddMessageContext m] [MonadError m]
+    : MD4Lean.Block → MDT m Term Term Unit
+  | .header level txt => do
+    closeSections level
+    let txtStxs ← txt.mapM inlineFromMarkdown |>.run' none
+    let titleTexts ← match txt.mapM stringFromMarkdownText with
+      | .ok t => pure t
+      | .error e => throwError m!"Unsupported Markdown in header:\n{e}"
+    let titleText := titleTexts.foldl (· ++ ·) ""
+    PartElabM.push {
+      titleSyntax := quote (k := `str) titleText
+      expandedTitle := some (titleText, txtStxs)
+      metadata := none
+      blocks := #[]
+      priorParts := #[]
+    }
+  | b => do
+    PartElabM.addBlock (← blockFromMarkdownAux b)
+
+/--
+Adds blocks from Markdown, treating top-level headers as new parts.
+
+`handleHeaders` provides a means of elaborating headers that appear
+nested within blocks (e.g., blockquotes), with one element for each supported
+level of nesting.
+
+`currentHeaderLevels` gives a list of headers within which elaboration is
+occurring and which can be terminated by the current elaboration. Typically,
+these are taken from a previous execution of `addPartFromMarkdown`, but they can
+also be specified manually as `(headerLevel, nestingLevel)` pairs, where
+`headerLevel` is the Markdown header level and `nestingLevel` the corresponding
+Verso nesting level of a preceding header.
+-/
+def addPartFromMarkdown {m} [Monad m]
+    [MonadLiftT PartElabM m] [MonadStateOf PartElabM.State m]
+    [MonadQuotation m] [AddMessageContext m] [MonadError m]
+    (md : MD4Lean.Block)
+    (currentHeaderLevels : List (Nat × Nat) := [])
+    (handleHeaders : List (Array Term → m Term) := [])
+    (elabInlineCode : Option (Option String → String → m Term) := none)
+    (elabBlockCode : Option (Option String → Option String → String → m Term) := none) : m (List (Nat × Nat)) := do
+  let ctxt := {headerHandlers := ⟨handleHeaders⟩, elabInlineCode, elabBlockCode}
+  let (_, { inHeaders }) ← (addPartFromMarkdownAux md |>.run ctxt |>.run {inHeaders := currentHeaderLevels})
+  return inHeaders
