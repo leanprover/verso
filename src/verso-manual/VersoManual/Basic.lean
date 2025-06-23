@@ -12,6 +12,7 @@ import Verso.Doc.TeX
 import MultiVerso
 import MultiVerso.Slug
 import VersoManual.LicenseInfo
+import VersoManual.Ext
 import Verso.Output.Html
 import Verso.Output.TeX
 import Verso.BEq
@@ -438,28 +439,6 @@ structure BlockDescr where
 deriving TypeName
 
 instance : Inhabited BlockDescr := ⟨⟨id, default, default, default, default, default, default, default, default, default⟩⟩
-
-open Lean in
-initialize inlineExtensionExt
-    : PersistentEnvExtension (Name × Name) (Name × Name) (NameMap Name) ←
-  registerPersistentEnvExtension {
-    mkInitial := pure {},
-    addImportedFn := fun _ => pure {},
-    addEntryFn := fun as (src, tgt) => as.insert src tgt,
-    exportEntriesFn := fun es =>
-      es.fold (fun a src tgt => a.push (src, tgt)) #[] |>.qsort (Name.quickLt ·.1 ·.1)
-  }
-
-open Lean in
-initialize blockExtensionExt
-    : PersistentEnvExtension (Name × Name) (Name × Name) (NameMap Name) ←
-  registerPersistentEnvExtension {
-    mkInitial := pure {},
-    addImportedFn := fun _ => pure {},
-    addEntryFn := fun as (src, tgt) => as.insert src tgt,
-    exportEntriesFn := fun es =>
-      es.fold (fun a src tgt => a.push (src, tgt)) #[] |>.qsort (Name.quickLt ·.1 ·.1)
-  }
 
 syntax (name := inline_extension) "inline_extension" ident : attr
 syntax (name := block_extension) "block_extension" ident : attr

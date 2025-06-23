@@ -141,8 +141,8 @@ instance [Pure m] : MonadLift Id m where
 def blockHtml (g : Genre)
     [bg : BlogGenre g]
     (goI : Inline g → HtmlM g Html)
-    (goB : Block g → HtmlM g Html)
-    : Blog.BlockExt → Array (Block g) → HtmlM g Html
+    (goB : Block g → HtmlM g Html) :
+    Blog.BlockExt → Array (Block g) → HtmlM g Html
   | .lexedText content, _contents => do
     pure {{ <pre class=s!"lexed {content.name}"> {{ content.toHtml }} </pre> }}
   | .highlightedCode contextName hls, _contents => hls.blockHtml (toString contextName)
