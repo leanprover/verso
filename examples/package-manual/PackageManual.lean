@@ -175,11 +175,11 @@ tag := "sec-ref"
 Sections with tags can be cross-referenced.
 They additionally gain permalink indicators that can be used to link to them even if the document is reorganized.
 Tags are added in section metadata, e.g.
-````
+```
 %%%
 tag := "my-tag"
 %%%
-````
+```
 They can be linked to using {lean}`ref`.
 Here's one to {ref "sec-ref"}[this section].
 
