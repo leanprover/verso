@@ -47,7 +47,7 @@ Mixing incompatible features results in an ordinary Lean type error.
 ## Tables
 
 Tables can be written using the `table` directive.
-````
+```
 :::table
 * * 1, 1
   * 1, 2
@@ -56,7 +56,7 @@ Tables can be written using the `table` directive.
 * * 3, 1
   * 3, 2
 :::
-````
+```
 produces
 :::table
 * * 1, 1
@@ -71,11 +71,11 @@ produces
 
 The namespace `Verso.Genre.Manual.InlineLean` contains the `lean` code block:
 
-`````
+````
 ```lean (name := twoPlusTwo)
 #check 2 + 2
 ```
-`````
+````
 results in
 ```lean (name := twoPlusTwo)
 #check 2 + 2
@@ -83,19 +83,19 @@ results in
 
 and
 
-`````
+````
 ```leanOutput (name := twoPlusTwo)
 #check 2 + 2
 ```
-`````
+````
 
 results in
 
-`````
+````
 ```leanOutput twoPlusTwo
 2 + 2 : Nat
 ```
-`````
+````
 results in
 ```leanOutput twoPlusTwo
 2 + 2 : Nat

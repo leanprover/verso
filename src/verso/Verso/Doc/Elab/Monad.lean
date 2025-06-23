@@ -462,15 +462,15 @@ def findLinksAndNotes : Expr → MetaM (Array (Expr × Expr))
   | .sort .. | .fvar .. | .bvar .. | .const .. | .lit .. => pure #[]
 
 def DocElabM.genreExpr : DocElabM Expr := do
-  let ⟨_, g, _⟩ ← readThe DocElabContext
+  let ⟨_, g, _⟩ ← read
   return g
 
 def DocElabM.blockType : DocElabM Expr := do
-  let ⟨_, g, _⟩ ← readThe DocElabContext
+  let g ← genreExpr
   return .app (.const ``Doc.Block []) g
 
 def DocElabM.inlineType : DocElabM Expr := do
-  let ⟨_, g, _⟩ ← readThe DocElabContext
+  let g ← genreExpr
   return .app (.const ``Doc.Inline []) g
 
 def DocElabM.emptyBlock : DocElabM Expr := do
@@ -478,7 +478,7 @@ def DocElabM.emptyBlock : DocElabM Expr := do
 
 open Lean Meta Elab Term in
 def DocElabM.defineInline (inline : Expr) : DocElabM Name := do
-  let ⟨_, g, _⟩ ← readThe DocElabContext
+  let g ← genreExpr
 
   let n ← mkFreshUserName `inline
 
@@ -518,7 +518,7 @@ def DocElabM.defineInline (inline : Expr) : DocElabM Name := do
 
 open Lean Meta Elab Term in
 def DocElabM.defineBlock (block : Expr) : DocElabM Name := do
-  let ⟨_, g, _⟩ ← readThe DocElabContext
+  let g ← genreExpr
 
   let n ← mkFreshUserName `block
 
@@ -564,7 +564,7 @@ def PartElabM.addBlockExpr (block : Expr) : PartElabM Unit := do
 
 open Lean Meta Elab Term in
 def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := withRef block <| do
-  let ⟨_, g, _⟩ ← readThe DocElabContext
+  let g ← DocElabM.genreExpr
   let type : Expr := .app (.const ``Doc.Block []) g
   let t ← elabTerm block (some type)
   addBlockExpr t

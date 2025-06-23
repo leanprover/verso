@@ -654,6 +654,33 @@ main .authors {
     font-family: var(--verso-structure-font-family);
 }
 
+main .authors {
+    text-align: center;
+    font-family: var(--verso-structure-font-family);
+}
+
+main .authors .author:only-of-type::after {
+    content: "";
+}
+
+main .authors .author:not(:last-of-type)::after {
+    content: ", ";
+}
+
+main .authors .author:nth-last-of-type(2)::after {
+    content: " and ";
+}
+
+main .authors .note {
+    margin: 0;
+    display: inline;
+    font-style: italic;
+
+}
+main .authors:has(.author) .note::before {
+  content: ", ";
+}
+
 /******** Main content ********/
 
 .content-wrapper {

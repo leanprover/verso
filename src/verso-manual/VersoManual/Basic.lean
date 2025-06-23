@@ -99,6 +99,8 @@ structure PartMetadata where
   -/
   shortTitle : Option String := none
   authors : List String := []
+  /-- An extra note to show after the author list -/
+  authorshipNote : Option String := none
   date : Option String := none
   /-- The main tag for the part, used for cross-references. -/
   tag : Option Tag := none

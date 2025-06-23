@@ -1012,24 +1012,34 @@ def tryElabCodeMetavarTermWith (mk : Highlighted → String → DocElabM α) (st
     else
       throwError "Not a doc metavar: {stx}"
 
-open Lean Elab Term in
-def tryElabInlineCodeTerm (str : String) (ignoreElabErrors := false) (identOnly := false) : DocElabM Highlighted :=
-  tryElabCodeTermWith (ignoreElabErrors := ignoreElabErrors) (identOnly := identOnly) (fun hls _ => pure hls)
+private def asInline (hl : Highlighted) : DocElabM Expr := do
+  let g ← DocElabM.genreExpr
+  let arr ← Meta.mkArrayLit (.app (.const ``Doc.Inline []) g) [mkApp2 (.const ``Doc.Inline.code []) g (toExpr hl.toString)]
+  return mkApp3 (.const ``Doc.Inline.other []) g (.app (.const ``Inline.leanFromMarkdown []) (toExpr hl)) arr
 
+private def asBlock (hl : Highlighted) : DocElabM Expr := do
+  let g ← DocElabM.genreExpr
+  let arr ← Meta.mkArrayLit (.app (.const ``Doc.Block []) g) [mkApp2 (.const ``Doc.Block.code []) g (toExpr hl.toString)]
+  return mkApp3 (.const ``Doc.Block.other []) g (.app (.const ``Block.leanFromMarkdown []) (toExpr hl)) arr
+
+
+open Lean Elab Term in
+def tryElabInlineCodeTerm (str : String) (ignoreElabErrors := false) (identOnly := false) : DocElabM Expr :=
+  tryElabCodeTermWith (ignoreElabErrors := ignoreElabErrors) (identOnly := identOnly) (fun hls _ => asInline hls)
     str
 
 open Lean Elab Term in
-def tryElabInlineCodeMetavarTerm (str : String) (ignoreElabErrors := false) : DocElabM Highlighted :=
-  tryElabCodeMetavarTermWith (ignoreElabErrors := ignoreElabErrors) (fun hls _ => pure hls)
+def tryElabInlineCodeMetavarTerm (str : String) (ignoreElabErrors := false) : DocElabM Expr :=
+  tryElabCodeMetavarTermWith (ignoreElabErrors := ignoreElabErrors) (fun hls _ => asInline hls)
     str
 
 open Lean Elab Term in
-def tryElabBlockCodeTerm (str : String)  (ignoreElabErrors := false) : DocElabM Highlighted :=
-  tryElabCodeTermWith (ignoreElabErrors := ignoreElabErrors) (fun hls _ => pure hls)
+def tryElabBlockCodeTerm (str : String)  (ignoreElabErrors := false) : DocElabM Expr :=
+  tryElabCodeTermWith (ignoreElabErrors := ignoreElabErrors) (fun hls _ => asBlock hls)
     str
 
 open Lean Elab Term in
-def tryParseInlineCodeTactic (str : String) : DocElabM Highlighted := do
+def tryParseInlineCodeTactic (str : String) : DocElabM Expr := do
   let loc := (← getRef).getPos?.map (← getFileMap).utf8PosToLspPos
   let src :=
     if let some ⟨line, col⟩ := loc then s!"<docstring at {← getFileName}:{line}:{col}>"
@@ -1039,22 +1049,22 @@ def tryParseInlineCodeTactic (str : String) : DocElabM Highlighted := do
   | .ok stx => DocElabM.withFileMap (.ofString str) <| do
     -- TODO try actually running the tactic - if the parameters are simple enough, then it may work
     -- and give better highlights
-    highlight stx #[] (PersistentArray.empty)
+    asInline =<< highlight stx #[] (PersistentArray.empty)
 
 open Lean Elab Term in
-def tryInlineOption (str : String) : DocElabM Highlighted := do
+def tryInlineOption (str : String) : DocElabM Expr := do
   let optName := str.trim.toName
   let optDecl ← getOptionDecl optName
-  return optTok optName optDecl.declName optDecl.descr
+  asInline <| optTok optName optDecl.declName optDecl.descr
 where
   optTok (name declName : Name) (descr : String) : Highlighted :=
     .token ⟨.option name declName descr, name.toString⟩
 
 open Lean Elab in
-def tryTacticName (tactics : Array Tactic.Doc.TacticDoc) (str : String) : DocElabM Highlighted := do
+def tryTacticName (tactics : Array Tactic.Doc.TacticDoc) (str : String) : DocElabM Expr := do
   for t in tactics do
     if t.userName == str then
-      return tacToken t
+      return ← asInline <| tacToken t
   throwError "Not a tactic name: {str}"
 where
   tacToken (t : Lean.Elab.Tactic.Doc.TacticDoc) : Highlighted :=
@@ -1062,7 +1072,7 @@ where
 
 open Lean Elab Term in
 open Lean.Parser in
-def tryHighlightKeywords (extraKeywords : Array String) (str : String) : DocElabM Highlighted := do
+def tryHighlightKeywords (extraKeywords : Array String) (str : String) : DocElabM Expr := do
   let loc := (← getRef).getPos?.map (← getFileMap).utf8PosToLspPos
   let src :=
     if let some ⟨line, col⟩ := loc then s!"<docstring at {← getFileName}:{line}:{col}>"
@@ -1071,7 +1081,7 @@ def tryHighlightKeywords (extraKeywords : Array String) (str : String) : DocElab
   match runParser extraKeywords (← getEnv) (← getOptions) p str src (prec := 0) with
   | .error _e => throwError "Not keyword-highlightable"
   | .ok stx => DocElabM.withFileMap (.ofString str) <| do
-    highlight stx #[] (PersistentArray.empty)
+    asInline =<< highlight stx #[] (PersistentArray.empty)
 where
 
   simpleFn := andthenFn whitespace <| nodeFn nullKind <| manyFn tokenFn
@@ -1108,7 +1118,7 @@ private def getAttr : Syntax → Syntax
   | _ => .missing
 
 open Lean Elab Term in
-def tryParseInlineCodeAttribute (validate := true) (str : String) : DocElabM Highlighted := do
+def tryParseInlineCodeAttribute (validate := true) (str : String) : DocElabM Expr := do
   let loc := (← getRef).getPos?.map (← getFileMap).utf8PosToLspPos
   let src :=
     if let some ⟨line, col⟩ := loc then s!"<docstring at {← getFileName}:{line}:{col}>"
@@ -1128,9 +1138,9 @@ def tryParseInlineCodeAttribute (validate := true) (str : String) : DocElabM Hig
       match getAttributeImpl (← getEnv) attrName with
       | .error e => throwError e
       | .ok _ =>
-        highlight stx #[] (PersistentArray.empty)
+        asInline =<< highlight stx #[] (PersistentArray.empty)
     else
-      highlight stx #[] (PersistentArray.empty)
+      asInline =<< highlight stx #[] (PersistentArray.empty)
 
 
 private def indentColumn (str : String) : Nat := Id.run do
@@ -1163,7 +1173,7 @@ private def indentColumn (str : String) : Nat := Id.run do
 #eval indentColumn "   abc\n\n  def\n    a"
 
 open Lean Elab Term in
-def tryElabBlockCodeCommand (str : String) (ignoreElabErrors := false) : DocElabM Highlighted := do
+def tryElabBlockCodeCommand (str : String) (ignoreElabErrors := false) : DocElabM Expr := do
     let loc := (← getRef).getPos?.map (← getFileMap).utf8PosToLspPos
     let src :=
       if let some ⟨line, col⟩ := loc then s!"<docstring at {← getFileName}:{line}:{col}>"
@@ -1200,18 +1210,18 @@ def tryElabBlockCodeCommand (str : String) (ignoreElabErrors := false) : DocElab
       let mut hls := Highlighted.empty
       for cmd in cmds do
         hls := hls ++ (← highlight cmd cmdState.messages.toArray cmdState.infoState.trees)
-      pure <| hls.deIndent (indentColumn str)
+      asBlock <| hls.deIndent (indentColumn str)
 
 
 
 open Lean Elab Term in
-def tryElabInlineCodeName (str : String) : DocElabM Highlighted := do
+def tryElabInlineCodeName (str : String) : DocElabM Expr := do
   let str := str.trim
   let x := str.toName
   if x.toString == str then
     let stx := mkIdent x
     let n ← realizeGlobalConstNoOverload stx
-    constTok n str
+    asInline =<< constTok n str
   else
     throwError "Not a name: '{str}'"
 where
@@ -1241,29 +1251,14 @@ private def attempt (str : String) (xs : List (String → DocElabM α)) : DocEla
 
 
 open Lean Elab Term in
-def tryElabInlineCode (allTactics : Array Tactic.Doc.TacticDoc) (extraKeywords : Array String)
+def tryElabInlineCodeUsing (elabs : List (String → DocElabM Expr))
     (priorWord : Option String) (str : String) : DocElabM Expr := do
   let g ← DocElabM.genreExpr
   -- Don't try to show Lake commands as terms
   let code := mkApp2 (.const ``Verso.Doc.Inline.code []) g (toExpr str)
   if "lake ".isPrefixOf str then return code
   try
-    let hl ← attempt str <| wordElab priorWord ++ [
-        tryElabInlineCodeName,
-        -- When identifiers have the same name as tactics, prefer the identifiers
-        tryElabInlineCodeTerm (identOnly := true),
-        tryParseInlineCodeTactic,
-        tryParseInlineCodeAttribute (validate := true),
-        tryInlineOption,
-        tryElabInlineCodeTerm,
-        tryElabInlineCodeMetavarTerm,
-        tryTacticName allTactics,
-        withTheReader Term.Context (fun ctx => {ctx with autoBoundImplicit := true}) ∘ tryElabInlineCodeTerm,
-        tryElabInlineCodeTerm (ignoreElabErrors := true),
-        tryHighlightKeywords extraKeywords
-      ]
-    let blk := .app (.const ``Inline.leanFromMarkdown []) (toExpr hl)
-    return mkApp3 (.const ``Verso.Doc.Inline.other []) g blk (← Meta.mkArrayLit (← DocElabM.inlineType) [code])
+    attempt str <| wordElab priorWord ++ elabs
   catch
     | .error ref e =>
       logWarningAt ref e
@@ -1274,17 +1269,55 @@ def tryElabInlineCode (allTactics : Array Tactic.Doc.TacticDoc) (extraKeywords :
       else
         logWarning m!"Internal exception uncaught: {e.toMessageData}"
         return code
-
 where
   wordElab
     | some "attribute" => [tryParseInlineCodeAttribute (validate := false)]
     | some "tactic" => [tryParseInlineCodeTactic]
     | _ => []
 
+open Elab in
+def tryElabInlineCode (allTactics : Array Tactic.Doc.TacticDoc) (extraKeywords : Array String)
+    (priorWord : Option String) (str : String) : DocElabM Expr :=
+  tryElabInlineCodeUsing [
+    tryElabInlineCodeName,
+    -- When identifiers have the same name as tactics, prefer the identifiers
+    tryElabInlineCodeTerm (identOnly := true),
+    tryParseInlineCodeTactic,
+    tryParseInlineCodeAttribute (validate := true),
+    tryInlineOption,
+    tryElabInlineCodeTerm,
+    tryElabInlineCodeMetavarTerm,
+    tryTacticName allTactics,
+    withTheReader Term.Context (fun ctx => {ctx with autoBoundImplicit := true}) ∘ tryElabInlineCodeTerm,
+    tryElabInlineCodeTerm (ignoreElabErrors := true),
+    tryHighlightKeywords extraKeywords
+  ] priorWord str
+
+open Elab in
+/--
+Like `tryElabInlineCode`, but prefers producing un-highlighted code blocks to
+displaying metavariable-typed terms (e.g., through auto-bound implicits or
+elaboration failures).
+-/
+def tryElabInlineCodeStrict (allTactics : Array Tactic.Doc.TacticDoc) (extraKeywords : Array String)
+    (priorWord : Option String) (str : String) : DocElabM Expr :=
+  tryElabInlineCodeUsing [
+    tryElabInlineCodeName,
+    -- When identifiers have the same name as tactics, prefer the identifiers
+    tryElabInlineCodeTerm (identOnly := true),
+    tryParseInlineCodeTactic,
+    tryParseInlineCodeAttribute (validate := true),
+    tryInlineOption,
+    tryElabInlineCodeTerm,
+    tryElabInlineCodeMetavarTerm,
+    tryTacticName allTactics,
+    tryHighlightKeywords extraKeywords
+  ] priorWord str
+
 open Lean Elab Term in
-def tryElabBlockCode (str : String) : DocElabM Expr := do
+def tryElabBlockCode (_info? _lang? : Option String) (str : String) : DocElabM Expr := do
   let g ← DocElabM.genreExpr
-  let code := mkApp2 (.const ``Verso.Doc.Block.code []) g (toExpr str)
+  let code := mkApp2 (.const ``Verso.Doc.Block.code []) g (mkStrLit str)
   try
     let hl ← attempt str [
         tryElabBlockCodeCommand,
@@ -1293,7 +1326,7 @@ def tryElabBlockCode (str : String) : DocElabM Expr := do
         withTheReader Term.Context (fun ctx => {ctx with autoBoundImplicit := true}) ∘
           tryElabBlockCodeTerm (ignoreElabErrors := true)
       ]
-    let blk := .app (.const ``Block.leanFromMarkdown []) (toExpr hl)
+    let blk := .app (.const ``Block.leanFromMarkdown []) hl
     return mkApp3 (.const ``Verso.Doc.Block.other []) g blk (← Meta.mkArrayLit (← DocElabM.blockType) [code])
   catch
     | .error ref e =>

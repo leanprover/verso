@@ -10,6 +10,7 @@ import Verso.Doc.ArgParse
 open Verso Doc Elab
 open Verso.Genre Manual
 open Verso.ArgParse
+open DocElabM
 
 open Lean Elab
 
@@ -177,8 +178,8 @@ def table : DirectiveElab
       if rows.any (·.size != columns) then
         throwErrorAt oneBlock s!"Expected all rows to have same number of columns, but got {rows.map (·.size)}"
 
-      let ⟨_, g⟩ ← readThe DocElabContext
-      let bt ← DocElabM.blockType
+      let g ← genreExpr
+      let bt ← blockType
 
       let flattened := rows.flatten
       let rows : Array Expr ← flattened.mapM fun r => do

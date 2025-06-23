@@ -172,6 +172,9 @@ Converts a string to a slug.
 -/
 def ofString (str : String) : Slug := str.sluggify
 
+/--
+Converts a string to a slug, performing no conversion because the string is already a valid slug.
+-/
 def ofString' (str : String) (wf : WF str := by decide) : Slug := ⟨str, wf⟩
 
 /--

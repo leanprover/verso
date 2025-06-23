@@ -28,6 +28,7 @@ import VersoManual.Glossary
 import VersoManual.Docstring
 import VersoManual.WebAssets
 import VersoManual.WordCount
+import VersoManual.Linters
 import VersoManual.LocalContents
 import VersoManual.InlineLean
 import VersoManual.ExternalLean
@@ -151,7 +152,7 @@ open Lean.Meta in
 @[directive_elab paragraph]
 def paragraph : DirectiveElab
   | #[], stxs => do
-    let ⟨_, g⟩ ← readThe DocElabContext
+    let g ← DocElabM.genreExpr
     let bt ← DocElabM.blockType
     let args ← stxs.mapM elabBlock'
     return Lean.mkApp3 (.const ``Block.other []) g (← mkAppM ``Block.paragraph #[]) (← mkArrayLit bt args.toList)
@@ -436,6 +437,7 @@ where
   emitContent (dir : System.FilePath) : StateT (State Html) (ReaderT ExtensionImpls IO) (Part Manual × TraverseState) := do
     let (text, state) ← traverse logError text {config with htmlDepth := 0}
     let authors := text.metadata.map (·.authors) |>.getD []
+    let authorshipNote := text.metadata.bind (·.authorshipNote)
     let _date := text.metadata.bind (·.date) |>.getD "" -- TODO
     let opts : Html.Options IO := {logError := fun msg => logError msg}
     let ctxt := {logError}
@@ -457,7 +459,7 @@ where
         Manual.toHtml {opts.lift with headerLevel := 2} (ctxt.inPart p) state definitionIds linkTargets {} p
     let pageContent := open Verso.Output.Html in
       {{<section>
-          {{Html.titlePage titleHtml authors introHtml}}
+          {{Html.titlePage titleHtml authors authorshipNote introHtml}}
           {{bookTocHtml}}
           {{contents}}
         </section>}}
@@ -515,6 +517,7 @@ where
   emitContent (root : System.FilePath) : StateT (State Html) (ReaderT ExtensionImpls IO) (Part Manual × TraverseState) := do
     let (text, state) ← traverse logError text config
     let authors := text.metadata.map (·.authors) |>.getD []
+    let authorshipNote := text.metadata >>= (·.authorshipNote)
     let _date := text.metadata.bind (·.date) |>.getD "" -- TODO
     let opts : Html.Options IO := {logError := fun msg => logError msg}
     let ctxt := {logError}
@@ -547,13 +550,13 @@ where
       (root / "-verso-data" / name).parent |>.forM fun d => ensureDir d
       IO.FS.writeBinFile (root.join "-verso-data" |>.join name) contents
 
-    emitPart titleToShow authors toc opts.lift ctxt state definitionIds linkTargets {} true config.htmlDepth root text
+    emitPart titleToShow authors authorshipNote toc opts.lift ctxt state definitionIds linkTargets {} true config.htmlDepth root text
     emitXrefs toc root state config
     pure (text, state)
   /--
   Emits HTML for a given part, and its children if the splitting threshold is not yet reached.
   -/
-  emitPart (bookTitle : Html) (authors : List String) (bookContents)
+  emitPart (bookTitle : Html) (authors : List String) (authorshipNote : Option String) (bookContents)
       (opts ctxt state definitionIds linkTargets codeOptions)
       (root : Bool) (depth : Nat) (dir : System.FilePath) (part : Part Manual) : StateT (State Html) (ReaderT ExtensionImpls IO) Unit := do
     let thisFile := part.metadata.bind (·.file) |>.getD (part.titleString.sluggify.toString)
@@ -593,7 +596,7 @@ where
             </section>
           }}
         else .empty
-        {{<section>{{Html.titlePage titleHtml authors introHtml ++ contents}} {{subTocHtml}}</section>}}
+        {{<section>{{Html.titlePage titleHtml authors authorshipNote introHtml ++ contents}} {{subTocHtml}}</section>}}
       else
         let subTocHtml :=
           if (depth > 0 && part.htmlSplit != .never) && subToc.size > 0 && part.htmlToc then
@@ -611,7 +614,7 @@ where
     if depth > 0 ∧ part.htmlSplit != .never then
       for p in part.subParts do
         let nextFile := p.metadata.bind (·.file) |>.getD (p.titleString.sluggify.toString)
-        emitPart bookTitle authors bookContents opts ({ctxt with path := ctxt.path.push nextFile}.inPart p) state definitionIds linkTargets {} false (depth - 1) dir p
+        emitPart bookTitle authors authorshipNote bookContents opts ({ctxt with path := ctxt.path.push nextFile}.inPart p) state definitionIds linkTargets {} false (depth - 1) dir p
   termination_by depth
 
 
