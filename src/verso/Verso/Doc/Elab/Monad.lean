@@ -91,9 +91,54 @@ def headerStxToString (env : Environment) : Syntax → String
   | headerStx => dbg_trace "didn't understand {headerStx} for string"
     "<missing>"
 
+/-- Parameters that have dynamic extent with respect to Verso elaboration. -/
+structure DocElabParameters where
+  parameters : NameMap Dynamic := {}
+
 structure DocElabContext where
   genreSyntax : Syntax
   genre : Expr
+  parameters : DocElabParameters := {}
+
+section
+variable [Monad m] [MonadError m] [MonadReaderOf DocElabContext m] [MonadWithReaderOf DocElabContext m] [TypeName α]
+
+def withModifiedParameter  (x : Name) (f : α → α) (act : m β) : m β := do
+  let ⟨params⟩ := (← read).parameters
+  if let some v := params.find? x then
+    if let some v := v.get? α then
+      withReader ({ · with parameters := ⟨params.insert x (.mk (f  v))⟩ }) act
+    else throwError m!"Internal error: expected a {TypeName.typeName α} for {x}, but got a {v.typeName}"
+  else throwError m!"Internal error: no value for parameter {x} of type {TypeName.typeName α}"
+
+def withParameter (x : Name) (value : α) (act : m β) : m β := do
+  let ⟨params⟩ := (← read).parameters
+  if let some v := params.find? x then
+    if v.typeName ≠ TypeName.typeName α then
+      throwError m!"Internal error: expected a {TypeName.typeName α} for {x}, but a {v.typeName} was already present."
+  withReader ({ · with parameters := ⟨params.insert x (.mk value)⟩ }) act
+
+def parameterValue! (x : Name) : m α := do
+  let ⟨params⟩ := (← read).parameters
+  if let some v := params.find? x then
+    if let some v := v.get? α then
+      return v
+    else
+      throwError m!"Internal error: expected a {TypeName.typeName α} for {x}, but found a {v.typeName}."
+  else
+    throwError m!"Internal error: no value for {x}. Expected a {TypeName.typeName α} but no value was present."
+
+def parameterValue? (x : Name) : m (Option α) := do
+  let ⟨params⟩ := (← read).parameters
+  if let some v := params.find? x then
+    if let some v := v.get? α then
+      return (some v)
+    else
+      throwError m!"Internal error: expected a {TypeName.typeName α} for {x}, but found a {v.typeName}."
+  else
+    return none
+
+end
 
 /-- References that must be local to the current blob of concrete document syntax -/
 structure DocDef (α : Type) where
@@ -281,8 +326,11 @@ def PartElabM.State.init (title : Syntax) (expandedTitle : Option (String × Arr
 
 def PartElabM (α : Type) : Type := ReaderT DocElabContext (StateT DocElabM.State (StateT PartElabM.State TermElabM)) α
 
-def PartElabM.run (genreSyntax : Syntax) (genre : Expr) (st : DocElabM.State) (st' : PartElabM.State) (act : PartElabM α) : TermElabM (α × DocElabM.State × PartElabM.State) := do
-  let ((res, st), st') ← act ⟨genreSyntax, genre⟩ st st'
+def PartElabM.run (genreSyntax : Syntax) (genre : Expr)
+    (st : DocElabM.State) (st' : PartElabM.State)
+    (act : PartElabM α)
+    (params : DocElabParameters := {}) : TermElabM (α × DocElabM.State × PartElabM.State) := do
+  let ((res, st), st') ← act ⟨genreSyntax, genre, params⟩ st st'
   pure (res, st, st')
 
 instance : Alternative PartElabM := inferInstanceAs <| Alternative (ReaderT DocElabContext (StateT DocElabM.State (StateT PartElabM.State TermElabM)))
@@ -321,8 +369,11 @@ def PartElabM.withFileMap (fileMap : FileMap) (act : PartElabM α) : PartElabM �
 
 def DocElabM (α : Type) : Type := ReaderT DocElabContext (ReaderT PartElabM.State (StateT DocElabM.State TermElabM)) α
 
-def DocElabM.run (genreSyntax : Syntax) (genre : Expr) (st : DocElabM.State) (st' : PartElabM.State) (act : DocElabM α) : TermElabM (α × DocElabM.State) := do
-  StateT.run (act ⟨genreSyntax, genre⟩ st') st
+def DocElabM.run (genreSyntax : Syntax) (genre : Expr)
+    (st : DocElabM.State) (st' : PartElabM.State)
+    (act : DocElabM α)
+    (params : DocElabParameters := {}) : TermElabM (α × DocElabM.State) := do
+  StateT.run (act ⟨genreSyntax, genre, params⟩ st') st
 
 instance : Inhabited (DocElabM α) := ⟨fun _ _ _ => default⟩
 
@@ -386,7 +437,7 @@ instance : MonadRecDepth DocElabM where
   getMaxRecDepth := fun _ _ st' => do return (← MonadRecDepth.getMaxRecDepth, st')
 
 def PartElabM.liftDocElabM (act : DocElabM α) : PartElabM α := do
-  let ⟨gStx, g⟩ ← readThe DocElabContext
+  let ⟨gStx, g, _⟩ ← readThe DocElabContext
   let (out, st') ← act.run gStx g (← getThe DocElabM.State) (← getThe PartElabM.State)
   set st'
   pure out
@@ -411,15 +462,15 @@ def findLinksAndNotes : Expr → MetaM (Array (Expr × Expr))
   | .sort .. | .fvar .. | .bvar .. | .const .. | .lit .. => pure #[]
 
 def DocElabM.genreExpr : DocElabM Expr := do
-  let ⟨_, g⟩ ← readThe DocElabContext
+  let ⟨_, g, _⟩ ← readThe DocElabContext
   return g
 
 def DocElabM.blockType : DocElabM Expr := do
-  let ⟨_, g⟩ ← readThe DocElabContext
+  let ⟨_, g, _⟩ ← readThe DocElabContext
   return .app (.const ``Doc.Block []) g
 
 def DocElabM.inlineType : DocElabM Expr := do
-  let ⟨_, g⟩ ← readThe DocElabContext
+  let ⟨_, g, _⟩ ← readThe DocElabContext
   return .app (.const ``Doc.Inline []) g
 
 def DocElabM.emptyBlock : DocElabM Expr := do
@@ -427,7 +478,7 @@ def DocElabM.emptyBlock : DocElabM Expr := do
 
 open Lean Meta Elab Term in
 def DocElabM.defineInline (inline : Expr) : DocElabM Name := do
-  let ⟨_, g⟩ ← readThe DocElabContext
+  let ⟨_, g, _⟩ ← readThe DocElabContext
 
   let n ← mkFreshUserName `inline
 
@@ -467,7 +518,7 @@ def DocElabM.defineInline (inline : Expr) : DocElabM Name := do
 
 open Lean Meta Elab Term in
 def DocElabM.defineBlock (block : Expr) : DocElabM Name := do
-  let ⟨_, g⟩ ← readThe DocElabContext
+  let ⟨_, g, _⟩ ← readThe DocElabContext
 
   let n ← mkFreshUserName `block
 
@@ -513,7 +564,7 @@ def PartElabM.addBlockExpr (block : Expr) : PartElabM Unit := do
 
 open Lean Meta Elab Term in
 def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := withRef block <| do
-  let ⟨_, g⟩ ← readThe DocElabContext
+  let ⟨_, g, _⟩ ← readThe DocElabContext
   let type : Expr := .app (.const ``Doc.Block []) g
   let t ← elabTerm block (some type)
   addBlockExpr t
@@ -557,7 +608,7 @@ def DocElabM.addLinkRef (refName : TSyntax `str) : DocElabM (TSyntax `term) := d
 def PartElabM.addFootnoteDef (refName : TSyntax `str) (content : Array (TSyntax `term)) : PartElabM Unit := do
   let strName := refName.getString
   let docName ← currentDocName
-  let ⟨_, genre⟩ ← readThe DocElabContext
+  let ⟨_, genre, _⟩ ← readThe DocElabContext
   match (← getThe State).footnoteDefs[strName]? with
   | none =>
     let t := mkApp3 (.const ``HasNote []) (toExpr strName) (toExpr docName) genre
@@ -580,7 +631,7 @@ def PartElabM.addFootnoteDef (refName : TSyntax `str) (content : Array (TSyntax 
 
 def DocElabM.addFootnoteRef (refName : TSyntax `str) : DocElabM (TSyntax `term) := do
   let strName := refName.getString
-  let ⟨genre, _⟩ ← readThe DocElabContext
+  let ⟨genre, _, _⟩ ← readThe DocElabContext
   match (← getThe State).footnoteRefs[strName]? with
   | none =>
     modifyThe State fun st => {st with footnoteRefs := st.footnoteRefs.insert strName ⟨#[refName]⟩}

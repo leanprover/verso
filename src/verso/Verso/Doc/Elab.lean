@@ -100,11 +100,11 @@ partial def elabInline (inline : TSyntax `inline) : DocElabM (TSyntax `term) :=
     throwUnexpected other
 
 private def mkInline (ctor : Name) : DocElabM Expr := do
-    let ⟨_, g⟩ ← readThe DocElabContext
+    let ⟨_, g, _⟩ ← readThe DocElabContext
     return .app (.const ctor []) g
 
 private def mkInlineArr (ctor : Name) (xs : Array Expr) : DocElabM Expr := do
-    let ⟨_, g⟩ ← readThe DocElabContext
+    let ⟨_, g, _⟩ ← readThe DocElabContext
     return mkApp2 (.const ctor []) g (← Meta.mkArrayLit (← inlineType) xs.toList)
 
 @[inline_elab Verso.Syntax.text]
@@ -181,7 +181,7 @@ open Lean.Parser.Term in
 def _root_.Verso.Syntax.role.elab : InlineElab
   | inline@`(inline| role{$name $args*} [$subjects*]) => do
       withRef inline <| withFreshMacroScope <| withIncRecDepth <| do
-        let ⟨genre, _⟩ ← readThe DocElabContext
+        let ⟨genre, _, _⟩ ← readThe DocElabContext
         let it ← inlineType
         let resolvedName ← realizeGlobalConstNoOverloadWithInfo name
         let exp ← roleExpandersFor resolvedName
@@ -282,7 +282,7 @@ open Lean.Elab.Term in
 partial def elabBlock' (block : TSyntax `block) : DocElabM Expr :=
   withTraceNode `Elab.Verso.block (fun _ => pure m!"Block {block}") <|
   withRef block <| withFreshMacroScope <| withIncRecDepth <| do
-  let ⟨_, g⟩ ← readThe DocElabContext
+  let ⟨_, g, _⟩ ← readThe DocElabContext
   let type : Expr := .app (.const ``Doc.Block []) g
   decorateClosing block
   match block.raw with
@@ -486,7 +486,7 @@ def _root_.Verso.Syntax.block_role.elab : BlockElab := fun block =>
   | `(block|block_role{$name $args*}) => do
     withTraceNode `Elab.Verso.block (fun _ => pure m!"Block role {name}") <|
     withRef block <| withFreshMacroScope <| withIncRecDepth <| do
-      let ⟨genre, _⟩ ← readThe DocElabContext
+      let ⟨genre, _, _⟩ ← readThe DocElabContext
       let resolvedName ← realizeGlobalConstNoOverloadWithInfo name
       let exp ← blockRoleExpandersFor resolvedName
       let elabs ← blockRoleElabsFor resolvedName
@@ -568,7 +568,7 @@ def elabDesc (block : Syntax) : DocElabM (Syntax × Expr) :=
   withRef block <|
   match block with
   | `(desc_item|:%$colon $dts* => $dds*) => do
-    let ⟨_, g⟩ ← readThe DocElabContext
+    let ⟨_, g, _⟩ ← readThe DocElabContext
     let it := .app (.const ``Inline []) g
     let bt := .app (.const ``Block []) g
     let item := mkApp4 (.const ``DescItem.mk [0, 0]) it bt (← Meta.mkArrayLit it (← dts.mapM elabInline').toList) (← Meta.mkArrayLit bt (← dds.mapM elabBlock').toList)
@@ -579,7 +579,7 @@ def elabDesc (block : Syntax) : DocElabM (Syntax × Expr) :=
 @[block_elab Verso.Syntax.dl]
 def _root_.Verso.Syntax.dl.elab : BlockElab
   | `(block|dl{$itemStxs*}) => do
-    let ⟨_, g⟩ ← readThe DocElabContext
+    let ⟨_, g, _⟩ ← readThe DocElabContext
     let mut colons : Array Syntax := #[]
     let mut items : Array Expr := #[]
     for i in itemStxs do
@@ -599,7 +599,7 @@ def _root_.Verso.Syntax.dl.elab : BlockElab
 @[block_elab Verso.Syntax.blockquote]
 def _root_.Verso.Syntax.blockquote.elab : BlockElab
   | `(block|> $innerBlocks*) => do
-    let ⟨_, g⟩ ← readThe DocElabContext
+    let ⟨_, g, _⟩ ← readThe DocElabContext
     let bt ← blockType
     return mkApp2 (.const ``Block.blockquote []) g (← Meta.mkArrayLit bt (← innerBlocks.mapM elabBlock').toList)
   | _ =>
@@ -609,7 +609,7 @@ def _root_.Verso.Syntax.blockquote.elab : BlockElab
 @[block_elab Verso.Syntax.codeblock]
 def _root_.Verso.Syntax.codeblock.expand : BlockElab
   | `(block|``` $nameStx:ident $argsStx* | $contents:str ```) => do
-      let ⟨_, g⟩ ← readThe DocElabContext
+      let ⟨_, g, _⟩ ← readThe DocElabContext
       let name ← realizeGlobalConstNoOverloadWithInfo nameStx
       -- TODO typed syntax here
       let args ← parseArgs <| argsStx.map (⟨·⟩)
@@ -640,7 +640,7 @@ def _root_.Verso.Syntax.codeblock.expand : BlockElab
 
       throwUnsupportedSyntax
   | `(block|``` | $contents:str ```) => do
-    let ⟨_, g⟩ ← readThe DocElabContext
+    let ⟨_, g, _⟩ ← readThe DocElabContext
     return mkApp2 (.const ``Block.code []) g (toExpr contents.getString)
   | _ =>
     throwUnsupportedSyntax
@@ -649,7 +649,7 @@ def _root_.Verso.Syntax.codeblock.expand : BlockElab
 def _root_.Verso.Syntax.directive.expand : BlockElab
   | `(block| ::: $nameStx:ident $argsStx* { $contents:block* } ) => do
 
-    let ⟨genre, _⟩ ← readThe DocElabContext
+    let ⟨genre, _, _⟩ ← readThe DocElabContext
     let name ← realizeGlobalConstNoOverloadWithInfo nameStx
     let args ← parseArgs argsStx
 

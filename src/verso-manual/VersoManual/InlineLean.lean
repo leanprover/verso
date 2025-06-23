@@ -33,6 +33,42 @@ open Lean.Elab.Tactic.GuardMsgs
 
 namespace Verso.Genre.Manual.InlineLean
 
+def envParameter : Name := decl_name%
+
+section
+variable [Monad m] [MonadError m] [MonadReaderOf DocElabContext m] [MonadWithReaderOf DocElabContext m]
+variable [MonadEnv m] [MonadFinally m]
+
+deriving instance TypeName for Environment
+
+/--
+If a special examples environment is specified, use it.
+-/
+def usingExamplesEnv (act : m α) : m α := do
+  if let some env := (← parameterValue? envParameter) then
+    let realEnv ← getEnv
+    try
+      modifyEnv (fun _ => env)
+      act
+    finally
+      modifyEnv (fun _ => realEnv)
+  else act
+
+def getExamplesEnv : m Environment := do
+  if let some env := (← parameterValue? envParameter) then
+    pure env
+  else getEnv
+
+
+/--
+Run `act` with the examples environment set to the current environment for rollback.
+-/
+def withIsolatedExamplesEnv (act : m α) : m α := do
+  let env ← getEnv
+  withParameter envParameter env act
+
+end
+
 inline_extension Inline.lean (hls : Highlighted) where
   data :=
     let defined := hls.definedNames.toArray
@@ -170,7 +206,7 @@ Elaborates the provided Lean command in the context of the current Verso module.
 -/
 @[code_block_elab lean]
 def lean : CodeBlockElab
-  | args, str => withoutAsync <| do
+  | args, str => withoutAsync <| usingExamplesEnv do
     let config ← LeanBlockConfig.parse.run args
 
     PointOfInterest.save (← getRef) ((config.name.map (·.toString)).getD (abbrevFirstLine 20 str.getString))
@@ -278,7 +314,7 @@ Elaborates the provided Lean term in the context of the current Verso module.
 -/
 @[code_block_expander leanTerm]
 def leanTerm : CodeBlockExpander
-  | args, str => withoutAsync <| do
+  | args, str => withoutAsync <| usingExamplesEnv do
     let config ← LeanInlineConfig.parse.run args
 
     let altStr ← parserInputString str
@@ -387,7 +423,7 @@ Elaborates the provided Lean term in the context of the current Verso module.
 @[role_expander lean]
 def leanInline : RoleExpander
   -- Async elab is turned off to make sure that info trees and messages are available when highlighting
-  | args, inlines => withoutAsync do
+  | args, inlines => withoutAsync <| usingExamplesEnv do
     let config ← LeanInlineConfig.parse.run args
     let #[arg] := inlines
       | throwError "Expected exactly one argument"
@@ -504,7 +540,7 @@ Elaborates the provided term in the current Verso context, then ensures that it'
 -/
 @[role_expander inst]
 def inst : RoleExpander
-  | args, inlines => withoutAsync <| do
+  | args, inlines => withoutAsync <| usingExamplesEnv do
     let config ← LeanBlockConfig.parse.run args
     let #[arg] := inlines
       | throwError "Expected exactly one argument"
