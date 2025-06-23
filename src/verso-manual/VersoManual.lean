@@ -28,6 +28,7 @@ import VersoManual.Glossary
 import VersoManual.Docstring
 import VersoManual.WebAssets
 import VersoManual.WordCount
+import VersoManual.Linters
 import VersoManual.LocalContents
 import VersoManual.InlineLean
 import VersoManual.ExternalLean
