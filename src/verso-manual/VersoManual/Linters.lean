@@ -67,9 +67,12 @@ partial def headerTagLinter : Linter where
             -- Next block is not metadata, so suggest inserting one
             let name := suggestId inls
             let blockStr := text.source.extract start stop
-            let suggestion := s!"{blockStr}\n%%%\ntag := \"{name}\"\n%%%"
-              let h ← runTermElabM fun _ => MessageData.hint "Add a metadata block with a tag" #[suggestion] (ref? := some block)
-              logLint linter.verso.manual.headerTags block m!"Missing permalink tag{h}{tagNote}"
+            let suggestions : Array Meta.Hint.Suggestion := #[
+              s!"{blockStr}\n%%%\ntag := \"{name}\"\n%%%",
+              s!"{blockStr}\n%%%\ntag := none\n%%%"
+            ]
+            let h ← runTermElabM fun _ => MessageData.hint "Add a metadata block with a tag or explicitly indicate that no tag is desired:" suggestions (ref? := some block)
+            logLint linter.verso.manual.headerTags block m!"Missing permalink tag{h}{tagNote}"
             return none
           let nextStx ←
               if s.stxStack.size = 1 then
@@ -84,22 +87,33 @@ partial def headerTagLinter : Linter where
               match_expr tagExpr with
               | Option.none _ => pure true
               | _ => pure false
-            if isMissing then
+            -- The syntactic check is to disable the linter when an explicit `none` is used
+            if isMissing then -- && noFieldIsTag fieldOrAbbrev then
               let name := suggestId inls
               -- Find the beginning of the line after the token
               let some ⟨start, stop⟩ := tk.getRange?
                 | return none
               let some ⟨start2, stop2⟩ := tk2.getRange?
                 | return none
-              let suggestion := s!"%%%\ntag := \"{name}\"" ++ text.source.extract stop stop2
+              let blockStr := text.source.extract start stop
+              let suggestions : Array Meta.Hint.Suggestion := #[
+                s!"{blockStr}\n%%%\ntag := \"{name}\"" ++ text.source.extract stop stop2,
+                s!"{blockStr}\n%%%\ntag := none" ++ text.source.extract stop stop2
+              ]
 
-              let h ← runTermElabM fun _ => MessageData.hint "Add a tag to the metadata block" #[suggestion] (ref? := some nextStx)
+              let h ← runTermElabM fun _ => MessageData.hint "Add a tag to the metadata block or explicitly indicate that no tag is desired:" suggestions (ref? := some <| mkNullNode #[block, nextStx])
               logLint linter.verso.manual.headerTags block m!"Missing permalink tag{h}{tagNote}"
             pure ()
           return none
       pure none
 
 where
+  noFieldIsTag (xs : Array (TSyntax `Lean.Parser.Term.structInstField)) : Bool :=
+    xs.all fun
+      | `(Lean.Parser.Term.structInstField|$x:ident)
+      | `(Lean.Parser.Term.structInstField|$x:ident := $_ ) => dbg_trace x; x.getId ≠ `tag
+      | _ => true
+
   suggestId (name : TSyntaxArray `inline) : String :=
     suggestId' name |>.sluggify |>.toString
 
@@ -107,7 +121,8 @@ where
     let mut strTitle := ""
     for inl in name do
       match inl with
-      | `(inline|$s:str) | `(inline|code($s)) => strTitle := strTitle ++ s.getString.toLower
+      | `(inline|$s:str) => strTitle := strTitle ++ s.getString.toLower
+      | `(inline|code($s)) => strTitle := strTitle ++ s.getString
       | `(inline|_[$i*]) | `(inline|*[$i*]) | `(inline|link[$i*]$_) | `(inline|role{$_ $_*}[$i*]) =>
         strTitle := strTitle ++ suggestId' i
       | _ => pure ()
