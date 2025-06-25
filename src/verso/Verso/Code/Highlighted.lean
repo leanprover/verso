@@ -30,7 +30,7 @@ where
       return .token t
     | .span i x => .span i <$> remove x
     | .seq xs => .seq <$> xs.mapM remove
-    | .text s =>
+    | .text s | .unparsed s =>
       let mut s' := ""
       let mut iter := s.iter
       while h : iter.hasNext do
@@ -257,7 +257,7 @@ Removes trailing whitespace from highlighted code.
 -/
 partial defmethod Highlighted.trimRight (hl : Highlighted) : Highlighted :=
   match hl with
-  | .text str => .text str.trimRight
+  | .text str | .unparsed str => .text str.trimRight
   | .token .. => hl
   | .span infos hl => .span infos hl.trimRight
   | .tactics info startPos endPos hl => .tactics info startPos endPos hl.trimRight
@@ -280,7 +280,7 @@ Removes leading whitespace from highlighted code.
 -/
 partial defmethod Highlighted.trimLeft (hl : Highlighted) : Highlighted :=
   match hl with
-  | .text str => .text str.trimLeft
+  | .text str | .unparsed str => .text str.trimLeft
   | .token .. => hl
   | .span infos hl => .span infos hl.trimLeft
   | .tactics info startPos endPos hl => .tactics info startPos endPos hl.trimLeft
@@ -473,7 +473,7 @@ def _root_.Array.mapIndexedM [Monad m] (arr : Array α) (f : Fin arr.size → α
 
 partial defmethod Highlighted.toHtml : Highlighted → HighlightHtmlM Html
   | .token t => t.toHtml
-  | .text str => pure {{<span class="inter-text">{{str}}</span>}}
+  | .text str | .unparsed str => pure {{<span class="inter-text">{{str}}</span>}}
   | .span infos hl =>
     if let some cls := spanClass infos then do
       pure {{<span class={{"has-info " ++ cls}}>

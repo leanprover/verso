@@ -319,7 +319,7 @@ partial def getModuleDocString (hl : Highlighted) : m String := do
   let str := str.stripPrefix "/-!" |>.stripSuffix "-/" |>.trim
   pure str
 where getString : Highlighted → m String
-  | .text txt => pure txt
+  | .text txt | .unparsed txt => pure txt
   | .tactics .. => throwError "Tactics found in module docstring!"
   | .point .. => pure ""
   | .span _ hl => getModuleDocString hl
@@ -340,6 +340,7 @@ def getFirstMessage : Highlighted → Option (Highlighted.Span.Kind × String)
     failure
   | .tactics _ _ _ x => getFirstMessage x
   | .text ..
+  | .unparsed ..
   | .token .. => failure
 
 partial def examplesFromMod [Monad m] [MonadError m]
