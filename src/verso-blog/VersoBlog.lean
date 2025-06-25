@@ -283,7 +283,7 @@ def leanCommand : BlockRoleExpander
     let projectExamples ← getSubproject project
     let (_, {highlighted := hls, original := str, ..}) ← projectExamples.getOrSuggest exampleName
     Verso.Hover.addCustomHover exampleName s!"```lean\n{str}\n```"
-    pure #[← ``(Block.other (Blog.BlockExt.highlightedCode $(quote project.getId) (SubVerso.Highlighting.Highlighted.seq $(quote hls))) #[Block.code $(quote str)])]
+    pure #[← `(Block.other (Blog.BlockExt.highlightedCode { contextName := $(quote project.getId) } (SubVerso.Highlighting.Highlighted.seq $(quote hls))) #[Block.code $(quote str)])]
   | _, more =>
     if h : more.size > 0 then
       throwErrorAt more[0] "Unexpected contents"
@@ -326,7 +326,7 @@ def leanCommandAt : BlockRoleExpander
         ranges.map (fun (l, l') => s!"{l}–{l'}") |>.toList |> (.group <| Std.Format.joinSep · ("," ++ .line))
       Lean.logError m!"No example found on line {line}. Valid lines are: {indentD rangeDoc}"
 
-    pure #[← ``(Block.other (Blog.BlockExt.highlightedCode $(quote project.getId) (SubVerso.Highlighting.Highlighted.seq $(quote hls))) #[])]
+    pure #[← `(Block.other (Blog.BlockExt.highlightedCode { contextName := $(quote project.getId) } (SubVerso.Highlighting.Highlighted.seq $(quote hls))) #[])]
   | _, more =>
     if h : more.size > 0 then
       throwErrorAt more[0] "Unexpected contents"
@@ -357,7 +357,7 @@ def leanTerm : RoleExpander
     let projectExamples ← getSubproject project
     let (_, {highlighted := hls, original := str, ..}) ← projectExamples.getOrSuggest <| mkIdentFrom name exampleName
     Verso.Hover.addCustomHover arg s!"```lean\n{str}\n```"
-    pure #[← ``(Inline.other (Blog.InlineExt.highlightedCode $(quote project.getId) (SubVerso.Highlighting.Highlighted.seq $(quote hls))) #[Inline.code $(quote str)])]
+    pure #[← `(Inline.other (Blog.InlineExt.highlightedCode { contextName := $(quote project.getId) } (SubVerso.Highlighting.Highlighted.seq $(quote hls))) #[Inline.code $(quote str)])]
   | _, more =>
     if h : more.size > 0 then
       throwErrorAt more[0] "Unexpected contents"
@@ -371,9 +371,11 @@ structure LeanBlockConfig where
   keep : Option Bool := none
   name : Option Name := none
   error : Option Bool := none
+  /-- Whether to render proof states -/
+  showProofStates : Bool := true
 
 instance [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m] : FromArgs LeanBlockConfig m where
-  fromArgs := LeanBlockConfig.mk <$> .positional `exampleContext .ident <*> .named `show .bool true <*> .named `keep .bool true <*> .named `name .name true <*> .named `error .bool true
+  fromArgs := LeanBlockConfig.mk <$> .positional `exampleContext .ident <*> .named `show .bool true <*> .named `keep .bool true <*> .named `name .name true <*> .named `error .bool true <*> .namedD `showProofStates .bool true
 
 @[code_block_expander leanInit]
 def leanInit : CodeBlockExpander
@@ -470,7 +472,7 @@ def lean : CodeBlockExpander
         setInfoState infoSt
         setEnv env
       if config.show.getD true then
-        pure #[← ``(Block.other (Blog.BlockExt.highlightedCode $(quote x.getId) $(quote hls)) #[Block.code $(quote str.getString)])]
+        pure #[← `(Block.other (Blog.BlockExt.highlightedCode { contextName := $(quote x.getId), showProofStates := $(quote config.showProofStates) } $(quote hls)) #[Block.code $(quote str.getString)])]
       else
         pure #[]
 
@@ -620,7 +622,7 @@ def leanInline : RoleExpander
           }
       let hls := (← highlight stx #[] (PersistentArray.empty.push tree))
 
-      pure #[← ``(Inline.other (Blog.InlineExt.highlightedCode $(quote config.exampleContext.getId) $(quote hls)) #[Inline.code $(quote str.getString)])]
+      pure #[← `(Inline.other (Blog.InlineExt.highlightedCode { contextName := $(quote config.exampleContext.getId) } $(quote hls)) #[Inline.code $(quote str.getString)])]
 
 open Lean.Elab.Tactic.GuardMsgs
 export WhitespaceMode (exact lax normalized)
@@ -840,9 +842,9 @@ open Verso.Code.External
 
 instance [bg : BlogGenre genre] : ExternalCode genre where
   leanInline hl :=
-    Inline.other (bg.inline_eq ▸ InlineExt.highlightedCode `verso hl) #[]
+    Inline.other (bg.inline_eq ▸ InlineExt.highlightedCode { contextName := `verso } hl) #[]
   leanBlock hl :=
-    Block.other (bg.block_eq ▸ BlockExt.highlightedCode `verso hl) #[]
+    Block.other (bg.block_eq ▸ BlockExt.highlightedCode { contextName := `verso } hl) #[]
   leanOutputInline severity message plain :=
     leanOutputInline severity message plain
   leanOutputBlock severity message (summarize := false) :=
