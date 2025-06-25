@@ -278,7 +278,7 @@ def DocName.ofName (c : Name) (ppWidth : Nat := 40) (showUniverses := true) (sho
 
     let docstring? ← if checkDocstring then  getDocString? env c else Lean.findDocString? env c
 
-    let hlCtx : SubVerso.Highlighting.Context := ⟨{}, false, []⟩
+    let hlCtx : SubVerso.Highlighting.Context := ⟨{}, false, false, []⟩
 
     pure { name := c, hlName := (← renderTagged none name hlCtx), signature := (← renderTagged none sig hlCtx), docstring? }
   else
@@ -316,7 +316,7 @@ def DeclType.ofName (c : Name)
     (hideStructureConstructor : Bool := false) :
     MetaM DeclType := do
   let env ← getEnv
-  let hlCtx : SubVerso.Highlighting.Context := ⟨{}, false, []⟩
+  let hlCtx : SubVerso.Highlighting.Context := ⟨{}, false, false, []⟩
   let openDecls : List OpenDecl :=
     match c with
     | .str _ s => [.explicit c.getPrefix s.toName]
@@ -455,7 +455,7 @@ def Signature.forName [Monad m] [MonadWithOptions m] [MonadEnv m] [MonadMCtx m] 
   let ttWide := Lean.Widget.TaggedText.prettyTagged (w := 72) fmt
   let sigWide ← Lean.Widget.tagCodeInfos ctx infos ttWide
 
-  let hlCtx : SubVerso.Highlighting.Context := ⟨{}, false, []⟩
+  let hlCtx : SubVerso.Highlighting.Context := ⟨{}, false, false, []⟩
 
   return {
     wide := ← renderTagged none sigWide hlCtx
