@@ -364,6 +364,9 @@ instance : MonadWithReaderOf Term.Context PartElabM := inferInstanceAs <| MonadW
 
 instance : MonadReaderOf DocElabContext PartElabM := inferInstanceAs <| MonadReaderOf DocElabContext (ReaderT DocElabContext (StateT DocElabM.State (StateT PartElabM.State TermElabM)))
 
+instance : MonadWithReaderOf DocElabContext PartElabM := inferInstanceAs <| MonadWithReaderOf DocElabContext (ReaderT DocElabContext (StateT DocElabM.State (StateT PartElabM.State TermElabM)))
+
+
 def PartElabM.withFileMap (fileMap : FileMap) (act : PartElabM α) : PartElabM α :=
   fun ρ ρ' σ ctxt σ' mctxt rw cctxt => act ρ ρ' σ ctxt σ' mctxt rw {cctxt with fileMap := fileMap}
 
@@ -426,6 +429,8 @@ instance : MonadWithReaderOf Term.Context DocElabM := inferInstanceAs <| MonadWi
 
 instance : MonadReaderOf DocElabContext DocElabM := inferInstanceAs <| MonadReaderOf DocElabContext (ReaderT DocElabContext (ReaderT PartElabM.State (StateT DocElabM.State TermElabM)))
 
+instance : MonadWithReaderOf DocElabContext DocElabM := inferInstanceAs <| MonadWithReaderOf DocElabContext (ReaderT DocElabContext (ReaderT PartElabM.State (StateT DocElabM.State TermElabM)))
+
 instance : MonadReaderOf PartElabM.State DocElabM := inferInstanceAs <| MonadReaderOf PartElabM.State (ReaderT DocElabContext (ReaderT PartElabM.State (StateT DocElabM.State TermElabM)))
 
 def DocElabM.withFileMap (fileMap : FileMap) (act : DocElabM α) : DocElabM α :=
@@ -469,9 +474,18 @@ def DocElabM.blockType : DocElabM Expr := do
   let g ← genreExpr
   return .app (.const ``Doc.Block []) g
 
+def DocElabM.blockArray (blocks : Array Expr) : DocElabM Expr := do
+  let bt ← blockType
+  Meta.mkArrayLit bt blocks.toList
+
+
 def DocElabM.inlineType : DocElabM Expr := do
   let g ← genreExpr
   return .app (.const ``Doc.Inline []) g
+
+def DocElabM.inlineArray (inlines : Array Expr) : DocElabM Expr := do
+  let bt ← inlineType
+  Meta.mkArrayLit bt inlines.toList
 
 def DocElabM.emptyBlock : DocElabM Expr := do
   pure <| mkApp2 (.const ``Block.concat []) (← genreExpr) (← Meta.mkArrayLit (← blockType) [])
@@ -667,6 +681,33 @@ def closes (openTok closeTok : Syntax) : DocElabM Unit := do
   let lineStr := text.source.extract (text.lineStart (line + 1)) (text.lineStart (line + 2)) |>.trim
   let lineStr := if lineStr.startsWith "`" || lineStr.endsWith "`" then " " ++ lineStr ++ " " else lineStr
   Hover.addCustomHover closeTok (.markdown s!"Closes line {line + 1}: ``````````{lineStr}``````````")
+
+/--
+Elaborates those values selected by `prioritize`, then runs `between`, and finally elaborates the
+rest.
+
+They are returned in their original order.
+-/
+def prioritizedElab [Monad m]
+    (prioritize : α → m Bool) (act : α  → m β)
+    (between : m Unit)
+    (xs : Array α) : m (Array β) := do
+  let mut out := #[]
+  let mut later := #[]
+
+  for h:i in [0:xs.size] do
+    let x := xs[i]
+    if ← prioritize x then
+      out := out.push (i, (← act x))
+    else later := later.push (i, x)
+
+  between
+
+  for (i, x) in later do
+    out := out.push (i, (← act x))
+
+  out := out.qsort (fun (i, _) (j, _) => i < j)
+  return out.map (·.2)
 
 
 abbrev InlineElab := Syntax → DocElabM Expr

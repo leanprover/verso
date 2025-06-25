@@ -14,6 +14,7 @@ import Verso
 
 import VersoManual.Basic
 import VersoManual.InlineLean.Block
+import VersoManual.InlineLean.Env
 import VersoManual.InlineLean.IO
 import VersoManual.InlineLean.LongLines
 import VersoManual.InlineLean.Option
@@ -33,41 +34,7 @@ open Lean.Elab.Tactic.GuardMsgs
 
 namespace Verso.Genre.Manual.InlineLean
 
-def envParameter : Name := decl_name%
 
-section
-variable [Monad m] [MonadError m] [MonadReaderOf DocElabContext m] [MonadWithReaderOf DocElabContext m]
-variable [MonadEnv m] [MonadFinally m]
-
-deriving instance TypeName for Environment
-
-/--
-If a special examples environment is specified, use it.
--/
-def usingExamplesEnv (act : m α) : m α := do
-  if let some env := (← parameterValue? envParameter) then
-    let realEnv ← getEnv
-    try
-      modifyEnv (fun _ => env)
-      act
-    finally
-      modifyEnv (fun _ => realEnv)
-  else act
-
-def getExamplesEnv : m Environment := do
-  if let some env := (← parameterValue? envParameter) then
-    pure env
-  else getEnv
-
-
-/--
-Run `act` with the examples environment set to the current environment for rollback.
--/
-def withIsolatedExamplesEnv (act : m α) : m α := do
-  let env ← getEnv
-  withParameter envParameter env act
-
-end
 
 inline_extension Inline.lean (hls : Highlighted) where
   data :=
@@ -688,7 +655,7 @@ deriving instance ToExpr for MessageSeverity
 open SubVerso.Examples.Messages in
 @[code_block_elab leanOutput]
 def leanOutput : CodeBlockElab
- | args, str => do
+ | args, str => usingExamplesEnv <| do
     let config ← LeanOutputConfig.parser.run args
 
     let col? := (← getRef).getPos? |>.map (← getFileMap).utf8PosToLspPos |>.map (·.character)
@@ -830,7 +797,7 @@ def constTok [Monad m] [MonadEnv m] [MonadLiftT MetaM m] [MonadLiftT IO m]
 
 @[role_expander name]
 def name : RoleExpander
-  | args, #[arg] => do
+  | args, #[arg] => usingExamplesEnv do
     let cfg ← NameConfig.parse.run args
     let `(inline|code( $name:str )) := arg
       | throwErrorAt arg "Expected code literal with the example name"

@@ -231,14 +231,14 @@ private def getSubversoDir : IO System.FilePath := do
   else
     throw <| IO.userError s!"SubVerso directory {p} not found"
 
-
-def startExample [Monad m] [MonadEnv m] [MonadError m] [MonadQuotation m] [MonadRef m] : m Unit := do
+def startExample [Monad m] [MonadEnv m] [MonadError m] [MonadLiftT CoreM m] [MonadLiftT MetaM m] [MonadQuotation m] [MonadRef m] : m Unit := do
   match ioExampleCtx.getState (← getEnv) with
   | some _ => throwError "Can't initialize - already in a context"
   | none =>
     let leanCodeName ← mkFreshIdent (← getRef)
     modifyEnv fun env =>
       ioExampleCtx.setState env (some {leanCodeName})
+
 
 def saveLeanCode (src : StrLit) : DocElabM Ident := do
   match ioExampleCtx.getState (← getEnv) with
@@ -284,7 +284,8 @@ def saveStderr [Monad m] [MonadEnv m] [MonadError m] (contents : StrLit) : m Uni
   | none => throwError "Can't save stderr - not in an IO example"
   | some st =>
     match st.stderr with
-    | none => modifyEnv fun env => ioExampleCtx.setState env (some {st with stderr := some contents})
+    | none =>
+      modifyEnv fun env => ioExampleCtx.setState env (some {st with stderr := some contents})
     | some _ => throwError "stderr already specified"
 
 
@@ -398,20 +399,26 @@ where
   shorten (str : String) : String :=
     if str.length < 30 then str else str.take 30 ++ "…"
 
-def endExample (body : TSyntax `term) : DocElabM (TSyntax `term) := do
+def endExampleSetup : DocElabM Unit:= do
   match ioExampleCtx.getState (← getEnv) with
-  | none => throwErrorAt body "Can't end example - never started"
+  | none => throwError "Can't end example setup - never started"
   | some {code, leanCodeName, inputFiles, outputFiles, stdin, stdout, stderr} => do
-    modifyEnv fun env =>
-      ioExampleCtx.setState env none
-
     let some leanCode := code
-      | throwErrorAt body "No code specified"
+      | throwError "No code specified"
 
     let hlLean ← check leanCode leanCodeName.getId inputFiles outputFiles stdin stdout stderr
-
-    `(let $leanCodeName : Highlighted := $(quote hlLean)
-      $body)
+    addAndCompile <| .defnDecl {
+      name := leanCodeName.getId
+      levelParams := [],
+      type := .const ``Highlighted [],
+      value := toExpr hlLean,
+      hints := .opaque,
+      safety := .safe
+    }
+    if ((← getEnv).find? leanCodeName.getId).isSome then
+      return
+    else
+      throwError "Failed to save highlighted code as {leanCodeName}"
 
 structure Config where
   tag : Option String := none
@@ -493,27 +500,86 @@ def stderr : CodeBlockExpander
     else
       pure #[]
 
+deriving instance ToExpr for Lsp.Position
+deriving instance ToExpr for Lsp.Range
 
 open IOExample in
-@[code_block_expander ioLean]
-def ioLean : CodeBlockExpander
+@[code_block_elab ioLean]
+def ioLean : CodeBlockElab
   | args, str => do
     let opts ← Config.parse.run args
     let x ← saveLeanCode str
+    let g ← DocElabM.genreExpr
+
     if opts.show then
       let range := Syntax.getRange? str
       let range := range.map (← getFileMap).utf8RangeToLspRange
-      pure #[← ``(Block.other (Block.lean $x (some $(quote (← getFileName))) $(quote range)) #[Block.code $(quote str.getString)])]
+      --pure #[← ``(Block.other (Block.lean $x (some $(quote (← getFileName))) $(quote range)) #[Block.code $(quote str.getString)])]
+      let fn := some ((← getFileName) : System.FilePath)
+      let leanBlock : Expr := mkApp3 (.const ``Block.lean []) (.const x.getId []) (toExpr fn) (toExpr range)
+      return mkApp3 (.const ``Block.other []) g leanBlock (← Meta.mkArrayLit (← DocElabM.blockType) [mkApp2 (.const ``Block.code []) g (mkStrLit str.getString)])
     else
-      pure #[]
+      return mkApp2 (.const ``Block.concat []) g (← Meta.mkArrayLit (← DocElabM.blockType) [])
 
+
+private partial def isSpecialBlock : TSyntax `block → DocElabM Bool
+  | `(block|```$nameStx:ident $_args*|$_contents:str```) => do
+    let name ← realizeGlobalConstNoOverloadWithInfo nameStx
+    return name ∈ [``ioLean, ``stdin, ``stdout, ``stderr, ``exampleFile, ``outputFile, ``inputFile]
+  | `(block|:::$_nameStx:ident $_args*{$bs*} ) =>
+    bs.anyM isSpecialBlock
+  | _ => pure false
+
+@[directive_elab ref]
+private def ref : DirectiveElab
+  | args, #[] => do
+    let (x : Ident) ← ArgParse.run (.positional' `name) args
+    Term.elabTerm x (some (← DocElabM.blockType))
+  | _, _ => throwError "Invalid use of `ref`"
+
+private partial def liftSpecialBlocks (stx : Syntax) : StateT (Array (Ident × TSyntax `block)) DocElabM Syntax :=
+  stx.replaceM fun s =>
+    match s with
+    | `(block|```$nameStx:ident $_args*|$_contents:str```) => do
+      let name ← realizeGlobalConstNoOverloadWithInfo nameStx
+      if name ∈ [``ioLean, ``stdin, ``stdout, ``stderr, ``exampleFile, ``outputFile, ``inputFile] then
+        let x ← mkFreshUserName <| name.componentsRev.find? (· matches .str _ _) |>.getD `x
+        let x := mkIdentFrom s x
+        modify (·.push (x, ⟨s⟩))
+        let b' ← `(block|:::ref $x:ident {})
+        pure (some b')
+      else pure none
+    | _ => pure none
+
+-- TODO lift extract special blocks from nested contexts and elaborate that way
 
 open IOExample in
-@[directive_expander ioExample]
-def ioExample : DirectiveExpander
+@[directive_elab ioExample]
+def ioExample : DirectiveElab
  | args, blocks => do
     ArgParse.done.run args
-    startExample
-    let body ← blocks.mapM elabBlock
-    let body' ← `(Verso.Doc.Block.concat #[$body,*]) >>= endExample
-    pure #[body']
+    let g ← DocElabM.genreExpr
+    try
+      startExample
+      let (blocks, lifted) ← StateT.run (blocks.mapM (liftSpecialBlocks ·.raw)) #[]
+      let bt ← DocElabM.blockType
+      -- First elaborate the special blocks, which has a side effect on the environment extension
+      let lifted ← lifted.mapM fun (x, b) => do
+        let b ← elabBlock' b >>= instantiateMVars
+        pure (x, b)
+      -- Use the extension's data to create helper definitions
+      endExampleSetup
+      -- Create definitions for the lifted blocks
+      for (x, b) in lifted do
+        addAndCompile <| .defnDecl {
+          name := x.getId, levelParams := [], type := bt, value := b, hints := .opaque, safety := .safe
+        }
+      -- Block until all helpers are ready before elaborating the final document
+      for (x, _) in lifted do
+        if (← getEnv).find? x.getId |>.isSome then continue else break
+
+      let body ← blocks.mapM (elabBlock' ⟨·⟩)
+      return mkApp2 (.const ``Block.concat []) g (← Meta.mkArrayLit (← DocElabM.blockType) body.toList)
+    finally
+      modifyEnv fun env =>
+        ioExampleCtx.setState env none

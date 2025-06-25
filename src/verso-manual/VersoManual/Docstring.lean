@@ -8,6 +8,7 @@ import Std.Data.HashSet
 import VersoManual.Basic
 import VersoManual.HighlightedCode
 import VersoManual.Index
+import VersoManual.InlineLean.Env
 import VersoManual.Markdown
 import VersoManual.Docstring.Config
 import VersoManual.Docstring.Progress
@@ -1319,15 +1320,14 @@ def tryElabBlockCode (_info? _lang? : Option String) (str : String) : DocElabM E
   let g ← DocElabM.genreExpr
   let code := mkApp2 (.const ``Verso.Doc.Block.code []) g (mkStrLit str)
   try
-    let hl ← attempt str [
+    attempt str [
         tryElabBlockCodeCommand,
         tryElabBlockCodeTerm,
         tryElabBlockCodeCommand (ignoreElabErrors := true),
         withTheReader Term.Context (fun ctx => {ctx with autoBoundImplicit := true}) ∘
           tryElabBlockCodeTerm (ignoreElabErrors := true)
       ]
-    let blk := .app (.const ``Block.leanFromMarkdown []) hl
-    return mkApp3 (.const ``Verso.Doc.Block.other []) g blk (← Meta.mkArrayLit (← DocElabM.blockType) [code])
+
   catch
     | .error ref e =>
       logWarningAt ref e
@@ -1777,7 +1777,7 @@ open Meta in
 def tactic : DirectiveElab
   | args, more => do
     let opts ← TacticDocsOptions.parse.run args
-    let tactic ← getTactic opts.name
+    let tactic ← InlineLean.usingExamplesEnv <| getTactic opts.name
     Doc.PointOfInterest.save (← getRef) tactic.userName
     if tactic.userName == tactic.internalName.toString && opts.show.isNone then
       throwError "No `show` option provided, but the tactic has no user-facing token name"
@@ -1865,7 +1865,9 @@ def tacticInline : RoleExpander
       | throwErrorAt arg "Expected code literal with the tactic name"
     let tacTok := tac.getString
     let tacName := tac.getString.toName
-    let some tacticDoc := (← getTactic? (.inl tacTok)) <|> (← getTactic? (.inr tacName))
+    let some tacticDoc :=
+      (← InlineLean.usingExamplesEnv <| getTactic? (.inl tacTok)) <|>
+      (← InlineLean.usingExamplesEnv <| getTactic? (.inr tacName))
       | throwErrorAt tac "Didn't find tactic named {tac}"
 
     let hl : Highlighted := tacToken tacticDoc «show»
