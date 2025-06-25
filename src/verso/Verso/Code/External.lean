@@ -194,7 +194,7 @@ def warningsToErrors (hl : Highlighted) : Highlighted :=
   | .point .. => hl
   | .tactics info start stop x => .tactics info start stop <| warningsToErrors x
   | .span infos x => .span (infos.map fun (k, str) => (if k matches .warning then .error else k, str)) (warningsToErrors x)
-  | .text .. | .token .. => hl
+  | .text .. | .token .. | .unparsed .. => hl
 
 /-- Extracts all messages from the given code. -/
 def allInfo (hl : Highlighted) : Array (MessageSeverity × String × Option Highlighted) :=
@@ -203,7 +203,7 @@ def allInfo (hl : Highlighted) : Array (MessageSeverity × String × Option High
   | .point k str => #[(toSev k, str, none)]
   | .tactics _ _ _ x => allInfo x
   | .span infos x => (infos.map fun (k, str) => (toSev k, str, some x)) ++ allInfo x
-  | .text .. | .token .. => #[]
+  | .text .. | .token .. | .unparsed .. => #[]
 where
   toSev : Highlighted.Span.Kind → MessageSeverity
     | .error => .error
@@ -401,14 +401,14 @@ macro_rules
 private partial def allTokens (hl : Highlighted) : HashSet String :=
   match hl with
   | .seq xs => xs.map allTokens |>.foldl (init := {}) HashSet.union
-  | .point .. | .text .. => {}
+  | .point .. | .text .. | .unparsed .. => {}
   | .tactics _ _ _ x | .span _ x => allTokens x
   | .token ⟨_, s⟩ => {s}
 
 private partial def allNames (hl : Highlighted) : HashSet String :=
   match hl with
   | .seq xs => xs.map allTokens |>.foldl (init := {}) HashSet.union
-  | .point .. | .text .. => {}
+  | .point .. | .text .. | .unparsed .. => {}
   | .tactics _ _ _ x | .span _ x => allTokens x
   | .token ⟨.var .., s⟩ | .token ⟨.const .., s⟩ => {s}
   | .token _ => {}
