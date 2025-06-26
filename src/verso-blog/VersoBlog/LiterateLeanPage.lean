@@ -367,7 +367,7 @@ partial def docFromMod (project : System.FilePath) (mod : String)
     match kind with
     | ``Lean.Parser.Module.header =>
       if config.header then
-        addBlock (← ``(Block.other (BlockExt.highlightedCode `name $(quote code)) Array.mkArray0))
+        addBlock (← `(Block.other (BlockExt.highlightedCode { contextName := `name } $(quote code)) Array.mkArray0))
       else pure ()
     | ``moduleDoc =>
       let str ← getModuleDocString code
@@ -398,7 +398,7 @@ partial def docFromMod (project : System.FilePath) (mod : String)
         | other =>
           addBlock (← ofBlock helper other)
     | ``eval | ``evalBang | ``reduceCmd | ``print | ``printAxioms | ``printEqns | ``«where» | ``version | ``synth | ``check =>
-      addBlock (← ``(Block.other (BlockExt.highlightedCode `name $(quote code)) Array.mkArray0))
+      addBlock (← `(Block.other (BlockExt.highlightedCode { contextName := `name } $(quote code)) Array.mkArray0))
       if let some (k, msg) := getFirstMessage code then
         let sev := match k with
           | .error => "error"
@@ -406,7 +406,7 @@ partial def docFromMod (project : System.FilePath) (mod : String)
           | .warning => "warning"
         addBlock (← ``(Block.other (Blog.BlockExt.htmlDiv $(quote sev)) (Array.mkArray1 (Block.code $(quote msg)))))
     | _ =>
-      addBlock (← ``(Block.other (BlockExt.highlightedCode `name $(quote code)) Array.mkArray0))
+      addBlock (← `(Block.other (BlockExt.highlightedCode { contextName := `name } $(quote code)) Array.mkArray0))
   closePartsUntil 0 ⟨0⟩ -- TODO endPos?
 where
   arr (xs : Array Term) : PartElabM Term := do
@@ -454,7 +454,7 @@ where
     let codeStr := String.join str.toList
     try
       let hl ← helper.highlight codeStr none
-      ``(Inline.other (InlineExt.highlightedCode `name $(quote hl)) #[])
+      `(Inline.other (InlineExt.highlightedCode { contextName := `name } $(quote hl)) #[])
     catch
       | e =>
         if (← getLogInlines) then

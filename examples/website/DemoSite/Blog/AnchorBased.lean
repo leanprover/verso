@@ -74,3 +74,13 @@ Or just one part:
 ```anchorTerm proof1a
 branch l v r ih1 ih2
 ```
+
+This rendering of the same proof doesn't have proof states:
+```anchor proof1 (showProofStates := false)
+theorem Tree.flip_flip_eq_id : flip ∘ flip = (id : Tree α → Tree α) := by
+  funext t
+  induction t with
+  | leaf => rfl
+  | branch l v r ih1 ih2 =>
+    simp_all [flip]
+```

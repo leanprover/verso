@@ -145,7 +145,9 @@ def blockHtml (g : Genre)
     Blog.BlockExt → Array (Block g) → HtmlM g Html
   | .lexedText content, _contents => do
     pure {{ <pre class=s!"lexed {content.name}"> {{ content.toHtml }} </pre> }}
-  | .highlightedCode contextName hls, _contents => hls.blockHtml (toString contextName)
+  | .highlightedCode { contextName, showProofStates } hls, _contents =>
+    withReader (fun ρ => { ρ with codeOptions.inlineProofStates := showProofStates }) <|
+    hls.blockHtml (toString contextName)
   | .htmlDetails classes summary, contents => do
     pure {{ <details class={{classes}}><summary>{{summary}}</summary> {{← contents.mapM goB}}</details>}}
   | .htmlWrapper name attrs, contents => do
@@ -172,7 +174,9 @@ def inlineHtml (g : Genre) [bg : BlogGenre g]
     [MonadConfig (HtmlM g)] [MonadPath (HtmlM g)]
     (go : Inline g → HtmlM g Html) :
     Blog.InlineExt → Array (Inline g) → HtmlM g Html
-  | .highlightedCode contextName hls, _contents => hls.inlineHtml (some <| toString contextName)
+  | .highlightedCode { contextName, showProofStates } hls, _contents =>
+    withReader (fun ρ => { ρ with codeOptions.inlineProofStates := showProofStates }) <|
+    hls.inlineHtml (some <| toString contextName)
   | .lexedText content, _contents => do
     pure {{ <code class=s!"lexed {content.name}"> {{ content.toHtml }} </code> }}
   | .customHighlight hls, _contents => do

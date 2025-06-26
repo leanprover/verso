@@ -6,6 +6,7 @@ Author: David Thrane Christiansen
 
 import Verso
 import VersoManual.Basic
+import Verso.Code.External
 import SubVerso.Examples.Messages
 
 set_option linter.missingDocs true
@@ -19,12 +20,14 @@ open SubVerso.Examples.Messages
 
 open Std
 
+open Verso.Code.External
+
 namespace Verso.Genre.Manual
 
-block_extension Block.lean (hls : Highlighted) where
+block_extension Block.lean (hls : Highlighted) (cfg : CodeConfig) where
   data :=
     let defined := hls.definedNames.toArray
-    Json.arr #[ToJson.toJson hls, ToJson.toJson defined]
+    Json.arr #[ToJson.toJson cfg, ToJson.toJson hls, ToJson.toJson defined]
   traverse _ _ _ := pure none
   toTeX := none
   extraCss := [highlightingStyle]
@@ -34,7 +37,7 @@ block_extension Block.lean (hls : Highlighted) where
   toHtml :=
     open Verso.Output.Html in
     some <| fun _ _ _ data _ => do
-      let .arr #[hlJson, _] := data
+      let .arr #[cfgJson, hlJson, _] := data
         | HtmlT.logError "Expected four-element JSON for Lean code"
           pure .empty
       match FromJson.fromJson? hlJson with
@@ -42,14 +45,20 @@ block_extension Block.lean (hls : Highlighted) where
         HtmlT.logError <| "Couldn't deserialize Lean code block while rendering HTML: " ++ err
         pure .empty
       | .ok (hl : Highlighted) =>
-        let i := hl.indentation
-        let hl := hl.deIndent i
-        hl.blockHtml "examples"
+        match FromJson.fromJson? cfgJson with
+        | .error err =>
+          HtmlT.logError <| "Couldn't deserialize Lean code block config while rendering HTML: " ++ err
+          pure .empty
+        | .ok (cfg : CodeConfig) =>
+          let i := hl.indentation
+          let hl := hl.deIndent i
+          withReader (fun ρ => { ρ with codeOptions.inlineProofStates := cfg.showProofStates }) <|
+            hl.blockHtml "examples"
 
-inline_extension Inline.lean (hls : Highlighted) where
+inline_extension Inline.lean (hls : Highlighted) (cfg : CodeConfig) where
   data :=
     let defined := hls.definedNames.toArray
-    Json.arr #[ToJson.toJson hls, ToJson.toJson defined]
+    Json.arr #[ToJson.toJson cfg, ToJson.toJson hls, ToJson.toJson defined]
   traverse _ _ _ := pure none
   toTeX := none
   extraCss := [highlightingStyle]
@@ -59,7 +68,7 @@ inline_extension Inline.lean (hls : Highlighted) where
   toHtml :=
     open Verso.Output.Html in
     some <| fun _ _ data _ => do
-      let .arr #[hlJson, _] := data
+      let .arr #[cfgJson, hlJson, _] := data
         | HtmlT.logError "Expected four-element JSON for Lean code"
           pure .empty
       match FromJson.fromJson? hlJson with
@@ -67,9 +76,15 @@ inline_extension Inline.lean (hls : Highlighted) where
         HtmlT.logError <| "Couldn't deserialize Lean code block while rendering HTML: " ++ err
         pure .empty
       | .ok (hl : Highlighted) =>
-        let i := hl.indentation
-        let hl := hl.deIndent i
-        hl.inlineHtml "examples"
+        match FromJson.fromJson? cfgJson with
+        | .error err =>
+          HtmlT.logError <| "Couldn't deserialize Lean code block config while rendering HTML: " ++ err
+          pure .empty
+        | .ok (cfg : CodeConfig) =>
+          let i := hl.indentation
+          let hl := hl.deIndent i
+          withReader (fun ρ => { ρ with codeOptions.inlineProofStates := cfg.showProofStates }) <|
+            hl.inlineHtml "examples"
 
 block_extension Block.leanOutput (severity : MessageSeverity) (message : String) (summarize : Bool := false) where
   data := ToJson.toJson (severity, message, summarize)
@@ -123,8 +138,8 @@ inline_extension Inline.leanOutput (severity : MessageSeverity) (message : Strin
 open Verso.Code.External
 
 instance : ExternalCode Manual where
-  leanInline hl := Inline.other (Inline.lean hl) #[]
-  leanBlock hl := Block.other (Block.lean hl) #[]
+  leanInline hl cfg := Inline.other (Inline.lean hl cfg) #[]
+  leanBlock hl cfg := Block.other (Block.lean hl cfg) #[]
   leanOutputInline severity message plain := Inline.other (Inline.leanOutput severity message plain) #[]
   leanOutputBlock severity message (summarize : Bool := false) :=
     Block.other (Block.leanOutput severity message (summarize := summarize)) #[]

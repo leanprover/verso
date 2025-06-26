@@ -276,14 +276,28 @@ def NameSuffixMap.getOrSuggest [Monad m] [MonadInfoTree m] [MonadError m]
       Suggestion.saveSuggestion key n.toString n.toString
     throwErrorAt key "'{key}' is ambiguous - options are {more.toList.map (·.fst)}"
 
+structure LeanCommandConfig where
+  project : Ident
+  exampleName : Ident
+  /-- Whether to render proof states -/
+  showProofStates : Bool := true
+
+section
+variable [Monad m] [MonadError m] [MonadLiftT CoreM m]
+
+instance : FromArgs LeanCommandConfig m where
+  fromArgs :=
+    LeanCommandConfig.mk <$> .positional `project .ident <*> .positional `exampleName .ident <*> .namedD `showProofStates .bool true
+end
+
 @[block_role_expander leanCommand]
 def leanCommand : BlockRoleExpander
   | args, #[] => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"leanCommand") <| do
-    let (project, exampleName) ← ArgParse.run ((·, ·) <$> .positional `project .ident <*> .positional `exampleName .ident) args
+    let { project, exampleName, showProofStates } ← parseThe LeanCommandConfig args
     let projectExamples ← getSubproject project
     let (_, {highlighted := hls, original := str, ..}) ← projectExamples.getOrSuggest exampleName
     Verso.Hover.addCustomHover exampleName s!"```lean\n{str}\n```"
-    pure #[← ``(Block.other (Blog.BlockExt.highlightedCode $(quote project.getId) (SubVerso.Highlighting.Highlighted.seq $(quote hls))) #[Block.code $(quote str)])]
+    pure #[← `(Block.other (Blog.BlockExt.highlightedCode { contextName := $(quote project.getId), showProofStates := $(quote showProofStates) } (SubVerso.Highlighting.Highlighted.seq $(quote hls))) #[Block.code $(quote str)])]
   | _, more =>
     if h : more.size > 0 then
       throwErrorAt more[0] "Unexpected contents"
@@ -326,7 +340,7 @@ def leanCommandAt : BlockRoleExpander
         ranges.map (fun (l, l') => s!"{l}–{l'}") |>.toList |> (.group <| Std.Format.joinSep · ("," ++ .line))
       Lean.logError m!"No example found on line {line}. Valid lines are: {indentD rangeDoc}"
 
-    pure #[← ``(Block.other (Blog.BlockExt.highlightedCode $(quote project.getId) (SubVerso.Highlighting.Highlighted.seq $(quote hls))) #[])]
+    pure #[← `(Block.other (Blog.BlockExt.highlightedCode { contextName := $(quote project.getId) } (SubVerso.Highlighting.Highlighted.seq $(quote hls))) #[])]
   | _, more =>
     if h : more.size > 0 then
       throwErrorAt more[0] "Unexpected contents"
@@ -350,14 +364,14 @@ def leanKw : RoleExpander
 @[role_expander leanTerm]
 def leanTerm : RoleExpander
   | args, #[arg] => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"leanTerm") <| do
-    let project ← ArgParse.run (.positional `project .ident) args
+    let (project, showProofStates) ← ArgParse.run ((·, ·) <$> .positional `project .ident <*> .namedD `showProofStates .bool true) args
     let `(inline|code( $name:str )) := arg
       | throwErrorAt arg "Expected code literal with the example name"
     let exampleName := name.getString.toName
     let projectExamples ← getSubproject project
     let (_, {highlighted := hls, original := str, ..}) ← projectExamples.getOrSuggest <| mkIdentFrom name exampleName
     Verso.Hover.addCustomHover arg s!"```lean\n{str}\n```"
-    pure #[← ``(Inline.other (Blog.InlineExt.highlightedCode $(quote project.getId) (SubVerso.Highlighting.Highlighted.seq $(quote hls))) #[Inline.code $(quote str)])]
+    pure #[← `(Inline.other (Blog.InlineExt.highlightedCode { contextName := $(quote project.getId) } (SubVerso.Highlighting.Highlighted.seq $(quote hls))) #[Inline.code $(quote str)])]
   | _, more =>
     if h : more.size > 0 then
       throwErrorAt more[0] "Unexpected contents"
@@ -371,9 +385,11 @@ structure LeanBlockConfig where
   keep : Option Bool := none
   name : Option Name := none
   error : Option Bool := none
+  /-- Whether to render proof states -/
+  showProofStates : Bool := true
 
 instance [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m] : FromArgs LeanBlockConfig m where
-  fromArgs := LeanBlockConfig.mk <$> .positional `exampleContext .ident <*> .named `show .bool true <*> .named `keep .bool true <*> .named `name .name true <*> .named `error .bool true
+  fromArgs := LeanBlockConfig.mk <$> .positional `exampleContext .ident <*> .named `show .bool true <*> .named `keep .bool true <*> .named `name .name true <*> .named `error .bool true <*> .namedD `showProofStates .bool true
 
 @[code_block_expander leanInit]
 def leanInit : CodeBlockExpander
@@ -470,7 +486,7 @@ def lean : CodeBlockExpander
         setInfoState infoSt
         setEnv env
       if config.show.getD true then
-        pure #[← ``(Block.other (Blog.BlockExt.highlightedCode $(quote x.getId) $(quote hls)) #[Block.code $(quote str.getString)])]
+        pure #[← `(Block.other (Blog.BlockExt.highlightedCode { contextName := $(quote x.getId), showProofStates := $(quote config.showProofStates) } $(quote hls)) #[Block.code $(quote str.getString)])]
       else
         pure #[]
 
@@ -620,7 +636,7 @@ def leanInline : RoleExpander
           }
       let hls := (← highlight stx #[] (PersistentArray.empty.push tree))
 
-      pure #[← ``(Inline.other (Blog.InlineExt.highlightedCode $(quote config.exampleContext.getId) $(quote hls)) #[Inline.code $(quote str.getString)])]
+      pure #[← `(Inline.other (Blog.InlineExt.highlightedCode { contextName := $(quote config.exampleContext.getId) } $(quote hls)) #[Inline.code $(quote str.getString)])]
 
 open Lean.Elab.Tactic.GuardMsgs
 export WhitespaceMode (exact lax normalized)
@@ -839,10 +855,10 @@ where
 open Verso.Code.External
 
 instance [bg : BlogGenre genre] : ExternalCode genre where
-  leanInline hl :=
-    Inline.other (bg.inline_eq ▸ InlineExt.highlightedCode `verso hl) #[]
-  leanBlock hl :=
-    Block.other (bg.block_eq ▸ BlockExt.highlightedCode `verso hl) #[]
+  leanInline hl cfg :=
+    Inline.other (bg.inline_eq ▸ InlineExt.highlightedCode { cfg with contextName := `verso } hl) #[]
+  leanBlock hl cfg :=
+    Block.other (bg.block_eq ▸ BlockExt.highlightedCode { cfg with contextName := `verso } hl) #[]
   leanOutputInline severity message plain :=
     leanOutputInline severity message plain
   leanOutputBlock severity message (summarize := false) :=
