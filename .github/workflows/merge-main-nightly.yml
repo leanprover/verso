@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 env:
-  TARGET_BRANCH: nightly-testing-test
+  TARGET_BRANCH: nightly-testing
 
 jobs:
   merge-to-nightly:
