@@ -45,7 +45,7 @@ jobs:
       - name: Update dependencies
         run: |
           lake --keep-toolchain update
-          ./update-subverso.sh
+          bash ./update-subverso.sh
 
       - name: Build
         run: |
