@@ -6,3 +6,4 @@
 .lake
 _out
 *.olean
+/.verso/
