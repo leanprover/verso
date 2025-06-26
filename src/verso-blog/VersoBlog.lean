@@ -276,14 +276,28 @@ def NameSuffixMap.getOrSuggest [Monad m] [MonadInfoTree m] [MonadError m]
       Suggestion.saveSuggestion key n.toString n.toString
     throwErrorAt key "'{key}' is ambiguous - options are {more.toList.map (·.fst)}"
 
+structure LeanCommandConfig where
+  project : Ident
+  exampleName : Ident
+  /-- Whether to render proof states -/
+  showProofStates : Bool := true
+
+section
+variable [Monad m] [MonadError m] [MonadLiftT CoreM m]
+
+instance : FromArgs LeanCommandConfig m where
+  fromArgs :=
+    LeanCommandConfig.mk <$> .positional `project .ident <*> .positional `exampleName .ident <*> .namedD `showProofStates .bool true
+end
+
 @[block_role_expander leanCommand]
 def leanCommand : BlockRoleExpander
   | args, #[] => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"leanCommand") <| do
-    let (project, exampleName) ← ArgParse.run ((·, ·) <$> .positional `project .ident <*> .positional `exampleName .ident) args
+    let { project, exampleName, showProofStates } ← parseThe LeanCommandConfig args
     let projectExamples ← getSubproject project
     let (_, {highlighted := hls, original := str, ..}) ← projectExamples.getOrSuggest exampleName
     Verso.Hover.addCustomHover exampleName s!"```lean\n{str}\n```"
-    pure #[← `(Block.other (Blog.BlockExt.highlightedCode { contextName := $(quote project.getId) } (SubVerso.Highlighting.Highlighted.seq $(quote hls))) #[Block.code $(quote str)])]
+    pure #[← `(Block.other (Blog.BlockExt.highlightedCode { contextName := $(quote project.getId), showProofStates := $(quote showProofStates) } (SubVerso.Highlighting.Highlighted.seq $(quote hls))) #[Block.code $(quote str)])]
   | _, more =>
     if h : more.size > 0 then
       throwErrorAt more[0] "Unexpected contents"
@@ -350,7 +364,7 @@ def leanKw : RoleExpander
 @[role_expander leanTerm]
 def leanTerm : RoleExpander
   | args, #[arg] => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"leanTerm") <| do
-    let project ← ArgParse.run (.positional `project .ident) args
+    let (project, showProofStates) ← ArgParse.run ((·, ·) <$> .positional `project .ident <*> .namedD `showProofStates .bool true) args
     let `(inline|code( $name:str )) := arg
       | throwErrorAt arg "Expected code literal with the example name"
     let exampleName := name.getString.toName
@@ -841,10 +855,10 @@ where
 open Verso.Code.External
 
 instance [bg : BlogGenre genre] : ExternalCode genre where
-  leanInline hl :=
-    Inline.other (bg.inline_eq ▸ InlineExt.highlightedCode { contextName := `verso } hl) #[]
-  leanBlock hl :=
-    Block.other (bg.block_eq ▸ BlockExt.highlightedCode { contextName := `verso } hl) #[]
+  leanInline hl cfg :=
+    Inline.other (bg.inline_eq ▸ InlineExt.highlightedCode { cfg with contextName := `verso } hl) #[]
+  leanBlock hl cfg :=
+    Block.other (bg.block_eq ▸ BlockExt.highlightedCode { cfg with contextName := `verso } hl) #[]
   leanOutputInline severity message plain :=
     leanOutputInline severity message plain
   leanOutputBlock severity message (summarize := false) :=
