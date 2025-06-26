@@ -102,6 +102,8 @@ jobs:
     - name: Update SubVerso
       run: |
         lake --keep-toolchain update subverso
+        pwd
+        ls -a
         bash ./update-subverso.sh
 
     - name: Build
