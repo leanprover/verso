@@ -72,6 +72,14 @@ theorem lt_4 (b : Bool) : (if b then 1 else 2) < 4 := by
   . decide
 ```
 
+And hide proof states:
+```lean demo (showProofStates := false)
+theorem lt_4' (b : Bool) : (if b then 1 else 2) < 4 := by
+  split
+  . skip; decide
+  . decide
+```
+
 It's also nice to write normal proofs sometimes.
 
 ```lean demo

@@ -29,8 +29,13 @@ namespace Verso.Genre
 
 namespace Blog
 
+structure CodeOpts where
+  contextName : Lean.Name
+  showProofStates : Bool := true
+deriving Repr
+
 inductive BlockExt where
-  | highlightedCode (contextName : Lean.Name) (highlighted : Highlighted)
+  | highlightedCode (opts : CodeOpts) (highlighted : Highlighted)
   | lexedText (content : LexedText)
   | htmlDiv (classes : String)
   | htmlWrapper (tag : String) (attributes : Array (String × String))
@@ -39,7 +44,7 @@ inductive BlockExt where
   | component (name : Lean.Name) (data : Json)
 
 inductive InlineExt where
-  | highlightedCode (contextName : Lean.Name) (highlighted : Highlighted)
+  | highlightedCode (opts : CodeOpts) (highlighted : Highlighted)
   | lexedText (content : LexedText)
   | customHighlight (highlighted : Highlighted)
   | label (name : Lean.Name)
