@@ -45,6 +45,7 @@ jobs:
       - name: Update dependencies
         run: |
           lake --keep-toolchain update
+          ./update-subverso.sh
 
       - name: Build
         run: |
@@ -57,14 +58,6 @@ jobs:
       - name: Generate the example genre's document
         run: |
           lake exe simplepage
-
-      - name: Commit and push
-        run: |
-          git add .
-          # If there's nothing to do (because there are no new commits from main),
-          # that's okay, hence the '|| true'.
-          git commit -m "chore: merge main into ${{ env.TARGET_BRANCH }}" || true
-          git push origin ${{ env.TARGET_BRANCH }}
 
       - name: Install PDF Dependencies
         uses: teatimeguest/setup-texlive-action@v3
