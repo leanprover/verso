@@ -8,6 +8,7 @@ import Std.Data.HashSet
 import VersoManual.Basic
 import VersoManual.HighlightedCode
 import VersoManual.Index
+import VersoManual.InlineLean.Env
 import VersoManual.Markdown
 import VersoManual.Docstring.Config
 import VersoManual.Docstring.Progress
@@ -84,7 +85,7 @@ structure Signature where
   wide : Highlighted
   /-- The signature formatted for narrower screens, such as mobile displays -/
   narrow : Highlighted
-deriving ToJson, FromJson, Quote
+deriving ToJson, FromJson, Quote, ToExpr
 
 namespace Block
 
@@ -174,17 +175,20 @@ def ppSignature (c : Name) (showNamespace : Bool := true) (openDecls : List Open
 
   return ⟨← ppTerm ⟨stx⟩, infos⟩  -- HACK: not a term
 
+deriving instance ToExpr for BinderInfo
+deriving instance ToExpr for DefinitionSafety
+deriving instance ToExpr for QuotKind
 
 structure DocName where
   name : Name
   hlName : Highlighted
   signature : Highlighted
   docstring? : Option String
-deriving ToJson, FromJson, Repr, Quote
+deriving ToJson, FromJson, Repr, Quote, ToExpr
 
 inductive Visibility where
   | «public» | «private» | «protected»
-deriving Inhabited, Repr, ToJson, FromJson, DecidableEq, Ord, Quote
+deriving Inhabited, Repr, ToJson, FromJson, DecidableEq, Ord, Quote, ToExpr
 
 def Visibility.of (env : Environment) (n : Name) : Visibility :=
   if isPrivateName n then .private else if isProtected env n then .protected else .public
@@ -204,7 +208,7 @@ structure FieldInfo where
   autoParam  : Bool
   docString? : Option String
   visibility : Visibility
-deriving Inhabited, Repr, ToJson, FromJson, Quote
+deriving Inhabited, Repr, ToJson, FromJson, Quote, ToExpr
 
 
 structure ParentInfo where
@@ -212,7 +216,7 @@ structure ParentInfo where
   name : Name
   parent : Highlighted
   index : Nat
-deriving ToJson, FromJson, Quote
+deriving ToJson, FromJson, Quote, ToExpr
 
 inductive DeclType where
   /--
@@ -228,7 +232,7 @@ inductive DeclType where
   | recursor (safety : DefinitionSafety)
   | quotPrim (kind : QuotKind)
   | other
-deriving ToJson, FromJson, Quote
+deriving ToJson, FromJson, Quote, ToExpr
 
 def DeclType.label : DeclType → String
   | .structure false .. => "structure"
@@ -1009,26 +1013,34 @@ def tryElabCodeMetavarTermWith (mk : Highlighted → String → DocElabM α) (st
     else
       throwError "Not a doc metavar: {stx}"
 
+private def asInline (hl : Highlighted) : DocElabM Expr := do
+  let g ← DocElabM.genreExpr
+  let arr ← Meta.mkArrayLit (.app (.const ``Doc.Inline []) g) [mkApp2 (.const ``Doc.Inline.code []) g (toExpr hl.toString)]
+  return mkApp3 (.const ``Doc.Inline.other []) g (.app (.const ``Inline.leanFromMarkdown []) (toExpr hl)) arr
+
+private def asBlock (hl : Highlighted) : DocElabM Expr := do
+  let g ← DocElabM.genreExpr
+  let arr ← Meta.mkArrayLit (.app (.const ``Doc.Block []) g) [mkApp2 (.const ``Doc.Block.code []) g (toExpr hl.toString)]
+  return mkApp3 (.const ``Doc.Block.other []) g (.app (.const ``Block.leanFromMarkdown []) (toExpr hl)) arr
+
+
 open Lean Elab Term in
-def tryElabInlineCodeTerm (str : String) (ignoreElabErrors := false) (identOnly := false) : DocElabM Term :=
-  tryElabCodeTermWith (ignoreElabErrors := ignoreElabErrors) (identOnly := identOnly) (fun hls str =>
-    ``(Verso.Doc.Inline.other (Inline.leanFromMarkdown $(quote hls)) #[Verso.Doc.Inline.code $(quote str)]))
+def tryElabInlineCodeTerm (str : String) (ignoreElabErrors := false) (identOnly := false) : DocElabM Expr :=
+  tryElabCodeTermWith (ignoreElabErrors := ignoreElabErrors) (identOnly := identOnly) (fun hls _ => asInline hls)
     str
 
 open Lean Elab Term in
-def tryElabInlineCodeMetavarTerm (str : String) (ignoreElabErrors := false) : DocElabM Term :=
-  tryElabCodeMetavarTermWith (ignoreElabErrors := ignoreElabErrors) (fun hls str =>
-    ``(Verso.Doc.Inline.other (Inline.leanFromMarkdown $(quote hls)) #[Verso.Doc.Inline.code $(quote str)]))
+def tryElabInlineCodeMetavarTerm (str : String) (ignoreElabErrors := false) : DocElabM Expr :=
+  tryElabCodeMetavarTermWith (ignoreElabErrors := ignoreElabErrors) (fun hls _ => asInline hls)
     str
 
 open Lean Elab Term in
-def tryElabBlockCodeTerm (str : String)  (ignoreElabErrors := false) : DocElabM Term :=
-  tryElabCodeTermWith (ignoreElabErrors := ignoreElabErrors) (fun hls str =>
-    ``(Verso.Doc.Block.other (Block.leanFromMarkdown $(quote hls)) #[Verso.Doc.Block.code $(quote str)]))
+def tryElabBlockCodeTerm (str : String)  (ignoreElabErrors := false) : DocElabM Expr :=
+  tryElabCodeTermWith (ignoreElabErrors := ignoreElabErrors) (fun hls _ => asBlock hls)
     str
 
 open Lean Elab Term in
-def tryParseInlineCodeTactic (str : String) : DocElabM Term := do
+def tryParseInlineCodeTactic (str : String) : DocElabM Expr := do
   let loc := (← getRef).getPos?.map (← getFileMap).utf8PosToLspPos
   let src :=
     if let some ⟨line, col⟩ := loc then s!"<docstring at {← getFileName}:{line}:{col}>"
@@ -1038,25 +1050,22 @@ def tryParseInlineCodeTactic (str : String) : DocElabM Term := do
   | .ok stx => DocElabM.withFileMap (.ofString str) <| do
     -- TODO try actually running the tactic - if the parameters are simple enough, then it may work
     -- and give better highlights
-    let hls ← highlight stx #[] (PersistentArray.empty)
-    ``(Verso.Doc.Inline.other (Inline.leanFromMarkdown $(quote hls)) #[Verso.Doc.Inline.code $(quote str)])
+    asInline =<< highlight stx #[] (PersistentArray.empty)
 
 open Lean Elab Term in
-def tryInlineOption (str : String) : DocElabM Term := do
+def tryInlineOption (str : String) : DocElabM Expr := do
   let optName := str.trim.toName
   let optDecl ← getOptionDecl optName
-  let hl : Highlighted := optTok optName optDecl.declName optDecl.descr
-  ``(Verso.Doc.Inline.other (Inline.leanFromMarkdown $(quote hl)) #[Verso.Doc.Inline.code $(quote str)])
+  asInline <| optTok optName optDecl.declName optDecl.descr
 where
   optTok (name declName : Name) (descr : String) : Highlighted :=
     .token ⟨.option name declName descr, name.toString⟩
 
 open Lean Elab in
-def tryTacticName (tactics : Array Tactic.Doc.TacticDoc) (str : String) : DocElabM Term := do
+def tryTacticName (tactics : Array Tactic.Doc.TacticDoc) (str : String) : DocElabM Expr := do
   for t in tactics do
     if t.userName == str then
-      let hl : Highlighted := tacToken t
-      return ← ``(Verso.Doc.Inline.other (Inline.leanFromMarkdown $(quote hl)) #[Verso.Doc.Inline.code $(quote str)])
+      return ← asInline <| tacToken t
   throwError "Not a tactic name: {str}"
 where
   tacToken (t : Lean.Elab.Tactic.Doc.TacticDoc) : Highlighted :=
@@ -1064,7 +1073,7 @@ where
 
 open Lean Elab Term in
 open Lean.Parser in
-def tryHighlightKeywords (extraKeywords : Array String) (str : String) : DocElabM Term := do
+def tryHighlightKeywords (extraKeywords : Array String) (str : String) : DocElabM Expr := do
   let loc := (← getRef).getPos?.map (← getFileMap).utf8PosToLspPos
   let src :=
     if let some ⟨line, col⟩ := loc then s!"<docstring at {← getFileName}:{line}:{col}>"
@@ -1073,8 +1082,7 @@ def tryHighlightKeywords (extraKeywords : Array String) (str : String) : DocElab
   match runParser extraKeywords (← getEnv) (← getOptions) p str src (prec := 0) with
   | .error _e => throwError "Not keyword-highlightable"
   | .ok stx => DocElabM.withFileMap (.ofString str) <| do
-    let hls ← highlight stx #[] (PersistentArray.empty)
-    ``(Verso.Doc.Inline.other (Inline.leanFromMarkdown $(quote hls)) #[Verso.Doc.Inline.code $(quote str)])
+    asInline =<< highlight stx #[] (PersistentArray.empty)
 where
 
   simpleFn := andthenFn whitespace <| nodeFn nullKind <| manyFn tokenFn
@@ -1111,7 +1119,7 @@ private def getAttr : Syntax → Syntax
   | _ => .missing
 
 open Lean Elab Term in
-def tryParseInlineCodeAttribute (validate := true) (str : String) : DocElabM Term := do
+def tryParseInlineCodeAttribute (validate := true) (str : String) : DocElabM Expr := do
   let loc := (← getRef).getPos?.map (← getFileMap).utf8PosToLspPos
   let src :=
     if let some ⟨line, col⟩ := loc then s!"<docstring at {← getFileName}:{line}:{col}>"
@@ -1131,11 +1139,9 @@ def tryParseInlineCodeAttribute (validate := true) (str : String) : DocElabM Ter
       match getAttributeImpl (← getEnv) attrName with
       | .error e => throwError e
       | .ok _ =>
-        let hls ← highlight stx #[] (PersistentArray.empty)
-        ``(Verso.Doc.Inline.other (Inline.leanFromMarkdown $(quote hls)) #[Verso.Doc.Inline.code $(quote str)])
+        asInline =<< highlight stx #[] (PersistentArray.empty)
     else
-      let hls ← highlight stx #[] (PersistentArray.empty)
-      ``(Verso.Doc.Inline.other (Inline.leanFromMarkdown $(quote hls)) #[Verso.Doc.Inline.code $(quote str)])
+      asInline =<< highlight stx #[] (PersistentArray.empty)
 
 
 private def indentColumn (str : String) : Nat := Id.run do
@@ -1168,7 +1174,7 @@ private def indentColumn (str : String) : Nat := Id.run do
 #eval indentColumn "   abc\n\n  def\n    a"
 
 open Lean Elab Term in
-def tryElabBlockCodeCommand (str : String) (ignoreElabErrors := false) : DocElabM Term := do
+def tryElabBlockCodeCommand (str : String) (ignoreElabErrors := false) : DocElabM Expr := do
     let loc := (← getRef).getPos?.map (← getFileMap).utf8PosToLspPos
     let src :=
       if let some ⟨line, col⟩ := loc then s!"<docstring at {← getFileName}:{line}:{col}>"
@@ -1201,24 +1207,22 @@ def tryElabBlockCodeCommand (str : String) (ignoreElabErrors := false) : DocElab
     if cmdState.messages.hasErrors then
       throwError "Errors found in command"
 
-    let hls ← DocElabM.withFileMap (.ofString str) do
+    DocElabM.withFileMap (.ofString str) do
       let mut hls := Highlighted.empty
       for cmd in cmds do
         hls := hls ++ (← highlight cmd cmdState.messages.toArray cmdState.infoState.trees)
-      pure <| hls.deIndent (indentColumn str)
+      asBlock <| hls.deIndent (indentColumn str)
 
-    ``(Verso.Doc.Block.other (Block.leanFromMarkdown $(quote hls)) #[Verso.Doc.Block.code $(quote str)])
 
 
 open Lean Elab Term in
-def tryElabInlineCodeName (str : String) : DocElabM Term := do
+def tryElabInlineCodeName (str : String) : DocElabM Expr := do
   let str := str.trim
   let x := str.toName
   if x.toString == str then
     let stx := mkIdent x
     let n ← realizeGlobalConstNoOverload stx
-    let hl : Highlighted ← constTok n str
-    ``(Verso.Doc.Inline.other (Inline.leanFromMarkdown $(quote hl)) #[Verso.Doc.Inline.code $(quote str)])
+    asInline =<< constTok n str
   else
     throwError "Not a name: '{str}'"
 where
@@ -1248,22 +1252,24 @@ private def attempt (str : String) (xs : List (String → DocElabM α)) : DocEla
 
 
 open Lean Elab Term in
-def tryElabInlineCodeUsing (elabs : List (String → DocElabM Term))
-    (priorWord : Option String) (str : String) : DocElabM Term := do
+def tryElabInlineCodeUsing (elabs : List (String → DocElabM Expr))
+    (priorWord : Option String) (str : String) : DocElabM Expr := do
+  let g ← DocElabM.genreExpr
   -- Don't try to show Lake commands as terms
-  if "lake ".isPrefixOf str then return (← ``(Verso.Doc.Inline.code $(quote str)))
+  let code := mkApp2 (.const ``Verso.Doc.Inline.code []) g (toExpr str)
+  if "lake ".isPrefixOf str then return code
   try
     attempt str <| wordElab priorWord ++ elabs
   catch
     | .error ref e =>
       logWarningAt ref e
-      ``(Verso.Doc.Inline.code $(quote str))
+      return code
     | e =>
       if isAutoBoundImplicitLocalException? e |>.isSome then
         throw e
       else
         logWarning m!"Internal exception uncaught: {e.toMessageData}"
-        ``(Verso.Doc.Inline.code $(quote str))
+        return code
 where
   wordElab
     | some "attribute" => [tryParseInlineCodeAttribute (validate := false)]
@@ -1272,7 +1278,7 @@ where
 
 open Elab in
 def tryElabInlineCode (allTactics : Array Tactic.Doc.TacticDoc) (extraKeywords : Array String)
-    (priorWord : Option String) (str : String) : DocElabM Term :=
+    (priorWord : Option String) (str : String) : DocElabM Expr :=
   tryElabInlineCodeUsing [
     tryElabInlineCodeName,
     -- When identifiers have the same name as tactics, prefer the identifiers
@@ -1295,7 +1301,7 @@ displaying metavariable-typed terms (e.g., through auto-bound implicits or
 elaboration failures).
 -/
 def tryElabInlineCodeStrict (allTactics : Array Tactic.Doc.TacticDoc) (extraKeywords : Array String)
-    (priorWord : Option String) (str : String) : DocElabM Term :=
+    (priorWord : Option String) (str : String) : DocElabM Expr :=
   tryElabInlineCodeUsing [
     tryElabInlineCodeName,
     -- When identifiers have the same name as tactics, prefer the identifiers
@@ -1310,25 +1316,28 @@ def tryElabInlineCodeStrict (allTactics : Array Tactic.Doc.TacticDoc) (extraKeyw
   ] priorWord str
 
 open Lean Elab Term in
-def tryElabBlockCode (_info? _lang? : Option String) (str : String) : DocElabM Term := do
+def tryElabBlockCode (_info? _lang? : Option String) (str : String) : DocElabM Expr := do
+  let g ← DocElabM.genreExpr
+  let code := mkApp2 (.const ``Verso.Doc.Block.code []) g (mkStrLit str)
   try
     attempt str [
-      tryElabBlockCodeCommand,
-      tryElabBlockCodeTerm,
-      tryElabBlockCodeCommand (ignoreElabErrors := true),
-      withTheReader Term.Context (fun ctx => {ctx with autoBoundImplicit := true}) ∘
-        tryElabBlockCodeTerm (ignoreElabErrors := true)
-    ]
+        tryElabBlockCodeCommand,
+        tryElabBlockCodeTerm,
+        tryElabBlockCodeCommand (ignoreElabErrors := true),
+        withTheReader Term.Context (fun ctx => {ctx with autoBoundImplicit := true}) ∘
+          tryElabBlockCodeTerm (ignoreElabErrors := true)
+      ]
+
   catch
     | .error ref e =>
       logWarningAt ref e
-      ``(Verso.Doc.Block.code $(quote str))
+      return code
     | e =>
       if isAutoBoundImplicitLocalException? e |>.isSome then
         throw e
       else
         logWarning m!"Internal exception uncaught: {e.toMessageData}"
-        ``(Verso.Doc.Block.code $(quote str))
+        return code
 
 open Lean Elab Term in
 /--
@@ -1336,9 +1345,10 @@ Heuristically elaborate Lean fragments in Markdown code. The provided names are 
 from left to right, with the names bound by the signature being available in the local scope in
 which the Lean fragments are elaborated.
 -/
-def blockFromMarkdownWithLean (names : List Name) (b : MD4Lean.Block) : DocElabM Term := do
+def blockFromMarkdownWithLean (names : List Name) (b : MD4Lean.Block) : DocElabM Expr := do
+  let g ← DocElabM.genreExpr
   unless (← Docstring.getElabMarkdown) do
-    return (← Markdown.blockFromMarkdown b (handleHeaders := Markdown.strongEmphHeaders))
+    return (← Markdown.blockFromMarkdown'' g b (handleHeaders := Markdown.strongEmphHeaders'' g))
   let tactics ← Elab.Tactic.Doc.allTacticDocs
   let keywords := tactics.map (·.userName)
   try
@@ -1349,13 +1359,13 @@ def blockFromMarkdownWithLean (names : List Name) (b : MD4Lean.Block) : DocElabM
         blockFromMarkdownWithLean decls b
     | [] =>
       -- It'd be silly for some weird edge case to block on this feature...
-      let rec loop (max : Nat) (s : SavedState) : DocElabM Term := do
+      let rec loop (max : Nat) (s : SavedState) : DocElabM Expr := do
         match max with
         | k + 1 =>
           try
             let res ←
-              Markdown.blockFromMarkdown b
-                (handleHeaders := Markdown.strongEmphHeaders)
+              Markdown.blockFromMarkdown'' g b
+                (handleHeaders := Markdown.strongEmphHeaders'' g)
                 (elabInlineCode := tryElabInlineCode tactics keywords)
                 (elabBlockCode := tryElabBlockCode)
             synthesizeSyntheticMVarsUsingDefault
@@ -1377,8 +1387,60 @@ def blockFromMarkdownWithLean (names : List Name) (b : MD4Lean.Block) : DocElabM
       finally
         (s.restore : TermElabM _)
   catch _ =>
-    Markdown.blockFromMarkdown b
-      (handleHeaders := Markdown.strongEmphHeaders)
+    Markdown.blockFromMarkdown'' g b
+      (handleHeaders := Markdown.strongEmphHeaders'' g)
+
+open Lean Elab Term in
+/--
+Heuristically elaborate Lean fragments in Markdown code. The provided names are used as signatures,
+from left to right, with the names bound by the signature being available in the local scope in
+which the Lean fragments are elaborated.
+-/
+-- TODO: replace Term version completely
+def blockFromMarkdownWithLean' (names : List Name) (b : MD4Lean.Block) : DocElabM Expr := do
+  let g ← DocElabM.genreExpr
+  unless (← Docstring.getElabMarkdown) do
+    return (← Markdown.blockFromMarkdown'' g b (handleHeaders := Markdown.strongEmphHeaders'' g))
+  let tactics ← Elab.Tactic.Doc.allTacticDocs
+  let keywords := tactics.map (·.userName)
+  try
+    match names with
+    | decl :: decls =>
+      -- This brings the parameters into scope, so the term elaboration version catches them!
+      Meta.forallTelescopeReducing (← getConstInfo decl).type fun _ _ =>
+        blockFromMarkdownWithLean' decls b
+    | [] =>
+      -- It'd be silly for some weird edge case to block on this feature...
+      let rec loop (max : Nat) (s : SavedState) : DocElabM Expr := do
+        match max with
+        | k + 1 =>
+          try
+            let res ←
+              Markdown.blockFromMarkdown'' g b
+                (handleHeaders := Markdown.strongEmphHeaders'' g)
+                (elabInlineCode := tryElabInlineCode tactics keywords)
+                (elabBlockCode := tryElabBlockCode)
+            synthesizeSyntheticMVarsUsingDefault
+
+            discard <| addAutoBoundImplicits #[] (inlayHintPos? := none)
+
+            return res
+          catch e =>
+            if let some n := isAutoBoundImplicitLocalException? e then
+              s.restore (restoreInfo := true)
+              Meta.withLocalDecl n .implicit (← Meta.mkFreshTypeMVar) fun x =>
+                withTheReader Term.Context (fun ctx => { ctx with autoBoundImplicits := ctx.autoBoundImplicits.push x } ) do
+                  loop k (← (saveState : TermElabM _))
+            else throw e
+        | 0 => throwError "Ran out of local name attempts"
+      let s ← (saveState : TermElabM _)
+      try
+        loop 40 s
+      finally
+        (s.restore : TermElabM _)
+  catch _ =>
+    Markdown.blockFromMarkdown'' g b
+      (handleHeaders := Markdown.strongEmphHeaders'' g)
 
 structure DocstringConfig where
   name : Ident × Name
@@ -1407,9 +1469,12 @@ def DocstringConfig.parse : ArgParse m DocstringConfig :=
 
 end
 
-@[block_role_expander docstring]
-def docstring : BlockRoleExpander
+open DocElabM in
+open Meta in
+@[block_role_elab docstring]
+def docstring : BlockRoleElab
   | args, #[] => do
+    let g ← DocElabM.genreExpr
     let ⟨(x, name), allowMissing, hideFields, hideCtor, customLabel⟩ ← DocstringConfig.parse.run args
 
     let opts : Options → Options := allowMissing.map (fun b opts => verso.docstring.allowMissing.set opts b) |>.getD id
@@ -1434,50 +1499,66 @@ def docstring : BlockRoleExpander
       let signature ← Signature.forName name
 
       let extras ← getExtras name declType
-      pure #[← ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.docstring $(quote name) $(quote declType) $(quote signature) $(quote customLabel)) #[$(blockStx ++ extras),*])]
+      let docBlock := mkApp4 (.const ``Manual.Block.docstring []) (toExpr name) (toExpr declType) (toExpr signature) (toExpr customLabel)
+
+      return mkApp3 (.const ``Verso.Doc.Block.other []) g docBlock (← mkArrayLit (← blockType) (blockStx ++ extras).toList)
   | _, more => throwErrorAt more[0]! "Unexpected block argument"
 where
-  getExtras (name : Name) (declType : Block.Docstring.DeclType) : DocElabM (Array Term) :=
+  getExtras (name : Name) (declType : Block.Docstring.DeclType) : DocElabM (Array Expr) := do
+    let g ← DocElabM.genreExpr
     match declType with
     | .structure isClass constructor? _ fieldInfo parents _ => do
-      let ctorRow : Option Term ← constructor?.mapM fun constructor => do
+      let ctorRow : Option Expr ← constructor?.mapM fun constructor => do
         let header := if isClass then "Instance Constructor" else "Constructor"
-        let sigDesc : Array Term ←
+        let sigDesc : Array Expr ←
           if let some docs := constructor.docstring? then
             let some mdAst := MD4Lean.parse docs
               | throwError "Failed to parse docstring as Markdown"
             mdAst.blocks.mapM (blockFromMarkdownWithLean [name, constructor.name])
-          else pure (#[] : Array Term)
-        let sig ← `(Verso.Doc.Block.other (Verso.Genre.Manual.Block.internalSignature $(quote constructor.hlName) none) #[$sigDesc,*])
-        ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.docstringSection $(quote header)) #[$sig])
+          else pure (#[] : Array Expr)
+        let sigBlk := mkApp2 (.const ``Block.internalSignature []) (toExpr constructor.hlName) (toExpr (none : Option Highlighted))
+        let sig := mkApp3 (.const ``Verso.Doc.Block.other []) g sigBlk (← Meta.mkArrayLit (← DocElabM.blockType) sigDesc.toList)
+        let sec := .app (.const ``Block.docstringSection []) (toExpr header)
+        return mkApp3 (.const ``Verso.Doc.Block.other []) g sec (← Meta.mkArrayLit (← DocElabM.blockType) [sig])
 
-      let parentsRow : Option Term ← do
+
+      let parentsRow : Option Expr ← do
         if parents.isEmpty then pure none
         else
           let header := "Extends"
-          let inh ← ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.inheritance $(quote name) $(quote parents)) #[])
-          some <$> ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.docstringSection $(quote header)) #[$inh])
+          let sec : Expr := .app (.const ``Block.docstringSection []) (toExpr header)
+          let inh := mkApp2 (.const ``Verso.Genre.Manual.Block.inheritance []) (toExpr name) (toExpr parents)
+          let inh := mkApp3 (.const ``Verso.Doc.Block.other []) g inh (← Meta.mkArrayLit (← DocElabM.blockType) [])
+          pure <| some <| mkApp3 (.const ``Verso.Doc.Block.other []) g sec (← Meta.mkArrayLit (← DocElabM.blockType) [inh])
 
-      let fieldsRow : Option Term ← do
+
+      let fieldsRow : Option Expr ← do
         let header := if isClass then "Methods" else "Fields"
         let fieldInfo := fieldInfo.filter (·.subobject?.isNone)
-        let fieldSigs : Array Term ← fieldInfo.mapM fun i => do
+        let fieldSigs : Array Expr ← fieldInfo.mapM fun i => do
           let inheritedFrom : Option Nat :=
             i.fieldFrom.head?.bind (fun n => parents.findIdx? (·.name == n.name))
-          let sigDesc : Array Term ←
+          let sigDesc : Array Expr ←
             if let some docs := i.docString? then
               let some mdAst := MD4Lean.parse docs
                 | throwError "Failed to parse docstring as Markdown"
               mdAst.blocks.mapM (blockFromMarkdownWithLean <| name :: (constructor?.map ([·.name])).getD [])
             else
-              pure (#[] : Array Term)
-          ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.fieldSignature $(quote i.visibility) $(quote i.fieldName) $(quote i.type) $(quote inheritedFrom) $(quote <| parents.map (·.parent))) #[$sigDesc,*])
+              pure (#[] : Array Expr)
+
+          let fieldSig : Expr :=
+            mkApp5 (.const ``Verso.Genre.Manual.Block.fieldSignature [])
+              (toExpr i.visibility) (toExpr i.fieldName) (toExpr i.type) (toExpr inheritedFrom) (toExpr (parents.map (·.parent)))
+          return mkApp3 (.const ``Verso.Doc.Block.other []) g fieldSig (← Meta.mkArrayLit (← DocElabM.blockType) sigDesc.toList)
         if fieldSigs.isEmpty then pure none
-        else some <$> ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.docstringSection $(quote header)) #[$fieldSigs,*])
+        -- ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.docstringSection $(quote header)) #[$fieldSigs,*])
+        else
+          let sec := .app (.const ``Block.docstringSection []) (toExpr header)
+          pure <| some <| mkApp3 (.const ``Verso.Doc.Block.other []) g sec (← Meta.mkArrayLit (← DocElabM.blockType) fieldSigs.toList)
 
       pure <| ctorRow.toArray ++ parentsRow.toArray ++ fieldsRow.toArray
     | .inductive ctors .. => do
-      let ctorSigs : Array Term ←
+      let ctorSigs : Array Expr ←
         -- Elaborate constructor docs in the type's NS
         ctors.mapM fun c => withTheReader Core.Context ({· with currNamespace := name}) do
           let sigDesc ←
@@ -1485,9 +1566,12 @@ where
               let some mdAst := MD4Lean.parse docs
                 | throwError "Failed to parse docstring as Markdown"
               mdAst.blocks.mapM (blockFromMarkdownWithLean [name, c.name])
-            else pure (#[] : Array Term)
-          ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.constructorSignature $(quote c.signature)) #[$sigDesc,*])
-      pure #[← ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.docstringSection "Constructors") #[$ctorSigs,*])]
+            else pure (#[] : Array Expr)
+          --``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.constructorSignature $(quote c.signature)) #[$sigDesc,*])
+          let sig := .app (.const ``Block.constructorSignature []) (toExpr c.signature)
+          pure <| mkApp3 (.const ``Verso.Doc.Block.other []) g sig (← mkArrayLit (← blockType) sigDesc.toList)
+      let sec := .app (.const ``Block.docstringSection []) (toExpr "Constructors")
+      pure #[mkApp3 (.const ``Verso.Doc.Block.other []) g sec (← mkArrayLit (← blockType) ctorSigs.toList)]
     | _ => pure #[]
 
 section
@@ -1505,16 +1589,19 @@ def IncludeDocstringOpts.parse : ArgParse m IncludeDocstringOpts :=
 
 end
 
-@[block_role_expander includeDocstring]
-def includeDocstring : BlockRoleExpander
+open DocElabM in
+open Meta in
+@[block_role_elab includeDocstring]
+def includeDocstring : BlockRoleElab
   | args, #[] => do
+    let g ← DocElabM.genreExpr
     let {name, elaborate} ← IncludeDocstringOpts.parse.run args
 
     let fromMd :=
       if elaborate then
         blockFromMarkdownWithLean [name]
       else
-        Markdown.blockFromMarkdown (handleHeaders := Markdown.strongEmphHeaders)
+        Markdown.blockFromMarkdown'' g (handleHeaders := Markdown.strongEmphHeaders'' g)
 
     let blockStx ←
       match ← getDocString? (← getEnv) name with
@@ -1524,7 +1611,7 @@ def includeDocstring : BlockRoleExpander
           | throwError "Failed to parse docstring as Markdown"
         ast.blocks.mapM fromMd
 
-    pure blockStx
+    pure <| mkApp2 (.const ``Verso.Doc.Block.concat []) g (← mkArrayLit (← blockType) blockStx.toList)
 
   | _args, more => throwErrorAt more[0]! "Unexpected block argument"
 
@@ -1563,8 +1650,10 @@ def highlightDataValue (v : DataValue) : Highlighted :=
     | .ofSyntax (v : Syntax) => ⟨.unknown, toString v⟩ -- TODO
 
 
-@[block_role_expander optionDocs]
-def optionDocs : BlockRoleExpander
+open DocElabM in
+open Meta in
+@[block_role_elab optionDocs]
+def optionDocs : BlockRoleElab
   | args, #[] => do
     let #[.anon (.name x)] := args
       | throwError "Expected exactly one positional argument that is a name"
@@ -1573,7 +1662,9 @@ def optionDocs : BlockRoleExpander
     let some mdAst := MD4Lean.parse optDecl.descr
       | throwErrorAt x "Failed to parse docstring as Markdown"
     let contents ← mdAst.blocks.mapM (blockFromMarkdownWithLean [])
-    pure #[← ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.optionDocs $(quote x.getId) $(quote <| highlightDataValue optDecl.defValue)) #[$contents,*])]
+    let g ← genreExpr
+    let optDocs := mkApp2 (.const ``Block.optionDocs []) (toExpr x.getId) (toExpr <| some <| highlightDataValue optDecl.defValue)
+    return mkApp3 (.const ``Verso.Doc.Block.other []) g optDocs (← mkArrayLit (← blockType) contents.toList)
 
   | _, more => throwErrorAt more[0]! "Unexpected block argument"
 
@@ -1672,11 +1763,21 @@ private def getTactic? (name : String ⊕ Name) : TermElabM (Option TacticDoc) :
       return some t
   return none
 
-@[directive_expander tactic]
-def tactic : DirectiveExpander
+
+instance : ToExpr NameSet where
+  toTypeExpr := .const ``NameSet []
+  toExpr xs :=
+    mkApp3 (.const ``RBTree.fromList [0]) (.const ``Name []) (toExpr xs.toList) (.const ``Name.quickCmp [])
+
+deriving instance ToExpr for Elab.Tactic.Doc.TacticDoc
+
+open DocElabM in
+open Meta in
+@[directive_elab tactic]
+def tactic : DirectiveElab
   | args, more => do
     let opts ← TacticDocsOptions.parse.run args
-    let tactic ← getTactic opts.name
+    let tactic ← InlineLean.usingExamplesEnv <| getTactic opts.name
     Doc.PointOfInterest.save (← getRef) tactic.userName
     if tactic.userName == tactic.internalName.toString && opts.show.isNone then
       throwError "No `show` option provided, but the tactic has no user-facing token name"
@@ -1686,8 +1787,11 @@ def tactic : DirectiveExpander
         let some mdAst := tactic.docString >>= MD4Lean.parse
           | throwError "Failed to parse docstring as Markdown"
         mdAst.blocks.mapM (blockFromMarkdownWithLean [])
-    let userContents ← more.mapM elabBlock
-    pure #[← ``(Verso.Doc.Block.other (Block.tactic $(quote tactic) $(quote opts.show)) #[$(contents ++ userContents),*])]
+    let userContents ← more.mapM elabBlock'
+    let g ← genreExpr
+    let tac := mkApp2 (.const ``Block.tactic []) (toExpr tactic) (toExpr opts.show)
+    return mkApp3 (.const ``Verso.Doc.Block.other []) g tac (← mkArrayLit (← blockType) (contents ++ userContents).toList)
+    --pure #[← ``(Verso.Doc.Block.other (Block.tactic $(quote tactic) $(quote opts.show)) #[$(contents ++ userContents),*])]
 
 
 
@@ -1761,7 +1865,9 @@ def tacticInline : RoleExpander
       | throwErrorAt arg "Expected code literal with the tactic name"
     let tacTok := tac.getString
     let tacName := tac.getString.toName
-    let some tacticDoc := (← getTactic? (.inl tacTok)) <|> (← getTactic? (.inr tacName))
+    let some tacticDoc :=
+      (← InlineLean.usingExamplesEnv <| getTactic? (.inl tacTok)) <|>
+      (← InlineLean.usingExamplesEnv <| getTactic? (.inr tacName))
       | throwErrorAt tac "Didn't find tactic named {tac}"
 
     let hl : Highlighted := tacToken tacticDoc «show»
@@ -1814,8 +1920,10 @@ def getConvTactic (name : String ⊕ Name) (allowMissing : Option Bool) : TermEl
         return ⟨k, ← getDocString? (← getEnv) k⟩
     throwError m!"Conv tactic not found: {kind}"
 
-@[directive_expander conv]
-def conv : DirectiveExpander
+open DocElabM in
+open Meta in
+@[directive_elab conv]
+def conv : DirectiveElab
   | args, more => do
     let opts ← TacticDocsOptions.parse.run args
     let tactic ← getConvTactic opts.name opts.allowMissing
@@ -1825,10 +1933,13 @@ def conv : DirectiveExpander
           | throwError "Failed to parse docstring as Markdown"
         mdAst.blocks.mapM (blockFromMarkdownWithLean [])
       else pure #[]
-    let userContents ← more.mapM elabBlock
+    let userContents ← more.mapM elabBlock'
     let some toShow := opts.show
       | throwError "An explicit 'show' is mandatory for conv docs (for now)"
-    pure #[← ``(Verso.Doc.Block.other (Block.conv $(quote tactic.name) $(quote toShow) $(quote tactic.docs?)) #[$(contents ++ userContents),*])]
+    let g ← genreExpr
+    let blk := mkApp3 (.const ``Block.conv []) (toExpr tactic.name) (toExpr toShow) (toExpr tactic.docs?)
+    return mkApp3 (.const ``Verso.Doc.Block.other []) g blk (← mkArrayLit (← blockType) (contents ++ userContents).toList)
+
 
 open Verso.Genre.Manual.Markdown in
 open Lean Elab Term Parser Tactic Doc in

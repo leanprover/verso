@@ -49,6 +49,14 @@ where
     | .point p s => return .point p s
     | .tactics gs x y hl => .tactics gs x y <$> remove hl
 
+deriving instance Lean.ToExpr for Lean.LevelMVarId
+deriving instance Lean.ToExpr for Lean.Level
+deriving instance Lean.ToExpr for Token.Kind
+deriving instance Lean.ToExpr for Token
+deriving instance Lean.ToExpr for Highlighted.Span.Kind
+deriving instance Lean.ToExpr for Highlighted.Goal
+deriving instance Lean.ToExpr for Highlighted
+
 end SubVerso.Highlighting
 
 

@@ -91,9 +91,54 @@ def headerStxToString (env : Environment) : Syntax → String
   | headerStx => dbg_trace "didn't understand {headerStx} for string"
     "<missing>"
 
+/-- Parameters that have dynamic extent with respect to Verso elaboration. -/
+structure DocElabParameters where
+  parameters : NameMap Dynamic := {}
+
 structure DocElabContext where
   genreSyntax : Syntax
   genre : Expr
+  parameters : DocElabParameters := {}
+
+section
+variable [Monad m] [MonadError m] [MonadReaderOf DocElabContext m] [MonadWithReaderOf DocElabContext m] [TypeName α]
+
+def withModifiedParameter  (x : Name) (f : α → α) (act : m β) : m β := do
+  let ⟨params⟩ := (← read).parameters
+  if let some v := params.find? x then
+    if let some v := v.get? α then
+      withReader ({ · with parameters := ⟨params.insert x (.mk (f  v))⟩ }) act
+    else throwError m!"Internal error: expected a {TypeName.typeName α} for {x}, but got a {v.typeName}"
+  else throwError m!"Internal error: no value for parameter {x} of type {TypeName.typeName α}"
+
+def withParameter (x : Name) (value : α) (act : m β) : m β := do
+  let ⟨params⟩ := (← read).parameters
+  if let some v := params.find? x then
+    if v.typeName ≠ TypeName.typeName α then
+      throwError m!"Internal error: expected a {TypeName.typeName α} for {x}, but a {v.typeName} was already present."
+  withReader ({ · with parameters := ⟨params.insert x (.mk value)⟩ }) act
+
+def parameterValue! (x : Name) : m α := do
+  let ⟨params⟩ := (← read).parameters
+  if let some v := params.find? x then
+    if let some v := v.get? α then
+      return v
+    else
+      throwError m!"Internal error: expected a {TypeName.typeName α} for {x}, but found a {v.typeName}."
+  else
+    throwError m!"Internal error: no value for {x}. Expected a {TypeName.typeName α} but no value was present."
+
+def parameterValue? (x : Name) : m (Option α) := do
+  let ⟨params⟩ := (← read).parameters
+  if let some v := params.find? x then
+    if let some v := v.get? α then
+      return (some v)
+    else
+      throwError m!"Internal error: expected a {TypeName.typeName α} for {x}, but found a {v.typeName}."
+  else
+    return none
+
+end
 
 /-- References that must be local to the current blob of concrete document syntax -/
 structure DocDef (α : Type) where
@@ -281,8 +326,11 @@ def PartElabM.State.init (title : Syntax) (expandedTitle : Option (String × Arr
 
 def PartElabM (α : Type) : Type := ReaderT DocElabContext (StateT DocElabM.State (StateT PartElabM.State TermElabM)) α
 
-def PartElabM.run (genreSyntax : Syntax) (genre : Expr) (st : DocElabM.State) (st' : PartElabM.State) (act : PartElabM α) : TermElabM (α × DocElabM.State × PartElabM.State) := do
-  let ((res, st), st') ← act ⟨genreSyntax, genre⟩ st st'
+def PartElabM.run (genreSyntax : Syntax) (genre : Expr)
+    (st : DocElabM.State) (st' : PartElabM.State)
+    (act : PartElabM α)
+    (params : DocElabParameters := {}) : TermElabM (α × DocElabM.State × PartElabM.State) := do
+  let ((res, st), st') ← act ⟨genreSyntax, genre, params⟩ st st'
   pure (res, st, st')
 
 instance : Alternative PartElabM := inferInstanceAs <| Alternative (ReaderT DocElabContext (StateT DocElabM.State (StateT PartElabM.State TermElabM)))
@@ -316,13 +364,19 @@ instance : MonadWithReaderOf Term.Context PartElabM := inferInstanceAs <| MonadW
 
 instance : MonadReaderOf DocElabContext PartElabM := inferInstanceAs <| MonadReaderOf DocElabContext (ReaderT DocElabContext (StateT DocElabM.State (StateT PartElabM.State TermElabM)))
 
+instance : MonadWithReaderOf DocElabContext PartElabM := inferInstanceAs <| MonadWithReaderOf DocElabContext (ReaderT DocElabContext (StateT DocElabM.State (StateT PartElabM.State TermElabM)))
+
+
 def PartElabM.withFileMap (fileMap : FileMap) (act : PartElabM α) : PartElabM α :=
   fun ρ ρ' σ ctxt σ' mctxt rw cctxt => act ρ ρ' σ ctxt σ' mctxt rw {cctxt with fileMap := fileMap}
 
 def DocElabM (α : Type) : Type := ReaderT DocElabContext (ReaderT PartElabM.State (StateT DocElabM.State TermElabM)) α
 
-def DocElabM.run (genreSyntax : Syntax) (genre : Expr) (st : DocElabM.State) (st' : PartElabM.State) (act : DocElabM α) : TermElabM (α × DocElabM.State) := do
-  StateT.run (act ⟨genreSyntax, genre⟩ st') st
+def DocElabM.run (genreSyntax : Syntax) (genre : Expr)
+    (st : DocElabM.State) (st' : PartElabM.State)
+    (act : DocElabM α)
+    (params : DocElabParameters := {}) : TermElabM (α × DocElabM.State) := do
+  StateT.run (act ⟨genreSyntax, genre, params⟩ st') st
 
 instance : Inhabited (DocElabM α) := ⟨fun _ _ _ => default⟩
 
@@ -375,6 +429,8 @@ instance : MonadWithReaderOf Term.Context DocElabM := inferInstanceAs <| MonadWi
 
 instance : MonadReaderOf DocElabContext DocElabM := inferInstanceAs <| MonadReaderOf DocElabContext (ReaderT DocElabContext (ReaderT PartElabM.State (StateT DocElabM.State TermElabM)))
 
+instance : MonadWithReaderOf DocElabContext DocElabM := inferInstanceAs <| MonadWithReaderOf DocElabContext (ReaderT DocElabContext (ReaderT PartElabM.State (StateT DocElabM.State TermElabM)))
+
 instance : MonadReaderOf PartElabM.State DocElabM := inferInstanceAs <| MonadReaderOf PartElabM.State (ReaderT DocElabContext (ReaderT PartElabM.State (StateT DocElabM.State TermElabM)))
 
 def DocElabM.withFileMap (fileMap : FileMap) (act : DocElabM α) : DocElabM α :=
@@ -386,7 +442,7 @@ instance : MonadRecDepth DocElabM where
   getMaxRecDepth := fun _ _ st' => do return (← MonadRecDepth.getMaxRecDepth, st')
 
 def PartElabM.liftDocElabM (act : DocElabM α) : PartElabM α := do
-  let ⟨gStx, g⟩ ← readThe DocElabContext
+  let ⟨gStx, g, _⟩ ← readThe DocElabContext
   let (out, st') ← act.run gStx g (← getThe DocElabM.State) (← getThe PartElabM.State)
   set st'
   pure out
@@ -410,14 +466,38 @@ def findLinksAndNotes : Expr → MetaM (Array (Expr × Expr))
   | .mdata _ e | .proj _ _ e => findLinksAndNotes e
   | .sort .. | .fvar .. | .bvar .. | .const .. | .lit .. => pure #[]
 
+def DocElabM.genreExpr : DocElabM Expr := do
+  let ⟨_, g, _⟩ ← read
+  return g
+
+def DocElabM.blockType : DocElabM Expr := do
+  let g ← genreExpr
+  return .app (.const ``Doc.Block []) g
+
+def DocElabM.blockArray (blocks : Array Expr) : DocElabM Expr := do
+  let bt ← blockType
+  Meta.mkArrayLit bt blocks.toList
+
+
+def DocElabM.inlineType : DocElabM Expr := do
+  let g ← genreExpr
+  return .app (.const ``Doc.Inline []) g
+
+def DocElabM.inlineArray (inlines : Array Expr) : DocElabM Expr := do
+  let bt ← inlineType
+  Meta.mkArrayLit bt inlines.toList
+
+def DocElabM.emptyBlock : DocElabM Expr := do
+  pure <| mkApp2 (.const ``Block.concat []) (← genreExpr) (← Meta.mkArrayLit (← blockType) [])
+
 open Lean Meta Elab Term in
-def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := withRef block <| do
-  let ⟨_, g⟩ ← readThe DocElabContext
+def DocElabM.defineInline (inline : Expr) : DocElabM Name := do
+  let g ← genreExpr
 
-  let n ← mkFreshUserName `block
+  let n ← mkFreshUserName `inline
 
-  let type : Expr := .app (.const ``Doc.Block []) g
-  let t ← elabTerm block (some type)
+  let type : Expr := .app (.const ``Doc.Inline []) g
+  let t ← ensureHasType (some type) inline
   let t ← instantiateMVars t
   let links ← findLinksAndNotes t
   let t ← links.foldrM (init := t) fun (mv, mvty) t =>
@@ -432,7 +512,7 @@ def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := withRef block
   let usedParams  := collectLevelParams {} type |>.params
 
   match sortDeclLevelParams [] [] usedParams with
-  | Except.error msg      => throwErrorAt block msg
+  | Except.error msg      => throwError msg
   | Except.ok levelParams =>
     synthesizeSyntheticMVarsNoPostponing
     let t ← instantiateMVars t
@@ -448,8 +528,61 @@ def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := withRef block
     }
     Term.ensureNoUnassignedMVars decl
     addAndCompile decl
+  return n
+
+open Lean Meta Elab Term in
+def DocElabM.defineBlock (block : Expr) : DocElabM Name := do
+  let g ← genreExpr
+
+  let n ← mkFreshUserName `block
+
+  let type : Expr := .app (.const ``Doc.Block []) g
+  let t ← ensureHasType (some type) block
+  let t ← instantiateMVars t
+  let links ← findLinksAndNotes t
+  let t ← links.foldrM (init := t) fun (mv, mvty) t =>
+    (.lam `inst mvty · .instImplicit) <$> t.abstractM #[mv]
+  let t ← instantiateMVars t
+
+  let xs ← Term.addAutoBoundImplicits #[] none
+  let type ← instantiateMVars type
+  let type ← mkForallFVars (links.map (·.1)) type (binderInfoForMVars := .instImplicit)
+  let type ← mkForallFVars xs type
+  let type ← levelMVarToParam type
+  let usedParams  := collectLevelParams {} type |>.params
+
+  match sortDeclLevelParams [] [] usedParams with
+  | Except.error msg      => throwError msg
+  | Except.ok levelParams =>
+    synthesizeSyntheticMVarsNoPostponing
+    let t ← instantiateMVars t
+    let type ← instantiateMVars type
+    let t ← ensureHasType (some type) t
+    let decl := Declaration.defnDecl {
+      name := n,
+      levelParams := levelParams,
+      type := type,
+      value := t,
+      hints := .abbrev,
+      safety := .safe
+    }
+    Term.ensureNoUnassignedMVars decl
+    addAndCompile decl
+  return n
+
+open Lean Meta Elab Term in
+def PartElabM.addBlockExpr (block : Expr) : PartElabM Unit := do
+  let n ← DocElabM.defineBlock block
   modifyThe State fun st =>
     { st with partContext.blocks := st.partContext.blocks.push (mkIdent n) }
+
+open Lean Meta Elab Term in
+def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := withRef block <| do
+  let g ← DocElabM.genreExpr
+  let type : Expr := .app (.const ``Doc.Block []) g
+  let t ← elabTerm block (some type)
+  addBlockExpr t
+
 
 def PartElabM.addPart (finished : FinishedPart) : PartElabM Unit := modifyThe State fun st =>
   {st with partContext.priorParts := st.partContext.priorParts.push finished}
@@ -489,7 +622,7 @@ def DocElabM.addLinkRef (refName : TSyntax `str) : DocElabM (TSyntax `term) := d
 def PartElabM.addFootnoteDef (refName : TSyntax `str) (content : Array (TSyntax `term)) : PartElabM Unit := do
   let strName := refName.getString
   let docName ← currentDocName
-  let ⟨_, genre⟩ ← readThe DocElabContext
+  let ⟨_, genre, _⟩ ← readThe DocElabContext
   match (← getThe State).footnoteDefs[strName]? with
   | none =>
     let t := mkApp3 (.const ``HasNote []) (toExpr strName) (toExpr docName) genre
@@ -512,7 +645,7 @@ def PartElabM.addFootnoteDef (refName : TSyntax `str) (content : Array (TSyntax 
 
 def DocElabM.addFootnoteRef (refName : TSyntax `str) : DocElabM (TSyntax `term) := do
   let strName := refName.getString
-  let ⟨genre, _⟩ ← readThe DocElabContext
+  let ⟨genre, _, _⟩ ← readThe DocElabContext
   match (← getThe State).footnoteRefs[strName]? with
   | none =>
     modifyThe State fun st => {st with footnoteRefs := st.footnoteRefs.insert strName ⟨#[refName]⟩}
@@ -549,6 +682,46 @@ def closes (openTok closeTok : Syntax) : DocElabM Unit := do
   let lineStr := if lineStr.startsWith "`" || lineStr.endsWith "`" then " " ++ lineStr ++ " " else lineStr
   Hover.addCustomHover closeTok (.markdown s!"Closes line {line + 1}: ``````````{lineStr}``````````")
 
+/--
+Elaborates those values selected by `prioritize`, then runs `between`, and finally elaborates the
+rest.
+
+They are returned in their original order.
+-/
+def prioritizedElab [Monad m]
+    (prioritize : α → m Bool) (act : α  → m β)
+    (between : m Unit)
+    (xs : Array α) : m (Array β) := do
+  let mut out := #[]
+  let mut later := #[]
+
+  for h:i in [0:xs.size] do
+    let x := xs[i]
+    if ← prioritize x then
+      out := out.push (i, (← act x))
+    else later := later.push (i, x)
+
+  between
+
+  for (i, x) in later do
+    out := out.push (i, (← act x))
+
+  out := out.qsort (fun (i, _) (j, _) => i < j)
+  return out.map (·.2)
+
+
+abbrev InlineElab := Syntax → DocElabM Expr
+
+initialize inlineElabAttr : KeyedDeclsAttribute InlineElab ←
+  mkDocExpanderAttribute `inline_elab ``InlineElab "Indicates that this function elaborates inline elements of a given name" `inlineElabAttr
+
+unsafe def inlineElabsForUnsafe (x : Name) : DocElabM (Array InlineElab) := do
+  let expanders := inlineElabAttr.getEntries (← getEnv) x
+  return expanders.map (·.value) |>.toArray
+
+@[implemented_by inlineElabsForUnsafe]
+opaque inlineElabsFor (x : Name) : DocElabM (Array InlineElab)
+
 
 abbrev InlineExpander := Syntax → DocElabM (TSyntax `term)
 
@@ -562,6 +735,18 @@ unsafe def inlineExpandersForUnsafe (x : Name) : DocElabM (Array InlineExpander)
 @[implemented_by inlineExpandersForUnsafe]
 opaque inlineExpandersFor (x : Name) : DocElabM (Array InlineExpander)
 
+
+abbrev BlockElab := Syntax → DocElabM Expr
+
+initialize blockElabAttr : KeyedDeclsAttribute BlockElab ←
+  mkDocExpanderAttribute `block_elab ``BlockElab "Indicates that this function expands block elements of a given name" `blockElabAttr
+
+unsafe def blockElabsForUnsafe (x : Name) : DocElabM (Array BlockElab) := do
+  let expanders := blockElabAttr.getEntries (← getEnv) x
+  return expanders.map (·.value) |>.toArray
+
+@[implemented_by blockElabsForUnsafe]
+opaque blockElabsFor (x : Name) : DocElabM (Array BlockElab)
 
 
 abbrev BlockExpander := Syntax → DocElabM (TSyntax `term)
@@ -591,6 +776,19 @@ unsafe def partCommandsForUnsafe (x : Name) : PartElabM (Array PartCommand) := d
 opaque partCommandsFor (x : Name) : PartElabM (Array PartCommand)
 
 
+abbrev RoleElab := Array Arg → TSyntaxArray `inline → DocElabM Expr
+
+initialize roleElabAttr : KeyedDeclsAttribute RoleElab ←
+  mkDocExpanderAttribute `role_elab ``RoleElab "Indicates that this function is used to elaborate a given role" `roleElabAttr
+
+unsafe def roleElabsForUnsafe (x : Name) : DocElabM (Array RoleElab) := do
+  let elabs := roleElabAttr.getEntries (← getEnv) x
+  return elabs.map (·.value) |>.toArray
+
+@[implemented_by roleElabsForUnsafe]
+opaque roleElabsFor (x : Name) : DocElabM (Array RoleElab)
+
+
 abbrev RoleExpander := Array Arg → TSyntaxArray `inline → DocElabM (Array (TSyntax `term))
 
 initialize roleExpanderAttr : KeyedDeclsAttribute RoleExpander ←
@@ -602,6 +800,19 @@ unsafe def roleExpandersForUnsafe (x : Name) : DocElabM (Array RoleExpander) := 
 
 @[implemented_by roleExpandersForUnsafe]
 opaque roleExpandersFor (x : Name) : DocElabM (Array RoleExpander)
+
+
+abbrev CodeBlockElab := Array Arg → TSyntax `str → DocElabM Expr
+
+initialize codeBlockElabAttr : KeyedDeclsAttribute CodeBlockElab ←
+  mkDocExpanderAttribute `code_block_elab ``CodeBlockElab "Indicates that this function is used to elaborate a given code block" `codeBlockElabAttr
+
+unsafe def codeBlockElabsForUnsafe (x : Name) : DocElabM (Array CodeBlockElab) := do
+  let elabs := codeBlockElabAttr.getEntries (← getEnv) x
+  return elabs.map (·.value) |>.toArray
+
+@[implemented_by codeBlockElabsForUnsafe]
+opaque codeBlockElabsFor (x : Name) : DocElabM (Array CodeBlockElab)
 
 
 abbrev CodeBlockExpander := Array Arg → TSyntax `str → DocElabM (Array (TSyntax `term))
@@ -617,6 +828,18 @@ unsafe def codeBlockExpandersForUnsafe (x : Name) : DocElabM (Array CodeBlockExp
 opaque codeBlockExpandersFor (x : Name) : DocElabM (Array CodeBlockExpander)
 
 
+abbrev DirectiveElab := Array Arg → TSyntaxArray `block → DocElabM Expr
+
+initialize directiveElabAttr : KeyedDeclsAttribute DirectiveElab ←
+  mkDocExpanderAttribute `directive_elab ``DirectiveElab "Indicates that this function is used to elaborate a given directive" `directiveElabAttr
+
+unsafe def directiveElabsForUnsafe (x : Name) : DocElabM (Array DirectiveElab) := do
+  let expanders := directiveElabAttr.getEntries (← getEnv) x
+  return expanders.map (·.value) |>.toArray
+
+@[implemented_by directiveElabsForUnsafe]
+opaque directiveElabsFor (x : Name) : DocElabM (Array DirectiveElab)
+
 
 abbrev DirectiveExpander := Array Arg → TSyntaxArray `block → DocElabM (Array (TSyntax `term))
 
@@ -629,6 +852,19 @@ unsafe def directiveExpandersForUnsafe (x : Name) : DocElabM (Array DirectiveExp
 
 @[implemented_by directiveExpandersForUnsafe]
 opaque directiveExpandersFor (x : Name) : DocElabM (Array DirectiveExpander)
+
+
+abbrev BlockRoleElab := Array Arg → Array Syntax → DocElabM Expr
+
+initialize blockRoleElabAttr : KeyedDeclsAttribute BlockRoleElab ←
+  mkDocExpanderAttribute `block_role_elab ``BlockRoleElab "Indicates that this function is used to implement a given blockRole" `blockRoleElabAttr
+
+unsafe def blockRoleElabsForUnsafe (x : Name) : DocElabM (Array BlockRoleElab) := do
+  let elabs := blockRoleElabAttr.getEntries (← getEnv) x
+  return elabs.map (·.value) |>.toArray
+
+@[implemented_by blockRoleElabsForUnsafe]
+opaque blockRoleElabsFor (x : Name) : DocElabM (Array BlockRoleElab)
 
 
 

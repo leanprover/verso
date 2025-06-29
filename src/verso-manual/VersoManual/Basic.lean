@@ -16,7 +16,9 @@ import Verso.Output.Html
 import Verso.Output.TeX
 import Verso.BEq
 
-open Lean (Name Json NameMap ToJson FromJson)
+open Lean (Name Json NameMap ToJson FromJson ToExpr Expr)
+open Lean.ToExpr
+open Lean.Meta
 open Std (HashSet HashMap TreeSet)
 open Verso.Doc
 open Verso.Multi
@@ -59,7 +61,17 @@ instance : ToString Tag where
 instance : Coe String Tag where
   coe := .provided
 
-
+def Tag.toExpr (tag : Tag) : MetaM Expr := do
+  match tag with
+  | .provided x => return Expr.app (.const ``Tag.provided []) (ToExpr.toExpr x)
+  | Tag.internal x => return Expr.app (.const ``Tag.internal []) (ToExpr.toExpr x)
+  | Tag.external x =>
+    let str := ToExpr.toExpr x.toString
+    let p := Expr.app (.const ``Slug.WF []) str
+    -- Should always succeed; we just need to run this due to type erasure
+    let prf ← mkDecideProof p
+    let slug := Lean.mkApp2 (.const ``Slug.ofString' []) str prf
+    return Expr.app (.const ``Tag.external []) slug
 
 /-- When rendering multi-page HTML, should splitting pages follow the depth setting? -/
 inductive HtmlSplitMode where

@@ -14,6 +14,7 @@ import Verso
 
 import VersoManual.Basic
 import VersoManual.InlineLean.Block
+import VersoManual.InlineLean.Env
 import VersoManual.InlineLean.IO
 import VersoManual.InlineLean.LongLines
 import VersoManual.InlineLean.Option
@@ -23,8 +24,8 @@ import VersoManual.InlineLean.Signature
 import VersoManual.InlineLean.SyntaxError
 
 
-open Lean Elab
-open Verso ArgParse Doc Elab Genre.Manual Html Code Highlighted.WebAssets ExpectString
+open Lean Elab Meta
+open Verso ArgParse Doc Elab Genre.Manual Html Code Highlighted.WebAssets ExpectString DocElabM
 open SubVerso.Highlighting Highlighted
 
 open Verso.SyntaxUtils (parserInputString runParserCategory' SyntaxError)
@@ -32,6 +33,8 @@ open Verso.SyntaxUtils (parserInputString runParserCategory' SyntaxError)
 open Lean.Elab.Tactic.GuardMsgs
 
 namespace Verso.Genre.Manual.InlineLean
+
+
 
 inline_extension Inline.lean (hls : Highlighted) where
   data :=
@@ -162,12 +165,15 @@ def reportMessages {m} [Monad m] [MonadLog m] [MonadError m]
     if messages.hasErrors then
       throwErrorAt blame "No error expected in code block, one occurred"
 
+deriving instance ToExpr for Lsp.Position
+deriving instance ToExpr for Lsp.Range
+
 /--
 Elaborates the provided Lean command in the context of the current Verso module.
 -/
-@[code_block_expander lean]
-def lean : CodeBlockExpander
-  | args, str => withoutAsync <| do
+@[code_block_elab lean]
+def lean : CodeBlockElab
+  | args, str => withoutAsync <| usingExamplesEnv do
     let config ← LeanBlockConfig.parse.run args
 
     PointOfInterest.save (← getRef) ((config.name.map (·.toString)).getD (abbrevFirstLine 20 str.getString))
@@ -224,9 +230,14 @@ def lean : CodeBlockExpander
       if config.show.getD true then
         let range := Syntax.getRange? str
         let range := range.map (← getFileMap).utf8RangeToLspRange
-        pure #[← ``(Block.other (Block.lean $(quote hls) (some $(quote (← getFileName))) $(quote range)) #[Block.code $(quote str.getString)])]
+
+        let g ← genreExpr
+        let bt ← blockType
+        let leanBlock := mkApp3 (.const ``Block.lean []) (toExpr hls) (toExpr (some ((← getFileName) : System.FilePath))) (toExpr range)
+        let code := mkApp2 (.const ``Block.code []) g (toExpr str.getString)
+        pure <| mkApp3 (.const ``Block.other []) (← genreExpr) leanBlock (← mkArrayLit bt [code])
       else
-        pure #[]
+        emptyBlock
     finally
       if !config.keep.getD true then
         setEnv origEnv
@@ -270,7 +281,7 @@ Elaborates the provided Lean term in the context of the current Verso module.
 -/
 @[code_block_expander leanTerm]
 def leanTerm : CodeBlockExpander
-  | args, str => withoutAsync <| do
+  | args, str => withoutAsync <| usingExamplesEnv do
     let config ← LeanInlineConfig.parse.run args
 
     let altStr ← parserInputString str
@@ -379,7 +390,7 @@ Elaborates the provided Lean term in the context of the current Verso module.
 @[role_expander lean]
 def leanInline : RoleExpander
   -- Async elab is turned off to make sure that info trees and messages are available when highlighting
-  | args, inlines => withoutAsync do
+  | args, inlines => withoutAsync <| usingExamplesEnv do
     let config ← LeanInlineConfig.parse.run args
     let #[arg] := inlines
       | throwError "Expected exactly one argument"
@@ -496,7 +507,7 @@ Elaborates the provided term in the current Verso context, then ensures that it'
 -/
 @[role_expander inst]
 def inst : RoleExpander
-  | args, inlines => withoutAsync <| do
+  | args, inlines => withoutAsync <| usingExamplesEnv do
     let config ← LeanBlockConfig.parse.run args
     let #[arg] := inlines
       | throwError "Expected exactly one argument"
@@ -639,11 +650,12 @@ where
 
 end
 
+deriving instance ToExpr for MessageSeverity
 
 open SubVerso.Examples.Messages in
-@[code_block_expander leanOutput]
-def leanOutput : CodeBlockExpander
- | args, str => do
+@[code_block_elab leanOutput]
+def leanOutput : CodeBlockElab
+ | args, str => usingExamplesEnv <| do
     let config ← LeanOutputConfig.parser.run args
 
     let col? := (← getRef).getPos? |>.map (← getFileMap).utf8PosToLspPos |>.map (·.character)
@@ -671,9 +683,16 @@ def leanOutput : CodeBlockExpander
             if s != sev then
               throwErrorAt str s!"Expected severity {sevStr s}, but got {sevStr sev}"
           if config.show then
-            let content ← `(Block.other {Block.leanOutput with data := ToJson.toJson ($(quote sev), $(quote txt), $(quote config.summarize))} #[Block.code $(quote str.getString)])
-            return #[content]
-          else return #[]
+            let ⟨name, _, _⟩ := Block.leanOutput
+            let name := toExpr name
+            let noId := .app (.const ``Option.none [0]) (.const ``InternalId [])
+            let data ← mkAppM ``Prod.mk #[toExpr sev, ← mkAppM ``Prod.mk #[toExpr txt, toExpr config.summarize]]
+            let data ← mkAppM ``ToJson.toJson #[data]
+            let out : Expr := mkApp3 (.const ``Manual.Block.mk []) name noId data
+            let g ← genreExpr
+            let codeBlock := mkApp2 (.const ``Block.code []) g (toExpr str.getString)
+            return mkApp3 (.const ``Block.other []) g out (← mkArrayLit (← blockType) [codeBlock])
+          else return (← emptyBlock)
     else
       let mut best : Option (Nat × String × MessageSeverity × String) := none
       for (sev, txt) in msgs do
@@ -693,9 +712,17 @@ def leanOutput : CodeBlockExpander
 
         Log.logSilentInfo m!"Diff is {d} lines:\n{d'}"
         if config.show then
-          let content ← `(Block.other {Block.leanOutput with data := ToJson.toJson ($(quote sev), $(quote txt), $(quote config.summarize))} #[Block.code $(quote str.getString)])
-          return #[content]
-        else return #[]
+
+          let ⟨name, _, _⟩ := Block.leanOutput
+          let name := toExpr name
+          let noId := .app (.const ``Option.none [0]) (.const ``InternalId [])
+          let data ← mkAppM ``Prod.mk #[toExpr sev, ← mkAppM ``Prod.mk #[toExpr txt, toExpr config.summarize]]
+          let data ← mkAppM ``ToJson.toJson #[data]
+          let out : Expr := mkApp3 (.const ``Manual.Block.mk []) name noId data
+          let g ← genreExpr
+          let codeBlock := mkApp2 (.const ``Block.code []) g (toExpr str.getString)
+          return mkApp3 (.const ``Block.other []) g out (← mkArrayLit (← blockType) [codeBlock])
+        else return (← emptyBlock)
 
     for (_, m) in msgs do
       let m := "".pushn ' ' (col?.getD 0) ++ if m.endsWith "\n" then m else m ++ "\n"
@@ -770,7 +797,7 @@ def constTok [Monad m] [MonadEnv m] [MonadLiftT MetaM m] [MonadLiftT IO m]
 
 @[role_expander name]
 def name : RoleExpander
-  | args, #[arg] => do
+  | args, #[arg] => usingExamplesEnv do
     let cfg ← NameConfig.parse.run args
     let `(inline|code( $name:str )) := arg
       | throwErrorAt arg "Expected code literal with the example name"

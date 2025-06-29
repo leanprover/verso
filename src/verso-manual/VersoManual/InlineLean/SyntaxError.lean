@@ -7,6 +7,7 @@ import Lean.Elab.InfoTree.Types
 
 import Verso
 import VersoManual.Basic
+import VersoManual.InlineLean.Env
 import VersoManual.InlineLean.Outputs
 import SubVerso.Examples
 
@@ -130,7 +131,7 @@ def SyntaxErrorConfig.parse [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [Mo
 open Lean.Parser in
 @[code_block_expander syntaxError]
 def syntaxError : CodeBlockExpander
-  | args, str => withoutAsync do
+  | args, str => withoutAsync <| usingExamplesEnv do
     let config ← SyntaxErrorConfig.parse.run args
 
     PointOfInterest.save (← getRef) config.name.toString
