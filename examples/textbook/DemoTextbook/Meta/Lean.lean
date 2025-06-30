@@ -8,8 +8,9 @@ import VersoManual
 
 open Verso.Genre Manual
 open Verso.Doc Elab
+open DocElabM
 open Verso.ArgParse
-open Lean
+open Lean Meta
 
 namespace DemoTextbook
 
@@ -32,11 +33,14 @@ block_extension Block.savedImport (file : String) (source : String) where
 /--
 Lean code that is saved to the examples file.
 -/
-@[code_block_expander savedLean]
-def savedLean : CodeBlockExpander
+@[code_block_elab savedLean]
+def savedLean : CodeBlockElab
   | args, code => do
     let underlying ← InlineLean.lean args code
-    return #[← ``(Block.other (Block.savedLean $(quote (← getFileName)) $(quote (code.getString))) #[$underlying,*])]
+    let g ← genreExpr
+    let b := mkApp2 (.const ``Block.savedLean []) (toExpr (← getFileName)) (toExpr code.getString)
+    return mkApp3 (.const ``Block.other []) g b (← mkArrayLit (← blockType) [underlying])
+
 
 /--
 An import of some other module, to be located in the saved code. Not rendered.

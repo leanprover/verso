@@ -7,6 +7,7 @@ import Lean.Elab.InfoTree.Types
 
 import Verso
 import VersoManual.Basic
+import VersoManual.InlineLean.Env
 import SubVerso.Examples
 
 open SubVerso.Highlighting
@@ -54,7 +55,7 @@ def SignatureConfig.parse [Monad m] [MonadError m] [MonadLiftT CoreM m] : ArgPar
 
 @[code_block_expander signature]
 def signature : CodeBlockExpander
-  | args, str => withoutAsync do
+  | args, str => usingExamplesEnv <| withoutAsync do
     let {«show»} ← SignatureConfig.parse.run args
     let altStr ← parserInputString str
     let col? := (← getRef).getPos? |>.map (← getFileMap).utf8PosToLspPos |>.map (·.character)

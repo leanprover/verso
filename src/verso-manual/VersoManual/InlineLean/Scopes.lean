@@ -13,7 +13,7 @@ open Lean Elab Command
 namespace Verso.Genre.Manual.InlineLean.Scopes
 
 initialize leanSampleScopes : Lean.EnvExtension (List Scope) ←
-  Lean.registerEnvExtension (pure [])
+  Lean.registerEnvExtension (pure []) (asyncMode := .sync)
 
 def initScopes [Monad m] [MonadEnv m] [MonadOptions m] [MonadResolveName m] : m Unit := do
   if leanSampleScopes.getState (← getEnv) |>.isEmpty then

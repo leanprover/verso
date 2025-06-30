@@ -10,6 +10,7 @@ import Verso.Doc.ArgParse
 open Verso Doc Elab
 open Verso.Genre Manual
 open Verso.ArgParse
+open DocElabM
 
 open Lean Elab
 
@@ -19,7 +20,7 @@ namespace Verso.Genre.Manual
 
 inductive TableConfig.Alignment where
   | left | right | center
-deriving ToJson, FromJson, DecidableEq, Repr, Ord
+deriving ToJson, FromJson, DecidableEq, Repr, Ord, ToExpr
 
 open Syntax in
 open TableConfig.Alignment in
@@ -149,8 +150,11 @@ where
 
   }
 
-@[directive_expander table]
-def table : DirectiveExpander
+/--
+Constructs a table from a list of lists. Each item in the outer list is a row, and each inner list is the contents of the row.
+-/
+@[directive_elab table]
+def table : DirectiveElab
   | args, contents => do
     let cfg ← TableConfig.parse.run args
     -- The table should be a list of lists. Extract them!
@@ -174,9 +178,17 @@ def table : DirectiveExpander
       if rows.any (·.size != columns) then
         throwErrorAt oneBlock s!"Expected all rows to have same number of columns, but got {rows.map (·.size)}"
 
+      let g ← genreExpr
+      let bt ← blockType
+
       let flattened := rows.flatten
-      let blocks : Array (Syntax.TSepArray `term ",") ← flattened.mapM (·.mapM elabBlock)
-      pure #[← ``(Block.other (Block.table $(quote columns) $(quote cfg.header) $(quote cfg.name) $(quote cfg.alignment)) #[Block.ul #[$[Verso.Doc.ListItem.mk #[$blocks,*]],*]])]
+      let rows : Array Expr ← flattened.mapM fun r => do
+        let cells ← r.mapM elabBlock'
+        pure <| mkApp2 (.const ``Doc.ListItem.mk [0]) bt (← Meta.mkArrayLit bt cells.toList)
+      let noTag : Expr := .app (.const ``Option.none [0]) (.const ``Tag [])
+      let table ← Meta.mkAppM ``Block.table #[toExpr columns, toExpr cfg.header, toExpr cfg.name, toExpr cfg.alignment, noTag]
+      let ul := mkApp2 (.const ``Block.ul []) g (← Meta.mkArrayLit (.app (.const ``Doc.ListItem [0]) bt) rows.toList)
+      return mkApp3 (.const ``Block.other []) g table (← Meta.mkArrayLit bt [ul])
 
 where
   getLi

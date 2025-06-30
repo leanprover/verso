@@ -7,6 +7,7 @@ Author: David Thrane Christiansen
 import MD4Lean
 
 import Lean.Exception
+import Lean.Meta
 
 import Verso.Doc
 
@@ -46,6 +47,11 @@ def attr' (val : Array AttrText) : Except String String := do
   match val.mapM attrText |>.map Array.toList |>.map String.join with
   | .error e => .error e
   | .ok s => pure s
+
+def attr'' [Monad m] [MonadError m] (val : Array AttrText) : m Expr := do
+  match val.mapM attrText |>.map Array.toList |>.map String.join with
+  | .error e => throwError e
+  | .ok s => pure (toExpr s)
 
 private structure MDState where
   /-- A mapping from document header levels to actual nesting levels -/
@@ -112,6 +118,54 @@ partial def inlineFromMarkdown' : Text → Except String (Doc.Inline g)
   | .img .. => .error s!"Unexpected image in parsed Markdown"
   | .wikiLink .. => .error s!"Unexpected wiki-style link in parsed Markdown"
 
+private def inlineType [Monad m] (g : Expr) : MDT m Expr Expr Expr := do
+  pure <| .app (.const ``Verso.Doc.Inline []) g
+
+private def blockType [Monad m] (g : Expr) : MDT m Expr Expr Expr := do
+  pure <| .app (.const ``Verso.Doc.Block []) g
+
+private def inlineArray [Monad m] [MonadLiftT MetaM m] (g : Expr) (xs : Array Expr) : MDT m Expr Expr Expr := do
+  let it ← inlineType g
+  Meta.mkArrayLit it xs.toList
+
+private def blockArray [Monad m] [MonadLiftT MetaM m] (g : Expr) (xs : Array Expr) : MDT m Expr Expr Expr := do
+  let it ← blockType g
+  Meta.mkArrayLit it xs.toList
+
+partial def inlineFromMarkdown'' [Monad m] [MonadLiftT MetaM m] [MonadQuotation m] [AddMessageContext m] [MonadError m] (g : Expr) : Text → StateT (Option String) (MDT m Expr Expr) Expr
+  | .normal str | .br str | .softbr str => do
+    (lastWord str).forM fun w => do
+      set (some w.toLower)
+    return mkApp2 (.const ``Verso.Doc.Inline.text []) g (toExpr str)
+  | .nullchar => throwError "Unexpected null character in parsed Markdown"
+  | .del _ => throwError "Unexpected strikethrough in parsed Markdown"
+  | .em txt => do
+    let txt ← txt.mapM (inlineFromMarkdown'' g)
+    return mkApp2 (.const ``Verso.Doc.Inline.emph []) g (← inlineArray (m := m) g txt)
+  | .strong txt => do
+    let txt ← txt.mapM (inlineFromMarkdown'' g)
+    return mkApp2 (.const ``Verso.Doc.Inline.bold []) g (← inlineArray (m := m) g txt)
+  | .a href _ _ txt => do
+    let txt ← txt.mapM (inlineFromMarkdown'' g)
+    let txt ← inlineArray (m := m) g txt
+    return mkApp3 (.const ``Verso.Doc.Inline.link []) g txt (← attr'' href)
+  | .latexMath m => do
+    set (none : Option String)
+    return mkApp3 (.const ``Verso.Doc.Inline.math []) g (toExpr Verso.Doc.MathMode.inline) (toExpr (String.join m.toList))
+  | .latexMathDisplay m => do
+    set (none : Option String)
+    return mkApp3 (.const ``Verso.Doc.Inline.math []) g (toExpr Verso.Doc.MathMode.display) (toExpr (String.join m.toList))
+  | .u txt => throwError "Unexpected underline around {repr txt} in parsed Markdown"
+  | .code strs => do
+    let str := String.join strs.toList
+    if let some f := (← read).elabInlineCode then
+      f (← get) str
+    else
+      return mkApp2 (.const ``Verso.Doc.Inline.code []) g (toExpr str)
+  | .entity ent => throwError s!"Unsupported entity {ent} in parsed Markdown"
+  | .img .. => throwError s!"Unexpected image in parsed Markdown"
+  | .wikiLink .. => throwError s!"Unexpected wiki-style link in parsed Markdown"
+
 instance [Monad m] [MonadError m] : MonadError (MDT m b i) where
   throw ex := fun _ρ _σ => throw ex
   tryCatch act handler := fun ρ σ => tryCatch (act ρ σ) (fun e => handler e ρ σ)
@@ -172,6 +226,47 @@ where
     if item.isTask then throwError "Tasks unsupported"
     else ``(Verso.Doc.ListItem.mk #[$[$(← item.contents.mapM blockFromMarkdownAux)],*])
 
+private partial def blockFromMarkdownAux'' [Monad m] [MonadLiftT MetaM m] [AddMessageContext m] [MonadQuotation m] [MonadError m] (g : Expr) : MD4Lean.Block → MDT m Expr Expr Expr
+  | .p txt => do
+    let inlines ← (txt.mapM (inlineFromMarkdown'' g ·)).run' none
+    return mkApp2 (.const ``Verso.Doc.Block.para []) g (← inlineArray g inlines)
+  | .blockquote bs => do
+    let bs ← bs.mapM (blockFromMarkdownAux'' g)
+    return mkApp2 (.const ``Verso.Doc.Block.blockquote []) g (← blockArray g bs)
+  | .code info lang _ strs => do
+    let info? := (attr' info).toOption
+    let lang? := (attr' lang).toOption
+    let str := String.join strs.toList
+    if let some f := (← read).elabBlockCode then
+      f info? lang? str
+    else
+      return mkApp2 (.const ``Verso.Doc.Block.code []) g (toExpr str)
+  | .ul _ _ items => do
+    let items ← items.mapM itemFromMarkdown
+    let itemType := .app (.const ``Verso.Doc.ListItem [0]) (← blockType g)
+    return mkApp2 (.const ``Verso.Doc.Block.ul []) g (← Meta.mkArrayLit itemType items.toList)
+  | .ol _ i _ items => do
+    let items ← items.mapM itemFromMarkdown
+    let itemType := .app (.const ``Verso.Doc.ListItem [0]) (← blockType g)
+    return mkApp3 (.const ``Verso.Doc.Block.ol []) g (toExpr (Int.ofNat i)) (← Meta.mkArrayLit itemType items.toList)
+  | .header level txt => do
+    match (← getHeader level) with
+    | .error e => throwError e
+    | .ok h => do
+      let inlines ← (txt.mapM (inlineFromMarkdown'' g ·)).run' none
+      h inlines
+  | .html .. => throwError "Unexpected literal HTML in parsed Markdown"
+  | .hr => throwError "Unexpected horizontal rule (thematic break) in parsed Markdown"
+  | .table .. => throwError "Unexpected table in parsed Markdown"
+where
+  itemFromMarkdown [Monad m] [MonadQuotation m] [MonadError m] (item : MD4Lean.Li MD4Lean.Block) : MDT m Expr Expr Expr := do
+    if item.isTask then throwError "Tasks unsupported"
+    else
+      let items ← item.contents.mapM (blockFromMarkdownAux'' g)
+      let items ← blockArray g items
+      return mkApp2 (.const ``Verso.Doc.ListItem.mk [0]) (← blockType g) items
+
+
 
 def blockFromMarkdown [Monad m] [MonadQuotation m] [MonadError m] [AddMessageContext m]
     (md : MD4Lean.Block)
@@ -181,10 +276,30 @@ def blockFromMarkdown [Monad m] [MonadQuotation m] [MonadError m] [AddMessageCon
   let ctxt := {headerHandlers := ⟨handleHeaders⟩, elabInlineCode, elabBlockCode}
   (·.fst) <$> blockFromMarkdownAux md ctxt {}
 
+def blockFromMarkdown'' [Monad m] [MonadQuotation m] [MonadError m] [AddMessageContext m] [MonadLiftT MetaM m]
+    (genre : Expr)
+    (md : MD4Lean.Block)
+    (handleHeaders : List (Array Expr → m Expr) := [])
+    (elabInlineCode : Option (Option String → String → m Expr) := none)
+    (elabBlockCode : Option ((info? lang? : Option String) → String → m Expr) := none) : m Expr :=
+  let ctxt := {headerHandlers := ⟨handleHeaders⟩, elabInlineCode, elabBlockCode}
+  (·.fst) <$> blockFromMarkdownAux'' genre md ctxt {}
+
+
 def strongEmphHeaders [Monad m] [MonadQuotation m] : List (Array Term → m Term) := [
   fun stxs => ``(Verso.Doc.Block.para #[Verso.Doc.Inline.bold #[$stxs,*]]),
   fun stxs => ``(Verso.Doc.Block.para #[Verso.Doc.Inline.emph #[$stxs,*]])
 ]
+
+def strongEmphHeaders'' [Monad m] [MonadLiftT MetaM m] (genre : Expr) : List (Array Expr → m Expr) :=
+  let it : Expr := .app (.const ``Verso.Doc.Inline []) genre
+  [
+  fun (exprs : Array Expr) => do
+    return mkApp2 (.const ``Verso.Doc.Block.para []) genre (← Meta.mkArrayLit it [mkApp2 (.const ``Verso.Doc.Inline.bold []) genre (← Meta.mkArrayLit it exprs.toList)]),
+  fun (exprs : Array Expr) => do
+    return mkApp2 (.const ``Verso.Doc.Block.para []) genre (← Meta.mkArrayLit it [mkApp2 (.const ``Verso.Doc.Inline.emph []) genre (← Meta.mkArrayLit it exprs.toList)])
+]
+
 
 private partial def blockFromMarkdownAux' : MD4Lean.Block → MDT (Except String) (Doc.Block g) (Doc.Inline g) (Doc.Block g)
   | .p txt => .para <$> txt.mapM (inlineFromMarkdown' ·)

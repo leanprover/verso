@@ -91,7 +91,7 @@ elab "#docs" "(" genre:term ")" n:ident title:str ":=" ":::::::" text:document "
 
   let mut docState := st
   for hook in (← documentFinishedHooks) do
-    let ((), docState') ← runTermElabM fun _ => hook ⟨genre, g⟩ st' docState
+    let ((), docState') ← runTermElabM fun _ => hook ⟨genre, g, {}⟩ st' docState
     docState := docState'
 
 elab "#doc" "(" genre:term ")" title:str "=>" text:completeDocument eoi : term => open Lean Elab Term PartElabM DocElabM in do
@@ -211,7 +211,7 @@ def finishDoc (genre : Term) (title : StrLit) : CommandElabM Unit:= do
     let mut docState := docStateExt.getState (← getEnv)
     let genreExpr ← runTermElabM fun _ => Term.elabTerm genre (some (.const ``Doc.Genre [])) >>= instantiateExprMVars
     for hook in (← documentFinishedHooks) do
-      let ((), docState') ← runTermElabM fun _ => hook ⟨genre, genreExpr⟩ partState docState
+      let ((), docState') ← runTermElabM fun _ => hook ⟨genre, genreExpr, {}⟩ partState docState
       docState := docState'
 
 syntax (name := replaceDoc) "#doc" "(" term ")" str "=>" : command
@@ -301,7 +301,7 @@ elab (name := completeDoc) "#old_doc" "(" genre:term ")" title:str "=>" text:com
         elabCommand (← `($titleStr:docComment def $docName : Part $genre := $(← finished.toSyntax' genre)))
         let mut docState := st
         for hook in (← documentFinishedHooks) do
-          let ((), docState') ← runTermElabM fun _ => hook ⟨genre, g⟩ st' docState
+          let ((), docState') ← runTermElabM fun _ => hook ⟨genre, g, {}⟩ st' docState
           docState := docState')
 
       -- The heartbeat count is reset for each top-level Verso block because they are analogous to Lean commands.
