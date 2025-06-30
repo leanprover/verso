@@ -242,7 +242,9 @@ structure BlogPost where
   contents : Part Post
 deriving TypeName, Repr
 
-class BlogGenre (genre : Genre) where
+-- This needs to be `Type` because otherwise the code generator starts running into applications of
+-- its `casesOn`
+class BlogGenre (genre : Genre) : Type where
   context_eq : genre.TraverseContext = Blog.TraverseContext := by rfl
   state_eq : genre.TraverseState = Blog.TraverseState := by rfl
   block_eq : genre.Block = Blog.BlockExt := by rfl

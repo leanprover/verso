@@ -166,10 +166,10 @@ def writeBlog (theme : Theme) (id : Lean.Name) (txt : Part Page) (posts : Array 
         | some md => (·.insert "metadata" ⟨.mk md, #[]⟩) <$> forPart post.contents
       writePage theme postParams (template := theme.postTemplate)
 
-  let meta ←
+  let «meta» ←
     match (← read).xref.blogs.find? id with
     | none => logError s!"Blog {id} not found in traverse pass!"; pure {}
-    | some meta => pure meta
+    | some «meta» => pure «meta»
 
   for (cat, contents) in meta.categories.toArray.qsort (·.1.name < ·.1.name) do
     withReader (fun c => {c with ctxt.path := c.ctxt.path ++ [cat.slug]}) <| do

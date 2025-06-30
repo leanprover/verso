@@ -141,8 +141,8 @@ instance [Pure m] : MonadLift Id m where
 def blockHtml (g : Genre)
     [bg : BlogGenre g]
     (goI : Inline g → HtmlM g Html)
-    (goB : Block g → HtmlM g Html)
-    : Blog.BlockExt → Array (Block g) → HtmlM g Html
+    (goB : Block g → HtmlM g Html) :
+    Blog.BlockExt → Array (Block g) → HtmlM g Html
   | .lexedText content, _contents => do
     pure {{ <pre class=s!"lexed {content.name}"> {{ content.toHtml }} </pre> }}
   | .highlightedCode { contextName, showProofStates } hls, _contents =>
@@ -202,7 +202,7 @@ def inlineHtml (g : Genre) [bg : BlogGenre g]
     | none =>
       HtmlT.logError s!"Can't find target {x} - options are {st.pageIds.toList.map (·.fst)}"
       pure {{<strong class="internal-error">s!"Can't find target {x}"</strong>}}
-    | some meta =>
+    | some «meta» =>
       let addr := String.join ((← relative meta.path).intersperse "/") ++ (id?.map ("#" ++ ·) |>.getD "")
       go <| .link contents addr
   | .htmlSpan classes, contents => do
