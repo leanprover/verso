@@ -151,7 +151,7 @@ def down? (self : Zipper) : Option Zipper :=
 
 @[simp]
 theorem up_smaller_context (z : Zipper) {p : z.context ≠ []} : sizeOf (z.up p).context < sizeOf z.context := by
-  simp only [up, List.reverse_cons, List.append_assoc, List.singleton_append]
+  simp only [up]
   split
   . simp_all +arith
   . contradiction
