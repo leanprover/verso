@@ -18,6 +18,10 @@ lean_lib MultiVerso where
   roots := #[`MultiVerso]
 
 @[default_target]
+lean_lib VersoSearch where
+  srcDir := "src/verso-search"
+
+@[default_target]
 lean_lib VersoBlog where
   srcDir := "src/verso-blog"
   roots := #[`VersoBlog]

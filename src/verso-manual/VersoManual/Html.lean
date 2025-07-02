@@ -541,6 +541,7 @@ def page
         {{extraCss.toArray.map ({{<style>{{Html.text false ·}}</style>}})}}
         {{extraJs.toArray.map ({{<script>{{Html.text false ·}}</script>}})}}
         {{extraHead}}
+        <script src="searchIndex.js"></script>
       </head>
       <body>
         <header>
