@@ -36,6 +36,10 @@ lean_exe «verso» where
   root := `Main
   srcDir := "src/cli"
 
+@[test_driver]
+lean_exe «verso-tests» where
+  root := `Tests
+  srcDir := "src/tests"
 
 @[default_target]
 lean_exe «verso-demo» where

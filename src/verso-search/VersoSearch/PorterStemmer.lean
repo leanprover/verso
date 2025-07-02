@@ -355,22 +355,3 @@ def trace (word : String) : IO Unit := do
     IO.println s!"5a: {word}"
     let word := step5b word
     IO.println s!"5b: {word}"
-
-def voc := include_str "../../../voc.txt"
-def output := include_str "../../../output.txt"
-
-def data := voc.splitOn "\n"
-def outData := output.splitOn "\n"
-
-
-/-- info: 0 failures -/
-#guard_msgs in
-#eval show IO Unit from do
-  let mut failures := #[]
-  for x in data, y in outData do
-    let s := porterStem x
-    unless s == y do
-      failures := failures.push (x, s, y)
-  IO.println s!"{failures.size} failures"
-  for (x, s, y) in failures do
-    IO.println s!"{x} --> {s} (wanted '{y}')"

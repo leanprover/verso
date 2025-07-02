@@ -108,6 +108,9 @@ jobs:
       run: |
         lake build
 
+    - name: Test
+      run: |
+        lake test
 
     - name: Generate the example website
       run: |

@@ -54,6 +54,10 @@ jobs:
         run: |
           lake build
 
+      - name: Run tests
+        run: |
+          lake test
+
       - name: Generate the example website
         run: |
           lake exe demosite --output _out/examples/demosite
