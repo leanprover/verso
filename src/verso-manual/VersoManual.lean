@@ -439,6 +439,7 @@ def emitSearchIndex (dir : System.FilePath) (state : TraverseState) (logError : 
     --   "const searchIndex2 = elasticlunr(function() { this.addField('id'); this.addField('contents');} );\n" ++
     --   xs.foldl (init := "") fun js doc => js ++ "searchIndex2.addDoc({'id':" ++ doc.id.quote ++ ",'contents':"++ doc.content.quote ++ "});\n"
     let indexJs := indexJs ++ "const searchIndex = elasticlunr ? elasticlunr.Index.load(searchIndex_) : null;\n"
+    let indexJs := indexJs ++ "window.searchIndex = elasticlunr ? searchIndex : null;\n"
     IO.FS.writeFile (dir / "searchIndex.js") <| indexJs
 
 end
