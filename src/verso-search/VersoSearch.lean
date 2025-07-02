@@ -31,7 +31,7 @@ structure FieldOptions where
   expand : Option Bool := false
 
 structure Options where
-  bool : SearchBool := .or
+  bool : SearchBool := .and -- Different from elasticlunr, but this is basically always correct for Verso docs
   expand : Bool := false
   fields : TreeMap String FieldOptions
 
