@@ -535,13 +535,13 @@ def page
         <title>{{textTitle}}</title>
         <link rel="stylesheet" href="/book.css" />
         <script>s!"const __versoSiteRoot = document.baseURI;"</script>
+        <script src="searchIndex.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js" integrity="sha384-zbcZAIxlvJtNE3Dp5nxLXdXtXyxwOdnILY1TDPVmKFhl4r4nSUG1r8bcFXGVa4Te" crossorigin="anonymous"></script>
         {{extraJsFiles.map ({{<script src=s!"{·}"></script>}})}}
         {{extraStylesheets.map (fun url => {{<link rel="stylesheet" href={{url}}/> }})}}
         {{extraCss.toArray.map ({{<style>{{Html.text false ·}}</style>}})}}
         {{extraJs.toArray.map ({{<script>{{Html.text false ·}}</script>}})}}
         {{extraHead}}
-        <script src="searchIndex.js"></script>
       </head>
       <body>
         <header>
