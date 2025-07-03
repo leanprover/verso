@@ -1,6 +1,33 @@
+/-
+Copyright (c) 2025 Lean FRO LLC. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+Author: David Thrane Christiansen
+-/
+
+set_option linter.missingDocs true
 
 namespace Verso.Search.Stemmer.Porter
 
+/-!
+This module implements a fairly naïve Porter stemmer, as described by the inventor
+[here](https://tartarus.org/martin/PorterStemmer/). This is the algorithm used by elasticlunr.js, so
+there's no need to use anything more powerful.
+
+Profiling shows that index generation is fast, and costs are dominated by generating and emitting
+JSON. If it ever becomes a performance bottleneck, there are a number of optimizations that can be
+implemented:
+ 1. Rule selection can be smarter, based on string contents rather than just trying them
+    top-to-bottom. Many rules are almost uniquely determined by the last or second-last letter of
+    the word. See the linked page for more details.
+ 2. There is some unnecessary allocation of strings. A substring could be profitably used when
+    shortening strings, and setting values when lengthening them, similarly to a Lisp fill pointer
+    or C byte array.
+-/
+
+/--
+Checks whether the character at position `i` is a consonant. `'y'` is a consonant if not preceded by
+a consonant.
+-/
 def isConsonant (str : String) (i : String.Pos) : Bool :=
   match str.get! i with
   | 'a' | 'e' | 'i' | 'o' | 'u' => false
@@ -13,7 +40,9 @@ decreasing_by
   simp [String.prev, *, String.utf8PrevAux_lt_of_pos]
 
 
--- Measure of a word (number of VC patterns)
+/--
+The measure of a word is the number of v+c+ clusters (vowels followed by consonants).
+-/
 def measure (word : String) : Nat :=
   let rec aux (iter : String.Iterator) (inVowel : Bool) (count : Nat) : Nat :=
     if h : iter.hasNext then
@@ -50,7 +79,9 @@ def measure (word : String) : Nat :=
 #guard_msgs in
 #eval measure "private"
 
--- Check if word contains a vowel
+/--
+Checks whether the provided word contains a vowel.
+-/
 def containsVowel (word : String) : Bool := Id.run do
   let mut iter := word.iter
   while h : iter.hasNext do
@@ -59,15 +90,19 @@ def containsVowel (word : String) : Bool := Id.run do
   return false
 
 
--- Check if word ends with double consonant
+/--
+Checks whether the word ends with a double consonant.
+-/
 def endsWithDoubleConsonant (word : String) : Bool :=
   word.length ≥ 2 &&
     let i := word.prev word.endPos
     let j := word.prev i
     isConsonant word i && word.get! i == word.get! j
 
-
--- Check if word ends with cvc pattern where final c is not w, x, or y
+/--
+Checks whether a word ends with a CVC pattern where the final consonant is not `'w'`, `'x'`, or
+`'y'`.
+-/
 def endsWithCvc (word : String) : Bool :=
   word.length ≥ 3 &&
     let i := word.prev word.endPos
@@ -77,7 +112,10 @@ def endsWithCvc (word : String) : Bool :=
       let ch := word.get! i
       ch != 'w' && ch != 'x' && ch != 'y'
 
--- Helper to remove suffix if conditions are met
+/--
+Replaces the given `suffix` with `replacement` if the remaining word after removing the suffix
+satisfies the `condition`.
+-/
 def replaceSuffix (word : String) (suffix : String) (replacement : String)
   (condition : String → Bool) : String :=
   if word.endsWith suffix then
@@ -85,13 +123,22 @@ def replaceSuffix (word : String) (suffix : String) (replacement : String)
     if condition stem then stem else word
   else word
 
+/--
+A rule, as described in Porter's paper.
+-/
 structure Rule where
+  /-- A suffix that must match exactly. -/
   suffix : String
+  /-- A replacement in case the suffix and condition match -/
   replacement : String
+  /-- A condition that must be fulfilled by the word up to the suffix. -/
   condition : String → Bool := fun _ => true
 
-def Rule.rw (suffix replacement : String) (condition : String → Bool := fun _ => true) : Rule := {suffix, replacement, condition}
+/-- A convenience function for constructing a rewrite rule. -/
+def Rule.rw (suffix replacement : String) (condition : String → Bool := fun _ => true) : Rule :=
+  { suffix, replacement, condition }
 
+/-- Applies a rule to a string, returning the modified string if it matches. -/
 def Rule.apply? (rule : Rule) (word : String) : Option String := do
   if word.endsWith rule.suffix then
     let word' := word.dropRight rule.suffix.length
@@ -100,18 +147,26 @@ def Rule.apply? (rule : Rule) (word : String) : Option String := do
     else return word
   none
 
-
+/--
+Returns the result of applying the first rule that matches, or the original string if none match.
+-/
 def applyRules (rules : List Rule) (word : String) : String := Id.run do
   for rule in rules do
     if let some word' := rule.apply? word then
       return word'
   return word
 
+/--
+Returns the result of applying the first rule that matches, or `none` if none match.
+-/
 def applyRules? (rules : List Rule) (word : String) : Option String := Id.run do
   for rule in rules do
     if let some word' := rule.apply? word then return some word'
   return none
 
+/--
+Step 1a of Porter's algorithm. Simplifies plural markers.
+-/
 def step1a : String → String :=
   applyRules [
     .rw "sses" "ss",
@@ -124,7 +179,9 @@ def step1a : String → String :=
 #guard_msgs in
 #eval step1a "abilities"
 
--- Step 1b
+/--
+Step 1b of Porter's algorithm.
+-/
 def step1b (word : String) : String :=
   if let some w := (Rule.rw "eed" "ee" (measure · > 0)).apply? word then w
   else if let some w := applyRules? [.rw "ed" "" containsVowel, .rw "ing" "" containsVowel] word then
@@ -193,7 +250,9 @@ where
 #guard_msgs in
 #eval step1b (step1a "meetings")
 
--- Step 1c
+/--
+Step 1c of Porter's algorithm.
+-/
 def step1c (word : String) : String :=
   applyRules [.rw "y" "i" containsVowel] word
 
@@ -205,8 +264,10 @@ def step1c (word : String) : String :=
 #guard_msgs in
 #eval step1c "abiliti"
 
--- Step 2
 
+/--
+Step 2 of Porter's algorithm. Simplifies many common suffixes.
+-/
 def step2 (word : String) : String := Id.run do
   unless measure word > 0 do return word
   for (s, s') in suffixes do
@@ -246,7 +307,9 @@ where
 #eval step2 "abiliti"
 
 
--- Step 3
+/--
+Step 3 of Porter's algorithm. Simplifies further common suffixes.
+-/
 def step3 (word : String) : String := Id.run do
   unless measure word > 0 do return word
   for (s, s') in suffixes do
@@ -272,6 +335,9 @@ where
 #guard_msgs in
 #eval step3 "able"
 
+/--
+Step 4 of Porter's algorithm. Removes many derivational suffixes.
+-/
 def step4 : String → String :=
   applyRules rules
 where
@@ -296,14 +362,17 @@ where
     .mk "al" "" (measure · > 1),
     .mk "ic" "" (measure · > 1)]
 
-
--- Step 5a
+/--
+Step 5a of Porter's algorithm. Removes extra trailing `'e'`.
+-/
 def step5a : String → String :=
   applyRules [
     .rw "e" "" fun w => measure w > 1 || (measure w == 1 && !endsWithCvc w)
   ]
 
--- Step 5b
+/--
+Step 5b of Porter's algorithm. Converts trailing `'ll'` to `'l'`.
+-/
 def step5b (word : String) : String :=
   if measure word > 1 ∧ endsWithDoubleConsonant word ∧ word.endsWith "l" then
     word.dropRight 1
@@ -318,7 +387,10 @@ def step5b (word : String) : String :=
 #guard_msgs in
 #eval step5b "roll"
 
--- Main Porter stemmer function
+/--
+Heuristically computes the stem of an English word using
+[Martin Porter's algorithm](https://tartarus.org/martin/PorterStemmer/).
+-/
 def porterStem (word : String) : String :=
   if word.length <= 2 then word
   else
@@ -333,8 +405,8 @@ def porterStem (word : String) : String :=
     let word := step5b word
     word
 
-
-def trace (word : String) : IO Unit := do
+-- Debugging function
+private def trace (word : String) : IO Unit := do
   if word.length <= 2 then IO.println s!"Short: {word}"
   else
     let word := word.toLower

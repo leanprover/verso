@@ -1,3 +1,9 @@
+/-
+Copyright (c) 2025 Lean FRO LLC. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+Author: David Thrane Christiansen
+-/
+
 import Std.Data.TreeMap
 import Std.Data.TreeMap.Lemmas
 import Std.Data.TreeMap.Raw.Lemmas
@@ -13,8 +19,13 @@ import VersoSearch.PorterStemmer
 open Std
 open Lean
 
+set_option linter.missingDocs true
+
 namespace Verso.Search
 
+/-!
+This module contains code to construct an index that's compatible with elasticlunr.js.
+-/
 
 /--
 How should multiple search terms be combined?
@@ -25,27 +36,73 @@ inductive SearchBool where
   /-- Requires at least one term to be present. -/
   | or
 
+/-- Generates an elasticlunr.js-compatible encoding of a Boolean term combination model. -/
+protected def SearchBool.toJson : SearchBool → Json
+  | .and => .str "AND"
+  | .or => .str "OR"
+
+/-- Parses the elasticlunr.js encoding of a term combination model. -/
+protected def SearchBool.fromJson? : Json → Except String SearchBool
+  | .str "AND" => pure .and
+  | .str "OR" => pure .or
+  | other => throw s!"Expected \"AND\" or \"OR\" but got {other.compress}"
+
+instance : ToJson SearchBool := ⟨SearchBool.toJson⟩
+instance : FromJson SearchBool := ⟨SearchBool.fromJson?⟩
+
+/--
+A version of `elasticlunr.js`'s field options, used at query time.
+
+This exists to facilitate the construction of queries and is not used during indexing.
+-/
 structure FieldOptions where
+  /-- The relative weight to give the matches in the field. -/
   boost : Option UInt8 := none
+  /-- How should terms be combined in this field? Overrides the model used for the whole query. -/
   bool : Option SearchBool := none
+  /-- Whether to search for substrings, e.g. by expanding 'micro' to 'microwave' and 'microscope' -/
   expand : Option Bool := false
 
+/-- Converts query field options to the right JSON encoding for elasticlunr.js. -/
+protected def FieldOptions.toJson : FieldOptions → Json
+  | {boost, bool, expand} =>
+    Json.mkObj <|
+      (boost.map fun x => [("boost", toJson x.toNat)]).getD [] ++
+      (bool.map fun x => [("bool", x.toJson)]).getD [] ++
+      (expand.map fun x => [("expand", toJson x)]).getD []
+
+instance : ToJson FieldOptions where
+  toJson := FieldOptions.toJson
+
+/-- Overall query options for elasticlunr.js. -/
 structure Options where
-  bool : SearchBool := .and -- Different from elasticlunr, but this is basically always correct for Verso docs
+  /-- How should terms be combined in this index? May be overridden on a per-field basis. -/
+  bool : SearchBool := .or
+  /-- Whether to search for substrings, e.g. by expanding 'micro' to 'microwave' and 'microscope' -/
   expand : Bool := false
+  /-- Options for each field. -/
   fields : TreeMap String FieldOptions
 
+/-- A document is a map from field names to field values. -/
 abbrev Doc := TreeMap String String
 
+/--
+A collection of indexed documents, represented so as to be compatible with elasticlunr.js.
+-/
 structure DocumentStore where
+  /-- Whether to save the contents of documents, or just their inverted index entries. -/
   save : Bool
+  /-- The saved documents. -/
   docs : TreeMap String Doc
+  /-- The size of each field in the document. -/
   docInfo : TreeMap String (TreeMap String USize)
+  /-- The total size of the document store. -/
   length : USize
 
 namespace DocumentStore
 
-def toJson (self: DocumentStore) : Json :=
+/-- Converts a document store to an elasticlunr.js-compatible representation. -/
+protected def toJson (self: DocumentStore) : Json :=
   json%{
     "save": $self.save,
     "docs": $(self.docs.foldr (init := Json.mkObj []) fun k v json => json.setObjVal! k (v.foldr (init := Json.mkObj []) fun k v js => js.setObjVal! k (Json.str v))),
@@ -53,51 +110,74 @@ def toJson (self: DocumentStore) : Json :=
     "length" : $self.length
   }
 
+/-- Checks whether the store contains a document with the given value for its reference field. -/
 def hasDoc (self : DocumentStore) (ref : String) : Bool := self.docs.contains ref
 
+/-- Checks whether the store contains no data -/
 def isEmpty (self : DocumentStore) : Bool := self.length == 0
 
+/--
+Adds a document to the store.
+
+If `self.save` is `false`, then only the length is incremented and the contents are discarded.
+-/
 def addDoc (self : DocumentStore) (ref : String) (doc : Doc) : DocumentStore :=
   { self with
     length := if self.hasDoc ref then self.length else self.length + 1,
     docs := self.docs.insert ref <| if self.save then doc else {} }
 
-def get? (self : DocumentStore) (ref : String) : Option Doc := self.docs[ref]?
+/--
+Gets a document if it is present in the store.
+-/
+protected def get? (self : DocumentStore) (ref : String) : Option Doc := self.docs[ref]?
 
 instance : GetElem? DocumentStore String Doc (fun store ref => ref ∈ store.docs) where
   getElem store ref ok := store.docs[ref]'ok
   getElem? store ref := store.docs[ref]?
 
+/--
+Removes a document with the given value in its reference field from the store.
+-/
 def erase (self : DocumentStore) (ref : String) : DocumentStore :=
   { self with
     length := if self.hasDoc ref then self.length - 1 else self.length,
     docs := self.docs.erase ref }
 
+/--
+Adds the length of the given field to the store.
+-/
 def addFieldLength (self : DocumentStore) (ref : String) (field : String) (length : USize) : DocumentStore :=
   { self with
     docInfo := self.docInfo.alter ref fun v => some (v.getD {} |>.insert field length) }
 
+/--
+Gets the length of the given field from the store for the given document.
+-/
 def getFieldLength (self : DocumentStore) (ref : String) (field : String) : USize :=
   (self.docInfo[ref]? >>= fun i => i[field]?).getD 0
 
--- TODO port tests
-
 end DocumentStore
 
+/--
+The frequency of a term.
+
+Stored in a wrapper to trigger appropriate serialization for elasticlunr.js.
+-/
 structure TermFrequency where
-  -- TODO rename field to tf in json - check json output
+  /-- The frequency value. -/
   termFreq : Float
 
-def TermFrequency.toJson (freq : TermFrequency) : Json := json%{"tf": $freq.termFreq}
+/--
+Serializes a term frequency to an elasticlunr-compatible representation.
+-/
+protected def TermFrequency.toJson (freq : TermFrequency) : Json := json%{"tf": $freq.termFreq}
 
-structure IndexItem.Raw where
+private structure IndexItem.Raw where
   docs : TreeMap String TermFrequency := {}
-  -- TODO field name df
   docFreq : Int64 := 0
-  -- TODO serialization
   children : TreeMap.Raw Char IndexItem.Raw := {}
 
-inductive IndexItem.Raw.WF : IndexItem.Raw → Prop where
+private inductive IndexItem.Raw.WF : IndexItem.Raw → Prop where
   | mk
     {docs : TreeMap String TermFrequency} {docFreq : Int64}
     {children : TreeMap.Raw Char IndexItem.Raw} :
@@ -109,9 +189,9 @@ namespace IndexItem
 
 namespace Raw
 
-def empty : IndexItem.Raw := {}
+private def empty : IndexItem.Raw := {}
 
-def addToken (self : IndexItem.Raw) (ref : String) (token : String) (termFreq : Float) : IndexItem.Raw :=
+private def addToken (self : IndexItem.Raw) (ref : String) (token : String) (termFreq : Float) : IndexItem.Raw :=
   if token.isEmpty then self
   else loop self token.iter
 where
@@ -134,7 +214,7 @@ where
     repeat (split; omega)
     omega
 
-def getNode? (self : IndexItem.Raw) (token : String) : Option IndexItem.Raw :=
+private def getNode? (self : IndexItem.Raw) (token : String) : Option IndexItem.Raw :=
   loop self token.iter
 where
   loop (item : IndexItem.Raw) (iter : String.Iterator) : Option IndexItem.Raw := do
@@ -152,7 +232,7 @@ where
     repeat (split; omega)
     omega
 
-def removeToken (self : IndexItem.Raw) (ref token : String) : IndexItem.Raw :=
+private def removeToken (self : IndexItem.Raw) (ref token : String) : IndexItem.Raw :=
   loop self token.iter
 where
   loop (item : IndexItem.Raw) (iter : String.Iterator) : IndexItem.Raw :=
@@ -182,94 +262,117 @@ where
     simp [String.Iterator.next', String.next, Char.utf8Size]
     repeat (split; omega)
     omega
-
-
 end Raw
 
 namespace WF
 
-theorem empty : Raw.empty.WF := by
+private theorem empty : Raw.empty.WF := by
   constructor
   . intro c v h
     have : (∅ : TreeMap.Raw Char IndexItem.Raw)[c]? = none := by rfl
     simp_all
   . exact TreeMap.Raw.WF.empty
 
-where
-
-
 end WF
 
 end IndexItem
 
+/--
+An item in the inverted index.
+-/
 structure IndexItem where
-  raw : IndexItem.Raw := {}
+  private raw : IndexItem.Raw := {}
   -- TODO WF
 
-
-
 namespace IndexItem
+/-- The term frequency for each document. -/
 def docs (item : IndexItem) : TreeMap String TermFrequency := item.raw.docs
+/-- The frequency for each document (field `df` in the serialized index) -/
 def docFreq (item : IndexItem) : Int64 := item.raw.docFreq
+/-- The empty inverted index. -/
 def empty : IndexItem := {}
+/-- Adds a token to the index for the given frequency. -/
 def addToken (self : IndexItem) (ref : String) (token : String) (termFreq : Float) : IndexItem :=
   ⟨self.raw.addToken ref token termFreq⟩
+/-- Gets a node for the given token if it exists. -/
 def getNode? (self : IndexItem) (token : String) : Option IndexItem :=
   (⟨·⟩) <$> self.raw.getNode? token
+/-- Removes the given token if it exists. -/
 def removeToken (self : IndexItem) (ref token : String) : IndexItem :=
   ⟨self.raw.removeToken ref token⟩
 
-partial def Raw.toJson (self: IndexItem.Raw) : Json :=
+private partial def Raw.toJson (self: IndexItem.Raw) : Json :=
   let metadata := json%{
     "docs": $(self.docs.foldr (init := Json.mkObj []) (fun f freq json => json.setObjVal! f freq.toJson)),
     "df": $self.docFreq.toInt
   }
   self.children.foldr (init := metadata) fun c ch json => json.setObjVal! c.toString (Raw.toJson ch)
 
-def toJson (self : IndexItem) : Json := self.raw.toJson
+/-- Converts an index item into the elasticlunr.js JSON format. -/
+protected def toJson (self : IndexItem) : Json := self.raw.toJson
 
 end IndexItem
 
+/-- An inverted index consists of a root in the trie. -/
 structure InvertedIndex where
+  /-- The root item. -/
   root : IndexItem := {}
 
 instance : EmptyCollection InvertedIndex := ⟨{root := {}}⟩
 
 namespace InvertedIndex
 
+@[inherit_doc IndexItem.addToken]
 def addToken (self : InvertedIndex) (ref token : String) (freq : Float) : InvertedIndex :=
   { self with root := self.root.addToken ref token freq }
 
+/-- Checks whether the given token is present in the index. -/
 def hasToken (self : InvertedIndex) (token : String) : Bool :=
   self.root.getNode? token |>.isSome
 
+@[inherit_doc IndexItem.removeToken]
 def removeToken (self : InvertedIndex) (ref token : String) : InvertedIndex :=
   {self with root := self.root.removeToken ref token }
 
+/--
+Gets the term frequency for each document for the given token. Documents are identified by their
+reference field.
+-/
 def getDocs (self : InvertedIndex) (token : String) : Option (TreeMap String Float) :=
   self.root.getNode? token |>.map fun node =>
     node.docs.map fun _ v => v.termFreq
 
+/--
+Gets the term frequency for a document with the given reference field value for the given token.
+-/
 def getTermFrequency (self : InvertedIndex) (ref token : String) : Float :=
   self.root.getNode? token |>.bind (·.docs[ref]?) |>.map (·.termFreq) |>.getD 0.0
 
-def toJson (self : InvertedIndex) : Json :=
+/-- Serializes an inverted index into the format expected by elasticlunr.js. -/
+protected def toJson (self : InvertedIndex) : Json :=
   json%{
     "root": $self.root.toJson
   }
 end InvertedIndex
 
+/--
+A named function in a pipeline.
+
+elasticlunr.js uses an array of names, each of which is mapped to a registered string processing
+function. The names and implementations must match for correctness.
+-/
 structure PipelineFn where
+  /-- The name used to identify the elasticlunr equivalent of the function. -/
   name : String
+  /-- The implementation, which should match the corresponding elasticlunr function -/
   filter (token : String) : Option String
 
--- Replaces StopWordFilter in Rust version
+/-- A pipeline function that eliminates the words in `stopWords`. -/
 def stopWordFilter (name : String) (stopWords : HashSet String) : PipelineFn where
   name := name
   filter tok := if stopWords.contains tok then none else some tok
 
-
--- Replaces RegexTrimmer in Rust version
+/-- A pipeline function that trims the prefix and suffix that match `wordChars`. -/
 def predicateTrimmer (name : String) (wordChars : Char → Bool) : PipelineFn where
   name := name
   filter tok :=
@@ -277,31 +380,49 @@ def predicateTrimmer (name : String) (wordChars : Char → Bool) : PipelineFn wh
     if tok.isEmpty then none
     else some tok
 
-
 open Verso.Search.Stemmer.Porter in
+/--
+A Porter stemmer, used to find the stems of English words.
+-/
 def porterStemmerFilter (name : String) : PipelineFn where
   name := name
   filter tok :=
     let res := porterStem tok
     if res.isEmpty then none else some res
 
-
+/--
+A pipeline, which arranges functions from left to right. This configuration should match the one
+used in elasticlunr.js.
+-/
 structure Pipeline where
+  /-- The functions in the pipeline.-/
   queue : Array PipelineFn
 
+/-- Applies the functions in the pipeline from left to right. -/
 def Pipeline.run (self : Pipeline) (tokens : Array String) : Array String :=
   tokens.filterMap fun tok =>
     self.queue.foldl (init := some tok) fun s f => s.bind f.filter
 
-def Pipeline.toJson (self : Pipeline) : Json := .arr <| self.queue.map (Json.str ·.name)
+/-- Serializes a pipeline for use with elasticlunr.js. -/
+protected def Pipeline.toJson (self : Pipeline) : Json := .arr <| self.queue.map (Json.str ·.name)
 
--- TODO tests
+/--
+A natural language for use with indexing.
+-/
 structure Language where
+  /-- The name of the language, e.g. `"English"`.-/
   name : String
+  /-- The ISO code for the language, e.g. `"en"`.-/
   code : String
+  /--
+  A tokenization function that splits a text into words. Each word is further transformed or
+  eliminated by the pipeline.
+  -/
   tokenize : String → Array String
+  /-- Further filters and transformations on the words, such as trimming them or stemming them. -/
   pipeline : Pipeline
 
+/-- The English language, with a fairly simple Porter stemmer. -/
 def english : Language where
   name := "English"
   code := "en"
@@ -327,20 +448,35 @@ where
   tokenizeWhitespace (str : String) :=
     str.split (fun c => c.isWhitespace || c == '-') |>.toArray |>.filter (!·.isEmpty) |>.map (·.trim.toLower)
 
-abbrev Tokenizer := Option (String → Array String)
+/--
+A tokenizer maps an input string to an array of search tokens (normally words).
 
+`none` means to use the language's tokenizer.
+-/
+abbrev TokenizerOverride := Option (String → Array String)
+
+/--
+An initial configuration for an index.
+-/
 structure IndexBuilder where
+  /-- Whether to save document contents, or just the index. -/
   save : Bool := true
+  /-- The fields present in documents. The reference field `refField` should be among them. -/
   fields : Array String := #[]
-  fieldTokenizers : Array Tokenizer := #[]
+  /-- Custom tokenizers for fields, associated with the fields in `fields` by position. -/
+  fieldTokenizers : Array TokenizerOverride := #[]
+  /-- The field used to identify a document. -/
   refField : String := "id"
+  /-- A custom token filtering/transformation pipeline that overrides the one in the language -/
   pipeline : Option Pipeline := none
+  /-- Which language are documents written in? -/
   language : Language := english
 
 instance : Inhabited IndexBuilder where
   default := ⟨true, #[], #[], "id", none, english⟩
 
 namespace IndexBuilder
+/-- Adds a field to an index configuration with the default tokenizer. -/
 def addField (self : IndexBuilder) (field : String) : IndexBuilder :=
   if self.fields.contains field then panic! s!"Duplicate field '{field}'"
   else
@@ -349,7 +485,8 @@ def addField (self : IndexBuilder) (field : String) : IndexBuilder :=
       fieldTokenizers := self.fieldTokenizers.push none
       }
 
-def addFieldWithTokenizer (self : IndexBuilder) (field : String) (tokenizer : Tokenizer) : IndexBuilder :=
+/-- Adds a field to an index configuration, simultaneously specifying a different tokenizer. -/
+def addFieldWithTokenizer (self : IndexBuilder) (field : String) (tokenizer : TokenizerOverride) : IndexBuilder :=
   if self.fields.contains field then panic! s!"Duplicate field '{field}'"
   else
     { self with
@@ -357,20 +494,39 @@ def addFieldWithTokenizer (self : IndexBuilder) (field : String) (tokenizer : To
       fieldTokenizers := self.fieldTokenizers.push tokenizer
       }
 
-def setRef (self : IndexBuilder) (refField : String) : IndexBuilder := { self with refField }
 end IndexBuilder
 
+/--
+An index suitable for elasticlunr.js.
+-/
 structure Index where
+  /-- Which fields exist in the provided documents? -/
   fields : Array String
-  fieldTokenizers : Array Tokenizer
+  /--
+  Fields that should be specially tokenized should have none-`none` tokenizers in the
+  corresponding position.
+  -/
+  fieldTokenizers : Array TokenizerOverride
+  /--
+  A pipeline. This Lean code must match the code used in the JavaScript configuration exactly - the
+  names, orders, and behaviors of the steps must be identical.
+  -/
   pipeline : Pipeline
+  /-- The field used to identify documents. Should be present in `fields`. -/
   refField : String
+  /-- The version of elasticlunr.js that the index is designed to work with. -/
   version : String
+  /-- An inverted index for each field. -/
   index : TreeMap String InvertedIndex
+  /-- The indexed documents. -/
   documentStore : DocumentStore
+  /-- The language used for the index. -/
   language : Language
 
 namespace IndexBuilder
+/--
+Constructs an empty index with the current settings.
+-/
 def build (self : IndexBuilder) : Index :=
   let {save, fields, fieldTokenizers, refField, pipeline, language} := self
   let index := TreeMap.ofArray <| fields.map fun f => (f, {})
@@ -384,6 +540,12 @@ end IndexBuilder
 
 namespace Index
 
+/--
+Adds a document to the index.
+
+The document should be an array with one element for each field that's configured for the index,
+matched elementwise in order of addition.
+-/
 def addDoc (self : Index) (ref : String) (data : Array String) : Index := Id.run do
   let mut self := self
   let mut doc : TreeMap String String := ∅
@@ -411,11 +573,17 @@ def addDoc (self : Index) (ref : String) (data : Array String) : Index := Id.run
         }
   { self with documentStore := self.documentStore.addDoc ref doc }
 
-def indexJson (self : Index) : Json :=
+/--
+Converts the context of an index into JSON.
+-/
+private def indexJson (self : Index) : Json :=
   self.index.foldr (init := Json.mkObj []) fun f i json => json.setObjVal! f i.toJson
 
+/--
+Converts an index into a form suitable for loading in `elasticlunr.js` using
+`elasticlunr.Index.load(...)`.
+-/
 def toJson (self : Index) : Json :=
-
   json%{
     "version": $self.version,
     "fields": $self.fields,
@@ -430,6 +598,13 @@ end Index
 
 open Verso Doc
 
+/--
+A document to be indexed.
+
+These are documents in the sense of elasticlunr.js, not necessarily Verso. Search occurs within a
+document, so making them too fine-grained can make it hard to find results with multiple search
+terms.
+-/
 structure IndexDoc where
   /-- A globally unique identifier for the document -/
   id : String
@@ -440,22 +615,38 @@ structure IndexDoc where
   /-- The string content to search for this document -/
   content : String
 
+/-- A monad for indexing documents. -/
 abbrev IndexM := ReaderT (Array String) (EStateM String (HashMap String IndexDoc))
 
+/--
+Saves an indexable document to the store.
+-/
 def IndexM.save (doc : IndexDoc) : IndexM Unit := do
   if (← get).contains doc.id then
     throw "Duplicate document ID: {doc.id}"
   else
     modify (·.insert doc.id doc)
 
+/--
+Adds a header to the current context.
+-/
 def IndexM.inPart (header : String) (act : IndexM α) : IndexM α :=
   withReader (·.push header) act
 
+/--
+Returns the stack of headers within which indexing is occurring.
+-/
 def IndexM.currentContext : IndexM (Array String) := read
 
 
+/--
+A genre is indexable if there are instructions for constructing an index for use with elasticlunr.js.
+-/
 class Indexable (genre : Genre) where
-  /-- The identifier for a part -/
+  /--
+  The identifier for a part. A frontend must be able to map this to a URL (but not necessarily a
+  whole HTML file, as `#id`s may be used).
+  -/
   partId : genre.PartMetadata → Option String
   /--
   How to index block extensions.
@@ -470,6 +661,9 @@ class Indexable (genre : Genre) where
   -/
   inline : genre.Inline → Option ((Inline genre → IndexM String) → Array (Inline genre) → IndexM IndexDoc)
 
+/--
+Finds the index-ready text for the given inline. May add sub-items to the index as a side effect.
+-/
 partial def inlineText [Indexable g] (i : Inline g) : IndexM String :=
   match i with
   | .text s | .math _ s | .linebreak s | .code s => pure s
@@ -485,6 +679,9 @@ partial def inlineText [Indexable g] (i : Inline g) : IndexM String :=
     | none =>
       inls.foldlM (init := "") (fun s i => do return s ++ (← inlineText i))
 
+/--
+Finds the index-ready text for the given bock. May add sub-items to the index as a side effect.
+-/
 partial def blockText [Indexable g] (b : Block g) : IndexM String :=
   match b with
   | .para inls =>
@@ -522,6 +719,9 @@ partial def blockText [Indexable g] (b : Block g) : IndexM String :=
       IndexM.save doc
       pure " "
 
+/--
+Finds the index-ready text for the given part. May add sub-items to the index as a side effect.
+-/
 partial def partText [idx : Indexable g] (p : Part g) : IndexM String := do
   let header := p.titleString
   let context ← IndexM.currentContext
@@ -535,6 +735,10 @@ partial def partText [idx : Indexable g] (p : Part g) : IndexM String := do
     IndexM.save {id, header, context, content}
     return ""
 
+/--
+Constructs a set of documents that can be used with elasticlunr.js by emitting JavaScript arrays and
+code to construct the index. Primarily useful for testing.
+-/
 def mkIndexDocs [idx : Indexable g] (p : Part g) : Except String (Array IndexDoc) := do
   if p.metadata.bind idx.partId |>.isNone then
     throw "No ID for root part"
@@ -543,6 +747,9 @@ def mkIndexDocs [idx : Indexable g] (p : Part g) : Except String (Array IndexDoc
     | .error e _ => throw e
     | .ok _ docs => return docs.fold (init := #[]) fun xs _ x => xs.push x
 
+/--
+Constructs an elasticlunr.js-compatible reverse index for the provided document.
+-/
 def mkIndex [idx : Indexable g] (p : Part g) : Except String Index := do
   if p.metadata.bind idx.partId |>.isNone then
     throw "No ID for root part"
@@ -555,6 +762,3 @@ def mkIndex [idx : Indexable g] (p : Part g) : Except String Index := do
         let context := "\t".intercalate doc.context.toList
         index := index.addDoc doc.id #[doc.id, doc.header, doc.content, context]
       return index
-
-
--- #eval { refField := "id" : IndexBuilder } |>.addField "id" |>.addField "contents" |>.build |>.addDoc "a" #["a", "dog cat"] |>.addDoc "b" #["b", "dog rat"] |>.indexJson |>.compress |> IO.println
