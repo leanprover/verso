@@ -14,7 +14,7 @@ env:
 
 jobs:
   merge-to-nightly:
-    runs-on: ubuntu-latest
+    runs-on: nscloud-ubuntu-22.04-amd64-8x16
     if: github.repository == 'leanprover/verso'
     steps:
       - name: Checkout repository
