@@ -70,7 +70,7 @@ jobs:
 
   # This job tries to update nightly-testing, and pushes if successful
   test-and-update:
-    runs-on: ubuntu-latest
+    runs-on: nscloud-ubuntu-22.04-amd64-8x16
     needs: check-update
     if: needs.check-update.outputs.update-needed == 'true'
     permissions:

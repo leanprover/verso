@@ -9,7 +9,7 @@ name: Continuous Integration
 jobs:
   build:
     name: test
-    runs-on: ubuntu-latest
+    runs-on: nscloud-ubuntu-22.04-amd64-8x16
     steps:
       - name: install elan
         run: |
