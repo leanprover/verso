@@ -69,6 +69,7 @@ jobs:
           texlive_version: 2024
           packages: |
             scheme-minimal
+            required
             latex-bin
             xpatch
             booktabs
