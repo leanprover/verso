@@ -80,6 +80,7 @@ jobs:
           packages: |
             scheme-minimal
             l3packages
+            tools
             latex-bin
             xpatch
             booktabs
