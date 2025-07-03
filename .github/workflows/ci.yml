@@ -74,8 +74,9 @@ jobs:
           args: --base './_out/examples/demosite' --no-progress --offline './_out/examples/demosite/**/*.html'
 
       - name: Install PDF Dependencies
-        uses: teatimeguest/setup-texlive-action@v3
+        uses: zauguin/install-texlive@v4
         with:
+          texlive_version: 2024
           packages: |
             scheme-minimal
             latex-bin
