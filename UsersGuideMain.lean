@@ -9,4 +9,4 @@ def config : Config := {
   issueLink := some "https://github.com/leanprover/verso/issues"
 }
 
-def main := manualMain (%doc UsersGuide.Basic) (config := config.addKaTeX)
+def main := manualMain (%doc UsersGuide.Basic)

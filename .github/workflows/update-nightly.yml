@@ -108,6 +108,9 @@ jobs:
       run: |
         lake build
 
+    - name: Test
+      run: |
+        lake test
 
     - name: Generate the example website
       run: |
@@ -118,14 +121,15 @@ jobs:
         lake exe simplepage
 
     - name: Install PDF Dependencies
-      uses: teatimeguest/setup-texlive-action@v3
+      uses: zauguin/install-texlive@v4
       with:
+        texlive_version: 2024
         packages: |
           scheme-minimal
+          l3packages
+          tools
           latex-bin
           xpatch
-          xparse
-          array
           booktabs
           footmisc
           environ
