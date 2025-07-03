@@ -16,12 +16,17 @@ there's no need to use anything more powerful.
 Profiling shows that index generation is fast, and costs are dominated by generating and emitting
 JSON. If it ever becomes a performance bottleneck, there are a number of optimizations that can be
 implemented:
+
  1. Rule selection can be smarter, based on string contents rather than just trying them
     top-to-bottom. Many rules are almost uniquely determined by the last or second-last letter of
     the word. See the linked page for more details.
+
  2. There is some unnecessary allocation of strings. A substring could be profitably used when
     shortening strings, and setting values when lengthening them, similarly to a Lisp fill pointer
     or C byte array.
+
+This implementation is based off the declarative description on the web page, rather than the C
+reference implementation or the paper, and it is tested against Porter's provided input data.
 -/
 
 /--
