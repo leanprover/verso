@@ -11,9 +11,12 @@ import Verso.Doc.Html
 import Verso.Output.TeX
 import Verso.Output.Html
 import Verso.Output.Html.KaTeX
+import Verso.Output.Html.ElasticLunr
 import Verso.Doc.Lsp
 import Verso.Doc.Elab
 import Verso.FS
+
+import VersoSearch
 
 import MultiVerso
 
@@ -413,6 +416,29 @@ def emitXrefs (toc : List Html.Toc) (dir : System.FilePath) (state : TraverseSta
   ensureDir (dir / "find")
   IO.FS.writeFile (dir / "find" / "index.html") (Html.doctype ++ (relativizeLinks <| xref toc xrefJson find.js state config).asString)
 
+section
+open Search
+
+def emitSearchIndex (dir : System.FilePath) (state : TraverseState) (logError : String → IO Unit) (doc : Part Manual) : IO Unit := do
+  have : Indexable Manual := {
+    partId m := do
+      let id ← m.id
+      let link ← state.resolveId id
+      pure link.link,
+    block _ := none,
+    inline _ := none
+  }
+
+  match Verso.Search.mkIndex doc with
+  | .error e => logError e
+  | .ok index =>
+    let indexJs := "const searchIndex_ = " ++ index.toJson.compress ++ ";\n\n"
+    let indexJs := indexJs ++ "const searchIndex = elasticlunr ? elasticlunr.Index.load(searchIndex_) : null;\n"
+    let indexJs := indexJs ++ "window.searchIndex = elasticlunr ? searchIndex : null;\n"
+    IO.FS.writeFile (dir / "searchIndex.js") <| indexJs
+
+end
+
 def wordCount
     (wcPath : System.FilePath)
     (logError : String → IO Unit) (config : Config)
@@ -467,6 +493,7 @@ where
       for e in errs do logError e
       pure <| items.map (·.toHtml)
     emitXrefs toc dir state config
+    emitSearchIndex dir state logError text
     IO.FS.withFile (dir.join "book.css") .write fun h => do
       h.putStrLn Html.Css.pageStyle
     for (src, dest) in config.extraFiles do
@@ -550,6 +577,7 @@ where
 
     emitPart titleToShow authors authorshipNote toc opts.lift ctxt state definitionIds linkTargets {} true config.htmlDepth root text
     emitXrefs toc root state config
+    emitSearchIndex root state logError text
     pure (text, state)
   /--
   Emits HTML for a given part, and its children if the splitting threshold is not yet reached.
@@ -628,6 +656,16 @@ def Config.addKaTeX (config : Config) : Config :=
     licenseInfo := Licenses.KaTeX :: config.licenseInfo
   }
 
+open Verso.Output.Html in
+/--
+Adds a bundled version of elasticlunr.js to the config.
+-/
+def Config.addSearch (config : Config) : Config :=
+  { config with
+    extraJsFiles := config.extraJsFiles.push ("elasticlunr.min.js", elasticlunr.js)
+    licenseInfo := Licenses.elasticlunr.js :: config.licenseInfo
+  }
+
 
 inductive Mode where | single | multi
 
@@ -649,7 +687,7 @@ abbrev ExtraStep := Mode → (String → IO Unit) → Config → TraverseState �
 def manualMain (text : Part Manual)
     (extensionImpls : ExtensionImpls := by exact extension_impls%)
     (options : List String)
-    (config : Config := Config.addKaTeX {})
+    (config : Config := Config.addKaTeX (Config.addSearch {}))
     (extraSteps : List ExtraStep := []) : IO UInt32 :=
   ReaderT.run go extensionImpls
 

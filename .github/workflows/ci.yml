@@ -9,7 +9,7 @@ name: Continuous Integration
 jobs:
   build:
     name: test
-    runs-on: ubuntu-latest
+    runs-on: nscloud-ubuntu-22.04-amd64-8x16
     steps:
       - name: install elan
         run: |
@@ -54,6 +54,10 @@ jobs:
         run: |
           lake build
 
+      - name: Run tests
+        run: |
+          lake test
+
       - name: Generate the example website
         run: |
           lake exe demosite --output _out/examples/demosite
@@ -70,14 +74,15 @@ jobs:
           args: --base './_out/examples/demosite' --no-progress --offline './_out/examples/demosite/**/*.html'
 
       - name: Install PDF Dependencies
-        uses: teatimeguest/setup-texlive-action@v3
+        uses: zauguin/install-texlive@v4
         with:
+          texlive_version: 2024
           packages: |
             scheme-minimal
+            l3packages
+            tools
             latex-bin
             xpatch
-            xparse
-            array
             booktabs
             footmisc
             environ

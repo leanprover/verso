@@ -18,6 +18,10 @@ lean_lib MultiVerso where
   roots := #[`MultiVerso]
 
 @[default_target]
+lean_lib VersoSearch where
+  srcDir := "src/verso-search"
+
+@[default_target]
 lean_lib VersoBlog where
   srcDir := "src/verso-blog"
   roots := #[`VersoBlog]
@@ -32,6 +36,10 @@ lean_exe «verso» where
   root := `Main
   srcDir := "src/cli"
 
+@[test_driver]
+lean_exe «verso-tests» where
+  root := `Tests
+  srcDir := "src/tests"
 
 @[default_target]
 lean_exe «verso-demo» where
