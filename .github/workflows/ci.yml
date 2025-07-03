@@ -81,8 +81,6 @@ jobs:
             scheme-minimal
             latex-bin
             xpatch
-            xparse
-            array
             booktabs
             footmisc
             environ
