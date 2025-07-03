@@ -432,9 +432,9 @@ def emitSearchIndex (dir : System.FilePath) (state : TraverseState) (logError : 
   match Verso.Search.mkIndex doc with
   | .error e => logError e
   | .ok index =>
-    let indexJs := "const searchIndex_ = " ++ index.toJson.compress ++ ";\n\n"
-    let indexJs := indexJs ++ "const searchIndex = elasticlunr ? elasticlunr.Index.load(searchIndex_) : null;\n"
-    let indexJs := indexJs ++ "window.searchIndex = elasticlunr ? searchIndex : null;\n"
+    let indexJs := "const __verso_searchIndexData = " ++ index.toJson.compress ++ ";\n\n"
+    let indexJs := indexJs ++ "const __versoSearchIndex = elasticlunr ? elasticlunr.Index.load(__verso_searchIndexData) : null;\n"
+    let indexJs := indexJs ++ "window.searchIndex = elasticlunr ? __versoSearchIndex : null;\n"
     IO.FS.writeFile (dir / "searchIndex.js") <| indexJs
 
 end
