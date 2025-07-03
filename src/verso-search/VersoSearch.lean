@@ -433,16 +433,26 @@ open Verso Doc
 structure IndexDoc where
   /-- A globally unique identifier for the document -/
   id : String
+  /-- A header to show in search results -/
+  header : String
+  /-- An indication of the context in the document, to be shown as breadcrumbs -/
+  context : Array String
   /-- The string content to search for this document -/
   content : String
 
-abbrev IndexM := EStateM String (HashMap String IndexDoc)
+abbrev IndexM := ReaderT (Array String) (EStateM String (HashMap String IndexDoc))
 
 def IndexM.save (doc : IndexDoc) : IndexM Unit := do
   if (← get).contains doc.id then
     throw "Duplicate document ID: {doc.id}"
   else
     modify (·.insert doc.id doc)
+
+def IndexM.inPart (header : String) (act : IndexM α) : IndexM α :=
+  withReader (·.push header) act
+
+def IndexM.currentContext : IndexM (Array String) := read
+
 
 class Indexable (genre : Genre) where
   /-- The identifier for a part -/
@@ -513,21 +523,23 @@ partial def blockText [Indexable g] (b : Block g) : IndexM String :=
       pure " "
 
 partial def partText [idx : Indexable g] (p : Part g) : IndexM String := do
-  let content := p.titleString ++ "\n\n"
-  let content ← p.content.foldlM (init := content) fun s b => do return s ++ (← blockText b) ++ "\n\n"
-  let content ← p.subParts.foldlM (init := content) fun s p' => do return s ++ (← partText p') ++ "\n\n"
+  let header := p.titleString
+  let context ← IndexM.currentContext
+  let content ← p.content.foldlM (init := "") fun s b => do return s ++ (← blockText b) ++ "\n\n"
+  let content ← IndexM.inPart header do
+    p.subParts.foldlM (init := content) fun s p' => do return s ++ (← partText p') ++ "\n\n"
 
   match p.metadata >>= idx.partId with
-  | none => return content
+  | none => return header ++ "\n\n" ++ content
   | some id =>
-    IndexM.save {id, content}
+    IndexM.save {id, header, context, content}
     return ""
 
 def mkIndexDocs [idx : Indexable g] (p : Part g) : Except String (Array IndexDoc) := do
   if p.metadata.bind idx.partId |>.isNone then
     throw "No ID for root part"
   else
-    match partText p {} with
+    match partText p #[] {} with
     | .error e _ => throw e
     | .ok _ docs => return docs.fold (init := #[]) fun xs _ x => xs.push x
 
@@ -535,12 +547,13 @@ def mkIndex [idx : Indexable g] (p : Part g) : Except String Index := do
   if p.metadata.bind idx.partId |>.isNone then
     throw "No ID for root part"
   else
-    match partText p {} with
+    match partText p #[] {} with
     | .error e _ => throw e
     | .ok _ docs =>
-      let mut index : Index := { refField := "id" : IndexBuilder } |>.addField "id" |>.addField "contents" |>.build
+      let mut index : Index := { refField := "id" : IndexBuilder } |>.addField "id" |>.addField "header" |>.addField "contents" |>.addField "context" |>.build
       for (_, doc) in docs do
-        index := index.addDoc doc.id #[doc.id, doc.content]
+        let context := "\t".intercalate doc.context.toList
+        index := index.addDoc doc.id #[doc.id, doc.header, doc.content, context]
       return index
 
 
