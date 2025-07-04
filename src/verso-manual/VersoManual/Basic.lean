@@ -99,6 +99,11 @@ structure PartMetadata where
   A shorter title to be shown in titlebars and tables of contents.
   -/
   shortTitle : Option String := none
+  /--
+  A shorter title to be shown in breadcrumbs for search results. Should typically be at least as
+  short as `shortTitle`.
+  -/
+  shortContextTitle : Option String := none
   authors : List String := []
   /-- An extra note to show after the author list -/
   authorshipNote : Option String := none
@@ -300,6 +305,7 @@ instance : Ord Inline where
 structure PartHeader where
   titleString : String
   metadata : Option PartMetadata
+deriving Repr
 
 structure TraverseContext where
   /-- The current URL path - will be [] for non-HTML output or in the root -/
@@ -771,7 +777,7 @@ instance : Traverse Manual TraverseM where
     -- Next, assign a tag, prioritizing user-chosen external IDs
     match meta.tag with
     | none =>
-      -- Assign an internal tag - the next round will make it external This is done in two rounds to
+      -- Assign an internal tag - the next round will make it external. This is done in two rounds to
       -- give priority to user-provided tags that might otherwise anticipate the name-mangling scheme
       let what := (← read).headers.map (·.titleString ++ "--") |>.push part.titleString |>.foldl (init := "") (· ++ ·)
       let tag ← freshTag what id

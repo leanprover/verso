@@ -439,8 +439,19 @@ def emitXrefs (toc : List Html.Toc) (dir : System.FilePath) (state : TraverseSta
 section
 open Search
 
-def addSearchIndex (state : TraverseState) (logError : String → IO Unit) (doc : Part Manual) : IO TraverseState := do
+def addSearchIndex (state : TraverseState) (ctx : TraverseContext) (logError : String → IO Unit) (doc : Part Manual) : IO TraverseState := do
   have : Indexable Manual := {
+    partHeader p := do
+      let ctxt ← IndexM.traverseContext
+      let num :=  (← IndexM.traverseContext).inPart p |>.headers |>.map (·.metadata.bind (·.assignedNumber))
+      let num :=
+        if h : num.size > 1 then
+          if num[0].isNone then num.extract 1 else num
+        else num
+      let num := num.mapM id
+      let num := num.map sectionNumberString
+      pure <| num.map (· ++ " " ++ p.titleString)
+    partShortContextName p := return p.metadata.bind (·.shortContextTitle)
     partId m := do
       let id ← m.id
       let link ← state.resolveId id
@@ -449,7 +460,7 @@ def addSearchIndex (state : TraverseState) (logError : String → IO Unit) (doc 
     inline _ := none
   }
 
-  match Verso.Search.mkIndex doc with
+  match Verso.Search.mkIndex doc ctx with
   | .error e => logError e; return state
   | .ok index =>
     let indexJs := "const __verso_searchIndexData = " ++ index.toJson.compress ++ ";\n\n"
@@ -480,7 +491,7 @@ def emitHtmlSingle
 where
   emitContent (dir : System.FilePath) : StateT (State Html) (ReaderT ExtensionImpls IO) (Part Manual × TraverseState) := do
     let (text, state) ← traverse logError text {config with htmlDepth := 0}
-    let state ← addSearchIndex state logError text
+    let state ← addSearchIndex state {logError, draft := config.draft} logError text
     let authors := text.metadata.map (·.authors) |>.getD []
     let authorshipNote := text.metadata.bind (·.authorshipNote)
     let _date := text.metadata.bind (·.date) |>.getD "" -- TODO
@@ -561,7 +572,7 @@ where
   -/
   emitContent (root : System.FilePath) : StateT (State Html) (ReaderT ExtensionImpls IO) (Part Manual × TraverseState) := do
     let (text, state) ← traverse logError text config
-    let state ← addSearchIndex state logError text
+    let state ← addSearchIndex state {logError, draft := config.draft} logError text
     let authors := text.metadata.map (·.authors) |>.getD []
     let authorshipNote := text.metadata >>= (·.authorshipNote)
     let _date := text.metadata.bind (·.date) |>.getD "" -- TODO
