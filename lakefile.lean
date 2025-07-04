@@ -2,7 +2,8 @@ import Lake
 open Lake DSL
 
 require subverso from git "https://github.com/leanprover/subverso"@"main"
-require MD4Lean from git "https://github.com/acmepjz/md4lean"@"main"
+-- Using a fork/branch because nightly-2025-07-01 changes the representation of constructors for the FFI
+require MD4Lean from git "https://github.com/david-christiansen/md4lean"@"new-ffi"
 
 package verso where
   precompileModules := false -- temporarily disabled to work around an issue with nightly-2025-03-30
