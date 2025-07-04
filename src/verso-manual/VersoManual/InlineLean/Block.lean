@@ -41,7 +41,7 @@ block_extension Block.lean (hls : Highlighted) (file : Option System.FilePath :=
         pure <| .seq #[← go b, .raw "\n"]
   extraCss := [highlightingStyle]
   extraJs := [highlightingJs]
-  extraJsFiles := [("popper.js", popper), ("tippy.js", tippy)]
+  extraJsFiles := [{filename := "popper.js", contents := popper}, {filename := "tippy.js", contents := tippy}]
   extraCssFiles := [("tippy-border.css", tippy.border.css)]
   toHtml :=
     open Verso.Output.Html in

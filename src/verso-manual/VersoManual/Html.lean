@@ -521,8 +521,9 @@ def page
     (repoLink : Option String := none)
     (issueLink : Option String := none)
     (extraStylesheets : List String := [])
-    (extraJsFiles : Array String := #[]) : Html :=
+    (extraJsFiles : Array (String × Bool) := #[]) : Html :=
   let relativeRoot := String.join <| "./" :: path.toList.map (fun _ => "../")
+  let defer := #[("defer", "defer")]
   {{
     <html>
       <head>
@@ -535,9 +536,8 @@ def page
         <title>{{textTitle}}</title>
         <link rel="stylesheet" href="/book.css" />
         <script>s!"const __versoSiteRoot = document.baseURI;"</script>
-        <script src="searchIndex.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js" integrity="sha384-zbcZAIxlvJtNE3Dp5nxLXdXtXyxwOdnILY1TDPVmKFhl4r4nSUG1r8bcFXGVa4Te" crossorigin="anonymous"></script>
-        {{extraJsFiles.map ({{<script src=s!"{·}"></script>}})}}
+        {{extraJsFiles.map fun f => ({{<script src=s!"{f.1}" {{if f.2 then defer else #[]}}></script>}})}}
         {{extraStylesheets.map (fun url => {{<link rel="stylesheet" href={{url}}/> }})}}
         {{extraCss.toArray.map ({{<style>{{Html.text false ·}}</style>}})}}
         {{extraJs.toArray.map ({{<script>{{Html.text false ·}}</script>}})}}

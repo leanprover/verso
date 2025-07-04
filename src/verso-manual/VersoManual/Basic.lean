@@ -60,7 +60,19 @@ instance : ToString Tag where
 instance : Coe String Tag where
   coe := .provided
 
+/-- An extra JS file to be included in the header, but not emitted -/
+structure StaticJsFile where
+  filename : String
+  defer : Bool := false
+  /-- Load after these other named files -/
+  after : Array String := #[]
+deriving BEq
 
+
+/-- An extra JS file to be emitted and added to the page -/
+structure JsFile extends StaticJsFile where
+  contents : String
+deriving BEq
 
 /-- When rendering multi-page HTML, should splitting pages follow the depth setting? -/
 inductive HtmlSplitMode where
@@ -138,7 +150,7 @@ structure TraverseState where
   ids : TreeSet InternalId := {}
   extraCss : HashSet String := {}
   extraJs : HashSet String := {}
-  extraJsFiles : Array (String × String) := #[]
+  extraJsFiles : Array JsFile := #[]
   extraCssFiles : Array (String × String) := #[]
   licenseInfo : HashSet LicenseInfo := {}
   private contents : NameMap Json := {}
@@ -387,7 +399,7 @@ structure InlineDescr where
 
   toHtml : Option (InlineToHtml Manual (ReaderT ExtensionImpls IO))
   extraJs : List String := []
-  extraJsFiles : List (String × String) := []
+  extraJsFiles : List JsFile := []
   extraCss : List String := []
   extraCssFiles : List (String × String) := []
   licenseInfo : List LicenseInfo := []
@@ -417,7 +429,7 @@ structure BlockDescr where
 
   toHtml : Option (BlockToHtml Manual (ReaderT ExtensionImpls IO))
   extraJs : List String := []
-  extraJsFiles : List (String × String) := []
+  extraJsFiles : List JsFile := []
   extraCss : List String := []
   extraCssFiles : List (String × String) := []
   licenseInfo : List LicenseInfo := []
@@ -843,9 +855,9 @@ instance : Traverse Manual TraverseM where
             modify fun s => {s with extraJs := s.extraJs.insert js}
           for css in impl.extraCss do
             modify fun s => {s with extraCss := s.extraCss.insert css}
-          for (name, js) in impl.extraJsFiles do
-            unless (← get).extraJsFiles.any (·.1 == name) do
-              modify fun s => {s with extraJsFiles := s.extraJsFiles.push (name, js)}
+          for f in impl.extraJsFiles do
+            unless (← get).extraJsFiles.any (·.filename == f.filename) do
+              modify fun s => {s with extraJsFiles := s.extraJsFiles.push f }
           for (name, js) in impl.extraCssFiles do
             unless (← get).extraCssFiles.any (·.1 == name) do
               modify fun s => {s with extraCssFiles := s.extraCssFiles.push (name, js)}
@@ -868,9 +880,9 @@ instance : Traverse Manual TraverseM where
             modify fun s => {s with extraJs := s.extraJs.insert js}
           for css in impl.extraCss do
             modify fun s => {s with extraCss := s.extraCss.insert css}
-          for (name, js) in impl.extraJsFiles do
-            unless (← get).extraJsFiles.any (·.1 == name) do
-              modify fun s => {s with extraJsFiles := s.extraJsFiles.push (name, js)}
+          for f in impl.extraJsFiles do
+            unless (← get).extraJsFiles.any (·.filename == f.filename) do
+              modify fun s => {s with extraJsFiles := s.extraJsFiles.push f}
           for (name, js) in impl.extraCssFiles do
             unless (← get).extraCssFiles.any (·.1 == name) do
               modify fun s => {s with extraCssFiles := s.extraCssFiles.push (name, js)}

@@ -172,11 +172,11 @@ structure Config where
   /-- Extra CSS to be included inline into every `<head>` -/
   extraCss : List String := []
   /-- Extra JS to be included inline into every `<head>` -/
-  extraJs : List String := []
+  extraJs : List StaticJsFile := []
   /-- Extra CSS to be written to the filesystem in the Verso data directory and loaded by each `<head>` -/
   extraCssFiles : Array (String × String) := #[]
   /-- Extra JS to be written to the filesystem in the Verso data directory and loaded by each `<head>` -/
-  extraJsFiles : Array (String × String) := #[]
+  extraJsFiles : Array JsFile := #[]
   /-- Extra files to be placed in the Verso data directory -/
   extraDataFiles : Array (String × ByteArray) := #[]
   licenseInfo : List LicenseInfo := []
@@ -368,6 +368,19 @@ partial def toc (depth : Nat) (opts : Html.Options IO)
       children := children.toList
     }
 
+partial def sortJs (extraJs : Array (Bool × StaticJsFile)) : Array (Bool × StaticJsFile) :=
+  helper #[] extraJs
+where
+  -- partial because library doesn't include that the sum of the size of the partitions is the size
+  -- of the original
+  helper (acc todo : Array (Bool × StaticJsFile)) : Array (Bool × StaticJsFile) :=
+    if todo.isEmpty then acc
+    else
+      let (ok, notYet) := todo.partition (fun f => f.2.after.all (fun f' => acc.any (·.2.filename == f')))
+      if ok.isEmpty then acc ++ todo
+      else
+        helper (acc ++ ok) notYet
+
 def page (toc : List Html.Toc)
     (path : Path) (textTitle : String) (htmlBookTitle contents : Html)
     (state : TraverseState) (config : Config)
@@ -376,6 +389,13 @@ def page (toc : List Html.Toc)
   let toc := {
     title := htmlBookTitle, path := #[], id := "" , sectionNum := some #[], children := toc
   }
+  let extraJsFiles :=
+    sortJs <|
+      config.extraJs.toArray.map (true, ·) ++
+      state.extraJsFiles.map (false, ·.toStaticJsFile)
+  let extraJsFiles := extraJsFiles.map fun
+    | (true, f) => (f.filename, f.defer)
+    | (false, f) => ("/-verso-data/" ++ f.filename, f.defer)
   Html.page toc path textTitle htmlBookTitle contents
     state.extraCss (state.extraJs.insertMany extraJs)
     (showNavButtons := showNavButtons)
@@ -387,7 +407,7 @@ def page (toc : List Html.Toc)
     -- The extra CSS and JS in the config is not take here because it's used to initialize the
     -- traverse state and is thus already present.
     (extraStylesheets := config.extraCss ++ state.extraCssFiles.toList.map ("/-verso-data/" ++ ·.1))
-    (extraJsFiles := config.extraJs.toArray ++ state.extraJsFiles.map ("/-verso-data/" ++ ·.1))
+    (extraJsFiles := extraJsFiles)
     (extraHead := config.extraHead)
     (extraContents := config.extraContents)
 
@@ -419,7 +439,7 @@ def emitXrefs (toc : List Html.Toc) (dir : System.FilePath) (state : TraverseSta
 section
 open Search
 
-def emitSearchIndex (dir : System.FilePath) (state : TraverseState) (logError : String → IO Unit) (doc : Part Manual) : IO Unit := do
+def addSearchIndex (state : TraverseState) (logError : String → IO Unit) (doc : Part Manual) : IO TraverseState := do
   have : Indexable Manual := {
     partId m := do
       let id ← m.id
@@ -430,12 +450,12 @@ def emitSearchIndex (dir : System.FilePath) (state : TraverseState) (logError : 
   }
 
   match Verso.Search.mkIndex doc with
-  | .error e => logError e
+  | .error e => logError e; return state
   | .ok index =>
     let indexJs := "const __verso_searchIndexData = " ++ index.toJson.compress ++ ";\n\n"
     let indexJs := indexJs ++ "const __versoSearchIndex = elasticlunr ? elasticlunr.Index.load(__verso_searchIndexData) : null;\n"
     let indexJs := indexJs ++ "window.searchIndex = elasticlunr ? __versoSearchIndex : null;\n"
-    IO.FS.writeFile (dir / "searchIndex.js") <| indexJs
+    return { state with extraJsFiles := state.extraJsFiles.push { filename := "searchIndex.js", contents := indexJs } }
 
 end
 
@@ -460,6 +480,7 @@ def emitHtmlSingle
 where
   emitContent (dir : System.FilePath) : StateT (State Html) (ReaderT ExtensionImpls IO) (Part Manual × TraverseState) := do
     let (text, state) ← traverse logError text {config with htmlDepth := 0}
+    let state ← addSearchIndex state logError text
     let authors := text.metadata.map (·.authors) |>.getD []
     let authorshipNote := text.metadata.bind (·.authorshipNote)
     let _date := text.metadata.bind (·.date) |>.getD "" -- TODO
@@ -493,16 +514,15 @@ where
       for e in errs do logError e
       pure <| items.map (·.toHtml)
     emitXrefs toc dir state config
-    emitSearchIndex dir state logError text
     IO.FS.withFile (dir.join "book.css") .write fun h => do
       h.putStrLn Html.Css.pageStyle
     for (src, dest) in config.extraFiles do
       copyRecursively logError src (dir.join dest)
-    for (name, contents) in state.extraJsFiles do
+    for f in state.extraJsFiles do
       ensureDir (dir.join "-verso-data")
-      (dir / "-verso-data" / name).parent |>.forM fun d => ensureDir d
-      IO.FS.withFile (dir.join "-verso-data" |>.join name) .write fun h => do
-        h.putStr contents
+      (dir / "-verso-data" / f.filename).parent |>.forM fun d => ensureDir d
+      IO.FS.withFile (dir.join "-verso-data" |>.join f.filename) .write fun h => do
+        h.putStr f.contents
     let titleToShow : Html :=
       open Verso.Output.Html in
       if let some alt := text.metadata.bind (·.shortTitle) then
@@ -541,6 +561,7 @@ where
   -/
   emitContent (root : System.FilePath) : StateT (State Html) (ReaderT ExtensionImpls IO) (Part Manual × TraverseState) := do
     let (text, state) ← traverse logError text config
+    let state ← addSearchIndex state logError text
     let authors := text.metadata.map (·.authors) |>.getD []
     let authorshipNote := text.metadata >>= (·.authorshipNote)
     let _date := text.metadata.bind (·.date) |>.getD "" -- TODO
@@ -560,11 +581,11 @@ where
       h.putStrLn Html.Css.pageStyle
     for (src, dest) in config.extraFiles do
       copyRecursively logError src (root.join dest)
-    for (name, contents) in state.extraJsFiles do
+    for f in state.extraJsFiles do
       ensureDir (root.join "-verso-data")
-      (root / "-verso-data" / name).parent |>.forM fun d => ensureDir d
-      IO.FS.withFile (root.join "-verso-data" |>.join name) .write fun h => do
-        h.putStr contents
+      (root / "-verso-data" / f.filename).parent |>.forM fun d => ensureDir d
+      IO.FS.withFile (root.join "-verso-data" |>.join f.filename) .write fun h => do
+        h.putStr f.contents
     for (name, contents) in state.extraCssFiles do
       ensureDir (root.join "-verso-data")
       (root / "-verso-data" / name).parent |>.forM fun d => ensureDir d
@@ -577,7 +598,6 @@ where
 
     emitPart titleToShow authors authorshipNote toc opts.lift ctxt state definitionIds linkTargets {} true config.htmlDepth root text
     emitXrefs toc root state config
-    emitSearchIndex root state logError text
     pure (text, state)
   /--
   Emits HTML for a given part, and its children if the splitting threshold is not yet reached.
@@ -651,7 +671,10 @@ Adds a bundled version of KaTeX to the document
 def Config.addKaTeX (config : Config) : Config :=
   {config with
     extraCssFiles := config.extraCssFiles.push ("katex/katex.css", katex.css),
-    extraJsFiles := config.extraJsFiles ++ #[("katex/katex.js", katex.js), ("katex/math.js", math.js)],
+    extraJsFiles :=
+      config.extraJsFiles
+        |>.push {filename := "katex/katex.js", contents := katex.js}
+        |>.push {filename := "katex/math.js", contents := math.js},
     extraDataFiles := config.extraDataFiles ++ katexFonts,
     licenseInfo := Licenses.KaTeX :: config.licenseInfo
   }
@@ -662,7 +685,7 @@ Adds a bundled version of elasticlunr.js to the config.
 -/
 def Config.addSearch (config : Config) : Config :=
   { config with
-    extraJsFiles := config.extraJsFiles.push ("elasticlunr.min.js", elasticlunr.js)
+    extraJsFiles := config.extraJsFiles.push {filename := "elasticlunr.min.js", contents := elasticlunr.js}
     licenseInfo := Licenses.elasticlunr.js :: config.licenseInfo
   }
 
