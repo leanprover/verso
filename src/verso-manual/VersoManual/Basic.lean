@@ -60,7 +60,19 @@ instance : ToString Tag where
 instance : Coe String Tag where
   coe := .provided
 
+/-- An extra JS file to be included in the header, but not emitted -/
+structure StaticJsFile where
+  filename : String
+  defer : Bool := false
+  /-- Load after these other named files -/
+  after : Array String := #[]
+deriving BEq
 
+
+/-- An extra JS file to be emitted and added to the page -/
+structure JsFile extends StaticJsFile where
+  contents : String
+deriving BEq
 
 /-- When rendering multi-page HTML, should splitting pages follow the depth setting? -/
 inductive HtmlSplitMode where
@@ -87,6 +99,11 @@ structure PartMetadata where
   A shorter title to be shown in titlebars and tables of contents.
   -/
   shortTitle : Option String := none
+  /--
+  A shorter title to be shown in breadcrumbs for search results. Should typically be at least as
+  short as `shortTitle`.
+  -/
+  shortContextTitle : Option String := none
   authors : List String := []
   /-- An extra note to show after the author list -/
   authorshipNote : Option String := none
@@ -138,7 +155,7 @@ structure TraverseState where
   ids : TreeSet InternalId := {}
   extraCss : HashSet String := {}
   extraJs : HashSet String := {}
-  extraJsFiles : Array (String × String) := #[]
+  extraJsFiles : Array JsFile := #[]
   extraCssFiles : Array (String × String) := #[]
   licenseInfo : HashSet LicenseInfo := {}
   private contents : NameMap Json := {}
@@ -288,6 +305,7 @@ instance : Ord Inline where
 structure PartHeader where
   titleString : String
   metadata : Option PartMetadata
+deriving Repr
 
 structure TraverseContext where
   /-- The current URL path - will be [] for non-HTML output or in the root -/
@@ -387,7 +405,7 @@ structure InlineDescr where
 
   toHtml : Option (InlineToHtml Manual (ReaderT ExtensionImpls IO))
   extraJs : List String := []
-  extraJsFiles : List (String × String) := []
+  extraJsFiles : List JsFile := []
   extraCss : List String := []
   extraCssFiles : List (String × String) := []
   licenseInfo : List LicenseInfo := []
@@ -417,7 +435,7 @@ structure BlockDescr where
 
   toHtml : Option (BlockToHtml Manual (ReaderT ExtensionImpls IO))
   extraJs : List String := []
-  extraJsFiles : List (String × String) := []
+  extraJsFiles : List JsFile := []
   extraCss : List String := []
   extraCssFiles : List (String × String) := []
   licenseInfo : List LicenseInfo := []
@@ -759,7 +777,7 @@ instance : Traverse Manual TraverseM where
     -- Next, assign a tag, prioritizing user-chosen external IDs
     match meta.tag with
     | none =>
-      -- Assign an internal tag - the next round will make it external This is done in two rounds to
+      -- Assign an internal tag - the next round will make it external. This is done in two rounds to
       -- give priority to user-provided tags that might otherwise anticipate the name-mangling scheme
       let what := (← read).headers.map (·.titleString ++ "--") |>.push part.titleString |>.foldl (init := "") (· ++ ·)
       let tag ← freshTag what id
@@ -843,9 +861,9 @@ instance : Traverse Manual TraverseM where
             modify fun s => {s with extraJs := s.extraJs.insert js}
           for css in impl.extraCss do
             modify fun s => {s with extraCss := s.extraCss.insert css}
-          for (name, js) in impl.extraJsFiles do
-            unless (← get).extraJsFiles.any (·.1 == name) do
-              modify fun s => {s with extraJsFiles := s.extraJsFiles.push (name, js)}
+          for f in impl.extraJsFiles do
+            unless (← get).extraJsFiles.any (·.filename == f.filename) do
+              modify fun s => {s with extraJsFiles := s.extraJsFiles.push f }
           for (name, js) in impl.extraCssFiles do
             unless (← get).extraCssFiles.any (·.1 == name) do
               modify fun s => {s with extraCssFiles := s.extraCssFiles.push (name, js)}
@@ -868,9 +886,9 @@ instance : Traverse Manual TraverseM where
             modify fun s => {s with extraJs := s.extraJs.insert js}
           for css in impl.extraCss do
             modify fun s => {s with extraCss := s.extraCss.insert css}
-          for (name, js) in impl.extraJsFiles do
-            unless (← get).extraJsFiles.any (·.1 == name) do
-              modify fun s => {s with extraJsFiles := s.extraJsFiles.push (name, js)}
+          for f in impl.extraJsFiles do
+            unless (← get).extraJsFiles.any (·.filename == f.filename) do
+              modify fun s => {s with extraJsFiles := s.extraJsFiles.push f}
           for (name, js) in impl.extraCssFiles do
             unless (← get).extraCssFiles.any (·.1 == name) do
               modify fun s => {s with extraCssFiles := s.extraCssFiles.push (name, js)}

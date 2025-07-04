@@ -616,27 +616,27 @@ structure IndexDoc where
   content : String
 
 /-- A monad for indexing documents. -/
-abbrev IndexM := ReaderT (Array String) (EStateM String (HashMap String IndexDoc))
+abbrev IndexM (genre : Genre) :=
+  ReaderT (Array String × genre.TraverseContext) (EStateM String (HashMap String IndexDoc))
+
+/--
+Gets the traversal context for the current point.
+-/
+def IndexM.traverseContext : IndexM g g.TraverseContext := read <&> (·.2)
 
 /--
 Saves an indexable document to the store.
 -/
-def IndexM.save (doc : IndexDoc) : IndexM Unit := do
+def IndexM.save (doc : IndexDoc) : IndexM g Unit := do
   if (← get).contains doc.id then
     throw "Duplicate document ID: {doc.id}"
   else
     modify (·.insert doc.id doc)
 
 /--
-Adds a header to the current context.
--/
-def IndexM.inPart (header : String) (act : IndexM α) : IndexM α :=
-  withReader (·.push header) act
-
-/--
 Returns the stack of headers within which indexing is occurring.
 -/
-def IndexM.currentContext : IndexM (Array String) := read
+def IndexM.currentContext : IndexM g (Array String) := read <&> (·.1)
 
 
 /--
@@ -648,23 +648,44 @@ class Indexable (genre : Genre) where
   whole HTML file, as `#id`s may be used).
   -/
   partId : genre.PartMetadata → Option String
+
+  /-- Computes the indexed header for a part. On `none`, falls back to a default implementation. -/
+  partHeader : Part genre → IndexM genre (Option String) := fun _ => pure none
+
+  /--
+  Computes a potentially abbreviated header name to show in contexts (e.g. an initialism for a long
+  book title). Falls back to the chapter title.
+  -/
+  partShortContextName : Part genre → IndexM genre (Option String) := fun _ => pure none
+
   /--
   How to index block extensions.
 
   Return `none` to fall back to the content of the contained blocks.
   -/
-  block : genre.Block → Option ((Inline genre → IndexM String) → (Block genre → IndexM String) → Array (Block genre) → IndexM IndexDoc)
+  block : genre.Block → Option ((Inline genre → IndexM genre String) → (Block genre → IndexM genre String) → Array (Block genre) → IndexM genre IndexDoc)
+
   /--
   How to index inline extensions.
 
   Return `none` to fall back to the content of the contained inlines.
   -/
-  inline : genre.Inline → Option ((Inline genre → IndexM String) → Array (Inline genre) → IndexM IndexDoc)
+  inline : genre.Inline → Option ((Inline genre → IndexM genre String) → Array (Inline genre) → IndexM genre IndexDoc)
+
+section
+variable [idx : Indexable g] [TraversePart g]
+
+/--
+Adds a header to the current context and updates the traversal context.
+-/
+def IndexM.inPart (part : Part g) (act : IndexM g α) : IndexM g α := do
+  let ctxHeader := (← idx.partShortContextName part).getD part.titleString
+  withReader (fun ρ => (ρ.1.push ctxHeader, TraversePart.inPart part ρ.2)) act
 
 /--
 Finds the index-ready text for the given inline. May add sub-items to the index as a side effect.
 -/
-partial def inlineText [Indexable g] (i : Inline g) : IndexM String :=
+partial def inlineText (i : Inline g) : IndexM g String :=
   match i with
   | .text s | .math _ s | .linebreak s | .code s => pure s
   | .link inls _ | .concat inls | .bold inls | .emph inls | .footnote _ inls =>
@@ -682,7 +703,7 @@ partial def inlineText [Indexable g] (i : Inline g) : IndexM String :=
 /--
 Finds the index-ready text for the given bock. May add sub-items to the index as a side effect.
 -/
-partial def blockText [Indexable g] (b : Block g) : IndexM String :=
+partial def blockText (b : Block g) : IndexM g String :=
   match b with
   | .para inls =>
     inls.foldlM (init := "") (fun s i => do return s ++ (← inlineText i))
@@ -722,11 +743,12 @@ partial def blockText [Indexable g] (b : Block g) : IndexM String :=
 /--
 Finds the index-ready text for the given part. May add sub-items to the index as a side effect.
 -/
-partial def partText [idx : Indexable g] (p : Part g) : IndexM String := do
-  let header := p.titleString
+partial def partText (p : Part g) : IndexM g String := do
+  let header := (← idx.partHeader p).getD p.titleString
+
   let context ← IndexM.currentContext
-  let content ← p.content.foldlM (init := "") fun s b => do return s ++ (← blockText b) ++ "\n\n"
-  let content ← IndexM.inPart header do
+  let content ← IndexM.inPart p do
+    let content ← p.content.foldlM (init := "") fun s b => do return s ++ (← blockText b) ++ "\n\n"
     p.subParts.foldlM (init := content) fun s p' => do return s ++ (← partText p') ++ "\n\n"
 
   match p.metadata >>= idx.partId with
@@ -739,22 +761,22 @@ partial def partText [idx : Indexable g] (p : Part g) : IndexM String := do
 Constructs a set of documents that can be used with elasticlunr.js by emitting JavaScript arrays and
 code to construct the index. Primarily useful for testing.
 -/
-def mkIndexDocs [idx : Indexable g] (p : Part g) : Except String (Array IndexDoc) := do
+def mkIndexDocs (p : Part g) (ctx : g.TraverseContext) : Except String (Array IndexDoc) := do
   if p.metadata.bind idx.partId |>.isNone then
     throw "No ID for root part"
   else
-    match partText p #[] {} with
+    match partText p (#[], ctx) {} with
     | .error e _ => throw e
     | .ok _ docs => return docs.fold (init := #[]) fun xs _ x => xs.push x
 
 /--
 Constructs an elasticlunr.js-compatible reverse index for the provided document.
 -/
-def mkIndex [idx : Indexable g] (p : Part g) : Except String Index := do
+def mkIndex (p : Part g) (ctx : g.TraverseContext) : Except String Index := do
   if p.metadata.bind idx.partId |>.isNone then
     throw "No ID for root part"
   else
-    match partText p #[] {} with
+    match partText p (#[], ctx) {} with
     | .error e _ => throw e
     | .ok _ docs =>
       let mut index : Index := { refField := "id" : IndexBuilder } |>.addField "id" |>.addField "header" |>.addField "contents" |>.addField "context" |>.build
@@ -762,3 +784,5 @@ def mkIndex [idx : Indexable g] (p : Part g) : Except String Index := do
         let context := "\t".intercalate doc.context.toList
         index := index.addDoc doc.id #[doc.id, doc.header, doc.content, context]
       return index
+
+end
