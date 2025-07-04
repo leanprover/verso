@@ -30,7 +30,7 @@ instance : CanHighlightCode BlockDescr where
     {b with
       extraCss := highlightingStyle :: b.extraCss
       extraJs := highlightingJs :: b.extraJs
-      extraJsFiles := ("popper.js", popper) :: ("tippy.js", tippy) :: b.extraJsFiles
+      extraJsFiles := {filename := "popper.js", contents := popper} :: {filename := "tippy.js", contents := tippy} :: b.extraJsFiles
       extraCssFiles := ("tippy-border.css", tippy.border.css) :: b.extraCssFiles
       licenseInfo := b.licenseInfo |>.insert tippy.js |>.insert popper.js
       }
@@ -40,7 +40,7 @@ instance : CanHighlightCode InlineDescr where
     {i with
       extraCss := highlightingStyle :: i.extraCss
       extraJs := highlightingJs :: i.extraJs
-      extraJsFiles := ("popper.js", popper) :: ("tippy.js", tippy) :: i.extraJsFiles
+      extraJsFiles := {filename := "popper.js", contents := popper} :: {filename := "tippy.js", contents := tippy} :: i.extraJsFiles
       extraCssFiles := ("tippy-border.css", tippy.border.css) :: i.extraCssFiles
       licenseInfo := i.licenseInfo |>.insert tippy.js |>.insert popper.js
       }

@@ -33,6 +33,9 @@ open Lean.Elab.Tactic.GuardMsgs
 
 namespace Verso.Genre.Manual.InlineLean
 
+private def hlJsDeps : List JsFile :=
+  [{filename := "popper.js", contents := popper}, {filename := "tippy.js", contents := tippy}]
+
 inline_extension Inline.lean (hls : Highlighted) where
   data :=
     let defined := hls.definedNames.toArray
@@ -57,7 +60,7 @@ inline_extension Inline.lean (hls : Highlighted) where
         pure <| .seq #[← go b, .raw "\n"]
   extraCss := [highlightingStyle]
   extraJs := [highlightingJs]
-  extraJsFiles := [("popper.js", popper), ("tippy.js", tippy)]
+  extraJsFiles := hlJsDeps
   extraCssFiles := [("tippy-border.css", tippy.border.css)]
   toHtml :=
     open Verso.Output.Html in
@@ -590,7 +593,7 @@ block_extension Block.leanOutput where
         pure <| .seq #[← go b, .raw "\n"]
   extraCss := [highlightingStyle]
   extraJs := [highlightingJs]
-  extraJsFiles := [("popper.js", popper), ("tippy.js", tippy)]
+  extraJsFiles := hlJsDeps
   extraCssFiles := [("tippy-border.css", tippy.border.css)]
   toHtml :=
     open Verso.Output.Html in
@@ -730,7 +733,7 @@ inline_extension Inline.name where
         pure <| .seq #[← go b, .raw "\n"]
   extraCss := [highlightingStyle]
   extraJs := [highlightingJs]
-  extraJsFiles := [("popper.js", popper), ("tippy.js", tippy)]
+  extraJsFiles := hlJsDeps
   extraCssFiles := [("tippy-border.css", tippy.border.css)]
   toHtml :=
     open Verso.Output.Html in

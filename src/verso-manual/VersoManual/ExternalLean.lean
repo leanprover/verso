@@ -24,6 +24,9 @@ open Verso.Code.External
 
 namespace Verso.Genre.Manual
 
+private def hlJsDeps : List JsFile :=
+  [{filename := "popper.js", contents := popper}, {filename := "tippy.js", contents := tippy}]
+
 block_extension Block.lean (hls : Highlighted) (cfg : CodeConfig) where
   data :=
     let defined := hls.definedNames.toArray
@@ -32,7 +35,7 @@ block_extension Block.lean (hls : Highlighted) (cfg : CodeConfig) where
   toTeX := none
   extraCss := [highlightingStyle]
   extraJs := [highlightingJs]
-  extraJsFiles := [("popper.js", popper), ("tippy.js", tippy)]
+  extraJsFiles := hlJsDeps
   extraCssFiles := [("tippy-border.css", tippy.border.css)]
   toHtml :=
     open Verso.Output.Html in
@@ -63,7 +66,7 @@ inline_extension Inline.lean (hls : Highlighted) (cfg : CodeConfig) where
   toTeX := none
   extraCss := [highlightingStyle]
   extraJs := [highlightingJs]
-  extraJsFiles := [("popper.js", popper), ("tippy.js", tippy)]
+  extraJsFiles := hlJsDeps
   extraCssFiles := [("tippy-border.css", tippy.border.css)]
   toHtml :=
     open Verso.Output.Html in
@@ -96,7 +99,7 @@ block_extension Block.leanOutput (severity : MessageSeverity) (message : String)
         pure <| .seq #[← go b, .raw "\n"]
   extraCss := [highlightingStyle]
   extraJs := [highlightingJs]
-  extraJsFiles := [("popper.js", popper), ("tippy.js", tippy)]
+  extraJsFiles := hlJsDeps
   extraCssFiles := [("tippy-border.css", tippy.border.css)]
   toHtml :=
     open Verso.Output.Html in
@@ -121,7 +124,7 @@ inline_extension Inline.leanOutput (severity : MessageSeverity) (message : Strin
         pure <| .seq #[← go b, .raw "\n"]
   extraCss := [highlightingStyle]
   extraJs := [highlightingJs]
-  extraJsFiles := [("popper.js", popper), ("tippy.js", tippy)]
+  extraJsFiles := hlJsDeps
   extraCssFiles := [("tippy-border.css", tippy.border.css)]
   toHtml :=
     open Verso.Output.Html in
