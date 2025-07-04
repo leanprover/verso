@@ -18,11 +18,11 @@ private def alphabet : Array Char :=
 /--
 Lookup table for decoding characters into values.
 -/
-private def decodeLookup : Array Nat := Id.run do
+private def decodeLookup : Array UInt32 := Id.run do
   let mut arr := Array.replicate 256 0
   for h : i in [0:85] do
     let char := alphabet[i]
-    arr := arr.set! char.toNat i
+    arr := arr.set! char.toNat i.toUInt32
   arr
 
 
