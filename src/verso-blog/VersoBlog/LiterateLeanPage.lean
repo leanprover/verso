@@ -581,7 +581,7 @@ best-effort conversion from a large subset of Markdown to Verso documents. Inlin
 elaborated as terms after the module itself; if they succeed, then they are highlighted as well. If
 not, they become ordinary Markdown code.
 
-Specifically, `def_literate_page POST from MOD in DIR as TITLE` defines a post `POST` by elaborating
+Specifically, `def_literate_post POST from MOD in DIR as TITLE` defines a post `POST` by elaborating
 the module `MOD` in the project directory `DIR` with title `TITLE`.
 
 The literate Lean module does not need to use the same toolchain as Verso. `DIR` should be a project
