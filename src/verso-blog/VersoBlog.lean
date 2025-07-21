@@ -800,7 +800,8 @@ private def filterString (p : Char → Bool) (str : String) : String := Id.run <
 
 open Template in
 def blogMain (theme : Theme) (site : Site) (relativizeUrls := true) (linkTargets : Code.LinkTargets := {})
-    (options : List String) (components : Components := by exact %registered_components) :
+    (options : List String) (components : Components := by exact %registered_components)
+    (header : String := Html.doctype) :
     IO UInt32 := do
   let hasError ← IO.mkRef false
   let logError msg := do hasError.set true; IO.eprintln msg
@@ -819,7 +820,7 @@ def blogMain (theme : Theme) (site : Site) (relativizeUrls := true) (linkTargets
     linkTargets := linkTargets,
     components := components
   }
-  let (((), st), _) ← site.generate theme initGenCtx .empty {}
+  let (((), st), _) ← site.generate theme initGenCtx .empty {} (header := header)
   IO.FS.writeFile (cfg.destination.join "-verso-docs.json") (toString st.dedup.docJson)
   for (name, content) in xref.jsFiles do
     FS.ensureDir (cfg.destination.join "-verso-js")

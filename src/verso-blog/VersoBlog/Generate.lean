@@ -147,15 +147,17 @@ open Generate
 
 open Template.Params (forPart)
 
-def writePage (theme : Theme) (params : Template.Params) (template : Template := theme.pageTemplate) : GenerateM Unit := do
+def writePage (theme : Theme) (params : Template.Params) (template : Template := theme.pageTemplate)
+    (header : String := Html.doctype) : GenerateM Unit := do
   ensureDir <| (← currentDir)
   let ⟨baseTemplate, modParams⟩ := theme.adHocTemplates (Array.mk (← currentPath)) |>.getD ⟨template, id⟩
   let output ← rewriteOutput <| ← Template.renderMany [baseTemplate, theme.primaryTemplate] <| modParams <| params
   IO.FS.withFile ((← currentDir).join "index.html") .write fun h => do
-    h.putStrLn "<!DOCTYPE html>"
+    h.putStrLn header
     h.putStrLn output.asString
 
-def writeBlog (theme : Theme) (id : Lean.Name) (txt : Part Page) (posts : Array BlogPost) : GenerateM Unit := do
+def writeBlog (theme : Theme) (id : Lean.Name) (txt : Part Page) (posts : Array BlogPost)
+    (header : String := Html.doctype) : GenerateM Unit := do
   for post in posts do
     if post.contents.metadata.map (·.draft) == some true && !(← showDrafts) then continue
 
@@ -164,7 +166,7 @@ def writeBlog (theme : Theme) (id : Lean.Name) (txt : Part Page) (posts : Array 
       let postParams : Template.Params ← match post.contents.metadata with
         | none => forPart post.contents
         | some md => (·.insert "metadata" ⟨.mk md, #[]⟩) <$> forPart post.contents
-      writePage theme postParams (template := theme.postTemplate)
+      writePage theme postParams (template := theme.postTemplate) (header := header)
 
   let «meta» ←
     match (← read).xref.blogs.find? id with
@@ -187,7 +189,7 @@ def writeBlog (theme : Theme) (id : Lean.Name) (txt : Part Page) (posts : Array 
         </ul>
       }}
       let catParams := Template.Params.ofList [("title", cat.name), ("category", ⟨.mk cat, #[]⟩), ("posts", ⟨.mk postList, #[]⟩)]
-      writePage theme catParams (template := theme.categoryTemplate)
+      writePage theme catParams (template := theme.categoryTemplate) (header := header)
 
   let postList := {{
     <ul class="post-list">
@@ -198,21 +200,22 @@ def writeBlog (theme : Theme) (id : Lean.Name) (txt : Part Page) (posts : Array 
   let allCats : Post.Categories := .mk <| meta.categories.toArray.map fun (c, _) =>
     (c.slug, c)
   let pageParams : Template.Params := (← forPart txt).insert "posts" ⟨.mk postList, #[]⟩ |>.insert "categories" ⟨.mk allCats, #[]⟩
-  writePage theme pageParams
+  writePage theme pageParams (header := header)
 where
   summarize (p : BlogPost) : GenerateM Html := do
     Html.seq <$> p.summary.mapM (GenerateM.toHtml Post)
 
 
-partial def Dir.generate (theme : Theme) (dir : Dir) : GenerateM Unit :=
+partial def Dir.generate (theme : Theme) (dir : Dir) (header : String := Html.doctype) :
+    GenerateM Unit :=
   inDir dir <|
   match dir with
   | .page _ _ txt subPages => do
     IO.println s!"Generating page '{← currentDir}'"
     -- TODO more configurable template context
-    writePage theme (← forPart txt)
+    writePage theme (← forPart txt) (header := header)
     for p in subPages do
-      p.generate theme
+      p.generate theme header
   | .blog _ id txt posts => do
     IO.println s!"Generating blog section '{← currentDir}'"
     writeBlog theme id txt posts
@@ -226,10 +229,11 @@ partial def Dir.generate (theme : Theme) (dir : Dir) : GenerateM Unit :=
         IO.FS.removeFile dest
     copyRecursively (← currentConfig).logError file dest
 
-def Site.generate (theme : Theme) (site : Site) : GenerateM Unit := do
+def Site.generate (theme : Theme) (site : Site) (header : String := Html.doctype) :
+    GenerateM Unit := do
   match site with
   | .page _ txt subPages =>
-    writePage theme (← forPart txt)
+    writePage theme (← forPart txt) (header := header)
     for p in subPages do
       p.generate theme
   | .blog id txt posts =>
