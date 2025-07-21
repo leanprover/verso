@@ -12,7 +12,6 @@ lean_lib VersoUtil where
   srcDir := "src/verso-util"
   roots := #[`VersoUtil]
 
-
 @[default_target]
 lean_lib Verso where
   srcDir := "src/verso"
@@ -57,6 +56,7 @@ lean_exe «verso-demo» where
 
 lean_lib UsersGuide where
   srcDir := "doc"
+  leanOptions := #[⟨`weak.linter.verso.manual.headerTags, true⟩]
 
 @[default_target]
 lean_exe usersguide where

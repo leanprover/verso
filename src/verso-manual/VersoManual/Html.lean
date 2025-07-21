@@ -541,6 +541,7 @@ def page
         <script type="module" src="-verso-search/search-init.js"></script>
         <link rel="stylesheet" href="-verso-search/search-box.css"/>
         <link rel="stylesheet" href="-verso-search/search-highlight.css"/>
+        <link rel="stylesheet" href="-verso-search/domain-display.css"/>
         {{extraJsFiles.map fun f => ({{<script src=s!"{f.1}" {{if f.2 then defer else #[]}}></script>}})}}
         {{extraStylesheets.map (fun url => {{<link rel="stylesheet" href={{url}}/> }})}}
         {{extraCss.toArray.map ({{<style>{{Html.text false ·}}</style>}})}}

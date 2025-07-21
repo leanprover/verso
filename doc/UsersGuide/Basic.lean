@@ -59,6 +59,7 @@ results in
 
 ## More Docstring Examples
 %%%
+tag := "more-docstring-examples"
 shortTitle := "More Docstrings"
 %%%
 
@@ -113,6 +114,7 @@ References to technical terms are valid both before and after their definition s
 
 # Index
 %%%
+tag := "index"
 number := false
 %%%
 
@@ -121,6 +123,7 @@ number := false
 
 # Dependencies
 %%%
+tag := "dependencies"
 number := false
 %%%
 

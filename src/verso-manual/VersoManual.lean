@@ -475,6 +475,7 @@ def emitSearchBox (dir : System.FilePath) (domains : DomainMappers) : IO Unit :=
   for (file, contents) in searchBoxCode do
     IO.FS.writeBinFile (dir / file) contents
   IO.FS.writeFile (dir / "domain-mappers.js") (domains.toJs.pretty (width := 70))
+  IO.FS.writeFile (dir / "domain-display.css") domains.quickJumpCss
 
 end
 

@@ -37,6 +37,91 @@ inductive Output where
     html (depth : Nat)
 deriving DecidableEq, BEq, Hashable
 
+/--
+The font families used when rendering documents.
+
+These font families are specified using CSS variables, so they can be overridden.
+-/
+inductive FontFamily where
+  | /--
+    The font used for ordinary text, customized with the `--verso-text-font-family` CSS variable.
+    -/
+    text
+  | /--
+    The font used for “structural” text, such as headers. Customized with the `--verso-structure-font-family` CSS variable.
+    -/
+    structure
+  | /--
+    The font used for monospace code, customized with the `--verso-code-font-family` CSS variable.
+    -/
+    code
+deriving DecidableEq, Repr, Hashable
+
+namespace FontFamily
+/--
+The CSS variable that is used to style this font.
+-/
+def toCssVar : FontFamily → String
+  | .text => "--verso-text-font-family"
+  | .structure => "--verso-structure-font-family"
+  | .code => "--verso-code-font-family"
+
+/--
+Returns CSS code that styles text using the font family.
+-/
+def toCss (family : FontFamily) : String := s!"font-family: var({family.toCssVar});"
+
+end FontFamily
+
+inductive FontStyle where
+  | normal
+  | italic
+deriving DecidableEq, Repr, Hashable
+
+def FontStyle.toCss (s : FontStyle) : String :=
+  "font-style: " ++
+  match s with
+  | .normal => "normal;"
+  | .italic => "italic;"
+
+inductive FontWeight where
+  | lighter
+  | light
+  | normal
+  | bold
+  | bolder
+  | numeric (weight : Nat) (ok : weight > 0 ∧ weight < 1000 := by omega)
+deriving DecidableEq, Repr, Hashable
+
+def FontWeight.toCss (w : FontWeight) : String :=
+  "font-weight: " ++
+  match w with
+  | .lighter => "lighter;"
+  | .light => "light;"
+  | .normal => "normal;"
+  | .bold => "bold;"
+  | .bolder => "bolder;"
+  | .numeric n _ => s!"{n};"
+
+/-- A specification of a font. -/
+structure Font where
+  family : FontFamily := .text
+  style : FontStyle := .normal
+  weight : FontWeight := .normal
+deriving DecidableEq, Repr, Hashable
+
+/-- CSS code for a font. -/
+def Font.toCss (font : Font) : String :=
+  "  " ++ font.family.toCss ++ "\n" ++
+  "  " ++ font.style.toCss ++ "\n" ++
+  "  " ++ font.weight.toCss ++ "\n"
+
+open Verso.Search in
+defmethod DomainMapper.setFont (mapper : DomainMapper) (font : Font) : DomainMapper :=
+  { mapper with
+    quickJumpCss :=
+      s!"#search-wrapper .{mapper.className} " ++ "{\n" ++ font.toCss ++ "}\n"
+  }
 
 /--
 Tags are used to refer to parts through tables of contents, cross-references, and the like.
@@ -771,9 +856,9 @@ def sectionString (ctxt : TraverseContext) : Option String :=
 def sectionDomain := `Verso.Genre.Manual.section
 
 open Verso.Search in
-def sectionDomainMapper : DomainMapper where
-  displayName := "Section"
-  className := "section-domain"
+def sectionDomainMapper : DomainMapper := {
+  displayName := "Section",
+  className := "section-domain",
   dataToSearchables :=
     "(domainData) =>
     Object.entries(domainData.contents).map(([key, value]) => ({
@@ -782,6 +867,7 @@ def sectionDomainMapper : DomainMapper where
       domainId: 'Verso.Genre.Manual.section',
       ref: value,
     }))"
+  : DomainMapper }.setFont { family := .structure, weight := .bold }
 
 instance : TraversePart Manual where
   inPart p := (·.inPart p)

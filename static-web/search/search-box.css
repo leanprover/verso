@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2024 Lean FRO LLC. All rights reserved.
+ * Copyright (c) 2024-2025 Lean FRO LLC. All rights reserved.
  * Released under Apache 2.0 license as described in the file LICENSE.
  * Author: Jakob Ambeck Vase
  */
@@ -111,20 +111,6 @@
   }
 }
 
-#search-wrapper .search-result.doc-domain,
-#search-wrapper .search-result.option-domain,
-#search-wrapper .search-result.syntax-domain,
-#search-wrapper .search-result.lake-option-domain,
-#search-wrapper .search-result.lake-toml-table-domain,
-#search-wrapper .search-result.lake-toml-field-domain,
-#search-wrapper .search-result.elan-option-domain,
-#search-wrapper .search-result.env-var-domain,
-#search-wrapper .search-result.lake-command-domain,
-#search-wrapper .search-result.error-explanation-domain,
-#search-wrapper .search-result.elan-command-domain {
-  font-family: var(--verso-code-font-family);
-}
-
 #search-wrapper .search-result.full-text  {
   font-family: var(--verso-text-font-family);
 }
@@ -134,21 +120,6 @@
 #search-wrapper .search-result.full-text .header,
 #search-wrapper .search-result.full-text .header em {
   font-style: normal;
-  font-family: var(--verso-structure-font-family);
-  font-weight: bold;
-}
-
-#search-wrapper .search-result.tactic-domain,
-#search-wrapper .search-result.conv-tactic-domain {
-  font-family: var(--verso-code-font-family);
-  font-weight: bold;
-}
-
-#search-wrapper .search-result.tech-term-domain {
-  font-family: var(--verso-text-font-family);
-}
-
-#search-wrapper .search-result.section-domain {
   font-family: var(--verso-structure-font-family);
   font-weight: bold;
 }

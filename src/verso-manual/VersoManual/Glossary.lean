@@ -96,9 +96,9 @@ def Glossary.addEntry [Monad m] [MonadState TraverseState m] [MonadLiftT IO m] [
     modify (TraverseState.set · glossaryState <| v.setObjVal! key (ToJson.toJson id))
 
 open Verso.Search in
-def technicalTermDomainMapper : DomainMapper where
-  displayName := "Terminology"
-  className := "tech-term-domain"
+def technicalTermDomainMapper : DomainMapper := {
+  displayName := "Terminology",
+  className := "tech-term-domain",
   dataToSearchables :=
     "(domainData) =>
   Object.entries(domainData.contents).map(([key, value]) => ({
@@ -107,6 +107,7 @@ def technicalTermDomainMapper : DomainMapper where
     domainId: 'Verso.Genre.Manual.doc.tech',
     ref: value,
   }))"
+  : DomainMapper }.setFont { family := .text }
 
 @[inline_extension deftech]
 def deftech.descr : InlineDescr where
@@ -230,6 +231,10 @@ a.technical-term {
 a.technical-term:hover {
   text-decoration: currentcolor underline solid;
 }
-
+/* Highlight the clicked term */
+.def-technical-term:target {
+  background-color: var(--verso-selected-color);
+  outline: auto;
+}
 "#
   ]

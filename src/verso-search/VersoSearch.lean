@@ -128,6 +128,14 @@ def addDoc (self : DocumentStore) (ref : String) (doc : Doc) : DocumentStore :=
     docs := self.docs.insert ref <| if self.save then doc else {} }
 
 /--
+Removes the documents from the store, setting `save` to `false`.
+-/
+def extractDocs (self : DocumentStore) : DocumentStore × TreeMap String Doc :=
+  let docs := self.docs
+  let noDocs := docs.map (fun _ _ => {})
+  ({ self with docs := noDocs, save := false }, docs)
+
+/--
 Gets a document if it is present in the store.
 -/
 protected def get? (self : DocumentStore) (ref : String) : Option Doc := self.docs[ref]?

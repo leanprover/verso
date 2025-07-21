@@ -774,7 +774,8 @@ def Signature.toHtml  : Signature → HighlightHtmlM Html
     return {{<div class="wide-only">{{← wide.toHtml}}</div><div class="narrow-only">{{← narrow.toHtml}}</div>}}
 
 open Verso.Search in
-def docDomainMapper : DomainMapper := .withDefaultJs docstringDomain "Documentation" "doc-domain"
+def docDomainMapper : DomainMapper :=
+  DomainMapper.withDefaultJs docstringDomain "Documentation" "doc-domain" |>.setFont { family := .code }
 
 open Verso.Genre.Manual.Markdown in
 @[block_extension Block.docstring]
@@ -1583,7 +1584,7 @@ def optionDocs : BlockRoleExpander
 
 open Verso.Search in
 def optionDomainMapper : DomainMapper :=
-  .withDefaultJs optionDomain "Compiler Option" "doc-option-domain"
+  DomainMapper.withDefaultJs optionDomain "Compiler Option" "doc-option-domain" |>.setFont { family := .code }
 
 open Verso.Genre.Manual.Markdown in
 @[block_extension optionDocs]
@@ -1705,7 +1706,7 @@ def Inline.tactic : Inline where
 
 
 open Verso.Search in
-def tacticDomainMapper : DomainMapper where
+def tacticDomainMapper : DomainMapper := {
   className := "tactic-domain"
   displayName := "Tactic"
   dataToSearchables :=
@@ -1716,6 +1717,7 @@ def tacticDomainMapper : DomainMapper where
     domainId: 'Verso.Genre.Manual.doc.tactic',
     ref: value,
   }))"
+  : DomainMapper }.setFont { family := .code, weight := .bold}
 
 open Verso.Genre.Manual.Markdown in
 open Lean Elab Term Parser Tactic Doc in
@@ -1853,9 +1855,9 @@ def conv : DirectiveExpander
     pure #[← ``(Verso.Doc.Block.other (Block.conv $(quote tactic.name) $(quote toShow) $(quote tactic.docs?)) #[$(contents ++ userContents),*])]
 
 open Verso.Search in
-def convDomainMapper : DomainMapper where
-  className := "conv-tactic-domain"
-  displayName := "Conv Tactic"
+def convDomainMapper : DomainMapper := {
+  className := "conv-tactic-domain",
+  displayName := "Conv Tactic",
   dataToSearchables :=
     "(domainData) =>
   Object.entries(domainData.contents).map(([key, value]) => ({
@@ -1864,6 +1866,7 @@ def convDomainMapper : DomainMapper where
     domainId: 'Verso.Genre.Manual.doc.tactic.conv',
     ref: value,
   }))"
+  : DomainMapper }.setFont { family := .code, weight := .bold }
 
 open Verso.Genre.Manual.Markdown in
 open Lean Elab Term Parser Tactic Doc in
