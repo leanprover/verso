@@ -255,10 +255,11 @@ The arguments are as follows:
 * `suggestions`: the suggestions to display.
 * `codeActionPrefix?`: if specified, text to display in place of "Try this: " in the code action
   label
+* `forceList`: if `true`, suggestions will be displayed as a bulleted list even if there is only one.
 -/
-def hintAt (ref : Syntax) (hint : MessageData) (suggestions : Array Suggestion) (codeActionPrefix? : Option String := none) : CoreM MessageData :=
+def hintAt (ref : Syntax) (hint : MessageData) (suggestions : Array Suggestion) (codeActionPrefix? : Option String := none) (forceList : Bool := false) : CoreM MessageData :=
   -- The @ guards against upstream signature changes going unnoticed
-  @MessageData.hint hint suggestions (ref? := some ref) (codeActionPrefix? := codeActionPrefix?)
+  @MessageData.hint hint suggestions (ref? := some ref) (codeActionPrefix? := codeActionPrefix?) (forceList := forceList)
 
 local instance : Coe (Array String) (Array Suggestion) where
   coe xs := xs.map ({suggestion := .string ·})
