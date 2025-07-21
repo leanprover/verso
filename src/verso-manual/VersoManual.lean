@@ -708,7 +708,7 @@ def Config.addSearch (config : Config) : Config :=
   { config with
     extraJsFiles :=
       config.extraJsFiles.push {filename := "elasticlunr.min.js", contents := elasticlunr.js},
-    licenseInfo := Licenses.elasticlunr.js :: config.licenseInfo
+    licenseInfo := [Licenses.fuzzysort, Licenses.w3Combobox, Licenses.elasticlunr.js] ++ config.licenseInfo
   }
 
 
