@@ -11,11 +11,13 @@ import Verso.Doc.Html
 import Verso.Doc.TeX
 import MultiVerso
 import MultiVerso.Slug
+import VersoSearch
 import VersoManual.LicenseInfo
 import VersoManual.Ext
 import Verso.Output.Html
 import Verso.Output.TeX
 import Verso.BEq
+
 
 open Lean (Name Json NameMap ToJson FromJson)
 open Std (HashSet HashMap TreeSet)
@@ -147,6 +149,7 @@ instance : ForIn m Domains (Name × Domain) :=
 
 def StringSet := HashSet String
 
+open Verso.Search in
 structure TraverseState where
   tags : HashMap Tag InternalId := {}
   externalTags : HashMap InternalId Link := {}
@@ -157,6 +160,7 @@ structure TraverseState where
   extraJs : HashSet String := {}
   extraJsFiles : Array JsFile := #[]
   extraCssFiles : Array (String × String) := #[]
+  quickJump : DomainMappers := {}
   licenseInfo : HashSet LicenseInfo := {}
   private contents : NameMap Json := {}
 
@@ -191,6 +195,8 @@ local instance [BEq α] [Hashable α] : BEq (HashSet α) where
 local instance [BEq α] [Ord α] : BEq (TreeSet α) where
   beq := ptrEqThen fun xs ys => xs.size == ys.size && xs.all (ys.contains ·)
 
+local instance [BEq α] [Hashable α] [BEq β] : BEq (HashMap α β) where
+  beq := ptrEqThen fun xs ys => xs.size == ys.size && xs.all (ys[·]?.isEqSome ·)
 
 instance : BEq TraverseState where
   beq := ptrEqThen fun x y =>
@@ -208,6 +214,7 @@ instance : BEq TraverseState where
     x.extraJs == y.extraJs &&
     x.extraJsFiles == y.extraJsFiles &&
     x.extraCssFiles == y.extraCssFiles &&
+    x.quickJump == y.quickJump &&
     ptrEqThen' x.contents y.contents (fun c1 c2 =>
       c1.size == c2.size &&
       c1.all (c2.find? · |>.isEqSome ·)) &&
@@ -245,6 +252,10 @@ def setDomainTitle (state : TraverseState) (domain : Name) (title : String) : Tr
 
 def setDomainDescription (state : TraverseState) (domain : Name) (description : String) : TraverseState :=
   {state with domains := state.domains.insert domain {state.domains.find? domain |>.getD {} with description := some description}}
+
+open Verso.Search in
+def addQuickJumpMapper (state : TraverseState) (domain : Name) (domainMapper : DomainMapper) : TraverseState :=
+  { state with quickJump := state.quickJump.insert domain.toString domainMapper }
 
 def htmlId (state : TraverseState) (id : InternalId) : Array (String × String) :=
   if let some {htmlId, ..} := state.externalTags[id]? then
@@ -758,6 +769,19 @@ def sectionString (ctxt : TraverseContext) : Option String :=
 
 
 def sectionDomain := `Verso.Genre.Manual.section
+
+open Verso.Search in
+def sectionDomainMapper : DomainMapper where
+  displayName := "Section"
+  className := "section-domain"
+  dataToSearchables :=
+    "(domainData) =>
+    Object.entries(domainData.contents).map(([key, value]) => ({
+      searchKey: `${value[0].data.sectionNum} ${value[0].data.title}`,
+      address: `${value[0].address}#${value[0].id}`,
+      domainId: 'Verso.Genre.Manual.section',
+      ref: value,
+    }))"
 
 instance : TraversePart Manual where
   inPart p := (·.inPart p)

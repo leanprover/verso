@@ -773,12 +773,16 @@ def Signature.toHtml  : Signature → HighlightHtmlM Html
   | {wide, narrow} => do
     return {{<div class="wide-only">{{← wide.toHtml}}</div><div class="narrow-only">{{← narrow.toHtml}}</div>}}
 
+open Verso.Search in
+def docDomainMapper : DomainMapper := .withDefaultJs docstringDomain "Documentation" "doc-domain"
+
 open Verso.Genre.Manual.Markdown in
 @[block_extension Block.docstring]
 def docstring.descr : BlockDescr := withHighlighting {
   init st := st
     |>.setDomainTitle docstringDomain "Lean constant reference"
     |>.setDomainDescription docstringDomain "Documentation for Lean constants"
+    |>.addQuickJumpMapper docstringDomain docDomainMapper
 
   traverse id info _ := do
     let .ok (name, declType, _signature, _customLabel) :=
@@ -1577,11 +1581,16 @@ def optionDocs : BlockRoleExpander
 
   | _, more => throwErrorAt more[0]! "Unexpected block argument"
 
+open Verso.Search in
+def optionDomainMapper : DomainMapper :=
+  .withDefaultJs optionDomain "Compiler Option" "doc-option-domain"
+
 open Verso.Genre.Manual.Markdown in
 @[block_extension optionDocs]
 def optionDocs.descr : BlockDescr where
   init st := st
     |>.setDomainTitle optionDomain "Compiler options"
+    |>.addQuickJumpMapper optionDomain optionDomainMapper
 
   traverse id info _ := do
     let .ok (name, _defaultValue) := FromJson.fromJson? (α := Name × Highlighted) info
@@ -1695,6 +1704,18 @@ def Inline.tactic : Inline where
   name := `Verso.Genre.Manual.tacticInline
 
 
+open Verso.Search in
+def tacticDomainMapper : DomainMapper where
+  className := "tactic-domain"
+  displayName := "Tactic"
+  dataToSearchables :=
+    "(domainData) =>
+  Object.entries(domainData.contents).map(([key, value]) => ({
+    searchKey: value[0].data.userName,
+    address: `${value[0].address}#${value[0].id}`,
+    domainId: 'Verso.Genre.Manual.doc.tactic',
+    ref: value,
+  }))"
 
 open Verso.Genre.Manual.Markdown in
 open Lean Elab Term Parser Tactic Doc in
@@ -1703,6 +1724,7 @@ def tactic.descr : BlockDescr := withHighlighting {
   init st := st
     |>.setDomainTitle tacticDomain "Tactic Documentation"
     |>.setDomainDescription tacticDomain "Detailed descriptions of tactics"
+    |>.addQuickJumpMapper tacticDomain tacticDomainMapper
 
   traverse id info _ := do
     let .ok (tactic, «show») := FromJson.fromJson? (α := TacticDoc × Option String) info
@@ -1830,6 +1852,19 @@ def conv : DirectiveExpander
       | throwError "An explicit 'show' is mandatory for conv docs (for now)"
     pure #[← ``(Verso.Doc.Block.other (Block.conv $(quote tactic.name) $(quote toShow) $(quote tactic.docs?)) #[$(contents ++ userContents),*])]
 
+open Verso.Search in
+def convDomainMapper : DomainMapper where
+  className := "conv-tactic-domain"
+  displayName := "Conv Tactic"
+  dataToSearchables :=
+    "(domainData) =>
+  Object.entries(domainData.contents).map(([key, value]) => ({
+    searchKey: key,
+    address: `${value[0].address}#${value[0].id}`,
+    domainId: 'Verso.Genre.Manual.doc.tactic.conv',
+    ref: value,
+  }))"
+
 open Verso.Genre.Manual.Markdown in
 open Lean Elab Term Parser Tactic Doc in
 @[block_extension conv]
@@ -1837,6 +1872,7 @@ def conv.descr : BlockDescr := withHighlighting {
   init st := st
     |>.setDomainTitle convDomain "Conversion Tactics"
     |>.setDomainDescription convDomain "Tactics for performing targeted rewriting of subterms"
+    |>.addQuickJumpMapper convDomain convDomainMapper
 
   traverse id info _ := do
     let .ok (name, «show», _docs?) := FromJson.fromJson? (α := Name × String × Option String) info

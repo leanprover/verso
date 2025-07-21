@@ -5,7 +5,7 @@ Author: David Thrane Christiansen
 -/
 import Lean.Elab.Eval
 import Lean.Elab.Term
-import Verso.BinFiles.Z85
+import VersoUtil.BinFiles.Z85
 
 open Lean Elab Term
 open Lean Environment

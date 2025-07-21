@@ -15,6 +15,7 @@ import Lean.Data.Json
 import Verso.Doc
 
 import VersoSearch.PorterStemmer
+import VersoSearch.DomainSearch
 
 open Std
 open Lean

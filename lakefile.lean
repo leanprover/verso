@@ -8,6 +8,12 @@ package verso where
   precompileModules := false -- temporarily disabled to work around an issue with nightly-2025-03-30
 
 @[default_target]
+lean_lib VersoUtil where
+  srcDir := "src/verso-util"
+  roots := #[`VersoUtil]
+
+
+@[default_target]
 lean_lib Verso where
   srcDir := "src/verso"
   roots := #[`Verso]

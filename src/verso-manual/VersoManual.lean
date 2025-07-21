@@ -270,7 +270,9 @@ def traverse (logError : String → IO Unit) (text : Part Manual) (config : Conf
   if config.verbose then
     IO.println "Initializing extensions"
   let extensionImpls ← readThe ExtensionImpls
-  state := state.setDomainTitle sectionDomain "Sections or chapters of the manual"
+  state := state
+    |>.setDomainTitle sectionDomain "Sections or chapters of the manual"
+    |>.addQuickJumpMapper sectionDomain sectionDomainMapper
   for ⟨_, b⟩ in extensionImpls.blockDescrs do
     if let some descr := b.get? BlockDescr then
       state := descr.init state
@@ -468,6 +470,12 @@ def addSearchIndex (state : TraverseState) (ctx : TraverseContext) (logError : S
     let indexJs := indexJs ++ "window.searchIndex = elasticlunr ? __versoSearchIndex : null;\n"
     return { state with extraJsFiles := state.extraJsFiles.push { filename := "searchIndex.js", contents := indexJs } }
 
+def emitSearchBox (dir : System.FilePath) (domains : DomainMappers) : IO Unit := do
+  ensureDir dir
+  for (file, contents) in searchBoxCode do
+    IO.FS.writeBinFile (dir / file) contents
+  IO.FS.writeFile (dir / "domain-mappers.js") (domains.toJs.pretty (width := 70))
+
 end
 
 def wordCount
@@ -487,6 +495,7 @@ def emitHtmlSingle
   ensureDir dir
   let (traverseOut, st) ← emitContent dir .empty
   IO.FS.writeFile (dir.join "-verso-docs.json") (toString st.dedup.docJson)
+  emitSearchBox (dir / "-verso-search") traverseOut.2.quickJump
   pure traverseOut
 where
   emitContent (dir : System.FilePath) : StateT (State Html) (ReaderT ExtensionImpls IO) (Part Manual × TraverseState) := do
@@ -564,6 +573,7 @@ def emitHtmlMulti (logError : String → IO Unit) (config : Config)
   ensureDir root
   let (traverseOut, st) ← emitContent root {}
   IO.FS.writeFile (root.join "-verso-docs.json") (toString st.dedup.docJson)
+  emitSearchBox (root / "-verso-search") traverseOut.2.quickJump
   pure traverseOut
 where
   /--
@@ -696,7 +706,8 @@ Adds a bundled version of elasticlunr.js to the config.
 -/
 def Config.addSearch (config : Config) : Config :=
   { config with
-    extraJsFiles := config.extraJsFiles.push {filename := "elasticlunr.min.js", contents := elasticlunr.js}
+    extraJsFiles :=
+      config.extraJsFiles.push {filename := "elasticlunr.min.js", contents := elasticlunr.js},
     licenseInfo := Licenses.elasticlunr.js :: config.licenseInfo
   }
 
