@@ -213,6 +213,9 @@ def withCollapsedSubgoals (policy : HighlightHtmlM.CollapseGoals) (act : Highlig
 def withVisibleProofStates (policy : HighlightHtmlM.VisibleProofStates) (act : HighlightHtmlM α) : HighlightHtmlM α :=
   withReader (fun ctx => {ctx with options := {ctx.options with visibleProofStates := policy} }) act
 
+def withDefinitionsAsTargets (saveIds : Bool) (act : HighlightHtmlM α) : HighlightHtmlM α :=
+  withReader (fun ctx => {ctx with options := {ctx.options with definitionsAsTargets := saveIds} }) act
+
 def linkTargets : HighlightHtmlM LinkTargets := do
   return (← readThe HighlightHtmlM.Context).linkTargets
 

@@ -75,7 +75,7 @@ def exampleDomainMapper : DomainMapper := {
 Extracts all names that are marked as definition sites, with both their occurrence in the source and
 the underlying name.
 -/
-private partial def definedNames : Highlighted → Array (Name × String)
+partial def definedNames : Highlighted → Array (Name × String)
   | .token ⟨.const n _ _ true, s⟩ => #[(n, s)]
   | .token _ => #[]
   | .span _ hl | .tactics _ _ _ hl => definedNames hl
