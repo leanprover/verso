@@ -27,11 +27,93 @@ namespace Verso.Genre.Manual
 private def hlJsDeps : List JsFile :=
   [{filename := "popper.js", contents := popper}, {filename := "tippy.js", contents := tippy}]
 
+open Verso.Search in
+/--
+Quick jump configuration for definitions in examples
+-/
+def exampleDomainMapper : DomainMapper := {
+  displayName := "Example Definition",
+  className := "example-def",
+  -- This is a bit of a hack. Examples with repeated names should really get differing canonical
+  -- names, but it's unclear what to use for them. Perhaps it should be the concatenated tags of the
+  -- containing sections, with a sequence number in case of further duplication? For now, this
+  -- fairly complicated mapper does the job. It'd also be good to have a way to show metadata in the
+  -- quick-jump box, with different styling.
+  dataToSearchables :=
+    "(domainData) => {
+  const byName = Object.entries(domainData.contents).flatMap(([key, value]) =>
+    value.map(v => ({
+      context: v.data[`${v.address}#${v.id}`].context,
+      name: v.data[`${v.address}#${v.id}`].display,
+      address: `${v.address}#${v.id}`
+    }))).reduce((acc, obj) => {
+      const key = obj.name;
+      acc[key] = acc[key] || [];
+      acc[key].push(obj);
+      return acc;
+    }, {})
+  return Object.entries(byName).flatMap(([key, value]) => {
+    if (value.length === 0) { return []; }
+    const firstCtxt = value[0].context;
+    let prefixLength = 0;
+    for (let i = 0; i < firstCtxt.length; i++) {
+      if (value.every(v => i < v.context.length && v.context[i] === firstCtxt[i])) {
+        prefixLength++;
+      } else break;
+    }
+    return value.map((v) => ({
+      searchKey: v.context.slice(prefixLength).concat(v.name).join(' › '),
+      address: v.address,
+      domainId: 'Verso.Genre.Manual.example',
+      ref: value
+    }));
+  });
+}"
+  : DomainMapper}
+
+/--
+Extracts all names that are marked as definition sites, with both their occurrence in the source and
+the underlying name.
+-/
+private partial def definedNames : Highlighted → Array (Name × String)
+  | .token ⟨.const n _ _ true, s⟩ => #[(n, s)]
+  | .token _ => #[]
+  | .span _ hl | .tactics _ _ _ hl => definedNames hl
+  | .seq hls => hls.map definedNames |>.foldl (· ++ ·) #[]
+  | .text .. | .point .. | .unparsed .. => #[]
+
 block_extension Block.lean (hls : Highlighted) (cfg : CodeConfig) where
+  init st :=
+    st.addQuickJumpMapper exampleDomain exampleDomainMapper
   data :=
-    let defined := hls.definedNames.toArray
+    let defined := definedNames hls
     Json.arr #[ToJson.toJson cfg, ToJson.toJson hls, ToJson.toJson defined]
-  traverse _ _ _ := pure none
+  traverse id data _ := do
+    let .arr #[cfgJson, _hlJson, definesJson] := data
+      | logError s!"Expected array for Lean block, got {data.compress}"; return none
+    match FromJson.fromJson? cfgJson with
+    | .error err =>
+      logError <| "Failed to deserialize code config during traversal:" ++ err
+      return none
+    | .ok (cfg : CodeConfig) =>
+      if cfg.defSite.isEqSome false then return none
+      match FromJson.fromJson? definesJson with
+      | .error err =>
+        logError <| "Failed to deserialize code config during traversal:" ++ err
+        return none
+      | .ok (defines : Array (Name × String)) =>
+        for (d, s) in defines do
+          if d.isAnonymous then continue
+          let d := d.toString
+          let path ← (·.path) <$> read
+          let _ ← externalTag id path d
+          let context := (← read).headers.map (·.titleString)
+          modify (·.saveDomainObject exampleDomain d id)
+          if let some link := (← get).externalTags[id]? then
+            modify (·.modifyDomainObjectData exampleDomain d fun v =>
+              let v := if let .obj _ := v then v else .obj {}
+              v.setObjVal! link.link (json%{"context": $context, "display": $s}))
+        pure none
   toTeX := none
   extraCss := [highlightingStyle]
   extraJs := [highlightingJs]
@@ -40,7 +122,7 @@ block_extension Block.lean (hls : Highlighted) (cfg : CodeConfig) where
   toHtml :=
     open Verso.Output.Html in
     some <| fun _ _ _ data _ => do
-      let .arr #[cfgJson, hlJson, _] := data
+      let .arr #[cfgJson, hlJson, _definesJson] := data
         | HtmlT.logError "Expected four-element JSON for Lean code"
           pure .empty
       match FromJson.fromJson? hlJson with
@@ -55,14 +137,39 @@ block_extension Block.lean (hls : Highlighted) (cfg : CodeConfig) where
         | .ok (cfg : CodeConfig) =>
           let i := hl.indentation
           let hl := hl.deIndent i
-          withReader (fun ρ => { ρ with codeOptions.inlineProofStates := cfg.showProofStates }) <|
+          withReader ({ · with codeOptions.inlineProofStates := cfg.showProofStates, codeOptions.definitionsAsTargets := cfg.defSite.getD true }) <|
             hl.blockHtml "examples"
 
 inline_extension Inline.lean (hls : Highlighted) (cfg : CodeConfig) where
   data :=
-    let defined := hls.definedNames.toArray
+    let defined := definedNames hls
     Json.arr #[ToJson.toJson cfg, ToJson.toJson hls, ToJson.toJson defined]
-  traverse _ _ _ := pure none
+  traverse id data _ := do
+    let .arr #[cfgJson, _hlJson, definesJson] := data
+      | logError s!"Expected array for Lean block, got {data.compress}"; return none
+    match FromJson.fromJson? cfgJson with
+    | .error err =>
+      logError <| "Failed to deserialize code config during traversal:" ++ err
+      return none
+    | .ok (cfg : CodeConfig) =>
+      unless cfg.defSite.isEqSome true do return none
+      match FromJson.fromJson? definesJson with
+      | .error err =>
+        logError <| "Failed to deserialize code config during traversal:" ++ err
+        return none
+      | .ok (defines : Array (Name × String)) =>
+        for (d, s) in defines do
+          if d.isAnonymous then continue
+          let d := d.toString
+          let path ← (·.path) <$> read
+          let _ ← externalTag id path d
+          let context := (← read).headers.map (·.titleString)
+          modify (·.saveDomainObject exampleDomain d id)
+          if let some link := (← get).externalTags[id]? then
+            modify (·.modifyDomainObjectData exampleDomain d fun v =>
+              let v := if let .obj _ := v then v else .obj {}
+              v.setObjVal! link.link (json%{"context": $context, "display": $s}))
+        pure none
   toTeX := none
   extraCss := [highlightingStyle]
   extraJs := [highlightingJs]
@@ -86,7 +193,9 @@ inline_extension Inline.lean (hls : Highlighted) (cfg : CodeConfig) where
         | .ok (cfg : CodeConfig) =>
           let i := hl.indentation
           let hl := hl.deIndent i
-          withReader (fun ρ => { ρ with codeOptions.inlineProofStates := cfg.showProofStates }) <|
+          withReader
+            ({ · with
+              codeOptions.inlineProofStates := cfg.showProofStates, codeOptions.definitionsAsTargets := cfg.defSite.getD false }) <|
             hl.inlineHtml "examples"
 
 block_extension Block.leanOutput (severity : MessageSeverity) (message : String) (summarize : Bool := false) where

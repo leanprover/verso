@@ -783,6 +783,8 @@ def doc.syntaxKind : Domain := {}
 def doc.option : Domain := {}
 def doc.tactic.conv : Domain := {}
 
+
+/-- Names defined as examples -/
 -- Protected to avoid taking up good namespace
 protected def «example» : Domain := {}
 
@@ -813,7 +815,8 @@ def TraverseState.linksFromDomain
 def TraverseState.localTargets (state : TraverseState) : Code.LinkTargets where
   const := fun x =>
     state.linksFromDomain docstringDomain x.toString "doc" s!"Documentation for {x}" ++
-    state.linksFromDomain exampleDomain x.toString "def" s!"Definition of example {x}"
+    -- There's no `x` in the tooltip on the next line to avoid revealing suppressed namespaces
+    state.linksFromDomain exampleDomain x.toString "def" s!"Definition of example"
   option := fun x =>
     state.linksFromDomain optionDomain x.toString "doc" s!"Documentation for option {x}"
   keyword := fun k =>

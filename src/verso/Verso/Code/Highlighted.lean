@@ -112,6 +112,7 @@ structure CodeLink where
   description : String
   /-- The actual link destination -/
   href : String
+deriving Repr, DecidableEq, Ord
 
 instance : ToJson CodeLink where
   toJson l := json%{"short": $l.shortDescription, "long": $l.description, "href": $l.href}
@@ -181,6 +182,7 @@ structure HighlightHtmlM.Options where
   inlineProofStates : Bool := true
   visibleProofStates : VisibleProofStates := .none
   collapseGoals : CollapseGoals := .subsequent
+  definitionsAsTargets : Bool := true
 
 structure HighlightHtmlM.Context where
   linkTargets : LinkTargets
@@ -383,9 +385,10 @@ defmethod Token.Kind.data : Token.Kind → String
 
 defmethod Token.Kind.idAttr : Token.Kind → HighlightHtmlM (Array (String × String))
   | .const n _ _ true => do
-    if let some id := (← read).definitionIds.find? n then
-      pure #[("id", id)]
-    else pure #[]
+    if (← read).options.definitionsAsTargets then
+      if let some id := (← read).definitionIds.find? n then
+        return #[("id", id)]
+    pure #[]
   | _ => pure #[]
 
 defmethod Token.toHtml (tok : Token) : HighlightHtmlM Html := do
@@ -513,16 +516,18 @@ partial defmethod Highlighted.toHtml : Highlighted → HighlightHtmlM Html
   | .point s info => pure {{<span class={{"message " ++ s.«class»}}>{{info}}</span>}}
   | .seq hls => hls.mapM toHtml
 
-defmethod Highlighted.blockHtml (contextName : String) (code : Highlighted) (trim : Bool := true) : HighlightHtmlM Html := do
+defmethod Highlighted.blockHtml (contextName : String) (code : Highlighted) (trim : Bool := true) (htmlId : Option String := none) : HighlightHtmlM Html := do
   let code := if trim then code.trim else code
-  pure {{ <code class="hl lean block" "data-lean-context"={{toString contextName}}> {{ ← code.toHtml }} </code> }}
+  let idAttr := htmlId.map (fun x => #[("id", x)]) |>.getD #[]
+  pure {{ <code class="hl lean block" "data-lean-context"={{toString contextName}} {{idAttr}}> {{ ← code.toHtml }} </code> }}
 
-defmethod Highlighted.inlineHtml (contextName : Option String) (code : Highlighted) (trim : Bool := true) : HighlightHtmlM Html := do
+defmethod Highlighted.inlineHtml (contextName : Option String) (code : Highlighted) (trim : Bool := true) (htmlId : Option String := none) : HighlightHtmlM Html := do
   let code := if trim then code.trim else code
+  let idAttr := htmlId.map (fun x => #[("id", x)]) |>.getD #[]
   if let some ctx := contextName then
-    pure {{ <code class="hl lean inline" "data-lean-context"={{toString ctx}}> {{ ← code.toHtml }} </code> }}
+    pure {{ <code class="hl lean inline" "data-lean-context"={{toString ctx}} {{idAttr}}> {{ ← code.toHtml }} </code> }}
   else
-    pure {{ <code class="hl lean inline"> {{ ← code.toHtml }} </code> }}
+    pure {{ <code class="hl lean inline" {{idAttr}}> {{ ← code.toHtml }} </code> }}
 
 -- TODO CSS variables, and document them
 def highlightingStyle : String := "
