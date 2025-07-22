@@ -41,6 +41,8 @@ import VersoManual.Table
 
 open Lean (Name NameMap Json ToJson FromJson quote)
 
+open Std (HashMap)
+
 open Verso.FS
 
 open Verso.Doc Elab
@@ -441,7 +443,7 @@ def emitXrefs (toc : List Html.Toc) (dir : System.FilePath) (state : TraverseSta
 section
 open Search
 
-def addSearchIndex (state : TraverseState) (ctx : TraverseContext) (logError : String → IO Unit) (doc : Part Manual) : IO TraverseState := do
+def emitSearchIndex (dir : System.FilePath) (state : TraverseState) (ctx : TraverseContext) (logError : String → IO Unit) (doc : Part Manual) : IO Unit := do
   have : Indexable Manual := {
     partHeader p := do
       let ctxt ← IndexM.traverseContext
@@ -463,12 +465,39 @@ def addSearchIndex (state : TraverseState) (ctx : TraverseContext) (logError : S
   }
 
   match Verso.Search.mkIndex doc ctx with
-  | .error e => logError e; return state
+  | .error e => logError e; return ()
   | .ok index =>
+    -- Split the index into roughly 150k chunks for faster loading
+    let (index, docs) := index.extractDocs
+    let size := docs.foldl (init := 0) (fun s _ v => s + v.size)
+    let mut docBuckets : HashMap UInt8 (HashMap String Doc) := {}
+    for (ref, content) in docs do
+      let h := bucket ref
+      docBuckets := docBuckets.alter h fun v =>
+        v.getD {} |>.insert ref content
+
+    for (bucket, docs) in docBuckets do
+      let docJson := docs.fold (init := Json.mkObj []) fun json k v => json.setObjVal! k (v.foldr (init := Json.mkObj []) fun k v js => js.setObjVal! k (Json.str v))
+      IO.FS.writeFile (dir / s!"searchIndex_{bucket}.js") s!"window.docContents[{bucket}].resolve({docJson.compress});"
+
     let indexJs := "const __verso_searchIndexData = " ++ index.toJson.compress ++ ";\n\n"
     let indexJs := indexJs ++ "const __versoSearchIndex = elasticlunr ? elasticlunr.Index.load(__verso_searchIndexData) : null;\n"
+    let indexJs := indexJs ++ "window.docContents = {};\n"
     let indexJs := indexJs ++ "window.searchIndex = elasticlunr ? __versoSearchIndex : null;\n"
-    return { state with extraJsFiles := state.extraJsFiles.push { filename := "searchIndex.js", contents := indexJs } }
+    IO.FS.writeFile (dir / "searchIndex.js") indexJs
+
+    IO.FS.writeFile (dir / "elasticlunr.min.js") Verso.Output.Html.elasticlunr.js
+
+where
+  -- Not using a proper hash because this needs to be implemented identically in JS
+  bucket (s : String) : UInt8 := Id.run do
+    let mut hash := 0
+    let mut n := 0
+    while h : n < s.utf8ByteSize do
+      hash := hash + s.getUtf8Byte n h
+      n := n + 1
+    return hash
+
 
 def emitSearchBox (dir : System.FilePath) (domains : DomainMappers) : IO Unit := do
   ensureDir dir
@@ -494,14 +523,14 @@ def emitHtmlSingle
     (text : Part Manual) : ReaderT ExtensionImpls IO (Part Manual × TraverseState) := do
   let dir := config.destination.join "html-single"
   ensureDir dir
-  let (traverseOut, st) ← emitContent dir .empty
-  IO.FS.writeFile (dir.join "-verso-docs.json") (toString st.dedup.docJson)
-  emitSearchBox (dir / "-verso-search") traverseOut.2.quickJump
-  pure traverseOut
+  let ((text, state), htmlState) ← emitContent dir .empty
+  IO.FS.writeFile (dir.join "-verso-docs.json") (toString htmlState.dedup.docJson)
+  emitSearchBox (dir / "-verso-search") state.quickJump
+  emitSearchIndex (dir / "-verso-search") state {logError, draft := config.draft} logError text
+  pure (text, state)
 where
   emitContent (dir : System.FilePath) : StateT (State Html) (ReaderT ExtensionImpls IO) (Part Manual × TraverseState) := do
     let (text, state) ← traverse logError text {config with htmlDepth := 0}
-    let state ← addSearchIndex state {logError, draft := config.draft} logError text
     let authors := text.metadata.map (·.authors) |>.getD []
     let authorshipNote := text.metadata.bind (·.authorshipNote)
     let _date := text.metadata.bind (·.date) |>.getD "" -- TODO
@@ -572,10 +601,11 @@ def emitHtmlMulti (logError : String → IO Unit) (config : Config)
     (text : Part Manual) : ReaderT ExtensionImpls IO (Part Manual × TraverseState) := do
   let root := config.destination.join "html-multi"
   ensureDir root
-  let (traverseOut, st) ← emitContent root {}
-  IO.FS.writeFile (root.join "-verso-docs.json") (toString st.dedup.docJson)
-  emitSearchBox (root / "-verso-search") traverseOut.2.quickJump
-  pure traverseOut
+  let ((text, state), htmlState) ← emitContent root {}
+  IO.FS.writeFile (root.join "-verso-docs.json") (toString htmlState.dedup.docJson)
+  emitSearchBox (root / "-verso-search") state.quickJump
+  emitSearchIndex (root / "-verso-search") state {logError, draft := config.draft} logError text
+  pure (text, state)
 where
   /--
   Emits the data used by all pages in the site, such as JS and CSS, and then emits the root page
@@ -583,7 +613,6 @@ where
   -/
   emitContent (root : System.FilePath) : StateT (State Html) (ReaderT ExtensionImpls IO) (Part Manual × TraverseState) := do
     let (text, state) ← traverse logError text config
-    let state ← addSearchIndex state {logError, draft := config.draft} logError text
     let authors := text.metadata.map (·.authors) |>.getD []
     let authorshipNote := text.metadata >>= (·.authorshipNote)
     let _date := text.metadata.bind (·.date) |>.getD "" -- TODO
@@ -701,14 +730,12 @@ def Config.addKaTeX (config : Config) : Config :=
     licenseInfo := Licenses.KaTeX :: config.licenseInfo
   }
 
-open Verso.Output.Html in
+
 /--
-Adds a bundled version of elasticlunr.js to the config.
+Adds search dependencies to the configuration
 -/
 def Config.addSearch (config : Config) : Config :=
   { config with
-    extraJsFiles :=
-      config.extraJsFiles.push {filename := "elasticlunr.min.js", contents := elasticlunr.js},
     licenseInfo := [Licenses.fuzzysort, Licenses.w3Combobox, Licenses.elasticlunr.js] ++ config.licenseInfo
   }
 

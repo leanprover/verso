@@ -88,6 +88,12 @@ structure Options where
 abbrev Doc := TreeMap String String
 
 /--
+The number of characters in the document.
+-/
+def Doc.size (doc : Doc) : Nat :=
+  doc.foldl (init := 0) fun s k v => s + k.length + v.length
+
+/--
 A collection of indexed documents, represented so as to be compatible with elasticlunr.js.
 -/
 structure DocumentStore where
@@ -583,6 +589,13 @@ def addDoc (self : Index) (ref : String) (data : Array String) : Index := Id.run
   { self with documentStore := self.documentStore.addDoc ref doc }
 
 /--
+Removes the documents from the index's store, setting `save` to `false`.
+-/
+def extractDocs (self : Index) : Index × TreeMap String Doc :=
+  let (store, docs) := self.documentStore.extractDocs
+  ({ self with documentStore := store }, docs)
+
+/--
 Converts the context of an index into JSON.
 -/
 private def indexJson (self : Index) : Json :=
@@ -772,7 +785,7 @@ code to construct the index. Primarily useful for testing.
 -/
 def mkIndexDocs (p : Part g) (ctx : g.TraverseContext) : Except String (Array IndexDoc) := do
   if p.metadata.bind idx.partId |>.isNone then
-    throw "No ID for root part"
+    throw "mkIndexDocs: No ID for root part"
   else
     match partText p (#[], ctx) {} with
     | .error e _ => throw e

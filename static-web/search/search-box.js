@@ -22,6 +22,14 @@ const searchIndex = /** @type {{searchIndex: TextSearchIndex}} */ (
   /** @type {unknown} */ (window)
 ).searchIndex;
 
+/**
+ * @typedef {{id: string, header: string, context: string, contents: string}} DocContent
+ * @typedef {Promise<Record<number, DocContent>> & {resolve?: (data : any) => void}} DocContentPromise
+ */
+/**
+ * @type {Record<string, DocContentPromise>}
+ */
+const docContents = ((/** @type {any} */ (window)).docContents) || ((/** @type {any} */ (window)).docContents = {});
 
 /** Whether to search word prefixes or whole words in full-text searches. Should match the setting in search-highlight.js.
  * @type {boolean}
@@ -37,7 +45,7 @@ const expandMatches = true;
  * @typedef {(searchable: Searchable, matchedParts: MatchedPart[], document: Document) => HTMLElement} CustomResultRender
  * @typedef {{dataToSearchables: DomainDataToSearchables, customRender?: CustomResultRender, displayName: string, className: string}} DomainMapper
  * @typedef {Record<string, DomainMapper>} DomainMappers
- * @typedef {{ref: string, score: number, doc: {id: string, header: string, context: string, contents: string}}} TextMatch
+ * @typedef {{ref: string, score: number, doc: DocContent}} TextMatch
  * @typedef {{item: Searchable, fuzzysortResult: Fuzzysort.Result, htmlItem: HTMLLIElement}|{terms: string, textItem: TextMatch, htmlItem: HTMLLIElement}} SearchResult
  * @typedef {{run: (tokens: string[]) => string[]}} ElasticLunrPipeline
  * @typedef {{bool?: "AND"|"OR", fields?:Record<string, {boost?: number}>, expand?: boolean}} SearchConfig
@@ -284,17 +292,70 @@ const searchableToHtml = (
 };
 
 /**
+ * Gets the sort bucket for a given document ID.
+ * @param {string} ref
+ * @return {number}
+ */
+const docBucket = ref => {
+  const utf8 = new TextEncoder().encode(ref);
+  let hash = 0;
+  for (let i = 0; i < utf8.length; i++) {
+    hash = (hash + utf8[i]) % 256;
+  }
+  return hash;
+};
+
+/**
+ * Loads the needed document bucket as a promise.
+ * @param {string} ref
+ * @return {Promise<Record<string, DocContent>>}
+ */
+const loadBucket = async (ref) => {
+  const bucket = docBucket(ref);
+  let bucketDocs = docContents[bucket];
+  if (bucketDocs) {
+    return bucketDocs;
+  }
+
+  /** @type {(data : any) => void} */
+  let resolveFun;
+  const promise = new Promise((resolve) => {
+    resolveFun = resolve;
+  });
+  (/** @type {any} */ (promise)).resolve = resolveFun;
+  docContents[bucket] = promise;
+  const script = document.createElement('script');
+  script.src = `-verso-search/searchIndex_${bucket}.js`
+  document.head.appendChild(script);
+
+  return await docContents[bucket];
+}
+
+/**
+ * @param {string} ref The identifier of the document to fetch from the store
+ * @return {Promise<DocContent>}
+ */
+const getDocContents = async (ref) => {
+  const resultBucket = await Promise.resolve(loadBucket(ref));
+
+  /** @type {DocContent} */
+  return resultBucket[ref];
+}
+
+/**
  * Maps from a data item to a HTML LI element
  * @param {string} term
  * @param {TextMatch} match
  * @param {Document} document
- * @return {HTMLLIElement|null}
+ * @return {Promise<HTMLLIElement|null>}
  */
-const textResultToHtml = (
+const textResultToHtml = async (
   term,
   match,
   document
 ) => {
+  const doc = await getDocContents(match.ref);
+
   const li = document.createElement("li");
   li.role = "option";
   li.className = `search-result full-text`;
@@ -304,15 +365,15 @@ const textResultToHtml = (
   
   const searchTerm = document.createElement("p");
   let inHeader = true;
-  let headerHl = highlightTextResult(match.doc.header, term, {contextLength: 30}); // Only abbreviate huge headers
+  let headerHl = highlightTextResult(doc.header, term, {contextLength: 30}); // Only abbreviate huge headers
   if (!headerHl) {
     inHeader = false;
     headerHl = document.createElement("span");
-    headerHl.append(document.createTextNode(match.doc.header));
+    headerHl.append(document.createTextNode(doc.header));
   }
   headerHl.className = "header";
   searchTerm.append(headerHl);
-  let contentHl = highlightTextResult(match.doc.contents, term, {contextLength: 10});
+  let contentHl = highlightTextResult(doc.contents, term, {contextLength: 10});
   if (!contentHl) {
     if (!inHeader) {
       // Exclude this result. It'd be cleaner to do this elsewhere, but duplicating the string
@@ -334,11 +395,11 @@ const textResultToHtml = (
   const domainName = document.createElement("p");
   li.appendChild(domainName);
   domainName.className = "domain";
-  if (match.doc.context.trim() == "") {
+  if (doc.context.trim() == "") {
     domainName.textContent = "Full-text search";
   } else {
     // This is a slight abuse of "domain", but it seems to work well
-    let context = match.doc.context.replaceAll("\t", " » ");
+    let context = doc.context.replaceAll("\t", " » ");
     domainName.append(document.createTextNode(context));
     domainName.classList.add('text-context');
   }
@@ -636,7 +697,7 @@ class SearchBox {
 
   // ComboboxAutocomplete Events
 
-  filterOptions() {
+  async filterOptions() {
     const currentOptionText = opt(this.currentOption, resultToText);
     const filter = this.filter;
 
@@ -742,7 +803,7 @@ class SearchBox {
           }
         }
       } else {
-        const option = textResultToHtml(filter, result, document);
+        const option = await textResultToHtml(filter, result, document);
         if (option) {
           /** @type {SearchResult} */
           const searchResult = {
@@ -880,7 +941,7 @@ class SearchBox {
    * @param {KeyboardEvent} event
    * @returns void
    */
-  onComboboxKeyDown(event) {
+  async onComboboxKeyDown(event) {
     let eventHandled = false;
     const altKey = event.altKey;
 
@@ -896,7 +957,12 @@ class SearchBox {
             if("fuzzysortResult" in this.currentOption) {
               this.confirmResult(this.currentOption.item.address);
             } else {
-              this.confirmResult(this.currentOption.textItem.doc.id, this.currentOption.terms);
+              const resultBucket = await Promise.resolve(loadBucket(this.currentOption.textItem.ref));
+
+              /** @type {DocContent} */
+              const doc = resultBucket[this.currentOption.textItem.ref];
+
+              this.confirmResult(doc.id, this.currentOption.terms);
             }
           }
         }
@@ -955,7 +1021,7 @@ class SearchBox {
         if (this.isOpen()) {
           this.close(true);
           this.filter = this.comboboxNode.textContent;
-          this.filterOptions();
+          await this.filterOptions();
           this.setVisualFocusCombobox();
         } else {
           this.setValue("");
@@ -993,7 +1059,7 @@ class SearchBox {
    * @param {KeyboardEvent} event
    * @returns void
    */
-  onComboboxKeyUp(event) {
+  async onComboboxKeyUp(event) {
     let eventHandled = false;
 
     if (event.key === "Escape" || event.key === "Esc") {
@@ -1018,7 +1084,7 @@ class SearchBox {
           this.setVisualFocusCombobox();
           this.setCurrentOptionStyle(null);
           eventHandled = true;
-          const option = this.filterOptions();
+          const option = await this.filterOptions();
           if (option) {
             if (this.isClosed() && this.comboboxNode.textContent.length) {
               this.open();
@@ -1049,9 +1115,9 @@ class SearchBox {
     }
   }
 
-  onComboboxFocus() {
+  async onComboboxFocus() {
     this.filter = this.comboboxNode.textContent;
-    this.filterOptions();
+    await this.filterOptions();
     this.setVisualFocusCombobox();
     this.setCurrentOptionStyle(null);
   }
@@ -1114,12 +1180,17 @@ class SearchBox {
     /**
      * @returns void
      */
-    return () => {
+    return async () => {
       this.comboboxNode.textContent = resultToText(result);
       if ("fuzzysortResult" in result) {
         this.confirmResult(result.item.address);
       } else {
-        this.confirmResult(result.textItem.doc.id, resultToText(result));
+        const resultBucket = await Promise.resolve(loadBucket(result.textItem.ref));
+
+        /** @type {DocContent} */
+        const doc = resultBucket[result.textItem.ref];
+
+        this.confirmResult(doc.id, resultToText(result));
       }
       this.close(true);
     };

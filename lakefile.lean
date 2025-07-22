@@ -22,9 +22,14 @@ lean_lib MultiVerso where
   srcDir := "src/multi-verso"
   roots := #[`MultiVerso]
 
+input_dir searchJs where
+  path := "static-web/search"
+
 @[default_target]
 lean_lib VersoSearch where
   srcDir := "src/verso-search"
+  -- Rebuild search when JS on disk changes
+  needs := #[searchJs]
 
 @[default_target]
 lean_lib VersoBlog where
