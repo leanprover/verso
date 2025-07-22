@@ -15,7 +15,7 @@ initialize blockComponentExt :
     addImportedFn := fun _ => pure {},
     addEntryFn := fun as (src, tgt) => as.insert src tgt,
     exportEntriesFn := fun es =>
-      es.fold (fun a src tgt => a.push (src, tgt)) #[] |>.qsort (Name.quickLt ·.1 ·.1)
+      es.foldl (fun a src tgt => a.push (src, tgt)) #[] |>.qsort (Name.quickLt ·.1 ·.1)
   }
 
 initialize inlineComponentExt :
@@ -25,5 +25,5 @@ initialize inlineComponentExt :
     addImportedFn := fun _ => pure {},
     addEntryFn := fun as (src, tgt) => as.insert src tgt,
     exportEntriesFn := fun es =>
-      es.fold (fun a src tgt => a.push (src, tgt)) #[] |>.qsort (Name.quickLt ·.1 ·.1)
+      es.foldl (fun a src tgt => a.push (src, tgt)) #[] |>.qsort (Name.quickLt ·.1 ·.1)
   }

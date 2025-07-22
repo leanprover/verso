@@ -135,7 +135,7 @@ instance : BEq Domains where
     x.all fun k v => y.find? k |>.isEqSome v
 
 instance : GetElem Domains Name Domain (fun ds d => ds.contents.contains d) where
-  getElem ds d _ok := ds.contents.find! d
+  getElem ds d _ok := ds.contents.get! d
 
 instance : GetElem? Domains Name Domain (fun ds d => ds.contents.contains d) where
   getElem? ds d := ds.contents.find? d

@@ -117,7 +117,7 @@ def progress.descr : BlockDescr where
     let documented ← match ((← Doc.Html.HtmlT.state).get? `Verso.Genre.Manual.docstring).getD (pure <| .mkObj []) >>= Json.getObj? with
       | .error e =>
         Doc.Html.HtmlT.logError e
-        pure .leaf
+        pure {}
       | .ok v =>
         pure v
     let mut ok : NameSet := {}
@@ -145,7 +145,7 @@ def progress.descr : BlockDescr where
     return {{
       <dl>
         {{namespaces.map fun ns =>
-          let wanted := check.findD ns []
+          let wanted := check.getD ns []
           let notDocumented := wanted.filter (!ok.contains ·) |>.mergeSort (fun x y => x.toString < y.toString)
           let percentMissing :=
             if wanted.isEmpty then 0
