@@ -21,7 +21,6 @@ import Verso.Doc.Suggestion
 import Verso.Hover
 import Verso.WithoutAsync
 open Verso.Output Html
-open Lean (RBMap)
 
 namespace Verso.Genre.Blog
 

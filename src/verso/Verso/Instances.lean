@@ -50,13 +50,13 @@ deriving instance ToJson for DefinitionSafety
 deriving instance FromJson for DefinitionSafety
 
 instance : Quote NameSet where
-  quote xs := mkCApp ``RBTree.fromList #[quote xs.toList, ⟨mkHole .missing⟩]
+  quote xs := mkCApp ``Std.TreeSet.ofList #[quote xs.toList, ⟨mkHole .missing⟩]
 instance : ToJson NameSet where
   toJson xs := toJson (xs.toArray : Array Name)
 instance : FromJson NameSet where
   fromJson? xs := do
     let arr ← fromJson? (α := Array Name) xs
-    pure <| RBTree.fromArray arr _
+    pure <| Std.TreeSet.ofArray arr _
 deriving instance Repr for NameSet
 
 section
