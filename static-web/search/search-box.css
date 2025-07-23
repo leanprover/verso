@@ -1,0 +1,225 @@
+/**
+ * Copyright (c) 2024-2025 Lean FRO LLC. All rights reserved.
+ * Released under Apache 2.0 license as described in the file LICENSE.
+ * Author: Jakob Ambeck Vase
+ */
+ 
+ :root {
+  --selected-color: var(--verso-selected-color, #def);
+}
+
+@media screen and (700px < width) {
+  :root {
+    --search-bar-width: 24rem;
+  }
+}
+
+@media screen and (width <= 700px) {
+  :root {
+    --search-bar-width: 12rem;
+  }
+}
+
+#search-wrapper .combobox-list {
+  position: relative;
+}
+
+#search-wrapper .combobox .group {
+  display: flex;
+  cursor: pointer;
+}
+
+#search-wrapper .combobox .cb_edit {
+  background-color: white;
+  color: black;
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+  vertical-align: bottom;
+  border: none;
+  border-bottom: 1px solid gray;
+  position: relative;
+  cursor: pointer;
+  width: var(--search-bar-width);
+  outline: none;
+  font-size: .9rem;
+  padding: .3rem .5rem;
+  font-family: system-ui, sans-serif;
+  /* Fix firefox eating spaces in textContent */
+  white-space: -moz-pre-space;
+}
+
+#search-wrapper .combobox .group.focus .cb_edit,
+#search-wrapper .combobox .group .cb_edit:hover {
+  background-color: var(--selected-color);
+  outline: auto;
+}
+
+/* Make the `placeholder` attribute visible even though the search
+   box is a div. */
+#search-wrapper .cb_edit:empty:before {
+  content: attr(placeholder);
+  pointer-events: none;
+  color: #888;
+  font-family: sans-serif;
+  display: block;
+}
+
+#search-wrapper ul[role="listbox"] {
+  margin: 0;
+  padding: 0;
+  position: absolute;
+  top: calc(100%);
+  width: var(--search-bar-width);
+  list-style: none;
+  background-color: white;
+  display: none;
+  box-sizing: border-box;
+  border: 2px currentcolor solid;
+  max-height: 20rem;
+  overflow: scroll;
+  overflow-x: hidden;
+  font-size: .9rem;
+  z-index: 100;
+}
+
+/* Applies to all `li` in the box, including "no results" and "showing x/y" */
+#search-wrapper ul[role="listbox"] li {
+  font-family: sans-serif;
+  padding: .2rem;
+  margin: 0;
+}
+
+#search-wrapper .search-result {
+  display: flex;
+  flex-direction: column;
+  gap: .2rem;
+
+  font-weight: 400;
+  cursor: pointer;
+
+  /* Make the 'Showing 1/2 results' visible when navigating with keyboard. */
+  scroll-margin-bottom: 1.2rem;
+}
+
+/* Couple the domain tighter with the search term on smaller screens,
+   otherwise it's easy to get lost in the results. */
+@media screen and (max-width: 700px) {
+  #search-wrapper .search-result {
+    gap: 0;
+    padding: .3rem .2rem;
+  }
+}
+
+#search-wrapper .search-result.full-text  {
+  font-family: var(--verso-text-font-family);
+}
+#search-wrapper .search-result.full-text .header {
+  display: block;
+}
+#search-wrapper .search-result.full-text .header,
+#search-wrapper .search-result.full-text .header em {
+  font-style: normal;
+  font-family: var(--verso-structure-font-family);
+  font-weight: bold;
+}
+
+#search-wrapper [role="listbox"].focus li[aria-selected="true"],
+#search-wrapper .search-result:hover {
+  background-color: var(--selected-color);
+  padding-bottom: calc(.2rem - 1px);
+  padding-top: calc(.2rem - 1px);
+  border-bottom: 1px solid currentColor;
+  border-top: 1px solid currentColor;
+}
+
+/* Couple the domain tighter with the search term on smaller screens,
+   otherwise it's easy to get lost in the results. */
+@media screen and (max-width: 700px) {
+#search-wrapper [role="listbox"].focus li[aria-selected="true"],
+#search-wrapper .search-result:hover {
+    padding-bottom: calc(.3rem - 1px);
+    padding-top: calc(.3rem - 1px);
+  }
+}
+
+#search-wrapper .search-result p {
+  margin: 0;
+  font-family: inherit;
+  font-weight: inherit;
+  font-style: inherit;
+}
+
+#search-wrapper .search-result em {
+  font-style: normal;
+  text-decoration: underline;
+}
+
+#search-wrapper .search-result .domain em {
+  font-style: italic;
+}
+
+#search-wrapper .search-result .domain {
+  text-align: right;
+  color: #777;
+  font-style: italic;
+  font-family: var(--verso-structure-font-family);
+  font-weight: normal;
+  font-size: .7rem;
+}
+
+#search-wrapper .search-result .domain.text-context {
+  /* For full-text search results, truncate on the left with an ellipsis */
+  text-overflow: ellipsis;
+  direction: rtl;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+#search-wrapper .search-result .domain .context-elem {
+  display: inline-block;
+}
+
+#search-wrapper .search-result .domain .context-elem:not(:last-child)::after {
+  content: "»";
+  margin: 0 0.25em;
+}
+
+/* Couple the domain tighter with the search term on smaller screens,
+   otherwise it's easy to get lost in the results. */
+@media screen and (max-width: 700px) {
+  #search-wrapper .search-result .domain {
+    text-align: left;
+  }
+}
+
+#search-wrapper .more-results {
+  text-align: center;
+  color: #777;
+  font-size: .7rem;
+}
+
+#search-wrapper .domain-filter label {
+  display: flex;
+  gap: .5rem
+}
+
+#search-wrapper .domain-filter input {
+  flex-basis: 2rem;
+}
+
+/* Page layout */
+#search-wrapper {
+  width: fit-content;
+  z-index: 1;
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  padding: 0 .5rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background-color: white;
+}

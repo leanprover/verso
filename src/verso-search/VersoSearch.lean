@@ -15,6 +15,7 @@ import Lean.Data.Json
 import Verso.Doc
 
 import VersoSearch.PorterStemmer
+import VersoSearch.DomainSearch
 
 open Std
 open Lean
@@ -87,6 +88,12 @@ structure Options where
 abbrev Doc := TreeMap String String
 
 /--
+The number of characters in the document.
+-/
+def Doc.size (doc : Doc) : Nat :=
+  doc.foldl (init := 0) fun s k v => s + k.length + v.length
+
+/--
 A collection of indexed documents, represented so as to be compatible with elasticlunr.js.
 -/
 structure DocumentStore where
@@ -125,6 +132,14 @@ def addDoc (self : DocumentStore) (ref : String) (doc : Doc) : DocumentStore :=
   { self with
     length := if self.hasDoc ref then self.length else self.length + 1,
     docs := self.docs.insert ref <| if self.save then doc else {} }
+
+/--
+Removes the documents from the store, setting `save` to `false`.
+-/
+def extractDocs (self : DocumentStore) : DocumentStore × TreeMap String Doc :=
+  let docs := self.docs
+  let noDocs := docs.map (fun _ _ => {})
+  ({ self with docs := noDocs, save := false }, docs)
 
 /--
 Gets a document if it is present in the store.
@@ -574,6 +589,13 @@ def addDoc (self : Index) (ref : String) (data : Array String) : Index := Id.run
   { self with documentStore := self.documentStore.addDoc ref doc }
 
 /--
+Removes the documents from the index's store, setting `save` to `false`.
+-/
+def extractDocs (self : Index) : Index × TreeMap String Doc :=
+  let (store, docs) := self.documentStore.extractDocs
+  ({ self with documentStore := store }, docs)
+
+/--
 Converts the context of an index into JSON.
 -/
 private def indexJson (self : Index) : Json :=
@@ -763,7 +785,7 @@ code to construct the index. Primarily useful for testing.
 -/
 def mkIndexDocs (p : Part g) (ctx : g.TraverseContext) : Except String (Array IndexDoc) := do
   if p.metadata.bind idx.partId |>.isNone then
-    throw "No ID for root part"
+    throw "mkIndexDocs: No ID for root part"
   else
     match partText p (#[], ctx) {} with
     | .error e _ => throw e

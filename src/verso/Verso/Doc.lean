@@ -434,14 +434,25 @@ instance [Repr g.Inline] [Repr g.Block] [Repr g.PartMetadata] : Repr (Part g) :=
 
 class TraversePart (g : Genre) where
   /--
-  How to modify the context while traversing the contents a given part.
-  This is applied after `part` and `genrePart` have rewritten the text, if applicable.
+  How to modify the context while traversing the contents of a given part. This is applied after
+  `part` and `genrePart` have rewritten the text, if applicable.
 
   It is also used during HTML generation.
   -/
   inPart : Part g → g.TraverseContext → g.TraverseContext := fun _ => id
 
+class TraverseBlock (g : Genre) where
+  /--
+  How to modify the context while traversing a given block.
+
+  It is also used during HTML generation.
+  -/
+  inBlock : Block g → g.TraverseContext → g.TraverseContext := fun _ => id
+
+
 instance : TraversePart .none := {}
+
+instance : TraverseBlock .none := {}
 
 /--
 Genre-specific traversal.
@@ -474,7 +485,7 @@ class Traverse (g : Genre) (m : outParam (Type → Type)) where
 
 
 partial def Genre.traverse (g : Genre)
-    [Traverse g m] [TraversePart g] [Monad m]
+    [Traverse g m] [TraversePart g] [TraverseBlock g] [Monad m]
     [MonadReader g.TraverseContext m] [MonadWithReader g.TraverseContext m]
     [MonadState g.TraverseState m]
     (top : Part g) : m (Part g) :=
@@ -498,21 +509,22 @@ where
 
   block (b : Doc.Block g) : m (Doc.Block g) := do
     Traverse.block b
-    match b with
-    | .para contents => .para <$> contents.mapM inline
-    | .ul items => .ul <$> items.mapM fun
-      | ListItem.mk contents => ListItem.mk <$> contents.mapM block
-    | .ol start items => .ol start <$> items.mapM fun
-      | ListItem.mk contents => ListItem.mk <$> contents.mapM block
-    | .dl items => .dl <$> items.mapM fun
-      | DescItem.mk t d => DescItem.mk <$> t.mapM inline <*> d.mapM block
-    | .blockquote items => .blockquote <$> items.mapM block
-    | .concat items => .concat <$> items.mapM block
-    | .other container content =>
-      match ← Traverse.genreBlock container content with
-      | .none => .other container <$> content.mapM block
-      | .some b' => block b'
-    | .code .. => pure b
+    withReader (TraverseBlock.inBlock b) <|
+      match b with
+      | .para contents => .para <$> contents.mapM inline
+      | .ul items => .ul <$> items.mapM fun
+        | ListItem.mk contents => ListItem.mk <$> contents.mapM block
+      | .ol start items => .ol start <$> items.mapM fun
+        | ListItem.mk contents => ListItem.mk <$> contents.mapM block
+      | .dl items => .dl <$> items.mapM fun
+        | DescItem.mk t d => DescItem.mk <$> t.mapM inline <*> d.mapM block
+      | .blockquote items => .blockquote <$> items.mapM block
+      | .concat items => .concat <$> items.mapM block
+      | .other container content => do
+        match ← Traverse.genreBlock container content with
+        | .none => .other container <$> content.mapM block
+        | .some b' => block b'
+      | .code .. => pure b
 
   part (p : Doc.Part g) : m (Doc.Part g) := do
     let meta' ← Traverse.part p

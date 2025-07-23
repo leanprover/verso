@@ -57,6 +57,9 @@ tag := "lean-markup"
 Lean's documentation markup language is a close relative of Markdown, but it's not identical to it.
 
 # Design Principles
+%%%
+tag := "markup-design-principles"
+%%%
 
  1. Syntax errors - fail fast rather than producing unexpected output or having complicated rules
  2. Reduce lookahead - parsing should succeed or fail as locally as possible
@@ -66,6 +69,9 @@ Lean's documentation markup language is a close relative of Markdown, but it's n
  6. Pandoc and Djot compatibility - when Markdown doesn't have a syntax for a feature, attempt to be compatible with Pandoc Markdown or Djot
 
 # Syntax
+%%%
+tag := "markup-syntax"
+%%%
 
 Like Markdown, Lean's markup has three primary syntactic categories:
 
@@ -82,8 +88,14 @@ Like Markdown, Lean's markup has three primary syntactic categories:
  Headers, footnote definitions, and named links give greater structure to a document. They may not be nested inside of blocks.
 
 ## Description
+%%%
+tag := "markup-syntax-description"
+%%%
 
 ### Inline Syntax
+%%%
+tag := "inline-syntax"
+%%%
 
 Emphasis is written with underscores:
 ```markupPreview
@@ -118,14 +130,26 @@ The definition of `main`
 TeX math can be included using a single or double dollar sign followed by code. Two dollar signs results in display-mode math, so `` $`\sum_{i=0}^{10} i` `` results in $`\sum_{i=0}^{10} i` while `` $$`\sum_{i=0}^{10} i` `` results in: $$`\sum_{i=0}^{10} i`
 
 ### Block Syntax
+%%%
+tag := "block-syntax"
+%%%
 
 ### Document Structure
+%%%
+tag := "document-structure"
+%%%
 
 ## Differences from Markdown
+%%%
+tag := "differences-from-markdown"
+%%%
 
 This is a quick "cheat sheet" for those who are used to Markdown, documenting the differences.
 
 ### Syntax Errors
+%%%
+tag := "syntax-errors"
+%%%
 
 While Markdown includes a set of precedence rules to govern the meaning of mismatched delimiters (such as in `what _is *bold_ or emph*?`), these are syntax errors in Lean's markup.
 Similarly, Markdown specifies that unmatched delimiters (such as `*` or `_`) should be included as characters, while Lean's markup requires explicit escaping of delimiters.
@@ -133,17 +157,26 @@ Similarly, Markdown specifies that unmatched delimiters (such as `*` or `_`) sho
 This is based on the principle that, for long-form technical writing, it's better to catch typos while writing than while reviewing the text later.
 
 ### Reduced Lookahead
+%%%
+tag := "reduced-lookahead"
+%%%
 
 In Markdown, whether `[this][here]` is a link depends on whether `here` is defined as a link reference target somewhere in the document.
 In Lean's markup, it is always a link, and it is an error if `here` is not defined as a link target.
 
 ### Header Nesting
+%%%
+tag := "header-nesting"
+%%%
 
 In Lean's markup, every document already has a title, so there's no need to use the highest level header (`#`) to specify one.
 Additionally, all documents are required to use `#` for their top-level header, `##` for the next level, and so forth, because a single file may represent a section, a chapter, or even a whole book.
 Authors should not need to maintain a global mapping from header levels to document structures, so Lean's markup automatically assigns these based on the structure of the document.
 
 ### Genre-Specific Extensions
+%%%
+tag := "genre-specific-extensions"
+%%%
 
 Markdown has no standard way for specific tools or styles of writing to express domain- or {ref "genres"}[genre]-specific concepts.
 Lean's markup provides standard syntaxes to use for this purpose, enabling compositional extensions.

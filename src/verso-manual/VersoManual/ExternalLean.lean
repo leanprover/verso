@@ -28,10 +28,27 @@ private def hlJsDeps : List JsFile :=
   [{filename := "popper.js", contents := popper}, {filename := "tippy.js", contents := tippy}]
 
 block_extension Block.lean (hls : Highlighted) (cfg : CodeConfig) where
+  init st :=
+    st.addQuickJumpMapper exampleDomain exampleDomainMapper
   data :=
-    let defined := hls.definedNames.toArray
+    let defined := definedNames hls
     Json.arr #[ToJson.toJson cfg, ToJson.toJson hls, ToJson.toJson defined]
-  traverse _ _ _ := pure none
+  traverse id data _ := do
+    let .arr #[cfgJson, _hlJson, definesJson] := data
+      | logError s!"Expected array for Lean block, got {data.compress}"; return none
+    match FromJson.fromJson? cfgJson with
+    | .error err =>
+      logError <| "Failed to deserialize code config during traversal:" ++ err
+      return none
+    | .ok (cfg : CodeConfig) =>
+      if cfg.defSite.isEqSome false then return none
+      match FromJson.fromJson? definesJson with
+      | .error err =>
+        logError <| "Failed to deserialize code config during traversal:" ++ err
+        return none
+      | .ok (defines : Array (Name × String)) =>
+        saveExampleDefs id defines
+        pure none
   toTeX := none
   extraCss := [highlightingStyle]
   extraJs := [highlightingJs]
@@ -40,7 +57,7 @@ block_extension Block.lean (hls : Highlighted) (cfg : CodeConfig) where
   toHtml :=
     open Verso.Output.Html in
     some <| fun _ _ _ data _ => do
-      let .arr #[cfgJson, hlJson, _] := data
+      let .arr #[cfgJson, hlJson, _definesJson] := data
         | HtmlT.logError "Expected four-element JSON for Lean code"
           pure .empty
       match FromJson.fromJson? hlJson with
@@ -55,14 +72,29 @@ block_extension Block.lean (hls : Highlighted) (cfg : CodeConfig) where
         | .ok (cfg : CodeConfig) =>
           let i := hl.indentation
           let hl := hl.deIndent i
-          withReader (fun ρ => { ρ with codeOptions.inlineProofStates := cfg.showProofStates }) <|
-            hl.blockHtml "examples"
+          withReader ({ · with codeOptions.inlineProofStates := cfg.showProofStates, codeOptions.definitionsAsTargets := cfg.defSite.getD true }) <|
+            hl.blockHtml (g := Manual) "examples"
 
 inline_extension Inline.lean (hls : Highlighted) (cfg : CodeConfig) where
   data :=
-    let defined := hls.definedNames.toArray
+    let defined := definedNames hls
     Json.arr #[ToJson.toJson cfg, ToJson.toJson hls, ToJson.toJson defined]
-  traverse _ _ _ := pure none
+  traverse id data _ := do
+    let .arr #[cfgJson, _hlJson, definesJson] := data
+      | logError s!"Expected array for Lean block, got {data.compress}"; return none
+    match FromJson.fromJson? cfgJson with
+    | .error err =>
+      logError <| "Failed to deserialize code config during traversal:" ++ err
+      return none
+    | .ok (cfg : CodeConfig) =>
+      unless cfg.defSite.isEqSome true do return none
+      match FromJson.fromJson? definesJson with
+      | .error err =>
+        logError <| "Failed to deserialize code config during traversal:" ++ err
+        return none
+      | .ok (defines : Array (Name × String)) =>
+        saveExampleDefs id defines
+        pure none
   toTeX := none
   extraCss := [highlightingStyle]
   extraJs := [highlightingJs]
@@ -86,8 +118,10 @@ inline_extension Inline.lean (hls : Highlighted) (cfg : CodeConfig) where
         | .ok (cfg : CodeConfig) =>
           let i := hl.indentation
           let hl := hl.deIndent i
-          withReader (fun ρ => { ρ with codeOptions.inlineProofStates := cfg.showProofStates }) <|
-            hl.inlineHtml "examples"
+          withReader
+            ({ · with
+              codeOptions.inlineProofStates := cfg.showProofStates, codeOptions.definitionsAsTargets := cfg.defSite.getD false }) <|
+            hl.inlineHtml (g := Manual) "examples"
 
 block_extension Block.leanOutput (severity : MessageSeverity) (message : String) (summarize : Bool := false) where
   data := ToJson.toJson (severity, message, summarize)

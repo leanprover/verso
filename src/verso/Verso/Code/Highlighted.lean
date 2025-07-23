@@ -7,6 +7,7 @@ import Lean.Data.OpenDecl
 import Lean.Data.Json
 import Std.Data.HashMap
 import SubVerso.Highlighting
+import Verso.Doc
 import Verso.Method
 import Verso.Output.Html
 
@@ -112,6 +113,7 @@ structure CodeLink where
   description : String
   /-- The actual link destination -/
   href : String
+deriving Repr, DecidableEq, Ord
 
 instance : ToJson CodeLink where
   toJson l := json%{"short": $l.shortDescription, "long": $l.description, "href": $l.href}
@@ -137,23 +139,23 @@ Instructions for computing link targets for various code elements.
 Each kind of link may have multiple destinations. The first is the default link, while the remainder
 are considered alternates.
 -/
-structure LinkTargets where
-  var : FVarId → Array CodeLink := fun _ => #[]
-  sort : Level → Array CodeLink := fun _ => #[]
-  const : Name → Array CodeLink := fun _ => #[]
-  option : Name → Array CodeLink := fun _ => #[]
-  keyword : Name → Array CodeLink := fun _ => #[]
-  definition : Name → Array CodeLink := fun _ => #[]
+structure LinkTargets (Ctxt : Type) where
+  var : FVarId → Option Ctxt → Array CodeLink := fun _ _ => #[]
+  sort : Level → Option Ctxt → Array CodeLink := fun _ _ => #[]
+  const : Name → Option Ctxt → Array CodeLink := fun _ _ => #[]
+  option : Name → Option Ctxt → Array CodeLink := fun _ _ => #[]
+  keyword : Name → Option Ctxt → Array CodeLink := fun _ _ => #[]
+  definition : Name → Option Ctxt → Array CodeLink := fun _ _ => #[]
 
-def LinkTargets.augment (tgts1 tgts2 : LinkTargets) : LinkTargets where
-  var fv := tgts1.var fv ++ tgts2.var fv
-  sort l := tgts1.sort l ++ tgts2.sort l
-  const n := tgts1.const n ++ tgts2.const n
-  option o := tgts1.option o ++ tgts2.option o
-  keyword kw := tgts1.keyword kw ++ tgts2.keyword kw
-  definition x := tgts1.definition x ++ tgts2.definition x
+def LinkTargets.augment (tgts1 tgts2 : LinkTargets g) : LinkTargets g where
+  var fv ctxt := tgts1.var fv ctxt ++ tgts2.var fv ctxt
+  sort l ctxt := tgts1.sort l ctxt ++ tgts2.sort l ctxt
+  const n ctxt := tgts1.const n ctxt ++ tgts2.const n ctxt
+  option o ctxt := tgts1.option o ctxt ++ tgts2.option o ctxt
+  keyword kw ctxt := tgts1.keyword kw ctxt ++ tgts2.keyword kw ctxt
+  definition x ctxt := tgts1.definition x ctxt ++ tgts2.definition x ctxt
 
-instance : Append LinkTargets where
+instance : Append (LinkTargets g) where
   append := LinkTargets.augment
 
 inductive HighlightHtmlM.CollapseGoals where
@@ -181,9 +183,11 @@ structure HighlightHtmlM.Options where
   inlineProofStates : Bool := true
   visibleProofStates : VisibleProofStates := .none
   collapseGoals : CollapseGoals := .subsequent
+  definitionsAsTargets : Bool := true
 
-structure HighlightHtmlM.Context where
-  linkTargets : LinkTargets
+structure HighlightHtmlM.Context (g : Verso.Doc.Genre) where
+  linkTargets : LinkTargets g.TraverseContext
+  traverseContext : g.TraverseContext
   definitionIds : Lean.NameMap String
   options : HighlightHtmlM.Options
 
@@ -195,61 +199,65 @@ The monad enables the following features:
 2. Conveying document-wide configurations, in particular policies for hyperlinking identifiers.
 3. De-duplicating hovers, which can greatly reduce the size of generated HTML.
 -/
-abbrev HighlightHtmlM α := ReaderT HighlightHtmlM.Context (StateT (State Html) Id) α
+abbrev HighlightHtmlM g α := ReaderT (HighlightHtmlM.Context g) (StateT (State Html) Id) α
 
-def addHover (content : Html) : HighlightHtmlM Nat := modifyGet fun st =>
+def addHover (content : Html) : HighlightHtmlM g Nat := modifyGet fun st =>
   let (hoverId, dedup) := st.dedup.insert content
   (hoverId, {st with dedup := dedup})
 
-def uniqueId (base := "--verso-unique") : HighlightHtmlM String := modifyGet fun st =>
+def uniqueId (base := "--verso-unique") : HighlightHtmlM g String := modifyGet fun st =>
   let (id, idSupply) := st.idSupply.unique (base := base)
   (id, {st with idSupply := idSupply})
 
-def withCollapsedSubgoals (policy : HighlightHtmlM.CollapseGoals) (act : HighlightHtmlM α) : HighlightHtmlM α :=
+def withCollapsedSubgoals (policy : HighlightHtmlM.CollapseGoals) (act : HighlightHtmlM g α) : HighlightHtmlM g α :=
   withReader (fun ctx => {ctx with options := {ctx.options with collapseGoals := policy} }) act
 
-def withVisibleProofStates (policy : HighlightHtmlM.VisibleProofStates) (act : HighlightHtmlM α) : HighlightHtmlM α :=
+def withVisibleProofStates (policy : HighlightHtmlM.VisibleProofStates) (act : HighlightHtmlM g α) : HighlightHtmlM g α :=
   withReader (fun ctx => {ctx with options := {ctx.options with visibleProofStates := policy} }) act
 
-def linkTargets : HighlightHtmlM LinkTargets := do
-  return (← readThe HighlightHtmlM.Context).linkTargets
+def withDefinitionsAsTargets (saveIds : Bool) (act : HighlightHtmlM g α) : HighlightHtmlM g α :=
+  withReader (fun ctx => {ctx with options := {ctx.options with definitionsAsTargets := saveIds} }) act
 
-def options : HighlightHtmlM HighlightHtmlM.Options := do
-  return (← readThe HighlightHtmlM.Context).options
+def linkTargets : HighlightHtmlM g (LinkTargets g.TraverseContext) := do
+  return (← readThe (HighlightHtmlM.Context g)).linkTargets
 
-open Lean in
-open Verso.Output.Html in
-def constLink (constName : Name) (content : Html) : HighlightHtmlM Html := do
-  return CodeLink.manyHtml ((← linkTargets).const constName) content
-
+def options : HighlightHtmlM g HighlightHtmlM.Options := do
+  return (← readThe (HighlightHtmlM.Context g)).options
 
 open Lean in
 open Verso.Output.Html in
-def optionLink (optionName : Name) (content : Html) : HighlightHtmlM Html := do
-  return CodeLink.manyHtml ((← linkTargets).option optionName) content
+def constLink (constName : Name) (content : Html) (ctxt : Option g.TraverseContext := none) : HighlightHtmlM g Html := do
+  return CodeLink.manyHtml ((← linkTargets).const constName ctxt) content
+
 
 open Lean in
 open Verso.Output.Html in
-def varLink (varName : FVarId) (content : Html) : HighlightHtmlM Html := do
-  return CodeLink.manyHtml ((← linkTargets).var varName) content
+def optionLink (optionName : Name) (content : Html) (ctxt : Option g.TraverseContext := none) : HighlightHtmlM g Html := do
+  return CodeLink.manyHtml ((← linkTargets).option optionName ctxt) content
 
 open Lean in
 open Verso.Output.Html in
-def kwLink (kind : Name) (content : Html) : HighlightHtmlM Html := do
-  return CodeLink.manyHtml ((← linkTargets).keyword kind) content
+def varLink (varName : FVarId) (content : Html) (ctxt : Option g.TraverseContext := none) : HighlightHtmlM g Html := do
+  return CodeLink.manyHtml ((← linkTargets).var varName ctxt) content
 
 open Lean in
 open Verso.Output.Html in
-def defLink (defName : Name) (content : Html) : HighlightHtmlM Html := do
-  return CodeLink.manyHtml ((← linkTargets).definition defName) content
+def kwLink (kind : Name) (content : Html) (ctxt : Option g.TraverseContext := none) : HighlightHtmlM g Html := do
+  return CodeLink.manyHtml ((← linkTargets).keyword kind ctxt) content
 
-defmethod Token.Kind.addLink (tok : Token.Kind) (content : Html) : HighlightHtmlM Html := do
+open Lean in
+open Verso.Output.Html in
+def defLink (defName : Name) (content : Html) (ctxt : Option g.TraverseContext := none) : HighlightHtmlM g Html := do
+  return CodeLink.manyHtml ((← linkTargets).definition defName ctxt) content
+
+defmethod Token.Kind.addLink (tok : Token.Kind) (content : Html) : HighlightHtmlM g Html := do
+  let ctxt := (← read).traverseContext
   match tok with
-  | .const x _ _ false => constLink x content
-  | .const x _ _ true => defLink x content
-  | .option o .. => optionLink o content
-  | .var x .. => varLink x content
-  | .keyword (some k) .. => kwLink k content
+  | .const x _ _ false => constLink x content (some ctxt)
+  | .const x _ _ true => defLink x content (some ctxt)
+  | .option o .. => optionLink o content (some ctxt)
+  | .var x .. => varLink x content (some ctxt)
+  | .keyword (some k) .. => kwLink k content (some ctxt)
   | _ => pure content
 
 /--
@@ -303,7 +311,7 @@ Removes leading and trailing whitespace from highlighted code.
 -/
 defmethod Highlighted.trim (hl : Highlighted) : Highlighted := hl.trimLeft.trimRight
 
-defmethod Token.Kind.hover? (tok : Token.Kind) : HighlightHtmlM (Option Nat) :=
+defmethod Token.Kind.hover? (tok : Token.Kind) : HighlightHtmlM g (Option Nat) :=
   match tok with
   | .const _n sig doc _ | .anonCtor _n sig doc =>
     let docs :=
@@ -381,14 +389,15 @@ defmethod Token.Kind.data : Token.Kind → String
   | .levelOp op => s!"level-op-{op}"
   | _ => ""
 
-defmethod Token.Kind.idAttr : Token.Kind → HighlightHtmlM (Array (String × String))
+defmethod Token.Kind.idAttr : Token.Kind → HighlightHtmlM g (Array (String × String))
   | .const n _ _ true => do
-    if let some id := (← read).definitionIds.find? n then
-      pure #[("id", id)]
-    else pure #[]
+    if (← read).options.definitionsAsTargets then
+      if let some id := (← read).definitionIds.find? n then
+        return #[("id", id)]
+    pure #[]
   | _ => pure #[]
 
-defmethod Token.toHtml (tok : Token) : HighlightHtmlM Html := do
+defmethod Token.toHtml (tok : Token) : HighlightHtmlM g Html := do
   let hoverId ← tok.kind.hover?
   let idAttr ← tok.kind.idAttr
   let hoverAttr := hoverId.map (fun i => #[("data-verso-hover", toString i)]) |>.getD #[]
@@ -396,7 +405,7 @@ defmethod Token.toHtml (tok : Token) : HighlightHtmlM Html := do
     <span class={{tok.kind.«class» ++ " token"}} data-binding={{tok.kind.data}} {{hoverAttr}} {{idAttr}}>{{tok.content}}</span>
   }}
 
-defmethod Highlighted.Goal.toHtml (exprHtml : expr → HighlightHtmlM Html) (index : Nat) : Highlighted.Goal expr → HighlightHtmlM Html
+defmethod Highlighted.Goal.toHtml (exprHtml : expr → HighlightHtmlM g Html) (index : Nat) : Highlighted.Goal expr → HighlightHtmlM g Html
   | {name, goalPrefix, hypotheses, conclusion} => do
     let hypsHtml : Html ←
       if hypotheses.size = 0 then pure .empty
@@ -471,7 +480,7 @@ def _root_.Array.mapIndexedM [Monad m] (arr : Array α) (f : Fin arr.size → α
     out := out.push (← f ⟨i, by get_elem_tactic⟩ arr[i])
   pure out
 
-partial defmethod Highlighted.toHtml : Highlighted → HighlightHtmlM Html
+partial defmethod Highlighted.toHtml : Highlighted → HighlightHtmlM g Html
   | .token t => t.toHtml
   | .text str | .unparsed str => pure {{<span class="inter-text">{{str}}</span>}}
   | .span infos hl =>
@@ -513,16 +522,18 @@ partial defmethod Highlighted.toHtml : Highlighted → HighlightHtmlM Html
   | .point s info => pure {{<span class={{"message " ++ s.«class»}}>{{info}}</span>}}
   | .seq hls => hls.mapM toHtml
 
-defmethod Highlighted.blockHtml (contextName : String) (code : Highlighted) (trim : Bool := true) : HighlightHtmlM Html := do
+defmethod Highlighted.blockHtml (contextName : String) (code : Highlighted) (trim : Bool := true) (htmlId : Option String := none) : HighlightHtmlM g Html := do
   let code := if trim then code.trim else code
-  pure {{ <code class="hl lean block" "data-lean-context"={{toString contextName}}> {{ ← code.toHtml }} </code> }}
+  let idAttr := htmlId.map (fun x => #[("id", x)]) |>.getD #[]
+  pure {{ <code class="hl lean block" "data-lean-context"={{toString contextName}} {{idAttr}}> {{ ← code.toHtml }} </code> }}
 
-defmethod Highlighted.inlineHtml (contextName : Option String) (code : Highlighted) (trim : Bool := true) : HighlightHtmlM Html := do
+defmethod Highlighted.inlineHtml (contextName : Option String) (code : Highlighted) (trim : Bool := true) (htmlId : Option String := none) : HighlightHtmlM g Html := do
   let code := if trim then code.trim else code
+  let idAttr := htmlId.map (fun x => #[("id", x)]) |>.getD #[]
   if let some ctx := contextName then
-    pure {{ <code class="hl lean inline" "data-lean-context"={{toString ctx}}> {{ ← code.toHtml }} </code> }}
+    pure {{ <code class="hl lean inline" "data-lean-context"={{toString ctx}} {{idAttr}}> {{ ← code.toHtml }} </code> }}
   else
-    pure {{ <code class="hl lean inline"> {{ ← code.toHtml }} </code> }}
+    pure {{ <code class="hl lean inline" {{idAttr}}> {{ ← code.toHtml }} </code> }}
 
 -- TODO CSS variables, and document them
 def highlightingStyle : String := "
