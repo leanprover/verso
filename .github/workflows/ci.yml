@@ -76,7 +76,7 @@ jobs:
       - name: Install PDF Dependencies
         uses: zauguin/install-texlive@v4
         with:
-          texlive_version: 2024
+          texlive_version: 2025
           packages: |
             scheme-minimal
             l3packages
