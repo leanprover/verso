@@ -123,6 +123,8 @@ jobs:
 
       - name: Type check the search bar code
         run: |
+          pwd
+          ls
           cd _out/html-multi/-verso-search
           tsc --noEmit -p jsconfig.json
 
