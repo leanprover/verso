@@ -45,7 +45,7 @@ block_extension Block.lean (hls : Highlighted) (file : Option System.FilePath :=
   toHtml :=
     open Verso.Output.Html in
     some <| fun _ _ _ data _ => do
-      let .arr #[hlJson, ds, _, _] := data
+      let .arr #[hlJson, _ds, _, _] := data
         | HtmlT.logError "Expected four-element JSON for Lean code" *> pure .empty
       match FromJson.fromJson? hlJson with
       | .error err =>
