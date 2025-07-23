@@ -115,6 +115,17 @@ jobs:
           cp -r _out/html-single html-single-page
           zip -r html-single-page.zip html-single-page
 
+      - name: Install TypeScript
+        run: |
+          sudo apt update && sudo apt install node-typescript
+
+      - uses: actions/checkout@v4
+
+      - name: Type check the search bar code
+        run: |
+          cd _out/html-multi/-verso-search
+          tsc --noEmit -p jsconfig.json
+
       - name: Upload docs to artifact storage
         if: github.ref != 'refs/heads/main'
         uses: actions/upload-artifact@v4
