@@ -38,7 +38,7 @@ block_extension Block.signature where
         HtmlT.logError <| "Couldn't deserialize Lean code while rendering HTML signature: " ++ err ++ "\n" ++ toString data
         pure .empty
       | .ok (hl : Highlighted) =>
-        hl.blockHtml "examples"
+        hl.blockHtml (g := Manual) "examples"
 
 
 declare_syntax_cat signature_spec

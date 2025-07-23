@@ -25,7 +25,7 @@ import VersoManual.InlineLean.SyntaxError
 
 open Lean Elab
 open Verso ArgParse Doc Elab Genre.Manual Html Code Highlighted.WebAssets ExpectString
-open SubVerso.Highlighting Highlighted
+open SubVerso.Highlighting
 
 open Verso.SyntaxUtils (parserInputString runParserCategory' SyntaxError)
 
@@ -38,7 +38,7 @@ private def hlJsDeps : List JsFile :=
 
 inline_extension Inline.lean (hls : Highlighted) where
   data :=
-    let defined := hls.definedNames.toArray
+    let defined := definedNames hls
     Json.arr #[ToJson.toJson hls, ToJson.toJson defined]
 
   traverse id data _ := do
@@ -48,11 +48,8 @@ inline_extension Inline.lean (hls : Highlighted) where
     | .error err =>
       logError <| "Couldn't deserialize Lean code while traversing inline example: " ++ err
       pure none
-    | .ok (defs : Array Name) =>
-      let path ← (·.path) <$> read
-      for n in defs do
-        let _ ← externalTag id path n.toString
-        modify (·.saveDomainObject exampleDomain n.toString id)
+    | .ok (defs : Array (Name × String)) =>
+      saveExampleDefs id defs
       pure none
   toTeX :=
     some <| fun go _ _ content => do
@@ -72,7 +69,7 @@ inline_extension Inline.lean (hls : Highlighted) where
         HtmlT.logError <| "Couldn't deserialize Lean code while rendering inline HTML: " ++ err
         pure .empty
       | .ok (hl : Highlighted) =>
-        hl.inlineHtml "examples"
+        hl.inlineHtml (g := Manual) "examples"
 
 
 section Config
@@ -743,7 +740,7 @@ inline_extension Inline.name where
         HtmlT.logError <| "Couldn't deserialize Lean code while rendering HTML: " ++ err
         pure .empty
       | .ok (hl : Highlighted) =>
-        hl.inlineHtml "examples"
+        hl.inlineHtml (g := Manual) "examples"
 
 structure NameConfig where
   full : Option Name

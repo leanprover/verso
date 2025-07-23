@@ -156,6 +156,8 @@ implement traversal for the provided part metadata, block extensions, and inline
 
 instance : TraversePart SimplePage := {}
 
+instance : TraverseBlock SimplePage := {}
+
 instance : Traverse SimplePage TraverseM where
   part _ := pure none
   block _ := pure ()
@@ -219,7 +221,6 @@ instance : GenreHtml SimplePage IO where
     -- Otherwise emit the right ID
     | .inr ⟨dest, some t⟩, contents => do
       pure {{<a href=s!"#{dest}" id=s!"link-{t}"> {{← contents.mapM recur}} </a>}}
-
 
 /--
 The main function to be called to produce HTML output

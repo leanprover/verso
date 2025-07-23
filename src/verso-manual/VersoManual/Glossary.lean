@@ -95,11 +95,26 @@ def Glossary.addEntry [Monad m] [MonadState TraverseState m] [MonadLiftT IO m] [
   | some (.ok (v : Json)) =>
     modify (TraverseState.set · glossaryState <| v.setObjVal! key (ToJson.toJson id))
 
+open Verso.Search in
+def technicalTermDomainMapper : DomainMapper := {
+  displayName := "Terminology",
+  className := "tech-term-domain",
+  dataToSearchables :=
+    "(domainData) =>
+  Object.entries(domainData.contents).map(([key, value]) => ({
+    searchKey: value[0].data.term,
+    address: `${value[0].address}#${value[0].id}`,
+    domainId: 'Verso.Genre.Manual.doc.tech',
+    ref: value,
+  }))"
+  : DomainMapper }.setFont { family := .text }
+
 @[inline_extension deftech]
 def deftech.descr : InlineDescr where
   init st := st
     |>.setDomainTitle technicalTermDomain "Terminology"
     |>.setDomainDescription technicalTermDomain "Definitions of technical terms"
+    |>.addQuickJumpMapper technicalTermDomain technicalTermDomainMapper
 
   traverse id data _contents := do
     -- A round with internal tags is not needed here because users's don't get to pick IDs
@@ -216,6 +231,10 @@ a.technical-term {
 a.technical-term:hover {
   text-decoration: currentcolor underline solid;
 }
-
+/* Highlight the clicked term */
+.def-technical-term:target {
+  background-color: var(--verso-selected-color);
+  outline: auto;
+}
 "#
   ]

@@ -109,9 +109,13 @@ def traverser (g : Genre) [bg : BlogGenre g] : Traverse g Blog.TraverseM where
 
 instance : TraversePart Page := {}
 
+instance : TraverseBlock Page := {}
+
 instance : Traverse Page Blog.TraverseM := traverser Page
 
 instance : TraversePart Post := {}
+
+instance : TraverseBlock Post := {}
 
 instance : Traverse Post Blog.TraverseM := traverser Post
 

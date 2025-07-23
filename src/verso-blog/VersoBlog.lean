@@ -799,7 +799,7 @@ private def filterString (p : Char → Bool) (str : String) : String := Id.run <
   pure out
 
 open Template in
-def blogMain (theme : Theme) (site : Site) (relativizeUrls := true) (linkTargets : Code.LinkTargets := {})
+def blogMain (theme : Theme) (site : Site) (relativizeUrls := true) (linkTargets : Code.LinkTargets TraverseContext := {})
     (options : List String) (components : Components := by exact %registered_components)
     (header : String := Html.doctype) :
     IO UInt32 := do

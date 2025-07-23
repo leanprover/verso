@@ -27,7 +27,7 @@ structure Generate.Context where
   site : Site
   ctxt : TraverseContext
   xref : TraverseState
-  linkTargets : LinkTargets
+  linkTargets : LinkTargets TraverseContext
   /-- The root directory in which to generate the static site -/
   dir : System.FilePath
   config : Config
@@ -77,7 +77,7 @@ def GenerateM.toHtml (g : Genre)
     (bg.context_eq ▸ ctxt)
     (bg.state_eq ▸ state)
     {}
-    linkTargets
+    (bg.context_eq ▸ linkTargets)
     {}
     x
     (← get)
@@ -92,6 +92,7 @@ namespace Params
 
 def forPart [BlogGenre g] [GenreHtml g ComponentM]
     [ToHtml g ComponentM (Part g)]
+    [ToHtml g ComponentM (Block g)]
     (txt : Part g) : GenerateM Params := do
   let titleHtml : Html ← txt.title.mapM (GenerateM.toHtml g)
   let preamble ← txt.content.mapM (GenerateM.toHtml g)
