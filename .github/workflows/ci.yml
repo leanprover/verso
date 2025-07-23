@@ -76,7 +76,7 @@ jobs:
       - name: Install PDF Dependencies
         uses: zauguin/install-texlive@v4
         with:
-          texlive_version: 2024
+          texlive_version: 2025
           packages: |
             scheme-minimal
             l3packages
@@ -114,6 +114,15 @@ jobs:
           cp _out/tex/main.pdf ./manual.pdf
           cp -r _out/html-single html-single-page
           zip -r html-single-page.zip html-single-page
+
+      - name: Install TypeScript
+        run: |
+          sudo apt update && sudo apt install node-typescript
+
+      - name: Type check the search bar code
+        run: |
+          cd _out/html-multi/-verso-search
+          tsc --noEmit -p jsconfig.json
 
       - name: Upload docs to artifact storage
         if: github.ref != 'refs/heads/main'

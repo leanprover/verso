@@ -11,11 +11,13 @@ import Verso.Doc.Html
 import Verso.Doc.TeX
 import MultiVerso
 import MultiVerso.Slug
+import VersoSearch
 import VersoManual.LicenseInfo
 import VersoManual.Ext
 import Verso.Output.Html
 import Verso.Output.TeX
 import Verso.BEq
+
 
 open Lean (Name Json NameMap ToJson FromJson)
 open Std (HashSet HashMap TreeSet)
@@ -35,6 +37,91 @@ inductive Output where
     html (depth : Nat)
 deriving DecidableEq, BEq, Hashable
 
+/--
+The font families used when rendering documents.
+
+These font families are specified using CSS variables, so they can be overridden.
+-/
+inductive FontFamily where
+  | /--
+    The font used for ordinary text, customized with the `--verso-text-font-family` CSS variable.
+    -/
+    text
+  | /--
+    The font used for “structural” text, such as headers. Customized with the `--verso-structure-font-family` CSS variable.
+    -/
+    structure
+  | /--
+    The font used for monospace code, customized with the `--verso-code-font-family` CSS variable.
+    -/
+    code
+deriving DecidableEq, Repr, Hashable
+
+namespace FontFamily
+/--
+The CSS variable that is used to style this font.
+-/
+def toCssVar : FontFamily → String
+  | .text => "--verso-text-font-family"
+  | .structure => "--verso-structure-font-family"
+  | .code => "--verso-code-font-family"
+
+/--
+Returns CSS code that styles text using the font family.
+-/
+def toCss (family : FontFamily) : String := s!"font-family: var({family.toCssVar});"
+
+end FontFamily
+
+inductive FontStyle where
+  | normal
+  | italic
+deriving DecidableEq, Repr, Hashable
+
+def FontStyle.toCss (s : FontStyle) : String :=
+  "font-style: " ++
+  match s with
+  | .normal => "normal;"
+  | .italic => "italic;"
+
+inductive FontWeight where
+  | lighter
+  | light
+  | normal
+  | bold
+  | bolder
+  | numeric (weight : Nat) (ok : weight > 0 ∧ weight < 1000 := by omega)
+deriving DecidableEq, Repr, Hashable
+
+def FontWeight.toCss (w : FontWeight) : String :=
+  "font-weight: " ++
+  match w with
+  | .lighter => "lighter;"
+  | .light => "light;"
+  | .normal => "normal;"
+  | .bold => "bold;"
+  | .bolder => "bolder;"
+  | .numeric n _ => s!"{n};"
+
+/-- A specification of a font. -/
+structure Font where
+  family : FontFamily := .text
+  style : FontStyle := .normal
+  weight : FontWeight := .normal
+deriving DecidableEq, Repr, Hashable
+
+/-- CSS code for a font. -/
+def Font.toCss (font : Font) : String :=
+  "  " ++ font.family.toCss ++ "\n" ++
+  "  " ++ font.style.toCss ++ "\n" ++
+  "  " ++ font.weight.toCss ++ "\n"
+
+open Verso.Search in
+defmethod DomainMapper.setFont (mapper : DomainMapper) (font : Font) : DomainMapper :=
+  { mapper with
+    quickJumpCss :=
+      s!"#search-wrapper .{mapper.className} " ++ "{\n" ++ font.toCss ++ "}\n"
+  }
 
 /--
 Tags are used to refer to parts through tables of contents, cross-references, and the like.
@@ -147,6 +234,7 @@ instance : ForIn m Domains (Name × Domain) :=
 
 def StringSet := HashSet String
 
+open Verso.Search in
 structure TraverseState where
   tags : HashMap Tag InternalId := {}
   externalTags : HashMap InternalId Link := {}
@@ -157,6 +245,7 @@ structure TraverseState where
   extraJs : HashSet String := {}
   extraJsFiles : Array JsFile := #[]
   extraCssFiles : Array (String × String) := #[]
+  quickJump : DomainMappers := {}
   licenseInfo : HashSet LicenseInfo := {}
   private contents : NameMap Json := {}
 
@@ -191,6 +280,8 @@ local instance [BEq α] [Hashable α] : BEq (HashSet α) where
 local instance [BEq α] [Ord α] : BEq (TreeSet α) where
   beq := ptrEqThen fun xs ys => xs.size == ys.size && xs.all (ys.contains ·)
 
+local instance [BEq α] [Hashable α] [BEq β] : BEq (HashMap α β) where
+  beq := ptrEqThen fun xs ys => xs.size == ys.size && xs.all (ys[·]?.isEqSome ·)
 
 instance : BEq TraverseState where
   beq := ptrEqThen fun x y =>
@@ -208,6 +299,7 @@ instance : BEq TraverseState where
     x.extraJs == y.extraJs &&
     x.extraJsFiles == y.extraJsFiles &&
     x.extraCssFiles == y.extraCssFiles &&
+    x.quickJump == y.quickJump &&
     ptrEqThen' x.contents y.contents (fun c1 c2 =>
       c1.size == c2.size &&
       c1.all (c2.find? · |>.isEqSome ·)) &&
@@ -246,6 +338,10 @@ def setDomainTitle (state : TraverseState) (domain : Name) (title : String) : Tr
 def setDomainDescription (state : TraverseState) (domain : Name) (description : String) : TraverseState :=
   {state with domains := state.domains.insert domain {state.domains.find? domain |>.getD {} with description := some description}}
 
+open Verso.Search in
+def addQuickJumpMapper (state : TraverseState) (domain : Name) (domainMapper : DomainMapper) : TraverseState :=
+  { state with quickJump := state.quickJump.insert domain.toString domainMapper }
+
 def htmlId (state : TraverseState) (id : InternalId) : Array (String × String) :=
   if let some {htmlId, ..} := state.externalTags[id]? then
     #[("id", htmlId.toString)]
@@ -261,7 +357,33 @@ structure Block where
   name : Name := by exact decl_name%
   id : Option InternalId := none
   data : Json := Json.null
-deriving BEq, Hashable, ToJson, FromJson
+  /--
+  A registry for properties that can be used to create ad-hoc protocols for coordination between
+  block elements in extensions.
+  -/
+  properties : Lean.NameMap String := {}
+deriving ToJson, FromJson
+
+section
+local instance : Repr Json := ⟨fun v _ => s!"json%" ++ v.render ⟩
+deriving instance Repr for Block
+end
+
+
+instance : BEq Block where
+  beq
+    | ⟨n1, i1, d1, p1⟩, ⟨n2, i2, d2, p2⟩ =>
+      n1 == n2 &&
+      i1 == i2 &&
+      ptrEqThen' d1 d2 (· == ·) &&
+      ptrEqThen' p1 p2 fun x y =>
+        x.size == y.size && x.all (fun k v => y.find? k |>.isEqSome v)
+
+instance : Hashable Block where
+  hash
+    | ⟨n, i, d, p⟩ =>
+      have : Ord (Name × String) := Ord.lex ⟨Name.quickCmp⟩ inferInstance
+      mixHash (hash n) <| mixHash (hash i) <| mixHash (hash d) (hash p.toArray.qsortOrd)
 
 structure Inline where
   name : Name := by exact decl_name%
@@ -307,11 +429,24 @@ structure PartHeader where
   metadata : Option PartMetadata
 deriving Repr
 
+inductive BlockContext where
+  | para
+  | code
+  | ul
+  | ol (start : Int)
+  | dl
+  | blockquote
+  | concat
+  | other (container : Manual.Block)
+deriving Repr
+
 structure TraverseContext where
   /-- The current URL path - will be [] for non-HTML output or in the root -/
   path : Path := #[]
   /-- The path from the root to the current header -/
   headers : Array PartHeader := #[]
+  /-- The path from the current header to the current block -/
+  blockContext : Array BlockContext := #[]
   /-- Whether the current build is a draft (used for hiding TODOs, etc from public builds) -/
   draft : Bool := false
   logError : String → IO Unit
@@ -380,11 +515,25 @@ instance : FromJson (Genre.Inline Manual) := inferInstanceAs (FromJson Manual.In
 
 namespace Manual
 
+def BlockContext.ofBlock (block : Doc.Block Manual) : BlockContext :=
+  match block with
+  | .para .. => .para
+  | .code .. => .code
+  | .ul .. => .ul
+  | .ol start .. => .ol start
+  | .dl .. => .dl
+  | .blockquote .. => .blockquote
+  | .concat .. => .concat
+  | .other container .. => .other container
+
 def PartHeader.ofPart (part : Part Manual) : PartHeader :=
   {titleString := part.titleString, metadata := part.metadata}
 
 def TraverseContext.inPart (self : TraverseContext) (part : Part Manual) : TraverseContext :=
   {self with headers := self.headers.push <| .ofPart part}
+
+def TraverseContext.inBlock (self : TraverseContext) (block : Doc.Block Manual) : TraverseContext :=
+  { self with blockContext := self.blockContext.push (.ofBlock block) }
 
 def TraverseContext.sectionNumber (self : TraverseContext) : Array (Option Numbering) :=
   self.headers.map (·.metadata |>.getD {} |>.assignedNumber)
@@ -687,6 +836,8 @@ def doc.syntaxKind : Domain := {}
 def doc.option : Domain := {}
 def doc.tactic.conv : Domain := {}
 
+
+/-- Names defined as examples -/
 -- Protected to avoid taking up good namespace
 protected def «example» : Domain := {}
 
@@ -698,14 +849,120 @@ def optionDomain := ``Verso.Genre.Manual.doc.option
 def convDomain := ``Verso.Genre.Manual.doc.tactic.conv
 def exampleDomain := ``Verso.Genre.Manual.example
 
-def TraverseState.definitionIds (state : TraverseState) : NameMap String := Id.run do
+def TraverseState.definitionIds (state : TraverseState) (ctxt : TraverseContext) : NameMap String := Id.run do
+  let exampleBlock := ctxt.blockContext.findSomeRev? fun
+    | .other x => x.properties.find? `Verso.Genre.Manual.exampleDefContext
+    | _ => none
+  let exampleDeco := exampleBlock.map (s!" (in {·})")
   if let some examples := state.domains.find? exampleDomain then
     let mut idMap := {}
     for (x, _) in examples.objects do
-      if let .ok { htmlId := slug, .. } := state.resolveDomainObject exampleDomain x then
-        idMap := idMap.insert x.toName slug.toString
+      let afterSpace := x.dropWhile (· != ' ')
+      if exampleDeco.isEqSome afterSpace then
+        if let .ok { htmlId := slug, .. } := state.resolveDomainObject exampleDomain x then
+          idMap := idMap.insert (x.takeWhile (· != ' ') |>.toName) slug.toString
+      else if afterSpace.isEmpty then
+        if let .ok { htmlId := slug, .. } := state.resolveDomainObject exampleDomain x then
+          idMap := idMap.insert x.toName slug.toString
     return idMap
   else return {}
+
+open Verso.Search in
+/--
+Quick jump configuration for definitions in examples
+-/
+def exampleDomainMapper : DomainMapper := {
+  displayName := "Example Definition",
+  className := "example-def",
+  -- This is a bit of a hack. Examples with repeated names should really get differing canonical
+  -- names, but it's unclear what to use for them. Perhaps it should be the concatenated tags of the
+  -- containing sections, with a sequence number in case of further duplication? For now, this
+  -- fairly complicated mapper does the job. It'd also be good to have a way to show metadata in the
+  -- quick-jump box, with different styling.
+  dataToSearchables :=
+    "(domainData) => {
+  const byName = Object.entries(domainData.contents).flatMap(([key, value]) =>
+    value.map(v => ({
+      context: v.data[`${v.address}#${v.id}`].context,
+      name: v.data[`${v.address}#${v.id}`].display,
+      address: `${v.address}#${v.id}`
+    }))).reduce((acc, obj) => {
+      const key = obj.name;
+      if (!acc.hasOwnProperty(key)) acc[key] = [];
+      acc[key].push(obj);
+      return acc;
+    }, {})
+  return Object.entries(byName).flatMap(([key, value]) => {
+    if (value.length === 0) { return []; }
+    const firstCtxt = value[0].context;
+    let prefixLength = 0;
+    for (let i = 0; i < firstCtxt.length; i++) {
+      if (value.every(v => i < v.context.length && v.context[i] === firstCtxt[i])) {
+        prefixLength++;
+      } else break;
+    }
+    return value.map((v) => ({
+      searchKey: v.context.slice(prefixLength).concat(v.name).join(' › '),
+      address: v.address,
+      domainId: 'Verso.Genre.Manual.example',
+      ref: value
+    }));
+  });
+}"
+  : DomainMapper }.setFont { family := .code }
+
+section
+
+open SubVerso.Highlighting
+
+/--
+Extracts all names that are marked as definition sites, with both their occurrence in the source and
+the underlying name.
+-/
+partial def definedNames : Highlighted → Array (Name × String)
+  | .token ⟨.const n _ _ true, s⟩ => #[(n, s)]
+  | .token _ => #[]
+  | .span _ hl | .tactics _ _ _ hl => definedNames hl
+  | .seq hls => hls.map definedNames |>.foldl (· ++ ·) #[]
+  | .text .. | .point .. | .unparsed .. => #[]
+
+variable [Monad m] [MonadReader TraverseContext m] [MonadStateOf TraverseState m]
+
+/--
+Saves a set of example definitions to the xref database with the expected metadata.
+-/
+def saveExampleDefs (id : InternalId) (definedNames : Array (Name × String)) : m Unit := do
+  let key := (ToJson.toJson id).compress
+  let assignedIds : Option (Except String Json) := (← get).get? `Verso.Genre.Manual.saveExampleDefs
+  let assignedIds := assignedIds.bind (·.toOption) |>.getD (Json.mkObj [])
+  let mut theseIds := if let .ok v@(.obj _) := assignedIds.getObjVal? key then v else Json.mkObj []
+
+  let exampleBlock := (← read).blockContext.findSomeRev? fun
+    | .other x => x.properties.find? `Verso.Genre.Manual.exampleDefContext
+    | _ => none
+  let context := (← read).headers.map (·.titleString)
+  let context := exampleBlock.map context.push |>.getD context
+  for (d, s) in definedNames do
+    if d.isAnonymous then continue
+    let thisId := theseIds.getObjValAs? InternalId d.toString |>.toOption
+    let thisId ←
+      if let some i := thisId then pure i
+      else
+        let i ← freshId
+        theseIds := theseIds.setObjValAs! d.toString i
+        pure i
+    let d :=
+      if let some ex := exampleBlock then s!"{d} (in {ex})" else d.toString
+    let path ← (·.path) <$> read
+    let _ ← externalTag thisId path d
+    modify (·.saveDomainObject exampleDomain d thisId)
+    if let some link := (← get).externalTags[thisId]? then
+      modify (·.modifyDomainObjectData exampleDomain d fun v =>
+        let v := if let .obj _ := v then v else .obj {}
+        v.setObjVal! link.link (json%{"context": $context, "display": $s}))
+  let assignedIds := assignedIds.setObjVal! key theseIds
+  modify (·.set `Verso.Genre.Manual.saveExampleDefs assignedIds)
+end
 
 def TraverseState.linksFromDomain
     (domain : Name) (canonicalName : String)
@@ -714,23 +971,30 @@ def TraverseState.linksFromDomain
   state.resolveDomainObject domain canonicalName |>.toOption |>.toArray |>.map fun l =>
     { shortDescription, description, href := l.link }
 
-def TraverseState.localTargets (state : TraverseState) : Code.LinkTargets where
-  const := fun x =>
+def TraverseState.exampleLinks (name : String) (state : TraverseState) (ctxt? : Option TraverseContext) : Array Code.CodeLink := Id.run do
+  let exampleBlock := ctxt?.bind (·.blockContext.findSomeRev? fun
+    | .other x => x.properties.find? `Verso.Genre.Manual.exampleDefContext
+    | _ => none)
+  let name := exampleBlock.map (s!"{name} (in {·})") |>.getD name
+  -- There's no `x` in the tooltip on the next line to avoid revealing suppressed namespaces
+  state.linksFromDomain exampleDomain name "def" s!"Definition of example"
+
+def TraverseState.localTargets (state : TraverseState) : Code.LinkTargets Manual.TraverseContext where
+  const := fun x ctxt? =>
     state.linksFromDomain docstringDomain x.toString "doc" s!"Documentation for {x}" ++
-    state.linksFromDomain exampleDomain x.toString "def" s!"Definition of example {x}"
-  option := fun x =>
+    state.exampleLinks x.toString ctxt?
+  option := fun x _ctxt? =>
     state.linksFromDomain optionDomain x.toString "doc" s!"Documentation for option {x}"
-  keyword := fun k =>
+  keyword := fun k _ctxt? =>
     state.linksFromDomain tacticDomain k.toString "doc" "Documentation for tactic" ++
     state.linksFromDomain syntaxKindDomain k.toString "doc" "Documentation for syntax"
 
-
-def TraverseState.remoteTargets (state : TraverseState) : Code.LinkTargets where
-  const := fun x =>
+def TraverseState.remoteTargets (state : TraverseState) : Code.LinkTargets Manual.TraverseContext where
+  const := fun x _ctxt? =>
     fromRemoteDomain docstringDomain x.toString (s!"doc ({·})") (s!"Documentation for {x} in {·}")
-  option := fun x =>
+  option := fun x _ctxt? =>
     fromRemoteDomain optionDomain x.toString (s!"doc ({·})") (s!"Documentation for option {x} in {·}")
-  keyword := fun k =>
+  keyword := fun k _ctxt? =>
     fromRemoteDomain tacticDomain k.toString (s!"doc ({·})") (s!"Documentation for tactic in {·}") ++
     fromRemoteDomain syntaxKindDomain k.toString (s!"doc ({·})") (s!"Documentation for syntax in {·}")
 where
@@ -759,8 +1023,25 @@ def sectionString (ctxt : TraverseContext) : Option String :=
 
 def sectionDomain := `Verso.Genre.Manual.section
 
+open Verso.Search in
+def sectionDomainMapper : DomainMapper := {
+  displayName := "Section",
+  className := "section-domain",
+  dataToSearchables :=
+    "(domainData) =>
+    Object.entries(domainData.contents).map(([key, value]) => ({
+      searchKey: `${value[0].data.sectionNum} ${value[0].data.title}`,
+      address: `${value[0].address}#${value[0].id}`,
+      domainId: 'Verso.Genre.Manual.section',
+      ref: value,
+    }))"
+  : DomainMapper }.setFont { family := .structure, weight := .bold }
+
 instance : TraversePart Manual where
   inPart p := (·.inPart p)
+
+instance : TraverseBlock Manual where
+  inBlock b := (·.inBlock b)
 
 instance : Traverse Manual TraverseM where
   part p :=
@@ -854,7 +1135,7 @@ instance : Traverse Manual TraverseM where
       else pure (part |>.withMetadata «meta» |>.withSubparts subs)
 
   genreBlock
-    | ⟨name, id?, data⟩, content => do
+    | ⟨name, id?, data, props⟩, content => do
       if let some id := id? then
         if let some impl := (← readThe ExtensionImpls).getBlock? name then
           for js in impl.extraJs do
@@ -877,7 +1158,7 @@ instance : Traverse Manual TraverseM where
       else
         -- Assign a fresh ID if there is none. It can then be used on the next traversal pass.
         let id ← freshId
-        pure <| some <| Block.other ⟨name, some id, data⟩ content
+        pure <| some <| Block.other ⟨name, some id, data, props⟩ content
   genreInline
     | ⟨name, id?, data⟩, content => do
       if let some id := id? then

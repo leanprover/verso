@@ -537,11 +537,19 @@ def page
         <link rel="stylesheet" href="/book.css" />
         <script>s!"const __versoSiteRoot = document.baseURI;"</script>
         <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js" integrity="sha384-zbcZAIxlvJtNE3Dp5nxLXdXtXyxwOdnILY1TDPVmKFhl4r4nSUG1r8bcFXGVa4Te" crossorigin="anonymous"></script>
+        <script src="-verso-search/elasticlunr.min.js"></script>
+        <script src="-verso-search/fuzzysort.js"></script>
+        <script src="-verso-search/searchIndex.js"></script>
+        <script type="module" src="-verso-search/search-init.js"></script>
+        <link rel="stylesheet" href="-verso-search/search-box.css"/>
+        <link rel="stylesheet" href="-verso-search/search-highlight.css"/>
+        <link rel="stylesheet" href="-verso-search/domain-display.css"/>
         {{extraJsFiles.map fun f => ({{<script src=s!"{f.1}" {{if f.2 then defer else #[]}}></script>}})}}
         {{extraStylesheets.map (fun url => {{<link rel="stylesheet" href={{url}}/> }})}}
         {{extraCss.toArray.map ({{<style>{{Html.text false ·}}</style>}})}}
         {{extraJs.toArray.map ({{<script>{{Html.text false ·}}</script>}})}}
         {{extraHead}}
+        <script src="-verso-search/search-highlight.js" defer="defer"></script>
       </head>
       <body>
         <header>

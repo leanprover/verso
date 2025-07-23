@@ -39,6 +39,9 @@ def pageStyle : String := r####"
     /* How wide should the ToC be on non-mobile? */
     --verso-toc-width: 18rem;
 
+    /** Selected items (e.g. search results) */
+    --verso-selected-color: #def;
+
     /** Variables that control the “burger menu” appearance **/
     --verso-burger-height: 1.25rem;
     --verso-burger-width: 1.25rem;

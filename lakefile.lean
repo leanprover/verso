@@ -9,6 +9,11 @@ package verso where
   precompileModules := false -- temporarily disabled to work around an issue with nightly-2025-03-30
 
 @[default_target]
+lean_lib VersoUtil where
+  srcDir := "src/verso-util"
+  roots := #[`VersoUtil]
+
+@[default_target]
 lean_lib Verso where
   srcDir := "src/verso"
   roots := #[`Verso]
@@ -18,9 +23,14 @@ lean_lib MultiVerso where
   srcDir := "src/multi-verso"
   roots := #[`MultiVerso]
 
+input_dir searchJs where
+  path := "static-web/search"
+
 @[default_target]
 lean_lib VersoSearch where
   srcDir := "src/verso-search"
+  -- Rebuild search when JS on disk changes
+  needs := #[searchJs]
 
 @[default_target]
 lean_lib VersoBlog where
@@ -52,6 +62,7 @@ lean_exe «verso-demo» where
 
 lean_lib UsersGuide where
   srcDir := "doc"
+  leanOptions := #[⟨`weak.linter.verso.manual.headerTags, true⟩]
 
 @[default_target]
 lean_exe usersguide where

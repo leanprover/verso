@@ -37,6 +37,12 @@ register_option verso.examples.suggest : Bool := {
 structure CodeConfig where
   /-- Whether to render proof states -/
   showProofStates : Bool := true
+  /--
+  Whether to treat names defined in the code as link targets.
+
+  If unspecified, the block or inline element in question may fall back to a default value.
+  -/
+  defSite : Option Bool := none
 deriving DecidableEq, Ord, Repr, Quote, ToExpr, ToJson, FromJson
 
 /--
@@ -118,8 +124,8 @@ structure CodeModuleContext extends CodeConfig where
   module : Ident
 
 instance : FromArgs CodeModuleContext m where
-  fromArgs := ((·, ·) <$> moduleOrDefault <*> .namedD `showProofStates .bool true) <&> fun (m, s) =>
-    ({module := m, showProofStates := s})
+  fromArgs := ((·, ·, ·) <$> moduleOrDefault <*> .namedD `showProofStates .bool true <*> .named `defSite .bool true) <&> fun (m, s, d) =>
+    ({module := m, showProofStates := s, defSite := d})
 
 /--
 A specification of which module to look in to find example code, potentially made more specific with
@@ -355,7 +361,7 @@ Requires that the genre have an `ExternalCode` instance.
 @[code_block_expander module]
 def module : CodeBlockExpander
   | args, code => withTraceNode `Elab.Verso (fun _ => pure m!"module") <| do
-    let cfg@{ module := moduleName, anchor?, showProofStates := _ } ← parseThe CodeContext args
+    let cfg@{ module := moduleName, anchor?, showProofStates := _, defSite := _ } ← parseThe CodeContext args
     withAnchored moduleName anchor? fun hl => do
       logInfos hl
       let hlString := hl.toString
@@ -389,7 +395,7 @@ Requires that the genre have an `ExternalCode` instance.
 @[role_expander module]
 def moduleInline : RoleExpander
   | args, inls => withTraceNode `Elab.Verso (fun _ => pure m!"moduleInline") <| do
-    let cfg@{module := moduleName, anchor?, showProofStates := _} ← parseThe CodeContext args
+    let cfg@{module := moduleName, anchor?, showProofStates := _, defSite := _} ← parseThe CodeContext args
     let code? ← oneCodeStr? inls
 
     withAnchored moduleName anchor? fun hl => do
@@ -438,7 +444,7 @@ Requires that the genre have an `ExternalCode` instance.
 @[role_expander moduleName]
 def moduleName : RoleExpander
   | args, inls => withTraceNode `Elab.Verso (fun _ => pure m!"moduleName") <| do
-    let cfg@{module := moduleName, anchor?, show?, showProofStates := _} ← parseThe NameContext args
+    let cfg@{module := moduleName, anchor?, show?, showProofStates := _, defSite := _} ← parseThe NameContext args
     let name ← oneCodeStr inls
     let nameStr := name.getString
 
@@ -494,7 +500,7 @@ Requires that the genre have an `ExternalCode` instance.
 @[role_expander moduleTerm]
 def moduleTerm : RoleExpander
   | args, inls => withTraceNode `Elab.Verso (fun _ => pure m!"moduleTerm") <| do
-    let cfg@{module := moduleName, anchor?, showProofStates := _} ← parseThe CodeContext args
+    let cfg@{module := moduleName, anchor?, showProofStates := _, defSite := _} ← parseThe CodeContext args
     let term ← oneCodeStr inls
 
     withAnchored moduleName anchor? fun hl => do
@@ -527,7 +533,7 @@ macro_rules
 @[code_block_expander moduleTerm, inherit_doc moduleTerm]
 def moduleTermBlock : CodeBlockExpander
   | args, term => withTraceNode `Elab.Verso (fun _ => pure m!"moduleTerm") <| do
-    let cfg@{module := moduleName, anchor?, showProofStates := _} ← parseThe CodeContext args
+    let cfg@{module := moduleName, anchor?, showProofStates := _, defSite := _} ← parseThe CodeContext args
 
     withAnchored moduleName anchor? fun hl => do
       let str := term.getString.trim
@@ -580,7 +586,7 @@ Requires that the genre have an `ExternalCode` instance.
 @[code_block_expander moduleOut]
 def moduleOut : CodeBlockExpander
   | args, str => withTraceNode `Elab.Verso (fun _ => pure m!"moduleOut") <| do
-    let {module := moduleName, anchor?, severity, showProofStates := _} ← parseThe MessageContext args
+    let {module := moduleName, anchor?, severity, showProofStates := _, defSite := _} ← parseThe MessageContext args
 
     withAnchored moduleName anchor? fun hl => do
       let infos : Array _ := allInfo hl
@@ -636,7 +642,7 @@ def moduleOutRole : RoleExpander
   | args, inls => withTraceNode `Elab.Verso (fun _ => pure m!"moduleOutRole") <| do
     let str? ← oneCodeStr? inls
 
-    let {module := moduleName, anchor?, severity, showProofStates := _} ← parseThe MessageContext args
+    let {module := moduleName, anchor?, severity, showProofStates := _, defSite := _} ← parseThe MessageContext args
 
     withAnchored moduleName anchor? fun hl => do
       let infos := allInfo hl
