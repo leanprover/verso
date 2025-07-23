@@ -147,7 +147,7 @@ def blockHtml (g : Genre)
     pure {{ <pre class=s!"lexed {content.name}"> {{ content.toHtml }} </pre> }}
   | .highlightedCode { contextName, showProofStates } hls, _contents =>
     withReader (fun ρ => { ρ with codeOptions.inlineProofStates := showProofStates }) <|
-    hls.blockHtml (toString contextName)
+    hls.blockHtml (toString contextName) (g := g)
   | .htmlDetails classes summary, contents => do
     pure {{ <details class={{classes}}><summary>{{summary}}</summary> {{← contents.mapM goB}}</details>}}
   | .htmlWrapper name attrs, contents => do
@@ -176,11 +176,11 @@ def inlineHtml (g : Genre) [bg : BlogGenre g]
     Blog.InlineExt → Array (Inline g) → HtmlM g Html
   | .highlightedCode { contextName, showProofStates } hls, _contents =>
     withReader (fun ρ => { ρ with codeOptions.inlineProofStates := showProofStates }) <|
-    hls.inlineHtml (some <| toString contextName)
+    hls.inlineHtml (some <| toString contextName) (g := g)
   | .lexedText content, _contents => do
     pure {{ <code class=s!"lexed {content.name}"> {{ content.toHtml }} </code> }}
   | .customHighlight hls, _contents => do
-    hls.inlineHtml none
+    hls.inlineHtml none (g := g)
   | .label x, contents => do
     let contentHtml ← contents.mapM go
     let st ← bg.state_eq ▸ state

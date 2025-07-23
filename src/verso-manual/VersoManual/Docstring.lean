@@ -673,9 +673,9 @@ def internalSignature.descr : BlockDescr where
       return {{
         <section class="subdocs">
           <pre class="name-and-type hl lean">
-            {{← name.toHtml}}
+            {{← name.toHtml (g := Manual)}}
             {{← if let some s := signature then do
-                  pure {{" : " {{← s.toHtml}} }}
+                  pure {{" : " {{← s.toHtml (g := Manual)}} }}
                 else pure .empty}}
           </pre>
           <div class="docs">
@@ -704,7 +704,7 @@ def inheritance.descr : BlockDescr where
                 pure {{
                   <li>
                     <input type="checkbox" id={{filterId}} checked="checked" data-parent-idx={{toString parent.index}}/>
-                    <label for={{filterId}}><code class="hl lean inline">{{← parent.parent.toHtml}}</code></label>
+                    <label for={{filterId}}><code class="hl lean inline">{{← parent.parent.toHtml (g := Manual)}}</code></label>
                   </li>}}
               }}
             </ul>
@@ -730,7 +730,7 @@ def fieldSignature.descr : BlockDescr where
       return {{
         <section class="subdocs" {{inheritedAttr}}>
           <pre class="name-and-type hl lean">
-            {{visibility}}{{← name.toHtml}} " : " {{ ← signature.toHtml}}
+            {{visibility}}{{← name.toHtml (g := Manual)}} " : " {{ ← signature.toHtml (g := Manual)}}
           </pre>
           {{← if inheritedFrom.isSome then do
               pure {{
@@ -738,7 +738,7 @@ def fieldSignature.descr : BlockDescr where
                   "Inherited from "
                   <ol>
                   {{ ← parents.mapM fun p => do
-                      pure {{<li><code class="hl lean inline">{{ ← p.toHtml }}</code></li>}}
+                      pure {{<li><code class="hl lean inline">{{ ← p.toHtml (g := Manual) }}</code></li>}}
                   }}
                   </ol>
                 </div>}}
@@ -761,7 +761,7 @@ def constructorSignature.descr : BlockDescr where
 
       return {{
         <div class="constructor">
-          <pre class="name-and-type hl lean">{{← signature.toHtml}}</pre>
+          <pre class="name-and-type hl lean">{{← signature.toHtml (g := Manual)}}</pre>
           <div class="docs">
             {{← contents.mapM goB}}
           </div>
@@ -769,7 +769,7 @@ def constructorSignature.descr : BlockDescr where
       }}
 
 open Verso.Output Html in
-def Signature.toHtml  : Signature → HighlightHtmlM Html
+def Signature.toHtml  : Signature → HighlightHtmlM Manual Html
   | {wide, narrow} => do
     return {{<div class="wide-only">{{← wide.toHtml}}</div><div class="narrow-only">{{← narrow.toHtml}}</div>}}
 
@@ -907,7 +907,7 @@ def leanFromMarkdown.inlinedescr : InlineDescr := withHighlighting {
         HtmlT.logError <| "Couldn't deserialize Lean code while rendering inline HTML: " ++ err
         pure .empty
       | .ok (hl : Highlighted) =>
-        hl.inlineHtml "docstring-examples"
+        hl.inlineHtml (g := Manual) "docstring-examples"
 }
 
 @[block_extension leanFromMarkdown]
@@ -926,7 +926,7 @@ def leanFromMarkdown.blockdescr : BlockDescr := withHighlighting {
         HtmlT.logError <| "Couldn't deserialize Lean code while rendering inline HTML: " ++ err
         pure .empty
       | .ok (hl : Highlighted) =>
-        hl.blockHtml "docstring-examples"
+        hl.blockHtml (g := Manual) "docstring-examples"
 }
 
 open Lean Elab Term in
@@ -1622,7 +1622,7 @@ def optionDocs.descr : BlockDescr where
           <span class="label">"option"</span>
           <pre class="signature hl lean block">{{x}}</pre>
           <div class="text">
-            <p>"Default value: " <code class="hl lean inline">{{← defaultValue.toHtml}}</code></p>
+            <p>"Default value: " <code class="hl lean inline">{{← defaultValue.toHtml (g := Manual)}}</code></p>
             {{← contents.mapM goB}}
           </div>
         </div>
@@ -1755,7 +1755,7 @@ def tactic.descr : BlockDescr := withHighlighting {
         <div class="namedocs" {{idAttr}}>
           {{permalink id xref false}}
           <span class="label">"tactic"</span>
-          <pre class="signature hl lean block">{{← x.toHtml}}</pre>
+          <pre class="signature hl lean block">{{← x.toHtml (g := Manual)}}</pre>
           <div class="text">
             {{← contents.mapM goB}}
           </div>
@@ -1813,7 +1813,7 @@ def tacticInline.descr : InlineDescr := withHighlighting {
         HtmlT.logError <| "Couldn't deserialize Lean tactic code while rendering HTML: " ++ err
         pure .empty
       | .ok (hl : Highlighted) =>
-        hl.inlineHtml "examples"
+        hl.inlineHtml (g := Manual) "examples"
 }
 
 -- TODO implement a system upstream like the one for normal tactics
@@ -1861,7 +1861,7 @@ def convDomainMapper : DomainMapper := {
   dataToSearchables :=
     "(domainData) =>
   Object.entries(domainData.contents).map(([key, value]) => ({
-    searchKey: key,
+    searchKey: value[0].data.userName,
     address: `${value[0].address}#${value[0].id}`,
     domainId: 'Verso.Genre.Manual.doc.tactic.conv',
     ref: value,
@@ -1902,7 +1902,7 @@ def conv.descr : BlockDescr := withHighlighting {
         <div class="namedocs" {{idAttr}}>
           {{permalink id xref false}}
           <span class="label">"conv tactic"</span>
-          <pre class="signature hl lean block">{{← x.toHtml}}</pre>
+          <pre class="signature hl lean block">{{← x.toHtml (g := Manual)}}</pre>
           <div class="text">
             {{← contents.mapM goB}}
           </div>

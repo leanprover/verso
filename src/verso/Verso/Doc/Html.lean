@@ -38,7 +38,7 @@ structure HtmlT.Context (genre : Genre) (m : Type → Type) where
   occurrence for later cross-referencing?
   -/
   definitionIds : Lean.NameMap String
-  linkTargets : Code.LinkTargets
+  linkTargets : Code.LinkTargets genre.TraverseContext
   codeOptions : Code.HighlightHtmlM.Options
 
 def HtmlT.Context.reinterpret (lift : {α : _} → m α → m' α) (ctx : HtmlT.Context g m) : HtmlT.Context g m' :=
@@ -48,14 +48,14 @@ def HtmlT.Context.reinterpret (lift : {α : _} → m α → m' α) (ctx : HtmlT.
 def HtmlT.Context.lift [MonadLiftT m m'] (ctx : HtmlT.Context g m) : HtmlT.Context g m' :=
   ctx.reinterpret monadLift
 
-
 def HtmlT.Context.cast {g1 g2 : Genre}
     (ctx : HtmlT.Context g1 m)
     (context_eq : g1.TraverseContext = g2.TraverseContext := by trivial)
     (state_eq : g1.TraverseState = g2.TraverseState := by trivial) : HtmlT.Context g2 m :=
-  {ctx with
+  { ctx with
     traverseContext := context_eq ▸ ctx.traverseContext,
-    traverseState := state_eq ▸ ctx.traverseState }
+    traverseState := state_eq ▸ ctx.traverseState,
+    linkTargets := context_eq ▸ ctx.linkTargets }
 
 abbrev HtmlT (genre : Genre) (m : Type → Type) : Type → Type :=
   ReaderT (HtmlT.Context genre m) (StateT (Verso.Code.Hover.State Html) m)
@@ -82,17 +82,16 @@ def HtmlT.state [Monad m] : HtmlT genre m genre.TraverseState := do
 def HtmlT.definitionIds [Monad m] : HtmlT genre m (Lean.NameMap String) := do
   return (← read).definitionIds
 
-def HtmlT.linkTargets [Monad m] : HtmlT genre m Code.LinkTargets := do
+def HtmlT.linkTargets [Monad m] : HtmlT genre m (Code.LinkTargets genre.TraverseContext) := do
   return (← read).linkTargets
 
 def HtmlT.codeOptions [Monad m] : HtmlT genre m Code.HighlightHtmlM.Options := do
   return (← read).codeOptions
 
-
 def HtmlT.logError [Monad m] (message : String) : HtmlT genre m Unit := do (← options).logError message
 
-instance [Monad m] : MonadLift HighlightHtmlM (HtmlT genre m) where
-  monadLift act := do modifyGet (act ⟨← HtmlT.linkTargets, ← HtmlT.definitionIds, ← HtmlT.codeOptions⟩)
+instance [Monad m] : MonadLift (HighlightHtmlM genre) (HtmlT genre m) where
+  monadLift act := do modifyGet (act ⟨← HtmlT.linkTargets, ← HtmlT.context, ← HtmlT.definitionIds, ← HtmlT.codeOptions⟩)
 
 open HtmlT
 
@@ -152,7 +151,9 @@ instance [Monad m] [GenreHtml g m] : ToHtml g m (Inline g) where
   toHtml := Inline.toHtml
 
 
-partial def Block.toHtml [Monad m] [GenreHtml g m] : Block g → HtmlT g m Html
+partial def Block.toHtml [Monad m] [GenreHtml g m] [TraverseBlock g] (b : Block g) : HtmlT g m Html :=
+  withReader (fun ctxt => { ctxt with traverseContext := TraverseBlock.inBlock b ctxt.traverseContext } ) do
+  match b with
   | .para xs => do
     pure {{ <p> {{← xs.mapM Inline.toHtml }} </p> }}
   | .blockquote bs => do
@@ -177,10 +178,10 @@ partial def Block.toHtml [Monad m] [GenreHtml g m] : Block g → HtmlT g m Html
   | .other container content => GenreHtml.block Inline.toHtml Block.toHtml container content
 
 
-instance [Monad m] [GenreHtml g m] : ToHtml g m (Block g) where
+instance [Monad m] [GenreHtml g m] [TraverseBlock g] : ToHtml g m (Block g) where
   toHtml := Block.toHtml
 
-partial def Part.toHtml [Monad m] [GenreHtml g m] [TraversePart g]
+partial def Part.toHtml [Monad m] [GenreHtml g m] [TraversePart g] [TraverseBlock g]
     (p : Part g) (mkHeader : Nat → Html → Html := mkPartHeader) : HtmlT g m Html :=
   match p.metadata with
   | .none => do
@@ -197,7 +198,7 @@ partial def Part.toHtml [Monad m] [GenreHtml g m] [TraversePart g]
   | some m =>
     GenreHtml.part (fun p mkHeader => Part.toHtml p (mkHeader := mkHeader)) m p.withoutMetadata
 
-instance [Monad m] [GenreHtml g m] [TraversePart g] : ToHtml g m (Part g) where
+instance [Monad m] [GenreHtml g m] [TraversePart g] [TraverseBlock g] : ToHtml g m (Part g) where
   toHtml p := Part.toHtml p
 
 instance : GenreHtml .none m where
@@ -208,7 +209,7 @@ instance : GenreHtml .none m where
 defmethod Genre.toHtml (g : Genre) [ToHtml g m α]
     (options : Options m) (context : g.TraverseContext) (state : g.TraverseState)
     (definitionIds : Lean.NameMap String)
-    (linkTargets : Code.LinkTargets) (codeOptions : Code.HighlightHtmlM.Options)
+    (linkTargets : Code.LinkTargets g.TraverseContext) (codeOptions : Code.HighlightHtmlM.Options)
     (x : α) : StateT (Verso.Code.Hover.State Html) m Html :=
   ToHtml.toHtml x ⟨options, context, state, definitionIds, linkTargets, codeOptions⟩
 

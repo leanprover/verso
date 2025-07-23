@@ -75,6 +75,13 @@ def nullInline_to_string : InlineToString
     return String.join <| contents.toList.map (inlineToString env)
   | _, _ => none
 
+@[inline_to_string Lean.Parser.Term.app]
+def app_to_string : InlineToString := fun (env : Environment) => fun
+  | `(Verso.Doc.Inline.text $s:str) =>
+    return s.getString
+  | `(Verso.Doc.Inline.concat #[$xs,*]) =>
+    return String.join <| (xs : Array _).toList.map (inlineToString env)
+  | _ => none
 
 def inlinesToString (env : Environment) (inlines : Array Syntax)  : String :=
   String.intercalate " " (inlines.map (inlineToString env)).toList

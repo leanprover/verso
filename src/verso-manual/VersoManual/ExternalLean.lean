@@ -27,61 +27,6 @@ namespace Verso.Genre.Manual
 private def hlJsDeps : List JsFile :=
   [{filename := "popper.js", contents := popper}, {filename := "tippy.js", contents := tippy}]
 
-open Verso.Search in
-/--
-Quick jump configuration for definitions in examples
--/
-def exampleDomainMapper : DomainMapper := {
-  displayName := "Example Definition",
-  className := "example-def",
-  -- This is a bit of a hack. Examples with repeated names should really get differing canonical
-  -- names, but it's unclear what to use for them. Perhaps it should be the concatenated tags of the
-  -- containing sections, with a sequence number in case of further duplication? For now, this
-  -- fairly complicated mapper does the job. It'd also be good to have a way to show metadata in the
-  -- quick-jump box, with different styling.
-  dataToSearchables :=
-    "(domainData) => {
-  const byName = Object.entries(domainData.contents).flatMap(([key, value]) =>
-    value.map(v => ({
-      context: v.data[`${v.address}#${v.id}`].context,
-      name: v.data[`${v.address}#${v.id}`].display,
-      address: `${v.address}#${v.id}`
-    }))).reduce((acc, obj) => {
-      const key = obj.name;
-      acc[key] = acc[key] || [];
-      acc[key].push(obj);
-      return acc;
-    }, {})
-  return Object.entries(byName).flatMap(([key, value]) => {
-    if (value.length === 0) { return []; }
-    const firstCtxt = value[0].context;
-    let prefixLength = 0;
-    for (let i = 0; i < firstCtxt.length; i++) {
-      if (value.every(v => i < v.context.length && v.context[i] === firstCtxt[i])) {
-        prefixLength++;
-      } else break;
-    }
-    return value.map((v) => ({
-      searchKey: v.context.slice(prefixLength).concat(v.name).join(' › '),
-      address: v.address,
-      domainId: 'Verso.Genre.Manual.example',
-      ref: value
-    }));
-  });
-}"
-  : DomainMapper}
-
-/--
-Extracts all names that are marked as definition sites, with both their occurrence in the source and
-the underlying name.
--/
-partial def definedNames : Highlighted → Array (Name × String)
-  | .token ⟨.const n _ _ true, s⟩ => #[(n, s)]
-  | .token _ => #[]
-  | .span _ hl | .tactics _ _ _ hl => definedNames hl
-  | .seq hls => hls.map definedNames |>.foldl (· ++ ·) #[]
-  | .text .. | .point .. | .unparsed .. => #[]
-
 block_extension Block.lean (hls : Highlighted) (cfg : CodeConfig) where
   init st :=
     st.addQuickJumpMapper exampleDomain exampleDomainMapper
@@ -102,17 +47,7 @@ block_extension Block.lean (hls : Highlighted) (cfg : CodeConfig) where
         logError <| "Failed to deserialize code config during traversal:" ++ err
         return none
       | .ok (defines : Array (Name × String)) =>
-        for (d, s) in defines do
-          if d.isAnonymous then continue
-          let d := d.toString
-          let path ← (·.path) <$> read
-          let _ ← externalTag id path d
-          let context := (← read).headers.map (·.titleString)
-          modify (·.saveDomainObject exampleDomain d id)
-          if let some link := (← get).externalTags[id]? then
-            modify (·.modifyDomainObjectData exampleDomain d fun v =>
-              let v := if let .obj _ := v then v else .obj {}
-              v.setObjVal! link.link (json%{"context": $context, "display": $s}))
+        saveExampleDefs id defines
         pure none
   toTeX := none
   extraCss := [highlightingStyle]
@@ -138,7 +73,7 @@ block_extension Block.lean (hls : Highlighted) (cfg : CodeConfig) where
           let i := hl.indentation
           let hl := hl.deIndent i
           withReader ({ · with codeOptions.inlineProofStates := cfg.showProofStates, codeOptions.definitionsAsTargets := cfg.defSite.getD true }) <|
-            hl.blockHtml "examples"
+            hl.blockHtml (g := Manual) "examples"
 
 inline_extension Inline.lean (hls : Highlighted) (cfg : CodeConfig) where
   data :=
@@ -158,17 +93,7 @@ inline_extension Inline.lean (hls : Highlighted) (cfg : CodeConfig) where
         logError <| "Failed to deserialize code config during traversal:" ++ err
         return none
       | .ok (defines : Array (Name × String)) =>
-        for (d, s) in defines do
-          if d.isAnonymous then continue
-          let d := d.toString
-          let path ← (·.path) <$> read
-          let _ ← externalTag id path d
-          let context := (← read).headers.map (·.titleString)
-          modify (·.saveDomainObject exampleDomain d id)
-          if let some link := (← get).externalTags[id]? then
-            modify (·.modifyDomainObjectData exampleDomain d fun v =>
-              let v := if let .obj _ := v then v else .obj {}
-              v.setObjVal! link.link (json%{"context": $context, "display": $s}))
+        saveExampleDefs id defines
         pure none
   toTeX := none
   extraCss := [highlightingStyle]
@@ -196,7 +121,7 @@ inline_extension Inline.lean (hls : Highlighted) (cfg : CodeConfig) where
           withReader
             ({ · with
               codeOptions.inlineProofStates := cfg.showProofStates, codeOptions.definitionsAsTargets := cfg.defSite.getD false }) <|
-            hl.inlineHtml "examples"
+            hl.inlineHtml (g := Manual) "examples"
 
 block_extension Block.leanOutput (severity : MessageSeverity) (message : String) (summarize : Bool := false) where
   data := ToJson.toJson (severity, message, summarize)

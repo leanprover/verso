@@ -214,7 +214,7 @@ structure Config where
   /--
   How to insert links in rendered code
   -/
-  linkTargets : TraverseState → LinkTargets := TraverseState.localTargets
+  linkTargets : TraverseState → LinkTargets Manual.TraverseContext := TraverseState.localTargets
 
 
 def ensureDir (dir : System.FilePath) : IO Unit := do
@@ -341,7 +341,7 @@ partial def toc (depth : Nat) (opts : Html.Options IO)
     (ctxt : TraverseContext)
     (state : TraverseState)
     (definitionIds : NameMap String)
-    (linkTargets : LinkTargets) :
+    (linkTargets : LinkTargets Manual.TraverseContext) :
     Part Manual → StateT (State Html) (ReaderT ExtensionImpls IO) Html.Toc
   | .mk title sTitle «meta» _ sub => do
     let titleHtml ← Html.seq <$> title.mapM (Manual.toHtml (m := ReaderT ExtensionImpls IO) opts.lift ctxt state definitionIds linkTargets {} ·)
@@ -536,7 +536,7 @@ where
     let _date := text.metadata.bind (·.date) |>.getD "" -- TODO
     let opts : Html.Options IO := {logError := fun msg => logError msg}
     let ctxt := {logError}
-    let definitionIds := state.definitionIds
+    let definitionIds := state.definitionIds ctxt
     let linkTargets := config.linkTargets state
     let titleHtml ← Html.seq <$> text.title.mapM (Manual.toHtml opts.lift ctxt state definitionIds linkTargets {})
     let introHtml ← Html.seq <$> text.content.mapM (Manual.toHtml opts.lift ctxt state definitionIds linkTargets {})
@@ -618,7 +618,7 @@ where
     let _date := text.metadata.bind (·.date) |>.getD "" -- TODO
     let opts : Html.Options IO := {logError := fun msg => logError msg}
     let ctxt := {logError}
-    let definitionIds := state.definitionIds
+    let definitionIds := state.definitionIds ctxt
     let linkTargets := config.linkTargets state
     let toc ← text.subParts.toList.mapM fun p =>
       toc config.htmlDepth opts (ctxt.inPart p) state definitionIds linkTargets p

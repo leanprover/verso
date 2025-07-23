@@ -19,9 +19,11 @@ open SubVerso.Highlighting
 namespace Verso.Genre.Manual.InlineLean
 
 block_extension Block.lean (hls : Highlighted) (file : Option System.FilePath := none) (range : Option Lsp.Range := none) where
+  init s := s.addQuickJumpMapper exampleDomain exampleDomainMapper
   data :=
-    let defined := hls.definedNames.toArray
+    let defined := definedNames hls
     Json.arr #[ToJson.toJson hls, ToJson.toJson defined, ToJson.toJson file, ToJson.toJson range]
+
   traverse id data _ := do
     let .arr #[_, defined, _, _] := data
       | logError "Expected two-element JSON for Lean code" *> pure none
@@ -29,11 +31,8 @@ block_extension Block.lean (hls : Highlighted) (file : Option System.FilePath :=
     | .error err =>
       logError <| "Couldn't deserialize Lean code while traversing block example: " ++ err
       pure none
-    | .ok (defs : Array Name) =>
-      let path ← (·.path) <$> read
-      for n in defs do
-        let _ ← externalTag id path n.toString
-        modify (·.saveDomainObject exampleDomain n.toString id)
+    | .ok (defs : Array (Name × String)) =>
+      saveExampleDefs id defs
       pure none
   toTeX :=
     some <| fun _ go _ _ content => do
@@ -46,11 +45,17 @@ block_extension Block.lean (hls : Highlighted) (file : Option System.FilePath :=
   toHtml :=
     open Verso.Output.Html in
     some <| fun _ _ _ data _ => do
-      let .arr #[hlJson, _, _, _] := data
+      let .arr #[hlJson, ds, _, _] := data
         | HtmlT.logError "Expected four-element JSON for Lean code" *> pure .empty
       match FromJson.fromJson? hlJson with
       | .error err =>
         HtmlT.logError <| "Couldn't deserialize Lean code block while rendering HTML: " ++ err
         pure .empty
       | .ok (hl : Highlighted) =>
-        hl.blockHtml "examples"
+        --if hl.toString.startsWith "namespace A" then
+          -- dbg_trace hl.toString
+          -- dbg_trace ds
+          -- have : Ord (Name × String) := Ord.lex ⟨fun x y => compare x.toString y.toString⟩ inferInstance
+          -- for (x, y) in (← HtmlT.definitionIds).toArray.qsortOrd do
+          --   dbg_trace "{x}\t=>\t{y}"
+        hl.blockHtml (g := Manual) "examples"

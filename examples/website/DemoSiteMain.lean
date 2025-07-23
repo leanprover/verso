@@ -79,8 +79,8 @@ def demoSite : Site := site DemoSite.Front /
     DemoSite.Blog.FirstPost
 
 
-def linkTargets : Code.LinkTargets where
-  const n := #[{shortDescription := "doc", description := s!"Documentation for {n}", href := s!"http://site.example/constlink/{n}"}]
-  definition d := #[{shortDescription := "def", description := "Definition", href := s!"http://site.example/deflink/{d}"}]
+def linkTargets : Code.LinkTargets TraverseContext where
+  const n _ := #[{shortDescription := "doc", description := s!"Documentation for {n}", href := s!"http://site.example/constlink/{n}"}]
+  definition d _ := #[{shortDescription := "def", description := "Definition", href := s!"http://site.example/deflink/{d}"}]
 
 def main := blogMain theme demoSite (linkTargets := linkTargets)
