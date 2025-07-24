@@ -314,18 +314,23 @@ section
 variable [Monad m] [MonadError m] [MonadQuotation m]
 
 
-partial def getModuleDocString (hl : Highlighted) : m String := do
+
+partial def getCommentString (pref : String) (hl : Highlighted) : m String := do
   let str := (← getString hl).trim
-  let str := str.stripPrefix "/-!" |>.stripSuffix "-/" |>.trim
+  let str := str.stripPrefix pref |>.stripSuffix "-/" |>.trim
   pure str
 where getString : Highlighted → m String
   | .text txt | .unparsed txt => pure txt
   | .tactics .. => throwError "Tactics found in module docstring!"
   | .point .. => pure ""
-  | .span _ hl => getModuleDocString hl
+  | .span _ hl => getCommentString pref hl
   | .seq hls => do return (← hls.mapM getString).foldl (init := "") (· ++ ·)
   | .token ⟨_, txt⟩ => pure txt
+
+partial def getModuleDocString : Highlighted -> m String := getCommentString "/-!"
+partial def getDocCommentString : Highlighted -> m String := getCommentString "/--"
 end
+
 
 def getFirstMessage : Highlighted → Option (Highlighted.Span.Kind × String)
   | .span msgs x =>
@@ -397,6 +402,30 @@ partial def docFromMod (project : System.FilePath) (mod : String)
           }
         | other =>
           addBlock (← ofBlock helper other)
+    -- Lemma is purposefully unchecked, such that it can be matched on when a project
+    -- is dependent on mathlib
+    | ``declaration | `lemma =>
+      -- Only convert doccomments if the option is turned on
+      match (← getConvertDoccomments), code with
+      | true, .seq s =>
+        -- Find the index corresponding to the docComment
+        let docCommentIdx := s.findIdx? (fun
+          | (.token ⟨.docComment, _⟩) => true
+          | _ => false)
+        match docCommentIdx with
+        | some i =>
+          let codeBefore ← ``(Block.other
+            (BlockExt.highlightedCode `name $(quote (Highlighted.seq s[:i]))) Array.mkArray0)
+          let some ⟨mdBlocks⟩ := MD4Lean.parse (← getDocCommentString s[i]!)
+            | throwError m!"Failed to parse Markdown: {← getDocCommentString s[i]!}"
+          let docCommentBlocks ← mdBlocks.mapM (fun b => ofBlock helper b)
+          let codeAfter ←``(Block.other (BlockExt.highlightedCode `name $(quote (Highlighted.seq s[i+1:]))) Array.mkArray0)
+          let blocks := #[codeBefore] ++ docCommentBlocks ++ #[codeAfter]
+          addBlock (← ``(Block.other (BlockExt.htmlDiv "declaration") #[$blocks,*]))
+        | none =>
+          -- No docComment attached to declaration, render definition as usual
+          addBlock (← ``(Block.other (BlockExt.highlightedCode `name $(quote code)) Array.mkArray0))
+      | _, _ => addBlock (← ``(Block.other (BlockExt.highlightedCode `name $(quote code)) Array.mkArray0))
     | ``eval | ``evalBang | ``reduceCmd | ``print | ``printAxioms | ``printEqns | ``«where» | ``version | ``synth | ``check =>
       addBlock (← `(Block.other (BlockExt.highlightedCode { contextName := `name } $(quote code)) Array.mkArray0))
       if let some (k, msg) := getFirstMessage code then
@@ -590,6 +619,8 @@ directory that contains a toolchain file and a Lake configuration (`lakefile.tom
 
 Set the option `verso.literateMarkdown.logInlines` to `true` to see the error messages that
 prevented elaboration of inline elements.
+Set the option `verso.literateMarkdown.convertDoccomments` to `true` to convert doccomments in
+a similar way as the module docstrings, except without allowing headers.
 -/
 syntax "def_literate_post " ident optConfig " from " ident " in " str " as " str (" with " term)? (rewrites)? : command
 
