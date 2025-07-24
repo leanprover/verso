@@ -455,6 +455,27 @@ defmethod Highlighted.Goal.toHtml (exprHtml : expr → HighlightHtmlM g Html) (i
       | .never => #[("checked", "checked")]
       | .subsequent => if index = 0 then #[("checked", "checked")] else #[]
 
+partial defmethod Highlighted.MessageContents.toHtml (maxTraceDepth : Nat) (exprHtml : expr → HighlightHtmlM g Html) : Highlighted.MessageContents expr → HighlightHtmlM g Html
+  | .text s => pure {{<span class="text">{{s}}</span>}}
+  | .term e => do return {{<span class="highlighted">{{← exprHtml e}}</span>}}
+  | .append xs => xs.foldlM (init := Html.empty) fun html m =>
+      (html ++ ·) <$> m.toHtml maxTraceDepth exprHtml
+  | .trace cls msg children collapsed => do
+    let msgHtml ← msg.toHtml maxTraceDepth exprHtml
+    let childHtml ←
+      if maxTraceDepth = 0 then pure Html.empty
+      else
+        let cs ← children.mapM (·.toHtml (maxTraceDepth - 1) exprHtml)
+        pure {{<ul class="trace-children">{{cs.map ({{<li>{{·}}</li>}})}}</ul>}}
+      if children.size > 0 then return {{
+        <details class="trace" {{if collapsed then #[] else #[("open", "open")]}}><summary><code class="trace-class">s!"[{cls}]"</code> " " {{msgHtml}}</summary>{{childHtml}}</details>
+      }} else return {{
+        <span class="trace"><code class="trace-class">s!"[{cls}]"</code> " " {{msgHtml}}</span>
+      }}
+
+  | .goal g => g.toHtml exprHtml 0
+
+
 def spanClass (infos : Array (Highlighted.Span.Kind × α)) : Option String := Id.run do
   let mut k := none
   for (k', _) in infos do
@@ -488,8 +509,8 @@ partial defmethod Highlighted.toHtml : Highlighted → HighlightHtmlM g Html
       pure {{<span class={{"has-info " ++ cls}}>
           <span class="hover-container">
             <span class={{"hover-info messages"}}>
-              {{ infos.map fun (s, info) => {{
-                <code class={{"message " ++ s.«class»}}>{{info}}</code> }}
+              {{←  infos.mapM fun (s, info) => do return {{
+                <code class={{"message " ++ s.«class»}}>{{← info.toHtml 10 toHtml}}</code> }}
               }}
             </span>
           </span>
@@ -519,7 +540,11 @@ partial defmethod Highlighted.toHtml : Highlighted → HighlightHtmlM g Html
       }}
     else
       toHtml hl
-  | .point s info => pure {{<span class={{"message " ++ s.«class»}}>{{info}}</span>}}
+  | .point s info => do
+    let info ← info.toHtml 10 toHtml
+    return {{
+      <span class={{"message " ++ s.«class»}}>{{info}}</span>
+    }}
   | .seq hls => hls.mapM toHtml
 
 defmethod Highlighted.blockHtml (contextName : String) (code : Highlighted) (trim : Bool := true) (htmlId : Option String := none) : HighlightHtmlM g Html := do
@@ -534,6 +559,11 @@ defmethod Highlighted.inlineHtml (contextName : Option String) (code : Highlight
     pure {{ <code class="hl lean inline" "data-lean-context"={{toString ctx}} {{idAttr}}> {{ ← code.toHtml }} </code> }}
   else
     pure {{ <code class="hl lean inline" {{idAttr}}> {{ ← code.toHtml }} </code> }}
+
+defmethod Highlighted.Message.toHtml (message : Highlighted.Message) (maxTraceDepth : Nat := 10) : HighlightHtmlM g Html := do
+  let contents ← message.contents.toHtml maxTraceDepth (·.toHtml)
+  return {{<code class=s!"verso-message {message.severity.class}">{{contents}}</code>}}
+
 
 -- TODO CSS variables, and document them
 def highlightingStyle : String := "
@@ -673,7 +703,7 @@ def highlightingStyle : String := "
   border: none;
 }
 
-.error pre {
+.verso-message.error {
     color: red;
 }
 
@@ -893,7 +923,7 @@ def highlightingStyle : String := "
 }
 
 
-.hl.lean .tactic-state .labeled-case > :not(:first-child) {
+.hl.lean .labeled-case > :not(:first-child) {
   max-height: 0px;
   display: block;
   overflow: hidden;
@@ -1049,6 +1079,25 @@ def highlightingStyle : String := "
   display: inline-block;
   margin: 0 0.25em;
 }
+
+.verso-message .trace-children > li {
+  list-style-type: none;
+  margin-left: 1.5em;
+}
+
+.verso-message .trace-children > li:not(:has(.trace)) {
+  margin-left: 0;
+}
+
+.verso-message .trace-class {
+  color: #666;
+  font-weight: bold;
+}
+
+.verso-message .text {
+  white-space: pre-wrap;
+}
+
 "
 
 def highlightingJs : String :=

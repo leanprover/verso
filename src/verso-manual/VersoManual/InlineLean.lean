@@ -708,7 +708,7 @@ where
     | .warning => "warning"
 
   mostlyEqual (ws : WhitespaceMode) (s1 s2 : String) : Bool :=
-    ws.apply s1.trim == ws.apply s2.trim
+    messagesMatch (ws.apply s1.trim) (ws.apply s2.trim)
 
   diffSize (ws : WhitespaceMode) (s1 s2 : String) : (Nat × String) :=
     let s1 := ws.apply s1.trim |>.splitOn "\n" |>.toArray

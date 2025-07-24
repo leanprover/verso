@@ -123,8 +123,8 @@ inline_extension Inline.lean (hls : Highlighted) (cfg : CodeConfig) where
               codeOptions.inlineProofStates := cfg.showProofStates, codeOptions.definitionsAsTargets := cfg.defSite.getD false }) <|
             hl.inlineHtml (g := Manual) "examples"
 
-block_extension Block.leanOutput (severity : MessageSeverity) (message : String) (summarize : Bool := false) where
-  data := ToJson.toJson (severity, message, summarize)
+block_extension Block.leanOutput (message : Highlighted.Message) (summarize : Bool := false) where
+  data := ToJson.toJson (message, summarize)
   traverse _ _ _ := do
     pure none
   toTeX :=
@@ -142,14 +142,15 @@ block_extension Block.leanOutput (severity : MessageSeverity) (message : String)
       | .error err =>
         HtmlT.logError <| "Couldn't deserialize Lean code while rendering HTML: " ++ err
         pure .empty
-      | .ok ((sev, txt, summarize) : MessageSeverity × String × Bool) =>
+      | .ok ((txt, summarize) : Highlighted.Message × Bool) =>
         let wrap html :=
           if summarize then {{<details><summary>"Expand..."</summary>{{html}}</details>}}
           else html
-        pure <| wrap {{<div class={{sev.class}}><pre>{{txt}}</pre></div>}}
+        wrap <$> txt.toHtml (g := Manual)
 
-inline_extension Inline.leanOutput (severity : MessageSeverity) (message : String) (plain : Bool) where
-  data := ToJson.toJson (severity, message, plain)
+
+inline_extension Inline.leanOutput (message : Highlighted.Message) (plain : Bool) where
+  data := ToJson.toJson (message, plain)
   traverse _ _ _ := do
     pure none
   toTeX :=
@@ -167,16 +168,16 @@ inline_extension Inline.leanOutput (severity : MessageSeverity) (message : Strin
       | .error err =>
         HtmlT.logError <| "Couldn't deserialize Lean code while rendering HTML: " ++ err
         pure .empty
-      | .ok ((sev, txt, plain) : MessageSeverity × String × Bool) =>
-        let plainHtml := {{<code>{{txt}}</code>}}
+      | .ok ((txt, plain) : Highlighted.Message × Bool) =>
+        let plainHtml := {{<code>{{txt.toString}}</code>}}
         if plain then pure plainHtml
-        else pure {{<span class={{sev.class}}>{{plainHtml}}</span>}}
+        else txt.toHtml (g := Manual)
 
 open Verso.Code.External
 
 instance : ExternalCode Manual where
   leanInline hl cfg := Inline.other (Inline.lean hl cfg) #[]
   leanBlock hl cfg := Block.other (Block.lean hl cfg) #[]
-  leanOutputInline severity message plain := Inline.other (Inline.leanOutput severity message plain) #[]
-  leanOutputBlock severity message (summarize : Bool := false) :=
-    Block.other (Block.leanOutput severity message (summarize := summarize)) #[]
+  leanOutputInline message plain := Inline.other (Inline.leanOutput message plain) #[]
+  leanOutputBlock message (summarize : Bool := false) :=
+    Block.other (Block.leanOutput message (summarize := summarize)) #[]

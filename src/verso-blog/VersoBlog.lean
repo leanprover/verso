@@ -686,32 +686,16 @@ where
       | other => throwError "Expected whitespace mode, got {repr other}"
   }
 
-private def leanOutputBlock [bg : BlogGenre genre] (severity : MessageSeverity) (message : String) (summarize : Bool := false) : Block genre :=
-  if summarize then
-    let lines := message.splitOn "\n"
-    let pre := lines.take 3
-    let post := String.join (lines.drop 3 |>.intersperse "\n")
-    let preHtml : Html := pre.map (fun (l : String) => {{<code>{{l}}</code>}})
-    Block.other (bg.block_eq ▸ BlockExt.htmlDetails (sevStr severity) preHtml) #[Block.code post]
-  else
-    Block.other (bg.block_eq ▸ BlockExt.htmlDiv (sevStr severity)) #[Block.code message]
-where
-  sevStr : MessageSeverity → String
-    | .error => "error"
-    | .information => "information"
-    | .warning => "warning"
+open SubVerso.Highlighting in
+private def leanOutputBlock [bg : BlogGenre genre] (message : Highlighted.Message) (summarize := false) : Block genre :=
+  Block.other (bg.block_eq ▸ BlockExt.message summarize message) #[Block.code message.toString]
 
-private def leanOutputInline [bg : BlogGenre genre] (severity : MessageSeverity) (message : String) (plain : Bool) : Inline genre :=
+open SubVerso.Highlighting in
+private def leanOutputInline [bg : BlogGenre genre] (message : Highlighted.Message) (plain : Bool) : Inline genre :=
   if plain then
-    Inline.code message
+    Inline.code message.toString
   else
-    Inline.other (bg.inline_eq ▸ InlineExt.htmlSpan (sevStr severity)) #[Inline.code message]
-where
-  sevStr : MessageSeverity → String
-    | .error => "error"
-    | .information => "information"
-    | .warning => "warning"
-
+    Inline.other (bg.inline_eq ▸ InlineExt.message message) #[Inline.code message.toString]
 
 @[code_block_expander leanOutput]
 def leanOutput : Doc.Elab.CodeBlockExpander
@@ -734,7 +718,8 @@ def leanOutput : Doc.Elab.CodeBlockExpander
                 let preHtml : Html := pre.map (fun (l : String) => {{<code>{{l}}</code>}})
                 ``(Block.other (Blog.BlockExt.htmlDetails $(quote (sevStr m.severity)) $(quote preHtml)) #[Block.code $(quote post)])
               else
-                ``(Block.other (Blog.BlockExt.htmlDiv $(quote (sevStr m.severity))) #[Block.code $(quote str.getString)])
+                let m' ← SubVerso.Highlighting.highlightMessage m
+                ``(Block.other (Blog.BlockExt.message false $(quote m')) #[Block.code $(quote str.getString)])
             return #[content]
         pure messages
       | .inr msgs =>
@@ -859,7 +844,7 @@ instance [bg : BlogGenre genre] : ExternalCode genre where
     Inline.other (bg.inline_eq ▸ InlineExt.highlightedCode { cfg with contextName := `verso } hl) #[]
   leanBlock hl cfg :=
     Block.other (bg.block_eq ▸ BlockExt.highlightedCode { cfg with contextName := `verso } hl) #[]
-  leanOutputInline severity message plain :=
-    leanOutputInline severity message plain
-  leanOutputBlock severity message (summarize := false) :=
-    leanOutputBlock severity message (summarize := summarize)
+  leanOutputInline message plain :=
+    leanOutputInline message plain
+  leanOutputBlock message (summarize := false) :=
+    leanOutputBlock message (summarize := summarize)

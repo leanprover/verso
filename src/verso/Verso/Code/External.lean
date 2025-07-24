@@ -57,9 +57,9 @@ class ExternalCode (genre : Genre) where
   An inline element for rendering Lean messages. `plain` should suppress the annotation of the
   output with its message severity.
   -/
-  leanOutputInline (severity : MessageSeverity) (message : String) (plain : Bool) : Inline genre
+  leanOutputInline (message : Highlighted.Message) (plain : Bool) : Inline genre
   /-- A block element for rendering Lean messages. -/
-  leanOutputBlock (severity : MessageSeverity) (message : String) (summarize : Bool := false) : Block genre
+  leanOutputBlock (message : Highlighted.Message) (summarize : Bool := false) : Block genre
 
 open ExternalCode
 
@@ -209,12 +209,12 @@ def warningsToErrors (hl : Highlighted) : Highlighted :=
   | .text .. | .token .. | .unparsed .. => hl
 
 /-- Extracts all messages from the given code. -/
-def allInfo (hl : Highlighted) : Array (MessageSeverity × String × Option Highlighted) :=
+def allInfo (hl : Highlighted) : Array (Highlighted.Message × Option Highlighted) :=
   match hl with
   | .seq xs => xs.flatMap allInfo
-  | .point k str => #[(toSev k, str, none)]
+  | .point k str => #[(⟨k, str⟩, none)]
   | .tactics _ _ _ x => allInfo x
-  | .span infos x => (infos.map fun (k, str) => (toSev k, str, some x)) ++ allInfo x
+  | .span infos x => (infos.map fun (k, str) => (⟨k, str⟩, some x)) ++ allInfo x
   | .text .. | .token .. | .unparsed .. => #[]
 where
   toSev : Highlighted.Span.Kind → MessageSeverity
@@ -295,8 +295,8 @@ private def sevStr : MessageSeverity → String
 Silently logs all the messages in `hl`.
 -/
 def logInfos (hl : Highlighted) : DocElabM Unit := do
-  for (sev, msg, _) in allInfo hl do
-    logSilentInfo m!"{sevStr sev}:\n{msg}"
+  for (⟨sev, msg⟩, _) in allInfo hl do
+    logSilentInfo m!"{sev}:\n{msg.toString}"
 
 /--
 Given a module name and an anchor name, loads the resulting code and invokes `k` on it, failing if
@@ -590,24 +590,24 @@ def moduleOut : CodeBlockExpander
     withAnchored moduleName anchor? fun hl => do
       let infos : Array _ := allInfo hl
 
-      for (sev, msg, _) in infos do
-        if messagesMatch msg str.getString then
-          if sev == severity.1 then
-            return #[← ``(leanOutputBlock $(quote sev) $(quote msg))]
+      for (msg, _) in infos do
+        if messagesMatch msg.toString str.getString then
+          if msg.severity == .ofSeverity severity.1 then
+            return #[← ``(leanOutputBlock $(quote msg))]
           else
-          let wanted ← severityName sev
+          let wanted ← severityName msg.severity.toSeverity
             throwError "Mismatched severity. Expected '{repr severity.1}', got '{wanted}'.{← severityHint wanted severity.2}"
 
-      let suggs : Array Suggestion := infos.map fun (sev, msg, _) => {
-        suggestion := withNl msg,
-        preInfo? := some s!"{sevStr sev}: "
+      let suggs : Array Suggestion := infos.map fun (msg, _) => {
+        suggestion := withNl msg.toString,
+        preInfo? := some s!"{sevStr msg.severity.toSeverity}: "
       }
 
       let ref ← getRef
 
       let mut err : MessageData := "Expected"
 
-      err := err ++ (m!"\nor".joinSep <| infos.toList.map fun (_, msg, _) => indentD msg ++ "\n")
+      err := err ++ (m!"\nor".joinSep <| infos.toList.map fun (msg, _) => indentD msg.toString ++ "\n")
 
       if str.getString.trim.isEmpty then
         err := err ++ "but nothing was provided."
@@ -646,39 +646,40 @@ def moduleOutRole : RoleExpander
     withAnchored moduleName anchor? fun hl => do
       let infos := allInfo hl
       if let some str := str? then
-        for (sev, msg, _) in infos do
-          if messagesMatch msg str.getString then
-            if sev == severity.1 then
-              return #[← ``(leanOutputInline $(quote sev) $(quote msg) true)]
+        for (msg, _) in infos do
+          if messagesMatch msg.toString str.getString then
+            if msg.severity == .ofSeverity severity.1 then
+              return #[← ``(leanOutputInline $(quote msg) true)]
             else
-              let wanted ← severityName sev
+              let wanted ← severityName msg.severity.toSeverity
               throwError "Mismatched severity. Expected '{repr severity.1}', got '{wanted}'.{← severityHint wanted severity.2}"
 
         let ref :=
           if let `(inline|role{ $_ $_* }[ $x ]) := (← getRef) then x.raw else str
 
-        let suggs : Array Suggestion := infos.map fun (sev, msg, _) => {
-          suggestion := quoteCode msg.trim,
-          preInfo? := s!"{sevStr sev}: "
+        let suggs : Array Suggestion := infos.map fun (msg, _) => {
+          suggestion := quoteCode msg.toString.trim,
+          preInfo? := s!"{sevStr msg.severity.toSeverity}: "
         }
         let h ←
           if suggs.isEmpty then pure m!""
           else hintAt ref "Use one of these." suggs
 
         let err :=
-          m!"Expected one of:{indentD (m!"\n".joinSep <| infos.toList.map (·.2.1))}" ++
+          m!"Expected one of:{indentD (m!"\n".joinSep <| infos.toList.map (·.1.toString))}" ++
           m!"\nbut got:{indentD str.getString}\n" ++ h
         logErrorAt str err
       else
-        let err := m!"Expected one of:{indentD (m!"\n".joinSep <| infos.toList.map (·.2.1))}"
+        let err := m!"Expected one of:{indentD (m!"\n".joinSep <| infos.toList.map (·.1.toString))}"
         Lean.logError m!"No expected term provided. {err}"
         if let `(inline|role{$_ $_*} [%$tok1 $contents* ]%$tok2) := (← getRef) then
           let stx :=
             if tok1.getHeadInfo matches .original .. && tok2.getHeadInfo matches .original .. then
               mkNullNode #[tok1, tok2]
             else mkNullNode contents
-          for (_, msg, _) in infos do
-            Suggestion.saveSuggestion stx (quoteCode <| ExpectString.abbreviateString msg.trim) (quoteCode msg.trim)
+          for (msg, _) in infos do
+            let str := msg.toString
+            Suggestion.saveSuggestion stx (quoteCode <| ExpectString.abbreviateString str.trim) (quoteCode str.trim)
 
       return #[← ``(sorryAx _ true)]
 
