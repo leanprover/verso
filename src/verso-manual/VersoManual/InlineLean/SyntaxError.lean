@@ -143,10 +143,10 @@ def syntaxError : CodeBlockExpander
       throwErrorAt str m!"Expected a syntax error for category {config.category}, but got {indentD stx}"
     | .error es =>
       let msgs := es.toList.map fun {pos, endPos, text := msg} =>
-        (.error, mkErrorStringWithPos  "<example>" pos msg (endPos := endPos))
+        ⟨.error, .text <| mkErrorStringWithPos  "<example>" pos msg (endPos := endPos)⟩
 
       saveOutputs config.name msgs
-      Hover.addCustomHover (← getRef) <| MessageData.joinSep (msgs.map fun (sev, msg) => m!"{sevStr sev}:{indentD msg}") Format.line
+      Hover.addCustomHover (← getRef) <| MessageData.joinSep (msgs.map fun ⟨sev, msg⟩ => m!"{sevStr sev.toSeverity}:{indentD msg.toString}") Format.line
 
       return #[← `(Block.other {Block.syntaxError with data := ToJson.toJson ($(quote s), $(quote es))} #[Block.code $(quote s)])]
 where

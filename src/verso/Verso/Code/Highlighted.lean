@@ -412,9 +412,9 @@ defmethod Highlighted.Goal.toHtml (exprHtml : expr → HighlightHtmlM g Html) (i
       else pure {{
         <span class="hypotheses">
           {{← hypotheses.mapM fun
-              | (x, k, t) => do pure {{
+              | ⟨names, t⟩ => do pure {{
                   <span class="hypothesis">
-                    <span class="name">{{← Token.toHtml ⟨k, x.toString⟩}}</span><span class="colon">":"</span>
+                    <span class="name">{{(← names.mapM (·.toHtml)).toList.intersperse {{" "}} }}</span><span class="colon">":"</span>
                     <span class="type">{{← exprHtml t}}</span>
                   </span>
                 }}
@@ -439,7 +439,7 @@ defmethod Highlighted.Goal.toHtml (exprHtml : expr → HighlightHtmlM g Html) (i
               <span class="labeled-case" {{openAttr collapsePolicy index}}>
                 <label class="case-label">
                   <input type="checkbox" id={{id}} {{openAttr collapsePolicy index}}/>
-                  <span for={{id}} class="goal-name">{{n.eraseMacroScopes.toString}}</span>
+                  <span for={{id}} class="goal-name">{{n}}</span>
                 </label>
                {{hypsHtml}}
                {{conclHtml}}

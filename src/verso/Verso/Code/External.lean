@@ -12,6 +12,7 @@ import Verso.Code.External.Files
 import Verso.EditDistance
 import Verso.ExpectString
 import Verso.Doc.Suggestion
+import Verso.Hint
 import Verso.Log
 
 import SubVerso.Highlighting
@@ -251,20 +252,6 @@ def anchored
 
 open MessageData (hint)
 
-/-
-Creates a hint message with associated code action suggestions at a specified location.
-
-The arguments are as follows:
-* `ref`: the syntax location for the code action suggestions. Will be overridden by the `span?`
-  field on any suggestions that specify it.
-* `hint`: the main message of the hint, which precedes its code action suggestions.
-* `suggestions`: the suggestions to display.
-* `codeActionPrefix?`: if specified, text to display in place of "Try this: " in the code action
-  label
--/
-def hintAt (ref : Syntax) (hint : MessageData) (suggestions : Array Suggestion) (codeActionPrefix? : Option String := none) : CoreM MessageData :=
-  -- The @ guards against upstream signature changes going unnoticed
-  @MessageData.hint hint suggestions (ref? := some ref) (codeActionPrefix? := codeActionPrefix?)
 
 local instance : Coe (Array String) (Array Suggestion) where
   coe xs := xs.map ({suggestion := .string ·})
