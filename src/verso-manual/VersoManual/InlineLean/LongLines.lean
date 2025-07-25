@@ -29,11 +29,11 @@ def warnLongLines [Monad m] [MonadFileMap m] [MonadLog m] [AddMessageContext m] 
   let maxCol := maxCodeColumns + indent?.getD 0
   if let some startPos := str.raw.getPos? then
     if let some stopPos := str.raw.getTailPos? then
-      let ⟨startLine, _⟩ := fileMap.utf8PosToLspPos startPos
-      let ⟨stopLine, _⟩ := fileMap.utf8PosToLspPos stopPos
+      let ⟨startLine, _⟩ := fileMap.toPosition startPos
+      let ⟨stopLine, _⟩ := fileMap.toPosition stopPos
       for l in [startLine:stopLine] do
         let nextStart := fileMap.lineStart (l + 1)
-        let ⟨_, endCol⟩ := fileMap.utf8PosToLspPos (nextStart - ⟨1⟩)
+        let ⟨_, endCol⟩ := fileMap.utf8PosToLspPos (fileMap.source.prev nextStart)
         if endCol > maxCol then
           let thisStart := fileMap.lineStart l
           let fakeLiteral := Syntax.mkStrLit (fileMap.source.extract thisStart nextStart) (.synthetic thisStart nextStart)

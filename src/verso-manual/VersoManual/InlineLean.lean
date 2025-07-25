@@ -594,12 +594,12 @@ block_extension Block.leanOutput where
     some <| fun _ _ _ data _ => do
       match FromJson.fromJson? data with
       | .error err =>
-        HtmlT.logError <| "Couldn't deserialize Lean output while rendering HTML: " ++ err
+        HtmlT.logError <| "Couldn't deserialize Lean output while rendering HTML: " ++ err ++ "\n" ++ toString data
         pure .empty
       | .ok ((msg, summarize) : Highlighted.Message × Bool) =>
         let wrap html :=
-          if summarize then {{<details><summary>"Expand..."</summary>{{html}}</details>}}
-          else html
+          if summarize then {{<details class=s!"lean-output {msg.severity.class}"><summary>"Expand..."</summary><pre class="hl lean">{{html}}</pre></details>}}
+          else {{<pre class=s!"hl lean lean-output {msg.severity.class}">{{html}}</pre>}}
         wrap <$> msg.toHtml (g := Manual)
 
 
@@ -675,7 +675,7 @@ def leanOutput : CodeBlockExpander
             return #[content]
           else return #[]
     else
-      let mut best : Option (Nat × String × MessageSeverity × String) := none
+      let mut best : Option (Nat × String × Highlighted.Message) := none
       for msg in msgs do
         let txt := msg.toString
         let actual :=
@@ -685,23 +685,19 @@ def leanOutput : CodeBlockExpander
         let (d, d') := diffSize config.whitespace expected actual
         if d ≤ config.allowDiff then
           if let some (n, _, _) := best then
-            if d < n then best := (d, d', msg.severity.toSeverity, txt)
-          else best := (d, d', msg.severity.toSeverity, txt)
-      if let some (d, d', sev, txt) := best then
+            if d < n then best := (d, d', msg)
+          else best := (d, d', msg)
+      if let some (d, d', msg) := best then
         if let some s := config.severity then
+          let sev := msg.severity.toSeverity
           if s != sev then
             throwErrorAt str s!"Expected severity {sevStr s}, but got {sevStr sev}"
 
         Log.logSilentInfo m!"Diff is {d} lines:\n{d'}"
         if config.show then
-          let content ← `(Block.other {Block.leanOutput with data := ToJson.toJson ($(quote sev), $(quote txt), $(quote config.summarize))} #[Block.code $(quote str.getString)])
+          let content ← `(Block.other {Block.leanOutput with data := ToJson.toJson ($(quote msg), $(quote config.summarize))} #[Block.code $(quote str.getString)])
           return #[content]
         else return #[]
-
-    for msg in msgs do
-      let m := msg.toString
-      let m := "".pushn ' ' (col?.getD 0) ++ if m.endsWith "\n" then m else m ++ "\n"
-      Verso.Doc.Suggestion.saveSuggestion str (abbreviateString m) m
 
     let suggs : Array (Nat × Meta.Hint.Suggestion) := msgs.toArray.map fun msg =>
       let strMsg := msg.toString

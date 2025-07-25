@@ -359,7 +359,7 @@ defmethod Lean.MessageSeverity.«class» : Lean.MessageSeverity → String
   | .error => "error"
 
 defmethod Highlighted.Span.Kind.«class» : Highlighted.Span.Kind → String
-  | .info => "info"
+  | .info => "information"
   | .warning => "warning"
   | .error => "error"
 
@@ -468,9 +468,9 @@ partial defmethod Highlighted.MessageContents.toHtml (maxTraceDepth : Nat) (expr
         let cs ← children.mapM (·.toHtml (maxTraceDepth - 1) exprHtml)
         pure {{<ul class="trace-children">{{cs.map ({{<li>{{·}}</li>}})}}</ul>}}
       if children.size > 0 then return {{
-        <details class="trace" {{if collapsed then #[] else #[("open", "open")]}}><summary><code class="trace-class">s!"[{cls}]"</code> " " {{msgHtml}}</summary>{{childHtml}}</details>
+        <details class="trace" {{if collapsed then #[] else #[("open", "open")]}}><summary><span class="trace-class">s!"[{cls}]"</span> " " {{msgHtml}}</summary>{{childHtml}}</details>
       }} else return {{
-        <span class="trace"><code class="trace-class">s!"[{cls}]"</code> " " {{msgHtml}}</span>
+        <span class="trace"><span class="trace-class">s!"[{cls}]"</span> " " {{msgHtml}}</span>
       }}
 
   | .goal g => g.toHtml exprHtml 0
@@ -510,7 +510,7 @@ partial defmethod Highlighted.toHtml : Highlighted → HighlightHtmlM g Html
           <span class="hover-container">
             <span class={{"hover-info messages"}}>
               {{←  infos.mapM fun (s, info) => do return {{
-                <code class={{"message " ++ s.«class»}}>{{← info.toHtml 10 toHtml}}</code> }}
+                <code class={{"verso-message " ++ s.«class»}}>{{← info.toHtml 10 toHtml}}</code> }}
               }}
             </span>
           </span>
@@ -543,7 +543,7 @@ partial defmethod Highlighted.toHtml : Highlighted → HighlightHtmlM g Html
   | .point s info => do
     let info ← info.toHtml 10 toHtml
     return {{
-      <span class={{"message " ++ s.«class»}}>{{info}}</span>
+      <span class={{"verso-message " ++ s.«class»}}>{{info}}</span>
     }}
   | .seq hls => hls.mapM toHtml
 
@@ -562,7 +562,7 @@ defmethod Highlighted.inlineHtml (contextName : Option String) (code : Highlight
 
 defmethod Highlighted.Message.toHtml (message : Highlighted.Message) (maxTraceDepth : Nat := 10) : HighlightHtmlM g Html := do
   let contents ← message.contents.toHtml maxTraceDepth (·.toHtml)
-  return {{<code class=s!"verso-message {message.severity.class}">{{contents}}</code>}}
+  return {{<span class=s!"verso-message">{{contents}}</span>}}
 
 
 -- TODO CSS variables, and document them
@@ -703,7 +703,7 @@ def highlightingStyle : String := "
   border: none;
 }
 
-.verso-message.error {
+.error .verso-message {
     color: red;
 }
 
@@ -732,12 +732,12 @@ def highlightingStyle : String := "
 }
 
 
-.hl.lean .has-info.info :not(.tactic-state):not(.tactic-state *) {
+.hl.lean .has-info.information :not(.tactic-state):not(.tactic-state *) {
   text-decoration-color: blue;
 }
 
 @media (hover: hover) {
-  .hl.lean .has-info.info:hover {
+  .hl.lean .has-info.information:hover {
     background-color: #4777ff;
   }
 }
@@ -781,7 +781,7 @@ def highlightingStyle : String := "
 }
 
 .hl.lean code {
-  font-family: monospace;
+  font-family: var(--verso-code-font-family);
 }
 
 .hl.lean .tactic-state {
@@ -898,16 +898,15 @@ def highlightingStyle : String := "
 }
 
 .hl.lean .case-label:has(input[type=\"checkbox\"])::before {
-  width: 1rem;
-  height: 1rem;
   display: inline-block;
   background-color: black;
   content: ' ';
   transition: ease 0.2s;
-  margin-right: 0.7rem;
+  margin-right: 0.7em;
   clip-path: polygon(100% 0, 0 0, 50% 100%);
-  width: 0.6rem;
-  height: 0.6rem;
+  width: 0.6em;
+  height: 0.6em;
+  vertical-align: middle;
 }
 
 .hl.lean .case-label:has(input[type=\"checkbox\"]:not(:checked))::before {
@@ -937,42 +936,42 @@ def highlightingStyle : String := "
 }
 
 
-.hl.lean .tactic-state .goal-name::before {
+.hl.lean .goal-name::before {
   font-style: normal;
   content: \"case \";
 }
 
-.hl.lean .tactic-state .goal-name {
+.hl.lean .goal-name {
   font-style: italic;
-  font-family: monospace;
+  font-family: var(--verso-code-font-family);
 }
 
-.hl.lean .tactic-state .hypotheses {
+.hl.lean .hypotheses {
   display: table;
 }
 
-.hl.lean .tactic-state .hypothesis {
+.hl.lean .hypothesis {
   display: table-row;
 }
 
-.hl.lean .tactic-state .hypothesis > * {
+.hl.lean .hypothesis > * {
   display: table-cell;
 }
 
 
-.hl.lean .tactic-state .hypotheses .colon {
+.hl.lean .hypotheses .colon {
   text-align: center;
   min-width: 1rem;
 }
 
-.hl.lean .tactic-state .hypotheses .name {
+.hl.lean .hypotheses .name {
   text-align: right;
 }
 
-.hl.lean .tactic-state .hypotheses .name,
-.hl.lean .tactic-state .hypotheses .type,
-.hl.lean .tactic-state .conclusion .type {
-  font-family: monospace;
+.hl.lean .hypotheses .name,
+.hl.lean .hypotheses .type,
+.hl.lean .conclusion .type {
+  font-family: var(--verso-code-font-family);
 }
 
 .tippy-box[data-theme~='lean'] {
@@ -1080,6 +1079,15 @@ def highlightingStyle : String := "
   margin: 0 0.25em;
 }
 
+.verso-message .trace > summary::marker {
+  color: var(--verso-text-color);
+}
+
+.verso-message .trace-children {
+  margin: 0;
+  padding: 0;
+}
+
 .verso-message .trace-children > li {
   list-style-type: none;
   margin-left: 1.5em;
@@ -1090,8 +1098,10 @@ def highlightingStyle : String := "
 }
 
 .verso-message .trace-class {
-  color: #666;
+  color: color-mix(in srgb, currentColor 70%, transparent);
   font-weight: bold;
+  margin: 0;
+  padding: 0;
 }
 
 .verso-message .text {
@@ -1283,7 +1293,7 @@ window.onload = () => {
       document.querySelectorAll('.hl.lean .has-info.warning').forEach(element => {
         element.setAttribute('data-tippy-theme', 'warning message');
       });
-      document.querySelectorAll('.hl.lean .has-info.info').forEach(element => {
+      document.querySelectorAll('.hl.lean .has-info.information').forEach(element => {
         element.setAttribute('data-tippy-theme', 'info message');
       });
       document.querySelectorAll('.hl.lean .has-info.error').forEach(element => {
