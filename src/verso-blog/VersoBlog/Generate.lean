@@ -149,8 +149,7 @@ open Generate
 
 open Template.Params (forPart)
 
-def writePage (theme : Theme) (params : Template.Params) (template : Template := theme.pageTemplate) :
-    GenerateM Unit := do
+def writePage (theme : Theme) (params : Template.Params) (template : Template := theme.pageTemplate) : GenerateM Unit := do
   ensureDir <| (← currentDir)
   let ⟨baseTemplate, modParams⟩ := theme.adHocTemplates (Array.mk (← currentPath)) |>.getD ⟨template, id⟩
   let output ← rewriteOutput <| ← Template.renderMany [baseTemplate, theme.primaryTemplate] <| modParams <| params
@@ -208,8 +207,7 @@ where
     Html.seq <$> p.summary.mapM (GenerateM.toHtml Post)
 
 
-partial def Dir.generate (theme : Theme) (dir : Dir) :
-    GenerateM Unit :=
+partial def Dir.generate (theme : Theme) (dir : Dir) : GenerateM Unit :=
   inDir dir <|
   match dir with
   | .page _ _ txt subPages => do
@@ -231,8 +229,7 @@ partial def Dir.generate (theme : Theme) (dir : Dir) :
         IO.FS.removeFile dest
     copyRecursively (← currentConfig).logError file dest
 
-def Site.generate (theme : Theme) (site : Site) :
-    GenerateM Unit := do
+def Site.generate (theme : Theme) (site : Site) : GenerateM Unit := do
   match site with
   | .page _ txt subPages =>
     writePage theme (← forPart txt)
