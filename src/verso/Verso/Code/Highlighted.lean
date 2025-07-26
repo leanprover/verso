@@ -817,6 +817,9 @@ def highlightingStyle : String := "
   display: inline-grid;
   grid-template-columns: 1fr;
   vertical-align: top;
+  /* Without these, mobile Safari will start making font sizes inconsistent when its text size adjustment feature is triggered.*/
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 .hl.lean .tactic-toggle:checked ~ .tactic-state {
