@@ -179,7 +179,8 @@ def lean : CodeBlockExpander
     let origScopes ← if config.fresh then pure [{header := ""}] else getScopes
 
     -- Turn of async elaboration so that info trees and messages are available when highlighting syntax
-    let origScopes := origScopes.modifyHead fun sc => {sc with opts := Elab.async.set sc.opts false}
+    let origScopes := origScopes.modifyHead fun sc =>
+      { sc with opts := pp.tagAppFns.set (Elab.async.set sc.opts false) true }
 
     let altStr ← parserInputString str
 
@@ -233,12 +234,11 @@ def lean : CodeBlockExpander
 
       if let some name := config.name then
         let nonSilentMsgs := cmdState.messages.toList.filter (!·.isSilent)
-        let msgs ← nonSilentMsgs.mapM fun msg => do
-
+        let msgs ← nonSilentMsgs.mapM fun (msg : Message) => do
           let head := if msg.caption != "" then msg.caption ++ ":\n" else ""
-          let txt := withNewline <| head ++ (← msg.data.toString)
+          let msg ← highlightMessage msg
+          pure { msg with contents := .append #[.text head, msg.contents] }
 
-          pure (msg.severity, txt)
         saveOutputs name msgs
 
       reportMessages config.error str cmdState.messages
@@ -319,12 +319,11 @@ def leanTerm : CodeBlockExpander
           Core.setMessageLog initMsgs
 
       if let some name := config.name then
-        let msgs ← newMsgs.toList.mapM fun msg => do
-
+        let msgs ← newMsgs.toList.mapM fun (msg : Message) => do
           let head := if msg.caption != "" then msg.caption ++ ":\n" else ""
-          let txt := withNewline <| head ++ (← msg.data.toString)
+          let msg ← highlightMessage msg
+          pure { msg with contents := .append #[.text head, msg.contents] }
 
-          pure (msg.severity, txt)
         saveOutputs name msgs
 
       pushInfoTree tree
@@ -433,12 +432,12 @@ def leanInline : RoleExpander
           Core.setMessageLog initMsgs
 
       if let some name := config.name then
-        let msgs ← newMsgs.toList.mapM fun msg => do
 
+        let msgs ← newMsgs.toList.mapM fun (msg : Message) => do
           let head := if msg.caption != "" then msg.caption ++ ":\n" else ""
-          let txt := withNewline <| head ++ (← msg.data.toString)
+          let msg ← highlightMessage msg
+          pure { msg with contents := .append #[.text head, msg.contents] }
 
-          pure (msg.severity, txt)
         saveOutputs name msgs
 
       pushInfoTree tree
@@ -528,12 +527,11 @@ def inst : RoleExpander
           Core.setMessageLog initMsgs
 
       if let some name := config.name then
-        let msgs ← newMsgs.toList.mapM fun msg => do
-
+        let msgs ← newMsgs.toList.mapM fun (msg : Message) => do
           let head := if msg.caption != "" then msg.caption ++ ":\n" else ""
-          let txt := withNewline <| head ++ (← msg.data.toString)
+          let msg ← highlightMessage msg
+          pure { msg with contents := .append #[.text head, msg.contents] }
 
-          pure (msg.severity, txt)
         saveOutputs name msgs
 
       pushInfoTree tree
@@ -597,13 +595,10 @@ block_extension Block.leanOutput where
     some <| fun _ _ _ data _ => do
       match FromJson.fromJson? data with
       | .error err =>
-        HtmlT.logError <| "Couldn't deserialize Lean code while rendering HTML: " ++ err
+        HtmlT.logError <| "Couldn't deserialize Lean output while rendering HTML: " ++ err ++ "\n" ++ toString data
         pure .empty
-      | .ok ((sev, txt, summarize) : MessageSeverity × String × Bool) =>
-        let wrap html :=
-          if summarize then {{<details><summary>"Expand..."</summary>{{html}}</details>}}
-          else html
-        pure <| wrap {{<div class={{getClass sev}}><pre>{{txt}}</pre></div>}}
+      | .ok ((msg, summarize) : Highlighted.Message × Bool) =>
+        msg.blockHtml summarize (g := Manual)
 
 
 structure LeanOutputConfig where
@@ -639,6 +634,8 @@ where
 
 end
 
+private def withNl (s : String) : String :=
+  if s.endsWith "\n" then s else s ++ "\n"
 
 open SubVerso.Examples.Messages in
 @[code_block_expander leanOutput]
@@ -653,7 +650,7 @@ def leanOutput : CodeBlockExpander
       (selectionRange := config.name)
       (detail? := some ("Lean output" ++ (config.severity.map (s!" ({sevStr ·})") |>.getD "")))
 
-    let msgs : List (MessageSeverity × String) ← getOutputs config.name
+    let msgs : List Highlighted.Message ← getOutputs config.name
 
     let expected :=
       if config.normalizeMetas then
@@ -661,22 +658,24 @@ def leanOutput : CodeBlockExpander
       else str.getString
 
     if config.allowDiff == 0 then
-      for (sev, txt) in msgs do
+      for msg in msgs do
+        let txt := msg.toString
         let actual :=
           if config.normalizeMetas then
             normalizeMetavars txt
           else txt
         if mostlyEqual config.whitespace expected actual then
           if let some s := config.severity then
-            if s != sev then
-              throwErrorAt str s!"Expected severity {sevStr s}, but got {sevStr sev}"
+            if s != msg.severity.toSeverity then
+              throwErrorAt str s!"Expected severity {sevStr s}, but got {sevStr msg.severity.toSeverity}"
           if config.show then
-            let content ← `(Block.other {Block.leanOutput with data := ToJson.toJson ($(quote sev), $(quote txt), $(quote config.summarize))} #[Block.code $(quote str.getString)])
+            let content ← `(Block.other {Block.leanOutput with data := ToJson.toJson ($(quote msg), $(quote config.summarize))} #[Block.code $(quote str.getString)])
             return #[content]
           else return #[]
     else
-      let mut best : Option (Nat × String × MessageSeverity × String) := none
-      for (sev, txt) in msgs do
+      let mut best : Option (Nat × String × Highlighted.Message) := none
+      for msg in msgs do
+        let txt := msg.toString
         let actual :=
           if config.normalizeMetas then
             normalizeMetavars txt
@@ -684,23 +683,32 @@ def leanOutput : CodeBlockExpander
         let (d, d') := diffSize config.whitespace expected actual
         if d ≤ config.allowDiff then
           if let some (n, _, _) := best then
-            if d < n then best := (d, d', sev, txt)
-          else best := (d, d', sev, txt)
-      if let some (d, d', sev, txt) := best then
+            if d < n then best := (d, d', msg)
+          else best := (d, d', msg)
+      if let some (d, d', msg) := best then
         if let some s := config.severity then
+          let sev := msg.severity.toSeverity
           if s != sev then
             throwErrorAt str s!"Expected severity {sevStr s}, but got {sevStr sev}"
 
         Log.logSilentInfo m!"Diff is {d} lines:\n{d'}"
         if config.show then
-          let content ← `(Block.other {Block.leanOutput with data := ToJson.toJson ($(quote sev), $(quote txt), $(quote config.summarize))} #[Block.code $(quote str.getString)])
+          let content ← `(Block.other {Block.leanOutput with data := ToJson.toJson ($(quote msg), $(quote config.summarize))} #[Block.code $(quote str.getString)])
           return #[content]
         else return #[]
 
-    for (_, m) in msgs do
-      let m := "".pushn ' ' (col?.getD 0) ++ if m.endsWith "\n" then m else m ++ "\n"
-      Verso.Doc.Suggestion.saveSuggestion str (abbreviateString m) m
-    throwErrorAt str "Didn't match - expected one of: {indentD (toMessageData <| msgs.map (·.2))}\nbut got:{indentD (toMessageData str.getString)}"
+    let suggs : Array (Nat × Meta.Hint.Suggestion) := msgs.toArray.map fun msg =>
+      let strMsg := msg.toString
+      ((diffSize config.whitespace strMsg str.getString).1, {
+        suggestion := withNl msg.toString,
+        preInfo? := some s!"{sevStr msg.severity.toSeverity}: "
+      })
+    let suggs : Array Meta.Hint.Suggestion := suggs.qsort (fun x y => x.1 < y.1) |>.map (·.2)
+
+    let hintMsg := if suggs.size > 1 then m!"Replace with one of the actual messages:" else m!"Replace with the actual message:"
+    let hint ← hintAt str hintMsg suggs
+
+    throwErrorAt str (m!"Didn't match - got: {indentD (toMessageData <| msgs.map (Std.Format.text ·.toString))}\nbut expected:{indentD (toMessageData str.getString)}" ++ hint)
 where
   sevStr : MessageSeverity → String
     | .error => "error"
@@ -708,7 +716,7 @@ where
     | .warning => "warning"
 
   mostlyEqual (ws : WhitespaceMode) (s1 s2 : String) : Bool :=
-    ws.apply s1.trim == ws.apply s2.trim
+    messagesMatch (ws.apply s1.trim) (ws.apply s2.trim)
 
   diffSize (ws : WhitespaceMode) (s1 s2 : String) : (Nat × String) :=
     let s1 := ws.apply s1.trim |>.splitOn "\n" |>.toArray

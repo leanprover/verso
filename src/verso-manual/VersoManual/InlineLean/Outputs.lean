@@ -9,11 +9,11 @@ import Lean.Exception
 import Verso
 
 open Lean
-
+open SubVerso.Highlighting
 
 namespace Verso.Genre.Manual.InlineLean
 
-initialize leanOutputs : EnvExtension (NameMap (List (MessageSeverity × String))) ←
+initialize leanOutputs : EnvExtension (NameMap (List Highlighted.Message)) ←
   registerEnvExtension (pure {})
 
 variable [Monad m] [MonadEnv m] [Elab.MonadInfoTree m] [MonadError m]
@@ -23,7 +23,7 @@ Save the output of a Lean block.
 
 `name` is the name the author assigned to the block.
 -/
-def saveOutputs (name : Name) (msgs : List (MessageSeverity × String)) : m Unit :=
+def saveOutputs (name : Name) (msgs : List Highlighted.Message) : m Unit :=
   modifyEnv (leanOutputs.modifyState · (·.insert name msgs))
 
 def getOrSuggest (key : Ident) (map : NameMap α) : m α := do
@@ -46,5 +46,5 @@ where
     else if l < 10 then 2
     else 3
 
-def getOutputs (name : Ident) : m (List (MessageSeverity × String)):= do
+def getOutputs (name : Ident) : m (List Highlighted.Message):= do
   leanOutputs.getState (← getEnv) |> getOrSuggest name

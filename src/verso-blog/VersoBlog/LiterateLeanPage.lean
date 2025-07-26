@@ -327,7 +327,7 @@ where getString : Highlighted → m String
   | .token ⟨_, txt⟩ => pure txt
 end
 
-def getFirstMessage : Highlighted → Option (Highlighted.Span.Kind × String)
+def getFirstMessage : Highlighted → Option (Highlighted.Span.Kind × Highlighted.MessageContents Highlighted)
   | .span msgs x =>
     msgs[0]? <|> getFirstMessage x
   | .point k m => pure (k, m)

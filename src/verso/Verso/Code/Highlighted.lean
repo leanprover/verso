@@ -359,7 +359,7 @@ defmethod Lean.MessageSeverity.«class» : Lean.MessageSeverity → String
   | .error => "error"
 
 defmethod Highlighted.Span.Kind.«class» : Highlighted.Span.Kind → String
-  | .info => "info"
+  | .info => "information"
   | .warning => "warning"
   | .error => "error"
 
@@ -412,9 +412,9 @@ defmethod Highlighted.Goal.toHtml (exprHtml : expr → HighlightHtmlM g Html) (i
       else pure {{
         <span class="hypotheses">
           {{← hypotheses.mapM fun
-              | (x, k, t) => do pure {{
+              | ⟨names, t⟩ => do pure {{
                   <span class="hypothesis">
-                    <span class="name">{{← Token.toHtml ⟨k, x.toString⟩}}</span><span class="colon">":"</span>
+                    <span class="name">{{(← names.mapM (·.toHtml)).toList.intersperse {{" "}} }}</span><span class="colon">":"</span>
                     <span class="type">{{← exprHtml t}}</span>
                   </span>
                 }}
@@ -439,7 +439,7 @@ defmethod Highlighted.Goal.toHtml (exprHtml : expr → HighlightHtmlM g Html) (i
               <span class="labeled-case" {{openAttr collapsePolicy index}}>
                 <label class="case-label">
                   <input type="checkbox" id={{id}} {{openAttr collapsePolicy index}}/>
-                  <span for={{id}} class="goal-name">{{n.eraseMacroScopes.toString}}</span>
+                  <span for={{id}} class="goal-name">{{n}}</span>
                 </label>
                {{hypsHtml}}
                {{conclHtml}}
@@ -454,6 +454,27 @@ defmethod Highlighted.Goal.toHtml (exprHtml : expr → HighlightHtmlM g Html) (i
       | .always => #[]
       | .never => #[("checked", "checked")]
       | .subsequent => if index = 0 then #[("checked", "checked")] else #[]
+
+partial defmethod Highlighted.MessageContents.toHtml (maxTraceDepth : Nat) (exprHtml : expr → HighlightHtmlM g Html) : Highlighted.MessageContents expr → HighlightHtmlM g Html
+  | .text s => pure {{<span class="text">{{s}}</span>}}
+  | .term e => do return {{<span class="highlighted">{{← exprHtml e}}</span>}}
+  | .append xs => xs.foldlM (init := Html.empty) fun html m =>
+      (html ++ ·) <$> m.toHtml maxTraceDepth exprHtml
+  | .trace cls msg children collapsed => do
+    let msgHtml ← msg.toHtml maxTraceDepth exprHtml
+    let childHtml ←
+      if maxTraceDepth = 0 then pure Html.empty
+      else
+        let cs ← children.mapM (·.toHtml (maxTraceDepth - 1) exprHtml)
+        pure {{<ul class="trace-children">{{cs.map ({{<li>{{·}}</li>}})}}</ul>}}
+      if children.size > 0 then return {{
+        <details class="trace" {{if collapsed then #[] else #[("open", "open")]}}><summary><span class="trace-class">s!"[{cls}]"</span> " " {{msgHtml}}</summary>{{childHtml}}</details>
+      }} else return {{
+        <span class="trace"><span class="trace-class">s!"[{cls}]"</span> " " {{msgHtml}}</span>
+      }}
+
+  | .goal g => g.toHtml exprHtml 0
+
 
 def spanClass (infos : Array (Highlighted.Span.Kind × α)) : Option String := Id.run do
   let mut k := none
@@ -488,8 +509,8 @@ partial defmethod Highlighted.toHtml : Highlighted → HighlightHtmlM g Html
       pure {{<span class={{"has-info " ++ cls}}>
           <span class="hover-container">
             <span class={{"hover-info messages"}}>
-              {{ infos.map fun (s, info) => {{
-                <code class={{"message " ++ s.«class»}}>{{info}}</code> }}
+              {{←  infos.mapM fun (s, info) => do return {{
+                <code class={{"verso-message " ++ s.«class»}}>{{← info.toHtml 10 toHtml}}</code> }}
               }}
             </span>
           </span>
@@ -519,7 +540,11 @@ partial defmethod Highlighted.toHtml : Highlighted → HighlightHtmlM g Html
       }}
     else
       toHtml hl
-  | .point s info => pure {{<span class={{"message " ++ s.«class»}}>{{info}}</span>}}
+  | .point s info => do
+    let info ← info.toHtml 10 toHtml
+    return {{
+      <span class={{"verso-message " ++ s.«class»}}>{{info}}</span>
+    }}
   | .seq hls => hls.mapM toHtml
 
 defmethod Highlighted.blockHtml (contextName : String) (code : Highlighted) (trim : Bool := true) (htmlId : Option String := none) : HighlightHtmlM g Html := do
@@ -534,6 +559,17 @@ defmethod Highlighted.inlineHtml (contextName : Option String) (code : Highlight
     pure {{ <code class="hl lean inline" "data-lean-context"={{toString ctx}} {{idAttr}}> {{ ← code.toHtml }} </code> }}
   else
     pure {{ <code class="hl lean inline" {{idAttr}}> {{ ← code.toHtml }} </code> }}
+
+defmethod Highlighted.Message.toHtml (message : Highlighted.Message) (maxTraceDepth : Nat := 10) : HighlightHtmlM g Html := do
+  let contents ← message.contents.toHtml maxTraceDepth (·.toHtml)
+  return {{<span class=s!"verso-message">{{contents}}</span>}}
+
+defmethod Highlighted.Message.blockHtml (message : Highlighted.Message) (summarize : Bool) (maxTraceDepth : Nat := 10) : HighlightHtmlM g Html := do
+  let wrap html :=
+    if summarize then {{<details class=s!"lean-output {message.severity.class}"><summary>"Expand..."</summary><pre class="hl lean">{{html}}</pre></details>}}
+    else {{<pre class=s!"hl lean lean-output {message.severity.class}">{{html}}</pre>}}
+  wrap <$> message.toHtml (maxTraceDepth := maxTraceDepth)
+
 
 -- TODO CSS variables, and document them
 def highlightingStyle : String := "
@@ -673,7 +709,7 @@ def highlightingStyle : String := "
   border: none;
 }
 
-.error pre {
+.error .verso-message {
     color: red;
 }
 
@@ -702,12 +738,12 @@ def highlightingStyle : String := "
 }
 
 
-.hl.lean .has-info.info :not(.tactic-state):not(.tactic-state *) {
+.hl.lean .has-info.information :not(.tactic-state):not(.tactic-state *) {
   text-decoration-color: blue;
 }
 
 @media (hover: hover) {
-  .hl.lean .has-info.info:hover {
+  .hl.lean .has-info.information:hover {
     background-color: #4777ff;
   }
 }
@@ -751,7 +787,7 @@ def highlightingStyle : String := "
 }
 
 .hl.lean code {
-  font-family: monospace;
+  font-family: var(--verso-code-font-family);
 }
 
 .hl.lean .tactic-state {
@@ -868,16 +904,15 @@ def highlightingStyle : String := "
 }
 
 .hl.lean .case-label:has(input[type=\"checkbox\"])::before {
-  width: 1rem;
-  height: 1rem;
   display: inline-block;
   background-color: black;
   content: ' ';
   transition: ease 0.2s;
-  margin-right: 0.7rem;
+  margin-right: 0.7em;
   clip-path: polygon(100% 0, 0 0, 50% 100%);
-  width: 0.6rem;
-  height: 0.6rem;
+  width: 0.6em;
+  height: 0.6em;
+  vertical-align: middle;
 }
 
 .hl.lean .case-label:has(input[type=\"checkbox\"]:not(:checked))::before {
@@ -893,7 +928,7 @@ def highlightingStyle : String := "
 }
 
 
-.hl.lean .tactic-state .labeled-case > :not(:first-child) {
+.hl.lean .labeled-case > :not(:first-child) {
   max-height: 0px;
   display: block;
   overflow: hidden;
@@ -907,42 +942,42 @@ def highlightingStyle : String := "
 }
 
 
-.hl.lean .tactic-state .goal-name::before {
+.hl.lean .goal-name::before {
   font-style: normal;
   content: \"case \";
 }
 
-.hl.lean .tactic-state .goal-name {
+.hl.lean .goal-name {
   font-style: italic;
-  font-family: monospace;
+  font-family: var(--verso-code-font-family);
 }
 
-.hl.lean .tactic-state .hypotheses {
+.hl.lean .hypotheses {
   display: table;
 }
 
-.hl.lean .tactic-state .hypothesis {
+.hl.lean .hypothesis {
   display: table-row;
 }
 
-.hl.lean .tactic-state .hypothesis > * {
+.hl.lean .hypothesis > * {
   display: table-cell;
 }
 
 
-.hl.lean .tactic-state .hypotheses .colon {
+.hl.lean .hypotheses .colon {
   text-align: center;
   min-width: 1rem;
 }
 
-.hl.lean .tactic-state .hypotheses .name {
+.hl.lean .hypotheses .name {
   text-align: right;
 }
 
-.hl.lean .tactic-state .hypotheses .name,
-.hl.lean .tactic-state .hypotheses .type,
-.hl.lean .tactic-state .conclusion .type {
-  font-family: monospace;
+.hl.lean .hypotheses .name,
+.hl.lean .hypotheses .type,
+.hl.lean .conclusion .type {
+  font-family: var(--verso-code-font-family);
 }
 
 .tippy-box[data-theme~='lean'] {
@@ -1049,6 +1084,36 @@ def highlightingStyle : String := "
   display: inline-block;
   margin: 0 0.25em;
 }
+
+.verso-message .trace > summary::marker {
+  color: var(--verso-text-color);
+}
+
+.verso-message .trace-children {
+  margin: 0;
+  padding: 0;
+}
+
+.verso-message .trace-children > li {
+  list-style-type: none;
+  margin-left: 1.5em;
+}
+
+.verso-message .trace-children > li:not(:has(.trace)) {
+  margin-left: 0;
+}
+
+.verso-message .trace-class {
+  color: color-mix(in srgb, currentColor 70%, transparent);
+  font-weight: bold;
+  margin: 0;
+  padding: 0;
+}
+
+.verso-message .text {
+  white-space: pre-wrap;
+}
+
 "
 
 def highlightingJs : String :=
@@ -1234,7 +1299,7 @@ window.onload = () => {
       document.querySelectorAll('.hl.lean .has-info.warning').forEach(element => {
         element.setAttribute('data-tippy-theme', 'warning message');
       });
-      document.querySelectorAll('.hl.lean .has-info.info').forEach(element => {
+      document.querySelectorAll('.hl.lean .has-info.information').forEach(element => {
         element.setAttribute('data-tippy-theme', 'info message');
       });
       document.querySelectorAll('.hl.lean .has-info.error').forEach(element => {
