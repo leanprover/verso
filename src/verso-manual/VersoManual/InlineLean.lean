@@ -179,7 +179,8 @@ def lean : CodeBlockExpander
     let origScopes ← if config.fresh then pure [{header := ""}] else getScopes
 
     -- Turn of async elaboration so that info trees and messages are available when highlighting syntax
-    let origScopes := origScopes.modifyHead fun sc => {sc with opts := Elab.async.set sc.opts false}
+    let origScopes := origScopes.modifyHead fun sc =>
+      { sc with opts := pp.tagAppFns.set (Elab.async.set sc.opts false) true }
 
     let altStr ← parserInputString str
 

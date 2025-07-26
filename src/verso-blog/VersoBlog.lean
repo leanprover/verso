@@ -183,7 +183,7 @@ deriving Inhabited
 initialize exampleContextExt : EnvExtension ExampleContext ← registerEnvExtension (pure {})
 
 structure ExampleMessages where
-  messages : NameSuffixMap (MessageLog ⊕ List (MessageSeverity × String)) := {}
+  messages : NameSuffixMap ((Environment × MessageLog) ⊕ List (MessageSeverity × String)) := {}
 deriving Inhabited
 
 initialize messageContextExt : EnvExtension ExampleMessages ← registerEnvExtension (pure {})
@@ -401,9 +401,10 @@ def leanInit : CodeBlockExpander
       throwErrorAt header "Modules not yet supported here"
     for imp in header.raw[2].getArgs do
       logErrorAt imp "Imports not yet supported here"
-    let opts := Options.empty -- .setBool `trace.Elab.info true
+    let opts := Options.empty.setBool `pp.tagAppFns true
     if header.raw[1].isNone then -- if the "prelude" option was not set, use the current env
-      let commandState := configureCommandState (←getEnv) {}
+      let commandState := configureCommandState (← getEnv) {}
+      let commandState := { commandState with scopes := [{ header := "", opts := pp.tagAppFns.set {} true }] }
       modifyEnv <| fun env => exampleContextExt.modifyState env fun s => {s with contexts := s.contexts.insert config.exampleContext.getId (.inline commandState  state)}
     else
       if header.raw[2].getArgs.isEmpty then
@@ -413,6 +414,7 @@ def leanInit : CodeBlockExpander
             logMessage msg
           liftM (m := IO) (throw <| IO.userError "Errors during import; aborting")
         let commandState := configureCommandState env {}
+        let commandState := { commandState with scopes := [{ header := "", opts := pp.tagAppFns.set {} true }] }
         modifyEnv <| fun env => exampleContextExt.modifyState env fun s => {s with contexts := s.contexts.insert config.exampleContext.getId (.inline commandState state)}
     if config.show.getD false then
       pure #[← ``(Block.code $(quote str.getString))] -- TODO highlighting hack
@@ -468,7 +470,7 @@ def lean : CodeBlockExpander
       }
     if let some infoName := config.name then
       modifyEnv fun env => messageContextExt.modifyState env fun st => {st with
-        messages := st.messages.insert infoName (.inl s.commandState.messages)
+        messages := st.messages.insert infoName (.inl (s.commandState.env, s.commandState.messages))
       }
     withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"Highlighting syntax") do
       let mut hls := Highlighted.empty
@@ -704,7 +706,7 @@ def leanOutput : Doc.Elab.CodeBlockExpander
 
     let (_, savedInfo) ← messageContextExt.getState (← getEnv) |>.messages |>.getOrSuggest config.name
     let messages ← match savedInfo with
-      | .inl log =>
+      | .inl (env, log) =>
         let messages ← liftM <| log.toArray.mapM contents
         for m in log.toArray do
           if mostlyEqual config.whitespace str.getString (← contents m) then
@@ -718,7 +720,13 @@ def leanOutput : Doc.Elab.CodeBlockExpander
                 let preHtml : Html := pre.map (fun (l : String) => {{<code>{{l}}</code>}})
                 ``(Block.other (Blog.BlockExt.htmlDetails $(quote (sevStr m.severity)) $(quote preHtml)) #[Block.code $(quote post)])
               else
-                let m' ← SubVerso.Highlighting.highlightMessage m
+                let myEnv ← getEnv
+                let m' ←
+                  try
+                    setEnv env
+                    withOptions (·.set `pp.tagAppFns true) do
+                      SubVerso.Highlighting.highlightMessage m
+                  finally setEnv myEnv
                 ``(Block.other (Blog.BlockExt.message false $(quote m')) #[Block.code $(quote str.getString)])
             return #[content]
         pure messages

@@ -251,4 +251,12 @@ example : (123123190283102938019238098 * 1234124).toString.length > 14 := by
   use `set_option diagnostics.threshold <num>` to control threshold for reporting counters
 ```
 
+Here's a check:
+```lean demo (name := check)
+#check fun x => [x]
+```
+```leanOutput check
+fun x => [x] : ?m.18581 → List ?m.18581
+```
+
 Thank you for looking at my test/demo post.

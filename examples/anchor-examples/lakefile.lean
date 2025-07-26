@@ -7,7 +7,7 @@ Author: David Thrane Christiansen
 import Lake
 open Lake DSL
 
-require subverso from git "https://github.com/leanprover/subverso"@"structured-output"
+require subverso from git "https://github.com/leanprover/subverso"@"main"
 
 package «examples» where
   -- add package configuration options here
