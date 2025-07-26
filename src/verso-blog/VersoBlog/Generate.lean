@@ -31,6 +31,7 @@ structure Generate.Context where
   /-- The root directory in which to generate the static site -/
   dir : System.FilePath
   config : Config
+  header : String
   rewriteHtml : Option ((logError : String → IO Unit) → TraverseContext → Html → IO Html) := none
   components : Components := {}
 
@@ -152,8 +153,9 @@ def writePage (theme : Theme) (params : Template.Params) (template : Template :=
   ensureDir <| (← currentDir)
   let ⟨baseTemplate, modParams⟩ := theme.adHocTemplates (Array.mk (← currentPath)) |>.getD ⟨template, id⟩
   let output ← rewriteOutput <| ← Template.renderMany [baseTemplate, theme.primaryTemplate] <| modParams <| params
+  let header := (← read).header
   IO.FS.withFile ((← currentDir).join "index.html") .write fun h => do
-    h.putStrLn "<!DOCTYPE html>"
+    h.putStrLn header
     h.putStrLn output.asString
 
 def writeBlog (theme : Theme) (id : Lean.Name) (txt : Part Page) (posts : Array BlogPost) : GenerateM Unit := do

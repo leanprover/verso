@@ -793,7 +793,8 @@ private def filterString (p : Char → Bool) (str : String) : String := Id.run <
 
 open Template in
 def blogMain (theme : Theme) (site : Site) (relativizeUrls := true) (linkTargets : Code.LinkTargets TraverseContext := {})
-    (options : List String) (components : Components := by exact %registered_components) :
+    (options : List String) (components : Components := by exact %registered_components)
+    (header : String := Html.doctype) :
     IO UInt32 := do
   let hasError ← IO.mkRef false
   let logError msg := do hasError.set true; IO.eprintln msg
@@ -808,6 +809,7 @@ def blogMain (theme : Theme) (site : Site) (relativizeUrls := true) (linkTargets
     xref := xref,
     dir := cfg.destination,
     config := cfg,
+    header := header,
     rewriteHtml := rw,
     linkTargets := linkTargets,
     components := components
