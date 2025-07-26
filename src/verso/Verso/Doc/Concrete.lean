@@ -176,15 +176,17 @@ scoped syntax (name := addLastBlockCmd) block term:max str : command
 
 def versoBlockCommandFn (genre : Term) (title : String) : ParserFn := fun c s =>
   let iniSz  := s.stackSize
-  let s := (recoverBlockWith #[.missing] (Verso.Parser.block {})) c s
-  let s := s.pushSyntax genre
-  let s := ignoreFn (manyFn blankLine) c s
-  let i := s.pos
-  if c.input.atEnd i then
-    let s := s.pushSyntax (Syntax.mkStrLit title)
-    s.mkNode ``addLastBlockCmd iniSz
+  let s := recoverBlockWith #[.missing] (Verso.Parser.block {}) c s
+  if s.hasError then s
   else
-    s.mkNode ``addBlockCmd iniSz
+    let s := s.pushSyntax genre
+    let s := ignoreFn (manyFn blankLine) c s
+    let i := s.pos
+    if c.input.atEnd i then
+      let s := s.pushSyntax (Syntax.mkStrLit title)
+      s.mkNode ``addLastBlockCmd iniSz
+    else
+      s.mkNode ``addBlockCmd iniSz
 
 initialize docStateExt : EnvExtension DocElabM.State ← registerEnvExtension (pure {})
 initialize partStateExt : EnvExtension (Option PartElabM.State) ← registerEnvExtension (pure none)
