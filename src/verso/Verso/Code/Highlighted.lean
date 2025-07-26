@@ -564,6 +564,12 @@ defmethod Highlighted.Message.toHtml (message : Highlighted.Message) (maxTraceDe
   let contents ← message.contents.toHtml maxTraceDepth (·.toHtml)
   return {{<span class=s!"verso-message">{{contents}}</span>}}
 
+defmethod Highlighted.Message.blockHtml (message : Highlighted.Message) (summarize : Bool) (maxTraceDepth : Nat := 10) : HighlightHtmlM g Html := do
+  let wrap html :=
+    if summarize then {{<details class=s!"lean-output {message.severity.class}"><summary>"Expand..."</summary><pre class="hl lean">{{html}}</pre></details>}}
+    else {{<pre class=s!"hl lean lean-output {message.severity.class}">{{html}}</pre>}}
+  wrap <$> message.toHtml (maxTraceDepth := maxTraceDepth)
+
 
 -- TODO CSS variables, and document them
 def highlightingStyle : String := "

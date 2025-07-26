@@ -142,11 +142,8 @@ block_extension Block.leanOutput (message : Highlighted.Message) (summarize : Bo
       | .error err =>
         HtmlT.logError <| "Couldn't deserialize Lean code while rendering HTML: " ++ err
         pure .empty
-      | .ok ((txt, summarize) : Highlighted.Message × Bool) =>
-        let wrap html :=
-          if summarize then {{<details><summary>"Expand..."</summary>{{html}}</details>}}
-          else html
-        wrap <$> txt.toHtml (g := Manual)
+      | .ok ((msg, summarize) : Highlighted.Message × Bool) =>
+        msg.blockHtml summarize (g := Manual)
 
 
 inline_extension Inline.leanOutput (message : Highlighted.Message) (plain : Bool) where

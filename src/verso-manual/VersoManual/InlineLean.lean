@@ -598,10 +598,7 @@ block_extension Block.leanOutput where
         HtmlT.logError <| "Couldn't deserialize Lean output while rendering HTML: " ++ err ++ "\n" ++ toString data
         pure .empty
       | .ok ((msg, summarize) : Highlighted.Message × Bool) =>
-        let wrap html :=
-          if summarize then {{<details class=s!"lean-output {msg.severity.class}"><summary>"Expand..."</summary><pre class="hl lean">{{html}}</pre></details>}}
-          else {{<pre class=s!"hl lean lean-output {msg.severity.class}">{{html}}</pre>}}
-        wrap <$> msg.toHtml (g := Manual)
+        msg.blockHtml summarize (g := Manual)
 
 
 structure LeanOutputConfig where
