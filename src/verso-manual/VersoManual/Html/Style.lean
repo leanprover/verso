@@ -24,14 +24,17 @@ def pageStyle : String := r####"
     /* Mobile font size */
     --verso-mobile-font-size: 16px;
 
-    /** Header appearance */
+    /** Text colors **/
+    --verso-text-color: black;
+
+    /** Header appearance **/
     --verso-header-height: 3rem;
-    /* Height of the displayed logo */
+    /* Height of the displayed logo **/
     --verso-logo-height: var(--verso-header-height);
 
     /** Table of Contents appearance **/
     --verso-toc-background-color: #fafafa;
-    --verso-toc-text-color: black;
+    --verso-toc-text-color: var(--verso-text-color);
 
     /* How long should the ToC animation take? */
     --verso-toc-transition-time: 0.4s;
@@ -889,26 +892,21 @@ main section li ol {
     margin-left: 0.75em;
 }
 
-.error pre, .information pre, .warning pre,
-.error code, .information code, .warning code {
+.lean-output {
     overflow-x: auto;
     margin: 0px;
-}
-
-.information pre, .error pre, .warning pre,
-.information code, .error code, .warning code {
-  margin: 0.5em .85em;
-  border-left: 0.2em solid red;
-  padding: 0 0.45em;
+    margin: 0.5em .85em;
+    border-left: 0.2em solid red;
+    padding: 0 0.45em;
 }
 
 /* Different color for warning */
-.warning pre, .warning code {
+.lean-output.warning {
     border-color: var(--verso-warning-color);
 }
 
 /* Different color for information */
-.information pre, .information code {
+.lean-output.information {
     border-color: #0000c0;
 }
 

@@ -5,7 +5,6 @@ Author: David Thrane Christiansen
 -/
 import SubVerso.Helper
 import SubVerso.Module
-import MD4Lean
 import Verso.Code.External.Env
 
 open Lean
