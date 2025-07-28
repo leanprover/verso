@@ -195,7 +195,7 @@ def inlineHtml (g : Genre) [bg : BlogGenre g]
     let st ← bg.state_eq ▸ state
     match st.targets.find? x with
     | none =>
-      HtmlT.logError "Can't find target {x}"
+      HtmlT.logError s!"Can't find target {x}"
       pure {{<strong class="internal-error">s!"Can't find target {x}"</strong>}}
     | some tgt =>
       let addr := s!"{String.join ((← relative tgt.path).intersperse "/")}#{tgt.htmlId}"
