@@ -35,13 +35,20 @@ Here are some examples:
 ```
 
 
-```lean demo (error := true)
+```lean demo (error := true) (name := fst)
 example := if true then 1 else 2
 example := if True then 1 else 2
 example : Int := if True then 1 else 2
 example : 2 < 5 := by
   constructor
   constructor
+```
+
+Here's the error:
+```leanOutput fst
+unsolved goals
+case a.a
+⊢ (Nat.succ 2).le 3
 ```
 
 ```lean demo
@@ -211,5 +218,45 @@ example := %more_info(25)
 ````
 
 The info gets stacked up, with the greatest severity highlighting the range in question.
+
+Here's some hoverable info:
+```lean demo (error := true) (name := typeErr)
+example : Nat := "Not a number"
+```
+```leanOutput typeErr
+type mismatch
+  "Not a number"
+has type
+  String
+but is expected to have type
+  Nat
+```
+
+
+Here's some traces:
+```lean demo (error := true) (name := traces)
+set_option trace.compiler.ir.result true in
+def f' (xs : List Nat) := xs.foldl (init := 0) (· + ·)
+
+set_option diagnostics true in
+example : (123123190283102938019238098 * 1234124).toString.length > 14 := by
+  simp
+```
+```leanOutput traces
+[diag] Diagnostics
+  [reduction] unfolded reducible declarations (max: 34, num: 1):
+    [reduction] outParam ↦ 34
+  [type_class] used instances (max: 54, num: 1):
+    [type_class] USize.instOfNat ↦ 54
+  use `set_option diagnostics.threshold <num>` to control threshold for reporting counters
+```
+
+Here's a check:
+```lean demo (name := check)
+#check fun x => [x]
+```
+```leanOutput check
+fun x => [x] : ?m.18581 → List ?m.18581
+```
 
 Thank you for looking at my test/demo post.

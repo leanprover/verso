@@ -41,7 +41,7 @@ def addJsFile (filename contents : String) : TraverseM Unit := do
   modify fun s => s.addJsFile filename contents
 
 def genreBlock (g : Genre) [bg : BlogGenre g] : Blog.BlockExt → Array (Block g) → Blog.TraverseM (Option (Block g))
-    | .highlightedCode .., _contents => do
+    | .highlightedCode .., _contents | .message .., _contents => do
       modify fun st => {st with
         stylesheets := st.stylesheets.insert highlightingStyle,
         scripts := st.scripts.insert highlightingJs
@@ -64,7 +64,7 @@ def genreBlock (g : Genre) [bg : BlogGenre g] : Blog.BlockExt → Array (Block g
     | _, _ => pure none
 
 def genreInline (g : Genre) [bg : BlogGenre g] : Blog.InlineExt → Array (Inline g) → Blog.TraverseM (Option (Inline g))
-    | .highlightedCode .., _contents | .customHighlight .., _contents => do
+    | .highlightedCode .., _contents | .customHighlight .., _contents | .message .., _contents => do
       modify fun st => {st with
         stylesheets := st.stylesheets.insert highlightingStyle,
         scripts := st.scripts.insert highlightingJs
