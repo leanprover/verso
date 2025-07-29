@@ -9,7 +9,10 @@ import AnchorExamples.Basic
 -- ANCHOR: t
 def someTree : Tree Nat :=
 -- ANCHOR: tDef
-  .branch (.branch .leaf 1 .leaf) 2 (.branch (.branch .leaf 3 .leaf) 4 .leaf)
+  .branch
+    (.branch .leaf 1 .leaf)
+    2
+    (.branch (.branch .leaf 3 .leaf) 4 .leaf)
 -- ANCHOR_END: tDef
 -- ANCHOR_END: t
 
@@ -25,7 +28,8 @@ deriving instance Repr for Tree
 
 
 -- ANCHOR: proof1
-theorem Tree.flip_flip_eq_id : flip ∘ flip = (id : Tree α → Tree α) := by
+theorem Tree.flip_flip_eq_id :
+    flip ∘ flip = (id : Tree α → Tree α) := by
   funext t
   induction t with
   | leaf => rfl
@@ -37,7 +41,8 @@ theorem Tree.flip_flip_eq_id : flip ∘ flip = (id : Tree α → Tree α) := by
 
 -- ANCHOR: proof2
 -- Show more tactic combinators and placement of proof states
-theorem Tree.flip_flip_id' (t : Tree α) : t.flip.flip = t := by
+theorem Tree.flip_flip_id' (t : Tree α) :
+    t.flip.flip = t := by
   induction t
   case leaf => rfl
   next l v r ih1 ih2 =>

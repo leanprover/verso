@@ -35,12 +35,18 @@ Here's a tree:
 
 ```anchor t
 def someTree : Tree Nat :=
-  .branch (.branch .leaf 1 .leaf) 2 (.branch (.branch .leaf 3 .leaf) 4 .leaf)
+  .branch
+    (.branch .leaf 1 .leaf)
+    2
+    (.branch (.branch .leaf 3 .leaf) 4 .leaf)
 ```
 
 And here's just part of its definition:
 ```anchor tDef
-  .branch (.branch .leaf 1 .leaf) 2 (.branch (.branch .leaf 3 .leaf) 4 .leaf)
+  .branch
+    (.branch .leaf 1 .leaf)
+    2
+    (.branch (.branch .leaf 3 .leaf) 4 .leaf)
 ```
 
 It's left branch is {anchorTerm tDef}`.branch .leaf 1 .leaf` which includes a reference to {anchorName tDef}`.leaf`.
@@ -58,7 +64,8 @@ Tree.branch
 
 As does proofs and parts of proofs:
 ```anchor proof1
-theorem Tree.flip_flip_eq_id : flip ∘ flip = (id : Tree α → Tree α) := by
+theorem Tree.flip_flip_eq_id :
+    flip ∘ flip = (id : Tree α → Tree α) := by
   funext t
   induction t with
   | leaf => rfl
@@ -77,7 +84,8 @@ branch l v r ih1 ih2
 
 This rendering of the same proof doesn't have proof states:
 ```anchor proof1 (showProofStates := false)
-theorem Tree.flip_flip_eq_id : flip ∘ flip = (id : Tree α → Tree α) := by
+theorem Tree.flip_flip_eq_id :
+    flip ∘ flip = (id : Tree α → Tree α) := by
   funext t
   induction t with
   | leaf => rfl

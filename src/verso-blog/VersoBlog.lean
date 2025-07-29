@@ -31,6 +31,7 @@ open Verso ArgParse Doc Elab
 open Verso.SyntaxUtils (parserInputString)
 
 open SubVerso.Examples (loadExamples Example)
+open SubVerso.Examples.Messages (messagesMatch)
 open SubVerso.Module (ModuleItem)
 
 def classArgs : ArgParse DocElabM String := .named `«class» .string false
@@ -764,7 +765,7 @@ where
     pure <| withNewline <| head ++ (← message.data.toString)
 
   mostlyEqual (ws : WhitespaceMode) (s1 s2 : String) : Bool :=
-    ws.apply s1.trim == ws.apply s2.trim
+    messagesMatch (ws.apply s1.trim) (ws.apply s2.trim)
 
 open Lean Elab Command in
 elab "define_lexed_text" blockName:ident " ← " lexerName:ident : command => do
