@@ -3122,6 +3122,68 @@ Remaining: "Let's say more!\n\nhello"
 #eval blocks {} |>.test! ": an excellent idea\n\nLet's say more!\n\nhello"
 
 /--
+info: Failure @91 (⟨6, 0⟩): non-whitespace
+Final stack:
+  [(Verso.Syntax.dl
+    "ul{"
+    [(Verso.Syntax.desc
+      ":"
+      [(Verso.Syntax.text (str "\" \""))
+       (Verso.Syntax.role
+        "{"
+        `ref
+        [(Verso.Syntax.anon
+          (Verso.Syntax.arg_ident `defs))]
+        "}"
+        "["
+        [(Verso.Syntax.text
+          (str "\"Basic definitions\""))]
+        "]")]
+      "=>"
+      [(Verso.Syntax.para
+        "para{"
+        [(Verso.Syntax.text
+          (str "\"The def is something\""))]
+        "}")])
+     (Verso.Syntax.desc
+      ":"
+      [(Verso.Syntax.text (str "\" \""))
+       (Verso.Syntax.role
+        "{"
+        `ref
+        [(Verso.Syntax.anon
+          (Verso.Syntax.arg_ident `large))]
+        "}"
+        "["
+        [(Verso.Syntax.role
+          "{"
+          `Sufficiently
+          [(Verso.Syntax.anon
+            (Verso.Syntax.arg_ident `large))]
+          "}"
+          "["
+          [(Verso.Syntax.footnote <missing>)]
+          "]")]
+        "]")])])]
+Remaining: "\n  More text\n\n: `foo`\n\n  Thing\n"
+-/
+#guard_msgs in
+#eval recoverBlockWith #[.missing] (blocks {}) |>.test!
+": {ref defs}[Basic definitions]
+
+  The def is something
+
+: {ref large}{Sufficiently large}
+
+  More text
+
+: `foo`
+
+  Thing
+"
+
+
+/--
 info: Success! Final stack:
   [(Verso.Syntax.ol
     "ol("

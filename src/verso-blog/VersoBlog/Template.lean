@@ -14,6 +14,7 @@ import VersoBlog.Basic
 import VersoBlog.Site
 import VersoBlog.Component
 import Verso.Output.Html
+import Verso.Output.Html.CssVars
 import Verso.Code
 
 open Std (HashSet TreeMap)
@@ -148,7 +149,7 @@ def blockHtml (g : Genre)
     withReader (fun ρ => { ρ with codeOptions.inlineProofStates := showProofStates }) <|
     hls.blockHtml (toString contextName) (g := g)
   | .message summarize msg, _contents => do
-    return {{<pre class="lean-output hl lean">{{← msg.toHtml (g := g)}}</pre>}}
+    return {{<pre class=s!"lean-output hl lean {msg.severity.class}">{{← msg.toHtml (g := g)}}</pre>}}
   | .htmlDetails classes summary, contents => do
     pure {{ <details class={{classes}}><summary>{{summary}}</summary> {{← contents.mapM goB}}</details>}}
   | .htmlWrapper name attrs, contents => do
@@ -299,8 +300,11 @@ def param [TypeName α] (key : String) : TemplateM α := do
     if let some v := val.get? (α := α) then return v
     else throw <| .wrongParamType key (TypeName.typeName α)
 
+
 def builtinHeader : TemplateM Html := do
   let mut out := .empty
+  -- These should come first so later stylesheets can easily override them.
+  out := out ++ {{<style>{{«verso-vars.css»}}</style>}}
   for style in (← read).builtInStyles do
     out := out ++ {{<style>"\n"{{.text false style}}"\n"</style>"\n"}}
   for script in (← read).builtInScripts do

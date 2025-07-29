@@ -24,7 +24,6 @@ open DemoTextbook
 set_option pp.rawOnError true
 
 
-
 #doc (Manual) "A Textbook" =>
 
 %%%

@@ -32,7 +32,10 @@ def theme : Theme := { Theme.default with
     return {{
       <html>
         <head>
-          <meta charset="UTF-8"/>
+          <meta charset="utf-8"/>
+          <meta name="viewport" content="width=device-width, initial-scale=1"/>
+          <meta name="color-scheme" content="light dark"/>
+          <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sakura.css/css/sakura.css" type="text/css"/>
           <title>{{ (← param (α := String) "title") }} " — Verso "</title>
           <link rel="stylesheet" href="/static/style.css"/>
           {{← builtinHeader }}
@@ -40,17 +43,17 @@ def theme : Theme := { Theme.default with
         <body>
           <header>
             <div class="inner-wrap">
-            <a class="logo" href="/"><img src="/static/logo.png"/></a>
+            <a class="logo" href="/"><h1>"A Verso Site"</h1></a>
             {{ ← topNav }}
             </div>
           </header>
-          <div class="main" role="main">
+          <main>
             <div class="wrap">
               {{ (← param "content") }}
               {{ postList }}
               {{ catList }}
             </div>
-          </div>
+          </main>
         </body>
       </html>
     }}

@@ -1,0 +1,55 @@
+:root {
+    /** Typography **/
+    /* The font family used for headers, ToC entries, etc */
+    --verso-structure-font-family: "Helvetica Neue","Segoe UI", "Roboto", Arial,sans-serif;
+    /* The font family used for body text */
+    --verso-text-font-family: "Helvetica Neue","Segoe UI", "Roboto", Arial,sans-serif;
+    /* The font family used for code */
+    --verso-code-font-family: monospace;
+
+    /** Text colors **/
+    --verso-text-color: black;
+    --verso-code-color: black;
+    --verso-structure-color: black;
+
+    /** Selected items (e.g. search results) */
+    --verso-selected-color: #def;
+
+    /** Message colors **/
+    /*
+    These colors are used to render Lean's feedback. They come in three severities and two
+    variants. The raw color itself is used for the text of a message of the indicated severity,
+    while the presence of such a message is indicated using the indicator color (e.g. via a
+    wavy underline or a bar in the margin).
+    */
+    --verso-info-color: black;
+    --verso-info-indicator-color: #4777ff;
+    --verso-warning-color: black;
+    --verso-warning-indicator-color: #e7a71d; /* 2.11 contrast ratio for white, 9.94 for black */
+    --verso-error-color: #cc0000;
+    --verso-error-indicator-color: #ff0000;
+
+    /** Code Highlighting **/
+    /*
+    These variables control the rendering of Lean code emitted by Verso. Each category that can be
+    highlighted supports the customization of color, weight, style, and family.
+    */
+    /* Constants (e.g. `List` or `id` or `none`) */
+    --verso-code-const-color: var(--verso-code-color);
+    --verso-code-const-weight: normal;
+    --verso-code-const-style: normal;
+    --verso-code-const-font-family: var(--verso-code-font-family);
+
+    /* Keywords/atoms (e.g. `for` or `def` or `induction`) */
+    --verso-code-keyword-color: var(--verso-code-color);
+    --verso-code-keyword-weight: bold;
+    --verso-code-keyword-style: normal;
+    --verso-code-keyword-font-family: var(--verso-code-font-family);
+
+    /* Local bindings (e.g. `x` in `let x := 5`) */
+    --verso-code-var-color: var(--verso-code-color);
+    --verso-code-var-weight: normal;
+    --verso-code-var-style: italic;
+    --verso-code-kw-font-family: var(--verso-code-font-family);
+
+}

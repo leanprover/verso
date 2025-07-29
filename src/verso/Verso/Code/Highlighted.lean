@@ -468,7 +468,7 @@ partial defmethod Highlighted.MessageContents.toHtml (maxTraceDepth : Nat) (expr
         let cs ← children.mapM (·.toHtml (maxTraceDepth - 1) exprHtml)
         pure {{<ul class="trace-children">{{cs.map ({{<li>{{·}}</li>}})}}</ul>}}
       if children.size > 0 then return {{
-        <details class="trace" {{if collapsed then #[] else #[("open", "open")]}}><summary><span class="trace-class">s!"[{cls}]"</span> " " {{msgHtml}}</summary>{{childHtml}}</details>
+        <details class="trace" role="group" {{if collapsed then #[] else #[("open", "open")]}}><summary><span class="trace-class">s!"[{cls}]"</span> " " {{msgHtml}}</summary>{{childHtml}}</details>
       }} else return {{
         <span class="trace"><span class="trace-class">s!"[{cls}]"</span> " " {{msgHtml}}</span>
       }}
@@ -578,15 +578,37 @@ def highlightingStyle : String := "
   white-space: pre;
   font-weight: normal;
   font-style: normal;
+  font-size: inherit;
 }
 
 .hl.lean .keyword {
-  font-weight : bold;
+  color: var(--verso-code-keyword-color,);
+  font-weight: var(--verso-code-keyword-weight, bold);
+  font-style: var(--verso-code-keyword-style, normal);
+  font-family: var(--verso-code-keyword-font-family,);
+}
+
+.hl.lean .const {
+  color: var(--verso-code-const-color,);
+  font-weight: var(--verso-code-const-weight, normal);
+  font-style: var(--verso-code-const-style, normal);
+  font-family: var(--verso-code-const-font-family,);
 }
 
 .hl.lean .var {
-  font-style: italic;
+  color: var(--verso-code-var-color,);
+  font-weight: var(--verso-code-var-weight, normal);
+  font-style: var(--verso-code-var-style, italic);
+  font-family: var(--verso-code-var-font-family,);
+
   position: relative;
+}
+
+.hl.lean .literal, .hl.lean .unknown {
+  color: var(--verso-code-color,);
+  font-weight: normal;
+  font-style: normal;
+  font-family: var(--verso-code-font-family,);
 }
 
 .hover-container {
@@ -616,7 +638,6 @@ def highlightingStyle : String := "
   border: 1px solid black;
   padding: 0.5rem;
   z-index: 300;
-  font-size: inherit;
 }
 
 .hl.lean .hover-info.messages {
@@ -630,6 +651,8 @@ def highlightingStyle : String := "
 
 .hl.lean .hover-info code {
   white-space: pre-wrap;
+  background: none;
+  color: black;
 }
 
 .hl.lean .hover-info.messages > code {
@@ -650,6 +673,9 @@ def highlightingStyle : String := "
   margin-top: 0rem;
 }
 
+.hl.lean {
+}
+
 .hl.lean.block {
   display: block;
 }
@@ -657,6 +683,9 @@ def highlightingStyle : String := "
 .hl.lean.inline {
   display: inline;
   white-space: pre-wrap;
+}
+
+.hl.lean * {
 }
 
 .hl.lean .token {
@@ -709,12 +738,16 @@ def highlightingStyle : String := "
   border: none;
 }
 
-.error .verso-message {
-    color: red;
+.error .verso-message, .error .verso-message .token, .error .verso-message label {
+  color: var(--verso-error-color);
+}
+
+.error .verso-message .case-label:has(input[type=\"checkbox\"])::before {
+  background-color: var(--verso-error-color) !important;
 }
 
 .hl.lean .has-info.warning :not(.tactic-state):not(.tactic-state *) {
-  text-decoration-color: var(--verso-warning-color);
+  text-decoration-color: var(--verso-warning-indicator-color);
 }
 
 @media (hover: hover) {
@@ -725,6 +758,25 @@ def highlightingStyle : String := "
 
 .hl.lean .hover-info.messages > code.warning {
   background-color: var(--verso-warning-color);
+}
+
+.lean-output {
+  border-left: 0.2em solid transparent;
+  padding: 0 0 0 0.5em;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.lean-output.error {
+  border-color: var(--verso-error-indicator-color);
+}
+
+.lean-output.information {
+  border-color: var(--verso-info-indicator-color);
+}
+
+.lean-output.warning {
+  border-color: var(--verso-warning-indicator-color);
 }
 
 .hl.lean .hover-info.messages > code.error {
@@ -739,7 +791,7 @@ def highlightingStyle : String := "
 
 
 .hl.lean .has-info.information :not(.tactic-state):not(.tactic-state *) {
-  text-decoration-color: blue;
+  text-decoration-color: var(--verso-info-indicator-color, blue);
 }
 
 @media (hover: hover) {
@@ -749,20 +801,20 @@ def highlightingStyle : String := "
 }
 
 
-.hl.lean .hover-info.messages > code.info {
+.hl.lean .hover-info.messages > code.information {
   background-color: #e5e5e5;
   border-left: 0.2rem solid #4777ff;
 }
 
-.tippy-box[data-theme~='info'] .hl.lean .hover-info.messages > code.info {
+.tippy-box[data-theme~='info'] .hl.lean .hover-info.messages > code.information {
   background: none;
   border: none;
 }
 
 .hl.lean div.docstring {
-  font-family: sans-serif;
+  font-family: var(--verso-text-font-family, sans-serif);
   white-space: normal;
-  max-width: 40rem;
+  max-width: calc(min(40rem, 90vw));
   width: max-content;
 }
 
@@ -853,12 +905,13 @@ def highlightingStyle : String := "
 .hl.lean .tactic > label::after {
   content: \"\";
   border: 1px solid #bbbbbb;
-  border-radius: 1rem;
-  height: 0.25rem;
+  /* These need to be em, not rem, to scale with the font */
+  border-radius: 1em;
+  height: 0.25em;
   vertical-align: middle;
-  width: 0.6rem;
-  margin-left: 0.1rem;
-  margin-right: 0.1rem;
+  width: 0.6em;
+  margin-left: 0.1em;
+  margin-right: 0.1em;
   display: inline-block;
   transition: all 0.5s;
 }
@@ -880,15 +933,60 @@ def highlightingStyle : String := "
 }
 
 .hl.lean .tactic-state .goal + .goal {
-  margin-top: 1.5rem;
+  margin-top: 1.5em;
+}
+
+/*
+Some CSS frameworks customize details/summary in ways not compatible with Verso's output.
+*/
+
+.hl.lean details {
+  display: block !important;
+  margin: 0;
+}
+
+.hl.lean details summary {
+  display: list-item !important;
+  margin: 0;
+}
+
+.hl.lean details summary:focus {
+  outline: none;
+  outline-offset: none;
+  color: inherit;
+}
+
+.hl.lean ul > li {
+  margin-bottom: 0;
+}
+
+.hl.lean details summary::marker {
+  display: inline !important;
+}
+
+.hl.lean details > summary:first-of-type {
+  list-style-type: disclosure-closed;
+  list-style-position: inside;
+}
+
+.hl.lean details[open] > summary:first-of-type {
+  list-style-type: disclosure-open;
+}
+
+.hl.lean details summary::before, .hl.lean details summary::after {
+  content: \"\" !important;
+  background: none;
+  display: none;
 }
 
 .hl.lean .tactic-state summary {
-  margin-left: -0.5rem;
+  /* These need to be em, not rem, to scale with the font */
+  margin-left: -0.5em;
 }
 
 .hl.lean .tactic-state details {
-  padding-left: 0.5rem;
+  /* These need to be em, not rem, to scale with the font */
+  padding-left: 0.5em;
 }
 
 .hl.lean .case-label {
@@ -936,8 +1034,9 @@ def highlightingStyle : String := "
   display: block;
   overflow: hidden;
   transition: max-height 0.1s ease-in;
-  margin-left: 0.5rem;
-  margin-top: 0.1rem;
+  /* These need to be em, not rem, to scale with the font */
+  margin-left: 0.5em;
+  margin-top: 0.1em;
 }
 
 .hl.lean .labeled-case:has(.case-label input[type=\"checkbox\"]:checked) > :not(:first-child) {
@@ -953,6 +1052,7 @@ def highlightingStyle : String := "
 .hl.lean .goal-name {
   font-style: italic;
   font-family: var(--verso-code-font-family);
+  color: inherit;
 }
 
 .hl.lean .hypotheses {
@@ -970,7 +1070,8 @@ def highlightingStyle : String := "
 
 .hl.lean .hypotheses .colon {
   text-align: center;
-  min-width: 1rem;
+  /* This needs to be em, not rem, to scale with the font */
+  min-width: 1em;
 }
 
 .hl.lean .hypotheses .name {
@@ -981,6 +1082,13 @@ def highlightingStyle : String := "
 .hl.lean .hypotheses .type,
 .hl.lean .conclusion .type {
   font-family: var(--verso-code-font-family);
+}
+
+.tippy-box {
+  /* Without these, mobile Safari will start making font sizes inconsistent when its text size adjustment feature is triggered.*/
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+
 }
 
 .tippy-box[data-theme~='lean'] {
@@ -1086,6 +1194,10 @@ def highlightingStyle : String := "
   content: '|';
   display: inline-block;
   margin: 0 0.25em;
+}
+
+.verso-message .trace {
+  display: block;
 }
 
 .verso-message .trace > summary::marker {
