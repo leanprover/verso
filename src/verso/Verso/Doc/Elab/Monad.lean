@@ -106,9 +106,11 @@ structure DocElabContext where
 structure DocDef (α : Type) where
   defSite : TSyntax `str
   val : α
+deriving Repr
 
 structure DocUses where
   useSites : Array Syntax := {}
+deriving Repr
 
 def DocUses.add (uses : DocUses) (loc : Syntax) : DocUses := {uses with useSites := uses.useSites.push loc}
 
@@ -130,7 +132,10 @@ def internalRefs (defs : HashMap String (DocDef α)) (refs : HashMap String DocU
   let keys : HashSet String := defs.fold (fun soFar k _ => HashSet.insert soFar k) <| refs.fold (fun soFar k _ => soFar.insert k) {}
   let mut refInfo := #[]
   for k in keys do
-    refInfo := refInfo.push ⟨defs[k]? |>.map (·.defSite), refs[k]? |>.map (·.useSites) |>.getD #[]⟩
+    refInfo := refInfo.push {
+      defSite := defs[k]? |>.map (·.defSite),
+      useSites := refs[k]? |>.map (·.useSites) |>.getD #[]
+    }
   refInfo
 
 

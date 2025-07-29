@@ -121,35 +121,6 @@ partial instance : FromJson Lean.Lsp.DocumentSymbolResult where
     let syms ← elts.mapM fromJson?
     pure ⟨syms⟩
 
-open Lean Server Lsp RequestM in
-def handleDef (params : TextDocumentPositionParams) (prev : RequestTask (Array LocationLink)) : RequestM (RequestTask (Array LocationLink)) := do
-  let doc ← readDoc
-  let text := doc.meta.text
-  let pos := text.lspPosToUtf8Pos params.position
-  bindWaitFindSnap doc (·.endPos + ' ' >= pos) (notFoundX := pure prev) fun snap => do
-    RequestM.mapTaskCostly prev fun prevLocs => do
-      let nodes := snap.infoTree.deepestNodes fun _ctxt info _arr =>
-        match info with
-        | .ofCustomInfo ⟨stx, data⟩ =>
-          if stx.containsPos pos then
-            data.get? DocRefInfo
-          else none
-        | _ => none
-      let mut locs : Array LocationLink := #[]
-      for node in nodes do
-        match node with
-        | ⟨some defSite, _⟩ =>
-          let mut origin : Option Range := none
-          for stx in node.syntax do
-            if let some ⟨head, tail⟩ := stx.getRange? then
-              if pos ≥ head && pos ≤ tail then
-                origin := stx.lspRange text
-                break
-          let some target := defSite.lspRange text
-            | continue
-          locs := locs.push {originSelectionRange? := origin, targetRange := target, targetUri := params.textDocument.uri, targetSelectionRange := target}
-        | _ => continue
-      pure (locs ++ prevLocs.toOption.getD #[])
 
 open Lean Server Lsp RequestM in
 def handleRefs (params : ReferenceParams) (prev : RequestTask (Array Location)) : RequestM (RequestTask (Array Location)) := do
@@ -631,6 +602,53 @@ where
       | .inr (.error e) => return ⟨[], some e, true⟩
 
 open Lean Server Lsp RequestM in
+def handleDef (params : TextDocumentPositionParams) (prev : RequestTask (Array LeanLocationLink)) : RequestM (RequestTask (Array LeanLocationLink)) := do
+  let ctx ← read
+  let doc ← readDoc
+  let text := doc.meta.text
+  let pos := text.lspPosToUtf8Pos params.position
+  let locTask ← RequestM.asTask do
+    let (snaps, _, _) ← doc.cmdSnaps.getFinishedPrefixWithTimeout 300 (cancelTks := ctx.cancelTk.cancellationTasks)
+    let nodes := snaps.flatMap fun snap =>
+      snap.infoTree.collectNodesBottomUp fun _ctxt info _arr xs =>
+          match info with
+          | .ofCustomInfo ⟨stx, data⟩ =>
+            if stx.containsPos pos then
+              if let some i := data.get? DocRefInfo then i :: xs else xs
+            else xs
+          | _ => xs
+
+    let mut locs : Array LeanLocationLink := #[]
+    for node in nodes do
+      match node with
+      | ⟨some defSite, _⟩ =>
+        let mut origin : Option Range := none
+        for stx in node.syntax do
+          if let some ⟨head, tail⟩ := stx.getRange? then
+            if pos ≥ head && pos ≤ tail then
+              origin := stx.lspRange text
+              break
+        let some target := defSite.lspRange text
+          | continue
+        locs := locs.push {
+          originSelectionRange? := origin,
+          targetRange := target,
+          targetUri := params.textDocument.uri,
+          targetSelectionRange := target,
+          -- Because this is `none`, the watchdog will not keep this up to date as files are
+          -- edited. This seems to be OK, because this feature is currently only used for
+          -- references valid the current file. Adding the field would be useful in the future,
+          -- but it would require actually defining each footnote/link ref as its own name in the
+          -- environment and tracking this in Verso.
+          ident? := none,
+          isDefault := true
+        }
+      | _ => continue
+    pure locs
+  mergeResponses prev locTask fun xs ys =>
+    xs.getD #[] ++ ys.getD #[]
+
+open Lean Server Lsp RequestM in
 partial def handleTokens (prev : RequestTask SemanticTokens)
     (beginPos : String.Pos) (endPos? : Option String.Pos) :
     RequestM (RequestTask (LspResponse SemanticTokens)) := do
@@ -930,7 +948,7 @@ open Lean.Server.FileWorker
 
 open Lean Server Lsp in
 initialize
-  chainLspRequestHandler "textDocument/definition" TextDocumentPositionParams (Array LocationLink) handleDef
+  chainLspRequestHandler "textDocument/definition" TextDocumentPositionParams (Array LeanLocationLink) handleDef
   -- chainLspRequestHandler "textDocument/references" ReferenceParams (Array Location) handleRefs -- TODO make this work - right now it goes through the watchdog so we can't chain it
   chainLspRequestHandler "textDocument/documentHighlight" DocumentHighlightParams DocumentHighlightResult handleHl
   chainLspRequestHandler "textDocument/documentSymbol" DocumentSymbolParams DocumentSymbolResult handleSyms

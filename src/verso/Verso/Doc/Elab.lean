@@ -162,7 +162,7 @@ def _root_.Verso.Syntax.link.expand : InlineExpander
 @[inline_expander Verso.Syntax.footnote]
 def _root_.Verso.Syntax.link.footnote : InlineExpander
   | `(inline| footnote( $name:str )) => do
-    ``(Inline.footnote $name $(← addFootnoteRef name))
+    ``(Inline.footnote $(quote name.getString) $(← addFootnoteRef name))
   | _ => throwUnsupportedSyntax
 
 

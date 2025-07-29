@@ -259,6 +259,7 @@ def runVersoBlock (genre : Term) (block : TSyntax `block) : CommandElabM Unit :=
     let ((), docState', partState') ← runTermElabM fun _ => do
       let g ← Term.elabTerm genre (some (.const ``Doc.Genre [])) >>= instantiateMVars
       partCommand block |>.run genre g (docStateExt.getState env) partState
+    saveRefs docState' partState'
     modifyEnv fun env =>
       partStateExt.setState (docStateExt.setState env docState') (some partState')
   finally
