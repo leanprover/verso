@@ -11,21 +11,12 @@ def pageStyle : String := r####"
 
 :root {
     /** Typography **/
-    /* The font family used for headers, ToC entries, etc */
-    --verso-structure-font-family: "Helvetica Neue","Segoe UI", "Roboto", Arial,sans-serif;
-    /* The font family used for body text */
-    --verso-text-font-family: "Helvetica Neue","Segoe UI", "Roboto", Arial,sans-serif;
-    /* The font family used for code */
-    --verso-code-font-family: monospace;
     /* What's the maximum line width, for legibility? */
     --verso-content-max-width: 47rem;
     /* Desktop font size */
     --verso-font-size: 16px;
     /* Mobile font size */
     --verso-mobile-font-size: 16px;
-
-    /** Text colors **/
-    --verso-text-color: black;
 
     /** Header appearance **/
     --verso-header-height: 3rem;
@@ -42,9 +33,6 @@ def pageStyle : String := r####"
     /* How wide should the ToC be on non-mobile? */
     --verso-toc-width: 18rem;
 
-    /** Selected items (e.g. search results) */
-    --verso-selected-color: #def;
-
     /** Variables that control the “burger menu” appearance **/
     --verso-burger-height: 1.25rem;
     --verso-burger-width: 1.25rem;
@@ -60,9 +48,6 @@ def pageStyle : String := r####"
     --verso-mobile-burger-width: 1.5rem;
     --verso-mobile-burger-line-width: 0.3rem;
     --verso-mobile-burger-line-radius: 0.3rem;
-
-    /* Colors */
-    --verso-warning-color: #e7a71d; /* 2.11 contrast ratio for white, 9.94 for black */
 }
 
 /******** Global parameters not intended for customization by themes ********/

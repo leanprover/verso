@@ -179,35 +179,43 @@ theorem grow_10_id {α} : grow (α := α) 6 = id := by
 
 Here is a proof with big terms in the context:
 ```lean demo
+section
+open Lean
 
-open Lean in
-def quotedStx [Monad m] [MonadQuotation m] [MonadRef m] (str : String) : m Syntax := do
+variable [Monad m] [MonadQuotation m] [MonadRef m]
+
+def quoted (str : String) : m Syntax := do
   let s ← `(a b c #[x, $(quote str), z])
   pure s
 
-open Lean in
-example [Monad m] [MonadQuotation m] [MonadRef m] : ¬(quotedStx (m := m) = fun (x : String) => pure .missing) := by
-  unfold quotedStx
+example : ¬(quoted (m := m) = fun x => pure .missing) := by
+  unfold quoted
   intro h
   let g : String → m Syntax := fun str => do
     let s ← `(a b c #[x, $(quote str), z])
     pure s
   have : g "hello" ≠ pure .missing := by skip; sorry
   sorry
+
+end
 ```
 
 It's possible to render a lot of info on one example:
 ```lean demo
-elab "%much_info(" t:term ")" : term => open Lean Elab Term in do
+open Lean Elab Term in
+elab "%much_info(" t:term ")" : term => do
   for i in [0:20] do
     logInfoAt t m!"Hello! ({i})"
   logInfoAt t "Some multi-line\ninfo too"
   elabTerm t none
 
-elab "%more_info(" t:term ")" : term => open Lean Elab Term in do
+open Lean Elab Term in
+elab "%more_info(" t:term ")" : term => do
   for i in [0:20] do
     logInfoAt t m!"Hello again! ({i})"
-  logErrorAt t "And a great big error, much wider than the other info!"
+  logErrorAt t <|
+    "And a great big error, " ++
+    "much wider than the other info!"
   elabTerm t none
 ```
 

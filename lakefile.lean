@@ -12,10 +12,15 @@ lean_lib VersoUtil where
   srcDir := "src/verso-util"
   roots := #[`VersoUtil]
 
+input_file versoVars where
+  text := true
+  path := "static-web/verso-vars.css"
+
 @[default_target]
 lean_lib Verso where
   srcDir := "src/verso"
   roots := #[`Verso]
+  needs := #[versoVars]
 
 @[default_target]
 lean_lib MultiVerso where

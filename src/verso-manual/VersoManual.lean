@@ -10,6 +10,7 @@ import Verso.Doc.TeX
 import Verso.Doc.Html
 import Verso.Output.TeX
 import Verso.Output.Html
+import Verso.Output.Html.CssVars
 import Verso.Output.Html.KaTeX
 import Verso.Output.Html.ElasticLunr
 import Verso.Doc.Lsp
@@ -564,6 +565,8 @@ where
       for e in errs do logError e
       pure <| items.map (·.toHtml)
     emitXrefs toc dir state config
+    IO.FS.withFile (dir.join "verso-vars.css") .write fun h => do
+      h.putStrLn Html.«verso-vars.css»
     IO.FS.withFile (dir.join "book.css") .write fun h => do
       h.putStrLn Html.Css.pageStyle
     for (src, dest) in config.extraFiles do
@@ -628,6 +631,8 @@ where
       if let some alt := text.metadata.bind (·.shortTitle) then
         alt
       else titleHtml
+    IO.FS.withFile (root.join "verso-vars.css") .write fun h => do
+      h.putStrLn Html.«verso-vars.css»
     IO.FS.withFile (root.join "book.css") .write fun h => do
       h.putStrLn Html.Css.pageStyle
     for (src, dest) in config.extraFiles do
