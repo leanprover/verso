@@ -54,24 +54,8 @@ def loadModuleContent
 
   IO.FS.withTempFile fun h f => do
     let cmd := "elan"
-    let args := #["run", "--install", toolchain, "lake", "env", "which", "subverso-extract-mod"]
 
-    let res ← IO.Process.output {
-      cmd, args, cwd := projectDir
-      -- Unset Lake's environment variables
-      env := lakeVars.map (·, none)
-    }
-    if res.exitCode != 0 then
-      let args := #["run", "--install", toolchain, "lake", "build", "subverso-extract-mod"]
-
-      let res ← IO.Process.output {
-        cmd, args, cwd := projectDir
-        -- Unset Lake's environment variables
-        env := lakeVars.map (·, none)
-      }
-      if res.exitCode != 0 then reportFail projectDir cmd args res
-
-    let args := #["run", "--install", toolchain, "lake", "env", "subverso-extract-mod", mod, f.toString]
+    let args := #["run", "--install", toolchain, "lake", "exe", "subverso-extract-mod", mod, f.toString]
     let res ← IO.Process.output {
       cmd, args, cwd := projectDir
       -- Unset Lake's environment variables
@@ -80,12 +64,12 @@ def loadModuleContent
     if res.exitCode != 0 then reportFail projectDir cmd args res
     h.rewind
 
-    let .ok (.arr json) := Json.parse (← h.readToEnd)
-      | throw <| IO.userError s!"Expected JSON array"
-    match json.mapM fromJson? with
+    let .ok json := Json.parse (← h.readToEnd)
+      | throw <| IO.userError s!"Expected JSON"
+    match Module.fromJson? json with
     | .error err =>
       throw <| IO.userError s!"Couldn't parse JSON from output file: {err}\nIn:\n{json}"
-    | .ok val => pure val
+    | .ok val => pure val.items
 
 where
   decorateOut (name : String) (out : String) : String :=
