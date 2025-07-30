@@ -2,6 +2,8 @@ on:
   push:
     branches:
       - master
+      - main
+      - nightly-testing
   pull_request:
 
 name: Continuous Integration

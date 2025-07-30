@@ -381,19 +381,10 @@ def check
         m!"Stderr:\n{out.stderr}\n\nStdout:\n{out.stdout}\n\n"
     let json ← IO.FS.readFile (dirname / jsonFile)
     let json ← IO.ofExcept <| Json.parse json
-    let Json.arr json := json
-      | throwError m!"Expected a JSON aray, got {json}"
-    let json ← json.mapM fun v =>
-      match v.getObjVal? "code" with
-      | .ok v => pure v
-      | .error e => throwError e
-    json.foldlM (init := .empty) fun hl v =>
-      match FromJson.fromJson? v with
-      | .ok v => pure <| hl ++ v
-      | .error e =>
-        throwError m!"Failed to deserialized JSON output as highlighted Lean code. Error: {indentD e}\nJSON: {Json.arr json}"
-
-
+    let code ← match SubVerso.Module.Module.fromJson? json with
+      | .ok v => pure (v.items.map (·.code))
+      | .error e => throwError m!"Failed to deserialized JSON output as highlighted Lean code. Error: {indentD e}\nJSON: {json}"
+    pure <| code.foldl (init := .empty) fun hl v => hl ++ v
 where
   shorten (str : String) : String :=
     if str.length < 30 then str else str.take 30 ++ "…"
