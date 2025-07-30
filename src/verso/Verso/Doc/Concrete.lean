@@ -31,7 +31,7 @@ def document : Parser where
 
 /-- Advance the parser to EOF on failure so Lean doesn't try to parse further commands -/
 def completeDocument : Parser where
-  fn := (recoverFn Verso.Parser.document fun _ => skipFn) >> untilEoi
+  fn := (Verso.Parser.recoverFn Verso.Parser.document fun _ => skipFn) >> untilEoi
 where
   untilEoi : ParserFn := fun c s =>
     s.setPos c.input.endPos
