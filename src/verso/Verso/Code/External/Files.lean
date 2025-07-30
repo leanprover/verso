@@ -5,6 +5,7 @@ Author: David Thrane Christiansen
 -/
 import SubVerso.Helper
 import SubVerso.Module
+import MD4Lean
 import Verso.Code.External.Env
 
 open Lean
@@ -89,19 +90,16 @@ def loadModuleContent' (projectDir : String) (mod : String) (suppressNamespaces 
   finally
     toolchainFile.unlock
 
-
-
   let hlDir := ("build" : System.FilePath) / "highlighted"
   let hlFile :=
     (mod.split (· == '.')).foldl (init := hlDir) (· / ·) |>.addExtension "json"
   let json ← IO.FS.readFile (projectDir / ".lake" / hlFile)
-  let .ok (.arr json) := Json.parse json
+  let .ok json := Json.parse json
     | throwError s!"Expected JSON array"
-  match json.mapM fromJson? with
+  match Module.fromJson? json with
   | .error err =>
     throwError s!"Couldn't parse JSON from output file: {err}\nIn:\n{json}"
-  | .ok val => pure val
-
+  | .ok val => pure val.items
 
 where
   decorateOut (name : String) (out : String) : String :=
