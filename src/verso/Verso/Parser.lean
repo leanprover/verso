@@ -663,6 +663,15 @@ Remaining:
 #guard_msgs in
 #eval val.test! "43\n\"foo\""
 
+/--
+info: Failure @0 (⟨1, 0⟩): unterminated string literal; expected identifier or numeral
+Final stack:
+  (Verso.Syntax.arg_str <missing>)
+Remaining: "\"foo"
+-/
+#guard_msgs in
+#eval val.test! "\"foo"
+
 def withCurrentStackSize (p : Nat → ParserFn) : ParserFn := fun c s =>
   p s.stxStack.size c s
 
@@ -683,33 +692,113 @@ def skipBlock : ParserFn :=
   skipToNewline >> manyFn nonEmptyLine >> takeWhileFn (· == '\n')
 where
   nonEmptyLine : ParserFn :=
-    chFn '\n' >>
-    takeWhileFn (fun c => c.isWhitespace && c != '\n') >>
-    satisfyFn (!·.isWhitespace) "non-whitespace" >> skipToNewline
+    atomicFn <|
+      chFn '\n' >>
+      takeWhileFn (fun c => c.isWhitespace && c != '\n') >>
+      satisfyFn (!·.isWhitespace) "non-whitespace" >> skipToNewline
 
-def recoverBlock (p : ParserFn) (final : ParserFn := skipFn) : ParserFn := recoverFn p fun _ => ignoreFn skipBlock >> final
+/--
+info: Success! Final stack:
+ empty
+Remaining:
+"\nhijk\n\n\n\nabc"
+-/
+#guard_msgs in
+#eval (ignoreFn skipToNewline).test! "abcdeg\nhijk\n\n\n\nabc"
+
+/--
+info: Success! Final stack:
+  ["\n"]
+Remaining:
+"\n\n\n\nabc"
+-/
+#guard_msgs in
+#eval (ignoreFn skipToNewline >> manyFn (atomicFn skipBlock.nonEmptyLine)).test! "abcdeg\nhijk\n\n\n\nabc"
+
+/--
+info: Success! Final stack:
+ empty
+Remaining:
+"abc"
+-/
+#guard_msgs in
+#eval (ignoreFn skipBlock).test! "abcdeg\nhijk\n\n\n\nabc"
+
+-- TODO: upstream
+def recoverFn (p : ParserFn) (recover : RecoveryContext → ParserFn) : ParserFn := fun c s =>
+  let iniPos := s.pos
+  let iniSz := s.stxStack.size
+  let s := p c s
+  if let some msg := s.errorMsg then
+    let s' := recover ⟨iniPos, iniSz⟩ c {s with errorMsg := none}
+    if s'.hasError then s
+    else {s with
+      pos := s'.pos,
+      errorMsg := none,
+      stxStack := s'.stxStack,
+      recoveredErrors := s.recoveredErrors.push (s'.pos, s'.stxStack, msg) }
+  else s
+
+def recoverBlock (p : ParserFn) (final : ParserFn := skipFn) : ParserFn :=
+  recoverFn p fun _ =>
+    ignoreFn skipBlock >> final
+
 def recoverBlockWith (stxs : Array Syntax) (p : ParserFn) : ParserFn :=
   recoverFn p fun rctx =>
     ignoreFn skipBlock >>
     show ParserFn from
       fun _ s => stxs.foldl (init := s.shrinkStack rctx.initialSize) (·.pushSyntax ·)
-def recoverLine (p : ParserFn) : ParserFn := recoverFn p fun _ => ignoreFn <| skipRestOfLine
-def recoverWs (p : ParserFn) : ParserFn := recoverFn p fun _ => ignoreFn <| takeUntilFn (fun c =>  c == ' ' || c == '\n')
-def recoverEol (p : ParserFn) : ParserFn := recoverFn p fun _ => ignoreFn <| skipToNewline
+
+def recoverLine (p : ParserFn) : ParserFn :=
+  recoverFn p fun _ =>
+    ignoreFn skipRestOfLine
+
+def recoverWs (p : ParserFn) : ParserFn :=
+  recoverFn p fun _ =>
+    ignoreFn <| takeUntilFn (fun c =>  c == ' ' || c == '\n')
+
+/--
+info: Failure @4 (⟨1, 4⟩): unterminated string literal; expected identifier or numeral
+Final stack:
+  (Verso.Syntax.arg_str <missing>)
+Remaining: ""
+-/
+#guard_msgs in
+#eval (recoverLine val).test! "\"foo"
+
+def recoverWsWith (stxs : Array Syntax) (p : ParserFn) : ParserFn :=
+  recoverFn p fun rctx =>
+    ignoreFn <| takeUntilFn (fun c =>  c == ' ' || c == '\n') >>
+    show ParserFn from
+      fun _ s => stxs.foldl (init := s.shrinkStack rctx.initialSize) (·.pushSyntax ·)
+
+def recoverEol (p : ParserFn) : ParserFn :=
+  recoverFn p fun _ => ignoreFn <| skipToNewline
+
 def recoverEolWith (stxs : Array Syntax) (p : ParserFn) : ParserFn :=
   recoverFn p fun rctx =>
     ignoreFn skipToNewline >>
     show ParserFn from
       fun _ s => stxs.foldl (init := s.shrinkStack rctx.initialSize) (·.pushSyntax ·)
-def recoverSkip (p : ParserFn) : ParserFn := recoverFn p fun _ => skipFn
+
+def recoverSkip (p : ParserFn) : ParserFn :=
+  recoverFn p fun _ => skipFn
+
 def recoverSkipWith (stxs : Array Syntax) (p : ParserFn) : ParserFn :=
   recoverFn p fun rctx =>
     show ParserFn from
       fun _ s => stxs.foldl (init := s.shrinkStack rctx.initialSize) (·.pushSyntax ·)
+
+/-- Recovers from an error by pushing the provided syntax items, without adjusting the position. -/
 def recoverHereWith (stxs : Array Syntax) (p : ParserFn) : ParserFn :=
   recoverFn p fun rctx =>
     show ParserFn from
       fun _ s => stxs.foldl (init := s.restore rctx.initialSize rctx.initialPos) (·.pushSyntax ·)
+
+def recoverHereWithKeeping (stxs : Array Syntax) (keep : Nat) (p : ParserFn) : ParserFn :=
+  recoverFn p fun rctx =>
+    show ParserFn from
+      fun _ s => stxs.foldl (init := s.restore (rctx.initialSize + keep) rctx.initialPos) (·.pushSyntax ·)
 
 
 def arg : ParserFn :=
@@ -1156,13 +1245,14 @@ mutual
     nodeFn ``code <|
     withCurrentColumn fun c =>
       atomicFn opener >>
-      (recoverHereWith #[.missing, .missing] <| atomicFn <|
+      ( atomicFn <|
         withCurrentColumn fun c' =>
           let count := c' - c
-          nodeFn strLitKind
-            (asStringFn (many1Fn <| codeContentsFn (count - 1)) (quoted := true) >>
-             normFn) >>
-          closer count)
+          recoverCode <|
+            nodeFn strLitKind
+              (asStringFn (many1Fn <| codeContentsFn (count - 1)) (quoted := true) >>
+               normFn) >>
+            closer count)
   where
     opener : ParserFn := asStringFn (many1Fn (satisfyFn (· == '`') s!"any number of backticks"))
     closer (count : Nat) : ParserFn :=
@@ -1171,6 +1261,10 @@ mutual
     takeBackticksFn : Nat → ParserFn
       | 0 => satisfyFn (fun _ => false)
       | n+1 => optionalFn (chFn '`' >> takeBackticksFn n)
+    recoverCode (p : ParserFn) : ParserFn :=
+      recoverFn p fun rctx =>
+        (show ParserFn from fun _ s => s.restore rctx.initialSize rctx.initialPos) >>
+        atomicFn (nodeFn strLitKind (asStringFn (takeWhileFn (· ≠ '\n')) true) >> ignoreFn (chFn '\n' <|> eoiFn) >> pushMissing)
     codeContentsFn (maxCount : Nat) : ParserFn :=
       atomicFn (asStringFn (satisfyFn (maxCount > 0 && · == '`') >> atMostFn (maxCount - 1) (chFn '`') s!"at most {maxCount} backticks")) <|>
       satisfyFn (· != '`') "expected character other than backtick ('`')"
@@ -1444,10 +1538,13 @@ All input consumed.
 #eval code.test! "``foo `stuff` bar``"
 
 /--
-info: Failure @1 (⟨1, 1⟩): expected '`' to close inline code
+info: Failure @4 (⟨1, 4⟩): expected '`' to close inline code
 Final stack:
-  (Verso.Syntax.code "`" <missing> <missing>)
-Remaining: "foo"
+  (Verso.Syntax.code
+   "`"
+   (str "\"foo\"")
+   <missing>)
+Remaining: ""
 -/
 #guard_msgs in
 #eval code.test! "`foo"
@@ -1507,10 +1604,13 @@ All input consumed.
 #eval (inline {}).test! "``foo `stuff` bar``"
 
 /--
-info: Failure @1 (⟨1, 1⟩): expected '`' to close inline code
+info: Failure @4 (⟨1, 4⟩): expected '`' to close inline code
 Final stack:
-  (Verso.Syntax.code "`" <missing> <missing>)
-Remaining: "foo"
+  (Verso.Syntax.code
+   "`"
+   (str "\"foo\"")
+   <missing>)
+Remaining: ""
 -/
 #guard_msgs in
 #eval (inline {}).test! "`foo"
@@ -1540,10 +1640,13 @@ All input consumed.
 #eval (inline {}).test! "` fo\no `"
 
 /--
-info: Failure @2 (⟨1, 2⟩): expected '``' to close inline code
+info: Failure @6 (⟨2, 0⟩): expected '``' to close inline code
 Final stack:
-  (Verso.Syntax.code "``" <missing> <missing>)
-Remaining: " fo\no `"
+  (Verso.Syntax.code
+   "``"
+   (str "\" fo\"")
+   <missing>)
+Remaining: "o `"
 -/
 #guard_msgs in
 #eval (inline {}).test! "`` fo\no `"
@@ -2264,7 +2367,7 @@ mutual
             s.mkError s!"Internal error - index {atDepth} wasn't the directive fence - it was the atom {str}"
         | .missing => s.pushSyntax .missing
         | stx =>
-          s.mkError s!"Internal error - index {atDepth} wasn't the directive fence - it was {stx}"
+          s.mkError s!"Internal error - index {atDepth} wasn't the directive fence - it was {stx} in {s.stxStack.back}, {s.stxStack.pop.back}, {s.stxStack.pop.pop.back}, {s.stxStack.pop.pop.pop.back}"
 
     withFenceSize (atDepth : Nat) (p : Nat → ParserFn) : ParserFn :=
       withFence atDepth fun _ str => p str.length
@@ -3122,7 +3225,52 @@ Remaining: "Let's say more!\n\nhello"
 #eval blocks {} |>.test! ": an excellent idea\n\nLet's say more!\n\nhello"
 
 /--
-info: Failure @91 (⟨6, 0⟩): non-whitespace
+info: Failure @55 (⟨3, 0⟩): '{'; expected '![', '$$', '$', '[' or '[^'
+Final stack:
+  (Verso.Syntax.para
+   "para{"
+   [(Verso.Syntax.role
+     "{"
+     `tactic
+     []
+     "}"
+     "["
+     [(Verso.Syntax.code "`" (str "\"rw\"") "`")]
+     "]")
+    (Verso.Syntax.role
+     "{"
+     `lit
+     []
+     "}"
+     "["
+     [(Verso.Syntax.code
+       "`"
+       (str "\" [t] \"")
+       "`")]
+     "]")
+    (Verso.Syntax.role
+     "{"
+     `kw
+     []
+     "}"
+     "["
+     [(Verso.Syntax.code "`" (str "\"at\"") "`")]
+     "]")
+    (Verso.Syntax.role
+     "{"
+     `lit
+     []
+     "}"
+     "["
+     [(Verso.Syntax.footnote <missing>)]
+     "]")])
+Remaining: "test"
+-/
+#guard_msgs in
+#eval recoverBlock (block {}) |>.test! "{tactic}`rw`{lit}`  [t]  `{kw}`at`{lit} h` applies th\n\ntest"
+
+/--
+info: Failure @92 (⟨7, 0⟩): '{'; expected '![', '$$', '$', '[' or '[^'
 Final stack:
   [(Verso.Syntax.dl
     "ul{"
@@ -3165,10 +3313,10 @@ Final stack:
           [(Verso.Syntax.footnote <missing>)]
           "]")]
         "]")])])]
-Remaining: "\n  More text\n\n: `foo`\n\n  Thing\n"
+Remaining: "  More text\n\n: `foo`\n\n  Thing\n"
 -/
 #guard_msgs in
-#eval recoverBlockWith #[.missing] (blocks {}) |>.test!
+#eval recoverBlock (blocks {}) |>.test!
 ": {ref defs}[Basic definitions]
 
   The def is something
@@ -3393,7 +3541,7 @@ All input consumed.
 #eval blocks {} |>.test! "> Quotation\nand contained"
 
 /--
-info: Failure @54 (⟨3, 42⟩): expected '`' to close inline code
+info: Failure @65 (⟨4, 0⟩): expected '`' to close inline code
 Final stack:
   [(Verso.Syntax.para
     "para{"
@@ -3404,11 +3552,10 @@ Final stack:
     [(Verso.Syntax.text
       (str
        "\"Here is a paragraph with an unterminated \""))
-     (Verso.Syntax.code "`" <missing> <missing>)
-     (Verso.Syntax.text (str "\"code block\""))
-     (Verso.Syntax.linebreak
-      "line!"
-      (str "\"\\n\""))
+     (Verso.Syntax.code
+      "`"
+      (str "\"code block\"")
+      <missing>)
      (Verso.Syntax.text
       (str
        "\"that would be super annoying without error recovery in the\""))
@@ -3421,7 +3568,7 @@ Final stack:
     "para{"
     [(Verso.Syntax.text (str "\"Yep.\""))]
     "}")]
-Remaining: "code block\nthat would be super annoying without error recovery in the\nparser.\n\nYep."
+Remaining: "that would be super annoying without error recovery in the\nparser.\n\nYep."
 -/
 #guard_msgs in
 #eval blocks {} |>.test!
