@@ -455,17 +455,18 @@ defmethod Highlighted.Goal.toHtml (exprHtml : expr → HighlightHtmlM g Html) (i
       | .never => #[("checked", "checked")]
       | .subsequent => if index = 0 then #[("checked", "checked")] else #[]
 
-partial defmethod Highlighted.MessageContents.toHtml (maxTraceDepth : Nat) (exprHtml : expr → HighlightHtmlM g Html) : Highlighted.MessageContents expr → HighlightHtmlM g Html
+partial defmethod Highlighted.MessageContents.toHtml (expandTraces : List Lean.Name) (maxTraceDepth : Nat) (exprHtml : expr → HighlightHtmlM g Html) : Highlighted.MessageContents expr → HighlightHtmlM g Html
   | .text s => pure {{<span class="text">{{s}}</span>}}
   | .term e => do return {{<span class="highlighted">{{← exprHtml e}}</span>}}
   | .append xs => xs.foldlM (init := Html.empty) fun html m =>
-      (html ++ ·) <$> m.toHtml maxTraceDepth exprHtml
+      (html ++ ·) <$> m.toHtml expandTraces maxTraceDepth exprHtml
   | .trace cls msg children collapsed => do
-    let msgHtml ← msg.toHtml maxTraceDepth exprHtml
+    let msgHtml ← msg.toHtml expandTraces maxTraceDepth exprHtml
+    let collapsed := collapsed && cls ∉ expandTraces
     let childHtml ←
       if maxTraceDepth = 0 then pure Html.empty
       else
-        let cs ← children.mapM (·.toHtml (maxTraceDepth - 1) exprHtml)
+        let cs ← children.mapM (·.toHtml expandTraces (maxTraceDepth - 1) exprHtml)
         pure {{<ul class="trace-children">{{cs.map ({{<li>{{·}}</li>}})}}</ul>}}
       if children.size > 0 then return {{
         <details class="trace" role="group" {{if collapsed then #[] else #[("open", "open")]}}><summary><span class="trace-class">s!"[{cls}]"</span> " " {{msgHtml}}</summary>{{childHtml}}</details>
@@ -510,7 +511,7 @@ partial defmethod Highlighted.toHtml : Highlighted → HighlightHtmlM g Html
           <span class="hover-container">
             <span class={{"hover-info messages"}}>
               {{←  infos.mapM fun (s, info) => do return {{
-                <code class={{"verso-message " ++ s.«class»}}>{{← info.toHtml 10 toHtml}}</code> }}
+                <code class={{"verso-message " ++ s.«class»}}>{{← info.toHtml [] 10 toHtml}}</code> }}
               }}
             </span>
           </span>
@@ -541,7 +542,7 @@ partial defmethod Highlighted.toHtml : Highlighted → HighlightHtmlM g Html
     else
       toHtml hl
   | .point s info => do
-    let info ← info.toHtml 10 toHtml
+    let info ← info.toHtml [] 10 toHtml
     return {{
       <span class={{"verso-message " ++ s.«class»}}>{{info}}</span>
     }}
@@ -560,15 +561,15 @@ defmethod Highlighted.inlineHtml (contextName : Option String) (code : Highlight
   else
     pure {{ <code class="hl lean inline" {{idAttr}}> {{ ← code.toHtml }} </code> }}
 
-defmethod Highlighted.Message.toHtml (message : Highlighted.Message) (maxTraceDepth : Nat := 10) : HighlightHtmlM g Html := do
-  let contents ← message.contents.toHtml maxTraceDepth (·.toHtml)
+defmethod Highlighted.Message.toHtml (message : Highlighted.Message) (expandTraces : List Lean.Name) (maxTraceDepth : Nat := 10) : HighlightHtmlM g Html := do
+  let contents ← message.contents.toHtml expandTraces maxTraceDepth (·.toHtml)
   return {{<span class=s!"verso-message">{{contents}}</span>}}
 
-defmethod Highlighted.Message.blockHtml (message : Highlighted.Message) (summarize : Bool) (maxTraceDepth : Nat := 10) : HighlightHtmlM g Html := do
+defmethod Highlighted.Message.blockHtml (message : Highlighted.Message) (summarize : Bool) (expandTraces : List Lean.Name := []) (maxTraceDepth : Nat := 10) : HighlightHtmlM g Html := do
   let wrap html :=
     if summarize then {{<details class=s!"lean-output {message.severity.class}"><summary>"Expand..."</summary><pre class="hl lean">{{html}}</pre></details>}}
     else {{<pre class=s!"hl lean lean-output {message.severity.class}">{{html}}</pre>}}
-  wrap <$> message.toHtml (maxTraceDepth := maxTraceDepth)
+  wrap <$> message.toHtml expandTraces (maxTraceDepth := maxTraceDepth)
 
 
 -- TODO CSS variables, and document them

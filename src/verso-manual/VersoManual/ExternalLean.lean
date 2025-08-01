@@ -123,8 +123,8 @@ inline_extension Inline.lean (hls : Highlighted) (cfg : CodeConfig) where
               codeOptions.inlineProofStates := cfg.showProofStates, codeOptions.definitionsAsTargets := cfg.defSite.getD false }) <|
             hl.inlineHtml (g := Manual) "examples"
 
-block_extension Block.leanOutput (message : Highlighted.Message) (summarize : Bool := false) where
-  data := ToJson.toJson (message, summarize)
+block_extension Block.leanOutput (message : Highlighted.Message) (summarize : Bool := false) (expandTraces : List Name := []) where
+  data := ToJson.toJson (message, summarize, expandTraces)
   traverse _ _ _ := do
     pure none
   toTeX :=
@@ -142,12 +142,12 @@ block_extension Block.leanOutput (message : Highlighted.Message) (summarize : Bo
       | .error err =>
         HtmlT.logError <| "Couldn't deserialize Lean code while rendering HTML: " ++ err
         pure .empty
-      | .ok ((msg, summarize) : Highlighted.Message × Bool) =>
-        msg.blockHtml summarize (g := Manual)
+      | .ok ((msg, summarize, expandTraces) : Highlighted.Message × Bool × List Name) =>
+        msg.blockHtml summarize expandTraces (g := Manual)
 
 
-inline_extension Inline.leanOutput (message : Highlighted.Message) (plain : Bool) where
-  data := ToJson.toJson (message, plain)
+inline_extension Inline.leanOutput (message : Highlighted.Message) (plain : Bool) (expandTraces : List Name) where
+  data := ToJson.toJson (message, plain, expandTraces)
   traverse _ _ _ := do
     pure none
   toTeX :=
@@ -165,16 +165,16 @@ inline_extension Inline.leanOutput (message : Highlighted.Message) (plain : Bool
       | .error err =>
         HtmlT.logError <| "Couldn't deserialize Lean code while rendering HTML: " ++ err
         pure .empty
-      | .ok ((txt, plain) : Highlighted.Message × Bool) =>
+      | .ok ((txt, plain, expandTraces) : Highlighted.Message × Bool × List Name) =>
         let plainHtml := {{<code>{{txt.toString}}</code>}}
         if plain then pure plainHtml
-        else txt.toHtml (g := Manual)
+        else txt.toHtml expandTraces (g := Manual)
 
 open Verso.Code.External
 
 instance : ExternalCode Manual where
   leanInline hl cfg := Inline.other (Inline.lean hl cfg) #[]
   leanBlock hl cfg := Block.other (Block.lean hl cfg) #[]
-  leanOutputInline message plain := Inline.other (Inline.leanOutput message plain) #[]
-  leanOutputBlock message (summarize : Bool := false) :=
-    Block.other (Block.leanOutput message (summarize := summarize)) #[]
+  leanOutputInline message plain (expandTraces : List Name := []) := Inline.other (Inline.leanOutput message plain (expandTraces := expandTraces)) #[]
+  leanOutputBlock message (summarize : Bool := false) (expandTraces : List Name := []) :=
+    Block.other (Block.leanOutput message (summarize := summarize) (expandTraces := expandTraces)) #[]

@@ -690,15 +690,15 @@ where
   }
 
 open SubVerso.Highlighting in
-private def leanOutputBlock [bg : BlogGenre genre] (message : Highlighted.Message) (summarize := false) : Block genre :=
-  Block.other (bg.block_eq ▸ BlockExt.message summarize message) #[Block.code message.toString]
+private def leanOutputBlock [bg : BlogGenre genre] (message : Highlighted.Message) (summarize := false) (expandTraces : List Name := []) : Block genre :=
+  Block.other (bg.block_eq ▸ BlockExt.message summarize message expandTraces) #[Block.code message.toString]
 
 open SubVerso.Highlighting in
-private def leanOutputInline [bg : BlogGenre genre] (message : Highlighted.Message) (plain : Bool) : Inline genre :=
+private def leanOutputInline [bg : BlogGenre genre] (message : Highlighted.Message) (plain : Bool) (expandTraces : List Name := []) : Inline genre :=
   if plain then
     Inline.code message.toString
   else
-    Inline.other (bg.inline_eq ▸ InlineExt.message message) #[Inline.code message.toString]
+    Inline.other (bg.inline_eq ▸ InlineExt.message message expandTraces) #[Inline.code message.toString]
 
 @[code_block_expander leanOutput]
 def leanOutput : Doc.Elab.CodeBlockExpander
@@ -728,7 +728,7 @@ def leanOutput : Doc.Elab.CodeBlockExpander
                     withOptions (·.set `pp.tagAppFns true) do
                       SubVerso.Highlighting.highlightMessage m
                   finally setEnv myEnv
-                ``(Block.other (Blog.BlockExt.message false $(quote m')) #[Block.code $(quote str.getString)])
+                ``(Block.other (Blog.BlockExt.message false $(quote m') ([] : List Lean.Name)) #[Block.code $(quote str.getString)])
             return #[content]
         pure messages
       | .inr msgs =>
@@ -855,7 +855,7 @@ instance [bg : BlogGenre genre] : ExternalCode genre where
     Inline.other (bg.inline_eq ▸ InlineExt.highlightedCode { cfg with contextName := `verso } hl) #[]
   leanBlock hl cfg :=
     Block.other (bg.block_eq ▸ BlockExt.highlightedCode { cfg with contextName := `verso } hl) #[]
-  leanOutputInline message plain :=
-    leanOutputInline message plain
-  leanOutputBlock message (summarize := false) :=
-    leanOutputBlock message (summarize := summarize)
+  leanOutputInline message plain (expandTraces := []) :=
+    leanOutputInline message plain (expandTraces := expandTraces)
+  leanOutputBlock message (summarize := false) (expandTraces : List Name := []) :=
+    leanOutputBlock message (summarize := summarize) (expandTraces := expandTraces)

@@ -597,8 +597,8 @@ block_extension Block.leanOutput where
       | .error err =>
         HtmlT.logError <| "Couldn't deserialize Lean output while rendering HTML: " ++ err ++ "\n" ++ toString data
         pure .empty
-      | .ok ((msg, summarize) : Highlighted.Message × Bool) =>
-        msg.blockHtml summarize (g := Manual)
+      | .ok ((msg, summarize, expandTraces) : Highlighted.Message × Bool × List Name) =>
+        msg.blockHtml summarize (expandTraces := expandTraces) (g := Manual)
 
 
 structure LeanOutputConfig where
@@ -609,11 +609,15 @@ structure LeanOutputConfig where
   whitespace : WhitespaceMode
   normalizeMetas : Bool
   allowDiff : Nat
+  expandTraces : List Name := []
 
 section
 variable [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m]
 
-def LeanOutputConfig.parser  : ArgParse m LeanOutputConfig :=
+partial def many (p : ArgParse m α) : ArgParse m (List α) :=
+  ((· :: ·) <$> p <*> many p) <|> pure []
+
+def LeanOutputConfig.parser : ArgParse m LeanOutputConfig :=
   LeanOutputConfig.mk <$>
     .positional `name output <*>
     ((·.getD true) <$> .named `show .bool true) <*>
@@ -621,7 +625,8 @@ def LeanOutputConfig.parser  : ArgParse m LeanOutputConfig :=
     ((·.getD false) <$> .named `summarize .bool true) <*>
     ((·.getD .exact) <$> .named `whitespace .whitespaceMode true) <*>
     .namedD `normalizeMetas .bool true <*>
-    .namedD `allowDiff .nat 0
+    .namedD `allowDiff .nat 0 <*>
+    many (.named `expandTrace .name false)
 where
   output : ValDesc m Ident := {
     description := "output name",
@@ -643,8 +648,6 @@ def leanOutput : CodeBlockExpander
  | args, str => do
     let config ← LeanOutputConfig.parser.run args
 
-    let col? := (← getRef).getPos? |>.map (← getFileMap).utf8PosToLspPos |>.map (·.character)
-
     PointOfInterest.save (← getRef) (config.name.getId.toString)
       (kind := Lsp.SymbolKind.file)
       (selectionRange := config.name)
@@ -657,9 +660,12 @@ def leanOutput : CodeBlockExpander
         normalizeMetavars str.getString
       else str.getString
 
+    let mut texts : Array (Highlighted.Span.Kind × String) := #[]
+
     if config.allowDiff == 0 then
       for msg in msgs do
-        let txt := msg.toString
+        let txt := msg.toString (expandTraces := config.expandTraces)
+        texts := texts.push (msg.severity, txt)
         let actual :=
           if config.normalizeMetas then
             normalizeMetavars txt
@@ -669,7 +675,7 @@ def leanOutput : CodeBlockExpander
             if s != msg.severity.toSeverity then
               throwErrorAt str s!"Expected severity {sevStr s}, but got {sevStr msg.severity.toSeverity}"
           if config.show then
-            let content ← `(Block.other {Block.leanOutput with data := ToJson.toJson ($(quote msg), $(quote config.summarize))} #[Block.code $(quote str.getString)])
+            let content ← `(Block.other {Block.leanOutput with data := ToJson.toJson ($(quote msg), $(quote config.summarize), ($(quote config.expandTraces) : List Name))} #[Block.code $(quote str.getString)])
             return #[content]
           else return #[]
     else
@@ -693,22 +699,21 @@ def leanOutput : CodeBlockExpander
 
         Log.logSilentInfo m!"Diff is {d} lines:\n{d'}"
         if config.show then
-          let content ← `(Block.other {Block.leanOutput with data := ToJson.toJson ($(quote msg), $(quote config.summarize))} #[Block.code $(quote str.getString)])
+          let content ← `(Block.other {Block.leanOutput with data := ToJson.toJson ($(quote msg), $(quote config.summarize), ($(quote config.expandTraces) : List Name))} #[Block.code $(quote str.getString)])
           return #[content]
         else return #[]
 
-    let suggs : Array (Nat × Meta.Hint.Suggestion) := msgs.toArray.map fun msg =>
-      let strMsg := msg.toString
-      ((diffSize config.whitespace strMsg str.getString).1, {
-        suggestion := withNl msg.toString,
-        preInfo? := some s!"{sevStr msg.severity.toSeverity}: "
+    let suggs : Array (Nat × Meta.Hint.Suggestion) := texts.map fun (sev, msg) =>
+      ((diffSize config.whitespace msg str.getString).1, {
+        suggestion := withNl msg,
+        preInfo? := some s!"{sevStr sev.toSeverity}: "
       })
     let suggs : Array Meta.Hint.Suggestion := suggs.qsort (fun x y => x.1 < y.1) |>.map (·.2)
 
     let hintMsg := if suggs.size > 1 then m!"Replace with one of the actual messages:" else m!"Replace with the actual message:"
     let hint ← hintAt str hintMsg suggs
 
-    throwErrorAt str (m!"Didn't match - got: {indentD (toMessageData <| msgs.map (Std.Format.text ·.toString))}\nbut expected:{indentD (toMessageData str.getString)}" ++ hint)
+    throwErrorAt str (m!"Didn't match - got: {indentD (toMessageData <| texts.map (Std.Format.text ·.2))}\nbut expected:{indentD (toMessageData str.getString)}" ++ hint)
 where
   sevStr : MessageSeverity → String
     | .error => "error"
