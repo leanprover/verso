@@ -149,8 +149,8 @@ def blockHtml (g : Genre)
   | .highlightedCode { contextName, showProofStates } hls, _contents =>
     withReader (fun ρ => { ρ with codeOptions.inlineProofStates := showProofStates }) <|
     hls.blockHtml (toString contextName) (g := g)
-  | .message summarize msg, _contents => do
-    return {{<pre class=s!"lean-output hl lean {msg.severity.class}">{{← msg.toHtml (g := g)}}</pre>}}
+  | .message summarize msg expandTraces, _contents => do
+    return {{<pre class=s!"lean-output hl lean {msg.severity.class}">{{← msg.toHtml (expandTraces := expandTraces) (g := g)}}</pre>}}
   | .htmlDetails classes summary, contents => do
     pure {{ <details class={{classes}}><summary>{{summary}}</summary> {{← contents.mapM goB}}</details>}}
   | .htmlWrapper name attrs, contents => do
@@ -180,8 +180,8 @@ def inlineHtml (g : Genre) [bg : BlogGenre g]
   | .highlightedCode { contextName, showProofStates } hls, _contents =>
     withReader (fun ρ => { ρ with codeOptions.inlineProofStates := showProofStates }) <|
     hls.inlineHtml (some <| toString contextName) (g := g)
-  | .message msg, _contents => do
-    return {{<code class="lean-output hl lean">{{← msg.toHtml (g := g)}}</code>}}
+  | .message msg expandTraces, _contents => do
+    return {{<code class="lean-output hl lean">{{← msg.toHtml expandTraces (g := g)}}</code>}}
   | .lexedText content, _contents => do
     pure {{ <code class=s!"lexed {content.name}"> {{ content.toHtml }} </code> }}
   | .customHighlight hls, _contents => do

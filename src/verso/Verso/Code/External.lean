@@ -58,9 +58,9 @@ class ExternalCode (genre : Genre) where
   An inline element for rendering Lean messages. `plain` should suppress the annotation of the
   output with its message severity.
   -/
-  leanOutputInline (message : Highlighted.Message) (plain : Bool) : Inline genre
+  leanOutputInline (message : Highlighted.Message) (plain : Bool) (expandTraces : List Lean.Name := []) : Inline genre
   /-- A block element for rendering Lean messages. -/
-  leanOutputBlock (message : Highlighted.Message) (summarize : Bool := false) : Block genre
+  leanOutputBlock (message : Highlighted.Message) (summarize : Bool := false) (expandTraces : List Lean.Name := []) : Block genre
 
 open ExternalCode
 
@@ -150,9 +150,16 @@ structure MessageContext extends CodeContext where
   The desired severity of the message.
   -/
   severity : WithSyntax MessageSeverity
+  /--
+  Traces classes to show expanded by default
+  -/
+  expandTraces : List Lean.Name
+
+private partial def many (p : ArgParse m α) : ArgParse m (List α) :=
+  (· :: ·) <$> p <*> many p <|> pure []
 
 instance : FromArgs MessageContext m where
-  fromArgs := (fun s x => MessageContext.mk x s) <$> .positional' `severity <*> fromArgs
+  fromArgs := (fun s ts x => MessageContext.mk x s ts) <$> .positional' `severity <*> many (.named `expandTrace .name false) <*> fromArgs
 
 /--
 A specification of which module to look in to find a quoted name, potentially made more specific with
@@ -572,15 +579,15 @@ Requires that the genre have an `ExternalCode` instance.
 @[code_block_expander moduleOut]
 def moduleOut : CodeBlockExpander
   | args, str => withTraceNode `Elab.Verso (fun _ => pure m!"moduleOut") <| do
-    let {module := moduleName, anchor?, severity, showProofStates := _, defSite := _} ← parseThe MessageContext args
+    let {module := moduleName, anchor?, severity, expandTraces, showProofStates := _, defSite := _} ← parseThe MessageContext args
 
     withAnchored moduleName anchor? fun hl => do
       let infos : Array _ := allInfo hl
 
       for (msg, _) in infos do
-        if messagesMatch msg.toString str.getString then
+        if messagesMatch (msg.toString (expandTraces := expandTraces)) str.getString then
           if msg.severity == .ofSeverity severity.1 then
-            return #[← ``(leanOutputBlock $(quote msg))]
+            return #[← ``(leanOutputBlock $(quote msg) (expandTraces := $(quote expandTraces)))]
           else
           let wanted ← severityName msg.severity.toSeverity
             throwError "Mismatched severity. Expected '{repr severity.1}', got '{wanted}'.{← severityHint wanted severity.2}"
@@ -628,15 +635,15 @@ def moduleOutRole : RoleExpander
   | args, inls => withTraceNode `Elab.Verso (fun _ => pure m!"moduleOutRole") <| do
     let str? ← oneCodeStr? inls
 
-    let {module := moduleName, anchor?, severity, showProofStates := _, defSite := _} ← parseThe MessageContext args
+    let {module := moduleName, anchor?, expandTraces, severity, showProofStates := _, defSite := _} ← parseThe MessageContext args
 
     withAnchored moduleName anchor? fun hl => do
       let infos := allInfo hl
       if let some str := str? then
         for (msg, _) in infos do
-          if messagesMatch msg.toString str.getString then
+          if messagesMatch (msg.toString (expandTraces := expandTraces)) str.getString then
             if msg.severity == .ofSeverity severity.1 then
-              return #[← ``(leanOutputInline $(quote msg) true)]
+              return #[← ``(leanOutputInline $(quote msg) true (expandTraces := $(quote expandTraces)))]
             else
               let wanted ← severityName msg.severity.toSeverity
               throwError "Mismatched severity. Expected '{repr severity.1}', got '{wanted}'.{← severityHint wanted severity.2}"
