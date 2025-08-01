@@ -610,6 +610,8 @@ structure LeanOutputConfig where
   normalizeMetas : Bool
   allowDiff : Nat
   expandTraces : List Name := []
+  startAt : Option String := none
+  stopAt : Option String := none
 
 section
 variable [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m]
@@ -626,7 +628,9 @@ def LeanOutputConfig.parser : ArgParse m LeanOutputConfig :=
     ((·.getD .exact) <$> .named `whitespace .whitespaceMode true) <*>
     .namedD `normalizeMetas .bool true <*>
     .namedD `allowDiff .nat 0 <*>
-    many (.named `expandTrace .name false)
+    many (.named `expandTrace .name false) <*>
+    .named `startAt .string true <*>
+    .named `stopAt .string true
 where
   output : ValDesc m Ident := {
     description := "output name",
@@ -664,6 +668,22 @@ def leanOutput : CodeBlockExpander
 
     if config.allowDiff == 0 then
       for msg in msgs do
+        let msg ←
+          if let some b := config.startAt then
+            if let some msg' := msg.startAt b then pure msg'
+            else
+              texts := texts.push (msg.severity, msg.toString (expandTraces := config.expandTraces))
+              continue
+          else pure msg
+
+        let msg ←
+          if let some e := config.stopAt then
+            if let some msg' := msg.stopAt e then pure msg'
+            else
+              texts := texts.push (msg.severity, msg.toString (expandTraces := config.expandTraces))
+              continue
+          else pure msg
+
         let txt := msg.toString (expandTraces := config.expandTraces)
         texts := texts.push (msg.severity, txt)
         let actual :=
