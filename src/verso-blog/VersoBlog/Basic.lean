@@ -36,7 +36,7 @@ deriving Repr
 
 inductive BlockExt where
   | highlightedCode (opts : CodeOpts) (highlighted : Highlighted)
-  | message (summarize : Bool) (msg : Highlighted.Message)
+  | message (summarize : Bool) (msg : Highlighted.Message) (expandTraces : List Lean.Name)
   | lexedText (content : LexedText)
   | htmlDiv (classes : String)
   | htmlWrapper (tag : String) (attributes : Array (String × String))
@@ -46,7 +46,7 @@ inductive BlockExt where
 
 inductive InlineExt where
   | highlightedCode (opts : CodeOpts) (highlighted : Highlighted)
-  | message (msg : Highlighted.Message)
+  | message (msg : Highlighted.Message) (expandTraces : List Lean.Name)
   | lexedText (content : LexedText)
   | customHighlight (highlighted : Highlighted)
   | label (name : Lean.Name)
