@@ -154,12 +154,16 @@ structure MessageContext extends CodeContext where
   Traces classes to show expanded by default
   -/
   expandTraces : List Lean.Name
+  /--
+  Only show the first trace with this title
+  -/
+  onlyTrace : Option String
 
 private partial def many (p : ArgParse m α) : ArgParse m (List α) :=
   (· :: ·) <$> p <*> many p <|> pure []
 
 instance : FromArgs MessageContext m where
-  fromArgs := (fun s ts x => MessageContext.mk x s ts) <$> .positional' `severity <*> many (.named `expandTrace .name false) <*> fromArgs
+  fromArgs := (fun s ts t x => MessageContext.mk x s ts t) <$> .positional' `severity <*> many (.named `expandTrace .name false) <*> (.named `onlyTrace .string true) <*> fromArgs
 
 /--
 A specification of which module to look in to find a quoted name, potentially made more specific with
@@ -298,9 +302,6 @@ the code can't be found.
 -/
 def withAnchored (moduleName : Ident) (anchor? : Option Ident)
     (k : Highlighted → DocElabM (Array Term)) : DocElabM (Array Term) := do
-  let modStr := moduleName.getId.toString
-  let items ← loadModuleContent modStr
-  let highlighted := Highlighted.seq (items.map (·.code))
   if let some anchor := anchor? then
     try
       let {anchors, ..} ← anchored moduleName anchor
@@ -312,7 +313,8 @@ def withAnchored (moduleName : Ident) (anchor? : Option Ident)
       | .error ref e => logErrorAt ref e; return #[← ``(sorryAx _ true)]
       | e => throw e
   else
-    k highlighted
+    let {code, ..} ← anchored moduleName moduleName
+    k code
 
 -- TODO: public API? Or something higher level that constructs the hint?
 private def editCodeBlock [Monad m] [MonadFileMap m] (stx : Syntax) (newContents : String) : m (Option String) := do
@@ -571,6 +573,16 @@ private def severityHint (wanted : String) (stx : Syntax) : DocElabM MessageData
     hintAt stx m!"Use '{wanted}'" #[wanted]
   else pure m!""
 
+
+open SubVerso.Highlighting Highlighted in
+private partial def findTrace? (header : String) : MessageContents Highlighted → Option (MessageContents Highlighted)
+  | .text .. | .term .. | .goal .. => none
+  | .append xs =>
+    xs.findSome? (findTrace? header)
+  | t@(.trace _ msg chs _) =>
+    if msg.toString == header then pure t
+    else chs.findSome? (findTrace? header)
+
 /--
 Displays output from the example module.
 
@@ -579,12 +591,21 @@ Requires that the genre have an `ExternalCode` instance.
 @[code_block_expander moduleOut]
 def moduleOut : CodeBlockExpander
   | args, str => withTraceNode `Elab.Verso (fun _ => pure m!"moduleOut") <| do
-    let {module := moduleName, anchor?, severity, expandTraces, showProofStates := _, defSite := _} ← parseThe MessageContext args
+    let {module := moduleName, anchor?, severity, expandTraces, onlyTrace, showProofStates := _, defSite := _} ← parseThe MessageContext args
 
     withAnchored moduleName anchor? fun hl => do
       let infos : Array _ := allInfo hl
 
+      let mut candidates : Array Highlighted.Message := #[]
+
       for (msg, _) in infos do
+        let msg ←
+          if let some tr := onlyTrace then
+            if let some msg' := findTrace? tr msg.contents then
+              pure {msg with contents := msg'}
+            else continue
+          else pure <| msg
+        candidates := candidates.push msg
         if messagesMatch (msg.toString (expandTraces := expandTraces)) str.getString then
           if msg.severity == .ofSeverity severity.1 then
             return #[← ``(leanOutputBlock $(quote msg) (expandTraces := $(quote expandTraces)))]
@@ -592,8 +613,8 @@ def moduleOut : CodeBlockExpander
           let wanted ← severityName msg.severity.toSeverity
             throwError "Mismatched severity. Expected '{repr severity.1}', got '{wanted}'.{← severityHint wanted severity.2}"
 
-      let suggs : Array Suggestion := infos.map fun (msg, _) => {
-        suggestion := withNl msg.toString,
+      let suggs : Array Suggestion := candidates.map fun msg => {
+        suggestion := withNl (msg.toString (expandTraces := expandTraces)),
         preInfo? := some s!"{sevStr msg.severity.toSeverity}: "
       }
 
@@ -601,7 +622,7 @@ def moduleOut : CodeBlockExpander
 
       let mut err : MessageData := "Expected"
 
-      err := err ++ (m!"\nor".joinSep <| infos.toList.map fun (msg, _) => indentD msg.toString ++ "\n")
+      err := err ++ (m!"\nor".joinSep <| candidates.toList.map fun msg => indentD (msg.toString (expandTraces := expandTraces)) ++ "\n")
 
       if str.getString.trim.isEmpty then
         err := err ++ "but nothing was provided."
@@ -635,12 +656,22 @@ def moduleOutRole : RoleExpander
   | args, inls => withTraceNode `Elab.Verso (fun _ => pure m!"moduleOutRole") <| do
     let str? ← oneCodeStr? inls
 
-    let {module := moduleName, anchor?, expandTraces, severity, showProofStates := _, defSite := _} ← parseThe MessageContext args
+    let {module := moduleName, anchor?, expandTraces, onlyTrace, severity, showProofStates := _, defSite := _} ← parseThe MessageContext args
+
 
     withAnchored moduleName anchor? fun hl => do
       let infos := allInfo hl
       if let some str := str? then
+        let mut candidates : Array Highlighted.Message := #[]
         for (msg, _) in infos do
+          let msg ←
+            if let some tr := onlyTrace then
+              if let some msg' := findTrace? tr msg.contents then
+                pure {msg with contents := msg'}
+              else continue
+            else pure <| msg
+          candidates := candidates.push msg
+
           if messagesMatch (msg.toString (expandTraces := expandTraces)) str.getString then
             if msg.severity == .ofSeverity severity.1 then
               return #[← ``(leanOutputInline $(quote msg) true (expandTraces := $(quote expandTraces)))]
@@ -651,8 +682,8 @@ def moduleOutRole : RoleExpander
         let ref :=
           if let `(inline|role{ $_ $_* }[ $x ]) := (← getRef) then x.raw else str
 
-        let suggs : Array Suggestion := infos.map fun (msg, _) => {
-          suggestion := quoteCode msg.toString.trim,
+        let suggs : Array Suggestion := candidates.map fun msg => {
+          suggestion := quoteCode (msg.toString (expandTraces := expandTraces)).trim,
           preInfo? := s!"{sevStr msg.severity.toSeverity}: "
         }
         let h ←
@@ -660,11 +691,17 @@ def moduleOutRole : RoleExpander
           else hintAt ref "Use one of these." suggs
 
         let err :=
-          m!"Expected one of:{indentD (m!"\n".joinSep <| infos.toList.map (·.1.toString))}" ++
+          m!"Expected one of:{indentD (m!"\n".joinSep <| candidates.toList.map (·.toString (expandTraces := expandTraces)))}" ++
           m!"\nbut got:{indentD str.getString}\n" ++ h
         logErrorAt str err
       else
-        let err := m!"Expected one of:{indentD (m!"\n".joinSep <| infos.toList.map (·.1.toString))}"
+        let candidates := infos.filterMap fun (msg, _) =>
+            if let some tr := onlyTrace then
+              if let some msg' := findTrace? tr msg.contents then
+                pure {msg with contents := msg'}
+              else none
+            else pure <| msg
+        let err := m!"Expected one of:{indentD (m!"\n".joinSep <| candidates.toList.map (·.toString (expandTraces := expandTraces)))}"
         Lean.logError m!"No expected term provided. {err}"
         if let `(inline|role{$_ $_*} [%$tok1 $contents* ]%$tok2) := (← getRef) then
           let stx :=
