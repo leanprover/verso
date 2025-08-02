@@ -259,7 +259,13 @@ def partCommand (cmd : TSyntax `block) : PartElabM Unit :=
 where
   fallback : PartElabM Unit := do
     if (← getThe PartElabM.State).partContext.priorParts.size > 0 then
-      throwErrorAt cmd "Unexpected block"
+      let which := (← getThe PartElabM.State).partContext.priorParts.back?.map fun
+        | .mk _ _ titleString .. => s!" (namely “{titleString}”)"
+        | .included n => s!" (namely `{unDocName n.getId}`)"
+      let which := which.getD ""
+      let msg := m!"Block content found in a context where a header was expected."
+      let note := MessageData.note m!"A document part (section/chapter/etc) consists of a header, followed by zero or more blocks, followed by zero or more sub-parts. This block occurs after a sub-part{which}, but outside of the sub-parts."
+      throwErrorAt cmd "{msg}\n{note}"
     let blk ← liftDocElabM <| elabBlock cmd
     addBlock blk
 
