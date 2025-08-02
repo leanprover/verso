@@ -703,7 +703,7 @@ def inheritance.descr : BlockDescr where
                 let filterId := s!"{parent.index}-{parent.name}-{name}"
                 pure {{
                   <li>
-                    <input type="checkbox" id={{filterId}} checked="checked" data-parent-idx={{toString parent.index}}/>
+                    <input type="checkbox" id={{filterId}} data-parent-idx={{toString parent.index}}/>
                     <label for={{filterId}}><code class="hl lean inline">{{← parent.parent.toHtml (g := Manual)}}</code></label>
                   </li>}}
               }}
