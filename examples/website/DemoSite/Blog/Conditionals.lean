@@ -232,7 +232,7 @@ Here's some hoverable info:
 example : Nat := "Not a number"
 ```
 ```leanOutput typeErr
-type mismatch
+Type mismatch
   "Not a number"
 has type
   String
