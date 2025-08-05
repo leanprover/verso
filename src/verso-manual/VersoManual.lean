@@ -154,6 +154,11 @@ block_extension Block.paragraph where
     some <| fun _ go _ _ content => do
       pure <| {{<div class="paragraph">{{← content.mapM go}}</div>}}
 
+/--
+Indicates that all the block-level elements contained within the directive are a single logical
+paragraph. In HTML output, they are rendered with less space between them, and LaTeX renders them as
+a single paragraph (e.g. without extraneous indentation).
+-/
 @[directive_expander paragraph]
 def paragraph : DirectiveExpander
   | #[], stxs => do

@@ -348,14 +348,7 @@ def codeBlockSuggestion (newBlock : String) : Suggestion :=
   let sugg := newBlock.splitOn "\n" |>.map (Std.Format.text ·) |> Std.Format.nil.joinSuffix
   {suggestion := newBlock, messageData? := sugg}
 
-/--
-Includes the contents of the specified example module.
-
-Requires that the genre have an `ExternalCode` instance.
--/
-@[code_block_expander module]
-def module : CodeBlockExpander
-  | args, code => withTraceNode `Elab.Verso (fun _ => pure m!"module") <| do
+def moduleContentBlock (args : Array Arg) (code : StrLit) : DocElabM (Array Term) := do
     let cfg@{ module := moduleName, anchor?, showProofStates := _, defSite := _ } ← parseThe CodeContext args
     withAnchored moduleName anchor? fun hl => do
       logInfos hl
@@ -376,35 +369,59 @@ def module : CodeBlockExpander
         logErrorAt code <| m!"Mismatched code:{indentD mismatch}" ++ h
       pure #[← ``(leanBlock $(quote hl) $(quote cfg.toCodeConfig))]
 
-macro_rules
-  | `(block|```anchor $arg:arg_val $args* | $s ```) =>
-    `(block|```module anchor:=$arg $args* | $s ```)
-  | `(block|```%$tok anchor $args* | $_s ```) =>
-    Macro.throwErrorAt (mkNullNode (#[tok] ++ args)) "Expected a positional identifier as first argument"
 
 /--
 Includes the contents of the specified example module.
 
 Requires that the genre have an `ExternalCode` instance.
 -/
+@[code_block_expander module]
+def module : CodeBlockExpander
+  | args, code => withTraceNode `Elab.Verso (fun _ => pure m!"module") <| do
+    moduleContentBlock args code
+
+/--
+Includes the contents of the specified anchored example.
+
+Requires that the genre have an `ExternalCode` instance.
+-/
+@[code_block_expander anchor]
+def anchor : CodeBlockExpander
+  | args, code => withTraceNode `Elab.Verso (fun _ => pure m!"anchor") <| do
+    if let some (Arg.anon a) := args[0]? then
+      moduleContentBlock (#[.named .missing (mkIdent `anchor) a] ++ args.drop 1) code
+    else
+      throwError "Expected a positional argument first (the anchor name)"
+
+def moduleInline (args : Array Arg) (inls : TSyntaxArray `inline) : DocElabM (Array Term) := do
+  let cfg@{module := moduleName, anchor?, showProofStates := _, defSite := _} ← parseThe CodeContext args
+  let code? ← oneCodeStr? inls
+
+  withAnchored moduleName anchor? fun hl => do
+    logInfos hl
+    if let some code := code? then
+      let _ ← ExpectString.expectString "code" code (hl.toString.trim)
+
+    pure #[← ``(leanInline $(quote hl) $(quote cfg.toCodeConfig))]
+
+
+/--
+Includes the contents of the specified anchor.
+
+Requires that the genre have an `ExternalCode` instance.
+-/
 @[role_expander module]
-def moduleInline : RoleExpander
-  | args, inls => withTraceNode `Elab.Verso (fun _ => pure m!"moduleInline") <| do
-    let cfg@{module := moduleName, anchor?, showProofStates := _, defSite := _} ← parseThe CodeContext args
-    let code? ← oneCodeStr? inls
+def moduleInlineRole : RoleExpander
+  | args, inls => withTraceNode `Elab.Verso (fun _ => pure m!"moduleInlineRole") <| do
+    moduleInline args inls
 
-    withAnchored moduleName anchor? fun hl => do
-      logInfos hl
-      if let some code := code? then
-        let _ ← ExpectString.expectString "code" code (hl.toString.trim)
-
-      pure #[← ``(leanInline $(quote hl) $(quote cfg.toCodeConfig))]
-
-macro_rules
-  | `(inline|role{ anchor $arg:arg_val $args* } [%$t1 $s ]%$t2) =>
-    `(inline|role{ module anchor:=$arg $args* } [%$t1 $s ]%$t2)
-  | `(inline|role{%$tok anchor $args* } [ $_s ]) =>
-    Macro.throwErrorAt (mkNullNode (#[tok] ++ args)) "Expected a positional identifier as first argument"
+@[role_expander anchor]
+def anchorInlineRole : RoleExpander
+  | args, inls => withTraceNode `Elab.Verso (fun _ => pure m!"anchorInlineRole") <| do
+    if let some (Arg.anon a) := args[0]? then
+      moduleInline (#[.named .missing (mkIdent `anchor) a] ++ args.drop 1) inls
+    else
+      throwError "Expected a positional argument first (the anchor name)"
 
 private partial def allTokens (hl : Highlighted) : HashSet String :=
   match hl with
@@ -431,6 +448,28 @@ where mkHover (sig : String) (doc? : Option String) : String :=
     s!"\n\n----------\n\n{d}"
   else ""
 
+def moduleNameInline (args : Array Arg) (inls : TSyntaxArray `inline) : DocElabM (Array Term) := do
+  let cfg@{module := moduleName, anchor?, show?, showProofStates := _, defSite := _} ← parseThe NameContext args
+  let name ← oneCodeStr inls
+  let nameStr := name.getString
+
+  withAnchored moduleName anchor? fun hl => do
+    if let some tok@⟨k, _txt⟩ := hl.matchingName? nameStr then
+
+      let tok := show?.map (⟨k, ·.getId.toString⟩) |>.getD tok
+      if let some h := tokenHover tok then
+        Hover.addCustomHover name (.markdown h)
+      return #[← ``(leanInline $(quote (Highlighted.token tok)) $(quote cfg.toCodeConfig))]
+    else
+      -- TODO test thresholds/sorting
+      let ss := smartSuggestions (allNames hl |>.toArray) nameStr
+      let h ←
+        if ss.isEmpty then pure m!""
+        else hintAt name "Use a known name" ss
+      logErrorAt name m!"'{nameStr}' not found in:{indentD <| ExpectString.abbreviateString (maxLength := 100) hl.toString}{h}"
+
+      return #[← ``(sorryAx _ true)]
+
 /--
 Quotes the first instance of the given name from the module.
 
@@ -438,32 +477,21 @@ Requires that the genre have an `ExternalCode` instance.
 -/
 @[role_expander moduleName]
 def moduleName : RoleExpander
-  | args, inls => withTraceNode `Elab.Verso (fun _ => pure m!"moduleName") <| do
-    let cfg@{module := moduleName, anchor?, show?, showProofStates := _, defSite := _} ← parseThe NameContext args
-    let name ← oneCodeStr inls
-    let nameStr := name.getString
+  | args, inls => withTraceNode `Elab.Verso (fun _ => pure m!"moduleName") <| moduleNameInline args inls
 
-    withAnchored moduleName anchor? fun hl => do
-      if let some tok@⟨k, _txt⟩ := hl.matchingName? nameStr then
+/--
+Quotes the first instance of the given name from the anchor.
 
-        let tok := show?.map (⟨k, ·.getId.toString⟩) |>.getD tok
-        if let some h := tokenHover tok then
-          Hover.addCustomHover name (.markdown h)
-        return #[← ``(leanInline $(quote (Highlighted.token tok)) $(quote cfg.toCodeConfig))]
-      else
-        -- TODO test thresholds/sorting
-        let ss := smartSuggestions (allNames hl |>.toArray) nameStr
-        let h ←
-          if ss.isEmpty then pure m!""
-          else hintAt name "Use a known name" ss
-        logErrorAt name m!"'{nameStr}' not found in:{indentD <| ExpectString.abbreviateString (maxLength := 100) hl.toString}{h}"
-
-        return #[← ``(sorryAx _ true)]
-
-
-macro_rules
-  | `(inline|role{%$rs anchorName $a:arg_val $arg* }%$re [%$s $str* ]%$e) =>
-    `(inline|role{%$rs moduleName $arg*  anchor:=$a }%$re [%$s $str* ]%$e)
+Requires that the genre have an `ExternalCode` instance.
+-/
+@[role_expander anchorName]
+def anchorName : RoleExpander
+  | args, inls =>
+    withTraceNode `Elab.Verso (fun _ => pure m!"moduleName") <|
+    if let some (Arg.anon a) := args[0]? then
+      moduleNameInline (#[.named .missing (mkIdent `anchor) a] ++ args.drop 1) inls
+    else
+      throwError "Expected a positional argument first (the anchor name)"
 
 
 private def suggestTerms (hl : Highlighted) (input : String) : Array String := Id.run do
@@ -487,6 +515,33 @@ private def suggestTerms (hl : Highlighted) (input : String) : Array String := I
   lines ++ (smartSuggestions out.toArray input (threshold := (max ·.length ·.length)) (count := 15))
 
 
+def moduleTermInline (args : Array Arg) (inls : TSyntaxArray `inline) : DocElabM (Array Term) := do
+  let cfg@{module := moduleName, anchor?, showProofStates := _, defSite := _} ← parseThe CodeContext args
+  let term ← oneCodeStr inls
+
+  withAnchored moduleName anchor? fun hl => do
+    if term.getString.trim.isEmpty then
+      let suggs := suggestTerms hl term.getString
+      let h ← hintAt term "Use one of these" suggs
+      let expectedString := ExpectString.abbreviateString (maxLength := 100) <| hl.toString
+      let mut msg := m!"No expected term provided.\n"
+      msg := msg ++ m!"in:{indentD <| m!"\n".joinSep <| (m!"{·}") <$> expectedString.splitOn "\n"}"
+      msg := msg ++ h
+      logErrorAt term msg
+      return #[← ``(sorryAx _ true)]
+    else if let some e := hl.matchingExpr? term.getString then
+      logInfos e
+      return #[← ``(leanInline $(quote e) $(quote cfg.toCodeConfig))]
+    else
+      let suggs := suggestTerms hl term.getString
+      let h ← hintAt term "Use one of these" suggs
+      let expectedString := ExpectString.abbreviateString (maxLength := 100) <| hl.toString
+      let mut msg := m!"Not found: `{term.getString}`\n"
+      msg := msg ++ m!"in:{indentD <| m!"\n".joinSep <| (m!"{·}") <$> expectedString.splitOn "\n"}"
+      msg := msg ++ h
+      logErrorAt term msg
+      return #[← ``(sorryAx _ true)]
+
 /--
 Quotes the first term that matches the provided string.
 
@@ -494,72 +549,64 @@ Requires that the genre have an `ExternalCode` instance.
 -/
 @[role_expander moduleTerm]
 def moduleTerm : RoleExpander
-  | args, inls => withTraceNode `Elab.Verso (fun _ => pure m!"moduleTerm") <| do
-    let cfg@{module := moduleName, anchor?, showProofStates := _, defSite := _} ← parseThe CodeContext args
-    let term ← oneCodeStr inls
+  | args, inls => withTraceNode `Elab.Verso (fun _ => pure m!"moduleTerm") <| moduleTermInline args inls
 
-    withAnchored moduleName anchor? fun hl => do
-      if term.getString.trim.isEmpty then
-        let suggs := suggestTerms hl term.getString
-        let h ← hintAt term "Use one of these" suggs
-        let expectedString := ExpectString.abbreviateString (maxLength := 100) <| hl.toString
-        let mut msg := m!"No expected term provided.\n"
-        msg := msg ++ m!"in:{indentD <| m!"\n".joinSep <| (m!"{·}") <$> expectedString.splitOn "\n"}"
-        msg := msg ++ h
-        logErrorAt term msg
-        return #[← ``(sorryAx _ true)]
-      else if let some e := hl.matchingExpr? term.getString then
-        logInfos e
-        return #[← ``(leanInline $(quote e) $(quote cfg.toCodeConfig))]
-      else
-        let suggs := suggestTerms hl term.getString
-        let h ← hintAt term "Use one of these" suggs
-        let expectedString := ExpectString.abbreviateString (maxLength := 100) <| hl.toString
-        let mut msg := m!"Not found: `{term.getString}`\n"
-        msg := msg ++ m!"in:{indentD <| m!"\n".joinSep <| (m!"{·}") <$> expectedString.splitOn "\n"}"
-        msg := msg ++ h
-        logErrorAt term msg
-        return #[← ``(sorryAx _ true)]
+/--
+Quotes the first term in the given anchor that matches the provided string.
 
-macro_rules
-  | `(inline|role{%$rs anchorTerm $a:arg_val $arg* }%$re [%$s $str* ]%$e) =>
-    `(inline|role{%$rs moduleTerm $arg*  anchor:=$a }%$re [%$s $str* ]%$e)
+Requires that the genre have an `ExternalCode` instance.
+-/
+@[role_expander anchorTerm]
+def anchorTerm : RoleExpander
+  | args, inls => withTraceNode `Elab.Verso (fun _ => pure m!"anchorTerm") <|
+    if let some (Arg.anon a) := args[0]? then
+      moduleTermInline (#[.named .missing (mkIdent `anchor) a] ++ args.drop 1) inls
+    else
+      throwError "Expected a positional argument first (the anchor name)"
+
+
+def moduleTermBlock (args : Array Arg) (term : StrLit) : DocElabM (Array Term) := do
+  let cfg@{module := moduleName, anchor?, showProofStates := _, defSite := _} ← parseThe CodeContext args
+
+  withAnchored moduleName anchor? fun hl => do
+    let str := term.getString.trim
+    if str.isEmpty then
+      let ref ← getRef
+      let suggs := suggestTerms hl str
+      let suggs ← suggs.filterMapM fun s =>
+        editCodeBlock ref s
+      let h ←
+        if suggs.size > 0 then
+          hint m!"Use one of these" suggs
+        else pure m!""
+      let wanted := String.trim <| ExpectString.abbreviateString (maxLength := 100) <| hl.toString
+      let wanted := wanted.splitOn "\n" |>.map (Std.Format.text ·) |> Std.Format.nil.joinSuffix
+      logErrorAt term (m!"No sub-term of the following was specified: {indentD <| wanted}" ++ h)
+      return #[← ``(sorryAx _ true)]
+    if let some e := hl.matchingExpr? str then
+      logInfos e
+      return #[← ``(leanBlock $(quote e) $(quote cfg.toCodeConfig))]
+    else
+      let ref ← getRef
+      let suggs := suggestTerms hl str
+      let suggs ← suggs.filterMapM fun s =>
+        editCodeBlock ref s
+      let h ← hint "Use one of these" suggs
+      logErrorAt term (m!"Not found: '{str}' in: {indentD <| ExpectString.abbreviateString (maxLength := 100) <| hl.toString}" ++ h)
+      return #[← ``(sorryAx _ true)]
+
 
 @[code_block_expander moduleTerm, inherit_doc moduleTerm]
-def moduleTermBlock : CodeBlockExpander
-  | args, term => withTraceNode `Elab.Verso (fun _ => pure m!"moduleTerm") <| do
-    let cfg@{module := moduleName, anchor?, showProofStates := _, defSite := _} ← parseThe CodeContext args
+def moduleTermBlockExp : CodeBlockExpander
+  | args, term => withTraceNode `Elab.Verso (fun _ => pure m!"moduleTerm") <| moduleTermBlock args term
 
-    withAnchored moduleName anchor? fun hl => do
-      let str := term.getString.trim
-      if str.isEmpty then
-        let ref ← getRef
-        let suggs := suggestTerms hl str
-        let suggs ← suggs.filterMapM fun s =>
-          editCodeBlock ref s
-        let h ←
-          if suggs.size > 0 then
-            hint m!"Use one of these" suggs
-          else pure m!""
-        let wanted := String.trim <| ExpectString.abbreviateString (maxLength := 100) <| hl.toString
-        let wanted := wanted.splitOn "\n" |>.map (Std.Format.text ·) |> Std.Format.nil.joinSuffix
-        logErrorAt term (m!"No sub-term of the following was specified: {indentD <| wanted}" ++ h)
-        return #[← ``(sorryAx _ true)]
-      if let some e := hl.matchingExpr? str then
-        logInfos e
-        return #[← ``(leanBlock $(quote e) $(quote cfg.toCodeConfig))]
-      else
-        let ref ← getRef
-        let suggs := suggestTerms hl str
-        let suggs ← suggs.filterMapM fun s =>
-          editCodeBlock ref s
-        let h ← hint "Use one of these" suggs
-        logErrorAt term (m!"Not found: '{str}' in: {indentD <| ExpectString.abbreviateString (maxLength := 100) <| hl.toString}" ++ h)
-        return #[← ``(sorryAx _ true)]
-
-macro_rules
-  | `(block|```anchorTerm $a:arg_val $args* | $s ```) =>
-    `(block|```moduleTerm anchor := $a:arg_val $args* | $s ```)
+@[code_block_expander anchorTerm, inherit_doc anchorTerm]
+def anchorTermBlockExp : CodeBlockExpander
+  | args, term => withTraceNode `Elab.Verso (fun _ => pure m!"moduleTerm") <|
+    if let some (Arg.anon a) := args[0]? then
+      moduleTermBlock (#[.named .missing (mkIdent `anchor) a] ++ args.drop 1) term
+    else
+      throwError "Expected a positional argument first (the anchor name)"
 
 private def severityName {m} [Monad m] [MonadEnv m] [MonadResolveName m] : MessageSeverity → m String
   | .error => unresolveNameGlobal ``MessageSeverity.error <&> (·.toString)
@@ -583,6 +630,54 @@ private partial def findTrace? (header : String) : MessageContents Highlighted �
     if msg.toString == header then pure t
     else chs.findSome? (findTrace? header)
 
+def outputBlock (args : Array Arg) (str : StrLit) : DocElabM (Array Term) := do
+  let {module := moduleName, anchor?, severity, expandTraces, onlyTrace, showProofStates := _, defSite := _} ← parseThe MessageContext args
+
+  withAnchored moduleName anchor? fun hl => do
+    let infos : Array _ := allInfo hl
+
+    let mut candidates : Array Highlighted.Message := #[]
+
+    for (msg, _) in infos do
+      let msg ←
+        if let some tr := onlyTrace then
+          if let some msg' := findTrace? tr msg.contents then
+            pure {msg with contents := msg'}
+          else continue
+        else pure <| msg
+      candidates := candidates.push msg
+      if messagesMatch (msg.toString (expandTraces := expandTraces)) str.getString then
+        if msg.severity == .ofSeverity severity.1 then
+          return #[← ``(leanOutputBlock $(quote msg) (expandTraces := $(quote expandTraces)))]
+        else
+        let wanted ← severityName msg.severity.toSeverity
+          throwError "Mismatched severity. Expected '{repr severity.1}', got '{wanted}'.{← severityHint wanted severity.2}"
+
+    let suggs : Array Suggestion := candidates.map fun msg => {
+      suggestion := withNl (msg.toString (expandTraces := expandTraces)),
+      preInfo? := some s!"{sevStr msg.severity.toSeverity}: "
+    }
+
+    let ref ← getRef
+
+    let mut err : MessageData := "Expected"
+
+    err := err ++ (m!"\nor".joinSep <| candidates.toList.map fun msg => indentD (msg.toString (expandTraces := expandTraces)) ++ "\n")
+
+    if str.getString.trim.isEmpty then
+      err := err ++ "but nothing was provided."
+    else
+      err := err ++ m!"but got:{indentD str.getString.trim}"
+    if suggs.size = 1 then
+      err := err ++ (← hintAt str "Use this:\n" suggs)
+    else if suggs.size > 1 then
+      err := err ++ (← hintAt str "Use one of these:\n" suggs)
+
+    logErrorAt ref err
+
+    return #[← ``(sorryAx _ true)]
+
+
 /--
 Displays output from the example module.
 
@@ -590,14 +685,86 @@ Requires that the genre have an `ExternalCode` instance.
 -/
 @[code_block_expander moduleOut]
 def moduleOut : CodeBlockExpander
-  | args, str => withTraceNode `Elab.Verso (fun _ => pure m!"moduleOut") <| do
-    let {module := moduleName, anchor?, severity, expandTraces, onlyTrace, showProofStates := _, defSite := _} ← parseThe MessageContext args
+  | args, str => withTraceNode `Elab.Verso (fun _ => pure m!"moduleOut") <| outputBlock args str
 
-    withAnchored moduleName anchor? fun hl => do
-      let infos : Array _ := allInfo hl
+/--
+Displays information output from the example module.
 
+Requires that the genre have an `ExternalCode` instance.
+-/
+@[code_block_expander moduleInfo]
+def moduleInfo : CodeBlockExpander
+  | args, str => withTraceNode `Elab.Verso (fun _ => pure m!"moduleInfo") <|
+    outputBlock (#[.anon <| .name <| mkIdent ``MessageSeverity.information] ++ args) str
+
+/--
+Displays error output from the example module.
+
+Requires that the genre have an `ExternalCode` instance.
+-/
+@[code_block_expander moduleError]
+def moduleError : CodeBlockExpander
+  | args, str => withTraceNode `Elab.Verso (fun _ => pure m!"moduleError") <|
+    outputBlock (#[.anon <| .name <| mkIdent ``MessageSeverity.error] ++ args) str
+
+/--
+Displays warning output from the example module.
+
+Requires that the genre have an `ExternalCode` instance.
+-/
+@[code_block_expander moduleWarning]
+def moduleWarning : CodeBlockExpander
+  | args, str => withTraceNode `Elab.Verso (fun _ => pure m!"moduleWarning") <|
+    outputBlock (#[.anon <| .name <| mkIdent ``MessageSeverity.warning] ++ args) str
+
+/--
+Displays information output from the example module's anchor.
+
+Requires that the genre have an `ExternalCode` instance.
+-/
+@[code_block_expander anchorInfo]
+def anchorInfo : CodeBlockExpander
+  | args, str => withTraceNode `Elab.Verso (fun _ => pure m!"anchorInfo") <| do
+    if let some (Arg.anon a) := args[0]? then
+      outputBlock (#[.anon <| .name <| mkIdent ``MessageSeverity.information, .named .missing (mkIdent `anchor) a] ++ args.drop 1) str
+    else
+      throwError "Expected a positional argument first (the anchor name)"
+
+/--
+Displays error output from the example module's anchor.
+
+Requires that the genre have an `ExternalCode` instance.
+-/
+@[code_block_expander anchorError]
+def anchorError : CodeBlockExpander
+  | args, str => withTraceNode `Elab.Verso (fun _ => pure m!"anchorError") <| do
+    if let some (Arg.anon a) := args[0]? then
+      outputBlock (#[.anon <| .name <| mkIdent ``MessageSeverity.error, .named .missing (mkIdent `anchor) a] ++ args.drop 1) str
+    else
+      throwError "Expected a positional argument first (the anchor name)"
+/--
+Displays warning output from the example module's anchor.
+
+Requires that the genre have an `ExternalCode` instance.
+-/
+@[code_block_expander anchorWarning]
+def anchorWarning : CodeBlockExpander
+  | args, str => withTraceNode `Elab.Verso (fun _ => pure m!"anchorWarning") <| do
+    if let some (Arg.anon a) := args[0]? then
+      outputBlock (#[.anon <| .name <| mkIdent ``MessageSeverity.warning, .named .missing (mkIdent `anchor) a] ++ args.drop 1) str
+    else
+      throwError "Expected a positional argument first (the anchor name)"
+
+
+def moduleOutInline (args : Array Arg) (inls : TSyntaxArray `inline) : DocElabM (Array Term) := do
+  let str? ← oneCodeStr? inls
+
+  let {module := moduleName, anchor?, expandTraces, onlyTrace, severity, showProofStates := _, defSite := _} ← parseThe MessageContext args
+
+  withAnchored moduleName anchor? fun hl => do
+    let infos := allInfo hl
+    if let some str := str? then
       let mut candidates : Array Highlighted.Message := #[]
-
       for (msg, _) in infos do
         let msg ←
           if let some tr := onlyTrace then
@@ -606,113 +773,48 @@ def moduleOut : CodeBlockExpander
             else continue
           else pure <| msg
         candidates := candidates.push msg
+
         if messagesMatch (msg.toString (expandTraces := expandTraces)) str.getString then
           if msg.severity == .ofSeverity severity.1 then
-            return #[← ``(leanOutputBlock $(quote msg) (expandTraces := $(quote expandTraces)))]
+            return #[← ``(leanOutputInline $(quote msg) true (expandTraces := $(quote expandTraces)))]
           else
-          let wanted ← severityName msg.severity.toSeverity
+            let wanted ← severityName msg.severity.toSeverity
             throwError "Mismatched severity. Expected '{repr severity.1}', got '{wanted}'.{← severityHint wanted severity.2}"
 
+      let ref :=
+        if let `(inline|role{ $_ $_* }[ $x ]) := (← getRef) then x.raw else str
+
       let suggs : Array Suggestion := candidates.map fun msg => {
-        suggestion := withNl (msg.toString (expandTraces := expandTraces)),
-        preInfo? := some s!"{sevStr msg.severity.toSeverity}: "
+        suggestion := quoteCode (msg.toString (expandTraces := expandTraces)).trim,
+        preInfo? := s!"{sevStr msg.severity.toSeverity}: "
       }
+      let h ←
+        if suggs.isEmpty then pure m!""
+        else hintAt ref "Use one of these." suggs
 
-      let ref ← getRef
-
-      let mut err : MessageData := "Expected"
-
-      err := err ++ (m!"\nor".joinSep <| candidates.toList.map fun msg => indentD (msg.toString (expandTraces := expandTraces)) ++ "\n")
-
-      if str.getString.trim.isEmpty then
-        err := err ++ "but nothing was provided."
-      else
-        err := err ++ m!"but got:{indentD str.getString.trim}"
-      if suggs.size = 1 then
-        err := err ++ (← hintAt str "Use this:\n" suggs)
-      else if suggs.size > 1 then
-        err := err ++ (← hintAt str "Use one of these:\n" suggs)
-
-      logErrorAt ref err
-
-      return #[← ``(sorryAx _ true)]
-
-macro_rules
-  | `(block|```moduleInfo $arg* | $s ```) =>
-    `(block|```moduleOut MessageSeverity.information $arg* | $s ```)
-  | `(block|```moduleError $arg* | $s ```) =>
-    `(block|```moduleOut MessageSeverity.error $arg* | $s ```)
-  | `(block|```moduleWarning $arg* | $s ```) =>
-    `(block|```moduleOut MessageSeverity.warning $arg* | $s ```)
-  | `(block|```anchorInfo $a:arg_val $arg* | $s ```) =>
-    `(block|```moduleOut MessageSeverity.information anchor:=$a $arg* | $s ```)
-  | `(block|```anchorError $a:arg_val $arg* | $s ```) =>
-    `(block|```moduleOut MessageSeverity.error anchor:=$a $arg* | $s ```)
-  | `(block|```anchorWarning $a:arg_val $arg* | $s ```) =>
-    `(block|```moduleOut MessageSeverity.warning anchor:=$a $arg* | $s ```)
-
-@[role_expander moduleOut, inherit_doc moduleOut]
-def moduleOutRole : RoleExpander
-  | args, inls => withTraceNode `Elab.Verso (fun _ => pure m!"moduleOutRole") <| do
-    let str? ← oneCodeStr? inls
-
-    let {module := moduleName, anchor?, expandTraces, onlyTrace, severity, showProofStates := _, defSite := _} ← parseThe MessageContext args
-
-
-    withAnchored moduleName anchor? fun hl => do
-      let infos := allInfo hl
-      if let some str := str? then
-        let mut candidates : Array Highlighted.Message := #[]
+      let err :=
+        m!"Expected one of:{indentD (m!"\n".joinSep <| candidates.toList.map (·.toString (expandTraces := expandTraces)))}" ++
+        m!"\nbut got:{indentD str.getString}\n" ++ h
+      logErrorAt str err
+    else
+      let candidates := infos.filterMap fun (msg, _) =>
+          if let some tr := onlyTrace then
+            if let some msg' := findTrace? tr msg.contents then
+              pure {msg with contents := msg'}
+            else none
+          else pure <| msg
+      let err := m!"Expected one of:{indentD (m!"\n".joinSep <| candidates.toList.map (·.toString (expandTraces := expandTraces)))}"
+      Lean.logError m!"No expected term provided. {err}"
+      if let `(inline|role{$_ $_*} [%$tok1 $contents* ]%$tok2) := (← getRef) then
+        let stx :=
+          if tok1.getHeadInfo matches .original .. && tok2.getHeadInfo matches .original .. then
+            mkNullNode #[tok1, tok2]
+          else mkNullNode contents
         for (msg, _) in infos do
-          let msg ←
-            if let some tr := onlyTrace then
-              if let some msg' := findTrace? tr msg.contents then
-                pure {msg with contents := msg'}
-              else continue
-            else pure <| msg
-          candidates := candidates.push msg
+          let str := msg.toString
+          Suggestion.saveSuggestion stx (quoteCode <| ExpectString.abbreviateString str.trim) (quoteCode str.trim)
 
-          if messagesMatch (msg.toString (expandTraces := expandTraces)) str.getString then
-            if msg.severity == .ofSeverity severity.1 then
-              return #[← ``(leanOutputInline $(quote msg) true (expandTraces := $(quote expandTraces)))]
-            else
-              let wanted ← severityName msg.severity.toSeverity
-              throwError "Mismatched severity. Expected '{repr severity.1}', got '{wanted}'.{← severityHint wanted severity.2}"
-
-        let ref :=
-          if let `(inline|role{ $_ $_* }[ $x ]) := (← getRef) then x.raw else str
-
-        let suggs : Array Suggestion := candidates.map fun msg => {
-          suggestion := quoteCode (msg.toString (expandTraces := expandTraces)).trim,
-          preInfo? := s!"{sevStr msg.severity.toSeverity}: "
-        }
-        let h ←
-          if suggs.isEmpty then pure m!""
-          else hintAt ref "Use one of these." suggs
-
-        let err :=
-          m!"Expected one of:{indentD (m!"\n".joinSep <| candidates.toList.map (·.toString (expandTraces := expandTraces)))}" ++
-          m!"\nbut got:{indentD str.getString}\n" ++ h
-        logErrorAt str err
-      else
-        let candidates := infos.filterMap fun (msg, _) =>
-            if let some tr := onlyTrace then
-              if let some msg' := findTrace? tr msg.contents then
-                pure {msg with contents := msg'}
-              else none
-            else pure <| msg
-        let err := m!"Expected one of:{indentD (m!"\n".joinSep <| candidates.toList.map (·.toString (expandTraces := expandTraces)))}"
-        Lean.logError m!"No expected term provided. {err}"
-        if let `(inline|role{$_ $_*} [%$tok1 $contents* ]%$tok2) := (← getRef) then
-          let stx :=
-            if tok1.getHeadInfo matches .original .. && tok2.getHeadInfo matches .original .. then
-              mkNullNode #[tok1, tok2]
-            else mkNullNode contents
-          for (msg, _) in infos do
-            let str := msg.toString
-            Suggestion.saveSuggestion stx (quoteCode <| ExpectString.abbreviateString str.trim) (quoteCode str.trim)
-
-      return #[← ``(sorryAx _ true)]
+    return #[← ``(sorryAx _ true)]
 
 where
   quoteCode (str : String) : String := Id.run do
@@ -732,19 +834,46 @@ where
     let delim := String.mk (List.replicate n '`')
     return delim ++ str ++ delim
 
-macro_rules
-  | `(inline|role{%$rs moduleInfo $arg*}%$re [%$s $str* ]%$e) =>
-    `(inline|role{%$rs moduleOut MessageSeverity.information $arg*}%$re [%$s $str* ]%$e)
-  | `(inline|role{%$rs moduleError $arg*}%$re [%$s $str* ]%$e) =>
-    `(inline|role{%$rs moduleOut MessageSeverity.error $arg*}%$re [%$s $str* ]%$e)
-  | `(inline|role{%$rs moduleWarning $arg*}%$re [%$s $str* ]%$e) =>
-    `(inline|role{%$rs moduleOut MessageSeverity.warning $arg*}%$re [%$s $str* ]%$e)
-  | `(inline|role{%$rs anchorInfo $a:arg_val $arg*}%$re [%$s $str* ]%$e) =>
-    `(inline|role{%$rs moduleOut MessageSeverity.information anchor:=$a $arg*}%$re [%$s $str* ]%$e)
-  | `(inline|role{%$rs anchorError $a:arg_val $arg*}%$re [%$s $str* ]%$e) =>
-    `(inline|role{%$rs moduleOut MessageSeverity.error anchor:=$a $arg*}%$re [%$s $str* ]%$e)
-  | `(inline|role{%$rs anchorWarning $a:arg_val $arg*}%$re [%$s $str* ]%$e) =>
-    `(inline|role{%$rs moduleOut MessageSeverity.warning anchor:=$a $arg*}%$re [%$s $str* ]%$e)
+
+@[role_expander moduleOut, inherit_doc moduleOut]
+def moduleOutRole : RoleExpander
+  | args, inls => withTraceNode `Elab.Verso (fun _ => pure m!"moduleOutRole") <| moduleOutInline args inls
+
+@[role_expander moduleInfo, inherit_doc moduleInfo]
+def moduleOutInfoRole : RoleExpander
+  | args, inls => withTraceNode `Elab.Verso (fun _ => pure m!"moduleOutInfoRole") <|
+    moduleOutInline (#[.anon <| .name <| mkIdent ``MessageSeverity.information] ++ args) inls
+
+@[role_expander moduleError, inherit_doc moduleError]
+def moduleOutErrorRole : RoleExpander
+  | args, inls => withTraceNode `Elab.Verso (fun _ => pure m!"moduleOutErrorRole") <|
+    moduleOutInline (#[.anon <| .name <| mkIdent ``MessageSeverity.error] ++ args) inls
+
+@[role_expander moduleWarning, inherit_doc moduleWarning]
+def moduleOutWarningRole : RoleExpander
+  | args, inls => withTraceNode `Elab.Verso (fun _ => pure m!"moduleOutWarningRole") <|
+    moduleOutInline (#[.anon <| .name <| mkIdent ``MessageSeverity.warning] ++ args) inls
+
+def anchorOutAsRole (severity : Name) (args : Array Arg) (inls : TSyntaxArray `inline) : DocElabM (Array Term) :=
+  if let some (Arg.anon a) := args[0]? then
+    moduleOutInline (#[.anon <| .name <| mkIdent severity, .named .missing (mkIdent `anchor) a] ++ args.drop 1) inls
+  else
+    throwError "Expected a positional argument first (the anchor name)"
+
+@[role_expander anchorInfo, inherit_doc anchorInfo]
+def anchorOutInfoRole : RoleExpander
+  | args, inls => withTraceNode `Elab.Verso (fun _ => pure m!"anchorOutInfoRole") <|
+    anchorOutAsRole ``MessageSeverity.information args inls
+
+@[role_expander anchorWarning, inherit_doc anchorWarning]
+def anchorOutWarningRole : RoleExpander
+  | args, inls => withTraceNode `Elab.Verso (fun _ => pure m!"anchorOutWarningRole") <|
+    anchorOutAsRole ``MessageSeverity.warning args inls
+
+@[role_expander anchorError, inherit_doc anchorError]
+def anchorOutErrorRole : RoleExpander
+  | args, inls => withTraceNode `Elab.Verso (fun _ => pure m!"anchorOutErrorRole") <|
+    anchorOutAsRole ``MessageSeverity.error args inls
 
 /--
 Explicitly indicates that a code element is intended to be literal character values without any
