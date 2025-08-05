@@ -347,6 +347,12 @@ def includeSection : PartCommand
   | `(block|block_role{include}) => throwError "Expected an argument"
   | `(block|block_role{include $arg1 $arg2 $arg3 $args*}) => throwErrorAt arg2 "Expected one or two arguments"
   | stx@`(block|block_role{include $args* }) => do
+    Hover.addCustomHover stx
+      r#"Includes another document at this point in the document.
+
+* `{include NAME}`: Includes the document as a child part.
+* `{include N NAME}`: Includes the document at header level `N`, as if its header had `N` header indicators (`#`) before it.
+"#
     match (← parseArgs args) with
     | #[.anon (.name x)] =>
       let name ← resolved x

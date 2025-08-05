@@ -30,6 +30,8 @@ set_option verso.exampleProject "examples/documented-package"
 -- `(module := ...)` argument to most elements that show code.
 set_option verso.exampleModule "Zippers"
 
+open Verso.Code.External
+
 #doc (Manual) "Zippers: A Documentation Example" =>
 %%%
 authors := ["David Thrane Christiansen"]
