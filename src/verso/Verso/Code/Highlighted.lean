@@ -867,12 +867,16 @@ def highlightingStyle : String := "
 
 .hl.lean .tactic {
   position: relative;
-  display: inline-grid;
-  grid-template-columns: 1fr;
+  display: inline;
   vertical-align: top;
   /* Without these, mobile Safari will start making font sizes inconsistent when its text size adjustment feature is triggered.*/
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+}
+
+.hl.lean .tactic:has(.tactic-toggle:checked) {
+  display: inline-grid;
+  grid-template-columns: 1fr;
 }
 
 .hl.lean .tactic-toggle:checked ~ .tactic-state {
@@ -885,6 +889,7 @@ def highlightingStyle : String := "
 .hl.lean .tactic > label {
   position: relative;
   grid-row: 1;
+  display: inline;
 }
 
 @media (hover: hover) {
