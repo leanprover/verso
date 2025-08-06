@@ -136,7 +136,7 @@ def _root_.Verso.Syntax.role.expand : InlineExpander
           try
             let termStxs ← withFreshMacroScope <| e argVals subjects
             if let some sig := sig? then
-              Hover.addCustomHover name (s!"Role `{resolvedName}`\n```\n{sig.pretty (width := 40)}\n```\n")
+              Hover.addCustomHover name (s!"Role `{resolvedName}`\n\n{sig}")
             let termStxs ← termStxs.mapM fun t => (``(($t : Inline $(⟨genre⟩))))
             if h : termStxs.size = 1 then return termStxs[0]
             else return (← ``(Inline.concat (genre := $(⟨genre⟩)) #[$[$termStxs],*]))
@@ -493,7 +493,7 @@ def _root_.Verso.Syntax.codeblock.expand : BlockExpander
       try
         let termStxs ← withFreshMacroScope <| e args contents
         if let some sig := sig? then
-          Hover.addCustomHover nameStx (s!"Directive `{name}`\n```\n{sig.pretty (width := 40)}\n```\n")
+          Hover.addCustomHover nameStx (s!"Code block `{name}`\n\n{sig}\n")
         return (← ``(Block.concat (genre := $(⟨genre⟩)) #[$[$termStxs],*]))
       catch
         | ex@(.internal id) =>
@@ -517,7 +517,7 @@ def _root_.Verso.Syntax.directive.expand : BlockExpander
       try
         let termStxs ← withFreshMacroScope <| e args contents
         if let some sig := sig? then
-          Hover.addCustomHover nameStx (s!"Directive `{name}`\n```\n{sig.pretty (width := 40)}\n```\n")
+          Hover.addCustomHover nameStx (s!"Directive `{name}`\n\n{sig}")
         return (← ``(Block.concat (genre := $(⟨genre⟩)) #[$[$termStxs],*]))
       catch
         | ex@(.internal id) =>

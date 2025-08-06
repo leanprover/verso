@@ -50,13 +50,6 @@ structure ExampleFileConfig where
   type : FileType
   «show» : Bool := true
 
--- TODO: upstream
-instance [Functor m] : Functor (ValDesc m) where
-  map f d := {
-    description := d.description
-    get := fun v => f <$> d.get v
-  }
-
 def FileType.parse [Monad m] [MonadError m] : ArgParse m FileType :=
     (.positional `type (literally `stdin) *> pure .stdin) <|>
     (.positional `type (literally `stdout) *> pure .stdout) <|>
@@ -70,6 +63,7 @@ where
 
   literally (n : Name) : ValDesc m Unit := {
     description := n
+    signature := n.toString
     get := fun
       | .name x => if x.getId == n then pure () else throwErrorAt x m!"Expected '{toString n}', got '{toString x.getId}'"
       | nonName => throwError m!"Expected '{toString n}', got {repr nonName}"

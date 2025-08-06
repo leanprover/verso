@@ -20,9 +20,15 @@ structure TechArgs where
   key : Option String
   normalize : Bool
 
-def TechArgs.parse [Monad m] [Lean.MonadError m] [MonadLiftT Lean.CoreM m] : ArgParse m TechArgs :=
+section
+variable [Monad m] [Lean.MonadError m] [MonadLiftT Lean.CoreM m]
+
+def TechArgs.parse  : ArgParse m TechArgs :=
   TechArgs.mk <$> .named `key .string true <*> .namedD `normalize .bool true
 
+instance : FromArgs TechArgs m := ⟨TechArgs.parse⟩
+
+end
 
 private def glossaryState := `Verso.Genre.Manual.glossary
 
@@ -64,10 +70,9 @@ of the automatically-derived key.
 
 Uses of `tech` use the same process to derive a key, and the key is matched against the `deftech` table.
 -/
-@[role_expander deftech]
-def deftech : RoleExpander
-  | args, content => do
-    let {key, normalize} ← TechArgs.parse.run args
+@[role]
+def deftech : RoleExpanderOf TechArgs
+  | {key, normalize}, content => do
 
     -- Heuristically guess at the string and key (usually works)
     let str := inlineToString (← getEnv) <| mkNullNode content
@@ -79,12 +84,11 @@ def deftech : RoleExpander
 
     let content ← content.mapM elabInline
 
-    let stx ←
-      `(let content : Array (Doc.Inline Verso.Genre.Manual) := #[$content,*]
-        let asString : String := techString (Doc.Inline.concat content)
-        let k : String := ($(quote key) : Option String).getD asString
-        Doc.Inline.other {Inline.deftech with data := ToJson.toJson (if $(quote normalize) then normString k else k, asString)} content)
-    return #[stx]
+    `(let content : Array (Doc.Inline Verso.Genre.Manual) := #[$content,*]
+      let asString : String := techString (Doc.Inline.concat content)
+      let k : String := ($(quote key) : Option String).getD asString
+      Doc.Inline.other {Inline.deftech with data := ToJson.toJson (if $(quote normalize) then normString k else k, asString)} content)
+
 
 /-- Adds an internal identifier as a target for a given glossary entry -/
 def Glossary.addEntry [Monad m] [MonadState TraverseState m] [MonadLiftT IO m] [MonadReaderOf TraverseContext m]
@@ -163,10 +167,9 @@ information from the arguments in `args`, and then normalizing the resulting str
 Call with `(normalize := false)` to disable normalization, and `(key := some k)` to use `k` instead
 of the automatically-derived key.
 -/
-@[role_expander tech]
-def tech : RoleExpander
-  | args, content => do
-    let {key, normalize} ← TechArgs.parse.run args
+@[role]
+def tech : RoleExpanderOf TechArgs
+  | {key, normalize}, content => do
 
     -- Heuristically guess at the string and key (usually works)
     let str := inlineToString (← getEnv) <| mkNullNode content
@@ -182,11 +185,11 @@ def tech : RoleExpander
 
     let content ← content.mapM elabInline
 
-    let stx ←
-      `(let content : Array (Doc.Inline Verso.Genre.Manual) := #[$content,*]
-        let k := ($(quote key) : Option String).getD (techString (Doc.Inline.concat content))
-        Doc.Inline.other {Inline.tech with data := Json.arr #[Json.str (if $(quote normalize) then normString k else k), Json.str $(quote loc)]} content)
-    return #[stx]
+
+    `(let content : Array (Doc.Inline Verso.Genre.Manual) := #[$content,*]
+      let k := ($(quote key) : Option String).getD (techString (Doc.Inline.concat content))
+      Doc.Inline.other {Inline.tech with data := Json.arr #[Json.str (if $(quote normalize) then normString k else k), Json.str $(quote loc)]} content)
+
 
 @[inline_extension tech]
 def tech.descr : InlineDescr where

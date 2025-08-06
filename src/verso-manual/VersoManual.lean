@@ -127,6 +127,7 @@ instance : FromArgs RoleArgs m where
 where
   stringOrName : ValDesc m String := {
     description := "remote name (string or identifier)"
+    signature := "String or Name"
     get
       | .str s => pure s.getString
       | .name n => pure n.getId.toString
@@ -136,12 +137,11 @@ end
 /--
 Inserts a reference to the provided tag.
 -/
-@[role_expander ref]
-def ref : RoleExpander
-  | args, content => do
-    let {canonicalName, domain, remote} ← parseThe RoleArgs args
+@[role]
+def ref : RoleExpanderOf RoleArgs
+  | {canonicalName, domain, remote}, content => do
     let content ← content.mapM elabInline
-    return #[← ``(Inline.other (Inline.ref $(quote canonicalName) $(quote domain) $(quote remote)) #[$content,*])]
+    ``(Inline.other (Inline.ref $(quote canonicalName) $(quote domain) $(quote remote)) #[$content,*])
 
 block_extension Block.paragraph where
   traverse := fun _ _ _ => pure none
@@ -159,14 +159,11 @@ Indicates that all the block-level elements contained within the directive are a
 paragraph. In HTML output, they are rendered with less space between them, and LaTeX renders them as
 a single paragraph (e.g. without extraneous indentation).
 -/
-@[directive_expander paragraph]
-def paragraph : DirectiveExpander
-  | #[], stxs => do
+@[directive]
+def paragraph : DirectiveExpanderOf Unit
+  | (), stxs => do
     let args ← stxs.mapM elabBlock
-    let val ← ``(Block.other Block.paragraph #[ $[ $args ],* ])
-    pure #[val]
-  | _, _ => Lean.Elab.throwUnsupportedSyntax
-
+    ``(Block.other Block.paragraph #[ $[ $args ],* ])
 
 structure Config where
   destination : System.FilePath := "_out"

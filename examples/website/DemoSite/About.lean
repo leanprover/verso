@@ -92,11 +92,16 @@ inline_component button (onclick : String) where
       </button>
     }}
 
-@[role_expander button]
-def buttonImpl : RoleExpander
-  | args, contents => do
-    let onclick ← ArgParse.run (.positional `onClick .string) args
-    pure #[← ``(button $(quote onclick) #[$(← contents.mapM elabInline),*])]
+structure ButtonArgs where
+  onClick : String
+
+instance : FromArgs ButtonArgs DocElabM where
+  fromArgs := ButtonArgs.mk <$> .positional `onClick .string
+
+@[role button]
+def buttonImpl : RoleExpanderOf ButtonArgs
+  | {onClick}, contents => do
+    ``(button $(quote onClick) #[$(← contents.mapM elabInline),*])
 
 end
 

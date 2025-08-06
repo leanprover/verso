@@ -138,6 +138,7 @@ def TableConfig.parse [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv
 where
   alignment := {
     description := "Alignment of the table ('left', 'right', or 'center')"
+    signature := "Alignment"
     get
       | .name x =>
         match x.getId with

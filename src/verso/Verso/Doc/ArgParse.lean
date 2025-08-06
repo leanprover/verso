@@ -26,6 +26,9 @@ structure ValDesc (α) where
   signature : String
   get : ArgVal → m α
 
+instance [Functor m] : Functor (ValDesc m) where
+  map f d := { d with get := fun v => f <$> d.get v }
+
 /--
 A canonical way to convert a Verso argument into a given type.
 -/
@@ -57,6 +60,8 @@ class FromArgs (α : Type) (m : Type → Type) where
   fromArgs : ArgParse m α
 
 export FromArgs (fromArgs)
+
+instance : FromArgs Unit m := ⟨.pure ()⟩
 
 def ArgParse.positional' {m} [FromArgVal α m] (nameHint : Name) (doc? : Option MessageData := none) : ArgParse m α :=
   .positional nameHint fromArgVal (doc? := doc?)
@@ -102,11 +107,61 @@ def ArgParse.describe : ArgParse m α → MessageData
   | .many p => m!"zero or more {p.describe}"
   | .remaining => "any arguments"
 
-def ArgParse.signature {m}  (prec : Nat) : ArgParse m α → Option Std.Format
+structure SimpleDesc where
+  positional : Array (Name × String) := {}
+  byName : Array (Name × String × Bool) := {}
+  keyVals : Option (Name × String) := none
+
+def toSimpleDesc {m} (p : ArgParse m α) : Option SimpleDesc :=
+  go p |>.run {} |>.map (·.snd)
+where
+  go {α} : ArgParse m α → StateT SimpleDesc Option Unit
+  | .fail _ msg? => failure
+  | .pure x | .done => pure ()
+  | .lift .. | .orElse .. => failure
+  | .positional x v _ =>
+    modify fun sd => { sd with positional := sd.positional.push (x, v.signature) }
+  | .named x v opt .. =>
+    modify fun sd => { sd with byName := sd.byName.push (x, v.signature, opt)}
+  | .anyNamed x v _  | .many (.anyNamed x v _) => do
+    if (← get).keyVals.isNone then
+      modify fun sd => { sd with keyVals := some (x, v.signature) }
+    else failure
+  | .seq p1 p2 => do
+    go p1
+    go (p2 ())
+  | .many p => failure
+  | .remaining => failure
+
+def SimpleDesc.markdown (d : SimpleDesc) : String :=
+  let {positional, byName, keyVals} := d
+  if positional.isEmpty && byName.isEmpty && keyVals.isNone then
+    "No parameters"
+  else
+    posList positional ++ nameList byName ++ kv keyVals
+where
+  posList (pos : Array (Name × String)) : String :=
+    if pos.isEmpty then ""
+    else if let #[(x, t)] := pos then
+      s!"Positional: `{x} : {t}`\n\n"
+    else
+      (pos.foldl (init := "Positional:\n") fun s (x, t) => s ++ s!"* `{x} : {t}\n`") ++ "\n"
+  nameList (ns : Array (Name × String × Bool)) : String :=
+    if ns.isEmpty then ""
+    else if let #[(x, t, opt)] := ns then
+      s!"Named: `{x} : {t}` ({if opt then "optional" else "required"})\n\n"
+    else (ns.foldl (init := "Named:\n") fun s (x, t, opt) =>
+      s ++ s!"* `{x} : {t}` ({if opt then "optional" else "required"})\n\n")
+  kv : Option (Name × String) → String
+    | none => ""
+    | some (x, t) => s!"Dictionary: `{x}`, saving names of `{t}`"
+
+def ArgParse.signature' {m} (prec : Nat) (p : ArgParse m α) : Option Std.Format :=
+  match p with
   | .fail _ msg? => failure
   | .pure x | .done => do return .nil
   | .lift desc act => do return desc
-  | .positional _x v _ => do return (← v.signature)
+  | .positional x v _ => do return s!"{x} :" ++ .line ++ (← v.signature)
   | .named x v opt _ => do
     let d := v.signature
     let s := .group <| .nest 2 <| .text s!"{x} :" ++ .line ++ d
@@ -116,23 +171,30 @@ def ArgParse.signature {m}  (prec : Nat) : ArgParse m α → Option Std.Format
     let s := .group <| .nest 2 <| .text s!"{x} :" ++ .line ++ d ++ .line ++ "(key/value)"
     return withParen 2 s
   | .orElse p1 p2 => do
-    let s1 := p1.signature 2
-    let s2 := (p2 ()).signature 3
+    let s1 := p1.signature' 2
+    let s2 := (p2 ()).signature' 3
     match s1, s2 with
     | some s1, some s2 =>
       return .group <| s1 ++ " <|>" ++ .line ++ s2
     | some s, none | none, some s => return s
     | none, none => failure
   | .seq p1 p2 => do
-    let s1 ← p1.signature 2
-    let s2 ← (p2 ()).signature 2
+    let s1 ← p1.signature' 2
+    let s2 ← (p2 ()).signature' 2
     if s1.isEmpty then return s2
     else if s2.isEmpty then return s1
     else return s1 ++ .line ++ s2
-  | .many p => do return (← p.signature 1) ++ "*"
+  | .many p => do return (← p.signature' 1) ++ "*"
   | .remaining => return "any"
 where
   withParen p (x : Std.Format) : Std.Format := if p > prec then "(" ++ x ++ ")" else x
+
+def ArgParse.signature {m} (p : ArgParse m α) : Option String :=
+  if let some sd := toSimpleDesc p then
+    sd.markdown
+  else if let some s := p.signature' 0 then
+    some s!"```\n({s.pretty 40})\n```\n"
+  else none
 
 scoped instance [Monad m] [MonadError m] : MonadError (StateT σ m) where
   throw e := fun _ => throw e

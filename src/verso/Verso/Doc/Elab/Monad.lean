@@ -600,7 +600,7 @@ unsafe def partCommandsForUnsafe (x : Name) : PartElabM (Array PartCommand) := d
 @[implemented_by partCommandsForUnsafe]
 opaque partCommandsFor (x : Name) : PartElabM (Array PartCommand)
 
-initialize expanderSignatureExt : PersistentEnvExtension (Name × Format) (Name × Format) (NameMap Format) ←
+initialize expanderSignatureExt : PersistentEnvExtension (Name × String) (Name × String) (NameMap String) ←
   registerPersistentEnvExtension {
     mkInitial := pure {},
     addImportedFn xss :=
@@ -614,8 +614,8 @@ initialize expanderSignatureExt : PersistentEnvExtension (Name × Format) (Name 
       xs.toArray
   }
 
-private def sig (α) [inst : FromArgs α DocElabM] : Option Std.Format :=
-  ArgParse.ArgParse.signature 0 inst.fromArgs
+private def sig (α) [inst : FromArgs α DocElabM] : Option String :=
+  ArgParse.ArgParse.signature inst.fromArgs
 
 abbrev RoleExpander := Array Arg → TSyntaxArray `inline → DocElabM (Array (TSyntax `term))
 
@@ -646,7 +646,7 @@ initialize roleExpanderExt : PersistentEnvExtension (Name × Array Name) (Name �
       xs.toArray
   }
 
-private unsafe def roleExpandersForUnsafe' (x : Name) : DocElabM (Array (RoleExpander × Option Format)) := do
+private unsafe def roleExpandersForUnsafe' (x : Name) : DocElabM (Array (RoleExpander × Option String)) := do
   let expanders := roleExpanderExt.getState (← getEnv) |>.find? x |>.getD #[]
   expanders.mapM fun n => do
     let e ← evalConst RoleExpander n
@@ -657,16 +657,16 @@ private unsafe def roleExpandersForUnsafe'' (x : Name) : DocElabM (Array RoleExp
   let expanders := roleExpanderAttr.getEntries (← getEnv) x
   return expanders.map (·.value) |>.toArray
 
-private unsafe def roleExpandersForUnsafe (x : Name) : DocElabM (Array (RoleExpander × Option Format)) := do
+private unsafe def roleExpandersForUnsafe (x : Name) : DocElabM (Array (RoleExpander × Option String)) := do
   return (← roleExpandersForUnsafe' x) ++ (← roleExpandersForUnsafe'' x).map (·, none)
 
 @[implemented_by roleExpandersForUnsafe]
-opaque roleExpandersFor (x : Name) : DocElabM (Array (RoleExpander × Option Format))
+opaque roleExpandersFor (x : Name) : DocElabM (Array (RoleExpander × Option String))
 
-private unsafe def evalFormatUnsafe (x : Name) : MetaM Format := evalConst Format x
+private unsafe def evalStringUnsafe (x : Name) : MetaM String := evalConst String x
 
-@[implemented_by evalFormatUnsafe]
-private opaque evalFormat (x : Name) : MetaM Format
+@[implemented_by evalStringUnsafe]
+private opaque evalString (x : Name) : MetaM String
 
 private def saveSignature (expanderName : Name) (argTy : Expr) : MetaM Unit := do
   let s ← Meta.mkAppM ``sig #[argTy]
@@ -680,14 +680,13 @@ private def saveSignature (expanderName : Name) (argTy : Expr) : MetaM Unit := d
     addAndCompile <| .defnDecl {
       name,
       levelParams := [],
-      type := .const ``Std.Format [],
+      type := .const ``String [],
       value := fmt,
       hints := .opaque,
       safety := .safe
     }
-    let fmt ← evalFormat name
-    logInfo fmt
-    modifyEnv (expanderSignatureExt.addEntry · (expanderName, .group fmt))
+    let str ← evalString name
+    modifyEnv (expanderSignatureExt.addEntry · (expanderName, str))
   | _ => return ()
 
 
