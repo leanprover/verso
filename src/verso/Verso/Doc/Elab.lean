@@ -132,11 +132,14 @@ def _root_.Verso.Syntax.role.expand : InlineExpander
           -- If no expanders are registered, then try elaborating just as a
           -- function application node
           return ← appFallback inline name resolvedName argVals subjects
-        for e in exp do
+        for (e, sig?) in exp do
           try
             let termStxs ← withFreshMacroScope <| e argVals subjects
+            if let some sig := sig? then
+              Hover.addCustomHover name (s!"Role `{resolvedName}`\n```\n{sig.pretty (width := 40)}\n```\n")
             let termStxs ← termStxs.mapM fun t => (``(($t : Inline $(⟨genre⟩))))
-            return (← ``(Inline.concat (genre := $(⟨genre⟩)) #[$[$termStxs],*]))
+            if h : termStxs.size = 1 then return termStxs[0]
+            else return (← ``(Inline.concat (genre := $(⟨genre⟩)) #[$[$termStxs],*]))
           catch
             | ex@(.internal id) =>
               if id == unsupportedSyntaxExceptionId then pure ()
@@ -481,21 +484,23 @@ def _root_.Verso.Syntax.blockquote.expand : BlockExpander
 @[block_expander Verso.Syntax.codeblock]
 def _root_.Verso.Syntax.codeblock.expand : BlockExpander
   | `(block|``` $nameStx:ident $argsStx* | $contents:str ```) => do
-      let ⟨genre, _⟩ ← readThe DocElabContext
-      let name ← realizeGlobalConstNoOverloadWithInfo nameStx
-      let exp ← codeBlockExpandersFor name
-      -- TODO typed syntax here
-      let args ← parseArgs <| argsStx.map (⟨·⟩)
-      for e in exp do
-        try
-          let termStxs ← withFreshMacroScope <| e args contents
-          return (← ``(Block.concat (genre := $(⟨genre⟩)) #[$[$termStxs],*]))
-        catch
-          | ex@(.internal id) =>
-            if id == unsupportedSyntaxExceptionId then pure ()
-            else throw ex
-          | ex => throw ex
-      throwUnsupportedSyntax
+    let ⟨genre, _⟩ ← readThe DocElabContext
+    let name ← realizeGlobalConstNoOverloadWithInfo nameStx
+    let exp ← codeBlockExpandersFor name
+    -- TODO typed syntax here
+    let args ← parseArgs <| argsStx.map (⟨·⟩)
+    for (e, sig?) in exp do
+      try
+        let termStxs ← withFreshMacroScope <| e args contents
+        if let some sig := sig? then
+          Hover.addCustomHover nameStx (s!"Directive `{name}`\n```\n{sig.pretty (width := 40)}\n```\n")
+        return (← ``(Block.concat (genre := $(⟨genre⟩)) #[$[$termStxs],*]))
+      catch
+        | ex@(.internal id) =>
+          if id == unsupportedSyntaxExceptionId then pure ()
+          else throw ex
+        | ex => throw ex
+    throwUnsupportedSyntax
   | `(block|``` | $contents:str ```) => do
     ``(Block.code $(quote contents.getString))
   | _ =>
@@ -508,9 +513,11 @@ def _root_.Verso.Syntax.directive.expand : BlockExpander
     let name ← realizeGlobalConstNoOverloadWithInfo nameStx
     let exp ← directiveExpandersFor name
     let args ← parseArgs argsStx
-    for e in exp do
+    for (e, sig?) in exp do
       try
         let termStxs ← withFreshMacroScope <| e args contents
+        if let some sig := sig? then
+          Hover.addCustomHover nameStx (s!"Directive `{name}`\n```\n{sig.pretty (width := 40)}\n```\n")
         return (← ``(Block.concat (genre := $(⟨genre⟩)) #[$[$termStxs],*]))
       catch
         | ex@(.internal id) =>

@@ -23,6 +23,7 @@ variable (m) [Monad m] [MonadInfoTree m] [MonadResolveName m] [MonadEnv m] [Mona
 
 structure ValDesc (α) where
   description : MessageData
+  signature : String
   get : ArgVal → m α
 
 /--
@@ -45,6 +46,7 @@ inductive ArgParse (m : Type → Type) : Type → Type 1 where
   | done : ArgParse m Unit
   | orElse (p1 : ArgParse m α) (p2 : Unit → ArgParse m α) : ArgParse m α
   | seq (p1 : ArgParse m (α → β)) (p2 : Unit → ArgParse m α) : ArgParse m β
+  | many : ArgParse m α → ArgParse m (List α)
   /-- Returns all remaining arguments. This is useful for consuming some, then forwarding the rest. -/
   | remaining : ArgParse m (Array Arg)
 
@@ -97,7 +99,40 @@ def ArgParse.describe : ArgParse m α → MessageData
   | .done => "no arguments remaining"
   | .orElse p1 p2 => p1.describe ++ " or " ++ (p2 ()).describe
   | .seq p1 p2 => p1.describe ++ " then " ++ (p2 ()).describe
+  | .many p => m!"zero or more {p.describe}"
   | .remaining => "any arguments"
+
+def ArgParse.signature {m}  (prec : Nat) : ArgParse m α → Option Std.Format
+  | .fail _ msg? => failure
+  | .pure x | .done => do return .nil
+  | .lift desc act => do return desc
+  | .positional _x v _ => do return (← v.signature)
+  | .named x v opt _ => do
+    let d := v.signature
+    let s := .group <| .nest 2 <| .text s!"{x} :" ++ .line ++ d
+    return withParen 2 <| if opt then "(" ++ s ++ ")?" else s
+  | .anyNamed x v _ => do
+    let d := v.signature
+    let s := .group <| .nest 2 <| .text s!"{x} :" ++ .line ++ d ++ .line ++ "(key/value)"
+    return withParen 2 s
+  | .orElse p1 p2 => do
+    let s1 := p1.signature 2
+    let s2 := (p2 ()).signature 3
+    match s1, s2 with
+    | some s1, some s2 =>
+      return .group <| s1 ++ " <|>" ++ .line ++ s2
+    | some s, none | none, some s => return s
+    | none, none => failure
+  | .seq p1 p2 => do
+    let s1 ← p1.signature 2
+    let s2 ← (p2 ()).signature 2
+    if s1.isEmpty then return s2
+    else if s2.isEmpty then return s1
+    else return s1 ++ .line ++ s2
+  | .many p => do return (← p.signature 1) ++ "*"
+  | .remaining => return "any"
+where
+  withParen p (x : Std.Format) : Std.Format := if p > prec then "(" ++ x ++ ")" else x
 
 scoped instance [Monad m] [MonadError m] : MonadError (StateT σ m) where
   throw e := fun _ => throw e
@@ -128,7 +163,7 @@ private def firstOriginal (stxs : Array Syntax) : Syntax := Id.run do
   return .missing
 
 -- NB the order of ExceptT and StateT is important here
-def ArgParse.parseArgs : ArgParse m α → ExceptT (Array Arg × Exception) (StateT ParseState m) α
+partial def ArgParse.parseArgs : ArgParse m α → ExceptT (Array Arg × Exception) (StateT ParseState m) α
   | .fail stx? msg? => do
     let stx ← stx?.getDM getRef
     let msg := msg?.getD "failed"
@@ -221,6 +256,13 @@ def ArgParse.parseArgs : ArgParse m α → ExceptT (Array Arg × Exception) (Sta
           | e2@(args2, _) =>
             if args2.size < args1.size then throw e1 else throw e2
   | .seq p1 p2 => Seq.seq p1.parseArgs (fun () => p2 () |>.parseArgs)
+  | .many p => do
+    let x ←
+      try
+        p.parseArgs
+      catch | _ => return []
+    let xs ← many p |>.parseArgs
+    return (x :: xs)
   | .remaining => modifyGet fun s =>
     let r := s.remaining
     (r, {s with remaining := #[]})
@@ -241,6 +283,7 @@ variable {m} [Monad m] [MonadInfoTree m] [MonadResolveName m] [MonadEnv m] [Mona
 
 def ValDesc.bool : ValDesc m Bool where
   description := m!"{true} or {false}"
+  signature := "Bool"
   get
     | .name b => do
       let b' ← liftM <| realizeGlobalConstNoOverloadWithInfo b
@@ -254,6 +297,7 @@ instance : FromArgVal Bool m where
 
 def ValDesc.string : ValDesc m String where
   description := m!"a string"
+  signature := "String"
   get
     | .str s => pure s.getString
     | other => throwError "Expected string, got {toMessageData other}"
@@ -263,6 +307,7 @@ instance : FromArgVal String m where
 
 def ValDesc.ident : ValDesc m Ident where
   description := m!"an identifier"
+  signature := "Name"
   get
     | .name x => pure x
     | other => throwError "Expected identifier, got { toMessageData other}"
@@ -277,6 +322,7 @@ The name is returned without macro scopes.
 -/
 def ValDesc.name : ValDesc m Name where
   description := m!"a name"
+  signature := "Name"
   get
     | .name x => pure x.getId.eraseMacroScopes
     | other => throwError "Expected identifier, got {other}"
@@ -286,6 +332,7 @@ instance : FromArgVal Name m where
 
 def ValDesc.resolvedName : ValDesc m Name where
   description := m!"a resolved name"
+  signature := "Name"
   get
     | .name x => realizeGlobalConstNoOverloadWithInfo x
     | other => throwError "Expected identifier, got {other}"
@@ -299,6 +346,7 @@ Parses a natural number.
 -/
 def ValDesc.nat : ValDesc m Nat where
   description := m!"a name"
+  signature := "Nat"
   get
     | .num n => pure n.getNat
     | other => throwError "Expected string, got {repr other}"
@@ -313,6 +361,7 @@ they can be related to their original source.
 -/
 def ValDesc.inlinesString [MonadFileMap m] : ValDesc m (FileMap × TSyntaxArray `inline) where
   description := m!"a string that contains a sequence of inline elements"
+  signature := "InlineString"
   get
     | .str s => open Lean.Parser in do
       let text ← getFileMap
@@ -340,6 +389,7 @@ def ValDesc.messageSeverity : ValDesc m MessageSeverity where
   description :=
     open MessageSeverity in
     m!"The expected severity: '{``error}', '{``warning}', or '{``information}'"
+  signature := "MessageSeverity"
   get := open MessageSeverity in fun
     | .name b => do
       let b' ← realizeGlobalConstNoOverloadWithInfo b
@@ -357,6 +407,7 @@ def ValDesc.whitespaceMode : ValDesc m WhitespaceMode where
   description :=
     open WhitespaceMode in
     m!"The expected whitespace mode: '{``exact}', '{``normalized}', or '{``lax}'"
+  signature := "WhitespaceMode"
   get := open WhitespaceMode in fun
     | .name b => do
       let b' ← realizeGlobalConstNoOverloadWithInfo b
@@ -381,6 +432,7 @@ other feedback at the right location.
 -/
 def ValDesc.withSyntax (desc : ValDesc m α) : ValDesc m (WithSyntax α) where
   description := desc.description
+  signature := desc.signature
   get v := (WithSyntax.mk · v.syntax) <$> desc.get v
 
 instance [FromArgVal α m] : FromArgVal (WithSyntax α) m where
@@ -391,6 +443,7 @@ Parses a string literal.
 -/
 def ValDesc.strLit [Monad m] [MonadError m] : ValDesc m StrLit where
   description := m!"a string"
+  signature := "String"
   get
     | .str s => pure s
     | other => throwError "Expected string, got {toMessageData other}"

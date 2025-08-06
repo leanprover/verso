@@ -36,72 +36,96 @@ open SubVerso.Module (ModuleItem)
 
 def classArgs : ArgParse DocElabM String := .named `«class» .string false
 
-@[role_expander htmlSpan]
-def htmlSpan : RoleExpander
-  | args, stxs => do
-    let classes ← classArgs.run args
+structure ClassArgs where
+  «class» : String
+
+section
+variable [Monad m] [MonadError m]
+instance : FromArgs ClassArgs m where
+  fromArgs := ClassArgs.mk <$> .named `«class» .string false
+end
+
+-- @[role_expander htmlSpan]
+-- def htmlSpan : RoleExpander
+--   | args, stxs => do
+--     let classes ← classArgs.run args
+--     let contents ← stxs.mapM elabInline
+--     let val ← ``(Inline.other (Blog.InlineExt.htmlSpan $(quote classes)) #[$contents,*])
+--     pure #[val]
+
+@[role]
+def htmlSpan : RoleExpanderOf ClassArgs
+  | {«class»}, stxs => do
     let contents ← stxs.mapM elabInline
-    let val ← ``(Inline.other (Blog.InlineExt.htmlSpan $(quote classes)) #[$contents,*])
-    pure #[val]
+    ``(Inline.other (Blog.InlineExt.htmlSpan $(quote «class»)) #[$contents,*])
 
-@[directive_expander htmlDiv]
-def htmlDiv : DirectiveExpander
-  | args, stxs => do
-    let classes ← classArgs.run args
+
+@[directive]
+def htmlDiv : DirectiveExpanderOf ClassArgs
+  | {«class»}, stxs => do
     let contents ← stxs.mapM elabBlock
-    let val ← ``(Block.other (Blog.BlockExt.htmlDiv $(quote classes)) #[ $contents,* ])
-    pure #[val]
+    ``(Block.other (Blog.BlockExt.htmlDiv $(quote «class»)) #[ $contents,* ])
 
-private partial def attrs : ArgParse DocElabM (Array (String × String)) := List.toArray <$> remaining attr
+
+private partial def attrs : ArgParse DocElabM (Array (String × String)) := List.toArray <$> .many attr
 where
-  remaining {m} {α} (p : ArgParse m α) : ArgParse m (List α) :=
-    (.done *> pure []) <|> ((· :: ·) <$> p <*> remaining p)
   attr : ArgParse DocElabM (String × String) :=
     (fun (k, v) => (k.getId.toString (escape := false), v)) <$> .anyNamed `attribute .string
 
-@[directive_expander html]
-def html : DirectiveExpander
-  | args, stxs => do
-    let (name, attrs) ← ArgParse.run ((·, ·) <$> .positional `name .name <*> attrs) args
+structure HtmlArgs where
+  name : Name
+  attrs : Array (String × String)
+
+instance : FromArgs HtmlArgs DocElabM where
+  fromArgs := HtmlArgs.mk <$> .positional `name .name <*> attrs
+
+
+@[directive]
+def html : DirectiveExpanderOf HtmlArgs
+  | {name, attrs}, stxs => do
     let tag := name.toString (escape := false)
     let contents ← stxs.mapM elabBlock
-    let val ← ``(Block.other (Blog.BlockExt.htmlWrapper $(quote tag) $(quote attrs)) #[ $contents,* ])
-    pure #[val]
+    ``(Block.other (Blog.BlockExt.htmlWrapper $(quote tag) $(quote attrs)) #[ $contents,* ])
 
-@[directive_expander blob]
-def blob : DirectiveExpander
-  | #[.anon (.name blobName)], stxs => do
+structure BlobArgs where
+  blobName : Ident
+
+instance : FromArgs BlobArgs DocElabM where
+  fromArgs := BlobArgs.mk <$> .positional `blobName .ident
+
+@[directive]
+def blob : DirectiveExpanderOf BlobArgs
+  | {blobName}, stxs => do
     if h : stxs.size > 0 then logErrorAt stxs[0] "Expected no contents"
     let actualName ← realizeGlobalConstNoOverloadWithInfo blobName
-    let val ← ``(Block.other (Blog.BlockExt.blob ($(mkIdentFrom blobName actualName) : Html)) #[])
-    pure #[val]
-  | _, _ => throwUnsupportedSyntax
+    ``(Block.other (Blog.BlockExt.blob ($(mkIdentFrom blobName actualName) : Html)) #[])
 
-@[role_expander blob]
-def inlineBlob : RoleExpander
-  | #[.anon (.name blobName)], stxs => do
+@[role blob]
+def inlineBlob : RoleExpanderOf BlobArgs
+  | {blobName}, stxs => do
     if h : stxs.size > 0 then logErrorAt stxs[0] "Expected no contents"
     let actualName ← realizeGlobalConstNoOverloadWithInfo blobName
-    let val ← ``(Inline.other (Blog.InlineExt.blob ($(mkIdentFrom blobName actualName) : Html)) #[])
-    pure #[val]
-  | _, _ => throwUnsupportedSyntax
+    ``(Inline.other (Blog.InlineExt.blob ($(mkIdentFrom blobName actualName) : Html)) #[])
 
-@[role_expander label]
-def label : RoleExpander
-  | #[.anon (.name l)], stxs => do
+structure LabelArgs where
+  label : Name
+
+instance : FromArgs LabelArgs DocElabM where
+  fromArgs := LabelArgs.mk <$> .positional `blobName .name
+
+#eval (inferInstanceAs <| FromArgs LabelArgs DocElabM).fromArgs.signature 0
+
+@[role]
+def label : RoleExpanderOf LabelArgs
+  | {label}, stxs => do
     let args ← stxs.mapM elabInline
-    let val ← ``(Inline.other (Blog.InlineExt.label $(quote l.getId)) #[ $[ $args ],* ])
-    pure #[val]
-  | _, _ => throwUnsupportedSyntax
+    ``(Inline.other (Blog.InlineExt.label $(quote label)) #[ $[ $args ],* ])
 
-@[role_expander ref]
-def ref : RoleExpander
-  | #[.anon (.name l)], stxs => do
+@[role]
+def ref : RoleExpanderOf LabelArgs
+  | {label}, stxs => do
     let args ← stxs.mapM elabInline
-    let val ← ``(Inline.other (Blog.InlineExt.ref $(quote l.getId)) #[ $[ $args ],* ])
-    pure #[val]
-  | _, _ => throwUnsupportedSyntax
-
+    ``(Inline.other (Blog.InlineExt.ref $(quote label)) #[ $[ $args ],* ])
 
 @[role_expander page_link]
 def page_link : RoleExpander
@@ -348,14 +372,18 @@ def leanCommandAt : BlockRoleExpander
     else
       throwError "Unexpected contents"
 
-@[role_expander leanKw]
-def leanKw : RoleExpander
-  | args, #[arg] => do
-    ArgParse.run .done args
+structure NoArgs where
+
+instance : FromArgs NoArgs m where
+  fromArgs := pure ⟨⟩
+
+@[role]
+def leanKw : RoleExpanderOf NoArgs
+  | ⟨⟩, #[arg] => do
     let `(inline|code( $kw:str )) := arg
       | throwErrorAt arg "Expected code literal with the keyword"
     let hl : SubVerso.Highlighting.Highlighted := .token ⟨.keyword none none none, kw.getString⟩
-    pure #[← ``(Inline.other (Blog.InlineExt.customHighlight $(quote hl)) #[Inline.code $(quote kw.getString)])]
+    ``(Inline.other (Blog.InlineExt.customHighlight $(quote hl)) #[Inline.code $(quote kw.getString)])
   | _, more =>
     if h : more.size > 0 then
       throwErrorAt more[0] "Unexpected contents"
@@ -425,10 +453,9 @@ where
     { Command.mkState env msg with infoState := { enabled := true } }
 
 open SubVerso.Highlighting Highlighted in
-@[code_block_expander lean]
-def lean : CodeBlockExpander
-  | args, str => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"lean block") <| withoutAsync do
-    let config ← parseThe LeanBlockConfig args
+@[code_block]
+def lean : CodeBlockExpanderOf LeanBlockConfig
+  | config, str => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"lean block") <| withoutAsync do
     let x := config.exampleContext
     let (commandState, state) ← match exampleContextExt.getState (← getEnv) |>.contexts.find? x.getId with
       | some (.inline commandState state) => pure (commandState, state)
@@ -489,9 +516,9 @@ def lean : CodeBlockExpander
         setInfoState infoSt
         setEnv env
       if config.show.getD true then
-        pure #[← `(Block.other (Blog.BlockExt.highlightedCode { contextName := $(quote x.getId), showProofStates := $(quote config.showProofStates) } $(quote hls)) #[Block.code $(quote str.getString)])]
+        `(Block.other (Blog.BlockExt.highlightedCode { contextName := $(quote x.getId), showProofStates := $(quote config.showProofStates) } $(quote hls)) #[Block.code $(quote str.getString)])
       else
-        pure #[]
+        ``(Block.concat [])
 
 
 structure LeanInlineConfig where
@@ -506,6 +533,7 @@ instance [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadErr
 where
   strLit : ValDesc m StrLit := {
     description := "string literal containing an expected type",
+    signature := "String (expected type)",
     get
       | .str s => pure s
       | other => throwError "Expected string, got {repr other}"
@@ -564,10 +592,9 @@ where
     modifyInfoState fun s => { s with trees := f s.trees }
 
 open SubVerso.Highlighting Highlighted in
-@[role_expander lean]
-def leanInline : RoleExpander
-  | args, elts => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"lean block") <| do
-    let config ← parseThe LeanInlineConfig args
+@[role]
+def leanInline : RoleExpanderOf LeanInlineConfig
+  | config, elts => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"lean block") <| do
     let #[code] := elts
       | throwError "Expected precisely one code element"
     let `(inline|code( $str:str )) := code
@@ -639,7 +666,7 @@ def leanInline : RoleExpander
           }
       let hls := (← highlight stx #[] (PersistentArray.empty.push tree))
 
-      pure #[← `(Inline.other (Blog.InlineExt.highlightedCode { contextName := $(quote config.exampleContext.getId) } $(quote hls)) #[Inline.code $(quote str.getString)])]
+      `(Inline.other (Blog.InlineExt.highlightedCode { contextName := $(quote config.exampleContext.getId) } $(quote hls)) #[Inline.code $(quote str.getString)])
 
 open Lean.Elab.Tactic.GuardMsgs
 export WhitespaceMode (exact lax normalized)
@@ -660,6 +687,7 @@ instance [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadErr
 where
   output : ValDesc m Ident := {
     description := "output name",
+    signature := "Name (output name)"
     get := fun
       | .name x => pure x
       | other => throwError "Expected output name, got {repr other}"
@@ -668,6 +696,7 @@ where
   optDef {α} (fallback : α) (p : ArgParse m α) : ArgParse m α := p <|> pure fallback
   sev : ValDesc m MessageSeverity := {
     description := open MessageSeverity in m!"The expected severity: '{``error}', '{``warning}', or '{``information}'",
+    signature := "MessageSeverity",
     get := open MessageSeverity in fun
       | .name b => do
         let b' ← realizeGlobalConstNoOverloadWithInfo b
@@ -679,6 +708,7 @@ where
   }
   ws : ValDesc m WhitespaceMode := {
     description := open WhitespaceMode in m!"The expected whitespace mode: '{``exact}', '{``normalized}', or '{``lax}'",
+    signature := "WhitespaceMode",
     get := open WhitespaceMode in fun
       | .name b => do
         let b' ← realizeGlobalConstNoOverloadWithInfo b
@@ -700,11 +730,9 @@ private def leanOutputInline [bg : BlogGenre genre] (message : Highlighted.Messa
   else
     Inline.other (bg.inline_eq ▸ InlineExt.message message expandTraces) #[Inline.code message.toString]
 
-@[code_block_expander leanOutput]
-def leanOutput : Doc.Elab.CodeBlockExpander
-  | args, str => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"leanOutput") <| do
-    let config ← parseThe LeanOutputConfig args
-
+@[code_block]
+def leanOutput : CodeBlockExpanderOf LeanOutputConfig
+  | config, str => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"leanOutput") <| do
     let (_, savedInfo) ← messageContextExt.getState (← getEnv) |>.messages |>.getOrSuggest config.name
     let messages ← match savedInfo with
       | .inl (env, log) =>
@@ -729,7 +757,7 @@ def leanOutput : Doc.Elab.CodeBlockExpander
                       SubVerso.Highlighting.highlightMessage m
                   finally setEnv myEnv
                 ``(Block.other (Blog.BlockExt.message false $(quote m') ([] : List Lean.Name)) #[Block.code $(quote str.getString)])
-            return #[content]
+            return content
         pure messages
       | .inr msgs =>
         let messages := msgs.toArray.map Prod.snd
@@ -746,7 +774,7 @@ def leanOutput : Doc.Elab.CodeBlockExpander
                 ``(Block.other (Blog.BlockExt.htmlDetails $(quote (sevStr sev)) $(quote preHtml)) #[Block.code $(quote post)])
               else
                 ``(Block.other (Blog.BlockExt.htmlDiv $(quote (sevStr sev))) #[Block.code $(quote str.getString)])
-            return #[content]
+            return content
         pure messages
 
     for m in messages do
@@ -770,19 +798,19 @@ where
 open Lean Elab Command in
 elab "define_lexed_text" blockName:ident " ← " lexerName:ident : command => do
   let lexer ← liftTermElabM <| realizeGlobalConstNoOverloadWithInfo lexerName
-  elabCommand <| ← `(@[code_block_expander $blockName]
-    def $blockName : Doc.Elab.CodeBlockExpander
-      | #[], str => do
+  elabCommand <| ← `(@[code_block]
+    def $blockName : Doc.Elab.CodeBlockExpanderOf NoArgs
+      | ⟨⟩, str => do
         let out ← Verso.Genre.Blog.LexedText.highlight $(mkIdentFrom lexerName lexer) str.getString
-        return #[← ``(Block.other (Blog.BlockExt.lexedText $$(quote out)) #[])]
+        ``(Block.other (Blog.BlockExt.lexedText $$(quote out)) #[])
       | _, str => throwErrorAt str "Expected no arguments")
-  elabCommand <| ← `(@[role_expander $blockName]
-    def $(mkIdent <| blockName.getId ++ `role) : Doc.Elab.RoleExpander
-      | #[], #[inl] => do
+  elabCommand <| ← `(@[role]
+    def $(mkIdent <| blockName.getId ++ `role) : Doc.Elab.RoleExpanderOf NoArgs
+      | ⟨⟩, #[inl] => do
         let `(inline|code($$str)) := inl
           | throwErrorAt inl "Expected code"
         let out ← Verso.Genre.Blog.LexedText.highlight $(mkIdentFrom lexerName lexer) str.getString
-        return #[← ``(Inline.other (Blog.InlineExt.lexedText $$(quote out)) #[])]
+        ``(Inline.other (Blog.InlineExt.lexedText $$(quote out)) #[])
       | _, str => throwError "Expected no arguments and a single code element")
 
 
