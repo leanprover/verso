@@ -40,7 +40,8 @@ open Verso.Doc.Suggestion
 variable {m} [Monad m] [MonadOptions m] [MonadEnv m] [MonadLiftT CoreM m] [MonadError m] [MonadLog m] [AddMessageContext m] [MonadInfoTree m]
 
 def ValDesc.documentableName : ValDesc m (Ident × Name) where
-  description := m!"a name with documentation"
+  description := "a name with documentation"
+  signature := .Ident
   get
     | .name n => do
       let x ← realizeGlobalConstNoOverloadWithInfo n
@@ -1410,13 +1411,13 @@ def DocstringConfig.parse : ArgParse m DocstringConfig :=
     .namedD `hideStructureConstructor .bool false <*>
     .named `label .string true
 
+instance : FromArgs DocstringConfig m := ⟨DocstringConfig.parse⟩
+
 end
 
-@[block_role_expander docstring]
-def docstring : BlockRoleExpander
-  | args, #[] => do
-    let ⟨(x, name), allowMissing, hideFields, hideCtor, customLabel⟩ ← DocstringConfig.parse.run args
-
+@[block_command]
+def docstring : BlockCommandOf DocstringConfig
+  | ⟨(x, name), allowMissing, hideFields, hideCtor, customLabel⟩ => do
     let opts : Options → Options := allowMissing.map (fun b opts => verso.docstring.allowMissing.set opts b) |>.getD id
 
     withOptions opts do
@@ -1439,8 +1440,7 @@ def docstring : BlockRoleExpander
       let signature ← Signature.forName name
 
       let extras ← getExtras name declType
-      pure #[← ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.docstring $(quote name) $(quote declType) $(quote signature) $(quote customLabel)) #[$(blockStx ++ extras),*])]
-  | _, more => throwErrorAt more[0]! "Unexpected block argument"
+      ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.docstring $(quote name) $(quote declType) $(quote signature) $(quote customLabel)) #[$(blockStx ++ extras),*])
 where
   getExtras (name : Name) (declType : Block.Docstring.DeclType) : DocElabM (Array Term) :=
     match declType with
@@ -1508,13 +1508,14 @@ structure IncludeDocstringOpts where
 def IncludeDocstringOpts.parse : ArgParse m IncludeDocstringOpts :=
   IncludeDocstringOpts.mk <$> (.positional `name .documentableName <&> (·.2)) <*> .namedD `elab .bool true
 
+instance : FromArgs IncludeDocstringOpts m where
+  fromArgs := IncludeDocstringOpts.parse
+
 end
 
-@[block_role_expander includeDocstring]
-def includeDocstring : BlockRoleExpander
-  | args, #[] => do
-    let {name, elaborate} ← IncludeDocstringOpts.parse.run args
-
+@[block_command]
+def includeDocstring : BlockCommandOf IncludeDocstringOpts
+  | {name, elaborate} => do
     let fromMd :=
       if elaborate then
         blockFromMarkdownWithLean [name]
@@ -1529,9 +1530,7 @@ def includeDocstring : BlockRoleExpander
           | throwError "Failed to parse docstring as Markdown"
         ast.blocks.mapM fromMd
 
-    pure blockStx
-
-  | _args, more => throwErrorAt more[0]! "Unexpected block argument"
+    ``(Doc.Block.concat #[$blockStx,*])
 
 def Block.optionDocs (name : Name) (defaultValue : Option Highlighted) : Block where
   name := `Verso.Genre.Manual.optionDocs
@@ -1568,19 +1567,18 @@ def highlightDataValue (v : DataValue) : Highlighted :=
     | .ofSyntax (v : Syntax) => ⟨.unknown, toString v⟩ -- TODO
 
 
-@[block_role_expander optionDocs]
-def optionDocs : BlockRoleExpander
-  | args, #[] => do
-    let #[.anon (.name x)] := args
-      | throwError "Expected exactly one positional argument that is a name"
-    let optDecl ← getOptionDecl x.getId
-    Doc.PointOfInterest.save x optDecl.declName.toString
-    let some mdAst := MD4Lean.parse optDecl.descr
-      | throwErrorAt x "Failed to parse docstring as Markdown"
-    let contents ← mdAst.blocks.mapM (blockFromMarkdownWithLean [])
-    pure #[← ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.optionDocs $(quote x.getId) $(quote <| highlightDataValue optDecl.defValue)) #[$contents,*])]
+def optionDocs.Args := Ident
+instance : FromArgs optionDocs.Args DocElabM := ⟨.positional `name .ident "The option name"⟩
 
-  | _, more => throwErrorAt more[0]! "Unexpected block argument"
+@[block_command]
+def optionDocs : BlockCommandOf optionDocs.Args
+  | x => do
+    let optDecl ← getOptionDecl x.getId
+    Doc.PointOfInterest.save x.raw optDecl.declName.toString
+    let some mdAst := MD4Lean.parse optDecl.descr
+      | throwErrorAt x.raw "Failed to parse docstring as Markdown"
+    let contents ← mdAst.blocks.mapM (blockFromMarkdownWithLean [])
+    ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.optionDocs $(quote x.getId) $(quote <| highlightDataValue optDecl.defValue)) #[$contents,*])
 
 open Verso.Search in
 def optionDomainMapper : DomainMapper :=
@@ -1648,7 +1646,11 @@ structure TacticDocsOptions where
   replace : Bool
   allowMissing : Option Bool
 
-def TacticDocsOptions.parse [Monad m] [MonadError m] [MonadLiftT CoreM m] : ArgParse m TacticDocsOptions :=
+section
+
+variable [Monad m] [MonadError m] [MonadLiftT CoreM m]
+
+def TacticDocsOptions.parse  : ArgParse m TacticDocsOptions :=
   TacticDocsOptions.mk <$>
     .positional `name strOrName <*>
     .named `show .string true <*>
@@ -1656,13 +1658,17 @@ def TacticDocsOptions.parse [Monad m] [MonadError m] [MonadLiftT CoreM m] : ArgP
     .named `allowMissing .bool true
 where
   strOrName : ValDesc m (String ⊕ Name) := {
-    description := m!"First token in tactic, or canonical parser name"
+    description := "First token in tactic, or canonical parser name"
+    signature := .Ident ∪ .String
     get := fun
       | .name x => pure (.inr x.getId)
       | .str s => pure (.inl s.getString)
       | .num n => throwErrorAt n "Expected tactic name (either first token as string, or internal parser name)"
   }
 
+instance : FromArgs TacticDocsOptions m := ⟨TacticDocsOptions.parse⟩
+
+end
 
 open Lean Elab Term Parser Tactic Doc in
 private def getTactic (name : String ⊕ Name) : TermElabM TacticDoc := do
@@ -1682,10 +1688,9 @@ private def getTactic? (name : String ⊕ Name) : TermElabM (Option TacticDoc) :
       return some t
   return none
 
-@[directive_expander tactic]
-def tactic : DirectiveExpander
-  | args, more => do
-    let opts ← TacticDocsOptions.parse.run args
+@[directive]
+def tactic : DirectiveExpanderOf TacticDocsOptions
+  | opts, more => do
     let tactic ← getTactic opts.name
     Doc.PointOfInterest.save (← getRef) tactic.userName
     if tactic.userName == tactic.internalName.toString && opts.show.isNone then
@@ -1697,9 +1702,7 @@ def tactic : DirectiveExpander
           | throwError "Failed to parse docstring as Markdown"
         mdAst.blocks.mapM (blockFromMarkdownWithLean [])
     let userContents ← more.mapM elabBlock
-    pure #[← ``(Verso.Doc.Block.other (Block.tactic $(quote tactic) $(quote opts.show)) #[$(contents ++ userContents),*])]
-
-
+    ``(Verso.Doc.Block.other (Block.tactic $(quote tactic) $(quote opts.show)) #[$(contents ++ userContents),*])
 
 def Inline.tactic : Inline where
   name := `Verso.Genre.Manual.tacticInline
@@ -1772,13 +1775,19 @@ def tactic.descr : BlockDescr := withHighlighting {
 structure TacticInlineOptions where
   «show» : Option String
 
-def TacticInlineOptions.parse [Monad m] [MonadError m] : ArgParse m TacticInlineOptions :=
+section
+variable [Monad m] [MonadError m]
+
+def TacticInlineOptions.parse : ArgParse m TacticInlineOptions :=
   TacticInlineOptions.mk <$> .named `show .string true
 
-@[role_expander tactic]
-def tacticInline : RoleExpander
-  | args, inlines => do
-    let {«show»} ← TacticInlineOptions.parse.run args
+instance : FromArgs TacticInlineOptions m where
+  fromArgs := TacticInlineOptions.parse
+end
+
+@[role tactic]
+def tacticInline : RoleExpanderOf TacticInlineOptions
+  | {«show»}, inlines => do
     let #[arg] := inlines
       | throwError "Expected exactly one argument"
     let `(inline|code( $tac:str )) := arg
@@ -1790,7 +1799,7 @@ def tacticInline : RoleExpander
 
     let hl : Highlighted := tacToken tacticDoc «show»
 
-    pure #[← `(Verso.Doc.Inline.other {Inline.tactic with data := ToJson.toJson $(quote hl)} #[Verso.Doc.Inline.code $(quote tacticDoc.userName)])]
+    `(Verso.Doc.Inline.other {Inline.tactic with data := ToJson.toJson $(quote hl)} #[Verso.Doc.Inline.code $(quote tacticDoc.userName)])
 where
   tacToken (t : Lean.Elab.Tactic.Doc.TacticDoc) (overrideStr : Option String) : Highlighted :=
     .token ⟨.keyword t.internalName none t.docString, overrideStr.getD t.userName⟩
@@ -1838,10 +1847,9 @@ def getConvTactic (name : String ⊕ Name) (allowMissing : Option Bool) : TermEl
         return ⟨k, ← getDocString? (← getEnv) k⟩
     throwError m!"Conv tactic not found: {kind}"
 
-@[directive_expander conv]
-def conv : DirectiveExpander
-  | args, more => do
-    let opts ← TacticDocsOptions.parse.run args
+@[directive]
+def conv : DirectiveExpanderOf TacticDocsOptions
+  | opts, more => do
     let tactic ← getConvTactic opts.name opts.allowMissing
     Doc.PointOfInterest.save (← getRef) tactic.name.toString
     let contents ← if let some d := tactic.docs? then
@@ -1852,7 +1860,7 @@ def conv : DirectiveExpander
     let userContents ← more.mapM elabBlock
     let some toShow := opts.show
       | throwError "An explicit 'show' is mandatory for conv docs (for now)"
-    pure #[← ``(Verso.Doc.Block.other (Block.conv $(quote tactic.name) $(quote toShow) $(quote tactic.docs?)) #[$(contents ++ userContents),*])]
+    ``(Verso.Doc.Block.other (Block.conv $(quote tactic.name) $(quote toShow) $(quote tactic.docs?)) #[$(contents ++ userContents),*])
 
 open Verso.Search in
 def convDomainMapper : DomainMapper := {

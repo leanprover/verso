@@ -26,9 +26,11 @@ categories := [examples, other]
 %%%
 
 
+:::htmlDiv (class := "some-other-class")
 Finally started blogging!
-This post describes the syntax and semantics of conditional expressions in Lean.
+This post {htmlSpan (class := "some-class")}[describes] the syntax and semantics of conditional expressions in Lean.
 Here are some examples:
+:::
 
 ```leanInit demo
 -- This block initializes a Lean context

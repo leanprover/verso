@@ -132,12 +132,15 @@ table.tabular td > p:last-child, table.tabular th > p:first-child {
 "##
   ]
 
+section
+variable [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m] [MonadFileMap m]
 
-def TableConfig.parse [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m] [MonadFileMap m] : ArgParse m TableConfig :=
+def TableConfig.parse : ArgParse m TableConfig :=
   TableConfig.mk <$> .named `tag .string true <*> ((·.getD false) <$> .named `header .bool true) <*> .named `align alignment true
 where
   alignment := {
     description := "Alignment of the table ('left', 'right', or 'center')"
+    signature := .Ident
     get
       | .name x =>
         match x.getId with
@@ -146,13 +149,15 @@ where
         | `center => pure .center
         | _ => throwErrorAt x "Expected 'left', 'right', or 'center'"
       | .num x | .str x => throwErrorAt x "Expected 'left', 'right', or 'center'"
-
   }
 
-@[directive_expander table]
-def table : DirectiveExpander
-  | args, contents => do
-    let cfg ← TableConfig.parse.run args
+instance : FromArgs TableConfig m := ⟨TableConfig.parse⟩
+
+end
+
+@[directive]
+def table : DirectiveExpanderOf TableConfig
+  | cfg, contents => do
     -- The table should be a list of lists. Extract them!
     let #[oneBlock] := contents
       | throwError "Expected a single unordered list"
@@ -172,11 +177,12 @@ def table : DirectiveExpander
       if columns = 0 then
         throwErrorAt oneBlock "Expected at least one column"
       if rows.any (·.size != columns) then
+
         throwErrorAt oneBlock s!"Expected all rows to have same number of columns, but got {rows.map (·.size)}"
 
       let flattened := rows.flatten
       let blocks : Array (Syntax.TSepArray `term ",") ← flattened.mapM (·.mapM elabBlock)
-      pure #[← ``(Block.other (Block.table $(quote columns) $(quote cfg.header) $(quote cfg.name) $(quote cfg.alignment)) #[Block.ul #[$[Verso.Doc.ListItem.mk #[$blocks,*]],*]])]
+      ``(Block.other (Block.table $(quote columns) $(quote cfg.header) $(quote cfg.name) $(quote cfg.alignment)) #[Block.ul #[$[Verso.Doc.ListItem.mk #[$blocks,*]],*]])
 
 where
   getLi

@@ -152,4 +152,4 @@ def metadataContents := structInstFields (sepByIndent structInstField ", " (allo
 
 /-- Metadata for this section, defined by the current genre -/
 syntax (name:=metadata_block) "%%%" metadataContents "%%%" : block
-syntax (name:=block_role) "block_role{" rawIdent argument* "}" ("[" block "]")?  : block
+syntax (name:=command) "command{" rawIdent argument* "}" : block

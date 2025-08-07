@@ -17,10 +17,9 @@ namespace Verso.Genre.Manual.InlineLean
 
 def Inline.option : Inline where
 
-@[role_expander option]
-def option : RoleExpander
-  | args, inlines => withoutAsync do
-    let () ← ArgParse.done.run args
+@[role]
+def option : RoleExpanderOf Unit
+  | (), inlines => withoutAsync do
     let #[arg] := inlines
       | throwError "Expected exactly one argument"
     let `(inline|code( $optName:str )) := arg
@@ -29,7 +28,7 @@ def option : RoleExpander
     let optDecl ← getOptionDecl optName
     let hl : Highlighted := optTok optName optDecl.declName optDecl.descr
 
-    pure #[← `(Inline.other {Inline.option with data := ToJson.toJson $(quote hl)} #[Inline.code $(quote optName.toString)])]
+    `(Inline.other {Inline.option with data := ToJson.toJson $(quote hl)} #[Inline.code $(quote optName.toString)])
 where
   optTok (name declName : Name) (descr : String) : Highlighted :=
     .token ⟨.option name declName descr , name.toString⟩

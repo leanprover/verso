@@ -265,11 +265,18 @@ inline_extension Inline.cite (citations : List Citable) (style : Style := .paren
 structure CiteConfig where
   citations : List Name
 
-partial def CiteConfig.parse [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m] [MonadFileMap m] : ArgParse m CiteConfig :=
+section
+variable [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m] [MonadFileMap m]
+
+partial def CiteConfig.parse : ArgParse m CiteConfig :=
   CiteConfig.mk <$> many1 (.positional `citation .resolvedName)
 where
-  many1 p := (· :: ·) <$> p <*> many p
-  many p := (· :: ·) <$> p <*> many p <|> pure []
+  many1 p := (· :: ·) <$> p <*> .many p
+
+instance : FromArgs CiteConfig m where
+  fromArgs := CiteConfig.parse
+
+end
 
 end Bibliography
 
@@ -277,23 +284,20 @@ export Verso.Genre.Manual.Bibliography (InProceedings Thesis ArXiv Article)
 
 open Bibliography
 
-@[role_expander citep]
-def citep : RoleExpander
-  | args, extra => do
-    let config ← CiteConfig.parse.run args
+@[role]
+def citep : RoleExpanderOf CiteConfig
+  | config, extra => do
     let xs := config.citations.map mkIdent |>.toArray
-    return #[← ``(Doc.Inline.other (Inline.cite ([$xs,*] : List Citable) Style.parenthetical) #[$(← extra.mapM elabInline),*])]
+    ``(Doc.Inline.other (Inline.cite ([$xs,*] : List Citable) Style.parenthetical) #[$(← extra.mapM elabInline),*])
 
-@[role_expander citet]
-def citet : RoleExpander
-  | args, extra => do
-    let config ← CiteConfig.parse.run args
+@[role]
+def citet : RoleExpanderOf CiteConfig
+  | config, extra => do
     let xs := config.citations.map mkIdent |>.toArray
-    return #[← ``(Doc.Inline.other (Inline.cite ([$xs,*] : List Citable) Style.textual) #[$(← extra.mapM elabInline),*])]
+    ``(Doc.Inline.other (Inline.cite ([$xs,*] : List Citable) Style.textual) #[$(← extra.mapM elabInline),*])
 
-@[role_expander citehere]
-def citehere : RoleExpander
-  | args, extra => do
-    let config ← CiteConfig.parse.run args
+@[role]
+def citehere : RoleExpanderOf CiteConfig
+  | config, extra => do
     let xs := config.citations.map mkIdent |>.toArray
-    return #[← ``(Doc.Inline.other (Inline.cite ([$xs,*] : List Citable) Style.here) #[$(← extra.mapM elabInline),*])]
+    ``(Doc.Inline.other (Inline.cite ([$xs,*] : List Citable) Style.here) #[$(← extra.mapM elabInline),*])
