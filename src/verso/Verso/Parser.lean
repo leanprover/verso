@@ -4327,6 +4327,15 @@ Final stack:
 
 /--
 info: Success! Final stack:
+  [(Verso.Syntax.command "{" `abc [] "}")
+   (Verso.Syntax.command "{" `def [] "}")]
+All input consumed.
+-/
+#guard_msgs in
+#eval blocks {} |>.test! "{abc}\n{def}\n"
+
+/--
+info: Success! Final stack:
   [(Verso.Syntax.metadata_block
     "%%%"
     (Term.structInstFields

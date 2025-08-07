@@ -1530,7 +1530,7 @@ def includeDocstring : BlockCommandOf IncludeDocstringOpts
           | throwError "Failed to parse docstring as Markdown"
         ast.blocks.mapM fromMd
 
-    ``(Block.concat #[$blockStx,*])
+    ``(Doc.Block.concat #[$blockStx,*])
 
 def Block.optionDocs (name : Name) (defaultValue : Option Highlighted) : Block where
   name := `Verso.Genre.Manual.optionDocs
