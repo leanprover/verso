@@ -32,29 +32,26 @@ block_extension Block.savedImport (file : String) (source : String) where
 /--
 Lean code that is saved to the examples file.
 -/
-@[code_block_expander savedLean]
-def savedLean : CodeBlockExpander
+@[code_block savedLean]
+def savedLean : CodeBlockExpanderOf InlineLean.LeanBlockConfig
   | args, code => do
     let underlying ← InlineLean.lean args code
-    return #[← ``(Block.other (Block.savedLean $(quote (← getFileName)) $(quote (code.getString))) #[$underlying,*])]
+    ``(Block.other (Block.savedLean $(quote (← getFileName)) $(quote (code.getString))) #[$underlying])
 
 /--
 An import of some other module, to be located in the saved code. Not rendered.
 -/
-@[code_block_expander savedImport]
-def savedImport : CodeBlockExpander
-  | args, code => do
-    ArgParse.done.run args
-    return #[← ``(Block.other (Block.savedImport $(quote (← getFileName)) $(quote (code.getString))) #[])]
-
+@[code_block]
+def savedImport : CodeBlockExpanderOf Unit
+  | (), code => do
+    ``(Block.other (Block.savedImport $(quote (← getFileName)) $(quote (code.getString))) #[])
 
 /--
 Comments to be added as module docstrings to the examples file.
 -/
-@[code_block_expander savedComment]
-def savedComment : CodeBlockExpander
-  | args, code => do
-    ArgParse.done.run args
+@[code_block]
+def savedComment : CodeBlockExpanderOf Unit
+  | (), code => do
     let str := code.getString.trimRight
     let comment := s!"/-!\n{str}\n-/"
-    return #[← ``(Block.other (Block.savedLean $(quote (← getFileName)) $(quote comment)) #[])]
+    ``(Block.other (Block.savedLean $(quote (← getFileName)) $(quote comment)) #[])

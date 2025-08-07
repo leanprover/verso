@@ -58,16 +58,14 @@ open Lean Elab Command in
   names := names.qsort (·.toString < ·.toString)
   elabCommand <| ← `(private def $(mkIdent `allRootNames) : Array Name := #[$(names.map (quote · : Name → Term)),*])
 
-@[directive_expander progress]
-def progress : DirectiveExpander
-  | args, blocks => do
-    if h : args.size > 0 then
-      throwErrorAt args[0].syntax  "Expected 0 arguments"
+@[directive]
+def progress : DirectiveExpanderOf Unit
+  | (), blocks => do
     let mut namespaces : NameSet := {}
     let mut exceptions : NameSet := {}
     for block in blocks do
       match block with
-      | `(block|```$nameStx:ident $argsStx* | $contents```) =>
+      | `(block|```$nameStx:ident $_argsStx* | $contents```) =>
         let contents := contents.getString
         match nameStx.getId with
         | `namespace =>
@@ -81,7 +79,6 @@ def progress : DirectiveExpander
         | _ => throwErrorAt nameStx "Expected 'namespace' or 'exceptions'"
       | _ => throwErrorAt block "Expected code block named 'namespace' or 'exceptions'"
     let mut present : NameMap NameSet := {}
-    let mut rootPresent : NameSet := {}
 
     for ns in namespaces do
       present := present.insert ns {}
@@ -93,7 +90,7 @@ def progress : DirectiveExpander
       | .ctorInfo _ => continue -- constructors are documented as children of their types
       | _ => pure ()
       if ← Meta.isInstance x then continue
-      if let .str .anonymous s := x then
+      if let .str .anonymous _ := x then
         if let some v := present.find? `_root_ then
           present := present.insert `_root_ (v.insert x)
         else
@@ -108,7 +105,7 @@ def progress : DirectiveExpander
     let present' := present.toList.map (fun x => (x.1, String.intercalate " " (x.2.toList.map Name.toString)))
     let allTactics : Array Name := (← Elab.Tactic.Doc.allTacticDocs).map (fun t => t.internalName)
 
-    pure #[← ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.progress $(quote namespaces.toArray) $(quote exceptions.toArray) $(quote present') $(quote allTactics)) #[])]
+    ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.progress $(quote namespaces.toArray) $(quote exceptions.toArray) $(quote present') $(quote allTactics)) #[])
 
 @[block_extension Block.progress]
 def progress.descr : BlockDescr where

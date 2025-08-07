@@ -86,6 +86,8 @@ structure LeanBlockConfig where
 def LeanBlockConfig.parse : ArgParse m LeanBlockConfig :=
   LeanBlockConfig.mk <$> .named `show .bool true <*> .named `keep .bool true <*> .named `name .name true <*> .named `error .bool true <*> .namedD `fresh .bool false
 
+instance : FromArgs LeanBlockConfig m := ⟨LeanBlockConfig.parse⟩
+
 structure LeanInlineConfig extends LeanBlockConfig where
   /-- The expected type of the term -/
   type : Option StrLit
@@ -97,10 +99,13 @@ def LeanInlineConfig.parse : ArgParse m LeanInlineConfig :=
 where
   strLit : ValDesc m StrLit := {
     description := "string literal containing an expected type",
+    signature := .String
     get
       | .str s => pure s
       | other => throwError "Expected string, got {repr other}"
   }
+
+instance : FromArgs LeanInlineConfig m := ⟨LeanInlineConfig.parse⟩
 
 end Config
 
@@ -165,10 +170,9 @@ def reportMessages {m} [Monad m] [MonadLog m] [MonadError m]
 /--
 Elaborates the provided Lean command in the context of the current Verso module.
 -/
-@[code_block_expander lean]
-def lean : CodeBlockExpander
-  | args, str => withoutAsync <| do
-    let config ← LeanBlockConfig.parse.run args
+@[code_block]
+def lean : CodeBlockExpanderOf LeanBlockConfig
+  | config, str => withoutAsync <| do
 
     PointOfInterest.save (← getRef) ((config.name.map (·.toString)).getD (abbrevFirstLine 20 str.getString))
       (kind := Lsp.SymbolKind.file)
@@ -225,9 +229,9 @@ def lean : CodeBlockExpander
       if config.show.getD true then
         let range := Syntax.getRange? str
         let range := range.map (← getFileMap).utf8RangeToLspRange
-        pure #[← ``(Block.other (Block.lean $(quote hls) (some $(quote (← getFileName))) $(quote range)) #[Block.code $(quote str.getString)])]
+        ``(Block.other (Block.lean $(quote hls) (some $(quote (← getFileName))) $(quote range)) #[Block.code $(quote str.getString)])
       else
-        pure #[]
+        ``(Block.concat #[])
     finally
       if !config.keep.getD true then
         setEnv origEnv
@@ -268,10 +272,9 @@ where
 /--
 Elaborates the provided Lean term in the context of the current Verso module.
 -/
-@[code_block_expander leanTerm]
-def leanTerm : CodeBlockExpander
-  | args, str => withoutAsync <| do
-    let config ← LeanInlineConfig.parse.run args
+@[code_block]
+def leanTerm : CodeBlockExpanderOf LeanInlineConfig
+  | config, str => withoutAsync <| do
 
     let altStr ← parserInputString str
 
@@ -353,9 +356,9 @@ def leanTerm : CodeBlockExpander
       if config.show.getD true then
         let range := Syntax.getRange? str
         let range := range.map (← getFileMap).utf8RangeToLspRange
-        pure #[← ``(Block.other (Block.lean $(quote hls) (some $(quote (← getFileName))) $(quote range)) #[Block.code $(quote str.getString)])]
+        ``(Block.other (Block.lean $(quote hls) (some $(quote (← getFileName))) $(quote range)) #[Block.code $(quote str.getString)])
       else
-        pure #[]
+        ``(Block.concat #[])
 where
   withNewline (str : String) := if str == "" || str.back != '\n' then str ++ "\n" else str
 
@@ -375,11 +378,10 @@ where
 /--
 Elaborates the provided Lean term in the context of the current Verso module.
 -/
-@[role_expander lean]
-def leanInline : RoleExpander
+@[role lean]
+def leanInline : RoleExpanderOf LeanInlineConfig
   -- Async elab is turned off to make sure that info trees and messages are available when highlighting
-  | args, inlines => withoutAsync do
-    let config ← LeanInlineConfig.parse.run args
+  | config, inlines => withoutAsync do
     let #[arg] := inlines
       | throwError "Expected exactly one argument"
     let `(inline|code( $term:str )) := arg
@@ -470,9 +472,9 @@ def leanInline : RoleExpander
 
 
       if config.show.getD true then
-        pure #[← ``(Inline.other (Verso.Genre.Manual.InlineLean.Inline.lean $(quote hls)) #[Inline.code $(quote term.getString)])]
+        ``(Inline.other (Verso.Genre.Manual.InlineLean.Inline.lean $(quote hls)) #[Inline.code $(quote term.getString)])
       else
-        pure #[]
+        ``(Block.concat #[])
 where
   withNewline (str : String) := if str == "" || str.back != '\n' then str ++ "\n" else str
 
@@ -493,10 +495,9 @@ where
 /--
 Elaborates the provided term in the current Verso context, then ensures that it's a type class that has an instance.
 -/
-@[role_expander inst]
-def inst : RoleExpander
-  | args, inlines => withoutAsync <| do
-    let config ← LeanBlockConfig.parse.run args
+@[role]
+def inst : RoleExpanderOf LeanBlockConfig
+  | config, inlines => withoutAsync <| do
     let #[arg] := inlines
       | throwError "Expected exactly one argument"
     let `(inline|code( $term:str )) := arg
@@ -541,9 +542,9 @@ def inst : RoleExpander
       let hls := (← highlight stx #[] (PersistentArray.empty.push tree))
 
       if config.show.getD true then
-        pure #[← ``(Inline.other (Verso.Genre.Manual.InlineLean.Inline.lean $(quote hls)) #[Inline.code $(quote term.getString)])]
+        ``(Inline.other (Verso.Genre.Manual.InlineLean.Inline.lean $(quote hls)) #[Inline.code $(quote term.getString)])
       else
-        pure #[]
+        ``(Block.concat #[])
 where
   withNewline (str : String) := if str == "" || str.back != '\n' then str ++ "\n" else str
 
@@ -616,9 +617,6 @@ structure LeanOutputConfig where
 section
 variable [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m]
 
-partial def many (p : ArgParse m α) : ArgParse m (List α) :=
-  ((· :: ·) <$> p <*> many p) <|> pure []
-
 def LeanOutputConfig.parser : ArgParse m LeanOutputConfig :=
   LeanOutputConfig.mk <$>
     .positional `name output <*>
@@ -628,12 +626,13 @@ def LeanOutputConfig.parser : ArgParse m LeanOutputConfig :=
     ((·.getD .exact) <$> .named `whitespace .whitespaceMode true) <*>
     .namedD `normalizeMetas .bool true <*>
     .namedD `allowDiff .nat 0 <*>
-    many (.named `expandTrace .name false) <*>
+    .many (.named `expandTrace .name false) <*>
     .named `startAt .string true <*>
     .named `stopAt .string true
 where
   output : ValDesc m Ident := {
     description := "output name",
+    signature := .Ident
     get := fun
       | .name x => pure x
       | other => throwError "Expected output name, got {repr other}"
@@ -641,16 +640,17 @@ where
   opt {α} (p : ArgParse m α) : ArgParse m (Option α) := (some <$> p) <|> pure none
   optDef {α} (fallback : α) (p : ArgParse m α) : ArgParse m α := p <|> pure fallback
 
+instance : FromArgs LeanOutputConfig m := ⟨LeanOutputConfig.parser⟩
+
 end
 
 private def withNl (s : String) : String :=
   if s.endsWith "\n" then s else s ++ "\n"
 
 open SubVerso.Examples.Messages in
-@[code_block_expander leanOutput]
-def leanOutput : CodeBlockExpander
- | args, str => do
-    let config ← LeanOutputConfig.parser.run args
+@[code_block]
+def leanOutput : CodeBlockExpanderOf LeanOutputConfig
+ | config, str => do
 
     PointOfInterest.save (← getRef) (config.name.getId.toString)
       (kind := Lsp.SymbolKind.file)
@@ -696,8 +696,8 @@ def leanOutput : CodeBlockExpander
               throwErrorAt str s!"Expected severity {sevStr s}, but got {sevStr msg.severity.toSeverity}"
           if config.show then
             let content ← `(Block.other {Block.leanOutput with data := ToJson.toJson ($(quote msg), $(quote config.summarize), ($(quote config.expandTraces) : List Name))} #[Block.code $(quote str.getString)])
-            return #[content]
-          else return #[]
+            return content
+          else return (← ``(Block.concat #[]))
     else
       let mut best : Option (Nat × String × Highlighted.Message) := none
       for msg in msgs do
@@ -720,8 +720,8 @@ def leanOutput : CodeBlockExpander
         Log.logSilentInfo m!"Diff is {d} lines:\n{d'}"
         if config.show then
           let content ← `(Block.other {Block.leanOutput with data := ToJson.toJson ($(quote msg), $(quote config.summarize), ($(quote config.expandTraces) : List Name))} #[Block.code $(quote str.getString)])
-          return #[content]
-        else return #[]
+          return content
+        else return (← ``(Block.concat #[]))
 
     let suggs : Array (Nat × Meta.Hint.Suggestion) := texts.map fun (sev, msg) =>
       ((diffSize config.whitespace msg str.getString).1, {
@@ -778,11 +778,15 @@ inline_extension Inline.name where
 structure NameConfig where
   full : Option Name
 
-def NameConfig.parse [Monad m] [MonadError m] [MonadLiftT CoreM m] [MonadLiftT TermElabM m] : ArgParse m NameConfig :=
+section
+variable [Monad m] [MonadError m] [MonadLiftT CoreM m] [MonadLiftT TermElabM m]
+
+def NameConfig.parse : ArgParse m NameConfig :=
   NameConfig.mk <$> ((fun _ => none) <$> .done <|> .positional `name ref)
 where
   ref : ValDesc m (Option Name) := {
-    description := m!"reference name"
+    description := "reference name"
+    signature := .Ident
     get := fun
       | .name x =>
         try
@@ -794,6 +798,9 @@ where
       | other => throwError "Expected reference name, got {repr other}"
   }
 
+instance : FromArgs NameConfig m := ⟨NameConfig.parse⟩
+end
+
 def constTok [Monad m] [MonadEnv m] [MonadLiftT MetaM m] [MonadLiftT IO m]
     (name : Name) (str : String) :
     m Highlighted := do
@@ -801,10 +808,9 @@ def constTok [Monad m] [MonadEnv m] [MonadLiftT MetaM m] [MonadLiftT IO m]
   let sig := toString (← (PrettyPrinter.ppSignature name)).1
   pure <| .token ⟨.const name sig docs false, str⟩
 
-@[role_expander name]
-def name : RoleExpander
-  | args, #[arg] => do
-    let cfg ← NameConfig.parse.run args
+@[role]
+def name : RoleExpanderOf NameConfig
+  | cfg, #[arg] => do
     let `(inline|code( $name:str )) := arg
       | throwErrorAt arg "Expected code literal with the example name"
     let exampleName := name.getString.toName
@@ -818,10 +824,10 @@ def name : RoleExpander
 
       let hl : Highlighted ← constTok resolvedName name.getString
 
-      pure #[← `(Inline.other {Inline.name with data := ToJson.toJson $(quote hl)} #[Inline.code $(quote name.getString)])]
+      `(Inline.other {Inline.name with data := ToJson.toJson $(quote hl)} #[Inline.code $(quote name.getString)])
     catch e =>
       logErrorAt identStx e.toMessageData
-      pure #[← `(Inline.code $(quote name.getString))]
+      `(Inline.code $(quote name.getString))
   | _, more =>
     if h : more.size > 0 then
       throwErrorAt more[0] "Unexpected contents"
@@ -830,15 +836,14 @@ def name : RoleExpander
 
 -- Placeholder for module names (eventually hyperlinking these will be important, so better to tag them now)
 
-@[role_expander module]
-def module : RoleExpander
-  | args, #[arg] => do
-    let cfg ← ArgParse.done.run args
+@[role]
+def module : RoleExpanderOf Unit
+  | (), #[arg] => do
     let `(inline|code( $name:str )) := arg
       | throwErrorAt arg "Expected code literal with the module's name"
     let exampleName := name.getString.toName
     let identStx := mkIdentFrom arg exampleName (canonical := true)
-    pure #[← ``(Doc.Inline.code $(quote name.getString))]
+    ``(Doc.Inline.code $(quote name.getString))
   | _, more =>
     if h : more.size > 0 then
       throwErrorAt more[0] "Expected code literal with the module's name"

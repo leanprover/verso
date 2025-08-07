@@ -47,15 +47,21 @@ syntax ("def" <|> "theorem")? declId declSig : signature_spec
 structure SignatureConfig where
   «show» : Bool := true
 
-def SignatureConfig.parse [Monad m] [MonadError m] [MonadLiftT CoreM m] : ArgParse m SignatureConfig :=
+section
+
+variable [Monad m] [MonadError m] [MonadLiftT CoreM m]
+
+def SignatureConfig.parse  : ArgParse m SignatureConfig :=
   SignatureConfig.mk <$>
     ((·.getD true) <$> .named `show .bool true)
 
+instance : FromArgs SignatureConfig m where
+  fromArgs := SignatureConfig.parse
+end
 
-@[code_block_expander signature]
-def signature : CodeBlockExpander
-  | args, str => withoutAsync do
-    let {«show»} ← SignatureConfig.parse.run args
+@[code_block]
+def signature : CodeBlockExpanderOf SignatureConfig
+  | {«show»}, str => withoutAsync do
     let altStr ← parserInputString str
     let col? := (← getRef).getPos? |>.map (← getFileMap).utf8PosToLspPos |>.map (·.character)
 
@@ -93,6 +99,6 @@ def signature : CodeBlockExpander
         else hls
 
       if «show» then
-        pure #[← `(Block.other {Block.signature with data := ToJson.toJson $(quote hls)} #[Block.code $(quote str.getString)])]
+        `(Block.other {Block.signature with data := ToJson.toJson $(quote hls)} #[Block.code $(quote str.getString)])
       else
-        pure #[]
+        ``(Block.concat #[])

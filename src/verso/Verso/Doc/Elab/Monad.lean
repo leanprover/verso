@@ -8,8 +8,10 @@ import Std.Data.HashMap
 import Std.Data.HashSet
 
 import Lean.Elab.DeclUtil
+import Lean.Meta.Reduce
 
 import Verso.Doc
+import Verso.Doc.ArgParse
 import Verso.Doc.Elab.ExpanderAttribute
 import Verso.Doc.Elab.InlineString
 import Verso.Hover
@@ -22,6 +24,7 @@ open Lean
 open Lean.Elab
 open Std (HashMap HashSet)
 open Verso.SyntaxUtils
+open Verso.ArgParse (FromArgs SigDoc)
 
 initialize registerTraceClass `Elab.Verso
 initialize registerTraceClass `Elab.Verso.part
@@ -588,7 +591,22 @@ unsafe def blockExpandersForUnsafe (x : Name) : DocElabM (Array BlockExpander) :
 @[implemented_by blockExpandersForUnsafe]
 opaque blockExpandersFor (x : Name) : DocElabM (Array BlockExpander)
 
+initialize expanderSignatureExt : PersistentEnvExtension (Name × SigDoc) (Name × SigDoc) (NameMap SigDoc) ←
+  registerPersistentEnvExtension {
+    mkInitial := pure {},
+    addImportedFn xss :=
+      pure <| xss.foldl (init := {}) fun ns xs =>
+        xs.foldl (init := ns) fun ns (x, s) =>
+          ns.insert x s
+    addEntryFn
+      | xs, (x, y) =>
+        xs.insert x y
+    exportEntriesFn xs :=
+      xs.toArray
+  }
 
+private def sig (α) [inst : FromArgs α DocElabM] : Option ArgParse.SigDoc :=
+  ArgParse.ArgParse.signature inst.fromArgs
 
 abbrev PartCommand := Syntax → PartElabM Unit
 
@@ -605,53 +623,377 @@ opaque partCommandsFor (x : Name) : PartElabM (Array PartCommand)
 
 abbrev RoleExpander := Array Arg → TSyntaxArray `inline → DocElabM (Array (TSyntax `term))
 
+abbrev RoleExpanderOf α := α → TSyntaxArray `inline → DocElabM Term
+
 initialize roleExpanderAttr : KeyedDeclsAttribute RoleExpander ←
   mkDocExpanderAttribute `role_expander ``RoleExpander "Indicates that this function is used to implement a given role" `roleExpanderAttr
 
-unsafe def roleExpandersForUnsafe (x : Name) : DocElabM (Array RoleExpander) := do
+private def toRole {α : Type} [FromArgs α DocElabM] (expander : α → TSyntaxArray `inline → DocElabM Term) : RoleExpander :=
+  fun args inlines => do
+    let v ← ArgParse.parse args
+    return #[← expander v inlines]
+
+syntax (name := role) "role " (ident)? : attr
+
+
+initialize roleExpanderExt : PersistentEnvExtension (Name × Array Name) (Name × Name) (NameMap (Array Name)) ←
+  registerPersistentEnvExtension {
+    mkInitial := pure {},
+    addImportedFn xss :=
+      pure <| xss.foldl (init := {}) fun ns xs =>
+        xs.foldl (init := ns) fun ns (x, ys) =>
+          ns.insert x <| (ns.find? x |>.getD #[]) ++ ys
+    addEntryFn
+      | xs, (x, y) =>
+        xs.insert x (xs.find? x |>.getD #[] |>.push y)
+    exportEntriesFn xs :=
+      xs.toArray
+  }
+
+private unsafe def roleExpandersForUnsafe' (x : Name) : DocElabM (Array (RoleExpander × Option String × Option SigDoc)) := do
+  let expanders := roleExpanderExt.getState (← getEnv) |>.find? x |>.getD #[]
+  expanders.mapM fun n => do
+    let e ← evalConst RoleExpander n
+    let doc? ← findDocString? (← getEnv) n
+    let sig := expanderSignatureExt.getState (← getEnv) |>.find? n
+    return (e, doc?, sig)
+
+private unsafe def roleExpandersForUnsafe'' (x : Name) : DocElabM (Array RoleExpander) := do
   let expanders := roleExpanderAttr.getEntries (← getEnv) x
   return expanders.map (·.value) |>.toArray
 
+private unsafe def roleExpandersForUnsafe (x : Name) : DocElabM (Array (RoleExpander × Option String × Option SigDoc)) := do
+  return (← roleExpandersForUnsafe' x) ++ (← roleExpandersForUnsafe'' x).map (·, none, none)
+
 @[implemented_by roleExpandersForUnsafe]
-opaque roleExpandersFor (x : Name) : DocElabM (Array RoleExpander)
+opaque roleExpandersFor (x : Name) : DocElabM (Array (RoleExpander × Option String × Option SigDoc))
+
+private unsafe def evalIOOptStringUnsafe (x : Name) : MetaM (Option SigDoc) := do
+  evalConst (Option SigDoc) x
+
+@[implemented_by evalIOOptStringUnsafe]
+private opaque evalOptMsg (x : Name) : MetaM (Option SigDoc)
+
+private def saveSignature (expanderName : Name) (argTy : Expr) : MetaM Unit := do
+  let s ← Meta.mkAppM ``sig #[argTy]
+  let inst ← Meta.synthInstance (mkApp2 (.const ``FromArgs []) argTy (.const ``DocElabM []))
+  let s := .app s inst
+  let s ← instantiateExprMVars s
+  let s ← Meta.whnf s
+  let name ← mkFreshUserName <| expanderName ++ `signature
+  addAndCompile <| .defnDecl {
+    name,
+    levelParams := [],
+    type := .app (.const ``Option [0]) (.const ``SigDoc []),
+    value := s,
+    hints := .opaque,
+    safety := .safe
+  }
+  let str? ← evalOptMsg name
+  if let some str := str? then
+    modifyEnv (expanderSignatureExt.addEntry · (expanderName, str))
+
+unsafe initialize registerBuiltinAttribute {
+  name := `role,
+  descr := "Define a new role",
+  applicationTime := .afterCompilation,
+  add declName stx k := do
+    unless k == .global do throwError m!"Must be `global`"
+    let roleName ←
+      match stx with
+      | `(attr|role) => pure declName
+      | `(attr|role $x) => realizeGlobalConstNoOverloadWithInfo x
+      | _ => throwError "Invalid `role` attribute"
+
+    let n ← mkFreshUserName <| declName ++ `role
+
+    let ((e, t), _) ← Meta.MetaM.run (ctx := {}) (s := {}) do
+      let e ← Meta.mkAppM ``toRole #[.const declName []]
+      let e ← instantiateMVars e
+      let t ← Meta.inferType e
+
+
+      match_expr e with
+      | toRole ty _ _ => saveSignature n ty
+      | _ => pure ()
+
+      pure (e, t)
+
+    addAndCompile <| .defnDecl {
+      name := n,
+      levelParams := [],
+      type := t,
+      value := e,
+      hints := .opaque,
+      safety := .safe
+    }
+
+    addDocStringCore' n (← findSimpleDocString? (← getEnv) declName)
+
+    modifyEnv fun env =>
+      roleExpanderExt.addEntry env (roleName, n)
+}
 
 
 abbrev CodeBlockExpander := Array Arg → TSyntax `str → DocElabM (Array (TSyntax `term))
 
+abbrev CodeBlockExpanderOf α := α → StrLit → DocElabM Term
+
+
 initialize codeBlockExpanderAttr : KeyedDeclsAttribute CodeBlockExpander ←
   mkDocExpanderAttribute `code_block_expander ``CodeBlockExpander "Indicates that this function is used to implement a given code block" `codeBlockExpanderAttr
 
-unsafe def codeBlockExpandersForUnsafe (x : Name) : DocElabM (Array CodeBlockExpander) := do
+private def toCodeBlock {α : Type} [FromArgs α DocElabM] (expander : α → StrLit → DocElabM Term) : CodeBlockExpander :=
+  fun args str => do
+    let v ← ArgParse.parse args
+    return #[← expander v str]
+
+syntax (name := code_block) "code_block " (ident)? : attr
+
+initialize codeBlockExpanderExt : PersistentEnvExtension (Name × Array Name) (Name × Name) (NameMap (Array Name)) ←
+  registerPersistentEnvExtension {
+    mkInitial := pure {},
+    addImportedFn xss :=
+      pure <| xss.foldl (init := {}) fun ns xs =>
+        xs.foldl (init := ns) fun ns (x, ys) =>
+          ns.insert x <| (ns.find? x |>.getD #[]) ++ ys
+    addEntryFn
+      | xs, (x, y) =>
+        xs.insert x (xs.find? x |>.getD #[] |>.push y)
+    exportEntriesFn xs :=
+      xs.toArray
+  }
+
+unsafe initialize registerBuiltinAttribute {
+  name := `code_block,
+  descr := "Define a new code_block",
+  applicationTime := .afterCompilation,
+  add declName stx k := do
+    unless k == .global do throwError m!"Must be `global`"
+    let blockName ←
+      match stx with
+      | `(attr|code_block) => pure declName
+      | `(attr|code_block $x) => realizeGlobalConstNoOverloadWithInfo x
+      | _ => throwError "Invalid `code_block` attribute"
+
+    let n ← mkFreshUserName <| declName ++ `code_block
+
+    let ((e, t), _) ← Meta.MetaM.run (ctx := {}) (s := {}) do
+      let e ← Meta.mkAppM ``toCodeBlock #[.const declName []]
+      let e ← instantiateMVars e
+      let t ← Meta.inferType e
+
+
+      match_expr e with
+      | toCodeBlock ty _ _ => saveSignature n ty
+      | _ => pure ()
+
+      pure (e, t)
+
+    addAndCompile <| .defnDecl {
+      name := n,
+      levelParams := [],
+      type := t,
+      value := e,
+      hints := .opaque,
+      safety := .safe
+    }
+
+    addDocStringCore' n (← findSimpleDocString? (← getEnv) declName)
+
+    modifyEnv fun env =>
+      codeBlockExpanderExt.addEntry env (blockName, n)
+}
+
+private unsafe def codeBlockExpandersForUnsafe' (x : Name) : DocElabM (Array (CodeBlockExpander × Option String × Option SigDoc)) := do
+  let expanders := codeBlockExpanderExt.getState (← getEnv) |>.find? x |>.getD #[]
+  expanders.mapM fun n => do
+    let e ← evalConst CodeBlockExpander n
+    let doc? ← findDocString? (← getEnv) n
+    let sig := expanderSignatureExt.getState (← getEnv) |>.find? n
+    return (e, doc?, sig)
+
+private unsafe def codeBlockExpandersForUnsafe'' (x : Name) : DocElabM (Array CodeBlockExpander) := do
   let expanders := codeBlockExpanderAttr.getEntries (← getEnv) x
   return expanders.map (·.value) |>.toArray
 
+private unsafe def codeBlockExpandersForUnsafe (x : Name) : DocElabM (Array (CodeBlockExpander × Option String × Option SigDoc)) := do
+  return (← codeBlockExpandersForUnsafe' x) ++ (← codeBlockExpandersForUnsafe'' x).map (·, none, none)
+
 @[implemented_by codeBlockExpandersForUnsafe]
-opaque codeBlockExpandersFor (x : Name) : DocElabM (Array CodeBlockExpander)
-
-
+opaque codeBlockExpandersFor (x : Name) : DocElabM (Array (CodeBlockExpander × Option String × Option SigDoc))
 
 abbrev DirectiveExpander := Array Arg → TSyntaxArray `block → DocElabM (Array (TSyntax `term))
+
+abbrev DirectiveExpanderOf α := α → TSyntaxArray `block → DocElabM Term
+
 
 initialize directiveExpanderAttr : KeyedDeclsAttribute DirectiveExpander ←
   mkDocExpanderAttribute `directive_expander ``DirectiveExpander "Indicates that this function is used to implement a given directive" `directiveExpanderAttr
 
-unsafe def directiveExpandersForUnsafe (x : Name) : DocElabM (Array DirectiveExpander) := do
+private def toDirective {α : Type} [FromArgs α DocElabM] (expander : α → TSyntaxArray `block → DocElabM Term) : DirectiveExpander :=
+  fun args blocks => do
+    let v ← ArgParse.parse args
+    return #[← expander v blocks]
+
+syntax (name := directive) "directive " (ident)? : attr
+
+initialize directiveExpanderExt : PersistentEnvExtension (Name × Array Name) (Name × Name) (NameMap (Array Name)) ←
+  registerPersistentEnvExtension {
+    mkInitial := pure {},
+    addImportedFn xss :=
+      pure <| xss.foldl (init := {}) fun ns xs =>
+        xs.foldl (init := ns) fun ns (x, ys) =>
+          ns.insert x <| (ns.find? x |>.getD #[]) ++ ys
+    addEntryFn
+      | xs, (x, y) =>
+        xs.insert x (xs.find? x |>.getD #[] |>.push y)
+    exportEntriesFn xs :=
+      xs.toArray
+  }
+
+unsafe initialize registerBuiltinAttribute {
+  name := `directive,
+  descr := "Define a new directive",
+  applicationTime := .afterCompilation,
+  add declName stx k := do
+    unless k == .global do throwError m!"Must be `global`"
+    let directiveName ←
+      match stx with
+      | `(attr|directive) => pure declName
+      | `(attr|directive $x) => realizeGlobalConstNoOverloadWithInfo x
+      | _ => throwError "Invalid `directive` attribute"
+
+    let n ← mkFreshUserName <| declName ++ `directive
+
+    let ((e, t), _) ← Meta.MetaM.run (ctx := {}) (s := {}) do
+      let e ← Meta.mkAppM ``toDirective #[.const declName []]
+      let e ← instantiateMVars e
+      let t ← Meta.inferType e
+
+
+      match_expr e with
+      | toDirective ty _ _ => saveSignature n ty
+      | _ => pure ()
+
+      pure (e, t)
+
+    addAndCompile <| .defnDecl {
+      name := n,
+      levelParams := [],
+      type := t,
+      value := e,
+      hints := .opaque,
+      safety := .safe
+    }
+
+    addDocStringCore' n (← findSimpleDocString? (← getEnv) declName)
+
+    modifyEnv fun env =>
+      directiveExpanderExt.addEntry env (directiveName, n)
+}
+
+private unsafe def directiveExpandersForUnsafe' (x : Name) : DocElabM (Array (DirectiveExpander × Option String × Option SigDoc)) := do
+  let expanders := directiveExpanderExt.getState (← getEnv) |>.find? x |>.getD #[]
+  expanders.mapM fun n => do
+    let e ← evalConst DirectiveExpander n
+    let doc? ← findDocString? (← getEnv) n
+    let sig := expanderSignatureExt.getState (← getEnv) |>.find? n
+    return (e, doc?, sig)
+
+private unsafe def directiveExpandersForUnsafe'' (x : Name) : DocElabM (Array DirectiveExpander) := do
   let expanders := directiveExpanderAttr.getEntries (← getEnv) x
   return expanders.map (·.value) |>.toArray
 
+private unsafe def directiveExpandersForUnsafe (x : Name) : DocElabM (Array (DirectiveExpander × Option String × Option SigDoc)) := do
+  return (← directiveExpandersForUnsafe' x) ++ (← directiveExpandersForUnsafe'' x).map (·, none, none)
+
 @[implemented_by directiveExpandersForUnsafe]
-opaque directiveExpandersFor (x : Name) : DocElabM (Array DirectiveExpander)
+opaque directiveExpandersFor (x : Name) : DocElabM (Array (DirectiveExpander × Option String × Option SigDoc))
 
 
+abbrev BlockCommandExpander := Array Arg → DocElabM (Array (TSyntax `term))
 
-abbrev BlockRoleExpander := Array Arg → Array Syntax → DocElabM (Array (TSyntax `term))
+abbrev BlockCommandOf α := α → DocElabM Term
 
-initialize blockRoleExpanderAttr : KeyedDeclsAttribute BlockRoleExpander ←
-  mkDocExpanderAttribute `block_role_expander ``BlockRoleExpander "Indicates that this function is used to implement a given blockRole" `blockRoleExpanderAttr
+initialize blockCommandExpanderAttr : KeyedDeclsAttribute BlockCommandExpander ←
+  mkDocExpanderAttribute `block_command_expander ``BlockCommandExpander "Indicates that this function is used to implement a given block-level command" `blockCommandExpanderAttr
 
-unsafe def blockRoleExpandersForUnsafe (x : Name) : DocElabM (Array BlockRoleExpander) := do
-  let expanders := blockRoleExpanderAttr.getEntries (← getEnv) x
+private def toBlockCommand {α : Type} [FromArgs α DocElabM] (expander : α → DocElabM Term) : BlockCommandExpander :=
+  fun args => do
+    let v ← ArgParse.parse args
+    return #[← expander v]
+
+syntax (name := block_command) "block_command " (ident)? : attr
+
+initialize blockCommandExpanderExt : PersistentEnvExtension (Name × Array Name) (Name × Name) (NameMap (Array Name)) ←
+  registerPersistentEnvExtension {
+    mkInitial := pure {},
+    addImportedFn xss :=
+      pure <| xss.foldl (init := {}) fun ns xs =>
+        xs.foldl (init := ns) fun ns (x, ys) =>
+          ns.insert x <| (ns.find? x |>.getD #[]) ++ ys
+    addEntryFn
+      | xs, (x, y) =>
+        xs.insert x (xs.find? x |>.getD #[] |>.push y)
+    exportEntriesFn xs :=
+      xs.toArray
+  }
+
+unsafe initialize registerBuiltinAttribute {
+  name := `block_command,
+  descr := "Define a new block command",
+  applicationTime := .afterCompilation,
+  add declName stx k := do
+    unless k == .global do throwError m!"Must be `global`"
+    let cmdName ←
+      match stx with
+      | `(attr|block_command) => pure declName
+      | `(attr|block_command $x) => realizeGlobalConstNoOverloadWithInfo x
+      | _ => throwError "Invalid `block_command` attribute"
+
+    let n ← mkFreshUserName <| declName ++ `block_command
+
+    let ((e, t), _) ← Meta.MetaM.run (ctx := {}) (s := {}) do
+      let e ← Meta.mkAppM ``toBlockCommand #[.const declName []]
+      let e ← instantiateMVars e
+      let t ← Meta.inferType e
+
+      match_expr e with
+      | toBlockCommand ty _ _ => saveSignature n ty
+      | _ => pure ()
+
+      pure (e, t)
+
+    addAndCompile <| .defnDecl {
+      name := n,
+      levelParams := [],
+      type := t,
+      value := e,
+      hints := .opaque,
+      safety := .safe
+    }
+
+    addDocStringCore' n (← findSimpleDocString? (← getEnv) declName)
+
+    modifyEnv fun env =>
+      blockCommandExpanderExt.addEntry env (cmdName, n)
+}
+
+private unsafe def blockCommandExpandersForUnsafe' (x : Name) : DocElabM (Array (BlockCommandExpander × Option String × Option SigDoc)) := do
+  let expanders := blockCommandExpanderExt.getState (← getEnv) |>.find? x |>.getD #[]
+  expanders.mapM fun n => do
+    let e ← evalConst BlockCommandExpander n
+    let doc? ← findDocString? (← getEnv) n
+    let sig := expanderSignatureExt.getState (← getEnv) |>.find? n
+    return (e, doc?, sig)
+
+private unsafe def blockCommandExpandersForUnsafe'' (x : Name) : DocElabM (Array BlockCommandExpander) := do
+  let expanders := blockCommandExpanderAttr.getEntries (← getEnv) x
   return expanders.map (·.value) |>.toArray
 
-@[implemented_by blockRoleExpandersForUnsafe]
-opaque blockRoleExpandersFor (x : Name) : DocElabM (Array BlockRoleExpander)
+private unsafe def blockCommandExpandersForUnsafe (x : Name) : DocElabM (Array (BlockCommandExpander × Option String × Option SigDoc)) := do
+  return (← blockCommandExpandersForUnsafe' x) ++ (← blockCommandExpandersForUnsafe'' x).map (·, none, none)
+
+@[implemented_by blockCommandExpandersForUnsafe]
+opaque blockCommandExpandersFor (x : Name) : DocElabM (Array (BlockCommandExpander × Option String × Option SigDoc))

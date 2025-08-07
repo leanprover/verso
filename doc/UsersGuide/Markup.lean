@@ -37,16 +37,12 @@ partial def preview [Monad m] [MonadError m] (stx : Syntax) : m String :=
       throwErrorAt stx "Didn't understand {Verso.SyntaxUtils.ppSyntax stx} for preview"
 
 open Lean Verso Doc Elab Parser in
-@[code_block_expander markupPreview]
-def markupPreview : CodeBlockExpander
-  | #[], contents => do
+@[code_block]
+def markupPreview : CodeBlockExpanderOf Unit
+  | (), contents => do
     let stx ← blocks {} |>.parseString contents.getString
     let p ← preview stx
-    pure #[
-      ← ``(Block.code $(quote contents.getString)),
-      ← ``(Block.code $(quote <| toString <| p))
-    ]
-  | _, contents => throwErrorAt contents "Unexpected arguments"
+    ``(Block.concat #[Block.code $(quote contents.getString), Block.code $(quote <| toString <| p)])
 
 
 #doc (Manual) "Lean Markup" =>

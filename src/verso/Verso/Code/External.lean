@@ -107,7 +107,7 @@ Parses the project directory as a named argument `project`, falling back to the 
 def projectOrDefault : ArgParse m StrLit :=
   .named `project .strLit false <|>
   (Syntax.mkStrLit <$> .lift "default project" defaultProject) <|>
-  .fail none (some m!"No `(project := ...)` argument provided and no default project set.")
+  .fail none (some "No `(project := ...)` argument provided and no default project set.")
 
 /--
 Parses the current module as a named argument `module`, falling back to the default if specified in the option `verso.exampleModule`.
@@ -115,7 +115,7 @@ Parses the current module as a named argument `module`, falling back to the defa
 def moduleOrDefault : ArgParse m Ident :=
   .named `module .ident false <|>
   (mkIdent <$> .lift "default module" defaultModule) <|>
-  .fail none (some m!"No `(module := ...)` argument provided and no default module set.")
+  .fail none (some "No `(module := ...)` argument provided and no default module set.")
 
 /--
 A specification of which module to look in to find example code.

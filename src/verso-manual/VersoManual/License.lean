@@ -260,10 +260,6 @@ block_extension Block.licenseInfo where
 
       return allLicenses.map (·.toHtml headerLevel)
 
-@[block_role_expander licenseInfo]
-def licenseInfo : BlockRoleExpander
-  | args, contents => do
-    if let some first := contents[0]? then
-      throwErrorAt first "Unexpected contents"
-    ArgParse.done.run args
-    return #[← ``(Block.other Block.licenseInfo #[])]
+@[block_command]
+def licenseInfo : BlockCommandOf Unit
+  | () => ``(Block.other Block.licenseInfo #[])
