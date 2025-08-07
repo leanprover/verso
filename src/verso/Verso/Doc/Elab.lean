@@ -13,6 +13,7 @@ open Lean Elab
 open PartElabM
 open DocElabM
 open Verso.Syntax
+open Verso.ArgParse (SigDoc)
 
 def throwUnexpected [Monad m] [MonadError m] (stx : Syntax) : m α :=
   throwErrorAt stx "unexpected syntax{indentD stx}"
@@ -119,6 +120,16 @@ def appFallback
       f (.node .none nullKind <| arrArg ++ argStx)
   return ⟨appStx⟩
 
+private def expanderDocHover (stx : Syntax) (what : String) (name : Name) (doc? : Option String) (sig? : Option SigDoc) : DocElabM Unit := do
+  let mut out := s!"{what} `{name}`"
+  if let some sig := sig? then
+
+    out := out ++ "\n\n" ++ (← sig.toString)
+  if let some d := doc? then
+    out := out ++ "\n\n" ++ d
+  Hover.addCustomHover stx out
+
+
 open Lean.Parser.Term in
 @[inline_expander Verso.Syntax.role]
 def _root_.Verso.Syntax.role.expand : InlineExpander
@@ -132,11 +143,10 @@ def _root_.Verso.Syntax.role.expand : InlineExpander
           -- If no expanders are registered, then try elaborating just as a
           -- function application node
           return ← appFallback inline name resolvedName argVals subjects
-        for (e, sig?) in exp do
+        for (e, doc?, sig?) in exp do
           try
             let termStxs ← withFreshMacroScope <| e argVals subjects
-            if let some sig := sig? then
-              Hover.addCustomHover name (s!"Role `{resolvedName}`\n\n{sig}")
+            expanderDocHover name "Role" resolvedName doc? sig?
             let termStxs ← termStxs.mapM fun t => (``(($t : Inline $(⟨genre⟩))))
             if h : termStxs.size = 1 then return termStxs[0]
             else return (← ``(Inline.concat (genre := $(⟨genre⟩)) #[$[$termStxs],*]))
@@ -489,11 +499,10 @@ def _root_.Verso.Syntax.codeblock.expand : BlockExpander
     let exp ← codeBlockExpandersFor name
     -- TODO typed syntax here
     let args ← parseArgs <| argsStx.map (⟨·⟩)
-    for (e, sig?) in exp do
+    for (e, doc?, sig?) in exp do
       try
         let termStxs ← withFreshMacroScope <| e args contents
-        if let some sig := sig? then
-          Hover.addCustomHover nameStx (s!"Code block `{name}`\n\n{sig}\n")
+        expanderDocHover nameStx "Code block" name doc? sig?
         return (← ``(Block.concat (genre := $(⟨genre⟩)) #[$[$termStxs],*]))
       catch
         | ex@(.internal id) =>
@@ -513,11 +522,10 @@ def _root_.Verso.Syntax.directive.expand : BlockExpander
     let name ← realizeGlobalConstNoOverloadWithInfo nameStx
     let exp ← directiveExpandersFor name
     let args ← parseArgs argsStx
-    for (e, sig?) in exp do
+    for (e, doc?, sig?) in exp do
       try
         let termStxs ← withFreshMacroScope <| e args contents
-        if let some sig := sig? then
-          Hover.addCustomHover nameStx (s!"Directive `{name}`\n\n{sig}")
+        expanderDocHover nameStx "Directive" name doc? sig?
         return (← ``(Block.concat (genre := $(⟨genre⟩)) #[$[$termStxs],*]))
       catch
         | ex@(.internal id) =>

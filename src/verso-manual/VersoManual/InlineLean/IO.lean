@@ -63,7 +63,7 @@ where
 
   literally (n : Name) : ValDesc m Unit := {
     description := n
-    signature := n.toString
+    signature := .Ident
     get := fun
       | .name x => if x.getId == n then pure () else throwErrorAt x m!"Expected '{toString n}', got '{toString x.getId}'"
       | nonName => throwError m!"Expected '{toString n}', got {repr nonName}"

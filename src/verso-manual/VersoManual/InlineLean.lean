@@ -99,7 +99,7 @@ def LeanInlineConfig.parse : ArgParse m LeanInlineConfig :=
 where
   strLit : ValDesc m StrLit := {
     description := "string literal containing an expected type",
-    signature := "String"
+    signature := .String
     get
       | .str s => pure s
       | other => throwError "Expected string, got {repr other}"
@@ -617,9 +617,6 @@ structure LeanOutputConfig where
 section
 variable [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m]
 
-partial def many (p : ArgParse m α) : ArgParse m (List α) :=
-  ((· :: ·) <$> p <*> many p) <|> pure []
-
 def LeanOutputConfig.parser : ArgParse m LeanOutputConfig :=
   LeanOutputConfig.mk <$>
     .positional `name output <*>
@@ -629,13 +626,13 @@ def LeanOutputConfig.parser : ArgParse m LeanOutputConfig :=
     ((·.getD .exact) <$> .named `whitespace .whitespaceMode true) <*>
     .namedD `normalizeMetas .bool true <*>
     .namedD `allowDiff .nat 0 <*>
-    many (.named `expandTrace .name false) <*>
+    .many (.named `expandTrace .name false) <*>
     .named `startAt .string true <*>
     .named `stopAt .string true
 where
   output : ValDesc m Ident := {
     description := "output name",
-    signature := "Name"
+    signature := .Ident
     get := fun
       | .name x => pure x
       | other => throwError "Expected output name, got {repr other}"
@@ -788,8 +785,8 @@ def NameConfig.parse : ArgParse m NameConfig :=
   NameConfig.mk <$> ((fun _ => none) <$> .done <|> .positional `name ref)
 where
   ref : ValDesc m (Option Name) := {
-    description := m!"reference name"
-    signature := "Name"
+    description := "reference name"
+    signature := .Ident
     get := fun
       | .name x =>
         try

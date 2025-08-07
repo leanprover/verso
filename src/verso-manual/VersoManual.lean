@@ -127,7 +127,7 @@ instance : FromArgs RoleArgs m where
 where
   stringOrName : ValDesc m String := {
     description := "remote name (string or identifier)"
-    signature := "String or Name"
+    signature := .String ∪ .Ident
     get
       | .str s => pure s.getString
       | .name n => pure n.getId.toString

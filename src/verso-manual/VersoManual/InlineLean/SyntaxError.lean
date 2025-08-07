@@ -122,9 +122,9 @@ structure SyntaxErrorConfig where
 
 def SyntaxErrorConfig.parse [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m] : ArgParse m SyntaxErrorConfig :=
   SyntaxErrorConfig.mk <$>
-    .positional `name (ValDesc.name.as m!"name for later reference") <*>
+    .positional `name (ValDesc.name.as "name for later reference") <*>
     .namedD `show .bool true <*>
-    .namedD `category (ValDesc.name.as m!"syntax category (default 'command')") `command <*>
+    .namedD `category (ValDesc.name.as "syntax category (default `command`)") `command <*>
     .namedD `precedence .nat 0
 
 open Lean.Parser in

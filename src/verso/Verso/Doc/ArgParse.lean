@@ -21,9 +21,82 @@ section
 
 variable (m) [Monad m] [MonadInfoTree m] [MonadResolveName m] [MonadEnv m] [MonadError m]
 
+
+inductive SigDoc where
+  | text (str : String)
+  | name (name : Name)
+  | append (d1 d2 : SigDoc)
+
+instance : Append SigDoc := ⟨.append⟩
+
+instance : Coe String SigDoc := ⟨.text⟩
+
+instance : Coe Name SigDoc := ⟨.name⟩
+
+def SigDoc.toMessageData : SigDoc → MessageData
+  | .text s => s
+  | .append x y => x.toMessageData ++ y.toMessageData
+  | .name x => x
+
+instance : ToMessageData SigDoc where
+  toMessageData x := x.toMessageData
+
+def SigDoc.toString {m} [Monad m] [MonadResolveName m] [MonadEnv m] : SigDoc → m String
+  | .text s => pure s
+  | .name x => do
+    let x ← unresolveNameGlobal x
+    pure x.toString
+  | .append d1 d2 => do
+    return (← d1.toString) ++ (← d2.toString)
+
+elab "doc!" s:interpolatedStr(ident) : term => do
+  let mut out ← Meta.mkAppM ``SigDoc.text #[toExpr ""]
+  for part in s.raw.getArgs do
+    if let some str := part.isInterpolatedStrLit? then
+      out ← Meta.mkAppM ``SigDoc.append #[out, ← Meta.mkAppM ``SigDoc.text #[toExpr str]]
+    else if part.getKind == identKind then
+      let x ← realizeGlobalConstNoOverloadWithInfo part
+      out ← Meta.mkAppM ``SigDoc.append #[out, ← Meta.mkAppM ``SigDoc.name #[toExpr x]]
+    else
+      throwErrorAt part "Didn't understand"
+  return out
+
+structure CanMatch where
+  ident : Bool
+  string : Bool
+  num : Bool
+
+def CanMatch.toString (m : CanMatch) : String :=
+  let s :=
+    (if m.ident then ["Ident"] else []) ++
+    (if m.string then ["String"] else []) ++
+    (if m.num then ["Num"] else []) |> String.intercalate " | "
+  if s.isEmpty then "∅" else s
+
+def CanMatch.format (m : CanMatch) : Std.Format :=
+  let sep : Std.Format := .text " |" ++ .line
+  let s :=
+    (if m.ident then ["Ident"] else []) ++
+    (if m.string then ["String"] else []) ++
+    (if m.num then ["Num"] else [])
+  if s.isEmpty then "∅" else .group (sep.joinSep s)
+
+instance : ToString CanMatch := ⟨CanMatch.toString⟩
+
+def CanMatch.Ident : CanMatch := { ident := true, string := false, num := false }
+def CanMatch.String : CanMatch := { ident := false, string := true, num := false }
+def CanMatch.Num : CanMatch := { ident := false, string := false, num := true }
+
+instance : Union CanMatch where
+  union a b := {
+    ident := a.ident || b.ident,
+    string := a.string || b.string,
+    num := a.num || b.num
+  }
+
 structure ValDesc (α) where
-  description : MessageData
-  signature : String
+  description : SigDoc
+  signature : CanMatch
   get : ArgVal → m α
 
 instance [Functor m] : Functor (ValDesc m) where
@@ -37,18 +110,51 @@ class FromArgVal (α : Type) (m : Type → Type) where
 
 export FromArgVal (fromArgVal)
 
+/--
+A parser for arguments in some underlying monad.
+-/
 inductive ArgParse (m : Type → Type) : Type → Type 1 where
-  | fail (stx? : Option Syntax) (message? : Option MessageData) : ArgParse m α
+  /--
+  Fails with the provided error message.
+  -/
+  | fail (stx? : Option Syntax) (message? : Option SigDoc) : ArgParse m α
+  /--
+  Returns a value without parsing any arguments.
+  -/
   | pure (val : α) : ArgParse m α
+  /--
+  Provides an argument value by lifting an action from the underlying monad.
+  -/
   | lift (desc : String) (act : m α) : ArgParse m α
-  | positional (nameHint : Name) (val : ValDesc m α) (doc? : Option MessageData := none) :
+  /--
+  Matches a positional argument.
+  -/
+  | positional (nameHint : Name) (val : ValDesc m α) (doc? : Option SigDoc := none) :
     ArgParse m α
-  | named (name : Name) (val : ValDesc m α) (optional : Bool) (doc? : Option MessageData := none) :
+  /--
+  Matches an argument with the provided name.
+  -/
+  | named (name : Name) (val : ValDesc m α) (optional : Bool) (doc? : Option SigDoc := none) :
     ArgParse m (if optional then Option α else α)
-  | anyNamed (name : Name) (val : ValDesc m α) (doc? : Option MessageData := none) : ArgParse m (Ident × α)
+  /--
+  Matches any named argument.
+  -/
+  | anyNamed (name : Name) (val : ValDesc m α) (doc? : Option SigDoc := none) : ArgParse m (Ident × α)
+  /--
+  No further arguments are allowed.
+  -/
   | done : ArgParse m Unit
+  /--
+  Error recovery.
+  -/
   | orElse (p1 : ArgParse m α) (p2 : Unit → ArgParse m α) : ArgParse m α
+  /--
+  The sequencing operation of an applicative functor.
+  -/
   | seq (p1 : ArgParse m (α → β)) (p2 : Unit → ArgParse m α) : ArgParse m β
+  /--
+  Zero or more repetitions.
+  -/
   | many : ArgParse m α → ArgParse m (List α)
   /-- Returns all remaining arguments. This is useful for consuming some, then forwarding the rest. -/
   | remaining : ArgParse m (Array Arg)
@@ -63,16 +169,16 @@ export FromArgs (fromArgs)
 
 instance : FromArgs Unit m := ⟨.pure ()⟩
 
-def ArgParse.positional' {m} [FromArgVal α m] (nameHint : Name) (doc? : Option MessageData := none) : ArgParse m α :=
+def ArgParse.positional' {m} [FromArgVal α m] (nameHint : Name) (doc? : Option SigDoc := none) : ArgParse m α :=
   .positional nameHint fromArgVal (doc? := doc?)
 
 def ArgParse.named' {m} [FromArgVal α m]
-    (name : Name) (optional : Bool) (doc? : Option MessageData := none) :
+    (name : Name) (optional : Bool) (doc? : Option SigDoc := none) :
     ArgParse m (if optional then Option α else α) :=
   .named name fromArgVal optional (doc? := doc?)
 
 def ArgParse.anyNamed' {m} [FromArgVal α m]
-    (name : Name) (doc? : Option MessageData := none) :
+    (name : Name) (doc? : Option SigDoc := none) :
     ArgParse m (Ident × α) :=
   .anyNamed name fromArgVal (doc? := doc?)
 
@@ -94,23 +200,23 @@ def ArgParse.namedD {m} (name : Name) (val : ValDesc m α) (default : α) : ArgP
 def ArgParse.namedD' {m} [FromArgVal α m] (name : Name) (default : α) : ArgParse m α :=
   namedD name fromArgVal default
 
-def ArgParse.describe : ArgParse m α → MessageData
+def ArgParse.describe : ArgParse m α → SigDoc
   | .fail _ msg? => msg?.getD "Cannot succeed"
   | .pure x => "No arguments expected"
   | .lift desc act => desc
   | .positional _x v _ => v.description
-  | .named x v opt _ => if opt then "[" else "" ++ m!"{x} : {v.description}" ++ if opt then "]" else ""
+  | .named x v opt _ => if opt then "[" else "" ++ x.toString ++ doc!" : " ++ v.description ++ if opt then "]" else ""
   | .anyNamed x v _ => s!"{x}: a named " ++ v.description
   | .done => "no arguments remaining"
   | .orElse p1 p2 => p1.describe ++ " or " ++ (p2 ()).describe
   | .seq p1 p2 => p1.describe ++ " then " ++ (p2 ()).describe
-  | .many p => m!"zero or more {p.describe}"
+  | .many p => "zero or more " ++ p.describe
   | .remaining => "any arguments"
 
 structure SimpleDesc where
-  positional : Array (Name × String) := {}
-  byName : Array (Name × String × Bool) := {}
-  keyVals : Option (Name × String) := none
+  positional : Array (Name × CanMatch × SigDoc) := {}
+  byName : Array (Name × CanMatch × Bool × SigDoc) := {}
+  keyVals : Option (Name × CanMatch × SigDoc) := none
 
 def toSimpleDesc {m} (p : ArgParse m α) : Option SimpleDesc :=
   go p |>.run {} |>.map (·.snd)
@@ -119,13 +225,13 @@ where
   | .fail _ msg? => failure
   | .pure x | .done => pure ()
   | .lift .. | .orElse .. => failure
-  | .positional x v _ =>
-    modify fun sd => { sd with positional := sd.positional.push (x, v.signature) }
-  | .named x v opt .. =>
-    modify fun sd => { sd with byName := sd.byName.push (x, v.signature, opt)}
-  | .anyNamed x v _  | .many (.anyNamed x v _) => do
+  | .positional x v doc? =>
+    modify fun sd => { sd with positional := sd.positional.push (x, v.signature, doc?.getD v.description) }
+  | .named x v opt doc? =>
+    modify fun sd => { sd with byName := sd.byName.push (x, v.signature, opt, doc?.getD v.description)}
+  | .anyNamed x v doc?  | .many (.anyNamed x v doc?) => do
     if (← get).keyVals.isNone then
-      modify fun sd => { sd with keyVals := some (x, v.signature) }
+      modify fun sd => { sd with keyVals := some (x, v.signature, doc?.getD v.description) }
     else failure
   | .seq p1 p2 => do
     go p1
@@ -133,41 +239,51 @@ where
   | .many p => failure
   | .remaining => failure
 
-def SimpleDesc.markdown (d : SimpleDesc) : String :=
+
+def SimpleDesc.markdown (d : SimpleDesc) : SigDoc :=
   let {positional, byName, keyVals} := d
   if positional.isEmpty && byName.isEmpty && keyVals.isNone then
     "No parameters"
   else
     posList positional ++ nameList byName ++ kv keyVals
 where
-  posList (pos : Array (Name × String)) : String :=
+  posList (pos : Array (Name × CanMatch × SigDoc)) : SigDoc :=
     if pos.isEmpty then ""
-    else if let #[(x, t)] := pos then
-      s!"Positional: `{x} : {t}`\n\n"
+    else if let #[(x, t, doc)] := pos then
+      doc!"Positional: `" ++ x.toString ++ " : " ++ t.toString ++ " — " ++ doc ++ "`\n\n"
     else
-      (pos.foldl (init := "Positional:\n") fun s (x, t) => s ++ s!"* `{x} : {t}\n`") ++ "\n"
-  nameList (ns : Array (Name × String × Bool)) : String :=
+      let args :=
+        pos.foldl (init := doc!"Positional:\n") fun s (x, t, doc) =>
+          s ++ doc!"* `" ++ .text x.toString ++ " : " ++ t.toString ++ "` — " ++ doc ++ "\n"
+      args ++ "\n"
+  nameList (ns : Array (Name × CanMatch × Bool × SigDoc)) : SigDoc :=
     if ns.isEmpty then ""
-    else if let #[(x, t, opt)] := ns then
-      s!"Named: `{x} : {t}` ({if opt then "optional" else "required"})\n\n"
-    else (ns.foldl (init := "Named:\n") fun s (x, t, opt) =>
-      s ++ s!"* `{x} : {t}` ({if opt then "optional" else "required"})\n\n")
-  kv : Option (Name × String) → String
+    else if let #[(x, t, opt, doc)] := ns then
+      doc!"Named: `" ++ .text x.toString ++ " : " ++ t.toString ++ "` (" ++
+      (if opt then "optional" else "required") ++ doc!") — " ++ doc ++ "\n\n"
+    else
+      let args :=
+        ns.foldl (init := doc!"Named:\n") fun s (x, t, opt, doc) =>
+          s ++ doc!"* `" ++ x.toString ++ " : " ++ t.toString ++
+            "` (" ++ (if opt then "optional" else "required") ++ ") — " ++ doc ++ "\n"
+      args ++ "\n"
+  kv : Option (Name × CanMatch × SigDoc) → SigDoc
     | none => ""
-    | some (x, t) => s!"Dictionary: `{x}`, saving names of `{t}`"
+    | some (x, t, doc) =>
+      doc!"Dictionary: `" ++ x.toString ++ "`, saving names of `" ++ t.toString ++ "` — " ++ doc
 
 def ArgParse.signature' {m} (prec : Nat) (p : ArgParse m α) : Option Std.Format :=
   match p with
   | .fail _ msg? => failure
   | .pure x | .done => do return .nil
   | .lift desc act => do return desc
-  | .positional x v _ => do return s!"{x} :" ++ .line ++ (← v.signature)
+  | .positional x v _ => do return s!"{x} :" ++ .line ++ (← v.signature.format)
   | .named x v opt _ => do
-    let d := v.signature
+    let d := v.signature.format
     let s := .group <| .nest 2 <| .text s!"{x} :" ++ .line ++ d
     return withParen 2 <| if opt then "(" ++ s ++ ")?" else s
   | .anyNamed x v _ => do
-    let d := v.signature
+    let d := v.signature.format
     let s := .group <| .nest 2 <| .text s!"{x} :" ++ .line ++ d ++ .line ++ "(key/value)"
     return withParen 2 s
   | .orElse p1 p2 => do
@@ -189,11 +305,11 @@ def ArgParse.signature' {m} (prec : Nat) (p : ArgParse m α) : Option Std.Format
 where
   withParen p (x : Std.Format) : Std.Format := if p > prec then "(" ++ x ++ ")" else x
 
-def ArgParse.signature {m} (p : ArgParse m α) : Option String :=
+def ArgParse.signature {m} (p : ArgParse m α) : Option SigDoc :=
   if let some sd := toSimpleDesc p then
-    sd.markdown
+    some sd.markdown
   else if let some s := p.signature' 0 then
-    some s!"```\n({s.pretty 40})\n```\n"
+    some <| doc!"```\n" ++ s.pretty 40 ++ doc!"\n```\n"
   else none
 
 scoped instance [Monad m] [MonadError m] : MonadError (StateT σ m) where
@@ -217,7 +333,7 @@ instance : ToMessageData Arg where
 
 structure ParseState where
   remaining : Array Arg
-  info : Array (Syntax × Name × MessageData)
+  info : Array (Syntax × Name × SigDoc)
 
 private def firstOriginal (stxs : Array Syntax) : Syntax := Id.run do
   for stx in stxs do
@@ -229,7 +345,7 @@ partial def ArgParse.parseArgs : ArgParse m α → ExceptT (Array Arg × Excepti
   | .fail stx? msg? => do
     let stx ← stx?.getDM getRef
     let msg := msg?.getD "failed"
-    throw ((← get).remaining, .error stx msg)
+    throw ((← get).remaining, .error stx msg.toMessageData)
   | .pure x => Pure.pure x
   | .lift desc act => act
   | .positional x vp doc? => do
@@ -344,8 +460,8 @@ end
 variable {m} [Monad m] [MonadInfoTree m] [MonadResolveName m] [MonadEnv m] [MonadError m] [MonadLiftT CoreM m]
 
 def ValDesc.bool : ValDesc m Bool where
-  description := m!"{true} or {false}"
-  signature := "Bool"
+  description := doc!"{true} or {false}"
+  signature := .Ident
   get
     | .name b => do
       let b' ← liftM <| realizeGlobalConstNoOverloadWithInfo b
@@ -358,8 +474,8 @@ instance : FromArgVal Bool m where
   fromArgVal := .bool
 
 def ValDesc.string : ValDesc m String where
-  description := m!"a string"
-  signature := "String"
+  description := doc!"a string"
+  signature := .String
   get
     | .str s => pure s.getString
     | other => throwError "Expected string, got {toMessageData other}"
@@ -368,8 +484,8 @@ instance : FromArgVal String m where
   fromArgVal := .string
 
 def ValDesc.ident : ValDesc m Ident where
-  description := m!"an identifier"
-  signature := "Name"
+  description := doc!"an identifier"
+  signature := .Ident
   get
     | .name x => pure x
     | other => throwError "Expected identifier, got { toMessageData other}"
@@ -383,8 +499,8 @@ Parses a name as an argument value.
 The name is returned without macro scopes.
 -/
 def ValDesc.name : ValDesc m Name where
-  description := m!"a name"
-  signature := "Name"
+  description := doc!"a name"
+  signature := .Ident
   get
     | .name x => pure x.getId.eraseMacroScopes
     | other => throwError "Expected identifier, got {other}"
@@ -393,22 +509,22 @@ instance : FromArgVal Name m where
   fromArgVal := .name
 
 def ValDesc.resolvedName : ValDesc m Name where
-  description := m!"a resolved name"
-  signature := "Name"
+  description := doc!"a resolved name"
+  signature := .Ident
   get
     | .name x => realizeGlobalConstNoOverloadWithInfo x
     | other => throwError "Expected identifier, got {other}"
 
 /-- Associates a new description with a parser for better error messages. -/
-def ValDesc.as (what : MessageData) (desc : ValDesc m α) : ValDesc m α :=
+def ValDesc.as (what : SigDoc) (desc : ValDesc m α) : ValDesc m α :=
   {desc with description := what}
 
 /--
 Parses a natural number.
 -/
 def ValDesc.nat : ValDesc m Nat where
-  description := m!"a name"
-  signature := "Nat"
+  description := doc!"a name"
+  signature := .Num
   get
     | .num n => pure n.getNat
     | other => throwError "Expected string, got {repr other}"
@@ -422,8 +538,8 @@ Parses a sequence of Verso inline elements from a string literal. Returns a File
 they can be related to their original source.
 -/
 def ValDesc.inlinesString [MonadFileMap m] : ValDesc m (FileMap × TSyntaxArray `inline) where
-  description := m!"a string that contains a sequence of inline elements"
-  signature := "InlineString"
+  description := doc!"a string that contains a sequence of inline elements"
+  signature := .String
   get
     | .str s => open Lean.Parser in do
       let text ← getFileMap
@@ -450,8 +566,8 @@ def ValDesc.inlinesString [MonadFileMap m] : ValDesc m (FileMap × TSyntaxArray 
 def ValDesc.messageSeverity : ValDesc m MessageSeverity where
   description :=
     open MessageSeverity in
-    m!"The expected severity: '{``error}', '{``warning}', or '{``information}'"
-  signature := "MessageSeverity"
+    doc!"The expected severity: `{error}`, `{warning}`, or `{information}`"
+  signature := .Ident
   get := open MessageSeverity in fun
     | .name b => do
       let b' ← realizeGlobalConstNoOverloadWithInfo b
@@ -468,8 +584,8 @@ open Lean.Elab.Tactic.GuardMsgs in
 def ValDesc.whitespaceMode : ValDesc m WhitespaceMode where
   description :=
     open WhitespaceMode in
-    m!"The expected whitespace mode: '{``exact}', '{``normalized}', or '{``lax}'"
-  signature := "WhitespaceMode"
+    doc!"The expected whitespace mode: `{exact}`, `{normalized}`, or `{lax}`"
+  signature := .Ident
   get := open WhitespaceMode in fun
     | .name b => do
       let b' ← realizeGlobalConstNoOverloadWithInfo b
@@ -504,8 +620,8 @@ instance [FromArgVal α m] : FromArgVal (WithSyntax α) m where
 Parses a string literal.
 -/
 def ValDesc.strLit [Monad m] [MonadError m] : ValDesc m StrLit where
-  description := m!"a string"
-  signature := "String"
+  description := doc!"a string"
+  signature := .String
   get
     | .str s => pure s
     | other => throwError "Expected string, got {toMessageData other}"

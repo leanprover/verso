@@ -24,7 +24,7 @@ open Lean
 open Lean.Elab
 open Std (HashMap HashSet)
 open Verso.SyntaxUtils
-open Verso.ArgParse (FromArgs)
+open Verso.ArgParse (FromArgs SigDoc)
 
 initialize registerTraceClass `Elab.Verso
 initialize registerTraceClass `Elab.Verso.part
@@ -600,7 +600,7 @@ unsafe def partCommandsForUnsafe (x : Name) : PartElabM (Array PartCommand) := d
 @[implemented_by partCommandsForUnsafe]
 opaque partCommandsFor (x : Name) : PartElabM (Array PartCommand)
 
-initialize expanderSignatureExt : PersistentEnvExtension (Name × String) (Name × String) (NameMap String) ←
+initialize expanderSignatureExt : PersistentEnvExtension (Name × SigDoc) (Name × SigDoc) (NameMap SigDoc) ←
   registerPersistentEnvExtension {
     mkInitial := pure {},
     addImportedFn xss :=
@@ -614,7 +614,7 @@ initialize expanderSignatureExt : PersistentEnvExtension (Name × String) (Name 
       xs.toArray
   }
 
-private def sig (α) [inst : FromArgs α DocElabM] : Option String :=
+private def sig (α) [inst : FromArgs α DocElabM] : Option ArgParse.SigDoc :=
   ArgParse.ArgParse.signature inst.fromArgs
 
 abbrev RoleExpander := Array Arg → TSyntaxArray `inline → DocElabM (Array (TSyntax `term))
@@ -646,27 +646,29 @@ initialize roleExpanderExt : PersistentEnvExtension (Name × Array Name) (Name �
       xs.toArray
   }
 
-private unsafe def roleExpandersForUnsafe' (x : Name) : DocElabM (Array (RoleExpander × Option String)) := do
+private unsafe def roleExpandersForUnsafe' (x : Name) : DocElabM (Array (RoleExpander × Option String × Option SigDoc)) := do
   let expanders := roleExpanderExt.getState (← getEnv) |>.find? x |>.getD #[]
   expanders.mapM fun n => do
     let e ← evalConst RoleExpander n
+    let doc? ← findDocString? (← getEnv) n
     let sig := expanderSignatureExt.getState (← getEnv) |>.find? n
-    return (e, sig)
+    return (e, doc?, sig)
 
 private unsafe def roleExpandersForUnsafe'' (x : Name) : DocElabM (Array RoleExpander) := do
   let expanders := roleExpanderAttr.getEntries (← getEnv) x
   return expanders.map (·.value) |>.toArray
 
-private unsafe def roleExpandersForUnsafe (x : Name) : DocElabM (Array (RoleExpander × Option String)) := do
-  return (← roleExpandersForUnsafe' x) ++ (← roleExpandersForUnsafe'' x).map (·, none)
+private unsafe def roleExpandersForUnsafe (x : Name) : DocElabM (Array (RoleExpander × Option String × Option SigDoc)) := do
+  return (← roleExpandersForUnsafe' x) ++ (← roleExpandersForUnsafe'' x).map (·, none, none)
 
 @[implemented_by roleExpandersForUnsafe]
-opaque roleExpandersFor (x : Name) : DocElabM (Array (RoleExpander × Option String))
+opaque roleExpandersFor (x : Name) : DocElabM (Array (RoleExpander × Option String × Option SigDoc))
 
-private unsafe def evalStringUnsafe (x : Name) : MetaM String := evalConst String x
+private unsafe def evalIOOptStringUnsafe (x : Name) : MetaM (Option SigDoc) := do
+  evalConst (Option SigDoc) x
 
-@[implemented_by evalStringUnsafe]
-private opaque evalString (x : Name) : MetaM String
+@[implemented_by evalIOOptStringUnsafe]
+private opaque evalOptMsg (x : Name) : MetaM (Option SigDoc)
 
 private def saveSignature (expanderName : Name) (argTy : Expr) : MetaM Unit := do
   let s ← Meta.mkAppM ``sig #[argTy]
@@ -674,21 +676,18 @@ private def saveSignature (expanderName : Name) (argTy : Expr) : MetaM Unit := d
   let s := .app s inst
   let s ← instantiateExprMVars s
   let s ← Meta.whnf s
-  match_expr s with
-  | some _ fmt =>
-    let name ← mkFreshUserName <| expanderName ++ `signature
-    addAndCompile <| .defnDecl {
-      name,
-      levelParams := [],
-      type := .const ``String [],
-      value := fmt,
-      hints := .opaque,
-      safety := .safe
-    }
-    let str ← evalString name
+  let name ← mkFreshUserName <| expanderName ++ `signature
+  addAndCompile <| .defnDecl {
+    name,
+    levelParams := [],
+    type := .app (.const ``Option [0]) (.const ``SigDoc []),
+    value := s,
+    hints := .opaque,
+    safety := .safe
+  }
+  let str? ← evalOptMsg name
+  if let some str := str? then
     modifyEnv (expanderSignatureExt.addEntry · (expanderName, str))
-  | _ => return ()
-
 
 unsafe initialize registerBuiltinAttribute {
   name := `role,
@@ -724,6 +723,8 @@ unsafe initialize registerBuiltinAttribute {
       hints := .opaque,
       safety := .safe
     }
+
+    addDocStringCore' n (← findSimpleDocString? (← getEnv) declName)
 
     modifyEnv fun env =>
       roleExpanderExt.addEntry env (roleName, n)
@@ -794,27 +795,29 @@ unsafe initialize registerBuiltinAttribute {
       safety := .safe
     }
 
+    addDocStringCore' n (← findSimpleDocString? (← getEnv) declName)
+
     modifyEnv fun env =>
       codeBlockExpanderExt.addEntry env (blockName, n)
 }
 
-private unsafe def codeBlockExpandersForUnsafe' (x : Name) : DocElabM (Array (CodeBlockExpander × Option Format)) := do
+private unsafe def codeBlockExpandersForUnsafe' (x : Name) : DocElabM (Array (CodeBlockExpander × Option String × Option SigDoc)) := do
   let expanders := codeBlockExpanderExt.getState (← getEnv) |>.find? x |>.getD #[]
   expanders.mapM fun n => do
     let e ← evalConst CodeBlockExpander n
+    let doc? ← findDocString? (← getEnv) n
     let sig := expanderSignatureExt.getState (← getEnv) |>.find? n
-    return (e, sig)
+    return (e, doc?, sig)
 
 private unsafe def codeBlockExpandersForUnsafe'' (x : Name) : DocElabM (Array CodeBlockExpander) := do
   let expanders := codeBlockExpanderAttr.getEntries (← getEnv) x
   return expanders.map (·.value) |>.toArray
 
-private unsafe def codeBlockExpandersForUnsafe (x : Name) : DocElabM (Array (CodeBlockExpander × Option Format)) := do
-  return (← codeBlockExpandersForUnsafe' x) ++ (← codeBlockExpandersForUnsafe'' x).map (·, none)
+private unsafe def codeBlockExpandersForUnsafe (x : Name) : DocElabM (Array (CodeBlockExpander × Option String × Option SigDoc)) := do
+  return (← codeBlockExpandersForUnsafe' x) ++ (← codeBlockExpandersForUnsafe'' x).map (·, none, none)
 
 @[implemented_by codeBlockExpandersForUnsafe]
-opaque codeBlockExpandersFor (x : Name) : DocElabM (Array (CodeBlockExpander × Option Format))
-
+opaque codeBlockExpandersFor (x : Name) : DocElabM (Array (CodeBlockExpander × Option String × Option SigDoc))
 
 abbrev DirectiveExpander := Array Arg → TSyntaxArray `block → DocElabM (Array (TSyntax `term))
 
@@ -880,26 +883,29 @@ unsafe initialize registerBuiltinAttribute {
       safety := .safe
     }
 
+    addDocStringCore' n (← findSimpleDocString? (← getEnv) declName)
+
     modifyEnv fun env =>
       directiveExpanderExt.addEntry env (directiveName, n)
 }
 
-private unsafe def directiveExpandersForUnsafe' (x : Name) : DocElabM (Array (DirectiveExpander × Option Format)) := do
+private unsafe def directiveExpandersForUnsafe' (x : Name) : DocElabM (Array (DirectiveExpander × Option String × Option SigDoc)) := do
   let expanders := directiveExpanderExt.getState (← getEnv) |>.find? x |>.getD #[]
   expanders.mapM fun n => do
     let e ← evalConst DirectiveExpander n
+    let doc? ← findDocString? (← getEnv) n
     let sig := expanderSignatureExt.getState (← getEnv) |>.find? n
-    return (e, sig)
+    return (e, doc?, sig)
 
 private unsafe def directiveExpandersForUnsafe'' (x : Name) : DocElabM (Array DirectiveExpander) := do
   let expanders := directiveExpanderAttr.getEntries (← getEnv) x
   return expanders.map (·.value) |>.toArray
 
-private unsafe def directiveExpandersForUnsafe (x : Name) : DocElabM (Array (DirectiveExpander × Option Format)) := do
-  return (← directiveExpandersForUnsafe' x) ++ (← directiveExpandersForUnsafe'' x).map (·, none)
+private unsafe def directiveExpandersForUnsafe (x : Name) : DocElabM (Array (DirectiveExpander × Option String × Option SigDoc)) := do
+  return (← directiveExpandersForUnsafe' x) ++ (← directiveExpandersForUnsafe'' x).map (·, none, none)
 
 @[implemented_by directiveExpandersForUnsafe]
-opaque directiveExpandersFor (x : Name) : DocElabM (Array (DirectiveExpander × Option Format))
+opaque directiveExpandersFor (x : Name) : DocElabM (Array (DirectiveExpander × Option String × Option SigDoc))
 
 
 abbrev BlockRoleExpander := Array Arg → Array Syntax → DocElabM (Array (TSyntax `term))

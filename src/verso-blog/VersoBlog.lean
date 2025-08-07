@@ -45,6 +45,9 @@ instance : FromArgs ClassArgs m where
   fromArgs := ClassArgs.mk <$> .named `«class» .string false
 end
 
+/--
+Wraps the contents in an HTML `<span>` element with the provided `class`.
+-/
 @[role]
 def htmlSpan : RoleExpanderOf ClassArgs
   | {«class»}, stxs => do
@@ -52,6 +55,9 @@ def htmlSpan : RoleExpanderOf ClassArgs
     ``(Inline.other (Blog.InlineExt.htmlSpan $(quote «class»)) #[$contents,*])
 
 
+/--
+Wraps the contents in an HTML `<div>` element with the provided `class`.
+-/
 @[directive]
 def htmlDiv : DirectiveExpanderOf ClassArgs
   | {«class»}, stxs => do
@@ -539,7 +545,7 @@ instance [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadErr
 where
   strLit : ValDesc m StrLit := {
     description := "string literal containing an expected type",
-    signature := "String (expected type)",
+    signature := .String
     get
       | .str s => pure s
       | other => throwError "Expected string, got {repr other}"
@@ -687,43 +693,19 @@ instance [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadErr
   fromArgs :=
     LeanOutputConfig.mk <$>
       .positional `name output <*>
-      .named `severity sev true <*>
+      .named `severity .messageSeverity true <*>
       ((·.getD false) <$> .named `summarize .bool true) <*>
-      ((·.getD .exact) <$> .named `whitespace ws true)
+      ((·.getD .exact) <$> .named `whitespace .whitespaceMode true)
 where
   output : ValDesc m Ident := {
     description := "output name",
-    signature := "Name (output name)"
+    signature := .Ident
     get := fun
       | .name x => pure x
       | other => throwError "Expected output name, got {repr other}"
   }
   opt {α} (p : ArgParse m α) : ArgParse m (Option α) := (some <$> p) <|> pure none
   optDef {α} (fallback : α) (p : ArgParse m α) : ArgParse m α := p <|> pure fallback
-  sev : ValDesc m MessageSeverity := {
-    description := open MessageSeverity in m!"The expected severity: '{``error}', '{``warning}', or '{``information}'",
-    signature := "MessageSeverity",
-    get := open MessageSeverity in fun
-      | .name b => do
-        let b' ← realizeGlobalConstNoOverloadWithInfo b
-        if b' == ``MessageSeverity.error then pure MessageSeverity.error
-        else if b' == ``MessageSeverity.warning then pure MessageSeverity.warning
-        else if b' == ``MessageSeverity.information then pure MessageSeverity.information
-        else throwErrorAt b "Expected '{``error}', '{``warning}', or '{``information}'"
-      | other => throwError "Expected severity, got {repr other}"
-  }
-  ws : ValDesc m WhitespaceMode := {
-    description := open WhitespaceMode in m!"The expected whitespace mode: '{``exact}', '{``normalized}', or '{``lax}'",
-    signature := "WhitespaceMode",
-    get := open WhitespaceMode in fun
-      | .name b => do
-        let b' ← realizeGlobalConstNoOverloadWithInfo b
-        if b' == ``WhitespaceMode.exact then pure WhitespaceMode.exact
-        else if b' == ``WhitespaceMode.normalized then pure WhitespaceMode.normalized
-        else if b' == ``WhitespaceMode.lax then pure WhitespaceMode.lax
-        else throwErrorAt b "Expected '{``exact}', '{``normalized}', or '{``lax}'"
-      | other => throwError "Expected whitespace mode, got {repr other}"
-  }
 
 open SubVerso.Highlighting in
 private def leanOutputBlock [bg : BlogGenre genre] (message : Highlighted.Message) (summarize := false) (expandTraces : List Name := []) : Block genre :=

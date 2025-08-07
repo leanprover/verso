@@ -40,8 +40,8 @@ open Verso.Doc.Suggestion
 variable {m} [Monad m] [MonadOptions m] [MonadEnv m] [MonadLiftT CoreM m] [MonadError m] [MonadLog m] [AddMessageContext m] [MonadInfoTree m]
 
 def ValDesc.documentableName : ValDesc m (Ident × Name) where
-  description := m!"a name with documentation"
-  signature := "Name (with docs)"
+  description := "a name with documentation"
+  signature := .Ident
   get
     | .name n => do
       let x ← realizeGlobalConstNoOverloadWithInfo n
@@ -1661,8 +1661,8 @@ def TacticDocsOptions.parse  : ArgParse m TacticDocsOptions :=
     .named `allowMissing .bool true
 where
   strOrName : ValDesc m (String ⊕ Name) := {
-    description := m!"First token in tactic, or canonical parser name"
-    signature := "Name or String"
+    description := "First token in tactic, or canonical parser name"
+    signature := .Ident ∪ .String
     get := fun
       | .name x => pure (.inr x.getId)
       | .str s => pure (.inl s.getString)
