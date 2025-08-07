@@ -120,18 +120,24 @@ structure SyntaxErrorConfig where
   category : Name := `command
   prec : Nat := 0
 
-def SyntaxErrorConfig.parse [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m] : ArgParse m SyntaxErrorConfig :=
+section
+variable [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m]
+
+def SyntaxErrorConfig.parse : ArgParse m SyntaxErrorConfig :=
   SyntaxErrorConfig.mk <$>
     .positional `name (ValDesc.name.as "name for later reference") <*>
     .namedD `show .bool true <*>
     .namedD `category (ValDesc.name.as "syntax category (default `command`)") `command <*>
     .namedD `precedence .nat 0
 
+instance : FromArgs SyntaxErrorConfig m := ⟨SyntaxErrorConfig.parse⟩
+
+end
+
 open Lean.Parser in
-@[code_block_expander syntaxError]
-def syntaxError : CodeBlockExpander
-  | args, str => withoutAsync do
-    let config ← SyntaxErrorConfig.parse.run args
+@[code_block]
+def syntaxError : CodeBlockExpanderOf SyntaxErrorConfig
+  | config, str => withoutAsync do
 
     PointOfInterest.save (← getRef) config.name.toString
       (kind := Lsp.SymbolKind.file)
@@ -148,7 +154,7 @@ def syntaxError : CodeBlockExpander
       saveOutputs config.name msgs
       Hover.addCustomHover (← getRef) <| MessageData.joinSep (msgs.map fun ⟨sev, msg⟩ => m!"{sevStr sev.toSeverity}:{indentD msg.toString}") Format.line
 
-      return #[← `(Block.other {Block.syntaxError with data := ToJson.toJson ($(quote s), $(quote es))} #[Block.code $(quote s)])]
+      `(Block.other {Block.syntaxError with data := ToJson.toJson ($(quote s), $(quote es))} #[Block.code $(quote s)])
 where
   sevStr : MessageSeverity → String
     | .information => "info"

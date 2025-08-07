@@ -105,9 +105,8 @@ inline_extension Inline.margin where
     some <| fun goI _ _ content  => do
       Marginalia.html <$> content.mapM goI
 
-@[role_expander margin]
-def margin : RoleExpander
-  | args, inlines => do
-    ArgParse.done.run args
+@[role]
+def margin : RoleExpanderOf Unit
+  | (), inlines => do
     let content ← inlines.mapM elabInline
-    pure #[← ``(Doc.Inline.other Inline.margin #[$content,*])]
+    ``(Doc.Inline.other Inline.margin #[$content,*])

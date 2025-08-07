@@ -1411,13 +1411,13 @@ def DocstringConfig.parse : ArgParse m DocstringConfig :=
     .namedD `hideStructureConstructor .bool false <*>
     .named `label .string true
 
+instance : FromArgs DocstringConfig m := ⟨DocstringConfig.parse⟩
+
 end
 
-@[block_role_expander docstring]
-def docstring : BlockRoleExpander
-  | args, #[] => do
-    let ⟨(x, name), allowMissing, hideFields, hideCtor, customLabel⟩ ← DocstringConfig.parse.run args
-
+@[block_command]
+def docstring : BlockCommandOf DocstringConfig
+  | ⟨(x, name), allowMissing, hideFields, hideCtor, customLabel⟩ => do
     let opts : Options → Options := allowMissing.map (fun b opts => verso.docstring.allowMissing.set opts b) |>.getD id
 
     withOptions opts do
@@ -1440,8 +1440,7 @@ def docstring : BlockRoleExpander
       let signature ← Signature.forName name
 
       let extras ← getExtras name declType
-      pure #[← ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.docstring $(quote name) $(quote declType) $(quote signature) $(quote customLabel)) #[$(blockStx ++ extras),*])]
-  | _, more => throwErrorAt more[0]! "Unexpected block argument"
+      ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.docstring $(quote name) $(quote declType) $(quote signature) $(quote customLabel)) #[$(blockStx ++ extras),*])
 where
   getExtras (name : Name) (declType : Block.Docstring.DeclType) : DocElabM (Array Term) :=
     match declType with
@@ -1509,13 +1508,14 @@ structure IncludeDocstringOpts where
 def IncludeDocstringOpts.parse : ArgParse m IncludeDocstringOpts :=
   IncludeDocstringOpts.mk <$> (.positional `name .documentableName <&> (·.2)) <*> .namedD `elab .bool true
 
+instance : FromArgs IncludeDocstringOpts m where
+  fromArgs := IncludeDocstringOpts.parse
+
 end
 
-@[block_role_expander includeDocstring]
-def includeDocstring : BlockRoleExpander
-  | args, #[] => do
-    let {name, elaborate} ← IncludeDocstringOpts.parse.run args
-
+@[block_command]
+def includeDocstring : BlockCommandOf IncludeDocstringOpts
+  | {name, elaborate} => do
     let fromMd :=
       if elaborate then
         blockFromMarkdownWithLean [name]
@@ -1530,9 +1530,7 @@ def includeDocstring : BlockRoleExpander
           | throwError "Failed to parse docstring as Markdown"
         ast.blocks.mapM fromMd
 
-    pure blockStx
-
-  | _args, more => throwErrorAt more[0]! "Unexpected block argument"
+    ``(Block.concat #[$blockStx,*])
 
 def Block.optionDocs (name : Name) (defaultValue : Option Highlighted) : Block where
   name := `Verso.Genre.Manual.optionDocs
@@ -1569,19 +1567,18 @@ def highlightDataValue (v : DataValue) : Highlighted :=
     | .ofSyntax (v : Syntax) => ⟨.unknown, toString v⟩ -- TODO
 
 
-@[block_role_expander optionDocs]
-def optionDocs : BlockRoleExpander
-  | args, #[] => do
-    let #[.anon (.name x)] := args
-      | throwError "Expected exactly one positional argument that is a name"
-    let optDecl ← getOptionDecl x.getId
-    Doc.PointOfInterest.save x optDecl.declName.toString
-    let some mdAst := MD4Lean.parse optDecl.descr
-      | throwErrorAt x "Failed to parse docstring as Markdown"
-    let contents ← mdAst.blocks.mapM (blockFromMarkdownWithLean [])
-    pure #[← ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.optionDocs $(quote x.getId) $(quote <| highlightDataValue optDecl.defValue)) #[$contents,*])]
+def optionDocs.Args := Ident
+instance : FromArgs optionDocs.Args DocElabM := ⟨.positional `name .ident "The option name"⟩
 
-  | _, more => throwErrorAt more[0]! "Unexpected block argument"
+@[block_command]
+def optionDocs : BlockCommandOf optionDocs.Args
+  | x => do
+    let optDecl ← getOptionDecl x.getId
+    Doc.PointOfInterest.save x.raw optDecl.declName.toString
+    let some mdAst := MD4Lean.parse optDecl.descr
+      | throwErrorAt x.raw "Failed to parse docstring as Markdown"
+    let contents ← mdAst.blocks.mapM (blockFromMarkdownWithLean [])
+    ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.optionDocs $(quote x.getId) $(quote <| highlightDataValue optDecl.defValue)) #[$contents,*])
 
 open Verso.Search in
 def optionDomainMapper : DomainMapper :=

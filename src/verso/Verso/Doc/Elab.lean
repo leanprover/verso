@@ -354,46 +354,48 @@ def _root_.Verso.Syntax.metadata_block.command : PartCommand
     modifyThe PartElabM.State fun st => {st with partContext.metadata := some stx}
   | _ => throwUnsupportedSyntax
 
-@[part_command Verso.Syntax.block_role]
+@[part_command Verso.Syntax.command]
 def includeSection : PartCommand
-  | `(block|block_role{include $_args* }[ $content ]) => throwErrorAt content "Unexpected block argument"
-  | `(block|block_role{include}) => throwError "Expected an argument"
-  | `(block|block_role{include $arg1 $arg2 $arg3 $args*}) => throwErrorAt arg2 "Expected one or two arguments"
-  | stx@`(block|block_role{include $args* }) => do
-    Hover.addCustomHover stx
-      r#"Includes another document at this point in the document.
+  | `(block|command{include $args* }) => do
+    if h : args.size = 0 then throwError "Expected an argument"
+    else if h : args.size > 2 then throwErrorAt args[2] "Expected one or two arguments"
+    else
+      let ref ← getRef
+      Hover.addCustomHover ref
+        r#"Includes another document at this point in the document.
 
-* `{include NAME}`: Includes the document as a child part.
-* `{include N NAME}`: Includes the document at header level `N`, as if its header had `N` header indicators (`#`) before it.
-"#
-    match (← parseArgs args) with
-    | #[.anon (.name x)] =>
-      let name ← resolved x
-      addPart <| .included name
-    | #[.anon (.num lvl), .anon (.name x)] =>
-      let name ← resolved x
-      closePartsUntil lvl.getNat stx.getHeadInfo.getPos!
-      addPart <| .included name
-    | _ => throwErrorAt stx "Expected exactly one positional argument that is a name"
-  | _ => Lean.Elab.throwUnsupportedSyntax
+  * `{include NAME}`: Includes the document as a child part.
+  * `{include N NAME}`: Includes the document at header level `N`, as if its header had `N` header indicators (`#`) before it.
+  "#
+      match (← parseArgs args) with
+      | #[.anon (.name x)] =>
+        let name ← resolved x
+        addPart <| .included name
+      | #[.anon (.num lvl), .anon (.name x)] =>
+        let name ← resolved x
+        closePartsUntil lvl.getNat ref.getHeadInfo.getPos!
+        addPart <| .included name
+      | _ => throwErrorAt ref "Expected exactly one positional argument that is a name"
+  | _ => (Lean.Elab.throwUnsupportedSyntax : PartElabM Unit)
 where
  resolved id := mkIdentFrom id <$> realizeGlobalConstNoOverloadWithInfo (mkIdentFrom id (docName id.getId))
 
-@[block_expander Verso.Syntax.block_role]
-def _root_.Verso.Syntax.block_role.expand : BlockExpander := fun block =>
+@[block_expander Verso.Syntax.command]
+def _root_.Verso.Syntax.command.expand : BlockExpander := fun block =>
   match block with
-  | `(block|block_role{$name $args*}) => do
+  | `(block|command{$name $args*}) => do
     withTraceNode `Elab.Verso.block (fun _ => pure m!"Block role {name}") <|
     withRef block <| withFreshMacroScope <| withIncRecDepth <| do
       let ⟨genre, _⟩ ← readThe DocElabContext
       let resolvedName ← realizeGlobalConstNoOverloadWithInfo name
-      let exp ← blockRoleExpandersFor resolvedName
+      let exp ← blockCommandExpandersFor resolvedName
       let argVals ← parseArgs args
       if exp.isEmpty then
         return ← appFallback block name resolvedName argVals none
-      for e in exp do
+      for (e, doc?, sig?) in exp do
         try
-          let termStxs ← withFreshMacroScope <| e argVals #[]
+          let termStxs ← withFreshMacroScope <| e argVals
+          expanderDocHover name "Command" resolvedName doc? sig?
           return (← ``(Block.concat (genre := $(⟨genre⟩)) #[$[$termStxs],*]))
         catch
           | ex@(.internal id) =>

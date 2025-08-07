@@ -219,11 +219,15 @@ initialize messageContextExt : EnvExtension ExampleMessages ← registerEnvExten
 initialize registerTraceClass `Elab.Verso.block.lean
 
 
+def leanExampleProject.Args := Name × String
+
+instance : FromArgs leanExampleProject.Args DocElabM :=
+  ⟨(·, ·) <$> .positional `name .name <*> .positional `projectDir .string⟩
+
 open System in
-@[block_role_expander leanExampleProject]
-def leanExampleProject : BlockRoleExpander
-  | args, #[] => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"Loading example project") <| do
-    let (name, projectDir) ← ArgParse.run ((·, ·) <$> .positional `name .name <*> .positional `projectDir .string) args
+@[block_command]
+def leanExampleProject : BlockCommandOf leanExampleProject.Args
+  | (name, projectDir) => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"Loading example project") <| do
     if exampleContextExt.getState (← getEnv) |>.contexts |>.contains name then
       throwError "Example context '{name}' already defined in this module"
     let path : FilePath := ⟨projectDir⟩
@@ -241,19 +245,16 @@ def leanExampleProject : BlockRoleExpander
     for (name, ex) in savedExamples.toArray do
       modifyEnv fun env => messageContextExt.modifyState env fun s => {s with messages := s.messages.insert name (.inr ex.messages) }
     Verso.Hover.addCustomHover (← getRef) <| "Contains:\n" ++ String.join (savedExamples.toList.map (s!" * `{toString ·.fst}`\n"))
-    pure #[]
-  | _, more =>
-    if h : more.size > 0 then
-      throwErrorAt more[0] "Unexpected contents"
-    else
-      throwError "Unexpected contents"
+    ``(Block.concat #[])
+
+def leanExampleModule.Args := Name × String × Name
+instance : FromArgs leanExampleModule.Args DocElabM :=
+  ⟨(·, ·, ·) <$> .positional `name .name <*> .positional `projectDir .string <*> .positional `module .name⟩
 
 open System in
-@[block_role_expander leanExampleModule]
-def leanExampleModule : BlockRoleExpander
-  | args, #[] => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"Loading example project") <| do
-    let (name, projectDir, module) ←
-      ArgParse.run ((·, ·, ·) <$> .positional `name .name <*> .positional `projectDir .string <*> .positional `module .name) args
+@[block_command]
+def leanExampleModule : BlockCommandOf leanExampleModule.Args
+  | (name, projectDir, module) => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"Loading example project") <| do
     if exampleContextExt.getState (← getEnv) |>.contexts |>.contains name then
       throwError "Example context '{name}' already defined in this module"
     let path : FilePath := ⟨projectDir⟩
@@ -264,12 +265,7 @@ def leanExampleModule : BlockRoleExpander
     modifyEnv fun env => exampleContextExt.modifyState env fun s => {s with
       contexts := s.contexts.insert name (.module loadedExamples)
     }
-    pure #[]
-  | _, more =>
-    if h : more.size > 0 then
-      throwErrorAt more[0] "Unexpected contents"
-    else
-      throwError "Unexpected contents"
+    ``(Block.concat #[])
 
 
 private def getSubproject (project : Ident) : TermElabM (NameSuffixMap Example) := do
@@ -318,19 +314,13 @@ instance : FromArgs LeanCommandConfig m where
     LeanCommandConfig.mk <$> .positional `project .ident <*> .positional `exampleName .ident <*> .namedD `showProofStates .bool true
 end
 
-@[block_role_expander leanCommand]
-def leanCommand : BlockRoleExpander
-  | args, #[] => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"leanCommand") <| do
-    let { project, exampleName, showProofStates } ← parseThe LeanCommandConfig args
+@[block_command]
+def leanCommand : BlockCommandOf LeanCommandConfig
+  | { project, exampleName, showProofStates } => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"leanCommand") <| do
     let projectExamples ← getSubproject project
     let (_, {highlighted := hls, original := str, ..}) ← projectExamples.getOrSuggest exampleName
     Verso.Hover.addCustomHover exampleName s!"```lean\n{str}\n```"
-    pure #[← `(Block.other (Blog.BlockExt.highlightedCode { contextName := $(quote project.getId), showProofStates := $(quote showProofStates) } (SubVerso.Highlighting.Highlighted.seq $(quote hls))) #[Block.code $(quote str)])]
-  | _, more =>
-    if h : more.size > 0 then
-      throwErrorAt more[0] "Unexpected contents"
-    else
-      throwError "Unexpected contents"
+    `(Block.other (Blog.BlockExt.highlightedCode { contextName := $(quote project.getId), showProofStates := $(quote showProofStates) } (SubVerso.Highlighting.Highlighted.seq $(quote hls))) #[Block.code $(quote str)])
 
 structure LeanCommandAtArgs where
   project : Ident
@@ -348,10 +338,9 @@ private def useRange (startLine : Nat) (endLine? : Option Nat) (range : Position
   else
     startLine ≥ startLine' && startLine ≤ endLine' -- point is in region
 
-@[block_role_expander leanCommandAt]
-def leanCommandAt : BlockRoleExpander
-  | args, #[] => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"leanCommand") <| do
-    let {project, line, endLine?} ← parseThe LeanCommandAtArgs args
+@[block_command]
+def leanCommandAt : BlockCommandOf LeanCommandAtArgs
+  | {project, line, endLine?} => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"leanCommand") <| do
     let projectExamples ← getModule project
 
     let mut hls := #[]
@@ -368,12 +357,8 @@ def leanCommandAt : BlockRoleExpander
         ranges.map (fun (l, l') => s!"{l}–{l'}") |>.toList |> (.group <| Std.Format.joinSep · ("," ++ .line))
       Lean.logError m!"No example found on line {line}. Valid lines are: {indentD rangeDoc}"
 
-    pure #[← `(Block.other (Blog.BlockExt.highlightedCode { contextName := $(quote project.getId) } (SubVerso.Highlighting.Highlighted.seq $(quote hls))) #[])]
-  | _, more =>
-    if h : more.size > 0 then
-      throwErrorAt more[0] "Unexpected contents"
-    else
-      throwError "Unexpected contents"
+    `(Block.other (Blog.BlockExt.highlightedCode { contextName := $(quote project.getId) } (SubVerso.Highlighting.Highlighted.seq $(quote hls))) #[])
+
 
 structure NoArgs where
 

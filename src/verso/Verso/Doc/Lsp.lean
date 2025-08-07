@@ -535,19 +535,11 @@ partial def versoTokens (text : FileMap) (stx : Syntax) : Array SemanticTokenEnt
     mkTok text .keyword s ++
     -- No tokens for defs, because Lean should supply them
     mkTok text .keyword e
-  | `(block| block_role{%$s $f $args* }%$e) =>
+  | `(block| command{%$s $f $args* }%$e) =>
     mkTok text .keyword s ++
     mkTok text .function f ++
     versoTokens text (mkNullNode args) ++
     mkTok text .keyword e
-  | `(block| block_role{%$s $f $args* }%$e [%$s' $block ]%$e') =>
-    mkTok text .keyword s ++
-    mkTok text .function f ++
-    versoTokens text (mkNullNode args) ++
-    mkTok text .keyword e ++
-    mkTok text .keyword s' ++
-    versoTokens text block ++
-    mkTok text .keyword e'
   | `(argument| $x:ident :=%$eq $v:arg_val) =>
     mkTok text .parameter x ++
     mkTok text .keyword eq ++

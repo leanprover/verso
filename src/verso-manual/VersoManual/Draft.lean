@@ -45,15 +45,13 @@ block_extension Block.draft where
       content.mapM goB
 
 /-- Hide draft-only content when in not in draft mode -/
-@[role_expander draft]
-def draft : RoleExpander
-  | args, contents => do
-    ArgParse.done.run args
-    pure #[← ``(Verso.Doc.Inline.other Inline.draft #[$[$(← contents.mapM elabInline)],*])]
+@[role]
+def draft : RoleExpanderOf Unit
+  | (), contents => do
+    ``(Verso.Doc.Inline.other Inline.draft #[$[$(← contents.mapM elabInline)],*])
 
 /-- Hide draft-only content when in not in draft mode -/
-@[directive_expander draft]
-def draftBlock : DirectiveExpander
-  | args, contents => do
-    ArgParse.done.run args
-    pure #[← ``(Verso.Doc.Block.other Block.draft #[$[$(← contents.mapM elabBlock)],*])]
+@[directive draft]
+def draftBlock : DirectiveExpanderOf Unit
+  | (), contents => do
+    ``(Verso.Doc.Block.other Block.draft #[$[$(← contents.mapM elabBlock)],*])

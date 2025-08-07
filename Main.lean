@@ -18,13 +18,13 @@ open Lean Elab Term
 
 set_option pp.rawOnError true
 
-@[role_expander vanish]
-def vanish : RoleExpander
-   | _args, _stxs => pure #[]
+@[role]
+def vanish : RoleExpanderOf Unit
+   | (), _stxs => pure #[]
 
-@[role_expander rev]
-def rev : RoleExpander
-  | _args, stxs => .reverse <$> stxs.mapM elabInline
+@[role]
+def rev : RoleExpanderOf Unit
+  | (), stxs => .reverse <$> stxs.mapM elabInline
 
 def html [Monad m] (doc : Part .none) : m Html := (·.fst) <$> Genre.none.toHtml {logError := fun _ => pure ()} () () {} {} {} doc .empty
 

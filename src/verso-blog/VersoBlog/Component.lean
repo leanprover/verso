@@ -298,20 +298,21 @@ elab_rules : command
     elabCommand cmd1
     elabCommand cmd2
     if dirTok.isSome then
+
       let argPat : Term ← argNames.foldrM (init := ← `(Unit.unit)) fun (x, _) y =>
         `(($x, $y))
-      let argP : Term ← argNames.foldrM (init := ← `(.done)) fun (x, t) y =>
-        `((·, ·) <$> .positional $(quote x.getId) (FromArgVal.fromArgVal (α := $t)) <*> $y)
+      let argP : Term ← argNames.foldrM (init := ← ``(ArgParse.done)) fun (x, t) y =>
+        ``((·, ·) <$> ArgParse.positional $(quote x.getId) (FromArgVal.fromArgVal (α := $t)) <*> $y)
+      let argT ← argNames.foldrM (init := ← `(Unit)) fun (_, t) y => `($t × $y)
+      elabCommand (← `(def T := $argT))
+      elabCommand (← `(instance : FromArgs T DocElabM := ⟨$argP⟩))
       let qArgs : Term ← argNames.foldlM (init := x) fun tm (x, _) =>
         `($tm $$(quote $x))
       let cmd3 ←
         `(command|
-          @[directive_expander $x]
-          def $dirName : DirectiveExpander
-            | args, blocks => do
-              let $argPat:term ← ArgParse.run $argP args
-              pure #[← `($qArgs #[$$(← blocks.mapM elabBlock),*])]
-              )
+          @[directive $x]
+          def $dirName : DirectiveExpanderOf T
+            | $argPat, blocks => do `($qArgs #[$$(← blocks.mapM elabBlock),*]))
       elabCommand cmd3
 
 

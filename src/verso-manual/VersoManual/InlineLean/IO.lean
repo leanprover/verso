@@ -69,25 +69,28 @@ where
       | nonName => throwError m!"Expected '{toString n}', got {repr nonName}"
   }
 
+section
 
-def ExampleFileConfig.parse [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m] : ArgParse m ExampleFileConfig :=
+variable [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m]
+
+def ExampleFileConfig.parse  : ArgParse m ExampleFileConfig :=
   ExampleFileConfig.mk <$> FileType.parse <*> ((·.getD true) <$> .named `show .bool true)
-
 
 def IOExample.exampleFileSyntax [Monad m] [MonadQuotation m] (type : FileType) (contents : String) : m Term := do
   `(Block.other (Block.exampleFile $(quote type)) #[Block.code $(quote contents)])
 
+instance : FromArgs ExampleFileConfig m := ⟨ExampleFileConfig.parse⟩
 
-@[code_block_expander exampleFile]
-def exampleFile : CodeBlockExpander
-  | args, str => do
-    let config ← ExampleFileConfig.parse.run args
+end
+
+@[code_block]
+def exampleFile : CodeBlockExpanderOf ExampleFileConfig
+  | config, str => do
     let s := str.getString
-
     if config.show then
-      return #[← IOExample.exampleFileSyntax config.type s]
+      IOExample.exampleFileSyntax config.type s
     else
-      return #[]
+      `(Block.concat #[])
 
 
 @[block_extension Block.exampleFile]
@@ -398,107 +401,107 @@ def endExample (body : TSyntax `term) : DocElabM (TSyntax `term) := do
     `(let $leanCodeName : Highlighted := $(quote hlLean)
       $body)
 
+section
+variable [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m]
+
 structure Config where
   tag : Option String := none
   «show» : Bool := true
 
-def Config.parse [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m] : ArgParse m Config :=
+def Config.parse : ArgParse m Config :=
   Config.mk <$> .named `tag .string true <*> ((·.getD true) <$> .named `show .bool true)
+
+instance : FromArgs Config m := ⟨Config.parse⟩
 
 structure FileConfig extends Config where
   name : String
 
-def FileConfig.parse [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m] : ArgParse m FileConfig :=
+def FileConfig.parse : ArgParse m FileConfig :=
   FileConfig.mk <$> Config.parse <*> .positional `name .string
+
+instance : FromArgs FileConfig m := ⟨FileConfig.parse⟩
+
+end
 
 end IOExample
 
 open IOExample in
-@[code_block_expander inputFile]
-def inputFile : CodeBlockExpander
-  | args, str => do
-    let opts ← FileConfig.parse.run args
+@[code_block]
+def inputFile : CodeBlockExpanderOf FileConfig
+  | opts, str => do
     saveInputFile opts.name str
     -- The quote step here is to prevent the editor from showing document AST internals when the
     -- cursor is on the code block
     if opts.show then
-      pure #[← exampleFileSyntax (.input opts.name) str.getString]
+      exampleFileSyntax (.input opts.name) str.getString
     else
-      pure #[]
+      ``(Block.concat #[])
 
 open IOExample in
-@[code_block_expander outputFile]
-def outputFile : CodeBlockExpander
-  | args, str => do
-    let opts ← FileConfig.parse.run args
+@[code_block]
+def outputFile : CodeBlockExpanderOf FileConfig
+  | opts, str => do
     saveOutputFile opts.name str
     -- The quote step here is to prevent the editor from showing document AST internals when the
     -- cursor is on the code block
     if opts.show then
-      pure #[← exampleFileSyntax (.output opts.name) str.getString]
+      exampleFileSyntax (.output opts.name) str.getString
     else
-      pure #[]
+      ``(Block.concat #[])
 
 open IOExample in
-@[code_block_expander stdin]
-def stdin : CodeBlockExpander
-  | args, str => do
-    let opts ← Config.parse.run args
+@[code_block]
+def stdin : CodeBlockExpanderOf Config
+  | opts, str => do
     saveStdin str
     -- The quote step here is to prevent the editor from showing document AST internals when the
     -- cursor is on the code block
     if opts.show then
-      pure #[← exampleFileSyntax .stdin str.getString]
+      exampleFileSyntax .stdin str.getString
     else
-      pure #[]
+      ``(Block.concat #[])
 
 open IOExample in
-@[code_block_expander stdout]
-def stdout : CodeBlockExpander
-  | args, str => do
-    let opts ← Config.parse.run args
+@[code_block]
+def stdout : CodeBlockExpanderOf Config
+  | opts, str => do
     saveStdout str
     -- The quote step here is to prevent the editor from showing document AST internals when the
     -- cursor is on the code block
     if opts.show then
-      pure #[← exampleFileSyntax .stdout str.getString]
+      exampleFileSyntax .stdout str.getString
     else
-      pure #[]
+      ``(Block.concat #[])
 
 open IOExample in
-@[code_block_expander stderr]
-def stderr : CodeBlockExpander
-  | args, str => do
-    let opts ← Config.parse.run args
+@[code_block]
+def stderr : CodeBlockExpanderOf Config
+  | opts, str => do
     saveStderr str
     -- The quote step here is to prevent the editor from showing document AST internals when the
     -- cursor is on the code block
     if opts.show then
-      pure #[← exampleFileSyntax .stderr str.getString]
+      exampleFileSyntax .stderr str.getString
     else
-      pure #[]
+      ``(Block.concat #[])
 
 
 open IOExample in
-@[code_block_expander ioLean]
-def ioLean : CodeBlockExpander
-  | args, str => do
-    let opts ← Config.parse.run args
+@[code_block]
+def ioLean : CodeBlockExpanderOf Config
+  | opts, str => do
     let x ← saveLeanCode str
     if opts.show then
       let range := Syntax.getRange? str
       let range := range.map (← getFileMap).utf8RangeToLspRange
-      pure #[← ``(Block.other (Block.lean $x (some $(quote (← getFileName))) $(quote range)) #[Block.code $(quote str.getString)])]
+      ``(Block.other (Block.lean $x (some $(quote (← getFileName))) $(quote range)) #[Block.code $(quote str.getString)])
     else
-      pure #[]
-
+      ``(Block.concat #[])
 
 open IOExample in
-@[directive_expander ioExample]
-def ioExample : DirectiveExpander
- | args, blocks => do
-    ArgParse.done.run args
+@[directive ioExample]
+def ioExample : DirectiveExpanderOf Unit
+ | (), blocks => do
     startExample
     let body ← blocks.mapM elabBlock
-    let body' ← `(Verso.Doc.Block.concat #[$body,*]) >>= endExample
-    pure #[body']
+    ``(Verso.Doc.Block.concat #[$body,*]) >>= endExample

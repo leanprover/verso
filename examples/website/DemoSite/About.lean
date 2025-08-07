@@ -20,11 +20,10 @@ def redBox : BlockComponent where
     saveCss ".red-box { border: 2px solid red; }"
     pure {{<div class="red-box" id={{id}}>{{← contents.mapM goB}}</div>}}
 
-@[directive_expander redBox]
-def redBoxImpl : DirectiveExpander
-  | args, stxs => do
-    ArgParse.done.run args
-    return #[← ``(Block.other (Blog.BlockExt.component $(quote `redBox) Json.null) #[$(← stxs.mapM elabBlock),*])]
+@[directive redBox]
+def redBoxImpl : DirectiveExpanderOf Unit
+  | (), stxs => do
+    ``(Block.other (Blog.BlockExt.component $(quote `redBox) Json.null) #[$(← stxs.mapM elabBlock),*])
 
 block_component gallery where
   toHtml id _data _goI goB contents := do
@@ -46,17 +45,16 @@ block_component image where
     }}
 
 
-@[directive_expander gallery]
-def galleryImpl : DirectiveExpander
-  | args, stxs => do
-    ArgParse.done.run args
+@[directive gallery]
+def galleryImpl : DirectiveExpanderOf Unit
+  | (), stxs => do
     let #[stx] := stxs
       | logErrorAt (mkNullNode stxs) "Expected one block"
-        return #[← `(sorry)]
+        return (← `(sorry))
     let `(block| dl{ $item*}) := stx
       | throwErrorAt stx "Expected definition list"
     let items ← item.mapM getItem
-    return #[← ``(Block.other (Blog.BlockExt.component $(quote `gallery) Json.null) #[$(items),*])]
+    ``(Block.other (Blog.BlockExt.component $(quote `gallery) Json.null) #[$(items),*])
 where
   getItem : TSyntax `desc_item → DocElabM Term
     | `(desc_item|: $inls* => $desc $descs*) => do

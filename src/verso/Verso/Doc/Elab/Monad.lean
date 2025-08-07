@@ -586,20 +586,6 @@ unsafe def blockExpandersForUnsafe (x : Name) : DocElabM (Array BlockExpander) :
 @[implemented_by blockExpandersForUnsafe]
 opaque blockExpandersFor (x : Name) : DocElabM (Array BlockExpander)
 
-
-
-abbrev PartCommand := Syntax → PartElabM Unit
-
-initialize partCommandAttr : KeyedDeclsAttribute PartCommand ←
-  mkDocExpanderAttribute `part_command ``PartCommand "Indicates that this function is used for side effects on the structure of the document" `partCommandAttr
-
-unsafe def partCommandsForUnsafe (x : Name) : PartElabM (Array PartCommand) := do
-  let expanders := partCommandAttr.getEntries (← getEnv) x
-  return expanders.map (·.value) |>.toArray
-
-@[implemented_by partCommandsForUnsafe]
-opaque partCommandsFor (x : Name) : PartElabM (Array PartCommand)
-
 initialize expanderSignatureExt : PersistentEnvExtension (Name × SigDoc) (Name × SigDoc) (NameMap SigDoc) ←
   registerPersistentEnvExtension {
     mkInitial := pure {},
@@ -616,6 +602,19 @@ initialize expanderSignatureExt : PersistentEnvExtension (Name × SigDoc) (Name 
 
 private def sig (α) [inst : FromArgs α DocElabM] : Option ArgParse.SigDoc :=
   ArgParse.ArgParse.signature inst.fromArgs
+
+abbrev PartCommand := Syntax → PartElabM Unit
+
+initialize partCommandAttr : KeyedDeclsAttribute PartCommand ←
+  mkDocExpanderAttribute `part_command ``PartCommand "Indicates that this function is used for side effects on the structure of the document" `partCommandAttr
+
+unsafe def partCommandsForUnsafe (x : Name) : PartElabM (Array PartCommand) := do
+  let expanders := partCommandAttr.getEntries (← getEnv) x
+  return expanders.map (·.value) |>.toArray
+
+@[implemented_by partCommandsForUnsafe]
+opaque partCommandsFor (x : Name) : PartElabM (Array PartCommand)
+
 
 abbrev RoleExpander := Array Arg → TSyntaxArray `inline → DocElabM (Array (TSyntax `term))
 
@@ -908,14 +907,88 @@ private unsafe def directiveExpandersForUnsafe (x : Name) : DocElabM (Array (Dir
 opaque directiveExpandersFor (x : Name) : DocElabM (Array (DirectiveExpander × Option String × Option SigDoc))
 
 
-abbrev BlockRoleExpander := Array Arg → Array Syntax → DocElabM (Array (TSyntax `term))
+abbrev BlockCommandExpander := Array Arg → DocElabM (Array (TSyntax `term))
 
-initialize blockRoleExpanderAttr : KeyedDeclsAttribute BlockRoleExpander ←
-  mkDocExpanderAttribute `block_role_expander ``BlockRoleExpander "Indicates that this function is used to implement a given blockRole" `blockRoleExpanderAttr
+abbrev BlockCommandOf α := α → DocElabM Term
 
-unsafe def blockRoleExpandersForUnsafe (x : Name) : DocElabM (Array BlockRoleExpander) := do
-  let expanders := blockRoleExpanderAttr.getEntries (← getEnv) x
+initialize blockCommandExpanderAttr : KeyedDeclsAttribute BlockCommandExpander ←
+  mkDocExpanderAttribute `block_command_expander ``BlockCommandExpander "Indicates that this function is used to implement a given block-level command" `blockCommandExpanderAttr
+
+private def toBlockCommand {α : Type} [FromArgs α DocElabM] (expander : α → DocElabM Term) : BlockCommandExpander :=
+  fun args => do
+    let v ← ArgParse.parse args
+    return #[← expander v]
+
+syntax (name := block_command) "block_command " (ident)? : attr
+
+initialize blockCommandExpanderExt : PersistentEnvExtension (Name × Array Name) (Name × Name) (NameMap (Array Name)) ←
+  registerPersistentEnvExtension {
+    mkInitial := pure {},
+    addImportedFn xss :=
+      pure <| xss.foldl (init := {}) fun ns xs =>
+        xs.foldl (init := ns) fun ns (x, ys) =>
+          ns.insert x <| (ns.find? x |>.getD #[]) ++ ys
+    addEntryFn
+      | xs, (x, y) =>
+        xs.insert x (xs.find? x |>.getD #[] |>.push y)
+    exportEntriesFn xs :=
+      xs.toArray
+  }
+
+unsafe initialize registerBuiltinAttribute {
+  name := `block_command,
+  descr := "Define a new block command",
+  applicationTime := .afterCompilation,
+  add declName stx k := do
+    unless k == .global do throwError m!"Must be `global`"
+    let cmdName ←
+      match stx with
+      | `(attr|block_command) => pure declName
+      | `(attr|block_command $x) => realizeGlobalConstNoOverloadWithInfo x
+      | _ => throwError "Invalid `block_command` attribute"
+
+    let n ← mkFreshUserName <| declName ++ `block_command
+
+    let ((e, t), _) ← Meta.MetaM.run (ctx := {}) (s := {}) do
+      let e ← Meta.mkAppM ``toBlockCommand #[.const declName []]
+      let e ← instantiateMVars e
+      let t ← Meta.inferType e
+
+      match_expr e with
+      | toBlockCommand ty _ _ => saveSignature n ty
+      | _ => pure ()
+
+      pure (e, t)
+
+    addAndCompile <| .defnDecl {
+      name := n,
+      levelParams := [],
+      type := t,
+      value := e,
+      hints := .opaque,
+      safety := .safe
+    }
+
+    addDocStringCore' n (← findSimpleDocString? (← getEnv) declName)
+
+    modifyEnv fun env =>
+      blockCommandExpanderExt.addEntry env (cmdName, n)
+}
+
+private unsafe def blockCommandExpandersForUnsafe' (x : Name) : DocElabM (Array (BlockCommandExpander × Option String × Option SigDoc)) := do
+  let expanders := blockCommandExpanderExt.getState (← getEnv) |>.find? x |>.getD #[]
+  expanders.mapM fun n => do
+    let e ← evalConst BlockCommandExpander n
+    let doc? ← findDocString? (← getEnv) n
+    let sig := expanderSignatureExt.getState (← getEnv) |>.find? n
+    return (e, doc?, sig)
+
+private unsafe def blockCommandExpandersForUnsafe'' (x : Name) : DocElabM (Array BlockCommandExpander) := do
+  let expanders := blockCommandExpanderAttr.getEntries (← getEnv) x
   return expanders.map (·.value) |>.toArray
 
-@[implemented_by blockRoleExpandersForUnsafe]
-opaque blockRoleExpandersFor (x : Name) : DocElabM (Array BlockRoleExpander)
+private unsafe def blockCommandExpandersForUnsafe (x : Name) : DocElabM (Array (BlockCommandExpander × Option String × Option SigDoc)) := do
+  return (← blockCommandExpandersForUnsafe' x) ++ (← blockCommandExpandersForUnsafe'' x).map (·, none, none)
+
+@[implemented_by blockCommandExpandersForUnsafe]
+opaque blockCommandExpandersFor (x : Name) : DocElabM (Array (BlockCommandExpander × Option String × Option SigDoc))

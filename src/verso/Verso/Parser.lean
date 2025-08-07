@@ -2396,7 +2396,7 @@ mutual
 
   -- This low-level definition is to get exactly the right amount of lookahead
   -- together with column tracking
-  partial def block_role (ctxt : BlockCtxt) : ParserFn := fun c s =>
+  partial def block_command (ctxt : BlockCtxt) : ParserFn := fun c s =>
     let iniPos := s.pos
     let iniSz := s.stxStack.size
     let restorePosOnErr : ParserState → ParserState
@@ -2405,15 +2405,13 @@ mutual
     let s := eatSpaces c s
     if s.hasError then restorePosOnErr s
     else
-      let col := c.currentColumn s
       let s := (intro >> eatSpaces >> ignoreFn (satisfyFn (· == '\n') "newline" <|> eoiFn)) c s
       if s.hasError then restorePosOnErr s
       else
-        let s := (nodeFn nullKind <| atomicFn (ignoreFn (eatSpaces >> (satisfyFn (· == '\n') "newline" <|> eoiFn))) <|> block {ctxt with minIndent := col}) c s
-        s.mkNode ``block_role iniSz
+        s.mkNode ``Verso.Syntax.command iniSz
   where
     eatSpaces := takeWhileFn (· == ' ')
-    intro := guardMinColumn (ctxt.minIndent) >> withCurrentColumn fun c => atomicFn (chFn '{') >> withCurrentColumn fun c' => nameAndArgs (some c') >> nameArgWhitespace (some c)  >> chFn '}'
+    intro := guardMinColumn (ctxt.minIndent) >> atomicFn (chFn '{') >> nameAndArgs >> nameArgWhitespace none >> chFn '}'
 
   partial def linkRef (c : BlockCtxt) : ParserFn :=
     nodeFn ``link_ref <|
@@ -2430,7 +2428,7 @@ mutual
       notFollowedByFn blockOpener "block opener" >> guardMinColumn c.minIndent >> textLine
 
   partial def block (c : BlockCtxt) : ParserFn :=
-    block_role c <|> unorderedList c <|> orderedList c <|> definitionList c <|> header c <|> codeBlock c <|> directive c <|> blockquote c <|> linkRef c <|> footnoteRef c <|> para c <|> metadataBlock
+    block_command c <|> unorderedList c <|> orderedList c <|> definitionList c <|> header c <|> codeBlock c <|> directive c <|> blockquote c <|> linkRef c <|> footnoteRef c <|> para c <|> metadataBlock
 
   partial def blocks (c : BlockCtxt) : ParserFn := sepByFn true (block c) (ignoreFn (manyFn blankLine))
 
@@ -4149,93 +4147,84 @@ r##"* `structure` and `inductive` commands
 
 /--
 info: Success! Final stack:
-  (Verso.Syntax.block_role
-   "{"
-   `test
-   []
-   "}"
-   [(Verso.Syntax.para
-     "para{"
-     [(Verso.Syntax.text
-       (str "\"Here's a modified paragraph.\""))]
-     "}")])
-All input consumed.
+  (Verso.Syntax.command "{" `test [] "}")
+Remaining:
+"Here's a paragraph."
 -/
 #guard_msgs in
-#eval block {} |>.test! "{test}\nHere's a modified paragraph."
-/--
-info: Success! Final stack:
-  (Verso.Syntax.block_role
-   "{"
-   `test
-   []
-   "}"
-   [(Verso.Syntax.para
-     "para{"
-     [(Verso.Syntax.text
-       (str "\"Here's a modified paragraph.\""))]
-     "}")])
-All input consumed.
--/
-#guard_msgs in
-#eval block {} |>.test! "{test}\n Here's a modified paragraph."
-/--
-info: Success! Final stack:
-  (Verso.Syntax.block_role
-   "{"
-   `test
-   []
-   "}"
-   [(Verso.Syntax.para
-     "para{"
-     [(Verso.Syntax.text
-       (str "\"Here's a modified paragraph.\""))]
-     "}")])
-All input consumed.
--/
-#guard_msgs in
-#eval block {} |>.test! " {test}\n Here's a modified paragraph."
-/--
-info: Failure @8 (⟨2, 0⟩): ':'; expected %%% (at line beginning), expected column at least 1 or expected end of file
-Final stack:
-  (Verso.Syntax.block_role
-   "{"
-   `test
-   []
-   "}"
-   [(Verso.Syntax.metadata_block
-     <missing>
-     <missing>)])
-Remaining: "Here's a modified paragraph."
--/
-#guard_msgs in
-#eval block {} |>.test! " {test}\nHere's a modified paragraph."
+#eval block {} |>.test! "{test}\nHere's a paragraph."
 
 /--
 info: Success! Final stack:
-  (Verso.Syntax.block_role
-   "{"
-   `test
-   []
-   "}"
-   [(Verso.Syntax.blockquote
-     ">"
-     [(Verso.Syntax.para
-       "para{"
-       [(Verso.Syntax.text
-         (str
-          "\"Here's a modified blockquote\""))]
-       "}")
-      (Verso.Syntax.para
-       "para{"
-       [(Verso.Syntax.text
-         (str "\"with multiple paras\""))]
-       "}")])])
-Remaining:
-"that ends"
+  [(Verso.Syntax.command "{" `test [] "}")
+   (Verso.Syntax.para
+    "para{"
+    [(Verso.Syntax.text
+      (str "\"Here's a paragraph.\""))]
+    "}")]
+All input consumed.
 -/
 #guard_msgs in
-#eval block {} |>.test! "{test}\n> Here's a modified blockquote\n\n with multiple paras\n\nthat ends"
+#eval blocks {} |>.test! "{test}\nHere's a paragraph."
+
+/--
+info: Success! Final stack:
+  (Verso.Syntax.command "{" `test [] "}")
+Remaining:
+" Here's a paragraph."
+-/
+#guard_msgs in
+#eval block {} |>.test! "{test}\n Here's a paragraph."
+
+/--
+info: Success! Final stack:
+  (Verso.Syntax.command "{" `test [] "}")
+Remaining:
+" Here's a paragraph."
+-/
+#guard_msgs in
+#eval block {} |>.test! " {test}\n Here's a paragraph."
+/--
+info: Success! Final stack:
+  (Verso.Syntax.command "{" `test [] "}")
+Remaining:
+"Here's a paragraph."
+-/
+#guard_msgs in
+#eval block {} |>.test! " {test}\nHere's a paragraph."
+
+/--
+info: Success! Final stack:
+  (Verso.Syntax.command "{" `test [] "}")
+Remaining:
+"> Here's a blockquote\n\n with multiple paras\n\nthat ends"
+-/
+#guard_msgs in
+#eval block {} |>.test! "{test}\n> Here's a blockquote\n\n with multiple paras\n\nthat ends"
+
+/--
+info: Success! Final stack:
+  [(Verso.Syntax.command "{" `test [] "}")
+   (Verso.Syntax.blockquote
+    ">"
+    [(Verso.Syntax.para
+      "para{"
+      [(Verso.Syntax.text
+        (str "\"Here's a blockquote\""))]
+      "}")
+     (Verso.Syntax.para
+      "para{"
+      [(Verso.Syntax.text
+        (str "\"with multiple paras\""))]
+      "}")])
+   (Verso.Syntax.para
+    "para{"
+    [(Verso.Syntax.text (str "\"that ends\""))]
+    "}")]
+All input consumed.
+-/
+#guard_msgs in
+#eval blocks {} |>.test! "{test}\n> Here's a blockquote\n\n with multiple paras\n\nthat ends"
 
 /--
 info: 2 failures:
@@ -4258,18 +4247,21 @@ Final stack:
 #eval block {} |>.test! "{\ntest}\nHere's a modified paragraph."
 
 /--
-info: Success! Final stack:
-  (Verso.Syntax.block_role
-   "{"
-   `test
-   []
-   "}"
-   [(Verso.Syntax.para
-     "para{"
-     [(Verso.Syntax.text
-       (str "\"Here's a modified paragraph.\""))]
-     "}")])
-All input consumed.
+info: 2 failures:
+  @37 (⟨3, 28⟩): expected identifier
+    ""
+  @37 (⟨3, 28⟩): unexpected end of input; expected '![', '$$', '$', '[' or '[^'
+    ""
+
+Final stack:
+  (Verso.Syntax.para
+   "para{"
+   [(Verso.Syntax.role
+     "{"
+     <missing>
+     "["
+     [(Verso.Syntax.footnote <missing>)]
+     "]")])
 -/
 #guard_msgs in
 #eval block {} |>.test! "{\n test}\nHere's a modified paragraph."
@@ -4295,36 +4287,43 @@ Final stack:
 #eval block {} |>.test! "{\n    test\narg}\nHere's a modified paragraph."
 
 /--
-info: Success! Final stack:
-  (Verso.Syntax.block_role
-   "{"
-   `test
-   [(Verso.Syntax.anon
-     (Verso.Syntax.arg_ident `arg))]
-   "}"
-   [(Verso.Syntax.para
-     "para{"
-     [(Verso.Syntax.text
-       (str "\"Here's a modified paragraph.\""))]
-     "}")])
-All input consumed.
+info: 2 failures:
+  @45 (⟨4, 28⟩): expected identifier
+    ""
+  @45 (⟨4, 28⟩): unexpected end of input; expected '![', '$$', '$', '[' or '[^'
+    ""
+
+Final stack:
+  (Verso.Syntax.para
+   "para{"
+   [(Verso.Syntax.role
+     "{"
+     <missing>
+     "["
+     [(Verso.Syntax.footnote <missing>)]
+     "]")])
 -/
 #guard_msgs in
 #eval block {} |>.test! "{\n    test\n arg}\nHere's a modified paragraph."
 /--
-info: Success! Final stack:
-  (Verso.Syntax.block_role
-   "{"
-   `test
-   [(Verso.Syntax.anon
-     (Verso.Syntax.arg_ident `arg))]
-   "}"
-   [])
-Remaining:
-"\nHere's a non-modified paragraph."
+info: 2 failures:
+  @19 (⟨6, 0⟩): '{'; expected '![', '$$', '$', '[' or '[^'
+    "Here's a paragraph."
+  @19 (⟨6, 0⟩): expected identifier
+    "Here's a paragraph."
+
+Final stack:
+  (Verso.Syntax.para
+   "para{"
+   [(Verso.Syntax.role
+     "{"
+     <missing>
+     "["
+     [(Verso.Syntax.footnote <missing>)]
+     "]")])
 -/
 #guard_msgs in
-#eval block {} |>.test! "{\n    test\n arg}\n\n\nHere's a non-modified paragraph."
+#eval block {} |>.test! "{\n    test\n arg}\n\n\nHere's a paragraph."
 
 /--
 info: Success! Final stack:
