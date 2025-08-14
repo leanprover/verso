@@ -123,10 +123,12 @@ A specification of which module to look in to find example code.
 structure CodeModuleContext extends CodeConfig where
   /-- The module's name. -/
   module : Ident
+  /-- The path at which the module's project is found -/
+  project : StrLit
 
 instance : FromArgs CodeModuleContext m where
-  fromArgs := ((·, ·, ·) <$> moduleOrDefault <*> .namedD `showProofStates .bool true <*> .named `defSite .bool true) <&> fun (m, s, d) =>
-    ({module := m, showProofStates := s, defSite := d})
+  fromArgs := ((·, ·, ·, ·) <$> moduleOrDefault <*> projectOrDefault <*> .namedD `showProofStates .bool true <*> .named `defSite .bool true) <&> fun (m, p, s, d) =>
+    ({module := m, project := p, showProofStates := s, defSite := d})
 
 /--
 A specification of which module to look in to find example code, potentially made more specific with
@@ -240,25 +242,28 @@ Loads the contents of a module, parsed by anchor. The results are cached.
 def anchored
     [Monad m] [MonadEnv m] [MonadLift IO m] [MonadError m] [MonadOptions m]
     [MonadTrace m] [AddMessageContext m] [MonadAlwaysExcept ε m] [MonadFinally m] [MonadQuotation m]
-    (moduleName : Ident) (blame : Syntax) :
+    (project : StrLit) (moduleName : Ident) (blame : Syntax) :
     m Highlighted.AnchoredExamples := do
+  let projectPath := project.getString
   let modName := moduleName.getId
   let modStr := modName.toString
   let suppress ← getSuppress
 
-  if let some cached := (loadedModuleAnchorExt.getState (← getEnv)).find? modName then
+  if let some cached := (loadedModuleAnchorExt.getState (← getEnv))[projectPath]?.getD {} |>.find? modName then
     if let some cached' := cached[suppress]? then
       return cached'
 
-  let items ← loadModuleContent modStr
+  let items ← loadModuleContent project modStr
   let highlighted := Highlighted.seq (items.map (·.code))
 
   match highlighted.anchored with
   | .error e => throwErrorAt blame e
   | .ok anchors =>
     modifyEnv fun env => loadedModuleAnchorExt.modifyState env fun mods =>
-      let v := (mods.find? modName).getD {}
-      mods.insert modName (v.insert suppress anchors)
+      mods.alter projectPath fun mods =>
+        let mods := mods.getD {}
+        let v := (mods.find? modName).getD {}
+        some <| mods.insert modName (v.insert suppress anchors)
     return anchors
 
 open MessageData (hint)
@@ -300,11 +305,11 @@ def logInfos (hl : Highlighted) : DocElabM Unit := do
 Given a module name and an anchor name, loads the resulting code and invokes `k` on it, failing if
 the code can't be found.
 -/
-def withAnchored (moduleName : Ident) (anchor? : Option Ident)
+def withAnchored (project : StrLit) (moduleName : Ident) (anchor? : Option Ident)
     (k : Highlighted → DocElabM (Array Term)) : DocElabM (Array Term) := do
   if let some anchor := anchor? then
     try
-      let {anchors, ..} ← anchored moduleName anchor
+      let {anchors, ..} ← anchored project moduleName anchor
       if let some hl := anchors[anchor.getId.toString]? then
         k hl
       else
@@ -313,7 +318,7 @@ def withAnchored (moduleName : Ident) (anchor? : Option Ident)
       | .error ref e => logErrorAt ref e; return #[← ``(sorryAx _ true)]
       | e => throw e
   else
-    let {code, ..} ← anchored moduleName moduleName
+    let {code, ..} ← anchored project moduleName moduleName
     k code
 
 -- TODO: public API? Or something higher level that constructs the hint?
@@ -349,8 +354,8 @@ def codeBlockSuggestion (newBlock : String) : Suggestion :=
   {suggestion := newBlock, messageData? := sugg}
 
 def moduleContentBlock (args : Array Arg) (code : StrLit) : DocElabM (Array Term) := do
-    let cfg@{ module := moduleName, anchor?, showProofStates := _, defSite := _ } ← parseThe CodeContext args
-    withAnchored moduleName anchor? fun hl => do
+    let cfg@{ module := moduleName, project, anchor?, showProofStates := _, defSite := _ } ← parseThe CodeContext args
+    withAnchored project moduleName anchor? fun hl => do
       logInfos hl
       let hlString := hl.toString
       if code.getString.trim.isEmpty && !hlString.trim.isEmpty then
@@ -394,10 +399,10 @@ def anchor : CodeBlockExpander
       throwError "Expected a positional argument first (the anchor name)"
 
 def moduleInline (args : Array Arg) (inls : TSyntaxArray `inline) : DocElabM (Array Term) := do
-  let cfg@{module := moduleName, anchor?, showProofStates := _, defSite := _} ← parseThe CodeContext args
+  let cfg@{module := moduleName, project, anchor?, showProofStates := _, defSite := _} ← parseThe CodeContext args
   let code? ← oneCodeStr? inls
 
-  withAnchored moduleName anchor? fun hl => do
+  withAnchored project moduleName anchor? fun hl => do
     logInfos hl
     if let some code := code? then
       let _ ← ExpectString.expectString "code" code (hl.toString.trim)
@@ -449,11 +454,11 @@ where mkHover (sig : String) (doc? : Option String) : String :=
   else ""
 
 def moduleNameInline (args : Array Arg) (inls : TSyntaxArray `inline) : DocElabM (Array Term) := do
-  let cfg@{module := moduleName, anchor?, show?, showProofStates := _, defSite := _} ← parseThe NameContext args
+  let cfg@{module := moduleName, project, anchor?, show?, showProofStates := _, defSite := _} ← parseThe NameContext args
   let name ← oneCodeStr inls
   let nameStr := name.getString
 
-  withAnchored moduleName anchor? fun hl => do
+  withAnchored project moduleName anchor? fun hl => do
     if let some tok@⟨k, _txt⟩ := hl.matchingName? nameStr then
 
       let tok := show?.map (⟨k, ·.getId.toString⟩) |>.getD tok
@@ -516,10 +521,10 @@ private def suggestTerms (hl : Highlighted) (input : String) : Array String := I
 
 
 def moduleTermInline (args : Array Arg) (inls : TSyntaxArray `inline) : DocElabM (Array Term) := do
-  let cfg@{module := moduleName, anchor?, showProofStates := _, defSite := _} ← parseThe CodeContext args
+  let cfg@{module := moduleName, project, anchor?, showProofStates := _, defSite := _} ← parseThe CodeContext args
   let term ← oneCodeStr inls
 
-  withAnchored moduleName anchor? fun hl => do
+  withAnchored project moduleName anchor? fun hl => do
     if term.getString.trim.isEmpty then
       let suggs := suggestTerms hl term.getString
       let h ← hintAt term "Use one of these" suggs
@@ -566,9 +571,9 @@ def anchorTerm : RoleExpander
 
 
 def moduleTermBlock (args : Array Arg) (term : StrLit) : DocElabM (Array Term) := do
-  let cfg@{module := moduleName, anchor?, showProofStates := _, defSite := _} ← parseThe CodeContext args
+  let cfg@{module := moduleName, project, anchor?, showProofStates := _, defSite := _} ← parseThe CodeContext args
 
-  withAnchored moduleName anchor? fun hl => do
+  withAnchored project moduleName anchor? fun hl => do
     let str := term.getString.trim
     if str.isEmpty then
       let ref ← getRef
@@ -631,9 +636,9 @@ private partial def findTrace? (header : String) : MessageContents Highlighted �
     else chs.findSome? (findTrace? header)
 
 def outputBlock (args : Array Arg) (str : StrLit) : DocElabM (Array Term) := do
-  let {module := moduleName, anchor?, severity, expandTraces, onlyTrace, showProofStates := _, defSite := _} ← parseThe MessageContext args
+  let {module := moduleName, project, anchor?, severity, expandTraces, onlyTrace, showProofStates := _, defSite := _} ← parseThe MessageContext args
 
-  withAnchored moduleName anchor? fun hl => do
+  withAnchored project moduleName anchor? fun hl => do
     let infos : Array _ := allInfo hl
 
     let mut candidates : Array Highlighted.Message := #[]
@@ -759,9 +764,9 @@ def anchorWarning : CodeBlockExpander
 def moduleOutInline (args : Array Arg) (inls : TSyntaxArray `inline) : DocElabM (Array Term) := do
   let str? ← oneCodeStr? inls
 
-  let {module := moduleName, anchor?, expandTraces, onlyTrace, severity, showProofStates := _, defSite := _} ← parseThe MessageContext args
+  let {module := moduleName, project, anchor?, expandTraces, onlyTrace, severity, showProofStates := _, defSite := _} ← parseThe MessageContext args
 
-  withAnchored moduleName anchor? fun hl => do
+  withAnchored project moduleName anchor? fun hl => do
     let infos := allInfo hl
     if let some str := str? then
       let mut candidates : Array Highlighted.Message := #[]
@@ -918,22 +923,24 @@ private def suggest : InlineExpander
       -- Delegate to the next handler
       Elab.throwUnsupportedSyntax
 
-    let anchors := loadedModuleAnchorExt.getState (← getEnv)
     let mut termSuggestions : NameMap (HashSet String) := {}
     let mut nameSuggestions : NameMap (HashSet String) := {}
-    for (modName, modAnchors) in anchors do
-      for (_, examples) in modAnchors do
-        for (anchorName, anchorContents) in examples.anchors.toArray do
 
-          if str'.all (fun c => !c.isWhitespace) then
-            if let some _ := anchorContents.matchingName? str' then
-              nameSuggestions := nameSuggestions.insert modName <|
-                ((nameSuggestions.find? modName).getD {}).insert anchorName
+    let anchors := loadedModuleAnchorExt.getState (← getEnv)
+    if let some defaultProject := verso.exampleProject.get? (← getOptions) then
+      for (modName, modAnchors) in anchors[defaultProject]?.getD {} do
+        for (_, examples) in modAnchors do
+          for (anchorName, anchorContents) in examples.anchors.toArray do
 
-          if let some _ := anchorContents.matchingExpr? str' then
-            termSuggestions :=
-              termSuggestions.insert modName <|
-                ((termSuggestions.find? modName).getD {}).insert anchorName
+            if str'.all (fun c => !c.isWhitespace) then
+              if let some _ := anchorContents.matchingName? str' then
+                nameSuggestions := nameSuggestions.insert modName <|
+                  ((nameSuggestions.find? modName).getD {}).insert anchorName
+
+            if let some _ := anchorContents.matchingExpr? str' then
+              termSuggestions :=
+                termSuggestions.insert modName <|
+                  ((termSuggestions.find? modName).getD {}).insert anchorName
 
     let mut defaultSuggestions : Array (String × String) := #[]
     let mut otherSuggestions : Array (String × String × String) := #[]

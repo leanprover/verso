@@ -43,19 +43,20 @@ variable [Monad m] [MonadLift IO m] [MonadEnv m] [MonadOptions m] [MonadError m]
 
 
 open System in
-def loadModuleContent' (projectDir : String) (mod : String) (suppressNamespaces : List String) : m (Array ModuleItem) := do
+def loadModuleContent' (projectDir : StrLit) (mod : String) (suppressNamespaces : List String) : m (Array ModuleItem) := do
+  let blame := projectDir
 
-  let projectDir : FilePath := projectDir
+  let projectDir : FilePath := projectDir.getString
 
   -- Validate that the path is really a Lean project
   let lakefile := projectDir / "lakefile.lean"
   let lakefile' := projectDir / "lakefile.toml"
   if !(← lakefile.pathExists) && !(← lakefile'.pathExists) then
-    throwError m!"Neither {lakefile} nor {lakefile'} exist, couldn't load project"
+    throwErrorAt blame m!"Neither {lakefile} nor {lakefile'} exist, couldn't load project"
   let toolchainfile := projectDir / "lean-toolchain"
   let toolchain ← do
       if !(← toolchainfile.pathExists) then
-        throwError m!"File {toolchainfile} doesn't exist, couldn't load project"
+        throwErrorAt blame m!"File {toolchainfile} doesn't exist, couldn't load project"
       pure (← IO.FS.readFile toolchainfile).trim
 
   -- Kludge: remove variables introduced by Lake. Clearing out DYLD_LIBRARY_PATH and
@@ -93,7 +94,9 @@ def loadModuleContent' (projectDir : String) (mod : String) (suppressNamespaces 
   let hlDir := ("build" : System.FilePath) / "highlighted"
   let hlFile :=
     (mod.split (· == '.')).foldl (init := hlDir) (· / ·) |>.addExtension "json"
-  let json ← IO.FS.readFile (projectDir / ".lake" / hlFile)
+  -- Very old Lake versions don't put things in .lake
+  let lakeDir := if (← (projectDir / ".lake").isDir) then projectDir / ".lake" else projectDir
+  let json ← IO.FS.readFile (lakeDir / hlFile)
   let .ok json := Json.parse json
     | throwError s!"Expected JSON array"
   match Module.fromJson? json with
@@ -113,24 +116,18 @@ where
       "\nstdout: " ++ res.stdout ++
       "\nstderr: " ++ res.stderr)
 
-
-
-def getProjectDir : m String := do
-  let some projectDir ← verso.exampleProject.get? <$> getOptions
-    | throwError "No example project specified - use `set_option verso.exampleProject \"DIR\" to set it.`"
-  return projectDir
-
 def getSuppress : m (List String) := do
   let some nss ← verso.externalExamples.suppressedNamespaces.get? <$> getOptions
     | return []
   let nss := nss.dropWhile (· == '"') |>.dropRightWhile (· == '"') -- Strings getting double-quoted for some reason
   return nss.splitOn " "
 
-def loadModuleContent [MonadAlwaysExcept ε m] (mod : String) : m (Array ModuleItem) :=
+def loadModuleContent [MonadAlwaysExcept ε m] (projectDir : StrLit) (mod : String) : m (Array ModuleItem) :=
   withTraceNode `Elab.Verso.Code.External (fun _ => pure m!"Loading example module {mod}") <| do
+    let dirName := projectDir.getString
     let modName := mod.toName
     let suppress ← getSuppress
-    if let some ms := (loadedModulesExt.getState (← getEnv)).find? modName then
+    if let some ms := (loadedModulesExt.getState (← getEnv))[dirName]?.getD {} |>.find? modName then
       if let some m := ms[suppress]? then
         trace[Elab.Verso.Code.External] m!"Cache hit for {mod}"
         return m
@@ -140,13 +137,14 @@ def loadModuleContent [MonadAlwaysExcept ε m] (mod : String) : m (Array ModuleI
       | .error .. => pure m!"Cache miss for {mod} but failed to load it"
       | .ok (_, ms) => pure m!"Cache miss for {mod}, loaded in {ms.toFloat / 1000.0}s"
     Prod.fst <$> withTraceNode `Elab.Verso.Code.External.loadModule traceMsg do
-      let projectDir ← getProjectDir
       let ms1 ← IO.monoMsNow
       let items ← loadModuleContent' projectDir mod suppress
       let ms2 ← IO.monoMsNow
       modifyEnv fun env =>
         loadedModulesExt.modifyState env fun st =>
-          let forMod := st.find? modName |>.getD {}
-          let forMod := forMod.insert suppress items
-          st.insert modName forMod
+          st.alter dirName fun ms =>
+            let ms := ms.getD {}
+            let forMod := ms.find? modName |>.getD {}
+            let forMod := forMod.insert suppress items
+            some (ms.insert modName forMod)
       return (items, ms2 - ms1)
