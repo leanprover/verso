@@ -16,6 +16,6 @@ open SubVerso Highlighting Module Highlighted
 
 namespace Verso.Code.External
 
-initialize loadedModulesExt : (EnvExtension (NameMap (HashMap (List String) (Array ModuleItem)))) ← registerEnvExtension (pure {})
+initialize loadedModulesExt : (EnvExtension (HashMap String (NameMap (HashMap (List String) (Array ModuleItem))))) ← registerEnvExtension (pure {})
 
-initialize loadedModuleAnchorExt : (EnvExtension (NameMap (HashMap (List String) AnchoredExamples))) ← registerEnvExtension (pure {})
+initialize loadedModuleAnchorExt : (EnvExtension (HashMap String (NameMap (HashMap (List String) AnchoredExamples)))) ← registerEnvExtension (pure {})
