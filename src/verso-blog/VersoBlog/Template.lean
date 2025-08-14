@@ -300,9 +300,14 @@ def param [TypeName α] (key : String) : TemplateM α := do
     if let some v := val.get? (α := α) then return v
     else throw <| .wrongParamType key (TypeName.typeName α)
 
-
+/--
+Contains the contents of `<head>` that are needed for proper functioning of the site.
+-/
 def builtinHeader : TemplateM Html := do
+  let siteRoot := String.join ((← currentPath).map fun _ => "../") ++ "./"
   let mut out := .empty
+  -- Other scripts need this
+  out := out ++ {{<script>s!"var __versoSiteRoot = {siteRoot.quote};"</script>}}
   -- These should come first so later stylesheets can easily override them.
   out := out ++ {{<style>{{«verso-vars.css»}}</style>}}
   for style in (← read).builtInStyles do
