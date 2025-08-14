@@ -42,7 +42,11 @@ def isConsonant (str : String) (i : String.Pos) : Bool :=
   | _ => true
 termination_by i.byteIdx
 decreasing_by
-  simp [String.prev, *, String.utf8PrevAux_lt_of_pos]
+  simp [String.prev, *]
+  rename_i h
+  refine String.utf8PrevAux_lt_of_pos str.data 0 i ?_ h
+  let ⟨i⟩ := i
+  cases i <;> simp_all
 
 
 /--

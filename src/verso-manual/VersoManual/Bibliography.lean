@@ -63,6 +63,9 @@ structure ArXiv where
   id : String
 deriving ToJson, FromJson, BEq, Hashable, Ord
 
+section
+attribute [local instance] lexOrd
+
 structure Article where
   title : Doc.Inline Manual
   authors : Array (Doc.Inline Manual)
@@ -74,6 +77,7 @@ structure Article where
   pages : Option (Nat × Nat) := none
   url : Option String := none
 deriving ToJson, FromJson, BEq, Hashable, Ord
+end
 
 inductive Citable where
   | inProceedings : InProceedings → Citable

@@ -82,7 +82,7 @@ Expected error messages must be indicated explicitly:
 #eval y
 ```
 ```leanOutput yVal
-unknown identifier 'y'
+Unknown identifier `y`
 ```
 
 {include 1 DemoTextbook.Nat}

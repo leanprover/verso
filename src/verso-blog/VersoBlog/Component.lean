@@ -138,8 +138,8 @@ deriving TypeName
 
 open Lean in
 def Components.fromLists (blocks : List (Name × BlockComponent)) (inlines : List (Name × InlineComponent)) : Components where
-  blocks := .fromList (blocks.map fun (x, b) => (x, Dynamic.mk b)) _
-  inlines := .fromList (inlines.map fun (x, b) => (x, Dynamic.mk b)) _
+  blocks := .ofList (blocks.map fun (x, b) => (x, Dynamic.mk b)) _
+  inlines := .ofList (inlines.map fun (x, b) => (x, Dynamic.mk b)) _
 
 open Lean in
 private def nameAndDef [Monad m] [MonadRef m] [MonadQuotation m] (ext : Name × Name) : m Term := do

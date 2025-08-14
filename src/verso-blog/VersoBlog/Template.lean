@@ -17,8 +17,7 @@ import Verso.Output.Html
 import Verso.Output.Html.CssVars
 import Verso.Code
 
-open Std (HashSet)
-open Lean (RBMap)
+open Std (HashSet TreeMap)
 
 open Verso Doc Output Html HtmlT
 open Verso.Genre Blog
@@ -52,9 +51,9 @@ instance : Coe Html Template.Params.Val where
    | other => ⟨.mk other, #[]⟩
 
 
-def Params := RBMap String Params.Val compare
+def Params := TreeMap String Params.Val
 
-instance : EmptyCollection Params := inferInstanceAs <| EmptyCollection (RBMap _ _ _)
+instance : EmptyCollection Params := inferInstanceAs <| EmptyCollection (TreeMap _ _ _)
 
 inductive Error where
   | missingParam (param : String)
@@ -258,16 +257,16 @@ namespace Verso.Genre.Blog.Template
 namespace Params
 
 def ofList (params : List (String × Val)) : Params :=
-  Lean.RBMap.ofList params
+  Std.TreeMap.ofList params _
 
 def toList (params : Params) : List (String × Val) :=
-  Lean.RBMap.toList params
+  Std.TreeMap.toList params
 
 def insert (params : Params) (key : String) (val : Val) : Params :=
-  Lean.RBMap.insert params key val
+  Std.TreeMap.insert params key val
 
 def erase (params : Params) (key : String) : Params :=
-  Lean.RBMap.erase params key
+  Std.TreeMap.erase params key
 
 
 end Params
@@ -287,7 +286,7 @@ namespace Template
 
 def param? [TypeName α] (key : String) : TemplateM (Option α) := do
   let ctx ← readThe Context
-  match ctx.params.find? key with
+  match ctx.params.get? key with
   | none => return none
   | some val =>
     if let some v := val.get? (α := α) then return (some v)
@@ -295,7 +294,7 @@ def param? [TypeName α] (key : String) : TemplateM (Option α) := do
 
 
 def param [TypeName α] (key : String) : TemplateM α := do
-  match (← read).params.find? key with
+  match (← read).params.get? key with
   | none => throw <| .missingParam key
   | some val =>
     if let some v := val.get? (α := α) then return v
