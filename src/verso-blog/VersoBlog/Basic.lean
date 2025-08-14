@@ -178,7 +178,7 @@ structure TraverseContext where
   components : Components
 
 structure TraverseState where
-  usedIds : Lean.RBMap (List String) (HashSet String) compare := {}
+  usedIds : Std.HashMap (List String) (HashSet String) := {}
   targets : Lean.NameMap Blog.Info.Target := {}
   blogs : Lean.NameMap Blog.Info.ArchivesMeta := {}
   refs : Lean.NameMap Blog.Info.Ref := {}
@@ -334,7 +334,7 @@ defmethod BlogPost.summary (post : BlogPost) : Array (Block Post) := Id.run do
 
 partial def TraverseState.freshId (state : Blog.TraverseState) (path : List String) (hint : Lean.Name) : String := Id.run do
   let mut idStr := mangle (toString hint)
-  match state.usedIds.find? path with
+  match state.usedIds[path]? with
   | none => return idStr
   | some used =>
     while used.contains idStr do

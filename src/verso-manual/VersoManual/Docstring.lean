@@ -37,7 +37,7 @@ open Lean Elab
 open Verso.Genre.Manual.Docstring
 open Verso.Doc.Suggestion
 
-variable {m} [Monad m] [MonadOptions m] [MonadEnv m] [MonadLiftT CoreM m] [MonadError m] [MonadLog m] [AddMessageContext m] [MonadInfoTree m]
+variable {m} [Monad m] [MonadOptions m] [MonadEnv m] [MonadLiftT CoreM m] [MonadError m] [MonadLog m] [AddMessageContext m] [MonadInfoTree m] [MonadLiftT MetaM m]
 
 def ValDesc.documentableName : ValDesc m (Ident × Name) where
   description := "a name with documentation"
@@ -1400,7 +1400,7 @@ structure DocstringConfig where
   label : Option String := none
 
 section
-variable [Monad m] [MonadOptions m] [MonadEnv m] [MonadLiftT CoreM m] [MonadError m]
+variable [Monad m] [MonadOptions m] [MonadEnv m] [MonadLiftT CoreM m] [MonadLiftT MetaM m] [MonadError m]
 variable [MonadLog m] [AddMessageContext m] [Elab.MonadInfoTree m]
 
 def DocstringConfig.parse : ArgParse m DocstringConfig :=
@@ -1497,7 +1497,7 @@ where
 
 section
 variable {m}
-variable [Monad m] [MonadError m] [MonadLiftT CoreM m] [MonadEnv m]
+variable [Monad m] [MonadError m] [MonadLiftT CoreM m] [MonadLiftT MetaM m] [MonadEnv m]
 variable [MonadLog m] [AddMessageContext m] [MonadOptions m] [MonadWithOptions m]
 variable [Lean.Elab.MonadInfoTree m]
 

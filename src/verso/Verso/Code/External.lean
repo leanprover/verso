@@ -969,6 +969,7 @@ private def suggest : InlineExpander
     let region := region?.getD ""
 
     let (close, far) := defaultSuggestions.partition (fun (_, x) => hasSubstring region x)
+    have : Ord (String × String) := lexOrd
     let close := close.qsortOrd
     let far := far.qsortOrd
 

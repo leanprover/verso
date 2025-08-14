@@ -13,28 +13,95 @@ open Verso.Method
 open Lean (ToJson FromJson)
 open Std (HashSet)
 
+private def validCharString := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"
+
+
 /-- The characters allowed in slugs. -/
-def Slug.validChars := HashSet.ofList "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_".toList
+def Slug.validChars := HashSet.ofList validCharString.toList
+
+/--
+A slug is well-formed if all its characters are valid.
+-/
+def Slug.WF (str : String) : Prop :=
+  str.toList.all (· ∈ validChars)
+
+open Lean Elab Command in
+#eval show CommandElabM Unit from do
+  let mut iter := validCharString.iter
+  while h : iter.hasNext do
+    let c := iter.curr' h
+    iter := iter.next' h
+    let n := mkIdent <| `Slug ++ (.str .anonymous s!"'{c}'_mem_validChars")
+    let cmd ←
+      `(@[simp, grind] protected theorem $n : ($(quote c) ∈ Slug.validChars) := by simp [Slug.validChars, validCharString])
+    elabCommand cmd
+
 
 private def mangle (c : Char) : String :=
-  match c with
-  | '<' => "_LT_"
-  | '>' => "_GT_"
-  | ';' => "_SEMI_"
-  | '‹' => "_FLQ_"
-  | '›' => "_FRQ_"
-  | '«' => "_FLQQ_"
-  | '»' => "_FLQQ_"
-  | '⟨' => "_LANGLE_"
-  | '⟩' => "_RANGLE_"
-  | '(' => "_LPAR_"
-  | ')' => "_RPAR_"
-  | '[' => "_LSQ_"
-  | ']' => "_RSQ_"
-  | '→' => "_ARR_"
-  | '↦' => "_MAPSTO_"
-  | '⊢' => "_VDASH_"
-  | _ => "___"
+  replacements.lookup c |>.getD "___"
+where
+  replacements : List (Char × String) := [
+    ('<', "_LT_"),
+    ('>', "_GT_"),
+    (';', "_SEMI_"),
+    ('‹', "_FLQ_"),
+    ('›', "_FRQ_"),
+    ('«', "_FLQQ_"),
+    ('»', "_FLQQ_"),
+    ('⟨', "_LANGLE_"),
+    ('⟩', "_RANGLE_"),
+    ('(', "_LPAR_"),
+    (')', "_RPAR_"),
+    ('[', "_LSQ_"),
+    (']', "_RSQ_"),
+    ('→', "_ARR_"),
+    ('↦', "_MAPSTO_"),
+    ('⊢', "_VDASH_")
+  ]
+
+
+@[simp, grind] theorem mangle.replacements_all_wf : (k, v) ∈ mangle.replacements → Slug.WF v := by
+  simp [Slug.WF, replacements]
+  intro
+  repeat (rename_i hk; cases hk; simp [*])
+
+@[simp, grind]
+private theorem mangle.replacements_wf (c : Char) : (c, s) ∈ mangle.replacements → Slug.WF (mangle c) := by
+  unfold mangle
+  generalize h : mangle.replacements = reps
+  have : ∀ k v, (k, v) ∈ reps → Slug.WF v := by
+    rw [← h]
+    grind only [=_ List.contains_iff_mem, mangle.replacements_all_wf]
+  clear h
+  fun_induction List.lookup <;> first | grind | simp
+
+@[simp, grind]
+private theorem mangle_wf (c : Char) : Slug.WF (mangle c) := by
+  unfold mangle
+  by_cases h : ∃ s, (c, s) ∈ mangle.replacements
+  . let ⟨w, p⟩ := h
+    apply mangle.replacements_wf _ p
+  . suffices List.lookup c mangle.replacements = none by
+      rw [this]
+      simp [Slug.WF]
+    generalize h' : mangle.replacements = xs
+    rw [h'] at h
+    clear h'
+    fun_induction List.lookup with try ((first | grind | simp); done)
+    | case2 _ _ _ _ beq =>
+      have := LawfulBEq.eq_of_beq beq
+      exfalso
+      apply h
+      simp [*]
+
+
+@[simp, grind]
+private theorem mangle_mem_valid (c : Char) : c ∈ (mangle c').data → c ∈ Slug.validChars := by
+  intro mem
+  have := mangle_wf c'
+  simp [Slug.WF] at this
+  apply this
+  assumption
 
 /--
 Converts a string to a valid slug, mangling as appropriate.
@@ -50,16 +117,13 @@ def asSlug (str : String) : String :=
         else acc ++ mangle c
   loop str.iter ""
 
-/--
-A slug is well-formed if all its characters are valid.
--/
-def Slug.WF (str : String) : Prop :=
-  str.toList.all (· ∈ validChars)
-
 instance : Decidable (c ∈ Slug.validChars) := inferInstance
 
 instance [DecidablePred p] : Decidable (String.all s (p ·)) :=
-  if h : String.all s (p ·) then isTrue h else isFalse h
+  if h : String.all s (p ·) then
+    isTrue h
+  else
+    isFalse h
 
 @[simp]
 theorem String.empty_all_eq_true : "".all p = true := by
@@ -68,59 +132,53 @@ theorem String.empty_all_eq_true : "".all p = true := by
 @[simp]
 theorem String.Pos.add_0_eq_size {c : Char} : (0 : String.Pos) + c = ⟨c.utf8Size⟩ := by
   simp only [HAdd.hAdd, String.Pos.byteIdx_zero, String.Pos.mk.injEq]
-  show 0 + c.utf8Size = c.utf8Size
-  simp
+  grind
 
 instance : DecidablePred Slug.WF := fun str =>
-  if h : str.toList.all (· ∈ Slug.validChars) then isTrue (by unfold Slug.WF; exact h) else isFalse h
+  if h : str.toList.all (· ∈ Slug.validChars) then
+    isTrue h
+  else
+    isFalse h
 
-@[simp]
-theorem Slug.wf_mangle : WF (mangle c) := by
-  unfold mangle
-  split <;> dsimp [WF, validChars] <;> simp
-
+@[grind]
 theorem Slug.wf_push (c str) : c ∈ validChars → WF str → WF (str.push c) := by
   unfold WF
   cases str
   intro mem wf
+  simp only [String.toList, List.all_eq_true, decide_eq_true_eq] at wf
   simp only [String.toList, String.data_push, List.all_append, List.all_cons, List.all_nil,
     Bool.and_true, Bool.and_eq_true, List.all_eq_true, decide_eq_true_eq]
-  and_intros <;> simp at wf <;> assumption
+  grind only
 
+@[grind]
 theorem Slug.wf_append (str1 str2) : WF str1 → WF str2 → WF (str1 ++ str2) := by
   unfold WF
   cases str1; cases str2
   intro wf1 wf2
   simp only [String.toList, String.data_append, List.all_append, Bool.and_eq_true, List.all_eq_true, decide_eq_true_eq]
   simp only [String.toList, List.all_eq_true, decide_eq_true_eq] at wf1 wf2
-  and_intros <;> assumption
+  grind only
+
+@[simp]
+theorem Slug.decide_WF_eq_wf (s : String) : (s.toList.all (fun x => decide (x ∈ validChars)) = true) = WF s := by
+  rfl
+
+@[grind, simp]
+theorem Slug.wf_forall : WF s → c ∈ s.data → c ∈ validChars := by
+  intro wf h
+  simp_all [WF]
 
 theorem Slug.asSlug_loop_valid : WF acc → WF (asSlug.loop iter acc) := by
   intro wfAcc
-  induction iter, acc using asSlug.loop.induct <;> unfold asSlug.loop <;> simp [*]
-  case case2 iter acc notEnd c ih =>
+  fun_induction asSlug.loop with try assumption
+  | case2 iter acc notEnd c ih =>
     apply ih
     unfold WF
-    simp only [WF, String.toList, List.all_eq_true, decide_eq_true_eq] at wfAcc
-    split
-    . simp only [String.toList, String.data_push, List.all_append, List.all_cons, List.all_nil,
-      Bool.and_true, Bool.and_eq_true, List.all_eq_true, decide_eq_true_eq]
-      and_intros <;> assumption
-    . split
-      . simp only [String.toList, ↓Char.isValue, String.data_push, List.all_append, List.all_cons,
-        List.all_nil, Bool.and_true, Bool.and_eq_true, List.all_eq_true, decide_eq_true_eq]
-        and_intros
-        . assumption
-        . simp [validChars]
-      . simp only [String.toList, String.data_append, List.all_append, Bool.and_eq_true,
-        List.all_eq_true, decide_eq_true_eq]
-        and_intros
-        . assumption
-        . intro c' mem
-          have : WF (mangle c) := wf_mangle
-          simp only [WF, String.toList, List.all_eq_true, decide_eq_true_eq] at this
-          simp [*]
+    (repeat' split) <;>
+      simp [*] <;>
+      grind only [=_ List.contains_iff_mem, List.contains_eq_mem, mangle_wf, wf_forall, mangle_mem_valid, wf_append, cases Or]
 
+@[grind]
 theorem Slug.asSlug_valid : WF (asSlug str) := by
   unfold asSlug
   apply asSlug_loop_valid
