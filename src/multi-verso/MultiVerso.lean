@@ -311,15 +311,24 @@ private def fetchFile (project : System.FilePath) (root : String) (file : System
   let json ← Json.parse json |> IO.ofExcept
   fromXrefJson root json |> IO.ofExcept
 
+private def defaultConfigFile (project : System.FilePath) : System.FilePath := project / "verso-sources.json"
+
+/--
+Returns `true` if the user has specified a configuration file, or if they haven't and the default file exists.
+-/
+private def hasConfig (project : System.FilePath) (configFile : Option System.FilePath) : IO Bool := do
+  if configFile.isSome then return true
+  else defaultConfigFile project |>.pathExists
+
 private def getConfig (project : System.FilePath) (configFile : Option System.FilePath) : IO Config := do
-    let configFile : System.FilePath :=
-      if let some f := configFile then f
-      else project / "verso-sources.json"
-    let configJson ← IO.FS.readFile configFile
-    let configJson ← Json.parse configJson |> IO.ofExcept
-    match Config.fromJson? configJson with
-    | .error e => throw <| IO.userError s!"Error reading {configFile}: {e}"
-    | .ok v => pure v
+  let configFile : System.FilePath :=
+    if let some f := configFile then f
+    else defaultConfigFile project
+  let configJson ← IO.FS.readFile configFile
+  let configJson ← Json.parse configJson |> IO.ofExcept
+  match Config.fromJson? configJson with
+  | .error e => throw <| IO.userError s!"Error reading {configFile}: {e}"
+  | .ok v => pure v
 
 /--
 Information about a remote document
@@ -411,10 +420,14 @@ def updateRemotes (manual : Bool) (configFile : Option System.FilePath) (logVerb
   if let some f := configFile then
     logVerbose s!"Config override is {f}."
   let config ←
-    try
-      getConfig project configFile
-    catch e =>
-      logVerbose s!"Didn't load remote data config. No remote data to be used. Error: {e}"
+    if (← hasConfig project configFile) then
+      try
+        getConfig project configFile
+      catch e =>
+        logVerbose s!"Didn't load remote data config. No remote data to be used. Error: {e}"
+        return {}
+    else
+      logVerbose s!"No remote data configuration specified, and the default file {defaultConfigFile "."} does not exist."
       return {}
 
   logVerbose s!"Creating remote data cache directory {config.outputDir}"
