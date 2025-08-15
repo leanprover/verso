@@ -34,26 +34,87 @@ structure CodeOpts where
   showProofStates : Bool := true
 deriving Repr
 
+/--
+The additional blocks available in pages and posts.
+-/
 inductive BlockExt where
+  /--
+  Highlighted Lean code.
+  -/
   | highlightedCode (opts : CodeOpts) (highlighted : Highlighted)
+  /--
+  Highlighted Lean messages.
+  -/
   | message (summarize : Bool) (msg : Highlighted.Message) (expandTraces : List Lean.Name)
+  /--
+  Lexed text, to be displayed with highlighted syntax.
+  -/
   | lexedText (content : LexedText)
+  /--
+  When rendered, the content is wrapped in a `<div>` with the given classes.
+  -/
   | htmlDiv (classes : String)
+  /--
+  When rendered, the content is wrapped in the specified HTML tag.
+  -/
   | htmlWrapper (tag : String) (attributes : Array (String × String))
+  /--
+  When rendered, the content is wrapped in a `<details>` tag with the given summary.
+  -/
   | htmlDetails (classes : String) (summary : Html)
+  /--
+  A blob of HTML. The contents are discarded.
+  -/
   | blob (html : Html)
+  /--
+  A reference to a component.
+  -/
   | component (name : Lean.Name) (data : Json)
 
+/--
+The additional inline elements available in pages and posts.
+-/
 inductive InlineExt where
+  /--
+  Highlighted Lean code.
+  -/
   | highlightedCode (opts : CodeOpts) (highlighted : Highlighted)
+  /--
+  Highlighted Lean messages.
+  -/
   | message (msg : Highlighted.Message) (expandTraces : List Lean.Name)
+  /--
+  Lexed text, to be displayed with highlighted syntax.
+  -/
   | lexedText (content : LexedText)
+  /--
+  Highlighted code that is not necessarily from Lean.
+  -/
   | customHighlight (highlighted : Highlighted)
+  /--
+  A label to serve as a cross-reference target.
+  -/
   | label (name : Lean.Name)
+  /--
+  A reference to a label.
+  -/
   | ref (name : Lean.Name)
+  /--
+  A reference to a page or post's internal name as a Lean value, to be shown as a link.
+  If `id?` is `some X`, then the link is suffixed with `#X`.
+  -/
   | pageref (name : Lean.Name) (id? : Option String)
+  /--
+  An HTML span element with the given classes.
+  -/
   | htmlSpan (classes : String)
+  /--
+  A blob of HTML. The contents are discarded.
+  -/
   | blob (html : Html)
+  /--
+  A reference to a component.
+  -/
   | component (name : Lean.Name) (data : Json)
 
 section
@@ -66,8 +127,13 @@ end
 
 namespace Post
 
+/--
+A category of blog posts.
+-/
 structure Category where
+  /-- The name to show in the user interface -/
   name : String
+  /-- A URL component for a category index page -/
   slug : String
 deriving BEq, Hashable, DecidableEq, Repr, TypeName
 
@@ -200,6 +266,7 @@ def TraverseState.addCssFile (st : TraverseState) (name content : String) :=
     {st with cssFiles := st.cssFiles.push (name, content)}
   else st
 
+/-- The metadata used for non-blog-post pages -/
 structure Page.Meta where
   /-- Whether to hide this page/part from navigation entries -/
   showInNav : Bool := true
@@ -207,6 +274,9 @@ structure Page.Meta where
   htmlId : Option String := none
 deriving Repr
 
+/--
+An ordinary web page that is not a blog post.
+-/
 def Page : Genre where
   PartMetadata := Page.Meta
   Block := Blog.BlockExt
@@ -218,14 +288,23 @@ instance : Repr Page.PartMetadata := inferInstanceAs (Repr Page.Meta)
 instance : Repr Page.Block := inferInstanceAs (Repr Blog.BlockExt)
 instance : Repr Page.Inline := inferInstanceAs (Repr Blog.InlineExt)
 
+/-- The metadata used for blog posts -/
 structure Post.Meta where
+  /-- The post's date. By default, this is used in the URL as well as included in the content. -/
   date : Blog.Date
+  /-- The authors of the post -/
   authors : List String
+  /-- The categories in which to include the post -/
   categories : List Post.Category := []
+  /-- If `true`, the post is not rendered by default -/
   draft : Bool := false
+  /-- The HTML ID to assign to the header -/
   htmlId : Option String := none
 deriving TypeName, Repr
 
+/--
+A blog post.
+-/
 def Post : Genre where
   PartMetadata := Post.Meta
   Block := Blog.BlockExt

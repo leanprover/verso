@@ -10,17 +10,29 @@ open Lean
 
 namespace Verso.Output
 
+/--
+TeX output
+-/
 inductive TeX where
+  /-- Text to be shown in the document, escaped as needed. -/
   | text (string : String)
+  /-- Raw TeX code to be included without escaping. -/
   | raw (string : String)
+  /-- A LaTeX command, with the provided optional and mandatory arguments (in square and curly brackets, respectively) -/
   | command (name : String) (optArgs : Array TeX) (args : Array TeX)
+  /-- A LaTeX environment, with the provided optional and mandatory arguments (in square and curly brackets, respectively) -/
   | environment (name : String)  (optArgs : Array TeX) (args : Array TeX) (content : Array TeX)
+  /-- A paragraph break, rendered to TeX as a blank line -/
   | paragraphBreak
+  /-- Concatenation of TeX -/
   | seq (contents : Array TeX)
 deriving Repr, Inhabited
 
 instance : Coe (Array TeX) TeX where
   coe := .seq
+
+instance : Coe (List TeX) TeX where
+  coe xs := .seq xs.toArray
 
 instance : Coe String TeX where
   coe := .text
@@ -34,8 +46,10 @@ instance : Append TeX where
 
 namespace TeX
 
+/-- The empty TeX document -/
 def empty : TeX := .seq #[]
 
+/-- Converts a TeX document to a string to be processed by LaTeX -/
 partial def asString (doc : TeX) : String :=
   match doc with
   | .text str => escape str
@@ -58,7 +72,7 @@ scoped syntax "section" : macro_name
 partial def _root_.Lean.TSyntax.macroName : TSyntax `macro_name → String
   | ⟨.node _ _ #[.atom _ x]⟩ => x
   | ⟨.node _ _ #[.ident _ _ x ..]⟩ => x.eraseMacroScopes.toString
-  | _ => "fake tag name!!!"
+  | _ => "unknown"
 
 
 declare_syntax_cat tex
@@ -71,21 +85,6 @@ scoped syntax "\\" macro_name ("[" tex* "]")* ("{" tex* "}")* : tex
 scoped syntax "s!" interpolatedStr(term) : tex
 
 scoped syntax str : tex
-
--- open Macro in
--- macro_rules
---   | `(term|\TeX{\Lean{$e}}) => pure e
---   | `(term|\TeX{ $s:str }) =>
---     ``(TeX.text $s)
---   | `(term|\TeX{ s!$s }) =>
---     ``(TeX.raw (s!$s))
---   | `(term| \TeX{ \begin{ $env:macro_name } $[ [ $opt* ] ]* $[ { $req* } ]* $contents:tex* \end{ $env':macro_name}}) => do
---     if env.macroName != env'.macroName then Macro.throwErrorAt env' "Mismatched closing environment"
---     ``(TeX.environment $(quote env.macroName) #[$[\TeX{$opt*}],*] #[$[\TeX{$req*}],*] #[$[\TeX{$contents}],*])
---   | `(term| \TeX{ \ $command:macro_name $[ [ $opt* ] ]* $[ { $req* } ]* }) =>
---     ``(TeX.command $(quote command.macroName) #[$[\TeX{$opt*}],*] #[$[\TeX{$req*}],*])
---   | `(term|\TeX{ $TeX:tex* }) =>
---     ``(TeX.seq #[ $[\TeX{ $TeX }],* ])
 
 open Lean Elab Term in
 partial def elabTeX (stx : TSyntax `tex) : TermElabM Expr := withRef stx do

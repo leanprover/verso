@@ -185,6 +185,6 @@ def table : DirectiveExpanderOf TableConfig
       ``(Block.other (Block.table $(quote columns) $(quote cfg.header) $(quote cfg.name) $(quote cfg.alignment)) #[Block.ul #[$[Verso.Doc.ListItem.mk #[$blocks,*]],*]])
 
 where
-  getLi
+  getLi : Syntax → DocElabM (TSyntaxArray `block)
     | `(list_item| * $content* ) => pure content
     | other => throwErrorAt other "Expected list item"
