@@ -88,12 +88,6 @@ private theorem mangle_wf (c : Char) : Slug.WF (mangle c) := by
     rw [h'] at h
     clear h'
     fun_induction List.lookup with try ((first | grind | simp); done)
-    | case2 _ _ _ _ beq =>
-      have := LawfulBEq.eq_of_beq beq
-      exfalso
-      apply h
-      simp [*]
-
 
 @[simp, grind]
 private theorem mangle_mem_valid (c : Char) : c ∈ (mangle c').data → c ∈ Slug.validChars := by
