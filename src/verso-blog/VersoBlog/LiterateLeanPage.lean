@@ -388,7 +388,7 @@ partial def docFromMod (project : System.FilePath) (mod : String)
           | .error => "error"
           | .info => "information"
           | .warning => "warning"
-        addBlock (← ``(Block.other (Blog.BlockExt.htmlDiv $(quote sev)) (Array.mkArray1 (Block.code $(quote msg)))))
+        addBlock (← ``(Block.other (Blog.BlockExt.htmlDiv $(quote sev)) (Array.mkArray1 (Block.other (BlockExt.message false ⟨$(quote k), $(quote msg)⟩ []) #[]))))
     | _ =>
       addBlock (← `(Block.other (BlockExt.highlightedCode { contextName := `name } $(quote code)) Array.mkArray0))
   closePartsUntil 0 ⟨0⟩ -- TODO endPos?

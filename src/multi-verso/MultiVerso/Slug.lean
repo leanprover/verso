@@ -69,11 +69,9 @@ where
 private theorem mangle.replacements_wf (c : Char) : (c, s) ∈ mangle.replacements → Slug.WF (mangle c) := by
   unfold mangle
   generalize h : mangle.replacements = reps
-  have : ∀ k v, (k, v) ∈ reps → Slug.WF v := by
-    rw [← h]
-    grind only [=_ List.contains_iff_mem, mangle.replacements_all_wf]
+  have : ∀ k v, (k, v) ∈ reps → Slug.WF v := by grind
   clear h
-  fun_induction List.lookup <;> first | grind | simp
+  fun_induction List.lookup <;> grind
 
 @[simp, grind]
 private theorem mangle_wf (c : Char) : Slug.WF (mangle c) := by
@@ -87,15 +85,14 @@ private theorem mangle_wf (c : Char) : Slug.WF (mangle c) := by
     generalize h' : mangle.replacements = xs
     rw [h'] at h
     clear h'
-    fun_induction List.lookup with try ((first | grind | simp); done)
+    fun_induction List.lookup <;> grind
 
 @[simp, grind]
 private theorem mangle_mem_valid (c : Char) : c ∈ (mangle c').data → c ∈ Slug.validChars := by
   intro mem
   have := mangle_wf c'
   simp [Slug.WF] at this
-  apply this
-  assumption
+  grind
 
 /--
 Converts a string to a valid slug, mangling as appropriate.
@@ -142,7 +139,7 @@ theorem Slug.wf_push (c str) : c ∈ validChars → WF str → WF (str.push c) :
   simp only [String.toList, List.all_eq_true, decide_eq_true_eq] at wf
   simp only [String.toList, String.data_push, List.all_append, List.all_cons, List.all_nil,
     Bool.and_true, Bool.and_eq_true, List.all_eq_true, decide_eq_true_eq]
-  grind only
+  grind
 
 @[grind]
 theorem Slug.wf_append (str1 str2) : WF str1 → WF str2 → WF (str1 ++ str2) := by
@@ -151,7 +148,7 @@ theorem Slug.wf_append (str1 str2) : WF str1 → WF str2 → WF (str1 ++ str2) :
   intro wf1 wf2
   simp only [String.toList, String.data_append, List.all_append, Bool.and_eq_true, List.all_eq_true, decide_eq_true_eq]
   simp only [String.toList, List.all_eq_true, decide_eq_true_eq] at wf1 wf2
-  grind only
+  grind
 
 @[simp]
 theorem Slug.decide_WF_eq_wf (s : String) : (s.toList.all (fun x => decide (x ∈ validChars)) = true) = WF s := by
@@ -159,7 +156,6 @@ theorem Slug.decide_WF_eq_wf (s : String) : (s.toList.all (fun x => decide (x �
 
 @[grind, simp]
 theorem Slug.wf_forall : WF s → c ∈ s.data → c ∈ validChars := by
-  intro wf h
   simp_all [WF]
 
 theorem Slug.asSlug_loop_valid : WF acc → WF (asSlug.loop iter acc) := by
@@ -170,7 +166,7 @@ theorem Slug.asSlug_loop_valid : WF acc → WF (asSlug.loop iter acc) := by
     unfold WF
     (repeat' split) <;>
       simp [*] <;>
-      grind only [=_ List.contains_iff_mem, List.contains_eq_mem, mangle_wf, wf_forall, mangle_mem_valid, wf_append, cases Or]
+      grind
 
 @[grind]
 theorem Slug.asSlug_valid : WF (asSlug str) := by
