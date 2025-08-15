@@ -723,7 +723,7 @@ But not this one.
 tag := "code-block-syntax"
 %%%
 
-Code blocks begin with three or more back-ticks at the start of a line (they may be preceded by spaces).
+{deftech}[Code blocks] begin with three or more back-ticks at the start of a line (they may be preceded by spaces).
 This is referred to as a {deftech}_fence_.
 They may optionally have a name and a sequence of arguments after the back-ticks.
 The code block continues until a line that contains only the same number of back-ticks at the same indentation.
@@ -854,7 +854,7 @@ This is a paragraph
 tag := "command-block-syntax"
 %%%
 
-A line that consists of only a set of curly braces that contain a name and zero or more arguments is a command.
+A line that consists of only a set of curly braces that contain a name and zero or more arguments is a {deftech}_command_.
 The name is used to select an implementation for the command, which is then invoked during elaboration.
 The {ref "extensions"}[chapter on Verso markup extensions] has more details on this process.
 
