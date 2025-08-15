@@ -6,7 +6,7 @@ Author: David Thrane Christiansen
 
 namespace Verso.Genre.Manual.TeX
 
-def preamble (title : String) (authors : List String) (date : String) : String :=
+def preamble (title : String) (authors : List String) (date : String) (packages : List String) (extraPreamble : List String) : String :=
 r##"
 \documentclass{memoir}
 
@@ -17,6 +17,9 @@ r##"
 \usepackage{fancyvrb}
 \usepackage{fvextra}
 
+"## ++
+"\n".intercalate packages ++
+r##"
 \makechapterstyle{lean}{%
 \renewcommand*{\chaptitlefont}{\sffamily\HUGE}
 \renewcommand*{\chapnumfont}{\chaptitlefont}
@@ -41,7 +44,9 @@ r##"
 \renewcommand{\cftsectionfont}{\normalfont\sffamily}
 \renewcommand{\cftchapterpagefont}{\normalfont\sffamily}
 \renewcommand{\cftsectionpagefont}{\normalfont\sffamily}
-
+"## ++
+"\n".intercalate extraPreamble ++
+r##"
 \title{\sffamily "## ++ title ++ r##"}
 \author{\sffamily "## ++ String.join (authors.intersperse r##" \and "##) ++ r##"}
 \date{\sffamily "## ++ date ++ r##"}

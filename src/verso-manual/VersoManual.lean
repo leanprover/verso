@@ -316,10 +316,17 @@ def emitTeX (logError : String → IO Unit) (config : Config) (text : Part Manua
   let chapters ← text.subParts.mapM (·.toTeX (opts, ctxt, state))
   let dir := config.destination.join "tex"
   ensureDir dir
+  let mut packages : Std.HashSet String := {}
+  let mut preambleItems : Std.HashSet String := {}
+  for (_, d) in (← read).blockDescrs do
+    let some d := d.get? BlockDescr
+      | continue
+    packages := packages.insertMany d.usePackages
+    preambleItems := preambleItems.insertMany d.preamble
   withFile (dir.join "main.tex") .write fun h => do
     if config.verbose then
       IO.println s!"Saving {dir.join "main.tex"}"
-    h.putStrLn (preamble text.titleString authors date)
+    h.putStrLn (preamble text.titleString authors date packages.toList preambleItems.toList)
     if frontMatter.size > 0 then
       h.putStrLn "\\chapter*{Introduction}"
     for b in frontMatter do
