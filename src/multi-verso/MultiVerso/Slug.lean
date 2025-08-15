@@ -87,12 +87,8 @@ private theorem mangle_wf (c : Char) : Slug.WF (mangle c) := by
     generalize h' : mangle.replacements = xs
     rw [h'] at h
     clear h'
-    fun_induction List.lookup with try ((first | grind | simp); done)
-    | case2 _ _ _ _ beq =>
-      have := LawfulBEq.eq_of_beq beq
-      exfalso
-      apply h
-      simp [*]
+    fun_induction List.lookup <;> first | grind | simp
+
 
 
 @[simp, grind]
