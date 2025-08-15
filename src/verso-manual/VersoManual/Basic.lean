@@ -603,9 +603,13 @@ structure BlockDescr where
     fun _ _ _ => pure #[]
 
   toTeX : Option (BlockToTeX Manual (ReaderT ExtensionImpls IO))
+  /-- Required TeX `\usepackage` lines -/
+  usePackages : List String := {}
+  /-- Required items in the TeX preamble -/
+  preamble : List String := {}
 deriving TypeName
 
-instance : Inhabited BlockDescr := ⟨⟨id, default, default, default, default, default, default, default, default, default⟩⟩
+instance : Inhabited BlockDescr := ⟨⟨id, default, default, default, default, default, default, default, default, default, default, default⟩⟩
 
 syntax (name := inline_extension) "inline_extension" ident : attr
 syntax (name := block_extension) "block_extension" ident : attr

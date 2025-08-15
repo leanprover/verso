@@ -2263,7 +2263,7 @@ mutual
   partial def definitionList (ctxt : BlockCtxt) : ParserFn :=
     nodeFn ``dl <|
       atomicFn (onlyBlockOpeners >> takeWhileFn (· == ' ') >> ignoreFn (lookaheadFn (chFn ':' >> chFn ' ')) >> guardMinColumn ctxt.minIndent) >>
-      withInfoSyntaxFn skip.fn (fun info => fakeAtom "ul{" info) >>
+      withInfoSyntaxFn skip.fn (fun info => fakeAtom "dl{" info) >>
       withCurrentColumn (fun c => many1Fn (descItem {ctxt with minIndent := c})) >>
       withInfoSyntaxFn skip.fn (fun info => fakeAtom "}" info)
 
@@ -3073,7 +3073,7 @@ All input consumed.
 info: Failure @35 (⟨2, 15⟩): unexpected end of input; expected %%% (at line beginning), '![', '$$', '$', '[', '[^', beginning of line at ⟨2, 15⟩ or beginning of line or sequence of nestable block openers at ⟨2, 15⟩
 Final stack:
   [(Verso.Syntax.dl
-    "ul{"
+    "dl{"
     [(Verso.Syntax.desc
       ":"
       [(Verso.Syntax.text
@@ -3095,7 +3095,7 @@ Remaining: ""
 /--
 info: Success! Final stack:
   [(Verso.Syntax.dl
-    "ul{"
+    "dl{"
     [(Verso.Syntax.desc
       ":"
       [(Verso.Syntax.text
@@ -3116,7 +3116,7 @@ All input consumed.
 info: Failure @47 (⟨7, 0⟩): expected indentation at least 1
 Final stack:
   [(Verso.Syntax.dl
-    "ul{"
+    "dl{"
     [(Verso.Syntax.desc
       ":"
       [(Verso.Syntax.text
@@ -3141,7 +3141,7 @@ Remaining: ""
 /--
 info: Success! Final stack:
   [(Verso.Syntax.dl
-    "ul{"
+    "dl{"
     [(Verso.Syntax.desc
       ":"
       [(Verso.Syntax.text
@@ -3171,7 +3171,7 @@ All input consumed.
 /--
 info: Success! Final stack:
   [(Verso.Syntax.dl
-    "ul{"
+    "dl{"
     [(Verso.Syntax.desc
       ":"
       [(Verso.Syntax.text
@@ -3200,7 +3200,7 @@ All input consumed.
 info: Failure @21 (⟨3, 0⟩): expected indentation at least 1
 Final stack:
   [(Verso.Syntax.dl
-    "ul{"
+    "dl{"
     [(Verso.Syntax.desc
       ":"
       [(Verso.Syntax.text
@@ -3271,7 +3271,7 @@ Remaining: "test"
 info: Failure @92 (⟨7, 0⟩): '{'; expected '![', '$$', '$', '[' or '[^'
 Final stack:
   [(Verso.Syntax.dl
-    "ul{"
+    "dl{"
     [(Verso.Syntax.desc
       ":"
       [(Verso.Syntax.text (str "\" \""))
