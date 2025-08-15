@@ -1,3 +1,8 @@
+/-
+Copyright (c) 2023-2025 Lean FRO LLC. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+Author: David Thrane Christiansen
+-/
 import Verso.Syntax
 import VersoManual
 
@@ -178,7 +183,7 @@ r#"
 
 .markup-example > .content > .syntax, .markup-example > .content > .result {
   flex: 1;
-  padding: var(--verso--box-padding);
+  padding: 0 var(--verso--box-padding);
   position: relative;
   width: calc(50% - calc(4 * var(--verso--box-padding)));
 }
@@ -189,7 +194,7 @@ r#"
 
 .markup-example > .content > .syntax > .title, .markup-example > .content > .result > .title {
   font-family: var(--verso-structure-font-family);
-  padding: var(--verso--box-padding);
+  padding: 0;
   font-size: 0.875rem;
 }
 
@@ -329,6 +334,7 @@ def markupPreviewPre : CodeBlockExpanderOf MarkupPreviewConfig
 #doc (Manual) "Verso Markup" =>
 %%%
 tag := "verso-markup"
+htmlSplit := .never
 %%%
 
 Lean's documentation markup language is a close relative of Markdown, but it's not identical to it.
@@ -338,12 +344,25 @@ Lean's documentation markup language is a close relative of Markdown, but it's n
 tag := "markup-design-principles"
 %%%
 
- 1. Syntax errors - fail fast rather than producing unexpected output or having complicated rules
- 2. Reduce lookahead - parsing should succeed or fail as locally as possible
- 3. Extensibility - there should be dedicated features for compositionally adding new kinds of content, rather than relying on a collection of ad-hoc textual subformats
- 4. Assume Unicode - Lean users are used to entering Unicode directly and have good tools for it, so there's no need to support alternative textual syntaxes for characters not on keyboards such as em dashes or typographical quotes
- 5. Markdown compatibility - benefit from existing muscle memory and familiarity when it doesn't lead to violations of the other principles
- 6. Pandoc and Djot compatibility - when Markdown doesn't have a syntax for a feature, attempt to be compatible with Pandoc Markdown or Djot
+: Syntax errors
+
+  Fail fast rather than producing unexpected output or having complicated rules.
+
+: Reduce lookahead
+
+  Parsing should succeed or fail as locally as possible.
+
+: Extensibility
+
+  There should be dedicated features for compositionally adding new kinds of content, rather than relying on a collection of ad-hoc textual subformats.
+
+: Assume Unicode
+
+  Lean users are used to entering Unicode directly and have good tools for it, so there's no need to support alternative textual syntaxes for characters not on keyboards such as em dashes or typographical quotes.
+
+: Markdown compatibility
+
+  Users benefit from existing muscle memory and familiarity when it doesn't lead to violations of the other principles.
 
 # Syntax
 %%%
@@ -352,24 +371,22 @@ tag := "markup-syntax"
 
 Like Markdown, Lean's markup has three primary syntactic categories:
 
-: Inline elements
-
- The ordinary content of written text, such as text itself, bold or emphasized text, and hyperlinks.
-
-: Block elements
-
- The main organization of written text, including paragraphs, lists, and quotations. Some blocks may be nested: for example, lists may contain other lists.
 
 : Document structure
 
  Headers, footnote definitions, and named links give greater structure to a document. They may not be nested inside of blocks.
 
-## Description
-%%%
-tag := "markup-syntax-description"
-%%%
 
-### Document Structure
+: Block elements
+
+ The main organization of written text, including paragraphs, lists, and quotations. Some blocks may be nested: for example, lists may contain other lists.
+
+: Inline elements
+
+ The ordinary content of written text, such as text itself, bold or emphasized text, and hyperlinks.
+
+
+## Document Structure
 %%%
 tag := "document-structure"
 %%%
@@ -403,7 +420,7 @@ Metadata blocks begin and end with `%%%`, and they contain any syntax that would
 :::
 
 
-### Block Syntax
+## Block Syntax
 %%%
 tag := "block-syntax"
 %%%
@@ -449,7 +466,7 @@ This is a new paragraph.
 ```
 :::
 
-#### Lists
+### Lists
 %%%
 tag := "list-syntax"
 %%%
@@ -664,7 +681,7 @@ A description item is a line that starts with zero or more spaces, followed by a
 ```
 :::
 
-#### Quotes
+### Quotes
 %%%
 tag := "quote-syntax"
 %%%
@@ -701,7 +718,7 @@ But not this one.
 ```
 :::
 
-#### Code Blocks
+### Code Blocks
 %%%
 tag := "code-block-syntax"
 %%%
@@ -789,9 +806,9 @@ def x : String := 5
 :::
 
 When a code block has a name, then the name is resolved in the current Lean namespace and used to select an implementation.
-TODO ref extensions chapter (todo)
+The {ref "extensions"}[chapter on Verso markup extensions] has more details on this process.
 
-#### Directives
+### Directives
 %%%
 tag := "directive-syntax"
 %%%
@@ -801,7 +818,7 @@ Directives begin with three or more colons and a name with zero or more argument
 They may contain any number of blocks, which must be indented at least as much as the colons.
 Nested directives must begin and end with strictly fewer colons than the surrounding directives.
 
-TODO ref extensions chapter (todo)
+The {ref "extensions"}[chapter on Verso markup extensions] describes the processing of directives in more detail.
 
 This is an empty directive:
 :::markupPreview "Directives"
@@ -832,14 +849,14 @@ This is a paragraph
 ```
 :::
 
-#### Commands
+### Commands
 %%%
 tag := "command-block-syntax"
 %%%
 
 A line that consists of only a set of curly braces that contain a name and zero or more arguments is a command.
 The name is used to select an implementation for the command, which is then invoked during elaboration.
-TODO ref extensions chapter (todo)
+The {ref "extensions"}[chapter on Verso markup extensions] has more details on this process.
 
 :::markupPreview "Commands"
 ```
@@ -851,7 +868,7 @@ TODO ref extensions chapter (todo)
 :::
 
 
-### Inline Syntax
+## Inline Syntax
 %%%
 tag := "inline-syntax"
 %%%
@@ -1044,14 +1061,14 @@ This one takes a single inline code element without needing square brackets:
 :::
 ::::
 
-## Differences from Markdown
+# Differences from Markdown
 %%%
 tag := "differences-from-markdown"
 %%%
 
 This is a quick "cheat sheet" for those who are used to Markdown, documenting the differences.
 
-### Syntax Errors
+## Syntax Errors
 %%%
 tag := "syntax-errors"
 %%%
@@ -1061,7 +1078,7 @@ Similarly, Markdown specifies that unmatched delimiters (such as `*` or `_`) sho
 
 This is based on the principle that, for long-form technical writing, it's better to catch typos while writing than while reviewing the text later.
 
-### Reduced Lookahead
+## Reduced Lookahead
 %%%
 tag := "reduced-lookahead"
 %%%
@@ -1069,7 +1086,7 @@ tag := "reduced-lookahead"
 In Markdown, whether `[this][here]` is a link depends on whether `here` is defined as a link reference target somewhere in the document.
 In Lean's markup, it is always a link, and it is an error if `here` is not defined as a link target.
 
-### Header Nesting
+## Header Nesting
 %%%
 tag := "header-nesting"
 %%%
@@ -1078,10 +1095,31 @@ In Lean's markup, every document already has a title, so there's no need to use 
 Additionally, all documents are required to use `#` for their top-level header, `##` for the next level, and so forth, because a single file may represent a section, a chapter, or even a whole book.
 Authors should not need to maintain a global mapping from header levels to document structures, so Lean's markup automatically assigns these based on the structure of the document.
 
-### Genre-Specific Extensions
+## Genre-Specific Extensions
 %%%
 tag := "genre-specific-extensions"
 %%%
 
 Markdown has no standard way for specific tools or styles of writing to express domain- or {ref "genres"}[genre]-specific concepts.
 Lean's markup provides standard syntaxes to use for this purpose, enabling compositional extensions.
+
+## Fewer Unused Features
+%%%
+tag := "removed-md-features"
+%%%
+
+Markdown has a number of features that are rarely used in practice.
+They have been removed from Verso to reduce surprises while using it and make documents more predictable.
+This includes:
+ * the distinction between [tight](https://spec.commonmark.org/0.31.2/#tight) and [loose](https://spec.commonmark.org/0.31.2/#loose) lists,
+ * [four-space indentation](https://spec.commonmark.org/0.31.2/#indented-code-blocks) to create code blocks,
+ * [Setext-style headers](https://spec.commonmark.org/0.31.2/#setext-headings), indicated with underlines instead of leading hash marks (`#`),
+ * [hard line break syntax](https://spec.commonmark.org/0.31.2/#hard-line-breaks),
+ * and [HTML entities and character references](https://spec.commonmark.org/0.31.2/#entity-and-numeric-character-references)
+
+Other Markdown features don't make sense for non-HTML output, and can be implemented by a {tech}[genre] using code blocks or directives.
+They have also been removed from Verso.
+In particular, this includes [HTML blocks](https://spec.commonmark.org/0.31.2/#html-blocks), [raw HTML](https://spec.commonmark.org/0.31.2/#raw-html) and [thematic breaks](https://spec.commonmark.org/0.31.2/#thematic-breaks).
+
+Finally, some Markdown features are used by a minority of authors, and make sense in all backends, but were not deemed worth the complexity budget.
+In particular, this includes [auto-links](https://spec.commonmark.org/0.31.2/#autolinks).

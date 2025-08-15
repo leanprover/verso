@@ -17,8 +17,6 @@ namespace Verso
 
 namespace ArgParse
 
-section
-
 variable (m) [Monad m] [MonadInfoTree m] [MonadResolveName m] [MonadEnv m] [MonadError m]
 
 
@@ -61,9 +59,18 @@ elab "doc!" s:interpolatedStr(ident) : term => do
       throwErrorAt part "Didn't understand"
   return out
 
+/--
+Documents which kinds of values a `ValDesc` might match.
+
+These are typically constructed using `CanMatch.Ident`, `CanMatch.String`, `CanMatch.Num`, and the
+`Union CanMatch` instance.
+-/
 structure CanMatch where
+  /-- Identifiers may match -/
   ident : Bool
+  /-- String literals may match -/
   string : Bool
+  /-- Numerals may match -/
   num : Bool
 
 def CanMatch.toString (m : CanMatch) : String :=
@@ -83,8 +90,19 @@ def CanMatch.format (m : CanMatch) : Std.Format :=
 
 instance : ToString CanMatch := ⟨CanMatch.toString⟩
 
+/--
+Identifiers can match this argument.
+-/
 def CanMatch.Ident : CanMatch := { ident := true, string := false, num := false }
+
+/--
+Strings can match this argument.
+-/
 def CanMatch.String : CanMatch := { ident := false, string := true, num := false }
+
+/--
+Numbers can match this argument.
+-/
 def CanMatch.Num : CanMatch := { ident := false, string := false, num := true }
 
 instance : Union CanMatch where
@@ -94,9 +112,15 @@ instance : Union CanMatch where
     num := a.num || b.num
   }
 
+/--
+A means of transforming a Verso argument value into a given type.
+-/
 structure ValDesc (α) where
+  /-- How should this argument be documented in automatically-generated signatures? -/
   description : SigDoc
+  /-- Which of the three kinds of values can match this argument? -/
   signature : CanMatch
+  /-- How to transform the value into the given type. -/
   get : ArgVal → m α
 
 instance [Functor m] : Functor (ValDesc m) where
@@ -106,9 +130,16 @@ instance [Functor m] : Functor (ValDesc m) where
 A canonical way to convert a Verso argument into a given type.
 -/
 class FromArgVal (α : Type) (m : Type → Type) where
+  /--
+  A canonical way to convert a Verso argument into a given type.
+  -/
   fromArgVal : ValDesc m α
 
 export FromArgVal (fromArgVal)
+
+end ArgParse
+
+open ArgParse
 
 /--
 A parser for arguments in some underlying monad.
@@ -121,7 +152,7 @@ inductive ArgParse (m : Type → Type) : Type → Type 1 where
   /--
   Returns a value without parsing any arguments.
   -/
-  | pure (val : α) : ArgParse m α
+  | protected pure (val : α) : ArgParse m α
   /--
   Provides an argument value by lifting an action from the underlying monad.
   -/
@@ -147,37 +178,51 @@ inductive ArgParse (m : Type → Type) : Type → Type 1 where
   /--
   Error recovery.
   -/
-  | orElse (p1 : ArgParse m α) (p2 : Unit → ArgParse m α) : ArgParse m α
+  | protected orElse (p1 : ArgParse m α) (p2 : Unit → ArgParse m α) : ArgParse m α
   /--
   The sequencing operation of an applicative functor.
   -/
-  | seq (p1 : ArgParse m (α → β)) (p2 : Unit → ArgParse m α) : ArgParse m β
+  | protected seq (p1 : ArgParse m (α → β)) (p2 : Unit → ArgParse m α) : ArgParse m β
   /--
   Zero or more repetitions.
   -/
-  | many : ArgParse m α → ArgParse m (List α)
+  | protected many : ArgParse m α → ArgParse m (List α)
   /-- Returns all remaining arguments. This is useful for consuming some, then forwarding the rest. -/
-  | remaining : ArgParse m (Array Arg)
+  | protected remaining : ArgParse m (Array Arg)
+
+namespace ArgParse
+section
+variable (m) [Monad m] [MonadInfoTree m] [MonadResolveName m] [MonadEnv m] [MonadError m]
 
 /--
 A canonical way to convert a sequence of Verso arguments into a given type.
 -/
 class FromArgs (α : Type) (m : Type → Type) where
+  /-- Converts a sequence of arguments into a value. -/
   fromArgs : ArgParse m α
 
-export FromArgs (fromArgs)
+export Verso.ArgParse.FromArgs (fromArgs)
 
 instance : FromArgs Unit m := ⟨.pure ()⟩
 
-def ArgParse.positional' {m} [FromArgVal α m] (nameHint : Name) (doc? : Option SigDoc := none) : ArgParse m α :=
+/--
+Matches a positional argument using the type's `FromArgVal` instance.
+-/
+def positional' {m} [FromArgVal α m] (nameHint : Name) (doc? : Option SigDoc := none) : ArgParse m α :=
   .positional nameHint fromArgVal (doc? := doc?)
 
-def ArgParse.named' {m} [FromArgVal α m]
+/--
+Matches a named argument using the type's `FromArgVal` instance.
+-/
+def named' {m} [FromArgVal α m]
     (name : Name) (optional : Bool) (doc? : Option SigDoc := none) :
     ArgParse m (if optional then Option α else α) :=
   .named name fromArgVal optional (doc? := doc?)
 
-def ArgParse.anyNamed' {m} [FromArgVal α m]
+/--
+Matches any named argument using the type's `FromArgVal` instance.
+-/
+def anyNamed' {m} [FromArgVal α m]
     (name : Name) (doc? : Option SigDoc := none) :
     ArgParse m (Ident × α) :=
   .anyNamed name fromArgVal (doc? := doc?)
@@ -194,13 +239,20 @@ instance : Alternative (ArgParse m) where
   failure := ArgParse.fail none none
   orElse := ArgParse.orElse
 
-def ArgParse.namedD {m} (name : Name) (val : ValDesc m α) (default : α) : ArgParse m α :=
+/--
+Matches an argument with the provided name. If the argument is not present, `default` is returned.
+-/
+def namedD {m} (name : Name) (val : ValDesc m α) (default : α) : ArgParse m α :=
   named name val true <&> (·.getD default)
 
-def ArgParse.namedD' {m} [FromArgVal α m] (name : Name) (default : α) : ArgParse m α :=
+/--
+Matches an argument with the provided name using the type's `FromArgVal` instance. If the argument
+is not present, `default` is returned.
+-/
+def namedD' {m} [FromArgVal α m] (name : Name) (default : α) : ArgParse m α :=
   namedD name fromArgVal default
 
-def ArgParse.describe : ArgParse m α → SigDoc
+def describe : ArgParse m α → SigDoc
   | .fail _ msg? => msg?.getD "Cannot succeed"
   | .pure x => "No arguments expected"
   | .lift desc act => desc
@@ -223,7 +275,7 @@ def toSimpleDesc {m} (p : ArgParse m α) : Option SimpleDesc :=
 where
   go {α} : ArgParse m α → StateT SimpleDesc Option Unit
   | .fail _ msg? => failure
-  | .pure x | .done => pure ()
+  | .pure x | .done => Pure.pure ()
   | .lift .. | .orElse .. => failure
   | .positional x v doc? =>
     modify fun sd => { sd with positional := sd.positional.push (x, v.signature, doc?.getD v.description) }
@@ -272,7 +324,7 @@ where
     | some (x, t, doc) =>
       doc!"Dictionary: `" ++ x.toString ++ "`, saving names of `" ++ t.toString ++ "` — " ++ doc
 
-def ArgParse.signature' {m} (prec : Nat) (p : ArgParse m α) : Option Std.Format :=
+def signature' {m} (prec : Nat) (p : ArgParse m α) : Option Std.Format :=
   match p with
   | .fail _ msg? => failure
   | .pure x | .done => do return .nil
@@ -305,7 +357,7 @@ def ArgParse.signature' {m} (prec : Nat) (p : ArgParse m α) : Option Std.Format
 where
   withParen p (x : Std.Format) : Std.Format := if p > prec then "(" ++ x ++ ")" else x
 
-def ArgParse.signature {m} (p : ArgParse m α) : Option SigDoc :=
+def signature {m} (p : ArgParse m α) : Option SigDoc :=
   if let some sd := toSimpleDesc p then
     some sd.markdown
   else if let some s := p.signature' 0 then
@@ -341,7 +393,7 @@ private def firstOriginal (stxs : Array Syntax) : Syntax := Id.run do
   return .missing
 
 -- NB the order of ExceptT and StateT is important here
-partial def ArgParse.parseArgs : ArgParse m α → ExceptT (Array Arg × Exception) (StateT ParseState m) α
+partial def parseArgs : ArgParse m α → ExceptT (Array Arg × Exception) (StateT ParseState m) α
   | .fail stx? msg? => do
     let stx ← stx?.getDM getRef
     let msg := msg?.getD "failed"
@@ -439,7 +491,7 @@ partial def ArgParse.parseArgs : ArgParse m α → ExceptT (Array Arg × Excepti
       try
         p.parseArgs
       catch | _ => return []
-    let xs ← many p |>.parseArgs
+    let xs ← ArgParse.many p |>.parseArgs
     return (x :: xs)
   | .remaining => modifyGet fun s =>
     let r := s.remaining
@@ -457,6 +509,7 @@ where
     return none
 end
 
+section
 variable {m} [Monad m] [MonadInfoTree m] [MonadResolveName m] [MonadEnv m] [MonadError m] [MonadLiftT CoreM m]
 
 def ValDesc.bool : ValDesc m Bool where
@@ -465,8 +518,8 @@ def ValDesc.bool : ValDesc m Bool where
   get
     | .name b => do
       let b' ← liftM <| realizeGlobalConstNoOverloadWithInfo b
-      if b' == ``true then pure true
-      else if b' == ``false then pure false
+      if b' == ``true then Pure.pure true
+      else if b' == ``false then Pure.pure false
       else throwErrorAt b "Expected 'true' or 'false'"
     | other => throwError "Expected Boolean, got {other}"
 
@@ -477,7 +530,7 @@ def ValDesc.string : ValDesc m String where
   description := doc!"a string"
   signature := .String
   get
-    | .str s => pure s.getString
+    | .str s => Pure.pure s.getString
     | other => throwError "Expected string, got {toMessageData other}"
 
 instance : FromArgVal String m where
@@ -487,7 +540,7 @@ def ValDesc.ident : ValDesc m Ident where
   description := doc!"an identifier"
   signature := .Ident
   get
-    | .name x => pure x
+    | .name x => Pure.pure x
     | other => throwError "Expected identifier, got { toMessageData other}"
 
 instance : FromArgVal Ident m where
@@ -502,7 +555,7 @@ def ValDesc.name : ValDesc m Name where
   description := doc!"a name"
   signature := .Ident
   get
-    | .name x => pure x.getId.eraseMacroScopes
+    | .name x => Pure.pure x.getId.eraseMacroScopes
     | other => throwError "Expected identifier, got {other}"
 
 instance : FromArgVal Name m where
@@ -526,7 +579,7 @@ def ValDesc.nat : ValDesc m Nat where
   description := doc!"a name"
   signature := .Num
   get
-    | .num n => pure n.getNat
+    | .num n => Pure.pure n.getNat
     | other => throwError "Expected string, got {repr other}"
 
 instance : FromArgVal Nat m where
@@ -552,7 +605,7 @@ def ValDesc.inlinesString [MonadFileMap m] : ValDesc m (FileMap × TSyntaxArray 
       if s'.allErrors.isEmpty then
         if s'.stxStack.size = 1 then
           match s'.stxStack.back with
-          | .node _ _ contents => pure (FileMap.ofString input, contents.map (⟨·⟩))
+          | .node _ _ contents => Pure.pure (FileMap.ofString input, contents.map (⟨·⟩))
           | other => throwError "Unexpected syntax from Verso parser. Expected a node, got {other}"
         else throwError "Unexpected internal stack size from Verso parser. Expected 1, got {s'.stxStack.size}"
       else
@@ -571,9 +624,9 @@ def ValDesc.messageSeverity : ValDesc m MessageSeverity where
   get := open MessageSeverity in fun
     | .name b => do
       let b' ← realizeGlobalConstNoOverloadWithInfo b
-      if b' == ``error then pure .error
-      else if b' == ``warning then pure .warning
-      else if b' == ``information then pure .information
+      if b' == ``error then Pure.pure .error
+      else if b' == ``warning then Pure.pure .warning
+      else if b' == ``information then Pure.pure .information
       else throwErrorAt b "Expected '{``error}', '{``warning}', or '{``information}'"
     | other => throwError "Expected severity, got {repr other}"
 
@@ -589,9 +642,9 @@ def ValDesc.whitespaceMode : ValDesc m WhitespaceMode where
   get := open WhitespaceMode in fun
     | .name b => do
       let b' ← realizeGlobalConstNoOverloadWithInfo b
-      if b' == ``exact then pure .exact
-      else if b' == ``normalized then pure .normalized
-      else if b' == ``lax then pure .lax
+      if b' == ``exact then Pure.pure .exact
+      else if b' == ``normalized then Pure.pure .normalized
+      else if b' == ``lax then Pure.pure .lax
       else throwErrorAt b "Expected '{``exact}', '{``normalized}', or '{``lax}'"
     | other => throwError "Expected whitespace mode, got {repr other}"
 
@@ -623,13 +676,13 @@ def ValDesc.strLit [Monad m] [MonadError m] : ValDesc m StrLit where
   description := doc!"a string"
   signature := .String
   get
-    | .str s => pure s
+    | .str s => Pure.pure s
     | other => throwError "Expected string, got {toMessageData other}"
 
 instance : FromArgVal StrLit m where
   fromArgVal := .strLit
 
-def ArgParse.run [MonadLiftT BaseIO m] (p : ArgParse m α) (args : Array Arg) : m α := do
+def run [MonadLiftT BaseIO m] (p : ArgParse m α) (args : Array Arg) : m α := do
   match ← p.parseArgs _ ⟨args, #[]⟩ with
   | (.ok v, ⟨more, info⟩) =>
     if more.size = 0 then

@@ -102,6 +102,9 @@ instance [Monad m] : Template.MonadComponents (TemplateT m) where
   saveJs js := modifyThe Component.State fun s => { s with headerJs := s.headerJs.insert js }
   saveCss css := modifyThe Component.State fun s => { s with headerCss := s.headerCss.insert css }
 
+/--
+A monad that provides template instantiation via dynamically-typed parameters.
+-/
 abbrev TemplateM (α : Type) : Type := TemplateT (Except Template.Error) α
 
 end Verso.Genre.Blog
@@ -274,6 +277,9 @@ end Params
 end Template
 
 
+/--
+A procedure for producing HTML from parameters. An abbreviation for `TemplateM Html`
+-/
 abbrev Template := TemplateM Html
 
 instance : MonadPath TemplateM where
@@ -284,6 +290,10 @@ instance : MonadConfig TemplateM where
 
 namespace Template
 
+/--
+Returns the value of the given template, if it exists.
+If it exists but has the wrong type, an exception is thrown.
+-/
 def param? [TypeName α] (key : String) : TemplateM (Option α) := do
   let ctx ← readThe Context
   match ctx.params.get? key with
@@ -292,7 +302,10 @@ def param? [TypeName α] (key : String) : TemplateM (Option α) := do
     if let some v := val.get? (α := α) then return (some v)
     else throw <| .wrongParamType key (TypeName.typeName α)
 
-
+/--
+Returns the value of the given template, if it exists. If it does not exist or if it exists but has
+the wrong type, an exception is thrown.
+-/
 def param [TypeName α] (key : String) : TemplateM α := do
   match (← read).params.get? key with
   | none => throw <| .missingParam key

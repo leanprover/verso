@@ -792,6 +792,25 @@ private def filterString (p : Char → Bool) (str : String) : String := Id.run <
   pure out
 
 open Template in
+/--
+Generates the HTML for `site`.
+
+Parameters:
+ * `theme` is the theme used to render content.
+ * `site` is the site to be generated.
+ * `options` are the command-line options provided by a user.
+
+Optional parameters:
+ * `relativizeUrls` rewrites internal links from absolute to relative links, which allows the blog
+   to be hosted in a subdirectory. Default `true`.
+ * `linkTargets` specifies how to create hyperlinks from Lean code to further documentation. By
+   default, no links are generated.
+ * `components` contains the implementation of the components. This is automatically filled out from
+   a table.
+ * `header` is emitted prior to each HTML document. By default, it produces a `<doctype>`, but it
+   can be overridden to integrate with other static site generators.
+-/
+
 def blogMain (theme : Theme) (site : Site) (relativizeUrls := true) (linkTargets : Code.LinkTargets TraverseContext := {})
     (options : List String) (components : Components := by exact %registered_components)
     (header : String := Html.doctype) :

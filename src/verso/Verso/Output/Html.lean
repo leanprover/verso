@@ -10,9 +10,22 @@ namespace Verso.Output
 
 open Lean
 
+/--
+A representation of HTML, used to render Verso to the web.
+-/
 inductive Html where
+  /--
+  Textual content. If `escape` is `true`, then characters such as `'&'` are escaped to entities such
+  as `"&amp;"` during rendering.
+  -/
   | text (escape : Bool) (string : String)
+  /--
+  A tag with the given name and attributes.
+  -/
   | tag (name : String) (attrs : Array (String × String)) (contents : Html)
+  /--
+  A sequence of HTML values.
+  -/
   | seq (contents : Array Html)
 deriving Repr, Inhabited, TypeName, BEq, Hashable
 
@@ -31,10 +44,19 @@ where
     | .seq contents =>
       mkCApp ``Html.seq #[quoteArray ⟨q⟩ contents]
 
+/--
+The empty HTML document.
+-/
 def Html.empty : Html := .seq #[]
 
+/--
+Converts a string to HTML, escaping special characters.
+-/
 def Html.ofString : String → Html := .text true
 
+/--
+Appends two HTML documents.
+-/
 def Html.append : Html → Html → Html
   | .seq xs, .seq ys => .seq (xs ++ ys)
   | .seq xs, other => .seq (xs.push other)
@@ -43,6 +65,11 @@ def Html.append : Html → Html → Html
 
 instance : Append Html := ⟨Html.append⟩
 
+/--
+Converts an array of HTML elements into a single element by appending them.
+
+This is equivalent to using `Html.seq`, but may result a more compact representation.
+-/
 def Html.fromArray (htmls : Array Html) : Html :=
   .seq <| htmls.foldl glue .empty
 where
@@ -50,6 +77,11 @@ where
     | arr, .seq hs => arr.append hs
     | arr, other => arr.push other
 
+/--
+Converts a list of HTML elements into a single element by appending them.
+
+This is equivalent to using `Html.seq` on the corresponding array, but may result in a more compact representation.
+-/
 def Html.fromList (htmls : List Html) : Html := Id.run do
   let mut out := Html.empty
   for elt in htmls do
@@ -70,6 +102,7 @@ termination_by input.size - i
 
 namespace Html
 
+/-- The default `DOCTYPE` for HTML5. -/
 def doctype := "<!DOCTYPE html>"
 
 /-- Visit the entire tree, applying rewrites in some monad. Return `none` to signal that no rewrites are to be performed. -/
@@ -209,7 +242,7 @@ scoped syntax (name := attrAntiquoted) "{{" term "}}" : attrib
 partial def _root_.Lean.TSyntax.tagName : TSyntax `tag_name → String
   | ⟨.node _ _ #[.atom _ x]⟩ => x
   | ⟨.node _ _ #[.ident _ _ x ..]⟩ => x.eraseMacroScopes.toString
-  | _ => "fake tag name!!!"
+  | _ => "unknown"
 
 
 scoped syntax "{{" term "}}" : html
@@ -298,7 +331,7 @@ elab_rules : term
 
 scoped instance : Coe String Html := ⟨.text true⟩
 
-def testAttrs := {{ <html charset="UTF-8" charset = "UTF-8" a="b" a-b-c="44" {{#[("x", "y")] }} /> }}
+private def testAttrs := {{ <html charset="UTF-8" charset = "UTF-8" a="b" a-b-c="44" {{#[("x", "y")] }} /> }}
 
 /--
 info: Verso.Output.Html.tag
@@ -309,7 +342,7 @@ info: Verso.Output.Html.tag
 #guard_msgs in
 #eval testAttrs
 
-def testAttrsAntiquotes :=
+private def testAttrsAntiquotes :=
   {{ <html charset={{"UTF" ++ "-8"}} "charset" = "UTF-8" a="b" a-b-c="44" {{#[("x", "y")]}} /> }}
 
 /--
@@ -321,7 +354,7 @@ info: Verso.Output.Html.tag
 #guard_msgs in
 #eval testAttrsAntiquotes
 
-def test : Html := {{
+private def test : Html := {{
   <html>
   <head>
     <meta charset="UTF-8"/>
@@ -357,7 +390,7 @@ info: Verso.Output.Html.tag
 #guard_msgs in
   #eval test
 
-def leanKwTest : Html := {{
+private def leanKwTest : Html := {{
   <label for="foo">"Blah"</label>
 }}
 
@@ -376,6 +409,11 @@ Hint: Remove contents
   #eval show Html from {{ <br>"foo" "foo"</br> }}
 
 open Std.Format in
+
+/--
+Converts HTML into a pretty-printer document. This is useful for debugging, but it does not preserve
+whitespace around preformatted content and scripts.
+-/
 partial def format : Html → Std.Format
   | .text true str => .text (str.replace "<" "&lt;" |>.replace ">" "&gt;")
   | .text false str => .text str
@@ -392,7 +430,9 @@ partial def format : Html → Std.Format
     ]) ++ line ++ Format.group ("</" ++ name ++ ">")
   | .seq arr => line.joinSep <| arr.toList.map Html.format
 
--- TODO nicely readable HTML output
+/--
+Converts HTML into a string that's suitable for sending to browsers, but is also readable.
+-/
 partial def asString (html : Html) (indent : Nat := 0) (breakLines := true) : String :=
   match html with
   | .text true str => str.replace "<" "&lt;" |>.replace ">" "&gt;"

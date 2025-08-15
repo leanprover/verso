@@ -181,6 +181,7 @@ instance : ToString Numbering where
     | .nat n => toString n
     | .letter a => toString a
 
+/-- Metadata for the manual -/
 structure PartMetadata where
   /--
   A shorter title to be shown in titlebars and tables of contents.
@@ -191,15 +192,17 @@ structure PartMetadata where
   short as `shortTitle`.
   -/
   shortContextTitle : Option String := none
+  /-- The book's authors -/
   authors : List String := []
   /-- An extra note to show after the author list -/
   authorshipNote : Option String := none
+  /-- The publication date -/
   date : Option String := none
   /-- The main tag for the part, used for cross-references. -/
   tag : Option Tag := none
   /-- If this part ends up as the root of a file, use this name for it -/
   file : Option String := none
-  /-- The internal unique ID, assigned during traversal. -/
+  /-- The internal unique ID, which is automatically assigned during traversal. -/
   id : Option InternalId := none
   /-- Should this section be numbered? If `false`, then it's like `\section*` in LaTeX -/
   number : Bool := true
@@ -209,6 +212,7 @@ structure PartMetadata where
   assignedNumber : Option Numbering := none
   /-- If `true`, this part will display a list of subparts that are separate HTML pages. -/
   htmlToc := true
+  /-- How should this document be split when rendering multi-page HTML output? -/
   htmlSplit : HtmlSplitMode := .default
 deriving BEq, Hashable, Repr
 
@@ -353,9 +357,18 @@ def addLicenseInfo (state : TraverseState) (licenseInfo : LicenseInfo) : Travers
 end TraverseState
 
 
+/--
+A custom block. The `name` field should correspond to an entry in the block descriptions table.
+-/
 structure Block where
+  /-- A unique name that identifies the block. -/
   name : Name := by exact decl_name%
+  /-- A unique ID, assigned during traversal. -/
   id : Option InternalId := none
+  /--
+  Data saved by elaboration, potentially updated during traversal, and used to render output. This
+  is the primary means of communicating information about a block between phases.
+  -/
   data : Json := Json.null
   /--
   A registry for properties that can be used to create ad-hoc protocols for coordination between
@@ -385,9 +398,18 @@ instance : Hashable Block where
       have : Ord (Name × String) := Ord.lex ⟨Name.quickCmp⟩ inferInstance
       mixHash (hash n) <| mixHash (hash i) <| mixHash (hash d) (hash p.toArray.qsortOrd)
 
+/--
+A custom inline. The `name` field should correspond to an entry in the block descriptions table.
+-/
 structure Inline where
+  /-- A unique name that identifies the inline. -/
   name : Name := by exact decl_name%
+  /-- The internal unique ID, which is automatically assigned during traversal. -/
   id : Option InternalId := none
+  /--
+  Data saved by elaboration, potentially updated during traversal, and used to render output. This
+  is the primary means of communicating information about a block between phases.
+  -/
   data : Json := Json.null
 deriving BEq, Hashable, ToJson, FromJson
 
@@ -490,6 +512,7 @@ structure ExtensionImpls where
 
 end Manual
 
+/-- A genre for writing reference manuals and other book-like documents. -/
 def Manual : Genre where
   PartMetadata := Manual.PartMetadata
   Block := Manual.Block
@@ -538,7 +561,10 @@ def TraverseContext.inBlock (self : TraverseContext) (block : Doc.Block Manual) 
 def TraverseContext.sectionNumber (self : TraverseContext) : Array (Option Numbering) :=
   self.headers.map (·.metadata |>.getD {} |>.assignedNumber)
 
+
+/-- Implementations of all the operations needed to use an inline element. -/
 structure InlineDescr where
+  /-- All registered initializers are called in the state prior to the first traversal. -/
   init : TraverseState → TraverseState := id
 
   /--
@@ -552,11 +578,29 @@ structure InlineDescr where
   -/
   traverse : InlineTraversal Manual
 
+  /--
+  How to generate HTML. If `none`, generating HTML from a document that contains this inline will fail.
+  -/
   toHtml : Option (InlineToHtml Manual (ReaderT ExtensionImpls IO))
+  /--
+  Extra JavaScript to add to a `<script>` tag in the generated HTML's `<head>`
+  -/
   extraJs : List String := []
+  /--
+  Extra JavaScript to save to the static files directory and load in the generated HTMl's `<head>`
+  -/
   extraJsFiles : List JsFile := []
+  /--
+  Extra CSS to add to a `<style>` tag in the generated HTML's `<head>`
+  -/
   extraCss : List String := []
+  /--
+  Extra CSS to save to the static files directory and load in the generated HTMl's `<head>`
+  -/
   extraCssFiles : List (String × String) := []
+  /--
+  Open-source licenses used by the inline, to be collected for display in the final document.
+  -/
   licenseInfo : List LicenseInfo := []
   /--
   Should this inline be an entry in the page-local ToC? If so, how should it be represented?
@@ -566,27 +610,55 @@ structure InlineDescr where
   formatting were stripped. Items are compared for string equality, with later suggestions used in
   case of overlap, but the HTML is what's displayed.
 
-  The empty array means that the block should not be included.
+  The empty array means that the inline should not be included.
   -/
   localContentItem : InternalId → Json → Array (Doc.Inline Manual) → Except String (Array (String × Verso.Output.Html)) :=
     fun _ _ _ => pure #[]
 
+  /-- How to generate TeX. If `none`, generating TeX from a document that contains this inline will fail. -/
   toTeX : Option (InlineToTeX Manual (ReaderT ExtensionImpls IO))
+  /-- Required TeX `\usepackage` lines -/
+  usePackages : List String := {}
+  /-- Required items in the TeX preamble -/
+  preamble : List String := {}
 
 deriving TypeName
 
-instance : Inhabited InlineDescr := ⟨⟨id, default, default, default, default, default, default, default, default, default⟩⟩
+instance : Inhabited InlineDescr := ⟨⟨id, default, default, default, default, default, default, default, default, default, default, default⟩⟩
 
+/--
+Implementations of all the operations needed to use a block.
+-/
 structure BlockDescr where
+  /-- All registered initializers are called in the state prior to the first traversal. -/
   init : TraverseState → TraverseState := id
 
+  /-- How the traversal phase should process this block -/
   traverse : BlockTraversal Manual
 
+  /--
+  How to generate HTML. If `none`, generating HTML from a document that contains this block will fail.
+  -/
   toHtml : Option (BlockToHtml Manual (ReaderT ExtensionImpls IO))
+  /--
+  Extra JavaScript to add to a `<script>` tag in the generated HTML's `<head>`
+  -/
   extraJs : List String := []
+  /--
+  Extra JavaScript to save to the static files directory and load in the generated HTMl's `<head>`
+  -/
   extraJsFiles : List JsFile := []
+  /--
+  Extra CSS to add to a `<style>` tag in the generated HTML's `<head>`
+  -/
   extraCss : List String := []
+  /--
+  Extra CSS to save to the static files directory and load in the generated HTMl's `<head>`
+  -/
   extraCssFiles : List (String × String) := []
+  /--
+  Open-source licenses used by the block, to be collected for display in the final document.
+  -/
   licenseInfo : List LicenseInfo := []
   /--
   Should this block be an entry in the page-local ToC? If so, how should it be represented?
@@ -602,6 +674,7 @@ structure BlockDescr where
   localContentItem : InternalId → Json → Array (Doc.Block Manual) → Except String (Array (String × Verso.Output.Html)) :=
     fun _ _ _ => pure #[]
 
+  /-- How to generate TeX. If `none`, generating TeX from a document that contains this block will fail. -/
   toTeX : Option (BlockToTeX Manual (ReaderT ExtensionImpls IO))
   /-- Required TeX `\usepackage` lines -/
   usePackages : List String := {}
@@ -1122,21 +1195,21 @@ instance : Traverse Manual TraverseM where
       let mut subMeta := s.metadata.getD {}
       if subMeta.number then
         if subMeta.assignedNumber != some (.nat i) then
-          subMeta := {subMeta with assignedNumber := some (.nat i)}
+          subMeta := { subMeta with assignedNumber := some (.nat i) }
         i := i + 1
       else
         if subMeta.assignedNumber.isSome then
-          subMeta := {subMeta with assignedNumber := none}
+          subMeta := { subMeta with assignedNumber := none }
       if s.metadata == some subMeta then
         subs := subs.push s
       else
-        subs := subs.push <| s.withMetadata subMeta
+        subs := subs.push <| { s with metadata :=  subMeta }
         modifiedSubs := true
 
 
     pure <|
       if not modifiedSubs && «meta» == startMeta then none
-      else pure (part |>.withMetadata «meta» |>.withSubparts subs)
+      else pure { part with metadata := some «meta», subParts := subs }
 
   genreBlock
     | ⟨name, id?, data, props⟩, content => do
