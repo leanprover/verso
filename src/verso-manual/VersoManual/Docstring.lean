@@ -1391,7 +1391,7 @@ structure DocstringConfig where
   /--
   Ignores the option `verso.docstring.allowMissing` and allows _this_ docstring to be missing.
   -/
-  allowMissing : Option Bool := none
+  allowMissing : Bool
   /-- Suppress the fields of a structure. -/
   hideFields : Bool := false
   /-- Suppress the constructor of a structure or class. -/
@@ -1406,9 +1406,10 @@ variable [MonadLog m] [AddMessageContext m] [Elab.MonadInfoTree m]
 def DocstringConfig.parse : ArgParse m DocstringConfig :=
   DocstringConfig.mk <$>
     .positional `name .documentableName <*>
-    .named `allowMissing .bool true <*>
-    .namedD `hideFields .bool false <*>
-    .namedD `hideStructureConstructor .bool false <*>
+    .flagM `allowMissing (verso.docstring.allowMissing.get <$> getOptions)
+      "Warn instead of error on missing docstrings (defaults to value of option `verso.docstring.allowMissing)" <*>
+    .flag `hideFields false <*>
+    .flag `hideStructureConstructor false <*>
     .named `label .string true
 
 instance : FromArgs DocstringConfig m := ⟨DocstringConfig.parse⟩
@@ -1418,7 +1419,7 @@ end
 @[block_command]
 def docstring : BlockCommandOf DocstringConfig
   | ⟨(x, name), allowMissing, hideFields, hideCtor, customLabel⟩ => do
-    let opts : Options → Options := allowMissing.map (fun b opts => verso.docstring.allowMissing.set opts b) |>.getD id
+    let opts : Options → Options := (verso.docstring.allowMissing.set · allowMissing)
 
     withOptions opts do
       Doc.PointOfInterest.save (← getRef) name.toString (detail? := some "Documentation")
@@ -1506,7 +1507,7 @@ structure IncludeDocstringOpts where
   elaborate : Bool
 
 def IncludeDocstringOpts.parse : ArgParse m IncludeDocstringOpts :=
-  IncludeDocstringOpts.mk <$> (.positional `name .documentableName <&> (·.2)) <*> .namedD `elab .bool true
+  IncludeDocstringOpts.mk <$> (.positional `name .documentableName <&> (·.2)) <*> .flag `elab true
 
 instance : FromArgs IncludeDocstringOpts m where
   fromArgs := IncludeDocstringOpts.parse
@@ -1644,18 +1645,19 @@ structure TacticDocsOptions where
   name : StrLit ⊕ Ident
   «show» : Option String
   replace : Bool
-  allowMissing : Option Bool
+  allowMissing : Bool
 
 section
 
-variable [Monad m] [MonadError m] [MonadLiftT CoreM m]
+variable [Monad m] [MonadError m] [MonadLiftT CoreM m] [MonadOptions m]
 
 def TacticDocsOptions.parse  : ArgParse m TacticDocsOptions :=
   TacticDocsOptions.mk <$>
     .positional `name strOrName <*>
     .named `show .string true <*>
-    .namedD `replace .bool false <*>
-    .named `allowMissing .bool true
+    .flag `replace false <*>
+    .flagM `allowMissing (verso.docstring.allowMissing.get <$> getOptions)
+      "Warn instead of error on missing docstrings (defaults to value of option `verso.docstring.allowMissing)"
 where
   strOrName : ValDesc m (StrLit ⊕ Ident) := {
     description := "First token in tactic, or canonical parser name"

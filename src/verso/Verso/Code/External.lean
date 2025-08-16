@@ -127,7 +127,7 @@ structure CodeModuleContext extends CodeConfig where
   project : StrLit
 
 instance : FromArgs CodeModuleContext m where
-  fromArgs := ((·, ·, ·, ·) <$> moduleOrDefault <*> projectOrDefault <*> .namedD `showProofStates .bool true <*> .named `defSite .bool true) <&> fun (m, p, s, d) =>
+  fromArgs := ((·, ·, ·, ·) <$> moduleOrDefault <*> projectOrDefault <*> .flag `showProofStates true <*> .flag `defSite true) <&> fun (m, p, s, d) =>
     ({module := m, project := p, showProofStates := s, defSite := d})
 
 /--

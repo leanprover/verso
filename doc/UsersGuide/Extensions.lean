@@ -31,12 +31,14 @@ tag := "extension-syntax"
 All four extension points share a common syntax.
 They are invoked by name, with a sequence of arguments.
 These arguments may be positional or by name, and their values may be identifiers, string literals, or numbers.
+Boolean flags may be passed by preceding their name with `-` or `+` for {lean}`false` or {lean}`true`, respectively.
 
 :::paragraph
 In this example, the directive `syntax` is invoked with the positional argument `term` and the named argument `title` set to `"Example"`.
+The flag `check` is set to `false`.
 It contains a descriptive paragraph and the code block `grammar`, which is invoked with no arguments:
 ````
-:::syntax term (title := example)
+:::syntax term (title := example) -check
 This is an example grammar:
 ```grammar
 term ::= term "<+-+>" term
@@ -49,7 +51,7 @@ term ::= term "<+-+>" term
 More formally, an invocation of an extension should match this grammar:
 ```
 CALL := IDENT ARG*
-ARG := VAL | "(" IDENT ":=" VAL ")"
+ARG := VAL | "(" IDENT ":=" VAL ")" | "+" IDENT | "-" IDENT
 VAL := IDENT | STRING | NUM
 ```
 A `CALL` may occur after an opening fence on a code block.

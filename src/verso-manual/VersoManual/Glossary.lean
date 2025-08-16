@@ -24,7 +24,7 @@ section
 variable [Monad m] [Lean.MonadError m] [MonadLiftT Lean.CoreM m]
 
 def TechArgs.parse  : ArgParse m TechArgs :=
-  TechArgs.mk <$> .named `key .string true <*> .namedD `normalize .bool true
+  TechArgs.mk <$> .named `key .string true <*> .flag `normalize true
 
 instance : FromArgs TechArgs m := ⟨TechArgs.parse⟩
 

@@ -34,7 +34,7 @@ The example project must depend on the same version of `subverso` that the docum
 Within the example project, examples are drawn from a module.
 Sometimes, the entire module is the example, while other cases use just some part of the module.
 To set a default module, use the option {option}`verso.exampleModule`.
-When there is no default set, or to override it, the example code features all accept a keyword argument `module`.{index subterm:="keyword argument"}[`module`]
+When there is no default set, or to override it, the example code features all accept a keyword argument `module`.{index (subterm:="keyword argument")}[`module`]
 
 {optionDocs verso.exampleModule}
 
@@ -82,7 +82,7 @@ The comments themselves are removed, and there is no requirement that anchors be
 :::
 
 :::paragraph
-Anchors can be specified using the `(anchor := anAnchor)`{index subterm:="keyword agument"}[`anchor`] parameter to each module form.
+Anchors can be specified using the `(anchor := anAnchor)`{index (subterm:="keyword agument")}[`anchor`] parameter to each module form.
 Additionally, there are macro versions that take anchor names positionally, so for example
 ````
 ```anchor anAnchor

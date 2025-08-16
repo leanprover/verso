@@ -757,6 +757,13 @@ def recoverWs (p : ParserFn) : ParserFn :=
   recoverFn p fun _ =>
     ignoreFn <| takeUntilFn (fun c =>  c == ' ' || c == '\n')
 
+def recoverNonSpace (p : ParserFn) : ParserFn :=
+  recoverFn p fun rctx =>
+    ignoreFn (takeUntilFn (fun c => c != ' ')) >>
+    show ParserFn from
+      fun _ s => s.shrinkStack rctx.initialSize
+
+
 /--
 info: Failure @4 (⟨1, 4⟩): unterminated string literal; expected identifier or numeral
 Final stack:
@@ -803,20 +810,31 @@ def recoverHereWithKeeping (stxs : Array Syntax) (keep : Nat) (p : ParserFn) : P
 
 def arg : ParserFn :=
     withCurrentStackSize fun iniSz =>
-      withParens iniSz <|> potentiallyNamed iniSz <|> (val >> mkAnon iniSz)
+      flag <|> withParens iniSz <|> potentiallyNamed iniSz <|> (val >> mkAnon iniSz)
 where
   mkNamed (iniSz : Nat) : ParserFn := fun _ s => s.mkNode ``Verso.Syntax.named iniSz
+  mkNamedNoParen (iniSz : Nat) : ParserFn := fun _ s => s.mkNode ``Verso.Syntax.named_no_paren iniSz
   mkAnon (iniSz : Nat) : ParserFn := fun _ s => s.mkNode ``Verso.Syntax.anon iniSz
   mkIdent (iniSz : Nat) : ParserFn := fun _ s => s.mkNode ``Verso.Syntax.arg_ident iniSz
+  flag : ParserFn :=
+    nodeFn ``Verso.Syntax.flag_on (asStringFn (strFn  "+") >> recoverNonSpace noSpace >> recoverWs (docIdentFn (reportAs := "flag name"))) <|>
+    nodeFn ``Verso.Syntax.flag_off (asStringFn (strFn "-") >> recoverNonSpace noSpace >> recoverWs (docIdentFn (reportAs := "flag name")))
+  noSpace : ParserFn := fun c s =>
+    if h : c.input.atEnd s.pos then s
+    else
+      let ch := c.input.get' s.pos h
+      if ch == ' ' then
+        s.mkError "no space before"
+      else s
   potentiallyNamed iniSz :=
       atomicFn docIdentFn >> eatSpaces >>
-       ((atomicFn (strFn ":=") >> eatSpaces >> val >> eatSpaces >> mkNamed iniSz) <|> (mkIdent iniSz >> mkAnon iniSz))
+       ((atomicFn (asStringFn <| strFn ":=") >> eatSpaces >> val >> eatSpaces >> mkNamedNoParen iniSz) <|> (mkIdent iniSz >> mkAnon iniSz))
   withParens iniSz :=
-    atomicFn (ignoreFn (strFn "(")) >> eatSpaces >>
+    atomicFn (asStringFn <| strFn "(") >> eatSpaces >>
     recoverWs (docIdentFn (reportAs := "argument name"))  >> eatSpaces >>
-    recoverWs (strFn ":=") >> eatSpaces >>
+    recoverWs (asStringFn <| strFn ":=") >> eatSpaces >>
     recoverWs val >> eatSpaces >>
-    recoverEol (ignoreFn (strFn ")")) >> eatSpaces >>
+    recoverEol (asStringFn <| strFn ")") >> eatSpaces >>
     mkNamed iniSz
 
 /--
@@ -830,7 +848,7 @@ All input consumed.
 
 /--
 info: Success! Final stack:
-  (Verso.Syntax.named
+  (Verso.Syntax.named_no_paren
    `x
    ":="
    (Verso.Syntax.arg_num (num "1")))
@@ -842,9 +860,11 @@ All input consumed.
 /--
 info: Success! Final stack:
   (Verso.Syntax.named
+   "("
    `x
    ":="
-   (Verso.Syntax.arg_num (num "1")))
+   (Verso.Syntax.arg_num (num "1"))
+   ")")
 All input consumed.
 -/
 #guard_msgs in
@@ -852,7 +872,7 @@ All input consumed.
 
 /--
 info: Failure @0 (⟨1, 0⟩): '
-'; expected '(', identifier or numeral
+'; expected '(', '+', '-', identifier or numeral
 Final stack:
   (Verso.Syntax.arg_str <missing>)
 Remaining: "\n(x:=1)"
@@ -862,10 +882,37 @@ Remaining: "\n(x:=1)"
 
 /--
 info: Success! Final stack:
+  (Verso.Syntax.flag_on "+" `foo)
+All input consumed.
+-/
+#guard_msgs in
+#eval arg.test! "+foo"
+
+/--
+info: Success! Final stack:
+  (Verso.Syntax.flag_off "-" `other)
+All input consumed.
+-/
+#guard_msgs in
+#eval arg.test! "-other"
+
+/--
+info: Failure @2 (⟨1, 2⟩): expected no space before
+Final stack:
+  (Verso.Syntax.flag_off "-" `other)
+Remaining: "other"
+-/
+#guard_msgs in
+#eval arg.test! "- other"
+
+/--
+info: Success! Final stack:
   (Verso.Syntax.named
+   "("
    `x
    ":="
-   (Verso.Syntax.arg_num (num "1")))
+   (Verso.Syntax.arg_num (num "1"))
+   ")")
 Remaining:
 "\n"
 -/
@@ -874,7 +921,7 @@ Remaining:
 
 /--
 info: Success! Final stack:
-  (Verso.Syntax.named
+  (Verso.Syntax.named_no_paren
    `x
    ":="
    (Verso.Syntax.arg_ident `y))
@@ -886,9 +933,11 @@ All input consumed.
 /--
 info: Success! Final stack:
   (Verso.Syntax.named
+   "("
    `x
    ":="
-   (Verso.Syntax.arg_ident `y))
+   (Verso.Syntax.arg_ident `y)
+   ")")
 All input consumed.
 -/
 #guard_msgs in
@@ -896,7 +945,7 @@ All input consumed.
 
 /--
 info: Success! Final stack:
-  (Verso.Syntax.named
+  (Verso.Syntax.named_no_paren
    `x
    ":="
    (Verso.Syntax.arg_str (str "\"y\"")))
@@ -926,9 +975,11 @@ info: 2 failures:
 
 Final stack:
   (Verso.Syntax.named
+   "("
    `x
    ":="
-   (Verso.Syntax.arg_str <missing>))
+   (Verso.Syntax.arg_str <missing>)
+   <missing>)
 -/
 #guard_msgs in
 #eval arg.test! "(x:=\"y)"
@@ -956,9 +1007,11 @@ info: 4 failures:
 
 Final stack:
   (Verso.Syntax.named
+   "("
    <missing>
    <missing>
-   (Verso.Syntax.arg_str <missing>))
+   (Verso.Syntax.arg_str <missing>)
+   <missing>)
 -/
 #guard_msgs in
 #eval arg.test! "(42)"
@@ -974,9 +1027,11 @@ info: 3 failures:
 
 Final stack:
   (Verso.Syntax.named
+   "("
    `x
    <missing>
-   (Verso.Syntax.arg_str <missing>))
+   (Verso.Syntax.arg_str <missing>)
+   <missing>)
 -/
 #guard_msgs in
 #eval arg.test! "(x 42)"
@@ -985,9 +1040,11 @@ Final stack:
 info: Failure @8 (⟨1, 8⟩): expected ')'
 Final stack:
   (Verso.Syntax.named
+   "("
    `x
    ":="
-   (Verso.Syntax.arg_num (num "42")))
+   (Verso.Syntax.arg_num (num "42"))
+   <missing>)
 Remaining: "\n)"
 -/
 #guard_msgs in
@@ -997,9 +1054,11 @@ Remaining: "\n)"
 info: Failure @8 (⟨1, 8⟩): expected ')'
 Final stack:
   (Verso.Syntax.named
+   "("
    `x
    ":="
-   (Verso.Syntax.arg_num (num "42")))
+   (Verso.Syntax.arg_num (num "42"))
+   <missing>)
 Remaining: "\na"
 -/
 #guard_msgs in
@@ -1046,7 +1105,7 @@ def nameAndArgs (multiline : Option Nat := none) (reportNameAs : String := "iden
 /--
 info: Success! Final stack:
  • `leanExample
- • [(Verso.Syntax.named
+ • [(Verso.Syntax.named_no_paren
       `context
       ":="
       (Verso.Syntax.arg_num (num "2")))]
@@ -1059,7 +1118,7 @@ All input consumed.
 /--
 info: Success! Final stack:
  • `scheme
- • [(Verso.Syntax.named
+ • [(Verso.Syntax.named_no_paren
       `dialect
       ":="
       (Verso.Syntax.arg_str (str "\"chicken\"")))
@@ -1071,6 +1130,56 @@ All input consumed.
 #guard_msgs in
 #eval nameAndArgs.test! "scheme dialect:=\"chicken\" 43"
 
+/--
+info: Success! Final stack:
+ • `scheme
+ • [(Verso.Syntax.named_no_paren
+      `dialect
+      ":="
+      (Verso.Syntax.arg_str (str "\"chicken\"")))
+     (Verso.Syntax.anon
+      (Verso.Syntax.arg_num (num "43")))
+     (Verso.Syntax.flag_on "+" `foo)]
+
+All input consumed.
+-/
+#guard_msgs in
+#eval nameAndArgs.test! "scheme dialect:=\"chicken\" 43 +foo"
+
+/--
+info: Failure @29 (⟨1, 29⟩): expected flag name
+Final stack:
+ • `scheme
+ • [(Verso.Syntax.named_no_paren
+      `dialect
+      ":="
+      (Verso.Syntax.arg_str (str "\"chicken\"")))
+     (Verso.Syntax.flag_on "+" <missing>)
+     (Verso.Syntax.anon
+      (Verso.Syntax.arg_num (num "99")))]
+
+Remaining: " 99"
+-/
+#guard_msgs in
+#eval nameAndArgs.test! "scheme dialect:=\"chicken\" +43 99"
+
+
+/--
+info: Failure @28 (⟨1, 28⟩): expected no space before
+Final stack:
+ • `scheme
+ • [(Verso.Syntax.named_no_paren
+      `dialect
+      ":="
+      (Verso.Syntax.arg_str (str "\"chicken\"")))
+     (Verso.Syntax.flag_on "+" `x)
+     (Verso.Syntax.anon
+      (Verso.Syntax.arg_num (num "99")))]
+
+Remaining: "x 99"
+-/
+#guard_msgs in
+#eval nameAndArgs.test! "scheme dialect:=\"chicken\" + x 99"
 
 /--
 info: Success! Final stack:
@@ -1084,7 +1193,7 @@ Remaining:
 
 /--
 info: Success! Final stack:
-  [(Verso.Syntax.named
+  [(Verso.Syntax.named_no_paren
     `dialect
     ":="
     (Verso.Syntax.arg_str (str "\"chicken\"")))
@@ -1098,7 +1207,7 @@ Remaining:
 
 /--
 info: Success! Final stack:
-  [(Verso.Syntax.named
+  [(Verso.Syntax.named_no_paren
     `dialect
     ":="
     (Verso.Syntax.arg_str (str "\"chicken\"")))
@@ -1113,7 +1222,7 @@ Remaining:
 /--
 info: Success! Final stack:
  • `scheme
- • [(Verso.Syntax.named
+ • [(Verso.Syntax.named_no_paren
       `dialect
       ":="
       (Verso.Syntax.arg_str (str "\"chicken\"")))
@@ -1153,7 +1262,7 @@ info: Success! Final stack:
  • `leanExample
  • [(Verso.Syntax.anon
       (Verso.Syntax.arg_ident `context))
-     (Verso.Syntax.named
+     (Verso.Syntax.named_no_paren
       `more
       ":="
       (Verso.Syntax.arg_str (str "\"stuff\"")))]
@@ -1169,7 +1278,7 @@ info: Success! Final stack:
  • `leanExample
  • [(Verso.Syntax.anon
       (Verso.Syntax.arg_ident `context))
-     (Verso.Syntax.named
+     (Verso.Syntax.named_no_paren
       `more
       ":="
       (Verso.Syntax.arg_str (str "\"stuff\"")))]
@@ -1836,7 +1945,7 @@ info: Success! Final stack:
   (Verso.Syntax.role
    "{"
    `hello
-   [(Verso.Syntax.named
+   [(Verso.Syntax.named_no_paren
      `world
      ":="
      (Verso.Syntax.arg_ident `gaia))]
@@ -1854,7 +1963,7 @@ info: Success! Final stack:
   (Verso.Syntax.role
    "{"
    `hello
-   [(Verso.Syntax.named
+   [(Verso.Syntax.named_no_paren
      `world
      ":="
      (Verso.Syntax.arg_ident `gaia))]
@@ -3874,7 +3983,7 @@ info: Success! Final stack:
   (Verso.Syntax.codeblock
    "```"
    [`scheme
-    [(Verso.Syntax.named
+    [(Verso.Syntax.named_no_paren
       `dialect
       ":="
       (Verso.Syntax.arg_str (str "\"chicken\"")))
@@ -3898,10 +4007,11 @@ info: Success! Final stack:
    "```"
    [`scheme
     [(Verso.Syntax.named
+      "("
       `dialect
       ":="
-      (Verso.Syntax.arg_str
-       (str "\"chicken\"")))]]
+      (Verso.Syntax.arg_str (str "\"chicken\""))
+      ")")]]
    "\n"
    (str "\"(define x 4)\\nx\\n\"")
    "```")
@@ -3921,10 +4031,11 @@ Final stack:
    "```"
    [`scheme
     [(Verso.Syntax.named
+      "("
       `dialect
       ":="
-      (Verso.Syntax.arg_str
-       (str "\"chicken\"")))]]
+      (Verso.Syntax.arg_str (str "\"chicken\""))
+      <missing>)]]
    "\n"
    (str "\"(define x 4)\\nx\\n\"")
    "```")
@@ -4398,7 +4509,7 @@ info: Success! Final stack:
   (Verso.Syntax.directive
    ":::"
    `multiPara
-   [(Verso.Syntax.named
+   [(Verso.Syntax.named_no_paren
      `greatness
      ":="
      (Verso.Syntax.arg_str (str "\"amazing!\"")))]
@@ -4939,7 +5050,7 @@ info: [Error pretty printing syntax: format: uncaught backtrack exception. Falli
 /--
 info: lean
 ---
-info: hasArg:=true
+info: (hasArg := true)
 ---
 info: "Code\n"
 -/
