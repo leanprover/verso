@@ -520,8 +520,9 @@ partial def parseArgs : ArgParse m α → ExceptT (Array Arg × Exception) (Stat
           modify fun s => {s with info := s.info.push (pos, x, d)}
         else
           modify fun s => {s with info := s.info.push (pos, x, "Flag")}
-        let hint ← MessageData.hint m!"Replace with the updated syntax:" #[s!"{if val then "+" else "-"}{x.toString}"] (ref? := some stx)
-        logWarningAt stx m!"Deprecated flag syntax.{hint}"
+        if let some (.original ..) := stx.getInfo? then
+          let hint ← MessageData.hint m!"Replace with the updated syntax:" #[s!"{if val then "+" else "-"}{x.toString}"] (ref? := some stx)
+          logWarningAt stx m!"Deprecated flag syntax.{hint}"
         Pure.pure val
       | .error e => throwThe (Array Arg × Exception) e
     else
@@ -556,8 +557,9 @@ partial def parseArgs : ArgParse m α → ExceptT (Array Arg × Exception) (Stat
           modify fun s => {s with info := s.info.push (pos, x, d)}
         else
           modify fun s => {s with info := s.info.push (pos, x, "Flag")}
-        let hint ← MessageData.hint m!"Replace with the updated syntax:" #[s!"{if val then "+" else "-"}{x.toString}"] (ref? := some stx)
-        logWarningAt stx m!"Deprecated flag syntax.{hint}"
+        if let some (.original ..) := stx.getInfo? then
+          let hint ← MessageData.hint m!"Replace with the updated syntax:" #[s!"{if val then "+" else "-"}{x.toString}"] (ref? := some stx)
+          logWarningAt stx m!"Deprecated flag syntax.{hint}"
         Pure.pure val
       | .error e => throwThe (Array Arg × Exception) e
     else

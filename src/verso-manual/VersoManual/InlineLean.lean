@@ -555,7 +555,7 @@ Elaborates the contained document in a new section.
 def leanSection : DirectiveExpander
   | args, contents => do
     let name? ← ArgParse.run ((some <$> .positional `name .string) <|> pure none) args
-    let arg ← `(argument| «show» := false)
+    let arg ← `(argument| -«show»)
     let code := name?.map (s!"section {·}") |>.getD "section"
     let start ← `(block|```lean $arg | $(quote code) ```)
     let code := name?.map (s!"end {·}") |>.getD "end"

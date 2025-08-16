@@ -93,12 +93,10 @@ def parseArgs (argStx : TSyntaxArray `argument) : DocElabM (Array Arg) := do
       argVals := argVals.push (.anon (← parseArgVal v))
     | `(argument|$x:ident := $v) => do
       let src := (← getFileMap).source
-      if let some ⟨s, e⟩ := x.raw.getRange? then
-        if let some ⟨s', e'⟩ := v.raw.getRange? then
+      if let some ⟨s, e⟩ := x.raw.getRange? (canonicalOnly := true) then
+        if let some ⟨s', e'⟩ := v.raw.getRange? (canonicalOnly := true) then
           let hint ← MessageData.hint m!"Replace with the updated syntax:" #[s!"({src.extract s e} := {src.extract s' e'})"] (ref? := some arg)
-          logWarningAt arg  m!"Deprecated named argument syntax{hint}"
-      else
-        logWarningAt arg  m!"Deprecated named argument syntax"
+          logWarningAt arg m!"Deprecated named argument syntax for `{x}`{hint}"
       argVals := argVals.push (.named arg x (← parseArgVal v))
     | `(argument|($x:ident := $v)) =>
       argVals := argVals.push (.named arg x (← parseArgVal v))
