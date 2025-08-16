@@ -97,7 +97,7 @@ partial def preview (stx : Syntax) : m Std.Format :=
   | `(block| command{$x $args*}) => do
     let args ← args.toList.mapM (preview ·.raw)
     pure s!"<{x.getId.toString} {Std.Format.prefixJoin " " args |>.pretty}/>"
-  | `(argument|$x:ident := $v) => do
+  | `(argument|($x:ident := $v)) | `(argument|$x:ident := $v) => do
     pure <| s!"{x.getId.toString}=\"{← preview v.raw}\""
   | `(argument|$v:arg_val) => preview v.raw
   | `(arg_val|$v:ident) => pure s!"{v.getId}"
@@ -416,6 +416,15 @@ Metadata blocks begin and end with `%%%`, and they contain any syntax that would
 ```
 ```
 <h1>Top-Level Header</h1>
+```
+:::
+
+:::markupPreview "Blah"
+```
+a b c
+```
+```
+<p> a b c </p>
 ```
 :::
 

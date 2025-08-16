@@ -172,6 +172,14 @@ inductive ArgParse (m : Type → Type) : Type → Type 1 where
   -/
   | anyNamed (name : Name) (val : ValDesc m α) (doc? : Option SigDoc := none) : ArgParse m (Ident × α)
   /--
+  Matches a flag with the provided name.
+  -/
+  | flag (name : Name) (default : Bool) (doc? : Option SigDoc := none) : ArgParse m Bool
+  /--
+  Matches a flag with the provided name, deriving a default value from the monad
+  -/
+  | flagM (name : Name) (default : m Bool) (doc? : Option SigDoc := none) : ArgParse m Bool
+  /--
   No further arguments are allowed.
   -/
   | done : ArgParse m Unit
@@ -192,7 +200,7 @@ inductive ArgParse (m : Type → Type) : Type → Type 1 where
 
 namespace ArgParse
 section
-variable (m) [Monad m] [MonadInfoTree m] [MonadResolveName m] [MonadEnv m] [MonadError m]
+variable (m) [Monad m] [MonadInfoTree m] [MonadResolveName m] [MonadEnv m] [MonadError m] [MonadLiftT CoreM m] [MonadLog m] [AddMessageContext m] [MonadOptions m]
 
 /--
 A canonical way to convert a sequence of Verso arguments into a given type.
@@ -259,6 +267,7 @@ def describe : ArgParse m α → SigDoc
   | .positional _x v _ => v.description
   | .named x v opt _ => if opt then "[" else "" ++ x.toString ++ doc!" : " ++ v.description ++ if opt then "]" else ""
   | .anyNamed x v _ => s!"{x}: a named " ++ v.description
+  | .flag x .. | .flagM x .. => s!"the flag {x}"
   | .done => "no arguments remaining"
   | .orElse p1 p2 => p1.describe ++ " or " ++ (p2 ()).describe
   | .seq p1 p2 => p1.describe ++ " then " ++ (p2 ()).describe
@@ -268,6 +277,7 @@ def describe : ArgParse m α → SigDoc
 structure SimpleDesc where
   positional : Array (Name × CanMatch × SigDoc) := {}
   byName : Array (Name × CanMatch × Bool × SigDoc) := {}
+  flags : Array (Name × Option Bool × SigDoc) := {}
   keyVals : Option (Name × CanMatch × SigDoc) := none
 
 def toSimpleDesc {m} (p : ArgParse m α) : Option SimpleDesc :=
@@ -285,6 +295,10 @@ where
     if (← get).keyVals.isNone then
       modify fun sd => { sd with keyVals := some (x, v.signature, doc?.getD v.description) }
     else failure
+  | .flag x default doc? => do
+    modify fun sd => { sd with flags := sd.flags.push (x, some default, doc?.getD "Flag") }
+  | .flagM x _ doc? => do
+    modify fun sd => { sd with flags := sd.flags.push (x, none, doc?.getD "Flag") }
   | .seq p1 p2 => do
     go p1
     go (p2 ())
@@ -293,11 +307,11 @@ where
 
 
 def SimpleDesc.markdown (d : SimpleDesc) : SigDoc :=
-  let {positional, byName, keyVals} := d
-  if positional.isEmpty && byName.isEmpty && keyVals.isNone then
+  let {positional, byName, flags, keyVals} := d
+  if positional.isEmpty && byName.isEmpty && flags.isEmpty && keyVals.isNone then
     "No parameters"
   else
-    posList positional ++ nameList byName ++ kv keyVals
+    posList positional ++ nameList byName ++ flagList flags ++ kv keyVals
 where
   posList (pos : Array (Name × CanMatch × SigDoc)) : SigDoc :=
     if pos.isEmpty then ""
@@ -319,6 +333,11 @@ where
           s ++ doc!"* `" ++ x.toString ++ " : " ++ t.toString ++
             "` (" ++ (if opt then "optional" else "required") ++ ") — " ++ doc ++ "\n"
       args ++ "\n"
+  flagList (fs : Array (Name × Option Bool × SigDoc)) : SigDoc :=
+    if fs.isEmpty then ""
+    else
+      fs.foldl (init := doc!"Flag" ++ if fs.size = 1 then "" else "s" ++ ":\n") fun s (x, default, doc) =>
+        s ++ doc!"* `" ++ x.toString ++ (default.map (s!"` (default `{·}`) - ")).getD "" ++ doc ++ "\n"
   kv : Option (Name × CanMatch × SigDoc) → SigDoc
     | none => ""
     | some (x, t, doc) =>
@@ -338,6 +357,8 @@ def signature' {m} (prec : Nat) (p : ArgParse m α) : Option Std.Format :=
     let d := v.signature.format
     let s := .group <| .nest 2 <| .text s!"{x} :" ++ .line ++ d ++ .line ++ "(key/value)"
     return withParen 2 s
+  | .flag x .. | .flagM x .. => do
+    return s!"[+/-]{x}"
   | .orElse p1 p2 => do
     let s1 := p1.signature' 2
     let s2 := (p2 ()).signature' 3
@@ -382,6 +403,7 @@ instance : ToMessageData Arg where
   toMessageData
     | .anon v => toMessageData v
     | .named _ x v => m!"({x.getId} := {v})"
+    | .flag _ x v => m!"{if v then "+" else "-"}{x.getId}"
 
 structure ParseState where
   remaining : Array Arg
@@ -397,7 +419,7 @@ partial def parseArgs : ArgParse m α → ExceptT (Array Arg × Exception) (Stat
   | .fail stx? msg? => do
     let stx ← stx?.getDM getRef
     let msg := msg?.getD "failed"
-    throw ((← get).remaining, .error stx msg.toMessageData)
+    throwThe (Array Arg × Exception) ((← get).remaining, Lean.Exception.error stx msg.toMessageData)
   | .pure x => Pure.pure x
   | .lift desc act => act
   | .positional x vp doc? => do
@@ -420,8 +442,8 @@ partial def parseArgs : ArgParse m α → ExceptT (Array Arg × Exception) (Stat
         else
           modify fun s => {s with info := s.info.push (v.syntax, x, vp.description)}
         Pure.pure val
-      | .error e => throw e
-    else throw ((← get).remaining, .error (← getRef) m!"Positional argument '{x}' ({vp.description}) not found")
+      | .error e => throwThe (Array Arg × Exception) e
+    else throwThe (Array Arg × Exception) ((← get).remaining, .error (← getRef) m!"Positional argument '{x}' ({vp.description}) not found")
   | .named x vp optional doc? => do
     let initArgs := (← get).remaining
     if let some (stx, n, v, args') := getNamed initArgs x then
@@ -441,16 +463,18 @@ partial def parseArgs : ArgParse m α → ExceptT (Array Arg × Exception) (Stat
         Pure.pure <| match optional with
           | true => some val
           | false => val
-      | .error e => throw e
+      | .error e => throwThe (Array Arg × Exception) e
     else match optional with
       | true => Pure.pure none
-      | false => throw ((← get).remaining, .error (← getRef) m!"Named argument '{x}' ({vp.description}) not found")
+      | false => throwThe (Array Arg × Exception) ((← get).remaining, .error (← getRef) m!"Named argument '{x}' ({vp.description}) not found")
   | .anyNamed x vp doc? => do
     let initArgs := (← get).remaining
     if h : initArgs.size > 0 then
       match initArgs[0] with
       | .anon _ =>
-        throw ((← get).remaining, .error (← getRef) m!"Name-argument pair '{x}' ({vp.description}) expected, got anonymous argument")
+        throwThe (Array Arg × Exception) ((← get).remaining, .error (← getRef) m!"Name-argument pair '{x}' ({vp.description}) expected, got anonymous argument")
+      | .flag _ x v =>
+        throwThe (Array Arg × Exception) ((← get).remaining, .error (← getRef) m!"Name-argument pair '{x}' ({vp.description}) expected, got flag `{if v then "+" else "-"}{x.getId}`")
       | .named stx y v =>
         let val? : Except (Array Arg × Exception) _ ← liftM <|
           try
@@ -464,35 +488,101 @@ partial def parseArgs : ArgParse m α → ExceptT (Array Arg × Exception) (Stat
             modify fun s => {s with info := s.info.push (stx, x, vp.description)}
           modify fun s => {s with remaining := initArgs.extract 1 initArgs.size}
           Pure.pure (y, val)
-        | .error e => throw e
-    else throw ((← get).remaining, .error (← getRef) m!"Name-argument pair '{x}' ({vp.description}) not found")
+        | .error e => throwThe (Array Arg × Exception) e
+    else throwThe (Array Arg × Exception) ((← get).remaining, .error (← getRef) m!"Name-argument pair '{x}' ({vp.description}) not found")
+  | .flag x default doc? => do
+    let initArgs := (← get).remaining
+    if let some (stx, n, v, args') := getFlag initArgs x then
+      -- This is needed to apply hovers correctly when a macro expands a positional argument into a named one
+      let pos := firstOriginal #[stx, n]
+      modify fun s => {s with remaining := args'}
+      if let some d := doc? then
+        modify fun s => {s with info := s.info.push (pos, x, d)}
+      else
+        modify fun s => {s with info := s.info.push (pos, x, "Flag")}
+      pure v
+    else if let some (stx, n, v, args') := getNamed initArgs x then
+      let val? : Except (Array Arg × Exception) _ ← liftM <|
+        try
+          Except.ok <$> withRef v.syntax (do
+            match v with
+            | .name x =>
+              let x' ← realizeGlobalConstNoOverloadWithInfo x
+              if x' == ``true then pure true else if x' == ``false then pure false else throwError "Expected Boolean"
+            | _ => throwError "Expected Boolean")
+        catch exn => Pure.pure <| Except.error (initArgs, exn)
+      -- This is needed to apply hovers correctly when a macro expands a positional argument into a named one
+      let pos := firstOriginal #[stx, n, v.syntax]
+      match val? with
+      | .ok val =>
+        modify fun s => {s with remaining := args'}
+        if let some d := doc? then
+          modify fun s => {s with info := s.info.push (pos, x, d)}
+        else
+          modify fun s => {s with info := s.info.push (pos, x, "Flag")}
+        let hint ← MessageData.hint m!"Replace with the updated syntax:" #[s!"{if val then "+" else "-"}{x.toString}"] (ref? := some stx)
+        logWarningAt stx m!"Deprecated flag syntax.{hint}"
+        Pure.pure val
+      | .error e => throwThe (Array Arg × Exception) e
+    else
+      pure default
+  | .flagM x default doc? => do
+    let initArgs := (← get).remaining
+    if let some (stx, n, v, args') := getFlag initArgs x then
+      -- This is needed to apply hovers correctly when a macro expands a positional argument into a named one
+      let pos := firstOriginal #[stx, n]
+      modify fun s => {s with remaining := args'}
+      if let some d := doc? then
+        modify fun s => {s with info := s.info.push (pos, x, d)}
+      else
+        modify fun s => {s with info := s.info.push (pos, x, "Flag")}
+      pure v
+    else if let some (stx, n, v, args') := getNamed initArgs x then
+      let val? : Except (Array Arg × Exception) _ ← liftM <|
+        try
+          Except.ok <$> withRef v.syntax (do
+            match v with
+            | .name x =>
+              let x' ← realizeGlobalConstNoOverloadWithInfo x
+              if x' == ``true then pure true else if x' == ``false then pure false else throwError "Expected Boolean"
+            | _ => throwError "Expected Boolean")
+        catch exn => Pure.pure <| Except.error (initArgs, exn)
+      -- This is needed to apply hovers correctly when a macro expands a positional argument into a named one
+      let pos := firstOriginal #[stx, n, v.syntax]
+      match val? with
+      | .ok val =>
+        modify fun s => {s with remaining := args'}
+        if let some d := doc? then
+          modify fun s => {s with info := s.info.push (pos, x, d)}
+        else
+          modify fun s => {s with info := s.info.push (pos, x, "Flag")}
+        let hint ← MessageData.hint m!"Replace with the updated syntax:" #[s!"{if val then "+" else "-"}{x.toString}"] (ref? := some stx)
+        logWarningAt stx m!"Deprecated flag syntax.{hint}"
+        Pure.pure val
+      | .error e => throwThe (Array Arg × Exception) e
+    else
+      default
   | .done => do
     let args := (← get).remaining
     if h : args.size > 0 then
       match args[0] with
-      | .anon v => throw (args, .error v.syntax m!"Unexpected argument {v}")
-      | .named stx x _ => throw (args, .error stx m!"Unexpected named argument '{x.getId}'")
+      | .anon v => throwThe (Array Arg × Exception) (args, .error v.syntax m!"Unexpected argument {v}")
+      | .flag stx x v => throwThe (Array Arg × Exception) (args, .error stx m!"Unexpected flag {if v then "+" else "-"}{x.getId}")
+      | .named stx x _ => throwThe (Array Arg × Exception) (args, .error stx m!"Unexpected named argument '{x.getId}'")
     else Pure.pure ()
   | .orElse p1 p2 => do
     let s ← get
-    try
-      p1.parseArgs
-    catch
-      | e1@(args1, _) =>
-        try
-          set s
-          (p2 ()).parseArgs
-        catch
+    tryCatchThe (Array Arg × Exception) p1.parseArgs fun
+      | e1@((args1 : Array Arg), _) =>
+        tryCatchThe (Array Arg × Exception) (set s *> (p2 ()).parseArgs) fun
           | e2@(args2, _) =>
-            if args2.size < args1.size then throw e1 else throw e2
+            if args2.size < args1.size then throwThe (Array Arg × Exception) e1 else throwThe (Array Arg × Exception) e2
   | .seq p1 p2 => Seq.seq p1.parseArgs (fun () => p2 () |>.parseArgs)
   | .many p => do
-    let x ←
-      try
-        p.parseArgs
-      catch | _ => return []
-    let xs ← ArgParse.many p |>.parseArgs
-    return (x :: xs)
+    if let some x ← tryCatchThe (Array Arg × Exception) (some <$> p.parseArgs) fun _ => pure none then
+      let xs ← ArgParse.many p |>.parseArgs
+      return (x :: xs)
+    else return []
   | .remaining => modifyGet fun s =>
     let r := s.remaining
     (r, {s with remaining := #[]})
@@ -500,6 +590,11 @@ where
   getNamed (args : Array Arg) (x : Name) : Option (Syntax × Ident × ArgVal × Array Arg) := Id.run do
     for h : i in [0:args.size] do
       if let .named stx y v := args[i] then
+        if y.getId.eraseMacroScopes == x then return some (stx, y, v, args.extract 0 i ++ args.extract (i+1) args.size)
+    return none
+  getFlag (args : Array Arg) (x : Name) : Option (Syntax × Ident × Bool × Array Arg) := Id.run do
+    for h : i in [0:args.size] do
+      if let .flag stx y v := args[i] then
         if y.getId.eraseMacroScopes == x then return some (stx, y, v, args.extract 0 i ++ args.extract (i+1) args.size)
     return none
   getPositional (args : Array Arg) : Option (ArgVal × Array Arg) := Id.run do
@@ -525,6 +620,7 @@ def ValDesc.bool : ValDesc m Bool where
 
 instance : FromArgVal Bool m where
   fromArgVal := .bool
+
 
 def ValDesc.string : ValDesc m String where
   description := doc!"a string"
@@ -682,7 +778,9 @@ def ValDesc.strLit [Monad m] [MonadError m] : ValDesc m StrLit where
 instance : FromArgVal StrLit m where
   fromArgVal := .strLit
 
-def run [MonadLiftT BaseIO m] (p : ArgParse m α) (args : Array Arg) : m α := do
+variable [MonadLiftT BaseIO m] [MonadLog m] [AddMessageContext m] [MonadOptions m]
+
+def run (p : ArgParse m α) (args : Array Arg) : m α := do
   match ← p.parseArgs _ ⟨args, #[]⟩ with
   | (.ok v, ⟨more, info⟩) =>
     if more.size = 0 then
@@ -698,8 +796,8 @@ def run [MonadLiftT BaseIO m] (p : ArgParse m α) (args : Array Arg) : m α := d
   | (.error e, st) =>
     throw e.snd
 
-def parse [MonadLiftT BaseIO m] [FromArgs α m] (args : Array Arg) : m α := do
+def parse [FromArgs α m] (args : Array Arg) : m α := do
   ArgParse.run fromArgs args
 
-def parseThe (α) [MonadLiftT BaseIO m] [FromArgs α m] (args : Array Arg) : m α := do
+def parseThe (α) [FromArgs α m] (args : Array Arg) : m α := do
   ArgParse.run fromArgs args

@@ -91,8 +91,21 @@ def parseArgs (argStx : TSyntaxArray `argument) : DocElabM (Array Arg) := do
     match arg with
     | `(argument|$v:arg_val) =>
       argVals := argVals.push (.anon (← parseArgVal v))
-    | `(argument|$x:ident := $v) =>
+    | `(argument|$x:ident := $v) => do
+      let src := (← getFileMap).source
+      if let some ⟨s, e⟩ := x.raw.getRange? then
+        if let some ⟨s', e'⟩ := v.raw.getRange? then
+          let hint ← MessageData.hint m!"Replace with the updated syntax:" #[s!"({src.extract s e} := {src.extract s' e'})"] (ref? := some arg)
+          logWarningAt arg  m!"Deprecated named argument syntax{hint}"
+      else
+        logWarningAt arg  m!"Deprecated named argument syntax"
       argVals := argVals.push (.named arg x (← parseArgVal v))
+    | `(argument|($x:ident := $v)) =>
+      argVals := argVals.push (.named arg x (← parseArgVal v))
+    | `(argument|+$x) =>
+      argVals := argVals.push (.flag arg x true)
+    | `(argument|-$x) =>
+      argVals := argVals.push (.flag arg x false)
     | other => throwErrorAt other "Can't decode argument '{repr other}'"
   pure argVals
 
@@ -111,6 +124,7 @@ def appFallback
   let argStx : Array Syntax ← argVals.mapM fun
     | .anon v => valStx v
     | .named _orig y v => do `(namedArgument|($y := $(← valStx v))) -- TODO location
+    | .flag _orig y v => `(namedArgument|($y := $(quote v))) -- TODO location
   let subs ← subjectArr.mapM (·.mapM elabInline)
   let arrArg ← match subs with
     | some ss => (#[·]) <$> `(#[$ss,*])

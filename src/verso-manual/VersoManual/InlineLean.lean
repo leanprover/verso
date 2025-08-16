@@ -77,14 +77,14 @@ section Config
 variable [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m]
 
 structure LeanBlockConfig where
-  «show» : Option Bool := none
-  keep : Option Bool := none
-  name : Option Name := none
-  error : Option Bool := none
-  fresh : Bool := false
+  «show» : Bool
+  keep : Bool
+  name : Option Name
+  error : Bool
+  fresh : Bool
 
 def LeanBlockConfig.parse : ArgParse m LeanBlockConfig :=
-  LeanBlockConfig.mk <$> .named `show .bool true <*> .named `keep .bool true <*> .named `name .name true <*> .named `error .bool true <*> .namedD `fresh .bool false
+  LeanBlockConfig.mk <$> .flag `show true <*> .flag `keep true <*> .named `name .name true <*> .flag `error false <*> .flag `fresh false
 
 instance : FromArgs LeanBlockConfig m := ⟨LeanBlockConfig.parse⟩
 
@@ -120,9 +120,9 @@ private def abbrevFirstLine (width : Nat) (str : String) : String :=
 def LeanBlockConfig.outlineMeta : LeanBlockConfig → String
   | {«show», error, ..} =>
     match «show», error with
-    | some true, true | none, true => " (error)"
-    | some false, true => " (hidden, error)"
-    | some false, false => " (hidden)"
+    | true, true => " (error)"
+    | false, true => " (hidden, error)"
+    | false, false => " (hidden)"
     | _, _ => " "
 
 def firstToken? (stx : Syntax) : Option Syntax :=
@@ -226,14 +226,14 @@ def lean : CodeBlockExpanderOf LeanBlockConfig
       if let some col := col? then
         hls := hls.deIndent col
 
-      if config.show.getD true then
+      if config.show then
         let range := Syntax.getRange? str
         let range := range.map (← getFileMap).utf8RangeToLspRange
         ``(Block.other (Block.lean $(quote hls) (some $(quote (← getFileName))) $(quote range)) #[Block.code $(quote str.getString)])
       else
         ``(Block.concat #[])
     finally
-      if !config.keep.getD true then
+      if !config.keep then
         setEnv origEnv
 
       if let some name := config.name then
@@ -247,7 +247,7 @@ def lean : CodeBlockExpanderOf LeanBlockConfig
 
       reportMessages config.error str cmdState.messages
 
-      if config.show.getD true then
+      if config.show then
         warnLongLines col? str
 where
   withNewline (str : String) := if str == "" || str.back != '\n' then str ++ "\n" else str
@@ -331,21 +331,15 @@ def leanTerm : CodeBlockExpanderOf LeanInlineConfig
 
       pushInfoTree tree
 
-      match config.error with
-      | none =>
-        for msg in newMsgs.toArray do
-          logMessage msg
-      | some true =>
+      if config.error then
         if newMsgs.hasErrors then
           for msg in newMsgs.errorsToWarnings.toArray do
             logMessage msg
         else
           throwErrorAt str "Error expected in code, but none occurred"
-      | some false =>
+      else
         for msg in newMsgs.toArray do
           logMessage msg
-        if newMsgs.hasErrors then
-          throwErrorAt str "No error expected in code, one occurred"
 
       let hls := (← highlight stx #[] (PersistentArray.empty.push tree))
       let hls :=
@@ -353,7 +347,7 @@ def leanTerm : CodeBlockExpanderOf LeanInlineConfig
           hls.deIndent col
         else hls
 
-      if config.show.getD true then
+      if config.show then
         let range := Syntax.getRange? str
         let range := range.map (← getFileMap).utf8RangeToLspRange
         ``(Block.other (Block.lean $(quote hls) (some $(quote (← getFileName))) $(quote range)) #[Block.code $(quote str.getString)])
@@ -448,30 +442,23 @@ def leanInline : RoleExpanderOf LeanInlineConfig
         Hover.addCustomHover (mkNullNode #[s, e]) type
         Hover.addCustomHover f type
 
-      match config.error with
-      | none =>
-        for msg in newMsgs.toArray do
-          logMessage {msg with
-            isSilent := msg.isSilent || msg.severity != .error
-          }
-      | some true =>
+      if config.error then
         if newMsgs.hasErrors then
           for msg in newMsgs.errorsToWarnings.toArray do
             logMessage {msg with isSilent := true}
         else
           throwErrorAt term "Error expected in code block, but none occurred"
-      | some false =>
+      else
         for msg in newMsgs.toArray do
-          logMessage {msg with isSilent := msg.isSilent || msg.severity != .error}
-        if newMsgs.hasErrors then
-          throwErrorAt term "No error expected in code block, one occurred"
+          logMessage {msg with
+            isSilent := msg.isSilent || msg.severity != .error
+          }
 
       reportMessages config.error term newMsgs
 
       let hls := (← highlight stx #[] (PersistentArray.empty.push tree))
 
-
-      if config.show.getD true then
+      if config.show then
         ``(Inline.other (Verso.Genre.Manual.InlineLean.Inline.lean $(quote hls)) #[Inline.code $(quote term.getString)])
       else
         ``(Block.concat #[])
@@ -541,7 +528,7 @@ def inst : RoleExpanderOf LeanBlockConfig
 
       let hls := (← highlight stx #[] (PersistentArray.empty.push tree))
 
-      if config.show.getD true then
+      if config.show then
         ``(Inline.other (Verso.Genre.Manual.InlineLean.Inline.lean $(quote hls)) #[Inline.code $(quote term.getString)])
       else
         ``(Block.concat #[])
@@ -620,11 +607,11 @@ variable [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadErr
 def LeanOutputConfig.parser : ArgParse m LeanOutputConfig :=
   LeanOutputConfig.mk <$>
     .positional `name output <*>
-    ((·.getD true) <$> .named `show .bool true) <*>
+    .flag `show true <*>
     .named `severity .messageSeverity true <*>
-    ((·.getD false) <$> .named `summarize .bool true) <*>
-    ((·.getD .exact) <$> .named `whitespace .whitespaceMode true) <*>
-    .namedD `normalizeMetas .bool true <*>
+    .flag `summarize false <*>
+    .namedD `whitespace .whitespaceMode .exact <*>
+    .flag `normalizeMetas true <*>
     .namedD `allowDiff .nat 0 <*>
     .many (.named `expandTrace .name false) <*>
     .named `startAt .string true <*>

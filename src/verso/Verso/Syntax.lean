@@ -58,7 +58,11 @@ declare_syntax_cat argument
 /-- Anonymous positional arguments -/
 syntax (name:=anon) arg_val : argument
 /-- Named arguments -/
-syntax (name:=named) ident ":=" arg_val : argument
+syntax (name:=named) "(" ident " := " arg_val ")": argument
+syntax (name:=named_no_paren) ident " := " arg_val : argument
+/-- Boolean flags -/
+syntax (name:=flag_on) "+" ident : argument
+syntax (name:=flag_off) "-" ident : argument
 
 /-- Link targets, which may be URLs or named references -/
 declare_syntax_cat link_target

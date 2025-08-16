@@ -136,7 +136,7 @@ section
 variable [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m] [MonadFileMap m]
 
 def TableConfig.parse : ArgParse m TableConfig :=
-  TableConfig.mk <$> .named `tag .string true <*> ((·.getD false) <$> .named `header .bool true) <*> .named `align alignment true
+  TableConfig.mk <$> .named `tag .string true <*> .flag `header true <*> .named `align alignment true
 where
   alignment := {
     description := "Alignment of the table ('left', 'right', or 'center')"

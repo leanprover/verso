@@ -340,12 +340,14 @@ open Lean in
 inductive Arg where
   | anon (value : ArgVal)
   | named (stx : Syntax) (name : Ident) (value : ArgVal)
+  | flag (stx : Syntax) (name : Ident) (value : Bool)
 deriving Repr, Inhabited, BEq
 
 open Lean in
 def Arg.syntax : Arg → Syntax
   | .anon v => v.syntax
-  | .named stx _ _ => stx
+  | .named stx .. | .flag stx .. => stx
+
 
 structure ListItem (α : Type u) where
   contents : Array α

@@ -56,7 +56,7 @@ Version is:
 {leanCommand examples Examples.version}
 
 that is,
-```leanOutput Examples.version severity := information
+```leanOutput Examples.version (severity := information)
 "4.5.0"
 ```
 
@@ -70,7 +70,7 @@ Tree.branch
 ```
 
 lax:
-```leanOutput Examples.basic whitespace := lax
+```leanOutput Examples.basic (whitespace := lax)
 Tree.branch
   (Tree.branch
     (Tree.leaf)
@@ -81,7 +81,7 @@ Tree.branch
 ```
 
 and normalized matching:
-```leanOutput Examples.basic whitespace := normalized
+```leanOutput Examples.basic (whitespace := normalized)
 Tree.branch   (Tree.branch (Tree.leaf) 4 (Tree.branch (Tree.leaf) 3 (Tree.leaf)))
   2   (Tree.branch (Tree.leaf) 1 (Tree.leaf))
 ```
