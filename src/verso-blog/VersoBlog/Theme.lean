@@ -16,11 +16,49 @@ structure Template.Override where
   template : Template
   params : Params → Params
 
+/--
+A specification of how to render a site.
+-/
 structure Theme where
+  /--
+  The template used to render every page. It should construct an HTML value for the entire page,
+  including the `<html>` element.
+
+  In the `<head>` element, it should invoke `builtinHeader` to ensure that the required dependencies
+  are present and that Verso-specific initialization is performed.
+
+  In the body, it should check whether the parameter `"posts"` of type `Html` is present. If so, the
+  page being rendered is a blog index, so it should place the parameter's value as a list of posts.
+  If `"categories"` of type `Post.Categories` is present, it should render the contents as a
+  category list.
+
+  The parameter `"content"` of type `Html` contains the content of the page. It should be placed
+  accordingly in the result.
+  -/
   primaryTemplate : Template
+  /--
+  Pages are rendered using `pageTemplate`, with the result being passed in the `"content"` parameter
+  to `primaryTemplate`. This template should use the `"title"` and `"content"` parameters to
+  construct the contents of the page.
+  -/
   pageTemplate : Template
+  /--
+  Blog posts are rendered using `pageTemplate`, with the result being passed in the `"content"`
+  parameter to `primaryTemplate`. This template should use the `"title"` and `"content"` parameters
+  to construct the contents of the post. Additionally, the `"metadata"` template of type
+  `"Post.PartMetadata"` may be present; if so, it can be used to render the author, date, and
+  categories of the post.
+  -/
   postTemplate : Template
+  /--
+  The template used to summarize a blog post in a post archive. It receives the parameters `"post"`,
+  which contains the post, and `"summary"`, which contains the HTML summary to display.
+  -/
   archiveEntryTemplate : Template
+  /--
+  The template used to display a category at the top of a category's post list. It receives one
+  parameter, `"category"`, which contains a `Post.Category`.
+  -/
   categoryTemplate : Template
   /--
   Customize the rendering of a given path by replacing the

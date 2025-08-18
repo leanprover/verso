@@ -10,9 +10,22 @@ namespace Verso.Output
 
 open Lean
 
+/--
+A representation of HTML, used to render Verso to the web.
+-/
 inductive Html where
+  /--
+  Textual content. If `escape` is `true`, then characters such as `'&'` are escaped to entities such
+  as `"&amp;"` during rendering.
+  -/
   | text (escape : Bool) (string : String)
+  /--
+  A tag with the given name and attributes.
+  -/
   | tag (name : String) (attrs : Array (String × String)) (contents : Html)
+  /--
+  A sequence of HTML values.
+  -/
   | seq (contents : Array Html)
 deriving Repr, Inhabited, TypeName, BEq, Hashable
 
@@ -31,10 +44,19 @@ where
     | .seq contents =>
       mkCApp ``Html.seq #[quoteArray ⟨q⟩ contents]
 
+/--
+The empty HTML document.
+-/
 def Html.empty : Html := .seq #[]
 
+/--
+Converts a string to HTML, escaping special characters.
+-/
 def Html.ofString : String → Html := .text true
 
+/--
+Appends two HTML documents.
+-/
 def Html.append : Html → Html → Html
   | .seq xs, .seq ys => .seq (xs ++ ys)
   | .seq xs, other => .seq (xs.push other)
@@ -43,6 +65,11 @@ def Html.append : Html → Html → Html
 
 instance : Append Html := ⟨Html.append⟩
 
+/--
+Converts an array of HTML elements into a single element by appending them.
+
+This is equivalent to using `Html.seq`, but may result a more compact representation.
+-/
 def Html.fromArray (htmls : Array Html) : Html :=
   .seq <| htmls.foldl glue .empty
 where
@@ -50,6 +77,11 @@ where
     | arr, .seq hs => arr.append hs
     | arr, other => arr.push other
 
+/--
+Converts a list of HTML elements into a single element by appending them.
+
+This is equivalent to using `Html.seq` on the corresponding array, but may result in a more compact representation.
+-/
 def Html.fromList (htmls : List Html) : Html := Id.run do
   let mut out := Html.empty
   for elt in htmls do
@@ -70,6 +102,7 @@ termination_by input.size - i
 
 namespace Html
 
+/-- The default `DOCTYPE` for HTML5. -/
 def doctype := "<!DOCTYPE html>"
 
 /-- Visit the entire tree, applying rewrites in some monad. Return `none` to signal that no rewrites are to be performed. -/
@@ -209,7 +242,7 @@ scoped syntax (name := attrAntiquoted) "{{" term "}}" : attrib
 partial def _root_.Lean.TSyntax.tagName : TSyntax `tag_name → String
   | ⟨.node _ _ #[.atom _ x]⟩ => x
   | ⟨.node _ _ #[.ident _ _ x ..]⟩ => x.eraseMacroScopes.toString
-  | _ => "fake tag name!!!"
+  | _ => "unknown"
 
 
 scoped syntax "{{" term "}}" : html
@@ -222,55 +255,106 @@ scoped syntax "r!" str : html
 scoped syntax "{{"  html+ "}}" : term
 scoped syntax "<<<" (attrib ppSpace) * ">>>" : term
 
-open Lean.Macro in
-macro_rules
-  | `(term| <<< $attrs* >>> ) => do
-    let attrsOut ← attrs.mapM fun
-      | `(attrib| $name:attributeName = $val:str) => `(term| #[($(quote name.getAttributeName), $val)])
-      | `(attrib| $name:attributeName = s!$val:interpolatedStr) => `(term| #[($(quote name.getAttributeName), s!$val)])
-      | `(attrib| $name:attributeName = {{ $e }} ) => `(term| #[($(quote name.getAttributeName), ($e : String))])
-      | `(attrStrNamed| $name:str = $val:str) => `(term| #[($(quote name.getString), $val)])
-      | `(attrStrNamed| $name:str = s!$val:interpolatedStr) => `(term| #[($(quote name.getString), s!$val)])
-      | `(attrStrNamed| $name:str = {{ $e }} ) => `(term| #[($(quote name.getString), ($e : String))])
-      | `(attrAntiquoted| {{ $e }}) => `(term| ($e : Array (String × String)))
-      | _ => throwUnsupported
-    `(term| #[ $[($attrsOut : Array (String × String))],* ].foldr (· ++ ·) #[] )
-  | `(term| {{ {{ $e:term }} }} ) => ``(($e : Html))
-  | `(term| {{ $text:str }} ) => ``(Html.text true $text)
-  | `(term| {{ s! $txt:interpolatedStr }} ) => ``(Html.text true s!$txt)
-  | `(term| {{ r! $txt:str }} ) => ``(Html.text false $txt)
-  | `(term| {{ $html1:html $html2:html $htmls:html*}}) =>
-    `({{$html1}} ++ {{$html2}} ++ Html.seq #[$[({{$htmls}} : Html)],*])
-  | `(term| {{ <$tag:tag_name $[$extra]* > $content:html </ $tag':tag_name> }}) => do
+open Lean Elab Term Meta in
+def elabAttrs (stxs : Array (TSyntax `attrib)) : TermElabM Expr := do
+  let attrType ← mkAppM ``Prod #[.const ``String [], .const ``String []]
+  let mut attrs : Expr ← mkArrayLit attrType []
+  for stx in stxs do
+    match stx with
+    | `(attrib| $name:attributeName = $val:str) =>
+      attrs ← mkAppM ``Array.push #[attrs, ← mkAppM ``Prod.mk #[toExpr name.getAttributeName, toExpr val.getString]]
+    | `(attrib| $name:attributeName = s!$val:interpolatedStr) =>
+      let val ← withRef val <| elabTermEnsuringType (← ``(s!$val:interpolatedStr)) (some (.const ``String []))
+      attrs ← mkAppM ``Array.push #[attrs, ← mkAppM ``Prod.mk #[toExpr name.getAttributeName, val]]
+    | `(attrib| $name:attributeName = {{ $e }} ) =>
+      let val ← withRef e <| elabTermEnsuringType e (some (.const ``String []))
+      attrs ← mkAppM ``Array.push #[attrs, ← mkAppM ``Prod.mk #[toExpr name.getAttributeName, val]]
+    | `(attrStrNamed| $name:str = $val:str) =>
+      attrs ← mkAppM ``Array.push #[attrs, ← mkAppM ``Prod.mk #[toExpr name.getString, toExpr val.getString]]
+    | `(attrStrNamed| $name:str = s!$val:interpolatedStr) =>
+      let val ← withRef val <| elabTermEnsuringType (← ``(s!$val:interpolatedStr)) (some (.const ``String []))
+      attrs ← mkAppM ``Array.push #[attrs, ← mkAppM ``Prod.mk #[toExpr name.getString, val]]
+    | `(attrStrNamed| $name:str = {{ $e }} ) =>
+      let val ← withRef e <| elabTermEnsuringType e (some (.const ``String []))
+      attrs ← mkAppM ``Array.push #[attrs, ← mkAppM ``Prod.mk #[toExpr name.getString, val]]
+    | `(attrAntiquoted| {{ $e }}) =>
+      let e ← elabTermEnsuringType e (← mkAppM ``Array #[attrType])
+      attrs ← mkAppM ``Array.append #[attrs, e]
+    | _ => withRef stx throwUnsupportedSyntax
+  return attrs
+
+open Lean Elab Term Meta in
+partial def elabHtml (stx : TSyntax `html) : TermElabM Expr := withRef stx do
+  match stx with
+  | `(html| {{ $e:term }} ) =>
+    elabTermEnsuringType e (some (.const ``Html []))
+  | `(html| $text:str ) =>
+    mkAppM ``Html.text #[toExpr true, toExpr text.getString]
+  | `(html| s! $txt:interpolatedStr ) => do
+    let txt ← elabTermEnsuringType (← `(s!$txt:interpolatedStr)) (some <| .const ``String [])
+    mkAppM ``Html.text #[toExpr true, txt]
+  | `(html| r! $txt:str ) =>
+    mkAppM ``Html.text #[toExpr false, toExpr txt.getString]
+  | `(html| <%$tk $tag:tag_name $[$extra]* >%$tk' $[$content:html]* </ $tag':tag_name>) => do
     if tag.tagName != tag'.tagName then
-      Macro.throwErrorAt tag' s!"Mismatched closing tag, expected {tag.tagName} but got {tag'.tagName}"
+      let hint ← MessageData.hint m!"Replace with opening tag" #[tag.tagName] (ref? := some tag')
+      throwErrorAt tag' m!"Mismatched closing tag, expected `{tag.tagName}` but got `{tag'.tagName}`\n{hint}"
     if tag.tagName ∈ voidTags then
-      Macro.throwErrorAt tag s!"'{tag.tagName}' doesn't allow contents"
-    ``(Html.tag $(quote tag.tagName) <<< $extra* >>> {{ $content }} )
-  | `(term| {{ <$tag:tag_name $[$extra]* > $[$content:html]* </ $tag':tag_name> }}) => do
-    if tag.tagName != tag'.tagName then
-      Macro.throwErrorAt tag' s!"Mismatched closing tag, expected {tag.tagName} but got {tag'.tagName}"
-    if tag.tagName ∈ voidTags && content.size != 0 then
-      Macro.throwErrorAt tag s!"'{tag.tagName}' doesn't allow contents"
-    ``(Html.tag $(quote tag.tagName) <<< $extra* >>> <| Html.fromArray #[$[ ({{ $content }} : Html) ],*] )
-  | `(term| {{ <$tag:tag_name $[$extra]* /> }}) => ``(Html.tag $(quote tag.tagName) <<< $extra* >>> Html.empty )
+      let hint ←
+        if let some ⟨start, stop⟩ := mkNullNode #[tk, tk'] |>.getRange? then
+          let src := (← getFileMap).source
+          let noContents := src.extract start (src.prev stop)
+          MessageData.hint m!"Remove contents" #[noContents ++ "/>"]
+        else pure m!""
+      throwErrorAt tag m!"`<{tag.tagName}>` doesn't allow contents{hint}"
+    let attrs ← elabAttrs extra
+    let content ←
+      if h : content.size = 1 then
+        elabHtml content[0]
+      else
+        let content ← content.mapM elabHtml
+        let content ← mkArrayLit (.const ``Html []) content.toList
+        mkAppM ``Html.fromArray #[content]
+    mkAppM ``Html.tag #[toExpr tag.tagName, attrs, content]
+  | `(html| <$tag:tag_name $[$extra]* />) =>
+    let attrs ← elabAttrs extra
+    mkAppM ``Html.tag #[toExpr tag.tagName, attrs, ← mkAppM ``Html.empty #[]]
+  | _ => throwUnsupportedSyntax
+
+elab_rules : term
+  | `(term| {{ $h:html }}) =>
+    withRef h <| elabHtml h
+  | `(term| {{ $[$h:html]* }}) => do
+    let h ← h.mapM fun (x : TSyntax `html) => withRef x <| elabHtml x
+    Meta.mkAppM ``Html.fromArray #[← Meta.mkArrayLit (.const ``Html []) h.toList]
+
 
 scoped instance : Coe String Html := ⟨.text true⟩
 
-def testAttrs := <<< charset="UTF-8" charset = "UTF-8" a="b" a-b-c="44" {{#[("x", "y")]}} >>>
+private def testAttrs := {{ <html charset="UTF-8" charset = "UTF-8" a="b" a-b-c="44" {{#[("x", "y")] }} /> }}
 
-/-- info: #[("charset", "UTF-8"), ("charset", "UTF-8"), ("a", "b"), ("a-b-c", "44"), ("x", "y")] -/
+/--
+info: Verso.Output.Html.tag
+  "html"
+  #[("charset", "UTF-8"), ("charset", "UTF-8"), ("a", "b"), ("a-b-c", "44"), ("x", "y")]
+  (Verso.Output.Html.seq #[])
+-/
 #guard_msgs in
 #eval testAttrs
 
-def testAttrsAntiquotes :=
-  <<< charset={{"UTF" ++ "-8"}} "charset" = "UTF-8" a="b" a-b-c="44" {{#[("x", "y")]}} >>>
+private def testAttrsAntiquotes :=
+  {{ <html charset={{"UTF" ++ "-8"}} "charset" = "UTF-8" a="b" a-b-c="44" {{#[("x", "y")]}} /> }}
 
-/-- info: #[("charset", "UTF-8"), ("charset", "UTF-8"), ("a", "b"), ("a-b-c", "44"), ("x", "y")] -/
+/--
+info: Verso.Output.Html.tag
+  "html"
+  #[("charset", "UTF-8"), ("charset", "UTF-8"), ("a", "b"), ("a-b-c", "44"), ("x", "y")]
+  (Verso.Output.Html.seq #[])
+-/
 #guard_msgs in
 #eval testAttrsAntiquotes
 
-def test : Html := {{
+private def test : Html := {{
   <html>
   <head>
     <meta charset="UTF-8"/>
@@ -306,7 +390,7 @@ info: Verso.Output.Html.tag
 #guard_msgs in
   #eval test
 
-def leanKwTest : Html := {{
+private def leanKwTest : Html := {{
   <label for="foo">"Blah"</label>
 }}
 
@@ -315,11 +399,21 @@ def leanKwTest : Html := {{
   #eval leanKwTest
 
 
-/-- error: 'br' doesn't allow contents -/
+/--
+error: `<br>` doesn't allow contents
+
+Hint: Remove contents
+  <̵b̵r̵>̵"̵f̵o̵o̵"̵ ̵"̵f̵o̵o̵"̵<̵/̵b̵r̵>̵<̲b̲r̲/̲>̲
+-/
 #guard_msgs in
   #eval show Html from {{ <br>"foo" "foo"</br> }}
 
 open Std.Format in
+
+/--
+Converts HTML into a pretty-printer document. This is useful for debugging, but it does not preserve
+whitespace around preformatted content and scripts.
+-/
 partial def format : Html → Std.Format
   | .text true str => .text (str.replace "<" "&lt;" |>.replace ">" "&gt;")
   | .text false str => .text str
@@ -336,7 +430,9 @@ partial def format : Html → Std.Format
     ]) ++ line ++ Format.group ("</" ++ name ++ ">")
   | .seq arr => line.joinSep <| arr.toList.map Html.format
 
--- TODO nicely readable HTML output
+/--
+Converts HTML into a string that's suitable for sending to browsers, but is also readable.
+-/
 partial def asString (html : Html) (indent : Nat := 0) (breakLines := true) : String :=
   match html with
   | .text true str => str.replace "<" "&lt;" |>.replace ">" "&gt;"

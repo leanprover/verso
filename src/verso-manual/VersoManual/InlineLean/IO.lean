@@ -74,7 +74,7 @@ section
 variable [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m]
 
 def ExampleFileConfig.parse  : ArgParse m ExampleFileConfig :=
-  ExampleFileConfig.mk <$> FileType.parse <*> ((·.getD true) <$> .named `show .bool true)
+  ExampleFileConfig.mk <$> FileType.parse <*> (.flag `show true)
 
 def IOExample.exampleFileSyntax [Monad m] [MonadQuotation m] (type : FileType) (contents : String) : m Term := do
   `(Block.other (Block.exampleFile $(quote type)) #[Block.code $(quote contents)])
@@ -409,7 +409,7 @@ structure Config where
   «show» : Bool := true
 
 def Config.parse : ArgParse m Config :=
-  Config.mk <$> .named `tag .string true <*> ((·.getD true) <$> .named `show .bool true)
+  Config.mk <$> .named `tag .string true <*> (.flag `show true)
 
 instance : FromArgs Config m := ⟨Config.parse⟩
 

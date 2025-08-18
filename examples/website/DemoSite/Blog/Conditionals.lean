@@ -37,7 +37,7 @@ Here are some examples:
 ```
 
 
-```lean demo (error := true) (name := fst)
+```lean demo +error (name := fst)
 example := if true then 1 else 2
 example := if True then 1 else 2
 example : Int := if True then 1 else 2
@@ -82,7 +82,7 @@ theorem lt_4 (b : Bool) : (if b then 1 else 2) < 4 := by
 ```
 
 And hide proof states:
-```lean demo (showProofStates := false)
+```lean demo -showProofStates
 theorem lt_4' (b : Bool) : (if b then 1 else 2) < 4 := by
   split
   . skip; decide
@@ -221,7 +221,7 @@ elab "%more_info(" t:term ")" : term => do
   elabTerm t none
 ```
 
-````lean demo error:=true
+````lean demo +error
 example := %much_info(22)
 
 example := %more_info(25)
@@ -230,7 +230,7 @@ example := %more_info(25)
 The info gets stacked up, with the greatest severity highlighting the range in question.
 
 Here's some hoverable info:
-```lean demo (error := true) (name := typeErr)
+```lean demo +error (name := typeErr)
 example : Nat := "Not a number"
 ```
 ```leanOutput typeErr
@@ -244,7 +244,7 @@ but is expected to have type
 
 
 Here's some traces:
-```lean demo (error := true) (name := traces)
+```lean demo +error (name := traces)
 set_option trace.compiler.ir.result true in
 def f' (xs : List Nat) := xs.foldl (init := 0) (· + ·)
 

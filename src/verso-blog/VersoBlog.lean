@@ -310,7 +310,7 @@ variable [Monad m] [MonadError m] [MonadLiftT CoreM m]
 
 instance : FromArgs LeanCommandConfig m where
   fromArgs :=
-    LeanCommandConfig.mk <$> .positional `project .ident <*> .positional `exampleName .ident <*> .namedD `showProofStates .bool true
+    LeanCommandConfig.mk <$> .positional `project .ident <*> .positional `exampleName .ident <*> .flag `showProofStates true
 end
 
 @[block_command]
@@ -385,7 +385,7 @@ instance : FromArgs LeanTermArgs DocElabM where
   fromArgs :=
     LeanTermArgs.mk <$>
       .positional `project .ident <*>
-      .namedD `showProofStates .bool true
+      .flag `showProofStates true
 
 @[role]
 def leanTerm : RoleExpanderOf LeanTermArgs
@@ -406,18 +406,38 @@ def leanTerm : RoleExpanderOf LeanTermArgs
 
 structure LeanBlockConfig where
   exampleContext : Ident
-  «show» : Option Bool := none
-  keep : Option Bool := none
+  «show» : Bool
+  keep : Bool
   name : Option Name := none
-  error : Option Bool := none
+  error : Bool
   /-- Whether to render proof states -/
-  showProofStates : Bool := true
+  showProofStates : Bool
 
 instance [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m] : FromArgs LeanBlockConfig m where
-  fromArgs := LeanBlockConfig.mk <$> .positional `exampleContext .ident <*> .named `show .bool true <*> .named `keep .bool true <*> .named `name .name true <*> .named `error .bool true <*> .namedD `showProofStates .bool true
+  fromArgs :=
+    LeanBlockConfig.mk <$>
+      .positional `exampleContext .ident <*>
+      .flag `show true "Include in rendered page?" <*>
+      .flag `keep true "Keep environment changes from this block?" <*>
+      .named `name .name true <*>
+      .flag `error false "Error expected in code?" <*>
+      .flag `showProofStates true "Show proof states in rendered page?"
+
+def LeanInitBlockConfig := LeanBlockConfig
+
+instance [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m] : FromArgs LeanInitBlockConfig m where
+  fromArgs :=
+    LeanBlockConfig.mk <$>
+      .positional `exampleContext .ident <*>
+      .flag `show false "Include in rendered page?" <*>
+      .flag `keep true "Keep environment changes from this block?" <*>
+      .named `name .name true <*>
+      .flag `error false "Error expected in code?" <*>
+      .flag `showProofStates true "Show proof states in rendered page?"
+
 
 @[code_block]
-def leanInit : CodeBlockExpanderOf LeanBlockConfig
+def leanInit : CodeBlockExpanderOf LeanInitBlockConfig
   | config , str => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"leanInit") <| do
     let context := Parser.mkInputContext (← parserInputString str) (← getFileName)
     let (header, state, msgs) ← Parser.parseHeader context
@@ -440,7 +460,7 @@ def leanInit : CodeBlockExpanderOf LeanBlockConfig
         let commandState := configureCommandState env {}
         let commandState := { commandState with scopes := [{ header := "", opts := pp.tagAppFns.set {} true }] }
         modifyEnv <| fun env => exampleContextExt.modifyState env fun s => {s with contexts := s.contexts.insert config.exampleContext.getId (.inline commandState state)}
-    if config.show.getD false then
+    if config.show then
       ``(Block.code $(quote str.getString)) -- TODO highlighting hack
     else
       ``(Block.concat #[])
@@ -466,29 +486,22 @@ def lean : CodeBlockExpanderOf LeanBlockConfig
     for t in s.commandState.infoState.trees do
       pushInfoTree t
 
-    match config.error with
-    | none =>
-      for msg in s.commandState.messages.toArray do
-        -- These errors break the build! Silence everything else to clean up output, but keep these.
-        if msg.severity != .error then
-          logMessage {msg with isSilent := true}
-        else
-          logMessage msg
-    | some true =>
+    if config.error then
       if s.commandState.messages.hasErrors then
         -- Nothing breaks the build here, so silence them all
         for msg in s.commandState.messages.errorsToWarnings.toArray do
           logMessage {msg with isSilent := true}
       else
         throwErrorAt str "Error expected in code block, but none occurred"
-    | some false =>
+    else
       for msg in s.commandState.messages.toArray do
-        -- Nothing breaks the build here, so silence them all
-        logMessage {msg with isSilent := true}
-      if s.commandState.messages.hasErrors then
-        throwErrorAt str "No error expected in code block, one occurred"
+        -- These errors break the build! Silence everything else to clean up output, but keep these.
+        if msg.severity != .error then
+          logMessage {msg with isSilent := true}
+        else
+          logMessage msg
 
-    if config.keep.getD true && !(config.error.getD false) then
+    if config.keep && !config.error then
       modifyEnv fun env => exampleContextExt.modifyState env fun st => {st with
         contexts := st.contexts.insert x.getId (.inline {s.commandState with messages := {} } s.parserState)
       }
@@ -511,7 +524,7 @@ def lean : CodeBlockExpanderOf LeanBlockConfig
       finally
         setInfoState infoSt
         setEnv env
-      if config.show.getD true then
+      if config.show then
         `(Block.other (Blog.BlockExt.highlightedCode { contextName := $(quote x.getId), showProofStates := $(quote config.showProofStates) } $(quote hls)) #[Block.code $(quote str.getString)])
       else
         ``(Block.concat [])
@@ -792,6 +805,25 @@ private def filterString (p : Char → Bool) (str : String) : String := Id.run <
   pure out
 
 open Template in
+/--
+Generates the HTML for `site`.
+
+Parameters:
+ * `theme` is the theme used to render content.
+ * `site` is the site to be generated.
+ * `options` are the command-line options provided by a user.
+
+Optional parameters:
+ * `relativizeUrls` rewrites internal links from absolute to relative links, which allows the blog
+   to be hosted in a subdirectory. Default `true`.
+ * `linkTargets` specifies how to create hyperlinks from Lean code to further documentation. By
+   default, no links are generated.
+ * `components` contains the implementation of the components. This is automatically filled out from
+   a table.
+ * `header` is emitted prior to each HTML document. By default, it produces a `<doctype>`, but it
+   can be overridden to integrate with other static site generators.
+-/
+
 def blogMain (theme : Theme) (site : Site) (relativizeUrls := true) (linkTargets : Code.LinkTargets TraverseContext := {})
     (options : List String) (components : Components := by exact %registered_components)
     (header : String := Html.doctype) :

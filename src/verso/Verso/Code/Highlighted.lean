@@ -530,7 +530,7 @@ partial defmethod Highlighted.toHtml : Highlighted → HighlightHtmlM g Html
       pure {{
         <span class="tactic">
           <label for={{id}}>{{← toHtml hl}}</label>
-          <input type="checkbox" class="tactic-toggle" id={{id}} {{checkedAttr}}></input>
+          <input type="checkbox" class="tactic-toggle" id={{id}} {{checkedAttr}}/>
           <span class="tactic-state">
             {{← if info.isEmpty then
                 pure {{"All goals completed! 🐙"}}

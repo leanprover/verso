@@ -1391,7 +1391,7 @@ structure DocstringConfig where
   /--
   Ignores the option `verso.docstring.allowMissing` and allows _this_ docstring to be missing.
   -/
-  allowMissing : Option Bool := none
+  allowMissing : Bool
   /-- Suppress the fields of a structure. -/
   hideFields : Bool := false
   /-- Suppress the constructor of a structure or class. -/
@@ -1406,9 +1406,10 @@ variable [MonadLog m] [AddMessageContext m] [Elab.MonadInfoTree m]
 def DocstringConfig.parse : ArgParse m DocstringConfig :=
   DocstringConfig.mk <$>
     .positional `name .documentableName <*>
-    .named `allowMissing .bool true <*>
-    .namedD `hideFields .bool false <*>
-    .namedD `hideStructureConstructor .bool false <*>
+    .flagM `allowMissing (verso.docstring.allowMissing.get <$> getOptions)
+      "Warn instead of error on missing docstrings (defaults to value of option `verso.docstring.allowMissing)" <*>
+    .flag `hideFields false <*>
+    .flag `hideStructureConstructor false <*>
     .named `label .string true
 
 instance : FromArgs DocstringConfig m := ⟨DocstringConfig.parse⟩
@@ -1418,7 +1419,7 @@ end
 @[block_command]
 def docstring : BlockCommandOf DocstringConfig
   | ⟨(x, name), allowMissing, hideFields, hideCtor, customLabel⟩ => do
-    let opts : Options → Options := allowMissing.map (fun b opts => verso.docstring.allowMissing.set opts b) |>.getD id
+    let opts : Options → Options := (verso.docstring.allowMissing.set · allowMissing)
 
     withOptions opts do
       Doc.PointOfInterest.save (← getRef) name.toString (detail? := some "Documentation")
@@ -1506,7 +1507,7 @@ structure IncludeDocstringOpts where
   elaborate : Bool
 
 def IncludeDocstringOpts.parse : ArgParse m IncludeDocstringOpts :=
-  IncludeDocstringOpts.mk <$> (.positional `name .documentableName <&> (·.2)) <*> .namedD `elab .bool true
+  IncludeDocstringOpts.mk <$> (.positional `name .documentableName <&> (·.2)) <*> .flag `elab true
 
 instance : FromArgs IncludeDocstringOpts m where
   fromArgs := IncludeDocstringOpts.parse
@@ -1641,28 +1642,29 @@ def Block.tactic (name : Lean.Elab.Tactic.Doc.TacticDoc) («show» : Option Stri
   data := ToJson.toJson (name, «show»)
 
 structure TacticDocsOptions where
-  name : String ⊕ Name
+  name : StrLit ⊕ Ident
   «show» : Option String
   replace : Bool
-  allowMissing : Option Bool
+  allowMissing : Bool
 
 section
 
-variable [Monad m] [MonadError m] [MonadLiftT CoreM m]
+variable [Monad m] [MonadError m] [MonadLiftT CoreM m] [MonadOptions m]
 
 def TacticDocsOptions.parse  : ArgParse m TacticDocsOptions :=
   TacticDocsOptions.mk <$>
     .positional `name strOrName <*>
     .named `show .string true <*>
-    .namedD `replace .bool false <*>
-    .named `allowMissing .bool true
+    .flag `replace false <*>
+    .flagM `allowMissing (verso.docstring.allowMissing.get <$> getOptions)
+      "Warn instead of error on missing docstrings (defaults to value of option `verso.docstring.allowMissing)"
 where
-  strOrName : ValDesc m (String ⊕ Name) := {
+  strOrName : ValDesc m (StrLit ⊕ Ident) := {
     description := "First token in tactic, or canonical parser name"
     signature := .Ident ∪ .String
     get := fun
-      | .name x => pure (.inr x.getId)
-      | .str s => pure (.inl s.getString)
+      | .name x => pure (.inr x)
+      | .str s => pure (.inl s)
       | .num n => throwErrorAt n "Expected tactic name (either first token as string, or internal parser name)"
   }
 
@@ -1671,15 +1673,35 @@ instance : FromArgs TacticDocsOptions m := ⟨TacticDocsOptions.parse⟩
 end
 
 open Lean Elab Term Parser Tactic Doc in
-private def getTactic (name : String ⊕ Name) : TermElabM TacticDoc := do
+private def getTactic (name : StrLit ⊕ Ident) : TermElabM TacticDoc := do
   for t in ← allTacticDocs do
-    if .inr t.internalName == name || .inl t.userName == name then
-      return t
+    match name with
+    | .inr name => if t.internalName == name.getId then return t
+    | .inl name => if t.userName == name.getString then return t
   let n : MessageData :=
     match name with
     | .inl x => x
     | .inr x => x
-  throwError m!"Tactic not found: {n}"
+  let blame : Syntax := name.elim TSyntax.raw TSyntax.raw
+  throwErrorAt blame m!"Tactic not found: {n}"
+
+
+open Lean Elab Term Parser Tactic Doc in
+private def getTacticOverloads (name : StrLit ⊕ Ident) : TermElabM (Array TacticDoc) := do
+  let mut out := #[]
+  for t in ← allTacticDocs do
+    match name with
+    | .inr name => if t.internalName == name.getId then out := out.push t
+    | .inl name => if t.userName == name.getString then out := out.push t
+
+  if out.size > 0 then return out
+  let n : MessageData :=
+    match name with
+    | .inl x => x
+    | .inr x => x
+  let blame : Syntax := name.elim TSyntax.raw TSyntax.raw
+  throwErrorAt blame m!"Tactic not found: {n}"
+
 
 open Lean Elab Term Parser Tactic Doc in
 private def getTactic? (name : String ⊕ Name) : TermElabM (Option TacticDoc) := do
@@ -1691,15 +1713,26 @@ private def getTactic? (name : String ⊕ Name) : TermElabM (Option TacticDoc) :
 @[directive]
 def tactic : DirectiveExpanderOf TacticDocsOptions
   | opts, more => do
-    let tactic ← getTactic opts.name
+    let tactics ← getTacticOverloads opts.name
+    let blame : Syntax := opts.name.elim TSyntax.raw TSyntax.raw
+    let withDocs := tactics.filter (·.docString.isSome)
+    -- Prefer overloads with docstrings to overloads without
+    let tactic ←
+      if h : tactics.size = 0 then throwErrorAt blame "Tactic not found"
+      else if h : withDocs.size > 0 then pure withDocs[0]
+      else pure tactics[0]
+    if tactics.size > 1 then
+      logWarningAt blame s!"Found {tactics.size} overloads: {tactics.map (toString ·.internalName) |>.toList |> ", ".intercalate}"
     Doc.PointOfInterest.save (← getRef) tactic.userName
     if tactic.userName == tactic.internalName.toString && opts.show.isNone then
       throwError "No `show` option provided, but the tactic has no user-facing token name"
     let contents ←
       if opts.replace then pure #[]
       else
-        let some mdAst := tactic.docString >>= MD4Lean.parse
-          | throwError "Failed to parse docstring as Markdown"
+        let some str := tactic.docString
+          | throwError "Tactic {tactic.userName} ({tactic.internalName}) has no docstring"
+        let some mdAst := MD4Lean.parse str
+          | throwError m!"Failed to parse docstring as Markdown. Docstring contents:\n{repr str}"
         mdAst.blocks.mapM (blockFromMarkdownWithLean [])
     let userContents ← more.mapM elabBlock
     ``(Verso.Doc.Block.other (Block.tactic $(quote tactic) $(quote opts.show)) #[$(contents ++ userContents),*])
@@ -1835,7 +1868,7 @@ structure ConvTacticDoc where
   docs? : Option String
 
 open Lean Elab Term Parser Tactic Doc in
-def getConvTactic (name : String ⊕ Name) (allowMissing : Option Bool) : TermElabM ConvTacticDoc :=
+def getConvTactic (name : StrLit ⊕ Ident) (allowMissing : Option Bool) : TermElabM ConvTacticDoc :=
   withOptions (allowMissing.map (fun b opts => verso.docstring.allowMissing.set opts b) |>.getD id) do
     let .inr kind := name
       | throwError "Strings not yet supported here"
@@ -1843,7 +1876,7 @@ def getConvTactic (name : String ⊕ Name) (allowMissing : Option Bool) : TermEl
     let some convs := parserState.categories.find? `conv
       | throwError "Couldn't find conv tactic list"
     for ⟨k, ()⟩ in convs.kinds do
-      if kind.isSuffixOf k then
+      if kind.getId.isSuffixOf k then
         return ⟨k, ← getDocString? (← getEnv) k⟩
     throwError m!"Conv tactic not found: {kind}"
 

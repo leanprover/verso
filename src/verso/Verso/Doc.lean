@@ -15,11 +15,36 @@ open Std (Format)
 open Lean (Name Json ToJson FromJson)
 open Lean.Json (getObj?)
 
+/--
+A genre is a kind of document that can be written with Verso.
+
+A genre is primarily defined by its extensions to the Verso framework, provided in this type.
+Additionally, each genre should provide a `main` function that is responsible for the traversal pass
+and for generating output.
+-/
 structure Genre : Type 1 where
+  /--
+  The metadata that may be associated with each `Part` (e.g. author, publication date,
+  cross-referencing identifier).
+  -/
   PartMetadata : Type
+  /--
+  Additional block-level values for documents written in the genre.
+  -/
   Block : Type
+  /--
+  Additional inline-level values for documents written in the genre.
+  -/
   Inline : Type
+  /--
+  The reader-style data used in the genre's traversal pass. Instances of `TraversePart` and
+  `TraverseBlock` for a genre specify how this is updated while traversing parts and blocks,
+  respectively.
+  -/
   TraverseContext : Type
+  /--
+  The mutable state used in the genre's traversal pass.
+  -/
   TraverseState : Type
 
 def Genre.none : Genre := ⟨Empty, Empty, Empty, Unit, Unit⟩
@@ -47,19 +72,57 @@ private def arrayEq (eq : α → α → Bool) (xs ys : Array α) : Bool := Id.ru
       return true
     else return false
 
-
+/--
+Inline content that is part of the text flow.
+-/
 inductive Inline (genre : Genre) : Type where
+  /--
+  Textual content.
+  -/
   | text (string : String)
+  /--
+  Emphasis, typically rendered using italic text.
+  -/
   | emph (content : Array (Inline genre))
+  /--
+  Strong emphasis, typically rendered using bold text.
+  -/
   | bold (content : Array (Inline genre))
+  /--
+  Inline literal code, typically rendered in a monospace font.
+  -/
   | code (string : String)
-  /-- Embedded blobs of TeX math -/
+  /--
+  Embedded TeX math, to be rendered by an external rendering engine such as TeX or KaTeX. The `mode`
+  determines whether it is rendered in inline mode or display mode; even display-mode math is an
+  inline element for purposes of document structure.
+  -/
   | math (mode : MathMode) (string : String)
+  /--
+  A user's line break. These are typically ignored when rendering, but don't need to be.
+  -/
   | linebreak (string : String)
+  /--
+  A link to some URL.
+  -/
   | link (content : Array (Inline genre)) (url : String)
+  /--
+  A footnote. In Verso's concrete syntax, their contents are specified elsewhere, but elaboration
+  places the contents at the use site.
+  -/
   | footnote (name : String) (content : Array (Inline genre))
+  /--
+  An image. `alt` should be displayed if the image can't be shown.
+  -/
   | image (alt : String) (url : String)
+  /--
+  A sequence of inline elements.
+  -/
   | concat (content : Array (Inline genre))
+  /--
+  A genre-specific inline element. `container` specifies what kind of element it is, and `content`
+  specifies the contained elements.
+  -/
   | other (container : genre.Inline) (content : Array (Inline genre))
 deriving Inhabited
 
@@ -277,12 +340,14 @@ open Lean in
 inductive Arg where
   | anon (value : ArgVal)
   | named (stx : Syntax) (name : Ident) (value : ArgVal)
+  | flag (stx : Syntax) (name : Ident) (value : Bool)
 deriving Repr, Inhabited, BEq
 
 open Lean in
 def Arg.syntax : Arg → Syntax
   | .anon v => v.syntax
-  | .named stx _ _ => stx
+  | .named stx .. | .flag stx .. => stx
+
 
 structure ListItem (α : Type u) where
   contents : Array α
@@ -308,14 +373,42 @@ instance [inst : ToJson α] : ToJson (ListItem α) := ⟨ListItem.toJson inst⟩
 
 def DescItem.reprPrec [Repr α] [Repr β] : DescItem α β → Nat → Std.Format := Repr.reprPrec
 
+/--
+Block-level content in a document.
+-/
 inductive Block (genre : Genre) : Type where
+  /--
+  A paragraph.
+  -/
   | para (contents : Array (Inline genre))
+  /--
+  A code block.
+  -/
   | code (content : String)
+  /--
+  An unordered list.
+  -/
   | ul (items : Array (ListItem (Block genre)))
+  /--
+  An ordered list.
+  -/
   | ol (start : Int) (items : Array (ListItem (Block genre)))
+  /--
+  A description list that associates explanatory text with shorter items.
+  -/
   | dl (items : Array (DescItem (Inline genre) (Block genre)))
+  /--
+  A quotation.
+  -/
   | blockquote (items : Array (Block genre))
+  /--
+  Multiple blocks, merged.
+  -/
   | concat (content : Array (Block genre))
+  /--
+  A genre-specific block. `container` specifies what kind of block it is, while `content` specifies
+  the content within the block.
+  -/
   | other (container : genre.Block) (content : Array (Block genre))
 deriving Inhabited
 
@@ -384,9 +477,22 @@ partial def Block.cast (inlines_eq : g1.Inline = g2.Inline) (blocks_eq : g1.Bloc
   | .concat xs => .concat (xs.map (cast inlines_eq blocks_eq))
   | .other x xs => .other (blocks_eq ▸ x) (xs.map (cast inlines_eq blocks_eq))
 
-
-inductive Part (genre : Genre) : Type where
-  | mk (title : Array (Inline genre)) (titleString : String) (metadata : Option genre.PartMetadata) (content : Array (Block genre)) (subParts : Array (Part genre))
+/--
+A logical division of a document.
+-/
+structure Part (genre : Genre) : Type where
+  /-- The part's title -/
+  title : Array (Inline genre)
+  /--
+  A string approximation of the part's title, for use in contexts where formatted text is invalid.
+  -/
+  titleString : String
+  /-- Genre-specific metadata -/
+  metadata : Option genre.PartMetadata
+  /-- The part's textual content -/
+  content : Array (Block genre)
+  /-- Sub-parts (e.g. subsections of a section, sections of a chapter) -/
+  subParts : Array (Part genre)
 deriving Inhabited
 
 partial def Part.beq [BEq genre.Inline] [BEq genre.Block] [BEq genre.PartMetadata] : Part genre → Part genre → Bool
@@ -395,30 +501,9 @@ partial def Part.beq [BEq genre.Inline] [BEq genre.Block] [BEq genre.PartMetadat
 
 instance [BEq genre.Inline] [BEq genre.Block] [BEq genre.PartMetadata] : BEq (Part genre) := ⟨Part.beq⟩
 
-def Part.title : Part genre → Array (Inline genre)
-  | .mk title .. => title
-def Part.titleString : Part genre → String
-  | .mk _ titleString .. => titleString
-def Part.metadata : Part genre → Option genre.PartMetadata
-  | .mk _ _ metadata .. => metadata
-def Part.content  : Part genre → Array (Block genre)
-  | .mk _ _ _ content .. => content
-def Part.subParts : Part genre → Array (Part genre)
-  | .mk _ _ _ _ subParts => subParts
+def Part.withoutSubparts (p : Part genre) : Part genre := { p with subParts := #[] }
 
-def Part.withoutSubparts : Part genre → Part genre
-  | .mk title titleString metadata content _ => .mk title titleString metadata content #[]
-
-def Part.withSubparts : Part genre → Array (Part genre) → Part genre
-  | .mk title titleString metadata content _, newSubs => .mk title titleString metadata content newSubs
-
-def Part.withoutMetadata : Part genre → Part genre
-  | .mk title titleString _ content subParts => .mk title titleString none content subParts
-
-def Part.withMetadata (part : Part genre) (newMeta : genre.PartMetadata) : Part genre :=
-  match part with
-  | .mk title titleString _ content subParts => .mk title titleString (some newMeta) content subParts
-
+def Part.withoutMetadata (p : Part genre) : Part genre := { p with metadata := none }
 
 partial def Part.reprPrec [Repr g.Inline] [Repr g.Block] [Repr g.PartMetadata] (part : Part g) (_prec : Nat) : Std.Format :=
   open Std.Format in
@@ -432,6 +517,9 @@ partial def Part.reprPrec [Repr g.Inline] [Repr g.Block] [Repr g.PartMetadata] (
 
 instance [Repr g.Inline] [Repr g.Block] [Repr g.PartMetadata] : Repr (Part g) := ⟨Part.reprPrec⟩
 
+/--
+Specifies how to modify the context while traversing the contents of a given part.
+-/
 class TraversePart (g : Genre) where
   /--
   How to modify the context while traversing the contents of a given part. This is applied after
@@ -441,6 +529,9 @@ class TraversePart (g : Genre) where
   -/
   inPart : Part g → g.TraverseContext → g.TraverseContext := fun _ => id
 
+/--
+Specifies how to modify the context while traversing the contents of a given block.
+-/
 class TraverseBlock (g : Genre) where
   /--
   How to modify the context while traversing a given block.
@@ -475,11 +566,32 @@ current position in the table of contents.
 
 -/
 class Traverse (g : Genre) (m : outParam (Type → Type)) where
+  /--
+  The effects carried out before traversing a `Part`.
+  -/
   part [MonadReader g.TraverseContext m] [MonadState g.TraverseState m] : Part g → m (Option g.PartMetadata)
+  /--
+  The effects carried out before traversing a `Block`.
+  -/
   block [MonadReader g.TraverseContext m] [MonadState g.TraverseState m] : Block g → m Unit
+  /--
+  The effects carried out before traversing an `Inline`.
+  -/
   inline [MonadReader g.TraverseContext m] [MonadState g.TraverseState m] : Inline g → m Unit
+  /--
+  Operations carried out after `part`, when a part has metadata. It allows genre-specific rewriting
+  of the entire part based on genre-specific metadata. This is typically used to construct a table
+  of contents or permalinks, but it can in principle arbitrarily rewrite the part. If it returns
+  `none`, then no rewrite is performed.
+  -/
   genrePart [MonadReader g.TraverseContext m] [MonadState g.TraverseState m] : g.PartMetadata → Part g → m (Option (Part g))
+  /--
+  The traversal of genre-specific block values. If it returns `none`, then no rewrite is performed.
+  -/
   genreBlock [MonadReader g.TraverseContext m] [MonadState g.TraverseState m] : g.Block → Array (Block g) → m (Option (Block g))
+  /--
+  The traversal of genre-specific inline values. If it returns `none`, then no rewrite is performed.
+  -/
   genreInline [MonadReader g.TraverseContext m] [MonadState g.TraverseState m] : g.Inline → Array (Inline g) → m (Option (Inline g))
 
 
@@ -528,7 +640,7 @@ where
 
   part (p : Doc.Part g) : m (Doc.Part g) := do
     let meta' ← Traverse.part p
-    let mut p := meta'.map p.withMetadata |>.getD p
+    let mut p := meta'.map ({ p with metadata := ·}) |>.getD p
     if let some md := p.metadata then
       if let some p' ← Traverse.genrePart md p then
         p := p'

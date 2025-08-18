@@ -260,6 +260,9 @@ block_extension Block.licenseInfo where
 
       return allLicenses.map (·.toHtml headerLevel)
 
+/--
+Displays the open-source licenses of components used to build the document.
+-/
 @[block_command]
 def licenseInfo : BlockCommandOf Unit
   | () => ``(Block.other Block.licenseInfo #[])

@@ -606,7 +606,7 @@ initialize expanderSignatureExt : PersistentEnvExtension (Name × SigDoc) (Name 
   }
 
 private def sig (α) [inst : FromArgs α DocElabM] : Option ArgParse.SigDoc :=
-  ArgParse.ArgParse.signature inst.fromArgs
+  inst.fromArgs.signature
 
 abbrev PartCommand := Syntax → PartElabM Unit
 

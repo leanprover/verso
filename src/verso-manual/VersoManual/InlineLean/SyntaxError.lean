@@ -126,7 +126,7 @@ variable [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadErr
 def SyntaxErrorConfig.parse : ArgParse m SyntaxErrorConfig :=
   SyntaxErrorConfig.mk <$>
     .positional `name (ValDesc.name.as "name for later reference") <*>
-    .namedD `show .bool true <*>
+    .flag `show true <*>
     .namedD `category (ValDesc.name.as "syntax category (default `command`)") `command <*>
     .namedD `precedence .nat 0
 

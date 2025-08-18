@@ -21,9 +21,15 @@ defmethod BlogPost.traverse1 (post : BlogPost) : Blog.TraverseM BlogPost := do
         pageIds := st.pageIds.insert post.id ⟨path, post.contents.titleString⟩}
     pure {post with contents := ← Post.traverse post.contents}
 
+/--
+A directory within the layout of a site.
+-/
 inductive Dir where
+  /-- The directory's root is the provided page -/
   | page (name : String) (id : Lean.Name) (text : Part Page) (contents : Array Dir)
+  /-- The directory's root is a blog -/
   | blog (name : String) (id : Lean.Name) (text : Part Page) (contents : Array BlogPost)
+  /-- The directory's root contains static files, copied from `files` when the site is generated -/
   | static (name : String) (files : System.FilePath)
 deriving Inhabited, Repr
 
@@ -61,8 +67,11 @@ partial def Dir.traverse1 (dir : Dir) : Blog.TraverseM Dir := do
       .blog name id txt' <$> posts.mapM BlogPost.traverse1
   | .static .. => pure dir
 
+/-- A specification of the layout of an entire site -/
 inductive Site where
+  /-- The root of the site is a page -/
   | page (id : Lean.Name) (text : Part Page) (contents : Array Dir)
+  /-- The root of the site is a blog with its associated posts -/
   | blog (id : Lean.Name) (text : Part Page) (contents : Array BlogPost)
 deriving Repr
 

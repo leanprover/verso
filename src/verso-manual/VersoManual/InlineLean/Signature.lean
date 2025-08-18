@@ -53,7 +53,7 @@ variable [Monad m] [MonadError m] [MonadLiftT CoreM m]
 
 def SignatureConfig.parse  : ArgParse m SignatureConfig :=
   SignatureConfig.mk <$>
-    ((·.getD true) <$> .named `show .bool true)
+    (.flag `show true)
 
 instance : FromArgs SignatureConfig m where
   fromArgs := SignatureConfig.parse

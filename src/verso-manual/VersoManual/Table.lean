@@ -136,7 +136,7 @@ section
 variable [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m] [MonadFileMap m]
 
 def TableConfig.parse : ArgParse m TableConfig :=
-  TableConfig.mk <$> .named `tag .string true <*> ((·.getD false) <$> .named `header .bool true) <*> .named `align alignment true
+  TableConfig.mk <$> .named `tag .string true <*> .flag `header true <*> .named `align alignment true
 where
   alignment := {
     description := "Alignment of the table ('left', 'right', or 'center')"
@@ -185,6 +185,6 @@ def table : DirectiveExpanderOf TableConfig
       ``(Block.other (Block.table $(quote columns) $(quote cfg.header) $(quote cfg.name) $(quote cfg.alignment)) #[Block.ul #[$[Verso.Doc.ListItem.mk #[$blocks,*]],*]])
 
 where
-  getLi
+  getLi : Syntax → DocElabM (TSyntaxArray `block)
     | `(list_item| * $content* ) => pure content
     | other => throwErrorAt other "Expected list item"
