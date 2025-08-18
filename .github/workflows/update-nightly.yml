@@ -151,6 +151,7 @@ jobs:
           fvextra
           upquote
           lineno
+          float
 
     - name: Check `tlmgr` version
       run: tlmgr --version
