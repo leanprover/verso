@@ -744,10 +744,7 @@ where
 inline_extension Inline.name where
   traverse _ _ _ := do
     pure none
-  toTeX :=
-    some <| fun go _ _ content => do
-      pure <| .seq <| ← content.mapM fun b => do
-        pure <| .seq #[← go b, .raw "\n"]
+  toTeX := some <| fun go _ _ content => content.mapM go
   extraCss := [highlightingStyle]
   extraJs := [highlightingJs]
   extraJsFiles := hlJsDeps
