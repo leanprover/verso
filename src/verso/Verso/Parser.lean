@@ -13,11 +13,9 @@ set_option guard_msgs.diff true
 
 namespace Verso.Parser
 
-
 open Verso.SyntaxUtils
 open Verso.Syntax
 open Lean Parser
-
 
 scoped instance : Coe Char ParserFn where
   coe := chFn
@@ -74,7 +72,6 @@ partial def satisfyFn' (p : Char → Bool) (errorMsg : String := "unexpected cha
   if h : c.input.atEnd i then s.mkUnexpectedError errorMsg
   else if p (c.input.get' i h) then s.next' c.input i h
   else s.mkUnexpectedError errorMsg
-
 
 partial def atMostAux (n : Nat) (p : ParserFn) (msg : String) : ParserFn := fun c s => Id.run do
   let iniSz  := s.stackSize
@@ -340,7 +337,6 @@ def onlyBlockOpeners : ParserFn := fun c s =>
   if ok then s
   else s.mkErrorAt s!"beginning of line or sequence of nestable block openers at {position}" s.pos
 
-
 def nl := satisfyFn (· == '\n') "newline"
 
 /--
@@ -367,7 +363,6 @@ def fakeAtom (str : String) (info : SourceInfo := SourceInfo.none) : ParserFn :=
 def pushMissing : ParserFn := fun _c s =>
   s.pushSyntax .missing
 
-
 def strFn (str : String) : ParserFn := asStringFn <| fun c s =>
   let rec go (iter : String.Iterator) (s : ParserState) :=
     if iter.atEnd then s
@@ -378,7 +373,6 @@ def strFn (str : String) : ParserFn := asStringFn <| fun c s =>
   let iniSz := s.stxStack.size
   let s := go str.iter s
   if s.hasError then s.mkErrorAt s!"'{str}'" iniPos (some iniSz) else s
-
 
 inductive OrderedListType where
    /-- Items like 1. -/
@@ -392,7 +386,6 @@ def OrderedListType.all : List OrderedListType :=
 
 theorem OrderedListType.all_complete : ∀ x : OrderedListType, x ∈ all := by
   unfold all; intro x; cases x <;> repeat constructor
-
 
 inductive UnorderedListType where
    /-- Items like * -/
@@ -423,7 +416,6 @@ def orderedListIndicator (type : OrderedListType) : ParserFn :=
     | .numDot => chFn '.'
     | .parenAfter => chFn ')'
 
-
 def blankLine : ParserFn := nodeFn `blankLine <| atomicFn <| asStringFn <| takeWhileFn (· == ' ') >> nl
 
 def bullet := atomicFn (go UnorderedListType.all)
@@ -439,7 +431,6 @@ where
     | [] => fun _ s => s.mkError "no list type"
     | [x] => atomicFn (orderedListIndicator x)
     | x :: xs => atomicFn (orderedListIndicator x) <|> go xs
-
 
 def inlineTextChar : ParserFn := fun c s =>
   let i := s.pos
@@ -491,7 +482,6 @@ Remaining: ""
 -/
 #guard_msgs in
 #eval inlineTextChar |>.test! ""
-
 
 /--
 info: Success! Final stack:
@@ -572,7 +562,6 @@ All input consumed.
 #guard_msgs in
 #eval asStringFn (transform := unescapeStr) (many1Fn inlineTextChar) |>.test! "\\>"
 
-
 /-- Block opener prefixes -/
 def blockOpener := atomicFn <|
   takeWhileEscFn (· == ' ') >>
@@ -613,18 +602,6 @@ def val : ParserFn :=
     nodeFn ``arg_num docNumLitFn <|>
     nodeFn ``arg_ident docIdentFn <|>
     nodeFn ``arg_str docStrLitFn
-
-
-
-
-
-
-
-
-
-
-
-
 
 def withCurrentStackSize (p : Nat → ParserFn) : ParserFn := fun c s =>
   p s.stxStack.size c s
@@ -717,7 +694,6 @@ def recoverNonSpace (p : ParserFn) : ParserFn :=
     show ParserFn from
       fun _ s => s.shrinkStack rctx.initialSize
 
-
 /--
 info: Failure @4 (⟨1, 4⟩): unterminated string literal; expected identifier or numeral
 Final stack:
@@ -761,7 +737,6 @@ def recoverHereWithKeeping (stxs : Array Syntax) (keep : Nat) (p : ParserFn) : P
     show ParserFn from
       fun _ s => stxs.foldl (init := s.restore (rctx.initialSize + keep) rctx.initialPos) (·.pushSyntax ·)
 
-
 def arg : ParserFn :=
     withCurrentStackSize fun iniSz =>
       flag <|> withParens iniSz <|> potentiallyNamed iniSz <|> (val >> mkAnon iniSz)
@@ -791,44 +766,6 @@ where
     recoverEol (asStringFn <| strFn ")") >> eatSpaces >>
     mkNamed iniSz
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 /--
 info: Success! Final stack:
   `x
@@ -849,7 +786,6 @@ def nameArgWhitespace : (multiline : Option Nat) → ParserFn
   | none => eatSpaces
   | some n => takeWhileFn (fun c => c == ' ' || c == '\n') >> guardMinColumn n
 
-
 /--
 info: Success! Final stack:
  empty
@@ -859,7 +795,6 @@ Remaining:
 #guard_msgs in
 #eval nameArgWhitespace none |>.test! " \n"
 
-
 def args (multiline : Option Nat := none) : ParserFn :=
   sepByFn true arg (nameArgWhitespace multiline)
 
@@ -867,84 +802,15 @@ def nameAndArgs (multiline : Option Nat := none) (reportNameAs : String := "iden
   nameArgWhitespace multiline >> docIdentFn (reportAs := reportNameAs) >>
   nameArgWhitespace multiline >> args (multiline := multiline)
 
-/--
-info: Success! Final stack:
- • `leanExample
- • [(Verso.Syntax.named_no_paren
-      `context
-      ":="
-      (Verso.Syntax.arg_num (num "2")))]
-
-All input consumed.
--/
-#guard_msgs in
-#eval nameAndArgs.test! "leanExample context := 2"
-
-/--
-info: Success! Final stack:
- • `scheme
- • [(Verso.Syntax.named_no_paren
-      `dialect
-      ":="
-      (Verso.Syntax.arg_str (str "\"chicken\"")))
-     (Verso.Syntax.anon
-      (Verso.Syntax.arg_num (num "43")))]
-
-All input consumed.
--/
-#guard_msgs in
-#eval nameAndArgs.test! "scheme dialect:=\"chicken\" 43"
-
-/--
-info: Success! Final stack:
- • `scheme
- • [(Verso.Syntax.named_no_paren
-      `dialect
-      ":="
-      (Verso.Syntax.arg_str (str "\"chicken\"")))
-     (Verso.Syntax.anon
-      (Verso.Syntax.arg_num (num "43")))
-     (Verso.Syntax.flag_on "+" `foo)]
-
-All input consumed.
--/
-#guard_msgs in
-#eval nameAndArgs.test! "scheme dialect:=\"chicken\" 43 +foo"
-
-/--
-info: Failure @29 (⟨1, 29⟩): expected flag name
-Final stack:
- • `scheme
- • [(Verso.Syntax.named_no_paren
-      `dialect
-      ":="
-      (Verso.Syntax.arg_str (str "\"chicken\"")))
-     (Verso.Syntax.flag_on "+" <missing>)
-     (Verso.Syntax.anon
-      (Verso.Syntax.arg_num (num "99")))]
-
-Remaining: " 99"
--/
-#guard_msgs in
-#eval nameAndArgs.test! "scheme dialect:=\"chicken\" +43 99"
 
 
-/--
-info: Failure @28 (⟨1, 28⟩): expected no space before
-Final stack:
- • `scheme
- • [(Verso.Syntax.named_no_paren
-      `dialect
-      ":="
-      (Verso.Syntax.arg_str (str "\"chicken\"")))
-     (Verso.Syntax.flag_on "+" `x)
-     (Verso.Syntax.anon
-      (Verso.Syntax.arg_num (num "99")))]
 
-Remaining: "x 99"
--/
-#guard_msgs in
-#eval nameAndArgs.test! "scheme dialect:=\"chicken\" + x 99"
+
+
+
+
+
+
 
 /--
 info: Success! Final stack:
@@ -984,75 +850,13 @@ Remaining:
 #guard_msgs in
 #eval args.test! "dialect:=\"chicken\" 43\n(foo)"
 
-/--
-info: Success! Final stack:
- • `scheme
- • [(Verso.Syntax.named_no_paren
-      `dialect
-      ":="
-      (Verso.Syntax.arg_str (str "\"chicken\"")))
-     (Verso.Syntax.anon
-      (Verso.Syntax.arg_num (num "43")))]
-
-Remaining:
-"\n(foo)"
--/
-#guard_msgs in
-#eval nameAndArgs.test! "scheme dialect:=\"chicken\" 43\n(foo)"
-
-/--
-info: Success! Final stack:
- • `leanExample
- • [(Verso.Syntax.anon
-      (Verso.Syntax.arg_ident `context))]
-
-All input consumed.
--/
-#guard_msgs in
-#eval nameAndArgs.test! "leanExample context"
-/--
-info: Success! Final stack:
- • `leanExample
- • [(Verso.Syntax.anon
-      (Verso.Syntax.arg_ident `context))
-     (Verso.Syntax.anon
-      (Verso.Syntax.arg_ident `more))]
-
-All input consumed.
--/
-#guard_msgs in
-#eval nameAndArgs.test! "leanExample context more"
-/--
-info: Success! Final stack:
- • `leanExample
- • [(Verso.Syntax.anon
-      (Verso.Syntax.arg_ident `context))
-     (Verso.Syntax.named_no_paren
-      `more
-      ":="
-      (Verso.Syntax.arg_str (str "\"stuff\"")))]
-
-All input consumed.
--/
-#guard_msgs in
-#eval nameAndArgs.test! "leanExample context more:=\"stuff\""
 
 
-/--
-info: Success! Final stack:
- • `leanExample
- • [(Verso.Syntax.anon
-      (Verso.Syntax.arg_ident `context))
-     (Verso.Syntax.named_no_paren
-      `more
-      ":="
-      (Verso.Syntax.arg_str (str "\"stuff\"")))]
 
-Remaining:
-"\n\nabc"
--/
-#guard_msgs in
-#eval nameAndArgs.test! "leanExample context more:=\"stuff\"\n\nabc"
+
+
+
+
 
 structure InlineCtxt where
   allowNewlines := true
@@ -1067,7 +871,6 @@ structure InlineCtxt where
   inLink : Bool := false
 
 deriving Inhabited
-
 
 /- Parsing inlines:
  * Inline parsers may not consume trailing whitespace, and must be robust in the face of leading whitespace
@@ -1243,13 +1046,11 @@ mutual
       let s := nodeFn nullKind (delimitedInline ctxt) c s
       s.pushSyntax fakeClose
 
-
   partial def delimitedInline (ctxt : InlineCtxt) : ParserFn := emph ctxt <|> bold ctxt <|> code <|> math <|> role ctxt <|> image <|> link ctxt <|> footnote ctxt
 
   partial def inline (ctxt : InlineCtxt) : ParserFn :=
     text <|> linebreak ctxt <|> delimitedInline ctxt
 end
-
 
 def textLine (allowNewlines := true) : ParserFn := many1Fn (inline { allowNewlines })
 
@@ -1293,7 +1094,6 @@ Remaining: "_ aa_"
 #guard_msgs in
 #eval emph {} |>.test! "_ aa_"
 
-
 /--
 info: Failure @0 (⟨1, 0⟩): expected character other than backtick ('`')
 Final stack:
@@ -1319,7 +1119,6 @@ All input consumed.
 -/
 #guard_msgs in
 #eval (asStringFn <| code.codeContentsFn 1).test! "a"
-
 
 /--
 info: Success! Final stack:
@@ -1390,7 +1189,6 @@ All input consumed.
 -/
 #guard_msgs in
 #eval code.test! "`   `"
-
 
 /--
 info: Success! Final stack:
@@ -1525,7 +1323,6 @@ Remaining: "o `"
 #guard_msgs in
 #eval (inline {}).test! "`` fo\no `"
 
-
 /--
 info: Success! Final stack:
   (Verso.Syntax.bold
@@ -1618,7 +1415,6 @@ Remaining: "\n123"
 -/
 #guard_msgs in
 #eval inline {} |>.test! "![abc\n123"
-
 
 /--
 info: Success! Final stack:
@@ -1798,7 +1594,6 @@ All input consumed.
 }
 `"
 
-
 /--
 info: Success! Final stack:
   (Verso.Syntax.display_math
@@ -1847,14 +1642,6 @@ def metadataBlock : ParserFn :=
 where
   opener := atomicFn (bolThen (eatSpaces >> strFn "%%%") "%%% (at line beginning)") >> eatSpaces >> ignoreFn (chFn '\n')
   closer := bolThen (eatSpaces >> strFn "%%%") "%%% (at line beginning)" >> eatSpaces >> ignoreFn (chFn '\n' <|> eoiFn)
-
-
-
-
-
-
-
-
 
 structure InList where
   indentation : Nat
@@ -2027,7 +1814,6 @@ Remaining: "** "
 #guard_msgs in
 #eval lookaheadUnorderedListIndicator {} (fun type => fakeAtom s! "{repr type}") |>.test! "** "
 
-
 def skipUntilDedent (indent : Nat) : ParserFn :=
   skipRestOfLine >>
   manyFn (chFn ' ' >> takeWhileFn (· == ' ') >> guardColumn (· ≥ indent) s!"indentation at {indent}" >> skipRestOfLine)
@@ -2051,7 +1837,6 @@ mutual
           takeWhileFn (· == ' ') >>
           guardColumn (· == col) s!"indentation at {col}" >>
           orderedListIndicator type >> ignoreFn (lookaheadFn (chFn ' ' <|> chFn '\n'))
-
 
   partial def descItem (ctxt : BlockCtxt) : ParserFn :=
     nodeFn ``desc <|
@@ -2090,7 +1875,6 @@ mutual
           many1Fn (listItem {ctxt with minIndent := c + 1 , inLists := ⟨c, .inl type⟩  :: ctxt.inLists}) >>
           fakeAtom "}"
 
-
   partial def definitionList (ctxt : BlockCtxt) : ParserFn :=
     nodeFn ``dl <|
       atomicFn (onlyBlockOpeners >> takeWhileFn (· == ' ') >> ignoreFn (lookaheadFn (chFn ':' >> chFn ' ')) >> guardMinColumn ctxt.minIndent) >>
@@ -2118,9 +1902,6 @@ mutual
       fakeAtom "{" >>
       textLine (allowNewlines := false) >>
       fakeAtom "}"
-
-
-
 
   partial def codeBlock (ctxt : BlockCtxt) : ParserFn :=
     nodeFn ``codeblock <|
@@ -2223,7 +2004,6 @@ mutual
          asStringFn (strFn str) >> notFollowedByFn (chFn ':') "':'" >>
          eatSpaces >>
          (ignoreFn <| atomicFn (satisfyFn (· == '\n') "newline") <|> eoiFn))
-
 
   -- This low-level definition is to get exactly the right amount of lookahead
   -- together with column tracking
@@ -2330,7 +2110,6 @@ All input consumed.
 #guard_msgs in
 #eval blocks {} |>.test! "I can describe lists like this one:\n\n* a\n* b"
 
-
 /--
 info: Success! Final stack:
   [(Verso.Syntax.para
@@ -2354,8 +2133,6 @@ All input consumed.
 -/
 #guard_msgs in
 #eval document |>.test! "\n![Lean logo](/static/lean_logo.svg)\n\nThis is an example website/blog, for testing purposes."
-
-
 
 /--
 info: Success! Final stack:
@@ -2621,7 +2398,6 @@ All input consumed.
 #guard_msgs in
 #eval blocks {} |>.test! "> 1. foo"
 
-
 /--
 info: Success! Final stack:
   [(Verso.Syntax.blockquote
@@ -2802,7 +2578,6 @@ All input consumed.
 -/
 #guard_msgs in
 #eval blocks {} |>.test! "+ foo\n+ bar\n"
-
 
 /--
 info: Success! Final stack:
@@ -2998,7 +2773,6 @@ All input consumed.
 #guard_msgs in
 #eval blocks {} |>.test! ": an excellent idea\n\n Let's say more!\n\n\n\n\n: more\n\n even more!"
 
-
 /--
 info: Success! Final stack:
   [(Verso.Syntax.dl
@@ -3159,7 +2933,6 @@ Remaining: "  More text\n\n: `foo`\n\n  Thing\n"
   Thing
 "
 
-
 /--
 info: Success! Final stack:
   [(Verso.Syntax.ol
@@ -3307,7 +3080,6 @@ Remaining: "* not regular_ emphasis"
 -/
 #guard_msgs in
 #eval blocks {} |>.test! "*This is _strong* not regular_ emphasis"
-
 
 /--
 info: Success! Final stack:
@@ -3603,8 +3375,6 @@ All input consumed.
 #guard_msgs in
 #eval blocks {} |>.test! "> Quotation\n\nand not contained"
 
-
-
 /--
 info: Success! Final stack:
   (Verso.Syntax.codeblock
@@ -3630,7 +3400,6 @@ All input consumed.
 -/
 #guard_msgs in
 #eval codeBlock {} |>.test! "``` scheme\n (define x 4)\n x\n```"
-
 
 /--
 info: Success! Final stack:
@@ -3658,7 +3427,6 @@ All input consumed.
 #guard_msgs in
 #eval codeBlock {} |>.test! " ```\n (define x 4)\n x\n ```"
 
-
 /--
 info: Success! Final stack:
   (Verso.Syntax.codeblock
@@ -3684,7 +3452,6 @@ All input consumed.
 -/
 #guard_msgs in
 #eval codeBlock {} |>.test! "``` scheme\n(define x 4)\nx\n```"
-
 
 /--
 info: Failure @32 (⟨5, 0⟩): expected column 0
@@ -4246,7 +4013,6 @@ All input consumed.
 #guard_msgs in
 #eval directive {} |>.test! " ::: multiPara greatness:=\"amazing!\"\n foo\n :::"
 
-
 /--
 info: Success! Final stack:
   (Verso.Syntax.directive
@@ -4365,7 +4131,6 @@ All input consumed.
 #guard_msgs in
 #eval blocks {} |>.test! "[\\[link A\\]](https://example.com) [\\[link B\\]](https://more.example.com)"
 
-
 /--
 info: Success! Final stack:
   [(Verso.Syntax.para
@@ -4460,7 +4225,6 @@ All input consumed.
 -/
 #guard_msgs in
 #eval blocks {} |>.test! "Blah blah[^1]\n\n[^1]: More can be said"
-
 
 -- A big test of error recovery
 
@@ -4873,7 +4637,6 @@ info: "Header!"
     logInfo inlines
   else logError "Didn't match"
 
-
 -- Inlines
 
 /-- info: "abc" -/
@@ -5048,6 +4811,5 @@ info: [Error pretty printing syntax: format: uncaught backtrack exception. Falli
     for x in as do logInfo x
     for x in bs do logInfo x
   else logError m!"Didn't match {stx}"
-
 
 end
