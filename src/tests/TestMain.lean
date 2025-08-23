@@ -44,13 +44,21 @@ def testParser (dir : System.FilePath) (fn : Lean.Parser.ParserFn) : Config → 
     updateExpected := config.updateExpected
   }
 
+open Lean.Parser in
+open Verso.Parser in
 def tests := [
   testStemmer, testBlockParser,
-  testParser "metadataBlock" Verso.Parser.metadataBlock,
-  testParser "val" Verso.Parser.val,
-  testParser "arg" Verso.Parser.arg,
-  testParser "nameAndArgs" Verso.Parser.nameAndArgs,
-  testParser "inlineTextChar" Verso.Parser.inlineTextChar
+  testParser "metadataBlock" metadataBlock,
+  testParser "val" val,
+  testParser "arg" arg,
+  testParser "nameAndArgs" nameAndArgs,
+  testParser "inlineTextChar" inlineTextChar,
+  testParser "manyInlineTextChar" (asStringFn (many1Fn inlineTextChar)),
+  testParser "inline/emph" (emph {}),
+  testParser "inline/code" code,
+  testParser "inline/role" (role {}),
+  testParser "inline" (inline {}),
+  testParser "block/code" (codeBlock {}),
 ]
 
 def getConfig (config : Config) : List String → IO Config

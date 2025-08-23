@@ -484,23 +484,9 @@ def inlineText : ParserFn := asStringFn (transform := unescapeStr) <| atomicFn i
 
 
 
-/--
-info: Success! Final stack:
-  "!!"
-Remaining:
-"![abc"
--/
-#guard_msgs in
-#eval asStringFn (many1Fn inlineTextChar) |>.test! "!!![abc"
 
-/--
-info: Failure @0 (⟨1, 0⟩): '*'
-Final stack:
-  [<missing>]
-Remaining: "*"
--/
-#guard_msgs in
-#eval asStringFn (many1Fn inlineTextChar) |>.test! "*"
+
+
 
 /--
 info: Success! Final stack:
@@ -511,14 +497,7 @@ Remaining:
 #guard_msgs in
 #eval asStringFn (transform := unescapeStr) (many1Fn inlineTextChar) |>.test! "\\*\\**"
 
-/--
-info: Success! Final stack:
-  "!!!\\[abc"
-Remaining:
-"]"
--/
-#guard_msgs in
-#eval asStringFn (many1Fn inlineTextChar) |>.test! "!!!\\[abc]"
+
 
 /--
 info: Success! Final stack:
@@ -1028,37 +1007,11 @@ All input consumed.
 #guard_msgs in
 #eval text.test! "abc "
 
-/--
-info: Success! Final stack:
-  (Verso.Syntax.emph
-   "_"
-   [(Verso.Syntax.text (str "\"aa\""))]
-   "_")
-All input consumed.
--/
-#guard_msgs in
-#eval emph {} |>.test! "_aa_"
 
-/--
-info: Failure @4 (⟨1, 4⟩): expected '_' without preceding space
-Final stack:
-  (Verso.Syntax.emph
-   "_"
-   [(Verso.Syntax.text (str "\"aa \""))]
-   <missing>)
-Remaining: "_"
--/
-#guard_msgs in
-#eval emph {} |>.test! "_aa _"
 
-/--
-info: Failure @0 (⟨1, 0⟩): unexpected space or newline after opener
-Final stack:
-  (Verso.Syntax.emph "_" <missing>)
-Remaining: "_ aa_"
--/
-#guard_msgs in
-#eval emph {} |>.test! "_ aa_"
+
+
+
 
 /--
 info: Failure @0 (⟨1, 0⟩): expected character other than backtick ('`')
@@ -1121,173 +1074,12 @@ Remaining:
 #guard_msgs in
 #eval (asStringFn <| many1Fn <| code.codeContentsFn 2).test! "aaa`\\nb``c```de````"
 
-/--
-info: Success! Final stack:
-  (Verso.Syntax.code
-   "``"
-   (str "\"foo bar\"")
-   "``")
-All input consumed.
--/
-#guard_msgs in
-#eval code.test! "``foo bar``"
 
-/--
-info: Success! Final stack:
-  (Verso.Syntax.code "`" (str "\" \"") "`")
-All input consumed.
--/
-#guard_msgs in
-#eval code.test! "` `"
 
-/--
-info: Success! Final stack:
-  (Verso.Syntax.code "`" (str "\"  \"") "`")
-All input consumed.
--/
-#guard_msgs in
-#eval code.test! "`  `"
 
-/--
-info: Success! Final stack:
-  (Verso.Syntax.code "`" (str "\"   \"") "`")
-All input consumed.
--/
-#guard_msgs in
-#eval code.test! "`   `"
 
-/--
-info: Success! Final stack:
-  (Verso.Syntax.code "`" (str "\"x\"") "`")
-All input consumed.
--/
-#guard_msgs in
-#eval code.test! "` x `"
 
-/--
-info: Success! Final stack:
-  (Verso.Syntax.code
-   "``"
-   (str "\"foo `stuff` bar\"")
-   "``")
-All input consumed.
--/
-#guard_msgs in
-#eval code.test! "``foo `stuff` bar``"
 
-/--
-info: Failure @4 (⟨1, 4⟩): expected '`' to close inline code
-Final stack:
-  (Verso.Syntax.code
-   "`"
-   (str "\"foo\"")
-   <missing>)
-Remaining: ""
--/
-#guard_msgs in
-#eval code.test! "`foo"
-
-/--
-info: Success! Final stack:
-  (Verso.Syntax.code "`" (str "\" foo\"") "`")
-All input consumed.
--/
-#guard_msgs in
-#eval code.test! "` foo`"
-
-/--
-info: Success! Final stack:
-  (Verso.Syntax.code "`" (str "\"foo\"") "`")
-All input consumed.
--/
-#guard_msgs in
-#eval code.test! "` foo `"
-
-/--
-info: Success! Final stack:
-  (Verso.Syntax.code "`" (str "\"fo\\no\"") "`")
-All input consumed.
--/
-#guard_msgs in
-#eval code.test! "` fo\no `"
-
-/--
-info: Success! Final stack:
-  (Verso.Syntax.code "``" (str "\"`x\"") "``")
-All input consumed.
--/
-#guard_msgs in
-#eval code.test! "`` `x ``"
-
-/--
-info: Success! Final stack:
-  (Verso.Syntax.code
-   "``"
-   (str "\"foo bar\"")
-   "``")
-All input consumed.
--/
-#guard_msgs in
-#eval (inline {}).test! "``foo bar``"
-
-/--
-info: Success! Final stack:
-  (Verso.Syntax.code
-   "``"
-   (str "\"foo `stuff` bar\"")
-   "``")
-All input consumed.
--/
-#guard_msgs in
-#eval (inline {}).test! "``foo `stuff` bar``"
-
-/--
-info: Failure @4 (⟨1, 4⟩): expected '`' to close inline code
-Final stack:
-  (Verso.Syntax.code
-   "`"
-   (str "\"foo\"")
-   <missing>)
-Remaining: ""
--/
-#guard_msgs in
-#eval (inline {}).test! "`foo"
-
-/--
-info: Success! Final stack:
-  (Verso.Syntax.code "`" (str "\" foo\"") "`")
-All input consumed.
--/
-#guard_msgs in
-#eval (inline {}).test! "` foo`"
-
-/--
-info: Success! Final stack:
-  (Verso.Syntax.code "`" (str "\"foo\"") "`")
-All input consumed.
--/
-#guard_msgs in
-#eval (inline {}).test! "` foo `"
-
-/--
-info: Success! Final stack:
-  (Verso.Syntax.code "`" (str "\"fo\\no\"") "`")
-All input consumed.
--/
-#guard_msgs in
-#eval (inline {}).test! "` fo\no `"
-
-/--
-info: Failure @6 (⟨2, 0⟩): expected '``' to close inline code
-Final stack:
-  (Verso.Syntax.code
-   "``"
-   (str "\" fo\"")
-   <missing>)
-Remaining: "o `"
--/
-#guard_msgs in
-#eval (inline {}).test! "`` fo\no `"
 
 /--
 info: Success! Final stack:
@@ -1300,218 +1092,20 @@ All input consumed.
 #guard_msgs in
 #eval bold {} |>.test! "**aa**"
 
-/--
-info: Success! Final stack:
-  (Verso.Syntax.bold
-   "**"
-   [(Verso.Syntax.text (str "\"aa\""))
-    (Verso.Syntax.linebreak
-     "line!"
-     (str "\"\\n\""))
-    (Verso.Syntax.text (str "\"bb\""))]
-   "**")
-All input consumed.
--/
-#guard_msgs in
-#eval inline {} |>.test! "**aa\nbb**"
 
-/--
-info: Success! Final stack:
-  (Verso.Syntax.text (str "\"a \""))
-Remaining:
-"* b"
--/
-#guard_msgs in
-#eval inline {} |>.test! "a * b"
 
-/--
-info: Success! Final stack:
-  (Verso.Syntax.link
-   "["
-   [(Verso.Syntax.text (str "\"Wikipedia\""))]
-   "]"
-   (Verso.Syntax.url
-    "("
-    (str "\"https://en.wikipedia.org\"")
-    ")"))
-All input consumed.
--/
-#guard_msgs in
-#eval inline {} |>.test! "[Wikipedia](https://en.wikipedia.org)"
 
-/--
-info: Success! Final stack:
-  (Verso.Syntax.image
-   "!["
-   (str "\"\"")
-   "]"
-   (Verso.Syntax.url
-    "("
-    (str "\"logo.png\"")
-    ")"))
-All input consumed.
--/
-#guard_msgs in
-#eval inline {} |>.test! "![](logo.png)"
 
-/--
-info: Failure @12 (⟨1, 12⟩): expected ')'
-Final stack:
-  (Verso.Syntax.image
-   "!["
-   (str "\"\"")
-   "]"
-   (Verso.Syntax.url
-    "("
-    (str "\"logo.png\"")
-    <missing>))
-Remaining: "\nabc"
--/
-#guard_msgs in
-#eval inline {} |>.test! "![](logo.png\nabc"
 
-/--
-info: Failure @5 (⟨1, 5⟩): expected ']'
-Final stack:
-  (Verso.Syntax.image
-   "!["
-   (str "\"abc\"")
-   <missing>)
-Remaining: "\n123"
--/
-#guard_msgs in
-#eval inline {} |>.test! "![abc\n123"
 
-/--
-info: Success! Final stack:
-  (Verso.Syntax.image
-   "!["
-   (str "\"alt text is good\"")
-   "]"
-   (Verso.Syntax.url
-    "("
-    (str "\"logo.png\"")
-    ")"))
-All input consumed.
--/
-#guard_msgs in
-#eval inline {} |>.test! "![alt text is good](logo.png)"
 
-/--
-info: Failure @19 (⟨1, 19⟩): expected '(' or '['
-Final stack:
-  (Verso.Syntax.image
-   "!["
-   (str "\"alt text is good\"")
-   "]"
-   (Verso.Syntax.url <missing>))
-Remaining: "](logo.png)"
--/
-#guard_msgs in
-#eval inline {} |>.test! "![alt text is good]](logo.png)"
 
-/--
-info: Success! Final stack:
-  (Verso.Syntax.role
-   "{"
-   `hello
-   []
-   "}"
-   "["
-   [(Verso.Syntax.bold
-     "*"
-     [(Verso.Syntax.text (str "\"there\""))]
-     "*")]
-   "]")
-All input consumed.
--/
-#guard_msgs in
-#eval role {} |>.test! "{hello}*there*"
 
-/--
-info: Success! Final stack:
-  (Verso.Syntax.role
-   "{"
-   `hello
-   []
-   "}"
-   "["
-   [(Verso.Syntax.text (str "\"there\""))]
-   "]")
-All input consumed.
--/
-#guard_msgs in
-#eval role {} |>.test! "{hello}[there]"
 
-/--
-info: Success! Final stack:
-  (Verso.Syntax.role
-   "{"
-   `ref
-   [(Verso.Syntax.anon
-     (Verso.Syntax.arg_ident `other))]
-   "}"
-   "["
-   [(Verso.Syntax.role
-     "{"
-     `leanKw
-     []
-     "}"
-     "["
-     [(Verso.Syntax.code "`" (str "\"cmd\"") "`")]
-     "]")
-    (Verso.Syntax.text (str "\" is great\""))]
-   "]")
-All input consumed.
--/
-#guard_msgs in
-#eval role {} |>.test! "{ref other}[{leanKw}`cmd` is great]"
 
-/--
-info: Success! Final stack:
-  (Verso.Syntax.role
-   "{"
-   `hello
-   [(Verso.Syntax.named_no_paren
-     `world
-     ":="
-     (Verso.Syntax.arg_ident `gaia))]
-   "}"
-   "["
-   [(Verso.Syntax.text (str "\"there\""))]
-   "]")
-All input consumed.
--/
-#guard_msgs in
-#eval role {} |>.test! "{hello world:=gaia}[there]"
 
-/--
-info: Success! Final stack:
-  (Verso.Syntax.role
-   "{"
-   `hello
-   [(Verso.Syntax.named_no_paren
-     `world
-     ":="
-     (Verso.Syntax.arg_ident `gaia))]
-   "}"
-   "["
-   [(Verso.Syntax.text (str "\"there \""))
-    (Verso.Syntax.bold
-     "*"
-     [(Verso.Syntax.text (str "\"is\""))]
-     "*")
-    (Verso.Syntax.text (str "\" \""))
-    (Verso.Syntax.emph
-     "_"
-     [(Verso.Syntax.text (str "\"a meaning!\""))]
-     "_")
-    (Verso.Syntax.text (str "\" \""))]
-   "]")
-All input consumed.
--/
-#guard_msgs in
-#eval role {} |>.test! "{hello world:=gaia}[there *is* _a meaning!_ ]"
+
+
 
 /--
 info: Success! Final stack:
@@ -1521,82 +1115,19 @@ All input consumed.
 #guard_msgs in
 #eval footnote {} |>.test! "[^1]"
 
-/--
-info: Success! Final stack:
-  (Verso.Syntax.footnote "[^" (str "\"1\"") "]")
-All input consumed.
--/
-#guard_msgs in
-#eval inline {} |>.test! "[^1]"
 
-/--
-info: Success! Final stack:
-  (Verso.Syntax.inline_math
-   "$"
-   (Verso.Syntax.code
-    "`"
-    (str "\"\\\\frac{x}{4}\"")
-    "`"))
-All input consumed.
--/
-#guard_msgs in
-#eval inline {} |>.test! "$`\\frac{x}{4}`"
 
-/--
-info: Success! Final stack:
-  (Verso.Syntax.inline_math
-   "$"
-   (Verso.Syntax.code
-    "`"
-    (str "\"\\\\frac{\\n  x\\n}{\\n  4\\n}\\n\"")
-    "`"))
-All input consumed.
--/
-#guard_msgs in
-#eval inline {} |>.test! "$`\\frac{
-  x
-}{
-  4
-}
-`"
 
-/--
-info: Success! Final stack:
-  (Verso.Syntax.display_math
-   "$$"
-   (Verso.Syntax.code
-    "`"
-    (str "\"\\\\frac{x}{4}\"")
-    "`"))
-All input consumed.
--/
-#guard_msgs in
-#eval inline {} |>.test! "$$`\\frac{x}{4}`"
 
-/--
-info: Success! Final stack:
-  (Verso.Syntax.text (str "\"$35.23\""))
-All input consumed.
--/
-#guard_msgs in
-#eval inline {} |>.test! "$35.23"
 
-/--
-info: Success! Final stack:
-  (Verso.Syntax.text (str "\"$\""))
-Remaining:
-"`code`"
--/
-#guard_msgs in
-#eval inline {} |>.test! "\\$`code`"
 
-/--
-info: Success! Final stack:
-  (Verso.Syntax.text (str "\"$$$\""))
-All input consumed.
--/
-#guard_msgs in
-#eval inline {} |>.test! "$$$"
+
+
+
+
+
+
+
 
 open Lean.Parser.Term in
 def metadataBlock : ParserFn :=
@@ -3341,97 +2872,19 @@ All input consumed.
 #guard_msgs in
 #eval blocks {} |>.test! "> Quotation\n\nand not contained"
 
-/--
-info: Success! Final stack:
-  (Verso.Syntax.codeblock
-   "```"
-   [`scheme []]
-   "\n"
-   (str "\"(define x 4)\\nx\\n\"")
-   "```")
-All input consumed.
--/
-#guard_msgs in
-#eval codeBlock {} |>.test! " ``` scheme\n (define x 4)\n x\n ```"
 
-/--
-info: Success! Final stack:
-  (Verso.Syntax.codeblock
-   "```"
-   [`scheme []]
-   "\n"
-   (str "\" (define x 4)\\n x\\n\"")
-   "```")
-All input consumed.
--/
-#guard_msgs in
-#eval codeBlock {} |>.test! "``` scheme\n (define x 4)\n x\n```"
 
-/--
-info: Success! Final stack:
-  (Verso.Syntax.codeblock
-   "```"
-   []
-   "\n"
-   (str "\"(define x 4)\\nx\\n\"")
-   "```")
-All input consumed.
--/
-#guard_msgs in
-#eval codeBlock {} |>.test! " ``` \n (define x 4)\n x\n ```"
 
-/--
-info: Success! Final stack:
-  (Verso.Syntax.codeblock
-   "```"
-   []
-   "\n"
-   (str "\"(define x 4)\\nx\\n\"")
-   "```")
-All input consumed.
--/
-#guard_msgs in
-#eval codeBlock {} |>.test! " ```\n (define x 4)\n x\n ```"
 
-/--
-info: Success! Final stack:
-  (Verso.Syntax.codeblock
-   "```"
-   [`scheme []]
-   "\n"
-   (str "\" (define x 4)\\n x\\n\"")
-   "```")
-All input consumed.
--/
-#guard_msgs in
-#eval codeBlock {} |>.test! "``` scheme\n (define x 4)\n x\n```\n"
 
-/--
-info: Success! Final stack:
-  (Verso.Syntax.codeblock
-   "```"
-   [`scheme []]
-   "\n"
-   (str "\"(define x 4)\\nx\\n\"")
-   "```")
-All input consumed.
--/
-#guard_msgs in
-#eval codeBlock {} |>.test! "``` scheme\n(define x 4)\nx\n```"
 
-/--
-info: Failure @32 (⟨5, 0⟩): expected column 0
-Final stack:
-  (Verso.Syntax.codeblock
-   "```"
-   [`scheme []]
-   "\n"
-   (str "\"(define x 4)\\nx\\n\"")
-   <missing>)
-Remaining: "more"
--/
-#guard_msgs in
-#eval codeBlock {} |>.test! "``` scheme\n(define x 4)\nx\n ````\nmore"
+
+
+
+
+
+
+
 
 /--
 info: Success! Final stack:
@@ -3503,61 +2956,13 @@ Remaining: "\n(define x 4)\nx\n```"
 x
 ```"
 
-/--
-info: Failure @25 (⟨3, 0⟩): expected column 1
-Final stack:
-  (Verso.Syntax.codeblock
-   "```"
-   [`scheme []]
-   "\n"
-   (str "\"\\n\"")
-   <missing>)
-Remaining: "x\n```"
--/
-#guard_msgs in
-#eval codeBlock {} |>.test! " ``` scheme\n(define x 4)\nx\n```"
 
-/--
-info: Failure @32 (⟨4, 3⟩): expected column 1
-Final stack:
-  (Verso.Syntax.codeblock
-   "```"
-   [`scheme []]
-   "\n"
-   (str "\"(define x 4)\\nx\\n\"")
-   <missing>)
-Remaining: ""
--/
-#guard_msgs in
-#eval codeBlock {} |>.test! " ``` scheme\n (define x 4)\n x\n```"
 
-/--
-info: Failure @25 (⟨4, 3⟩): expected column 1
-Final stack:
-  (Verso.Syntax.codeblock
-   "```"
-   []
-   "\n"
-   (str "\"(define x 4)\\nx\\n\"")
-   <missing>)
-Remaining: ""
--/
-#guard_msgs in
-#eval codeBlock {} |>.test! " ```\n (define x 4)\n x\n```"
 
-/--
-info: Failure @28 (⟨4, 3⟩): expected column 1
-Final stack:
-  (Verso.Syntax.codeblock
-   "```"
-   []
-   "\n"
-   (str "\"(define x 4)\\nx\\n\"")
-   <missing>)
-Remaining: ""
--/
-#guard_msgs in
-#eval codeBlock {} |>.test! " ```   \n (define x 4)\n x\n```"
+
+
+
+
 
 /--
 info: Success! Final stack:
