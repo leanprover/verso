@@ -1,0 +1,5 @@
+Failure @0 (⟨1, 0⟩): '
+'; expected '(', '+', '-', identifier or numeral
+Final stack:
+  (Verso.Syntax.arg_str <missing>)
+Remaining: "\n(x:=1)"

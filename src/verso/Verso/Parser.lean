@@ -791,232 +791,43 @@ where
     recoverEol (asStringFn <| strFn ")") >> eatSpaces >>
     mkNamed iniSz
 
-/--
-info: Success! Final stack:
-  (Verso.Syntax.anon (Verso.Syntax.arg_ident `x))
-All input consumed.
--/
-#guard_msgs in
-#eval arg.test! "x"
 
 
-/--
-info: Success! Final stack:
-  (Verso.Syntax.named_no_paren
-   `x
-   ":="
-   (Verso.Syntax.arg_num (num "1")))
-All input consumed.
--/
-#guard_msgs in
-#eval arg.test! "x:=1"
-
-/--
-info: Success! Final stack:
-  (Verso.Syntax.named
-   "("
-   `x
-   ":="
-   (Verso.Syntax.arg_num (num "1"))
-   ")")
-All input consumed.
--/
-#guard_msgs in
-#eval arg.test! "(x:=1)"
-
-/--
-info: Failure @0 (⟨1, 0⟩): '
-'; expected '(', '+', '-', identifier or numeral
-Final stack:
-  (Verso.Syntax.arg_str <missing>)
-Remaining: "\n(x:=1)"
--/
-#guard_msgs in
-#eval arg.test! "\n(x:=1)"
-
-/--
-info: Success! Final stack:
-  (Verso.Syntax.flag_on "+" `foo)
-All input consumed.
--/
-#guard_msgs in
-#eval arg.test! "+foo"
-
-/--
-info: Success! Final stack:
-  (Verso.Syntax.flag_off "-" `other)
-All input consumed.
--/
-#guard_msgs in
-#eval arg.test! "-other"
-
-/--
-info: Failure @2 (⟨1, 2⟩): expected no space before
-Final stack:
-  (Verso.Syntax.flag_off "-" `other)
-Remaining: "other"
--/
-#guard_msgs in
-#eval arg.test! "- other"
-
-/--
-info: Success! Final stack:
-  (Verso.Syntax.named
-   "("
-   `x
-   ":="
-   (Verso.Syntax.arg_num (num "1"))
-   ")")
-Remaining:
-"\n"
--/
-#guard_msgs in
-#eval arg.test! "(x:=1)\n"
-
-/--
-info: Success! Final stack:
-  (Verso.Syntax.named_no_paren
-   `x
-   ":="
-   (Verso.Syntax.arg_ident `y))
-All input consumed.
--/
-#guard_msgs in
-#eval arg.test! "x:=y"
-
-/--
-info: Success! Final stack:
-  (Verso.Syntax.named
-   "("
-   `x
-   ":="
-   (Verso.Syntax.arg_ident `y)
-   ")")
-All input consumed.
--/
-#guard_msgs in
-#eval arg.test! "(x:=y)"
-
-/--
-info: Success! Final stack:
-  (Verso.Syntax.named_no_paren
-   `x
-   ":="
-   (Verso.Syntax.arg_str (str "\"y\"")))
-All input consumed.
--/
-#guard_msgs in
-#eval arg.test! "x:=\"y\""
-
-/--
-info: Failure @3 (⟨1, 3⟩): unterminated string literal; expected identifier or numeral
-Final stack:
- • `x
- • ":="
- • (Verso.Syntax.arg_str <missing>)
-
-Remaining: "\"y"
--/
-#guard_msgs in
-#eval arg.test! "x:=\"y"
-
-/--
-info: 2 failures:
-  @7 (⟨1, 7⟩): expected ')'
-    ""
-  @7 (⟨1, 7⟩): unterminated string literal; expected identifier or numeral
-    ""
-
-Final stack:
-  (Verso.Syntax.named
-   "("
-   `x
-   ":="
-   (Verso.Syntax.arg_str <missing>)
-   <missing>)
--/
-#guard_msgs in
-#eval arg.test! "(x:=\"y)"
 
 
-/--
-info: Success! Final stack:
-  (Verso.Syntax.anon
-   (Verso.Syntax.arg_num (num "42")))
-All input consumed.
--/
-#guard_msgs in
-#eval arg.test! "42"
 
-/--
-info: 4 failures:
-  @4 (⟨1, 4⟩): expected ')'
-    ""
-  @4 (⟨1, 4⟩): expected ':='
-    ""
-  @4 (⟨1, 4⟩): expected argument name
-    ""
-  @4 (⟨1, 4⟩): unexpected end of input; expected identifier, numeral or string literal
-    ""
 
-Final stack:
-  (Verso.Syntax.named
-   "("
-   <missing>
-   <missing>
-   (Verso.Syntax.arg_str <missing>)
-   <missing>)
--/
-#guard_msgs in
-#eval arg.test! "(42)"
 
-/--
-info: 3 failures:
-  @6 (⟨1, 6⟩): expected ')'
-    ""
-  @6 (⟨1, 6⟩): expected ':='
-    ""
-  @6 (⟨1, 6⟩): unexpected end of input; expected identifier, numeral or string literal
-    ""
 
-Final stack:
-  (Verso.Syntax.named
-   "("
-   `x
-   <missing>
-   (Verso.Syntax.arg_str <missing>)
-   <missing>)
--/
-#guard_msgs in
-#eval arg.test! "(x 42)"
 
-/--
-info: Failure @8 (⟨1, 8⟩): expected ')'
-Final stack:
-  (Verso.Syntax.named
-   "("
-   `x
-   ":="
-   (Verso.Syntax.arg_num (num "42"))
-   <missing>)
-Remaining: "\n)"
--/
-#guard_msgs in
-#eval arg.test! "(x := 42\n)"
 
-/--
-info: Failure @8 (⟨1, 8⟩): expected ')'
-Final stack:
-  (Verso.Syntax.named
-   "("
-   `x
-   ":="
-   (Verso.Syntax.arg_num (num "42"))
-   <missing>)
-Remaining: "\na"
--/
-#guard_msgs in
-#eval arg.test! "(x := 42\na"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 /--
 info: Success! Final stack:
