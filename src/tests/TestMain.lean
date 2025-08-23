@@ -30,13 +30,6 @@ def testStemmer (_ : Config) : IO Unit := do
       IO.eprintln s!"{x} --> {s} (wanted '{y}')"
     throw <| IO.userError "Stemmer tests failed"
 
-def testBlockParser (config : Config) : IO Unit := do
-  Verso.GoldenTest.runTests {
-    testDir := "src/tests/parser/blocks"
-    runTest := Verso.Parser.blocks {} |>.test
-    updateExpected := config.updateExpected
-  }
-
 def testParser (dir : System.FilePath) (fn : Lean.Parser.ParserFn) : Config → IO Unit := fun config =>
   Verso.GoldenTest.runTests {
     testDir := ("src/tests/parser" : System.FilePath) / dir,
@@ -47,7 +40,7 @@ def testParser (dir : System.FilePath) (fn : Lean.Parser.ParserFn) : Config → 
 open Lean.Parser in
 open Verso.Parser in
 def tests := [
-  testStemmer, testBlockParser,
+  testStemmer,
   testParser "metadataBlock" metadataBlock,
   testParser "val" val,
   testParser "arg" arg,
@@ -55,6 +48,7 @@ def tests := [
   testParser "nameAndArgs" nameAndArgs,
   testParser "inlineTextChar" inlineTextChar,
   testParser "manyInlineTextChar" (asStringFn (many1Fn inlineTextChar)),
+  testParser "inline/text" text,
   testParser "inline/emph" (emph {}),
   testParser "inline/code" code,
   testParser "inline/role" (role {}),
@@ -69,7 +63,7 @@ def tests := [
   testParser "block/ulIndicator" (lookaheadUnorderedListIndicator {} (fun type => fakeAtom s! "{repr type}")),
   testParser "block/olIndicator" (lookaheadOrderedListIndicator {} (fun type i => fakeAtom s! "{repr type} {i}")),
   testParser "block/" (block {}),
-
+  testParser "document" document,
 ]
 
 def getConfig (config : Config) : List String → IO Config

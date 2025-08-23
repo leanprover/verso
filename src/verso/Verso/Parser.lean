@@ -51,7 +51,6 @@ def repFn : Nat → ParserFn → ParserFn
   | 0, _ => skipFn
   | n+1, p => p >> repFn n p
 
-
 /-- Like `satisfyFn`, but no special handling of EOI -/
 partial def satisfyFn' (p : Char → Bool) (errorMsg : String := "unexpected character") : ParserFn := fun c s =>
   let i := s.pos
@@ -89,7 +88,6 @@ partial def satisfyEscFn (p : Char → Bool) (errorMsg : String := "unexpected c
   else if p (c.input.get' i h) then s.next' c.input i h
   else s.mkUnexpectedError errorMsg
 
-
 partial def takeUntilEscFn (p : Char → Bool) : ParserFn := fun c s =>
   let i := s.pos
   if h : c.input.atEnd i then s
@@ -102,7 +100,6 @@ partial def takeUntilEscFn (p : Char → Bool) : ParserFn := fun c s =>
   else takeUntilEscFn p c (s.next' c.input i h)
 
 partial def takeWhileEscFn (p : Char → Bool) : ParserFn := takeUntilEscFn (not ∘ p)
-
 
 def ignoreFn (p : ParserFn) : ParserFn := fun c s =>
   let iniSz := s.stxStack.size
@@ -215,7 +212,6 @@ def onlyBlockOpeners : ParserFn := fun c s =>
   else s.mkErrorAt s!"beginning of line or sequence of nestable block openers at {position}" s.pos
 
 def nl := satisfyFn (· == '\n') "newline"
-
 
 def fakeAtom (str : String) (info : SourceInfo := SourceInfo.none) : ParserFn := fun _c s =>
   let atom := mkAtom info str
@@ -335,7 +331,6 @@ the line, whichever is first. Always consumes at least one
 logical character on success, taking escaping into account. -/
 def inlineText : ParserFn := asStringFn (transform := unescapeStr) <| atomicFn inlineTextChar >> manyFn inlineTextChar
 
-
 /-- Block opener prefixes -/
 def blockOpener := atomicFn <|
   takeWhileEscFn (· == ' ') >>
@@ -376,7 +371,6 @@ where
       chFn '\n' >>
       takeWhileFn (fun c => c.isWhitespace && c != '\n') >>
       satisfyFn (!·.isWhitespace) "non-whitespace" >> skipToNewline
-
 
 -- TODO: upstream
 def recoverFn (p : ParserFn) (recover : RecoveryContext → ParserFn) : ParserFn := fun c s =>
@@ -746,7 +740,6 @@ def lookaheadOrderedListIndicator (ctxt : BlockCtxt) (p : OrderedListType → In
             let num := Syntax.mkNumLit digits (info := .original leading numPos trailing i)
             p type n c (s.shrinkStack iniSz |>.setPos numPos |>.pushSyntax num)
 
-
 def lookaheadUnorderedListIndicator (ctxt : BlockCtxt) (p : UnorderedListType → ParserFn) : ParserFn := fun c s =>
   let iniPos := s.pos
   let iniSz := s.stxStack.size
@@ -998,57 +991,3 @@ mutual
 
   partial def document (blockContext : BlockCtxt := {}) : ParserFn := ignoreFn (manyFn blankLine) >> blocks blockContext
 end
-
-
-
-
-
-
-
-/--
-info: Success! Final stack:
-  [(Verso.Syntax.para
-    "para{"
-    [(Verso.Syntax.image
-      "!["
-      (str "\"Lean logo\"")
-      "]"
-      (Verso.Syntax.url
-       "("
-       (str "\"/static/lean_logo.svg\"")
-       ")"))]
-    "}")
-   (Verso.Syntax.para
-    "para{"
-    [(Verso.Syntax.text
-      (str
-       "\"This is an example website/blog, for testing purposes.\""))]
-    "}")]
-All input consumed.
--/
-#guard_msgs in
-#eval document |>.test! "\n![Lean logo](/static/lean_logo.svg)\n\nThis is an example website/blog, for testing purposes."
-
-/--
-info: Success! Final stack:
-  (Verso.Syntax.li
-   "*"
-   [(Verso.Syntax.para
-     "para{"
-     [(Verso.Syntax.text (str "\"foo\""))]
-     "}")])
-Remaining:
-"* bar\n"
--/
-#guard_msgs in
-#eval listItem {inLists:=[⟨0, .inr .asterisk⟩]} |>.test! "* foo\n* bar\n"
-
-
-/--
-info: Success! Final stack:
-  (Verso.Syntax.text (str "\" \""))
-Remaining:
-"[\\[link\\]](https://link.com)"
--/
-#guard_msgs in
-#eval text |>.test! " [\\[link\\]](https://link.com)"

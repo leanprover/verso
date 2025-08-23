@@ -1,7 +1,13 @@
-
+/-
+Copyright (c) 2025 Lean FRO LLC. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+Author: David Thrane Christiansen
+-/
 import Lean.Util.Diff
 
 namespace Verso.GoldenTest
+
+set_option linter.missingDocs true
 
 open Lean.Diff
 
@@ -10,34 +16,47 @@ open Lean.Diff
 structure Config where
   /-- Where are input and expected files located? -/
   testDir : System.FilePath
+  /-- Should the expected output be replaced with the actual output? -/
   updateExpected : Bool := false
+  /-- How to test an input file's contents. -/
   runTest : String → IO String
 
-/-- Result of running a single test -/
+/-- Result of running a single test. -/
 inductive TestResult where
+  /-- The test succeeded.-/
   | pass (name : String) : TestResult
+  /-- The test was a failure. -/
   | fail (name expected actual : String) : TestResult
+  /-- An error prevented the test from running. -/
   | error (name message : String) : TestResult
 
-/-- Statistics for a test run -/
+/-- Statistics for a test run. -/
 structure TestStats where
+  /-- The number of passing tests. -/
   passed : Nat := 0
+  /-- The number of failing tests. -/
   failed : Nat := 0
+  /-- The number of test that couldn't run. -/
   errors : Nat := 0
 
+/-- The total number of tests from a given run. -/
 def TestStats.total (stats : TestStats) : Nat :=
   stats.passed + stats.failed + stats.errors
 
+/-- Add a test result to the statistics-/
 def TestStats.add (stats : TestStats) (result : TestResult) : TestStats :=
   match result with
   | .pass _ => { stats with passed := stats.passed + 1 }
   | .fail _ _ _ => { stats with failed := stats.failed + 1 }
   | .error _ _ => { stats with errors := stats.errors + 1 }
 
-
+/-- A single test consists of three paths -/
 structure TestPaths where
+  /-- The file to parse -/
   input : System.FilePath
+  /-- The expected result -/
   expected : System.FilePath
+  /-- The actual result -/
   output : System.FilePath
 
 /-- Get paths for a test given the input file path -/
