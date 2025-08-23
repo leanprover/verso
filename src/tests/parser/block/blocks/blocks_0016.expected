@@ -1,0 +1,24 @@
+Success! Final stack:
+  [(Verso.Syntax.blockquote
+    ">"
+    [(Verso.Syntax.blockquote
+      ">"
+      [(Verso.Syntax.ul
+        "ul{"
+        [(Verso.Syntax.li
+          "*"
+          [(Verso.Syntax.para
+            "para{"
+            [(Verso.Syntax.text (str "\"foo\""))]
+            "}")])]
+        "}")])
+     (Verso.Syntax.ul
+      "ul{"
+      [(Verso.Syntax.li
+        "*"
+        [(Verso.Syntax.para
+          "para{"
+          [(Verso.Syntax.text (str "\"foo\""))]
+          "}")])]
+      "}")])]
+All input consumed.

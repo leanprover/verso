@@ -1,0 +1,20 @@
+Success! Final stack:
+  [(Verso.Syntax.metadata_block
+    "%%%"
+    (Term.structInstFields
+     [(Term.structInstField
+       (Term.structInstLVal `foo [])
+       [[]
+        []
+        (Term.structInstFieldDef
+         ":="
+         []
+         (num "53"))])
+      []])
+    "%%%")
+   (Verso.Syntax.para
+    "para{"
+    [(Verso.Syntax.text
+      (str "\"Text/paragraph!\""))]
+    "}")]
+All input consumed.

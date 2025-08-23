@@ -1,0 +1,9 @@
+Failure @32 (⟨4, 4⟩): expected column 0
+Final stack:
+  (Verso.Syntax.codeblock
+   "```"
+   [`scheme []]
+   "\n"
+   (str "\" (define x 4)\\n x\\n\"")
+   <missing>)
+Remaining: ""

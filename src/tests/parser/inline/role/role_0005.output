@@ -1,0 +1,23 @@
+Success! Final stack:
+  (Verso.Syntax.role
+   "{"
+   `hello
+   [(Verso.Syntax.named_no_paren
+     `world
+     ":="
+     (Verso.Syntax.arg_ident `gaia))]
+   "}"
+   "["
+   [(Verso.Syntax.text (str "\"there \""))
+    (Verso.Syntax.bold
+     "*"
+     [(Verso.Syntax.text (str "\"is\""))]
+     "*")
+    (Verso.Syntax.text (str "\" \""))
+    (Verso.Syntax.emph
+     "_"
+     [(Verso.Syntax.text (str "\"a meaning!\""))]
+     "_")
+    (Verso.Syntax.text (str "\" \""))]
+   "]")
+All input consumed.

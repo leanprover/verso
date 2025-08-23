@@ -1,0 +1,15 @@
+Success! Final stack:
+  [(Verso.Syntax.dl
+    "dl{"
+    [(Verso.Syntax.desc
+      ":"
+      [(Verso.Syntax.text
+        (str "\" an excellent idea\""))]
+      "=>"
+      [(Verso.Syntax.para
+        "para{"
+        [(Verso.Syntax.text
+          (str "\"Let's say more!\""))]
+        "}")])]
+    "}")]
+All input consumed.

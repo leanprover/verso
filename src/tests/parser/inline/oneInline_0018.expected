@@ -1,0 +1,8 @@
+Success! Final stack:
+  (Verso.Syntax.inline_math
+   "$"
+   (Verso.Syntax.code
+    "`"
+    (str "\"\\\\frac{\\n  x\\n}{\\n  4\\n}\\n\"")
+    "`"))
+All input consumed.

@@ -59,6 +59,7 @@ def tests := [
   testParser "inline/role" (role {}),
   testParser "inline" (inline {}),
   testParser "block/code" (codeBlock {}),
+  testParser "block/blocks" (blocks {}),
 ]
 
 def getConfig (config : Config) : List String → IO Config

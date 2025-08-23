@@ -1545,67 +1545,11 @@ mutual
   partial def document (blockContext : BlockCtxt := {}) : ParserFn := ignoreFn (manyFn blankLine) >> blocks blockContext
 end
 
-/--
-info: Success! Final stack:
-  [(Verso.Syntax.para
-    "para{"
-    [(Verso.Syntax.text
-      (str
-       "\"This is just some textual content. How is it?\""))]
-    "}")
-   (Verso.Syntax.para
-    "para{"
-    [(Verso.Syntax.text (str "\"More?\""))]
-    "}")]
-All input consumed.
--/
-#guard_msgs in
-#eval blocks {} |>.test! "This is just some textual content. How is it?\n\nMore?"
 
-/--
-info: Success! Final stack:
-  [(Verso.Syntax.para
-    "para{"
-    [(Verso.Syntax.text
-      (str "\"Newlines are preserved\""))
-     (Verso.Syntax.linebreak
-      "line!"
-      (str "\"\\n\""))
-     (Verso.Syntax.text
-      (str "\"in paragraphs.\""))]
-    "}")]
-All input consumed.
--/
-#guard_msgs in
-#eval blocks {} |>.test! "Newlines are preserved\nin paragraphs."
 
-/--
-info: Success! Final stack:
-  [(Verso.Syntax.para
-    "para{"
-    [(Verso.Syntax.text
-      (str
-       "\"I can describe lists like this one:\""))]
-    "}")
-   (Verso.Syntax.ul
-    "ul{"
-    [(Verso.Syntax.li
-      "*"
-      [(Verso.Syntax.para
-        "para{"
-        [(Verso.Syntax.text (str "\"a\""))]
-        "}")])
-     (Verso.Syntax.li
-      "*"
-      [(Verso.Syntax.para
-        "para{"
-        [(Verso.Syntax.text (str "\"b\""))]
-        "}")])]
-    "}")]
-All input consumed.
--/
-#guard_msgs in
-#eval blocks {} |>.test! "I can describe lists like this one:\n\n* a\n* b"
+
+
+
 
 /--
 info: Success! Final stack:
@@ -1645,684 +1589,55 @@ Remaining:
 #guard_msgs in
 #eval listItem {inLists:=[⟨0, .inr .asterisk⟩]} |>.test! "* foo\n* bar\n"
 
-/--
-info: Success! Final stack:
-  [(Verso.Syntax.ul
-    "ul{"
-    [(Verso.Syntax.li
-      "*"
-      [(Verso.Syntax.ul
-        "ul{"
-        [(Verso.Syntax.li
-          "*"
-          [(Verso.Syntax.para
-            "para{"
-            [(Verso.Syntax.text (str "\"A1\""))]
-            "}")])
-         (Verso.Syntax.li
-          "*"
-          [(Verso.Syntax.para
-            "para{"
-            [(Verso.Syntax.text (str "\"A2\""))]
-            "}")])]
-        "}")])
-     (Verso.Syntax.li
-      "*"
-      [(Verso.Syntax.para
-        "para{"
-        [(Verso.Syntax.text (str "\"B\""))]
-        "}")
-       (Verso.Syntax.ul
-        "ul{"
-        [(Verso.Syntax.li
-          "*"
-          [(Verso.Syntax.para
-            "para{"
-            [(Verso.Syntax.text (str "\"B1\""))]
-            "}")])
-         (Verso.Syntax.li
-          "*"
-          [(Verso.Syntax.para
-            "para{"
-            [(Verso.Syntax.text (str "\"B2\""))]
-            "}")])]
-        "}")])]
-    "}")]
-All input consumed.
--/
-#guard_msgs in
-#eval blocks {} |>.test! "* * A1\n  * A2\n* B\n * B1\n * B2"
 
-/--
-info: Success! Final stack:
-  [(Verso.Syntax.ul
-    "ul{"
-    [(Verso.Syntax.li
-      "*"
-      [(Verso.Syntax.ul
-        "ul{"
-        [(Verso.Syntax.li
-          "*"
-          [(Verso.Syntax.para
-            "para{"
-            [(Verso.Syntax.text (str "\"A1\""))]
-            "}")])
-         (Verso.Syntax.li
-          "*"
-          [(Verso.Syntax.para
-            "para{"
-            [(Verso.Syntax.text (str "\"A2\""))
-             (Verso.Syntax.linebreak
-              "line!"
-              (str "\"\\n\""))]
-            "}")])]
-        "}")])
-     (Verso.Syntax.li
-      "*"
-      [(Verso.Syntax.ul
-        "ul{"
-        [(Verso.Syntax.li
-          "*"
-          [(Verso.Syntax.para
-            "para{"
-            [(Verso.Syntax.text (str "\"B1\""))]
-            "}")])]
-        "}")])]
-    "}")]
-All input consumed.
--/
-#guard_msgs in
-#eval blocks {} |>.test! "* \n * A1\n * A2\n*\n * B1"
 
-/--
-info: Success! Final stack:
-  [(Verso.Syntax.ul
-    "ul{"
-    [(Verso.Syntax.li
-      "*"
-      [(Verso.Syntax.ul
-        "ul{"
-        [(Verso.Syntax.li
-          "*"
-          [(Verso.Syntax.para
-            "para{"
-            [(Verso.Syntax.text (str "\"A1\""))]
-            "}")])
-         (Verso.Syntax.li
-          "*"
-          [(Verso.Syntax.para
-            "para{"
-            [(Verso.Syntax.text (str "\"A2\""))
-             (Verso.Syntax.linebreak
-              "line!"
-              (str "\"\\n\""))]
-            "}")])]
-        "}")])
-     (Verso.Syntax.li
-      "*"
-      [(Verso.Syntax.ul
-        "ul{"
-        [(Verso.Syntax.li
-          "*"
-          [(Verso.Syntax.para
-            "para{"
-            [(Verso.Syntax.text (str "\"B1\""))]
-            "}")])]
-        "}")])]
-    "}")]
-All input consumed.
--/
-#guard_msgs in
-#eval blocks {} |>.test! "*\n * A1\n * A2\n*\n * B1"
 
-/--
-info: Failure @2 (⟨2, 0⟩): ':'; expected %%% (at line beginning) or expected column at least 1
-Final stack:
-  [(Verso.Syntax.ul
-    "ul{"
-    [(Verso.Syntax.li
-      "*"
-      [(Verso.Syntax.metadata_block
-        <missing>
-        <missing>)
-       <missing>])])]
-Remaining: "abc"
--/
-#guard_msgs in
-#eval blocks {} |>.test! "*\nabc"
 
-/--
-info: Success! Final stack:
-  [(Verso.Syntax.ul
-    "ul{"
-    [(Verso.Syntax.li
-      "*"
-      [(Verso.Syntax.para
-        "para{"
-        [(Verso.Syntax.text (str "\"abc\""))]
-        "}")
-       (Verso.Syntax.para
-        "para{"
-        [(Verso.Syntax.text (str "\"def\""))]
-        "}")])]
-    "}")]
-All input consumed.
--/
-#guard_msgs in
-#eval blocks {} |>.test! "*\n abc\n\n def"
 
-/--
-info: Success! Final stack:
-  [(Verso.Syntax.ul
-    "ul{"
-    [(Verso.Syntax.li
-      "*"
-      [(Verso.Syntax.para
-        "para{"
-        [(Verso.Syntax.text (str "\"abc\""))]
-        "}")])]
-    "}")
-   (Verso.Syntax.para
-    "para{"
-    [(Verso.Syntax.text (str "\"def\""))]
-    "}")]
-All input consumed.
--/
-#guard_msgs in
-#eval blocks {} |>.test! "*\n abc\n\ndef"
 
-/--
-info: Success! Final stack:
-  [(Verso.Syntax.ul
-    "ul{"
-    [(Verso.Syntax.li
-      "*"
-      [(Verso.Syntax.para
-        "para{"
-        [(Verso.Syntax.text (str "\"foo\""))]
-        "}")])
-     (Verso.Syntax.li
-      "*"
-      [(Verso.Syntax.para
-        "para{"
-        [(Verso.Syntax.text (str "\"bar\""))
-         (Verso.Syntax.linebreak
-          "line!"
-          (str "\"\\n\""))]
-        "}")])]
-    "}")]
-All input consumed.
--/
-#guard_msgs in
-#eval blocks {} |>.test! "* foo\n* bar\n"
 
-/--
-info: Success! Final stack:
-  [(Verso.Syntax.blockquote
-    ">"
-    [(Verso.Syntax.ul
-      "ul{"
-      [(Verso.Syntax.li
-        "*"
-        [(Verso.Syntax.para
-          "para{"
-          [(Verso.Syntax.text (str "\"foo\""))]
-          "}")])]
-      "}")])]
-All input consumed.
--/
-#guard_msgs in
-#eval blocks {} |>.test! "> * foo"
 
-/--
-info: Success! Final stack:
-  [(Verso.Syntax.blockquote
-    ">"
-    [(Verso.Syntax.ol
-      "ol("
-      (num "1")
-      ")"
-      "{"
-      [(Verso.Syntax.li
-        "1."
-        [(Verso.Syntax.para
-          "para{"
-          [(Verso.Syntax.text (str "\"foo\""))]
-          "}")])]
-      "}")])]
-All input consumed.
--/
-#guard_msgs in
-#eval blocks {} |>.test! "> 1. foo"
 
-/--
-info: Success! Final stack:
-  [(Verso.Syntax.blockquote
-    ">"
-    [(Verso.Syntax.ul
-      "ul{"
-      [(Verso.Syntax.li
-        "*"
-        [(Verso.Syntax.para
-          "para{"
-          [(Verso.Syntax.text (str "\"foo\""))]
-          "}")])]
-      "}")
-     (Verso.Syntax.ul
-      "ul{"
-      [(Verso.Syntax.li
-        "*"
-        [(Verso.Syntax.para
-          "para{"
-          [(Verso.Syntax.text (str "\"foo\""))]
-          "}")])]
-      "}")])]
-All input consumed.
--/
-#guard_msgs in
-#eval blocks {} |>.test! "> * foo\n\n\n * foo"
 
-/--
-info: Success! Final stack:
-  [(Verso.Syntax.blockquote
-    ">"
-    [(Verso.Syntax.para
-      "para{"
-      [(Verso.Syntax.text
-        (str "\"I like quotes\""))]
-      "}")
-     (Verso.Syntax.ul
-      "ul{"
-      [(Verso.Syntax.li
-        "*"
-        [(Verso.Syntax.para
-          "para{"
-          [(Verso.Syntax.text
-            (str "\"Also with lists in them\""))]
-          "}")])]
-      "}")])
-   (Verso.Syntax.para
-    "para{"
-    [(Verso.Syntax.text (str "\"Abc\""))]
-    "}")]
-All input consumed.
--/
-#guard_msgs in
-#eval blocks {} |>.test! "> I like quotes\n  * Also with lists in them\n\nAbc"
 
-/--
-info: Success! Final stack:
-  [(Verso.Syntax.blockquote
-    ">"
-    [(Verso.Syntax.ul
-      "ul{"
-      [(Verso.Syntax.li
-        "*"
-        [(Verso.Syntax.para
-          "para{"
-          [(Verso.Syntax.text (str "\"foo\""))]
-          "}")])
-       (Verso.Syntax.li
-        "*"
-        [(Verso.Syntax.para
-          "para{"
-          [(Verso.Syntax.text (str "\"foo\""))]
-          "}")])]
-      "}")])]
-All input consumed.
--/
-#guard_msgs in
-#eval blocks {} |>.test! "> * foo\n\n\n  * foo"
 
-/--
-info: Success! Final stack:
-  [(Verso.Syntax.blockquote
-    ">"
-    [(Verso.Syntax.blockquote
-      ">"
-      [(Verso.Syntax.ul
-        "ul{"
-        [(Verso.Syntax.li
-          "*"
-          [(Verso.Syntax.para
-            "para{"
-            [(Verso.Syntax.text (str "\"foo\""))]
-            "}")])]
-        "}")])
-     (Verso.Syntax.ul
-      "ul{"
-      [(Verso.Syntax.li
-        "*"
-        [(Verso.Syntax.para
-          "para{"
-          [(Verso.Syntax.text (str "\"foo\""))]
-          "}")])]
-      "}")])]
-All input consumed.
--/
-#guard_msgs in
-#eval blocks {} |>.test! "> > * foo\n\n\n * foo"
 
-/--
-info: Success! Final stack:
-  [(Verso.Syntax.blockquote
-    ">"
-    [(Verso.Syntax.ul
-      "ul{"
-      [(Verso.Syntax.li
-        "*"
-        [(Verso.Syntax.para
-          "para{"
-          [(Verso.Syntax.text (str "\"foo\""))]
-          "}")])]
-      "}")])
-   (Verso.Syntax.ul
-    "ul{"
-    [(Verso.Syntax.li
-      "*"
-      [(Verso.Syntax.para
-        "para{"
-        [(Verso.Syntax.text (str "\"foo\""))]
-        "}")])]
-    "}")]
-All input consumed.
--/
-#guard_msgs in
-#eval blocks {} |>.test! "> * foo\n\n\n* foo"
 
-/--
-info: Success! Final stack:
-  [(Verso.Syntax.ul
-    "ul{"
-    [(Verso.Syntax.li
-      "*"
-      [(Verso.Syntax.para
-        "para{"
-        [(Verso.Syntax.text (str "\"foo\""))
-         (Verso.Syntax.linebreak
-          "line!"
-          (str "\"\\n\""))
-         (Verso.Syntax.text (str "\"  thing\""))]
-        "}")])]
-    "}")]
-Remaining:
-"* bar\n"
--/
-#guard_msgs in
-#eval blocks {} |>.test! "* foo\n  thing* bar\n"
 
-/--
-info: Success! Final stack:
-  [(Verso.Syntax.ul
-    "ul{"
-    [(Verso.Syntax.li
-      "+"
-      [(Verso.Syntax.para
-        "para{"
-        [(Verso.Syntax.text (str "\"foo\""))]
-        "}")])
-     (Verso.Syntax.li
-      "+"
-      [(Verso.Syntax.para
-        "para{"
-        [(Verso.Syntax.text (str "\"bar\""))
-         (Verso.Syntax.linebreak
-          "line!"
-          (str "\"\\n\""))]
-        "}")])]
-    "}")]
-All input consumed.
--/
-#guard_msgs in
-#eval blocks {} |>.test! "+ foo\n+ bar\n"
 
-/--
-info: Success! Final stack:
-  [(Verso.Syntax.ul
-    "ul{"
-    [(Verso.Syntax.li
-      "*"
-      [(Verso.Syntax.para
-        "para{"
-        [(Verso.Syntax.text (str "\"foo\""))]
-        "}")])
-     (Verso.Syntax.li
-      "*"
-      [(Verso.Syntax.para
-        "para{"
-        [(Verso.Syntax.text (str "\"bar\""))
-         (Verso.Syntax.linebreak
-          "line!"
-          (str "\"\\n\""))]
-        "}")])]
-    "}")]
-All input consumed.
--/
-#guard_msgs in
-#eval blocks {} |>.test! "* foo\n\n* bar\n"
 
-/--
-info: Success! Final stack:
-  [(Verso.Syntax.ul
-    "ul{"
-    [(Verso.Syntax.li
-      "*"
-      [(Verso.Syntax.para
-        "para{"
-        [(Verso.Syntax.text (str "\"foo\""))
-         (Verso.Syntax.linebreak
-          "line!"
-          (str "\"\\n\""))
-         (Verso.Syntax.text (str "\"  stuff\""))]
-        "}")
-       (Verso.Syntax.blockquote
-        ">"
-        [(Verso.Syntax.para
-          "para{"
-          [(Verso.Syntax.text (str "\"more \""))]
-          "}")])
-       (Verso.Syntax.para
-        "para{"
-        [(Verso.Syntax.text (str "\"abc\""))]
-        "}")])
-     (Verso.Syntax.li
-      "*"
-      [(Verso.Syntax.para
-        "para{"
-        [(Verso.Syntax.text (str "\"bar\""))
-         (Verso.Syntax.linebreak
-          "line!"
-          (str "\"\\n\""))]
-        "}")])]
-    "}")]
-All input consumed.
--/
-#guard_msgs in
-#eval blocks {} |>.test! "* foo\n  stuff\n\n > more \n\n abc\n\n\n* bar\n"
 
-/--
-info: Success! Final stack:
-  [(Verso.Syntax.ul
-    "ul{"
-    [(Verso.Syntax.li
-      "*"
-      [(Verso.Syntax.para
-        "para{"
-        [(Verso.Syntax.text (str "\"foo\""))]
-        "}")
-       (Verso.Syntax.ul
-        "ul{"
-        [(Verso.Syntax.li
-          "*"
-          [(Verso.Syntax.para
-            "para{"
-            [(Verso.Syntax.text (str "\"bar\""))]
-            "}")])]
-        "}")])
-     (Verso.Syntax.li
-      "*"
-      [(Verso.Syntax.para
-        "para{"
-        [(Verso.Syntax.text
-          (str "\"more outer\""))]
-        "}")])]
-    "}")]
-All input consumed.
--/
-#guard_msgs in
-#eval blocks {} |>.test! "* foo\n  * bar\n* more outer"
 
-/--
-info: Failure @35 (⟨2, 15⟩): unexpected end of input; expected %%% (at line beginning), '![', '$$', '$', '[', '[^', beginning of line at ⟨2, 15⟩ or beginning of line or sequence of nestable block openers at ⟨2, 15⟩
-Final stack:
-  [(Verso.Syntax.dl
-    "dl{"
-    [(Verso.Syntax.desc
-      ":"
-      [(Verso.Syntax.text
-        (str "\" an excellent idea\""))
-       (Verso.Syntax.linebreak
-        "line!"
-        (str "\"\\n\""))
-       (Verso.Syntax.text
-        (str "\"Let's say more!\""))]
-      "=>"
-      [(Verso.Syntax.metadata_block <missing>)
-       <missing>])]
-    "}")]
-Remaining: ""
--/
-#guard_msgs in
-#eval blocks {} |>.test! ": an excellent idea\nLet's say more!"
 
-/--
-info: Success! Final stack:
-  [(Verso.Syntax.dl
-    "dl{"
-    [(Verso.Syntax.desc
-      ":"
-      [(Verso.Syntax.text
-        (str "\" an excellent idea\""))]
-      "=>"
-      [(Verso.Syntax.para
-        "para{"
-        [(Verso.Syntax.text
-          (str "\"Let's say more!\""))]
-        "}")])]
-    "}")]
-All input consumed.
--/
-#guard_msgs in
-#eval blocks {} |>.test! ": an excellent idea\n\n    Let's say more!"
 
-/--
-info: Failure @47 (⟨7, 0⟩): expected indentation at least 1
-Final stack:
-  [(Verso.Syntax.dl
-    "dl{"
-    [(Verso.Syntax.desc
-      ":"
-      [(Verso.Syntax.text
-        (str "\" an excellent idea\""))]
-      "=>"
-      [(Verso.Syntax.para
-        "para{"
-        [(Verso.Syntax.text
-          (str "\"Let's say more!\""))]
-        "}")])
-     (Verso.Syntax.desc
-      ":"
-      [(Verso.Syntax.text (str "\" more\""))]
-      "=>"
-      <missing>)]
-    "}")]
-Remaining: ""
--/
-#guard_msgs in
-#eval blocks {} |>.test! ": an excellent idea\n\n Let's say more!\n\n: more\n\n"
 
-/--
-info: Success! Final stack:
-  [(Verso.Syntax.dl
-    "dl{"
-    [(Verso.Syntax.desc
-      ":"
-      [(Verso.Syntax.text
-        (str "\" an excellent idea\""))]
-      "=>"
-      [(Verso.Syntax.para
-        "para{"
-        [(Verso.Syntax.text
-          (str "\"Let's say more!\""))]
-        "}")])
-     (Verso.Syntax.desc
-      ":"
-      [(Verso.Syntax.text (str "\" more\""))]
-      "=>"
-      [(Verso.Syntax.para
-        "para{"
-        [(Verso.Syntax.text
-          (str "\"even more!\""))]
-        "}")])]
-    "}")]
-All input consumed.
--/
-#guard_msgs in
-#eval blocks {} |>.test! ": an excellent idea\n\n Let's say more!\n\n\n\n\n: more\n\n even more!"
 
-/--
-info: Success! Final stack:
-  [(Verso.Syntax.dl
-    "dl{"
-    [(Verso.Syntax.desc
-      ":"
-      [(Verso.Syntax.text
-        (str "\" an excellent idea\""))]
-      "=>"
-      [(Verso.Syntax.para
-        "para{"
-        [(Verso.Syntax.text
-          (str "\"Let's say more!\""))]
-        "}")])
-     (Verso.Syntax.desc
-      ":"
-      [(Verso.Syntax.text (str "\" more\""))]
-      "=>"
-      [(Verso.Syntax.para
-        "para{"
-        [(Verso.Syntax.text (str "\"stuff\""))]
-        "}")])]
-    "}")]
-All input consumed.
--/
-#guard_msgs in
-#eval blocks {} |>.test! ": an excellent idea\n\n Let's say more!\n\n: more\n\n stuff"
 
-/--
-info: Failure @21 (⟨3, 0⟩): expected indentation at least 1
-Final stack:
-  [(Verso.Syntax.dl
-    "dl{"
-    [(Verso.Syntax.desc
-      ":"
-      [(Verso.Syntax.text
-        (str "\" an excellent idea\""))]
-      "=>"
-      <missing>)]
-    "}")
-   (Verso.Syntax.para
-    "para{"
-    [(Verso.Syntax.text
-      (str "\"Let's say more!\""))]
-    "}")
-   (Verso.Syntax.para
-    "para{"
-    [(Verso.Syntax.text (str "\"hello\""))]
-    "}")]
-Remaining: "Let's say more!\n\nhello"
--/
-#guard_msgs in
-#eval blocks {} |>.test! ": an excellent idea\n\nLet's say more!\n\nhello"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 /--
 info: Failure @55 (⟨3, 0⟩): '{'; expected '![', '$$', '$', '[' or '[^'
@@ -2430,153 +1745,20 @@ Remaining: "  More text\n\n: `foo`\n\n  Thing\n"
   Thing
 "
 
-/--
-info: Success! Final stack:
-  [(Verso.Syntax.ol
-    "ol("
-    (num "1")
-    ")"
-    "{"
-    [(Verso.Syntax.li
-      "1."
-      [(Verso.Syntax.para
-        "para{"
-        [(Verso.Syntax.text (str "\"Hello\""))]
-        "}")])
-     (Verso.Syntax.li
-      "2."
-      [(Verso.Syntax.para
-        "para{"
-        [(Verso.Syntax.text (str "\"World\""))]
-        "}")])]
-    "}")]
-All input consumed.
--/
-#guard_msgs in
-#eval blocks {} |>.test! "1. Hello\n\n2. World"
 
-/--
-info: Success! Final stack:
-  [(Verso.Syntax.ol
-    "ol("
-    (num "1")
-    ")"
-    "{"
-    [(Verso.Syntax.li
-      "1."
-      [(Verso.Syntax.para
-        "para{"
-        [(Verso.Syntax.text (str "\"Hello\""))]
-        "}")])]
-    "}")]
-All input consumed.
--/
-#guard_msgs in
-#eval blocks {} |>.test! " 1. Hello"
 
-/--
-info: Success! Final stack:
-  [(Verso.Syntax.ol
-    "ol("
-    (num "1")
-    ")"
-    "{"
-    [(Verso.Syntax.li
-      "1."
-      [(Verso.Syntax.para
-        "para{"
-        [(Verso.Syntax.text (str "\"Hello\""))]
-        "}")])]
-    "}")
-   (Verso.Syntax.ol
-    "ol("
-    (num "2")
-    ")"
-    "{"
-    [(Verso.Syntax.li
-      "2."
-      [(Verso.Syntax.para
-        "para{"
-        [(Verso.Syntax.text (str "\"World\""))]
-        "}")])]
-    "}")]
-All input consumed.
--/
-#guard_msgs in
-#eval blocks {} |>.test! "1. Hello\n\n 2. World"
 
-/--
-info: Success! Final stack:
-  [(Verso.Syntax.ol
-    "ol("
-    (num "1")
-    ")"
-    "{"
-    [(Verso.Syntax.li
-      "1."
-      [(Verso.Syntax.para
-        "para{"
-        [(Verso.Syntax.text (str "\"Hello\""))]
-        "}")])
-     (Verso.Syntax.li
-      "2."
-      [(Verso.Syntax.para
-        "para{"
-        [(Verso.Syntax.text (str "\"World\""))]
-        "}")])]
-    "}")]
-All input consumed.
--/
-#guard_msgs in
-#eval blocks {} |>.test! " 1. Hello\n\n 2. World"
 
-/--
-info: Success! Final stack:
-  [(Verso.Syntax.blockquote
-    ">"
-    [(Verso.Syntax.para
-      "para{"
-      [(Verso.Syntax.text (str "\"hey\""))
-       (Verso.Syntax.linebreak
-        "line!"
-        (str "\"\\n\""))]
-      "}")])]
-All input consumed.
--/
-#guard_msgs in
-#eval blocks {} |>.test! "> hey\n"
 
-/--
-info: Success! Final stack:
-  [(Verso.Syntax.para
-    "para{"
-    [(Verso.Syntax.text (str "\"n*k \""))]
-    "}")]
-All input consumed.
--/
-#guard_msgs in
-#eval blocks {} |>.test! "n\\*k "
+
+
+
+
+
+
 
 -- Unlike Djot, we don't have precedence - these must be well-nested
-/--
-info: Failure @16 (⟨1, 16⟩): '_'
-Final stack:
-  [(Verso.Syntax.para
-    "para{"
-    [(Verso.Syntax.bold
-      "*"
-      [(Verso.Syntax.text (str "\"This is \""))
-       (Verso.Syntax.emph
-        "_"
-        [(Verso.Syntax.text (str "\"strong\""))]
-        <missing>)]
-      "*")
-     (Verso.Syntax.text (str "\" not regular\""))]
-    "}")]
-Remaining: "* not regular_ emphasis"
--/
-#guard_msgs in
-#eval blocks {} |>.test! "*This is _strong* not regular_ emphasis"
+
 
 /--
 info: Success! Final stack:
@@ -2592,285 +1774,23 @@ All input consumed.
 #guard_msgs in
 #eval header {} |>.test! "# Header!"
 
-/--
-info: Success! Final stack:
-  [(Verso.Syntax.header
-    "header("
-    (num "0")
-    ")"
-    "{"
-    [(Verso.Syntax.text (str "\"Header!\""))]
-    "}")]
-All input consumed.
--/
-#guard_msgs in
-#eval blocks {} |>.test! "# Header!\n"
 
-/--
-info: Success! Final stack:
-  [(Verso.Syntax.header
-    "header("
-    (num "1")
-    ")"
-    "{"
-    [(Verso.Syntax.text (str "\"Header!\""))]
-    "}")]
-All input consumed.
--/
-#guard_msgs in
-#eval blocks {} |>.test! "## Header!\n"
 
-/--
-info: Success! Final stack:
-  [(Verso.Syntax.blockquote
-    ">"
-    [(Verso.Syntax.para
-      "para{"
-      [(Verso.Syntax.text (str "\"Quotation\""))
-       (Verso.Syntax.linebreak
-        "line!"
-        (str "\"\\n\""))
-       (Verso.Syntax.text
-        (str "\"and contained\""))]
-      "}")])]
-All input consumed.
--/
-#guard_msgs in
-#eval blocks {} |>.test! "> Quotation\nand contained"
 
-/--
-info: Failure @65 (⟨4, 0⟩): expected '`' to close inline code
-Final stack:
-  [(Verso.Syntax.para
-    "para{"
-    [(Verso.Syntax.text (str "\"Attention:\""))]
-    "}")
-   (Verso.Syntax.para
-    "para{"
-    [(Verso.Syntax.text
-      (str
-       "\"Here is a paragraph with an unterminated \""))
-     (Verso.Syntax.code
-      "`"
-      (str "\"code block\"")
-      <missing>)
-     (Verso.Syntax.text
-      (str
-       "\"that would be super annoying without error recovery in the\""))
-     (Verso.Syntax.linebreak
-      "line!"
-      (str "\"\\n\""))
-     (Verso.Syntax.text (str "\"parser.\""))]
-    "}")
-   (Verso.Syntax.para
-    "para{"
-    [(Verso.Syntax.text (str "\"Yep.\""))]
-    "}")]
-Remaining: "that would be super annoying without error recovery in the\nparser.\n\nYep."
--/
-#guard_msgs in
-#eval blocks {} |>.test!
-  "Attention:
 
-Here is a paragraph with an unterminated `code block
-that would be super annoying without error recovery in the
-parser.
 
-Yep."
 
-/--
-info: 3 failures:
-  @73 (⟨9, 3⟩): expected directive name (identifier)
-    "\n"
-  @74 (⟨10, 0⟩): expected closing ':::' for directive from line 9
-    ""
-  @74 (⟨10, 0⟩): expected closing '::::' for directive from line 3
-    ""
 
-Final stack:
-  [(Verso.Syntax.para
-    "para{"
-    [(Verso.Syntax.text
-      (str
-       "\"Here's some error recovery for directives.\""))]
-    "}")
-   (Verso.Syntax.directive
-    "::::"
-    `foo
-    []
-    "\n"
-    [(Verso.Syntax.para
-      "para{"
-      [(Verso.Syntax.text (str "\"Indeed.\""))]
-      "}")
-     (Verso.Syntax.para
-      "para{"
-      [(Verso.Syntax.text (str "\"It is.\""))]
-      "}")
-     (Verso.Syntax.directive
-      ":::"
-      <missing>
-      []
-      "\n"
-      []
-      <missing>)]
-    <missing>)]
--/
-#guard_msgs in
-#eval blocks {} |>.test!
-  "Here's some error recovery for directives.
 
-::::foo
 
-Indeed.
 
-It is.
 
-:::
-"
 
-/--
-info: 3 failures:
-  @68 (⟨8, 0⟩): expected closing ':::' from directive on line 3 at column 0, but it's at column 1
-    " :::\n"
-  @72 (⟨8, 4⟩): expected directive name (identifier)
-    "\n"
-  @73 (⟨9, 0⟩): expected closing ':::' for directive from line 8
-    ""
 
-Final stack:
-  [(Verso.Syntax.para
-    "para{"
-    [(Verso.Syntax.text
-      (str
-       "\"Here's some error recovery for directives.\""))]
-    "}")
-   (Verso.Syntax.directive
-    ":::"
-    `foo
-    []
-    "\n"
-    [(Verso.Syntax.para
-      "para{"
-      [(Verso.Syntax.text (str "\"Indeed.\""))]
-      "}")
-     (Verso.Syntax.para
-      "para{"
-      [(Verso.Syntax.text (str "\"It is.\""))]
-      "}")]
-    <missing>)
-   (Verso.Syntax.directive
-    ":::"
-    <missing>
-    []
-    "\n"
-    []
-    <missing>)]
--/
-#guard_msgs in
-#eval blocks {} |>.test!
-  "Here's some error recovery for directives.
 
-:::foo
 
-Indeed.
 
-It is.
- :::
-"
 
-/--
-info: 2 failures:
-  @71 (⟨8, 0⟩): expected closing '::::' for directive from line 3
-    ":::: a\n\nx\n"
-  @81 (⟨11, 0⟩): expected closing '::::' for directive from line 8
-    ""
-
-Final stack:
-  [(Verso.Syntax.para
-    "para{"
-    [(Verso.Syntax.text
-      (str
-       "\"Here's some error recovery for directives.\""))]
-    "}")
-   (Verso.Syntax.directive
-    "::::"
-    `foo
-    [(Verso.Syntax.anon
-      (Verso.Syntax.arg_num (num "5")))]
-    "\n"
-    [(Verso.Syntax.para
-      "para{"
-      [(Verso.Syntax.text (str "\"Indeed.\""))]
-      "}")
-     (Verso.Syntax.para
-      "para{"
-      [(Verso.Syntax.text (str "\"It is.\""))]
-      "}")]
-    <missing>)
-   (Verso.Syntax.directive
-    "::::"
-    `a
-    []
-    "\n"
-    [(Verso.Syntax.para
-      "para{"
-      [(Verso.Syntax.text (str "\"x\""))
-       (Verso.Syntax.linebreak
-        "line!"
-        (str "\"\\n\""))]
-      "}")]
-    <missing>)]
--/
-#guard_msgs in
-#eval blocks {} |>.test!
-  "Here's some error recovery for directives.
-
-::::foo 5
-
-Indeed.
-
-It is.
-:::: a
-
-x
-"
-
-/--
-info: Success! Final stack:
-  [(Verso.Syntax.blockquote
-    ">"
-    [(Verso.Syntax.para
-      "para{"
-      [(Verso.Syntax.text (str "\"Quotation\""))]
-      "}")
-     (Verso.Syntax.para
-      "para{"
-      [(Verso.Syntax.text
-        (str "\"and contained\""))]
-      "}")])]
-All input consumed.
--/
-#guard_msgs in
-#eval blocks {} |>.test! "> Quotation\n\n and contained"
-
-/--
-info: Success! Final stack:
-  [(Verso.Syntax.blockquote
-    ">"
-    [(Verso.Syntax.para
-      "para{"
-      [(Verso.Syntax.text (str "\"Quotation\""))]
-      "}")])
-   (Verso.Syntax.para
-    "para{"
-    [(Verso.Syntax.text
-      (str "\"and not contained\""))]
-    "}")]
-All input consumed.
--/
-#guard_msgs in
-#eval blocks {} |>.test! "> Quotation\n\nand not contained"
 
 
 
@@ -3125,18 +2045,7 @@ Remaining:
 #guard_msgs in
 #eval block {} |>.test! "{test}\nHere's a paragraph."
 
-/--
-info: Success! Final stack:
-  [(Verso.Syntax.command "{" `test [] "}")
-   (Verso.Syntax.para
-    "para{"
-    [(Verso.Syntax.text
-      (str "\"Here's a paragraph.\""))]
-    "}")]
-All input consumed.
--/
-#guard_msgs in
-#eval blocks {} |>.test! "{test}\nHere's a paragraph."
+
 
 /--
 info: Success! Final stack:
@@ -3173,29 +2082,7 @@ Remaining:
 #guard_msgs in
 #eval block {} |>.test! "{test}\n> Here's a blockquote\n\n with multiple paras\n\nthat ends"
 
-/--
-info: Success! Final stack:
-  [(Verso.Syntax.command "{" `test [] "}")
-   (Verso.Syntax.blockquote
-    ">"
-    [(Verso.Syntax.para
-      "para{"
-      [(Verso.Syntax.text
-        (str "\"Here's a blockquote\""))]
-      "}")
-     (Verso.Syntax.para
-      "para{"
-      [(Verso.Syntax.text
-        (str "\"with multiple paras\""))]
-      "}")])
-   (Verso.Syntax.para
-    "para{"
-    [(Verso.Syntax.text (str "\"that ends\""))]
-    "}")]
-All input consumed.
--/
-#guard_msgs in
-#eval blocks {} |>.test! "{test}\n> Here's a blockquote\n\n with multiple paras\n\nthat ends"
+
 
 /--
 info: 2 failures:
@@ -3296,39 +2183,9 @@ Final stack:
 #guard_msgs in
 #eval block {} |>.test! "{\n    test\n arg}\n\n\nHere's a paragraph."
 
-/--
-info: Success! Final stack:
-  [(Verso.Syntax.command "{" `abc [] "}")
-   (Verso.Syntax.command "{" `def [] "}")]
-All input consumed.
--/
-#guard_msgs in
-#eval blocks {} |>.test! "{abc}\n{def}\n"
 
-/--
-info: Success! Final stack:
-  [(Verso.Syntax.metadata_block
-    "%%%"
-    (Term.structInstFields
-     [(Term.structInstField
-       (Term.structInstLVal `foo [])
-       [[]
-        []
-        (Term.structInstFieldDef
-         ":="
-         []
-         (num "53"))])
-      []])
-    "%%%")
-   (Verso.Syntax.para
-    "para{"
-    [(Verso.Syntax.text
-      (str "\"Text/paragraph!\""))]
-    "}")]
-All input consumed.
--/
-#guard_msgs in
-#eval blocks {} |>.test! "%%%\nfoo := 53\n%%%\nText/paragraph!"
+
+
 
 /--
 info: Success! Final stack:
@@ -3475,127 +2332,15 @@ Remaining:
 #guard_msgs in
 #eval text |>.test! " [\\[link\\]](https://link.com)"
 
-/--
-info: Success! Final stack:
-  [(Verso.Syntax.para
-    "para{"
-    [(Verso.Syntax.link
-      "["
-      [(Verso.Syntax.text (str "\"[link A]\""))]
-      "]"
-      (Verso.Syntax.url
-       "("
-       (str "\"https://example.com\"")
-       ")"))
-     (Verso.Syntax.text (str "\" \""))
-     (Verso.Syntax.link
-      "["
-      [(Verso.Syntax.text (str "\"[link B]\""))]
-      "]"
-      (Verso.Syntax.url
-       "("
-       (str "\"https://more.example.com\"")
-       ")"))]
-    "}")]
-All input consumed.
--/
-#guard_msgs in
-#eval blocks {} |>.test! "[\\[link A\\]](https://example.com) [\\[link B\\]](https://more.example.com)"
 
-/--
-info: Success! Final stack:
-  [(Verso.Syntax.para
-    "para{"
-    [(Verso.Syntax.link
-      "["
-      [(Verso.Syntax.text (str "\"My link\""))]
-      "]"
-      (Verso.Syntax.ref
-       "["
-       (str "\"lean\"")
-       "]"))]
-    "}")
-   (Verso.Syntax.link_ref
-    "["
-    (str "\"lean\"")
-    "]:"
-    (str "\"https://lean-lang.org\""))]
-All input consumed.
--/
-#guard_msgs in
-#eval blocks {} |>.test! "[My link][lean]\n\n[lean]: https://lean-lang.org"
 
-/--
-info: Failure @45 (⟨2, 29⟩): expected '(' or '['
-Final stack:
-  [(Verso.Syntax.para
-    "para{"
-    [(Verso.Syntax.link
-      "["
-      [(Verso.Syntax.text (str "\"My link\""))]
-      "]"
-      (Verso.Syntax.ref "[" (str "\"lean\"") "]"))
-     (Verso.Syntax.linebreak
-      "line!"
-      (str "\"\\n\""))
-     (Verso.Syntax.link
-      "["
-      [(Verso.Syntax.text (str "\"lean\""))]
-      "]"
-      (Verso.Syntax.url <missing>))]
-    "}")]
-Remaining: ""
--/
-#guard_msgs in
-#eval blocks {} |>.test! "[My link][lean]\n[lean]: https://lean-lang.org"
 
-/--
-info: Success! Final stack:
-  [(Verso.Syntax.para
-    "para{"
-    [(Verso.Syntax.link
-      "["
-      [(Verso.Syntax.text (str "\"My link\""))]
-      "]"
-      (Verso.Syntax.ref
-       "["
-       (str "\"lean\"")
-       "]"))]
-    "}")
-   (Verso.Syntax.link_ref
-    "["
-    (str "\"lean\"")
-    "]:"
-    (str "\"https://lean-lang.org\""))
-   (Verso.Syntax.para
-    "para{"
-    [(Verso.Syntax.text (str "\"hello\""))]
-    "}")]
-All input consumed.
--/
-#guard_msgs in
-#eval blocks {} |>.test! "[My link][lean]\n\n[lean]: https://lean-lang.org\nhello"
 
-/--
-info: Success! Final stack:
-  [(Verso.Syntax.para
-    "para{"
-    [(Verso.Syntax.text (str "\"Blah blah\""))
-     (Verso.Syntax.footnote
-      "[^"
-      (str "\"1\"")
-      "]")]
-    "}")
-   (Verso.Syntax.footnote_ref
-    "[^"
-    (str "\"1\"")
-    "]:"
-    [(Verso.Syntax.text
-      (str "\"More can be said\""))])]
-All input consumed.
--/
-#guard_msgs in
-#eval blocks {} |>.test! "Blah blah[^1]\n\n[^1]: More can be said"
+
+
+
+
+
 
 -- A big test of error recovery
 

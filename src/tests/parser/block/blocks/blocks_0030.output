@@ -1,0 +1,14 @@
+Success! Final stack:
+  [(Verso.Syntax.ol
+    "ol("
+    (num "1")
+    ")"
+    "{"
+    [(Verso.Syntax.li
+      "1."
+      [(Verso.Syntax.para
+        "para{"
+        [(Verso.Syntax.text (str "\"Hello\""))]
+        "}")])]
+    "}")]
+All input consumed.

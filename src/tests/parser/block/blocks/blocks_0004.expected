@@ -1,0 +1,43 @@
+Success! Final stack:
+  [(Verso.Syntax.ul
+    "ul{"
+    [(Verso.Syntax.li
+      "*"
+      [(Verso.Syntax.ul
+        "ul{"
+        [(Verso.Syntax.li
+          "*"
+          [(Verso.Syntax.para
+            "para{"
+            [(Verso.Syntax.text (str "\"A1\""))]
+            "}")])
+         (Verso.Syntax.li
+          "*"
+          [(Verso.Syntax.para
+            "para{"
+            [(Verso.Syntax.text (str "\"A2\""))]
+            "}")])]
+        "}")])
+     (Verso.Syntax.li
+      "*"
+      [(Verso.Syntax.para
+        "para{"
+        [(Verso.Syntax.text (str "\"B\""))]
+        "}")
+       (Verso.Syntax.ul
+        "ul{"
+        [(Verso.Syntax.li
+          "*"
+          [(Verso.Syntax.para
+            "para{"
+            [(Verso.Syntax.text (str "\"B1\""))]
+            "}")])
+         (Verso.Syntax.li
+          "*"
+          [(Verso.Syntax.para
+            "para{"
+            [(Verso.Syntax.text (str "\"B2\""))]
+            "}")])]
+        "}")])]
+    "}")]
+All input consumed.

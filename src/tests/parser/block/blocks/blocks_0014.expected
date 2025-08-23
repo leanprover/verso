@@ -1,0 +1,23 @@
+Success! Final stack:
+  [(Verso.Syntax.blockquote
+    ">"
+    [(Verso.Syntax.para
+      "para{"
+      [(Verso.Syntax.text
+        (str "\"I like quotes\""))]
+      "}")
+     (Verso.Syntax.ul
+      "ul{"
+      [(Verso.Syntax.li
+        "*"
+        [(Verso.Syntax.para
+          "para{"
+          [(Verso.Syntax.text
+            (str "\"Also with lists in them\""))]
+          "}")])]
+      "}")])
+   (Verso.Syntax.para
+    "para{"
+    [(Verso.Syntax.text (str "\"Abc\""))]
+    "}")]
+All input consumed.

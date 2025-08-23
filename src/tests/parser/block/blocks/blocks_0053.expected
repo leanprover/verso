@@ -1,0 +1,16 @@
+Success! Final stack:
+  [(Verso.Syntax.para
+    "para{"
+    [(Verso.Syntax.text (str "\"Blah blah\""))
+     (Verso.Syntax.footnote
+      "[^"
+      (str "\"1\"")
+      "]")]
+    "}")
+   (Verso.Syntax.footnote_ref
+    "[^"
+    (str "\"1\"")
+    "]:"
+    [(Verso.Syntax.text
+      (str "\"More can be said\""))])]
+All input consumed.
