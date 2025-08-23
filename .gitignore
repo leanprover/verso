@@ -7,3 +7,4 @@
 _out
 *.olean
 /.verso/
+/src/tests/parser/*/*.output

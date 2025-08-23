@@ -61,7 +61,7 @@ def runSingleTest (config : Config) (testName : String) : IO TestResult := do
     else
       if ← System.FilePath.pathExists expected then
         let expectedString ← IO.FS.readFile expected
-        if output == expectedString then
+        if outputString == expectedString then
           return TestResult.pass testName
         else
           return TestResult.fail testName expectedString outputString
@@ -86,6 +86,8 @@ def TestResult.print (result : TestResult) : IO Unit := do
   | .fail name expected actual =>
     IO.println s!"✗ {name}"
     IO.println s!"  Expected output differs from actual output"
+    IO.println s!"Expected:\n------------\n{expected}\n-------"
+    IO.println s!"Actual:\n------------\n{actual}\n-------"
     let d := diff (expected.split (· == '\n') |>.toArray) (actual.split (· == '\n') |>.toArray)
     IO.println (linesToString d)
   | .error name msg =>

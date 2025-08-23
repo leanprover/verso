@@ -2084,54 +2084,11 @@ where
   closer := bolThen (eatSpaces >> strFn "%%%") "%%% (at line beginning)" >> eatSpaces >> ignoreFn (chFn '\n' <|> eoiFn)
 
 
-/--
-info: Success! Final stack:
-  (Verso.Syntax.metadata_block
-   "%%%"
-   (Term.structInstFields [])
-   "%%%")
-All input consumed.
--/
-#guard_msgs in
-#eval metadataBlock |>.test! "%%%\n%%%\n"
 
-/--
-info: Success! Final stack:
-  (Verso.Syntax.metadata_block
-   "%%%"
-   (Term.structInstFields
-    [(Term.structInstField
-      (Term.structInstLVal `foo [])
-      [[]
-       []
-       (Term.structInstFieldDef ":=" [] `bar)])
-     []])
-   "%%%")
-All input consumed.
--/
-#guard_msgs in
-#eval metadataBlock |>.test! "%%%\nfoo := bar\n\n%%%\n"
 
-/--
-info: Success! Final stack:
-  (Verso.Syntax.metadata_block
-   "%%%"
-   (Term.structInstFields
-    [(Term.structInstField
-      (Term.structInstLVal `foo [])
-      [[]
-       []
-       (Term.structInstFieldDef ":=" [] `bar)])
-     []
-     (Term.structInstField
-      (Term.structInstLVal `x [])
-      [])
-     []])
-   "%%%")
-All input consumed.
--/
-#guard_msgs in
-#eval metadataBlock |>.test! "%%%\nfoo := bar\nx\n%%%\n"
+
+
+
 
 
 structure InList where

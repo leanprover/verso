@@ -37,7 +37,15 @@ def testBlockParser (config : Config) : IO Unit := do
     updateExpected := config.updateExpected
   }
 
-def tests := [testStemmer, testBlockParser]
+def testMetadataBlockParser (config : Config) : IO Unit := do
+  Verso.GoldenTest.runTests {
+    testDir := "src/tests/parser/metadataBlock"
+    runTest := Verso.Parser.metadataBlock |>.test
+    updateExpected := config.updateExpected
+  }
+
+
+def tests := [testStemmer, testBlockParser, testMetadataBlockParser]
 
 def getConfig (config : Config) : List String → IO Config
   | [] => pure config
