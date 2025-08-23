@@ -614,63 +614,17 @@ def val : ParserFn :=
     nodeFn ``arg_ident docIdentFn <|>
     nodeFn ``arg_str docStrLitFn
 
-/--
-info: Success! Final stack:
-  (Verso.Syntax.arg_num (num "1"))
-All input consumed.
--/
-#guard_msgs in
-#eval val.test! "1"
-/--
-info: Success! Final stack:
-  (Verso.Syntax.arg_num (num "3"))
-All input consumed.
--/
-#guard_msgs in
-#eval val.test! "3"
-/--
-info: Failure @0 (⟨1, 0⟩): unexpected end of input; expected identifier, numeral or string literal
-Final stack:
-  (Verso.Syntax.arg_str <missing>)
-Remaining: ""
--/
-#guard_msgs in
-#eval val.test! ""
 
-/--
-info: Success! Final stack:
-  (Verso.Syntax.arg_str (str "\"a b c\t d\""))
-All input consumed.
--/
-#guard_msgs in
-#eval val.test! "\"a b c\t d\""
 
-/--
-info: Success! Final stack:
-  (Verso.Syntax.arg_str (str "\"a b c\t d\""))
-Remaining:
-"\n"
--/
-#guard_msgs in
-#eval val.test! "\"a b c\t d\"\n"
 
-/--
-info: Success! Final stack:
-  (Verso.Syntax.arg_num (num "43"))
-Remaining:
-"\n\"foo\""
--/
-#guard_msgs in
-#eval val.test! "43\n\"foo\""
 
-/--
-info: Failure @0 (⟨1, 0⟩): unterminated string literal; expected identifier or numeral
-Final stack:
-  (Verso.Syntax.arg_str <missing>)
-Remaining: "\"foo"
--/
-#guard_msgs in
-#eval val.test! "\"foo"
+
+
+
+
+
+
+
 
 def withCurrentStackSize (p : Nat → ParserFn) : ParserFn := fun c s =>
   p s.stxStack.size c s
