@@ -1,0 +1,11 @@
+Success! Final stack:
+  [(Verso.Syntax.blockquote
+    ">"
+    [(Verso.Syntax.para
+      "para{"
+      [(Verso.Syntax.text (str "\"hey\""))
+       (Verso.Syntax.linebreak
+        "line!"
+        (str "\"\\n\""))]
+      "}")])]
+All input consumed.

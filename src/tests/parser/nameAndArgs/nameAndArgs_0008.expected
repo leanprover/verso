@@ -1,0 +1,8 @@
+Success! Final stack:
+ • `leanExample
+ • [(Verso.Syntax.anon
+      (Verso.Syntax.arg_ident `context))
+     (Verso.Syntax.anon
+      (Verso.Syntax.arg_ident `more))]
+
+All input consumed.

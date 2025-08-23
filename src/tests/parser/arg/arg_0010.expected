@@ -1,0 +1,8 @@
+Success! Final stack:
+  (Verso.Syntax.named
+   "("
+   `x
+   ":="
+   (Verso.Syntax.arg_ident `y)
+   ")")
+All input consumed.

@@ -1,0 +1,18 @@
+Success! Final stack:
+  [(Verso.Syntax.para
+    "para{"
+    [(Verso.Syntax.link
+      "["
+      [(Verso.Syntax.text (str "\"My link\""))]
+      "]"
+      (Verso.Syntax.ref
+       "["
+       (str "\"lean\"")
+       "]"))]
+    "}")
+   (Verso.Syntax.link_ref
+    "["
+    (str "\"lean\"")
+    "]:"
+    (str "\"https://lean-lang.org\""))]
+All input consumed.

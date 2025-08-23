@@ -1,0 +1,15 @@
+3 failures:
+  @6 (⟨1, 6⟩): expected ')'
+    ""
+  @6 (⟨1, 6⟩): expected ':='
+    ""
+  @6 (⟨1, 6⟩): unexpected end of input; expected identifier, numeral or string literal
+    ""
+
+Final stack:
+  (Verso.Syntax.named
+   "("
+   `x
+   <missing>
+   (Verso.Syntax.arg_str <missing>)
+   <missing>)

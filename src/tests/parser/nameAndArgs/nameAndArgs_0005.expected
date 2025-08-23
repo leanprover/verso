@@ -1,0 +1,12 @@
+Failure @28 (⟨1, 28⟩): expected no space before
+Final stack:
+ • `scheme
+ • [(Verso.Syntax.named_no_paren
+      `dialect
+      ":="
+      (Verso.Syntax.arg_str (str "\"chicken\"")))
+     (Verso.Syntax.flag_on "+" `x)
+     (Verso.Syntax.anon
+      (Verso.Syntax.arg_num (num "99")))]
+
+Remaining: "x 99"
