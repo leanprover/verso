@@ -1,0 +1,16 @@
+Success! Final stack:
+  [(Verso.Syntax.ul
+    "ul{"
+    [(Verso.Syntax.li
+      "*"
+      [(Verso.Syntax.para
+        "para{"
+        [(Verso.Syntax.text (str "\"foo\""))
+         (Verso.Syntax.linebreak
+          "line!"
+          (str "\"\\n\""))
+         (Verso.Syntax.text (str "\"  thing\""))]
+        "}")])]
+    "}")]
+Remaining:
+"* bar\n"

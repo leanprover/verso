@@ -1,0 +1,4 @@
+Success! Final stack:
+  (Verso.Syntax.text (str "\"a \""))
+Remaining:
+"* b"

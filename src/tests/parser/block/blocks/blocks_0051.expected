@@ -1,0 +1,19 @@
+Failure @45 (⟨2, 29⟩): expected '(' or '['
+Final stack:
+  [(Verso.Syntax.para
+    "para{"
+    [(Verso.Syntax.link
+      "["
+      [(Verso.Syntax.text (str "\"My link\""))]
+      "]"
+      (Verso.Syntax.ref "[" (str "\"lean\"") "]"))
+     (Verso.Syntax.linebreak
+      "line!"
+      (str "\"\\n\""))
+     (Verso.Syntax.link
+      "["
+      [(Verso.Syntax.text (str "\"lean\""))]
+      "]"
+      (Verso.Syntax.url <missing>))]
+    "}")]
+Remaining: ""

@@ -1,0 +1,4 @@
+Success! Final stack:
+  [(Verso.Syntax.command "{" `abc [] "}")
+   (Verso.Syntax.command "{" `def [] "}")]
+All input consumed.

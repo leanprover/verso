@@ -1,0 +1,24 @@
+Failure @46 (⟨7, 0⟩): expected closing ':::' from directive on line 1 at column 0, but it's at column 1
+Final stack:
+  (Verso.Syntax.directive
+   ":::"
+   `multiPara
+   [(Verso.Syntax.anon
+     (Verso.Syntax.arg_ident `thing))]
+   "\n"
+   [(Verso.Syntax.para
+     "para{"
+     [(Verso.Syntax.text (str "\"foo\""))]
+     "}")
+    (Verso.Syntax.ul
+     "ul{"
+     [(Verso.Syntax.li
+       "*"
+       [(Verso.Syntax.para
+         "para{"
+         [(Verso.Syntax.text
+           (str "\"List item \""))]
+         "}")])]
+     "}")]
+   <missing>)
+Remaining: " :::"

@@ -1,0 +1,11 @@
+Success! Final stack:
+ • `leanExample
+ • [(Verso.Syntax.anon
+      (Verso.Syntax.arg_ident `context))
+     (Verso.Syntax.named_no_paren
+      `more
+      ":="
+      (Verso.Syntax.arg_str (str "\"stuff\"")))]
+
+Remaining:
+"\n\nabc"
