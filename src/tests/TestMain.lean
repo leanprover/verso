@@ -37,36 +37,21 @@ def testBlockParser (config : Config) : IO Unit := do
     updateExpected := config.updateExpected
   }
 
-def testMetadataBlockParser (config : Config) : IO Unit := do
+def testParser (dir : System.FilePath) (fn : Lean.Parser.ParserFn) : Config → IO Unit := fun config =>
   Verso.GoldenTest.runTests {
-    testDir := "src/tests/parser/metadataBlock"
-    runTest := Verso.Parser.metadataBlock |>.test
+    testDir := ("src/tests/parser" : System.FilePath) / dir,
+    runTest := fn.test,
     updateExpected := config.updateExpected
   }
 
-def testValParser (config : Config) : IO Unit := do
-  Verso.GoldenTest.runTests {
-    testDir := "src/tests/parser/val"
-    runTest := Verso.Parser.val |>.test
-    updateExpected := config.updateExpected
-  }
-
-def testArgParser (config : Config) : IO Unit := do
-  Verso.GoldenTest.runTests {
-    testDir := "src/tests/parser/arg"
-    runTest := Verso.Parser.arg |>.test
-    updateExpected := config.updateExpected
-  }
-
-def testNameArgParser (config : Config) : IO Unit := do
-  Verso.GoldenTest.runTests {
-    testDir := "src/tests/parser/nameAndArgs"
-    runTest := Verso.Parser.nameAndArgs |>.test
-    updateExpected := config.updateExpected
-  }
-
-
-def tests := [testStemmer, testBlockParser, testMetadataBlockParser, testValParser, testArgParser]
+def tests := [
+  testStemmer, testBlockParser,
+  testParser "metadataBlock" Verso.Parser.metadataBlock,
+  testParser "val" Verso.Parser.val,
+  testParser "arg" Verso.Parser.arg,
+  testParser "nameAndArgs" Verso.Parser.nameAndArgs,
+  testParser "inlineTextChar" Verso.Parser.inlineTextChar
+]
 
 def getConfig (config : Config) : List String → IO Config
   | [] => pure config

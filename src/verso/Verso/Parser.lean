@@ -474,49 +474,15 @@ the line, whichever is first. Always consumes at least one
 logical character on success, taking escaping into account. -/
 def inlineText : ParserFn := asStringFn (transform := unescapeStr) <| atomicFn inlineTextChar >> manyFn inlineTextChar
 
-/--
-info: Failure @0 (⟨1, 0⟩): unexpected end of input
-Final stack:
-  <missing>
-Remaining: ""
--/
-#guard_msgs in
-#eval inlineTextChar |>.test! ""
 
-/--
-info: Success! Final stack:
- empty
-All input consumed.
--/
-#guard_msgs in
-#eval inlineTextChar |>.test! "a"
 
-/--
-info: Success! Final stack:
- empty
-Remaining:
-"bc"
--/
-#guard_msgs in
-#eval inlineTextChar |>.test! "abc"
 
-/--
-info: Failure @0 (⟨1, 0⟩): '['
-Final stack:
-  <missing>
-Remaining: "[abc"
--/
-#guard_msgs in
-#eval inlineTextChar |>.test! "[abc"
 
-/--
-info: Success! Final stack:
- empty
-Remaining:
-"abc"
--/
-#guard_msgs in
-#eval inlineTextChar |>.test! "!abc"
+
+
+
+
+
 
 /--
 info: Success! Final stack:

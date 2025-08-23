@@ -9,7 +9,7 @@ open Lean.Diff
 /-- Configuration for the test runner -/
 structure Config where
   /-- Where are input and expected files located? -/
-  testDir : String
+  testDir : System.FilePath
   updateExpected : Bool := false
   runTest : String → IO String
 
