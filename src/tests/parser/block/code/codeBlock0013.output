@@ -1,0 +1,19 @@
+2 failures:
+  @33 (⟨1, 33⟩): '\'; expected identifier or numeral
+    "\n(define x 4)\nx\n```"
+  @33 (⟨1, 33⟩): expected ')'
+    "\n(define x 4)\nx\n```"
+
+Final stack:
+  (Verso.Syntax.codeblock
+   "```"
+   [`scheme
+    [(Verso.Syntax.named
+      "("
+      `dialect
+      ":="
+      (Verso.Syntax.arg_str <missing>)
+      <missing>)]]
+   "\n"
+   (str "\"(define x 4)\\nx\\n\"")
+   "```")
