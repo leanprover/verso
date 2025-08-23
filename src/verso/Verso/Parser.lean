@@ -51,20 +51,6 @@ def repFn : Nat → ParserFn → ParserFn
   | 0, _ => skipFn
   | n+1, p => p >> repFn n p
 
-/--
-info: Success! Final stack:
- • "b"
- • "a"
- • "b"
- • "a"
- • "b"
- • "a"
-
-Remaining:
-"aab"
--/
-#guard_msgs in
-#eval repFn 3 (chFn 'b' >> chFn 'a') |>.test! "bababaaab"
 
 /-- Like `satisfyFn`, but no special handling of EOI -/
 partial def satisfyFn' (p : Char → Bool) (errorMsg : String := "unexpected character") : ParserFn := fun c s =>
@@ -91,74 +77,6 @@ def atMostFn (n : Nat) (p : ParserFn) (msg : String) : ParserFn := fun c s =>
   let s := atMostAux n p msg c s
   s.mkNode nullKind iniSz
 
-/--
-info: Success! Final stack:
-  []
-All input consumed.
--/
-#guard_msgs in
-#eval atMostFn 3 (chFn 'a') "small A" |>.test! ""
-
-/--
-info: Success! Final stack:
-  ["a"]
-Remaining:
-"bc"
--/
-#guard_msgs in
-#eval atMostFn 3 (chFn 'a') "small A" |>.test! "abc"
-
-/--
-info: Success! Final stack:
-  ["a" "a" "a"]
-All input consumed.
--/
-#guard_msgs in
-#eval atMostFn 3 (chFn 'a') "small A" |>.test! "aaa"
-
-/--
-info: Failure @3 (⟨1, 3⟩): unexpected small A
-Final stack:
-  ["a" "a" "a" <missing>]
-Remaining: "a"
--/
-#guard_msgs in
-#eval atMostFn 3 (chFn 'a') "small A" |>.test! "aaaa"
-
-/--
-info: Failure @0 (⟨1, 0⟩): unexpected end of input
-Final stack:
-  [<missing>]
-Remaining: ""
--/
-#guard_msgs in
-#eval atLeastFn 3 (chFn 'a') |>.test! ""
-
-/--
-info: Failure @2 (⟨1, 2⟩): unexpected end of input
-Final stack:
-  ["a" "a" <missing>]
-Remaining: ""
--/
-#guard_msgs in
-#eval atLeastFn 3 (chFn 'a') |>.test! "aa"
-
-/--
-info: Success! Final stack:
-  ["a" "a" "a"]
-All input consumed.
--/
-#guard_msgs in
-#eval atLeastFn 3 (chFn 'a') |>.test! "aaa"
-
-/--
-info: Success! Final stack:
-  ["a" "a" "a" "a" "a" "a"]
-All input consumed.
--/
-#guard_msgs in
-#eval atLeastFn 3 (chFn 'a') |>.test! "aaaaaa"
-
 /-- Like `satisfyFn`, but allows any escape sequence through -/
 partial def satisfyEscFn (p : Char → Bool) (errorMsg : String := "unexpected character") : ParserFn := fun c s =>
   let i := s.pos
@@ -171,30 +89,6 @@ partial def satisfyEscFn (p : Char → Bool) (errorMsg : String := "unexpected c
   else if p (c.input.get' i h) then s.next' c.input i h
   else s.mkUnexpectedError errorMsg
 
-/--
-info: Success! Final stack:
- empty
-Remaining:
-"bc"
--/
-#guard_msgs in
-#eval satisfyEscFn Char.isAlpha |>.test! "abc"
-/--
-info: Failure @0 (⟨1, 0⟩): unexpected character
-Final stack:
-  <missing>
-Remaining: "0abc"
--/
-#guard_msgs in
-#eval satisfyEscFn Char.isAlpha |>.test! "0abc"
-/--
-info: Success! Final stack:
- empty
-Remaining:
-"abc"
--/
-#guard_msgs in
-#eval satisfyEscFn Char.isAlpha |>.test! "\\0abc"
 
 partial def takeUntilEscFn (p : Char → Bool) : ParserFn := fun c s =>
   let i := s.pos
@@ -209,23 +103,6 @@ partial def takeUntilEscFn (p : Char → Bool) : ParserFn := fun c s =>
 
 partial def takeWhileEscFn (p : Char → Bool) : ParserFn := takeUntilEscFn (not ∘ p)
 
-/--
-info: Success! Final stack:
- empty
-Remaining:
-"c  c"
--/
-#guard_msgs in
-#eval takeUntilEscFn Char.isAlpha |>.test! "    c  c"
-
-/--
-info: Success! Final stack:
- empty
-Remaining:
-"c"
--/
-#guard_msgs in
-#eval takeUntilEscFn Char.isAlpha |>.test! "    \\c  c"
 
 def ignoreFn (p : ParserFn) : ParserFn := fun c s =>
   let iniSz := s.stxStack.size
@@ -243,7 +120,7 @@ def withInfoSyntaxFn (p : ParserFn) (infoP : SourceInfo → ParserFn) : ParserFn
   let info     := SourceInfo.original leading startPos trailing stopPos
   infoP info c (s.shrinkStack iniSz)
 
-private def unescapeStr (str : String) : String := Id.run do
+def unescapeStr (str : String) : String := Id.run do
   let mut out := ""
   let mut iter := str.iter
   while !iter.atEnd do
@@ -339,22 +216,6 @@ def onlyBlockOpeners : ParserFn := fun c s =>
 
 def nl := satisfyFn (· == '\n') "newline"
 
-/--
-info: Success! Final stack:
- empty
-All input consumed.
--/
-#guard_msgs in
-#eval nl.test! "\n"
-
-/--
-info: Success! Final stack:
- empty
-Remaining:
-" "
--/
-#guard_msgs in
-#eval nl.test! "\n "
 
 def fakeAtom (str : String) (info : SourceInfo := SourceInfo.none) : ParserFn := fun _c s =>
   let atom := mkAtom info str
@@ -475,38 +336,6 @@ logical character on success, taking escaping into account. -/
 def inlineText : ParserFn := asStringFn (transform := unescapeStr) <| atomicFn inlineTextChar >> manyFn inlineTextChar
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-/--
-info: Success! Final stack:
-  "**"
-Remaining:
-"*"
--/
-#guard_msgs in
-#eval asStringFn (transform := unescapeStr) (many1Fn inlineTextChar) |>.test! "\\*\\**"
-
-
-
-/--
-info: Success! Final stack:
-  ">"
-All input consumed.
--/
-#guard_msgs in
-#eval asStringFn (transform := unescapeStr) (many1Fn inlineTextChar) |>.test! "\\>"
-
 /-- Block opener prefixes -/
 def blockOpener := atomicFn <|
   takeWhileEscFn (· == ' ') >>
@@ -573,32 +402,6 @@ where
       takeWhileFn (fun c => c.isWhitespace && c != '\n') >>
       satisfyFn (!·.isWhitespace) "non-whitespace" >> skipToNewline
 
-/--
-info: Success! Final stack:
- empty
-Remaining:
-"\nhijk\n\n\n\nabc"
--/
-#guard_msgs in
-#eval (ignoreFn skipToNewline).test! "abcdeg\nhijk\n\n\n\nabc"
-
-/--
-info: Success! Final stack:
-  ["\n"]
-Remaining:
-"\n\n\n\nabc"
--/
-#guard_msgs in
-#eval (ignoreFn skipToNewline >> manyFn (atomicFn skipBlock.nonEmptyLine)).test! "abcdeg\nhijk\n\n\n\nabc"
-
-/--
-info: Success! Final stack:
- empty
-Remaining:
-"abc"
--/
-#guard_msgs in
-#eval (ignoreFn skipBlock).test! "abcdeg\nhijk\n\n\n\nabc"
 
 -- TODO: upstream
 def recoverFn (p : ParserFn) (recover : RecoveryContext → ParserFn) : ParserFn := fun c s =>
@@ -638,15 +441,6 @@ def recoverNonSpace (p : ParserFn) : ParserFn :=
     ignoreFn (takeUntilFn (fun c => c != ' ')) >>
     show ParserFn from
       fun _ s => s.shrinkStack rctx.initialSize
-
-/--
-info: Failure @4 (⟨1, 4⟩): unterminated string literal; expected identifier or numeral
-Final stack:
-  (Verso.Syntax.arg_str <missing>)
-Remaining: ""
--/
-#guard_msgs in
-#eval (recoverLine val).test! "\"foo"
 
 def recoverWsWith (stxs : Array Syntax) (p : ParserFn) : ParserFn :=
   recoverFn p fun rctx =>
@@ -712,15 +506,6 @@ where
     mkNamed iniSz
 
 /--
-info: Success! Final stack:
-  `x
-Remaining:
-"\n"
--/
-#guard_msgs in
-#eval docIdentFn.test! "x\n"
-
-/--
 
 Skip whitespace for name and arguments. If the argument is `none`,
 it's in a single-line context and whitespace may only be the space
@@ -746,15 +531,6 @@ def args (multiline : Option Nat := none) : ParserFn :=
 def nameAndArgs (multiline : Option Nat := none) (reportNameAs : String := "identifier") : ParserFn :=
   nameArgWhitespace multiline >> docIdentFn (reportAs := reportNameAs) >>
   nameArgWhitespace multiline >> args (multiline := multiline)
-
-
-
-
-
-
-
-
-
 
 
 /--
@@ -794,12 +570,6 @@ Remaining:
 -/
 #guard_msgs in
 #eval args.test! "dialect:=\"chicken\" 43\n(foo)"
-
-
-
-
-
-
 
 
 
@@ -1007,80 +777,6 @@ All input consumed.
 #guard_msgs in
 #eval text.test! "abc "
 
-
-
-
-
-
-
-/--
-info: Failure @0 (⟨1, 0⟩): expected character other than backtick ('`')
-Final stack:
-  [<missing>]
-Remaining: "`a"
--/
-#guard_msgs in
-#eval (asStringFn <| many1Fn <| code.codeContentsFn 0).test! "`a"
-
-/--
-info: Success! Final stack:
-  "`"
-Remaining:
-"a"
--/
-#guard_msgs in
-#eval (asStringFn <| code.codeContentsFn 1).test! "`a"
-
-/--
-info: Success! Final stack:
-  "a"
-All input consumed.
--/
-#guard_msgs in
-#eval (asStringFn <| code.codeContentsFn 1).test! "a"
-
-/--
-info: Success! Final stack:
-  "`a"
-All input consumed.
--/
-#guard_msgs in
-#eval (asStringFn <| many1Fn <| code.codeContentsFn 1).test! "`a"
-
-/--
-info: Success! Final stack:
-  "aaa`b``c"
-Remaining:
-"```de````"
--/
-#guard_msgs in
-#eval (asStringFn <| many1Fn <| code.codeContentsFn 2).test! "aaa`b``c```de````"
-
-/--
-info: Success! Final stack:
-  "aaa`\nb``c"
-Remaining:
-"```de````"
--/
-#guard_msgs in
-#eval (asStringFn <| many1Fn <| code.codeContentsFn 2).test! "aaa`\nb``c```de````"
-
-/--
-info: Success! Final stack:
-  "aaa`\\nb``c"
-Remaining:
-"```de````"
--/
-#guard_msgs in
-#eval (asStringFn <| many1Fn <| code.codeContentsFn 2).test! "aaa`\\nb``c```de````"
-
-
-
-
-
-
-
-
 /--
 info: Success! Final stack:
   (Verso.Syntax.bold
@@ -1092,21 +788,6 @@ All input consumed.
 #guard_msgs in
 #eval bold {} |>.test! "**aa**"
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 /--
 info: Success! Final stack:
   (Verso.Syntax.footnote "[^" (str "\"1\"") "]")
@@ -1114,20 +795,6 @@ All input consumed.
 -/
 #guard_msgs in
 #eval footnote {} |>.test! "[^1]"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 open Lean.Parser.Term in
 def metadataBlock : ParserFn :=
@@ -1180,68 +847,13 @@ def lookaheadOrderedListIndicator (ctxt : BlockCtxt) (p : OrderedListType → In
             let trailing := mkEmptySubstringAt c.input i
             let num := Syntax.mkNumLit digits (info := .original leading numPos trailing i)
             p type n c (s.shrinkStack iniSz |>.setPos numPos |>.pushSyntax num)
-/--
-info: Success! Final stack:
- • (num "1")
- • "Verso.Parser.OrderedListType.numDot 1"
 
-Remaining:
-"1. "
--/
-#guard_msgs in
-#eval lookaheadOrderedListIndicator {} (fun type i => fakeAtom s!"{repr type} {i}") |>.test! "1. "
-/--
-info: Success! Final stack:
- • (num "2")
- • "Verso.Parser.OrderedListType.numDot 2"
 
-Remaining:
-"2. "
--/
-#guard_msgs in
-#eval lookaheadOrderedListIndicator {} (fun type i => fakeAtom s!"{repr type} {i}") |>.test! "2. "
-/--
-info: Failure @0 (⟨1, 0⟩): unexpected end of input
-Final stack:
-  <missing>
-Remaining: "2."
--/
-#guard_msgs in
-#eval lookaheadOrderedListIndicator {} (fun type i => fakeAtom s!"{repr type} {i}") |>.test! "2."
-/--
-info: Success! Final stack:
- • (num "2")
- • "Verso.Parser.OrderedListType.parenAfter 2"
 
-Remaining:
-"2) "
--/
-#guard_msgs in
-#eval lookaheadOrderedListIndicator {} (fun type i => fakeAtom s!"{repr type} {i}") |>.test! "2) "
-/--
-info: Failure @0 (⟨1, 0⟩): digits
-Final stack:
- empty
-Remaining: "-23) "
--/
-#guard_msgs in
-#eval lookaheadOrderedListIndicator {} (fun type i => fakeAtom s!"{repr type} {i}") |>.test! "-23) "
-/--
-info: Failure @0 (⟨1, 0⟩): digits
-Final stack:
- empty
-Remaining: "a-23) "
--/
-#guard_msgs in
-#eval lookaheadOrderedListIndicator {} (fun type i => fakeAtom s!"{repr type} {i}") |>.test! "a-23) "
-/--
-info: Failure @0 (⟨1, 0⟩): unexpected ' '; expected ')' or '.'
-Final stack:
- empty
-Remaining: "23 ) "
--/
-#guard_msgs in
-#eval lookaheadOrderedListIndicator {} (fun type i => fakeAtom s!"{repr type} {i}") |>.test! "23 ) "
+
+
+
+
 
 def lookaheadUnorderedListIndicator (ctxt : BlockCtxt) (p : UnorderedListType → ParserFn) : ParserFn := fun c s =>
   let iniPos := s.pos
@@ -1260,56 +872,6 @@ def lookaheadUnorderedListIndicator (ctxt : BlockCtxt) (p : UnorderedListType �
     let s := (chFn ' ' <|> chFn '\n') c s
     if s.hasError then s.setPos iniPos
     else p type c (s.shrinkStack iniSz |>.setPos bulletPos)
-
-/--
-info: Success! Final stack:
-  "Verso.Parser.UnorderedListType.asterisk"
-Remaining:
-"* "
--/
-#guard_msgs in
-#eval lookaheadUnorderedListIndicator {} (fun type => fakeAtom s! "{repr type}") |>.test! "* "
-/--
-info: Success! Final stack:
-  "Verso.Parser.UnorderedListType.dash"
-Remaining:
-"- "
--/
-#guard_msgs in
-#eval lookaheadUnorderedListIndicator {} (fun type => fakeAtom s! "{repr type}") |>.test! "- "
-/--
-info: Success! Final stack:
-  "Verso.Parser.UnorderedListType.plus"
-Remaining:
-"+ "
--/
-#guard_msgs in
-#eval lookaheadUnorderedListIndicator {} (fun type => fakeAtom s! "{repr type}") |>.test! "+ "
-/--
-info: Success! Final stack:
-  "Verso.Parser.UnorderedListType.asterisk"
-Remaining:
-"* "
--/
-#guard_msgs in
-#eval lookaheadUnorderedListIndicator {} (fun type => fakeAtom s! "{repr type}") |>.test! " * "
-
-/--
-info: Failure @0 (⟨1, 0⟩): unexpected end of input
-Final stack:
-  <missing>
-Remaining: " *"
--/
-#guard_msgs in
-#eval lookaheadUnorderedListIndicator {} (fun type => fakeAtom s! "{repr type}") |>.test! " *"
-/--
-info: Failure @0 (⟨1, 0⟩): ' '
-Final stack:
-  <missing>
-Remaining: "** "
--/
-#guard_msgs in
-#eval lookaheadUnorderedListIndicator {} (fun type => fakeAtom s! "{repr type}") |>.test! "** "
 
 def skipUntilDedent (indent : Nat) : ParserFn :=
   skipRestOfLine >>
@@ -1757,7 +1319,6 @@ Remaining: "  More text\n\n: `foo`\n\n  Thing\n"
 
 
 
--- Unlike Djot, we don't have precedence - these must be well-nested
 
 
 /--
@@ -1773,36 +1334,6 @@ All input consumed.
 -/
 #guard_msgs in
 #eval header {} |>.test! "# Header!"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -1875,64 +1406,6 @@ Remaining: "\n(define x 4)\nx\n```"
 (define x 4)
 x
 ```"
-
-
-
-
-
-
-
-
-
-/--
-info: Success! Final stack:
-  (Verso.Syntax.ul
-   "ul{"
-   [(Verso.Syntax.li
-     "*"
-     [(Verso.Syntax.para
-       "para{"
-       [(Verso.Syntax.text
-         (str "\"Here's a bullet\""))]
-       "}")])
-    (Verso.Syntax.li
-     "*"
-     [(Verso.Syntax.para
-       "para{"
-       [(Verso.Syntax.text
-         (str
-          "\"and another with some code in it\""))]
-       "}")
-      (Verso.Syntax.codeblock
-       "````"
-       [`lean []]
-       "\n"
-       (str "\"hey\\n\\nthere\\n\"")
-       "````")])
-    (Verso.Syntax.li
-     "*"
-     [(Verso.Syntax.para
-       "para{"
-       [(Verso.Syntax.text
-         (str "\"and another one\""))
-        (Verso.Syntax.linebreak
-         "line!"
-         (str "\"\\n\""))]
-       "}")])]
-   "}")
-All input consumed.
--/
-#guard_msgs in
-#eval block {} |>.test!
-  " * Here's a bullet
- * and another with some code in it
-    ````lean
-    hey
-
-    there
-    ````
- * and another one
-"
 
 /--
 info: Success! Final stack:
@@ -2036,292 +1509,7 @@ r##"* `structure` and `inductive` commands
     ```
   * [#5814](https://github.com/leanprover/lean4/pull/5814) "##
 
-/--
-info: Success! Final stack:
-  (Verso.Syntax.command "{" `test [] "}")
-Remaining:
-"Here's a paragraph."
--/
-#guard_msgs in
-#eval block {} |>.test! "{test}\nHere's a paragraph."
 
-
-
-/--
-info: Success! Final stack:
-  (Verso.Syntax.command "{" `test [] "}")
-Remaining:
-" Here's a paragraph."
--/
-#guard_msgs in
-#eval block {} |>.test! "{test}\n Here's a paragraph."
-
-/--
-info: Success! Final stack:
-  (Verso.Syntax.command "{" `test [] "}")
-Remaining:
-" Here's a paragraph."
--/
-#guard_msgs in
-#eval block {} |>.test! " {test}\n Here's a paragraph."
-/--
-info: Success! Final stack:
-  (Verso.Syntax.command "{" `test [] "}")
-Remaining:
-"Here's a paragraph."
--/
-#guard_msgs in
-#eval block {} |>.test! " {test}\nHere's a paragraph."
-
-/--
-info: Success! Final stack:
-  (Verso.Syntax.command "{" `test [] "}")
-Remaining:
-"> Here's a blockquote\n\n with multiple paras\n\nthat ends"
--/
-#guard_msgs in
-#eval block {} |>.test! "{test}\n> Here's a blockquote\n\n with multiple paras\n\nthat ends"
-
-
-
-/--
-info: 2 failures:
-  @36 (⟨3, 28⟩): expected identifier
-    ""
-  @36 (⟨3, 28⟩): unexpected end of input; expected '![', '$$', '$', '[' or '[^'
-    ""
-
-Final stack:
-  (Verso.Syntax.para
-   "para{"
-   [(Verso.Syntax.role
-     "{"
-     <missing>
-     "["
-     [(Verso.Syntax.footnote <missing>)]
-     "]")])
--/
-#guard_msgs in
-#eval block {} |>.test! "{\ntest}\nHere's a modified paragraph."
-
-/--
-info: 2 failures:
-  @37 (⟨3, 28⟩): expected identifier
-    ""
-  @37 (⟨3, 28⟩): unexpected end of input; expected '![', '$$', '$', '[' or '[^'
-    ""
-
-Final stack:
-  (Verso.Syntax.para
-   "para{"
-   [(Verso.Syntax.role
-     "{"
-     <missing>
-     "["
-     [(Verso.Syntax.footnote <missing>)]
-     "]")])
--/
-#guard_msgs in
-#eval block {} |>.test! "{\n test}\nHere's a modified paragraph."
-
-/--
-info: 2 failures:
-  @44 (⟨4, 28⟩): expected identifier
-    ""
-  @44 (⟨4, 28⟩): unexpected end of input; expected '![', '$$', '$', '[' or '[^'
-    ""
-
-Final stack:
-  (Verso.Syntax.para
-   "para{"
-   [(Verso.Syntax.role
-     "{"
-     <missing>
-     "["
-     [(Verso.Syntax.footnote <missing>)]
-     "]")])
--/
-#guard_msgs in
-#eval block {} |>.test! "{\n    test\narg}\nHere's a modified paragraph."
-
-/--
-info: 2 failures:
-  @45 (⟨4, 28⟩): expected identifier
-    ""
-  @45 (⟨4, 28⟩): unexpected end of input; expected '![', '$$', '$', '[' or '[^'
-    ""
-
-Final stack:
-  (Verso.Syntax.para
-   "para{"
-   [(Verso.Syntax.role
-     "{"
-     <missing>
-     "["
-     [(Verso.Syntax.footnote <missing>)]
-     "]")])
--/
-#guard_msgs in
-#eval block {} |>.test! "{\n    test\n arg}\nHere's a modified paragraph."
-/--
-info: 2 failures:
-  @19 (⟨6, 0⟩): '{'; expected '![', '$$', '$', '[' or '[^'
-    "Here's a paragraph."
-  @19 (⟨6, 0⟩): expected identifier
-    "Here's a paragraph."
-
-Final stack:
-  (Verso.Syntax.para
-   "para{"
-   [(Verso.Syntax.role
-     "{"
-     <missing>
-     "["
-     [(Verso.Syntax.footnote <missing>)]
-     "]")])
--/
-#guard_msgs in
-#eval block {} |>.test! "{\n    test\n arg}\n\n\nHere's a paragraph."
-
-
-
-
-
-/--
-info: Success! Final stack:
-  (Verso.Syntax.directive
-   "::::"
-   `multiPara
-   []
-   "\n"
-   [(Verso.Syntax.para
-     "para{"
-     [(Verso.Syntax.text (str "\"foo\""))]
-     "}")]
-   "::::")
-All input consumed.
--/
-#guard_msgs in
-#eval directive {} |>.test! ":::: multiPara\nfoo\n::::"
-
-/--
-info: Success! Final stack:
-  (Verso.Syntax.directive
-   "::::"
-   `multiPara
-   []
-   "\n"
-   [(Verso.Syntax.para
-     "para{"
-     [(Verso.Syntax.text (str "\"foo\""))]
-     "}")]
-   "::::")
-All input consumed.
--/
-#guard_msgs in
-#eval directive {} |>.test! ":::: multiPara\n\n\nfoo\n::::"
-
-/--
-info: Success! Final stack:
-  (Verso.Syntax.directive
-   ":::"
-   `multiPara
-   [(Verso.Syntax.named_no_paren
-     `greatness
-     ":="
-     (Verso.Syntax.arg_str (str "\"amazing!\"")))]
-   "\n"
-   [(Verso.Syntax.para
-     "para{"
-     [(Verso.Syntax.text (str "\"foo\""))]
-     "}")]
-   ":::")
-All input consumed.
--/
-#guard_msgs in
-#eval directive {} |>.test! " ::: multiPara greatness:=\"amazing!\"\n foo\n :::"
-
-/--
-info: Success! Final stack:
-  (Verso.Syntax.directive
-   ":::"
-   `multiPara
-   []
-   "\n"
-   [(Verso.Syntax.para
-     "para{"
-     [(Verso.Syntax.text (str "\"foo\""))]
-     "}")
-    (Verso.Syntax.ul
-     "ul{"
-     [(Verso.Syntax.li
-       "*"
-       [(Verso.Syntax.para
-         "para{"
-         [(Verso.Syntax.text
-           (str "\"List item \""))]
-         "}")])]
-     "}")]
-   ":::")
-All input consumed.
--/
-#guard_msgs in
-#eval directive {} |>.test! " ::: multiPara\n foo\n \n \n \n  * List item \n :::"
-
-/--
-info: Success! Final stack:
-  (Verso.Syntax.directive
-   ":::"
-   `multiPara
-   [(Verso.Syntax.anon
-     (Verso.Syntax.arg_ident `thing))]
-   "\n"
-   [(Verso.Syntax.para
-     "para{"
-     [(Verso.Syntax.text (str "\"foo\""))]
-     "}")
-    (Verso.Syntax.ul
-     "ul{"
-     [(Verso.Syntax.li
-       "*"
-       [(Verso.Syntax.para
-         "para{"
-         [(Verso.Syntax.text
-           (str "\"List item \""))]
-         "}")])]
-     "}")]
-   ":::")
-All input consumed.
--/
-#guard_msgs in
-#eval directive {} |>.test! " ::: multiPara thing\n foo\n \n \n \n  * List item \n :::"
-
-/--
-info: Success! Final stack:
-  (Verso.Syntax.directive
-   ":::"
-   `multiPara
-   []
-   "\n"
-   [(Verso.Syntax.para
-     "para{"
-     [(Verso.Syntax.text (str "\"foo\""))]
-     "}")
-    (Verso.Syntax.ul
-     "ul{"
-     [(Verso.Syntax.li
-       "*"
-       [(Verso.Syntax.para
-         "para{"
-         [(Verso.Syntax.text
-           (str "\"List item \""))]
-         "}")])]
-     "}")]
-   ":::")
-All input consumed.
--/
-#guard_msgs in
-#eval directive {} |>.test! " ::: multiPara\n foo\n\n * List item \n :::"
 
 /--
 info: Success! Final stack:
@@ -2331,16 +1519,6 @@ Remaining:
 -/
 #guard_msgs in
 #eval text |>.test! " [\\[link\\]](https://link.com)"
-
-
-
-
-
-
-
-
-
-
 
 -- A big test of error recovery
 

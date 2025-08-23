@@ -60,6 +60,11 @@ def tests := [
   testParser "inline" (inline {}),
   testParser "block/code" (codeBlock {}),
   testParser "block/blocks" (blocks {}),
+  testParser "block/directive" (directive {}),
+  testParser "block/ulIndicator" (lookaheadUnorderedListIndicator {} (fun type => fakeAtom s! "{repr type}")),
+  testParser "block/olIndicator" (lookaheadOrderedListIndicator {} (fun type i => fakeAtom s! "{repr type} {i}")),
+  testParser "block/" (block {}),
+
 ]
 
 def getConfig (config : Config) : List String → IO Config

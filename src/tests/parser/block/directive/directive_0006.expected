@@ -1,0 +1,22 @@
+Success! Final stack:
+  (Verso.Syntax.directive
+   ":::"
+   `multiPara
+   []
+   "\n"
+   [(Verso.Syntax.para
+     "para{"
+     [(Verso.Syntax.text (str "\"foo\""))]
+     "}")
+    (Verso.Syntax.ul
+     "ul{"
+     [(Verso.Syntax.li
+       "*"
+       [(Verso.Syntax.para
+         "para{"
+         [(Verso.Syntax.text
+           (str "\"List item \""))]
+         "}")])]
+     "}")]
+   ":::")
+All input consumed.
