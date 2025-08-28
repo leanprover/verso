@@ -5,8 +5,31 @@ namespace Verso.ManualTexTest
 
 open Verso Genre Manual
 
-mutual
+--------------------
 
+/-- This is a docstring.
+
+Here's some more text with a `code inline` in it.
+Here's when a `code inline`
+occurs right before a line break.
+
+And then here's a paragraph break.
+-/
+def sample_constant := Unit
+
+#docs (Manual) sample_part "Title of the Doc" :=
+:::::::
+
+%%%
+shortTitle := "ShortTitle"
+authors := ["Harry Q. Bovik"]
+%%%
+
+{docstring sample_constant}
+
+:::::::
+
+mutual
 
 def inline2str : Verso.Doc.Inline Manual → String
 | .text s => s!"text[ {Repr.reprPrec s 0} ]"
@@ -45,32 +68,8 @@ instance : ToString (Verso.Doc.Block Manual) where
 instance : ToString (Verso.Doc.Part Manual) where
   toString p := s!"Manual Part: { p.titleString } { p.content.map (fun x => ToString.toString x) } ... "
 
---------------------
-
-/-- This is a docstring.
-
-Here's some more text with a `code inline` in it.
-Here's when a `code inline`
-occurs right before a line break.
-
-And then here's a paragraph break.
--/
-def foo := Unit
-
-#docs (Manual) n "Writing Docs" :=
-:::::::
-
-%%%
-shortTitle := "Documentation with Verso"
-authors := ["David Thrane Christiansen"]
-%%%
-
-{docstring foo}
-
-:::::::
-
 /--
-info: Manual Part: Writing Docs #[CONCAT[ #[OTHER[Verso.Genre.Manual.Block.docstring #[PARA[ #[text[ "This is a docstring." ]] ], PARA[ #[text[ "Here's some more text with a " ], other[{"name": "Verso.Genre.Manual.leanFromMarkdown",
+info: Manual Part: Title of the Doc #[CONCAT[ #[OTHER[Verso.Genre.Manual.Block.docstring #[PARA[ #[text[ "This is a docstring." ]] ], PARA[ #[text[ "Here's some more text with a " ], other[{"name": "Verso.Genre.Manual.leanFromMarkdown",
  "id": null,
  "data":
  {"seq":
@@ -87,7 +86,7 @@ info: Manual Part: Writing Docs #[CONCAT[ #[OTHER[Verso.Genre.Manual.Block.docst
     {"token": {"tok": {"kind": "unknown", "content": "inline"}}}]}}} #[code[ "code inline" ]] ], text[ "\n" ], text[ "occurs right before a line break." ]] ], PARA[ #[text[ "And then here's a paragraph break." ]] ]]]] ]] ...
 -/
 #guard_msgs in
- #eval n
+ #eval sample_part
 
 def testTexMain : IO Unit := open Verso Genre Manual in do
  let logError (msg : String) := IO.eprintln msg
@@ -96,11 +95,8 @@ def testTexMain : IO Unit := open Verso Genre Manual in do
    emitTeX := true,
    emitHtmlMulti := false,
    }
- let part : Doc.Part Manual := Doc.Part.mk #[] "title" none #[] #[]
- let exts : ExtensionImpls := (ExtensionImpls.fromLists [] [])
- let z := ReaderT.run (emitTeX logError cfg part) exts
- _ ← z
- return
+
+ ReaderT.run (emitTeX logError cfg sample_part) extension_impls%
 
 def run (input : String) : IO String := do
   testTexMain
