@@ -50,7 +50,6 @@
 
 \mainmatter
 
-
 \chapter*{Introduction}
 This is a docstring.Here's some more text with a \Verb|code inline|
  in it.
