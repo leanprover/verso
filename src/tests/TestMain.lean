@@ -37,9 +37,16 @@ def testParser (dir : System.FilePath) (fn : Lean.Parser.ParserFn) : Config → 
     updateExpected := config.updateExpected
   }
 
+def testManualTeX (dir : System.FilePath) : Config → IO Unit := fun config =>
+  Verso.GoldenTest.runTests {
+    testDir := ("src/tests/manual-tex" : System.FilePath) / dir,
+    runTest := Verso.ManualTexTest.run
+    updateExpected := config.updateExpected
+  }
+
 open Lean.Parser in
 open Verso.Parser in
-def tests := [
+def tests : List (Config → IO Unit) := [
   testStemmer,
   testParser "metadataBlock" metadataBlock,
   testParser "val" val,
@@ -64,6 +71,7 @@ def tests := [
   testParser "block/olIndicator" (lookaheadOrderedListIndicator {} (fun type i => fakeAtom s! "{repr type} {i}")),
   testParser "block/" (block {}),
   testParser "document" document,
+  testManualTeX "newlines",
 ]
 
 def getConfig (config : Config) : List String → IO Config
