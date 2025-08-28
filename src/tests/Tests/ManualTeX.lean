@@ -29,18 +29,9 @@ authors := ["Harry Q. Bovik"]
 
 :::::::
 
-def testTexMain : IO Unit := open Verso Genre Manual in do
+def run : IO String := open Verso Genre Manual in do
  let logError (msg : String) := IO.eprintln msg
- let cfg : Config := {
-   destination := "/tmp/_out",
-   emitTeX := true,
-   emitHtmlMulti := false,
-   }
-
- ReaderT.run (emitTeX logError cfg sample_part) extension_impls%
-
-def run (input : String) : IO String := do
-  testTexMain
-  pure s!"{input}"
+ let cfg : Config := { }
+ ReaderT.run (makeTeX logError cfg sample_part) extension_impls%
 
 end Verso.ManualTexTest
