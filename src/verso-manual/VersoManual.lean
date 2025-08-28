@@ -327,7 +327,7 @@ def makeTeX (logError : String → IO Unit) (config : Config) (text : Part Manua
   let putStrLn (line : String) : StateT String Id Unit := do
     modify (fun s => s ++ line ++ "\n")
   let tex : StateT String Id Unit := do
-    putStrLn (preamble text.titleString authors date packages.toList preambleItems.toList ++ "\n")
+    putStrLn (preamble text.titleString authors date packages.toList preambleItems.toList)
     if frontMatter.size > 0 then
       putStrLn "\\chapter*{Introduction}"
     for b in frontMatter do

@@ -40,7 +40,7 @@ def testParser (dir : System.FilePath) (fn : Lean.Parser.ParserFn) : Config → 
 def testManualTeX (dir : System.FilePath) : Config → IO Unit := fun config =>
   Verso.GoldenTest.runTests {
     testDir := ("src/tests/manual-tex" : System.FilePath) / dir,
-    runTest := fun _s => Verso.ManualTexTest.run -- TODO: admit multiple input test files
+    runTest := fun _s => Verso.ManualTexTest.run -- TODO(admit multiple files)
     updateExpected := config.updateExpected
   }
 
