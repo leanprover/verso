@@ -583,7 +583,7 @@ structure InlineDescr where
   -/
   toHtml : Option (InlineToHtml Manual (ReaderT ExtensionImpls IO))
   /--
-  Extra JavaScript to add to a `<script>` tag in the generated HTML's `<head>`
+  Extra JavaScript files to add to a `<script>` tag in the generated HTML's `<head>`
   -/
   extraJs : List String := []
   /--
@@ -591,7 +591,7 @@ structure InlineDescr where
   -/
   extraJsFiles : List JsFile := []
   /--
-  Extra CSS to add to a `<style>` tag in the generated HTML's `<head>`
+  Extra CSS files to add to a `<style>` tag in the generated HTML's `<head>`
   -/
   extraCss : List String := []
   /--

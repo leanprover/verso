@@ -174,9 +174,9 @@ structure Config where
   emitHtmlMulti : Bool := true
   wordCount : Option System.FilePath := none
   extraFiles : List (System.FilePath × String) := []
-  /-- Extra CSS to be included inline into every `<head>` -/
+  /-- Extra CSS files to be included inline into every `<head>` -/
   extraCss : List String := []
-  /-- Extra JS to be included inline into every `<head>` -/
+  /-- Extra JS files to be included inline into every `<head>` -/
   extraJs : List StaticJsFile := []
   /-- Extra CSS to be written to the filesystem in the Verso data directory and loaded by each `<head>` -/
   extraCssFiles : Array (String × String) := #[]
