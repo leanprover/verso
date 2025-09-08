@@ -132,7 +132,7 @@ private partial def mkSyntaxError (c : InputContext) (pos : String.Pos) (stk : S
         pos := trailing.startPos
   return {
     pos := c.fileMap.toPosition pos
-    endPos := (c.fileMap.toPosition <$> endPos?).getD (c.fileMap.toPosition (pos + c.input.get pos))
+    endPos := (c.fileMap.toPosition <$> endPos?).getD (c.fileMap.toPosition (pos + c.get pos))
     text := toString e
   }
 where
@@ -174,7 +174,7 @@ def runParserCategory
   let s := p.run ictx { env, options := opts } (getTokenTable env) (mkParserState input)
   if !s.allErrors.isEmpty then
     Except.error (toErrorMsg ictx s)
-  else if ictx.input.atEnd s.pos then
+  else if ictx.atEnd s.pos then
     Except.ok s.stxStack.back
   else
     Except.error (toErrorMsg ictx (s.mkError "end of input"))
@@ -197,7 +197,7 @@ def runParserCategory' (env : Environment) (opts : Lean.Options) (catName : Name
     let s := p.run ictx { env, options := opts } (getTokenTable env) (mkParserState input)
     if !s.allErrors.isEmpty then
       Except.error <| toSyntaxErrors ictx s
-    else if ictx.input.atEnd s.pos then
+    else if ictx.atEnd s.pos then
       Except.ok s.stxStack.back
     else
       Except.error (toSyntaxErrors ictx (s.mkError "end of input"))
