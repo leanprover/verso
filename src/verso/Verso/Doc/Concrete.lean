@@ -34,7 +34,7 @@ def completeDocument : Parser where
   fn := (Verso.Parser.recoverFn Verso.Parser.document fun _ => skipFn) >> untilEoi
 where
   untilEoi : ParserFn := fun c s =>
-    s.setPos c.input.endPos
+    s.setPos c.endPos
 
 @[combinator_parenthesizer completeDocument] def completeDocument.parenthesizer := PrettyPrinter.Parenthesizer.visitToken
 @[combinator_formatter completeDocument] def completeDocument.formatter := PrettyPrinter.Formatter.visitAtom Name.anonymous
@@ -182,7 +182,7 @@ def versoBlockCommandFn (genre : Term) (title : String) : ParserFn := fun c s =>
     let s := s.pushSyntax genre
     let s := ignoreFn (manyFn blankLine) c s
     let i := s.pos
-    if c.input.atEnd i then
+    if c.atEnd i then
       let s := s.pushSyntax (Syntax.mkStrLit title)
       s.mkNode ``addLastBlockCmd iniSz
     else

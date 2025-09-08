@@ -46,7 +46,7 @@ partial def headerTagLinter : Linter where
             else break
           -- Attempt to parse the next command as a metadata block.
           let ictx := {
-            input := text.source,
+            inputString := text.source,
             fileName := ← getFileName,
             fileMap := text
           }

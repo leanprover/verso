@@ -54,8 +54,8 @@ def repFn : Nat → ParserFn → ParserFn
 /-- Like `satisfyFn`, but no special handling of EOI -/
 partial def satisfyFn' (p : Char → Bool) (errorMsg : String := "unexpected character") : ParserFn := fun c s =>
   let i := s.pos
-  if h : c.input.atEnd i then s.mkUnexpectedError errorMsg
-  else if p (c.input.get' i h) then s.next' c.input i h
+  if h : c.atEnd i then s.mkUnexpectedError errorMsg
+  else if p (c.get' i h) then s.next' c i h
   else s.mkUnexpectedError errorMsg
 
 partial def atMostAux (n : Nat) (p : ParserFn) (msg : String) : ParserFn := fun c s => Id.run do
@@ -79,25 +79,25 @@ def atMostFn (n : Nat) (p : ParserFn) (msg : String) : ParserFn := fun c s =>
 /-- Like `satisfyFn`, but allows any escape sequence through -/
 partial def satisfyEscFn (p : Char → Bool) (errorMsg : String := "unexpected character") : ParserFn := fun c s =>
   let i := s.pos
-  if h : c.input.atEnd i then s.mkEOIError
-  else if c.input.get' i h == '\\' then
-    let s := s.next' c.input i h
+  if h : c.atEnd i then s.mkEOIError
+  else if c.get' i h == '\\' then
+    let s := s.next' c i h
     let i := s.pos
-    if h : c.input.atEnd i then s.mkEOIError
-    else s.next' c.input i h
-  else if p (c.input.get' i h) then s.next' c.input i h
+    if h : c.atEnd i then s.mkEOIError
+    else s.next' c i h
+  else if p (c.get' i h) then s.next' c i h
   else s.mkUnexpectedError errorMsg
 
 partial def takeUntilEscFn (p : Char → Bool) : ParserFn := fun c s =>
   let i := s.pos
-  if h : c.input.atEnd i then s
-  else if c.input.get' i h == '\\' then
-    let s := s.next' c.input i h
+  if h : c.atEnd i then s
+  else if c.get' i h == '\\' then
+    let s := s.next' c i h
     let i := s.pos
-    if h : c.input.atEnd i then s.mkEOIError
-    else takeUntilEscFn p c (s.next' c.input i h)
-  else if p (c.input.get' i h) then s
-  else takeUntilEscFn p c (s.next' c.input i h)
+    if h : c.atEnd i then s.mkEOIError
+    else takeUntilEscFn p c (s.next' c i h)
+  else if p (c.get' i h) then s
+  else takeUntilEscFn p c (s.next' c i h)
 
 partial def takeWhileEscFn (p : Char → Bool) : ParserFn := takeUntilEscFn (not ∘ p)
 
@@ -110,10 +110,9 @@ def withInfoSyntaxFn (p : ParserFn) (infoP : SourceInfo → ParserFn) : ParserFn
   let iniSz := s.stxStack.size
   let startPos := s.pos
   let s := p c s
-  let input    := c.input
   let stopPos  := s.pos
-  let leading  := mkEmptySubstringAt input startPos
-  let trailing := mkEmptySubstringAt input stopPos
+  let leading  := c.mkEmptySubstringAt startPos
+  let trailing := c.mkEmptySubstringAt stopPos
   let info     := SourceInfo.original leading startPos trailing stopPos
   infoP info c (s.shrinkStack iniSz)
 
@@ -132,12 +131,12 @@ def unescapeStr (str : String) : String := Id.run do
   out
 
 private def asStringAux (quoted : Bool) (startPos : String.Pos) (transform : String → String) : ParserFn := fun c s =>
-  let input    := c.input
+  let input    := c
   let stopPos  := s.pos
-  let leading  := mkEmptySubstringAt input startPos
+  let leading  := c.mkEmptySubstringAt startPos
   let val      := input.extract startPos stopPos
   let val      := transform val
-  let trailing := mkEmptySubstringAt input stopPos
+  let trailing := c.mkEmptySubstringAt stopPos
   let atom     :=
     mkAtom (SourceInfo.original leading startPos trailing stopPos) <|
       if quoted then val.quote else val
@@ -193,7 +192,7 @@ def onlyBlockOpeners : ParserFn := fun c s =>
   let position := c.fileMap.toPosition s.pos
   let lineStart := c.fileMap.lineStart position.line
   let ok : Bool := Id.run do
-    let mut iter := {c.input.iter with i := lineStart}
+    let mut iter := {c.inputString.iter with i := lineStart}
     while iter.i < s.pos && iter.hasNext do
       if iter.curr.isDigit then
         while iter.curr.isDigit && iter.i < s.pos && iter.hasNext do
@@ -291,40 +290,40 @@ where
 
 def inlineTextChar : ParserFn := fun c s =>
   let i := s.pos
-  if h : c.input.atEnd i then s.mkEOIError
+  if h : c.atEnd i then s.mkEOIError
   else
-    let curr := c.input.get' i h
+    let curr := c.get' i h
     match curr with
     | '\\' =>
-      let s := s.next' c.input i h
+      let s := s.next' c i h
       let i := s.pos
-      if h : c.input.atEnd i then s.mkEOIError
-      else s.next' c.input i h
+      if h : c.atEnd i then s.mkEOIError
+      else s.next' c i h
     | '*' | '_' | '\n' | '[' | ']' | '{' | '}' | '`' => s.mkUnexpectedErrorAt s!"'{curr}'" i
     | '!' =>
-      let s := s.next' c.input i h
+      let s := s.next' c i h
       let i' := s.pos
-      if h : c.input.atEnd i' then s
-      else if c.input.get' i' h == '['
+      if h : c.atEnd i' then s
+      else if c.get' i' h == '['
       then s.mkUnexpectedErrorAt "![" i
       else s
     | '$' =>
-      let s := s.next' c.input i h
+      let s := s.next' c i h
       let i' := s.pos
-      if h : c.input.atEnd i' then
+      if h : c.atEnd i' then
         s
-      else if c.input.get' i' h == '`' then
+      else if c.get' i' h == '`' then
         s.mkUnexpectedErrorAt "$`" i
-      else if c.input.get' i' h == '$' then
-        let s := s.next' c.input i' h
+      else if c.get' i' h == '$' then
+        let s := s.next' c i' h
         let i' := s.pos
-        if h : c.input.atEnd i' then
+        if h : c.atEnd i' then
           s
-        else if c.input.get' i' h == '`' then
+        else if c.get' i' h == '`' then
           s.mkUnexpectedErrorAt "$$`" i
         else s
       else s
-    | _ => s.next' c.input i h
+    | _ => s.next' c i h
 
 /-- Return some inline text up to the next inline opener or the end of
 the line, whichever is first. Always consumes at least one
@@ -457,9 +456,9 @@ where
     nodeFn ``Verso.Syntax.flag_on (asStringFn (strFn  "+") >> recoverNonSpace noSpace >> recoverWs (docIdentFn (reportAs := "flag name"))) <|>
     nodeFn ``Verso.Syntax.flag_off (asStringFn (strFn "-") >> recoverNonSpace noSpace >> recoverWs (docIdentFn (reportAs := "flag name")))
   noSpace : ParserFn := fun c s =>
-    if h : c.input.atEnd s.pos then s
+    if h : c.atEnd s.pos then s
     else
-      let ch := c.input.get' s.pos h
+      let ch := c.get' s.pos h
       if ch == ' ' then
         s.mkError "no space before"
       else s
@@ -544,7 +543,7 @@ mutual
     noSpaceBefore : ParserFn := fun c s =>
       if s.pos == 0 then s
       else
-        let prior := c.input.get (c.input.prev s.pos)
+        let prior := c.get (c.prev s.pos)
         if prior.isWhitespace then
           s.mkError s!"'{char}' without preceding space"
         else s
@@ -599,16 +598,16 @@ mutual
 
     takeContentsFn (maxCount : Nat) : ParserFn := fun c s =>
       let i := s.pos
-      if h : c.input.atEnd i then s.mkEOIError
+      if h : c.atEnd i then s.mkEOIError
       else
-        let ch := c.input.get' i h
-        let s := s.next' c.input i h
+        let ch := c.get' i h
+        let s := s.next' c i h
         let i := s.pos
         if ch == '\\' then
-          if h : c.input.atEnd i then s.mkEOIError
+          if h : c.atEnd i then s.mkEOIError
           else
-            let ch := c.input.get' i h
-            let s := s.next' c.input i h
+            let ch := c.get' i h
+            let s := s.next' c i h
             if ch ∈ ['`', '\\'] then takeContentsFn maxCount c s
             else
               s.mkError "expected 'n', '\\', or '`'"
@@ -719,24 +718,24 @@ def lookaheadOrderedListIndicator (ctxt : BlockCtxt) (p : OrderedListType → In
     let numPos := s.pos
     let s := ignoreFn (takeWhile1Fn (·.isDigit) "digits") c s
     if s.hasError then {s with pos := iniPos}.shrinkStack iniSz else
-    let digits := c.input.extract numPos s.pos
+    let digits := c.extract numPos s.pos
     match digits.toNat? with
     | none => {s.mkError s!"digits, got '{digits}'" with pos := iniPos}
     | some n =>
       let i := s.pos
-      if h : c.input.atEnd i then {s.mkEOIError with pos := iniPos}
+      if h : c.atEnd i then {s.mkEOIError with pos := iniPos}
       else
-        let (s, next, type) := match c.input.get' i h with
-          | '.' => (s.next' c.input i h, (chFn ' ' <|> chFn '\n'), OrderedListType.numDot)
-          | ')' => (s.next' c.input i h, (chFn ' ' <|> chFn '\n'), OrderedListType.parenAfter)
+        let (s, next, type) := match c.get' i h with
+          | '.' => (s.next' c i h, (chFn ' ' <|> chFn '\n'), OrderedListType.numDot)
+          | ')' => (s.next' c i h, (chFn ' ' <|> chFn '\n'), OrderedListType.parenAfter)
           | other => (s.setError {unexpected := s!"unexpected '{other}'", expected := ["'.'", "')'"]}, skipFn, .numDot)
         if s.hasError then {s with pos := iniPos}
         else
           let s := next c s
           if s.hasError then {s with pos := iniPos}
           else
-            let leading := mkEmptySubstringAt c.input numPos
-            let trailing := mkEmptySubstringAt c.input i
+            let leading := c.mkEmptySubstringAt numPos
+            let trailing := c.mkEmptySubstringAt i
             let num := Syntax.mkNumLit digits (info := .original leading numPos trailing i)
             p type n c (s.shrinkStack iniSz |>.setPos numPos |>.pushSyntax num)
 
@@ -746,11 +745,11 @@ def lookaheadUnorderedListIndicator (ctxt : BlockCtxt) (p : UnorderedListType �
   let s := (onlyBlockOpeners >> takeWhileFn (· == ' ') >> guardMinColumn ctxt.minIndent) c s
   let bulletPos := s.pos
   if s.hasError then s.setPos iniPos |>.shrinkStack iniSz
-  else if h : c.input.atEnd s.pos then s.mkEOIError.setPos iniPos |>.shrinkStack iniSz
-  else let (s, type) : (_ × UnorderedListType) := match c.input.get' s.pos h with
-    | '*' => (s.next' c.input s.pos h, .asterisk)
-    | '-' => (s.next' c.input s.pos h, .dash)
-    | '+' => (s.next' c.input s.pos h, .plus)
+  else if h : c.atEnd s.pos then s.mkEOIError.setPos iniPos |>.shrinkStack iniSz
+  else let (s, type) : (_ × UnorderedListType) := match c.get' s.pos h with
+    | '*' => (s.next' c s.pos h, .asterisk)
+    | '-' => (s.next' c s.pos h, .dash)
+    | '+' => (s.next' c s.pos h, .plus)
     | other => (s.setError {expected := ["*", "-", "+"], unexpected := s!"'{other}'"}, .plus)
   if s.hasError then s.setPos iniPos
   else
