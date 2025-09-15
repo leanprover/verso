@@ -30,8 +30,5 @@ import Verso.Method
 import Verso.Output
 import Verso.Output.Html
 import Verso.Output.TeX
-import Verso.Parser
-import Verso.Parser.Lean
-import Verso.Syntax
 import Verso.SyntaxUtils
 import Verso.WithoutAsync

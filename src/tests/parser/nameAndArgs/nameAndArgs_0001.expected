@@ -1,8 +1,0 @@
-Success! Final stack:
- • `leanExample
- • [(Verso.Syntax.named_no_paren
-      `context
-      ":="
-      (Verso.Syntax.arg_num (num "2")))]
-
-All input consumed.

@@ -3,7 +3,7 @@ Copyright (c) 2023-2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-import Verso.Syntax
+import Lean.DocString.Syntax
 import VersoManual
 
 set_option guard_msgs.diff true
@@ -12,7 +12,8 @@ open Verso Genre Manual
 
 section
 open Lean
-open Verso.Syntax
+open Lean.Doc.Syntax
+
 variable [Monad m] [MonadError m] [MonadQuotation m]
 
 def newlinesToSpace (inls : Array (TSyntax `inline)) : m (Array (TSyntax `inline)) := do
@@ -97,9 +98,9 @@ partial def preview (stx : Syntax) : m Std.Format :=
   | `(block| command{$x $args*}) => do
     let args ← args.toList.mapM (preview ·.raw)
     pure s!"<{x.getId.toString} {Std.Format.prefixJoin " " args |>.pretty}/>"
-  | `(argument|($x:ident := $v)) | `(argument|$x:ident := $v) => do
+  | `(doc_arg|($x:ident := $v)) | `(doc_arg|$x:ident := $v) => do
     pure <| s!"{x.getId.toString}=\"{← preview v.raw}\""
-  | `(argument|$v:arg_val) => preview v.raw
+  | `(doc_arg|$v:arg_val) => preview v.raw
   | `(arg_val|$v:ident) => pure s!"{v.getId}"
   | `(arg_val|$v:num) => pure s!"{v.getNat}"
   | `(arg_val|$v:str) => pure s!"{v.getString.quote}"
@@ -123,7 +124,7 @@ partial def preview (stx : Syntax) : m Std.Format :=
     pure <| .group <| .nest 2 ("<li>" ++ .line ++ .join content) ++ .line ++ "</li>"
   | other => do
     if other.getKind = nullKind then
-      pure <| .joinSep (← other.args.toList.mapM preview) (.line ++ .line)
+      pure <| .joinSep (← other.getArgs.toList.mapM preview) (.line ++ .line)
     else
       throwErrorAt stx "Didn't understand {Verso.SyntaxUtils.ppSyntax stx} for preview"
 end
@@ -275,7 +276,9 @@ end
 
 private def withNl (s : String) : String := if s.endsWith "\n" then s else s.push '\n'
 
-open Lean Verso Doc Elab Parser in
+open Lean Verso Doc Elab in
+open Verso.Parser in
+open Lean.Doc.Syntax in
 @[directive]
 def markupPreview : DirectiveExpanderOf MarkupPreviewConfig
   | {title}, contents => do
@@ -316,7 +319,8 @@ where
   | `(block|para[$inls*]) => inls.any nonemptyI
   | _ => true
 
-open Lean Verso Doc Elab Parser in
+open Lean Verso Doc Elab in
+open Verso.Parser in
 @[code_block markupPreview]
 def markupPreviewPre : CodeBlockExpanderOf MarkupPreviewConfig
   | {title}, contents => do

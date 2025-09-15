@@ -1,6 +1,0 @@
-Success! Final stack:
-  (Verso.Syntax.metadata_block
-   "%%%"
-   (Term.structInstFields [])
-   "%%%")
-All input consumed.

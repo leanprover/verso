@@ -1,7 +1,0 @@
-Failure @4 (⟨1, 4⟩): expected '_' without preceding space
-Final stack:
-  (Verso.Syntax.emph
-   "_"
-   [(Verso.Syntax.text (str "\"aa \""))]
-   <missing>)
-Remaining: "_"

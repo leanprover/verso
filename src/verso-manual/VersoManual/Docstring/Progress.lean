@@ -6,7 +6,7 @@ Author: David Thrane Christiansen
 
 import Lean.Environment
 import Lean.Meta
-import Verso.Syntax
+import Lean.DocString.Syntax
 import VersoManual.Basic
 
 
@@ -15,6 +15,7 @@ namespace Verso.Genre.Manual
 open Lean
 open Verso.Output.Html
 open Verso.Doc.Elab
+open Lean.Doc.Syntax
 
 /--
 A progress tracker that shows how many symbols are documented.

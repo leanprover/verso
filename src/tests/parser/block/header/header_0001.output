@@ -1,9 +1,0 @@
-Success! Final stack:
-  (Verso.Syntax.header
-   "header("
-   (num "0")
-   ")"
-   "{"
-   [(Verso.Syntax.text (str "\"Header!\""))]
-   "}")
-All input consumed.

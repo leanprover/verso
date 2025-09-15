@@ -20,6 +20,7 @@ import SubVerso.Examples.Messages
 
 import Lean.Message
 import Lean.Meta.Hint
+import Lean.DocString.Syntax
 
 import Std.Data.HashSet
 
@@ -27,6 +28,7 @@ open Verso Doc Elab Log ArgParse
 open SubVerso Highlighting Examples.Messages
 open Lean Meta Hint
 open Std
+open Lean.Doc.Syntax
 
 namespace Verso.Code.External
 
@@ -914,7 +916,7 @@ private def hasSubstring (s pattern : String) : Bool :=
 /--
 Internal detail of anchor suggestion mechanism.
 -/
-@[inline_expander Verso.Syntax.code]
+@[inline_expander Lean.Doc.Syntax.code]
 private def suggest : InlineExpander
   |  `(inline| code( $str )) => do
     let str' := str.getString

@@ -12,6 +12,7 @@ open Verso Doc Elab ArgParse
 open Lean
 open Verso Output Html
 open Template
+open scoped Lean.Doc.Syntax
 
 @[block_component redBox]
 def redBox : BlockComponent where

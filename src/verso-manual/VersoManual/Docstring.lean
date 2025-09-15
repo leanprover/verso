@@ -28,6 +28,7 @@ open Verso.Doc.Elab.PartElabM
 open Verso.Code
 open Verso.ArgParse
 open Verso.Code.Highlighted.WebAssets
+open Lean.Doc.Syntax
 
 open SubVerso.Highlighting
 

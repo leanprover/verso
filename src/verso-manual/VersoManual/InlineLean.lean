@@ -29,6 +29,7 @@ open SubVerso.Highlighting
 
 open Verso.SyntaxUtils (parserInputString runParserCategory' SyntaxError)
 
+open Lean.Doc.Syntax
 open Lean.Elab.Tactic.GuardMsgs
 
 namespace Verso.Genre.Manual.InlineLean
@@ -555,7 +556,7 @@ Elaborates the contained document in a new section.
 def leanSection : DirectiveExpander
   | args, contents => do
     let name? ← ArgParse.run ((some <$> .positional `name .string) <|> pure none) args
-    let arg ← `(argument| -«show»)
+    let arg ← `(doc_arg| -«show»)
     let code := name?.map (s!"section {·}") |>.getD "section"
     let start ← `(block|```lean $arg | $(quote code) ```)
     let code := name?.map (s!"end {·}") |>.getD "end"

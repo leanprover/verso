@@ -9,6 +9,7 @@ import Std.Data.HashSet
 
 import Lean.Elab.DeclUtil
 import Lean.Meta.Reduce
+import Lean.DocString.Syntax
 
 import Verso.Doc
 import Verso.Doc.ArgParse
@@ -16,12 +17,12 @@ import Verso.Doc.Elab.ExpanderAttribute
 import Verso.Doc.Elab.InlineString
 import Verso.Hover
 import Verso.SyntaxUtils
-import Verso.Syntax
 
 namespace Verso.Doc.Elab
 
 open Lean
 open Lean.Elab
+open Lean.Doc.Syntax
 open Std (HashMap HashSet)
 open Verso.SyntaxUtils
 open Verso.ArgParse (FromArgs SigDoc)
@@ -38,36 +39,36 @@ class HasNote (name : String) (doc : Name) (genre : Genre) where
 
 
 -- For use in IDE features and previews and such
-@[inline_to_string Verso.Syntax.text]
-def _root_.Verso.Syntax.text.inline_to_string : InlineToString
+@[inline_to_string Lean.Doc.Syntax.text]
+def _root_.Lean.Doc.Syntax.text.inline_to_string : InlineToString
   | _, `(inline| $s:str) => some s.getString
   | _, _ => none
 
-@[inline_to_string Verso.Syntax.linebreak]
-def _root_.Verso.Syntax.linebreak.inline_to_string : InlineToString
+@[inline_to_string Lean.Doc.Syntax.linebreak]
+def _root_.Lean.Doc.Syntax.linebreak.inline_to_string : InlineToString
   | _, `(inline|line! $_) => some " "
   | _, _ => none
 
-@[inline_to_string Verso.Syntax.emph]
-def _root_.Verso.Syntax.emph.inline_to_string : InlineToString
+@[inline_to_string Lean.Doc.Syntax.emph]
+def _root_.Lean.Doc.Syntax.emph.inline_to_string : InlineToString
   | env, `(inline| _[ $args* ]) =>
     some <| String.intercalate " " (Array.map (inlineToString env) args).toList
   | _, _ => none
 
-@[inline_to_string Verso.Syntax.bold]
-def _root_.Verso.Syntax.bold.inline_to_string : InlineToString
+@[inline_to_string Lean.Doc.Syntax.bold]
+def _root_.Lean.Doc.Syntax.bold.inline_to_string : InlineToString
   | env, `(inline| *[ $args* ]) =>
     some <| String.intercalate " " (Array.map (inlineToString env) args).toList
   | _, _ => none
 
-@[inline_to_string Verso.Syntax.code]
-def _root_.Verso.Syntax.code.inline_to_string : InlineToString
+@[inline_to_string Lean.Doc.Syntax.code]
+def _root_.Lean.Doc.Syntax.code.inline_to_string : InlineToString
   | _, `(inline| code( $str )) =>
     some str.getString
   | _, _ => none
 
-@[inline_to_string Verso.Syntax.role]
-def _root_.Verso.Syntax.role.inline_to_string : InlineToString
+@[inline_to_string Lean.Doc.Syntax.role]
+def _root_.Lean.Doc.Syntax.role.inline_to_string : InlineToString
   | env, `(inline| role{ $_ $_* }[ $body* ]) =>
     String.join (body.toList.map (inlineToString env <| ·.raw))
   | _, _ => none
