@@ -1,4 +1,0 @@
-Failure @0 (⟨1, 0⟩): unexpected end of input; expected identifier, numeral or string literal
-Final stack:
-  (Verso.Syntax.arg_str <missing>)
-Remaining: ""

@@ -24,9 +24,10 @@ open Verso.Output Html
 
 namespace Verso.Genre.Blog
 
-open Lean Elab
-open Verso ArgParse Doc Elab
 
+open Lean.Doc.Syntax
+open Verso ArgParse Doc Elab
+open Lean Elab
 open Verso.SyntaxUtils (parserInputString)
 
 open SubVerso.Examples (loadExamples Example)
@@ -706,14 +707,14 @@ where
 
 open SubVerso.Highlighting in
 private def leanOutputBlock [bg : BlogGenre genre] (message : Highlighted.Message) (summarize := false) (expandTraces : List Name := []) : Block genre :=
-  Block.other (bg.block_eq ▸ BlockExt.message summarize message expandTraces) #[Block.code message.toString]
+  .other (bg.block_eq ▸ BlockExt.message summarize message expandTraces) #[.code message.toString]
 
 open SubVerso.Highlighting in
 private def leanOutputInline [bg : BlogGenre genre] (message : Highlighted.Message) (plain : Bool) (expandTraces : List Name := []) : Inline genre :=
   if plain then
-    Inline.code message.toString
+    .code message.toString
   else
-    Inline.other (bg.inline_eq ▸ InlineExt.message message expandTraces) #[Inline.code message.toString]
+    .other (bg.inline_eq ▸ InlineExt.message message expandTraces) #[.code message.toString]
 
 @[code_block]
 def leanOutput : CodeBlockExpanderOf LeanOutputConfig
@@ -883,9 +884,9 @@ open Verso.Code.External
 
 instance [bg : BlogGenre genre] : ExternalCode genre where
   leanInline hl cfg :=
-    Inline.other (bg.inline_eq ▸ InlineExt.highlightedCode { cfg with contextName := `verso } hl) #[]
+    .other (bg.inline_eq ▸ InlineExt.highlightedCode { cfg with contextName := `verso } hl) #[]
   leanBlock hl cfg :=
-    Block.other (bg.block_eq ▸ BlockExt.highlightedCode { cfg with contextName := `verso } hl) #[]
+    .other (bg.block_eq ▸ BlockExt.highlightedCode { cfg with contextName := `verso } hl) #[]
   leanOutputInline message plain (expandTraces := []) :=
     leanOutputInline message plain (expandTraces := expandTraces)
   leanOutputBlock message (summarize := false) (expandTraces : List Name := []) :=

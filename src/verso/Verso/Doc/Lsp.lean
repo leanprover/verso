@@ -7,8 +7,8 @@ Author: David Thrane Christiansen
 import Lean.Data.Lsp
 import Lean.Server
 
-import Verso.Doc.Elab
-import Verso.Syntax
+import Verso.Doc.Elab.Monad
+import Lean.DocString.Syntax
 import Verso.Hover
 import Verso.Doc.PointOfInterest
 import Verso.Doc.Name
@@ -18,6 +18,7 @@ namespace Verso.Lsp
 open Verso.Doc.Elab (DocListInfo DocRefInfo TOC)
 open Verso.Doc (PointOfInterest)
 open Verso.Hover
+open Lean.Doc.Syntax
 
 open Lean
 
@@ -511,11 +512,11 @@ partial def versoTokens (text : FileMap) (stx : Syntax) : Array SemanticTokenEnt
     mkTok text .function f ++
     versoTokens text (mkNullNode args) ++
     mkTok text .keyword e
-  | `(argument| $x:ident :=%$eq $v:arg_val) =>
+  | `(doc_arg| $x:ident :=%$eq $v:arg_val) =>
     mkTok text .parameter x ++
     mkTok text .keyword eq ++
     versoTokens text v
-  | `(argument| $v:arg_val) =>
+  | `(doc_arg| $v:arg_val) =>
     versoTokens text v
   -- In the next three cases, no token is returned. This is to allow Lean's to shine through, if
   -- there are any. It would be nice to add a priority mechanism to fall back to these defaults if

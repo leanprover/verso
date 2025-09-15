@@ -1,8 +1,0 @@
-Success! Final stack:
-  (Verso.Syntax.codeblock
-   "```"
-   []
-   "\n"
-   (str "\"(define x 4)\\nx\\n\"")
-   "```")
-All input consumed.

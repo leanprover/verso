@@ -9,7 +9,7 @@ import VersoBlog.Basic
 import VersoBlog.LiterateLeanPage.Options
 import MD4Lean
 
-
+open Verso Doc
 open Lean
 
 open SubVerso.Highlighting
@@ -339,7 +339,7 @@ partial def examplesFromMod [Monad m] [MonadError m]
       examples := examples.push (modname ++ x, range, code)
   return examples
 
-open Verso Doc Elab PartElabM in
+open Elab PartElabM in
 open Lean.Parser.Command in
 partial def docFromMod (project : System.FilePath) (mod : String)
     (config : LitPageConfig) (content : Array ModuleItem)

@@ -4,12 +4,13 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 
-import Verso.Syntax
+import Lean.DocString.Syntax
 import VersoManual
 
 open Verso Genre Manual
 
 open Verso.Genre.Manual.InlineLean
+
 
 #doc (Manual) "Building Documents" =>
 %%%

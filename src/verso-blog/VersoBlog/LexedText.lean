@@ -3,8 +3,8 @@ Copyright (c) 2023-2024 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-
-import Verso.Parser
+import Lean.Parser
+import Verso.Instances.Deriving
 
 namespace Verso.Genre.Blog
 
@@ -18,8 +18,6 @@ deriving Repr, Inhabited, BEq, DecidableEq, Lean.Quote
 namespace LexedText
 
 open Lean Parser
-
-open Verso.Parser (ignoreFn)
 
 -- In the absence of a proper regexp engine, abuse ParserFn here
 structure Highlighter where
@@ -62,4 +60,4 @@ def highlight (hl : Highlighter) (str : String) : IO LexedText := do
   pure ⟨hl.name, out⟩
 
 def token (kind : Name) (p : ParserFn) : ParserFn :=
-  nodeFn kind <| ignoreFn p
+  nodeFn kind <| Lean.Doc.Parser.ignoreFn p

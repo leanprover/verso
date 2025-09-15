@@ -1,4 +1,0 @@
-Failure @2 (⟨1, 2⟩): expected no space before
-Final stack:
-  (Verso.Syntax.flag_off "-" `other)
-Remaining: "other"

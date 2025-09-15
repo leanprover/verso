@@ -5,8 +5,8 @@ Author: David Thrane Christiansen
 -/
 
 import VersoBlog
-import Verso.Parser
 import Lean.Parser
+import Verso.Parser
 open Verso Genre Blog LexedText
 
 open Lean.Parser in

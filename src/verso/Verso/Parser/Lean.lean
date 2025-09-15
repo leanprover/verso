@@ -4,29 +4,15 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Leonardo de Moura, Sebastian Ullrich
 -/
 
-/- This file contains modified versions of the Lean token parsers that
- don't consume trailing whitespace. These changes need to be
- upstreamed if we figure out how to make whitespace configurable in
- the parser framework, or perhaps it could be refactored to have two
- layers. Please don't blame the authors.-/
+module
+public import Lean.Parser
 
-import Lean.Parser
+
+public section
 
 open Lean Parser Syntax
 
 namespace Verso.Parser
-
-def docMkNodeToken (n : SyntaxNodeKind) (startPos : String.Pos) : ParserFn := fun c s => Id.run do
-  if s.hasError then
-    return s
-  let stopPos   := s.pos
-  let leading   := c.mkEmptySubstringAt startPos
-  let val       := c.extract startPos stopPos
-  -- let s         := whitespace c s
-  let wsStopPos := s.pos
-  let trailing  := c.substring (startPos := stopPos) (stopPos := wsStopPos)
-  let info      := SourceInfo.original leading startPos trailing stopPos
-  s.pushSyntax (Syntax.mkLit n val info)
 
 
 partial def docStrLitFnAux (startPos : String.Pos) : ParserFn := fun c s =>
@@ -36,7 +22,7 @@ partial def docStrLitFnAux (startPos : String.Pos) : ParserFn := fun c s =>
     let curr := c.get' i h
     let s    := s.setPos (c.next' i h)
     if curr == '\"' then
-      docMkNodeToken strLitKind startPos c s
+      mkNodeToken strLitKind startPos false c s
     else if curr == '\\' then andthenFn quotedCharFn (docStrLitFnAux startPos) c s
     else docStrLitFnAux startPos c s
 
@@ -50,56 +36,6 @@ def docStrLitFn : ParserFn := fun c s =>
   else s.mkUnexpectedError s!"'{curr}'"
 
 
-def docBinNumberFn (startPos : String.Pos) : ParserFn := fun c s =>
-  let s := takeWhile1Fn (fun c => c == '0' || c == '1') "binary number" c s
-  mkNodeToken numLitKind startPos c s
-
-def docOctalNumberFn (startPos : String.Pos) : ParserFn := fun c s =>
-  let s := takeWhile1Fn (fun c => '0' ≤ c && c ≤ '7') "octal number" c s
-  mkNodeToken numLitKind startPos c s
-
-def docHexNumberFn (startPos : String.Pos) : ParserFn := fun c s =>
-  let s := takeWhile1Fn (fun c => ('0' ≤ c && c ≤ '9') || ('a' ≤ c && c ≤ 'f') || ('A' ≤ c && c ≤ 'F')) "hexadecimal number" c s
-  mkNodeToken numLitKind startPos c s
-
-def docDecimalNumberFn (startPos : String.Pos) (c : ParserContext) : ParserState → ParserState := fun s =>
-  let s     := takeWhileFn (fun c => c.isDigit) c s
-  let i     := s.pos
-  let curr  := c.get i
-  if curr == '.' || curr == 'e' || curr == 'E' then
-    let s := parseOptDot s
-    let s := parseOptExp s
-    docMkNodeToken scientificLitKind startPos c s
-  else
-    docMkNodeToken numLitKind startPos c s
-where
-  parseOptDot s :=
-    let i     := s.pos
-    let curr  := c.get i
-    if curr == '.' then
-      let i    := c.next i
-      let curr := c.get i
-      if curr.isDigit then
-        takeWhileFn (fun c => c.isDigit) c (s.setPos i)
-      else
-        s.setPos i
-    else
-      s
-
-  parseOptExp s :=
-    let i     := s.pos
-    let curr  := c.get i
-    if curr == 'e' || curr == 'E' then
-      let i    := c.next i
-      let i    := if c.get i == '-' || c.get i == '+' then c.next i else i
-      let curr := c.get i
-      if curr.isDigit then
-        takeWhileFn (fun c => c.isDigit) c (s.setPos i)
-      else
-        s.mkUnexpectedError "missing exponent digits in scientific literal"
-    else
-      s
-
 def docNumLitFn : ParserFn := fun c s =>
   let startPos := s.pos
   if c.atEnd startPos then s.mkEOIError ["numeral"]
@@ -110,15 +46,15 @@ def docNumLitFn : ParserFn := fun c s =>
       let i    := c.next' startPos h
       let curr := c.get i
       if curr == 'b' || curr == 'B' then
-        docBinNumberFn startPos c (s.next c i)
+        binNumberFn startPos false c (s.next c i)
       else if curr == 'o' || curr == 'O' then
-        docOctalNumberFn startPos c (s.next c i)
+        octalNumberFn startPos false c (s.next c i)
       else if curr == 'x' || curr == 'X' then
-        docHexNumberFn startPos c (s.next c i)
+        hexNumberFn startPos false c (s.next c i)
       else
-        docDecimalNumberFn startPos c (s.setPos i)
+        decimalNumberFn startPos false c (s.setPos i)
     else if curr.isDigit then
-      docDecimalNumberFn startPos c (s.next c startPos)
+      decimalNumberFn startPos false c (s.next c startPos)
     else
       s.mkError "numeral"
 

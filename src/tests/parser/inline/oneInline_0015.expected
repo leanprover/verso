@@ -1,8 +1,0 @@
-Failure @19 (⟨1, 19⟩): expected '(' or '['
-Final stack:
-  (Verso.Syntax.image
-   "!["
-   (str "\"alt text is good\"")
-   "]"
-   (Verso.Syntax.url <missing>))
-Remaining: "](logo.png)"
