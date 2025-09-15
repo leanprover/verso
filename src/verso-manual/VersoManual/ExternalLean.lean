@@ -173,8 +173,11 @@ inline_extension Inline.leanOutput (message : Highlighted.Message) (plain : Bool
 open Verso.Code.External
 
 instance : ExternalCode Manual where
-  leanInline hl cfg := Inline.other (Inline.lean hl cfg) #[]
-  leanBlock hl cfg := Block.other (Block.lean hl cfg) #[]
-  leanOutputInline message plain (expandTraces : List Name := []) := Inline.other (Inline.leanOutput message plain (expandTraces := expandTraces)) #[]
+  leanInline hl cfg :=
+    .other (Inline.lean hl cfg) #[]
+  leanBlock hl cfg :=
+    .other (Block.lean hl cfg) #[]
+  leanOutputInline message plain (expandTraces : List Name := []) :=
+    .other (Inline.leanOutput message plain (expandTraces := expandTraces)) #[]
   leanOutputBlock message (summarize : Bool := false) (expandTraces : List Name := []) :=
-    Block.other (Block.leanOutput message (summarize := summarize) (expandTraces := expandTraces)) #[]
+    .other (Block.leanOutput message (summarize := summarize) (expandTraces := expandTraces)) #[]

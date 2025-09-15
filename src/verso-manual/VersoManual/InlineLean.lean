@@ -23,8 +23,8 @@ import VersoManual.InlineLean.Signature
 import VersoManual.InlineLean.SyntaxError
 
 
-open Lean Elab
 open Verso ArgParse Doc Elab Genre.Manual Html Code Highlighted.WebAssets ExpectString
+open Lean Elab
 open SubVerso.Highlighting
 
 open Verso.SyntaxUtils (parserInputString runParserCategory' SyntaxError)
@@ -812,7 +812,7 @@ def name : RoleExpanderOf NameConfig
       `(Inline.other {Inline.name with data := ToJson.toJson $(quote hl)} #[Inline.code $(quote name.getString)])
     catch e =>
       logErrorAt identStx e.toMessageData
-      `(Inline.code $(quote name.getString))
+      ``(Inline.code $(quote name.getString))
   | _, more =>
     if h : more.size > 0 then
       throwErrorAt more[0] "Unexpected contents"
@@ -828,7 +828,7 @@ def module : RoleExpanderOf Unit
       | throwErrorAt arg "Expected code literal with the module's name"
     let exampleName := name.getString.toName
     let identStx := mkIdentFrom arg exampleName (canonical := true)
-    ``(Doc.Inline.code $(quote name.getString))
+    ``(Inline.code $(quote name.getString))
   | _, more =>
     if h : more.size > 0 then
       throwErrorAt more[0] "Expected code literal with the module's name"
