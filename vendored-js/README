@@ -1,7 +1,9 @@
-This directory contains "vendored" dependencies, redistributed according to their licenses (both
+This directory contains "vendored" dependencies, redistributed according to their licenses (all
 MIT).
 
 They are:
+
+elasticlunr - http://elasticlunr.com/
 
 tippy.js - https://github.com/atomiks/tippyjs
 
