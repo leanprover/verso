@@ -9,6 +9,7 @@ import Verso.Hover
 import Lean.Parser
 import Lean.Elab.GuardMsgs
 import Verso.Parser
+import Verso.SyntaxUtils
 
 open Lean Elab
 open Verso Doc
@@ -698,7 +699,7 @@ def ValDesc.inlinesString [MonadFileMap m] : ValDesc m (FileMap × TSyntaxArray 
       let ictxt := mkInputContext input s!"string literal on line {s.raw.getPos?.map ((s!" on line {text.toPosition · |>.line}")) |>.getD ""}"
       let env ← getEnv
       let pmctx : ParserModuleContext := {env, options := {}}
-      let p := Parser.textLine
+      let p := Verso.Parser.textLine -- TODO use upstreamed once public
       let s' := p.run ictxt pmctx (getTokenTable env) (mkParserState input)
       if s'.allErrors.isEmpty then
         if s'.stxStack.size = 1 then

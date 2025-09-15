@@ -23,12 +23,13 @@ import VersoManual.InlineLean.Signature
 import VersoManual.InlineLean.SyntaxError
 
 
-open Lean Elab
 open Verso ArgParse Doc Elab Genre.Manual Html Code Highlighted.WebAssets ExpectString
+open Lean Elab
 open SubVerso.Highlighting
 
 open Verso.SyntaxUtils (parserInputString runParserCategory' SyntaxError)
 
+open Lean.Doc.Syntax
 open Lean.Elab.Tactic.GuardMsgs
 
 namespace Verso.Genre.Manual.InlineLean
@@ -555,7 +556,7 @@ Elaborates the contained document in a new section.
 def leanSection : DirectiveExpander
   | args, contents => do
     let name? ← ArgParse.run ((some <$> .positional `name .string) <|> pure none) args
-    let arg ← `(argument| -«show»)
+    let arg ← `(doc_arg| -«show»)
     let code := name?.map (s!"section {·}") |>.getD "section"
     let start ← `(block|```lean $arg | $(quote code) ```)
     let code := name?.map (s!"end {·}") |>.getD "end"
@@ -811,7 +812,7 @@ def name : RoleExpanderOf NameConfig
       `(Inline.other {Inline.name with data := ToJson.toJson $(quote hl)} #[Inline.code $(quote name.getString)])
     catch e =>
       logErrorAt identStx e.toMessageData
-      `(Inline.code $(quote name.getString))
+      ``(Inline.code $(quote name.getString))
   | _, more =>
     if h : more.size > 0 then
       throwErrorAt more[0] "Unexpected contents"
@@ -827,7 +828,7 @@ def module : RoleExpanderOf Unit
       | throwErrorAt arg "Expected code literal with the module's name"
     let exampleName := name.getString.toName
     let identStx := mkIdentFrom arg exampleName (canonical := true)
-    ``(Doc.Inline.code $(quote name.getString))
+    ``(Inline.code $(quote name.getString))
   | _, more =>
     if h : more.size > 0 then
       throwErrorAt more[0] "Expected code literal with the module's name"

@@ -10,6 +10,7 @@ import Verso.Doc.ArgParse
 open Verso Doc Elab
 open Verso.Genre Manual
 open Verso.ArgParse
+open Lean.Doc.Syntax
 
 open Lean Elab
 
@@ -165,7 +166,7 @@ def table : DirectiveExpanderOf TableConfig
       | throwErrorAt oneBlock "Expected a single unordered list"
     let preRows ← items.mapM getLi
     let rows ← preRows.mapM fun blks => do
-      let #[oneInRow] := blks.filter (·.raw.isOfKind ``Verso.Syntax.ul)
+      let #[oneInRow] := blks.filter (·.raw.isOfKind ``Lean.Doc.Syntax.ul)
         | throwError "Each row should have exactly one list in it"
       let `(block|ul{ $cellItems*}) := oneInRow
         | throwErrorAt oneInRow "Each row should have exactly one list in it"

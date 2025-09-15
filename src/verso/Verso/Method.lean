@@ -3,10 +3,13 @@ Copyright (c) 2023 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-import Lean.Elab.Command
+module
+public import Lean.Elab.Command
 import Lean.Parser
 
 namespace Verso.Method
+
+public section
 
 open Lean Parser Elab Command
 
@@ -22,10 +25,6 @@ a unique resolution, say `Lib.More.A.B`, then it is equivalent to
 error.
 -/
 syntax (name := methodDecl) method : command
-
-def _root_.Lean.Syntax.args : Syntax → Array Syntax
-  | .node _ _ args => args
-  | _ => #[]
 
 @[command_elab methodDecl]
 def elabMethodDecl : CommandElab := fun stx => do
@@ -50,7 +49,7 @@ def elabMethodDecl : CommandElab := fun stx => do
       | .node info ``method args => pure (some (.node info ``Parser.Command.declaration args))
       | _ => pure none
     let decl' := open Parser.Command in
-      Syntax.node .none ``declaration #[decl[0][0], .node .none ``definition decl[0].args[1:7]]
+      Syntax.node .none ``declaration #[decl[0][0], .node .none ``definition decl[0].getArgs[1:7]]
     elabCommand decl'
 where
   inRoot : Name → Name
@@ -62,7 +61,6 @@ where
   replaceIdent (n : Name) : Syntax → CommandElabM Syntax
     | .ident info str _ preres => pure <| .ident info str n preres
     | other => throwErrorAt other "Not an identifier: {other}"
-
 
 namespace A.B.C
   structure D where

@@ -28,6 +28,7 @@ open Verso.Doc.Elab.PartElabM
 open Verso.Code
 open Verso.ArgParse
 open Verso.Code.Highlighted.WebAssets
+open Lean.Doc.Syntax
 
 open SubVerso.Highlighting
 
@@ -1092,7 +1093,7 @@ where
     let s := p'.fn.run ictx { env, options := opts } tokens (mkParserState input)
     if !s.allErrors.isEmpty then
       Except.error (toErrorMsg ictx s)
-    else if ictx.input.atEnd s.pos then
+    else if ictx.atEnd s.pos then
       Except.ok s.stxStack.back
     else
       Except.error (toErrorMsg ictx (s.mkError "end of input"))

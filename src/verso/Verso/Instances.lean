@@ -7,7 +7,6 @@ Author: David Thrane Christiansen
 import Lean.Parser.Term
 import Lean.Elab.Command
 import Lean.Elab.Tactic.Doc
-
 import Verso.Instances.Deriving
 
 open Lean

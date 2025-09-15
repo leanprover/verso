@@ -10,6 +10,7 @@ import SubVerso.Highlighting
 import Verso.Doc
 import Verso.Method
 import Verso.Output.Html
+import Verso.Instances.Deriving
 
 open SubVerso.Highlighting
 open Verso.Output Html

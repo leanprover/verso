@@ -85,7 +85,9 @@ private theorem mangle_wf (c : Char) : Slug.WF (mangle c) := by
     generalize h' : mangle.replacements = xs
     rw [h'] at h
     clear h'
-    fun_induction List.lookup <;> grind
+    fun_induction List.lookup <;> first | grind | simp
+
+
 
 @[simp, grind]
 private theorem mangle_mem_valid (c : Char) : c ∈ (mangle c').data → c ∈ Slug.validChars := by

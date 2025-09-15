@@ -7,15 +7,18 @@ import Lean.Parser
 
 import Verso.Parser.Lean
 import Verso.SyntaxUtils
-import Verso.Syntax
+import Lean.DocString.Syntax
+import Lean.DocString.Parser
 
 set_option guard_msgs.diff true
 
 namespace Verso.Parser
 
 open Verso.SyntaxUtils
-open Verso.Syntax
+open Lean.Doc.Syntax
 open Lean Parser
+
+export Lean.Doc.Parser (skipFn ignoreFn)
 
 scoped instance : Coe Char ParserFn where
   coe := chFn
@@ -43,7 +46,6 @@ def atLeastFn (n : Nat) (p : ParserFn) : ParserFn := fun c s =>
   let s := atLeastAux n p c s
   s.mkNode nullKind iniSz
 
-def skipFn : ParserFn := fun _ s => s
 
 def eatSpaces := takeWhileFn (· == ' ')
 
@@ -54,8 +56,8 @@ def repFn : Nat → ParserFn → ParserFn
 /-- Like `satisfyFn`, but no special handling of EOI -/
 partial def satisfyFn' (p : Char → Bool) (errorMsg : String := "unexpected character") : ParserFn := fun c s =>
   let i := s.pos
-  if h : c.input.atEnd i then s.mkUnexpectedError errorMsg
-  else if p (c.input.get' i h) then s.next' c.input i h
+  if h : c.atEnd i then s.mkUnexpectedError errorMsg
+  else if p (c.get' i h) then s.next' c i h
   else s.mkUnexpectedError errorMsg
 
 partial def atMostAux (n : Nat) (p : ParserFn) (msg : String) : ParserFn := fun c s => Id.run do
@@ -79,41 +81,35 @@ def atMostFn (n : Nat) (p : ParserFn) (msg : String) : ParserFn := fun c s =>
 /-- Like `satisfyFn`, but allows any escape sequence through -/
 partial def satisfyEscFn (p : Char → Bool) (errorMsg : String := "unexpected character") : ParserFn := fun c s =>
   let i := s.pos
-  if h : c.input.atEnd i then s.mkEOIError
-  else if c.input.get' i h == '\\' then
-    let s := s.next' c.input i h
+  if h : c.atEnd i then s.mkEOIError
+  else if c.get' i h == '\\' then
+    let s := s.next' c i h
     let i := s.pos
-    if h : c.input.atEnd i then s.mkEOIError
-    else s.next' c.input i h
-  else if p (c.input.get' i h) then s.next' c.input i h
+    if h : c.atEnd i then s.mkEOIError
+    else s.next' c i h
+  else if p (c.get' i h) then s.next' c i h
   else s.mkUnexpectedError errorMsg
 
 partial def takeUntilEscFn (p : Char → Bool) : ParserFn := fun c s =>
   let i := s.pos
-  if h : c.input.atEnd i then s
-  else if c.input.get' i h == '\\' then
-    let s := s.next' c.input i h
+  if h : c.atEnd i then s
+  else if c.get' i h == '\\' then
+    let s := s.next' c i h
     let i := s.pos
-    if h : c.input.atEnd i then s.mkEOIError
-    else takeUntilEscFn p c (s.next' c.input i h)
-  else if p (c.input.get' i h) then s
-  else takeUntilEscFn p c (s.next' c.input i h)
+    if h : c.atEnd i then s.mkEOIError
+    else takeUntilEscFn p c (s.next' c i h)
+  else if p (c.get' i h) then s
+  else takeUntilEscFn p c (s.next' c i h)
 
 partial def takeWhileEscFn (p : Char → Bool) : ParserFn := takeUntilEscFn (not ∘ p)
-
-def ignoreFn (p : ParserFn) : ParserFn := fun c s =>
-  let iniSz := s.stxStack.size
-  let s' := p c s
-  s'.shrinkStack iniSz
 
 def withInfoSyntaxFn (p : ParserFn) (infoP : SourceInfo → ParserFn) : ParserFn := fun c s =>
   let iniSz := s.stxStack.size
   let startPos := s.pos
   let s := p c s
-  let input    := c.input
   let stopPos  := s.pos
-  let leading  := mkEmptySubstringAt input startPos
-  let trailing := mkEmptySubstringAt input stopPos
+  let leading  := c.mkEmptySubstringAt startPos
+  let trailing := c.mkEmptySubstringAt stopPos
   let info     := SourceInfo.original leading startPos trailing stopPos
   infoP info c (s.shrinkStack iniSz)
 
@@ -132,12 +128,12 @@ def unescapeStr (str : String) : String := Id.run do
   out
 
 private def asStringAux (quoted : Bool) (startPos : String.Pos) (transform : String → String) : ParserFn := fun c s =>
-  let input    := c.input
+  let input    := c
   let stopPos  := s.pos
-  let leading  := mkEmptySubstringAt input startPos
+  let leading  := c.mkEmptySubstringAt startPos
   let val      := input.extract startPos stopPos
   let val      := transform val
-  let trailing := mkEmptySubstringAt input stopPos
+  let trailing := c.mkEmptySubstringAt stopPos
   let atom     :=
     mkAtom (SourceInfo.original leading startPos trailing stopPos) <|
       if quoted then val.quote else val
@@ -193,7 +189,7 @@ def onlyBlockOpeners : ParserFn := fun c s =>
   let position := c.fileMap.toPosition s.pos
   let lineStart := c.fileMap.lineStart position.line
   let ok : Bool := Id.run do
-    let mut iter := {c.input.iter with i := lineStart}
+    let mut iter := {c.inputString.iter with i := lineStart}
     while iter.i < s.pos && iter.hasNext do
       if iter.curr.isDigit then
         while iter.curr.isDigit && iter.i < s.pos && iter.hasNext do
@@ -211,7 +207,6 @@ def onlyBlockOpeners : ParserFn := fun c s =>
   if ok then s
   else s.mkErrorAt s!"beginning of line or sequence of nestable block openers at {position}" s.pos
 
-def nl := satisfyFn (· == '\n') "newline"
 
 def fakeAtom (str : String) (info : SourceInfo := SourceInfo.none) : ParserFn := fun _c s =>
   let atom := mkAtom info str
@@ -273,8 +268,6 @@ def orderedListIndicator (type : OrderedListType) : ParserFn :=
     | .numDot => chFn '.'
     | .parenAfter => chFn ')'
 
-def blankLine : ParserFn := nodeFn `blankLine <| atomicFn <| asStringFn <| takeWhileFn (· == ' ') >> nl
-
 def bullet := atomicFn (go UnorderedListType.all)
 where
   go
@@ -291,40 +284,40 @@ where
 
 def inlineTextChar : ParserFn := fun c s =>
   let i := s.pos
-  if h : c.input.atEnd i then s.mkEOIError
+  if h : c.atEnd i then s.mkEOIError
   else
-    let curr := c.input.get' i h
+    let curr := c.get' i h
     match curr with
     | '\\' =>
-      let s := s.next' c.input i h
+      let s := s.next' c i h
       let i := s.pos
-      if h : c.input.atEnd i then s.mkEOIError
-      else s.next' c.input i h
+      if h : c.atEnd i then s.mkEOIError
+      else s.next' c i h
     | '*' | '_' | '\n' | '[' | ']' | '{' | '}' | '`' => s.mkUnexpectedErrorAt s!"'{curr}'" i
     | '!' =>
-      let s := s.next' c.input i h
+      let s := s.next' c i h
       let i' := s.pos
-      if h : c.input.atEnd i' then s
-      else if c.input.get' i' h == '['
+      if h : c.atEnd i' then s
+      else if c.get' i' h == '['
       then s.mkUnexpectedErrorAt "![" i
       else s
     | '$' =>
-      let s := s.next' c.input i h
+      let s := s.next' c i h
       let i' := s.pos
-      if h : c.input.atEnd i' then
+      if h : c.atEnd i' then
         s
-      else if c.input.get' i' h == '`' then
+      else if c.get' i' h == '`' then
         s.mkUnexpectedErrorAt "$`" i
-      else if c.input.get' i' h == '$' then
-        let s := s.next' c.input i' h
+      else if c.get' i' h == '$' then
+        let s := s.next' c i' h
         let i' := s.pos
-        if h : c.input.atEnd i' then
+        if h : c.atEnd i' then
           s
-        else if c.input.get' i' h == '`' then
+        else if c.get' i' h == '`' then
           s.mkUnexpectedErrorAt "$$`" i
         else s
       else s
-    | _ => s.next' c.input i h
+    | _ => s.next' c i h
 
 /-- Return some inline text up to the next inline opener or the end of
 the line, whichever is first. Always consumes at least one
@@ -363,15 +356,6 @@ def skipToSpace : ParserFn :=
 def skipRestOfLine : ParserFn :=
     skipToNewline >> (eoiFn <|> nl)
 
-def skipBlock : ParserFn :=
-  skipToNewline >> manyFn nonEmptyLine >> takeWhileFn (· == '\n')
-where
-  nonEmptyLine : ParserFn :=
-    atomicFn <|
-      chFn '\n' >>
-      takeWhileFn (fun c => c.isWhitespace && c != '\n') >>
-      satisfyFn (!·.isWhitespace) "non-whitespace" >> skipToNewline
-
 -- TODO: upstream
 def recoverFn (p : ParserFn) (recover : RecoveryContext → ParserFn) : ParserFn := fun c s =>
   let iniPos := s.pos
@@ -390,12 +374,6 @@ def recoverFn (p : ParserFn) (recover : RecoveryContext → ParserFn) : ParserFn
 def recoverBlock (p : ParserFn) (final : ParserFn := skipFn) : ParserFn :=
   recoverFn p fun _ =>
     ignoreFn skipBlock >> final
-
-def recoverBlockWith (stxs : Array Syntax) (p : ParserFn) : ParserFn :=
-  recoverFn p fun rctx =>
-    ignoreFn skipBlock >>
-    show ParserFn from
-      fun _ s => stxs.foldl (init := s.shrinkStack rctx.initialSize) (·.pushSyntax ·)
 
 def recoverLine (p : ParserFn) : ParserFn :=
   recoverFn p fun _ =>
@@ -449,17 +427,17 @@ def arg : ParserFn :=
     withCurrentStackSize fun iniSz =>
       flag <|> withParens iniSz <|> potentiallyNamed iniSz <|> (val >> mkAnon iniSz)
 where
-  mkNamed (iniSz : Nat) : ParserFn := fun _ s => s.mkNode ``Verso.Syntax.named iniSz
-  mkNamedNoParen (iniSz : Nat) : ParserFn := fun _ s => s.mkNode ``Verso.Syntax.named_no_paren iniSz
-  mkAnon (iniSz : Nat) : ParserFn := fun _ s => s.mkNode ``Verso.Syntax.anon iniSz
-  mkIdent (iniSz : Nat) : ParserFn := fun _ s => s.mkNode ``Verso.Syntax.arg_ident iniSz
+  mkNamed (iniSz : Nat) : ParserFn := fun _ s => s.mkNode ``Lean.Doc.Syntax.named iniSz
+  mkNamedNoParen (iniSz : Nat) : ParserFn := fun _ s => s.mkNode ``Lean.Doc.Syntax.named_no_paren iniSz
+  mkAnon (iniSz : Nat) : ParserFn := fun _ s => s.mkNode ``Lean.Doc.Syntax.anon iniSz
+  mkIdent (iniSz : Nat) : ParserFn := fun _ s => s.mkNode ``Lean.Doc.Syntax.arg_ident iniSz
   flag : ParserFn :=
-    nodeFn ``Verso.Syntax.flag_on (asStringFn (strFn  "+") >> recoverNonSpace noSpace >> recoverWs (docIdentFn (reportAs := "flag name"))) <|>
-    nodeFn ``Verso.Syntax.flag_off (asStringFn (strFn "-") >> recoverNonSpace noSpace >> recoverWs (docIdentFn (reportAs := "flag name")))
+    nodeFn ``Lean.Doc.Syntax.flag_on (asStringFn (strFn  "+") >> recoverNonSpace noSpace >> recoverWs (docIdentFn (reportAs := "flag name"))) <|>
+    nodeFn ``Lean.Doc.Syntax.flag_off (asStringFn (strFn "-") >> recoverNonSpace noSpace >> recoverWs (docIdentFn (reportAs := "flag name")))
   noSpace : ParserFn := fun c s =>
-    if h : c.input.atEnd s.pos then s
+    if h : c.atEnd s.pos then s
     else
-      let ch := c.input.get' s.pos h
+      let ch := c.get' s.pos h
       if ch == ' ' then
         s.mkError "no space before"
       else s
@@ -544,7 +522,7 @@ mutual
     noSpaceBefore : ParserFn := fun c s =>
       if s.pos == 0 then s
       else
-        let prior := c.input.get (c.input.prev s.pos)
+        let prior := c.get (c.prev s.pos)
         if prior.isWhitespace then
           s.mkError s!"'{char}' without preceding space"
         else s
@@ -599,16 +577,16 @@ mutual
 
     takeContentsFn (maxCount : Nat) : ParserFn := fun c s =>
       let i := s.pos
-      if h : c.input.atEnd i then s.mkEOIError
+      if h : c.atEnd i then s.mkEOIError
       else
-        let ch := c.input.get' i h
-        let s := s.next' c.input i h
+        let ch := c.get' i h
+        let s := s.next' c i h
         let i := s.pos
         if ch == '\\' then
-          if h : c.input.atEnd i then s.mkEOIError
+          if h : c.atEnd i then s.mkEOIError
           else
-            let ch := c.input.get' i h
-            let s := s.next' c.input i h
+            let ch := c.get' i h
+            let s := s.next' c i h
             if ch ∈ ['`', '\\'] then takeContentsFn maxCount c s
             else
               s.mkError "expected 'n', '\\', or '`'"
@@ -648,11 +626,11 @@ mutual
     notUrlEnd := satisfyEscFn (· ∉ ")\n".toList) "not ')' or newline" >> takeUntilEscFn (· ∈ ")\n".toList)
     notRefEnd := satisfyEscFn (· ∉ "]\n".toList) "not ']' or newline" >> takeUntilEscFn (· ∈ "]\n".toList)
     ref : ParserFn :=
-      nodeFn ``Verso.Syntax.ref <|
+      nodeFn ``Lean.Doc.Syntax.ref <|
         (atomicFn <| strFn "[") >>
         recoverEol (nodeFn strLitKind (asStringFn notRefEnd (quoted := true)) >> strFn "]")
     url : ParserFn :=
-      nodeFn ``Verso.Syntax.url <|
+      nodeFn ``Lean.Doc.Syntax.url <|
         (atomicFn <| strFn "(") >>
         recoverEol (nodeFn strLitKind (asStringFn notUrlEnd (quoted := true)) >> strFn ")")
 
@@ -686,8 +664,6 @@ mutual
     text <|> linebreak ctxt <|> delimitedInline ctxt
 end
 
-def textLine (allowNewlines := true) : ParserFn := many1Fn (inline { allowNewlines })
-
 open Lean.Parser.Term in
 def metadataBlock : ParserFn :=
   nodeFn ``metadata_block <|
@@ -719,24 +695,24 @@ def lookaheadOrderedListIndicator (ctxt : BlockCtxt) (p : OrderedListType → In
     let numPos := s.pos
     let s := ignoreFn (takeWhile1Fn (·.isDigit) "digits") c s
     if s.hasError then {s with pos := iniPos}.shrinkStack iniSz else
-    let digits := c.input.extract numPos s.pos
+    let digits := c.extract numPos s.pos
     match digits.toNat? with
     | none => {s.mkError s!"digits, got '{digits}'" with pos := iniPos}
     | some n =>
       let i := s.pos
-      if h : c.input.atEnd i then {s.mkEOIError with pos := iniPos}
+      if h : c.atEnd i then {s.mkEOIError with pos := iniPos}
       else
-        let (s, next, type) := match c.input.get' i h with
-          | '.' => (s.next' c.input i h, (chFn ' ' <|> chFn '\n'), OrderedListType.numDot)
-          | ')' => (s.next' c.input i h, (chFn ' ' <|> chFn '\n'), OrderedListType.parenAfter)
+        let (s, next, type) := match c.get' i h with
+          | '.' => (s.next' c i h, (chFn ' ' <|> chFn '\n'), OrderedListType.numDot)
+          | ')' => (s.next' c i h, (chFn ' ' <|> chFn '\n'), OrderedListType.parenAfter)
           | other => (s.setError {unexpected := s!"unexpected '{other}'", expected := ["'.'", "')'"]}, skipFn, .numDot)
         if s.hasError then {s with pos := iniPos}
         else
           let s := next c s
           if s.hasError then {s with pos := iniPos}
           else
-            let leading := mkEmptySubstringAt c.input numPos
-            let trailing := mkEmptySubstringAt c.input i
+            let leading := c.mkEmptySubstringAt numPos
+            let trailing := c.mkEmptySubstringAt i
             let num := Syntax.mkNumLit digits (info := .original leading numPos trailing i)
             p type n c (s.shrinkStack iniSz |>.setPos numPos |>.pushSyntax num)
 
@@ -746,11 +722,11 @@ def lookaheadUnorderedListIndicator (ctxt : BlockCtxt) (p : UnorderedListType �
   let s := (onlyBlockOpeners >> takeWhileFn (· == ' ') >> guardMinColumn ctxt.minIndent) c s
   let bulletPos := s.pos
   if s.hasError then s.setPos iniPos |>.shrinkStack iniSz
-  else if h : c.input.atEnd s.pos then s.mkEOIError.setPos iniPos |>.shrinkStack iniSz
-  else let (s, type) : (_ × UnorderedListType) := match c.input.get' s.pos h with
-    | '*' => (s.next' c.input s.pos h, .asterisk)
-    | '-' => (s.next' c.input s.pos h, .dash)
-    | '+' => (s.next' c.input s.pos h, .plus)
+  else if h : c.atEnd s.pos then s.mkEOIError.setPos iniPos |>.shrinkStack iniSz
+  else let (s, type) : (_ × UnorderedListType) := match c.get' s.pos h with
+    | '*' => (s.next' c s.pos h, .asterisk)
+    | '-' => (s.next' c s.pos h, .dash)
+    | '+' => (s.next' c s.pos h, .plus)
     | other => (s.setError {expected := ["*", "-", "+"], unexpected := s!"'{other}'"}, .plus)
   if s.hasError then s.setPos iniPos
   else
@@ -963,7 +939,7 @@ mutual
       let s := (intro >> eatSpaces >> ignoreFn (satisfyFn (· == '\n') "newline" <|> eoiFn)) c s
       if s.hasError then restorePosOnErr s
       else
-        s.mkNode ``Verso.Syntax.command iniSz
+        s.mkNode ``Lean.Doc.Syntax.command iniSz
   where
     eatSpaces := takeWhileFn (· == ' ')
     intro := guardMinColumn (ctxt.minIndent) >> atomicFn (chFn '{') >> nameAndArgs >> nameArgWhitespace none >> chFn '}'

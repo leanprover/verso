@@ -3,13 +3,17 @@ Copyright (c) 2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
+
 import Lean.Linter.Basic
 import Lean.Meta.Hint
 import Verso.Parser
+import Lean.Elab.Command
+import Lean.Data.Options
 
 set_option linter.missingDocs true
 
 open Lean Linter Elab Command
+open Lean.Doc.Syntax
 
 /-- Generates curly-quote suggestions -/
 register_option linter.typography.quotes : Bool := {

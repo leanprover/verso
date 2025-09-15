@@ -12,15 +12,14 @@ import Verso.Doc.Elab.Monad
 import Verso.Doc.Lsp
 import Verso.Hooks
 import Verso.Instances
-import Verso.Parser
 import Verso.SyntaxUtils
+import Verso.Parser
 
 namespace Verso.Doc.Concrete
 
-open Lean Parser
+open Lean Doc
 
 open Verso Parser SyntaxUtils Doc Elab
-
 
 
 def document : Parser where
@@ -31,10 +30,10 @@ def document : Parser where
 
 /-- Advance the parser to EOF on failure so Lean doesn't try to parse further commands -/
 def completeDocument : Parser where
-  fn := (Verso.Parser.recoverFn Verso.Parser.document fun _ => skipFn) >> untilEoi
+  fn := (Lean.Parser.recoverFn Verso.Parser.document fun _ => skipFn) >> untilEoi
 where
   untilEoi : ParserFn := fun c s =>
-    s.setPos c.input.endPos
+    s.setPos c.endPos
 
 @[combinator_parenthesizer completeDocument] def completeDocument.parenthesizer := PrettyPrinter.Parenthesizer.visitToken
 @[combinator_formatter completeDocument] def completeDocument.formatter := PrettyPrinter.Formatter.visitAtom Name.anonymous
@@ -71,8 +70,7 @@ elab "#docs" "(" genre:term ")" n:ident title:str ":=" ":::::::" text:document "
       | none => panic! "No final token!"
     | _ => panic! "Nothing"
   let endPos := endTok.getPos!
-  let .node _ _ blocks := text.raw
-    | dbg_trace "nope {ppSyntax text.raw}" throwUnsupportedSyntax
+  let blocks := text.raw.getArgs
 
   let titleParts ← stringToInlines title
   let titleString := inlinesToString (← getEnv) titleParts
@@ -97,8 +95,7 @@ elab "#docs" "(" genre:term ")" n:ident title:str ":=" ":::::::" text:document "
 elab "#doc" "(" genre:term ")" title:str "=>" text:completeDocument eoi : term => open Lean Elab Term PartElabM DocElabM in do
   findGenreTm genre
   let endPos := (← getFileMap).source.endPos
-  let .node _ _ blocks := text.raw
-    | dbg_trace "nope {ppSyntax text.raw}" throwUnsupportedSyntax
+  let blocks := text.raw.getArgs
   let titleParts ← stringToInlines title
   let titleString := inlinesToString (← getEnv) titleParts
   let g ← elabTerm genre (some (.const ``Doc.Genre []))
@@ -150,9 +147,9 @@ instance : MonadStateOf DocElabSnapshotState PartElabM where
   -- this instance.
   modifyGet f := do
     let s ← getter
-    let (val, s') := f s
-    setter s'
-    pure val
+    let v := f s
+    setter v.2
+    pure v.1
 where
   getter := do pure ⟨← getThe _, ← getThe _,  ← saveState (m := TermElabM)⟩
   setter
@@ -182,7 +179,7 @@ def versoBlockCommandFn (genre : Term) (title : String) : ParserFn := fun c s =>
     let s := s.pushSyntax genre
     let s := ignoreFn (manyFn blankLine) c s
     let i := s.pos
-    if c.input.atEnd i then
+    if c.atEnd i then
       let s := s.pushSyntax (Syntax.mkStrLit title)
       s.mkNode ``addLastBlockCmd iniSz
     else
@@ -221,13 +218,14 @@ syntax (name := replaceDoc) "#doc" "(" term ")" str "=>" : command
 elab_rules : command
   | `(command|#doc ( $genre:term ) $title:str =>%$tok) => open Lean Parser Elab Command in do
   findGenreCmd genre
+  elabCommand <| ← `(open scoped Lean.Doc.Syntax)
   let titleParts ← stringToInlines title
   let titleString := inlinesToString (← getEnv) titleParts
   let initState : PartElabM.State := .init (.node .none nullKind titleParts)
 
   let (titleInlines, docState) ← runTermElabM <| fun _ => do
     let g ← Term.elabTerm genre (some (.const ``Doc.Genre [])) >>= instantiateMVars
-    titleParts.mapM (elabInline ⟨·⟩) |>.run genre g {} initState
+    titleParts.mapM (Verso.Doc.Elab.elabInline ⟨·⟩) |>.run genre g {} initState
   modifyEnv (docStateExt.setState · docState)
 
   let initState := { initState with
@@ -284,8 +282,7 @@ def elabVersoLastBlock : CommandElab
 elab (name := completeDoc) "#old_doc" "(" genre:term ")" title:str "=>" text:completeDocument eoi : command => open Lean Elab Term Command PartElabM DocElabM in do
   findGenreCmd genre
   let endPos := (← getFileMap).source.endPos
-  let .node _ _ blocks := text.raw
-    | dbg_trace "nope {ppSyntax text.raw}" throwUnsupportedSyntax
+  let blocks := text.raw.getArgs
   let titleParts ← stringToInlines title
   let titleString := inlinesToString (← getEnv) titleParts
   let g ← runTermElabM fun _ => Lean.Elab.Term.elabTerm genre (some (.const ``Doc.Genre []))
