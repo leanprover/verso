@@ -276,7 +276,9 @@ end
 
 private def withNl (s : String) : String := if s.endsWith "\n" then s else s.push '\n'
 
-open Lean Verso Doc Elab in
+
+open Verso Doc Elab in
+open Lean Elab in
 open Verso.Parser in
 open Lean.Doc.Syntax in
 @[directive]
