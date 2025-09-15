@@ -5,3 +5,4 @@ Author: David Thrane Christiansen
 -/
 import Tests.Golden
 import Tests.Parser
+import Tests.ManualTeX

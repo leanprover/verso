@@ -299,10 +299,8 @@ def traverse (logError : String → IO Unit) (text : Part Manual) (config : Conf
       text := text'
   return (text, state)
 
-
-
 open IO.FS in
-def emitTeX (logError : String → IO Unit) (config : Config) (text : Part Manual) : ReaderT ExtensionImpls IO Unit := do
+def makeTeX (logError : String → IO Unit) (config : Config) (text : Part Manual) : ReaderT ExtensionImpls IO String := do
   let (text, state) ← traverse logError text config
   let opts : TeX.Options Manual (ReaderT ExtensionImpls IO) := {
     headerLevels := #["chapter", "section", "subsection", "subsubsection", "paragraph"],
@@ -314,8 +312,6 @@ def emitTeX (logError : String → IO Unit) (config : Config) (text : Part Manua
   let ctxt := {logError}
   let frontMatter ← text.content.mapM (·.toTeX (opts, ctxt, state))
   let chapters ← text.subParts.mapM (·.toTeX (opts, ctxt, state))
-  let dir := config.destination.join "tex"
-  ensureDir dir
   let mut packages : Std.HashSet String := {}
   let mut preambleItems : Std.HashSet String := {}
   for (_, d) in (← read).blockDescrs do
@@ -328,17 +324,28 @@ def emitTeX (logError : String → IO Unit) (config : Config) (text : Part Manua
       | continue
     packages := packages.insertMany d.usePackages
     preambleItems := preambleItems.insertMany d.preamble
+  let putStrLn (line : String) : StateT String Id Unit := do
+    modify (fun s => s ++ line ++ "\n")
+  let tex : StateT String Id Unit := do
+    putStrLn (preamble text.titleString authors date packages.toList preambleItems.toList)
+    if frontMatter.size > 0 then
+      putStrLn "\\chapter*{Introduction}"
+    for b in frontMatter do
+      putStrLn b.asString
+    for c in chapters do
+      putStrLn c.asString
+    putStrLn postamble
+  pure (StateT.run tex "").2
+
+open IO.FS in
+def emitTeX (logError : String → IO Unit) (config : Config) (text : Part Manual) : ReaderT ExtensionImpls IO Unit := do
+  let dir := config.destination.join "tex"
+  ensureDir dir
+  let tex ← makeTeX logError config text
   withFile (dir.join "main.tex") .write fun h => do
     if config.verbose then
       IO.println s!"Saving {dir.join "main.tex"}"
-    h.putStrLn (preamble text.titleString authors date packages.toList preambleItems.toList)
-    if frontMatter.size > 0 then
-      h.putStrLn "\\chapter*{Introduction}"
-    for b in frontMatter do
-      h.putStrLn b.asString
-    for c in chapters do
-      h.putStrLn c.asString
-    h.putStrLn postamble
+    h.putStr tex
 
 open Verso.Output (Html)
 
