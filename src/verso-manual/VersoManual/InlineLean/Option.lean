@@ -12,6 +12,7 @@ open Verso Genre Manual ArgParse Doc Elab
 open Verso Output Html
 open Verso Code Highlighted WebAssets
 open Lean
+open Lean.Doc.Syntax
 
 namespace Verso.Genre.Manual.InlineLean
 

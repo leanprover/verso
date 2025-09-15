@@ -7,15 +7,18 @@ import Lean.Parser
 
 import Verso.Parser.Lean
 import Verso.SyntaxUtils
-import Verso.Syntax
+import Lean.DocString.Syntax
+import Lean.DocString.Parser
 
 set_option guard_msgs.diff true
 
 namespace Verso.Parser
 
 open Verso.SyntaxUtils
-open Verso.Syntax
+open Lean.Doc.Syntax
 open Lean Parser
+
+export Lean.Doc.Parser (skipFn ignoreFn)
 
 scoped instance : Coe Char ParserFn where
   coe := chFn
@@ -43,7 +46,6 @@ def atLeastFn (n : Nat) (p : ParserFn) : ParserFn := fun c s =>
   let s := atLeastAux n p c s
   s.mkNode nullKind iniSz
 
-def skipFn : ParserFn := fun _ s => s
 
 def eatSpaces := takeWhileFn (· == ' ')
 
@@ -100,11 +102,6 @@ partial def takeUntilEscFn (p : Char → Bool) : ParserFn := fun c s =>
   else takeUntilEscFn p c (s.next' c i h)
 
 partial def takeWhileEscFn (p : Char → Bool) : ParserFn := takeUntilEscFn (not ∘ p)
-
-def ignoreFn (p : ParserFn) : ParserFn := fun c s =>
-  let iniSz := s.stxStack.size
-  let s' := p c s
-  s'.shrinkStack iniSz
 
 def withInfoSyntaxFn (p : ParserFn) (infoP : SourceInfo → ParserFn) : ParserFn := fun c s =>
   let iniSz := s.stxStack.size
@@ -210,7 +207,6 @@ def onlyBlockOpeners : ParserFn := fun c s =>
   if ok then s
   else s.mkErrorAt s!"beginning of line or sequence of nestable block openers at {position}" s.pos
 
-def nl := satisfyFn (· == '\n') "newline"
 
 def fakeAtom (str : String) (info : SourceInfo := SourceInfo.none) : ParserFn := fun _c s =>
   let atom := mkAtom info str
@@ -271,8 +267,6 @@ def orderedListIndicator (type : OrderedListType) : ParserFn :=
     match type with
     | .numDot => chFn '.'
     | .parenAfter => chFn ')'
-
-def blankLine : ParserFn := nodeFn `blankLine <| atomicFn <| asStringFn <| takeWhileFn (· == ' ') >> nl
 
 def bullet := atomicFn (go UnorderedListType.all)
 where
@@ -362,15 +356,6 @@ def skipToSpace : ParserFn :=
 def skipRestOfLine : ParserFn :=
     skipToNewline >> (eoiFn <|> nl)
 
-def skipBlock : ParserFn :=
-  skipToNewline >> manyFn nonEmptyLine >> takeWhileFn (· == '\n')
-where
-  nonEmptyLine : ParserFn :=
-    atomicFn <|
-      chFn '\n' >>
-      takeWhileFn (fun c => c.isWhitespace && c != '\n') >>
-      satisfyFn (!·.isWhitespace) "non-whitespace" >> skipToNewline
-
 -- TODO: upstream
 def recoverFn (p : ParserFn) (recover : RecoveryContext → ParserFn) : ParserFn := fun c s =>
   let iniPos := s.pos
@@ -389,12 +374,6 @@ def recoverFn (p : ParserFn) (recover : RecoveryContext → ParserFn) : ParserFn
 def recoverBlock (p : ParserFn) (final : ParserFn := skipFn) : ParserFn :=
   recoverFn p fun _ =>
     ignoreFn skipBlock >> final
-
-def recoverBlockWith (stxs : Array Syntax) (p : ParserFn) : ParserFn :=
-  recoverFn p fun rctx =>
-    ignoreFn skipBlock >>
-    show ParserFn from
-      fun _ s => stxs.foldl (init := s.shrinkStack rctx.initialSize) (·.pushSyntax ·)
 
 def recoverLine (p : ParserFn) : ParserFn :=
   recoverFn p fun _ =>
@@ -448,13 +427,13 @@ def arg : ParserFn :=
     withCurrentStackSize fun iniSz =>
       flag <|> withParens iniSz <|> potentiallyNamed iniSz <|> (val >> mkAnon iniSz)
 where
-  mkNamed (iniSz : Nat) : ParserFn := fun _ s => s.mkNode ``Verso.Syntax.named iniSz
-  mkNamedNoParen (iniSz : Nat) : ParserFn := fun _ s => s.mkNode ``Verso.Syntax.named_no_paren iniSz
-  mkAnon (iniSz : Nat) : ParserFn := fun _ s => s.mkNode ``Verso.Syntax.anon iniSz
-  mkIdent (iniSz : Nat) : ParserFn := fun _ s => s.mkNode ``Verso.Syntax.arg_ident iniSz
+  mkNamed (iniSz : Nat) : ParserFn := fun _ s => s.mkNode ``Lean.Doc.Syntax.named iniSz
+  mkNamedNoParen (iniSz : Nat) : ParserFn := fun _ s => s.mkNode ``Lean.Doc.Syntax.named_no_paren iniSz
+  mkAnon (iniSz : Nat) : ParserFn := fun _ s => s.mkNode ``Lean.Doc.Syntax.anon iniSz
+  mkIdent (iniSz : Nat) : ParserFn := fun _ s => s.mkNode ``Lean.Doc.Syntax.arg_ident iniSz
   flag : ParserFn :=
-    nodeFn ``Verso.Syntax.flag_on (asStringFn (strFn  "+") >> recoverNonSpace noSpace >> recoverWs (docIdentFn (reportAs := "flag name"))) <|>
-    nodeFn ``Verso.Syntax.flag_off (asStringFn (strFn "-") >> recoverNonSpace noSpace >> recoverWs (docIdentFn (reportAs := "flag name")))
+    nodeFn ``Lean.Doc.Syntax.flag_on (asStringFn (strFn  "+") >> recoverNonSpace noSpace >> recoverWs (docIdentFn (reportAs := "flag name"))) <|>
+    nodeFn ``Lean.Doc.Syntax.flag_off (asStringFn (strFn "-") >> recoverNonSpace noSpace >> recoverWs (docIdentFn (reportAs := "flag name")))
   noSpace : ParserFn := fun c s =>
     if h : c.atEnd s.pos then s
     else
@@ -647,11 +626,11 @@ mutual
     notUrlEnd := satisfyEscFn (· ∉ ")\n".toList) "not ')' or newline" >> takeUntilEscFn (· ∈ ")\n".toList)
     notRefEnd := satisfyEscFn (· ∉ "]\n".toList) "not ']' or newline" >> takeUntilEscFn (· ∈ "]\n".toList)
     ref : ParserFn :=
-      nodeFn ``Verso.Syntax.ref <|
+      nodeFn ``Lean.Doc.Syntax.ref <|
         (atomicFn <| strFn "[") >>
         recoverEol (nodeFn strLitKind (asStringFn notRefEnd (quoted := true)) >> strFn "]")
     url : ParserFn :=
-      nodeFn ``Verso.Syntax.url <|
+      nodeFn ``Lean.Doc.Syntax.url <|
         (atomicFn <| strFn "(") >>
         recoverEol (nodeFn strLitKind (asStringFn notUrlEnd (quoted := true)) >> strFn ")")
 
@@ -684,8 +663,6 @@ mutual
   partial def inline (ctxt : InlineCtxt) : ParserFn :=
     text <|> linebreak ctxt <|> delimitedInline ctxt
 end
-
-def textLine (allowNewlines := true) : ParserFn := many1Fn (inline { allowNewlines })
 
 open Lean.Parser.Term in
 def metadataBlock : ParserFn :=
@@ -962,7 +939,7 @@ mutual
       let s := (intro >> eatSpaces >> ignoreFn (satisfyFn (· == '\n') "newline" <|> eoiFn)) c s
       if s.hasError then restorePosOnErr s
       else
-        s.mkNode ``Verso.Syntax.command iniSz
+        s.mkNode ``Lean.Doc.Syntax.command iniSz
   where
     eatSpaces := takeWhileFn (· == ' ')
     intro := guardMinColumn (ctxt.minIndent) >> atomicFn (chFn '{') >> nameAndArgs >> nameArgWhitespace none >> chFn '}'

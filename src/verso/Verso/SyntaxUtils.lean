@@ -7,10 +7,62 @@ Author: David Thrane Christiansen
 import Verso.Instances
 import Verso.Method
 
+namespace Verso.Parser
+-- TODO: make public upstream and delete these
+
+open Lean Doc Parser
+
+
+def textLine (allowNewlines := true) : ParserFn := many1Fn (inline { allowNewlines })
+
+def nl := satisfyFn (· == '\n') "newline"
+
+/--
+Parses a line that contains only spaces.
+-/
+def blankLine : ParserFn :=
+  nodeFn `blankLine <| atomicFn <| asStringFn <| takeWhileFn (· == ' ') >> nl
+
+private def skipToNewline : ParserFn :=
+    takeUntilFn (· == '\n')
+
+private def skipRestOfLine : ParserFn :=
+    skipToNewline >> (eoiFn <|> nl)
+
+/--
+Consumes the rest of the current line and any subsequent non-empty lines in order to reach the
+end of the block.
+-/
+public def skipBlock : ParserFn :=
+  skipToNewline >> manyFn nonEmptyLine >> takeWhileFn (· == '\n')
+where
+  nonEmptyLine : ParserFn :=
+    atomicFn <|
+      chFn '\n' >>
+      takeWhileFn (fun c => c.isWhitespace && c != '\n') >>
+      satisfyFn (!·.isWhitespace) "non-whitespace" >> skipToNewline
+
+
+/--
+Recovers from a parse error by skipping input until one or more complete blank lines has been
+skipped.
+
+The provided `stxs` are pushed to the stack upon recovery.
+-/
+public def recoverBlockWith (stxs : Array Syntax) (p : ParserFn) : ParserFn :=
+  recoverFn p fun rctx =>
+    ignoreFn skipBlock >>
+    show ParserFn from
+      fun _ s => stxs.foldl (init := s.shrinkStack rctx.initialSize) (·.pushSyntax ·)
+
+
+end Verso.Parser
+
 namespace Verso.SyntaxUtils
 
 open Lean Parser
 open Std.Format
+
 
 defmethod Syntax.getPos! (stx : Syntax) : String.Pos :=
   if let some pos := stx.getPos? then pos else panic! s!"No position for {stx}"

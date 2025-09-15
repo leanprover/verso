@@ -1,9 +1,0 @@
-Failure @25 (⟨3, 0⟩): expected column 1
-Final stack:
-  (Verso.Syntax.codeblock
-   "```"
-   [`scheme []]
-   "\n"
-   (str "\"\\n\"")
-   <missing>)
-Remaining: "x\n```"

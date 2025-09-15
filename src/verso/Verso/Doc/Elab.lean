@@ -5,14 +5,14 @@ Author: David Thrane Christiansen
 -/
 
 import Verso.Doc.Elab.Monad
-import Verso.Syntax
+import Lean.DocString.Syntax
 
 namespace Verso.Doc.Elab
 
 open Lean Elab
 open PartElabM
 open DocElabM
-open Verso.Syntax
+open Lean.Doc.Syntax
 open Verso.ArgParse (SigDoc)
 
 def throwUnexpected [Monad m] [MonadError m] (stx : Syntax) : m α :=
@@ -46,8 +46,8 @@ partial def elabInline (inline : TSyntax `inline) : DocElabM (TSyntax `term) :=
   | other =>
     throwUnexpected other
 
-@[inline_expander Verso.Syntax.text]
-partial def _root_.Verso.Syntax.text.expand : InlineExpander := fun x =>
+@[inline_expander Lean.Doc.Syntax.text]
+partial def _root_.Lean.Doc.Syntax.text.expand : InlineExpander := fun x =>
   match x with
   | `(inline| $s:str) => do
     -- Erase the source locations from the string literal to prevent unwanted hover info
@@ -60,20 +60,20 @@ partial def _root_.Verso.Syntax.text.expand : InlineExpander := fun x =>
       | .ident _ rawVal val preres => .ident .none rawVal val preres
       | .missing => .missing
 
-@[inline_expander Verso.Syntax.linebreak]
+@[inline_expander Lean.Doc.Syntax.linebreak]
 def _root_.linebreak.expand : InlineExpander
   | `(inline|line! $s:str) =>
     ``(Inline.linebreak $(quote s.getString))
   | _ => throwUnsupportedSyntax
 
-@[inline_expander Verso.Syntax.emph]
-def _root_.Verso.Syntax.emph.expand : InlineExpander
+@[inline_expander Lean.Doc.Syntax.emph]
+def _root_.Lean.Doc.Syntax.emph.expand : InlineExpander
   | `(inline| _[ $args* ]) => do
     ``(Inline.emph #[$[$(← args.mapM elabInline)],*])
   | _ => throwUnsupportedSyntax
 
-@[inline_expander Verso.Syntax.bold]
-def _root_.Verso.Syntax.bold.expand : InlineExpander
+@[inline_expander Lean.Doc.Syntax.bold]
+def _root_.Lean.Doc.Syntax.bold.expand : InlineExpander
   | `(inline| *[ $args* ]) => do
     ``(Inline.bold #[$[$(← args.mapM elabInline)],*])
   | _ => throwUnsupportedSyntax
@@ -85,24 +85,24 @@ def parseArgVal (val : TSyntax `arg_val) : DocElabM ArgVal := do
   | `(arg_val|$n:num) => pure <| .num n
   | other => throwErrorAt other "Can't decode argument value '{repr other}'"
 
-def parseArgs (argStx : TSyntaxArray `argument) : DocElabM (Array Arg) := do
+def parseArgs (argStx : TSyntaxArray `doc_arg) : DocElabM (Array Arg) := do
   let mut argVals := #[]
   for arg in argStx do
     match arg with
-    | `(argument|$v:arg_val) =>
+    | `(doc_arg|$v:arg_val) =>
       argVals := argVals.push (.anon (← parseArgVal v))
-    | `(argument|$x:ident := $v) => do
+    | `(doc_arg|$x:ident := $v) => do
       let src := (← getFileMap).source
       if let some ⟨s, e⟩ := x.raw.getRange? (canonicalOnly := true) then
         if let some ⟨s', e'⟩ := v.raw.getRange? (canonicalOnly := true) then
           let hint ← MessageData.hint m!"Replace with the updated syntax:" #[s!"({src.extract s e} := {src.extract s' e'})"] (ref? := some arg)
           logWarningAt arg m!"Deprecated named argument syntax for `{x}`{hint}"
       argVals := argVals.push (.named arg x (← parseArgVal v))
-    | `(argument|($x:ident := $v)) =>
+    | `(doc_arg|($x:ident := $v)) =>
       argVals := argVals.push (.named arg x (← parseArgVal v))
-    | `(argument|+$x) =>
+    | `(doc_arg|+$x) =>
       argVals := argVals.push (.flag arg x true)
-    | `(argument|-$x) =>
+    | `(doc_arg|-$x) =>
       argVals := argVals.push (.flag arg x false)
     | other => throwErrorAt other "Can't decode argument '{repr other}'"
   pure argVals
@@ -143,8 +143,8 @@ private def expanderDocHover (stx : Syntax) (what : String) (name : Name) (doc? 
 
 
 open Lean.Parser.Term in
-@[inline_expander Verso.Syntax.role]
-def _root_.Verso.Syntax.role.expand : InlineExpander
+@[inline_expander Lean.Doc.Syntax.role]
+def _root_.Lean.Doc.Syntax.role.expand : InlineExpander
   | inline@`(inline| role{$name $args*} [$subjects*]) => do
       withRef inline <| withFreshMacroScope <| withIncRecDepth <| do
         let ⟨genre, _⟩ ← readThe DocElabContext
@@ -170,8 +170,8 @@ def _root_.Verso.Syntax.role.expand : InlineExpander
         throwUnsupportedSyntax
   | _ => throwUnsupportedSyntax
 
-@[inline_expander Verso.Syntax.link]
-def _root_.Verso.Syntax.link.expand : InlineExpander
+@[inline_expander Lean.Doc.Syntax.link]
+def _root_.Lean.Doc.Syntax.link.expand : InlineExpander
   | `(inline| link[ $txt* ] $dest:link_target) => do
     let url : TSyntax `term ←
       match dest with
@@ -184,15 +184,15 @@ def _root_.Verso.Syntax.link.expand : InlineExpander
     ``(Inline.link #[$[$(← txt.mapM elabInline)],*] $url)
   | _ => throwUnsupportedSyntax
 
-@[inline_expander Verso.Syntax.footnote]
-def _root_.Verso.Syntax.link.footnote : InlineExpander
+@[inline_expander Lean.Doc.Syntax.footnote]
+def _root_.Lean.Doc.Syntax.link.footnote : InlineExpander
   | `(inline| footnote( $name:str )) => do
     ``(Inline.footnote $(quote name.getString) $(← addFootnoteRef name))
   | _ => throwUnsupportedSyntax
 
 
-@[inline_expander Verso.Syntax.image]
-def _root_.Verso.Syntax.image.expand : InlineExpander
+@[inline_expander Lean.Doc.Syntax.image]
+def _root_.Lean.Doc.Syntax.image.expand : InlineExpander
   | `(inline| image( $alt:str ) $dest:link_target) => do
     let altText := alt.getString
     let url : TSyntax `term ←
@@ -207,21 +207,21 @@ def _root_.Verso.Syntax.image.expand : InlineExpander
   | _ => throwUnsupportedSyntax
 
 
-@[inline_expander Verso.Syntax.code]
-def _root_.Verso.Syntax.code.expand : InlineExpander
+@[inline_expander Lean.Doc.Syntax.code]
+def _root_.Lean.Doc.Syntax.code.expand : InlineExpander
   |  `(inline| code( $s )) =>
     ``(Inline.code $(quote s.getString))
   | _ => throwUnsupportedSyntax
 
 
-@[inline_expander Verso.Syntax.inline_math]
-def _root_.Verso.Syntax.inline_math.expand : InlineExpander
+@[inline_expander Lean.Doc.Syntax.inline_math]
+def _root_.Lean.Doc.Syntax.inline_math.expand : InlineExpander
   |  `(inline| \math code( $s )) =>
     ``(Inline.math MathMode.inline $s)
   | _ => throwUnsupportedSyntax
 
-@[inline_expander Verso.Syntax.display_math]
-def _root_.Verso.Syntax.display_math.expand : InlineExpander
+@[inline_expander Lean.Doc.Syntax.display_math]
+def _root_.Lean.Doc.Syntax.display_math.expand : InlineExpander
   |  `(inline| \displaymath code( $s )) =>
     ``(Inline.math MathMode.display $s)
   | _ => throwUnsupportedSyntax
@@ -294,14 +294,14 @@ where
     let blk ← liftDocElabM <| elabBlock cmd
     addBlock blk
 
-@[part_command Verso.Syntax.footnote_ref]
-partial def _root_.Verso.Syntax.footnote_ref.command : PartCommand
+@[part_command Lean.Doc.Syntax.footnote_ref]
+partial def _root_.Lean.Doc.Syntax.footnote_ref.command : PartCommand
   | `(block| [^ $name:str ]: $contents* ) =>
     addFootnoteDef name =<< contents.mapM (elabInline ·)
   | _ => throwUnsupportedSyntax
 
-@[part_command Verso.Syntax.link_ref]
-partial def _root_.Verso.Syntax.link_ref.command : PartCommand
+@[part_command Lean.Doc.Syntax.link_ref]
+partial def _root_.Lean.Doc.Syntax.link_ref.command : PartCommand
   | `(block| [ $name:str ]: $url:str ) =>
     addLinkDef name url.getString
   | _ => throwUnsupportedSyntax
@@ -327,8 +327,8 @@ partial def closePartsUntil (outer : Nat) (endPos : String.Pos) : PartElabM Unit
         closePartsUntil outer endPos
     | none => pure ()
 
-@[part_command Verso.Syntax.header]
-partial def _root_.Verso.Syntax.header.command : PartCommand
+@[part_command Lean.Doc.Syntax.header]
+partial def _root_.Lean.Doc.Syntax.header.command : PartCommand
   | stx@`(block|header($headerLevel){$inlines*}) => do
     let titleBits ← liftDocElabM <| inlines.mapM elabInline
     let titleString := headerStxToString (← getEnv) stx
@@ -354,8 +354,8 @@ partial def _root_.Verso.Syntax.header.command : PartCommand
 
   | _ => throwUnsupportedSyntax
 
-@[part_command Verso.Syntax.metadata_block]
-def _root_.Verso.Syntax.metadata_block.command : PartCommand
+@[part_command Lean.Doc.Syntax.metadata_block]
+def _root_.Lean.Doc.Syntax.metadata_block.command : PartCommand
   | `(block| %%%%$tk $fieldOrAbbrev*  %%%) => do
     let ctxt := (← getThe PartElabM.State).partContext
     if ctxt.blocks.size > 0 || ctxt.priorParts.size > 0 then
@@ -366,7 +366,7 @@ def _root_.Verso.Syntax.metadata_block.command : PartCommand
     modifyThe PartElabM.State fun st => {st with partContext.metadata := some stx}
   | _ => throwUnsupportedSyntax
 
-@[part_command Verso.Syntax.command]
+@[part_command Lean.Doc.Syntax.command]
 def includeSection : PartCommand
   | `(block|command{include $args* }) => do
     if h : args.size = 0 then throwError "Expected an argument"
@@ -392,8 +392,8 @@ def includeSection : PartCommand
 where
  resolved id := mkIdentFrom id <$> realizeGlobalConstNoOverloadWithInfo (mkIdentFrom id (docName id.getId))
 
-@[block_expander Verso.Syntax.command]
-def _root_.Verso.Syntax.command.expand : BlockExpander := fun block =>
+@[block_expander Lean.Doc.Syntax.command]
+def _root_.Lean.Doc.Syntax.command.expand : BlockExpander := fun block =>
   match block with
   | `(block|command{$name $args*}) => do
     withTraceNode `Elab.Verso.block (fun _ => pure m!"Block role {name}") <|
@@ -417,8 +417,8 @@ def _root_.Verso.Syntax.command.expand : BlockExpander := fun block =>
       throwUnsupportedSyntax
   | _ => throwUnsupportedSyntax
 
-@[block_expander Verso.Syntax.para]
-partial def _root_.Verso.Syntax.para.expand : BlockExpander
+@[block_expander Lean.Doc.Syntax.para]
+partial def _root_.Lean.Doc.Syntax.para.expand : BlockExpander
   | `(block| para[ $args:inline* ]) => do
     let ⟨genre, _⟩ ← readThe DocElabContext
     ``(Block.para (genre := $(⟨genre⟩)) #[$[$(← args.mapM elabInline)],*])
@@ -436,8 +436,8 @@ def elabLi (block : Syntax) : DocElabM (Syntax × TSyntax `term) :=
   | _ =>
     throwUnsupportedSyntax
 
-@[block_expander Verso.Syntax.ul]
-def _root_.Verso.Syntax.ul.expand : BlockExpander
+@[block_expander Lean.Doc.Syntax.ul]
+def _root_.Lean.Doc.Syntax.ul.expand : BlockExpander
   | `(block|ul{$itemStxs*}) => do
     let ⟨genre, _⟩ ← readThe DocElabContext
     let mut bullets : Array Syntax := #[]
@@ -453,8 +453,8 @@ def _root_.Verso.Syntax.ul.expand : BlockExpander
   | _ =>
     throwUnsupportedSyntax
 
-@[block_expander Verso.Syntax.ol]
-def _root_.Verso.Syntax.ol.expand : BlockExpander
+@[block_expander Lean.Doc.Syntax.ol]
+def _root_.Lean.Doc.Syntax.ol.expand : BlockExpander
   | `(block|ol($start:num){$itemStxs*}) => do
     let ⟨genre, _⟩ ← readThe DocElabContext
     let mut bullets : Array Syntax := #[]
@@ -480,8 +480,8 @@ def elabDesc (block : Syntax) : DocElabM (Syntax × TSyntax `term) :=
   | _ =>
     throwUnsupportedSyntax
 
-@[block_expander Verso.Syntax.dl]
-def _root_.Verso.Syntax.dl.expand : BlockExpander
+@[block_expander Lean.Doc.Syntax.dl]
+def _root_.Lean.Doc.Syntax.dl.expand : BlockExpander
   | `(block|dl{$itemStxs*}) => do
     let ⟨genre, _⟩ ← readThe DocElabContext
     let mut colons : Array Syntax := #[]
@@ -497,16 +497,16 @@ def _root_.Verso.Syntax.dl.expand : BlockExpander
   | _ =>
     throwUnsupportedSyntax
 
-@[block_expander Verso.Syntax.blockquote]
-def _root_.Verso.Syntax.blockquote.expand : BlockExpander
+@[block_expander Lean.Doc.Syntax.blockquote]
+def _root_.Lean.Doc.Syntax.blockquote.expand : BlockExpander
   | `(block|> $innerBlocks*) => do
     ``(Block.blockquote #[$[$(← innerBlocks.mapM elabBlock)],*])
   | _ =>
     throwUnsupportedSyntax
 
 
-@[block_expander Verso.Syntax.codeblock]
-def _root_.Verso.Syntax.codeblock.expand : BlockExpander
+@[block_expander Lean.Doc.Syntax.codeblock]
+def _root_.Lean.Doc.Syntax.codeblock.expand : BlockExpander
   | `(block|``` $nameStx:ident $argsStx* | $contents:str ```) => do
     let ⟨genre, _⟩ ← readThe DocElabContext
     let name ← realizeGlobalConstNoOverloadWithInfo nameStx
@@ -529,8 +529,8 @@ def _root_.Verso.Syntax.codeblock.expand : BlockExpander
   | _ =>
     throwUnsupportedSyntax
 
-@[block_expander Verso.Syntax.directive]
-def _root_.Verso.Syntax.directive.expand : BlockExpander
+@[block_expander Lean.Doc.Syntax.directive]
+def _root_.Lean.Doc.Syntax.directive.expand : BlockExpander
   | `(block| ::: $nameStx:ident $argsStx* { $contents:block* } ) => do
     let ⟨genre, _⟩ ← readThe DocElabContext
     let name ← realizeGlobalConstNoOverloadWithInfo nameStx

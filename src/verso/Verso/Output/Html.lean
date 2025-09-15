@@ -5,10 +5,14 @@ Author: David Thrane Christiansen
 -/
 import Lean.Parser
 import Verso.Parser
+import Lean.Elab.Term.TermElabM
+import Lean.Meta.Hint
 
 namespace Verso.Output
 
 open Lean
+
+public section
 
 /--
 A representation of HTML, used to render Verso to the web.
@@ -35,7 +39,6 @@ partial instance : Quote Html where
 where
   quoteArray {α : _} (_inst : Quote α) (xs : Array α) : TSyntax `term :=
     mkCApp ``List.toArray #[quote xs.toList]
-
   q
     | .text esc str =>
       mkCApp ``Html.text #[quote esc, quote str]
@@ -94,7 +97,7 @@ instance : Coe (Array Html) Html where
 instance : Coe (List Html) Html where
   coe arr := Html.fromList arr
 
-def revFrom (i : Nat) (input : Array α) (output : Array α := #[]) : Array α :=
+private def revFrom (i : Nat) (input : Array α) (output : Array α := #[]) : Array α :=
   if h : i < input.size then
     revFrom (i+1) input (output.push input[i])
   else output
@@ -179,7 +182,8 @@ section
 def attributeNameKind := `Verso.Output.Html.attributeName
 
 open Lean.Parser
-open Verso.Parser
+open Lean.Doc.Parser
+
 def attributeNameFn : ParserFn :=
   atomicFn <|
     nodeFn attributeNameKind <|
@@ -219,7 +223,7 @@ def attributeName.parenthesizer := PrettyPrinter.Parenthesizer.visitToken
 @[combinator_formatter attributeName]
 def attributeName.formatter := PrettyPrinter.Formatter.visitAtom Name.anonymous
 
-defmethod TSyntax.getAttributeName (stx : TSyntax attributeNameKind) : String :=
+def _root_.Lean.TSyntax.getAttributeName (stx : TSyntax attributeNameKind) : String :=
   if let ⟨.node _ _ #[.atom _ name]⟩ := stx then
     name
   else panic! "Not an attribute name"
@@ -256,7 +260,7 @@ scoped syntax "{{"  html+ "}}" : term
 scoped syntax "<<<" (attrib ppSpace) * ">>>" : term
 
 open Lean Elab Term Meta in
-def elabAttrs (stxs : Array (TSyntax `attrib)) : TermElabM Expr := do
+meta def elabAttrs (stxs : Array (TSyntax `attrib)) : TermElabM Expr := do
   let attrType ← mkAppM ``Prod #[.const ``String [], .const ``String []]
   let mut attrs : Expr ← mkArrayLit attrType []
   for stx in stxs do
@@ -284,7 +288,7 @@ def elabAttrs (stxs : Array (TSyntax `attrib)) : TermElabM Expr := do
   return attrs
 
 open Lean Elab Term Meta in
-partial def elabHtml (stx : TSyntax `html) : TermElabM Expr := withRef stx do
+meta partial def elabHtml (stx : TSyntax `html) : TermElabM Expr := withRef stx do
   match stx with
   | `(html| {{ $e:term }} ) =>
     elabTermEnsuringType e (some (.const ``Html []))

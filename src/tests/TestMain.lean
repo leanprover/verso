@@ -6,7 +6,6 @@ Author: David Thrane Christiansen
 
 import VersoSearch.PorterStemmer
 import Tests
-import Verso.Parser
 
 structure Config where
   updateExpected : Bool := false
@@ -30,40 +29,8 @@ def testStemmer (_ : Config) : IO Unit := do
       IO.eprintln s!"{x} --> {s} (wanted '{y}')"
     throw <| IO.userError "Stemmer tests failed"
 
-def testParser (dir : System.FilePath) (fn : Lean.Parser.ParserFn) : Config → IO Unit := fun config =>
-  Verso.GoldenTest.runTests {
-    testDir := ("src/tests/parser" : System.FilePath) / dir,
-    runTest := fn.test,
-    updateExpected := config.updateExpected
-  }
-
-open Lean.Parser in
-open Verso.Parser in
 def tests := [
-  testStemmer,
-  testParser "metadataBlock" metadataBlock,
-  testParser "val" val,
-  testParser "arg" arg,
-  testParser "args" args,
-  testParser "nameAndArgs" nameAndArgs,
-  testParser "inlineTextChar" inlineTextChar,
-  testParser "manyInlineTextChar" (asStringFn (many1Fn inlineTextChar)),
-  testParser "inline/text" text,
-  testParser "inline/emph" (emph {}),
-  testParser "inline/code" code,
-  testParser "inline/role" (role {}),
-  testParser "inline" (inline {}),
-  testParser "block/code" (codeBlock {}),
-  testParser "block/header" (header {}),
-  testParser "block/blocks" (blocks {}),
-  testParser "block/recover" (recoverBlock (block {})),
-  testParser "blocks/recover" (recoverBlock (blocks {})),
-  testParser "block/directive" (directive {}),
-  testParser "block/opener" (ignoreFn blockOpener),
-  testParser "block/ulIndicator" (lookaheadUnorderedListIndicator {} (fun type => fakeAtom s! "{repr type}")),
-  testParser "block/olIndicator" (lookaheadOrderedListIndicator {} (fun type i => fakeAtom s! "{repr type} {i}")),
-  testParser "block/" (block {}),
-  testParser "document" document,
+  testStemmer
 ]
 
 def getConfig (config : Config) : List String → IO Config

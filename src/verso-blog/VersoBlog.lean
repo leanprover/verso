@@ -25,6 +25,7 @@ open Verso.Output Html
 namespace Verso.Genre.Blog
 
 open Lean Elab
+open Lean.Doc.Syntax
 open Verso ArgParse Doc Elab
 
 open Verso.SyntaxUtils (parserInputString)

@@ -6,6 +6,7 @@ require MD4Lean from git "https://github.com/acmepjz/md4lean"@"main"
 
 package verso where
   precompileModules := false -- temporarily disabled to work around an issue with nightly-2025-03-30
+  leanOptions := #[⟨`experimental.module, true⟩]
 
 @[default_target]
 lean_lib VersoUtil where

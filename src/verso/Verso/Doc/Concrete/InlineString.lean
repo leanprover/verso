@@ -4,12 +4,14 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 
+import Verso.Parser
+
 import Verso.Doc
 import Verso.Doc.Elab
 import Verso.Doc.Elab.Incremental
 import Verso.Doc.Elab.Monad
 import Verso.Doc.Lsp
-import Verso.Parser
+
 import Verso.SyntaxUtils
 
 namespace Verso.Doc.Concrete
@@ -21,7 +23,7 @@ open Verso Parser SyntaxUtils Doc Elab
 open Lean Elab Term in
 def stringToInlines [Monad m] [MonadError m] [MonadEnv m] [MonadQuotation m] (s : StrLit) : m (Array Syntax) :=
   withRef s do
-    return (← textLine.parseString s.getString).args
+    return (← textLine.parseString s.getString).getArgs
 
 syntax:max (name := inlinesLit) "inlines!" noWs str : term
 

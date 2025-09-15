@@ -6,12 +6,12 @@ Author: David Thrane Christiansen
 import Lean.Linter.Basic
 import Lean.Meta.Hint
 import Verso.Doc.Concrete
-import Verso.Parser
 import MultiVerso.Slug
 
 set_option linter.missingDocs true
 
 open Lean Linter Elab Command
+open Lean.Doc.Syntax
 
 /-- Warns when headers don't have tags -/
 register_option linter.verso.manual.headerTags : Bool := {
@@ -56,7 +56,7 @@ partial def headerTagLinter : Linter where
           }
           let toks := Parser.getTokenTable (← getEnv)
           let s := { cache := { tokenCache := {}, parserCache := {} }, pos := nextLine.i }
-          let s := Verso.Parser.metadataBlock.run ictx pmctx toks s
+          let s := Lean.Doc.Parser.metadataBlock.run ictx pmctx toks s
           let tagNote :=
             MessageData.note <|
               "The tag is used as a permanent name for the section or chapter. Writers "++
