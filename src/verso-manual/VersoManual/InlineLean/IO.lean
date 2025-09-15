@@ -22,10 +22,9 @@ import VersoManual.InlineLean.IO.Context
 import VersoManual.InlineLean.Block
 
 
-
-open Lean Elab
 open Verso ArgParse Doc Elab Genre.Manual Html Code Highlighted.WebAssets
 open SubVerso.Highlighting Highlighted
+open Lean Elab
 
 open Lean.Elab.Tactic.GuardMsgs
 
