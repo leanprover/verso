@@ -174,9 +174,9 @@ structure Config where
   emitHtmlMulti : Bool := true
   wordCount : Option System.FilePath := none
   extraFiles : List (System.FilePath × String) := []
-  /-- Extra CSS to be included inline into every `<head>` -/
+  /-- Extra CSS to be included inline into every `<head>` via `<script>` tags -/
   extraCss : List String := []
-  /-- Extra JS to be included inline into every `<head>` -/
+  /-- Extra JS to be included inline into every `<head>` via `<style>` tags -/
   extraJs : List String := []
   /-- Extra CSS to be written to the filesystem in the Verso data directory and loaded by each `<head>` -/
   extraCssFiles : Array (String × String) := #[]
@@ -424,8 +424,8 @@ def page (toc : List Html.Toc)
     (repoLink := config.sourceLink)
     (issueLink := config.issueLink)
     (localItems := localItems)
-    -- The extraCss and extraJs in the config is not take here because it's used to initialize the
-    -- traverse state and is thus already present.
+    -- The extraCss and extraJs in the config are absent here because they're included in the
+    -- traverse state when it is initialized
     (extraStylesheets := state.extraCssFiles.toList.map ("/-verso-data/" ++ ·.1))
     (extraJsFiles := extraJsFiles)
     (extraHead := config.extraHead)
