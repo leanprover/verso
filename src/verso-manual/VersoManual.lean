@@ -417,6 +417,8 @@ def page (toc : List Html.Toc)
     | (true, f) => (f.filename, f.defer)
     | (false, f) => ("/-verso-data/" ++ f.filename, f.defer)
   Html.page toc path textTitle htmlBookTitle contents
+    -- The extraCss, extraJs, extraCssFiles, and extraJsFiles in the config are absent here
+    -- because they arere included in the traverse state when it is initialized
     state.extraCss (state.extraJs.insertMany extraJs)
     (showNavButtons := showNavButtons)
     (logo := config.logo)
@@ -424,8 +426,6 @@ def page (toc : List Html.Toc)
     (repoLink := config.sourceLink)
     (issueLink := config.issueLink)
     (localItems := localItems)
-    -- The extraCss and extraJs in the config are absent here because they're included in the
-    -- traverse state when it is initialized
     (extraStylesheets := state.extraCssFiles.toList.map ("/-verso-data/" ++ ·.1))
     (extraJsFiles := extraJsFiles)
     (extraHead := config.extraHead)
