@@ -174,10 +174,10 @@ structure Config where
   emitHtmlMulti : Bool := true
   wordCount : Option System.FilePath := none
   extraFiles : List (System.FilePath × String) := []
-  /-- Extra CSS to be included inline into every `<head>` -/
+  /-- Extra CSS to be included inline into every `<head>` via `<script>` tags -/
   extraCss : List String := []
-  /-- Extra JS to be included inline into every `<head>` -/
-  extraJs : List StaticJsFile := []
+  /-- Extra JS to be included inline into every `<head>` via `<style>` tags -/
+  extraJs : List String := []
   /-- Extra CSS to be written to the filesystem in the Verso data directory and loaded by each `<head>` -/
   extraCssFiles : Array (String × String) := #[]
   /-- Extra JS to be written to the filesystem in the Verso data directory and loaded by each `<head>` -/
@@ -265,6 +265,8 @@ def traverse (logError : String → IO Unit) (text : Part Manual) (config : Conf
   let remoteContent ← updateRemotes false config.remoteConfigFile (if config.verbose then IO.println else fun _ => pure ())
   let mut state : Manual.TraverseState := {
     licenseInfo := .ofList config.licenseInfo,
+    extraCss := .insertMany {} config.extraJs
+    extraJs := .insertMany {} config.extraJs
     extraCssFiles := config.extraCssFiles,
     extraJsFiles := config.extraJsFiles,
     remoteContent
@@ -410,12 +412,13 @@ def page (toc : List Html.Toc)
   }
   let extraJsFiles :=
     sortJs <|
-      config.extraJs.toArray.map (true, ·) ++
       state.extraJsFiles.map (false, ·.toStaticJsFile)
   let extraJsFiles := extraJsFiles.map fun
     | (true, f) => (f.filename, f.defer)
     | (false, f) => ("/-verso-data/" ++ f.filename, f.defer)
   Html.page toc path textTitle htmlBookTitle contents
+    -- The extraCss, extraJs, extraCssFiles, and extraJsFiles in the config are absent here
+    -- because they are included in the traverse state when it is initialized
     state.extraCss (state.extraJs.insertMany extraJs)
     (showNavButtons := showNavButtons)
     (logo := config.logo)
@@ -423,9 +426,7 @@ def page (toc : List Html.Toc)
     (repoLink := config.sourceLink)
     (issueLink := config.issueLink)
     (localItems := localItems)
-    -- The extra CSS and JS in the config is not take here because it's used to initialize the
-    -- traverse state and is thus already present.
-    (extraStylesheets := config.extraCss ++ state.extraCssFiles.toList.map ("/-verso-data/" ++ ·.1))
+    (extraStylesheets := state.extraCssFiles.toList.map ("/-verso-data/" ++ ·.1))
     (extraJsFiles := extraJsFiles)
     (extraHead := config.extraHead)
     (extraContents := config.extraContents)
