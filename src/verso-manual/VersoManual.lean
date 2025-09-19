@@ -418,7 +418,7 @@ def page (toc : List Html.Toc)
     | (false, f) => ("/-verso-data/" ++ f.filename, f.defer)
   Html.page toc path textTitle htmlBookTitle contents
     -- The extraCss, extraJs, extraCssFiles, and extraJsFiles in the config are absent here
-    -- because they arere included in the traverse state when it is initialized
+    -- because they are included in the traverse state when it is initialized
     state.extraCss (state.extraJs.insertMany extraJs)
     (showNavButtons := showNavButtons)
     (logo := config.logo)
