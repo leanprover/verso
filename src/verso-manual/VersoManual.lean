@@ -265,8 +265,8 @@ def traverse (logError : String → IO Unit) (text : Part Manual) (config : Conf
   let remoteContent ← updateRemotes false config.remoteConfigFile (if config.verbose then IO.println else fun _ => pure ())
   let mut state : Manual.TraverseState := {
     licenseInfo := .ofList config.licenseInfo,
-    extraCss := Std.HashSet.emptyWithCapacity |>.insertMany config.extraCss
-    extraJs := Std.HashSet.emptyWithCapacity |>.insertMany config.extraJs
+    extraCss := .insertMany {} config.extraJs
+    extraJs := .insertMany {} config.extraJs
     extraCssFiles := config.extraCssFiles,
     extraJsFiles := config.extraJsFiles,
     remoteContent
