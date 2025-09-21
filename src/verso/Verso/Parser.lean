@@ -668,12 +668,16 @@ open Lean.Parser.Term in
 def metadataBlock : ParserFn :=
   nodeFn ``metadata_block <|
     opener >>
-    metadataContents.fn >>
+    (adaptUncacheableContextFn addTriplePercent metadataContents.fn) >>
     takeWhileFn (·.isWhitespace) >>
     closer
 where
   opener := atomicFn (bolThen (eatSpaces >> strFn "%%%") "%%% (at line beginning)") >> eatSpaces >> ignoreFn (chFn '\n')
   closer := bolThen (eatSpaces >> strFn "%%%") "%%% (at line beginning)" >> eatSpaces >> ignoreFn (chFn '\n' <|> eoiFn)
+
+  -- This is necessary in Lean v4.24.0-rc1. Check if it's still necessary in subsequent releases.
+  addTriplePercent c := { c with tokens := c.tokens.insert "%%%" "%%%" }
+
 
 structure InList where
   indentation : Nat
