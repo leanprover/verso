@@ -106,11 +106,51 @@ structure DocElabContext where
   genreSyntax : Syntax
   genre : Expr
 
+  /-- When a Verso document references Verso code, we can choose to elaborate examples in a
+  different environment (the "example environment") than the one the document itself is elaborating
+  in (the "document environment"). The current example elaboration environment acts as a
+  dynamically-scoped parameter. -/
+  examplesEnvironment : Option (IO.Ref Environment) := none
+
 /-- References that must be local to the current blob of concrete document syntax -/
 structure DocDef (α : Type) where
   defSite : TSyntax `str
   val : α
 deriving Repr
+
+section
+variable [Monad m] [MonadReaderOf DocElabContext m] [MonadWithReaderOf DocElabContext m] [MonadEnv m] [MonadFinally m] [MonadLiftT (ST IO.RealWorld) m] [MonadLiftT BaseIO m]
+
+/-- Execute `act` in the context of the currently-defined example environment (or the current
+environment if no example environment is defined by using `withIsolatedExamplesEnvironment`.)
+
+Any changes to the examples environment will be stored when the action is finished running. -/
+def usingExamplesEnv (act : m α): m α := do
+  if let some envRef := (← read).examplesEnvironment then
+    let namedEnv ← envRef.get
+    let documentEnv ← envRef.get
+    try
+      modifyEnv (fun _ => namedEnv)
+      try
+        act
+      finally
+        envRef.set (← getEnv)
+    finally
+      modifyEnv (fun _ => documentEnv)
+  else act
+
+/-- Create an isolated copy of the current examples environment (or the current document environment
+if no current examples environment is defined). Any calls to `usingExamplesEnv` while `act` executes
+will refer to this isolated examples environment and will not affect the document's environment or
+any outward-defined elaboration environment. -/
+def withIsolatedExamplesEnvironment (act : m α): m α := do
+  let examplesEnv ← match (← read).examplesEnvironment with
+  | .none => getEnv
+  | .some envRef => envRef.get
+  let envRef ← IO.mkRef examplesEnv
+  withReader ({· with examplesEnvironment := some envRef }) act
+
+end
 
 structure DocUses where
   useSites : Array Syntax := {}
@@ -297,8 +337,8 @@ def PartElabM.State.init (title : Syntax) (expandedTitle : Option (String × Arr
 
 def PartElabM (α : Type) : Type := ReaderT DocElabContext (StateT DocElabM.State (StateT PartElabM.State TermElabM)) α
 
-def PartElabM.run (genreSyntax : Syntax) (genre : Expr) (st : DocElabM.State) (st' : PartElabM.State) (act : PartElabM α) : TermElabM (α × DocElabM.State × PartElabM.State) := do
-  let ((res, st), st') ← act ⟨genreSyntax, genre⟩ st st'
+def PartElabM.run (genreSyntax : Syntax) (genre : Expr) (examplesEnv : Option (IO.Ref Environment)) (st : DocElabM.State) (st' : PartElabM.State) (act : PartElabM α) : TermElabM (α × DocElabM.State × PartElabM.State) := do
+  let ((res, st), st') ← act ⟨genreSyntax, genre, examplesEnv⟩ st st'
   pure (res, st, st')
 
 instance : Alternative PartElabM := inferInstanceAs <| Alternative (ReaderT DocElabContext (StateT DocElabM.State (StateT PartElabM.State TermElabM)))
@@ -337,8 +377,8 @@ def PartElabM.withFileMap (fileMap : FileMap) (act : PartElabM α) : PartElabM �
 
 def DocElabM (α : Type) : Type := ReaderT DocElabContext (ReaderT PartElabM.State (StateT DocElabM.State TermElabM)) α
 
-def DocElabM.run (genreSyntax : Syntax) (genre : Expr) (st : DocElabM.State) (st' : PartElabM.State) (act : DocElabM α) : TermElabM (α × DocElabM.State) := do
-  StateT.run (act ⟨genreSyntax, genre⟩ st') st
+def DocElabM.run (genreSyntax : Syntax) (genre : Expr) (examplesEnv : Option (IO.Ref Environment)) (st : DocElabM.State) (st' : PartElabM.State) (act : DocElabM α) : TermElabM (α × DocElabM.State) := do
+  StateT.run (act ⟨genreSyntax, genre, examplesEnv⟩ st') st
 
 instance : Inhabited (DocElabM α) := ⟨fun _ _ _ => default⟩
 
@@ -402,8 +442,8 @@ instance : MonadRecDepth DocElabM where
   getMaxRecDepth := fun _ _ st' => do return (← MonadRecDepth.getMaxRecDepth, st')
 
 def PartElabM.liftDocElabM (act : DocElabM α) : PartElabM α := do
-  let ⟨gStx, g⟩ ← readThe DocElabContext
-  let (out, st') ← act.run gStx g (← getThe DocElabM.State) (← getThe PartElabM.State)
+  let ⟨gStx, g, examplesEnv⟩ ← readThe DocElabContext
+  let (out, st') ← act.run gStx g examplesEnv (← getThe DocElabM.State) (← getThe PartElabM.State)
   set st'
   pure out
 
@@ -428,7 +468,7 @@ def findLinksAndNotes : Expr → MetaM (Array (Expr × Expr))
 
 open Lean Meta Elab Term in
 def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := withRef block <| do
-  let ⟨_, g⟩ ← readThe DocElabContext
+  let g := (← readThe DocElabContext).genre
 
   let n ← mkFreshUserName `block
 
@@ -505,7 +545,7 @@ def DocElabM.addLinkRef (refName : TSyntax `str) : DocElabM (TSyntax `term) := d
 def PartElabM.addFootnoteDef (refName : TSyntax `str) (content : Array (TSyntax `term)) : PartElabM Unit := do
   let strName := refName.getString
   let docName ← currentDocName
-  let ⟨_, genre⟩ ← readThe DocElabContext
+  let genre := (← readThe DocElabContext).genre
   match (← getThe State).footnoteDefs[strName]? with
   | none =>
     let t := mkApp3 (.const ``HasNote []) (toExpr strName) (toExpr docName) genre
@@ -528,7 +568,7 @@ def PartElabM.addFootnoteDef (refName : TSyntax `str) (content : Array (TSyntax 
 
 def DocElabM.addFootnoteRef (refName : TSyntax `str) : DocElabM (TSyntax `term) := do
   let strName := refName.getString
-  let ⟨genre, _⟩ ← readThe DocElabContext
+  let genre := (← readThe DocElabContext).genreSyntax
   match (← getThe State).footnoteRefs[strName]? with
   | none =>
     modifyThe State fun st => {st with footnoteRefs := st.footnoteRefs.insert strName ⟨#[refName]⟩}

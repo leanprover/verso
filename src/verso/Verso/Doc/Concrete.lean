@@ -76,7 +76,7 @@ elab "#docs" "(" genre:term ")" n:ident title:str ":=" ":::::::" text:document "
   let titleString := inlinesToString (← getEnv) titleParts
   let g ← runTermElabM fun _ => Lean.Elab.Term.elabTerm genre (some (.const ``Doc.Genre []))
 
-  let ((), st, st') ← liftTermElabM <| PartElabM.run genre g {} (.init (.node .none nullKind titleParts)) <| do
+  let ((), st, st') ← liftTermElabM <| PartElabM.run genre g .none {} (.init (.node .none nullKind titleParts)) <| do
     setTitle titleString (← liftDocElabM <| titleParts.mapM (elabInline ⟨·⟩))
     for b in blocks do partCommand ⟨b⟩
     closePartsUntil 0 endPos
@@ -89,7 +89,7 @@ elab "#docs" "(" genre:term ")" n:ident title:str ":=" ":::::::" text:document "
 
   let mut docState := st
   for hook in (← documentFinishedHooks) do
-    let ((), docState') ← runTermElabM fun _ => hook ⟨genre, g⟩ st' docState
+    let ((), docState') ← runTermElabM fun _ => hook ⟨genre, g, .none⟩ st' docState
     docState := docState'
 
 elab "#doc" "(" genre:term ")" title:str "=>" text:completeDocument eoi : term => open Lean Elab Term PartElabM DocElabM in do
@@ -100,7 +100,7 @@ elab "#doc" "(" genre:term ")" title:str "=>" text:completeDocument eoi : term =
   let titleString := inlinesToString (← getEnv) titleParts
   let g ← elabTerm genre (some (.const ``Doc.Genre []))
   let g ← instantiateMVars g
-  let ((), st, st') ← PartElabM.run genre g {} (.init (.node .none nullKind titleParts)) <| do
+  let ((), st, st') ← PartElabM.run genre g .none {} (.init (.node .none nullKind titleParts)) <| do
     let mut errors := #[]
     setTitle titleString (← liftDocElabM <| titleParts.mapM (elabInline ⟨·⟩))
     for b in blocks do
@@ -210,7 +210,7 @@ def finishDoc (genre : Term) (title : StrLit) : CommandElabM Unit:= do
     let mut docState := docStateExt.getState (← getEnv)
     let genreExpr ← runTermElabM fun _ => Term.elabTerm genre (some (.const ``Doc.Genre [])) >>= instantiateExprMVars
     for hook in (← documentFinishedHooks) do
-      let ((), docState') ← runTermElabM fun _ => hook ⟨genre, genreExpr⟩ partState docState
+      let ((), docState') ← runTermElabM fun _ => hook ⟨genre, genreExpr, .none⟩ partState docState
       docState := docState'
 
 syntax (name := replaceDoc) "#doc" "(" term ")" str "=>" : command
@@ -225,7 +225,7 @@ elab_rules : command
 
   let (titleInlines, docState) ← runTermElabM <| fun _ => do
     let g ← Term.elabTerm genre (some (.const ``Doc.Genre [])) >>= instantiateMVars
-    titleParts.mapM (Verso.Doc.Elab.elabInline ⟨·⟩) |>.run genre g {} initState
+    titleParts.mapM (Verso.Doc.Elab.elabInline ⟨·⟩) |>.run genre g .none {} initState
   modifyEnv (docStateExt.setState · docState)
 
   let initState := { initState with
@@ -256,7 +256,7 @@ def runVersoBlock (genre : Term) (block : TSyntax `block) : CommandElabM Unit :=
 
     let ((), docState', partState') ← runTermElabM fun _ => do
       let g ← Term.elabTerm genre (some (.const ``Doc.Genre [])) >>= instantiateMVars
-      partCommand block |>.run genre g (docStateExt.getState env) partState
+      partCommand block |>.run genre g .none (docStateExt.getState env) partState
     saveRefs docState' partState'
     modifyEnv fun env =>
       partStateExt.setState (docStateExt.setState env docState') (some partState')
@@ -301,14 +301,14 @@ elab (name := completeDoc) "#old_doc" "(" genre:term ")" title:str "=>" text:com
         elabCommand (← `($titleStr:docComment def $docName : Part $genre := $(← finished.toSyntax' genre)))
         let mut docState := st
         for hook in (← documentFinishedHooks) do
-          let ((), docState') ← runTermElabM fun _ => hook ⟨genre, g⟩ st' docState
+          let ((), docState') ← runTermElabM fun _ => hook ⟨genre, g, .none⟩ st' docState
           docState := docState')
 
       -- The heartbeat count is reset for each top-level Verso block because they are analogous to Lean commands.
       (handleStep := fun block => do
         let heartbeats ← IO.getNumHeartbeats
         withTheReader Core.Context ({· with initHeartbeats := heartbeats}) (partCommand ⟨block⟩))
-      (run := fun act => runTermElabM fun _ => Prod.fst <$> PartElabM.run genre g {} initState act)
+      (run := fun act => runTermElabM fun _ => Prod.fst <$> PartElabM.run genre g .none {} initState act)
 
 /--
 Make the single elaborator for some syntax kind become incremental
