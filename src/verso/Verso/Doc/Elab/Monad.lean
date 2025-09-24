@@ -128,7 +128,7 @@ Any changes to the examples environment will be stored when the action is finish
 def usingExamplesEnv (act : m α): m α := do
   if let some envRef := (← read).examplesEnvironment then
     let namedEnv ← envRef.get
-    let documentEnv ← envRef.get
+    let documentEnv ← getEnv
     try
       modifyEnv (fun _ => namedEnv)
       try
