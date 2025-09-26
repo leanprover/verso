@@ -48,10 +48,18 @@ def attr' (val : Array AttrText) : Except String String := do
   | .ok s => pure s
 
 /-- A mapping from markdown document header levels to actual verso nesting levels.
-The reason we need this is that we make a best effort to repair non-consecutive
-markdown header levels in a reasonable way, so we need to remember which mapping
-choices we already made. -/
-private abbrev HeaderMapping := List (Nat × Nat)
+The list
+    `[5,4,2,1]`
+is understood as mapping:
+- markdown level 1 to verso nesting 0
+- markdown level 2 to verso nesting 1
+- markdown level 4 to verso nesting 2
+- markdown level 5 to verso nesting 3
+
+The reason we need this data at all is that we make a best effort to
+repair non-consecutive markdown header levels in a reasonable way, so
+we need to remember which mapping choices we already made. -/
+private abbrev HeaderMapping := List Nat
 
 private structure MDState where
   inHeaders : HeaderMapping := []
@@ -128,17 +136,17 @@ private partial def getHeaderLevel [Monad m] (level : Nat) : MDT m b i Nat := do
   let hdrs := (← get).inHeaders
   match hdrs with
   | [] =>
-    modify ({· with inHeaders := [(level, 0)]})
+    modify ({· with inHeaders := [level]})
     pure 0
-  | (docLevel, nesting) :: more =>
+  | docLevel :: more =>
     if level < docLevel then
       modify ({· with inHeaders := more})
       getHeaderLevel level
     else if level = docLevel then
-      pure nesting
+      pure more.length
     else
-      modify ({· with inHeaders := (level, nesting + 1) :: hdrs})
-      pure (nesting + 1)
+      modify ({· with inHeaders := level :: hdrs})
+      pure (more.length + 1)
 
 private def getHeader  [Monad m] (level : Nat) : MDT m b i (Except String (Array i → m b)) := do
   let lvl ← getHeaderLevel level
@@ -255,8 +263,8 @@ private partial def closeSections {m} [Monad m]
     (level : Nat) : MDT m b i Unit := do
   let hdrs := (← getThe MDState).inHeaders
   match hdrs with
-  | [] => modifyThe MDState ({· with inHeaders := [(level, 0)]})
-  | (docLevel, _) :: more =>
+  | [] => pure ()
+  | docLevel :: more =>
     if docLevel ≥ level then
       if let some ctxt' := (← getThe PartElabM.State).partContext.close default then -- Markdown parser provides no source position
         modifyThe PartElabM.State fun st => {st with partContext := ctxt'}
@@ -269,10 +277,7 @@ private partial def newSection {m} [Monad m]
     [MonadStateOf PartElabM.State m]
     (level : Nat) : MDT m b i Unit := do
   let hdr := (← getThe MDState).inHeaders
-  let nextNesting := match hdr with
-  | [] => 0
-  | (_, nesting) :: _ => nesting + 1
-  modifyThe MDState ({· with inHeaders := (level, nextNesting) :: hdr})
+  modifyThe MDState ({· with inHeaders := level :: hdr})
 
 private partial def addPartFromMarkdownAux {m} [Monad m]
     [MonadLiftT PartElabM m] [MonadStateOf PartElabM.State m]
@@ -280,12 +285,12 @@ private partial def addPartFromMarkdownAux {m} [Monad m]
     : MD4Lean.Block → MDT m Term Term Unit
   | .header level txt => do
     closeSections level
-    newSection level
     let txtStxs ← txt.mapM inlineFromMarkdown |>.run' none
     let titleTexts ← match txt.mapM stringFromMarkdownText with
       | .ok t => pure t
       | .error e => throwError m!"Unsupported Markdown in header:\n{e}"
     let titleText := titleTexts.foldl (· ++ ·) ""
+    newSection level
     PartElabM.push {
       titleSyntax := quote (k := `str) titleText
       expandedTitle := some (titleText, txtStxs)
