@@ -121,16 +121,17 @@ deriving Repr
 section
 variable [Monad m] [MonadReaderOf DocElabContext m] [MonadWithReaderOf DocElabContext m] [MonadEnv m] [MonadFinally m] [MonadLiftT (ST IO.RealWorld) m] [MonadLiftT BaseIO m]
 
-/-- Execute `act` in the context of the currently-defined example environment (or the current
-environment if no example environment is defined by using `withIsolatedExamplesEnvironment`.)
+/-- Execute `act` in the context of the dynamically-defined examples environment (or the document's
+ambient environment if no examples environment has been defined by using
+`withIsolatedExamplesEnvironment`.)
 
 Any changes to the examples environment will be stored when the action is finished running. -/
 def usingExamplesEnv (act : m α): m α := do
   if let some envRef := (← read).examplesEnvironment then
-    let namedEnv ← envRef.get
+    let examplesEnv ← envRef.get
     let documentEnv ← getEnv
     try
-      modifyEnv (fun _ => namedEnv)
+      modifyEnv (fun _ => examplesEnv)
       try
         act
       finally
@@ -139,10 +140,10 @@ def usingExamplesEnv (act : m α): m α := do
       modifyEnv (fun _ => documentEnv)
   else act
 
-/-- Create an isolated copy of the current examples environment (or the current document environment
-if no current examples environment is defined). Any calls to `usingExamplesEnv` while `act` executes
-will refer to this isolated examples environment and will not affect the document's environment or
-any outward-defined elaboration environment. -/
+/-- Create an isolated copy of the dynamically-scoped examples environment (or the ambient document
+environment if no dymaically-scoped examples environment is defined). Any calls to
+`usingExamplesEnv` while `act` executes will refer to this isolated examples environment and will
+not affect the document's environment or any outward-defined elaboration environment. -/
 def withIsolatedExamplesEnvironment (act : m α): m α := do
   let examplesEnv ← match (← read).examplesEnvironment with
   | .none => getEnv
