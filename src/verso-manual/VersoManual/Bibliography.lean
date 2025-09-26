@@ -56,6 +56,17 @@ structure Thesis where
   url : Option String := none
 deriving ToJson, FromJson, BEq, Hashable, Ord
 
+structure Book where
+  title : Doc.Inline Manual
+  authors : Array (Doc.Inline Manual)
+  year : Int
+  url : Option String := none
+  isbn : Option String := none -- TODO: make concrete type `ISBN10` or `ISBN13`
+  publisher : Doc.Inline Manual
+  edition : Option (Doc.Inline Manual) := none
+  series : Option ((Doc.Inline Manual) × Int) := none
+deriving ToJson, FromJson, BEq, Hashable, Ord
+
 structure ArXiv where
   title : Doc.Inline Manual
   authors : Array (Doc.Inline Manual)
@@ -84,6 +95,7 @@ inductive Citable where
   | thesis : Thesis → Citable
   | arXiv : ArXiv → Citable
   | article : Article → Citable
+  | book : Book → Citable
 deriving ToJson, FromJson, BEq, Hashable, Ord
 
 instance : Coe InProceedings Citable where
@@ -98,21 +110,25 @@ instance : Coe ArXiv Citable where
 instance : Coe Article Citable where
   coe := .article
 
+instance : Coe Book Citable where
+  coe := .book
+
 def Citable.authors : Citable → Array (Doc.Inline Manual)
-  | .inProceedings p | .arXiv p | .article p => p.authors
+  | .inProceedings p | .arXiv p | .article p | .book p => p.authors
   | .thesis p => #[p.author]
 
 def Citable.title : Citable → Doc.Inline Manual
-  | .inProceedings p | .arXiv p | .thesis p | .article p => p.title
+  | .inProceedings p | .arXiv p | .thesis p | .article p | .book p => p.title
 
 def Citable.year : Citable → Int
-  | .inProceedings p | .arXiv p | .thesis p | .article p => p.year
+  | .inProceedings p | .arXiv p | .thesis p | .article p | .book p => p.year
 
 def Citable.url : Citable → Option String
   | .inProceedings p => p.url
   | .thesis p => p.url
   | .arXiv p => some s!"https://arxiv.org/abs/{p.id}"
   | .article p => p.url
+  | .book p => p.url
 
 
 private def slugString : Doc.Inline Manual → String
@@ -165,7 +181,10 @@ def Citable.bibHtml (go : Doc.Inline Genre.Manual → HtmlT Manual (ReaderT Exte
   match c with
   | .inProceedings p =>
     let authors ← andList <$> p.authors.mapM go
-    return {{ {{authors}} s!", {p.year}. " {{ link {{"“" {{← go p.title}} "”"}} }} ". In " <em>{{← go p.booktitle}}"."</em>{{(← p.series.mapM go).map ({{" (" {{·}} ")" }}) |>.getD .empty}} }}
+    return {{
+      {{authors}} s!", {p.year}. " {{ link {{"“" {{← go p.title}} "”"}} }}
+      ". In " <em>{{← go p.booktitle}}"."</em>{{(← p.series.mapM go).map ({{" (" {{·}} ")" }}) |>.getD .empty}}
+    }}
   | .article p =>
     let authors ← andList <$> p.authors.mapM go
     return {{ {{authors}} " (" {{(← p.month.mapM go).map (· ++ {{" "}}) |>.getD .empty}}s!"{p.year}" "). " {{ link {{"“" {{← go p.title}} "”"}} }} ". " <em>{{← go p.journal}}"."</em> <strong>{{← go p.volume}}</strong>" "{{← go p.number}} {{p.pages.map (fun (x, y) => s!"pp. {x}–{y}") |>.getD .empty }}  "."}}
@@ -174,6 +193,13 @@ def Citable.bibHtml (go : Doc.Inline Genre.Manual → HtmlT Manual (ReaderT Exte
   | .arXiv p =>
     let authors ← andList <$> p.authors.mapM go
     return {{ {{authors}} s!", {p.year}. " {{ link {{"“" {{← go p.title}} "”"}} }} ". arXiv:" {{p.id}} }}
+  | .book p =>
+    let authors ← andList <$> p.authors.mapM go
+    return {{
+      {{authors}} s!", {p.year}. " {{ link {{"“" {{← go p.title}} "”"}} }} ". "
+      {{ p.series.map (λ (s, v) => {{ "Volume " <strong>s!"{v}"</strong> " of " /- TODO: insert series -/ ", "}}) |>.getD .empty }}
+      {{← go (p.publisher)}}". "
+    }}
 where
   wrap (content : Html) : Html := {{<span class="citation">{{content}}</span>}}
   link (title : Html) : Html :=
