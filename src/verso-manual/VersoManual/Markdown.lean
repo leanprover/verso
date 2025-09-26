@@ -47,9 +47,14 @@ def attr' (val : Array AttrText) : Except String String := do
   | .error e => .error e
   | .ok s => pure s
 
+/-- A mapping from markdown document header levels to actual verso nesting levels.
+The reason we need this is that we make a best effort to repair non-consecutive
+markdown header levels in a reasonable way, so we need to remember which mapping
+choices we already made. -/
+private abbrev HeaderMapping := List (Nat × Nat)
+
 private structure MDState where
-  /-- A mapping from document header levels to actual nesting levels -/
-  inHeaders : List (Nat × Nat) := []
+  inHeaders : HeaderMapping := []
 deriving Inhabited
 
 private abbrev MDT m block inline α := ReaderT (MDContext m block inline) (StateT MDState m) α
@@ -241,7 +246,9 @@ where
 open Verso.Doc.Elab
 
 /--
-Updates the active sections given a new header with `level`.
+Updates the active sections given a new header with `level`. We specifically close
+all sections that have a markdown header level that is ≥ {name}`level`, to prepare
+the state for pushing new a part at level {name}`level`.
 -/
 private partial def closeSections {m} [Monad m]
     [MonadStateOf PartElabM.State m]
@@ -249,15 +256,23 @@ private partial def closeSections {m} [Monad m]
   let hdrs := (← getThe MDState).inHeaders
   match hdrs with
   | [] => modifyThe MDState ({· with inHeaders := [(level, 0)]})
-  | (docLevel, nesting) :: more =>
-    if level ≤ docLevel then
+  | (docLevel, _) :: more =>
+    if docLevel ≥ level then
       if let some ctxt' := (← getThe PartElabM.State).partContext.close default then -- Markdown parser provides no source position
         modifyThe PartElabM.State fun st => {st with partContext := ctxt'}
-        closeSections level
-      if level < docLevel then
         modifyThe MDState ({· with inHeaders := more})
-    else
-      modifyThe MDState ({· with inHeaders := (level, nesting + 1) :: hdrs})
+        closeSections level
+      else
+        panic! "tried to close part but couldn't"
+
+private partial def newSection {m} [Monad m]
+    [MonadStateOf PartElabM.State m]
+    (level : Nat) : MDT m b i Unit := do
+  let hdr := (← getThe MDState).inHeaders
+  let nextNesting := match hdr with
+  | [] => 0
+  | (_, nesting) :: _ => nesting + 1
+  modifyThe MDState ({· with inHeaders := (level, nextNesting) :: hdr})
 
 private partial def addPartFromMarkdownAux {m} [Monad m]
     [MonadLiftT PartElabM m] [MonadStateOf PartElabM.State m]
@@ -265,6 +280,7 @@ private partial def addPartFromMarkdownAux {m} [Monad m]
     : MD4Lean.Block → MDT m Term Term Unit
   | .header level txt => do
     closeSections level
+    newSection level
     let txtStxs ← txt.mapM inlineFromMarkdown |>.run' none
     let titleTexts ← match txt.mapM stringFromMarkdownText with
       | .ok t => pure t
@@ -298,10 +314,10 @@ def addPartFromMarkdown {m} [Monad m]
     [MonadLiftT PartElabM m] [MonadStateOf PartElabM.State m]
     [MonadQuotation m] [AddMessageContext m] [MonadError m]
     (md : MD4Lean.Block)
-    (currentHeaderLevels : List (Nat × Nat) := [])
+    (currentHeaderLevels : HeaderMapping := [])
     (handleHeaders : List (Array Term → m Term) := [])
     (elabInlineCode : Option (Option String → String → m Term) := none)
-    (elabBlockCode : Option (Option String → Option String → String → m Term) := none) : m (List (Nat × Nat)) := do
+    (elabBlockCode : Option (Option String → Option String → String → m Term) := none) : m HeaderMapping := do
   let ctxt := {headerHandlers := ⟨handleHeaders⟩, elabInlineCode, elabBlockCode}
   let (_, { inHeaders }) ← (addPartFromMarkdownAux md |>.run ctxt |>.run {inHeaders := currentHeaderLevels})
   return inHeaders

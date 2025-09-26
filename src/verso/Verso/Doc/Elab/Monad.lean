@@ -256,6 +256,7 @@ partial def FinishedPart.toTOC : FinishedPart → TOC
     .mk titleString titleStx endPos (subParts.map toTOC)
   | .included name => .included name
 
+/-- Information describing a part still under construction. -/
 structure PartFrame where
   titleSyntax : Syntax
   expandedTitle : Option (String × Array (TSyntax `term)) := none
@@ -264,15 +265,26 @@ structure PartFrame where
   priorParts : Array FinishedPart
 deriving Repr, Inhabited
 
+/-- Turn an previously active {name}`PartFrame` into a {name}`FinishedPart`. -/
 def PartFrame.close (fr : PartFrame) (endPos : String.Pos) : FinishedPart :=
   let (titlePreview, titleInlines) := fr.expandedTitle.getD ("<anonymous>", #[])
   .mk fr.titleSyntax titleInlines titlePreview fr.metadata fr.blocks fr.priorParts endPos
 
+/-- Information available while constructing a part. It extends
+{name}`PartFrame` because that data represents the current frame. The
+field {name PartContext.parents}`parents` represents other parts above
+us in the hierarchy that are still being built. -/
 structure PartContext extends PartFrame where
   parents : Array PartFrame
 deriving Repr, Inhabited
 
+/-- The current nesting level is the number of frames in the stack of
+parent parts being built. -/
 def PartContext.level (ctxt : PartContext) : Nat := ctxt.parents.size
+
+/-- Close the current part. It is appended to {name}`priorParts`, and
+the top of the stack of our parents becomes the current frame. Returns
+{name}`none` if there are no parents. -/
 def PartContext.close (ctxt : PartContext) (endPos : String.Pos) : Option PartContext := do
   let fr ← ctxt.parents.back?
   pure {
@@ -284,6 +296,7 @@ def PartContext.close (ctxt : PartContext) (endPos : String.Pos) : Option PartCo
     priorParts := fr.priorParts.push <| ctxt.toPartFrame.close endPos
   }
 
+/-- Make the frame {name}`fr` the current frame. -/
 def PartContext.push (ctxt : PartContext) (fr : PartFrame) : PartContext := ⟨fr, ctxt.parents.push ctxt.toPartFrame⟩
 
 structure PartElabM.State where
