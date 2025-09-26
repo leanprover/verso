@@ -47,19 +47,23 @@ def attr' (val : Array AttrText) : Except String String := do
   | .error e => .error e
   | .ok s => pure s
 
-/-- A mapping from markdown document header levels to actual verso nesting levels.
-The list
+/--
+A mapping from markdown document header levels to actual verso nesting levels.
+The values in the list are markdown header levels. Their position in the list
+is the verso nesting level, with the final element being verso level 0.
+For example, the list
     `[5,4,2,1]`
-is understood as mapping:
+is understood as associating:
 - markdown level 1 to verso nesting 0
 - markdown level 2 to verso nesting 1
 - markdown level 4 to verso nesting 2
 - markdown level 5 to verso nesting 3
 
-The reason we need this data at all is that we make a best effort to
-repair non-consecutive markdown header levels in a reasonable way, so
-we need to remember which mapping choices we already made. -/
-private abbrev HeaderMapping := List Nat
+We need to keep this state to appropriately repair non-consecutive
+markdown header levels.
+-/
+public def HeaderMapping := List Nat
+deriving Inhabited
 
 private structure MDState where
   inHeaders : HeaderMapping := []
@@ -254,9 +258,12 @@ where
 open Verso.Doc.Elab
 
 /--
-Updates the active sections given a new header with `level`. We specifically close
-all sections that have a markdown header level that is ≥ {name}`level`, to prepare
-the state for pushing new a part at level {name}`level`.
+Close all sections that have a markdown header level that is ≥
+{name}`level`, to prepare the state for pushing new a part at level
+{name}`level`.
+
+We close a frame in the `.partContext` of `PartElabM.State` exactly in lockstep
+with dropping the head of `inHeaders` in `MDState`.
 -/
 private partial def closeSections {m} [Monad m]
     [MonadStateOf PartElabM.State m]
@@ -266,13 +273,18 @@ private partial def closeSections {m} [Monad m]
   | [] => pure ()
   | docLevel :: more =>
     if docLevel ≥ level then
-      if let some ctxt' := (← getThe PartElabM.State).partContext.close default then -- Markdown parser provides no source position
+      -- `default` here because markdown parser provides no source position
+      if let some ctxt' := (← getThe PartElabM.State).partContext.close default then
         modifyThe PartElabM.State fun st => {st with partContext := ctxt'}
         modifyThe MDState ({· with inHeaders := more})
         closeSections level
       else
         panic! "tried to close part but couldn't"
 
+/--
+In our header mapping bookkeeping, create a new section with a new markdown header with level {name}`level`.
+This must be accompanied by pushing a new part.
+-/
 private partial def newSection {m} [Monad m]
     [MonadStateOf PartElabM.State m]
     (level : Nat) : MDT m b i Unit := do
