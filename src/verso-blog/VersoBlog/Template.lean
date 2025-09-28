@@ -174,6 +174,27 @@ def blockHtml (g : Genre)
         (fun x => goI (x.cast bg.inline_eq.symm) |>.cast)
         (fun x => goB (x.cast bg.inline_eq.symm bg.block_eq.symm) |>.cast)
         (contents.map (·.cast bg.inline_eq bg.block_eq)) |>.cast (by simp [Page, *]) (by simp [Page, *])
+  | .docstring indent declName?, contents => do
+    return {{
+      <div class="docstring" {{declName?.map ("data-docstring-for", ·.toString) |>.toArray}} style=s!"--indent: {indent}">
+        {{← contents.mapM goB}}
+      </div>
+    }}
+  | .docstringSection lvl, contents => do
+    if lvl > 5 then
+      logError s!"Docstring header level {lvl + 1} is greater than the allowed HTML nesting of `<h6>`"
+    if let some (Block.para first) := contents[0]? then
+      let contents := contents.extract 1
+      return {{
+        <section>
+          {{ .tag s!"h{lvl + 1}" #[] (← first.mapM goI) }}
+          {{ ← contents.mapM goB }}
+        </section>
+      }}
+    else
+      logError "Internal error: docstring section missing leading paragraph as title"
+      contents.mapM goB
+
 
 def inlineHtml (g : Genre) [bg : BlogGenre g]
     [MonadConfig (HtmlM g)] [MonadPath (HtmlM g)]

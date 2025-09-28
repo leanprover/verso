@@ -5,13 +5,14 @@ Author: David Thrane Christiansen
 -/
 
 set_option linter.missingDocs true
+set_option doc.verso true
 
 namespace Verso.Search.Stemmer.Porter
 
 /-!
 This module implements a fairly naïve Porter stemmer, as described by the inventor
-[here](https://tartarus.org/martin/PorterStemmer/). This is the algorithm used by elasticlunr.js, so
-there's no need to use anything more powerful.
+[here](https://tartarus.org/martin/PorterStemmer/). This is the algorithm used by
+{lit}`elasticlunr.js`, so there's no need to use anything more powerful.
 
 Profiling shows that index generation is fast, and costs are dominated by generating and emitting
 JSON. If it ever becomes a performance bottleneck, there are a number of optimizations that can be
@@ -30,8 +31,8 @@ reference implementation or the paper, and it is tested against Porter's provide
 -/
 
 /--
-Checks whether the character at position `i` is a consonant. `'y'` is a consonant if not preceded by
-a consonant.
+Checks whether the character at position {name}`i` is a consonant. {lean}`'y'` is a consonant if not
+preceded by a consonant.
 -/
 def isConsonant (str : String) (i : String.Pos) : Bool :=
   match str.get! i with
@@ -109,8 +110,8 @@ def endsWithDoubleConsonant (word : String) : Bool :=
     isConsonant word i && word.get! i == word.get! j
 
 /--
-Checks whether a word ends with a CVC pattern where the final consonant is not `'w'`, `'x'`, or
-`'y'`.
+Checks whether a word ends with a CVC pattern where the final consonant is not {lean}`'w'`,
+{lean}`'x'`, or {lean}`'y'`.
 -/
 def endsWithCvc (word : String) : Bool :=
   word.length ≥ 3 &&
@@ -122,8 +123,8 @@ def endsWithCvc (word : String) : Bool :=
       ch != 'w' && ch != 'x' && ch != 'y'
 
 /--
-Replaces the given `suffix` with `replacement` if the remaining word after removing the suffix
-satisfies the `condition`.
+Replaces the given {name}`suffix` with {name}`replacement` if the remaining word after removing the suffix
+satisfies the {name}`condition`.
 -/
 def replaceSuffix (word : String) (suffix : String) (replacement : String)
   (condition : String → Bool) : String :=
@@ -166,7 +167,7 @@ def applyRules (rules : List Rule) (word : String) : String := Id.run do
   return word
 
 /--
-Returns the result of applying the first rule that matches, or `none` if none match.
+Returns the result of applying the first rule that matches, or {name}`none` if none match.
 -/
 def applyRules? (rules : List Rule) (word : String) : Option String := Id.run do
   for rule in rules do
@@ -372,7 +373,7 @@ where
     .mk "ic" "" (measure · > 1)]
 
 /--
-Step 5a of Porter's algorithm. Removes extra trailing `'e'`.
+Step 5a of Porter's algorithm. Removes extra trailing {lean}`'e'`.
 -/
 def step5a : String → String :=
   applyRules [
@@ -380,7 +381,7 @@ def step5a : String → String :=
   ]
 
 /--
-Step 5b of Porter's algorithm. Converts trailing `'ll'` to `'l'`.
+Step 5b of Porter's algorithm. Converts trailing {lean}`"ll"` to {lean}`"l"`.
 -/
 def step5b (word : String) : String :=
   if measure word > 1 ∧ endsWithDoubleConsonant word ∧ word.endsWith "l" then

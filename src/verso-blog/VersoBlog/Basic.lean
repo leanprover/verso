@@ -70,6 +70,18 @@ inductive BlockExt where
   A reference to a component.
   -/
   | component (name : Lean.Name) (data : Json)
+  /--
+  A Lean docstring that was indented `indent` spaces in the original source.
+  -/
+  | docstring (indent : Nat) (declName? : Option Lean.Name)
+  /--
+  A section in a Lean docstring.
+
+  Lean docstrings may contain nested headers, but they are not sections of the document as a whole.
+  The contents of a docstring section are expected to be a paragraph that contains the section's
+  title, followed by the actual content.
+  -/
+  | docstringSection (level : Nat)
 
 /--
 The additional inline elements available in pages and posts.
@@ -119,7 +131,7 @@ inductive InlineExt where
 
 section
 local instance : Repr Json where
-  reprPrec v := Repr.addAppParen v.render
+  reprPrec v := Repr.addAppParen <| "json%" ++ v.render
 
 deriving instance Repr for BlockExt
 deriving instance Repr for InlineExt

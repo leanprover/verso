@@ -7,10 +7,13 @@ module
 import Std.Data.HashSet
 import Verso.Method
 public import Lean.Data.Json.FromToJson.Basic
+import Std.Tactic.BVDecide
+meta import Lean.Elab.Command
 
 public section
 
 set_option linter.missingDocs true
+set_option doc.verso true
 
 namespace Verso.Multi
 open Verso.Method
@@ -18,6 +21,55 @@ open Lean (ToJson FromJson)
 open Std (HashSet)
 
 private def validCharString := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"
+
+open Lean Elab Command in
+run_cmd do
+  let x := Lean.mkIdent `x
+  let mut e ← `(False)
+  for c in validCharString.toList do
+    e ← `($x = $(Lean.quote c) ∨ $e)
+  elabCommand <| ← `(def $(mkIdent `Slug.ValidChar) ($x : Char) : Prop := $e)
+  for c in validCharString.toList do
+    elabCommand <| ← `(@[simp, grind .] theorem $(mkIdent <| `Slug.ValidChar ++ .str .anonymous s!"{c}") : $(mkIdent `Slug.ValidChar) $(quote c) := by unfold $(mkIdent `Slug.ValidChar); simp)
+
+/--
+Checks whether a character is valid in slugs (that is, whether it's an English letter, a digit, a
+dash, or an underscore).
+-/
+def Slug.validChar (c : Char) : Bool :=
+  lower c || upper c || digit c || c == '-' || c == '_'
+where
+  lower
+    | 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'g' | 'h' | 'i' | 'j' | 'k' | 'l' | 'm' | 'n' | 'o' | 'p' | 'q' | 'r' | 's' | 't' | 'u' | 'v' | 'w' | 'x' | 'y' | 'z' => true
+    | _ => false
+  upper
+    | 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'I' | 'J' | 'K' | 'L' | 'M' | 'N' | 'O' | 'P' | 'Q' | 'R' | 'S' | 'T' | 'U' | 'V' | 'W' | 'X' | 'Y' | 'Z' => true
+    | _ => false
+  digit
+    | '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' => true
+    | _ => false
+
+
+theorem Slug.validChar_eq_ValidChar {c : Char} : Slug.validChar c = Slug.ValidChar c := by
+  simp only [eq_iff_iff]
+  constructor
+  . simp [validChar]
+    intro
+    repeat' (rename_i h; cases h)
+    . rename_i h; simp [validChar.lower] at h; split at h <;> simp_all [ValidChar]
+    . rename_i h; simp [validChar.upper] at h; split at h <;> simp_all [ValidChar]
+    . rename_i h; simp [validChar.digit] at h; split at h <;> simp_all [ValidChar]
+    all_goals (simp_all [ValidChar])
+  . intro
+    repeat (rename_i h; cases h; subst_eqs; rfl)
+    contradiction
+
+instance : DecidablePred Slug.ValidChar := fun c =>
+  if h : Slug.validChar c then
+    isTrue <| by simp_all [Slug.validChar_eq_ValidChar]
+  else
+    isFalse <| by simp_all [Slug.validChar_eq_ValidChar]
+
 
 /-- The characters allowed in slugs. -/
 def Slug.validChars :=
@@ -108,23 +160,26 @@ instance : DecidableRel (@LE.le Slug _) := fun s1 s2 =>
 defmethod String.sluggify (str : String) : Slug :=
   ⟨asSlug str⟩
 
+instance : Append Slug where
+  append := private fun | ⟨s1⟩, ⟨s2⟩ => ⟨s1 ++ s2⟩
+
 /--
 Converts a string to a slug.
 -/
 def ofString (str : String) : Slug := str.sluggify
 
 /--
-Returns a slug that's not present in `used`, starting with `slug` and appending consecutive numbers
+Returns a slug that's not present in {name}`used`, starting with {name}`slug` and appending consecutive numbers
 until it becomes unique.
 
-The consecutive numbers start at `startCount`, which is `1` by default. Callers with reason to
+The consecutive numbers start at {name}`startCount`, which is {lean (type:="Nat")}`1` by default. Callers with reason to
 believe that there will be many collisions may provide an alternative starting value.
 -/
 partial def unique (used : HashSet Slug) (slug : Slug) (startCount : Nat := 1) : Slug :=
   if !(used.contains slug) then slug
   else
     let rec attempt (i : Nat) :=
-      let slug' := s!"{slug.toString}{i}".sluggify
+      let slug' := s!"{slug.toString}-{i}".sluggify
       if !(used.contains slug') then slug'
       else attempt (i + 1)
     attempt startCount

@@ -10,7 +10,6 @@ import Verso.Code
 import Verso.Doc
 import Verso.Doc.ArgParse
 import Verso.Doc.Concrete
-import Verso.EditDistance
 import Verso.Doc.Elab
 import Verso.Doc.Elab.ExpanderAttribute
 import Verso.Doc.Elab.InlineString
