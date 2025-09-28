@@ -7,6 +7,7 @@ import Lean.Parser
 import Verso.Parser
 import Lean.Elab.Term.TermElabM
 import Lean.Meta.Hint
+import Verso.Output.Html.Entities
 
 namespace Verso.Output
 

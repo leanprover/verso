@@ -132,6 +132,33 @@ public def Inline.other (container : genre.Inline) (content : Array (Inline genr
 
 public def Inline.empty : Inline genre := .concat #[]
 
+public partial def Inline.rewriteOtherM [Monad m]
+    (onInline :
+      (Inline genre1 → m (Inline genre2)) →
+      genre1.Inline → Array (Inline genre1) →
+      m (Inline genre2)) :
+    Inline genre1 → m (Inline genre2)
+  | .text str => pure <| .text str
+  | .linebreak str => pure <| .linebreak str
+  | .image alt url => pure <| .image alt url
+  | .code s => pure <| .code s
+  | .math m s => pure <| .math m s
+  | .emph content => .emph <$> content.mapM (rewriteOtherM onInline)
+  | .bold content => .bold <$> content.mapM (rewriteOtherM onInline)
+  | .concat content => .concat <$> content.mapM (rewriteOtherM onInline)
+  | .footnote name content => .footnote name <$> content.mapM (rewriteOtherM onInline)
+  | .link content url => (.link · url) <$> content.mapM (rewriteOtherM onInline)
+  | .other container content =>
+    onInline (rewriteOtherM onInline) container content
+
+public partial def Inline.rewriteOther
+    (onInline :
+      (Inline genre1 → Inline genre2) →
+      genre1.Inline → Array (Inline genre1) →
+      Inline genre2) :
+    Inline genre1 → Inline genre2 :=
+  Inline.rewriteOtherM (m := Id) onInline
+
 private partial def Inline.toJson [ToJson i] : Lean.Doc.Inline i → Json
   | .text str => json% {"text": $str}
   | .emph content => json% {"emph": $(content.map toJson)}
@@ -383,6 +410,36 @@ public instance : Append (Lean.Doc.Block i b) where
   inferInstanceAs (Append (Lean.Doc.Block genre.Inline genre.Block))
 
 public def Block.empty : Block genre := .concat #[]
+
+public partial def Block.rewriteOtherM [Monad m]
+    (onInline :
+      (Inline genre1 → m (Inline genre2)) →
+      genre1.Inline → Array (Inline genre1) → m (Inline genre2))
+    (onBlock :
+      (Inline genre1 → m (Inline genre2)) →
+      (Block genre1 → m (Block genre2)) →
+      genre1.Block → Array (Block genre1) → m (Block genre2)) :
+    Block genre1 → m (Block genre2)
+  | .code s => pure <| .code s
+  | .para content => .para <$> content.mapM (·.rewriteOtherM onInline)
+  | .blockquote content => .blockquote <$> content.mapM (·.rewriteOtherM onInline onBlock)
+  | .concat content => .concat <$> content.mapM (·.rewriteOtherM onInline onBlock)
+  | .ol n items => .ol n <$> items.mapM fun ⟨content⟩ => (⟨·⟩) <$> content.mapM (·.rewriteOtherM onInline onBlock)
+  | .ul items => .ul <$> items.mapM fun ⟨content⟩ => (⟨·⟩) <$> content.mapM (·.rewriteOtherM onInline onBlock)
+  | .dl items => .dl <$> items.mapM fun ⟨term, desc⟩ => (⟨·, ·⟩) <$> term.mapM (·.rewriteOtherM onInline) <*> desc.mapM (·.rewriteOtherM onInline onBlock)
+  | .other container content =>
+    onBlock (Inline.rewriteOtherM onInline) (Block.rewriteOtherM onInline onBlock) container content
+
+public partial def Block.rewriteOther
+    (onInline :
+      (Inline genre1 → Inline genre2) →
+      genre1.Inline → Array (Inline genre1) → Inline genre2)
+    (onBlock :
+      (Inline genre1 → Inline genre2) →
+      (Block genre1 → Block genre2) →
+      genre1.Block → Array (Block genre1) → Block genre2) :
+    Block genre1 → Block genre2 :=
+  Block.rewriteOtherM (m := Id) onInline onBlock
 
 private partial def Block.toJson [ToJson i] [ToJson b] : Lean.Doc.Block i b → Json
   | .para contents => json% {"para": $contents}

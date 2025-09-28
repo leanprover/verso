@@ -226,42 +226,9 @@ where
       else
         (hl.dropTextRight 1, 0)
 
-structure LMod where
-  name : Name
-  contents : Array ModuleItem'
-
-open Verso.BEq in
-instance : BEq LMod where
-  beq := ptrEqThen fun
-    | ⟨name1, contents1⟩, ⟨name2, contents2⟩ =>
-      name1 == name2 && contents1 == contents2
-
-def load (jsonFile : System.FilePath) : IO LMod := do
-  let json ← IO.FS.readFile jsonFile
-  let json ←
-    match Lean.Json.parse json with
-    | .error e => throw <| .userError s!"Error parsing {jsonFile}: {e}"
-    | .ok v => pure v
-  let name ←
-    match json.getObjValAs? String "module" with
-    | .error e => throw <| .userError <| s!"Error decoding module name in {jsonFile}: {e}"
-    | .ok v => pure v
-  let itemsJson ←
-    match json.getObjVal? "items" with
-    | .error e => throw <| .userError <| s!"Error decoding items in {jsonFile}: {e}"
-    | .ok v => pure v
-  let eItems ←
-    match FromJson.fromJson? (α := VersoLiterate.ExportedModuleItems) itemsJson with
-    | .error e =>
-      throw <| .userError <| s!"Error decoding {jsonFile}: {e}"
-    | .ok v => pure v
-  let items ←
-    match eItems.toModuleItems with
-    | .error e => throw <| IO.userError e
-    | .ok v => pure { name := name.toName, contents := v }
 
 structure Dir where
-  mod : Option LMod := none
+  mod : Option LitMod := none
   children : Array (Name × Dir) := #[]
 deriving BEq
 
@@ -283,7 +250,7 @@ instance : GetElem? Dir Name Dir Dir.Contains where
       simp_all [Dir.Contains]
   getElem? := Dir.get?
 
-def Dir.insert (mod : LMod) (dir : Dir) : Dir :=
+def Dir.insert (mod : LitMod) (dir : Dir) : Dir :=
   insert' mod.name.components dir
 where
   insert' : List Name → Dir → Dir
@@ -302,7 +269,10 @@ partial def Dir.sort (dir : Dir) : Dir :=
         |>.map (fun (x, d) => (x, d.sort))
         |>.qsort (fun c c' => c.1.toString < c'.1.toString) }
 
-def loadPath (path : System.FilePath) : IO Dir := do
+/--
+Recursively loads all the modules in the given directory.
+-/
+def loadDir (path : System.FilePath) : IO Dir := do
   let mut files := [path]
   let mut dir : Dir := {}
   repeat
@@ -430,7 +400,7 @@ where
 
 
 open Verso Output Doc Html in
-def emitMod (root : Dir) (outDir: System.FilePath) (mod : LMod) : EmitM Unit := do
+def emitMod (root : Dir) (outDir: System.FilePath) (mod : LitMod) : EmitM Unit := do
   let components := mod.name.components
   let nesting := components.length
 
@@ -714,7 +684,7 @@ def main (args : List String) : IO UInt32 := do
   IO.FS.writeFile (config.outputDir / "tippy-border.css") Verso.Code.Highlighted.WebAssets.tippy.border.css
   IO.FS.writeFile (config.outputDir / "code.css") code.css
   emitSearchBox (config.outputDir / "-verso-search")
-  let dir ← loadPath config.inputDir
+  let dir ← loadDir config.inputDir
   let dir := dir.sort
   let (dir, traverseState) ← traverse dir
   let ctx := {

@@ -10,7 +10,7 @@ import SubVerso.Highlighting.Export
 import MD4Lean
 import Lean.DocString.Syntax
 import Lean.DocString.Extension
-import Verso
+
 import VersoLiterate
 
 open Lean Elab Frontend

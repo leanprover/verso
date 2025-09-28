@@ -90,7 +90,7 @@ structure ModuleItem' where
   kind : SyntaxNodeKind
   defines : Array Name
   code : Array Code
-deriving Inhabited
+deriving Inhabited, Repr
 
 open Verso.BEq in
 instance : BEq ModuleItem' where

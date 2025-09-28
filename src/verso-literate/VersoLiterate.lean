@@ -6,4 +6,5 @@ Author: David Thrane Christiansen
 
 import VersoLiterate.Basic
 import VersoLiterate.Exported
+import VersoLiterate.Module
 import VersoLiterate.Search
