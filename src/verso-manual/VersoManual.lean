@@ -36,6 +36,7 @@ import VersoManual.Linters
 import VersoManual.LocalContents
 import VersoManual.InlineLean
 import VersoManual.ExternalLean
+import VersoManual.Literate
 import VersoManual.Marginalia
 import VersoManual.Bibliography
 import VersoManual.Table

@@ -113,7 +113,15 @@ def handleModName : InlineToLiterate
     throwError "Wrong data"
   | _, _, _ => pure none
 
-def inline := #[handleLocal, handleConst, handlePostponed, handleTerm, handleOption, handleModName]
+def handleTactic : InlineToLiterate
+  | ``Lean.Doc.Data.Tactic, val, content => do
+    if let some { name } := val.get? Lean.Doc.Data.Tactic then
+      let s := if let #[.code s] := content then s else name.toString
+      return some <| .other (.highlighted <| .token ⟨.keyword (some name) none none, s⟩) content
+    throwError "Wrong data"
+  | _, _, _ => pure none
+
+def inline := #[handleLocal, handleConst, handlePostponed, handleTerm, handleOption, handleModName, handleTactic]
 
 end Builtin
 
@@ -377,3 +385,25 @@ instance [Monad m] : GenreHtml Literate m where
     match ext with
     | .highlighted hl => hl.inlineHtml (g := Literate) "lean"
     | .data _ => contents.mapM goI
+
+
+/--
+Genres with {name}`LoadLiterate` instances allow Lean modules with module docstrings to be translated into
+documents.
+-/
+class LoadLiterate (g : Genre) where
+  inline
+    (go : Inline Literate → Inline g)
+    (container : Literate.Inline) (contents : Array (Inline Literate)) : Inline g
+  block
+    (goI : Inline Literate → Inline g) (goB : Block Literate → Block g)
+    (container : Literate.Block) (contents : Array (Block Literate)) : Block g
+
+  docstring (indent : Nat) (declName? : Option Name) (content : Array (Block g)) : Block g
+
+  docstringPart (lvl : Nat)
+    (title : Array (Inline g))
+    (content : Array (Block g)) : Block g
+
+partial def LoadLiterate.part [LoadLiterate g] (lvl : Nat) (p : Part g) : Block g :=
+  docstringPart lvl p.title (p.content ++ p.subParts.map (part (lvl + 1)))

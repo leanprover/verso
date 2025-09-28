@@ -11,6 +11,8 @@ import SubVerso.Highlighting
 import SubVerso.Module
 import VersoLiterate.Basic
 
+
+open Verso.Doc
 open Lean
 open SubVerso.Highlighting
 open SubVerso.Module
@@ -98,6 +100,18 @@ instance : BEq ModuleItem' where
     | ⟨r1, k1, d1, c1⟩, ⟨r2, k2, d2, c2⟩ =>
       r1 == r2 && k1 == k2 && d1 == d2 && ptrEqThen' c1 c2 (· == ·)
 
+structure LitMod where
+  name : Name
+  contents : Array ModuleItem'
+deriving Inhabited, Repr
+
+open Verso.BEq in
+instance : BEq LitMod where
+  beq := ptrEqThen fun
+    | ⟨name1, contents1⟩, ⟨name2, contents2⟩ =>
+      name1 == name2 && contents1 == contents2
+
+
 section
 open SubVerso.Highlighting Export
 
@@ -159,3 +173,162 @@ def ExportedModuleItems.toModuleItems (e : ExportedModuleItems) : Except String 
 
 
 end
+
+section
+variable [LoadLiterate g]
+
+partial def pushBlock (part : Part g) (block : Block g) : Part g :=
+  if part.subParts.isEmpty then
+    { part with content := part.content.push block }
+  else
+    { part with subParts := part.subParts.modify (part.subParts.size - 1) (pushBlock · block)}
+
+def pushPart (parent child : Part g) : Part g :=
+  { parent with subParts := parent.subParts.push child}
+
+def loadInline : Inline Literate → Inline g :=
+  Inline.rewriteOther LoadLiterate.inline
+
+def loadBlock : Block Literate → Block g :=
+  Block.rewriteOther LoadLiterate.inline LoadLiterate.block
+
+partial def loadPart (p : Part Literate) : Part g :=
+  let title := p.title.map loadInline
+  let content := p.content.map loadBlock
+  let subParts := p.subParts.map loadPart
+  {p with title, metadata := none, content, subParts}
+
+end
+
+
+section
+open Verso.Output.Html
+
+private partial def attrText : MD4Lean.AttrText → String
+  | .normal s => s
+  | .nullchar => ""
+  | .entity e => decodeEntity? e |>.getD e -- leave invalid entities alone
+
+private partial def attr (str : Array MD4Lean.AttrText) : String :=
+  str.map attrText |>.toList |> String.join
+
+private partial def mdTextString : MD4Lean.Text → String
+  | .normal s => s
+  | .nullchar | .img .. | .latexMath .. | .latexMathDisplay .. | .br .. | .softbr .. =>  ""
+  | .code s => s.toList |> String.join
+  | .a _ _ _ txt | .em txt | .strong txt | .wikiLink _ txt | .u txt | .del txt => txt.map mdTextString |>.toList |> String.join
+  | .entity e => decodeEntity? e |>.getD e -- leave invalid entities alone
+
+private partial def mdText : MD4Lean.Text → Except String (Inline g)
+  | .normal s => pure <| .text s
+  | .nullchar => pure .empty
+  | .softbr .. | .br .. => pure .empty
+  | .a href _title _ txt => (.link · (attr href)) <$> txt.mapM mdText
+  | .img src _title alt => pure <| .image (alt.map mdTextString |>.toList |> String.join) (attr src)
+  | .em txt => .emph <$> txt.mapM mdText
+  | .strong txt => .bold <$> txt.mapM mdText
+  | .entity e => pure <| .text (decodeEntity? e |>.getD e) -- leave invalid entities alone
+  | .code s => pure <| .code (s.toList |> String.join)
+  | .latexMath s => pure <| .math .inline (s.toList |> String.join)
+  | .latexMathDisplay s => pure <| .math .display (s.toList |> String.join)
+  | .wikiLink .. => throw "Wiki-style links not supported"
+  | .u .. => throw "Underline not supported"
+  | .del .. => throw "Strikethrough not supported"
+end
+
+private partial def mdBlock : MD4Lean.Block → Except String (Block g)
+  | .p xs => .para <$> xs.mapM mdText
+  | .ul _ _ items => .ul <$> items.mapM fun ⟨_, _, _, content⟩ => (⟨·⟩) <$> content.mapM mdBlock
+  | .ol _ n _ items => .ol n <$> items.mapM fun ⟨_, _, _, content⟩ => (⟨·⟩) <$> content.mapM mdBlock
+  | .blockquote bs => .blockquote <$> bs.mapM mdBlock
+  | .code _ _ _ s => pure <| .code <| String.join s.toList
+  | .header .. => throw "Headers may not be nested under other blocks"
+  | .table .. => throw "Markdown tables not supported"
+  | .html .. => throw "Literal HTML in Markdown not supported"
+  | .hr => throw "Thematic break (horizontal rule) in Markdown not supported"
+
+--open Code.External.ExternalCode in
+partial def modToPage [LoadLiterate g] (mod : LitMod) (title : Array (Inline g)) (titleString : String) : Except String (Part g) := do
+  let mut stack : Array (Part g) := #[]
+  let mut p : Part g := {title, titleString, metadata := none, content := #[], subParts := #[]}
+
+  let mut mdLevels := #[] -- Header nesting for legacy Markdown moduledocs
+
+  for item in mod.contents do
+    for c in item.code do
+      match c with
+      | .highlighted hl =>
+        p := pushBlock p <| loadBlock (.other (.highlighted hl) #[])
+      | .markdownModDoc doc =>
+        for b in doc.blocks do
+          match b with
+          | .header lvl title =>
+            let mdLevel := mdLevels.back? |>.getD 0
+              let titleString := String.join <| Array.toList <| title.map mdTextString
+              let title ← title.mapM mdText
+              let newPart := {title, titleString, metadata := none, content := #[], subParts := #[]}
+
+            if lvl > mdLevel then
+              stack := stack.push p
+              mdLevels := mdLevels.push lvl
+              p := newPart
+            else
+              while h : stack.size > 0 ∧ mdLevels.size > 0 ∧ lvl < mdLevels.back?.getD 0 do
+                let p' := stack.back
+                stack := stack.pop
+                mdLevels := mdLevels.pop
+                p := pushPart p' p
+              p := pushPart p newPart
+          | other =>
+            match mdBlock other with
+            | .error e => throw e
+            | .ok b' => p := pushBlock p b'
+      | .modDoc doc =>
+        for b in doc.text do
+          p := pushBlock p (loadBlock b)
+        for (lvl, sec) in doc.sections do
+          if lvl > stack.size then
+            stack := stack.push p
+            p := loadPart sec
+          else
+            while h : lvl < stack.size do
+              let p' := stack.back
+              stack := stack.pop
+              p := pushPart p' p
+            stack := stack.push p
+            p := loadPart sec
+      | .verso i declName? docstring =>
+        p := pushBlock p <| LoadLiterate.docstring i declName? <| docstringBlock docstring
+      | .markdown i declName? docstring =>
+        p := pushBlock p <| LoadLiterate.docstring i declName? <| ← mdDocstringBlock docstring.blocks
+
+  while h : stack.size > 0 do
+    let p' := stack.back
+    stack := stack.pop
+    p := pushPart p' p
+  return p
+where
+  docstringBlock (doc : LitVersoDocString) : Array (Block g) :=
+    let parts := doc.subsections.map loadPart
+    doc.text.map loadBlock ++ parts.map (LoadLiterate.part 0)
+
+  mdDocstringBlock (blocks : Array MD4Lean.Block) : Except String (Array (Block g)) := do
+    let mut stack : Array (Nat × Array (Inline g) × Array (Block g)) := #[]
+    let mut current := #[]
+    for b in blocks do
+      if let .header lvl title := b then
+        let title ← title.mapM mdText
+        let outerLvl := stack.back?.map (·.1) |>.getD 0
+        while h : stack.size > 0 ∧ lvl ≤ (stack.back?.map (·.1) |>.getD 0) do
+          let (lvl', title', current') := stack.back
+          stack := stack.pop
+          current := current'.push <| LoadLiterate.docstringPart stack.size title' current
+        stack := stack.push (lvl, title, current)
+        current := #[]
+      else
+        current := current.push (← mdBlock b)
+    while h : stack.size > 0 do
+      let (lvl', title', current') := stack.back
+      stack := stack.pop
+      current := current'.push <| LoadLiterate.docstringPart stack.size title' current
+    return current
