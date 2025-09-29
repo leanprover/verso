@@ -258,15 +258,15 @@ where
 open Verso.Doc.Elab
 
 /--
-Close all sections that have a markdown header level that is ≥
-{name}`level`, to prepare the state for pushing new a part at level
-{name}`level`.
+Close all sections that have a markdown header level that is greater
+than or equal to {name}`level`, to prepare the state for pushing new a
+part at level {name}`level`.
 
 We close a frame in the `.partContext` of `PartElabM.State` exactly in lockstep
 with dropping the head of `inHeaders` in `MDState`.
 -/
 private partial def closeSections {m} [Monad m]
-    [MonadStateOf PartElabM.State m]
+    [MonadError m] [MonadStateOf PartElabM.State m]
     (level : Nat) : MDT m b i Unit := do
   let hdrs := (← getThe MDState).inHeaders
   match hdrs with
@@ -274,12 +274,11 @@ private partial def closeSections {m} [Monad m]
   | docLevel :: more =>
     if docLevel ≥ level then
       -- `default` here because markdown parser provides no source position
-      if let some ctxt' := (← getThe PartElabM.State).partContext.close default then
-        modifyThe PartElabM.State fun st => {st with partContext := ctxt'}
-        modifyThe MDState ({· with inHeaders := more})
-        closeSections level
-      else
-        panic! "tried to close part but couldn't"
+      let some ctxt' := (← getThe PartElabM.State).partContext.close default
+        |  throwError m!"Failed to close verso part corresponding to markdown section: no parts left"
+      modifyThe PartElabM.State fun st => {st with partContext := ctxt'}
+      modifyThe MDState ({· with inHeaders := more})
+      closeSections level
 
 /--
 In our header mapping bookkeeping, create a new section with a new markdown header with level {name}`level`.
@@ -338,3 +337,60 @@ def addPartFromMarkdown {m} [Monad m]
   let ctxt := {headerHandlers := ⟨handleHeaders⟩, elabInlineCode, elabBlockCode}
   let (_, { inHeaders }) ← (addPartFromMarkdownAux md |>.run ctxt |>.run {inHeaders := currentHeaderLevels})
   return inHeaders
+
+/--
+Given a finished part (which may contain subparts) render just the titles as markdown
+headings with a number of # that reflects their nesting depth. Meant to be used
+for debugging/testing only.
+-/
+def displayPartStructure (part : Verso.Doc.Elab.FinishedPart) (level : Nat := 1) : String := match part with
+  | .mk _ _ title _ _ subParts _ =>
+       let partsStr : String := subParts.map (displayPartStructure · (level + 1))
+         |>.toList |> String.join
+       let pref := List.replicate level "#" |> String.join
+       s!"{pref} {title}\n{partsStr}"
+  | .included name => s!"included {name}\n"
+
+/--
+Given a markdown string, parse it and return the displayed part structure.
+-/
+def testAddPartFromMarkdown (input : String) : Elab.TermElabM String := do
+  let some parsed := MD4Lean.parse input
+    | throwError m!"Couldn't parse markdown {input}"
+  let addParts : PartElabM Unit := do
+    let mut levels := []
+    for block in parsed.blocks do
+      levels ← addPartFromMarkdown block levels
+    closePartsUntil 0 0
+  let (_, _, part) ← addParts.run (Syntax.node .none identKind #[]) (mkConst ``Manual) default default
+  part.partContext.priorParts.toList.map displayPartStructure |> String.join |> pure
+
+/--
+info:
+# header1
+## header2-a
+### header3-aa
+## header 2-b
+### header3-ba
+### header3-bb
+#### header4-bba
+### header3-bc
+# another header
+## one more
+-/
+#guard_msgs in
+/- Exercise how inconsistent markdown header nesting depth
+is heuristically fixed. -/
+#eval do
+  IO.println <| "\n" ++ (← testAddPartFromMarkdown r#"
+# header1
+## header2-a
+### header3-aa
+## header 2-b
+##### header3-ba
+#### header3-bb
+###### header4-bba
+### header3-bc
+# another header
+## one more
+"#)
