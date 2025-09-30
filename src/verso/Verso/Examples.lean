@@ -389,3 +389,14 @@ info: Verso.Doc.Part.mk
 /-- info: true -/
 #guard_msgs in
 #eval toString (repr g) == (toString (repr g')).replace "after" "before"
+
+/-- error: Wrong header nesting - got 4 but expected at most 3 -/
+#guard_msgs in
+#docs (.none) h "Bad nesting" :=
+:::::::
+
+# Section
+## Subsection
+#### Sub^3section
+
+:::::::
