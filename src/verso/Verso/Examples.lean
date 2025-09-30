@@ -390,7 +390,8 @@ info: Verso.Doc.Part.mk
 #guard_msgs in
 #eval toString (repr g) == (toString (repr g')).replace "after" "before"
 
-/-- error: Wrong header nesting - got 4 but expected at most 3 -/
+/-! https://github.com/leanprover/verso/pull/541 -/
+/-- error: Wrong header nesting - got #### but expected at most ### -/
 #guard_msgs in
 #docs (.none) h "Bad nesting" :=
 :::::::
