@@ -4,6 +4,8 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 
+import Verso
+import VersoManual
 import VersoSearch.PorterStemmer
 import Tests
 
@@ -31,13 +33,37 @@ def testStemmer (_ : Config) : IO Unit := do
 
 def testParser (dir : System.FilePath) (fn : Lean.Parser.ParserFn) : Config → IO Unit := fun config =>
   Verso.GoldenTest.runTests {
-    testDir := ("src/tests/parser" : System.FilePath) / dir,
+    testDir := "src/tests/parser" / dir,
     runTest := fn.test,
     updateExpected := config.updateExpected
   }
 
+/--
+Tests manual-genre TeX generation. `dir` is a subdirectory specific to a particular test document.
+`doc` is the document itself.
+-/
+def testTexOutput (dir : System.FilePath) (doc : Verso.Doc.Part Verso.Genre.Manual) :
+    Config →  IO Unit := fun config =>
+  let versoConfig : Verso.Genre.Manual.Config := {
+    destination := "src/tests/integration" / dir / "output",
+    emitTeX := true,
+    emitHtmlMulti := false
+  }
+
+  let runTest : IO Unit  :=
+    open Verso Genre Manual in do
+    let logError (msg : String) := IO.eprintln msg
+    ReaderT.run (emitTeX logError versoConfig doc) extension_impls%
+
+  Verso.Integration.runTests {
+    testDir := "src/tests/integration" / dir,
+    updateExpected := config.updateExpected,
+    runTest
+  }
+
 open Lean.Parser in
 open Verso.Parser in
+open Verso.Integration in
 def tests := [
   testStemmer,
   testParser "metadataBlock" metadataBlock,
@@ -63,6 +89,7 @@ def tests := [
   testParser "block/olIndicator" (lookaheadOrderedListIndicator {} (fun type i => fakeAtom s! "{repr type} {i}")),
   testParser "block/" (block {}),
   testParser "document" document,
+  testTexOutput "sample-doc" SampleDoc.doc
 ]
 
 def getConfig (config : Config) : List String → IO Config
