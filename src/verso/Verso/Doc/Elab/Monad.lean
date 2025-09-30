@@ -430,7 +430,7 @@ def findLinksAndNotes : Expr → MetaM (Array (Expr × Expr))
 
 open Lean Meta Elab Term in
 def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := withRef block <| do
-  let ⟨_, g⟩ ← readThe DocElabContext
+  let g := (← readThe DocElabContext).genre
 
   let n ← mkFreshUserName `block
 
@@ -507,7 +507,7 @@ def DocElabM.addLinkRef (refName : TSyntax `str) : DocElabM (TSyntax `term) := d
 def PartElabM.addFootnoteDef (refName : TSyntax `str) (content : Array (TSyntax `term)) : PartElabM Unit := do
   let strName := refName.getString
   let docName ← currentDocName
-  let ⟨_, genre⟩ ← readThe DocElabContext
+  let genre := (← readThe DocElabContext).genre
   match (← getThe State).footnoteDefs[strName]? with
   | none =>
     let t := mkApp3 (.const ``HasNote []) (toExpr strName) (toExpr docName) genre
@@ -530,7 +530,7 @@ def PartElabM.addFootnoteDef (refName : TSyntax `str) (content : Array (TSyntax 
 
 def DocElabM.addFootnoteRef (refName : TSyntax `str) : DocElabM (TSyntax `term) := do
   let strName := refName.getString
-  let ⟨genre, _⟩ ← readThe DocElabContext
+  let genre := (← readThe DocElabContext).genreSyntax
   match (← getThe State).footnoteRefs[strName]? with
   | none =>
     modifyThe State fun st => {st with footnoteRefs := st.footnoteRefs.insert strName ⟨#[refName]⟩}

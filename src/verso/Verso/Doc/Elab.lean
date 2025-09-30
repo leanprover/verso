@@ -147,7 +147,7 @@ open Lean.Parser.Term in
 def _root_.Lean.Doc.Syntax.role.expand : InlineExpander
   | inline@`(inline| role{$name $args*} [$subjects*]) => do
       withRef inline <| withFreshMacroScope <| withIncRecDepth <| do
-        let ⟨genre, _⟩ ← readThe DocElabContext
+        let genre := (← readThe DocElabContext).genreSyntax
         let resolvedName ← realizeGlobalConstNoOverloadWithInfo name
         let exp ← roleExpandersFor resolvedName
         let argVals ← parseArgs args
@@ -334,7 +334,7 @@ partial def _root_.Lean.Doc.Syntax.header.command : PartCommand
     let titleString := headerStxToString (← getEnv) stx
     let ambientLevel ← currentLevel
     let headerLevel := headerLevel.getNat + 1
-    if headerLevel > ambientLevel + 1 then throwErrorAt stx "Wrong header nesting - got {headerLevel} but expected at most {ambientLevel}"
+    if headerLevel > ambientLevel + 1 then throwErrorAt stx "Wrong header nesting - got {"".pushn '#' headerLevel} but expected at most {"#".pushn '#' ambientLevel}"
     -- New subheader?
     if headerLevel == ambientLevel + 1 then
       -- Prelude is done!
@@ -398,7 +398,7 @@ def _root_.Lean.Doc.Syntax.command.expand : BlockExpander := fun block =>
   | `(block|command{$name $args*}) => do
     withTraceNode `Elab.Verso.block (fun _ => pure m!"Block role {name}") <|
     withRef block <| withFreshMacroScope <| withIncRecDepth <| do
-      let ⟨genre, _⟩ ← readThe DocElabContext
+      let genre := (← readThe DocElabContext).genreSyntax
       let resolvedName ← realizeGlobalConstNoOverloadWithInfo name
       let exp ← blockCommandExpandersFor resolvedName
       let argVals ← parseArgs args
@@ -420,7 +420,7 @@ def _root_.Lean.Doc.Syntax.command.expand : BlockExpander := fun block =>
 @[block_expander Lean.Doc.Syntax.para]
 partial def _root_.Lean.Doc.Syntax.para.expand : BlockExpander
   | `(block| para[ $args:inline* ]) => do
-    let ⟨genre, _⟩ ← readThe DocElabContext
+    let genre := (← readThe DocElabContext).genreSyntax
     ``(Block.para (genre := $(⟨genre⟩)) #[$[$(← args.mapM elabInline)],*])
   | _ =>
     throwUnsupportedSyntax
@@ -430,7 +430,7 @@ def elabLi (block : Syntax) : DocElabM (Syntax × TSyntax `term) :=
   withRef block <|
   match block with
   | `(list_item|*%$dot $contents:block*) => do
-    let ⟨genre, _⟩ ← readThe DocElabContext
+    let genre := (← readThe DocElabContext).genreSyntax
     let item ← ``(ListItem.mk (α := Block $(⟨genre⟩)) #[$[$(← contents.mapM elabBlock)],*])
     pure (dot, item)
   | _ =>
@@ -439,7 +439,7 @@ def elabLi (block : Syntax) : DocElabM (Syntax × TSyntax `term) :=
 @[block_expander Lean.Doc.Syntax.ul]
 def _root_.Lean.Doc.Syntax.ul.expand : BlockExpander
   | `(block|ul{$itemStxs*}) => do
-    let ⟨genre, _⟩ ← readThe DocElabContext
+    let genre := (← readThe DocElabContext).genreSyntax
     let mut bullets : Array Syntax := #[]
     let mut items : Array (TSyntax `term) := #[]
     for i in itemStxs do
@@ -456,7 +456,7 @@ def _root_.Lean.Doc.Syntax.ul.expand : BlockExpander
 @[block_expander Lean.Doc.Syntax.ol]
 def _root_.Lean.Doc.Syntax.ol.expand : BlockExpander
   | `(block|ol($start:num){$itemStxs*}) => do
-    let ⟨genre, _⟩ ← readThe DocElabContext
+    let genre := (← readThe DocElabContext).genreSyntax
     let mut bullets : Array Syntax := #[]
     let mut items : Array (TSyntax `term) := #[]
     for i in itemStxs do
@@ -474,7 +474,7 @@ def elabDesc (block : Syntax) : DocElabM (Syntax × TSyntax `term) :=
   withRef block <|
   match block with
   | `(desc_item|:%$colon $dts* => $dds*) => do
-    let ⟨genre, _⟩ ← readThe DocElabContext
+    let genre := (← readThe DocElabContext).genreSyntax
     let item ← ``(DescItem.mk (α := Inline $(⟨genre⟩)) (β := Block $(⟨genre⟩))  #[$[$(← dts.mapM elabInline)],*] #[$[$(← dds.mapM elabBlock)],*])
     pure (colon, item)
   | _ =>
@@ -483,7 +483,7 @@ def elabDesc (block : Syntax) : DocElabM (Syntax × TSyntax `term) :=
 @[block_expander Lean.Doc.Syntax.dl]
 def _root_.Lean.Doc.Syntax.dl.expand : BlockExpander
   | `(block|dl{$itemStxs*}) => do
-    let ⟨genre, _⟩ ← readThe DocElabContext
+    let genre := (← readThe DocElabContext).genreSyntax
     let mut colons : Array Syntax := #[]
     let mut items : Array (TSyntax `term) := #[]
     for i in itemStxs do
@@ -508,7 +508,7 @@ def _root_.Lean.Doc.Syntax.blockquote.expand : BlockExpander
 @[block_expander Lean.Doc.Syntax.codeblock]
 def _root_.Lean.Doc.Syntax.codeblock.expand : BlockExpander
   | `(block|``` $nameStx:ident $argsStx* | $contents:str ```) => do
-    let ⟨genre, _⟩ ← readThe DocElabContext
+    let genre := (← readThe DocElabContext).genreSyntax
     let name ← realizeGlobalConstNoOverloadWithInfo nameStx
     let exp ← codeBlockExpandersFor name
     -- TODO typed syntax here
@@ -532,7 +532,7 @@ def _root_.Lean.Doc.Syntax.codeblock.expand : BlockExpander
 @[block_expander Lean.Doc.Syntax.directive]
 def _root_.Lean.Doc.Syntax.directive.expand : BlockExpander
   | `(block| ::: $nameStx:ident $argsStx* { $contents:block* } ) => do
-    let ⟨genre, _⟩ ← readThe DocElabContext
+    let genre := (← readThe DocElabContext).genreSyntax
     let name ← realizeGlobalConstNoOverloadWithInfo nameStx
     let exp ← directiveExpandersFor name
     let args ← parseArgs argsStx
