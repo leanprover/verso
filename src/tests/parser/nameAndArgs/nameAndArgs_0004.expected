@@ -4,7 +4,8 @@ Final stack:
  • [(Lean.Doc.Syntax.named_no_paren
       `dialect
       ":="
-      (Lean.Doc.Syntax.arg_str (str "\"chicken\"")))
+      (Lean.Doc.Syntax.arg_str
+       (str "\"chicken\"")))
      (Lean.Doc.Syntax.flag_on "+" <missing>)
      (Lean.Doc.Syntax.anon
       (Lean.Doc.Syntax.arg_num (num "99")))]

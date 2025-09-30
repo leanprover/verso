@@ -9,7 +9,8 @@ Success! Final stack:
           "*"
           [(Lean.Doc.Syntax.para
             "para{"
-            [(Lean.Doc.Syntax.text (str "\"foo\""))]
+            [(Lean.Doc.Syntax.text
+              (str "\"foo\""))]
             "}")])]
         "}")])
      (Lean.Doc.Syntax.ul

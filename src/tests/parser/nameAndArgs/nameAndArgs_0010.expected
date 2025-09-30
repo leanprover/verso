@@ -5,7 +5,8 @@ Success! Final stack:
      (Lean.Doc.Syntax.named_no_paren
       `more
       ":="
-      (Lean.Doc.Syntax.arg_str (str "\"stuff\"")))]
+      (Lean.Doc.Syntax.arg_str
+       (str "\"stuff\"")))]
 
 Remaining:
 "\n\nabc"

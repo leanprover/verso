@@ -3,7 +3,8 @@ Success! Final stack:
     ">"
     [(Lean.Doc.Syntax.para
       "para{"
-      [(Lean.Doc.Syntax.text (str "\"Quotation\""))]
+      [(Lean.Doc.Syntax.text
+        (str "\"Quotation\""))]
       "}")
      (Lean.Doc.Syntax.para
       "para{"

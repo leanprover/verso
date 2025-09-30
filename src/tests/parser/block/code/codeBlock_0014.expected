@@ -7,7 +7,8 @@ Final stack:
       "("
       `dialect
       ":="
-      (Lean.Doc.Syntax.arg_str (str "\"chicken\""))
+      (Lean.Doc.Syntax.arg_str
+       (str "\"chicken\""))
       <missing>)]]
    "\n"
    (str "\"(define x 4)\\nx\\n\"")

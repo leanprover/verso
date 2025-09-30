@@ -2,7 +2,8 @@ Failure @65 (⟨4, 0⟩): expected '`' to close inline code
 Final stack:
   [(Lean.Doc.Syntax.para
     "para{"
-    [(Lean.Doc.Syntax.text (str "\"Attention:\""))]
+    [(Lean.Doc.Syntax.text
+      (str "\"Attention:\""))]
     "}")
    (Lean.Doc.Syntax.para
     "para{"

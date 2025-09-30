@@ -9,7 +9,8 @@ Success! Final stack:
          (Lean.Doc.Syntax.linebreak
           "line!"
           (str "\"\\n\""))
-         (Lean.Doc.Syntax.text (str "\"  thing\""))]
+         (Lean.Doc.Syntax.text
+          (str "\"  thing\""))]
         "}")])]
     "}")]
 Remaining:

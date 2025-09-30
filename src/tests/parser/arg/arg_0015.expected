@@ -5,7 +5,7 @@
     ""
   @4 (⟨1, 4⟩): expected argument name
     ""
-  @4 (⟨1, 4⟩): unexpected end of input; expected token, numeral or string literal
+  @4 (⟨1, 4⟩): unexpected end of input; expected identifier, numeral or string literal
     ""
 
 Final stack:

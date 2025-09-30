@@ -3,7 +3,8 @@ Success! Final stack:
     "para{"
     [(Lean.Doc.Syntax.link
       "["
-      [(Lean.Doc.Syntax.text (str "\"[link A]\""))]
+      [(Lean.Doc.Syntax.text
+        (str "\"[link A]\""))]
       "]"
       (Lean.Doc.Syntax.url
        "("
@@ -12,7 +13,8 @@ Success! Final stack:
      (Lean.Doc.Syntax.text (str "\" \""))
      (Lean.Doc.Syntax.link
       "["
-      [(Lean.Doc.Syntax.text (str "\"[link B]\""))]
+      [(Lean.Doc.Syntax.text
+        (str "\"[link B]\""))]
       "]"
       (Lean.Doc.Syntax.url
        "("

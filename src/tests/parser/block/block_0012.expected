@@ -14,7 +14,8 @@ Success! Final stack:
          "`"
          (str "\"inductive\"")
          "`")
-        (Lean.Doc.Syntax.text (str "\" commands\""))]
+        (Lean.Doc.Syntax.text
+         (str "\" commands\""))]
        "}")
       (Lean.Doc.Syntax.ul
        "ul{"
@@ -32,7 +33,8 @@ Success! Final stack:
               (str
                "\"https://github.com/leanprover/lean4/pull/5842\"")
               ")"))
-            (Lean.Doc.Syntax.text (str "\" and \""))
+            (Lean.Doc.Syntax.text
+             (str "\" and \""))
             (Lean.Doc.Syntax.link
              "["
              [(Lean.Doc.Syntax.text

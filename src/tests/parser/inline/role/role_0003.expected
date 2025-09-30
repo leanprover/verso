@@ -12,7 +12,10 @@ Success! Final stack:
      []
      "}"
      "["
-     [(Lean.Doc.Syntax.code "`" (str "\"cmd\"") "`")]
+     [(Lean.Doc.Syntax.code
+       "`"
+       (str "\"cmd\"")
+       "`")]
      "]")
     (Lean.Doc.Syntax.text (str "\" is great\""))]
    "]")

@@ -47,7 +47,8 @@ Final stack:
         "para{"
         [(Lean.Doc.Syntax.link
           "["
-          [(Lean.Doc.Syntax.text (str "\"busted\""))
+          [(Lean.Doc.Syntax.text
+            (str "\"busted\""))
            (Lean.Doc.Syntax.linebreak
             "line!"
             (str "\"\\n\""))
@@ -61,7 +62,8 @@ Final stack:
         "para{"
         [(Lean.Doc.Syntax.link
           "["
-          [(Lean.Doc.Syntax.text (str "\"busted\""))
+          [(Lean.Doc.Syntax.text
+            (str "\"busted\""))
            (Lean.Doc.Syntax.linebreak
             "line!"
             (str "\"\\n\""))
@@ -132,7 +134,8 @@ Final stack:
         [(Lean.Doc.Syntax.text (str "\"very \""))
          (Lean.Doc.Syntax.emph
           "_"
-          [(Lean.Doc.Syntax.text (str "\"italic \""))
+          [(Lean.Doc.Syntax.text
+            (str "\"italic \""))
            (Lean.Doc.Syntax.bold
             "*"
             [(Lean.Doc.Syntax.text
