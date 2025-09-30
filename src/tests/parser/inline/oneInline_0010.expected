@@ -1,9 +1,9 @@
 Success! Final stack:
-  (Verso.Syntax.link
+  (Lean.Doc.Syntax.link
    "["
-   [(Verso.Syntax.text (str "\"Wikipedia\""))]
+   [(Lean.Doc.Syntax.text (str "\"Wikipedia\""))]
    "]"
-   (Verso.Syntax.url
+   (Lean.Doc.Syntax.url
     "("
     (str "\"https://en.wikipedia.org\"")
     ")"))

@@ -1,19 +1,19 @@
 Success! Final stack:
-  [(Verso.Syntax.command "{" `test [] "}")
-   (Verso.Syntax.blockquote
+  [(Lean.Doc.Syntax.command "{" `test [] "}")
+   (Lean.Doc.Syntax.blockquote
     ">"
-    [(Verso.Syntax.para
+    [(Lean.Doc.Syntax.para
       "para{"
-      [(Verso.Syntax.text
+      [(Lean.Doc.Syntax.text
         (str "\"Here's a blockquote\""))]
       "}")
-     (Verso.Syntax.para
+     (Lean.Doc.Syntax.para
       "para{"
-      [(Verso.Syntax.text
+      [(Lean.Doc.Syntax.text
         (str "\"with multiple paras\""))]
       "}")])
-   (Verso.Syntax.para
+   (Lean.Doc.Syntax.para
     "para{"
-    [(Verso.Syntax.text (str "\"that ends\""))]
+    [(Lean.Doc.Syntax.text (str "\"that ends\""))]
     "}")]
 All input consumed.

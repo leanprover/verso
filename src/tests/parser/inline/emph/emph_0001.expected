@@ -1,6 +1,6 @@
 Success! Final stack:
-  (Verso.Syntax.emph
+  (Lean.Doc.Syntax.emph
    "_"
-   [(Verso.Syntax.text (str "\"aa\""))]
+   [(Lean.Doc.Syntax.text (str "\"aa\""))]
    "_")
 All input consumed.

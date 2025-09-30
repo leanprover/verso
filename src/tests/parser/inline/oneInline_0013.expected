@@ -1,6 +1,6 @@
 Failure @5 (⟨1, 5⟩): expected ']'
 Final stack:
-  (Verso.Syntax.image
+  (Lean.Doc.Syntax.image
    "!["
    (str "\"abc\"")
    <missing>)

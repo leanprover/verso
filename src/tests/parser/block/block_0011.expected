@@ -1,15 +1,15 @@
 2 failures:
   @19 (⟨6, 0⟩): '{'; expected '![', '$$', '$', '[' or '[^'
     "Here's a paragraph."
-  @19 (⟨6, 0⟩): expected identifier
+  @19 (⟨6, 0⟩): expected token
     "Here's a paragraph."
 
 Final stack:
-  (Verso.Syntax.para
+  (Lean.Doc.Syntax.para
    "para{"
-   [(Verso.Syntax.role
+   [(Lean.Doc.Syntax.role
      "{"
      <missing>
      "["
-     [(Verso.Syntax.footnote <missing>)]
+     [(Lean.Doc.Syntax.footnote <missing>)]
      "]")])

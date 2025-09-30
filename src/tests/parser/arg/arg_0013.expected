@@ -1,13 +1,13 @@
 2 failures:
   @7 (⟨1, 7⟩): expected ')'
     ""
-  @7 (⟨1, 7⟩): unterminated string literal; expected identifier or numeral
+  @7 (⟨1, 7⟩): unterminated string literal; expected token or numeral
     ""
 
 Final stack:
-  (Verso.Syntax.named
+  (Lean.Doc.Syntax.named
    "("
    `x
    ":="
-   (Verso.Syntax.arg_str <missing>)
+   (Lean.Doc.Syntax.arg_str <missing>)
    <missing>)

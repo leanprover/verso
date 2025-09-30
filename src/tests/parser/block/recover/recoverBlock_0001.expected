@@ -1,40 +1,40 @@
 Failure @55 (⟨3, 0⟩): '{'; expected '![', '$$', '$', '[' or '[^'
 Final stack:
-  (Verso.Syntax.para
+  (Lean.Doc.Syntax.para
    "para{"
-   [(Verso.Syntax.role
+   [(Lean.Doc.Syntax.role
      "{"
      `tactic
      []
      "}"
      "["
-     [(Verso.Syntax.code "`" (str "\"rw\"") "`")]
+     [(Lean.Doc.Syntax.code "`" (str "\"rw\"") "`")]
      "]")
-    (Verso.Syntax.role
+    (Lean.Doc.Syntax.role
      "{"
      `lit
      []
      "}"
      "["
-     [(Verso.Syntax.code
+     [(Lean.Doc.Syntax.code
        "`"
        (str "\" [t] \"")
        "`")]
      "]")
-    (Verso.Syntax.role
+    (Lean.Doc.Syntax.role
      "{"
      `kw
      []
      "}"
      "["
-     [(Verso.Syntax.code "`" (str "\"at\"") "`")]
+     [(Lean.Doc.Syntax.code "`" (str "\"at\"") "`")]
      "]")
-    (Verso.Syntax.role
+    (Lean.Doc.Syntax.role
      "{"
      `lit
      []
      "}"
      "["
-     [(Verso.Syntax.footnote <missing>)]
+     [(Lean.Doc.Syntax.footnote <missing>)]
      "]")])
 Remaining: "test"

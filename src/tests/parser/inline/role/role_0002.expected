@@ -1,10 +1,10 @@
 Success! Final stack:
-  (Verso.Syntax.role
+  (Lean.Doc.Syntax.role
    "{"
    `hello
    []
    "}"
    "["
-   [(Verso.Syntax.text (str "\"there\""))]
+   [(Lean.Doc.Syntax.text (str "\"there\""))]
    "]")
 All input consumed.

@@ -1,15 +1,15 @@
 2 failures:
-  @44 (⟨4, 28⟩): expected identifier
+  @44 (⟨4, 28⟩): expected token
     ""
   @44 (⟨4, 28⟩): unexpected end of input; expected '![', '$$', '$', '[' or '[^'
     ""
 
 Final stack:
-  (Verso.Syntax.para
+  (Lean.Doc.Syntax.para
    "para{"
-   [(Verso.Syntax.role
+   [(Lean.Doc.Syntax.role
      "{"
      <missing>
      "["
-     [(Verso.Syntax.footnote <missing>)]
+     [(Lean.Doc.Syntax.footnote <missing>)]
      "]")])

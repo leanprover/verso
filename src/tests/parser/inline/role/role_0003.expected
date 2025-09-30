@@ -1,19 +1,19 @@
 Success! Final stack:
-  (Verso.Syntax.role
+  (Lean.Doc.Syntax.role
    "{"
    `ref
-   [(Verso.Syntax.anon
-     (Verso.Syntax.arg_ident `other))]
+   [(Lean.Doc.Syntax.anon
+     (Lean.Doc.Syntax.arg_ident `other))]
    "}"
    "["
-   [(Verso.Syntax.role
+   [(Lean.Doc.Syntax.role
      "{"
      `leanKw
      []
      "}"
      "["
-     [(Verso.Syntax.code "`" (str "\"cmd\"") "`")]
+     [(Lean.Doc.Syntax.code "`" (str "\"cmd\"") "`")]
      "]")
-    (Verso.Syntax.text (str "\" is great\""))]
+    (Lean.Doc.Syntax.text (str "\" is great\""))]
    "]")
 All input consumed.

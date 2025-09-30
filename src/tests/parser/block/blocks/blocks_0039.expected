@@ -1,28 +1,28 @@
 Failure @65 (⟨4, 0⟩): expected '`' to close inline code
 Final stack:
-  [(Verso.Syntax.para
+  [(Lean.Doc.Syntax.para
     "para{"
-    [(Verso.Syntax.text (str "\"Attention:\""))]
+    [(Lean.Doc.Syntax.text (str "\"Attention:\""))]
     "}")
-   (Verso.Syntax.para
+   (Lean.Doc.Syntax.para
     "para{"
-    [(Verso.Syntax.text
+    [(Lean.Doc.Syntax.text
       (str
        "\"Here is a paragraph with an unterminated \""))
-     (Verso.Syntax.code
+     (Lean.Doc.Syntax.code
       "`"
       (str "\"code block\"")
       <missing>)
-     (Verso.Syntax.text
+     (Lean.Doc.Syntax.text
       (str
        "\"that would be super annoying without error recovery in the\""))
-     (Verso.Syntax.linebreak
+     (Lean.Doc.Syntax.linebreak
       "line!"
       (str "\"\\n\""))
-     (Verso.Syntax.text (str "\"parser.\""))]
+     (Lean.Doc.Syntax.text (str "\"parser.\""))]
     "}")
-   (Verso.Syntax.para
+   (Lean.Doc.Syntax.para
     "para{"
-    [(Verso.Syntax.text (str "\"Yep.\""))]
+    [(Lean.Doc.Syntax.text (str "\"Yep.\""))]
     "}")]
 Remaining: "that would be super annoying without error recovery in the\nparser.\n\nYep."

@@ -1,15 +1,15 @@
 Failure @16 (⟨1, 16⟩): '_'
 Final stack:
-  [(Verso.Syntax.para
+  [(Lean.Doc.Syntax.para
     "para{"
-    [(Verso.Syntax.bold
+    [(Lean.Doc.Syntax.bold
       "*"
-      [(Verso.Syntax.text (str "\"This is \""))
-       (Verso.Syntax.emph
+      [(Lean.Doc.Syntax.text (str "\"This is \""))
+       (Lean.Doc.Syntax.emph
         "_"
-        [(Verso.Syntax.text (str "\"strong\""))]
+        [(Lean.Doc.Syntax.text (str "\"strong\""))]
         <missing>)]
       "*")
-     (Verso.Syntax.text (str "\" not regular\""))]
+     (Lean.Doc.Syntax.text (str "\" not regular\""))]
     "}")]
 Remaining: "* not regular_ emphasis"

@@ -1,10 +1,10 @@
 Success! Final stack:
  • `leanExample
- • [(Verso.Syntax.anon
-      (Verso.Syntax.arg_ident `context))
-     (Verso.Syntax.named_no_paren
+ • [(Lean.Doc.Syntax.anon
+      (Lean.Doc.Syntax.arg_ident `context))
+     (Lean.Doc.Syntax.named_no_paren
       `more
       ":="
-      (Verso.Syntax.arg_str (str "\"stuff\"")))]
+      (Lean.Doc.Syntax.arg_str (str "\"stuff\"")))]
 
 All input consumed.

@@ -1,10 +1,10 @@
 Success! Final stack:
-  [(Verso.Syntax.blockquote
+  [(Lean.Doc.Syntax.blockquote
     ">"
-    [(Verso.Syntax.para
+    [(Lean.Doc.Syntax.para
       "para{"
-      [(Verso.Syntax.text (str "\"hey\""))
-       (Verso.Syntax.linebreak
+      [(Lean.Doc.Syntax.text (str "\"hey\""))
+       (Lean.Doc.Syntax.linebreak
         "line!"
         (str "\"\\n\""))]
       "}")])]

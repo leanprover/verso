@@ -1,81 +1,81 @@
 Success! Final stack:
-  (Verso.Syntax.ul
+  (Lean.Doc.Syntax.ul
    "ul{"
-   [(Verso.Syntax.li
+   [(Lean.Doc.Syntax.li
      "*"
-     [(Verso.Syntax.para
+     [(Lean.Doc.Syntax.para
        "para{"
-       [(Verso.Syntax.code
+       [(Lean.Doc.Syntax.code
          "`"
          (str "\"structure\"")
          "`")
-        (Verso.Syntax.text (str "\" and \""))
-        (Verso.Syntax.code
+        (Lean.Doc.Syntax.text (str "\" and \""))
+        (Lean.Doc.Syntax.code
          "`"
          (str "\"inductive\"")
          "`")
-        (Verso.Syntax.text (str "\" commands\""))]
+        (Lean.Doc.Syntax.text (str "\" commands\""))]
        "}")
-      (Verso.Syntax.ul
+      (Lean.Doc.Syntax.ul
        "ul{"
-       [(Verso.Syntax.li
+       [(Lean.Doc.Syntax.li
          "*"
-         [(Verso.Syntax.para
+         [(Lean.Doc.Syntax.para
            "para{"
-           [(Verso.Syntax.link
+           [(Lean.Doc.Syntax.link
              "["
-             [(Verso.Syntax.text
+             [(Lean.Doc.Syntax.text
                (str "\"#5842\""))]
              "]"
-             (Verso.Syntax.url
+             (Lean.Doc.Syntax.url
               "("
               (str
                "\"https://github.com/leanprover/lean4/pull/5842\"")
               ")"))
-            (Verso.Syntax.text (str "\" and \""))
-            (Verso.Syntax.link
+            (Lean.Doc.Syntax.text (str "\" and \""))
+            (Lean.Doc.Syntax.link
              "["
-             [(Verso.Syntax.text
+             [(Lean.Doc.Syntax.text
                (str "\"#5783\""))]
              "]"
-             (Verso.Syntax.url
+             (Lean.Doc.Syntax.url
               "("
               (str
                "\"https://github.com/leanprover/lean4/pull/5783\"")
               ")"))
-            (Verso.Syntax.text
+            (Lean.Doc.Syntax.text
              (str
               "\" implement a feature where the \""))
-            (Verso.Syntax.code
+            (Lean.Doc.Syntax.code
              "`"
              (str "\"structure\"")
              "`")
-            (Verso.Syntax.text
+            (Lean.Doc.Syntax.text
              (str
               "\" command can now define recursive inductive types:\""))]
            "}")
-          (Verso.Syntax.codeblock
+          (Lean.Doc.Syntax.codeblock
            "```"
            [`lean []]
            "\n"
            (str
             "\"structure Tree where\\n  n : Nat\\n  children : Fin n → Tree\\n\\ndef Tree.size : Tree → Nat\\n  | {n, children} => Id.run do\\n    let mut s := 0\\n    for h : i in [0 : n] do\\n      s := s + (children ⟨i, h.2⟩).size\\n    pure s\\n\"")
            "```")])
-        (Verso.Syntax.li
+        (Lean.Doc.Syntax.li
          "*"
-         [(Verso.Syntax.para
+         [(Lean.Doc.Syntax.para
            "para{"
-           [(Verso.Syntax.link
+           [(Lean.Doc.Syntax.link
              "["
-             [(Verso.Syntax.text
+             [(Lean.Doc.Syntax.text
                (str "\"#5814\""))]
              "]"
-             (Verso.Syntax.url
+             (Lean.Doc.Syntax.url
               "("
               (str
                "\"https://github.com/leanprover/lean4/pull/5814\"")
               ")"))
-            (Verso.Syntax.text (str "\" \""))]
+            (Lean.Doc.Syntax.text (str "\" \""))]
            "}")])]
        "}")])]
    "}")

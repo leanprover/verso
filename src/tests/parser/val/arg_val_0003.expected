@@ -1,4 +1,4 @@
-Failure @0 (⟨1, 0⟩): unexpected end of input; expected identifier, numeral or string literal
+Failure @0 (⟨1, 0⟩): unexpected end of input; expected token, numeral or string literal
 Final stack:
-  (Verso.Syntax.arg_str <missing>)
+  (Lean.Doc.Syntax.arg_str <missing>)
 Remaining: ""

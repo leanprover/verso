@@ -1,13 +1,13 @@
 Success! Final stack:
-  [(Verso.Syntax.blockquote
+  [(Lean.Doc.Syntax.blockquote
     ">"
-    [(Verso.Syntax.para
+    [(Lean.Doc.Syntax.para
       "para{"
-      [(Verso.Syntax.text (str "\"Quotation\""))]
+      [(Lean.Doc.Syntax.text (str "\"Quotation\""))]
       "}")])
-   (Verso.Syntax.para
+   (Lean.Doc.Syntax.para
     "para{"
-    [(Verso.Syntax.text
+    [(Lean.Doc.Syntax.text
       (str "\"and not contained\""))]
     "}")]
 All input consumed.

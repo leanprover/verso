@@ -1,5 +1,5 @@
 Success! Final stack:
-  [(Verso.Syntax.metadata_block
+  [(Lean.Doc.Syntax.metadata_block
     "%%%"
     (Term.structInstFields
      [(Term.structInstField
@@ -12,9 +12,9 @@ Success! Final stack:
          (num "53"))])
       []])
     "%%%")
-   (Verso.Syntax.para
+   (Lean.Doc.Syntax.para
     "para{"
-    [(Verso.Syntax.text
+    [(Lean.Doc.Syntax.text
       (str "\"Text/paragraph!\""))]
     "}")]
 All input consumed.

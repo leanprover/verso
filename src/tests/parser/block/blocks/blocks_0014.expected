@@ -1,23 +1,23 @@
 Success! Final stack:
-  [(Verso.Syntax.blockquote
+  [(Lean.Doc.Syntax.blockquote
     ">"
-    [(Verso.Syntax.para
+    [(Lean.Doc.Syntax.para
       "para{"
-      [(Verso.Syntax.text
+      [(Lean.Doc.Syntax.text
         (str "\"I like quotes\""))]
       "}")
-     (Verso.Syntax.ul
+     (Lean.Doc.Syntax.ul
       "ul{"
-      [(Verso.Syntax.li
+      [(Lean.Doc.Syntax.li
         "*"
-        [(Verso.Syntax.para
+        [(Lean.Doc.Syntax.para
           "para{"
-          [(Verso.Syntax.text
+          [(Lean.Doc.Syntax.text
             (str "\"Also with lists in them\""))]
           "}")])]
       "}")])
-   (Verso.Syntax.para
+   (Lean.Doc.Syntax.para
     "para{"
-    [(Verso.Syntax.text (str "\"Abc\""))]
+    [(Lean.Doc.Syntax.text (str "\"Abc\""))]
     "}")]
 All input consumed.

@@ -1,9 +1,9 @@
 Success! Final stack:
-  [(Verso.Syntax.header
+  [(Lean.Doc.Syntax.header
     "header("
     (num "1")
     ")"
     "{"
-    [(Verso.Syntax.text (str "\"Header!\""))]
+    [(Lean.Doc.Syntax.text (str "\"Header!\""))]
     "}")]
 All input consumed.

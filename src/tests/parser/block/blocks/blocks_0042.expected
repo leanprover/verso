@@ -5,36 +5,36 @@
     ""
 
 Final stack:
-  [(Verso.Syntax.para
+  [(Lean.Doc.Syntax.para
     "para{"
-    [(Verso.Syntax.text
+    [(Lean.Doc.Syntax.text
       (str
        "\"Here's some error recovery for directives.\""))]
     "}")
-   (Verso.Syntax.directive
+   (Lean.Doc.Syntax.directive
     "::::"
     `foo
-    [(Verso.Syntax.anon
-      (Verso.Syntax.arg_num (num "5")))]
+    [(Lean.Doc.Syntax.anon
+      (Lean.Doc.Syntax.arg_num (num "5")))]
     "\n"
-    [(Verso.Syntax.para
+    [(Lean.Doc.Syntax.para
       "para{"
-      [(Verso.Syntax.text (str "\"Indeed.\""))]
+      [(Lean.Doc.Syntax.text (str "\"Indeed.\""))]
       "}")
-     (Verso.Syntax.para
+     (Lean.Doc.Syntax.para
       "para{"
-      [(Verso.Syntax.text (str "\"It is.\""))]
+      [(Lean.Doc.Syntax.text (str "\"It is.\""))]
       "}")]
     <missing>)
-   (Verso.Syntax.directive
+   (Lean.Doc.Syntax.directive
     "::::"
     `a
     []
     "\n"
-    [(Verso.Syntax.para
+    [(Lean.Doc.Syntax.para
       "para{"
-      [(Verso.Syntax.text (str "\"x\""))
-       (Verso.Syntax.linebreak
+      [(Lean.Doc.Syntax.text (str "\"x\""))
+       (Lean.Doc.Syntax.linebreak
         "line!"
         (str "\"\\n\""))]
       "}")]

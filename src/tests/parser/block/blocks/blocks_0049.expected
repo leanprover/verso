@@ -1,20 +1,20 @@
 Success! Final stack:
-  [(Verso.Syntax.para
+  [(Lean.Doc.Syntax.para
     "para{"
-    [(Verso.Syntax.link
+    [(Lean.Doc.Syntax.link
       "["
-      [(Verso.Syntax.text (str "\"[link A]\""))]
+      [(Lean.Doc.Syntax.text (str "\"[link A]\""))]
       "]"
-      (Verso.Syntax.url
+      (Lean.Doc.Syntax.url
        "("
        (str "\"https://example.com\"")
        ")"))
-     (Verso.Syntax.text (str "\" \""))
-     (Verso.Syntax.link
+     (Lean.Doc.Syntax.text (str "\" \""))
+     (Lean.Doc.Syntax.link
       "["
-      [(Verso.Syntax.text (str "\"[link B]\""))]
+      [(Lean.Doc.Syntax.text (str "\"[link B]\""))]
       "]"
-      (Verso.Syntax.url
+      (Lean.Doc.Syntax.url
        "("
        (str "\"https://more.example.com\"")
        ")"))]

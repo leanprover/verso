@@ -1,5 +1,5 @@
 Success! Final stack:
-  (Verso.Syntax.metadata_block
+  (Lean.Doc.Syntax.metadata_block
    "%%%"
    (Term.structInstFields
     [(Term.structInstField

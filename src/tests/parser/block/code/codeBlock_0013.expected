@@ -1,12 +1,12 @@
 Success! Final stack:
-  (Verso.Syntax.codeblock
+  (Lean.Doc.Syntax.codeblock
    "```"
    [`scheme
-    [(Verso.Syntax.named
+    [(Lean.Doc.Syntax.named
       "("
       `dialect
       ":="
-      (Verso.Syntax.arg_str (str "\"chicken\""))
+      (Lean.Doc.Syntax.arg_str (str "\"chicken\""))
       ")")]]
    "\n"
    (str "\"(define x 4)\\nx\\n\"")

@@ -1,4 +1,4 @@
 Success! Final stack:
-  (Verso.Syntax.arg_num (num "43"))
+  (Lean.Doc.Syntax.arg_num (num "43"))
 Remaining:
 "\n\"foo\""

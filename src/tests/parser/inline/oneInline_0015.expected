@@ -1,8 +1,8 @@
 Failure @19 (⟨1, 19⟩): expected '(' or '['
 Final stack:
-  (Verso.Syntax.image
+  (Lean.Doc.Syntax.image
    "!["
    (str "\"alt text is good\"")
    "]"
-   (Verso.Syntax.url <missing>))
+   (Lean.Doc.Syntax.url <missing>))
 Remaining: "](logo.png)"

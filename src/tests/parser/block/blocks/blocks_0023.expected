@@ -1,18 +1,18 @@
 Failure @35 (⟨2, 15⟩): unexpected end of input; expected %%% (at line beginning), '![', '$$', '$', '[', '[^', beginning of line at ⟨2, 15⟩ or beginning of line or sequence of nestable block openers at ⟨2, 15⟩
 Final stack:
-  [(Verso.Syntax.dl
+  [(Lean.Doc.Syntax.dl
     "dl{"
-    [(Verso.Syntax.desc
+    [(Lean.Doc.Syntax.desc
       ":"
-      [(Verso.Syntax.text
+      [(Lean.Doc.Syntax.text
         (str "\" an excellent idea\""))
-       (Verso.Syntax.linebreak
+       (Lean.Doc.Syntax.linebreak
         "line!"
         (str "\"\\n\""))
-       (Verso.Syntax.text
+       (Lean.Doc.Syntax.text
         (str "\"Let's say more!\""))]
       "=>"
-      [(Verso.Syntax.metadata_block <missing>)
+      [(Lean.Doc.Syntax.metadata_block <missing>)
        <missing>])]
     "}")]
 Remaining: ""

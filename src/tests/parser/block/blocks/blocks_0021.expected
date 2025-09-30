@@ -1,32 +1,32 @@
 Success! Final stack:
-  [(Verso.Syntax.ul
+  [(Lean.Doc.Syntax.ul
     "ul{"
-    [(Verso.Syntax.li
+    [(Lean.Doc.Syntax.li
       "*"
-      [(Verso.Syntax.para
+      [(Lean.Doc.Syntax.para
         "para{"
-        [(Verso.Syntax.text (str "\"foo\""))
-         (Verso.Syntax.linebreak
+        [(Lean.Doc.Syntax.text (str "\"foo\""))
+         (Lean.Doc.Syntax.linebreak
           "line!"
           (str "\"\\n\""))
-         (Verso.Syntax.text (str "\"  stuff\""))]
+         (Lean.Doc.Syntax.text (str "\"  stuff\""))]
         "}")
-       (Verso.Syntax.blockquote
+       (Lean.Doc.Syntax.blockquote
         ">"
-        [(Verso.Syntax.para
+        [(Lean.Doc.Syntax.para
           "para{"
-          [(Verso.Syntax.text (str "\"more \""))]
+          [(Lean.Doc.Syntax.text (str "\"more \""))]
           "}")])
-       (Verso.Syntax.para
+       (Lean.Doc.Syntax.para
         "para{"
-        [(Verso.Syntax.text (str "\"abc\""))]
+        [(Lean.Doc.Syntax.text (str "\"abc\""))]
         "}")])
-     (Verso.Syntax.li
+     (Lean.Doc.Syntax.li
       "*"
-      [(Verso.Syntax.para
+      [(Lean.Doc.Syntax.para
         "para{"
-        [(Verso.Syntax.text (str "\"bar\""))
-         (Verso.Syntax.linebreak
+        [(Lean.Doc.Syntax.text (str "\"bar\""))
+         (Lean.Doc.Syntax.linebreak
           "line!"
           (str "\"\\n\""))]
         "}")])]

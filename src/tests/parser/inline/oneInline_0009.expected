@@ -1,4 +1,4 @@
 Success! Final stack:
-  (Verso.Syntax.text (str "\"a \""))
+  (Lean.Doc.Syntax.text (str "\"a \""))
 Remaining:
 "* b"

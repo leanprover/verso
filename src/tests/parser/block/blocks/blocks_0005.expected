@@ -1,35 +1,35 @@
 Success! Final stack:
-  [(Verso.Syntax.ul
+  [(Lean.Doc.Syntax.ul
     "ul{"
-    [(Verso.Syntax.li
+    [(Lean.Doc.Syntax.li
       "*"
-      [(Verso.Syntax.ul
+      [(Lean.Doc.Syntax.ul
         "ul{"
-        [(Verso.Syntax.li
+        [(Lean.Doc.Syntax.li
           "*"
-          [(Verso.Syntax.para
+          [(Lean.Doc.Syntax.para
             "para{"
-            [(Verso.Syntax.text (str "\"A1\""))]
+            [(Lean.Doc.Syntax.text (str "\"A1\""))]
             "}")])
-         (Verso.Syntax.li
+         (Lean.Doc.Syntax.li
           "*"
-          [(Verso.Syntax.para
+          [(Lean.Doc.Syntax.para
             "para{"
-            [(Verso.Syntax.text (str "\"A2\""))
-             (Verso.Syntax.linebreak
+            [(Lean.Doc.Syntax.text (str "\"A2\""))
+             (Lean.Doc.Syntax.linebreak
               "line!"
               (str "\"\\n\""))]
             "}")])]
         "}")])
-     (Verso.Syntax.li
+     (Lean.Doc.Syntax.li
       "*"
-      [(Verso.Syntax.ul
+      [(Lean.Doc.Syntax.ul
         "ul{"
-        [(Verso.Syntax.li
+        [(Lean.Doc.Syntax.li
           "*"
-          [(Verso.Syntax.para
+          [(Lean.Doc.Syntax.para
             "para{"
-            [(Verso.Syntax.text (str "\"B1\""))]
+            [(Lean.Doc.Syntax.text (str "\"B1\""))]
             "}")])]
         "}")])]
     "}")]

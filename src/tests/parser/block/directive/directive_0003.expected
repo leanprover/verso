@@ -1,15 +1,15 @@
 Success! Final stack:
-  (Verso.Syntax.directive
+  (Lean.Doc.Syntax.directive
    ":::"
    `multiPara
-   [(Verso.Syntax.named_no_paren
+   [(Lean.Doc.Syntax.named_no_paren
      `greatness
      ":="
-     (Verso.Syntax.arg_str (str "\"amazing!\"")))]
+     (Lean.Doc.Syntax.arg_str (str "\"amazing!\"")))]
    "\n"
-   [(Verso.Syntax.para
+   [(Lean.Doc.Syntax.para
      "para{"
-     [(Verso.Syntax.text (str "\"foo\""))]
+     [(Lean.Doc.Syntax.text (str "\"foo\""))]
      "}")]
    ":::")
 All input consumed.

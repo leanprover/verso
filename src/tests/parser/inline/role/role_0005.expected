@@ -1,23 +1,23 @@
 Success! Final stack:
-  (Verso.Syntax.role
+  (Lean.Doc.Syntax.role
    "{"
    `hello
-   [(Verso.Syntax.named_no_paren
+   [(Lean.Doc.Syntax.named_no_paren
      `world
      ":="
-     (Verso.Syntax.arg_ident `gaia))]
+     (Lean.Doc.Syntax.arg_ident `gaia))]
    "}"
    "["
-   [(Verso.Syntax.text (str "\"there \""))
-    (Verso.Syntax.bold
+   [(Lean.Doc.Syntax.text (str "\"there \""))
+    (Lean.Doc.Syntax.bold
      "*"
-     [(Verso.Syntax.text (str "\"is\""))]
+     [(Lean.Doc.Syntax.text (str "\"is\""))]
      "*")
-    (Verso.Syntax.text (str "\" \""))
-    (Verso.Syntax.emph
+    (Lean.Doc.Syntax.text (str "\" \""))
+    (Lean.Doc.Syntax.emph
      "_"
-     [(Verso.Syntax.text (str "\"a meaning!\""))]
+     [(Lean.Doc.Syntax.text (str "\"a meaning!\""))]
      "_")
-    (Verso.Syntax.text (str "\" \""))]
+    (Lean.Doc.Syntax.text (str "\" \""))]
    "]")
 All input consumed.

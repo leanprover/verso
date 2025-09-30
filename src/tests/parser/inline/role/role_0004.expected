@@ -1,13 +1,13 @@
 Success! Final stack:
-  (Verso.Syntax.role
+  (Lean.Doc.Syntax.role
    "{"
    `hello
-   [(Verso.Syntax.named_no_paren
+   [(Lean.Doc.Syntax.named_no_paren
      `world
      ":="
-     (Verso.Syntax.arg_ident `gaia))]
+     (Lean.Doc.Syntax.arg_ident `gaia))]
    "}"
    "["
-   [(Verso.Syntax.text (str "\"there\""))]
+   [(Lean.Doc.Syntax.text (str "\"there\""))]
    "]")
 All input consumed.

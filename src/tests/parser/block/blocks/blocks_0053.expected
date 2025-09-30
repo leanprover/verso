@@ -1,16 +1,16 @@
 Success! Final stack:
-  [(Verso.Syntax.para
+  [(Lean.Doc.Syntax.para
     "para{"
-    [(Verso.Syntax.text (str "\"Blah blah\""))
-     (Verso.Syntax.footnote
+    [(Lean.Doc.Syntax.text (str "\"Blah blah\""))
+     (Lean.Doc.Syntax.footnote
       "[^"
       (str "\"1\"")
       "]")]
     "}")
-   (Verso.Syntax.footnote_ref
+   (Lean.Doc.Syntax.footnote_ref
     "[^"
     (str "\"1\"")
     "]:"
-    [(Verso.Syntax.text
+    [(Lean.Doc.Syntax.text
       (str "\"More can be said\""))])]
 All input consumed.

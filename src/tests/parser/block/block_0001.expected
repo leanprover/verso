@@ -1,34 +1,34 @@
 Success! Final stack:
-  (Verso.Syntax.ul
+  (Lean.Doc.Syntax.ul
    "ul{"
-   [(Verso.Syntax.li
+   [(Lean.Doc.Syntax.li
      "*"
-     [(Verso.Syntax.para
+     [(Lean.Doc.Syntax.para
        "para{"
-       [(Verso.Syntax.text
+       [(Lean.Doc.Syntax.text
          (str "\"Here's a bullet\""))]
        "}")])
-    (Verso.Syntax.li
+    (Lean.Doc.Syntax.li
      "*"
-     [(Verso.Syntax.para
+     [(Lean.Doc.Syntax.para
        "para{"
-       [(Verso.Syntax.text
+       [(Lean.Doc.Syntax.text
          (str
           "\"and another with some code in it\""))]
        "}")
-      (Verso.Syntax.codeblock
+      (Lean.Doc.Syntax.codeblock
        "````"
        [`lean []]
        "\n"
        (str "\"hey\\n\\nthere\\n\"")
        "````")])
-    (Verso.Syntax.li
+    (Lean.Doc.Syntax.li
      "*"
-     [(Verso.Syntax.para
+     [(Lean.Doc.Syntax.para
        "para{"
-       [(Verso.Syntax.text
+       [(Lean.Doc.Syntax.text
          (str "\"and another one\""))
-        (Verso.Syntax.linebreak
+        (Lean.Doc.Syntax.linebreak
          "line!"
          (str "\"\\n\""))]
        "}")])]

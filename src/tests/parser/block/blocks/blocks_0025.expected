@@ -1,20 +1,20 @@
 Failure @47 (⟨7, 0⟩): expected indentation at least 1
 Final stack:
-  [(Verso.Syntax.dl
+  [(Lean.Doc.Syntax.dl
     "dl{"
-    [(Verso.Syntax.desc
+    [(Lean.Doc.Syntax.desc
       ":"
-      [(Verso.Syntax.text
+      [(Lean.Doc.Syntax.text
         (str "\" an excellent idea\""))]
       "=>"
-      [(Verso.Syntax.para
+      [(Lean.Doc.Syntax.para
         "para{"
-        [(Verso.Syntax.text
+        [(Lean.Doc.Syntax.text
           (str "\"Let's say more!\""))]
         "}")])
-     (Verso.Syntax.desc
+     (Lean.Doc.Syntax.desc
       ":"
-      [(Verso.Syntax.text (str "\" more\""))]
+      [(Lean.Doc.Syntax.text (str "\" more\""))]
       "=>"
       <missing>)]
     "}")]

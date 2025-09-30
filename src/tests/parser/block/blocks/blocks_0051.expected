@@ -1,19 +1,19 @@
 Failure @45 (⟨2, 29⟩): expected '(' or '['
 Final stack:
-  [(Verso.Syntax.para
+  [(Lean.Doc.Syntax.para
     "para{"
-    [(Verso.Syntax.link
+    [(Lean.Doc.Syntax.link
       "["
-      [(Verso.Syntax.text (str "\"My link\""))]
+      [(Lean.Doc.Syntax.text (str "\"My link\""))]
       "]"
-      (Verso.Syntax.ref "[" (str "\"lean\"") "]"))
-     (Verso.Syntax.linebreak
+      (Lean.Doc.Syntax.ref "[" (str "\"lean\"") "]"))
+     (Lean.Doc.Syntax.linebreak
       "line!"
       (str "\"\\n\""))
-     (Verso.Syntax.link
+     (Lean.Doc.Syntax.link
       "["
-      [(Verso.Syntax.text (str "\"lean\""))]
+      [(Lean.Doc.Syntax.text (str "\"lean\""))]
       "]"
-      (Verso.Syntax.url <missing>))]
+      (Lean.Doc.Syntax.url <missing>))]
     "}")]
 Remaining: ""

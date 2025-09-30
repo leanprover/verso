@@ -1,6 +1,6 @@
 Success! Final stack:
-  (Verso.Syntax.named_no_paren
+  (Lean.Doc.Syntax.named_no_paren
    `x
    ":="
-   (Verso.Syntax.arg_str (str "\"y\"")))
+   (Lean.Doc.Syntax.arg_str (str "\"y\"")))
 All input consumed.

@@ -1,16 +1,16 @@
 Success! Final stack:
-  [(Verso.Syntax.blockquote
+  [(Lean.Doc.Syntax.blockquote
     ">"
-    [(Verso.Syntax.ol
+    [(Lean.Doc.Syntax.ol
       "ol("
       (num "1")
       ")"
       "{"
-      [(Verso.Syntax.li
+      [(Lean.Doc.Syntax.li
         "1."
-        [(Verso.Syntax.para
+        [(Lean.Doc.Syntax.para
           "para{"
-          [(Verso.Syntax.text (str "\"foo\""))]
+          [(Lean.Doc.Syntax.text (str "\"foo\""))]
           "}")])]
       "}")])]
 All input consumed.

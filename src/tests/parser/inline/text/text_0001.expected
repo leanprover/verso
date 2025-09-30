@@ -1,4 +1,4 @@
 Success! Final stack:
-  (Verso.Syntax.text (str "\" \""))
+  (Lean.Doc.Syntax.text (str "\" \""))
 Remaining:
 "[\\[link\\]](https://link.com)"

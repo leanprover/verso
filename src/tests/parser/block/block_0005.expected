@@ -1,4 +1,4 @@
 Success! Final stack:
-  (Verso.Syntax.command "{" `test [] "}")
+  (Lean.Doc.Syntax.command "{" `test [] "}")
 Remaining:
 "Here's a paragraph."

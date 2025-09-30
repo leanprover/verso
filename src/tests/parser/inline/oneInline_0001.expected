@@ -1,5 +1,5 @@
 Success! Final stack:
-  (Verso.Syntax.code
+  (Lean.Doc.Syntax.code
    "``"
    (str "\"foo bar\"")
    "``")

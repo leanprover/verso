@@ -1,5 +1,5 @@
 Success! Final stack:
-  (Verso.Syntax.codeblock
+  (Lean.Doc.Syntax.codeblock
    "```"
    [`scheme []]
    "\n"

@@ -1,8 +1,8 @@
 Success! Final stack:
  • `leanExample
- • [(Verso.Syntax.anon
-      (Verso.Syntax.arg_ident `context))
-     (Verso.Syntax.anon
-      (Verso.Syntax.arg_ident `more))]
+ • [(Lean.Doc.Syntax.anon
+      (Lean.Doc.Syntax.arg_ident `context))
+     (Lean.Doc.Syntax.anon
+      (Lean.Doc.Syntax.arg_ident `more))]
 
 All input consumed.

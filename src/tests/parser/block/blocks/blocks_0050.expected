@@ -1,16 +1,16 @@
 Success! Final stack:
-  [(Verso.Syntax.para
+  [(Lean.Doc.Syntax.para
     "para{"
-    [(Verso.Syntax.link
+    [(Lean.Doc.Syntax.link
       "["
-      [(Verso.Syntax.text (str "\"My link\""))]
+      [(Lean.Doc.Syntax.text (str "\"My link\""))]
       "]"
-      (Verso.Syntax.ref
+      (Lean.Doc.Syntax.ref
        "["
        (str "\"lean\"")
        "]"))]
     "}")
-   (Verso.Syntax.link_ref
+   (Lean.Doc.Syntax.link_ref
     "["
     (str "\"lean\"")
     "]:"

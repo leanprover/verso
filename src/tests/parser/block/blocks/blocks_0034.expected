@@ -1,6 +1,6 @@
 Success! Final stack:
-  [(Verso.Syntax.para
+  [(Lean.Doc.Syntax.para
     "para{"
-    [(Verso.Syntax.text (str "\"n*k \""))]
+    [(Lean.Doc.Syntax.text (str "\"n*k \""))]
     "}")]
 All input consumed.

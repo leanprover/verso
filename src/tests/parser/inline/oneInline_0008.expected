@@ -1,10 +1,10 @@
 Success! Final stack:
-  (Verso.Syntax.bold
+  (Lean.Doc.Syntax.bold
    "**"
-   [(Verso.Syntax.text (str "\"aa\""))
-    (Verso.Syntax.linebreak
+   [(Lean.Doc.Syntax.text (str "\"aa\""))
+    (Lean.Doc.Syntax.linebreak
      "line!"
      (str "\"\\n\""))
-    (Verso.Syntax.text (str "\"bb\""))]
+    (Lean.Doc.Syntax.text (str "\"bb\""))]
    "**")
 All input consumed.

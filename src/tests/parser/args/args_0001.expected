@@ -1,5 +1,5 @@
 Success! Final stack:
-  [(Verso.Syntax.anon
-    (Verso.Syntax.arg_num (num "43")))]
+  [(Lean.Doc.Syntax.anon
+    (Lean.Doc.Syntax.arg_num (num "43")))]
 Remaining:
 "\n\"foo\""

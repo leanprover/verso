@@ -1,6 +1,6 @@
 Failure @4 (⟨1, 4⟩): expected '`' to close inline code
 Final stack:
-  (Verso.Syntax.code
+  (Lean.Doc.Syntax.code
    "`"
    (str "\"foo\"")
    <missing>)

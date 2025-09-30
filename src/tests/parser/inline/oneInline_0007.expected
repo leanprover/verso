@@ -1,6 +1,6 @@
 Failure @6 (⟨2, 0⟩): expected '``' to close inline code
 Final stack:
-  (Verso.Syntax.code
+  (Lean.Doc.Syntax.code
    "``"
    (str "\" fo\"")
    <missing>)

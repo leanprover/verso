@@ -1,12 +1,12 @@
 Success! Final stack:
-  [(Verso.Syntax.para
+  [(Lean.Doc.Syntax.para
     "para{"
-    [(Verso.Syntax.text
+    [(Lean.Doc.Syntax.text
       (str "\"Newlines are preserved\""))
-     (Verso.Syntax.linebreak
+     (Lean.Doc.Syntax.linebreak
       "line!"
       (str "\"\\n\""))
-     (Verso.Syntax.text
+     (Lean.Doc.Syntax.text
       (str "\"in paragraphs.\""))]
     "}")]
 All input consumed.

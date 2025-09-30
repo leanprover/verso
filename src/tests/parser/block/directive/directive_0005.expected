@@ -1,21 +1,21 @@
 Success! Final stack:
-  (Verso.Syntax.directive
+  (Lean.Doc.Syntax.directive
    ":::"
    `multiPara
-   [(Verso.Syntax.anon
-     (Verso.Syntax.arg_ident `thing))]
+   [(Lean.Doc.Syntax.anon
+     (Lean.Doc.Syntax.arg_ident `thing))]
    "\n"
-   [(Verso.Syntax.para
+   [(Lean.Doc.Syntax.para
      "para{"
-     [(Verso.Syntax.text (str "\"foo\""))]
+     [(Lean.Doc.Syntax.text (str "\"foo\""))]
      "}")
-    (Verso.Syntax.ul
+    (Lean.Doc.Syntax.ul
      "ul{"
-     [(Verso.Syntax.li
+     [(Lean.Doc.Syntax.li
        "*"
-       [(Verso.Syntax.para
+       [(Lean.Doc.Syntax.para
          "para{"
-         [(Verso.Syntax.text
+         [(Lean.Doc.Syntax.text
            (str "\"List item \""))]
          "}")])]
      "}")]

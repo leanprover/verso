@@ -1,10 +1,10 @@
 Failure @12 (⟨1, 12⟩): expected ')'
 Final stack:
-  (Verso.Syntax.image
+  (Lean.Doc.Syntax.image
    "!["
    (str "\"\"")
    "]"
-   (Verso.Syntax.url
+   (Lean.Doc.Syntax.url
     "("
     (str "\"logo.png\"")
     <missing>))

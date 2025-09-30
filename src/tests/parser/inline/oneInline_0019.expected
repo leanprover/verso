@@ -1,7 +1,7 @@
 Success! Final stack:
-  (Verso.Syntax.display_math
+  (Lean.Doc.Syntax.display_math
    "$$"
-   (Verso.Syntax.code
+   (Lean.Doc.Syntax.code
     "`"
     (str "\"\\\\frac{x}{4}\"")
     "`"))

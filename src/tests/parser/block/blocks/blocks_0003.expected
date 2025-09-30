@@ -1,23 +1,23 @@
 Success! Final stack:
-  [(Verso.Syntax.para
+  [(Lean.Doc.Syntax.para
     "para{"
-    [(Verso.Syntax.text
+    [(Lean.Doc.Syntax.text
       (str
        "\"I can describe lists like this one:\""))]
     "}")
-   (Verso.Syntax.ul
+   (Lean.Doc.Syntax.ul
     "ul{"
-    [(Verso.Syntax.li
+    [(Lean.Doc.Syntax.li
       "*"
-      [(Verso.Syntax.para
+      [(Lean.Doc.Syntax.para
         "para{"
-        [(Verso.Syntax.text (str "\"a\""))]
+        [(Lean.Doc.Syntax.text (str "\"a\""))]
         "}")])
-     (Verso.Syntax.li
+     (Lean.Doc.Syntax.li
       "*"
-      [(Verso.Syntax.para
+      [(Lean.Doc.Syntax.para
         "para{"
-        [(Verso.Syntax.text (str "\"b\""))]
+        [(Lean.Doc.Syntax.text (str "\"b\""))]
         "}")])]
     "}")]
 All input consumed.

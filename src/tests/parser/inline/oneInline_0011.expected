@@ -1,9 +1,9 @@
 Success! Final stack:
-  (Verso.Syntax.image
+  (Lean.Doc.Syntax.image
    "!["
    (str "\"\"")
    "]"
-   (Verso.Syntax.url
+   (Lean.Doc.Syntax.url
     "("
     (str "\"logo.png\"")
     ")"))

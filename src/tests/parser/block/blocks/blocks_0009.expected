@@ -1,15 +1,15 @@
 Success! Final stack:
-  [(Verso.Syntax.ul
+  [(Lean.Doc.Syntax.ul
     "ul{"
-    [(Verso.Syntax.li
+    [(Lean.Doc.Syntax.li
       "*"
-      [(Verso.Syntax.para
+      [(Lean.Doc.Syntax.para
         "para{"
-        [(Verso.Syntax.text (str "\"abc\""))]
+        [(Lean.Doc.Syntax.text (str "\"abc\""))]
         "}")])]
     "}")
-   (Verso.Syntax.para
+   (Lean.Doc.Syntax.para
     "para{"
-    [(Verso.Syntax.text (str "\"def\""))]
+    [(Lean.Doc.Syntax.text (str "\"def\""))]
     "}")]
 All input consumed.

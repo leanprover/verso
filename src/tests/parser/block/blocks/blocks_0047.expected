@@ -1,4 +1,4 @@
 Success! Final stack:
-  [(Verso.Syntax.command "{" `abc [] "}")
-   (Verso.Syntax.command "{" `def [] "}")]
+  [(Lean.Doc.Syntax.command "{" `abc [] "}")
+   (Lean.Doc.Syntax.command "{" `def [] "}")]
 All input consumed.

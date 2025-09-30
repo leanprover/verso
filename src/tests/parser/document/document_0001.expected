@@ -1,18 +1,18 @@
 Success! Final stack:
-  [(Verso.Syntax.para
+  [(Lean.Doc.Syntax.para
     "para{"
-    [(Verso.Syntax.image
+    [(Lean.Doc.Syntax.image
       "!["
       (str "\"Lean logo\"")
       "]"
-      (Verso.Syntax.url
+      (Lean.Doc.Syntax.url
        "("
        (str "\"/static/lean_logo.svg\"")
        ")"))]
     "}")
-   (Verso.Syntax.para
+   (Lean.Doc.Syntax.para
     "para{"
-    [(Verso.Syntax.text
+    [(Lean.Doc.Syntax.text
       (str
        "\"This is an example website/blog, for testing purposes.\""))]
     "}")]

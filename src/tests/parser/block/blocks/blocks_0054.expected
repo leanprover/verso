@@ -21,157 +21,157 @@
     "\nis OK. The rest *works*.\n"
 
 Final stack:
-  [(Verso.Syntax.para
+  [(Lean.Doc.Syntax.para
     "para{"
-    [(Verso.Syntax.linebreak
+    [(Lean.Doc.Syntax.linebreak
       "line!"
       (str "\"\\n\""))
-     (Verso.Syntax.text
+     (Lean.Doc.Syntax.text
       (str "\"Error recovery tests:\""))]
     "}")
-   (Verso.Syntax.ul
+   (Lean.Doc.Syntax.ul
     "ul{"
-    [(Verso.Syntax.li
+    [(Lean.Doc.Syntax.li
       "*"
-      [(Verso.Syntax.para
+      [(Lean.Doc.Syntax.para
         "para{"
-        [(Verso.Syntax.link
+        [(Lean.Doc.Syntax.link
           "["
-          [(Verso.Syntax.text
+          [(Lean.Doc.Syntax.text
             (str "\"busted link\""))]
           <missing>)]
         "}")])
-     (Verso.Syntax.li
+     (Lean.Doc.Syntax.li
       "*"
-      [(Verso.Syntax.para
+      [(Lean.Doc.Syntax.para
         "para{"
-        [(Verso.Syntax.link
+        [(Lean.Doc.Syntax.link
           "["
-          [(Verso.Syntax.text (str "\"busted\""))
-           (Verso.Syntax.linebreak
+          [(Lean.Doc.Syntax.text (str "\"busted\""))
+           (Lean.Doc.Syntax.linebreak
             "line!"
             (str "\"\\n\""))
-           (Verso.Syntax.text
+           (Lean.Doc.Syntax.text
             (str "\"   link\""))]
           <missing>)]
         "}")])
-     (Verso.Syntax.li
+     (Lean.Doc.Syntax.li
       "*"
-      [(Verso.Syntax.para
+      [(Lean.Doc.Syntax.para
         "para{"
-        [(Verso.Syntax.link
+        [(Lean.Doc.Syntax.link
           "["
-          [(Verso.Syntax.text (str "\"busted\""))
-           (Verso.Syntax.linebreak
+          [(Lean.Doc.Syntax.text (str "\"busted\""))
+           (Lean.Doc.Syntax.linebreak
             "line!"
             (str "\"\\n\""))
-           (Verso.Syntax.text (str "\"   \""))
-           (Verso.Syntax.emph
+           (Lean.Doc.Syntax.text (str "\"   \""))
+           (Lean.Doc.Syntax.emph
             "_"
-            [(Verso.Syntax.text
+            [(Lean.Doc.Syntax.text
               (str "\"italics\""))
-             (Verso.Syntax.linebreak
+             (Lean.Doc.Syntax.linebreak
               "line!"
               (str "\"\\n\""))
-             (Verso.Syntax.text
+             (Lean.Doc.Syntax.text
               (str "\"   link\""))]
             <missing>)]
           <missing>)]
         "}")])
-     (Verso.Syntax.li
+     (Lean.Doc.Syntax.li
       "*"
-      [(Verso.Syntax.para
+      [(Lean.Doc.Syntax.para
         "para{"
-        [(Verso.Syntax.link
+        [(Lean.Doc.Syntax.link
           "["
-          [(Verso.Syntax.text
+          [(Lean.Doc.Syntax.text
             (str "\"busted destination\""))]
           "]"
-          (Verso.Syntax.url
+          (Lean.Doc.Syntax.url
            "("
            (str "\"hey\"")
            <missing>))]
         "}")])
-     (Verso.Syntax.li
+     (Lean.Doc.Syntax.li
       "*"
-      [(Verso.Syntax.para
+      [(Lean.Doc.Syntax.para
         "para{"
-        [(Verso.Syntax.image
+        [(Lean.Doc.Syntax.image
           "!["
           (str "\"busted image alt text\"")
           <missing>)]
         "}")])
-     (Verso.Syntax.li
+     (Lean.Doc.Syntax.li
       "*"
-      [(Verso.Syntax.para
+      [(Lean.Doc.Syntax.para
         "para{"
-        [(Verso.Syntax.image
+        [(Lean.Doc.Syntax.image
           "!["
           (str "\"busted image link\"")
           "]"
-          (Verso.Syntax.url
+          (Lean.Doc.Syntax.url
            "("
            (str "\"image.png\"")
            <missing>))]
         "}")])
-     (Verso.Syntax.li
+     (Lean.Doc.Syntax.li
       "*"
-      [(Verso.Syntax.para
+      [(Lean.Doc.Syntax.para
         "para{"
-        [(Verso.Syntax.text (str "\"a \""))
-         (Verso.Syntax.bold
+        [(Lean.Doc.Syntax.text (str "\"a \""))
+         (Lean.Doc.Syntax.bold
           "*"
-          [(Verso.Syntax.text
+          [(Lean.Doc.Syntax.text
             (str "\"bold choice\""))]
           <missing>)]
         "}")])
-     (Verso.Syntax.li
+     (Lean.Doc.Syntax.li
       "*"
-      [(Verso.Syntax.para
+      [(Lean.Doc.Syntax.para
         "para{"
-        [(Verso.Syntax.text (str "\"very \""))
-         (Verso.Syntax.emph
+        [(Lean.Doc.Syntax.text (str "\"very \""))
+         (Lean.Doc.Syntax.emph
           "_"
-          [(Verso.Syntax.text (str "\"italic \""))
-           (Verso.Syntax.bold
+          [(Lean.Doc.Syntax.text (str "\"italic \""))
+           (Lean.Doc.Syntax.bold
             "*"
-            [(Verso.Syntax.text
+            [(Lean.Doc.Syntax.text
               (str "\"and bold, onto many\""))
-             (Verso.Syntax.linebreak
+             (Lean.Doc.Syntax.linebreak
               "line!"
               (str "\"\\n\""))
-             (Verso.Syntax.text
+             (Lean.Doc.Syntax.text
               (str "\"   lines is OK\""))]
             "*")
-           (Verso.Syntax.text
+           (Lean.Doc.Syntax.text
             (str "\" but don't forget...\""))]
           <missing>)]
         "}")])]
     "}")
-   (Verso.Syntax.para
+   (Lean.Doc.Syntax.para
     "para{"
-    [(Verso.Syntax.text
+    [(Lean.Doc.Syntax.text
       (str "\"a paragraph with \""))
-     (Verso.Syntax.link
+     (Lean.Doc.Syntax.link
       "["
-      [(Verso.Syntax.text
+      [(Lean.Doc.Syntax.text
         (str "\"a bad link syntax\""))]
       "]"
-      (Verso.Syntax.url
+      (Lean.Doc.Syntax.url
        "("
        (str "\"http://example.com\"")
        <missing>))
-     (Verso.Syntax.linebreak
+     (Lean.Doc.Syntax.linebreak
       "line!"
       (str "\"\\n\""))
-     (Verso.Syntax.text
+     (Lean.Doc.Syntax.text
       (str "\"is OK. The rest \""))
-     (Verso.Syntax.bold
+     (Lean.Doc.Syntax.bold
       "*"
-      [(Verso.Syntax.text (str "\"works\""))]
+      [(Lean.Doc.Syntax.text (str "\"works\""))]
       "*")
-     (Verso.Syntax.text (str "\".\""))
-     (Verso.Syntax.linebreak
+     (Lean.Doc.Syntax.text (str "\".\""))
+     (Lean.Doc.Syntax.linebreak
       "line!"
       (str "\"\\n\""))]
     "}")]

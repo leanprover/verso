@@ -1,26 +1,26 @@
 Success! Final stack:
-  [(Verso.Syntax.ol
+  [(Lean.Doc.Syntax.ol
     "ol("
     (num "1")
     ")"
     "{"
-    [(Verso.Syntax.li
+    [(Lean.Doc.Syntax.li
       "1."
-      [(Verso.Syntax.para
+      [(Lean.Doc.Syntax.para
         "para{"
-        [(Verso.Syntax.text (str "\"Hello\""))]
+        [(Lean.Doc.Syntax.text (str "\"Hello\""))]
         "}")])]
     "}")
-   (Verso.Syntax.ol
+   (Lean.Doc.Syntax.ol
     "ol("
     (num "2")
     ")"
     "{"
-    [(Verso.Syntax.li
+    [(Lean.Doc.Syntax.li
       "2."
-      [(Verso.Syntax.para
+      [(Lean.Doc.Syntax.para
         "para{"
-        [(Verso.Syntax.text (str "\"World\""))]
+        [(Lean.Doc.Syntax.text (str "\"World\""))]
         "}")])]
     "}")]
 All input consumed.

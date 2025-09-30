@@ -1,6 +1,6 @@
 Failure @25 (⟨3, 0⟩): expected column 1
 Final stack:
-  (Verso.Syntax.codeblock
+  (Lean.Doc.Syntax.codeblock
    "```"
    [`scheme []]
    "\n"

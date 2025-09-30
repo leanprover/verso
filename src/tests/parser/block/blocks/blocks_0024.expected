@@ -1,14 +1,14 @@
 Success! Final stack:
-  [(Verso.Syntax.dl
+  [(Lean.Doc.Syntax.dl
     "dl{"
-    [(Verso.Syntax.desc
+    [(Lean.Doc.Syntax.desc
       ":"
-      [(Verso.Syntax.text
+      [(Lean.Doc.Syntax.text
         (str "\" an excellent idea\""))]
       "=>"
-      [(Verso.Syntax.para
+      [(Lean.Doc.Syntax.para
         "para{"
-        [(Verso.Syntax.text
+        [(Lean.Doc.Syntax.text
           (str "\"Let's say more!\""))]
         "}")])]
     "}")]
