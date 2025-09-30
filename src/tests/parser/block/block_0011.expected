@@ -1,0 +1,15 @@
+2 failures:
+  @19 (⟨6, 0⟩): '{'; expected '![', '$$', '$', '[' or '[^'
+    "Here's a paragraph."
+  @19 (⟨6, 0⟩): expected identifier
+    "Here's a paragraph."
+
+Final stack:
+  (Verso.Syntax.para
+   "para{"
+   [(Verso.Syntax.role
+     "{"
+     <missing>
+     "["
+     [(Verso.Syntax.footnote <missing>)]
+     "]")])

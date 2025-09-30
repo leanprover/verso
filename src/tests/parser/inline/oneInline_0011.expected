@@ -1,0 +1,10 @@
+Success! Final stack:
+  (Verso.Syntax.image
+   "!["
+   (str "\"\"")
+   "]"
+   (Verso.Syntax.url
+    "("
+    (str "\"logo.png\"")
+    ")"))
+All input consumed.

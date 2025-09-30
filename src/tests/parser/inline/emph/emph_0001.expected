@@ -1,0 +1,6 @@
+Success! Final stack:
+  (Verso.Syntax.emph
+   "_"
+   [(Verso.Syntax.text (str "\"aa\""))]
+   "_")
+All input consumed.

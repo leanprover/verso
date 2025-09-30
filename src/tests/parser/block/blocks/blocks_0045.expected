@@ -1,0 +1,8 @@
+Success! Final stack:
+  [(Verso.Syntax.command "{" `test [] "}")
+   (Verso.Syntax.para
+    "para{"
+    [(Verso.Syntax.text
+      (str "\"Here's a paragraph.\""))]
+    "}")]
+All input consumed.

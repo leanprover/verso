@@ -1,0 +1,3 @@
+Success! Final stack:
+  (Verso.Syntax.code "`" (str "\"fo\\no\"") "`")
+All input consumed.

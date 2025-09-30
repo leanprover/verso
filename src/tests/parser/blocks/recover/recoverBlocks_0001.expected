@@ -1,0 +1,44 @@
+Failure @92 (⟨7, 0⟩): '{'; expected '![', '$$', '$', '[' or '[^'
+Final stack:
+  [(Verso.Syntax.dl
+    "dl{"
+    [(Verso.Syntax.desc
+      ":"
+      [(Verso.Syntax.text (str "\" \""))
+       (Verso.Syntax.role
+        "{"
+        `ref
+        [(Verso.Syntax.anon
+          (Verso.Syntax.arg_ident `defs))]
+        "}"
+        "["
+        [(Verso.Syntax.text
+          (str "\"Basic definitions\""))]
+        "]")]
+      "=>"
+      [(Verso.Syntax.para
+        "para{"
+        [(Verso.Syntax.text
+          (str "\"The def is something\""))]
+        "}")])
+     (Verso.Syntax.desc
+      ":"
+      [(Verso.Syntax.text (str "\" \""))
+       (Verso.Syntax.role
+        "{"
+        `ref
+        [(Verso.Syntax.anon
+          (Verso.Syntax.arg_ident `large))]
+        "}"
+        "["
+        [(Verso.Syntax.role
+          "{"
+          `Sufficiently
+          [(Verso.Syntax.anon
+            (Verso.Syntax.arg_ident `large))]
+          "}"
+          "["
+          [(Verso.Syntax.footnote <missing>)]
+          "]")]
+        "]")])])]
+Remaining: "  More text\n\n: `foo`\n\n  Thing\n"

@@ -1,0 +1,11 @@
+Success! Final stack:
+ • `scheme
+ • [(Verso.Syntax.named_no_paren
+      `dialect
+      ":="
+      (Verso.Syntax.arg_str (str "\"chicken\"")))
+     (Verso.Syntax.anon
+      (Verso.Syntax.arg_num (num "43")))
+     (Verso.Syntax.flag_on "+" `foo)]
+
+All input consumed.

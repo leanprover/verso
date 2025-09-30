@@ -1,0 +1,10 @@
+Success! Final stack:
+  (Verso.Syntax.role
+   "{"
+   `hello
+   []
+   "}"
+   "["
+   [(Verso.Syntax.text (str "\"there\""))]
+   "]")
+All input consumed.
