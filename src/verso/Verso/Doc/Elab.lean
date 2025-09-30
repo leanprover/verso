@@ -334,7 +334,7 @@ partial def _root_.Lean.Doc.Syntax.header.command : PartCommand
     let titleString := headerStxToString (← getEnv) stx
     let ambientLevel ← currentLevel
     let headerLevel := headerLevel.getNat + 1
-    if headerLevel > ambientLevel + 1 then throwErrorAt stx "Wrong header nesting - got {headerLevel} but expected at most {ambientLevel}"
+    if headerLevel > ambientLevel + 1 then throwErrorAt stx "Wrong header nesting - got {"".pushn '#' headerLevel} but expected at most {"#".pushn '#' ambientLevel}"
     -- New subheader?
     if headerLevel == ambientLevel + 1 then
       -- Prelude is done!
