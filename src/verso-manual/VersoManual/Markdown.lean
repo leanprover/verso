@@ -339,9 +339,9 @@ def addPartFromMarkdown {m} [Monad m]
   return inHeaders
 
 /--
-Given a finished part (which may contain subparts) render just the titles as markdown
-headings with a number of # that reflects their nesting depth. Meant to be used
-for debugging/testing only.
+Renders the entire structure of a finished part as Mardown-style headings, with a
+number of `'#'s` that reflects their nesting depth. This is a tool for debugging/testing
+only.
 -/
 def displayPartStructure (part : Verso.Doc.Elab.FinishedPart) (level : Nat := 1) : String := match part with
   | .mk _ _ title _ _ subParts _ =>
