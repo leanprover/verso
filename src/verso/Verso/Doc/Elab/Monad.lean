@@ -256,7 +256,11 @@ partial def FinishedPart.toTOC : FinishedPart → TOC
     .mk titleString titleStx endPos (subParts.map toTOC)
   | .included name => .included name
 
-/-- Information describing a part still under construction. -/
+/--
+Information describing a part still under construction.
+
+During elaboration, the current position in the document is represented by a stack of these frames, with each frame representing a layer of document section nesting. As the Verso document elaborator encounters new headers, stack frames are pushed and popped as indicated by the header's level.
+-/
 structure PartFrame where
   titleSyntax : Syntax
   expandedTitle : Option (String × Array (TSyntax `term)) := none
