@@ -50,17 +50,17 @@ def attr' (val : Array AttrText) : Except String String := do
 /--
 A mapping from Markdown document header levels to actual Verso nesting levels.
 The values in the list are Markdown header levels. Their position in the list
-is the verso nesting level, with the final element being verso level 0.
+is the Verso nesting level, with the final element being Verso level 0.
 For example, the list
     `[5,4,2,1]`
 is understood as associating:
-- markdown level 1 to verso nesting 0
-- markdown level 2 to verso nesting 1
-- markdown level 4 to verso nesting 2
-- markdown level 5 to verso nesting 3
+- Markdown level 1 to Verso nesting 0
+- Markdown level 2 to Verso nesting 1
+- Markdown level 4 to Verso nesting 2
+- Markdown level 5 to Verso nesting 3
 
 We need to keep this state to appropriately repair non-consecutive
-markdown header levels.
+Markdown header levels.
 -/
 public def HeaderMapping := List Nat
 deriving Inhabited
