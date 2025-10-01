@@ -281,7 +281,7 @@ private partial def closeSections {m} [Monad m]
       closeSections level
 
 /--
-In our header mapping bookkeeping, create a new section with a new markdown header with level {name}`level`.
+In our header mapping bookkeeping, creates a new section with a new Markdown header with level {name}`level`.
 This must be accompanied by pushing a new part.
 -/
 private partial def newSection {m} [Monad m]
