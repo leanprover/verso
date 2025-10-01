@@ -265,7 +265,7 @@ part at level {name}`level`.
 We close a frame in the {name (full:=PartElabM.State.partContext)}`partContext` of {name}`PartElabM.State` exactly in lockstep
 with dropping the head of {name (full:=MDState.inHeaders)}`inHeaders` in {name}`MDState`.
 -/
-private partial def closeSections {m} [Monad m]
+private partial def closeMarkdownSections {m} [Monad m]
     [MonadError m] [MonadStateOf PartElabM.State m]
     (level : Nat) : MDT m b i Unit := do
   let hdrs := (← getThe MDState).inHeaders
@@ -278,31 +278,31 @@ private partial def closeSections {m} [Monad m]
         |  throwError m!"Failed to close verso part corresponding to markdown section: no parts left"
       modifyThe PartElabM.State fun st => {st with partContext := ctxt'}
       modifyThe MDState ({· with inHeaders := more})
-      closeSections level
+      closeMarkdownSections level
 
 /--
 In our header mapping bookkeeping, creates a new section with a new Markdown header with level {name}`level`.
-This must be accompanied by pushing a new part.
+Also pushes a new part {name}`frame`.
 -/
-private partial def newSection {m} [Monad m]
-    [MonadStateOf PartElabM.State m]
-    (level : Nat) : MDT m b i Unit := do
+private partial def startMarkdownSection {m} [Monad m]
+    [MonadStateOf PartElabM.State m] [MonadLiftT PartElabM m]
+    (level : Nat) (frame : PartFrame) : MDT m b i Unit := do
   let hdr := (← getThe MDState).inHeaders
   modifyThe MDState ({· with inHeaders := level :: hdr})
+  PartElabM.push frame
 
 private partial def addPartFromMarkdownAux {m} [Monad m]
     [MonadLiftT PartElabM m] [MonadStateOf PartElabM.State m]
     [MonadQuotation m] [AddMessageContext m] [MonadError m]
     : MD4Lean.Block → MDT m Term Term Unit
   | .header level txt => do
-    closeSections level
+    closeMarkdownSections level
     let txtStxs ← txt.mapM inlineFromMarkdown |>.run' none
     let titleTexts ← match txt.mapM stringFromMarkdownText with
       | .ok t => pure t
       | .error e => throwError m!"Unsupported Markdown in header:\n{e}"
     let titleText := titleTexts.foldl (· ++ ·) ""
-    newSection level
-    PartElabM.push {
+    startMarkdownSection level {
       titleSyntax := quote (k := `str) titleText
       expandedTitle := some (titleText, txtStxs)
       metadata := none
