@@ -288,8 +288,10 @@ structure PartContext extends PartFrame where
   parents : Array PartFrame
 deriving Repr, Inhabited
 
-/-- The current nesting level is the number of frames in the stack of
-parent parts being built. -/
+/--
+The current nesting level is the number of frames in the stack of parent
+parts being built.
+-/
 def PartContext.level (ctxt : PartContext) : Nat := ctxt.parents.size
 
 /-- Close the current part. It is appended to {name}`priorParts`, and
