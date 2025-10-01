@@ -343,7 +343,8 @@ Renders the entire structure of a finished part as Mardown-style headings, with 
 number of `'#'s` that reflects their nesting depth. This is a tool for debugging/testing
 only.
 -/
-def displayPartStructure (part : Verso.Doc.Elab.FinishedPart) (level : Nat := 1) : String := match part with
+open Verso.Doc.Elab in
+def displayPartStructure (part : FinishedPart) (level : Nat := 1) : String := match part with
   | .mk _ _ title _ _ subParts _ =>
        let partsStr : String := subParts.map (displayPartStructure · (level + 1))
          |>.toList |> String.join
