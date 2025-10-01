@@ -348,7 +348,7 @@ def displayPartStructure (part : FinishedPart) (level : Nat := 1) : String := ma
   | .mk _ _ title _ _ subParts _ =>
        let partsStr : String := subParts.map (displayPartStructure · (level + 1))
          |>.toList |> String.join
-       let pref := List.replicate level "#" |> String.join
+       let pref := "".pushn '#' level
        s!"{pref} {title}\n{partsStr}"
   | .included name => s!"included {name}\n"
 
