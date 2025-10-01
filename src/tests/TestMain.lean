@@ -55,8 +55,6 @@ def testTexOutput (dir : System.FilePath) (doc : Verso.Doc.Part Verso.Genre.Manu
     runTest
   }
 
-open Lean.Parser in
-open Verso.Parser in
 open Verso.Integration in
 def tests := [
   testStemmer,
