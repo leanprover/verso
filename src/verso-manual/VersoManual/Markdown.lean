@@ -380,7 +380,7 @@ info:
 ## one more
 -/
 #guard_msgs in
-/- Exercise how inconsistent markdown header nesting depth
+/- Exercises how inconsistent Markdown header nesting depth
 is heuristically fixed. -/
 #eval do
   IO.println <| "\n" ++ (← testAddPartFromMarkdown r#"
