@@ -278,10 +278,12 @@ def PartFrame.close (fr : PartFrame) (endPos : String.Pos) : FinishedPart :=
   let (titlePreview, titleInlines) := fr.expandedTitle.getD ("<anonymous>", #[])
   .mk fr.titleSyntax titleInlines titlePreview fr.metadata fr.blocks fr.priorParts endPos
 
-/-- Information available while constructing a part. It extends
-{name}`PartFrame` because that data represents the current frame. The
-field {name PartContext.parents}`parents` represents other parts above
-us in the hierarchy that are still being built. -/
+/--
+Information available while constructing a part. It extends {name}`PartFrame`
+because that data represents the current frame. The field
+{name PartContext.parents}`parents` represents other parts above
+us in the hierarchy that are still being built.
+-/
 structure PartContext extends PartFrame where
   parents : Array PartFrame
 deriving Repr, Inhabited
