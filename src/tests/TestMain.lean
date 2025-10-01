@@ -32,8 +32,9 @@ def testStemmer (_ : Config) : IO Unit := do
     throw <| IO.userError "Stemmer tests failed"
 
 /--
-Tests manual-genre TeX generation. `dir` is a subdirectory specific to a particular test document.
-`doc` is the document itself.
+Tests manual-genre TeX generation. `dir` is a subdirectory specific to a particular test document,
+which is where actual output should go, and which contains the expected output directory.
+`doc` is the document to be rendered.
 -/
 def testTexOutput (dir : System.FilePath) (doc : Verso.Doc.Part Verso.Genre.Manual) :
     Config →  IO Unit := fun config =>
