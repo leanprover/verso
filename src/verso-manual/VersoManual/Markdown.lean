@@ -258,12 +258,12 @@ where
 open Verso.Doc.Elab
 
 /--
-Close all sections that have a markdown header level that is greater
+Closes all sections that have a Markdown header level that is greater
 than or equal to {name}`level`, to prepare the state for pushing new a
 part at level {name}`level`.
 
-We close a frame in the `.partContext` of `PartElabM.State` exactly in lockstep
-with dropping the head of `inHeaders` in `MDState`.
+We close a frame in the {name (full:=PartElabM.State.partContext)}`partContext` of {name}`PartElabM.State` exactly in lockstep
+with dropping the head of {name (full:=MDState.inHeaders)}`inHeaders` in {name}`MDState`.
 -/
 private partial def closeSections {m} [Monad m]
     [MonadError m] [MonadStateOf PartElabM.State m]
