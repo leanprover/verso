@@ -49,7 +49,7 @@ def attr' (val : Array AttrText) : Except String String := do
 
 /--
 A mapping from markdown document header levels to actual verso nesting levels.
-The values in the list are markdown header levels. Their position in the list
+The values in the list are Markdown header levels. Their position in the list
 is the verso nesting level, with the final element being verso level 0.
 For example, the list
     `[5,4,2,1]`
