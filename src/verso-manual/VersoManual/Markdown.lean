@@ -273,7 +273,7 @@ private partial def closeSections {m} [Monad m]
   | [] => pure ()
   | docLevel :: more =>
     if docLevel ≥ level then
-      -- `default` here because markdown parser provides no source position
+      -- `default` here because the Markdown parser provides no source position
       let some ctxt' := (← getThe PartElabM.State).partContext.close default
         |  throwError m!"Failed to close verso part corresponding to markdown section: no parts left"
       modifyThe PartElabM.State fun st => {st with partContext := ctxt'}
