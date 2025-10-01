@@ -338,12 +338,12 @@ def addPartFromMarkdown {m} [Monad m]
   let (_, { inHeaders }) ← (addPartFromMarkdownAux md |>.run ctxt |>.run {inHeaders := currentHeaderLevels})
   return inHeaders
 
+open Verso.Doc.Elab in
 /--
 Renders the entire structure of a finished part as Mardown-style headings, with a
 number of `'#'s` that reflects their nesting depth. This is a tool for debugging/testing
 only.
 -/
-open Verso.Doc.Elab in
 def displayPartStructure (part : FinishedPart) (level : Nat := 1) : String := match part with
   | .mk _ _ title _ _ subParts _ =>
        let partsStr : String := subParts.map (displayPartStructure · (level + 1))
