@@ -12,6 +12,8 @@ import Verso.Doc
 
 import VersoManual.Basic
 
+set_option doc.verso true
+
 /-!
 This module contains tools for working with Markdown and Verso. In particular, it contains ways to
 generate Verso content from Markdown input.
@@ -27,7 +29,7 @@ Markdown documents in practice have unpredictable nesting of headers, so the nes
 here as ordered handlers, rather than as a mapping from levels to handlers.
 
 Because we're rendering Markdown in a Verso context that doesn't support nesting structure, will not
-generate nested `Part`s, but rather some custom node or some formatted text.
+generate nested {name (full := Lean.Doc.Part)}`Part`s, but rather some custom node or some formatted text.
 -/
 private structure HeaderHandlers (m : Type u → Type w) (block : Type u) (inline : Type v) : Type (max u v w) where
   levels : List (Array inline → m block) := []
@@ -57,7 +59,7 @@ A mapping from Markdown document header levels to actual Verso nesting levels.
 The values in the list are Markdown header levels. Their position in the list
 is the Verso nesting level, with the final element being Verso level 0.
 For example, the list
-    `[5,4,2,1]`
+    {lean}`[5,4,2,1]`
 is understood as associating:
 - Markdown level 1 to Verso nesting 0
 - Markdown level 2 to Verso nesting 1
@@ -266,8 +268,9 @@ Closes all sections that have a Markdown header level that is greater
 than or equal to {name}`level`, to prepare the state for pushing new a
 part at level {name}`level`.
 
-We close a frame in the {name (full:=PartElabM.State.partContext)}`partContext` of {name}`PartElabM.State` exactly in lockstep
-with dropping the head of {name (full:=MDState.inHeaders)}`inHeaders` in {name}`MDState`.
+We close a frame in the {name (full:=PartElabM.State.partContext)}`partContext` of
+{name}`PartElabM.State` exactly in lockstep with dropping the head of
+{name (full:=MDState.inHeaders)}`inHeaders` in {name}`MDState`.
 -/
 private partial def closeMarkdownSections {m} [Monad m]
     [MonadError m] [MonadStateOf PartElabM.State m]
@@ -319,15 +322,15 @@ private partial def addPartFromMarkdownAux {m} [Monad m]
 /--
 Adds blocks from Markdown, treating top-level headers as new parts.
 
-`handleHeaders` provides a means of elaborating headers that appear
+{name}`handleHeaders` provides a means of elaborating headers that appear
 nested within blocks (e.g., blockquotes), with one element for each supported
 level of nesting.
 
-`currentHeaderLevels` gives a list of headers within which elaboration is
+{name}`currentHeaderLevels` gives a list of headers within which elaboration is
 occurring and which can be terminated by the current elaboration. Typically,
-these are taken from a previous execution of `addPartFromMarkdown`, but they can
-also be specified manually as `(headerLevel, nestingLevel)` pairs, where
-`headerLevel` is the Markdown header level and `nestingLevel` the corresponding
+these are taken from a previous execution of {name}`addPartFromMarkdown`, but they can
+also be specified manually as {lit}`(headerLevel, nestingLevel)` pairs, where
+{lit}`headerLevel` is the Markdown header level and {lit}`nestingLevel` the corresponding
 Verso nesting level of a preceding header.
 -/
 def addPartFromMarkdown {m} [Monad m]
@@ -344,7 +347,7 @@ def addPartFromMarkdown {m} [Monad m]
 
 open Verso.Doc.Elab in
 /--
-Renders the entire structure of a finished part as Mardown-style headings, with a
+Renders the entire structure of a finished part as Markdown-style headings, with a
 number of `'#'s` that reflects their nesting depth. This is a tool for debugging/testing
 only.
 
