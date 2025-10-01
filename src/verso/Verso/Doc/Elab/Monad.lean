@@ -294,9 +294,12 @@ parts being built.
 -/
 def PartContext.level (ctxt : PartContext) : Nat := ctxt.parents.size
 
-/-- Close the current part. It is appended to {name}`priorParts`, and
+/--
+Closes the current part.
+The resulting {name}`FinishedPart` is appended to {name}`priorParts`, and
 the top of the stack of our parents becomes the current frame. Returns
-{name}`none` if there are no parents. -/
+{name}`none` if there are no parents.
+-/
 def PartContext.close (ctxt : PartContext) (endPos : String.Pos) : Option PartContext := do
   let fr ← ctxt.parents.back?
   pure {
