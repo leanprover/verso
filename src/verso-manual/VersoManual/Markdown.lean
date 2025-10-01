@@ -353,7 +353,7 @@ def displayPartStructure (part : FinishedPart) (level : Nat := 1) : String := ma
   | .included name => s!"included {name}\n"
 
 /--
-Given a markdown string, parse it and return the displayed part structure.
+Parses a Markdown string, returning the displayed part structure.
 -/
 def testAddPartFromMarkdown (input : String) : Elab.TermElabM String := do
   let some parsed := MD4Lean.parse input
