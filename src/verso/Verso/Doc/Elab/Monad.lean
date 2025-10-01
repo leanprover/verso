@@ -308,7 +308,9 @@ def PartContext.close (ctxt : PartContext) (endPos : String.Pos) : Option PartCo
     priorParts := fr.priorParts.push <| ctxt.toPartFrame.close endPos
   }
 
-/-- Make the frame {name}`fr` the current frame. -/
+/--
+Makes the frame {name}`fr` the current frame. The former current frame is saved to the stack.
+-/
 def PartContext.push (ctxt : PartContext) (fr : PartFrame) : PartContext := ⟨fr, ctxt.parents.push ctxt.toPartFrame⟩
 
 structure PartElabM.State where
