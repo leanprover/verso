@@ -343,6 +343,10 @@ open Verso.Doc.Elab in
 Renders the entire structure of a finished part as Mardown-style headings, with a
 number of `'#'s` that reflects their nesting depth. This is a tool for debugging/testing
 only.
+
+To avoid off-by-one misunderstandings: The heading level is equal to
+the number of # characters in the opening sequence. (cf. [CommonMark
+Spec](https://spec.commonmark.org/0.31.2/))
 -/
 def displayPartStructure (part : FinishedPart) (level : Nat := 1) : String := match part with
   | .mk _ _ title _ _ subParts _ =>
