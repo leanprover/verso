@@ -62,8 +62,7 @@ is understood as associating:
 We need to keep this state to appropriately repair non-consecutive
 Markdown header levels.
 -/
-public def HeaderMapping := List Nat
-deriving Inhabited
+public abbrev HeaderMapping := List Nat
 
 private structure MDState where
   inHeaders : HeaderMapping := []
