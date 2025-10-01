@@ -266,6 +266,10 @@ structure PartFrame where
   expandedTitle : Option (String × Array (TSyntax `term)) := none
   metadata : Option (TSyntax `term)
   blocks : Array (TSyntax `term)
+  /--
+  The sibling parts at the same nesting level as the part represented by this frame. These siblings
+  are earlier in the document and have the same parent.
+  -/
   priorParts : Array FinishedPart
 deriving Repr, Inhabited
 
