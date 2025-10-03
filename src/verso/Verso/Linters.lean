@@ -49,7 +49,7 @@ namespace Verso.Linter
 
 private inductive PunctuationState where
   | none
-  | atBeginning (pos : String.Pos)
+  | atBeginning (pos : String.Pos.Raw)
   | afterDigit
 
 private def typographyLint [Monad m] [MonadOptions m] [MonadEnv m] : m Bool := do
@@ -67,7 +67,7 @@ def typography : Linter where
 
     let suggest (what : String) (replacement : String)
         (linter : Lean.Option Bool)
-        (pos : String.Pos) (stop : String.Pos := text.source.next pos) := do
+        (pos : String.Pos.Raw) (stop : String.Pos.Raw := text.source.next pos) := do
       let strLit :=
         Syntax.mkStrLit (String.singleton (text.source.get pos))
           (info := .original {str := text.source, startPos := pos, stopPos := pos} pos {str := text.source, startPos := stop, stopPos := stop} stop)
