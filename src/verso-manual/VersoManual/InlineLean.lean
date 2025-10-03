@@ -350,6 +350,13 @@ def leanTerm : CodeBlockExpanderOf LeanInlineConfig
       highlight stx #[] (PersistentArray.empty.push tree)
 
 /--
+Construct the appropriate Term from a Highlighted version of a String.
+The two arguments should correspond with each other.
+-/
+private def mkInlineLeanSyntax (hls : Highlighted) (str : String) : DocElabM Term :=
+  ``(Inline.other (Verso.Genre.Manual.InlineLean.Inline.lean $(quote hls)) #[Inline.code $(quote str)])
+
+/--
 Elaborates the provided Lean term in the context of the current Verso module.
 -/
 @[role lean]
@@ -439,7 +446,7 @@ def leanInline : RoleExpanderOf LeanInlineConfig
       let hls := (← highlight stx #[] (PersistentArray.empty.push tree))
 
       if config.show then
-        ``(Inline.other (Verso.Genre.Manual.InlineLean.Inline.lean $(quote hls)) #[Inline.code $(quote term.getString)])
+        mkInlineLeanSyntax hls term.getString
       else
         ``(Block.concat #[])
 
@@ -494,7 +501,7 @@ def inst : RoleExpanderOf LeanBlockConfig
       let hls := (← highlight stx #[] (PersistentArray.empty.push tree))
 
       if config.show then
-        ``(Inline.other (Verso.Genre.Manual.InlineLean.Inline.lean $(quote hls)) #[Inline.code $(quote term.getString)])
+        mkInlineLeanSyntax hls term.getString
       else
         ``(Block.concat #[])
 
