@@ -501,7 +501,10 @@ def inst : RoleExpanderOf LeanBlockConfig
 
       let hls := (← highlight stx #[] (PersistentArray.empty.push tree))
 
-      ``(Inline.concat #[])
+      if config.show then
+        mkInlineLeanSyntax hls term.getString
+      else
+        ``(Inline.concat #[])
 
 /--
 Elaborates the contained document in a new section.
