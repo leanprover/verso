@@ -169,32 +169,39 @@ def reportMessages {m} [Monad m] [MonadLog m] [MonadError m]
       throwErrorAt blame "No error expected in code block, one occurred"
 
 /--
-Common functionality for expanding the `lean` and `leanTerm` codeblocks:
-
- - Before: modifying the string so that source positions are consistent
- - After: de-indenting and exporting (syntax of) Block representation
+De-indent and return (syntax of) a Block representation containing highlighted Lean code
+The argument `hls` must be a highlighting of the parsed string `str`.
 -/
-private def withLeanCodeBlock (shouldShow : Bool) (str: StrLit) (act : String -> DocElabM Highlighted) : DocElabM Term := do
+private def mkHighlightedLeanBlock (shouldShow : Bool) (hls : Highlighted) (str: StrLit) : DocElabM Term := do
+  if !shouldShow then
+    return ← ``(Block.concat #[])
+
   let col? := (← getRef).getPos? |>.map (← getFileMap).utf8PosToLspPos |>.map (·.character)
-  let altStr ← parserInputString str
+  let hls := match col? with
+  | .none => hls
+  | .some col => hls.deIndent col
 
-  let mut hls ← act altStr
-  if let some col := col? then
-    hls := hls.deIndent col
+  let range := Syntax.getRange? str
+  let range := range.map (← getFileMap).utf8RangeToLspRange
+  ``(Block.other (Block.lean $(quote hls) (some $(quote (← getFileName))) $(quote range)) #[Block.code $(quote str.getString)])
 
-  if shouldShow then
-    let range := Syntax.getRange? str
-    let range := range.map (← getFileMap).utf8RangeToLspRange
-    ``(Block.other (Block.lean $(quote hls) (some $(quote (← getFileName))) $(quote range)) #[Block.code $(quote str.getString)])
-  else
-    ``(Block.concat #[])
+/--
+Return (syntax of) an Inline representation containing highlighted Lean code.
+The argument `hls` must be a highlighting of the parsed string `str`.
+-/
+private def mkHighlightedLeanInline (shouldShow : Bool) (hls : Highlighted) (str : StrLit) : DocElabM Term := do
+  if !shouldShow then
+    return ← ``(Inline.concat #[])
+
+  ``(Inline.other (Verso.Genre.Manual.InlineLean.Inline.lean $(quote hls)) #[Inline.code $(quote str.getString)])
+
 
 /--
 Elaborates the provided Lean command in the context of the current Verso module.
 -/
 @[code_block]
 def lean : CodeBlockExpanderOf LeanBlockConfig
-  | config, str => withoutAsync <| withLeanCodeBlock config.show str <| fun altStr => do
+  | config, str => withoutAsync <| do
 
     PointOfInterest.save (← getRef) ((config.name.map (·.toString)).getD (abbrevFirstLine 20 str.getString))
       (kind := Lsp.SymbolKind.file)
@@ -203,6 +210,8 @@ def lean : CodeBlockExpanderOf LeanBlockConfig
     let col? := (← getRef).getPos? |>.map (← getFileMap).utf8PosToLspPos |>.map (·.character)
 
     let origScopes ← if config.fresh then pure [{header := ""}] else getScopes
+
+    let altStr ← parserInputString str
 
     -- Turn of async elaboration so that info trees and messages are available when highlighting syntax
     let origScopes := origScopes.modifyHead fun sc =>
@@ -243,7 +252,7 @@ def lean : CodeBlockExpanderOf LeanBlockConfig
       for cmd in cmds do
         hls := hls ++ (← highlight cmd nonSilentMsgs cmdState.infoState.trees)
 
-      return hls
+      mkHighlightedLeanBlock config.show hls str
     finally
       if !config.keep then
         setEnv origEnv
@@ -285,7 +294,9 @@ Elaborates the provided Lean term in the context of the current Verso module.
 -/
 @[code_block]
 def leanTerm : CodeBlockExpanderOf LeanInlineConfig
-  | config, str => withoutAsync <| withLeanCodeBlock config.show str <| fun altStr => do
+  | config, str => withoutAsync <| do
+
+    let altStr ← parserInputString str
 
     let leveller :=
       if let some us := config.universes then
@@ -348,14 +359,8 @@ def leanTerm : CodeBlockExpanderOf LeanInlineConfig
         for msg in newMsgs.toArray do
           logMessage msg
 
-      highlight stx #[] (PersistentArray.empty.push tree)
-
-/--
-Construct the appropriate Term from a Highlighted version of a String.
-The two arguments should correspond with each other.
--/
-private def mkInlineLeanSyntax (hls : Highlighted) (str : String) : DocElabM Term :=
-  ``(Inline.other (Verso.Genre.Manual.InlineLean.Inline.lean $(quote hls)) #[Inline.code $(quote str)])
+      let hls ← highlight stx #[] (PersistentArray.empty.push tree)
+      mkHighlightedLeanBlock config.show hls str
 
 /--
 Elaborates the provided Lean term in the context of the current Verso module.
@@ -446,10 +451,7 @@ def leanInline : RoleExpanderOf LeanInlineConfig
 
       let hls := (← highlight stx #[] (PersistentArray.empty.push tree))
 
-      if config.show then
-        mkInlineLeanSyntax hls term.getString
-      else
-        ``(Inline.concat #[])
+      mkHighlightedLeanInline config.show hls term
 
 
 /--
@@ -501,10 +503,7 @@ def inst : RoleExpanderOf LeanBlockConfig
 
       let hls := (← highlight stx #[] (PersistentArray.empty.push tree))
 
-      if config.show then
-        mkInlineLeanSyntax hls term.getString
-      else
-        ``(Inline.concat #[])
+      mkHighlightedLeanInline config.show hls term
 
 /--
 Elaborates the contained document in a new section.
