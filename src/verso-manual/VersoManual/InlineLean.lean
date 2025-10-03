@@ -449,7 +449,7 @@ def leanInline : RoleExpanderOf LeanInlineConfig
       if config.show then
         mkInlineLeanSyntax hls term.getString
       else
-        ``(Block.concat #[])
+        ``(Inline.concat #[])
 
 
 /--
