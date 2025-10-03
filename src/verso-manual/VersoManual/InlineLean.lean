@@ -501,7 +501,7 @@ def inst : RoleExpanderOf LeanBlockConfig
 
       let hls := (← highlight stx #[] (PersistentArray.empty.push tree))
 
-      ``(Block.concat #[])
+      ``(Inline.concat #[])
 
 /--
 Elaborates the contained document in a new section.
