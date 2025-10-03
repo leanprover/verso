@@ -359,7 +359,7 @@ def leanTerm : CodeBlockExpanderOf LeanInlineConfig
         for msg in newMsgs.toArray do
           logMessage msg
 
-      let hls ← highlight stx #[] (PersistentArray.empty.push tree)
+      let hls := (← highlight stx #[] (PersistentArray.empty.push tree))
       mkHighlightedLeanBlock config.show hls str
 
 /--
