@@ -211,11 +211,11 @@ def lean : CodeBlockExpanderOf LeanBlockConfig
 
     let origScopes ← if config.fresh then pure [{header := ""}] else getScopes
 
-    let altStr ← parserInputString str
-
-    -- Turn of async elaboration so that info trees and messages are available when highlighting syntax
+    -- Turn off async elaboration so that info trees and messages are available when highlighting syntax
     let origScopes := origScopes.modifyHead fun sc =>
       { sc with opts := pp.tagAppFns.set (Elab.async.set sc.opts false) true }
+
+    let altStr ← parserInputString str
 
     let ictx := Parser.mkInputContext altStr (← getFileName)
     let cctx : Command.Context := { fileName := ← getFileName, fileMap := FileMap.ofString altStr, snap? := none, cancelTk? := none}
