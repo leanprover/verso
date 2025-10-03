@@ -110,6 +110,7 @@ instance : FromArgs LeanInlineConfig m := ⟨LeanInlineConfig.parse⟩
 
 end Config
 
+
 open Verso.Genre.Manual.InlineLean.Scopes (getScopes setScopes runWithOpenDecls runWithVariables)
 
 private def abbrevFirstLine (width : Nat) (str : String) : String :=
@@ -500,10 +501,7 @@ def inst : RoleExpanderOf LeanBlockConfig
 
       let hls := (← highlight stx #[] (PersistentArray.empty.push tree))
 
-      if config.show then
-        mkInlineLeanSyntax hls term.getString
-      else
-        ``(Block.concat #[])
+      ``(Block.concat #[])
 
 /--
 Elaborates the contained document in a new section.
