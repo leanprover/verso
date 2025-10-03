@@ -110,7 +110,6 @@ instance : FromArgs LeanInlineConfig m := ⟨LeanInlineConfig.parse⟩
 
 end Config
 
-
 open Verso.Genre.Manual.InlineLean.Scopes (getScopes setScopes runWithOpenDecls runWithVariables)
 
 private def abbrevFirstLine (width : Nat) (str : String) : String :=
@@ -169,11 +168,32 @@ def reportMessages {m} [Monad m] [MonadLog m] [MonadError m]
       throwErrorAt blame "No error expected in code block, one occurred"
 
 /--
+Common functionality for expanding the `lean` and `leanTerm` codeblocks:
+
+ - Before: modifying the string so that source positions are consistent
+ - After: de-indenting and exporting (syntax of) Block representation
+-/
+private def withLeanCodeBlock (shouldShow : Bool) (str: StrLit) (act : String -> DocElabM Highlighted) : DocElabM Term := do
+  let col? := (← getRef).getPos? |>.map (← getFileMap).utf8PosToLspPos |>.map (·.character)
+  let altStr ← parserInputString str
+
+  let mut hls ← act altStr
+  if let some col := col? then
+    hls := hls.deIndent col
+
+  if shouldShow then
+    let range := Syntax.getRange? str
+    let range := range.map (← getFileMap).utf8RangeToLspRange
+    ``(Block.other (Block.lean $(quote hls) (some $(quote (← getFileName))) $(quote range)) #[Block.code $(quote str.getString)])
+  else
+    ``(Block.concat #[])
+
+/--
 Elaborates the provided Lean command in the context of the current Verso module.
 -/
 @[code_block]
 def lean : CodeBlockExpanderOf LeanBlockConfig
-  | config, str => withoutAsync <| do
+  | config, str => withoutAsync <| withLeanCodeBlock config.show str <| fun altStr => do
 
     PointOfInterest.save (← getRef) ((config.name.map (·.toString)).getD (abbrevFirstLine 20 str.getString))
       (kind := Lsp.SymbolKind.file)
@@ -186,8 +206,6 @@ def lean : CodeBlockExpanderOf LeanBlockConfig
     -- Turn of async elaboration so that info trees and messages are available when highlighting syntax
     let origScopes := origScopes.modifyHead fun sc =>
       { sc with opts := pp.tagAppFns.set (Elab.async.set sc.opts false) true }
-
-    let altStr ← parserInputString str
 
     let ictx := Parser.mkInputContext altStr (← getFileName)
     let cctx : Command.Context := { fileName := ← getFileName, fileMap := FileMap.ofString altStr, snap? := none, cancelTk? := none}
@@ -224,15 +242,7 @@ def lean : CodeBlockExpanderOf LeanBlockConfig
       for cmd in cmds do
         hls := hls ++ (← highlight cmd nonSilentMsgs cmdState.infoState.trees)
 
-      if let some col := col? then
-        hls := hls.deIndent col
-
-      if config.show then
-        let range := Syntax.getRange? str
-        let range := range.map (← getFileMap).utf8RangeToLspRange
-        ``(Block.other (Block.lean $(quote hls) (some $(quote (← getFileName))) $(quote range)) #[Block.code $(quote str.getString)])
-      else
-        ``(Block.concat #[])
+      return hls
     finally
       if !config.keep then
         setEnv origEnv
@@ -275,11 +285,7 @@ Elaborates the provided Lean term in the context of the current Verso module.
 -/
 @[code_block]
 def leanTerm : CodeBlockExpanderOf LeanInlineConfig
-  | config, str => withoutAsync <| do
-
-    let altStr ← parserInputString str
-
-    let col? := (← getRef).getPos? |>.map (← getFileMap).utf8PosToLspPos |>.map (·.character)
+  | config, str => withoutAsync <| withLeanCodeBlock config.show str <| fun altStr => do
 
     let leveller :=
       if let some us := config.universes then
@@ -342,18 +348,7 @@ def leanTerm : CodeBlockExpanderOf LeanInlineConfig
         for msg in newMsgs.toArray do
           logMessage msg
 
-      let hls := (← highlight stx #[] (PersistentArray.empty.push tree))
-      let hls :=
-        if let some col := col? then
-          hls.deIndent col
-        else hls
-
-      if config.show then
-        let range := Syntax.getRange? str
-        let range := range.map (← getFileMap).utf8RangeToLspRange
-        ``(Block.other (Block.lean $(quote hls) (some $(quote (← getFileName))) $(quote range)) #[Block.code $(quote str.getString)])
-      else
-        ``(Block.concat #[])
+      highlight stx #[] (PersistentArray.empty.push tree)
 where
   withNewline (str : String) := if str == "" || str.back != '\n' then str ++ "\n" else str
 
