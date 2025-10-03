@@ -261,7 +261,6 @@ def lean : CodeBlockExpanderOf LeanBlockConfig
       if config.show then
         warnLongLines col? str
 where
-  withNewline (str : String) := if str == "" || str.back != '\n' then str ++ "\n" else str
   runCommand (act : Command.CommandElabM Unit) (stx : Syntax)
       (cctx : Command.Context) (cmdState : Command.State) :
       DocElabM Command.State := do
@@ -349,21 +348,6 @@ def leanTerm : CodeBlockExpanderOf LeanInlineConfig
           logMessage msg
 
       highlight stx #[] (PersistentArray.empty.push tree)
-where
-  withNewline (str : String) := if str == "" || str.back != '\n' then str ++ "\n" else str
-
-
-  modifyInfoTrees {m} [Monad m] [MonadInfoTree m] (f : PersistentArray InfoTree → PersistentArray InfoTree) : m Unit :=
-    modifyInfoState fun s => { s with trees := f s.trees }
-
-  -- TODO - consider how to upstream this
-  withInfoTreeContext {m α} [Monad m] [MonadInfoTree m] [MonadFinally m] (x : m α) (mkInfoTree : PersistentArray InfoTree → m InfoTree) : m (α × InfoTree) := do
-    let treesSaved ← getResetInfoTrees
-    MonadFinally.tryFinally' x fun _ => do
-      let st    ← getInfoState
-      let tree  ← mkInfoTree st.trees
-      modifyInfoTrees fun _ => treesSaved.push tree
-      pure tree
 
 /--
 Elaborates the provided Lean term in the context of the current Verso module.
@@ -458,21 +442,6 @@ def leanInline : RoleExpanderOf LeanInlineConfig
         ``(Inline.other (Verso.Genre.Manual.InlineLean.Inline.lean $(quote hls)) #[Inline.code $(quote term.getString)])
       else
         ``(Block.concat #[])
-where
-  withNewline (str : String) := if str == "" || str.back != '\n' then str ++ "\n" else str
-
-
-  modifyInfoTrees {m} [Monad m] [MonadInfoTree m] (f : PersistentArray InfoTree → PersistentArray InfoTree) : m Unit :=
-    modifyInfoState fun s => { s with trees := f s.trees }
-
-  -- TODO - consider how to upstream this
-  withInfoTreeContext {m α} [Monad m] [MonadInfoTree m] [MonadFinally m] (x : m α) (mkInfoTree : PersistentArray InfoTree → m InfoTree) : m (α × InfoTree) := do
-    let treesSaved ← getResetInfoTrees
-    MonadFinally.tryFinally' x fun _ => do
-      let st    ← getInfoState
-      let tree  ← mkInfoTree st.trees
-      modifyInfoTrees fun _ => treesSaved.push tree
-      pure tree
 
 
 /--
@@ -528,21 +497,6 @@ def inst : RoleExpanderOf LeanBlockConfig
         ``(Inline.other (Verso.Genre.Manual.InlineLean.Inline.lean $(quote hls)) #[Inline.code $(quote term.getString)])
       else
         ``(Block.concat #[])
-where
-  withNewline (str : String) := if str == "" || str.back != '\n' then str ++ "\n" else str
-
-
-  modifyInfoTrees {m} [Monad m] [MonadInfoTree m] (f : PersistentArray InfoTree → PersistentArray InfoTree) : m Unit :=
-    modifyInfoState fun s => { s with trees := f s.trees }
-
-  -- TODO - consider how to upstream this
-  withInfoTreeContext {m α} [Monad m] [MonadInfoTree m] [MonadFinally m] (x : m α) (mkInfoTree : PersistentArray InfoTree → m InfoTree) : m (α × InfoTree) := do
-    let treesSaved ← getResetInfoTrees
-    MonadFinally.tryFinally' x fun _ => do
-      let st    ← getInfoState
-      let tree  ← mkInfoTree st.trees
-      modifyInfoTrees fun _ => treesSaved.push tree
-      pure tree
 
 /--
 Elaborates the contained document in a new section.
