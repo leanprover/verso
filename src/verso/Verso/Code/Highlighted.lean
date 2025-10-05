@@ -42,7 +42,7 @@ def hlFromExport (exportLit : String) : SubVerso.Highlighting.Highlighted :=
     | .error e => panic! s!"Failed to deserialize Highlighted export data from parsed JSON: {e}"
     | .ok v' =>
       match v'.toHighlighted with
-      | .error e => panic! s!"Failed to deserialize highlighted code from export data: {e}"
+      | .error e => panic! s!"Failed to deserialize Highlighted data from export data: {e}"
       | .ok hl => hl
 
 
