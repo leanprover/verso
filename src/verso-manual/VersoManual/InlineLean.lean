@@ -581,8 +581,6 @@ where
       | .name x => pure x
       | other => throwError "Expected output name, got {repr other}"
   }
-  opt {α} (p : ArgParse m α) : ArgParse m (Option α) := (some <$> p) <|> pure none
-  optDef {α} (fallback : α) (p : ArgParse m α) : ArgParse m α := p <|> pure fallback
 
 instance : FromArgs LeanOutputConfig m := ⟨LeanOutputConfig.parser⟩
 
