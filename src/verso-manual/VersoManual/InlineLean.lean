@@ -169,6 +169,34 @@ def reportMessages {m} [Monad m] [MonadLog m] [MonadError m]
       throwErrorAt blame "No error expected in code block, one occurred"
 
 /--
+De-indents and returns (syntax of) a Block representation containing highlighted Lean code.
+The argument `hls` must be a highlighting of the parsed string `str`.
+-/
+private def toHighlightedLeanBlock (shouldShow : Bool) (hls : Highlighted) (str: StrLit) : DocElabM Term := do
+  if !shouldShow then
+    return ← ``(Block.concat #[])
+
+  let col? := (← getRef).getPos? |>.map (← getFileMap).utf8PosToLspPos |>.map (·.character)
+  let hls := match col? with
+  | .none => hls
+  | .some col => hls.deIndent col
+
+  let range := Syntax.getRange? str
+  let range := range.map (← getFileMap).utf8RangeToLspRange
+  ``(Block.other (Block.lean $(quote hls) (some $(quote (← getFileName))) $(quote range)) #[Block.code $(quote str.getString)])
+
+/--
+Returns (syntax of) an Inline representation containing highlighted Lean code.
+The argument `hls` must be a highlighting of the parsed string `str`.
+-/
+private def toHighlightedLeanInline (shouldShow : Bool) (hls : Highlighted) (str : StrLit) : DocElabM Term := do
+  if !shouldShow then
+    return ← ``(Inline.concat #[])
+
+  ``(Inline.other (Verso.Genre.Manual.InlineLean.Inline.lean $(quote hls)) #[Inline.code $(quote str.getString)])
+
+
+/--
 Elaborates the provided Lean command in the context of the current Verso module.
 -/
 @[code_block]
@@ -183,7 +211,7 @@ def lean : CodeBlockExpanderOf LeanBlockConfig
 
     let origScopes ← if config.fresh then pure [{header := ""}] else getScopes
 
-    -- Turn of async elaboration so that info trees and messages are available when highlighting syntax
+    -- Turn off async elaboration so that info trees and messages are available when highlighting syntax
     let origScopes := origScopes.modifyHead fun sc =>
       { sc with opts := pp.tagAppFns.set (Elab.async.set sc.opts false) true }
 
@@ -224,15 +252,7 @@ def lean : CodeBlockExpanderOf LeanBlockConfig
       for cmd in cmds do
         hls := hls ++ (← highlight cmd nonSilentMsgs cmdState.infoState.trees)
 
-      if let some col := col? then
-        hls := hls.deIndent col
-
-      if config.show then
-        let range := Syntax.getRange? str
-        let range := range.map (← getFileMap).utf8RangeToLspRange
-        ``(Block.other (Block.lean $(quote hls) (some $(quote (← getFileName))) $(quote range)) #[Block.code $(quote str.getString)])
-      else
-        ``(Block.concat #[])
+      toHighlightedLeanBlock config.show hls str
     finally
       if !config.keep then
         setEnv origEnv
@@ -251,7 +271,6 @@ def lean : CodeBlockExpanderOf LeanBlockConfig
       if config.show then
         warnLongLines col? str
 where
-  withNewline (str : String) := if str == "" || str.back != '\n' then str ++ "\n" else str
   runCommand (act : Command.CommandElabM Unit) (stx : Syntax)
       (cctx : Command.Context) (cmdState : Command.State) :
       DocElabM Command.State := do
@@ -278,8 +297,6 @@ def leanTerm : CodeBlockExpanderOf LeanInlineConfig
   | config, str => withoutAsync <| do
 
     let altStr ← parserInputString str
-
-    let col? := (← getRef).getPos? |>.map (← getFileMap).utf8PosToLspPos |>.map (·.character)
 
     let leveller :=
       if let some us := config.universes then
@@ -343,32 +360,7 @@ def leanTerm : CodeBlockExpanderOf LeanInlineConfig
           logMessage msg
 
       let hls := (← highlight stx #[] (PersistentArray.empty.push tree))
-      let hls :=
-        if let some col := col? then
-          hls.deIndent col
-        else hls
-
-      if config.show then
-        let range := Syntax.getRange? str
-        let range := range.map (← getFileMap).utf8RangeToLspRange
-        ``(Block.other (Block.lean $(quote hls) (some $(quote (← getFileName))) $(quote range)) #[Block.code $(quote str.getString)])
-      else
-        ``(Block.concat #[])
-where
-  withNewline (str : String) := if str == "" || str.back != '\n' then str ++ "\n" else str
-
-
-  modifyInfoTrees {m} [Monad m] [MonadInfoTree m] (f : PersistentArray InfoTree → PersistentArray InfoTree) : m Unit :=
-    modifyInfoState fun s => { s with trees := f s.trees }
-
-  -- TODO - consider how to upstream this
-  withInfoTreeContext {m α} [Monad m] [MonadInfoTree m] [MonadFinally m] (x : m α) (mkInfoTree : PersistentArray InfoTree → m InfoTree) : m (α × InfoTree) := do
-    let treesSaved ← getResetInfoTrees
-    MonadFinally.tryFinally' x fun _ => do
-      let st    ← getInfoState
-      let tree  ← mkInfoTree st.trees
-      modifyInfoTrees fun _ => treesSaved.push tree
-      pure tree
+      toHighlightedLeanBlock config.show hls str
 
 /--
 Elaborates the provided Lean term in the context of the current Verso module.
@@ -459,25 +451,7 @@ def leanInline : RoleExpanderOf LeanInlineConfig
 
       let hls := (← highlight stx #[] (PersistentArray.empty.push tree))
 
-      if config.show then
-        ``(Inline.other (Verso.Genre.Manual.InlineLean.Inline.lean $(quote hls)) #[Inline.code $(quote term.getString)])
-      else
-        ``(Block.concat #[])
-where
-  withNewline (str : String) := if str == "" || str.back != '\n' then str ++ "\n" else str
-
-
-  modifyInfoTrees {m} [Monad m] [MonadInfoTree m] (f : PersistentArray InfoTree → PersistentArray InfoTree) : m Unit :=
-    modifyInfoState fun s => { s with trees := f s.trees }
-
-  -- TODO - consider how to upstream this
-  withInfoTreeContext {m α} [Monad m] [MonadInfoTree m] [MonadFinally m] (x : m α) (mkInfoTree : PersistentArray InfoTree → m InfoTree) : m (α × InfoTree) := do
-    let treesSaved ← getResetInfoTrees
-    MonadFinally.tryFinally' x fun _ => do
-      let st    ← getInfoState
-      let tree  ← mkInfoTree st.trees
-      modifyInfoTrees fun _ => treesSaved.push tree
-      pure tree
+      toHighlightedLeanInline config.show hls term
 
 
 /--
@@ -529,25 +503,7 @@ def inst : RoleExpanderOf LeanBlockConfig
 
       let hls := (← highlight stx #[] (PersistentArray.empty.push tree))
 
-      if config.show then
-        ``(Inline.other (Verso.Genre.Manual.InlineLean.Inline.lean $(quote hls)) #[Inline.code $(quote term.getString)])
-      else
-        ``(Block.concat #[])
-where
-  withNewline (str : String) := if str == "" || str.back != '\n' then str ++ "\n" else str
-
-
-  modifyInfoTrees {m} [Monad m] [MonadInfoTree m] (f : PersistentArray InfoTree → PersistentArray InfoTree) : m Unit :=
-    modifyInfoState fun s => { s with trees := f s.trees }
-
-  -- TODO - consider how to upstream this
-  withInfoTreeContext {m α} [Monad m] [MonadInfoTree m] [MonadFinally m] (x : m α) (mkInfoTree : PersistentArray InfoTree → m InfoTree) : m (α × InfoTree) := do
-    let treesSaved ← getResetInfoTrees
-    MonadFinally.tryFinally' x fun _ => do
-      let st    ← getInfoState
-      let tree  ← mkInfoTree st.trees
-      modifyInfoTrees fun _ => treesSaved.push tree
-      pure tree
+      toHighlightedLeanInline config.show hls term
 
 /--
 Elaborates the contained document in a new section.
@@ -625,8 +581,6 @@ where
       | .name x => pure x
       | other => throwError "Expected output name, got {repr other}"
   }
-  opt {α} (p : ArgParse m α) : ArgParse m (Option α) := (some <$> p) <|> pure none
-  optDef {α} (fallback : α) (p : ArgParse m α) : ArgParse m α := p <|> pure fallback
 
 instance : FromArgs LeanOutputConfig m := ⟨LeanOutputConfig.parser⟩
 
