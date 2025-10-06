@@ -169,7 +169,7 @@ def reportMessages {m} [Monad m] [MonadLog m] [MonadError m]
       throwErrorAt blame "No error expected in code block, one occurred"
 
 /--
-De-indent and return (syntax of) a Block representation containing highlighted Lean code
+De-indents and returns (syntax of) a Block representation containing highlighted Lean code.
 The argument `hls` must be a highlighting of the parsed string `str`.
 -/
 private def mkHighlightedLeanBlock (shouldShow : Bool) (hls : Highlighted) (str: StrLit) : DocElabM Term := do
