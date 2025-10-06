@@ -47,9 +47,25 @@ def attr' (val : Array AttrText) : Except String String := do
   | .error e => .error e
   | .ok s => pure s
 
+/--
+A mapping from Markdown document header levels to actual Verso nesting levels.
+The values in the list are Markdown header levels. Their position in the list
+is the Verso nesting level, with the final element being Verso level 0.
+For example, the list
+    `[5,4,2,1]`
+is understood as associating:
+- Markdown level 1 to Verso nesting 0
+- Markdown level 2 to Verso nesting 1
+- Markdown level 4 to Verso nesting 2
+- Markdown level 5 to Verso nesting 3
+
+We need to keep this state to appropriately repair non-consecutive
+Markdown header levels.
+-/
+public abbrev HeaderMapping := List Nat
+
 private structure MDState where
-  /-- A mapping from document header levels to actual nesting levels -/
-  inHeaders : List (Nat × Nat) := []
+  inHeaders : HeaderMapping := []
 deriving Inhabited
 
 private abbrev MDT m block inline α := ReaderT (MDContext m block inline) (StateT MDState m) α
@@ -123,17 +139,17 @@ private partial def getHeaderLevel [Monad m] (level : Nat) : MDT m b i Nat := do
   let hdrs := (← get).inHeaders
   match hdrs with
   | [] =>
-    modify ({· with inHeaders := [(level, 0)]})
+    modify ({· with inHeaders := [level]})
     pure 0
-  | (docLevel, nesting) :: more =>
+  | docLevel :: more =>
     if level < docLevel then
       modify ({· with inHeaders := more})
       getHeaderLevel level
     else if level = docLevel then
-      pure nesting
+      pure more.length
     else
-      modify ({· with inHeaders := (level, nesting + 1) :: hdrs})
-      pure (nesting + 1)
+      modify ({· with inHeaders := level :: hdrs})
+      pure (more.length + 1)
 
 private def getHeader  [Monad m] (level : Nat) : MDT m b i (Except String (Array i → m b)) := do
   let lvl ← getHeaderLevel level
@@ -241,36 +257,51 @@ where
 open Verso.Doc.Elab
 
 /--
-Updates the active sections given a new header with `level`.
+Closes all sections that have a Markdown header level that is greater
+than or equal to {name}`level`, to prepare the state for pushing new a
+part at level {name}`level`.
+
+We close a frame in the {name (full:=PartElabM.State.partContext)}`partContext` of {name}`PartElabM.State` exactly in lockstep
+with dropping the head of {name (full:=MDState.inHeaders)}`inHeaders` in {name}`MDState`.
 -/
-private partial def closeSections {m} [Monad m]
-    [MonadStateOf PartElabM.State m]
+private partial def closeMarkdownSections {m} [Monad m]
+    [MonadError m] [MonadStateOf PartElabM.State m]
     (level : Nat) : MDT m b i Unit := do
   let hdrs := (← getThe MDState).inHeaders
   match hdrs with
-  | [] => modifyThe MDState ({· with inHeaders := [(level, 0)]})
-  | (docLevel, nesting) :: more =>
-    if level ≤ docLevel then
-      if let some ctxt' := (← getThe PartElabM.State).partContext.close default then -- Markdown parser provides no source position
-        modifyThe PartElabM.State fun st => {st with partContext := ctxt'}
-        closeSections level
-      if level < docLevel then
-        modifyThe MDState ({· with inHeaders := more})
-    else
-      modifyThe MDState ({· with inHeaders := (level, nesting + 1) :: hdrs})
+  | [] => pure ()
+  | docLevel :: more =>
+    if docLevel ≥ level then
+      -- `default` here because the Markdown parser provides no source position
+      let some ctxt' := (← getThe PartElabM.State).partContext.close default
+        |  throwError m!"Failed to close verso part corresponding to markdown section: no parts left"
+      modifyThe PartElabM.State fun st => {st with partContext := ctxt'}
+      modifyThe MDState ({· with inHeaders := more})
+      closeMarkdownSections level
+
+/--
+In our header mapping bookkeeping, creates a new section with a new Markdown header with level {name}`level`.
+Also pushes a new part {name}`frame`.
+-/
+private partial def startMarkdownSection {m} [Monad m]
+    [MonadStateOf PartElabM.State m] [MonadLiftT PartElabM m]
+    (level : Nat) (frame : PartFrame) : MDT m b i Unit := do
+  let hdr := (← getThe MDState).inHeaders
+  modifyThe MDState ({· with inHeaders := level :: hdr})
+  PartElabM.push frame
 
 private partial def addPartFromMarkdownAux {m} [Monad m]
     [MonadLiftT PartElabM m] [MonadStateOf PartElabM.State m]
     [MonadQuotation m] [AddMessageContext m] [MonadError m]
     : MD4Lean.Block → MDT m Term Term Unit
   | .header level txt => do
-    closeSections level
+    closeMarkdownSections level
     let txtStxs ← txt.mapM inlineFromMarkdown |>.run' none
     let titleTexts ← match txt.mapM stringFromMarkdownText with
       | .ok t => pure t
       | .error e => throwError m!"Unsupported Markdown in header:\n{e}"
     let titleText := titleTexts.foldl (· ++ ·) ""
-    PartElabM.push {
+    startMarkdownSection level {
       titleSyntax := quote (k := `str) titleText
       expandedTitle := some (titleText, txtStxs)
       metadata := none
@@ -298,10 +329,72 @@ def addPartFromMarkdown {m} [Monad m]
     [MonadLiftT PartElabM m] [MonadStateOf PartElabM.State m]
     [MonadQuotation m] [AddMessageContext m] [MonadError m]
     (md : MD4Lean.Block)
-    (currentHeaderLevels : List (Nat × Nat) := [])
+    (currentHeaderLevels : HeaderMapping := [])
     (handleHeaders : List (Array Term → m Term) := [])
     (elabInlineCode : Option (Option String → String → m Term) := none)
-    (elabBlockCode : Option (Option String → Option String → String → m Term) := none) : m (List (Nat × Nat)) := do
+    (elabBlockCode : Option (Option String → Option String → String → m Term) := none) : m HeaderMapping := do
   let ctxt := {headerHandlers := ⟨handleHeaders⟩, elabInlineCode, elabBlockCode}
   let (_, { inHeaders }) ← (addPartFromMarkdownAux md |>.run ctxt |>.run {inHeaders := currentHeaderLevels})
   return inHeaders
+
+open Verso.Doc.Elab in
+/--
+Renders the entire structure of a finished part as Mardown-style headings, with a
+number of `'#'s` that reflects their nesting depth. This is a tool for debugging/testing
+only.
+
+To avoid off-by-one misunderstandings: The heading level is equal to
+the number of # characters in the opening sequence. (cf. [CommonMark
+Spec](https://spec.commonmark.org/0.31.2/))
+-/
+def displayPartStructure (part : FinishedPart) (level : Nat := 1) : String := match part with
+  | .mk _ _ title _ _ subParts _ =>
+       let partsStr : String := subParts.map (displayPartStructure · (level + 1))
+         |>.toList |> String.join
+       let pref := "".pushn '#' level
+       s!"{pref} {title}\n{partsStr}"
+  | .included name => s!"included {name}\n"
+
+/--
+Parses a Markdown string, returning the displayed part structure.
+-/
+def testAddPartFromMarkdown (input : String) : Elab.TermElabM String := do
+  let some parsed := MD4Lean.parse input
+    | throwError m!"Couldn't parse markdown {input}"
+  let addParts : PartElabM Unit := do
+    let mut levels := []
+    for block in parsed.blocks do
+      levels ← addPartFromMarkdown block levels
+    closePartsUntil 0 0
+  let (_, _, part) ← addParts.run (Syntax.node .none identKind #[]) (mkConst ``Manual) default default
+  part.partContext.priorParts.toList.map displayPartStructure |> String.join |> pure
+
+/--
+info:
+# header1
+## header2-a
+### header3-aa
+## header 2-b
+### header3-ba
+### header3-bb
+#### header4-bba
+### header3-bc
+# another header
+## one more
+-/
+#guard_msgs in
+/- Exercises how inconsistent Markdown header nesting depth
+is heuristically fixed. -/
+#eval do
+  IO.println <| "\n" ++ (← testAddPartFromMarkdown r#"
+# header1
+## header2-a
+### header3-aa
+## header 2-b
+##### header3-ba
+#### header3-bb
+###### header4-bba
+### header3-bc
+# another header
+## one more
+"#)
