@@ -172,7 +172,7 @@ def reportMessages {m} [Monad m] [MonadLog m] [MonadError m]
 De-indents and returns (syntax of) a Block representation containing highlighted Lean code.
 The argument `hls` must be a highlighting of the parsed string `str`.
 -/
-private def mkHighlightedLeanBlock (shouldShow : Bool) (hls : Highlighted) (str: StrLit) : DocElabM Term := do
+private def toHighlightedLeanBlock (shouldShow : Bool) (hls : Highlighted) (str: StrLit) : DocElabM Term := do
   if !shouldShow then
     return ← ``(Block.concat #[])
 
@@ -189,7 +189,7 @@ private def mkHighlightedLeanBlock (shouldShow : Bool) (hls : Highlighted) (str:
 Returns (syntax of) an Inline representation containing highlighted Lean code.
 The argument `hls` must be a highlighting of the parsed string `str`.
 -/
-private def mkHighlightedLeanInline (shouldShow : Bool) (hls : Highlighted) (str : StrLit) : DocElabM Term := do
+private def toHighlightedLeanInline (shouldShow : Bool) (hls : Highlighted) (str : StrLit) : DocElabM Term := do
   if !shouldShow then
     return ← ``(Inline.concat #[])
 
@@ -252,7 +252,7 @@ def lean : CodeBlockExpanderOf LeanBlockConfig
       for cmd in cmds do
         hls := hls ++ (← highlight cmd nonSilentMsgs cmdState.infoState.trees)
 
-      mkHighlightedLeanBlock config.show hls str
+      toHighlightedLeanBlock config.show hls str
     finally
       if !config.keep then
         setEnv origEnv
@@ -360,7 +360,7 @@ def leanTerm : CodeBlockExpanderOf LeanInlineConfig
           logMessage msg
 
       let hls := (← highlight stx #[] (PersistentArray.empty.push tree))
-      mkHighlightedLeanBlock config.show hls str
+      toHighlightedLeanBlock config.show hls str
 
 /--
 Elaborates the provided Lean term in the context of the current Verso module.
@@ -451,7 +451,7 @@ def leanInline : RoleExpanderOf LeanInlineConfig
 
       let hls := (← highlight stx #[] (PersistentArray.empty.push tree))
 
-      mkHighlightedLeanInline config.show hls term
+      toHighlightedLeanInline config.show hls term
 
 
 /--
@@ -503,7 +503,7 @@ def inst : RoleExpanderOf LeanBlockConfig
 
       let hls := (← highlight stx #[] (PersistentArray.empty.push tree))
 
-      mkHighlightedLeanInline config.show hls term
+      toHighlightedLeanInline config.show hls term
 
 /--
 Elaborates the contained document in a new section.
