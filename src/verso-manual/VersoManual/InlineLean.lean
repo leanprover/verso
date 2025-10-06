@@ -186,7 +186,7 @@ private def mkHighlightedLeanBlock (shouldShow : Bool) (hls : Highlighted) (str:
   ``(Block.other (Block.lean $(quote hls) (some $(quote (← getFileName))) $(quote range)) #[Block.code $(quote str.getString)])
 
 /--
-Return (syntax of) an Inline representation containing highlighted Lean code.
+Returns (syntax of) an Inline representation containing highlighted Lean code.
 The argument `hls` must be a highlighting of the parsed string `str`.
 -/
 private def mkHighlightedLeanInline (shouldShow : Bool) (hls : Highlighted) (str : StrLit) : DocElabM Term := do
