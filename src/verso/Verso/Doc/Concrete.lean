@@ -38,19 +38,14 @@ where
 @[combinator_parenthesizer completeDocument] def completeDocument.parenthesizer := PrettyPrinter.Parenthesizer.visitToken
 @[combinator_formatter completeDocument] def completeDocument.formatter := PrettyPrinter.Formatter.visitAtom Name.anonymous
 
-
-open Lean.Elab Command in
-partial def findGenreCmd : Syntax → Lean.Elab.Command.CommandElabM Unit
-  | `($g:ident) => discard <| liftTermElabM <| realizeGlobalConstNoOverloadWithInfo g -- Don't allow it to become an auto-argument
-  | `(($e)) => findGenreCmd e
-  | _ => pure ()
-
 open Lean.Elab Term in
 partial def findGenreTm : Syntax → TermElabM Unit
   | `($g:ident) => discard <| realizeGlobalConstNoOverloadWithInfo g -- Don't allow it to become an auto-argument
   | `(($e)) => findGenreTm e
   | _ => pure ()
 
+partial def findGenreCmd (genre : Syntax) : Command.CommandElabM Unit :=
+  Command.liftTermElabM do findGenreTm genre
 
 def saveRefs [Monad m] [MonadInfoTree m] (st : DocElabM.State) (st' : PartElabM.State) : m Unit := do
   for r in internalRefs st'.linkDefs st.linkRefs do
@@ -59,6 +54,9 @@ def saveRefs [Monad m] [MonadInfoTree m] (st : DocElabM.State) (st' : PartElabM.
   for r in internalRefs st'.footnoteDefs st.footnoteRefs do
     for stx in r.syntax do
       pushInfoLeaf <| .ofCustomInfo {stx := stx , value := Dynamic.mk r}
+
+def elabGenre (genre : TSyntax `term) : TermElabM Expr :=
+  Term.elabTerm genre (some (.const ``Doc.Genre []))
 
 elab "#docs" "(" genre:term ")" n:ident title:str ":=" ":::::::" text:document ":::::::" : command => open Lean Elab Command PartElabM DocElabM in do
   findGenreCmd genre
@@ -70,37 +68,38 @@ elab "#docs" "(" genre:term ")" n:ident title:str ":=" ":::::::" text:document "
       | none => panic! "No final token!"
     | _ => panic! "Nothing"
   let endPos := endTok.getPos!
-  let blocks := text.raw.getArgs
 
+  let blocks := text.raw.getArgs
   let titleParts ← stringToInlines title
   let titleString := inlinesToString (← getEnv) titleParts
-  let g ← runTermElabM fun _ => Lean.Elab.Term.elabTerm genre (some (.const ``Doc.Genre []))
+  let initState : PartElabM.State := .init (.node .none nullKind titleParts)
 
-  let ((), st, st') ← liftTermElabM <| PartElabM.run genre g {} (.init (.node .none nullKind titleParts)) <| do
+  let ((), st, st') ← liftTermElabM <| do PartElabM.run genre (← elabGenre genre) {} initState do
     setTitle titleString (← liftDocElabM <| titleParts.mapM (elabInline ⟨·⟩))
     for b in blocks do partCommand ⟨b⟩
     closePartsUntil 0 endPos
     pure ()
   let finished := st'.partContext.toPartFrame.close endPos
+  
   pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
   saveRefs st st'
-
   elabCommand (← `(def $n : Part $genre := $(← finished.toSyntax genre)))
 
   let mut docState := st
   for hook in (← documentFinishedHooks) do
-    let ((), docState') ← runTermElabM fun _ => hook ⟨genre, g⟩ st' docState
+    let ((), docState') ← liftTermElabM do hook ⟨genre, ← elabGenre genre⟩ st' docState
     docState := docState'
 
 elab "#doc" "(" genre:term ")" title:str "=>" text:completeDocument eoi : term => open Lean Elab Term PartElabM DocElabM in do
   findGenreTm genre
   let endPos := (← getFileMap).source.endPos
+
   let blocks := text.raw.getArgs
   let titleParts ← stringToInlines title
   let titleString := inlinesToString (← getEnv) titleParts
-  let g ← elabTerm genre (some (.const ``Doc.Genre []))
-  let g ← instantiateMVars g
-  let ((), st, st') ← PartElabM.run genre g {} (.init (.node .none nullKind titleParts)) <| do
+  let initState : PartElabM.State := .init (.node .none nullKind titleParts)
+
+  let ((), st, st') ← PartElabM.run genre (← elabGenre genre) {} initState <| do
     let mut errors := #[]
     setTitle titleString (← liftDocElabM <| titleParts.mapM (elabInline ⟨·⟩))
     for b in blocks do
@@ -115,6 +114,7 @@ elab "#doc" "(" genre:term ")" title:str "=>" text:completeDocument eoi : term =
       | oops@(.internal _ _) => throw oops
     pure ()
   let finished := st'.partContext.toPartFrame.close endPos
+
   pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
   saveRefs st st'
   elabTerm (← `( ($(← finished.toSyntax genre) : Part $genre))) none
@@ -219,13 +219,14 @@ elab_rules : command
   | `(command|#doc ( $genre:term ) $title:str =>%$tok) => open Lean Parser Elab Command in do
   findGenreCmd genre
   elabCommand <| ← `(open scoped Lean.Doc.Syntax)
+
   let titleParts ← stringToInlines title
   let titleString := inlinesToString (← getEnv) titleParts
   let initState : PartElabM.State := .init (.node .none nullKind titleParts)
 
-  let (titleInlines, docState) ← runTermElabM <| fun _ => do
-    let g ← Term.elabTerm genre (some (.const ``Doc.Genre [])) >>= instantiateMVars
-    titleParts.mapM (Verso.Doc.Elab.elabInline ⟨·⟩) |>.run genre g {} initState
+  let (titleInlines, docState) ← liftTermElabM do
+    DocElabM.run genre (← elabGenre genre) {} initState <| do
+      titleParts.mapM (Verso.Doc.Elab.elabInline ⟨·⟩)
   modifyEnv (docStateExt.setState · docState)
 
   let initState := { initState with
@@ -262,6 +263,7 @@ def runVersoBlock (genre : Term) (block : TSyntax `block) : CommandElabM Unit :=
       partStateExt.setState (docStateExt.setState env docState') (some partState')
   finally
     modifyEnv (categoryParserFnExtension.setState · versoCmdFn)
+
 
 open Lean Elab Command in
 @[command_elab addBlockCmd]
