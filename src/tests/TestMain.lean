@@ -4,6 +4,8 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 
+import Verso
+import VersoManual
 import VersoSearch.PorterStemmer
 import Tests
 
@@ -29,8 +31,34 @@ def testStemmer (_ : Config) : IO Unit := do
       IO.eprintln s!"{x} --> {s} (wanted '{y}')"
     throw <| IO.userError "Stemmer tests failed"
 
+/--
+Tests manual-genre TeX generation. `dir` is a subdirectory specific to a particular test document,
+which is where actual output should go, and which contains the expected output directory.
+`doc` is the document to be rendered.
+-/
+def testTexOutput (dir : System.FilePath) (doc : Verso.Doc.Part Verso.Genre.Manual) :
+    Config →  IO Unit := fun config =>
+  let versoConfig : Verso.Genre.Manual.Config := {
+    destination := "src/tests/integration" / dir / "output",
+    emitTeX := true,
+    emitHtmlMulti := false
+  }
+
+  let runTest : IO Unit  :=
+    open Verso Genre Manual in do
+    let logError (msg : String) := IO.eprintln msg
+    ReaderT.run (emitTeX logError versoConfig doc) extension_impls%
+
+  Verso.Integration.runTests {
+    testDir := "src/tests/integration" / dir,
+    updateExpected := config.updateExpected,
+    runTest
+  }
+
+open Verso.Integration in
 def tests := [
-  testStemmer
+  testStemmer,
+  testTexOutput "sample-doc" SampleDoc.doc
 ]
 
 def getConfig (config : Config) : List String → IO Config
