@@ -76,15 +76,16 @@ elab "#docs" "(" genre:term ")" n:ident title:str ":=" ":::::::" text:document "
 
   let ((), st, st') ← liftTermElabM <| do PartElabM.run genre (← elabGenre genre) {} initState do
     setTitle titleString (← liftDocElabM <| titleParts.mapM (elabInline ⟨·⟩))
-    for b in blocks do partCommand ⟨b⟩
+    for b in blocks do partCommand ⟨b⟩ -- this modifies the current partelabm state
     closePartsUntil 0 endPos
     pure ()
   let finished := st'.partContext.toPartFrame.close endPos
-  
+
   pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
   saveRefs st st'
   elabCommand (← `(def $n : Part $genre := $(← finished.toSyntax genre)))
 
+  -- Try deleting documentFinishedHooks and then unraveling
   let mut docState := st
   for hook in (← documentFinishedHooks) do
     let ((), docState') ← liftTermElabM do hook ⟨genre, ← elabGenre genre⟩ st' docState
@@ -94,7 +95,6 @@ elab "#doc" "(" genre:term ")" title:str "=>" text:completeDocument eoi : term =
   findGenreTm genre
   let endPos := (← getFileMap).source.endPos
 
-  let blocks := text.raw.getArgs
   let titleParts ← stringToInlines title
   let titleString := inlinesToString (← getEnv) titleParts
   let initState : PartElabM.State := .init (.node .none nullKind titleParts)
@@ -102,6 +102,7 @@ elab "#doc" "(" genre:term ")" title:str "=>" text:completeDocument eoi : term =
   let ((), st, st') ← PartElabM.run genre (← elabGenre genre) {} initState <| do
     let mut errors := #[]
     setTitle titleString (← liftDocElabM <| titleParts.mapM (elabInline ⟨·⟩))
+    let blocks := text.raw.getArgs
     for b in blocks do
       try
         partCommand ⟨b⟩
@@ -117,6 +118,8 @@ elab "#doc" "(" genre:term ")" title:str "=>" text:completeDocument eoi : term =
 
   pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
   saveRefs st st'
+  -- ToSyntax is the point where we need to output the syntax table
+  -- doesn't need to be an environment-level bindng
   elabTerm (← `( ($(← finished.toSyntax genre) : Part $genre))) none
 
 
@@ -215,8 +218,10 @@ def finishDoc (genre : Term) (title : StrLit) : CommandElabM Unit:= do
 
 syntax (name := replaceDoc) "#doc" "(" term ")" str "=>" : command
 
+#check Lean.Doc.Syntax.blockquote
+
 elab_rules : command
-  | `(command|#doc ( $genre:term ) $title:str =>%$tok) => open Lean Parser Elab Command in do
+  | `(command|#doc ( $genre:term ) $title:str =>%$tok) => open Lean Parser Elab Command PartElabM in do
   findGenreCmd genre
   elabCommand <| ← `(open scoped Lean.Doc.Syntax)
 
@@ -224,6 +229,12 @@ elab_rules : command
   let titleString := inlinesToString (← getEnv) titleParts
   let initState : PartElabM.State := .init (.node .none nullKind titleParts)
 
+  let ((), st, st') ← liftTermElabM <| PartElabM.run genre (← Command.runTermElabM fun _ => elabGenre genre) {} initState <| do
+    setTitle titleString (← liftDocElabM <| titleParts.mapM (Verso.Doc.Elab.elabInline ⟨·⟩))
+  modifyEnv (docStateExt.setState · st)
+  modifyEnv (partStateExt.setState · (some st'))
+
+/-
   let (titleInlines, docState) ← liftTermElabM do
     DocElabM.run genre (← elabGenre genre) {} initState <| do
       titleParts.mapM (Verso.Doc.Elab.elabInline ⟨·⟩)
@@ -233,6 +244,7 @@ elab_rules : command
     partContext.expandedTitle := some (titleString, titleInlines)
   }
   modifyEnv (partStateExt.setState · (some initState))
+-/
 
   -- If there's no blocks after the =>, then the command parser never gets called, so it needs special-casing here
   if let some stopPos := tok.getTailPos? then
@@ -241,6 +253,10 @@ elab_rules : command
       finishDoc genre title
       return
 
+  -- This is messing with Lean's internal command parser to start
+  -- treating blocks with the infrastructure for Lean commands
+  -- The result of parsing a verso block is a lean command that will add this block to the
+  -- current document
   modifyEnv fun env => originalCatParserExt.setState env (categoryParserFnExtension.getState env)
   modifyEnv (replaceCategoryFn `command (versoBlockCommandFn genre titleString))
 
@@ -252,11 +268,13 @@ def runVersoBlock (genre : Term) (block : TSyntax `block) : CommandElabM Unit :=
   try
     modifyEnv fun env => categoryParserFnExtension.setState env (originalCatParserExt.getState env)
     let env ← getEnv
+    -- This is where we keep the part
     let some partState := partStateExt.getState env
       | throwErrorAt block "State not initialized"
 
     let ((), docState', partState') ← runTermElabM fun _ => do
       let g ← Term.elabTerm genre (some (.const ``Doc.Genre [])) >>= instantiateMVars
+      -- compare to line 79
       partCommand block |>.run genre g (docStateExt.getState env) partState
     saveRefs docState' partState'
     modifyEnv fun env =>
