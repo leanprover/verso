@@ -45,7 +45,7 @@ def saveRefs [Monad m] [MonadInfoTree m] (st : DocElabM.State) (st' : PartElabM.
     for stx in r.syntax do
       pushInfoLeaf <| .ofCustomInfo {stx := stx , value := Dynamic.mk r}
 
-def elabGenre (genre : TSyntax `term) : TermElabM Expr :=
+private def elabGenre (genre : TSyntax `term) : TermElabM Expr :=
   Term.elabTerm genre (some (.const ``Doc.Genre []))
 
 /-- All-at-once elaboration of verso document syntax to syntax denoting a verso `Part`. Implements
@@ -103,13 +103,13 @@ commands are elaborated top-level-block by top-level-block in the manner of Lean
 is done by replacing the parser for the `command category: -/
 
 /-- Replaces the stored parsing behavior for the category `cat` with the behavior defined by `p`. -/
-def replaceCategoryParser (cat : Name) (p : ParserFn) : Command.CommandElabM Unit :=
+private def replaceCategoryParser (cat : Name) (p : ParserFn) : Command.CommandElabM Unit :=
   modifyEnv (categoryParserFnExtension.modifyState · fun st =>
     fun n => if n == cat then p else st n)
 
 /-- Parses each top-level block as either a `addBlockCmd` or a `addLastBlockCmd`. (This is what
 Verso uses to replace the command parser.) -/
-def versoBlockCommandFn (genre : Term) (title : String) : ParserFn := fun c s =>
+private def versoBlockCommandFn (genre : Term) (title : String) : ParserFn := fun c s =>
   let iniSz  := s.stackSize
   let s := recoverBlockWith #[.missing] (Verso.Parser.block {}) c s
   if s.hasError then s
@@ -133,7 +133,7 @@ initialize originalCatParserExt : EnvExtension CategoryParserFn ← registerEnvE
 /-- Performs `PartElabM.run` with state gathered from `docStateExt` and `partStateExt`, and then
 updates the state in those environment extensions with any modifications. Also replaces the default
 command parser in case `act` wants to parse commands (such as within an embedded code block). -/
-def runPartElabInEnv (genreSyntax: Term) (act : PartElabM a) : Command.CommandElabM a := do
+private def runPartElabInEnv (genreSyntax: Term) (act : PartElabM a) : Command.CommandElabM a := do
   let env ← getEnv
   let versoCmdFn := categoryParserFnExtension.getState env
   let docState := docStateExt.getState env
@@ -150,7 +150,7 @@ def runPartElabInEnv (genreSyntax: Term) (act : PartElabM a) : Command.CommandEl
   finally
     modifyEnv (categoryParserFnExtension.setState · versoCmdFn)
 
-def saveRefsInEnv : Command.CommandElabM Unit := do
+private def saveRefsInEnv : Command.CommandElabM Unit := do
   let env ← getEnv
   let docState := docStateExt.getState env
   let some partState := partStateExt.getState env
@@ -160,7 +160,7 @@ def saveRefsInEnv : Command.CommandElabM Unit := do
 /-! The actions of `elabDoc` are split across three functions: the prelude in `startDoc`,
 the loop body in `runVersoBlock`, and the postlude in `finishDoc`. -/
 
-def startDoc (genre : Term) (title: StrLit) : Command.CommandElabM String := do
+private def startDoc (genre : Term) (title: StrLit) : Command.CommandElabM String := do
   let titleParts ← stringToInlines title
   let titleString := inlinesToString (← getEnv) titleParts
 
@@ -170,11 +170,11 @@ def startDoc (genre : Term) (title: StrLit) : Command.CommandElabM String := do
     PartElabM.setTitle titleString (← PartElabM.liftDocElabM <| titleParts.mapM (elabInline ⟨·⟩))
   return titleString
 
-def runVersoBlock (genre : Term) (block : TSyntax `block) : Command.CommandElabM Unit := do
+private def runVersoBlock (genre : Term) (block : TSyntax `block) : Command.CommandElabM Unit := do
   runPartElabInEnv genre <| partCommand block
   saveRefsInEnv
 
-def finishDoc (genre : Term) (title : StrLit) : Command.CommandElabM Unit:= do
+private def finishDoc (genre : Term) (title : StrLit) : Command.CommandElabM Unit:= do
   let endPos := (← getFileMap).source.endPos
   runPartElabInEnv genre <| do closePartsUntil 0 endPos
   saveRefsInEnv -- XXX Question: why do we need to save refs again?
