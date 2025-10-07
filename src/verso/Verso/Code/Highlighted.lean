@@ -27,7 +27,7 @@ Nothing should be assumed about the `String` output except that it can be passed
 to recover the original input.
 -/
 def hlToExport (hl: SubVerso.Highlighting.Highlighted) : String :=
-  hl.exportCode |>.toJson |>.compress
+  hl.exportCode.toJson.compress
 
 /--
 Recover the `Highlighted` data from its serialization.

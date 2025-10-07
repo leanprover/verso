@@ -169,10 +169,10 @@ def reportMessages {m} [Monad m] [MonadLog m] [MonadError m]
       throwErrorAt blame "No error expected in code block, one occurred"
 
 /--
-Produces, within the DocElabM, a Syntax expression that denotes the `hsl` value. Specifically,
-within the DocElabM monad, `← quoteHighlightViaSerialization hls` will result in a syntax term that
+Produces the syntax of an expression that denotes the `hls` value. Specifically,
+within the DocElabM monad, `← quoteHighlightViaSerialization hls` will result in a `Term` that
 represents the same highlight as `quote hls`, but will hopefully produce smaller code because of
-quoting a compressed version of the highlight.
+quoting a compressed version of the highlighted code.
 -/
 private def quoteHighlightViaSerialization (hls : Highlighted) : DocElabM Term := do
   let repr := hlToExport hls
