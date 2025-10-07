@@ -207,16 +207,14 @@ elab_rules : command
     if txt.source.extract stopPos txt.source.endPos |>.all (·.isWhitespace) then
       finishDoc genre title
 
-open Lean Elab Command in
 @[command_elab addBlockCmd]
-def elabVersoBlock : CommandElab
+def elabVersoBlock : Command.CommandElab
   | `(addBlockCmd| $b:block $genre:term) => do
     runVersoBlock genre b
   | _ => throwUnsupportedSyntax
 
-open Lean Elab Command in
 @[command_elab addLastBlockCmd]
-def elabVersoLastBlock : CommandElab
+def elabVersoLastBlock : Command.CommandElab
   | `(addLastBlockCmd| $b:block $genre:term $title:str) => do
     runVersoBlock genre b
     -- Finish up the document
