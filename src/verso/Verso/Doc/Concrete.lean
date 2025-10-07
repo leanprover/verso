@@ -7,19 +7,11 @@ Author: David Thrane Christiansen
 import Verso.Doc
 import Verso.Doc.Concrete.InlineString
 import Verso.Doc.Elab
-import Verso.Doc.Elab.Incremental
-import Verso.Doc.Elab.Monad
-import Verso.Doc.Lsp
-import Verso.Instances
-import Verso.SyntaxUtils
 import Verso.Parser
 
 namespace Verso.Doc.Concrete
 
-open Lean Doc
-
-open Verso Parser SyntaxUtils Doc Elab
-
+open Lean Verso Parser Doc Elab
 
 def document : Parser where
   fn := atomicFn <| Verso.Parser.document (blockContext := {maxDirective := some 6})
@@ -37,7 +29,6 @@ where
 @[combinator_parenthesizer completeDocument] def completeDocument.parenthesizer := PrettyPrinter.Parenthesizer.visitToken
 @[combinator_formatter completeDocument] def completeDocument.formatter := PrettyPrinter.Formatter.visitAtom Name.anonymous
 
-open Lean.Elab Term in
 partial def findGenreTm : Syntax → TermElabM Unit
   | `($g:ident) => discard <| realizeGlobalConstNoOverloadWithInfo g -- Don't allow it to become an auto-argument
   | `(($e)) => findGenreTm e
@@ -94,17 +85,15 @@ elab "#docs" "(" genre:term ")" n:ident title:str ":=" ":::::::" text:document "
       | some x => x
       | none => panic! "No final token!"
     | _ => panic! "Nothing"
-  let document ← Command.runTermElabM fun _ => elabDoc genre title text.raw.getArgs endTok.getPos!
-  Command.elabCommand (← `(def $n : Part $genre := $document))
+  let docu ← Command.runTermElabM fun _ => elabDoc genre title text.raw.getArgs endTok.getPos!
+  Command.elabCommand (← `(def $n : Part $genre := $docu))
 
 elab "#doc" "(" genre:term ")" title:str "=>" text:completeDocument eoi : term => do
   findGenreTm genre
   let endPos := (← getFileMap).source.endPos
-  let document ← elabDoc genre title text.raw.getArgs endPos
-  Term.elabTerm (← `( ($(document) : Part $genre))) none
+  let docu ← elabDoc genre title text.raw.getArgs endPos
+  Term.elabTerm (← `( ($(docu) : Part $genre))) none
 
-
-open Language
 
 scoped syntax (name := addBlockCmd) block term:max : command
 scoped syntax (name := addLastBlockCmd) block term:max str : command
@@ -195,8 +184,8 @@ def finishDoc (genre : Term) (title : StrLit) : Command.CommandElabM Unit:= do
   let finished := partElabState.partContext.toPartFrame.close endPos
 
   let n := mkIdentFrom title (← currentDocName)
-  let document ← finished.toSyntax genre
-  Command.elabCommand (← `(def $n : Part $genre := $document))
+  let docu ← finished.toSyntax genre
+  Command.elabCommand (← `(def $n : Part $genre := $docu))
 
 syntax (name := replaceDoc) "#doc" "(" term ")" str "=>" : command
 elab_rules : command
