@@ -48,9 +48,9 @@ def saveRefs [Monad m] [MonadInfoTree m] (st : DocElabM.State) (st' : PartElabM.
 def elabGenre (genre : TSyntax `term) : TermElabM Expr :=
   Term.elabTerm genre (some (.const ``Doc.Genre []))
 
-/-- All-at-once elaboration of verso document syntax to syntax denoting a verso `Part`. Used to
-elaborate the `#docs` command and `#doc` syntax. -/
-def elabDoc (genre: Term) (title: StrLit) (topLevelBlocks : Array Syntax) (endPos: String.Pos): TermElabM Term := do
+/-- All-at-once elaboration of verso document syntax to syntax denoting a verso `Part`. Implements
+elaboration of the `#docs` command and `#doc` term. -/
+private def elabDoc (genre: Term) (title: StrLit) (topLevelBlocks : Array Syntax) (endPos: String.Pos): TermElabM Term := do
   let titleParts ← stringToInlines title
   let titleString := inlinesToString (← getEnv) titleParts
   let initState : PartElabM.State := .init (.node .none nullKind titleParts)
@@ -102,13 +102,13 @@ scoped syntax (name := addLastBlockCmd) block term:max str : command
 commands are elaborated top-level-block by top-level-block in the manner of Lean's commands. This
 is done by replacing the parser for the `command category: -/
 
-/-- Replace the stored parsing behavior for the category `cat` with the behavior defined by `p`. -/
+/-- Replaces the stored parsing behavior for the category `cat` with the behavior defined by `p`. -/
 def replaceCategoryParser (cat : Name) (p : ParserFn) : Command.CommandElabM Unit :=
   modifyEnv (categoryParserFnExtension.modifyState · fun st =>
     fun n => if n == cat then p else st n)
 
-/-- Verso's replacement for the command parser, `versoBlockCommandFn` parses each top-level block as
-either a `addBlockCmd` or a `addLastBlockCmd`. -/
+/-- Parses each top-level block as either a `addBlockCmd` or a `addLastBlockCmd`. (This is what
+Verso uses to replace the command parser.) -/
 def versoBlockCommandFn (genre : Term) (title : String) : ParserFn := fun c s =>
   let iniSz  := s.stackSize
   let s := recoverBlockWith #[.missing] (Verso.Parser.block {}) c s
@@ -130,7 +130,7 @@ initialize docStateExt : EnvExtension DocElabM.State ← registerEnvExtension (p
 initialize partStateExt : EnvExtension (Option PartElabM.State) ← registerEnvExtension (pure none)
 initialize originalCatParserExt : EnvExtension CategoryParserFn ← registerEnvExtension (pure <| fun _ => whitespace)
 
-/-- Perform `PartElabM.run` with state gathered from `docStateExt` and `partStateExt`, and then
+/-- Performs `PartElabM.run` with state gathered from `docStateExt` and `partStateExt`, and then
 updates the state in those environment extensions with any modifications. Also replaces the default
 command parser in case `act` wants to parse commands (such as within an embedded code block). -/
 def runPartElabInEnv (genreSyntax: Term) (act : PartElabM a) : Command.CommandElabM a := do
