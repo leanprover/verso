@@ -147,6 +147,7 @@ structure LinkTargets (Ctxt : Type) where
   option : Name → Option Ctxt → Array CodeLink := fun _ _ => #[]
   keyword : Name → Option Ctxt → Array CodeLink := fun _ _ => #[]
   definition : Name → Option Ctxt → Array CodeLink := fun _ _ => #[]
+  moduleName : Name → Option Ctxt → Array CodeLink := fun _ _ => #[]
 
 def LinkTargets.augment (tgts1 tgts2 : LinkTargets g) : LinkTargets g where
   var fv ctxt := tgts1.var fv ctxt ++ tgts2.var fv ctxt
@@ -155,6 +156,7 @@ def LinkTargets.augment (tgts1 tgts2 : LinkTargets g) : LinkTargets g where
   option o ctxt := tgts1.option o ctxt ++ tgts2.option o ctxt
   keyword kw ctxt := tgts1.keyword kw ctxt ++ tgts2.keyword kw ctxt
   definition x ctxt := tgts1.definition x ctxt ++ tgts2.definition x ctxt
+  moduleName m ctxt := tgts1.moduleName m ctxt ++ tgts2.moduleName m ctxt
 
 instance : Append (LinkTargets g) where
   append := LinkTargets.augment
@@ -225,31 +227,28 @@ def linkTargets : HighlightHtmlM g (LinkTargets g.TraverseContext) := do
 def options : HighlightHtmlM g HighlightHtmlM.Options := do
   return (← readThe (HighlightHtmlM.Context g)).options
 
-open Lean in
-open Verso.Output.Html in
+section
+open Lean
+open Verso.Output.Html
+
 def constLink (constName : Name) (content : Html) (ctxt : Option g.TraverseContext := none) : HighlightHtmlM g Html := do
   return CodeLink.manyHtml ((← linkTargets).const constName ctxt) content
 
-
-open Lean in
-open Verso.Output.Html in
 def optionLink (optionName : Name) (content : Html) (ctxt : Option g.TraverseContext := none) : HighlightHtmlM g Html := do
   return CodeLink.manyHtml ((← linkTargets).option optionName ctxt) content
 
-open Lean in
-open Verso.Output.Html in
 def varLink (varName : FVarId) (content : Html) (ctxt : Option g.TraverseContext := none) : HighlightHtmlM g Html := do
   return CodeLink.manyHtml ((← linkTargets).var varName ctxt) content
 
-open Lean in
-open Verso.Output.Html in
 def kwLink (kind : Name) (content : Html) (ctxt : Option g.TraverseContext := none) : HighlightHtmlM g Html := do
   return CodeLink.manyHtml ((← linkTargets).keyword kind ctxt) content
 
-open Lean in
-open Verso.Output.Html in
 def defLink (defName : Name) (content : Html) (ctxt : Option g.TraverseContext := none) : HighlightHtmlM g Html := do
   return CodeLink.manyHtml ((← linkTargets).definition defName ctxt) content
+
+def moduleNameLink (modName : Name) (content : Html) (ctxt : Option g.TraverseContext := none) : HighlightHtmlM g Html := do
+  return CodeLink.manyHtml ((← linkTargets).moduleName modName ctxt) content
+end
 
 defmethod Token.Kind.addLink (tok : Token.Kind) (content : Html) : HighlightHtmlM g Html := do
   let ctxt := (← read).traverseContext
@@ -259,6 +258,8 @@ defmethod Token.Kind.addLink (tok : Token.Kind) (content : Html) : HighlightHtml
   | .option o .. => optionLink o content (some ctxt)
   | .var x .. => varLink x content (some ctxt)
   | .keyword (some k) .. => kwLink k content (some ctxt)
+  | .moduleName m =>
+    moduleNameLink m content (some ctxt)
   | _ => pure content
 
 /--
@@ -378,6 +379,7 @@ defmethod Token.Kind.«class» : Token.Kind → String
   | .levelConst .. => "level-const"
   | .levelVar .. => "level-var"
   | .levelOp .. => "level-op"
+  | .moduleName .. => "module-name"
 
 defmethod Token.Kind.data : Token.Kind → String
   | .const n _ _ _ | .anonCtor n _ _ => "const-" ++ toString n
@@ -388,6 +390,7 @@ defmethod Token.Kind.data : Token.Kind → String
   | .levelVar x => s!"level-var-{x}"
   | .levelConst i => s!"level-const-{i}"
   | .levelOp op => s!"level-op-{op}"
+  | .moduleName m => s!"module-name-{m}"
   | _ => ""
 
 defmethod Token.Kind.idAttr : Token.Kind → HighlightHtmlM g (Array (String × String))
