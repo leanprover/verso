@@ -176,7 +176,7 @@ quoting a compressed version of the highlighted code.
 -/
 private def quoteHighlightViaSerialization (hls : Highlighted) : DocElabM Term := do
   let repr := hlToExport hls
-  ``(hlFromExport $(quote repr))
+  ``(hlFromExport! $(quote repr))
 
 /--
 De-indents and returns (syntax of) a Block representation containing highlighted Lean code.
