@@ -32,9 +32,9 @@ def hlToExport (hl: SubVerso.Highlighting.Highlighted) : String :=
 /--
 Recover the `Highlighted` data from its serialization.
 
-Can only be expected to work on the output of `hlToExport`.
+Can only be expected to work on the output of `hlToExport`, likely to panic otherwise.
 -/
-def hlFromExport (exportLit : String) : SubVerso.Highlighting.Highlighted :=
+def hlFromExport! (exportLit : String) : SubVerso.Highlighting.Highlighted :=
   match Lean.Json.parse exportLit with
   | .error e => panic! s!"Failed to parse Highlighted export data as JSON: {e}"
   | .ok v =>
