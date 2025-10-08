@@ -6,21 +6,10 @@ Author: David Thrane Christiansen
 
 import Verso.Doc
 import Verso.Doc.Concrete.InlineString
-import Verso.Doc.Elab
-import Verso.Doc.Elab.Incremental
-import Verso.Doc.Elab.Monad
-import Verso.Doc.Lsp
-import Verso.Hooks
-import Verso.Instances
-import Verso.SyntaxUtils
-import Verso.Parser
 
 namespace Verso.Doc.Concrete
 
-open Lean Doc
-
-open Verso Parser SyntaxUtils Doc Elab
-
+open Lean Verso Parser Doc Elab
 
 def document : Parser where
   fn := atomicFn <| Verso.Parser.document (blockContext := {maxDirective := some 6})
@@ -38,19 +27,13 @@ where
 @[combinator_parenthesizer completeDocument] def completeDocument.parenthesizer := PrettyPrinter.Parenthesizer.visitToken
 @[combinator_formatter completeDocument] def completeDocument.formatter := PrettyPrinter.Formatter.visitAtom Name.anonymous
 
-
-open Lean.Elab Command in
-partial def findGenreCmd : Syntax → Lean.Elab.Command.CommandElabM Unit
-  | `($g:ident) => discard <| liftTermElabM <| realizeGlobalConstNoOverloadWithInfo g -- Don't allow it to become an auto-argument
-  | `(($e)) => findGenreCmd e
-  | _ => pure ()
-
-open Lean.Elab Term in
 partial def findGenreTm : Syntax → TermElabM Unit
   | `($g:ident) => discard <| realizeGlobalConstNoOverloadWithInfo g -- Don't allow it to become an auto-argument
   | `(($e)) => findGenreTm e
   | _ => pure ()
 
+partial def findGenreCmd (genre : Syntax) : Command.CommandElabM Unit :=
+  Command.runTermElabM fun _ => findGenreTm genre
 
 def saveRefs [Monad m] [MonadInfoTree m] (st : DocElabM.State) (st' : PartElabM.State) : m Unit := do
   for r in internalRefs st'.linkDefs st.linkRefs do
@@ -60,50 +43,20 @@ def saveRefs [Monad m] [MonadInfoTree m] (st : DocElabM.State) (st' : PartElabM.
     for stx in r.syntax do
       pushInfoLeaf <| .ofCustomInfo {stx := stx , value := Dynamic.mk r}
 
-elab "#docs" "(" genre:term ")" n:ident title:str ":=" ":::::::" text:document ":::::::" : command => open Lean Elab Command PartElabM DocElabM in do
-  findGenreCmd genre
-  let endTok :=
-    match ← getRef with
-    | .node _ _ t =>
-      match t.back? with
-      | some x => x
-      | none => panic! "No final token!"
-    | _ => panic! "Nothing"
-  let endPos := endTok.getPos!
-  let blocks := text.raw.getArgs
+private def elabGenre (genre : TSyntax `term) : TermElabM Expr :=
+  Term.elabTerm genre (some (.const ``Doc.Genre []))
 
+/-- All-at-once elaboration of verso document syntax to syntax denoting a verso `Part`. Implements
+elaboration of the `#docs` command and `#doc` term. -/
+private def elabDoc (genre: Term) (title: StrLit) (topLevelBlocks : Array Syntax) (endPos: String.Pos): TermElabM Term := do
   let titleParts ← stringToInlines title
   let titleString := inlinesToString (← getEnv) titleParts
-  let g ← runTermElabM fun _ => Lean.Elab.Term.elabTerm genre (some (.const ``Doc.Genre []))
+  let initState : PartElabM.State := .init (.node .none nullKind titleParts)
 
-  let ((), st, st') ← liftTermElabM <| PartElabM.run genre g {} (.init (.node .none nullKind titleParts)) <| do
-    setTitle titleString (← liftDocElabM <| titleParts.mapM (elabInline ⟨·⟩))
-    for b in blocks do partCommand ⟨b⟩
-    closePartsUntil 0 endPos
-    pure ()
-  let finished := st'.partContext.toPartFrame.close endPos
-  pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
-  saveRefs st st'
-
-  elabCommand (← `(def $n : Part $genre := $(← finished.toSyntax genre)))
-
-  let mut docState := st
-  for hook in (← documentFinishedHooks) do
-    let ((), docState') ← runTermElabM fun _ => hook ⟨genre, g⟩ st' docState
-    docState := docState'
-
-elab "#doc" "(" genre:term ")" title:str "=>" text:completeDocument eoi : term => open Lean Elab Term PartElabM DocElabM in do
-  findGenreTm genre
-  let endPos := (← getFileMap).source.endPos
-  let blocks := text.raw.getArgs
-  let titleParts ← stringToInlines title
-  let titleString := inlinesToString (← getEnv) titleParts
-  let g ← elabTerm genre (some (.const ``Doc.Genre []))
-  let g ← instantiateMVars g
-  let ((), st, st') ← PartElabM.run genre g {} (.init (.node .none nullKind titleParts)) <| do
+  let ((), docElabState, partElabState) ← PartElabM.run genre (← elabGenre genre) {} initState <| do
     let mut errors := #[]
-    setTitle titleString (← liftDocElabM <| titleParts.mapM (elabInline ⟨·⟩))
-    for b in blocks do
+    PartElabM.setTitle titleString (← PartElabM.liftDocElabM <| titleParts.mapM (elabInline ⟨·⟩))
+    for b in topLevelBlocks do
       try
         partCommand ⟨b⟩
       catch e =>
@@ -114,64 +67,47 @@ elab "#doc" "(" genre:term ")" title:str "=>" text:completeDocument eoi : term =
       | .error stx msg => logErrorAt stx msg
       | oops@(.internal _ _) => throw oops
     pure ()
-  let finished := st'.partContext.toPartFrame.close endPos
+  saveRefs docElabState partElabState
+
+  let finished := partElabState.partContext.toPartFrame.close endPos
+
   pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
-  saveRefs st st'
-  elabTerm (← `( ($(← finished.toSyntax genre) : Part $genre))) none
+  finished.toSyntax genre
 
+elab "#docs" "(" genre:term ")" n:ident title:str ":=" ":::::::" text:document ":::::::" : command => do
+  findGenreCmd genre
+  let endTok :=
+    match ← getRef with
+    | .node _ _ t =>
+      match t.back? with
+      | some x => x
+      | none => panic! "No final token!"
+    | _ => panic! "Nothing"
+  let docu ← Command.runTermElabM fun _ => elabDoc genre title text.raw.getArgs endTok.getPos!
+  Command.elabCommand (← `(def $n : Part $genre := $docu))
 
-open Language
+elab "#doc" "(" genre:term ")" title:str "=>" text:completeDocument eoi : term => do
+  findGenreTm genre
+  let endPos := (← getFileMap).source.endPos
+  let docu ← elabDoc genre title text.raw.getArgs endPos
+  Term.elabTerm (← `( ($(docu) : Part $genre))) none
 
-/--
-The complete state of `PartElabM`, suitable for saving and restoration during incremental
-elaboration
--/
-structure DocElabSnapshotState where
-  docState : DocElabM.State
-  partState : PartElabM.State
-  termState : Term.SavedState
-deriving Nonempty
-
-structure DocElabSnapshot where
-  finished : Task (Option DocElabSnapshotState)
-deriving Nonempty, TypeName
-
-instance : IncrementalSnapshot DocElabSnapshot DocElabSnapshotState where
-  getIncrState snap := snap.finished
-  mkSnap := DocElabSnapshot.mk
-
-instance : MonadStateOf DocElabSnapshotState PartElabM where
-  get := getter
-  set := setter
-  -- Not great for linearity, but incrementality breaks that anyway and that's the only use case for
-  -- this instance.
-  modifyGet f := do
-    let s ← getter
-    let v := f s
-    setter v.2
-    pure v.1
-where
-  getter := do pure ⟨← getThe _, ← getThe _,  ← saveState (m := TermElabM)⟩
-  setter
-    | ⟨docState, partState, termState⟩ => do
-      set docState
-      set partState
-      -- SavedState.restore doesn't  restore enough state, so dig in!
-      set termState.elab
-      (show MetaM Unit from set termState.meta.meta)
-      (show CoreM Unit from set termState.meta.core.toState)
-
-private def ifCat (cat : Name) (p : ParserFn) (fallback : Name → ParserFn) (n : Name) : ParserFn :=
-  if n == cat then p else fallback n
-
-open Lean Parser in
-def replaceCategoryFn (cat : Name) (p : ParserFn) (env : Environment) : Environment :=
-  categoryParserFnExtension.modifyState env fun st => ifCat cat p st
 
 scoped syntax (name := addBlockCmd) block term:max : command
 scoped syntax (name := addLastBlockCmd) block term:max str : command
 
-def versoBlockCommandFn (genre : Term) (title : String) : ParserFn := fun c s =>
+/-! Unlike `#doc` expressions and `#docs` commands, which are elaborated all at once, `#doc`
+commands are elaborated top-level-block by top-level-block in the manner of Lean's commands. This
+is done by replacing the parser for the `command category: -/
+
+/-- Replaces the stored parsing behavior for the category `cat` with the behavior defined by `p`. -/
+private def replaceCategoryParser (cat : Name) (p : ParserFn) : Command.CommandElabM Unit :=
+  modifyEnv (categoryParserFnExtension.modifyState · fun st =>
+    fun n => if n == cat then p else st n)
+
+/-- Parses each top-level block as either a `addBlockCmd` or a `addLastBlockCmd`. (This is what
+Verso uses to replace the command parser.) -/
+private def versoBlockCommandFn (genre : Term) (title : String) : ParserFn := fun c s =>
   let iniSz  := s.stackSize
   let s := recoverBlockWith #[.missing] (Verso.Parser.block {}) c s
   if s.hasError then s
@@ -185,151 +121,121 @@ def versoBlockCommandFn (genre : Term) (title : String) : ParserFn := fun c s =>
     else
       s.mkNode ``addBlockCmd iniSz
 
+/-! The elaboration of zero-or-more `addBlockCmd` calls, followed by th elaboration of
+`addLastBlockCmd`, are connected by state stored in environment extensions. -/
+
 initialize docStateExt : EnvExtension DocElabM.State ← registerEnvExtension (pure {})
 initialize partStateExt : EnvExtension (Option PartElabM.State) ← registerEnvExtension (pure none)
 initialize originalCatParserExt : EnvExtension CategoryParserFn ← registerEnvExtension (pure <| fun _ => whitespace)
 
-open Lean Elab Command in
-def finishDoc (genre : Term) (title : StrLit) : CommandElabM Unit:= do
-  -- Finish up the document
-  let txt ← getFileMap
-  let endPos := txt.source.endPos
-  let some partState ← partStateExt.getState <$> getEnv
-    | throwError "Document state not initialized"
-  let partState := partState.closeAll endPos
+/-- Performs `PartElabM.run` with state gathered from `docStateExt` and `partStateExt`, and then
+updates the state in those environment extensions with any modifications. Also replaces the default
+command parser in case `act` wants to parse commands (such as within an embedded code block). -/
+private def runPartElabInEnv (genreSyntax: Term) (act : PartElabM a) : Command.CommandElabM a := do
+  let env ← getEnv
+  let versoCmdFn := categoryParserFnExtension.getState env
+  let docState := docStateExt.getState env
+  let some partState := partStateExt.getState env
+    | panic! "The document's start state is not initialized"
+
   try
-    let finished := partState.partContext.toPartFrame.close endPos
-    pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
-    saveRefs (docStateExt.getState (← getEnv)) partState
-    let n ← currentDocName
-    let docName := mkIdentFrom title n
-    let titleString := title.getString
-    let titleStr : TSyntax ``Lean.Parser.Command.docComment := quote titleString
-    elabCommand (← `($titleStr:docComment def $docName : Part $genre := $(← finished.toSyntax' genre)))
+    modifyEnv (fun env => categoryParserFnExtension.setState env $ originalCatParserExt.getState env)
+    let (result, docState', partState') ← Command.runTermElabM fun _ => do
+      PartElabM.run genreSyntax (← elabGenre genreSyntax) docState partState act
+    modifyEnv (docStateExt.setState · docState')
+    modifyEnv (partStateExt.setState · (some partState'))
+    return result
   finally
-    let mut docState := docStateExt.getState (← getEnv)
-    let genreExpr ← runTermElabM fun _ => Term.elabTerm genre (some (.const ``Doc.Genre [])) >>= instantiateExprMVars
-    for hook in (← documentFinishedHooks) do
-      let ((), docState') ← runTermElabM fun _ => hook ⟨genre, genreExpr⟩ partState docState
-      docState := docState'
+    modifyEnv (categoryParserFnExtension.setState · versoCmdFn)
+
+private def saveRefsInEnv : Command.CommandElabM Unit := do
+  let env ← getEnv
+  let docState := docStateExt.getState env
+  let some partState := partStateExt.getState env
+    | panic! "The document's start state is not initialized"
+  saveRefs docState partState
+
+/-! The actions of `elabDoc` are split across three functions: the prelude in `startDoc`,
+the loop body in `runVersoBlock`, and the postlude in `finishDoc`. -/
+
+private def startDoc (genre : Term) (title: StrLit) : Command.CommandElabM String := do
+  let titleParts ← stringToInlines title
+  let titleString := inlinesToString (← getEnv) titleParts
+
+  modifyEnv (docStateExt.setState · {})
+  modifyEnv (partStateExt.setState · (some (.init (.node .none nullKind titleParts)
+    (externalLeanTable := some (mkPrivateName (← getEnv) `code_table, {})))))
+  runPartElabInEnv genre <| do
+    PartElabM.setTitle titleString (← PartElabM.liftDocElabM <| titleParts.mapM (elabInline ⟨·⟩))
+  return titleString
+
+private def runVersoBlock (genre : Term) (block : TSyntax `block) : Command.CommandElabM Unit := do
+  runPartElabInEnv genre <| partCommand block
+  saveRefsInEnv
+
+deriving instance Inhabited for SubVerso.Highlighting.Export
+def fromExport (str : String) :=
+  match FromJson.fromJson? str with
+  | .error _ => panic! "Cannot retrieve JSON from export str"
+  | .ok json => match SubVerso.Highlighting.Export.fromJson? json with
+    | .error _ => panic! "Cannot retrieve data from export json"
+    | .ok et => et
+
+private def finishDoc (genre : Term) (title : StrLit) : Command.CommandElabM Unit:= do
+  let endPos := (← getFileMap).source.endPos
+  runPartElabInEnv genre <| do closePartsUntil 0 endPos
+  saveRefsInEnv -- XXX Question: why do we need to save refs again?
+
+  let some partElabState := partStateExt.getState (← getEnv)
+    | panic! "The document's start state was never initialized"
+  let finished := partElabState.partContext.toPartFrame.close endPos
+
+  if let some (tableName, table) := partElabState.externalLeanTable then
+    if table.nextKey > 0 then -- nextKey == 0 means the table is unused
+      Command.runTermElabM fun _ => withOptions (·.setBool `compiler.extract_closed false) do
+        let value ← Meta.mkAppM ``fromExport #[ToExpr.toExpr table.toExport.toJson.compress]
+        addAndCompile <| .defnDecl {
+          name := tableName, value
+          type := .const ``SubVerso.Highlighting.Export []
+          levelParams := []
+          hints := .regular 0
+          safety := .safe
+        }
+
+  let n := mkIdentFrom title (← currentDocName)
+  let docu ← finished.toSyntax genre
+  Command.elabCommand (← `(def $n : Part $genre := $docu))
 
 syntax (name := replaceDoc) "#doc" "(" term ")" str "=>" : command
-
 elab_rules : command
   | `(command|#doc ( $genre:term ) $title:str =>%$tok) => open Lean Parser Elab Command in do
   findGenreCmd genre
   elabCommand <| ← `(open scoped Lean.Doc.Syntax)
-  let titleParts ← stringToInlines title
-  let titleString := inlinesToString (← getEnv) titleParts
-  let initState : PartElabM.State := .init (.node .none nullKind titleParts)
 
-  let (titleInlines, docState) ← runTermElabM <| fun _ => do
-    let g ← Term.elabTerm genre (some (.const ``Doc.Genre [])) >>= instantiateMVars
-    titleParts.mapM (Verso.Doc.Elab.elabInline ⟨·⟩) |>.run genre g {} initState
-  modifyEnv (docStateExt.setState · docState)
+  let titleString ← startDoc genre title
 
-  let initState := { initState with
-    partContext.expandedTitle := some (titleString, titleInlines)
-  }
-  modifyEnv (partStateExt.setState · (some initState))
+  -- Sets up basic incremental evaluation of documents by replacing Lean's command-by-command parser
+  -- with a top-level-block parser.
+  modifyEnv fun env => originalCatParserExt.setState env (categoryParserFnExtension.getState env)
+  replaceCategoryParser `command (versoBlockCommandFn genre titleString)
 
-  -- If there's no blocks after the =>, then the command parser never gets called, so it needs special-casing here
+  -- Edge case: if there's no blocks after the =>, the replacement command parser won't get called,
+  -- so we detect that case and call finishDoc.
   if let some stopPos := tok.getTailPos? then
     let txt ← getFileMap
     if txt.source.extract stopPos txt.source.endPos |>.all (·.isWhitespace) then
       finishDoc genre title
-      return
 
-  modifyEnv fun env => originalCatParserExt.setState env (categoryParserFnExtension.getState env)
-  modifyEnv (replaceCategoryFn `command (versoBlockCommandFn genre titleString))
-
-open Lean Elab Command in
-def runVersoBlock (genre : Term) (block : TSyntax `block) : CommandElabM Unit := withRef block do
-  -- The original command parser must be restored here in case one of the Verso blocks is parsing
-  -- Lean code during its elaboration.
-  let versoCmdFn := (categoryParserFnExtension.getState (← getEnv))
-  try
-    modifyEnv fun env => categoryParserFnExtension.setState env (originalCatParserExt.getState env)
-    let env ← getEnv
-    let some partState := partStateExt.getState env
-      | throwErrorAt block "State not initialized"
-
-    let ((), docState', partState') ← runTermElabM fun _ => do
-      let g ← Term.elabTerm genre (some (.const ``Doc.Genre [])) >>= instantiateMVars
-      partCommand block |>.run genre g (docStateExt.getState env) partState
-    saveRefs docState' partState'
-    modifyEnv fun env =>
-      partStateExt.setState (docStateExt.setState env docState') (some partState')
-  finally
-    modifyEnv (categoryParserFnExtension.setState · versoCmdFn)
-
-open Lean Elab Command in
 @[command_elab addBlockCmd]
-def elabVersoBlock : CommandElab
+def elabVersoBlock : Command.CommandElab
   | `(addBlockCmd| $b:block $genre:term) => do
     runVersoBlock genre b
   | _ => throwUnsupportedSyntax
 
-open Lean Elab Command in
 @[command_elab addLastBlockCmd]
-def elabVersoLastBlock : CommandElab
+def elabVersoLastBlock : Command.CommandElab
   | `(addLastBlockCmd| $b:block $genre:term $title:str) => do
     runVersoBlock genre b
     -- Finish up the document
     finishDoc genre title
   | _ => throwUnsupportedSyntax
-
-elab (name := completeDoc) "#old_doc" "(" genre:term ")" title:str "=>" text:completeDocument eoi : command => open Lean Elab Term Command PartElabM DocElabM in do
-  findGenreCmd genre
-  let endPos := (← getFileMap).source.endPos
-  let blocks := text.raw.getArgs
-  let titleParts ← stringToInlines title
-  let titleString := inlinesToString (← getEnv) titleParts
-  let g ← runTermElabM fun _ => Lean.Elab.Term.elabTerm genre (some (.const ``Doc.Genre []))
-  let initState : PartElabM.State := .init (.node .none nullKind titleParts)
-  withTraceNode `Elab.Verso (fun _ => pure m!"Document AST elab") <|
-    incrementallyElabCommand blocks
-      (initAct := do setTitle titleString (← liftDocElabM <| titleParts.mapM (elabInline ⟨·⟩)))
-      (endAct := fun ⟨st, st', _⟩ => withTraceNode `Elab.Verso (fun _ => pure m!"Document def") do
-        let st' := st'.closeAll endPos
-        let finished := st'.partContext.toPartFrame.close endPos
-        pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
-        saveRefs st st'
-        let n ← currentDocName
-        let docName := mkIdentFrom title n
-        let titleStr : TSyntax ``Lean.Parser.Command.docComment := quote titleString
-        elabCommand (← `($titleStr:docComment def $docName : Part $genre := $(← finished.toSyntax' genre)))
-        let mut docState := st
-        for hook in (← documentFinishedHooks) do
-          let ((), docState') ← runTermElabM fun _ => hook ⟨genre, g⟩ st' docState
-          docState := docState')
-
-      -- The heartbeat count is reset for each top-level Verso block because they are analogous to Lean commands.
-      (handleStep := fun block => do
-        let heartbeats ← IO.getNumHeartbeats
-        withTheReader Core.Context ({· with initHeartbeats := heartbeats}) (partCommand ⟨block⟩))
-      (run := fun act => runTermElabM fun _ => Prod.fst <$> PartElabM.run genre g {} initState act)
-
-/--
-Make the single elaborator for some syntax kind become incremental
-
-This is useful because `elab` doesn't create an accessible name for the generated elaborator. It's
-possible to predict it and apply the attribute, but this seems fragile - better to look it up.
-Placing the attribute before `elab` itself doesn't work because the attribute ends up on the
-`syntax` declaration. Seperate elaborators don't work if the syntax rule in question ends with an
-EOF - `elab` provides a representation of it (which can be checked via `isMissing` to see if the
-parser went all the way), but that's not present in the parser's own syntax objects. Quoting `eoi`
-doesn't  work because the parser wants to read to the end of the file.
--/
-scoped elab "elab" &"incremental" kind:ident : command =>
-  open Lean Elab Command Term in do
-  let k ← liftTermElabM <| realizeGlobalConstNoOverloadWithInfo kind
-  let elabs := commandElabAttribute.getEntries (← getEnv) k
-  match elabs with
-  | [] => throwErrorAt kind "No elaborators for '{k}'"
-  | [x] =>
-    let elabName := mkIdentFrom kind x.declName
-    elabCommand (← `(attribute [incremental] $elabName))
-  | _ => throwErrorAt kind "Multiple elaborators for '{k}'"
-
-elab incremental completeDoc
