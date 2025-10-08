@@ -333,8 +333,11 @@ private def editCodeBlock [Monad m] [MonadFileMap m] (stx : Syntax) (newContents
     | pure none
   let { start := {line := l1, ..}, .. } := txt.utf8RangeToLspRange rng
   let line1 := txt.source.extract (txt.lineStart (l1 + 1)) (txt.lineStart (l1 + 2))
-  if line1.startsWith "```" then
-    return some s!"{delims}{line1.dropWhile (· == '`') |>.trim}\n{withNl newContents}{delims}"
+  let line1ws := line1.takeWhile (· == ' ')
+  let line1rest := line1.drop line1ws.length
+  let newContents := line1ws ++ (withNl newContents).replace "\n" ("\n" ++ line1ws)
+  if line1rest.startsWith "```" then
+    return some s!"{delims}{line1rest.dropWhile (· == '`') |>.trim}\n{withNl newContents}{delims}"
   else
     return none
 where
@@ -354,10 +357,6 @@ where
       if k > n then n := k
     n.fold (fun _ _ s => s.push '`') ""
 
-def codeBlockSuggestion (newBlock : String) : Suggestion :=
-  let sugg := newBlock.splitOn "\n" |>.map (Std.Format.text ·) |> Std.Format.nil.joinSuffix
-  {suggestion := newBlock, messageData? := sugg}
-
 def moduleContentBlock (args : Array Arg) (code : StrLit) : DocElabM (Array Term) := do
     let cfg@{ module := moduleName, project, anchor?, showProofStates := _, defSite := _ } ← parseThe CodeContext args
     withAnchored project moduleName anchor? fun hl => do
@@ -367,14 +366,14 @@ def moduleContentBlock (args : Array Arg) (code : StrLit) : DocElabM (Array Term
         let ref ← getRef
         let h ←
           if let some s ← editCodeBlock ref hlString then
-            hint m!"" #[codeBlockSuggestion s]
+            hint m!"" #[s]
           else pure m!""
         logErrorAt ref <| m!"Missing code." ++ h
       else if let some mismatch ← ExpectString.expectStringOrDiff code (hlString |> withNl) (useLine := fun l => !l.trim.isEmpty) then
         let ref ← getRef
         let h ←
           if let some s ← editCodeBlock ref hlString then
-            hint m!"" #[codeBlockSuggestion s]
+            hint m!"" #[s]
           else pure m!""
         logErrorAt code <| m!"Mismatched code:{indentD mismatch}" ++ h
       pure #[← ``(leanBlock $(quote hl) $(quote cfg.toCodeConfig))]
