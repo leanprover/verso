@@ -190,7 +190,7 @@ private def startDoc (genre : Term) (title: StrLit) : Command.CommandElabM Strin
   let initPartState : PartElabM.State := .init (.node .none nullKind titleParts)
 
   modifyEnv (docStateExt.setState · initDocState)
-  modifyEnv (partStateExt.setState · initPartState)
+  modifyEnv (partStateExt.setState · (some initPartState))
   runPartElabInEnv genre <| do
     PartElabM.setTitle titleString (← PartElabM.liftDocElabM <| titleParts.mapM (elabInline ⟨·⟩))
   return titleString
