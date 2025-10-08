@@ -438,7 +438,6 @@ def emitMod (root : Dir) (outDir: System.FilePath) (mod : LitMod) : EmitM Unit :
     <script src="tippy.js"></script>
     <script>{{Html.text false highlightingJs}}</script>
     <style>{{Html.text false highlightingStyle}}</style>
-    <script>s!"const __versoSiteRoot = {siteRoot.quote};"</script>
     <link rel="stylesheet" href="tippy-border.css"/>
     <link rel="stylesheet" href="code.css"/>
 

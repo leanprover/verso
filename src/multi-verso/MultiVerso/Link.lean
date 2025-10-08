@@ -29,6 +29,15 @@ deriving ToJson, FromJson, BEq, Ord, Repr
 public def Link.link (link : Link) : String :=
   link.path.link (htmlId := some link.htmlId.toString)
 
+/--
+Constructs a link URL suitable for an `<a>` tag.
+Ensures that it is rendered as a relative link.
+In situations where we can guarantee a <base> tag,
+this is an appropriate choice.
+-/
+public def Link.relativeLink (link : Link) : String :=
+  link.path.relativeLink (htmlId := some link.htmlId.toString)
+
 /-- A link to a piece of content on another site -/
 public structure RemoteLink extends Link where
   /--
