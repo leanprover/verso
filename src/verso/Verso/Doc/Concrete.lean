@@ -11,6 +11,12 @@ namespace Verso.Doc.Concrete
 
 open Lean Verso Parser Doc Elab
 
+register_option verso.outputCompression : Bool := {
+  defValue := true,
+  descr := "Controls compression of output; setting to false disables compression, which can make the generated IR more readable"
+  group := "verso"
+}
+
 def document : Parser where
   fn := atomicFn <| Verso.Parser.document (blockContext := {maxDirective := some 6})
 
@@ -74,7 +80,7 @@ private def elabDoc (genre: Term) (title: StrLit) (topLevelBlocks : Array Syntax
   let finished := partElabState.partContext.toPartFrame.close endPos
 
   pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
-  finished.toSyntax genre
+  finished.toSyntaxAndAuxDefs genre docElabState
 
 elab "#docs" "(" genre:term ")" n:ident title:str ":=" ":::::::" text:document ":::::::" : command => do
   findGenreCmd genre
@@ -194,12 +200,13 @@ private def finishDoc (genre : Term) (title : StrLit) : Command.CommandElabM Uni
   saveRefsInEnv -- XXX Question: why do we need to save refs again?
 
   let env ← getEnv
+  let docElabState := docStateExt.getState env
   let some partElabState := partStateExt.getState env
     | panic! "The document's start state was never initialized"
   let finished := partElabState.partContext.toPartFrame.close endPos
 
   let n := mkIdentFrom title (← currentDocName)
-  let docu ← finished.toSyntax genre
+  let docu ← Command.liftCoreM <| finished.toSyntaxAndAuxDefs genre docElabState
   Command.elabCommand (← `(def $n : Part $genre := $docu))
 
 syntax (name := replaceDoc) "#doc" "(" term ")" str "=>" : command

@@ -121,6 +121,7 @@ def DocUses.add (uses : DocUses) (loc : Syntax) : DocUses := {uses with useSites
 structure DocElabM.State where
   linkRefs : HashMap String DocUses := {}
   footnoteRefs : HashMap String DocUses := {}
+  exportingTable : Option (Name × SubVerso.Highlighting.Exporting) := .none
 deriving Inhabited
 
 /-- Custom info tree data to save footnote and reflink cross-references -/
@@ -195,8 +196,6 @@ private def linkRefName [Monad m] [MonadQuotation m] (docName : Name) (ref : TSy
 private def footnoteRefName [Monad m] [MonadQuotation m] (genre : Term) (docName : Name) (ref : TSyntax `str) : m Term :=
   ``(HasNote.contents $(quote ref.getString) $(quote docName) (genre := $genre) (self := _))
 
-
-open Lean.Parser.Term in
 partial def FinishedPart.toSyntax [Monad m] [MonadQuotation m] [MonadEnv m]
     (genre : TSyntax `term)
     : FinishedPart → m (TSyntax `term)
@@ -211,6 +210,33 @@ partial def FinishedPart.toSyntax [Monad m] [MonadQuotation m] [MonadEnv m]
     let typedBlocks ← blocks.mapM fun b => `(($b : Block $genre))
     ``(Part.mk #[$titleInlines,*] $(quote titleString) $metaStx #[$typedBlocks,*] #[$subStx,*])
   | .included name => pure name
+
+deriving instance Inhabited for SubVerso.Highlighting.Export
+
+def strToExport (str : String) : SubVerso.Highlighting.Export :=
+  match Json.parse str with
+  | .error e => panic! s!"String not JSON: {e}"
+  | .ok json =>
+    match FromJson.fromJson? json with
+    | .error e => panic! s!"JSON not Export structure: {e}"
+    | .ok exportData => exportData
+
+partial def FinishedPart.toSyntaxAndAuxDefs
+    (genre : Term)
+    (docElabState : DocElabM.State)
+    (finishedPart : FinishedPart)
+    : CoreM Term := do
+  if let some (name, table) := docElabState.exportingTable then
+    let str := table.toExport.toJson.compress
+    let value := mkApp (ToExpr.toExpr ``strToExport) (ToExpr.toExpr str)
+    addAndCompile <| .defnDecl {
+      name, value,
+      type := .const ``SubVerso.Highlighting.Export []
+      levelParams := [],
+      hints := .regular 0,
+      safety := .safe
+    }
+  finishedPart.toSyntax genre
 
 structure ToSyntaxState where
   gensymCounter : Nat := 0
