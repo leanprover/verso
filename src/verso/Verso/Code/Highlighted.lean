@@ -19,6 +19,33 @@ open Std (HashMap)
 
 namespace SubVerso.Highlighting
 
+
+/--
+Serialize `Highlighted` code as a string.
+
+Nothing should be assumed about the `String` output except that it can be passed to `hlFromExport`
+to recover the original input.
+-/
+def hlToExport (hl: SubVerso.Highlighting.Highlighted) : String :=
+  hl.exportCode.toJson.compress
+
+/--
+Recover the `Highlighted` data from its serialization.
+
+Can only be expected to work on the output of `hlToExport`, likely to panic otherwise.
+-/
+def hlFromExport! (exportLit : String) : SubVerso.Highlighting.Highlighted :=
+  match Lean.Json.parse exportLit with
+  | .error e => panic! s!"Failed to parse Highlighted export data as JSON: {e}"
+  | .ok v =>
+    match SubVerso.Highlighting.ExportCode.fromJson? v with
+    | .error e => panic! s!"Failed to deserialize Highlighted export data from parsed JSON: {e}"
+    | .ok v' =>
+      match v'.toHighlighted with
+      | .error e => panic! s!"Failed to deserialize Highlighted data from export data: {e}"
+      | .ok hl => hl
+
+
 /--
 Removes n levels of indentation from highlighted code.
 -/
