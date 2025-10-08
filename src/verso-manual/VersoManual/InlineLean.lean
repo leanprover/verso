@@ -169,6 +169,16 @@ def reportMessages {m} [Monad m] [MonadLog m] [MonadError m]
       throwErrorAt blame "No error expected in code block, one occurred"
 
 /--
+Produces the syntax of an expression that denotes the `hls` value. Specifically,
+within the DocElabM monad, `← quoteHighlightViaSerialization hls` will result in a `Term` that
+represents the same highlight as `quote hls`, but will hopefully produce smaller code because of
+quoting a compressed version of the highlighted code.
+-/
+private def quoteHighlightViaSerialization (hls : Highlighted) : DocElabM Term := do
+  let repr := hlToExport hls
+  ``(hlFromExport! $(quote repr))
+
+/--
 De-indents and returns (syntax of) a Block representation containing highlighted Lean code.
 The argument `hls` must be a highlighting of the parsed string `str`.
 -/
@@ -183,7 +193,7 @@ private def toHighlightedLeanBlock (shouldShow : Bool) (hls : Highlighted) (str:
 
   let range := Syntax.getRange? str
   let range := range.map (← getFileMap).utf8RangeToLspRange
-  ``(Block.other (Block.lean $(quote hls) (some $(quote (← getFileName))) $(quote range)) #[Block.code $(quote str.getString)])
+  ``(Block.other (Block.lean $(← quoteHighlightViaSerialization hls) (some $(quote (← getFileName))) $(quote range)) #[Block.code $(quote str.getString)])
 
 /--
 Returns (syntax of) an Inline representation containing highlighted Lean code.
@@ -193,7 +203,7 @@ private def toHighlightedLeanInline (shouldShow : Bool) (hls : Highlighted) (str
   if !shouldShow then
     return ← ``(Inline.concat #[])
 
-  ``(Inline.other (Verso.Genre.Manual.InlineLean.Inline.lean $(quote hls)) #[Inline.code $(quote str.getString)])
+  ``(Inline.other (Verso.Genre.Manual.InlineLean.Inline.lean $(← quoteHighlightViaSerialization hls)) #[Inline.code $(quote str.getString)])
 
 
 /--
