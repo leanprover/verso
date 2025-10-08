@@ -201,7 +201,8 @@ private def finishDoc (genre : Term) (title : StrLit) : Command.CommandElabM Uni
   runPartElabInEnv genre <| do closePartsUntil 0 endPos
   saveRefsInEnv -- XXX Question: why do we need to save refs again?
 
-  let some partElabState := partStateExt.getState (← getEnv)
+  let env ← getEnv
+  let some partElabState := partStateExt.getState env
     | panic! "The document's start state was never initialized"
   let finished := partElabState.partContext.toPartFrame.close endPos
 
