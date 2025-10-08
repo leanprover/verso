@@ -179,6 +179,9 @@ private def startDoc (genre : Term) (title: StrLit) : Command.CommandElabM Strin
 
 private def runVersoBlock (genre : Term) (block : TSyntax `block) : Command.CommandElabM Unit := do
   runPartElabInEnv genre <| partCommand block
+  -- This calls pushInfoLeaf a quadratic number of times for a for a linear number of top-level
+  -- verso blocks, which should be harmless but may be inefficient. It may be desirable to tag
+  -- info leaves that have already been pushed to avoid pushing them again.
   saveRefsInEnv
 
 deriving instance Inhabited for SubVerso.Highlighting.Export
