@@ -17,6 +17,7 @@ import Verso.Doc.Elab.ExpanderAttribute
 import Verso.Doc.Elab.InlineString
 import Verso.Hover
 import Verso.SyntaxUtils
+import SubVerso.Highlighting.Export
 
 namespace Verso.Doc.Elab
 
@@ -228,10 +229,10 @@ partial def FinishedPart.toSyntaxAndAuxDefs
     : CoreM Term := do
   if let some (name, table) := docElabState.exportingTable then
     let str := table.toExport.toJson.compress
-    let value := mkApp (ToExpr.toExpr ``strToExport) (ToExpr.toExpr str)
+    let value := .app (mkConst ``strToExport) (ToExpr.toExpr str)
     addAndCompile <| .defnDecl {
       name, value,
-      type := .const ``SubVerso.Highlighting.Export []
+      type := mkConst ``SubVerso.Highlighting.Export
       levelParams := [],
       hints := .regular 0,
       safety := .safe

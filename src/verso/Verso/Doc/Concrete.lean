@@ -58,7 +58,11 @@ private def elabDoc (genre: Term) (title: StrLit) (topLevelBlocks : Array Syntax
   let env ← getEnv
   let titleParts ← stringToInlines title
   let titleString := inlinesToString env titleParts
-  let initDocState : DocElabM.State := {}
+  let initDocState : DocElabM.State ← if verso.outputCompression.defValue then do
+      let tableName ← mkFreshUserName `export_table
+      pure { exportingTable := some (tableName, {}) }
+    else do
+      pure {}
   let initPartState : PartElabM.State := .init (.node .none nullKind titleParts)
 
   let ((), docElabState, partElabState) ← PartElabM.run genre (← elabGenre genre) initDocState initPartState <| do
@@ -178,11 +182,15 @@ private def startDoc (genre : Term) (title: StrLit) : Command.CommandElabM Strin
   let env ← getEnv
   let titleParts ← stringToInlines title
   let titleString := inlinesToString env titleParts
-  let initDocState : DocElabM.State := {}
+  let initDocState : DocElabM.State ← if verso.outputCompression.defValue then do
+      let tableName ← Command.liftCoreM <| mkFreshUserName `export_table
+      pure { exportingTable := some (tableName, {}) }
+    else do
+      pure {}
   let initPartState : PartElabM.State := .init (.node .none nullKind titleParts)
 
   modifyEnv (docStateExt.setState · initDocState)
-  modifyEnv (partStateExt.setState · (some initPartState))
+  modifyEnv (partStateExt.setState · initPartState)
   runPartElabInEnv genre <| do
     PartElabM.setTitle titleString (← PartElabM.liftDocElabM <| titleParts.mapM (elabInline ⟨·⟩))
   return titleString
