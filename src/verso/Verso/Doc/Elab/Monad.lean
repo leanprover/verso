@@ -325,12 +325,10 @@ structure PartElabM.State where
   partContext : PartContext
   linkDefs : HashMap String (DocDef String) := {}
   footnoteDefs : HashMap String (DocDef (Array (TSyntax `term))) := {}
-  externalLeanTable : Option (Name × SubVerso.Highlighting.Exporting)
 deriving Inhabited
 
-def PartElabM.State.init (title : Syntax) (expandedTitle : Option (String × Array (TSyntax `term)) := none) (externalLeanTable : Option (Name × SubVerso.Highlighting.Exporting) := none) : PartElabM.State where
+def PartElabM.State.init (title : Syntax) (expandedTitle : Option (String × Array (TSyntax `term)) := none) : PartElabM.State where
   partContext := {titleSyntax := title, expandedTitle, metadata := none, blocks := #[], priorParts := #[], parents := #[]}
-  externalLeanTable := externalLeanTable
 
 def PartElabM (α : Type) : Type := ReaderT DocElabContext (StateT DocElabM.State (StateT PartElabM.State TermElabM)) α
 

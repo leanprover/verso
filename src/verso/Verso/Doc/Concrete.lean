@@ -49,11 +49,13 @@ private def elabGenre (genre : TSyntax `term) : TermElabM Expr :=
 /-- All-at-once elaboration of verso document syntax to syntax denoting a verso `Part`. Implements
 elaboration of the `#docs` command and `#doc` term. -/
 private def elabDoc (genre: Term) (title: StrLit) (topLevelBlocks : Array Syntax) (endPos: String.Pos): TermElabM Term := do
+  let env ← getEnv
   let titleParts ← stringToInlines title
-  let titleString := inlinesToString (← getEnv) titleParts
-  let initState : PartElabM.State := .init (.node .none nullKind titleParts)
+  let titleString := inlinesToString env titleParts
+  let initDocState : DocElabM.State := {}
+  let initPartState : PartElabM.State := .init (.node .none nullKind titleParts)
 
-  let ((), docElabState, partElabState) ← PartElabM.run genre (← elabGenre genre) {} initState <| do
+  let ((), docElabState, partElabState) ← PartElabM.run genre (← elabGenre genre) initDocState initPartState <| do
     let mut errors := #[]
     PartElabM.setTitle titleString (← PartElabM.liftDocElabM <| titleParts.mapM (elabInline ⟨·⟩))
     for b in topLevelBlocks do
@@ -167,12 +169,14 @@ private def saveRefsInEnv : Command.CommandElabM Unit := do
 the loop body in `runVersoBlock`, and the postlude in `finishDoc`. -/
 
 private def startDoc (genre : Term) (title: StrLit) : Command.CommandElabM String := do
+  let env ← getEnv
   let titleParts ← stringToInlines title
-  let titleString := inlinesToString (← getEnv) titleParts
+  let titleString := inlinesToString env titleParts
+  let initDocState : DocElabM.State := {}
+  let initPartState : PartElabM.State := .init (.node .none nullKind titleParts)
 
-  modifyEnv (docStateExt.setState · {})
-  modifyEnv (partStateExt.setState · (some (.init (.node .none nullKind titleParts)
-    (externalLeanTable := some (mkPrivateName (← getEnv) `code_table, {})))))
+  modifyEnv (docStateExt.setState · initDocState)
+  modifyEnv (partStateExt.setState · (some initPartState))
   runPartElabInEnv genre <| do
     PartElabM.setTitle titleString (← PartElabM.liftDocElabM <| titleParts.mapM (elabInline ⟨·⟩))
   return titleString
@@ -200,18 +204,6 @@ private def finishDoc (genre : Term) (title : StrLit) : Command.CommandElabM Uni
   let some partElabState := partStateExt.getState (← getEnv)
     | panic! "The document's start state was never initialized"
   let finished := partElabState.partContext.toPartFrame.close endPos
-
-  if let some (tableName, table) := partElabState.externalLeanTable then
-    if table.nextKey > 0 then -- nextKey == 0 means the table is unused
-      Command.runTermElabM fun _ => withOptions (·.setBool `compiler.extract_closed false) do
-        let value ← Meta.mkAppM ``fromExport #[ToExpr.toExpr table.toExport.toJson.compress]
-        addAndCompile <| .defnDecl {
-          name := tableName, value
-          type := .const ``SubVerso.Highlighting.Export []
-          levelParams := []
-          hints := .regular 0
-          safety := .safe
-        }
 
   let n := mkIdentFrom title (← currentDocName)
   let docu ← finished.toSyntax genre
