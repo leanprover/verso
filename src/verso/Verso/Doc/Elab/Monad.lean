@@ -17,7 +17,6 @@ import Verso.Doc.Elab.ExpanderAttribute
 import Verso.Doc.Elab.InlineString
 import Verso.Hover
 import Verso.SyntaxUtils
-import SubVerso.Highlighting.Export
 
 namespace Verso.Doc.Elab
 
