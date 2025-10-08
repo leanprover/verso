@@ -98,15 +98,17 @@ scoped syntax (name := addLastBlockCmd) block term:max str : command
 
 /-! Unlike `#doc` expressions and `#docs` commands, which are elaborated all at once, `#doc`
 commands are elaborated top-level-block by top-level-block in the manner of Lean's commands. This
-is done by replacing the parser for the `command category: -/
+is done by replacing the parser for the `command` category: -/
 
 /-- Replaces the stored parsing behavior for the category `cat` with the behavior defined by `p`. -/
 private def replaceCategoryParser (cat : Name) (p : ParserFn) : Command.CommandElabM Unit :=
   modifyEnv (categoryParserFnExtension.modifyState · fun st =>
     fun n => if n == cat then p else st n)
 
-/-- Parses each top-level block as either a `addBlockCmd` or a `addLastBlockCmd`. (This is what
-Verso uses to replace the command parser.) -/
+/--
+Parses each top-level block as either an `addBlockCmd` or an `addLastBlockCmd`. (This is what
+Verso uses to replace the command parser.)
+-/
 private def versoBlockCommandFn (genre : Term) (title : String) : ParserFn := fun c s =>
   let iniSz  := s.stackSize
   let s := recoverBlockWith #[.missing] (Verso.Parser.block {}) c s
@@ -121,8 +123,10 @@ private def versoBlockCommandFn (genre : Term) (title : String) : ParserFn := fu
     else
       s.mkNode ``addBlockCmd iniSz
 
-/-! The elaboration of zero-or-more `addBlockCmd` calls, followed by th elaboration of
-`addLastBlockCmd`, are connected by state stored in environment extensions. -/
+/-!
+The elaboration of zero-or-more `addBlockCmd` calls, followed by the elaboration of
+`addLastBlockCmd`, are connected by state stored in environment extensions.
+-/
 
 initialize docStateExt : EnvExtension DocElabM.State ← registerEnvExtension (pure {})
 initialize partStateExt : EnvExtension (Option PartElabM.State) ← registerEnvExtension (pure none)
@@ -139,7 +143,7 @@ private def runPartElabInEnv (genreSyntax: Term) (act : PartElabM a) : Command.C
     | panic! "The document's start state is not initialized"
 
   try
-    modifyEnv (fun env => categoryParserFnExtension.setState env $ originalCatParserExt.getState env)
+    modifyEnv (fun env => categoryParserFnExtension.setState env <| originalCatParserExt.getState env)
     let (result, docState', partState') ← Command.runTermElabM fun _ => do
       PartElabM.run genreSyntax (← elabGenre genreSyntax) docState partState act
     modifyEnv (docStateExt.setState · docState')
