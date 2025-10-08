@@ -130,6 +130,10 @@ The elaboration of zero-or-more `addBlockCmd` calls, followed by the elaboration
 
 initialize docStateExt : EnvExtension DocElabM.State ← registerEnvExtension (pure {})
 initialize partStateExt : EnvExtension (Option PartElabM.State) ← registerEnvExtension (pure none)
+/--
+The original parser for the `command` category, which is restored while elaborating a Verso block so that
+nested Lean code has the correct syntax.
+-/
 initialize originalCatParserExt : EnvExtension CategoryParserFn ← registerEnvExtension (pure <| fun _ => whitespace)
 
 /-- Performs `PartElabM.run` with state gathered from `docStateExt` and `partStateExt`, and then
