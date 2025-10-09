@@ -12,6 +12,12 @@ namespace Verso.Doc.Concrete
 
 open Lean Verso Parser Doc Elab
 
+register_option verso.outputCompression : Bool := {
+  defValue := true,
+  descr := "Controls compression of output; setting to false disables compression, which can make the generated IR more readable"
+  group := "verso"
+}
+
 def document : Parser where
   fn := atomicFn <| Verso.Parser.document (blockContext := {maxDirective := some 6})
 
@@ -53,7 +59,11 @@ private def elabDoc (genre: Term) (title: StrLit) (topLevelBlocks : Array Syntax
   let env ← getEnv
   let titleParts ← stringToInlines title
   let titleString := inlinesToString env titleParts
-  let initDocState : DocElabM.State := {}
+  let initDocState : DocElabM.State ← if verso.outputCompression.defValue then do
+      let tableName ← mkFreshUserName `export_table
+      pure { exportingTable := some (tableName, {}) }
+    else do
+      pure {}
   let initPartState : PartElabM.State := .init (.node .none nullKind titleParts)
 
   let ((), docElabState, partElabState) ← PartElabM.run genre (← elabGenre genre) initDocState initPartState <| do
@@ -75,7 +85,7 @@ private def elabDoc (genre: Term) (title: StrLit) (topLevelBlocks : Array Syntax
   let finished := partElabState.partContext.toPartFrame.close endPos
 
   pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
-  finished.toSyntax genre
+  finished.toSyntaxAndAuxDefs genre docElabState
 
 elab "#docs" "(" genre:term ")" n:ident title:str ":=" ":::::::" text:document ":::::::" : command => do
   findGenreCmd genre
@@ -173,7 +183,11 @@ private def startDoc (genre : Term) (title: StrLit) : Command.CommandElabM Strin
   let env ← getEnv
   let titleParts ← stringToInlines title
   let titleString := inlinesToString env titleParts
-  let initDocState : DocElabM.State := {}
+  let initDocState : DocElabM.State ← if verso.outputCompression.defValue then do
+      let tableName ← Command.liftCoreM <| mkFreshUserName `export_table
+      pure { exportingTable := some (tableName, {}) }
+    else do
+      pure {}
   let initPartState : PartElabM.State := .init (.node .none nullKind titleParts)
 
   modifyEnv (docStateExt.setState · initDocState)
@@ -194,12 +208,13 @@ private def finishDoc (genre : Term) (title : StrLit) : Command.CommandElabM Uni
   runPartElabInEnv genre <| do closePartsUntil 0 endPos
 
   let env ← getEnv
+  let docElabState := docStateExt.getState env
   let some partElabState := partStateExt.getState env
     | panic! "The document's start state was never initialized"
   let finished := partElabState.partContext.toPartFrame.close endPos
 
   let n := mkIdentFrom title (← currentDocName)
-  let docu ← finished.toSyntax genre
+  let docu ← Command.liftCoreM <| finished.toSyntaxAndAuxDefs genre docElabState
   Command.elabCommand (← `(def $n : Part $genre := $docu))
 
 syntax (name := replaceDoc) "#doc" "(" term ")" str "=>" : command
