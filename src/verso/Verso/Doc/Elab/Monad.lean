@@ -121,6 +121,7 @@ def DocUses.add (uses : DocUses) (loc : Syntax) : DocUses := {uses with useSites
 structure DocElabM.State where
   linkRefs : HashMap String DocUses := {}
   footnoteRefs : HashMap String DocUses := {}
+  exportingTable : Option (Name × Nat)
 deriving Inhabited
 
 /-- Custom info tree data to save footnote and reflink cross-references -/
@@ -195,13 +196,12 @@ private def linkRefName [Monad m] [MonadQuotation m] (docName : Name) (ref : TSy
 private def footnoteRefName [Monad m] [MonadQuotation m] (genre : Term) (docName : Name) (ref : TSyntax `str) : m Term :=
   ``(HasNote.contents $(quote ref.getString) $(quote docName) (genre := $genre) (self := _))
 
-
-open Lean.Parser.Term in
-partial def FinishedPart.toSyntax [Monad m] [MonadQuotation m] [MonadEnv m]
+partial def FinishedPart.toSyntax
     (genre : TSyntax `term)
-    : FinishedPart → m (TSyntax `term)
+    (reprTable : Option (Name × Nat))
+    : FinishedPart → TermElabM (TSyntax `term)
   | .mk _titleStx titleInlines titleString metadata blocks subParts _endPos => do
-    let subStx ← subParts.mapM (toSyntax genre)
+    let subStx ← subParts.mapM (toSyntax genre none)
     let metaStx ←
       match metadata with
       | none => `(none)
@@ -209,7 +209,12 @@ partial def FinishedPart.toSyntax [Monad m] [MonadQuotation m] [MonadEnv m]
     -- Adding type annotations works around a limitation in list and array elaboration, where intermediate
     -- let bindings introduced by "chunking" the elaboration may fail to infer types
     let typedBlocks ← blocks.mapM fun b => `(($b : Block $genre))
-    ``(Part.mk #[$titleInlines,*] $(quote titleString) $metaStx #[$typedBlocks,*] #[$subStx,*])
+    let syn ← ``(Part.mk #[$titleInlines,*] $(quote titleString) $metaStx #[$typedBlocks,*] #[$subStx,*])
+    if let some (name, nat) := reprTable then
+      println! s!"{← `(let $(mkIdent name) : Nat := $(quote nat); $syn)}"
+      `(let $(mkIdent name) : Nat := $(quote nat); $syn)
+    else
+      pure syn
   | .included name => pure name
 
 structure ToSyntaxState where
@@ -462,6 +467,7 @@ def findLinksAndNotes : Expr → MetaM (Array (Expr × Expr))
 
 open Lean Meta Elab Term in
 def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := withRef block <| do
+/-
   let g := (← readThe DocElabContext).genre
 
   let n ← mkFreshUserName `block
@@ -498,8 +504,8 @@ def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := withRef block
     }
     Term.ensureNoUnassignedMVars decl
     addAndCompile decl
-  modifyThe State fun st =>
-    { st with partContext.blocks := st.partContext.blocks.push (mkIdent n) }
+-/  modifyThe State fun st =>
+    { st with partContext.blocks := st.partContext.blocks.push block }
 
 def PartElabM.addPart (finished : FinishedPart) : PartElabM Unit := modifyThe State fun st =>
   {st with partContext.priorParts := st.partContext.priorParts.push finished}

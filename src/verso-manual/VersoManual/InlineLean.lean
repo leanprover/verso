@@ -168,6 +168,9 @@ def reportMessages {m} [Monad m] [MonadLog m] [MonadError m]
     if messages.hasErrors then
       throwErrorAt blame "No error expected in code block, one occurred"
 
+def hlFromGlobalExport! (max : Nat) (mix : Nat) (str : String) :=
+  hlFromExport! str
+
 /--
 Produces the syntax of an expression that denotes the `hls` value. Specifically,
 within the DocElabM monad, `← quoteHighlightViaSerialization hls` will result in a `Term` that
@@ -175,8 +178,16 @@ represents the same highlight as `quote hls`, but will hopefully produce smaller
 quoting a compressed version of the highlighted code.
 -/
 private def quoteHighlightViaSerialization (hls : Highlighted) : DocElabM Term := do
-  let repr := hlToExport hls
-  ``(hlFromExport! $(quote repr))
+  let docElabState ← get
+  if let .some (name, num) := docElabState.exportingTable then
+    let repr := hlToExport hls
+    println! s!"Exporting lean #{num+1}"
+    set { docElabState with exportingTable := some (name, num + 1) }
+    ``(hlFromGlobalExport! $(mkIdent name) $(quote <| num + 1) $(quote repr))
+  else
+    let repr := hlToExport hls
+    ``(hlFromExport! $(quote repr))
+
 
 /--
 De-indents and returns (syntax of) a Block representation containing highlighted Lean code.
