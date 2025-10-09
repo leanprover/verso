@@ -6,6 +6,7 @@ Author: David Thrane Christiansen
 
 import Verso.Doc
 import Verso.Doc.Concrete.InlineString
+import Verso.Doc.Lsp
 
 namespace Verso.Doc.Concrete
 
