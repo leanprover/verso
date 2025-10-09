@@ -192,7 +192,6 @@ private def runVersoBlock (genre : Term) (block : TSyntax `block) : Command.Comm
 private def finishDoc (genre : Term) (title : StrLit) : Command.CommandElabM Unit:= do
   let endPos := (← getFileMap).source.endPos
   runPartElabInEnv genre <| do closePartsUntil 0 endPos
-  saveRefsInEnv -- XXX Question: why do we need to save refs again?
 
   let env ← getEnv
   let some partElabState := partStateExt.getState env
