@@ -47,29 +47,33 @@ def saveRefs [Monad m] [MonadInfoTree m] (st : DocElabM.State) (st' : PartElabM.
 private def elabGenre (genre : TSyntax `term) : TermElabM Expr :=
   Term.elabTerm genre (some (.const ``Doc.Genre []))
 
-/-- All-at-once elaboration of verso document syntax to syntax denoting a verso `Part`. Implements
-elaboration of the `#docs` command and `#doc` term. -/
-private def elabDoc (genre: Term) (title: StrLit) (topLevelBlocks : Array Syntax) (endPos: String.Pos): TermElabM Term := do
+/--
+All-at-once elaboration of verso document syntax to syntax denoting a verso `Part`. Implements
+elaboration of the `#docs` command and `#doc` term. The `#doc` command is incremental, and thus
+splits the logic in this function across multiple functions.
+-/
+private def elabDoc (genre: Term) (title: StrLit) (topLevelBlocks : Array Syntax) (endPos: String.Pos) : TermElabM Term := do
   let env ← getEnv
   let titleParts ← stringToInlines title
   let titleString := inlinesToString env titleParts
   let initDocState : DocElabM.State := {}
   let initPartState : PartElabM.State := .init (.node .none nullKind titleParts)
 
-  let ((), docElabState, partElabState) ← PartElabM.run genre (← elabGenre genre) initDocState initPartState <| do
-    let mut errors := #[]
-    PartElabM.setTitle titleString (← PartElabM.liftDocElabM <| titleParts.mapM (elabInline ⟨·⟩))
-    for b in topLevelBlocks do
-      try
-        partCommand ⟨b⟩
-      catch e =>
-        errors := errors.push e
-    closePartsUntil 0 endPos
-    for e in errors do
-      match e with
-      | .error stx msg => logErrorAt stx msg
-      | oops@(.internal _ _) => throw oops
-    pure ()
+  let ((), docElabState, partElabState) ←
+    PartElabM.run genre (← elabGenre genre) initDocState initPartState <| do
+      let mut errors := #[]
+      PartElabM.setTitle titleString (← PartElabM.liftDocElabM <| titleParts.mapM (elabInline ⟨·⟩))
+      for b in topLevelBlocks do
+        try
+          partCommand ⟨b⟩
+        catch e =>
+          errors := errors.push e
+      closePartsUntil 0 endPos
+      for e in errors do
+        match e with
+        | .error stx msg => logErrorAt stx msg
+        | oops@(.internal _ _) => throw oops
+      pure ()
   saveRefs docElabState partElabState
 
   let finished := partElabState.partContext.toPartFrame.close endPos
@@ -99,9 +103,11 @@ elab "#doc" "(" genre:term ")" title:str "=>" text:completeDocument eoi : term =
 scoped syntax (name := addBlockCmd) block term:max : command
 scoped syntax (name := addLastBlockCmd) block term:max str : command
 
-/-! Unlike `#doc` expressions and `#docs` commands, which are elaborated all at once, `#doc`
-commands are elaborated top-level-block by top-level-block in the manner of Lean's commands. This
-is done by replacing the parser for the `command` category: -/
+/-!
+Unlike `#doc` expressions and `#docs` commands, which are elaborated all at once, `#doc` commands
+are elaborated top-level-block by top-level-block in the manner of Lean's commands. This is done by
+replacing the parser for the `command` category:
+-/
 
 /-- Replaces the stored parsing behavior for the category `cat` with the behavior defined by `p`. -/
 private def replaceCategoryParser (cat : Name) (p : ParserFn) : Command.CommandElabM Unit :=
@@ -127,21 +133,25 @@ private def versoBlockCommandFn (genre : Term) (title : String) : ParserFn := fu
       s.mkNode ``addBlockCmd iniSz
 
 /-!
-The elaboration of zero-or-more `addBlockCmd` calls, followed by the elaboration of
-`addLastBlockCmd`, are connected by state stored in environment extensions.
+As we elaborate a `#doc` command top-level-block by top-level-block, the Lean environment will
+be used to thread state between the separate top level blocks. These three environment extensions:
+`docStateExt`, `partStateExt`, and `originalCatParserExt`, contain the state that needs to exist
+across top-level-block parsing events.
 -/
 
 initialize docStateExt : EnvExtension DocElabM.State ← registerEnvExtension (pure {})
 initialize partStateExt : EnvExtension (Option PartElabM.State) ← registerEnvExtension (pure none)
 /--
-The original parser for the `command` category, which is restored while elaborating a Verso block so that
-nested Lean code has the correct syntax.
+The original parser for the `command` category, which is restored while elaborating a Verso block so
+that nested Lean code has the correct syntax.
 -/
 initialize originalCatParserExt : EnvExtension CategoryParserFn ← registerEnvExtension (pure <| fun _ => whitespace)
 
-/-- Performs `PartElabM.run` with state gathered from `docStateExt` and `partStateExt`, and then
-updates the state in those environment extensions with any modifications. Also replaces the default
-command parser in case `act` wants to parse commands (such as within an embedded code block). -/
+/--
+Performs `PartElabM.run` with state gathered from `docStateExt` and `partStateExt`, and then updates
+the state in those environment extensions with any modifications. Also replaces the default command
+parser in case `act` wants to parse commands (such as within an embedded code block).
+-/
 private def runPartElabInEnv (genreSyntax: Term) (act : PartElabM a) : Command.CommandElabM a := do
   let env ← getEnv
   let versoCmdFn := categoryParserFnExtension.getState env
@@ -166,8 +176,11 @@ private def saveRefsInEnv : Command.CommandElabM Unit := do
     | panic! "The document's start state is not initialized"
   saveRefs docState partState
 
-/-! The actions of `elabDoc` are split across three functions: the prelude in `startDoc`,
-the loop body in `runVersoBlock`, and the postlude in `finishDoc`. -/
+/-!
+When we do incremental parsing of `#doc` commands, we split the behaviors that are done all at once
+in `elabDoc` across three functions: the prelude in `startDoc`, the loop body in `runVersoBlock`,
+and the postlude in `finishDoc`.
+-/
 
 private def startDoc (genre : Term) (title: StrLit) : Command.CommandElabM String := do
   let env ← getEnv
