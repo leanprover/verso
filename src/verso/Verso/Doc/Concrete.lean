@@ -188,14 +188,6 @@ private def runVersoBlock (genre : Term) (block : TSyntax `block) : Command.Comm
   -- info leaves that have already been pushed to avoid pushing them again.
   saveRefsInEnv
 
-deriving instance Inhabited for SubVerso.Highlighting.Export
-def fromExport (str : String) :=
-  match FromJson.fromJson? str with
-  | .error _ => panic! "Cannot retrieve JSON from export str"
-  | .ok json => match SubVerso.Highlighting.Export.fromJson? json with
-    | .error _ => panic! "Cannot retrieve data from export json"
-    | .ok et => et
-
 private def finishDoc (genre : Term) (title : StrLit) : Command.CommandElabM Unit:= do
   let endPos := (← getFileMap).source.endPos
   runPartElabInEnv genre <| do closePartsUntil 0 endPos
