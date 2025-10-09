@@ -230,6 +230,7 @@ partial def FinishedPart.toSyntaxAndAuxDefs
   if let some (name, table) := docElabState.exportingTable then
     let str := table.toExport.toJson.compress
     let value := .app (mkConst ``strToExport) (ToExpr.toExpr str)
+    println! s!"{name} {table.toJson}"
     addAndCompile <| .defnDecl {
       name, value,
       type := mkConst ``SubVerso.Highlighting.Export

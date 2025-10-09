@@ -31,7 +31,9 @@ tag := "extension-syntax"
 All four extension points share a common syntax.
 They are invoked by name, with a sequence of arguments.
 These arguments may be positional or by name, and their values may be identifiers, string literals, or numbers.
-Boolean flags may be passed by preceding their name with `-` or `+` for {lean}`false` or {lean}`true`, respectively.
+Boolean flags may be passed by preceding their name with `-` or `+` for {lean}`false` or
+
+ {lean}`true`, respectively.
 
 :::paragraph
 In this example, the directive `syntax` is invoked with the positional argument `term` and the named argument `title` set to `"Example"`.

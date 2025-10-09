@@ -168,6 +168,12 @@ def reportMessages {m} [Monad m] [MonadLog m] [MonadError m]
     if messages.hasErrors then
       throwErrorAt blame "No error expected in code block, one occurred"
 
+
+def hlFromGlobalExport! (exportTable : SubVerso.Highlighting.Export) (key : Export.Key) :=
+  match exportTable.toHighlighted key with
+  | .error e => panic! s!"Error deriving highlighted code with key ${key} from global table: ${e}"
+  | .ok hl => hl
+
 /--
 Produces the syntax of an expression that denotes the `hls` value. Specifically,
 within the DocElabM monad, `← quoteHighlightViaSerialization hls` will result in a `Term` that
@@ -175,8 +181,15 @@ represents the same highlight as `quote hls`, but will hopefully produce smaller
 quoting a compressed version of the highlighted code.
 -/
 private def quoteHighlightViaSerialization (hls : Highlighted) : DocElabM Term := do
-  let repr := hlToExport hls
-  ``(hlFromExport! $(quote repr))
+  let docElabState := Concrete.docStateExt.getState (← getEnv)
+  if let some (name, table) := docElabState.exportingTable then
+    let (exportKey, table') ← hls.export.run table
+    println! s!"{name} {exportKey} {table.toJson} {table'.toJson}"
+    modifyEnv (Concrete.docStateExt.setState · { docElabState with exportingTable := some (name, table')})
+    return Syntax.mkApp (mkIdent ``hlFromGlobalExport!) #[mkIdent name, quote exportKey]
+  else
+    let repr := hlToExport hls
+    ``(hlFromExport! $(quote repr))
 
 /--
 De-indents and returns (syntax of) a Block representation containing highlighted Lean code.
@@ -249,6 +262,7 @@ def lean : CodeBlockExpanderOf LeanBlockConfig
       if Parser.isTerminalCommand cmd then break
 
     let origEnv ← getEnv
+    let mut hls := Highlighted.empty
     try
       setEnv cmdState.env
       setScopes cmdState.scopes
@@ -257,12 +271,10 @@ def lean : CodeBlockExpanderOf LeanBlockConfig
         pushInfoTree t
 
 
-      let mut hls := Highlighted.empty
       let nonSilentMsgs := cmdState.messages.toArray.filter (!·.isSilent)
       for cmd in cmds do
         hls := hls ++ (← highlight cmd nonSilentMsgs cmdState.infoState.trees)
 
-      toHighlightedLeanBlock config.show hls str
     finally
       if !config.keep then
         setEnv origEnv
@@ -280,6 +292,8 @@ def lean : CodeBlockExpanderOf LeanBlockConfig
 
       if config.show then
         warnLongLines col? str
+
+    toHighlightedLeanBlock config.show hls str
 where
   runCommand (act : Command.CommandElabM Unit) (stx : Syntax)
       (cctx : Command.Context) (cmdState : Command.State) :

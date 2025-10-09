@@ -56,7 +56,7 @@ The differences are:
  * Interpolated Lean strings (with `s!`) may be used in any context that expects a string.
 
 For example, this definition creates a `<ul>` list:
-```lean -keep (name := htmllist)
+```lean (name := htmllist)
 open Verso.Output.Html
 
 def mkList (xs : List Html) : Html :=
