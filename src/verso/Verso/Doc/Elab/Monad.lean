@@ -472,6 +472,17 @@ def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := withRef block
   let n ← mkFreshUserName `block
 
   let type : Expr := .app (.const ``Doc.Block []) g
+  let (type, block) ←
+    if let some (name, _) := (← getThe DocElabM.State).exportingTable then
+      let typeClassSyntax ← ``(Verso.CodeTable.CodeTable $(mkIdent name))
+      let typeClassExpr : Expr := .app (.const ``Verso.CodeTable.CodeTable []) (ToExpr.toExpr name)
+      let wrappedType := Expr.forallE (← mkFreshUserName `_) typeClassExpr type BinderInfo.implicit
+      let wrappedBlock ← `(fun [$(typeClassSyntax)] => $(block))
+      pure (wrappedType, wrappedBlock)
+    else
+      pure (type, block)
+
+
   let t ← elabTerm block (some type)
   let t ← instantiateMVars t
   let links ← findLinksAndNotes t
@@ -493,17 +504,11 @@ def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := withRef block
     let t ← instantiateMVars t
     let type ← instantiateMVars type
     let t ← ensureHasType (some type) t
-    let value :=
-      if let some (name, _) := (← getThe DocElabM.State).exportingTable then
-        let typeclass := (Expr.app (Expr.const ``Verso.CodeTable.CodeTable []) (ToExpr.toExpr name))
-        Expr.lam (← mkFreshUserName `_) typeclass t Lean.BinderInfo.instImplicit
-      else
-        t
     let decl := Declaration.defnDecl {
       name := n,
       levelParams := levelParams,
       type := type,
-      value,
+      value := t,
       hints := .abbrev,
       safety := .safe
     }
