@@ -340,8 +340,8 @@ Contains the contents of `<head>` that are needed for proper functioning of the 
 def builtinHeader : TemplateM Html := do
   let siteRoot := String.join ((← currentPath).map fun _ => "../") ++ "./"
   let mut out := .empty
-  -- Other scripts need this
-  out := out ++ {{<script>s!"var __versoSiteRoot = {siteRoot.quote};"</script>}}
+  -- Establish that all relative paths should be relative to siteRoot
+  out := out ++ {{<base href={{siteRoot}}/>}}
   -- These should come first so later stylesheets can easily override them.
   out := out ++ {{<style>{{«verso-vars.css»}}</style>}}
   for style in (← read).builtInStyles do
@@ -349,9 +349,9 @@ def builtinHeader : TemplateM Html := do
   for script in (← read).builtInScripts do
     out := out ++ {{<script>"\n"{{.text false script}}"\n"</script>"\n"}}
   for js in (← read).jsFiles do
-    out := out ++ {{<script src=s!"/-verso-js/{js}"></script>}}
+    out := out ++ {{<script src=s!"-verso-js/{js}"></script>}}
   for css in (← read).cssFiles do
-    out := out ++ {{<link rel="stylesheet" href=s!"/-verso-css/{css}"/>}}
+    out := out ++ {{<link rel="stylesheet" href=s!"-verso-css/{css}"/>}}
   out := out ++ {{
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI+WdtXRGWt2kTvGFasHpSy3SV" crossorigin="anonymous"/>
     <script defer="defer" src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG+vnGctmUb0ZY0l8" crossorigin="anonymous"></script>

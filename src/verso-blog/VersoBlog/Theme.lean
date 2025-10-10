@@ -77,7 +77,7 @@ def dirLinks : Site → TemplateM (Array Html)
     subs.filterMapM fun
       | .page name _id txt .. | .blog name _id txt .. =>
         if txt.metadata.map (·.showInNav) |>.getD true then
-          pure <| some {{<li><a href={{"/" ++ name}}>{{txt.titleString}}</a></li>}}
+          pure <| some {{<li><a href={{name}}>{{txt.titleString}}</a></li>}}
         else
           pure none
       | .static .. => pure none
@@ -95,7 +95,7 @@ def topNav (homeLink : Option String := none) : Template := do
     pure {{
       <nav class="top" role="navigation">
         <ol>
-          {{homeLink.map ({{<li class="home"><a href="/">s!"{·}"</a></li>}}) |>.getD .empty}}
+          {{homeLink.map ({{<li class="home"><a href=".">s!"{·}"</a></li>}}) |>.getD .empty}}
           {{ ← dirLinks (← read).site }}
         </ol>
       </nav>
@@ -147,6 +147,10 @@ def page : Template := do
   }}
 
 def post : Template := do
+  let catAddr ← do
+    if let some p := (← param? "path") then
+      pure <| fun slug => p ++ "/" ++ slug
+    else pure <| fun slug => slug
   pure {{
     <h1>{{← param "title"}}</h1>
     {{ match (← param? "metadata") with
@@ -162,7 +166,7 @@ def post : Template := do
           {{if md.categories.isEmpty then Html.empty
             else {{
               <ul class="categories">
-                {{md.categories.toArray.map (fun cat => {{<li><a href=s!"../{cat.slug}">{{cat.name}}</a></li>}})}}
+                {{md.categories.toArray.map (fun cat => {{<li><a href=s!"{catAddr cat.slug}">{{cat.name}}</a></li>}})}}
               </ul>
             }}
           }}
