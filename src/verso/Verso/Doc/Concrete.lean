@@ -52,7 +52,7 @@ All-at-once elaboration of verso document syntax to syntax denoting a verso `Par
 elaboration of the `#docs` command and `#doc` term. The `#doc` command is incremental, and thus
 splits the logic in this function across multiple functions.
 -/
-private def elabDoc (genre: Term) (title: StrLit) (topLevelBlocks : Array Syntax) (endPos: String.Pos) : TermElabM Term := do
+private def elabDoc (genre: Term) (title: StrLit) (topLevelBlocks : Array Syntax) (endPos: String.Pos.Raw) : TermElabM Term := do
   let env ← getEnv
   let titleParts ← stringToInlines title
   let titleString := inlinesToString env titleParts

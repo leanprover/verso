@@ -50,7 +50,7 @@ def docNumLitFn : ParserFn := fun c s =>
       else if curr == 'o' || curr == 'O' then
         octalNumberFn startPos false c (s.next c i)
       else if curr == 'x' || curr == 'X' then
-        hexNumberFn startPos false c (s.next c i)
+        (hexNumberFn startPos false) c (s.next c i)
       else
         decimalNumberFn startPos false c (s.setPos i)
     else if curr.isDigit then
