@@ -896,10 +896,7 @@ def Block.leanFromMarkdown (hls : Highlighted) : Block where
 @[inline_extension leanFromMarkdown]
 def leanFromMarkdown.inlinedescr : InlineDescr := withHighlighting {
   traverse _id _data _ := pure none
-  toTeX :=
-    some <| fun go _ _ content => do
-      pure <| .seq <| ← content.mapM fun b => do
-        pure <| .seq #[← go b, .raw "\n"]
+  toTeX := some <| fun go _ _ content => content.mapM go
   toHtml :=
     open Verso.Output Html in
     open Verso.Doc.Html in
