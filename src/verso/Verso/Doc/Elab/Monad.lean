@@ -11,6 +11,7 @@ import Lean.Elab.DeclUtil
 import Lean.Meta.Reduce
 import Lean.DocString.Syntax
 
+import Verso.CodeTable
 import Verso.Doc
 import Verso.Doc.ArgParse
 import Verso.Doc.Elab.ExpanderAttribute
@@ -209,13 +210,12 @@ partial def FinishedPart.toSyntax
     -- Adding type annotations works around a limitation in list and array elaboration, where intermediate
     -- let bindings introduced by "chunking" the elaboration may fail to infer types
     let typedBlocks ← blocks.mapM fun b => `(($b : Block $genre))
-    let syn ← ``(Part.mk #[$titleInlines,*] $(quote titleString) $metaStx #[$typedBlocks,*] #[$subStx,*])
-    if let some (name, nat) := reprTable then
-      println! s!"{← `(let $(mkIdent name) : Nat := $(quote nat); $syn)}"
-      `(let $(mkIdent name) : Nat := $(quote nat); $syn)
-    else
-      pure syn
+    if let some (name, num) := reprTable then
+      println! s!"Outputting at {name} with {num} Lean code fences"
+    ``(Part.mk #[$titleInlines,*] $(quote titleString) $metaStx #[$typedBlocks,*] #[$subStx,*])
   | .included name => pure name
+
+
 
 structure ToSyntaxState where
   gensymCounter : Nat := 0
@@ -467,7 +467,6 @@ def findLinksAndNotes : Expr → MetaM (Array (Expr × Expr))
 
 open Lean Meta Elab Term in
 def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := withRef block <| do
-/-
   let g := (← readThe DocElabContext).genre
 
   let n ← mkFreshUserName `block
@@ -494,18 +493,24 @@ def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := withRef block
     let t ← instantiateMVars t
     let type ← instantiateMVars type
     let t ← ensureHasType (some type) t
+    let value :=
+      if let some (name, _) := (← getThe DocElabM.State).exportingTable then
+        let typeclass := (Expr.app (Expr.const ``Verso.CodeTable.CodeTable []) (ToExpr.toExpr name))
+        Expr.lam (← mkFreshUserName `_) typeclass t Lean.BinderInfo.instImplicit
+      else
+        t
     let decl := Declaration.defnDecl {
       name := n,
       levelParams := levelParams,
       type := type,
-      value := t,
+      value,
       hints := .abbrev,
       safety := .safe
     }
     Term.ensureNoUnassignedMVars decl
     addAndCompile decl
--/  modifyThe State fun st =>
-    { st with partContext.blocks := st.partContext.blocks.push block }
+  modifyThe State fun st =>
+    { st with partContext.blocks := st.partContext.blocks.push (mkIdent n) }
 
 def PartElabM.addPart (finished : FinishedPart) : PartElabM Unit := modifyThe State fun st =>
   {st with partContext.priorParts := st.partContext.priorParts.push finished}

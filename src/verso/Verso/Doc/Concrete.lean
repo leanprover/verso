@@ -217,8 +217,6 @@ private def finishDoc (genre : Term) (title : StrLit) : Command.CommandElabM Uni
     | panic! "The document's start state was never initialized"
   let finished := partElabState.partContext.toPartFrame.close endPos
 
-  if let some (name, num) := docElabState.exportingTable then
-    println! s!"Outputting at {name} with {num} Lean code fences"
   let n := mkIdentFrom title (← currentDocName)
   let docu ← Command.runTermElabM fun _ => finished.toSyntax genre (reprTable := docElabState.exportingTable)
   Command.elabCommand (← `(def $n : Part $genre := $docu))

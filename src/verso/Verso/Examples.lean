@@ -334,3 +334,70 @@ Here's [a link][to here][^note]!
 [^note]: The footnote text
 
 :::::::
+
+/--
+info: Verso.Doc.Part.mk
+  #[Verso.Doc.Inline.text "Ref link before"]
+  "Ref link before"
+  none
+  #[]
+  #[Verso.Doc.Part.mk
+      #[Verso.Doc.Inline.text "Section 1"]
+      "Section 1"
+      none
+      #[Verso.Doc.Block.para
+          #[Verso.Doc.Inline.text "Here's ",
+            Verso.Doc.Inline.link #[(Verso.Doc.Inline.text "a link")] "http://example.com",
+            Verso.Doc.Inline.footnote "note" #[(Verso.Doc.Inline.text "The footnote text")], Verso.Doc.Inline.text "!"]]
+      #[]]
+-/
+#guard_msgs in
+  #eval g
+
+#docs (.none) g' "Ref link after" :=
+:::::::
+
+# Section 1
+
+[^note]: The footnote text
+
+Here's [a link][to here][^note]!
+
+[to here]: http://example.com
+
+:::::::
+
+/--
+info: Verso.Doc.Part.mk
+  #[Verso.Doc.Inline.text "Ref link after"]
+  "Ref link after"
+  none
+  #[]
+  #[Verso.Doc.Part.mk
+      #[Verso.Doc.Inline.text "Section 1"]
+      "Section 1"
+      none
+      #[Verso.Doc.Block.para
+          #[Verso.Doc.Inline.text "Here's ",
+            Verso.Doc.Inline.link #[(Verso.Doc.Inline.text "a link")] "http://example.com",
+            Verso.Doc.Inline.footnote "note" #[(Verso.Doc.Inline.text "The footnote text")], Verso.Doc.Inline.text "!"]]
+      #[]]
+-/
+#guard_msgs in
+  #eval g'
+
+/-- info: true -/
+#guard_msgs in
+#eval toString (repr g) == (toString (repr g')).replace "after" "before"
+
+-- https://github.com/leanprover/verso/pull/541
+/-- error: Wrong header nesting - got #### but expected at most ### -/
+#guard_msgs in
+#docs (.none) h "Bad nesting" :=
+:::::::
+
+# Section
+## Subsection
+#### Sub^3section
+
+:::::::
