@@ -11,6 +11,7 @@ import SubVerso.Highlighting
 import SubVerso.Examples
 
 import Verso
+import Verso.CodeTable
 
 import VersoManual.Basic
 import VersoManual.HighlightedCode
@@ -177,11 +178,11 @@ private def quoteHighlightViaSerialization (hls : Highlighted) : DocElabM Term :
     let repr := hlToExport hls
     println! s!"Exporting lean #{num+1}"
     set { docElabState with exportingTable := some (name, num + 1) }
-    ``(hlFromGlobalExport! $(mkIdent name) $(quote <| num + 1) $(quote repr))
+    let tableRef ← ``(Verso.CodeTable.CodeTable.is $(quote name))
+    ``(hlFromGlobalExport! $(tableRef) $(quote <| num + 1) $(quote repr))
   else
     let repr := hlToExport hls
     ``(hlFromExport! $(quote repr))
-
 
 /--
 De-indents and returns (syntax of) a Block representation containing highlighted Lean code.
