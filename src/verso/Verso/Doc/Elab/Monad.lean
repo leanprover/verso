@@ -477,7 +477,7 @@ def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := withRef block
       let typeClassSyntax ← ``(Verso.CodeTable.CodeTable $(quote name))
       let typeClassExpr : Expr := .app (.const ``Verso.CodeTable.CodeTable []) (ToExpr.toExpr name)
       let unused ← mkFreshUserName `unused
-      let wrapperType := fun expr => Expr.forallE unused typeClassExpr expr BinderInfo.implicit
+      let wrapperType := fun expr => Expr.forallE unused typeClassExpr expr BinderInfo.instImplicit
       let wrappedBlock ← `(fun [$(typeClassSyntax)] => $(block))
       -- let wrappedType := Expr.forallE (← mkFreshUserName `_) (.const name []) type BinderInfo.instImplicit
       -- let wrappedBlock ← `(fun [$(mkIdent name)] => $(block))
@@ -486,7 +486,9 @@ def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := withRef block
       pure (fun x => x, block)
 
 
-  let t ← elabTerm block (some type)
+  logInfo "A"
+  let t ← elabTerm block (some <| wrapperType type)
+  logInfo "b"
   let t ← instantiateMVars t
   let links ← findLinksAndNotes t
   let t ← links.foldrM (init := t) fun (mv, mvty) t =>
@@ -498,7 +500,7 @@ def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := withRef block
   let type ← mkForallFVars (links.map (·.1)) type (binderInfoForMVars := .instImplicit)
   let type ← mkForallFVars xs type
   let type ← levelMVarToParam type
-  let usedParams  := collectLevelParams {} type |>.params
+  let usedParams := collectLevelParams {} type |>.params
 
   match sortDeclLevelParams [] [] usedParams with
   | Except.error msg      => throwErrorAt block msg
@@ -506,7 +508,7 @@ def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := withRef block
     synthesizeSyntheticMVarsNoPostponing
     let t ← instantiateMVars t
     let type ← instantiateMVars type
-    let t ← ensureHasType (some type) t
+    let t ← ensureHasType (some <| wrapperType type) t
     let decl := Declaration.defnDecl {
       name := n,
       levelParams := levelParams,
