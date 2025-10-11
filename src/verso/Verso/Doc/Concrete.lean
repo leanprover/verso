@@ -57,6 +57,7 @@ private def elabDoc (genre: Term) (title: StrLit) (topLevelBlocks : Array Syntax
   let titleParts ← stringToInlines title
   let titleString := inlinesToString env titleParts
   let tmpName ← mkAuxDeclName `docs_table
+
   let initDocState : DocElabM.State := { exportingTable := some (tmpName, 0) }
   let initPartState : PartElabM.State := .init (.node .none nullKind titleParts)
 
@@ -189,9 +190,8 @@ private def startDoc (genre : Term) (title: StrLit) : Command.CommandElabM Strin
   let env ← getEnv
   let titleParts ← stringToInlines title
   let titleString := inlinesToString env titleParts
-  -- let tmpName ← mkAuxDeclName `doc_table
-  let tmpName := `unlikely_to_conflict_12
-  let initDocState : DocElabM.State := { exportingTable := some (tmpName, 0) }
+  let tmpName ← mkAuxDeclName `doc_table
+  let initDocState : DocElabM.State := { exportingTable := (tmpName, 0) }
   let initPartState : PartElabM.State := .init (.node .none nullKind titleParts)
 
   modifyEnv (docStateExt.setState · initDocState)

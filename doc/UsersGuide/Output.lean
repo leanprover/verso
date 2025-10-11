@@ -17,7 +17,6 @@ open Verso.Doc
 open Verso.Output
 
 #doc (Manual) "Output Formats" =>
-
 %%%
 tag := "outputs"
 htmlSplit := .never

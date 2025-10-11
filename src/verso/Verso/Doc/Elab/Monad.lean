@@ -472,15 +472,18 @@ def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := withRef block
   let n ← mkFreshUserName `block
 
   let type : Expr := .app (.const ``Doc.Block []) g
-  let (type, block) ←
+  let (wrapperType, block) ←
     if let some (name, _) := (← getThe DocElabM.State).exportingTable then
-      let typeClassSyntax ← ``(Verso.CodeTable.CodeTable $(mkIdent name))
+      let typeClassSyntax ← ``(Verso.CodeTable.CodeTable $(quote name))
       let typeClassExpr : Expr := .app (.const ``Verso.CodeTable.CodeTable []) (ToExpr.toExpr name)
-      let wrappedType := Expr.forallE (← mkFreshUserName `_) typeClassExpr type BinderInfo.implicit
+      let unused ← mkFreshUserName `unused
+      let wrapperType := fun expr => Expr.forallE unused typeClassExpr expr BinderInfo.implicit
       let wrappedBlock ← `(fun [$(typeClassSyntax)] => $(block))
-      pure (wrappedType, wrappedBlock)
+      -- let wrappedType := Expr.forallE (← mkFreshUserName `_) (.const name []) type BinderInfo.instImplicit
+      -- let wrappedBlock ← `(fun [$(mkIdent name)] => $(block))
+      pure (wrapperType, wrappedBlock)
     else
-      pure (type, block)
+      pure (fun x => x, block)
 
 
   let t ← elabTerm block (some type)
@@ -507,7 +510,7 @@ def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := withRef block
     let decl := Declaration.defnDecl {
       name := n,
       levelParams := levelParams,
-      type := type,
+      type := wrapperType type,
       value := t,
       hints := .abbrev,
       safety := .safe
