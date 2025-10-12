@@ -1,6 +1,5 @@
+import Lean
 namespace Verso.CodeTable
 
-class CodeTable (name : Name) where
+class CodeTable (name : Lean.Name) where
   is : Array String
-
-

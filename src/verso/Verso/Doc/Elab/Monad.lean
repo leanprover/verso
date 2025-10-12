@@ -212,6 +212,16 @@ partial def FinishedPart.toSyntax
     let typedBlocks ← blocks.mapM fun b => `(($b : Block $genre))
     if let some (name, num) := reprTable then
       println! s!"Outputting at {name} with {num} Lean code fences"
+      let type ← Meta.mkAppM ``Verso.CodeTable.CodeTable #[ToExpr.toExpr name]
+      let value ← Meta.mkAppM' (mkApp (mkConst ``Verso.CodeTable.CodeTable.mk) (ToExpr.toExpr name)) #[ToExpr.toExpr #[""]]
+      addAndCompile <| .defnDecl {
+        name,
+        levelParams := [],
+        type, value,
+        hints := .regular 1,
+        safety := .safe
+      }
+      Meta.addInstance name .global 1
     ``(Part.mk #[$titleInlines,*] $(quote titleString) $metaStx #[$typedBlocks,*] #[$subStx,*])
   | .included name => pure name
 
@@ -472,23 +482,21 @@ def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := withRef block
   let n ← mkFreshUserName `block
 
   let type : Expr := .app (.const ``Doc.Block []) g
-  let (wrapperType, block) ←
+  let (type, block) ←
     if let some (name, _) := (← getThe DocElabM.State).exportingTable then
       let typeClassSyntax ← ``(Verso.CodeTable.CodeTable $(quote name))
-      let typeClassExpr : Expr := .app (.const ``Verso.CodeTable.CodeTable []) (ToExpr.toExpr name)
+      let typeClassExpr : Expr ← Meta.mkAppM ``Verso.CodeTable.CodeTable #[ToExpr.toExpr name]
       let unused ← mkFreshUserName `unused
-      let wrapperType := fun expr => Expr.forallE unused typeClassExpr expr BinderInfo.instImplicit
+      let wrappedType := Expr.forallE unused typeClassExpr type BinderInfo.instImplicit
       let wrappedBlock ← `(fun [$(typeClassSyntax)] => $(block))
       -- let wrappedType := Expr.forallE (← mkFreshUserName `_) (.const name []) type BinderInfo.instImplicit
       -- let wrappedBlock ← `(fun [$(mkIdent name)] => $(block))
-      pure (wrapperType, wrappedBlock)
+      pure (wrappedType, wrappedBlock)
     else
-      pure (fun x => x, block)
+      pure (type, block)
 
 
-  logInfo "A"
-  let t ← elabTerm block (some <| wrapperType type)
-  logInfo "b"
+  let t ← elabTerm block (some type)
   let t ← instantiateMVars t
   let links ← findLinksAndNotes t
   let t ← links.foldrM (init := t) fun (mv, mvty) t =>
@@ -508,11 +516,11 @@ def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := withRef block
     synthesizeSyntheticMVarsNoPostponing
     let t ← instantiateMVars t
     let type ← instantiateMVars type
-    let t ← ensureHasType (some <| wrapperType type) t
+    let t ← ensureHasType (some type) t
     let decl := Declaration.defnDecl {
       name := n,
       levelParams := levelParams,
-      type := wrapperType type,
+      type := type,
       value := t,
       hints := .abbrev,
       safety := .safe

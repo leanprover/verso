@@ -190,7 +190,8 @@ private def startDoc (genre : Term) (title: StrLit) : Command.CommandElabM Strin
   let env ← getEnv
   let titleParts ← stringToInlines title
   let titleString := inlinesToString env titleParts
-  let tmpName ← mkAuxDeclName `doc_table
+  -- let tmpName := `doc_table
+  let tmpName ← mkAuxDeclName `docs_table
   let initDocState : DocElabM.State := { exportingTable := (tmpName, 0) }
   let initPartState : PartElabM.State := .init (.node .none nullKind titleParts)
 
