@@ -163,7 +163,7 @@ def reportMessages {m} [Monad m] [MonadLog m] [MonadError m]
     if messages.hasErrors then
       throwErrorAt blame "No error expected in code block, one occurred"
 
-def hlFromGlobalExport! (max : Nat) (mix : Nat) (str : String) :=
+def hlFromGlobalExport! (max : Array String) (mix : Nat) (str : String) :=
   hlFromExport! str
 
 /--
