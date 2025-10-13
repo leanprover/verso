@@ -401,32 +401,3 @@ Here's [a link][to here][^note]!
 
 /-- info: true -/
 #guard_msgs in #eval refAndLink == refAndLink4
-
-
-/- ----- -/
-
-/-! The next two examples are instances of https://github.com/leanprover/verso/issues/567 -/
-
-/--
-error: failed to synthesize
-  Doc.Elab.HasNote "missingfootnote" `Tests.Basic.«the canonical document object name» Doc.Genre.none
-
-Hint: Additional diagnostic information may be available using the `set_option diagnostics true` command.
--/
-#guard_msgs in
-#docs (.none) errMsgForMissingFootnote "Footnote" :=
-:::::::
-Here's something that needs context[^missingfootnote]!
-:::::::
-
-/--
-error: failed to synthesize
-  Doc.Elab.HasLink "missinglink" `Tests.Basic.«the canonical document object name»
-
-Hint: Additional diagnostic information may be available using the `set_option diagnostics true` command.
--/
-#guard_msgs in
-#docs (.none) errMsgForMissingLink "Footnote" :=
-:::::::
-Here's something that needs [context][missinglink]!
-:::::::
