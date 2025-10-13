@@ -9,6 +9,7 @@ import Lean.Data.Json.FromToJson
 import Std.Data.HashMap
 import Std.Data.HashSet
 
+import Verso.Doc.Elab
 import VersoManual.Basic
 import MultiVerso
 

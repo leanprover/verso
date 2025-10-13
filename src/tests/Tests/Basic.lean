@@ -3,31 +3,30 @@ Copyright (c) 2023 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-import Verso.Doc.Concrete
-
+import Verso
+namespace Verso.BasicTest
 set_option guard_msgs.diff true
-
-namespace Verso.Examples
-
 set_option pp.rawOnError true
+
+
+/- ----- -/
 
 #docs (.none) noDoc "Nothing" :=
 :::::::
 :::::::
-
 /-- info: Verso.Doc.Part.mk #[Verso.Doc.Inline.text "Nothing"] "Nothing" none #[] #[] -/
 #guard_msgs in
   #eval noDoc
 
-#docs (.none) a "My title here" :=
+
+/- ----- -/
+
+#docs (.none) littleParagraph "My title here" :=
 :::::::
 
 Hello, I'm a paragraph. Yes I am!
 
 :::::::
-
-
-
 /--
 info: Verso.Doc.Part.mk
   #[Verso.Doc.Inline.text "My title here"]
@@ -37,15 +36,17 @@ info: Verso.Doc.Part.mk
   #[]
 -/
 #guard_msgs in
-  #eval a
+  #eval littleParagraph
 
-#docs (.none) a' "My title here" :=
+
+/- ----- -/
+
+#docs (.none) listOneItem "My title here" :=
 :::::::
 
 * Just a list with one item
 
 :::::::
-
 /--
 info: Verso.Doc.Part.mk
   #[Verso.Doc.Inline.text "My title here"]
@@ -55,19 +56,19 @@ info: Verso.Doc.Part.mk
   #[]
 -/
 #guard_msgs in
-  #eval a'
+  #eval listOneItem
 
 
-#docs (.none) b "My title here" :=
+/- ----- -/
+
+#docs (.none) sectionAndPara "My title here" :=
 :::::::
 
 # Section 1
 
 a paragraph
 
-
 :::::::
-
 /--
 info: Verso.Doc.Part.mk
   #[Verso.Doc.Inline.text "My title here"]
@@ -82,9 +83,12 @@ info: Verso.Doc.Part.mk
       #[]]
 -/
 #guard_msgs in
-  #eval b
+  #eval sectionAndPara
 
-#docs (.none) c "My title here" :=
+
+/- ----- -/
+
+#docs (.none) nestedDoc1 "My title here" :=
 :::::::
 
 # Section 1
@@ -99,10 +103,7 @@ More text:
 * with two
  * and nested
 
-
-
 :::::::
-
 /--
 info: Verso.Doc.Part.mk
   #[Verso.Doc.Inline.text "My title here"]
@@ -127,9 +128,12 @@ info: Verso.Doc.Part.mk
           #[]]]
 -/
 #guard_msgs in
-  #eval c
+  #eval nestedDoc1
 
-#docs (.none) c' "My title here" :=
+
+/- ----- -/
+
+#docs (.none) nestedDoc2 "My title here" :=
 :::::::
 
 # Section 1
@@ -144,10 +148,7 @@ More text:
 2. with two
  * and nested
 
-
-
 :::::::
-
 /--
 info: Verso.Doc.Part.mk
   #[Verso.Doc.Inline.text "My title here"]
@@ -172,9 +173,12 @@ info: Verso.Doc.Part.mk
           #[]]]
 -/
 #guard_msgs in
-  #eval c'
+  #eval nestedDoc2
 
-#docs (.none) c'' "My title here" :=
+
+/- ----- -/
+
+#docs (.none) nestedDoc3 "My title here" :=
 :::::::
 
 # Section 1
@@ -193,9 +197,7 @@ More text:
 
  * and nested
 
-
 :::::::
-
 /--
 info: Verso.Doc.Part.mk
   #[Verso.Doc.Inline.text "My title here"]
@@ -221,10 +223,12 @@ info: Verso.Doc.Part.mk
           #[]]]
 -/
 #guard_msgs in
-  #eval c''
+  #eval nestedDoc3
 
 
-#docs (.none) d "More writing" :=
+/- ----- -/
+
+#docs (.none) nestedDoc4 "More writing" :=
 :::::::
 
 # Section 1
@@ -237,7 +241,6 @@ Here's a quote;
 Also, 2 > 3.
 
 :::::::
-
 /--
 info: Verso.Doc.Part.mk
   #[Verso.Doc.Inline.text "More writing"]
@@ -257,138 +260,10 @@ info: Verso.Doc.Part.mk
       #[]]
 -/
 #guard_msgs in
-  #eval d
+  #eval nestedDoc4
 
-#docs (.none) e "More writing" :=
-:::::::
 
-# Section 1
-
-Here's some code
-
-```
-(define (zero f z) z)
-(define (succ n) (lambda (f x) (f (n f z))))
-```
-
-:::::::
-
-/--
-info: Verso.Doc.Part.mk
-  #[Verso.Doc.Inline.text "More writing"]
-  "More writing"
-  none
-  #[]
-  #[Verso.Doc.Part.mk
-      #[Verso.Doc.Inline.text "Section 1"]
-      "Section 1"
-      none
-      #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "Here's some code"],
-        Verso.Doc.Block.code "(define (zero f z) z)\n(define (succ n) (lambda (f x) (f (n f z))))\n"]
-      #[]]
--/
-#guard_msgs in
-  #eval e
-
-#docs (.none) f "More code writing" :=
-:::::::
-
-# Section 1
-
-Here's some `code`!
-
-```
-(define (zero f z) z)
-(define (succ n) (lambda (f x) (f (n f z))))
-```
-
-:::::::
-
-/--
-info: Verso.Doc.Part.mk
-  #[Verso.Doc.Inline.text "More code writing"]
-  "More code writing"
-  none
-  #[]
-  #[Verso.Doc.Part.mk
-      #[Verso.Doc.Inline.text "Section 1"]
-      "Section 1"
-      none
-      #[Verso.Doc.Block.para
-          #[Verso.Doc.Inline.text "Here's some ", Verso.Doc.Inline.code "code", Verso.Doc.Inline.text "!"],
-        Verso.Doc.Block.code "(define (zero f z) z)\n(define (succ n) (lambda (f x) (f (n f z))))\n"]
-      #[]]
--/
-#guard_msgs in
-  #eval f
-
-#docs (.none) g "Ref link before" :=
-:::::::
-
-# Section 1
-
-[to here]: http://example.com
-
-Here's [a link][to here][^note]!
-
-[^note]: The footnote text
-
-:::::::
-
-/--
-info: Verso.Doc.Part.mk
-  #[Verso.Doc.Inline.text "Ref link before"]
-  "Ref link before"
-  none
-  #[]
-  #[Verso.Doc.Part.mk
-      #[Verso.Doc.Inline.text "Section 1"]
-      "Section 1"
-      none
-      #[Verso.Doc.Block.para
-          #[Verso.Doc.Inline.text "Here's ",
-            Verso.Doc.Inline.link #[(Verso.Doc.Inline.text "a link")] "http://example.com",
-            Verso.Doc.Inline.footnote "note" #[(Verso.Doc.Inline.text "The footnote text")], Verso.Doc.Inline.text "!"]]
-      #[]]
--/
-#guard_msgs in
-  #eval g
-
-#docs (.none) g' "Ref link after" :=
-:::::::
-
-# Section 1
-
-[^note]: The footnote text
-
-Here's [a link][to here][^note]!
-
-[to here]: http://example.com
-
-:::::::
-
-/--
-info: Verso.Doc.Part.mk
-  #[Verso.Doc.Inline.text "Ref link after"]
-  "Ref link after"
-  none
-  #[]
-  #[Verso.Doc.Part.mk
-      #[Verso.Doc.Inline.text "Section 1"]
-      "Section 1"
-      none
-      #[Verso.Doc.Block.para
-          #[Verso.Doc.Inline.text "Here's ",
-            Verso.Doc.Inline.link #[(Verso.Doc.Inline.text "a link")] "http://example.com",
-            Verso.Doc.Inline.footnote "note" #[(Verso.Doc.Inline.text "The footnote text")], Verso.Doc.Inline.text "!"]]
-      #[]]
--/
-#guard_msgs in
-  #eval g'
-
-/-- info: true -/
-#guard_msgs in
-#eval toString (repr g) == (toString (repr g')).replace "after" "before"
+/- ----- -/
 
 -- https://github.com/leanprover/verso/pull/541
 /-- error: Wrong header nesting - got #### but expected at most ### -/
