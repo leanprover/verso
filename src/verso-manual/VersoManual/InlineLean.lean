@@ -77,9 +77,10 @@ structure LeanBlockConfig where
   name : Option Name
   error : Bool
   fresh : Bool
+  liveLink : Bool
 
 def LeanBlockConfig.parse : ArgParse m LeanBlockConfig :=
-  LeanBlockConfig.mk <$> .flag `show true <*> .flag `keep true <*> .named `name .name true <*> .flag `error false <*> .flag `fresh false
+  LeanBlockConfig.mk <$> .flag `show true <*> .flag `keep true <*> .named `name .name true <*> .flag `error false <*> .flag `fresh false <*> .flag `liveLink false
 
 instance : FromArgs LeanBlockConfig m := ⟨LeanBlockConfig.parse⟩
 
@@ -176,7 +177,7 @@ private def quoteHighlightViaSerialization (hls : Highlighted) : DocElabM Term :
 De-indents and returns (syntax of) a Block representation containing highlighted Lean code.
 The argument `hls` must be a highlighting of the parsed string `str`.
 -/
-private def toHighlightedLeanBlock (shouldShow : Bool) (hls : Highlighted) (str: StrLit) : DocElabM Term := do
+private def toHighlightedLeanBlock (shouldShow : Bool) (hls : Highlighted) (str : StrLit) (liveLink : Bool) : DocElabM Term := do
   if !shouldShow then
     return ← ``(Block.concat #[])
 
@@ -187,7 +188,7 @@ private def toHighlightedLeanBlock (shouldShow : Bool) (hls : Highlighted) (str:
 
   let range := Syntax.getRange? str
   let range := range.map (← getFileMap).utf8RangeToLspRange
-  ``(Block.other (Block.lean $(← quoteHighlightViaSerialization hls) (some $(quote (← getFileName))) $(quote range)) #[Block.code $(quote str.getString)])
+  ``(Block.other (Block.lean $(← quoteHighlightViaSerialization hls) (some $(quote (← getFileName))) $(quote range) $(quote liveLink)) #[Block.code $(quote str.getString)])
 
 /--
 Returns (syntax of) an Inline representation containing highlighted Lean code.
@@ -256,7 +257,7 @@ def lean : CodeBlockExpanderOf LeanBlockConfig
       for cmd in cmds do
         hls := hls ++ (← highlight cmd nonSilentMsgs cmdState.infoState.trees)
 
-      toHighlightedLeanBlock config.show hls str
+      toHighlightedLeanBlock config.show hls str config.liveLink
     finally
       if !config.keep then
         setEnv origEnv
@@ -364,7 +365,7 @@ def leanTerm : CodeBlockExpanderOf LeanInlineConfig
           logMessage msg
 
       let hls := (← highlight stx #[] (PersistentArray.empty.push tree))
-      toHighlightedLeanBlock config.show hls str
+      toHighlightedLeanBlock config.show hls str config.liveLink
 
 /--
 Elaborates the provided Lean term in the context of the current Verso module.

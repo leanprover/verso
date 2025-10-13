@@ -11,6 +11,7 @@ import Verso.Doc
 import Verso.Method
 import Verso.Output.Html
 import Verso.Instances.Deriving
+import Verso.Code.LzCompress
 
 open SubVerso.Highlighting
 open Verso.Output Html
@@ -214,6 +215,7 @@ structure HighlightHtmlM.Options where
   visibleProofStates : VisibleProofStates := .none
   collapseGoals : CollapseGoals := .subsequent
   definitionsAsTargets : Bool := true
+  liveLink : Bool := false
 
 structure HighlightHtmlM.Context (g : Verso.Doc.Genre) where
   linkTargets : LinkTargets g.TraverseContext
@@ -582,7 +584,12 @@ partial defmethod Highlighted.toHtml : Highlighted → HighlightHtmlM g Html
 defmethod Highlighted.blockHtml (contextName : String) (code : Highlighted) (trim : Bool := true) (htmlId : Option String := none) : HighlightHtmlM g Html := do
   let code := if trim then code.trim else code
   let idAttr := htmlId.map (fun x => #[("id", x)]) |>.getD #[]
-  pure {{ <code class="hl lean block" "data-lean-context"={{toString contextName}} {{idAttr}}> {{ ← code.toHtml }} </code> }}
+  let liveLink : Html := if (← options).liveLink then
+    let href := s!"https://live.lean-lang.org/#codez={lzCompress code.toString}"
+    {{ <a href={{ href }} class="live-link"> {{ "live" }} </a> }}
+  else
+    {{ <span></span> }} -- FIXME: empty html?
+  pure {{ <code class="hl lean block" "data-lean-context"={{toString contextName}} {{idAttr}}> {{ ← code.toHtml }} {{ liveLink }} </code> }}
 
 defmethod Highlighted.inlineHtml (contextName : Option String) (code : Highlighted) (trim : Bool := true) (htmlId : Option String := none) : HighlightHtmlM g Html := do
   let code := if trim then code.trim else code
@@ -710,11 +717,19 @@ def highlightingStyle : String := "
 
 .hl.lean.block {
   display: block;
+  position: relative;
 }
 
 .hl.lean.inline {
   display: inline;
   white-space: pre-wrap;
+}
+
+.live-link {
+  position: absolute;
+  top: 0;
+  right: 0;
+  background-color: rgb(190,190,255);
 }
 
 .hl.lean * {

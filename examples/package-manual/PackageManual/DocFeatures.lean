@@ -97,3 +97,9 @@ is equivalent to
 ````
 and `` {anchorName anAnchor}`x` `` is equivalent to `` {moduleName (anchor := anAnchor)}`x` ``.
 :::
+
+# Live Link
+
+```lean +liveLink
+def foo := 1 + 2
+```
