@@ -475,6 +475,11 @@ def findLinksAndNotes : Expr → MetaM (Array (Expr × Expr))
   | .mdata _ e | .proj _ _ e => findLinksAndNotes e
   | .sort .. | .fvar .. | .bvar .. | .const .. | .lit .. => pure #[]
 
+#eval (do
+  let e : Expr := Expr.lam `inst (.const ``Nat []) (.const `inst []) BinderInfo.default
+  logInfo m!"{e}"
+)
+
 open Lean Meta Elab Term in
 def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := withRef block <| do
   let g := (← readThe DocElabContext).genre
@@ -487,48 +492,64 @@ def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := withRef block
       let typeClassSyntax ← ``(Verso.CodeTable.CodeTable $(quote name))
       let typeClassExpr : Expr ← Meta.mkAppM ``Verso.CodeTable.CodeTable #[ToExpr.toExpr name]
       let unused ← mkFreshUserName `unused
-      let wrappedType := Expr.forallE unused typeClassExpr type BinderInfo.instImplicit
+      let wrappedType := Expr.forallE `inst typeClassExpr type BinderInfo.instImplicit
       let wrappedBlock ← `(fun [$(typeClassSyntax)] => $(block))
-      -- let wrappedType := Expr.forallE (← mkFreshUserName `_) (.const name []) type BinderInfo.instImplicit
-      -- let wrappedBlock ← `(fun [$(mkIdent name)] => $(block))
       pure (wrappedType, wrappedBlock)
     else
       pure (type, block)
 
-
   let t ← elabTerm block (some type)
+
+  -- otherwise findlinksnotes may not find all the links and notes
+  -- (allows findLinksAndNotes to be simpler and not inspect mvars)
   let t ← instantiateMVars t
   let links ← findLinksAndNotes t
   let t ← links.foldrM (init := t) fun (mv, mvty) t =>
     (.lam `inst mvty · .instImplicit) <$> t.abstractM #[mv]
+
+  -- probably can delete
   let t ← instantiateMVars t
 
-  let xs ← Term.addAutoBoundImplicits #[] none
+
+  -- this is needlessly defensive because we are assuming mkForallFVars is written the easy way like
+  -- findLinksAndNotes was, but it's written more robustly and actually does the instantiation if
+  -- needed
   let type ← instantiateMVars type
   let type ← mkForallFVars (links.map (·.1)) type (binderInfoForMVars := .instImplicit)
+
+  -- if the user has auto-bound implicits enabled (or if there's a global variable decl?????)
+  -- XXX want to see an example of why this is necessary or where this happens, or maybe
+  -- try to make a test case for it
+  let xs ← Term.addAutoBoundImplicits #[] none
   let type ← mkForallFVars xs type
-  let type ← levelMVarToParam type
-  let usedParams := collectLevelParams {} type |>.params
+  let type ← levelMVarToParam type -- replace universe metavariables with universe variables
+  let usedParams := collectLevelParams {} type |>.params -- used
 
   match sortDeclLevelParams [] [] usedParams with
   | Except.error msg      => throwErrorAt block msg
   | Except.ok levelParams =>
     synthesizeSyntheticMVarsNoPostponing
-    let t ← instantiateMVars t
-    let type ← instantiateMVars type
+    let t ← instantiateMVars t -- findLinksAndNotes could have metavariables in its returned expressions
+    let type ← instantiateMVars type -- ditto
+
+    -- elabTerm does *not* ensure type, but we need to check the type here eventually and
+    -- this does it to make sure we matched things. We'd rather get a kernel error rather than
+    -- an elaborator error.
     let t ← ensureHasType (some type) t
     let decl := Declaration.defnDecl {
       name := n,
-      levelParams := levelParams,
+      levelParams := levelParams, -- bind those universe variables we captured earlier
       type := type,
       value := t,
       hints := .abbrev,
       safety := .safe
     }
+    -- Ensures addAndCompile won't give a worse/kernel error (this is a bit defensive, but ok)
     Term.ensureNoUnassignedMVars decl
     addAndCompile decl
   modifyThe State fun st =>
     { st with partContext.blocks := st.partContext.blocks.push (mkIdent n) }
+
 
 def PartElabM.addPart (finished : FinishedPart) : PartElabM Unit := modifyThe State fun st =>
   {st with partContext.priorParts := st.partContext.priorParts.push finished}
