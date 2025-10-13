@@ -7,8 +7,9 @@ Author: David Thrane Christiansen
 import Lean.Data.Json
 import Lean.Data.Json.FromToJson
 
+import Verso.Doc.Elab
+import Verso.Doc.PointOfInterest
 import VersoManual.Basic
-import Verso.Doc.ArgParse
 
 open Verso Genre Manual ArgParse
 open Verso.Doc.Elab

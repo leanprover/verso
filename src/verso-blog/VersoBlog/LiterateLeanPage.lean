@@ -5,6 +5,7 @@ Author: David Thrane Christiansen
 -/
 import SubVerso.Helper
 import SubVerso.Module
+import Verso.Doc.Concrete
 import VersoBlog.Basic
 import VersoBlog.LiterateLeanPage.Options
 import MD4Lean
