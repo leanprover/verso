@@ -725,7 +725,45 @@ initialize
 open Lean.Parser Term in
 def extContents := structInstFields (sepByIndent Term.structInstField "; " (allowTrailingSep := true))
 
+/--
+Defines a new block extension.
+
+```
+block_extension NAME PARAMS [via MIXINS,+] where
+  data := ...
+  fields*
+````
+defines a new kind of block called `NAME` that takes initialization parameters `PARAMS` for the
+`data` field.
+
+If there are no `PARAMS`, then `NAME` is bound to the block with empty data. If there are `PARAMS`,
+then `NAME` is bound to a function that constructs an instance of the block with the data field
+initialized as directed. `PARAMS` are only in scope for the data field.
+
+The remaining fields are used to define traversal and output generation for the block. The resulting
+block descriptor is then processed by `MIXINS`, from left to right, before being added to the block
+descriptor table.
+-/
 syntax "block_extension" ident (ppSpace bracketedBinder)* (&" via " ident,+)? ppIndent(ppSpace "where" extContents) : command
+/--
+Defines a new inline extension.
+
+```
+inline_extension NAME PARAMS [via MIXINS,+] where
+  data := ...
+  fields*
+````
+defines a new kind of inline called `NAME` that takes initialization parameters `PARAMS` for the
+`data` field.
+
+If there are no `PARAMS`, then `NAME` is bound to the inline with empty data. If there are `PARAMS`,
+then `NAME` is bound to a function that constructs an instance of the inline with the data field
+initialized as directed. `PARAMS` are only in scope for the data field.
+
+The remaining fields are used to define traversal and output generation for the inline. The
+resulting inline descriptor is then processed by `MIXINS`, from left to right, before being added to
+the inline descriptor table.
+-/
 syntax "inline_extension" ident (ppSpace bracketedBinder)* (&" via " ident,+)? ppIndent(ppSpace "where" extContents) : command
 
 def isDataField : Lean.TSyntax ``Lean.Parser.Term.structInstField → Bool
