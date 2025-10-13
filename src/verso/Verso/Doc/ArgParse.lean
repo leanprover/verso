@@ -821,3 +821,22 @@ def parse [FromArgs α m] (args : Array Arg) : m α := do
 
 def parseThe (α) [FromArgs α m] (args : Array Arg) : m α := do
   ArgParse.run fromArgs args
+
+/--
+Documentation for bar, convert into a unit test it is only here for debugging
+-/
+structure Bar where
+  /-- Field3 -/
+  field3 : Nat
+  /-- Field4 -/
+  field4 : String
+
+
+/--
+Documentation for foo, convert into a unit test it is only here for debugging
+-/
+structure Foo extends Bar where
+  /-- Field1 -/
+  field1 : Nat
+  /-- Field2 -/
+  field2 : String
