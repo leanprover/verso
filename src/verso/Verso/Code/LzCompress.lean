@@ -1,3 +1,8 @@
+/-
+Copyright (c) 2025 Lean FRO LLC. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+Author: Jason Reed
+-/
 import Std.Data.HashMap
 
 def keyStrBase64 := "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/="
@@ -6,12 +11,24 @@ def getCharFromInt (n : Nat) : Char := keyStrBase64.get ⟨n⟩
 
 open Std
 
-/--
-Ported from https://github.com/pieroxy/lz-string
+/-!
+This code was adapted from https://github.com/pieroxy/lz-string
+which was distributed under the MIT License as given below.
 
-Very imperative and not particularly idiomatic lean.
+In its current state it is quite imperative and not particularly
+idiomatic lean. The reason for using this code at all is to match the
+compressed strings that lean4web uses.
 
-The reason for using this code at all is to match what lean4web uses.
+MIT License
+
+Copyright (c) 2013 Pieroxy pieroxy@pieroxy.net
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
 -/
 def compress (uncompressed : String)
              (bitsPerChar : Nat)
