@@ -491,10 +491,11 @@ def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := withRef block
   let genre := (← readThe DocElabContext).genre
 
   let mut type := .app (.const ``Doc.Block []) genre
-  logInfo "A"
   let mut baseBlock := block
 
-  -- We cannot elaborate the term if it has inline code ref
+  -- We cannot elaborate the term if it has inline code ref because of the reference to the
+  -- redundancy-elimination table, so wrap the type and corresponding expression syntax in a binder
+  -- before elaborating to a term
   if let some (name, _) := (← getThe DocElabM.State).exportingTable then
     let typeClass ← Meta.mkAppM ``Verso.CodeTable.CodeTable #[ToExpr.toExpr name]
     type := .forallE `inst typeClass type .instImplicit
@@ -505,26 +506,14 @@ def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := withRef block
   -- It simplifies the logic of findLinksAndNotes to have the mvars freshly instantiated
   blockExpr ← instantiateMVars blockExpr
   let links ← findLinksAndNotes blockExpr
-  logInfo "C"
 
   -- Wrap the type and corresponding expression in binders for the links and notes
   type ← Meta.mkForallFVars (links.map (·.1)) type (binderInfoForMVars := .instImplicit)
   blockExpr ← links.foldrM (init := blockExpr) fun (mv, mvty) t =>
     (.lam `inst mvty · .instImplicit) <$> t.abstractM #[mv]
-  logInfo "D"
-
-/-
-  -- Wrap the type and corresponding expression in a binder for the redundancy-elimination table
-  if let some (name, _) := (← getThe DocElabM.State).exportingTable then
-    let typeClass ← Meta.mkAppM ``Verso.CodeTable.CodeTable #[ToExpr.toExpr name]
-    type := .forallE `inst typeClass type .instImplicit
-    blockExpr := .lam `inst typeClass blockExpr .instImplicit
-  logInfo "E"
--/
 
   -- Wrap auto-bound implicits and global variables (this is possibly overly defensive)
   type ← Meta.mkForallFVars (← Term.addAutoBoundImplicits #[] none) type
-  logInfo "F"
 
   -- Replace any universe metavariables with universe variables and report errors outside the kernel
   type ← Term.levelMVarToParam type
