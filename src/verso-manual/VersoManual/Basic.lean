@@ -1272,7 +1272,7 @@ instance : TeX.GenreTeX Manual (ReaderT ExtensionImpls IO) where
       | panic! s!"Unknown block {b.name} while rendering.\n\nKnown blocks: {(← readThe ExtensionImpls).blockDescrs.toArray |>.map (·.fst) |>.qsort (·.toString < ·.toString)}"
     let some impl := descr.toTeX
       | TeX.logError s!"Block {b.name} doesn't support TeX"
-        return .empty
+        return \TeX{\textcolor{"red"}{s!"Missing toTeX for Block {b.name}"}}
     impl goI goB id b.data content
   inline go i content := do
     let some id := i.id
@@ -1281,7 +1281,7 @@ instance : TeX.GenreTeX Manual (ReaderT ExtensionImpls IO) where
       | panic! s!"Unknown inline {i.name} while rendering.\n\nKnown inlines: {(← readThe ExtensionImpls).inlineDescrs.toArray |>.map (·.fst) |>.qsort (·.toString < ·.toString)}"
     let some impl := descr.toTeX
       | TeX.logError s!"Inline {i.name} doesn't support TeX"
-        return .empty
+        return \TeX{\textcolor{"red"}{s!"Missing toTeX for Inline {i.name}"}}
     impl go id i.data content
 
 
