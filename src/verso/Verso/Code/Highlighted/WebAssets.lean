@@ -11,6 +11,10 @@ open Lean Elab Command
 
 def popper := include_str "../../../../../vendored-js/popper/popper.min.js"
 
+def popper.map := include_str "../../../../../vendored-js/popper/popper.min.js.map"
+
 def tippy := include_str "../../../../../vendored-js/tippy/tippy-bundle.umd.min.js"
+
+def tippy.map := include_str "../../../../../vendored-js/tippy/tippy-bundle.umd.min.js.map.json"
 
 def tippy.border.css := include_str "../../../../../vendored-js/tippy/border.css"

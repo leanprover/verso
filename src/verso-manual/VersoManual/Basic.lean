@@ -155,11 +155,23 @@ structure StaticJsFile where
   after : Array String := #[]
 deriving BEq
 
+/--
+A JavaScript source map to be included along with emitted JavaScript.
+
+Many minified JavaScript files contain a reference to a source map. The filename here should match
+the one referred to by the minified file; Verso will not validate this.
+-/
+structure JsSourceMap where
+  filename : String
+  contents : String
+deriving BEq
 
 /-- An extra JS file to be emitted and added to the page -/
 structure JsFile extends StaticJsFile where
   contents : String
+  sourceMap? : Option JsSourceMap
 deriving BEq
+
 
 /-- When rendering multi-page HTML, should splitting pages follow the depth setting? -/
 inductive HtmlSplitMode where
@@ -713,8 +725,8 @@ initialize
 open Lean.Parser Term in
 def extContents := structInstFields (sepByIndent Term.structInstField "; " (allowTrailingSep := true))
 
-syntax "block_extension" ident (ppSpace bracketedBinder)* ppIndent(ppSpace "where" extContents) : command
-syntax "inline_extension" ident (ppSpace bracketedBinder)* ppIndent(ppSpace "where" extContents) : command
+syntax "block_extension" ident (ppSpace bracketedBinder)* (&" via " ident,+)? ppIndent(ppSpace "where" extContents) : command
+syntax "inline_extension" ident (ppSpace bracketedBinder)* (&" via " ident,+)? ppIndent(ppSpace "where" extContents) : command
 
 def isDataField : Lean.TSyntax ``Lean.Parser.Term.structInstField → Bool
   | `(Lean.Parser.Term.structInstField|data := $_) => true
@@ -723,37 +735,53 @@ def isDataField : Lean.TSyntax ``Lean.Parser.Term.structInstField → Bool
 
 open Lean Elab Command in
 elab_rules : command
-  | `(block_extension $x $args* where $contents;*) => do
+  | `(block_extension $x $args* $[via $mixins,*]? where $contents;*) => do
     let (data, nonData) := (contents : Array _).partition isDataField
     if data.size > 1 then
       for x in data do
         logErrorAt x "Multiple 'data' fields found"
     let cmd1 ←
       `(command| def $x $args* : Block where $data;*)
+    let innerDescrName := x.getId ++ `descr.inner |> mkIdentFrom x
     let descrName := x.getId ++ `descr |> mkIdentFrom x
+    let applyMixins (x : Term) : CommandElabM Term :=
+      let mixins := (mixins : Option (Array Ident)).getD #[]
+      mixins.foldlM (init := x) fun soFar mixin => `(($mixin $soFar))
     let cmd2 ←
       `(command|
+        private def $innerDescrName : BlockDescr where $nonData;*)
+    let cmd3 ←
+      `(command|
         @[block_extension $x]
-        private def $descrName : BlockDescr where $nonData;*)
+        private def $descrName : BlockDescr := $(← applyMixins innerDescrName))
     elabCommand cmd1
     elabCommand cmd2
+    elabCommand cmd3
 
 open Lean Elab Command in
 elab_rules : command
-  | `(inline_extension $x $args* where $contents;*) => do
+  | `(inline_extension $x $args* $[via $mixins,*]? where $contents;*) => do
     let (data, nonData) := (contents : Array _).partition isDataField
     if data.size > 1 then
       for x in data do
         logErrorAt x "Multiple 'data' fields found"
     let cmd1 ←
       `(command| def $x $args* : Inline where $data;*)
+    let innerDescrName := x.getId ++ `descr.inner |> mkIdentFrom x
     let descrName := x.getId ++ `descr |> mkIdentFrom x
+    let applyMixins (x : Term) : CommandElabM Term :=
+      let mixins := (mixins : Option (Array Ident)).getD #[]
+      mixins.foldlM (init := x) fun soFar mixin => `(($mixin $soFar))
     let cmd2 ←
       `(command|
+        private def $innerDescrName : InlineDescr where $nonData;*)
+    let cmd3 ←
+      `(command|
         @[inline_extension $x]
-        private def $descrName : InlineDescr where $nonData;*)
+        private def $descrName : InlineDescr := $(← applyMixins innerDescrName))
     elabCommand cmd1
     elabCommand cmd2
+    elabCommand cmd3
 
 open Lean in
 private def nameAndDef [Monad m] [MonadRef m] [MonadQuotation m] (ext : Name × Name) : m Term := do
@@ -1241,15 +1269,15 @@ instance : Traverse Manual TraverseM where
       if let some id := id? then
         if let some impl := (← readThe ExtensionImpls).getInline? name then
           for js in impl.extraJs do
-            modify fun s => {s with extraJs := s.extraJs.insert js}
+            modify fun s => { s with extraJs := s.extraJs.insert js }
           for css in impl.extraCss do
-            modify fun s => {s with extraCss := s.extraCss.insert css}
+            modify fun s => { s with extraCss := s.extraCss.insert css }
           for f in impl.extraJsFiles do
             unless (← get).extraJsFiles.any (·.filename == f.filename) do
-              modify fun s => {s with extraJsFiles := s.extraJsFiles.push f}
+              modify fun s => { s with extraJsFiles := s.extraJsFiles.push f }
           for (name, js) in impl.extraCssFiles do
             unless (← get).extraCssFiles.any (·.1 == name) do
-              modify fun s => {s with extraCssFiles := s.extraCssFiles.push (name, js)}
+              modify fun s => { s with extraCssFiles := s.extraCssFiles.push (name, js) }
           for licenseInfo in impl.licenseInfo do
             modify (·.addLicenseInfo licenseInfo)
 

@@ -7,6 +7,7 @@ import Lean.Elab.InfoTree.Types
 
 import Verso
 import VersoManual.Basic
+import VersoManual.HighlightedCode
 import VersoManual.InlineLean.Outputs
 import SubVerso.Examples
 
@@ -73,8 +74,8 @@ block_extension Block.syntaxError where
   extraJs := [
     highlightingJs
   ]
-  extraJsFiles := [{filename := "popper.js", contents := popper}, {filename := "tippy.js", contents := tippy}]
-  extraCssFiles := [("tippy-border.css", tippy.border.css)]
+  extraJsFiles := [popperJs, tippyJs]
+  extraCssFiles := [tippyCss]
   toHtml :=
     open Verso.Output Html in
     some <| fun _ _ _ data _ => do

@@ -6,6 +6,7 @@ Author: David Thrane Christiansen
 
 import Verso
 import VersoManual.Basic
+import VersoManual.HighlightedCode
 import Verso.Code.External
 import SubVerso.Examples.Messages
 
@@ -24,10 +25,7 @@ open Verso.Code.External
 
 namespace Verso.Genre.Manual
 
-private def hlJsDeps : List JsFile :=
-  [{filename := "popper.js", contents := popper}, {filename := "tippy.js", contents := tippy}]
-
-block_extension Block.lean (hls : Highlighted) (cfg : CodeConfig) where
+block_extension Block.lean (hls : Highlighted) (cfg : CodeConfig) via withHighlighting where
   init st :=
     st.addQuickJumpMapper exampleDomain exampleDomainMapper
   data :=
@@ -50,10 +48,6 @@ block_extension Block.lean (hls : Highlighted) (cfg : CodeConfig) where
         saveExampleDefs id defines
         pure none
   toTeX := none
-  extraCss := [highlightingStyle]
-  extraJs := [highlightingJs]
-  extraJsFiles := hlJsDeps
-  extraCssFiles := [("tippy-border.css", tippy.border.css)]
   toHtml :=
     open Verso.Output.Html in
     some <| fun _ _ _ data _ => do
@@ -75,7 +69,7 @@ block_extension Block.lean (hls : Highlighted) (cfg : CodeConfig) where
           withReader ({ · with codeOptions.inlineProofStates := cfg.showProofStates, codeOptions.definitionsAsTargets := cfg.defSite.getD true }) <|
             hl.blockHtml (g := Manual) "examples"
 
-inline_extension Inline.lean (hls : Highlighted) (cfg : CodeConfig) where
+inline_extension Inline.lean (hls : Highlighted) (cfg : CodeConfig) via withHighlighting where
   data :=
     let defined := definedNames hls
     Json.arr #[ToJson.toJson cfg, ToJson.toJson hls, ToJson.toJson defined]
@@ -96,10 +90,6 @@ inline_extension Inline.lean (hls : Highlighted) (cfg : CodeConfig) where
         saveExampleDefs id defines
         pure none
   toTeX := none
-  extraCss := [highlightingStyle]
-  extraJs := [highlightingJs]
-  extraJsFiles := hlJsDeps
-  extraCssFiles := [("tippy-border.css", tippy.border.css)]
   toHtml :=
     open Verso.Output.Html in
     some <| fun _ _ data _ => do
@@ -123,7 +113,9 @@ inline_extension Inline.lean (hls : Highlighted) (cfg : CodeConfig) where
               codeOptions.inlineProofStates := cfg.showProofStates, codeOptions.definitionsAsTargets := cfg.defSite.getD false }) <|
             hl.inlineHtml (g := Manual) "examples"
 
-block_extension Block.leanOutput (message : Highlighted.Message) (summarize : Bool := false) (expandTraces : List Name := []) where
+block_extension Block.leanOutput
+    (message : Highlighted.Message) (summarize : Bool := false) (expandTraces : List Name := [])
+    via withHighlighting where
   data := ToJson.toJson (message, summarize, expandTraces)
   traverse _ _ _ := do
     pure none
@@ -131,10 +123,6 @@ block_extension Block.leanOutput (message : Highlighted.Message) (summarize : Bo
     some <| fun _ go _ _ content => do
       pure <| .seq <| ← content.mapM fun b => do
         pure <| .seq #[← go b, .raw "\n"]
-  extraCss := [highlightingStyle]
-  extraJs := [highlightingJs]
-  extraJsFiles := hlJsDeps
-  extraCssFiles := [("tippy-border.css", tippy.border.css)]
   toHtml :=
     open Verso.Output.Html in
     some <| fun _ _ _ data _ => do
@@ -146,7 +134,9 @@ block_extension Block.leanOutput (message : Highlighted.Message) (summarize : Bo
         msg.blockHtml summarize expandTraces (g := Manual)
 
 
-inline_extension Inline.leanOutput (message : Highlighted.Message) (plain : Bool) (expandTraces : List Name) where
+inline_extension Inline.leanOutput
+    (message : Highlighted.Message) (plain : Bool) (expandTraces : List Name)
+    via withHighlighting where
   data := ToJson.toJson (message, plain, expandTraces)
   traverse _ _ _ := do
     pure none
@@ -154,10 +144,6 @@ inline_extension Inline.leanOutput (message : Highlighted.Message) (plain : Bool
     some <| fun go _ _  content => do
       pure <| .seq <| ← content.mapM fun b => do
         pure <| .seq #[← go b, .raw "\n"]
-  extraCss := [highlightingStyle]
-  extraJs := [highlightingJs]
-  extraJsFiles := hlJsDeps
-  extraCssFiles := [("tippy-border.css", tippy.border.css)]
   toHtml :=
     open Verso.Output.Html in
     some <| fun _ _ data _ => do

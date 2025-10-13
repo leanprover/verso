@@ -93,7 +93,7 @@ def exampleFile : CodeBlockExpanderOf ExampleFileConfig
 
 
 @[block_extension Block.exampleFile]
-def Block.exampleFile.descr : BlockDescr where
+def Block.exampleFile.descr : BlockDescr := withHighlighting {
   traverse _ _ _ := pure none
   toTeX := none
   extraCss := [
@@ -162,11 +162,6 @@ def Block.exampleFile.descr : BlockDescr where
 }
 "#
   ]
-  extraJs := [
-    highlightingJs
-  ]
-  extraJsFiles := [{filename := "popper.js", contents := popper}, {filename := "tippy.js", contents := tippy}]
-  extraCssFiles := [("tippy-border.css", tippy.border.css)]
   toHtml :=
     open Verso.Output Html in
     some <| fun _ _ _ data blocks => do
@@ -202,6 +197,7 @@ def Block.exampleFile.descr : BlockDescr where
             {{descr}}
             {{lines}}
           </div>}}
+}
 where
   getLines (file : String) : Array String :=
     let lines := file.split (· == '\n') |>.toArray
