@@ -488,6 +488,7 @@ def findLinksAndNotes : Expr → MetaM (Array (Expr × Expr))
 
 
 def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := withRef block <| do
+  logInfo "starting add block"
   let genre := (← readThe DocElabContext).genre
 
   let mut type := .app (.const ``Doc.Block []) genre
@@ -534,6 +535,7 @@ def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := withRef block
     addAndCompile decl
     modifyThe State fun st =>
       { st with partContext.blocks := st.partContext.blocks.push (mkIdent name) }
+    logInfo "ending add block"
 
 
 def PartElabM.addPart (finished : FinishedPart) : PartElabM Unit := modifyThe State fun st =>
@@ -541,6 +543,7 @@ def PartElabM.addPart (finished : FinishedPart) : PartElabM Unit := modifyThe St
 
 
 def PartElabM.addLinkDef (refName : TSyntax `str) (url : String) : PartElabM Unit := do
+  logInfo "starting link def"
   let strName := refName.getString
   let docName ← currentDocName
   match (← getThe State).linkDefs[strName]? with
@@ -557,22 +560,30 @@ def PartElabM.addLinkDef (refName : TSyntax `str) (url : String) : PartElabM Uni
     }
     Meta.addInstance name AttributeKind.global (eval_prio default)
     modifyThe State fun st => {st with linkDefs := st.linkDefs.insert strName ⟨refName, url⟩}
+    logInfo "ending link def"
 
   | some ⟨_, url'⟩ =>
     throwErrorAt refName "Already defined as '{url'}'"
 
 def DocElabM.addLinkRef (refName : TSyntax `str) : DocElabM (TSyntax `term) := do
+  logInfo "starting link ref"
   let strName := refName.getString
   match (← getThe State).linkRefs[strName]? with
   | none =>
     modifyThe State fun st => {st with linkRefs := st.linkRefs.insert strName ⟨#[refName]⟩}
-    linkRefName (← currentDocName) refName
+    let res ← linkRefName (← currentDocName) refName
+    logInfo "ending link ref"
+    pure res
   | some ⟨uses⟩ =>
     modifyThe State fun st => {st with linkRefs := st.linkRefs.insert strName ⟨uses.push refName⟩}
-    linkRefName (← currentDocName) refName
+    let res ← linkRefName (← currentDocName) refName
+    logInfo "ending link ref"
+    pure res
+
 
 
 def PartElabM.addFootnoteDef (refName : TSyntax `str) (content : Array (TSyntax `term)) : PartElabM Unit := do
+  logInfo "starting footnote def"
   let strName := refName.getString
   let docName ← currentDocName
   let genre := (← readThe DocElabContext).genre
@@ -593,19 +604,25 @@ def PartElabM.addFootnoteDef (refName : TSyntax `str) (content : Array (TSyntax 
     }
     Meta.addInstance n AttributeKind.global (eval_prio default)
     modifyThe State fun st => {st with footnoteDefs := st.footnoteDefs.insert strName ⟨refName, content⟩}
+    logInfo "Ending footnote def"
   | some ⟨_, content⟩ =>
     throwErrorAt refName "Already defined as '{content}'"
 
 def DocElabM.addFootnoteRef (refName : TSyntax `str) : DocElabM (TSyntax `term) := do
+  logInfo "Starting footnote ref"
   let strName := refName.getString
   let genre := (← readThe DocElabContext).genreSyntax
   match (← getThe State).footnoteRefs[strName]? with
   | none =>
     modifyThe State fun st => {st with footnoteRefs := st.footnoteRefs.insert strName ⟨#[refName]⟩}
-    footnoteRefName ⟨genre⟩ (← currentDocName) refName
+    let res ← footnoteRefName ⟨genre⟩ (← currentDocName) refName
+    logInfo "Ending footnote ref"
+    pure res
   | some ⟨uses⟩ =>
     modifyThe State fun st => {st with footnoteRefs := st.footnoteRefs.insert strName ⟨uses.push refName⟩}
-    footnoteRefName ⟨genre⟩ (← currentDocName) refName
+    let res ← footnoteRefName ⟨genre⟩ (← currentDocName) refName
+    logInfo "Ending footnote ref"
+    pure res
 
 
 def PartElabM.push (fr : PartFrame) : PartElabM Unit := modifyThe State fun st => {st with partContext := st.partContext.push fr}

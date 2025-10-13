@@ -100,18 +100,35 @@ info: ok: ["Lean", "Parser", "Command", "definition"]
 
 #docs (Genre.Manual) footnotesAndLinkRefsAndCode "Test" :=
 :::::::
-There can be {lean}`x` and [links][linkex] and footnotes[^footnoteEx].
+Lean like {lean}`x` and {lean}`4 + x`
 
 ```lean
-def y := "And blocks of code"
+def y := "Block"
+```
+
+Lean also like {lean}`y.length + x`.
+:::::::
+
+
+/- ----- -/
+
+#docs (Genre.Manual) footnotesAndLinkRefsAndCode "Test" :=
+:::::::
+There can be {lean}`x` and
+[links][linkex] and
+footnotes[^footnoteEx]
+.
+
+```lean
+def z := "And blocks of code"
 ```
 
 [linkex]: https://example.com
 [^footnoteEx]: A footnote containing {lean}`y`
 :::::::
-/--
--/
+/-
 #guard_msgs in
   #eval
     getPath? footnotesAndLinkRefsAndCode.content.toJson
       []
+-/
