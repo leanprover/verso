@@ -251,14 +251,14 @@ structure TraverseState where
   pageIds : Lean.NameMap Blog.Info.PageMeta := {}
   scripts : HashSet String := {}
   stylesheets : HashSet String := {}
-  jsFiles : Array (String × String) := #[]
+  jsFiles : Array (String × String × Option (String × String)) := #[]
   cssFiles : Array (String × String) := #[]
   errors : HashSet String := {}
   remoteContent : AllRemotes
 
-def TraverseState.addJsFile (st : TraverseState) (name content : String) :=
+def TraverseState.addJsFile (st : TraverseState) (name content : String) (sourceMap : Option (String × String) := none) :=
   if st.jsFiles.all (·.1 != name) then
-    {st with jsFiles := st.jsFiles.push (name, content)}
+    {st with jsFiles := st.jsFiles.push (name, content, sourceMap)}
   else st
 
 def TraverseState.addCssFile (st : TraverseState) (name content : String) :=

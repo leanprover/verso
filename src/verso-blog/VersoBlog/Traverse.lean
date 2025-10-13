@@ -31,21 +31,25 @@ def addCssFile (filename contents : String) : TraverseM Unit := do
 
   modify fun s => s.addCssFile filename contents
 
-def addJsFile (filename contents : String) : TraverseM Unit := do
-  for (fn, js) in (← get).jsFiles do
+def addJsFile (filename contents : String) (sourceMap? : Option (String × String) := none) : TraverseM Unit := do
+  for (fn, js, map?) in (← get).jsFiles do
     if filename == fn then
       if contents != js then
         logError s!"Attempted to add different content for JS file {filename}"
+      if sourceMap? != map? then
+        logError s!"Attempted to add different source map for JS file {filename}"
       return
 
-  modify fun s => s.addJsFile filename contents
+  modify fun s => s.addJsFile filename contents sourceMap?
 
 def genreBlock (g : Genre) [bg : BlogGenre g] : Blog.BlockExt → Array (Block g) → Blog.TraverseM (Option (Block g))
     | .highlightedCode .., _contents | .message .., _contents => do
       modify fun st => {st with
         stylesheets := st.stylesheets.insert highlightingStyle,
         scripts := st.scripts.insert highlightingJs
-      } |>.addJsFile "popper.js" popper |>.addJsFile "tippy.js" tippy |>.addCssFile "tippy-border.css" tippy.border.css
+      } |>.addJsFile "popper.js" popper (some ("popper.min.js.map", popper.map))
+        |>.addJsFile "tippy.js" tippy (some ("tippy-bundle.umd.min.js.map", tippy.map))
+        |>.addCssFile "tippy-border.css" tippy.border.css
       pure none
     | .component name json, contents => do
       let some blk := (← read).components.blocks.find? name
@@ -68,7 +72,9 @@ def genreInline (g : Genre) [bg : BlogGenre g] : Blog.InlineExt → Array (Inlin
       modify fun st => {st with
         stylesheets := st.stylesheets.insert highlightingStyle,
         scripts := st.scripts.insert highlightingJs
-      } |>.addJsFile "popper.js" popper |>.addJsFile "tippy.js" tippy |>.addCssFile "tippy-border.css" tippy.border.css
+      } |>.addJsFile "popper.js" popper (some ("popper.min.js.map", popper.map))
+        |>.addJsFile "tippy.js" tippy (some ("tippy-bundle.umd.min.js.map", tippy.map))
+        |>.addCssFile "tippy-border.css" tippy.border.css
       pure none
     | .label x, _contents => do
       -- Add as target if not already present
