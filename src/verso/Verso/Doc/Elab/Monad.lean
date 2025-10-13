@@ -465,6 +465,12 @@ def PartElabM.currentLevel : PartElabM Nat := do return (← getThe State).curre
 def PartElabM.setTitle (titlePreview : String) (titleInlines : Array (TSyntax `term)) : PartElabM Unit := modifyThe State fun st =>
   {st with partContext.expandedTitle := some (titlePreview, titleInlines)}
 
+/--
+Traverses the Expr structure to find mvars that represent links or (foot)notes, pull them out to
+the top level so they can be instantiated.
+
+It is a simplifying precondition that instantiateMVars has just been called on the argument.
+-/
 def findLinksAndNotes : Expr → MetaM (Array (Expr × Expr))
   | .app t1 t2 => do return (← findLinksAndNotes t1) ++ (← findLinksAndNotes t2)
   | e@(.mvar _) => do
@@ -480,79 +486,70 @@ def findLinksAndNotes : Expr → MetaM (Array (Expr × Expr))
   logInfo m!"{e}"
 )
 
-open Lean Meta Elab Term in
+
 def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := withRef block <| do
-  let g := (← readThe DocElabContext).genre
+  let genre := (← readThe DocElabContext).genre
 
-  let n ← mkFreshUserName `block
+  let mut type := .app (.const ``Doc.Block []) genre
+  logInfo "A"
+  let mut baseBlock := block
 
-  let type : Expr := .app (.const ``Doc.Block []) g
-  let (type, block) ←
-    if let some (name, _) := (← getThe DocElabM.State).exportingTable then
-      let typeClassSyntax ← ``(Verso.CodeTable.CodeTable $(quote name))
-      let typeClassExpr : Expr ← Meta.mkAppM ``Verso.CodeTable.CodeTable #[ToExpr.toExpr name]
-      let unused ← mkFreshUserName `unused
-      let wrappedType := Expr.forallE `inst typeClassExpr type BinderInfo.instImplicit
-      let wrappedBlock ← `(fun [$(typeClassSyntax)] => $(block))
-      pure (wrappedType, wrappedBlock)
-    else
-      pure (type, block)
+  -- We cannot elaborate the term if it has inline code ref
+  if let some (name, _) := (← getThe DocElabM.State).exportingTable then
+    let typeClass ← Meta.mkAppM ``Verso.CodeTable.CodeTable #[ToExpr.toExpr name]
+    type := .forallE `inst typeClass type .instImplicit
+    baseBlock ← `(fun [_] => $(block))
+  let mut blockExpr ← Term.elabTerm baseBlock (some type)
 
-  let t ← elabTerm block (some type)
+  -- We find, and add, links and notes by traversing blockExpr
+  -- It simplifies the logic of findLinksAndNotes to have the mvars freshly instantiated
+  blockExpr ← instantiateMVars blockExpr
+  let links ← findLinksAndNotes blockExpr
+  logInfo "C"
 
-  -- otherwise findlinksnotes may not find all the links and notes
-  -- (allows findLinksAndNotes to be simpler and not inspect mvars)
-  let t ← instantiateMVars t
-  let links ← findLinksAndNotes t
-  let t ← links.foldrM (init := t) fun (mv, mvty) t =>
+  -- Wrap the type and corresponding expression in binders for the links and notes
+  type ← Meta.mkForallFVars (links.map (·.1)) type (binderInfoForMVars := .instImplicit)
+  blockExpr ← links.foldrM (init := blockExpr) fun (mv, mvty) t =>
     (.lam `inst mvty · .instImplicit) <$> t.abstractM #[mv]
+  logInfo "D"
 
-  -- probably can delete
-  let t ← instantiateMVars t
+/-
+  -- Wrap the type and corresponding expression in a binder for the redundancy-elimination table
+  if let some (name, _) := (← getThe DocElabM.State).exportingTable then
+    let typeClass ← Meta.mkAppM ``Verso.CodeTable.CodeTable #[ToExpr.toExpr name]
+    type := .forallE `inst typeClass type .instImplicit
+    blockExpr := .lam `inst typeClass blockExpr .instImplicit
+  logInfo "E"
+-/
 
+  -- Wrap auto-bound implicits and global variables (this is possibly overly defensive)
+  type ← Meta.mkForallFVars (← Term.addAutoBoundImplicits #[] none) type
+  logInfo "F"
 
-  -- this is needlessly defensive because we are assuming mkForallFVars is written the easy way like
-  -- findLinksAndNotes was, but it's written more robustly and actually does the instantiation if
-  -- needed
-  let type ← instantiateMVars type
-  let type ← mkForallFVars (links.map (·.1)) type (binderInfoForMVars := .instImplicit)
-
-  -- if the user has auto-bound implicits enabled (or if there's a global variable decl?????)
-  -- XXX want to see an example of why this is necessary or where this happens, or maybe
-  -- try to make a test case for it
-  let xs ← Term.addAutoBoundImplicits #[] none
-  let type ← mkForallFVars xs type
-  let type ← levelMVarToParam type -- replace universe metavariables with universe variables
-  let usedParams := collectLevelParams {} type |>.params -- used
-
-  match sortDeclLevelParams [] [] usedParams with
+  -- Replace any universe metavariables with universe variables and report errors outside the kernel
+  type ← Term.levelMVarToParam type
+  match sortDeclLevelParams [] [] (collectLevelParams {} type |>.params) with
   | Except.error msg      => throwErrorAt block msg
   | Except.ok levelParams =>
-    synthesizeSyntheticMVarsNoPostponing
-    let t ← instantiateMVars t -- findLinksAndNotes could have metavariables in its returned expressions
-    let type ← instantiateMVars type -- ditto
-
-    -- elabTerm does *not* ensure type, but we need to check the type here eventually and
-    -- this does it to make sure we matched things. We'd rather get a kernel error rather than
-    -- an elaborator error.
-    let t ← ensureHasType (some type) t
+    Term.synthesizeSyntheticMVarsNoPostponing
+    type ← instantiateMVars type
+    blockExpr ← Term.ensureHasType (some type) (← instantiateMVars blockExpr)
+    let name ← mkFreshUserName `block
     let decl := Declaration.defnDecl {
-      name := n,
-      levelParams := levelParams, -- bind those universe variables we captured earlier
-      type := type,
-      value := t,
+      name, levelParams, type,
+      value := blockExpr,
       hints := .abbrev,
       safety := .safe
     }
-    -- Ensures addAndCompile won't give a worse/kernel error (this is a bit defensive, but ok)
-    Term.ensureNoUnassignedMVars decl
+    Term.ensureNoUnassignedMVars decl -- possibly overly defensive
     addAndCompile decl
-  modifyThe State fun st =>
-    { st with partContext.blocks := st.partContext.blocks.push (mkIdent n) }
+    modifyThe State fun st =>
+      { st with partContext.blocks := st.partContext.blocks.push (mkIdent name) }
 
 
 def PartElabM.addPart (finished : FinishedPart) : PartElabM Unit := modifyThe State fun st =>
   {st with partContext.priorParts := st.partContext.priorParts.push finished}
+
 
 def PartElabM.addLinkDef (refName : TSyntax `str) (url : String) : PartElabM Unit := do
   let strName := refName.getString
@@ -560,16 +557,16 @@ def PartElabM.addLinkDef (refName : TSyntax `str) (url : String) : PartElabM Uni
   match (← getThe State).linkDefs[strName]? with
   | none =>
     let t := mkApp2 (.const ``HasLink []) (toExpr strName) (toExpr docName)
-    let n ← mkFreshUserName (docName ++ `inst.link ++ strName.toName)
+    let name ← mkFreshUserName (docName ++ `inst.link ++ strName.toName)
     addAndCompile <| .defnDecl {
-      name := n,
+      name,
       levelParams := [],
       type := t,
       value := mkApp3 (.const ``HasLink.mk []) (toExpr strName) (toExpr docName) (toExpr url),
       hints := .abbrev,
       safety := .safe
     }
-    Meta.addInstance n AttributeKind.global (eval_prio default)
+    Meta.addInstance name AttributeKind.global (eval_prio default)
     modifyThe State fun st => {st with linkDefs := st.linkDefs.insert strName ⟨refName, url⟩}
 
   | some ⟨_, url'⟩ =>
