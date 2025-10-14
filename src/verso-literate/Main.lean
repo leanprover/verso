@@ -360,8 +360,15 @@ unsafe def go (suppressedNamespaces : Array Name) (extraImports : Array Name) (m
     let .node _ _ cmds := mkNullNode (#[headerStx] ++ cmdStx) |>.updateLeading |> wholeFile contents
       | panic! "updateLeading created non-node"
 
-    let infos := infos.toArray.map some
-    let infos := #[none] ++ infos
+    -- After Lean nightly-2025-10-13, there's no longer a 1-to-1 mapping between info trees and
+    -- command syntax, so we instead match them up by checking explicitly.
+    let infos := infos.toArray
+    let infos := cmds.map fun stx => do
+      let ⟨s, e⟩ ← stx.getRangeWithTrailing?
+      infos.find? fun tree => Option.isSome <| tree.findInfo? fun i =>
+        if let some ⟨s', e'⟩ := i.stx.getRange? then
+          !(e < s' || s' < s) -- if neither is before the other then they overlap
+        else false
 
     let hls ← (Frontend.runCommandElabM <| liftTermElabM <| highlightMany' cmds msgs infos (suppressNamespaces := suppressedNamespaces.toList)) pctx cmdSt
 
