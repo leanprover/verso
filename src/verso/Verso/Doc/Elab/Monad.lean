@@ -197,6 +197,9 @@ private def linkRefName [Monad m] [MonadQuotation m] (docName : Name) (ref : TSy
 private def footnoteRefName [Monad m] [MonadQuotation m] (genre : Term) (docName : Name) (ref : TSyntax `str) : m Term :=
   ``(HasNote.contents $(quote ref.getString) $(quote docName) (genre := $genre) (self := _))
 
+def codeTableName [Monad m] [MonadQuotation m] (name : Name) : m Term :=
+  ``(CodeTable.CodeTable.is $(quote name) (self := _))
+
 partial def FinishedPart.toSyntax
     (genre : TSyntax `term)
     (reprTable : Option (Name × Nat))
@@ -475,33 +478,18 @@ def findLinksAndNotes : Expr → MetaM (Array (Expr × Expr))
   | .app t1 t2 => do return (← findLinksAndNotes t1) ++ (← findLinksAndNotes t2)
   | e@(.mvar _) => do
     let ty ← Meta.inferType e
-    if ty.isAppOf ``HasLink || ty.isAppOf ``HasNote then pure #[(e, ty)] else pure #[]
+    if ty.isAppOf ``HasLink || ty.isAppOf ``HasNote || ty.isAppOf ``CodeTable.CodeTable then pure #[(e, ty)] else pure #[]
   | .lam _ t b _ | .forallE _ t b _ => do return (← findLinksAndNotes t) ++ (← findLinksAndNotes b)
   | .letE _ t d b _ => do return (← findLinksAndNotes t) ++ (← findLinksAndNotes d) ++ (← findLinksAndNotes b)
   | .mdata _ e | .proj _ _ e => findLinksAndNotes e
   | .sort .. | .fvar .. | .bvar .. | .const .. | .lit .. => pure #[]
 
-#eval (do
-  let e : Expr := Expr.lam `inst (.const ``Nat []) (.const `inst []) BinderInfo.default
-  logInfo m!"{e}"
-)
-
 
 def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := withRef block <| do
-  logInfo "starting add block"
   let genre := (← readThe DocElabContext).genre
 
   let mut type := .app (.const ``Doc.Block []) genre
-  let mut baseBlock := block
-
-  -- We cannot elaborate the term if it has inline code ref because of the reference to the
-  -- redundancy-elimination table, so wrap the type and corresponding expression syntax in a binder
-  -- before elaborating to a term
-  if let some (name, _) := (← getThe DocElabM.State).exportingTable then
-    let typeClass ← Meta.mkAppM ``Verso.CodeTable.CodeTable #[ToExpr.toExpr name]
-    type := .forallE `inst typeClass type .instImplicit
-    baseBlock ← `(fun [_] => $(block))
-  let mut blockExpr ← Term.elabTerm baseBlock (some type)
+  let mut blockExpr ← Term.elabTerm block (some type)
 
   -- We find, and add, links and notes by traversing blockExpr
   -- It simplifies the logic of findLinksAndNotes to have the mvars freshly instantiated
@@ -535,7 +523,6 @@ def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := withRef block
     addAndCompile decl
     modifyThe State fun st =>
       { st with partContext.blocks := st.partContext.blocks.push (mkIdent name) }
-    logInfo "ending add block"
 
 
 def PartElabM.addPart (finished : FinishedPart) : PartElabM Unit := modifyThe State fun st =>
@@ -543,7 +530,6 @@ def PartElabM.addPart (finished : FinishedPart) : PartElabM Unit := modifyThe St
 
 
 def PartElabM.addLinkDef (refName : TSyntax `str) (url : String) : PartElabM Unit := do
-  logInfo "starting link def"
   let strName := refName.getString
   let docName ← currentDocName
   match (← getThe State).linkDefs[strName]? with
@@ -560,30 +546,23 @@ def PartElabM.addLinkDef (refName : TSyntax `str) (url : String) : PartElabM Uni
     }
     Meta.addInstance name AttributeKind.global (eval_prio default)
     modifyThe State fun st => {st with linkDefs := st.linkDefs.insert strName ⟨refName, url⟩}
-    logInfo "ending link def"
 
   | some ⟨_, url'⟩ =>
     throwErrorAt refName "Already defined as '{url'}'"
 
 def DocElabM.addLinkRef (refName : TSyntax `str) : DocElabM (TSyntax `term) := do
-  logInfo "starting link ref"
   let strName := refName.getString
   match (← getThe State).linkRefs[strName]? with
   | none =>
     modifyThe State fun st => {st with linkRefs := st.linkRefs.insert strName ⟨#[refName]⟩}
-    let res ← linkRefName (← currentDocName) refName
-    logInfo "ending link ref"
-    pure res
+    linkRefName (← currentDocName) refName
   | some ⟨uses⟩ =>
     modifyThe State fun st => {st with linkRefs := st.linkRefs.insert strName ⟨uses.push refName⟩}
-    let res ← linkRefName (← currentDocName) refName
-    logInfo "ending link ref"
-    pure res
+    linkRefName (← currentDocName) refName
 
 
 
 def PartElabM.addFootnoteDef (refName : TSyntax `str) (content : Array (TSyntax `term)) : PartElabM Unit := do
-  logInfo "starting footnote def"
   let strName := refName.getString
   let docName ← currentDocName
   let genre := (← readThe DocElabContext).genre
@@ -604,25 +583,19 @@ def PartElabM.addFootnoteDef (refName : TSyntax `str) (content : Array (TSyntax 
     }
     Meta.addInstance n AttributeKind.global (eval_prio default)
     modifyThe State fun st => {st with footnoteDefs := st.footnoteDefs.insert strName ⟨refName, content⟩}
-    logInfo "Ending footnote def"
   | some ⟨_, content⟩ =>
     throwErrorAt refName "Already defined as '{content}'"
 
 def DocElabM.addFootnoteRef (refName : TSyntax `str) : DocElabM (TSyntax `term) := do
-  logInfo "Starting footnote ref"
   let strName := refName.getString
   let genre := (← readThe DocElabContext).genreSyntax
   match (← getThe State).footnoteRefs[strName]? with
   | none =>
     modifyThe State fun st => {st with footnoteRefs := st.footnoteRefs.insert strName ⟨#[refName]⟩}
-    let res ← footnoteRefName ⟨genre⟩ (← currentDocName) refName
-    logInfo "Ending footnote ref"
-    pure res
+    footnoteRefName ⟨genre⟩ (← currentDocName) refName
   | some ⟨uses⟩ =>
     modifyThe State fun st => {st with footnoteRefs := st.footnoteRefs.insert strName ⟨uses.push refName⟩}
-    let res ← footnoteRefName ⟨genre⟩ (← currentDocName) refName
-    logInfo "Ending footnote ref"
-    pure res
+    footnoteRefName ⟨genre⟩ (← currentDocName) refName
 
 
 def PartElabM.push (fr : PartFrame) : PartElabM Unit := modifyThe State fun st => {st with partContext := st.partContext.push fr}

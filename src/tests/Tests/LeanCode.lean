@@ -98,7 +98,7 @@ info: ok: ["Lean", "Parser", "Command", "definition"]
 
 /- ----- -/
 
-#docs (Genre.Manual) footnotesAndLinkRefsAndCode "Test" :=
+#docs (Genre.Manual) multipleCode "Test" :=
 :::::::
 Lean like {lean}`x` and {lean}`4 + x`
 
@@ -107,6 +107,10 @@ def y := "Block"
 ```
 
 Lean also like {lean}`y.length + x`.
+
+```lean
+example := 34 * x
+```
 :::::::
 
 

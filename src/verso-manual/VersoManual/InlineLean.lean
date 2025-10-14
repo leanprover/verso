@@ -178,8 +178,7 @@ private def quoteHighlightViaSerialization (hls : Highlighted) : DocElabM Term :
     let repr := hlToExport hls
     println! s!"Exporting lean #{num+1}"
     set { docElabState with exportingTable := some (name, num + 1) }
-    let tableRef ← ``(Verso.CodeTable.CodeTable.is $(quote name))
-    ``(hlFromGlobalExport! $(tableRef) $(quote <| num + 1) $(quote repr))
+    ``(hlFromGlobalExport! $(← codeTableName name) $(quote <| num + 1) $(quote repr))
   else
     let repr := hlToExport hls
     ``(hlFromExport! $(quote repr))
