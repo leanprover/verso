@@ -474,14 +474,18 @@ the top level so they can be instantiated.
 
 It is a simplifying precondition that instantiateMVars has just been called on the argument.
 -/
-def findLinksAndNotes : Expr → MetaM (Array (Expr × Expr))
-  | .app t1 t2 => do return (← findLinksAndNotes t1) ++ (← findLinksAndNotes t2)
+def findTypeclassInstances : Expr → MetaM (Array (Expr × Expr))
+  | .app t1 t2 => do return (← findTypeclassInstances t1) ++ (← findTypeclassInstances t2)
   | e@(.mvar _) => do
     let ty ← Meta.inferType e
-    if ty.isAppOf ``HasLink || ty.isAppOf ``HasNote || ty.isAppOf ``CodeTable.CodeTable then pure #[(e, ty)] else pure #[]
-  | .lam _ t b _ | .forallE _ t b _ => do return (← findLinksAndNotes t) ++ (← findLinksAndNotes b)
-  | .letE _ t d b _ => do return (← findLinksAndNotes t) ++ (← findLinksAndNotes d) ++ (← findLinksAndNotes b)
-  | .mdata _ e | .proj _ _ e => findLinksAndNotes e
+    if ty.isAppOf ``HasLink || ty.isAppOf ``HasNote || ty.isAppOf ``CodeTable.CodeTable then
+      pure #[(e, ty)]
+    else
+      -- Question RJS: do we actually want to just fall through here? Do we every want to leave an mvar?
+      pure #[]
+  | .lam _ t b _ | .forallE _ t b _ => do return (← findTypeclassInstances t) ++ (← findTypeclassInstances b)
+  | .letE _ t d b _ => do return (← findTypeclassInstances t) ++ (← findTypeclassInstances d) ++ (← findTypeclassInstances b)
+  | .mdata _ e | .proj _ _ e => findTypeclassInstances e
   | .sort .. | .fvar .. | .bvar .. | .const .. | .lit .. => pure #[]
 
 
@@ -494,7 +498,7 @@ def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := withRef block
   -- We find, and add, links and notes by traversing blockExpr
   -- It simplifies the logic of findLinksAndNotes to have the mvars freshly instantiated
   blockExpr ← instantiateMVars blockExpr
-  let links ← findLinksAndNotes blockExpr
+  let links ← findTypeclassInstances blockExpr
 
   -- Wrap the type and corresponding expression in binders for the links and notes
   type ← Meta.mkForallFVars (links.map (·.1)) type (binderInfoForMVars := .instImplicit)
