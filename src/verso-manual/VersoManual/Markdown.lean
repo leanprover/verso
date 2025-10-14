@@ -9,6 +9,7 @@ import MD4Lean
 import Lean.Exception
 
 import Verso.Doc
+import Verso.Doc.Elab
 
 import VersoManual.Basic
 

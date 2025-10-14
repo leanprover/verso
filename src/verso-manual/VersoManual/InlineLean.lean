@@ -13,6 +13,7 @@ import SubVerso.Examples
 import Verso
 
 import VersoManual.Basic
+import VersoManual.HighlightedCode
 import VersoManual.InlineLean.Block
 import VersoManual.InlineLean.IO
 import VersoManual.InlineLean.LongLines
@@ -34,10 +35,7 @@ open Lean.Elab.Tactic.GuardMsgs
 
 namespace Verso.Genre.Manual.InlineLean
 
-private def hlJsDeps : List JsFile :=
-  [{filename := "popper.js", contents := popper}, {filename := "tippy.js", contents := tippy}]
-
-inline_extension Inline.lean (hls : Highlighted) where
+inline_extension Inline.lean (hls : Highlighted) via withHighlighting where
   data :=
     let defined := definedNames hls
     Json.arr #[ToJson.toJson hls, ToJson.toJson defined]
@@ -56,10 +54,6 @@ inline_extension Inline.lean (hls : Highlighted) where
     some <| fun go _ _ content => do
       pure <| .seq <| ← content.mapM fun b => do
         pure <| .seq #[← go b, .raw "\n"]
-  extraCss := [highlightingStyle]
-  extraJs := [highlightingJs]
-  extraJsFiles := hlJsDeps
-  extraCssFiles := [("tippy-border.css", tippy.border.css)]
   toHtml :=
     open Verso.Output.Html in
     some <| fun _ _ data _ => do
@@ -534,17 +528,13 @@ private def getClass : MessageSeverity → String
   | .information => "information"
   | .warning => "warning"
 
-block_extension Block.leanOutput where
+block_extension Block.leanOutput via withHighlighting where
   traverse _ _ _ := do
     pure none
   toTeX :=
     some <| fun _ go _ _ content => do
       pure <| .seq <| ← content.mapM fun b => do
         pure <| .seq #[← go b, .raw "\n"]
-  extraCss := [highlightingStyle]
-  extraJs := [highlightingJs]
-  extraJsFiles := hlJsDeps
-  extraCssFiles := [("tippy-border.css", tippy.border.css)]
   toHtml :=
     open Verso.Output.Html in
     some <| fun _ _ _ data _ => do
@@ -706,14 +696,10 @@ where
     (insDel.size, Diff.linesToString d)
 
 
-inline_extension Inline.name where
+inline_extension Inline.name via withHighlighting where
   traverse _ _ _ := do
     pure none
   toTeX := some <| fun go _ _ content => content.mapM go
-  extraCss := [highlightingStyle]
-  extraJs := [highlightingJs]
-  extraJsFiles := hlJsDeps
-  extraCssFiles := [("tippy-border.css", tippy.border.css)]
   toHtml :=
     open Verso.Output.Html in
     some <| fun _ _ data _ => do

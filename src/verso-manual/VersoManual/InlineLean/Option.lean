@@ -5,6 +5,7 @@ Author: David Thrane Christiansen
 -/
 import Verso
 import VersoManual.Basic
+import VersoManual.HighlightedCode
 
 open SubVerso.Highlighting
 
@@ -35,17 +36,13 @@ where
     .token ⟨.option name declName descr , name.toString⟩
 
 @[inline_extension Inline.option]
-def option.descr : InlineDescr where
+def option.descr : InlineDescr := withHighlighting {
   traverse _ _ _ := do
     pure none
   toTeX :=
     some <| fun go _ _ content => do
       pure <| .seq <| ← content.mapM fun b => do
         pure <| .seq #[← go b, .raw "\n"]
-  extraCss := [highlightingStyle]
-  extraJs := [highlightingJs]
-  extraJsFiles := [{filename := "popper.js", contents := popper}, {filename := "tippy.js", contents := tippy}]
-  extraCssFiles := [("tippy-border.css", tippy.border.css)]
   toHtml :=
     open Verso.Output.Html in
     some <| fun _ _ data _ => do
@@ -55,3 +52,4 @@ def option.descr : InlineDescr where
         pure .empty
       | .ok (hl : Highlighted) =>
         hl.inlineHtml (g := Manual) "examples"
+}

@@ -11,10 +11,7 @@ Unit tests covering TeX output given given concrete Verso structures.
 
 open Verso Genre.Manual
 
-/--
-info: before\Verb|verb|
-after
--/
+/-- info: before\Verb|verb|after -/
 #guard_msgs in
 #eval do
   let b : Doc.Block Genre.Manual := .concat #[

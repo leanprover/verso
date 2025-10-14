@@ -6,6 +6,7 @@ Author: David Thrane Christiansen
 
 import VersoManual.Basic
 import Verso.Doc.ArgParse
+import Verso.Doc.Elab
 
 open Verso Doc Elab
 open Verso.Genre Manual

@@ -586,8 +586,9 @@ where
     for f in state.extraJsFiles do
       ensureDir (dir.join "-verso-data")
       (dir / "-verso-data" / f.filename).parent |>.forM fun d => ensureDir d
-      IO.FS.withFile (dir.join "-verso-data" |>.join f.filename) .write fun h => do
-        h.putStr f.contents
+      IO.FS.writeFile (dir / "-verso-data" / f.filename) f.contents
+      if let some m := f.sourceMap? then
+        IO.FS.writeFile (dir / "-verso-data" / m.filename) m.contents
     let titleToShow : Html :=
       open Verso.Output.Html in
       if let some alt := text.metadata.bind (·.shortTitle) then
@@ -652,8 +653,9 @@ where
     for f in state.extraJsFiles do
       ensureDir (root.join "-verso-data")
       (root / "-verso-data" / f.filename).parent |>.forM fun d => ensureDir d
-      IO.FS.withFile (root.join "-verso-data" |>.join f.filename) .write fun h => do
-        h.putStr f.contents
+      IO.FS.writeFile (root.join "-verso-data" |>.join f.filename) f.contents
+      if let some m := f.sourceMap? then
+        IO.FS.writeFile (root.join "-verso-data" |>.join m.filename) m.contents
     for (name, contents) in state.extraCssFiles do
       ensureDir (root.join "-verso-data")
       (root / "-verso-data" / name).parent |>.forM fun d => ensureDir d
@@ -741,8 +743,8 @@ def Config.addKaTeX (config : Config) : Config :=
     extraCssFiles := config.extraCssFiles.push ("katex/katex.css", katex.css),
     extraJsFiles :=
       config.extraJsFiles
-        |>.push {filename := "katex/katex.js", contents := katex.js}
-        |>.push {filename := "katex/math.js", contents := math.js},
+        |>.push {filename := "katex/katex.js", contents := katex.js, sourceMap? := none}
+        |>.push {filename := "katex/math.js", contents := math.js, sourceMap? := none},
     extraDataFiles := config.extraDataFiles ++ katexFonts,
     licenseInfo := Licenses.KaTeX :: config.licenseInfo
   }

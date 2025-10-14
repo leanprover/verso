@@ -6,6 +6,7 @@ Author: David Thrane Christiansen
 
 import Lean.Data.Json.Basic
 import VersoManual.Basic
+import VersoManual.HighlightedCode
 import Verso.Code.Highlighted.WebAssets
 
 import SubVerso.Highlighting
@@ -18,7 +19,9 @@ open SubVerso.Highlighting
 
 namespace Verso.Genre.Manual.InlineLean
 
-block_extension Block.lean (hls : Highlighted) (file : Option System.FilePath := none) (range : Option Lsp.Range := none) where
+block_extension Block.lean
+    (hls : Highlighted) (file : Option System.FilePath := none) (range : Option Lsp.Range := none)
+    via withHighlighting where
   init s := s.addQuickJumpMapper exampleDomain exampleDomainMapper
   data :=
     let defined := definedNames hls
@@ -38,10 +41,6 @@ block_extension Block.lean (hls : Highlighted) (file : Option System.FilePath :=
     some <| fun _ go _ _ content => do
       pure <| .seq <| ← content.mapM fun b => do
         pure <| .seq #[← go b, .raw "\n"]
-  extraCss := [highlightingStyle]
-  extraJs := [highlightingJs]
-  extraJsFiles := [{filename := "popper.js", contents := popper}, {filename := "tippy.js", contents := tippy}]
-  extraCssFiles := [("tippy-border.css", tippy.border.css)]
   toHtml :=
     open Verso.Output.Html in
     some <| fun _ _ _ data _ => do

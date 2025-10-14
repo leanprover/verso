@@ -58,6 +58,15 @@ public structure Genre : Type 1 where
 @[expose]
 public def Genre.none : Genre := ⟨Empty, Empty, Empty, Unit, Unit⟩
 
+instance : BEq Genre.none.Block where
+  beq e _ := nomatch e
+
+instance : BEq Genre.none.PartMetadata where
+  beq e _ := nomatch e
+
+instance : BEq Genre.none.Inline where
+  beq e _ := nomatch e
+
 instance : Repr Genre.none.Block where
   reprPrec e _ := nomatch e
 

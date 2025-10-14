@@ -8,6 +8,7 @@ import Lean.Environment
 import Lean.Meta
 import Lean.DocString.Syntax
 import VersoManual.Basic
+import Verso.Doc.Elab
 
 
 namespace Verso.Genre.Manual

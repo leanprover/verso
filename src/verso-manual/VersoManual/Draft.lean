@@ -10,6 +10,7 @@ import Std.Data.HashMap
 import Std.Data.HashSet
 
 import Verso.Doc.ArgParse
+import Verso.Doc.Elab
 import VersoManual.Basic
 
 open Verso.ArgParse
