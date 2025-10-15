@@ -7,6 +7,7 @@ ROOT_MANIFEST="./lake-manifest.json"
 # Extract required fields for validation
 SUBVERSO_REV=$(jq -r '.packages[] | select(.name == "subverso") | .rev' "$ROOT_MANIFEST")
 SUBVERSO_URL=$(jq -r '.packages[] | select(.name == "subverso") | .url' "$ROOT_MANIFEST")
+SUBVERSO_NOMODULE_REV=$(git ls-remote "$SUBVERSO_URL" "no-modules/$SUBVERSO_REV" | awk '{print $1}')
 
 # Ensure we found subverso in the root manifest
 if [ -z "$SUBVERSO_REV" ]; then
@@ -14,11 +15,20 @@ if [ -z "$SUBVERSO_REV" ]; then
     exit 1
 fi
 
+# Ensure we found subverso in the root manifest
+if [ -z "$SUBVERSO_NOMODULE_REV" ]; then
+    echo "Error: Could not find no-module rev for SubVerso"
+    exit 1
+fi
+
 echo "Found subverso rev: $SUBVERSO_REV"
 echo "Found subverso url: $SUBVERSO_URL"
+echo "Found subverso non-module rev: $SUBVERSO_NOMODULE_REV"
 
-# Find all lake-manifest.json files in the repo (excluding the root one)
-find . -name "lake-manifest.json" -not -path "$ROOT_MANIFEST" | grep -v "\.lake" | while read -r manifest_file; do
+
+
+# Find example lake-manifest.json files in the repo (excluding the root one)
+find examples -name "lake-manifest.json" -not -path "$ROOT_MANIFEST" | grep -v "\.lake" | while read -r manifest_file; do
     echo "Processing $manifest_file..."
 
     # Check if the manifest contains subverso package
@@ -54,7 +64,7 @@ find . -name "lake-manifest.json" -not -path "$ROOT_MANIFEST" | grep -v "\.lake"
         fi
 
         # Update the rev field for subverso
-        jq --arg rev "$SUBVERSO_REV" '.packages = (.packages | map(
+        jq --arg rev "$SUBVERSO_NOMODULE_REV" '.packages = (.packages | map(
             if .name == "subverso" then
                 .rev = $rev
             else
