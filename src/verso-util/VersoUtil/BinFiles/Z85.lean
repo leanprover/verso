@@ -19,16 +19,17 @@ Lookup table for decoding characters into values.
 private def decodeLookup : Array UInt32 := Id.run do
   let mut arr := Array.replicate 256 0
   for h : i in [0:85] do
+
     let char := alphabet[i]
     arr := arr.set! char.toNat i.toUInt32
   arr
 
-
-private theorem alphabet_lt_256 (h : i < 85) : alphabet[i].toNat < 256 := by
-  simp only [alphabet, String.toList, List.getElem_toArray]
-  rw [← List.getElem_map (f := Char.toNat) (h := h)]
-  . simp
-    repeat (cases ‹Nat› <;> simp [*])
+-- Check that the values make sense
+#eval
+  show IO Unit from
+  for h : i in [0:85] do
+    if alphabet[i].toNat ≥ 256 then
+      throw <| .userError s!"Value {alphabet[i].toNat} out of range"
 
 /--
 Finds the index of the given character in the alphabet.
@@ -113,6 +114,7 @@ private def padBytes (bytes : ByteArray) : ByteArray :=
 
 @[simp]
 theorem byteArray_push_size (xs : ByteArray) : (xs.push x).size = xs.size + 1 := by
+  let ⟨xs⟩ := xs
   simp [ByteArray.push, ByteArray.size]
 
 private theorem padBytes_size_mod_4 : (padBytes xs).size % 4 = 0 := by

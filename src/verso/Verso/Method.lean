@@ -5,6 +5,7 @@ Author: David Thrane Christiansen
 -/
 module
 public import Lean.Elab.Command
+meta import Lean.Elab.Command
 import Lean.Parser
 
 namespace Verso.Method
@@ -13,7 +14,8 @@ public section
 
 open Lean Parser Elab Command
 
-def method := leading_parser
+@[run_builtin_parser_attribute_hooks]
+meta def method := leading_parser
   declModifiers false >> "defmethod " >> declId >> ppIndent optDeclSig >> declVal >> optDefDeriving
 
 /-- Like 'def', except the namespace is resolved to an existing unique
@@ -27,7 +29,7 @@ error.
 syntax (name := methodDecl) method : command
 
 @[command_elab methodDecl]
-def elabMethodDecl : CommandElab := fun stx => do
+meta def elabMethodDecl : CommandElab := fun stx => do
   let ident := stx[0][2][0]
   let .ident origInfo origSubstr x _ := ident
     | throwErrorAt ident "Expected identifier"

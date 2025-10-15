@@ -3,8 +3,12 @@ Copyright (c) 2023-2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
+module
 import Std.Data.HashSet
 import Verso.Method
+public import Lean.Data.Json.FromToJson.Basic
+
+public section
 
 set_option linter.missingDocs true
 
@@ -15,27 +19,19 @@ open Std (HashSet)
 
 private def validCharString := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"
 
-
 /-- The characters allowed in slugs. -/
-def Slug.validChars := HashSet.ofList validCharString.toList
+def Slug.validChars :=
+  HashSet.ofList [
+    'a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z',
+    'A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z',
+    '0','1','2','3','4','5','6','7','8','9',
+    '-','_']
 
 /--
 A slug is well-formed if all its characters are valid.
 -/
-def Slug.WF (str : String) : Prop :=
-  str.toList.all (· ∈ validChars)
-
-open Lean Elab Command in
-#eval show CommandElabM Unit from do
-  let mut iter := validCharString.iter
-  while h : iter.hasNext do
-    let c := iter.curr' h
-    iter := iter.next' h
-    let n := mkIdent <| `Slug ++ (.str .anonymous s!"'{c}'_mem_validChars")
-    let cmd ←
-      `(@[simp, grind] protected theorem $n : ($(quote c) ∈ Slug.validChars) := by simp [Slug.validChars, validCharString])
-    elabCommand cmd
-
+def Slug.wf (str : String) : Bool :=
+  str.all (· ∈ validChars)
 
 private def mangle (c : Char) : String :=
   replacements.lookup c |>.getD "___"
@@ -59,43 +55,6 @@ where
     ('⊢', "_VDASH_")
   ]
 
-
-@[simp, grind] theorem mangle.replacements_all_wf : (k, v) ∈ mangle.replacements → Slug.WF v := by
-  simp [Slug.WF, replacements]
-  intro
-  repeat (rename_i hk; cases hk; simp [*])
-
-@[simp, grind]
-private theorem mangle.replacements_wf (c : Char) : (c, s) ∈ mangle.replacements → Slug.WF (mangle c) := by
-  unfold mangle
-  generalize h : mangle.replacements = reps
-  have : ∀ k v, (k, v) ∈ reps → Slug.WF v := by grind
-  clear h
-  fun_induction List.lookup <;> grind
-
-@[simp, grind]
-private theorem mangle_wf (c : Char) : Slug.WF (mangle c) := by
-  unfold mangle
-  by_cases h : ∃ s, (c, s) ∈ mangle.replacements
-  . let ⟨w, p⟩ := h
-    apply mangle.replacements_wf _ p
-  . suffices List.lookup c mangle.replacements = none by
-      rw [this]
-      simp [Slug.WF]
-    generalize h' : mangle.replacements = xs
-    rw [h'] at h
-    clear h'
-    fun_induction List.lookup <;> first | grind | simp
-
-
-
-@[simp, grind]
-private theorem mangle_mem_valid (c : Char) : c ∈ (mangle c').data → c ∈ Slug.validChars := by
-  intro mem
-  have := mangle_wf c'
-  simp [Slug.WF] at this
-  grind
-
 /--
 Converts a string to a valid slug, mangling as appropriate.
 -/
@@ -110,72 +69,6 @@ def asSlug (str : String) : String :=
         else acc ++ mangle c
   loop str.iter ""
 
-instance : Decidable (c ∈ Slug.validChars) := inferInstance
-
-instance [DecidablePred p] : Decidable (String.all s (p ·)) :=
-  if h : String.all s (p ·) then
-    isTrue h
-  else
-    isFalse h
-
-@[simp]
-theorem String.empty_all_eq_true : "".all p = true := by
-  simp [String.all, String.any, String.endPos, String.utf8ByteSize, String.utf8ByteSize.go, String.anyAux]
-
-@[simp]
-theorem String.Pos.add_0_eq_size {c : Char} : (0 : String.Pos) + c = ⟨c.utf8Size⟩ := by
-  simp only [HAdd.hAdd, String.Pos.byteIdx_zero, String.Pos.mk.injEq]
-  grind
-
-instance : DecidablePred Slug.WF := fun str =>
-  if h : str.toList.all (· ∈ Slug.validChars) then
-    isTrue h
-  else
-    isFalse h
-
-@[grind]
-theorem Slug.wf_push (c str) : c ∈ validChars → WF str → WF (str.push c) := by
-  unfold WF
-  cases str
-  intro mem wf
-  simp only [String.toList, List.all_eq_true, decide_eq_true_eq] at wf
-  simp only [String.toList, String.data_push, List.all_append, List.all_cons, List.all_nil,
-    Bool.and_true, Bool.and_eq_true, List.all_eq_true, decide_eq_true_eq]
-  grind
-
-@[grind]
-theorem Slug.wf_append (str1 str2) : WF str1 → WF str2 → WF (str1 ++ str2) := by
-  unfold WF
-  cases str1; cases str2
-  intro wf1 wf2
-  simp only [String.toList, String.data_append, List.all_append, Bool.and_eq_true, List.all_eq_true, decide_eq_true_eq]
-  simp only [String.toList, List.all_eq_true, decide_eq_true_eq] at wf1 wf2
-  grind
-
-@[simp]
-theorem Slug.decide_WF_eq_wf (s : String) : (s.toList.all (fun x => decide (x ∈ validChars)) = true) = WF s := by
-  rfl
-
-@[grind, simp]
-theorem Slug.wf_forall : WF s → c ∈ s.data → c ∈ validChars := by
-  simp_all [WF]
-
-theorem Slug.asSlug_loop_valid : WF acc → WF (asSlug.loop iter acc) := by
-  intro wfAcc
-  fun_induction asSlug.loop with try assumption
-  | case2 iter acc notEnd c ih =>
-    apply ih
-    unfold WF
-    (repeat' split) <;>
-      simp [*] <;>
-      grind
-
-@[grind]
-theorem Slug.asSlug_valid : WF (asSlug str) := by
-  unfold asSlug
-  apply asSlug_loop_valid
-  simp [WF]
-
 /--
 A slug is a well-formed string.
 -/
@@ -183,19 +76,17 @@ structure Slug where
   private mk ::
   /-- Converts the slug to the underlying string. -/
   toString : String
-  /-- The underlying string is well-formed. -/
-  wf : Slug.WF toString
 deriving BEq, Hashable, DecidableEq, Ord, Repr
 
 instance : ToString Slug := ⟨Slug.toString⟩
 
 instance : ToJson Slug where
-  toJson | ⟨str, _⟩ => ToJson.toJson str
+  toJson s := ToJson.toJson s.toString
 
 instance : FromJson Slug where
-  fromJson? v := do
+  fromJson? v := private do
     let s : String ← FromJson.fromJson? v
-    if h : asSlug s = s then pure ⟨s, h ▸ Slug.asSlug_valid⟩
+    if asSlug s = s then pure ⟨s⟩
     else throw s!"String {s} contains invalid characters"
 
 namespace Slug
@@ -215,7 +106,7 @@ instance : DecidableRel (@LE.le Slug _) := fun s1 s2 =>
   else .isFalse <| by intro nope; cases nope <;> contradiction
 
 defmethod String.sluggify (str : String) : Slug :=
-  ⟨asSlug str, asSlug_valid⟩
+  ⟨asSlug str⟩
 
 /--
 Converts a string to a slug.
