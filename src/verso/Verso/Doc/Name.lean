@@ -4,31 +4,30 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 
-import Lean.Environment
+module
+public meta import Lean.Environment
+
+set_option doc.verso true
 
 namespace Verso.Doc
 
 open Lean
 
 @[match_pattern]
-private def versoModuleDocNameString : String := "the canonical document object name"
+private meta def versoModuleDocNameString : String := "the canonical document object name"
 
-def docName (moduleName : Name) : Name :=
+public meta def docName (moduleName : Name) : Name :=
   id <| .str moduleName versoModuleDocNameString
 
 /-- If the argument is a module's document name, extract the module name. Otherwise do nothing. -/
-def unDocName (docName : Name) : Name :=
+public def unDocName (docName : Name) : Name :=
   match docName with
   | .str moduleName versoModuleDocNameString => moduleName
   | _ => docName
 
-/-- info: `X.Y -/
-#guard_msgs in
-#eval unDocName <| docName `X.Y
-
-/-- info: `X.Y -/
-#guard_msgs in
-#eval unDocName `X.Y
+theorem unDocName_docName_eq_id : unDocName ∘ docName = id := by
+  funext x
+  simp [unDocName, docName, versoModuleDocNameString]
 
 /-- Treats an identifier as a module that contains Verso using the standard convention -/
 macro "%doc" moduleName:ident : term =>
@@ -58,5 +57,5 @@ macro "%docName?" nameOrModuleName:ident : term => do
     else n
 
 
-def currentDocName [Monad m] [MonadEnv m] : m Name := do
+public meta def currentDocName [Monad m] [MonadEnv m] : m Name := do
   pure <| docName <| (← Lean.MonadEnv.getEnv).mainModule

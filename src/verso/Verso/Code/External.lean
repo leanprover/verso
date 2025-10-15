@@ -9,7 +9,7 @@ import Verso.Doc.ArgParse
 import Verso.Doc.Elab
 import Verso.Code.External.Env
 import Verso.Code.External.Files
-import Verso.EditDistance
+import Lean.Data.EditDistance
 import Verso.ExpectString
 import Verso.Doc.Suggestion
 import Verso.Hint
@@ -23,6 +23,8 @@ import Lean.Meta.Hint
 import Lean.DocString.Syntax
 
 import Std.Data.HashSet
+
+set_option doc.verso true
 
 open Verso Doc Elab Log ArgParse
 open SubVerso Highlighting Examples.Messages
@@ -57,7 +59,7 @@ class ExternalCode (genre : Genre) where
   /-- A block element for rendering Lean code. -/
   leanBlock : Highlighted → CodeConfig → Block genre
   /--
-  An inline element for rendering Lean messages. `plain` should suppress the annotation of the
+  An inline element for rendering Lean messages. {name}`plain` should suppress the annotation of the
   output with its message severity.
   -/
   leanOutputInline (message : Highlighted.Message) (plain : Bool) (expandTraces : List Lean.Name := []) : Inline genre
@@ -104,7 +106,8 @@ private def defaultModule : m Name := do
   if let some m := verso.exampleModule.get? (← getOptions) then pure m.toName else throwError "No default module specified"
 
 /--
-Parses the project directory as a named argument `project`, falling back to the default if specified in the option `verso.exampleProject`.
+Parses the project directory as a named argument {lit}`project`, falling back to the default if
+specified in the option {option}`verso.exampleProject`.
 -/
 def projectOrDefault : ArgParse m StrLit :=
   .named `project .strLit false <|>
@@ -112,7 +115,8 @@ def projectOrDefault : ArgParse m StrLit :=
   .fail none (some "No `(project := ...)` argument provided and no default project set.")
 
 /--
-Parses the current module as a named argument `module`, falling back to the default if specified in the option `verso.exampleModule`.
+Parses the current module as a named argument {lit}`module`, falling back to the default if
+specified in the option {option}`verso.exampleModule`.
 -/
 def moduleOrDefault : ArgParse m Ident :=
   .named `module .ident false <|>
@@ -199,11 +203,10 @@ Default suggestion threshold function: a suggestion is sufficiently close if
 def suggestionThreshold (input _candidate : String) := if input.length < 5 then 1 else if input.length < 10 then 2 else 3
 
 /--
-Adds up to `count` suggestions.
+Adds up to {name}`count` suggestions.
 
-`loc` is the location at which the edit should occur, `candidates` are the valid inputs, and `input`
-is the provided input. Suggestions are added if they are "sufficiently close" to the input, as
-determined by `threshold`.
+{name}`candidates` are the valid inputs and {name}`input` is the provided input. Suggestions are added if
+they are "sufficiently close" to the input, as determined by {name}`threshold`.
 -/
 def smartSuggestions (candidates : Array String) (input : String) (count : Nat := 10) (threshold := suggestionThreshold) : Array String :=
   let toks := candidates.filterMap fun t =>
@@ -297,15 +300,15 @@ private def sevStr : MessageSeverity → String
 
 
 /--
-Silently logs all the messages in `hl`.
+Silently logs all the messages in {name}`hl`.
 -/
 def logInfos (hl : Highlighted) : DocElabM Unit := do
   for (⟨sev, msg⟩, _) in allInfo hl do
     logSilentInfo m!"{sev}:\n{msg.toString}"
 
 /--
-Given a module name and an anchor name, loads the resulting code and invokes `k` on it, failing if
-the code can't be found.
+Given a module name and an anchor name, loads the resulting code and invokes {name}`k` on it,
+failing if the code can't be found.
 -/
 def withAnchored (project : StrLit) (moduleName : Ident) (anchor? : Option Ident)
     (k : Highlighted → DocElabM (Array Term)) : DocElabM (Array Term) := do
@@ -379,7 +382,7 @@ def moduleContentBlock (args : Array Arg) (code : StrLit) : DocElabM (Array Term
 /--
 Includes the contents of the specified example module.
 
-Requires that the genre have an `ExternalCode` instance.
+Requires that the genre have an {name}`ExternalCode` instance.
 -/
 @[code_block_expander module]
 def module : CodeBlockExpander
@@ -389,7 +392,7 @@ def module : CodeBlockExpander
 /--
 Includes the contents of the specified anchored example.
 
-Requires that the genre have an `ExternalCode` instance.
+Requires that the genre have an {lean}`ExternalCode` instance.
 -/
 @[code_block_expander anchor]
 def anchor : CodeBlockExpander
@@ -414,7 +417,7 @@ def moduleInline (args : Array Arg) (inls : TSyntaxArray `inline) : DocElabM (Ar
 /--
 Includes the contents of the specified anchor.
 
-Requires that the genre have an `ExternalCode` instance.
+Requires that the genre have an {name}`ExternalCode` instance.
 -/
 @[role_expander module]
 def moduleInlineRole : RoleExpander
@@ -479,7 +482,7 @@ def moduleNameInline (args : Array Arg) (inls : TSyntaxArray `inline) : DocElabM
 /--
 Quotes the first instance of the given name from the module.
 
-Requires that the genre have an `ExternalCode` instance.
+Requires that the genre have an {name}`ExternalCode` instance.
 -/
 @[role_expander moduleName]
 def moduleName : RoleExpander
@@ -488,7 +491,7 @@ def moduleName : RoleExpander
 /--
 Quotes the first instance of the given name from the anchor.
 
-Requires that the genre have an `ExternalCode` instance.
+Requires that the genre have an {name}`ExternalCode` instance.
 -/
 @[role_expander anchorName]
 def anchorName : RoleExpander
@@ -551,16 +554,18 @@ def moduleTermInline (args : Array Arg) (inls : TSyntaxArray `inline) : DocElabM
 /--
 Quotes the first term that matches the provided string.
 
-Requires that the genre have an `ExternalCode` instance.
+Requires that the genre have an {name}`ExternalCode` instance.
 -/
 @[role_expander moduleTerm]
 def moduleTerm : RoleExpander
-  | args, inls => withTraceNode `Elab.Verso (fun _ => pure m!"moduleTerm") <| moduleTermInline args inls
+  | args, inls =>
+    withTraceNode `Elab.Verso (fun _ => pure m!"moduleTerm") <|
+      moduleTermInline args inls
 
 /--
 Quotes the first term in the given anchor that matches the provided string.
 
-Requires that the genre have an `ExternalCode` instance.
+Requires that the genre have an {lean}`ExternalCode` instance.
 -/
 @[role_expander anchorTerm]
 def anchorTerm : RoleExpander
@@ -687,7 +692,7 @@ def outputBlock (args : Array Arg) (str : StrLit) : DocElabM (Array Term) := do
 /--
 Displays output from the example module.
 
-Requires that the genre have an `ExternalCode` instance.
+Requires that the genre have an {name}`ExternalCode` instance.
 -/
 @[code_block_expander moduleOut]
 def moduleOut : CodeBlockExpander
@@ -696,7 +701,7 @@ def moduleOut : CodeBlockExpander
 /--
 Displays information output from the example module.
 
-Requires that the genre have an `ExternalCode` instance.
+Requires that the genre have an {name}`ExternalCode` instance.
 -/
 @[code_block_expander moduleInfo]
 def moduleInfo : CodeBlockExpander
@@ -706,7 +711,7 @@ def moduleInfo : CodeBlockExpander
 /--
 Displays error output from the example module.
 
-Requires that the genre have an `ExternalCode` instance.
+Requires that the genre have an {name}`ExternalCode` instance.
 -/
 @[code_block_expander moduleError]
 def moduleError : CodeBlockExpander
@@ -716,7 +721,7 @@ def moduleError : CodeBlockExpander
 /--
 Displays warning output from the example module.
 
-Requires that the genre have an `ExternalCode` instance.
+Requires that the genre have an {name}`ExternalCode` instance.
 -/
 @[code_block_expander moduleWarning]
 def moduleWarning : CodeBlockExpander
@@ -726,7 +731,7 @@ def moduleWarning : CodeBlockExpander
 /--
 Displays information output from the example module's anchor.
 
-Requires that the genre have an `ExternalCode` instance.
+Requires that the genre have an {name}`ExternalCode` instance.
 -/
 @[code_block_expander anchorInfo]
 def anchorInfo : CodeBlockExpander
@@ -739,7 +744,7 @@ def anchorInfo : CodeBlockExpander
 /--
 Displays error output from the example module's anchor.
 
-Requires that the genre have an `ExternalCode` instance.
+Requires that the genre have an {name}`ExternalCode` instance.
 -/
 @[code_block_expander anchorError]
 def anchorError : CodeBlockExpander
@@ -751,7 +756,7 @@ def anchorError : CodeBlockExpander
 /--
 Displays warning output from the example module's anchor.
 
-Requires that the genre have an `ExternalCode` instance.
+Requires that the genre have an {name}`ExternalCode` instance.
 -/
 @[code_block_expander anchorWarning]
 def anchorWarning : CodeBlockExpander

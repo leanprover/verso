@@ -60,20 +60,27 @@ def theme : Theme := { Theme.default with
   }
   |>.override #[] ⟨do return {{<div class="frontpage"><h1>{{← param "title"}}</h1> {{← param "content"}}</div>}}, id⟩
 
-
-
 def_literate_page litPage from LitLean in "examples/website-literate" as "Literate Lean page"
+
+literate_page litPage' from DemoSite.LiteratePage in "." as "Literate Trees"
 
 def_literate_post litPost from LitLean in "examples/website-literate" as "Literate Lean (post)" with {
   authors := ["An Author"]
   date := ⟨2025, 4, 4⟩
 }
 
+literate_post litPost' from DemoSite.LiteratePage in "." as "Literate Trees (post)" with {
+  authors := ["An Author"]
+  date := ⟨2025, 4, 4⟩
+}
+
+
 
 def demoSite : Site := site DemoSite.Front /
   static "static" ← "examples/website/static_files"
   "about" DemoSite.About
   "PHOAS" litPage
+  "mod-doc-lit" litPage'
   "blog" DemoSite.Blog with
     litPost
     DemoSite.Blog.AnchorBased

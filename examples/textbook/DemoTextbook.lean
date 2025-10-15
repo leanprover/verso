@@ -87,6 +87,8 @@ Unknown identifier `y`
 
 {include 1 DemoTextbook.Nat}
 
+{includeLiterate "." DemoTextbook.ListSet "Quotient Demo" (level := 1)}
+
 # Notes
 
 Use {lean}`margin` to create a marginal note.{margin}[Marginal notes should be used like footnotes.]

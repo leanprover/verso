@@ -214,6 +214,7 @@ structure HighlightHtmlM.Options where
   visibleProofStates : VisibleProofStates := .none
   collapseGoals : CollapseGoals := .subsequent
   definitionsAsTargets : Bool := true
+  identifierWordBreaks : Bool := false
 
 structure HighlightHtmlM.Context (g : Verso.Doc.Genre) where
   linkTargets : LinkTargets g.TraverseContext
@@ -428,12 +429,38 @@ defmethod Token.Kind.idAttr : Token.Kind → HighlightHtmlM g (Array (String × 
     pure #[]
   | _ => pure #[]
 
+/--
+Returns the string component of the token as HTML.
+
+If `HighlightHtmlM.Options.identifierWordBreaks` is true, soft-hyphen opportunities are inserted
+after each dot. This allows browsers to wrap long qualified names at reasonable points.
+-/
+defmethod Token.htmlContent (tok : Token) : HighlightHtmlM g Html := do
+  let content := tok.content
+  if (← read).options.identifierWordBreaks then
+    let mut html := .empty
+    let mut str := ""
+    let mut iter := content.iter
+    while h : iter.hasNext do
+      let c := iter.curr' h
+      iter := iter.next' h
+      str := str.push c
+      if c == '.' then
+        html := html ++ .text true str
+        str := ""
+        if iter.hasNext then
+          html := html ++ .text false "&shy;"
+    if !str.isEmpty then html := html ++ .text true str
+    return html
+  else
+    return content
+
 defmethod Token.toHtml (tok : Token) : HighlightHtmlM g Html := do
   let hoverId ← tok.kind.hover?
   let idAttr ← tok.kind.idAttr
   let hoverAttr := hoverId.map (fun i => #[("data-verso-hover", toString i)]) |>.getD #[]
   tok.kind.addLink {{
-    <span class={{tok.kind.«class» ++ " token"}} data-binding={{tok.kind.data}} {{hoverAttr}} {{idAttr}}>{{tok.content}}</span>
+    <span class={{tok.kind.«class» ++ " token"}} data-binding={{tok.kind.data}} {{hoverAttr}} {{idAttr}}>{{← tok.htmlContent}}</span>
   }}
 
 defmethod Highlighted.Goal.toHtml (exprHtml : expr → HighlightHtmlM g Html) (index : Nat) : Highlighted.Goal expr → HighlightHtmlM g Html

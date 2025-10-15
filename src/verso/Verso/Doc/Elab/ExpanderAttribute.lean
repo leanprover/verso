@@ -22,7 +22,8 @@ unsafe def mkDocExpanderAttrUnsafe (attrName typeName : Name) (descr : String) (
 @[implemented_by mkDocExpanderAttrUnsafe]
 opaque mkDocExpanderAttributeSafe (attrName typeName : Name) (desc : String) (attrDeclName : Name) : IO (KeyedDeclsAttribute α)
 
-def mkDocExpanderAttribute (attrName typeName : Name) (desc : String) (attrDeclName : Name := by exact decl_name%) : IO (KeyedDeclsAttribute α) := mkDocExpanderAttributeSafe attrName typeName desc attrDeclName
+def mkDocExpanderAttribute (attrName typeName : Name) (desc : String) (attrDeclName : Name := by exact decl_name%) : IO (KeyedDeclsAttribute α) :=
+  mkDocExpanderAttributeSafe attrName typeName desc attrDeclName
 
 unsafe def mkUncheckedDocExpanderAttrUnsafe (attrName typeName : Name) (descr : String) (attrDeclName : Name) : IO (KeyedDeclsAttribute α) :=
   KeyedDeclsAttribute.init {
@@ -37,4 +38,5 @@ unsafe def mkUncheckedDocExpanderAttrUnsafe (attrName typeName : Name) (descr : 
 @[implemented_by mkUncheckedDocExpanderAttrUnsafe]
 opaque mkUncheckedDocExpanderAttributeSafe (attrName typeName : Name) (desc : String) (attrDeclName : Name) : IO (KeyedDeclsAttribute α)
 
-def mkUncheckedDocExpanderAttribute (attrName typeName : Name) (desc : String) (attrDeclName : Name := by exact decl_name%) : IO (KeyedDeclsAttribute α) := mkUncheckedDocExpanderAttributeSafe attrName typeName desc attrDeclName
+def mkUncheckedDocExpanderAttribute (attrName typeName : Name) (desc : String) (attrDeclName : Name := by exact decl_name%) : IO (KeyedDeclsAttribute α) :=
+  mkUncheckedDocExpanderAttributeSafe attrName typeName desc attrDeclName

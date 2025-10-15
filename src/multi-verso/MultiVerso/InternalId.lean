@@ -3,9 +3,10 @@ Copyright (c) 2023-2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
+module
 
-import Lean.Data.Json
-import Std.Data.TreeSet
+public import Lean.Data.Json
+public import Std.Data.TreeSet
 
 set_option linter.missingDocs true
 
@@ -21,31 +22,33 @@ over these IDs, so they can be used to ensure uniqueness of tags.
 Even though the constructor is private, there is a JSON serialization that can be used to undermine
 the uniqueness of internal IDs. Please don't do that - your program may break unpredictably.
 -/
-structure InternalId where
+public structure InternalId where
   private mk ::
   private id : Nat
 deriving BEq, Hashable, Repr, Inhabited, Ord
 
-instance : ToJson InternalId where
-  toJson | ⟨n⟩ => .num n
+public instance : ToJson InternalId where
+  toJson i := private
+    let ⟨n⟩ := i
+    .num n
 
-instance : FromJson InternalId where
-  fromJson? v := do
+public instance : FromJson InternalId where
+  fromJson? v := private do
     return ⟨←  v.getNat?⟩
 
-instance : LT InternalId where
+public instance : LT InternalId where
   lt x y := Ord.compare x y = .lt
 
-instance : LE InternalId where
+public instance : LE InternalId where
   le x y := x < y ∨ x = y
 
-instance : ToString InternalId where
-  toString x := s!"#<{x.id}>"
+public instance : ToString InternalId where
+  toString x := private s!"#<{x.id}>"
 
 /--
 Returns a fresh ID that's not contained in the provided set of used IDs along with the updated set.
 -/
-def InternalId.fresh (used : TreeSet InternalId) : (InternalId × TreeSet InternalId) := Id.run do
+public def InternalId.fresh (used : TreeSet InternalId) : (InternalId × TreeSet InternalId) := Id.run do
   let mut i : InternalId := used.max?.map (⟨·.id + 1⟩) |>.getD ⟨0⟩
   while used.contains i do
     i := ⟨i.id + 1⟩

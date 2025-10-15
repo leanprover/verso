@@ -13,6 +13,11 @@ import Verso.Doc.Elab
 
 import VersoManual.Basic
 
+/-!
+This module contains tools for working with Markdown and Verso. In particular, it contains ways to
+generate Verso content from Markdown input.
+-/
+
 open MD4Lean
 open Lean
 

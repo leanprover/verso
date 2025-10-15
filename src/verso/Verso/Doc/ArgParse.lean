@@ -781,6 +781,20 @@ def ValDesc.strLit [Monad m] [MonadError m] : ValDesc m StrLit where
 instance : FromArgVal StrLit m where
   fromArgVal := .strLit
 
+/--
+Parses a numeric literal.
+-/
+def ValDesc.numLit [Monad m] [MonadError m] : ValDesc m NumLit where
+  description := doc!"a number"
+  signature := .String
+  get
+    | .num n => Pure.pure n
+    | other => throwError "Expected number, got {toMessageData other}"
+
+instance : FromArgVal NumLit m where
+  fromArgVal := .numLit
+
+
 variable [MonadLiftT BaseIO m] [MonadLog m] [AddMessageContext m] [MonadOptions m]
 
 def run (p : ArgParse m α) (args : Array Arg) : m α := do

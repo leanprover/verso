@@ -36,6 +36,7 @@ import VersoManual.Linters
 import VersoManual.LocalContents
 import VersoManual.InlineLean
 import VersoManual.ExternalLean
+import VersoManual.Literate
 import VersoManual.Marginalia
 import VersoManual.Bibliography
 import VersoManual.Table
@@ -250,14 +251,11 @@ def traverseMulti (depth : Nat) (path : Path) (part : Part Manual) : TraverseM (
           if let some p' ← Traverse.genrePart md p then
             p := p'
         let .mk title titleString «meta» content subParts := p
-        let content' ← withReader (·.inPart p) <| content.mapM traverseBlock
+        let content' ← withReader (·.inPart p) <| content.mapM Manual.traverseBlock
         let subParts' ← withReader (·.inPart p) <| subParts.mapM fun p => do
           let path' := path.push (p.metadata.bind (·.file) |>.getD (p.titleString.sluggify.toString))
           withReader ({· with path := path' : TraverseContext}) (traverseMulti d path' p)
-        pure <| .mk (← title.mapM traverseInline) titleString «meta» content' subParts'
-where
-  traverseInline := Verso.Doc.Genre.traverse.inline Manual
-  traverseBlock := Verso.Doc.Genre.traverse.block Manual
+        pure <| .mk (← title.mapM Manual.traverseInline) titleString «meta» content' subParts'
 
 def traverse (logError : String → IO Unit) (text : Part Manual) (config : Config) : ReaderT ExtensionImpls IO (Part Manual × TraverseState) := do
   let topCtxt : Manual.TraverseContext := {logError, draft := config.draft}
@@ -485,7 +483,6 @@ def emitSearchIndex (dir : System.FilePath) (state : TraverseState) (ctx : Trave
   | .ok index =>
     -- Split the index into roughly 150k chunks for faster loading
     let (index, docs) := index.extractDocs
-    let size := docs.foldl (init := 0) (fun s _ v => s + v.size)
     let mut docBuckets : HashMap UInt8 (HashMap String Doc) := {}
     for (ref, content) in docs do
       let h := bucket ref
@@ -510,7 +507,7 @@ where
     let mut hash := 0
     let mut n := 0
     while h : n < s.utf8ByteSize do
-      hash := hash + s.getUtf8Byte n h
+      hash := hash + s.getUtf8Byte ⟨n⟩ h
       n := n + 1
     return hash
 

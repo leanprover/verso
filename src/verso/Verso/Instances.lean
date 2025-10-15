@@ -3,11 +3,15 @@ Copyright (c) 2024-2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-
+module
 import Lean.Parser.Term
 import Lean.Elab.Command
 import Lean.Elab.Tactic.Doc
-import Verso.Instances.Deriving
+public import Lean.Data.Position
+public import Lean.Message
+public import Lean.Data.Lsp
+public import Lean.Elab.Tactic.Doc
+meta import Verso.Instances.Deriving
 
 open Lean
 open Syntax
@@ -48,11 +52,11 @@ deriving instance Quote for DefinitionSafety
 deriving instance ToJson for DefinitionSafety
 deriving instance FromJson for DefinitionSafety
 
-instance : Quote NameSet where
+public instance : Quote NameSet where
   quote xs := mkCApp ``Std.TreeSet.ofList #[quote xs.toList, ⟨mkHole .missing⟩]
-instance : ToJson NameSet where
+public instance : ToJson NameSet where
   toJson xs := toJson (xs.toArray : Array Name)
-instance : FromJson NameSet where
+public instance : FromJson NameSet where
   fromJson? xs := do
     let arr ← fromJson? (α := Array Name) xs
     pure <| Std.TreeSet.ofArray arr _

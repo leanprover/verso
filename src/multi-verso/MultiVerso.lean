@@ -3,17 +3,22 @@ Copyright (c) 2023-2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
+module
 
-import Lean.Data.Json
+public import Lean.Data.Json
 
 import Std.Data.TreeMap
 import Std.Data.HashSet
+import Std.Time.Zoned
+import Std.Time.Format
 
-import MultiVerso.InternalId
-import MultiVerso.Link
+public import MultiVerso.InternalId
+public import MultiVerso.Link
 import MultiVerso.Manifest
 import MultiVerso.Path
 import MultiVerso.Slug
+
+set_option doc.verso true
 
 open Std
 open Lean
@@ -25,7 +30,7 @@ namespace Verso.Multi
 /--
 A documented object, described in specific locations in the document.
 -/
-structure Object where
+public structure Object where
   /--
   The canonical string name used to construct a cross-reference to this object, also from external
   sites. Should be stable over time.
@@ -38,7 +43,7 @@ structure Object where
 deriving Inhabited
 
 open Format in
-instance : Repr Object where
+public instance : Repr Object where
   reprPrec v _ :=
     let {canonicalName, data, ids} := v
     nest 2 <| group <| line.joinSep [
@@ -49,7 +54,7 @@ instance : Repr Object where
       text "}"
     ]
 
-instance : BEq Object where
+public instance : BEq Object where
   beq
     | {canonicalName := n1, data := d1, ids := i1}, {canonicalName := n2, data := d2, ids := i2} =>
       n1 == n2 &&
@@ -57,30 +62,34 @@ instance : BEq Object where
       i1.size == i2.size && i1.fold (init := true) (fun soFar v => soFar && i2.contains v)
 
 /--
-Registers the fact that the provided `id` refers to the object.
+Registers the fact that the provided {name}`id` refers to the object.
 -/
-def Object.addId (id : InternalId) (object : Object) : Object :=
+public def Object.addId (id : InternalId) (object : Object) : Object :=
   {object with ids := object.ids.insert id}
 
 /--
-Sets the `data` field of the object, replacing existing data.
+Sets the {name (full := Object.data)}`data` field of the object, replacing existing data.
 -/
-def Object.setData (data : Json) (object : Object) : Object :=
-  {object with data := data}
+public def Object.setData (data : Json) (object : Object) : Object :=
+  { object with data := data }
 
 /--
-Modifies the `data` field of the object.
+Modifies the {name (full := Object.data)}`data` field of the object.
 -/
-def Object.modifyData (f : Json → Json) (object : Object) : Object :=
+public def Object.modifyData (f : Json → Json) (object : Object) : Object :=
   {object with data := f object.data}
 
 /--
 A particular category of documentable objects.
 -/
-structure Domain where
+public structure Domain where
   /-- The objects in the domain, categorized by their canonical names. -/
   objects : TreeMap String Object compare := {}
-  /-- The objects in the domain, categorized by their internal IDs. -/
+  /--
+  The objects in the domain, categorized by their internal IDs. The values in the map are all
+  canonical names for an object with the given ID. In most use cases, without aliasing, the set will
+  be a singleton.
+  -/
   objectsById : TreeMap InternalId (HashSet String) := {}
   /--
   An explanatory title for clients of the domain.
@@ -109,14 +118,21 @@ private unsafe def Domain.fastBeq (x y : Domain) : Bool :=
 Compares two domains for equality.
 -/
 @[implemented_by Domain.fastBeq]
-def Domain.beq (x y : Domain) : Bool := Domain.structBeq x y
+private def Domain.beq (x y : Domain) : Bool := Domain.structBeq x y
 
-instance : BEq Domain := ⟨Domain.beq⟩
+public instance : BEq Domain where
+  beq := private Domain.beq
 
 /--
-Registers the fact that the given ID refers to the object with the given canonical name.
+Returns the canonical names used in {name}`domain`.
 -/
-def Domain.insertId (canonicalName : String) (id : InternalId) (domain : Domain) : Domain :=
+public def Domain.canonicalNames (domain : Domain) : Array String :=
+  domain.objects.keysArray
+
+/--
+Registers the fact that the unique ID {name}`id` refers to the object with the given canonical name.
+-/
+public def Domain.insertId (canonicalName : String) (id : InternalId) (domain : Domain) : Domain :=
   { domain with
     objects :=
       domain.objects.alter canonicalName fun
@@ -129,29 +145,42 @@ def Domain.insertId (canonicalName : String) (id : InternalId) (domain : Domain)
   }
 
 /--
-Sets the `data` field of the object with the given canonical name, replacing existing data.
+Sets the {name (full := Object.data)}`data` field of the object with the given canonical name, replacing existing data.
 -/
-def Domain.setData  (canonicalName : String) (data : Json) (domain : Domain) : Domain :=
+public def Domain.setData  (canonicalName : String) (data : Json) (domain : Domain) : Domain :=
   { domain with objects := domain.objects.alter canonicalName (·.getD {canonicalName} |>.setData data) }
 
 /--
-Modifies the `data` field of the object with the given canonical name.
+Modifies the {name (full := Object.data)}`data` field of the object with the given canonical name.
 -/
-def Domain.modifyData  (canonicalName : String) (f : Json → Json) (domain : Domain) : Domain :=
+public def Domain.modifyData  (canonicalName : String) (f : Json → Json) (domain : Domain) : Domain :=
   { domain with objects := domain.objects.alter canonicalName (·.getD {canonicalName} |>.modifyData f) }
 
 /--
-Returns the object with the given canonical name, or `none` if there is no such object.
+Returns the object with the given canonical name, or {name}`none` if there is no such object.
 -/
-def Domain.get? (canonicalName : String) (domain : Domain) : Option Object :=
+public def Domain.get? (canonicalName : String) (domain : Domain) : Option Object :=
   domain.objects[canonicalName]?
+
+public instance : GetElem? Domain String Object (fun dom x => dom.get? x |>.isSome) where
+  getElem dom x valid :=
+    match h : dom.get? x with
+    | none => False.elim <| by simp_all
+    | some v => v
+  getElem? dom x := dom.get? x
+
+/--
+Returns {name}`true` if the domain contains an object with the given canonical name, or {name}`false` otherwise.
+-/
+public def Domain.contains (canonicalName : String) (domain : Domain) : Bool :=
+  domain.objects.contains canonicalName
 
 /--
 Generates the public cross-reference file for a set of domains.
 
-`links` maps internal IDs to their corresponding URLs.
+{name}`links` maps internal IDs to their corresponding URLs.
 -/
-def xrefJson {Links} {valid} [GetElem? Links InternalId Link valid]
+public def xrefJson {Links} {valid} [GetElem? Links InternalId Link valid]
     (domains : NameMap Domain) (links : Links) : Json := Id.run do
   let mut out : Json := Json.mkObj []
   for (n, dom) in domains do
@@ -168,7 +197,7 @@ where
 /--
 An object loaded from a cross-reference database.
 -/
-structure RefObject where
+public structure RefObject where
   /-- The object's link destination. -/
   link : RemoteLink
   /-- Metadata saved for the object. -/
@@ -176,7 +205,7 @@ structure RefObject where
 deriving BEq
 
 open Format in
-instance : Repr RefObject where
+public instance : Repr RefObject where
   reprPrec v _ :=
     let {link, data} := v
     nest 2 <| group <| line.joinSep [
@@ -189,13 +218,13 @@ instance : Repr RefObject where
 /--
 Converts a reference object to the official interchange format.
 -/
-def RefObject.toJson (object : RefObject) : Json :=
+public def RefObject.toJson (object : RefObject) : Json :=
   json%{"address": $object.link.path.link, "id": $object.link.htmlId.toString, "data": $object.data}
 
 /--
 A domain loaded from a cross-reference database.
 -/
-structure RefDomain where
+public structure RefDomain where
   /--
   The domain's title field.
   -/
@@ -226,14 +255,15 @@ private unsafe def RefDomain.fastEq (x y : RefDomain) :=
 Boolean equality of reference domains.
 -/
 @[implemented_by RefDomain.fastEq]
-def RefDomain.beq := RefDomain.structEq
+private def RefDomain.beq := RefDomain.structEq
 
-instance : BEq RefDomain := ⟨RefDomain.beq⟩
+public instance : BEq RefDomain where
+  beq := private RefDomain.beq
 
 /--
 Converts a reference domain to the official interchange format.
 -/
-def RefDomain.toJson (domain : RefDomain) : Json :=
+public def RefDomain.toJson (domain : RefDomain) : Json :=
   let contents : Json := .mkObj <| domain.contents.toList.map fun (k, v) => (k, .arr <| v.map (·.toJson))
   json%{
     "title": $domain.title,
@@ -244,7 +274,7 @@ def RefDomain.toJson (domain : RefDomain) : Json :=
 /--
 Loads a set of reference domains from a cross-reference database in JSON format.
 -/
-def fromXrefJson (root : String) (json : Json) : Except String (NameMap RefDomain) := do
+public def fromXrefJson (root : String) (json : Json) : Except String (NameMap RefDomain) := do
   let json ← json.getObj?
   let mut out := {}
   let json := json.toArray
@@ -314,7 +344,7 @@ private def fetchFile (project : System.FilePath) (root : String) (file : System
 private def defaultConfigFile (project : System.FilePath) : System.FilePath := project / "verso-sources.json"
 
 /--
-Returns `true` if the user has specified a configuration file, or if they haven't and the default file exists.
+Returns {name}`true` if the user has specified a configuration file, or if they haven't and the default file exists.
 -/
 private def hasConfig (project : System.FilePath) (configFile : Option System.FilePath) : IO Bool := do
   if configFile.isSome then return true
@@ -333,7 +363,7 @@ private def getConfig (project : System.FilePath) (configFile : Option System.Fi
 /--
 Information about a remote document
 -/
-structure RemoteInfo where
+public structure RemoteInfo where
   /-- The root of the document's URLs. -/
   root : String
   /-- A short name to show in short links (e.g. "v4.20" or a package name). -/
@@ -360,21 +390,22 @@ private unsafe def RemoteInfo.fastBEq (x y : RemoteInfo) : Bool :=
 Boolean equality of information about remote documents.
 -/
 @[implemented_by RemoteInfo.fastBEq]
-def RemoteInfo.beq (x y : RemoteInfo) : Bool := RemoteInfo.structBEq x y
+private def RemoteInfo.beq (x y : RemoteInfo) : Bool := RemoteInfo.structBEq x y
 
-instance : BEq RemoteInfo := ⟨RemoteInfo.beq⟩
+public instance : BEq RemoteInfo where
+  beq := private RemoteInfo.beq
 
 /--
 All remote data that was loaded.
 -/
-structure AllRemotes where
+public structure AllRemotes where
   /-- The remote data -/
   allRemotes : HashMap String RemoteInfo := {}
 
-instance : GetElem AllRemotes String RemoteInfo (fun x y => y ∈ x.allRemotes) where
+public instance : GetElem AllRemotes String RemoteInfo (fun x y => y ∈ x.allRemotes) where
   getElem x y z := GetElem.getElem x.allRemotes y z
 
-instance : GetElem? AllRemotes String RemoteInfo (fun x y => y ∈ x.allRemotes) where
+public instance : GetElem? AllRemotes String RemoteInfo (fun x y => y ∈ x.allRemotes) where
   getElem? x y := GetElem?.getElem? x.allRemotes y
 
 private def AllRemotes.structBeq (x y : AllRemotes) : Bool :=
@@ -398,23 +429,24 @@ In compiled code, this uses pointer equality tests first, because these values a
 change during the traversal pass.
 -/
 @[implemented_by AllRemotes.fastBeq]
-def AllRemotes.beq (x y : AllRemotes) : Bool := AllRemotes.structBeq x y
+public def AllRemotes.beq (x y : AllRemotes) : Bool := AllRemotes.structBeq x y
 
 /--
-Returns an array of name-remote info pairs, in some order.b
+Returns an array of name-remote info pairs, in some order.
 -/
-def AllRemotes.toArray (all : AllRemotes) : Array (String × RemoteInfo) :=
+public def AllRemotes.toArray (all : AllRemotes) : Array (String × RemoteInfo) :=
   all.allRemotes.toArray
 
-instance : BEq AllRemotes := ⟨AllRemotes.beq⟩
+public instance : BEq AllRemotes where
+  beq := private AllRemotes.beq
 
 /--
 Updates the remote Verso data, fetching according to the configuration.
 
-`manual` should be `true` when a user is explicitly asking for a sync, not as part of something like
+{name}`manual` should be {lean}`true` when a user is explicitly asking for a sync, not as part of something like
 executing a document renderer.
 -/
-def updateRemotes (manual : Bool) (configFile : Option System.FilePath) (logVerbose : String → IO Unit) : IO AllRemotes := do
+public def updateRemotes (manual : Bool) (configFile : Option System.FilePath) (logVerbose : String → IO Unit) : IO AllRemotes := do
   let project ← findProject "."
   logVerbose s!"Loading project config. Project is '{project}'."
   if let some f := configFile then

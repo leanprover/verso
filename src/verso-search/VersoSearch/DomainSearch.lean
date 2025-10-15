@@ -6,36 +6,41 @@ Author: David Thrane Christiansen
 
 import Std.Data.HashMap
 import VersoUtil.BinFiles
+import Std.Data.HashMap
 
 open Std (HashMap)
 
 set_option linter.missingDocs true
+set_option doc.verso true
 
 namespace Verso.Search
 
 /--
 Transforms data in a Verso documentation domain into a quick-jump item.
 -/
-structure DomainMapper where
+public structure DomainMapper where
   /--
-  The name to be shown in the search UI, such as `"Compiler Option"` or `"Terminology"`.
+  The name to be shown in the search UI, such as {lean}`"Compiler Option"` or {lean}`"Terminology"`.
   -/
   displayName : String
   /--
   The HTML class name to apply to results from the domain.
 
-  Use `quickJumpCss` to apply CSS rules based on this class name.
+  {open DomainMapper}
+
+  Use {name}`quickJumpCss` to apply CSS rules based on this class name.
   -/
   className : String
   /--
-  JavaScript code to transform items from the domain's serialization in `xref.json` into searchable
-  items.
+  JavaScript code to transform items from the domain's serialization in {lit}`xref.json` into
+  searchable items.
 
   Searchable items are JavaScript objects with the following fields:
-   * `searchKey` is the string used for fuzzy matching against the user's input
-   * `address` is the link target to be used when clicking on the search result
-   * `domainId` is the domain's name
-   * `ref` is a representation of the value itself, used for equality comparison in case of duplicate search keys
+   * {lit}`searchKey` is the string used for fuzzy matching against the user's input
+   * {lit}`address` is the link target to be used when clicking on the search result
+   * {lit}`domainId` is the domain's name
+   * {lit}`ref` is a representation of the value itself, used for equality comparison in case of
+     duplicate search keys
   -/
   dataToSearchables : String
   /--
@@ -45,11 +50,11 @@ structure DomainMapper where
 deriving Repr, DecidableEq
 
 /--
-Constructs a domain mapper with default code for the `dataToSearchables` field.
+Constructs a domain mapper with default code for the {name}`dataToSearchables` field.
 
 This default code is suitable when the canonical name of the object is the string that users should search for.
 -/
-def DomainMapper.withDefaultJs (domain : Lean.Name) (displayName className : String) (css : Option String := none) : DomainMapper where
+public def DomainMapper.withDefaultJs (domain : Lean.Name) (displayName className : String) (css : Option String := none) : DomainMapper where
   displayName := displayName
   className := className
   quickJumpCss := css
@@ -66,7 +71,7 @@ open Std Format in
 /--
 Generates JavaScript code for the provided domain mapper.
 -/
-def DomainMapper.toJs (mapper : DomainMapper) : Std.Format :=
+public def DomainMapper.toJs (mapper : DomainMapper) : Std.Format :=
   nest 2 <| group <|
     text "{" ++ line ++
     nest 2 (group ("dataToSearchables:" ++ line ++ mapper.dataToSearchables)) ++ "," ++ line ++
@@ -142,14 +147,14 @@ end
 /--
 A mapping from Verso domain names to their search customizations.
 -/
-abbrev DomainMappers : Type := HashMap String DomainMapper
+public abbrev DomainMappers : Type := HashMap String DomainMapper
 
 open Std.Format in
 /--
 Generates code for the provided collection of domain mappers, constructing a JS constant named
-`domainMappers` that's suitable for the quick-jump feature.
+{lit}`domainMappers` that's suitable for the quick-jump feature.
 -/
-def DomainMappers.toJs (mappers : DomainMappers) : Std.Format :=
+public def DomainMappers.toJs (mappers : DomainMappers) : Std.Format :=
   let ms := mappers.fold (init := nil) fun code dom m => code ++ line ++ line ++ gen dom m
   let ms' := mappers.keys.map fun dom => nest 2 <| group <| text dom.quote ++ ":" ++ line ++ jsName dom
   ms ++ line ++ line ++
@@ -164,7 +169,7 @@ where
 /--
 Collects the CSS customizations for each domain.
 -/
-def DomainMappers.quickJumpCss (mappers : DomainMappers) : String :=
+public def DomainMappers.quickJumpCss (mappers : DomainMappers) : String :=
   mappers.fold (init := "") fun css _ m =>
     match m.quickJumpCss with
     | none => css
@@ -177,7 +182,7 @@ open Verso.BinFiles
 /--
 The search box code
 -/
-def searchBoxCode : Array (String × ByteArray):=
+public def searchBoxCode : Array (String × ByteArray) :=
   (include_bin_dir "../../../static-web/search").filterMap fun (name, contents) =>
     if name.endsWith "domain-mappers.js" then none
     else some (name.stripPrefix "../../../static-web/search/", contents)

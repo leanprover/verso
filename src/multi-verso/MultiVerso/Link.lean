@@ -3,10 +3,11 @@ Copyright (c) 2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
+module
 
-import Lean.Data.Json
-import MultiVerso.Path
-import MultiVerso.Slug
+public import Lean.Data.Json
+public import MultiVerso.Path
+public import MultiVerso.Slug
 
 open Lean
 
@@ -15,7 +16,7 @@ set_option linter.missingDocs true
 namespace Verso.Multi
 
 /-- A link to a given piece of content -/
-structure Link where
+public structure Link where
   /--
   The path from the site root to the current page.
   -/
@@ -25,12 +26,11 @@ structure Link where
 deriving ToJson, FromJson, BEq, Ord, Repr
 
 /-- Constructs a link URL suitable for an `<a>` tag. -/
-def Link.link (link : Link) : String :=
+public def Link.link (link : Link) : String :=
   link.path.link (htmlId := some link.htmlId.toString)
 
-
 /-- A link to a piece of content on another site -/
-structure RemoteLink extends Link where
+public structure RemoteLink extends Link where
   /--
   The part of the link to be prepended to the path, if present. Only used on links to other sites.
   -/
@@ -38,5 +38,5 @@ structure RemoteLink extends Link where
 deriving ToJson, FromJson, BEq, Ord, Repr
 
 @[inherit_doc Link.link]
-def RemoteLink.link (link : RemoteLink) : String :=
+public def RemoteLink.link (link : RemoteLink) : String :=
   link.root.stripSuffix "/" ++ link.toLink.link

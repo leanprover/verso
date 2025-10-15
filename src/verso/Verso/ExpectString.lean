@@ -8,6 +8,11 @@ import Lean.Elab.Command
 import Lean.Elab.InfoTree
 import Lean.Util.Diff
 import Lean.Meta.Hint
+-- For doc xrefs
+import SubVerso.Examples.Messages.NormalizeLineNum
+import SubVerso.Examples.Messages.NormalizeMetavars
+
+set_option doc.verso true
 
 open Lean Elab
 
@@ -23,20 +28,19 @@ def abbreviateString (what : String) (maxLength : Nat := 30) : String :=
     what
 
 /--
-Expects that a string matches some expected form from the document, returning `MessageData` for further processing.
+Expects that a string matches some expected form from the document, returning {name}`MessageData` for further processing.
 
 No errors are logged.
 
 If the strings don't match, then a diff is displayed as an error, and a code action to replace the
 expected string with the actual one is offered. Strings are compared one line at a time, and only
-strings that match `useLine` are considered (by default, all are considered). Lines are compared
-modulo `preEq`. The parameter `what` is used in the error message header, in a context "Mismatched
-`what` output:".
+strings that match {name}`useLine` are considered (by default, all are considered). Lines are compared
+modulo {name}`preEq`.
 
-`SubVerso.Examples.Messages.normalizeMetavars` and `SubVerso.Examples.Messages.normalizeLineNums`
-are good candidates for `preEq`.
+{name}`SubVerso.Examples.Messages.normalizeMetavars` and {name}`SubVerso.Examples.Messages.normalizeLineNums`
+are good candidates for {name}`preEq`.
 
-Errors are logged, not thrown; the returned `Bool` indicates whether an error was logged.
+Errors are logged, not thrown; the returned {name}`Bool` indicates whether an error was logged.
 -/
 def expectStringOrDiff (expected : StrLit) (actual : String)
     (preEq : String → String := id)
@@ -55,14 +59,14 @@ Expects that a string matches some expected form from the document.
 
 If the strings don't match, then a diff is displayed as an error, and a code action to replace the
 expected string with the actual one is offered. Strings are compared one line at a time, and only
-strings that match `useLine` are considered (by default, all are considered). Lines are compared
-modulo `preEq`. The parameter `what` is used in the error message header, in a context "Mismatched
-`what` output:".
+strings that match {name}`useLine` are considered (by default, all are considered). Lines are compared
+modulo {name}`preEq`. The parameter {name}`what` is used in the error message header, in a context "Mismatched
+{name}`what` output:".
 
-`SubVerso.Examples.Messages.normalizeMetavars` and `SubVerso.Examples.Messages.normalizeLineNums`
-are good candidates for `preEq`.
+{name}`SubVerso.Examples.Messages.normalizeMetavars` and {name}`SubVerso.Examples.Messages.normalizeLineNums`
+are good candidates for {name}`preEq`.
 
-Errors are logged, not thrown; the returned `Bool` indicates whether an error was logged.
+Errors are logged, not thrown; the returned {name}`Bool` indicates whether an error was logged.
 -/
 def expectString (what : String) (expected : StrLit) (actual : String)
     (preEq : String → String := id)

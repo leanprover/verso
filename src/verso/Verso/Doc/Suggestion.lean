@@ -3,23 +3,23 @@ Copyright (c) 2023-2024 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-
-import Lean.Server.CodeActions
+module
+public meta import Lean.Server.CodeActions
 
 namespace Verso.Doc.Suggestion
 
 open Lean Elab Server RequestM
 
-structure Suggestion where
+meta structure Suggestion where
   summary : String
   replacement : String
 deriving TypeName
 
-def saveSuggestion [Monad m] [MonadInfoTree m] (stx : Syntax) (summary replacement: String) : m Unit := do
+public meta def saveSuggestion [Monad m] [MonadInfoTree m] (stx : Syntax) (summary replacement: String) : m Unit := do
   pushInfoLeaf <| .ofCustomInfo {stx := stx, value := Dynamic.mk (Suggestion.mk summary replacement) }
 
 @[code_action_provider]
-def provideSuggestions : CodeActionProvider := fun params snap => do
+public meta def provideSuggestions : CodeActionProvider := fun params snap => do
   let doc ← readDoc
   let text := doc.meta.text
   let startPos := text.lspPosToUtf8Pos params.range.start
