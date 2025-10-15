@@ -18,6 +18,8 @@ import Verso.Doc.Elab.InlineString
 import Verso.Hover
 import Verso.SyntaxUtils
 
+set_option doc.verso true
+
 namespace Verso.Doc.Elab
 
 open Lean
@@ -285,7 +287,7 @@ def PartFrame.close (fr : PartFrame) (endPos : String.Pos) : FinishedPart :=
 /--
 Information available while constructing a part. It extends {name}`PartFrame`
 because that data represents the current frame. The field
-{name PartContext.parents}`parents` represents other parts above
+{name (full := PartContext.parents)}`parents` represents other parts above
 us in the hierarchy that are still being built.
 -/
 structure PartContext extends PartFrame where
@@ -299,8 +301,8 @@ parts being built.
 def PartContext.level (ctxt : PartContext) : Nat := ctxt.parents.size
 
 /--
-Closes the current part.
-The resulting {name}`FinishedPart` is appended to {name}`priorParts`, and
+Closes the current part. The resulting {name}`FinishedPart` is appended to
+{name (full := PartFrame.priorParts)}`priorParts`, and
 the top of the stack of our parents becomes the current frame. Returns
 {name}`none` if there are no parents.
 -/
