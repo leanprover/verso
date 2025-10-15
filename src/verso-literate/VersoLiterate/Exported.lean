@@ -247,7 +247,6 @@ private partial def mdBlock : MD4Lean.Block → Except String (Block g)
   | .html .. => throw "Literal HTML in Markdown not supported"
   | .hr => throw "Thematic break (horizontal rule) in Markdown not supported"
 
---open Code.External.ExternalCode in
 partial def modToPage [LoadLiterate g] (mod : LitMod) (title : Array (Inline g)) (titleString : String) : Except String (Part g) := do
   let mut stack : Array (Part g) := #[]
   let mut p : Part g := {title, titleString, metadata := none, content := #[], subParts := #[]}
