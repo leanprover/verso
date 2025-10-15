@@ -15,7 +15,7 @@ open Lean Parser Syntax
 namespace Verso.Parser
 
 
-partial def docStrLitFnAux (startPos : String.Pos) : ParserFn := fun c s =>
+partial def docStrLitFnAux (startPos : String.Pos.Raw) : ParserFn := fun c s =>
   let i     := s.pos
   if h : c.atEnd i then s.mkUnexpectedErrorAt "unterminated string literal" startPos
   else
@@ -50,7 +50,7 @@ def docNumLitFn : ParserFn := fun c s =>
       else if curr == 'o' || curr == 'O' then
         octalNumberFn startPos false c (s.next c i)
       else if curr == 'x' || curr == 'X' then
-        hexNumberFn startPos false c (s.next c i)
+        (hexNumberFn startPos false) c (s.next c i)
       else
         decimalNumberFn startPos false c (s.setPos i)
     else if curr.isDigit then
@@ -58,7 +58,7 @@ def docNumLitFn : ParserFn := fun c s =>
     else
       s.mkError "numeral"
 
-def docMkIdResult (startPos : String.Pos) (val : Name) : ParserFn := fun c s =>
+def docMkIdResult (startPos : String.Pos.Raw) (val : Name) : ParserFn := fun c s =>
   let stopPos         := s.pos
   let rawVal          := c.substring startPos stopPos
   let trailingStopPos := s.pos
@@ -69,7 +69,7 @@ def docMkIdResult (startPos : String.Pos) (val : Name) : ParserFn := fun c s =>
   s.pushSyntax atom
 
 partial def docIdentFn (reportAs : String := "identifier") : ParserFn :=
-  let rec parse (startPos : String.Pos) (r : Name) : ParserFn:= fun c s =>
+  let rec parse (startPos : String.Pos.Raw) (r : Name) : ParserFn:= fun c s =>
     let i     := s.pos
     if h : c.atEnd i then
       s.mkEOIError [reportAs]

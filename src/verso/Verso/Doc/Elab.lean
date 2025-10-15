@@ -306,10 +306,10 @@ partial def _root_.Lean.Doc.Syntax.link_ref.command : PartCommand
     addLinkDef name url.getString
   | _ => throwUnsupportedSyntax
 
-partial def PartElabM.State.close (endPos : String.Pos) (state : PartElabM.State) : Option PartElabM.State :=
+partial def PartElabM.State.close (endPos : String.Pos.Raw) (state : PartElabM.State) : Option PartElabM.State :=
   state.partContext.close endPos |>.map ({state with partContext := ·})
 
-partial def PartElabM.State.closeAll (endPos : String.Pos) (state : PartElabM.State) : PartElabM.State :=
+partial def PartElabM.State.closeAll (endPos : String.Pos.Raw) (state : PartElabM.State) : PartElabM.State :=
   match state.close endPos with
   | none => state
   | some state' =>
@@ -317,7 +317,7 @@ partial def PartElabM.State.closeAll (endPos : String.Pos) (state : PartElabM.St
       state'.closeAll endPos
     else state'
 
-partial def closePartsUntil (outer : Nat) (endPos : String.Pos) : PartElabM Unit := do
+partial def closePartsUntil (outer : Nat) (endPos : String.Pos.Raw) : PartElabM Unit := do
   let level ← currentLevel
   if outer ≤ level then
     match (← getThe PartElabM.State).partContext.close endPos with

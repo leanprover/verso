@@ -84,7 +84,7 @@ block_extension Block.syntaxError where
         HtmlT.logError <| "Couldn't deserialize Lean code while rendering HTML: " ++ err
         pure .empty
       | .ok (str, (msgs : (Array SyntaxError))) =>
-        let mut pos : String.Pos := ⟨0⟩
+        let mut pos : String.Pos.Raw := ⟨0⟩
         let mut out : Array Html := #[]
         let mut line : Array Html := #[]
         let filemap := FileMap.ofString str
