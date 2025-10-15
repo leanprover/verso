@@ -3,11 +3,11 @@ Copyright (c) 2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-
-import Lean.Data.Json
+module
+public import Lean.Data.Json
 
 import Std.Data.HashMap
-import Std.Time.DateTime
+public import Std.Time.DateTime
 import Std.Time.Format
 
 open Std
@@ -16,7 +16,7 @@ open Lean
 
 namespace Verso.Multi
 
-inductive XrefSource where
+public inductive XrefSource where
   | localOverride (path : System.FilePath)
   | remoteOverride (URL : String)
   /--
@@ -26,7 +26,7 @@ inductive XrefSource where
   | default
 deriving BEq, Repr
 
-def XrefSource.toJson (source : XrefSource) : Json :=
+public def XrefSource.toJson (source : XrefSource) : Json :=
   match source with
   | .localOverride path =>
     json%{"local": $path.toString}
@@ -35,7 +35,7 @@ def XrefSource.toJson (source : XrefSource) : Json :=
   | .default =>
     "default"
 
-def XrefSource.fromJson? (json : Json) : Except String XrefSource :=
+public def XrefSource.fromJson? (json : Json) : Except String XrefSource :=
   match json with
   | .str "default" => pure .default
   | .obj o =>
@@ -46,17 +46,17 @@ def XrefSource.fromJson? (json : Json) : Except String XrefSource :=
       throw s!"Expected a singleton object with either a 'local' or 'remote' field mapped to a string, got {json.compress}"
   | other => throw s!"Expected the string \"default\" or an object, got {other.compress}"
 
-inductive UpdateFrequency where
+public inductive UpdateFrequency where
   | manual
   | days (days : Day.Offset)
 deriving BEq, Repr
 
-def UpdateFrequency.toJson (freq : UpdateFrequency) : Json :=
+public def UpdateFrequency.toJson (freq : UpdateFrequency) : Json :=
   match freq with
   | .manual => .str "manual"
   | .days i => json%{"days": $i.toInt}
 
-def UpdateFrequency.fromJson? (freq : Json) : Except String UpdateFrequency := do
+public def UpdateFrequency.fromJson? (freq : Json) : Except String UpdateFrequency := do
   match freq with
   | .str "manual" =>
     return .manual
@@ -69,13 +69,13 @@ def UpdateFrequency.fromJson? (freq : Json) : Except String UpdateFrequency := d
   | _ => pure ()
   throw <| "Expected \"manual\" or `{\"days\": i}`, got " ++ freq.compress
 
-instance : ToJson UpdateFrequency := ⟨UpdateFrequency.toJson⟩
-instance : FromJson UpdateFrequency := ⟨UpdateFrequency.fromJson?⟩
+public instance : ToJson UpdateFrequency := ⟨UpdateFrequency.toJson⟩
+public instance : FromJson UpdateFrequency := ⟨UpdateFrequency.fromJson?⟩
 
 /--
 A remote collection of documentation.
 -/
-structure Remote where
+public structure Remote where
   /-- The root URL for the documentation. -/
   root : String
   /--
@@ -98,7 +98,7 @@ structure Remote where
   updateFrequency : UpdateFrequency
 deriving BEq, Repr
 
-def Remote.toJson (remote : Remote) : Json :=
+public def Remote.toJson (remote : Remote) : Json :=
   let json := json%{
       "root": $remote.root,
       "shortName": $remote.shortName,
@@ -110,7 +110,7 @@ def Remote.toJson (remote : Remote) : Json :=
   else
     json.setObjVal! "sources" (.arr (remote.sources.toArray.map (·.toJson)))
 
-def Remote.fromJson? (remote : String) (json : Json) : Except String Remote := do
+public def Remote.fromJson? (remote : String) (json : Json) : Except String Remote := do
   let root ← getField? json "root"
   let shortName ← getField? json "shortName"
   let longName ← getField? json "longName"
@@ -136,18 +136,18 @@ where
       catch
         | e => throw s!"Remote '{remote}' field '{field}': {e}"
 
-structure RemoteMeta where
+public structure RemoteMeta where
   lastUpdated : PlainDateTime
 deriving Repr
 
-structure Config where
+public structure Config where
   /-- A mapping from external source names to their root URLs. -/
   sources : HashMap String Remote
   /-- A relative directory that governs where to store Verso cross-reference data -/
   outputDir : System.FilePath
 deriving Repr
 
-def Config.fromJson? (json : Json) : Except String Config := do
+public def Config.fromJson? (json : Json) : Except String Config := do
   let version ← json.getObjVal? "version"
   let version ← version.getNat? |>.mapError ("version: " ++ ·)
   if version != 0 then throw s!"Only version 0 is supported, got {version}"
@@ -161,11 +161,11 @@ def Config.fromJson? (json : Json) : Except String Config := do
   let outputDir ← if outputDir.isNull then pure ".verso" else FromJson.fromJson? outputDir
   pure {sources := HashMap.ofList sources, outputDir}
 
-structure Manifest extends Config where
+public structure Manifest extends Config where
   metadata : HashMap String RemoteMeta
 deriving Repr
 
-def Manifest.toJson (manifest : Manifest) : Json :=
+public def Manifest.toJson (manifest : Manifest) : Json :=
   let sources := Json.mkObj <|
     manifest.sources.toList.map fun (name, remote) =>
       let json := remote.toJson
@@ -179,7 +179,7 @@ def Manifest.toJson (manifest : Manifest) : Json :=
     "outputDir" : $manifest.outputDir
   }
 
-def Manifest.fromJson? (json : Json) : Except String Manifest := do
+public def Manifest.fromJson? (json : Json) : Except String Manifest := do
   let config ← Config.fromJson? json
   let sourcesJson ← json.getObjVal? "sources"
   let metadata ← HashMap.ofList <$> config.sources.toList.mapM fun (k, _) => do

@@ -30,7 +30,7 @@ def toTex (block : Doc.Block Genre.Manual) : IO Output.TeX := do
 
   -- Traverse the block. This shadows both `block` and `traverseState`.
   -- This is where we engage with the IO at the bottom of TraverseM.
-  let ⟨block, traverseState⟩ ← Doc.Genre.traverse.block Genre.Manual block
+  let ⟨block, traverseState⟩ ← Doc.Genre.traverseBlock Genre.Manual block
     |>.run extension_impls traverseContext traverseState
 
   -- Options for TeX

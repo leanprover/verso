@@ -17,10 +17,13 @@ import Verso.Doc
 import VersoSearch.PorterStemmer
 import VersoSearch.DomainSearch
 
+set_option linter.missingDocs true
+set_option doc.verso true
+
 open Std
 open Lean
 
-set_option linter.missingDocs true
+
 
 namespace Verso.Search
 
@@ -126,7 +129,7 @@ def isEmpty (self : DocumentStore) : Bool := self.length == 0
 /--
 Adds a document to the store.
 
-If `self.save` is `false`, then only the length is incremented and the contents are discarded.
+If {lean}`self.save` is {name}`false`, then only the length is incremented and the contents are discarded.
 -/
 def addDoc (self : DocumentStore) (ref : String) (doc : Doc) : DocumentStore :=
   { self with
@@ -134,7 +137,7 @@ def addDoc (self : DocumentStore) (ref : String) (doc : Doc) : DocumentStore :=
     docs := self.docs.insert ref <| if self.save then doc else {} }
 
 /--
-Removes the documents from the store, setting `save` to `false`.
+Removes the documents from the store, setting {lean}`self.save` to {name}`false`.
 -/
 def extractDocs (self : DocumentStore) : DocumentStore × TreeMap String Doc :=
   let docs := self.docs
@@ -223,11 +226,26 @@ where
   termination_by iter.s.endPos.byteIdx - iter.i.byteIdx
   decreasing_by
     have : iter.s.endPos.byteIdx > iter.i.byteIdx := by
-      simp [String.Iterator.hasNext] at h
-      omega
-    simp [String.Iterator.next', String.next, Char.utf8Size]
-    repeat (split; omega)
-    omega
+      simp only [String.Iterator.hasNext, String.byteIdx_endPos, decide_eq_true_eq] at h
+      assumption
+    simp [String.Iterator.next']
+    apply Nat.sub_lt_sub_left
+    . simp_all [String.endPos]
+    . simp [String.next, Char.utf8Size]
+      grind
+
+@[simp, grind =]
+private theorem string_iter_next'_same_s {iter : String.Iterator} {h : iter.hasNext = true} : (iter.next' h).s = iter.s := by
+  simp [String.Iterator.next']
+
+@[simp, grind! .]
+private theorem char_utf8Size_pos {c : Char} : 0 < c.utf8Size := by
+  grind [Char.utf8Size]
+
+@[simp, grind! .]
+private theorem string_iter_next'_i_gt_i {iter : String.Iterator} {h : iter.hasNext = true} : iter.i.byteIdx < (iter.next' h).i.byteIdx := by
+  simp_all [String.Iterator.next', String.next]
+
 
 private def getNode? (self : IndexItem.Raw) (token : String) : Option IndexItem.Raw :=
   loop self token.iter
@@ -241,11 +259,11 @@ where
   termination_by iter.s.endPos.byteIdx - iter.i.byteIdx
   decreasing_by
     have : iter.s.endPos.byteIdx > iter.i.byteIdx := by
-      simp [String.Iterator.hasNext] at h
-      omega
-    simp [String.Iterator.next', String.next, Char.utf8Size]
-    repeat (split; omega)
-    omega
+      simp only [String.Iterator.hasNext, String.byteIdx_endPos, decide_eq_true_eq] at h
+      assumption
+    simp
+    apply Nat.sub_lt_sub_left <;> simp_all
+
 
 private def removeToken (self : IndexItem.Raw) (ref token : String) : IndexItem.Raw :=
   loop self token.iter
@@ -274,9 +292,8 @@ where
     have : iter.s.endPos.byteIdx > iter.i.byteIdx := by
       simp_all [String.Iterator.hasNext, String.Iterator.next', String.next]
       omega
-    simp [String.Iterator.next', String.next, Char.utf8Size]
-    repeat (split; omega)
-    omega
+    simp [String.Iterator.next', String.next]
+    apply Nat.sub_lt_sub_left <;> simp_all
 end Raw
 
 namespace WF
@@ -302,7 +319,7 @@ structure IndexItem where
 namespace IndexItem
 /-- The term frequency for each document. -/
 def docs (item : IndexItem) : TreeMap String TermFrequency := item.raw.docs
-/-- The frequency for each document (field `df` in the serialized index) -/
+/-- The frequency for each document (field {lit}`df` in the serialized index) -/
 def docFreq (item : IndexItem) : Int64 := item.raw.docFreq
 /-- The empty inverted index. -/
 def empty : IndexItem := {}
@@ -382,12 +399,12 @@ structure PipelineFn where
   /-- The implementation, which should match the corresponding elasticlunr function -/
   filter (token : String) : Option String
 
-/-- A pipeline function that eliminates the words in `stopWords`. -/
+/-- A pipeline function that eliminates the words in {name}`stopWords`. -/
 def stopWordFilter (name : String) (stopWords : HashSet String) : PipelineFn where
   name := name
   filter tok := if stopWords.contains tok then none else some tok
 
-/-- A pipeline function that trims the prefix and suffix that match `wordChars`. -/
+/-- A pipeline function that trims the prefix and suffix that match {name}`wordChars`. -/
 def predicateTrimmer (name : String) (wordChars : Char → Bool) : PipelineFn where
   name := name
   filter tok :=
@@ -425,9 +442,9 @@ protected def Pipeline.toJson (self : Pipeline) : Json := .arr <| self.queue.map
 A natural language for use with indexing.
 -/
 structure Language where
-  /-- The name of the language, e.g. `"English"`.-/
+  /-- The name of the language, e.g. {lean}`"English"`.-/
   name : String
-  /-- The ISO code for the language, e.g. `"en"`.-/
+  /-- The ISO code for the language, e.g. {lean}`"en"`.-/
   code : String
   /--
   A tokenization function that splits a text into words. Each word is further transformed or
@@ -466,7 +483,7 @@ where
 /--
 A tokenizer maps an input string to an array of search tokens (normally words).
 
-`none` means to use the language's tokenizer.
+{name}`none` means to use the language's tokenizer.
 -/
 abbrev TokenizerOverride := Option (String → Array String)
 
@@ -476,9 +493,14 @@ An initial configuration for an index.
 structure IndexBuilder where
   /-- Whether to save document contents, or just the index. -/
   save : Bool := true
-  /-- The fields present in documents. The reference field `refField` should be among them. -/
+  /--
+  The fields present in documents. The reference field {name full:=IndexBuilder.refField}`refField`
+  should be among them.
+  -/
   fields : Array String := #[]
-  /-- Custom tokenizers for fields, associated with the fields in `fields` by position. -/
+  /--
+  Custom tokenizers for fields, associated with the fields in {name full:=IndexBuilder.fields}`fields` by position.
+  -/
   fieldTokenizers : Array TokenizerOverride := #[]
   /-- The field used to identify a document. -/
   refField : String := "id"
@@ -518,7 +540,7 @@ structure Index where
   /-- Which fields exist in the provided documents? -/
   fields : Array String
   /--
-  Fields that should be specially tokenized should have none-`none` tokenizers in the
+  Fields that should be specially tokenized should have none-{name}`none` tokenizers in the
   corresponding position.
   -/
   fieldTokenizers : Array TokenizerOverride
@@ -527,9 +549,12 @@ structure Index where
   names, orders, and behaviors of the steps must be identical.
   -/
   pipeline : Pipeline
-  /-- The field used to identify documents. Should be present in `fields`. -/
+  /--
+  {open Index}
+  The field used to identify documents. Should be present in {name}`fields`.
+  -/
   refField : String
-  /-- The version of elasticlunr.js that the index is designed to work with. -/
+  /-- The version of `elasticlunr.js` that the index is designed to work with. -/
   version : String
   /-- An inverted index for each field. -/
   index : TreeMap String InvertedIndex
@@ -589,7 +614,8 @@ def addDoc (self : Index) (ref : String) (data : Array String) : Index := Id.run
   { self with documentStore := self.documentStore.addDoc ref doc }
 
 /--
-Removes the documents from the index's store, setting `save` to `false`.
+Removes the documents from the index's store, setting {lean}`self.documentStore.save` to
+{name}`false`.
 -/
 def extractDocs (self : Index) : Index × TreeMap String Doc :=
   let (store, docs) := self.documentStore.extractDocs
@@ -651,7 +677,7 @@ Saves an indexable document to the store.
 -/
 def IndexM.save (doc : IndexDoc) : IndexM g Unit := do
   if (← get).contains doc.id then
-    throw "Duplicate document ID: {doc.id}"
+    throw s!"Duplicate document ID: {doc.id}"
   else
     modify (·.insert doc.id doc)
 
@@ -660,6 +686,18 @@ Returns the stack of headers within which indexing is occurring.
 -/
 def IndexM.currentContext : IndexM g (Array String) := read <&> (·.1)
 
+/--
+Runs an indexing computation and constructs the resulting index.
+-/
+def IndexM.finalize (traverseContext : g.TraverseContext) (act : IndexM g Unit) : Except String Index := do
+  match act (#[], traverseContext) {} with
+  | .error e _ => throw e
+  | .ok _ docs =>
+    let mut index : Index := { refField := "id" : IndexBuilder } |>.addField "id" |>.addField "header" |>.addField "contents" |>.addField "context" |>.build
+    for (_, doc) in docs do
+      let context := "\t".intercalate doc.context.toList
+      index := index.addDoc doc.id #[doc.id, doc.header, doc.content, context]
+    return index
 
 /--
 A genre is indexable if there are instructions for constructing an index for use with elasticlunr.js.
@@ -671,7 +709,9 @@ class Indexable (genre : Genre) where
   -/
   partId : genre.PartMetadata → Option String
 
-  /-- Computes the indexed header for a part. On `none`, falls back to a default implementation. -/
+  /--
+  Computes the indexed header for a part. On {name}`none`, falls back to a default implementation.
+  -/
   partHeader : Part genre → IndexM genre (Option String) := fun _ => pure none
 
   /--
@@ -683,14 +723,14 @@ class Indexable (genre : Genre) where
   /--
   How to index block extensions.
 
-  Return `none` to fall back to the content of the contained blocks.
+  Return {name}`none` to fall back to the content of the contained blocks.
   -/
   block : genre.Block → Option ((Inline genre → IndexM genre String) → (Block genre → IndexM genre String) → Array (Block genre) → IndexM genre IndexDoc)
 
   /--
   How to index inline extensions.
 
-  Return `none` to fall back to the content of the contained inlines.
+  Return {name}`none` to fall back to the content of the contained inlines.
   -/
   inline : genre.Inline → Option ((Inline genre → IndexM genre String) → Array (Inline genre) → IndexM genre IndexDoc)
 
@@ -798,13 +838,6 @@ def mkIndex (p : Part g) (ctx : g.TraverseContext) : Except String Index := do
   if p.metadata.bind idx.partId |>.isNone then
     throw "No ID for root part"
   else
-    match partText p (#[], ctx) {} with
-    | .error e _ => throw e
-    | .ok _ docs =>
-      let mut index : Index := { refField := "id" : IndexBuilder } |>.addField "id" |>.addField "header" |>.addField "contents" |>.addField "context" |>.build
-      for (_, doc) in docs do
-        let context := "\t".intercalate doc.context.toList
-        index := index.addDoc doc.id #[doc.id, doc.header, doc.content, context]
-      return index
+   partText p |> discard |>.finalize ctx
 
 end
