@@ -75,6 +75,29 @@ lean_lib VersoManual where
 lean_exe «verso» where
   root := `Main
   srcDir := "src/cli"
+  supportInterpreter := true
+
+@[default_target]
+lean_lib VersoLiterate where
+  roots := #[`VersoLiterate]
+  srcDir := "src/verso-literate"
+
+@[default_target]
+lean_exe «verso-literate» where
+  root := `Main
+  srcDir := "src/verso-literate"
+  supportInterpreter := true
+
+input_file «verso-html-css» where
+  text := true
+  path := "src/verso-html/code.css"
+
+@[default_target]
+lean_exe «verso-html» where
+  root := `Main
+  srcDir := "src/verso-html"
+  needs := #[«verso-html-css»]
+  supportInterpreter := true
 
 @[default_target]
 lean_lib Tests where
@@ -84,13 +107,11 @@ lean_lib Tests where
 lean_exe «verso-tests» where
   root := `TestMain
   srcDir := "src/tests"
+  supportInterpreter := true
 
 @[default_target]
 lean_exe «verso-demo» where
   root := `Main
-  -- Enables the use of the Lean interpreter by the executable (e.g.,
-  -- `runFrontend`) at the expense of increased binary size on Linux.
-  -- Remove this line if you do not need such functionality.
   supportInterpreter := true
 
 lean_lib UsersGuide where
@@ -100,9 +121,6 @@ lean_lib UsersGuide where
 @[default_target]
 lean_exe usersguide where
   root := `UsersGuideMain
-  -- Enables the use of the Lean interpreter by the executable (e.g.,
-  -- `runFrontend`) at the expense of increased binary size on Linux.
-  -- Remove this line if you do not need such functionality.
   supportInterpreter := true
 
 -- A demo site that shows how to generate websites with Verso
@@ -114,11 +132,7 @@ lean_lib DemoSite where
 lean_exe demosite where
   srcDir := "examples/website"
   root := `DemoSiteMain
-  -- Enables the use of the Lean interpreter by the executable (e.g.,
-  -- `runFrontend`) at the expense of increased binary size on Linux.
-  -- Remove this line if you do not need such functionality.
   supportInterpreter := true
-
 
 -- An example of a textbook project built in Verso
 lean_lib DemoTextbook where
@@ -152,3 +166,37 @@ lean_lib SimplePage where
 lean_exe simplepage where
   srcDir := "examples/custom-genre"
   root := `SimplePageMain
+  supportInterpreter := true
+
+
+module_facet literate mod : System.FilePath := do
+  let ws ← getWorkspace
+
+  let exeJob ← «verso-literate».fetch
+  let modJob ← mod.olean.fetch
+
+  let buildDir := ws.root.buildDir
+  let litFile := mod.filePath (buildDir / "literate") "json"
+
+  exeJob.bindM fun exeFile =>
+    modJob.mapM fun _oleanPath => do
+      addLeanTrace
+      buildFileUnlessUpToDate' (text := true) litFile <|
+        proc {
+          cmd := exeFile.toString
+          args := #[mod.name.toString, litFile.toString]
+          env := ← getAugmentedEnv
+        }
+      pure litFile
+
+library_facet literate lib : Array System.FilePath := do
+  let mods ← (← lib.modules.fetch).await
+  let lits ← mods.mapM fun x =>
+    x.facet `literate |>.fetch
+  pure <| Job.collectArray lits
+
+
+package_facet literate pkg : Array System.FilePath := do
+  let libs := Job.collectArray (← pkg.leanLibs.mapM (·.facet `literate |>.fetch))
+  let exes := Job.collectArray (← pkg.leanExes.mapM (·.toLeanLib.facet `literate |>.fetch))
+  return libs.zipWith (·.flatten ++ ·.flatten) exes

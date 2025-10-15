@@ -7,6 +7,7 @@ import Lean.Parser
 import Verso.Parser
 import Lean.Elab.Term.TermElabM
 import Lean.Meta.Hint
+import Verso.Output.Html.Entities
 
 namespace Verso.Output
 
@@ -223,6 +224,34 @@ def attributeName.parenthesizer := PrettyPrinter.Parenthesizer.visitToken
 @[combinator_formatter attributeName]
 def attributeName.formatter := PrettyPrinter.Formatter.visitAtom Name.anonymous
 
+partial def htmlCommentContentsFn : ParserFn := fun c s =>
+  let startPos := s.pos
+  if h : c.atEnd s.pos then
+    s.mkEOIError ["HTML comment end"]
+  else
+    if c.get' s.pos h == '-' then
+      let s := s.setPos (c.next' s.pos h)
+      if h' : ¬c.atEnd s.pos then
+        if c.get' s.pos h' == '-' then
+          let s := s.setPos (c.next' s.pos h')
+          if h'' : ¬c.atEnd s.pos then
+            if c.get' s.pos h'' == '>' then
+              s.setPos (c.next' s.pos h'')
+            else htmlCommentContentsFn c <| s.setPos (c.next' startPos h)
+          else s.mkEOIError ["HTML comment end"]
+        else htmlCommentContentsFn c <| s.setPos (c.next' startPos h)
+      else s.mkEOIError ["HTML comment end"]
+    else htmlCommentContentsFn c <| s.setPos (c.next' startPos h)
+
+def htmlCommentContents : Parser where
+  fn := rawFn htmlCommentContentsFn (trailingWs := true)
+
+@[combinator_parenthesizer htmlCommentContents]
+def htmlCommentContents.parenthesizer := PrettyPrinter.Parenthesizer.visitToken
+
+@[combinator_formatter htmlCommentContents]
+def htmlCommentContents.formatter := PrettyPrinter.Formatter.visitAtom Name.anonymous
+
 def _root_.Lean.TSyntax.getAttributeName (stx : TSyntax attributeNameKind) : String :=
   if let ⟨.node _ _ #[.atom _ name]⟩ := stx then
     name
@@ -241,6 +270,7 @@ scoped syntax (name := attrib_val_str_interp) "s!" interpolatedStr(term) : attri
 scoped syntax (name := attrib_val_antiquote) "{{" term "}}" : attrib_val
 scoped syntax (name := attrStrNamed) str " = " attrib_val : attrib
 scoped syntax (name := attrRawNamed) attributeName " = " attrib_val : attrib
+scoped syntax (name := attrBool) attributeName : attrib
 scoped syntax (name := attrAntiquoted) "{{" term "}}" : attrib
 
 partial def _root_.Lean.TSyntax.tagName : TSyntax `tag_name → String
@@ -252,6 +282,7 @@ partial def _root_.Lean.TSyntax.tagName : TSyntax `tag_name → String
 scoped syntax "{{" term "}}" : html
 scoped syntax "<" tag_name attrib* ">" html* "</" tag_name ">" : html
 scoped syntax "<" tag_name attrib* "/" ">" : html
+scoped syntax (name := comment) "<!--" htmlCommentContents : html
 scoped syntax str : html
 scoped syntax "s!" interpolatedStr(term) : html
 scoped syntax "r!" str : html
@@ -281,6 +312,8 @@ meta def elabAttrs (stxs : Array (TSyntax `attrib)) : TermElabM Expr := do
     | `(attrStrNamed| $name:str = {{ $e }} ) =>
       let val ← withRef e <| elabTermEnsuringType e (some (.const ``String []))
       attrs ← mkAppM ``Array.push #[attrs, ← mkAppM ``Prod.mk #[toExpr name.getString, val]]
+    | `(attrBool| $name ) =>
+      attrs ← mkAppM ``Array.push #[attrs, ← mkAppM ``Prod.mk #[toExpr name.getAttributeName, toExpr ""]]
     | `(attrAntiquoted| {{ $e }}) =>
       let e ← elabTermEnsuringType e (← mkAppM ``Array #[attrType])
       attrs ← mkAppM ``Array.append #[attrs, e]
@@ -289,6 +322,8 @@ meta def elabAttrs (stxs : Array (TSyntax `attrib)) : TermElabM Expr := do
 
 open Lean Elab Term Meta in
 meta partial def elabHtml (stx : TSyntax `html) : TermElabM Expr := withRef stx do
+  if stx.raw.getKind == ``comment then
+    return (← mkAppM ``Html.empty #[])
   match stx with
   | `(html| {{ $e:term }} ) =>
     elabTermEnsuringType e (some (.const ``Html []))
@@ -361,10 +396,12 @@ info: Verso.Output.Html.tag
 private def test : Html := {{
   <html>
   <head>
+    <!-- Set the contents -->
     <meta charset="UTF-8"/>
     <script></script>
   </head>
   <body lang="en" class="thing" data-foo="data foo">
+  <input type="checkbox" checked />
   <p> "foo bar" <br/> "hey" </p>
   </body>
   </html>
@@ -384,12 +421,14 @@ info: Verso.Output.Html.tag
       Verso.Output.Html.tag
         "body"
         #[("lang", "en"), ("class", "thing"), ("data-foo", "data foo")]
-        (Verso.Output.Html.tag
-          "p"
-          #[]
-          (Verso.Output.Html.seq
-            #[Verso.Output.Html.text true "foo bar", Verso.Output.Html.tag "br" #[] (Verso.Output.Html.seq #[]),
-              Verso.Output.Html.text true "hey"]))])
+        (Verso.Output.Html.seq
+          #[Verso.Output.Html.tag "input" #[("type", "checkbox"), ("checked", "")] (Verso.Output.Html.seq #[]),
+            Verso.Output.Html.tag
+              "p"
+              #[]
+              (Verso.Output.Html.seq
+                #[Verso.Output.Html.text true "foo bar", Verso.Output.Html.tag "br" #[] (Verso.Output.Html.seq #[]),
+                  Verso.Output.Html.text true "hey"])])])
 -/
 #guard_msgs in
   #eval test
@@ -478,7 +517,7 @@ info: |
     <script></script>
     </head>
   <body lang="en" class="thing" data-foo="data foo">
-    <p>
+    <input type="checkbox" checked=""><p>
       foo bar<br>hey</p>
     </body>
   </html>

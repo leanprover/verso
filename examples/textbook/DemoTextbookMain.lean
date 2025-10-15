@@ -84,4 +84,4 @@ def config : Config where
   emitHtmlMulti := true
   htmlDepth := 2
 
-def main := manualMain (%doc DemoTextbook) (extraSteps := [buildExercises]) (config := config)
+def main := manualMain (%doc DemoTextbook) (extraSteps := [buildExercises]) (config := config.addKaTeX)

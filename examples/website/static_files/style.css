@@ -89,6 +89,30 @@ code {
   margin-bottom: 2.5rem; /* Match sakura.css's setting for block elements */
 }
 
+section > .docstring::before, section > .docstring::after {
+  line-height: 1;
+  font-weight: bold;
+  color: #888;
+  display: block;
+  font-size: 80%;
+}
+
+section > .docstring::before {
+  content: "/--";
+}
+
+section > .docstring::after {
+  content: "-/";
+}
+
+section > .docstring > *:last-child {
+  margin-bottom: 0;
+}
+
+section > .docstring {
+  border: 0.2rem solid #f1f1f1;
+}
+
 /**************************/
 
 .lexed.json .brace {
