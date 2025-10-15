@@ -64,10 +64,10 @@ open Lean Parser
 open Std.Format
 
 
-defmethod Syntax.getPos! (stx : Syntax) : String.Pos :=
+defmethod Syntax.getPos! (stx : Syntax) : String.Pos.Raw :=
   if let some pos := stx.getPos? then pos else panic! s!"No position for {stx}"
 
-defmethod SourceInfo.getPos! (info : SourceInfo) : String.Pos :=
+defmethod SourceInfo.getPos! (info : SourceInfo) : String.Pos.Raw :=
   if let some pos := info.getPos? then pos else panic! s!"No position for {repr info}"
 
 def ppSyntax (stx : Syntax) : Std.Format := .nest 2 <| stx.formatStx (some 50) false
@@ -163,7 +163,7 @@ deriving ToJson, FromJson, BEq, Repr, Quote
 
 -- Based on mkErrorMessage used in Lean upstream - keep them in synch for best UX
 open Lean.Parser in
-private partial def mkSyntaxError (c : InputContext) (pos : String.Pos) (stk : SyntaxStack) (e : Parser.Error) : SyntaxError := Id.run do
+private partial def mkSyntaxError (c : InputContext) (pos : String.Pos.Raw) (stk : SyntaxStack) (e : Parser.Error) : SyntaxError := Id.run do
   let mut pos := pos
   let mut endPos? := none
   let mut e := e

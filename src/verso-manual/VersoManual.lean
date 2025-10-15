@@ -507,7 +507,7 @@ where
     let mut hash := 0
     let mut n := 0
     while h : n < s.utf8ByteSize do
-      hash := hash + s.getUtf8Byte ⟨n⟩ h
+      hash := hash + s.getUTF8Byte ⟨n⟩ h
       n := n + 1
     return hash
 
