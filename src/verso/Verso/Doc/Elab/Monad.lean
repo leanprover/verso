@@ -146,7 +146,7 @@ def internalRefs (defs : HashMap String (DocDef α)) (refs : HashMap String DocU
 
 
 inductive TOC where
-  | mk (title : String) (titleSyntax : Syntax) (endPos : String.Pos) (children : Array TOC)
+  | mk (title : String) (titleSyntax : Syntax) (endPos : String.Pos.Raw) (children : Array TOC)
   | included (name : Ident)
 deriving Repr, TypeName, Inhabited
 
@@ -157,16 +157,16 @@ structure TocFrame where
   priorChildren : Array TOC
 deriving Repr, Inhabited
 
-def TocFrame.close (frame : TocFrame) (endPos : String.Pos) : TOC :=
+def TocFrame.close (frame : TocFrame) (endPos : String.Pos.Raw) : TOC :=
   .mk frame.title frame.titleSyntax endPos frame.priorChildren
 
-def TocFrame.wrap (frame : TocFrame) (item : TOC) (endPos : String.Pos) : TOC :=
+def TocFrame.wrap (frame : TocFrame) (item : TOC) (endPos : String.Pos.Raw) : TOC :=
   .mk frame.title frame.titleSyntax endPos (frame.priorChildren.push item)
 
 def TocFrame.addChild (frame : TocFrame) (item : TOC) : TocFrame :=
   {frame with priorChildren := priorChildren frame |>.push item}
 
-partial def TocFrame.closeAll (stack : Array TocFrame) (endPos : String.Pos) : Option TOC :=
+partial def TocFrame.closeAll (stack : Array TocFrame) (endPos : String.Pos.Raw) : Option TOC :=
   let rec aux (stk : Array TocFrame) (toc : TOC) :=
     if let some fr := stack.back? then
       aux stk.pop (fr.wrap toc endPos)
@@ -176,8 +176,8 @@ partial def TocFrame.closeAll (stack : Array TocFrame) (endPos : String.Pos) : O
   else none
 
 
-def TocFrame.wrapAll (stack : Array TocFrame) (item : TOC) (endPos : String.Pos) : TOC :=
-  let rec aux (i : Nat) (item : TOC) (endPos : String.Pos) : TOC :=
+def TocFrame.wrapAll (stack : Array TocFrame) (item : TOC) (endPos : String.Pos.Raw) : TOC :=
+  let rec aux (i : Nat) (item : TOC) (endPos : String.Pos.Raw) : TOC :=
     match i with
     | 0 => item
     | i' + 1 =>
@@ -187,7 +187,7 @@ def TocFrame.wrapAll (stack : Array TocFrame) (item : TOC) (endPos : String.Pos)
   aux (stack.size - 1) item endPos
 
 inductive FinishedPart where
-  | mk (titleSyntax : Syntax) (expandedTitle : Array (TSyntax `term)) (titlePreview : String) (metadata : Option (TSyntax `term)) (blocks : Array (TSyntax `term)) (subParts : Array FinishedPart) (endPos : String.Pos)
+  | mk (titleSyntax : Syntax) (expandedTitle : Array (TSyntax `term)) (titlePreview : String) (metadata : Option (TSyntax `term)) (blocks : Array (TSyntax `term)) (subParts : Array FinishedPart) (endPos : String.Pos.Raw)
   | included (name : Ident)
 deriving Repr, BEq
 
@@ -280,7 +280,7 @@ structure PartFrame where
 deriving Repr, Inhabited
 
 /-- Turn an previously active {name}`PartFrame` into a {name}`FinishedPart`. -/
-def PartFrame.close (fr : PartFrame) (endPos : String.Pos) : FinishedPart :=
+def PartFrame.close (fr : PartFrame) (endPos : String.Pos.Raw) : FinishedPart :=
   let (titlePreview, titleInlines) := fr.expandedTitle.getD ("<anonymous>", #[])
   .mk fr.titleSyntax titleInlines titlePreview fr.metadata fr.blocks fr.priorParts endPos
 
@@ -306,7 +306,7 @@ Closes the current part. The resulting {name}`FinishedPart` is appended to
 the top of the stack of our parents becomes the current frame. Returns
 {name}`none` if there are no parents.
 -/
-def PartContext.close (ctxt : PartContext) (endPos : String.Pos) : Option PartContext := do
+def PartContext.close (ctxt : PartContext) (endPos : String.Pos.Raw) : Option PartContext := do
   let fr ← ctxt.parents.back?
   pure {
     parents := ctxt.parents.pop,

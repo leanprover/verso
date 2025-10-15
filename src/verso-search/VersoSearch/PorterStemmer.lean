@@ -34,7 +34,7 @@ reference implementation or the paper, and it is tested against Porter's provide
 Checks whether the character at position {name}`i` is a consonant. {lean}`'y'` is a consonant if not
 preceded by a consonant.
 -/
-def isConsonant (str : String) (i : String.Pos) : Bool :=
+def isConsonant (str : String) (i : String.Pos.Raw) : Bool :=
   match str.get! i with
   | 'a' | 'e' | 'i' | 'o' | 'u' => false
   | 'y' =>

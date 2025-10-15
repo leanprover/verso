@@ -902,7 +902,7 @@ private def hasSubstring (s pattern : String) : Bool :=
   if h : pattern.endPos.1 = 0 then false
   else
     have hPatt := Nat.zero_lt_of_ne_zero h
-    let rec loop (pos : String.Pos) :=
+    let rec loop (pos : String.Pos.Raw) :=
       if h : pos.byteIdx + pattern.endPos.byteIdx > s.endPos.byteIdx then
         false
       else

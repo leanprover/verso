@@ -41,12 +41,12 @@ def withFallbackAs (accept : α → Bool) (resp : RequestTask α) (act : Request
       if accept v then pure (.pure v)
       else pure resp
 
-defmethod Syntax.containsPos (s : Syntax) (p : String.Pos) : Bool :=
+defmethod Syntax.containsPos (s : Syntax) (p : String.Pos.Raw) : Bool :=
   match span s.getHeadInfo, span s.getTailInfo with
   | some (start, _), some (_, stop) => p >= start && p < stop
   | _, _ => false
 where
-  span : SourceInfo → Option (String.Pos × String.Pos)
+  span : SourceInfo → Option (String.Pos.Raw × String.Pos.Raw)
     | .original (pos := start) (endPos := stop) .. => some (start, stop)
     | .synthetic (pos := start) (endPos := stop) .. => some (start, stop)
     | _ => none
@@ -56,7 +56,7 @@ defmethod Syntax.lspRange (text : FileMap) (s : Syntax) : Option Lsp.Range :=
   | some (start, _), some (_, stop) => some ⟨text.utf8PosToLspPos start, text.utf8PosToLspPos stop⟩
   | _, _ => none
 where
-  span : SourceInfo → Option (String.Pos × String.Pos)
+  span : SourceInfo → Option (String.Pos.Raw × String.Pos.Raw)
     | .original (pos := start) (endPos := stop) .. => some (start, stop)
     | .synthetic (pos := start) (endPos := stop) .. => some (start, stop)
     | _ => none
@@ -185,7 +185,7 @@ where
   -- Unfortunately, VS Code doesn't do the right thing, so many of these highlights don't work there:
   --   https://github.com/microsoft/vscode/issues/127007
   -- Tested in Emacs and the problem isn't server side.
-  syntactic (text : FileMap) (pos : String.Pos) (stx : Syntax) : Option (Array Syntax) := do
+  syntactic (text : FileMap) (pos : String.Pos.Raw) (stx : Syntax) : Option (Array Syntax) := do
     if includes stx pos |>.getD true then
       match stx with
         | `(block|:::%$opener $_name $_args* {$_contents*}%$closer )
@@ -217,7 +217,7 @@ where
           if let some r := syntactic text pos s then return r
     failure
 
-  includes (stx : Syntax) (pos : String.Pos) : Option Bool :=
+  includes (stx : Syntax) (pos : String.Pos.Raw) : Option Bool :=
     stx.getRange?.map (fun r => pos ≥ r.start && pos < r.stop)
 
 open Lean Lsp
@@ -558,11 +558,11 @@ def mergeTokens (mine : Array SemanticTokenEntry) (leans : SemanticTokens) : Arr
   encodeTokenEntries (toks ++ mine |>.qsort (·.ordLt ·))
 
 open Lean Server Lsp RequestM in
-def snapshotTokens (beginPos : String.Pos) (text : FileMap) (snap : Snapshots.Snapshot) : Array SemanticTokenEntry :=
+def snapshotTokens (beginPos : String.Pos.Raw) (text : FileMap) (snap : Snapshots.Snapshot) : Array SemanticTokenEntry :=
   if snap.endPos <= beginPos then #[] else versoTokens text snap.stx
 
 open Lean Server Lsp RequestM in
-def snapshotsTokens (beginPos : String.Pos) (text : FileMap) (snaps : List Snapshots.Snapshot) : Array SemanticTokenEntry :=
+def snapshotsTokens (beginPos : String.Pos.Raw) (text : FileMap) (snaps : List Snapshots.Snapshot) : Array SemanticTokenEntry :=
   snaps.foldl (init := #[]) fun toks snap => toks ++ snapshotTokens beginPos text snap
 
 open Lean Server Lsp IO in
@@ -643,7 +643,7 @@ def handleDef (params : TextDocumentPositionParams) (prev : RequestTask (Array L
 
 open Lean Server Lsp RequestM in
 partial def handleTokens (prev : RequestTask SemanticTokens)
-    (beginPos : String.Pos) (endPos? : Option String.Pos) :
+    (beginPos : String.Pos.Raw) (endPos? : Option String.Pos.Raw) :
     RequestM (RequestTask (LspResponse SemanticTokens)) := do
   let ctx ← read
   let doc ← readDoc
@@ -732,7 +732,7 @@ def renumberLists : CodeActionProvider := fun params snap => do
     }
 
 partial def directiveResizings
-    (startPos endPos : String.Pos)
+    (startPos endPos : String.Pos.Raw)
     (startLine endLine : Nat)
     (text : FileMap)
     (parents : Array (Syntax × Syntax))

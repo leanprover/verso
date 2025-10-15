@@ -24,7 +24,7 @@ open Lean.Parser.Command
 instance : Quote String (k := ``docComment) where
   quote str := ⟨.node .none ``docComment #[ .atom .none "/--", .atom .none (str ++ "-/")]⟩
 
-deriving instance Quote for String.Pos
+deriving instance Quote for String.Pos.Raw
 
 deriving instance Quote for SourceInfo
 
