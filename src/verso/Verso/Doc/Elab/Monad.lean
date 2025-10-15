@@ -11,7 +11,9 @@ import Lean.Elab.DeclUtil
 import Lean.Meta.Reduce
 import Lean.DocString.Syntax
 
+import SubVerso.Highlighting
 import Verso.CodeTable
+import Verso.Code.Highlighted
 import Verso.Doc
 import Verso.Doc.ArgParse
 import Verso.Doc.Elab.ExpanderAttribute
@@ -122,7 +124,7 @@ def DocUses.add (uses : DocUses) (loc : Syntax) : DocUses := {uses with useSites
 structure DocElabM.State where
   linkRefs : HashMap String DocUses := {}
   footnoteRefs : HashMap String DocUses := {}
-  exportingTable : Option (Name × Nat)
+  exportingTable : Option (Name × SubVerso.Highlighting.Exporting)
 deriving Inhabited
 
 /-- Custom info tree data to save footnote and reflink cross-references -/
@@ -197,12 +199,9 @@ private def linkRefName [Monad m] [MonadQuotation m] (docName : Name) (ref : TSy
 private def footnoteRefName [Monad m] [MonadQuotation m] (genre : Term) (docName : Name) (ref : TSyntax `str) : m Term :=
   ``(HasNote.contents $(quote ref.getString) $(quote docName) (genre := $genre) (self := _))
 
-def codeTableName [Monad m] [MonadQuotation m] (name : Name) : m Term :=
-  ``(CodeTable.CodeTable.is $(quote name) (self := _))
-
 partial def FinishedPart.toSyntax
     (genre : TSyntax `term)
-    (reprTable : Option (Name × Nat))
+    (reprTable : Option (Name × SubVerso.Highlighting.Exporting))
     : FinishedPart → TermElabM (TSyntax `term)
   | .mk _titleStx titleInlines titleString metadata blocks subParts _endPos => do
     let subStx ← subParts.mapM (toSyntax genre none)
@@ -213,10 +212,13 @@ partial def FinishedPart.toSyntax
     -- Adding type annotations works around a limitation in list and array elaboration, where intermediate
     -- let bindings introduced by "chunking" the elaboration may fail to infer types
     let typedBlocks ← blocks.mapM fun b => `(($b : Block $genre))
-    if let some (name, num) := reprTable then
-      println! s!"Outputting at {name} with {num} Lean code fences"
+    if let some (name, exportTable) := reprTable then
+      -- println! s!"Outputting at {name} with {num} Lean code fences"
       let type ← Meta.mkAppM ``Verso.CodeTable.CodeTable #[ToExpr.toExpr name]
-      let value ← Meta.mkAppM' (mkApp (mkConst ``Verso.CodeTable.CodeTable.mk) (ToExpr.toExpr name)) #[ToExpr.toExpr #[""]]
+      let synTable ← Meta.mkAppM ``SubVerso.Highlighting.exportFromStr!
+        #[ToExpr.toExpr (SubVerso.Highlighting.exportToStr exportTable.toExport)]
+      let mkCodeTable := mkApp (mkConst ``Verso.CodeTable.CodeTable.mk) (ToExpr.toExpr name)
+      let value ← Meta.mkAppM' mkCodeTable #[synTable]
       addAndCompile <| .defnDecl {
         name,
         levelParams := [],

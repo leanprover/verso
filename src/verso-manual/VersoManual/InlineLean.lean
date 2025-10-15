@@ -163,8 +163,13 @@ def reportMessages {m} [Monad m] [MonadLog m] [MonadError m]
     if messages.hasErrors then
       throwErrorAt blame "No error expected in code block, one occurred"
 
-def hlFromGlobalExport! (max : Array String) (mix : Nat) (str : String) :=
-  hlFromExport! str
+def hlFromGlobalExport! (exportTable : SubVerso.Highlighting.Export) (key : SubVerso.Highlighting.Export.Key) :=
+  match exportTable.toHighlighted key with
+  | .error e => panic! s!"Unable to export key {key}: {e}"
+  | .ok v => v
+
+def codeTableName [Monad m] [MonadQuotation m] (name : Name) : m Term :=
+  ``(CodeTable.CodeTable.is $(quote name) (self := _))
 
 /--
 Produces the syntax of an expression that denotes the `hls` value. Specifically,
@@ -174,11 +179,11 @@ quoting a compressed version of the highlighted code.
 -/
 private def quoteHighlightViaSerialization (hls : Highlighted) : DocElabM Term := do
   let docElabState ← get
-  if let .some (name, num) := docElabState.exportingTable then
-    let repr := hlToExport hls
-    println! s!"Exporting lean #{num+1}"
-    set { docElabState with exportingTable := some (name, num + 1) }
-    ``(hlFromGlobalExport! $(← codeTableName name) $(quote <| num + 1) $(quote repr))
+  if let .some (name, exportTable) := docElabState.exportingTable then
+    let (key, exportTable) := hls.export.run exportTable
+    set { docElabState with exportingTable := some (name, exportTable) }
+    let codeTableSyn ← ``(CodeTable.CodeTable.is $(quote name) (self := _))
+    ``(hlFromGlobalExport! $(codeTableSyn) $(quote key))
   else
     let repr := hlToExport hls
     ``(hlFromExport! $(quote repr))

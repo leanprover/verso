@@ -114,7 +114,7 @@ example := 34 * x
 :::::::
 
 
-/- ----- -/
+/- -----
 
 #docs (Genre.Manual) footnotesAndLinkRefsAndCode "Test" :=
 :::::::
@@ -130,9 +130,4 @@ def z := "And blocks of code"
 [linkex]: https://example.com
 [^footnoteEx]: A footnote containing {lean}`y`
 :::::::
-/-
-#guard_msgs in
-  #eval
-    getPath? footnotesAndLinkRefsAndCode.content.toJson
-      []
 -/

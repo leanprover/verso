@@ -58,7 +58,7 @@ private def elabDoc (genre: Term) (title: StrLit) (topLevelBlocks : Array Syntax
   let titleString := inlinesToString env titleParts
   let tmpName ← mkAuxDeclName `docs_table
 
-  let initDocState : DocElabM.State := { exportingTable := some (tmpName, 0) }
+  let initDocState : DocElabM.State := { exportingTable := some (tmpName, {}) }
   let initPartState : PartElabM.State := .init (.node .none nullKind titleParts)
 
   let ((), docElabState, partElabState) ←
@@ -81,8 +81,6 @@ private def elabDoc (genre: Term) (title: StrLit) (topLevelBlocks : Array Syntax
   let finished := partElabState.partContext.toPartFrame.close endPos
 
   pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
-  if let some (name, num) := docElabState.exportingTable then
-    println! s!"Outputting at {name} with {num} Lean code fences"
   finished.toSyntax genre docElabState.exportingTable
 
 elab "#docs" "(" genre:term ")" n:ident title:str ":=" ":::::::" text:document ":::::::" : command => do
@@ -192,7 +190,7 @@ private def startDoc (genre : Term) (title: StrLit) : Command.CommandElabM Strin
   let titleString := inlinesToString env titleParts
   -- let tmpName := `doc_table
   let tmpName ← mkAuxDeclName `docs_table
-  let initDocState : DocElabM.State := { exportingTable := (tmpName, 0) }
+  let initDocState : DocElabM.State := { exportingTable := some (tmpName, {}) }
   let initPartState : PartElabM.State := .init (.node .none nullKind titleParts)
 
   modifyEnv (docStateExt.setState · initDocState)

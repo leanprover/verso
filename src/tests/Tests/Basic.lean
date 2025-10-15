@@ -372,8 +372,9 @@ info: Verso.Doc.Part.mk
 :::::::
 Here's [a link][to here][^note]!
 
-[to here]: http://example.com
 [^note]: The footnote text
+
+[to here]: http://example.com
 :::::::
 
 #docs (.none) refAndLink3 "Ref/link ordering" :=
@@ -401,3 +402,30 @@ Here's [a link][to here][^note]!
 
 /-- info: true -/
 #guard_msgs in #eval refAndLink == refAndLink4
+
+#docs (.none) nested1 "Nested footnotes?" :=
+:::::::
+Here's some context[^note]!
+
+[^note]: The context can contain a [link](https://example.com)
+:::::::
+
+/-
+#docs (.none) nested2 "Nested footnotes?" :=
+:::::::
+Here's some context[^note]!
+
+[^note]: The context can contain a [link][to here].
+
+[to here]: https://example.com
+:::::::
+
+#docs (.none) nested3 "Nested footnotes?" :=
+:::::::
+Here's some context[^note]!
+
+[to here]: https://example.com
+
+[^note]: The context can contain a [link][to here].
+:::::::
+-/

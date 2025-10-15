@@ -1,5 +1,6 @@
 import Lean
+import SubVerso.Highlighting
 namespace Verso.CodeTable
 
 class CodeTable (name : Lean.Name) where
-  is : Array String
+  is : SubVerso.Highlighting.Export
