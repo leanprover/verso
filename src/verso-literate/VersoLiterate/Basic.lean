@@ -275,11 +275,11 @@ def State.linkTargets (state : State) : Code.LinkTargets ρ where
     if let some obj := state.constantDefDomain.get? x.toString then
       if let .ok v := obj.data.getObjValAs? String "module" then
         if let some link := state.moduleLink v.toName then
-          return #[.mk "def" s!"Definition of `{x}`" link.link]
+          return #[.mk "def" s!"Definition of `{x}`" link.relativeLink]
     return #[]
   moduleName m _ :=
     if let some link := state.moduleLink m then
-      #[.mk "mod" s!"Module `{m}`" link.link]
+      #[.mk "mod" s!"Module `{m}`" link.relativeLink]
     else #[]
 
 structure Context where

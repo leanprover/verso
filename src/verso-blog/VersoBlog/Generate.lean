@@ -149,6 +149,12 @@ open Generate
 
 open Template.Params (forPart)
 
+def dirPathToString (path : List String) (trailing : Bool := false) : String :=
+  if trailing then
+    "/".intercalate path ++ "/"
+  else
+    "/".intercalate path
+
 def writePage (theme : Theme) (params : Template.Params) (template : Template := theme.pageTemplate) : GenerateM Unit := do
   ensureDir <| (← currentDir)
   let ⟨baseTemplate, modParams⟩ := theme.adHocTemplates (Array.mk (← currentPath)) |>.getD ⟨template, id⟩
@@ -159,6 +165,9 @@ def writePage (theme : Theme) (params : Template.Params) (template : Template :=
     h.putStrLn output.asString
 
 def writeBlog (theme : Theme) (id : Lean.Name) (txt : Part Page) (posts : Array BlogPost) : GenerateM Unit := do
+  -- path from site to here
+  let pathToBlog := dirPathToString (← currentPath)
+
   for post in posts do
     if post.contents.metadata.map (·.draft) == some true && !(← showDrafts) then continue
 
@@ -167,6 +176,7 @@ def writeBlog (theme : Theme) (id : Lean.Name) (txt : Part Page) (posts : Array 
       let postParams : Template.Params ← match post.contents.metadata with
         | none => forPart post.contents
         | some md => (·.insert "metadata" ⟨.mk md, #[]⟩) <$> forPart post.contents
+      let postParams := postParams.insert "path" ⟨.mk pathToBlog, #[]⟩
       writePage theme postParams (template := theme.postTemplate)
 
   let «meta» ←
@@ -186,7 +196,7 @@ def writeBlog (theme : Theme) (id : Lean.Name) (txt : Part Page) (posts : Array 
       let postList := {{
         <ul class="post-list">
           {{← catPosts.mapM fun (_addr, p) => do
-            theme.archiveEntryTemplate.render (.ofList [("path", ⟨.mk "..", #[]⟩), ("post", ⟨.mk p, #[]⟩), ("summary", ⟨.mk (← summarize p), #[]⟩)])}}
+            theme.archiveEntryTemplate.render (.ofList [("path", ⟨.mk pathToBlog, #[]⟩), ("post", ⟨.mk p, #[]⟩), ("summary", ⟨.mk (← summarize p), #[]⟩)])}}
         </ul>
       }}
       let catParams := Template.Params.ofList [("title", cat.name), ("category", ⟨.mk cat, #[]⟩), ("posts", ⟨.mk postList, #[]⟩)]
@@ -195,11 +205,12 @@ def writeBlog (theme : Theme) (id : Lean.Name) (txt : Part Page) (posts : Array 
   let postList := {{
     <ul class="post-list">
       {{← posts.mapM fun p => do
-        theme.archiveEntryTemplate.render (.ofList [("post", ⟨.mk p, #[]⟩), ("summary", ⟨.mk (← summarize p), #[]⟩)])}}
+        theme.archiveEntryTemplate.render (.ofList [("path", ⟨.mk pathToBlog, #[]⟩), ("post", ⟨.mk p, #[]⟩), ("summary", ⟨.mk (← summarize p), #[]⟩)])}}
     </ul>
   }}
+  let path ← currentPath
   let allCats : Post.Categories := .mk <| meta.categories.toArray.map fun (c, _) =>
-    (c.slug, c)
+    (dirPathToString (trailing := true) <| path ++ [c.slug], c)
   let pageParams : Template.Params := (← forPart txt).insert "posts" ⟨.mk postList, #[]⟩ |>.insert "categories" ⟨.mk allCats, #[]⟩
   writePage theme pageParams
 where

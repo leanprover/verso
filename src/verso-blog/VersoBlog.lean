@@ -816,8 +816,6 @@ Parameters:
  * `options` are the command-line options provided by a user.
 
 Optional parameters:
- * `relativizeUrls` rewrites internal links from absolute to relative links, which allows the blog
-   to be hosted in a subdirectory. Default `true`.
  * `linkTargets` specifies how to create hyperlinks from Lean code to further documentation. By
    default, no links are generated.
  * `components` contains the implementation of the components. This is automatically filled out from
@@ -826,7 +824,7 @@ Optional parameters:
    can be overridden to integrate with other static site generators.
 -/
 
-def blogMain (theme : Theme) (site : Site) (relativizeUrls := true) (linkTargets : Code.LinkTargets TraverseContext := {})
+def blogMain (theme : Theme) (site : Site) (linkTargets : Code.LinkTargets TraverseContext := {})
     (options : List String) (components : Components := by exact %registered_components)
     (header : String := Html.doctype) :
     IO UInt32 := do
@@ -834,9 +832,6 @@ def blogMain (theme : Theme) (site : Site) (relativizeUrls := true) (linkTargets
   let logError msg := do hasError.set true; IO.eprintln msg
   let cfg ← opts {logError := logError} options
   let (site, xref) ← site.traverse cfg components
-  let rw := if relativizeUrls then
-      some <| relativize
-    else none
   let initGenCtx : Generate.Context := {
     site := site,
     ctxt := { path := [], config := cfg, components },
@@ -844,7 +839,6 @@ def blogMain (theme : Theme) (site : Site) (relativizeUrls := true) (linkTargets
     dir := cfg.destination,
     config := cfg,
     header := header,
-    rewriteHtml := rw,
     linkTargets := linkTargets,
     components := components
   }
@@ -880,8 +874,6 @@ where
       pure attr
   rwTag (tag : String) (attrs : Array (String × String)) (content : Html) : ReaderT TraverseContext Id (Option Html) := do
     pure <| some <| .tag tag (← attrs.mapM rwAttr) content
-  relativize _err ctxt html :=
-    pure <| html.visitM (m := ReaderT TraverseContext Id) (tag := rwTag) |>.run ctxt
 
 open Verso.Code.External
 

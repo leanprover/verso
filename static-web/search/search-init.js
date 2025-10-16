@@ -7,8 +7,6 @@
 import {domainMappers} from './domain-mappers.js';
 import {registerSearch} from './search-box.js';
 
-let siteRoot = typeof __versoSiteRoot !== 'undefined' ? __versoSiteRoot : "";
-
 // The search box itself. TODO: add to template
 // autocorrect is a safari-only attribute. It is required to prevent autocorrect on iOS.
 const searchHTML = `<div id="search-wrapper">
@@ -37,7 +35,7 @@ const searchHTML = `<div id="search-wrapper">
 `;
 
 // Initialize search box
-const data = fetch(siteRoot + "/xref.json").then((data) => data.json())
+const data = fetch("xref.json").then((data) => data.json())
 window.addEventListener("load", () => {
   const main = document.querySelector("header");
   main.insertAdjacentHTML("beforeend", searchHTML);
