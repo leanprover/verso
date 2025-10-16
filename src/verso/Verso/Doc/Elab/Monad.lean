@@ -124,7 +124,7 @@ def DocUses.add (uses : DocUses) (loc : Syntax) : DocUses := {uses with useSites
 structure DocElabM.State where
   linkRefs : HashMap String DocUses := {}
   footnoteRefs : HashMap String DocUses := {}
-  exportingTable : Option (Name × SubVerso.Highlighting.Exporting)
+  exportingTable : Option (Name × SubVerso.Highlighting.Exporting) := .none
 deriving Inhabited
 
 /-- Custom info tree data to save footnote and reflink cross-references -/
