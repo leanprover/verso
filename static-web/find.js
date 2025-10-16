@@ -13,7 +13,7 @@ if(paramName) {
             if (xref.hasOwnProperty(domain)) {
                 console.log('Found domain ' + domain);
                 let opts = xref[domain];
-                if (opts['contents'].hasOwnProperty(name)) {
+                if (opts['contents'].hasOwnProperty(paramName)) {
                     options = opts['contents'][paramName].map(x => Object.assign(x, {'domain': domain}));
                 }
             }
