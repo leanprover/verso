@@ -17,11 +17,34 @@ input_file versoVars where
   text := true
   path := "static-web/verso-vars.css"
 
+input_file findJs where
+  text := true
+  path := "static-web/find.js"
+
+input_file mathJs where
+  text := true
+  path := "static-web/math.js"
+
+input_dir vendorPopper where
+  path := "vendored-js/popper"
+
+-- Commented out because nested directories aren't handled correctly
+-- FIXME: https://github.com/leanprover/lean4/issues/10827
+-- (A single vendoredJs target is preferable when that issue is resolved)
+-- input_dir vendorTippy where
+--   path := "vendored-js/tippy"
+-- input_dir vendorKatex where
+--   path := "vendored-js/katex"
+
+input_dir vendorElasticlunr where
+  path := "vendored-js/elasticlunr"
+
+
 @[default_target]
 lean_lib Verso where
   srcDir := "src/verso"
   roots := #[`Verso]
-  needs := #[versoVars]
+  needs := #[versoVars, mathJs, vendorPopper, vendorElasticlunr]
 
 @[default_target]
 lean_lib MultiVerso where
@@ -46,6 +69,7 @@ lean_lib VersoBlog where
 lean_lib VersoManual where
   srcDir := "src/verso-manual"
   roots := #[`VersoManual]
+  needs := #[findJs]
 
 @[default_target]
 lean_exe «verso» where
