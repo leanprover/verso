@@ -19,11 +19,12 @@ open Std (HashMap)
 
 namespace SubVerso.Highlighting
 
+deriving instance Inhabited for SubVerso.Highlighting.Export
 
 /--
 Serialize `Highlighted` code as a string.
 
-Nothing should be assumed about the `String` output except that it can be passed to `hlFromExport`
+Nothing should be assumed about the `String` output except that it can be passed to `hlFromExport!`
 to recover the original input.
 -/
 def hlToExport (hl: SubVerso.Highlighting.Highlighted) : String :=
@@ -44,6 +45,30 @@ def hlFromExport! (exportLit : String) : SubVerso.Highlighting.Highlighted :=
       match v'.toHighlighted with
       | .error e => panic! s!"Failed to deserialize Highlighted data from export data: {e}"
       | .ok hl => hl
+
+
+/--
+Serialize `Export` code as a string.
+
+Nothing should be assumed about the `String` output except that it can be passed to `exportFromStr!`
+to recover the original input.
+-/
+def exportToStr (ex: SubVerso.Highlighting.Export) : String :=
+  ex.toJson.compress
+
+
+/--
+Recover the `Export` data from its serialization.
+
+Can only be expected to work on the output of `exportToStr`, likely to panic otherwise.
+-/
+def exportFromStr! (exportLit : String) : SubVerso.Highlighting.Export :=
+  match Lean.Json.parse exportLit with
+  | .error e => panic! s!"Failed to parse Export data as JSON: {e}"
+  | .ok v =>
+    match SubVerso.Highlighting.Export.fromJson? v with
+    | .error e => panic! s!"Failed to deserialize Export data from parsed JSON: {e}"
+    | .ok v => v
 
 
 /--
