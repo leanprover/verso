@@ -28,7 +28,9 @@ input_file mathJs where
 input_dir vendorPopper where
   path := "vendored-js/popper"
 
--- Needs recursive input_dir capability
+-- Commented out because nested directories aren't handled correctly
+-- FIXME: https://github.com/leanprover/lean4/issues/10827
+-- (A single vendoredJs target is preferable when that issue is resolved)
 -- input_dir vendorTippy where
 --   path := "vendored-js/tippy"
 -- input_dir vendorKatex where
