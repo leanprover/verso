@@ -219,7 +219,7 @@ partial def FinishedPart.toSyntax
         #[ToExpr.toExpr (SubVerso.Highlighting.exportToStr exportTable.toExport)]
       let mkCodeTable := mkApp (mkConst ``Verso.CodeTable.CodeTable.mk) (ToExpr.toExpr name)
       let value ← Meta.mkAppM' mkCodeTable #[synTable]
-      addAndCompile <| .defnDecl {
+      withOptions (·.setBool `compiler.extract_closed false) <| addAndCompile <| .defnDecl {
         name,
         levelParams := [],
         type, value,
@@ -439,6 +439,8 @@ instance : MonadOptions DocElabM := inferInstanceAs <| MonadOptions (ReaderT Doc
 
 instance : MonadWithOptions DocElabM := inferInstanceAs <| MonadWithOptions (ReaderT DocElabContext (ReaderT PartElabM.State (StateT DocElabM.State TermElabM)))
 
+instance : MonadWithOptions PartElabM := inferInstanceAs <| MonadWithOptions (ReaderT DocElabContext (StateT DocElabM.State (StateT PartElabM.State TermElabM)))
+
 instance : MonadWithReaderOf Core.Context DocElabM := inferInstanceAs <| MonadWithReaderOf Core.Context (ReaderT DocElabContext (ReaderT PartElabM.State (StateT DocElabM.State TermElabM)))
 
 instance : MonadWithReaderOf Term.Context DocElabM := inferInstanceAs <| MonadWithReaderOf Term.Context (ReaderT DocElabContext (ReaderT PartElabM.State (StateT DocElabM.State TermElabM)))
@@ -526,7 +528,7 @@ def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := withRef block
       safety := .safe
     }
     Term.ensureNoUnassignedMVars decl -- possibly overly defensive
-    addAndCompile decl
+    withOptions (·.setBool `compiler.extract_closed false) <| addAndCompile decl
     modifyThe State fun st =>
       { st with partContext.blocks := st.partContext.blocks.push (mkIdent name) }
 
