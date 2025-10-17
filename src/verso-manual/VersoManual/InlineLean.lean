@@ -187,7 +187,7 @@ private def toHighlightedLeanBlock (shouldShow : Bool) (hls : Highlighted) (str:
 
   let range := Syntax.getRange? str
   let range := range.map (← getFileMap).utf8RangeToLspRange
-  ``(Block.other (Block.lean $(← quoteHighlightViaSerialization hls) (some $(quote (← getFileName))) $(quote range)) #[Block.code $(quote str.getString)])
+  ``(Block.other (Block.lean $(quote hls) (some $(quote (← getFileName))) $(quote range)) #[Block.code $(quote str.getString)])
 
 /--
 Returns (syntax of) an Inline representation containing highlighted Lean code.
