@@ -42,9 +42,10 @@ if(paramName) {
             document.querySelector("#message").innerHTML = "<p>Searched domains:</p>" + "<ul>" + domains.map(x => "<li><code>" + x + "</code>: " + xref[x]['title'] + "</li>\n").join('') + "</ul>";
         });
     } else if (options.length == 1) {
-        const addr = new URL(options[0]['address'], siteRoot);
-        addr.hash = options[0]['id'];
-        window.location.replace(addr);
+        // Currently, our stored options look like absolute paths ('/Axiom').
+        // This makes them relative ('Axiom') so that they will be set relative to the <base> tag
+        const path = options[0]['address'].replace(/^\//, '')
+        window.location.replace(path);
     } else {
         addEventListener('DOMContentLoaded', event => {
             document.title = "Ambiguous: '" + paramName + "'";
