@@ -91,7 +91,7 @@ instance {block inline} [AddMessageContext m] [Monad m] [MonadError m] : MonadEr
     tryCatch (a r s) fun e => b e r s
 
 private def lastWord (str : String) : Option String :=
-  let words := str |>.split (!·.isAlpha) |>.filter (!·.isEmpty)
+  let words := str |>.splitToList (!·.isAlpha) |>.filter (!·.isEmpty)
   words.getLast?
 
 partial def inlineFromMarkdown [Monad m] [MonadQuotation m] [AddMessageContext m] [MonadError m] : Text → StateT (Option String) (MDT m Term Term) Term

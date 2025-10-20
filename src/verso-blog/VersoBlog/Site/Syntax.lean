@@ -54,9 +54,12 @@ scoped syntax "post" post_spec : term
 end Internals
 open Internals
 
-def resolvedDocName [Monad m] [MonadResolveName m] [MonadEnv m] [MonadError m] (id : TSyntax `ident) : m (TSyntax `ident) :=
-  mkIdentFrom id <$> resolveGlobalConstNoOverload (mkIdentFrom id (docName id.getId))
+section
+variable {m} [Monad m] [MonadResolveName m] [MonadEnv m] [MonadOptions m] [MonadLog m] [AddMessageContext m] [MonadError m]
 
+def resolvedDocName (id : TSyntax `ident) : m (TSyntax `ident) :=
+  mkIdentFrom id <$> resolveGlobalConstNoOverload (mkIdentFrom id (docName id.getId))
+end
 
 macro_rules
   | `(term| site $id:ident) => do

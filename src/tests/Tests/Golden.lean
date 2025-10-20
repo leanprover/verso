@@ -105,7 +105,7 @@ def TestResult.print (result : TestResult) : IO Unit := do
   | .fail name expected actual =>
     IO.println s!"✗ {name}"
     IO.println s!"  Expected output differs from actual output"
-    let d := diff (expected.split (· == '\n') |>.toArray) (actual.split (· == '\n') |>.toArray)
+    let d := diff (expected.splitToList (· == '\n') |>.toArray) (actual.splitToList (· == '\n') |>.toArray)
     IO.println (linesToString d)
   | .error name msg =>
     IO.println s!"✗ {name}"

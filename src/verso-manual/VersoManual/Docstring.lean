@@ -1144,7 +1144,7 @@ def tryParseInlineCodeAttribute (validate := true) (str : String) : DocElabM Ter
 
 private def indentColumn (str : String) : Nat := Id.run do
   let mut i : Option Nat := none
-  for line in str.split (· == '\n') do
+  for line in str.splitToList (· == '\n') do
     let leading := line.takeWhile (·.isWhitespace)
     if leading == line then continue
     if let some i' := i then

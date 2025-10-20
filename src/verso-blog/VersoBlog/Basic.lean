@@ -391,7 +391,7 @@ private def sumArrayWith (f : α → Nat) (arr : Array α) : Nat := Id.run do
 /-- An approximate word count for summary length limits -/
 partial defmethod Inline.wordCount : Inline genre → Nat
   | .code str
-  | .text str => str.split (Char.isWhitespace) |>.filter (!·.isEmpty) |>.length
+  | .text str => str.splitToList (Char.isWhitespace) |>.filter (!·.isEmpty) |>.length
   | .emph content
   | .link content ..
   | .concat content
@@ -410,7 +410,7 @@ partial defmethod Block.wordCount : Block genre → Nat
     | .blockquote items
     | .concat items => sumArrayWith wordCount items
     | .other _ content => sumArrayWith wordCount content
-    | .code str => str.split (Char.isWhitespace) |>.filter (!·.isEmpty) |>.length
+    | .code str => str.splitToList (Char.isWhitespace) |>.filter (!·.isEmpty) |>.length
 
 defmethod BlogPost.summary (post : BlogPost) : Array (Block Post) := Id.run do
   let mut out := #[]

@@ -209,7 +209,7 @@ namespace Raw
 
 private def empty : IndexItem.Raw := {}
 
-private def addToken (self : IndexItem.Raw) (ref : String) (token : String) (termFreq : Float) : IndexItem.Raw :=
+private  def addToken (self : IndexItem.Raw) (ref : String) (token : String) (termFreq : Float) : IndexItem.Raw :=
   if token.isEmpty then self
   else loop self token.iter
 where
@@ -231,7 +231,7 @@ where
     simp [String.Iterator.next']
     apply Nat.sub_lt_sub_left
     . simp_all [String.endPos]
-    . simp [String.next, Char.utf8Size]
+    . simp [String.Pos.Raw.next, Char.utf8Size]
       grind
 
 @[simp, grind =]
@@ -244,7 +244,7 @@ private theorem char_utf8Size_pos {c : Char} : 0 < c.utf8Size := by
 
 @[simp, grind! .]
 private theorem string_iter_next'_i_gt_i {iter : String.Iterator} {h : iter.hasNext = true} : iter.i.byteIdx < (iter.next' h).i.byteIdx := by
-  simp_all [String.Iterator.next', String.next]
+  simp_all [String.Iterator.next', String.Pos.Raw.next]
 
 
 private def getNode? (self : IndexItem.Raw) (token : String) : Option IndexItem.Raw :=
@@ -290,9 +290,9 @@ where
     simp [iter] at *
     clear iter
     have : iter.s.endPos.byteIdx > iter.i.byteIdx := by
-      simp_all [String.Iterator.hasNext, String.Iterator.next', String.next]
-      omega
-    simp [String.Iterator.next', String.next]
+      simp_all [String.Iterator.hasNext, String.Iterator.next', String.Pos.Raw.next]
+      grind
+    simp [String.Iterator.next', String.Pos.Raw.next]
     apply Nat.sub_lt_sub_left <;> simp_all
 end Raw
 
@@ -478,7 +478,7 @@ where
     "tis", "to", "too", "twas", "us", "wants", "was", "we", "were", "what", "when", "where",
     "which", "while", "who", "whom", "why", "will", "with", "would", "yet", "you", "your"]
   tokenizeWhitespace (str : String) :=
-    str.split (fun c => c.isWhitespace || c == '-') |>.toArray |>.filter (!·.isEmpty) |>.map (·.trim.toLower)
+    str.splitToList (fun c => c.isWhitespace || c == '-') |>.toArray |>.filter (!·.isEmpty) |>.map (·.trim.toLower)
 
 /--
 A tokenizer maps an input string to an array of search tokens (normally words).

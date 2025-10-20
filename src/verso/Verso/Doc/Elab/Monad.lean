@@ -599,7 +599,7 @@ def closes (openTok closeTok : Syntax) : DocElabM Unit := do
     | return ()
   let text ← getFileMap
   let {line, ..} := text.utf8PosToLspPos pos
-  let lineStr := text.source.extract (text.lineStart (line + 1)) (text.lineStart (line + 2)) |>.trim
+  let lineStr := (text.lineStart (line + 1)).extract text.source  (text.lineStart (line + 2)) |>.trim
   let lineStr := if lineStr.startsWith "`" || lineStr.endsWith "`" then " " ++ lineStr ++ " " else lineStr
   Hover.addCustomHover closeTok (.markdown s!"Closes line {line + 1}: ``````````{lineStr}``````````")
 

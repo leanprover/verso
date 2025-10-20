@@ -66,7 +66,7 @@ partial def headerTagLinter : Linter where
           if s.hasError || !s.recoveredErrors.isEmpty then
             -- Next block is not metadata, so suggest inserting one
             let name := suggestId inls
-            let blockStr := text.source.extract start stop
+            let blockStr := start.extract text.source stop
             let suggestions : Array Meta.Hint.Suggestion := #[
               s!"{blockStr}\n%%%\ntag := \"{name}\"\n%%%",
               s!"{blockStr}\n%%%\ntag := none\n%%%"
@@ -95,10 +95,10 @@ partial def headerTagLinter : Linter where
                 | return none
               let some ⟨start2, stop2⟩ := tk2.getRange?
                 | return none
-              let blockStr := text.source.extract start stop
+              let blockStr := start.extract text.source stop
               let suggestions : Array Meta.Hint.Suggestion := #[
-                s!"{blockStr}\n%%%\ntag := \"{name}\"" ++ text.source.extract stop1 stop2,
-                s!"{blockStr}\n%%%\ntag := none" ++ text.source.extract stop1 stop2
+                s!"{blockStr}\n%%%\ntag := \"{name}\"" ++ stop1.extract text.source stop2,
+                s!"{blockStr}\n%%%\ntag := none" ++ stop1.extract text.source stop2
               ]
 
               let h ← runTermElabM fun _ => MessageData.hint "Add a tag to the metadata block or explicitly indicate that no tag is desired:" suggestions (ref? := some <| mkNullNode #[block, nextStx])

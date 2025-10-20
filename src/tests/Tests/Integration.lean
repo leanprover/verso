@@ -81,7 +81,7 @@ def runTests (config : Config) : IO Unit := do
       let expected ← IO.FS.readFile (expectedRoot / file)
       let actual ← IO.FS.readFile (outputRoot / file)
       if expected != actual then
-        let d := Lean.Diff.diff (expected.split (· == '\n') |>.toArray) (actual.split (· == '\n') |>.toArray)
+        let d := Lean.Diff.diff (expected.splitToList (· == '\n') |>.toArray) (actual.splitToList (· == '\n') |>.toArray)
         IO.println s!"✗ In test {config.testDir}, output file {file}"
         IO.println s!"  Expected output differs from actual output"
         IO.println (Lean.Diff.linesToString d)

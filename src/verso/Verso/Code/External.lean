@@ -332,7 +332,7 @@ private def editCodeBlock [Monad m] [MonadFileMap m] (stx : Syntax) (newContents
   let some rng := stx.getRange?
     | pure none
   let { start := {line := l1, ..}, .. } := txt.utf8RangeToLspRange rng
-  let line1 := txt.source.extract (txt.lineStart (l1 + 1)) (txt.lineStart (l1 + 2))
+  let line1 := (txt.lineStart (l1 + 1)).extract txt.source (txt.lineStart (l1 + 2))
   let line1ws := line1.takeWhile (· == ' ')
   let line1rest := line1.drop line1ws.length
   let newContents := line1ws ++ (withNl newContents).replace "\n" ("\n" ++ line1ws)
@@ -619,10 +619,14 @@ def anchorTermBlockExp : CodeBlockExpander
     else
       throwError "Expected a positional argument first (the anchor name)"
 
-private def severityName {m} [Monad m] [MonadEnv m] [MonadResolveName m] : MessageSeverity → m String
+section
+variable {m} [Monad m] [MonadResolveName m] [MonadEnv m] [MonadOptions m] [MonadLog m] [AddMessageContext m]
+
+private def severityName : MessageSeverity → m String
   | .error => unresolveNameGlobal ``MessageSeverity.error <&> (·.toString)
   | .warning => unresolveNameGlobal ``MessageSeverity.warning <&> (·.toString)
   | .information => unresolveNameGlobal ``MessageSeverity.information <&> (·.toString)
+end
 
 deriving instance Repr for MessageSeverity
 
@@ -907,12 +911,12 @@ private def hasSubstring (s pattern : String) : Bool :=
         false
       else
         have := Nat.lt_of_lt_of_le (Nat.add_lt_add_left hPatt _) (Nat.ge_of_not_lt h)
-        if s.substrEq pos pattern 0 pattern.endPos.byteIdx then
+        if pos.substrEq s pattern 0 pattern.endPos.byteIdx then
           have := Nat.sub_lt_sub_left this (Nat.add_lt_add_left hPatt _)
           true
         else
-          have := Nat.sub_lt_sub_left this (s.lt_next pos)
-          loop (s.next pos)
+          have := Nat.sub_lt_sub_left this (pos.lt_next s)
+          loop (pos.next s)
       termination_by s.endPos.1 - pos.1
     loop 0
 
@@ -978,7 +982,7 @@ private def suggest : InlineExpander
     let text ← getFileMap
     let region? := (← getRef).getPos? |>.map fun p =>
       let {line, ..} := text.utf8PosToLspPos p
-      text.source.extract (text.lineStart (line - 4)) (text.lineStart (line + 4))
+      (text.lineStart (line - 4)).extract text.source (text.lineStart (line + 4))
     let region := region?.getD ""
 
     let (close, far) := defaultSuggestions.partition (fun (_, x) => hasSubstring region x)
