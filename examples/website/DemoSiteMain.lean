@@ -37,13 +37,13 @@ def theme : Theme := { Theme.default with
           <meta name="color-scheme" content="light dark"/>
           <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sakura.css/css/sakura.css" type="text/css"/>
           <title>{{ (← param (α := String) "title") }} " — Verso "</title>
-          <link rel="stylesheet" href="/static/style.css"/>
           {{← builtinHeader }}
+          <link rel="stylesheet" href="static/style.css"/>
         </head>
         <body>
           <header>
             <div class="inner-wrap">
-            <a class="logo" href="/"><h1>"A Verso Site"</h1></a>
+            <a class="logo" href="."><h1>"A Verso Site"</h1></a>
             {{ ← topNav }}
             </div>
           </header>
