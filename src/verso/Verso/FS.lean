@@ -7,19 +7,29 @@ namespace Verso.FS
 
 open IO.FS
 
+/--
+Ensures that the path `dir` exists and is a directory, creating it if necessary and throwing an
+exception if the path already exists and is not a directory.
+-/
 def ensureDir (dir : System.FilePath) : IO Unit := do
   if !(← dir.pathExists) then
     createDirAll dir
   if !(← dir.isDir) then
     throw (↑ s!"Not a directory: {dir}")
 
-partial def copyRecursively (logError : String → IO Unit) (src tgt : System.FilePath)  : IO Unit := do
+/--
+Recursively copies a directory of files from `src` to `tgt`. Any errors are logged using `logError`,
+and paths that don't satisfy `copyFile` are skipped.
+-/
+partial def copyRecursively (logError : String → IO Unit) (src tgt : System.FilePath)
+    (copyFile : System.FilePath → IO Bool := fun _ => pure true) : IO Unit := do
+  unless (← copyFile src) do return
   if (← src.metadata).type == .symlink then
     logError s!"Can't copy '{src}' - symlinks not currently supported"
   if ← src.isDir then
     ensureDir tgt
     for d in ← src.readDir do
-      copyRecursively logError d.path (tgt.join d.fileName)
+      copyRecursively logError d.path (tgt / d.fileName) (copyFile := copyFile)
   else
     withFile src .read fun h =>
       withFile tgt .write fun h' => do
