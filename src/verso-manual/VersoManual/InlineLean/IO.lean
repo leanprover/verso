@@ -200,7 +200,7 @@ def Block.exampleFile.descr : BlockDescr := withHighlighting {
 }
 where
   getLines (file : String) : Array String :=
-    let lines := file.split (· == '\n') |>.toArray
+    let lines := file.splitToList (· == '\n') |>.toArray
     if lines.back? == some "" then lines.pop else lines
 
 namespace IOExample

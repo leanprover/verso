@@ -52,7 +52,7 @@ private partial def normString (term : String) : String := Id.run do
   if str.endsWith "ies" then str := str.dropRight 3 ++ "y"
   if str.endsWith "s" then str := str.dropRight 1
   str := str.replace "‑" "-"
-  String.intercalate " " (str.split (fun c => c.isWhitespace || c == '-') |>.filter (!·.isEmpty))
+  String.intercalate " " (str.splitToList (fun c => c.isWhitespace || c == '-') |>.filter (!·.isEmpty))
 
 
 open Lean in

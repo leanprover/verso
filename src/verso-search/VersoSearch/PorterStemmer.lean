@@ -34,46 +34,31 @@ reference implementation or the paper, and it is tested against Porter's provide
 Checks whether the character at position {name}`i` is a consonant. {lean}`'y'` is a consonant if not
 preceded by a consonant.
 -/
-def isConsonant (str : String) (i : String.Pos.Raw) : Bool :=
-  match str.get! i with
+-- TODO prove termination. With String.Pos.Raw, this went through, but we seem to be lacking theory here.
+partial def isConsonant (i : String.ValidPos str) : Bool :=
+  match i.get! with
   | 'a' | 'e' | 'i' | 'o' | 'u' => false
   | 'y' =>
-    if i = 0 then true
-    else !isConsonant str (str.prev i)
+    if h : i = str.startValidPos then true
+    else !isConsonant (i.prev h)
   | _ => true
-termination_by i.byteIdx
-decreasing_by
-  simp [String.prev, *]
-  rename_i h
-  refine String.utf8PrevAux_lt_of_pos str.data 0 i ?_ h
-  let ⟨i⟩ := i
-  cases i <;> simp_all
-
 
 /--
 The measure of a word is the number of v+c+ clusters (vowels followed by consonants).
 -/
-def measure (word : String) : Nat :=
-  let rec aux (iter : String.Iterator) (inVowel : Bool) (count : Nat) : Nat :=
-    if h : iter.hasNext then
-      if !isConsonant iter.s iter.i then
-        aux (iter.next' h) true count
+-- TODO prove termination again once we get more theory/automation
+partial def measure (word : String) : Nat :=
+  let rec aux (pos : String.ValidPos word) (inVowel : Bool) (count : Nat) : Nat :=
+    match pos.next? with
+    | some next =>
+      if !isConsonant pos then
+        aux next true count
       else if inVowel then
-        aux (iter.next' h) false (count + 1)
+        aux next false (count + 1)
       else
-        aux (iter.next' h) false count
-    else count
-  termination_by iter.s.endPos.byteIdx - iter.i.byteIdx
-  decreasing_by
-    all_goals
-      cases iter
-      unfold String.Iterator.hasNext at h
-      simp at h
-      simp_all [String.next, String.Iterator.next', Char.utf8Size]
-      repeat (split; omega)
-      omega
-
-  aux word.iter false 0
+        aux next false count
+    | none => count
+  aux word.startValidPos false 0
 
 /-- info: 0 -/
 #guard_msgs in
@@ -93,34 +78,45 @@ def measure (word : String) : Nat :=
 Checks whether the provided word contains a vowel.
 -/
 def containsVowel (word : String) : Bool := Id.run do
-  let mut iter := word.iter
-  while h : iter.hasNext do
-    if isConsonant word iter.i then iter := iter.next' h
+  let mut pos := word.startValidPos
+  repeat
+    let some next := pos.next?
+      | break
+    if isConsonant pos then pos := next
     else return true
   return false
-
 
 /--
 Checks whether the word ends with a double consonant.
 -/
 def endsWithDoubleConsonant (word : String) : Bool :=
-  word.length ≥ 2 &&
-    let i := word.prev word.endPos
-    let j := word.prev i
-    isConsonant word i && word.get! i == word.get! j
+  let endPos := word.endValidPos
+  if h : endPos = word.startValidPos then false
+  else
+    let i :=  endPos.prev h
+    if h : i = word.startValidPos then false
+    else
+      let j := i.prev h
+      isConsonant i && i.get! == j.get!
 
 /--
 Checks whether a word ends with a CVC pattern where the final consonant is not {lean}`'w'`,
 {lean}`'x'`, or {lean}`'y'`.
 -/
 def endsWithCvc (word : String) : Bool :=
-  word.length ≥ 3 &&
-    let i := word.prev word.endPos
-    let j := word.prev i
-    let k := word.prev j
-    isConsonant word i && !isConsonant word j && isConsonant word k &&
-      let ch := word.get! i
-      ch != 'w' && ch != 'x' && ch != 'y'
+  let endPos := word.endValidPos
+  if h : endPos = word.startValidPos then false
+  else
+    let i := endPos.prev h
+    if hi : i = word.startValidPos then false
+    else
+      let j := i.prev hi
+      if hj : j = word.startValidPos then false
+      else
+        let k := j.prev hj
+        isConsonant i && !isConsonant j && isConsonant k &&
+        let ch := i.get!
+        ch != 'w' && ch != 'x' && ch != 'y'
 
 /--
 Replaces the given {name}`suffix` with {name}`replacement` if the remaining word after removing the suffix
@@ -202,9 +198,12 @@ where
     if word.endsWith "at" then return word ++ "e"
     if word.endsWith "bl" then return word ++ "e"
     if word.endsWith "iz" then return word ++ "e"
-    let i := word.prev word.endPos
-    let j := word.prev i
-    if isConsonant word i && word.get! i == word.get! j && word.get! i ∉ ['l', 's', 'z'] then
+    let endPos := word.endValidPos
+    let some i := endPos.prev?
+      | return word
+    let some j := i.prev?
+      | return word
+    if isConsonant i && i.get! == j.get! && i.get! ∉ ['l', 's', 'z'] then
       return word.dropRight 1
     if measure word == 1 && endsWithCvc word then return word ++ "e"
     word

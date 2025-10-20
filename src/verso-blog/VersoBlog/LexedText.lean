@@ -33,29 +33,29 @@ def highlight (hl : Highlighter) (str : String) : IO LexedText := do
   let pmctx : ParserModuleContext := {env := env, options := {}}
   let mut s := mkParserState str
   repeat
-    if str.atEnd s.pos then
+    if s.pos.atEnd str then
       if let some txt := unHl then
         out := out.push (none, txt)
       break
     let s' := hl.lexer.run ictx pmctx {} s
     if s'.hasError then
-      let c := str.get! s.pos
+      let c := s.pos.get! str
       unHl := unHl.getD "" |>.push c
       s := {s with pos := s.pos + c}
     else
       let stk := s'.stxStack.extract 0 s'.stxStack.size
       if stk.size ≠ 1 then
-        unHl := unHl.getD "" ++ str.extract s.pos s'.pos
+        unHl := unHl.getD "" ++ s.pos.extract str s'.pos
         s := s'.restore 0 s'.pos
       else
         let stx := stk[0]!
         match hl.tokenClass stx with
-        | none => unHl := unHl.getD "" ++ str.extract s.pos s'.pos
+        | none => unHl := unHl.getD "" ++ s.pos.extract str s'.pos
         | some tok =>
           if let some ws := unHl then
             out := out.push (none, ws)
             unHl := none
-          out := out.push (some tok, str.extract s.pos s'.pos)
+          out := out.push (some tok, s.pos.extract str s'.pos)
         s := s'.restore 0 s'.pos
   pure ⟨hl.name, out⟩
 

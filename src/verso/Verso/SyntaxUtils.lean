@@ -92,16 +92,18 @@ defmethod ParserFn.test (p : ParserFn) (input : String) : IO String := do
   let s' := p.run ictx pmctx (getTokenTable env) (mkParserState input)
   let stk := ppStack <| s'.stxStack.extract 0 s'.stxStack.size
 
-  let remaining : String := if s'.pos ≥ input.endPos then "All input consumed." else s!"Remaining:\n{repr (input.extract s'.pos input.endPos)}"
+  let remaining : String :=
+    if s'.pos ≥ input.endPos then "All input consumed."
+    else s!"Remaining:\n{repr (s'.pos.extract input input.endPos)}"
 
   if s'.allErrors.isEmpty then
     return s!"Success! Final stack:\n{stk.pretty 50}\n{remaining}"
   else if let #[(p, _, err)] := s'.allErrors then
-    return s!"Failure @{p} ({ictx.fileMap.toPosition p}): {toString err}\nFinal stack:\n{stk.pretty 50}\nRemaining: {repr $ input.extract p input.endPos}"
+    return s!"Failure @{p} ({ictx.fileMap.toPosition p}): {toString err}\nFinal stack:\n{stk.pretty 50}\nRemaining: {repr $ p.extract input input.endPos}"
   else
     let mut errors := ""
     for (p, _, e) in s'.allErrors.qsort (fun x y => x.1 < y.1 || x.1 == y.1 && toString x.2.2 < toString y.2.2)  do
-      errors := errors ++ s!"  @{p} ({ictx.fileMap.toPosition p}): {toString e}\n    {repr <| input.extract p input.endPos}\n"
+      errors := errors ++ s!"  @{p} ({ictx.fileMap.toPosition p}): {toString e}\n    {repr <| p.extract input input.endPos}\n"
     return s!"{s'.allErrors.size} failures:\n{errors}\nFinal stack:\n{stk.pretty 50}"
 
 defmethod ParserFn.test! (p : ParserFn) (input : String) : IO Unit :=
@@ -137,7 +139,7 @@ def parserInputString [Monad m] [MonadFileMap m]
     (str : TSyntax `str) :
     m String := do
   let text ← getFileMap
-  let preString := text.source.extract 0 (str.raw.getPos?.getD 0)
+  let preString := (0 : String.Pos.Raw).extract text.source (str.raw.getPos?.getD 0)
   let mut code := ""
   let mut iter := preString.iter
   while !iter.atEnd do
@@ -148,7 +150,7 @@ def parserInputString [Monad m] [MonadFileMap m]
     iter := iter.next
   let strOriginal? : Option String := do
     let ⟨start, stop⟩ ← str.raw.getRange?
-    text.source.extract start stop
+    start.extract text.source stop
   code := code ++ strOriginal?.getD str.getString
   return code
 
