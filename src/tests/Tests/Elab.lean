@@ -31,7 +31,6 @@ def insertSyntaxGivingRiseToMetavariables : RoleExpanderOf Unit
 :::::::
 I can {insertSyntaxGivingRiseToMetavariables}[]
 :::::::
-:::::::
 
 @[role]
 def totallyUndefined : RoleExpanderOf Unit

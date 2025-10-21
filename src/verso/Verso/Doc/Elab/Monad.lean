@@ -497,13 +497,16 @@ def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := withRef block
     blockExpr ← Term.ensureHasType (some type) (← instantiateMVars blockExpr)
     let name ← mkFreshUserName `block
     let decl := Declaration.defnDecl {
-      name, levelParams, type,
+      name,
+      levelParams,
+      type,
       value := blockExpr,
       hints := .abbrev,
       safety := .safe
     }
-
-    Term.ensureNoUnassignedMVars decl -- Possibly overly defensive
+  
+    -- This is possibly overly defensive (or ineffectual)
+    Term.ensureNoUnassignedMVars decl
     addAndCompile decl
     modifyThe PartElabM.State fun st =>
       { st with partContext.blocks := st.partContext.blocks.push (mkIdent name) }
