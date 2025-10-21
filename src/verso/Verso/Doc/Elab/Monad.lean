@@ -461,8 +461,6 @@ def findTypeclassInstances : Expr → MetaM (Array (Expr × Expr))
     if ty.isAppOf ``HasLink || ty.isAppOf ``HasNote then
       pure #[(e, ty)]
     else
-      -- Question RJS: do we actually want to just fall through here?
-      -- Do we every want to leave an mvar?
       pure #[]
   | .lam _ t b _ | .forallE _ t b _ => do return (← findTypeclassInstances t) ++ (← findTypeclassInstances b)
   | .letE _ t d b _ => do
