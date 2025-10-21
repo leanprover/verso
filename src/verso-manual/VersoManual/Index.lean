@@ -283,7 +283,7 @@ def IndexCat.header : IndexCat → Output.Html
   | .letter c => c.toUpper.toString
 
 def IndexCat.fromString (str : String) : IndexCat :=
-  match str.get? 0 with
+  match str.startValidPos.get? with
   | none => .symbolic
   | some c =>
     if c.isAlpha then .letter c.toUpper

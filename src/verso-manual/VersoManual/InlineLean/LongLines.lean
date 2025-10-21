@@ -33,9 +33,9 @@ def warnLongLines [Monad m] [MonadFileMap m] [MonadLog m] [AddMessageContext m] 
       let ⟨stopLine, _⟩ := fileMap.toPosition stopPos
       for l in [startLine:stopLine] do
         let nextStart := fileMap.lineStart (l + 1)
-        let ⟨_, endCol⟩ := fileMap.utf8PosToLspPos (fileMap.source.prev nextStart)
+        let ⟨_, endCol⟩ := fileMap.utf8PosToLspPos (nextStart.prev fileMap.source)
         if endCol > maxCol then
           let thisStart := fileMap.lineStart l
-          let fakeLiteral := Syntax.mkStrLit (fileMap.source.extract thisStart nextStart) (.synthetic thisStart nextStart)
+          let fakeLiteral := Syntax.mkStrLit (thisStart.extract fileMap.source nextStart) (.synthetic thisStart nextStart)
           let msg := m!"Line {l} is too long ({endCol} columns exceeds {maxCol})"
           logWarningAt fakeLiteral msg

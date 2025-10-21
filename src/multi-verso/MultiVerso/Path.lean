@@ -12,7 +12,7 @@ namespace Verso.Multi
 
 /--
 
-An absolute path through the site.
+A path through the site.
 
 {given (type := "String") -show}`x,y,z` {lean type:="Path"}`#[]` is the root, and {lean}`#[x,y,z]` is
 {lean}`s!"/{x}/{y}/{z}/"`. The trailing slash is important here.
@@ -23,11 +23,17 @@ namespace Path
 
 /--
 Retrieves a string that can be used as a link.
+This is a path relative to the site root.
 -/
-public def link (path : Path) (htmlId : Option String := none) : String :=
-  "/" ++ String.join (path.toList.map (· ++ "/")) ++
+public def relativeLink (path : Path) (htmlId : Option String := none) : String :=
+  String.join (path.toList.map (· ++ "/")) ++
   (htmlId.map ("#" ++ ·)).getD ""
 
+/--
+Retrieves a string that can be used as an absolute link.
+-/
+public def link (path : Path) (htmlId : Option String := none) : String :=
+  "/" ++ relativeLink path htmlId
 
 /--
 Make the URL relative to the path.
