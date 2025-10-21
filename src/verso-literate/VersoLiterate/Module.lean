@@ -71,7 +71,7 @@ def loadModuleJson
     env := lakeVars.map (·, none)
   }
   if res.exitCode != 0 then reportFail projectDir cmd args res
-  if let some f := res.stdout.split (· == '\n') |>.find? (!·.isEmpty) then
+  if let some f := res.stdout.splitToList (· == '\n') |>.find? (!·.isEmpty) then
     IO.FS.readFile f
   else throw <| .userError s!"No result returned from build of {mod}"
 

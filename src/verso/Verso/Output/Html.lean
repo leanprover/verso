@@ -342,7 +342,7 @@ meta partial def elabHtml (stx : TSyntax `html) : TermElabM Expr := withRef stx 
       let hint ←
         if let some ⟨start, stop⟩ := mkNullNode #[tk, tk'] |>.getRange? then
           let src := (← getFileMap).source
-          let noContents := src.extract start (src.prev stop)
+          let noContents := start.extract src (stop.prev src)
           MessageData.hint m!"Remove contents" #[noContents ++ "/>"]
         else pure m!""
       throwErrorAt tag m!"`<{tag.tagName}>` doesn't allow contents{hint}"

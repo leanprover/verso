@@ -4,7 +4,6 @@ let paramName = params.get("name");
 console.log("Domains: " + domains);
 console.log("name: " + paramName);
 if(paramName) {
-    let siteRoot = typeof __versoSiteRoot !== 'undefined' ? __versoSiteRoot : "";
     let options = [];
     if (domains && domains.length > 0) {
         for (const i in domains) {
@@ -44,14 +43,15 @@ if(paramName) {
     } else if (options.length == 1) {
         // Currently, our stored options look like absolute paths ('/Axiom').
         // This makes them relative ('Axiom') so that they will be set relative to the <base> tag
-        const path = options[0]['address'].replace(/^\//, '')
-        window.location.replace(path);
+        const addr = new URL(options[0]['address'].replace(/^\//, ''));
+        addr.hash = options[0]['id'];
+        window.location.replace(addr);
     } else {
         addEventListener('DOMContentLoaded', event => {
             document.title = "Ambiguous: '" + paramName + "'";
             document.querySelector("#title").innerHTML = "Ambiguous: name '" + paramName + "'";
             document.querySelector("#message").innerHTML = "<p>Options:</p><ul>" +
-                options.map((x, idx) => '<li><p><a href="' + siteRoot + x['address'] + '#' + x['id'] + '">From ' + xref[x['domain']]['title'] + '</a></p></li>').join('\n') +
+                options.map((x, idx) => '<li><p><a href="' + x['address'] + '#' + x['id'] + '">From ' + xref[x['domain']]['title'] + '</a></p></li>').join('\n') +
                 "</ul>";
         });
     }

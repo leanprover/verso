@@ -4,7 +4,10 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 module
+meta import Init.System.FilePath
+public import Lean.Data.Json.Basic
 import Lean.Data.Json
+
 public import Std.Data.HashMap
 public import Std.Data.HashSet
 
@@ -113,7 +116,7 @@ public def decodeEntity? (entityString : String) : Option String := do
     if entityString.startsWith "x" || entityString.startsWith "X" then
       let v ← entityString.drop 1 |> decodeHex
       refToChar v
-    else if entityString.get? 0 |>.map isHexDigit |>.getD false then
+    else if String.Pos.Raw.get? entityString 0 |>.map isHexDigit |>.getD false then
       let v ← entityString.toNat?
       refToChar v
     else failure

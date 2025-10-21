@@ -93,7 +93,7 @@ def loadModuleContent' (projectDir : StrLit) (mod : String) (suppressNamespaces 
 
   let hlDir := ("build" : System.FilePath) / "highlighted"
   let hlFile :=
-    (mod.split (· == '.')).foldl (init := hlDir) (· / ·) |>.addExtension "json"
+    (mod.splitToList (· == '.')).foldl (init := hlDir) (· / ·) |>.addExtension "json"
   -- Very old Lake versions don't put things in .lake
   let lakeDir := if (← (projectDir / ".lake").isDir) then projectDir / ".lake" else projectDir
   let json ← IO.FS.readFile (lakeDir / hlFile)

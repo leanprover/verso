@@ -40,13 +40,16 @@ def SigDoc.toMessageData : SigDoc → MessageData
 instance : ToMessageData SigDoc where
   toMessageData x := x.toMessageData
 
-def SigDoc.toString {m} [Monad m] [MonadResolveName m] [MonadEnv m] : SigDoc → m String
+section
+variable {m} [Monad m] [MonadResolveName m] [MonadEnv m] [MonadOptions m] [MonadLog m] [AddMessageContext m]
+def SigDoc.toString : SigDoc → m String
   | .text s => pure s
   | .name x => do
     let x ← unresolveNameGlobal x
     pure x.toString
   | .append d1 d2 => do
     return (← d1.toString) ++ (← d2.toString)
+end
 
 elab "doc!" s:interpolatedStr(ident) : term => do
   let mut out ← Meta.mkAppM ``SigDoc.text #[toExpr ""]
@@ -711,7 +714,7 @@ def ValDesc.inlinesString [MonadFileMap m] : ValDesc m (FileMap × TSyntaxArray 
         let mut msg := "Failed to parse:"
         for (p, _, e) in s'.allErrors do
           let {line, column} := text.toPosition p
-          msg := msg ++ s!"  {line}:{column}: {toString e}\n    {repr <| input.extract p input.endPos}\n"
+          msg := msg ++ s!"  {line}:{column}: {toString e}\n    {repr <| p.extract input input.endPos}\n"
         throwError msg
     | other => throwError "Expected string, got {repr other}"
 

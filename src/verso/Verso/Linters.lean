@@ -67,9 +67,9 @@ def typography : Linter where
 
     let suggest (what : String) (replacement : String)
         (linter : Lean.Option Bool)
-        (pos : String.Pos.Raw) (stop : String.Pos.Raw := text.source.next pos) := do
+        (pos : String.Pos.Raw) (stop : String.Pos.Raw := pos.next text.source) := do
       let strLit :=
-        Syntax.mkStrLit (String.singleton (text.source.get pos))
+        Syntax.mkStrLit (String.singleton (pos.get text.source))
           (info := .original {str := text.source, startPos := pos, stopPos := pos} pos {str := text.source, startPos := stop, stopPos := stop} stop)
         let h ← liftTermElabM <| MessageData.hint m!"Replace with Unicode" #[{suggestion := replacement}] (ref? := strLit)
         logLint linter strLit (m!"Use {what} ('{replacement}')" ++ h)
@@ -78,8 +78,8 @@ def typography : Linter where
       | `(inline|$s:str) => do
         if let some ⟨start, stop⟩ := s.raw.getRange? then
           let mut state : PunctuationState :=
-            if start == 0 || text.source.get (text.source.prev start) ∈ ['\n', ' '] then
-              .atBeginning (text.source.prev start)
+            if start == 0 || (start.prev text.source).get text.source ∈ ['\n', ' '] then
+              .atBeginning (start.prev text.source)
             else
               .none
           let mut iter : String.Iterator := ⟨text.source, start⟩
@@ -117,7 +117,7 @@ def typography : Linter where
               else if dashCount == 1 then
                 match state with
                 | .afterDigit =>
-                  if text.source.get dashesSpaces.stopPos |>.isDigit then
+                  if dashesSpaces.stopPos.get text.source |>.isDigit then
                     suggest "an en dash" "–" linter.typography.dashes here dashesSpaces.stopPos
                 | .atBeginning p =>
                   if dashesSpaces.stopPos != dashes.stopPos then
@@ -158,8 +158,8 @@ private def lintDelimited (linter : Lean.Option Bool) (text : FileMap) (tk1 tk2 
     | pure ()
   let some ⟨start2, stop2⟩ := tk2.getRange?
     | pure ()
-  let opener := text.source.extract start1 stop1
-  let closer := text.source.extract start2 stop2
+  let opener := start1.extract text.source stop1
+  let closer := start2.extract text.source stop2
   let length := opener.length
   if closer.length ≠ length then return
   if length ≤ minimal then return
@@ -169,7 +169,7 @@ private def lintDelimited (linter : Lean.Option Bool) (text : FileMap) (tk1 tk2 
     let delim := String.mk (List.replicate (max (biggest + 1) minimal) delimChar)
     let replacement := (delim ++ contents.toString ++ delim)
     let strLit :=
-      Syntax.mkStrLit (text.source.extract start1 stop2)
+      Syntax.mkStrLit (start1.extract text.source stop2)
         (info := .original {str := text.source, startPos := start1, stopPos := start1} start1 {str := text.source, startPos := stop2, stopPos := stop2} stop2)
     let h ← liftTermElabM <| MessageData.hint m!"Use the minimal number of '{delimChar}'s" #[{suggestion := replacement}] (ref? := strLit)
     let note :=

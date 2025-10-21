@@ -71,11 +71,11 @@ def progress : DirectiveExpanderOf Unit
         let contents := contents.getString
         match nameStx.getId with
         | `namespace =>
-          for str in contents.split Char.isWhitespace do
+          for str in contents.splitToList Char.isWhitespace do
             if !str.isEmpty then
               namespaces := namespaces.insert str.toName
         | `exceptions =>
-          for str in contents.split Char.isWhitespace do
+          for str in contents.splitToList Char.isWhitespace do
             if !str.isEmpty then
               exceptions := exceptions.insert str.toName
         | _ => throwErrorAt nameStx "Expected 'namespace' or 'exceptions'"
@@ -99,7 +99,7 @@ def progress : DirectiveExpanderOf Unit
           present := present.insert `_root_ (NameSet.empty.insert x)
       else
         let mut ns := x
-        while !ns.isAnonymous && !(ns.getString!.get 0 |>.isUpper) do
+        while !ns.isAnonymous && !(ns.getString!.startValidPos.get! |>.isUpper) do
           ns := ns.getPrefix
         if let some v := present.find? ns then
           present := present.insert ns (v.insert x)
