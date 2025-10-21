@@ -208,25 +208,35 @@ module, where each command has its own corresponding tree.
 
 The work of constructing the alias table is performed once, with all the trees together.
 -/
-partial def highlightMany' (stxs : Array Syntax) (messages : Array Message)
-    (trees : Array (Option Lean.Elab.InfoTree))
+partial def highlightFrontendResult' (result : Compat.Frontend.FrontendResult)
     (suppressNamespaces : List Name := []) :
     TermElabM (Array (Array Code)) := do
-  let trees' := trees.filterMap id
+  let trees' := result.items.flatMap (·.info |>.toArray)
   let infoTable : InfoTable := .ofInfoTrees trees'
   let modrefs := Lean.Server.findModuleRefs (← getFileMap) trees'
   let ids := build modrefs
-  let st ← HighlightState.ofMessages (mkNullNode stxs) messages
 
-  if trees.size ≠ stxs.size then throwError "Mismatch: got {trees.size} info trees and {stxs.size} syntaxes"
-  let (hls, _) ← (trees.zip stxs).mapM (fun (x, y) => go x y) |>.run ⟨ids, true, false, sortSuppress suppressNamespaces⟩ |>.run infoTable |>.run st
-  pure hls
+  let ctx := ⟨ids, true, false, sortSuppress suppressNamespaces⟩
+
+  let mut code : Array (Array Code) := #[]
+
+  let ((), headerSt) ← highlight' #[] result.headerSyntax true |>.run ctx |>.run infoTable |>.run (← HighlightState.ofMessages result.headerSyntax #[])
+  code := code.push #[.highlighted <| Highlighted.fromOutput headerSt.output]
+
+  for cmd in result.items do
+    let st ← HighlightState.ofMessages cmd.commandSyntax (Compat.messageLogArray cmd.messages)
+    let (hl, _) ← go cmd |>.run ctx |>.run infoTable |>.run st
+    code := code.push hl
+
+  return code
 where
-  go t stx : HighlightM (Array Code) := do
+
+  go (res : Compat.Frontend.FrontendItem) : HighlightM (Array Code) := do
+    if res.info.size > 1 then panic! s!"Command {res.commandSyntax.getKind} has {res.info.size} info trees, expected at most 1"
     let stx ←
-      if let some t := t then
-        findDocstringDefs stx t
-      else pure stx
+      if let some t := res.info[0]? then
+        findDocstringDefs res.commandSyntax t
+      else pure res.commandSyntax
 
     if stx.isOfKind ``moduleDoc then
       if let some declRange ← getDeclarationRange? stx then
@@ -239,7 +249,7 @@ where
           if let some doc := MD4Lean.parse (stx[1].getAtomVal.stripSuffix "-/") then
             return #[.markdownModDoc doc]
 
-    highlight' (Option.map (#[·]) t |>.getD #[]) stx true
+    highlight' (Option.map (#[·]) res.info[0]? |>.getD #[]) stx true
     let hl ← modifyGet fun (st : HighlightState) => (Highlighted.fromOutput st.output, {st with output := []})
     let hl ← hl.substM (m := HighlightM) fun str => do
       if str.endsWith "▲" then
@@ -341,40 +351,14 @@ unsafe def go (suppressedNamespaces : Array Name) (extraImports : Array Name) (m
     let cmdPos := parserState.pos
     let cmdSt ← IO.mkRef {commandState, parserState, cmdPos}
 
-    processCommands pctx cmdSt
+    let res ← Compat.Frontend.processCommands headerStx pctx cmdSt
+    let res := res.updateLeading contents
 
-    -- The EOI parser uses a constant `"".toSubstring` for its leading and trailing info, which gets
-    -- in the way of `updateLeading`. This can lead to missing comments from the end of the file.
-    -- This fixup replaces it with an empty substring that's actually at the end of the input, which
-    -- fixes this.
-    let cmdStx := (← cmdSt.get).commands.map fun cmd =>
-      if cmd.isOfKind ``Lean.Parser.Command.eoi then
-        let s := {contents.toSubstring with startPos := contents.endPos, stopPos := contents.endPos}
-        .node .none ``Lean.Parser.Command.eoi #[.atom (.original s contents.endPos s contents.endPos) ""]
-      else cmd
-
-    let infos := (← cmdSt.get).commandState.infoState.trees
-    let msgs := Compat.messageLogArray (← cmdSt.get).commandState.messages
-
-
-    let .node _ _ cmds := mkNullNode (#[headerStx] ++ cmdStx) |>.updateLeading |> wholeFile contents
-      | panic! "updateLeading created non-node"
-
-    -- After Lean nightly-2025-10-13, there's no longer a 1-to-1 mapping between info trees and
-    -- command syntax, so we instead match them up by checking explicitly.
-    let infos := infos.toArray
-    let infos := cmds.map fun stx => do
-      let ⟨s, e⟩ ← stx.getRangeWithTrailing?
-      infos.find? fun tree => Option.isSome <| tree.findInfo? fun i =>
-        if let some ⟨s', e'⟩ := i.stx.getRange? then
-          !(e < s' || s' < s) -- if neither is before the other then they overlap
-        else false
-
-    let hls ← (Frontend.runCommandElabM <| liftTermElabM <| highlightMany' cmds msgs infos (suppressNamespaces := suppressedNamespaces.toList)) pctx cmdSt
+    let hls ← (Frontend.runCommandElabM <| liftTermElabM <| highlightFrontendResult' res (suppressNamespaces := suppressedNamespaces.toList)) pctx cmdSt
 
     let env := (← cmdSt.get).commandState.env
 
-    let items : Array ModuleItem' := hls.zip (cmds) |>.map fun (hl, stx) => {
+    let items : Array ModuleItem' := hls.zip (res.syntax) |>.map fun (hl, stx) => {
       defines := hl.foldl (init := #[]) fun
         | out, .highlighted h => out ++ h.definedNames.toArray
         | out, _ => out,

@@ -4,7 +4,6 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 module
-import Std.Tactic.BVDecide
 
 set_option guard_msgs.diff true
 set_option linter.missingDocs true
@@ -36,8 +35,8 @@ Finds the index of the given character in the alphabet.
 
 Used during decoding.
 -/
-private def alphabetChar (i : UInt32) (h : i < 85 := by bv_decide) : Char :=
-  alphabet[i.toNat]'(by grind [UInt32.lt_iff_toNat_lt])
+private def alphabetChar (i : UInt32) (h : i < 85 := by grind) : Char :=
+  alphabet[i.toNat]
 
 /--
 Gets the numeric value of a character.

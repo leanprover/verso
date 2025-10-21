@@ -21,17 +21,18 @@ public def ensureDir (dir : System.FilePath) : IO Unit := do
     throw (↑ s!"Not a directory: {dir}")
 
 /--
-Recursively copies a directory structure from {name}`src` to {name}`tgt`.
-
-Some errors that occur while copying are logged using {name}`logError`.
+Recursively copies a directory of files from {name}`src` to {name}`tgt`. Any errors are logged using
+{name}`logError`, and paths that don't satisfy {name}`copyFile` are skipped.
 -/
-public partial def copyRecursively (logError : String → IO Unit) (src tgt : System.FilePath)  : IO Unit := do
+public partial def copyRecursively (logError : String → IO Unit) (src tgt : System.FilePath)
+    (copyFile : System.FilePath → IO Bool := fun _ => pure true) : IO Unit := do
+  unless (← copyFile src) do return
   if (← src.metadata).type == .symlink then
     logError s!"Can't copy '{src}' - symlinks not currently supported"
   if ← src.isDir then
     ensureDir tgt
     for d in ← src.readDir do
-      copyRecursively logError d.path (tgt.join d.fileName)
+      copyRecursively logError d.path (tgt / d.fileName) (copyFile := copyFile)
   else
     withFile src .read fun h =>
       withFile tgt .write fun h' => do

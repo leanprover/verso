@@ -43,10 +43,9 @@ if(paramName) {
     } else if (options.length == 1) {
         // Currently, our stored options look like absolute paths ('/Axiom').
         // This makes them relative ('Axiom') so that they will be set relative to the <base> tag
-        const addr = new URL(options[0]['address'].replace(/^\//, ''));
+        const addr = new URL(options[0]['address'].replace(/^\//, ''), document.baseURI);
         addr.hash = options[0]['id'];
         window.location.replace(addr);
-
     } else {
         addEventListener('DOMContentLoaded', event => {
             document.title = "Ambiguous: '" + paramName + "'";

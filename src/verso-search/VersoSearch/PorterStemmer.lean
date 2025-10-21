@@ -34,30 +34,40 @@ reference implementation or the paper, and it is tested against Porter's provide
 Checks whether the character at position {name}`i` is a consonant. {lean}`'y'` is a consonant if not
 preceded by a consonant.
 -/
--- TODO prove termination. With String.Pos.Raw, this went through, but we seem to be lacking theory here.
-partial def isConsonant (i : String.ValidPos str) : Bool :=
+def isConsonant (i : String.ValidPos str) : Bool :=
   match i.get! with
   | 'a' | 'e' | 'i' | 'o' | 'u' => false
   | 'y' =>
     if h : i = str.startValidPos then true
     else !isConsonant (i.prev h)
   | _ => true
+termination_by i.offset.byteIdx
+decreasing_by
+  simp only [String.ValidPos.prev, ← i.offset_toSlice, String.Slice.Pos.ofset_ofSlice, ← String.Pos.Raw.lt_iff, ← String.Slice.Pos.lt_iff]
+  exact String.Slice.Pos.prev_lt
 
 /--
 The measure of a word is the number of v+c+ clusters (vowels followed by consonants).
 -/
--- TODO prove termination again once we get more theory/automation
-partial def measure (word : String) : Nat :=
+def measure (word : String) : Nat :=
   let rec aux (pos : String.ValidPos word) (inVowel : Bool) (count : Nat) : Nat :=
-    match pos.next? with
-    | some next =>
+    if h : pos = word.endValidPos then count
+    else
+      let next := pos.next h
       if !isConsonant pos then
         aux next true count
       else if inVowel then
         aux next false (count + 1)
       else
         aux next false count
-    | none => count
+  termination_by word.endValidPos.offset.byteIdx - pos.offset.byteIdx
+  decreasing_by
+    all_goals
+    apply Nat.sub_lt_sub_left
+    . apply String.ValidPos.byteIdx_lt_utf8ByteSize
+      grind
+    . simp [String.ValidPos.offset_next, (pos.get h).utf8Size_pos]
+
   aux word.startValidPos false 0
 
 /-- info: 0 -/
