@@ -454,56 +454,67 @@ def PartElabM.currentLevel : PartElabM Nat := do return (← getThe State).curre
 def PartElabM.setTitle (titlePreview : String) (titleInlines : Array (TSyntax `term)) : PartElabM Unit := modifyThe State fun st =>
   {st with partContext.expandedTitle := some (titlePreview, titleInlines)}
 
-def findLinksAndNotes : Expr → MetaM (Array (Expr × Expr))
-  | .app t1 t2 => do return (← findLinksAndNotes t1) ++ (← findLinksAndNotes t2)
+/--
+Traverses the Expr structure to find and list MVars that represent undefined links or footnotes.
+It is a simplifying precondition that instantiateMVars has just been called on the argument.
+-/
+def findTypeclassInstances : Expr → MetaM (Array (Expr × Expr))
+  | .app t1 t2 => do return (← findTypeclassInstances t1) ++ (← findTypeclassInstances t2)
   | e@(.mvar _) => do
     let ty ← Meta.inferType e
-    if ty.isAppOf ``HasLink || ty.isAppOf ``HasNote then pure #[(e, ty)] else pure #[]
-  | .lam _ t b _ | .forallE _ t b _ => do return (← findLinksAndNotes t) ++ (← findLinksAndNotes b)
-  | .letE _ t d b _ => do return (← findLinksAndNotes t) ++ (← findLinksAndNotes d) ++ (← findLinksAndNotes b)
-  | .mdata _ e | .proj _ _ e => findLinksAndNotes e
+    if ty.isAppOf ``HasLink || ty.isAppOf ``HasNote then
+      pure #[(e, ty)]
+    else
+      pure #[]
+  | .lam _ t b _ | .forallE _ t b _ => do return (← findTypeclassInstances t) ++ (← findTypeclassInstances b)
+  | .letE _ t d b _ => do
+    return (← findTypeclassInstances t) ++ (← findTypeclassInstances d) ++ (← findTypeclassInstances b)
+  | .mdata _ e | .proj _ _ e => findTypeclassInstances e
   | .sort .. | .fvar .. | .bvar .. | .const .. | .lit .. => pure #[]
 
-open Lean Meta Elab Term in
 def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := withRef block <| do
-  let g := (← readThe DocElabContext).genre
+  let genre := (← readThe DocElabContext).genre
 
-  let n ← mkFreshUserName `block
+  let mut type := .app (.const ``Doc.Block []) genre
+  let mut blockExpr ← Term.elabTerm block (some type)
 
-  let type : Expr := .app (.const ``Doc.Block []) g
-  let t ← elabTerm block (some type)
-  let t ← instantiateMVars t
-  let links ← findLinksAndNotes t
-  let t ← links.foldrM (init := t) fun (mv, mvty) t =>
+  -- Find links and footnotes by traversing blockExpr
+  -- It simplifies the logic of findTypeclassInstances to have the MVars freshly instantiated
+  blockExpr ← instantiateMVars blockExpr
+  let links ← findTypeclassInstances blockExpr
+
+  -- Wrap the type and corresponding expression in binders for the links and notes
+  type ← Meta.mkForallFVars (links.map (·.1)) type (binderInfoForMVars := .instImplicit)
+  blockExpr ← links.foldrM (init := blockExpr) fun (mv, mvty) t =>
     (.lam `inst mvty · .instImplicit) <$> t.abstractM #[mv]
-  let t ← instantiateMVars t
 
-  let xs ← Term.addAutoBoundImplicits #[] none
-  let type ← instantiateMVars type
-  let type ← mkForallFVars (links.map (·.1)) type (binderInfoForMVars := .instImplicit)
-  let type ← mkForallFVars xs type
-  let type ← levelMVarToParam type
-  let usedParams  := collectLevelParams {} type |>.params
+  -- Wrap auto-bound implicits and global variables (this is possibly overly defensive)
+  type ← Meta.mkForallFVars (← Term.addAutoBoundImplicits #[] none) type
 
-  match sortDeclLevelParams [] [] usedParams with
+  -- Replace any universe metavariables with universe variables; report errors
+  type ← Term.levelMVarToParam type
+  match sortDeclLevelParams [] [] (collectLevelParams {} type |>.params) with
   | Except.error msg      => throwErrorAt block msg
   | Except.ok levelParams =>
-    synthesizeSyntheticMVarsNoPostponing
-    let t ← instantiateMVars t
-    let type ← instantiateMVars type
-    let t ← ensureHasType (some type) t
+    Term.synthesizeSyntheticMVarsNoPostponing
+    type ← instantiateMVars type
+    blockExpr ← Term.ensureHasType (some type) (← instantiateMVars blockExpr)
+    let name ← mkFreshUserName `block
     let decl := Declaration.defnDecl {
-      name := n,
-      levelParams := levelParams,
-      type := type,
-      value := t,
+      name,
+      levelParams,
+      type,
+      value := blockExpr,
       hints := .abbrev,
       safety := .safe
     }
+  
+    -- This is possibly overly defensive (or ineffectual)
     Term.ensureNoUnassignedMVars decl
     addAndCompile decl
-  modifyThe State fun st =>
-    { st with partContext.blocks := st.partContext.blocks.push (mkIdent n) }
+    modifyThe PartElabM.State fun st =>
+      { st with partContext.blocks := st.partContext.blocks.push (mkIdent name) }
+
 
 def PartElabM.addPart (finished : FinishedPart) : PartElabM Unit := modifyThe State fun st =>
   {st with partContext.priorParts := st.partContext.priorParts.push finished}
