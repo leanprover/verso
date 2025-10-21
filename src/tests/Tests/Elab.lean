@@ -49,6 +49,12 @@ Attempting to insert something {totallyUndefined}[]
 :::::::
 end
 
+#guard_msgs in
+#docs (Manual) novar "My title here" :=
+:::::::
+A variable like {lean +error}`x`.
+:::::::
+
 section
 variable (x : Int)
 #docs (Manual) var2 "My title here" :=
