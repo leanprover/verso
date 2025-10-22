@@ -1,7 +1,7 @@
 # Verso: An Authoring Tool for Lean
 
 Writing about Lean takes many forms, including but not limited to:
- 
+
  * Instructional books such as [Theorem Proving in Lean](https://lean-lang.org/theorem_proving_in_lean4/), [Functional Programming in Lean](https://lean-lang.org/functional_programming_in_lean/), and [Mathematics in Lean](https://leanprover-community.github.io/mathematics_in_lean/index.html)
  * Software documentation, such as the Lean users' manual
  * In-source API documentation that is both displayed in IDEs and included in larger documents
