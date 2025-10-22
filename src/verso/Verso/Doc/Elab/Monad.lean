@@ -221,14 +221,14 @@ partial def FinishedPart.toSyntax
         #[ToExpr.toExpr (SubVerso.Highlighting.exportToStr exportTable.toExport)]
       let mkCodeTable := mkApp (mkConst ``Verso.CodeTable.CodeTable.mk) (ToExpr.toExpr name)
       let value ← Meta.mkAppM' mkCodeTable #[synTable]
-      withOptions (·.setBool `compiler.extract_closed false) <| addAndCompile <| .defnDecl {
+      addAndCompile <| .defnDecl {
         name,
         levelParams := [],
         type, value,
         hints := .regular 1,
         safety := .safe
       }
-      Meta.addInstance name .global 1
+      Meta.addInstance name .global (eval_prio default)
     ``(Part.mk #[$titleInlines,*] $(quote titleString) $metaStx #[$typedBlocks,*] #[$subStx,*])
   | .included name => pure name
 
@@ -484,7 +484,7 @@ def findTypeclassInstances : Expr → MetaM (Array (Expr × Expr))
   | .app t1 t2 => do return (← findTypeclassInstances t1) ++ (← findTypeclassInstances t2)
   | e@(.mvar _) => do
     let ty ← Meta.inferType e
-    if ty.isAppOf ``HasLink || ty.isAppOf ``HasNote then
+    if ty.isAppOf ``HasLink || ty.isAppOf ``HasNote || ty.isAppOf ``CodeTable.CodeTable then
       pure #[(e, ty)]
     else
       pure #[]

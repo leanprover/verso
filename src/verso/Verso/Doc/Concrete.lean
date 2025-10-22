@@ -47,6 +47,7 @@ def saveRefs [Monad m] [MonadInfoTree m] (st : DocElabM.State) (st' : PartElabM.
 private def elabGenre (genre : TSyntax `term) : TermElabM Expr :=
   Term.elabTerm genre (some (.const ``Doc.Genre []))
 
+
 /--
 All-at-once elaboration of verso document syntax to syntax denoting a verso `Part`. Implements
 elaboration of the `#docs` command and `#doc` term. The `#doc` command is incremental, and thus
