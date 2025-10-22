@@ -56,7 +56,9 @@ private def elabDoc (genre: Term) (title: StrLit) (topLevelBlocks : Array Syntax
   let env ← getEnv
   let titleParts ← stringToInlines title
   let titleString := inlinesToString env titleParts
-  let initDocState : DocElabM.State := {}
+  let tmpName ← mkAuxDeclName `docs_table
+
+  let initDocState : DocElabM.State := { exportingTable := some (tmpName, {}) }
   let initPartState : PartElabM.State := .init (.node .none nullKind titleParts)
 
   let ((), docElabState, partElabState) ←
@@ -79,7 +81,7 @@ private def elabDoc (genre: Term) (title: StrLit) (topLevelBlocks : Array Syntax
   let finished := partElabState.partContext.toPartFrame.close endPos
 
   pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
-  finished.toSyntax genre
+  finished.toSyntax genre docElabState.exportingTable
 
 elab "#docs" "(" genre:term ")" n:ident title:str ":=" ":::::::" text:document ":::::::" : command => do
   findGenreCmd genre
@@ -139,7 +141,7 @@ be used to thread state between the separate top level blocks. These three envir
 across top-level-block parsing events.
 -/
 
-initialize docStateExt : EnvExtension DocElabM.State ← registerEnvExtension (pure {})
+initialize docStateExt : EnvExtension DocElabM.State ← registerEnvExtension (pure { exportingTable := none })
 initialize partStateExt : EnvExtension (Option PartElabM.State) ← registerEnvExtension (pure none)
 /--
 The original parser for the `command` category, which is restored while elaborating a Verso block so
@@ -186,7 +188,9 @@ private def startDoc (genre : Term) (title: StrLit) : Command.CommandElabM Strin
   let env ← getEnv
   let titleParts ← stringToInlines title
   let titleString := inlinesToString env titleParts
-  let initDocState : DocElabM.State := {}
+  -- let tmpName := `doc_table
+  let tmpName ← mkAuxDeclName `docs_table
+  let initDocState : DocElabM.State := { exportingTable := some (tmpName, {}) }
   let initPartState : PartElabM.State := .init (.node .none nullKind titleParts)
 
   modifyEnv (docStateExt.setState · initDocState)
@@ -207,12 +211,13 @@ private def finishDoc (genre : Term) (title : StrLit) : Command.CommandElabM Uni
   runPartElabInEnv genre <| do closePartsUntil 0 endPos
 
   let env ← getEnv
+  let docElabState := docStateExt.getState env
   let some partElabState := partStateExt.getState env
     | panic! "The document's start state was never initialized"
   let finished := partElabState.partContext.toPartFrame.close endPos
 
   let n := mkIdentFrom title (← currentDocName)
-  let docu ← finished.toSyntax genre
+  let docu ← Command.runTermElabM fun _ => finished.toSyntax genre (reprTable := docElabState.exportingTable)
   Command.elabCommand (← `(def $n : Part $genre := $docu))
 
 syntax (name := replaceDoc) "#doc" "(" term ")" str "=>" : command

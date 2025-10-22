@@ -11,6 +11,9 @@ import Lean.Elab.DeclUtil
 import Lean.Meta.Reduce
 import Lean.DocString.Syntax
 
+import SubVerso.Highlighting
+import Verso.CodeTable
+import Verso.Code.Highlighted
 import Verso.Doc
 import Verso.Doc.ArgParse
 import Verso.Doc.Elab.ExpanderAttribute
@@ -123,6 +126,7 @@ def DocUses.add (uses : DocUses) (loc : Syntax) : DocUses := {uses with useSites
 structure DocElabM.State where
   linkRefs : HashMap String DocUses := {}
   footnoteRefs : HashMap String DocUses := {}
+  exportingTable : Option (Name × SubVerso.Highlighting.Exporting) := .none
 deriving Inhabited
 
 /-- Custom info tree data to save footnote and reflink cross-references -/
@@ -197,13 +201,12 @@ private def linkRefName [Monad m] [MonadQuotation m] (docName : Name) (ref : TSy
 private def footnoteRefName [Monad m] [MonadQuotation m] (genre : Term) (docName : Name) (ref : TSyntax `str) : m Term :=
   ``(HasNote.contents $(quote ref.getString) $(quote docName) (genre := $genre) (self := _))
 
-
-open Lean.Parser.Term in
-partial def FinishedPart.toSyntax [Monad m] [MonadQuotation m] [MonadEnv m]
+partial def FinishedPart.toSyntax
     (genre : TSyntax `term)
-    : FinishedPart → m (TSyntax `term)
+    (reprTable : Option (Name × SubVerso.Highlighting.Exporting))
+    : FinishedPart → TermElabM (TSyntax `term)
   | .mk _titleStx titleInlines titleString metadata blocks subParts _endPos => do
-    let subStx ← subParts.mapM (toSyntax genre)
+    let subStx ← subParts.mapM (toSyntax genre none)
     let metaStx ←
       match metadata with
       | none => `(none)
@@ -211,8 +214,25 @@ partial def FinishedPart.toSyntax [Monad m] [MonadQuotation m] [MonadEnv m]
     -- Adding type annotations works around a limitation in list and array elaboration, where intermediate
     -- let bindings introduced by "chunking" the elaboration may fail to infer types
     let typedBlocks ← blocks.mapM fun b => `(($b : Block $genre))
+    if let some (name, exportTable) := reprTable then
+      -- println! s!"Outputting at {name} with {num} Lean code fences"
+      let type ← Meta.mkAppM ``Verso.CodeTable.CodeTable #[ToExpr.toExpr name]
+      let synTable ← Meta.mkAppM ``SubVerso.Highlighting.exportFromStr!
+        #[ToExpr.toExpr (SubVerso.Highlighting.exportToStr exportTable.toExport)]
+      let mkCodeTable := mkApp (mkConst ``Verso.CodeTable.CodeTable.mk) (ToExpr.toExpr name)
+      let value ← Meta.mkAppM' mkCodeTable #[synTable]
+      withOptions (·.setBool `compiler.extract_closed false) <| addAndCompile <| .defnDecl {
+        name,
+        levelParams := [],
+        type, value,
+        hints := .regular 1,
+        safety := .safe
+      }
+      Meta.addInstance name .global 1
     ``(Part.mk #[$titleInlines,*] $(quote titleString) $metaStx #[$typedBlocks,*] #[$subStx,*])
   | .included name => pure name
+
+
 
 structure ToSyntaxState where
   gensymCounter : Nat := 0
@@ -423,6 +443,8 @@ instance : MonadOptions DocElabM := inferInstanceAs <| MonadOptions (ReaderT Doc
 
 instance : MonadWithOptions DocElabM := inferInstanceAs <| MonadWithOptions (ReaderT DocElabContext (ReaderT PartElabM.State (StateT DocElabM.State TermElabM)))
 
+instance : MonadWithOptions PartElabM := inferInstanceAs <| MonadWithOptions (ReaderT DocElabContext (StateT DocElabM.State (StateT PartElabM.State TermElabM)))
+
 instance : MonadWithReaderOf Core.Context DocElabM := inferInstanceAs <| MonadWithReaderOf Core.Context (ReaderT DocElabContext (ReaderT PartElabM.State (StateT DocElabM.State TermElabM)))
 
 instance : MonadWithReaderOf Term.Context DocElabM := inferInstanceAs <| MonadWithReaderOf Term.Context (ReaderT DocElabContext (ReaderT PartElabM.State (StateT DocElabM.State TermElabM)))
@@ -508,7 +530,7 @@ def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := withRef block
       hints := .abbrev,
       safety := .safe
     }
-  
+
     -- This is possibly overly defensive (or ineffectual)
     Term.ensureNoUnassignedMVars decl
     addAndCompile decl
@@ -519,22 +541,23 @@ def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := withRef block
 def PartElabM.addPart (finished : FinishedPart) : PartElabM Unit := modifyThe State fun st =>
   {st with partContext.priorParts := st.partContext.priorParts.push finished}
 
+
 def PartElabM.addLinkDef (refName : TSyntax `str) (url : String) : PartElabM Unit := do
   let strName := refName.getString
   let docName ← currentDocName
   match (← getThe State).linkDefs[strName]? with
   | none =>
     let t := mkApp2 (.const ``HasLink []) (toExpr strName) (toExpr docName)
-    let n ← mkFreshUserName (docName ++ `inst.link ++ strName.toName)
+    let name ← mkFreshUserName (docName ++ `inst.link ++ strName.toName)
     addAndCompile <| .defnDecl {
-      name := n,
+      name,
       levelParams := [],
       type := t,
       value := mkApp3 (.const ``HasLink.mk []) (toExpr strName) (toExpr docName) (toExpr url),
       hints := .abbrev,
       safety := .safe
     }
-    Meta.addInstance n AttributeKind.global (eval_prio default)
+    Meta.addInstance name AttributeKind.global (eval_prio default)
     modifyThe State fun st => {st with linkDefs := st.linkDefs.insert strName ⟨refName, url⟩}
 
   | some ⟨_, url'⟩ =>
@@ -549,6 +572,7 @@ def DocElabM.addLinkRef (refName : TSyntax `str) : DocElabM (TSyntax `term) := d
   | some ⟨uses⟩ =>
     modifyThe State fun st => {st with linkRefs := st.linkRefs.insert strName ⟨uses.push refName⟩}
     linkRefName (← currentDocName) refName
+
 
 
 def PartElabM.addFootnoteDef (refName : TSyntax `str) (content : Array (TSyntax `term)) : PartElabM Unit := do
