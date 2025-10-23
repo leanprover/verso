@@ -60,7 +60,7 @@ def addAuxDeclsAndFinishSyntax
       #[ToExpr.toExpr (SubVerso.Highlighting.exportToStr exportTable.toExport)]
     let mkCodeTable := mkApp (mkConst ``Verso.CodeTable.CodeTable.mk) (ToExpr.toExpr name)
     let value ← Meta.mkAppM' mkCodeTable #[synTable]
-    withOptions (·.setBool `compiler.extract_closed true) do addAndCompile <| .defnDecl {
+    withOptions (·.setBool `compiler.extract_closed false) do addAndCompile <| .defnDecl {
       name,
       levelParams := [],
       type,
@@ -99,7 +99,8 @@ def addAuxDeclsAndFinishSyntax
 
       -- This is possibly overly defensive (or ineffectual)
       Term.ensureNoUnassignedMVars decl
-      addAndCompile decl
+      -- addAndCompile decl
+      withOptions (·.setBool `compiler.extract_closed false) <| addAndCompile decl
 
   finished.toSyntax genreSyntax
 
