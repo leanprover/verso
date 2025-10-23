@@ -60,10 +60,11 @@ def addAuxDeclsAndFinishSyntax
       #[ToExpr.toExpr (SubVerso.Highlighting.exportToStr exportTable.toExport)]
     let mkCodeTable := mkApp (mkConst ``Verso.CodeTable.CodeTable.mk) (ToExpr.toExpr name)
     let value ← Meta.mkAppM' mkCodeTable #[synTable]
-    addAndCompile <| .defnDecl {
+    withOptions (·.setBool `compiler.extract_closed true) do addAndCompile <| .defnDecl {
       name,
       levelParams := [],
-      type, value,
+      type,
+      value,
       hints := .regular 1,
       safety := .safe
     }
