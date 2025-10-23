@@ -169,7 +169,7 @@ def hlFromGlobalExport! (exportTable : SubVerso.Highlighting.Export) (key : SubV
   | .ok v => v
 
 def codeTableName [Monad m] [MonadQuotation m] (name : Name) : m Term :=
-  ``(CodeTable.CodeTable.is $(quote name) (self := _))
+  ``(CodeTable.CodeTable.is $(quote name))
 
 /--
 Produces the syntax of an expression that denotes the `hls` value. Specifically,
@@ -182,7 +182,7 @@ private def quoteHighlightViaSerialization (hls : Highlighted) : DocElabM Term :
   if let .some (name, exportTable) := docElabState.exportingTable then
     let (key, exportTable) := hls.export.run exportTable
     set { docElabState with exportingTable := some (name, exportTable) }
-    let codeTableSyn ← ``(CodeTable.CodeTable.is $(quote name) (self := _))
+    let codeTableSyn ← ``(CodeTable.CodeTable.is $(quote name))
     ``(hlFromGlobalExport! $(codeTableSyn) $(quote key))
   else
     let repr := hlToExport hls

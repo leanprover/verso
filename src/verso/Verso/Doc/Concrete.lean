@@ -47,23 +47,79 @@ def saveRefs [Monad m] [MonadInfoTree m] (st : DocElabM.State) (st' : PartElabM.
 private def elabGenre (genre : TSyntax `term) : TermElabM Expr :=
   Term.elabTerm genre (some (.const ``Doc.Genre []))
 
+def addAuxDeclsAndFinishSyntax
+    (genreSyntax : Term) (genre : Expr)
+    (docElabState : DocElabM.State)
+    (finished : FinishedPart)
+    : TermElabM Term := do
+
+  -- Output highlighting export table
+  if let some (name, exportTable) := docElabState.exportingTable then
+    let type ← Meta.mkAppM ``Verso.CodeTable.CodeTable #[ToExpr.toExpr name]
+    let synTable ← Meta.mkAppM ``SubVerso.Highlighting.exportFromStr!
+      #[ToExpr.toExpr (SubVerso.Highlighting.exportToStr exportTable.toExport)]
+    let mkCodeTable := mkApp (mkConst ``Verso.CodeTable.CodeTable.mk) (ToExpr.toExpr name)
+    let value ← Meta.mkAppM' mkCodeTable #[synTable]
+    addAndCompile <| .defnDecl {
+      name,
+      levelParams := [],
+      type, value,
+      hints := .regular 1,
+      safety := .safe
+    }
+    Meta.addInstance name .global (eval_prio default)
+
+  let _ ← getEnv
+
+  -- Output blocks
+  for (name, block) in docElabState.deferredBlocks do
+    let mut type := .app (.const ``Doc.Block []) genre
+    let mut blockExpr ← Term.elabTerm block (some type)
+
+    -- Wrap auto-bound implicits and global variables (this is possibly overly defensive)
+    type ← Meta.mkForallFVars (← Term.addAutoBoundImplicits #[] none) type
+
+    -- Replace any universe metavariables with universe variables; report errors
+    type ← Term.levelMVarToParam type
+    match sortDeclLevelParams [] [] (collectLevelParams {} type |>.params) with
+    | Except.error msg      => throwErrorAt block msg
+    | Except.ok levelParams =>
+      Term.synthesizeSyntheticMVarsNoPostponing
+      type ← instantiateMVars type
+      blockExpr ← Term.ensureHasType (some type) (← instantiateMVars blockExpr)
+      let decl := Declaration.defnDecl {
+        name,
+        levelParams,
+        type,
+        value := blockExpr,
+        hints := .abbrev,
+        safety := .safe
+      }
+
+      -- This is possibly overly defensive (or ineffectual)
+      Term.ensureNoUnassignedMVars decl
+      addAndCompile decl
+
+  finished.toSyntax genreSyntax
+
 
 /--
 All-at-once elaboration of verso document syntax to syntax denoting a verso `Part`. Implements
 elaboration of the `#docs` command and `#doc` term. The `#doc` command is incremental, and thus
 splits the logic in this function across multiple functions.
 -/
-private def elabDoc (genre: Term) (title: StrLit) (topLevelBlocks : Array Syntax) (endPos: String.Pos.Raw) : TermElabM Term := do
+private def elabDoc (genreSyntax: Term) (title: StrLit) (topLevelBlocks : Array Syntax) (endPos: String.Pos.Raw) : TermElabM Term := do
   let env ← getEnv
   let titleParts ← stringToInlines title
   let titleString := inlinesToString env titleParts
   let tmpName ← mkAuxDeclName `docs_table
+  let genre ← elabGenre genreSyntax
 
   let initDocState : DocElabM.State := { exportingTable := some (tmpName, {}) }
   let initPartState : PartElabM.State := .init (.node .none nullKind titleParts)
 
   let ((), docElabState, partElabState) ←
-    PartElabM.run genre (← elabGenre genre) initDocState initPartState <| do
+    PartElabM.run genreSyntax genre initDocState initPartState <| do
       let mut errors := #[]
       PartElabM.setTitle titleString (← PartElabM.liftDocElabM <| titleParts.mapM (elabInline ⟨·⟩))
       for b in topLevelBlocks do
@@ -82,7 +138,7 @@ private def elabDoc (genre: Term) (title: StrLit) (topLevelBlocks : Array Syntax
   let finished := partElabState.partContext.toPartFrame.close endPos
 
   pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
-  finished.toSyntax genre docElabState.exportingTable
+  addAuxDeclsAndFinishSyntax genreSyntax genre docElabState finished
 
 elab "#docs" "(" genre:term ")" n:ident title:str ":=" ":::::::" text:document ":::::::" : command => do
   findGenreCmd genre
@@ -207,9 +263,9 @@ private def runVersoBlock (genre : Term) (block : TSyntax `block) : Command.Comm
   -- info leaves that have already been pushed to avoid pushing them again.
   saveRefsInEnv
 
-private def finishDoc (genre : Term) (title : StrLit) : Command.CommandElabM Unit:= do
+private def finishDoc (genreSyntax : Term) (title : StrLit) : Command.CommandElabM Unit:= do
   let endPos := (← getFileMap).source.endPos
-  runPartElabInEnv genre <| do closePartsUntil 0 endPos
+  runPartElabInEnv genreSyntax <| do closePartsUntil 0 endPos
 
   let env ← getEnv
   let docElabState := docStateExt.getState env
@@ -218,8 +274,9 @@ private def finishDoc (genre : Term) (title : StrLit) : Command.CommandElabM Uni
   let finished := partElabState.partContext.toPartFrame.close endPos
 
   let n := mkIdentFrom title (← currentDocName)
-  let docu ← Command.runTermElabM fun _ => finished.toSyntax genre (reprTable := docElabState.exportingTable)
-  Command.elabCommand (← `(def $n : Part $genre := $docu))
+  let docu ← Command.runTermElabM fun _ => do
+    addAuxDeclsAndFinishSyntax genreSyntax (← elabGenre genreSyntax) docElabState finished
+  Command.elabCommand (← `(def $n : Part $genreSyntax := $docu))
 
 syntax (name := replaceDoc) "#doc" "(" term ")" str "=>" : command
 elab_rules : command

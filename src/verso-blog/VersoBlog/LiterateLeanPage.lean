@@ -522,7 +522,8 @@ def elabLiteratePage (x : Ident) (path : StrLit) (mod : Ident) (config : LitPage
       | _ => p
     else finished
 
-  elabCommand <| ← `(def $x : Part $genre := $(← finished.toSyntax' genre))
+  let block ← Command.runTermElabM fun _ => finished.toSyntax genre .none
+  elabCommand <| ← `(def $x : Part $genre := $block)
 
 end Literate
 open Literate
