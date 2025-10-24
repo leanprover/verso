@@ -1,8 +1,8 @@
 {
     "compilerOptions": {
-        "typeRoots": ["."],
         "lib": ["ES2024", "DOM", "DOM.Iterable"],
         "target": "ES2024",
         "noEmit": true
-    }
+    },
+    "include": ["find.js"]
 }
