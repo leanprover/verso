@@ -16,7 +16,7 @@ set_option pp.rawOnError true
 :::::::
 /-- info: Verso.Doc.Part.mk #[Verso.Doc.Inline.text "Nothing"] "Nothing" none #[] #[] -/
 #guard_msgs in
-  #eval noDoc
+  #eval noDoc.toPart
 
 
 /- ----- -/
@@ -36,7 +36,7 @@ info: Verso.Doc.Part.mk
   #[]
 -/
 #guard_msgs in
-  #eval littleParagraph
+  #eval littleParagraph.toPart
 
 
 /- ----- -/
@@ -56,7 +56,7 @@ info: Verso.Doc.Part.mk
   #[]
 -/
 #guard_msgs in
-  #eval listOneItem
+  #eval listOneItem.toPart
 
 
 /- ----- -/
@@ -83,7 +83,7 @@ info: Verso.Doc.Part.mk
       #[]]
 -/
 #guard_msgs in
-  #eval sectionAndPara
+  #eval sectionAndPara.toPart
 
 
 /- ----- -/
@@ -128,7 +128,7 @@ info: Verso.Doc.Part.mk
           #[]]]
 -/
 #guard_msgs in
-  #eval nestedDoc1
+  #eval nestedDoc1.toPart
 
 
 /- ----- -/
@@ -173,7 +173,7 @@ info: Verso.Doc.Part.mk
           #[]]]
 -/
 #guard_msgs in
-  #eval nestedDoc2
+  #eval nestedDoc2.toPart
 
 
 /- ----- -/
@@ -223,7 +223,7 @@ info: Verso.Doc.Part.mk
           #[]]]
 -/
 #guard_msgs in
-  #eval nestedDoc3
+  #eval nestedDoc3.toPart
 
 
 /- ----- -/
@@ -260,7 +260,7 @@ info: Verso.Doc.Part.mk
       #[]]
 -/
 #guard_msgs in
-  #eval nestedDoc4
+  #eval nestedDoc4.toPart
 
 
 /- ----- -/
@@ -295,7 +295,7 @@ info: Verso.Doc.Part.mk
   #[]
 -/
 #guard_msgs in
-  #eval regularLink
+  #eval regularLink.toPart
 
 
 /- ----- -/
@@ -317,7 +317,7 @@ info: Verso.Doc.Part.mk
   #[]
 -/
 #guard_msgs in
-  #eval refLink
+  #eval refLink.toPart
 
 
 /- ----- -/
@@ -339,7 +339,7 @@ info: Verso.Doc.Part.mk
   #[]
 -/
 #guard_msgs in
-  #eval noteLink
+  #eval noteLink.toPart
 
 
 /- ----- -/
@@ -366,7 +366,7 @@ info: Verso.Doc.Part.mk
   #[]
 -/
 #guard_msgs in
-  #eval refAndLink
+  #eval refAndLink.toPart
 
 #docs (.none) refAndLink2 "Ref/link ordering" :=
 :::::::
@@ -395,13 +395,13 @@ Here's [a link][to here][^note]!
 :::::::
 
 /-- info: true -/
-#guard_msgs in #eval refAndLink == refAndLink2
+#guard_msgs in #eval refAndLink.toPart == refAndLink2.toPart
 
 /-- info: true -/
-#guard_msgs in #eval refAndLink == refAndLink3
+#guard_msgs in #eval refAndLink.toPart == refAndLink3.toPart
 
 /-- info: true -/
-#guard_msgs in #eval refAndLink == refAndLink4
+#guard_msgs in #eval refAndLink.toPart == refAndLink4.toPart
 
 #docs (.none) nested1 "Nested footnotes?" :=
 :::::::

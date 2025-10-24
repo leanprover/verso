@@ -12,6 +12,7 @@ namespace Verso.Doc.Concrete
 
 open Lean Verso Parser Doc Elab
 
+
 def document : Parser where
   fn := atomicFn <| Verso.Parser.document (blockContext := {maxDirective := some 6})
 
@@ -74,11 +75,15 @@ def addAuxDeclsAndFinishSyntax
 
   -- Output blocks
   for (name, block) in docElabState.deferredBlocks do
-    let mut type := .app (.const ``Doc.Block []) genre
-    let mut blockExpr ← Term.elabTerm block (some type)
+    let baseType := .app (.const ``Doc.Block []) genre
+    let mut blockExpr ← Term.elabTerm block (.some baseType)
+
+    let mut type ← Term.elabType (← ``(Unit → Doc.Block $genreSyntax))
+    blockExpr := .lam .anonymous (mkConst ``Unit) blockExpr .default
 
     -- Wrap auto-bound implicits and global variables (this is possibly overly defensive)
     type ← Meta.mkForallFVars (← Term.addAutoBoundImplicits #[] none) type
+
 
     -- Replace any universe metavariables with universe variables; report errors
     type ← Term.levelMVarToParam type
@@ -102,7 +107,7 @@ def addAuxDeclsAndFinishSyntax
       -- addAndCompile decl
       withOptions (·.setBool `compiler.extract_closed false) <| addAndCompile decl
 
-  finished.toSyntax genreSyntax
+  ``(VersoDoc.mk (fun () => $(← finished.toSyntax genreSyntax)))
 
 
 /--
@@ -152,13 +157,13 @@ elab "#docs" "(" genre:term ")" n:ident title:str ":=" ":::::::" text:document "
       | none => panic! "No final token!"
     | _ => panic! "Nothing"
   let docu ← Command.runTermElabM fun _ => elabDoc genre title text.raw.getArgs endTok.getPos!
-  Command.elabCommand (← `(def $n : Part $genre := $docu))
+  Command.elabCommand (← `(def $n : VersoDoc $genre := $docu))
 
 elab "#doc" "(" genre:term ")" title:str "=>" text:completeDocument eoi : term => do
   findGenreTm genre
   let endPos := (← getFileMap).source.endPos
   let docu ← elabDoc genre title text.raw.getArgs endPos
-  Term.elabTerm (← `( ($(docu) : Part $genre))) none
+  Term.elabTerm (← ``( ($docu : VersoDoc $genre))) none
 
 
 scoped syntax (name := addBlockCmd) block term:max : command
@@ -278,7 +283,8 @@ private def finishDoc (genreSyntax : Term) (title : StrLit) : Command.CommandEla
   let n := mkIdentFrom title (← currentDocName)
   let docu ← Command.runTermElabM fun _ => do
     addAuxDeclsAndFinishSyntax genreSyntax (← elabGenre genreSyntax) docElabState finished
-  Command.elabCommand (← `(def $n : Part $genreSyntax := $docu))
+  let docuType ← ``(VersoDoc $genreSyntax)
+  Command.elabCommand (← `(def $n : $docuType := $docu))
 
 syntax (name := replaceDoc) "#doc" "(" term ")" str "=>" : command
 elab_rules : command

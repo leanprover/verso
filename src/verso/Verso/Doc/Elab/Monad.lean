@@ -32,6 +32,14 @@ open Std (HashMap HashSet)
 open Verso.SyntaxUtils
 open Verso.ArgParse (FromArgs SigDoc)
 
+structure VersoDoc (genre : Genre) where
+  document : Unit → Part genre
+
+def VersoDoc.toPart (bundle : VersoDoc genre) : Part genre :=
+  -- let exportTable := SubVerso.Highlighting.exportFromStr! bundle.exportStr
+  bundle.document ()
+
+
 initialize registerTraceClass `Elab.Verso
 initialize registerTraceClass `Elab.Verso.part
 initialize registerTraceClass `Elab.Verso.block
@@ -215,7 +223,7 @@ partial def FinishedPart.toSyntax
     -- let bindings introduced by "chunking" the elaboration may fail to infer types
     let typedBlocks ← blocks.mapM fun b => `(($b : Block $genre))
     ``(Part.mk #[$titleInlines,*] $(quote titleString) $metaStx #[$typedBlocks,*] #[$subStx,*])
-  | .included name => pure name
+  | .included name => ``(VersoDoc.toPart $name)
 
 structure ToSyntaxState where
   gensymCounter : Nat := 0
@@ -447,8 +455,9 @@ def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := withRef block
   let name ← mkFreshUserName `block
   modifyThe DocElabM.State fun st =>
     { st with deferredBlocks := st.deferredBlocks.push (name, block) }
+  let expr ← `($(mkIdent name) ())
   modifyThe PartElabM.State fun st =>
-    { st with partContext.blocks := st.partContext.blocks.push (mkIdent name) }
+    { st with partContext.blocks := st.partContext.blocks.push expr}
 
 def PartElabM.addPart (finished : FinishedPart) : PartElabM Unit := modifyThe State fun st =>
   {st with partContext.priorParts := st.partContext.priorParts.push finished}
