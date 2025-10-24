@@ -776,7 +776,7 @@ The parameters are:
 abbrev ExtraStep := Mode → (String → IO Unit) → Config → TraverseState → Part Manual → IO Unit
 
 
-def manualMain (text : Part Manual)
+def manualMain (preText : VersoDoc Manual)
     (extensionImpls : ExtensionImpls := by exact extension_impls%)
     (options : List String)
     (config : Config := Config.addKaTeX (Config.addSearch {}))
@@ -784,6 +784,8 @@ def manualMain (text : Part Manual)
   ReaderT.run go extensionImpls
 
 where
+  text := preText.toPart
+
   opts (cfg : Config) : List String → ReaderT ExtensionImpls IO Config
     | ("--output"::dir::more) => opts {cfg with destination := dir} more
     | ("--depth"::n::more) => opts {cfg with htmlDepth := n.toNat!} more
