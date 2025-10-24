@@ -125,8 +125,15 @@ jobs:
 
       - name: Type check the search bar code
         run: |
-          cd _out/html-multi/-verso-search
+          pushd _out/html-multi/-verso-search
           tsc --noEmit -p jsconfig.json
+          popd
+
+      - name: Type check the xref redirect JS code
+        run: |
+          pushd static-web
+          tsc --noEmit -p jsconfig.json
+          popd
 
       - name: Upload docs to artifact storage
         if: github.ref != 'refs/heads/main'
