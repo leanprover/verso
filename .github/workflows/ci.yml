@@ -5,12 +5,13 @@ on:
       - main
       - nightly-testing
   pull_request:
+  merge_group:
 
 name: Continuous Integration
 
 jobs:
   build:
-    name: test
+    name: Build and test
     runs-on: nscloud-ubuntu-22.04-amd64-8x16
     steps:
       - name: install elan
@@ -124,8 +125,15 @@ jobs:
 
       - name: Type check the search bar code
         run: |
-          cd _out/html-multi/-verso-search
+          pushd _out/html-multi/-verso-search
           tsc --noEmit -p jsconfig.json
+          popd
+
+      - name: Type check the xref redirect JS code
+        run: |
+          pushd static-web
+          tsc --noEmit -p jsconfig.json
+          popd
 
       - name: Upload docs to artifact storage
         if: github.ref != 'refs/heads/main'
