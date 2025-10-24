@@ -54,6 +54,7 @@ def addAuxDeclsAndFinishSyntax
     (finished : FinishedPart)
     : TermElabM Term := do
 
+/-
   -- Output highlighting export table
   if let some (name, exportTable) := docElabState.exportingTable then
     let type ← Meta.mkAppM ``Verso.CodeTable.CodeTable #[ToExpr.toExpr name]
@@ -70,6 +71,7 @@ def addAuxDeclsAndFinishSyntax
       safety := .safe
     }
     Meta.addInstance name .global (eval_prio default)
+-/
 
   let _ ← getEnv
 
@@ -78,12 +80,14 @@ def addAuxDeclsAndFinishSyntax
     let baseType := .app (.const ``Doc.Block []) genre
     let mut blockExpr ← Term.elabTerm block (.some baseType)
 
-    let mut type ← Term.elabType (← ``(Unit → Doc.Block $genreSyntax))
-    blockExpr := .lam .anonymous (mkConst ``Unit) blockExpr .default
+    let mut type ← Term.elabType (← ``(SubVerso.Highlighting.Export → Doc.Block $genreSyntax))
+
+    let theVar ← Meta.mkFreshExprMVar (mkConst ``SubVerso.Highlighting.Export)
+    blockExpr ← equateExportInstances theVar blockExpr
+    blockExpr := (.lam .anonymous (mkConst ``SubVerso.Highlighting.Export) · .default) (← Expr.abstractM blockExpr #[theVar])
 
     -- Wrap auto-bound implicits and global variables (this is possibly overly defensive)
     type ← Meta.mkForallFVars (← Term.addAutoBoundImplicits #[] none) type
-
 
     -- Replace any universe metavariables with universe variables; report errors
     type ← Term.levelMVarToParam type
@@ -107,7 +111,13 @@ def addAuxDeclsAndFinishSyntax
       -- addAndCompile decl
       withOptions (·.setBool `compiler.extract_closed false) <| addAndCompile decl
 
-  ``(VersoDoc.mk (fun () => $(← finished.toSyntax genreSyntax)))
+  let exportTable :=
+    if let some (_, exportTable) := docElabState.exportingTable then
+      exportTable
+    else
+      {}
+
+  ``(VersoDoc.mk $(quote <| SubVerso.Highlighting.exportToStr exportTable.toExport) (fun $(mkIdent `special_secret_addblock_thing) => $(← finished.toSyntax genreSyntax)))
 
 
 /--

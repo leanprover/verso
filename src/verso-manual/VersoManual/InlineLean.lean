@@ -182,8 +182,8 @@ private def quoteHighlightViaSerialization (hls : Highlighted) : DocElabM Term :
   if let .some (name, exportTable) := docElabState.exportingTable then
     let (key, exportTable) := hls.export.run exportTable
     set { docElabState with exportingTable := some (name, exportTable) }
-    let codeTableSyn ← ``(CodeTable.CodeTable.is $(quote name))
-    ``(hlFromGlobalExport! $(codeTableSyn) $(quote key))
+    let codeTableSyn ← ``(VersoDoc.__dummy_name)
+    ``(hlFromGlobalExport! $codeTableSyn $(quote key))
   else
     let repr := hlToExport hls
     ``(hlFromExport! $(quote repr))

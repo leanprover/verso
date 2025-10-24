@@ -33,11 +33,14 @@ open Verso.SyntaxUtils
 open Verso.ArgParse (FromArgs SigDoc)
 
 structure VersoDoc (genre : Genre) where
-  document : Unit → Part genre
+  exportStr : String
+  document : SubVerso.Highlighting.Export → Part genre
 
 def VersoDoc.toPart (bundle : VersoDoc genre) : Part genre :=
-  -- let exportTable := SubVerso.Highlighting.exportFromStr! bundle.exportStr
-  bundle.document ()
+  let exportTable := SubVerso.Highlighting.exportFromStr! bundle.exportStr
+  bundle.document exportTable
+
+def VersoDoc.__dummy_name : SubVerso.Highlighting.Export := {}
 
 
 initialize registerTraceClass `Elab.Verso
@@ -433,29 +436,27 @@ def PartElabM.currentLevel : PartElabM Nat := do return (← getThe State).curre
 def PartElabM.setTitle (titlePreview : String) (titleInlines : Array (TSyntax `term)) : PartElabM Unit := modifyThe State fun st =>
   {st with partContext.expandedTitle := some (titlePreview, titleInlines)}
 
-/--
-Traverses the Expr structure to find and list MVars that represent undefined links or footnotes.
-It is a simplifying precondition that instantiateMVars has just been called on the argument.
--/
-def findTypeclassInstances : Expr → MetaM (Array (Expr × Expr))
-  | .app t1 t2 => do return (← findTypeclassInstances t1) ++ (← findTypeclassInstances t2)
-  | e@(.mvar _) => do
-    let ty ← Meta.inferType e
-    if ty.isAppOf ``HasLink || ty.isAppOf ``HasNote || ty.isAppOf ``CodeTable.CodeTable then
-      pure #[(e, ty)]
-    else
-      pure #[]
-  | .lam _ t b _ | .forallE _ t b _ => do return (← findTypeclassInstances t) ++ (← findTypeclassInstances b)
-  | .letE _ t d b _ => do
-    return (← findTypeclassInstances t) ++ (← findTypeclassInstances d) ++ (← findTypeclassInstances b)
-  | .mdata _ e | .proj _ _ e => findTypeclassInstances e
-  | .sort .. | .fvar .. | .bvar .. | .const .. | .lit .. => pure #[]
+def equateExportInstances (same : Expr) (e : Expr) : CoreM Expr := do match e with
+  | .app t1 t2 => return .app (← equateExportInstances same t1) (← equateExportInstances same t2)
+  | e@(.const name _) =>
+    return if name = ``VersoDoc.__dummy_name then same else e
+  | .lam n t b i => return .lam n (← equateExportInstances same t) (← equateExportInstances same b) i
+  | .forallE n t b i => return .forallE n (← equateExportInstances same t) (← equateExportInstances same b) i
+  | .letE m t d b x =>
+    return .letE m
+      (← equateExportInstances same t)
+      (← equateExportInstances same d)
+      (← equateExportInstances same b)
+      x
+  | .mdata d e => return .mdata d (← equateExportInstances same e)
+  | .proj n i e => return .proj n i (← equateExportInstances same e)
+  | .mvar .. | .sort .. | .fvar .. | .bvar .. | .lit .. => return e
 
 def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := withRef block <| do
   let name ← mkFreshUserName `block
   modifyThe DocElabM.State fun st =>
     { st with deferredBlocks := st.deferredBlocks.push (name, block) }
-  let expr ← `($(mkIdent name) ())
+  let expr ← ``($(mkIdent name) $(mkIdent `special_secret_addblock_thing))
   modifyThe PartElabM.State fun st =>
     { st with partContext.blocks := st.partContext.blocks.push expr}
 
