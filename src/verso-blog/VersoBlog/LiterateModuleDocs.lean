@@ -88,8 +88,8 @@ def elabFromModuleDocs (x : Ident) (path : StrLit) (mod : Ident) (title : StrLit
       }
     pure name
 
-  -- let metadata ← if let some m := metadata? then `(some $m) else `(none)
-  elabCommand <| ← `(command|def $x : VersoDoc $genre := $(mkIdent mod))
+  let metadata ← if let some m := metadata? then `(some $m) else `(none)
+  elabCommand <| ← `(command|def $x : VersoDoc $genre := $(mkIdent mod).withMetadata $metadata)
 
 
 end
