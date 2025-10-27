@@ -11,6 +11,12 @@ import Verso.Doc.Name
 set_option doc.verso true
 set_option pp.rawOnError true
 
+/--
+Identify function; this is a temporary compatibility shim to introduce a new type,
+VersoDoc, that will have a nontrival toPart method.
+-/
+public def Lean.Doc.Part.toPart (p : Lean.Doc.Part i b p) := p
+
 namespace Verso
 
 namespace Doc
@@ -623,6 +629,12 @@ private partial def Part.reprPrec [Repr genre.Inline] [Repr genre.Block] [Repr g
 
 public instance [Repr g.Inline] [Repr g.Block] [Repr g.PartMetadata] : Repr (Part g) where
   reprPrec := private Part.reprPrec
+
+/--
+Identify function; this is a temporary compatibility shim to introduce a new type,
+VersoDoc, that will have a nontrival toPart method.
+-/
+public def Part.toPart (p : Part genre) := p
 
 /--
 Specifies how to modify the context while traversing the contents of a given part.
