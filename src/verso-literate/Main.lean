@@ -398,7 +398,7 @@ where
     | "--suppress-namespaces" :: more => do
       if let file :: more := more then
         let contents ← IO.FS.readFile file
-        let nss' := contents.split (·.isWhitespace) |>.filter (!·.isEmpty) |>.map (·.toName)
+        let nss' := contents.splitToList (·.isWhitespace) |>.filter (!·.isEmpty) |>.map (·.toName)
         go { cfg with suppressedNamespaces := cfg.suppressedNamespaces ++ nss' } more
       else
         throw <| .userError "No namespace file given after --suppress-namespaces"
