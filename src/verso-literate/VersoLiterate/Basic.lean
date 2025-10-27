@@ -91,6 +91,19 @@ def highlightDocCode : Lean.Doc.DocCode → Highlighted
       else out := out ++ .text str
     return out
 
+def handleAttr : InlineToLiterate
+  | ``Lean.Doc.Data.Attribute, val, content => do
+    if let some { .. } := val.get? Lean.Doc.Data.Attribute then
+      -- TODO highlight upstream
+      return some <| .concat content
+    throwError "Wrong data"
+  | ``Lean.Doc.Data.Attributes, val, content => do
+    if let some { .. } := val.get? Lean.Doc.Data.Attributes then
+      -- TODO highlight upstream
+      return some <| .concat content
+    throwError "Wrong data"
+  | _, _, _ => pure none
+
 def handleTerm : InlineToLiterate
   | ``Lean.Doc.Data.LeanTerm, val, content => do
     if let some { term, ..} := val.get? Lean.Doc.Data.LeanTerm then
@@ -121,7 +134,7 @@ def handleTactic : InlineToLiterate
     throwError "Wrong data"
   | _, _, _ => pure none
 
-def inline := #[handleLocal, handleConst, handlePostponed, handleTerm, handleOption, handleModName, handleTactic]
+def inline := #[handleLocal, handleConst, handlePostponed, handleAttr, handleTerm, handleOption, handleModName, handleTactic]
 
 end Builtin
 
