@@ -663,6 +663,7 @@ This is something of a hack used as a workaround in LiterateModuleDocs.
 public def VersoDoc.withMetadata (metadata? : Option genre.PartMetadata)  : VersoDoc genre → VersoDoc genre
   | .mk construct => .mk fun () => { construct () with metadata := metadata? }
 
+/--
 Identify function; this is a temporary compatibility shim to introduce a new type,
 VersoDoc, that will have a nontrival toPart method.
 -/
