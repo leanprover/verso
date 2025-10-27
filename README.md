@@ -259,9 +259,37 @@ python3 -m http.server 8880 --directory _out/examples/demotextbook/html-multi &
 ```
 after which `http://localhost:8880/` will show the generated site.
 
+## Rendering Lean Code
+
+Verso includes an experimental Lean-to-HTML renderer that will convert
+Lean code to HTML. This HTML includes hovers, clickable "go to
+definition" links, a search function, and rendered intermediate proof
+states.
+
+There are two steps to using it, after adding a package dependency on
+Verso in your Lake configuration:
+
+1. Generate literate program data from your Lean libraries or modules
+   by building their `literate` facet. For library `MyLib`, run:
+
+   ```
+   lake build MyLib:literate
+   ```
+
+2. Generate HTML from this literate program data. To put the HTML in
+   `htmldir`, run:
+   
+   ```
+   lake exe verso-html ./lake/build/literate htmldir
+   ``` 
+
+In this output, Verso docstrings and moduledocs are rendered. Setting
+`doc.verso` to `true` enables these in source files.
+
 ## Licenses
 
-Verso is licensed under the Apache license - please see the file [LICENSE](./LICENSE) for details.
+Verso is licensed under the Apache license - please see the file
+[LICENSE](./LICENSE) for details.
 
 Verso additionally includes third-party software made available under the MIT
 license. These components, and their copyright and licensing information, are
