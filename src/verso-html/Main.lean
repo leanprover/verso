@@ -445,6 +445,7 @@ def emitMod (root : Dir) (outDir: System.FilePath) (mod : LitMod) : EmitM Unit :
     <script src="-verso-search/fuzzysort.js"></script>
     <script src="-verso-search/searchIndex.js"></script>
     <script type="module" src="-verso-search/search-init.js"></script>
+    <script src="-verso-search/domain-mappers.js" defer="defer"></script>
     <link rel="stylesheet" href="-verso-search/search-box.css"/>
     <link rel="stylesheet" href="-verso-search/search-highlight.css"/>
     <link rel="stylesheet" href="-verso-search/domain-display.css"/>
@@ -571,7 +572,7 @@ def constMapper : DomainMapper where
   dataToSearchables :=
     "(domainData) =>
   Object.entries(domainData.contents).map(([key, value]) => ({
-    searchKey: `${value[0].userName}`,
+    searchKey: `${value[0].data.userName}`,
     address: `${value[0].address}#${value[0].id}`,
     domainId: '" ++ constDomainName.toString ++ "',
     ref: value,
@@ -666,7 +667,7 @@ where
     let mut hash := 0
     let mut n := 0
     while h : n < s.utf8ByteSize do
-      hash := hash + s.getUtf8Byte ⟨n⟩ h
+      hash := hash + s.getUTF8Byte ⟨n⟩ h
       n := n + 1
     return hash
 end

@@ -269,13 +269,10 @@ def State.allLinks (state : State) : HashMap InternalId Link := Id.run do
               idLinks := idLinks.insert id { link with htmlId }
   return idLinks
 
-
 def State.linkTargets (state : State) : Code.LinkTargets ρ where
   const x _ := Id.run do
-    if let some obj := state.constantDefDomain.get? x.toString then
-      if let .ok v := obj.data.getObjValAs? String "module" then
-        if let some link := state.moduleLink v.toName then
-          return #[.mk "def" s!"Definition of `{x}`" link.relativeLink]
+    if let some link := state.constLink x then
+      return #[.mk "def" s!"Definition of `{x}`" link.relativeLink]
     return #[]
   moduleName m _ :=
     if let some link := state.moduleLink m then
