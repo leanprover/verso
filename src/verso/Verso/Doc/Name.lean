@@ -30,8 +30,9 @@ theorem unDocName_docName_eq_id : unDocName ∘ docName = id := by
   simp [unDocName, docName, versoModuleDocNameString]
 
 /-- Treats an identifier as a module that contains Verso using the standard convention -/
-macro "%doc" moduleName:ident : term =>
-  pure <| mkIdentFrom moduleName <| docName moduleName.getId
+macro "%doc" moduleName:ident : term => do
+  let ident := mkIdentFrom moduleName <| docName moduleName.getId
+  `($(ident).toPart)
 
 /--
 Treats an identifier as a module that contains Verso using the standard convention if it exists, or
@@ -41,8 +42,8 @@ macro "%doc?" nameOrModuleName:ident : term => do
   let n := mkIdentFrom nameOrModuleName (docName nameOrModuleName.getId)
   let r ← Macro.resolveGlobalName n.getId
   let r := r.filter (·.2.isEmpty) -- ignore field access possibilities here
-  if r.isEmpty then pure nameOrModuleName
-  else pure n
+  if r.isEmpty then `($(nameOrModuleName).toPart)
+  else `($(n).toPart)
 
 macro "%docName" moduleName:ident : term =>
   let n := mkIdentFrom moduleName (docName moduleName.getId) |>.getId
