@@ -22,6 +22,19 @@ public abbrev Path := Array String
 namespace Path
 
 /--
+The topmost path.
+-/
+public def root : Path := #[]
+
+/--
+Adds {lean}`component` to the end of {name}`path`.
+-/
+public def Path.join (path : Path) (component : String) : Path :=
+  Array.push path component
+
+instance : HDiv Path String Path := ⟨Path.join⟩
+
+/--
 Retrieves a string that can be used as a link.
 This is a path relative to the site root.
 -/

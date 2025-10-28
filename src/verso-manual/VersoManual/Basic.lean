@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 
+
 import Std.Data.HashSet
 import Std.Data.TreeSet
 import Verso.Doc
@@ -140,6 +141,8 @@ inductive Tag where
   | /-- A unique tag, suitable for inclusion in a document -/ private external (name : Slug)
   | /-- A machine-assigned tag -/ private internal (name : String)
 deriving BEq, Hashable, Repr, ToJson, FromJson
+
+instance : Inhabited Tag := ⟨.external "".sluggify⟩
 
 instance : ToString Tag where
   toString := toString ∘ repr
@@ -550,7 +553,7 @@ instance : FromJson (Genre.Inline Manual) := inferInstanceAs (FromJson Manual.In
 
 namespace Manual
 
-def BlockContext.ofBlock (block : Doc.Block Manual) : BlockContext :=
+def BlockContext.ofBlock (block : Lean.Doc.Block i Manual.Block) : BlockContext :=
   match block with
   | .para .. => .para
   | .code .. => .code
@@ -562,12 +565,12 @@ def BlockContext.ofBlock (block : Doc.Block Manual) : BlockContext :=
   | .other container .. => .other container
 
 def PartHeader.ofPart (part : Part Manual) : PartHeader :=
-  {titleString := part.titleString, metadata := part.metadata}
+  { titleString := part.titleString, metadata := part.metadata }
 
 def TraverseContext.inPart (self : TraverseContext) (part : Part Manual) : TraverseContext :=
-  {self with headers := self.headers.push <| .ofPart part}
+  { self with headers := self.headers.push <| .ofPart part }
 
-def TraverseContext.inBlock (self : TraverseContext) (block : Doc.Block Manual) : TraverseContext :=
+def TraverseContext.inBlock (self : TraverseContext) (block : Lean.Doc.Block i Manual.Block) : TraverseContext :=
   { self with blockContext := self.blockContext.push (.ofBlock block) }
 
 def TraverseContext.sectionNumber (self : TraverseContext) : Array (Option Numbering) :=
@@ -1186,6 +1189,89 @@ instance : TraversePart Manual where
 instance : TraverseBlock Manual where
   inBlock b := (·.inBlock b)
 
+def savePartXref (slug : Slug) (id : InternalId) (part : Part Manual) : TraverseM Unit := do
+  let jsonMetadata :=
+    Json.arr ((← read).inPart part |>.headers.map (fun h => json%{
+      "title": $h.titleString,
+      "shortTitle": $(h.metadata.bind (·.shortTitle)),
+      "number": $(h.metadata.bind (·.assignedNumber) |>.map toString)
+    }))
+  let title := (← read).inPart part |>.headers |>.back? |>.map (·.titleString)
+  let shortTitle := (← read).inPart part |>.headers |>.back? |>.bind (·.metadata) |>.bind (·.shortTitle)
+  -- During the traverse pass, the root section (which is unnumbered) is in the header stack.
+  -- Including it causes all sections to be unnumbered, so it needs to be dropped here.
+  -- TODO: harmonize this situation with HTML generation and give it a clean API
+  let num :=
+    ((← read).inPart part |>.headers[1:]).toArray.map (fun (h : PartHeader) => h.metadata.bind (·.assignedNumber))
+      |>.mapM _root_.id |>.map sectionNumberString
+  modify fun (st : TraverseState) => st.saveDomainObject sectionDomain slug.toString id |>.saveDomainObjectData sectionDomain slug.toString (json%{
+    "context": $jsonMetadata,
+    "title": $title,
+    "shortTitle": $shortTitle,
+    "sectionNum": $num
+  })
+
+/--
+Assigns a tag to a part during traversal.
+
+This operation is careful to preserve and prioritize user-selected tags. In the first round, the
+following may occur:
+
+ * If there's no tag at all, then an internal tag is applied.
+
+ * If there's a provided tag, it is converted to an external tag and added as an xref target.
+
+In subsequent rounds, the internal tags are converted to external tags. At this point, the
+user-provided tags have already been made external. It also ensures that auto-generated tags are
+never added as xref targets.
+-/
+def tagPart
+    (part : Lean.Doc.Part Manual.Inline Manual.Block m) (metadata : m)
+    (getId : m → Option InternalId) (getTag : m → Option Tag)
+    (saveXref : Slug → InternalId → Lean.Doc.Part Manual.Inline Manual.Block m → TraverseM Unit) :
+    TraverseM Tag := do
+  let some id := getId metadata
+    | logError "No internal ID assigned while tagging part"; return default
+  match getTag metadata with
+  | none =>
+    -- Assign an internal tag - the next round will make it external. This is done in two rounds to
+    -- give priority to user-provided tags that might otherwise anticipate the name-mangling scheme
+    let what := (← read).headers.map (·.titleString ++ "--") |>.push part.titleString |>.foldl (init := "") (· ++ ·)
+    let tag ← freshTag what id
+    return Tag.internal tag
+  | some t =>
+    -- Ensure uniqueness
+    if let some id' := (← get).tags[t]? then
+      if id != id' then
+        logError s!"Duplicate tag '{t}'"
+    else
+      modify fun st => {st with tags := st.tags.insert t id}
+    let path := (← readThe TraverseContext).path
+    match t with
+    | Tag.external name =>
+      saveXref name id { part with metadata := some metadata }
+      -- These are the actual IDs to use in generated HTML and links and such
+      modify fun st : TraverseState => { st with externalTags := st.externalTags.insert id { path, htmlId := name } }
+      return t
+    | Tag.internal name =>
+      return (← externalTag id path name)
+    | Tag.provided n =>
+      let slug := n.sluggify
+      -- Convert to an external tag, and fail if we can't (users should control their link IDs)
+      let external := Tag.external slug
+
+      let t ← if let some id' := (← get).tags[external]? then
+        if id != id' then logError s!"Duplicate tag '{t}'"
+          pure t
+        else
+          modify fun st => { st with
+              tags := st.tags.insert external id,
+              externalTags := st.externalTags.insert id { path, htmlId := slug }
+            }
+          pure external
+      return t
+
+
 instance : Traverse Manual TraverseM where
   part p :=
     if p.metadata.isNone then pure (some {}) else pure none
@@ -1196,62 +1282,10 @@ instance : Traverse Manual TraverseM where
 
     -- First, assign a unique ID if there is none
     let id ← if let some i := meta.id then pure i else freshId
-    «meta» := {«meta» with id := some id}
+    «meta» := { «meta» with id := some id }
 
     -- Next, assign a tag, prioritizing user-chosen external IDs
-    match meta.tag with
-    | none =>
-      -- Assign an internal tag - the next round will make it external. This is done in two rounds to
-      -- give priority to user-provided tags that might otherwise anticipate the name-mangling scheme
-      let what := (← read).headers.map (·.titleString ++ "--") |>.push part.titleString |>.foldl (init := "") (· ++ ·)
-      let tag ← freshTag what id
-      «meta» := {«meta» with tag := Tag.internal tag}
-    | some t =>
-      -- Ensure uniqueness
-      if let some id' := (← get).tags[t]? then
-        if id != id' then
-          logError s!"Duplicate tag '{t}'"
-      else
-        modify fun st => {st with tags := st.tags.insert t id}
-      let path := (← readThe TraverseContext).path
-      match t with
-      | Tag.external name =>
-        -- These are the actual IDs to use in generated HTML and links and such
-        modify fun st => {st with externalTags := st.externalTags.insert id { path, htmlId := name } }
-      | Tag.internal name =>
-        «meta» := {«meta» with tag := ← externalTag id path name}
-      | Tag.provided n =>
-        let slug := n.sluggify
-        -- Convert to an external tag, and fail if we can't (users should control their link IDs)
-        let external := Tag.external slug
-        if let some id' := (← get).tags[external]? then
-          if id != id' then logError s!"Duplicate tag '{t}'"
-        else
-          modify fun st => {st with
-              tags := st.tags.insert external id,
-              externalTags := st.externalTags.insert id { path, htmlId := slug }
-            }
-          «meta» := {«meta» with tag := external}
-        let jsonMetadata :=
-          Json.arr ((← read).inPart part |>.headers.map (fun h => json%{
-            "title": $h.titleString,
-            "shortTitle": $(h.metadata.bind (·.shortTitle)),
-            "number": $(h.metadata.bind (·.assignedNumber) |>.map toString)
-          }))
-        let title := (← read).inPart part |>.headers |>.back? |>.map (·.titleString)
-        let shortTitle := (← read).inPart part |>.headers |>.back? |>.bind (·.metadata) |>.bind (·.shortTitle)
-        -- During the traverse pass, the root section (which is unnumbered) is in the header stack.
-        -- Including it causes all sections to be unnumbered, so it needs to be dropped here.
-        -- TODO: harmonize this situation with HTML generation and give it a clean API
-        let num :=
-          ((← read).inPart part |>.headers[1:]).toArray.map (fun (h : PartHeader) => h.metadata.bind (·.assignedNumber))
-            |>.mapM _root_.id |>.map sectionNumberString
-        modify (·.saveDomainObject sectionDomain n id |>.saveDomainObjectData sectionDomain n (json%{
-          "context": $jsonMetadata,
-          "title": $title,
-          "shortTitle": $shortTitle,
-          "sectionNum": $num
-        }))
+    «meta» := { «meta» with tag := ← tagPart part «meta» (·.id) (·.tag) savePartXref }
 
     -- Assign section numbers to subsections
     let mut i := 1

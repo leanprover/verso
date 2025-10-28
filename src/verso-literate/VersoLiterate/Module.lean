@@ -30,8 +30,8 @@ def load (jsonFile : System.FilePath) : IO LitMod := do
   | .error e => throw <| .userError e
   | .ok v => pure v
 
-def modToPage! [LoadLiterate g] (mod : LitMod) (title : Array (Inline g)) (titleString : String) : Part g :=
-  match modToPage mod title titleString with
+def modToPage! [LoadLiterate g] (mod : LitMod) (title : Array (Inline g)) (titleString : String) (metadata? : Option g.PartMetadata) : Part g :=
+  match modToPage mod title titleString metadata? with
   | .error e => panic! s!"Couldn't load {titleString}: {e}"
   | .ok v => v
 

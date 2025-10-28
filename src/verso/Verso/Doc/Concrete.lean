@@ -18,6 +18,28 @@ def document : Parser where
 @[combinator_parenthesizer document] def document.parenthesizer := PrettyPrinter.Parenthesizer.visitToken
 @[combinator_formatter document] def document.formatter := PrettyPrinter.Formatter.visitAtom Name.anonymous
 
+def termDocument : Parser where
+  fn := (atomicFn doc) >> whitespace
+where
+  doc : ParserFn := fun c s =>
+    let opener := s.stxStack.back
+    let indent := opener.getHeadInfo.getPos!
+    let col := c.fileMap.toPosition indent |>.column
+
+    let opener := getOpener opener
+    if opener.isEmpty || opener.any (· ≠ ':') || opener.length < 3 then
+      s.mkError s!"document after at least three colons (got {opener.quote})"
+    else
+      Verso.Parser.document (blockContext := {maxDirective := some (opener.length - 1), minIndent := col}) c s
+
+  getOpener : Syntax → String
+    | .node _ _ #[stx] => getOpener stx
+    | .atom _ v => v
+    | _ => ""
+
+@[combinator_parenthesizer termDocument] def termDocument.parenthesizer := PrettyPrinter.Parenthesizer.visitToken
+@[combinator_formatter termDocument] def termDocument.formatter := PrettyPrinter.Formatter.visitAtom Name.anonymous
+
 /-- Advance the parser to EOF on failure so Lean doesn't try to parse further commands -/
 def completeDocument : Parser where
   fn := (Lean.Parser.recoverFn Verso.Parser.document fun _ => skipFn) >> untilEoi
@@ -92,6 +114,39 @@ elab "#docs" "(" genre:term ")" n:ident title:str ":=" ":::::::" text:document "
     | _ => panic! "Nothing"
   let docu ← Command.runTermElabM fun _ => elabDoc genre title text.raw.getArgs endTok.getPos!
   Command.elabCommand (← `(def $n : Part $genre := $docu))
+
+syntax docTermBody :=
+  atomic(":::" termDocument ":::") <|>
+  atomic("::::" termDocument "::::") <|>
+  atomic(":::::" termDocument ":::::") <|>
+  atomic("::::::" termDocument "::::::") <|>
+  atomic(":::::::" termDocument ":::::::") <|>
+  atomic("::::::::" termDocument "::::::::") <|>
+  atomic(":::::::::" termDocument ":::::::::") <|>
+  atomic("::::::::::" termDocument "::::::::::") <|>
+  atomic(":::::::::::" termDocument ":::::::::::")
+
+/--
+Elaborates a Verso document in a term position. There are two forms:
+
+verso "TITLE"
+-/
+scoped syntax (name := docTerm) "verso " ("(" term ")")? str docTermBody : term
+
+open Elab Term in
+elab_rules : term
+  | `(verso  $[($genre)]? $title:str $body:docTermBody) => do
+  genre.forM (findGenreTm ·.raw)
+  let genre ←
+    if let some g := genre then
+      findGenreTm g.raw
+      pure g
+    else
+      `((_ : Genre))
+  let endPos := body.raw.getTailPos? |>.getD (← getFileMap).source.endPos
+  let docu ← elabDoc genre title body.raw[0][1].getArgs endPos
+  Term.elabTerm (← `( ($(docu) : Part $genre))) none
+
 
 elab "#doc" "(" genre:term ")" title:str "=>" text:completeDocument eoi : term => do
   findGenreTm genre

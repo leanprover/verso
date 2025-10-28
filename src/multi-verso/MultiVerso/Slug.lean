@@ -130,6 +130,9 @@ structure Slug where
   toString : String
 deriving BEq, Hashable, DecidableEq, Ord, Repr
 
+instance : Inhabited Slug where
+  default := private Slug.mk ""
+
 instance : ToString Slug := ⟨Slug.toString⟩
 
 instance : ToJson Slug where

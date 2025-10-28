@@ -611,6 +611,15 @@ public def Part.withoutSubparts (p : Part genre) : Part genre := { p with subPar
 
 public def Part.withoutMetadata (p : Part genre) : Part genre := { p with metadata := none }
 
+public def Part.cast
+    (inlines_eq : g1.Inline = g2.Inline)
+    (blocks_eq : g1.Block = g2.Block)
+    (metadata_eq : g1.PartMetadata = g2.PartMetadata)
+    (p : Part g1) : Part g2 :=
+  show Lean.Doc.Part g2.Inline g2.Block g2.PartMetadata from
+  inlines_eq ▸ blocks_eq ▸ metadata_eq ▸ (p : Lean.Doc.Part g1.Inline g1.Block g1.PartMetadata)
+
+
 private partial def Part.reprPrec [Repr genre.Inline] [Repr genre.Block] [Repr genre.PartMetadata] (part : Part genre) (_prec : Nat) : Std.Format :=
   open Std.Format in
   reprCtor ``Part.mk [
