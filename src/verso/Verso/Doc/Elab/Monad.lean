@@ -218,8 +218,8 @@ partial def FinishedPart.toTOC : FinishedPart → TOC
   | .included name => .included name
 
 /--
-Creates a term denoting a `VersoDoc` value from a `FinishedPart`. This is the final step in turning
-a parsed verso doc into syntax.
+Creates a term denoting a {lean}`VersoDoc` value from a {lean}`FinishedPart`. This is the final step
+in turning a parsed verso doc into syntax.
 -/
 def FinishedPart.toVersoDoc [Monad m] [MonadQuotation m]
     (genreSyntax : Term)
