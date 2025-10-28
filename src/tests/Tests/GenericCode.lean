@@ -39,7 +39,7 @@ info: Verso.Doc.Part.mk
       #[]]
 -/
 #guard_msgs in
-  #eval code1
+  #eval code1.toPart
 /--
 info: Verso.Output.Html.tag
   "section"
@@ -58,7 +58,7 @@ info: Verso.Output.Html.tag
               (Verso.Output.Html.text true "(define (zero f z) z)\n(define (succ n) (lambda (f x) (f (n f z))))\n")])])
 -/
 #guard_msgs in
-  #eval Doc.Genre.none.toHtml (m:=Id) {logError := fun _ => ()} () () {} {} {} code1 |>.run .empty |>.fst
+  #eval Doc.Genre.none.toHtml (m:=Id) {logError := fun _ => ()} () () {} {} {} code1.toPart |>.run .empty |>.fst
 
 
 /- ----- -/
@@ -92,4 +92,4 @@ info: Verso.Doc.Part.mk
       #[]]
 -/
 #guard_msgs in
-  #eval code2
+  #eval code2.toPart

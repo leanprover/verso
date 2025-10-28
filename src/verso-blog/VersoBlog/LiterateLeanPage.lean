@@ -502,7 +502,7 @@ def elabLiteratePage (x : Ident) (path : StrLit) (mod : Ident) (config : LitPage
 
   let g ← runTermElabM fun _ => Term.elabTerm genre (some (.const ``Doc.Genre []))
 
-  let ((), _st, st') ← liftTermElabM <| PartElabM.run genre g {} initState <| do
+  let ((), st, st') ← liftTermElabM <| PartElabM.run genre g { exportingTable := none } initState <| do
     setTitle titleString (← liftDocElabM <| titleParts.mapM (elabInline ⟨·⟩))
     if let some metadata := metadata? then
       modifyThe PartElabM.State fun st => {st with partContext.metadata := some metadata}
@@ -522,7 +522,9 @@ def elabLiteratePage (x : Ident) (path : StrLit) (mod : Ident) (config : LitPage
       | _ => p
     else finished
 
-  elabCommand <| ← `(def $x : Part $genre := $(← finished.toSyntax' genre))
+
+  let block ← Command.runTermElabM fun _ => Concrete.addAuxDeclsAndFinishSyntax genre g st finished
+  elabCommand <| ← `(def $x : Part $genre := $block)
 
 end Literate
 open Literate

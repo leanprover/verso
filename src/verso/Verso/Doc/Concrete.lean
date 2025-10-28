@@ -12,6 +12,7 @@ namespace Verso.Doc.Concrete
 
 open Lean Verso Parser Doc Elab
 
+
 def document : Parser where
   fn := atomicFn <| Verso.Parser.document (blockContext := {maxDirective := some 6})
 
@@ -47,20 +48,95 @@ def saveRefs [Monad m] [MonadInfoTree m] (st : DocElabM.State) (st' : PartElabM.
 private def elabGenre (genre : TSyntax `term) : TermElabM Expr :=
   Term.elabTerm genre (some (.const ``Doc.Genre []))
 
+def addAuxDeclsAndFinishSyntax
+    (genreSyntax : Term) (genre : Expr)
+    (docElabState : DocElabM.State)
+    (finished : FinishedPart)
+    : TermElabM Term := do
+
+/-
+  -- Output highlighting export table
+  if let some (name, exportTable) := docElabState.exportingTable then
+    let type ← Meta.mkAppM ``Verso.CodeTable.CodeTable #[ToExpr.toExpr name]
+    let synTable ← Meta.mkAppM ``SubVerso.Highlighting.exportFromStr!
+      #[ToExpr.toExpr (SubVerso.Highlighting.exportToStr exportTable.toExport)]
+    let mkCodeTable := mkApp (mkConst ``Verso.CodeTable.CodeTable.mk) (ToExpr.toExpr name)
+    let value ← Meta.mkAppM' mkCodeTable #[synTable]
+    withOptions (·.setBool `compiler.extract_closed false) do addAndCompile <| .defnDecl {
+      name,
+      levelParams := [],
+      type,
+      value,
+      hints := .regular 1,
+      safety := .safe
+    }
+    Meta.addInstance name .global (eval_prio default)
+-/
+
+  let _ ← getEnv
+
+  -- Output blocks
+  for (name, block) in docElabState.deferredBlocks do
+    let baseType := .app (.const ``Doc.Block []) genre
+    let mut blockExpr ← Term.elabTerm block (.some baseType)
+
+    let mut type ← Term.elabType (← ``(SubVerso.Highlighting.Export → Doc.Block $genreSyntax))
+
+    let theVar ← Meta.mkFreshExprMVar (mkConst ``SubVerso.Highlighting.Export)
+    blockExpr ← equateExportInstances theVar blockExpr
+    blockExpr := (.lam .anonymous (mkConst ``SubVerso.Highlighting.Export) · .default) (← Expr.abstractM blockExpr #[theVar])
+
+    -- Wrap auto-bound implicits and global variables (this is possibly overly defensive)
+    type ← Meta.mkForallFVars (← Term.addAutoBoundImplicits #[] none) type
+
+    -- Replace any universe metavariables with universe variables; report errors
+    type ← Term.levelMVarToParam type
+    match sortDeclLevelParams [] [] (collectLevelParams {} type |>.params) with
+    | Except.error msg      => throwErrorAt block msg
+    | Except.ok levelParams =>
+      Term.synthesizeSyntheticMVarsNoPostponing
+      type ← instantiateMVars type
+      blockExpr ← Term.ensureHasType (some type) (← instantiateMVars blockExpr)
+      let decl := Declaration.defnDecl {
+        name,
+        levelParams,
+        type,
+        value := blockExpr,
+        hints := .abbrev,
+        safety := .safe
+      }
+
+      -- This is possibly overly defensive (or ineffectual)
+      Term.ensureNoUnassignedMVars decl
+      -- addAndCompile decl
+      withOptions (·.setBool `compiler.extract_closed false) <| addAndCompile decl
+
+  let exportTable :=
+    if let some (_, exportTable) := docElabState.exportingTable then
+      exportTable
+    else
+      {}
+
+  ``(VersoDoc.mk $(quote <| SubVerso.Highlighting.exportToStr exportTable.toExport) (fun $(mkIdent `special_secret_addblock_thing) => $(← finished.toSyntax genreSyntax)))
+
+
 /--
 All-at-once elaboration of verso document syntax to syntax denoting a verso `Part`. Implements
 elaboration of the `#docs` command and `#doc` term. The `#doc` command is incremental, and thus
 splits the logic in this function across multiple functions.
 -/
-private def elabDoc (genre: Term) (title: StrLit) (topLevelBlocks : Array Syntax) (endPos: String.Pos.Raw) : TermElabM Term := do
+private def elabDoc (genreSyntax: Term) (title: StrLit) (topLevelBlocks : Array Syntax) (endPos: String.Pos.Raw) : TermElabM Term := do
   let env ← getEnv
   let titleParts ← stringToInlines title
   let titleString := inlinesToString env titleParts
-  let initDocState : DocElabM.State := {}
+  let tmpName ← mkAuxDeclName `docs_table
+  let genre ← elabGenre genreSyntax
+
+  let initDocState : DocElabM.State := { exportingTable := some (tmpName, {}) }
   let initPartState : PartElabM.State := .init (.node .none nullKind titleParts)
 
   let ((), docElabState, partElabState) ←
-    PartElabM.run genre (← elabGenre genre) initDocState initPartState <| do
+    PartElabM.run genreSyntax genre initDocState initPartState <| do
       let mut errors := #[]
       PartElabM.setTitle titleString (← PartElabM.liftDocElabM <| titleParts.mapM (elabInline ⟨·⟩))
       for b in topLevelBlocks do
@@ -79,7 +155,7 @@ private def elabDoc (genre: Term) (title: StrLit) (topLevelBlocks : Array Syntax
   let finished := partElabState.partContext.toPartFrame.close endPos
 
   pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
-  finished.toSyntax genre
+  addAuxDeclsAndFinishSyntax genreSyntax genre docElabState finished
 
 elab "#docs" "(" genre:term ")" n:ident title:str ":=" ":::::::" text:document ":::::::" : command => do
   findGenreCmd genre
@@ -91,13 +167,13 @@ elab "#docs" "(" genre:term ")" n:ident title:str ":=" ":::::::" text:document "
       | none => panic! "No final token!"
     | _ => panic! "Nothing"
   let docu ← Command.runTermElabM fun _ => elabDoc genre title text.raw.getArgs endTok.getPos!
-  Command.elabCommand (← `(def $n : Part $genre := $docu))
+  Command.elabCommand (← `(def $n : VersoDoc $genre := $docu))
 
 elab "#doc" "(" genre:term ")" title:str "=>" text:completeDocument eoi : term => do
   findGenreTm genre
   let endPos := (← getFileMap).source.endPos
   let docu ← elabDoc genre title text.raw.getArgs endPos
-  Term.elabTerm (← `( ($(docu) : Part $genre))) none
+  Term.elabTerm (← ``( ($docu : VersoDoc $genre))) none
 
 
 scoped syntax (name := addBlockCmd) block term:max : command
@@ -139,7 +215,7 @@ be used to thread state between the separate top level blocks. These three envir
 across top-level-block parsing events.
 -/
 
-initialize docStateExt : EnvExtension DocElabM.State ← registerEnvExtension (pure {})
+initialize docStateExt : EnvExtension DocElabM.State ← registerEnvExtension (pure { exportingTable := none })
 initialize partStateExt : EnvExtension (Option PartElabM.State) ← registerEnvExtension (pure none)
 /--
 The original parser for the `command` category, which is restored while elaborating a Verso block so
@@ -186,7 +262,9 @@ private def startDoc (genre : Term) (title: StrLit) : Command.CommandElabM Strin
   let env ← getEnv
   let titleParts ← stringToInlines title
   let titleString := inlinesToString env titleParts
-  let initDocState : DocElabM.State := {}
+  -- let tmpName := `doc_table
+  let tmpName ← mkAuxDeclName `docs_table
+  let initDocState : DocElabM.State := { exportingTable := some (tmpName, {}) }
   let initPartState : PartElabM.State := .init (.node .none nullKind titleParts)
 
   modifyEnv (docStateExt.setState · initDocState)
@@ -202,18 +280,21 @@ private def runVersoBlock (genre : Term) (block : TSyntax `block) : Command.Comm
   -- info leaves that have already been pushed to avoid pushing them again.
   saveRefsInEnv
 
-private def finishDoc (genre : Term) (title : StrLit) : Command.CommandElabM Unit:= do
+private def finishDoc (genreSyntax : Term) (title : StrLit) : Command.CommandElabM Unit:= do
   let endPos := (← getFileMap).source.endPos
-  runPartElabInEnv genre <| do closePartsUntil 0 endPos
+  runPartElabInEnv genreSyntax <| do closePartsUntil 0 endPos
 
   let env ← getEnv
+  let docElabState := docStateExt.getState env
   let some partElabState := partStateExt.getState env
     | panic! "The document's start state was never initialized"
   let finished := partElabState.partContext.toPartFrame.close endPos
 
   let n := mkIdentFrom title (← currentDocName)
-  let docu ← finished.toSyntax genre
-  Command.elabCommand (← `(def $n : Part $genre := $docu))
+  let docu ← Command.runTermElabM fun _ => do
+    addAuxDeclsAndFinishSyntax genreSyntax (← elabGenre genreSyntax) docElabState finished
+  let docuType ← ``(VersoDoc $genreSyntax)
+  Command.elabCommand (← `(def $n : $docuType := $docu))
 
 syntax (name := replaceDoc) "#doc" "(" term ")" str "=>" : command
 elab_rules : command
