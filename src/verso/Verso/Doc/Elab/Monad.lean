@@ -195,7 +195,7 @@ private def footnoteRefName [Monad m] [MonadQuotation m] (genre : Term) (docName
   ``(HasNote.contents $(quote ref.getString) $(quote docName) (genre := $genre) (self := _))
 
 /--
-From a finished part, construct a Part value
+From a finished part, constructs syntax that denotes its `Part` value.
 -/
 partial def FinishedPart.toSyntax [Monad m] [MonadQuotation m]
     (genre : TSyntax `term)
@@ -218,14 +218,15 @@ partial def FinishedPart.toTOC : FinishedPart → TOC
   | .included name => .included name
 
 /--
-Create a term denoting a VersoDoc value from a FinishedPart
+Creates a term denoting a `VersoDoc` value from a `FinishedPart`. This is the final step in turning
+a parsed verso doc into syntax.
 -/
 def FinishedPart.toVersoDoc [Monad m] [MonadQuotation m]
     (genreSyntax : Term)
     (finished : FinishedPart)
     : m Term := do
   let finishedSyntax ← finished.toSyntax genreSyntax
-  ``(VersoDoc.new (fun () => $finishedSyntax))
+  ``(VersoDoc.mk (fun () => $finishedSyntax))
 
 
 /--
