@@ -13,10 +13,7 @@ import Lean.DocString.Syntax
 
 import Verso.Doc
 import Verso.Doc.ArgParse
-import Verso.Doc.Elab.ExpanderAttribute
 import Verso.Doc.Elab.InlineString
-import Verso.Hover
-import Verso.SyntaxUtils
 
 set_option doc.verso true
 
@@ -26,7 +23,6 @@ open Lean
 open Lean.Elab
 open Lean.Doc.Syntax
 open Std (HashMap HashSet)
-open Verso.SyntaxUtils
 open Verso.ArgParse (FromArgs SigDoc)
 
 initialize registerTraceClass `Elab.Verso
@@ -188,6 +184,7 @@ def TocFrame.wrapAll (stack : Array TocFrame) (item : TOC) (endPos : String.Pos.
 
 inductive FinishedPart where
   | mk (titleSyntax : Syntax) (expandedTitle : Array (TSyntax `term)) (titlePreview : String) (metadata : Option (TSyntax `term)) (blocks : Array (TSyntax `term)) (subParts : Array FinishedPart) (endPos : String.Pos.Raw)
+    /-- A name representing a value of type {lean}`VersoDoc` -/
   | included (name : Ident)
 deriving Repr, BEq
 
@@ -197,11 +194,12 @@ private def linkRefName [Monad m] [MonadQuotation m] (docName : Name) (ref : TSy
 private def footnoteRefName [Monad m] [MonadQuotation m] (genre : Term) (docName : Name) (ref : TSyntax `str) : m Term :=
   ``(HasNote.contents $(quote ref.getString) $(quote docName) (genre := $genre) (self := _))
 
-
-open Lean.Parser.Term in
-partial def FinishedPart.toSyntax [Monad m] [MonadQuotation m] [MonadEnv m]
+/--
+From a finished part, constructs syntax that denotes its `Part` value.
+-/
+partial def FinishedPart.toSyntax [Monad m] [MonadQuotation m]
     (genre : TSyntax `term)
-    : FinishedPart → m (TSyntax `term)
+    : FinishedPart → m Term
   | .mk _titleStx titleInlines titleString metadata blocks subParts _endPos => do
     let subStx ← subParts.mapM (toSyntax genre)
     let metaStx ←
@@ -212,51 +210,24 @@ partial def FinishedPart.toSyntax [Monad m] [MonadQuotation m] [MonadEnv m]
     -- let bindings introduced by "chunking" the elaboration may fail to infer types
     let typedBlocks ← blocks.mapM fun b => `(($b : Block $genre))
     ``(Part.mk #[$titleInlines,*] $(quote titleString) $metaStx #[$typedBlocks,*] #[$subStx,*])
-  | .included name => pure name
-
-structure ToSyntaxState where
-  gensymCounter : Nat := 0
-
-open Command
-
-partial def FinishedPart.toSyntax' [Monad m] [MonadQuotation m] [MonadLiftT CommandElabM m] [MonadEnv m]
-    (genre : TSyntax `term)
-    (finishedPart : FinishedPart) : m (TSyntax `term) := do
-  let rootName ← currentDocName
-  let HelperM := ReaderT Name (StateT ToSyntaxState m)
-
-  let rec gensym (src : Syntax) (hint := "gensym") : HelperM (TSyntax `ident) := do
-    let x ←
-      modifyGet fun (st : ToSyntaxState) =>
-        let n : Name := .str rootName s!"{hint}{st.gensymCounter}"
-        (mkIdentFrom src n, {st with gensymCounter := st.gensymCounter + 1})
-    if (← getEnv).contains x.getId then
-      gensym src (hint := hint)
-    else pure x
-
-  let rec helper : FinishedPart → HelperM (TSyntax `term)
-      | .mk titleStx titleInlines titleString metadata blocks subParts _endPos => do
-        let partName ← gensym titleStx (hint := titleString)
-        let subStx ← subParts.mapM helper
-        let mut blockNames := #[]
-        for b in blocks do
-          let n ← gensym b
-          withRef genre <|
-            elabCommand (← `(def $n : Block $genre := $b))
-          blockNames := blockNames.push n
-        let metaStx ←
-          match metadata with
-          | none => `(none)
-          | some stx => `(some $stx)
-        elabCommand (← `(def $partName : Part $genre := Part.mk #[$[$titleInlines],*] $(quote titleString) $metaStx #[$blockNames,*] #[$[$subStx],*]))
-        pure partName
-      | .included name => pure name
-  StateT.run' (ReaderT.run (helper finishedPart) rootName) {}
+  | .included name => ``(VersoDoc.toPart $name)
 
 partial def FinishedPart.toTOC : FinishedPart → TOC
   | .mk titleStx _titleInlines titleString _metadata _blocks subParts endPos =>
     .mk titleString titleStx endPos (subParts.map toTOC)
   | .included name => .included name
+
+/--
+Creates a term denoting a {lean}`VersoDoc` value from a {lean}`FinishedPart`. This is the final step
+in turning a parsed verso doc into syntax.
+-/
+def FinishedPart.toVersoDoc [Monad m] [MonadQuotation m]
+    (genreSyntax : Term)
+    (finished : FinishedPart)
+    : m Term := do
+  let finishedSyntax ← finished.toSyntax genreSyntax
+  ``(VersoDoc.mk (fun () => $finishedSyntax))
+
 
 /--
 Information describing a part still under construction.
@@ -508,7 +479,7 @@ def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := withRef block
       hints := .abbrev,
       safety := .safe
     }
-  
+
     -- This is possibly overly defensive (or ineffectual)
     Term.ensureNoUnassignedMVars decl
     addAndCompile decl

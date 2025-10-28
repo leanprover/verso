@@ -79,7 +79,7 @@ private def elabDoc (genre: Term) (title: StrLit) (topLevelBlocks : Array Syntax
   let finished := partElabState.partContext.toPartFrame.close endPos
 
   pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
-  finished.toSyntax genre
+  finished.toVersoDoc genre
 
 elab "#docs" "(" genre:term ")" n:ident title:str ":=" ":::::::" text:document ":::::::" : command => do
   findGenreCmd genre
@@ -90,14 +90,14 @@ elab "#docs" "(" genre:term ")" n:ident title:str ":=" ":::::::" text:document "
       | some x => x
       | none => panic! "No final token!"
     | _ => panic! "Nothing"
-  let docu ← Command.runTermElabM fun _ => elabDoc genre title text.raw.getArgs endTok.getPos!
-  Command.elabCommand (← `(def $n : Part $genre := $docu))
+  let doc ← Command.runTermElabM fun _ => elabDoc genre title text.raw.getArgs endTok.getPos!
+  Command.elabCommand (← `(def $n : VersoDoc $genre := $doc))
 
 elab "#doc" "(" genre:term ")" title:str "=>" text:completeDocument eoi : term => do
   findGenreTm genre
   let endPos := (← getFileMap).source.endPos
-  let docu ← elabDoc genre title text.raw.getArgs endPos
-  Term.elabTerm (← `( ($(docu) : Part $genre))) none
+  let doc ← elabDoc genre title text.raw.getArgs endPos
+  Term.elabTerm (← `( ($(doc) : Part $genre))) none
 
 
 scoped syntax (name := addBlockCmd) block term:max : command
@@ -212,8 +212,9 @@ private def finishDoc (genre : Term) (title : StrLit) : Command.CommandElabM Uni
   let finished := partElabState.partContext.toPartFrame.close endPos
 
   let n := mkIdentFrom title (← currentDocName)
-  let docu ← finished.toSyntax genre
-  Command.elabCommand (← `(def $n : Part $genre := $docu))
+  let doc ← finished.toVersoDoc genre
+  let ty ← ``(VersoDoc $genre)
+  Command.elabCommand (← `(def $n : $ty := $doc))
 
 syntax (name := replaceDoc) "#doc" "(" term ")" str "=>" : command
 elab_rules : command
