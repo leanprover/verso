@@ -99,10 +99,11 @@ Cite works using {lean}`citet`, {lean}`citep`, or {lean}`citehere`.
 They take a name of a citable reference value as a parameter.
 References should be defined as values, typically in one module that is imported (similar to the role of a `.bib` file in LaTeX).
 
-Textual citations, as with {citet someThesis}[], look like this.
+Textual citations, as with {citet someBook}[], look like this.
 Parenthetical {citep someArXiv}[] looks like this.
 Use {lean}`citehere` to literally include the cite rather than making a margin note, e.g. {citehere somePaper}[].
 Literally-included cites are mostly useful when performing citation inside a margin note.
+
 
 # Section References
 %%%
