@@ -70,7 +70,7 @@ jobs:
           lake exe simplepage
 
       - name: Check internal links on the example website
-        uses: lycheeverse/lychee-action@v2.6
+        uses: lycheeverse/lychee-action@v2.6.1
         with:
           format: markdown
           jobSummary: true
