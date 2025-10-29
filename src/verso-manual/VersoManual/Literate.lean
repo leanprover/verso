@@ -62,6 +62,12 @@ instance : LoadLiterate Manual where
 
   docstringPart lvl title contents := .other (Block.literateDocstringPart lvl) (#[.para title] ++ contents)
 
+def moduleGenreElabContext [Monad m] [MonadRef m] [MonadQuotation m] : m Doc.Elab.DocElabContext := do
+  let genre ← ``(Manual)
+  let g := Expr.const ``Manual []
+  return ⟨genre, g⟩
+
+
 open Lean.Doc.Syntax
 open Verso.Doc Elab Concrete
 open Lean.Elab Command Term
@@ -73,10 +79,9 @@ def getModuleWithDocs (path : StrLit) (mod : Ident) (title : StrLit) : PartElabM
   let titleString := inlinesToString (← getEnv) titleParts
   let initState : PartElabM.State := .init (.node .none nullKind titleParts)
 
-  let genre ← ``(Manual)
   let g := Expr.const ``Manual []
 
-  let (titleTerm, _st) ← DocElabM.run genre g {} initState <| do
+  let (titleTerm, _st) ← DocElabM.run (← moduleGenreElabContext) {} initState <| do
     titleParts.mapM (elabInline ⟨·⟩)
 
   let modJson ← withTraceNode `verso.blog.literate.loadMod (fun _ => pure m!"Loading '{mod}' in '{path}'") <|
@@ -95,7 +100,6 @@ def getModuleWithDocs (path : StrLit) (mod : Ident) (title : StrLit) : PartElabM
     let title ← titleTerm.mapM (elabTerm · (some (.app (mkConst ``Verso.Doc.Inline) g)))
     let title ← Meta.mkArrayLit (.app (mkConst ``Verso.Doc.Inline) g) title.toList
     withOptions (Compiler.LCNF.compiler.extract_closed.set · false) do
-      logInfo m!"{name} {g}"
       addAndCompile <| .defnDecl {
         name, levelParams := [], type := .app (mkConst ``Verso.Doc.VersoDoc) g,
         value := ← Meta.mkAppM ``modToPage! #[
