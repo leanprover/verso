@@ -183,7 +183,12 @@ def PartElabM.withFileMap (fileMap : FileMap) (act : PartElabM α) : PartElabM �
   fun ρ ρ' σ ctxt σ' mctxt rw cctxt => act ρ ρ' σ ctxt σ' mctxt rw {cctxt with fileMap := fileMap}
 
 /--
-Text elaboration monad. Can modify the DocElabM.State, but can only read from the PartElabM.state
+Text elaboration monad.
+
+This monad can produce content, but it can't modify the structure of the surrounding document. It can
+observe this structure, however.
+
+This means  it can modify the `DocElabM.State`, but it can only read from the `PartElabM.State`.
 -/
 def DocElabM (α : Type) : Type := ReaderT DocElabContext (ReaderT PartElabM.State (StateT DocElabM.State TermElabM)) α
 
