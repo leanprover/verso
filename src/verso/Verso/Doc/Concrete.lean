@@ -53,11 +53,12 @@ private def elabDoc (genre: Term) (title: StrLit) (topLevelBlocks : Array Syntax
   let env ← getEnv
   let titleParts ← stringToInlines title
   let titleString := inlinesToString env titleParts
+  let ctx ← DocElabContext.fromGenreTerm genre
   let initDocState : DocElabM.State := {}
   let initPartState : PartElabM.State := .init (.node .none nullKind titleParts)
 
   let ((), docElabState, partElabState) ←
-    PartElabM.run (← DocElabContext.fromGenreTerm genre) initDocState initPartState <| do
+    PartElabM.run ctx initDocState initPartState <| do
       let mut errors := #[]
       PartElabM.setTitle titleString (← PartElabM.liftDocElabM <| titleParts.mapM (elabInline ⟨·⟩))
       for b in topLevelBlocks do
