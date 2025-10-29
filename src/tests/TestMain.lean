@@ -36,7 +36,7 @@ Tests manual-genre TeX generation. `dir` is a subdirectory specific to a particu
 which is where actual output should go, and which contains the expected output directory.
 `doc` is the document to be rendered.
 -/
-def testTexOutput (dir : System.FilePath) (doc : Verso.Doc.Part Verso.Genre.Manual) :
+def testTexOutput (dir : System.FilePath) (doc : Verso.Doc.VersoDoc Verso.Genre.Manual) :
     Config →  IO Unit := fun config =>
   let versoConfig : Verso.Genre.Manual.Config := {
     destination := "src/tests/integration" / dir / "output",
@@ -47,7 +47,7 @@ def testTexOutput (dir : System.FilePath) (doc : Verso.Doc.Part Verso.Genre.Manu
   let runTest : IO Unit  :=
     open Verso Genre Manual in do
     let logError (msg : String) := IO.eprintln msg
-    ReaderT.run (emitTeX logError versoConfig doc) extension_impls%
+    ReaderT.run (emitTeX logError versoConfig doc.toPart) extension_impls%
 
   Verso.Integration.runTests {
     testDir := "src/tests/integration" / dir,

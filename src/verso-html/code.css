@@ -270,6 +270,11 @@ body {
   margin-bottom: 0.5rem;
 }
 
+pre, .code-content .verso-text pre {
+  font-family: var(--verso-code-font-family, monospace);
+}
+
+
 /* Hamburger menu (hidden by default) */
 .menu-toggle {
   display: none;

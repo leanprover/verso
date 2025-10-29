@@ -6,15 +6,15 @@ open Verso.Genre Tutorial
 open Verso.Doc.Concrete in
 def content : Tutorials where
   content :=
-    verso (.none) "Example Tutorial Site"
+    (verso (.none) "Example Tutorial Site"
     ::::
     Here are some examples of the tutorials feature.
-    ::::
+    ::::).toPart
 
   topics := #[
     { title := "Data",
       description := #[blocks!"These tutorials describe the use of data in Lean."]
-      tutorials := #[%doc TutorialExample.Data, %doc TutorialExample.HashMap, literate_part⟨"." TutorialExample.Lit "Literately-Produced Tutorial" {slug := "literate", summary := "checks that we can load them"} : Tutorial⟩]
+      tutorials := #[%doc TutorialExample.Data, %doc TutorialExample.HashMap, literate_part⟨"." TutorialExample.Lit "Literately-Produced Tutorial" {slug := "literate", summary := "checks that we can load them"} : Tutorial⟩ |>.toPart]
     },
     { title := "Tactics",
       description := #[]
