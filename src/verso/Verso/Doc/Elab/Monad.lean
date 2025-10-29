@@ -110,6 +110,7 @@ def headerStxToString (env : Environment) : Syntax → String
 structure DocElabContext where
   genreSyntax : Syntax
   genre : Expr
+deriving Inhabited
 
 structure DocElabM.State where
   linkRefs : HashMap String DocUses := {}
@@ -141,8 +142,8 @@ Top-level document elaboration monad. Can modify both DocElabM.State and PartEla
 -/
 def PartElabM (α : Type) : Type := ReaderT DocElabContext (StateT DocElabM.State (StateT PartElabM.State TermElabM)) α
 
-def PartElabM.run (genreSyntax : Syntax) (genre : Expr) (st : DocElabM.State) (st' : PartElabM.State) (act : PartElabM α) : TermElabM (α × DocElabM.State × PartElabM.State) := do
-  let ((res, st), st') ← act ⟨genreSyntax, genre⟩ st st'
+def PartElabM.run (ctx : DocElabContext) (st : DocElabM.State) (st' : PartElabM.State) (act : PartElabM α) : TermElabM (α × DocElabM.State × PartElabM.State) := do
+  let ((res, st), st') ← act ctx st st'
   pure (res, st, st')
 
 instance : Alternative PartElabM := inferInstanceAs <| Alternative (ReaderT DocElabContext (StateT DocElabM.State (StateT PartElabM.State TermElabM)))
@@ -186,8 +187,8 @@ Text elaboration monad. Can modify the DocElabM.State, but can only read from th
 -/
 def DocElabM (α : Type) : Type := ReaderT DocElabContext (ReaderT PartElabM.State (StateT DocElabM.State TermElabM)) α
 
-def DocElabM.run (genreSyntax : Syntax) (genre : Expr) (st : DocElabM.State) (st' : PartElabM.State) (act : DocElabM α) : TermElabM (α × DocElabM.State) := do
-  StateT.run (act ⟨genreSyntax, genre⟩ st') st
+def DocElabM.run (ctx : DocElabContext) (st : DocElabM.State) (st' : PartElabM.State) (act : DocElabM α) : TermElabM (α × DocElabM.State) := do
+  StateT.run (act ctx st') st
 
 instance : Inhabited (DocElabM α) := ⟨fun _ _ _ => default⟩
 
@@ -251,9 +252,8 @@ instance : MonadRecDepth DocElabM where
   getMaxRecDepth := fun _ _ st' => do return (← MonadRecDepth.getMaxRecDepth, st')
 
 def PartElabM.liftDocElabM (act : DocElabM α) : PartElabM α := do
-  let ⟨gStx, g⟩ ← readThe DocElabContext
-  let (out, st') ← act.run gStx g (← getThe DocElabM.State) (← getThe PartElabM.State)
-  set st'
+  let (out, stDoc) ← act.run (← readThe DocElabContext) (← getThe DocElabM.State) (← getThe PartElabM.State)
+  modifyThe DocElabM.State (fun _ => stDoc)
   pure out
 
 instance : MonadLift DocElabM PartElabM := ⟨PartElabM.liftDocElabM⟩
