@@ -14,7 +14,7 @@ import Lean.DocString.Syntax
 import Verso.Doc
 import Verso.Doc.ArgParse
 import Verso.Doc.Elab.InlineString
-import Verso.Doc.Elab.Types
+import Verso.Doc.Elab.Basic
 
 set_option doc.verso true
 
