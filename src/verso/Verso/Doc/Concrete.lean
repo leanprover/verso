@@ -60,7 +60,7 @@ private def elabDoc (genre: Term) (title: StrLit) (topLevelBlocks : Array Syntax
   let initPartState : PartElabM.State := .init (.node .none nullKind titleParts)
 
   let ((), docElabState, partElabState) ←
-    PartElabM.run genre (← elabGenre genre) initDocState initPartState <| do
+    PartElabM.run ⟨genre, ← elabGenre genre⟩ initDocState initPartState <| do
       let mut errors := #[]
       PartElabM.setTitle titleString (← PartElabM.liftDocElabM <| titleParts.mapM (elabInline ⟨·⟩))
       for b in topLevelBlocks do
@@ -132,15 +132,19 @@ private def versoBlockCommandFn (genre : Term) (title : String) : ParserFn := fu
     else
       s.mkNode ``addBlockCmd iniSz
 
-/-!
+/--
 As we elaborate a `#doc` command top-level-block by top-level-block, the Lean environment will
-be used to thread state between the separate top level blocks. These three environment extensions:
-`docStateExt`, `partStateExt`, and `originalCatParserExt`, contain the state that needs to exist
-across top-level-block parsing events.
+be used to thread state between the separate top level blocks. These environment extensions contain
+the state that needs to exist across top-level-block parsing events.
 -/
+structure DocElabEnvironment where
+  ctx : DocElabContext := ⟨.missing, mkConst ``Unit⟩
+  docState : DocElabM.State := {}
+  partState : PartElabM.State := .init (.node .none nullKind #[])
+deriving Inhabited
 
-initialize docStateExt : EnvExtension DocElabM.State ← registerEnvExtension (pure {})
-initialize partStateExt : EnvExtension (Option PartElabM.State) ← registerEnvExtension (pure none)
+initialize docEnvironmentExt : EnvExtension DocElabEnvironment ← registerEnvExtension (pure {})
+
 /--
 The original parser for the `command` category, which is restored while elaborating a Verso block so
 that nested Lean code has the correct syntax.
@@ -152,29 +156,23 @@ Performs `PartElabM.run` with state gathered from `docStateExt` and `partStateEx
 the state in those environment extensions with any modifications. Also replaces the default command
 parser in case `act` wants to parse commands (such as within an embedded code block).
 -/
-private def runPartElabInEnv (genreSyntax: Term) (act : PartElabM a) : Command.CommandElabM a := do
+private def runPartElabInEnv (act : PartElabM a) : Command.CommandElabM a := do
   let env ← getEnv
   let versoCmdFn := categoryParserFnExtension.getState env
-  let docState := docStateExt.getState env
-  let some partState := partStateExt.getState env
-    | panic! "The document's start state is not initialized"
+  let versoEnv := docEnvironmentExt.getState env
 
   try
     modifyEnv (fun env => categoryParserFnExtension.setState env <| originalCatParserExt.getState env)
     let (result, docState', partState') ← Command.runTermElabM fun _ => do
-      PartElabM.run genreSyntax (← elabGenre genreSyntax) docState partState act
-    modifyEnv (docStateExt.setState · docState')
-    modifyEnv (partStateExt.setState · (some partState'))
+      PartElabM.run versoEnv.ctx versoEnv.docState versoEnv.partState act
+    modifyEnv (docEnvironmentExt.setState · {versoEnv with docState := docState', partState := partState'})
     return result
   finally
     modifyEnv (categoryParserFnExtension.setState · versoCmdFn)
 
 private def saveRefsInEnv : Command.CommandElabM Unit := do
-  let env ← getEnv
-  let docState := docStateExt.getState env
-  let some partState := partStateExt.getState env
-    | panic! "The document's start state is not initialized"
-  saveRefs docState partState
+  let versoEnv := docEnvironmentExt.getState (← getEnv)
+  saveRefs versoEnv.docState versoEnv.partState
 
 /-!
 When we do incremental parsing of `#doc` commands, we split the behaviors that are done all at once
@@ -182,70 +180,67 @@ in `elabDoc` across three functions: the prelude in `startDoc`, the loop body in
 and the postlude in `finishDoc`.
 -/
 
-private def startDoc (genre : Term) (title: StrLit) : Command.CommandElabM String := do
+private def startDoc (ctx : DocElabContext) (title: StrLit) : Command.CommandElabM String := do
   let env ← getEnv
   let titleParts ← stringToInlines title
   let titleString := inlinesToString env titleParts
   let initDocState : DocElabM.State := {}
   let initPartState : PartElabM.State := .init (.node .none nullKind titleParts)
 
-  modifyEnv (docStateExt.setState · initDocState)
-  modifyEnv (partStateExt.setState · (some initPartState))
-  runPartElabInEnv genre <| do
+  modifyEnv (docEnvironmentExt.setState · ⟨ctx, initDocState, initPartState⟩)
+  runPartElabInEnv <| do
     PartElabM.setTitle titleString (← PartElabM.liftDocElabM <| titleParts.mapM (elabInline ⟨·⟩))
   return titleString
 
-private def runVersoBlock (genre : Term) (block : TSyntax `block) : Command.CommandElabM Unit := do
-  runPartElabInEnv genre <| partCommand block
+private def runVersoBlock (block : TSyntax `block) : Command.CommandElabM Unit := do
+  runPartElabInEnv <| partCommand block
   -- This calls pushInfoLeaf a quadratic number of times for a for a linear number of top-level
   -- verso blocks, which should be harmless but may be inefficient. It may be desirable to tag
   -- info leaves that have already been pushed to avoid pushing them again.
   saveRefsInEnv
 
-private def finishDoc (genre : Term) (title : StrLit) : Command.CommandElabM Unit:= do
+private def finishDoc (genreSyntax : Term) (title : StrLit) : Command.CommandElabM Unit:= do
   let endPos := (← getFileMap).source.endPos
-  runPartElabInEnv genre <| do closePartsUntil 0 endPos
+  runPartElabInEnv <| do closePartsUntil 0 endPos
 
-  let env ← getEnv
-  let some partElabState := partStateExt.getState env
-    | panic! "The document's start state was never initialized"
-  let finished := partElabState.partContext.toPartFrame.close endPos
+  let versoEnv := docEnvironmentExt.getState (← getEnv)
+  let finished := versoEnv.partState.partContext.toPartFrame.close endPos
 
   let n := mkIdentFrom title (← currentDocName)
-  let doc ← finished.toVersoDoc genre
-  let ty ← ``(VersoDoc $genre)
+  let doc ← finished.toVersoDoc genreSyntax
+  let ty ← ``(VersoDoc $genreSyntax)
   Command.elabCommand (← `(def $n : $ty := $doc))
 
 syntax (name := replaceDoc) "#doc" "(" term ")" str "=>" : command
 elab_rules : command
-  | `(command|#doc ( $genre:term ) $title:str =>%$tok) => open Lean Parser Elab Command in do
-  findGenreCmd genre
+  | `(command|#doc ( $genreSyntax:term ) $title:str =>%$tok) => open Lean Parser Elab Command in do
+  let genre ← Command.runTermElabM fun _ => elabGenre genreSyntax
   elabCommand <| ← `(open scoped Lean.Doc.Syntax)
 
-  let titleString ← startDoc genre title
+  let titleString ← startDoc ⟨genreSyntax, genre⟩ title
 
   -- Sets up basic incremental evaluation of documents by replacing Lean's command-by-command parser
   -- with a top-level-block parser.
   modifyEnv fun env => originalCatParserExt.setState env (categoryParserFnExtension.getState env)
-  replaceCategoryParser `command (versoBlockCommandFn genre titleString)
+  replaceCategoryParser `command (versoBlockCommandFn genreSyntax titleString)
 
   -- Edge case: if there's no blocks after the =>, the replacement command parser won't get called,
   -- so we detect that case and call finishDoc.
   if let some stopPos := tok.getTailPos? then
     let txt ← getFileMap
     if stopPos.extract txt.source txt.source.endPos |>.all (·.isWhitespace) then
-      finishDoc genre title
+      finishDoc genreSyntax title
 
 @[command_elab addBlockCmd]
 def elabVersoBlock : Command.CommandElab
-  | `(addBlockCmd| $b:block $genre:term) => do
-    runVersoBlock genre b
+  | `(addBlockCmd| $b:block $_:term) => do
+    runVersoBlock b
   | _ => throwUnsupportedSyntax
 
 @[command_elab addLastBlockCmd]
 def elabVersoLastBlock : Command.CommandElab
   | `(addLastBlockCmd| $b:block $genre:term $title:str) => do
-    runVersoBlock genre b
+    runVersoBlock b
     -- Finish up the document
     finishDoc genre title
   | _ => throwUnsupportedSyntax

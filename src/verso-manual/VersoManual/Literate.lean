@@ -76,7 +76,7 @@ def getModuleWithDocs (path : StrLit) (mod : Ident) (title : StrLit) : PartElabM
   let genre ← ``(Manual)
   let g := Expr.const ``Manual []
 
-  let (titleTerm, _st) ← DocElabM.run genre g {} initState <| do
+  let (titleTerm, _st) ← DocElabM.run ⟨genre, g⟩ {} initState <| do
     titleParts.mapM (elabInline ⟨·⟩)
 
   let modJson ← withTraceNode `verso.blog.literate.loadMod (fun _ => pure m!"Loading '{mod}' in '{path}'") <|

@@ -5,6 +5,8 @@ open Lean
 open Verso.Doc
 open Std (HashMap HashSet)
 
+set_option doc.verso true
+
 namespace Verso.Doc.Elab
 
 inductive TOC where
