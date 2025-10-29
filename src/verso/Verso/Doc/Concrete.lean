@@ -36,11 +36,11 @@ partial def findGenreTm : Syntax → TermElabM Unit
 partial def findGenreCmd (genre : Syntax) : Command.CommandElabM Unit :=
   Command.runTermElabM fun _ => findGenreTm genre
 
-def saveRefs [Monad m] [MonadInfoTree m] (st : DocElabM.State) (st' : PartElabM.State) : m Unit := do
-  for r in internalRefs st'.linkDefs st.linkRefs do
+def saveRefs [Monad m] [MonadInfoTree m] (st : DocElabM.State) : m Unit := do
+  for r in internalRefs st.linkDefs st.linkRefs do
     for stx in r.syntax do
       pushInfoLeaf <| .ofCustomInfo {stx := stx , value := Dynamic.mk r}
-  for r in internalRefs st'.footnoteDefs st.footnoteRefs do
+  for r in internalRefs st.footnoteDefs st.footnoteRefs do
     for stx in r.syntax do
       pushInfoLeaf <| .ofCustomInfo {stx := stx , value := Dynamic.mk r}
 
@@ -74,12 +74,12 @@ private def elabDoc (genre: Term) (title: StrLit) (topLevelBlocks : Array Syntax
         | .error stx msg => logErrorAt stx msg
         | oops@(.internal _ _) => throw oops
       pure ()
-  saveRefs docElabState partElabState
+  saveRefs docElabState
 
   let finished := partElabState.partContext.toPartFrame.close endPos
 
   pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
-  finished.toVersoDoc genre
+  finished.toVersoDoc genre docElabState
 
 elab "#docs" "(" genre:term ")" n:ident title:str ":=" ":::::::" text:document ":::::::" : command => do
   findGenreCmd genre
@@ -172,9 +172,7 @@ private def runPartElabInEnv (genreSyntax: Term) (act : PartElabM a) : Command.C
 private def saveRefsInEnv : Command.CommandElabM Unit := do
   let env ← getEnv
   let docState := docStateExt.getState env
-  let some partState := partStateExt.getState env
-    | panic! "The document's start state is not initialized"
-  saveRefs docState partState
+  saveRefs docState
 
 /-!
 When we do incremental parsing of `#doc` commands, we split the behaviors that are done all at once
@@ -207,12 +205,14 @@ private def finishDoc (genre : Term) (title : StrLit) : Command.CommandElabM Uni
   runPartElabInEnv genre <| do closePartsUntil 0 endPos
 
   let env ← getEnv
+
+  let docElabState := docStateExt.getState env
   let some partElabState := partStateExt.getState env
     | panic! "The document's start state was never initialized"
   let finished := partElabState.partContext.toPartFrame.close endPos
 
   let n := mkIdentFrom title (← currentDocName)
-  let doc ← finished.toVersoDoc genre
+  let doc ← Command.runTermElabM fun _ => finished.toVersoDoc genre docElabState
   let ty ← ``(VersoDoc $genre)
   Command.elabCommand (← `(def $n : $ty := $doc))
 

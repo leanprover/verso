@@ -502,7 +502,7 @@ def elabLiteratePage (x : Ident) (path : StrLit) (mod : Ident) (config : LitPage
 
   let g ← runTermElabM fun _ => Term.elabTerm genre (some (.const ``Doc.Genre []))
 
-  let ((), _st, st') ← liftTermElabM <| PartElabM.run genre g {} initState <| do
+  let ((), st, st') ← liftTermElabM <| PartElabM.run genre g {} initState <| do
     setTitle titleString (← liftDocElabM <| titleParts.mapM (elabInline ⟨·⟩))
     if let some metadata := metadata? then
       modifyThe PartElabM.State fun st => {st with partContext.metadata := some metadata}
@@ -523,7 +523,7 @@ def elabLiteratePage (x : Ident) (path : StrLit) (mod : Ident) (config : LitPage
     else finished
 
   let ty ← ``(VersoDoc $genre)
-  elabCommand <| ← `(def $x : $ty := $(← finished.toVersoDoc genre))
+  elabCommand <| ← `(def $x : $ty := $(← finished.toVersoDoc genre st))
 
 end Literate
 open Literate

@@ -297,13 +297,12 @@ where
 @[part_command Lean.Doc.Syntax.footnote_ref]
 partial def _root_.Lean.Doc.Syntax.footnote_ref.command : PartCommand
   | `(block| [^ $name:str ]: $contents* ) =>
-    addFootnoteDef name =<< contents.mapM (elabInline ·)
+    addFootnoteDef name =<< contents.mapM (withForwardReferences false <| elabInline ·)
   | _ => throwUnsupportedSyntax
 
 @[part_command Lean.Doc.Syntax.link_ref]
 partial def _root_.Lean.Doc.Syntax.link_ref.command : PartCommand
-  | `(block| [ $name:str ]: $url:str ) =>
-    addLinkDef name url.getString
+  | `(block| [ $name:str ]: $url:str ) => addLinkDef name url.getString
   | _ => throwUnsupportedSyntax
 
 partial def PartElabM.State.close (endPos : String.Pos.Raw) (state : PartElabM.State) : Option PartElabM.State :=

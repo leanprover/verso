@@ -6,8 +6,6 @@ Author: David Thrane Christiansen
 import Verso
 namespace Verso.BasicTest
 set_option guard_msgs.diff true
-set_option pp.rawOnError true
-
 
 /- ----- -/
 
@@ -401,3 +399,81 @@ Here's [a link][to here][^note]!
 
 /-- info: true -/
 #guard_msgs in #eval refAndLink.toPart == refAndLink4.toPart
+
+/--
+error: Already defined link [foo] as 'https://example.com'
+-/
+#guard_msgs in
+#docs (.none) failDupLink "Fail" :=
+:::::::
+[foo]: https://example.com
+[foo]: http://example.com
+
+[Go to foo][foo]!
+:::::::
+
+/--
+error: Already defined footnote [^note]
+-/
+#guard_msgs in
+#docs (.none) failDupFoot "Fail" :=
+:::::::
+[^note]: Note
+
+[^note]: Note2
+
+There are no caveats.[^note]
+:::::::
+
+/--
+error: Footnotes may only reference previously-defined footnotes.
+-/
+#guard_msgs in
+#docs (.none) failForwardRef "Fail" :=
+:::::::
+[^foo]: Disallowing forward reference in footnotes[^bar]
+
+[^bar]: Even though it's defined later
+
+And used[^bar]
+:::::::
+
+/--
+warning: Unused footnote [^hidden]
+---
+warning: Unused footnote [^baz]
+-/
+#guard_msgs in
+#docs (.none) fail4 "Fail" :=
+:::::::
+[^baz]: Unused footnote
+
+[^hidden]: Unused footnote
+:::::::
+
+/--
+error: No definition for footnote [^caveat]
+-/
+#guard_msgs in
+#docs (.none) fail "Fail" :=
+:::::::
+There's no caveat.[^caveat]
+:::::::
+
+/--
+warning: Unused link [forlorn]
+-/
+#guard_msgs in
+#docs (.none) warnForlorn "Fail" :=
+:::::::
+[forlorn]: http://example.com
+:::::::
+
+/--
+error: No definition for link [fourOhFour]
+-/
+#guard_msgs in
+#docs (.none) failHangingLink "Fail" :=
+:::::::
+There's no [destination][fourOhFour]
+:::::::

@@ -103,10 +103,11 @@ def headerStxToString (env : Environment) : Syntax → String
 structure DocElabContext where
   genreSyntax : Syntax
   genre : Expr
+  canForwardReference : Bool
 
 /-- References that must be local to the current blob of concrete document syntax -/
 structure DocDef (α : Type) where
-  defSite : TSyntax `str
+  defSite : Syntax
   val : α
 deriving Repr
 
@@ -119,6 +120,8 @@ def DocUses.add (uses : DocUses) (loc : Syntax) : DocUses := {uses with useSites
 structure DocElabM.State where
   linkRefs : HashMap String DocUses := {}
   footnoteRefs : HashMap String DocUses := {}
+  linkDefs : HashMap String (DocDef String) := {}
+  footnoteDefs : HashMap String (DocDef (Array (TSyntax `term))) := {}
 deriving Inhabited
 
 /-- Custom info tree data to save footnote and reflink cross-references -/
@@ -195,7 +198,7 @@ private def footnoteRefName [Monad m] [MonadQuotation m] (genre : Term) (docName
   ``(HasNote.contents $(quote ref.getString) $(quote docName) (genre := $genre) (self := _))
 
 /--
-From a finished part, constructs syntax that denotes its `Part` value.
+From a finished part, constructs syntax that denotes its {lean}`Part` value.
 -/
 partial def FinishedPart.toSyntax [Monad m] [MonadQuotation m]
     (genre : TSyntax `term)
@@ -221,10 +224,28 @@ partial def FinishedPart.toTOC : FinishedPart → TOC
 Creates a term denoting a {lean}`VersoDoc` value from a {lean}`FinishedPart`. This is the final step
 in turning a parsed verso doc into syntax.
 -/
-def FinishedPart.toVersoDoc [Monad m] [MonadQuotation m]
+def FinishedPart.toVersoDoc
     (genreSyntax : Term)
     (finished : FinishedPart)
-    : m Term := do
+    (state : DocElabM.State)
+    : TermElabM Term := do
+
+  -- Check for undefined and unused references
+  for (name, sites) in state.footnoteRefs do
+    if !state.footnoteDefs.contains name then
+      for site in sites.useSites do
+        throwErrorAt site m!"No definition for footnote [^{name}]"
+  for (name, d) in state.footnoteDefs do
+    if !state.footnoteRefs.contains name then
+      Lean.logWarningAt d.defSite m!"Unused footnote [^{name}]"
+  for (name, sites) in state.linkRefs do
+    if !state.linkDefs.contains name then
+      for site in sites.useSites do
+        throwErrorAt site m!"No definition for link [{name}]"
+  for (name, d) in state.linkDefs do
+    if !state.linkRefs.contains name then
+      Lean.logWarningAt d.defSite m!"Unused link [{name}]"
+
   let finishedSyntax ← finished.toSyntax genreSyntax
   ``(VersoDoc.mk (fun () => $finishedSyntax))
 
@@ -295,8 +316,6 @@ def PartContext.push (ctxt : PartContext) (fr : PartFrame) : PartContext := ⟨f
 
 structure PartElabM.State where
   partContext : PartContext
-  linkDefs : HashMap String (DocDef String) := {}
-  footnoteDefs : HashMap String (DocDef (Array (TSyntax `term))) := {}
 deriving Inhabited
 
 def PartElabM.State.init (title : Syntax) (expandedTitle : Option (String × Array (TSyntax `term)) := none) : PartElabM.State where
@@ -305,7 +324,7 @@ def PartElabM.State.init (title : Syntax) (expandedTitle : Option (String × Arr
 def PartElabM (α : Type) : Type := ReaderT DocElabContext (StateT DocElabM.State (StateT PartElabM.State TermElabM)) α
 
 def PartElabM.run (genreSyntax : Syntax) (genre : Expr) (st : DocElabM.State) (st' : PartElabM.State) (act : PartElabM α) : TermElabM (α × DocElabM.State × PartElabM.State) := do
-  let ((res, st), st') ← act ⟨genreSyntax, genre⟩ st st'
+  let ((res, st), st') ← act ⟨genreSyntax, genre, true⟩ st st'
   pure (res, st, st')
 
 instance : Alternative PartElabM := inferInstanceAs <| Alternative (ReaderT DocElabContext (StateT DocElabM.State (StateT PartElabM.State TermElabM)))
@@ -339,6 +358,8 @@ instance : MonadWithReaderOf Term.Context PartElabM := inferInstanceAs <| MonadW
 
 instance : MonadReaderOf DocElabContext PartElabM := inferInstanceAs <| MonadReaderOf DocElabContext (ReaderT DocElabContext (StateT DocElabM.State (StateT PartElabM.State TermElabM)))
 
+instance : MonadWithReaderOf DocElabContext PartElabM := inferInstanceAs <| MonadWithReaderOf DocElabContext (ReaderT DocElabContext (StateT DocElabM.State (StateT PartElabM.State TermElabM)))
+
 instance : MonadWithOptions PartElabM := inferInstanceAs <| MonadWithOptions (ReaderT DocElabContext (StateT DocElabM.State (StateT PartElabM.State TermElabM)))
 
 def PartElabM.withFileMap (fileMap : FileMap) (act : PartElabM α) : PartElabM α :=
@@ -346,8 +367,8 @@ def PartElabM.withFileMap (fileMap : FileMap) (act : PartElabM α) : PartElabM �
 
 def DocElabM (α : Type) : Type := ReaderT DocElabContext (ReaderT PartElabM.State (StateT DocElabM.State TermElabM)) α
 
-def DocElabM.run (genreSyntax : Syntax) (genre : Expr) (st : DocElabM.State) (st' : PartElabM.State) (act : DocElabM α) : TermElabM (α × DocElabM.State) := do
-  StateT.run (act ⟨genreSyntax, genre⟩ st') st
+def DocElabM.run (genreSyntax : Syntax) (genre : Expr) (canForwardReference := true) (st : DocElabM.State) (st' : PartElabM.State) (act : DocElabM α) : TermElabM (α × DocElabM.State) := do
+  StateT.run (act ⟨genreSyntax, genre, canForwardReference⟩ st') st
 
 instance : Inhabited (DocElabM α) := ⟨fun _ _ _ => default⟩
 
@@ -398,6 +419,8 @@ instance : MonadWithReaderOf Core.Context DocElabM := inferInstanceAs <| MonadWi
 
 instance : MonadWithReaderOf Term.Context DocElabM := inferInstanceAs <| MonadWithReaderOf Term.Context (ReaderT DocElabContext (ReaderT PartElabM.State (StateT DocElabM.State TermElabM)))
 
+instance : MonadWithReaderOf DocElabContext DocElabM := inferInstanceAs <| MonadWithReaderOf DocElabContext (ReaderT DocElabContext (ReaderT PartElabM.State (StateT DocElabM.State TermElabM)))
+
 instance : MonadReaderOf DocElabContext DocElabM := inferInstanceAs <| MonadReaderOf DocElabContext (ReaderT DocElabContext (ReaderT PartElabM.State (StateT DocElabM.State TermElabM)))
 
 instance : MonadReaderOf PartElabM.State DocElabM := inferInstanceAs <| MonadReaderOf PartElabM.State (ReaderT DocElabContext (ReaderT PartElabM.State (StateT DocElabM.State TermElabM)))
@@ -411,8 +434,8 @@ instance : MonadRecDepth DocElabM where
   getMaxRecDepth := fun _ _ st' => do return (← MonadRecDepth.getMaxRecDepth, st')
 
 def PartElabM.liftDocElabM (act : DocElabM α) : PartElabM α := do
-  let ⟨gStx, g⟩ ← readThe DocElabContext
-  let (out, st') ← act.run gStx g (← getThe DocElabM.State) (← getThe PartElabM.State)
+  let ⟨gStx, g, canForwardReference⟩ ← readThe DocElabContext
+  let (out, st') ← act.run gStx g (canForwardReference := canForwardReference) (← getThe DocElabM.State) (← getThe PartElabM.State)
   set st'
   pure out
 
@@ -493,7 +516,7 @@ def PartElabM.addPart (finished : FinishedPart) : PartElabM Unit := modifyThe St
 def PartElabM.addLinkDef (refName : TSyntax `str) (url : String) : PartElabM Unit := do
   let strName := refName.getString
   let docName ← currentDocName
-  match (← getThe State).linkDefs[strName]? with
+  match (← getThe DocElabM.State).linkDefs[strName]? with
   | none =>
     let t := mkApp2 (.const ``HasLink []) (toExpr strName) (toExpr docName)
     let n ← mkFreshUserName (docName ++ `inst.link ++ strName.toName)
@@ -506,10 +529,10 @@ def PartElabM.addLinkDef (refName : TSyntax `str) (url : String) : PartElabM Uni
       safety := .safe
     }
     Meta.addInstance n AttributeKind.global (eval_prio default)
-    modifyThe State fun st => {st with linkDefs := st.linkDefs.insert strName ⟨refName, url⟩}
+    modifyThe DocElabM.State fun st => {st with linkDefs := st.linkDefs.insert strName ⟨refName, url⟩}
 
   | some ⟨_, url'⟩ =>
-    throwErrorAt refName "Already defined as '{url'}'"
+    throwErrorAt refName "Already defined link [{strName}] as '{url'}'"
 
 def DocElabM.addLinkRef (refName : TSyntax `str) : DocElabM (TSyntax `term) := do
   let strName := refName.getString
@@ -526,7 +549,7 @@ def PartElabM.addFootnoteDef (refName : TSyntax `str) (content : Array (TSyntax 
   let strName := refName.getString
   let docName ← currentDocName
   let genre := (← readThe DocElabContext).genre
-  match (← getThe State).footnoteDefs[strName]? with
+  match (← getThe DocElabM.State).footnoteDefs[strName]? with
   | none =>
     let t := mkApp3 (.const ``HasNote []) (toExpr strName) (toExpr docName) genre
     let n ← mkFreshUserName (docName ++ `inst.note ++ strName.toName)
@@ -542,13 +565,19 @@ def PartElabM.addFootnoteDef (refName : TSyntax `str) (content : Array (TSyntax 
       safety := .safe
     }
     Meta.addInstance n AttributeKind.global (eval_prio default)
-    modifyThe State fun st => {st with footnoteDefs := st.footnoteDefs.insert strName ⟨refName, content⟩}
-  | some ⟨_, content⟩ =>
-    throwErrorAt refName "Already defined as '{content}'"
+    modifyThe DocElabM.State fun st => {st with footnoteDefs := st.footnoteDefs.insert strName ⟨refName, content⟩}
+  | some _ =>
+    throwErrorAt refName "Already defined footnote [^{strName}]"
+
+def DocElabM.withForwardReferences (b : Bool) : DocElabM a → DocElabM a :=
+  withTheReader DocElabContext ({ · with canForwardReference := b })
 
 def DocElabM.addFootnoteRef (refName : TSyntax `str) : DocElabM (TSyntax `term) := do
   let strName := refName.getString
   let genre := (← readThe DocElabContext).genreSyntax
+  if !(← readThe DocElabContext).canForwardReference && !(← getThe State).footnoteDefs.contains strName then
+    throwErrorAt refName "Footnotes may only reference previously-defined footnotes."
+
   match (← getThe State).footnoteRefs[strName]? with
   | none =>
     modifyThe State fun st => {st with footnoteRefs := st.footnoteRefs.insert strName ⟨#[refName]⟩}
