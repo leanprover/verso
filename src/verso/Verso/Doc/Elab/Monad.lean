@@ -36,6 +36,12 @@ class HasLink (name : String) (doc : Name) where
 class HasNote (name : String) (doc : Name) (genre : Genre) where
   contents : Array (Inline genre)
 
+private def linkRefName [Monad m] [MonadQuotation m] (docName : Name) (ref : TSyntax `str) : m Term := do
+  ``(HasLink.url $(quote ref.getString) $(quote docName) (self := _))
+
+private def footnoteRefName [Monad m] [MonadQuotation m] (genre : Term) (docName : Name) (ref : TSyntax `str) : m Term :=
+  ``(HasNote.contents $(quote ref.getString) $(quote docName) (genre := $genre) (self := _))
+
 
 -- For use in IDE features and previews and such
 @[inline_to_string Lean.Doc.Syntax.text]
@@ -105,18 +111,10 @@ structure DocElabContext where
   genreSyntax : Syntax
   genre : Expr
 
-
 structure DocElabM.State where
   linkRefs : HashMap String DocUses := {}
   footnoteRefs : HashMap String DocUses := {}
 deriving Inhabited
-
-
-private def linkRefName [Monad m] [MonadQuotation m] (docName : Name) (ref : TSyntax `str) : m Term := do
-  ``(HasLink.url $(quote ref.getString) $(quote docName) (self := _))
-
-private def footnoteRefName [Monad m] [MonadQuotation m] (genre : Term) (docName : Name) (ref : TSyntax `str) : m Term :=
-  ``(HasNote.contents $(quote ref.getString) $(quote docName) (genre := $genre) (self := _))
 
 /--
 Creates a term denoting a {lean}`VersoDoc` value from a {lean}`FinishedPart`. This is the final step
@@ -129,7 +127,6 @@ def FinishedPart.toVersoDoc [Monad m] [MonadQuotation m]
   let finishedSyntax ← finished.toSyntax genreSyntax
   ``(VersoDoc.mk (fun () => $finishedSyntax))
 
-
 structure PartElabM.State where
   partContext : PartContext
   linkDefs : HashMap String (DocDef String) := {}
@@ -139,6 +136,9 @@ deriving Inhabited
 def PartElabM.State.init (title : Syntax) (expandedTitle : Option (String × Array (TSyntax `term)) := none) : PartElabM.State where
   partContext := {titleSyntax := title, expandedTitle, metadata := none, blocks := #[], priorParts := #[], parents := #[]}
 
+/--
+Top-level document elaboration monad. Can modify both DocElabM.State and PartElabM.State
+-/
 def PartElabM (α : Type) : Type := ReaderT DocElabContext (StateT DocElabM.State (StateT PartElabM.State TermElabM)) α
 
 def PartElabM.run (genreSyntax : Syntax) (genre : Expr) (st : DocElabM.State) (st' : PartElabM.State) (act : PartElabM α) : TermElabM (α × DocElabM.State × PartElabM.State) := do
@@ -181,6 +181,9 @@ instance : MonadWithOptions PartElabM := inferInstanceAs <| MonadWithOptions (Re
 def PartElabM.withFileMap (fileMap : FileMap) (act : PartElabM α) : PartElabM α :=
   fun ρ ρ' σ ctxt σ' mctxt rw cctxt => act ρ ρ' σ ctxt σ' mctxt rw {cctxt with fileMap := fileMap}
 
+/--
+Text elaboration monad. Can modify the DocElabM.State, but can only read from the PartElabM.state
+-/
 def DocElabM (α : Type) : Type := ReaderT DocElabContext (ReaderT PartElabM.State (StateT DocElabM.State TermElabM)) α
 
 def DocElabM.run (genreSyntax : Syntax) (genre : Expr) (st : DocElabM.State) (st' : PartElabM.State) (act : DocElabM α) : TermElabM (α × DocElabM.State) := do
