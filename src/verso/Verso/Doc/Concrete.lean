@@ -44,9 +44,6 @@ def saveRefs [Monad m] [MonadInfoTree m] (st : DocElabM.State) (st' : PartElabM.
     for stx in r.syntax do
       pushInfoLeaf <| .ofCustomInfo {stx := stx , value := Dynamic.mk r}
 
-private def elabGenre (genre : TSyntax `term) : TermElabM Expr :=
-  Term.elabTerm genre (some (.const ``Doc.Genre []))
-
 /--
 All-at-once elaboration of verso document syntax to syntax denoting a verso `Part`. Implements
 elaboration of the `#docs` command and `#doc` term. The `#doc` command is incremental, and thus
@@ -60,7 +57,7 @@ private def elabDoc (genre: Term) (title: StrLit) (topLevelBlocks : Array Syntax
   let initPartState : PartElabM.State := .init (.node .none nullKind titleParts)
 
   let ((), docElabState, partElabState) ←
-    PartElabM.run ⟨genre, ← elabGenre genre⟩ initDocState initPartState <| do
+    PartElabM.run (← DocElabContext.fromGenreTerm genre) initDocState initPartState <| do
       let mut errors := #[]
       PartElabM.setTitle titleString (← PartElabM.liftDocElabM <| titleParts.mapM (elabInline ⟨·⟩))
       for b in topLevelBlocks do
@@ -180,10 +177,11 @@ in `elabDoc` across three functions: the prelude in `startDoc`, the loop body in
 and the postlude in `finishDoc`.
 -/
 
-private def startDoc (ctx : DocElabContext) (title: StrLit) : Command.CommandElabM String := do
+private def startDoc (genreSyntax : Term) (title: StrLit) : Command.CommandElabM String := do
   let env ← getEnv
   let titleParts ← stringToInlines title
   let titleString := inlinesToString env titleParts
+  let ctx ← Command.runTermElabM fun _ => DocElabContext.fromGenreTerm genreSyntax
   let initDocState : DocElabM.State := {}
   let initPartState : PartElabM.State := .init (.node .none nullKind titleParts)
 
@@ -214,10 +212,9 @@ private def finishDoc (genreSyntax : Term) (title : StrLit) : Command.CommandEla
 syntax (name := replaceDoc) "#doc" "(" term ")" str "=>" : command
 elab_rules : command
   | `(command|#doc ( $genreSyntax:term ) $title:str =>%$tok) => open Lean Parser Elab Command in do
-  let genre ← Command.runTermElabM fun _ => elabGenre genreSyntax
   elabCommand <| ← `(open scoped Lean.Doc.Syntax)
 
-  let titleString ← startDoc ⟨genreSyntax, genre⟩ title
+  let titleString ← startDoc genreSyntax title
 
   -- Sets up basic incremental evaluation of documents by replacing Lean's command-by-command parser
   -- with a top-level-block parser.

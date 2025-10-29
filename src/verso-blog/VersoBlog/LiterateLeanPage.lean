@@ -500,9 +500,9 @@ def elabLiteratePage (x : Ident) (path : StrLit) (mod : Ident) (config : LitPage
   let items ← withTraceNode `verso.blog.literate.loadMod (fun _ => pure m!"Loading '{mod}' in '{path}'") <|
     loadLiteratePage path.getString mod.getId.toString
 
-  let g ← runTermElabM fun _ => Term.elabTerm genre (some (.const ``Doc.Genre []))
+  let ctx ← runTermElabM fun _ => DocElabContext.fromGenreTerm genre
 
-  let ((), _st, st') ← liftTermElabM <| PartElabM.run ⟨genre, g⟩ {} initState <| do
+  let ((), _st, st') ← liftTermElabM <| PartElabM.run ctx {} initState <| do
     setTitle titleString (← liftDocElabM <| titleParts.mapM (elabInline ⟨·⟩))
     if let some metadata := metadata? then
       modifyThe PartElabM.State fun st => {st with partContext.metadata := some metadata}

@@ -112,6 +112,10 @@ structure DocElabContext where
   genre : Expr
 deriving Inhabited
 
+def DocElabContext.fromGenreTerm (genreSyntax : Term) : TermElabM DocElabContext := do
+  let genre ← Term.elabTerm genreSyntax (some (.const ``Doc.Genre []))
+  return DocElabContext.mk genreSyntax genre
+
 structure DocElabM.State where
   linkRefs : HashMap String DocUses := {}
   footnoteRefs : HashMap String DocUses := {}
@@ -185,10 +189,11 @@ def PartElabM.withFileMap (fileMap : FileMap) (act : PartElabM α) : PartElabM �
 /--
 Text elaboration monad.
 
-This monad can produce content, but it can't modify the structure of the surrounding document. It can
-observe this structure, however.
+This monad can produce content, but it can't modify the structure of the surrounding document. It
+can observe this structure, however.
 
-This means  it can modify the `DocElabM.State`, but it can only read from the `PartElabM.State`.
+This means it can modify the {lean}`DocElabM.State`, but it can only read from the
+{lean}`PartElabM.State`.
 -/
 def DocElabM (α : Type) : Type := ReaderT DocElabContext (ReaderT PartElabM.State (StateT DocElabM.State TermElabM)) α
 

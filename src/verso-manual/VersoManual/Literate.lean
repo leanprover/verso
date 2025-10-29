@@ -95,7 +95,6 @@ def getModuleWithDocs (path : StrLit) (mod : Ident) (title : StrLit) : PartElabM
     let title ← titleTerm.mapM (elabTerm · (some (.app (mkConst ``Verso.Doc.Inline) g)))
     let title ← Meta.mkArrayLit (.app (mkConst ``Verso.Doc.Inline) g) title.toList
     withOptions (Compiler.LCNF.compiler.extract_closed.set · false) do
-      logInfo m!"{name} {g}"
       addAndCompile <| .defnDecl {
         name, levelParams := [], type := .app (mkConst ``Verso.Doc.VersoDoc) g,
         value := ← Meta.mkAppM ``modToPage! #[
