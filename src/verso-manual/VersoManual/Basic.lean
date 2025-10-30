@@ -704,8 +704,7 @@ open Lean in
 def manualGenreElabContext : CoreM Elab.DocElabContext := do
   let genre ← ``(Manual)
   let g := Expr.const ``Manual []
-  let name ← mkFreshUserName `manual
-  return Elab.DocElabContext.mk genre g name .always
+  return Elab.DocElabContext.mk genre g .always
 
 @[deprecated moduleGenreElabContext (since := "2025-10-30")]
 def moduleGenreElabContext := manualGenreElabContext

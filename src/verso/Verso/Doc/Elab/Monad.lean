@@ -125,17 +125,12 @@ deriving Inhabited, BEq
 structure DocElabContext where
   genreSyntax : Syntax
   genre : Expr
-  /--
-  Verso elaboration may create auxiliary definitions; the private name can act as a base of those
-  definitions.
-  -/
-  privateName : Name
   refsAllowed : RefsAllowed
 deriving Inhabited
 
 def DocElabContext.fromGenreTerm (genreSyntax : Term) : TermElabM DocElabContext := do
   let genre ← Term.elabTerm genreSyntax (some (.const ``Doc.Genre []))
-  return DocElabContext.mk genreSyntax genre (← mkFreshUserName `doc) .always
+  return DocElabContext.mk genreSyntax genre .always
 
 structure DocElabM.State where
   linkRefs : HashMap String DocUses := {}
