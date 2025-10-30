@@ -131,6 +131,39 @@ Here's [a link][to here][^note]!
 /-- info: true -/
 #guard_msgs in #eval refAndLink.toPart == refAndLink4.toPart
 
+#docs (.none) refAndLinkRecursion "Ref/link recursion" :=
+:::::::
+[^nestedTwice]: C'mon, man.
+
+[^nestedOnce]: A footnote?[^nestedTwice]
+
+[to here]: http://example.com
+[^plain]: Footnotes can have recursive footnotes[^nestedOnce] and [links][to here].
+
+Example[^plain]
+:::::::
+/--
+info: Verso.Doc.Part.mk
+  #[Verso.Doc.Inline.text "Ref/link recursion"]
+  "Ref/link recursion"
+  none
+  #[Verso.Doc.Block.para
+      #[Verso.Doc.Inline.text "Example",
+        Verso.Doc.Inline.footnote
+          "plain"
+          #[(Verso.Doc.Inline.text "Footnotes can have recursive footnotes"),
+            (Verso.Doc.Inline.footnote
+               "nestedOnce"
+               #[(Verso.Doc.Inline.text "A footnote?"),
+                 (Verso.Doc.Inline.footnote "nestedTwice" #[(Verso.Doc.Inline.text "C'mon, man.")])]),
+            (Verso.Doc.Inline.text " and "),
+            (Verso.Doc.Inline.link #[(Verso.Doc.Inline.text "links")] "http://example.com"),
+            (Verso.Doc.Inline.text ".")]]]
+  #[]
+-/
+#guard_msgs in
+  #eval refAndLinkRecursion.toPart
+
 /--
 error: Already defined link [foo] as 'https://example.com'
 -/
@@ -157,10 +190,10 @@ There are no caveats.[^note]
 :::::::
 
 /--
-error: Footnote reference [^bar] is not defined yet when it occurs
+error: Footnote reference [^bar] does not have a definition
 -/
 #guard_msgs in
-#docs (.none) failForwardRef "Fail" :=
+#docs (.none) failForwardRefFootnote "Fail" :=
 :::::::
 [^foo]: Disallowing forward reference in footnotes[^bar]
 
@@ -168,6 +201,20 @@ error: Footnote reference [^bar] is not defined yet when it occurs
 
 And used[^bar]
 :::::::
+
+/--
+error: Link reference [bar] does not have a definition
+-/
+#guard_msgs in
+#docs (.none) failForwardRefLink "Fail" :=
+:::::::
+[^foo]: Disallowing [forward reference in footnotes][bar]
+
+[bar]: http://example.com
+
+[And used][bar]
+:::::::
+
 
 /--
 warning: Unused footnote [^hidden]

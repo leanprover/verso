@@ -375,7 +375,7 @@ def testAddPartFromMarkdown (input : String) : Elab.TermElabM String := do
     for block in parsed.blocks do
       levels ← addPartFromMarkdown block levels
     closePartsUntil 0 0
-  let (_, _, part) ← addParts.run ⟨Syntax.node .none identKind #[], mkConst ``Manual, true⟩ default default
+  let (_, _, part) ← addParts.run ⟨Syntax.node .none identKind #[], mkConst ``Manual, .always⟩ default default
   part.partContext.priorParts.toList.map displayPartStructure |> String.join |> pure
 
 /--

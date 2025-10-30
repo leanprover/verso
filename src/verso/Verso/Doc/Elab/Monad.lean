@@ -107,23 +107,31 @@ def headerStxToString (env : Environment) : Syntax → String
   | headerStx => dbg_trace "didn't understand {headerStx} for string"
     "<missing>"
 
+/--
+Specifies the elaboration behavior of inline references in Verso.
+-/
+inductive RefsAllowed : Type where
+  /--
+  A footnote ref like `[^note]` or a link ref like {lit}`[wikipedia]` are treated as an error if the
+  current {lit}`PartElabM` state does not contain a definition for the ref.
+  -/
+  | onlyIfDefined
+  /--
+  Undefined link and footnote references in inline text are permitted with no warning.
+  -/
+  | always
+deriving Inhabited, BEq
+
 structure DocElabContext where
   genreSyntax : Syntax
   genre : Expr
 
-  /--
-  When this is false, a footnote ref like `[^note]` or a link ref like {lit}`[wikipedia]` will be
-  treated as an error if the current {lit}`PartElabM` state does not contain a definition for the
-  ref.
-
-  When this is true, undefined references in inline text will be ignored until a later time.
-  -/
-  allowUndefinedRefs : Bool
+  refsAllowed : RefsAllowed
 deriving Inhabited
 
 def DocElabContext.fromGenreTerm (genreSyntax : Term) : TermElabM DocElabContext := do
   let genre ← Term.elabTerm genreSyntax (some (.const ``Doc.Genre []))
-  return DocElabContext.mk genreSyntax genre true
+  return DocElabContext.mk genreSyntax genre .always
 
 structure DocElabM.State where
   linkRefs : HashMap String DocUses := {}
@@ -187,8 +195,8 @@ instance : MonadWithOptions PartElabM := inferInstanceAs <| MonadWithOptions (Re
 def PartElabM.withFileMap (fileMap : FileMap) (act : PartElabM α) : PartElabM α :=
   fun ρ ρ' σ ctxt σ' mctxt rw cctxt => act ρ ρ' σ ctxt σ' mctxt rw {cctxt with fileMap := fileMap}
 
-def withAllowUndefinedRefs [MonadWithReaderOf DocElabContext m] [Monad m] (b : Bool) : m a → m a :=
-  withTheReader DocElabContext ({ · with allowUndefinedRefs := b})
+def withAllowUndefinedRefs [MonadWithReaderOf DocElabContext m] [Monad m] (b : RefsAllowed) : m a → m a :=
+  withTheReader DocElabContext ({ · with refsAllowed := b})
 
 /--
 Text elaboration monad.
@@ -313,6 +321,12 @@ def PartElabM.addLinkDef (refName : TSyntax `str) (url : String) : PartElabM Uni
 
 def DocElabM.addLinkRef (refName : TSyntax `str) : DocElabM (TSyntax `term) := do
   let strName := refName.getString
+  match (← readThe DocElabContext).refsAllowed with
+    | .always => pure ()
+    | .onlyIfDefined =>
+      if !(← readThe PartElabM.State).linkDefs.contains strName then
+        throwErrorAt refName m!"Link reference [{strName}] does not have a definition"
+
   match (← getThe State).linkRefs[strName]? with
   | none =>
     modifyThe State fun st => {st with linkRefs := st.linkRefs.insert strName ⟨#[refName]⟩}
@@ -349,8 +363,12 @@ def PartElabM.addFootnoteDef (refName : TSyntax `str) (content : Array (TSyntax 
 def DocElabM.addFootnoteRef (refName : TSyntax `str) : DocElabM (TSyntax `term) := do
   let strName := refName.getString
   let genre := (← readThe DocElabContext).genreSyntax
-  if !(← readThe DocElabContext).allowUndefinedRefs && !(← readThe PartElabM.State).footnoteDefs.contains strName then
-    throwErrorAt refName m!"Footnote reference [^{strName}] is not defined yet when it occurs"
+  match (← readThe DocElabContext).refsAllowed with
+    | .always => pure ()
+    | .onlyIfDefined =>
+      if !(← readThe PartElabM.State).footnoteDefs.contains strName then
+        throwErrorAt refName m!"Footnote reference [^{strName}] does not have a definition"
+
   match (← getThe State).footnoteRefs[strName]? with
   | none =>
     modifyThe State fun st => {st with footnoteRefs := st.footnoteRefs.insert strName ⟨#[refName]⟩}

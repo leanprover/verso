@@ -137,7 +137,7 @@ be used to thread state between the separate top level blocks. These environment
 the state that needs to exist across top-level-block parsing events.
 -/
 structure DocElabEnvironment where
-  ctx : DocElabContext := ⟨.missing, mkConst ``Unit, false⟩
+  ctx : DocElabContext := ⟨.missing, mkConst ``Unit, .always⟩
   docState : DocElabM.State := {}
   partState : PartElabM.State := .init (.node .none nullKind #[])
 deriving Inhabited
