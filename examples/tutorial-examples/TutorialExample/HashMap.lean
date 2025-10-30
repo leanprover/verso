@@ -23,7 +23,7 @@ This is a machine-generated tutorial used for testing the feature. Please don't 
 
 # Importing and Setup
 
-```
+```imports
 import Std.Data.HashMap
 ```
 

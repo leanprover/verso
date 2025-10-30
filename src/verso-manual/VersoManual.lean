@@ -26,6 +26,7 @@ import VersoManual.TeX
 import VersoManual.Html
 import VersoManual.Html.Style
 import VersoManual.Draft
+import VersoManual.Imports
 import VersoManual.Index
 import VersoManual.License
 import VersoManual.Glossary
