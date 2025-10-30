@@ -4,7 +4,6 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 
-module
 import VersoUtil.BinFiles.Z85
 
 open Verso.BinFiles.Z85
@@ -72,6 +71,7 @@ Encoded: nm=QNzY&b1A+]nf
 Decoded: [72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100, 33]
 Round trip successful: true
 -/
-#guard_msgs in #eval test
+#guard_msgs in
+#eval test
 
 end Test

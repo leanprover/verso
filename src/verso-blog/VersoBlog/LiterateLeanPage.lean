@@ -502,7 +502,7 @@ def elabLiteratePage (x : Ident) (path : StrLit) (mod : Ident) (config : LitPage
 
   let ctx ← runTermElabM fun _ => DocElabContext.fromGenreTerm genre
 
-  let ((), _st, st') ← liftTermElabM <| PartElabM.run ctx {} initState <| do
+  let ((), docState, partState) ← liftTermElabM <| PartElabM.run ctx {} initState <| do
     setTitle titleString (← liftDocElabM <| titleParts.mapM (elabInline ⟨·⟩))
     if let some metadata := metadata? then
       modifyThe PartElabM.State fun st => {st with partContext.metadata := some metadata}
@@ -511,7 +511,7 @@ def elabLiteratePage (x : Ident) (path : StrLit) (mod : Ident) (config : LitPage
       docFromMod path.getString mod.getId.toString config items rewriter
 
 
-  let finished := st'.partContext.toPartFrame.close 0
+  let finished := partState.partContext.toPartFrame.close 0
   let finished :=
     -- Obey the Markdown convention of a single top-level header being the title of the document, if it's been followed
     if let .mk _ _ _ «meta» #[] #[p] _ := finished then
@@ -523,7 +523,7 @@ def elabLiteratePage (x : Ident) (path : StrLit) (mod : Ident) (config : LitPage
     else finished
 
   let ty ← ``(VersoDoc $genre)
-  elabCommand <| ← `(def $x : $ty := $(← finished.toVersoDoc genre))
+  elabCommand <| ← `(def $x : $ty := $(← finished.toVersoDoc genre docState partState))
 
 end Literate
 open Literate

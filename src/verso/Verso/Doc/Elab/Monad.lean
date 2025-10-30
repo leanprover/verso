@@ -110,27 +110,25 @@ def headerStxToString (env : Environment) : Syntax → String
 structure DocElabContext where
   genreSyntax : Syntax
   genre : Expr
+
+  /--
+  When this is false, a footnote ref like `[^note]` or a link ref like {lit}`[wikipedia]` will be
+  treated as an error if the current {lit}`PartElabM` state does not contain a definition for the
+  ref.
+
+  When this is true, undefined references in inline text will be ignored until a later time.
+  -/
+  allowUndefinedRefs : Bool
 deriving Inhabited
 
 def DocElabContext.fromGenreTerm (genreSyntax : Term) : TermElabM DocElabContext := do
   let genre ← Term.elabTerm genreSyntax (some (.const ``Doc.Genre []))
-  return DocElabContext.mk genreSyntax genre
+  return DocElabContext.mk genreSyntax genre true
 
 structure DocElabM.State where
   linkRefs : HashMap String DocUses := {}
   footnoteRefs : HashMap String DocUses := {}
 deriving Inhabited
-
-/--
-Creates a term denoting a {lean}`VersoDoc` value from a {lean}`FinishedPart`. This is the final step
-in turning a parsed verso doc into syntax.
--/
-def FinishedPart.toVersoDoc [Monad m] [MonadQuotation m]
-    (genreSyntax : Term)
-    (finished : FinishedPart)
-    : m Term := do
-  let finishedSyntax ← finished.toSyntax genreSyntax
-  ``(VersoDoc.mk (fun () => $finishedSyntax))
 
 structure PartElabM.State where
   partContext : PartContext
@@ -179,12 +177,17 @@ instance : MonadWithReaderOf Core.Context PartElabM := inferInstanceAs <| MonadW
 
 instance : MonadWithReaderOf Term.Context PartElabM := inferInstanceAs <| MonadWithReaderOf Term.Context (ReaderT DocElabContext (StateT DocElabM.State (StateT PartElabM.State TermElabM)))
 
+instance : MonadWithReaderOf DocElabContext PartElabM := inferInstanceAs <| MonadWithReaderOf DocElabContext (ReaderT DocElabContext (StateT DocElabM.State (StateT PartElabM.State TermElabM)))
+
 instance : MonadReaderOf DocElabContext PartElabM := inferInstanceAs <| MonadReaderOf DocElabContext (ReaderT DocElabContext (StateT DocElabM.State (StateT PartElabM.State TermElabM)))
 
 instance : MonadWithOptions PartElabM := inferInstanceAs <| MonadWithOptions (ReaderT DocElabContext (StateT DocElabM.State (StateT PartElabM.State TermElabM)))
 
 def PartElabM.withFileMap (fileMap : FileMap) (act : PartElabM α) : PartElabM α :=
   fun ρ ρ' σ ctxt σ' mctxt rw cctxt => act ρ ρ' σ ctxt σ' mctxt rw {cctxt with fileMap := fileMap}
+
+def withAllowUndefinedRefs [MonadWithReaderOf DocElabContext m] [Monad m] (b : Bool) : m a → m a :=
+  withTheReader DocElabContext ({ · with allowUndefinedRefs := b})
 
 /--
 Text elaboration monad.
@@ -359,7 +362,7 @@ def PartElabM.addLinkDef (refName : TSyntax `str) (url : String) : PartElabM Uni
     modifyThe State fun st => {st with linkDefs := st.linkDefs.insert strName ⟨refName, url⟩}
 
   | some ⟨_, url'⟩ =>
-    throwErrorAt refName "Already defined as '{url'}'"
+    throwErrorAt refName "Already defined link [{strName}] as '{url'}'"
 
 def DocElabM.addLinkRef (refName : TSyntax `str) : DocElabM (TSyntax `term) := do
   let strName := refName.getString
@@ -393,12 +396,14 @@ def PartElabM.addFootnoteDef (refName : TSyntax `str) (content : Array (TSyntax 
     }
     Meta.addInstance n AttributeKind.global (eval_prio default)
     modifyThe State fun st => {st with footnoteDefs := st.footnoteDefs.insert strName ⟨refName, content⟩}
-  | some ⟨_, content⟩ =>
-    throwErrorAt refName "Already defined as '{content}'"
+  | some _ =>
+    throwErrorAt refName m!"Already defined footnote [^{strName}]"
 
 def DocElabM.addFootnoteRef (refName : TSyntax `str) : DocElabM (TSyntax `term) := do
   let strName := refName.getString
   let genre := (← readThe DocElabContext).genreSyntax
+  if !(← readThe DocElabContext).allowUndefinedRefs && !(← readThe PartElabM.State).footnoteDefs.contains strName then
+    throwErrorAt refName m!"Footnote reference [^{strName}] is not defined yet when it occurs"
   match (← getThe State).footnoteRefs[strName]? with
   | none =>
     modifyThe State fun st => {st with footnoteRefs := st.footnoteRefs.insert strName ⟨#[refName]⟩}
@@ -430,6 +435,7 @@ def closes (openTok closeTok : Syntax) : DocElabM Unit := do
   Hover.addCustomHover closeTok (.markdown s!"Closes line {line + 1}: ``````````{lineStr}``````````")
 
 
+
 abbrev InlineExpander := Syntax → DocElabM (TSyntax `term)
 
 initialize inlineExpanderAttr : KeyedDeclsAttribute InlineExpander ←
@@ -442,6 +448,36 @@ unsafe def inlineExpandersForUnsafe (x : Name) : DocElabM (Array InlineExpander)
 @[implemented_by inlineExpandersForUnsafe]
 opaque inlineExpandersFor (x : Name) : DocElabM (Array InlineExpander)
 
+
+/--
+Creates a term denoting a {lean}`VersoDoc` value from a {lean}`FinishedPart`. This is the final step
+in turning a parsed verso doc into syntax.
+-/
+def FinishedPart.toVersoDoc [Monad m] [MonadQuotation m] [MonadError m] [MonadLog m] [AddMessageContext m] [MonadOptions m]
+    (genreSyntax : Term)
+    (finished : FinishedPart)
+    (docElabState : DocElabM.State)
+    (partElabState : PartElabM.State)
+    : m Term := do
+
+  for (ref, uses) in docElabState.footnoteRefs do
+    if !partElabState.footnoteDefs.contains ref then
+      for use in uses.useSites do
+        throwErrorAt use m!"No definition for footnote [^{ref}]"
+  for (ref, site) in partElabState.footnoteDefs do
+    if !docElabState.footnoteRefs.contains ref then
+      logWarningAt site.defSite m!"Unused footnote [^{ref}]"
+
+  for (ref, uses) in docElabState.linkRefs do
+    if !partElabState.linkDefs.contains ref then
+      for use in uses.useSites do
+        throwErrorAt use m!"No definition for link [{ref}]"
+  for (ref, site) in partElabState.linkDefs do
+    if !docElabState.linkRefs.contains ref then
+      logWarningAt site.defSite m!"Unused link [{ref}]"
+
+  let finishedSyntax ← finished.toSyntax genreSyntax
+  ``(VersoDoc.mk (fun () => $finishedSyntax))
 
 
 abbrev BlockExpander := Syntax → DocElabM (TSyntax `term)
