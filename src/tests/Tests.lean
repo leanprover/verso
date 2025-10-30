@@ -13,3 +13,4 @@ import Tests.ParserRegression
 import Tests.TexUnit
 import Tests.Paths
 import Tests.HtmlEntities
+import Tests.Zip

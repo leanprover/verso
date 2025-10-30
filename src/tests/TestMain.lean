@@ -55,10 +55,21 @@ def testTexOutput (dir : System.FilePath) (doc : Verso.Doc.VersoDoc Verso.Genre.
     runTest
   }
 
+def testZip (_ : Config) : IO Unit := do
+  testExtract #[] .store
+  testExtract #[] .deflate
+  testExtract #[("empty", .empty)] .store
+  testExtract #[("empty", .empty)] .deflate
+  testExtract files .store
+  testExtract files .deflate
+where
+  files := #[("x.txt", "abcdef\nlkjlkj".bytes), ("y.txt", "".bytes), ("z.txt", "abc\n\n".bytes)]
+
 open Verso.Integration in
 def tests := [
   testStemmer,
-  testTexOutput "sample-doc" SampleDoc.doc
+  testTexOutput "sample-doc" SampleDoc.doc,
+  testZip
 ]
 
 def getConfig (config : Config) : List String → IO Config
