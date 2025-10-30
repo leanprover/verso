@@ -37,10 +37,10 @@ class HasNote (name : String) (doc : Name) (genre : Genre) where
   contents : Array (Inline genre)
 
 private def linkRefName [Monad m] [MonadQuotation m] (docName : Name) (ref : TSyntax `str) : m Term := do
-  ``(HasLink.url $(quote ref.getString) $(quote docName) (self := _))
+  ``(HasLink.url $(quote ref.getString) $(quote docName))
 
 private def footnoteRefName [Monad m] [MonadQuotation m] (genre : Term) (docName : Name) (ref : TSyntax `str) : m Term :=
-  ``(HasNote.contents $(quote ref.getString) $(quote docName) (genre := $genre) (self := _))
+  ``(HasNote.contents $(quote ref.getString) $(quote docName) (genre := $genre))
 
 
 -- For use in IDE features and previews and such
@@ -134,6 +134,7 @@ structure PartElabM.State where
   partContext : PartContext
   linkDefs : HashMap String (DocDef String) := {}
   footnoteDefs : HashMap String (DocDef (Array (TSyntax `term))) := {}
+  deferredBlocks : Array (Name × Term) := #[]
 deriving Inhabited
 
 def PartElabM.State.init (title : Syntax) (expandedTitle : Option (String × Array (TSyntax `term)) := none) : PartElabM.State where
@@ -278,67 +279,13 @@ def PartElabM.currentLevel : PartElabM Nat := do return (← getThe State).curre
 def PartElabM.setTitle (titlePreview : String) (titleInlines : Array (TSyntax `term)) : PartElabM Unit := modifyThe State fun st =>
   {st with partContext.expandedTitle := some (titlePreview, titleInlines)}
 
-/--
-Traverses the Expr structure to find and list MVars that represent undefined links or footnotes.
-It is a simplifying precondition that instantiateMVars has just been called on the argument.
--/
-def findTypeclassInstances : Expr → MetaM (Array (Expr × Expr))
-  | .app t1 t2 => do return (← findTypeclassInstances t1) ++ (← findTypeclassInstances t2)
-  | e@(.mvar _) => do
-    let ty ← Meta.inferType e
-    if ty.isAppOf ``HasLink || ty.isAppOf ``HasNote then
-      pure #[(e, ty)]
-    else
-      pure #[]
-  | .lam _ t b _ | .forallE _ t b _ => do return (← findTypeclassInstances t) ++ (← findTypeclassInstances b)
-  | .letE _ t d b _ => do
-    return (← findTypeclassInstances t) ++ (← findTypeclassInstances d) ++ (← findTypeclassInstances b)
-  | .mdata _ e | .proj _ _ e => findTypeclassInstances e
-  | .sort .. | .fvar .. | .bvar .. | .const .. | .lit .. => pure #[]
-
-def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := withRef block <| do
-  let genre := (← readThe DocElabContext).genre
-
-  let mut type := .app (.const ``Doc.Block []) genre
-  let mut blockExpr ← Term.elabTerm block (some type)
-
-  -- Find links and footnotes by traversing blockExpr
-  -- It simplifies the logic of findTypeclassInstances to have the MVars freshly instantiated
-  blockExpr ← instantiateMVars blockExpr
-  let links ← findTypeclassInstances blockExpr
-
-  -- Wrap the type and corresponding expression in binders for the links and notes
-  type ← Meta.mkForallFVars (links.map (·.1)) type (binderInfoForMVars := .instImplicit)
-  blockExpr ← links.foldrM (init := blockExpr) fun (mv, mvty) t =>
-    (.lam `inst mvty · .instImplicit) <$> t.abstractM #[mv]
-
-  -- Wrap auto-bound implicits and global variables (this is possibly overly defensive)
-  type ← Meta.mkForallFVars (← Term.addAutoBoundImplicits #[] none) type
-
-  -- Replace any universe metavariables with universe variables; report errors
-  type ← Term.levelMVarToParam type
-  match sortDeclLevelParams [] [] (collectLevelParams {} type |>.params) with
-  | Except.error msg      => throwErrorAt block msg
-  | Except.ok levelParams =>
-    Term.synthesizeSyntheticMVarsNoPostponing
-    type ← instantiateMVars type
-    blockExpr ← Term.ensureHasType (some type) (← instantiateMVars blockExpr)
-    let name ← mkFreshUserName `block
-    let decl := Declaration.defnDecl {
-      name,
-      levelParams,
-      type,
-      value := blockExpr,
-      hints := .abbrev,
-      safety := .safe
+def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := do
+  let name ← mkFreshUserName `block
+  modifyThe PartElabM.State fun st =>
+    { st with
+      partContext.blocks := st.partContext.blocks.push (mkIdent name)
+      deferredBlocks := st.deferredBlocks.push (name, block)
     }
-
-    -- This is possibly overly defensive (or ineffectual)
-    Term.ensureNoUnassignedMVars decl
-    addAndCompile decl
-    modifyThe PartElabM.State fun st =>
-      { st with partContext.blocks := st.partContext.blocks.push (mkIdent name) }
-
 
 def PartElabM.addPart (finished : FinishedPart) : PartElabM Unit := modifyThe State fun st =>
   {st with partContext.priorParts := st.partContext.priorParts.push finished}
@@ -453,13 +400,15 @@ opaque inlineExpandersFor (x : Name) : DocElabM (Array InlineExpander)
 Creates a term denoting a {lean}`VersoDoc` value from a {lean}`FinishedPart`. This is the final step
 in turning a parsed verso doc into syntax.
 -/
-def FinishedPart.toVersoDoc [Monad m] [MonadQuotation m] [MonadError m] [MonadLog m] [AddMessageContext m] [MonadOptions m]
+def FinishedPart.toVersoDoc
     (genreSyntax : Term)
     (finished : FinishedPart)
+    (ctx : DocElabContext)
     (docElabState : DocElabM.State)
     (partElabState : PartElabM.State)
-    : m Term := do
+    : TermElabM Term := do
 
+  -- Check internal refs
   for (ref, uses) in docElabState.footnoteRefs do
     if !partElabState.footnoteDefs.contains ref then
       for use in uses.useSites do
@@ -476,6 +425,36 @@ def FinishedPart.toVersoDoc [Monad m] [MonadQuotation m] [MonadError m] [MonadLo
     if !docElabState.linkRefs.contains ref then
       logWarningAt site.defSite m!"Unused link [{ref}]"
 
+  -- Add and compile blocks
+  for (name, block) in partElabState.deferredBlocks do
+    let mut type := .app (.const ``Doc.Block []) ctx.genre
+    let mut blockExpr ← Term.elabTerm block (some type)
+
+    -- Wrap auto-bound implicits and global variables (this is possibly overly defensive)
+    type ← Meta.mkForallFVars (← Term.addAutoBoundImplicits #[] none) type
+
+    -- Replace any universe metavariables with universe variables; report errors
+    type ← Term.levelMVarToParam type
+    match sortDeclLevelParams [] [] (collectLevelParams {} type |>.params) with
+    | Except.error msg      => throwErrorAt block msg
+    | Except.ok levelParams =>
+      Term.synthesizeSyntheticMVarsNoPostponing
+      type ← instantiateMVars type
+      blockExpr ← Term.ensureHasType (some type) (← instantiateMVars blockExpr)
+      let decl := Declaration.defnDecl {
+        name,
+        levelParams,
+        type,
+        value := blockExpr,
+        hints := .abbrev,
+        safety := .safe
+      }
+
+      -- This is possibly overly defensive (or ineffectual)
+      Term.ensureNoUnassignedMVars decl
+      addAndCompile decl
+
+  -- Generate and return outermost syntax
   let finishedSyntax ← finished.toSyntax genreSyntax
   ``(VersoDoc.mk (fun () => $finishedSyntax))
 

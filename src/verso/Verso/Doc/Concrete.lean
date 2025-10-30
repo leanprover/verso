@@ -78,7 +78,7 @@ private def elabDoc (genre: Term) (title: StrLit) (topLevelBlocks : Array Syntax
   let finished := partElabState.partContext.toPartFrame.close endPos
 
   pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
-  finished.toVersoDoc genre docElabState partElabState
+  finished.toVersoDoc genre ctx docElabState partElabState
 
 elab "#docs" "(" genre:term ")" n:ident title:str ":=" ":::::::" text:document ":::::::" : command => do
   findGenreCmd genre
@@ -207,7 +207,7 @@ private def finishDoc (genreSyntax : Term) (title : StrLit) : Command.CommandEla
   let finished := versoEnv.partState.partContext.toPartFrame.close endPos
 
   let n := mkIdentFrom title (← currentDocName)
-  let doc ← finished.toVersoDoc genreSyntax versoEnv.docState versoEnv.partState
+  let doc ← Command.runTermElabM fun _ => finished.toVersoDoc genreSyntax versoEnv.ctx versoEnv.docState versoEnv.partState
   let ty ← ``(VersoDoc $genreSyntax)
   Command.elabCommand (← `(def $n : $ty := $doc))
 
