@@ -14,3 +14,4 @@ import Tests.ParserRegression
 import Tests.Paths
 import Tests.Refs
 import Tests.TexUnit
+import Tests.Z85
