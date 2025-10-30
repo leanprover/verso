@@ -67,16 +67,16 @@ open Verso.Doc Elab Concrete
 open Lean.Elab Command Term
 open PartElabM
 
-def getModuleWithDocs (path : StrLit) (mod : Ident) (title : StrLit) (metadata? : Option Term) (genre : Syntax := mkIdent ``Manual ) : TermElabM Name :=
+def getModuleWithDocs (path : StrLit) (mod : Ident) (title : StrLit) (metadata? : Option Term) (genre : Syntax := mkIdent ``Manual) : TermElabM Name :=
   withTraceNode `verso.blog.literate (fun _ => pure m!"Literate '{title.getString}'") do
 
   let titleParts ← stringToInlines title
   let titleString := inlinesToString (← getEnv) titleParts
   let initState : PartElabM.State := .init (.node .none nullKind titleParts)
 
-  let g ← elabTerm genre (some (mkConst ``Manual))
+  let g ← elabTerm genre (some (.const ``Genre []))
 
-  let (titleTerm, _st) ← DocElabM.run genre g {} initState <| do
+  let (titleTerm, _st) ← DocElabM.run ⟨genre, g⟩ {} initState <| do
     titleParts.mapM (elabInline ⟨·⟩)
 
   let modJson ← withTraceNode `verso.blog.literate.loadMod (fun _ => pure m!"Loading '{mod}' in '{path}'") <|

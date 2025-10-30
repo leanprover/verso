@@ -37,14 +37,15 @@ open Lean Elab Term in
 elab_rules : term
   | `(inlines!%$tk$s) => do
     let inls ← stringToInlines s
+    let gTerm ← `(term|_%$tk)
     let g ← Meta.mkFreshExprMVar (some (.const ``Verso.Doc.Genre []))
-    let (tms, _) ← DocElabM.run tk g {} (.init (← `(foo))) <| inls.mapM (elabInline ⟨·⟩)
+    let (tms, _) ← DocElabM.run ⟨gTerm, g⟩ {} (.init (← `(foo))) <| inls.mapM (elabInline ⟨·⟩)
     elabTerm (← ``(Inline.concat #[ $[$tms],* ] )) none
   | `(blocks!%$tk$s) => do
     let inls ← stringToBlocks s
     let g ← Meta.mkFreshExprMVar (some (.const ``Verso.Doc.Genre []))
     let gTerm ← `(term|_%$tk)
-    let (tms, _) ← DocElabM.run gTerm g {} (.init (← `(foo))) <| inls.mapM (elabBlock ⟨·⟩)
+    let (tms, _) ← DocElabM.run ⟨gTerm, g⟩ {} (.init (← `(foo))) <| inls.mapM (elabBlock ⟨·⟩)
     elabTerm (← ``(Block.concat #[ $[$tms],* ] )) none
 
 
