@@ -37,9 +37,11 @@ def totallyUndefined : RoleExpanderOf Unit
   | (), _content => do
     `(_)
 
+-- This is not a good error message and it would be great to improve it!
 /--
 error: don't know how to synthesize placeholder for argument `head`
 context:
+doc_reconstruction✝ : Doc.DocReconstruction
 ⊢ Doc.Inline Doc.Genre.none
 -/
 #guard_msgs in

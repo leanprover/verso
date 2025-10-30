@@ -137,7 +137,7 @@ be used to thread state between the separate top level blocks. These environment
 the state that needs to exist across top-level-block parsing events.
 -/
 structure DocElabEnvironment where
-  ctx : DocElabContext := ⟨.missing, mkConst ``Unit, .always⟩
+  ctx : DocElabContext := ⟨.missing, mkConst ``Unit, .always, .none⟩
   docState : DocElabM.State := {}
   partState : PartElabM.State := .init (.node .none nullKind #[])
 deriving Inhabited
@@ -189,7 +189,7 @@ private def startDoc (genreSyntax : Term) (title: StrLit) : Command.CommandElabM
 
   modifyEnv (docEnvironmentExt.setState · ⟨ctx, initDocState, initPartState⟩)
   runPartElabInEnv <| do
-    PartElabM.setTitle titleString (← PartElabM.liftDocElabM <| titleParts.mapM (elabInline ⟨·⟩))
+    PartElabM.setTitle titleString (← titleParts.mapM (elabInline ⟨·⟩))
   return titleString
 
 private def runVersoBlock (block : TSyntax `block) : Command.CommandElabM Unit := do

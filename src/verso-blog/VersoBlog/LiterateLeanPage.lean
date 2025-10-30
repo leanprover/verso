@@ -352,7 +352,7 @@ partial def docFromMod (project : System.FilePath) (mod : String)
     match kind with
     | ``Lean.Parser.Module.header =>
       if config.header then
-        addBlock (← `(Block.other (BlockExt.highlightedCode { contextName := `name } $(quote code)) Array.mkArray0))
+        addBlock (← `(fun _ => Block.other (BlockExt.highlightedCode { contextName := `name } $(quote code)) Array.mkArray0))
       else pure ()
     | ``moduleDoc =>
       let str ← getModuleDocString code
@@ -381,17 +381,17 @@ partial def docFromMod (project : System.FilePath) (mod : String)
             priorParts := #[]
           }
         | other =>
-          addBlock (← ofBlock helper other)
+          addBlock (← `(fun _ => $(← ofBlock helper other)))
     | ``eval | ``evalBang | ``reduceCmd | ``print | ``printAxioms | ``printEqns | ``«where» | ``version | ``synth | ``check =>
-      addBlock (← `(Block.other (BlockExt.highlightedCode { contextName := `name } $(quote code)) Array.mkArray0))
+      addBlock (← `(fun _ => Block.other (BlockExt.highlightedCode { contextName := `name } $(quote code)) Array.mkArray0))
       if let some (k, msg) := getFirstMessage code then
         let sev := match k with
           | .error => "error"
           | .info => "information"
           | .warning => "warning"
-        addBlock (← ``(Block.other (Blog.BlockExt.htmlDiv $(quote sev)) (Array.mkArray1 (Block.other (BlockExt.message false ⟨$(quote k), $(quote msg)⟩ []) #[]))))
+        addBlock (← ``(fun _ => Block.other (Blog.BlockExt.htmlDiv $(quote sev)) (Array.mkArray1 (Block.other (BlockExt.message false ⟨$(quote k), $(quote msg)⟩ []) #[]))))
     | _ =>
-      addBlock (← `(Block.other (BlockExt.highlightedCode { contextName := `name } $(quote code)) Array.mkArray0))
+      addBlock (← `(fun _ => Block.other (BlockExt.highlightedCode { contextName := `name } $(quote code)) Array.mkArray0))
   closePartsUntil 0 ⟨0⟩ -- TODO endPos?
 where
   arr (xs : Array Term) : PartElabM Term := do
@@ -406,13 +406,13 @@ where
     let inlines ← txt.mapM (ofInline helper)
     ``(Block.para $(← arr inlines))
   | .ul _ _ lis => do
-    ``(Doc.Block.ul $(← arr (← lis.mapM (ofLi helper))))
+    ``(Block.ul $(← arr (← lis.mapM (ofLi helper))))
   | .ol _ start _ lis => do
-    ``(Doc.Block.ol $(quote (start : Int)) $(← arr (← lis.mapM (ofLi helper))))
+    ``(Block.ol $(quote (start : Int)) $(← arr (← lis.mapM (ofLi helper))))
   | .code info lang _ strs => do
     let str := strs.toList |> String.join
     if info.isEmpty && lang.isEmpty then
-      ``(Doc.Block.code $(quote str))
+      ``(Block.code $(quote str))
     else
       let msg : MessageData :=
         "Info and language information in code blocks is not supported:" ++

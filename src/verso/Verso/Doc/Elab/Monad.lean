@@ -127,11 +127,13 @@ structure DocElabContext where
   genre : Expr
 
   refsAllowed : RefsAllowed
+
+  docReconstructionName : Option Name
 deriving Inhabited
 
 def DocElabContext.fromGenreTerm (genreSyntax : Term) : TermElabM DocElabContext := do
   let genre ← Term.elabTerm genreSyntax (some (.const ``Doc.Genre []))
-  return DocElabContext.mk genreSyntax genre .always
+  return DocElabContext.mk genreSyntax genre .always (.some <| ← mkFreshUserName `drn)
 
 structure DocElabM.State where
   linkRefs : HashMap String DocUses := {}
@@ -143,6 +145,7 @@ structure PartElabM.State where
   linkDefs : HashMap String (DocDef String) := {}
   footnoteDefs : HashMap String (DocDef (Array (TSyntax `term))) := {}
   deferredBlocks : Array (Name × Term) := #[]
+
 deriving Inhabited
 
 def PartElabM.State.init (title : Syntax) (expandedTitle : Option (String × Array (TSyntax `term)) := none) : PartElabM.State where
@@ -195,8 +198,11 @@ instance : MonadWithOptions PartElabM := inferInstanceAs <| MonadWithOptions (Re
 def PartElabM.withFileMap (fileMap : FileMap) (act : PartElabM α) : PartElabM α :=
   fun ρ ρ' σ ctxt σ' mctxt rw cctxt => act ρ ρ' σ ctxt σ' mctxt rw {cctxt with fileMap := fileMap}
 
-def withAllowUndefinedRefs [MonadWithReaderOf DocElabContext m] [Monad m] (b : RefsAllowed) : m a → m a :=
+def withRefsAllowed [MonadWithReaderOf DocElabContext m] [Monad m] (b : RefsAllowed) : m a → m a :=
   withTheReader DocElabContext ({ · with refsAllowed := b})
+
+def withDocReconstruction [MonadWithReaderOf DocElabContext m] [Monad m] (drn : Option Name) : m a → m a :=
+  withTheReader DocElabContext ({ · with docReconstructionName := drn})
 
 /--
 Text elaboration monad.
@@ -287,11 +293,17 @@ def PartElabM.currentLevel : PartElabM Nat := do return (← getThe State).curre
 def PartElabM.setTitle (titlePreview : String) (titleInlines : Array (TSyntax `term)) : PartElabM Unit := modifyThe State fun st =>
   {st with partContext.expandedTitle := some (titlePreview, titleInlines)}
 
+/--
+Add a block generator ()
+-/
 def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := do
   let name ← mkFreshUserName `block
+  let blockSyntax ← match (← read).docReconstructionName with
+    | .none => ``($(mkIdent name) DocReconstruction.default)
+    | .some docReconstructionRef => `($(mkIdent name) $(mkIdent docReconstructionRef))
   modifyThe PartElabM.State fun st =>
     { st with
-      partContext.blocks := st.partContext.blocks.push (mkIdent name)
+      partContext.blocks := st.partContext.blocks.push blockSyntax
       deferredBlocks := st.deferredBlocks.push (name, block)
     }
 
@@ -445,7 +457,7 @@ def FinishedPart.toVersoDoc
 
   -- Add and compile blocks
   for (name, block) in partElabState.deferredBlocks do
-    let mut type := .app (.const ``Doc.Block []) ctx.genre
+    let mut type ← Term.elabType (← ``(DocReconstruction → Doc.Block $genreSyntax))
     let mut blockExpr ← Term.elabTerm block (some type)
 
     -- Wrap auto-bound implicits and global variables (this is possibly overly defensive)
@@ -474,7 +486,9 @@ def FinishedPart.toVersoDoc
 
   -- Generate and return outermost syntax
   let finishedSyntax ← finished.toSyntax genreSyntax
-  ``(VersoDoc.mk (fun () => $finishedSyntax))
+  let .some docReconstructionName := ctx.docReconstructionName
+    | throwError "No doc reconstruction name available"
+  ``(VersoDoc.mk (fun $(mkIdent docReconstructionName) => $finishedSyntax))
 
 
 abbrev BlockExpander := Syntax → DocElabM (TSyntax `term)

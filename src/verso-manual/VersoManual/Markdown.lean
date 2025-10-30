@@ -318,7 +318,7 @@ private partial def addPartFromMarkdownAux {m} [Monad m]
       priorParts := #[]
     }
   | b => do
-    PartElabM.addBlock (← blockFromMarkdownAux b)
+    PartElabM.addBlock (← `(fun _ => $(← blockFromMarkdownAux b)))
 
 /--
 Adds blocks from Markdown, treating top-level headers as new parts.
@@ -375,7 +375,7 @@ def testAddPartFromMarkdown (input : String) : Elab.TermElabM String := do
     for block in parsed.blocks do
       levels ← addPartFromMarkdown block levels
     closePartsUntil 0 0
-  let (_, _, part) ← addParts.run ⟨Syntax.node .none identKind #[], mkConst ``Manual, .always⟩ default default
+  let (_, _, part) ← addParts.run ⟨Syntax.node .none identKind #[], mkConst ``Manual, .always, .none⟩ default default
   part.partContext.priorParts.toList.map displayPartStructure |> String.join |> pure
 
 /--
