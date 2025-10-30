@@ -7,6 +7,7 @@ Author: David Thrane Christiansen
 import Std.Data.HashSet
 import Std.Data.TreeSet
 import Verso.Doc
+import Verso.Doc.Elab
 import Verso.Doc.Html
 import Verso.Doc.TeX
 import MultiVerso
@@ -698,6 +699,16 @@ instance : Inhabited BlockDescr := ⟨⟨id, default, default, default, default,
 
 syntax (name := inline_extension) "inline_extension" ident : attr
 syntax (name := block_extension) "block_extension" ident : attr
+
+open Lean in
+def manualGenreElabContext : CoreM Elab.DocElabContext := do
+  let genre ← ``(Manual)
+  let g := Expr.const ``Manual []
+  let name ← mkFreshUserName `manual
+  return Elab.DocElabContext.mk genre g name .always
+
+@[deprecated moduleGenreElabContext (since := "2025-10-30")]
+def moduleGenreElabContext := manualGenreElabContext
 
 open Lean in
 initialize

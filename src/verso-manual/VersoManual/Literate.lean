@@ -62,11 +62,6 @@ instance : LoadLiterate Manual where
 
   docstringPart lvl title contents := .other (Block.literateDocstringPart lvl) (#[.para title] ++ contents)
 
-def moduleGenreElabContext [Monad m] [MonadRef m] [MonadQuotation m] : m Doc.Elab.DocElabContext := do
-  let genre ← ``(Manual)
-  let g := Expr.const ``Manual []
-  return ⟨genre, g, .always⟩
-
 
 open Lean.Doc.Syntax
 open Verso.Doc Elab Concrete
@@ -81,7 +76,7 @@ def getModuleWithDocs (path : StrLit) (mod : Ident) (title : StrLit) : PartElabM
 
   let g := Expr.const ``Manual []
 
-  let (titleTerm, _st) ← DocElabM.run (← moduleGenreElabContext) {} initState <| do
+  let (titleTerm, _st) ← DocElabM.run (← manualGenreElabContext) {} initState <| do
     titleParts.mapM (elabInline ⟨·⟩)
 
   let modJson ← withTraceNode `verso.blog.literate.loadMod (fun _ => pure m!"Loading '{mod}' in '{path}'") <|
