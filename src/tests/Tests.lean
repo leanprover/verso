@@ -12,5 +12,5 @@ import Tests.Integration
 import Tests.Integration.SampleDoc
 import Tests.ParserRegression
 import Tests.Paths
--- import Tests.Refs
+import Tests.Refs
 import Tests.TexUnit
