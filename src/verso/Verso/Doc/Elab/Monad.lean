@@ -37,10 +37,10 @@ class HasNote (name : String) (doc : Name) (genre : Genre) where
   contents : Array (Inline genre)
 
 private def linkRefName [Monad m] [MonadQuotation m] (docName : Name) (ref : TSyntax `str) : m Term := do
-  ``(HasLink.url $(quote ref.getString) $(quote docName) (self := _))
+  ``(HasLink.url $(quote ref.getString) $(quote docName))
 
 private def footnoteRefName [Monad m] [MonadQuotation m] (genre : Term) (docName : Name) (ref : TSyntax `str) : m Term :=
-  ``(HasNote.contents $(quote ref.getString) $(quote docName) (genre := $genre) (self := _))
+  ``(HasNote.contents $(quote ref.getString) $(quote docName) (genre := $genre))
 
 
 -- For use in IDE features and previews and such
@@ -107,35 +107,42 @@ def headerStxToString (env : Environment) : Syntax → String
   | headerStx => dbg_trace "didn't understand {headerStx} for string"
     "<missing>"
 
+/--
+Specifies the elaboration behavior of inline references in Verso.
+-/
+inductive RefsAllowed : Type where
+  /--
+  A footnote ref like `[^note]` or a link ref like {lit}`[wikipedia]` are treated as an error if the
+  current {lit}`PartElabM` state does not contain a definition for the ref.
+  -/
+  | onlyIfDefined
+  /--
+  Undefined link and footnote references in inline text are permitted with no warning.
+  -/
+  | always
+deriving Inhabited, BEq
+
 structure DocElabContext where
   genreSyntax : Syntax
   genre : Expr
+
+  refsAllowed : RefsAllowed
 deriving Inhabited
 
 def DocElabContext.fromGenreTerm (genreSyntax : Term) : TermElabM DocElabContext := do
   let genre ← Term.elabTerm genreSyntax (some (.const ``Doc.Genre []))
-  return DocElabContext.mk genreSyntax genre
+  return DocElabContext.mk genreSyntax genre .always
 
 structure DocElabM.State where
   linkRefs : HashMap String DocUses := {}
   footnoteRefs : HashMap String DocUses := {}
 deriving Inhabited
 
-/--
-Creates a term denoting a {lean}`VersoDoc` value from a {lean}`FinishedPart`. This is the final step
-in turning a parsed verso doc into syntax.
--/
-def FinishedPart.toVersoDoc [Monad m] [MonadQuotation m]
-    (genreSyntax : Term)
-    (finished : FinishedPart)
-    : m Term := do
-  let finishedSyntax ← finished.toSyntax genreSyntax
-  ``(VersoDoc.mk (fun () => $finishedSyntax))
-
 structure PartElabM.State where
   partContext : PartContext
   linkDefs : HashMap String (DocDef String) := {}
   footnoteDefs : HashMap String (DocDef (Array (TSyntax `term))) := {}
+  deferredBlocks : Array (Name × Term) := #[]
 deriving Inhabited
 
 def PartElabM.State.init (title : Syntax) (expandedTitle : Option (String × Array (TSyntax `term)) := none) : PartElabM.State where
@@ -179,12 +186,17 @@ instance : MonadWithReaderOf Core.Context PartElabM := inferInstanceAs <| MonadW
 
 instance : MonadWithReaderOf Term.Context PartElabM := inferInstanceAs <| MonadWithReaderOf Term.Context (ReaderT DocElabContext (StateT DocElabM.State (StateT PartElabM.State TermElabM)))
 
+instance : MonadWithReaderOf DocElabContext PartElabM := inferInstanceAs <| MonadWithReaderOf DocElabContext (ReaderT DocElabContext (StateT DocElabM.State (StateT PartElabM.State TermElabM)))
+
 instance : MonadReaderOf DocElabContext PartElabM := inferInstanceAs <| MonadReaderOf DocElabContext (ReaderT DocElabContext (StateT DocElabM.State (StateT PartElabM.State TermElabM)))
 
 instance : MonadWithOptions PartElabM := inferInstanceAs <| MonadWithOptions (ReaderT DocElabContext (StateT DocElabM.State (StateT PartElabM.State TermElabM)))
 
 def PartElabM.withFileMap (fileMap : FileMap) (act : PartElabM α) : PartElabM α :=
   fun ρ ρ' σ ctxt σ' mctxt rw cctxt => act ρ ρ' σ ctxt σ' mctxt rw {cctxt with fileMap := fileMap}
+
+def withAllowUndefinedRefs [MonadWithReaderOf DocElabContext m] [Monad m] (b : RefsAllowed) : m a → m a :=
+  withTheReader DocElabContext ({ · with refsAllowed := b})
 
 /--
 Text elaboration monad.
@@ -275,67 +287,13 @@ def PartElabM.currentLevel : PartElabM Nat := do return (← getThe State).curre
 def PartElabM.setTitle (titlePreview : String) (titleInlines : Array (TSyntax `term)) : PartElabM Unit := modifyThe State fun st =>
   {st with partContext.expandedTitle := some (titlePreview, titleInlines)}
 
-/--
-Traverses the Expr structure to find and list MVars that represent undefined links or footnotes.
-It is a simplifying precondition that instantiateMVars has just been called on the argument.
--/
-def findTypeclassInstances : Expr → MetaM (Array (Expr × Expr))
-  | .app t1 t2 => do return (← findTypeclassInstances t1) ++ (← findTypeclassInstances t2)
-  | e@(.mvar _) => do
-    let ty ← Meta.inferType e
-    if ty.isAppOf ``HasLink || ty.isAppOf ``HasNote then
-      pure #[(e, ty)]
-    else
-      pure #[]
-  | .lam _ t b _ | .forallE _ t b _ => do return (← findTypeclassInstances t) ++ (← findTypeclassInstances b)
-  | .letE _ t d b _ => do
-    return (← findTypeclassInstances t) ++ (← findTypeclassInstances d) ++ (← findTypeclassInstances b)
-  | .mdata _ e | .proj _ _ e => findTypeclassInstances e
-  | .sort .. | .fvar .. | .bvar .. | .const .. | .lit .. => pure #[]
-
-def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := withRef block <| do
-  let genre := (← readThe DocElabContext).genre
-
-  let mut type := .app (.const ``Doc.Block []) genre
-  let mut blockExpr ← Term.elabTerm block (some type)
-
-  -- Find links and footnotes by traversing blockExpr
-  -- It simplifies the logic of findTypeclassInstances to have the MVars freshly instantiated
-  blockExpr ← instantiateMVars blockExpr
-  let links ← findTypeclassInstances blockExpr
-
-  -- Wrap the type and corresponding expression in binders for the links and notes
-  type ← Meta.mkForallFVars (links.map (·.1)) type (binderInfoForMVars := .instImplicit)
-  blockExpr ← links.foldrM (init := blockExpr) fun (mv, mvty) t =>
-    (.lam `inst mvty · .instImplicit) <$> t.abstractM #[mv]
-
-  -- Wrap auto-bound implicits and global variables (this is possibly overly defensive)
-  type ← Meta.mkForallFVars (← Term.addAutoBoundImplicits #[] none) type
-
-  -- Replace any universe metavariables with universe variables; report errors
-  type ← Term.levelMVarToParam type
-  match sortDeclLevelParams [] [] (collectLevelParams {} type |>.params) with
-  | Except.error msg      => throwErrorAt block msg
-  | Except.ok levelParams =>
-    Term.synthesizeSyntheticMVarsNoPostponing
-    type ← instantiateMVars type
-    blockExpr ← Term.ensureHasType (some type) (← instantiateMVars blockExpr)
-    let name ← mkFreshUserName `block
-    let decl := Declaration.defnDecl {
-      name,
-      levelParams,
-      type,
-      value := blockExpr,
-      hints := .abbrev,
-      safety := .safe
+def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := do
+  let name ← mkFreshUserName `block
+  modifyThe PartElabM.State fun st =>
+    { st with
+      partContext.blocks := st.partContext.blocks.push (mkIdent name)
+      deferredBlocks := st.deferredBlocks.push (name, block)
     }
-
-    -- This is possibly overly defensive (or ineffectual)
-    Term.ensureNoUnassignedMVars decl
-    addAndCompile decl
-    modifyThe PartElabM.State fun st =>
-      { st with partContext.blocks := st.partContext.blocks.push (mkIdent name) }
-
 
 def PartElabM.addPart (finished : FinishedPart) : PartElabM Unit := modifyThe State fun st =>
   {st with partContext.priorParts := st.partContext.priorParts.push finished}
@@ -359,10 +317,16 @@ def PartElabM.addLinkDef (refName : TSyntax `str) (url : String) : PartElabM Uni
     modifyThe State fun st => {st with linkDefs := st.linkDefs.insert strName ⟨refName, url⟩}
 
   | some ⟨_, url'⟩ =>
-    throwErrorAt refName "Already defined as '{url'}'"
+    throwErrorAt refName "Already defined link [{strName}] as '{url'}'"
 
 def DocElabM.addLinkRef (refName : TSyntax `str) : DocElabM (TSyntax `term) := do
   let strName := refName.getString
+  match (← readThe DocElabContext).refsAllowed with
+    | .always => pure ()
+    | .onlyIfDefined =>
+      if !(← readThe PartElabM.State).linkDefs.contains strName then
+        throwErrorAt refName m!"Link reference [{strName}] does not have a definition"
+
   match (← getThe State).linkRefs[strName]? with
   | none =>
     modifyThe State fun st => {st with linkRefs := st.linkRefs.insert strName ⟨#[refName]⟩}
@@ -393,12 +357,18 @@ def PartElabM.addFootnoteDef (refName : TSyntax `str) (content : Array (TSyntax 
     }
     Meta.addInstance n AttributeKind.global (eval_prio default)
     modifyThe State fun st => {st with footnoteDefs := st.footnoteDefs.insert strName ⟨refName, content⟩}
-  | some ⟨_, content⟩ =>
-    throwErrorAt refName "Already defined as '{content}'"
+  | some _ =>
+    throwErrorAt refName m!"Already defined footnote [^{strName}]"
 
 def DocElabM.addFootnoteRef (refName : TSyntax `str) : DocElabM (TSyntax `term) := do
   let strName := refName.getString
   let genre := (← readThe DocElabContext).genreSyntax
+  match (← readThe DocElabContext).refsAllowed with
+    | .always => pure ()
+    | .onlyIfDefined =>
+      if !(← readThe PartElabM.State).footnoteDefs.contains strName then
+        throwErrorAt refName m!"Footnote reference [^{strName}] does not have a definition"
+
   match (← getThe State).footnoteRefs[strName]? with
   | none =>
     modifyThe State fun st => {st with footnoteRefs := st.footnoteRefs.insert strName ⟨#[refName]⟩}
@@ -430,6 +400,7 @@ def closes (openTok closeTok : Syntax) : DocElabM Unit := do
   Hover.addCustomHover closeTok (.markdown s!"Closes line {line + 1}: ``````````{lineStr}``````````")
 
 
+
 abbrev InlineExpander := Syntax → DocElabM (TSyntax `term)
 
 initialize inlineExpanderAttr : KeyedDeclsAttribute InlineExpander ←
@@ -442,6 +413,68 @@ unsafe def inlineExpandersForUnsafe (x : Name) : DocElabM (Array InlineExpander)
 @[implemented_by inlineExpandersForUnsafe]
 opaque inlineExpandersFor (x : Name) : DocElabM (Array InlineExpander)
 
+
+/--
+Creates a term denoting a {lean}`VersoDoc` value from a {lean}`FinishedPart`. This is the final step
+in turning a parsed verso doc into syntax.
+-/
+def FinishedPart.toVersoDoc
+    (genreSyntax : Term)
+    (finished : FinishedPart)
+    (ctx : DocElabContext)
+    (docElabState : DocElabM.State)
+    (partElabState : PartElabM.State)
+    : TermElabM Term := do
+
+  -- Check internal refs
+  for (ref, uses) in docElabState.footnoteRefs do
+    if !partElabState.footnoteDefs.contains ref then
+      for use in uses.useSites do
+        throwErrorAt use m!"No definition for footnote [^{ref}]"
+  for (ref, site) in partElabState.footnoteDefs do
+    if !docElabState.footnoteRefs.contains ref then
+      logWarningAt site.defSite m!"Unused footnote [^{ref}]"
+
+  for (ref, uses) in docElabState.linkRefs do
+    if !partElabState.linkDefs.contains ref then
+      for use in uses.useSites do
+        throwErrorAt use m!"No definition for link [{ref}]"
+  for (ref, site) in partElabState.linkDefs do
+    if !docElabState.linkRefs.contains ref then
+      logWarningAt site.defSite m!"Unused link [{ref}]"
+
+  -- Add and compile blocks
+  for (name, block) in partElabState.deferredBlocks do
+    let mut type := .app (.const ``Doc.Block []) ctx.genre
+    let mut blockExpr ← Term.elabTerm block (some type)
+
+    -- Wrap auto-bound implicits and global variables (this is possibly overly defensive)
+    type ← Meta.mkForallFVars (← Term.addAutoBoundImplicits #[] none) type
+
+    -- Replace any universe metavariables with universe variables; report errors
+    type ← Term.levelMVarToParam type
+    match sortDeclLevelParams [] [] (collectLevelParams {} type |>.params) with
+    | Except.error msg      => throwErrorAt block msg
+    | Except.ok levelParams =>
+      Term.synthesizeSyntheticMVarsNoPostponing
+      type ← instantiateMVars type
+      blockExpr ← Term.ensureHasType (some type) (← instantiateMVars blockExpr)
+      let decl := Declaration.defnDecl {
+        name,
+        levelParams,
+        type,
+        value := blockExpr,
+        hints := .abbrev,
+        safety := .safe
+      }
+
+      -- This is possibly overly defensive (or ineffectual)
+      Term.ensureNoUnassignedMVars decl
+      addAndCompile decl
+
+  -- Generate and return outermost syntax
+  let finishedSyntax ← finished.toSyntax genreSyntax
+  ``(VersoDoc.mk (fun () => $finishedSyntax))
 
 
 abbrev BlockExpander := Syntax → DocElabM (TSyntax `term)

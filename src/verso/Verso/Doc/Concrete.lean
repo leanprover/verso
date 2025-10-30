@@ -44,6 +44,7 @@ def saveRefs [Monad m] [MonadInfoTree m] (st : DocElabM.State) (st' : PartElabM.
     for stx in r.syntax do
       pushInfoLeaf <| .ofCustomInfo {stx := stx , value := Dynamic.mk r}
 
+
 /--
 All-at-once elaboration of verso document syntax to syntax denoting a verso `Part`. Implements
 elaboration of the `#docs` command and `#doc` term. The `#doc` command is incremental, and thus
@@ -77,7 +78,7 @@ private def elabDoc (genre: Term) (title: StrLit) (topLevelBlocks : Array Syntax
   let finished := partElabState.partContext.toPartFrame.close endPos
 
   pushInfoLeaf <| .ofCustomInfo {stx := (← getRef) , value := Dynamic.mk finished.toTOC}
-  finished.toVersoDoc genre
+  finished.toVersoDoc genre ctx docElabState partElabState
 
 elab "#docs" "(" genre:term ")" n:ident title:str ":=" ":::::::" text:document ":::::::" : command => do
   findGenreCmd genre
@@ -136,7 +137,7 @@ be used to thread state between the separate top level blocks. These environment
 the state that needs to exist across top-level-block parsing events.
 -/
 structure DocElabEnvironment where
-  ctx : DocElabContext := ⟨.missing, mkConst ``Unit⟩
+  ctx : DocElabContext := ⟨.missing, mkConst ``Unit, .always⟩
   docState : DocElabM.State := {}
   partState : PartElabM.State := .init (.node .none nullKind #[])
 deriving Inhabited
@@ -206,7 +207,7 @@ private def finishDoc (genreSyntax : Term) (title : StrLit) : Command.CommandEla
   let finished := versoEnv.partState.partContext.toPartFrame.close endPos
 
   let n := mkIdentFrom title (← currentDocName)
-  let doc ← finished.toVersoDoc genreSyntax
+  let doc ← Command.runTermElabM fun _ => finished.toVersoDoc genreSyntax versoEnv.ctx versoEnv.docState versoEnv.partState
   let ty ← ``(VersoDoc $genreSyntax)
   Command.elabCommand (← `(def $n : $ty := $doc))
 
