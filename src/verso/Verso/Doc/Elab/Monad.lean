@@ -14,6 +14,7 @@ import Lean.DocString.Syntax
 import Verso.Doc
 import Verso.Doc.ArgParse
 import Verso.Doc.Elab.InlineString
+import Verso.Doc.Elab.Basic
 
 set_option doc.verso true
 
@@ -34,6 +35,12 @@ class HasLink (name : String) (doc : Name) where
 
 class HasNote (name : String) (doc : Name) (genre : Genre) where
   contents : Array (Inline genre)
+
+private def linkRefName [Monad m] [MonadQuotation m] (docName : Name) (ref : TSyntax `str) : m Term := do
+  ``(HasLink.url $(quote ref.getString) $(quote docName) (self := _))
+
+private def footnoteRefName [Monad m] [MonadQuotation m] (genre : Term) (docName : Name) (ref : TSyntax `str) : m Term :=
+  ``(HasNote.contents $(quote ref.getString) $(quote docName) (genre := $genre) (self := _))
 
 
 -- For use in IDE features and previews and such
@@ -103,119 +110,16 @@ def headerStxToString (env : Environment) : Syntax → String
 structure DocElabContext where
   genreSyntax : Syntax
   genre : Expr
+deriving Inhabited
 
-/-- References that must be local to the current blob of concrete document syntax -/
-structure DocDef (α : Type) where
-  defSite : TSyntax `str
-  val : α
-deriving Repr
-
-structure DocUses where
-  useSites : Array Syntax := {}
-deriving Repr
-
-def DocUses.add (uses : DocUses) (loc : Syntax) : DocUses := {uses with useSites := uses.useSites.push loc}
+def DocElabContext.fromGenreTerm (genreSyntax : Term) : TermElabM DocElabContext := do
+  let genre ← Term.elabTerm genreSyntax (some (.const ``Doc.Genre []))
+  return DocElabContext.mk genreSyntax genre
 
 structure DocElabM.State where
   linkRefs : HashMap String DocUses := {}
   footnoteRefs : HashMap String DocUses := {}
 deriving Inhabited
-
-/-- Custom info tree data to save footnote and reflink cross-references -/
-structure DocRefInfo where
-  defSite : Option Syntax
-  useSites : Array Syntax
-deriving TypeName, Repr
-
-def DocRefInfo.syntax (dri : DocRefInfo) : Array Syntax :=
-  (dri.defSite.map (#[·])|>.getD #[]) ++ dri.useSites
-
-def internalRefs (defs : HashMap String (DocDef α)) (refs : HashMap String DocUses) : Array DocRefInfo := Id.run do
-  let keys : HashSet String := defs.fold (fun soFar k _ => HashSet.insert soFar k) <| refs.fold (fun soFar k _ => soFar.insert k) {}
-  let mut refInfo := #[]
-  for k in keys do
-    refInfo := refInfo.push {
-      defSite := defs[k]? |>.map (·.defSite),
-      useSites := refs[k]? |>.map (·.useSites) |>.getD #[]
-    }
-  refInfo
-
-
-inductive TOC where
-  | mk (title : String) (titleSyntax : Syntax) (endPos : String.Pos.Raw) (children : Array TOC)
-  | included (name : Ident)
-deriving Repr, TypeName, Inhabited
-
-structure TocFrame where
-  ptr : Nat
-  title : String
-  titleSyntax : Syntax
-  priorChildren : Array TOC
-deriving Repr, Inhabited
-
-def TocFrame.close (frame : TocFrame) (endPos : String.Pos.Raw) : TOC :=
-  .mk frame.title frame.titleSyntax endPos frame.priorChildren
-
-def TocFrame.wrap (frame : TocFrame) (item : TOC) (endPos : String.Pos.Raw) : TOC :=
-  .mk frame.title frame.titleSyntax endPos (frame.priorChildren.push item)
-
-def TocFrame.addChild (frame : TocFrame) (item : TOC) : TocFrame :=
-  {frame with priorChildren := priorChildren frame |>.push item}
-
-partial def TocFrame.closeAll (stack : Array TocFrame) (endPos : String.Pos.Raw) : Option TOC :=
-  let rec aux (stk : Array TocFrame) (toc : TOC) :=
-    if let some fr := stack.back? then
-      aux stk.pop (fr.wrap toc endPos)
-    else toc
-  if let some fr := stack.back? then
-    some (aux stack.pop <| fr.close endPos)
-  else none
-
-
-def TocFrame.wrapAll (stack : Array TocFrame) (item : TOC) (endPos : String.Pos.Raw) : TOC :=
-  let rec aux (i : Nat) (item : TOC) (endPos : String.Pos.Raw) : TOC :=
-    match i with
-    | 0 => item
-    | i' + 1 =>
-      if let some fr := stack[i]? then
-        aux i' (fr.wrap item endPos) endPos
-      else item
-  aux (stack.size - 1) item endPos
-
-inductive FinishedPart where
-  | mk (titleSyntax : Syntax) (expandedTitle : Array (TSyntax `term)) (titlePreview : String) (metadata : Option (TSyntax `term)) (blocks : Array (TSyntax `term)) (subParts : Array FinishedPart) (endPos : String.Pos.Raw)
-    /-- A name representing a value of type {lean}`VersoDoc` -/
-  | included (name : Ident)
-deriving Repr, BEq
-
-private def linkRefName [Monad m] [MonadQuotation m] (docName : Name) (ref : TSyntax `str) : m Term := do
-  ``(HasLink.url $(quote ref.getString) $(quote docName) (self := _))
-
-private def footnoteRefName [Monad m] [MonadQuotation m] (genre : Term) (docName : Name) (ref : TSyntax `str) : m Term :=
-  ``(HasNote.contents $(quote ref.getString) $(quote docName) (genre := $genre) (self := _))
-
-/--
-From a finished part, constructs syntax that denotes its `Part` value.
--/
-partial def FinishedPart.toSyntax [Monad m] [MonadQuotation m]
-    (genre : TSyntax `term)
-    : FinishedPart → m Term
-  | .mk _titleStx titleInlines titleString metadata blocks subParts _endPos => do
-    let subStx ← subParts.mapM (toSyntax genre)
-    let metaStx ←
-      match metadata with
-      | none => `(none)
-      | some stx => `(some $stx)
-    -- Adding type annotations works around a limitation in list and array elaboration, where intermediate
-    -- let bindings introduced by "chunking" the elaboration may fail to infer types
-    let typedBlocks ← blocks.mapM fun b => `(($b : Block $genre))
-    ``(Part.mk #[$titleInlines,*] $(quote titleString) $metaStx #[$typedBlocks,*] #[$subStx,*])
-  | .included name => ``(VersoDoc.toPart $name)
-
-partial def FinishedPart.toTOC : FinishedPart → TOC
-  | .mk titleStx _titleInlines titleString _metadata _blocks subParts endPos =>
-    .mk titleString titleStx endPos (subParts.map toTOC)
-  | .included name => .included name
 
 /--
 Creates a term denoting a {lean}`VersoDoc` value from a {lean}`FinishedPart`. This is the final step
@@ -228,71 +132,6 @@ def FinishedPart.toVersoDoc [Monad m] [MonadQuotation m]
   let finishedSyntax ← finished.toSyntax genreSyntax
   ``(VersoDoc.mk (fun () => $finishedSyntax))
 
-
-/--
-Information describing a part still under construction.
-
-During elaboration, the current position in the document is
-represented by a stack of these frames, with each frame representing a
-layer of document section nesting. As the Verso document elaborator
-encounters new headers, stack frames are pushed and popped as
-indicated by the header's level.
--/
-structure PartFrame where
-  titleSyntax : Syntax
-  expandedTitle : Option (String × Array (TSyntax `term)) := none
-  metadata : Option (TSyntax `term)
-  blocks : Array (TSyntax `term)
-  /--
-  The sibling parts at the same nesting level as the part represented by this frame. These siblings
-  are earlier in the document and have the same parent.
-  -/
-  priorParts : Array FinishedPart
-deriving Repr, Inhabited
-
-/-- Turn an previously active {name}`PartFrame` into a {name}`FinishedPart`. -/
-def PartFrame.close (fr : PartFrame) (endPos : String.Pos.Raw) : FinishedPart :=
-  let (titlePreview, titleInlines) := fr.expandedTitle.getD ("<anonymous>", #[])
-  .mk fr.titleSyntax titleInlines titlePreview fr.metadata fr.blocks fr.priorParts endPos
-
-/--
-Information available while constructing a part. It extends {name}`PartFrame`
-because that data represents the current frame. The field
-{name (full := PartContext.parents)}`parents` represents other parts above
-us in the hierarchy that are still being built.
--/
-structure PartContext extends PartFrame where
-  parents : Array PartFrame
-deriving Repr, Inhabited
-
-/--
-The current nesting level is the number of frames in the stack of parent
-parts being built.
--/
-def PartContext.level (ctxt : PartContext) : Nat := ctxt.parents.size
-
-/--
-Closes the current part. The resulting {name}`FinishedPart` is appended to
-{name (full := PartFrame.priorParts)}`priorParts`, and
-the top of the stack of our parents becomes the current frame. Returns
-{name}`none` if there are no parents.
--/
-def PartContext.close (ctxt : PartContext) (endPos : String.Pos.Raw) : Option PartContext := do
-  let fr ← ctxt.parents.back?
-  pure {
-    parents := ctxt.parents.pop,
-    blocks := fr.blocks,
-    titleSyntax := fr.titleSyntax,
-    expandedTitle := fr.expandedTitle,
-    metadata := fr.metadata
-    priorParts := fr.priorParts.push <| ctxt.toPartFrame.close endPos
-  }
-
-/--
-Makes the frame {name}`fr` the current frame. The former current frame is saved to the stack.
--/
-def PartContext.push (ctxt : PartContext) (fr : PartFrame) : PartContext := ⟨fr, ctxt.parents.push ctxt.toPartFrame⟩
-
 structure PartElabM.State where
   partContext : PartContext
   linkDefs : HashMap String (DocDef String) := {}
@@ -302,10 +141,13 @@ deriving Inhabited
 def PartElabM.State.init (title : Syntax) (expandedTitle : Option (String × Array (TSyntax `term)) := none) : PartElabM.State where
   partContext := {titleSyntax := title, expandedTitle, metadata := none, blocks := #[], priorParts := #[], parents := #[]}
 
+/--
+Top-level document elaboration monad. Can modify both DocElabM.State and PartElabM.State
+-/
 def PartElabM (α : Type) : Type := ReaderT DocElabContext (StateT DocElabM.State (StateT PartElabM.State TermElabM)) α
 
-def PartElabM.run (genreSyntax : Syntax) (genre : Expr) (st : DocElabM.State) (st' : PartElabM.State) (act : PartElabM α) : TermElabM (α × DocElabM.State × PartElabM.State) := do
-  let ((res, st), st') ← act ⟨genreSyntax, genre⟩ st st'
+def PartElabM.run (ctx : DocElabContext) (st : DocElabM.State) (st' : PartElabM.State) (act : PartElabM α) : TermElabM (α × DocElabM.State × PartElabM.State) := do
+  let ((res, st), st') ← act ctx st st'
   pure (res, st, st')
 
 instance : Alternative PartElabM := inferInstanceAs <| Alternative (ReaderT DocElabContext (StateT DocElabM.State (StateT PartElabM.State TermElabM)))
@@ -344,10 +186,19 @@ instance : MonadWithOptions PartElabM := inferInstanceAs <| MonadWithOptions (Re
 def PartElabM.withFileMap (fileMap : FileMap) (act : PartElabM α) : PartElabM α :=
   fun ρ ρ' σ ctxt σ' mctxt rw cctxt => act ρ ρ' σ ctxt σ' mctxt rw {cctxt with fileMap := fileMap}
 
+/--
+Text elaboration monad.
+
+This monad can produce content, but it can't modify the structure of the surrounding document. It
+can observe this structure, however.
+
+This means it can modify the {lean}`DocElabM.State`, but it can only read from the
+{lean}`PartElabM.State`.
+-/
 def DocElabM (α : Type) : Type := ReaderT DocElabContext (ReaderT PartElabM.State (StateT DocElabM.State TermElabM)) α
 
-def DocElabM.run (genreSyntax : Syntax) (genre : Expr) (st : DocElabM.State) (st' : PartElabM.State) (act : DocElabM α) : TermElabM (α × DocElabM.State) := do
-  StateT.run (act ⟨genreSyntax, genre⟩ st') st
+def DocElabM.run (ctx : DocElabContext) (st : DocElabM.State) (st' : PartElabM.State) (act : DocElabM α) : TermElabM (α × DocElabM.State) := do
+  StateT.run (act ctx st') st
 
 instance : Inhabited (DocElabM α) := ⟨fun _ _ _ => default⟩
 
@@ -411,9 +262,8 @@ instance : MonadRecDepth DocElabM where
   getMaxRecDepth := fun _ _ st' => do return (← MonadRecDepth.getMaxRecDepth, st')
 
 def PartElabM.liftDocElabM (act : DocElabM α) : PartElabM α := do
-  let ⟨gStx, g⟩ ← readThe DocElabContext
-  let (out, st') ← act.run gStx g (← getThe DocElabM.State) (← getThe PartElabM.State)
-  set st'
+  let (out, stDoc) ← act.run (← readThe DocElabContext) (← getThe DocElabM.State) (← getThe PartElabM.State)
+  modifyThe DocElabM.State (fun _ => stDoc)
   pure out
 
 instance : MonadLift DocElabM PartElabM := ⟨PartElabM.liftDocElabM⟩
@@ -566,12 +416,6 @@ def PartElabM.debug (msg : String) : PartElabM Unit := do
   dbg_trace "  partContext: {repr st.partContext}"
   dbg_trace ""
   pure ()
-
-/-- Custom info tree data to save the locations and identities of lists -/
-structure DocListInfo where
-  bullets : Array Syntax
-  items : Array Syntax
-deriving Repr, TypeName
 
 
 def closes (openTok closeTok : Syntax) : DocElabM Unit := do
