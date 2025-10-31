@@ -714,7 +714,7 @@ def ValDesc.inlinesString [MonadFileMap m] : ValDesc m (FileMap × TSyntaxArray 
         let mut msg := "Failed to parse:"
         for (p, _, e) in s'.allErrors do
           let {line, column} := text.toPosition p
-          msg := msg ++ s!"  {line}:{column}: {toString e}\n    {repr <| p.extract input input.endPos}\n"
+          msg := msg ++ s!"  {line}:{column}: {toString e}\n    {repr <| p.extract input input.rawEndPos}\n"
         throwError msg
     | other => throwError "Expected string, got {repr other}"
 

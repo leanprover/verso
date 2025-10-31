@@ -93,17 +93,17 @@ defmethod ParserFn.test (p : ParserFn) (input : String) : IO String := do
   let stk := ppStack <| s'.stxStack.extract 0 s'.stxStack.size
 
   let remaining : String :=
-    if s'.pos ≥ input.endPos then "All input consumed."
-    else s!"Remaining:\n{repr (s'.pos.extract input input.endPos)}"
+    if s'.pos ≥ input.rawEndPos then "All input consumed."
+    else s!"Remaining:\n{repr (s'.pos.extract input input.rawEndPos)}"
 
   if s'.allErrors.isEmpty then
     return s!"Success! Final stack:\n{stk.pretty 50}\n{remaining}"
   else if let #[(p, _, err)] := s'.allErrors then
-    return s!"Failure @{p} ({ictx.fileMap.toPosition p}): {toString err}\nFinal stack:\n{stk.pretty 50}\nRemaining: {repr $ p.extract input input.endPos}"
+    return s!"Failure @{p} ({ictx.fileMap.toPosition p}): {toString err}\nFinal stack:\n{stk.pretty 50}\nRemaining: {repr $ p.extract input input.rawEndPos}"
   else
     let mut errors := ""
     for (p, _, e) in s'.allErrors.qsort (fun x y => x.1 < y.1 || x.1 == y.1 && toString x.2.2 < toString y.2.2)  do
-      errors := errors ++ s!"  @{p} ({ictx.fileMap.toPosition p}): {toString e}\n    {repr <| p.extract input input.endPos}\n"
+      errors := errors ++ s!"  @{p} ({ictx.fileMap.toPosition p}): {toString e}\n    {repr <| p.extract input input.rawEndPos}\n"
     return s!"{s'.allErrors.size} failures:\n{errors}\nFinal stack:\n{stk.pretty 50}"
 
 defmethod ParserFn.test! (p : ParserFn) (input : String) : IO Unit :=
