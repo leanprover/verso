@@ -232,7 +232,7 @@ def decorateClosing : TSyntax `block → DocElabM Unit
   | `(block|%%%%$s $_* %%%%$e) => closes s e
   | _ => pure ()
 
-/-- Elaborate a parsed block into syntax denoting an expression of type `Block genre` -/
+/-- Elaborates a parsed block into syntax denoting an expression of type `Block genre`. -/
 partial def elabBlock (block : TSyntax `block) : DocElabM (TSyntax `term) :=
   withTraceNode `Elab.Verso.block (fun _ => pure m!"Block {block}") <|
   withRef block <| withFreshMacroScope <| withIncRecDepth <| do
