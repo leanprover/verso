@@ -32,7 +32,7 @@ elab_rules : term
   | `(inlines!%$tk$s) => do
     let inls ← stringToInlines s
     let g ← Meta.mkFreshExprMVar (some (.const ``Verso.Doc.Genre []))
-    let (tms, _) ← DocElabM.run ⟨tk, g, .onlyIfDefined⟩ {} (.init (← `(foo))) <| inls.mapM (elabInline ⟨·⟩)
+    let (tms, _) ← DocElabM.run ⟨tk, g, .onlyIfDefined, .none⟩ {} (.init (← `(foo))) <| inls.mapM (elabInline ⟨·⟩)
     elabTerm (← `(term|Inline.concat #[ $[$tms],* ] )) none
 
 

@@ -127,11 +127,13 @@ structure DocElabContext where
   genre : Expr
 
   refsAllowed : RefsAllowed
+
+  docReconstructionRef : Option Ident
 deriving Inhabited
 
 def DocElabContext.fromGenreTerm (genreSyntax : Term) : TermElabM DocElabContext := do
   let genre ← Term.elabTerm genreSyntax (some (.const ``Doc.Genre []))
-  return DocElabContext.mk genreSyntax genre .always
+  return DocElabContext.mk genreSyntax genre .always (.some <| mkIdent (← mkFreshUserName `ref))
 
 structure DocElabM.State where
   linkRefs : HashMap String DocUses := {}
@@ -143,6 +145,7 @@ structure PartElabM.State where
   linkDefs : HashMap String (DocDef String) := {}
   footnoteDefs : HashMap String (DocDef (Array (TSyntax `term))) := {}
   deferredBlocks : Array (Name × Term) := #[]
+
 deriving Inhabited
 
 def PartElabM.State.init (title : Syntax) (expandedTitle : Option (String × Array (TSyntax `term)) := none) : PartElabM.State where
@@ -288,13 +291,17 @@ def PartElabM.setTitle (titlePreview : String) (titleInlines : Array (TSyntax `t
   {st with partContext.expandedTitle := some (titlePreview, titleInlines)}
 
 /--
-Adds a block (syntax denoting a function {lit}`Block g`) to the Verso elaboration state.
+Adds a block (syntax denoting a function {lit}`Block g`, with potential free variables of type
+{lean}`DocReconstruction`) to the elaboration state.
 -/
 def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := do
   let name ← mkFreshUserName `block
+  let .some docReconstructionRef := (← read).docReconstructionRef
+    | throwErrorAt block "No doc reconstruction name available"
+  let blockSyntax ← ``($(mkIdent name) $docReconstructionRef)
   modifyThe PartElabM.State fun st =>
     { st with
-      partContext.blocks := st.partContext.blocks.push (mkIdent name)
+      partContext.blocks := st.partContext.blocks.push blockSyntax
       deferredBlocks := st.deferredBlocks.push (name, block)
     }
 
@@ -416,6 +423,22 @@ unsafe def inlineExpandersForUnsafe (x : Name) : DocElabM (Array InlineExpander)
 @[implemented_by inlineExpandersForUnsafe]
 opaque inlineExpandersFor (x : Name) : DocElabM (Array InlineExpander)
 
+def substForDocReconstructionMvars (same : Expr) (e : Expr) : MetaM Expr := do match e with
+  | .app t1 t2 => return .app (← substForDocReconstructionMvars same t1) (← substForDocReconstructionMvars same t2)
+  | .mdata d e => return .mdata d (← substForDocReconstructionMvars same e)
+  | e@(.mvar _) =>
+    let ty ← Meta.inferType e
+    return if ty.isAppOf ``DocReconstruction then same else e
+  | .lam n t b i => return .lam n (← substForDocReconstructionMvars same t) (← substForDocReconstructionMvars same b) i
+  | .forallE n t b i => return .forallE n (← substForDocReconstructionMvars same t) (← substForDocReconstructionMvars same b) i
+  | .letE m t d b x =>
+    return .letE m
+      (← substForDocReconstructionMvars same t)
+      (← substForDocReconstructionMvars same d)
+      (← substForDocReconstructionMvars same b)
+      x
+  | .proj n i e => return .proj n i (← substForDocReconstructionMvars same e)
+  | .const .. | .sort .. | .fvar .. | .bvar .. | .lit .. => return e
 
 /--
 Creates a term denoting a {lean}`VersoDoc` value from a {lean}`FinishedPart`. This is the final step
@@ -448,10 +471,18 @@ def FinishedPart.toVersoDoc
 
   -- Add and compile blocks
   for (name, block) in partElabState.deferredBlocks do
-    let mut type := .app (.const ``Doc.Block []) ctx.genre
+    let mut type ← Term.elabType (← ``(Doc.Block $genreSyntax))
     let mut blockExpr ← Term.elabTerm block (some type)
 
+    -- Wrap blockExpr in a lambda, abstracting all the holes of type `DocReconstruction`
+    blockExpr ← instantiateMVars blockExpr
+    let arg := Expr.fvar (← mkFreshFVarId)
+    blockExpr ← substForDocReconstructionMvars arg blockExpr
+    blockExpr ← Expr.abstractM blockExpr #[arg]
+    blockExpr := .lam `inst (mkConst ``DocReconstruction) blockExpr .instImplicit
+
     -- Wrap auto-bound implicits and global variables (this is possibly overly defensive)
+    type ← Term.elabType (← ``(DocReconstruction → Doc.Block $genreSyntax))
     type ← Meta.mkForallFVars (← Term.addAutoBoundImplicits #[] none) type
 
     -- Replace any universe metavariables with universe variables; report errors
@@ -473,11 +504,14 @@ def FinishedPart.toVersoDoc
 
       -- This is possibly overly defensive (or ineffectual)
       Term.ensureNoUnassignedMVars decl
+
       addAndCompile decl
 
   -- Generate and return outermost syntax
   let finishedSyntax ← finished.toSyntax genreSyntax
-  ``(VersoDoc.mk (fun () => $finishedSyntax))
+  let .some docReconstructionRef := ctx.docReconstructionRef
+    | throwError "No doc reconstruction name available"
+  ``(VersoDoc.mk (fun $docReconstructionRef => $finishedSyntax))
 
 
 abbrev BlockExpander := Syntax → DocElabM (TSyntax `term)
