@@ -7,10 +7,13 @@ import Tests.Basic
 import Tests.Elab
 import Tests.GenericCode
 import Tests.Golden
+import Tests.HtmlEntities
 import Tests.Integration
 import Tests.Integration.SampleDoc
 import Tests.ParserRegression
-import Tests.TexUnit
 import Tests.Paths
 import Tests.HtmlEntities
+import Tests.Refs
+import Tests.TexUnit
+import Tests.Z85
 import Tests.Zip

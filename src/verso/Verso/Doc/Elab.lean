@@ -297,7 +297,7 @@ where
 @[part_command Lean.Doc.Syntax.footnote_ref]
 partial def _root_.Lean.Doc.Syntax.footnote_ref.command : PartCommand
   | `(block| [^ $name:str ]: $contents* ) =>
-    addFootnoteDef name =<< contents.mapM (elabInline ·)
+    addFootnoteDef name =<< contents.mapM (withAllowUndefinedRefs .onlyIfDefined <| elabInline ·)
   | _ => throwUnsupportedSyntax
 
 @[part_command Lean.Doc.Syntax.link_ref]
