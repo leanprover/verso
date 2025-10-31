@@ -100,6 +100,7 @@ end BitWriter
 public inductive CompressionMethod where
   | store    -- No compression (method 0)
   | deflate  -- DEFLATE compression (method 8)
+deriving Repr
 
 def CompressionMethod.header : CompressionMethod → UInt16
   | .store => 0x0000
@@ -281,7 +282,7 @@ def compress (data : ByteArray) : ByteArray := Id.run do
   let mut bw : BitWriter.State := {}
 
   -- DEFLATE block header: BFINAL=1, BTYPE=01 (fixed Huffman)
-  bw := bw.writeBits 0b101 3
+  bw := bw.writeBits 0b011 3
 
   let «matches» := findMatches data
   let mut i : UInt32 := 0

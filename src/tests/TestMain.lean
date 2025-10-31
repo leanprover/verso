@@ -56,14 +56,50 @@ def testTexOutput (dir : System.FilePath) (doc : Verso.Doc.VersoDoc Verso.Genre.
   }
 
 def testZip (_ : Config) : IO Unit := do
+  IO.println "Running zip tests with fixed files..."
   testExtract #[] .store
   testExtract #[] .deflate
   testExtract #[("empty", .empty)] .store
   testExtract #[("empty", .empty)] .deflate
   testExtract files .store
   testExtract files .deflate
+  for i in (0 : Nat)...(me.size / 10) do
+    let me := me.extract 0 (i * 10)
+    testExtract #[("T2.lean", me)] .store
+    testExtract #[("T2.lean", me)] .deflate
+  for i in (0 : Nat)...(me.size / 10) do
+    let me := me.extract 0 (i * 10)
+    let bwd := bwd.extract 0 (i * 10)
+    testExtract #[("T2.lean", me), ("other", bwd)] .store
+    testExtract #[("T2.lean", me), ("other", bwd)] .deflate
+  for _ in (0 : Nat)...10 do
+    IO.setRandSeed (← IO.monoNanosNow)
+    let mut randFiles := #[]
+    for _ in 0...(← IO.rand 0 15) do
+      let name ← randName
+      let size ← IO.rand 0 50000
+      let content ← IO.getRandomBytes <| .ofNat size
+      randFiles := randFiles.push (name, content)
+    IO.println s!"Running random zip test with {randFiles.size} files, sizes:"
+    for (x, y) in randFiles do
+      IO.println s!" * {x}: {y.size} bytes"
+    testExtract randFiles .store
+    testExtract randFiles .deflate
+
+
 where
   files := #[("x.txt", "abcdef\nlkjlkj".bytes), ("y.txt", "".bytes), ("z.txt", "abc\n\n".bytes)]
+  me := (include_str "TestMain.lean").bytes
+  bwd := me.foldl (init := .empty) fun x y => ByteArray.empty.push y ++ x
+  randName : IO String := do
+    let len ← IO.rand 1 10
+    let stem ← len.foldM (init := "") fun _ _ acc => do
+      return acc.push <| Char.ofNat ('a'.toNat + (← IO.rand 0 25))
+    let len ← IO.rand 2 4
+    let ext ← len.foldM (init := "") fun _ _ acc => do
+      return acc.push <| Char.ofNat ('a'.toNat + (← IO.rand 0 25))
+    return stem ++ "." ++ ext
+
 
 open Verso.Integration in
 def tests := [
