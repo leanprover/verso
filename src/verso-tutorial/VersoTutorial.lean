@@ -221,6 +221,15 @@ where
       if name = ``Manual.InlineLean.Block.lean then
         let .arr #[hl, _, _, _] := data
           | panic! "Malformed metadata"
+        codeFromHl style hl
+      else if name = ``Manual.Block.lean then
+        let .arr #[_, hl, _] := data
+          | panic! "Malformed metadata"
+        codeFromHl style hl
+      else
+        contents.forM (fromBlock style)
+
+  codeFromHl (style : ExampleCodeStyle) hl : StateM (HashMap String String) Unit := do
         match FromJson.fromJson? hl with
         | .error e => panic! s!"Malformed metadata: {e}"
         | .ok (hl : Highlighted) =>
@@ -231,8 +240,6 @@ where
               s.alter s!"{m}.lean" fun
               | none => some hl.toString
               | some s => s ++ "\n" ++ hl.toString
-      else
-        contents.forM (fromBlock style)
 
 end
 
@@ -280,7 +287,7 @@ structure LocalToC where
 structure Theme where
   page : PageContent → Html
   topic : TopicContent → Html
-  tutorialToC : LocalToC → Html
+  tutorialToC : Option (String × String) → LocalToC → Html
   cssFiles : Array (String × String) := #[]
   jsFiles : Array Manual.JsFile := #[]
 
@@ -318,9 +325,12 @@ def Theme.default : Theme where
         </div>
       </div>
     }}
-  tutorialToC toc := if toc.children.isEmpty then .empty else {{
+  tutorialToC code? toc := if toc.children.isEmpty then .empty else {{
     <nav class="local-toc">
-      <h1>{{toc.title}}</h1>
+      <div> <!-- This is for scroll prevention -->
+        <h1>{{toc.title}}</h1>
+        {{if let some (url, file) := code? then {{ <a href={{url}} class="download-link"><code>{{file}}</code></a> }} else .empty}}
+      </div>
       <ol>{{toc.children.map defaultLocalToC}}</ol>
     </nav>
   }}
@@ -407,9 +417,10 @@ def EmitM.page (path : Path) (title : String) (content : Html) : EmitM Html := d
     | (true, f) => (f.filename, f.defer)
     | (false, f) => ("/-verso-data/" ++ f.filename, f.defer)
 
+
   return (← theme).page {
-    title := title
-    base := {{ <base href={{ path.map (fun _ => "../") |>.foldl (init := "./") (· ++ ·) }} /> }}
+    title := title,
+    base := {{ <base href={{ path.map (fun _ => "../") |>.foldl (init := "./") (· ++ ·) }} /> }},
     head := .seq #[
       extraJsFiles.map fun (fn, defer) =>
         {{<script src={{fn}} {{if defer then #[("defer", "defer")] else #[]}}></script>}},
@@ -417,7 +428,7 @@ def EmitM.page (path : Path) (title : String) (content : Html) : EmitM Html := d
         {{ <script>{{.text false js}}</script>}},
       state.extraCss.toArray.map fun css =>
         {{<style>{{.text false css}}</style>}}
-    ]
+    ],
     content
   }
 
@@ -469,7 +480,10 @@ def emit (tutorials : Tutorials) : EmitM Unit := do
       let (html, hlState') ← Genre.toHtml (m := ReaderT ExtensionImpls IO) Tutorial { logError := (logError ·) } { logError } (← readThe Manual.TraverseState) {} {} {} tut hlState
       hlState := hlState'
       let toc ← LocalToC.ofPart tut
-      let html := html ++ (← theme).tutorialToC toc
+      let sampleCode := do
+        match metadata.exampleStyle with
+        | .inlineLean .. => pure (metadata.slug ++ "/" ++ metadata.slug ++ ".zip", metadata.slug ++ ".zip")
+      let html := html ++ (← theme).tutorialToC sampleCode toc
       let html := {{<main class="tutorial-text">{{html}}</main>}}
       let html ← page (Path.root / metadata.slug) tut.titleString html
       writeHtmlFile (dir / "index.html") html

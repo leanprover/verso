@@ -74,6 +74,29 @@ a:focus {
   outline-offset: 2px;
 }
 
+.download-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: bold;
+  border: 1px solid var(--color-secondary);
+  border-radius: 0.5rem;
+  padding: 0 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.download-link code {
+  background: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+.download-link::before {
+  content: "↓";
+  font-size: 1.1em;
+  font-weight: bold;
+}
+
 /* Sections for tutorial list page */
 section {
   margin-bottom: 3rem;
@@ -102,6 +125,10 @@ code {
   font-family: 'Courier New', monospace;
   font-size: 0.9em;
   color: var(--color-primary);
+}
+
+code.hl.block {
+  overflow-x: auto;
 }
 
 pre {
@@ -158,7 +185,7 @@ main.tutorial-text {
   grid-template-columns: minmax(10rem, 50rem) minmax(15em, 1fr);
 }
 
-main.tutorial-text > section {
+main.tutorial-text>section {
   grid-column: 1;
 }
 
@@ -167,11 +194,19 @@ main.tutorial-text .local-toc {
   padding-left: 1rem;
   position: sticky;
   align-self: start;
-  top: 5rem;
+  top: 2rem;
+  max-height: calc(100vh - 2rem);
+  display: grid;
+  grid-template-rows: auto 1fr;
 }
 
 main.tutorial-text .local-toc h1 {
-  font-size: 2rem;
+  font-size: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.local-toc > ol {
+  overflow-y: auto;
 }
 
 .local-toc ol li {
@@ -179,7 +214,7 @@ main.tutorial-text .local-toc h1 {
   padding-left: 0;
 }
 
-.local-toc > ol > li {
+.local-toc>ol>li {
   font-weight: bold;
 }
 
