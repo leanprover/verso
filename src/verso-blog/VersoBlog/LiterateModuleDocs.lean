@@ -55,10 +55,10 @@ def elabFromModuleDocs (x : Ident) (path : StrLit) (mod : Ident) (title : StrLit
   let titleString := inlinesToString (← getEnv) titleParts
   let initState : PartElabM.State := .init (.node .none nullKind titleParts)
 
+  let ctx ← runTermElabM fun _ => DocElabContext.fromGenreTerm genre
+  let g := ctx.genre
 
-  let g ← runTermElabM fun _ => Term.elabTerm genre (some (.const ``Doc.Genre []))
-
-  let (titleTerm, _st) ← liftTermElabM <| DocElabM.run ⟨genre, g, .always⟩ {} initState <| do
+  let (titleTerm, _st) ← liftTermElabM <| DocElabM.run ctx {} initState <| do
     titleParts.mapM (elabInline ⟨·⟩)
 
   let modJson ← withTraceNode `verso.blog.literate.loadMod (fun _ => pure m!"Loading '{mod}' in '{path}'") <|

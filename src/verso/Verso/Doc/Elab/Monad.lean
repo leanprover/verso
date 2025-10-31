@@ -195,7 +195,7 @@ instance : MonadWithOptions PartElabM := inferInstanceAs <| MonadWithOptions (Re
 def PartElabM.withFileMap (fileMap : FileMap) (act : PartElabM α) : PartElabM α :=
   fun ρ ρ' σ ctxt σ' mctxt rw cctxt => act ρ ρ' σ ctxt σ' mctxt rw {cctxt with fileMap := fileMap}
 
-def withAllowUndefinedRefs [MonadWithReaderOf DocElabContext m] [Monad m] (b : RefsAllowed) : m a → m a :=
+def withRefsAllowed [MonadWithReaderOf DocElabContext m] [Monad m] (b : RefsAllowed) : m a → m a :=
   withTheReader DocElabContext ({ · with refsAllowed := b})
 
 /--
@@ -287,6 +287,9 @@ def PartElabM.currentLevel : PartElabM Nat := do return (← getThe State).curre
 def PartElabM.setTitle (titlePreview : String) (titleInlines : Array (TSyntax `term)) : PartElabM Unit := modifyThe State fun st =>
   {st with partContext.expandedTitle := some (titlePreview, titleInlines)}
 
+/--
+Adds a block (syntax denoting a function {lit}`Block g`) to the Verso elaboration state.
+-/
 def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := do
   let name ← mkFreshUserName `block
   modifyThe PartElabM.State fun st =>

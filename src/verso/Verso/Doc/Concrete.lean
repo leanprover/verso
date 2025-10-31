@@ -189,7 +189,7 @@ private def startDoc (genreSyntax : Term) (title: StrLit) : Command.CommandElabM
 
   modifyEnv (docEnvironmentExt.setState · ⟨ctx, initDocState, initPartState⟩)
   runPartElabInEnv <| do
-    PartElabM.setTitle titleString (← PartElabM.liftDocElabM <| titleParts.mapM (elabInline ⟨·⟩))
+    PartElabM.setTitle titleString (← titleParts.mapM (elabInline ⟨·⟩))
   return titleString
 
 private def runVersoBlock (block : TSyntax `block) : Command.CommandElabM Unit := do
