@@ -16,12 +16,16 @@ namespace Verso.Genre
 open Verso.Doc (Genre)
 open Verso.Multi
 
+private def defaultToolchain := "leanprover/lean4:" ++ Lean.versionString
+
 inductive ExampleCodeStyle where
   /--
   The example code should be extracted to a Lean project from the tutorial.
   -/
-  | inlineLean (moduleName : Lean.Name)
+  | inlineLean (moduleName : Lean.Name) (toolchain : String)
 deriving BEq, DecidableEq, Inhabited, Repr
+
+def ExampleCodeStyle.default (modName : Lean.Name) (toolchain := defaultToolchain) := inlineLean modName toolchain
 
 open Manual (Tag InternalId) in
 structure Tutorial.PartMetadata where
@@ -97,7 +101,7 @@ open Manual in
 instance : Traverse Tutorial TraverseM where
   part p := do
     if p.metadata.isNone then
-      pure (some { slug := p.titleString.sluggify.toString, summary := "", exampleStyle := .inlineLean `Main })
+      pure (some { slug := p.titleString.sluggify.toString, summary := "", exampleStyle := .default `Main })
     else pure none
   block _ := pure ()
   inline _ := pure ()
@@ -196,12 +200,15 @@ where
     extras style
 
   extras : ExampleCodeStyle → StateM (HashMap String String) Unit
-    | .inlineLean modName => do
+    | .inlineLean modName toolchain => do
       let mut lakeToml := "name = " ++ modName.toString.toLower.quote ++ "\n"
       lakeToml := lakeToml ++ "defaultTargets = [" ++ modName.toString.quote ++ "]\n\n"
       lakeToml := lakeToml ++ "[[lean_lib]]\n"
       lakeToml := lakeToml ++ "name = " ++ modName.toString.quote ++ "\n"
       modify fun s => s.insert "lakefile.toml" lakeToml
+      modify fun s => s.insert "lean-toolchain" (withNl toolchain)
+
+  withNl (s : String) := if s.endsWith "\n" then s else s ++ "\n"
 
   fromPart (style : ExampleCodeStyle) (p : Part Tutorial) : StateM (HashMap String String) Unit := do
     p.content.forM <| fromBlock style
@@ -220,7 +227,7 @@ where
         | .error e => panic! s!"Malformed metadata: {e}"
         | .ok (hl : Highlighted) =>
           match style with
-          | .inlineLean m =>
+          | .inlineLean m _ =>
             modify fun s =>
               -- TODO directories/dots in module name?
               s.alter s!"{m}.lean" fun
