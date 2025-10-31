@@ -505,7 +505,7 @@ def FinishedPart.toVersoDoc
 
       -- This is possibly overly defensive (or ineffectual)
       Term.ensureNoUnassignedMVars decl
-      addAndCompile decl
+      withOptions (·.setBool `compiler.extract_closed false) <| addAndCompile decl
 
   -- Generate and return outermost syntax
   let finishedSyntax ← finished.toSyntax genreSyntax
