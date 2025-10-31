@@ -517,8 +517,8 @@ def emit (tutorials : Tutorials) : EmitM Unit := do
         | logError s!"No metadata for {tut.titleString}"
       let dir := dir / metadata.slug
       let code := getCode tut
-      Zip.zipToFile (dir / (metadata.slug ++ ".zip")) (method := .store) <| code.map fun (fn, txt) => (metadata.slug ++ "/" ++ fn, txt.bytes)
       ensureDir dir
+      Zip.zipToFile (dir / (metadata.slug ++ ".zip")) (method := .store) <| code.map fun (fn, txt) => (metadata.slug ++ "/" ++ fn, txt.bytes)
       let (html, hlState') ← Genre.toHtml (m := ReaderT ExtensionImpls IO) Tutorial { logError := (logError ·) } { logError } (← readThe Manual.TraverseState) {} {} {} tut hlState
       hlState := hlState'
       let toc ← LocalToC.ofPart tut
