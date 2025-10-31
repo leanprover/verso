@@ -634,7 +634,7 @@ public instance [Repr g.Inline] [Repr g.Block] [Repr g.PartMetadata] : Repr (Par
 public structure DocReconstruction where
 
 /--
-The result type of values created by Verso's `#doc` and `#docs` commands. A value of type
+The result type of values created by Verso's {lit}`#doc` and {lit}`#docs` commands. A value of type
 {lean}`VersoDoc` represents a not-fully-evaluated document of type {lean}`Part` that can be turned
 into a value by invoking the `VersoDoc.toPart` method. The actual structure of a {lean}`VersoDoc`
 should not be relied on.
