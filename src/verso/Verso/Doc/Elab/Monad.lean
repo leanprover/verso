@@ -471,7 +471,7 @@ def FinishedPart.toVersoDoc
 
   -- Add and compile blocks
   for (name, block) in partElabState.deferredBlocks do
-    let mut type ← Term.elabType (← ``(Doc.Block $genreSyntax))
+    let mut type := .app (.const ``Doc.Block []) ctx.genre
     let mut blockExpr ← Term.elabTerm block (some type)
 
     -- Wrap blockExpr in a lambda, abstracting all the holes of type `DocReconstruction`
