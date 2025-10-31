@@ -17,6 +17,22 @@ r##"
 \usepackage{fancyvrb}
 \usepackage{fvextra}
 
+\usepackage[most]{tcolorbox}
+
+\definecolor{bordercolor}{HTML}{98B2C0}
+\definecolor{medgray}{HTML}{555555}
+\newtcolorbox{docstringBox}[2][]{colback=white,
+breakable,
+colframe=bordercolor,
+colbacktitle=white,
+enhanced,
+coltitle=medgray,
+attach boxed title to top left={xshift=2mm,yshift=-2mm},
+boxrule=0.4pt,
+fonttitle=\sffamily\fontsize{6pt}{7pt}\selectfont,
+boxed title style={top=-0.3mm,bottom=-0.3mm,left=-0.3mm,right=-0.3mm,boxrule=0.4pt},
+title={#2},#1}
+
 "## ++
 "\n".intercalate packages ++
 r##"
