@@ -6,8 +6,6 @@ Author: David Thrane Christiansen
 
 import VersoTutorial
 
-import TutorialExample.Data
-
 open Verso.Genre
 open Verso.Genre.Manual InlineLean
 
@@ -90,7 +88,8 @@ example (h : P ∧ Q ∧ R) : R ∧ P := by
 ## Existential Quantifiers
 
 ```lean
-example (h : ∃ n : Nat, n > 5 ∧ Even n) : ∃ m, m > 3 := by
+example (h : ∃ n : Nat, n > 5 ∧ n % 2 = 0) :
+    ∃ m, m > 3 := by
   rcases h with ⟨n, hn, heven⟩
   exact ⟨n, by omega⟩
 ```
@@ -122,8 +121,8 @@ example (h : P ∨ Q ∨ R) : R ∨ Q ∨ P := by
 Combine patterns to destructure complex hypotheses in one step:
 
 ```lean
-example (h : ∃ n : Nat, n > 0 ∧ (∃ m, m < n ∧ Even m)) :
-    ∃ k, Even k := by
+example (h : ∃ n : Nat, n > 0 ∧ (∃ m, m < n ∧ m % 2 = 0)) :
+    ∃ k, k % 2 = 0 := by
   rcases h with ⟨n, hn, m, hm, heven⟩
   exact ⟨m, heven⟩
 ```
@@ -176,8 +175,8 @@ Use `⟨p₁, p₂, ..., pₙ⟩` for:
 - Any structure with a single constructor
 
 ```lean
-example (h : ∃ n m : Nat, n < m ∧ Even n ∧ Even m) :
-    ∃ k, Even k := by
+example (h : ∃ n m : Nat, n < m ∧ n % 2 = 0 ∧ m % 2 = 0) :
+    ∃ k, k % 2 = 0 := by
   rcases h with ⟨n, m, _, heven_n, _⟩
   exact ⟨n, heven_n⟩
 ```
@@ -335,7 +334,7 @@ example (h₁ : P ∨ Q) (h₂ : ∃ n, n > 5) : True := by
 
 ```lean
 -- With cases, need multiple steps:
-example (h : ∃ n : Nat, n > 0 ∧ Even n) : True := by
+example (h : ∃ n : Nat, n > 0 ∧ n % 2 = 0) : True := by
   cases h with
   | intro n h' =>
     cases h' with
@@ -343,7 +342,7 @@ example (h : ∃ n : Nat, n > 0 ∧ Even n) : True := by
       trivial
 
 -- With rcases, one step:
-example (h : ∃ n : Nat, n > 0 ∧ Even n) : True := by
+example (h : ∃ n : Nat, n > 0 ∧ n % 2 = 0) : True := by
   rcases h with ⟨n, hn, heven⟩
   trivial
 ```
@@ -446,14 +445,13 @@ example (s : Σ n : Nat, Fin n) : True := by
 
 ```lean
 section
-open Mut
-theorem even_or_odd (n : Nat) : Mut.Even n ∨ Odd n := by
+theorem even_or_odd (n : Nat) : n % 2 = 0 ∨ n % 2 = 1 := by
   induction n with
-  | zero => left; exact .zero
+  | zero => left; grind
   | succ n ih =>
     rcases ih with heven | hodd
-    · right; exact .succ heven
-    · left; exact .succ hodd
+    · right; grind
+    · left; grind
 end
 ```
 
@@ -499,7 +497,8 @@ end
 ```lean +error (name := ctorNames)
 -- Wrong: trying to use constructor names
 example (opt : Option Nat) : True := by
-  rcases opt with none | some n  -- Error: 'none' is not a pattern
+  -- Error: 'none' is not a pattern
+  rcases opt with none | some n
 ```
 ```leanOutput ctorNames
 unexpected identifier; expected command

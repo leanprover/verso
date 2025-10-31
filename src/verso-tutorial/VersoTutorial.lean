@@ -232,16 +232,33 @@ where
         contents.forM (fromBlock style)
 
   codeFromHl (style : ExampleCodeStyle) hl : StateM (HashMap String String) Unit := do
-        match FromJson.fromJson? hl with
-        | .error e => panic! s!"Malformed metadata: {e}"
-        | .ok (hl : Highlighted) =>
-          match style with
-          | .inlineLean m _ _live =>
-            modify fun s =>
-              -- TODO directories/dots in module name?
-              s.alter s!"{m}.lean" fun
-              | none => some hl.toString
-              | some s => s ++ "\n" ++ hl.toString
+    match FromJson.fromJson? hl with
+    | .error e => panic! s!"Malformed metadata: {e}"
+    | .ok (hl : Highlighted) =>
+      match style with
+      | .inlineLean m _ _live =>
+        let str :=
+          if hasErrors hl then addComment hl.toString else hl.toString
+        modify fun s =>
+          -- TODO directories/dots in module name?
+          s.alter s!"{m}.lean" fun
+          | none => some str
+          | some s => some <| s ++ "\n" ++ str
+
+  addComment (str : String) : String :=
+    str.toSlice.splitInclusive "\n"
+      |>.map ("-- " ++ ·.copy)
+      |>.allowNontermination.toList
+      |> String.join
+
+  hasErrors : Highlighted → Bool
+  | .point .error _ => true
+  | .point .. => false
+  | .span msgs hl =>
+    msgs.any (·.1 matches .error) || hasErrors hl
+  | .tactics _ _ _ hl => hasErrors hl
+  | .seq xs => xs.any hasErrors
+  | .text .. | .token .. | .unparsed .. => false
 
 end
 
