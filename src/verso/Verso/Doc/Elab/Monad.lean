@@ -126,10 +126,21 @@ structure DocElabContext where
   genreSyntax : Syntax
   genre : Expr
 
+
+  /-- Whether references to undefined (not-yet-defined) footnotes and links are permitted. -/
   refsAllowed : RefsAllowed
 
-  docReconstructionRef : Option Ident
+  /--
+  The docReconstructionPlaceholder provides a free variable during construction of syntax
+  denoting a document's top-level {lean}`Part` object. This syntax needs to include calls to
+  functions with type {lean}`DocReconstruction → Block _`, and so this placeholder is used as the
+  argument to that function. When the top-level {lean}`Part`-denoting syntax is included in
+  {lean}`VersoDoc`-including syntax, it's turned into a closed term by creating
+  {lit}`` `(fun $docReconstructionPlaceholder => $partContainingFreeVariable)``.
+  -/
+  docReconstructionPlaceholder : Option Ident
 deriving Inhabited
+
 
 def DocElabContext.fromGenreTerm (genreSyntax : Term) : TermElabM DocElabContext := do
   let genre ← Term.elabTerm genreSyntax (some (.const ``Doc.Genre []))
@@ -296,9 +307,9 @@ Adds a block (syntax denoting a function {lit}`Block g`, with potential free var
 -/
 def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := do
   let name ← mkFreshUserName `block
-  let .some docReconstructionRef := (← read).docReconstructionRef
-    | throwErrorAt block "No doc reconstruction name available"
-  let blockSyntax ← ``($(mkIdent name) $docReconstructionRef)
+  let .some docReconstructionPlaceholder := (← read).docReconstructionPlaceholder
+    | throwErrorAt block "No doc reconstruction placeholder available"
+  let blockSyntax ← ``($(mkIdent name) $docReconstructionPlaceholder)
   modifyThe PartElabM.State fun st =>
     { st with
       partContext.blocks := st.partContext.blocks.push blockSyntax
@@ -508,9 +519,9 @@ def FinishedPart.toVersoDoc
 
   -- Generate and return outermost syntax
   let finishedSyntax ← finished.toSyntax genreSyntax
-  let .some docReconstructionRef := ctx.docReconstructionRef
-    | throwError "No doc reconstruction name available"
-  ``(VersoDoc.mk (fun $docReconstructionRef => $finishedSyntax))
+  let .some docReconstructionPlaceholder := ctx.docReconstructionPlaceholder
+    | throwError "No doc reconstruction placeholder available"
+  ``(VersoDoc.mk (fun $docReconstructionPlaceholder => $finishedSyntax))
 
 
 abbrev BlockExpander := Syntax → DocElabM (TSyntax `term)
