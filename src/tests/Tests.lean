@@ -13,6 +13,8 @@ import Tests.Integration.SampleDoc
 import Tests.LeanCode
 import Tests.ParserRegression
 import Tests.Paths
+import Tests.HtmlEntities
 import Tests.Refs
 import Tests.TexUnit
 import Tests.Z85
+import Tests.Zip

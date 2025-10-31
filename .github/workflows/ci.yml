@@ -135,6 +135,65 @@ jobs:
           tsc --noEmit -p jsconfig.json
           popd
 
+      - name: Check that projects emitted from tutorials tests build
+        run: |
+          lake exe tutorial-example
+          failed_zips=()
+
+          while IFS= read -r -d '' zipfile; do
+            echo "Checking $zipfile..."
+            stem=$(basename "$zipfile" .zip)
+            zipdir=$(dirname "$zipfile")
+
+            # Check that all files are under the expected top-level directory
+            if ! unzip -Z1 "$zipfile" | grep -v "^$stem/" | grep -q .; then
+              :  # All files are under $stem/, continue
+            else
+              echo "❌ FAIL: $zipfile contains files outside of '$stem/' directory"
+              failed_zips+=("$zipfile: contains files outside of '$stem/' directory")
+              continue
+            fi
+
+            # Unzip in place
+            unzip -q "$zipfile" -d "$zipdir"
+
+            # Check 1: Top-level directory matches stem
+            if [ ! -d "$zipdir/$stem" ]; then
+              echo "❌ FAIL: $zipfile does not contain top-level directory '$stem'"
+              failed_zips+=("$zipfile: missing top-level directory '$stem'")
+              continue
+            fi
+
+            # Check 2: lean-toolchain exists
+            if [ ! -f "$zipdir/$stem/lean-toolchain" ]; then
+              echo "❌ FAIL: $zipfile missing lean-toolchain"
+              failed_zips+=("$zipfile: missing lean-toolchain")
+              continue
+            fi
+
+            # Check 3: lake build succeeds
+            if ! (cd "$zipdir/$stem" && lake build); then
+              echo "❌ FAIL: $zipfile lake build failed"
+              failed_zips+=("$zipfile: lake build failed")
+              continue
+            fi
+
+            echo "PASS: $zipfile"
+          done < <(find _out/tut -type f -name "*.zip" -print0)
+
+          # Report results
+          if [ ${#failed_zips[@]} -gt 0 ]; then
+            echo ""
+            echo "========================================="
+            echo "FAILURES: ${#failed_zips[@]} zip file(s) failed checks:"
+            printf '%s\n' "${failed_zips[@]}"
+            exit 1
+          else
+            echo ""
+            echo "All zip files passed checks."
+          fi
+
+
       - name: Upload docs to artifact storage
         if: github.ref != 'refs/heads/main'
         uses: actions/upload-artifact@v4

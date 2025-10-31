@@ -1,9 +1,12 @@
 /-
-Copyright (c) 2023-2024 Lean FRO LLC. All rights reserved.
+Copyright (c) 2023-2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-import Lean.Elab.Term
+module
+public import Lean.Elab.Term
+meta import Lean.Elab.Term
+public meta import Lean.Meta.Hint
 import Lean.Meta.Hint
 
 open Lean
@@ -13,7 +16,7 @@ namespace Verso.Output
 /--
 TeX output
 -/
-inductive TeX where
+public inductive TeX where
   /-- Text to be shown in the document, escaped as needed. -/
   | text (string : String)
   /-- Raw TeX code to be included without escaping. -/
@@ -28,16 +31,16 @@ inductive TeX where
   | seq (contents : Array TeX)
 deriving Repr, Inhabited
 
-instance : Coe (Array TeX) TeX where
+public instance : Coe (Array TeX) TeX where
   coe := .seq
 
-instance : Coe (List TeX) TeX where
+public instance : Coe (List TeX) TeX where
   coe xs := .seq xs.toArray
 
-instance : Coe String TeX where
+public instance : Coe String TeX where
   coe := .text
 
-instance : Append TeX where
+public instance : Append TeX where
   append
     | .seq xs, .seq ys => .seq (xs ++ ys)
     | .seq xs, y => .seq (xs.push y)
@@ -47,10 +50,10 @@ instance : Append TeX where
 namespace TeX
 
 /-- The empty TeX document -/
-def empty : TeX := .seq #[]
+public def empty : TeX := .seq #[]
 
 /-- Converts a TeX document to a string to be processed by LaTeX -/
-partial def asString (doc : TeX) : String :=
+public partial def asString (doc : TeX) : String :=
   match doc with
   | .text str => escape str
   | .raw str => str
@@ -69,7 +72,7 @@ declare_syntax_cat macro_name
 scoped syntax ident : macro_name
 scoped syntax "section" : macro_name
 
-partial def _root_.Lean.TSyntax.macroName : TSyntax `macro_name → String
+meta partial def _root_.Lean.TSyntax.macroName : TSyntax `macro_name → String
   | ⟨.node _ _ #[.atom _ x]⟩ => x
   | ⟨.node _ _ #[.ident _ _ x ..]⟩ => x.eraseMacroScopes.toString
   | _ => "unknown"
@@ -87,7 +90,7 @@ scoped syntax "s!" interpolatedStr(term) : tex
 scoped syntax str : tex
 
 open Lean Elab Term in
-partial def elabTeX (stx : TSyntax `tex) : TermElabM Expr := withRef stx do
+meta partial def elabTeX (stx : TSyntax `tex) : TermElabM Expr := withRef stx do
   match stx with
   | `(tex|\Lean{$e}) => do
     elabTermEnsuringType e (some (.const ``TeX []))

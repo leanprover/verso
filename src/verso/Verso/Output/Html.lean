@@ -1,24 +1,34 @@
 /-
-Copyright (c) 2023 Lean FRO LLC. All rights reserved.
+Copyright (c) 2023-2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
+module
+import Lean.DocString.Parser
+public import Lean.Parser.Types
 import Lean.Parser
-import Verso.Parser
-import Lean.Elab.Term.TermElabM
-import Lean.Meta.Hint
+public import Lean.PrettyPrinter.Formatter
+public import Lean.PrettyPrinter.Parenthesizer
+public import Lean.Elab.Term.TermElabM
+meta import Lean.Elab.Term.TermElabM
+public meta import Lean.Meta.Hint
+
 import Verso.Output.Html.Entities
+public import Verso.Output.Html.AttributeName
+public import Verso.Output.Html.Comments
+public meta import Verso.Output.Html.AttributeName
+public meta import Verso.Output.Html.Comments
+public meta import Verso.Output.Html.Tags
+import Verso.Output.Html.Tags
 
 namespace Verso.Output
 
 open Lean
 
-public section
-
 /--
 A representation of HTML, used to render Verso to the web.
 -/
-inductive Html where
+public inductive Html where
   /--
   Textual content. If `escape` is `true`, then characters such as `'&'` are escaped to entities such
   as `"&amp;"` during rendering.
@@ -35,7 +45,7 @@ inductive Html where
 deriving Repr, Inhabited, TypeName, BEq, Hashable
 
 open Syntax in
-partial instance : Quote Html where
+public partial instance : Quote Html where
   quote := q
 where
   quoteArray {α : _} (_inst : Quote α) (xs : Array α) : TSyntax `term :=
@@ -51,30 +61,59 @@ where
 /--
 The empty HTML document.
 -/
-def Html.empty : Html := .seq #[]
+public def Html.empty : Html := .seq #[]
 
 /--
 Converts a string to HTML, escaping special characters.
 -/
-def Html.ofString : String → Html := .text true
+public def Html.ofString : String → Html := .text true
 
 /--
 Appends two HTML documents.
 -/
-def Html.append : Html → Html → Html
+public def Html.append : Html → Html → Html
   | .seq xs, .seq ys => .seq (xs ++ ys)
   | .seq xs, other => .seq (xs.push other)
   | other, .seq ys => .seq (#[other] ++ ys)
   | x, y => .seq #[x, y]
 
-instance : Append Html := ⟨Html.append⟩
+public instance : Append Html := ⟨Html.append⟩
+
+/--
+If the HTML consists of a single tag, then the given attribute is set to the provided value. If the
+attribute already exists, then its value is replaced.
+
+If the HTML is not a single tag, no changes are made.
+-/
+public def Html.setAttribute (attr : String) (value : String) (html : Html) : Html :=
+  match html with
+  | .tag name attrs children =>
+    let attrs :=
+      if let some i := attrs.findFinIdx? (·.1 == attr) then
+        attrs.set i (attr, value)
+      else
+        attrs.push (attr, value)
+    .tag name attrs children
+  | _ => html
+
+/--
+If the HTML consists of a single tag, then the given attribute is set to the provided value. If the
+attribute already exists, then its value is replaced.
+
+Panics if the HTML is not a single tag.
+-/
+public def Html.setAttribute! (attr : String) (value : String) (html : Html) : Html :=
+  match html with
+  | .tag .. => html.setAttribute attr value
+  | other => panic! s!"Not a single HTML node: {repr other}"
+
 
 /--
 Converts an array of HTML elements into a single element by appending them.
 
 This is equivalent to using `Html.seq`, but may result a more compact representation.
 -/
-def Html.fromArray (htmls : Array Html) : Html :=
+public def Html.fromArray (htmls : Array Html) : Html :=
   .seq <| htmls.foldl glue .empty
 where
   glue
@@ -86,16 +125,16 @@ Converts a list of HTML elements into a single element by appending them.
 
 This is equivalent to using `Html.seq` on the corresponding array, but may result in a more compact representation.
 -/
-def Html.fromList (htmls : List Html) : Html := Id.run do
+public def Html.fromList (htmls : List Html) : Html := Id.run do
   let mut out := Html.empty
   for elt in htmls do
     out := out ++ elt
   out
 
-instance : Coe (Array Html) Html where
+public instance : Coe (Array Html) Html where
   coe arr := Html.fromArray arr
 
-instance : Coe (List Html) Html where
+public instance : Coe (List Html) Html where
   coe arr := Html.fromList arr
 
 private def revFrom (i : Nat) (input : Array α) (output : Array α := #[]) : Array α :=
@@ -107,10 +146,10 @@ termination_by input.size - i
 namespace Html
 
 /-- The default `DOCTYPE` for HTML5. -/
-def doctype := "<!DOCTYPE html>"
+public abbrev doctype := "<!DOCTYPE html>"
 
 /-- Visit the entire tree, applying rewrites in some monad. Return `none` to signal that no rewrites are to be performed. -/
-partial def visitM [Monad m]
+public partial def visitM [Monad m]
     (text : (escape : Bool) → String → m (Option Html) := (fun _ _ => pure none))
     (tag : (name : String) → (attrs : Array (String × String)) → (contents : Html) → m (Option Html) := fun _ _ _ => pure none)
     (seq : Array Html → m (Option Html) := fun _ => pure none)
@@ -124,140 +163,7 @@ partial def visitM [Monad m]
     let elts' ← elts.mapM (visitM (text := text) (tag := tag) (seq := seq))
     pure <| (← seq elts').getD (.seq elts')
 
-/-- Void tags are those that cannot have child nodes - they must not have closing tags.
-
-See https://developer.mozilla.org/en-US/docs/Glossary/Void_element
- -/
-private def voidTags : List String :=
-  ["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"]
-
-/--
-Tags for which tag omission rules do not permit omitting the
-closing tag (the XHTML-style `<selfclosing/>` syntax is also invalid
-here). This list includes all SVG tags, since SVG is XML based and XML requires
-that every tag be explicitly closed.
-
-This was manually constructed by grepping through
-- https://html.spec.whatwg.org/
-- https://www.w3.org/TR/SVG11/eltindex.html
-- https://www.w3.org/TR/SVGTiny12/elementTable.html
-- https://www.w3.org/TR/SVG2/eltindex.html
--/
-private def mustClose : List String :=
-  ["b", "u", "mark", "bdi", "bdo", "span", "ins", "del", "picture", "iframe",
-   "object", "video", "audio", "map", "table", "form", "label", "button", "select",
-   "datalist", "textarea", "output", "progress", "meter", "fieldset", "legend",
-   "details", "summary", "dialog", "script", "noscript", "template", "slot",
-   "canvas", "title", "style", "article", "section", "nav", "aside", "h1",
-   "h2", "h3", "h4", "h5", "h6", "hgroup", "header", "footer", "address", "pre",
-   "blockquote", "ol", "ul", "menu", "dl", "figure", "figcaption", "main", "search",
-   "div", "a", "em", "strong", "small", "s", "cite", "q", "dfn", "abbr", "ruby",
-   "data", "time", "code", "var", "samp", "kbd", "sub", "sup", "i"] ++
-  -- SVG tags begin here
-  ["altGlyph", "a", "altGlyphDef", "altGlyphItem", "animate", "animateColor",
-   "animateMotion", "animateTransform", "circle", "clipPath", "color-profile",
-   "cursor", "defs", "desc", "ellipse", "feBlend", "feColorMatrix",
-   "feComponentTransfer", "feComposite", "feConvolveMatrix", "feDiffuseLighting",
-   "feDisplacementMap", "feDistantLight", "feFlood", "feFuncA", "feFuncB",
-   "feFuncG", "feFuncR", "feGaussianBlur", "feImage", "feMerge", "feMergeNode",
-   "feMorphology", "feOffset", "fePointLight", "feSpecularLighting", "feSpotLight",
-   "feTile", "feTurbulence", "filter", "font", "font-face", "font-face-format",
-   "font-face-name", "font-face-src", "font-face-uri", "foreignObject", "g",
-   "glyph", "glyphRef", "hkern", "image", "line", "linearGradient", "marker",
-   "mask", "metadata", "missing-glyph", "mpath", "path", "pattern", "polygon",
-   "polyline", "radialGradient", "rect", "script", "set", "stop", "style", "svg",
-   "switch", "symbol", "text", "textPath", "title", "tref", "tspan", "use", "view",
-   "vkern", "audio", "canvas", "discard", "feDropShadow", "iframe", "unknown",
-   "video"]
-
-/--
-  Tags to break the line after without risking weird results
--/
-private def newlineAfter : List String := [
-  "p", "div", "li", "ul", "ol", "section", "header", "nav", "head", "body",
-  "script", "link", "meta", "html"] ++ [1,2,3,4,5,6].map (s!"h{·}")
-
-open Lean.Parser (rawIdent)
-
-section
-def attributeNameKind := `Verso.Output.Html.attributeName
-
-open Lean.Parser
-open Lean.Doc.Parser
-
-def attributeNameFn : ParserFn :=
-  atomicFn <|
-    nodeFn attributeNameKind <|
-      asStringFn <| andthenFn (satisfyFn versoAttributeNameChar) (manyFn attributeNameCharFn)
-where
-  -- A slight divergence from the spec for the sake of quasiquotation syntax:
-  -- attribute names can't start with a few special characters that the spec allows but that
-  -- are very obscure and make parser errors much worse.
-  versoAttributeNameChar (c : Char) : Bool := c ∉ ['{', '}', '<', '"', '\''] && attributeNameChar c
-  -- https://html.spec.whatwg.org/multipage/syntax.html#attributes-2
-  attributeNameChar (c : Char) : Bool :=
-    !(isControl c) && c ∉ [' ', '"', '\'', '>', '/', '='] && !(isNonChar c)
-  -- https://infra.spec.whatwg.org/#control
-  isControl (c : Char) :=
-    let n := c.toNat
-    n ≥ 0x007f && n ≤ 0x009f
-  -- https://infra.spec.whatwg.org/#noncharacter
-  isNonChar (c : Char) :=
-    let n := c.toNat
-    (n ≥ 0xfdd0 && n ≤ 0xfdef) ||
-    n ∈ [0xFFFE, 0xFFFF, 0x1FFFE, 0x1FFFF, 0x2FFFE, 0x2FFFF, 0x3FFFE, 0x3FFFF, 0x4FFFE,
-      0x4FFFF, 0x5FFFE, 0x5FFFF, 0x6FFFE, 0x6FFFF, 0x7FFFE, 0x7FFFF, 0x8FFFE, 0x8FFFF,
-      0x9FFFE, 0x9FFFF, 0xAFFFE, 0xAFFFF, 0xBFFFE, 0xBFFFF, 0xCFFFE, 0xCFFFF, 0xDFFFE,
-      0xDFFFF, 0xEFFFE, 0xEFFFF, 0xFFFFE, 0xFFFFF, 0x10FFFE, 0x10FFFF]
-  attributeNameCharFn := satisfyFn attributeNameChar "attribute name"
-
-
-def attributeNameNoAntiquot : Parser where
-  fn := andthenFn attributeNameFn (takeWhileFn Char.isWhitespace)
-
-def attributeName : Parser :=
-  withAntiquot (mkAntiquot "attributeName" attributeNameKind) attributeNameNoAntiquot
-
-@[combinator_parenthesizer attributeName]
-def attributeName.parenthesizer := PrettyPrinter.Parenthesizer.visitToken
-
-@[combinator_formatter attributeName]
-def attributeName.formatter := PrettyPrinter.Formatter.visitAtom Name.anonymous
-
-partial def htmlCommentContentsFn : ParserFn := fun c s =>
-  let startPos := s.pos
-  if h : c.atEnd s.pos then
-    s.mkEOIError ["HTML comment end"]
-  else
-    if c.get' s.pos h == '-' then
-      let s := s.setPos (c.next' s.pos h)
-      if h' : ¬c.atEnd s.pos then
-        if c.get' s.pos h' == '-' then
-          let s := s.setPos (c.next' s.pos h')
-          if h'' : ¬c.atEnd s.pos then
-            if c.get' s.pos h'' == '>' then
-              s.setPos (c.next' s.pos h'')
-            else htmlCommentContentsFn c <| s.setPos (c.next' startPos h)
-          else s.mkEOIError ["HTML comment end"]
-        else htmlCommentContentsFn c <| s.setPos (c.next' startPos h)
-      else s.mkEOIError ["HTML comment end"]
-    else htmlCommentContentsFn c <| s.setPos (c.next' startPos h)
-
-def htmlCommentContents : Parser where
-  fn := rawFn htmlCommentContentsFn (trailingWs := true)
-
-@[combinator_parenthesizer htmlCommentContents]
-def htmlCommentContents.parenthesizer := PrettyPrinter.Parenthesizer.visitToken
-
-@[combinator_formatter htmlCommentContents]
-def htmlCommentContents.formatter := PrettyPrinter.Formatter.visitAtom Name.anonymous
-
-def _root_.Lean.TSyntax.getAttributeName (stx : TSyntax attributeNameKind) : String :=
-  if let ⟨.node _ _ #[.atom _ name]⟩ := stx then
-    name
-  else panic! "Not an attribute name"
-
-end
+public section
 
 declare_syntax_cat tag_name
 scoped syntax rawIdent : tag_name
@@ -273,11 +179,10 @@ scoped syntax (name := attrRawNamed) attributeName " = " attrib_val : attrib
 scoped syntax (name := attrBool) attributeName : attrib
 scoped syntax (name := attrAntiquoted) "{{" term "}}" : attrib
 
-partial def _root_.Lean.TSyntax.tagName : TSyntax `tag_name → String
+public meta partial def _root_.Lean.TSyntax.tagName : TSyntax `tag_name → String
   | ⟨.node _ _ #[.atom _ x]⟩ => x
   | ⟨.node _ _ #[.ident _ _ x ..]⟩ => x.eraseMacroScopes.toString
   | _ => "unknown"
-
 
 scoped syntax "{{" term "}}" : html
 scoped syntax "<" tag_name attrib* ">" html* "</" tag_name ">" : html
@@ -289,6 +194,7 @@ scoped syntax "r!" str : html
 
 scoped syntax "{{"  html+ "}}" : term
 scoped syntax "<<<" (attrib ppSpace) * ">>>" : term
+end
 
 open Lean Elab Term Meta in
 meta def elabAttrs (stxs : Array (TSyntax `attrib)) : TermElabM Expr := do
@@ -368,7 +274,7 @@ elab_rules : term
     Meta.mkAppM ``Html.fromArray #[← Meta.mkArrayLit (.const ``Html []) h.toList]
 
 
-scoped instance : Coe String Html := ⟨.text true⟩
+public scoped instance : Coe String Html := ⟨.text true⟩
 
 private def testAttrs := {{ <html charset="UTF-8" charset = "UTF-8" a="b" a-b-c="44" {{#[("x", "y")] }} /> }}
 
@@ -457,7 +363,7 @@ open Std.Format in
 Converts HTML into a pretty-printer document. This is useful for debugging, but it does not preserve
 whitespace around preformatted content and scripts.
 -/
-partial def format : Html → Std.Format
+public partial def format : Html → Std.Format
   | .text true str => .text (str.replace "<" "&lt;" |>.replace ">" "&gt;")
   | .text false str => .text str
   | .tag name attrs (.seq #[]) =>
@@ -476,7 +382,7 @@ partial def format : Html → Std.Format
 /--
 Converts HTML into a string that's suitable for sending to browsers, but is also readable.
 -/
-partial def asString (html : Html) (indent : Nat := 0) (breakLines := true) : String :=
+public partial def asString (html : Html) (indent : Nat := 0) (breakLines := true) : String :=
   match html with
   | .text true str => str.replace "<" "&lt;" |>.replace ">" "&gt;"
   | .text false str => str

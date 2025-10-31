@@ -25,7 +25,7 @@ the uniqueness of internal IDs. Please don't do that - your program may break un
 public structure InternalId where
   private mk ::
   private id : Nat
-deriving BEq, Hashable, Repr, Inhabited, Ord
+deriving BEq, DecidableEq, Hashable, Repr, Inhabited, Ord
 
 public instance : ToJson InternalId where
   toJson i := private
