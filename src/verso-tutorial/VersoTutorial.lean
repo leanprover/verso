@@ -22,10 +22,8 @@ inductive ExampleCodeStyle where
   /--
   The example code should be extracted to a Lean project from the tutorial.
   -/
-  | inlineLean (moduleName : Lean.Name) (toolchain : String)
+  | inlineLean (moduleName : Lean.Name) (toolchain := defaultToolchain)
 deriving BEq, DecidableEq, Inhabited, Repr
-
-def ExampleCodeStyle.default (modName : Lean.Name) (toolchain := defaultToolchain) := inlineLean modName toolchain
 
 open Manual (Tag InternalId) in
 structure Tutorial.PartMetadata where
@@ -101,7 +99,7 @@ open Manual in
 instance : Traverse Tutorial TraverseM where
   part p := do
     if p.metadata.isNone then
-      pure (some { slug := p.titleString.sluggify.toString, summary := "", exampleStyle := .default `Main })
+      pure (some { slug := p.titleString.sluggify.toString, summary := "", exampleStyle := .inlineLean `Main })
     else pure none
   block _ := pure ()
   inline _ := pure ()
