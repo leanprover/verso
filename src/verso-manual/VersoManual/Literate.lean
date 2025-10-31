@@ -65,7 +65,7 @@ instance : LoadLiterate Manual where
 def moduleGenreElabContext [Monad m] [MonadRef m] [MonadQuotation m] : m Doc.Elab.DocElabContext := do
   let genre ← ``(Manual)
   let g := Expr.const ``Manual []
-  return ⟨genre, g, .always⟩
+  return ⟨genre, g, .always, .none⟩
 
 
 open Lean.Doc.Syntax
