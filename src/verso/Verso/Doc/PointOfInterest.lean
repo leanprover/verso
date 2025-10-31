@@ -12,7 +12,7 @@ open Lean Elab Server RequestM
 
 public structure PointOfInterest where
   title : String
-  selectionRange : Option String.Range := none
+  selectionRange : Option Syntax.Range := none
   kind : Lean.Lsp.SymbolKind := .constant
   detail? : Option String
 deriving TypeName
