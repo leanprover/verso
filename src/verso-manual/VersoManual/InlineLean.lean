@@ -162,7 +162,7 @@ def reportMessages {m} [Monad m] [MonadLog m] [MonadError m]
     if messages.hasErrors then
       throwErrorAt blame "No error expected in code block, one occurred"
 
-def foo (_ : DocReconstruction) (str : String) := hlFromExport! str
+def reconstructHighlight (_ : DocReconstruction) (str : String) := hlFromExport! str
 
 /--
 Produces the syntax of an expression that denotes the `hls` value. Specifically,
@@ -172,7 +172,7 @@ quoting a compressed version of the highlighted code.
 -/
 private def quoteHighlightViaSerialization (hls : Highlighted) : DocElabM Term := do
   let repr := hlToExport hls
-  ``(foo (_ : DocReconstruction) $(quote repr))
+  ``(reconstructHighlight (_ : DocReconstruction) $(quote repr))
 
 /--
 De-indents and returns (syntax of) a Block representation containing highlighted Lean code.
