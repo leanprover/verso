@@ -9,11 +9,19 @@ import Verso.Doc
 import VersoManual.Basic
 import VersoManual
 import Lean.Data.Json
+import VersoUtil.Zip
 
 namespace Verso.Genre
 
 open Verso.Doc (Genre)
 open Verso.Multi
+
+inductive ExampleCodeStyle where
+  /--
+  The example code should be extracted to a Lean project from the tutorial.
+  -/
+  | inlineLean (moduleName : Lean.Name)
+deriving BEq, DecidableEq, Inhabited, Repr
 
 open Manual (Tag InternalId) in
 structure Tutorial.PartMetadata where
@@ -25,7 +33,9 @@ structure Tutorial.PartMetadata where
   id : Option InternalId := none
   /-- A summary to show on the overview page. -/
   summary : String
-deriving BEq, Inhabited, Repr
+  /-- How should the code samples in this tutorial be extracted to a downloadable tarball? -/
+  exampleStyle : ExampleCodeStyle
+deriving BEq, DecidableEq, Inhabited, Repr
 
 def Tutorial : Genre :=
   { Manual with
@@ -37,6 +47,10 @@ instance : Inhabited (Genre.PartMetadata Tutorial) :=
 instance : BEq (Genre.PartMetadata Tutorial) := inferInstanceAs (BEq Tutorial.PartMetadata)
 instance : BEq (Genre.Block Tutorial) := inferInstanceAs (BEq Manual.Block)
 instance : BEq (Genre.Inline Tutorial) := inferInstanceAs (BEq Manual.Inline)
+
+instance : Repr (Genre.PartMetadata Tutorial) := inferInstanceAs (Repr Tutorial.PartMetadata)
+instance : Repr (Genre.Block Tutorial) := inferInstanceAs (Repr Manual.Block)
+instance : Repr (Genre.Inline Tutorial) := inferInstanceAs (Repr Manual.Inline)
 
 instance : VersoLiterate.LoadLiterate Tutorial where
   inline := inst.inline
@@ -81,9 +95,9 @@ def savePartXref (slug : Slug) (id : InternalId) (part : Part Tutorial) : Manual
 
 open Manual in
 instance : Traverse Tutorial TraverseM where
-  part p :=
+  part p := do
     if p.metadata.isNone then
-      pure (some { slug := p.titleString.sluggify.toString, summary := "" })
+      pure (some { slug := p.titleString.sluggify.toString, summary := "", exampleStyle := .inlineLean `Main })
     else pure none
   block _ := pure ()
   inline _ := pure ()
@@ -166,6 +180,56 @@ def traverse (logError : String → IO Unit) (tutorials : Tutorials) (config : M
       state := state'
       tutorials := tutorials'
   return (tutorials, state)
+
+section
+open SubVerso Highlighting
+open Std
+
+partial def getCode (text : Part Tutorial) : Array (String × String) :=
+  if let some metadata := text.metadata then
+    StateT.run (go metadata.exampleStyle text) {} |>.2.toArray
+  else
+    #[]
+where
+  go (style : ExampleCodeStyle) (p : Part Tutorial) : StateM (HashMap String String) Unit := do
+    fromPart style p
+    extras style
+
+  extras : ExampleCodeStyle → StateM (HashMap String String) Unit
+    | .inlineLean modName => do
+      let mut lakeToml := "name = " ++ modName.toString.toLower.quote ++ "\n"
+      lakeToml := lakeToml ++ "defaultTargets = [" ++ modName.toString.quote ++ "]\n\n"
+      lakeToml := lakeToml ++ "[[lean_lib]]\n"
+      lakeToml := lakeToml ++ "name = " ++ modName.toString.quote ++ "\n"
+      modify fun s => s.insert "lakefile.toml" lakeToml
+
+  fromPart (style : ExampleCodeStyle) (p : Part Tutorial) : StateM (HashMap String String) Unit := do
+    p.content.forM <| fromBlock style
+    p.subParts.forM <| fromPart style
+
+  fromBlock (style : ExampleCodeStyle) : Block Tutorial → StateM (HashMap String String) Unit
+    | .concat xs | .blockquote xs => xs.forM <| fromBlock style
+    | .ol _ items | .ul items => items.forM (·.contents.forM <| fromBlock style)
+    | .dl items => items.forM (·.desc.forM <| fromBlock style)
+    | .para .. | .code .. => pure ()
+    | .other {name, data, ..} contents => do
+      if name = ``Manual.InlineLean.Block.lean then
+        let .arr #[hl, _, _, _] := data
+          | panic! "Malformed metadata"
+        match FromJson.fromJson? hl with
+        | .error e => panic! s!"Malformed metadata: {e}"
+        | .ok (hl : Highlighted) =>
+          match style with
+          | .inlineLean m =>
+            modify fun s =>
+              -- TODO directories/dots in module name?
+              s.alter s!"{m}.lean" fun
+              | none => some hl.toString
+              | some s => s ++ "\n" ++ hl.toString
+      else
+        contents.forM (fromBlock style)
+
+end
 
 section
 open Verso.Output Html
@@ -404,6 +468,8 @@ def emit (tutorials : Tutorials) : EmitM Unit := do
       let html := {{<main class="tutorial-text">{{html}}</main>}}
       let html ← page (Path.root / metadata.slug) tut.titleString html
       writeHtmlFile (dir / "index.html") html
+      let code := getCode tut
+      Zip.zipToFile (dir / (metadata.slug ++ ".zip")) (method := .store) <| code.map fun (fn, txt) => (metadata.slug ++ "/" ++ fn, txt.bytes)
 
   writeFile (dir / "-verso-docs.json") (toString hlState.dedup.docJson)
 
@@ -430,6 +496,7 @@ def tutorialsMain (tutorials : Tutorials) (args : List String)
 
 where
   go : ReaderT ExtensionImpls IO UInt32 := do
+    let config ← opts config args
     let hasError ← IO.mkRef false
     let logError msg := do hasError.set true; IO.eprintln msg
 
@@ -445,3 +512,9 @@ where
       return 1
     else
       return 0
+
+  opts (cfg : Manual.Config) : List String → ReaderT ExtensionImpls IO Manual.Config
+    | ("--output"::dir::more) => opts {cfg with destination := dir} more
+    | ("--verbose"::more) => opts {cfg with verbose := true} more
+    | (other :: _) => throw (↑ s!"Unknown option {other}")
+    | [] => pure cfg

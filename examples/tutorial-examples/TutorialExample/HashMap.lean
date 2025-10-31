@@ -15,6 +15,7 @@ open Verso.Genre.Manual InlineLean
 %%%
 slug := "hashmap"
 summary := "describes hash maps"
+exampleStyle := .inlineLean `HashMap
 %%%
 
 This is a machine-generated tutorial used for testing the feature. Please don't attempt to learn from it. Think of it as more-realistic Lorem Ipsum.

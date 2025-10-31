@@ -19,7 +19,10 @@ def content : Tutorials where
   topics := #[
     { title := "Data",
       description := #[blocks!"These tutorials describe the use of data in Lean."]
-      tutorials := #[%doc TutorialExample.Data, %doc TutorialExample.HashMap, literate_part⟨"." TutorialExample.Lit "Literately-Produced Tutorial" {slug := "literate", summary := "checks that we can load them"} : Tutorial⟩ |>.toPart]
+      tutorials := #[
+        %doc TutorialExample.Data,
+        %doc TutorialExample.HashMap,
+        literate_part⟨"." TutorialExample.Lit "Literately-Produced Tutorial" {slug := "literate", summary := "checks that we can load them", exampleStyle := .inlineLean `Lit} : Tutorial⟩ |>.toPart]
     },
     { title := "Tactics",
       description := #[]
@@ -28,5 +31,4 @@ def content : Tutorials where
 
   ]
 
--- TODO cmdline for output dir
 def main := tutorialsMain content (config := { destination := "_out/tut" : Verso.Genre.Manual.Config} |>.addKaTeX)

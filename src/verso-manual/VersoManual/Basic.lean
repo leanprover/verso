@@ -140,7 +140,7 @@ inductive Tag where
   | /-- A user-provided tag - respect this if possible -/ provided (name : String)
   | /-- A unique tag, suitable for inclusion in a document -/ private external (name : Slug)
   | /-- A machine-assigned tag -/ private internal (name : String)
-deriving BEq, Hashable, Repr, ToJson, FromJson
+deriving BEq, DecidableEq, Hashable, Repr, ToJson, FromJson
 
 instance : Inhabited Tag := ⟨.external "".sluggify⟩
 
@@ -427,6 +427,12 @@ structure Inline where
   -/
   data : Json := Json.null
 deriving BEq, Hashable, ToJson, FromJson
+
+section
+local instance : Repr Json := ⟨fun v _ => s!"json%" ++ v.render ⟩
+deriving instance Repr for Inline
+end
+
 
 private partial def cmpJson : (j1 j2 : Json) → Ordering
   | .null, .null => .eq

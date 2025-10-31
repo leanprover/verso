@@ -15,6 +15,7 @@ open Verso.Genre.Manual InlineLean
 %%%
 slug := "rcases"
 summary := "is a tactic for case analysis"
+exampleStyle := .inlineLean `RCases
 %%%
 
 This is a machine-generated tutorial used for testing the feature. Please don't attempt to learn from it.  Think of it as more-realistic Lorem Ipsum.
