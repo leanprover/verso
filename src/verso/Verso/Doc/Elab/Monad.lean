@@ -504,7 +504,6 @@ def FinishedPart.toVersoDoc
 
       -- This is possibly overly defensive (or ineffectual)
       Term.ensureNoUnassignedMVars decl
-
       addAndCompile decl
 
   -- Generate and return outermost syntax
