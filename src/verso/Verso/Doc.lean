@@ -633,8 +633,6 @@ public instance [Repr g.Inline] [Repr g.Block] [Repr g.PartMetadata] : Repr (Par
 
 public structure DocReconstruction where
 
-def DocReconstruction.default := DocReconstruction.mk
-
 /--
 The result type of values created by Verso's `#doc` and `#docs` commands. A value of type
 {lean}`VersoDoc` represents a not-fully-evaluated document of type {lean}`Part` that can be turned
