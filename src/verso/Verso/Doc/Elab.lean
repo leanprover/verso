@@ -232,7 +232,7 @@ def decorateClosing : TSyntax `block → DocElabM Unit
   | `(block|%%%%$s $_* %%%%$e) => closes s e
   | _ => pure ()
 
-open Lean.Elab.Term in
+/-- Elaborate a parsed block into syntax denoting an expression of type `Block genre` -/
 partial def elabBlock (block : TSyntax `block) : DocElabM (TSyntax `term) :=
   withTraceNode `Elab.Verso.block (fun _ => pure m!"Block {block}") <|
   withRef block <| withFreshMacroScope <| withIncRecDepth <| do
@@ -291,13 +291,13 @@ where
       let msg := m!"Block content found in a context where a header was expected."
       let note := MessageData.note m!"A document part (section/chapter/etc) consists of a header, followed by zero or more blocks, followed by zero or more sub-parts. This block occurs after a sub-part{which}, but outside of the sub-parts."
       throwErrorAt cmd "{msg}\n{note}"
-    let blk ← liftDocElabM <| elabBlock cmd
+    let blk ← elabBlock cmd
     addBlock blk
 
 @[part_command Lean.Doc.Syntax.footnote_ref]
 partial def _root_.Lean.Doc.Syntax.footnote_ref.command : PartCommand
   | `(block| [^ $name:str ]: $contents* ) =>
-    addFootnoteDef name =<< contents.mapM (withAllowUndefinedRefs .onlyIfDefined <| elabInline ·)
+    addFootnoteDef name =<< contents.mapM (withRefsAllowed .onlyIfDefined <| elabInline ·)
   | _ => throwUnsupportedSyntax
 
 @[part_command Lean.Doc.Syntax.link_ref]

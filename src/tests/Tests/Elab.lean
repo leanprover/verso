@@ -37,6 +37,8 @@ def totallyUndefined : RoleExpanderOf Unit
   | (), _content => do
     `(_)
 
+-- This is not a good error message and it would be great to improve it!
+-- However, the right way to do this may be to eliminate these fallback functions.
 /--
 error: don't know how to synthesize placeholder for argument `head`
 context:
