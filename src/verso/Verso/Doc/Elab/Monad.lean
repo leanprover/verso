@@ -131,12 +131,9 @@ structure DocElabContext where
   refsAllowed : RefsAllowed
 
   /--
-  The docReconstructionPlaceholder provides a free variable during construction of syntax
-  denoting a document's top-level {lean}`Part` object. This syntax needs to include calls to
-  functions with type {lean}`DocReconstruction → Block _`, and so this placeholder is used as the
-  argument to that function. When the top-level {lean}`Part`-denoting syntax is included in
-  {lean}`VersoDoc`-including syntax, it's turned into a closed term by creating
-  {lit}`` `(fun $docReconstructionPlaceholder => $partContainingFreeVariable)``.
+  The docReconstructionPlaceholder provides a free variable during Verso document elaboration. This
+  syntax object cannot be successfully elaborated to a term until closed as a function
+  {lit}`` `(fun $docReconstructionPlaceholder => $termContainingFreeVariable)``.
   -/
   docReconstructionPlaceholder : Option Ident
 deriving Inhabited
@@ -144,7 +141,7 @@ deriving Inhabited
 
 def DocElabContext.fromGenreTerm (genreSyntax : Term) : TermElabM DocElabContext := do
   let genre ← Term.elabTerm genreSyntax (some (.const ``Doc.Genre []))
-  return DocElabContext.mk genreSyntax genre .always (.some <| mkIdent (← mkFreshUserName `ref))
+  return DocElabContext.mk genreSyntax genre .always (.some <| mkIdent (← mkFreshUserName `docRecon))
 
 structure DocElabM.State where
   linkRefs : HashMap String DocUses := {}
@@ -302,18 +299,30 @@ def PartElabM.setTitle (titlePreview : String) (titleInlines : Array (TSyntax `t
   {st with partContext.expandedTitle := some (titlePreview, titleInlines)}
 
 /--
-Adds a block (syntax denoting a function {lit}`Block g`, with potential free variables of type
-{lean}`DocReconstruction`) to the elaboration state.
+Adds a block (syntax denoting a function {lit}`Block g`)to the elaboration state.
+
+If some {name}`blockInternalDocReconstructionPlaceholder` is given to represent unresolved free
+references to a {lean}`DocReconstruction` object within this block, captures those references with a
+function argument.
 -/
-def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := do
+def PartElabM.addBlock (block : TSyntax `term) (blockInternalDocReconstructionPlaceholder : Option Ident := .none)  : PartElabM Unit := do
+  -- The syntax denoting the top-level Part structure will refer to this block by name, passing it
+  -- the ident that holds the `DocReconstruction` object.
   let name ← mkFreshUserName `block
   let .some docReconstructionPlaceholder := (← read).docReconstructionPlaceholder
     | throwErrorAt block "No doc reconstruction placeholder available"
-  let blockSyntax ← ``($(mkIdent name) $docReconstructionPlaceholder)
+  let blockRefSyntax ← ``($(mkIdent name) $docReconstructionPlaceholder)
+
+  -- If the internal block includes a doc reconstruction placeholder, it should be different from
+  -- the one in the current `DocElabContext` to maintain good hygiene.
+  let blockDefSyntax ← match blockInternalDocReconstructionPlaceholder with
+    | .none => `(fun _ => $block)
+    | .some name => `(fun $name => $block)
+
   modifyThe PartElabM.State fun st =>
     { st with
-      partContext.blocks := st.partContext.blocks.push blockSyntax
-      deferredBlocks := st.deferredBlocks.push (name, block)
+      partContext.blocks := st.partContext.blocks.push blockRefSyntax
+      deferredBlocks := st.deferredBlocks.push (name, blockDefSyntax)
     }
 
 def PartElabM.addPart (finished : FinishedPart) : PartElabM Unit := modifyThe State fun st =>
@@ -434,23 +443,6 @@ unsafe def inlineExpandersForUnsafe (x : Name) : DocElabM (Array InlineExpander)
 @[implemented_by inlineExpandersForUnsafe]
 opaque inlineExpandersFor (x : Name) : DocElabM (Array InlineExpander)
 
-def substForDocReconstructionMvars (same : Expr) (e : Expr) : MetaM Expr := do match e with
-  | .app t1 t2 => return .app (← substForDocReconstructionMvars same t1) (← substForDocReconstructionMvars same t2)
-  | .mdata d e => return .mdata d (← substForDocReconstructionMvars same e)
-  | e@(.mvar _) =>
-    let ty ← Meta.inferType e
-    return if ty.isAppOf ``DocReconstruction then same else e
-  | .lam n t b i => return .lam n (← substForDocReconstructionMvars same t) (← substForDocReconstructionMvars same b) i
-  | .forallE n t b i => return .forallE n (← substForDocReconstructionMvars same t) (← substForDocReconstructionMvars same b) i
-  | .letE m t d b x =>
-    return .letE m
-      (← substForDocReconstructionMvars same t)
-      (← substForDocReconstructionMvars same d)
-      (← substForDocReconstructionMvars same b)
-      x
-  | .proj n i e => return .proj n i (← substForDocReconstructionMvars same e)
-  | .const .. | .sort .. | .fvar .. | .bvar .. | .lit .. => return e
-
 /--
 Creates a term denoting a {lean}`VersoDoc` value from a {lean}`FinishedPart`. This is the final step
 in turning a parsed verso doc into syntax.
@@ -482,18 +474,10 @@ def FinishedPart.toVersoDoc
 
   -- Add and compile blocks
   for (name, block) in partElabState.deferredBlocks do
-    let mut type := .app (.const ``Doc.Block []) ctx.genre
+    let mut type ← Term.elabType (← ``(DocReconstruction → Doc.Block $genreSyntax))
     let mut blockExpr ← Term.elabTerm block (some type)
 
-    -- Wrap blockExpr in a lambda, abstracting all the holes of type `DocReconstruction`
-    blockExpr ← instantiateMVars blockExpr
-    let arg := Expr.fvar (← mkFreshFVarId)
-    blockExpr ← substForDocReconstructionMvars arg blockExpr
-    blockExpr ← Expr.abstractM blockExpr #[arg]
-    blockExpr := .lam `inst (mkConst ``DocReconstruction) blockExpr .instImplicit
-
     -- Wrap auto-bound implicits and global variables (this is possibly overly defensive)
-    type ← Term.elabType (← ``(DocReconstruction → Doc.Block $genreSyntax))
     type ← Meta.mkForallFVars (← Term.addAutoBoundImplicits #[] none) type
 
     -- Replace any universe metavariables with universe variables; report errors

@@ -42,6 +42,7 @@ def totallyUndefined : RoleExpanderOf Unit
 /--
 error: don't know how to synthesize placeholder for argument `head`
 context:
+docReconInBlock✝ : Doc.DocReconstruction
 ⊢ Doc.Inline Doc.Genre.none
 -/
 #guard_msgs in

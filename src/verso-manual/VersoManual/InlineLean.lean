@@ -171,8 +171,10 @@ represents the same highlight as `quote hls`, but will hopefully produce smaller
 quoting a compressed version of the highlighted code.
 -/
 private def quoteHighlightViaSerialization (hls : Highlighted) : DocElabM Term := do
+  let .some placeholderName := (← readThe DocElabContext).docReconstructionPlaceholder
+    | throwError "Temp"
   let repr := hlToExport hls
-  ``(reconstructHighlight (_ : DocReconstruction) $(quote repr))
+  ``(reconstructHighlight $placeholderName $(quote repr))
 
 /--
 De-indents and returns (syntax of) a Block representation containing highlighted Lean code.
