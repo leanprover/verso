@@ -288,7 +288,7 @@ def PartElabM.setTitle (titlePreview : String) (titleInlines : Array (TSyntax `t
   {st with partContext.expandedTitle := some (titlePreview, titleInlines)}
 
 /--
-Add a block (syntax denoting a function {lit}`Block g`) to the elaboration state.
+Adds a block (syntax denoting a function {lit}`Block g`) to the Verso elaboration state.
 -/
 def PartElabM.addBlock (block : TSyntax `term) : PartElabM Unit := do
   let name ← mkFreshUserName `block
