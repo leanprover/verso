@@ -81,7 +81,7 @@ def getModuleWithDocs (path : StrLit) (mod : Ident) (title : StrLit) : PartElabM
 
   let g := Expr.const ``Manual []
 
-  let (titleTerm, _st) ← DocElabM.run (← moduleGenreElabContext) {} initState <| do
+  let (titleTerm, _st) ← DocElabM.run (← moduleGenreElabContext) { highlightDeduplicationTable := .none } initState <| do
     titleParts.mapM (elabInline ⟨·⟩)
 
   let modJson ← withTraceNode `verso.blog.literate.loadMod (fun _ => pure m!"Loading '{mod}' in '{path}'") <|
