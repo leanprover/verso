@@ -96,6 +96,8 @@ a:focus {
   background: inherit;
   font-size: inherit;
   font-weight: inherit;
+  padding: 0;
+  margin: 0;
 }
 
 .code-link::before {
