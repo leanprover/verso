@@ -9,6 +9,7 @@ import Verso.Doc
 import VersoManual.Basic
 import VersoManual
 import Lean.Data.Json
+import VersoUtil.LzCompress
 import VersoUtil.Zip
 
 namespace Verso.Genre
@@ -17,12 +18,13 @@ open Verso.Doc (Genre)
 open Verso.Multi
 
 private def defaultToolchain := "leanprover/lean4:" ++ Lean.versionString
+private def defaultLive := "lean-v" ++ Lean.versionString
 
 inductive ExampleCodeStyle where
   /--
   The example code should be extracted to a Lean project from the tutorial.
   -/
-  | inlineLean (moduleName : Lean.Name) (toolchain := defaultToolchain)
+  | inlineLean (moduleName : Lean.Name) (toolchain := defaultToolchain) (liveProject := some defaultLive)
 deriving BEq, DecidableEq, Inhabited, Repr
 
 open Manual (Tag InternalId) in
@@ -198,7 +200,7 @@ where
     extras style
 
   extras : ExampleCodeStyle → StateM (HashMap String String) Unit
-    | .inlineLean modName toolchain => do
+    | .inlineLean modName toolchain _live => do
       let mut lakeToml := "name = " ++ modName.toString.toLower.quote ++ "\n"
       lakeToml := lakeToml ++ "defaultTargets = [" ++ modName.toString.quote ++ "]\n\n"
       lakeToml := lakeToml ++ "[[lean_lib]]\n"
@@ -234,7 +236,7 @@ where
         | .error e => panic! s!"Malformed metadata: {e}"
         | .ok (hl : Highlighted) =>
           match style with
-          | .inlineLean m _ =>
+          | .inlineLean m _ _live =>
             modify fun s =>
               -- TODO directories/dots in module name?
               s.alter s!"{m}.lean" fun
@@ -284,10 +286,22 @@ structure LocalToC where
   link : Link
   children : Array LocalToC
 
+structure LiveConfig where
+  /-- The location of the editor -/
+  root : String := "https://live.lean-lang.org/"
+  /-- The project to use for the link -/
+  project : String
+  /-- The text to use for the link -/
+  content : String
+
+open Verso.LzCompress in
+def LiveConfig.url (config : LiveConfig) : String :=
+  s!"{config.root}#project={config.project}&codez={lzCompress config.content}"
+
 structure Theme where
   page : PageContent → Html
   topic : TopicContent → Html
-  tutorialToC : Option (String × String) → LocalToC → Html
+  tutorialToC : Option (String × String) → Option LiveConfig → LocalToC → Html
   cssFiles : Array (String × String) := #[]
   jsFiles : Array Manual.JsFile := #[]
 
@@ -325,11 +339,20 @@ def Theme.default : Theme where
         </div>
       </div>
     }}
-  tutorialToC code? toc := if toc.children.isEmpty then .empty else {{
+  tutorialToC code? live? toc := if toc.children.isEmpty then .empty else {{
     <nav class="local-toc">
       <div> <!-- This is for scroll prevention -->
         <h1>{{toc.title}}</h1>
-        {{if let some (url, file) := code? then {{ <a href={{url}} class="download-link"><code>{{file}}</code></a> }} else .empty}}
+        {{ if live?.isSome || code?.isSome then {{
+            <div class="code-links">
+              {{if let some live := live? then
+                {{ <a href={{live.url}} class="live code-link">"Live"</a> }}
+                else .empty}}
+              {{if let some (url, _file) := code? then {{ <a href={{url}} class="download code-link"><code>".zip"</code></a> }} else .empty}}
+            </div>
+          }}
+          else .empty
+        }}
       </div>
       <ol>{{toc.children.map defaultLocalToC}}</ol>
     </nav>
@@ -476,6 +499,8 @@ def emit (tutorials : Tutorials) : EmitM Unit := do
       let some metadata := tut.metadata
         | logError s!"No metadata for {tut.titleString}"
       let dir := dir / metadata.slug
+      let code := getCode tut
+      Zip.zipToFile (dir / (metadata.slug ++ ".zip")) (method := .store) <| code.map fun (fn, txt) => (metadata.slug ++ "/" ++ fn, txt.bytes)
       ensureDir dir
       let (html, hlState') ← Genre.toHtml (m := ReaderT ExtensionImpls IO) Tutorial { logError := (logError ·) } { logError } (← readThe Manual.TraverseState) {} {} {} tut hlState
       hlState := hlState'
@@ -483,12 +508,19 @@ def emit (tutorials : Tutorials) : EmitM Unit := do
       let sampleCode := do
         match metadata.exampleStyle with
         | .inlineLean .. => pure (metadata.slug ++ "/" ++ metadata.slug ++ ".zip", metadata.slug ++ ".zip")
-      let html := html ++ (← theme).tutorialToC sampleCode toc
+      let live? := do
+        match metadata.exampleStyle with
+        | .inlineLean _ _ (some project) =>
+          let content ←
+            match code.filter (·.1.endsWith ".lean") with
+            | #[(_, code)] => pure code
+            | _ => none
+          pure { project, content }
+        | _ => none
+      let html := html ++ (← theme).tutorialToC sampleCode live? toc
       let html := {{<main class="tutorial-text">{{html}}</main>}}
       let html ← page (Path.root / metadata.slug) tut.titleString html
       writeHtmlFile (dir / "index.html") html
-      let code := getCode tut
-      Zip.zipToFile (dir / (metadata.slug ++ ".zip")) (method := .store) <| code.map fun (fn, txt) => (metadata.slug ++ "/" ++ fn, txt.bytes)
 
   writeFile (dir / "-verso-docs.json") (toString hlState.dedup.docJson)
 

@@ -74,7 +74,12 @@ a:focus {
   outline-offset: 2px;
 }
 
-.download-link {
+.code-links {
+  display: flex;
+  gap: 1em;
+}
+
+.code-link {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
@@ -83,18 +88,27 @@ a:focus {
   border-radius: 0.5rem;
   padding: 0 0.5rem;
   margin-bottom: 0.5rem;
+  width: 45%;
+  text-align: center
 }
 
-.download-link code {
+.code-link code {
   background: inherit;
   font-size: inherit;
   font-weight: inherit;
 }
 
-.download-link::before {
-  content: "↓";
+.code-link::before {
   font-size: 1.1em;
   font-weight: bold;
+}
+
+.download.code-link::before {
+  content: "↓";
+}
+
+.live.code-link::before {
+  content: "↪";
 }
 
 /* Sections for tutorial list page */

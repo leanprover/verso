@@ -7,6 +7,7 @@ Author: David Thrane Christiansen
 import Verso
 import VersoManual
 import VersoSearch.PorterStemmer
+import VersoUtil.LzCompress
 import Tests
 
 structure Config where
@@ -100,6 +101,33 @@ where
       return acc.push <| Char.ofNat ('a'.toNat + (← IO.rand 0 25))
     return stem ++ "." ++ ext
 
+open Verso.LzCompress in
+def testLz (_ : Config) : IO Unit := do
+  let actual := lzCompress r#"import Mathlib.Logic.Basic -- basic facts in logic
+-- theorems in Lean's mathematics library
+
+-- Let P and Q be true-false statements
+variable (P Q : Prop)
+
+-- The following is a basic result in logic
+example : ¬ (P ∧ Q) ↔ ¬ P ∨ ¬ Q := by
+  -- its proof is already in Lean's mathematics library
+  exact not_and_or
+
+-- Here is another basic result in logic
+example : ¬ (P ∨ Q) ↔ ¬ P ∧ ¬ Q := by
+  apply? -- we can search for the proof in the library
+  -- we can also replace `apply?` with its output
+"#
+  let expected :=
+    "JYWwDg9gTgLgBAWQIYwBYBtgCMB0AZCAc2AGMcAhJAZ1LgFo64traAzJEmKuYAOznRFSAKAZw0AU2gSQ3" ++
+    "PnDwSkvAOTcQKVDJSlumLFCRQAnsNGNF8AApxlAEzgBFJhPFQArhLrt0VV1RgUGQleLmEANyNgJCx0VwA" ++
+    "KG2cALjgrKAgwAEozMQAVLThWCHRBAHc+Qh5uJCYWEjgoCSp3dHh5QWISYQkADyRwOLhUgBq4RLhAciIn" ++
+    "LLhAFMI4MZtACiJFp2GAXiZTOHpGYC44MAyIVmrbdCakO2MefkVlNTgNSRfdAWxDE2Fdvo54XgQGAAfXs" ++
+    "wOguUYAAkJE1zsogVooHUaA0mi02ncBEJun9Bq5RuMVjN5msbNMxiktlgdrYwGB0MYAPx7OBlVwkZRwPx" ++
+    "GEioIrQcSFY4QU5YyQfAxGWlidlwTn8JC+CCNCQMjiuAAGSHpjKZmrZB35B24EHcMDA5uEQA"
+  if actual ≠ expected then
+    throw <| .userError "Mismatched lzCompress output"
 
 open Verso.Integration in
 def tests := [
