@@ -153,7 +153,6 @@ structure PartElabM.State where
   linkDefs : HashMap String (DocDef String) := {}
   footnoteDefs : HashMap String (DocDef (Array (TSyntax `term))) := {}
   deferredBlocks : Array (Name × Term) := #[]
-
 deriving Inhabited
 
 def PartElabM.State.init (title : Syntax) (expandedTitle : Option (String × Array (TSyntax `term)) := none) : PartElabM.State where
