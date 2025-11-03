@@ -141,7 +141,7 @@ deriving Inhabited
 
 def DocElabContext.fromGenreTerm (genreSyntax : Term) : TermElabM DocElabContext := do
   let genre ← Term.elabTerm genreSyntax (some (.const ``Doc.Genre []))
-  return DocElabContext.mk genreSyntax genre .always (.some <| mkIdent (← mkFreshUserName `docRecon))
+  return DocElabContext.mk genreSyntax genre .always (.some <| mkIdent (← mkFreshUserName `docReconst))
 
 structure DocElabM.State where
   linkRefs : HashMap String DocUses := {}

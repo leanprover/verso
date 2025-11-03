@@ -659,7 +659,7 @@ Replace the metadata in a VersoDoc.
 This is something of a hack used as a workaround in LiterateModuleDocs.
 -/
 public def VersoDoc.withMetadata (metadata? : Option genre.PartMetadata)  : VersoDoc genre → VersoDoc genre
-  | .mk construct => .mk fun recon => { construct recon with metadata := metadata? }
+  | .mk construct => .mk fun docReconst => { construct docReconst with metadata := metadata? }
 
 /--
 Identify function; this is a temporary compatibility shim to introduce a new type,
