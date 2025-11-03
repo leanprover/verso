@@ -30,15 +30,28 @@ between genres. The goals of the project are:
  * Empower users to conveniently add their own features to the documentation language
  * Enable but not require extensions to be usable in multiple genres
 
-Please consult the in-progress Verso manual
-([HTML](https://github.com/leanprover/verso/releases/download/latest/html-single-page.zip),
-[PDF](https://github.com/leanprover/verso/releases/download/latest/manual.pdf))
-for further details. Today, Verso is usable for running a website and
-blog, while the other genres are still under development.
-
 Verso's design is primarily inspired by
 [Scribble](https://docs.racket-lang.org/scribble/index.html) and
 [Sphinx](https://www.sphinx-doc.org/en/master/).
+
+## Getting Started
+
+### Examples
+
+The [`verso-templates`](https://github.com/leanprover/verso-templates)
+repository contains templates that can serve as a starting point for
+Verso-based projects.
+
+### Documentation
+
+The in-progress Verso manual
+([HTML](https://github.com/leanprover/verso/releases/download/latest/html-manual.zip),
+[PDF](https://github.com/leanprover/verso/releases/download/latest/manual.pdf))
+describes the Verso markup language and partially documents the
+built-in genres. Today, Verso is usable for running a website and blog
+and for writing long-form technical documentation, such as the [Lean
+language reference](https://lean-lang.org/doc/reference/latest/).
+
 
 ## Branches and Tags
 

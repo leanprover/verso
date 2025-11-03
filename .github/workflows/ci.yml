@@ -4,8 +4,11 @@ on:
       - master
       - main
       - nightly-testing
+    tags:
+      - 'v4*'
   pull_request:
   merge_group:
+
 
 name: Continuous Integration
 
@@ -21,7 +24,7 @@ jobs:
           ./elan-init -y --default-toolchain none
           echo "$HOME/.elan/bin" >> $GITHUB_PATH
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
 
       - name: List all files
         run: |
@@ -124,8 +127,9 @@ jobs:
         run: |
           ./generate.sh
           cp _out/tex/main.pdf ./manual.pdf
-          cp -r _out/html-single html-single-page
-          zip -r html-single-page.zip html-single-page
+          cp -r _out/html-multi html-multi
+          cp README-html.md html-multi/README.md
+          zip -r html-manual.zip html-multi
 
       - name: Install TypeScript
         run: |
@@ -144,20 +148,31 @@ jobs:
           popd
 
       - name: Upload docs to artifact storage
-        if: github.ref != 'refs/heads/main'
+        if: github.ref_type != 'tag' && github.ref != 'refs/heads/main'
         uses: actions/upload-artifact@v4
         with:
           name: "Verso manual (PDF and HTML)"
           path: |
             manual.pdf
-            html-single-page.zip
+            html-manual.zip
 
       - uses: "marvinpinto/action-automatic-releases@latest"
-        if: github.ref == 'refs/heads/main'
+        if: github.ref_type != 'tag' && github.ref == 'refs/heads/main'
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
           automatic_release_tag: "latest"
           title: "Verso manual (PDF and HTML)"
           files: |
             manual.pdf
-            html-single-page.zip
+            html-manual.zip
+
+      - name: Create release from tag
+        if: github.ref_type == 'tag' && startsWith(github.ref_name, 'v4')
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create ${{ github.ref_name }} \
+            manual.pdf \
+            html-manual.zip \
+            --title "Release ${{ github.ref_name }}" \
+            --notes "Automated release for ${{ github.ref_name }}"

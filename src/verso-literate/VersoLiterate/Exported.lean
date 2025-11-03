@@ -305,7 +305,7 @@ partial def modToPage [LoadLiterate g] (mod : LitMod) (title : Array (Inline g))
     let p' := stack.back
     stack := stack.pop
     p := pushPart p' p
-  return VersoDoc.mk (fun () => p)
+  return VersoDoc.mk (fun _ => p) "{}"
 where
   docstringBlock (doc : LitVersoDocString) : Array (Block g) :=
     let parts := doc.subsections.map loadPart
