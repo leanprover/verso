@@ -512,11 +512,11 @@ def FinishedPart.toVersoDoc
   let .some docReconstructionPlaceholder := ctx.docReconstructionPlaceholder
     | throwError "No doc reconstruction placeholder available"
 
-  let reconJson := match docElabState.highlightDeduplicationTable with
+  let reconstJson := match docElabState.highlightDeduplicationTable with
     | .none => Json.mkObj []
     | .some table => Json.mkObj [("highlight", table.toExport.toJson)]
 
-  ``(VersoDoc.mk (fun $docReconstructionPlaceholder => $finishedSyntax) $(quote reconJson.compress))
+  ``(VersoDoc.mk (fun $docReconstructionPlaceholder => $finishedSyntax) $(quote reconstJson.compress))
 
 
 abbrev BlockExpander := Syntax → DocElabM (TSyntax `term)

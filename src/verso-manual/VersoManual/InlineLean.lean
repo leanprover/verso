@@ -162,8 +162,8 @@ def reportMessages {m} [Monad m] [MonadLog m] [MonadError m]
     if messages.hasErrors then
       throwErrorAt blame "No error expected in code block, one occurred"
 
-def reconstructHighlight (recon : DocReconstruction) (key : Export.Key) :=
-  match recon.highlightDeduplication.toHighlighted key with
+def reconstructHighlight (docReconst : DocReconstruction) (key : Export.Key) :=
+  match docReconst.highlightDeduplication.toHighlighted key with
   | .error msg => panic! s!"Unable to export key {key}: {msg}"
   | .ok v => v
 
