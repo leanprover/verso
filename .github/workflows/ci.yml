@@ -6,8 +6,8 @@ on:
       - nightly-testing
   pull_request:
   merge_group:
-  release:
-    types: [created]
+  tags:
+    - 'v4*'
 
 name: Continuous Integration
 
@@ -156,7 +156,7 @@ jobs:
             html-manual.zip
 
       - uses: "marvinpinto/action-automatic-releases@latest"
-        if: github.event_name != 'release' && github.ref == 'refs/heads/main'
+        if: github.ref_type != 'tag' && github.ref == 'refs/heads/main'
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
           automatic_release_tag: "latest"
