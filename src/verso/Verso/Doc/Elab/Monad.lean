@@ -133,7 +133,7 @@ structure DocElabContext where
   /--
   The docReconstructionPlaceholder provides a free variable during Verso document elaboration. This
   syntax object cannot be successfully elaborated to a term until closed as a function
-  {lit}`` `(fun $docReconstructionPlaceholder => $termContainingFreeVariable)``.
+  {lit}`` `(fun $docReconstructionPlaceholder => $termContainingFreeVariable) ``.
   -/
   docReconstructionPlaceholder : Option Ident
 deriving Inhabited
