@@ -279,22 +279,44 @@ Lean code to HTML. This HTML includes hovers, clickable "go to
 definition" links, a search function, and rendered intermediate proof
 states.
 
-There are two steps to using it, after adding a package dependency on
-Verso in your Lake configuration:
+To use this in your project:
 
-1. Generate literate program data from your Lean libraries or modules
+1. Add Verso as a package dependency.
+
+   If you're using a `lakefile.toml` configuration, that looks like this:
+
+   ```toml
+   [[require]]
+   name = "verso"
+   git = "https://github.com/leanprover/verso.git"
+   rev = "latest"
+   ```
+
+   If you're using a `lakefile.lean` configuration, that looks like this:
+
+   ```lean4
+   require verso from git "https://github.com/leanprover/verso.git"@"latest"
+   ```
+
+2. Generate literate program data from your Lean libraries or modules
    by building their `literate` facet. For library `MyLib`, run:
 
    ```
    lake build MyLib:literate
    ```
 
-2. Generate HTML from this literate program data. To put the HTML in
-   `htmldir`, run:
+   This generates files in the folder `.lake/build/literate`
+
+3. Generate HTML from this literate program data. To put the HTML in a
+   directory named `dist`, run:
    
    ```
-   lake exe verso-html ./lake/build/literate htmldir
+   lake exe verso-html .lake/build/literate dist
    ``` 
+
+You can preview the resulting files by running
+`python3 -m http.server -d dist` and pointing a web browser to
+http://localhost:8000/
 
 In this output, Verso docstrings and moduledocs are rendered. Setting
 `doc.verso` to `true` enables these in source files.
