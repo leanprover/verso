@@ -903,21 +903,21 @@ def lit : RoleExpander
 
 
 private def hasSubstring (s pattern : String) : Bool :=
-  if h : pattern.endPos.1 = 0 then false
+  if h : pattern.rawEndPos.1 = 0 then false
   else
     have hPatt := Nat.zero_lt_of_ne_zero h
     let rec loop (pos : String.Pos.Raw) :=
-      if h : pos.byteIdx + pattern.endPos.byteIdx > s.endPos.byteIdx then
+      if h : pos.byteIdx + pattern.rawEndPos.byteIdx > s.rawEndPos.byteIdx then
         false
       else
         have := Nat.lt_of_lt_of_le (Nat.add_lt_add_left hPatt _) (Nat.ge_of_not_lt h)
-        if pos.substrEq s pattern 0 pattern.endPos.byteIdx then
+        if pos.substrEq s pattern 0 pattern.rawEndPos.byteIdx then
           have := Nat.sub_lt_sub_left this (Nat.add_lt_add_left hPatt _)
           true
         else
           have := Nat.sub_lt_sub_left this (pos.lt_next s)
           loop (pos.next s)
-      termination_by s.endPos.1 - pos.1
+      termination_by s.rawEndPos.1 - pos.1
     loop 0
 
 

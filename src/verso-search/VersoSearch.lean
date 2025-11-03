@@ -223,14 +223,14 @@ where
     else
       let item := if item.docs.contains ref then item else { item with docFreq := item.docFreq + 1 }
       { item with docs := item.docs.insert ref ⟨termFreq⟩ }
-  termination_by iter.s.endPos.byteIdx - iter.i.byteIdx
+  termination_by iter.s.rawEndPos.byteIdx - iter.i.byteIdx
   decreasing_by
-    have : iter.s.endPos.byteIdx > iter.i.byteIdx := by
-      simp only [String.Iterator.hasNext, String.byteIdx_endPos, decide_eq_true_eq] at h
+    have : iter.s.rawEndPos.byteIdx > iter.i.byteIdx := by
+      simp only [String.Iterator.hasNext, String.byteIdx_rawEndPos, decide_eq_true_eq] at h
       assumption
     simp [String.Iterator.next']
     apply Nat.sub_lt_sub_left
-    . simp_all [String.endPos]
+    . simp_all [String.rawEndPos]
     . simp [String.Pos.Raw.next, Char.utf8Size]
       grind
 
@@ -256,10 +256,10 @@ where
       loop item (iter.next' h)
     else
       pure item
-  termination_by iter.s.endPos.byteIdx - iter.i.byteIdx
+  termination_by iter.s.rawEndPos.byteIdx - iter.i.byteIdx
   decreasing_by
-    have : iter.s.endPos.byteIdx > iter.i.byteIdx := by
-      simp only [String.Iterator.hasNext, String.byteIdx_endPos, decide_eq_true_eq] at h
+    have : iter.s.rawEndPos.byteIdx > iter.i.byteIdx := by
+      simp only [String.Iterator.hasNext, String.byteIdx_rawEndPos, decide_eq_true_eq] at h
       assumption
     simp
     apply Nat.sub_lt_sub_left <;> simp_all
@@ -285,11 +285,11 @@ where
       else item
     else
       item
-  termination_by iter.s.endPos.byteIdx - iter.i.byteIdx
+  termination_by iter.s.rawEndPos.byteIdx - iter.i.byteIdx
   decreasing_by
     simp [iter] at *
     clear iter
-    have : iter.s.endPos.byteIdx > iter.i.byteIdx := by
+    have : iter.s.rawEndPos.byteIdx > iter.i.byteIdx := by
       simp_all [String.Iterator.hasNext, String.Iterator.next', String.Pos.Raw.next]
       grind
     simp [String.Iterator.next', String.Pos.Raw.next]
