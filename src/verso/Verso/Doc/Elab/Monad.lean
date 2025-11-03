@@ -473,32 +473,33 @@ def FinishedPart.toVersoDoc
 
   -- Add and compile blocks
   for (name, block) in partElabState.deferredBlocks do
-    let mut type ← Term.elabType (← ``(DocReconstruction → Doc.Block $genreSyntax))
-    let mut blockExpr ← Term.elabTerm block (some type)
+    withCurrHeartbeats <| do -- reset the heartbeat count for each block addAndCompile
+      let mut type ← Term.elabType (← ``(DocReconstruction → Doc.Block $genreSyntax))
+      let mut blockExpr ← Term.elabTerm block (some type)
 
-    -- Wrap auto-bound implicits and global variables (this is possibly overly defensive)
-    type ← Meta.mkForallFVars (← Term.addAutoBoundImplicits #[] none) type
+      -- Wrap auto-bound implicits and global variables (this is possibly overly defensive)
+      type ← Meta.mkForallFVars (← Term.addAutoBoundImplicits #[] none) type
 
-    -- Replace any universe metavariables with universe variables; report errors
-    type ← Term.levelMVarToParam type
-    match sortDeclLevelParams [] [] (collectLevelParams {} type |>.params) with
-    | Except.error msg      => throwErrorAt block msg
-    | Except.ok levelParams =>
-      Term.synthesizeSyntheticMVarsNoPostponing
-      type ← instantiateMVars type
-      blockExpr ← Term.ensureHasType (some type) (← instantiateMVars blockExpr)
-      let decl := Declaration.defnDecl {
-        name,
-        levelParams,
-        type,
-        value := blockExpr,
-        hints := .abbrev,
-        safety := .safe
-      }
+      -- Replace any universe metavariables with universe variables; report errors
+      type ← Term.levelMVarToParam type
+      match sortDeclLevelParams [] [] (collectLevelParams {} type |>.params) with
+      | Except.error msg      => throwErrorAt block msg
+      | Except.ok levelParams =>
+        Term.synthesizeSyntheticMVarsNoPostponing
+        type ← instantiateMVars type
+        blockExpr ← Term.ensureHasType (some type) (← instantiateMVars blockExpr)
+        let decl := Declaration.defnDecl {
+          name,
+          levelParams,
+          type,
+          value := blockExpr,
+          hints := .abbrev,
+          safety := .safe
+        }
 
-      -- This is possibly overly defensive (or ineffectual)
-      Term.ensureNoUnassignedMVars decl
-      addAndCompile decl
+        -- This is possibly overly defensive (or ineffectual)
+        Term.ensureNoUnassignedMVars decl
+        addAndCompile decl
 
   -- Generate and return outermost syntax
   let finishedSyntax ← finished.toSyntax genreSyntax
