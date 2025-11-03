@@ -5,4 +5,5 @@ Author: David Thrane Christiansen
 -/
 import Verso.Code.External
 import Verso.Code.Highlighted
+import Verso.Code.HighlightedToTex
 import Verso.Code.Highlighted.WebAssets

@@ -108,6 +108,14 @@ jobs:
             upquote
             lineno
             float
+            tcolorbox
+            tikzfill
+            pdfcol
+            listings
+            epstopdf-pkg
+            pgf
+            environ
+            etoolbox
 
       - name: Check `tlmgr` version
         run: tlmgr --version
@@ -153,4 +161,3 @@ jobs:
           files: |
             manual.pdf
             html-single-page.zip
-

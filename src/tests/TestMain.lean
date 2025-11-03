@@ -58,7 +58,8 @@ def testTexOutput (dir : System.FilePath) (doc : Verso.Doc.VersoDoc Verso.Genre.
 open Verso.Integration in
 def tests := [
   testStemmer,
-  testTexOutput "sample-doc" SampleDoc.doc
+  testTexOutput "sample-doc" SampleDoc.doc,
+  testTexOutput "inheritance-doc" InheritanceDoc.doc
 ]
 
 def getConfig (config : Config) : List String → IO Config
