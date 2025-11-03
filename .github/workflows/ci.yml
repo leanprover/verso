@@ -4,10 +4,11 @@ on:
       - master
       - main
       - nightly-testing
+    tags:
+      - 'v4*'
   pull_request:
   merge_group:
-  tags:
-    - 'v4*'
+
 
 name: Continuous Integration
 
