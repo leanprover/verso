@@ -291,8 +291,10 @@ where
       let msg := m!"Block content found in a context where a header was expected."
       let note := MessageData.note m!"A document part (section/chapter/etc) consists of a header, followed by zero or more blocks, followed by zero or more sub-parts. This block occurs after a sub-part{which}, but outside of the sub-parts."
       throwErrorAt cmd "{msg}\n{note}"
-    let blk ← elabBlock cmd
-    addBlock blk
+    let hygenicName := some <| mkIdent (← mkFreshUserName `docReconstInBlock)
+    let blk ← withTheReader DocElabContext ({ · with docReconstructionPlaceholder := hygenicName }) <|
+      elabBlock cmd
+    addBlock blk (blockInternalDocReconstructionPlaceholder := hygenicName)
 
 @[part_command Lean.Doc.Syntax.footnote_ref]
 partial def _root_.Lean.Doc.Syntax.footnote_ref.command : PartCommand
