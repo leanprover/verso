@@ -150,7 +150,7 @@ structure DocElabM.State where
 
   /--
   Retains a more efficient representation of document-wide information about highlighted code.
-  (Specific to the {lit}`VersoManual` genre at present.)
+  (Used only by the {lit}`Manual` genre at present.)
   -/
   highlightDeduplicationTable : Option SubVerso.Highlighting.Exporting := .none
 deriving Inhabited
