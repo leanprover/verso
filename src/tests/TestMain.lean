@@ -129,8 +129,15 @@ example : ¬ (P ∨ Q) ↔ ¬ P ∧ ¬ Q := by
   if actual ≠ expected then
     throw <| .userError "Mismatched lzCompress output"
 
+def testSerialization (_ : Config) : IO Unit := do
+  IO.println "Running serialization tests with Plausible..."
+  let fails ← runSerializationTests
+  if fails > 0 then
+    throw <| .userError s!"{fails} serialization tests failed"
+
 open Verso.Integration in
 def tests := [
+  testSerialization,
   testStemmer,
   testTexOutput "sample-doc" SampleDoc.doc,
   testTexOutput "inheritance-doc" InheritanceDoc.doc,

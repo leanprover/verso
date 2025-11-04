@@ -171,7 +171,7 @@ structure State where
   For each module, saves the HTML IDs assigned to the module docstrings. The module doc in module
   `M`, item `i`, code element `j`, would be under keys `` `M `` and then `(i, j)`.
   -/
-  modDocs : NameMap (HashMap (Nat × Nat) Slug) := {}
+  modDocs : Lean.NameMap (HashMap (Nat × Nat) Slug) := {}
   moduleDomain : Domain := { title := "Modules" }
   constantDefDomain : Domain := { title := "Global constants" }
 
@@ -200,7 +200,7 @@ private def treeMapEqWith (eq : β → β → Bool) : (x1 x2 : TreeMap α β) �
   l.size = r.size && l.foldl (init := true) fun soFar k v => soFar && (r[k]?.map (ptrEqThen eq v)).getD false
 
 @[inline]
-private def nameMapEqWith (eq : β → β → Bool) : (x1 x2 : NameMap β) → Bool := ptrEqThen fun l r =>
+private def nameMapEqWith (eq : β → β → Bool) : (x1 x2 : Lean.NameMap β) → Bool := ptrEqThen fun l r =>
   l.size = r.size && l.foldl (init := true) fun soFar k v => soFar && ((r.find? k).map (ptrEqThen eq v)).getD false
 
 
@@ -222,7 +222,7 @@ def State.getDef (name : Name) (state : State) : Option Slug := do
     if let some x := state.htmlIds[i]? then return x
   failure
 
-def State.definitionIds (state : State) : NameMap String :=
+def State.definitionIds (state : State) : Lean.NameMap String :=
   state.constantDefDomain.objects.foldl (init := {}) fun defIds name obj =>
     if let some htmlId := obj.ids.toArray.findSome? (state.htmlIds[·]?) |>.map (·.toString) then
       defIds.insert name.toName htmlId
@@ -261,7 +261,7 @@ def State.saveModDoc (state : State) (mod : Name) (item pos : Nat) : Slug × Sta
       }
     }
 
-def State.moduleIds (state : State) : NameMap String :=
+def State.moduleIds (state : State) : Lean.NameMap String :=
   state.moduleDomain.objects.foldl (init := {}) fun modIds name obj =>
     if let some htmlId := obj.ids.toArray.findSome? (state.htmlIds[·]?) |>.map (·.toString) then
       modIds.insert name.toName htmlId

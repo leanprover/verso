@@ -44,7 +44,7 @@ syntax (name := inline_component) "inline_component" ident : attr
 
 open Lean in
 initialize
-  let register (name) (strName : String) (ext : PersistentEnvExtension (Name × Name) (Name × Name) (NameMap Name)) (get : Syntax → Option Ident) := do
+  let register (name) (strName : String) (ext : PersistentEnvExtension (Name × Name) (Name × Name) (Lean.NameMap Name)) (get : Syntax → Option Ident) := do
     registerBuiltinAttribute {
       name := name,
       ref := by exact decl_name%,

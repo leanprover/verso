@@ -203,7 +203,7 @@ inductive Pat where
 deriving BEq, Hashable, Repr, Inhabited
 
 -- TODO rewrite with dynamic programming
-partial def Pat.match (p : List Pat) (str : String) : Option (NameMap String) :=
+partial def Pat.match (p : List Pat) (str : String) : Option (Lean.NameMap String) :=
   go str.iter p
 where
   go iter
@@ -243,7 +243,7 @@ inductive Template where
   | var : Name → Template
 deriving BEq, Hashable, Repr, Inhabited
 
-def Template.subst (vars : NameMap String) : Template → Except String String
+def Template.subst (vars : Lean.NameMap String) : Template → Except String String
   | .str s => pure s
   | .var x => if let some s := vars.find? x then pure s else throw s!"Not found: '{x}'"
 
