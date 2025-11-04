@@ -6,6 +6,7 @@ Author: David Thrane Christiansen
 module
 public import Lean.Data.Json
 public import Lean.DocString.Types
+public import SubVerso.Highlighting
 import Verso.Doc.Name
 
 set_option doc.verso true
@@ -640,24 +641,40 @@ private partial def Part.reprPrec [Repr genre.Inline] [Repr genre.Block] [Repr g
 public instance [Repr g.Inline] [Repr g.Block] [Repr g.PartMetadata] : Repr (Part g) where
   reprPrec := private Part.reprPrec
 
+public structure DocReconstruction where
+  highlightDeduplication : SubVerso.Highlighting.Export
+
+
 /--
-The result type of values created by Verso's `#doc` and `#docs` commands. A value of type
+The result type of values created by Verso's {lit}`#doc` and {lit}`#docs` commands. A value of type
 {lean}`VersoDoc` represents a not-fully-evaluated document of type {lean}`Part` that can be turned
 into a value by invoking the `VersoDoc.toPart` method. The actual structure of a {lean}`VersoDoc`
 should not be relied on.
 -/
 public structure VersoDoc (genre : Genre) where
-  construct : Unit → Part genre
+  construct : DocReconstruction → Part genre
+
+  /-- Serialization of the DocReconstruction data structure -/
+  docReconstructionData : String := "{}"
 
 instance : Inhabited (VersoDoc genre) where
-  default := VersoDoc.mk fun () => Inhabited.default
+  default := VersoDoc.mk (fun _ => Inhabited.default) "{}"
+
 
 /--
 A {lean}`VersoDoc` represents a potentially-not-fully-evaluated {lean}`Part`. Calling {lean}`VersoDoc.toPart` forces
 evaluation of the {lean}`VersoDoc` to a {lean}`Part`.
 -/
 public def VersoDoc.toPart: VersoDoc genre → Part genre
-  | .mk construct => construct ()
+  | .mk construct highlight =>
+    match Json.parse highlight with
+    | .error e => panic! s!"Failed to parse VersoDoc's Export data as JSON: {e}"
+    | .ok json =>
+      if let .ok highlightJson := json.getObjVal? "highlight" then
+        match SubVerso.Highlighting.Export.fromJson? highlightJson with
+        | .error e => panic! s!"Failed to deserialize Export data from parsed JSON: {e}"
+        | .ok table => construct ⟨table⟩
+      else construct ⟨{}⟩
 
 /--
 Replace the metadata in a VersoDoc.
@@ -665,7 +682,7 @@ Replace the metadata in a VersoDoc.
 This is something of a hack used as a workaround in LiterateModuleDocs.
 -/
 public def VersoDoc.withMetadata (metadata? : Option genre.PartMetadata)  : VersoDoc genre → VersoDoc genre
-  | .mk construct => .mk fun () => { construct () with metadata := metadata? }
+  | .mk construct docReconstStr => .mk (fun docReconst => { construct docReconst with metadata := metadata? }) docReconstStr
 
 /--
 Identify function; this is a temporary compatibility shim to introduce a new type,

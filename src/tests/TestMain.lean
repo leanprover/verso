@@ -133,6 +133,7 @@ open Verso.Integration in
 def tests := [
   testStemmer,
   testTexOutput "sample-doc" SampleDoc.doc,
+  testTexOutput "inheritance-doc" InheritanceDoc.doc,
   testZip
 ]
 

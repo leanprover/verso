@@ -77,7 +77,7 @@ private def elabDoc (genre: Term) (title: StrLit) (topLevelBlocks : Array Syntax
   let titleParts ← stringToInlines title
   let titleString := inlinesToString env titleParts
   let ctx ← DocElabContext.fromGenreTerm genre
-  let initDocState : DocElabM.State := {}
+  let initDocState : DocElabM.State := { highlightDeduplicationTable := .some {} }
   let initPartState : PartElabM.State := .init (.node .none nullKind titleParts)
 
   let ((), docElabState, partElabState) ←
@@ -192,8 +192,8 @@ be used to thread state between the separate top level blocks. These environment
 the state that needs to exist across top-level-block parsing events.
 -/
 structure DocElabEnvironment where
-  ctx : DocElabContext := ⟨.missing, mkConst ``Unit, .always⟩
-  docState : DocElabM.State := {}
+  ctx : DocElabContext := ⟨.missing, mkConst ``Unit, .always, .none⟩
+  docState : DocElabM.State := { highlightDeduplicationTable := some {} }
   partState : PartElabM.State := .init (.node .none nullKind #[])
 deriving Inhabited
 
@@ -239,12 +239,12 @@ private def startDoc (genreSyntax : Term) (title: StrLit) : Command.CommandElabM
   let titleParts ← stringToInlines title
   let titleString := inlinesToString env titleParts
   let ctx ← Command.runTermElabM fun _ => DocElabContext.fromGenreTerm genreSyntax
-  let initDocState : DocElabM.State := {}
+  let initDocState : DocElabM.State := { highlightDeduplicationTable := .some {} }
   let initPartState : PartElabM.State := .init (.node .none nullKind titleParts)
 
   modifyEnv (docEnvironmentExt.setState · ⟨ctx, initDocState, initPartState⟩)
   runPartElabInEnv <| do
-    PartElabM.setTitle titleString (← PartElabM.liftDocElabM <| titleParts.mapM (elabInline ⟨·⟩))
+    PartElabM.setTitle titleString (← titleParts.mapM (elabInline ⟨·⟩))
   return titleString
 
 private def runVersoBlock (block : TSyntax `block) : Command.CommandElabM Unit := do

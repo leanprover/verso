@@ -406,26 +406,26 @@ where
     let inlines ← txt.mapM (ofInline helper)
     ``(Block.para $(← arr inlines))
   | .ul _ _ lis => do
-    ``(Doc.Block.ul $(← arr (← lis.mapM (ofLi helper))))
+    ``(Block.ul $(← arr (← lis.mapM (ofLi helper))))
   | .ol _ start _ lis => do
-    ``(Doc.Block.ol $(quote (start : Int)) $(← arr (← lis.mapM (ofLi helper))))
+    ``(Block.ol $(quote (start : Int)) $(← arr (← lis.mapM (ofLi helper))))
   | .code info lang _ strs => do
     let str := strs.toList |> String.join
     if info.isEmpty && lang.isEmpty then
-      ``(Doc.Block.code $(quote str))
+      ``(Block.code $(quote str))
     else
       let msg : MessageData :=
         "Info and language information in code blocks is not supported:" ++
         indentD m!"info is {repr info} and language is {repr lang}"
       throwError msg
   | .blockquote bs => do
-    ``(Doc.Block.blockquote $(← arr (← bs.mapM (ofBlock helper))))
+    ``(Block.blockquote $(← arr (← bs.mapM (ofBlock helper))))
   | b => throwError "Unsupported block {repr b}"
 
   ofLi (helper : Helper) : MD4Lean.Li MD4Lean.Block → PartElabM Term
   | {isTask, taskChar:=_, taskMarkOffset:=_, contents} => do
     if isTask then throwError "Tasks not supported"
-    ``(Doc.ListItem.mk $(← arr (← contents.mapM (ofBlock helper))))
+    ``(ListItem.mk $(← arr (← contents.mapM (ofBlock helper))))
 
   ofInline (helper : Helper) : MD4Lean.Text → PartElabM Term
   | .normal str => ``(Inline.text $(quote str))
