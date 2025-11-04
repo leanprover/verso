@@ -144,7 +144,7 @@ def page_link : RoleExpanderOf PageLinkArgs
 -- The assumption here is that suffixes are _mostly_ unique, so the arrays will likely be very
 -- small.
 structure NameSuffixMap (α : Type) : Type where
-  contents : NameMap (Array (Name × α)) := {}
+  contents : Lean.NameMap (Array (Name × α)) := {}
 deriving Inhabited
 
 def NameSuffixMap.empty : NameSuffixMap α := {}
@@ -206,7 +206,7 @@ inductive LeanExampleData where
 deriving Inhabited
 
 structure ExampleContext where
-  contexts : NameMap LeanExampleData := {}
+  contexts : Lean.NameMap LeanExampleData := {}
 deriving Inhabited
 
 initialize exampleContextExt : EnvExtension ExampleContext ← registerEnvExtension (pure {})

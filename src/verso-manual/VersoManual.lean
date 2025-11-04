@@ -355,7 +355,7 @@ depth of the table of contents in the document (which is controlled by a paramet
 partial def toc (depth : Nat) (opts : Html.Options IO)
     (ctxt : TraverseContext)
     (state : TraverseState)
-    (definitionIds : NameMap String)
+    (definitionIds : Lean.NameMap String)
     (linkTargets : LinkTargets Manual.TraverseContext) :
     Part Manual → StateT (State Html) (ReaderT ExtensionImpls IO) Html.Toc
   | .mk title sTitle «meta» _ sub => do
