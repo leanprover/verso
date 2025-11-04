@@ -298,6 +298,11 @@ To use this in your project:
    require verso from git "https://github.com/leanprover/verso.git"@"latest"
    ```
 
+   In either case, you probably want to replace `"latest"` with the version of
+   Lean you're using: if your `lean-toolchain` file contains 
+   `leanprover/lean4:v4.25.0`, then you should replace `"latest"` with 
+   `"v4.25.0"`.
+
 2. Generate literate program data from your Lean libraries or modules
    by building their `literate` facet. For library `MyLib`, run:
 
@@ -308,14 +313,14 @@ To use this in your project:
    This generates files in the folder `.lake/build/literate`
 
 3. Generate HTML from this literate program data. To put the HTML in a
-   directory named `dist`, run:
+   directory named `html`, run:
    
    ```
-   lake exe verso-html .lake/build/literate dist
+   lake exe verso-html .lake/build/literate html
    ``` 
 
 You can preview the resulting files by running
-`python3 -m http.server -d dist` and pointing a web browser to
+`python3 -m http.server -d html` and pointing a web browser to
 http://localhost:8000/
 
 In this output, Verso docstrings and moduledocs are rendered. Setting
