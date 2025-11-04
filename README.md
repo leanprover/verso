@@ -320,7 +320,7 @@ To use this in your project:
    ``` 
 
 You can preview the resulting files by running
-`python3 -m http.server -d html` and pointing a web browser to
+`python3 -m http.server 8000 -d html` and pointing a web browser to
 http://localhost:8000/
 
 In this output, Verso docstrings and moduledocs are rendered. Setting
