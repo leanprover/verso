@@ -11,6 +11,7 @@ import Lean.Elab.DeclUtil
 import Lean.Meta.Reduce
 import Lean.DocString.Syntax
 
+import SubVerso.Highlighting
 import Verso.Doc
 import Verso.Doc.ArgParse
 import Verso.Doc.Elab.InlineString
@@ -146,6 +147,12 @@ def DocElabContext.fromGenreTerm (genreSyntax : Term) : TermElabM DocElabContext
 structure DocElabM.State where
   linkRefs : HashMap String DocUses := {}
   footnoteRefs : HashMap String DocUses := {}
+
+  /--
+  Retains a more efficient representation of document-wide information about highlighted code.
+  (Used only by the {lit}`Manual` genre at present.)
+  -/
+  highlightDeduplicationTable : Option SubVerso.Highlighting.Exporting := .none
 deriving Inhabited
 
 structure PartElabM.State where
@@ -473,38 +480,44 @@ def FinishedPart.toVersoDoc
 
   -- Add and compile blocks
   for (name, block) in partElabState.deferredBlocks do
-    let mut type ← Term.elabType (← ``(DocReconstruction → Doc.Block $genreSyntax))
-    let mut blockExpr ← Term.elabTerm block (some type)
+    withCurrHeartbeats <| do -- reset the heartbeat count for each block addAndCompile
+      let mut type ← Term.elabType (← ``(DocReconstruction → Doc.Block $genreSyntax))
+      let mut blockExpr ← Term.elabTerm block (some type)
 
-    -- Wrap auto-bound implicits and global variables (this is possibly overly defensive)
-    type ← Meta.mkForallFVars (← Term.addAutoBoundImplicits #[] none) type
+      -- Wrap auto-bound implicits and global variables (this is possibly overly defensive)
+      type ← Meta.mkForallFVars (← Term.addAutoBoundImplicits #[] none) type
 
-    -- Replace any universe metavariables with universe variables; report errors
-    type ← Term.levelMVarToParam type
-    match sortDeclLevelParams [] [] (collectLevelParams {} type |>.params) with
-    | Except.error msg      => throwErrorAt block msg
-    | Except.ok levelParams =>
-      Term.synthesizeSyntheticMVarsNoPostponing
-      type ← instantiateMVars type
-      blockExpr ← Term.ensureHasType (some type) (← instantiateMVars blockExpr)
-      let decl := Declaration.defnDecl {
-        name,
-        levelParams,
-        type,
-        value := blockExpr,
-        hints := .abbrev,
-        safety := .safe
-      }
+      -- Replace any universe metavariables with universe variables; report errors
+      type ← Term.levelMVarToParam type
+      match sortDeclLevelParams [] [] (collectLevelParams {} type |>.params) with
+      | Except.error msg      => throwErrorAt block msg
+      | Except.ok levelParams =>
+        Term.synthesizeSyntheticMVarsNoPostponing
+        type ← instantiateMVars type
+        blockExpr ← Term.ensureHasType (some type) (← instantiateMVars blockExpr)
+        let decl := Declaration.defnDecl {
+          name,
+          levelParams,
+          type,
+          value := blockExpr,
+          hints := .abbrev,
+          safety := .safe
+        }
 
-      -- This is possibly overly defensive (or ineffectual)
-      Term.ensureNoUnassignedMVars decl
-      addAndCompile decl
+        -- This is possibly overly defensive (or ineffectual)
+        Term.ensureNoUnassignedMVars decl
+        withOptions (·.setBool `compiler.extract_closed false) <| addAndCompile decl
 
   -- Generate and return outermost syntax
   let finishedSyntax ← finished.toSyntax genreSyntax
   let .some docReconstructionPlaceholder := ctx.docReconstructionPlaceholder
     | throwError "No doc reconstruction placeholder available"
-  ``(VersoDoc.mk (fun $docReconstructionPlaceholder => $finishedSyntax))
+
+  let reconstJson := match docElabState.highlightDeduplicationTable with
+    | .none => Json.mkObj []
+    | .some table => Json.mkObj [("highlight", table.toExport.toJson)]
+
+  ``(VersoDoc.mk (fun $docReconstructionPlaceholder => $finishedSyntax) $(quote reconstJson.compress))
 
 
 abbrev BlockExpander := Syntax → DocElabM (TSyntax `term)
