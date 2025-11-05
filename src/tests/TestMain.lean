@@ -42,7 +42,7 @@ def testTexOutput (dir : System.FilePath) (doc : Verso.Doc.VersoDoc Verso.Genre.
   let versoConfig : Verso.Genre.Manual.Config := {
     destination := "src/tests/integration" / dir / "output",
     emitTeX := true,
-    emitHtmlMulti := false
+    emitHtmlMulti := .no
   }
 
   let runTest : IO Unit  :=

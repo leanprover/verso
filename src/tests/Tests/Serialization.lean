@@ -8,6 +8,8 @@ import Lean.Data.Json.FromToJson
 import MultiVerso.InternalId
 import MultiVerso
 import VersoManual.Basic
+import VersoManual
+import VersoManual.Html.CssFile
 
 /-!
 This module contains Plausible generators for most of the types that Verso regularly serializes or
@@ -20,12 +22,21 @@ open Verso Multi
 open Shrinkable
 open Std
 
+def isEqOk [BEq α] (actual : Except ε α) (expected : α) : Bool :=
+  match actual with
+  | .ok v => v == expected
+  | _ => false
 
 def roundTripOk [ToJson α] [FromJson α] [BEq α] [Repr α] (x : α) : Bool :=
   let json := toJson x
-  match fromJson? json with
-  | .ok y => x == y
-  | .error _ => false
+  isEqOk (fromJson? json) x
+
+def sizedArrayOf (gen : Gen α) : Gen (Array α) := do
+  let count ← chooseNat
+  let mut out := #[]
+  for _ in 0...count do
+    out := out.push (← gen.resize (· / count))
+  return out
 
 deriving instance Arbitrary for JsonNumber
 
@@ -54,15 +65,9 @@ where
         pure (.bool false),
         .num <$> arbitrary,
         .str <$> arbitrary,
-        .arr <$> genArr n,
+        .arr <$> sizedArrayOf (arb n),
         .obj <$> (Std.TreeMap.Raw.ofArray · _) <$> genObj n
       ] (by simp)
-  genArr (fuel : Nat) : Gen (Array Json) := do
-    let count ← Gen.chooseNat
-    let mut xs := #[]
-    for _ in 0...count do
-      xs := xs.push (← Gen.resize (· / count) (arb fuel))
-    return xs
   genObj (fuel : Nat) : Gen (Array (String × Json)) := do
     let count ← Gen.chooseNat
     let mut xs := #[]
@@ -185,6 +190,11 @@ instance : Arbitrary RefDomain where
 instance [Shrinkable α] [Shrinkable β] [BEq α] [Hashable α] : Shrinkable (Std.HashMap α β) where
   shrink xs :=
     shrink xs.toArray |>.map (Std.HashMap.insertMany {} ·)
+
+instance [Shrinkable α] [BEq α] [Hashable α] : Shrinkable (Std.HashSet α) where
+  shrink xs :=
+    shrink xs.toArray |>.map Std.HashSet.ofArray
+
 
 instance : Shrinkable RefDomain where
   shrink x :=
@@ -316,6 +326,10 @@ instance : Shrinkable JsFile where
     (shrink f.after |>.map ({ f with after := · })) ++
     (shrink f.sourceMap? |>.map ({ f with sourceMap? := · }))
 
+instance : Shrinkable CssFile where
+  shrink f :=
+    (shrink f.filename |>.map ({ f with filename := · }))
+
 instance : Shrinkable Search.DomainMapper where
   shrink m :=
     (shrink m.className |>.map ({ m with className := ·})) ++
@@ -340,7 +354,6 @@ instance : Shrinkable TraverseState where
     (shrink st.tags.toArray |>.map ({ st with tags := ({} : HashMap _ _).insertMany ·})) ++
     (shrink st.externalTags.toArray |>.map ({ st with externalTags := ({} : HashMap _ _).insertMany ·})) ++
     (shrink st.domains |>.map ({ st with domains := ·})) ++
-    (shrink st.remoteContent |>.map ({ st with remoteContent := ·})) ++
     (shrink st.ids |>.map ({ st with ids := ·})) ++
     (shrink st.extraCss |>.map ({ st with extraCss := ·})) ++
     (shrink st.extraJs |>.map ({ st with extraJs := ·})) ++
@@ -394,6 +407,13 @@ instance : Arbitrary JsFile where
       after := ← arbitrary
     }
 
+instance : Arbitrary CssFile where
+  arbitrary := do
+    return {
+      filename := ← arbitrary,
+      contents := ← arbitrary
+    }
+
 instance : Arbitrary Search.DomainMapper where
   arbitrary := do
     return {
@@ -439,8 +459,6 @@ instance : Arbitrary TraverseState where
       let n : NameMap.PublicName ← arbitrary
       domains := domains.insert n.val (← arbitrary.resize (· / count)) n.property
 
-    let remoteContent <- arbitrary
-
     let count ← chooseNat
     let mut ids := {}
     for _ in 0...count do
@@ -455,7 +473,6 @@ instance : Arbitrary TraverseState where
     let mut st := {
       tags, externalTags,
       domains,
-      remoteContent,
       ids,
       extraCss, extraJs, extraJsFiles, extraCssFiles,
       quickJump,
@@ -471,14 +488,179 @@ instance : Arbitrary TraverseState where
 
 end
 
+section
+open Verso.Output
+
+instance : ArbitraryFueled Html where
+  arbitraryFueled := html
+where
+  html : Nat → Gen Html
+    | 0 => text
+    | n + 1 =>
+      oneOf #[text, tag n, seq n] (by simp)
+  text := .text <$> arbitrary <*> arbitrary
+  tag n := do
+    let name ← arbitrary
+    let attrs ← sizedArrayOf do return (← arbitrary, ← arbitrary)
+    let content ← (html n).resize (· - 1)
+    return .tag name attrs content
+  seq n := .seq <$> sizedArrayOf (html n)
+
+partial instance : Shrinkable Html where
+  shrink := shrinkHtml
+where
+  shrinkHtml
+    | .text true s =>
+      .text false s :: (shrink s |>.map (.text true))
+    | .text false s =>
+      shrink s |>.map (.text true)
+    | .seq xs =>
+      have : Shrinkable Html := ⟨shrinkHtml⟩
+      shrink xs |>.map (.seq)
+    | .tag name attrs content =>
+      (shrink name |>.map (.tag · attrs content)) ++
+      (shrink attrs |>.map (.tag name · content)) ++
+      (shrinkHtml content |>.map (.tag name attrs ·))
+end
+
+section
+open Verso.Genre.Manual
+
+instance : Arbitrary ByteArray where
+  arbitrary := do
+    let count ← chooseNat
+    let mut arr := ByteArray.emptyWithCapacity count
+    for _ in 0...count do
+      arr := arr.push (← arbitrary)
+    return arr
+
+instance : Shrinkable ByteArray where
+  shrink arr :=
+    let halves :=
+      if arr.size > 1 then
+        let i := arr.size / 2
+        [arr.extract 0 i, arr.extract i arr.size]
+      else []
+    let dropped :=
+      if arr.size > 1 then [arr.extract 1 arr.size] else []
+    let zeroes :=
+      if arr.foldl (init := false) (fun ok b => ok || b != 0) then
+        [arr.foldl (init := ByteArray.emptyWithCapacity arr.size) (fun xs _ => xs.push 0)]
+      else []
+    let smaller := arr.foldl (init := ByteArray.emptyWithCapacity arr.size) (fun xs x => xs.push (x / 2))
+    let smaller := if smaller == arr then [] else [smaller]
+    let smaller' := arr.foldl (init := ByteArray.emptyWithCapacity arr.size) (fun xs x => xs.push (x - 1))
+    let smaller' := if smaller' == arr then [] else [smaller']
+    ByteArray.emptyWithCapacity 0 :: halves ++ dropped ++ zeroes ++ smaller ++ smaller'
+
+instance : Arbitrary DataFile where
+  arbitrary := do return { filename := ← arbitrary, content := ← arbitrary }
+
+instance : Shrinkable DataFile where
+  shrink f :=
+    (shrink f.filename |>.map ({ f with filename := · })) ++
+    (shrink f.content |>.map ({ f with content := · }))
+
+instance : Arbitrary Numbering where
+  arbitrary := do
+    oneOf #[ .nat <$> arbitrary, .letter <$> arbitrary]
+
+instance : Shrinkable Numbering where
+  shrink
+    | .nat n => shrink n |>.map .nat
+    | .letter c => .nat 0 :: (shrink c |>.map .letter)
+end
+
+private def pathChars : List Char := "abcdefghijklmnopqrstuvwzyzABCDEFGHIJKLMNOPQRSTUVWXYZ-._".toList
+
+instance : Arbitrary System.FilePath where
+  arbitrary := do
+    let components ← arrayOf comp
+    let isRoot ← chooseAny Bool
+    let init : System.FilePath := if isRoot then "/" else ""
+    return components.foldl (α := String) (init := init) fun x y => x / y
+where
+
+  comp : Gen String := do
+    let mut s := ""
+    for _ in 0...(← chooseNat) do
+      s := s.push (← ch)
+    return s
+
+  ch : Gen Char := do
+    let ⟨i, ⟨_, h⟩⟩ ← choose Nat 0 (chars.length - 1) (by grind)
+    return chars[i]'(Nat.lt_succ_of_le h)
+
+instance : Shrinkable System.FilePath where
+  shrink path :=
+    if let some parent := path.parent then
+      parent :: (path.fileName.toList.flatMap shrink |>.map path.withFileName)
+    else []
+
+instance : Arbitrary XrefSource where
+  arbitrary :=
+    oneOf #[(.localOverride ∘ System.FilePath.mk) <$> arbitrary, .remoteOverride <$> arbitrary, pure .default] (by simp)
+
+instance : Shrinkable XrefSource where
+  shrink
+    | .localOverride f => .default :: (shrink f |>.map .localOverride)
+    | .remoteOverride url => .default :: (shrink url |>.map .remoteOverride)
+    | .default => []
+
+instance : Arbitrary Time.Day.Offset where
+  arbitrary := do
+    let n : Nat ← arbitrary
+    return OfNat.ofNat n
+
+instance : Shrinkable Time.Day.Offset where
+  shrink n :=
+    (if n ≠ 0 then [0] else []) ++
+    (if n > 1 then [⟨n.val / 2⟩, n - 1] else []) ++
+    (if n < -1 then [⟨n.val / 2⟩, n + 1] else [])
+
+instance : Arbitrary UpdateFrequency where
+  arbitrary :=
+    frequency (pure .manual) [
+      (1, pure .manual),
+      (4, .days <$> arbitrary)
+    ]
+
+instance : Shrinkable UpdateFrequency where
+  shrink
+    | .manual => []
+    | .days n => .manual :: (shrink n |>.map .days)
+
+instance : Arbitrary Remote where
+  arbitrary :=
+    return {
+      root := ← arbitrary,
+      shortName := ← arbitrary,
+      longName := ← arbitrary,
+      sources := ← arbitrary,
+      updateFrequency := ← arbitrary
+    }
+
+instance : Shrinkable Remote where
+  shrink rem :=
+    (shrink rem.root |>.map ({ rem with root := · })) ++
+    (shrink rem.shortName |>.map ({ rem with shortName := · })) ++
+    (shrink rem.longName |>.map ({ rem with longName := · })) ++
+    (shrink rem.sources |>.map ({ rem with sources := · })) ++
+    (shrink rem.updateFrequency |>.map ({ rem with updateFrequency := · }))
+
 def testInternalId := Testable.checkIO (NamedBinder "id" <| ∀ (id : InternalId), roundTripOk id)
-def testObject := Testable.checkIO (NamedBinder "obj" <| ∀ (id : Object), roundTripOk id)
-def testDomain := Testable.checkIO (NamedBinder "obj" <| ∀ (id : Domain), roundTripOk id)
-def testRefDomain := Testable.checkIO (NamedBinder "obj" <| ∀ (id : RefDomain), roundTripOk id)
-def testRefObject := Testable.checkIO (NamedBinder "obj" <| ∀ (id : RefObject), roundTripOk id)
-def testRemoteInfo := Testable.checkIO (NamedBinder "obj" <| ∀ (id : RemoteInfo), roundTripOk id)
-def testAllRemotes := Testable.checkIO (NamedBinder "obj" <| ∀ (id : AllRemotes), roundTripOk id)
-def testTraverseState := Testable.checkIO (NamedBinder "obj" <| ∀ (id : Verso.Genre.Manual.TraverseState), roundTripOk id)
+def testObject := Testable.checkIO (NamedBinder "obj" <| ∀ (obj : Object), roundTripOk obj)
+def testDomain := Testable.checkIO (NamedBinder "obj" <| ∀ (dom : Domain), roundTripOk dom)
+def testRefDomain := Testable.checkIO (NamedBinder "obj" <| ∀ (dom : RefDomain), roundTripOk dom)
+def testRefObject := Testable.checkIO (NamedBinder "obj" <| ∀ (obj : RefObject), roundTripOk obj)
+def testRemoteInfo := Testable.checkIO (NamedBinder "obj" <| ∀ (info : RemoteInfo), roundTripOk info)
+def testAllRemotes := Testable.checkIO (NamedBinder "obj" <| ∀ (remotes : AllRemotes), roundTripOk remotes)
+def testTraverseState := Testable.checkIO (NamedBinder "obj" <| ∀ (st : Verso.Genre.Manual.TraverseState), roundTripOk st)
+def testHtml := Testable.checkIO (NamedBinder "obj" <| ∀ (html : Verso.Output.Html), roundTripOk html)
+def testDataFile := Testable.checkIO (NamedBinder "obj" <| ∀ (f : Verso.Genre.Manual.DataFile), roundTripOk f)
+def testNumbering := Testable.checkIO (NamedBinder "obj" <| ∀ (n : Verso.Genre.Manual.Numbering), roundTripOk n)
+def testXrefSource := Testable.checkIO (NamedBinder "obj" <| ∀ (src : XrefSource), isEqOk (XrefSource.fromJson? src.toJson) src)
+def testRemote := Testable.checkIO (NamedBinder "obj" <| ∀ (r : Remote), isEqOk (Remote.fromJson? "" r.toJson) r)
 
 def serializationTests : List (Name × (Σ p, IO <| TestResult p)) := [
   (`testInternalId, ⟨_, testInternalId⟩),
@@ -489,6 +671,11 @@ def serializationTests : List (Name × (Σ p, IO <| TestResult p)) := [
   (`testRemoteInfo, ⟨_, testRemoteInfo⟩),
   (`testAllRemotes, ⟨_, testAllRemotes⟩),
   (`testTraverseState, ⟨_, testTraverseState⟩),
+  (`testHtml, ⟨_, testHtml⟩),
+  (`testDataFile, ⟨_, testDataFile⟩),
+  (`testNumbering, ⟨_, testNumbering⟩),
+  (`testXrefSource, ⟨_, testXrefSource⟩),
+  (`testRemote, ⟨_, testRemote⟩),
 ]
 
 def runSerializationTests : IO Nat := do

@@ -66,23 +66,41 @@ public structure Genre : Type 1 where
 @[expose]
 public def Genre.none : Genre := ⟨Empty, Empty, Empty, Unit, Unit⟩
 
-instance : BEq Genre.none.Block where
+public instance : BEq Genre.none.Block where
   beq e _ := nomatch e
 
-instance : BEq Genre.none.PartMetadata where
+public instance : BEq Genre.none.PartMetadata where
   beq e _ := nomatch e
 
-instance : BEq Genre.none.Inline where
+public instance : BEq Genre.none.Inline where
   beq e _ := nomatch e
 
-instance : Repr Genre.none.Block where
+public instance : Repr Genre.none.Block where
   reprPrec e _ := nomatch e
 
-instance : Repr Genre.none.Inline where
+public instance : Repr Genre.none.Inline where
   reprPrec e _ := nomatch e
 
-instance : Repr Genre.none.PartMetadata where
+public instance : Repr Genre.none.PartMetadata where
   reprPrec e _ := nomatch e
+
+public instance : ToJson Genre.none.Block where
+  toJson := nofun
+
+public instance : ToJson Genre.none.Inline where
+  toJson := nofun
+
+public instance : ToJson Genre.none.PartMetadata where
+  toJson := nofun
+
+public instance : FromJson Genre.none.Block where
+  fromJson? _ := throw "No fromJson? for `Empty`"
+
+public instance : FromJson Genre.none.Inline where
+  fromJson? _ := throw "No fromJson? for `Empty`"
+
+public instance : FromJson Genre.none.PartMetadata where
+  fromJson? _ := throw "No fromJson? for `Empty`"
 
 export Lean.Doc (MathMode MathMode.inline MathMode.display)
 

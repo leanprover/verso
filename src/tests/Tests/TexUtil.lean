@@ -25,7 +25,6 @@ def toTex (block : Doc.Block Genre.Manual) : IO Output.TeX := do
     logError msg := IO.println msg,
   }
   let traverseState : TraverseState := {
-    remoteContent := {},
   }
 
   -- Traverse the block. This shadows both `block` and `traverseState`.

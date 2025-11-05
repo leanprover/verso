@@ -44,6 +44,43 @@ public inductive Html where
   | seq (contents : Array Html)
 deriving Repr, Inhabited, TypeName, BEq, Hashable
 
+public instance : ToJson Html where
+  toJson := private to
+where
+  to
+    | .text true string => .str string
+    | .text false string => json%{"raw": $string}
+    | .tag name attrs contents =>
+      let attrs : Json := .arr <| attrs.map fun (x, y) => json%{"name": $x, "value": $y}
+      json%{"tag": $name, "attrs": $attrs, "content": $(to contents)}
+    | .seq xs => .arr <| xs.map to
+
+public partial instance : FromJson Html where
+  fromJson? := private from?
+where
+  from?
+    | .str s => pure <| .text true s
+    | .arr xs => .seq <$> xs.mapM from?
+    | json@(.obj o) => do
+      if let some name := o["tag"]? then
+        let .str name := name
+          | throw s!"Expected a string as a tag name, got: {name.compress}"
+        let attrs ← json.getObjValAs? (Array Json) "attrs"
+        let attrs ← attrs.mapM fun a => do
+          return (← a.getObjValAs? String "name", ← a.getObjValAs? String "value")
+        let content ← json.getObjVal? "content" >>= from?
+        return .tag name attrs content
+      else if let some string := o["raw"]? then
+        let .str string := string
+          | throw s!"Expected a string for raw content, got: {string.compress}"
+        return .text false string
+      else
+        throw <|
+          s!"Failed to deserialize {json.compress} as HTML. " ++
+          "Expected key \"tag\" or key \"raw\"."
+    | other => throw s!"Failed to deserialize {other.compress} as HTML"
+
+
 open Syntax in
 public partial instance : Quote Html where
   quote := q

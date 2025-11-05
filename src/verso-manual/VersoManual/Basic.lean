@@ -4,7 +4,6 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 
-
 import Std.Data.HashSet
 import Std.Data.TreeSet
 import Verso.Doc
@@ -14,6 +13,7 @@ import MultiVerso
 import MultiVerso.Slug
 import VersoSearch
 import VersoManual.LicenseInfo
+import VersoManual.Html.Config
 import VersoManual.Ext
 import Verso.Output.Html
 import Verso.Output.TeX
@@ -150,30 +150,6 @@ instance : ToString Tag where
 instance : Coe String Tag where
   coe := .provided
 
-/-- An extra JS file to be included in the header, but not emitted -/
-structure StaticJsFile where
-  filename : String
-  defer : Bool := false
-  /-- Load after these other named files -/
-  after : Array String := #[]
-deriving BEq, Repr
-
-/--
-A JavaScript source map to be included along with emitted JavaScript.
-
-Many minified JavaScript files contain a reference to a source map. The filename here should match
-the one referred to by the minified file; Verso will not validate this.
--/
-structure JsSourceMap where
-  filename : String
-  contents : String
-deriving BEq, ToJson, FromJson, Repr
-
-/-- An extra JS file to be emitted and added to the page -/
-structure JsFile extends StaticJsFile where
-  contents : String
-  sourceMap? : Option JsSourceMap
-deriving BEq, ToJson, FromJson, Repr
 
 
 /-- When rendering multi-page HTML, should splitting pages follow the depth setting? -/
@@ -190,6 +166,27 @@ inductive Numbering where
   | /-- Letter numbering, used e.g. for appendices -/
     letter (char : Char)
 deriving DecidableEq, Hashable, Repr
+
+instance : ToJson Numbering where
+  toJson
+    | .nat n => .num { mantissa := n, exponent := 0 }
+    | .letter c => .str <| String.singleton c
+
+instance : FromJson Numbering where
+  fromJson?
+    | v@(.num { mantissa, exponent }) =>
+      if exponent = 0 then
+        if let some n := mantissa.toNat? then
+          return .nat n
+        else throw s!"Expected natural number, got {v.compress}"
+      else throw s!"Expected exponent 0 for {v.compress}"
+    | v@(.str s) =>
+      if h : s.length = 1 then
+        return .letter <| s.startValidPos.get <| by
+          have : "".length = 0 := by rfl
+          grind [String.startValidPos_eq_endValidPos_iff]
+      else throw s!"Expected one-character string for {v.compress}"
+    | other => throw s!"Expected number or string, got {other.compress}"
 
 instance : ToString Numbering where
   toString
@@ -229,7 +226,7 @@ structure PartMetadata where
   htmlToc := true
   /-- How should this document be split when rendering multi-page HTML output? -/
   htmlSplit : HtmlSplitMode := .default
-deriving BEq, Hashable, Repr
+deriving BEq, Hashable, Repr, ToJson, FromJson
 
 
 def Domains := NameMap Domain deriving Repr
@@ -285,18 +282,12 @@ instance : Repr Contents where
     .line ++ "}"
 
 open Verso.Search in
-structure TraverseState where
+structure TraverseState extends HtmlAssets where
   tags : HashMap Tag InternalId := {}
   externalTags : HashMap InternalId Link := {}
   domains : Domains := {}
-  remoteContent : AllRemotes
   ids : TreeSet InternalId := {}
-  extraCss : HashSet String := {}
-  extraJs : HashSet String := {}
-  extraJsFiles : Array JsFile := #[]
-  extraCssFiles : Array (String × String) := #[]
   quickJump : DomainMappers := {}
-  licenseInfo : HashSet LicenseInfo := {}
   private contents : Contents := {}
 deriving Repr
 
@@ -307,17 +298,17 @@ private def jsonMap (xs : HashMap α β) : Json :=
 
 instance : ToJson TraverseState where
   toJson st :=
-    let {tags, externalTags, domains, remoteContent, ids, extraCss, extraJs, extraJsFiles, extraCssFiles, quickJump, licenseInfo, contents} := st
+    let {tags, externalTags, domains, ids, extraCss, extraJs, extraJsFiles, extraCssFiles, extraDataFiles, quickJump, licenseInfo, contents} := st
     json%{
       "tags": $(jsonMap tags),
       "externalTags": $(jsonMap externalTags),
       "domains": $domains,
-      "remoteContent": $remoteContent,
       "ids": $ids.toArray,
       "extraCss": $extraCss.toArray,
       "extraJs": $extraJs.toArray,
-      "extraJsFiles": $extraJsFiles,
-      "extraCssFiles": $extraCssFiles,
+      "extraJsFiles": $extraJsFiles.toArray,
+      "extraDataFiles": $extraDataFiles.toArray,
+      "extraCssFiles": $extraCssFiles.toArray,
       "quickJump": $quickJump.toArray,
       "licenseInfo": $licenseInfo.toArray,
       "contents": $contents.contents
@@ -338,22 +329,22 @@ instance : FromJson TraverseState where
       pure (k, v)
     let externalTags : HashMap _ _ := HashMap.insertMany {} externalTags
     let domains <- v.getObjValAs? _ "domains"
-    let remoteContent <- v.getObjValAs? _ "remoteContent"
     let ids <- v.getObjValAs? (Array InternalId) "ids"
     let ids := .ofArray ids
     let extraCss <- v.getObjValAs? (Array String) "extraCss"
     let extraCss := .ofArray extraCss
     let extraJs <- v.getObjValAs? (Array String) "extraJs"
     let extraJs := .ofArray extraJs
-    let extraJsFiles <- v.getObjValAs? _ "extraJsFiles"
-    let extraCssFiles <- v.getObjValAs? _ "extraCssFiles"
+    let extraJsFiles <- HashSet.ofArray <$> v.getObjValAs? (Array _) "extraJsFiles"
+    let extraCssFiles <- HashSet.ofArray <$> v.getObjValAs? (Array _) "extraCssFiles"
+    let extraDataFiles ← HashSet.ofArray <$> v.getObjValAs? (Array _) "extraDataFiles"
     let quickJump <- v.getObjValAs? (Array (String × Search.DomainMapper)) "quickJump"
     let quickJump := HashMap.insertMany {} quickJump
     let licenseInfo <- v.getObjValAs? (Array LicenseInfo) "licenseInfo"
     let licenseInfo := .ofArray licenseInfo
     let contents ← v.getObjValAs? (NameMap Json) "contents"
     let contents := ⟨contents⟩
-    return { tags, externalTags, domains, remoteContent, ids, extraCss, extraJs, extraJsFiles, extraCssFiles, quickJump, licenseInfo, contents }
+    return { tags, externalTags, domains, ids, extraCss, extraJs, extraJsFiles, extraCssFiles, extraDataFiles, quickJump, licenseInfo, contents }
 end
 /--
 Returns a fresh internal ID.
@@ -399,7 +390,6 @@ instance : BEq TraverseState where
       | none => false
       | some v' => v == v') &&
     x.domains == y.domains &&
-    x.remoteContent == y.remoteContent &&
     x.ids == y.ids &&
     x.extraCss == y.extraCss &&
     x.extraJs == y.extraJs &&
@@ -641,8 +631,11 @@ instance : Repr (Genre.PartMetadata Manual) := inferInstanceAs (Repr Manual.Part
 
 instance : ToJson (Genre.Inline Manual) := inferInstanceAs (ToJson Manual.Inline)
 instance : ToJson (Genre.Block Manual) := inferInstanceAs (ToJson Manual.Block)
+instance : ToJson (Genre.PartMetadata Manual) := inferInstanceAs (ToJson Manual.PartMetadata)
 
 instance : FromJson (Genre.Inline Manual) := inferInstanceAs (FromJson Manual.Inline)
+instance : FromJson (Genre.Block Manual) := inferInstanceAs (FromJson Manual.Block)
+instance : FromJson (Genre.PartMetadata Manual) := inferInstanceAs (FromJson Manual.PartMetadata)
 
 namespace Manual
 
@@ -689,7 +682,7 @@ structure InlineDescr where
   /--
   How to generate HTML. If `none`, generating HTML from a document that contains this inline will fail.
   -/
-  toHtml : Option (InlineToHtml Manual (ReaderT ExtensionImpls IO))
+  toHtml : Option (InlineToHtml Manual (ReaderT AllRemotes (ReaderT ExtensionImpls IO)))
   /--
   Extra JavaScript to add to a `<script>` tag in the generated HTML's `<head>`
   -/
@@ -747,7 +740,7 @@ structure BlockDescr where
   /--
   How to generate HTML. If `none`, generating HTML from a document that contains this block will fail.
   -/
-  toHtml : Option (BlockToHtml Manual (ReaderT ExtensionImpls IO))
+  toHtml : Option (BlockToHtml Manual (ReaderT AllRemotes (ReaderT ExtensionImpls IO)))
   /--
   Extra JavaScript to add to a `<script>` tag in the generated HTML's `<head>`
   -/
@@ -1034,20 +1027,20 @@ def TraverseState.resolveDomainObject (st : TraverseState) (domain : Name) (cano
         throw s!"Ref {canonicalName} in {domain} has {more} targets, can only link to one"
   else throw s!"Not found: {canonicalName} in {domain}"
 
-def TraverseState.resolveRemoteObject (st : TraverseState) (domain : Name) (canonicalName : String) (remote : String) : Except String RemoteLink := do
-  let some data := st.remoteContent[remote]?
-    | throw s!"Remote {remote} not found"
-  let some dom := data.domains[domain]?
-    | throw s!"Remote {remote} has no domain '{domain}'"
-  let some v := dom.contents[canonicalName]?
-    | throw s!"Remote {remote} domain '{domain}' does not define '{canonicalName}'"
-  match h : v.size with
-  | 0 =>
-    throw s!"No link target registered for {canonicalName} in {domain} in remote {remote}"
-  | 1 =>
-    return v[0].link
-  | more =>
-    throw s!"Ref {canonicalName} in {domain} in remote {remote} has {more} targets, can only link to one"
+-- def TraverseState.resolveRemoteObject (st : TraverseState) (domain : Name) (canonicalName : String) (remote : String) : Except String RemoteLink := do
+--   let some data := st.remoteContent[remote]?
+--     | throw s!"Remote {remote} not found"
+--   let some dom := data.domains[domain]?
+--     | throw s!"Remote {remote} has no domain '{domain}'"
+--   let some v := dom.contents[canonicalName]?
+--     | throw s!"Remote {remote} domain '{domain}' does not define '{canonicalName}'"
+--   match h : v.size with
+--   | 0 =>
+--     throw s!"No link target registered for {canonicalName} in {domain} in remote {remote}"
+--   | 1 =>
+--     return v[0].link
+--   | more =>
+--     throw s!"Ref {canonicalName} in {domain} in remote {remote} has {more} targets, can only link to one"
 
 
 def TraverseState.resolveTag (st : TraverseState) (tag : Slug) : Option Link :=
@@ -1228,23 +1221,23 @@ def TraverseState.localTargets (state : TraverseState) : Code.LinkTargets Manual
     state.linksFromDomain tacticDomain k.toString "doc" "Documentation for tactic" ++
     state.linksFromDomain syntaxKindDomain k.toString "doc" "Documentation for syntax"
 
-def TraverseState.remoteTargets (state : TraverseState) : Code.LinkTargets Manual.TraverseContext where
-  const := fun x _ctxt? =>
-    fromRemoteDomain docstringDomain x.toString (s!"doc ({·})") (s!"Documentation for {x} in {·}")
-  option := fun x _ctxt? =>
-    fromRemoteDomain optionDomain x.toString (s!"doc ({·})") (s!"Documentation for option {x} in {·}")
-  keyword := fun k _ctxt? =>
-    fromRemoteDomain tacticDomain k.toString (s!"doc ({·})") (s!"Documentation for tactic in {·}") ++
-    fromRemoteDomain syntaxKindDomain k.toString (s!"doc ({·})") (s!"Documentation for syntax in {·}")
-where
+-- def TraverseState.remoteTargets (state : TraverseState) : Code.LinkTargets Manual.TraverseContext where
+--   const := fun x _ctxt? =>
+--     fromRemoteDomain docstringDomain x.toString (s!"doc ({·})") (s!"Documentation for {x} in {·}")
+--   option := fun x _ctxt? =>
+--     fromRemoteDomain optionDomain x.toString (s!"doc ({·})") (s!"Documentation for option {x} in {·}")
+--   keyword := fun k _ctxt? =>
+--     fromRemoteDomain tacticDomain k.toString (s!"doc ({·})") (s!"Documentation for tactic in {·}") ++
+--     fromRemoteDomain syntaxKindDomain k.toString (s!"doc ({·})") (s!"Documentation for syntax in {·}")
+-- where
 
-  fromRemoteDomain (domain : Name) (canonicalName : String) (shortDescription description : String → String) : Array Code.CodeLink := Id.run do
-    state.remoteContent.toArray.filterMap fun (r, info) =>
-      state.resolveRemoteObject domain canonicalName r |>.toOption |>.map fun l => {
-        shortDescription := shortDescription info.shortName,
-        description := description info.longName,
-        href := l.link
-      }
+--   fromRemoteDomain (domain : Name) (canonicalName : String) (shortDescription description : String → String) : Array Code.CodeLink := Id.run do
+--     state.remoteContent.toArray.filterMap fun (r, info) =>
+--       state.resolveRemoteObject domain canonicalName r |>.toOption |>.map fun l => {
+--         shortDescription := shortDescription info.shortName,
+--         description := description info.longName,
+--         href := l.link
+--       }
 
 
 def sectionNumberString (num : Array Numbering) : String := Id.run do
@@ -1409,15 +1402,15 @@ instance : Traverse Manual TraverseM where
       if let some id := id? then
         if let some impl := (← readThe ExtensionImpls).getBlock? name then
           for js in impl.extraJs do
-            modify fun s => {s with extraJs := s.extraJs.insert js}
+            modify fun s => { s with extraJs := s.extraJs.insert js }
           for css in impl.extraCss do
-            modify fun s => {s with extraCss := s.extraCss.insert css}
+            modify fun s => { s with extraCss := s.extraCss.insert css }
           for f in impl.extraJsFiles do
             unless (← get).extraJsFiles.any (·.filename == f.filename) do
-              modify fun s => {s with extraJsFiles := s.extraJsFiles.push f }
-          for (name, js) in impl.extraCssFiles do
-            unless (← get).extraCssFiles.any (·.1 == name) do
-              modify fun s => {s with extraCssFiles := s.extraCssFiles.push (name, js)}
+              modify fun s => { s with extraJsFiles := s.extraJsFiles.insert f }
+          for (name, css) in impl.extraCssFiles do
+            unless (← get).extraCssFiles.any (·.filename == name) do
+              modify fun s => { s with extraCssFiles := s.extraCssFiles.insert { filename := name, contents := css } }
           for licenseInfo in impl.licenseInfo do
             modify (·.addLicenseInfo licenseInfo)
 
@@ -1439,10 +1432,10 @@ instance : Traverse Manual TraverseM where
             modify fun s => { s with extraCss := s.extraCss.insert css }
           for f in impl.extraJsFiles do
             unless (← get).extraJsFiles.any (·.filename == f.filename) do
-              modify fun s => { s with extraJsFiles := s.extraJsFiles.push f }
-          for (name, js) in impl.extraCssFiles do
-            unless (← get).extraCssFiles.any (·.1 == name) do
-              modify fun s => { s with extraCssFiles := s.extraCssFiles.push (name, js) }
+              modify fun s => { s with extraJsFiles := s.extraJsFiles.insert f }
+          for (name, css) in impl.extraCssFiles do
+            unless (← get).extraCssFiles.any (·.filename == name) do
+              modify fun s => { s with extraCssFiles := s.extraCssFiles.insert { filename := name, contents := css } }
           for licenseInfo in impl.licenseInfo do
             modify (·.addLicenseInfo licenseInfo)
 
@@ -1512,7 +1505,7 @@ def permalink (id : InternalId) (st : TraverseState) (inline : Bool := true) : H
 
 
 open Verso.Output.Html in
-instance : Html.GenreHtml Manual (ReaderT ExtensionImpls IO) where
+instance : Html.GenreHtml Manual (ReaderT AllRemotes (ReaderT ExtensionImpls IO)) where
   part go «meta» txt := do
     let st ← Verso.Doc.Html.HtmlT.state
     let attrs := meta.id.map (st.htmlId) |>.getD #[]

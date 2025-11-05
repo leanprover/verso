@@ -281,6 +281,10 @@ public structure RefDomain where
   contents : HashMap String (Array RefObject)
 deriving Inhabited, Repr
 
+instance : GetElem? RefDomain String (Array RefObject) fun dom name => name ∈ dom.contents where
+  getElem dom name ok := dom.contents[name]'ok
+  getElem? dom name := dom.contents[name]?
+
 private def RefDomain.structEq (x y : RefDomain) :=
   let ⟨t1, d1, c1⟩ := x
   let ⟨t2, d2, c2⟩ := y

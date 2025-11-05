@@ -13,6 +13,7 @@ import VersoUtil.LzCompress
 import VersoUtil.Zip
 
 namespace Verso.Genre
+open Lean
 
 open Verso.Doc (Genre)
 open Verso.Multi
@@ -25,7 +26,7 @@ inductive ExampleCodeStyle where
   The example code should be extracted to a Lean project from the tutorial.
   -/
   | inlineLean (moduleName : Lean.Name) (toolchain := defaultToolchain) (liveProject := some defaultLive)
-deriving BEq, DecidableEq, Inhabited, Repr
+deriving BEq, DecidableEq, Inhabited, Repr, ToJson, FromJson
 
 open Manual (Tag InternalId) in
 structure Tutorial.PartMetadata where
@@ -39,7 +40,7 @@ structure Tutorial.PartMetadata where
   summary : String
   /-- How should the code samples in this tutorial be extracted to a downloadable tarball? -/
   exampleStyle : ExampleCodeStyle
-deriving BEq, DecidableEq, Inhabited, Repr
+deriving BEq, DecidableEq, Inhabited, Repr, ToJson, FromJson
 
 def Tutorial : Genre :=
   { Manual with
@@ -56,6 +57,14 @@ instance : Repr (Genre.PartMetadata Tutorial) := inferInstanceAs (Repr Tutorial.
 instance : Repr (Genre.Block Tutorial) := inferInstanceAs (Repr Manual.Block)
 instance : Repr (Genre.Inline Tutorial) := inferInstanceAs (Repr Manual.Inline)
 
+instance : ToJson (Genre.PartMetadata Tutorial) := inferInstanceAs (ToJson Tutorial.PartMetadata)
+instance : ToJson (Genre.Block Tutorial) := inferInstanceAs (ToJson Manual.Block)
+instance : ToJson (Genre.Inline Tutorial) := inferInstanceAs (ToJson Manual.Inline)
+
+instance : FromJson (Genre.PartMetadata Tutorial) := inferInstanceAs (FromJson Tutorial.PartMetadata)
+instance : FromJson (Genre.Block Tutorial) := inferInstanceAs (FromJson Manual.Block)
+instance : FromJson (Genre.Inline Tutorial) := inferInstanceAs (FromJson Manual.Inline)
+
 instance : VersoLiterate.LoadLiterate Tutorial where
   inline := inst.inline
   block := inst.block
@@ -69,7 +78,7 @@ namespace Tutorial
 
 open Verso.Doc
 open Manual (ExtensionImpls)
-open Lean
+
 
 instance : TraversePart Tutorial where
   inPart p ctx := { ctx with
@@ -126,12 +135,12 @@ structure Topic where
   title : String -- TODO inlines
   description : Array (Block .none) -- TODO page from blog genre?
   tutorials : Array (Part Tutorial)
-deriving BEq
+deriving BEq, ToJson, FromJson
 
 structure Tutorials : Type where
   content : Part .none -- TODO Page from blog genre?
   topics : Array Topic
-deriving BEq
+deriving BEq, ToJson, FromJson
 
 def Tutorials.traverse1 [Monad m] (traversal : Part Tutorial → m (Part Tutorial)) (tutorials : Tutorials) : m Tutorials := do
   let { content, topics } := tutorials
@@ -146,16 +155,7 @@ def Tutorials.traverse1 [Monad m] (traversal : Part Tutorial → m (Part Tutoria
 open Manual in
 def traverse (logError : String → IO Unit) (tutorials : Tutorials) (config : Manual.Config) : ReaderT ExtensionImpls IO (Tutorials × Manual.TraverseState) := do
   let topCtxt : Manual.TraverseContext := {logError, draft := config.draft}
-  if config.verbose then IO.println "Updating remote data"
-  let remoteContent ← updateRemotes false config.remoteConfigFile (if config.verbose then IO.println else fun _ => pure ())
-  let mut state : Manual.TraverseState := {
-    licenseInfo := .ofList config.licenseInfo,
-    extraCss := .insertMany {} config.extraJs
-    extraJs := .insertMany {} config.extraJs
-    extraCssFiles := config.extraCssFiles,
-    extraJsFiles := config.extraJsFiles,
-    remoteContent
-  }
+  let mut state : Manual.TraverseState := .ofConfig config.toHtmlConfig
   let mut tutorials := tutorials
   if config.verbose then
     IO.println "Initializing extensions"
@@ -265,7 +265,7 @@ end
 section
 open Verso.Output Html
 
-instance : GenreHtml Tutorial (ReaderT ExtensionImpls IO) where
+instance [GenreHtml Manual m] : GenreHtml Tutorial m where
   part go metadata txt :=
     go txt
   block goI goB container content :=
@@ -274,7 +274,7 @@ instance : GenreHtml Tutorial (ReaderT ExtensionImpls IO) where
     HtmlT.cast <| inst.inline (HtmlT.cast <| go ·) container content
 
 where
-  inst := (inferInstanceAs (GenreHtml Manual (ReaderT ExtensionImpls IO)))
+  inst := (inferInstanceAs (GenreHtml Manual m))
 
 variable [Monad m] [MonadReaderOf Manual.TraverseState m]
 
@@ -411,6 +411,9 @@ def EmitM.run
     (act : EmitM α) : IO α :=
   ReaderT.run act {theme, config, logError} |>.run state |>.run extensionImpls
 
+def EmitM.config : EmitM Manual.Config := do
+  return (← readThe EmitContext).config
+
 def EmitM.logError (message : String) : EmitM Unit := do
   (← readThe EmitContext).logError message
 
@@ -452,7 +455,7 @@ def EmitM.page (path : Path) (title : String) (content : Html) : EmitM Html := d
   let state ← readThe Manual.TraverseState
   let extraJsFiles :=
     Manual.sortJs <|
-      state.extraJsFiles.map (false, ·.toStaticJsFile)
+      state.extraJsFiles.toArray.map (false, ·.toStaticJsFile)
   let extraJsFiles := extraJsFiles.map fun
     | (true, f) => (f.filename, f.defer)
     | (false, f) => ("/-verso-data/" ++ f.filename, f.defer)
@@ -496,6 +499,10 @@ where
 
 open EmitM in
 def emit (tutorials : Tutorials) : EmitM Unit := do
+  let config ← EmitM.config
+  if config.verbose then IO.println "Updating remote data"
+  let remoteContent ← updateRemotes false config.remoteConfigFile (if config.verbose then IO.println else fun _ => pure ())
+
   let dir := (← read).config.destination
   ensureDir dir
   let mut hlState := {}
@@ -519,7 +526,7 @@ def emit (tutorials : Tutorials) : EmitM Unit := do
       let code := getCode tut
       ensureDir dir
       Zip.zipToFile (dir / (metadata.slug ++ ".zip")) (method := .store) <| code.map fun (fn, txt) => (metadata.slug ++ "/" ++ fn, txt.bytes)
-      let (html, hlState') ← Genre.toHtml (m := ReaderT ExtensionImpls IO) Tutorial { logError := (logError ·) } { logError } (← readThe Manual.TraverseState) {} {} {} tut hlState
+      let (html, hlState') ← Genre.toHtml (m := ReaderT AllRemotes (ReaderT ExtensionImpls IO)) Tutorial { logError := (logError ·) } { logError } (← readThe Manual.TraverseState) {} {} {} tut hlState remoteContent
       hlState := hlState'
       let toc ← LocalToC.ofPart tut
       let sampleCode := do
@@ -548,15 +555,36 @@ def emit (tutorials : Tutorials) : EmitM Unit := do
   for themeCss in (← theme).cssFiles do
     writeFile (dir / themeCss.1) themeCss.2
 
-  let json := xrefJson (← readThe Manual.TraverseState).domains (← readThe Manual.TraverseState).externalTags
-  writeFile (dir / "xref.json") <| toString json
-
-
 end
+
+inductive EmitTutorial where
+  | immediately
+  | delay (savedState : System.FilePath)
+  | resumeFrom (savedState : System.FilePath)
+
+structure Config extends Manual.Config where
+  emit : EmitTutorial := .immediately
+
+structure SavedState where
+  tutorials : Tutorials
+  traverseState : Manual.TraverseState
+deriving ToJson, FromJson
+
+def SavedState.save (file : System.FilePath) (state : SavedState) : IO Unit := do
+  IO.FS.writeFile file (toJson state).compress
+
+def SavedState.load (file : System.FilePath) : IO SavedState := do
+  let json ← IO.FS.readFile file
+  match Json.parse json with
+  | .error e => throw <| .userError s!"Error parsing {file}: {e}"
+  | .ok json =>
+    match FromJson.fromJson? json with
+    | .error e => throw <| .userError s!"Error deserializing tutorials from {file}: {e}"
+    | .ok st => return st
 
 
 def tutorialsMain (tutorials : Tutorials) (args : List String)
-    (config : Manual.Config := Manual.Config.addKaTeX {})
+    (config : Config := {})
     (theme : Theme := .default)
     (extensionImpls : ExtensionImpls := by exact extension_impls%) :
     IO UInt32 :=
@@ -569,10 +597,29 @@ where
     let logError msg := do hasError.set true; IO.eprintln msg
 
     -- Traversal
-    let (tutorials, state) ← traverse logError tutorials config
+    let (tutorials, state) ←
+      match config.emit with
+      | .immediately =>
+        let (tutorials, state) ← traverse logError tutorials config.toConfig
+        let json := xrefJson state.domains state.externalTags
+        IO.FS.writeFile (config.destination / "xref.json") <| toString json
+        pure (tutorials, state)
+      | .delay f =>
+        let (tutorials, state) ← traverse logError tutorials config.toConfig
+        SavedState.mk tutorials state |>.save f
+        let json := xrefJson state.domains state.externalTags
+        IO.FS.writeFile (config.destination / "xref.json") <| toString json
+        return 0
+      | .resumeFrom f =>
+          try
+            let ⟨tutorials, state⟩ ← SavedState.load f
+            pure (tutorials, state)
+          catch
+            | .userError e => logError e; return (1 : UInt32)
+            | other => throw other
 
     -- Emit HTML
-    (emit tutorials).run theme config logError state extensionImpls
+    (emit tutorials).run theme config.toConfig logError state extensionImpls
 
     -- Extract code/convert
     if (← hasError.get) then
@@ -581,8 +628,17 @@ where
     else
       return 0
 
-  opts (cfg : Manual.Config) : List String → ReaderT ExtensionImpls IO Manual.Config
-    | ("--output"::dir::more) => opts {cfg with destination := dir} more
-    | ("--verbose"::more) => opts {cfg with verbose := true} more
+  opts (cfg : Config) : List String → ReaderT ExtensionImpls IO Config
+    | ("--output"::dir::more) => opts { cfg with destination := dir } more
+    | ("--verbose"::more) => opts { cfg with verbose := true } more
+    | ("--now"::more) => opts { cfg with emit := .immediately } more
+    | ("--delay"::more) =>
+      if let file::more := more then
+        opts { cfg with emit := .delay file } more
+      else throw (↑ s!"Missing filename for --delay")
+    | ("--resume"::more) =>
+      if let file::more := more then
+        opts { cfg with emit := .resumeFrom file } more
+      else throw (↑ s!"Missing filename for --resume")
     | (other :: _) => throw (↑ s!"Unknown option {other}")
     | [] => pure cfg
