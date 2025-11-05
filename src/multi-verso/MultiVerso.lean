@@ -14,9 +14,11 @@ import Std.Time.Format
 
 public import MultiVerso.InternalId
 public import MultiVerso.Link
+public import MultiVerso.NameMap
 import MultiVerso.Manifest
 import MultiVerso.Path
 import MultiVerso.Slug
+
 
 set_option doc.verso true
 
@@ -41,6 +43,19 @@ public structure Object where
   /-- The IDs of the description site(s) -/
   ids : HashSet InternalId := {}
 deriving Inhabited
+
+instance : ToJson Object where
+  toJson
+    | { canonicalName, data, ids } =>
+      json%{ "canonicalName": $canonicalName, "data": $data, "ids": $ids.toArray }
+
+instance : FromJson Object where
+  fromJson? v := do
+    let canonicalName ← v.getObjValAs? String "canonicalName"
+    let data ← v.getObjVal? "data"
+    let ids ← v.getObjValAs? (Array InternalId) "ids"
+    let ids := HashSet.ofArray ids
+    return { canonicalName, data, ids }
 
 open Format in
 public instance : Repr Object where
@@ -100,6 +115,31 @@ public structure Domain where
   -/
   description : Option String := none
 deriving Inhabited, Repr
+
+public instance : ToJson Domain where
+  toJson := private fun
+    | {objects, objectsById, title, description} =>
+      let objects : Json := objects.foldl (init := Json.mkObj []) fun json name obj => json.setObjVal! name (toJson obj)
+      let objectsById : Json := .arr <| objectsById.foldl (init := #[]) fun jsons id names => jsons.push (json%{"key": $id, "names": $names.toArray})
+      json%{"objects": $objects, "objectsById": $objectsById, "title": $title, "description": $description}
+
+public instance : FromJson Domain where
+  fromJson? v := private do
+    let objects ← v.getObjVal? "objects"
+    let objects ← objects.getObj?
+    let objects ← objects.foldlM (init := ({} : TreeMap String Object _)) fun objs name obj => do
+      return objs.insert name (← FromJson.fromJson? obj)
+    let objectsById ← v.getObjVal? "objectsById"
+    let objectsById ← objectsById.getArr?
+    let objectsById ← objectsById.foldlM (init := ({} : TreeMap InternalId (HashSet String))) fun soFar v => do
+      let id ← v.getObjValAs? _ "key"
+      let names ← v.getObjVal? "names"
+      let names : Array String ← FromJson.fromJson? names
+      return soFar.insert id (HashSet.ofArray names)
+    let title ← v.getObjValAs? _ "title"
+    let description ← v.getObjValAs? _ "description"
+    return { objects, objectsById, title, description }
+
 
 private def Domain.structBeq : Domain → Domain → Bool
   | ⟨d1, byId1, t1, desc1⟩, ⟨d2, byId2, t2, desc2⟩ =>
@@ -215,6 +255,8 @@ public instance : Repr RefObject where
       text "}"
     ]
 
+deriving instance ToJson, FromJson for RefObject
+
 /--
 Converts a reference object to the official interchange format.
 -/
@@ -271,6 +313,25 @@ public def RefDomain.toJson (domain : RefDomain) : Json :=
     "contents": $contents
   }
 
+public instance : ToJson RefDomain where
+  toJson domain :=
+    let contents : Json := .mkObj <| domain.contents.toList.map fun (k, v) => (k, .arr <| v.map (toJson ·))
+    json%{
+      "title": $domain.title,
+      "description": $domain.description,
+      "contents": $contents
+    }
+
+public instance : FromJson RefDomain where
+  fromJson? v := do
+    let title ← v.getObjValAs? _ "title"
+    let description ← v.getObjValAs? _ "description"
+    let contents ← v.getObjVal? "contents"
+    let contents ← contents.getObj?
+    let contents : HashMap String (Array RefObject) ← contents.foldlM (init := {}) fun objs k v => do
+      return objs.insert k (← fromJson? v)
+    return { title, description, contents }
+
 /--
 Loads a set of reference domains from a cross-reference database in JSON format.
 -/
@@ -295,7 +356,7 @@ public def fromXrefJson (root : String) (json : Json) : Except String (NameMap R
         let data ← x.getObjVal? "data"
         pure {link := {root, path := address, htmlId := htmlId.sluggify}, data : RefObject}
       contents := contents.insert canonicalName v
-    out := out.insert domainName {title, description, contents}
+    out := out.insert! domainName {title, description, contents}
   return out
 
 private def normPath (path : System.FilePath) : System.FilePath :=
@@ -371,7 +432,34 @@ public structure RemoteInfo where
   /-- A long name to show in longer links (e.g. "Lean Language Reference version 4.20"). -/
   longName : String
   /-- The documented items in the remote. -/
-  domains : NameMap RefDomain
+  domains : Verso.NameMap RefDomain
+deriving Repr
+
+public instance : ToJson RemoteInfo where
+  toJson := private fun
+    | { root, shortName, longName, domains } =>
+      let domains := domains.toArray.map fun (x, y) => (x.toString, toJson y)
+      let domains : Json := .obj <| .ofArray domains _
+      json%{ "root": $root, "shortName": $shortName, "longName": $longName, "domains": $domains }
+
+public instance : FromJson RemoteInfo where
+  fromJson? v := private do
+    let root ← v.getObjValAs? String "root"
+    let shortName ← v.getObjValAs? String "shortName"
+    let longName ← v.getObjValAs? String "longName"
+    let domains ← v.getObjVal? "domains"
+    let domains ← domains.getObj?
+    let domains : NameMap RefDomain ← domains.foldlM (init := {}) fun ds (x : String) y => do
+      let title ← y.getObjValAs? (Option String) "title"
+      let description ← y.getObjValAs? (Option String) "description"
+      let contents ← y.getObjVal? "contents"
+      let contents ← contents.getObj?
+      let contents ← contents.foldlM (init := {}) fun c k v => do
+        let v ← fromJson? v
+        pure <| c.insert k v
+      let x' := x.toName
+      return ds.insert! x' { title, description, contents }
+    return { root, shortName, longName, domains }
 
 private def RemoteInfo.structBEq (x y : RemoteInfo) : Bool :=
   let ⟨root1, x1, y1, doms1⟩ := x
@@ -381,7 +469,7 @@ private def RemoteInfo.structBEq (x y : RemoteInfo) : Bool :=
   y1 == y2 &&
   doms1.size == doms2.size &&
   doms1.foldl (init := true) fun soFar k v =>
-    soFar && (doms2.find? k).isEqSome v
+    soFar && doms2[k]?.isEqSome v
 
 private unsafe def RemoteInfo.fastBEq (x y : RemoteInfo) : Bool :=
   if ptrEq x y then true else RemoteInfo.structBEq x y
@@ -401,6 +489,22 @@ All remote data that was loaded.
 public structure AllRemotes where
   /-- The remote data -/
   allRemotes : HashMap String RemoteInfo := {}
+deriving Repr
+
+instance : ToJson AllRemotes where
+  toJson v := Id.run do
+    let mut val := Json.obj {}
+    for (name, info) in v.allRemotes do
+      val := val.setObjValAs! name info
+    return val
+
+instance : FromJson AllRemotes where
+  fromJson? v := do
+    let v ← v.getObj?
+    let mut all := {}
+    for (name, infoJson) in v do
+      all := all.insert name (← fromJson? infoJson)
+    return ⟨all⟩
 
 public instance : GetElem AllRemotes String RemoteInfo (fun x y => y ∈ x.allRemotes) where
   getElem x y z := GetElem.getElem x.allRemotes y z

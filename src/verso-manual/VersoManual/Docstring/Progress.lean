@@ -80,7 +80,7 @@ def progress : DirectiveExpanderOf Unit
               exceptions := exceptions.insert str.toName
         | _ => throwErrorAt nameStx "Expected 'namespace' or 'exceptions'"
       | _ => throwErrorAt block "Expected code block named 'namespace' or 'exceptions'"
-    let mut present : NameMap NameSet := {}
+    let mut present : Lean.NameMap NameSet := {}
 
     for ns in namespaces do
       present := present.insert ns {}
@@ -128,7 +128,7 @@ def progress.descr : BlockDescr where
     let .ok ((namespaces : Array Name), (exceptions : Array Name), (present : List (Name × String)), (allTactics : Array Name)) := fromJson? info
       | panic! "Can't deserialize progress bar state"
 
-    let check : NameMap (List Name) := present.foldr (init := {}) fun (ns, names) z =>
+    let check : Lean.NameMap (List Name) := present.foldr (init := {}) fun (ns, names) z =>
       -- The filter is needed here because `"".splitOn " " = [""]`
       z.insert ns (names.splitOn " " |>.filter (!·.isEmpty) |>.map String.toName)
     let check := check.insert `_root_ allRootNames.toList

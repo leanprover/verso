@@ -3,17 +3,24 @@ Copyright (c) 2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
+module
 
 import Std.Data.HashMap
+meta import VersoUtil.BinFiles
 import VersoUtil.BinFiles
 import Std.Data.HashMap
+public import Lean.Data.Json.FromToJson
 
 open Std (HashMap)
 
 set_option linter.missingDocs true
 set_option doc.verso true
 
+public section
+
 namespace Verso.Search
+
+open Lean
 
 /--
 Transforms data in a Verso documentation domain into a quick-jump item.
@@ -47,7 +54,7 @@ public structure DomainMapper where
   CSS to be used in the quick-jump box to customize results from the given domain.
   -/
   quickJumpCss : Option String := none
-deriving Repr, DecidableEq
+deriving Repr, DecidableEq, ToJson, FromJson
 
 /--
 Constructs a domain mapper with default code for the {name}`dataToSearchables` field.

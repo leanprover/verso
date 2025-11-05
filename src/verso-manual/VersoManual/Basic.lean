@@ -139,7 +139,9 @@ inductive Tag where
   | /-- A user-provided tag - respect this if possible -/ provided (name : String)
   | /-- A unique tag, suitable for inclusion in a document -/ private external (name : Slug)
   | /-- A machine-assigned tag -/ private internal (name : String)
-deriving BEq, Hashable, Repr, ToJson, FromJson
+deriving BEq, DecidableEq, Hashable, Repr, ToJson, FromJson
+
+instance : Inhabited Tag := ⟨.external "".sluggify⟩
 
 instance : ToString Tag where
   toString := toString ∘ repr
@@ -153,7 +155,7 @@ structure StaticJsFile where
   defer : Bool := false
   /-- Load after these other named files -/
   after : Array String := #[]
-deriving BEq
+deriving BEq, Repr
 
 /--
 A JavaScript source map to be included along with emitted JavaScript.
@@ -164,13 +166,13 @@ the one referred to by the minified file; Verso will not validate this.
 structure JsSourceMap where
   filename : String
   contents : String
-deriving BEq
+deriving BEq, ToJson, FromJson, Repr
 
 /-- An extra JS file to be emitted and added to the page -/
 structure JsFile extends StaticJsFile where
   contents : String
   sourceMap? : Option JsSourceMap
-deriving BEq
+deriving BEq, ToJson, FromJson, Repr
 
 
 /-- When rendering multi-page HTML, should splitting pages follow the depth setting? -/
@@ -229,26 +231,57 @@ structure PartMetadata where
 deriving BEq, Hashable, Repr
 
 
-def Domains := NameMap Domain
+def Domains := NameMap Domain deriving Repr
 def Domains.contents : Domains → NameMap Domain := id
 
 instance : BEq Domains where
   beq := ptrEqThen fun x y =>
     x.size == y.size &&
-    x.all fun k v => y.find? k |>.isEqSome v
+    x.all fun k v => y.get? k |>.isEqSome v
 
 instance : GetElem Domains Name Domain (fun ds d => ds.contents.contains d) where
   getElem ds d _ok := ds.contents.get! d
 
 instance : GetElem? Domains Name Domain (fun ds d => ds.contents.contains d) where
-  getElem? ds d := ds.contents.find? d
+  getElem? ds d := ds.contents.get? d
 
 instance : EmptyCollection Domains := ⟨({} : NameMap Domain)⟩
 
 instance : ForIn m Domains (Name × Domain) :=
   inferInstanceAs (ForIn m (NameMap Domain) (Name × Domain))
 
+instance : ToJson Domains where
+  toJson doms :=
+    doms.foldl (init := Json.obj {}) fun json name dom => json.setObjVal! name.toString (ToJson.toJson dom)
+
+instance : FromJson Domains where
+  fromJson? j := do
+    let jsonDoms ← j.getObj?
+    jsonDoms.foldlM (init := ({} : Domains)) fun doms name dom => do
+      if let some ⟨x, h⟩ := NameMap.PublicName.ofString name then
+        pure <| doms.insert x (← FromJson.fromJson? dom) h
+      else throw s!"The string {name.quote} is not a valid name for a domain"
+
+
 def StringSet := HashSet String
+
+structure Contents where
+  contents : NameMap Json
+
+instance : EmptyCollection Contents := ⟨⟨{}⟩⟩
+
+instance : Repr Contents where
+  reprPrec v _ :=
+    .group <|
+    .nestD
+      ("{" ++
+        .line ++
+        .joinSep
+          (v.contents.toList.map fun (k, v) =>
+            Std.Format.group <|
+            .nestD ("(" ++ k.toString ++ "," ++ Std.Format.line ++ "json%" ++ v.pretty ++ ")"))
+          .line) ++
+    .line ++ "}"
 
 open Verso.Search in
 structure TraverseState where
@@ -263,8 +296,64 @@ structure TraverseState where
   extraCssFiles : Array (String × String) := #[]
   quickJump : DomainMappers := {}
   licenseInfo : HashSet LicenseInfo := {}
-  private contents : NameMap Json := {}
+  private contents : Contents := {}
+deriving Repr
 
+section
+variable [ToJson α] [ToJson β] [BEq α] [Hashable α]
+private def jsonMap (xs : HashMap α β) : Json :=
+  .arr (xs.toArray.map fun (x, y) => json%{"key": $x, "value": $y})
+
+instance : ToJson TraverseState where
+  toJson st :=
+    let {tags, externalTags, domains, remoteContent, ids, extraCss, extraJs, extraJsFiles, extraCssFiles, quickJump, licenseInfo, contents} := st
+    json%{
+      "tags": $(jsonMap tags),
+      "externalTags": $(jsonMap externalTags),
+      "domains": $domains,
+      "remoteContent": $remoteContent,
+      "ids": $ids.toArray,
+      "extraCss": $extraCss.toArray,
+      "extraJs": $extraJs.toArray,
+      "extraJsFiles": $extraJsFiles,
+      "extraCssFiles": $extraCssFiles,
+      "quickJump": $quickJump.toArray,
+      "licenseInfo": $licenseInfo.toArray,
+      "contents": $contents.contents
+    }
+
+instance : FromJson TraverseState where
+  fromJson? v :=do
+    let tags ← v.getObjValAs? (Array Json) "tags"
+    let tags ← tags.mapM fun j => do
+      let k ← j.getObjValAs? _ "key"
+      let v ← j.getObjValAs? _ "value"
+      pure (k, v)
+    let tags : HashMap _ _ := HashMap.insertMany {} tags
+    let externalTags ← v.getObjValAs? (Array Json) "externalTags"
+    let externalTags ← externalTags.mapM fun j => do
+      let k ← j.getObjValAs? _ "key"
+      let v ← j.getObjValAs? _ "value"
+      pure (k, v)
+    let externalTags : HashMap _ _ := HashMap.insertMany {} externalTags
+    let domains <- v.getObjValAs? _ "domains"
+    let remoteContent <- v.getObjValAs? _ "remoteContent"
+    let ids <- v.getObjValAs? (Array InternalId) "ids"
+    let ids := .ofArray ids
+    let extraCss <- v.getObjValAs? (Array String) "extraCss"
+    let extraCss := .ofArray extraCss
+    let extraJs <- v.getObjValAs? (Array String) "extraJs"
+    let extraJs := .ofArray extraJs
+    let extraJsFiles <- v.getObjValAs? _ "extraJsFiles"
+    let extraCssFiles <- v.getObjValAs? _ "extraCssFiles"
+    let quickJump <- v.getObjValAs? (Array (String × Search.DomainMapper)) "quickJump"
+    let quickJump := HashMap.insertMany {} quickJump
+    let licenseInfo <- v.getObjValAs? (Array LicenseInfo) "licenseInfo"
+    let licenseInfo := .ofArray licenseInfo
+    let contents ← v.getObjValAs? (NameMap Json) "contents"
+    let contents := ⟨contents⟩
+    return { tags, externalTags, domains, remoteContent, ids, extraCss, extraJs, extraJsFiles, extraCssFiles, quickJump, licenseInfo, contents }
+end
 /--
 Returns a fresh internal ID.
 -/
@@ -317,42 +406,42 @@ instance : BEq TraverseState where
     x.extraCssFiles == y.extraCssFiles &&
     x.quickJump == y.quickJump &&
     ptrEqThen' x.contents y.contents (fun c1 c2 =>
-      c1.size == c2.size &&
-      c1.all (c2.find? · |>.isEqSome ·)) &&
+      c1.contents.size == c2.contents.size &&
+      c1.contents.all (c2.contents[·]? |>.isEqSome ·)) &&
     x.licenseInfo == y.licenseInfo
 
 namespace TraverseState
 
-def set [ToJson α] (state : TraverseState) (name : Name) (value : α) : TraverseState :=
-  {state with contents := state.contents.insert name (ToJson.toJson value)}
+def set [ToJson α] (state : TraverseState) (name : Name) (value : α) (ok : NameMap.isPublic name := by decide) : TraverseState :=
+  { state with contents.contents := state.contents.contents.insert name (ToJson.toJson value) ok }
 
 /-- Returns `none` if the key is not found, or `some (error e)` if JSON deserialization failed -/
 def get? [FromJson α] (state : TraverseState) (name : Name) : Option (Except String α) :=
-  state.contents.find? name |>.map FromJson.fromJson?
+  state.contents.contents.get? name |>.map FromJson.fromJson?
 
 def saveDomainObject (state : TraverseState) (domain : Name) (canonicalName : String) (id : InternalId) : TraverseState :=
   {state with
     domains :=
-      state.domains.insert domain (state.domains.find? domain |>.getD {} |>.insertId canonicalName id)}
+      state.domains.insert! domain (state.domains.get? domain |>.getD {} |>.insertId canonicalName id)}
 
 def saveDomainObjectData (state : TraverseState) (domain : Name) (canonicalName : String) (data : Json) : TraverseState :=
   {state with
     domains :=
-      state.domains.insert domain (state.domains.find? domain |>.getD {} |>.setData canonicalName data)}
+      state.domains.insert! domain (state.domains.get? domain |>.getD {} |>.setData canonicalName data)}
 
 def modifyDomainObjectData (state : TraverseState) (domain : Name) (canonicalName : String) (f : Json → Json) : TraverseState :=
   {state with
     domains :=
-      state.domains.insert domain (state.domains.find? domain |>.getD {} |>.modifyData canonicalName f)}
+      state.domains.insert! domain (state.domains.get? domain |>.getD {} |>.modifyData canonicalName f)}
 
 def getDomainObject? (state : TraverseState) (domain : Name) (canonicalName : String) : Option Object :=
-  state.domains.find? domain >>= fun d => d.get? canonicalName
+  state.domains.get? domain >>= fun d => d.get? canonicalName
 
 def setDomainTitle (state : TraverseState) (domain : Name) (title : String) : TraverseState :=
-  {state with domains := state.domains.insert domain {state.domains.find? domain |>.getD {} with title := some title}}
+  {state with domains := state.domains.insert! domain {state.domains.get? domain |>.getD {} with title := some title}}
 
 def setDomainDescription (state : TraverseState) (domain : Name) (description : String) : TraverseState :=
-  {state with domains := state.domains.insert domain {state.domains.find? domain |>.getD {} with description := some description}}
+  {state with domains := state.domains.insert! domain {state.domains.get? domain |>.getD {} with description := some description}}
 
 open Verso.Search in
 def addQuickJumpMapper (state : TraverseState) (domain : Name) (domainMapper : DomainMapper) : TraverseState :=
@@ -519,8 +608,8 @@ structure ExtensionImpls where
   private mk ::
   -- This is to work around recursion restrictions, not for real dynamism
   -- They are expected to be `InlineDescr` and `BlockDescr`, respectively
-  inlineDescrs : NameMap Dynamic
-  blockDescrs : NameMap Dynamic
+  inlineDescrs : Lean.NameMap Dynamic
+  blockDescrs : Lean.NameMap Dynamic
 
 end Manual
 
@@ -701,7 +790,7 @@ syntax (name := block_extension) "block_extension" ident : attr
 
 open Lean in
 initialize
-  let register (name) (strName : String) (ext : PersistentEnvExtension (Name × Name) (Name × Name) (NameMap Name)) (get : Syntax → Option Ident) := do
+  let register (name) (strName : String) (ext : PersistentEnvExtension (Name × Name) (Name × Name) (Lean.NameMap Name)) (get : Syntax → Option Ident) := do
     registerBuiltinAttribute {
       name := name,
       ref := by exact decl_name%,
@@ -732,7 +821,7 @@ Defines a new block extension.
 block_extension NAME PARAMS [via MIXINS,+] where
   data := ...
   fields*
-````
+```
 defines a new kind of block called `NAME` that takes initialization parameters `PARAMS` for the
 `data` field.
 
@@ -752,7 +841,7 @@ Defines a new inline extension.
 inline_extension NAME PARAMS [via MIXINS,+] where
   data := ...
   fields*
-````
+```
 defines a new kind of inline called `NAME` that takes initialization parameters `PARAMS` for the
 `data` field.
 
@@ -941,7 +1030,7 @@ def TraverseState.resolveDomainObject (st : TraverseState) (domain : Name) (cano
 def TraverseState.resolveRemoteObject (st : TraverseState) (domain : Name) (canonicalName : String) (remote : String) : Except String RemoteLink := do
   let some data := st.remoteContent[remote]?
     | throw s!"Remote {remote} not found"
-  let some dom := data.domains.find? domain
+  let some dom := data.domains[domain]?
     | throw s!"Remote {remote} has no domain '{domain}'"
   let some v := dom.contents[canonicalName]?
     | throw s!"Remote {remote} domain '{domain}' does not define '{canonicalName}'"
@@ -992,12 +1081,12 @@ def optionDomain := ``Verso.Genre.Manual.doc.option
 def convDomain := ``Verso.Genre.Manual.doc.tactic.conv
 def exampleDomain := ``Verso.Genre.Manual.example
 
-def TraverseState.definitionIds (state : TraverseState) (ctxt : TraverseContext) : NameMap String := Id.run do
+def TraverseState.definitionIds (state : TraverseState) (ctxt : TraverseContext) : Lean.NameMap String := Id.run do
   let exampleBlock := ctxt.blockContext.findSomeRev? fun
     | .other x => x.properties.find? `Verso.Genre.Manual.exampleDefContext
     | _ => none
   let exampleDeco := exampleBlock.map (s!" (in {·})")
-  if let some examples := state.domains.find? exampleDomain then
+  if let some examples := state.domains.get? exampleDomain then
     let mut idMap := {}
     for (x, _) in examples.objects do
       let afterSpace := x.dropWhile (· != ' ')
