@@ -9,9 +9,17 @@ import MultiVerso.InternalId
 import MultiVerso
 import VersoManual.Basic
 
+/-!
+This module contains Plausible generators for most of the types that Verso regularly serializes or
+deserializes.
+-/
+
 open Lean
 open Plausible Gen Arbitrary
 open Verso Multi
+open Shrinkable
+open Std
+
 
 def roundTripOk [ToJson α] [FromJson α] [BEq α] [Repr α] (x : α) : Bool :=
   let json := toJson x
@@ -23,25 +31,32 @@ deriving instance Arbitrary for JsonNumber
 
 instance : Shrinkable JsonNumber where
   shrink x :=
-    let ms := Shrinkable.shrink x.mantissa
-    let xs := Shrinkable.shrink x.exponent
+    let ms := shrink x.mantissa
+    let xs := shrink x.exponent
     ms.map ({ x with mantissa := · }) ++ xs.map ({ x with exponent := · })
 
 instance : ArbitraryFueled Json where
   arbitraryFueled := arb
 where
   arb
-    | 0 => oneOf #[pure .null, pure (.bool true), pure (.bool false), .num <$> arbitrary, .str <$> arbitrary]
-    | n + 1 => do
-      .frequency (pure .null) [
-        (1, pure .null),
-        (1, pure (.bool true)),
-        (1, pure (.bool false)),
-        (1, .num <$> arbitrary),
-        (1, .str <$> arbitrary),
-        (1, .arr <$> genArr n),
-        (1, .obj <$> (Std.TreeMap.Raw.ofArray · _) <$> genObj n)
+    | 0 =>
+      oneOf #[
+        pure .null,
+        pure (.bool true),
+        pure (.bool false),
+        .num <$> arbitrary,
+        .str <$> arbitrary
       ]
+    | n + 1 => do
+      oneOf #[
+        pure .null,
+        pure (.bool true),
+        pure (.bool false),
+        .num <$> arbitrary,
+        .str <$> arbitrary,
+        .arr <$> genArr n,
+        .obj <$> (Std.TreeMap.Raw.ofArray · _) <$> genObj n
+      ] (by simp)
   genArr (fuel : Nat) : Gen (Array Json) := do
     let count ← Gen.chooseNat
     let mut xs := #[]
@@ -62,15 +77,15 @@ where
     | .null => []
     | .bool true => [.bool false]
     | .bool _ => []
-    | .num n => .num <$> Shrinkable.shrink n
-    | .str s => .str <$> Shrinkable.shrink s
+    | .num n => .num <$> shrink n
+    | .str s => .str <$> shrink s
     | .arr xs =>
       have : Shrinkable Json := ⟨sh⟩
-      .arr <$> Shrinkable.shrink xs
+      .arr <$> shrink xs
     | .obj v =>
       have : Shrinkable Json := ⟨sh⟩
       let xs := v.toArray
-      let xs' := Shrinkable.shrink xs
+      let xs' := shrink xs
       xs'.map fun v => .obj (Std.TreeMap.Raw.ofArray v _)
 
 local instance : Arbitrary (Std.HashSet InternalId) where
@@ -79,7 +94,7 @@ local instance : Arbitrary (Std.HashSet InternalId) where
 
 local instance : Shrinkable (Std.HashSet InternalId) where
   shrink v :=
-    Std.HashSet.ofArray <$> Shrinkable.shrink v.toArray
+    Std.HashSet.ofArray <$> shrink v.toArray
 
 instance : Arbitrary Object where
   arbitrary := do
@@ -90,11 +105,10 @@ instance : Arbitrary Object where
 
 instance : Shrinkable Object where
   shrink x :=
-    let names := Shrinkable.shrink x.canonicalName
-    let datas := Shrinkable.shrink x.data
-    let idss := Shrinkable.shrink x.ids
+    (shrink x.canonicalName |>.map ({x with canonicalName := ·})) ++
+    (shrink x.data |>.map ({ x with data := · })) ++
+    (shrink x.ids |>.map ({ x with ids := · }))
 
-    names.map ({x with canonicalName := ·}) ++ datas.map ({ x with data := · }) ++ idss.map ({ x with ids := · })
 
 instance : Arbitrary Domain where
   arbitrary := do
@@ -113,7 +127,16 @@ instance : Arbitrary Domain where
     let description ← arbitrary
     return { objects, objectsById, title, description }
 
+instance : Shrinkable (HashSet String) where
+  shrink xs :=
+    shrink xs.toArray |>.map .ofArray
+
 instance : Shrinkable Domain where
+  shrink dom :=
+    (shrink dom.objects.toArray |>.map ({ dom with objects := .ofArray · })) ++
+    (shrink dom.objectsById.toArray |>.map ({ dom with objectsById := .ofArray ·})) ++
+    (shrink dom.title |>.map ({ dom with title := · })) ++
+    (shrink dom.description |>.map ({ dom with description := · }))
 
 instance : Arbitrary Slug where
   arbitrary := do
@@ -122,7 +145,7 @@ instance : Arbitrary Slug where
 
 instance : Shrinkable Slug where
   shrink x :=
-    Shrinkable.shrink x.toString |>.map (·.sluggify)
+    shrink x.toString |>.map (·.sluggify)
 
 instance : Arbitrary RemoteLink where
   arbitrary := do
@@ -133,9 +156,9 @@ instance : Arbitrary RemoteLink where
 
 instance : Shrinkable RemoteLink where
   shrink x :=
-    (Shrinkable.shrink x.path |>.map ({ x with path := · })) ++
-    (Shrinkable.shrink x.htmlId |>.map ({ x with htmlId := · })) ++
-    (Shrinkable.shrink x.root |>.map ({ x with root := · }))
+    (shrink x.path |>.map ({ x with path := · })) ++
+    (shrink x.htmlId |>.map ({ x with htmlId := · })) ++
+    (shrink x.root |>.map ({ x with root := · }))
 
 
 instance : Arbitrary RefObject where
@@ -146,8 +169,8 @@ instance : Arbitrary RefObject where
 
 instance : Shrinkable RefObject where
   shrink x :=
-    (Shrinkable.shrink x.link |>.map ({ x with link := · })) ++
-    (Shrinkable.shrink x.data |>.map ({ x with data := · }))
+    (shrink x.link |>.map ({ x with link := · })) ++
+    (shrink x.data |>.map ({ x with data := · }))
 
 instance : Arbitrary RefDomain where
   arbitrary := do
@@ -161,13 +184,13 @@ instance : Arbitrary RefDomain where
 
 instance [Shrinkable α] [Shrinkable β] [BEq α] [Hashable α] : Shrinkable (Std.HashMap α β) where
   shrink xs :=
-    Shrinkable.shrink xs.toArray |>.map (Std.HashMap.insertMany {} ·)
+    shrink xs.toArray |>.map (Std.HashMap.insertMany {} ·)
 
 instance : Shrinkable RefDomain where
   shrink x :=
-    (Shrinkable.shrink x.title |>.map ({ x with title := ·})) ++
-    (Shrinkable.shrink x.description |>.map ({ x with description := ·})) ++
-    (Shrinkable.shrink x.contents |>.map ({ x with contents := ·}))
+    (shrink x.title |>.map ({ x with title := ·})) ++
+    (shrink x.description |>.map ({ x with description := ·})) ++
+    (shrink x.contents |>.map ({ x with contents := ·}))
 
 /-- Generates non-anonymous names that users could write -/
 def arbitraryName : Gen Name := do
@@ -177,7 +200,7 @@ def arbitraryName : Gen Name := do
     x := .str x (← arbitrary)
   return x
 
-def chars : List Char := "abcdefghijklmnopqrstuvwzyz.ABCæÆλ𝒫() `".toList
+def chars : List Char := "abcdefghijklmnopqrstuvwzyzæøå.ABCDEFGHIJKLMNOPQRSTUVWXYZÆØÅλ𝒫() `_+×⊕·⟨⟩[]".toList
 
 instance : Arbitrary NameMap.PublicName where
   arbitrary := do
@@ -199,8 +222,11 @@ where
 
 instance : Shrinkable NameMap.PublicName where
   shrink
-    | ⟨.str .anonymous x, _⟩ => Shrinkable.shrink x |>.map (⟨.str .anonymous ·, by grind [NameMap.isPublic]⟩)
-    | ⟨.str y@(.str _ _) x, _⟩ => [⟨y, by grind [NameMap.isPublic]⟩] ++ (Shrinkable.shrink x |>.map (⟨.str y ·, by grind [NameMap.isPublic]⟩))
+    | ⟨.str .anonymous x, _⟩ =>
+      shrink x |>.map (⟨.str .anonymous ·, by grind [NameMap.isPublic]⟩)
+    | ⟨.str y@(.str _ _) x, _⟩ =>
+      ⟨y, by grind [NameMap.isPublic]⟩ ::
+      (shrink x |>.map (⟨.str y ·, by grind [NameMap.isPublic]⟩))
 
 instance [Arbitrary α] : Arbitrary (Verso.NameMap α) where
   arbitrary := do
@@ -213,7 +239,8 @@ instance [Arbitrary α] : Arbitrary (Verso.NameMap α) where
 
 open Shrinkable in
 instance [Shrinkable α] : Shrinkable (Verso.NameMap α) where
-  shrink v := shrink v.toArray |>.map fun v => v.foldl (init := {}) fun xs (⟨key, ok⟩, val) => xs.insert key val ok
+  shrink v :=
+    shrink v.toArray |>.map fun v => .ofArray v _
 
 instance : Arbitrary RemoteInfo where
   arbitrary := do
@@ -226,49 +253,35 @@ instance : Arbitrary RemoteInfo where
 instance : Shrinkable Name where
   shrink
     | .anonymous => []
-    | .num x y => [x] ++ (Shrinkable.shrink y).map (.num x)
-    | .str x y => [x] ++ (Shrinkable.shrink y).map (.str x)
+    | .num x y => [x] ++ (shrink y).map (.num x)
+    | .str x y => [x] ++ (shrink y).map (.str x)
 
 instance [Shrinkable α] : Shrinkable (Lean.NameMap α) where
   shrink v :=
-    have : Shrinkable (Name × α) := ⟨fun (x, y) => Shrinkable.shrink x |>.flatMap fun x => Shrinkable.shrink y |>.map fun y => (x, y) ⟩
-    Shrinkable.shrink v.toArray |>.map fun xvs =>
+    shrink v.toArray |>.map fun xvs =>
       xvs.foldl (init := {}) (fun xs (x, v) => xs.insert x v)
-
-instance [Shrinkable α] : Shrinkable (Verso.NameMap α) where
-  shrink v :=
-    have : Shrinkable (Name × α) := ⟨fun (x, y) => Shrinkable.shrink x |>.flatMap fun x => Shrinkable.shrink y |>.map fun y => (x, y) ⟩
-    Shrinkable.shrink v.toArray |>.map fun xvs =>
-      xvs.foldl (init := {}) (fun xs (⟨x, h⟩, v) => xs.insert x v h)
-
 
 instance : Shrinkable RemoteInfo where
   shrink v :=
-    let roots := Shrinkable.shrink v.root
-    let shortNames := Shrinkable.shrink v.shortName
-    let longNames := Shrinkable.shrink v.longName
-    let domains := Shrinkable.shrink v.domains
-    roots.map ({ v with root := · }) ++
-    shortNames.map ({ v with shortName := · }) ++
-    longNames.map ({ v with longName := · }) ++
-    domains.map ({ v with domains := · })
+    (shrink v.root |>.map ({ v with root := · })) ++
+    (shrink v.shortName |>.map ({ v with shortName := · })) ++
+    (shrink v.longName |>.map ({ v with longName := · })) ++
+    (shrink v.domains |>.map ({ v with domains := · }))
 
 instance : Arbitrary AllRemotes where
   arbitrary := do
     let mut xs := {}
     let count ← chooseNat
-    for i in 0...count do
+    for _ in 0...count do
       xs := xs.insert (← arbitrary) (← Gen.resize (· / count) arbitrary)
     return ⟨xs⟩
 
 instance : Shrinkable AllRemotes where
   shrink x :=
-    Shrinkable.shrink x.allRemotes |>.map AllRemotes.mk
+    shrink x.allRemotes |>.map AllRemotes.mk
 
 section
 open Verso Genre Manual
-open Shrinkable
-open Std
 
 instance : Shrinkable Tag where
   shrink
@@ -373,11 +386,22 @@ instance : Arbitrary JsSourceMap where
 
 instance : Arbitrary JsFile where
   arbitrary := do
-    return {filename := ← arbitrary, contents := ← arbitrary, sourceMap? := ← arbitrary, defer := ← arbitrary, after := ← arbitrary}
+    return {
+      filename := ← arbitrary,
+      contents := ← arbitrary,
+      sourceMap? := ← arbitrary,
+      defer := ← arbitrary,
+      after := ← arbitrary
+    }
 
 instance : Arbitrary Search.DomainMapper where
   arbitrary := do
-    return { displayName := ← arbitrary, className := ← arbitrary, quickJumpCss := ← arbitrary, dataToSearchables := ← arbitrary}
+    return {
+      displayName := ← arbitrary,
+      className := ← arbitrary,
+      quickJumpCss := ← arbitrary,
+      dataToSearchables := ← arbitrary
+    }
 
 instance : Arbitrary Search.DomainMappers where
   arbitrary := do
@@ -389,7 +413,13 @@ instance : Arbitrary Search.DomainMappers where
 
 instance : Arbitrary LicenseInfo where
   arbitrary := do
-    return { identifier := ← arbitrary, dependency := ← arbitrary, howUsed := ← arbitrary, link := ← arbitrary, text := ← arbitrary }
+    return {
+      identifier := ← arbitrary,
+      dependency := ← arbitrary,
+      howUsed := ← arbitrary,
+      link := ← arbitrary,
+      text := ← arbitrary
+    }
 
 instance : Arbitrary TraverseState where
   arbitrary := do
@@ -422,7 +452,15 @@ instance : Arbitrary TraverseState where
     let extraCssFiles <- arbitrary
     let quickJump <- arbitrary
     let licenseInfo <- arbitrary
-    let mut st := { tags, externalTags, domains, remoteContent, ids, extraCss, extraJs, extraJsFiles, extraCssFiles, quickJump, licenseInfo }
+    let mut st := {
+      tags, externalTags,
+      domains,
+      remoteContent,
+      ids,
+      extraCss, extraJs, extraJsFiles, extraCssFiles,
+      quickJump,
+      licenseInfo
+    }
     -- add content
     let count ← chooseNat
     for _ in 0...count do
@@ -433,7 +471,7 @@ instance : Arbitrary TraverseState where
 
 end
 
-def testInternalId := Testable.checkIO <| NamedBinder "id" <| ∀ (id : InternalId), roundTripOk id
+def testInternalId := Testable.checkIO (NamedBinder "id" <| ∀ (id : InternalId), roundTripOk id)
 def testObject := Testable.checkIO (NamedBinder "obj" <| ∀ (id : Object), roundTripOk id)
 def testDomain := Testable.checkIO (NamedBinder "obj" <| ∀ (id : Domain), roundTripOk id)
 def testRefDomain := Testable.checkIO (NamedBinder "obj" <| ∀ (id : RefDomain), roundTripOk id)
