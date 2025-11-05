@@ -142,8 +142,6 @@ inductive Tag where
   | /-- A machine-assigned tag -/ private internal (name : String)
 deriving BEq, DecidableEq, Hashable, Repr, ToJson, FromJson
 
-#eval FromJson.fromJson? (α := Tag) (json%{"external":{"name": "abc"}})
-
 instance : Inhabited Tag := ⟨.external "".sluggify⟩
 
 instance : ToString Tag where

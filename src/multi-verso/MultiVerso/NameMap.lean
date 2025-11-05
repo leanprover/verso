@@ -4,7 +4,8 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 module
-import Lean
+import Lean.Data.Name
+import Lean.Data.Json.FromToJson
 public import Std.Data.TreeMap
 
 set_option linter.missingDocs true
