@@ -15,5 +15,6 @@ import Tests.Integration.InheritanceDoc
 import Tests.ParserRegression
 import Tests.Paths
 import Tests.Refs
+import Tests.Serialization
 import Tests.TexUnit
 import Tests.Z85
