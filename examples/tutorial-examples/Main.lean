@@ -31,4 +31,4 @@ def content : Tutorials where
 
   ]
 
-def main := tutorialsMain content (config := { destination := "_out/tut" : Verso.Genre.Manual.Config} |>.addKaTeX)
+def main := tutorialsMain content (config := { destination := "_out/tut" })
