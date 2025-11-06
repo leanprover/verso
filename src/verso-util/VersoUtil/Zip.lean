@@ -5,20 +5,13 @@ Author: David Thrane Christiansen
 -/
 module
 
-import Std.Tactic.Do
 import Std.Tactic.BVDecide
 
 namespace Verso.Zip
-
-open Std.Do
-
 namespace CRC32
 
-def table : Array UInt32 := Id.run do
-  let mut table : Array UInt32 := .emptyWithCapacity 255
-  for n in (0 : UInt32)...256 do
-    table := table.push <| computeCrc n
-  return table
+def table :  Array UInt32 :=
+  Array.ofFn (n := 256) fun i => computeCrc i.toNat.toUInt32
 where
   computeCrc (n : UInt32) : UInt32 := Id.run do
     let mut crc := n
@@ -29,21 +22,9 @@ where
         else crc >>> 1
     return crc
 
-
-set_option mvcgen.warning false in
-open Std in
-@[simp, grind =]
+@[simp]
 theorem table.size_eq : table.size = 256 := by
-  generalize h : table = x
-  apply Id.of_wp_run_eq h
-  mvcgen invariants
-  · ⇓⟨xs, tableSoFar⟩ =>
-    ⌜tableSoFar.size = xs.prefix.length⌝
-  case vc1 => grind
-  case vc3 h =>
-    rw [Rco.length_toList] at h
-    simp_all [Rco.size, Iterators.Iter.size, Iterators.IteratorSize.size,
-      Iterators.Iter.toIterM, Rco.Internal.iter, Rxo.HasSize.size, Rxc.HasSize.size]
+  simp [table]
 
 #guard table[0] = 0x00000000
 #guard table[1] = 0x77073096
