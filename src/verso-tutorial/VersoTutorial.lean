@@ -596,12 +596,15 @@ where
     let hasError ← IO.mkRef false
     let logError msg := do hasError.set true; IO.eprintln msg
 
+    IO.FS.createDirAll config.destination
+
     -- Traversal
     let (tutorials, state) ←
       match config.emit with
       | .immediately =>
         let (tutorials, state) ← traverse logError tutorials config.toConfig
         let json := xrefJson state.domains state.externalTags
+
         IO.FS.writeFile (config.destination / "xref.json") <| toString json
         pure (tutorials, state)
       | .delay f =>
