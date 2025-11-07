@@ -60,10 +60,13 @@ class GenreTeX (genre : Genre) (m : Type → Type) where
   block (inlineTeX : Inline genre → TeXT genre m TeX) (blockTeX : Block genre → TeXT genre m TeX) (container : genre.Block) (contents : Array (Block genre)) : TeXT genre m TeX
   inline (inlineTeX : Inline genre → TeXT genre m TeX) (container : genre.Inline) (contents : Array (Inline genre)) : TeXT genre m TeX
 
+def escapeForTexHref (s : String) : String :=
+  s.replace "%" "\\%"
+
 partial defmethod Inline.toTeX [Monad m] [GenreTeX g m] : Inline g → TeXT g m TeX
   | .text str => pure <| .text str
   | .link content dest => do
-    pure \TeX{\hyperlink{\Lean{.raw (toString (repr dest)) }}{\Lean{← content.mapM Inline.toTeX}}} -- TODO link destinations
+    pure \TeX{\href{\Lean{.raw (escapeForTexHref dest)}}{\Lean{← content.mapM Inline.toTeX}}}
   | .image _alt dest => do
     pure \TeX{\includegraphics{\Lean{.raw (toString (repr dest))}}} -- TODO link destinations
   | .footnote _name txt => do
