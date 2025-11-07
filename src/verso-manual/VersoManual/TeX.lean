@@ -18,6 +18,7 @@ r##"
 \usepackage{fvextra}
 
 \usepackage[most]{tcolorbox}
+\usepackage{hyperref}
 
 \definecolor{bordercolor}{HTML}{98B2C0}
 \definecolor{medgray}{HTML}{555555}
@@ -60,6 +61,7 @@ r##"
 \renewcommand{\cftsectionfont}{\normalfont\sffamily}
 \renewcommand{\cftchapterpagefont}{\normalfont\sffamily}
 \renewcommand{\cftsectionpagefont}{\normalfont\sffamily}
+\setmonofont{DejaVu Sans Mono}
 "## ++
 "\n".intercalate extraPreamble ++
 r##"
