@@ -5,26 +5,22 @@ Author: David Thrane Christiansen
 -/
 module
 
-import Std.Tactic.BVDecide
+import Std.Data.HashMap
 
 namespace Verso.Zip
 namespace CRC32
 
-def table :  Array UInt32 :=
-  Array.ofFn (n := 256) fun i => computeCrc i.toNat.toUInt32
+def table : Vector UInt32 256 :=
+  .ofFn (computeCrc ·.toNat.toUInt32)
 where
   computeCrc (n : UInt32) : UInt32 := Id.run do
     let mut crc := n
     for _ in (0 : Nat)...8 do
-      crc :=
-        if crc % 2 == 1 then
-          (crc >>> 1) ^^^ 0xEDB88320
-        else crc >>> 1
+      if crc % 2 == 1 then
+        crc := (crc >>> 1) ^^^ 0xEDB88320
+      else
+        crc := crc >>> 1
     return crc
-
-@[simp]
-theorem table.size_eq : table.size = 256 := by
-  simp [table]
 
 #guard table[0] = 0x00000000
 #guard table[1] = 0x77073096
@@ -37,9 +33,10 @@ def crc32 (data : ByteArray) : UInt32 := Id.run do
   let mut crc := 0xFFFFFFFF
   for byte in data do
     let idx := ((crc ^^^ byte.toUInt32) &&& 0xff)
-    have : idx.toNat < table.size := by
-      suffices idx < 256 by rw [table.size_eq]; assumption
-      bv_decide
+    have : idx.toNat < 256 := by
+      have : idx ≤ 255 := UInt32.and_le_right
+      change idx < 256
+      grind
     crc := (crc >>> 8) ^^^ table[idx.toNat]
   return crc ^^^ 0xFFFFFFFF
 
