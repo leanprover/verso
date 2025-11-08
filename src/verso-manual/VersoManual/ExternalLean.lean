@@ -8,6 +8,7 @@ import Verso
 import VersoManual.Basic
 import VersoManual.HighlightedCode
 import Verso.Code.External
+import Verso.Code.HighlightedToTex
 import SubVerso.Examples.Messages
 
 set_option linter.missingDocs true
@@ -47,7 +48,24 @@ block_extension Block.lean (hls : Highlighted) (cfg : CodeConfig) via withHighli
       | .ok (defines : Array (Name × String)) =>
         saveExampleDefs id defines
         pure none
-  toTeX := none
+  toTeX :=
+    some <| fun _ _go _ data _content => do
+      let .arr #[cfgJson, hlJson, _definesJson] := data
+        | IO.println "Expected four-element JSON for Lean code"
+          pure .empty
+      match FromJson.fromJson? hlJson with
+      | .error err =>
+        IO.println <| "Couldn't deserialize Lean code block while rendering TeX: " ++ err
+        pure .empty
+      | .ok (hl : Highlighted) =>
+        match FromJson.fromJson? cfgJson with
+        | .error err =>
+          IO.println <| "Couldn't deserialize Lean code block config while rendering TeX: " ++ err
+          pure .empty
+        | .ok (_cfg : CodeConfig) =>
+          let i := hl.indentation
+          let hl := hl.deIndent i
+          pure hl.toTeX
   toHtml :=
     open Verso.Output.Html in
     some <| fun _ _ _ data _ => do
@@ -89,7 +107,24 @@ inline_extension Inline.lean (hls : Highlighted) (cfg : CodeConfig) via withHigh
       | .ok (defines : Array (Name × String)) =>
         saveExampleDefs id defines
         pure none
-  toTeX := none
+  toTeX :=
+    some <| fun _ _ data _ => do
+      let .arr #[cfgJson, hlJson, _definesJson] := data
+        | IO.println "Expected four-element JSON for Lean code"
+          pure .empty
+      match FromJson.fromJson? hlJson with
+      | .error err =>
+        IO.println <| "Couldn't deserialize Lean code block while rendering TeX: " ++ err
+        pure .empty
+      | .ok (hl : Highlighted) =>
+        match FromJson.fromJson? cfgJson with
+        | .error err =>
+          IO.println <| "Couldn't deserialize Lean code block config while rendering TeX: " ++ err
+          pure .empty
+        | .ok (_cfg : CodeConfig) =>
+          let i := hl.indentation
+          let hl := hl.deIndent i
+          pure hl.toTeX
   toHtml :=
     open Verso.Output.Html in
     some <| fun _ _ data _ => do

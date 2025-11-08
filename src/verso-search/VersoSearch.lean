@@ -705,7 +705,7 @@ A genre is indexable if there are instructions for constructing an index for use
 class Indexable (genre : Genre) where
   /--
   The identifier for a part. A frontend must be able to map this to a URL (but not necessarily a
-  whole HTML file, as `#id`s may be used).
+  whole HTML file, as {lit}`#id`s may be used).
   -/
   partId : genre.PartMetadata → Option String
 
