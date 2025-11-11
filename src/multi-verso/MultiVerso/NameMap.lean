@@ -31,24 +31,83 @@ A name that is suitably public to be included in data exported from Verso.
 
 A name is suitably public if it contains at least one string component and no non-string components.
 -/
-@[expose]
-public def PublicName := { x : Name // isPublic x }
+public structure PublicName where
+  /--
+  Converts a public name to a name, forgetting the proof that the name is suitably public.
+  -/
+  toName : Name
+  toName_isPublic : isPublic toName := by grind
 deriving Repr
 
+namespace PublicName
+
+attribute [grind =] PublicName.toName_isPublic
+
+@[grind =]
+public theorem isPublic_singleton : isPublic (.str .anonymous s) := by
+  simp [isPublic]
+
+@[grind =]
+public theorem isPublic_str : isPublic x → isPublic (.str x s) := by
+  intro h
+  unfold isPublic <;> split <;> simp_all
+
+@[grind .]
+public theorem not_isPublic_num : ¬isPublic (.num x n) := by simp [isPublic]
+
+@[grind ., simp]
+public theorem not_isPublic_anonymous : ¬isPublic .anonymous := by simp [isPublic]
+
+@[grind .]
+public theorem not_isPublic_anonymous' : isPublic x → x ≠ .anonymous := by
+  intro h; cases x <;> simp_all
+
+public theorem not_isPublic_fallback :
+    (∀ (s : String), x ≠ .str .anonymous s) →
+    (∀ (y : Name) (str : String), x ≠ y.str str) →
+    ¬isPublic x := by
+  cases x <;> simp [isPublic]
+
+@[grind →, simp]
+public theorem isPublic_str_prefix : isPublic (.str x s) → x = .anonymous ∨ isPublic x := by
+  intro h
+  cases x with
+  | anonymous => simp
+  | num => contradiction
+  | str =>
+    simp only [isPublic] at h
+    simp [*]
+
+@[simp]
+public theorem isPublic_str_prefix' : (isPublic (.str x s)) = (x = .anonymous ∨ isPublic x) := by
+  apply propext
+  constructor
+  . apply isPublic_str_prefix
+  . intro h
+    cases h <;>
+    unfold isPublic <;>
+    split <;> simp_all
+
 /--
-Converts a public name to a name, forgetting the proof that the name is suitably public.
+Converts a name to a suitably-public name.
 -/
-public def PublicName.toName (x : PublicName) : Name := x.1
+public def ofName (x : Name) (x_isPublic : isPublic x := by grind) : PublicName := PublicName.mk x x_isPublic
+
+end PublicName
 
 public instance : Coe PublicName Name where
-  coe x := x.1
+  coe x := x.toName
 
-instance : CoeDep Name (.str .anonymous x) PublicName := ⟨⟨.str .anonymous x, by grind [isPublic]⟩⟩
+instance : CoeDep Name (.str .anonymous x) PublicName := ⟨⟨.str .anonymous x, by grind⟩⟩
 
-instance [inst : CoeDep Name y PublicName] : CoeDep Name (.str y x) PublicName := ⟨⟨.str inst.coe.val x, by unfold PublicName; grind [isPublic]⟩⟩
+instance [inst : CoeDep Name y PublicName] : CoeDep Name (.str y x) PublicName where
+  coe := .ofName (.str inst.coe.toName x) <| by
+    unfold CoeDep.coe;
+    cases inst; cases ‹PublicName›
+    simp [*]
 
 public instance : BEq PublicName where
-  beq x y := x.val == y.val
+  beq x y := x.toName == y.toName
 
 instance : Hashable PublicName where
   hash | ⟨x, _⟩ => hash x
@@ -59,14 +118,14 @@ instance : Inhabited PublicName := ⟨ ⟨.str .anonymous "x", by simp [isPublic
 Quickly compares two names. The resulting order is not particularly meaningful for users, but is
 useful in data structures.
 -/
-public def PublicName.quickCmp (x y : PublicName) : Ordering := x.val.quickCmp y.val
+public def PublicName.quickCmp (x y : PublicName) : Ordering := x.toName.quickCmp y.toName
 
 /--
 Converts a public name to a string.
 -/
 public def PublicName.toString (x : PublicName) : String :=
   -- This works around the name `.str .anonymous "#"` not round-tripping
-  x.val.toStringWithSep "." true (fun _ => true)
+  x.toName.toStringWithSep "." true (fun _ => true)
 
 /--
 Converts a string to a public name, failing with {name}`none` if the string doesn't encode such a name.
@@ -105,7 +164,7 @@ public instance (α : Type) : Inhabited (NameMap α) where
   default := {}
 
 @[inherit_doc Std.TreeMap.insert]
-public def insert (m : NameMap α) (n : Name) (a : α) (ok : isPublic n := by first | assumption | decide) : NameMap α :=
+public def insert (m : NameMap α) (n : Name) (a : α) (ok : isPublic n := by grind) : NameMap α :=
   Std.TreeMap.insert m ⟨n, ok⟩ a
 
 /--
@@ -162,7 +221,7 @@ public instance : ForIn m (NameMap α) (PublicName × α) where
   forIn xs init f := (xs : Std.TreeMap _ _ _).forIn (fun a b acc => f (a, b) acc) init
 
 instance : ForIn m (NameMap α) (Name × α) where
-  forIn xs init f := (xs : Std.TreeMap _ _ _).forIn (fun a b acc => f (a.val, b) acc) init
+  forIn xs init f := (xs : Std.TreeMap _ _ _).forIn (fun a b acc => f (a.toName, b) acc) init
 
 /--
 {lean}`filter f m` returns the {name}`NameMap` consisting of all

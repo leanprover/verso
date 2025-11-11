@@ -215,9 +215,9 @@ def chars : List Char := "abcdefghijklmnopqrstuvwzyzæøå.ABCDEFGHIJKLMNOPQRSTU
 instance : Arbitrary NameMap.PublicName where
   arbitrary := do
     let size ← frequency (pure 0) [(5, pure 0), (1, chooseNat)]
-    let mut x : NameMap.PublicName := ⟨.str .anonymous (← arbitrary), by grind [NameMap.isPublic]⟩
+    let mut x : NameMap.PublicName := .ofName <| .str .anonymous (← arbitrary)
     for _ in 0...size do
-      x := ⟨.str x.val (← component), by grind [NameMap.isPublic]⟩
+      x := ⟨.str x.toName (← component), by grind⟩
     return x
 where
   component : Gen String := do
@@ -233,10 +233,10 @@ where
 instance : Shrinkable NameMap.PublicName where
   shrink
     | ⟨.str .anonymous x, _⟩ =>
-      shrink x |>.map (⟨.str .anonymous ·, by grind [NameMap.isPublic]⟩)
+      shrink x |>.map (.ofName <| .str .anonymous ·)
     | ⟨.str y@(.str _ _) x, _⟩ =>
-      ⟨y, by grind [NameMap.isPublic]⟩ ::
-      (shrink x |>.map (⟨.str y ·, by grind [NameMap.isPublic]⟩))
+      .ofName y ::
+      (shrink x |>.map (.ofName <| .str y ·))
 
 instance [Arbitrary α] : Arbitrary (Verso.NameMap α) where
   arbitrary := do
@@ -457,7 +457,7 @@ instance : Arbitrary TraverseState where
     let mut domains := {}
     for _ in 0...count do
       let n : NameMap.PublicName ← arbitrary
-      domains := domains.insert n.val (← arbitrary.resize (· / count)) n.property
+      domains := domains.insert n.toName (← arbitrary.resize (· / count))
 
     let count ← chooseNat
     let mut ids := {}
@@ -483,7 +483,7 @@ instance : Arbitrary TraverseState where
     for _ in 0...count do
       let x : NameMap.PublicName ← arbitrary
       let val : Json ← arbitrary.resize (· / count)
-      st := st.set x.val val x.property
+      st := st.set x.toName val
     return st
 
 end

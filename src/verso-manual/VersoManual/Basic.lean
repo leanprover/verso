@@ -403,7 +403,7 @@ instance : BEq TraverseState where
 
 namespace TraverseState
 
-def set [ToJson α] (state : TraverseState) (name : Name) (value : α) (ok : NameMap.isPublic name := by decide) : TraverseState :=
+def set [ToJson α] (state : TraverseState) (name : Name) (value : α) (ok : NameMap.isPublic name := by first | decide | grind) : TraverseState :=
   { state with contents.contents := state.contents.contents.insert name (ToJson.toJson value) ok }
 
 /-- Returns `none` if the key is not found, or `some (error e)` if JSON deserialization failed -/
