@@ -469,7 +469,7 @@ private def RemoteInfo.structBEq (x y : RemoteInfo) : Bool :=
   y1 == y2 &&
   doms1.size == doms2.size &&
   doms1.foldl (init := true) fun soFar k v =>
-    soFar && doms2[k]?.isEqSome v
+    soFar && doms2[k.toName]?.isEqSome v
 
 private unsafe def RemoteInfo.fastBEq (x y : RemoteInfo) : Bool :=
   if ptrEq x y then true else RemoteInfo.structBEq x y

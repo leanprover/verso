@@ -407,12 +407,12 @@ instance : BEq TraverseState where
     x.quickJump == y.quickJump &&
     ptrEqThen' x.contents y.contents (fun c1 c2 =>
       c1.contents.size == c2.contents.size &&
-      c1.contents.all (c2.contents[·]? |>.isEqSome ·)) &&
+      c1.contents.all (c2.contents[·.toName]? |>.isEqSome ·)) &&
     x.licenseInfo == y.licenseInfo
 
 namespace TraverseState
 
-def set [ToJson α] (state : TraverseState) (name : Name) (value : α) (ok : NameMap.isPublic name := by decide) : TraverseState :=
+def set [ToJson α] (state : TraverseState) (name : Name) (value : α) (ok : NameMap.isPublic name := by first | grind | decide) : TraverseState :=
   { state with contents.contents := state.contents.contents.insert name (ToJson.toJson value) ok }
 
 /-- Returns `none` if the key is not found, or `some (error e)` if JSON deserialization failed -/
