@@ -62,8 +62,35 @@ block_extension Block.table (columns : Nat) (header : Bool) (tag : Option String
       pure <| some <| Block.other {Block.table c hdr (some x) (assignedTag := some tag) align with id := some id} contents
     | .ok (_, _, some _, some _, _) => pure none
 
-  toTeX := none
+  toTeX := some <| fun _ goB _ data blocks =>
+      open Verso.Output.TeX in do
+      match FromJson.fromJson? data (α := Nat × Bool × Option String × Option Tag × Option TableConfig.Alignment) with
+      | .error e =>
+        IO.println s!"Error deserializing table data: {e}"
+        return .empty
+      | .ok (columns, header, _, _, _align) =>
+      if let #[.ul items] := blocks then
+        let mut items := items
+        let mut rows := #[]
+        while items.size > 0 do
+          rows := rows.push (items.take columns |>.map (·.contents))
+          items := items.extract columns items.size
 
+        let rowsOut : TeX.TeXT Manual (ReaderT ExtensionImpls IO) (Array Output.TeX) := do
+          rows.mapIdxM fun i r => do
+            let cols ← r.mapM fun c => do
+              let cell : Output.TeX ← Array.mapM goB c
+              if header && i == 0 then
+                pure cell -- TODO: bold?
+              else
+                pure cell
+            cols.toList |> List.intersperse (Output.TeX.raw "&") |>.toArray |> Output.TeX.seq |> pure
+        let columnSpec : Output.TeX := String.join (List.replicate columns "l") -- TODO: get this from align?
+        let tableContent : Output.TeX := (← rowsOut).map (· ++ Output.TeX.raw "\\\\\n")
+        pure \TeX{\begin{tabular}{\Lean{columnSpec}} \Lean{tableContent} \end{tabular} }
+      else
+        IO.println "Malformed table"
+        pure .empty
   toHtml :=
     open Verso.Doc.Html in
     open Verso.Output.Html in

@@ -67,7 +67,7 @@ public partial def asString (doc : TeX) : String :=
   | .seq texs => String.join (texs.map (·.asString) |>.toList)
 where
   escape s := s.replace "\\" "\\\\" |>.replace "{" "\\{" |>.replace "}" "\\}" |>.replace "^" "\\string^"
-    |>.replace "_" "\\_" |>.replace "%" "\\%" --TODO make correct!
+    |>.replace "_" "\\_" |>.replace "%" "\\%" |>.replace "#" "\\#" --TODO make correct!
 
 declare_syntax_cat macro_name
 scoped syntax ident : macro_name
