@@ -398,7 +398,7 @@ instance : BEq TraverseState where
     x.quickJump == y.quickJump &&
     ptrEqThen' x.contents y.contents (fun c1 c2 =>
       c1.contents.size == c2.contents.size &&
-      c1.contents.all (c2.contents[·]? |>.isEqSome ·)) &&
+      c1.contents.all (c2.contents[·.toName]? |>.isEqSome ·)) &&
     x.licenseInfo == y.licenseInfo
 
 namespace TraverseState
@@ -446,70 +446,12 @@ def htmlId (state : TraverseState) (id : InternalId) : Array (String × String) 
 /-- Add an open-source license used in the generated HTML/JavaScript -/
 def addLicenseInfo (state : TraverseState) (licenseInfo : LicenseInfo) : TraverseState :=
   {state with licenseInfo := state.licenseInfo.insert licenseInfo}
+
+@[inherit_doc HtmlAssets.writeFiles]
+def writeFiles (state : TraverseState) (destination : System.FilePath) : IO Unit :=
+  state.toHtmlAssets.writeFiles destination
+
 end TraverseState
-
-
-/--
-A custom block. The `name` field should correspond to an entry in the block descriptions table.
--/
-structure Block where
-  /-- A unique name that identifies the block. -/
-  name : Name := by exact decl_name%
-  /-- A unique ID, assigned during traversal. -/
-  id : Option InternalId := none
-  /--
-  Data saved by elaboration, potentially updated during traversal, and used to render output. This
-  is the primary means of communicating information about a block between phases.
-  -/
-  data : Json := Json.null
-  /--
-  A registry for properties that can be used to create ad-hoc protocols for coordination between
-  block elements in extensions.
-  -/
-  properties : Lean.NameMap String := {}
-deriving ToJson, FromJson
-
-section
-local instance : Repr Json := ⟨fun v _ => s!"json%" ++ v.render ⟩
-deriving instance Repr for Block
-end
-
-
-instance : BEq Block where
-  beq
-    | ⟨n1, i1, d1, p1⟩, ⟨n2, i2, d2, p2⟩ =>
-      n1 == n2 &&
-      i1 == i2 &&
-      ptrEqThen' d1 d2 (· == ·) &&
-      ptrEqThen' p1 p2 fun x y =>
-        x.size == y.size && x.all (fun k v => y.find? k |>.isEqSome v)
-
-instance : Hashable Block where
-  hash
-    | ⟨n, i, d, p⟩ =>
-      have : Ord (Name × String) := Ord.lex ⟨Name.quickCmp⟩ inferInstance
-      mixHash (hash n) <| mixHash (hash i) <| mixHash (hash d) (hash p.toArray.qsortOrd)
-
-/--
-A custom inline. The `name` field should correspond to an entry in the block descriptions table.
--/
-structure Inline where
-  /-- A unique name that identifies the inline. -/
-  name : Name := by exact decl_name%
-  /-- The internal unique ID, which is automatically assigned during traversal. -/
-  id : Option InternalId := none
-  /--
-  Data saved by elaboration, potentially updated during traversal, and used to render output. This
-  is the primary means of communicating information about a block between phases.
-  -/
-  data : Json := Json.null
-deriving BEq, Hashable, ToJson, FromJson
-
-section
-local instance : Repr Json := ⟨fun v _ => s!"json%" ++ v.render ⟩
-deriving instance Repr for Inline
-end
-
 
 private partial def cmpJson : (j1 j2 : Json) → Ordering
   | .null, .null => .eq
@@ -541,12 +483,83 @@ private partial def cmpJson : (j1 j2 : Json) → Ordering
         if o != .eq then return o
       .eq)
 
+/--
+A custom block. The `name` field should correspond to an entry in the block descriptions table.
+-/
+structure Block where
+  /-- A unique name that identifies the block. -/
+  name : Name := by exact decl_name%
+  /-- A unique ID, assigned during traversal. -/
+  id : Option InternalId := none
+  /--
+  Data saved by elaboration, potentially updated during traversal, and used to render output. This
+  is the primary means of communicating information about a block between phases.
+  -/
+  data : Json := Json.null
+  /--
+  A registry for properties that can be used to create ad-hoc protocols for coordination between
+  block elements in extensions.
+  -/
+  properties : NameMap String := {}
+deriving ToJson, FromJson
+
+section
+local instance : Repr Json := ⟨fun v _ => s!"json%" ++ v.render ⟩
+deriving instance Repr for Block
+end
+
+
+instance : BEq Block where
+  beq
+    | ⟨n1, i1, d1, p1⟩, ⟨n2, i2, d2, p2⟩ =>
+      n1 == n2 &&
+      i1 == i2 &&
+      ptrEqThen' d1 d2 (· == ·) &&
+      ptrEqThen' p1 p2 fun x y =>
+        x.size == y.size && x.all (fun k v => y[k.toName]? |>.isEqSome v)
+
+instance : Hashable Block where
+  hash
+    | ⟨n, i, d, p⟩ =>
+      have : Ord (Name × String) := Ord.lex ⟨Name.quickCmp⟩ inferInstance
+      mixHash (hash n) <|
+      mixHash (hash i) <|
+      mixHash (hash d) <|
+      hash <| p.toArray.qsort fun ⟨x, s1⟩ ⟨y, s2⟩ =>
+        x.quickCmp y |>.then (compare s1 s2) |>.isLT
+
+/--
+A custom inline. The `name` field should correspond to an entry in the block descriptions table.
+-/
+structure Inline where
+  /-- A unique name that identifies the inline. -/
+  name : Name := by exact decl_name%
+  /-- The internal unique ID, which is automatically assigned during traversal. -/
+  id : Option InternalId := none
+  /--
+  Data saved by elaboration, potentially updated during traversal, and used to render output. This
+  is the primary means of communicating information about a block between phases.
+  -/
+  data : Json := Json.null
+deriving BEq, Hashable, ToJson, FromJson
+
+section
+local instance : Repr Json := ⟨fun v _ => s!"json%" ++ v.render ⟩
+deriving instance Repr for Inline
+end
+
+
 instance : Ord Inline where
   compare i1 i2 := i1.name.cmp i2.name |>.then (Ord.compare i1.id i2.id) |>.then (cmpJson i1.data i2.data)
 
 structure PartHeader where
   titleString : String
   metadata : Option PartMetadata
+  /--
+  A registry for properties that can be used to create ad-hoc protocols for coordination between
+  parts and/or block elements in extensions.
+  -/
+  properties : NameMap String
 deriving Repr
 
 inductive BlockContext where
@@ -626,7 +639,10 @@ instance : Ord (Genre.Inline Manual) := inferInstanceAs (Ord Manual.Inline)
 
 instance : Hashable (Genre.Block Manual) := inferInstanceAs (Hashable Manual.Block)
 instance : Hashable (Genre.Inline Manual) := inferInstanceAs (Hashable Manual.Inline)
+instance : Hashable (Genre.PartMetadata Manual) := inferInstanceAs (Hashable Manual.PartMetadata)
 
+instance : Repr (Genre.Inline Manual) := inferInstanceAs (Repr Manual.Inline)
+instance : Repr (Genre.Block Manual) := inferInstanceAs (Repr Manual.Block)
 instance : Repr (Genre.PartMetadata Manual) := inferInstanceAs (Repr Manual.PartMetadata)
 
 instance : ToJson (Genre.Inline Manual) := inferInstanceAs (ToJson Manual.Inline)
@@ -651,7 +667,7 @@ def BlockContext.ofBlock (block : Lean.Doc.Block i Manual.Block) : BlockContext 
   | .other container .. => .other container
 
 def PartHeader.ofPart (part : Part Manual) : PartHeader :=
-  { titleString := part.titleString, metadata := part.metadata }
+  { titleString := part.titleString, metadata := part.metadata, properties := {} }
 
 def TraverseContext.inPart (self : TraverseContext) (part : Part Manual) : TraverseContext :=
   { self with headers := self.headers.push <| .ofPart part }
@@ -1081,10 +1097,18 @@ def optionDomain := ``Verso.Genre.Manual.doc.option
 def convDomain := ``Verso.Genre.Manual.doc.tactic.conv
 def exampleDomain := ``Verso.Genre.Manual.example
 
+def TraverseContext.propertyValue (ctxt : TraverseContext) (name : Name) : Option String := Id.run do
+  for b in ctxt.blockContext do
+    match b with
+    | .other x =>
+      if let some v := x.properties[name]? then return some v
+    | _ => continue
+  for p in ctxt.headers do
+      if let some v := p.properties[name]? then return some v
+  return none
+
 def TraverseState.definitionIds (state : TraverseState) (ctxt : TraverseContext) : Lean.NameMap String := Id.run do
-  let exampleBlock := ctxt.blockContext.findSomeRev? fun
-    | .other x => x.properties.find? `Verso.Genre.Manual.exampleDefContext
-    | _ => none
+  let exampleBlock := ctxt.propertyValue `Verso.Genre.Manual.exampleDefContext
   let exampleDeco := exampleBlock.map (s!" (in {·})")
   if let some examples := state.domains.get? exampleDomain then
     let mut idMap := {}
@@ -1169,9 +1193,8 @@ def saveExampleDefs (id : InternalId) (definedNames : Array (Name × String)) : 
   let assignedIds := assignedIds.bind (·.toOption) |>.getD (Json.mkObj [])
   let mut theseIds := if let .ok v@(.obj _) := assignedIds.getObjVal? key then v else Json.mkObj []
 
-  let exampleBlock := (← read).blockContext.findSomeRev? fun
-    | .other x => x.properties.find? `Verso.Genre.Manual.exampleDefContext
-    | _ => none
+  let exampleBlock := (← read).propertyValue `Verso.Genre.Manual.exampleDefContext
+
   let context := (← read).headers.map (·.titleString)
   let context := exampleBlock.map context.push |>.getD context
   for (d, s) in definedNames do
@@ -1187,6 +1210,7 @@ def saveExampleDefs (id : InternalId) (definedNames : Array (Name × String)) : 
       if let some ex := exampleBlock then s!"{d} (in {ex})" else d.toString
     let path ← (·.path) <$> read
     let _ ← externalTag thisId path d
+    dbg_trace "Saving example def {d} at {path}"
     modify (·.saveDomainObject exampleDomain d thisId)
     if let some link := (← get).externalTags[thisId]? then
       modify (·.modifyDomainObjectData exampleDomain d fun v =>
@@ -1204,9 +1228,8 @@ def TraverseState.linksFromDomain
     { shortDescription, description, href := l.link }
 
 def TraverseState.exampleLinks (name : String) (state : TraverseState) (ctxt? : Option TraverseContext) : Array Code.CodeLink := Id.run do
-  let exampleBlock := ctxt?.bind (·.blockContext.findSomeRev? fun
-    | .other x => x.properties.find? `Verso.Genre.Manual.exampleDefContext
-    | _ => none)
+  let exampleBlock := ctxt?.bind (·.propertyValue `Verso.Genre.Manual.exampleDefContext)
+
   let name := exampleBlock.map (s!"{name} (in {·})") |>.getD name
   -- There's no `x` in the tooltip on the next line to avoid revealing suppressed namespaces
   state.linksFromDomain exampleDomain name "def" s!"Definition of example"
@@ -1221,23 +1244,28 @@ def TraverseState.localTargets (state : TraverseState) : Code.LinkTargets Manual
     state.linksFromDomain tacticDomain k.toString "doc" "Documentation for tactic" ++
     state.linksFromDomain syntaxKindDomain k.toString "doc" "Documentation for syntax"
 
--- def TraverseState.remoteTargets (state : TraverseState) : Code.LinkTargets Manual.TraverseContext where
---   const := fun x _ctxt? =>
---     fromRemoteDomain docstringDomain x.toString (s!"doc ({·})") (s!"Documentation for {x} in {·}")
---   option := fun x _ctxt? =>
---     fromRemoteDomain optionDomain x.toString (s!"doc ({·})") (s!"Documentation for option {x} in {·}")
---   keyword := fun k _ctxt? =>
---     fromRemoteDomain tacticDomain k.toString (s!"doc ({·})") (s!"Documentation for tactic in {·}") ++
---     fromRemoteDomain syntaxKindDomain k.toString (s!"doc ({·})") (s!"Documentation for syntax in {·}")
--- where
+def _root_.Verso.Multi.AllRemotes.remoteTargets (remoteContent : AllRemotes) : Code.LinkTargets Manual.TraverseContext where
+  const := fun x _ctxt? =>
+    fromRemoteDomain docstringDomain x.toString (s!"doc ({·})") (s!"Documentation for {x} in {·}")
+  option := fun x _ctxt? =>
+    fromRemoteDomain optionDomain x.toString (s!"doc ({·})") (s!"Documentation for option {x} in {·}")
+  keyword := fun k _ctxt? =>
+    fromRemoteDomain tacticDomain k.toString (s!"doc ({·})") (s!"Documentation for tactic in {·}") ++
+    fromRemoteDomain syntaxKindDomain k.toString (s!"doc ({·})") (s!"Documentation for syntax in {·}")
+where
 
---   fromRemoteDomain (domain : Name) (canonicalName : String) (shortDescription description : String → String) : Array Code.CodeLink := Id.run do
---     state.remoteContent.toArray.filterMap fun (r, info) =>
---       state.resolveRemoteObject domain canonicalName r |>.toOption |>.map fun l => {
---         shortDescription := shortDescription info.shortName,
---         description := description info.longName,
---         href := l.link
---       }
+  fromRemoteDomain (domain : Name) (canonicalName : String) (shortDescription description : String → String) : Array Code.CodeLink := Id.run do
+    remoteContent.toArray.filterMap fun (r, info) =>
+      let objs := info.getDomainObject? domain canonicalName |>.getD #[]
+      if h : objs.size = 1 then
+        some {
+          shortDescription := shortDescription info.shortName,
+          description := description info.longName,
+          href := objs[0].link.link
+        }
+      else none
+
+
 
 
 def sectionNumberString (num : Array Numbering) : String := Id.run do

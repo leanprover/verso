@@ -103,6 +103,32 @@ public structure HtmlAssets where
   licenseInfo : HashSet LicenseInfo := {}
 deriving Repr
 
+/--
+Returns all the files that should be written in the `-verso-data` directory.
+-/
+public def HtmlAssets.files (assets : HtmlAssets) : Array (String × (String ⊕ ByteArray)) := Id.run do
+  let mut out := #[]
+  for js in assets.extraJsFiles do
+    out := out.push (js.filename, .inl js.contents)
+    if let some m := js.sourceMap? then
+      out := out.push (m.filename, .inl m.contents)
+  for css in assets.extraCssFiles do
+    out := out.push (css.filename, .inl css.contents)
+  for data in assets.extraDataFiles do
+    out := out.push (data.filename, .inr data.content)
+  return out
+
+/--
+Emits the extra CSS, JS, and data files to the specified destination directory, ensuring that it exists.
+-/
+public def HtmlAssets.writeFiles (assets : HtmlAssets) (destination : System.FilePath) : IO Unit := do
+  for (name, content) in assets.files do
+    let path := destination / name
+    path.parent.forM IO.FS.createDirAll
+    match content with
+    | .inl string => IO.FS.writeFile path string
+    | .inr bytes => IO.FS.writeBinFile path bytes
+
 open Verso.BEq in
 public instance : BEq HtmlAssets where
   beq := private ptrEqThen fun
@@ -139,7 +165,9 @@ public instance : FromJson HtmlAssets where
 
 public def HtmlFeature.addAssets : HtmlFeature → HtmlAssets → HtmlAssets
   | .KaTeX, st => { st with
-      extraCssFiles := st.extraCssFiles.insert { filename := "katex/katex.css", contents := katex.css },
+      extraCssFiles :=
+        st.extraCssFiles
+          |>.insert { filename := "katex/katex.css", contents := katex.css },
       extraJsFiles :=
         st.extraJsFiles
           |>.insert {filename := "katex/katex.js", contents := katex.js, sourceMap? := none}

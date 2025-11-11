@@ -31,14 +31,27 @@ A name that is suitably public to be included in data exported from Verso.
 
 A name is suitably public if it contains at least one string component and no non-string components.
 -/
-public abbrev PublicName := { x : Name // isPublic x }
+@[expose]
+public def PublicName := { x : Name // isPublic x }
+deriving Repr
+
+/--
+Converts a public name to a name, forgetting the proof that the name is suitably public.
+-/
+public def PublicName.toName (x : PublicName) : Name := x.1
+
+public instance : Coe PublicName Name where
+  coe x := x.1
 
 instance : CoeDep Name (.str .anonymous x) PublicName := ⟨⟨.str .anonymous x, by grind [isPublic]⟩⟩
 
-instance [inst : CoeDep Name y PublicName] : CoeDep Name (.str y x) PublicName := ⟨⟨.str inst.coe.val x, by grind [isPublic]⟩⟩
+instance [inst : CoeDep Name y PublicName] : CoeDep Name (.str y x) PublicName := ⟨⟨.str inst.coe.val x, by unfold PublicName; grind [isPublic]⟩⟩
 
 public instance : BEq PublicName where
   beq x y := x.val == y.val
+
+instance : Hashable PublicName where
+  hash | ⟨x, _⟩ => hash x
 
 instance : Inhabited PublicName := ⟨ ⟨.str .anonymous "x", by simp [isPublic]⟩⟩
 
@@ -77,15 +90,16 @@ open NameMap
 /--
 A Verso {name}`NameMap` maps non-empty, string-only names to some kind of value.
 -/
-public abbrev NameMap (α : Type) : Type :=
+@[expose]
+public def NameMap (α : Type) : Type :=
   TreeMap PublicName α PublicName.quickCmp
 
 namespace NameMap
 variable {α : Type}
 
-public instance [Repr α] : Repr (NameMap α) := inferInstanceAs (Repr (Std.TreeMap _ _ _))
+public instance [Repr α] : Repr (NameMap α) := inferInstanceAs (Repr (Std.TreeMap PublicName α PublicName.quickCmp))
 
-public instance (α : Type) : EmptyCollection (NameMap α) := ⟨{}⟩
+public instance (α : Type) : EmptyCollection (NameMap α) := ⟨({} : TreeMap PublicName α PublicName.quickCmp)⟩
 
 public instance (α : Type) : Inhabited (NameMap α) where
   default := {}
@@ -123,14 +137,24 @@ public def get! [Inhabited α] (m : NameMap α) (n : Name) : α :=
     Std.TreeMap.get! m ⟨n, h⟩
   else panic! s!"The name `{n}` is not suitably public to be inserted into a Verso `NameMap`"
 
+public instance {α} : Membership Name (NameMap α) where
+  mem xs n :=
+    if h : isPublic n then
+      let x : PublicName := ⟨n, h⟩
+      let xs : TreeMap PublicName α PublicName.quickCmp := xs
+      x ∈ xs
+    else False
 
-public instance : GetElem? (NameMap α) Name α fun xs n => if h : isPublic n then ⟨n, h⟩ ∈ xs else False where
+public instance : GetElem? (NameMap α) Name α fun xs n => n ∈ xs where
   getElem xs x ok :=
     if h : isPublic x then
-      show α from GetElem.getElem (coll := TreeMap PublicName α PublicName.quickCmp ) (valid := fun xs x => x ∈ xs) xs ⟨x, h⟩ <| by
-        grind
+      show α from GetElem.getElem (coll := TreeMap PublicName α PublicName.quickCmp) (idx := PublicName) (elem := α) (valid := fun xs x => x ∈ xs) xs ⟨x, h⟩ <| by
+        simp only [Membership.mem, h, dite_cond_eq_true] at ok
+        exact ok
     else
-     False.elim <| by grind
+     False.elim <| by
+       simp only [Membership.mem, h] at ok
+       exact ok
   getElem? xs x := xs.get? x
 
 

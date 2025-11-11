@@ -86,10 +86,9 @@ inline_extension Inline.ref (canonicalName : String) (domain : Option Name) (rem
       | .error _ => return none
       | .ok dest =>
         return some <| .other (Inline.ref name (some domain) none (some dest.link)) content
-    | .ok { canonicalName := name, domain, remote := some remote, resolvedDestination := none } =>
-      let domain := domain.getD sectionDomain
-      return some <| .other (Inline.ref name (some domain) (some remote) none) content
-    | .ok {resolvedDestination := some _, ..} =>
+    | .ok { canonicalName := name, domain := none, remote := some remote, resolvedDestination := none } =>
+      return some <| .other (Inline.ref name (some sectionDomain) (some remote) none) content
+    | .ok { resolvedDestination := some _, .. } | .ok { remote := some _, .. } =>
       pure none
   toTeX :=
     some <| fun go _ _ content => do

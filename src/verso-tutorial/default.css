@@ -160,6 +160,13 @@ pre code {
   padding: 0;
 }
 
+/* Math */
+.math {
+  background-color: inherit;
+  color: inherit;
+  padding: 0;
+}
+
 /* Tutorial list */
 
 .topic .tutorials {

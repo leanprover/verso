@@ -473,10 +473,27 @@ private def RemoteInfo.structBEq (x y : RemoteInfo) : Bool :=
   y1 == y2 &&
   doms1.size == doms2.size &&
   doms1.foldl (init := true) fun soFar k v =>
-    soFar && doms2[k]?.isEqSome v
+    soFar && doms2[k.toName]?.isEqSome v
 
 private unsafe def RemoteInfo.fastBEq (x y : RemoteInfo) : Bool :=
   if ptrEq x y then true else RemoteInfo.structBEq x y
+
+instance : Membership Name RemoteInfo where
+  mem ri dom := dom ∈ ri.domains
+
+instance : GetElem? RemoteInfo Name RefDomain (fun ri d => d ∈ ri) where
+  getElem xs x ok := xs.domains[x]'ok
+  getElem? xs x := xs.domains[x]?
+
+/--
+Looks up an object in a domain, returning all targets.
+
+Returns {lean type:="Option (Array RefObject)"}`none` if {name}`domain` is not a domain in {name}`remote` or if
+no object has {name}`canonicalName` as its canonical name in the domain.
+-/
+public def RemoteInfo.getDomainObject? (remote : RemoteInfo) (domain : Name) (canonicalName : String) : Option (Array RefObject) := do
+  let dom ← remote[domain]?
+  dom[canonicalName]?
 
 /--
 Boolean equality of information about remote documents.

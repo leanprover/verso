@@ -42,8 +42,11 @@ structure Tutorial.PartMetadata where
   exampleStyle : ExampleCodeStyle
 deriving BEq, DecidableEq, Inhabited, Repr, ToJson, FromJson
 
+def Tutorial.TraverseContext := Manual.TraverseContext
+
 def Tutorial : Genre :=
   { Manual with
+    TraverseContext := Tutorial.TraverseContext
     PartMetadata := Tutorial.PartMetadata
   }
 
@@ -79,12 +82,24 @@ namespace Tutorial
 open Verso.Doc
 open Manual (ExtensionImpls)
 
+def defaultMetadata (p : Part Tutorial) : Tutorial.PartMetadata :=
+  { slug := p.titleString.sluggify.toString, summary := "", exampleStyle := .inlineLean `Main }
+
 
 instance : TraversePart Tutorial where
-  inPart p ctx := { ctx with
-    headers := ctx.headers.push { titleString := p.titleString, metadata := none },
-    path := if let some metadata := p.metadata then ctx.path.push metadata.slug else ctx.path
-  }
+  inPart p ctx :=
+    let metadata := p.metadata.getD (defaultMetadata p)
+    let properties := if ctx.headers.isEmpty then
+      NameMap.insert {} `Verso.Genre.Manual.exampleDefContext metadata.slug
+    else
+      {}
+    let path := if ctx.path.isEmpty then #[metadata.slug] else ctx.path
+    { ctx with
+      path
+      headers := ctx.headers.push {
+        titleString := p.titleString, metadata := none, properties
+      }
+    }
 
 instance : TraverseBlock Tutorial where
   inBlock b := (·.inBlock b)
@@ -105,12 +120,11 @@ def savePartXref (slug : Slug) (id : InternalId) (part : Part Tutorial) : Manual
         "sectionNum": null
       })
 
-
 open Manual in
 instance : Traverse Tutorial TraverseM where
   part p := do
     if p.metadata.isNone then
-      pure (some { slug := p.titleString.sluggify.toString, summary := "", exampleStyle := .inlineLean `Main })
+      pure (some (defaultMetadata p))
     else pure none
   block _ := pure ()
   inline _ := pure ()
@@ -142,13 +156,15 @@ structure Tutorials : Type where
   topics : Array Topic
 deriving BEq, ToJson, FromJson
 
-def Tutorials.traverse1 [Monad m] (traversal : Part Tutorial → m (Part Tutorial)) (tutorials : Tutorials) : m Tutorials := do
+def Tutorials.traverse1  (traversal : Part Tutorial → Manual.TraverseM (Part Tutorial)) (tutorials : Tutorials) : Manual.TraverseM Tutorials := do
   let { content, topics } := tutorials
   return {
     content,
     topics := ← topics.mapM fun topic => do
       return { topic with
-        tutorials := ← topic.tutorials.mapM traversal
+        tutorials := ← topic.tutorials.mapM fun tut => do
+          let tut := { tut with metadata := tut.metadata.getD (defaultMetadata tut) }
+          withReader (TraversePart.inPart tut) <| traversal tut
       }
   }
 
@@ -458,7 +474,7 @@ def EmitM.page (path : Path) (title : String) (content : Html) : EmitM Html := d
       state.extraJsFiles.toArray.map (false, ·.toStaticJsFile)
   let extraJsFiles := extraJsFiles.map fun
     | (true, f) => (f.filename, f.defer)
-    | (false, f) => ("/-verso-data/" ++ f.filename, f.defer)
+    | (false, f) => ("-verso-data/" ++ f.filename, f.defer)
 
 
   return (← theme).page {
@@ -467,8 +483,10 @@ def EmitM.page (path : Path) (title : String) (content : Html) : EmitM Html := d
     head := .seq #[
       extraJsFiles.map fun (fn, defer) =>
         {{<script src={{fn}} {{if defer then #[("defer", "defer")] else #[]}}></script>}},
+      state.extraCssFiles.toArray.map fun cssFile =>
+        {{<link rel="stylesheet" href=s!"-verso-data/{cssFile.filename}" />}},
       state.extraJs.toArray.map fun js =>
-        {{ <script>{{.text false js}}</script>}},
+        {{<script>{{.text false js}}</script>}},
       state.extraCss.toArray.map fun css =>
         {{<style>{{.text false css}}</style>}}
     ],
@@ -497,21 +515,34 @@ where
         return some { title := tut.titleString, link, summary : TutorialSummary }
     }
 
+
+
+open Verso.Genre.Manual in
+def tutorialLocalTargets (state : TraverseState) : Code.LinkTargets ctxt where
+  const := fun x _ctxt? =>
+    state.linksFromDomain docstringDomain x.toString "doc" s!"Documentation for {x}" ++
+    state.linksFromDomain exampleDomain x.toString "def" s!"Definition of example"
+
+  option := fun x _ctxt? =>
+    state.linksFromDomain optionDomain x.toString "doc" s!"Documentation for option {x}"
+  keyword := fun k _ctxt? =>
+    state.linksFromDomain tacticDomain k.toString "doc" "Documentation for tactic" ++
+    state.linksFromDomain syntaxKindDomain k.toString "doc" "Documentation for syntax"
+
+
 open EmitM in
 def emit (tutorials : Tutorials) : EmitM Unit := do
   let config ← EmitM.config
   if config.verbose then IO.println "Updating remote data"
   let remoteContent ← updateRemotes false config.remoteConfigFile (if config.verbose then IO.println else fun _ => pure ())
 
+  let targets : Code.LinkTargets Tutorial.TraverseContext := (← readThe Manual.TraverseState).localTargets ++ remoteContent.remoteTargets
+
   let dir := (← read).config.destination
   ensureDir dir
   let mut hlState := {}
-  for f in (← readThe Manual.TraverseState).extraJsFiles do
-    ensureDir (dir / "-verso-data")
-    (dir / "-verso-data" / f.filename).parent |>.forM fun d => ensureDir d
-    writeFile (dir / "-verso-data" / f.filename) f.contents
-    if let some m := f.sourceMap? then
-      writeFile (dir / "-verso-data" / m.filename) m.contents
+  (← readThe Manual.TraverseState).writeFiles (dir / "-verso-data")
+
   -- TODO cross-link to manual even here
   let (rootHtml, hlState') ← Genre.toHtml .none (← EmitM.htmlOptions) () () {} {} {} tutorials.content hlState
   hlState := hlState'
@@ -526,7 +557,14 @@ def emit (tutorials : Tutorials) : EmitM Unit := do
       let code := getCode tut
       ensureDir dir
       Zip.zipToFile (dir / (metadata.slug ++ ".zip")) (method := .store) <| code.map fun (fn, txt) => (metadata.slug ++ "/" ++ fn, txt.bytes)
-      let (html, hlState') ← Genre.toHtml (m := ReaderT AllRemotes (ReaderT ExtensionImpls IO)) Tutorial { logError := (logError ·) } { logError } (← readThe Manual.TraverseState) {} {} {} tut hlState remoteContent
+
+      let ctxt := { logError }
+      let ctxt := TraversePart.inPart tut ctxt
+
+      let definitionIds := (← readThe Manual.TraverseState).definitionIds ctxt
+
+      let (html, hlState') ←
+        Genre.toHtml (m := ReaderT AllRemotes (ReaderT ExtensionImpls IO)) Tutorial { logError := (logError ·) } ctxt (← readThe Manual.TraverseState) definitionIds targets {} tut hlState remoteContent
       hlState := hlState'
       let toc ← LocalToC.ofPart tut
       let sampleCode := do
