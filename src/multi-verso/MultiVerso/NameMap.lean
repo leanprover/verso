@@ -6,6 +6,7 @@ Author: David Thrane Christiansen
 module
 import Lean.Data.Name
 import Lean.Data.Json.FromToJson
+public import Lean.Data.Json.FromToJson.Basic
 public import Std.Data.TreeMap
 
 set_option linter.missingDocs true
@@ -109,10 +110,10 @@ instance [inst : CoeDep Name y PublicName] : CoeDep Name (.str y x) PublicName w
 public instance : BEq PublicName where
   beq x y := x.toName == y.toName
 
-instance : Hashable PublicName where
+public instance : Hashable PublicName where
   hash | ⟨x, _⟩ => hash x
 
-instance : Inhabited PublicName := ⟨ ⟨.str .anonymous "x", by simp [isPublic]⟩⟩
+public instance : Inhabited PublicName := ⟨ ⟨.str .anonymous "x", by simp [isPublic]⟩⟩
 
 /--
 Quickly compares two names. The resulting order is not particularly meaningful for users, but is
@@ -230,17 +231,17 @@ instance : ForIn m (NameMap α) (Name × α) where
 public def filter (f : Name → α → Bool) (m : NameMap α) : NameMap α :=
   Std.TreeMap.filter (fun x v => f x v) m
 
-end NameMap
+
 
 section
 variable [ToJson α] [FromJson α]
 
-instance : ToJson (NameMap α) where
-  toJson v :=
+public instance : ToJson (NameMap α) where
+  toJson v := private
     .obj <| v.foldl (init := {}) fun xs (k : PublicName) (v : α) => xs.insert k.toString (toJson v)
 
-instance : FromJson (NameMap α) where
-  fromJson? json := do
+public instance : FromJson (NameMap α) where
+  fromJson? json := private do
     let xs ← json.getObj?
     xs.foldlM (init := {}) fun xs k v => do
       let k' := k.toName

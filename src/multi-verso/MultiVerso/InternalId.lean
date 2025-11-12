@@ -7,8 +7,7 @@ module
 
 public import Lean.Data.Json
 public import Std.Data.TreeSet
-public import Plausible
-public meta import Plausible.ArbitraryFueled
+
 
 set_option linter.missingDocs true
 
@@ -55,15 +54,3 @@ public def InternalId.fresh (used : TreeSet InternalId) : (InternalId × TreeSet
   while used.contains i do
     i := ⟨i.id + 1⟩
   return (i, used.insert i)
-
-meta section
-open Plausible Arbitrary Gen
-
-instance : Arbitrary InternalId where
-  arbitrary := InternalId.mk <$> arbitrary
-
-instance : Shrinkable InternalId where
-  shrink
-    | { id } => Shrinkable.shrink id <&> InternalId.mk
-
-end
