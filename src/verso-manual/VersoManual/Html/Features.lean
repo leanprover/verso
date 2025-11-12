@@ -108,6 +108,9 @@ Checks whether the feature {name}`f` is enabled in {name}`features`.
 -/
 public def contains (features : HtmlFeatures) (f : HtmlFeature) : Bool := features.features.contains f
 
+/--
+{name}`f` is a member of {name}`features`.
+-/
 public def Mem (features : HtmlFeatures) (f : HtmlFeature) : Prop := f ∈ features.features
 
 public instance : Membership HtmlFeature HtmlFeatures where
@@ -116,6 +119,20 @@ public instance : Membership HtmlFeature HtmlFeatures where
 public theorem mem_iff_contains {fs : HtmlFeatures} {f : HtmlFeature} : f ∈ fs ↔ fs.contains f = true := by
   unfold contains
   apply HashSet.mem_iff_contains
+
+/--
+Membership is decidable.
+-/
+@[instance]
+public def instDecidableMem : Decidable (Mem fs f) :=
+  inferInstanceAs <| Decidable <| fs.contains f
+
+/--
+Membership is decidable.
+-/
+@[instance]
+public def instDecidableMembership {f : HtmlFeature} {fs : HtmlFeatures} : Decidable (f ∈  fs) :=
+  instDecidableMem
 
 @[simp, grind! .]
 public theorem all_contains_all (f : HtmlFeature) : all.contains f := by

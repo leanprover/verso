@@ -515,8 +515,9 @@ def emitHtmlSingle
   ensureDir dir
   let ((text, state), htmlState) ← emitContent dir .empty
   IO.FS.writeFile (dir.join "-verso-docs.json") (toString htmlState.dedup.docJson)
-  emitSearchBox (dir / "-verso-search") state.quickJump
-  emitSearchIndex (dir / "-verso-search") state {logError, draft := config.draft} logError text
+  if .search ∈ config.features then
+    emitSearchBox (dir / "-verso-search") state.quickJump
+    emitSearchIndex (dir / "-verso-search") state {logError, draft := config.draft} logError text
   pure (text, state)
 where
   emitContent (dir : System.FilePath) : StateT (State Html) (ReaderT ExtensionImpls IO) (Part Manual × TraverseState) := do
@@ -588,8 +589,9 @@ def emitHtmlMulti (logError : String → IO Unit) (config : Config)
   ensureDir root
   let ((text, state), htmlState) ← emitContent root {}
   IO.FS.writeFile (root.join "-verso-docs.json") (toString htmlState.dedup.docJson)
-  emitSearchBox (root / "-verso-search") state.quickJump
-  emitSearchIndex (root / "-verso-search") state {logError, draft := config.draft} logError text
+  if .search ∈ config.features then
+    emitSearchBox (root / "-verso-search") state.quickJump
+    emitSearchIndex (root / "-verso-search") state {logError, draft := config.draft} logError text
   pure (text, state)
 where
   /--
