@@ -15,16 +15,16 @@ open Lean
 
 public structure DataFile where
   filename : String
-  content : ByteArray
+  contents : ByteArray
 
 open Verso.BEq in
 public instance : BEq DataFile where
   beq := private ptrEqThen fun f1 f2 =>
     ptrEqThen' f1.filename f2.filename (· == ·) &&
-    ptrEqThen' f1.content f2.content (· == ·)
+    ptrEqThen' f1.contents f2.contents (· == ·)
 
 public instance : Hashable DataFile where
-  hash f := private mixHash f.filename.hash f.content.hash
+  hash f := private mixHash f.filename.hash f.contents.hash
 
 open Std Format in
 public instance : Repr DataFile where
@@ -34,18 +34,18 @@ public instance : Repr DataFile where
       (joinSep [
         text "{",
         group ("filename :=" ++ line ++ v.filename.quote ++ ","),
-        group ("content :=" ++ line ++ s!"#<{v.content.size} bytes>")
+        group ("content :=" ++ line ++ s!"#<{v.contents.size} bytes>")
        ] line) ++
     line ++ "}"
 
 public instance : ToJson DataFile where
   toJson f := private
-    json%{"filename": $f.filename, "size": $f.content.size, "content": $(BinFiles.Z85.encode f.content)}
+    json%{"filename": $f.filename, "size": $f.contents.size, "content": $(BinFiles.Z85.encode f.contents)}
 
 public instance : FromJson DataFile where
   fromJson? json := private do
     let filename ← json.getObjValAs? String "filename"
     let size ← json.getObjValAs? Nat "size"
-    let content ← json.getObjValAs? String "content"
-    let content := BinFiles.Z85.decode content size
-    return { filename, content }
+    let contents ← json.getObjValAs? String "content"
+    let contents := BinFiles.Z85.decode contents size
+    return { filename, contents }

@@ -403,7 +403,7 @@ instance : BEq TraverseState where
 
 namespace TraverseState
 
-def set [ToJson α] (state : TraverseState) (name : Name) (value : α) (ok : NameMap.isPublic name := by first | decide | grind) : TraverseState :=
+def set [ToJson α] (state : TraverseState) (name : Name) (value : α) (ok : NameMap.isPublic name := by first | grind | decide) : TraverseState :=
   { state with contents.contents := state.contents.contents.insert name (ToJson.toJson value) ok }
 
 /-- Returns `none` if the key is not found, or `some (error e)` if JSON deserialization failed -/
@@ -1210,7 +1210,6 @@ def saveExampleDefs (id : InternalId) (definedNames : Array (Name × String)) : 
       if let some ex := exampleBlock then s!"{d} (in {ex})" else d.toString
     let path ← (·.path) <$> read
     let _ ← externalTag thisId path d
-    dbg_trace "Saving example def {d} at {path}"
     modify (·.saveDomainObject exampleDomain d thisId)
     if let some link := (← get).externalTags[thisId]? then
       modify (·.modifyDomainObjectData exampleDomain d fun v =>

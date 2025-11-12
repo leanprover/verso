@@ -464,13 +464,13 @@ instance : Arbitrary TraverseState where
     for _ in 0...count do
       ids := ids.insert (← arbitrary)
 
-    let extraCss <- arbitrary
-    let extraJs <- arbitrary
-    let extraJsFiles <- arbitrary
-    let extraCssFiles <- arbitrary
-    let quickJump <- arbitrary
-    let licenseInfo <- arbitrary
-    let mut st := {
+    let extraCss ← arbitrary
+    let extraJs ← arbitrary
+    let extraJsFiles ← arbitrary
+    let extraCssFiles ← arbitrary
+    let quickJump ← arbitrary
+    let licenseInfo ← arbitrary
+    let mut st : TraverseState := {
       tags, externalTags,
       domains,
       ids,
@@ -554,12 +554,12 @@ instance : Shrinkable ByteArray where
     ByteArray.emptyWithCapacity 0 :: halves ++ dropped ++ zeroes ++ smaller ++ smaller'
 
 instance : Arbitrary DataFile where
-  arbitrary := do return { filename := ← arbitrary, content := ← arbitrary }
+  arbitrary := do return { filename := ← arbitrary, contents := ← arbitrary }
 
 instance : Shrinkable DataFile where
   shrink f :=
     (shrink f.filename |>.map ({ f with filename := · })) ++
-    (shrink f.content |>.map ({ f with content := · }))
+    (shrink f.contents |>.map ({ f with contents := · }))
 
 instance : Arbitrary Numbering where
   arbitrary := do
@@ -648,19 +648,26 @@ instance : Shrinkable Remote where
     (shrink rem.sources |>.map ({ rem with sources := · })) ++
     (shrink rem.updateFrequency |>.map ({ rem with updateFrequency := · }))
 
-def testInternalId := Testable.checkIO (NamedBinder "id" <| ∀ (id : InternalId), roundTripOk id)
-def testObject := Testable.checkIO (NamedBinder "obj" <| ∀ (obj : Object), roundTripOk obj)
-def testDomain := Testable.checkIO (NamedBinder "obj" <| ∀ (dom : Domain), roundTripOk dom)
-def testRefDomain := Testable.checkIO (NamedBinder "obj" <| ∀ (dom : RefDomain), roundTripOk dom)
-def testRefObject := Testable.checkIO (NamedBinder "obj" <| ∀ (obj : RefObject), roundTripOk obj)
-def testRemoteInfo := Testable.checkIO (NamedBinder "obj" <| ∀ (info : RemoteInfo), roundTripOk info)
-def testAllRemotes := Testable.checkIO (NamedBinder "obj" <| ∀ (remotes : AllRemotes), roundTripOk remotes)
-def testTraverseState := Testable.checkIO (NamedBinder "obj" <| ∀ (st : Verso.Genre.Manual.TraverseState), roundTripOk st)
-def testHtml := Testable.checkIO (NamedBinder "obj" <| ∀ (html : Verso.Output.Html), roundTripOk html)
-def testDataFile := Testable.checkIO (NamedBinder "obj" <| ∀ (f : Verso.Genre.Manual.DataFile), roundTripOk f)
-def testNumbering := Testable.checkIO (NamedBinder "obj" <| ∀ (n : Verso.Genre.Manual.Numbering), roundTripOk n)
-def testXrefSource := Testable.checkIO (NamedBinder "obj" <| ∀ (src : XrefSource), isEqOk (XrefSource.fromJson? src.toJson) src)
-def testRemote := Testable.checkIO (NamedBinder "obj" <| ∀ (r : Remote), isEqOk (Remote.fromJson? "" r.toJson) r)
+open scoped Plausible.Decorations in
+def testProp
+    (p : Prop) (cfg : Configuration := {})
+    (p' : Decorations.DecorationsOf p := by mk_decorations) [Testable p'] :
+    IO (TestResult p') :=
+  Testable.checkIO p' (cfg := cfg)
+
+def testInternalId := testProp <| ∀ (id : InternalId), roundTripOk id
+def testObject := testProp <| ∀ (obj : Object), roundTripOk obj
+def testDomain := testProp <| ∀ (dom : Domain), roundTripOk dom
+def testRefDomain := testProp <| ∀ (dom : RefDomain), roundTripOk dom
+def testRefObject := testProp <| ∀ (obj : RefObject), roundTripOk obj
+def testRemoteInfo := testProp <| ∀ (info : RemoteInfo), roundTripOk info
+def testAllRemotes := testProp <| ∀ (remotes : AllRemotes), roundTripOk remotes
+def testTraverseState := testProp <| ∀ (st : Verso.Genre.Manual.TraverseState), roundTripOk st
+def testHtml := testProp <| ∀ (html : Verso.Output.Html), roundTripOk html
+def testDataFile := testProp <| ∀ (f : Verso.Genre.Manual.DataFile), roundTripOk f
+def testNumbering := testProp <| ∀ (n : Verso.Genre.Manual.Numbering), roundTripOk n
+def testXrefSource := testProp <| ∀ (src : XrefSource), isEqOk (XrefSource.fromJson? src.toJson) src
+def testRemote := testProp <| ∀ (r : Remote), isEqOk (Remote.fromJson? "" r.toJson) r
 
 def serializationTests : List (Name × (Σ p, IO <| TestResult p)) := [
   (`testInternalId, ⟨_, testInternalId⟩),

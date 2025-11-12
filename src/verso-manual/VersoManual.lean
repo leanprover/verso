@@ -208,6 +208,21 @@ structure RenderConfig extends Config where
   -/
   linkTargets : TraverseState → LinkTargets Manual.TraverseContext := TraverseState.localTargets
 
+namespace Config
+
+/--
+Adds a bundled version of KaTeX to the document.
+-/
+@[deprecated "Set the `features` field instead (though KaTeX is enabled by default, so this is probably not needed)" (since := "2025-11-12")]
+def addKaTeX (config : Config) : Config := { config with features := config.features.insert .KaTeX }
+
+/--
+Adds search dependencies to the configuration.
+-/
+@[deprecated "Set the `features` field instead (though search is enabled by default, so this is probably not needed)" (since := "2025-11-12")]
+def addSearch (config : Config) : Config := { config with features := config.features.insert .search }
+
+end Config
 
 
 def ensureDir (dir : System.FilePath) : IO Unit := do
@@ -546,8 +561,9 @@ def emitHtmlSingle
   let remoteContent ← updateRemotes false config.remoteConfigFile (if config.verbose then IO.println else fun _ => pure ())
   let ((), htmlState) ← emitContent dir .empty remoteContent
   IO.FS.writeFile (dir.join "-verso-docs.json") (toString htmlState.dedup.docJson)
-  emitSearchBox (dir / "-verso-search") state.quickJump
-  emitSearchIndex (dir / "-verso-search") state {logError, draft := config.draft} logError text
+  if .search ∈ config.features then
+    emitSearchBox (dir / "-verso-search") state.quickJump
+    emitSearchIndex (dir / "-verso-search") state {logError, draft := config.draft} logError text
 where
   emitContent (dir : System.FilePath) : StateT (State Html) (ReaderT AllRemotes (ReaderT ExtensionImpls IO)) Unit := do
     let authors := text.metadata.map (·.authors) |>.getD []
@@ -601,15 +617,7 @@ where
       if let some alt := text.metadata.bind (·.shortTitle) then
         alt
       else titleHtml
-    for { filename := name, contents } in state.extraCssFiles do
-      ensureDir (dir.join "-verso-data")
-      (dir / "-verso-data" / name).parent |>.forM fun d => ensureDir d
-      IO.FS.withFile (dir.join "-verso-data" |>.join name) .write fun h => do
-        h.putStr contents
-    for ⟨name, contents⟩ in state.extraDataFiles do
-      ensureDir (dir.join "-verso-data")
-      (dir / "-verso-data" / name).parent |>.forM fun d => ensureDir d
-      IO.FS.writeBinFile (dir.join "-verso-data" |>.join name) contents
+    state.writeFiles (dir / "-verso-data")
 
     IO.FS.withFile (dir.join "index.html") .write fun h => do
       if config.verbose then
@@ -638,9 +646,10 @@ def emitHtmlMulti (logError : String → IO Unit) (config : RenderConfig)
   let root := config.destination.join "html-multi"
   ensureDir root
   let ((), htmlState) ← emitContent root {} remoteContent
-  IO.FS.writeFile (root / "-verso-docs.json") (toString htmlState.dedup.docJson)
-  emitSearchBox (root / "-verso-search") state.quickJump
-  emitSearchIndex (root / "-verso-search") state {logError, draft := config.draft} logError text
+  IO.FS.writeFile (root.join "-verso-docs.json") (toString htmlState.dedup.docJson)
+  if .search ∈ config.features then
+    emitSearchBox (root / "-verso-search") state.quickJump
+    emitSearchIndex (root / "-verso-search") state {logError, draft := config.draft} logError text
 where
   /--
   Emits the data used by all pages in the site, such as JS and CSS, and then emits the root page
@@ -667,22 +676,8 @@ where
     IO.FS.withFile (root / "book.css") .write fun h => do
       h.putStrLn Html.Css.pageStyle
     for (src, dest) in config.extraFiles do
-      copyRecursively logError src (root / dest)
-    for f in state.extraJsFiles do
-      ensureDir (root / "-verso-data")
-      (root / "-verso-data" / f.filename).parent |>.forM fun d => ensureDir d
-      IO.FS.writeFile (root / "-verso-data" |>.join f.filename) f.contents
-      if let some m := f.sourceMap? then
-        IO.FS.writeFile (root / "-verso-data" |>.join m.filename) m.contents
-    for { filename := name, contents } in state.extraCssFiles do
-      ensureDir (root / "-verso-data")
-      (root / "-verso-data" / name).parent |>.forM fun d => ensureDir d
-      IO.FS.withFile (root / "-verso-data" |>.join name) .write fun h => do
-        h.putStr contents
-    for ⟨name, contents⟩ in state.extraDataFiles do
-      ensureDir (root / "-verso-data")
-      (root / "-verso-data" / name).parent |>.forM fun d => ensureDir d
-      IO.FS.writeBinFile (root / "-verso-data" |>.join name) contents
+      copyRecursively logError src (root.join dest)
+    state.writeFiles (root / "-verso-data")
 
     emitPart titleToShow authors authorshipNote toc opts.lift ctxt state definitionIds linkTargets {} true config.htmlDepth root text
     let xrefJson ← IO.FS.readFile (root / "xref.json")

@@ -36,7 +36,7 @@ public structure PublicName where
   Converts a public name to a name, forgetting the proof that the name is suitably public.
   -/
   toName : Name
-  toName_isPublic : isPublic toName := by grind
+  toName_isPublic : isPublic toName := by first | decide | grind
 deriving Repr
 
 namespace PublicName
@@ -91,7 +91,7 @@ public theorem isPublic_str_prefix' : (isPublic (.str x s)) = (x = .anonymous �
 /--
 Converts a name to a suitably-public name.
 -/
-public def ofName (x : Name) (x_isPublic : isPublic x := by grind) : PublicName := PublicName.mk x x_isPublic
+public def ofName (x : Name) (x_isPublic : isPublic x := by first | decide | grind) : PublicName := PublicName.mk x x_isPublic
 
 end PublicName
 
@@ -164,7 +164,7 @@ public instance (α : Type) : Inhabited (NameMap α) where
   default := {}
 
 @[inherit_doc Std.TreeMap.insert]
-public def insert (m : NameMap α) (n : Name) (a : α) (ok : isPublic n := by grind) : NameMap α :=
+public def insert (m : NameMap α) (n : Name) (a : α) (ok : isPublic n := by first | decide | grind) : NameMap α :=
   Std.TreeMap.insert m ⟨n, ok⟩ a
 
 /--
