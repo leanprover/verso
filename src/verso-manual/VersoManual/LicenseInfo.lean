@@ -3,8 +3,8 @@ Copyright (c) 2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-
-import Lean.Data.Json
+module
+public import Lean.Data.Json.FromToJson
 
 open Lean (ToJson FromJson)
 
@@ -14,7 +14,7 @@ namespace Verso.Genre.Manual
 A description of an open-source license used by a frontend component that's included in
 generated HTML. This is used to create an attribution page.
 -/
-structure LicenseInfo where
+public structure LicenseInfo where
   /-- SPDX license identifier -/
   identifier : String
 

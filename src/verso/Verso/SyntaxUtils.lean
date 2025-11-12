@@ -3,7 +3,9 @@ Copyright (c) 2023 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-
+module
+public import Lean.Parser.Types
+public meta import Verso.Instances
 import Verso.Instances
 import Verso.Method
 
@@ -13,14 +15,14 @@ namespace Verso.Parser
 open Lean Doc Parser
 
 
-def textLine (allowNewlines := true) : ParserFn := many1Fn (inline { allowNewlines })
+public def textLine (allowNewlines := true) : ParserFn := many1Fn (inline { allowNewlines })
 
-def nl := satisfyFn (· == '\n') "newline"
+public def nl := satisfyFn (· == '\n') "newline"
 
 /--
 Parses a line that contains only spaces.
 -/
-def blankLine : ParserFn :=
+public def blankLine : ParserFn :=
   nodeFn `blankLine <| atomicFn <| asStringFn <| takeWhileFn (· == ' ') >> nl
 
 private def skipToNewline : ParserFn :=
@@ -64,15 +66,15 @@ open Lean Parser
 open Std.Format
 
 
-defmethod Syntax.getPos! (stx : Syntax) : String.Pos.Raw :=
+public defmethod Syntax.getPos! (stx : Syntax) : String.Pos.Raw :=
   if let some pos := stx.getPos? then pos else panic! s!"No position for {stx}"
 
-defmethod SourceInfo.getPos! (info : SourceInfo) : String.Pos.Raw :=
+public defmethod SourceInfo.getPos! (info : SourceInfo) : String.Pos.Raw :=
   if let some pos := info.getPos? then pos else panic! s!"No position for {repr info}"
 
-def ppSyntax (stx : Syntax) : Std.Format := .nest 2 <| stx.formatStx (some 50) false
+public def ppSyntax (stx : Syntax) : Std.Format := .nest 2 <| stx.formatStx (some 50) false
 
-def ppStack (elts : Array Syntax) (number : Bool := false) : Std.Format := Id.run do
+public def ppStack (elts : Array Syntax) (number : Bool := false) : Std.Format := Id.run do
   let mut stk : Format := .nil
   if h : elts.size = 0 then
     stk := " empty"
@@ -85,7 +87,7 @@ def ppStack (elts : Array Syntax) (number : Bool := false) : Std.Format := Id.ru
       stk := stk ++ .group (" • " ++ num ++ nest 2 (.group tm)) ++ line
   pure stk
 
-defmethod ParserFn.test (p : ParserFn) (input : String) : IO String := do
+public defmethod ParserFn.test (p : ParserFn) (input : String) : IO String := do
   let ictx := mkInputContext input "<input>"
   let env : Environment ← mkEmptyEnvironment
   let pmctx : ParserModuleContext := {env := env, options := {}}
@@ -106,10 +108,10 @@ defmethod ParserFn.test (p : ParserFn) (input : String) : IO String := do
       errors := errors ++ s!"  @{p} ({ictx.fileMap.toPosition p}): {toString e}\n    {repr <| p.extract input input.rawEndPos}\n"
     return s!"{s'.allErrors.size} failures:\n{errors}\nFinal stack:\n{stk.pretty 50}"
 
-defmethod ParserFn.test! (p : ParserFn) (input : String) : IO Unit :=
+public defmethod ParserFn.test! (p : ParserFn) (input : String) : IO Unit :=
   p.test input >>= IO.println
 
-
+public section
 /-- A more convenient concrete syntax for low-level syntax objects,
 without needing to involve the Lean parser. Useful when working at the
 ParserFn level.-/
@@ -130,12 +132,13 @@ macro_rules
   | `( `<low| ( $id $stx* ) > ) => ``(Syntax.node SourceInfo.none $(quote id.getId) #[ $[`<low| $stx > ],* ] )
   | `( `<low| ~$e > ) => ``(($e : Syntax))
   | `( `<low| ~~$e > ) => ``(Syntax.atom _ $e)
+end
 
 /--
 Given a string literal, constructs a Lean string that can be parsed by the Lean parser, yielding
 correct source positions for items in the string literal.
 -/
-def parserInputString [Monad m] [MonadFileMap m]
+public def parserInputString [Monad m] [MonadFileMap m]
     (str : TSyntax `str) :
     m String := do
   let text ← getFileMap
@@ -155,7 +158,7 @@ def parserInputString [Monad m] [MonadFileMap m]
   return code
 
 
-structure SyntaxError where
+public structure SyntaxError where
   pos : Position
   endPos : Position
   text : String
@@ -196,7 +199,7 @@ where
       if let .original (trailing := trailing) .. := stx.getTailInfo then pure (some trailing)
         else none
 
-defmethod ParserFn.parseString [Monad m] [MonadError m] [MonadEnv m] (p : ParserFn) (input : String) : m Syntax := do
+public defmethod ParserFn.parseString [Monad m] [MonadError m] [MonadEnv m] (p : ParserFn) (input : String) : m Syntax := do
   let ictx := mkInputContext input "<input>"
   let env ← getEnv
   let pmctx : ParserModuleContext := {env := env, options := {}}
@@ -219,7 +222,7 @@ open Lean.Parser in
 /--
 Runs a parser category, returning any errors encountered as a list of position-string pairs.
 -/
-def runParserCategory
+public def runParserCategory
     (env : Environment) (opts : Lean.Options) (catName : Name)
     (input : String) (fileName : String := "<example>") :
     Except (List (Position × String)) Syntax :=
@@ -245,7 +248,7 @@ open Lean.Parser in
 Runs a parser category, returning any errors encountered as `SyntaxError`s, with the source spans
 computed the way Lean does.
 -/
-def runParserCategory' (env : Environment) (opts : Lean.Options) (catName : Name) (input : String) (fileName : String := "<example>") : Except (Array SyntaxError) Syntax :=
+public def runParserCategory' (env : Environment) (opts : Lean.Options) (catName : Name) (input : String) (fileName : String := "<example>") : Except (Array SyntaxError) Syntax :=
     let p := andthenFn whitespace (categoryParserFnImpl catName)
     let ictx := mkInputContext input fileName
     let s := p.run ictx { env, options := opts } (getTokenTable env) (mkParserState input)

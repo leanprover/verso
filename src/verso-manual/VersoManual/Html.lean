@@ -21,12 +21,12 @@ structure Toc.Meta where
   path : Path
   id : Option String
   sectionNum : Option (Array Numbering)
-deriving Repr
+deriving Repr, Inhabited
 
 structure Toc extends Toc.Meta where
   entry ::
   children : List Toc
-deriving Repr
+deriving Repr, Inhabited
 
 namespace Toc
 
