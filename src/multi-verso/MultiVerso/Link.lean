@@ -23,7 +23,7 @@ public structure Link where
   path : Path
   /-- The HTML ID on the current page-/
   htmlId : Slug
-deriving ToJson, FromJson, BEq, Ord, Repr
+deriving ToJson, FromJson, BEq, Ord, Repr, Inhabited
 
 /-- Constructs a link URL suitable for an `<a>` tag. -/
 public def Link.link (link : Link) : String :=

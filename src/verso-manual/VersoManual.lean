@@ -166,7 +166,7 @@ def paragraph : DirectiveExpanderOf Unit
     let args ← stxs.mapM elabBlock
     ``(Block.other Block.paragraph #[ $[ $args ],* ])
 
-structure Config where
+structure Config extends HtmlConfig where
   destination : System.FilePath := "_out"
   maxTraversals : Nat := 20
   htmlDepth := 2
@@ -174,43 +174,9 @@ structure Config where
   emitHtmlSingle : Bool := false
   emitHtmlMulti : Bool := true
   wordCount : Option System.FilePath := none
-  extraFiles : List (System.FilePath × String) := []
-  /-- Extra CSS to be included inline into every `<head>` via `<script>` tags -/
-  extraCss : List String := []
-  /-- Extra JS to be included inline into every `<head>` via `<style>` tags -/
-  extraJs : List String := []
-  /-- Extra CSS to be written to the filesystem in the Verso data directory and loaded by each `<head>` -/
-  extraCssFiles : Array (String × String) := #[]
-  /-- Extra JS to be written to the filesystem in the Verso data directory and loaded by each `<head>` -/
-  extraJsFiles : Array JsFile := #[]
-  /-- Extra files to be placed in the Verso data directory -/
-  extraDataFiles : Array (String × ByteArray) := #[]
-  licenseInfo : List LicenseInfo := []
-  /-- Extra elements to add to every page's `head` tag -/
-  extraHead : Array Output.Html := #[]
-  /-- Extra elements to add to every page's contents -/
-  extraContents : Array Output.Html := #[]
   draft : Bool := false
-  /-- The URL from which to draw the logo to show, if any -/
-  logo : Option String := none
-  /-- The URL that the logo should link to, if any (default is site root) -/
-  logoLink : Option String := none
-  /-- URL for source link -/
-  sourceLink : Option String := none
-  /-- URL for issue reports -/
-  issueLink : Option String := none
   /-- Be verbose while generating output -/
   verbose : Bool := false
-  /--
-  How deep should the local table of contents on each non-leaf HTML page?
-  `none` means "unlimited".
-  -/
-  sectionTocDepth : Option Nat := some 1
-  /--
-  How deep should the local table of contents on the root HTML page?
-  `none` means "unlimited".
-  -/
-  rootTocDepth : Option Nat := some 1
   /--
   Location of the remote config file.
   -/
@@ -262,11 +228,7 @@ def traverse (logError : String → IO Unit) (text : Part Manual) (config : Conf
   if config.verbose then IO.println "Updating remote data"
   let remoteContent ← updateRemotes false config.remoteConfigFile (if config.verbose then IO.println else fun _ => pure ())
   let mut state : Manual.TraverseState := {
-    licenseInfo := .ofList config.licenseInfo,
-    extraCss := .insertMany {} config.extraJs
-    extraJs := .insertMany {} config.extraJs
-    extraCssFiles := config.extraCssFiles,
-    extraJsFiles := config.extraJsFiles,
+    toHtmlAssets := config.toHtmlAssets
     remoteContent
   }
   let mut text := text
@@ -410,7 +372,7 @@ def page (toc : List Html.Toc)
   }
   let extraJsFiles :=
     sortJs <|
-      state.extraJsFiles.map (false, ·.toStaticJsFile)
+      state.extraJsFiles.toArray.map (false, ·.toStaticJsFile)
   let extraJsFiles := extraJsFiles.map fun
     | (true, f) => (f.filename, f.defer)
     | (false, f) => ("/-verso-data/" ++ f.filename, f.defer)
@@ -424,7 +386,7 @@ def page (toc : List Html.Toc)
     (repoLink := config.sourceLink)
     (issueLink := config.issueLink)
     (localItems := localItems)
-    (extraStylesheets := state.extraCssFiles.toList.map ("/-verso-data/" ++ ·.1))
+    (extraStylesheets := state.extraCssFiles.toList.map ("/-verso-data/" ++ ·.filename))
     (extraJsFiles := extraJsFiles)
     (extraHead := config.extraHead)
     (extraContents := config.extraContents)
@@ -594,15 +556,7 @@ where
       if let some alt := text.metadata.bind (·.shortTitle) then
         alt
       else titleHtml
-    for (name, contents) in state.extraCssFiles do
-      ensureDir (dir.join "-verso-data")
-      (dir / "-verso-data" / name).parent |>.forM fun d => ensureDir d
-      IO.FS.withFile (dir.join "-verso-data" |>.join name) .write fun h => do
-        h.putStr contents
-    for (name, contents) in config.extraDataFiles do
-      ensureDir (dir.join "-verso-data")
-      (dir / "-verso-data" / name).parent |>.forM fun d => ensureDir d
-      IO.FS.writeBinFile (dir.join "-verso-data" |>.join name) contents
+    state.writeFiles (dir / "-verso-data")
 
     IO.FS.withFile (dir.join "index.html") .write fun h => do
       if config.verbose then
@@ -650,21 +604,7 @@ where
       h.putStrLn Html.Css.pageStyle
     for (src, dest) in config.extraFiles do
       copyRecursively logError src (root.join dest)
-    for f in state.extraJsFiles do
-      ensureDir (root.join "-verso-data")
-      (root / "-verso-data" / f.filename).parent |>.forM fun d => ensureDir d
-      IO.FS.writeFile (root.join "-verso-data" |>.join f.filename) f.contents
-      if let some m := f.sourceMap? then
-        IO.FS.writeFile (root.join "-verso-data" |>.join m.filename) m.contents
-    for (name, contents) in state.extraCssFiles do
-      ensureDir (root.join "-verso-data")
-      (root / "-verso-data" / name).parent |>.forM fun d => ensureDir d
-      IO.FS.withFile (root.join "-verso-data" |>.join name) .write fun h => do
-        h.putStr contents
-    for (name, contents) in config.extraDataFiles do
-      ensureDir (root.join "-verso-data")
-      (root / "-verso-data" / name).parent |>.forM fun d => ensureDir d
-      IO.FS.writeBinFile (root.join "-verso-data" |>.join name) contents
+    state.writeFiles (root / "-verso-data")
 
     emitPart titleToShow authors authorshipNote toc opts.lift ctxt state definitionIds linkTargets {} true config.htmlDepth root text
     emitXrefs toc root state config
@@ -734,31 +674,6 @@ where
   termination_by depth
 
 
-open Verso.Output.Html in
-/--
-Adds a bundled version of KaTeX to the document
--/
-def Config.addKaTeX (config : Config) : Config :=
-  {config with
-    extraCssFiles := config.extraCssFiles.push ("katex/katex.css", katex.css),
-    extraJsFiles :=
-      config.extraJsFiles
-        |>.push {filename := "katex/katex.js", contents := katex.js, sourceMap? := none}
-        |>.push {filename := "katex/math.js", contents := math.js, sourceMap? := none},
-    extraDataFiles := config.extraDataFiles ++ katexFonts,
-    licenseInfo := Licenses.KaTeX :: config.licenseInfo
-  }
-
-
-/--
-Adds search dependencies to the configuration
--/
-def Config.addSearch (config : Config) : Config :=
-  { config with
-    licenseInfo := [Licenses.fuzzysort, Licenses.w3Combobox, Licenses.elasticlunr.js] ++ config.licenseInfo
-  }
-
-
 inductive Mode where | single | multi
 
 /--
@@ -779,7 +694,7 @@ abbrev ExtraStep := Mode → (String → IO Unit) → Config → TraverseState �
 def manualMain (text : Part Manual)
     (extensionImpls : ExtensionImpls := by exact extension_impls%)
     (options : List String)
-    (config : Config := Config.addKaTeX (Config.addSearch {}))
+    (config : Config := {})
     (extraSteps : List ExtraStep := []) : IO UInt32 :=
   ReaderT.run go extensionImpls
 
