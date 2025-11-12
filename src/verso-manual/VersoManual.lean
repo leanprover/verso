@@ -186,6 +186,21 @@ structure Config extends HtmlConfig where
   -/
   linkTargets : TraverseState → LinkTargets Manual.TraverseContext := TraverseState.localTargets
 
+namespace Config
+
+/--
+Adds a bundled version of KaTeX to the document.
+-/
+@[deprecated "Set the `features` field instead (though KaTeX is enabled by default, so this is probably not needed)" (since := "2025-11-12")]
+def addKaTeX (config : Config) : Config := { config with features := config.features.insert .KaTeX }
+
+/--
+Adds search dependencies to the configuration.
+-/
+@[deprecated "Set the `features` field instead (though search is enabled by default, so this is probably not needed)" (since := "2025-11-12")]
+def addSearch (config : Config) : Config := { config with features := config.features.insert .search }
+
+end Config
 
 def ensureDir (dir : System.FilePath) : IO Unit := do
   if !(← dir.pathExists) then

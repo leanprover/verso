@@ -14,17 +14,39 @@ import Verso.Output.Html.KaTeX
 public import VersoManual.LicenseInfo
 import VersoManual.LicenseInfo.Licenses
 
+set_option doc.verso true
+set_option linter.missingDocs true
+
 namespace Verso.Genre.Manual
 open Lean
 open Std
 open Verso.Output.Html
 
+/--
+A built-in feature supported by the HTML backend of the manual genre.
+-/
 public inductive HtmlFeature where
-  | KaTeX | search
+  /--
+  Rendering mathematics using KaTeX.
+
+  Enabling this feature causes the bundled KaTeX to be included in the emitted HTML and math
+  elements to be rendered on page load.
+  -/
+  | KaTeX
+  /--
+  The search box.
+
+  Enabling this feature causes the search box JavaScript to be included.
+  -/
+  | search
 deriving ToJson, FromJson, Repr, BEq, DecidableEq, Ord, Hashable
 
+/--
+A set of HTML features.
+-/
 public structure HtmlFeatures where
-  features :  HashSet HtmlFeature
+  private mk ::
+  private features : HashSet HtmlFeature
 deriving Repr
 
 public instance : BEq HtmlFeatures where
@@ -45,31 +67,54 @@ public instance : LawfulHashable HtmlFeature where
     cases f <;> cases f' <;> first | rfl | contradiction
 
 namespace HtmlFeatures
+/--
+No HTML features are enabled.
+-/
 public def empty : HtmlFeatures := ⟨{}⟩
 
 public instance : EmptyCollection HtmlFeatures := ⟨.empty⟩
 
 public instance : Singleton HtmlFeature HtmlFeatures where
-  singleton x := ⟨singleton x⟩
+  singleton x := private ⟨singleton x⟩
+
+/--
+Adds a feature to the feature set.
+-/
+public def insert (feature : HtmlFeature) (features : HtmlFeatures) : HtmlFeatures :=
+  { features with features := features.features.insert feature }
 
 public instance : Insert HtmlFeature HtmlFeatures where
-  insert x xs := ⟨insert x xs.features⟩
+  insert x xs := insert x xs
 
+/--
+Converts a feature set into an array of features.
+-/
 public def toArray (features : HtmlFeatures) : Array HtmlFeature :=
   features.features.toArray |>.qsortOrd
 
+/--
+Converts an array of features into a feature set.
+-/
 public def ofArray (features : Array HtmlFeature) : HtmlFeatures :=
   ⟨HashSet.ofArray features⟩
 
+/--
+The feature set that includes all HTML features.
+-/
 public def all : HtmlFeatures := {.KaTeX, .search}
 
+/--
+Checks whether the feature {name}`f` is enabled in {name}`features`.
+-/
 public def contains (features : HtmlFeatures) (f : HtmlFeature) : Bool := features.features.contains f
 
+public def Mem (features : HtmlFeatures) (f : HtmlFeature) : Prop := f ∈ features.features
+
 public instance : Membership HtmlFeature HtmlFeatures where
-  mem fs f := f ∈ fs.features
+  mem fs f := Mem fs f
 
 public theorem mem_iff_contains {fs : HtmlFeatures} {f : HtmlFeature} : f ∈ fs ↔ fs.contains f = true := by
-  simp [contains]
+  unfold contains
   apply HashSet.mem_iff_contains
 
 @[simp, grind! .]
@@ -89,6 +134,10 @@ public instance : ForIn m HtmlFeatures HtmlFeature where
 
 end HtmlFeatures
 
+/--
+A collection of HTML assets that can be initialized in the manual configuration and enlarged by
+custom elements during traversal.
+-/
 public structure HtmlAssets where
   /-- Extra CSS to be included inline into every `<head>` via `<style>` tags -/
   extraCss : HashSet String := {}
@@ -104,7 +153,7 @@ public structure HtmlAssets where
 deriving Repr
 
 /--
-Returns all the files that should be written in the `-verso-data` directory.
+Returns all the files that should be written in the {lit}`-verso-data` directory.
 -/
 public def HtmlAssets.files (assets : HtmlAssets) : Array (String × (String ⊕ ByteArray)) := Id.run do
   let mut out := #[]
@@ -163,6 +212,9 @@ public instance : FromJson HtmlAssets where
     let licenseInfo ← HashSet.ofArray <$> v.getObjValAs? (Array LicenseInfo) "licenseInfo"
     return { extraCss, extraJs, extraJsFiles, extraCssFiles, extraDataFiles, licenseInfo }
 
+/--
+Adds the HTML assets corresponding to a feature.
+-/
 public def HtmlFeature.addAssets : HtmlFeature → HtmlAssets → HtmlAssets
   | .KaTeX, st => { st with
       extraCssFiles :=
