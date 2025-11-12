@@ -13,6 +13,7 @@ import MultiVerso
 import MultiVerso.Slug
 import VersoSearch
 import VersoManual.LicenseInfo
+import VersoManual.Html.Config
 import VersoManual.Ext
 import Verso.Output.Html
 import Verso.Output.TeX
@@ -149,30 +150,6 @@ instance : ToString Tag where
 instance : Coe String Tag where
   coe := .provided
 
-/-- An extra JS file to be included in the header, but not emitted -/
-structure StaticJsFile where
-  filename : String
-  defer : Bool := false
-  /-- Load after these other named files -/
-  after : Array String := #[]
-deriving BEq, Repr
-
-/--
-A JavaScript source map to be included along with emitted JavaScript.
-
-Many minified JavaScript files contain a reference to a source map. The filename here should match
-the one referred to by the minified file; Verso will not validate this.
--/
-structure JsSourceMap where
-  filename : String
-  contents : String
-deriving BEq, ToJson, FromJson, Repr
-
-/-- An extra JS file to be emitted and added to the page -/
-structure JsFile extends StaticJsFile where
-  contents : String
-  sourceMap? : Option JsSourceMap
-deriving BEq, ToJson, FromJson, Repr
 
 
 /-- When rendering multi-page HTML, should splitting pages follow the depth setting? -/
@@ -189,6 +166,27 @@ inductive Numbering where
   | /-- Letter numbering, used e.g. for appendices -/
     letter (char : Char)
 deriving DecidableEq, Hashable, Repr
+
+instance : ToJson Numbering where
+  toJson
+    | .nat n => .num { mantissa := n, exponent := 0 }
+    | .letter c => .str <| String.singleton c
+
+instance : FromJson Numbering where
+  fromJson?
+    | v@(.num { mantissa, exponent }) =>
+      if exponent = 0 then
+        if let some n := mantissa.toNat? then
+          return .nat n
+        else throw s!"Expected natural number, got {v.compress}"
+      else throw s!"Expected exponent 0 for {v.compress}"
+    | v@(.str s) =>
+      if h : s.length = 1 then
+        return .letter <| s.startValidPos.get <| by
+          have : "".length = 0 := by rfl
+          grind [String.startValidPos_eq_endValidPos_iff]
+      else throw s!"Expected one-character string for {v.compress}"
+    | other => throw s!"Expected number or string, got {other.compress}"
 
 instance : ToString Numbering where
   toString
@@ -228,7 +226,7 @@ structure PartMetadata where
   htmlToc := true
   /-- How should this document be split when rendering multi-page HTML output? -/
   htmlSplit : HtmlSplitMode := .default
-deriving BEq, Hashable, Repr
+deriving BEq, Hashable, Repr, ToJson, FromJson
 
 
 def Domains := NameMap Domain deriving Repr
@@ -284,18 +282,13 @@ instance : Repr Contents where
     .line ++ "}"
 
 open Verso.Search in
-structure TraverseState where
+structure TraverseState extends HtmlAssets where
   tags : HashMap Tag InternalId := {}
   externalTags : HashMap InternalId Link := {}
   domains : Domains := {}
   remoteContent : AllRemotes
   ids : TreeSet InternalId := {}
-  extraCss : HashSet String := {}
-  extraJs : HashSet String := {}
-  extraJsFiles : Array JsFile := #[]
-  extraCssFiles : Array (String × String) := #[]
   quickJump : DomainMappers := {}
-  licenseInfo : HashSet LicenseInfo := {}
   private contents : Contents := {}
 deriving Repr
 
@@ -306,20 +299,21 @@ private def jsonMap (xs : HashMap α β) : Json :=
 
 instance : ToJson TraverseState where
   toJson st :=
-    let {tags, externalTags, domains, remoteContent, ids, extraCss, extraJs, extraJsFiles, extraCssFiles, quickJump, licenseInfo, contents} := st
+    let {tags, externalTags, domains, ids, extraCss, extraJs, extraJsFiles, extraCssFiles, extraDataFiles, quickJump, licenseInfo, contents, remoteContent} := st
     json%{
       "tags": $(jsonMap tags),
       "externalTags": $(jsonMap externalTags),
       "domains": $domains,
-      "remoteContent": $remoteContent,
       "ids": $ids.toArray,
       "extraCss": $extraCss.toArray,
       "extraJs": $extraJs.toArray,
-      "extraJsFiles": $extraJsFiles,
-      "extraCssFiles": $extraCssFiles,
+      "extraJsFiles": $extraJsFiles.toArray,
+      "extraDataFiles": $extraDataFiles.toArray,
+      "extraCssFiles": $extraCssFiles.toArray,
       "quickJump": $quickJump.toArray,
       "licenseInfo": $licenseInfo.toArray,
-      "contents": $contents.contents
+      "contents": $contents.contents,
+      "remoteContent": $remoteContent
     }
 
 instance : FromJson TraverseState where
@@ -337,22 +331,23 @@ instance : FromJson TraverseState where
       pure (k, v)
     let externalTags : HashMap _ _ := HashMap.insertMany {} externalTags
     let domains <- v.getObjValAs? _ "domains"
-    let remoteContent <- v.getObjValAs? _ "remoteContent"
     let ids <- v.getObjValAs? (Array InternalId) "ids"
     let ids := .ofArray ids
     let extraCss <- v.getObjValAs? (Array String) "extraCss"
     let extraCss := .ofArray extraCss
     let extraJs <- v.getObjValAs? (Array String) "extraJs"
     let extraJs := .ofArray extraJs
-    let extraJsFiles <- v.getObjValAs? _ "extraJsFiles"
-    let extraCssFiles <- v.getObjValAs? _ "extraCssFiles"
+    let extraJsFiles <- HashSet.ofArray <$> v.getObjValAs? (Array _) "extraJsFiles"
+    let extraCssFiles <- HashSet.ofArray <$> v.getObjValAs? (Array _) "extraCssFiles"
+    let extraDataFiles ← HashSet.ofArray <$> v.getObjValAs? (Array _) "extraDataFiles"
     let quickJump <- v.getObjValAs? (Array (String × Search.DomainMapper)) "quickJump"
     let quickJump := HashMap.insertMany {} quickJump
     let licenseInfo <- v.getObjValAs? (Array LicenseInfo) "licenseInfo"
     let licenseInfo := .ofArray licenseInfo
     let contents ← v.getObjValAs? (NameMap Json) "contents"
     let contents := ⟨contents⟩
-    return { tags, externalTags, domains, remoteContent, ids, extraCss, extraJs, extraJsFiles, extraCssFiles, quickJump, licenseInfo, contents }
+    let remoteContent ← v.getObjValAs? AllRemotes "remoteContent"
+    return { tags, externalTags, domains, ids, extraCss, extraJs, extraJsFiles, extraCssFiles, extraDataFiles, quickJump, licenseInfo, contents, remoteContent }
 end
 /--
 Returns a fresh internal ID.
@@ -398,7 +393,6 @@ instance : BEq TraverseState where
       | none => false
       | some v' => v == v') &&
     x.domains == y.domains &&
-    x.remoteContent == y.remoteContent &&
     x.ids == y.ids &&
     x.extraCss == y.extraCss &&
     x.extraJs == y.extraJs &&
@@ -455,64 +449,12 @@ def htmlId (state : TraverseState) (id : InternalId) : Array (String × String) 
 /-- Add an open-source license used in the generated HTML/JavaScript -/
 def addLicenseInfo (state : TraverseState) (licenseInfo : LicenseInfo) : TraverseState :=
   {state with licenseInfo := state.licenseInfo.insert licenseInfo}
+
+@[inherit_doc HtmlAssets.writeFiles]
+def writeFiles (state : TraverseState) (destination : System.FilePath) : IO Unit :=
+  state.toHtmlAssets.writeFiles destination
+
 end TraverseState
-
-
-/--
-A custom block. The `name` field should correspond to an entry in the block descriptions table.
--/
-structure Block where
-  /-- A unique name that identifies the block. -/
-  name : Name := by exact decl_name%
-  /-- A unique ID, assigned during traversal. -/
-  id : Option InternalId := none
-  /--
-  Data saved by elaboration, potentially updated during traversal, and used to render output. This
-  is the primary means of communicating information about a block between phases.
-  -/
-  data : Json := Json.null
-  /--
-  A registry for properties that can be used to create ad-hoc protocols for coordination between
-  block elements in extensions.
-  -/
-  properties : Lean.NameMap String := {}
-deriving ToJson, FromJson
-
-section
-local instance : Repr Json := ⟨fun v _ => s!"json%" ++ v.render ⟩
-deriving instance Repr for Block
-end
-
-
-instance : BEq Block where
-  beq
-    | ⟨n1, i1, d1, p1⟩, ⟨n2, i2, d2, p2⟩ =>
-      n1 == n2 &&
-      i1 == i2 &&
-      ptrEqThen' d1 d2 (· == ·) &&
-      ptrEqThen' p1 p2 fun x y =>
-        x.size == y.size && x.all (fun k v => y.find? k |>.isEqSome v)
-
-instance : Hashable Block where
-  hash
-    | ⟨n, i, d, p⟩ =>
-      have : Ord (Name × String) := Ord.lex ⟨Name.quickCmp⟩ inferInstance
-      mixHash (hash n) <| mixHash (hash i) <| mixHash (hash d) (hash p.toArray.qsortOrd)
-
-/--
-A custom inline. The `name` field should correspond to an entry in the block descriptions table.
--/
-structure Inline where
-  /-- A unique name that identifies the inline. -/
-  name : Name := by exact decl_name%
-  /-- The internal unique ID, which is automatically assigned during traversal. -/
-  id : Option InternalId := none
-  /--
-  Data saved by elaboration, potentially updated during traversal, and used to render output. This
-  is the primary means of communicating information about a block between phases.
-  -/
-  data : Json := Json.null
-deriving BEq, Hashable, ToJson, FromJson
 
 private partial def cmpJson : (j1 j2 : Json) → Ordering
   | .null, .null => .eq
@@ -544,12 +486,83 @@ private partial def cmpJson : (j1 j2 : Json) → Ordering
         if o != .eq then return o
       .eq)
 
+/--
+A custom block. The `name` field should correspond to an entry in the block descriptions table.
+-/
+structure Block where
+  /-- A unique name that identifies the block. -/
+  name : Name := by exact decl_name%
+  /-- A unique ID, assigned during traversal. -/
+  id : Option InternalId := none
+  /--
+  Data saved by elaboration, potentially updated during traversal, and used to render output. This
+  is the primary means of communicating information about a block between phases.
+  -/
+  data : Json := Json.null
+  /--
+  A registry for properties that can be used to create ad-hoc protocols for coordination between
+  block elements in extensions.
+  -/
+  properties : NameMap String := {}
+deriving ToJson, FromJson
+
+section
+local instance : Repr Json := ⟨fun v _ => s!"json%" ++ v.render ⟩
+deriving instance Repr for Block
+end
+
+
+instance : BEq Block where
+  beq
+    | ⟨n1, i1, d1, p1⟩, ⟨n2, i2, d2, p2⟩ =>
+      n1 == n2 &&
+      i1 == i2 &&
+      ptrEqThen' d1 d2 (· == ·) &&
+      ptrEqThen' p1 p2 fun x y =>
+        x.size == y.size && x.all (fun k v => y[k.toName]? |>.isEqSome v)
+
+instance : Hashable Block where
+  hash
+    | ⟨n, i, d, p⟩ =>
+      have : Ord (Name × String) := Ord.lex ⟨Name.quickCmp⟩ inferInstance
+      mixHash (hash n) <|
+      mixHash (hash i) <|
+      mixHash (hash d) <|
+      hash <| p.toArray.qsort fun ⟨x, s1⟩ ⟨y, s2⟩ =>
+        x.quickCmp y |>.then (compare s1 s2) |>.isLT
+
+/--
+A custom inline. The `name` field should correspond to an entry in the block descriptions table.
+-/
+structure Inline where
+  /-- A unique name that identifies the inline. -/
+  name : Name := by exact decl_name%
+  /-- The internal unique ID, which is automatically assigned during traversal. -/
+  id : Option InternalId := none
+  /--
+  Data saved by elaboration, potentially updated during traversal, and used to render output. This
+  is the primary means of communicating information about a block between phases.
+  -/
+  data : Json := Json.null
+deriving BEq, Hashable, ToJson, FromJson
+
+section
+local instance : Repr Json := ⟨fun v _ => s!"json%" ++ v.render ⟩
+deriving instance Repr for Inline
+end
+
+
 instance : Ord Inline where
   compare i1 i2 := i1.name.cmp i2.name |>.then (Ord.compare i1.id i2.id) |>.then (cmpJson i1.data i2.data)
 
 structure PartHeader where
   titleString : String
   metadata : Option PartMetadata
+  /--
+  A registry for properties that can be used to create ad-hoc protocols for coordination between
+  parts and/or block elements in extensions.
+  -/
+  properties : NameMap String
 deriving Repr
 
 inductive BlockContext where
@@ -629,17 +642,23 @@ instance : Ord (Genre.Inline Manual) := inferInstanceAs (Ord Manual.Inline)
 
 instance : Hashable (Genre.Block Manual) := inferInstanceAs (Hashable Manual.Block)
 instance : Hashable (Genre.Inline Manual) := inferInstanceAs (Hashable Manual.Inline)
+instance : Hashable (Genre.PartMetadata Manual) := inferInstanceAs (Hashable Manual.PartMetadata)
 
+instance : Repr (Genre.Inline Manual) := inferInstanceAs (Repr Manual.Inline)
+instance : Repr (Genre.Block Manual) := inferInstanceAs (Repr Manual.Block)
 instance : Repr (Genre.PartMetadata Manual) := inferInstanceAs (Repr Manual.PartMetadata)
 
 instance : ToJson (Genre.Inline Manual) := inferInstanceAs (ToJson Manual.Inline)
 instance : ToJson (Genre.Block Manual) := inferInstanceAs (ToJson Manual.Block)
+instance : ToJson (Genre.PartMetadata Manual) := inferInstanceAs (ToJson Manual.PartMetadata)
 
 instance : FromJson (Genre.Inline Manual) := inferInstanceAs (FromJson Manual.Inline)
+instance : FromJson (Genre.Block Manual) := inferInstanceAs (FromJson Manual.Block)
+instance : FromJson (Genre.PartMetadata Manual) := inferInstanceAs (FromJson Manual.PartMetadata)
 
 namespace Manual
 
-def BlockContext.ofBlock (block : Doc.Block Manual) : BlockContext :=
+def BlockContext.ofBlock (block : Lean.Doc.Block i Manual.Block) : BlockContext :=
   match block with
   | .para .. => .para
   | .code .. => .code
@@ -651,12 +670,12 @@ def BlockContext.ofBlock (block : Doc.Block Manual) : BlockContext :=
   | .other container .. => .other container
 
 def PartHeader.ofPart (part : Part Manual) : PartHeader :=
-  {titleString := part.titleString, metadata := part.metadata}
+  { titleString := part.titleString, metadata := part.metadata, properties := {} }
 
 def TraverseContext.inPart (self : TraverseContext) (part : Part Manual) : TraverseContext :=
-  {self with headers := self.headers.push <| .ofPart part}
+  { self with headers := self.headers.push <| .ofPart part }
 
-def TraverseContext.inBlock (self : TraverseContext) (block : Doc.Block Manual) : TraverseContext :=
+def TraverseContext.inBlock (self : TraverseContext) (block : Lean.Doc.Block i Manual.Block) : TraverseContext :=
   { self with blockContext := self.blockContext.push (.ofBlock block) }
 
 def TraverseContext.sectionNumber (self : TraverseContext) : Array (Option Numbering) :=
@@ -1083,7 +1102,7 @@ def exampleDomain := ``Verso.Genre.Manual.example
 
 def TraverseState.definitionIds (state : TraverseState) (ctxt : TraverseContext) : Lean.NameMap String := Id.run do
   let exampleBlock := ctxt.blockContext.findSomeRev? fun
-    | .other x => x.properties.find? `Verso.Genre.Manual.exampleDefContext
+    | .other x => x.properties[`Verso.Genre.Manual.exampleDefContext]?
     | _ => none
   let exampleDeco := exampleBlock.map (s!" (in {·})")
   if let some examples := state.domains.get? exampleDomain then
@@ -1170,7 +1189,7 @@ def saveExampleDefs (id : InternalId) (definedNames : Array (Name × String)) : 
   let mut theseIds := if let .ok v@(.obj _) := assignedIds.getObjVal? key then v else Json.mkObj []
 
   let exampleBlock := (← read).blockContext.findSomeRev? fun
-    | .other x => x.properties.find? `Verso.Genre.Manual.exampleDefContext
+    | .other x => x.properties[`Verso.Genre.Manual.exampleDefContext]?
     | _ => none
   let context := (← read).headers.map (·.titleString)
   let context := exampleBlock.map context.push |>.getD context
@@ -1205,7 +1224,7 @@ def TraverseState.linksFromDomain
 
 def TraverseState.exampleLinks (name : String) (state : TraverseState) (ctxt? : Option TraverseContext) : Array Code.CodeLink := Id.run do
   let exampleBlock := ctxt?.bind (·.blockContext.findSomeRev? fun
-    | .other x => x.properties.find? `Verso.Genre.Manual.exampleDefContext
+    | .other x => x.properties[`Verso.Genre.Manual.exampleDefContext]?
     | _ => none)
   let name := exampleBlock.map (s!"{name} (in {·})") |>.getD name
   -- There's no `x` in the tooltip on the next line to avoid revealing suppressed namespaces
@@ -1285,7 +1304,7 @@ instance : Traverse Manual TraverseM where
 
     -- First, assign a unique ID if there is none
     let id ← if let some i := meta.id then pure i else freshId
-    «meta» := {«meta» with id := some id}
+    «meta» := { «meta» with id := some id }
 
     -- Next, assign a tag, prioritizing user-chosen external IDs
     match meta.tag with
@@ -1371,15 +1390,15 @@ instance : Traverse Manual TraverseM where
       if let some id := id? then
         if let some impl := (← readThe ExtensionImpls).getBlock? name then
           for js in impl.extraJs do
-            modify fun s => {s with extraJs := s.extraJs.insert js}
+            modify fun s => { s with extraJs := s.extraJs.insert js }
           for css in impl.extraCss do
-            modify fun s => {s with extraCss := s.extraCss.insert css}
+            modify fun s => { s with extraCss := s.extraCss.insert css }
           for f in impl.extraJsFiles do
             unless (← get).extraJsFiles.any (·.filename == f.filename) do
-              modify fun s => {s with extraJsFiles := s.extraJsFiles.push f }
-          for (name, js) in impl.extraCssFiles do
-            unless (← get).extraCssFiles.any (·.1 == name) do
-              modify fun s => {s with extraCssFiles := s.extraCssFiles.push (name, js)}
+              modify fun s => { s with extraJsFiles := s.extraJsFiles.insert f }
+          for (name, css) in impl.extraCssFiles do
+            unless (← get).extraCssFiles.any (·.filename == name) do
+              modify fun s => { s with extraCssFiles := s.extraCssFiles.insert { filename := name, contents := css } }
           for licenseInfo in impl.licenseInfo do
             modify (·.addLicenseInfo licenseInfo)
 
@@ -1401,10 +1420,10 @@ instance : Traverse Manual TraverseM where
             modify fun s => { s with extraCss := s.extraCss.insert css }
           for f in impl.extraJsFiles do
             unless (← get).extraJsFiles.any (·.filename == f.filename) do
-              modify fun s => { s with extraJsFiles := s.extraJsFiles.push f }
-          for (name, js) in impl.extraCssFiles do
-            unless (← get).extraCssFiles.any (·.1 == name) do
-              modify fun s => { s with extraCssFiles := s.extraCssFiles.push (name, js) }
+              modify fun s => { s with extraJsFiles := s.extraJsFiles.insert f }
+          for (name, css) in impl.extraCssFiles do
+            unless (← get).extraCssFiles.any (·.filename == name) do
+              modify fun s => { s with extraCssFiles := s.extraCssFiles.insert { filename := name, contents := css } }
           for licenseInfo in impl.licenseInfo do
             modify (·.addLicenseInfo licenseInfo)
 
