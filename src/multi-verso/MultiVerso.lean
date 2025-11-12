@@ -44,12 +44,12 @@ public structure Object where
   ids : HashSet InternalId := {}
 deriving Inhabited
 
-instance : ToJson Object where
+public instance : ToJson Object where
   toJson
     | { canonicalName, data, ids } =>
       json%{ "canonicalName": $canonicalName, "data": $data, "ids": $ids.toArray }
 
-instance : FromJson Object where
+public instance : FromJson Object where
   fromJson? v := do
     let canonicalName ← v.getObjValAs? String "canonicalName"
     let data ← v.getObjVal? "data"
@@ -491,14 +491,14 @@ public structure AllRemotes where
   allRemotes : HashMap String RemoteInfo := {}
 deriving Repr
 
-instance : ToJson AllRemotes where
+public instance : ToJson AllRemotes where
   toJson v := Id.run do
     let mut val := Json.obj {}
     for (name, info) in v.allRemotes do
       val := val.setObjValAs! name info
     return val
 
-instance : FromJson AllRemotes where
+public instance : FromJson AllRemotes where
   fromJson? v := do
     let v ← v.getObj?
     let mut all := {}

@@ -3,7 +3,6 @@ Copyright (c) 2023-2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-
 import Verso.Doc
 import Verso.Doc.Concrete
 import Verso.Doc.TeX
@@ -242,10 +241,7 @@ def traverse (logError : String → IO Unit) (text : Part Manual) (config : Conf
   let topCtxt : Manual.TraverseContext := {logError, draft := config.draft}
   if config.verbose then IO.println "Updating remote data"
   let remoteContent ← updateRemotes false config.remoteConfigFile (if config.verbose then IO.println else fun _ => pure ())
-  let mut state : Manual.TraverseState := {
-    toHtmlAssets := config.toHtmlAssets
-    remoteContent
-  }
+  let mut state : Manual.TraverseState := .initialize config.toHtmlAssets remoteContent
   let mut text := text
   if !config.draft then
     text := removeDraftParts text
