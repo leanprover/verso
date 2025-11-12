@@ -10,6 +10,19 @@
 
 \usepackage[most]{tcolorbox}
 \usepackage{hyperref}
+\usepackage[normalem]{ulem}
+\newcommand{\coloredwave}[2]{\textcolor{#1}{\uwave{\textcolor{black}{#2}}}}
+
+\definecolor{errorColor}{HTML}{ff0000}
+\definecolor{infoColor}{HTML}{007f00}
+\definecolor{warningColor}{HTML}{0000ff}
+\newcommand{\errorDecorate}[1]{\coloredwave{errorColor}{#1}}
+\newcommand{\infoDecorate}[1]{\coloredwave{infoColor}{#1}}
+\newcommand{\warningDecorate}[1]{\coloredwave{warningColor}{#1}}
+\DefineVerbatimEnvironment{LeanVerbatim}{Verbatim}
+  {commandchars=\\\{\},fontsize=\small,breaklines=true}
+\CustomVerbatimCommand{\LeanVerb}{Verb}
+  {commandchars=\\\{\},fontsize=\small}
 
 \definecolor{bordercolor}{HTML}{98B2C0}
 \definecolor{medgray}{HTML}{555555}
@@ -70,8 +83,7 @@ title={#2},#1}
 
 \chapter*{Introduction}
 \begin{docstringBox}{def}
-\texttt{Verso.Integration.SampleDoc.sample\_constant} \texttt{:}
-  \texttt{Type}\tcblower This is a docstring.Here's some more text with a \Verb|code inline| in it.
+\LeanVerb|Verso.Integration.SampleDoc.sample_constant : Type|\tcblower This is a docstring.Here's some more text with a \Verb|code inline| in it.
 Here's when a \Verb|code inline|
 occurs right before a line break.And then here's a paragraph break.
 \end{docstringBox}
