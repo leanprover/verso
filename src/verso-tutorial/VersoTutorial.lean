@@ -120,6 +120,23 @@ def savePartXref (slug : Slug) (id : InternalId) (part : Part Tutorial) : Manual
         "sectionNum": null
       })
 
+block_extension Block.displayOnly where
+  traverse _ _ _ _ := pure none
+  toHtml := some <| fun _ goB _ _ content => content.mapM goB
+  toTeX := some <| fun _ goB _ _ content => content.mapM goB
+
+@[directive]
+def displayOnly : Elab.DirectiveExpanderOf Unit
+  | (), contents => do
+    ``(Block.other Block.displayOnly #[$(← contents.mapM Elab.elabBlock),*])
+
+section
+open Verso.Code.External
+instance : ExternalCode Tutorial :=
+  let inst : ExternalCode Manual := inferInstance
+  { inst with }
+end
+
 open Manual in
 instance : Traverse Tutorial TraverseM where
   part p := do
@@ -244,6 +261,8 @@ where
         let .arr #[_, hl, _] := data
           | panic! "Malformed metadata"
         codeFromHl style hl
+      else if name = ``Tutorial.Block.displayOnly then
+        pure ()
       else
         contents.forM (fromBlock style)
 
@@ -291,6 +310,8 @@ instance [GenreHtml Manual m] : GenreHtml Tutorial m where
 
 where
   inst := (inferInstanceAs (GenreHtml Manual m))
+
+
 
 variable [Monad m] [MonadReaderOf Manual.TraverseState m]
 
@@ -372,24 +393,27 @@ def Theme.default : Theme where
         </div>
       </div>
     }}
-  tutorialToC code? live? toc := if toc.children.isEmpty then .empty else {{
-    <nav class="local-toc">
-      <div> <!-- This is for scroll prevention -->
-        <h1>{{toc.title}}</h1>
-        {{ if live?.isSome || code?.isSome then {{
-            <div class="code-links">
-              {{if let some live := live? then
-                {{ <a href={{live.url}} class="live code-link">"Live"</a> }}
-                else .empty}}
-              {{if let some (url, _file) := code? then {{ <a href={{url}} class="download code-link"><code>".zip"</code></a> }} else .empty}}
-            </div>
+  tutorialToC code? live? toc :=
+    if toc.children.isEmpty && live?.isNone && code?.isNone then .empty
+    else {{
+      <nav class="local-toc">
+        <div> <!-- This is for scroll prevention -->
+          <h1>{{toc.title}}</h1>
+          {{ if live?.isSome || code?.isSome then {{
+              <div class="code-links">
+                {{if let some live := live? then
+                  {{ <a href={{live.url}} class="live code-link">"Live"</a> }}
+                  else .empty}}
+                {{if let some (url, _file) := code? then {{ <a href={{url}} class="download code-link"><code>".zip"</code></a> }} else .empty}}
+              </div>
+            }}
+            else .empty
           }}
-          else .empty
-        }}
-      </div>
-      <ol>{{toc.children.map defaultLocalToC}}</ol>
-    </nav>
-  }}
+        </div>
+        {{if toc.children.isEmpty then .empty
+          else {{<ol>{{toc.children.map defaultLocalToC}}</ol>}} }}
+      </nav>
+    }}
   cssFiles := #[("default.css", defaultCss)]
 where
   defaultLocalToC (toc : LocalToC) : Html := {{
@@ -543,7 +567,6 @@ def emit (tutorials : Tutorials) : EmitM Unit := do
   let mut hlState := {}
   (← readThe Manual.TraverseState).writeFiles (dir / "-verso-data")
 
-  -- TODO cross-link to manual even here
   let (rootHtml, hlState') ← Genre.toHtml .none (← EmitM.htmlOptions) () () {} {} {} tutorials.content hlState
   hlState := hlState'
   writeHtmlFile (dir / "index.html") (← page .root "Tutorials" (rootHtml ++ (← tutorialList tutorials.topics)))
@@ -662,7 +685,7 @@ where
     -- Emit HTML
     (emit tutorials).run theme config.toConfig logError state extensionImpls
 
-    -- Extract code/convert
+
     if (← hasError.get) then
       IO.eprintln "Errors were encountered!"
       return 1
