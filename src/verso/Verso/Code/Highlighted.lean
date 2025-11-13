@@ -457,7 +457,7 @@ defmethod Token.htmlContent (tok : Token) : HighlightHtmlM g Html := do
   else
     return content
 
-defmethod Token.toHtml (tok : Token) : HighlightHtmlM g Html := do
+public defmethod Token.toHtml (tok : Token) : HighlightHtmlM g Html := do
   let hoverId ← tok.kind.hover?
   let idAttr ← tok.kind.idAttr
   let hoverAttr := hoverId.map (fun i => #[("data-verso-hover", toString i)]) |>.getD #[]
@@ -465,7 +465,7 @@ defmethod Token.toHtml (tok : Token) : HighlightHtmlM g Html := do
     <span class={{tok.kind.«class» ++ " token"}} data-binding={{tok.kind.data}} {{hoverAttr}} {{idAttr}}>{{← tok.htmlContent}}</span>
   }}
 
-defmethod Highlighted.Goal.toHtml (exprHtml : expr → HighlightHtmlM g Html) (index : Nat) : Highlighted.Goal expr → HighlightHtmlM g Html
+public defmethod Highlighted.Goal.toHtml (exprHtml : expr → HighlightHtmlM g Html) (index : Nat) : Highlighted.Goal expr → HighlightHtmlM g Html
   | {name, goalPrefix, hypotheses, conclusion} => do
     let hypsHtml : Html ←
       if hypotheses.size = 0 then pure .empty
@@ -515,7 +515,7 @@ defmethod Highlighted.Goal.toHtml (exprHtml : expr → HighlightHtmlM g Html) (i
       | .never => #[("checked", "checked")]
       | .subsequent => if index = 0 then #[("checked", "checked")] else #[]
 
-partial defmethod Highlighted.MessageContents.toHtml (expandTraces : List Lean.Name) (maxTraceDepth : Nat) (exprHtml : expr → HighlightHtmlM g Html) : Highlighted.MessageContents expr → HighlightHtmlM g Html
+public partial defmethod Highlighted.MessageContents.toHtml (expandTraces : List Lean.Name) (maxTraceDepth : Nat) (exprHtml : expr → HighlightHtmlM g Html) : Highlighted.MessageContents expr → HighlightHtmlM g Html
   | .text s => pure {{<span class="text">{{s}}</span>}}
   | .term e => do return {{<span class="highlighted">{{← exprHtml e}}</span>}}
   | .append xs => xs.foldlM (init := Html.empty) fun html m =>
