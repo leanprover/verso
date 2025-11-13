@@ -69,9 +69,11 @@ where
   escape s := s.replace "\\" "\\\\" |>.replace "{" "\\{" |>.replace "}" "\\}" |>.replace "^" "\\string^"
     |>.replace "_" "\\_" |>.replace "%" "\\%" |>.replace "#" "\\#" --TODO make correct!
 
+public section
 declare_syntax_cat macro_name
 scoped syntax ident : macro_name
 scoped syntax "section" : macro_name
+end
 
 meta partial def _root_.Lean.TSyntax.macroName : TSyntax `macro_name → String
   | ⟨.node _ _ #[.atom _ x]⟩ => x
@@ -79,6 +81,7 @@ meta partial def _root_.Lean.TSyntax.macroName : TSyntax `macro_name → String
   | _ => "unknown"
 
 
+public section
 declare_syntax_cat tex
 
 scoped syntax "\\TeX{" tex* "}" : term
@@ -89,6 +92,7 @@ scoped syntax "\\" macro_name ("[" tex* "]")* ("{" tex* "}")* : tex
 scoped syntax "s!" interpolatedStr(term) : tex
 
 scoped syntax str : tex
+end
 
 open Lean Elab Term in
 meta partial def elabTeX (stx : TSyntax `tex) : TermElabM Expr := withRef stx do

@@ -3,16 +3,18 @@ Copyright (c) 2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-
-import Std.Data.TreeMap
+module
+public import Std.Data.TreeMap
 import Std.Data.TreeMap.Lemmas
 import Std.Data.TreeMap.Raw.Lemmas
 import Std.Data.TreeMap.Raw.WF
-import Std.Data.HashSet
+public import Std.Data.HashSet
 
 import Lean.Data.Json
+public import Lean.Data.Json.Basic
+public import Lean.Data.Json.FromToJson.Basic
 
-import Verso.Doc
+public import Verso.Doc
 
 import VersoSearch.PorterStemmer
 import VersoSearch.DomainSearch
@@ -34,32 +36,32 @@ This module contains code to construct an index that's compatible with elasticlu
 /--
 How should multiple search terms be combined?
 -/
-inductive SearchBool where
+public inductive SearchBool where
   /-- Requires all terms to be present. -/
   | and
   /-- Requires at least one term to be present. -/
   | or
 
 /-- Generates an elasticlunr.js-compatible encoding of a Boolean term combination model. -/
-protected def SearchBool.toJson : SearchBool → Json
+public protected def SearchBool.toJson : SearchBool → Json
   | .and => .str "AND"
   | .or => .str "OR"
 
 /-- Parses the elasticlunr.js encoding of a term combination model. -/
-protected def SearchBool.fromJson? : Json → Except String SearchBool
+public protected def SearchBool.fromJson? : Json → Except String SearchBool
   | .str "AND" => pure .and
   | .str "OR" => pure .or
   | other => throw s!"Expected \"AND\" or \"OR\" but got {other.compress}"
 
-instance : ToJson SearchBool := ⟨SearchBool.toJson⟩
-instance : FromJson SearchBool := ⟨SearchBool.fromJson?⟩
+public instance : ToJson SearchBool := ⟨SearchBool.toJson⟩
+public instance : FromJson SearchBool := ⟨SearchBool.fromJson?⟩
 
 /--
 A version of `elasticlunr.js`'s field options, used at query time.
 
 This exists to facilitate the construction of queries and is not used during indexing.
 -/
-structure FieldOptions where
+public structure FieldOptions where
   /-- The relative weight to give the matches in the field. -/
   boost : Option UInt8 := none
   /-- How should terms be combined in this field? Overrides the model used for the whole query. -/
@@ -79,7 +81,7 @@ instance : ToJson FieldOptions where
   toJson := FieldOptions.toJson
 
 /-- Overall query options for elasticlunr.js. -/
-structure Options where
+public structure Options where
   /-- How should terms be combined in this index? May be overridden on a per-field basis. -/
   bool : SearchBool := .or
   /-- Whether to search for substrings, e.g. by expanding 'micro' to 'microwave' and 'microscope' -/
@@ -88,18 +90,18 @@ structure Options where
   fields : TreeMap String FieldOptions
 
 /-- A document is a map from field names to field values. -/
-abbrev Doc := TreeMap String String
+public abbrev Doc := TreeMap String String
 
 /--
 The number of characters in the document.
 -/
-def Doc.size (doc : Doc) : Nat :=
+public def Doc.size (doc : Doc) : Nat :=
   doc.foldl (init := 0) fun s k v => s + k.length + v.length
 
 /--
 A collection of indexed documents, represented so as to be compatible with elasticlunr.js.
 -/
-structure DocumentStore where
+public structure DocumentStore where
   /-- Whether to save the contents of documents, or just their inverted index entries. -/
   save : Bool
   /-- The saved documents. -/
@@ -112,7 +114,7 @@ structure DocumentStore where
 namespace DocumentStore
 
 /-- Converts a document store to an elasticlunr.js-compatible representation. -/
-protected def toJson (self: DocumentStore) : Json :=
+public protected def toJson (self: DocumentStore) : Json :=
   json%{
     "save": $self.save,
     "docs": $(self.docs.foldr (init := Json.mkObj []) fun k v json => json.setObjVal! k (v.foldr (init := Json.mkObj []) fun k v js => js.setObjVal! k (Json.str v))),
@@ -121,17 +123,17 @@ protected def toJson (self: DocumentStore) : Json :=
   }
 
 /-- Checks whether the store contains a document with the given value for its reference field. -/
-def hasDoc (self : DocumentStore) (ref : String) : Bool := self.docs.contains ref
+public def hasDoc (self : DocumentStore) (ref : String) : Bool := self.docs.contains ref
 
 /-- Checks whether the store contains no data -/
-def isEmpty (self : DocumentStore) : Bool := self.length == 0
+public def isEmpty (self : DocumentStore) : Bool := self.length == 0
 
 /--
 Adds a document to the store.
 
 If {lean}`self.save` is {name}`false`, then only the length is incremented and the contents are discarded.
 -/
-def addDoc (self : DocumentStore) (ref : String) (doc : Doc) : DocumentStore :=
+public def addDoc (self : DocumentStore) (ref : String) (doc : Doc) : DocumentStore :=
   { self with
     length := if self.hasDoc ref then self.length else self.length + 1,
     docs := self.docs.insert ref <| if self.save then doc else {} }
@@ -139,7 +141,7 @@ def addDoc (self : DocumentStore) (ref : String) (doc : Doc) : DocumentStore :=
 /--
 Removes the documents from the store, setting {lean}`self.save` to {name}`false`.
 -/
-def extractDocs (self : DocumentStore) : DocumentStore × TreeMap String Doc :=
+public def extractDocs (self : DocumentStore) : DocumentStore × TreeMap String Doc :=
   let docs := self.docs
   let noDocs := docs.map (fun _ _ => {})
   ({ self with docs := noDocs, save := false }, docs)
@@ -147,16 +149,16 @@ def extractDocs (self : DocumentStore) : DocumentStore × TreeMap String Doc :=
 /--
 Gets a document if it is present in the store.
 -/
-protected def get? (self : DocumentStore) (ref : String) : Option Doc := self.docs[ref]?
+public protected def get? (self : DocumentStore) (ref : String) : Option Doc := self.docs[ref]?
 
-instance : GetElem? DocumentStore String Doc (fun store ref => ref ∈ store.docs) where
+public instance : GetElem? DocumentStore String Doc (fun store ref => ref ∈ store.docs) where
   getElem store ref ok := store.docs[ref]'ok
   getElem? store ref := store.docs[ref]?
 
 /--
 Removes a document with the given value in its reference field from the store.
 -/
-def erase (self : DocumentStore) (ref : String) : DocumentStore :=
+public def erase (self : DocumentStore) (ref : String) : DocumentStore :=
   { self with
     length := if self.hasDoc ref then self.length - 1 else self.length,
     docs := self.docs.erase ref }
@@ -164,14 +166,14 @@ def erase (self : DocumentStore) (ref : String) : DocumentStore :=
 /--
 Adds the length of the given field to the store.
 -/
-def addFieldLength (self : DocumentStore) (ref : String) (field : String) (length : USize) : DocumentStore :=
+public def addFieldLength (self : DocumentStore) (ref : String) (field : String) (length : USize) : DocumentStore :=
   { self with
     docInfo := self.docInfo.alter ref fun v => some (v.getD {} |>.insert field length) }
 
 /--
 Gets the length of the given field from the store for the given document.
 -/
-def getFieldLength (self : DocumentStore) (ref : String) (field : String) : USize :=
+public def getFieldLength (self : DocumentStore) (ref : String) (field : String) : USize :=
   (self.docInfo[ref]? >>= fun i => i[field]?).getD 0
 
 end DocumentStore
@@ -181,7 +183,7 @@ The frequency of a term.
 
 Stored in a wrapper to trigger appropriate serialization for elasticlunr.js.
 -/
-structure TermFrequency where
+public structure TermFrequency where
   /-- The frequency value. -/
   termFreq : Float
 
@@ -209,70 +211,61 @@ namespace Raw
 
 private def empty : IndexItem.Raw := {}
 
-private  def addToken (self : IndexItem.Raw) (ref : String) (token : String) (termFreq : Float) : IndexItem.Raw :=
+private def addToken (self : IndexItem.Raw) (ref : String) (token : String) (termFreq : Float) : IndexItem.Raw :=
   if token.isEmpty then self
-  else loop self token.iter
+  else loop self token.startValidPos
 where
-  loop (item : IndexItem.Raw) (iter : String.Iterator) : IndexItem.Raw :=
-    if h : iter.hasNext then --while loop
-      let c := iter.curr' h
-      have : c = iter.curr' h := rfl
+  loop (item : IndexItem.Raw) (iter : String.ValidPos token) : IndexItem.Raw :=
+    if h : iter ≠ token.endValidPos then --while loop
+      let c := iter.get h
       let item' := item.children[c]?.getD {}
-      let item' := loop item' (iter.next' h)
+      let item' := loop item' (iter.next h)
       { item with children := item.children.insert c item' }
     else
       let item := if item.docs.contains ref then item else { item with docFreq := item.docFreq + 1 }
       { item with docs := item.docs.insert ref ⟨termFreq⟩ }
-  termination_by iter.s.endPos.byteIdx - iter.i.byteIdx
+  termination_by token.endValidPos.offset.byteIdx - iter.offset.byteIdx
   decreasing_by
-    have : iter.s.endPos.byteIdx > iter.i.byteIdx := by
-      simp only [String.Iterator.hasNext, String.byteIdx_endPos, decide_eq_true_eq] at h
-      assumption
-    simp [String.Iterator.next']
+    have := iter.isValid.le_endPos
     apply Nat.sub_lt_sub_left
-    . simp_all [String.endPos]
-    . simp [String.Pos.Raw.next, Char.utf8Size]
-      grind
-
-@[simp, grind =]
-private theorem string_iter_next'_same_s {iter : String.Iterator} {h : iter.hasNext = true} : (iter.next' h).s = iter.s := by
-  simp [String.Iterator.next']
-
-@[simp, grind! .]
-private theorem char_utf8Size_pos {c : Char} : 0 < c.utf8Size := by
-  grind [Char.utf8Size]
-
-@[simp, grind! .]
-private theorem string_iter_next'_i_gt_i {iter : String.Iterator} {h : iter.hasNext = true} : iter.i.byteIdx < (iter.next' h).i.byteIdx := by
-  simp_all [String.Iterator.next', String.Pos.Raw.next]
-
+    . rw [String.Pos.Raw.le_iff] at this
+      have : iter.offset.byteIdx ≠ token.endValidPos.offset.byteIdx := by
+        intro h
+        have : iter = token.endValidPos := by
+          ext; assumption
+        contradiction
+      apply Nat.lt_of_le_of_ne <;> trivial
+    . simp [Char.utf8Size_pos]
 
 private def getNode? (self : IndexItem.Raw) (token : String) : Option IndexItem.Raw :=
-  loop self token.iter
+  loop self token.startValidPos
 where
-  loop (item : IndexItem.Raw) (iter : String.Iterator) : Option IndexItem.Raw := do
-    if h : iter.hasNext then
-      let item ← item.children[iter.curr' h]?
-      loop item (iter.next' h)
+  loop (item : IndexItem.Raw) (iter : String.ValidPos token) : Option IndexItem.Raw := do
+    if h : iter ≠ token.endValidPos then
+      let item ← item.children[iter.get h]?
+      loop item (iter.next h)
     else
       pure item
-  termination_by iter.s.endPos.byteIdx - iter.i.byteIdx
+  termination_by token.endValidPos.offset.byteIdx - iter.offset.byteIdx
   decreasing_by
-    have : iter.s.endPos.byteIdx > iter.i.byteIdx := by
-      simp only [String.Iterator.hasNext, String.byteIdx_endPos, decide_eq_true_eq] at h
-      assumption
-    simp
-    apply Nat.sub_lt_sub_left <;> simp_all
-
+    have := iter.isValid.le_endPos
+    simp only [String.offset_endValidPos, String.byteIdx_endPos, String.ValidPos.offset_next,
+      String.Pos.Raw.byteIdx_add_char, gt_iff_lt]
+    apply Nat.sub_lt_sub_left
+    . apply Nat.lt_of_le_of_ne this
+      . intro h'
+        have : iter = token.endValidPos := by ext <;> assumption
+        contradiction
+    . simp [Char.utf8Size_pos]
 
 private def removeToken (self : IndexItem.Raw) (ref token : String) : IndexItem.Raw :=
-  loop self token.iter
+  loop self token.startValidPos
 where
-  loop (item : IndexItem.Raw) (iter : String.Iterator) : IndexItem.Raw :=
-    if h : iter.hasNext then
-      let ch := iter.curr' h
-      let iter := iter.next' h
-      if _ : iter.hasNext then
+  loop (item : IndexItem.Raw) (iter : token.ValidPos) : IndexItem.Raw :=
+    if h : iter ≠ token.endValidPos then
+      let ch := iter.get h
+      let iter := iter.next h
+      if _ : iter ≠ token.endValidPos then
         { item with
           children := item.children.alter ch fun
             | some item' => some <| loop item' iter
@@ -285,15 +278,17 @@ where
       else item
     else
       item
-  termination_by iter.s.endPos.byteIdx - iter.i.byteIdx
+  termination_by token.endValidPos.offset.byteIdx - iter.offset.byteIdx
   decreasing_by
-    simp [iter] at *
-    clear iter
-    have : iter.s.endPos.byteIdx > iter.i.byteIdx := by
-      simp_all [String.Iterator.hasNext, String.Iterator.next', String.Pos.Raw.next]
-      grind
-    simp [String.Iterator.next', String.Pos.Raw.next]
-    apply Nat.sub_lt_sub_left <;> simp_all
+    rename_i iter' _
+    have := iter.isValid.le_endPos
+    have := iter'.isValid.le_endPos
+    apply Nat.sub_lt_sub_left
+    . apply Nat.lt_of_le_of_ne this
+      . intro h'
+        have : iter' = token.endValidPos := by ext <;> assumption
+        contradiction
+    . simp [Char.utf8Size_pos]
 end Raw
 
 namespace WF
@@ -312,25 +307,29 @@ end IndexItem
 /--
 An item in the inverted index.
 -/
-structure IndexItem where
+public structure IndexItem where
+  private mk ::
   private raw : IndexItem.Raw := {}
   -- TODO WF
 
+public instance : EmptyCollection IndexItem where
+  emptyCollection := private {}
+
 namespace IndexItem
 /-- The term frequency for each document. -/
-def docs (item : IndexItem) : TreeMap String TermFrequency := item.raw.docs
+public def docs (item : IndexItem) : TreeMap String TermFrequency := item.raw.docs
 /-- The frequency for each document (field {lit}`df` in the serialized index) -/
-def docFreq (item : IndexItem) : Int64 := item.raw.docFreq
+public def docFreq (item : IndexItem) : Int64 := item.raw.docFreq
 /-- The empty inverted index. -/
-def empty : IndexItem := {}
+public def empty : IndexItem := .mk {}
 /-- Adds a token to the index for the given frequency. -/
-def addToken (self : IndexItem) (ref : String) (token : String) (termFreq : Float) : IndexItem :=
+public def addToken (self : IndexItem) (ref : String) (token : String) (termFreq : Float) : IndexItem :=
   ⟨self.raw.addToken ref token termFreq⟩
 /-- Gets a node for the given token if it exists. -/
-def getNode? (self : IndexItem) (token : String) : Option IndexItem :=
+public def getNode? (self : IndexItem) (token : String) : Option IndexItem :=
   (⟨·⟩) <$> self.raw.getNode? token
 /-- Removes the given token if it exists. -/
-def removeToken (self : IndexItem) (ref token : String) : IndexItem :=
+public def removeToken (self : IndexItem) (ref token : String) : IndexItem :=
   ⟨self.raw.removeToken ref token⟩
 
 private partial def Raw.toJson (self: IndexItem.Raw) : Json :=
@@ -346,42 +345,42 @@ protected def toJson (self : IndexItem) : Json := self.raw.toJson
 end IndexItem
 
 /-- An inverted index consists of a root in the trie. -/
-structure InvertedIndex where
+public structure InvertedIndex where
   /-- The root item. -/
   root : IndexItem := {}
 
-instance : EmptyCollection InvertedIndex := ⟨{root := {}}⟩
+public instance : EmptyCollection InvertedIndex := ⟨{root := {}}⟩
 
 namespace InvertedIndex
 
 @[inherit_doc IndexItem.addToken]
-def addToken (self : InvertedIndex) (ref token : String) (freq : Float) : InvertedIndex :=
+public def addToken (self : InvertedIndex) (ref token : String) (freq : Float) : InvertedIndex :=
   { self with root := self.root.addToken ref token freq }
 
 /-- Checks whether the given token is present in the index. -/
-def hasToken (self : InvertedIndex) (token : String) : Bool :=
+public def hasToken (self : InvertedIndex) (token : String) : Bool :=
   self.root.getNode? token |>.isSome
 
 @[inherit_doc IndexItem.removeToken]
-def removeToken (self : InvertedIndex) (ref token : String) : InvertedIndex :=
+public def removeToken (self : InvertedIndex) (ref token : String) : InvertedIndex :=
   {self with root := self.root.removeToken ref token }
 
 /--
 Gets the term frequency for each document for the given token. Documents are identified by their
 reference field.
 -/
-def getDocs (self : InvertedIndex) (token : String) : Option (TreeMap String Float) :=
+public def getDocs (self : InvertedIndex) (token : String) : Option (TreeMap String Float) :=
   self.root.getNode? token |>.map fun node =>
     node.docs.map fun _ v => v.termFreq
 
 /--
 Gets the term frequency for a document with the given reference field value for the given token.
 -/
-def getTermFrequency (self : InvertedIndex) (ref token : String) : Float :=
+public def getTermFrequency (self : InvertedIndex) (ref token : String) : Float :=
   self.root.getNode? token |>.bind (·.docs[ref]?) |>.map (·.termFreq) |>.getD 0.0
 
 /-- Serializes an inverted index into the format expected by elasticlunr.js. -/
-protected def toJson (self : InvertedIndex) : Json :=
+public protected def toJson (self : InvertedIndex) : Json :=
   json%{
     "root": $self.root.toJson
   }
@@ -393,19 +392,19 @@ A named function in a pipeline.
 elasticlunr.js uses an array of names, each of which is mapped to a registered string processing
 function. The names and implementations must match for correctness.
 -/
-structure PipelineFn where
+public structure PipelineFn where
   /-- The name used to identify the elasticlunr equivalent of the function. -/
   name : String
   /-- The implementation, which should match the corresponding elasticlunr function -/
   filter (token : String) : Option String
 
 /-- A pipeline function that eliminates the words in {name}`stopWords`. -/
-def stopWordFilter (name : String) (stopWords : HashSet String) : PipelineFn where
+public def stopWordFilter (name : String) (stopWords : HashSet String) : PipelineFn where
   name := name
   filter tok := if stopWords.contains tok then none else some tok
 
 /-- A pipeline function that trims the prefix and suffix that match {name}`wordChars`. -/
-def predicateTrimmer (name : String) (wordChars : Char → Bool) : PipelineFn where
+public def predicateTrimmer (name : String) (wordChars : Char → Bool) : PipelineFn where
   name := name
   filter tok :=
     let tok := tok.dropWhile wordChars |>.dropRightWhile wordChars
@@ -416,7 +415,7 @@ open Verso.Search.Stemmer.Porter in
 /--
 A Porter stemmer, used to find the stems of English words.
 -/
-def porterStemmerFilter (name : String) : PipelineFn where
+public def porterStemmerFilter (name : String) : PipelineFn where
   name := name
   filter tok :=
     let res := porterStem tok
@@ -426,22 +425,22 @@ def porterStemmerFilter (name : String) : PipelineFn where
 A pipeline, which arranges functions from left to right. This configuration should match the one
 used in elasticlunr.js.
 -/
-structure Pipeline where
+public structure Pipeline where
   /-- The functions in the pipeline.-/
   queue : Array PipelineFn
 
 /-- Applies the functions in the pipeline from left to right. -/
-def Pipeline.run (self : Pipeline) (tokens : Array String) : Array String :=
+public def Pipeline.run (self : Pipeline) (tokens : Array String) : Array String :=
   tokens.filterMap fun tok =>
     self.queue.foldl (init := some tok) fun s f => s.bind f.filter
 
 /-- Serializes a pipeline for use with elasticlunr.js. -/
-protected def Pipeline.toJson (self : Pipeline) : Json := .arr <| self.queue.map (Json.str ·.name)
+public protected def Pipeline.toJson (self : Pipeline) : Json := .arr <| self.queue.map (Json.str ·.name)
 
 /--
 A natural language for use with indexing.
 -/
-structure Language where
+public structure Language where
   /-- The name of the language, e.g. {lean}`"English"`.-/
   name : String
   /-- The ISO code for the language, e.g. {lean}`"en"`.-/
@@ -455,7 +454,7 @@ structure Language where
   pipeline : Pipeline
 
 /-- The English language, with a fairly simple Porter stemmer. -/
-def english : Language where
+public def english : Language where
   name := "English"
   code := "en"
   tokenize := tokenizeWhitespace
@@ -485,12 +484,12 @@ A tokenizer maps an input string to an array of search tokens (normally words).
 
 {name}`none` means to use the language's tokenizer.
 -/
-abbrev TokenizerOverride := Option (String → Array String)
+public abbrev TokenizerOverride := Option (String → Array String)
 
 /--
 An initial configuration for an index.
 -/
-structure IndexBuilder where
+public structure IndexBuilder where
   /-- Whether to save document contents, or just the index. -/
   save : Bool := true
   /--
@@ -509,12 +508,12 @@ structure IndexBuilder where
   /-- Which language are documents written in? -/
   language : Language := english
 
-instance : Inhabited IndexBuilder where
+public instance : Inhabited IndexBuilder where
   default := ⟨true, #[], #[], "id", none, english⟩
 
 namespace IndexBuilder
 /-- Adds a field to an index configuration with the default tokenizer. -/
-def addField (self : IndexBuilder) (field : String) : IndexBuilder :=
+public def addField (self : IndexBuilder) (field : String) : IndexBuilder :=
   if self.fields.contains field then panic! s!"Duplicate field '{field}'"
   else
     { self with
@@ -523,7 +522,7 @@ def addField (self : IndexBuilder) (field : String) : IndexBuilder :=
       }
 
 /-- Adds a field to an index configuration, simultaneously specifying a different tokenizer. -/
-def addFieldWithTokenizer (self : IndexBuilder) (field : String) (tokenizer : TokenizerOverride) : IndexBuilder :=
+public def addFieldWithTokenizer (self : IndexBuilder) (field : String) (tokenizer : TokenizerOverride) : IndexBuilder :=
   if self.fields.contains field then panic! s!"Duplicate field '{field}'"
   else
     { self with
@@ -536,7 +535,7 @@ end IndexBuilder
 /--
 An index suitable for elasticlunr.js.
 -/
-structure Index where
+public structure Index where
   /-- Which fields exist in the provided documents? -/
   fields : Array String
   /--
@@ -567,7 +566,7 @@ namespace IndexBuilder
 /--
 Constructs an empty index with the current settings.
 -/
-def build (self : IndexBuilder) : Index :=
+public def build (self : IndexBuilder) : Index :=
   let {save, fields, fieldTokenizers, refField, pipeline, language} := self
   let index := TreeMap.ofArray <| fields.map fun f => (f, {})
   { self with
@@ -586,7 +585,7 @@ Adds a document to the index.
 The document should be an array with one element for each field that's configured for the index,
 matched elementwise in order of addition.
 -/
-def addDoc (self : Index) (ref : String) (data : Array String) : Index := Id.run do
+public def addDoc (self : Index) (ref : String) (data : Array String) : Index := Id.run do
   let mut self := self
   let mut doc : TreeMap String String := ∅
   doc := doc.insert self.refField ref
@@ -617,7 +616,7 @@ def addDoc (self : Index) (ref : String) (data : Array String) : Index := Id.run
 Removes the documents from the index's store, setting {lean}`self.documentStore.save` to
 {name}`false`.
 -/
-def extractDocs (self : Index) : Index × TreeMap String Doc :=
+public def extractDocs (self : Index) : Index × TreeMap String Doc :=
   let (store, docs) := self.documentStore.extractDocs
   ({ self with documentStore := store }, docs)
 
@@ -631,7 +630,7 @@ private def indexJson (self : Index) : Json :=
 Converts an index into a form suitable for loading in `elasticlunr.js` using
 `elasticlunr.Index.load(...)`.
 -/
-def toJson (self : Index) : Json :=
+public protected def toJson (self : Index) : Json :=
   json%{
     "version": $self.version,
     "fields": $self.fields,
@@ -644,7 +643,7 @@ def toJson (self : Index) : Json :=
 
 end Index
 
-open Verso Doc
+open Verso
 
 /--
 A document to be indexed.
@@ -653,7 +652,7 @@ These are documents in the sense of elasticlunr.js, not necessarily Verso. Searc
 document, so making them too fine-grained can make it hard to find results with multiple search
 terms.
 -/
-structure IndexDoc where
+public structure IndexDoc where
   /-- A globally unique identifier for the document -/
   id : String
   /-- A header to show in search results -/
@@ -664,18 +663,18 @@ structure IndexDoc where
   content : String
 
 /-- A monad for indexing documents. -/
-abbrev IndexM (genre : Genre) :=
+public abbrev IndexM (genre : Verso.Doc.Genre) :=
   ReaderT (Array String × genre.TraverseContext) (EStateM String (HashMap String IndexDoc))
 
 /--
 Gets the traversal context for the current point.
 -/
-def IndexM.traverseContext : IndexM g g.TraverseContext := read <&> (·.2)
+public def IndexM.traverseContext : IndexM g g.TraverseContext := read <&> (·.2)
 
 /--
 Saves an indexable document to the store.
 -/
-def IndexM.save (doc : IndexDoc) : IndexM g Unit := do
+public def IndexM.save (doc : IndexDoc) : IndexM g Unit := do
   if (← get).contains doc.id then
     throw s!"Duplicate document ID: {doc.id}"
   else
@@ -684,12 +683,12 @@ def IndexM.save (doc : IndexDoc) : IndexM g Unit := do
 /--
 Returns the stack of headers within which indexing is occurring.
 -/
-def IndexM.currentContext : IndexM g (Array String) := read <&> (·.1)
+public def IndexM.currentContext : IndexM g (Array String) := read <&> (·.1)
 
 /--
 Runs an indexing computation and constructs the resulting index.
 -/
-def IndexM.finalize (traverseContext : g.TraverseContext) (act : IndexM g Unit) : Except String Index := do
+public def IndexM.finalize (traverseContext : g.TraverseContext) (act : IndexM g Unit) : Except String Index := do
   match act (#[], traverseContext) {} with
   | .error e _ => throw e
   | .ok _ docs =>
@@ -702,7 +701,7 @@ def IndexM.finalize (traverseContext : g.TraverseContext) (act : IndexM g Unit) 
 /--
 A genre is indexable if there are instructions for constructing an index for use with elasticlunr.js.
 -/
-class Indexable (genre : Genre) where
+public class Indexable (genre : Verso.Doc.Genre) where
   /--
   The identifier for a part. A frontend must be able to map this to a URL (but not necessarily a
   whole HTML file, as {lit}`#id`s may be used).
@@ -712,42 +711,42 @@ class Indexable (genre : Genre) where
   /--
   Computes the indexed header for a part. On {name}`none`, falls back to a default implementation.
   -/
-  partHeader : Part genre → IndexM genre (Option String) := fun _ => pure none
+  partHeader : Verso.Doc.Part genre → IndexM genre (Option String) := fun _ => pure none
 
   /--
   Computes a potentially abbreviated header name to show in contexts (e.g. an initialism for a long
   book title). Falls back to the chapter title.
   -/
-  partShortContextName : Part genre → IndexM genre (Option String) := fun _ => pure none
+  partShortContextName : Verso.Doc.Part genre → IndexM genre (Option String) := fun _ => pure none
 
   /--
   How to index block extensions.
 
   Return {name}`none` to fall back to the content of the contained blocks.
   -/
-  block : genre.Block → Option ((Inline genre → IndexM genre String) → (Block genre → IndexM genre String) → Array (Block genre) → IndexM genre IndexDoc)
+  block : genre.Block → Option ((Verso.Doc.Inline genre → IndexM genre String) → (Verso.Doc.Block genre → IndexM genre String) → Array (Verso.Doc.Block genre) → IndexM genre IndexDoc)
 
   /--
   How to index inline extensions.
 
   Return {name}`none` to fall back to the content of the contained inlines.
   -/
-  inline : genre.Inline → Option ((Inline genre → IndexM genre String) → Array (Inline genre) → IndexM genre IndexDoc)
+  inline : genre.Inline → Option ((Verso.Doc.Inline genre → IndexM genre String) → Array (Verso.Doc.Inline genre) → IndexM genre IndexDoc)
 
 section
-variable [idx : Indexable g] [TraversePart g]
+variable [idx : Indexable g] [traversePart : Verso.Doc.TraversePart g]
 
 /--
 Adds a header to the current context and updates the traversal context.
 -/
-def IndexM.inPart (part : Part g) (act : IndexM g α) : IndexM g α := do
+public def IndexM.inPart (part : Verso.Doc.Part g) (act : IndexM g α) : IndexM g α := do
   let ctxHeader := (← idx.partShortContextName part).getD part.titleString
-  withReader (fun ρ => (ρ.1.push ctxHeader, TraversePart.inPart part ρ.2)) act
+  withReader (fun ρ => (ρ.1.push ctxHeader, traversePart.inPart part ρ.2)) act
 
 /--
 Finds the index-ready text for the given inline. May add sub-items to the index as a side effect.
 -/
-partial def inlineText (i : Inline g) : IndexM g String :=
+public partial def inlineText (i : Verso.Doc.Inline g) : IndexM g String :=
   match i with
   | .text s | .math _ s | .linebreak s | .code s => pure s
   | .link inls _ | .concat inls | .bold inls | .emph inls | .footnote _ inls =>
@@ -765,7 +764,7 @@ partial def inlineText (i : Inline g) : IndexM g String :=
 /--
 Finds the index-ready text for the given bock. May add sub-items to the index as a side effect.
 -/
-partial def blockText (b : Block g) : IndexM g String :=
+public partial def blockText (b : Verso.Doc.Block g) : IndexM g String :=
   match b with
   | .para inls =>
     inls.foldlM (init := "") (fun s i => do return s ++ (← inlineText i))
@@ -805,7 +804,7 @@ partial def blockText (b : Block g) : IndexM g String :=
 /--
 Finds the index-ready text for the given part. May add sub-items to the index as a side effect.
 -/
-partial def partText (p : Part g) : IndexM g String := do
+public partial def partText (p : Verso.Doc.Part g) : IndexM g String := do
   let header := (← idx.partHeader p).getD p.titleString
 
   let context ← IndexM.currentContext
@@ -823,7 +822,7 @@ partial def partText (p : Part g) : IndexM g String := do
 Constructs a set of documents that can be used with elasticlunr.js by emitting JavaScript arrays and
 code to construct the index. Primarily useful for testing.
 -/
-def mkIndexDocs (p : Part g) (ctx : g.TraverseContext) : Except String (Array IndexDoc) := do
+public def mkIndexDocs (p : Verso.Doc.Part g) (ctx : g.TraverseContext) : Except String (Array IndexDoc) := do
   if p.metadata.bind idx.partId |>.isNone then
     throw "mkIndexDocs: No ID for root part"
   else
@@ -834,7 +833,7 @@ def mkIndexDocs (p : Part g) (ctx : g.TraverseContext) : Except String (Array In
 /--
 Constructs an elasticlunr.js-compatible reverse index for the provided document.
 -/
-def mkIndex (p : Part g) (ctx : g.TraverseContext) : Except String Index := do
+public def mkIndex (p : Verso.Doc.Part g) (ctx : g.TraverseContext) : Except String Index := do
   if p.metadata.bind idx.partId |>.isNone then
     throw "No ID for root part"
   else

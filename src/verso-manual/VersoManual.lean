@@ -3,7 +3,6 @@ Copyright (c) 2023-2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-
 import Verso.Doc
 import Verso.Doc.Concrete
 import Verso.Doc.TeX
@@ -263,13 +262,10 @@ def traverseMulti (depth : Nat) (path : Path) (part : Part Manual) : TraverseM (
 
 open Verso.Output.Html in
 def TraverseState.ofConfig (config : HtmlConfig) : TraverseState := Id.run do
-  let mut st := {
-    toHtmlAssets := config.toHtmlAssets
-  }
+  let mut st : TraverseState := .initialize config.toHtmlAssets
   for f in config.features do
-    st := { st with toHtmlAssets := f.addAssets st.toHtmlAssets }
+    st := st.modifyHtmlAssets f.addAssets
   return st
-
 
 def traverse (logError : String → IO Unit) (text : Part Manual) (config : Config) : ReaderT ExtensionImpls IO (Part Manual × TraverseState) := do
   let topCtxt : Manual.TraverseContext := {logError, draft := config.draft}

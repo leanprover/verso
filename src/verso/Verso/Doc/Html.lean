@@ -3,32 +3,30 @@ Copyright (c) 2023-2024 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-
-import Verso.Doc
+module
+public import Verso.Doc
 import Verso.Output.Html
 import Verso.Method
-import Verso.Code.Highlighted
-
-set_option guard_msgs.diff true
+public import Verso.Code.Highlighted
 
 namespace Verso.Doc.Html
 
 open Verso Output Doc Html
 open Verso.Code (HighlightHtmlM)
 
-structure Options  (m : Type → Type) where
+public structure Options  (m : Type → Type) where
   /-- The level of the top-level headers -/
   headerLevel : Nat := 1
   logError : String → m Unit
 
-def Options.reinterpret (lift : {α : _} → m α → m' α) (opts : Options m) : Options m' :=
+public def Options.reinterpret (lift : {α : _} → m α → m' α) (opts : Options m) : Options m' :=
   {opts with
     logError := fun msg => lift <| opts.logError msg}
 
-def Options.lift [MonadLiftT m m'] (opts : Options m) : Options m' :=
+public def Options.lift [MonadLiftT m m'] (opts : Options m) : Options m' :=
   opts.reinterpret MonadLiftT.monadLift
 
-structure HtmlT.Context (genre : Genre) (m : Type → Type) where
+public structure HtmlT.Context (genre : Genre) (m : Type → Type) where
   options : Options m
   traverseContext : genre.TraverseContext
   traverseState : genre.TraverseState
@@ -40,14 +38,14 @@ structure HtmlT.Context (genre : Genre) (m : Type → Type) where
   linkTargets : Code.LinkTargets genre.TraverseContext
   codeOptions : Code.HighlightHtmlM.Options
 
-def HtmlT.Context.reinterpret (lift : {α : _} → m α → m' α) (ctx : HtmlT.Context g m) : HtmlT.Context g m' :=
+public def HtmlT.Context.reinterpret (lift : {α : _} → m α → m' α) (ctx : HtmlT.Context g m) : HtmlT.Context g m' :=
   {ctx with
     options := ctx.options.reinterpret lift}
 
-def HtmlT.Context.lift [MonadLiftT m m'] (ctx : HtmlT.Context g m) : HtmlT.Context g m' :=
+public def HtmlT.Context.lift [MonadLiftT m m'] (ctx : HtmlT.Context g m) : HtmlT.Context g m' :=
   ctx.reinterpret monadLift
 
-def HtmlT.Context.cast {g1 g2 : Genre}
+public def HtmlT.Context.cast {g1 g2 : Genre}
     (ctx : HtmlT.Context g1 m)
     (context_eq : g1.TraverseContext = g2.TraverseContext := by trivial)
     (state_eq : g1.TraverseState = g2.TraverseState := by trivial) : HtmlT.Context g2 m :=
@@ -56,51 +54,51 @@ def HtmlT.Context.cast {g1 g2 : Genre}
     traverseState := state_eq ▸ ctx.traverseState,
     linkTargets := context_eq ▸ ctx.linkTargets }
 
-abbrev HtmlT (genre : Genre) (m : Type → Type) : Type → Type :=
+public abbrev HtmlT (genre : Genre) (m : Type → Type) : Type → Type :=
   ReaderT (HtmlT.Context genre m) (StateT (Verso.Code.Hover.State Html) m)
 
-def HtmlT.cast {g1 g2 : Genre} (act : HtmlT g1 m α)
+public def HtmlT.cast {g1 g2 : Genre} (act : HtmlT g1 m α)
     (context_eq : g1.TraverseContext = g2.TraverseContext := by trivial)
     (state_eq : g1.TraverseState = g2.TraverseState := by trivial) :
     HtmlT g2 m α :=
   fun ρ σ =>
     act (ρ.cast context_eq.symm state_eq.symm) σ
 
-def HtmlT.options [Monad m] : HtmlT genre m (Options m) := do
+public def HtmlT.options [Monad m] : HtmlT genre m (Options m) := do
   return (← read).options
 
-def HtmlT.withOptions (opts : Options m → Options m) (act : HtmlT g m α) : HtmlT g m α :=
+public def HtmlT.withOptions (opts : Options m → Options m) (act : HtmlT g m α) : HtmlT g m α :=
   withReader (fun ctxt => {ctxt with options := opts ctxt.options}) act
 
-def HtmlT.context [Monad m] : HtmlT genre m genre.TraverseContext := do
+public def HtmlT.context [Monad m] : HtmlT genre m genre.TraverseContext := do
   return (← read).traverseContext
 
-def HtmlT.state [Monad m] : HtmlT genre m genre.TraverseState := do
+public def HtmlT.state [Monad m] : HtmlT genre m genre.TraverseState := do
   return (← read).traverseState
 
-def HtmlT.definitionIds [Monad m] : HtmlT genre m (Lean.NameMap String) := do
+public def HtmlT.definitionIds [Monad m] : HtmlT genre m (Lean.NameMap String) := do
   return (← read).definitionIds
 
-def HtmlT.linkTargets [Monad m] : HtmlT genre m (Code.LinkTargets genre.TraverseContext) := do
+public def HtmlT.linkTargets [Monad m] : HtmlT genre m (Code.LinkTargets genre.TraverseContext) := do
   return (← read).linkTargets
 
-def HtmlT.codeOptions [Monad m] : HtmlT genre m Code.HighlightHtmlM.Options := do
+public def HtmlT.codeOptions [Monad m] : HtmlT genre m Code.HighlightHtmlM.Options := do
   return (← read).codeOptions
 
-def HtmlT.logError [Monad m] (message : String) : HtmlT genre m Unit := do (← options).logError message
+public def HtmlT.logError [Monad m] (message : String) : HtmlT genre m Unit := do (← options).logError message
 
-instance [Monad m] : MonadLift (HighlightHtmlM genre) (HtmlT genre m) where
+public instance [Monad m] : MonadLift (HighlightHtmlM genre) (HtmlT genre m) where
   monadLift act := do modifyGet (act ⟨← HtmlT.linkTargets, ← HtmlT.context, ← HtmlT.definitionIds, ← HtmlT.codeOptions⟩)
 
 open HtmlT
 
-def mkPartHeader (level : Nat) (contents : Html) (headerAttrs : Array (String × String) := #[]) : Html :=
+public def mkPartHeader (level : Nat) (contents : Html) (headerAttrs : Array (String × String) := #[]) : Html :=
   .tag s!"h{level}" headerAttrs contents
 
-class ToHtml (genre : Genre) (m : Type → Type) (α : Type u) where
+public class ToHtml (genre : Genre) (m : Type → Type) (α : Type u) where
   toHtml (val : α) : HtmlT genre m Html
 
-class GenreHtml (genre : Genre) (m : Type → Type) where
+public class GenreHtml (genre : Genre) (m : Type → Type) where
   /--
   Customizable rendering of parts for genres.
 
@@ -146,9 +144,8 @@ partial def Inline.toHtml [Monad m] [GenreHtml g m] : Inline g → HtmlT g m Htm
   | .concat inlines => inlines.mapM toHtml
   | .other container content => GenreHtml.inline Inline.toHtml container content
 
-instance [Monad m] [GenreHtml g m] : ToHtml g m (Inline g) where
-  toHtml := Inline.toHtml
-
+public instance [Monad m] [GenreHtml g m] : ToHtml g m (Inline g) where
+  toHtml := private Inline.toHtml
 
 partial def Block.toHtml [Monad m] [GenreHtml g m] [TraverseBlock g] (b : Block g) : HtmlT g m Html :=
   withReader (fun ctxt => { ctxt with traverseContext := TraverseBlock.inBlock b ctxt.traverseContext } ) do
@@ -176,9 +173,8 @@ partial def Block.toHtml [Monad m] [GenreHtml g m] [TraverseBlock g] (b : Block 
   | .concat items => Html.seq <$> items.mapM Block.toHtml
   | .other container content => GenreHtml.block Inline.toHtml Block.toHtml container content
 
-
-instance [Monad m] [GenreHtml g m] [TraverseBlock g] : ToHtml g m (Block g) where
-  toHtml := Block.toHtml
+public instance [Monad m] [GenreHtml g m] [TraverseBlock g] : ToHtml g m (Block g) where
+  toHtml := private Block.toHtml
 
 partial def Part.toHtml [Monad m] [GenreHtml g m] [TraversePart g] [TraverseBlock g]
     (p : Part g) (mkHeader : Nat → Html → Html := mkPartHeader) : HtmlT g m Html :=
@@ -197,26 +193,17 @@ partial def Part.toHtml [Monad m] [GenreHtml g m] [TraversePart g] [TraverseBloc
   | some m =>
     GenreHtml.part (fun p mkHeader => Part.toHtml p (mkHeader := mkHeader)) m p.withoutMetadata
 
-instance [Monad m] [GenreHtml g m] [TraversePart g] [TraverseBlock g] : ToHtml g m (Part g) where
-  toHtml p := Part.toHtml p
+public instance [Monad m] [GenreHtml g m] [TraversePart g] [TraverseBlock g] : ToHtml g m (Part g) where
+  toHtml p := private Part.toHtml p
 
-instance : GenreHtml .none m where
+public instance : GenreHtml .none m where
   part _ m := nomatch m
   block _ _ x := nomatch x
   inline _ x := nomatch x
 
-defmethod Genre.toHtml (g : Genre) [ToHtml g m α]
+public defmethod Genre.toHtml (g : Genre) [ToHtml g m α]
     (options : Options m) (context : g.TraverseContext) (state : g.TraverseState)
     (definitionIds : Lean.NameMap String)
     (linkTargets : Code.LinkTargets g.TraverseContext) (codeOptions : Code.HighlightHtmlM.Options)
     (x : α) : StateT (Verso.Code.Hover.State Html) m Html :=
   ToHtml.toHtml x ⟨options, context, state, definitionIds, linkTargets, codeOptions⟩
-
-
-
-def embody (content : Html) : Html := {{
-<html>
-<head></head>
-<body> {{ content }} </body>
-</html>
-}}

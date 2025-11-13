@@ -3,15 +3,16 @@ Copyright (c) 2024 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
+module
 import Lean.Data.OpenDecl
 import Lean.Data.Json
 import Std.Data.HashMap
-import SubVerso.Highlighting
-import Verso.Doc
+public import SubVerso.Highlighting
+public import Verso.Doc
 import Verso.Method
-import Verso.Output.Html
+public import Verso.Output.Html
 import Verso.Output.TeX
-import Verso.Instances.Deriving
+meta import Verso.Instances.Deriving
 
 open SubVerso.Highlighting
 open Verso.Output Html
@@ -27,7 +28,7 @@ Serialize `Highlighted` code as a string.
 Nothing should be assumed about the `String` output except that it can be passed to `hlFromExport`
 to recover the original input.
 -/
-def hlToExport (hl: SubVerso.Highlighting.Highlighted) : String :=
+public def hlToExport (hl: SubVerso.Highlighting.Highlighted) : String :=
   hl.exportCode.toJson.compress
 
 /--
@@ -35,7 +36,7 @@ Recover the `Highlighted` data from its serialization.
 
 Can only be expected to work on the output of `hlToExport`, likely to panic otherwise.
 -/
-def hlFromExport! (exportLit : String) : SubVerso.Highlighting.Highlighted :=
+public def hlFromExport! (exportLit : String) : SubVerso.Highlighting.Highlighted :=
   match Lean.Json.parse exportLit with
   | .error e => panic! s!"Failed to parse Highlighted export data as JSON: {e}"
   | .ok v =>
@@ -50,7 +51,7 @@ def hlFromExport! (exportLit : String) : SubVerso.Highlighting.Highlighted :=
 /--
 Removes n levels of indentation from highlighted code.
 -/
-partial def Highlighted.deIndent (n : Nat) (hl : Highlighted) : Highlighted :=
+public partial def Highlighted.deIndent (n : Nat) (hl : Highlighted) : Highlighted :=
   (remove hl).run' (some n)
 where
   remove (hl : Highlighted) : StateM (Option Nat) Highlighted := do
@@ -85,19 +86,19 @@ end SubVerso.Highlighting
 namespace Verso.Code
 
 namespace Hover
-structure Dedup (α) extends BEq α, Hashable α where
+public structure Dedup (α) extends BEq α, Hashable α where
   nextId : Nat := 0
   contentId : HashMap Nat α := {}
   idContent : HashMap α Nat := {}
 
 variable {α}
 
-def Dedup.empty [BEq α] [Hashable α] : Dedup α := {}
+public def Dedup.empty [BEq α] [Hashable α] : Dedup α := {}
 
-instance [BEq α] [Hashable α] : Inhabited (Dedup α) where
+public instance [BEq α] [Hashable α] : Inhabited (Dedup α) where
   default := .empty
 
-def Dedup.insert (table : Dedup α) (val : α) : Nat × Dedup α :=
+public def Dedup.insert (table : Dedup α) (val : α) : Nat × Dedup α :=
   if let some id := table.idContent[val]? then (id, table)
   else
     let id := table.nextId
@@ -108,34 +109,34 @@ def Dedup.insert (table : Dedup α) (val : α) : Nat × Dedup α :=
             contentId := table.contentId.insert id val,
             idContent := table.idContent.insert val id})
 
-def Dedup.get? (table : Dedup α) (id : Nat) : Option α := table.contentId[id]?
+public def Dedup.get? (table : Dedup α) (id : Nat) : Option α := table.contentId[id]?
 
-def Dedup.docJson (table : Dedup Html) : Json :=
+public def Dedup.docJson (table : Dedup Html) : Json :=
   table.contentId.fold (init := .mkObj []) fun out id html => out.setObjVal! (toString id) (.str html.asString)
 
-structure IdSupply where
+public structure IdSupply where
   nextId : Nat := 0
 
-def IdSupply.unique (supply : IdSupply) (base := "--verso-unique") : String × IdSupply :=
+public def IdSupply.unique (supply : IdSupply) (base := "--verso-unique") : String × IdSupply :=
   (s!"{base}-{supply.nextId}", {supply with nextId := supply.nextId + 1})
 
-structure State (α) where
+public structure State (α) where
   dedup : Dedup α
   idSupply : IdSupply
 
-def State.empty [BEq α] [Hashable α] : State α := ⟨{}, {}⟩
+public def State.empty [BEq α] [Hashable α] : State α := ⟨{}, {}⟩
 
-instance [BEq α] [Hashable α] : EmptyCollection (State α) where
+public instance [BEq α] [Hashable α] : EmptyCollection (State α) where
   emptyCollection := .empty
 
-instance [BEq α] [Hashable α] : Inhabited (State α) where
+public instance [BEq α] [Hashable α] : Inhabited (State α) where
   default := {}
 
 end Hover
 
 open Hover
 
-structure CodeLink where
+public structure CodeLink where
   /-- A very short description to show in hovers, like `"doc"` or `"src"` -/
   shortDescription : String
   /-- A longer description (at most one sentence) to describe the destination -/
@@ -144,16 +145,16 @@ structure CodeLink where
   href : String
 deriving Repr, DecidableEq, Ord
 
-instance : ToJson CodeLink where
+public instance : ToJson CodeLink where
   toJson l := json%{"short": $l.shortDescription, "long": $l.description, "href": $l.href}
 
-def CodeLink.inlineHtml (link : CodeLink) (text : Html) : Html :=
+public def CodeLink.inlineHtml (link : CodeLink) (text : Html) : Html :=
   {{<a href={{link.href}} title={{link.description}}>{{text}}</a>}}
 
-def CodeLink.menuHtml (link : CodeLink) : Html :=
+public def CodeLink.menuHtml (link : CodeLink) : Html :=
   {{<a href={{link.href}} title={{link.description}}>{{link.shortDescription}}</a>}}
 
-def CodeLink.manyHtml (links : Array CodeLink) (text : Html) : Html :=
+public def CodeLink.manyHtml (links : Array CodeLink) (text : Html) : Html :=
   if h : links.size = 1 then
     {{<a href={{links[0].href}} title={{links[0].description}}>{{text}}</a>}}
   else if h : links.size > 1 then
@@ -168,7 +169,7 @@ Instructions for computing link targets for various code elements.
 Each kind of link may have multiple destinations. The first is the default link, while the remainder
 are considered alternates.
 -/
-structure LinkTargets (Ctxt : Type) where
+public structure LinkTargets (Ctxt : Type) where
   var : FVarId → Option Ctxt → Array CodeLink := fun _ _ => #[]
   sort : Level → Option Ctxt → Array CodeLink := fun _ _ => #[]
   const : Name → Option Ctxt → Array CodeLink := fun _ _ => #[]
@@ -177,7 +178,7 @@ structure LinkTargets (Ctxt : Type) where
   definition : Name → Option Ctxt → Array CodeLink := fun _ _ => #[]
   moduleName : Name → Option Ctxt → Array CodeLink := fun _ _ => #[]
 
-def LinkTargets.augment (tgts1 tgts2 : LinkTargets g) : LinkTargets g where
+public def LinkTargets.augment (tgts1 tgts2 : LinkTargets g) : LinkTargets g where
   var fv ctxt := tgts1.var fv ctxt ++ tgts2.var fv ctxt
   sort l ctxt := tgts1.sort l ctxt ++ tgts2.sort l ctxt
   const n ctxt := tgts1.const n ctxt ++ tgts2.const n ctxt
@@ -186,15 +187,15 @@ def LinkTargets.augment (tgts1 tgts2 : LinkTargets g) : LinkTargets g where
   definition x ctxt := tgts1.definition x ctxt ++ tgts2.definition x ctxt
   moduleName m ctxt := tgts1.moduleName m ctxt ++ tgts2.moduleName m ctxt
 
-instance : Append (LinkTargets g) where
+public  instance : Append (LinkTargets g) where
   append := LinkTargets.augment
 
-inductive HighlightHtmlM.CollapseGoals where
+public inductive HighlightHtmlM.CollapseGoals where
   | subsequent
   | always
   | never
 
-inductive HighlightHtmlM.VisibleProofStates where
+public inductive HighlightHtmlM.VisibleProofStates where
   | none
   /--
   Make the given states visible.
@@ -205,19 +206,19 @@ inductive HighlightHtmlM.VisibleProofStates where
   | all
 deriving ToJson, FromJson, Repr, Quote
 
-def HighlightHtmlM.VisibleProofStates.isVisible : HighlightHtmlM.VisibleProofStates → Nat → Nat → Bool
+public def HighlightHtmlM.VisibleProofStates.isVisible : HighlightHtmlM.VisibleProofStates → Nat → Nat → Bool
   | .none, _, _ => false
   | .all, _, _ => true
   | .states xs, b, e => (b, e) ∈ xs
 
-structure HighlightHtmlM.Options where
+public structure HighlightHtmlM.Options where
   inlineProofStates : Bool := true
   visibleProofStates : VisibleProofStates := .none
   collapseGoals : CollapseGoals := .subsequent
   definitionsAsTargets : Bool := true
   identifierWordBreaks : Bool := false
 
-structure HighlightHtmlM.Context (g : Verso.Doc.Genre) where
+public structure HighlightHtmlM.Context (g : Verso.Doc.Genre) where
   linkTargets : LinkTargets g.TraverseContext
   traverseContext : g.TraverseContext
   definitionIds : Lean.NameMap String
@@ -231,55 +232,55 @@ The monad enables the following features:
 2. Conveying document-wide configurations, in particular policies for hyperlinking identifiers.
 3. De-duplicating hovers, which can greatly reduce the size of generated HTML.
 -/
-abbrev HighlightHtmlM g α := ReaderT (HighlightHtmlM.Context g) (StateT (State Html) Id) α
+public abbrev HighlightHtmlM g α := ReaderT (HighlightHtmlM.Context g) (StateT (State Html) Id) α
 
-def addHover (content : Html) : HighlightHtmlM g Nat := modifyGet fun st =>
+public def addHover (content : Html) : HighlightHtmlM g Nat := modifyGet fun st =>
   let (hoverId, dedup) := st.dedup.insert content
   (hoverId, {st with dedup := dedup})
 
-def uniqueId (base := "--verso-unique") : HighlightHtmlM g String := modifyGet fun st =>
+public def uniqueId (base := "--verso-unique") : HighlightHtmlM g String := modifyGet fun st =>
   let (id, idSupply) := st.idSupply.unique (base := base)
   (id, {st with idSupply := idSupply})
 
-def withCollapsedSubgoals (policy : HighlightHtmlM.CollapseGoals) (act : HighlightHtmlM g α) : HighlightHtmlM g α :=
+public def withCollapsedSubgoals (policy : HighlightHtmlM.CollapseGoals) (act : HighlightHtmlM g α) : HighlightHtmlM g α :=
   withReader (fun ctx => {ctx with options := {ctx.options with collapseGoals := policy} }) act
 
-def withVisibleProofStates (policy : HighlightHtmlM.VisibleProofStates) (act : HighlightHtmlM g α) : HighlightHtmlM g α :=
+public def withVisibleProofStates (policy : HighlightHtmlM.VisibleProofStates) (act : HighlightHtmlM g α) : HighlightHtmlM g α :=
   withReader (fun ctx => {ctx with options := {ctx.options with visibleProofStates := policy} }) act
 
-def withDefinitionsAsTargets (saveIds : Bool) (act : HighlightHtmlM g α) : HighlightHtmlM g α :=
+public def withDefinitionsAsTargets (saveIds : Bool) (act : HighlightHtmlM g α) : HighlightHtmlM g α :=
   withReader (fun ctx => {ctx with options := {ctx.options with definitionsAsTargets := saveIds} }) act
 
-def linkTargets : HighlightHtmlM g (LinkTargets g.TraverseContext) := do
+public def linkTargets : HighlightHtmlM g (LinkTargets g.TraverseContext) := do
   return (← readThe (HighlightHtmlM.Context g)).linkTargets
 
-def options : HighlightHtmlM g HighlightHtmlM.Options := do
+public def options : HighlightHtmlM g HighlightHtmlM.Options := do
   return (← readThe (HighlightHtmlM.Context g)).options
 
 section
 open Lean
 open Verso.Output.Html
 
-def constLink (constName : Name) (content : Html) (ctxt : Option g.TraverseContext := none) : HighlightHtmlM g Html := do
+public def constLink (constName : Name) (content : Html) (ctxt : Option g.TraverseContext := none) : HighlightHtmlM g Html := do
   return CodeLink.manyHtml ((← linkTargets).const constName ctxt) content
 
-def optionLink (optionName : Name) (content : Html) (ctxt : Option g.TraverseContext := none) : HighlightHtmlM g Html := do
+public def optionLink (optionName : Name) (content : Html) (ctxt : Option g.TraverseContext := none) : HighlightHtmlM g Html := do
   return CodeLink.manyHtml ((← linkTargets).option optionName ctxt) content
 
-def varLink (varName : FVarId) (content : Html) (ctxt : Option g.TraverseContext := none) : HighlightHtmlM g Html := do
+public def varLink (varName : FVarId) (content : Html) (ctxt : Option g.TraverseContext := none) : HighlightHtmlM g Html := do
   return CodeLink.manyHtml ((← linkTargets).var varName ctxt) content
 
-def kwLink (kind : Name) (content : Html) (ctxt : Option g.TraverseContext := none) : HighlightHtmlM g Html := do
+public def kwLink (kind : Name) (content : Html) (ctxt : Option g.TraverseContext := none) : HighlightHtmlM g Html := do
   return CodeLink.manyHtml ((← linkTargets).keyword kind ctxt) content
 
-def defLink (defName : Name) (content : Html) (ctxt : Option g.TraverseContext := none) : HighlightHtmlM g Html := do
+public def defLink (defName : Name) (content : Html) (ctxt : Option g.TraverseContext := none) : HighlightHtmlM g Html := do
   return CodeLink.manyHtml ((← linkTargets).definition defName ctxt) content
 
-def moduleNameLink (modName : Name) (content : Html) (ctxt : Option g.TraverseContext := none) : HighlightHtmlM g Html := do
+public def moduleNameLink (modName : Name) (content : Html) (ctxt : Option g.TraverseContext := none) : HighlightHtmlM g Html := do
   return CodeLink.manyHtml ((← linkTargets).moduleName modName ctxt) content
 end
 
-defmethod Token.Kind.addLink (tok : Token.Kind) (content : Html) : HighlightHtmlM g Html := do
+public defmethod Token.Kind.addLink (tok : Token.Kind) (content : Html) : HighlightHtmlM g Html := do
   let ctxt := (← read).traverseContext
   match tok with
   | .const x _ _ false => constLink x content (some ctxt)
@@ -294,7 +295,7 @@ defmethod Token.Kind.addLink (tok : Token.Kind) (content : Html) : HighlightHtml
 /--
 Removes trailing whitespace from highlighted code.
 -/
-partial defmethod Highlighted.trimRight (hl : Highlighted) : Highlighted :=
+public partial defmethod Highlighted.trimRight (hl : Highlighted) : Highlighted :=
   match hl with
   | .text str | .unparsed str => .text str.trimRight
   | .token .. => hl
@@ -317,7 +318,7 @@ partial defmethod Highlighted.trimRight (hl : Highlighted) : Highlighted :=
 /--
 Removes leading whitespace from highlighted code.
 -/
-partial defmethod Highlighted.trimLeft (hl : Highlighted) : Highlighted :=
+public partial defmethod Highlighted.trimLeft (hl : Highlighted) : Highlighted :=
   match hl with
   | .text str | .unparsed str => .text str.trimLeft
   | .token .. => hl
@@ -340,7 +341,7 @@ partial defmethod Highlighted.trimLeft (hl : Highlighted) : Highlighted :=
 /--
 Removes leading and trailing whitespace from highlighted code.
 -/
-defmethod Highlighted.trim (hl : Highlighted) : Highlighted := hl.trimLeft.trimRight
+public defmethod Highlighted.trim (hl : Highlighted) : Highlighted := hl.trimLeft.trimRight
 
 defmethod Token.Kind.hover? (tok : Token.Kind) : HighlightHtmlM g (Option Nat) :=
   match tok with
@@ -384,17 +385,17 @@ where
   separatedDocs txt :=
     {{<span class="sep"/><code class="docstring">{{txt}}</code>}}
 
-defmethod Lean.MessageSeverity.«class» : Lean.MessageSeverity → String
+public defmethod Lean.MessageSeverity.«class» : Lean.MessageSeverity → String
   | .information => "information"
   | .warning => "warning"
   | .error => "error"
 
-defmethod Highlighted.Span.Kind.«class» : Highlighted.Span.Kind → String
+public defmethod Highlighted.Span.Kind.«class» : Highlighted.Span.Kind → String
   | .info => "information"
   | .warning => "warning"
   | .error => "error"
 
-defmethod Token.Kind.«class» : Token.Kind → String
+public defmethod Token.Kind.«class» : Token.Kind → String
   | .var .. => "var"
   | .str .. => "literal string"
   | .sort .. => "sort"
@@ -410,7 +411,7 @@ defmethod Token.Kind.«class» : Token.Kind → String
   | .levelOp .. => "level-op"
   | .moduleName .. => "module-name"
 
-defmethod Token.Kind.data : Token.Kind → String
+public defmethod Token.Kind.data : Token.Kind → String
   | .const n _ _ _ | .anonCtor n _ _ => "const-" ++ toString n
   | .var ⟨v⟩ _ => "var-" ++ toString v
   | .option n _ _ => "option-" ++ toString n
@@ -422,7 +423,7 @@ defmethod Token.Kind.data : Token.Kind → String
   | .moduleName m => s!"module-name-{m}"
   | _ => ""
 
-defmethod Token.Kind.idAttr : Token.Kind → HighlightHtmlM g (Array (String × String))
+public defmethod Token.Kind.idAttr : Token.Kind → HighlightHtmlM g (Array (String × String))
   | .const n _ _ true => do
     if (← read).options.definitionsAsTargets then
       if let some id := (← read).definitionIds.find? n then
@@ -456,7 +457,7 @@ defmethod Token.htmlContent (tok : Token) : HighlightHtmlM g Html := do
   else
     return content
 
-defmethod Token.toHtml (tok : Token) : HighlightHtmlM g Html := do
+public defmethod Token.toHtml (tok : Token) : HighlightHtmlM g Html := do
   let hoverId ← tok.kind.hover?
   let idAttr ← tok.kind.idAttr
   let hoverAttr := hoverId.map (fun i => #[("data-verso-hover", toString i)]) |>.getD #[]
@@ -464,7 +465,7 @@ defmethod Token.toHtml (tok : Token) : HighlightHtmlM g Html := do
     <span class={{tok.kind.«class» ++ " token"}} data-binding={{tok.kind.data}} {{hoverAttr}} {{idAttr}}>{{← tok.htmlContent}}</span>
   }}
 
-defmethod Highlighted.Goal.toHtml (exprHtml : expr → HighlightHtmlM g Html) (index : Nat) : Highlighted.Goal expr → HighlightHtmlM g Html
+public defmethod Highlighted.Goal.toHtml (exprHtml : expr → HighlightHtmlM g Html) (index : Nat) : Highlighted.Goal expr → HighlightHtmlM g Html
   | {name, goalPrefix, hypotheses, conclusion} => do
     let hypsHtml : Html ←
       if hypotheses.size = 0 then pure .empty
@@ -514,7 +515,7 @@ defmethod Highlighted.Goal.toHtml (exprHtml : expr → HighlightHtmlM g Html) (i
       | .never => #[("checked", "checked")]
       | .subsequent => if index = 0 then #[("checked", "checked")] else #[]
 
-partial defmethod Highlighted.MessageContents.toHtml (expandTraces : List Lean.Name) (maxTraceDepth : Nat) (exprHtml : expr → HighlightHtmlM g Html) : Highlighted.MessageContents expr → HighlightHtmlM g Html
+public partial defmethod Highlighted.MessageContents.toHtml (expandTraces : List Lean.Name) (maxTraceDepth : Nat) (exprHtml : expr → HighlightHtmlM g Html) : Highlighted.MessageContents expr → HighlightHtmlM g Html
   | .text s => pure {{<span class="text">{{s}}</span>}}
   | .term e => do return {{<span class="highlighted">{{← exprHtml e}}</span>}}
   | .append xs => xs.foldlM (init := Html.empty) fun html m =>
@@ -549,19 +550,7 @@ where
     | .warning, _ => .warning
     | .info, other => other
 
-def _root_.Array.mapIndexed (arr : Array α) (f : Fin arr.size → α → β) : Array β := Id.run do
-  let mut out := #[]
-  for h : i in [:arr.size] do
-    out := out.push (f ⟨i, by get_elem_tactic⟩ arr[i])
-  out
-
-def _root_.Array.mapIndexedM [Monad m] (arr : Array α) (f : Fin arr.size → α → m β) : m (Array β) := do
-  let mut out := #[]
-  for h : i in [:arr.size] do
-    out := out.push (← f ⟨i, by get_elem_tactic⟩ arr[i])
-  pure out
-
-partial defmethod Highlighted.toHtml : Highlighted → HighlightHtmlM g Html
+public partial defmethod Highlighted.toHtml : Highlighted → HighlightHtmlM g Html
   | .token t => t.toHtml
   | .text str | .unparsed str => pure {{<span class="inter-text">{{str}}</span>}}
   | .span infos hl =>
@@ -594,7 +583,7 @@ partial defmethod Highlighted.toHtml : Highlighted → HighlightHtmlM g Html
             {{← if info.isEmpty then
                 pure {{"All goals completed! 🐙"}}
               else
-                .seq <$> info.mapIndexedM (fun ⟨i, _⟩ x => x.toHtml toHtml i)}}
+                .seq <$> info.mapIdxM (fun i x => x.toHtml toHtml i)}}
           </span>
         </span>
       }}
@@ -607,12 +596,12 @@ partial defmethod Highlighted.toHtml : Highlighted → HighlightHtmlM g Html
     }}
   | .seq hls => hls.mapM toHtml
 
-defmethod Highlighted.blockHtml (contextName : String) (code : Highlighted) (trim : Bool := true) (htmlId : Option String := none) : HighlightHtmlM g Html := do
+public defmethod Highlighted.blockHtml (contextName : String) (code : Highlighted) (trim : Bool := true) (htmlId : Option String := none) : HighlightHtmlM g Html := do
   let code := if trim then code.trim else code
   let idAttr := htmlId.map (fun x => #[("id", x)]) |>.getD #[]
   pure {{ <code class="hl lean block" "data-lean-context"={{toString contextName}} {{idAttr}}> {{ ← code.toHtml }} </code> }}
 
-defmethod Highlighted.inlineHtml (contextName : Option String) (code : Highlighted) (trim : Bool := true) (htmlId : Option String := none) : HighlightHtmlM g Html := do
+public defmethod Highlighted.inlineHtml (contextName : Option String) (code : Highlighted) (trim : Bool := true) (htmlId : Option String := none) : HighlightHtmlM g Html := do
   let code := if trim then code.trim else code
   let idAttr := htmlId.map (fun x => #[("id", x)]) |>.getD #[]
   if let some ctx := contextName then
@@ -620,19 +609,18 @@ defmethod Highlighted.inlineHtml (contextName : Option String) (code : Highlight
   else
     pure {{ <code class="hl lean inline" {{idAttr}}> {{ ← code.toHtml }} </code> }}
 
-defmethod Highlighted.Message.toHtml (message : Highlighted.Message) (expandTraces : List Lean.Name) (maxTraceDepth : Nat := 10) : HighlightHtmlM g Html := do
+public defmethod Highlighted.Message.toHtml (message : Highlighted.Message) (expandTraces : List Lean.Name) (maxTraceDepth : Nat := 10) : HighlightHtmlM g Html := do
   let contents ← message.contents.toHtml expandTraces maxTraceDepth (·.toHtml)
   return {{<span class=s!"verso-message">{{contents}}</span>}}
 
-defmethod Highlighted.Message.blockHtml (message : Highlighted.Message) (summarize : Bool) (expandTraces : List Lean.Name := []) (maxTraceDepth : Nat := 10) : HighlightHtmlM g Html := do
+public defmethod Highlighted.Message.blockHtml (message : Highlighted.Message) (summarize : Bool) (expandTraces : List Lean.Name := []) (maxTraceDepth : Nat := 10) : HighlightHtmlM g Html := do
   let wrap html :=
     if summarize then {{<details class=s!"lean-output {message.severity.class}"><summary>"Expand..."</summary><pre class="hl lean">{{html}}</pre></details>}}
     else {{<pre class=s!"hl lean lean-output {message.severity.class}">{{html}}</pre>}}
   wrap <$> message.toHtml expandTraces (maxTraceDepth := maxTraceDepth)
 
 
--- TODO CSS variables, and document them
-def highlightingStyle : String := "
+public def highlightingStyle : String := "
 
 .hl.lean {
   white-space: pre;
@@ -1296,7 +1284,7 @@ Some CSS frameworks customize details/summary in ways not compatible with Verso'
 
 "
 
-def highlightingJs : String :=
+public def highlightingJs : String :=
 "
 window.onload = () => {
 

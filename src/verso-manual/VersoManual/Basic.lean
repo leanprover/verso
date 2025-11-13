@@ -3,22 +3,28 @@ Copyright (c) 2024-2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-
+module
 import Std.Data.HashSet
 import Std.Data.TreeSet
 import Verso.Doc
-import Verso.Doc.Html
-import Verso.Doc.TeX
-import MultiVerso
-import MultiVerso.Slug
-import VersoSearch
+public import Verso.Doc.Html
+public import Verso.Doc.TeX
+public import MultiVerso
+public import MultiVerso.InternalId
+public import MultiVerso.NameMap
+public import MultiVerso.Slug
+public import VersoSearch
+public import VersoSearch.DomainSearch
 import VersoManual.LicenseInfo
 import VersoManual.Html.Config
-import VersoManual.Ext
+public import VersoManual.Html.Features
+public meta import VersoManual.Ext
 import Verso.Output.Html
-import Verso.Output.TeX
-import Verso.BEq
+public import Verso.Output.TeX
+public import Verso.BEq
+import Verso.Method
 
+public section
 
 open Lean (Name Json NameMap ToJson FromJson)
 open Std (HashSet HashMap TreeSet)
@@ -142,7 +148,8 @@ inductive Tag where
   | /-- A machine-assigned tag -/ private internal (name : String)
 deriving BEq, DecidableEq, Hashable, Repr, ToJson, FromJson
 
-instance : Inhabited Tag := ⟨.external "".sluggify⟩
+instance : Inhabited Tag where
+  default := private .external "".sluggify
 
 instance : ToString Tag where
   toString := toString ∘ repr
@@ -229,11 +236,11 @@ structure PartMetadata where
 deriving BEq, Hashable, Repr, ToJson, FromJson
 
 
-def Domains := NameMap Domain deriving Repr
+@[expose] def Domains := NameMap Domain deriving Repr
 def Domains.contents : Domains → NameMap Domain := id
 
 instance : BEq Domains where
-  beq := ptrEqThen fun x y =>
+  beq := private ptrEqThen fun x y =>
     x.size == y.size &&
     x.all fun k v => y.get? k |>.isEqSome v
 
@@ -245,8 +252,10 @@ instance : GetElem? Domains Name Domain (fun ds d => ds.contents.contains d) whe
 
 instance : EmptyCollection Domains := ⟨({} : NameMap Domain)⟩
 
-instance : ForIn m Domains (Name × Domain) :=
-  inferInstanceAs (ForIn m (NameMap Domain) (Name × Domain))
+instance : ForIn m Domains (Name × Domain) where
+  forIn doms init f := inferInstanceAs (ForIn m (NameMap Domain) (NameMap.PublicName × Domain)) |>.forIn doms init fun (n, dom) v =>
+    -- Eta expansion uses a coercion
+    f (n, dom) v
 
 instance : ToJson Domains where
   toJson doms :=
@@ -291,13 +300,16 @@ structure TraverseState extends HtmlAssets where
   private contents : Contents := {}
 deriving Repr
 
+def TraverseState.initialize (htmlAssets : HtmlAssets) : TraverseState :=
+  { toHtmlAssets := htmlAssets }
+
 section
 variable [ToJson α] [ToJson β] [BEq α] [Hashable α]
 private def jsonMap (xs : HashMap α β) : Json :=
   .arr (xs.toArray.map fun (x, y) => json%{"key": $x, "value": $y})
 
 instance : ToJson TraverseState where
-  toJson st :=
+  toJson st := private
     let {tags, externalTags, domains, ids, extraCss, extraJs, extraJsFiles, extraCssFiles, extraDataFiles, quickJump, licenseInfo, contents} := st
     json%{
       "tags": $(jsonMap tags),
@@ -314,8 +326,8 @@ instance : ToJson TraverseState where
       "contents": $contents.contents
     }
 
-instance : FromJson TraverseState where
-  fromJson? v :=do
+public instance : FromJson TraverseState where
+  fromJson? v := private do
     let tags ← v.getObjValAs? (Array Json) "tags"
     let tags ← tags.mapM fun j => do
       let k ← j.getObjValAs? _ "key"
@@ -372,16 +384,16 @@ defmethod HashMap.all [BEq α] [Hashable α] (hm : HashMap α β) (p : α → β
   hm.fold (fun prev k v => prev && p k v) true
 
 local instance [BEq α] [Hashable α] : BEq (HashSet α) where
-  beq := ptrEqThen fun xs ys => xs.size == ys.size && xs.all (ys.contains ·)
+  beq := private ptrEqThen fun xs ys => xs.size == ys.size && xs.all (ys.contains ·)
 
 local instance [BEq α] [Ord α] : BEq (TreeSet α) where
-  beq := ptrEqThen fun xs ys => xs.size == ys.size && xs.all (ys.contains ·)
+  beq := private ptrEqThen fun xs ys => xs.size == ys.size && xs.all (ys.contains ·)
 
 local instance [BEq α] [Hashable α] [BEq β] : BEq (HashMap α β) where
-  beq := ptrEqThen fun xs ys => xs.size == ys.size && xs.all (ys[·]?.isEqSome ·)
+  beq := private ptrEqThen fun xs ys => xs.size == ys.size && xs.all (ys[·]?.isEqSome ·)
 
 instance : BEq TraverseState where
-  beq := ptrEqThen fun x y =>
+  beq := private ptrEqThen fun x y =>
     ptrEqThen' x.tags y.tags (fun t1 t2 =>
       t1.size == t2.size && t1.all (t2[·]?.isEqSome ·)) &&
     x.externalTags.size == y.externalTags.size &&
@@ -443,7 +455,10 @@ def htmlId (state : TraverseState) (id : InternalId) : Array (String × String) 
     #[("id", htmlId.toString)]
   else #[]
 
-/-- Add an open-source license used in the generated HTML/JavaScript -/
+def modifyHtmlAssets (state : TraverseState) (f : HtmlAssets → HtmlAssets) : TraverseState :=
+  { state with toHtmlAssets := f state.toHtmlAssets }
+
+/-- Adds an open-source license used in the generated HTML/JavaScript. -/
 def addLicenseInfo (state : TraverseState) (licenseInfo : LicenseInfo) : TraverseState :=
   {state with licenseInfo := state.licenseInfo.insert licenseInfo}
 
@@ -550,7 +565,8 @@ end
 
 
 instance : Ord Inline where
-  compare i1 i2 := i1.name.cmp i2.name |>.then (Ord.compare i1.id i2.id) |>.then (cmpJson i1.data i2.data)
+  compare i1 i2 := private
+    i1.name.cmp i2.name |>.then (Ord.compare i1.id i2.id) |>.then (cmpJson i1.data i2.data)
 
 structure PartHeader where
   titleString : String
@@ -624,6 +640,7 @@ structure ExtensionImpls where
 end Manual
 
 /-- A genre for writing reference manuals and other book-like documents. -/
+@[expose]
 def Manual : Genre where
   PartMetadata := Manual.PartMetadata
   Block := Manual.Block
@@ -805,7 +822,7 @@ syntax (name := inline_extension) "inline_extension" ident : attr
 syntax (name := block_extension) "block_extension" ident : attr
 
 open Lean in
-initialize
+meta initialize
   let register (name) (strName : String) (ext : PersistentEnvExtension (Name × Name) (Name × Name) (Lean.NameMap Name)) (get : Syntax → Option Ident) := do
     registerBuiltinAttribute {
       name := name,
@@ -828,7 +845,7 @@ initialize
 
 
 open Lean.Parser Term in
-def extContents := structInstFields (sepByIndent Term.structInstField "; " (allowTrailingSep := true))
+meta def extContents := structInstFields (sepByIndent Term.structInstField "; " (allowTrailingSep := true))
 
 /--
 Defines a new block extension.
@@ -871,7 +888,7 @@ the inline descriptor table.
 -/
 syntax "inline_extension" ident (ppSpace bracketedBinder)* (&" via " ident,+)? ppIndent(ppSpace "where" extContents) : command
 
-def isDataField : Lean.TSyntax ``Lean.Parser.Term.structInstField → Bool
+meta def isDataField : Lean.TSyntax ``Lean.Parser.Term.structInstField → Bool
   | `(Lean.Parser.Term.structInstField|data := $_) => true
   | `(Lean.Parser.Term.structInstField|data) => true
   | _ => false
@@ -927,7 +944,7 @@ elab_rules : command
     elabCommand cmd3
 
 open Lean in
-private def nameAndDef [Monad m] [MonadRef m] [MonadQuotation m] (ext : Name × Name) : m Term := do
+private meta def nameAndDef [Monad m] [MonadRef m] [MonadQuotation m] (ext : Name × Name) : m Term := do
   let quoted : Term := quote ext.fst
   let ident ← mkCIdentFromRef ext.snd
   `(($quoted, $(⟨ident⟩)))
@@ -1386,11 +1403,11 @@ def tagPart
 
 
 instance : Traverse Manual TraverseM where
-  part p :=
+  part p := private
     if p.metadata.isNone then pure (some {}) else pure none
-  block _ := pure ()
-  inline _ := pure ()
-  genrePart startMeta part := do
+  block _ := private pure ()
+  inline _ := private pure ()
+  genrePart startMeta part := private do
     let mut «meta» := startMeta
 
     -- First, assign a unique ID if there is none
@@ -1424,7 +1441,7 @@ instance : Traverse Manual TraverseM where
       if not modifiedSubs && «meta» == startMeta then none
       else pure { part with metadata := some «meta», subParts := subs }
 
-  genreBlock
+  genreBlock := private fun
     | ⟨name, id?, data, props⟩, content => do
       if let some id := id? then
         if let some impl := (← readThe ExtensionImpls).getBlock? name then
@@ -1449,7 +1466,7 @@ instance : Traverse Manual TraverseM where
         -- Assign a fresh ID if there is none. It can then be used on the next traversal pass.
         let id ← freshId
         pure <| some <| Block.other ⟨name, some id, data, props⟩ content
-  genreInline
+  genreInline := private fun
     | ⟨name, id?, data⟩, content => do
       if let some id := id? then
         if let some impl := (← readThe ExtensionImpls).getInline? name then
