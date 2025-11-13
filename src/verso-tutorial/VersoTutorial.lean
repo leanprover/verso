@@ -130,6 +130,17 @@ def displayOnly : Elab.DirectiveExpanderOf Unit
   | (), contents => do
     ``(Block.other Block.displayOnly #[$(← contents.mapM Elab.elabBlock),*])
 
+block_extension Block.codeOnly where
+  traverse _ _ _ _ := pure none
+  toHtml := some <| fun _ _ _ _ _ => pure .empty
+  toTeX := some <| fun _ _ _ _ _ => pure .empty
+
+@[directive]
+def codeOnly : Elab.DirectiveExpanderOf Unit
+  | (), contents => do
+    ``(Block.other Block.codeOnly #[$(← contents.mapM Elab.elabBlock),*])
+
+
 section
 open Verso.Code.External
 instance : ExternalCode Tutorial :=
