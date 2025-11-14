@@ -3,9 +3,15 @@ Copyright (c) 2023-2024 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-
-import Verso.Doc.Elab.Monad
-import Lean.DocString.Syntax
+module
+public import Verso.Doc.Elab.Monad
+meta import Verso.Doc.Elab.Monad
+public import Lean.DocString.Syntax
+import Verso.Doc.Elab.Inline
+public import Verso.Doc.Elab.Inline
+public meta import Verso.Doc.Elab.Inline
+public import Verso.Doc.Elab.Block
+public meta import Verso.Doc.Elab.Block
 
 namespace Verso.Doc.Elab
 
@@ -15,39 +21,10 @@ open DocElabM
 open Lean.Doc.Syntax
 open Verso.ArgParse (SigDoc)
 
-def throwUnexpected [Monad m] [MonadError m] (stx : Syntax) : m α :=
-  throwErrorAt stx "unexpected syntax{indentD stx}"
-
-partial def elabInline (inline : TSyntax `inline) : DocElabM (TSyntax `term) :=
-  withRef inline <| withFreshMacroScope <| withIncRecDepth <| do
-  match inline.raw with
-  | .missing =>
-    ``(sorryAx (Inline _) (synthetic := true))
-  | stx@(.node _ kind _) =>
-    let env ← getEnv
-    let result ← match (← liftMacroM (expandMacroImpl? env stx)) with
-    | some (_decl, stxNew?) => -- TODO terminfo here? Right now, we suppress most uses of it.
-      let stxNew ← liftMacroM <| liftExcept stxNew?
-      withMacroExpansionInfo stx stxNew <|
-        withRef stxNew <|
-          elabInline ⟨stxNew⟩
-    | none =>
-      let exp ← inlineExpandersFor kind
-      for e in exp do
-        try
-          let termStx ← withFreshMacroScope <| e stx
-          return termStx
-        catch
-          | ex@(.internal id) =>
-            if id == unsupportedSyntaxExceptionId then pure ()
-            else throw ex
-          | ex => throw ex
-      throwUnexpected stx
-  | other =>
-    throwUnexpected other
+set_option backward.privateInPublic false
 
 @[inline_expander Lean.Doc.Syntax.text]
-partial def _root_.Lean.Doc.Syntax.text.expand : InlineExpander := fun x =>
+public meta partial def _root_.Lean.Doc.Syntax.text.expand : InlineExpander := fun x =>
   match x with
   | `(inline| $s:str) => do
     -- Erase the source locations from the string literal to prevent unwanted hover info
@@ -61,31 +38,31 @@ partial def _root_.Lean.Doc.Syntax.text.expand : InlineExpander := fun x =>
       | .missing => .missing
 
 @[inline_expander Lean.Doc.Syntax.linebreak]
-def _root_.linebreak.expand : InlineExpander
+public meta def _root_.linebreak.expand : InlineExpander
   | `(inline|line! $s:str) =>
     ``(Inline.linebreak $(quote s.getString))
   | _ => throwUnsupportedSyntax
 
 @[inline_expander Lean.Doc.Syntax.emph]
-def _root_.Lean.Doc.Syntax.emph.expand : InlineExpander
+public meta def _root_.Lean.Doc.Syntax.emph.expand : InlineExpander
   | `(inline| _[ $args* ]) => do
     ``(Inline.emph #[$[$(← args.mapM elabInline)],*])
   | _ => throwUnsupportedSyntax
 
 @[inline_expander Lean.Doc.Syntax.bold]
-def _root_.Lean.Doc.Syntax.bold.expand : InlineExpander
+public meta def _root_.Lean.Doc.Syntax.bold.expand : InlineExpander
   | `(inline| *[ $args* ]) => do
     ``(Inline.bold #[$[$(← args.mapM elabInline)],*])
   | _ => throwUnsupportedSyntax
 
-def parseArgVal (val : TSyntax `arg_val) : DocElabM ArgVal := do
+meta def parseArgVal (val : TSyntax `arg_val) : DocElabM ArgVal := do
   match val with
   | `(arg_val|$s:str) => pure <| .str s
   | `(arg_val|$x:ident) => pure <| .name x
   | `(arg_val|$n:num) => pure <| .num n
   | other => throwErrorAt other "Can't decode argument value '{repr other}'"
 
-def parseArgs (argStx : TSyntaxArray `doc_arg) : DocElabM (Array Arg) := do
+public meta def parseArgs (argStx : TSyntaxArray `doc_arg) : DocElabM (Array Arg) := do
   let mut argVals := #[]
   for arg in argStx do
     match arg with
@@ -108,7 +85,7 @@ def parseArgs (argStx : TSyntaxArray `doc_arg) : DocElabM (Array Arg) := do
   pure argVals
 
 open Lean.Parser.Term in
-def appFallback
+meta def appFallback
     (stx : Syntax)
     (name : Ident) (resolvedName : Name)
     (argVals : Array Arg) (subjectArr : Option (Array (TSyntax `inline)))
@@ -132,7 +109,7 @@ def appFallback
       f (.node .none nullKind <| arrArg ++ argStx)
   return ⟨appStx⟩
 
-private def expanderDocHover (stx : Syntax) (what : String) (name : Name) (doc? : Option String) (sig? : Option SigDoc) : DocElabM Unit := do
+private meta def expanderDocHover (stx : Syntax) (what : String) (name : Name) (doc? : Option String) (sig? : Option SigDoc) : DocElabM Unit := do
   let mut out := s!"{what} `{name}`"
   if let some sig := sig? then
 
@@ -144,7 +121,7 @@ private def expanderDocHover (stx : Syntax) (what : String) (name : Name) (doc? 
 
 open Lean.Parser.Term in
 @[inline_expander Lean.Doc.Syntax.role]
-def _root_.Lean.Doc.Syntax.role.expand : InlineExpander
+public meta def _root_.Lean.Doc.Syntax.role.expand : InlineExpander
   | inline@`(inline| role{$name $args*} [$subjects*]) => do
       withRef inline <| withFreshMacroScope <| withIncRecDepth <| do
         let genre := (← readThe DocElabContext).genreSyntax
@@ -171,7 +148,7 @@ def _root_.Lean.Doc.Syntax.role.expand : InlineExpander
   | _ => throwUnsupportedSyntax
 
 @[inline_expander Lean.Doc.Syntax.link]
-def _root_.Lean.Doc.Syntax.link.expand : InlineExpander
+public meta def _root_.Lean.Doc.Syntax.link.expand : InlineExpander
   | `(inline| link[ $txt* ] $dest:link_target) => do
     let url : TSyntax `term ←
       match dest with
@@ -185,14 +162,14 @@ def _root_.Lean.Doc.Syntax.link.expand : InlineExpander
   | _ => throwUnsupportedSyntax
 
 @[inline_expander Lean.Doc.Syntax.footnote]
-def _root_.Lean.Doc.Syntax.link.footnote : InlineExpander
+public meta def _root_.Lean.Doc.Syntax.link.footnote : InlineExpander
   | `(inline| footnote( $name:str )) => do
     ``(Inline.footnote $(quote name.getString) $(← addFootnoteRef name))
   | _ => throwUnsupportedSyntax
 
 
 @[inline_expander Lean.Doc.Syntax.image]
-def _root_.Lean.Doc.Syntax.image.expand : InlineExpander
+public meta def _root_.Lean.Doc.Syntax.image.expand : InlineExpander
   | `(inline| image( $alt:str ) $dest:link_target) => do
     let altText := alt.getString
     let url : TSyntax `term ←
@@ -208,62 +185,26 @@ def _root_.Lean.Doc.Syntax.image.expand : InlineExpander
 
 
 @[inline_expander Lean.Doc.Syntax.code]
-def _root_.Lean.Doc.Syntax.code.expand : InlineExpander
+public meta def _root_.Lean.Doc.Syntax.code.expand : InlineExpander
   |  `(inline| code( $s )) =>
     ``(Inline.code $(quote s.getString))
   | _ => throwUnsupportedSyntax
 
 
 @[inline_expander Lean.Doc.Syntax.inline_math]
-def _root_.Lean.Doc.Syntax.inline_math.expand : InlineExpander
+public meta def _root_.Lean.Doc.Syntax.inline_math.expand : InlineExpander
   |  `(inline| \math code( $s )) =>
     ``(Inline.math MathMode.inline $s)
   | _ => throwUnsupportedSyntax
 
 @[inline_expander Lean.Doc.Syntax.display_math]
-def _root_.Lean.Doc.Syntax.display_math.expand : InlineExpander
+public meta def _root_.Lean.Doc.Syntax.display_math.expand : InlineExpander
   |  `(inline| \displaymath code( $s )) =>
     ``(Inline.math MathMode.display $s)
   | _ => throwUnsupportedSyntax
 
-def decorateClosing : TSyntax `block → DocElabM Unit
-  | `(block|:::%$s $_ $_* { $_* }%$e)
-  | `(block|```%$s $_ $_* | $_ ```%$e)
-  | `(block|%%%%$s $_* %%%%$e) => closes s e
-  | _ => pure ()
 
-/-- Elaborates a parsed block into syntax denoting an expression of type `Block genre`. -/
-partial def elabBlock (block : TSyntax `block) : DocElabM (TSyntax `term) :=
-  withTraceNode `Elab.Verso.block (fun _ => pure m!"Block {block}") <|
-  withRef block <| withFreshMacroScope <| withIncRecDepth <| do
-  decorateClosing block
-  match block.raw with
-  | .missing =>
-    ``(sorryAx Block (synthetic := true))
-  | stx@(.node _ kind _) =>
-    let env ← getEnv
-    let result ← match (← liftMacroM (expandMacroImpl? env stx)) with
-    | some (_decl, stxNew?) => -- TODO terminfo here? Right now, we suppress most uses of it.
-      let stxNew ← liftMacroM <| liftExcept stxNew?
-      withMacroExpansionInfo stx stxNew <|
-        withRef stxNew <|
-          elabBlock ⟨stxNew⟩
-    | none =>
-      let exp ← blockExpandersFor kind
-      for e in exp do
-        try
-          let termStx ← withFreshMacroScope <| e stx
-          return termStx
-        catch
-          | ex@(.internal id) =>
-            if id == unsupportedSyntaxExceptionId then continue
-            else throw ex
-          | ex => throw ex
-      throwUnexpected block
-  | _ =>
-    throwUnexpected block
-
-def partCommand (cmd : TSyntax `block) : PartElabM Unit :=
+public meta def partCommand (cmd : TSyntax `block) : PartElabM Unit :=
   withTraceNode `Elab.Verso.part (fun _ => pure m!"Part modification {cmd}") <|
   withRef cmd <| withFreshMacroScope <| do
   match cmd.raw with
@@ -297,13 +238,13 @@ where
     addBlock blk (blockInternalDocReconstructionPlaceholder := hygenicName)
 
 @[part_command Lean.Doc.Syntax.footnote_ref]
-partial def _root_.Lean.Doc.Syntax.footnote_ref.command : PartCommand
+public meta partial def _root_.Lean.Doc.Syntax.footnote_ref.command : PartCommand
   | `(block| [^ $name:str ]: $contents* ) =>
     addFootnoteDef name =<< contents.mapM (withRefsAllowed .onlyIfDefined <| elabInline ·)
   | _ => throwUnsupportedSyntax
 
 @[part_command Lean.Doc.Syntax.link_ref]
-partial def _root_.Lean.Doc.Syntax.link_ref.command : PartCommand
+public meta partial def _root_.Lean.Doc.Syntax.link_ref.command : PartCommand
   | `(block| [ $name:str ]: $url:str ) =>
     addLinkDef name url.getString
   | _ => throwUnsupportedSyntax
@@ -319,18 +260,10 @@ partial def PartElabM.State.closeAll (endPos : String.Pos.Raw) (state : PartElab
       state'.closeAll endPos
     else state'
 
-partial def closePartsUntil (outer : Nat) (endPos : String.Pos.Raw) : PartElabM Unit := do
-  let level ← currentLevel
-  if outer ≤ level then
-    match (← getThe PartElabM.State).partContext.close endPos with
-    | some ctxt' =>
-      modifyThe PartElabM.State fun st => {st with partContext := ctxt'}
-      if outer < level then
-        closePartsUntil outer endPos
-    | none => pure ()
+
 
 @[part_command Lean.Doc.Syntax.header]
-partial def _root_.Lean.Doc.Syntax.header.command : PartCommand
+public meta partial def _root_.Lean.Doc.Syntax.header.command : PartCommand
   | stx@`(block|header($headerLevel){$inlines*}) => do
     let titleBits ← liftDocElabM <| inlines.mapM elabInline
     let titleString := headerStxToString (← getEnv) stx
@@ -343,7 +276,7 @@ partial def _root_.Lean.Doc.Syntax.header.command : PartCommand
       pure ()
     else
       if let none := stx.getPos? then dbg_trace "No start position for {stx}"
-      closePartsUntil headerLevel stx.getPos!
+      PartElabM.closePartsUntil headerLevel stx.getPos!
 
     -- Start a new subpart
     push {
@@ -357,7 +290,7 @@ partial def _root_.Lean.Doc.Syntax.header.command : PartCommand
   | _ => throwUnsupportedSyntax
 
 @[part_command Lean.Doc.Syntax.metadata_block]
-def _root_.Lean.Doc.Syntax.metadata_block.command : PartCommand
+public meta def _root_.Lean.Doc.Syntax.metadata_block.command : PartCommand
   | `(block| %%%%$tk $fieldOrAbbrev*  %%%) => do
     let ctxt := (← getThe PartElabM.State).partContext
     if ctxt.blocks.size > 0 || ctxt.priorParts.size > 0 then
@@ -369,7 +302,7 @@ def _root_.Lean.Doc.Syntax.metadata_block.command : PartCommand
   | _ => throwUnsupportedSyntax
 
 @[part_command Lean.Doc.Syntax.command]
-def includeSection : PartCommand
+public meta def includeSection : PartCommand
   | `(block|command{include $args* }) => do
     if h : args.size = 0 then throwError "Expected an argument"
     else if h : args.size > 2 then throwErrorAt args[2] "Expected one or two arguments"
@@ -395,7 +328,7 @@ where
  resolved id := mkIdentFrom id <$> realizeGlobalConstNoOverloadWithInfo (mkIdentFrom id (docName id.getId))
 
 @[block_expander Lean.Doc.Syntax.command]
-def _root_.Lean.Doc.Syntax.command.expand : BlockExpander := fun block =>
+public meta def _root_.Lean.Doc.Syntax.command.expand : BlockExpander := fun block =>
   match block with
   | `(block|command{$name $args*}) => do
     withTraceNode `Elab.Verso.block (fun _ => pure m!"Block role {name}") <|
@@ -420,7 +353,7 @@ def _root_.Lean.Doc.Syntax.command.expand : BlockExpander := fun block =>
   | _ => throwUnsupportedSyntax
 
 @[block_expander Lean.Doc.Syntax.para]
-partial def _root_.Lean.Doc.Syntax.para.expand : BlockExpander
+public meta partial def _root_.Lean.Doc.Syntax.para.expand : BlockExpander
   | `(block| para[ $args:inline* ]) => do
     let genre := (← readThe DocElabContext).genreSyntax
     ``(Block.para (genre := $(⟨genre⟩)) #[$[$(← args.mapM elabInline)],*])
@@ -428,7 +361,7 @@ partial def _root_.Lean.Doc.Syntax.para.expand : BlockExpander
     throwUnsupportedSyntax
 
 
-def elabLi (block : Syntax) : DocElabM (Syntax × TSyntax `term) :=
+meta def elabLi (block : Syntax) : DocElabM (Syntax × TSyntax `term) :=
   withRef block <|
   match block with
   | `(list_item|*%$dot $contents:block*) => do
@@ -439,7 +372,7 @@ def elabLi (block : Syntax) : DocElabM (Syntax × TSyntax `term) :=
     throwUnsupportedSyntax
 
 @[block_expander Lean.Doc.Syntax.ul]
-def _root_.Lean.Doc.Syntax.ul.expand : BlockExpander
+public meta def _root_.Lean.Doc.Syntax.ul.expand : BlockExpander
   | `(block|ul{$itemStxs*}) => do
     let genre := (← readThe DocElabContext).genreSyntax
     let mut bullets : Array Syntax := #[]
@@ -456,7 +389,7 @@ def _root_.Lean.Doc.Syntax.ul.expand : BlockExpander
     throwUnsupportedSyntax
 
 @[block_expander Lean.Doc.Syntax.ol]
-def _root_.Lean.Doc.Syntax.ol.expand : BlockExpander
+public meta def _root_.Lean.Doc.Syntax.ol.expand : BlockExpander
   | `(block|ol($start:num){$itemStxs*}) => do
     let genre := (← readThe DocElabContext).genreSyntax
     let mut bullets : Array Syntax := #[]
@@ -472,7 +405,7 @@ def _root_.Lean.Doc.Syntax.ol.expand : BlockExpander
   | _ =>
     throwUnsupportedSyntax
 
-def elabDesc (block : Syntax) : DocElabM (Syntax × TSyntax `term) :=
+meta def elabDesc (block : Syntax) : DocElabM (Syntax × TSyntax `term) :=
   withRef block <|
   match block with
   | `(desc_item|:%$colon $dts* => $dds*) => do
@@ -483,7 +416,7 @@ def elabDesc (block : Syntax) : DocElabM (Syntax × TSyntax `term) :=
     throwUnsupportedSyntax
 
 @[block_expander Lean.Doc.Syntax.dl]
-def _root_.Lean.Doc.Syntax.dl.expand : BlockExpander
+public meta def _root_.Lean.Doc.Syntax.dl.expand : BlockExpander
   | `(block|dl{$itemStxs*}) => do
     let genre := (← readThe DocElabContext).genreSyntax
     let mut colons : Array Syntax := #[]
@@ -500,7 +433,7 @@ def _root_.Lean.Doc.Syntax.dl.expand : BlockExpander
     throwUnsupportedSyntax
 
 @[block_expander Lean.Doc.Syntax.blockquote]
-def _root_.Lean.Doc.Syntax.blockquote.expand : BlockExpander
+public meta def _root_.Lean.Doc.Syntax.blockquote.expand : BlockExpander
   | `(block|> $innerBlocks*) => do
     ``(Block.blockquote #[$[$(← innerBlocks.mapM elabBlock)],*])
   | _ =>
@@ -508,7 +441,7 @@ def _root_.Lean.Doc.Syntax.blockquote.expand : BlockExpander
 
 
 @[block_expander Lean.Doc.Syntax.codeblock]
-def _root_.Lean.Doc.Syntax.codeblock.expand : BlockExpander
+public meta def _root_.Lean.Doc.Syntax.codeblock.expand : BlockExpander
   | `(block|``` $nameStx:ident $argsStx* | $contents:str ```) => do
     let genre := (← readThe DocElabContext).genreSyntax
     let name ← realizeGlobalConstNoOverloadWithInfo nameStx
@@ -532,7 +465,7 @@ def _root_.Lean.Doc.Syntax.codeblock.expand : BlockExpander
     throwUnsupportedSyntax
 
 @[block_expander Lean.Doc.Syntax.directive]
-def _root_.Lean.Doc.Syntax.directive.expand : BlockExpander
+public meta def _root_.Lean.Doc.Syntax.directive.expand : BlockExpander
   | `(block| ::: $nameStx:ident $argsStx* { $contents:block* } ) => do
     let genre := (← readThe DocElabContext).genreSyntax
     let name ← realizeGlobalConstNoOverloadWithInfo nameStx

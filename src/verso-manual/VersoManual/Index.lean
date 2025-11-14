@@ -1,17 +1,20 @@
 /-
-Copyright (c) 2024 Lean FRO LLC. All rights reserved.
+Copyright (c) 2024-2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-
+module
 import Lean.Data.Json
 import Lean.Data.Json.FromToJson
 import Std.Data.HashMap
 import Std.Data.HashSet
 
 import Verso.Doc.Elab
-import VersoManual.Basic
+public import VersoManual.Basic
+import VersoManual.Html.SoftHyphenate
 import MultiVerso
+
+public import Verso.Doc
 
 open Verso Genre Manual
 open Verso.Multi
@@ -39,7 +42,7 @@ An index has the following components:
 
 -/
 
-structure Entry where
+public structure Entry where
   term : Doc.Inline Manual
   /-- A more specific sub-entry, if applicable.
 
@@ -58,13 +61,13 @@ structure Entry where
 
 deriving BEq, Hashable, ToJson, FromJson, Ord
 
-instance instLtEntry : LT Entry where
+public instance instLtEntry : LT Entry where
   lt x y := Ord.compare x y = .lt
 
-instance : DecidableRel (@LT.lt Entry instLtEntry) :=
+public instance : DecidableRel (@LT.lt Entry instLtEntry) :=
   fun _ _ => inferInstance
 
-structure See where
+public structure See where
   source : Doc.Inline Manual
   target : Doc.Inline Manual
   subTarget : Option (Doc.Inline Manual)
@@ -76,7 +79,7 @@ structure See where
   index : Option String := none
 deriving BEq, Hashable, ToJson, FromJson, Ord
 
-instance : LT See where
+public instance : LT See where
   lt x y := Ord.compare x y = .lt
 
 end Index
@@ -111,12 +114,16 @@ def Inline.index : Inline where
 
 def indexState := `Verso.Genre.Manual.index
 
-def index (args : Array (Doc.Inline Manual)) (subterm : Option String := none) (index : Option String := none) : Doc.Inline Manual :=
+@[grind =]
+theorem indexState.isPublic : NameMap.isPublic indexState := by
+  grind [indexState]
+
+public def index (args : Array (Doc.Inline Manual)) (subterm : Option String := none) (index : Option String := none) : Doc.Inline Manual :=
   let entry : Index.Entry := {term := .concat args, subterm := subterm.map Doc.Inline.text, index}
   Doc.Inline.other {Inline.index with data := ToJson.toJson entry} #[]
 
 /-- Adds an internal identifier as a target for a given index entry -/
-def Index.addEntry [Monad m] [MonadState TraverseState m] [MonadLiftT IO m] [MonadReaderOf TraverseContext m]
+public def Index.addEntry [Monad m] [MonadState TraverseState m] [MonadLiftT IO m] [MonadReaderOf TraverseContext m]
     (id : InternalId) (entry : Index.Entry) : m Unit := do
   let ist : Option (Except String Lean.Json) := (← get).get? indexState
   -- This function works directly with the JSON serialization of the index. Otherwise, there's a
@@ -131,8 +138,8 @@ def Index.addEntry [Monad m] [MonadState TraverseState m] [MonadLiftT IO m] [Mon
         | logError "Expected two elements for index state with first being an array"
       let entries' := entries.binInsert cmpEntry (.arr #[ToJson.toJson entry, ToJson.toJson id])
       modify fun i =>
-        i.set indexState (Lean.Json.arr #[.arr entries', see])
-  | none => modify (·.set indexState {entries := #[(entry, id)] : Index})
+        i.set indexState (Lean.Json.arr #[.arr entries', see]) (by clear entries'; grind)
+  | none => modify (·.set indexState {entries := #[(entry, id)] : Index} )
 where
   cmpEntry
     | .arr #[e1, id1], .arr #[e2, id2] =>
@@ -141,7 +148,7 @@ where
       else panic! "Malformed index entry JSON for ID"
     | _, _ => panic! "Malformed index entry JSON"
 
-
+public section
 @[inline_extension index]
 def index.descr : InlineDescr where
   traverse id data contents := do
@@ -201,6 +208,8 @@ def seeAlso.descr : InlineDescr := see.descr
 
 def Block.theIndex : Block where
   name := `Verso.Genre.Manual.theIndex
+
+end
 
 structure RenderedEntryId where
   toString : String
@@ -370,79 +379,10 @@ def Index.render (index : Index) : Array (IndexCat × Array RenderedEntry) := Id
 
   pure grouped
 
+public section
 
 def theIndex (index : Option String := none) : Doc.Block Manual :=
   Doc.Block.other {Block.theIndex with data := ToJson.toJson index} #[]
-
-open Verso.Output Html in
-partial def softHyphenateIdentifiers (html : Html) : Html :=
-  html.visitM (m := Id) (tag := rwTag)
-where
-  rwTag
-    | "code", attrs, content => pure (some (.tag "code" attrs (rwText content)))
-    | _, _, _ => pure none
-
-  addShy (xs : Array Html) : Array Html :=
-    if xs.isEmpty then xs
-    else if let some (Verso.Output.Html.tag "wbr" ..) := xs.back? then xs
-    else  xs.push (.text false "&shy;")
-
-  rwText
-    | .seq xs => .seq (xs.map rwText)
-    | .tag t attrs x => .tag t attrs (rwText x)
-    | .text esc str => Id.run do
-      let mut strs : Array Html := #[]
-      let mut prior : Option Char := none
-      let mut start := str.iter
-      let mut iter := str.iter
-      while h : iter.hasNext do
-        let current := iter.curr' h
-        if prior == some '.' && current != '.' then
-          strs := strs.push (.text esc <| start.extract iter)
-          -- Break lines after dots without hyphens
-          strs := strs.push {{<wbr/>}}
-          start := iter
-        else if current.isUpper then
-          if prior.map (·.isLower) |>.getD false then
-            if !strs.isEmpty then
-              strs := addShy strs
-            strs := strs.push (.text esc <| start.extract iter)
-            start := iter
-
-        prior := some current
-        iter := iter.next
-
-
-      if start.pos != iter.pos then
-        strs := addShy strs
-        strs := strs.push (.text esc <| start.extract iter)
-
-      if h : strs.size = 1 then strs[0] else .seq strs
-
-/-- info: "blahNotCode<code><a>foo&shy;Bar&shy;Baz</a></code>" -/
-#guard_msgs in
-open Verso.Output Html in
-#eval softHyphenateIdentifiers {{"blahNotCode"<code><a>"fooBarBaz"</a></code>}} |>.asString
-
-/-- info: "<code>abc.<wbr>def.<wbr>ghi.<wbr>jkl</code>" -/
-#guard_msgs in
-open Verso.Output Html in
-#eval softHyphenateIdentifiers {{<code>"abc.def.ghi.jkl"</code>}} |>.asString
-
-/-- info: "<code>ABC.<wbr>DEF</code>" -/
-#guard_msgs in
-open Verso.Output Html in
-#eval softHyphenateIdentifiers {{<code>"ABC.DEF"</code>}} |>.asString
-
-/-- info: "blahNotCode<code><a>fooBa.<wbr>rBaz.<wbr>ab&shy;CD</a></code>" -/
-#guard_msgs in
-open Verso.Output Html in
-#eval softHyphenateIdentifiers {{"blahNotCode"<code><a>"fooBa.rBaz.abCD"</a></code>}} |>.asString
-
-/-- info: "blahNotCode<code><a>fooBa...<wbr>rBaz.<wbr>ab&shy;CD</a></code>" -/
-#guard_msgs in
-open Verso.Output Html in
-#eval softHyphenateIdentifiers {{"blahNotCode"<code><a>"fooBa...rBaz.abCD"</a></code>}} |>.asString
 
 
 @[block_extension theIndex]

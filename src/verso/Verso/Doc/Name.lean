@@ -1,23 +1,19 @@
 /-
-Copyright (c) 2024 Lean FRO LLC. All rights reserved.
+Copyright (c) 2024-2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 
 module
-public meta import Lean.Environment
+public import Lean.Environment
+meta import all Verso.Doc.DocName
+public meta import Verso.Doc.DocName
 
 set_option doc.verso true
 
 namespace Verso.Doc
 
 open Lean
-
-@[match_pattern]
-private meta def versoModuleDocNameString : String := "the canonical document object name"
-
-public meta def docName (moduleName : Name) : Name :=
-  id <| .str moduleName versoModuleDocNameString
 
 /-- If the argument is a module's document name, extract the module name. Otherwise do nothing. -/
 public def unDocName (docName : Name) : Name :=
@@ -58,5 +54,5 @@ macro "%docName?" nameOrModuleName:ident : term => do
     else n
 
 
-public meta def currentDocName [Monad m] [MonadEnv m] : m Name := do
+public def currentDocName [Monad m] [MonadEnv m] : m Name := do
   pure <| docName <| (← Lean.MonadEnv.getEnv).mainModule
