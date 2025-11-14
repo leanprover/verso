@@ -72,6 +72,14 @@ def elabFromModuleDocs (x : Ident) (path : StrLit) (mod : Ident) (title : StrLit
     }
     pure name
 
+
+  let metadata ← runTermElabM fun _ => do
+    let metadataType ← Meta.mkAppM ``Genre.PartMetadata #[g]
+    if let some metadataTerm := metadata? then
+      Meta.mkAppM ``some #[← elabTerm metadataTerm (some metadataType)]
+    else
+      Meta.mkAppOptM ``none #[some metadataType]
+
   let mod ← runTermElabM fun _ => do
     let name ← mkFreshUserName (x.getId ++ `getPart)
     let title ← titleTerm.mapM (elabTerm · (some (.app (mkConst ``Verso.Doc.Inline) g)))
@@ -82,7 +90,8 @@ def elabFromModuleDocs (x : Ident) (path : StrLit) (mod : Ident) (title : StrLit
         value := ← Meta.mkAppM ``modToPage! #[
           ← Meta.mkAppM ``VersoLiterate.loadJsonString! #[mkConst jsonName, mkStrLit s!"JSON for {x.getId}"],
           title,
-          mkStrLit titleString
+          mkStrLit titleString,
+          metadata
         ],
         hints := .regular 0, safety := .safe
       }

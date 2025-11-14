@@ -247,7 +247,7 @@ private partial def mdBlock : MD4Lean.Block → Except String (Block g)
   | .html .. => throw "Literal HTML in Markdown not supported"
   | .hr => throw "Thematic break (horizontal rule) in Markdown not supported"
 
-partial def modToPage [LoadLiterate g] (mod : LitMod) (title : Array (Inline g)) (titleString : String) : Except String (VersoDoc g) := do
+partial def modToPage [LoadLiterate g] (mod : LitMod) (title : Array (Inline g)) (titleString : String) (metadata? : Option g.PartMetadata) : Except String (VersoDoc g) := do
   let mut stack : Array (Part g) := #[]
   let mut p : Part g := {title, titleString, metadata := none, content := #[], subParts := #[]}
 
@@ -305,7 +305,7 @@ partial def modToPage [LoadLiterate g] (mod : LitMod) (title : Array (Inline g))
     let p' := stack.back
     stack := stack.pop
     p := pushPart p' p
-  return VersoDoc.mk (fun _ => p) "{}"
+  return VersoDoc.mk (fun _ => metadata? |>.map ({ p with metadata := ·}) |>.getD p) "{}"
 where
   docstringBlock (doc : LitVersoDocString) : Array (Block g) :=
     let parts := doc.subsections.map loadPart
