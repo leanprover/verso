@@ -3,11 +3,12 @@ Copyright (c) 2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-
-import Verso
-
+module
 import VersoManual.Basic
-import VersoManual.License
+public import VersoManual.License
+public import VersoManual.LicenseInfo.Licenses
+public import VersoManual.Html.JsFile
+public import Verso.Code.Highlighted.WebAssets
 
 namespace Verso.Genre.Manual
 
@@ -16,24 +17,24 @@ open Verso.Code.Highlighted.WebAssets
 
 open Licenses
 
-class CanHighlightCode (α : Type) where
+public class CanHighlightCode (α : Type) where
   addDependencies : α → α
 
 /--
 Add the necessary frontend dependencies for showing Verso-highlighted Lean code
 -/
-def withHighlighting [CanHighlightCode α] (blockOrInline : α) : α :=
+public def withHighlighting [CanHighlightCode α] (blockOrInline : α) : α :=
   CanHighlightCode.addDependencies blockOrInline
 
-def popperJs : JsFile where
+public def popperJs : JsFile where
   filename := "popper.min.js"
-  contents := popper
+  contents := Highlighted.WebAssets.popper
   sourceMap? := some {
     filename := "popper.min.js.map"
     contents := popper.map
   }
 
-def tippyJs : JsFile where
+public def tippyJs : JsFile where
   filename := "tippy-bundle.umd.min.js"
   contents := tippy
   sourceMap? := some {
@@ -41,9 +42,9 @@ def tippyJs : JsFile where
     contents := tippy.map
   }
 
-def tippyCss := ("tippy-border.css", tippy.border.css)
+public def tippyCss := ("tippy-border.css", tippy.border.css)
 
-instance : CanHighlightCode BlockDescr where
+public instance : CanHighlightCode BlockDescr where
   addDependencies b :=
     {b with
       extraCss := highlightingStyle :: b.extraCss
@@ -53,7 +54,7 @@ instance : CanHighlightCode BlockDescr where
       licenseInfo := b.licenseInfo |>.insert tippy.js |>.insert popper.js
       }
 
-instance : CanHighlightCode InlineDescr where
+public instance : CanHighlightCode InlineDescr where
   addDependencies i :=
     {i with
       extraCss := highlightingStyle :: i.extraCss

@@ -3,8 +3,14 @@ Copyright (c) 2023-2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-
+module
+public import Lean.Parser.Types
+public meta import Verso.Parser
+public import Lean.Elab.Command
+public meta import SubVerso.Highlighting.Export
 import Verso.Doc
+public import Verso.Doc.Elab
+public meta import Verso.Doc.Elab.Monad
 import Verso.Doc.Concrete.InlineString
 import Verso.Doc.Lsp
 
@@ -12,14 +18,14 @@ namespace Verso.Doc.Concrete
 
 open Lean Verso Parser Doc Elab
 
-def document : Parser where
+public meta def document : Parser where
   fn := atomicFn <| Verso.Parser.document (blockContext := {maxDirective := some 6})
 
 @[combinator_parenthesizer document] def document.parenthesizer := PrettyPrinter.Parenthesizer.visitToken
 @[combinator_formatter document] def document.formatter := PrettyPrinter.Formatter.visitAtom Name.anonymous
 
 /-- Advance the parser to EOF on failure so Lean doesn't try to parse further commands -/
-def completeDocument : Parser where
+public meta def completeDocument : Parser where
   fn := (Lean.Parser.recoverFn Verso.Parser.document fun _ => skipFn) >> untilEoi
 where
   untilEoi : ParserFn := fun c s =>
@@ -28,15 +34,15 @@ where
 @[combinator_parenthesizer completeDocument] def completeDocument.parenthesizer := PrettyPrinter.Parenthesizer.visitToken
 @[combinator_formatter completeDocument] def completeDocument.formatter := PrettyPrinter.Formatter.visitAtom Name.anonymous
 
-partial def findGenreTm : Syntax → TermElabM Unit
+meta partial def findGenreTm : Syntax → TermElabM Unit
   | `($g:ident) => discard <| realizeGlobalConstNoOverloadWithInfo g -- Don't allow it to become an auto-argument
   | `(($e)) => findGenreTm e
   | _ => pure ()
 
-partial def findGenreCmd (genre : Syntax) : Command.CommandElabM Unit :=
+meta partial def findGenreCmd (genre : Syntax) : Command.CommandElabM Unit :=
   Command.runTermElabM fun _ => findGenreTm genre
 
-def saveRefs [Monad m] [MonadInfoTree m] (st : DocElabM.State) (st' : PartElabM.State) : m Unit := do
+meta def saveRefs [Monad m] [MonadInfoTree m] (st : DocElabM.State) (st' : PartElabM.State) : m Unit := do
   for r in internalRefs st'.linkDefs st.linkRefs do
     for stx in r.syntax do
       pushInfoLeaf <| .ofCustomInfo {stx := stx , value := Dynamic.mk r}
@@ -45,12 +51,13 @@ def saveRefs [Monad m] [MonadInfoTree m] (st : DocElabM.State) (st' : PartElabM.
       pushInfoLeaf <| .ofCustomInfo {stx := stx , value := Dynamic.mk r}
 
 
+open PartElabM in
 /--
 All-at-once elaboration of verso document syntax to syntax denoting a verso `Part`. Implements
 elaboration of the `#docs` command and `#doc` term. The `#doc` command is incremental, and thus
 splits the logic in this function across multiple functions.
 -/
-private def elabDoc (genre: Term) (title: StrLit) (topLevelBlocks : Array Syntax) (endPos: String.Pos.Raw) : TermElabM Term := do
+private meta def elabDoc (genre: Term) (title: StrLit) (topLevelBlocks : Array Syntax) (endPos: String.Pos.Raw) : TermElabM Term := do
   let env ← getEnv
   let titleParts ← stringToInlines title
   let titleString := inlinesToString env titleParts
@@ -109,7 +116,7 @@ replacing the parser for the `command` category:
 -/
 
 /-- Replaces the stored parsing behavior for the category `cat` with the behavior defined by `p`. -/
-private def replaceCategoryParser (cat : Name) (p : ParserFn) : Command.CommandElabM Unit :=
+private meta def replaceCategoryParser (cat : Name) (p : ParserFn) : Command.CommandElabM Unit :=
   modifyEnv (categoryParserFnExtension.modifyState · fun st =>
     fun n => if n == cat then p else st n)
 
@@ -117,7 +124,7 @@ private def replaceCategoryParser (cat : Name) (p : ParserFn) : Command.CommandE
 Parses each top-level block as either an `addBlockCmd` or an `addLastBlockCmd`. (This is what
 Verso uses to replace the command parser.)
 -/
-private def versoBlockCommandFn (genre : Term) (title : String) : ParserFn := fun c s =>
+private meta def versoBlockCommandFn (genre : Term) (title : String) : ParserFn := fun c s =>
   let iniSz  := s.stackSize
   let s := recoverBlockWith #[.missing] (Verso.Parser.block {}) c s
   if s.hasError then s
@@ -136,26 +143,26 @@ As we elaborate a `#doc` command top-level-block by top-level-block, the Lean en
 be used to thread state between the separate top level blocks. These environment extensions contain
 the state that needs to exist across top-level-block parsing events.
 -/
-structure DocElabEnvironment where
+public meta structure DocElabEnvironment where
   ctx : DocElabContext := ⟨.missing, mkConst ``Unit, .always, .none⟩
   docState : DocElabM.State := { highlightDeduplicationTable := some {} }
   partState : PartElabM.State := .init (.node .none nullKind #[])
 deriving Inhabited
 
-initialize docEnvironmentExt : EnvExtension DocElabEnvironment ← registerEnvExtension (pure {})
+meta initialize docEnvironmentExt : EnvExtension DocElabEnvironment ← registerEnvExtension (pure {})
 
 /--
 The original parser for the `command` category, which is restored while elaborating a Verso block so
 that nested Lean code has the correct syntax.
 -/
-initialize originalCatParserExt : EnvExtension CategoryParserFn ← registerEnvExtension (pure <| fun _ => whitespace)
+meta initialize originalCatParserExt : EnvExtension CategoryParserFn ← registerEnvExtension (pure <| fun _ => whitespace)
 
 /--
 Performs `PartElabM.run` with state gathered from `docStateExt` and `partStateExt`, and then updates
 the state in those environment extensions with any modifications. Also replaces the default command
 parser in case `act` wants to parse commands (such as within an embedded code block).
 -/
-private def runPartElabInEnv (act : PartElabM a) : Command.CommandElabM a := do
+private meta def runPartElabInEnv (act : PartElabM a) : Command.CommandElabM a := do
   let env ← getEnv
   let versoCmdFn := categoryParserFnExtension.getState env
   let versoEnv := docEnvironmentExt.getState env
@@ -169,7 +176,7 @@ private def runPartElabInEnv (act : PartElabM a) : Command.CommandElabM a := do
   finally
     modifyEnv (categoryParserFnExtension.setState · versoCmdFn)
 
-private def saveRefsInEnv : Command.CommandElabM Unit := do
+private meta def saveRefsInEnv : Command.CommandElabM Unit := do
   let versoEnv := docEnvironmentExt.getState (← getEnv)
   saveRefs versoEnv.docState versoEnv.partState
 
@@ -179,7 +186,7 @@ in `elabDoc` across three functions: the prelude in `startDoc`, the loop body in
 and the postlude in `finishDoc`.
 -/
 
-private def startDoc (genreSyntax : Term) (title: StrLit) : Command.CommandElabM String := do
+private meta def startDoc (genreSyntax : Term) (title: StrLit) : Command.CommandElabM String := do
   let env ← getEnv
   let titleParts ← stringToInlines title
   let titleString := inlinesToString env titleParts
@@ -192,14 +199,15 @@ private def startDoc (genreSyntax : Term) (title: StrLit) : Command.CommandElabM
     PartElabM.setTitle titleString (← titleParts.mapM (elabInline ⟨·⟩))
   return titleString
 
-private def runVersoBlock (block : TSyntax `block) : Command.CommandElabM Unit := do
+private meta def runVersoBlock (block : TSyntax `block) : Command.CommandElabM Unit := do
   runPartElabInEnv <| partCommand block
   -- This calls pushInfoLeaf a quadratic number of times for a for a linear number of top-level
   -- verso blocks, which should be harmless but may be inefficient. It may be desirable to tag
   -- info leaves that have already been pushed to avoid pushing them again.
   saveRefsInEnv
 
-private def finishDoc (genreSyntax : Term) (title : StrLit) : Command.CommandElabM Unit:= do
+open PartElabM in
+private meta def finishDoc (genreSyntax : Term) (title : StrLit) : Command.CommandElabM Unit:= do
   let endPos := (← getFileMap).source.endPos
   runPartElabInEnv <| do closePartsUntil 0 endPos
 
@@ -231,13 +239,13 @@ elab_rules : command
       finishDoc genreSyntax title
 
 @[command_elab addBlockCmd]
-def elabVersoBlock : Command.CommandElab
+public meta def elabVersoBlock : Command.CommandElab
   | `(addBlockCmd| $b:block $_:term) => do
     runVersoBlock b
   | _ => throwUnsupportedSyntax
 
 @[command_elab addLastBlockCmd]
-def elabVersoLastBlock : Command.CommandElab
+public meta def elabVersoLastBlock : Command.CommandElab
   | `(addLastBlockCmd| $b:block $genre:term $title:str) => do
     runVersoBlock b
     -- Finish up the document

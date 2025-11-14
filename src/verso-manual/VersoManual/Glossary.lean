@@ -3,13 +3,14 @@ Copyright (c) 2024-2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-
+module
 import Lean.Data.Json
 import Lean.Data.Json.FromToJson
 
 import Verso.Doc.Elab
 import Verso.Doc.PointOfInterest
-import VersoManual.Basic
+public import VersoManual.Basic
+public import Verso.Doc.Elab.Monad
 
 open Verso Genre Manual ArgParse
 open Verso.Doc.Elab
@@ -17,7 +18,7 @@ open Lean (Json ToJson FromJson)
 
 namespace Verso.Genre.Manual
 
-structure TechArgs where
+public structure TechArgs where
   key : Option String
   normalize : Bool
 
@@ -27,13 +28,16 @@ variable [Monad m] [Lean.MonadError m] [MonadLiftT Lean.CoreM m]
 def TechArgs.parse  : ArgParse m TechArgs :=
   TechArgs.mk <$> .named `key .string true <*> .flag `normalize true
 
-instance : FromArgs TechArgs m := ⟨TechArgs.parse⟩
+public instance : FromArgs TechArgs m where
+  fromArgs := private TechArgs.parse
 
 end
 
 private def glossaryState := `Verso.Genre.Manual.glossary
+@[grind =]
+private theorem glossaryState.isPublic : NameMap.isPublic glossaryState := by grind [glossaryState]
 
-def Inline.deftech : Inline where
+public def Inline.deftech : Inline where
   name := `Verso.Genre.Manual.deftech
 
 private partial def techString (text : Doc.Inline Manual) : String :=
@@ -72,7 +76,7 @@ of the automatically-derived key.
 Uses of `tech` use the same process to derive a key, and the key is matched against the `deftech` table.
 -/
 @[role]
-def deftech : RoleExpanderOf TechArgs
+public def deftech : RoleExpanderOf TechArgs
   | {key, normalize}, content => do
 
     -- Heuristically guess at the string and key (usually works)
@@ -116,7 +120,7 @@ def technicalTermDomainMapper : DomainMapper := {
   : DomainMapper }.setFont { family := .text }
 
 @[inline_extension deftech]
-def deftech.descr : InlineDescr where
+public def deftech.descr : InlineDescr where
   init st := st
     |>.setDomainTitle technicalTermDomain "Terminology"
     |>.setDomainDescription technicalTermDomain "Definitions of technical terms"
@@ -151,7 +155,7 @@ def deftech.descr : InlineDescr where
         | panic! s!"Untagged index target with data {inl}"
       return {{<span id={{link.htmlId.toString}} class="def-technical-term">{{← content.mapM go}}</span>}}
 
-def Inline.tech : Inline where
+public def Inline.tech : Inline where
   name := `Verso.Genre.Manual.tech
 
 open Lean in
@@ -169,7 +173,7 @@ Call with `(normalize := false)` to disable normalization, and `(key := some k)`
 of the automatically-derived key.
 -/
 @[role]
-def tech : RoleExpanderOf TechArgs
+public def tech : RoleExpanderOf TechArgs
   | {key, normalize}, content => do
 
     -- Heuristically guess at the string and key (usually works)
@@ -193,7 +197,7 @@ def tech : RoleExpanderOf TechArgs
 
 
 @[inline_extension tech]
-def tech.descr : InlineDescr where
+public def tech.descr : InlineDescr where
   traverse _id _data _contents := pure none
   toTeX :=
     some <| fun go _id _ content => do
