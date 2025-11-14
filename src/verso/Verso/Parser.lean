@@ -3,14 +3,17 @@ Copyright (c) 2023-2024 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
+module
 import Lean.Parser
+public import Lean.Parser.Basic
+public import Lean.Parser.Types
 
 import Verso.Parser.Lean
-import Verso.SyntaxUtils
+public import Verso.SyntaxUtils
 import Lean.DocString.Syntax
-import Lean.DocString.Parser
+public import Lean.DocString.Parser
 
-set_option guard_msgs.diff true
+public section
 
 namespace Verso.Parser
 
@@ -664,6 +667,10 @@ mutual
     text <|> linebreak ctxt <|> delimitedInline ctxt
 end
 
+open Lean.Parser Term in
+def metadataContents : Parser :=
+  structInstFields (sepByIndent structInstField ", " (allowTrailingSep := true))
+
 open Lean.Parser.Term in
 def metadataBlock : ParserFn :=
   nodeFn ``metadata_block <|
@@ -971,3 +978,20 @@ mutual
 
   partial def document (blockContext : BlockCtxt := {}) : ParserFn := ignoreFn (manyFn blankLine) >> blocks blockContext
 end
+
+end Verso.Parser
+
+namespace Verso.Doc.Concrete
+open Verso.Parser
+open Lean Elab Term
+
+public def stringToInlines [Monad m] [MonadError m] [MonadEnv m] [MonadQuotation m] (s : StrLit) : m (Array Syntax) :=
+  withRef s do
+    return (← textLine.parseString s.getString).getArgs
+
+open Lean Elab Term in
+public def stringToBlocks [Monad m] [MonadError m] [MonadEnv m] [MonadQuotation m] (s : StrLit) : m (Array Syntax) :=
+  withRef s do
+    return (← (blocks {}).parseString s.getString).getArgs
+
+end Verso.Doc.Concrete

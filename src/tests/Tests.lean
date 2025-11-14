@@ -18,5 +18,6 @@ import Tests.HtmlEntities
 import Tests.Refs
 import Tests.Serialization
 import Tests.TexUnit
+import Tests.VersoManual
 import Tests.Z85
 import Tests.Zip

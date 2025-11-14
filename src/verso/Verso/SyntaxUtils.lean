@@ -261,3 +261,5 @@ public def runParserCategory' (env : Environment) (opts : Lean.Options) (catName
 where
   toSyntaxErrors (ictx : InputContext) (s : ParserState) : Array SyntaxError :=
     s.allErrors.map fun (pos, stk, e) => (mkSyntaxError ictx pos stk e)
+
+end Verso.SyntaxUtils

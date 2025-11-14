@@ -3,19 +3,20 @@ Copyright (c) 2023-2024 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
+module
 import Std.Data.HashSet
 
-import Verso.Output.Html
-import MultiVerso.Path
+public import Verso.Output.Html
+public import MultiVerso.Path
 
-import VersoManual.Basic
+public import VersoManual.Basic
 import VersoManual.Html.Style
 
 namespace Verso.Genre.Manual.Html
 open Std (HashSet)
 open Verso.Output Html Multi
 
-structure Toc.Meta where
+public structure Toc.Meta where
   title : Html
   shortTitle : Option Html := none
   path : Path
@@ -23,7 +24,7 @@ structure Toc.Meta where
   sectionNum : Option (Array Numbering)
 deriving Repr, Inhabited
 
-structure Toc extends Toc.Meta where
+public structure Toc extends Toc.Meta where
   entry ::
   children : List Toc
 deriving Repr, Inhabited
@@ -38,28 +39,15 @@ partial def onlyPages (toc : Toc) : Toc :=
     children := toc.children.filter (·.path.size > toc.path.size) |>.map onlyPages
   }
 
-/--
-Specification for the preorder traversal implemented by the local navigation buttons.
 
-Use this for testing!
--/
-def preorder (toc : Toc) : List Toc :=
-  toc :: toc.children.attach.flatMap fun ⟨t, h⟩ =>
-    have := List.sizeOf_lt_of_mem h
-    have : sizeOf toc.children < sizeOf toc := by
-      cases toc
-      simp +arith
-    preorder t
-termination_by toc
-
-structure Zipper.ContextFrame extends Toc.Meta where
+public structure Zipper.ContextFrame extends Toc.Meta where
   /-- The nodes to the left, reversed -/
   left : List Toc
   /-- The nodes to the right, in order -/
   right : List Toc
 deriving Repr
 
-def Zipper.ContextFrame.ofToc (toc : Toc) (left right : List Toc) : Zipper.ContextFrame where
+public def Zipper.ContextFrame.ofToc (toc : Toc) (left right : List Toc) : Zipper.ContextFrame where
   left := left
   right := right
   title := toc.title
@@ -67,7 +55,7 @@ def Zipper.ContextFrame.ofToc (toc : Toc) (left right : List Toc) : Zipper.Conte
   id := toc.id
   sectionNum := toc.sectionNum
 
-structure Zipper where
+public structure Zipper where
   context : List Zipper.ContextFrame
   focus : Toc
 deriving Repr
@@ -77,7 +65,7 @@ namespace Zipper
 /--
 Focuses a zipper on the most specific page that corresponds to the provided path.
 -/
-def followPath (toc : Toc) (path : Path) : Option Zipper := Id.run do
+public def followPath (toc : Toc) (path : Path) : Option Zipper := Id.run do
   let mut here : Zipper := {context := [], focus := toc}
   let mut currentPath := #[]
   for lvl in path do
@@ -100,7 +88,7 @@ def followPath (toc : Toc) (path : Path) : Option Zipper := Id.run do
   else
     return none
 
-def up (self : Zipper) (hasParent : self.context ≠ []) : Zipper :=
+public def up (self : Zipper) (hasParent : self.context ≠ []) : Zipper :=
   match h : self.context with
   | {title, path, id, sectionNum, left, right, ..} :: more =>
     let children := left.reverse ++ self.focus :: right
@@ -109,7 +97,7 @@ def up (self : Zipper) (hasParent : self.context ≠ []) : Zipper :=
     }
   | [] => False.elim (by contradiction)
 
-def up? (self : Zipper) : Option Zipper :=
+public def up? (self : Zipper) : Option Zipper :=
   if h : !self.context.isEmpty then
     have : self.context ≠ [] := by
       intro h'
@@ -118,7 +106,7 @@ def up? (self : Zipper) : Option Zipper :=
     some (self.up this)
   else none
 
-def left? (self : Zipper) : Option Zipper :=
+public def left? (self : Zipper) : Option Zipper :=
   match self.context with
   | [] => none
   | parent :: ancestors =>
@@ -129,7 +117,7 @@ def left? (self : Zipper) : Option Zipper :=
       focus := l
     }
 
-def right? (self : Zipper) : Option Zipper :=
+public def right? (self : Zipper) : Option Zipper :=
   match self.context with
   | [] => none
   | parent :: ancestors =>
@@ -141,7 +129,7 @@ def right? (self : Zipper) : Option Zipper :=
     }
 
 /-- Enters the first child node if one exists -/
-def down? (self : Zipper) : Option Zipper :=
+public def down? (self : Zipper) : Option Zipper :=
   match self.focus.children with
   | [] => none
   | c :: cs => some {
@@ -157,7 +145,7 @@ theorem up_smaller_context (z : Zipper) {p : z.context ≠ []} : sizeOf (z.up p)
   . contradiction
 
 /-- Reconstructs the ToC that corresponds to a zipper by repeatedly moving upwards. -/
-def rebuild (self : Zipper) : Toc :=
+public def rebuild (self : Zipper) : Toc :=
   match h : self.context with
   | f :: more =>
     have : sizeOf more < sizeOf self.context := by simp_all; omega
@@ -165,7 +153,7 @@ def rebuild (self : Zipper) : Toc :=
   | [] => self.focus
 termination_by self.context
 
-partial def upUntilRight? (self : Zipper) : Option Zipper := do
+public partial def upUntilRight? (self : Zipper) : Option Zipper := do
   let parent ← self.up?
   match parent.context with
   | [] => upUntilRight? parent
@@ -183,7 +171,7 @@ Compute the next focus in a preorder traversal, if one exists.
 
 The traversal covers only ToC elements that have their own HTML pages.
 -/
-partial def next (self : Zipper) : Option Zipper :=
+public partial def next (self : Zipper) : Option Zipper :=
   -- Take the first child, if possible.
   -- Failing that, go to the sibling to the right.
   -- If there's no right sibling, go up until there is.
@@ -191,7 +179,7 @@ partial def next (self : Zipper) : Option Zipper :=
 
 
 /-- Find the rightmost descendent of the current focus with its own HTML page. -/
-partial def last (self : Zipper) : Zipper :=
+public partial def last (self : Zipper) : Zipper :=
   if let some (left, c) := getLast self.focus.children then {
       context := .ofToc self.focus left [] :: self.context,
       focus := c
@@ -208,108 +196,20 @@ where
     | y :: ys => getLast' (x :: acc) y ys
 
 /-- Compute the previous focus in a preorder traversal, if one exists -/
-def prev (self : Zipper) : Option Zipper := do
+public def prev (self : Zipper) : Option Zipper := do
   self.left?.map (·.last) <|> self.up?
 
 end Zipper
 
 end Toc
 
-section
-open Toc Zipper
-
-private def testToc : Toc where
-  title := "ROOT"
-  path := #[]
-  id := none
-  sectionNum := none
-  children := [
-    {title := "A", path := #["A"], id := none, sectionNum := none, children := []},
-    { title := "B", path := #["B"], id := none, sectionNum := none,
-      children := [
-        {title := "B1", path := #["B", "1"], id := none, sectionNum := none, children := []},
-        { title := "B2", path := #["B", "2"], id := none, sectionNum := none, children := [
-            {title := "B2a", path := #["B", "2", "a"], id := none, sectionNum := none, children := []}
-          ]
-        }
-      ]
-    },
-    {title := "C", path := #["C"], id := none, sectionNum := none, children := [
-        {title := "C1", path := #["C", "1"], id := none, sectionNum := none, children := []},
-        {title := "C2", path := #["C", "2"], id := none, sectionNum := none, children := []}
-      ]
-    },
-    {title := "D", path := #["D"], id := none, sectionNum := none, children := []},
-  ]
-
-
-/--
-info: Expected #[], seeing #[]
-	Prev: none
-	Up: none
-	Next: (some #[A])
-Expected #[A], seeing #[A]
-	Prev: (some #[])
-	Up: (some #[])
-	Next: (some #[B])
-Expected #[B], seeing #[B]
-	Prev: (some #[A])
-	Up: (some #[])
-	Next: (some #[B, 1])
-Expected #[B, 1], seeing #[B, 1]
-	Prev: (some #[B])
-	Up: (some #[B])
-	Next: (some #[B, 2])
-Expected #[B, 2], seeing #[B, 2]
-	Prev: (some #[B, 1])
-	Up: (some #[B])
-	Next: (some #[B, 2, a])
-Expected #[B, 2, a], seeing #[B, 2, a]
-	Prev: (some #[B, 2])
-	Up: (some #[B, 2])
-	Next: (some #[C])
-Expected #[C], seeing #[C]
-	Prev: (some #[B, 2, a])
-	Up: (some #[])
-	Next: (some #[C, 1])
-Expected #[C, 1], seeing #[C, 1]
-	Prev: (some #[C])
-	Up: (some #[C])
-	Next: (some #[C, 2])
-Expected #[C, 2], seeing #[C, 2]
-	Prev: (some #[C, 1])
-	Up: (some #[C])
-	Next: (some #[D])
-Expected #[D], seeing #[D]
-	Prev: (some #[C, 2])
-	Up: (some #[])
-	Next: none
-Done
--/
-#guard_msgs in
-#eval do
-  let mut here : Zipper := ⟨[], testToc⟩
-  let spec := testToc.preorder
-
-  for s in spec do
-    IO.println s!"Expected {s.path}, seeing {here.focus.path}"
-    IO.println s!"\tPrev: {here.prev |>.map (fun (z : Zipper) => z.focus.path)}"
-    IO.println s!"\tUp: {here.up? |>.map (fun (z : Zipper) => z.focus.path)}"
-    IO.println s!"\tNext: {here.next |>.map (fun (z : Zipper) => z.focus.path)}"
-    if let some n := here.next then
-      here := n
-    else
-      IO.println "Done"
-      break
-
-end
 
 /--
 Convert a `Toc` to `HTML`.
 
 The `depth` is a limit for the tree depth of the generated HTML (`none` for no limit).
 -/
-partial def Toc.html (depth : Option Nat) : Toc → Html
+public partial def Toc.html (depth : Option Nat) : Toc → Html
   | {title, shortTitle := _, path, id, sectionNum, children} =>
     if depth = some 0 then .empty
     else
@@ -479,7 +379,7 @@ where
       | none => {{<span class="unnumbered"></span>}}
       | some ns => {{<span class="number">{{sectionNumberString ns}}</span>" "}}
 
-def titlePage (title : Html) (authors : List String) (authorshipNote : Option String) (intro : Html) : Html := {{
+public def titlePage (title : Html) (authors : List String) (authorshipNote : Option String) (intro : Html) : Html := {{
   <div class="titlepage">
     <h1>{{title}}</h1>
     <div class="authors">
@@ -505,7 +405,7 @@ r#"(function(){
   }
 })()"#
 
-def page
+public def page
     (toc : Toc) (path : Path)
     (textTitle : String)
     (bookTitle : Html)
@@ -607,7 +507,7 @@ def page
 
 
 
-def relativize (path : Path) (html : Html) : Html :=
+public def relativize (path : Path) (html : Html) : Html :=
   html.visitM (m := ReaderT Path Id) (tag := rwTag) |>.run path
 where
   urlAttr (name : String) : Bool := name ∈ ["href", "src", "data", "poster"]
