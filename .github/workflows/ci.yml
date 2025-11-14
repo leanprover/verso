@@ -122,6 +122,7 @@ jobs:
             pgf
             environ
             etoolbox
+            ulem
 
       - name: Check `tlmgr` version
         run: tlmgr --version
