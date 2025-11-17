@@ -115,7 +115,7 @@ def withInfoSyntaxFn (p : ParserFn) (infoP : SourceInfo → ParserFn) : ParserFn
 
 def unescapeStr (str : String) : String := Id.run do
   let mut out := ""
-  let mut iter := str.iter
+  let mut iter := String.Legacy.iter str
   while !iter.atEnd do
     let c := iter.curr
     iter := iter.next
@@ -189,7 +189,7 @@ def onlyBlockOpeners : ParserFn := fun c s =>
   let position := c.fileMap.toPosition s.pos
   let lineStart := c.fileMap.lineStart position.line
   let ok : Bool := Id.run do
-    let mut iter := {c.inputString.iter with i := lineStart}
+    let mut iter := {String.Legacy.iter c.inputString with i := lineStart}
     while iter.i < s.pos && iter.hasNext do
       if iter.curr.isDigit then
         while iter.curr.isDigit && iter.i < s.pos && iter.hasNext do
@@ -216,14 +216,14 @@ def pushMissing : ParserFn := fun _c s =>
   s.pushSyntax .missing
 
 def strFn (str : String) : ParserFn := asStringFn <| fun c s =>
-  let rec go (iter : String.Iterator) (s : ParserState) :=
+  let rec go (iter : String.Legacy.Iterator) (s : ParserState) :=
     if iter.atEnd then s
     else
       let ch := iter.curr
       go iter.next <| satisfyFn (· == ch) ch.toString c s
   let iniPos := s.pos
   let iniSz := s.stxStack.size
-  let s := go str.iter s
+  let s := go (String.Legacy.iter str) s
   if s.hasError then s.mkErrorAt s!"'{str}'" iniPos (some iniSz) else s
 
 inductive OrderedListType where
@@ -545,7 +545,7 @@ mutual
   where
     opener : ParserFn := asStringFn (many1Fn (satisfyFn (· == '`') s!"any number of backticks"))
     closer (count : Nat) : ParserFn :=
-      asStringFn (atomicFn (repFn count (satisfyFn' (· == '`') s!"expected '{String.mk (.replicate count '`')}' to close inline code"))) >>
+      asStringFn (atomicFn (repFn count (satisfyFn' (· == '`') s!"expected '{String.ofList (.replicate count '`')}' to close inline code"))) >>
       notFollowedByFn (satisfyFn (· == '`') "`") "backtick"
     takeBackticksFn : Nat → ParserFn
       | 0 => satisfyFn (fun _ => false)
@@ -889,7 +889,7 @@ mutual
               (closeFence l fenceWidth >>
                withFence 0 fun info _ c s =>
                 if (c.fileMap.toPosition info.getPos!).column != col then
-                  s.mkErrorAt s!"closing '{String.mk <| List.replicate fenceWidth ':'}' from directive on line {l} at column {col}, but it's at column {(c.fileMap.toPosition info.getPos!).column}" info.getPos!
+                  s.mkErrorAt s!"closing '{String.ofList <| List.replicate fenceWidth ':'}' from directive on line {l} at column {col}, but it's at column {(c.fileMap.toPosition info.getPos!).column}" info.getPos!
                 else
                   s))
 
@@ -922,7 +922,7 @@ mutual
         else skipFn
 
     closeFence (line width : Nat) :=
-      let str := String.mk (.replicate width ':')
+      let str := String.ofList (.replicate width ':')
       bolThen (description := s!"closing '{str}' for directive from line {line}")
         (eatSpaces >>
          asStringFn (strFn str) >> notFollowedByFn (chFn ':') "':'" >>

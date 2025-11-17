@@ -82,7 +82,7 @@ def typography : Linter where
               .atBeginning (start.prev text.source)
             else
               .none
-          let mut iter : String.Iterator := ⟨text.source, start⟩
+          let mut iter : String.Legacy.Iterator := ⟨text.source, start⟩
           while h : iter.hasNext ∧ iter.pos ≤ stop do
             let here := iter.pos
             let c := iter.curr' h.1
@@ -135,7 +135,7 @@ initialize addLinter typography
 private def longestRunOf (string : Substring) (char : Char) : Nat := Id.run do
   let mut best := 0
   let mut curr : Option Nat := none
-  let mut iter := { string.str.iter with i := string.startPos }
+  let mut iter := { String.Legacy.iter string.str with i := string.startPos }
   while h : iter.hasNext ∧ iter.i < string.stopPos do
     let c := iter.curr' h.1
     iter := iter.next' h.1
@@ -166,7 +166,7 @@ private def lintDelimited (linter : Lean.Option Bool) (text : FileMap) (tk1 tk2 
   let contents := { text.source.toSubstring with startPos := stop1, stopPos := start2 }
   let biggest := longestRunOf contents delimChar
   if biggest < length - 1 then
-    let delim := String.mk (List.replicate (max (biggest + 1) minimal) delimChar)
+    let delim := String.ofList (List.replicate (max (biggest + 1) minimal) delimChar)
     let replacement := (delim ++ contents.toString ++ delim)
     let strLit :=
       Syntax.mkStrLit (start1.extract text.source stop2)

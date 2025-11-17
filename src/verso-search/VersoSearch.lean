@@ -211,9 +211,9 @@ private def empty : IndexItem.Raw := {}
 
 private  def addToken (self : IndexItem.Raw) (ref : String) (token : String) (termFreq : Float) : IndexItem.Raw :=
   if token.isEmpty then self
-  else loop self token.iter
+  else loop self (String.Legacy.iter token)
 where
-  loop (item : IndexItem.Raw) (iter : String.Iterator) : IndexItem.Raw :=
+  loop (item : IndexItem.Raw) (iter : String.Legacy.Iterator) : IndexItem.Raw :=
     if h : iter.hasNext then --while loop
       let c := iter.curr' h
       have : c = iter.curr' h := rfl
@@ -226,31 +226,31 @@ where
   termination_by iter.s.rawEndPos.byteIdx - iter.i.byteIdx
   decreasing_by
     have : iter.s.rawEndPos.byteIdx > iter.i.byteIdx := by
-      simp only [String.Iterator.hasNext, String.byteIdx_rawEndPos, decide_eq_true_eq] at h
+      simp only [String.Legacy.Iterator.hasNext, String.byteIdx_rawEndPos, decide_eq_true_eq] at h
       assumption
-    simp [String.Iterator.next']
+    simp [String.Legacy.Iterator.next']
     apply Nat.sub_lt_sub_left
     . simp_all [String.rawEndPos]
     . simp [String.Pos.Raw.next, Char.utf8Size]
       grind
 
 @[simp, grind =]
-private theorem string_iter_next'_same_s {iter : String.Iterator} {h : iter.hasNext = true} : (iter.next' h).s = iter.s := by
-  simp [String.Iterator.next']
+private theorem string_iter_next'_same_s {iter : String.Legacy.Iterator} {h : iter.hasNext = true} : (iter.next' h).s = iter.s := by
+  simp [String.Legacy.Iterator.next']
 
 @[simp, grind! .]
 private theorem char_utf8Size_pos {c : Char} : 0 < c.utf8Size := by
   grind [Char.utf8Size]
 
 @[simp, grind! .]
-private theorem string_iter_next'_i_gt_i {iter : String.Iterator} {h : iter.hasNext = true} : iter.i.byteIdx < (iter.next' h).i.byteIdx := by
-  simp_all [String.Iterator.next', String.Pos.Raw.next]
+private theorem string_iter_next'_i_gt_i {iter : String.Legacy.Iterator} {h : iter.hasNext = true} : iter.i.byteIdx < (iter.next' h).i.byteIdx := by
+  simp_all [String.Legacy.Iterator.next', String.Pos.Raw.next]
 
 
 private def getNode? (self : IndexItem.Raw) (token : String) : Option IndexItem.Raw :=
-  loop self token.iter
+  loop self (String.Legacy.iter token)
 where
-  loop (item : IndexItem.Raw) (iter : String.Iterator) : Option IndexItem.Raw := do
+  loop (item : IndexItem.Raw) (iter : String.Legacy.Iterator) : Option IndexItem.Raw := do
     if h : iter.hasNext then
       let item ← item.children[iter.curr' h]?
       loop item (iter.next' h)
@@ -259,16 +259,16 @@ where
   termination_by iter.s.rawEndPos.byteIdx - iter.i.byteIdx
   decreasing_by
     have : iter.s.rawEndPos.byteIdx > iter.i.byteIdx := by
-      simp only [String.Iterator.hasNext, String.byteIdx_rawEndPos, decide_eq_true_eq] at h
+      simp only [String.Legacy.Iterator.hasNext, String.byteIdx_rawEndPos, decide_eq_true_eq] at h
       assumption
     simp
     apply Nat.sub_lt_sub_left <;> simp_all
 
 
 private def removeToken (self : IndexItem.Raw) (ref token : String) : IndexItem.Raw :=
-  loop self token.iter
+  loop self (String.Legacy.iter token)
 where
-  loop (item : IndexItem.Raw) (iter : String.Iterator) : IndexItem.Raw :=
+  loop (item : IndexItem.Raw) (iter : String.Legacy.Iterator) : IndexItem.Raw :=
     if h : iter.hasNext then
       let ch := iter.curr' h
       let iter := iter.next' h
@@ -290,9 +290,9 @@ where
     simp [iter] at *
     clear iter
     have : iter.s.rawEndPos.byteIdx > iter.i.byteIdx := by
-      simp_all [String.Iterator.hasNext, String.Iterator.next', String.Pos.Raw.next]
+      simp_all [String.Legacy.Iterator.hasNext, String.Legacy.Iterator.next', String.Pos.Raw.next]
       grind
-    simp [String.Iterator.next', String.Pos.Raw.next]
+    simp [String.Legacy.Iterator.next', String.Pos.Raw.next]
     apply Nat.sub_lt_sub_left <;> simp_all
 end Raw
 
