@@ -393,8 +393,8 @@ where
     | .text esc str => Id.run do
       let mut strs : Array Html := #[]
       let mut prior : Option Char := none
-      let mut start := str.iter
-      let mut iter := str.iter
+      let mut start := String.Legacy.iter str
+      let mut iter := String.Legacy.iter str
       while h : iter.hasNext do
         let current := iter.curr' h
         if prior == some '.' && current != '.' then

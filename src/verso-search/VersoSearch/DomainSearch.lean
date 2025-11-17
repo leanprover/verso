@@ -115,7 +115,7 @@ private def isReservedWord (s : String) : Bool :=
 private def charToHex (c : Char) : String :=
   let code := c.toNat
   let hex := Nat.toDigits 16 code
-  let hexString := hex.asString
+  let hexString := String.ofList hex
   -- Pad to at least 2 characters
   if hexString.length = 1 then "0" ++ hexString else hexString
 
@@ -134,7 +134,7 @@ private def jsName (domainName : String) : String := Id.run do
     else
       "_x" ++ charToHex first
 
-  let mut iter := domainName.iter.next
+  let mut iter := String.Legacy.iter domainName |>.next
   while h : iter.hasNext do
     let c := iter.curr' h
     iter := iter.next' h

@@ -446,7 +446,7 @@ public partial def asString (html : Html) (indent : Nat := 0) (breakLines := tru
       s!"</{name}>" ++ breakline name
   | .seq elts => String.join (elts.toList.map (Html.asString · (indent := indent) (breakLines := breakLines)))
 where
-  newline i := "\n" ++ String.mk (List.replicate i ' ')
+  newline i := "\n" ++ String.ofList (List.replicate i ' ')
   breakline tag := if breakLines && tag ∈ newlineAfter then newline indent else ""
   breakline' tag := if breakLines && tag ∈ newlineAfter then newline (indent + 2) else ""
   attrsAsString xs := String.join <| xs.toList.map (fun ⟨k, v⟩ => s!" {k}=\"{escapeAttr v}\"")

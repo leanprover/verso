@@ -26,7 +26,7 @@ private def testDecode : IO Unit := do
   IO.println s!"Decoded bytes: {decoded}"
   -- Convert back to string for verification
   let chars := decoded.toList.map (fun b => Char.ofUInt8 b)
-  IO.println s!"Decoded string: {String.mk chars}"
+  IO.println s!"Decoded string: {String.ofList chars}"
 
 private def testRoundTrip : IO Unit := do
   let original : Array UInt8 := #[72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100, 33]  -- "Hello World!"

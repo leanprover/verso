@@ -344,10 +344,10 @@ where
   delims : String := Id.run do
     let mut n := 3
     let mut run := none
-    let mut iter := newContents.iter
-    while h : iter.hasNext do
-      let c := iter.curr' h
-      iter := iter.next
+    let mut iter := newContents.startValidPos
+    while h : iter ≠ newContents.endValidPos do
+      let c := iter.get h
+      iter := iter.next h
       if c == '`' then
         run := some (run.getD 0 + 1)
       else if let some k := run then
@@ -836,17 +836,17 @@ where
     let str := if str.startsWith "`" || str.endsWith "`" then " " ++ str ++ " " else str
     let mut n := 1
     let mut run := none
-    let mut iter := str.iter
-    while h : iter.hasNext do
-      let c := iter.curr' h
-      iter := iter.next
+    let mut iter := str.startValidPos
+    while h : iter ≠ str.endValidPos do
+      let c := iter.get h
+      iter := iter.next h
       if c == '`' then
         run := some (run.getD 0 + 1)
       else if let some k := run then
         if k > n then n := k
         run := none
 
-    let delim := String.mk (List.replicate n '`')
+    let delim := String.ofList (List.replicate n '`')
     return delim ++ str ++ delim
 
 
