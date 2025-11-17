@@ -99,7 +99,7 @@ def typography : Linter where
                 if iter.curr' h ∈ [' ', '\n', '.', ',', ':', ';', '?', '!', '}', ')', ']'] then
                   suggest "curly quotes" "”" linter.typography.quotes here
             | _, '-' =>
-              let s : Substring := {str := text.source, startPos := here, stopPos := stop}
+              let s : Substring.Raw := {str := text.source, startPos := here, stopPos := stop}
               let dashesSpaces := s.takeWhile fun c => c == '-' || c.isWhitespace
               let dashes := dashesSpaces.takeWhile (· == '-')
               let dashCount := dashes.stopPos.byteIdx - dashes.startPos.byteIdx
@@ -132,7 +132,7 @@ def typography : Linter where
 
 initialize addLinter typography
 
-private def longestRunOf (string : Substring) (char : Char) : Nat := Id.run do
+private def longestRunOf (string : Substring.Raw) (char : Char) : Nat := Id.run do
   let mut best := 0
   let mut curr : Option Nat := none
   let mut iter := { String.Legacy.iter string.str with i := string.startPos }
