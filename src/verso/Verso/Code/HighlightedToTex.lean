@@ -84,9 +84,9 @@ def replaceChars (s : String) (replace : Char → Option String) : String :=
   loop "" 0
 
 /--
-Escapes a string in an appropriate way for uses of
-`\Verb[commandchars=\\\{\}]|...|` and
-`\begin{Verbatim}[commandchars=\\\{\}]...\end{Verbatim}`
+Escapes a string in an appropriate way for uses of `\Verb` and
+`\begin{Verbatim}...\end{Verbatim}` (from package `fancyvrb`) with
+command characters `\`, `{`, and `}`.
 -/
 def escapeForVerbatim (s : String) : String :=
   replaceChars s fun
@@ -128,7 +128,7 @@ defmethod Highlighted.toVerbatimTeX : Highlighted → Verso.Output.TeX
      else content.toVerbatimTeX
   | .tactics _info _start _end content => content.toVerbatimTeX
   | .point _kind _info => \TeX{"[Point]"}
-  | .unparsed str => .raw (escapeForVerbatim str) -- FIXME: Is this right?
+  | .unparsed str => .raw (escapeForVerbatim str)
 
 def verbatim (t : Verso.Output.TeX) : Verso.Output.TeX :=
   .seq #[.raw "\\LeanVerb|", t, .raw "|"]
