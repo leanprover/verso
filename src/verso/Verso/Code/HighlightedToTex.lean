@@ -84,7 +84,7 @@ def replaceChars (s : String) (replace : Char → Option String) : String :=
   loop "" 0
 
 /--
-Escape a string in an appropriate way for uses of
+Escapes a string in an appropriate way for uses of
 `\Verb[commandchars=\\\{\}]|...|` and
 `\begin{Verbatim}[commandchars=\\\{\}]...\end{Verbatim}`
 -/
