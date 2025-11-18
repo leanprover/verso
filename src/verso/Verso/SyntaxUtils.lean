@@ -95,17 +95,17 @@ public defmethod ParserFn.test (p : ParserFn) (input : String) : IO String := do
   let stk := ppStack <| s'.stxStack.extract 0 s'.stxStack.size
 
   let remaining : String :=
-    if s'.pos ≥ input.endPos then "All input consumed."
-    else s!"Remaining:\n{repr (s'.pos.extract input input.endPos)}"
+    if s'.pos ≥ input.rawEndPos then "All input consumed."
+    else s!"Remaining:\n{repr (s'.pos.extract input input.rawEndPos)}"
 
   if s'.allErrors.isEmpty then
     return s!"Success! Final stack:\n{stk.pretty 50}\n{remaining}"
   else if let #[(p, _, err)] := s'.allErrors then
-    return s!"Failure @{p} ({ictx.fileMap.toPosition p}): {toString err}\nFinal stack:\n{stk.pretty 50}\nRemaining: {repr $ p.extract input input.endPos}"
+    return s!"Failure @{p} ({ictx.fileMap.toPosition p}): {toString err}\nFinal stack:\n{stk.pretty 50}\nRemaining: {repr $ p.extract input input.rawEndPos}"
   else
     let mut errors := ""
     for (p, _, e) in s'.allErrors.qsort (fun x y => x.1 < y.1 || x.1 == y.1 && toString x.2.2 < toString y.2.2)  do
-      errors := errors ++ s!"  @{p} ({ictx.fileMap.toPosition p}): {toString e}\n    {repr <| p.extract input input.endPos}\n"
+      errors := errors ++ s!"  @{p} ({ictx.fileMap.toPosition p}): {toString e}\n    {repr <| p.extract input input.rawEndPos}\n"
     return s!"{s'.allErrors.size} failures:\n{errors}\nFinal stack:\n{stk.pretty 50}"
 
 public defmethod ParserFn.test! (p : ParserFn) (input : String) : IO Unit :=
@@ -144,13 +144,15 @@ public def parserInputString [Monad m] [MonadFileMap m]
   let text ← getFileMap
   let preString := (0 : String.Pos.Raw).extract text.source (str.raw.getPos?.getD 0)
   let mut code := ""
-  let mut iter := preString.iter
-  while !iter.atEnd do
-    if iter.curr == '\n' then code := code.push '\n'
+  let mut iter := preString.startValidPos
+  while h : iter ≠ preString.endValidPos do
+    let c := iter.get h
+    iter := iter.next h
+    if c == '\n' then
+      code := code.push '\n'
     else
-      for _ in [0:iter.curr.utf8Size] do
+      for _ in [0:c.utf8Size] do
         code := code.push ' '
-    iter := iter.next
   let strOriginal? : Option String := do
     let ⟨start, stop⟩ ← str.raw.getRange?
     start.extract text.source stop
@@ -194,7 +196,7 @@ private partial def mkSyntaxError (c : InputContext) (pos : String.Pos.Raw) (stk
   }
 where
   -- Error recovery might lead to there being some "junk" on the stack
-  lastTrailing (s : SyntaxStack) : Option Substring :=
+  lastTrailing (s : SyntaxStack) : Option Substring.Raw :=
     s.toSubarray.findSomeRevM? (m := Id) fun stx =>
       if let .original (trailing := trailing) .. := stx.getTailInfo then pure (some trailing)
         else none
