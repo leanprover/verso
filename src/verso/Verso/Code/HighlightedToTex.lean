@@ -115,7 +115,7 @@ defmethod Highlighting.Token.toVerbatimTeX (t : Highlighting.Token) : Verso.Outp
 
 open Verso.Output.TeX in
 /--
-Return TeX that is appropriate for the content of a \Verb environment (from package fancyvrb)
+Returns TeX that is appropriate for the content of a `\Verb` environment (from package `fancyvrb`)
 with command characters `\`, `{`, and `}`.
 -/
 defmethod Highlighted.toVerbatimTeX : Highlighted → Verso.Output.TeX
