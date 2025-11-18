@@ -344,10 +344,10 @@ where
   delims : String := Id.run do
     let mut n := 3
     let mut run := none
-    let mut iter := newContents.iter
-    while h : iter.hasNext do
-      let c := iter.curr' h
-      iter := iter.next
+    let mut iter := newContents.startValidPos
+    while h : iter ≠ newContents.endValidPos do
+      let c := iter.get h
+      iter := iter.next h
       if c == '`' then
         run := some (run.getD 0 + 1)
       else if let some k := run then
@@ -836,17 +836,17 @@ where
     let str := if str.startsWith "`" || str.endsWith "`" then " " ++ str ++ " " else str
     let mut n := 1
     let mut run := none
-    let mut iter := str.iter
-    while h : iter.hasNext do
-      let c := iter.curr' h
-      iter := iter.next
+    let mut iter := str.startValidPos
+    while h : iter ≠ str.endValidPos do
+      let c := iter.get h
+      iter := iter.next h
       if c == '`' then
         run := some (run.getD 0 + 1)
       else if let some k := run then
         if k > n then n := k
         run := none
 
-    let delim := String.mk (List.replicate n '`')
+    let delim := String.ofList (List.replicate n '`')
     return delim ++ str ++ delim
 
 
@@ -903,21 +903,21 @@ def lit : RoleExpander
 
 
 private def hasSubstring (s pattern : String) : Bool :=
-  if h : pattern.endPos.1 = 0 then false
+  if h : pattern.rawEndPos.1 = 0 then false
   else
     have hPatt := Nat.zero_lt_of_ne_zero h
     let rec loop (pos : String.Pos.Raw) :=
-      if h : pos.byteIdx + pattern.endPos.byteIdx > s.endPos.byteIdx then
+      if h : pos.byteIdx + pattern.rawEndPos.byteIdx > s.rawEndPos.byteIdx then
         false
       else
         have := Nat.lt_of_lt_of_le (Nat.add_lt_add_left hPatt _) (Nat.ge_of_not_lt h)
-        if pos.substrEq s pattern 0 pattern.endPos.byteIdx then
+        if pos.substrEq s pattern 0 pattern.rawEndPos.byteIdx then
           have := Nat.sub_lt_sub_left this (Nat.add_lt_add_left hPatt _)
           true
         else
           have := Nat.sub_lt_sub_left this (pos.lt_next s)
           loop (pos.next s)
-      termination_by s.endPos.1 - pos.1
+      termination_by s.rawEndPos.1 - pos.1
     loop 0
 
 

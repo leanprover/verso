@@ -213,6 +213,6 @@ def compress (uncompressed : String)
     else
       data_position := data_position + 1
 
-  return String.mk data.toList
+  return data.foldl (init := "") (·.push ·)
 
 public def lzCompress (uncompressed : String) : String := compress uncompressed 6 getCharFromInt

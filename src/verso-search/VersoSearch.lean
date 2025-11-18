@@ -226,7 +226,7 @@ where
       { item with docs := item.docs.insert ref ⟨termFreq⟩ }
   termination_by token.endValidPos.offset.byteIdx - iter.offset.byteIdx
   decreasing_by
-    have := iter.isValid.le_endPos
+    have := iter.isValid.le_rawEndPos
     apply Nat.sub_lt_sub_left
     . rw [String.Pos.Raw.le_iff] at this
       have : iter.offset.byteIdx ≠ token.endValidPos.offset.byteIdx := by
@@ -248,8 +248,8 @@ where
       pure item
   termination_by token.endValidPos.offset.byteIdx - iter.offset.byteIdx
   decreasing_by
-    have := iter.isValid.le_endPos
-    simp only [String.offset_endValidPos, String.byteIdx_endPos, String.ValidPos.offset_next,
+    have := iter.isValid.le_rawEndPos
+    simp only [String.offset_endValidPos, String.byteIdx_rawEndPos, String.ValidPos.offset_next,
       String.Pos.Raw.byteIdx_add_char, gt_iff_lt]
     apply Nat.sub_lt_sub_left
     . apply Nat.lt_of_le_of_ne this
@@ -281,8 +281,8 @@ where
   termination_by token.endValidPos.offset.byteIdx - iter.offset.byteIdx
   decreasing_by
     rename_i iter' _
-    have := iter.isValid.le_endPos
-    have := iter'.isValid.le_endPos
+    have := iter.isValid.le_rawEndPos
+    have := iter'.isValid.le_rawEndPos
     apply Nat.sub_lt_sub_left
     . apply Nat.lt_of_le_of_ne this
       . intro h'

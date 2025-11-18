@@ -40,7 +40,7 @@ partial def headerTagLinter : Linter where
         if let `(block|header($n){$inls*}) := block then
           let some ⟨start, stop⟩ := block.getRange?
             | return none
-          let mut nextLine : String.Iterator := {s := text.source, i := stop}
+          let mut nextLine : String.Legacy.Iterator := {s := text.source, i := stop}
           while h : nextLine.hasNext do
             if (nextLine.curr' h).isWhitespace then nextLine := nextLine.next' h
             else break

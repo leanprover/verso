@@ -39,10 +39,12 @@ open Std (HashMap)
 
 ```lean
 -- Create an empty hash map with type annotations
-def emptyMap : HashMap String Nat := HashMap.empty
+def emptyMap : HashMap String Nat :=
+  HashMap.emptyWithCapacity
 
 -- Type inference usually works
-def scores := HashMap.empty (α := String) (β := Nat)
+def scores :=
+  HashMap.emptyWithCapacity (α := String) (β := Nat)
 
 -- Using the empty literal
 def config : HashMap String Bool := ∅
@@ -73,7 +75,7 @@ def colorCodes : HashMap String String :=
 ```lean
 -- Chain insertions
 def buildMap : HashMap String Nat :=
-  HashMap.empty
+  HashMap.emptyWithCapacity 3
     |>.insert "x" 10
     |>.insert "y" 20
     |>.insert "z" 30
@@ -84,7 +86,7 @@ def buildMap : HashMap String Nat :=
 ## Insertion
 
 ```lean
-def map1 := HashMap.empty.insert "key" 42
+def map1 := emptyMap.insert "key" 42
 
 -- Insert returns a new map (functional/immutable)
 def map2 := map1.insert "another" 100
@@ -187,7 +189,7 @@ namespace Mapping
 -- Transform all values
 def doubleValues (map : HashMap String Nat) :
     HashMap String Nat :=
-  map.fold (init := HashMap.empty) fun acc key val =>
+  map.fold (init := {}) fun acc key val =>
     acc.insert key (val * 2)
 
 def original := HashMap.ofList [("x", 5), ("y", 10)]
@@ -273,7 +275,7 @@ def grid : HashMap Coordinate String :=
 
 ```lean
 def countWords (text : List String) : HashMap String Nat :=
-  text.foldl (init := HashMap.empty) fun map word =>
+  text.foldl (init := {}) fun map word =>
     let count := map.getD word 0
     map.insert word (count + 1)
 
@@ -309,7 +311,7 @@ def fibonacci (n : Nat) (cache : Cache) : Nat × Cache :=
       (result, newCache)
 
 def computeFib (n : Nat) : Nat :=
-  let (result, _) := fibonacci n { store := HashMap.empty }
+  let (result, _) := fibonacci n { store := {} }
   result
 ```
 
@@ -318,7 +320,7 @@ def computeFib (n : Nat) : Nat :=
 ```lean
 def groupBy (f : α → β) (xs : List α) [Hashable β] [BEq β] :
     HashMap β (List α) :=
-  xs.foldl (init := HashMap.empty) fun map x =>
+  xs.foldl (init := {}) fun map x =>
     let key := f x
     let group := map.getD key []
     map.insert key (x :: group)
@@ -339,7 +341,7 @@ structure Document where
 
 def buildIndex (docs : List Document) :
     HashMap String (List Nat) :=
-  docs.foldl (init := HashMap.empty) fun index doc =>
+  docs.foldl (init := {}) fun index doc =>
     doc.content.foldl (init := index) fun idx word =>
       let docIds := idx.getD word []
       idx.insert word (doc.id :: docIds)

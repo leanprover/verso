@@ -111,7 +111,7 @@ where
 Converts a string to a valid slug, mangling as appropriate.
 -/
 def asSlug (str : String) : String :=
-  let rec loop (iter : String.Iterator) (acc : String) : String :=
+  let rec loop (iter : String.Legacy.Iterator) (acc : String) : String :=
     if iter.atEnd then acc
     else
       let c := iter.curr
@@ -119,7 +119,7 @@ def asSlug (str : String) : String :=
         if c ∈ Slug.validChars then acc.push c
         else if c.isWhitespace then acc.push '-'
         else acc ++ mangle c
-  loop str.iter ""
+  loop (String.Legacy.iter str) ""
 
 /--
 A slug is a well-formed string.

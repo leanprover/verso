@@ -149,14 +149,14 @@ elab_rules : term
       pure g
     else
       `((_ : Genre))
-  let endPos := body.raw.getTailPos? |>.getD (← getFileMap).source.endPos
+  let endPos := body.raw.getTailPos? |>.getD (← getFileMap).source.rawEndPos
   let docu ← elabDoc genre title body.raw[0][1].getArgs endPos
   Term.elabTerm (← ``( ($(docu) : VersoDoc $genre))) none
 
 
 elab "#doc" "(" genre:term ")" title:str "=>" text:completeDocument eoi : term => do
   findGenreTm genre
-  let endPos := (← getFileMap).source.endPos
+  let endPos := (← getFileMap).source.rawEndPos
   let doc ← elabDoc genre title text.raw.getArgs endPos
   Term.elabTerm (← `( ($(doc) : Part $genre))) none
 
@@ -263,7 +263,7 @@ private meta def runVersoBlock (block : TSyntax `block) : Command.CommandElabM U
 
 open PartElabM in
 private meta def finishDoc (genreSyntax : Term) (title : StrLit) : Command.CommandElabM Unit:= do
-  let endPos := (← getFileMap).source.endPos
+  let endPos := (← getFileMap).source.rawEndPos
   runPartElabInEnv <| do closePartsUntil 0 endPos
 
   let versoEnv := docEnvironmentExt.getState (← getEnv)
@@ -290,7 +290,7 @@ elab_rules : command
   -- so we detect that case and call finishDoc.
   if let some stopPos := tok.getTailPos? then
     let txt ← getFileMap
-    if stopPos.extract txt.source txt.source.endPos |>.all (·.isWhitespace) then
+    if stopPos.extract txt.source txt.source.rawEndPos |>.all (·.isWhitespace) then
       finishDoc genreSyntax title
 
 @[command_elab addBlockCmd]

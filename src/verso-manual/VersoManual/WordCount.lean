@@ -29,18 +29,19 @@ instance [WordCount α] : WordCount (Array α) where
 instance : WordCount String where
   countWords _ (str : String) := Id.run do
     let mut wc := 0
-    let mut iter := str.iter
+    let mut iter := str.startValidPos
     let mut state := false
-    while !iter.atEnd do
+    while h : iter ≠ str.endValidPos do
+      let curr := iter.get h
+      iter := iter.next h
       match state with
       | false => -- not in a word
-        if !iter.curr.isWhitespace then
+        if !curr.isWhitespace then
           state := true
           wc := wc + 1
       | true => -- in a word
-        if iter.curr.isWhitespace then
+        if curr.isWhitespace then
           state := false
-      iter := iter.next
     return wc
 
 /-- info: 4 -/
