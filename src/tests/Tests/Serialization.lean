@@ -496,15 +496,13 @@ instance : Arbitrary TraverseState where
     let extraCssFiles ← arbitrary
     let quickJump ← arbitrary
     let licenseInfo ← arbitrary
-    let remoteContent ← arbitrary
-    let mut st := {
+    let mut st : TraverseState := {
       tags, externalTags,
       domains,
       ids,
       extraCss, extraJs, extraJsFiles, extraCssFiles,
       quickJump,
-      licenseInfo,
-      remoteContent
+      licenseInfo
     }
     -- add content
     let count ← chooseNat
