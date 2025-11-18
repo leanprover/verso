@@ -3,12 +3,14 @@ Copyright (c) 2024 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-
+module
 import Lean.Environment
 import Lean.Meta
 import Lean.DocString.Syntax
-import VersoManual.Basic
+public import VersoManual.Basic
 import Verso.Doc.Elab
+public import Verso.Doc.Elab.Monad
+import Lean.Elab.Tactic.Doc
 
 
 namespace Verso.Genre.Manual
@@ -25,7 +27,7 @@ The parameter `present` tracks which names' docs are present in the manual, sort
 set of names in each namespace is encoded as a string with space separation to prevent running out
 of heartbeats while quoting larger data structures.
 -/
-def Block.progress
+public def Block.progress
     (namespaces exceptions : Array Name)
     (present : List (Name × String))
     (tactics : Array Name) :
@@ -52,7 +54,7 @@ private def ignore [Monad m] [MonadLiftT CoreM m] [MonadEnv m] (x : Name) : m Bo
     "eq_".isPrefixOf str && (str.drop 3).all (·.isDigit)
 
 open Lean Elab Command in
-#eval show CommandElabM Unit from do
+run_cmd do
   let mut names := #[]
   for (x, _) in (← getEnv).constants do
     if x matches .str .anonymous _ && !(← liftTermElabM <| ignore x) then
@@ -61,7 +63,7 @@ open Lean Elab Command in
   elabCommand <| ← `(private def $(mkIdent `allRootNames) : Array Name := #[$(names.map (quote · : Name → Term)),*])
 
 @[directive]
-def progress : DirectiveExpanderOf Unit
+public def progress : DirectiveExpanderOf Unit
   | (), blocks => do
     let mut namespaces : NameSet := {}
     let mut exceptions : NameSet := {}
@@ -110,7 +112,7 @@ def progress : DirectiveExpanderOf Unit
     ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.progress $(quote namespaces.toArray) $(quote exceptions.toArray) $(quote present') $(quote allTactics)) #[])
 
 @[block_extension Block.progress]
-def progress.descr : BlockDescr where
+public def progress.descr : BlockDescr where
   traverse _ _ _ := pure none
   toHtml := some fun _ _ _ info _blocks => open Output.Html in do
     let documented ← match ((← Doc.Html.HtmlT.state).get? `Verso.Genre.Manual.docstring).getD (pure <| .mkObj []) >>= Json.getObj? with

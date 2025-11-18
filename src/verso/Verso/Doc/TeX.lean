@@ -3,49 +3,47 @@ Copyright (c) 2023-2024 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-
-import Verso.Doc
+module
+public import Verso.Doc
 import Verso.Method
-import Verso.Output.TeX
-
-open Verso.Doc
+public import Verso.Output.TeX
 
 namespace Verso.Doc.TeX
 
 open Verso.Output TeX
 
-structure Options (g : Genre) (m : Type → Type) where
+public structure Options (g : Genre) (m : Type → Type) where
   headerLevels : Array String := #["chapter", "section", "subsection", "subsubsection", "paragraph"]
   /-- The level of the top-level headers -/
   headerLevel : Option (Fin headerLevels.size)
   logError : String → m Unit
 
-def Options.reinterpret (lift : {α : _} → m α → m' α) (opts : Options g m) : Options g m' :=
+public def Options.reinterpret (lift : {α : _} → m α → m' α) (opts : Options g m) : Options g m' :=
   {opts with
     logError := fun msg => lift <| opts.logError msg}
 
-def Options.lift [MonadLiftT m m'] (opts : Options g m) : Options g m' :=
+public def Options.lift [MonadLiftT m m'] (opts : Options g m) : Options g m' :=
   opts.reinterpret MonadLiftT.monadLift
 
-abbrev TeXT (genre : Genre) (m : Type → Type) : Type → Type :=
+public abbrev TeXT (genre : Genre) (m : Type → Type) : Type → Type :=
   ReaderT (Options genre m × genre.TraverseContext × genre.TraverseState) m
 
-instance [Monad m] [Inhabited α] : Inhabited (TeXT g m α) := ⟨pure default⟩
+public instance [Monad m] [Inhabited α] : Inhabited (TeXT g m α) := ⟨pure default⟩
 
-def options [Monad m] : TeXT g m (Options g m) := do
+public def options [Monad m] : TeXT g m (Options g m) := do
   pure (← read).fst
 
-def logError [Monad m] (message : String) : TeXT g m Unit := do
+public def logError [Monad m] (message : String) : TeXT g m Unit := do
   (← options).logError message
 
-def header [Monad m] (name : TeX) : TeXT g m TeX := do
+public def header [Monad m] (name : TeX) : TeXT g m TeX := do
   let opts ← options
   let some i := opts.headerLevel
     | logError s!"No more header nesting available at {name.asString}"; return \TeX{\textbf{\Lean{name}}}
   let header := opts.headerLevels[i]
   pure <| .raw (s!"\\{header}" ++ "{") ++ name ++ .raw "}"
 
-def inHeader [Monad m] (act : TeXT g m α) : TeXT g m α :=
+public def inHeader [Monad m] (act : TeXT g m α) : TeXT g m α :=
   withReader (fun (opts, st, st') => (bumpHeader opts, st, st')) act
 where
   bumpHeader opts :=
@@ -55,7 +53,7 @@ where
       else {opts with headerLevel := none}
     else opts
 
-class GenreTeX (genre : Genre) (m : Type → Type) where
+public class GenreTeX (genre : Genre) (m : Type → Type) where
   part (partTeX : Part genre → TeXT genre m TeX) (metadata : genre.PartMetadata) (contents : Part genre) : TeXT genre m TeX
   block (inlineTeX : Inline genre → TeXT genre m TeX) (blockTeX : Block genre → TeXT genre m TeX) (container : genre.Block) (contents : Array (Block genre)) : TeXT genre m TeX
   inline (inlineTeX : Inline genre → TeXT genre m TeX) (container : genre.Inline) (contents : Array (Inline genre)) : TeXT genre m TeX
@@ -63,7 +61,7 @@ class GenreTeX (genre : Genre) (m : Type → Type) where
 def escapeForTexHref (s : String) : String :=
   s.replace "%" "\\%"
 
-partial defmethod Inline.toTeX [Monad m] [GenreTeX g m] : Inline g → TeXT g m TeX
+public partial defmethod Inline.toTeX [Monad m] [GenreTeX g m] : Inline g → TeXT g m TeX
   | .text str => pure <| .text str
   | .link content dest => do
     pure \TeX{\href{\Lean{.raw (escapeForTexHref dest)}}{\Lean{← content.mapM Inline.toTeX}}}
@@ -83,7 +81,7 @@ partial defmethod Inline.toTeX [Monad m] [GenreTeX g m] : Inline g → TeXT g m 
   | .concat inlines => inlines.mapM toTeX
   | .other container content => GenreTeX.inline Inline.toTeX container content
 
-partial defmethod Block.toTeX [Monad m] [GenreTeX g m] : Block g → TeXT g m TeX
+public partial defmethod Block.toTeX [Monad m] [GenreTeX g m] : Block g → TeXT g m TeX
   | .para xs => do
     pure <| (← xs.mapM Inline.toTeX)
   | .blockquote bs => do
@@ -100,7 +98,7 @@ partial defmethod Block.toTeX [Monad m] [GenreTeX g m] : Block g → TeXT g m Te
   | .other container content => GenreTeX.block Inline.toTeX Block.toTeX container content
 
 
-partial defmethod Part.toTeX [Monad m] [GenreTeX g m] (p : Part g) : TeXT g m TeX :=
+public partial defmethod Part.toTeX [Monad m] [GenreTeX g m] (p : Part g) : TeXT g m TeX :=
   match p.metadata with
   | .none => do
     pure \TeX{

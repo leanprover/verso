@@ -3,15 +3,21 @@ Copyright (c) 2023-2024 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-
+module
+public import Lean.Data.Json.Basic
+public import Lean.Data.Lsp.LanguageFeatures
+public import Lean.Server.CodeActions.Basic
+public meta import Lean.Server.FileWorker.SemanticHighlighting
 import Lean.Data.Lsp
 import Lean.Server
 
+public meta import Verso.Doc.Elab.Basic
+import Verso.Method
 import Verso.Doc.Elab.Monad
 import Lean.DocString.Syntax
-import Verso.Hover
-import Verso.Doc.PointOfInterest
-import Verso.Doc.Name
+public meta import Verso.Hover
+public meta import Verso.Doc.PointOfInterest
+public meta import Verso.Doc.Name
 
 namespace Verso.Lsp
 
@@ -24,15 +30,13 @@ open Lean
 
 
 open Lean Server in
-
-open Lean Server in
 /--
 Runs `act` to handle a request. If the result satisfies `accept`, then it is returned.
 
 If the result does not satisfy request, then it is handled by the prior response `resp`. If it
 fails, then the error is logged and `resp` is used.
 -/
-def withFallbackAs (accept : α → Bool) (resp : RequestTask α) (act : RequestM α) : RequestM (RequestTask α) := do
+meta def withFallbackAs (accept : α → Bool) (resp : RequestTask α) (act : RequestM α) : RequestM (RequestTask α) := do
   RequestM.bindTaskCostly (← act.asTask) fun
     | .error e => do
       (← read).hLog.putStrLn s!"Doc LSP request failed: {e.message}"
@@ -41,7 +45,7 @@ def withFallbackAs (accept : α → Bool) (resp : RequestTask α) (act : Request
       if accept v then pure (.pure v)
       else pure resp
 
-defmethod Syntax.containsPos (s : Syntax) (p : String.Pos.Raw) : Bool :=
+meta defmethod Syntax.containsPos (s : Syntax) (p : String.Pos.Raw) : Bool :=
   match span s.getHeadInfo, span s.getTailInfo with
   | some (start, _), some (_, stop) => p >= start && p < stop
   | _, _ => false
@@ -51,7 +55,7 @@ where
     | .synthetic (pos := start) (endPos := stop) .. => some (start, stop)
     | _ => none
 
-defmethod Syntax.lspRange (text : FileMap) (s : Syntax) : Option Lsp.Range :=
+meta defmethod Syntax.lspRange (text : FileMap) (s : Syntax) : Option Lsp.Range :=
   match span s.getHeadInfo, span s.getTailInfo with
   | some (start, _), some (_, stop) => some ⟨text.utf8PosToLspPos start, text.utf8PosToLspPos stop⟩
   | _, _ => none
@@ -63,17 +67,18 @@ where
 
 
 open Lean.Lsp in
-instance : FromJson DocumentHighlightKind where
+meta instance : FromJson DocumentHighlightKind where
   fromJson?
     | 1 => pure DocumentHighlightKind.text
     | 2 => pure DocumentHighlightKind.read
     | 3 => pure DocumentHighlightKind.write
     | n => throw s!"Expected 1, 2, or 3, got {n}"
 
-
+meta section
 deriving instance FromJson for Lean.Lsp.DocumentHighlight
+end
 
-instance : FromJson Lean.Lsp.SymbolKind where
+meta instance : FromJson Lean.Lsp.SymbolKind where
   fromJson? v := open Lean.Lsp in do
     let .num i := v | throw "expected number"
     match i with
@@ -105,17 +110,20 @@ instance : FromJson Lean.Lsp.SymbolKind where
     | 26 => pure SymbolKind.typeParameter
     | _ => throw s!"didn't understand {i}"
 
+meta section
 deriving instance FromJson for Lean.Lsp.DocumentSymbolAux
+end
+
 open Lean Lsp in
 set_option linter.unusedVariables false in -- it doesn't like the `inst` name here
-partial def symFromJson? (j : Json) : Except String DocumentSymbol := do
+meta partial def symFromJson? (j : Json) : Except String DocumentSymbol := do
   let fromJ : {α : _} → [inst : FromJson α] → FromJson (Lean.Lsp.DocumentSymbolAux α) := inferInstance
   DocumentSymbol.mk <$> @FromJson.fromJson? _ (fromJ (inst:=⟨symFromJson?⟩)) j
 
-instance : FromJson Lean.Lsp.DocumentSymbol where
+meta instance : FromJson Lean.Lsp.DocumentSymbol where
   fromJson? := symFromJson?
 
-partial instance : FromJson Lean.Lsp.DocumentSymbolResult where
+meta partial instance : FromJson Lean.Lsp.DocumentSymbolResult where
   fromJson? j := do
     let .arr elts := j
       | throw "expected array"
@@ -124,7 +132,7 @@ partial instance : FromJson Lean.Lsp.DocumentSymbolResult where
 
 
 open Lean Server Lsp RequestM in
-def handleRefs (params : ReferenceParams) (prev : RequestTask (Array Location)) : RequestM (RequestTask (Array Location)) := do
+meta def handleRefs (params : ReferenceParams) (prev : RequestTask (Array Location)) : RequestM (RequestTask (Array Location)) := do
   let doc ← readDoc
   let text := doc.meta.text
   let pos := text.lspPosToUtf8Pos params.position
@@ -147,7 +155,7 @@ def handleRefs (params : ReferenceParams) (prev : RequestTask (Array Location)) 
         pure <| locs
 
 open Lean Server Lsp RequestM in
-partial def handleHl (params : DocumentHighlightParams) (prev : RequestTask DocumentHighlightResult) : RequestM (RequestTask DocumentHighlightResult) := do
+meta partial def handleHl (params : DocumentHighlightParams) (prev : RequestTask DocumentHighlightResult) : RequestM (RequestTask DocumentHighlightResult) := do
   let doc ← readDoc
   let text := doc.meta.text
   let pos := text.lspPosToUtf8Pos params.position
@@ -222,11 +230,11 @@ where
 
 open Lean Lsp
 
-def rangeContains (outer inner : Lsp.Range) :=
+meta def rangeContains (outer inner : Lsp.Range) :=
   outer.start < inner.start && inner.«end» ≤ outer.«end» ||
   outer.start == inner.start && inner.«end» < outer.«end»
 
-partial def mergeInto (sym : DocumentSymbol) (existing : Array DocumentSymbol) : Array DocumentSymbol := Id.run do
+meta partial def mergeInto (sym : DocumentSymbol) (existing : Array DocumentSymbol) : Array DocumentSymbol := Id.run do
   let ⟨sym⟩ := sym
   for h : i in [0:existing.size] do
     let ⟨e⟩ := existing[i]
@@ -256,14 +264,14 @@ partial def mergeInto (sym : DocumentSymbol) (existing : Array DocumentSymbol) :
   -- If we got through the loop, then the new symbol belongs at the end
   return existing.push ⟨sym⟩
 
-def mergeManyInto (syms : Array DocumentSymbol) (existing : Array DocumentSymbol) : Array DocumentSymbol :=
+meta def mergeManyInto (syms : Array DocumentSymbol) (existing : Array DocumentSymbol) : Array DocumentSymbol :=
   syms.foldr (init := existing) mergeInto
 
 /--
 The Lean VS Code mode can't deal with symbols whose names are "falsy" - this recovers more
 robustly, removing empty strings and arrays.
 -/
-partial def removeFalsy (sym : DocumentSymbol) : DocumentSymbol :=
+meta partial def removeFalsy (sym : DocumentSymbol) : DocumentSymbol :=
   match sym with
   | ⟨sym'⟩ =>
     ⟨{sym' with
@@ -281,7 +289,7 @@ partial def removeFalsy (sym : DocumentSymbol) : DocumentSymbol :=
       }⟩
 
 open Lean Server Lsp RequestM in
-def mergeResponses (docTask : RequestTask α) (leanTask : RequestTask β) (f : Option α → Option β → γ) : RequestM (RequestTask γ) := do
+meta def mergeResponses (docTask : RequestTask α) (leanTask : RequestTask β) (f : Option α → Option β → γ) : RequestM (RequestTask γ) := do
   pure <| docTask.bindCostly fun
   | .ok docResult =>
     leanTask.bindCostly fun
@@ -295,11 +303,11 @@ def mergeResponses (docTask : RequestTask α) (leanTask : RequestTask β) (f : O
 
 -- In Lean 4.18.0, this function has type IO, but we need a BaseIO version here. TODO: modify the
 -- type upstream, then delete this shim.
-def findSimpleDocStringCompat? (env : Environment) (declName : Name) : BaseIO (Option String) :=
+meta def findSimpleDocStringCompat? (env : Environment) (declName : Name) : BaseIO (Option String) :=
   pure <| docStringExt.find? env declName
 
 open Lean Server Lsp RequestM in
-partial def handleSyms (_params : DocumentSymbolParams) (prev : RequestTask DocumentSymbolResult) : RequestM (RequestTask DocumentSymbolResult) := do
+meta partial def handleSyms (_params : DocumentSymbolParams) (prev : RequestTask DocumentSymbolResult) : RequestM (RequestTask DocumentSymbolResult) := do
   let doc ← readDoc
   let t := doc.cmdSnaps.waitAll
   bindTaskCostly t fun (snaps, _) => do
@@ -389,10 +397,10 @@ structure SemanticTokenEntry where
   modifierMask : Nat
 deriving Inhabited, Repr
 
-protected def SemanticTokenEntry.ordLt (a b : SemanticTokenEntry) : Bool :=
+protected meta def SemanticTokenEntry.ordLt (a b : SemanticTokenEntry) : Bool :=
   a.line < b.line ∨ (a.line = b.line ∧ a.startChar < b.startChar)
 
-def encodeTokenEntries (entries : Array SemanticTokenEntry) : Array Nat := Id.run do
+meta def encodeTokenEntries (entries : Array SemanticTokenEntry) : Array Nat := Id.run do
   let mut data := #[]
   let mut lastLine := 0
   let mut lastChar := 0
@@ -403,7 +411,7 @@ def encodeTokenEntries (entries : Array SemanticTokenEntry) : Array Nat := Id.ru
     lastLine := line; lastChar := char
   return data
 
-def decodeLeanTokens (data : Array Nat) : Array SemanticTokenEntry := Id.run do
+meta def decodeLeanTokens (data : Array Nat) : Array SemanticTokenEntry := Id.run do
   let mut line := 0
   let mut char := 0
   let mut entries : Array SemanticTokenEntry := #[]
@@ -417,7 +425,7 @@ def decodeLeanTokens (data : Array Nat) : Array SemanticTokenEntry := Id.run do
 
 deriving instance Repr, BEq for SemanticTokenType
 
-partial def versoTokens (text : FileMap) (stx : Syntax) : Array SemanticTokenEntry := Id.run do
+meta partial def versoTokens (text : FileMap) (stx : Syntax) : Array SemanticTokenEntry := Id.run do
   match stx with
   | `(inline|$_s:str) =>
     mkTok text .string stx
@@ -553,16 +561,16 @@ where
       }]
     else #[]
 
-def mergeTokens (mine : Array SemanticTokenEntry) (leans : SemanticTokens) : Array Nat:=
+meta def mergeTokens (mine : Array SemanticTokenEntry) (leans : SemanticTokens) : Array Nat:=
   let toks := decodeLeanTokens leans.data
   encodeTokenEntries (toks ++ mine |>.qsort (·.ordLt ·))
 
 open Lean Server Lsp RequestM in
-def snapshotTokens (beginPos : String.Pos.Raw) (text : FileMap) (snap : Snapshots.Snapshot) : Array SemanticTokenEntry :=
+meta def snapshotTokens (beginPos : String.Pos.Raw) (text : FileMap) (snap : Snapshots.Snapshot) : Array SemanticTokenEntry :=
   if snap.endPos <= beginPos then #[] else versoTokens text snap.stx
 
 open Lean Server Lsp RequestM in
-def snapshotsTokens (beginPos : String.Pos.Raw) (text : FileMap) (snaps : List Snapshots.Snapshot) : Array SemanticTokenEntry :=
+meta def snapshotsTokens (beginPos : String.Pos.Raw) (text : FileMap) (snaps : List Snapshots.Snapshot) : Array SemanticTokenEntry :=
   snaps.foldl (init := #[]) fun toks snap => toks ++ snapshotTokens beginPos text snap
 
 open Lean Server Lsp IO in
@@ -595,7 +603,7 @@ where
       | .inr (.error e) => return ⟨[], some e, true⟩
 
 open Lean Server Lsp RequestM in
-def handleDef (params : TextDocumentPositionParams) (prev : RequestTask (Array LeanLocationLink)) : RequestM (RequestTask (Array LeanLocationLink)) := do
+meta def handleDef (params : TextDocumentPositionParams) (prev : RequestTask (Array LeanLocationLink)) : RequestM (RequestTask (Array LeanLocationLink)) := do
   let ctx ← read
   let doc ← readDoc
   let text := doc.meta.text
@@ -642,7 +650,7 @@ def handleDef (params : TextDocumentPositionParams) (prev : RequestTask (Array L
     xs.getD #[] ++ ys.getD #[]
 
 open Lean Server Lsp RequestM in
-partial def handleTokens (prev : RequestTask SemanticTokens)
+meta partial def handleTokens (prev : RequestTask SemanticTokens)
     (beginPos : String.Pos.Raw) (endPos? : Option String.Pos.Raw) :
     RequestM (RequestTask (LspResponse SemanticTokens)) := do
   let ctx ← read
@@ -670,7 +678,7 @@ where
       | some mine, some leans => {leans with data := mergeTokens mine leans}
 
 open Lean Server Lsp RequestM in
-def handleTokensRange (params : SemanticTokensRangeParams) (prev : RequestTask SemanticTokens) : RequestM (RequestTask SemanticTokens) := do
+meta def handleTokensRange (params : SemanticTokensRangeParams) (prev : RequestTask SemanticTokens) : RequestM (RequestTask SemanticTokens) := do
   let doc ← readDoc
   let text := doc.meta.text
   let beginPos := text.lspPosToUtf8Pos params.range.start
@@ -678,7 +686,7 @@ def handleTokensRange (params : SemanticTokensRangeParams) (prev : RequestTask S
   handleTokens prev beginPos endPos <&> fun t => t.mapCheap (LspResponse.response <$> ·)
 
 open Lean Server Lsp RequestM in
-def handleTokensFull (_params : SemanticTokensParams) (prev : RequestTask SemanticTokens) : RequestM (RequestTask SemanticTokens) :=
+meta def handleTokensFull (_params : SemanticTokensParams) (prev : RequestTask SemanticTokens) : RequestM (RequestTask SemanticTokens) :=
   handleTokens prev 0 none <&> fun t => t.mapCheap (LspResponse.response <$> ·)
 
 open Lean.Server in
@@ -686,7 +694,7 @@ open Lean.Server in
 
 open Lean Server Lsp RequestM in
 open Lean.Server.FileWorker in
-def handleTokensFullStateful
+meta def handleTokensFullStateful
     (_params : SemanticTokensParams) (prev : LspResponse SemanticTokens) (st : SemanticTokensState) :
     RequestM (LspResponse SemanticTokens × SemanticTokensState) := do
   let doc ← readDoc
@@ -702,7 +710,7 @@ def handleTokensFullStateful
 
 open Lean Server Lsp RequestM in
 @[code_action_provider]
-def renumberLists : CodeActionProvider := fun params snap => do
+public meta def renumberLists : CodeActionProvider := fun params snap => do
   let doc ← readDoc
   let text := doc.meta.text
   let startPos := text.lspPosToUtf8Pos params.range.start
@@ -731,7 +739,7 @@ def renumberLists : CodeActionProvider := fun params snap => do
       }
     }
 
-partial def directiveResizings
+meta partial def directiveResizings
     (startPos endPos : String.Pos.Raw)
     (startLine endLine : Nat)
     (text : FileMap)
@@ -802,7 +810,7 @@ where
 
 open Lean Server Lsp RequestM in
 @[code_action_provider]
-def resizeDirectives : CodeActionProvider := fun params snap => do
+public meta def resizeDirectives : CodeActionProvider := fun params snap => do
   let doc ← readDoc
   let text := doc.meta.text
   let startPos := text.lspPosToUtf8Pos params.range.start
@@ -825,15 +833,16 @@ def resizeDirectives : CodeActionProvider := fun params snap => do
   }
 
 
-
+meta section
 deriving instance FromJson for FoldingRangeKind
 deriving instance FromJson for FoldingRange
+end
 
-private def rangeOfStx? (text : FileMap) (stx : Syntax) :=
+private meta def rangeOfStx? (text : FileMap) (stx : Syntax) :=
   Lean.FileMap.utf8RangeToLspRange text <$> Lean.Syntax.getRange? stx
 
 open Lean Server Lsp RequestM in
-partial def handleFolding (_params : FoldingRangeParams) (prev : RequestTask (Array FoldingRange)) : RequestM (RequestTask (Array FoldingRange)) := do
+meta partial def handleFolding (_params : FoldingRangeParams) (prev : RequestTask (Array FoldingRange)) : RequestM (RequestTask (Array FoldingRange)) := do
   let doc ← readDoc
   let text := doc.meta.text
   -- bad: we have to wait on elaboration of the entire file before we can report folding
@@ -899,7 +908,7 @@ where
       pure regions
 
 open Lean Server Lsp RequestM in
-def handleHover (params : HoverParams) (prev : RequestTask (Option Hover)) : RequestM (RequestTask (Option Hover)) := do
+meta def handleHover (params : HoverParams) (prev : RequestTask (Option Hover)) : RequestM (RequestTask (Option Hover)) := do
   let doc ← readDoc
   let text := doc.meta.text
   let pos := text.lspPosToUtf8Pos params.position
@@ -940,7 +949,7 @@ open Lean.Server.FileWorker
 
 
 open Lean Server Lsp in
-initialize
+meta initialize
   chainLspRequestHandler "textDocument/definition" TextDocumentPositionParams (Array LeanLocationLink) handleDef
   -- chainLspRequestHandler "textDocument/references" ReferenceParams (Array Location) handleRefs -- TODO make this work - right now it goes through the watchdog so we can't chain it
   chainLspRequestHandler "textDocument/documentHighlight" DocumentHighlightParams DocumentHighlightResult handleHl
