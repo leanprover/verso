@@ -89,7 +89,7 @@ Escapes a string in an appropriate way for uses of
 `\begin{Verbatim}[commandchars=\\\{\}]...\end{Verbatim}`
 -/
 def escapeForVerbatim (s : String) : String :=
-  replaceChars s (fun
+  replaceChars s fun
   | '{' => some "\\symbol{123}"
   | '|' => some "\\symbol{124}"
   | '}' => some "\\symbol{125}"
@@ -104,7 +104,7 @@ def escapeForVerbatim (s : String) : String :=
   -- but this is exactly the character Lean inserts to create shadowed
   -- names, so it seems benign to change it in this case.
   | '✝' => some "†"
-  | _ => none)
+  | _ => none
 
 /-- info: "\\symbol{123}\\symbol{124}\\symbol{125}\\symbol{92}" -/
 #guard_msgs in
