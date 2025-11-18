@@ -85,10 +85,10 @@ private def isHexDigit (c : Char) : Bool :=
 private def decodeHex (s : String) : Option Nat := do
   if s.isEmpty then failure
   let mut n := 0
-  let mut iter := s.iter
-  while h : iter.hasNext do
-    let c := iter.curr' h
-    iter := iter.next' h
+  let mut iter := s.startValidPos
+  while h : iter ≠ s.endValidPos do
+    let c := iter.get h
+    iter := iter.next h
 
     if '0' ≤ c && c ≤ '9' then n := n <<< 4 + (c.toNat - '0'.toNat)
     else if 'a' ≤ c && c ≤ 'f' then n := n <<< 4 + (10 + c.toNat - 'a'.toNat)

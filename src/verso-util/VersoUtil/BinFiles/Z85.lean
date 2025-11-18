@@ -11,12 +11,8 @@ set_option linter.missingDocs true
 namespace Verso.BinFiles.Z85
 
 /-- Z85 alphabet (85 printable ASCII characters) -/
-private def alphabet : Array Char :=
-  "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.-:+=^!/*?&<>()[]{}@%$#".toList.toArray
-
-@[simp, grind =]
-theorem alphabet_size_eq_85 : alphabet.size = 85 := by
-  decide +native
+private def alphabet : Vector Char 85 :=
+  "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.-:+=^!/*?&<>()[]{}@%$#".toList.toArray.toVector
 
 /--
 Lookup table for decoding characters into values.
@@ -72,10 +68,10 @@ private def encodeChunk (bytes : ByteArray) (startIdx : Nat) (ok : startIdx + 3 
   let c1 := alphabetChar d1
   let c0 := alphabetChar d0
 
-  String.mk [c4, c3, c2, c1, c0]
+  String.ofList [c4, c3, c2, c1, c0]
 
 /-- Decodes 5 characters to 4 bytes. -/
-private def decodeChunk (chars : Substring) : UInt8 × UInt8 × UInt8 × UInt8 :=
+private def decodeChunk (chars : Substring.Raw) : UInt8 × UInt8 × UInt8 × UInt8 :=
   let c0 := chars.get 0
   let c1 := chars.get ⟨1⟩
   let c2 := chars.get ⟨2⟩

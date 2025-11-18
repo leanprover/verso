@@ -43,7 +43,7 @@ def isConsonant (i : String.ValidPos str) : Bool :=
   | _ => true
 termination_by i.offset.byteIdx
 decreasing_by
-  simp only [String.ValidPos.prev, ← i.offset_toSlice, String.Slice.Pos.ofset_ofSlice, ← String.Pos.Raw.lt_iff, ← String.Slice.Pos.lt_iff]
+  simp only [String.ValidPos.prev, ← i.offset_toSlice, String.Slice.Pos.offset_ofSlice, ← String.Pos.Raw.lt_iff, ← String.Slice.Pos.lt_iff]
   exact String.Slice.Pos.prev_lt
 
 /--

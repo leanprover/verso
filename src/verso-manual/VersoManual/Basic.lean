@@ -383,9 +383,6 @@ def freshTag [Monad m] [MonadStateOf TraverseState m] (hint : String) (id : Inte
 where
   tagStr (strPart : String) (numPart : Option Nat) := s!"{strPart}{numPart.map (s!"-{·}") |>.getD ""}"
 
-defmethod HashMap.all [BEq α] [Hashable α] (hm : HashMap α β) (p : α → β → Bool) : Bool :=
-  hm.fold (fun prev k v => prev && p k v) true
-
 local instance [BEq α] [Hashable α] : BEq (HashSet α) where
   beq := private ptrEqThen fun xs ys => xs.size == ys.size && xs.all (ys.contains ·)
 

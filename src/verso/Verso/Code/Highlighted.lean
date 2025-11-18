@@ -63,10 +63,10 @@ where
     | .seq xs => .seq <$> xs.mapM remove
     | .text s | .unparsed s =>
       let mut s' := ""
-      let mut iter := s.iter
-      while h : iter.hasNext do
-        let c := iter.curr' h
-        iter := iter.next
+      let mut iter := s.startValidPos
+      while h : iter ≠ s.endValidPos do
+        let c := iter.get h
+        iter := iter.next h
         match c with
         | '\n' =>
           set (some n)
@@ -442,15 +442,15 @@ defmethod Token.htmlContent (tok : Token) : HighlightHtmlM g Html := do
   if (← read).options.identifierWordBreaks then
     let mut html := .empty
     let mut str := ""
-    let mut iter := content.iter
-    while h : iter.hasNext do
-      let c := iter.curr' h
-      iter := iter.next' h
+    let mut iter := content.startValidPos
+    while h : iter ≠ content.endValidPos do
+      let c := iter.get h
+      iter := iter.next h
       str := str.push c
       if c == '.' then
         html := html ++ .text true str
         str := ""
-        if iter.hasNext then
+        if iter ≠ content.endValidPos then
           html := html ++ .text false "&shy;"
     if !str.isEmpty then html := html ++ .text true str
     return html
