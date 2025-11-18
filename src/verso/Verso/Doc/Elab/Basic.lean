@@ -3,61 +3,23 @@ Copyright (c) 2023-2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen, Rob Simmons
 -/
-
-import Verso.Doc
+module
+public import Verso.Doc
 
 open Lean
-open Verso.Doc
+
 open Std (HashMap HashSet)
 
 set_option doc.verso true
 
 namespace Verso.Doc.Elab
 
-inductive TOC where
+public inductive TOC where
   | mk (title : String) (titleSyntax : Syntax) (endPos : String.Pos.Raw) (children : Array TOC)
   | included (name : Ident)
 deriving Repr, TypeName, Inhabited
 
-
-structure TocFrame where
-  ptr : Nat
-  title : String
-  titleSyntax : Syntax
-  priorChildren : Array TOC
-deriving Repr, Inhabited
-
-def TocFrame.close (frame : TocFrame) (endPos : String.Pos.Raw) : TOC :=
-  .mk frame.title frame.titleSyntax endPos frame.priorChildren
-
-def TocFrame.wrap (frame : TocFrame) (item : TOC) (endPos : String.Pos.Raw) : TOC :=
-  .mk frame.title frame.titleSyntax endPos (frame.priorChildren.push item)
-
-def TocFrame.addChild (frame : TocFrame) (item : TOC) : TocFrame :=
-  {frame with priorChildren := priorChildren frame |>.push item}
-
-partial def TocFrame.closeAll (stack : Array TocFrame) (endPos : String.Pos.Raw) : Option TOC :=
-  let rec aux (stk : Array TocFrame) (toc : TOC) :=
-    if let some fr := stack.back? then
-      aux stk.pop (fr.wrap toc endPos)
-    else toc
-  if let some fr := stack.back? then
-    some (aux stack.pop <| fr.close endPos)
-  else none
-
-
-def TocFrame.wrapAll (stack : Array TocFrame) (item : TOC) (endPos : String.Pos.Raw) : TOC :=
-  let rec aux (i : Nat) (item : TOC) (endPos : String.Pos.Raw) : TOC :=
-    match i with
-    | 0 => item
-    | i' + 1 =>
-      if let some fr := stack[i]? then
-        aux i' (fr.wrap item endPos) endPos
-      else item
-  aux (stack.size - 1) item endPos
-
-
-inductive FinishedPart where
+public inductive FinishedPart where
   | mk (titleSyntax : Syntax) (expandedTitle : Array (TSyntax `term)) (titlePreview : String) (metadata : Option (TSyntax `term)) (blocks : Array (TSyntax `term)) (subParts : Array FinishedPart) (endPos : String.Pos.Raw)
     /-- A name representing a value of type {lean}`VersoDoc` -/
   | included (name : Ident)
@@ -66,7 +28,7 @@ deriving Repr, BEq
 /--
 From a finished part, constructs syntax that denotes its {lean}`Part` value.
 -/
-partial def FinishedPart.toSyntax [Monad m] [MonadQuotation m]
+public partial def FinishedPart.toSyntax [Monad m] [MonadQuotation m]
     (genre : TSyntax `term)
     : FinishedPart → m Term
   | .mk _titleStx titleInlines titleString metadata blocks subParts _endPos => do
@@ -81,7 +43,7 @@ partial def FinishedPart.toSyntax [Monad m] [MonadQuotation m]
     ``(Part.mk #[$titleInlines,*] $(quote titleString) $metaStx #[$typedBlocks,*] #[$subStx,*])
   | .included name => ``(VersoDoc.toPart $name)
 
-partial def FinishedPart.toTOC : FinishedPart → TOC
+public partial def FinishedPart.toTOC : FinishedPart → TOC
   | .mk titleStx _titleInlines titleString _metadata _blocks subParts endPos =>
     .mk titleString titleStx endPos (subParts.map toTOC)
   | .included name => .included name
@@ -96,7 +58,7 @@ layer of document section nesting. As the Verso document elaborator
 encounters new headers, stack frames are pushed and popped as
 indicated by the header's level.
 -/
-structure PartFrame where
+public structure PartFrame where
   titleSyntax : Syntax
   expandedTitle : Option (String × Array (TSyntax `term)) := none
   metadata : Option (TSyntax `term)
@@ -109,22 +71,22 @@ structure PartFrame where
 deriving Repr, Inhabited
 
 /-- Turn an previously active {name}`PartFrame` into a {name}`FinishedPart`. -/
-def PartFrame.close (fr : PartFrame) (endPos : String.Pos.Raw) : FinishedPart :=
+public def PartFrame.close (fr : PartFrame) (endPos : String.Pos.Raw) : FinishedPart :=
   let (titlePreview, titleInlines) := fr.expandedTitle.getD ("<anonymous>", #[])
   .mk fr.titleSyntax titleInlines titlePreview fr.metadata fr.blocks fr.priorParts endPos
 
 
 /-- References that must be local to the current blob of concrete document syntax -/
-structure DocDef (α : Type) where
+public structure DocDef (α : Type) where
   defSite : TSyntax `str
   val : α
 deriving Repr
 
-structure DocUses where
+public structure DocUses where
   useSites : Array Syntax := {}
 deriving Repr
 
-def DocUses.add (uses : DocUses) (loc : Syntax) : DocUses := {uses with useSites := uses.useSites.push loc}
+public def DocUses.add (uses : DocUses) (loc : Syntax) : DocUses := {uses with useSites := uses.useSites.push loc}
 
 
 /--
@@ -133,7 +95,7 @@ because that data represents the current frame. The field
 {name (full := PartContext.parents)}`parents` represents other parts above
 us in the hierarchy that are still being built.
 -/
-structure PartContext extends PartFrame where
+public structure PartContext extends PartFrame where
   parents : Array PartFrame
 deriving Repr, Inhabited
 
@@ -141,7 +103,7 @@ deriving Repr, Inhabited
 The current nesting level is the number of frames in the stack of parent
 parts being built.
 -/
-def PartContext.level (ctxt : PartContext) : Nat := ctxt.parents.size
+public def PartContext.level (ctxt : PartContext) : Nat := ctxt.parents.size
 
 /--
 Closes the current part. The resulting {name}`FinishedPart` is appended to
@@ -149,7 +111,7 @@ Closes the current part. The resulting {name}`FinishedPart` is appended to
 the top of the stack of our parents becomes the current frame. Returns
 {name}`none` if there are no parents.
 -/
-def PartContext.close (ctxt : PartContext) (endPos : String.Pos.Raw) : Option PartContext := do
+public def PartContext.close (ctxt : PartContext) (endPos : String.Pos.Raw) : Option PartContext := do
   let fr ← ctxt.parents.back?
   pure {
     parents := ctxt.parents.pop,
@@ -163,19 +125,19 @@ def PartContext.close (ctxt : PartContext) (endPos : String.Pos.Raw) : Option Pa
 /--
 Makes the frame {name}`fr` the current frame. The former current frame is saved to the stack.
 -/
-def PartContext.push (ctxt : PartContext) (fr : PartFrame) : PartContext := ⟨fr, ctxt.parents.push ctxt.toPartFrame⟩
+public def PartContext.push (ctxt : PartContext) (fr : PartFrame) : PartContext := ⟨fr, ctxt.parents.push ctxt.toPartFrame⟩
 
 
 /-- Custom info tree data to save footnote and reflink cross-references -/
-structure DocRefInfo where
+public structure DocRefInfo where
   defSite : Option Syntax
   useSites : Array Syntax
 deriving TypeName, Repr
 
-def DocRefInfo.syntax (dri : DocRefInfo) : Array Syntax :=
+public def DocRefInfo.syntax (dri : DocRefInfo) : Array Syntax :=
   (dri.defSite.map (#[·])|>.getD #[]) ++ dri.useSites
 
-def internalRefs (defs : HashMap String (DocDef α)) (refs : HashMap String DocUses) : Array DocRefInfo := Id.run do
+public def internalRefs (defs : HashMap String (DocDef α)) (refs : HashMap String DocUses) : Array DocRefInfo := Id.run do
   let keys : HashSet String := defs.fold (fun soFar k _ => HashSet.insert soFar k) <| refs.fold (fun soFar k _ => soFar.insert k) {}
   let mut refInfo := #[]
   for k in keys do
@@ -186,7 +148,7 @@ def internalRefs (defs : HashMap String (DocDef α)) (refs : HashMap String DocU
   refInfo
 
 /-- Custom info tree data to save the locations and identities of lists -/
-structure DocListInfo where
+public structure DocListInfo where
   bullets : Array Syntax
   items : Array Syntax
 deriving Repr, TypeName

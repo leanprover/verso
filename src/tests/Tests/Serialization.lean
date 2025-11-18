@@ -3,12 +3,23 @@ Copyright (c) 2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-import Plausible
+module
+public import Plausible
+public import Plausible.ArbitraryFueled
+public meta import Plausible.ArbitraryFueled
 import Lean.Data.Json.FromToJson
-import MultiVerso.InternalId
-import MultiVerso
-import VersoManual.Basic
-import VersoManual
+import all MultiVerso.InternalId
+public meta import MultiVerso.NameMap
+public meta import MultiVerso
+public meta import VersoManual.Html.JsFile
+public meta import VersoManual.Html.CssFile
+public meta import VersoManual.Html.Features
+public meta import VersoManual.LicenseInfo
+public meta import VersoSearch.DomainSearch
+public meta import Verso.Output.Html
+public meta import MultiVerso.Manifest
+public meta import VersoManual.Basic
+import all VersoManual.Basic
 import VersoManual.Html.CssFile
 
 /-!
@@ -21,6 +32,8 @@ open Plausible Gen Arbitrary
 open Verso Multi
 open Shrinkable
 open Std
+
+meta section
 
 def isEqOk [BEq α] (actual : Except ε α) (expected : α) : Bool :=
   match actual with
@@ -38,13 +51,24 @@ def sizedArrayOf (gen : Gen α) : Gen (Array α) := do
     out := out.push (← gen.resize (· / count))
   return out
 
-deriving instance Arbitrary for JsonNumber
+instance : Arbitrary InternalId where
+  arbitrary := InternalId.mk <$> arbitrary
+
+instance : Shrinkable InternalId where
+  shrink
+    | { id } => Shrinkable.shrink id <&> InternalId.mk
+
+
+instance : Arbitrary JsonNumber where
+  arbitrary := do
+    return { mantissa := ← arbitrary, exponent := ← arbitrary }
 
 instance : Shrinkable JsonNumber where
   shrink x :=
     let ms := shrink x.mantissa
     let xs := shrink x.exponent
     ms.map ({ x with mantissa := · }) ++ xs.map ({ x with exponent := · })
+
 
 instance : ArbitraryFueled Json where
   arbitraryFueled := arb
@@ -237,6 +261,8 @@ instance : Shrinkable NameMap.PublicName where
     | ⟨.str y@(.str _ _) x, _⟩ =>
       .ofName y ::
       (shrink x |>.map (.ofName <| .str y ·))
+    | ⟨.num _ _, _⟩ | ⟨.anonymous, _⟩ | ⟨.str (.num _ _) _, _⟩ =>
+      False.elim <| by grind
 
 instance [Arbitrary α] : Arbitrary (Verso.NameMap α) where
   arbitrary := do
@@ -266,10 +292,10 @@ instance : Shrinkable Name where
     | .num x y => [x] ++ (shrink y).map (.num x)
     | .str x y => [x] ++ (shrink y).map (.str x)
 
-instance [Shrinkable α] : Shrinkable (Lean.NameMap α) where
-  shrink v :=
-    shrink v.toArray |>.map fun xvs =>
-      xvs.foldl (init := {}) (fun xs (x, v) => xs.insert x v)
+-- instance [Shrinkable α] : Shrinkable (Lean.NameMap α) where
+--   shrink v :=
+--     shrink v.toArray |>.map fun xvs =>
+--       xvs.foldl (init := {}) (fun xs (x, v) => xs.insert x v)
 
 instance : Shrinkable RemoteInfo where
   shrink v :=
@@ -309,11 +335,11 @@ instance : Shrinkable (TreeSet InternalId compare) where
   shrink xs :=
     shrink xs.toArray |>.map fun xs => .ofArray xs
 
-instance : Shrinkable (HashSet String) where
+instance instShrinkableHashSet : Shrinkable (HashSet String) where
   shrink xs :=
     shrink xs.toArray |>.map fun s => .ofArray s
 
-instance : Shrinkable JsSourceMap where
+instance instShrinkableJsSourceMap : Shrinkable JsSourceMap where
   shrink f :=
     (shrink f.filename |>.map ({ f with filename := · })) ++
     (shrink f.contents |>.map ({ f with contents := · }))
@@ -687,7 +713,7 @@ def serializationTests : List (Name × (Σ p, IO <| TestResult p)) := [
   (`testRemote, ⟨_, testRemote⟩),
 ]
 
-def runSerializationTests : IO Nat := do
+public def runSerializationTests : IO Nat := do
   let mut failures := 0
   for (name, test) in serializationTests do
     IO.print s!"{name}: "

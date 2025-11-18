@@ -606,7 +606,11 @@ class SearchBox {
     // TODO more work on the domain filters
     // this.domainFilters.push(docDomainFilter);
 
-    this.setValue(query ? query : "");
+    // It's important not to call setValue with a blank string when query
+    // is false, because that puts keyboard focus in the box.
+    if (query) {
+      this.setValue(query);
+    }
 
     // Open Button
 

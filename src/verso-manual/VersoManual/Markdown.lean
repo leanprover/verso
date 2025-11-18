@@ -364,6 +364,7 @@ def displayPartStructure (part : FinishedPart) (level : Nat := 1) : String := ma
        s!"{pref} {title}\n{partsStr}"
   | .included name => s!"included {name}\n"
 
+open PartElabM in
 /--
 Parses a Markdown string, returning the displayed part structure.
 -/

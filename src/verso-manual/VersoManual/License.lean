@@ -3,9 +3,11 @@ Copyright (c) 2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-
-import Verso
+module
 import Verso.Doc.ArgParse
+public import Verso.Doc.Elab.Monad
+meta import Verso.Doc.Elab.Monad
+public import VersoManual.Basic
 
 import VersoManual.LicenseInfo
 import VersoManual.LicenseInfo.Licenses
@@ -73,6 +75,8 @@ where
           .empty
       {{<section>{{hdrHtml}}{{paragraphedHtml txt}}</section>}}
 
+public section
+
 block_extension Block.licenseInfo where
   traverse _ _ _ := do
     pure none
@@ -90,5 +94,5 @@ block_extension Block.licenseInfo where
 Displays the open-source licenses of components used to build the document.
 -/
 @[block_command]
-def licenseInfo : BlockCommandOf Unit
+public meta def licenseInfo : BlockCommandOf Unit
   | () => ``(Block.other Block.licenseInfo #[])

@@ -3,7 +3,7 @@ Copyright (c) 2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-
+module
 set_option linter.missingDocs true
 set_option doc.verso true
 
@@ -410,7 +410,7 @@ def step5b (word : String) : String :=
 Heuristically computes the stem of an English word using
 [Martin Porter's algorithm](https://tartarus.org/martin/PorterStemmer/).
 -/
-def porterStem (word : String) : String :=
+public def porterStem (word : String) : String :=
   if word.length <= 2 then word
   else
     let word := word.toLower
