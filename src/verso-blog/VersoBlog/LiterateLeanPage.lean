@@ -204,38 +204,44 @@ deriving BEq, Hashable, Repr, Inhabited
 
 -- TODO rewrite with dynamic programming
 partial def Pat.match (p : List Pat) (str : String) : Option (Lean.NameMap String) :=
-  go str.iter p
+  go str.startValidPos p
 where
   go iter
-    | [] => if iter.atEnd then pure {} else failure
+    | [] => if iter = str.endValidPos then pure {} else failure
     | .char c :: p' =>
-      if h : iter.hasNext then
-        if iter.curr' h == c then
-          go (iter.next' h) p'
+      if h : iter ≠ str.endValidPos then
+        if iter.get h == c then
+          go (iter.next h) p'
         else failure
       else failure
     | .str s :: p' =>
-      go iter (s.data.map .char ++ p')
+      go iter (s.toList.map .char ++ p')
     | .var x :: p' => do
-      let mut iter' := iter.toEnd
-      while iter'.pos ≥ iter.pos do
+      let mut iter' := str.endValidPos
+      while iter' ≥ iter do
         try
           let rest ← go iter' p'
           return rest.insert x (iter.extract iter')
         catch
           | () =>
-            iter' := iter'.prev
-            continue
+            if h : iter' = str.startValidPos then
+              break
+            else
+              iter' := iter'.prev h
+              continue
       failure
     | .any :: p' => do
-      let mut iter' := iter.toEnd
-      while iter'.pos ≥ iter.pos do
+      let mut iter' := str.endValidPos
+      while iter' ≥ iter do
         try
           return (← go iter' p')
         catch
           | () =>
-            iter' := iter'.prev
-            continue
+            if h : iter' = str.startValidPos then
+              break
+            else
+              iter' := iter'.prev h
+              continue
       failure
 
 inductive Template where

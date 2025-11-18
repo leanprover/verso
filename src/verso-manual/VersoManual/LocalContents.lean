@@ -257,7 +257,7 @@ partial def localContentsCore
       localContentsCore opts (ctxt.inPart p') xref p' sectionNumPrefix true includeSubparts.decr (fromLevel + 1)
 where
   withoutPrefix (str : String) (prefix? : Option String) : String :=
-    prefix?.bind (str.dropPrefix? · |>.map Substring.toString) |>.getD str
+    prefix?.bind (str.dropPrefix? · |>.map Substring.Raw.toString) |>.getD str
 
 def localContents
     (opts : Html.Options (ReaderT ExtensionImpls IO)) (ctxt : TraverseContext) (xref : TraverseState)
