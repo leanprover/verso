@@ -69,7 +69,7 @@ def highlightToken : String → Token.Kind → TeX
 | c, .unknown => .raw c
 
 /--
-Replace characters with strings simultaneously
+Replaces characters with strings simultaneously.
 -/
 def replaceChars (s : String) (replace : Char → Option String) : String :=
   let rec loop (acc : String) (pos : String.Pos.Raw) :=
