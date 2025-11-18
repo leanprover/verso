@@ -1,17 +1,20 @@
 /-
-Copyright (c) 2024 Lean FRO LLC. All rights reserved.
+Copyright (c) 2024-2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
+module
+public import MD4Lean
 
-import MD4Lean
+public import Lean.Exception
 
-import Lean.Exception
-
-import Verso.Doc
+public import Verso.Doc
 import Verso.Doc.Elab
+public import Verso.Doc.Elab.Monad
 
 import VersoManual.Basic
+
+public section
 
 set_option doc.verso true
 
@@ -32,7 +35,7 @@ here as ordered handlers, rather than as a mapping from levels to handlers.
 Because we're rendering Markdown in a Verso context that doesn't support nesting structure, will not
 generate nested {name (full := Lean.Doc.Part)}`Part`s, but rather some custom node or some formatted text.
 -/
-private structure HeaderHandlers (m : Type u → Type w) (block : Type u) (inline : Type v) : Type (max u v w) where
+structure HeaderHandlers (m : Type u → Type w) (block : Type u) (inline : Type v) : Type (max u v w) where
   levels : List (Array inline → m block) := []
 
 structure MDContext (m : Type u → Type w) (block : Type u) (inline : Type u) : Type (max u w) where
@@ -72,11 +75,11 @@ Markdown header levels.
 -/
 public abbrev HeaderMapping := List Nat
 
-private structure MDState where
+structure MDState where
   inHeaders : HeaderMapping := []
 deriving Inhabited
 
-private abbrev MDT m block inline α := ReaderT (MDContext m block inline) (StateT MDState m) α
+abbrev MDT m block inline α := ReaderT (MDContext m block inline) (StateT MDState m) α
 
 instance {block inline} [Monad m] : MonadLift m (MDT m block inline) where
   monadLift act := fun _ s => act <&> (·, s)
