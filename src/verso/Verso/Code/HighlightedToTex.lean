@@ -80,7 +80,7 @@ def replaceChars (s : String) (replace : Char → Option String) : String :=
       let c := pos.get s
       let s' := match replace c with | some rs => rs | none => s!"{c}"
       loop (acc ++ s') (pos.next s)
-    termination_by s.endPos.1 - pos.1
+    termination_by s.rawEndPos.1 - pos.1
   loop "" 0
 
 /--
