@@ -34,7 +34,7 @@ def log10 (n : Nat) : Nat :=
   else 0
 
 def asCode (s : String) : String :=
-  let lines := s.dropEndWhile (· == '\n') |>.copy |>.splitToList (· == '\n')
+  let lines := s.dropEndWhile (· == '\n') |>.split (· == '\n') |>.toList
   let lw := log10 lines.length + 1
   let pad (s : String) : String :=
     (lw - s.length).fold (init := s) fun _ _ => (" " ++ ·)
@@ -310,8 +310,8 @@ def markupPreview : DirectiveExpanderOf MarkupPreviewConfig
     ])
 where
   eq (s1 s2 : String) : Bool :=
-    let lines1 := s1.trimAscii.copy.splitToList (· == '\n') |>.map (·.trimAsciiEnd)
-    let lines2 := s2.trimAscii.copy.splitToList (· == '\n') |>.map (·.trimAsciiEnd)
+    let lines1 := s1.trimAscii.split (· == '\n') |>.map (·.trimAsciiEnd) |>.toArray
+    let lines2 := s2.trimAscii.split (· == '\n') |>.map (·.trimAsciiEnd) |>.toArray
     lines1 == lines2
 
   nonemptyI : TSyntax `inline → Bool
