@@ -126,7 +126,7 @@ Converts a public name to a string.
 -/
 public def PublicName.toString (x : PublicName) : String :=
   -- This works around the name `.str .anonymous "#"` not round-tripping
-  x.toName.toStringWithSep "." true (fun _ => true)
+  x.toName.toStringWithSep "." true (fun _ => false)
 
 /--
 Converts a string to a public name, failing with {name}`none` if the string doesn't encode such a name.
