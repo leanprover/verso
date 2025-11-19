@@ -326,6 +326,75 @@ http://localhost:8000/
 In this output, Verso docstrings and moduledocs are rendered. Setting
 `doc.verso` to `true` enables these in source files.
 
+## Tests
+
+The main tests can be run using `lake test`.
+
+### Browser Tests
+
+Additionally, some aspects of Verso's JavaScript can be tested using
+Playwright, a Python browser testing framework. These tests can be
+found in the [`browser-tests`](./browser-tests) directory.
+
+#### Browser Test Setup
+To run them, first install [uv](https://github.com/astral-sh/uv) if
+you don't have it. Depending on the platform, one of these commands
+may do the trick:
+
+```bash
+$ curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+```bash
+$ brew install uv
+```
+
+Then, in the `browser-tests` directory, install the browser testing
+engines used by Playwright:
+```bash
+$ cd browser-tests
+$ uv run --extra test playwright install chromium firefox
+```
+
+#### Running Browser Tests
+
+The browser tests run against Verso's own user manual. The first step
+is to generate it by running `./generate.sh`.
+
+Next, run the tests. From the project root, use this command:
+```bash
+$ uv run --project browser-tests --extra test pytest browser-tests -v
+```
+
+From within the `browser-tests` directory, `--project` is unnecessary:
+```bash
+$ cd browser-tests
+$ uv run --extra test pytest . -v
+```
+
+The test runner accepts a number of parameters. The site's output
+directory can be set using `--site-dir`:
+```bash
+$ uv run --project browser-tests --extra test pytest browser-tests --site-dir=dist -v
+```
+
+By default, the script runs a local web server, picking an available
+port. If this fails, or to force a particular port for some other
+reason, use the `--port` option:
+```bash
+$ uv run --project browser-tests --extra test pytest browser-tests --port=3000 -v
+```
+
+To use an existing server, pass `--server`:
+```bash
+$ uv run --project browser-tests --extra test pytest browser-tests --server-url=http://localhost:4000 -v
+```
+
+To use only one browser engine, pass `-k`:
+```bash
+$ uv run --project browser-tests --extra test pytest browser-tests -v -k "chromium"
+```
+
 ## Licenses
 
 Verso is licensed under the Apache license - please see the file
