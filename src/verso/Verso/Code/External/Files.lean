@@ -65,7 +65,7 @@ def loadModuleContent' (projectDir : StrLit) (mod : String) (suppressNamespaces 
   let toolchain ← do
       if !(← toolchainfile.pathExists) then
         throwErrorAt blame m!"File {toolchainfile} doesn't exist, couldn't load project"
-      pure (← IO.FS.readFile toolchainfile).trim
+      pure (← IO.FS.readFile toolchainfile).trimAscii.copy
 
   -- Kludge: remove variables introduced by Lake. Clearing out DYLD_LIBRARY_PATH and
   -- LD_LIBRARY_PATH is useful so the version selected by Elan doesn't get the wrong shared
@@ -127,8 +127,8 @@ where
 def getSuppress : m (List String) := do
   let some nss ← verso.externalExamples.suppressedNamespaces.get? <$> getOptions
     | return []
-  let nss := nss.dropWhile (· == '"') |>.dropRightWhile (· == '"') -- Strings getting double-quoted for some reason
-  return nss.splitOn " "
+  let nss := nss.dropWhile (· == '"') |>.dropEndWhile (· == '"') -- Strings getting double-quoted for some reason
+  return nss.copy.splitOn " "
 
 def loadModuleContent [MonadAlwaysExcept ε m] (projectDir : StrLit) (mod : String) : m (Array ModuleItem) :=
   withTraceNode `Elab.Verso.Code.External (fun _ => pure m!"Loading example module {mod}") <| do

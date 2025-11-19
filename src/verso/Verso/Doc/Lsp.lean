@@ -275,10 +275,10 @@ meta partial def removeFalsy (sym : DocumentSymbol) : DocumentSymbol :=
   match sym with
   | ⟨sym'⟩ =>
     ⟨{sym' with
-        name := if sym'.name.trim.isEmpty then "<no name>" else sym'.name,
+        name := if sym'.name.trimAscii.isEmpty then "<no name>" else sym'.name,
         detail? := do
           let detail ← sym'.detail?
-          if detail.trim.isEmpty then
+          if detail.trimAscii.isEmpty then
             none
           else
             pure detail
@@ -803,7 +803,7 @@ where
   | stx@(.atom _ colons) => do
     if let some r := stx.lspRange text then
       if colons.length > 3 then
-        return {range := r, newText := colons.drop 1}
+        return { range := r, newText := colons.drop 1 |>.copy }
     failure
   | _ => none
 

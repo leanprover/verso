@@ -56,7 +56,7 @@ where
   | .missing => none
 
   wholeFileInfo : SourceInfo → SourceInfo
-    | .original l l' t _ => .original l l' t contents.endPos
+    | .original l l' t _ => .original l l' t contents.rawEndPos
     | i => i
 
 instance : ToJson ElabInline where
@@ -246,16 +246,16 @@ where
           if let some doc := doc? then
             return #[.modDoc (← toModLit doc)]
         else if stx[1].isAtom then
-          if let some doc := MD4Lean.parse (stx[1].getAtomVal.stripSuffix "-/") then
+          if let some doc := MD4Lean.parse (stx[1].getAtomVal.dropSuffix "-/").copy then
             return #[.markdownModDoc doc]
 
     highlight' (Option.map (#[·]) res.info[0]? |>.getD #[]) stx true
     let hl ← modifyGet fun (st : HighlightState) => (Highlighted.fromOutput st.output, {st with output := []})
     let hl ← hl.substM (m := HighlightM) fun str => do
       if str.endsWith "▲" then
-        let str := str.dropWhile (· ≠ '▼') |>.drop 1 |>.dropRight 1
-        let indentStr := str.takeWhile (· ≠ '◄')
-        let str := str.drop (indentStr.length + 1)
+        let str := str.dropWhile (· ≠ '▼' : Char → Bool) |>.drop 1 |>.dropEnd 1
+        let indentStr := str.takeWhile (· ≠ '◄' : Char → Bool)
+        let str := str.drop (indentStr.chars.count + 1)
         let declName := str.toName
         let i := indentStr.toNat!
         if let some v ← findInternalDocString? (← getEnv) declName then

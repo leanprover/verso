@@ -108,9 +108,9 @@ end Config
 open Verso.Genre.Manual.InlineLean.Scopes (getScopes setScopes runWithOpenDecls runWithVariables)
 
 private def abbrevFirstLine (width : Nat) (str : String) : String :=
-  let str := str.trimLeft
+  let str := str.trimAsciiStart
   let short := str.take width |>.replace "\n" "⏎"
-  if short == str then short else short ++ "…"
+  if short.toSlice == str then short else short ++ "…"
 
 def LeanBlockConfig.outlineMeta : LeanBlockConfig → String
   | {«show», error, ..} =>
@@ -294,7 +294,7 @@ where
       | (output, .error e) => Lean.logError e.toMessageData; pure (output, cmdState)
       | (output, .ok ((), cmdState)) => pure (output, cmdState)
 
-    if output.trim.isEmpty then return cmdState
+    if output.trimAscii.isEmpty then return cmdState
 
     let log : MessageData → Command.CommandElabM Unit :=
       if let some tok := firstToken? stx then logInfoAt tok
@@ -694,11 +694,11 @@ where
     | .warning => "warning"
 
   mostlyEqual (ws : WhitespaceMode) (s1 s2 : String) : Bool :=
-    messagesMatch (ws.apply s1.trim) (ws.apply s2.trim)
+    messagesMatch (ws.apply s1.trimAscii.copy) (ws.apply s2.trimAscii.copy)
 
   diffSize (ws : WhitespaceMode) (s1 s2 : String) : (Nat × String) :=
-    let s1 := ws.apply s1.trim |>.splitOn "\n" |>.toArray
-    let s2 := ws.apply s2.trim |>.splitOn "\n" |>.toArray
+    let s1 := ws.apply s1.trimAscii.copy |>.splitOn "\n" |>.toArray
+    let s2 := ws.apply s2.trimAscii.copy |>.splitOn "\n" |>.toArray
     let d := Diff.diff s1 s2
     let insDel := d.filter fun
       | (.insert, _) => true

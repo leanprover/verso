@@ -226,7 +226,7 @@ where
       { item with docs := item.docs.insert ref ⟨termFreq⟩ }
   termination_by token.endValidPos.offset.byteIdx - iter.offset.byteIdx
   decreasing_by
-    have := iter.isValid.le_endPos
+    have := iter.isValid.le_rawEndPos
     apply Nat.sub_lt_sub_left
     . rw [String.Pos.Raw.le_iff] at this
       have : iter.offset.byteIdx ≠ token.endValidPos.offset.byteIdx := by
@@ -248,8 +248,8 @@ where
       pure item
   termination_by token.endValidPos.offset.byteIdx - iter.offset.byteIdx
   decreasing_by
-    have := iter.isValid.le_endPos
-    simp only [String.offset_endValidPos, String.byteIdx_endPos, String.ValidPos.offset_next,
+    have := iter.isValid.le_rawEndPos
+    simp only [String.offset_endValidPos, String.byteIdx_rawEndPos, String.ValidPos.offset_next,
       String.Pos.Raw.byteIdx_add_char, gt_iff_lt]
     apply Nat.sub_lt_sub_left
     . apply Nat.lt_of_le_of_ne this
@@ -281,8 +281,8 @@ where
   termination_by token.endValidPos.offset.byteIdx - iter.offset.byteIdx
   decreasing_by
     rename_i iter' _
-    have := iter.isValid.le_endPos
-    have := iter'.isValid.le_endPos
+    have := iter.isValid.le_rawEndPos
+    have := iter'.isValid.le_rawEndPos
     apply Nat.sub_lt_sub_left
     . apply Nat.lt_of_le_of_ne this
       . intro h'
@@ -407,9 +407,9 @@ public def stopWordFilter (name : String) (stopWords : HashSet String) : Pipelin
 public def predicateTrimmer (name : String) (wordChars : Char → Bool) : PipelineFn where
   name := name
   filter tok :=
-    let tok := tok.dropWhile wordChars |>.dropRightWhile wordChars
+    let tok := tok.dropWhile wordChars |>.dropEndWhile wordChars
     if tok.isEmpty then none
-    else some tok
+    else some tok.copy
 
 open Verso.Search.Stemmer.Porter in
 /--
@@ -464,7 +464,7 @@ public def english : Language where
     porterStemmerFilter "stemmer"
   ]
 where
-  trimmer (tok : String) : Option String := tok.dropWhile badChar |>.dropRightWhile badChar
+  trimmer (tok : String) : Option String := tok.dropWhile badChar |>.dropEndWhile badChar |>.copy
   badChar c := !(c.isAlphanum || c == '_')
   words := #["", "a", "able", "about", "across", "after", "all", "almost", "also", "am", "among", "an",
     "and", "any", "are", "as", "at", "be", "because", "been", "but", "by", "can", "cannot",
@@ -477,7 +477,7 @@ where
     "tis", "to", "too", "twas", "us", "wants", "was", "we", "were", "what", "when", "where",
     "which", "while", "who", "whom", "why", "will", "with", "would", "yet", "you", "your"]
   tokenizeWhitespace (str : String) :=
-    str.splitToList (fun c => c.isWhitespace || c == '-') |>.toArray |>.filter (!·.isEmpty) |>.map (·.trim.toLower)
+    str.splitToList (fun c => c.isWhitespace || c == '-') |>.toArray |>.filter (!·.isEmpty) |>.map (·.trimAscii.copy.toLower)
 
 /--
 A tokenizer maps an input string to an array of search tokens (normally words).

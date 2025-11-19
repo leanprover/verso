@@ -297,7 +297,7 @@ Removes trailing whitespace from highlighted code.
 -/
 public partial defmethod Highlighted.trimRight (hl : Highlighted) : Highlighted :=
   match hl with
-  | .text str | .unparsed str => .text str.trimRight
+  | .text str | .unparsed str => .text str.trimAsciiEnd.copy
   | .token .. => hl
   | .span infos hl => .span infos hl.trimRight
   | .tactics info startPos endPos hl => .tactics info startPos endPos hl.trimRight
@@ -320,7 +320,7 @@ Removes leading whitespace from highlighted code.
 -/
 public partial defmethod Highlighted.trimLeft (hl : Highlighted) : Highlighted :=
   match hl with
-  | .text str | .unparsed str => .text str.trimLeft
+  | .text str | .unparsed str => .text str.trimAsciiStart.copy
   | .token .. => hl
   | .span infos hl => .span infos hl.trimLeft
   | .tactics info startPos endPos hl => .tactics info startPos endPos hl.trimLeft

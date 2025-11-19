@@ -1119,7 +1119,7 @@ def TraverseState.definitionIds (state : TraverseState) (ctxt : TraverseContext)
   if let some examples := state.domains.get? exampleDomain then
     let mut idMap := {}
     for (x, _) in examples.objects do
-      let afterSpace := x.dropWhile (· != ' ')
+      let afterSpace := x.dropWhile (· != ' ') |>.copy
       if exampleDeco.isEqSome afterSpace then
         if let .ok { htmlId := slug, .. } := state.resolveDomainObject exampleDomain x then
           idMap := idMap.insert (x.takeWhile (· != ' ') |>.toName) slug.toString

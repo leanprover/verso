@@ -34,11 +34,11 @@ def log10 (n : Nat) : Nat :=
   else 0
 
 def asCode (s : String) : String :=
-  let lines := s.dropRightWhile (· == '\n') |>.splitToList (· == '\n')
+  let lines := s.dropEndWhile (· == '\n') |>.copy |>.splitToList (· == '\n')
   let lw := log10 lines.length + 1
   let pad (s : String) : String :=
     (lw - s.length).fold (init := s) fun _ _ => (" " ++ ·)
-  (lines.mapIdx fun i l => (s!"{toString (i + 1) |> pad}|{l}⏎\n")) |> String.join |>.trimRight
+  (lines.mapIdx fun i l => (s!"{toString (i + 1) |> pad}|{l}⏎\n")) |> String.join |>.trimAsciiEnd |>.copy
 
 partial def preview (stx : Syntax) : m Std.Format :=
   match stx with
@@ -291,7 +291,7 @@ def markupPreview : DirectiveExpanderOf MarkupPreviewConfig
     let `(block|``` | $expected ```) := blk2
       | throwErrorAt blk1 "Expected anonymous code block"
 
-    let stx ← blocks {} |>.parseString contents.getString.trimRight
+    let stx ← blocks {} |>.parseString contents.getString.trimAsciiEnd.copy
     let p ← preview stx
     let p := p.pretty (width := 35)
 
@@ -310,8 +310,8 @@ def markupPreview : DirectiveExpanderOf MarkupPreviewConfig
     ])
 where
   eq (s1 s2 : String) : Bool :=
-    let lines1 := s1.trim.splitToList (· == '\n') |>.map (·.trimRight)
-    let lines2 := s2.trim.splitToList (· == '\n') |>.map (·.trimRight)
+    let lines1 := s1.trimAscii.copy.splitToList (· == '\n') |>.map (·.trimAsciiEnd)
+    let lines2 := s2.trimAscii.copy.splitToList (· == '\n') |>.map (·.trimAsciiEnd)
     lines1 == lines2
 
   nonemptyI : TSyntax `inline → Bool
