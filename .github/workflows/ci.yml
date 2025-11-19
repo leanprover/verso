@@ -160,7 +160,7 @@ jobs:
       - name: Cache Playwright browsers
         uses: actions/cache@v4
         with:
-          path: ${{ matrix.playwright-cache }}
+          path: .playwright-browsers
           key: playwright-${{ runner.os }}-${{ hashFiles('browser-tests/uv.lock') }}
 
       - name: Install Playwright browsers
