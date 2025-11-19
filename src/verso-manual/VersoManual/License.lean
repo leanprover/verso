@@ -86,7 +86,7 @@ block_extension Block.licenseInfo where
     some <| fun _ _ _ _ _ => do
       let headerLevel := (← read).traverseContext.headers.size + 1
       let allLicenses := (← read).traverseState.licenseInfo.toArray
-      let allLicenses := allLicenses.qsort (·.dependency.trim.toLower < ·.dependency.trim.toLower)
+      let allLicenses := allLicenses.qsort (·.dependency.trimAscii.copy.toLower < ·.dependency.trimAscii.copy.toLower)
 
       return allLicenses.map (·.toHtml headerLevel)
 

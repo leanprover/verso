@@ -49,9 +49,9 @@ private def ignore [Monad m] [MonadLiftT CoreM m] [MonadEnv m] (x : Name) : m Bo
     (`noConfusionType).isSuffixOf x ||
     let str := x.getString!
     str ∈ ["sizeOf_spec", "sizeOf_eq", "brecOn", "ind", "ofNat_toCtorIdx", "inj", "injEq", "induct"] ||
-    "proof_".isPrefixOf str && (str.drop 6).all (·.isDigit) ||
-    "match_".isPrefixOf str && (str.drop 6).all (·.isDigit) ||
-    "eq_".isPrefixOf str && (str.drop 3).all (·.isDigit)
+    "proof_".isPrefixOf str && (str.drop 6).all Char.isDigit ||
+    "match_".isPrefixOf str && (str.drop 6).all Char.isDigit ||
+    "eq_".isPrefixOf str && (str.drop 3).all Char.isDigit
 
 open Lean Elab Command in
 run_cmd do

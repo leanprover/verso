@@ -52,6 +52,6 @@ Comments to be added as module docstrings to the examples file.
 @[code_block]
 def savedComment : CodeBlockExpanderOf Unit
   | (), code => do
-    let str := code.getString.trimRight
+    let str := code.getString.trimAsciiEnd.copy
     let comment := s!"/-!\n{str}\n-/"
     ``(Block.other (Block.savedLean $(quote (← getFileName)) $(quote comment)) #[])

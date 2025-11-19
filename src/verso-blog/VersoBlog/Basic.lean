@@ -433,13 +433,13 @@ partial def TraverseState.freshId (state : Blog.TraverseState) (path : List Stri
     return idStr
 where
   next (idStr : String) : String :=
-    match idStr.takeRightWhile (·.isDigit) with
+    match idStr.takeEndWhile Char.isDigit |>.copy with
     | "" => idStr ++ "1"
     | more =>
       if let some n := more.toNat? then
-        idStr.dropRight (more.length) ++ toString (n + 1)
+        (idStr.dropEnd more.length).copy ++ toString (n + 1)
       else
-        idStr.dropRight (more.length) ++ "1"
+        (idStr.dropEnd more.length).copy ++ "1"
   mangle (idStr : String) : String := Id.run do
     let mut state := false -- found valid leading char?
     let mut out := ""

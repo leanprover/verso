@@ -192,6 +192,6 @@ The search box code
 public def searchBoxCode : Array (String × ByteArray) :=
   (include_bin_dir "../../../static-web/search").filterMap fun (name, contents) =>
     if name.endsWith "domain-mappers.js" then none
-    else some (name.stripPrefix "../../../static-web/search/", contents)
+    else some (name.dropPrefix "../../../static-web/search/" |>.copy, contents)
 
 end

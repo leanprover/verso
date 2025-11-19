@@ -40,7 +40,7 @@ def loadModuleContent
       let toolchainfile := projectDir / "lean-toolchain"
       if !(← toolchainfile.pathExists) then
         throw <| .userError s!"File {toolchainfile} doesn't exist, couldn't load project"
-      pure (← IO.FS.readFile toolchainfile).trim
+      pure (← IO.FS.readFile toolchainfile).trimAscii.copy
     | some override => pure override
 
   -- Kludge: remove variables introduced by Lake. Clearing out DYLD_LIBRARY_PATH and
@@ -110,7 +110,7 @@ def Helper.fromModule
       let toolchainfile := projectDir / "lean-toolchain"
       if !(← toolchainfile.pathExists) then
         throw <| .userError s!"File {toolchainfile} doesn't exist, couldn't load project"
-      pure (← IO.FS.readFile toolchainfile).trim
+      pure (← IO.FS.readFile toolchainfile).trimAscii.copy
     | some override => pure override
 
   -- Kludge: remove variables introduced by Lake. Clearing out DYLD_LIBRARY_PATH and
@@ -306,8 +306,8 @@ variable [Monad m] [MonadError m] [MonadQuotation m]
 
 
 partial def getModuleDocString (hl : Highlighted) : m String := do
-  let str := (← getString hl).trim
-  let str := str.stripPrefix "/-!" |>.stripSuffix "-/" |>.trim
+  let str := (← getString hl).trimAscii
+  let str := str.dropPrefix "/-!" |>.dropSuffix "-/" |>.trimAscii |>.copy
   pure str
 where getString : Highlighted → m String
   | .text txt | .unparsed txt => pure txt
