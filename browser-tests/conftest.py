@@ -93,6 +93,7 @@ def server(request):
         return
 
     site_dir = request.config.getoption("--site-dir")
+    site_dir = Path(__file__).parent / site_dir
     port = request.config.getoption("--port")
 
     if port is None:
