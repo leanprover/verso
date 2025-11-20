@@ -242,7 +242,8 @@ def traverse (logError : String → IO Unit) (text : Part Manual) (config : Conf
   let topCtxt : Manual.TraverseContext := {logError, draft := config.draft}
   if config.verbose then IO.println "Updating remote data"
   let remoteContent ← updateRemotes false config.remoteConfigFile (if config.verbose then IO.println else fun _ => pure ())
-  let mut state : Manual.TraverseState := .initialize config.toHtmlAssets remoteContent
+  let assets := config.features.toArray.foldr (init := config.toHtmlAssets) (·.addAssets ·)
+  let mut state : Manual.TraverseState := .initialize assets remoteContent
   let mut text := text
   if !config.draft then
     text := removeDraftParts text
