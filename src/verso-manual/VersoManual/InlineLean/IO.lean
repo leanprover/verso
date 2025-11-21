@@ -76,7 +76,7 @@ def ExampleFileConfig.parse  : ArgParse m ExampleFileConfig :=
   ExampleFileConfig.mk <$> FileType.parse <*> (.flag `show true)
 
 def IOExample.exampleFileSyntax [Monad m] [MonadQuotation m] (type : FileType) (contents : String) : m Term := do
-  `(Block.other (Block.exampleFile $(quote type)) #[Block.code $(quote contents)])
+  ``(Block.other (Block.exampleFile $(quote type)) #[Block.code $(quote contents)])
 
 instance : FromArgs ExampleFileConfig m := ⟨ExampleFileConfig.parse⟩
 
@@ -92,12 +92,8 @@ def exampleFile : CodeBlockExpanderOf ExampleFileConfig
       `(Block.concat #[])
 
 
-@[block_extension Block.exampleFile]
-def Block.exampleFile.descr : BlockDescr := withHighlighting {
-  traverse _ _ _ := pure none
-  toTeX := none
-  extraCss := [
-    r#"
+private def exampleFileCss :=
+r#"
 .example-file {
   white-space: normal;
   font-family: var(--verso-structure-font-family);
@@ -161,7 +157,45 @@ def Block.exampleFile.descr : BlockDescr := withHighlighting {
   text-align: right;
 }
 "#
-  ]
+
+section
+open Verso.Output Html
+private def exampleFileHtmlWrapper (descr : Html) (content : Html) : Html := {{
+  <div class="example-file">
+    {{descr}}
+    {{content}}
+  </div>
+}}
+
+private def exampleFileLines (str : String) : Html :=
+  if str.isEmpty || str == "\n" then
+    {{<code class="empty">"<empty>"</code>}}
+  else
+    getLines str |>.map ({{<code class="line">{{show String from ·}}</code>}})
+where
+  getLines (file : String) : Array String :=
+    let lines := file.splitToList (· == '\n') |>.toArray
+    if lines.back? == some "" then lines.pop else lines
+end
+
+block_extension Block.exampleLeanFile (filename : String) where
+  data := .str filename
+  traverse _ _ _ := pure none
+  toTeX := none
+  extraCss := [exampleFileCss]
+  toHtml := open Verso.Output Html in
+    some <| fun _ goB _ data blocks => do
+      let .str filename := data
+        | HtmlT.logError "Failed to deserialize filename from {data.compress} (expected a string)"
+          return .empty
+      let descr := {{<code>{{filename}}</code>}}
+      return exampleFileHtmlWrapper descr (← blocks.mapM goB)
+
+@[block_extension Block.exampleFile]
+def Block.exampleFile.descr : BlockDescr := withHighlighting {
+  traverse _ _ _ := pure none
+  toTeX := none
+  extraCss := [exampleFileCss]
   toHtml :=
     open Verso.Output Html in
     some <| fun _ _ _ data blocks => do
@@ -185,23 +219,9 @@ def Block.exampleFile.descr : BlockDescr := withHighlighting {
           | .output f => {{"Output: "<code>{{f.toString}}</code>}}
           | .other f => {{"File: "<code>{{f.toString}}</code>}}
 
-
-        let lines : Html :=
-          if str.isEmpty || str == "\n" then
-            {{<code class="empty">"<empty>"</code>}}
-          else
-            getLines str |>.map ({{<code class="line">{{show String from ·}}</code>}})
-
-        pure {{
-          <div class="example-file">
-            {{descr}}
-            {{lines}}
-          </div>}}
+        return exampleFileHtmlWrapper descr (exampleFileLines str)
 }
-where
-  getLines (file : String) : Array String :=
-    let lines := file.splitToList (· == '\n') |>.toArray
-    if lines.back? == some "" then lines.pop else lines
+
 
 namespace IOExample
 
