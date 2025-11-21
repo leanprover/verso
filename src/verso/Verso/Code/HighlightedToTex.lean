@@ -94,16 +94,6 @@ def escapeForVerbatim (s : String) : String :=
   | '|' => some "\\symbol{124}"
   | '}' => some "\\symbol{125}"
   | '\\' => some "\\symbol{92}"
-  -- The reason for changing U+271d LATIN CROSS to U+2020 DAGGER here
-  -- is that DejaVu Sans Mono Oblique lacks the former, and we'd like
-  -- to render variables in italic/oblique. If we decide on a
-  -- different monospace font that has better coverage, we could
-  -- reconsider this decision.
-  -- Ordinarily it'd be pretty sketchy to subvert author intent by replacing
-  -- characters that users might otherwise copy and paste into Lean,
-  -- but this is exactly the character Lean inserts to create shadowed
-  -- names, so it seems benign to change it in this case.
-  | '✝' => some "†"
   | _ => none
 
 /-- info: "\\symbol{123}\\symbol{124}\\symbol{125}\\symbol{92}" -/
