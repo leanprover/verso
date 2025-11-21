@@ -160,7 +160,8 @@ jobs:
           pgf
           environ
           etoolbox
-
+          ulem
+          newunicodechar
 
     - name: Check `tlmgr` version
       run: tlmgr --version
