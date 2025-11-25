@@ -163,8 +163,20 @@ instance : DecidableRel (@LE.le Slug _) := fun s1 s2 =>
 defmethod String.sluggify (str : String) : Slug :=
   ⟨asSlug str⟩
 
-instance : Append Slug where
-  append := private fun | ⟨s1⟩, ⟨s2⟩ => ⟨s1 ++ s2⟩
+/--
+Appends two slugs by appending their underlying strings.
+-/
+def append : Slug → Slug → Slug
+  | ⟨s1⟩, ⟨s2⟩ => ⟨s1 ++ s2⟩
+
+@[instance, inherit_doc append]
+public def instAppendSlug : Append Slug where
+  append := Slug.append
+
+/--
+Checks whether a slug's string representation is {lean}`""`.
+-/
+public def isEmpty (s : Slug) : Bool := s.toString.isEmpty
 
 /--
 Converts a string to a slug.

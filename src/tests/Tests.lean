@@ -17,5 +17,6 @@ import Tests.Paths
 import Tests.Refs
 import Tests.Serialization
 import Tests.TexUnit
+import Tests.VersoBlog
 import Tests.VersoManual
 import Tests.Z85

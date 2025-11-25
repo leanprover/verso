@@ -152,6 +152,13 @@ jobs:
           tsc --noEmit -p jsconfig.json
           popd
 
+      - name: Generate the demo site and make sure page_link works
+        run: |
+          lake exe demosite --output _out/demosite
+          # Fail if the generated about page doesn't have the expected base tag and blog link
+          grep -qF '<a href="blog/">blog</a> genre' _out/demosite/about/index.html
+          grep -qF '<base href=".././">' _out/demosite/about/index.html
+
       # Begin browser testing
       - name: Install uv
         uses: astral-sh/setup-uv@v4
