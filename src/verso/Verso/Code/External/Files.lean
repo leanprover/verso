@@ -27,19 +27,16 @@ namespace Verso.Code.External
 register_option verso.exampleProject : String := {
   defValue := "",
   descr := "The directory in which to search for example code",
-  group := "verso"
 }
 
 register_option verso.exampleModule : String := {
   defValue := "",
   descr := "The default module to load examples from",
-  group := "verso"
 }
 
 register_option verso.externalExamples.suppressedNamespaces : String := {
   defValue := "",
   descr := "Namespaces to be hidden in term metadata (separated by spaces)",
-  group := "verso"
 }
 
 

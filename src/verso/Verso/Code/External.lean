@@ -344,8 +344,8 @@ where
   delims : String := Id.run do
     let mut n := 3
     let mut run := none
-    let mut iter := newContents.startValidPos
-    while h : iter ≠ newContents.endValidPos do
+    let mut iter := newContents.startPos
+    while h : iter ≠ newContents.endPos do
       let c := iter.get h
       iter := iter.next h
       if c == '`' then
@@ -836,8 +836,8 @@ where
     let str := if str.startsWith "`" || str.endsWith "`" then " " ++ str ++ " " else str
     let mut n := 1
     let mut run := none
-    let mut iter := str.startValidPos
-    while h : iter ≠ str.endValidPos do
+    let mut iter := str.startPos
+    while h : iter ≠ str.endPos do
       let c := iter.get h
       iter := iter.next h
       if c == '`' then

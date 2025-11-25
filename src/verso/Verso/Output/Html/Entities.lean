@@ -85,8 +85,8 @@ private def isHexDigit (c : Char) : Bool :=
 private def decodeHex (s : String) : Option Nat := do
   if s.isEmpty then failure
   let mut n := 0
-  let mut iter := s.startValidPos
-  while h : iter ≠ s.endValidPos do
+  let mut iter := s.startPos
+  while h : iter ≠ s.endPos do
     let c := iter.get h
     iter := iter.next h
 

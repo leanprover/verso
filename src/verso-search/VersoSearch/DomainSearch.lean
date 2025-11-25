@@ -125,7 +125,7 @@ Mangles a domain's name to that for its mapper, to be used in JS code.
 private def jsName (domainName : String) : String := Id.run do
   if domainName.isEmpty then return "_"
 
-  let first := domainName.startValidPos.get!
+  let first := domainName.startPos.get!
   let mut out : String :=
     if isValidFirstChar first then
       first.toString

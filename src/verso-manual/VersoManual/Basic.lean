@@ -189,9 +189,9 @@ instance : FromJson Numbering where
       else throw s!"Expected exponent 0 for {v.compress}"
     | v@(.str s) =>
       if h : s.length = 1 then
-        return .letter <| s.startValidPos.get <| by
+        return .letter <| s.startPos.get <| by
           have : "".length = 0 := by rfl
-          grind [String.startValidPos_eq_endValidPos_iff]
+          grind => instantiate only [String.startPos_eq_endPos_iff]
       else throw s!"Expected one-character string for {v.compress}"
     | other => throw s!"Expected number or string, got {other.compress}"
 
