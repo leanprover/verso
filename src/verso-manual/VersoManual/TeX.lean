@@ -19,6 +19,26 @@ r##"
 
 \usepackage[most]{tcolorbox}
 \usepackage{hyperref}
+\usepackage[normalem]{ulem}
+\newcommand{\coloredwave}[2]{\textcolor{#1}{\uwave{\textcolor{black}{#2}}}}
+\usepackage{newunicodechar}
+
+% Work around the fact that
+% U+271D LATIN CROSS doesn't exist in
+% DejaVu Sans Mono Oblique. \textup
+% is fontspec for "upright, not italic/oblique".
+\newunicodechar{✝}{\textup{✝}}
+
+\definecolor{errorColor}{HTML}{ff0000}
+\definecolor{infoColor}{HTML}{007f00}
+\definecolor{warningColor}{HTML}{0000ff}
+\newcommand{\errorDecorate}[1]{\coloredwave{errorColor}{#1}}
+\newcommand{\infoDecorate}[1]{\coloredwave{infoColor}{#1}}
+\newcommand{\warningDecorate}[1]{\coloredwave{warningColor}{#1}}
+\DefineVerbatimEnvironment{LeanVerbatim}{Verbatim}
+  {commandchars=\\\{\},fontsize=\small,breaklines=true}
+\CustomVerbatimCommand{\LeanVerb}{Verb}
+  {commandchars=\\\{\},fontsize=\small}
 
 \definecolor{bordercolor}{HTML}{98B2C0}
 \definecolor{medgray}{HTML}{555555}

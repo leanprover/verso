@@ -157,7 +157,7 @@ def dirPathToString (path : List String) (trailing : Bool := false) : String :=
 
 def writePage (theme : Theme) (params : Template.Params) (template : Template := theme.pageTemplate) : GenerateM Unit := do
   ensureDir <| (← currentDir)
-  let ⟨baseTemplate, modParams⟩ := theme.adHocTemplates (Array.mk (← currentPath)) |>.getD ⟨template, id⟩
+  let ⟨baseTemplate, modParams⟩ := theme.adHocTemplates (← currentPath) |>.getD ⟨template, id⟩
   let output ← rewriteOutput <| ← Template.renderMany [baseTemplate, theme.primaryTemplate] <| modParams <| params
   let header := (← read).header
   IO.FS.withFile ((← currentDir).join "index.html") .write fun h => do
@@ -166,7 +166,7 @@ def writePage (theme : Theme) (params : Template.Params) (template : Template :=
 
 def writeBlog (theme : Theme) (id : Lean.Name) (txt : Part Page) (posts : Array BlogPost) : GenerateM Unit := do
   -- path from site to here
-  let pathToBlog := dirPathToString (← currentPath)
+  let pathToBlog := dirPathToString (← currentPath).toList
 
   for post in posts do
     if post.contents.metadata.map (·.draft) == some true && !(← showDrafts) then continue
@@ -210,7 +210,7 @@ def writeBlog (theme : Theme) (id : Lean.Name) (txt : Part Page) (posts : Array 
   }}
   let path ← currentPath
   let allCats : Post.Categories := .mk <| meta.categories.toArray.map fun (c, _) =>
-    (dirPathToString (trailing := true) <| path ++ [c.slug], c)
+    (dirPathToString (trailing := true) <| (path / c.slug).toList, c)
   let pageParams : Template.Params := (← forPart txt).insert "posts" ⟨.mk postList, #[]⟩ |>.insert "categories" ⟨.mk allCats, #[]⟩
   writePage theme pageParams
 where

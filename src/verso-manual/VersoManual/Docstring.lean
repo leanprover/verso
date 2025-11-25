@@ -655,7 +655,7 @@ def docstringSection.descr : BlockDescr where
   toTeX := some fun _goI goB _id info contents =>
     open Verso.Output.TeX in do
     let .ok header := FromJson.fromJson? (α := String) info
-      | IO.println "Failed to deserialize docstring section data while generating TeX"; return .empty
+      | Verso.Doc.TeX.logError "Failed to deserialize docstring section data while generating TeX"; return .empty
     pure \TeX{\par\noindent\textbf{\Lean{header}}\par " " \Lean{.seq (← contents.mapM goB)}}
   toHtml := some fun _goI goB _id info contents =>
     open Verso.Doc.Html HtmlT in
@@ -673,7 +673,7 @@ def internalSignature.descr : BlockDescr where
   toTeX := some fun _goI goB _id info contents =>
     open Verso.Output.TeX in do
     let .ok (name, signature) := FromJson.fromJson? (α := Highlighted × Option Highlighted) info
-      | IO.println "Failed to deserialize docstring section data while generating TeX"; return .empty
+      | Verso.Doc.TeX.logError "Failed to deserialize docstring section data while generating TeX"; return .empty
     let signatureTeX := if let .some sig := signature then \TeX{ " : " \Lean{sig.toTeX}} else .empty
     pure \TeX{\par " " \Lean{name.toTeX} \Lean{signatureTeX} \Lean{.seq (← contents.mapM goB)}}
   toHtml := some fun _goI goB _id info contents =>
@@ -703,7 +703,7 @@ def inheritance.descr : BlockDescr where
   toTeX := some fun _goI goB _id info contents =>
     open Verso.Output.TeX in do
     let .ok (name, _parents) := FromJson.fromJson? (α := Name × Array Block.Docstring.ParentInfo) info
-      | IO.println "Failed to deserialize docstring section data while generating TeX"; return .empty
+      | Verso.Doc.TeX.logError "Failed to deserialize docstring section data while generating TeX"; return .empty
     return \TeX{\Lean{s!"{name}"} \Lean{.seq (← contents.mapM goB)}}
   toHtml := some fun _goI _goB _id info _contents =>
     open Verso.Doc.Html HtmlT in
@@ -732,7 +732,7 @@ def fieldSignature.descr : BlockDescr where
   toTeX := some fun _goI goB _id info contents =>
     open Verso.Output.TeX in do
     let .ok (visibility, name, signature, inheritedFrom, parents) := FromJson.fromJson? (α := Visibility × Highlighted × Highlighted × Option Nat × Array Highlighted) info
-      | IO.println "Failed to deserialize docstring section data while generating TeX"; return .empty
+      | Verso.Doc.TeX.logError "Failed to deserialize docstring section data while generating TeX"; return .empty
     let visibility : Verso.Output.TeX :=
       match visibility with
       | .public => .empty
@@ -783,7 +783,7 @@ def constructorSignature.descr : BlockDescr where
   toTeX := some fun _goI goB _id info contents =>
     open Verso.Output.TeX in do
       let .ok signature := FromJson.fromJson? (α := Highlighted) info
-        | IO.println "Failed to deserialize docstring section data while generating TeX"; pure .empty
+        | Verso.Doc.TeX.logError "Failed to deserialize docstring section data while generating TeX"; pure .empty
       let signat := signature.toTeX
       pure \TeX{ \Lean{.raw "\\begin{list}{$|$}{\\leftmargin=1em\\topsep=0pt \\partopsep=0pt}\\item "}
                  \Lean{signat}
@@ -813,8 +813,8 @@ def Signature.toHtml  : Signature → HighlightHtmlM Manual Html
 
 open Verso.Output TeX in
 def Signature.toTeX : Signature → TeX
-  | { narrow, .. } =>
-    narrow.toTeX
+  | { wide, .. } =>
+    wide.toTeX
 
 open Verso.Search in
 def docDomainMapper : DomainMapper :=
@@ -906,12 +906,12 @@ def docstring.descr : BlockDescr := withHighlighting {
   toTeX := some <| fun _goI goB _id info contents =>
     open Verso.Output.TeX in do
       let .ok (name, declType, signature, customLabel) := FromJson.fromJson? (α := Name × Block.Docstring.DeclType × Signature × Option String) info
-        | IO.println "Failed to deserialize docstring data while generating TeX"; return .empty
+        | Verso.Doc.TeX.logError "Failed to deserialize docstring data while generating TeX"; return .empty
 
       let label := customLabel.getD declType.label
       if label == "" then
-        IO.println s!"Missing label for '{name}': supply one with 'label := \"LABEL\"'"
-      pure \TeX{\begin{docstringBox}{\Lean{label}}  \Lean{signature.toTeX} \tcblower " " \Lean{← contents.mapM goB} \end{docstringBox}}
+        Verso.Doc.TeX.logError s!"Missing label for '{name}': supply one with 'label := \"LABEL\"'"
+      pure \TeX{\begin{docstringBox}{\Lean{label}} \Lean{signature.toTeX} \tcblower " " \Lean{← contents.mapM goB} \end{docstringBox}}
 
   extraCss := [docstringStyle]
 }

@@ -84,7 +84,7 @@ instance [MonadReaderOf Components m] [MonadStateOf Component.State m] : MonadCo
 structure Context where
   site : Site
   config : Config
-  path : List String
+  path : Multi.Path
   params : Params
   builtInStyles : HashSet String
   builtInScripts : HashSet String
@@ -214,7 +214,7 @@ def inlineHtml (g : Genre) [bg : BlogGenre g]
     let st ← bg.state_eq ▸ state
     let some tgt := st.targets.find? x
       | panic! "No label for {x}"
-    pure {{ <span id={{tgt.htmlId}}> {{ contentHtml }} </span>}}
+    pure {{ <span id={{tgt.htmlId.toString}}> {{ contentHtml }} </span>}}
   | .ref x, contents => do
     let st ← bg.state_eq ▸ state
     match st.targets.find? x with
@@ -222,7 +222,7 @@ def inlineHtml (g : Genre) [bg : BlogGenre g]
       HtmlT.logError s!"Can't find target {x}"
       pure {{<strong class="internal-error">s!"Can't find target {x}"</strong>}}
     | some tgt =>
-      let addr := s!"{String.join ((← relative tgt.path).intersperse "/")}#{tgt.htmlId}"
+      let addr := tgt.relativeLink
       go <| .link contents addr
   | .pageref x id?, contents => do
     let st ← bg.state_eq ▸ state
@@ -231,7 +231,7 @@ def inlineHtml (g : Genre) [bg : BlogGenre g]
       HtmlT.logError s!"Can't find target {x} - options are {st.pageIds.toList.map (·.fst)}"
       pure {{<strong class="internal-error">s!"Can't find target {x}"</strong>}}
     | some «meta» =>
-      let addr := String.join ((← relative meta.path).intersperse "/") ++ (id?.map ("#" ++ ·) |>.getD "")
+      let addr := meta.path.relativeLink ++ (id?.map ("#" ++ ·) |>.getD "")
       go <| .link contents addr
   | .htmlSpan classes, contents => do
     pure {{ <span class={{classes}}> {{← contents.mapM go}} </span> }}
@@ -338,7 +338,7 @@ def param [TypeName α] (key : String) : TemplateM α := do
 Contains the contents of `<head>` that are needed for proper functioning of the site.
 -/
 def builtinHeader : TemplateM Html := do
-  let siteRoot := String.join ((← currentPath).map fun _ => "../") ++ "./"
+  let siteRoot := String.join ((← currentPath).toList.map fun _ => "../") ++ "./"
   let mut out := .empty
   -- Establish that all relative paths should be relative to siteRoot
   out := out ++ {{<base href={{siteRoot}}/>}}
