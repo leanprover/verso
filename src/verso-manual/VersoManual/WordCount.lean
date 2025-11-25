@@ -29,9 +29,9 @@ instance [WordCount α] : WordCount (Array α) where
 instance : WordCount String where
   countWords _ (str : String) := Id.run do
     let mut wc := 0
-    let mut iter := str.startValidPos
+    let mut iter := str.startPos
     let mut state := false
-    while h : iter ≠ str.endValidPos do
+    while h : iter ≠ str.endPos do
       let curr := iter.get h
       iter := iter.next h
       match state with

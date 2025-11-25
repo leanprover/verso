@@ -11,19 +11,16 @@ open Lean MonadOptions
 
 register_option verso.docstring.elabMarkdown : Bool := {
   defValue := true
-  group := "doc"
   descr := "Whether to heuristically elaborate Lean code in Markdown docstrings in Verso"
 }
 
 register_option verso.docstring.allowDeprecated : Bool := {
   defValue := false
-  group := "doc"
   descr := "Whether to accept documentation for deprecated names"
 }
 
 register_option verso.docstring.allowMissing : Bool := {
   defValue := false
-  group := "doc"
   descr := "Whether to accept missing documentation. If false, missing docstrings are errors rather than warnings."
 }
 

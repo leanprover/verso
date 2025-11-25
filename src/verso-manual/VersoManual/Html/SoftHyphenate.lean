@@ -30,9 +30,9 @@ Text nodes in the resulting HTML will have their contents escaped according to {
 public def softHyphenateText (esc : Bool) (str : String) : Html := Id.run do
   let mut strs : Array Html := #[]
   let mut prior : Option Char := none
-  let mut start := str.startValidPos
-  let mut iter := str.startValidPos
-  while h : iter ≠ str.endValidPos do
+  let mut start := str.startPos
+  let mut iter := str.startPos
+  while h : iter ≠ str.endPos do
     let current := iter.get h
     let iter' := iter.next h
     if prior == some '.' && current != '.' then

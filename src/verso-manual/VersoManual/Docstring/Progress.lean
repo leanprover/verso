@@ -101,7 +101,7 @@ public def progress : DirectiveExpanderOf Unit
           present := present.insert `_root_ (NameSet.empty.insert x)
       else
         let mut ns := x
-        while !ns.isAnonymous && !(ns.getString!.startValidPos.get! |>.isUpper) do
+        while !ns.isAnonymous && !(ns.getString!.startPos.get! |>.isUpper) do
           ns := ns.getPrefix
         if let some v := present.find? ns then
           present := present.insert ns (v.insert x)

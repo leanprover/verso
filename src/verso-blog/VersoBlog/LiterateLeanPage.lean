@@ -204,12 +204,12 @@ deriving BEq, Hashable, Repr, Inhabited
 
 -- TODO rewrite with dynamic programming
 partial def Pat.match (p : List Pat) (str : String) : Option (Lean.NameMap String) :=
-  go str.startValidPos p
+  go str.startPos p
 where
   go iter
-    | [] => if iter = str.endValidPos then pure {} else failure
+    | [] => if iter = str.endPos then pure {} else failure
     | .char c :: p' =>
-      if h : iter ≠ str.endValidPos then
+      if h : iter ≠ str.endPos then
         if iter.get h == c then
           go (iter.next h) p'
         else failure
@@ -217,27 +217,27 @@ where
     | .str s :: p' =>
       go iter (s.toList.map .char ++ p')
     | .var x :: p' => do
-      let mut iter' := str.endValidPos
+      let mut iter' := str.endPos
       while iter' ≥ iter do
         try
           let rest ← go iter' p'
           return rest.insert x (iter.extract iter')
         catch
           | () =>
-            if h : iter' = str.startValidPos then
+            if h : iter' = str.startPos then
               break
             else
               iter' := iter'.prev h
               continue
       failure
     | .any :: p' => do
-      let mut iter' := str.endValidPos
+      let mut iter' := str.endPos
       while iter' ≥ iter do
         try
           return (← go iter' p')
         catch
           | () =>
-            if h : iter' = str.startValidPos then
+            if h : iter' = str.startPos then
               break
             else
               iter' := iter'.prev h

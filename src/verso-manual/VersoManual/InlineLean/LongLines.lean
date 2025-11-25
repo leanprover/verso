@@ -12,7 +12,6 @@ open Lean MonadOptions
 
 register_option verso.code.warnLineLength : Nat := {
   defValue := 60
-  group := "doc"
   descr := "The example code line length at which to issue warnings. Set to 0 for no warnings."
 }
 
