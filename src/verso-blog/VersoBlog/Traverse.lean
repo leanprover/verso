@@ -80,7 +80,7 @@ def genreInline (g : Genre) [bg : BlogGenre g] : Blog.InlineExt → Array (Inlin
       -- Add as target if not already present
       if let none := (← get).targets.find? x then
         let path := (← read).path
-        let htmlId := (← get).freshId path x
+        let htmlId := (← get).freshId path x.toString.sluggify
         modify fun st => {st with targets := st.targets.insert x ⟨path, htmlId⟩}
       pure none
     | .ref _x, _contents =>

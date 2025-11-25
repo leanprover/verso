@@ -158,11 +158,6 @@ end Post
 
 namespace Info
 
-structure Target where
-  path : List String
-  htmlId : String
-deriving BEq
-
 open Lean (Name Syntax)
 
 structure Ref where
@@ -186,7 +181,7 @@ instance : BEq ArchivesMeta where
   beq xs ys := xs.categories == ys.categories
 
 structure PageMeta where
-  path : List String
+  path : Path
   title : String
 deriving BEq, Hashable, TypeName, Repr
 
@@ -251,13 +246,13 @@ deriving Inhabited
 
 
 structure TraverseContext where
-  path : List String := {}
+  path : Multi.Path := .root
   config : Config
   components : Components
 
 structure TraverseState where
-  usedIds : Std.HashMap (List String) (HashSet String) := {}
-  targets : Lean.NameMap Blog.Info.Target := {}
+  usedIds : Std.HashMap Multi.Path (HashSet Multi.Slug) := {}
+  targets : Lean.NameMap Link := {}
   blogs : Lean.NameMap Blog.Info.ArchivesMeta := {}
   refs : Lean.NameMap Blog.Info.Ref := {}
   pageIds : Lean.NameMap Blog.Info.PageMeta := {}
@@ -423,7 +418,8 @@ defmethod BlogPost.summary (post : BlogPost) : Array (Block Post) := Id.run do
     else break
   out
 
-partial def TraverseState.freshId (state : Blog.TraverseState) (path : List String) (hint : Lean.Name) : String := Id.run do
+partial def TraverseState.freshId (state : Blog.TraverseState) (path : Path) (hint : Slug) : Slug := Id.run do
+  let hint := if hint.toString.isEmpty then "x".sluggify else hint
   let mut idStr := mangle (toString hint)
   match state.usedIds[path]? with
   | none => return idStr
@@ -432,15 +428,15 @@ partial def TraverseState.freshId (state : Blog.TraverseState) (path : List Stri
       idStr := next idStr
     return idStr
 where
-  next (idStr : String) : String :=
-    match idStr.takeRightWhile (·.isDigit) with
-    | "" => idStr ++ "1"
+  next (idStr : Slug) : Slug :=
+    match idStr.toString.takeRightWhile (·.isDigit) with
+    | "" => idStr.toString ++ "1" |>.sluggify
     | more =>
       if let some n := more.toNat? then
-        idStr.dropRight (more.length) ++ toString (n + 1)
+        idStr.toString.dropRight (more.length) ++ toString (n + 1) |>.sluggify
       else
-        idStr.dropRight (more.length) ++ "1"
-  mangle (idStr : String) : String := Id.run do
+        idStr.toString.dropRight (more.length) ++ "1" |>.sluggify
+  mangle (idStr : String) : Multi.Slug := Id.run do
     let mut state := false -- found valid leading char?
     let mut out := ""
     for c in idStr.toList do
@@ -453,7 +449,7 @@ where
           out := out.push c
         else
           out := out ++ s!"--{c.toNat}--"
-    pure out
+    pure out.sluggify
 
 
 instance : BEq TraverseState where

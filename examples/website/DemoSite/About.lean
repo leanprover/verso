@@ -106,7 +106,7 @@ end
 
 #doc (Page) "About Me" =>
 
-I am a hypothetical user of the blog genre, describing my work on my personal site.
+I am a hypothetical user of the {page_link DemoSite.Blog}[blog] genre, describing my work on my personal site.
 
 This is a red box:
 
