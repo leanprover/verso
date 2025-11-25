@@ -834,7 +834,7 @@ def blogMain (theme : Theme) (site : Site) (linkTargets : Code.LinkTargets Trave
   let (site, xref) ← site.traverse cfg components
   let initGenCtx : Generate.Context := {
     site := site,
-    ctxt := { path := [], config := cfg, components },
+    ctxt := { path := .root, config := cfg, components },
     xref := xref,
     dir := cfg.destination,
     config := cfg,
@@ -868,7 +868,7 @@ where
     if urlAttr attr.fst && "/".isPrefixOf attr.snd then
       let path := (← read).path
       pure { attr with
-        snd := String.join (List.replicate path.length "../") ++ attr.snd.drop 1
+        snd := String.join (List.replicate path.size "../") ++ attr.snd.drop 1
       }
     else
       pure attr
