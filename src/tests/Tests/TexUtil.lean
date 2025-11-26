@@ -38,4 +38,4 @@ def toTex (block : Doc.Block Genre.Manual) : IO Output.TeX := do
   }
 
   -- Convert the block to TeX
-  block.toTeX.run ⟨options, traverseContext, traverseState⟩ |>.run extension_impls
+  block.toTeX.run ⟨options, traverseContext, traverseState, default⟩ |>.run extension_impls

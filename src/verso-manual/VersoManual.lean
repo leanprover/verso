@@ -287,8 +287,9 @@ def emitTeX (logError : String → IO Unit) (config : Config) (text : Part Manua
   let authors := text.metadata.map (·.authors) |>.getD []
   let date := text.metadata.bind (·.date) |>.getD ""
   let ctxt := {logError}
-  let frontMatter ← text.content.mapM (·.toTeX (opts, ctxt, state))
-  let chapters ← text.subParts.mapM (·.toTeX (opts, ctxt, state))
+  let tex_ctxt := default
+  let frontMatter ← text.content.mapM (·.toTeX (opts, ctxt, state, tex_ctxt))
+  let chapters ← text.subParts.mapM (·.toTeX (opts, ctxt, state, tex_ctxt))
   let dir := config.destination.join "tex"
   ensureDir dir
   let mut packages : Std.HashSet String := {}

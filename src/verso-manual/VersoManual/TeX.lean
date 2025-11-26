@@ -37,8 +37,11 @@ r##"
 \newcommand{\warningDecorate}[1]{\coloredwave{warningColor}{#1}}
 \DefineVerbatimEnvironment{LeanVerbatim}{Verbatim}
   {commandchars=\\\{\},fontsize=\small,breaklines=true}
+\DefineVerbatimEnvironment{FileVerbatim}{Verbatim}{commandchars=\\\{\},fontsize=\small,breaklines=true,frame=single,framesep=2mm,numbers=left}
 \CustomVerbatimCommand{\LeanVerb}{Verb}
   {commandchars=\\\{\},fontsize=\small}
+\CustomVerbatimCommand{\FileListingVerb}{Verb}
+  {commandchars=\\\{\},fontsize=\small,frame=single,framesep=2mm, numbers=left}
 
 \definecolor{bordercolor}{HTML}{98B2C0}
 \definecolor{medgray}{HTML}{555555}
