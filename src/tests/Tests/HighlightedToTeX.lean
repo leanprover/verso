@@ -5,6 +5,7 @@ Author: Jason Reed
 -/
 module
 meta import all Verso.Code.HighlightedToTex
+open Verso.Doc.TeX (escapeForVerbatim)
 
 open SubVerso.Highlighting
 
