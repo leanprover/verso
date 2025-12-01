@@ -942,7 +942,7 @@ private def suggest : InlineExpander
         for (_, examples) in modAnchors do
           for (anchorName, anchorContents) in examples.anchors.toArray do
 
-            if str'.all (fun c => !c.isWhitespace) then
+            if str'.all (not ∘ Char.isWhitespace) then
               if let some _ := anchorContents.matchingName? str' then
                 nameSuggestions := nameSuggestions.insert modName <|
                   ((nameSuggestions.find? modName).getD {}).insert anchorName

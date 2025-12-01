@@ -28,7 +28,7 @@ private def paragraphed (text : String) : Array String := Id.run do
   let mut paras := #[]
   let mut thisPara := #[]
   for l in lines do
-    if l.all (·.isWhitespace) then
+    if l.all Char.isWhitespace then
       if !thisPara.isEmpty then
         paras := paras.push (" ".intercalate thisPara.toList)
         thisPara := #[]

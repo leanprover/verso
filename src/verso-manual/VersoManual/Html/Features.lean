@@ -146,8 +146,8 @@ public instance : FromJson HtmlFeatures where
     let arr ← FromJson.fromJson? (α := Array HtmlFeature) json
     return .ofArray arr
 
-public instance : ForIn m HtmlFeatures HtmlFeature where
-  forIn fs init step := ForIn.forIn fs.toArray init step
+public instance [Monad m] : ForIn m HtmlFeatures HtmlFeature where
+  forIn fs init step := private ForIn.forIn fs.toArray init step
 
 end HtmlFeatures
 
