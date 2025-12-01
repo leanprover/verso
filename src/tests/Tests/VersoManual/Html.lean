@@ -96,7 +96,7 @@ Expected #[D], seeing #[D]
 Done
 -/
 #guard_msgs in
-#eval do
+#eval show IO Unit from do
   let mut here : Zipper := ⟨[], testToc⟩
   let spec := testToc.preorder
 
