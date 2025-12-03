@@ -75,6 +75,11 @@ jobs:
         run: |
           lake exe simplepage
 
+      - name: Generate some source HTML
+        run: |
+          lake build Verso.Hover:literate
+          lake exe verso-html .lake/build/literate htmlout
+
       - name: Check internal links on the example website
         uses: lycheeverse/lychee-action@v2.6.1
         with:
