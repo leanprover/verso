@@ -221,7 +221,7 @@ where
       while iter' ≥ iter do
         try
           let rest ← go iter' p'
-          return rest.insert x (iter.extract iter')
+          return rest.insert x (str.extract iter iter')
         catch
           | () =>
             if h : iter' = str.startPos then
