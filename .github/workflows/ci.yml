@@ -77,7 +77,7 @@ jobs:
 
       - name: Generate some source HTML
         run: |
-          lake build Verso.Hover:litearte
+          lake build Verso.Hover:literate
           lake exe verso-html .lake/build/literate htmlout
 
       - name: Check internal links on the example website
