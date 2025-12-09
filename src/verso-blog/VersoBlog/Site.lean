@@ -88,7 +88,7 @@ def Site.traverse
     (site : Site) (config : Config)
     (components : Components) :
     IO (Site × Blog.TraverseState) := do
-  let topCtxt : Blog.TraverseContext := {path := [], config, components}
+  let topCtxt : Blog.TraverseContext := {path := .root, config, components}
   let logVerbose := (if config.verbose then (fun _ => pure ()) else IO.println)
   let remoteContent ← Multi.updateRemotes false config.remoteInfoConfigPath logVerbose
   let mut state : Blog.TraverseState := {remoteContent}
@@ -103,13 +103,13 @@ def Site.traverse
   return (site, state)
 
 class MonadPath (m : Type → Type u) where
-  currentPath : m (List String)
+  currentPath : m Multi.Path
 
 export MonadPath (currentPath)
 
 
 def relative [Monad m] [MonadConfig m] [MonadPath m] (target : List String) : m (List String) := do
-  return relativize (← currentPath) target
+  return relativize (← currentPath).toList target
 where
   relativize (me target : List String) : List String :=
     match me, target with

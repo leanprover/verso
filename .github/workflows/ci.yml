@@ -16,6 +16,9 @@ jobs:
   build:
     name: Build and test
     runs-on: nscloud-ubuntu-22.04-amd64-8x16
+    env:
+      # Used for browser tests. Placing them here allows caching to work right.
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers
     steps:
       - name: install elan
         run: |
@@ -72,6 +75,11 @@ jobs:
         run: |
           lake exe simplepage
 
+      - name: Generate some source HTML
+        run: |
+          lake build Verso.Hover:literate
+          lake exe verso-html .lake/build/literate htmlout
+
       - name: Check internal links on the example website
         uses: lycheeverse/lychee-action@v2.6.1
         with:
@@ -119,6 +127,8 @@ jobs:
             pgf
             environ
             etoolbox
+            ulem
+            newunicodechar
 
       - name: Check `tlmgr` version
         run: tlmgr --version
@@ -205,6 +215,33 @@ jobs:
             echo "All zip files passed checks."
           fi
 
+
+      - name: Generate the demo site and make sure page_link works
+        run: |
+          lake exe demosite --output _out/demosite
+          # Fail if the generated about page doesn't have the expected base tag and blog link
+          grep -qF '<a href="blog/">blog</a> genre' _out/demosite/about/index.html
+          grep -qF '<base href=".././">' _out/demosite/about/index.html
+
+      # Begin browser testing
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          cache-dependency-glob: "browser-tests/pyproject.toml"
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: .playwright-browsers
+          key: playwright-${{ runner.os }}-${{ hashFiles('browser-tests/uv.lock') }}
+
+      - name: Install Playwright browsers
+        run: uv run --project browser-tests --extra test playwright install chromium firefox --with-deps
+
+      - name: Run browser tests
+        run: uv run --project browser-tests --extra test pytest browser-tests -v
+      # End browser testing
 
       - name: Upload docs to artifact storage
         if: github.ref_type != 'tag' && github.ref != 'refs/heads/main'

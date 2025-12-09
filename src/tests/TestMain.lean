@@ -135,9 +135,16 @@ def testSerialization (_ : Config) : IO Unit := do
   if fails > 0 then
     throw <| .userError s!"{fails} serialization tests failed"
 
+def testBlog (_ : Config) : IO Unit := do
+  IO.println "Running blog tests with Plausible..."
+  let fails ← runBlogTests
+  if fails > 0 then
+    throw <| .userError s!"{fails} blog tests failed"
+
 open Verso.Integration in
 def tests := [
   testSerialization,
+  testBlog,
   testStemmer,
   testTexOutput "sample-doc" SampleDoc.doc,
   testTexOutput "inheritance-doc" InheritanceDoc.doc,

@@ -5,6 +5,7 @@ Author: David Thrane Christiansen
 -/
 import Lean.Data.Json
 import VersoLiterate
+import Verso.Doc.Html
 import Verso.Output.Html
 import Verso.Output.Html.ElasticLunr
 import Std.Data.HashMap
@@ -178,10 +179,10 @@ def VersoLiterate.ModuleItem'.toHtml [Monad m] (itemIdx : Nat) (item : VersoLite
     | .verso i _ x => do
       let text ←
         withReader (fun ρ => {ρ with codeOptions.identifierWordBreaks := true}) <|
-        x.text.mapM Verso.Doc.Html.Block.toHtml
+        x.text.mapM fun b : Block Literate => ToHtml.toHtml b
       let sub ←
         withReader (fun ρ => {ρ with codeOptions.identifierWordBreaks := true}) <|
-        x.subsections.mapM Verso.Doc.Html.Part.toHtml
+        x.subsections.mapM fun p : Part Literate => ToHtml.toHtml p
       html := html ++ {{ <div class="verso-text" style=s!"--indent: {i}">{{text ++ sub}}</div> }}
     | .highlighted hl =>
       if newlinesOnly hl then
@@ -196,11 +197,11 @@ def VersoLiterate.ModuleItem'.toHtml [Monad m] (itemIdx : Nat) (item : VersoLite
       let htmlId := (← read).traverseState.modDocLink (← read).traverseContext.currentModule itemIdx idx
       let text ←
         withReader (fun ρ => {ρ with codeOptions.identifierWordBreaks := true}) <|
-        doc.text.mapM Verso.Doc.Html.Block.toHtml
+        doc.text.mapM fun b : Block Literate => ToHtml.toHtml b
       let sub ←
         withReader (fun ρ => {ρ with codeOptions.identifierWordBreaks := true}) <|
         doc.sections.mapM fun (lvl, p) =>
-          withReader (fun ρ => {ρ with options.headerLevel := lvl + 1 }) <| Verso.Doc.Html.Part.toHtml p
+          withReader (fun ρ => {ρ with options.headerLevel := lvl + 1 }) <| ToHtml.toHtml (α := Part Literate) p
       let idAttr := htmlId.map ("id", ·.htmlId.toString) |>.toArray
       html := html ++ {{ <div class="verso-text mod-doc" {{ idAttr }} style=s!"--indent: {nextIndent}">{{text ++ sub}}</div> }}
     | .markdownModDoc doc =>
@@ -696,7 +697,7 @@ def main (args : List String) : IO UInt32 := do
   }
   let ((), st) ← emitDir config.outputDir dir |>.run ctx |>.run {}
   emitIndex {} traverseState dir (config.outputDir / "-verso-search") ctx.logError
-  let domainData : NameMap Verso.Multi.Domain := ({} : NameMap _)
+  let domainData : Verso.NameMap Verso.Multi.Domain := ({} : Verso.NameMap _)
     |>.insert `VersoHtml.constant traverseState.constantDefDomain
     |>.insert `VersoHtml.module traverseState.moduleDomain
   IO.FS.writeFile (config.outputDir / "xref.json") <| Json.compress <| Verso.Multi.xrefJson domainData traverseState.allLinks

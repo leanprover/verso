@@ -94,6 +94,8 @@ public def progress : DirectiveExpanderOf Unit
       | .ctorInfo _ => continue -- constructors are documented as children of their types
       | _ => pure ()
       if ← Meta.isInstance x then continue
+      if x matches .str _ "ctorIdx" then continue
+      if x matches .str _ "noConfusion" then continue
       if let .str .anonymous _ := x then
         if let some v := present.find? `_root_ then
           present := present.insert `_root_ (v.insert x)
