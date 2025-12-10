@@ -438,7 +438,7 @@ public def page
         <link rel="stylesheet" href="verso-vars.css" />
         <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js" integrity="sha384-zbcZAIxlvJtNE3Dp5nxLXdXtXyxwOdnILY1TDPVmKFhl4r4nSUG1r8bcFXGVa4Te" crossorigin="anonymous"></script>
         <script src="-verso-search/elasticlunr.min.js"></script>
-        <script src="-verso-search/fuzzysort.js"></script>
+        <script src="-verso-search/fuzzysort.min.js"></script>
         <script src="-verso-search/searchIndex.js"></script>
         <script type="module" src="-verso-search/search-init.js"></script>
         <link rel="stylesheet" href="-verso-search/search-box.css"/>
