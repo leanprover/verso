@@ -1,0 +1,20 @@
+name: Prettier formatting
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  
+jobs:
+  prettier:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions@checkout@v5
+
+      - name: Format with prettier
+        uses: creyD/prettier_action@v4.6
+        with:
+          prettier_options: "--write ."
+          commit_message: "Format code with prettier"
+          prettier_version: 3.7.4

@@ -3,3 +3,4 @@ _out
 vendored-js
 lake-manifest.json
 licenses.md
+*.min.js
