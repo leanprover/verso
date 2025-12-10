@@ -213,3 +213,9 @@ jobs:
             html-manual.zip \
             --title "Release ${{ github.ref_name }}" \
             --notes "Automated release for ${{ github.ref_name }}"
+
+      - name: Check JS/CSS/etc formatting with prettier
+        uses: creyD/prettier_action@v4
+        with:
+          dry: true
+          prettier_options: "--check ."
