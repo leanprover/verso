@@ -2,6 +2,8 @@ name: Prettier formatting
 
 on:
     workflow_dispatch:
+    push:
+      branches: [main]
 
 jobs:
     prettier:
