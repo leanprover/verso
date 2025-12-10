@@ -203,7 +203,7 @@ public def tech : RoleExpanderOf TechArgs
 
     `(let content : Array (Doc.Inline Verso.Genre.Manual) := #[$content,*]
       let k := ($(quote key) : Option String).getD (techString (Doc.Inline.concat content))
-      Doc.Inline.other {Inline.tech with data := Json.arr #[Json.str (if $(quote normalize) then normString k else k), Json.str $(quote loc)]} content)
+      Doc.Inline.other {Inline.tech with data := Json.arr #[Json.str (if $(quote normalize) then normString k else k), Json.str $(quote loc), $(quote remote).map Json.str |>.getD Json.null]} content)
 
 open Verso.Output Html in
 private def techLink (addr : String) (content : Html) :=
