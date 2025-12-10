@@ -3,14 +3,16 @@ Copyright (c) 2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-
+module
 import Lean.Linter.Basic
 import Lean.Meta.Hint
 import Verso.Parser
-import Lean.Elab.Command
-import Lean.Data.Options
+public import Lean.Elab.Command
+public import Lean.Data.Options
 
 set_option linter.missingDocs true
+
+public section
 
 open Lean Linter Elab Command
 open Lean.Doc.Syntax

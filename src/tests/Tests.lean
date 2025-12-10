@@ -7,6 +7,7 @@ import Tests.Basic
 import Tests.Elab
 import Tests.GenericCode
 import Tests.Golden
+import Tests.HighlightedToTeX
 import Tests.HtmlEntities
 import Tests.Integration
 import Tests.Integration.SampleDoc
