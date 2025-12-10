@@ -26,9 +26,9 @@ categories := [examples, other]
 
 This post demonstrates mixing highlighted examples from multiple Lean versions.
 
-{leanExampleProject examples "examples/website-examples"}
+{leanExampleProject examples "test-projects/website-examples"}
 
-{leanExampleModule exampleMod "examples/website-examples" Examples}
+{leanExampleModule exampleMod "test-projects/website-examples" Examples}
 
 
 # Foo
@@ -57,7 +57,7 @@ Version is:
 
 that is,
 ```leanOutput Examples.version (severity := information)
-"4.5.0"
+"4.25.2"
 ```
 
 Comparing output modulo whitespace differences, with exact:

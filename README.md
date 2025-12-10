@@ -217,61 +217,6 @@ includes them for explanation:
 }
 ```
 
-
-## Examples of Verso
-
-The [`examples`](./examples) directory contains example documents
-built with the default Verso genres.
-
-### Custom Genre
-
-A minimal example of a Verso genre that includes nontrivial
-cross-references can be found in
-[`examples/custom-genre`](./examples/custom-genre). To build and run
-it, with the output being placed in `./index.html`, use:
-
-```
-lake exe simplepage
-```
-
-### Website
-
-To build the example website and place the results in
-`_out/examples/demosite`, run:
-```
-lake build
-lake exe demosite --output _out/examples/demosite
-```
-
-To view the output, a local server will be needed. One way to get such
-a server is to use the Python script included in this repository:
-```
-python3 ./server.py 8880 --directory _out/examples/demosite &
-```
-after which `http://localhost:8880/` will show the generated site.
-
-
-
-### Textbook
-
-The textbook example is both an example that can serve as a template for a
-textbook project in Verso and a place where features can be developed
-for upstreaming into the manual genre proper.
-
-To build the example website and place the results in
-`_out/examples/demotextbook`, run:
-```
-lake build
-lake exe demotextbook --output _out/examples/demotextbook
-```
-
-To view the output, a local server will be needed. One way to get such
-a server is to use the one from the Python standard library, e.g.
-```
-python3 -m http.server 8880 --directory _out/examples/demotextbook/html-multi &
-```
-after which `http://localhost:8880/` will show the generated site.
-
 ## Rendering Lean Code
 
 Verso includes an experimental Lean-to-HTML renderer that will convert

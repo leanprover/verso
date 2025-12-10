@@ -3,9 +3,10 @@ Copyright (c) 2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: Jason Reed
 -/
-import SubVerso.Highlighting
+module
+public import SubVerso.Highlighting
 import Verso.Method
-import Verso.Output.TeX
+public import Verso.Output.TeX
 
 open SubVerso.Highlighting
 open Verso.Output
@@ -14,7 +15,7 @@ open Std (HashMap)
 
 namespace SubVerso.Highlighting.Highlighted
 
-def trimOneLeadingNl : Highlighted → Highlighted
+private def trimOneLeadingNl : Highlighted → Highlighted
   | .text s => .text <| if "\n".isPrefixOf s then s.drop 1 else s
   | .unparsed s => .unparsed <| if "\n".isPrefixOf s then s.drop 1 else s
   | .seq xs =>
@@ -28,7 +29,7 @@ def trimOneLeadingNl : Highlighted → Highlighted
   | .tactics i s e hl => .tactics i s e (trimOneLeadingNl hl)
   | .span i hl => .span i (trimOneLeadingNl hl)
 
-def trimOneTrailingNl : Highlighted → Highlighted
+private def trimOneTrailingNl : Highlighted → Highlighted
   | .text s => .text <| s.stripSuffix "\n"
   | .unparsed s => .unparsed <| s.stripSuffix "\n"
   | .seq xs =>
@@ -52,7 +53,7 @@ namespace SubVerso.Highlighting
 Given an already escaped-for-verbatim string, and a token kind,
 returns TeX to display that token appropriately syntax-highlighted.
 -/
-def highlightToken : String → Token.Kind → TeX
+public def highlightToken : String → Token.Kind → TeX
 | c, .keyword _ _ _ => .raw s!"\\textbf\{{c}}"
 | c, .const _ _ _ _ => .raw c
 | c, .anonCtor _ _ _ => .raw c
@@ -96,9 +97,6 @@ def escapeForVerbatim (s : String) : String :=
   | '\\' => some "\\symbol{92}"
   | _ => none
 
-/-- info: "\\symbol{123}\\symbol{124}\\symbol{125}\\symbol{92}" -/
-#guard_msgs in
-#eval escapeForVerbatim "{|}\\"
 
 defmethod Highlighting.Token.toVerbatimTeX (t : Highlighting.Token) : Verso.Output.TeX :=
   highlightToken (escapeForVerbatim t.content) t.kind
@@ -108,7 +106,7 @@ open Verso.Output.TeX in
 Returns TeX that is appropriate for the content of a `\Verb` environment (from package `fancyvrb`)
 with command characters `\`, `{`, and `}`.
 -/
-defmethod Highlighted.toVerbatimTeX : Highlighted → Verso.Output.TeX
+public defmethod Highlighted.toVerbatimTeX : Highlighted → Verso.Output.TeX
   | .token t => highlightToken (escapeForVerbatim t.content) t.kind
   | .text str => .raw (escapeForVerbatim str)
   | .seq hts => .seq <| hts.map (·.toVerbatimTeX)
@@ -123,10 +121,10 @@ defmethod Highlighted.toVerbatimTeX : Highlighted → Verso.Output.TeX
 def verbatim (t : Verso.Output.TeX) : Verso.Output.TeX :=
   .seq #[.raw "\\LeanVerb|", t, .raw "|"]
 
-defmethod Highlighting.Token.toTeX (t : Highlighting.Token) : Verso.Output.TeX :=
+public defmethod Highlighting.Token.toTeX (t : Highlighting.Token) : Verso.Output.TeX :=
   verbatim (t.toVerbatimTeX)
 
-defmethod Highlighted.toTeX (t : Highlighted) : Verso.Output.TeX :=
+public defmethod Highlighted.toTeX (t : Highlighted) : Verso.Output.TeX :=
   let strip := t.trimOneTrailingNl
   if strip.isEmpty then
     .empty
@@ -134,7 +132,7 @@ defmethod Highlighted.toTeX (t : Highlighted) : Verso.Output.TeX :=
     verbatim (strip.toVerbatimTeX)
 
 open Verso.Output.TeX in
-defmethod Highlighted.Goal.toTeX (h : Highlighted.Goal Highlighted) : Id Verso.Output.TeX := do
+public defmethod Highlighted.Goal.toTeX (h : Highlighted.Goal Highlighted) : Id Verso.Output.TeX := do
   let {name, goalPrefix, hypotheses, conclusion} := h
   let mut rows : Array TeX := #[]
   if let some n := name then
@@ -154,7 +152,7 @@ def messageContentsToVerbatimTeX (h : Highlighted.MessageContents Highlighted) :
   | .trace _cls _msg _children _collapsed => .empty -- FIXME: what to render here?
   | .append mcs => .seq (mcs.map messageContentsToVerbatimTeX)
 
-defmethod Highlighted.Message.toTeX (h : Highlighted.Message) : Verso.Output.TeX :=
+public defmethod Highlighted.Message.toTeX (h : Highlighted.Message) : Verso.Output.TeX :=
   let {severity, contents} := h
   let rulecolor := s!"{severity}Color"
   let body := messageContentsToVerbatimTeX contents

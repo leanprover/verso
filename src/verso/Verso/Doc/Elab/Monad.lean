@@ -493,7 +493,9 @@ public def FinishedPart.toVersoDoc
 
   -- Add and compile blocks
   for (name, block) in partElabState.deferredBlocks do
-    withCurrHeartbeats <| do -- reset the heartbeat count for each block addAndCompile
+    withRef block do
+    withCurrHeartbeats do -- reset the heartbeat count for each block addAndCompile
+
       let mut type ← Term.elabType (← ``(DocReconstruction → Doc.Block $genreSyntax))
       let mut blockExpr ← Term.elabTerm block (some type)
 

@@ -54,7 +54,7 @@ jobs:
       # This was failing CI from clang crashing, so do it first for fast turnaround
       - name: Build the website examples subproject
         run: |
-          pushd examples/website-examples
+          pushd test-projects/website-examples
           lake build
           lake build :examples
           popd
@@ -67,11 +67,11 @@ jobs:
         run: |
           lake test
 
-      - name: Generate the example website
+      - name: Generate the test website
         run: |
-          lake exe demosite --output _out/examples/demosite
+          lake exe demosite --output _out/test-projects/demosite
 
-      - name: Generate the example genre's document
+      - name: Generate the test genre's document
         run: |
           lake exe simplepage
 
@@ -80,12 +80,12 @@ jobs:
           lake build Verso.Hover:literate
           lake exe verso-html .lake/build/literate htmlout
 
-      - name: Check internal links on the example website
+      - name: Check internal links on the test website
         uses: lycheeverse/lychee-action@v2.6.1
         with:
           format: markdown
           jobSummary: true
-          args: --base './_out/examples/demosite' --no-progress --offline './_out/examples/demosite/**/*.html'
+          args: --base './_out/test-projects/demosite' --no-progress --offline './_out/test-projects/demosite/**/*.html'
 
       - name: Install PDF Dependencies
         uses: zauguin/install-texlive@v4
