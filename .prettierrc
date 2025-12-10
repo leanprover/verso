@@ -12,5 +12,5 @@
     "arrowParens": "always",
     "proseWrap": "always",
     "htmlWhitespaceSensitivity": "ignore",
-    "overrides": [{"files": "*.md", "options": {"printWidth": 70}}]
+    "overrides": [{ "files": "*.md", "options": { "printWidth": 70 } }]
 }
