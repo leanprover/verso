@@ -57,7 +57,7 @@ Version is:
 
 that is,
 ```leanOutput Examples.version (severity := information)
-"4.5.0"
+"4.25.2"
 ```
 
 Comparing output modulo whitespace differences, with exact:
