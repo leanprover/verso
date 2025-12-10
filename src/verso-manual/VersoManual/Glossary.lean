@@ -43,6 +43,10 @@ public instance : FromArgs TechArgs m where
 
 end
 
+private def glossaryState := `Verso.Genre.Manual.glossary
+@[grind =]
+private theorem glossaryState.isPublic : NameMap.isPublic glossaryState := by grind [glossaryState]
+
 public def Inline.deftech : Inline where
   name := `Verso.Genre.Manual.deftech
 
@@ -95,11 +99,21 @@ public def deftech : RoleExpanderOf DefTechArgs
 
     let content ← content.mapM elabInline
 
-    `(let content := #[$content,*]
+    `(let content : Array (Doc.Inline Verso.Genre.Manual) := #[$content,*]
       let asString : String := techString (Doc.Inline.concat content)
-      Doc.Inline.other
-        {Inline.deftech with data := ToJson.toJson (α := String × String) ($(quote k), asString)}
-        content)
+      let k : String := ($(quote key) : Option String).getD asString
+      Doc.Inline.other {Inline.deftech with data := ToJson.toJson (if $(quote normalize) then normString k else k, asString)} content)
+
+
+/-- Adds an internal identifier as a target for a given glossary entry -/
+def Glossary.addEntry [Monad m] [MonadState TraverseState m] [MonadLiftT IO m] [MonadReaderOf TraverseContext m]
+    (id : InternalId) (key : String) : m Unit := do
+  match (← get).get? glossaryState with
+  | none =>
+    modify (TraverseState.set · glossaryState <| Lean.Json.mkObj [(key, ToJson.toJson id)])
+  | some (.error err) => logError err
+  | some (.ok (v : Json)) =>
+    modify (TraverseState.set · glossaryState <| v.setObjVal! key (ToJson.toJson id))
 
 open Verso.Search in
 def technicalTermDomainMapper : DomainMapper := {
@@ -132,6 +146,7 @@ public def deftech.descr : InlineDescr where
     | .ok ((key, term) : (String × String) ) =>
       let termSlug := term.sluggify.toString
       let _ ← Verso.Genre.Manual.externalTag id path s!"--tech-term-{termSlug}"
+      Glossary.addEntry id key
       modify fun st =>
         st
           |>.saveDomainObject technicalTermDomain key id
@@ -165,7 +180,7 @@ information from the arguments in `args`, and then normalizing the resulting str
  3. replacing consecutive runs of whitespace and/or hyphens with a single space
 
 Call with `(normalize := false)` to disable normalization, and `(key := some k)` to use `k` instead
-of the automatically-derived key. Use `remote` if the term is defined in another document.
+of the automatically-derived key.
 -/
 @[role]
 public def tech : RoleExpanderOf TechArgs
@@ -186,9 +201,9 @@ public def tech : RoleExpanderOf TechArgs
     let content ← content.mapM elabInline
 
 
-    `(Doc.Inline.other
-      {Inline.tech with data := Json.arr #[Json.str $(quote k), Json.str $(quote loc), $(quote remote).map Json.str |>.getD Json.null]}
-      #[$content,*])
+    `(let content : Array (Doc.Inline Verso.Genre.Manual) := #[$content,*]
+      let k := ($(quote key) : Option String).getD (techString (Doc.Inline.concat content))
+      Doc.Inline.other {Inline.tech with data := Json.arr #[Json.str (if $(quote normalize) then normString k else k), Json.str $(quote loc)]} content)
 
 open Verso.Output Html in
 private def techLink (addr : String) (content : Html) :=
