@@ -1,9 +1,9 @@
 :root {
     /** Typography **/
     /* The font family used for headers, ToC entries, etc */
-    --verso-structure-font-family: "Helvetica Neue","Segoe UI", "Roboto", Arial,sans-serif;
+    --verso-structure-font-family: "Helvetica Neue", "Segoe UI", "Roboto", Arial, sans-serif;
     /* The font family used for body text */
-    --verso-text-font-family: "Helvetica Neue","Segoe UI", "Roboto", Arial,sans-serif;
+    --verso-text-font-family: "Helvetica Neue", "Segoe UI", "Roboto", Arial, sans-serif;
     /* The font family used for code */
     --verso-code-font-family: monospace;
 
@@ -51,5 +51,4 @@
     --verso-code-var-weight: normal;
     --verso-code-var-style: italic;
     --verso-code-kw-font-family: var(--verso-code-font-family);
-
 }

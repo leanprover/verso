@@ -4,8 +4,8 @@
  * Author: David Thrane Christiansen
  */
 
-import {domainMappers} from './domain-mappers.js';
-import {registerSearch} from './search-box.js';
+import { domainMappers } from "./domain-mappers.js";
+import { registerSearch } from "./search-box.js";
 
 // The search box itself. TODO: add to template
 // autocorrect is a safari-only attribute. It is required to prevent autocorrect on iOS.
@@ -17,7 +17,7 @@ const searchHTML = `<div id="search-wrapper">
         class="cb_edit"
         contenteditable="true"
         role="searchbox"
-        placeholder="${window.searchIndex ? 'Search...' : 'Jump to...'}"
+        placeholder="${window.searchIndex ? "Search..." : "Jump to..."}"
         aria-autocomplete="list"
         aria-expanded="false"
         aria-controls="cb1-listbox"
@@ -35,12 +35,12 @@ const searchHTML = `<div id="search-wrapper">
 `;
 
 // Initialize search box
-const data = fetch("xref.json").then((data) => data.json())
+const data = fetch("xref.json").then((data) => data.json());
 window.addEventListener("load", () => {
-  const main = document.querySelector("header");
-  main.insertAdjacentHTML("beforeend", searchHTML);
-  const searchWrapper = document.querySelector(".combobox-list");
-  data.then((data) => {
-    registerSearch({searchWrapper, data, domainMappers});
-  });
+    const main = document.querySelector("header");
+    main.insertAdjacentHTML("beforeend", searchHTML);
+    const searchWrapper = document.querySelector(".combobox-list");
+    data.then((data) => {
+        registerSearch({ searchWrapper, data, domainMappers });
+    });
 });
