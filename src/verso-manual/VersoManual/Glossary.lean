@@ -240,7 +240,11 @@ public def tech.descr : InlineDescr where
               HtmlT.logError s!"{loc}: No link target saved for internal ID of term \"{key}\""
               content.mapM go
           else
-            HtmlT.logError s!"{loc}: Ambiguous term def with key \"{key}\""
+            let st ← HtmlT.state
+            let potentialTargets := ids.map st.resolveId |>.map (·.map (·.link))
+            let potentialTargets := potentialTargets.map fun tgt? =>
+              s!" * {tgt?.getD "<no link>"}"
+            HtmlT.logError s!"{loc}: Ambiguous term def with key \"{key}\". Targets: {"\n".intercalate potentialTargets.toList}"
             content.mapM go
         else
           HtmlT.logError s!"{loc}: No term def with key \"{key}\""
