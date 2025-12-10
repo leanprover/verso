@@ -136,46 +136,46 @@ lean_exe usersguide where
 
 -- A demo site that shows how to generate websites with Verso
 lean_lib DemoSite where
-  srcDir := "examples/website"
+  srcDir := "test-projects/website"
   roots := #[`DemoSite]
 
 @[default_target]
 lean_exe demosite where
-  srcDir := "examples/website"
+  srcDir := "test-projects/website"
   root := `DemoSiteMain
   supportInterpreter := true
 
 -- An example of a textbook project built in Verso
 lean_lib DemoTextbook where
-  srcDir := "examples/textbook"
+  srcDir := "test-projects/textbook"
   roots := #[`DemoTextbook]
 
 @[default_target]
 lean_exe demotextbook where
-  srcDir := "examples/textbook"
+  srcDir := "test-projects/textbook"
   root := `DemoTextbookMain
   supportInterpreter := true
 
 -- An example of a package documentation project built in Verso
 lean_lib PackageManual where
-  srcDir := "examples/package-manual"
+  srcDir := "test-projects/package-manual"
   roots := #[`PackageManual]
 
 @[default_target]
 lean_exe packagedocs where
-  srcDir := "examples/package-manual"
+  srcDir := "test-projects/package-manual"
   root := `PackageManualMain
   supportInterpreter := true
 
 -- An example of a minimal nontrivial custom genre
 @[default_target]
 lean_lib SimplePage where
-  srcDir := "examples/custom-genre"
+  srcDir := "test-projects/custom-genre"
   roots := #[`SimplePage]
 
 @[default_target]
 lean_exe simplepage where
-  srcDir := "examples/custom-genre"
+  srcDir := "test-projects/custom-genre"
   root := `SimplePageMain
   supportInterpreter := true
 

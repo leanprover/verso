@@ -55,9 +55,9 @@ jobs:
         run: |
           lake test
 
-      - name: Generate the example website
+      - name: Generate the test website
         run: |
-          lake exe demosite --output _out/examples/demosite
+          lake exe demosite --output _out/test-projects/demosite
 
       - name: Generate the example genre's document
         run: |
