@@ -3,13 +3,15 @@ Copyright (c) 2024 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-
-import Verso.Doc
+module
+public import Verso.Doc
 import Verso.Method
-import VersoManual.Basic
+public import VersoManual.Basic
 
 open Verso.Doc
 open Lean (Name)
+
+public section
 
 namespace Verso.Genre.Manual
 namespace WordCount
