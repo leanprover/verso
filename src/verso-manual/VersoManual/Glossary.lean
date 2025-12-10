@@ -244,7 +244,7 @@ public def tech.descr : InlineDescr where
             let potentialTargets := ids.map st.resolveId |>.map (·.map (·.link))
             let potentialTargets := potentialTargets.map fun tgt? =>
               s!" * {tgt?.getD "<no link>"}"
-            HtmlT.logError s!"{loc}: Ambiguous term def with key \"{key}\". Targets: {"\n".intercalate potentialTargets.toList}"
+            HtmlT.logError s!"{loc}: Ambiguous term def with key \"{key}\". Targets:\n{"\n".intercalate potentialTargets.toList}"
             content.mapM go
         else
           HtmlT.logError s!"{loc}: No term def with key \"{key}\""
