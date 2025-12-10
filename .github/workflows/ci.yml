@@ -54,7 +54,7 @@ jobs:
       # This was failing CI from clang crashing, so do it first for fast turnaround
       - name: Build the website examples subproject
         run: |
-          pushd examples/website-examples
+          pushd test-projects/website-examples
           lake build
           lake build :examples
           popd
@@ -69,7 +69,7 @@ jobs:
 
       - name: Generate the example website
         run: |
-          lake exe demosite --output _out/examples/demosite
+          lake exe demosite --output _out/test-projects/demosite
 
       - name: Generate the example genre's document
         run: |
@@ -85,7 +85,7 @@ jobs:
         with:
           format: markdown
           jobSummary: true
-          args: --base './_out/examples/demosite' --no-progress --offline './_out/examples/demosite/**/*.html'
+          args: --base './_out/test-projects/demosite' --no-progress --offline './_out/test-projects/demosite/**/*.html'
 
       - name: Install PDF Dependencies
         uses: zauguin/install-texlive@v4

@@ -26,9 +26,9 @@ categories := [examples, other]
 
 This post demonstrates mixing highlighted examples from multiple Lean versions.
 
-{leanExampleProject examples "examples/website-examples"}
+{leanExampleProject examples "test-projects/website-examples"}
 
-{leanExampleModule exampleMod "examples/website-examples" Examples}
+{leanExampleModule exampleMod "test-projects/website-examples" Examples}
 
 
 # Foo
