@@ -67,11 +67,11 @@ jobs:
         run: |
           lake test
 
-      - name: Generate the example website
+      - name: Generate the test website
         run: |
           lake exe demosite --output _out/test-projects/demosite
 
-      - name: Generate the example genre's document
+      - name: Generate the test genre's document
         run: |
           lake exe simplepage
 
@@ -80,7 +80,7 @@ jobs:
           lake build Verso.Hover:literate
           lake exe verso-html .lake/build/literate htmlout
 
-      - name: Check internal links on the example website
+      - name: Check internal links on the test website
         uses: lycheeverse/lychee-action@v2.6.1
         with:
           format: markdown
