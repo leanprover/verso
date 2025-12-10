@@ -365,6 +365,12 @@ To use only one browser engine, pass `-k`:
 $ uv run --project browser-tests --extra test pytest browser-tests -v -k "chromium"
 ```
 
+## Formatting
+
+Commits to the main branch will reformat all eligible files (HTML, CSS, JavaScript, and Markdown) with 
+[Prettier](https://prettier.io/). There are Prettier extensions for [VS Code](https://marketplace.visualstudio.com/items?itemName=prettier.prettier-vscode) and for [VSCodium](https://open-vsx.org/extension/prettier/prettier-vscode) that you can use to format your PRs.
+
+
 ## Licenses
 
 Verso is licensed under the Apache license - please see the file
