@@ -61,6 +61,7 @@ public structure DomainMapper where
   {open DomainMapper}
    * {lit}`searchable` is a Searchable object (returned by the {name}`dataToSearchables` function)
    * {lit}`matchedParts` is an array of objects with TypeScript type {lit}`{t: 'text', v: string} | {t: 'highlight', v: string}`
+     Objects with `text` in the `t` field are the parts of the search result that provide context, while objects with `highlight` are the parts of the result that match the search string.
    * {lit}`document` is the DOM document object
   -/
   customRender : Option String := none
