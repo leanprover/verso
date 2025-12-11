@@ -367,9 +367,23 @@ $ uv run --project browser-tests --extra test pytest browser-tests -v -k "chromi
 
 ## Formatting
 
-Commits to the main branch will reformat all eligible files (HTML, CSS, JavaScript, and Markdown) with 
-[Prettier](https://prettier.io/). There are Prettier extensions for [VS Code](https://marketplace.visualstudio.com/items?itemName=prettier.prettier-vscode) and for [VSCodium](https://open-vsx.org/extension/prettier/prettier-vscode) that you can use to format your PRs.
+Commits to the main branch will reformat all eligible files (HTML,
+CSS, JavaScript, and Markdown) with [Prettier](https://prettier.io/).
+There are Prettier extensions for
+[VS Code](https://marketplace.visualstudio.com/items?itemName=prettier.prettier-vscode)
+and for
+[VSCodium](https://open-vsx.org/extension/prettier/prettier-vscode)
+that you can use to format your PRs, and if you have `npm` installed
+then you can format code from the command line with
 
+```
+npx prettier --write .
+```
+
+It is also possible to run the
+[Prettier GitHub action](https://github.com/leanprover/verso/actions/workflows/format.yml)
+to format code for an branch without having Prettier installed; the
+action will run prettier and commit the formatted results.
 
 ## Licenses
 
