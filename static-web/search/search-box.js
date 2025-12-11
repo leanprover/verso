@@ -28,7 +28,7 @@ const searchIndex = /** @type {{searchIndex: TextSearchIndex}} */ (/** @type {un
  * @type {Record<string, DocContentPromise>}
  */
 const docContents =
-    /** @type {any} */ (window).docContents || (/** @type {any} */ (window).docContents = {});
+    /** @type {any} */ (window).docContents || /** @type {any} */ (window.docContents = {});
 
 /** Whether to search word prefixes or whole words in full-text searches. Should match the setting in search-highlight.js.
  * @type {boolean}

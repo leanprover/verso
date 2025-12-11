@@ -1,9 +1,6 @@
 name: Check Formatting of JS/CSS/HTML and Markdown
 
 on:
-    push:
-        branches:
-        tags:
     pull_request:
     merge_group:
 
