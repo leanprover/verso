@@ -8,3 +8,4 @@ _out
 *.olean
 /.verso/
 /src/tests/integration/**/output
+/node_modules
