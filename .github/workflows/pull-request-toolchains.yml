@@ -1,26 +1,26 @@
 name: Check toolchain file
 
 on:
-  pull_request:
-    branches:
-      - main
-  merge_group:
+    pull_request:
+        branches:
+            - main
+    merge_group:
 
 jobs:
-  check-toolchain:
-    name: Check for "nightly" in lean-toolchain
-    runs-on: ubuntu-latest
+    check-toolchain:
+        name: Check for "nightly" in lean-toolchain
+        runs-on: ubuntu-latest
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
 
-      - name: Check whether lean-toolchain contains nightly
-        id: check-nightly
-        run: |
-          if grep -q "nightly" lean-toolchain; then
-            echo "::error::The lean-toolchain file contains 'nightly', which is not allowed in PRs to main"
-            exit 1
-          else
-            echo "Lean toolchain is valid for main branch - no 'nightly' found"
-          fi
+            - name: Check whether lean-toolchain contains nightly
+              id: check-nightly
+              run: |
+                  if grep -q "nightly" lean-toolchain; then
+                    echo "::error::The lean-toolchain file contains 'nightly', which is not allowed in PRs to main"
+                    exit 1
+                  else
+                    echo "Lean toolchain is valid for main branch - no 'nightly' found"
+                  fi

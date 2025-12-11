@@ -17,9 +17,9 @@
     border: 1px solid #ccc;
     border-radius: 4px;
     padding: 4px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     box-sizing: border-box;
-    font-size: .9rem;
+    font-size: 0.9rem;
     font-family: system-ui, sans-serif;
     min-width: 400px;
     max-width: var(--verso-content-max-width, 47rem);
@@ -36,8 +36,9 @@
     }
 }
 
-
-#highlight-prev, #highlight-next, #highlight-close {
+#highlight-prev,
+#highlight-next,
+#highlight-close {
     padding: 6px 8px;
     border-radius: 2px;
     cursor: pointer;
@@ -47,7 +48,9 @@
 
 @media screen and (max-width: 700px) {
     /* Touch-friendly sizing */
-    #highlight-prev, #highlight-next, #highlight-close {
+    #highlight-prev,
+    #highlight-next,
+    #highlight-close {
         min-width: var(--verso-burger-width, 1.5rem);
         min-height: var(--verso-burger-height, 1.5rem);
     }
