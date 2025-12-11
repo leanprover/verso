@@ -22,7 +22,7 @@ open Lean Elab
 namespace Verso.Genre.Manual.InlineLean
 
 
-block_extension Block.syntaxError where
+block_extension Block.syntaxError via withHighlighting where
   traverse _ _ _ := pure none
   toTeX :=
     some <| fun _ go _ _ content => do
@@ -71,11 +71,6 @@ block_extension Block.syntaxError where
 }
 "
   ]
-  extraJs := [
-    highlightingJs
-  ]
-  extraJsFiles := [popperJs, tippyJs]
-  extraCssFiles := [tippyCss]
   toHtml :=
     open Verso.Output Html in
     some <| fun _ _ _ data _ => do

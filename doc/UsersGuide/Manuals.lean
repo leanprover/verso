@@ -42,6 +42,19 @@ The fields {name}`Block.name` and {name Manual.Inline.name}`Inline.name` are use
 
 Typically, the `inline_extension` and `block_extension` commands are used to simultaneously define an element and its descriptor, registering them for use by {name}`manualMain`.
 
+:::paragraph
+The type {name}`HtmlAssets` contains CSS and JavaScript code.
+{name}`Manual.TraverseState`, {name}`Manual.BlockDescr`, and {name}`Manual.InlineDescr` all inherit from this structure.
+During traversal, HTML assets are collected; they are all included in the final rendered document.
+
+{docstring Manual.HtmlAssets}
+
+Use {name}`HtmlAssets.combine` to combine multiple assets.
+
+{docstring Manual.HtmlAssets.combine}
+
+:::
+
 # Tags and References
 %%%
 tag := "manual-tags"
@@ -152,7 +165,7 @@ tag := "oss-licenses"
 %%%
 
 To facilitate providing appropriate credit to the authors of open-source JavaScript, CSS, and HTML libraries used to render a Verso document, inline and block elements can specify the licenses of components that they include in their rendered output.
-This is done using the {name}`BlockDescr.licenseInfo` and {name}`InlineDescr.licenseInfo` fields.
+This is done using the {name HtmlAssets.licenseInfo}`licenseInfo` field that {name}`BlockDescr` and {name}`InlineDescr` inherit from {name}`HtmlAssets`.
 These contain a {name}`LicenseInfo`:
 
 {docstring LicenseInfo}

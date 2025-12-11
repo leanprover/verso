@@ -20,17 +20,13 @@ open Lean Elab
 
 namespace Verso.Genre.Manual.InlineLean
 
-block_extension Block.signature where
+block_extension Block.signature via withHighlighting where
   traverse _ _ _ := do
     pure none
   toTeX :=
     some <| fun _ go _ _ content => do
       pure <| .seq <| ← content.mapM fun b => do
         pure <| .seq #[← go b, .raw "\n"]
-  extraCss := [highlightingStyle]
-  extraJs := [highlightingJs]
-  extraJsFiles := [popperJs, tippyJs]
-  extraCssFiles := [tippyCss]
   toHtml :=
     open Verso.Output.Html in
     some <| fun _ _ _ data _ => do
