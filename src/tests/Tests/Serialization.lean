@@ -68,6 +68,12 @@ instance instShrinkableJsSourceMap : Shrinkable JsSourceMap where
     (shrink f.filename |>.map ({ f with filename := · })) ++
     (shrink f.contents |>.map ({ f with contents := · }))
 
+instance : Shrinkable JS where
+  shrink f := shrink f.js |>.map JS.mk
+
+instance : Shrinkable CSS where
+  shrink f := shrink f.css |>.map CSS.mk
+
 instance : Shrinkable JsFile where
   shrink f :=
     (shrink f.filename |>.map ({ f with filename := · })) ++
@@ -146,6 +152,12 @@ instance [Arbitrary α] [BEq α] [Hashable α] : Arbitrary (HashSet α) where
 instance : Arbitrary JsSourceMap where
   arbitrary := do
     return {filename := ← arbitrary, contents := ← arbitrary}
+
+instance : Arbitrary JS where
+  arbitrary := JS.mk <$> arbitrary
+
+instance : Arbitrary CSS where
+  arbitrary := CSS.mk <$> arbitrary
 
 instance : Arbitrary JsFile where
   arbitrary := do

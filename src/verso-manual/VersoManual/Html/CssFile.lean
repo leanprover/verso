@@ -6,6 +6,8 @@ Author: David Thrane Christiansen
 
 module
 public import Lean.Data.Json.FromToJson
+public import VersoManual.Html.Basic
+
 
 namespace Verso.Genre.Manual
 
@@ -22,5 +24,5 @@ deriving BEq, Repr, Hashable, Ord
 An extra JS file to be emitted and added to the page.
 -/
 public structure CssFile extends StaticCssFile where
-  contents : String
+  contents : CSS
 deriving BEq, ToJson, FromJson, Repr, Hashable, Ord
