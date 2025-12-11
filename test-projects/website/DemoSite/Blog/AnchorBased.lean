@@ -13,7 +13,7 @@ open Verso Genre Blog
 open Verso.Code.External
 open DemoSite
 
-set_option verso.exampleProject "examples/anchor-examples"
+set_option verso.exampleProject "test-projects/anchor-examples"
 set_option verso.exampleModule "AnchorExamples"
 
 set_option pp.rawOnError true

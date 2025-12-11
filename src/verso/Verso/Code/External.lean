@@ -3,21 +3,30 @@ Copyright (c) 2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-
-import Verso.Doc
+module
+public import Verso.Doc
 import Verso.Doc.ArgParse
 import Verso.Doc.Elab
+public import Verso.Doc.Elab.Monad
+public meta import Verso.Code.External.Code
+import Verso.Code.External.Code
+public import Verso.Code.External.Config
+public meta import Verso.Code.External.Config
 import Verso.Code.External.Env
 import Verso.Code.External.Files
 import Lean.Data.EditDistance
-import Verso.ExpectString
-import Verso.Doc.Suggestion
-import Verso.Hint
-import Verso.Log
+public meta import Verso.ExpectString
+public meta import Verso.Doc.Suggestion
+public meta import Verso.Hint
+public meta import Verso.Log
 
 import SubVerso.Highlighting
-import SubVerso.Examples.Messages
+public meta import SubVerso.Examples.Messages
 
+public meta import Lean.Data.EditDistance
+public import Lean.Data.Json.FromToJson
+public import Lean.Data.Options
+public import Lean.ToExpr
 import Lean.Message
 import Lean.Meta.Hint
 import Lean.DocString.Syntax
@@ -27,33 +36,18 @@ import Std.Data.HashSet
 set_option doc.verso true
 
 open Verso Doc Elab Log ArgParse
-open SubVerso Highlighting Examples.Messages
+open SubVerso Highlighting
+
 open Lean Meta Hint
 open Std
 open Lean.Doc.Syntax
 
 namespace Verso.Code.External
 
-register_option verso.examples.suggest : Bool := {
-  defValue := false,
-  descr := "Whether to suggest potentially-matching code examples"
-}
-
-structure CodeConfig where
-  /-- Whether to render proof states -/
-  showProofStates : Bool := true
-  /--
-  Whether to treat names defined in the code as link targets.
-
-  If unspecified, the block or inline element in question may fall back to a default value.
-  -/
-  defSite : Option Bool := none
-deriving DecidableEq, Ord, Repr, Quote, ToExpr, ToJson, FromJson
-
 /--
 A genre that supports loading and displaying external Lean code samples.
 -/
-class ExternalCode (genre : Genre) where
+public class ExternalCode (genre : Genre) where
   /-- An inline element for rendering Lean code. -/
   leanInline : Highlighted → CodeConfig → Inline genre
   /-- A block element for rendering Lean code. -/
@@ -68,14 +62,14 @@ class ExternalCode (genre : Genre) where
 
 open ExternalCode
 
-private def oneCodeStr [Monad m] [MonadError m] (inlines : Array (TSyntax `inline)) : m StrLit := do
+private meta def oneCodeStr [Monad m] [MonadError m] (inlines : Array (TSyntax `inline)) : m StrLit := do
   let #[code] := inlines
     | (if inlines.size == 0 then (throwError ·) else (throwErrorAt (mkNullNode inlines) ·)) "Expected one code element"
   let `(inline|code($code)) := code
     | throwErrorAt code "Expected a code element"
   return code
 
-private def oneCodeStr? [Monad m] [MonadError m] [MonadLog m] [AddMessageContext m] [MonadOptions m]
+private meta def oneCodeStr? [Monad m] [MonadError m] [MonadLog m] [AddMessageContext m] [MonadOptions m]
     (inlines : Array (TSyntax `inline)) : m (Option StrLit) := do
   let #[code] := inlines
     | if inlines.size == 0 then
@@ -89,7 +83,7 @@ private def oneCodeStr? [Monad m] [MonadError m] [MonadLog m] [AddMessageContext
   return some code
 
 
-private def oneCodeName [Monad m] [MonadError m] (inlines : Array (TSyntax `inline)) : m Ident := do
+private meta def oneCodeName [Monad m] [MonadError m] (inlines : Array (TSyntax `inline)) : m Ident := do
   let code ← oneCodeStr inlines
   let str := code.getString
   let name := if str.contains '.' then str.toName else Name.str .anonymous str
@@ -97,94 +91,6 @@ private def oneCodeName [Monad m] [MonadError m] (inlines : Array (TSyntax `inli
 
 section
 
-variable [Monad m] [MonadOptions m] [MonadError m] [MonadLiftT CoreM m]
-
-private def defaultProject : m String := do
-  if let some p := verso.exampleProject.get? (← getOptions) then pure p else throwError "No default project specified"
-
-private def defaultModule : m Name := do
-  if let some m := verso.exampleModule.get? (← getOptions) then pure m.toName else throwError "No default module specified"
-
-/--
-Parses the project directory as a named argument {lit}`project`, falling back to the default if
-specified in the option {option}`verso.exampleProject`.
--/
-def projectOrDefault : ArgParse m StrLit :=
-  .named `project .strLit false <|>
-  (Syntax.mkStrLit <$> .lift "default project" defaultProject) <|>
-  .fail none (some "No `(project := ...)` argument provided and no default project set.")
-
-/--
-Parses the current module as a named argument {lit}`module`, falling back to the default if
-specified in the option {option}`verso.exampleModule`.
--/
-def moduleOrDefault : ArgParse m Ident :=
-  .named `module .ident false <|>
-  (mkIdent <$> .lift "default module" defaultModule) <|>
-  .fail none (some "No `(module := ...)` argument provided and no default module set.")
-
-/--
-A specification of which module to look in to find example code.
--/
-structure CodeModuleContext extends CodeConfig where
-  /-- The module's name. -/
-  module : Ident
-  /-- The path at which the module's project is found -/
-  project : StrLit
-
-instance : FromArgs CodeModuleContext m where
-  fromArgs := ((·, ·, ·, ·) <$> moduleOrDefault <*> projectOrDefault <*> .flag `showProofStates true <*> .flag `defSite true) <&> fun (m, p, s, d) =>
-    ({module := m, project := p, showProofStates := s, defSite := d})
-
-/--
-A specification of which module to look in to find example code, potentially made more specific with
-a named anchor.
--/
-structure CodeContext extends CodeModuleContext where
-  /--
-  The relevant `-- ANCHOR: X` to include
-  -/
-  anchor? : Option Ident
-
-instance : FromArgs CodeContext m where
-  fromArgs := CodeContext.mk <$> fromArgs <*> .named `anchor .ident true
-
-/--
-A specification of which module to look in to find an example message, with its desired severity,
-potentially made more specific with a named anchor.
--/
-structure MessageContext extends CodeContext where
-  /--
-  The desired severity of the message.
-  -/
-  severity : WithSyntax MessageSeverity
-  /--
-  Traces classes to show expanded by default
-  -/
-  expandTraces : List Lean.Name
-  /--
-  Only show the first trace with this title
-  -/
-  onlyTrace : Option String
-
-private partial def many (p : ArgParse m α) : ArgParse m (List α) :=
-  (· :: ·) <$> p <*> many p <|> pure []
-
-instance : FromArgs MessageContext m where
-  fromArgs := (fun s ts t x => MessageContext.mk x s ts t) <$> .positional' `severity <*> many (.named `expandTrace .name false) <*> (.named `onlyTrace .string true) <*> fromArgs
-
-/--
-A specification of which module to look in to find a quoted name, potentially made more specific with
-a named anchor.
--/
-structure NameContext extends CodeContext where
-  /--
-  How to override the display of the name.
-  -/
-  show? : Option Ident
-
-instance : FromArgs NameContext m where
-  fromArgs := NameContext.mk <$> fromArgs <*> .named' `show true
 
 end
 
@@ -192,7 +98,7 @@ end
 /--
 Adds a newline to a string if it doesn't already end with one.
 -/
-def withNl (s : String) : String := if s.endsWith "\n" then s else s ++ "\n"
+meta def withNl (s : String) : String := if s.endsWith "\n" then s else s ++ "\n"
 
 /--
 Default suggestion threshold function: a suggestion is sufficiently close if
@@ -200,7 +106,7 @@ Default suggestion threshold function: a suggestion is sufficiently close if
  * the input is shorter than 10 and their distance is 2 or less, or
  * the distance is shorter than 3.
 -/
-def suggestionThreshold (input _candidate : String) := if input.length < 5 then 1 else if input.length < 10 then 2 else 3
+meta def suggestionThreshold (input _candidate : String) := if input.length < 5 then 1 else if input.length < 10 then 2 else 3
 
 /--
 Adds up to {name}`count` suggestions.
@@ -208,7 +114,7 @@ Adds up to {name}`count` suggestions.
 {name}`candidates` are the valid inputs and {name}`input` is the provided input. Suggestions are added if
 they are "sufficiently close" to the input, as determined by {name}`threshold`.
 -/
-def smartSuggestions (candidates : Array String) (input : String) (count : Nat := 10) (threshold := suggestionThreshold) : Array String :=
+meta def smartSuggestions (candidates : Array String) (input : String) (count : Nat := 10) (threshold := suggestionThreshold) : Array String :=
   let toks := candidates.filterMap fun t =>
     let limit := threshold input t
     EditDistance.levenshtein t input limit <&> (t, ·)
@@ -217,34 +123,12 @@ def smartSuggestions (candidates : Array String) (input : String) (count : Nat :
   -- TODO test thresholds/sorting
   toks.map fun (t, _) => t
 
-/-- Converts all warnings to errors. -/
-def warningsToErrors (hl : Highlighted) : Highlighted :=
-  match hl with
-  | .seq xs => .seq <| xs.map warningsToErrors
-  | .point .warning str => .point .error str
-  | .point .. => hl
-  | .tactics info start stop x => .tactics info start stop <| warningsToErrors x
-  | .span infos x => .span (infos.map fun (k, str) => (if k matches .warning then .error else k, str)) (warningsToErrors x)
-  | .text .. | .token .. | .unparsed .. => hl
 
-/-- Extracts all messages from the given code. -/
-def allInfo (hl : Highlighted) : Array (Highlighted.Message × Option Highlighted) :=
-  match hl with
-  | .seq xs => xs.flatMap allInfo
-  | .point k str => #[(⟨k, str⟩, none)]
-  | .tactics _ _ _ x => allInfo x
-  | .span infos x => (infos.map fun (k, str) => (⟨k, str⟩, some x)) ++ allInfo x
-  | .text .. | .token .. | .unparsed .. => #[]
-where
-  toSev : Highlighted.Span.Kind → MessageSeverity
-    | .error => .error
-    | .info => .information
-    | .warning => .warning
 
 /--
 Loads the contents of a module, parsed by anchor. The results are cached.
 -/
-def anchored
+meta def anchored
     [Monad m] [MonadEnv m] [MonadLift IO m] [MonadError m] [MonadOptions m]
     [MonadTrace m] [AddMessageContext m] [MonadAlwaysExcept ε m] [MonadFinally m] [MonadQuotation m]
     (project : StrLit) (moduleName : Ident) (blame : Syntax) :
@@ -280,7 +164,7 @@ local instance : Coe (Array String) (Array Suggestion) where
 /--
 Reports a missing anchor error.
 -/
-def anchorNotFound (anchorName : Ident) (allAnchors : List String) : DocElabM Term := do
+meta def anchorNotFound (anchorName : Ident) (allAnchors : List String) : DocElabM Term := do
   let anchorStr := anchorName.getId.toString
 
   let toSuggest := allAnchors.filterMap fun x =>
@@ -293,7 +177,7 @@ def anchorNotFound (anchorName : Ident) (allAnchors : List String) : DocElabM Te
   logErrorAt anchorName m!"Anchor not found.\n\n{h}"
   ``(sorryAx _ true)
 
-private def sevStr : MessageSeverity → String
+private meta def sevStr : MessageSeverity → String
   | .error => "error"
   | .warning => "warning"
   | .information => "info"
@@ -302,7 +186,7 @@ private def sevStr : MessageSeverity → String
 /--
 Silently logs all the messages in {name}`hl`.
 -/
-def logInfos (hl : Highlighted) : DocElabM Unit := do
+meta def logInfos (hl : Highlighted) : DocElabM Unit := do
   for (⟨sev, msg⟩, _) in allInfo hl do
     logSilentInfo m!"{sev}:\n{msg.toString}"
 
@@ -310,7 +194,7 @@ def logInfos (hl : Highlighted) : DocElabM Unit := do
 Given a module name and an anchor name, loads the resulting code and invokes {name}`k` on it,
 failing if the code can't be found.
 -/
-def withAnchored (project : StrLit) (moduleName : Ident) (anchor? : Option Ident)
+meta def withAnchored (project : StrLit) (moduleName : Ident) (anchor? : Option Ident)
     (k : Highlighted → DocElabM (Array Term)) : DocElabM (Array Term) := do
   if let some anchor := anchor? then
     try
@@ -327,7 +211,7 @@ def withAnchored (project : StrLit) (moduleName : Ident) (anchor? : Option Ident
     k code
 
 -- TODO: public API? Or something higher level that constructs the hint?
-private def editCodeBlock [Monad m] [MonadFileMap m] (stx : Syntax) (newContents : String) : m (Option String) := do
+private meta def editCodeBlock [Monad m] [MonadFileMap m] (stx : Syntax) (newContents : String) : m (Option String) := do
   let txt ← getFileMap
   let some rng := stx.getRange?
     | pure none
@@ -357,7 +241,7 @@ where
       if k > n then n := k
     n.fold (fun _ _ s => s.push '`') ""
 
-def moduleContentBlock (args : Array Arg) (code : StrLit) : DocElabM (Array Term) := do
+meta def moduleContentBlock (args : Array Arg) (code : StrLit) : DocElabM (Array Term) := do
     let cfg@{ module := moduleName, project, anchor?, showProofStates := _, defSite := _ } ← parseThe CodeContext args
     withAnchored project moduleName anchor? fun hl => do
       logInfos hl
@@ -385,7 +269,7 @@ Includes the contents of the specified example module.
 Requires that the genre have an {name}`ExternalCode` instance.
 -/
 @[code_block_expander module]
-def module : CodeBlockExpander
+public meta def module : CodeBlockExpander
   | args, code => withTraceNode `Elab.Verso (fun _ => pure m!"module") <| do
     moduleContentBlock args code
 
@@ -395,14 +279,14 @@ Includes the contents of the specified anchored example.
 Requires that the genre have an {lean}`ExternalCode` instance.
 -/
 @[code_block_expander anchor]
-def anchor : CodeBlockExpander
+public meta def anchor : CodeBlockExpander
   | args, code => withTraceNode `Elab.Verso (fun _ => pure m!"anchor") <| do
     if let some (Arg.anon a) := args[0]? then
       moduleContentBlock (#[.named .missing (mkIdent `anchor) a] ++ args.drop 1) code
     else
       throwError "Expected a positional argument first (the anchor name)"
 
-def moduleInline (args : Array Arg) (inls : TSyntaxArray `inline) : DocElabM (Array Term) := do
+meta def moduleInline (args : Array Arg) (inls : TSyntaxArray `inline) : DocElabM (Array Term) := do
   let cfg@{module := moduleName, project, anchor?, showProofStates := _, defSite := _} ← parseThe CodeContext args
   let code? ← oneCodeStr? inls
 
@@ -420,34 +304,19 @@ Includes the contents of the specified anchor.
 Requires that the genre have an {name}`ExternalCode` instance.
 -/
 @[role_expander module]
-def moduleInlineRole : RoleExpander
+public meta def moduleInlineRole : RoleExpander
   | args, inls => withTraceNode `Elab.Verso (fun _ => pure m!"moduleInlineRole") <| do
     moduleInline args inls
 
 @[role_expander anchor]
-def anchorInlineRole : RoleExpander
+public meta def anchorInlineRole : RoleExpander
   | args, inls => withTraceNode `Elab.Verso (fun _ => pure m!"anchorInlineRole") <| do
     if let some (Arg.anon a) := args[0]? then
       moduleInline (#[.named .missing (mkIdent `anchor) a] ++ args.drop 1) inls
     else
       throwError "Expected a positional argument first (the anchor name)"
 
-private partial def allTokens (hl : Highlighted) : HashSet String :=
-  match hl with
-  | .seq xs => xs.map allTokens |>.foldl (init := {}) HashSet.union
-  | .point .. | .text .. | .unparsed .. => {}
-  | .tactics _ _ _ x | .span _ x => allTokens x
-  | .token ⟨_, s⟩ => {s}
-
-private partial def allNames (hl : Highlighted) : HashSet String :=
-  match hl with
-  | .seq xs => xs.map allTokens |>.foldl (init := {}) HashSet.union
-  | .point .. | .text .. | .unparsed .. => {}
-  | .tactics _ _ _ x | .span _ x => allTokens x
-  | .token ⟨.var .., s⟩ | .token ⟨.const .., s⟩ => {s}
-  | .token _ => {}
-
-private def tokenHover : Token → Option String
+private meta def tokenHover : Token → Option String
   | ⟨.const _ sig doc? _, _⟩ => some (mkHover sig doc?)
   | ⟨.var _ ty, s⟩ => some (mkHover s!"{s} : {ty}" none)
   | _ => none
@@ -457,7 +326,7 @@ where mkHover (sig : String) (doc? : Option String) : String :=
     s!"\n\n----------\n\n{d}"
   else ""
 
-def moduleNameInline (args : Array Arg) (inls : TSyntaxArray `inline) : DocElabM (Array Term) := do
+public meta def moduleNameInline (args : Array Arg) (inls : TSyntaxArray `inline) : DocElabM (Array Term) := do
   let cfg@{module := moduleName, project, anchor?, show?, showProofStates := _, defSite := _} ← parseThe NameContext args
   let name ← oneCodeStr inls
   let nameStr := name.getString
@@ -485,7 +354,7 @@ Quotes the first instance of the given name from the module.
 Requires that the genre have an {name}`ExternalCode` instance.
 -/
 @[role_expander moduleName]
-def moduleName : RoleExpander
+public meta def moduleName : RoleExpander
   | args, inls => withTraceNode `Elab.Verso (fun _ => pure m!"moduleName") <| moduleNameInline args inls
 
 /--
@@ -494,7 +363,7 @@ Quotes the first instance of the given name from the anchor.
 Requires that the genre have an {name}`ExternalCode` instance.
 -/
 @[role_expander anchorName]
-def anchorName : RoleExpander
+public meta def anchorName : RoleExpander
   | args, inls =>
     withTraceNode `Elab.Verso (fun _ => pure m!"moduleName") <|
     if let some (Arg.anon a) := args[0]? then
@@ -502,7 +371,8 @@ def anchorName : RoleExpander
     else
       throwError "Expected a positional argument first (the anchor name)"
 
-private def suggestTerms (hl : Highlighted) (input : String) : Array String := Id.run do
+
+private meta def suggestTerms (hl : Highlighted) (input : String) : Array String := Id.run do
   let delimTokens : Array String := #["def", "axiom", "example", "theorem", ":=", "inductive", "where", "structure", "class", "instance"]
 
   -- Avoid performance issues with processing very large documents
@@ -524,7 +394,7 @@ private def suggestTerms (hl : Highlighted) (input : String) : Array String := I
   lines ++ (smartSuggestions out.toArray input (threshold := (max ·.length ·.length)) (count := 15))
 
 
-def moduleTermInline (args : Array Arg) (inls : TSyntaxArray `inline) : DocElabM (Array Term) := do
+public meta def moduleTermInline (args : Array Arg) (inls : TSyntaxArray `inline) : DocElabM (Array Term) := do
   let cfg@{module := moduleName, project, anchor?, showProofStates := _, defSite := _} ← parseThe CodeContext args
   let term ← oneCodeStr inls
 
@@ -557,7 +427,7 @@ Quotes the first term that matches the provided string.
 Requires that the genre have an {name}`ExternalCode` instance.
 -/
 @[role_expander moduleTerm]
-def moduleTerm : RoleExpander
+public meta def moduleTerm : RoleExpander
   | args, inls =>
     withTraceNode `Elab.Verso (fun _ => pure m!"moduleTerm") <|
       moduleTermInline args inls
@@ -568,15 +438,14 @@ Quotes the first term in the given anchor that matches the provided string.
 Requires that the genre have an {lean}`ExternalCode` instance.
 -/
 @[role_expander anchorTerm]
-def anchorTerm : RoleExpander
+public meta def anchorTerm : RoleExpander
   | args, inls => withTraceNode `Elab.Verso (fun _ => pure m!"anchorTerm") <|
     if let some (Arg.anon a) := args[0]? then
       moduleTermInline (#[.named .missing (mkIdent `anchor) a] ++ args.drop 1) inls
     else
       throwError "Expected a positional argument first (the anchor name)"
 
-
-def moduleTermBlock (args : Array Arg) (term : StrLit) : DocElabM (Array Term) := do
+public meta def moduleTermBlock (args : Array Arg) (term : StrLit) : DocElabM (Array Term) := do
   let cfg@{module := moduleName, project, anchor?, showProofStates := _, defSite := _} ← parseThe CodeContext args
 
   withAnchored project moduleName anchor? fun hl => do
@@ -608,11 +477,11 @@ def moduleTermBlock (args : Array Arg) (term : StrLit) : DocElabM (Array Term) :
 
 
 @[code_block_expander moduleTerm, inherit_doc moduleTerm]
-def moduleTermBlockExp : CodeBlockExpander
+public meta def moduleTermBlockExp : CodeBlockExpander
   | args, term => withTraceNode `Elab.Verso (fun _ => pure m!"moduleTerm") <| moduleTermBlock args term
 
 @[code_block_expander anchorTerm, inherit_doc anchorTerm]
-def anchorTermBlockExp : CodeBlockExpander
+public meta def anchorTermBlockExp : CodeBlockExpander
   | args, term => withTraceNode `Elab.Verso (fun _ => pure m!"moduleTerm") <|
     if let some (Arg.anon a) := args[0]? then
       moduleTermBlock (#[.named .missing (mkIdent `anchor) a] ++ args.drop 1) term
@@ -622,22 +491,24 @@ def anchorTermBlockExp : CodeBlockExpander
 section
 variable {m} [Monad m] [MonadResolveName m] [MonadEnv m] [MonadOptions m] [MonadLog m] [AddMessageContext m]
 
-private def severityName : MessageSeverity → m String
+private meta def severityName : MessageSeverity → m String
   | .error => unresolveNameGlobal ``MessageSeverity.error <&> (·.toString)
   | .warning => unresolveNameGlobal ``MessageSeverity.warning <&> (·.toString)
   | .information => unresolveNameGlobal ``MessageSeverity.information <&> (·.toString)
 end
 
+meta section
 deriving instance Repr for MessageSeverity
+end
 
-private def severityHint (wanted : String) (stx : Syntax) : DocElabM MessageData := do
+private meta def severityHint (wanted : String) (stx : Syntax) : DocElabM MessageData := do
   if stx.getHeadInfo matches .original .. then
     hintAt stx m!"Use '{wanted}'" #[wanted]
   else pure m!""
 
 
 open SubVerso.Highlighting Highlighted in
-private partial def findTrace? (header : String) : MessageContents Highlighted → Option (MessageContents Highlighted)
+private meta def findTrace? (header : String) : MessageContents Highlighted → Option (MessageContents Highlighted)
   | .text .. | .term .. | .goal .. => none
   | .append xs =>
     xs.findSome? (findTrace? header)
@@ -645,7 +516,7 @@ private partial def findTrace? (header : String) : MessageContents Highlighted �
     if msg.toString == header then pure t
     else chs.findSome? (findTrace? header)
 
-def outputBlock (args : Array Arg) (str : StrLit) : DocElabM (Array Term) := do
+public meta def outputBlock (args : Array Arg) (str : StrLit) : DocElabM (Array Term) := do
   let {module := moduleName, project, anchor?, severity, expandTraces, onlyTrace, showProofStates := _, defSite := _} ← parseThe MessageContext args
 
   withAnchored project moduleName anchor? fun hl => do
@@ -661,7 +532,7 @@ def outputBlock (args : Array Arg) (str : StrLit) : DocElabM (Array Term) := do
           else continue
         else pure <| msg
       candidates := candidates.push msg
-      if messagesMatch (msg.toString (expandTraces := expandTraces)) str.getString then
+      if SubVerso.Examples.Messages.messagesMatch (msg.toString (expandTraces := expandTraces)) str.getString then
         if msg.severity == .ofSeverity severity.1 then
           return #[← ``(leanOutputBlock $(quote msg) (expandTraces := $(quote expandTraces)))]
         else
@@ -699,7 +570,7 @@ Displays output from the example module.
 Requires that the genre have an {name}`ExternalCode` instance.
 -/
 @[code_block_expander moduleOut]
-def moduleOut : CodeBlockExpander
+public meta def moduleOut : CodeBlockExpander
   | args, str => withTraceNode `Elab.Verso (fun _ => pure m!"moduleOut") <| outputBlock args str
 
 /--
@@ -708,7 +579,7 @@ Displays information output from the example module.
 Requires that the genre have an {name}`ExternalCode` instance.
 -/
 @[code_block_expander moduleInfo]
-def moduleInfo : CodeBlockExpander
+public meta def moduleInfo : CodeBlockExpander
   | args, str => withTraceNode `Elab.Verso (fun _ => pure m!"moduleInfo") <|
     outputBlock (#[.anon <| .name <| mkIdent ``MessageSeverity.information] ++ args) str
 
@@ -718,7 +589,7 @@ Displays error output from the example module.
 Requires that the genre have an {name}`ExternalCode` instance.
 -/
 @[code_block_expander moduleError]
-def moduleError : CodeBlockExpander
+public meta def moduleError : CodeBlockExpander
   | args, str => withTraceNode `Elab.Verso (fun _ => pure m!"moduleError") <|
     outputBlock (#[.anon <| .name <| mkIdent ``MessageSeverity.error] ++ args) str
 
@@ -728,7 +599,7 @@ Displays warning output from the example module.
 Requires that the genre have an {name}`ExternalCode` instance.
 -/
 @[code_block_expander moduleWarning]
-def moduleWarning : CodeBlockExpander
+public meta def moduleWarning : CodeBlockExpander
   | args, str => withTraceNode `Elab.Verso (fun _ => pure m!"moduleWarning") <|
     outputBlock (#[.anon <| .name <| mkIdent ``MessageSeverity.warning] ++ args) str
 
@@ -738,7 +609,7 @@ Displays information output from the example module's anchor.
 Requires that the genre have an {name}`ExternalCode` instance.
 -/
 @[code_block_expander anchorInfo]
-def anchorInfo : CodeBlockExpander
+public meta def anchorInfo : CodeBlockExpander
   | args, str => withTraceNode `Elab.Verso (fun _ => pure m!"anchorInfo") <| do
     if let some (Arg.anon a) := args[0]? then
       outputBlock (#[.anon <| .name <| mkIdent ``MessageSeverity.information, .named .missing (mkIdent `anchor) a] ++ args.drop 1) str
@@ -751,7 +622,7 @@ Displays error output from the example module's anchor.
 Requires that the genre have an {name}`ExternalCode` instance.
 -/
 @[code_block_expander anchorError]
-def anchorError : CodeBlockExpander
+public meta def anchorError : CodeBlockExpander
   | args, str => withTraceNode `Elab.Verso (fun _ => pure m!"anchorError") <| do
     if let some (Arg.anon a) := args[0]? then
       outputBlock (#[.anon <| .name <| mkIdent ``MessageSeverity.error, .named .missing (mkIdent `anchor) a] ++ args.drop 1) str
@@ -763,7 +634,7 @@ Displays warning output from the example module's anchor.
 Requires that the genre have an {name}`ExternalCode` instance.
 -/
 @[code_block_expander anchorWarning]
-def anchorWarning : CodeBlockExpander
+public meta def anchorWarning : CodeBlockExpander
   | args, str => withTraceNode `Elab.Verso (fun _ => pure m!"anchorWarning") <| do
     if let some (Arg.anon a) := args[0]? then
       outputBlock (#[.anon <| .name <| mkIdent ``MessageSeverity.warning, .named .missing (mkIdent `anchor) a] ++ args.drop 1) str
@@ -771,7 +642,7 @@ def anchorWarning : CodeBlockExpander
       throwError "Expected a positional argument first (the anchor name)"
 
 
-def moduleOutInline (args : Array Arg) (inls : TSyntaxArray `inline) : DocElabM (Array Term) := do
+public meta def moduleOutInline (args : Array Arg) (inls : TSyntaxArray `inline) : DocElabM (Array Term) := do
   let str? ← oneCodeStr? inls
 
   let {module := moduleName, project, anchor?, expandTraces, onlyTrace, severity, showProofStates := _, defSite := _} ← parseThe MessageContext args
@@ -789,7 +660,7 @@ def moduleOutInline (args : Array Arg) (inls : TSyntaxArray `inline) : DocElabM 
           else pure <| msg
         candidates := candidates.push msg
 
-        if messagesMatch (msg.toString (expandTraces := expandTraces)) str.getString then
+        if SubVerso.Examples.Messages.messagesMatch (msg.toString (expandTraces := expandTraces)) str.getString then
           if msg.severity == .ofSeverity severity.1 then
             return #[← ``(leanOutputInline $(quote msg) true (expandTraces := $(quote expandTraces)))]
           else
@@ -851,42 +722,42 @@ where
 
 
 @[role_expander moduleOut, inherit_doc moduleOut]
-def moduleOutRole : RoleExpander
+public meta def moduleOutRole : RoleExpander
   | args, inls => withTraceNode `Elab.Verso (fun _ => pure m!"moduleOutRole") <| moduleOutInline args inls
 
 @[role_expander moduleInfo, inherit_doc moduleInfo]
-def moduleOutInfoRole : RoleExpander
+public meta def moduleOutInfoRole : RoleExpander
   | args, inls => withTraceNode `Elab.Verso (fun _ => pure m!"moduleOutInfoRole") <|
     moduleOutInline (#[.anon <| .name <| mkIdent ``MessageSeverity.information] ++ args) inls
 
 @[role_expander moduleError, inherit_doc moduleError]
-def moduleOutErrorRole : RoleExpander
+public meta def moduleOutErrorRole : RoleExpander
   | args, inls => withTraceNode `Elab.Verso (fun _ => pure m!"moduleOutErrorRole") <|
     moduleOutInline (#[.anon <| .name <| mkIdent ``MessageSeverity.error] ++ args) inls
 
 @[role_expander moduleWarning, inherit_doc moduleWarning]
-def moduleOutWarningRole : RoleExpander
+public meta def moduleOutWarningRole : RoleExpander
   | args, inls => withTraceNode `Elab.Verso (fun _ => pure m!"moduleOutWarningRole") <|
     moduleOutInline (#[.anon <| .name <| mkIdent ``MessageSeverity.warning] ++ args) inls
 
-def anchorOutAsRole (severity : Name) (args : Array Arg) (inls : TSyntaxArray `inline) : DocElabM (Array Term) :=
+public meta def anchorOutAsRole (severity : Name) (args : Array Arg) (inls : TSyntaxArray `inline) : DocElabM (Array Term) :=
   if let some (Arg.anon a) := args[0]? then
     moduleOutInline (#[.anon <| .name <| mkIdent severity, .named .missing (mkIdent `anchor) a] ++ args.drop 1) inls
   else
     throwError "Expected a positional argument first (the anchor name)"
 
 @[role_expander anchorInfo, inherit_doc anchorInfo]
-def anchorOutInfoRole : RoleExpander
+public meta def anchorOutInfoRole : RoleExpander
   | args, inls => withTraceNode `Elab.Verso (fun _ => pure m!"anchorOutInfoRole") <|
     anchorOutAsRole ``MessageSeverity.information args inls
 
 @[role_expander anchorWarning, inherit_doc anchorWarning]
-def anchorOutWarningRole : RoleExpander
+public meta def anchorOutWarningRole : RoleExpander
   | args, inls => withTraceNode `Elab.Verso (fun _ => pure m!"anchorOutWarningRole") <|
     anchorOutAsRole ``MessageSeverity.warning args inls
 
 @[role_expander anchorError, inherit_doc anchorError]
-def anchorOutErrorRole : RoleExpander
+public meta def anchorOutErrorRole : RoleExpander
   | args, inls => withTraceNode `Elab.Verso (fun _ => pure m!"anchorOutErrorRole") <|
     anchorOutAsRole ``MessageSeverity.error args inls
 
@@ -895,14 +766,14 @@ Explicitly indicates that a code element is intended to be literal character val
 further semantics.
 -/
 @[role_expander lit]
-def lit : RoleExpander
+public meta def lit : RoleExpander
   | args, inls => do
     ArgParse.done.run args
     let kw ← oneCodeStr inls
     return #[← ``(Inline.code $(quote kw.getString))]
 
 
-private def hasSubstring (s pattern : String) : Bool :=
+private meta def hasSubstring (s pattern : String) : Bool :=
   if h : pattern.rawEndPos.1 = 0 then false
   else
     have hPatt := Nat.zero_lt_of_ne_zero h
@@ -925,7 +796,7 @@ private def hasSubstring (s pattern : String) : Bool :=
 Internal detail of anchor suggestion mechanism.
 -/
 @[inline_expander Lean.Doc.Syntax.code]
-private def suggest : InlineExpander
+public meta def suggest : InlineExpander
   |  `(inline| code( $str )) => do
     let str' := str.getString
 
