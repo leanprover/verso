@@ -727,7 +727,7 @@ def docstring.descr : BlockDescr := withHighlighting {
     |>.setDomainTitle docstringDomain "Lean constant reference"
     |>.setDomainDescription docstringDomain "Documentation for Lean constants"
     |>.addQuickJumpMapper docstringDomain docDomainMapper
-    |>.setDomainTitle suggestionDomain "Lean constant suggestion"
+    |>.setDomainTitle suggestionDomain "Lean constant suggestions"
     |>.setDomainDescription suggestionDomain "Search suggestions for Lean constants"
     |>.addQuickJumpMapper suggestionDomain docSuggestionMapper
 
