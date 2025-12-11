@@ -393,7 +393,7 @@ def theIndex.descr : BlockDescr where
     some <| fun _ go _ _ content => do
       pure <| .seq <| ← content.mapM fun b => do
         pure <| .seq #[← go b, .raw "\n"]
-  extraCss := [indexCss]
+  extraCss := {indexCss}
   toHtml :=
     open Verso.Output.Html Doc.Html HtmlT in
     some <| fun goI _goB _ _ _content => do
@@ -427,7 +427,7 @@ def theIndex.descr : BlockDescr where
           </div>
         }}
 where
-  indexCss := r###"
+  indexCss : CSS := r###"
     main .theIndex {
       padding-left: 0;
       font-family: var(--verso-text-font-family);

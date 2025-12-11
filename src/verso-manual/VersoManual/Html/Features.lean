@@ -157,17 +157,18 @@ custom elements during traversal.
 -/
 public structure HtmlAssets where
   /-- Extra CSS to be included inline into every `<head>` via `<style>` tags -/
-  extraCss : HashSet String := {}
+  extraCss : HashSet CSS := {}
   /-- Extra JS to be included inline into every `<head>` via `<script>` tags -/
-  extraJs : HashSet String := {}
+  extraJs : HashSet JS := {}
   /-- Extra JS to be written to the filesystem in the Verso data directory and loaded by each `<head>` -/
   extraJsFiles : HashSet JsFile := {}
   /-- Extra CSS to be written to the filesystem in the Verso data directory and loaded by each `<head>` -/
   extraCssFiles : HashSet CssFile := {}
   /-- Extra files to be placed in the Verso data directory -/
   extraDataFiles : HashSet DataFile := {}
+  /-- Open-source licenses, to be collected for display in the final document. -/
   licenseInfo : HashSet LicenseInfo := {}
-deriving Repr
+deriving Repr, Inhabited
 
 /--
 Returns all the files that should be written in the {lit}`-verso-data` directory.
@@ -175,11 +176,11 @@ Returns all the files that should be written in the {lit}`-verso-data` directory
 public def HtmlAssets.files (assets : HtmlAssets) : Array (String × (String ⊕ ByteArray)) := Id.run do
   let mut out := #[]
   for js in assets.extraJsFiles do
-    out := out.push (js.filename, .inl js.contents)
+    out := out.push (js.filename, .inl js.contents.js)
     if let some m := js.sourceMap? then
       out := out.push (m.filename, .inl m.contents)
   for css in assets.extraCssFiles do
-    out := out.push (css.filename, .inl css.contents)
+    out := out.push (css.filename, .inl css.contents.css)
   for data in assets.extraDataFiles do
     out := out.push (data.filename, .inr data.contents)
   return out
@@ -221,13 +222,31 @@ public instance : ToJson HtmlAssets where
 
 public instance : FromJson HtmlAssets where
   fromJson? v := private do
-    let extraCss ← HashSet.ofArray <$> v.getObjValAs? (Array String) "extraCss"
-    let extraJs ← HashSet.ofArray <$> v.getObjValAs? (Array String) "extraJs"
+    let extraCss ← HashSet.ofArray <$> v.getObjValAs? (Array CSS) "extraCss"
+    let extraJs ← HashSet.ofArray <$> v.getObjValAs? (Array JS) "extraJs"
     let extraJsFiles ← HashSet.ofArray <$> v.getObjValAs? (Array JsFile) "extraJsFiles"
     let extraCssFiles ← HashSet.ofArray <$> v.getObjValAs? (Array CssFile) "extraCssFiles"
     let extraDataFiles ← HashSet.ofArray <$> v.getObjValAs? (Array DataFile) "extraDataFiles"
     let licenseInfo ← HashSet.ofArray <$> v.getObjValAs? (Array LicenseInfo) "licenseInfo"
     return { extraCss, extraJs, extraJsFiles, extraCssFiles, extraDataFiles, licenseInfo }
+
+/--
+Combines two sets of HTML assets.
+
+If {name}`moreAssets` contains named file assets whose names conflict with those in {name}`assets`,
+then the version in {name}`assets` is used.
+-/
+public def HtmlAssets.combine (assets moreAssets : HtmlAssets) : HtmlAssets := {
+    extraCss := assets.extraCss.insertMany moreAssets.extraCss,
+    extraJs := assets.extraJs.insertMany moreAssets.extraJs,
+    extraJsFiles := moreAssets.extraJsFiles.fold (init := assets.extraJsFiles) fun extraJsFiles jsFile =>
+      if extraJsFiles.all (·.filename ≠ jsFile.filename) then extraJsFiles.insert jsFile else extraJsFiles
+    extraCssFiles := moreAssets.extraCssFiles.fold (init := assets.extraCssFiles) fun extraCssFiles cssFile =>
+      if extraCssFiles.all (·.filename ≠ cssFile.filename) then extraCssFiles.insert cssFile else extraCssFiles
+    extraDataFiles := moreAssets.extraDataFiles.fold (init := assets.extraDataFiles) fun extraDataFiles dataFile =>
+      if extraDataFiles.all (·.filename ≠ dataFile.filename) then extraDataFiles.insert dataFile else extraDataFiles
+    licenseInfo := assets.licenseInfo.insertMany moreAssets.licenseInfo
+  }
 
 /--
 Adds the HTML assets corresponding to a feature.
@@ -247,3 +266,39 @@ public def HtmlFeature.addAssets : HtmlFeature → HtmlAssets → HtmlAssets
   | .search, st => { st with
       licenseInfo := st.licenseInfo.insertMany [Licenses.fuzzysort, Licenses.w3Combobox, Licenses.elasticlunr.js]
     }
+
+/--
+This is a legacy coercion for API compatibility.
+-/
+public instance : Coe (List String) (HashSet CSS) where
+  coe xs := xs.map CSS.mk |> .ofList
+
+/--
+This is a legacy coercion for API compatibility.
+-/
+public instance : Coe (List String) (HashSet JS) where
+  coe xs := xs.map JS.mk |> .ofList
+
+/--
+This is a legacy coercion for API compatibility.
+-/
+public instance : Coe (List CSS) (HashSet CSS) where
+  coe xs := .ofList xs
+
+/--
+This is a legacy coercion for API compatibility.
+-/
+public instance : Coe (List JS) (HashSet JS) where
+  coe xs := .ofList xs
+
+/--
+This is a legacy coercion for API compatibility.
+-/
+public instance : Coe (HashSet String) (HashSet CSS) where
+  coe xs := xs.toList.map CSS.mk |> .ofList
+
+/--
+This is a legacy coercion for API compatibility.
+-/
+public instance : Coe (HashSet String) (HashSet JS) where
+  coe xs := xs.toList.map JS.mk |> .ofList

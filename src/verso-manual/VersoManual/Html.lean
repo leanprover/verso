@@ -410,8 +410,8 @@ public def page
     (textTitle : String)
     (bookTitle : Html)
     (contents : Html)
-    (extraCss : HashSet String)
-    (extraJs : HashSet String)
+    (extraCss : HashSet CSS)
+    (extraJs : HashSet JS)
     (localItems : Array Html)
     (extraHead : Array Html := #[])
     (extraContents : Array Html := #[])
@@ -446,8 +446,8 @@ public def page
         <link rel="stylesheet" href="-verso-search/domain-display.css"/>
         {{extraJsFiles.map fun f => ({{<script src=s!"{f.1}" {{if f.2 then defer else #[]}}></script>}})}}
         {{extraStylesheets.map (fun url => {{<link rel="stylesheet" href={{url}}/> }})}}
-        {{extraCss.toArray.map ({{<style>{{Html.text false ·}}</style>}})}}
-        {{extraJs.toArray.map ({{<script>{{Html.text false ·}}</script>}})}}
+        {{extraCss.toArray.map ({{<style>{{Html.text false ·.css}}</style>}})}}
+        {{extraJs.toArray.map ({{<script>{{Html.text false ·.js}}</script>}})}}
         {{extraHead}}
         <script src="-verso-search/search-highlight.js" defer="defer"></script>
       </head>

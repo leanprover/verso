@@ -6,6 +6,7 @@ Author: David Thrane Christiansen
 
 module
 public import Lean.Data.Json.FromToJson
+public import VersoManual.Html.Basic
 
 namespace Verso.Genre.Manual
 
@@ -36,6 +37,6 @@ deriving BEq, ToJson, FromJson, Repr, Hashable, Ord
 An extra JS file to be emitted and added to the page.
 -/
 public structure JsFile extends StaticJsFile where
-  contents : String
+  contents : JS
   sourceMap? : Option JsSourceMap
 deriving BEq, ToJson, FromJson, Repr, Hashable, Ord
