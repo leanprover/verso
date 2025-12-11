@@ -343,9 +343,9 @@ public instance : FromJson TraverseState where
     let domains <- v.getObjValAs? _ "domains"
     let ids <- v.getObjValAs? (Array InternalId) "ids"
     let ids := .ofArray ids
-    let extraCss <- v.getObjValAs? (Array String) "extraCss"
+    let extraCss <- v.getObjValAs? (Array CSS) "extraCss"
     let extraCss := .ofArray extraCss
-    let extraJs <- v.getObjValAs? (Array String) "extraJs"
+    let extraJs <- v.getObjValAs? (Array JS) "extraJs"
     let extraJs := .ofArray extraJs
     let extraJsFiles <- HashSet.ofArray <$> v.getObjValAs? (Array _) "extraJsFiles"
     let extraCssFiles <- HashSet.ofArray <$> v.getObjValAs? (Array _) "extraCssFiles"
@@ -389,26 +389,21 @@ local instance [BEq α] [Ord α] : BEq (TreeSet α) where
 local instance [BEq α] [Hashable α] [BEq β] : BEq (HashMap α β) where
   beq := private ptrEqThen fun xs ys => xs.size == ys.size && xs.all (ys[·]?.isEqSome ·)
 
+instance : BEq Contents where
+  beq := ptrEqThen fun c1 c2 =>
+    c1.contents.size == c2.contents.size &&
+    c1.contents.all (c2.contents[·.toName]?.isEqSome ·)
+
 instance : BEq TraverseState where
   beq := private ptrEqThen fun x y =>
+    x.toHtmlAssets == y.toHtmlAssets &&
     ptrEqThen' x.tags y.tags (fun t1 t2 =>
       t1.size == t2.size && t1.all (t2[·]?.isEqSome ·)) &&
-    x.externalTags.size == y.externalTags.size &&
-    (x.externalTags.all fun k v =>
-      match y.externalTags[k]? with
-      | none => false
-      | some v' => v == v') &&
+    x.externalTags == y.externalTags &&
     x.domains == y.domains &&
     x.ids == y.ids &&
-    x.extraCss == y.extraCss &&
-    x.extraJs == y.extraJs &&
-    x.extraJsFiles == y.extraJsFiles &&
-    x.extraCssFiles == y.extraCssFiles &&
     x.quickJump == y.quickJump &&
-    ptrEqThen' x.contents y.contents (fun c1 c2 =>
-      c1.contents.size == c2.contents.size &&
-      c1.contents.all (c2.contents[·.toName]? |>.isEqSome ·)) &&
-    x.licenseInfo == y.licenseInfo
+    x.contents == y.contents
 
 namespace TraverseState
 
@@ -692,9 +687,8 @@ def TraverseContext.inBlock (self : TraverseContext) (block : Lean.Doc.Block i M
 def TraverseContext.sectionNumber (self : TraverseContext) : Array (Option Numbering) :=
   self.headers.map (·.metadata |>.getD {} |>.assignedNumber)
 
-
 /-- Implementations of all the operations needed to use an inline element. -/
-structure InlineDescr where
+structure InlineDescr extends HtmlAssets where
   /-- All registered initializers are called in the state prior to the first traversal. -/
   init : TraverseState → TraverseState := id
 
@@ -713,26 +707,7 @@ structure InlineDescr where
   How to generate HTML. If `none`, generating HTML from a document that contains this inline will fail.
   -/
   toHtml : Option (InlineToHtml Manual (ReaderT AllRemotes (ReaderT ExtensionImpls IO)))
-  /--
-  Extra JavaScript to add to a `<script>` tag in the generated HTML's `<head>`
-  -/
-  extraJs : List String := []
-  /--
-  Extra JavaScript to save to the static files directory and load in the generated HTMl's `<head>`
-  -/
-  extraJsFiles : List JsFile := []
-  /--
-  Extra CSS to add to a `<style>` tag in the generated HTML's `<head>`
-  -/
-  extraCss : List String := []
-  /--
-  Extra CSS to save to the static files directory and load in the generated HTMl's `<head>`
-  -/
-  extraCssFiles : List (String × String) := []
-  /--
-  Open-source licenses used by the inline, to be collected for display in the final document.
-  -/
-  licenseInfo : List LicenseInfo := []
+
   /--
   Should this inline be an entry in the page-local ToC? If so, how should it be represented?
 
@@ -755,12 +730,12 @@ structure InlineDescr where
 
 deriving TypeName
 
-instance : Inhabited InlineDescr := ⟨⟨id, default, default, default, default, default, default, default, default, default, default, default⟩⟩
+instance : Inhabited InlineDescr := ⟨⟨default, id, default, default, default, default, default, default⟩⟩
 
 /--
 Implementations of all the operations needed to use a block.
 -/
-structure BlockDescr where
+structure BlockDescr extends HtmlAssets where
   /-- All registered initializers are called in the state prior to the first traversal. -/
   init : TraverseState → TraverseState := id
 
@@ -771,26 +746,7 @@ structure BlockDescr where
   How to generate HTML. If `none`, generating HTML from a document that contains this block will fail.
   -/
   toHtml : Option (BlockToHtml Manual (ReaderT AllRemotes (ReaderT ExtensionImpls IO)))
-  /--
-  Extra JavaScript to add to a `<script>` tag in the generated HTML's `<head>`
-  -/
-  extraJs : List String := []
-  /--
-  Extra JavaScript to save to the static files directory and load in the generated HTMl's `<head>`
-  -/
-  extraJsFiles : List JsFile := []
-  /--
-  Extra CSS to add to a `<style>` tag in the generated HTML's `<head>`
-  -/
-  extraCss : List String := []
-  /--
-  Extra CSS to save to the static files directory and load in the generated HTMl's `<head>`
-  -/
-  extraCssFiles : List (String × String) := []
-  /--
-  Open-source licenses used by the block, to be collected for display in the final document.
-  -/
-  licenseInfo : List LicenseInfo := []
+
   /--
   Should this block be an entry in the page-local ToC? If so, how should it be represented?
 
@@ -813,7 +769,7 @@ structure BlockDescr where
   preamble : List String := {}
 deriving TypeName
 
-instance : Inhabited BlockDescr := ⟨⟨id, default, default, default, default, default, default, default, default, default, default, default⟩⟩
+instance : Inhabited BlockDescr := ⟨⟨default, id, default, default, default, default, default, default⟩⟩
 
 syntax (name := inline_extension) "inline_extension" ident : attr
 syntax (name := block_extension) "block_extension" ident : attr
@@ -1442,18 +1398,7 @@ instance : Traverse Manual TraverseM where
     | ⟨name, id?, data, props⟩, content => do
       if let some id := id? then
         if let some impl := (← readThe ExtensionImpls).getBlock? name then
-          for js in impl.extraJs do
-            modify fun s => { s with extraJs := s.extraJs.insert js }
-          for css in impl.extraCss do
-            modify fun s => { s with extraCss := s.extraCss.insert css }
-          for f in impl.extraJsFiles do
-            unless (← get).extraJsFiles.any (·.filename == f.filename) do
-              modify fun s => { s with extraJsFiles := s.extraJsFiles.insert f }
-          for (name, css) in impl.extraCssFiles do
-            unless (← get).extraCssFiles.any (·.filename == name) do
-              modify fun s => { s with extraCssFiles := s.extraCssFiles.insert { filename := name, contents := css } }
-          for licenseInfo in impl.licenseInfo do
-            modify (·.addLicenseInfo licenseInfo)
+          modify fun s => { s with toHtmlAssets := s.toHtmlAssets.combine impl.toHtmlAssets }
 
           impl.traverse id data content
         else
@@ -1467,18 +1412,7 @@ instance : Traverse Manual TraverseM where
     | ⟨name, id?, data⟩, content => do
       if let some id := id? then
         if let some impl := (← readThe ExtensionImpls).getInline? name then
-          for js in impl.extraJs do
-            modify fun s => { s with extraJs := s.extraJs.insert js }
-          for css in impl.extraCss do
-            modify fun s => { s with extraCss := s.extraCss.insert css }
-          for f in impl.extraJsFiles do
-            unless (← get).extraJsFiles.any (·.filename == f.filename) do
-              modify fun s => { s with extraJsFiles := s.extraJsFiles.insert f }
-          for (name, css) in impl.extraCssFiles do
-            unless (← get).extraCssFiles.any (·.filename == name) do
-              modify fun s => { s with extraCssFiles := s.extraCssFiles.insert { filename := name, contents := css } }
-          for licenseInfo in impl.licenseInfo do
-            modify (·.addLicenseInfo licenseInfo)
+          modify fun s => { s with toHtmlAssets := s.toHtmlAssets.combine impl.toHtmlAssets }
 
           impl.traverse id data content
         else

@@ -1501,7 +1501,7 @@ def optionDomainMapper : DomainMapper :=
 
 open Verso.Genre.Manual.Markdown in
 @[block_extension optionDocs]
-def optionDocs.descr : BlockDescr where
+def optionDocs.descr : BlockDescr := withHighlighting {
   init st := st
     |>.setDomainTitle optionDomain "Compiler options"
     |>.addQuickJumpMapper optionDomain optionDomainMapper
@@ -1547,9 +1547,8 @@ def optionDocs.descr : BlockDescr where
       (s!"{name.toString} (Option)", {{<code>{{name.toString}}</code>" (Option)"}})
     ]
   toTeX := some <| fun _goI goB _id _info contents => contents.mapM goB
-  extraCss := [highlightingStyle, docstringStyle]
-  extraJs := [highlightingJs]
-
+  extraCss := [docstringStyle]
+}
 
 def Block.tactic (name : Lean.Elab.Tactic.Doc.TacticDoc) («show» : Option String) : Block where
   name := `Verso.Genre.Manual.tactic

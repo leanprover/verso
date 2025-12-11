@@ -367,10 +367,10 @@ structure Theme where
   page : PageContent → Html
   topic : TopicContent → Html
   tutorialToC : Option (String × String) → Option LiveConfig → LocalToC → Html
-  cssFiles : Array (String × String) := #[]
+  cssFiles : Array Manual.CssFile := #[]
   jsFiles : Array Manual.JsFile := #[]
 
-private def defaultCss := include_str "default.css"
+private def defaultCss : Manual.CSS := include_str "default.css"
 
 def Theme.default : Theme where
   page content := {{
@@ -425,7 +425,7 @@ def Theme.default : Theme where
           else {{<ol>{{toc.children.map defaultLocalToC}}</ol>}} }}
       </nav>
     }}
-  cssFiles := #[("default.css", defaultCss)]
+  cssFiles := #[{ filename := "default.css", contents := defaultCss }]
 where
   defaultLocalToC (toc : LocalToC) : Html := {{
     <li>
@@ -520,9 +520,9 @@ def EmitM.page (path : Path) (title : String) (content : Html) : EmitM Html := d
         {{<script src={{fn}} {{if defer then #[("defer", "defer")] else #[]}}></script>}},
       state.extraCssFiles.toArray.map fun cssFile =>
         {{<link rel="stylesheet" href=s!"-verso-data/{cssFile.filename}" />}},
-      state.extraJs.toArray.map fun js =>
+      state.extraJs.toArray.map fun ⟨js⟩ =>
         {{<script>{{.text false js}}</script>}},
-      state.extraCss.toArray.map fun css =>
+      state.extraCss.toArray.map fun ⟨css⟩ =>
         {{<style>{{.text false css}}</style>}}
     ],
     content
@@ -621,11 +621,11 @@ def emit (tutorials : Tutorials) : EmitM Unit := do
   writeFile (dir / "-verso-docs.json") (toString hlState.dedup.docJson)
 
   for themeJs in (← theme).jsFiles do
-    writeFile (dir / themeJs.filename) themeJs.contents
+    writeFile (dir / themeJs.filename) themeJs.contents.js
     if let some m := themeJs.sourceMap? then
       writeFile (dir / m.filename) m.contents
   for themeCss in (← theme).cssFiles do
-    writeFile (dir / themeCss.1) themeCss.2
+    writeFile (dir / themeCss.filename) themeCss.contents.css
 
 end
 

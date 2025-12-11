@@ -407,7 +407,7 @@ def page (toc : List Html.Toc)
     (path : Path) (textTitle : String) (htmlBookTitle contents : Html)
     (state : TraverseState) (config : Config)
     (localItems : Array Html)
-    (showNavButtons : Bool := true) (extraJs : List String := []) : Html :=
+    (showNavButtons : Bool := true) (extraJs : List JS := []) : Html :=
   let toc := {
     title := htmlBookTitle, path := #[], id := "" , sectionNum := some #[], children := toc
   }
@@ -606,7 +606,7 @@ where
     for f in state.extraJsFiles do
       ensureDir (dir.join "-verso-data")
       (dir / "-verso-data" / f.filename).parent |>.forM fun d => ensureDir d
-      IO.FS.writeFile (dir / "-verso-data" / f.filename) f.contents
+      IO.FS.writeFile (dir / "-verso-data" / f.filename) f.contents.js
       if let some m := f.sourceMap? then
         IO.FS.writeFile (dir / "-verso-data" / m.filename) m.contents
     let titleToShow : Html :=
