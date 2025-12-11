@@ -1,0 +1,13 @@
+name: Check for trailing newlines
+
+on: [pull_request, merge_group]
+
+jobs:
+  check-trailing-newlines:
+    name: "Check text files have trailing newlines"
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Check for trailing newlines
+      run: .github/scripts/check-trailing-newlines.sh
