@@ -1,5 +1,13 @@
-_out
-vendored-js
 lake-manifest.json
-licenses.md
+
+# build files
+_out
+browser-tests
+html-multi
+htmlout
+.playwright-browsers
+
+# Vendored files
+vendored-js
 *.min.js
+licenses.md
