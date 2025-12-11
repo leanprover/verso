@@ -42,24 +42,21 @@ public def tippyJs : JsFile where
     contents := tippy.map
   }
 
-public def tippyCss := ("tippy-border.css", tippy.border.css)
+public def tippyCss : CssFile where
+  filename := "tippy-border.css"
+  contents := tippy.border.css
+
+public def highlightAssets : HtmlAssets where
+  extraCss := { CSS.mk highlightingStyle }
+  extraJs := { JS.mk highlightingJs }
+  extraJsFiles := { popperJs, tippyJs }
+  extraCssFiles := { tippyCss }
+  licenseInfo := { tippy.js, popper.js }
 
 public instance : CanHighlightCode BlockDescr where
   addDependencies b :=
-    {b with
-      extraCss := highlightingStyle :: b.extraCss
-      extraJs := highlightingJs :: b.extraJs
-      extraJsFiles := popperJs :: tippyJs :: b.extraJsFiles
-      extraCssFiles := tippyCss :: b.extraCssFiles
-      licenseInfo := b.licenseInfo |>.insert tippy.js |>.insert popper.js
-      }
+    { b with toHtmlAssets := b.toHtmlAssets.combine highlightAssets }
 
 public instance : CanHighlightCode InlineDescr where
   addDependencies i :=
-    {i with
-      extraCss := highlightingStyle :: i.extraCss
-      extraJs := highlightingJs :: i.extraJs
-      extraJsFiles := popperJs :: tippyJs :: i.extraJsFiles
-      extraCssFiles := tippyCss :: i.extraCssFiles
-      licenseInfo := i.licenseInfo |>.insert tippy.js |>.insert popper.js
-      }
+    { i with toHtmlAssets := i.toHtmlAssets.combine highlightAssets }
