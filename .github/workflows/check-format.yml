@@ -1,0 +1,19 @@
+name: Check Formatting of JS/CSS/HTML and Markdown
+
+on:
+    push:
+        branches:
+        tags:
+    pull_request:
+    merge_group:
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Check formatting with prettier
+              uses: creyD/prettier_action@v4.6
+              with:
+                  dry: true
+                  prettier_options: "--check ."
+                  prettier_version: 3.7.4

@@ -1,4 +1,4 @@
-name: Format JS/CSS/HTML and Markdown with Prettier
+name: Format JS/CSS/HTML and Markdown
 
 on:
     workflow_dispatch:
