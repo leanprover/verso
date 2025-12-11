@@ -8,6 +8,9 @@ jobs:
     build:
         runs-on: ubuntu-latest
         steps:
+            - name: Checkout
+              uses: actions/checkout@v5
+
             - name: Check formatting with prettier
               uses: creyD/prettier_action@v4.6
               with:
