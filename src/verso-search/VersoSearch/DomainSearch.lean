@@ -54,6 +54,17 @@ public structure DomainMapper where
   CSS to be used in the quick-jump box to customize results from the given domain.
   -/
   quickJumpCss : Option String := none
+  /--
+  JavaScript code to give a custom rendering for a searchable item. This should be a function that
+  takes three arguments:
+
+  {open DomainMapper}
+   * {lit}`searchable` is a Searchable object (returned by the {name}`dataToSearchables` function)
+   * {lit}`matchedParts` is an array of objects with TypeScript type {lit}`{t: 'text', v: string} | {t: 'highlight', v: string}`
+     Objects with `text` in the `t` field are the parts of the search result that provide context, while objects with `highlight` are the parts of the result that match the search string.
+   * {lit}`document` is the DOM document object
+  -/
+  customRender : Option String := none
 deriving Repr, DecidableEq, ToJson, FromJson
 
 /--
