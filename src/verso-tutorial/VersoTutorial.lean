@@ -571,7 +571,7 @@ def emit (tutorials : Tutorials) : EmitM Unit := do
   if config.verbose then IO.println "Updating remote data"
   let remoteContent ← updateRemotes false config.remoteConfigFile (if config.verbose then IO.println else fun _ => pure ())
 
-  let targets : Code.LinkTargets Tutorial.TraverseContext := (← readThe Manual.TraverseState).localTargets ++ remoteContent.remoteTargets
+  let targets : Code.LinkTargets Tutorial.TraverseContext := tutorialLocalTargets (← readThe Manual.TraverseState) ++ remoteContent.remoteTargets
 
   let dir := (← read).config.destination
   ensureDir dir
