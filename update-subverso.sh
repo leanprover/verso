@@ -28,7 +28,7 @@ echo "Found subverso non-module rev: $SUBVERSO_NOMODULE_REV"
 
 
 # Find example lake-manifest.json files in the repo (excluding the root one)
-find examples -name "lake-manifest.json" -not -path "$ROOT_MANIFEST" | grep -v "\.lake" | while read -r manifest_file; do
+find test-projects -name "lake-manifest.json" -not -path "$ROOT_MANIFEST" | grep -v "\.lake" | while read -r manifest_file; do
     echo "Processing $manifest_file..."
 
     # Check if the manifest contains subverso package
