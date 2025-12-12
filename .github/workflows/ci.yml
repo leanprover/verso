@@ -1,215 +1,220 @@
 on:
-  push:
-    branches:
-      - master
-      - main
-      - nightly-testing
-    tags:
-      - 'v4*'
-  pull_request:
-  merge_group:
-
+    push:
+        branches:
+            - master
+            - main
+            - nightly-testing
+        tags:
+            - "v4*"
+    pull_request:
+    merge_group:
 
 name: Continuous Integration
 
 jobs:
-  build:
-    name: Build and test
-    runs-on: nscloud-ubuntu-22.04-amd64-8x16
-    env:
-      # Used for browser tests. Placing them here allows caching to work right.
-      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers
-    steps:
-      - name: install elan
-        run: |
-          set -o pipefail
-          curl -sSfL https://github.com/leanprover/elan/releases/download/v3.0.0/elan-x86_64-unknown-linux-gnu.tar.gz | tar xz
-          ./elan-init -y --default-toolchain none
-          echo "$HOME/.elan/bin" >> $GITHUB_PATH
-
-      - uses: actions/checkout@v5
-
-      - name: List all files
-        run: |
-          find . -name "*.lean" -type f
-
-      - name: lean version
-        run: |
-          lean --version
-
-      - name: Compute short SHA
-        id: shortSHA
-        run: echo "short_sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
-
-      - name: Cache .lake
-        uses: actions/cache@v4
-        with:
-          path: .lake
-          # The SHA is in the key to get the most recent cache possible, rather than just saving a single one for each Lean/deps version and not touching it.
-          key: ${{ runner.os }}-${{ hashFiles('lake-manifest.json') }}-${{ hashFiles('lean-toolchain') }}-${{ steps.shortSHA.outputs.short_sha }}
-          # Try to restore cache for same OS/Lean/deps, but don't get less specific, because Lake isn't always happy to get build product version mismatches
-          restore-keys: |
-            ${{ runner.os }}-${{ hashFiles('lake-manifest.json') }}-${{ hashFiles('lean-toolchain') }}-
-
-      # This was failing CI from clang crashing, so do it first for fast turnaround
-      - name: Build the website examples subproject
-        run: |
-          pushd test-projects/website-examples
-          lake build
-          lake build :examples
-          popd
-
-      - name: Build the project
-        run: |
-          lake build
-
-      - name: Run tests
-        run: |
-          lake test
-
-      - name: Generate the test website
-        run: |
-          lake exe demosite --output _out/test-projects/demosite
-
-      - name: Generate the test genre's document
-        run: |
-          lake exe simplepage
-
-      - name: Generate some source HTML
-        run: |
-          lake build Verso.Hover:literate
-          lake exe verso-html .lake/build/literate htmlout
-
-      - name: Check internal links on the test website
-        uses: lycheeverse/lychee-action@v2.6.1
-        with:
-          format: markdown
-          jobSummary: true
-          args: --base './_out/test-projects/demosite' --no-progress --offline './_out/test-projects/demosite/**/*.html'
-
-      - name: Install PDF Dependencies
-        uses: zauguin/install-texlive@v4
-        with:
-          texlive_version: 2025
-          packages: |
-            scheme-minimal
-            l3packages
-            tools
-            latex-bin
-            xpatch
-            booktabs
-            footmisc
-            environ
-            hyperref
-            titlesec
-            tocloft
-            enumitem
-            fmtcount
-            glossaries
-            datatool
-            caption
-            babel
-            fontspec
-            textcase
-            memoir
-            sourcecodepro
-            sourcesanspro
-            sourceserifpro
-            fvextra
-            upquote
-            lineno
-            float
-            tcolorbox
-            tikzfill
-            pdfcol
-            listings
-            epstopdf-pkg
-            pgf
-            environ
-            etoolbox
-            ulem
-            newunicodechar
-
-      - name: Check `tlmgr` version
-        run: tlmgr --version
-
-      - name: Generate the manual
-        run: |
-          ./generate.sh
-          cp _out/tex/main.pdf ./manual.pdf
-          cp -r _out/html-multi html-multi
-          cp README-html.md html-multi/README.md
-          zip -r html-manual.zip html-multi
-
-      - name: Install TypeScript
-        run: |
-          sudo apt update && sudo apt install node-typescript
-
-      - name: Type check the search bar code
-        run: |
-          pushd _out/html-multi/-verso-search
-          tsc --noEmit -p jsconfig.json
-          popd
-
-      - name: Type check the xref redirect JS code
-        run: |
-          pushd static-web
-          tsc --noEmit -p jsconfig.json
-          popd
-
-      - name: Generate the demo site and make sure page_link works
-        run: |
-          lake exe demosite --output _out/demosite
-          # Fail if the generated about page doesn't have the expected base tag and blog link
-          grep -qF '<a href="blog/">blog</a> genre' _out/demosite/about/index.html
-          grep -qF '<base href=".././">' _out/demosite/about/index.html
-
-      # Begin browser testing
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-        with:
-          enable-cache: true
-          cache-dependency-glob: "browser-tests/pyproject.toml"
-
-      - name: Cache Playwright browsers
-        uses: actions/cache@v4
-        with:
-          path: .playwright-browsers
-          key: playwright-${{ runner.os }}-${{ hashFiles('browser-tests/uv.lock') }}
-
-      - name: Install Playwright browsers
-        run: uv run --project browser-tests --extra test playwright install chromium firefox --with-deps
-
-      - name: Run browser tests
-        run: uv run --project browser-tests --extra test pytest browser-tests -v
-      # End browser testing
-
-      - name: Upload docs to artifact storage
-        if: github.ref_type != 'tag' && github.ref != 'refs/heads/main'
-        uses: actions/upload-artifact@v4
-        with:
-          name: "Verso manual (PDF and HTML)"
-          path: |
-            manual.pdf
-            html-manual.zip
-
-      - uses: "marvinpinto/action-automatic-releases@latest"
-        if: github.ref_type != 'tag' && github.ref == 'refs/heads/main'
-        with:
-          repo_token: "${{ secrets.GITHUB_TOKEN }}"
-          automatic_release_tag: "latest"
-          title: "Verso manual (PDF and HTML)"
-          files: |
-            manual.pdf
-            html-manual.zip
-
-      - name: Create release from tag
-        if: github.ref_type == 'tag' && startsWith(github.ref_name, 'v4')
+    build:
+        name: Build and test
+        runs-on: nscloud-ubuntu-22.04-amd64-8x16
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release create ${{ github.ref_name }} \
-            manual.pdf \
-            html-manual.zip \
-            --title "Release ${{ github.ref_name }}" \
-            --notes "Automated release for ${{ github.ref_name }}"
+            # Used for browser tests. Placing them here allows caching to work right.
+            PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers
+        steps:
+            - name: install elan
+              run: |
+                  set -o pipefail
+                  curl -sSfL https://github.com/leanprover/elan/releases/download/v3.0.0/elan-x86_64-unknown-linux-gnu.tar.gz | tar xz
+                  ./elan-init -y --default-toolchain none
+                  echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+
+            - uses: actions/checkout@v5
+
+            - name: List all files
+              run: |
+                  find . -name "*.lean" -type f
+
+            - name: lean version
+              run: |
+                  lean --version
+
+            - name: Compute short SHA
+              id: shortSHA
+              run: echo "short_sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+            - name: Cache .lake
+              uses: actions/cache@v4
+              with:
+                  path: .lake
+                  # The SHA is in the key to get the most recent cache possible, rather than just saving a single one for each Lean/deps version and not touching it.
+                  key:
+                      ${{ runner.os }}-${{ hashFiles('lake-manifest.json') }}-${{
+                      hashFiles('lean-toolchain') }}-${{ steps.shortSHA.outputs.short_sha }}
+                  # Try to restore cache for same OS/Lean/deps, but don't get less specific, because Lake isn't always happy to get build product version mismatches
+                  restore-keys: |
+                      ${{ runner.os }}-${{ hashFiles('lake-manifest.json') }}-${{ hashFiles('lean-toolchain') }}-
+
+            # This was failing CI from clang crashing, so do it first for fast turnaround
+            - name: Build the website examples subproject
+              run: |
+                  pushd test-projects/website-examples
+                  lake build
+                  lake build :examples
+                  popd
+
+            - name: Build the project
+              run: |
+                  lake build
+
+            - name: Run tests
+              run: |
+                  lake test
+
+            - name: Generate the test website
+              run: |
+                  lake exe demosite --output _out/test-projects/demosite
+
+            - name: Generate the test genre's document
+              run: |
+                  lake exe simplepage
+
+            - name: Generate some source HTML
+              run: |
+                  lake build Verso.Hover:literate
+                  lake exe verso-html .lake/build/literate htmlout
+
+            - name: Check internal links on the test website
+              uses: lycheeverse/lychee-action@v2.6.1
+              with:
+                  format: markdown
+                  jobSummary: true
+                  args:
+                      --base './_out/test-projects/demosite' --no-progress --offline
+                      './_out/test-projects/demosite/**/*.html'
+
+            - name: Install PDF Dependencies
+              uses: zauguin/install-texlive@v4
+              with:
+                  texlive_version: 2025
+                  packages: |
+                      scheme-minimal
+                      l3packages
+                      tools
+                      latex-bin
+                      xpatch
+                      booktabs
+                      footmisc
+                      environ
+                      hyperref
+                      titlesec
+                      tocloft
+                      enumitem
+                      fmtcount
+                      glossaries
+                      datatool
+                      caption
+                      babel
+                      fontspec
+                      textcase
+                      memoir
+                      sourcecodepro
+                      sourcesanspro
+                      sourceserifpro
+                      fvextra
+                      upquote
+                      lineno
+                      float
+                      tcolorbox
+                      tikzfill
+                      pdfcol
+                      listings
+                      epstopdf-pkg
+                      pgf
+                      environ
+                      etoolbox
+                      ulem
+                      newunicodechar
+
+            - name: Check `tlmgr` version
+              run: tlmgr --version
+
+            - name: Generate the manual
+              run: |
+                  ./generate.sh
+                  cp _out/tex/main.pdf ./manual.pdf
+                  cp -r _out/html-multi html-multi
+                  cp README-html.md html-multi/README.md
+                  zip -r html-manual.zip html-multi
+
+            - name: Install TypeScript
+              run: |
+                  sudo apt update && sudo apt install node-typescript
+
+            - name: Type check the search bar code
+              run: |
+                  pushd _out/html-multi/-verso-search
+                  tsc --noEmit -p jsconfig.json
+                  popd
+
+            - name: Type check the xref redirect JS code
+              run: |
+                  pushd static-web
+                  tsc --noEmit -p jsconfig.json
+                  popd
+
+            - name: Generate the demo site and make sure page_link works
+              run: |
+                  lake exe demosite --output _out/demosite
+                  # Fail if the generated about page doesn't have the expected base tag and blog link
+                  grep -qF '<a href="blog/">blog</a> genre' _out/demosite/about/index.html
+                  grep -qF '<base href=".././">' _out/demosite/about/index.html
+
+            # Begin browser testing
+            - name: Install uv
+              uses: astral-sh/setup-uv@v4
+              with:
+                  enable-cache: true
+                  cache-dependency-glob: "browser-tests/pyproject.toml"
+
+            - name: Cache Playwright browsers
+              uses: actions/cache@v4
+              with:
+                  path: .playwright-browsers
+                  key: playwright-${{ runner.os }}-${{ hashFiles('browser-tests/uv.lock') }}
+
+            - name: Install Playwright browsers
+              run:
+                  uv run --project browser-tests --extra test playwright install chromium firefox
+                  --with-deps
+
+            - name: Run browser tests
+              run: uv run --project browser-tests --extra test pytest browser-tests -v
+            # End browser testing
+
+            - name: Upload docs to artifact storage
+              if: github.ref_type != 'tag' && github.ref != 'refs/heads/main'
+              uses: actions/upload-artifact@v4
+              with:
+                  name: "Verso manual (PDF and HTML)"
+                  path: |
+                      manual.pdf
+                      html-manual.zip
+
+            - uses: "marvinpinto/action-automatic-releases@v1.2.1"
+              if: github.ref_type != 'tag' && github.ref == 'refs/heads/main'
+              with:
+                  repo_token: "${{ secrets.GITHUB_TOKEN }}"
+                  automatic_release_tag: "latest"
+                  title: "Verso manual (PDF and HTML)"
+                  files: |
+                      manual.pdf
+                      html-manual.zip
+
+            - name: Create release from tag
+              if: github.ref_type == 'tag' && startsWith(github.ref_name, 'v4')
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                  gh release create ${{ github.ref_name }} \
+                    manual.pdf \
+                    html-manual.zip \
+                    --title "Release ${{ github.ref_name }}" \
+                    --notes "Automated release for ${{ github.ref_name }}"

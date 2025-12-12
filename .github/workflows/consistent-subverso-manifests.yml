@@ -1,45 +1,51 @@
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-  merge_group:
+    push:
+        branches:
+            - main
+    pull_request:
+    merge_group:
 
 name: Consistent SubVerso dependencies
 
 jobs:
-  build:
-    name: SubVerso version consistency
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
+    build:
+        name: SubVerso version consistency
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v5
 
-      - name: Check for consistent Subverso versions in all manifests
-        run: |
-          # Get the Subverso revision from root manifest
-          ROOT_REV=$(jq -r '.packages[] | select(.name == "subverso") | .rev' ./lake-manifest.json)
-          echo "Root SubVerso revision: $ROOT_REV"
-          
-          # Get the Subverso repository URL
-          SUBVERSO_URL=$(jq -r '.packages[] | select(.name == "subverso") | .url' ./lake-manifest.json)
-          echo "SubVerso repository: $SUBVERSO_URL"
-          
-          # Get the de-modulized version SHA using git ls-remote
-          DEMOD_REV=$(git ls-remote "$SUBVERSO_URL" "refs/tags/no-modules/$ROOT_REV" | awk '{print $1}')
-          echo "De-modulized SubVerso revision: $DEMOD_REV"
-          
-          echo ""
-          echo "Valid SubVerso revisions are:"
-          echo "  - $ROOT_REV (root/modulized)"
-          echo "  - $DEMOD_REV (de-modulized)"
-          echo ""
-          
-          # Show all Subverso versions in the repository
-          echo "SubVerso versions in all manifests:"
-          find . -name lake-manifest.json -print0 | xargs -0 jq --arg file input_filename '.packages[] | select(.name == "subverso") | {"file": $file, "subverso": .rev}'
-          echo ""
-          
-          # Check that all non-root manifests use one of the two valid revisions
-          find . -name lake-manifest.json -not -path ./lake-manifest.json -print0 | \
-            xargs -0 jq -e --arg root "$ROOT_REV" --arg demod "$DEMOD_REV" \
-            'all(.packages[] | select(.name == "subverso") | .rev; . == $root or . == $demod)'
+            - name: Check for consistent Subverso versions in all manifests
+              run: |
+                  # Get the Subverso revision from root manifest
+                  ROOT_REV=$(jq -r '.packages[] | select(.name == "subverso") | .rev' ./lake-manifest.json)
+                  echo "Root SubVerso revision: $ROOT_REV"
+
+                  # Get the Subverso repository URL
+                  SUBVERSO_URL=$(jq -r '.packages[] | select(.name == "subverso") | .url' ./lake-manifest.json)
+                  echo "SubVerso repository: $SUBVERSO_URL"
+
+                  # Get the de-modulized version SHA using git ls-remote
+                  DEMOD_REV=$(git ls-remote "$SUBVERSO_URL" "refs/tags/no-modules/$ROOT_REV" | awk '{print $1}')
+                  echo "De-modulized SubVerso revision: $DEMOD_REV"
+
+                  echo ""
+                  echo "Valid SubVerso revisions are:"
+                  echo "  - $ROOT_REV (root/modulized)"
+                  echo "  - $DEMOD_REV (de-modulized)"
+                  echo ""
+
+                  # Show all Subverso versions in the repository
+                  echo "SubVerso versions in all manifests:"
+                  # $file is a jq variable (set via --arg), not a shell variable
+                  # SC2016 (expressions don't expand in single quotes) is a false positive here
+                  # shellcheck disable=SC2016
+                  find . -name lake-manifest.json -print0 | xargs -0 jq --arg file input_filename '.packages[] | select(.name == "subverso") | {"file": $file, "subverso": .rev}'
+                  echo ""
+
+                  # Check that all non-root manifests use one of the two valid revisions
+                  # $root and $demod are jq variables (set via --arg), not shell variables
+                  # SC2016 (expressions don't expand in single quotes) is a false positive here
+                  # shellcheck disable=SC2016
+                  find . -name lake-manifest.json -not -path ./lake-manifest.json -print0 | \
+                    xargs -0 jq -e --arg root "$ROOT_REV" --arg demod "$DEMOD_REV" \
+                    'all(.packages[] | select(.name == "subverso") | .rev; . == $root or . == $demod)'

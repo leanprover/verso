@@ -3,7 +3,7 @@
 # While SubVerso works in every Lean release, a Verso project and the
 # code that it's documenting must have the same version of SubVerso.
 # Most projects should rely on a tagged version of Verso that
-# corresponds to a Lean relase, but this doesn't provide an easy way
+# corresponds to a Lean release, but this doesn't provide an easy way
 # to keep the versions of SubVerso synchronized. This can be solved by
 # tagging SubVerso for each Verso tag.
 
@@ -12,6 +12,14 @@
 # for each Lean release.
 
 set -euo pipefail
+
+# Check dependencies
+for cmd in git jq; do
+    if ! command -v "$cmd" &> /dev/null; then
+        echo "Error: Required command '$cmd' not found" >&2
+        exit 1
+    fi
+done
 
 # Configuration
 ORG="leanprover"
@@ -55,7 +63,7 @@ trap cleanup EXIT
 get_git_url() {
     local repo=$1
     if [[ -n "${GITHUB_TOKEN:-}" ]]; then
-        echo "https://${GITHUB_TOKEN}@github.com/${ORG}/${repo}.git"
+        echo "https://x-access-token:${GITHUB_TOKEN}@github.com/${ORG}/${repo}.git"
     else
         echo "git@github.com:${ORG}/${repo}.git"
     fi
@@ -64,27 +72,41 @@ get_git_url() {
 echo "Working directory: $WORK_DIR"
 cd "$WORK_DIR"
 
+# Safety check: ensure the work directory is empty
+if [[ -n "$(ls -A)" ]]; then
+    echo "Error: Work directory is not empty: $PWD" >&2
+    exit 1
+fi
+
 # Clone repositories
 echo "Cloning repositories..."
-git clone --quiet "$(get_git_url "$VERSO_REPO")" verso-repo
-git clone --quiet "$(get_git_url "$SUBVERSO_REPO")" subverso-repo
+if ! git clone --quiet "$(get_git_url "$VERSO_REPO")" verso-repo; then
+    echo "Error: Failed to clone $VERSO_REPO. Check authentication." >&2
+    exit 1
+fi
+if ! git clone --quiet "$(get_git_url "$SUBVERSO_REPO")" subverso-repo; then
+    echo "Error: Failed to clone $SUBVERSO_REPO. Check authentication." >&2
+    exit 1
+fi
 
 cd verso-repo
 
 # Get all v4* tags from Verso repo
 echo "Finding v4* tags in $VERSO_REPO..."
-verso_tags=$(git tag -l 'v4*' | sort -V)
+verso_tags=$(git tag -l 'v4*' | sort -t. -k1,1n -k2,2n -k3,3n 2>/dev/null || git tag -l 'v4*' | sort)
 if [[ -z "$verso_tags" ]]; then
     echo "No v4* tags found in $VERSO_REPO"
     exit 0
 fi
 
-echo "Found $(echo "$verso_tags" | wc -l) v4* tags"
+tag_count=$(echo "$verso_tags" | wc -l | tr -d ' ')
+echo "Found $tag_count v4* tags"
 
 cd ../subverso-repo
 
 # Get existing verso-* tags from SubVerso repo
-existing_subverso_tags=$(git tag -l 'verso-*' | sed 's/^verso-//' | sort -V)
+git fetch --tags origin
+existing_subverso_tags=$(git tag -l 'verso-*' | sed 's/^verso-//' | sort -t. -k1,1n -k2,2n -k3,3n 2>/dev/null || git tag -l 'verso-*' | sed 's/^verso-//' | sort)
 
 cd ../verso-repo
 
@@ -164,7 +186,12 @@ done
 # Push all new tags
 if [[ "$PUSH_TAGS" == "true" ]]; then
     echo "Pushing tags to remote..."
-    git push --tags
+    for entry in "${tags_to_create[@]}"; do
+        tag=${entry%:*}
+        subverso_tag="verso-$tag"
+        echo "Pushing tag $subverso_tag"
+        git push origin "$subverso_tag"
+    done
     echo "Done! Created and pushed ${#tags_to_create[@]} tags"
 else
     echo "Done! Created ${#tags_to_create[@]} tags locally (use --push to push to remote)"

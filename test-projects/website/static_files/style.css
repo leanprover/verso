@@ -1,33 +1,32 @@
-
 /**************************/
 
 nav ol {
-  display: flex;
-  flex-wrap: wrap; /* Wrap to new lines on small screens */
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  gap: 3rem;
+    display: flex;
+    flex-wrap: wrap; /* Wrap to new lines on small screens */
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    gap: 3rem;
 }
 
 @media (max-width: 600px) {
-  nav ol {
-    flex-direction: column; /* Stack vertically on mobile */
-  }
+    nav ol {
+        flex-direction: column; /* Stack vertically on mobile */
+    }
 }
 
 div.metadata {
     margin-bottom: 1.5em;
 }
 
-.metadata .authors, .metadata .date {
+.metadata .authors,
+.metadata .date {
     display: inline-block;
 }
 
 .metadata .authors:has(+ .date)::after {
     content: " | ";
 }
-
 
 .metadata .authors::before {
     content: "By ";
@@ -37,7 +36,12 @@ div.metadata {
     content: ", ";
 }
 
-h1, h2, h3, h4, h5, h6 {
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
     font-family: sans-serif;
 }
 
@@ -57,7 +61,7 @@ div.category-directory li {
     font-size: 90%;
 }
 
-div.category-directory li:has( + li)::after {
+div.category-directory li:has(+ li)::after {
     content: ", ";
 }
 
@@ -72,8 +76,7 @@ ul.categories li:first-child::before {
     content: "In: ";
 }
 
-
-ul.categories li:has( + li)::after {
+ul.categories li:has(+ li)::after {
     content: ", ";
 }
 
@@ -86,31 +89,32 @@ code {
 /**************************/
 
 .hl.lean.block {
-  margin-bottom: 2.5rem; /* Match sakura.css's setting for block elements */
+    margin-bottom: 2.5rem; /* Match sakura.css's setting for block elements */
 }
 
-section > .docstring::before, section > .docstring::after {
-  line-height: 1;
-  font-weight: bold;
-  color: #888;
-  display: block;
-  font-size: 80%;
+section > .docstring::before,
+section > .docstring::after {
+    line-height: 1;
+    font-weight: bold;
+    color: #888;
+    display: block;
+    font-size: 80%;
 }
 
 section > .docstring::before {
-  content: "/--";
+    content: "/--";
 }
 
 section > .docstring::after {
-  content: "-/";
+    content: "-/";
 }
 
 section > .docstring > *:last-child {
-  margin-bottom: 0;
+    margin-bottom: 0;
 }
 
 section > .docstring {
-  border: 0.2rem solid #f1f1f1;
+    border: 0.2rem solid #f1f1f1;
 }
 
 /**************************/

@@ -1,0 +1,25 @@
+name: Tag SubVerso for Verso releases
+
+on:
+    push:
+        tags:
+            - "v4*"
+    workflow_dispatch:
+
+jobs:
+    sync-tags:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Configure git identity
+              run: |
+                  git config --global user.email "github-actions[bot]@users.noreply.github.com"
+                  git config --global user.name "github-actions[bot]"
+
+            - name: Create mising `verso-v*` tags in SubVerso
+              run: |
+                  ./tag-subverso.sh --push
+              env:
+                  GITHUB_TOKEN: ${{ secrets.SUBVERSO_PUSH_TOKEN }}

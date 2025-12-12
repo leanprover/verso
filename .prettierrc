@@ -1,0 +1,7 @@
+{
+    "printWidth": 100,
+    "tabWidth": 4,
+    "bracketSameLine": true,
+    "proseWrap": "always",
+    "overrides": [{ "files": "*.md", "options": { "printWidth": 70 } }]
+}

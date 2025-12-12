@@ -443,7 +443,7 @@ def emitMod (root : Dir) (outDir: System.FilePath) (mod : LitMod) : EmitM Unit :
     <link rel="stylesheet" href="code.css"/>
 
     <script src="-verso-search/elasticlunr.min.js"></script>
-    <script src="-verso-search/fuzzysort.js"></script>
+    <script src="-verso-search/fuzzysort.min.js"></script>
     <script src="-verso-search/searchIndex.js"></script>
     <script type="module" src="-verso-search/search-init.js"></script>
     <script src="-verso-search/domain-mappers.js" defer="defer"></script>
