@@ -63,7 +63,7 @@ trap cleanup EXIT
 get_git_url() {
     local repo=$1
     if [[ -n "${GITHUB_TOKEN:-}" ]]; then
-        echo "https://${GITHUB_TOKEN}@github.com/${ORG}/${repo}.git"
+        echo "https://x-access-token:${GITHUB_TOKEN}@github.com/${ORG}/${repo}.git"
     else
         echo "git@github.com:${ORG}/${repo}.git"
     fi
