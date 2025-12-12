@@ -359,13 +359,15 @@ instance : Arbitrary UpdateFrequency where
   arbitrary :=
     frequency (pure .manual) [
       (1, pure .manual),
+      (1, pure .always),
       (4, .days <$> arbitrary)
     ]
 
 instance : Shrinkable UpdateFrequency where
   shrink
     | .manual => []
-    | .days n => .manual :: (shrink n |>.map .days)
+    | .always => [.manual]
+    | .days n => .manual :: .always :: (shrink n |>.map .days)
 
 instance : Arbitrary Remote where
   arbitrary :=

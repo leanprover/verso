@@ -616,6 +616,7 @@ public def updateRemotes (manual : Bool) (configFile : Option System.FilePath) (
     let lastUpdated := oldManifest.metadata[name]? |>.map (·.lastUpdated)
     if let some prior := lastUpdated then
       match updateFrequency with
+      | .always => pure ()
       | .days d =>
         if compare (prior + d) (← Std.Time.PlainDateTime.now) |>.isGE then
           found := oldXrefs[name]?
