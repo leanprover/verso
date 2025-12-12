@@ -1,7 +1,9 @@
-name: Prettier formatting
+name: Format JS/CSS/HTML and Markdown
 
 on:
     workflow_dispatch:
+    push:
+        branches: [main]
 
 jobs:
     prettier:
@@ -14,5 +16,5 @@ jobs:
               uses: creyD/prettier_action@v4.6
               with:
                   prettier_options: "--write ."
-                  commit_message: "Format code with prettier"
+                  commit_message: "Run the Prettier code formatter"
                   prettier_version: 3.7.4

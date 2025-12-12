@@ -1,0 +1,14 @@
+lake-manifest.json
+.lake
+
+# build files
+_out
+browser-tests
+html-multi
+htmlout
+.playwright-browsers
+
+# Vendored files
+vendored-js
+*.min.js
+licenses.md
