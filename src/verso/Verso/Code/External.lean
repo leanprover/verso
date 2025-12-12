@@ -98,7 +98,7 @@ end
 /--
 Adds a newline to a string if it doesn't already end with one.
 -/
-meta def withNl (s : String) : String := if s.endsWith "\n" then s else s ++ "\n"
+public meta def withNl (s : String) : String := if s.endsWith "\n" then s else s ++ "\n"
 
 /--
 Default suggestion threshold function: a suggestion is sufficiently close if
@@ -128,7 +128,7 @@ meta def smartSuggestions (candidates : Array String) (input : String) (count : 
 /--
 Loads the contents of a module, parsed by anchor. The results are cached.
 -/
-meta def anchored
+public meta def anchored
     [Monad m] [MonadEnv m] [MonadLift IO m] [MonadError m] [MonadOptions m]
     [MonadTrace m] [AddMessageContext m] [MonadAlwaysExcept ε m] [MonadFinally m] [MonadQuotation m]
     (project : StrLit) (moduleName : Ident) (blame : Syntax) :
@@ -194,7 +194,7 @@ meta def logInfos (hl : Highlighted) : DocElabM Unit := do
 Given a module name and an anchor name, loads the resulting code and invokes {name}`k` on it,
 failing if the code can't be found.
 -/
-meta def withAnchored (project : StrLit) (moduleName : Ident) (anchor? : Option Ident)
+public meta def withAnchored (project : StrLit) (moduleName : Ident) (anchor? : Option Ident)
     (k : Highlighted → DocElabM (Array Term)) : DocElabM (Array Term) := do
   if let some anchor := anchor? then
     try

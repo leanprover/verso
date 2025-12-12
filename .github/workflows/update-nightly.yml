@@ -1,179 +1,179 @@
 name: Update nightly-testing
 
 on:
-  schedule:
-    - cron: '15 9/6 * * *'
-    # Run every six hours, starting at 11:15AM CET/2:15AM PT.  This is
-    # 15 minutes after the script that merges in main, and 2:15 after
-    # Lean starts building its nightly
-  workflow_dispatch:  # Allow manual triggering
+    schedule:
+        - cron: "15 9/6 * * *"
+        # Run every six hours, starting at 11:15AM CET/2:15AM PT.  This is
+        # 15 minutes after the script that merges in main, and 2:15 after
+        # Lean starts building its nightly
+    workflow_dispatch: # Allow manual triggering
 
 env:
-  TARGET_BRANCH: nightly-testing
+    TARGET_BRANCH: nightly-testing
 
 jobs:
-  # This job checks whether there's been a new nightly since the last
-  # successful automatic update
-  check-update:
-    runs-on: ubuntu-latest
-    if: github.repository == 'leanprover/verso'
-    outputs:
-      update-needed: ${{ steps.check-update.outputs.update-needed }}
-      latest-version: ${{ steps.latest-available.outputs.version }}
+    # This job checks whether there's been a new nightly since the last
+    # successful automatic update
+    check-update:
+        runs-on: ubuntu-latest
+        if: github.repository == 'leanprover/verso'
+        outputs:
+            update-needed: ${{ steps.check-update.outputs.update-needed }}
+            latest-version: ${{ steps.latest-available.outputs.version }}
 
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      with:
-        ref: ${{ env.TARGET_BRANCH }}
-        token: ${{ secrets.GITHUB_TOKEN }}
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+              with:
+                  ref: ${{ env.TARGET_BRANCH }}
+                  token: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Configure Git
-      run: |
-        git config user.name "github-actions[bot]"
-        git config user.email "github-actions[bot]@users.noreply.github.com"
+            - name: Configure Git
+              run: |
+                  git config user.name "github-actions[bot]"
+                  git config user.email "github-actions[bot]@users.noreply.github.com"
 
-    - name: Verify target branch exists
-      run: |
-        if ! git show-ref --verify --quiet refs/heads/${{ env.TARGET_BRANCH }}; then
-          echo "Error: Target branch '${{ env.TARGET_BRANCH }}' does not exist"
-          exit 1
-        fi
-        echo "Target branch '${{ env.TARGET_BRANCH }}' exists"
+            - name: Verify target branch exists
+              run: |
+                  if ! git show-ref --verify --quiet refs/heads/${{ env.TARGET_BRANCH }}; then
+                    echo "Error: Target branch '${{ env.TARGET_BRANCH }}' does not exist"
+                    exit 1
+                  fi
+                  echo "Target branch '${{ env.TARGET_BRANCH }}' exists"
 
-    - name: Get current nightly version
-      id: last-working
-      run: |
-        TOOLCHAIN="$(cut -f2 -d: ./lean-toolchain)"
-        echo "version=$TOOLCHAIN" >> $GITHUB_OUTPUT
+            - name: Get current nightly version
+              id: last-working
+              run: |
+                  TOOLCHAIN="$(cut -f2 -d: ./lean-toolchain)"
+                  echo "version=$TOOLCHAIN" >> $GITHUB_OUTPUT
 
-    - name: Get latest release tag from leanprover/lean4-nightly
-      id: latest-available
-      run: |
-        RELEASE_TAG="$(curl -s "https://api.github.com/repos/leanprover/lean4-nightly/releases" | jq -r '.[0].tag_name')"
-        echo "RELEASE_TAG=$RELEASE_TAG" >> "${GITHUB_ENV}"
-        echo "version=$RELEASE_TAG" >> $GITHUB_OUTPUT
+            - name: Get latest release tag from leanprover/lean4-nightly
+              id: latest-available
+              run: |
+                  RELEASE_TAG="$(curl -s "https://api.github.com/repos/leanprover/lean4-nightly/releases" | jq -r '.[0].tag_name')"
+                  echo "RELEASE_TAG=$RELEASE_TAG" >> "${GITHUB_ENV}"
+                  echo "version=$RELEASE_TAG" >> $GITHUB_OUTPUT
 
-    - name: Check if update needed
-      id: check-update
-      run: |
-        if [ "${{ steps.last-working.outputs.version }}" = "${{ steps.latest-available.outputs.version }}" ]; then
-          echo "No update needed - versions match"
-          echo "✅ Nightly version ${{ steps.last-working.outputs.version }} is already up to date"
-          echo "✅ Nightly version \`${{ steps.last-working.outputs.version }}\` is already up to date" >> $GITHUB_STEP_SUMMARY
-          echo "update-needed=false" >> $GITHUB_OUTPUT
-        else
-          echo "Update needed: ${{ steps.last-working.outputs.version }} -> ${{ steps.latest-available.outputs.version }}"
-          echo "Update needed: \`${{ steps.last-working.outputs.version }}\` -> \`${{ steps.latest-available.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "update-needed=true" >> $GITHUB_OUTPUT
-        fi
+            - name: Check if update needed
+              id: check-update
+              run: |
+                  if [ "${{ steps.last-working.outputs.version }}" = "${{ steps.latest-available.outputs.version }}" ]; then
+                    echo "No update needed - versions match"
+                    echo "✅ Nightly version ${{ steps.last-working.outputs.version }} is already up to date"
+                    echo "✅ Nightly version \`${{ steps.last-working.outputs.version }}\` is already up to date" >> $GITHUB_STEP_SUMMARY
+                    echo "update-needed=false" >> $GITHUB_OUTPUT
+                  else
+                    echo "Update needed: ${{ steps.last-working.outputs.version }} -> ${{ steps.latest-available.outputs.version }}"
+                    echo "Update needed: \`${{ steps.last-working.outputs.version }}\` -> \`${{ steps.latest-available.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
+                    echo "update-needed=true" >> $GITHUB_OUTPUT
+                  fi
 
-  # This job tries to update nightly-testing, and pushes if successful
-  test-and-update:
-    runs-on: nscloud-ubuntu-22.04-amd64-8x16
-    needs: check-update
-    if: needs.check-update.outputs.update-needed == 'true'
-    permissions:
-      contents: write
+    # This job tries to update nightly-testing, and pushes if successful
+    test-and-update:
+        runs-on: nscloud-ubuntu-22.04-amd64-8x16
+        needs: check-update
+        if: needs.check-update.outputs.update-needed == 'true'
+        permissions:
+            contents: write
 
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      with:
-        ref: ${{ env.TARGET_BRANCH }}
-        token: ${{ secrets.GITHUB_TOKEN }}
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+              with:
+                  ref: ${{ env.TARGET_BRANCH }}
+                  token: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Configure Git
-      run: |
-        git config user.name "github-actions[bot]"
-        git config user.email "github-actions[bot]@users.noreply.github.com"
+            - name: Configure Git
+              run: |
+                  git config user.name "github-actions[bot]"
+                  git config user.email "github-actions[bot]@users.noreply.github.com"
 
-    - name: Update toolchain file to ${{ needs.check-update.outputs.latest-version }}
-      run: |
-        echo "leanprover/lean4:${{ needs.check-update.outputs.latest-version }}" > lean-toolchain
+            - name: Update toolchain file to ${{ needs.check-update.outputs.latest-version }}
+              run: |
+                  echo "leanprover/lean4:${{ needs.check-update.outputs.latest-version }}" > lean-toolchain
 
-    - name: Install elan
-      run: |
-        set -o pipefail
-        curl -sSfL https://github.com/leanprover/elan/releases/download/v4.1.2/elan-x86_64-unknown-linux-gnu.tar.gz | tar xz
-        ./elan-init -y --default-toolchain none
-        echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+            - name: Install elan
+              run: |
+                  set -o pipefail
+                  curl -sSfL https://github.com/leanprover/elan/releases/download/v4.1.2/elan-x86_64-unknown-linux-gnu.tar.gz | tar xz
+                  ./elan-init -y --default-toolchain none
+                  echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
 
-    - name: Update SubVerso
-      run: |
-        lake --keep-toolchain update subverso
-        ./update-subverso.sh
+            - name: Update SubVerso
+              run: |
+                  lake --keep-toolchain update subverso
+                  ./update-subverso.sh
 
-    - name: Build
-      run: |
-        lake build
+            - name: Build
+              run: |
+                  lake build
 
-    - name: Test
-      run: |
-        lake test
+            - name: Test
+              run: |
+                  lake test
 
-    - name: Generate the test website
-      run: |
-        lake exe demosite --output _out/test-projects/demosite
+            - name: Generate the test website
+              run: |
+                  lake exe demosite --output _out/test-projects/demosite
 
-    - name: Generate the example genre's document
-      run: |
-        lake exe simplepage
+            - name: Generate the example genre's document
+              run: |
+                  lake exe simplepage
 
-    - name: Install PDF Dependencies
-      uses: zauguin/install-texlive@v4
-      with:
-        texlive_version: 2025
-        packages: |
-          scheme-minimal
-          l3packages
-          tools
-          latex-bin
-          xpatch
-          booktabs
-          footmisc
-          environ
-          hyperref
-          titlesec
-          tocloft
-          enumitem
-          fmtcount
-          glossaries
-          datatool
-          caption
-          babel
-          fontspec
-          textcase
-          memoir
-          sourcecodepro
-          sourcesanspro
-          sourceserifpro
-          fvextra
-          upquote
-          lineno
-          float
-          tcolorbox
-          tikzfill
-          pdfcol
-          listings
-          epstopdf-pkg
-          pgf
-          environ
-          etoolbox
-          ulem
-          newunicodechar
+            - name: Install PDF Dependencies
+              uses: zauguin/install-texlive@v4
+              with:
+                  texlive_version: 2025
+                  packages: |
+                      scheme-minimal
+                      l3packages
+                      tools
+                      latex-bin
+                      xpatch
+                      booktabs
+                      footmisc
+                      environ
+                      hyperref
+                      titlesec
+                      tocloft
+                      enumitem
+                      fmtcount
+                      glossaries
+                      datatool
+                      caption
+                      babel
+                      fontspec
+                      textcase
+                      memoir
+                      sourcecodepro
+                      sourcesanspro
+                      sourceserifpro
+                      fvextra
+                      upquote
+                      lineno
+                      float
+                      tcolorbox
+                      tikzfill
+                      pdfcol
+                      listings
+                      epstopdf-pkg
+                      pgf
+                      environ
+                      etoolbox
+                      ulem
+                      newunicodechar
 
-    - name: Check `tlmgr` version
-      run: tlmgr --version
+            - name: Check `tlmgr` version
+              run: tlmgr --version
 
-    - name: Generate the manual
-      run: |
-        ./generate.sh
+            - name: Generate the manual
+              run: |
+                  ./generate.sh
 
-    - name: Commit and push changes
-      run: |
-        git add .
-        git commit -m "chore: bump to nightly ${{ needs.check-update.outputs.latest-version }}"
-        git tag "${{ needs.check-update.outputs.latest-version }}"
-        git push origin ${{ env.TARGET_BRANCH }}
-        git push origin "${{ needs.check-update.outputs.latest-version }}"
+            - name: Commit and push changes
+              run: |
+                  git add .
+                  git commit -m "chore: bump to nightly ${{ needs.check-update.outputs.latest-version }}"
+                  git tag "${{ needs.check-update.outputs.latest-version }}"
+                  git push origin ${{ env.TARGET_BRANCH }}
+                  git push origin "${{ needs.check-update.outputs.latest-version }}"

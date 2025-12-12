@@ -3,120 +3,120 @@
 name: Merge main to nightly
 
 on:
-  schedule:
-    - cron: '0 9/6 * * *'
-    # Run every six hours, starting at 10:00AM CET/1:00AM PT.
-    # This is 30 minutes prior to the reference manual updating its own nightly-testing branch.
-  workflow_dispatch:
+    schedule:
+        - cron: "0 9/6 * * *"
+        # Run every six hours, starting at 10:00AM CET/1:00AM PT.
+        # This is 30 minutes prior to the reference manual updating its own nightly-testing branch.
+    workflow_dispatch:
 
 env:
-  TARGET_BRANCH: nightly-testing
+    TARGET_BRANCH: nightly-testing
 
 jobs:
-  merge-to-nightly:
-    runs-on: nscloud-ubuntu-22.04-amd64-8x16
-    if: github.repository == 'leanprover/verso'
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ env.TARGET_BRANCH }}
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+    merge-to-nightly:
+        runs-on: nscloud-ubuntu-22.04-amd64-8x16
+        if: github.repository == 'leanprover/verso'
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+              with:
+                  ref: ${{ env.TARGET_BRANCH }}
+                  fetch-depth: 0
+                  token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Configure Git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+            - name: Configure Git
+              run: |
+                  git config user.name "github-actions[bot]"
+                  git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Merge main, favoring nightly changes
-        run: |
-          git checkout ${{ env.TARGET_BRANCH }}
-          # If the merge goes badly, we proceed anyway via '|| true'.
-          git merge origin/main --strategy-option ours --no-commit --allow-unrelated-histories || true
+            - name: Merge main, favoring nightly changes
+              run: |
+                  git checkout ${{ env.TARGET_BRANCH }}
+                  # If the merge goes badly, we proceed anyway via '|| true'.
+                  git merge origin/main --strategy-option ours --no-commit --allow-unrelated-histories || true
 
-      - name: Install elan
-        run: |
-          set -o pipefail
-          curl -sSfL https://github.com/leanprover/elan/releases/download/v4.1.2/elan-x86_64-unknown-linux-gnu.tar.gz | tar xz
-          ./elan-init -y --default-toolchain none
-          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+            - name: Install elan
+              run: |
+                  set -o pipefail
+                  curl -sSfL https://github.com/leanprover/elan/releases/download/v4.1.2/elan-x86_64-unknown-linux-gnu.tar.gz | tar xz
+                  ./elan-init -y --default-toolchain none
+                  echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
 
-      - name: Update dependencies
-        run: |
-          lake --keep-toolchain update
-          ./update-subverso.sh
+            - name: Update dependencies
+              run: |
+                  lake --keep-toolchain update
+                  ./update-subverso.sh
 
-      - name: Build
-        run: |
-          lake build
+            - name: Build
+              run: |
+                  lake build
 
-      - name: Test
-        run: |
-          lake test
+            - name: Test
+              run: |
+                  lake test
 
-      - name: Generate the test website
-        run: |
-          lake exe demosite --output _out/test-projects/demosite
+            - name: Generate the test website
+              run: |
+                  lake exe demosite --output _out/test-projects/demosite
 
-      - name: Generate the example genre's document
-        run: |
-          lake exe simplepage
+            - name: Generate the example genre's document
+              run: |
+                  lake exe simplepage
 
-      - name: Install PDF Dependencies
-        uses: zauguin/install-texlive@v4
-        with:
-          texlive_version: 2025
-          packages: |
-            scheme-minimal
-            l3packages
-            tools
-            latex-bin
-            xpatch
-            booktabs
-            footmisc
-            environ
-            hyperref
-            titlesec
-            tocloft
-            enumitem
-            fmtcount
-            glossaries
-            datatool
-            caption
-            babel
-            fontspec
-            textcase
-            memoir
-            sourcecodepro
-            sourcesanspro
-            sourceserifpro
-            fvextra
-            upquote
-            lineno
-            float
-            tcolorbox
-            tikzfill
-            pdfcol
-            listings
-            epstopdf-pkg
-            pgf
-            environ
-            etoolbox
-            ulem
-            newunicodechar
+            - name: Install PDF Dependencies
+              uses: zauguin/install-texlive@v4
+              with:
+                  texlive_version: 2025
+                  packages: |
+                      scheme-minimal
+                      l3packages
+                      tools
+                      latex-bin
+                      xpatch
+                      booktabs
+                      footmisc
+                      environ
+                      hyperref
+                      titlesec
+                      tocloft
+                      enumitem
+                      fmtcount
+                      glossaries
+                      datatool
+                      caption
+                      babel
+                      fontspec
+                      textcase
+                      memoir
+                      sourcecodepro
+                      sourcesanspro
+                      sourceserifpro
+                      fvextra
+                      upquote
+                      lineno
+                      float
+                      tcolorbox
+                      tikzfill
+                      pdfcol
+                      listings
+                      epstopdf-pkg
+                      pgf
+                      environ
+                      etoolbox
+                      ulem
+                      newunicodechar
 
-      - name: Check `tlmgr` version
-        run: tlmgr --version
+            - name: Check `tlmgr` version
+              run: tlmgr --version
 
-      - name: Generate the manual
-        run: |
-          ./generate.sh
+            - name: Generate the manual
+              run: |
+                  ./generate.sh
 
-      - name: Commit and push
-        run: |
-          git add .
-          # If there's nothing to do (because there are no new commits from main),
-          # that's okay, hence the '|| true'.
-          git commit -m "chore: merge main into ${{ env.TARGET_BRANCH }}" || true
-          git push origin ${{ env.TARGET_BRANCH }}
+            - name: Commit and push
+              run: |
+                  git add .
+                  # If there's nothing to do (because there are no new commits from main),
+                  # that's okay, hence the '|| true'.
+                  git commit -m "chore: merge main into ${{ env.TARGET_BRANCH }}" || true
+                  git push origin ${{ env.TARGET_BRANCH }}
