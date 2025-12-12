@@ -779,6 +779,8 @@ The parameters are:
 abbrev ExtraStep := Mode → (String → IO Unit) → Config → TraverseState → Part Manual → IO Unit
 
 
+open Verso.CLI
+
 def manualMain (text : Part Manual)
     (extensionImpls : ExtensionImpls := by exact extension_impls%)
     (options : List String)
@@ -787,47 +789,57 @@ def manualMain (text : Part Manual)
   ReaderT.run go extensionImpls
 
 where
+
   opts (cfg : RenderConfig) : List String → ReaderT ExtensionImpls IO RenderConfig
     | ("--output"::dir::more) => opts { cfg with destination := dir } more
     | ("--depth"::n::more) => opts { cfg with htmlDepth := n.toNat! } more
+
     | ("--with-tex"::more) => opts { cfg with emitTeX := true } more
     | ("--without-tex"::more) => opts { cfg with emitTeX := false } more
 
     | ("--with-html-single"::more) => opts { cfg with emitHtmlSingle := .immediately } more
     | ("--delay-html-single"::more) =>
-      if let f :: more := more then
-        opts { cfg with emitHtmlSingle := .delay f } more
-      else throw (↑ s!"Expected filename after --delay-html-single")
+      match requireFilename "--delay-html-single" more with
+      | .ok f more' _ => opts { cfg with emitHtmlSingle := .delay f } more'
+      | .error e => throw (↑ e)
     | ("--resume-html-single"::more) =>
-      if let f :: more := more then
-        opts { cfg with emitHtmlSingle := .resumeFrom f } more
-      else throw (↑ s!"Expected filename after --resume-html-single")
+      match requireFilename "--resume-html-single" more with
+      | .ok f more' _ => opts { cfg with emitHtmlSingle := .resumeFrom f } more'
+      | .error e => throw (↑ e)
     | ("--without-html-single"::more) => opts { cfg with emitHtmlSingle := .no } more
 
     | ("--with-html-multi"::more) => opts { cfg with emitHtmlMulti := .immediately } more
     | ("--delay-html-multi"::more) =>
-      if let f :: more := more then
-        opts { cfg with emitHtmlMulti := .delay f } more
-      else throw (↑ s!"Expected filename after --delay-html-multi")
+      match requireFilename "--delay-html-multi" more with
+      | .ok f more' _ => opts { cfg with emitHtmlMulti := .delay f } more'
+      | .error e => throw (↑ e)
     | ("--resume-html-multi"::more) =>
-      if let f :: more := more then
-        opts { cfg with emitHtmlMulti := .resumeFrom f } more
-      else throw (↑ s!"Expected filename after --resume-html-multi")
+      match requireFilename "--resume-html-multi" more with
+      | .ok f more' _ => opts { cfg with emitHtmlMulti := .resumeFrom f } more'
+      | .error e => throw (↑ e)
     | ("--without-html-multi"::more) => opts { cfg with emitHtmlMulti := .no } more
 
-    | ("--with-word-count"::file::more) => opts { cfg with wordCount := some file } more
+    | ("--with-word-count"::more) =>
+      match requireFilename "--with-word-count" more with
+      | .ok file more' _ => opts { cfg with wordCount := some file } more'
+      | .error e => throw (↑ e)
     | ("--without-word-count"::more) => opts { cfg with wordCount := none } more
     | ("--draft"::more) => opts { cfg with draft := true } more
     | ("--verbose"::more) => opts { cfg with verbose := true } more
+    | ("--remote-config"::more) =>
+      match requireFilename "--remote-config" more with
+      | .ok file more' _ => opts { cfg with remoteConfigFile := some file } more'
+      | .error e => throw (↑ e)
     | (other :: _) => throw (↑ s!"Unknown option {other}")
     | [] => pure cfg
+
 
   fixBase (base : String) : String :=
     if base.takeRight 1 != "/" then base ++ "/" else base
 
   go : ReaderT ExtensionImpls IO UInt32 := do
-    let hasError ← IO.mkRef false
-    let logError msg := do hasError.set true; IO.eprintln msg
+    let errorCount : IO.Ref Nat ← IO.mkRef 0
+    let logError msg := do errorCount.modify (· + 1); IO.eprintln msg
     let cfg ← opts config options
 
     if cfg.emitTeX then
@@ -843,11 +855,10 @@ where
         IO.println s!"Saving word counts to {wcFile}"
       wordCount wcFile logError cfg.toConfig text
 
-    if (← hasError.get) then
-      IO.eprintln "Errors were encountered!"
-      return 1
-    else
-      return 0
+    match ← errorCount.get with
+    | 0 => return 0
+    | 1 => IO.eprintln "An error was encountered!"; return 1
+    | n => IO.eprintln s!"{n} errors were encountered!"; return 1
 
   emitHtml
       (how : EmitHtml) (mode : Mode) (logError : String → IO Unit) (cfg : RenderConfig) (text : Part Manual)

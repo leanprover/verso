@@ -654,6 +654,7 @@ def SavedState.load (file : System.FilePath) : IO SavedState := do
     | .error e => throw <| .userError s!"Error deserializing tutorials from {file}: {e}"
     | .ok st => return st
 
+open Verso.CLI
 
 def tutorialsMain (tutorials : Tutorials) (args : List String)
     (config : Config := {})
@@ -665,8 +666,8 @@ def tutorialsMain (tutorials : Tutorials) (args : List String)
 where
   go : ReaderT ExtensionImpls IO UInt32 := do
     let config ← opts config args
-    let hasError ← IO.mkRef false
-    let logError msg := do hasError.set true; IO.eprintln msg
+    let errorCount : IO.Ref Nat ← IO.mkRef 0
+    let logError msg := do errorCount.modify (· + 1); IO.eprintln msg
 
     IO.FS.createDirAll config.destination
 
@@ -696,24 +697,27 @@ where
     -- Emit HTML
     (emit tutorials).run theme config.toConfig logError state extensionImpls
 
-
-    if (← hasError.get) then
-      IO.eprintln "Errors were encountered!"
-      return 1
-    else
-      return 0
+    match ← errorCount.get with
+    | 0 => return 0
+    | 1 => IO.eprintln "An error was encountered!"; return 1
+    | n => IO.eprintln s!"{n} errors were encountered!"; return 1
 
   opts (cfg : Config) : List String → ReaderT ExtensionImpls IO Config
     | ("--output"::dir::more) => opts { cfg with destination := dir } more
     | ("--verbose"::more) => opts { cfg with verbose := true } more
     | ("--now"::more) => opts { cfg with emit := .immediately } more
     | ("--delay"::more) =>
-      if let file::more := more then
-        opts { cfg with emit := .delay file } more
-      else throw (↑ s!"Missing filename for --delay")
+      match requireFilename "--delay" more with
+      | .ok file more' _ => opts { cfg with emit := .delay file } more'
+      | .error e => throw (↑ e)
     | ("--resume"::more) =>
-      if let file::more := more then
-        opts { cfg with emit := .resumeFrom file } more
-      else throw (↑ s!"Missing filename for --resume")
+      match requireFilename "--resume" more with
+      | .ok file more' _ => opts { cfg with emit := .resumeFrom file } more'
+      | .error e => throw (↑ e)
+    | ("--remote-config"::more) =>
+      match requireFilename "--remote-config" more with
+      | .ok file more' _ => opts { cfg with remoteConfigFile := some file } more'
+      | .error e => throw (↑ e)
     | (other :: _) => throw (↑ s!"Unknown option {other}")
     | [] => pure cfg
+  termination_by args => args
