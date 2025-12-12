@@ -17,8 +17,8 @@ open PackageManual
 
 def config : Config where
   emitTeX := false
-  emitHtmlSingle := false
-  emitHtmlMulti := true
+  emitHtmlSingle := .no
+  emitHtmlMulti := .immediately
   htmlDepth := 2
 
-def main := manualMain (%doc PackageManual) (config := config)
+def main := manualMain (%doc PackageManual) (config := { config with })

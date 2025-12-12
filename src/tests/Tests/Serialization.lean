@@ -232,15 +232,13 @@ instance : Arbitrary TraverseState where
     let extraCssFiles ← arbitrary
     let quickJump ← arbitrary
     let licenseInfo ← arbitrary
-    let remoteContent ← arbitrary
-    let mut st := {
+    let mut st : TraverseState := {
       tags, externalTags,
       domains,
       ids,
       extraCss, extraJs, extraJsFiles, extraCssFiles,
       quickJump,
-      licenseInfo,
-      remoteContent
+      licenseInfo
     }
     -- add content
     let count ← chooseNat
@@ -361,13 +359,15 @@ instance : Arbitrary UpdateFrequency where
   arbitrary :=
     frequency (pure .manual) [
       (1, pure .manual),
+      (1, pure .always),
       (4, .days <$> arbitrary)
     ]
 
 instance : Shrinkable UpdateFrequency where
   shrink
     | .manual => []
-    | .days n => .manual :: (shrink n |>.map .days)
+    | .always => [.manual]
+    | .days n => .manual :: .always :: (shrink n |>.map .days)
 
 instance : Arbitrary Remote where
   arbitrary :=
