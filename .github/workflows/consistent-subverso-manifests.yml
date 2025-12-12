@@ -12,7 +12,7 @@ jobs:
         name: SubVerso version consistency
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v3
+            - uses: actions/checkout@v5
 
             - name: Check for consistent Subverso versions in all manifests
               run: |
@@ -36,10 +36,16 @@ jobs:
 
                   # Show all Subverso versions in the repository
                   echo "SubVerso versions in all manifests:"
+                  # $file is a jq variable (set via --arg), not a shell variable
+                  # SC2016 (expressions don't expand in single quotes) is a false positive here
+                  # shellcheck disable=SC2016
                   find . -name lake-manifest.json -print0 | xargs -0 jq --arg file input_filename '.packages[] | select(.name == "subverso") | {"file": $file, "subverso": .rev}'
                   echo ""
 
                   # Check that all non-root manifests use one of the two valid revisions
+                  # $root and $demod are jq variables (set via --arg), not shell variables
+                  # SC2016 (expressions don't expand in single quotes) is a false positive here
+                  # shellcheck disable=SC2016
                   find . -name lake-manifest.json -not -path ./lake-manifest.json -print0 | \
                     xargs -0 jq -e --arg root "$ROOT_REV" --arg demod "$DEMOD_REV" \
                     'all(.packages[] | select(.name == "subverso") | .rev; . == $root or . == $demod)'

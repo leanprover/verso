@@ -45,14 +45,14 @@ jobs:
               id: last-working
               run: |
                   TOOLCHAIN="$(cut -f2 -d: ./lean-toolchain)"
-                  echo "version=$TOOLCHAIN" >> $GITHUB_OUTPUT
+                  echo "version=$TOOLCHAIN" >> "$GITHUB_OUTPUT"
 
             - name: Get latest release tag from leanprover/lean4-nightly
               id: latest-available
               run: |
                   RELEASE_TAG="$(curl -s "https://api.github.com/repos/leanprover/lean4-nightly/releases" | jq -r '.[0].tag_name')"
                   echo "RELEASE_TAG=$RELEASE_TAG" >> "${GITHUB_ENV}"
-                  echo "version=$RELEASE_TAG" >> $GITHUB_OUTPUT
+                  echo "version=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
 
             - name: Check if update needed
               id: check-update
@@ -60,12 +60,12 @@ jobs:
                   if [ "${{ steps.last-working.outputs.version }}" = "${{ steps.latest-available.outputs.version }}" ]; then
                     echo "No update needed - versions match"
                     echo "✅ Nightly version ${{ steps.last-working.outputs.version }} is already up to date"
-                    echo "✅ Nightly version \`${{ steps.last-working.outputs.version }}\` is already up to date" >> $GITHUB_STEP_SUMMARY
-                    echo "update-needed=false" >> $GITHUB_OUTPUT
+                    echo "✅ Nightly version \`${{ steps.last-working.outputs.version }}\` is already up to date" >> "$GITHUB_STEP_SUMMARY"
+                    echo "update-needed=false" >> "$GITHUB_OUTPUT"
                   else
                     echo "Update needed: ${{ steps.last-working.outputs.version }} -> ${{ steps.latest-available.outputs.version }}"
-                    echo "Update needed: \`${{ steps.last-working.outputs.version }}\` -> \`${{ steps.latest-available.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
-                    echo "update-needed=true" >> $GITHUB_OUTPUT
+                    echo "Update needed: \`${{ steps.last-working.outputs.version }}\` -> \`${{ steps.latest-available.outputs.version }}\`" >> "$GITHUB_STEP_SUMMARY"
+                    echo "update-needed=true" >> "$GITHUB_OUTPUT"
                   fi
 
     # This job tries to update nightly-testing, and pushes if successful
