@@ -189,9 +189,9 @@ instance : FromJson Numbering where
       else throw s!"Expected exponent 0 for {v.compress}"
     | v@(.str s) =>
       if h : s.length = 1 then
-        return .letter <| s.startValidPos.get <| by
+        return .letter <| s.startPos.get <| by
           have : "".length = 0 := by rfl
-          grind [String.startValidPos_eq_endValidPos_iff]
+          grind => instantiate only [String.startPos_eq_endPos_iff]
       else throw s!"Expected one-character string for {v.compress}"
     | other => throw s!"Expected number or string, got {other.compress}"
 
@@ -252,7 +252,7 @@ instance : GetElem? Domains Name Domain (fun ds d => ds.contents.contains d) whe
 
 instance : EmptyCollection Domains := ⟨({} : NameMap Domain)⟩
 
-instance : ForIn m Domains (Name × Domain) where
+instance [Monad m] : ForIn m Domains (Name × Domain) where
   forIn doms init f := inferInstanceAs (ForIn m (NameMap Domain) (NameMap.PublicName × Domain)) |>.forIn doms init fun (n, dom) v =>
     -- Eta expansion uses a coercion
     f (n, dom) v
@@ -1075,7 +1075,7 @@ def TraverseState.definitionIds (state : TraverseState) (ctxt : TraverseContext)
   if let some examples := state.domains.get? exampleDomain then
     let mut idMap := {}
     for (x, _) in examples.objects do
-      let afterSpace := x.dropWhile (· != ' ')
+      let afterSpace := x.dropWhile (· != ' ') |>.copy
       if exampleDeco.isEqSome afterSpace then
         if let .ok { htmlId := slug, .. } := state.resolveDomainObject exampleDomain x then
           idMap := idMap.insert (x.takeWhile (· != ' ') |>.toName) slug.toString

@@ -16,8 +16,8 @@ open Std (HashMap)
 namespace SubVerso.Highlighting.Highlighted
 
 private def trimOneLeadingNl : Highlighted → Highlighted
-  | .text s => .text <| if "\n".isPrefixOf s then s.drop 1 else s
-  | .unparsed s => .unparsed <| if "\n".isPrefixOf s then s.drop 1 else s
+  | .text s => .text <| (s.dropPrefix "\n").copy
+  | .unparsed s => .unparsed <| (s.dropPrefix "\n").copy
   | .seq xs =>
     let i? := xs.findIdx? (!·.isEmpty)
     match h : i? with
@@ -30,8 +30,8 @@ private def trimOneLeadingNl : Highlighted → Highlighted
   | .span i hl => .span i (trimOneLeadingNl hl)
 
 private def trimOneTrailingNl : Highlighted → Highlighted
-  | .text s => .text <| s.stripSuffix "\n"
-  | .unparsed s => .unparsed <| s.stripSuffix "\n"
+  | .text s => .text <| (s.dropSuffix "\n").copy
+  | .unparsed s => .unparsed <| (s.dropSuffix "\n").copy
   | .seq xs =>
     let ni? := xs.reverse.findIdx? (!·.isEmpty)
     match h : ni? with

@@ -731,7 +731,7 @@ where
     | [] => pure cfg
 
   fixBase (base : String) : String :=
-    if base.takeRight 1 != "/" then base ++ "/" else base
+    if base.endsWith "/" then base else base ++ "/"
 
   go : ReaderT ExtensionImpls IO UInt32 := do
     let hasError ← IO.mkRef false

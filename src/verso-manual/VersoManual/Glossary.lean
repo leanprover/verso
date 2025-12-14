@@ -53,8 +53,10 @@ private partial def techString (text : Doc.Inline Manual) : String :=
 -- Implements the normalization procedure used in Scribble
 private partial def normString (term : String) : String := Id.run do
   let mut str := term.toLower
-  if str.endsWith "ies" then str := str.dropRight 3 ++ "y"
-  if str.endsWith "s" then str := str.dropRight 1
+  if str.endsWith "ies" then
+    str := (str.dropEnd 3).copy ++ "y"
+  if str.endsWith "s" then
+    str := str.dropEnd 1 |>.copy
   str := str.replace "‑" "-"
   String.intercalate " " (str.splitToList (fun c => c.isWhitespace || c == '-') |>.filter (!·.isEmpty))
 

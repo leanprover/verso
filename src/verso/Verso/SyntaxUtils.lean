@@ -144,8 +144,8 @@ public def parserInputString [Monad m] [MonadFileMap m]
   let text ← getFileMap
   let preString := (0 : String.Pos.Raw).extract text.source (str.raw.getPos?.getD 0)
   let mut code := ""
-  let mut iter := preString.startValidPos
-  while h : iter ≠ preString.endValidPos do
+  let mut iter := preString.startPos
+  while h : iter ≠ preString.endPos do
     let c := iter.get h
     iter := iter.next h
     if c == '\n' then

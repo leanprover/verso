@@ -235,7 +235,7 @@ elab_rules : command
   -- so we detect that case and call finishDoc.
   if let some stopPos := tok.getTailPos? then
     let txt ← getFileMap
-    if stopPos.extract txt.source txt.source.rawEndPos |>.all (·.isWhitespace) then
+    if stopPos.extract txt.source txt.source.rawEndPos |>.all Char.isWhitespace then
       finishDoc genreSyntax title
 
 @[command_elab addBlockCmd]

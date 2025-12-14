@@ -218,10 +218,10 @@ public instance : GetElem? (NameMap α) Name α fun xs n => n ∈ xs where
   getElem? xs x := xs.get? x
 
 
-public instance : ForIn m (NameMap α) (PublicName × α) where
+public instance [Monad m] : ForIn m (NameMap α) (PublicName × α) where
   forIn xs init f := (xs : Std.TreeMap _ _ _).forIn (fun a b acc => f (a, b) acc) init
 
-instance : ForIn m (NameMap α) (Name × α) where
+instance [Monad m] : ForIn m (NameMap α) (Name × α) where
   forIn xs init f := (xs : Std.TreeMap _ _ _).forIn (fun a b acc => f (a.toName, b) acc) init
 
 /--

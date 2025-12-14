@@ -853,7 +853,7 @@ def tryElabCodeTermWith (mk : Highlighted → String → DocElabM α) (str : Str
   match Parser.runParserCategory (← getEnv) `term str src with
   | .error e => throw (.error (← getRef) e)
   | .ok stx => DocElabM.withFileMap (.ofString str) <| do
-    if stx.isIdent && (← readThe Term.Context).autoBoundImplicit then
+    if stx.isIdent && (← readThe Term.Context).autoBoundImplicitContext.isSome then
       throwError m!"Didn't elaborate {stx} as term to avoid spurious auto-implicits"
     if identOnly && !stx.isIdent then
       throwError m!"Didn't elaborate {stx} as term because only identifiers are wanted here"
@@ -906,7 +906,7 @@ def tryElabCodeMetavarTermWith (mk : Highlighted → String → DocElabM α) (st
           -- TODO open decls/current namespace
           let (tree', e') ← do
             let stx' : Term ← `(($pat : $ty))
-            let e ← withReader ({· with autoBoundImplicit := true}) <| elabTerm stx' none
+            let e ← withReader ({· with autoBoundImplicitContext := some ⟨true, {}⟩}) <| elabTerm stx' none
             Term.synthesizeSyntheticMVarsNoPostponing
             let e' ← Term.levelMVarToParam (← instantiateMVars e)
             Term.synthesizeSyntheticMVarsNoPostponing
@@ -963,7 +963,7 @@ def tryParseInlineCodeTactic (str : String) : DocElabM Term := do
 
 open Lean Elab Term in
 def tryInlineOption (str : String) : DocElabM Term := do
-  let optName := str.trim.toName
+  let optName := str.trimAscii.toName
   let optDecl ← getOptionDecl optName
   let hl : Highlighted := optTok optName optDecl.declName optDecl.descr
   ``(Verso.Doc.Inline.other (Inline.leanFromMarkdown $(quote hl)) #[Verso.Doc.Inline.code $(quote str)])
@@ -1061,8 +1061,9 @@ def tryParseInlineCodeAttribute (validate := true) (str : String) : DocElabM Ter
 private def indentColumn (str : String) : Nat := Id.run do
   let mut i : Option Nat := none
   for line in str.splitToList (· == '\n') do
-    let leading := line.takeWhile (·.isWhitespace)
-    if leading == line then continue
+    let leading := line.takeWhile Char.isWhitespace
+    if leading == line.toSlice then continue
+    let leading := leading.copy
     if let some i' := i then
       if leading.length < i' then i := some leading.length
     else i := some leading.length
@@ -1132,11 +1133,12 @@ def tryElabBlockCodeCommand (str : String) (ignoreElabErrors := false) : DocElab
 
 open Lean Elab Term in
 def tryElabInlineCodeName (str : String) : DocElabM Term := do
-  let str := str.trim
+  let str := str.trimAscii
   let x := str.toName
-  if x.toString == str then
+  if x.toString.toSlice == str then
     let stx := mkIdent x
     let n ← realizeGlobalConstNoOverload stx
+    let str := str.copy
     let hl : Highlighted ← constTok n str
     ``(Verso.Doc.Inline.other (Inline.leanFromMarkdown $(quote hl)) #[Verso.Doc.Inline.code $(quote str)])
   else
@@ -1203,7 +1205,7 @@ def tryElabInlineCode (allTactics : Array Tactic.Doc.TacticDoc) (extraKeywords :
     tryElabInlineCodeTerm,
     tryElabInlineCodeMetavarTerm,
     tryTacticName allTactics,
-    withTheReader Term.Context (fun ctx => {ctx with autoBoundImplicit := true}) ∘ tryElabInlineCodeTerm,
+    withTheReader Term.Context (fun ctx => {ctx with autoBoundImplicitContext := some ⟨true, {}⟩}) ∘ tryElabInlineCodeTerm,
     tryElabInlineCodeTerm (ignoreElabErrors := true),
     tryHighlightKeywords extraKeywords
   ] priorWord str
@@ -1236,7 +1238,7 @@ def tryElabBlockCode (_info? _lang? : Option String) (str : String) : DocElabM T
       tryElabBlockCodeCommand,
       tryElabBlockCodeTerm,
       tryElabBlockCodeCommand (ignoreElabErrors := true),
-      withTheReader Term.Context (fun ctx => {ctx with autoBoundImplicit := true}) ∘
+      withTheReader Term.Context (fun ctx => {ctx with autoBoundImplicitContext := some ⟨true, {}⟩}) ∘
         tryElabBlockCodeTerm (ignoreElabErrors := true)
     ]
   catch
@@ -1287,7 +1289,7 @@ def blockFromMarkdownWithLean (names : List Name) (b : MD4Lean.Block) : DocElabM
             if let some n := isAutoBoundImplicitLocalException? e then
               s.restore (restoreInfo := true)
               Meta.withLocalDecl n .implicit (← Meta.mkFreshTypeMVar) fun x =>
-                withTheReader Term.Context (fun ctx => { ctx with autoBoundImplicits := ctx.autoBoundImplicits.push x } ) do
+                withTheReader Term.Context (fun ctx => { ctx with autoBoundImplicitContext := ctx.autoBoundImplicitContext.map (fun c => {c with boundVariables := c.boundVariables.push x }) }) do
                   loop k (← (saveState : TermElabM _))
             else throw e
         | 0 => throwError "Ran out of local name attempts"

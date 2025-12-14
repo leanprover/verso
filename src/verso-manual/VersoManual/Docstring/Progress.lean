@@ -49,9 +49,9 @@ private def ignore [Monad m] [MonadLiftT CoreM m] [MonadEnv m] (x : Name) : m Bo
     (`noConfusionType).isSuffixOf x ||
     let str := x.getString!
     str ∈ ["sizeOf_spec", "sizeOf_eq", "brecOn", "ind", "ofNat_toCtorIdx", "inj", "injEq", "induct"] ||
-    "proof_".isPrefixOf str && (str.drop 6).all (·.isDigit) ||
-    "match_".isPrefixOf str && (str.drop 6).all (·.isDigit) ||
-    "eq_".isPrefixOf str && (str.drop 3).all (·.isDigit)
+    "proof_".isPrefixOf str && (str.drop 6).all Char.isDigit ||
+    "match_".isPrefixOf str && (str.drop 6).all Char.isDigit ||
+    "eq_".isPrefixOf str && (str.drop 3).all Char.isDigit
 
 open Lean Elab Command in
 run_cmd do
@@ -103,7 +103,7 @@ public def progress : DirectiveExpanderOf Unit
           present := present.insert `_root_ (NameSet.empty.insert x)
       else
         let mut ns := x
-        while !ns.isAnonymous && !(ns.getString!.startValidPos.get! |>.isUpper) do
+        while !ns.isAnonymous && !(ns.getString!.startPos.get! |>.isUpper) do
           ns := ns.getPrefix
         if let some v := present.find? ns then
           present := present.insert ns (v.insert x)

@@ -213,10 +213,10 @@ private def empty : IndexItem.Raw := {}
 
 private def addToken (self : IndexItem.Raw) (ref : String) (token : String) (termFreq : Float) : IndexItem.Raw :=
   if token.isEmpty then self
-  else loop self token.startValidPos
+  else loop self token.startPos
 where
-  loop (item : IndexItem.Raw) (iter : String.ValidPos token) : IndexItem.Raw :=
-    if h : iter ≠ token.endValidPos then --while loop
+  loop (item : IndexItem.Raw) (iter : String.Pos token) : IndexItem.Raw :=
+    if h : iter ≠ token.endPos then --while loop
       let c := iter.get h
       let item' := item.children[c]?.getD {}
       let item' := loop item' (iter.next h)
@@ -224,48 +224,48 @@ where
     else
       let item := if item.docs.contains ref then item else { item with docFreq := item.docFreq + 1 }
       { item with docs := item.docs.insert ref ⟨termFreq⟩ }
-  termination_by token.endValidPos.offset.byteIdx - iter.offset.byteIdx
+  termination_by token.endPos.offset.byteIdx - iter.offset.byteIdx
   decreasing_by
     have := iter.isValid.le_rawEndPos
     apply Nat.sub_lt_sub_left
     . rw [String.Pos.Raw.le_iff] at this
-      have : iter.offset.byteIdx ≠ token.endValidPos.offset.byteIdx := by
+      have : iter.offset.byteIdx ≠ token.endPos.offset.byteIdx := by
         intro h
-        have : iter = token.endValidPos := by
+        have : iter = token.endPos := by
           ext; assumption
         contradiction
       apply Nat.lt_of_le_of_ne <;> trivial
     . simp [Char.utf8Size_pos]
 
 private def getNode? (self : IndexItem.Raw) (token : String) : Option IndexItem.Raw :=
-  loop self token.startValidPos
+  loop self token.startPos
 where
-  loop (item : IndexItem.Raw) (iter : String.ValidPos token) : Option IndexItem.Raw := do
-    if h : iter ≠ token.endValidPos then
+  loop (item : IndexItem.Raw) (iter : String.Pos token) : Option IndexItem.Raw := do
+    if h : iter ≠ token.endPos then
       let item ← item.children[iter.get h]?
       loop item (iter.next h)
     else
       pure item
-  termination_by token.endValidPos.offset.byteIdx - iter.offset.byteIdx
+  termination_by token.endPos.offset.byteIdx - iter.offset.byteIdx
   decreasing_by
     have := iter.isValid.le_rawEndPos
-    simp only [String.offset_endValidPos, String.byteIdx_rawEndPos, String.ValidPos.offset_next,
+    simp only [String.offset_endPos, String.byteIdx_rawEndPos, String.Pos.offset_next,
       String.Pos.Raw.byteIdx_add_char, gt_iff_lt]
     apply Nat.sub_lt_sub_left
     . apply Nat.lt_of_le_of_ne this
       . intro h'
-        have : iter = token.endValidPos := by ext <;> assumption
+        have : iter = token.endPos := by ext <;> assumption
         contradiction
     . simp [Char.utf8Size_pos]
 
 private def removeToken (self : IndexItem.Raw) (ref token : String) : IndexItem.Raw :=
-  loop self token.startValidPos
+  loop self token.startPos
 where
-  loop (item : IndexItem.Raw) (iter : token.ValidPos) : IndexItem.Raw :=
-    if h : iter ≠ token.endValidPos then
+  loop (item : IndexItem.Raw) (iter : token.Pos) : IndexItem.Raw :=
+    if h : iter ≠ token.endPos then
       let ch := iter.get h
       let iter := iter.next h
-      if _ : iter ≠ token.endValidPos then
+      if _ : iter ≠ token.endPos then
         { item with
           children := item.children.alter ch fun
             | some item' => some <| loop item' iter
@@ -278,7 +278,7 @@ where
       else item
     else
       item
-  termination_by token.endValidPos.offset.byteIdx - iter.offset.byteIdx
+  termination_by token.endPos.offset.byteIdx - iter.offset.byteIdx
   decreasing_by
     rename_i iter' _
     have := iter.isValid.le_rawEndPos
@@ -286,7 +286,7 @@ where
     apply Nat.sub_lt_sub_left
     . apply Nat.lt_of_le_of_ne this
       . intro h'
-        have : iter' = token.endValidPos := by ext <;> assumption
+        have : iter' = token.endPos := by ext <;> assumption
         contradiction
     . simp [Char.utf8Size_pos]
 end Raw
@@ -407,9 +407,9 @@ public def stopWordFilter (name : String) (stopWords : HashSet String) : Pipelin
 public def predicateTrimmer (name : String) (wordChars : Char → Bool) : PipelineFn where
   name := name
   filter tok :=
-    let tok := tok.dropWhile wordChars |>.dropRightWhile wordChars
+    let tok := tok.dropWhile wordChars |>.dropEndWhile wordChars
     if tok.isEmpty then none
-    else some tok
+    else some tok.copy
 
 open Verso.Search.Stemmer.Porter in
 /--
@@ -464,7 +464,7 @@ public def english : Language where
     porterStemmerFilter "stemmer"
   ]
 where
-  trimmer (tok : String) : Option String := tok.dropWhile badChar |>.dropRightWhile badChar
+  trimmer (tok : String) : Option String := tok.dropWhile badChar |>.dropEndWhile badChar |>.copy
   badChar c := !(c.isAlphanum || c == '_')
   words := #["", "a", "able", "about", "across", "after", "all", "almost", "also", "am", "among", "an",
     "and", "any", "are", "as", "at", "be", "because", "been", "but", "by", "can", "cannot",
@@ -477,7 +477,7 @@ where
     "tis", "to", "too", "twas", "us", "wants", "was", "we", "were", "what", "when", "where",
     "which", "while", "who", "whom", "why", "will", "with", "would", "yet", "you", "your"]
   tokenizeWhitespace (str : String) :=
-    str.splitToList (fun c => c.isWhitespace || c == '-') |>.toArray |>.filter (!·.isEmpty) |>.map (·.trim.toLower)
+    str.splitToList (fun c => c.isWhitespace || c == '-') |>.toArray |>.filter (!·.isEmpty) |>.map (·.trimAscii.copy.toLower)
 
 /--
 A tokenizer maps an input string to an array of search tokens (normally words).

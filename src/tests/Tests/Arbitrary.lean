@@ -190,9 +190,9 @@ instance : Arbitrary LetterString where
 
 instance : Shrinkable LetterString where
   shrink s :=
-    if let some first := s.startValidPos.get? then
+    if let some first := s.startPos.get? then
       let rest := s.drop 1
-      [String.singleton first] ++ [rest] ++
+      [String.singleton first] ++ [rest.copy] ++
       (instShrinkableLetter.shrink first |>.map (String.singleton · ++ rest))
     else []
 

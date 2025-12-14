@@ -217,19 +217,19 @@ private meta def editCodeBlock [Monad m] [MonadFileMap m] (stx : Syntax) (newCon
     | pure none
   let { start := {line := l1, ..}, .. } := txt.utf8RangeToLspRange rng
   let line1 := (txt.lineStart (l1 + 1)).extract txt.source (txt.lineStart (l1 + 2))
-  let line1ws := line1.takeWhile (· == ' ')
+  let line1ws := line1.takeWhile (· == ' ') |>.copy
   let line1rest := line1.drop line1ws.length
   let newContents := line1ws ++ (withNl newContents).replace "\n" ("\n" ++ line1ws)
   if line1rest.startsWith "```" then
-    return some s!"{delims}{line1rest.dropWhile (· == '`') |>.trim}\n{withNl newContents}{delims}"
+    return some s!"{delims}{line1rest.dropWhile (· == '`') |>.trimAscii}\n{withNl newContents}{delims}"
   else
     return none
 where
   delims : String := Id.run do
     let mut n := 3
     let mut run := none
-    let mut iter := newContents.startValidPos
-    while h : iter ≠ newContents.endValidPos do
+    let mut iter := newContents.startPos
+    while h : iter ≠ newContents.endPos do
       let c := iter.get h
       iter := iter.next h
       if c == '`' then
@@ -246,14 +246,14 @@ meta def moduleContentBlock (args : Array Arg) (code : StrLit) : DocElabM (Array
     withAnchored project moduleName anchor? fun hl => do
       logInfos hl
       let hlString := hl.toString
-      if code.getString.trim.isEmpty && !hlString.trim.isEmpty then
+      if code.getString.trimAscii.isEmpty && !hlString.trimAscii.isEmpty then
         let ref ← getRef
         let h ←
           if let some s ← editCodeBlock ref hlString then
             hint m!"" #[s]
           else pure m!""
         logErrorAt ref <| m!"Missing code." ++ h
-      else if let some mismatch ← ExpectString.expectStringOrDiff code (hlString |> withNl) (useLine := fun l => !l.trim.isEmpty) then
+      else if let some mismatch ← ExpectString.expectStringOrDiff code (hlString |> withNl) (useLine := fun l => !l.trimAscii.isEmpty) then
         let ref ← getRef
         let h ←
           if let some s ← editCodeBlock ref hlString then
@@ -293,7 +293,7 @@ meta def moduleInline (args : Array Arg) (inls : TSyntaxArray `inline) : DocElab
   withAnchored project moduleName anchor? fun hl => do
     logInfos hl
     if let some code := code? then
-      let _ ← ExpectString.expectString "code" code (hl.toString.trim)
+      let _ ← ExpectString.expectString "code" code hl.toString.trimAscii.copy
 
     pure #[← ``(leanInline $(quote hl) $(quote cfg.toCodeConfig))]
 
@@ -380,12 +380,13 @@ private meta def suggestTerms (hl : Highlighted) (input : String) : Array String
 
   let ns := allTokens hl |>.filter (· ∉ #[":", "[", "]", "=>", "match", "(", ")", "{", "}", ",", "with", ":=", "=", "by", "#[", ";", "@", "if", "then", "else"] ++ delimTokens)
 
-  let lines := hl.lines.map (·.toString.trim) |>.filter (·.any (· ∉ [' ', '(', ')', '=', ':']))
+  let lines := hl.lines.map (·.toString.trimAscii) |>.filter (·.contains (· ∉ [' ', '(', ')', '=', ':'] : Char → Bool)) |>.map (·.copy)
 
   let tms := hl.split (· ∈ delimTokens) |>.filterMap fun h => do
     let more := h.split (· == "=") |>.map (·.toString)
-    let s := h.toString.trim
-    let s := if let some s' := s.dropPrefix? ": " then s'.toString.trimLeft else s
+    let s := h.toString.trimAscii
+    let s := if let some s' := s.dropPrefix? ": " then s'.toString.trimAsciiStart else s
+    let s := s.copy
     guard (s.length < 80)
     return #[s] ++ if more.size > 1 then more.map (fun x => (x.dropPrefix? ": " |>.map (·.toString)).getD "") else #[]
   let tms := tms.flatten
@@ -398,7 +399,7 @@ public meta def moduleTermInline (args : Array Arg) (inls : TSyntaxArray `inline
   let term ← oneCodeStr inls
 
   withAnchored project moduleName anchor? fun hl => do
-    if term.getString.trim.isEmpty then
+    if term.getString.trimAscii.isEmpty then
       let suggs := suggestTerms hl term.getString
       let h ← hintAt term "Use one of these" suggs
       let expectedString := ExpectString.abbreviateString (maxLength := 100) <| hl.toString
@@ -448,7 +449,7 @@ public meta def moduleTermBlock (args : Array Arg) (term : StrLit) : DocElabM (A
   let cfg@{module := moduleName, project, anchor?, showProofStates := _, defSite := _} ← parseThe CodeContext args
 
   withAnchored project moduleName anchor? fun hl => do
-    let str := term.getString.trim
+    let str := term.getString.trimAscii.copy
     if str.isEmpty then
       let ref ← getRef
       let suggs := suggestTerms hl str
@@ -458,8 +459,8 @@ public meta def moduleTermBlock (args : Array Arg) (term : StrLit) : DocElabM (A
         if suggs.size > 0 then
           hint m!"Use one of these" suggs
         else pure m!""
-      let wanted := String.trim <| ExpectString.abbreviateString (maxLength := 100) <| hl.toString
-      let wanted := wanted.splitOn "\n" |>.map (Std.Format.text ·) |> Std.Format.nil.joinSuffix
+      let wanted := String.trimAscii <| ExpectString.abbreviateString (maxLength := 100) <| hl.toString
+      let wanted := wanted.copy.splitOn "\n" |>.map (Std.Format.text ·) |> Std.Format.nil.joinSuffix
       logErrorAt term (m!"No sub-term of the following was specified: {indentD <| wanted}" ++ h)
       return #[← ``(sorryAx _ true)]
     if let some e := hl.matchingExpr? str then
@@ -549,10 +550,10 @@ public meta def outputBlock (args : Array Arg) (str : StrLit) : DocElabM (Array 
 
     err := err ++ (m!"\nor".joinSep <| candidates.toList.map fun msg => indentD (msg.toString (expandTraces := expandTraces)) ++ "\n")
 
-    if str.getString.trim.isEmpty then
+    if str.getString.trimAscii.isEmpty then
       err := err ++ "but nothing was provided."
     else
-      err := err ++ m!"but got:{indentD str.getString.trim}"
+      err := err ++ m!"but got:{indentD str.getString.trimAscii.copy}"
     if suggs.size = 1 then
       err := err ++ (← hintAt str "Use this:\n" suggs)
     else if suggs.size > 1 then
@@ -670,7 +671,7 @@ public meta def moduleOutInline (args : Array Arg) (inls : TSyntaxArray `inline)
         if let `(inline|role{ $_ $_* }[ $x ]) := (← getRef) then x.raw else str
 
       let suggs : Array Suggestion := candidates.map fun msg => {
-        suggestion := quoteCode (msg.toString (expandTraces := expandTraces)).trim,
+        suggestion := quoteCode (msg.toString (expandTraces := expandTraces)).trimAscii.copy,
         preInfo? := s!"{sevStr msg.severity.toSeverity}: "
       }
       let h ←
@@ -696,8 +697,8 @@ public meta def moduleOutInline (args : Array Arg) (inls : TSyntaxArray `inline)
             mkNullNode #[tok1, tok2]
           else mkNullNode contents
         for (msg, _) in infos do
-          let str := msg.toString
-          Suggestion.saveSuggestion stx (quoteCode <| ExpectString.abbreviateString str.trim) (quoteCode str.trim)
+          let str := msg.toString |>.trimAscii |>.copy
+          Suggestion.saveSuggestion stx (quoteCode <| ExpectString.abbreviateString str) (quoteCode str)
 
     return #[← ``(sorryAx _ true)]
 
@@ -706,8 +707,8 @@ where
     let str := if str.startsWith "`" || str.endsWith "`" then " " ++ str ++ " " else str
     let mut n := 1
     let mut run := none
-    let mut iter := str.startValidPos
-    while h : iter ≠ str.endValidPos do
+    let mut iter := str.startPos
+    while h : iter ≠ str.endPos do
       let c := iter.get h
       iter := iter.next h
       if c == '`' then
@@ -812,7 +813,7 @@ public meta def suggest : InlineExpander
         for (_, examples) in modAnchors do
           for (anchorName, anchorContents) in examples.anchors.toArray do
 
-            if str'.all (fun c => !c.isWhitespace) then
+            if str'.all (not ∘ Char.isWhitespace) then
               if let some _ := anchorContents.matchingName? str' then
                 nameSuggestions := nameSuggestions.insert modName <|
                   ((nameSuggestions.find? modName).getD {}).insert anchorName
