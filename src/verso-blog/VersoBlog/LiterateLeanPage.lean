@@ -40,7 +40,7 @@ def loadModuleContent
       let toolchainfile := projectDir / "lean-toolchain"
       if !(← toolchainfile.pathExists) then
         throw <| .userError s!"File {toolchainfile} doesn't exist, couldn't load project"
-      pure (← IO.FS.readFile toolchainfile).trim
+      pure (← IO.FS.readFile toolchainfile).trimAscii.copy
     | some override => pure override
 
   -- Kludge: remove variables introduced by Lake. Clearing out DYLD_LIBRARY_PATH and
@@ -110,7 +110,7 @@ def Helper.fromModule
       let toolchainfile := projectDir / "lean-toolchain"
       if !(← toolchainfile.pathExists) then
         throw <| .userError s!"File {toolchainfile} doesn't exist, couldn't load project"
-      pure (← IO.FS.readFile toolchainfile).trim
+      pure (← IO.FS.readFile toolchainfile).trimAscii.copy
     | some override => pure override
 
   -- Kludge: remove variables introduced by Lake. Clearing out DYLD_LIBRARY_PATH and
@@ -204,12 +204,12 @@ deriving BEq, Hashable, Repr, Inhabited
 
 -- TODO rewrite with dynamic programming
 partial def Pat.match (p : List Pat) (str : String) : Option (Lean.NameMap String) :=
-  go str.startValidPos p
+  go str.startPos p
 where
   go iter
-    | [] => if iter = str.endValidPos then pure {} else failure
+    | [] => if iter = str.endPos then pure {} else failure
     | .char c :: p' =>
-      if h : iter ≠ str.endValidPos then
+      if h : iter ≠ str.endPos then
         if iter.get h == c then
           go (iter.next h) p'
         else failure
@@ -217,27 +217,27 @@ where
     | .str s :: p' =>
       go iter (s.toList.map .char ++ p')
     | .var x :: p' => do
-      let mut iter' := str.endValidPos
+      let mut iter' := str.endPos
       while iter' ≥ iter do
         try
           let rest ← go iter' p'
-          return rest.insert x (iter.extract iter')
+          return rest.insert x (str.extract iter iter')
         catch
           | () =>
-            if h : iter' = str.startValidPos then
+            if h : iter' = str.startPos then
               break
             else
               iter' := iter'.prev h
               continue
       failure
     | .any :: p' => do
-      let mut iter' := str.endValidPos
+      let mut iter' := str.endPos
       while iter' ≥ iter do
         try
           return (← go iter' p')
         catch
           | () =>
-            if h : iter' = str.startValidPos then
+            if h : iter' = str.startPos then
               break
             else
               iter' := iter'.prev h
@@ -306,8 +306,8 @@ variable [Monad m] [MonadError m] [MonadQuotation m]
 
 
 partial def getModuleDocString (hl : Highlighted) : m String := do
-  let str := (← getString hl).trim
-  let str := str.stripPrefix "/-!" |>.stripSuffix "-/" |>.trim
+  let str := (← getString hl).trimAscii
+  let str := str.dropPrefix "/-!" |>.dropSuffix "-/" |>.trimAscii |>.copy
   pure str
 where getString : Highlighted → m String
   | .text txt | .unparsed txt => pure txt

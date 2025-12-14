@@ -14,6 +14,8 @@ open Verso Output Html
 open Template
 open scoped Lean.Doc.Syntax
 
+set_option pp.rawOnError true
+
 @[block_component redBox]
 def redBox : BlockComponent where
   toHtml id _data _goI goB contents := do
@@ -60,7 +62,7 @@ where
   getItem : TSyntax `desc_item → DocElabM Term
     | `(desc_item|: $inls* => $desc $descs*) => do
       let #[inl] := inls.filter (fun
-          | `(inline|$s:str) => s.getString.any (!·.isWhitespace)
+          | `(inline|$s:str) => s.getString.any (not ∘ Char.isWhitespace)
           | _ => true)
         | throwErrorAt (mkNullNode inls) "Expected one inline"
       let `(inline|image($alt)($url)) := inl

@@ -125,7 +125,7 @@ Mangles a domain's name to that for its mapper, to be used in JS code.
 private def jsName (domainName : String) : String := Id.run do
   if domainName.isEmpty then return "_"
 
-  let first := domainName.startValidPos.get!
+  let first := domainName.startPos.get!
   let mut out : String :=
     if isValidFirstChar first then
       first.toString
@@ -192,6 +192,6 @@ The search box code
 public def searchBoxCode : Array (String × ByteArray) :=
   (include_bin_dir "../../../static-web/search").filterMap fun (name, contents) =>
     if name.endsWith "domain-mappers.js" then none
-    else some (name.stripPrefix "../../../static-web/search/", contents)
+    else some (name.dropPrefix "../../../static-web/search/" |>.copy, contents)
 
 end

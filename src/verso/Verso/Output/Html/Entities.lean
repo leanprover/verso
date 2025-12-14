@@ -85,8 +85,8 @@ private def isHexDigit (c : Char) : Bool :=
 private def decodeHex (s : String) : Option Nat := do
   if s.isEmpty then failure
   let mut n := 0
-  let mut iter := s.startValidPos
-  while h : iter ≠ s.endValidPos do
+  let mut iter := s.startPos
+  while h : iter ≠ s.endPos do
     let c := iter.get h
     iter := iter.next h
 
@@ -107,16 +107,16 @@ Decodes an HTML entity string, which may be a named entity (e.g. `ˆ&amp;`), a d
 public def decodeEntity? (entityString : String) : Option String := do
   if let some x := entityStrings[entityString]? then return x
   unless entityString.startsWith "&" do failure
-  let entityString := entityString.stripPrefix "&"
+  let entityString := entityString.dropPrefix "&"
   unless entityString.endsWith ";" do failure
-  let entityString := entityString.stripSuffix ";"
+  let entityString := entityString.dropSuffix ";"
 
   if entityString.startsWith "#" then -- numeric reference
-    let entityString := entityString.stripPrefix "#"
+    let entityString := entityString.dropPrefix "#"
     if entityString.startsWith "x" || entityString.startsWith "X" then
-      let v ← entityString.drop 1 |> decodeHex
+      let v ← entityString.drop 1 |>.copy |> decodeHex
       refToChar v
-    else if String.Pos.Raw.get? entityString 0 |>.map isHexDigit |>.getD false then
+    else if String.Pos.Raw.get? entityString.copy 0 |>.map isHexDigit |>.getD false then
       let v ← entityString.toNat?
       refToChar v
     else failure

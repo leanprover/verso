@@ -37,8 +37,8 @@ partial def buildExercises (mode : Mode) (logError : String → IO Unit) (cfg : 
   for ⟨fn, f⟩ in code do
     -- Make sure the path is relative to that of this one
     if let some fn' := fn.dropPrefix? mainDir.toString then
-      let fn' := fn'.toString.dropWhile (· ∈ System.FilePath.pathSeparators)
-      let fn := dest / fn'
+      let fn' := fn'.toString.dropWhile (· ∈ System.FilePath.pathSeparators : Char → Bool)
+      let fn := dest / fn'.copy
       fn.parent.forM IO.FS.createDirAll
       if (← fn.pathExists) then IO.FS.removeFile fn
       IO.FS.writeFile fn f
@@ -64,7 +64,7 @@ where
           | logError s!"Failed to deserialize saved Lean import data {which.data}"
         modify fun saved =>
           let prior := saved[fn]?.getD ""
-          saved.insert fn (code.trimRight ++ "\n" ++ prior)
+          saved.insert fn (code.trimAsciiEnd.copy ++ "\n" ++ prior)
 
       for b in contents do block b
     | .concat bs | .blockquote bs =>

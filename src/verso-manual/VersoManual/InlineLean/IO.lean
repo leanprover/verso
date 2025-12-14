@@ -360,13 +360,13 @@ def check
 
     let stdoutOut ← IO.ofExcept stdoutTask.get
     let expectedStdout := stdout.map (·.getString) |>.getD ""
-    if stdoutOut.trim != expectedStdout.trim then
+    if stdoutOut.trimAscii != expectedStdout.trimAscii then
       if let some stdoutLit := stdout then
         Verso.Doc.Suggestion.saveSuggestion stdoutLit (shorten stdoutOut) stdoutOut
       logErrorAt (loc stdout) s!"Mismatched stdout. Expected:\n{expectedStdout}\nGot:\n{stdoutOut}"
 
     let expectedStderr := stderr.map (·.getString) |>.getD ""
-    if stderrOut.trim != expectedStderr.trim then
+    if stderrOut.trimAscii != expectedStderr.trimAscii then
       if let some stderrLit := stderr then
         Verso.Doc.Suggestion.saveSuggestion stderrLit (shorten stderrOut) stderrOut
       logErrorAt (loc stderr) s!"Mismatched stderr. Expected:\n{stderr.map (·.getString) |>.getD ""}\nGot:{stderrOut}\n"
@@ -375,7 +375,7 @@ def check
       let f' := dirname / f
       if ← f'.pathExists then
         let contents ← IO.FS.readFile f'
-        if contents.trim != o.getString.trim then
+        if contents.trimAscii != o.getString.trimAscii then
           Verso.Doc.Suggestion.saveSuggestion o (shorten contents) contents
           logErrorAt (loc (some o)) s!"Output file {f} mismatch. Got:\n{contents}"
       else Lean.logError s!"Output file {f} not found"
@@ -399,7 +399,7 @@ def check
     pure <| code.foldl (init := .empty) fun hl v => hl ++ v
 where
   shorten (str : String) : String :=
-    if str.length < 30 then str else str.take 30 ++ "…"
+    if str.length < 30 then str else (str.take 30).copy ++ "…"
 
 def endExample (body : TSyntax `term) : DocElabM (TSyntax `term) := do
   match ioExampleCtx.getState (← getEnv) with

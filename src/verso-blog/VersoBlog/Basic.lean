@@ -419,24 +419,23 @@ defmethod BlogPost.summary (post : BlogPost) : Array (Block Post) := Id.run do
   out
 
 partial def TraverseState.freshId (state : Blog.TraverseState) (path : Path) (hint : Slug) : Slug := Id.run do
-  let hint := if hint.toString.isEmpty then "x".sluggify else hint
   let mut idStr := mangle (toString hint)
   match state.usedIds[path]? with
   | none => return idStr
   | some used =>
     while used.contains idStr do
-      idStr := next idStr
+      idStr := next idStr.toString
     return idStr
 where
-  next (idStr : Slug) : Slug :=
-    match idStr.toString.takeRightWhile (·.isDigit) with
-    | "" => idStr.toString ++ "1" |>.sluggify
+  next (idStr : String) : Slug :=
+    match idStr.takeEndWhile Char.isDigit |>.copy with
+    | "" => idStr ++ "1" |>.sluggify
     | more =>
       if let some n := more.toNat? then
-        idStr.toString.dropRight (more.length) ++ toString (n + 1) |>.sluggify
+        (idStr.dropEnd more.length).copy ++ toString (n + 1) |>.sluggify
       else
-        idStr.toString.dropRight (more.length) ++ "1" |>.sluggify
-  mangle (idStr : String) : Multi.Slug := Id.run do
+        (idStr.dropEnd more.length).copy ++ "1" |>.sluggify
+  mangle (idStr : String) : Slug := Id.run do
     let mut state := false -- found valid leading char?
     let mut out := ""
     for c in idStr.toList do
