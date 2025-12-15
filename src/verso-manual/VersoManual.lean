@@ -112,7 +112,13 @@ inline_extension Inline.ref (canonicalName : String) (domain : Option Name) (rem
                 let obj := objs[0]
                 let dest := obj.link.link
                 return {{<a href={{dest}}>{{← content.mapM go}}</a>}}
-        Html.HtmlT.logError ("No destination found for remote '" ++ remote ++ "' tag '" ++ name ++ "' in " ++ toString domain)
+              else
+                let dests := objs.map (s!" * {·.link.link}") |>.toList |> "\n".intercalate
+                Html.HtmlT.logError s!"Remote '{remote}' domain '{domain}' contains multiple destinations for '{name}':\n{dests}"
+            else Html.HtmlT.logError s!"Remote '{remote}' contains domain '{domain}, but it not item '{name}'"
+          else Html.HtmlT.logError s!"Remote '{remote}' does not contain domain '{domain}' (looking up '{name}')"
+        else Html.HtmlT.logError s!"Remote '{remote}' not found for tag '{name}' in domain '{domain}'"
+        -- If any error was logged, just don't emit a link
         content.mapM go
       | .ok {resolvedDestination := some dest, ..} =>
         pure {{<a href={{dest}}>{{← content.mapM go}}</a>}}

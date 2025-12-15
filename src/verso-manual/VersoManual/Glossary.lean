@@ -258,7 +258,11 @@ public def tech.descr : InlineDescr where
               HtmlT.logError s!"{loc}: Ambiguous term def with key \"{key}\" in remote {r.quote} - {objs.map (·.link.link)} found"
               content.mapM go
           else
-            HtmlT.logError s!"{loc}: No term def with key \"{key}\" in remote {r.quote}"
+            let keys := remote.domains[technicalTermDomain]?
+              |>.map (·.contents.keysArray.qsortOrd.toList |> ", ".intercalate)
+              |>.map ("Keys are: " ++ ·)
+              |>.getD "Technical term domain not found."
+            HtmlT.logError s!"{loc}: No term def with key \"{key}\" in remote {r.quote}. {keys}"
             content.mapM go
         else
           HtmlT.logError s!"{loc}: Remote {r.quote} not found in {(← readThe AllRemotes).allRemotes.keys}"
