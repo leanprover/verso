@@ -294,7 +294,7 @@ where
   addComment (str : String) : String :=
     str.toSlice.splitInclusive "\n"
       |>.map ("-- " ++ ·.copy)
-      |>.allowNontermination.toList
+      |>.toList
       |> String.join
 
   hasErrors : Highlighted → Bool
