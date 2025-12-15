@@ -111,7 +111,7 @@ inline_extension Inline.ref (canonicalName : String) (domain : Option Name) (rem
               if h : objs.size = 1 then
                 let obj := objs[0]
                 let dest := obj.link.link
-                return {{<a href={{dest}}>{{← content.mapM go}}</a>}}
+                return {{<a href={{dest}} data-verso-remote={{remote}}>{{← content.mapM go}}</a>}}
               else
                 let dests := objs.map (s!" * {·.link.link}") |>.toList |> "\n".intercalate
                 Html.HtmlT.logError s!"Remote '{remote}' domain '{domain}' contains multiple destinations for '{name}':\n{dests}"

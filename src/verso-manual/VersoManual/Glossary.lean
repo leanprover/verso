@@ -208,8 +208,9 @@ public def tech : RoleExpanderOf TechArgs
       Doc.Inline.other {Inline.tech with data := Json.arr #[Json.str (if $(quote normalize) then normString k else k), Json.str $(quote loc), $(quote remote).map Json.str |>.getD Json.null]} content)
 
 open Verso.Output Html in
-private def techLink (addr : String) (content : Html) :=
-  {{<a class="technical-term" href={{addr}}>{{content}}</a>}}
+private def techLink (addr : String) (content : Html) (remote? : Option String) :=
+  let remoteAttr := remote?.map (fun r => #[("data-verso-remote", r)]) |>.getD #[]
+  {{<a class="technical-term" href={{addr}} {{remoteAttr}}>{{content}}</a>}}
 
 @[inline_extension tech]
 public def tech.descr : InlineDescr where
