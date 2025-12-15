@@ -13,8 +13,13 @@ jobs:
             - name: Checkout
               uses: actions/checkout@v4
 
+            - name: Configure git identity
+              run: |
+                  git config --global user.email "github-actions[bot]@users.noreply.github.com"
+                  git config --global user.name "github-actions[bot]"
+
             - name: Create mising `verso-v*` tags in SubVerso
               run: |
                   ./tag-subverso.sh --push
               env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  GITHUB_TOKEN: ${{ secrets.SUBVERSO_PUSH_TOKEN }}

@@ -1,0 +1,16 @@
+name: Lint GitHub Actions workflows
+
+on: [pull_request, merge_group]
+
+jobs:
+    actionlint:
+        name: "Lint GitHub Actions workflows"
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v5
+
+            - name: Run actionlint
+              uses: reviewdog/action-actionlint@v1
+              with:
+                  fail_level: any
+                  actionlint_flags: ""

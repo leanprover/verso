@@ -165,7 +165,7 @@ private def lintDelimited (linter : Lean.Option Bool) (text : FileMap) (tk1 tk2 
   let length := opener.length
   if closer.length ≠ length then return
   if length ≤ minimal then return
-  let contents := { text.source.toSubstring with startPos := stop1, stopPos := start2 }
+  let contents := { text.source.toRawSubstring with startPos := stop1, stopPos := start2 }
   let biggest := longestRunOf contents delimChar
   if biggest < length - 1 then
     let delim := String.ofList (List.replicate (max (biggest + 1) minimal) delimChar)

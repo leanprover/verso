@@ -5,7 +5,7 @@ on:
     merge_group:
 
 jobs:
-    build:
+    check-prettier-formatting:
         runs-on: ubuntu-latest
         steps:
             - name: Checkout

@@ -590,7 +590,7 @@ def emit (tutorials : Tutorials) : EmitM Unit := do
       let dir := dir / metadata.slug
       let code := getCode tut
       ensureDir dir
-      Zip.zipToFile (dir / (metadata.slug ++ ".zip")) (method := .store) <| code.map fun (fn, txt) => (metadata.slug ++ "/" ++ fn, txt.bytes)
+      Zip.zipToFile (dir / (metadata.slug ++ ".zip")) (method := .store) <| code.map fun (fn, txt) => (metadata.slug ++ "/" ++ fn, txt.toByteArray)
 
       let ctxt := { logError }
       let ctxt := TraversePart.inPart tut ctxt

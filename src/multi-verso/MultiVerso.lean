@@ -355,7 +355,7 @@ public def fromXrefJson (root : String) (json : Json) : Except String (NameMap R
         | throw s!"Expected JSON array, got {v.compress}"
       let v ← v.mapM fun x => do
         let address ← x.getObjValAs? String "address"
-        let address := address.stripPrefix "/" |>.stripSuffix "/" |>.splitOn "/" |>.toArray
+        let address := address.dropPrefix "/" |>.dropSuffix "/" |>.split "/" |>.toArray |>.map (·.copy)
         let htmlId ← x.getObjValAs? String "id"
         let data ← x.getObjVal? "data"
         pure {link := {root, path := address, htmlId := htmlId.sluggify}, data : RefObject}

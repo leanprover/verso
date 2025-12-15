@@ -9,7 +9,6 @@ open Lean MonadOptions
 
 register_option verso.literateMarkdown.logInlines : Bool := {
   defValue := false
-  group := "doc"
   descr := "Whether to log failures to elaborate inline code items in Markdown comments."
 }
 

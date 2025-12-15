@@ -446,8 +446,8 @@ public def closes (openTok closeTok : Syntax) : DocElabM Unit := do
     | return ()
   let text ← getFileMap
   let {line, ..} := text.utf8PosToLspPos pos
-  let lineStr := (text.lineStart (line + 1)).extract text.source  (text.lineStart (line + 2)) |>.trim
-  let lineStr := if lineStr.startsWith "`" || lineStr.endsWith "`" then " " ++ lineStr ++ " " else lineStr
+  let lineStr := (text.lineStart (line + 1)).extract text.source  (text.lineStart (line + 2)) |>.trimAscii
+  let lineStr := if lineStr.startsWith "`" || lineStr.endsWith "`" then " " ++ lineStr ++ " " else lineStr.copy
   Hover.addCustomHover closeTok (.markdown s!"Closes line {line + 1}: ``````````{lineStr}``````````")
 
 public abbrev InlineExpander := Syntax → DocElabM (TSyntax `term)

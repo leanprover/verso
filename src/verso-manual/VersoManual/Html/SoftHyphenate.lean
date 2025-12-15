@@ -30,13 +30,13 @@ Text nodes in the resulting HTML will have their contents escaped according to {
 public def softHyphenateText (esc : Bool) (str : String) : Html := Id.run do
   let mut strs : Array Html := #[]
   let mut prior : Option Char := none
-  let mut start := str.startValidPos
-  let mut iter := str.startValidPos
-  while h : iter ≠ str.endValidPos do
+  let mut start := str.startPos
+  let mut iter := str.startPos
+  while h : iter ≠ str.endPos do
     let current := iter.get h
     let iter' := iter.next h
     if prior == some '.' && current != '.' then
-      strs := strs.push (.text esc <| start.extract iter)
+      strs := strs.push (.text esc <| str.extract start iter)
       -- Break lines after dots without hyphens
       strs := strs.push {{<wbr/>}}
       start := iter
@@ -45,7 +45,7 @@ public def softHyphenateText (esc : Bool) (str : String) : Html := Id.run do
         if !strs.isEmpty then
           strs := addShy strs
         -- Break lines at case changes with hyphens
-        strs := strs.push (.text esc <| start.extract iter)
+        strs := strs.push (.text esc <| str.extract start iter)
         start := iter
 
     prior := some current
@@ -53,7 +53,7 @@ public def softHyphenateText (esc : Bool) (str : String) : Html := Id.run do
 
   if start != iter then
     strs := addShy strs
-    strs := strs.push (.text esc <| start.extract iter)
+    strs := strs.push (.text esc <| str.extract start iter)
 
   if h : strs.size = 1 then strs[0] else .seq strs
 

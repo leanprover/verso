@@ -40,8 +40,8 @@ def crc32 (data : ByteArray) : UInt32 := Id.run do
     crc := (crc >>> 8) ^^^ table[idx.toNat]
   return crc ^^^ 0xFFFFFFFF
 
-#guard crc32 "123456789".bytes = 0xCBF43926
-#guard crc32 "Hello, World!".bytes = 0xEC4AC3D0
+#guard crc32 "123456789".toByteArray = 0xCBF43926
+#guard crc32 "Hello, World!".toByteArray = 0xEC4AC3D0
 
 end CRC32
 

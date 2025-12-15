@@ -63,8 +63,8 @@ where
     | .seq xs => .seq <$> xs.mapM remove
     | .text s | .unparsed s =>
       let mut s' := ""
-      let mut iter := s.startValidPos
-      while h : iter ≠ s.endValidPos do
+      let mut iter := s.startPos
+      while h : iter ≠ s.endPos do
         let c := iter.get h
         iter := iter.next h
         match c with
@@ -297,7 +297,7 @@ Removes trailing whitespace from highlighted code.
 -/
 public partial defmethod Highlighted.trimRight (hl : Highlighted) : Highlighted :=
   match hl with
-  | .text str | .unparsed str => .text str.trimRight
+  | .text str | .unparsed str => .text str.trimAsciiEnd.copy
   | .token .. => hl
   | .span infos hl => .span infos hl.trimRight
   | .tactics info startPos endPos hl => .tactics info startPos endPos hl.trimRight
@@ -320,7 +320,7 @@ Removes leading whitespace from highlighted code.
 -/
 public partial defmethod Highlighted.trimLeft (hl : Highlighted) : Highlighted :=
   match hl with
-  | .text str | .unparsed str => .text str.trimLeft
+  | .text str | .unparsed str => .text str.trimAsciiStart.copy
   | .token .. => hl
   | .span infos hl => .span infos hl.trimLeft
   | .tactics info startPos endPos hl => .tactics info startPos endPos hl.trimLeft
@@ -442,15 +442,15 @@ defmethod Token.htmlContent (tok : Token) : HighlightHtmlM g Html := do
   if (← read).options.identifierWordBreaks then
     let mut html := .empty
     let mut str := ""
-    let mut iter := content.startValidPos
-    while h : iter ≠ content.endValidPos do
+    let mut iter := content.startPos
+    while h : iter ≠ content.endPos do
       let c := iter.get h
       iter := iter.next h
       str := str.push c
       if c == '.' then
         html := html ++ .text true str
         str := ""
-        if iter ≠ content.endValidPos then
+        if iter ≠ content.endPos then
           html := html ++ .text false "&shy;"
     if !str.isEmpty then html := html ++ .text true str
     return html

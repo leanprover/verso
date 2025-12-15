@@ -765,7 +765,7 @@ def leanOutput : CodeBlockExpanderOf LeanOutputConfig
         pure messages
 
     for m in messages do
-      Verso.Doc.Suggestion.saveSuggestion str (m.take 30 ++ "…") m
+      Verso.Doc.Suggestion.saveSuggestion str ((m.take 30).copy ++ "…") m
     throwErrorAt str "Didn't match - expected one of: {indentD (toMessageData messages)}\nbut got:{indentD (toMessageData str.getString)}"
 where
   withNewline (str : String) := if str == "" || str.back != '\n' then str ++ "\n" else str
@@ -780,7 +780,7 @@ where
     pure <| withNewline <| head ++ (← message.data.toString)
 
   mostlyEqual (ws : WhitespaceMode) (s1 s2 : String) : Bool :=
-    messagesMatch (ws.apply s1.trim) (ws.apply s2.trim)
+    messagesMatch (ws.apply s1.trimAscii.copy) (ws.apply s2.trimAscii.copy)
 
 open Lean Elab Command in
 elab "define_lexed_text" blockName:ident " ← " lexerName:ident : command => do

@@ -58,10 +58,10 @@ This relies on the assumption that the path has only directory-like entries. In 
 public def relativize (path : Path) (url : String) : String := Id.run do
   if "/".isPrefixOf url then
     let mut path := path.toSubarray
-    let mut url := url.toSubstring.drop 1
+    let mut url := url.toSlice.drop 1
     while h : path.size > 0 do
       -- Get rid of the common prefix of the paths, to avoid unnecessary "../"s
-      if let some url' := url.dropPrefix? (path[0] ++ "/").toSubstring then
+      if let some url' := url.dropPrefix? (path[0] ++ "/") then
         path := path.drop 1
         url := url'
       else break

@@ -56,7 +56,7 @@ instance : FromJson Char where
   fromJson? v := do
     let v ← v.getStr?
     if h : v.length = 1 then
-      return v.startValidPos.get <| by simp_all; intro hv; subst_eqs
+      return v.startPos.get <| by simp_all; intro hv; subst_eqs
     else throw s!"Expected singleton string for `Char`, but got {v.quote}"
 
 deriving instance ToJson, FromJson for MD4Lean.AttrText, MD4Lean.Text, MD4Lean.Li, MD4Lean.Block, MD4Lean.Document

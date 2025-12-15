@@ -30,7 +30,7 @@ The KaTeX font files. Keys are filenames of the form `katex/fonts/...`.
 -/
 public def katexFonts : Array (String × ByteArray):=
   (include_bin_dir "../../../../../vendored-js/katex/fonts").map fun (name, contents) =>
-    (name.stripPrefix "../../../../../vendored-js/", contents)
+    (name.dropPrefix "../../../../../vendored-js/" |>.copy, contents)
 
 /--
 A short script that renders all Verso math using KaTeX.

@@ -48,4 +48,4 @@ deriving ToJson, FromJson, BEq, Ord, Repr
 
 @[inherit_doc Link.link]
 public def RemoteLink.link (link : RemoteLink) : String :=
-  link.root.stripSuffix "/" ++ link.toLink.link
+  (link.root.dropSuffix "/").copy ++ link.toLink.link

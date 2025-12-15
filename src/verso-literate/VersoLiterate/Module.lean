@@ -52,7 +52,7 @@ def loadModuleJson
       let toolchainfile := projectDir / "lean-toolchain"
       if !(← toolchainfile.pathExists) then
         throw <| .userError s!"File {toolchainfile} doesn't exist, couldn't load project"
-      pure (← IO.FS.readFile toolchainfile).trim
+      pure (← IO.FS.readFile toolchainfile).trimAscii.copy
     | some override => pure override
 
   -- Kludge: remove variables introduced by Lake. Clearing out DYLD_LIBRARY_PATH and
