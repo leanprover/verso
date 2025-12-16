@@ -324,7 +324,7 @@ instance : Inhabited (StateT (State Html) (ReaderT ExtensionImpls IO) Html.Toc) 
 /--
 Generate a ToC structure for a document.
 
-Here, `depth` is the current depth at which pages no longer recieve their own HTML files, not the
+Here, `depth` is the current depth at which pages no longer receive their own HTML files, not the
 depth of the table of contents in the document (which is controlled by a parameter to `Toc.html`).
 -/
 partial def toc (depth : Nat) (opts : Html.Options IO)
