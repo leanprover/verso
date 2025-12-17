@@ -146,7 +146,7 @@ public defmethod Highlighted.Goal.toTeX [Monad m] [GenreTeX g m] (h : Highlighte
     pure <| .seq #[namesTeX, .text " : ", (← h.typeAndVal.toTeX)]
   rows := rows ++ (← hypotheses.mapM toRow)
   rows := rows ++ #[verbatim (goalPrefix) ++ (← conclusion.toTeX)]
-  pure \TeX{\begin{tabular}{"l"} \Lean{rows.map (· ++ .raw "\\\\")} \end{tabular}}
+  pure \TeX{\begin{tabular}{"l"} \Lean{rows.map (· ++ .raw r#"\\"#)} \end{tabular}}
 
 def messageContentsToVerbatimTeX [Monad m] [GenreTeX g m] (h : Highlighted.MessageContents Highlighted) : TeXT g m Verso.Output.TeX :=
   match h with

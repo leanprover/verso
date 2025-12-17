@@ -23,8 +23,7 @@ public structure TeXContext where
   True if we are currently rendering TeX in a fragile environment
   (specifically, one which cannot accommodate `\Verb`)
   -/
-  inFragile : Bool
-deriving Inhabited
+  inFragile : Bool := false
 
 public def Options.reinterpret (lift : {α : _} → m α → m' α) (opts : Options g m) : Options g m' :=
   {opts with

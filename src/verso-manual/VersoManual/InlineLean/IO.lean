@@ -201,7 +201,7 @@ def Block.exampleFile.descr : BlockDescr := withHighlighting {
     some <| fun _ _ _ data blocks => do
       match FromJson.fromJson? (α := FileType) data with
       | .error err =>
-        IO.println <| "Couldn't deserialize file metadata while rendering HTML: " ++ err
+        IO.println <| "Couldn't deserialize file metadata while rendering TeX: " ++ err
         pure .empty
       | .ok type =>
         let str ←

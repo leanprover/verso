@@ -542,8 +542,8 @@ def internalSignature.descr : BlockDescr where
     let .ok (name, signature) := FromJson.fromJson? (α := Highlighted × Option Highlighted) info
       | Verso.Doc.TeX.logError "Failed to deserialize docstring section data while generating TeX"; return .empty
     let signatureTeX ← do
-      if let some sig := signature
-      then pure \TeX{ " : " \Lean{ (← sig.toTeX) } }
+      if let some sig := signature then
+        pure \TeX{ " : " \Lean{ (← sig.toTeX) } }
       else pure .empty
     pure \TeX{\par " " \Lean{← name.toTeX} \Lean{signatureTeX} \Lean{.seq (← contents.mapM goB)}}
   toHtml := some fun _goI goB _id info contents =>
@@ -609,7 +609,7 @@ def fieldSignature.descr : BlockDescr where
       | .private => \TeX{ \textbf{"private"} }
       | .protected => .empty
     let desc := \TeX{ \par " " \Lean{visibility} \Lean{← name.toTeX} " : " \Lean{← signature.toTeX} \par " " \Lean{.seq (← contents.mapM goB)}}
-    let parentsTeX := (← parents |>.toList |>.mapM (·.toTeX)).intersperse (.raw ", ")
+    let parentsTeX := (← parents.toList.mapM (·.toTeX)).intersperse (.raw ", ")
     let inheritedExtra : Output.TeX := match inheritedFrom with
     | .none => ""
     | .some _ => .raw "Inherited from " ++ parentsTeX
