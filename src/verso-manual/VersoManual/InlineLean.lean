@@ -198,7 +198,9 @@ private def toHighlightedLeanBlock (shouldShow : Bool) (hls : Highlighted) (str:
 
   let range := Syntax.getRange? str
   let range := range.map (← getFileMap).utf8RangeToLspRange
-  ``(Block.other (Block.lean $(← quoteHighlightViaSerialization hls) (some $(quote (← getFileName))) $(quote range)) #[Block.code $(quote str.getString)])
+  ``(Block.other
+      (Block.lean $(← quoteHighlightViaSerialization hls) (some $(quote (← getFileName))) $(quote range))
+      #[Block.code $(quote str.getString)])
 
 /--
 Returns (syntax of) an Inline representation containing highlighted Lean code.
@@ -264,8 +266,10 @@ def lean : CodeBlockExpanderOf LeanBlockConfig
 
       let mut hls := Highlighted.empty
       let nonSilentMsgs := cmdState.messages.toArray.filter (!·.isSilent)
+      let mut lastPos : String.Pos.Raw := cmds[0]? >>= (·.getRange?.map (·.start)) |>.getD 0
       for cmd in cmds do
-        hls := hls ++ (← highlight cmd nonSilentMsgs cmdState.infoState.trees)
+        hls := hls ++ (← highlightIncludingUnparsed cmd nonSilentMsgs cmdState.infoState.trees (startPos? := lastPos))
+        lastPos := (cmd.getTrailingTailPos?).getD lastPos
 
       toHighlightedLeanBlock config.show hls str
     finally
