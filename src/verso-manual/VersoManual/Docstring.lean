@@ -1403,7 +1403,7 @@ def docstring : BlockCommandOf DocstringConfig
 
       let altNames ← getStoredSuggestions name
 
-      ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.docstring $(quote name) $(quote declType) $(quote signature) $(quote customLabel) $(quote altNames)) #[$(blockStx ++ extras),*])
+      ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.docstring $(quote name) $(quote declType) $(quote signature) $(quote customLabel) $(quote altNames.toArray)) #[$(blockStx ++ extras),*])
 where
   getExtras (name : Name) (declType : Block.Docstring.DeclType) : DocElabM (Array Term) :=
     match declType with
