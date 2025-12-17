@@ -785,7 +785,7 @@ def docstring.descr : BlockDescr := withHighlighting {
   toHtml := some <| fun _goI goB id info contents =>
     open Verso.Doc.Html HtmlT in
     open Verso.Output Html in do
-      let .ok (name, declType, signature, customLabel) := FromJson.fromJson? (α := Name × Block.Docstring.DeclType × Signature × Option String) info
+      let .ok (name, declType, signature, customLabel, _) := FromJson.fromJson? (α := Name × Block.Docstring.DeclType × Signature × Option String × Array Name) info
         | do Verso.Doc.Html.HtmlT.logError "Failed to deserialize docstring data while generating HTML"; pure .empty
       let sig : Html ← signature.toHtml
 
@@ -816,7 +816,7 @@ def docstring.descr : BlockDescr := withHighlighting {
 
   toTeX := some <| fun _goI goB _id info contents =>
     open Verso.Output.TeX in do
-      let .ok (name, declType, signature, customLabel) := FromJson.fromJson? (α := Name × Block.Docstring.DeclType × Signature × Option String) info
+      let .ok (name, declType, signature, customLabel, _) := FromJson.fromJson? (α := Name × Block.Docstring.DeclType × Signature × Option String × Array Name) info
         | Verso.Doc.TeX.logError "Failed to deserialize docstring data while generating TeX"; return .empty
 
       let label := customLabel.getD declType.label
