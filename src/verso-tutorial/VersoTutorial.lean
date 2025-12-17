@@ -515,7 +515,6 @@ def liftGenerate (act : Blog.GenerateM α) (site : Blog.Site) (state : Blog.Trav
 
 open EmitM in
 def emit (tutorials : Tutorials) : EmitM Unit := do
-  let remoteContent := (← read).remoteContent
 
   let dir := (← read).config.destination
   ensureDir dir
