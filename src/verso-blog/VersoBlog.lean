@@ -845,13 +845,13 @@ def blogMain (theme : Theme) (site : Site) (linkTargets : Code.LinkTargets Trave
   let (((), st), _) ← site.generate theme initGenCtx .empty {}
   IO.FS.writeFile (cfg.destination.join "-verso-docs.json") (toString st.dedup.docJson)
   for (name, content, srcMap?) in xref.jsFiles do
-    FS.ensureDir (cfg.destination.join "-verso-js")
-    IO.FS.writeFile (cfg.destination.join "-verso-js" |>.join name) content
+    FS.ensureDir (cfg.destination.join "-verso-data")
+    IO.FS.writeFile (cfg.destination.join "-verso-data" |>.join name) content
     if let some (name, content) := srcMap? then
-      IO.FS.writeFile (cfg.destination.join "-verso-js" |>.join name) content
+      IO.FS.writeFile (cfg.destination.join "-verso-data" |>.join name) content
   for (name, content) in xref.cssFiles do
-    FS.ensureDir (cfg.destination.join "-verso-css")
-    IO.FS.writeFile (cfg.destination.join "-verso-css" |>.join name) content
+    FS.ensureDir (cfg.destination.join "-verso-data")
+    IO.FS.writeFile (cfg.destination.join "-verso-data" |>.join name) content
   if (← hasError.get) then
     IO.eprintln "Errors were encountered!"
     return 1

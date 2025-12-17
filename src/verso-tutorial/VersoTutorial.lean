@@ -11,6 +11,10 @@ import VersoManual
 import Lean.Data.Json
 import VersoUtil.LzCompress
 import VersoUtil.Zip
+import VersoBlog.Basic
+import VersoBlog.Component
+import VersoBlog.Template
+import VersoBlog.Generate
 
 namespace Verso.Genre
 open Lean
@@ -174,13 +178,14 @@ instance : Traverse Tutorial TraverseM where
   genreInline := Traverse.genreInline (g := Manual)
 
 structure Topic where
-  title : String -- TODO inlines
-  description : Array (Block .none) -- TODO page from blog genre?
+  title : Array (Inline Blog.Page)
+  titleString : String
+  description : Array (Block Blog.Page)
   tutorials : Array (Part Tutorial)
 deriving BEq, ToJson, FromJson
 
 structure Tutorials : Type where
-  content : Part .none -- TODO Page from blog genre?
+  content : Part Blog.Page
   topics : Array Topic
 deriving BEq, ToJson, FromJson
 
@@ -350,6 +355,7 @@ structure LocalToC where
   title : String
   link : Link
   children : Array LocalToC
+deriving ToJson, FromJson, BEq, Hashable, Inhabited
 
 structure LiveConfig where
   /-- The location of the editor -/
@@ -358,22 +364,23 @@ structure LiveConfig where
   project : String
   /-- The text to use for the link -/
   content : String
+deriving ToJson, FromJson, Hashable, BEq, Repr
 
 open Verso.LzCompress in
 def LiveConfig.url (config : LiveConfig) : String :=
   s!"{config.root}#project={config.project}&codez={lzCompress config.content}"
 
 structure Theme where
-  page : PageContent → Html
-  topic : TopicContent → Html
-  tutorialToC : Option (String × String) → Option LiveConfig → LocalToC → Html
+  page : PageContent → IO Html
+  topic : TopicContent → IO Html
+  tutorialToC : Option (String × String) → Option LiveConfig → LocalToC → IO Html
   cssFiles : Array Manual.CssFile := #[]
   jsFiles : Array Manual.JsFile := #[]
 
 private def defaultCss : Manual.CSS := include_str "default.css"
 
 def Theme.default : Theme where
-  page content := {{
+  page content := pure {{
     <html>
       <head>
         {{ content.base }}
@@ -387,7 +394,7 @@ def Theme.default : Theme where
       </body>
     </html>
   }}
-  topic content := {{
+  topic content := pure {{
       <div class="topic">
         <h2>{{ content.title }}</h2>
         {{ content.description }}
@@ -405,8 +412,8 @@ def Theme.default : Theme where
       </div>
     }}
   tutorialToC code? live? toc :=
-    if toc.children.isEmpty && live?.isNone && code?.isNone then .empty
-    else {{
+    if toc.children.isEmpty && live?.isNone && code?.isNone then pure .empty
+    else pure {{
       <nav class="local-toc">
         <div> <!-- This is for scroll prevention -->
           <h1>{{toc.title}}</h1>
@@ -445,31 +452,41 @@ where
 
 open Verso.FS
 
+open Verso.Genre.Blog.Template in
 structure EmitContext where
+  components : Blog.Components
   theme : Theme
   config : Manual.Config
   logError : String → IO Unit
+
+def EmitContext.toBlogContext (ctxt : EmitContext) : Blog.TraverseContext where
+  config := { logError := ctxt.logError }
+  components := ctxt.components
 
 abbrev EmitM :=
   ReaderT EmitContext <|
   ReaderT Manual.TraverseState <|
   ReaderT ExtensionImpls <|
-  IO
+  StateRefT Blog.Component.State (StateRefT (Code.Hover.State Html) IO)
 
 def EmitM.run
     (theme : Theme) (config : Manual.Config) (logError : String → IO Unit)
     (state : Manual.TraverseState) (extensionImpls : ExtensionImpls)
-    (act : EmitM α) : IO α :=
-  ReaderT.run act {theme, config, logError} |>.run state |>.run extensionImpls
+    (componentState : Blog.Component.State)
+    (hoverState : Code.Hover.State Html)
+    (components : Blog.Components)
+    (act : EmitM α) : IO (α × Blog.Component.State × Code.Hover.State Html) := do
+  let ((v, st), st') ← ReaderT.run act {theme, config, logError, components} |>.run state |>.run extensionImpls |>.run componentState |>.run hoverState
+  return (v, st, st')
 
 def EmitM.config : EmitM Manual.Config := do
   return (← readThe EmitContext).config
 
-def EmitM.logError (message : String) : EmitM Unit := do
-  (← readThe EmitContext).logError message
+def EmitM.logError : EmitM ((message : String) → IO Unit) := do
+  return (← readThe EmitContext).logError
 
-def EmitM.htmlOptions : EmitM (Html.Options EmitM) := do
-  return { logError := EmitM.logError }
+def EmitM.htmlOptions [MonadLiftT IO m] : EmitM (Html.Options m) := do
+  return { logError := ((← EmitM.logError) ·) }
 
 def EmitM.writeFile (path : System.FilePath) (content : String) : EmitM Unit := do
   if (← readThe EmitContext).config.verbose then
@@ -484,11 +501,12 @@ def EmitM.writeHtmlFile (path : System.FilePath) (content : Html) : EmitM Unit :
 def EmitM.theme : EmitM Theme := do
   return (← readThe EmitContext).theme
 
-def LocalToC.ofPart (text : Part Tutorial) : EmitM LocalToC := do
+
+def LocalToC.ofPage (path : Path) (text : Part Blog.Page) : EmitM LocalToC := do
   let title := text.titleString
-  let id := text.metadata.bind (·.id) |>.get!
-  let link := (← readThe Manual.TraverseState).externalTags[id]!
-  let children ← text.subParts.attach.mapM fun ⟨child, _⟩ => ofPart child
+  let htmlId := text.metadata.bind (·.htmlId) |>.get! |>.sluggify
+  let link := .mk path htmlId
+  let children ← text.subParts.attach.mapM fun ⟨child, _⟩ => ofPage path child
   return {
     title,
     link,
@@ -501,6 +519,7 @@ decreasing_by
     simp_all [Array.sizeOf_lt_of_mem]
   grind [Doc.Part.mk.sizeOf_spec]
 
+
 open Output Html in
 def EmitM.page (path : Path) (title : String) (content : Html) : EmitM Html := do
   let state ← readThe Manual.TraverseState
@@ -512,7 +531,7 @@ def EmitM.page (path : Path) (title : String) (content : Html) : EmitM Html := d
     | (false, f) => ("-verso-data/" ++ f.filename, f.defer)
 
 
-  return (← theme).page {
+  (← theme).page {
     title := title,
     base := {{ <base href={{ path.map (fun _ => "../") |>.foldl (init := "./") (· ++ ·) }} /> }},
     head := .seq #[
@@ -527,28 +546,17 @@ def EmitM.page (path : Path) (title : String) (content : Html) : EmitM Html := d
     ],
     content
   }
+--set_option trace.Meta.synthInstance true in
 
-def EmitM.tutorialList (topics : Array Topic) : EmitM Html :=
-  topics.mapM topicHtml
-where
-  topicHtml (topic : Topic) := do
-    let description ← topic.description.mapM (Genre.toHtml .none (← htmlOptions) () () {} {} {} · {})
-    let description := description.map Prod.fst
-    return (← theme).topic {
-      title := topic.title,
-      description,
-      tutorials := ← topic.tutorials.filterMapM fun tut : Part Tutorial => do
-        let some {id := id?, summary, ..} := tut.metadata
-          | logError s!"No metadata for tutorial '{tut.titleString}'"
-            return none
-        let some id := id?
-          | logError s!"No ID assigned for tutorial '{tut.titleString}'"
-            return none
-        let some link := (← readThe Manual.TraverseState).externalTags[id]?
-          | logError s!"No link found for tutorial '{tut.titleString}'"
-            return none
-        return some { title := tut.titleString, link, summary : TutorialSummary }
-    }
+open scoped Verso.Genre.Blog.Template in
+def EmitM.tutorialList (topics : Array Topic) : Array (Part Blog.Page) :=
+  topics.map fun { title, titleString, description, tutorials } => {
+    title, titleString,
+    metadata := none,
+    content := description,
+    subParts := #[]
+  }
+
 
 
 
@@ -564,9 +572,270 @@ def tutorialLocalTargets (state : TraverseState) : Code.LinkTargets ctxt where
     state.linksFromDomain tacticDomain k.toString "doc" "Documentation for tactic" ++
     state.linksFromDomain syntaxKindDomain k.toString "doc" "Documentation for syntax"
 
+partial def inlineToPage (i : Inline Tutorial) : EmitM (Inline Blog.Page) := do
+  match i with
+  | .text s => return .text s
+  | .linebreak s => return .linebreak s
+  | .code s => return .code s
+  | .math m s => return .math m s
+  | .concat xs => .concat <$> xs.mapM inlineToPage
+  | .image alt url => return .image alt url
+  | .bold xs => .bold <$> xs.mapM inlineToPage
+  | .emph xs => .emph <$> xs.mapM inlineToPage
+  | .link xs url => (.link · url) <$> xs.mapM inlineToPage
+  | .footnote name xs => .footnote name <$> xs.mapM inlineToPage
+  | .other .. =>
+    let hoverSt ← getThe (Code.Hover.State Html)
+    let (html, hoverSt) ← Tutorial.toHtml (m := ReaderT AllRemotes (ReaderT ExtensionImpls IO)) (← EmitM.htmlOptions) { logError := (← read).logError } (← readThe Manual.TraverseState) {} {} {} i |>.run hoverSt {} (← readThe ExtensionImpls)
+    set hoverSt
+    return .other (.blob html) #[]
+
+partial def blockToPage (b : Block Tutorial) : EmitM (Block Blog.Page) := do
+  match b with
+  | .para xs => .para <$> xs.mapM inlineToPage
+  | .concat xs => .concat <$> xs.mapM blockToPage
+  | .blockquote xs => .blockquote <$> xs.mapM blockToPage
+  | .ol n xs => .ol n <$> xs.mapM fun ⟨i⟩ => .mk <$> i.mapM blockToPage
+  | .ul xs => .ul <$> xs.mapM fun ⟨i⟩ => .mk <$> i.mapM blockToPage
+  | .dl xs => .dl <$> xs.mapM fun ⟨t, d⟩ => .mk <$> t.mapM inlineToPage <*> d.mapM blockToPage
+  | .code s => return .code s
+  | .other .. =>
+    let hoverSt ← getThe (Code.Hover.State Html)
+    let (html, hoverSt) ← Tutorial.toHtml (m := ReaderT AllRemotes (ReaderT ExtensionImpls IO)) (← EmitM.htmlOptions) { logError := (← read).logError } (← readThe Manual.TraverseState) {} {} {} b |>.run hoverSt {} (← readThe ExtensionImpls)
+    set hoverSt
+    return .other (.blob html) #[]
+
+def defaultLocalToC (toc : LocalToC) : Html := {{
+    <li>
+      <a href={{toc.link.relativeLink}}>{{toc.title}}</a>
+      {{ if toc.children.isEmpty then .empty
+          else {{<ol>{{toc.children.map defaultLocalToC}}</ol>}} }}
+    </li>
+  }}
+termination_by toc
+decreasing_by
+  rename_i toc' h
+  have : sizeOf toc.children < sizeOf toc := by
+    cases toc; simp +arith
+  have : sizeOf toc' < sizeOf toc.children := by
+    simp_all [Array.sizeOf_lt_of_mem]
+  grind
+
+private def localToCStyle := r#"
+nav.local-toc {
+  position: fixed;
+  top: 1rem;
+  right: calc((100vw - var(--max-width)) / 2 - 15rem - 2rem);
+  width: 15rem;
+  font-size: 0.875rem;
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+}
+
+nav.local-toc ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+nav.local-toc li {
+  margin: 0.5rem 0;
+}
+
+nav.local-toc a {
+  color: var(--verso-text-color);
+  text-decoration: none;
+}
+
+nav.local-toc a:hover {
+  color: var(--color-accent);
+}
+
+/* On smaller screens, display normally */
+@media (max-width: 90rem) {
+  nav.local-toc {
+    position: static;
+    right: auto;
+    width: auto;
+    max-height: none;
+    border-left: 3px solid var(--color-border);
+    padding-left: 1rem;
+    margin-bottom: 1rem;
+  }
+}
+
+nav.local-toc ol ol {
+  padding-left: 1rem;
+  margin-top: 0.25rem;
+}
+
+nav.local-toc ol ol li {
+  margin: 0.25rem 0;
+}
+
+/*******/
+nav.local-toc > div:first-child {
+  margin-bottom: 1rem;
+}
+
+nav.local-toc h1 {
+  font-size: 1rem;
+  margin: 0 0 0.5rem 0;
+  font-weight: 600;
+}
+
+nav.local-toc .code-links {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+nav.local-toc .code-link {
+  font-size: 0.8125rem;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: var(--verso-text-color);
+  text-decoration: none;
+  display: inline-block;
+}
+
+nav.local-toc .code-link:hover {
+  background: var(--verso-selected-color);
+  border-color: var(--color-accent);
+}
+
+nav.local-toc .code-link code {
+  background: none;
+  padding: 0;
+  font-size: inherit;
+}
+
+nav.local-toc .code-link.live::before {
+  content: "↪ ";
+  margin-right: 0.25rem;
+}
+
+nav.local-toc .code-link.download::before {
+  content: "📦 ";
+  margin-right: 0.25rem;
+}
+"#
+
+block_component tutorialNav (code? : Option (String × String)) (live? : Option LiveConfig) (toc : LocalToC) where
+  traverse _ _ := pure none
+  toHtml id _json goI goB contents := do
+    if toc.children.isEmpty && live?.isNone && code?.isNone then pure .empty
+    else pure {{
+      <nav class="local-toc">
+        <div> <!-- This is for scroll prevention -->
+          <h1>{{toc.title}}</h1>
+          {{ if live?.isSome || code?.isSome then {{
+              <div class="code-links">
+                {{if let some live := live? then
+                  {{ <a href={{live.url}} class="live code-link">"Live"</a> }}
+                  else .empty}}
+                {{if let some (url, _file) := code? then {{ <a href={{url}} class="download code-link"><code>".zip"</code></a> }} else .empty}}
+              </div>
+            }}
+            else .empty
+          }}
+        </div>
+        {{if toc.children.isEmpty then .empty
+          else {{<ol>{{toc.children.map defaultLocalToC}}</ol>}} }}
+      </nav>
+    }}
+  cssFiles := #[("local-toc.css", localToCStyle)]
+
+partial def partToPage (tut : Part Tutorial) : EmitM (Part Blog.Page) := do
+  let title ← tut.title.mapM inlineToPage
+  let content ← tut.content.mapM blockToPage
+  let subParts ← tut.subParts.mapM partToPage
+
+  let htmlMeta ← do
+    let some id := tut.metadata.bind (·.id)
+      | pure none
+    let st ← readThe Manual.TraverseState
+    let some link := st.externalTags[id]?
+      | pure none
+    pure <| some { htmlId := some link.htmlId.toString }
+
+
+  return { tut with title, metadata := htmlMeta, content, subParts }
+
+def addLocalToC (path : Path) (metadata : Tutorial.PartMetadata) (tut : Part Tutorial) (part : Part Blog.Page) : EmitM (Part Blog.Page) := do
+  let code := getCode tut
+  let toc ← LocalToC.ofPage path part
+  let sampleCode := do
+    match metadata.exampleStyle with
+    | .inlineLean .. => pure (metadata.slug ++ "/" ++ metadata.slug ++ ".zip", metadata.slug ++ ".zip")
+  let live? := do
+    match metadata.exampleStyle with
+    | .inlineLean _ _ (some project) =>
+      let content ←
+        match code.filter (fun (name, _) => name.endsWith ".lean") with
+        | #[(_, code)] => pure code
+        | _ => none
+      pure { project, content }
+    | _ => none
+  return { part with
+    content := #[tutorialNav sampleCode live? toc #[]] ++ part.content
+  }
+
+def toSite (tuts : Tutorials) : EmitM Blog.Site := do
+  let contentPages : Array Blog.Dir ← tuts.topics.flatMap (·.tutorials) |>.filterMapM fun t => do
+    let some metadata := t.metadata
+      | return none
+    let slug := metadata.slug
+    let path := #[slug]
+    let page ← partToPage t
+    let page ← addLocalToC path metadata t page
+    return Blog.Dir.page slug slug.toName page #[]
+  let topicParts ← tuts.topics.mapM fun t => do
+    let tutList ← Block.dl <$> t.tutorials.filterMapM fun tut => do
+      let some m := tut.metadata
+        | return none
+      return some {
+        term := #[.link (← tut.title.mapM inlineToPage) s!"./{m.slug}"],
+        desc := tut.metadata.map (.para #[.text <| ·.summary]) |>.toArray
+      }
+    return { t with
+      metadata := none,
+      content := t.description ++ #[tutList],
+      subParts := #[]
+    }
+  return .page `tutorials { tuts.content with subParts := topicParts } contentPages
+
+def EmitM.blogConfig : EmitM Blog.Config := do
+  return { logError := (← read).logError, verbose := (← EmitM.config).verbose }
+
+def liftGenerate (act : Blog.GenerateM α) (site : Blog.Site) (state : Blog.TraverseState) : EmitM α := do
+  let st ← getThe (Code.Hover.State _)
+  let st' ← getThe Blog.Component.State
+  let mSt ← readThe Manual.TraverseState
+  let ctxt := {
+    site
+    ctxt := (← read).toBlogContext
+    xref := { state with
+      scripts := state.scripts.insertMany (mSt.extraJs |>.toArray |>.map (·.js)),
+      stylesheets := state.stylesheets.insertMany (mSt.extraCss |>.toArray |>.map (·.css)),
+      cssFiles := state.cssFiles ++ (mSt.extraCssFiles |>.toArray |>.map fun css => (css.filename, css.contents.css)),
+      jsFiles := state.jsFiles ++ (mSt.extraJsFiles |>.toArray |>.map fun js => (js.filename, js.contents.js, js.sourceMap?.map (fun m => (m.filename, m.contents)))),
+      remoteContent := {}
+    }
+    linkTargets := {} -- TODO
+    dir := (← read).config.destination
+    config := (← EmitM.blogConfig)
+    header := Html.doctype
+    components := (← read).components
+  }
+  let ((v, st), st') ← act.run ctxt st st'
+  set st
+  set st'
+  return v
 
 open EmitM in
-def emit (tutorials : Tutorials) : EmitM Unit := do
+def emit (tutorials : Tutorials) (blogTheme : Blog.Theme) : EmitM Unit := do
   let config ← EmitM.config
   if config.verbose then IO.println "Updating remote data"
   let remoteContent ← updateRemotes false config.remoteConfigFile (if config.verbose then IO.println else fun _ => pure ())
@@ -575,57 +844,83 @@ def emit (tutorials : Tutorials) : EmitM Unit := do
 
   let dir := (← read).config.destination
   ensureDir dir
-  let mut hlState := {}
   (← readThe Manual.TraverseState).writeFiles (dir / "-verso-data")
 
-  let (rootHtml, hlState') ← Genre.toHtml .none (← EmitM.htmlOptions) () () {} {} {} tutorials.content hlState
-  hlState := hlState'
-  writeHtmlFile (dir / "index.html") (← page .root "Tutorials" (rootHtml ++ (← tutorialList tutorials.topics)))
+  let site ← toSite tutorials
+  let (site, blogState) ← site.traverse (← blogConfig) (← read).components
+
+
+  let state ← readThe Manual.TraverseState
+
+  state.writeFiles dir
+
+  liftGenerate (site.generate blogTheme) site blogState
 
   let logError : String → IO Unit := (← read).logError
-  for sec in tutorials.topics do
-    for tut in sec.tutorials do
-      let some metadata := tut.metadata
-        | logError s!"No metadata for {tut.titleString}"
-      let dir := dir / metadata.slug
-      let code := getCode tut
-      ensureDir dir
-      Zip.zipToFile (dir / (metadata.slug ++ ".zip")) (method := .store) <| code.map fun (fn, txt) => (metadata.slug ++ "/" ++ fn, txt.toByteArray)
+  -- for sec in tutorials.topics do
+  --   for tut in sec.tutorials do
+  --     let some metadata := tut.metadata
+  --       | logError s!"No metadata for {tut.titleString}"
+  --     let dir := dir / metadata.slug
+  --     let code := getCode tut
+  --     ensureDir dir
+  --     Zip.zipToFile (dir / (metadata.slug ++ ".zip")) (method := .store) <| code.map fun (fn, txt) => (metadata.slug ++ "/" ++ fn, txt.toByteArray)
 
-      let ctxt := { logError }
-      let ctxt := TraversePart.inPart tut ctxt
+  --     let ctxt := { logError }
+  --     let ctxt := TraversePart.inPart tut ctxt
 
-      let definitionIds := (← readThe Manual.TraverseState).definitionIds ctxt
+  --     let definitionIds := (← readThe Manual.TraverseState).definitionIds ctxt
 
-      let (html, hlState') ←
-        Genre.toHtml (m := ReaderT AllRemotes (ReaderT ExtensionImpls IO)) Tutorial { logError := (logError ·) } ctxt (← readThe Manual.TraverseState) definitionIds targets {} tut hlState remoteContent
-      hlState := hlState'
-      let toc ← LocalToC.ofPart tut
-      let sampleCode := do
-        match metadata.exampleStyle with
-        | .inlineLean .. => pure (metadata.slug ++ "/" ++ metadata.slug ++ ".zip", metadata.slug ++ ".zip")
-      let live? := do
-        match metadata.exampleStyle with
-        | .inlineLean _ _ (some project) =>
-          let content ←
-            match code.filter (·.1.endsWith ".lean") with
-            | #[(_, code)] => pure code
-            | _ => none
-          pure { project, content }
-        | _ => none
-      let html := html ++ (← theme).tutorialToC sampleCode live? toc
-      let html := {{<main class="tutorial-text">{{html}}</main>}}
-      let html ← page (Path.root / metadata.slug) tut.titleString html
-      writeHtmlFile (dir / "index.html") html
+  --     let (html, hlState') ←
+  --       Genre.toHtml (m := ReaderT AllRemotes (ReaderT ExtensionImpls IO)) Tutorial { logError := (logError ·) } ctxt (← readThe Manual.TraverseState) definitionIds targets {} tut hlState remoteContent
 
-  writeFile (dir / "-verso-docs.json") (toString hlState.dedup.docJson)
+  --     let toc ← LocalToC.ofPart tut
+  --     let sampleCode := do
+  --       match metadata.exampleStyle with
+  --       | .inlineLean .. => pure (metadata.slug ++ "/" ++ metadata.slug ++ ".zip", metadata.slug ++ ".zip")
+  --     let live? := do
+  --       match metadata.exampleStyle with
+  --       | .inlineLean _ _ (some project) =>
+  --         let content ←
+  --           match code.filter (·.1.endsWith ".lean") with
+  --           | #[(_, code)] => pure code
+  --           | _ => none
+  --         pure { project, content }
+  --       | _ => none
+  --     let html := html ++ (← (← theme).tutorialToC sampleCode live? toc)
+  --     let html := {{<main class="tutorial-text">{{html}}</main>}}
+  --     let html ← page (Path.root / metadata.slug) tut.titleString html
+  --     writeHtmlFile (dir / "index.html") html
+
+
+  writeFile (dir / "-verso-docs.json") (toString (← getThe <| Code.Hover.State _).dedup.docJson)
+
+  for (filename, contents, srcMap?) in blogState.jsFiles do
+    let filename := (dir / "-verso-data" / filename)
+    filename.parent.forM (IO.FS.createDirAll ·)
+    writeFile filename contents
+    if let some m := srcMap? then
+      let filename := (dir / "-verso-data" / m.1)
+      filename.parent.forM (IO.FS.createDirAll ·)
+      writeFile filename m.2
+  for (filename, contents) in blogState.cssFiles do
+    let filename := (dir / "-verso-data" / filename)
+    filename.parent.forM (IO.FS.createDirAll ·)
+    writeFile filename contents
+
 
   for themeJs in (← theme).jsFiles do
-    writeFile (dir / themeJs.filename) themeJs.contents.js
+    let filename := (dir / themeJs.filename)
+    filename.parent.forM (IO.FS.createDirAll ·)
+    writeFile filename themeJs.contents.js
     if let some m := themeJs.sourceMap? then
-      writeFile (dir / m.filename) m.contents
+      let filename := (dir / m.filename)
+      filename.parent.forM (IO.FS.createDirAll ·)
+      writeFile filename m.contents
   for themeCss in (← theme).cssFiles do
-    writeFile (dir / themeCss.filename) themeCss.contents.css
+    let filename := (dir / themeCss.filename)
+    filename.parent.forM (IO.FS.createDirAll ·)
+    writeFile filename themeCss.contents.css
 
 end
 
@@ -656,10 +951,12 @@ def SavedState.load (file : System.FilePath) : IO SavedState := do
 
 open Verso.CLI
 
+open scoped Verso.Genre.Blog.Template in
 def tutorialsMain (tutorials : Tutorials) (args : List String)
     (config : Config := {})
     (theme : Theme := .default)
-    (extensionImpls : ExtensionImpls := by exact extension_impls%) :
+    (extensionImpls : ExtensionImpls := by exact extension_impls%)
+    (components : Blog.Components := by exact %registered_components) :
     IO UInt32 :=
   ReaderT.run go extensionImpls
 
@@ -695,7 +992,7 @@ where
             | other => throw other
 
     -- Emit HTML
-    (emit tutorials).run theme config.toConfig logError state extensionImpls
+    let ((), _) ← (emit tutorials .default).run theme config.toConfig logError state extensionImpls {} {} components
 
     match ← errorCount.get with
     | 0 => return 0

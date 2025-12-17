@@ -3,6 +3,8 @@ Copyright (c) 2023-2024 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
+import Lean.Data.Json.FromToJson
+
 import Std.Data.HashMap
 import Std.Data.HashSet
 
@@ -19,7 +21,7 @@ import MultiVerso
 import VersoBlog.LexedText
 
 open Std (HashSet HashMap)
-open Lean (Json)
+open Lean (Json ToJson FromJson)
 
 open Verso Doc Output Html Code
 open Verso.Multi
@@ -32,7 +34,7 @@ namespace Blog
 structure CodeOpts where
   contextName : Lean.Name
   showProofStates : Bool := true
-deriving Repr
+deriving Repr, BEq, ToJson, FromJson
 
 /--
 The additional blocks available in pages and posts.
@@ -82,6 +84,7 @@ inductive BlockExt where
   title, followed by the actual content.
   -/
   | docstringSection (level : Nat)
+deriving BEq, ToJson, FromJson
 
 /--
 The additional inline elements available in pages and posts.
@@ -128,6 +131,7 @@ inductive InlineExt where
   A reference to a component.
   -/
   | component (name : Lean.Name) (data : Json)
+deriving BEq, ToJson, FromJson
 
 section
 local instance : Repr Json where
@@ -279,7 +283,7 @@ structure Page.Meta where
   showInNav : Bool := true
   /-- The HTML ID to assign to the header -/
   htmlId : Option String := none
-deriving Repr
+deriving Repr, BEq, ToJson, FromJson
 
 /--
 An ordinary web page that is not a blog post.
@@ -294,6 +298,16 @@ def Page : Genre where
 instance : Repr Page.PartMetadata := inferInstanceAs (Repr Page.Meta)
 instance : Repr Page.Block := inferInstanceAs (Repr Blog.BlockExt)
 instance : Repr Page.Inline := inferInstanceAs (Repr Blog.InlineExt)
+instance : BEq Page.PartMetadata := inferInstanceAs (BEq Page.Meta)
+instance : BEq Page.Block := inferInstanceAs (BEq Blog.BlockExt)
+instance : BEq Page.Inline := inferInstanceAs (BEq Blog.InlineExt)
+instance : ToJson Page.PartMetadata := inferInstanceAs (ToJson Page.Meta)
+instance : ToJson Page.Block := inferInstanceAs (ToJson Blog.BlockExt)
+instance : ToJson Page.Inline := inferInstanceAs (ToJson Blog.InlineExt)
+instance : FromJson Page.PartMetadata := inferInstanceAs (FromJson Page.Meta)
+instance : FromJson Page.Block := inferInstanceAs (FromJson Blog.BlockExt)
+instance : FromJson Page.Inline := inferInstanceAs (FromJson Blog.InlineExt)
+
 
 /-- The metadata used for blog posts -/
 structure Post.Meta where

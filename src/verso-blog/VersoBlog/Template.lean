@@ -164,7 +164,7 @@ def blockHtml (g : Genre)
     let ⟨_, _, _, _⟩ := bg
     match (← readThe Components).blocks.find? name with
     | none =>
-      HtmlT.logError s!"No component implementation found for '{name}' in {(← readThe Components).blocks.toList.map (·.fst)}"
+      HtmlT.logError s!"No component implementation found for block '{name}' in {(← readThe Components).blocks.toList.map (·.fst)}"
       pure .empty
     | some dyn =>
       let some {toHtml := impl, ..} := dyn.get? BlockComponent
@@ -240,7 +240,7 @@ def inlineHtml (g : Genre) [bg : BlogGenre g]
     let ⟨_, _, _, _⟩ := bg
     match (← readThe Components).inlines.find? name with
     | none =>
-      HtmlT.logError s!"No component implementation found for '{name}' in {(← readThe Components).inlines.toList.map (·.fst)}"
+      HtmlT.logError s!"No component implementation found for inline '{name}' in {(← readThe Components).inlines.toList.map (·.fst)}"
       pure .empty
     | some dyn =>
       let some {toHtml := impl, ..} := dyn.get? InlineComponent
@@ -349,9 +349,9 @@ def builtinHeader : TemplateM Html := do
   for script in (← read).builtInScripts do
     out := out ++ {{<script>"\n"{{.text false script}}"\n"</script>"\n"}}
   for js in (← read).jsFiles do
-    out := out ++ {{<script src=s!"-verso-js/{js}"></script>}}
+    out := out ++ {{<script src=s!"-verso-data/{js}"></script>}}
   for css in (← read).cssFiles do
-    out := out ++ {{<link rel="stylesheet" href=s!"-verso-css/{css}"/>}}
+    out := out ++ {{<link rel="stylesheet" href=s!"-verso-data/{css}"/>}}
   out := out ++ {{
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI+WdtXRGWt2kTvGFasHpSy3SV" crossorigin="anonymous"/>
     <script defer="defer" src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG+vnGctmUb0ZY0l8" crossorigin="anonymous"></script>
