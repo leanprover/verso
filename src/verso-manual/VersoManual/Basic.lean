@@ -581,6 +581,9 @@ inductive BlockContext where
   | other (container : Manual.Block)
 deriving Repr
 
+/--
+Information that tracks the current context of traversal for a document.
+-/
 structure TraverseContext where
   /-- The current URL path - will be [] for non-HTML output or in the root -/
   path : Path := #[]
@@ -1213,7 +1216,7 @@ def TraverseState.localTargets (state : TraverseState) : Code.LinkTargets Manual
     state.linksFromDomain tacticDomain k.toString "doc" "Documentation for tactic" ++
     state.linksFromDomain syntaxKindDomain k.toString "doc" "Documentation for syntax"
 
-def _root_.Verso.Multi.AllRemotes.remoteTargets (remoteContent : AllRemotes) : Code.LinkTargets Manual.TraverseContext where
+def _root_.Verso.Multi.AllRemotes.remoteTargets (remoteContent : AllRemotes) : Code.LinkTargets ρ where
   const := fun x _ctxt? =>
     fromRemoteDomain docstringDomain x.toString (s!"doc ({·})") (s!"Documentation for {x} in {·}")
   option := fun x _ctxt? =>

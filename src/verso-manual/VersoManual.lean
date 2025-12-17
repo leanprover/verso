@@ -231,12 +231,6 @@ def addSearch (config : Config) : Config := { config with features := config.fea
 end Config
 
 
-def ensureDir (dir : System.FilePath) : IO Unit := do
-  if !(← dir.pathExists) then
-    IO.FS.createDirAll dir
-  if !(← dir.isDir) then
-    throw (↑ s!"Not a directory: {dir}")
-
 /--
 Removes all parts that are specified as draft-only.
 -/

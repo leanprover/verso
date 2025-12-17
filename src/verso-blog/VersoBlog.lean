@@ -833,7 +833,7 @@ def blogMain (theme : Theme) (site : Site) (linkTargets : Code.LinkTargets Trave
   let cfg ← opts {logError := logError} options
   let (site, xref) ← site.traverse cfg components
   let initGenCtx : Generate.Context := {
-    site := site,
+    theme, site,
     ctxt := { path := .root, config := cfg, components },
     xref := xref,
     dir := cfg.destination,
@@ -849,7 +849,7 @@ def blogMain (theme : Theme) (site : Site) (linkTargets : Code.LinkTargets Trave
     IO.FS.writeFile (cfg.destination.join "-verso-data" |>.join name) content
     if let some (name, content) := srcMap? then
       IO.FS.writeFile (cfg.destination.join "-verso-data" |>.join name) content
-  for (name, content) in xref.cssFiles do
+  for (name, content) in theme.cssFiles ++ xref.cssFiles do
     FS.ensureDir (cfg.destination.join "-verso-data")
     IO.FS.writeFile (cfg.destination.join "-verso-data" |>.join name) content
   if (← hasError.get) then

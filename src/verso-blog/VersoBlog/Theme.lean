@@ -65,10 +65,14 @@ structure Theme where
   template and providing additional parameters
   -/
   adHocTemplates : Array String → Option Template.Override := fun _ => none
+  /--
+  CSS files to be referenced in `<head>` and added to generated code.
+  -/
+  cssFiles : Array (String × String) := #[]
 
 def Theme.override (path : Array String) (override : Template.Override) (theme : Theme) : Theme :=
-  {theme with
-    adHocTemplates := fun p => if path = p then some override else theme.adHocTemplates p}
+  { theme with
+    adHocTemplates := fun p => if path = p then some override else theme.adHocTemplates p }
 
 namespace Theme
 

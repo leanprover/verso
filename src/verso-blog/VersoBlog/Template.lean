@@ -55,6 +55,9 @@ def Params := TreeMap String Params.Val
 
 instance : EmptyCollection Params := inferInstanceAs <| EmptyCollection (TreeMap _ _ _)
 
+instance : Append Params where
+  append xs ys := ys.foldl (init := xs) fun params k v => params.insert k v
+
 inductive Error where
   | missingParam (param : String)
   | wrongParamType (param : String) (type : Lean.Name)
