@@ -60,8 +60,15 @@ public structure DomainMapper where
 
   {open DomainMapper}
    * {lit}`searchable` is a Searchable object (returned by the {name}`dataToSearchables` function)
-   * {lit}`matchedParts` is an array of objects with TypeScript type {lit}`{t: 'text', v: string} | {t: 'highlight', v: string}`
-     Objects with `text` in the `t` field are the parts of the search result that provide context, while objects with `highlight` are the parts of the result that match the search string.
+     {lit}`Searchable` is the TypeScript type
+     {lit}`{searchKey: string, address: string, domainId: string, ref?: any}`. {lit}`searchKey` is
+     the text that the user can search for, {lit}`address` is the result's link destination,
+     {lit}`domainId` is the name of the Verso domain, and {lit}`ref` is arbitrary data that will
+     be passed to a custom rendering function if one exists.
+   * {lit}`matchedParts` is an array of objects with TypeScript type
+     {lit}`{t: 'text', v: string} | {t: 'highlight', v: string}`. Objects with {lit}`text` in the
+     {lit}`t` field are the parts of the search result that provide context, while objects with
+     {lit}`highlight` are the parts of the result that match the search string.
    * {lit}`document` is the DOM document object
   -/
   customRender : Option String := none
