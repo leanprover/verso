@@ -194,7 +194,34 @@ block_extension Block.exampleLeanFile (filename : String) where
 @[block_extension Block.exampleFile]
 def Block.exampleFile.descr : BlockDescr := withHighlighting {
   traverse _ _ _ := pure none
-  toTeX := none
+
+  toTeX :=
+    open Verso.Output.TeX in
+    open Verso.Doc.TeX in
+    some <| fun _ _ _ data blocks => do
+      match FromJson.fromJson? (α := FileType) data with
+      | .error err =>
+        IO.println <| "Couldn't deserialize file metadata while rendering TeX: " ++ err
+        pure .empty
+      | .ok type =>
+        let str ←
+          match blocks with
+          | #[.code s] => pure s
+          | other =>
+            IO.println <| s!"Expected a single code block in an example file, but got {other.size} blocks"
+            return .empty
+        let str := str.trimLeft.trimRight
+        let descr : Output.TeX :=
+          match type with
+          | .stdin => \TeX{\texttt{"stdin"} }
+          | .stdout => \TeX{\texttt{"stdout"} }
+          | .stderr => \TeX{\texttt{"stderr"} }
+          | .input f => \TeX{\texttt{\Lean{"Input: " ++ f.toString} } }
+          | .output f => \TeX{\texttt{\Lean{"Output: " ++ f.toString} } }
+          | .other f => \TeX{\texttt{\Lean{"File: " ++ f.toString} } }
+        pure <| .seq #[.raw "\\begin{FileVerbatim}[label={", descr, .raw "}]\n", .raw str, .raw "\n\\end{FileVerbatim}\n" ]
+
+
   extraCss := [exampleFileCss]
   toHtml :=
     open Verso.Output Html in

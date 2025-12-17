@@ -7,11 +7,27 @@ module
 public import SubVerso.Highlighting
 import Verso.Method
 public import Verso.Output.TeX
+public import Verso.Doc.TeX
 
 open SubVerso.Highlighting
+open Verso.Doc.TeX (escapeForVerbatim verbatimInline GenreTeX TeXT)
 open Verso.Output
 open Lean (Json ToJson FromJson Quote)
 open Std (HashMap)
+
+/-
+These two theorems justify termination of `containsNewline` below
+in the face of its use of `Array.any`. They can be removed if these
+land in `lean4` proper.
+-/
+@[wf_preprocess] theorem any_wfParam {xs : Array α} {f : α → Bool} :
+    (wfParam xs).any f = xs.attach.unattach.any f := by
+  simp [wfParam]
+
+@[wf_preprocess] theorem any_unattach {P : α → Prop} {xs : Array (Subtype P)} {f : α → Bool} :
+    xs.unattach.any f = xs.any fun ⟨x, h⟩ =>
+      binderNameHint x f <| binderNameHint h () <| f (wfParam x) := by
+  simp [wfParam]
 
 namespace SubVerso.Highlighting.Highlighted
 
@@ -45,6 +61,15 @@ private def trimOneTrailingNl : Highlighted → Highlighted
   | .tactics i s e hl => .tactics i s e (trimOneTrailingNl hl)
   | .span i hl => .span i (trimOneTrailingNl hl)
 
+def containsNewline (t : Highlighted) : Bool := match t with
+  | .text s => s.contains '\n'
+  | .unparsed s => s.contains '\n'
+  | .seq xs => xs.any containsNewline
+  | (.point ..) | (.token ..) => False
+  | .tactics _ _ _ hl => hl.containsNewline
+  | .span _ hl => hl.containsNewline
+termination_by t
+
 end SubVerso.Highlighting.Highlighted
 
 namespace SubVerso.Highlighting
@@ -69,35 +94,6 @@ public def highlightToken : String → Token.Kind → TeX
 | c, .withType _ => .raw c
 | c, .unknown => .raw c
 
-/--
-Replaces characters with strings simultaneously.
--/
-def replaceChars (s : String) (replace : Char → Option String) : String :=
-  let rec loop (acc : String) (pos : String.Pos.Raw) :=
-    if pos.byteIdx ≥ s.utf8ByteSize then acc
-    else
-      have : (String.Pos.Raw.next s pos).byteIdx > pos.byteIdx :=
-        String.Pos.Raw.byteIdx_lt_byteIdx_next s pos
-      let c := pos.get s
-      let s' := match replace c with | some rs => rs | none => s!"{c}"
-      loop (acc ++ s') (pos.next s)
-    termination_by s.rawEndPos.1 - pos.1
-  loop "" 0
-
-/--
-Escapes a string in an appropriate way for uses of `\Verb` and
-`\begin{Verbatim}...\end{Verbatim}` (from package `fancyvrb`) with
-command characters `\`, `{`, and `}`.
--/
-def escapeForVerbatim (s : String) : String :=
-  replaceChars s fun
-  | '{' => some "\\symbol{123}"
-  | '|' => some "\\symbol{124}"
-  | '}' => some "\\symbol{125}"
-  | '\\' => some "\\symbol{92}"
-  | _ => none
-
-
 defmethod Highlighting.Token.toVerbatimTeX (t : Highlighting.Token) : Verso.Output.TeX :=
   highlightToken (escapeForVerbatim t.content) t.kind
 
@@ -118,45 +114,59 @@ public defmethod Highlighted.toVerbatimTeX : Highlighted → Verso.Output.TeX
   | .point _kind _info => \TeX{"[Point]"}
   | .unparsed str => .raw (escapeForVerbatim str)
 
-def verbatim (t : Verso.Output.TeX) : Verso.Output.TeX :=
-  .seq #[.raw "\\LeanVerb|", t, .raw "|"]
+def verbatimBlock (t : Verso.Output.TeX) : Verso.Output.TeX :=
+  .seq #[.raw "\\begin{LeanVerbatim}\n", t, .raw "\n\\end{LeanVerbatim}\n"]
 
-public defmethod Highlighting.Token.toTeX (t : Highlighting.Token) : Verso.Output.TeX :=
-  verbatim (t.toVerbatimTeX)
+public defmethod Highlighting.Token.toTeX [Monad m] [GenreTeX g m] (t : Highlighting.Token) :
+    TeXT g m Verso.Output.TeX :=
+  verbatimInline (t.toVerbatimTeX)
 
-public defmethod Highlighted.toTeX (t : Highlighted) : Verso.Output.TeX :=
-  let strip := t.trimOneTrailingNl
+public defmethod Highlighted.toTeX [Monad m] [GenreTeX g m] (t : Highlighted) :
+    TeXT g m Verso.Output.TeX :=
+  let strip := t.trimOneTrailingNl.trimOneLeadingNl
   if strip.isEmpty then
-    .empty
+    pure .empty
+  else if strip.containsNewline then
+    pure <| verbatimBlock (strip.toVerbatimTeX)
   else
-    verbatim (strip.toVerbatimTeX)
+    verbatimInline (strip.toVerbatimTeX)
+
 
 open Verso.Output.TeX in
-public defmethod Highlighted.Goal.toTeX (h : Highlighted.Goal Highlighted) : Id Verso.Output.TeX := do
+public defmethod Highlighted.Goal.toTeX [Monad m] [GenreTeX g m] (h : Highlighted.Goal Highlighted) : TeXT g m Verso.Output.TeX := do
   let {name, goalPrefix, hypotheses, conclusion} := h
   let mut rows : Array TeX := #[]
+  let verbatim (t : Verso.Output.TeX) : Verso.Output.TeX :=
+    .seq #[.raw "\\LeanVerb|", t, .raw "|"]
   if let some n := name then
     rows := rows ++ #[\TeX{\textbf{"case"} " " \Lean{n}}]
-  let toRow (h : Highlighted.Hypothesis Highlighted) : TeX :=
-    let namesTeX := h.names.map (·.toTeX) |>.toList.intersperse (.text " ")
-    .seq #[namesTeX, .text " : ", h.typeAndVal.toTeX]
-  rows := rows ++ hypotheses.map toRow
-  rows := rows ++ #[verbatim (goalPrefix) ++ conclusion.toTeX]
-  \TeX{\begin{tabular}{"l"} \Lean{rows.map (· ++ .raw "\\\\")} \end{tabular}}
 
-def messageContentsToVerbatimTeX (h : Highlighted.MessageContents Highlighted) : Verso.Output.TeX :=
+  let toRow (h : Highlighted.Hypothesis Highlighted) : TeXT g m Verso.Output.TeX  := do
+    let namesTeX := (← h.names.mapM (·.toTeX)).toList.intersperse (.text " ")
+    pure <| .seq #[namesTeX, .text " : ", (← h.typeAndVal.toTeX)]
+  rows := rows ++ (← hypotheses.mapM toRow)
+  rows := rows ++ #[verbatim (goalPrefix) ++ (← conclusion.toTeX)]
+  pure \TeX{\begin{tabular}{"l"} \Lean{rows.map (· ++ .raw r#"\\"#)} \end{tabular}}
+
+def messageContentsToVerbatimTeX [Monad m] [GenreTeX g m] (h : Highlighted.MessageContents Highlighted) : TeXT g m Verso.Output.TeX :=
   match h with
-  | .text str => str
-  | .goal g => g.toTeX -- FIXME: this doesn't seem correct?
-  | .term t => t.toVerbatimTeX
-  | .trace _cls _msg _children _collapsed => .empty -- FIXME: what to render here?
-  | .append mcs => .seq (mcs.map messageContentsToVerbatimTeX)
+  | .text str => pure str
+  | .goal g => pure g.toString
+  | .term t => pure t.toVerbatimTeX
+  | .trace _cls _msg _children _collapsed => pure .empty -- FIXME: what to render here?
+  | .append mcs => do
+      -- We are doing this two-step dance only because lean can't see termination
+      -- when we directly call mcs.mapM messageContentsToVerbatimTeX. This probably
+      -- wouldn't be necessary if there were appropriate @[wf_preprocess] lemmas for mapM.
+      let contentsM := mcs.map messageContentsToVerbatimTeX
+      let contents ← contentsM.mapM id
+      pure (.seq contents)
 
-public defmethod Highlighted.Message.toTeX (h : Highlighted.Message) : Verso.Output.TeX :=
+public defmethod Highlighted.Message.toTeX [Monad m] [GenreTeX g m] (h : Highlighted.Message) : TeXT g m Verso.Output.TeX := do
   let {severity, contents} := h
   let rulecolor := s!"{severity}Color"
-  let body := messageContentsToVerbatimTeX contents
-  .seq #[
+  let body ← messageContentsToVerbatimTeX contents
+  pure <| .seq #[
     .raw s!"\\begin\{LeanVerbatim}[formatcom=\\color\{{rulecolor}}, framesep=2mm, vspace=0pt, framerule=1.25mm, frame=leftline]\n",
     body,
     .raw "\n\\end{LeanVerbatim}\n"
