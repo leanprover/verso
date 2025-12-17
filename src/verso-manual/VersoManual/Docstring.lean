@@ -809,8 +809,8 @@ def docstring.descr : BlockDescr := withHighlighting {
       }}
 
   localContentItem := fun _id info _contents => open Verso.Output.Html in do
-    let  (name, _declType, _signature, _customLabel) ←
-      FromJson.fromJson? (α := Name × Block.Docstring.DeclType × Signature × Option String) info
+    let  (name, _declType, _signature, _customLabel, _altNames) ←
+      FromJson.fromJson? (α := Name × Block.Docstring.DeclType × Signature × Option String × Array Name) info
     let names := #[name.getString!, name.toString]
     pure <| names.map fun s => (s, {{<code>{{s}}</code>}})
 
