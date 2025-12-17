@@ -164,6 +164,7 @@ structure EmitContext where
   config : Manual.Config
   logError : String → IO Unit
   theme : Blog.Theme
+  remoteContent : AllRemotes
 
 def EmitContext.toBlogContext (ctxt : EmitContext) : Blog.TraverseContext where
   config := { logError := ctxt.logError }
@@ -182,8 +183,14 @@ def EmitM.run
     (hoverState : Code.Hover.State Html)
     (components : Blog.Components)
     (theme : Blog.Theme)
+    (remoteContent : AllRemotes)
     (act : EmitM α) : IO (α × Blog.Component.State × Code.Hover.State Html) := do
-  let ((v, st), st') ← ReaderT.run act {config, logError, components, theme} |>.run state |>.run extensionImpls |>.run componentState |>.run hoverState
+  let ((v, st), st') ←
+    ReaderT.run act { config, logError, components, theme, remoteContent }
+      |>.run state
+      |>.run extensionImpls
+      |>.run componentState
+      |>.run hoverState
   return (v, st, st')
 
 def EmitM.config : EmitM Manual.Config := do
@@ -260,7 +267,14 @@ partial def inlineToPage (i : Inline Tutorial) : EmitM (Inline Blog.Page) := do
   | .footnote name xs => .footnote name <$> xs.mapM inlineToPage
   | .other .. =>
     let hoverSt ← getThe (Code.Hover.State Html)
-    let (html, hoverSt) ← Tutorial.toHtml (m := ReaderT AllRemotes (ReaderT ExtensionImpls IO)) (← EmitM.htmlOptions) { logError := (← read).logError } (← readThe Manual.TraverseState) {} {} {} i |>.run hoverSt {} (← readThe ExtensionImpls)
+    let (html, hoverSt) ←
+      Tutorial.toHtml (m := ReaderT AllRemotes (ReaderT ExtensionImpls IO)) (← EmitM.htmlOptions)
+        { logError := (← read).logError }
+        (← readThe Manual.TraverseState)
+        {} {} {} i
+        |>.run hoverSt
+        |>.run (← read).remoteContent
+        |>.run (← readThe ExtensionImpls)
     set hoverSt
     return .other (.blob html) #[]
 
@@ -275,9 +289,32 @@ partial def blockToPage (b : Block Tutorial) : EmitM (Block Blog.Page) := do
   | .code s => return .code s
   | .other .. =>
     let hoverSt ← getThe (Code.Hover.State Html)
-    let (html, hoverSt) ← Tutorial.toHtml (m := ReaderT AllRemotes (ReaderT ExtensionImpls IO)) (← EmitM.htmlOptions) { logError := (← read).logError } (← readThe Manual.TraverseState) {} {} {} b |>.run hoverSt {} (← readThe ExtensionImpls)
+    let (html, hoverSt) ←
+      Tutorial.toHtml (m := ReaderT AllRemotes (ReaderT ExtensionImpls IO)) (← EmitM.htmlOptions)
+        { logError := (← read).logError }
+        (← readThe Manual.TraverseState)
+        {} {} {} b
+        |>.run hoverSt
+        |>.run (← read).remoteContent
+        |>.run (← readThe ExtensionImpls)
     set hoverSt
     return .other (.blob html) #[]
+
+partial def partToPage (tut : Part Tutorial) : EmitM (Part Blog.Page) := do
+  let title ← tut.title.mapM inlineToPage
+  let content ← tut.content.mapM blockToPage
+  let subParts ← tut.subParts.mapM partToPage
+
+  let htmlMeta ← do
+    let some id := tut.metadata.bind (·.id)
+      | pure none
+    let st ← readThe Manual.TraverseState
+    let some link := st.externalTags[id]?
+      | pure none
+    pure <| some { htmlId := some link.htmlId.toString }
+
+  return { tut with title, metadata := htmlMeta, content, subParts }
+
 
 def defaultLocalToC (toc : LocalToC) : Html := {{
     <li>
@@ -418,22 +455,6 @@ def tutorialNavHtml (code? : Option (String × String)) (live? : Option LiveConf
       </nav>
     }}
 
-partial def partToPage (tut : Part Tutorial) : EmitM (Part Blog.Page) := do
-  let title ← tut.title.mapM inlineToPage
-  let content ← tut.content.mapM blockToPage
-  let subParts ← tut.subParts.mapM partToPage
-
-  let htmlMeta ← do
-    let some id := tut.metadata.bind (·.id)
-      | pure none
-    let st ← readThe Manual.TraverseState
-    let some link := st.externalTags[id]?
-      | pure none
-    pure <| some { htmlId := some link.htmlId.toString }
-
-  return { tut with title, metadata := htmlMeta, content, subParts }
-
-
 def toSite (tuts : Tutorials) : EmitM Blog.Site := do
   let contentPages : Array Blog.Dir ← tuts.topics.flatMap (·.tutorials) |>.filterMapM fun t => do
     let some metadata := t.metadata
@@ -459,10 +480,11 @@ def toSite (tuts : Tutorials) : EmitM Blog.Site := do
 def EmitM.blogConfig : EmitM Blog.Config := do
   return { logError := (← read).logError, verbose := (← EmitM.config).verbose }
 
-def liftGenerate (act : Blog.GenerateM α) (site : Blog.Site) (state : Blog.TraverseState) (remoteContent : AllRemotes) (extraParams : Path → Blog.Template.Params:= fun _ => {}) : EmitM α := do
+def liftGenerate (act : Blog.GenerateM α) (site : Blog.Site) (state : Blog.TraverseState) (extraParams : Path → Blog.Template.Params:= fun _ => {}) : EmitM α := do
   let st ← getThe (Code.Hover.State _)
   let st' ← getThe Blog.Component.State
   let mSt ← readThe Manual.TraverseState
+  let remoteContent := (← read).remoteContent
 
   let linkTargets : Code.LinkTargets Blog.TraverseContext :=
     tutorialLocalTargets (← readThe Manual.TraverseState) ++ remoteContent.remoteTargets
@@ -477,7 +499,7 @@ def liftGenerate (act : Blog.GenerateM α) (site : Blog.Site) (state : Blog.Trav
       stylesheets := state.stylesheets.insertMany (mSt.extraCss |>.toArray |>.map (·.css)),
       cssFiles := state.cssFiles ++ (mSt.extraCssFiles |>.toArray |>.map fun css => (css.filename, css.contents.css)),
       jsFiles := state.jsFiles ++ (mSt.extraJsFiles |>.toArray |>.map fun js => (js.filename, js.contents.js, js.sourceMap?.map (fun m => (m.filename, m.contents)))),
-      remoteContent := {}
+      remoteContent := remoteContent
     },
     linkTargets,
     dir := (← read).config.destination,
@@ -493,11 +515,7 @@ def liftGenerate (act : Blog.GenerateM α) (site : Blog.Site) (state : Blog.Trav
 
 open EmitM in
 def emit (tutorials : Tutorials) : EmitM Unit := do
-  let config ← EmitM.config
-  let theme := (← read).theme
-  if config.verbose then IO.println "Updating remote data"
-
-  let remoteContent ← updateRemotes false config.remoteConfigFile (if config.verbose then IO.println else fun _ => pure ())
+  let remoteContent := (← read).remoteContent
 
   let dir := (← read).config.destination
   ensureDir dir
@@ -509,8 +527,6 @@ def emit (tutorials : Tutorials) : EmitM Unit := do
   let state ← readThe Manual.TraverseState
 
   state.writeFiles dir
-
-
 
   let mut tutorialCode : HashMap String ((String × String) × Option LiveConfig) := {}
 
@@ -556,8 +572,8 @@ def emit (tutorials : Tutorials) : EmitM Unit := do
       else {}
     | _ => {}
 
-
-  liftGenerate (site.generate theme) site blogState remoteContent (extraParams := extraParams)
+  let theme := (← read).theme
+  liftGenerate (site.generate theme) site blogState (extraParams := extraParams)
 
 
   writeFile (dir / "-verso-docs.json") (toString (← getThe <| Code.Hover.State _).dedup.docJson)
@@ -665,8 +681,11 @@ where
             | .userError e => logError e; return (1 : UInt32)
             | other => throw other
 
+    if config.verbose then IO.println "Updating remote data"
+    let remoteContent ← updateRemotes false config.remoteConfigFile (if config.verbose then IO.println else fun _ => pure ())
+
     -- Emit HTML
-    let ((), _) ← (emit tutorials).run config.toConfig logError state extensionImpls {} {} components theme
+    let ((), _) ← (emit tutorials).run config.toConfig logError state extensionImpls {} {} components theme remoteContent
 
     match ← errorCount.get with
     | 0 => return 0
