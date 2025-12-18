@@ -10,6 +10,7 @@
 // Enable typescript
 // @ts-check
 
+let /** @type Promise<null|SearchResult> */ bigPromise = Promise.resolve(null);
 import { Range } from "./unicode-input.min.js";
 import { InputAbbreviationRewriter } from "./unicode-input-component.min.js";
 
@@ -517,6 +518,12 @@ class SearchBox {
     imeRewriter;
 
     /**
+     * Incrementing counter used to detect and cancel stale computations
+     * @type {number}
+     * */
+    requestCounter;
+
+    /**
      * @param {HTMLDivElement} comboboxNode
      * @param {HTMLButtonElement | null} buttonNode
      * @param {HTMLElement} listboxNode
@@ -530,6 +537,7 @@ class SearchBox {
         this.domainMappers = domainMappers;
         this.mappedData = mappedData;
         this.preparedData = Object.keys(this.mappedData).map((name) => fuzzysort.prepare(name));
+        this.requestCounter = 0;
 
         // Add IME
         this.imeRewriter = new InputAbbreviationRewriter(
@@ -674,20 +682,21 @@ class SearchBox {
 
     // ComboboxAutocomplete Events
 
+    /**
+     * @returns {Promise<SearchResult|null>}
+     */
     async filterOptions() {
         const currentOptionText = opt(this.currentOption, resultToText);
         const filter = this.filter;
-
-        // Empty the listbox
-        this.listboxNode.textContent = "";
-
-        this.listboxNode.append(...this.domainFilters);
+        this.requestCounter += 1;
+        const requestCount = this.requestCounter;
 
         if (filter.length === 0) {
             this.filteredOptions = [];
             this.firstOption = null;
             this.lastOption = null;
             this.currentOption = null;
+            this.listboxNode.textContent = "";
             return null;
         }
 
@@ -726,25 +735,22 @@ class SearchBox {
             this.firstOption = null;
             this.lastOption = null;
             this.currentOption = null;
-            this.listboxNode.appendChild(this.noResultsElement);
+            this.listboxNode.textContent = "";
+            this.listboxNode.append(this.noResultsElement);
             return null;
         }
 
-        /**
-         * @type {SearchResult|null}
-         */
-        let newCurrentOption = null;
-
-        /** @type {(Fuzzysort.Result|TextMatch) []} */
-        let allResults = [];
+        let /** @type {(Fuzzysort.Result|TextMatch) []} */ allResults = [];
         allResults.push(...textResults);
         allResults.push(...results);
         allResults.sort((x, y) => y.score - x.score);
         allResults = allResults.slice(0, 30);
 
-        this.filteredOptions = [];
-        this.firstOption = null;
-        this.lastOption = null;
+        const /** @type {HTMLLIElement[]} */ listboxResults = [];
+        const /** @type {SearchResult[]} */ filteredOptions = [];
+        let /** @type {SearchResult | null} */ firstOption = null;
+        let /** @type {SearchResult | null} */ lastOption = null;
+        let /** @type {SearchResult|null} */ newCurrentOption = null;
         for (let i = 0; i < allResults.length; i++) {
             const result = allResults[i];
             if ("target" in result) {
@@ -774,13 +780,13 @@ class SearchBox {
                     option.addEventListener("click", this.onOptionClick(searchResult));
                     option.addEventListener("pointerover", this.onOptionPointerover.bind(this));
                     option.addEventListener("pointerout", this.onOptionPointerout.bind(this));
-                    this.filteredOptions.push(searchResult);
-                    this.listboxNode.appendChild(option);
+                    filteredOptions.push(searchResult);
+                    listboxResults.push(option);
                     if (i === 0 && j === 0) {
-                        this.firstOption = searchResult;
+                        firstOption = searchResult;
                     }
                     if (i === allResults.length - 1 && j === dataItems.length - 1) {
-                        this.lastOption = searchResult;
+                        lastOption = searchResult;
                     }
                     if (currentOptionText === resultToText(searchResult)) {
                         newCurrentOption = searchResult;
@@ -798,13 +804,13 @@ class SearchBox {
                     option.addEventListener("click", this.onOptionClick(searchResult));
                     option.addEventListener("pointerover", this.onOptionPointerover.bind(this));
                     option.addEventListener("pointerout", this.onOptionPointerout.bind(this));
-                    this.filteredOptions.push(searchResult);
-                    this.listboxNode.appendChild(option);
+                    filteredOptions.push(searchResult);
+                    listboxResults.push(option);
                     if (i === 0) {
-                        this.firstOption = searchResult;
+                        firstOption = searchResult;
                     }
                     if (i === allResults.length - 1) {
-                        this.lastOption = searchResult;
+                        lastOption = searchResult;
                     }
                     if (currentOptionText === resultToText(searchResult)) {
                         newCurrentOption = searchResult;
@@ -816,14 +822,24 @@ class SearchBox {
         const moreResults = document.createElement("li");
         moreResults.textContent = `Showing ${allResults.length}/${results.total + textResults.length} results`;
         moreResults.className = `more-results`;
-        this.listboxNode.appendChild(moreResults);
+        listboxResults.push(moreResults);
 
+        if (this.requestCounter !== requestCount) {
+            return null; // Cancel stale computation
+        }
+
+        // Finalize completed computation
+        this.filteredOptions = filteredOptions;
+        this.firstOption = firstOption;
+        this.lastOption = lastOption;
         if (newCurrentOption) {
             this.currentOption = newCurrentOption;
         }
         if (!this.currentOption) {
             this.currentOption = this.firstOption;
         }
+        this.listboxNode.textContent = "";
+        this.listboxNode.append(...listboxResults);
 
         return newCurrentOption ?? this.firstOption;
     }

@@ -181,9 +181,8 @@ jobs:
                   key: playwright-${{ runner.os }}-${{ hashFiles('browser-tests/uv.lock') }}
 
             - name: Install Playwright browsers
-              run:
-                  uv run --project browser-tests --extra test playwright install chromium firefox
-                  --with-deps
+              run: |
+                  uv run --project browser-tests --extra test playwright install chromium firefox --with-deps
 
             - name: Run browser tests
               run: uv run --project browser-tests --extra test pytest browser-tests -v
