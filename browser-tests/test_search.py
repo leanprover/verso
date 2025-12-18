@@ -41,3 +41,23 @@ class TestSearch:
         expect(page.get_by_label("Results")).to_match_aria_snapshot("""
           - listbox "Results":
             - listitem: No results""".strip())
+
+    def test_suggestion(self, server: str, page: Page):
+        """Test that the search box can find suggestions."""
+        page.goto(f"{server}") 
+        page.get_by_role("searchbox").type("Html.none")
+        expect(page.get_by_role("searchbox")).to_match_aria_snapshot('- searchbox "Search": Html.none')
+        expect(page.get_by_label("Results")).to_match_aria_snapshot("""- listbox "Results":
+  - option "Html.none Suggestion" [selected]:
+    - paragraph:
+      - emphasis: Html.none
+    - paragraph: Suggestion
+  - listitem: Showing 1/1 results""")
+
+        page.get_by_role("searchbox").press("Backspace")
+        page.get_by_role("searchbox").press("Backspace")
+        page.get_by_role("searchbox").press("Backspace")
+        page.get_by_role("searchbox").type("il")
+        expect(page.get_by_role("searchbox")).to_match_aria_snapshot('- searchbox "Search": Html.nil')
+        expect(page.get_by_label("Results")).to_match_aria_snapshot("""- listbox "Results":
+  - listitem: No results""")
