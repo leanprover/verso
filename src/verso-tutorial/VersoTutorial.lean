@@ -514,7 +514,7 @@ def liftGenerate (act : Blog.GenerateM α) (site : Blog.Site) (state : Blog.Trav
   return v
 
 open EmitM in
-def emit (tutorials : Tutorials) : EmitM Unit := do
+def emit (tutorials : Tutorials) (navSite : Option Blog.Site) : EmitM Unit := do
 
   let dir := (← read).config.destination
   ensureDir dir
@@ -572,7 +572,7 @@ def emit (tutorials : Tutorials) : EmitM Unit := do
     | _ => {}
 
   let theme := (← read).theme
-  liftGenerate (site.generate theme) site blogState (extraParams := extraParams)
+  liftGenerate (site.generate theme) (navSite.getD site) blogState (extraParams := extraParams)
 
 
   writeFile (dir / "-verso-docs.json") (toString (← getThe <| Code.Hover.State _).dedup.docJson)
@@ -585,6 +585,11 @@ def emit (tutorials : Tutorials) : EmitM Unit := do
       let filename := (dir / "-verso-data" / m.1)
       filename.parent.forM (IO.FS.createDirAll ·)
       writeFile filename m.2
+  for (filename, contents, _) in theme.jsFiles do
+    let filename := (dir / "-verso-data" / filename)
+    filename.parent.forM (IO.FS.createDirAll ·)
+    writeFile filename contents
+
   for (filename, contents) in theme.cssFiles ++ blogState.cssFiles  do
     let filename := (dir / "-verso-data" / filename)
     filename.parent.forM (IO.FS.createDirAll ·)
@@ -630,7 +635,7 @@ def defaultTheme := { Blog.Theme.default with
         {{← param "content"}}
       </article>
     }}
-  cssFiles := #[("local-toc.css", localToCStyle)]
+  cssFiles := Blog.Theme.default.cssFiles ++ #[("local-toc.css", localToCStyle)]
 }
 
 open scoped Verso.Genre.Blog.Template in
@@ -644,6 +649,7 @@ Generates a tutorials site in HTML, based on `tutorials`.
 def tutorialsMain (tutorials : Tutorials) (args : List String)
     (config : Config := {})
     (theme : Blog.Theme := defaultTheme)
+    (navSite : Option Blog.Site := none)
     (extensionImpls : ExtensionImpls := by exact extension_impls%)
     (components : Blog.Components := by exact %registered_components) :
     IO UInt32 :=
@@ -684,7 +690,7 @@ where
     let remoteContent ← updateRemotes false config.remoteConfigFile (if config.verbose then IO.println else fun _ => pure ())
 
     -- Emit HTML
-    let ((), _) ← (emit tutorials).run config.toConfig logError state extensionImpls {} {} components theme remoteContent
+    let ((), _) ← (emit tutorials navSite).run config.toConfig logError state extensionImpls {} {} components theme remoteContent
 
     match ← errorCount.get with
     | 0 => return 0

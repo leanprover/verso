@@ -69,6 +69,10 @@ structure Theme where
   CSS files to be referenced in `<head>` and added to generated code.
   -/
   cssFiles : Array (String × String) := #[]
+  /--
+  JS files to be referenced in `<head>` or at the end of `<body>` and added to generated code.
+  -/
+  jsFiles : Array (String × String × Bool) := #[]
 
 def Theme.override (path : Array String) (override : Template.Override) (theme : Theme) : Theme :=
   { theme with

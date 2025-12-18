@@ -235,7 +235,7 @@ passes have been run.
 -/
 def traverse (logError : String → IO Unit) (tutorials : Tutorials) (config : Manual.Config) : ReaderT ExtensionImpls IO (Tutorials × Manual.TraverseState) := do
   let topCtxt : Manual.TraverseContext := {logError, draft := config.draft}
-  let mut state : Manual.TraverseState := .ofConfig config.toHtmlConfig
+  let mut state : Manual.TraverseState := .ofConfig ({ config with features := {} }).toHtmlConfig
   let mut tutorials := tutorials
   if config.verbose then
     IO.println "Initializing extensions"
@@ -250,6 +250,7 @@ def traverse (logError : String → IO Unit) (tutorials : Tutorials) (config : M
     if let some descr := i.get? InlineDescr then
       state := descr.init state
   for i in [0:config.maxTraversals] do
+    dbg_trace "traversal {i}"
     if config.verbose then
       IO.println s!"Traversal pass {i}"
     let startTime ← IO.monoMsNow
