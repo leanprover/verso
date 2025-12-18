@@ -1,4 +1,5 @@
 /**
+/**
  * Copyright (c) 2024 Lean FRO LLC. All rights reserved.
  * Released under Apache 2.0 license as described in the file LICENSE.
  * Author: Jakob Ambeck Vase
@@ -688,8 +689,6 @@ class SearchBox {
     async filterOptions() {
         const currentOptionText = opt(this.currentOption, resultToText);
         const filter = this.filter;
-        this.requestCounter += 1;
-        const requestCount = this.requestCounter;
 
         if (filter.length === 0) {
             this.filteredOptions = [];
@@ -746,6 +745,14 @@ class SearchBox {
         allResults.sort((x, y) => y.score - x.score);
         allResults = allResults.slice(0, 30);
 
+        // The following computation is async, and so might fall behind later search results if
+        // the user types quickly. This counter detects whether the current function has become
+        // stale due to a later-starting search request
+        this.requestCounter += 1;
+        const requestCount = this.requestCounter;
+
+        // All variables need to be stored in the function and only written to the object once
+        // we decide the request was not stale
         const /** @type {HTMLLIElement[]} */ listboxResults = [];
         const /** @type {SearchResult[]} */ filteredOptions = [];
         let /** @type {SearchResult | null} */ firstOption = null;
@@ -828,7 +835,7 @@ class SearchBox {
             return null; // Cancel stale computation
         }
 
-        // Finalize completed computation
+        // Finalize completed computation, store intermediate results back to object
         this.filteredOptions = filteredOptions;
         this.firstOption = firstOption;
         this.lastOption = lastOption;
