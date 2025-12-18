@@ -48,9 +48,10 @@ class TestSearch:
         page.get_by_role("searchbox").type("Html.none")
         expect(page.get_by_role("searchbox")).to_match_aria_snapshot('- searchbox "Search": Html.none')
         expect(page.get_by_label("Results")).to_match_aria_snapshot("""- listbox "Results":
-  - option "Html.none Suggestion" [selected]:
+  - option "Html.none ↪ Verso.Output.Html.empty Suggestion" [selected]:
     - paragraph:
       - emphasis: Html.none
+      - text: ↪ Verso.Output.Html.empty
     - paragraph: Suggestion
   - listitem: Showing 1/1 results""")
 
