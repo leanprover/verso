@@ -14,52 +14,30 @@ lean_lib VersoUtil where
   srcDir := "src/verso-util"
   roots := #[`VersoUtil]
 
-input_file versoVars where
+input_dir staticWeb where
   text := true
-  path := "static-web/verso-vars.css"
+  path := "static-web"
 
-input_file findJs where
+input_dir vendorJs where
   text := true
-  path := "static-web/find.js"
-
-input_file mathJs where
-  text := true
-  path := "static-web/math.js"
-
-input_dir vendorPopper where
-  path := "vendored-js/popper"
-
--- Commented out because nested directories aren't handled correctly
--- FIXME: https://github.com/leanprover/lean4/issues/10827
--- (A single vendoredJs target is preferable when that issue is resolved)
--- input_dir vendorTippy where
---   path := "vendored-js/tippy"
--- input_dir vendorKatex where
---   path := "vendored-js/katex"
-
-input_dir vendorElasticlunr where
-  path := "vendored-js/elasticlunr"
-
+  path := "vendored-js"
 
 @[default_target]
 lean_lib Verso where
   srcDir := "src/verso"
   roots := #[`Verso]
-  needs := #[versoVars, mathJs, vendorPopper, vendorElasticlunr]
+  needs := #[staticWeb, vendorJs]
 
 @[default_target]
 lean_lib MultiVerso where
   srcDir := "src/multi-verso"
   roots := #[`MultiVerso]
 
-input_dir searchJs where
-  path := "static-web/search"
-
 @[default_target]
 lean_lib VersoSearch where
   srcDir := "src/verso-search"
   -- Rebuild search when JS on disk changes
-  needs := #[searchJs]
+  needs := #[staticWeb]
 
 @[default_target]
 lean_lib VersoBlog where
@@ -70,7 +48,7 @@ lean_lib VersoBlog where
 lean_lib VersoManual where
   srcDir := "src/verso-manual"
   roots := #[`VersoManual]
-  needs := #[findJs]
+  needs := #[staticWeb]
 
 @[default_target]
 lean_exe «verso» where
