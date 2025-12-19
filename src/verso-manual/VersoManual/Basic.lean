@@ -1051,6 +1051,7 @@ structure Domain where
   name : Name := by exact decl_name%
 
 def doc : Domain := {}
+def doc.suggestion : Domain := {}
 def doc.tactic : Domain := {}
 def doc.tech : Domain := {}
 def doc.syntaxKind : Domain := {}
@@ -1063,6 +1064,7 @@ def doc.tactic.conv : Domain := {}
 protected def «example» : Domain := {}
 
 def docstringDomain := ``Verso.Genre.Manual.doc
+def suggestionDomain := ``Verso.Genre.Manual.doc.suggestion
 def tacticDomain := ``Verso.Genre.Manual.doc.tactic
 def technicalTermDomain := ``Verso.Genre.Manual.doc.tech
 def syntaxKindDomain := ``Verso.Genre.Manual.doc.syntaxKind

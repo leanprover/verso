@@ -279,9 +279,9 @@ where
 end Docstring
 
 
-def docstring (name : Name) (declType : Docstring.DeclType) (signature : Signature) (customLabel : Option String) : Block where
+def docstring (name : Name) (declType : Docstring.DeclType) (signature : Signature) (customLabel : Option String) (altNamesToSuggest : Array Name) : Block where
   name := `Verso.Genre.Manual.Block.docstring
-  data := ToJson.toJson (name, declType, signature, customLabel)
+  data := ToJson.toJson (name, declType, signature, customLabel, altNamesToSuggest)
 
 def docstringSection (header : String) : Block where
   name := `Verso.Genre.Manual.Block.docstringSection
@@ -541,8 +541,11 @@ def internalSignature.descr : BlockDescr where
     open Verso.Output.TeX in do
     let .ok (name, signature) := FromJson.fromJson? (α := Highlighted × Option Highlighted) info
       | Verso.Doc.TeX.logError "Failed to deserialize docstring section data while generating TeX"; return .empty
-    let signatureTeX := if let .some sig := signature then \TeX{ " : " \Lean{sig.toTeX}} else .empty
-    pure \TeX{\par " " \Lean{name.toTeX} \Lean{signatureTeX} \Lean{.seq (← contents.mapM goB)}}
+    let signatureTeX ← do
+      if let some sig := signature then
+        pure \TeX{ " : " \Lean{ (← sig.toTeX) } }
+      else pure .empty
+    pure \TeX{\par " " \Lean{← name.toTeX} \Lean{signatureTeX} \Lean{.seq (← contents.mapM goB)}}
   toHtml := some fun _goI goB _id info contents =>
     open Verso.Doc.Html HtmlT in
     open Verso.Output Html in do
@@ -605,10 +608,11 @@ def fieldSignature.descr : BlockDescr where
       | .public => .empty
       | .private => \TeX{ \textbf{"private"} }
       | .protected => .empty
-    let desc := \TeX{ \par " " \Lean{visibility} \Lean{name.toTeX} " : " \Lean{signature.toTeX} \par " " \Lean{.seq (← contents.mapM goB)}}
+    let desc := \TeX{ \par " " \Lean{visibility} \Lean{← name.toTeX} " : " \Lean{← signature.toTeX} \par " " \Lean{.seq (← contents.mapM goB)}}
+    let parentsTeX := (← parents.toList.mapM (·.toTeX)).intersperse (.raw ", ")
     let inheritedExtra : Output.TeX := match inheritedFrom with
     | .none => ""
-    | .some _ => .raw "Inherited from " ++ (parents |>.toList |>.map (·.toTeX) |>.intersperse (.raw ", "))
+    | .some _ => .raw "Inherited from " ++ parentsTeX
     pure (desc ++ inheritedExtra)
   toHtml := some fun _goI goB _id info contents =>
     open Verso.Doc.Html HtmlT in
@@ -651,10 +655,10 @@ def constructorSignature.descr : BlockDescr where
     open Verso.Output.TeX in do
       let .ok signature := FromJson.fromJson? (α := Highlighted) info
         | Verso.Doc.TeX.logError "Failed to deserialize docstring section data while generating TeX"; pure .empty
-      let signat := signature.toTeX
+      let signat ← signature.toTeX
       pure \TeX{ \Lean{.raw "\\begin{list}{$|$}{\\leftmargin=1em\\topsep=0pt \\partopsep=0pt}\\item "}
                  \Lean{signat}
-                 \Lean{.raw "\\\\" }
+                 \Lean{.raw "\\par " }
                  \Lean{← contents.mapM goB}
                  \Lean{.raw "\\end{list}" } }
 
@@ -679,13 +683,42 @@ def Signature.toHtml  : Signature → HighlightHtmlM Manual Html
     return {{<div class="wide-only">{{← wide.toHtml}}</div><div class="narrow-only">{{← narrow.toHtml}}</div>}}
 
 open Verso.Output TeX in
-def Signature.toTeX : Signature → TeX
+def Signature.toTeX [Monad m] [Doc.TeX.GenreTeX g m] : Signature → Doc.TeX.TeXT g m TeX
   | { wide, .. } =>
     wide.toTeX
 
 open Verso.Search in
 def docDomainMapper : DomainMapper :=
   DomainMapper.withDefaultJs docstringDomain "Documentation" "doc-domain" |>.setFont { family := .code }
+
+open Verso.Search in
+def docSuggestionMapper : DomainMapper := {
+  displayName := "Suggestion",
+  className := "suggestion-domain",
+  dataToSearchables := "(domainData) =>
+    Object.entries(domainData.contents).map(([key, value]) => ({
+      searchKey: value[0].data.searchTerm,
+      address: `${value[0].address}#${value[0].id}`,
+      domainId: '" ++ suggestionDomain.toString ++ "',
+      ref: value[0].data.suggestedRedirect,
+    }))",
+  customRender := "(searchable, matchedParts, document) => {
+    const searchTerm = document.createElement('p');
+    for (const { t, v } of matchedParts) {
+      if (t === 'text') {
+        searchTerm.append(v);
+      } else {
+        const emEl = document.createElement('em');
+        searchTerm.append(emEl);
+        emEl.textContent = v;
+      }
+    }
+    searchTerm.append(document.createElement('br'));
+    searchTerm.append(`↪ ${searchable.ref}`);
+    return searchTerm
+  }"
+  : DomainMapper
+}.setFont { family := .code }
 
 open Verso.Genre.Manual.Markdown in
 @[block_extension Block.docstring]
@@ -694,10 +727,13 @@ def docstring.descr : BlockDescr := withHighlighting {
     |>.setDomainTitle docstringDomain "Lean constant reference"
     |>.setDomainDescription docstringDomain "Documentation for Lean constants"
     |>.addQuickJumpMapper docstringDomain docDomainMapper
+    |>.setDomainTitle suggestionDomain "Lean constant suggestions"
+    |>.setDomainDescription suggestionDomain "Search suggestions for Lean constants"
+    |>.addQuickJumpMapper suggestionDomain docSuggestionMapper
 
   traverse id info _ := do
-    let .ok (name, declType, _signature, _customLabel) :=
-      FromJson.fromJson? (α := Name × Block.Docstring.DeclType × Signature × Option String) info
+    let .ok (name, declType, _signature, _customLabel, altNames) :=
+      FromJson.fromJson? (α := Name × Block.Docstring.DeclType × Signature × Option String × Array Name) info
       | do logError "Failed to deserialize docstring data"; pure none
 
     match declType with
@@ -737,11 +773,19 @@ def docstring.descr : BlockDescr := withHighlighting {
     if name.getPrefix != .anonymous then
       Index.addEntry id {term := Doc.Inline.code name.getString!, subterm := some <| Doc.Inline.code name.toString}
 
+    for altName in altNames do
+      modify fun st => st
+        |>.saveDomainObject suggestionDomain name.toString id
+        |>.saveDomainObjectData suggestionDomain name.toString (json%{
+          "searchTerm": $altName.toString,
+          "suggestedRedirect": $name.toString
+        })
+
     pure none
   toHtml := some <| fun _goI goB id info contents =>
     open Verso.Doc.Html HtmlT in
     open Verso.Output Html in do
-      let .ok (name, declType, signature, customLabel) := FromJson.fromJson? (α := Name × Block.Docstring.DeclType × Signature × Option String) info
+      let .ok (name, declType, signature, customLabel, _) := FromJson.fromJson? (α := Name × Block.Docstring.DeclType × Signature × Option String × Array Name) info
         | do Verso.Doc.Html.HtmlT.logError "Failed to deserialize docstring data while generating HTML"; pure .empty
       let sig : Html ← signature.toHtml
 
@@ -765,20 +809,20 @@ def docstring.descr : BlockDescr := withHighlighting {
       }}
 
   localContentItem := fun _id info _contents => open Verso.Output.Html in do
-    let  (name, _declType, _signature, _customLabel) ←
-      FromJson.fromJson? (α := Name × Block.Docstring.DeclType × Signature × Option String) info
+    let  (name, _declType, _signature, _customLabel, _altNames) ←
+      FromJson.fromJson? (α := Name × Block.Docstring.DeclType × Signature × Option String × Array Name) info
     let names := #[name.getString!, name.toString]
     pure <| names.map fun s => (s, {{<code>{{s}}</code>}})
 
   toTeX := some <| fun _goI goB _id info contents =>
     open Verso.Output.TeX in do
-      let .ok (name, declType, signature, customLabel) := FromJson.fromJson? (α := Name × Block.Docstring.DeclType × Signature × Option String) info
+      let .ok (name, declType, signature, customLabel, _) := FromJson.fromJson? (α := Name × Block.Docstring.DeclType × Signature × Option String × Array Name) info
         | Verso.Doc.TeX.logError "Failed to deserialize docstring data while generating TeX"; return .empty
 
       let label := customLabel.getD declType.label
       if label == "" then
         Verso.Doc.TeX.logError s!"Missing label for '{name}': supply one with 'label := \"LABEL\"'"
-      pure \TeX{\begin{docstringBox}{\Lean{label}} \Lean{signature.toTeX} \tcblower " " \Lean{← contents.mapM goB} \end{docstringBox}}
+      pure \TeX{\begin{docstringBox}{\Lean{label}} \Lean{← signature.toTeX} \tcblower " " \Lean{← contents.mapM goB} \end{docstringBox}}
 
   extraCss := [docstringStyle]
 }
@@ -1351,13 +1395,15 @@ def docstring : BlockCommandOf DocstringConfig
       if !(← Docstring.getAllowDeprecated) && Lean.Linter.isDeprecated (← getEnv) name then
         Lean.logError m!"'{name}' is deprecated.\n\nSet option 'verso.docstring.allowDeprecated' to 'true' to allow documentation for deprecated names."
 
-
       let declType ← Block.Docstring.DeclType.ofName name (hideFields := hideFields) (hideStructureConstructor := hideCtor)
 
       let signature ← Signature.forName name
 
       let extras ← getExtras name declType
-      ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.docstring $(quote name) $(quote declType) $(quote signature) $(quote customLabel)) #[$(blockStx ++ extras),*])
+
+      let altNames ← getStoredSuggestions name
+
+      ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.docstring $(quote name) $(quote declType) $(quote signature) $(quote customLabel) $(quote altNames.toArray)) #[$(blockStx ++ extras),*])
 where
   getExtras (name : Name) (declType : Block.Docstring.DeclType) : DocElabM (Array Term) :=
     match declType with

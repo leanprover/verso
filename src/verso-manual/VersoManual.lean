@@ -314,8 +314,9 @@ def emitTeX (logError : String → IO Unit) (config : Config) (text : Part Manua
   let authors := text.metadata.map (·.authors) |>.getD []
   let date := text.metadata.bind (·.date) |>.getD ""
   let ctxt := {logError}
-  let frontMatter ← text.content.mapM (·.toTeX (opts, ctxt, state))
-  let chapters ← text.subParts.mapM (·.toTeX (opts, ctxt, state))
+  let texCtxt := {}
+  let frontMatter ← text.content.mapM (·.toTeX (opts, ctxt, state, texCtxt))
+  let chapters ← text.subParts.mapM (·.toTeX (opts, ctxt, state, texCtxt))
   let dir := config.destination.join "tex"
   ensureDir dir
   let mut packages : Std.HashSet String := {}
@@ -351,7 +352,7 @@ instance : Inhabited (StateT (State Html) (ReaderT ExtensionImpls IO) Html.Toc) 
 /--
 Generate a ToC structure for a document.
 
-Here, `depth` is the current depth at which pages no longer recieve their own HTML files, not the
+Here, `depth` is the current depth at which pages no longer receive their own HTML files, not the
 depth of the table of contents in the document (which is controlled by a parameter to `Toc.html`).
 -/
 partial def toc [Monad m] [Html.ToHtml Manual m (Doc.Inline Manual)] [MonadLiftT IO m]

@@ -28,8 +28,11 @@
 \newcommand{\warningDecorate}[1]{\coloredwave{warningColor}{#1}}
 \DefineVerbatimEnvironment{LeanVerbatim}{Verbatim}
   {commandchars=\\\{\},fontsize=\small,breaklines=true}
+\DefineVerbatimEnvironment{FileVerbatim}{Verbatim}{commandchars=\\\{\},fontsize=\small,breaklines=true,frame=single,framesep=2mm,numbers=left}
 \CustomVerbatimCommand{\LeanVerb}{Verb}
   {commandchars=\\\{\},fontsize=\small}
+\CustomVerbatimCommand{\FileListingVerb}{Verb}
+  {commandchars=\\\{\},fontsize=\small,frame=single,framesep=2mm, numbers=left}
 
 \definecolor{bordercolor}{HTML}{98B2C0}
 \definecolor{medgray}{HTML}{555555}
@@ -90,8 +93,8 @@ title={#2},#1}
 
 \chapter*{Introduction}
 \begin{docstringBox}{def}
-\LeanVerb|Verso.Integration.SampleDoc.sample_constant : Type|\tcblower This is a docstring.Here's some more text with a \Verb|code inline| in it.
-Here's when a \Verb|code inline|
+\LeanVerb|Verso.Integration.SampleDoc.sample_constant : Type|\tcblower This is a docstring.Here's some more text with a \LeanVerb|code inline| in it.
+Here's when a \LeanVerb|code inline|
 occurs right before a line break.And then here's a paragraph break.
 \end{docstringBox}
 

@@ -18,6 +18,13 @@ public structure Options (g : Genre) (m : Type → Type) where
   headerLevel : Option (Fin headerLevels.size)
   logError : String → m Unit
 
+public structure TeXContext where
+  /--
+  True if we are currently rendering TeX in a fragile environment
+  (specifically, one which cannot accommodate `\Verb`)
+  -/
+  inFragile : Bool := false
+
 public def Options.reinterpret (lift : {α : _} → m α → m' α) (opts : Options g m) : Options g m' :=
   {opts with
     logError := fun msg => lift <| opts.logError msg}
@@ -26,7 +33,7 @@ public def Options.lift [MonadLiftT m m'] (opts : Options g m) : Options g m' :=
   opts.reinterpret MonadLiftT.monadLift
 
 public abbrev TeXT (genre : Genre) (m : Type → Type) : Type → Type :=
-  ReaderT (Options genre m × genre.TraverseContext × genre.TraverseState) m
+  ReaderT (Options genre m × genre.TraverseContext × genre.TraverseState × TeXContext) m
 
 public instance [Monad m] [Inhabited α] : Inhabited (TeXT g m α) := ⟨pure default⟩
 
@@ -36,6 +43,10 @@ public def options [Monad m] : TeXT g m (Options g m) := do
 public def logError [Monad m] (message : String) : TeXT g m Unit := do
   (← options).logError message
 
+public def texContext [Monad m] : TeXT g m TeXContext := do
+  let ⟨_, _, _, ctx⟩ ← read
+  pure ctx
+
 public def header [Monad m] (name : TeX) : TeXT g m TeX := do
   let opts ← options
   let some i := opts.headerLevel
@@ -43,8 +54,11 @@ public def header [Monad m] (name : TeX) : TeXT g m TeX := do
   let header := opts.headerLevels[i]
   pure <| .raw (s!"\\{header}" ++ "{") ++ name ++ .raw "}"
 
+public def inFragile [Monad m] (act : TeXT g m α) : TeXT g m α :=
+  withReader (fun (opts, st, st', tctx) => (opts, st, st', { tctx with inFragile := true })) act
+
 public def inHeader [Monad m] (act : TeXT g m α) : TeXT g m α :=
-  withReader (fun (opts, st, st') => (bumpHeader opts, st, st')) act
+  withReader (fun (opts, st, st', tctx) => (bumpHeader opts, st, st', tctx)) act
 where
   bumpHeader opts :=
     if let some i := opts.headerLevel then
@@ -61,6 +75,48 @@ public class GenreTeX (genre : Genre) (m : Type → Type) where
 def escapeForTexHref (s : String) : String :=
   s.replace "%" "\\%"
 
+/--
+Replaces characters with strings simultaneously.
+-/
+def replaceChars (s : String) (replace : Char → Option String) : String :=
+  let rec loop (acc : String) (pos : String.Pos.Raw) :=
+    if pos.byteIdx ≥ s.utf8ByteSize then acc
+    else
+      have : (String.Pos.Raw.next s pos).byteIdx > pos.byteIdx :=
+        String.Pos.Raw.byteIdx_lt_byteIdx_next s pos
+      let c := pos.get s
+      let s' := match replace c with | some rs => rs | none => s!"{c}"
+      loop (acc ++ s') (pos.next s)
+    termination_by s.rawEndPos.1 - pos.1
+  loop "" 0
+
+/--
+Escapes a string in an appropriate way for uses of `\Verb` and
+`\begin{Verbatim}...\end{Verbatim}` (from package `fancyvrb`) with
+command characters `\`, `{`, and `}`.
+-/
+public def escapeForVerbatim (s : String) : String :=
+  replaceChars s fun
+  | '{' => some "\\symbol{123}"
+  | '|' => some "\\symbol{124}"
+  | '}' => some "\\symbol{125}"
+  | '\\' => some "\\symbol{92}"
+  | '#' => some "\\symbol{35}" -- FIXME: this is really just a test
+  | _ => none
+
+/-- info: "\\symbol{123}\\symbol{124}\\symbol{125}\\symbol{92}" -/
+#guard_msgs in
+#eval escapeForVerbatim "{|}\\"
+
+/--
+Wraps some TeX (which is already assumed to be appropriately escaped in the approprate
+verbatim-like environment depending on whether we're in a fragile environment.
+-/
+public def verbatimInline [Monad m] [GenreTeX g m] (t : TeX) : TeXT g m Verso.Output.TeX := do
+  if (← texContext).inFragile
+  then pure (.seq #[.raw "\\texttt{", t, .raw "}"]) -- TODO: better escaping for texttt
+  else pure (.seq #[.raw "\\LeanVerb|", t, .raw "|"])
+
 public partial defmethod Inline.toTeX [Monad m] [GenreTeX g m] : Inline g → TeXT g m TeX
   | .text str => pure <| .text str
   | .link content dest => do
@@ -74,8 +130,7 @@ public partial defmethod Inline.toTeX [Monad m] [GenreTeX g m] : Inline g → Te
     pure \TeX{\emph{\Lean{← content.mapM toTeX}}}
   | .bold content => do
     pure \TeX{\textbf{\Lean{← content.mapM toTeX}}}
-  | .code str => do
-    pure \TeX{s!"\\Verb|{str}|"} --- TODO choose delimiter automatically
+  | .code str => verbatimInline (escapeForVerbatim str)
   | .math .inline str => pure <| .raw s!"${str}$"
   | .math .display str => pure <| .raw s!"\\[{str}\\]"
   | .concat inlines => inlines.mapM toTeX
@@ -102,7 +157,7 @@ public partial defmethod Part.toTeX [Monad m] [GenreTeX g m] (p : Part g) : TeXT
   match p.metadata with
   | .none => do
     pure \TeX{
-      \Lean{← header (← p.title.mapM Inline.toTeX)}
+      \Lean{← header (← inFragile <| p.title.mapM Inline.toTeX)}
       "\n\n"
       \Lean{← p.content.mapM (fun b => do pure <| TeX.seq #[← Block.toTeX b, .paragraphBreak])}
       "\n\n"
