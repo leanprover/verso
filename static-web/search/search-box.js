@@ -1,4 +1,5 @@
 /**
+/**
  * Copyright (c) 2024 Lean FRO LLC. All rights reserved.
  * Released under Apache 2.0 license as described in the file LICENSE.
  * Author: Jakob Ambeck Vase
@@ -10,6 +11,7 @@
 // Enable typescript
 // @ts-check
 
+let /** @type Promise<null|SearchResult> */ bigPromise = Promise.resolve(null);
 import { Range } from "./unicode-input.min.js";
 import { InputAbbreviationRewriter } from "./unicode-input-component.min.js";
 
@@ -517,6 +519,12 @@ class SearchBox {
     imeRewriter;
 
     /**
+     * Incrementing counter used to detect and cancel stale computations
+     * @type {number}
+     * */
+    requestCounter;
+
+    /**
      * @param {HTMLDivElement} comboboxNode
      * @param {HTMLButtonElement | null} buttonNode
      * @param {HTMLElement} listboxNode
@@ -530,6 +538,7 @@ class SearchBox {
         this.domainMappers = domainMappers;
         this.mappedData = mappedData;
         this.preparedData = Object.keys(this.mappedData).map((name) => fuzzysort.prepare(name));
+        this.requestCounter = 0;
 
         // Add IME
         this.imeRewriter = new InputAbbreviationRewriter(
@@ -674,20 +683,19 @@ class SearchBox {
 
     // ComboboxAutocomplete Events
 
+    /**
+     * @returns {Promise<SearchResult|null>}
+     */
     async filterOptions() {
         const currentOptionText = opt(this.currentOption, resultToText);
         const filter = this.filter;
-
-        // Empty the listbox
-        this.listboxNode.textContent = "";
-
-        this.listboxNode.append(...this.domainFilters);
 
         if (filter.length === 0) {
             this.filteredOptions = [];
             this.firstOption = null;
             this.lastOption = null;
             this.currentOption = null;
+            this.listboxNode.textContent = "";
             return null;
         }
 
@@ -726,25 +734,31 @@ class SearchBox {
             this.firstOption = null;
             this.lastOption = null;
             this.currentOption = null;
-            this.listboxNode.appendChild(this.noResultsElement);
+            this.listboxNode.textContent = "";
+            this.listboxNode.append(this.noResultsElement);
             return null;
         }
 
-        /**
-         * @type {SearchResult|null}
-         */
-        let newCurrentOption = null;
-
-        /** @type {(Fuzzysort.Result|TextMatch) []} */
-        let allResults = [];
+        let /** @type {(Fuzzysort.Result|TextMatch) []} */ allResults = [];
         allResults.push(...textResults);
         allResults.push(...results);
         allResults.sort((x, y) => y.score - x.score);
         allResults = allResults.slice(0, 30);
 
-        this.filteredOptions = [];
-        this.firstOption = null;
-        this.lastOption = null;
+        // NOTE: Cancellable speculative execution segment begins here! (No awaits before this.)
+        // The following computation is async, and so might fall behind later search results if
+        // the user types quickly. This counter detects whether the current function has become
+        // stale due to a later-starting search request
+        this.requestCounter += 1;
+        const requestCount = this.requestCounter;
+
+        // All variables need to be stored in the function and only written to the object once
+        // we decide the request was not stale
+        const /** @type {HTMLLIElement[]} */ listboxResults = [];
+        const /** @type {SearchResult[]} */ filteredOptions = [];
+        let /** @type {SearchResult | null} */ firstOption = null;
+        let /** @type {SearchResult | null} */ lastOption = null;
+        let /** @type {SearchResult|null} */ newCurrentOption = null;
         for (let i = 0; i < allResults.length; i++) {
             const result = allResults[i];
             if ("target" in result) {
@@ -774,13 +788,13 @@ class SearchBox {
                     option.addEventListener("click", this.onOptionClick(searchResult));
                     option.addEventListener("pointerover", this.onOptionPointerover.bind(this));
                     option.addEventListener("pointerout", this.onOptionPointerout.bind(this));
-                    this.filteredOptions.push(searchResult);
-                    this.listboxNode.appendChild(option);
+                    filteredOptions.push(searchResult);
+                    listboxResults.push(option);
                     if (i === 0 && j === 0) {
-                        this.firstOption = searchResult;
+                        firstOption = searchResult;
                     }
                     if (i === allResults.length - 1 && j === dataItems.length - 1) {
-                        this.lastOption = searchResult;
+                        lastOption = searchResult;
                     }
                     if (currentOptionText === resultToText(searchResult)) {
                         newCurrentOption = searchResult;
@@ -798,13 +812,13 @@ class SearchBox {
                     option.addEventListener("click", this.onOptionClick(searchResult));
                     option.addEventListener("pointerover", this.onOptionPointerover.bind(this));
                     option.addEventListener("pointerout", this.onOptionPointerout.bind(this));
-                    this.filteredOptions.push(searchResult);
-                    this.listboxNode.appendChild(option);
+                    filteredOptions.push(searchResult);
+                    listboxResults.push(option);
                     if (i === 0) {
-                        this.firstOption = searchResult;
+                        firstOption = searchResult;
                     }
                     if (i === allResults.length - 1) {
-                        this.lastOption = searchResult;
+                        lastOption = searchResult;
                     }
                     if (currentOptionText === resultToText(searchResult)) {
                         newCurrentOption = searchResult;
@@ -816,14 +830,24 @@ class SearchBox {
         const moreResults = document.createElement("li");
         moreResults.textContent = `Showing ${allResults.length}/${results.total + textResults.length} results`;
         moreResults.className = `more-results`;
-        this.listboxNode.appendChild(moreResults);
+        listboxResults.push(moreResults);
 
+        if (this.requestCounter !== requestCount) {
+            return null; // Cancel stale computation
+        }
+
+        // Finalize completed computation, store intermediate results back to object
+        this.filteredOptions = filteredOptions;
+        this.firstOption = firstOption;
+        this.lastOption = lastOption;
         if (newCurrentOption) {
             this.currentOption = newCurrentOption;
         }
         if (!this.currentOption) {
             this.currentOption = this.firstOption;
         }
+        this.listboxNode.textContent = "";
+        this.listboxNode.append(...listboxResults);
 
         return newCurrentOption ?? this.firstOption;
     }
