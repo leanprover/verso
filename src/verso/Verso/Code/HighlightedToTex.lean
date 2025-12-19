@@ -8,6 +8,7 @@ public import SubVerso.Highlighting
 import Verso.Method
 public import Verso.Output.TeX
 public import Verso.Doc.TeX
+public import Verso.Code.Highlighted
 
 open SubVerso.Highlighting
 open Verso.Doc.TeX (escapeForVerbatim verbatimInline GenreTeX TeXT)
@@ -15,62 +16,6 @@ open Verso.Output
 open Lean (Json ToJson FromJson Quote)
 open Std (HashMap)
 
-/-
-These two theorems justify termination of `containsNewline` below
-in the face of its use of `Array.any`. They can be removed if these
-land in `lean4` proper.
--/
-@[wf_preprocess] theorem any_wfParam {xs : Array α} {f : α → Bool} :
-    (wfParam xs).any f = xs.attach.unattach.any f := by
-  simp [wfParam]
-
-@[wf_preprocess] theorem any_unattach {P : α → Prop} {xs : Array (Subtype P)} {f : α → Bool} :
-    xs.unattach.any f = xs.any fun ⟨x, h⟩ =>
-      binderNameHint x f <| binderNameHint h () <| f (wfParam x) := by
-  simp [wfParam]
-
-namespace SubVerso.Highlighting.Highlighted
-
-private def trimOneLeadingNl : Highlighted → Highlighted
-  | .text s => .text <| (s.dropPrefix "\n").copy
-  | .unparsed s => .unparsed <| (s.dropPrefix "\n").copy
-  | .seq xs =>
-    let i? := xs.findIdx? (!·.isEmpty)
-    match h : i? with
-    | some i =>
-      have : i < xs.size := (Array.findIdx?_eq_some_iff_findIdx_eq.mp h).left
-      xs.extract (i+1) |>.foldl (init := trimOneLeadingNl xs[i]) (· ++ ·)
-    | none => .empty
-  | hl@(.point ..) | hl@(.token ..) => hl
-  | .tactics i s e hl => .tactics i s e (trimOneLeadingNl hl)
-  | .span i hl => .span i (trimOneLeadingNl hl)
-
-private def trimOneTrailingNl : Highlighted → Highlighted
-  | .text s => .text <| (s.dropSuffix "\n").copy
-  | .unparsed s => .unparsed <| (s.dropSuffix "\n").copy
-  | .seq xs =>
-    let ni? := xs.reverse.findIdx? (!·.isEmpty)
-    match h : ni? with
-    | some ni =>
-      let i := xs.size - ni - 1
-      have := (Array.findIdx?_eq_some_iff_findIdx_eq.mp h).left
-      have : i < xs.size := by grind
-      .seq (xs.extract (stop := i) ++ #[trimOneTrailingNl xs[i]])
-    | none => .empty
-  | hl@(.point ..) | hl@(.token ..) => hl
-  | .tactics i s e hl => .tactics i s e (trimOneTrailingNl hl)
-  | .span i hl => .span i (trimOneTrailingNl hl)
-
-def containsNewline (t : Highlighted) : Bool := match t with
-  | .text s => s.contains '\n'
-  | .unparsed s => s.contains '\n'
-  | .seq xs => xs.any containsNewline
-  | (.point ..) | (.token ..) => False
-  | .tactics _ _ _ hl => hl.containsNewline
-  | .span _ hl => hl.containsNewline
-termination_by t
-
-end SubVerso.Highlighting.Highlighted
 
 namespace SubVerso.Highlighting
 
