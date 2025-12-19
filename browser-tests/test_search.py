@@ -5,33 +5,22 @@ class TestSearch:
         """Test that the search box can find suggestions."""
         page.goto(f"{server}") 
 
-        page.get_by_role("searchbox").type("Verso provides genre authors with tools for generating HTML and TeX code via embedded languages")
-        expect(page.get_by_role("searchbox")).to_match_aria_snapshot('- searchbox "Search": Verso provides genre authors with tools for generating HTML and TeX code via embedded languages')
+        page.get_by_role("searchbox").type("syntactic ASTs libraries extensions")
+        expect(page.get_by_role("searchbox")).to_match_aria_snapshot('- searchbox "Search": syntactic ASTs libraries extensions')
+        print(page.get_by_label("Results").aria_snapshot())
         expect(page.get_by_label("Results")).to_match_aria_snapshot("""
           - listbox "Results":
-            - option "5. Output Formats Verso provides genre authors with tools for generating HTML and TeX code via embedded languages that reduce… …be used by authors of extensions to the Manual genre, who need to… Writing Documentation in Lean with Verso" [selected]:
+            - option "5. Output Formats …reduce the syntactic overhead of constructing ASTs. These libraries may also be used by authors of extensions to the Manual… Writing Documentation in Lean with Verso" [selected]:
               - paragraph:
-                - text: 5. Output Formats
-                - emphasis: Verso
-                - emphasis: provides
-                - emphasis: genre
-                - emphasis: authors
-                - text: with
-                - emphasis: tools
-                - text: for
-                - emphasis: generating
-                - emphasis: HTML
-                - text: and
-                - emphasis: TeX
-                - emphasis: code
-                - emphasis: via
-                - emphasis: embedded
-                - emphasis: languages
-                - text: that reduce… …be used by
-                - emphasis: authors
-                - text: of extensions to the Manual
-                - emphasis: genre,
-                - text: who need to…
+                - text: 5. Output Formats …reduce the
+                - emphasis: syntactic
+                - text: overhead of constructing
+                - emphasis: ASTs.
+                - text: These
+                - emphasis: libraries
+                - text: may also be used by authors of
+                - emphasis: extensions
+                - text: to the Manual…
               - paragraph: Writing Documentation in Lean with Verso
             - listitem: Showing 1/1 results""".strip())
 
