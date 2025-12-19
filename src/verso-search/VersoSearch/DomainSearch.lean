@@ -92,17 +92,20 @@ public def DomainMapper.withDefaultJs (domain : Lean.Name) (displayName classNam
     ref: value,
   }))"
 
-open Std Format in
 /--
 Generates JavaScript code for the provided domain mapper.
 -/
 public def DomainMapper.toJs (mapper : DomainMapper) : Std.Format :=
-  nest 2 <| group <|
-    text "{" ++ line ++
-    nest 2 (group ("dataToSearchables:" ++ line ++ mapper.dataToSearchables)) ++ "," ++ line ++
-    nest 2 (group ("className:" ++ line ++ text mapper.className.quote)) ++ "," ++ line ++
-    nest 2 (group ("displayName:" ++ line ++ text mapper.displayName.quote)) ++ line ++
-    text "}"
+  .nest 2 <| .group <|
+    .text "{" ++ .line ++
+    .nest 2 (.group ("dataToSearchables:" ++ .line ++ mapper.dataToSearchables)) ++ "," ++ .line ++
+    .nest 2 (.group ("className:" ++ .line ++ .text mapper.className.quote)) ++ "," ++ .line ++
+    .nest 2 (.group ("displayName:" ++ .line ++ .text mapper.displayName.quote)) ++ "," ++ .line ++
+    (match mapper.customRender with
+      | .none => .nil
+      | .some customRender =>
+          .nest 2 (.group ("customRender:" ++ .line ++ .text customRender)) ++ "," ++ .line) ++
+    .text "}"
 
 -- Objects could be included as literals, rather than defined, but that makes it more difficult to
 -- debug the resulting JS code if needed.
