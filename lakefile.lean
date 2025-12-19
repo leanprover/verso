@@ -19,7 +19,6 @@ input_dir staticWeb where
   path := "static-web"
 
 input_dir vendorJs where
-  text := true
   path := "vendored-js"
 
 @[default_target]
