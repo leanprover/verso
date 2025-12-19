@@ -87,10 +87,9 @@ def testZip (_ : Config) : IO Unit := do
     testExtract randFiles .store
     testExtract randFiles .deflate
 
-
 where
-  files := #[("x.txt", "abcdef\nlkjlkj".bytes), ("y.txt", "".bytes), ("z.txt", "abc\n\n".bytes)]
-  me := (include_str "TestMain.lean").bytes
+  files := #[("x.txt", "abcdef\nlkjlkj".toByteArray), ("y.txt", "".toByteArray), ("z.txt", "abc\n\n".toByteArray)]
+  me := (include_str "TestMain.lean").toByteArray
   bwd := me.foldl (init := .empty) fun x y => ByteArray.empty.push y ++ x
   randName : IO String := do
     let len ← IO.rand 1 10
