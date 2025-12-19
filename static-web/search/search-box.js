@@ -745,6 +745,7 @@ class SearchBox {
         allResults.sort((x, y) => y.score - x.score);
         allResults = allResults.slice(0, 30);
 
+        // NOTE: Cancellable speculative execution segment begins here! (No awaits before this.)
         // The following computation is async, and so might fall behind later search results if
         // the user types quickly. This counter detects whether the current function has become
         // stale due to a later-starting search request
