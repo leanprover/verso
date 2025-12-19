@@ -775,8 +775,8 @@ def docstring.descr : BlockDescr := withHighlighting {
 
     for altName in altNames do
       modify fun st => st
-        |>.saveDomainObject suggestionDomain (altName.toString ++ "->" ++ name.toString) id
-        |>.saveDomainObjectData suggestionDomain (altName.toString ++ "->" ++ name.toString) (json%{
+        |>.saveDomainObject suggestionDomain (altName.toString ++ "↪" ++ name.toString) id
+        |>.saveDomainObjectData suggestionDomain (altName.toString ++ "↪" ++ name.toString) (json%{
           "searchTerm": $altName.toString,
           "suggestedRedirect": $name.toString
         })
