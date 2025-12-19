@@ -8,6 +8,7 @@ public import SubVerso.Highlighting
 import Verso.Method
 public import Verso.Output.TeX
 public import Verso.Doc.TeX
+public import Verso.Code.Highlighted
 
 open SubVerso.Highlighting
 open Verso.Doc.TeX (escapeForVerbatim verbatimInline GenreTeX TeXT)
