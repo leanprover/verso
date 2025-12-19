@@ -13,6 +13,7 @@ import Verso.Method
 public import Verso.Output.Html
 import Verso.Output.TeX
 meta import Verso.Instances.Deriving
+import VersoUtil.WfRec
 
 open SubVerso.Highlighting
 open Verso.Output Html
@@ -342,6 +343,44 @@ public partial defmethod Highlighted.trimLeft (hl : Highlighted) : Highlighted :
 Removes leading and trailing whitespace from highlighted code.
 -/
 public defmethod Highlighted.trim (hl : Highlighted) : Highlighted := hl.trimLeft.trimRight
+
+public defmethod Highlighted.trimOneLeadingNl : Highlighted → Highlighted
+  | .text s => .text <| (s.dropPrefix "\n").copy
+  | .unparsed s => .unparsed <| (s.dropPrefix "\n").copy
+  | .seq xs =>
+    let i? := xs.findIdx? (!·.isEmpty)
+    match h : i? with
+    | some i =>
+      have : i < xs.size := (Array.findIdx?_eq_some_iff_findIdx_eq.mp h).left
+      xs.extract (i+1) |>.foldl (init := trimOneLeadingNl xs[i]) (· ++ ·)
+    | none => .empty
+  | hl@(.point ..) | hl@(.token ..) => hl
+  | .tactics i s e hl => .tactics i s e (trimOneLeadingNl hl)
+  | .span i hl => .span i (trimOneLeadingNl hl)
+
+public defmethod Highlighted.trimOneTrailingNl : Highlighted → Highlighted
+  | .text s => .text <| (s.dropSuffix "\n").copy
+  | .unparsed s => .unparsed <| (s.dropSuffix "\n").copy
+  | .seq xs =>
+    let ni? := xs.reverse.findIdx? (!·.isEmpty)
+    match h : ni? with
+    | some ni =>
+      let i := xs.size - ni - 1
+      have := (Array.findIdx?_eq_some_iff_findIdx_eq.mp h).left
+      have : i < xs.size := by grind
+      .seq (xs.extract (stop := i) ++ #[trimOneTrailingNl xs[i]])
+    | none => .empty
+  | hl@(.point ..) | hl@(.token ..) => hl
+  | .tactics i s e hl => .tactics i s e (trimOneTrailingNl hl)
+  | .span i hl => .span i (trimOneTrailingNl hl)
+
+public defmethod Highlighted.containsNewline : (t : Highlighted) → Bool
+  | .text s => s.contains '\n'
+  | .unparsed s => s.contains '\n'
+  | .seq xs => xs.any containsNewline
+  | (.point ..) | (.token ..) => False
+  | .tactics _ _ _ hl => hl.containsNewline
+  | .span _ hl => hl.containsNewline
 
 defmethod Token.Kind.hover? (tok : Token.Kind) : HighlightHtmlM g (Option Nat) :=
   match tok with
