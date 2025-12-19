@@ -47,19 +47,27 @@ class TestSearch:
         page.goto(f"{server}") 
         page.get_by_role("searchbox").type("Html.none")
         expect(page.get_by_role("searchbox")).to_match_aria_snapshot('- searchbox "Search": Html.none')
-        expect(page.get_by_label("Results")).to_match_aria_snapshot("""- listbox "Results":
-  - option "Verso.Output.Html.none ↪ Verso.Output.Html.empty Suggestion" [selected]:
-    - paragraph:
-      - text: Verso.Output.
-      - emphasis: Html.none
-      - text: ↪ Verso.Output.Html.empty
-    - paragraph: Suggestion
-  - listitem: Showing 1/1 results""")
+        expect(page.get_by_label("Results")).to_match_aria_snapshot("""
+          - listbox "Results":
+            - option "Verso.Output.Html.none ↪ Verso.Output.Html.empty Suggestion" [selected]:
+              - paragraph:
+                - text: Verso.Output.
+                - emphasis: Html.none
+                - text: ↪ Verso.Output.Html.empty
+              - paragraph: Suggestion
+            - listitem: Showing 1/1 results""".strip())
 
         page.get_by_role("searchbox").press("Backspace")
         page.get_by_role("searchbox").press("Backspace")
         page.get_by_role("searchbox").press("Backspace")
         page.get_by_role("searchbox").type("il")
         expect(page.get_by_role("searchbox")).to_match_aria_snapshot('- searchbox "Search": Html.nil')
-        expect(page.get_by_label("Results")).to_match_aria_snapshot("""- listbox "Results":
-  - listitem: No results""")
+        expect(page.get_by_label("Results")).to_match_aria_snapshot("""
+          - listbox "Results":
+            - option "Verso.Output.Html.nil ↪ Verso.Output.Html.empty Suggestion" [selected]:
+              - paragraph:
+                - text: Verso.Output.
+                - emphasis: Html.nil
+                - text: ↪ Verso.Output.Html.empty
+              - paragraph: Suggestion
+            - listitem: Showing 1/1 results""".strip())
