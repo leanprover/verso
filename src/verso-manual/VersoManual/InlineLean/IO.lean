@@ -210,7 +210,7 @@ def Block.exampleFile.descr : BlockDescr := withHighlighting {
           | other =>
             IO.println <| s!"Expected a single code block in an example file, but got {other.size} blocks"
             return .empty
-        let str := str.trimLeft.trimRight
+        let str := str.trimAscii.copy
         let descr : Output.TeX :=
           match type with
           | .stdin => \TeX{\texttt{"stdin"} }

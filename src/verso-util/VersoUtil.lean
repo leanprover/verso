@@ -5,3 +5,4 @@ Author: David Thrane Christiansen
 -/
 module
 public import VersoUtil.BinFiles
+public import VersoUtil.WfRec
