@@ -9,7 +9,7 @@ public import Lean.Parser.Basic
 public import Lean.Parser.Types
 
 import Verso.Parser.Lean
-import Verso.SyntaxUtils
+public import Verso.SyntaxUtils
 import Lean.DocString.Syntax
 public import Lean.DocString.Parser
 
@@ -980,3 +980,18 @@ mutual
 end
 
 end Verso.Parser
+
+namespace Verso.Doc.Concrete
+open Verso.Parser
+open Lean Elab Term
+
+public def stringToInlines [Monad m] [MonadError m] [MonadEnv m] [MonadQuotation m] (s : StrLit) : m (Array Syntax) :=
+  withRef s do
+    return (← textLine.parseString s.getString).getArgs
+
+open Lean Elab Term in
+public def stringToBlocks [Monad m] [MonadError m] [MonadEnv m] [MonadQuotation m] (s : StrLit) : m (Array Syntax) :=
+  withRef s do
+    return (← (blocks {}).parseString s.getString).getArgs
+
+end Verso.Doc.Concrete

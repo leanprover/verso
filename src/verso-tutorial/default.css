@@ -1,0 +1,249 @@
+/* CSS Variables */
+:root {
+    --color-primary: #1a4d7a;
+    --color-secondary: #2b6ba3;
+    --color-tertiary: #3579b8;
+    --color-border: #dce9f5;
+    --color-background: #ffffff;
+    --color-text: #1a1a1a;
+    --color-code-bg: #f5f5f5;
+}
+
+/* Reset and base styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family:
+        -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    line-height: 1.6;
+    color: var(--color-text);
+    background-color: var(--color-background);
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem;
+}
+
+/* Typography */
+h1 {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--color-primary);
+    margin-bottom: 2rem;
+    line-height: 1.2;
+}
+
+h2 {
+    font-size: 1.75rem;
+    font-weight: 600;
+    color: var(--color-secondary);
+    margin-top: 3rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--color-border);
+}
+
+h3 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--color-tertiary);
+    margin-top: 1.5rem;
+    margin-bottom: 0.75rem;
+}
+
+p {
+    margin-bottom: 1rem;
+}
+
+/* Links */
+a {
+    color: var(--color-secondary);
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+    transition: border-bottom-color 0.2s;
+}
+
+a:hover {
+    border-bottom-color: var(--color-secondary);
+}
+
+a:focus {
+    outline: 2px solid var(--color-secondary);
+    outline-offset: 2px;
+}
+
+.code-links {
+    display: flex;
+    gap: 1em;
+}
+
+.code-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-weight: bold;
+    border: 1px solid var(--color-secondary);
+    border-radius: 0.5rem;
+    padding: 0 0.5rem;
+    margin-bottom: 0.5rem;
+    width: 45%;
+    text-align: center;
+}
+
+.code-link code {
+    background: inherit;
+    font-size: inherit;
+    font-weight: inherit;
+    padding: 0;
+    margin: 0;
+}
+
+.code-link::before {
+    font-size: 1.1em;
+    font-weight: bold;
+}
+
+.download.code-link::before {
+    content: "↓";
+}
+
+.live.code-link::before {
+    content: "↪";
+}
+
+/* Sections for tutorial list page */
+section {
+    margin-bottom: 3rem;
+}
+
+section:last-child {
+    margin-bottom: 0;
+}
+
+/* Tutorial list items */
+ul {
+    margin-top: 1rem;
+}
+
+li {
+    margin-bottom: 0.75rem;
+    margin-left: 1.5rem;
+    position: relative;
+}
+
+/* Code blocks */
+code {
+    background-color: var(--color-code-bg);
+    padding: 0.2rem 0.4rem;
+    border-radius: 3px;
+    font-family: "Courier New", monospace;
+    font-size: 0.9em;
+    color: var(--color-primary);
+}
+
+code.hl.block {
+    overflow-x: auto;
+}
+
+pre {
+    background-color: var(--color-code-bg);
+    padding: 1rem;
+    border-radius: 4px;
+    overflow-x: auto;
+    border-left: 3px solid var(--color-secondary);
+}
+
+pre code {
+    background-color: transparent;
+    padding: 0;
+}
+
+/* Math */
+.math {
+    background-color: inherit;
+    color: inherit;
+    padding: 0;
+}
+
+/* Tutorial list */
+
+.topic .tutorials {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+}
+
+a.tutorial-summary {
+    width: 45%;
+    border: 1px solid var(--color-border);
+    padding: 1rem;
+    border-radius: 1rem;
+    color: inherit;
+}
+
+a.tutorial-summary:hover {
+    text-decoration: none;
+}
+
+a.tutorial-summary footer {
+    font-weight: bold;
+    color: var(--color-secondary);
+}
+
+a.tutorial-summary footer::after {
+    content: " →";
+}
+
+a.tutorial-summary:hover footer {
+    text-decoration: underline;
+    font-weight: bold;
+    color: var(--color-secondary);
+}
+
+/* Tutorial page */
+main.tutorial-text {
+    display: grid;
+    grid-template-columns: minmax(10rem, 50rem) minmax(15em, 1fr);
+}
+
+main.tutorial-text > section {
+    grid-column: 1;
+}
+
+main.tutorial-text .local-toc {
+    grid-column: 2;
+    padding-left: 1rem;
+    position: sticky;
+    align-self: start;
+    top: 2rem;
+    max-height: calc(100vh - 2rem);
+    display: grid;
+    grid-template-rows: auto 1fr;
+}
+
+main.tutorial-text .local-toc h1 {
+    font-size: 1.5rem;
+    margin-bottom: 1rem;
+}
+
+.local-toc > ol {
+    overflow-y: auto;
+}
+
+.local-toc ol li {
+    list-style-type: none;
+    padding-left: 0;
+}
+
+.local-toc > ol > li {
+    font-weight: bold;
+}
+
+.local-toc ol li ol li {
+    list-style-type: none;
+    padding-left: 1rem;
+    font-weight: normal;
+}

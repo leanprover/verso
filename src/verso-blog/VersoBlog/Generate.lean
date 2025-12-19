@@ -34,17 +34,21 @@ structure Generate.Context where
   header : String
   rewriteHtml : Option ((logError : String → IO Unit) → TraverseContext → Html → IO Html) := none
   components : Components := {}
+  theme : Theme
+  extraParams : Multi.Path → Template.Params := fun _ => {}
 
-def Generate.Context.templateContext (ctxt : Generate.Context) (params : Template.Params) : Template.Context where
-  site := ctxt.site
-  config := ctxt.config
-  params := params
-  path := ctxt.ctxt.path
-  builtInStyles := ctxt.xref.stylesheets
-  builtInScripts := ctxt.xref.scripts.insert Traverse.renderMathJs
-  jsFiles := ctxt.xref.jsFiles.map (·.1)
-  cssFiles := ctxt.xref.cssFiles.map (·.1)
-  components := ctxt.components
+def Generate.Context.templateContext (ctxt : Generate.Context) (params : Template.Params) : Template.Context :=
+  let path := ctxt.ctxt.path
+  { site := ctxt.site,
+    config := ctxt.config,
+    params := params ++ ctxt.extraParams path,
+    path,
+    builtInStyles := ctxt.xref.stylesheets,
+    builtInScripts := ctxt.xref.scripts.insert Traverse.renderMathJs,
+    jsFiles := ctxt.xref.jsFiles.map (·.1),
+    cssFiles := ctxt.theme.cssFiles.map (·.1) ++ ctxt.xref.cssFiles.map (·.1),
+    components := ctxt.components
+  }
 
 abbrev GenerateM := ReaderT Generate.Context (StateT (State Html) (StateT Component.State IO))
 

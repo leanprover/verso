@@ -185,7 +185,10 @@ namespace Html
 /-- The default `DOCTYPE` for HTML5. -/
 public abbrev doctype := "<!DOCTYPE html>"
 
-/-- Visit the entire tree, applying rewrites in some monad. Return `none` to signal that no rewrites are to be performed. -/
+/--
+Visit the entire tree, applying rewrites in some monad. Return `none` to signal that no rewrites are
+to be performed.
+-/
 public partial def visitM [Monad m]
     (text : (escape : Bool) → String → m (Option Html) := (fun _ _ => pure none))
     (tag : (name : String) → (attrs : Array (String × String)) → (contents : Html) → m (Option Html) := fun _ _ _ => pure none)

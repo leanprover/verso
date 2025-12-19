@@ -65,10 +65,18 @@ structure Theme where
   template and providing additional parameters
   -/
   adHocTemplates : Array String → Option Template.Override := fun _ => none
+  /--
+  CSS files to be referenced in `<head>` and added to generated code.
+  -/
+  cssFiles : Array (String × String) := #[]
+  /--
+  JS files to be referenced in `<head>` or at the end of `<body>` and added to generated code.
+  -/
+  jsFiles : Array (String × String × Bool) := #[]
 
 def Theme.override (path : Array String) (override : Template.Override) (theme : Theme) : Theme :=
-  {theme with
-    adHocTemplates := fun p => if path = p then some override else theme.adHocTemplates p}
+  { theme with
+    adHocTemplates := fun p => if path = p then some override else theme.adHocTemplates p }
 
 namespace Theme
 
@@ -103,6 +111,136 @@ def topNav (homeLink : Option String := none) : Template := do
 
 namespace Default
 
+private def defaultBlogStyle := r#"
+:root {
+  --max-width: 70ch;
+  --spacing: 1.5rem;
+  --color-accent: #0066cc;
+  --color-border: #ddd;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--verso-text-font-family);
+  line-height: 1.6;
+  color: var(--verso-text-color);
+  background: #fff;
+  margin: 0;
+  padding: var(--spacing);
+  max-width: var(--max-width);
+  margin-inline: auto;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--verso-structure-font-family);
+  color: var(--verso-structure-color);
+  line-height: 1.2;
+  margin: 2em 0 0.5em;
+}
+
+h1 { font-size: 2rem; }
+h2 { font-size: 1.5rem; }
+h3 { font-size: 1.25rem; }
+
+p, ul, ol, pre {
+  margin: 0 0 1em;
+}
+
+a {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+code {
+  font-family: var(--verso-code-font-family);
+  color: var(--verso-code-color);
+  background: #f4f4f4;
+  padding: 0.2em 0.4em;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+
+pre {
+  background: #f4f4f4;
+  padding: 1em;
+  border-radius: 5px;
+  overflow-x: auto;
+}
+
+pre code {
+  background: none;
+  padding: 0;
+}
+
+blockquote {
+  margin: 1em 0;
+  padding-left: 1em;
+  border-left: 3px solid var(--color-border);
+  color: #666;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1em 0;
+}
+
+th, td {
+  text-align: left;
+  padding: 0.5em;
+  border-bottom: 1px solid var(--color-border);
+}
+
+th {
+  font-weight: 600;
+  font-family: var(--verso-structure-font-family);
+  color: var(--verso-structure-color);
+}
+
+nav.top {
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+nav.top ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+nav.top li {
+  margin: 0;
+}
+
+nav.top a {
+  font-family: var(--verso-structure-font-family);
+  color: var(--verso-structure-color);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+nav.top a:hover {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+"#
+
 def primary : Template := do
   let postList :=
     match (← param? "posts") with
@@ -127,23 +265,32 @@ def primary : Template := do
         <meta charset="utf-8"/>
         <meta name="viewport" content="width=device-width, initial-scale=1"/>
         <meta name="color-scheme" content="light dark"/>
-        <link rel="stylesheet" href="https://unpkg.com/mvp.css"/>
+        <!-- Stop favicon requests -->
+        <link rel="icon" href="data:," />
+        <style>{{defaultBlogStyle}}</style>
+        <style>":root { --justify-important: left; }"</style>
         <title>{{← param (α := String) "title"}}</title>
         {{← builtinHeader}}
       </head>
       <body>
+        <header>
         {{← topNav}}
-        {{← param "content"}}
-        {{postList}}
-        {{catList}}
+        </header>
+        <main>
+          {{← param "content"}}
+          {{postList}}
+          {{catList}}
+        </main>
       </body>
     </html>
   }}
 
 def page : Template := do
   pure {{
-    <h1>{{← param "title"}}</h1>
-    {{← param "content"}}
+    <article>
+      <h1>{{← param "title"}}</h1>
+      {{← param "content"}}
+    </article>
   }}
 
 def post : Template := do

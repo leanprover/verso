@@ -62,26 +62,22 @@ instance : LoadLiterate Manual where
 
   docstringPart lvl title contents := .other (Block.literateDocstringPart lvl) (#[.para title] ++ contents)
 
-def moduleGenreElabContext [Monad m] [MonadRef m] [MonadQuotation m] : m Doc.Elab.DocElabContext := do
-  let genre ← ``(Manual)
-  let g := Expr.const ``Manual []
-  return ⟨genre, g, .always, .none⟩
-
 
 open Lean.Doc.Syntax
 open Verso.Doc Elab Concrete
 open Lean.Elab Command Term
 open PartElabM
-def getModuleWithDocs (path : StrLit) (mod : Ident) (title : StrLit) : PartElabM Name :=
+
+def getModuleWithDocs (path : StrLit) (mod : Ident) (title : StrLit) (metadata? : Option Term) (genre : Syntax := mkIdent ``Manual) : TermElabM Name :=
   withTraceNode `verso.blog.literate (fun _ => pure m!"Literate '{title.getString}'") do
 
   let titleParts ← stringToInlines title
   let titleString := inlinesToString (← getEnv) titleParts
   let initState : PartElabM.State := .init (.node .none nullKind titleParts)
 
-  let g := Expr.const ``Manual []
+  let g ← elabTerm genre (some (.const ``Genre []))
 
-  let (titleTerm, _st) ← DocElabM.run (← moduleGenreElabContext) {} initState <| do
+  let (titleTerm, _st) ← DocElabM.run ⟨genre, g, .always, .none⟩ {} initState <| do
     titleParts.mapM (elabInline ⟨·⟩)
 
   let modJson ← withTraceNode `verso.blog.literate.loadMod (fun _ => pure m!"Loading '{mod}' in '{path}'") <|
@@ -95,6 +91,13 @@ def getModuleWithDocs (path : StrLit) (mod : Ident) (title : StrLit) : PartElabM
     }
     pure name
 
+  let metadataType ← Meta.mkAppM ``Genre.PartMetadata #[g]
+  let metadata ←
+    if let some metadataTerm := metadata? then
+      Meta.mkAppM ``some #[← elabTerm metadataTerm (some metadataType)]
+    else
+      Meta.mkAppOptM ``none #[some metadataType]
+
   let mod ← do
     let name ← mkFreshUserName (mod.getId ++ `getPart)
     let title ← titleTerm.mapM (elabTerm · (some (.app (mkConst ``Verso.Doc.Inline) g)))
@@ -105,7 +108,8 @@ def getModuleWithDocs (path : StrLit) (mod : Ident) (title : StrLit) : PartElabM
         value := ← Meta.mkAppM ``modToPage! #[
           ← Meta.mkAppM ``VersoLiterate.loadJsonString! #[mkConst jsonName, mkStrLit s!"JSON for {mod.getId}"],
           title,
-          mkStrLit titleString
+          mkStrLit titleString,
+          metadata
         ],
         hints := .regular 0, safety := .safe
       }
@@ -134,11 +138,18 @@ def includeLiterateSection : PartCommand
     let {path, level, modName, title} ← parseThe IncludeLiterateConfig (← parseArgs args)
     let ref ← getRef
     if let some lvl := level then
-      let name ← getModuleWithDocs path modName title
+      let name ← getModuleWithDocs path modName title none
       closePartsUntil lvl.getNat ref.getHeadInfo.getPos!
       addPart <| .included (mkIdentFrom modName name)
     else
-      let name ← getModuleWithDocs path modName title
+      let name ← getModuleWithDocs path modName title none
       addPart <| .included (mkIdentFrom modName name)
 
   | _ => (Lean.Elab.throwUnsupportedSyntax : PartElabM Unit)
+end
+
+syntax "literate_part⟨" str ident str (term)? (":" term)? "⟩" : term
+elab_rules : term
+  | `(term|literate_part⟨$path:str $modName:ident $title:str $[$metadata?]? $[: $genre?]?⟩) => do
+    let name ← getModuleWithDocs path modName title metadata? (genre?.getD (mkIdent ``Manual))
+    return mkConst name

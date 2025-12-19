@@ -4,7 +4,10 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 import Lean.Parser
+import Lean.Data.Json.FromToJson
 import Verso.Instances.Deriving
+
+open Lean (ToJson FromJson)
 
 namespace Verso.Genre.Blog
 
@@ -13,7 +16,7 @@ abbrev LexedText.Highlighted := Array (Option String × String)
 structure LexedText where
   name : String
   content : LexedText.Highlighted
-deriving Repr, Inhabited, BEq, DecidableEq, Lean.Quote
+deriving Repr, Inhabited, BEq, DecidableEq, Lean.Quote, ToJson, FromJson
 
 namespace LexedText
 

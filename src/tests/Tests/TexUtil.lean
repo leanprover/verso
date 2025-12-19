@@ -24,7 +24,7 @@ def toTex (block : Doc.Block Genre.Manual) : IO Output.TeX := do
   let traverseContext : TraverseContext := {
     logError msg := IO.println msg,
   }
-  let traverseState : TraverseState := .initialize {} {}
+  let traverseState : TraverseState := .initialize {}
 
   -- Traverse the block. This shadows both `block` and `traverseState`.
   -- This is where we engage with the IO at the bottom of TraverseM.

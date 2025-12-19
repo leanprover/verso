@@ -281,6 +281,10 @@ public structure RefDomain where
   contents : HashMap String (Array RefObject)
 deriving Inhabited, Repr
 
+instance : GetElem? RefDomain String (Array RefObject) fun dom name => name ∈ dom.contents where
+  getElem dom name ok := dom.contents[name]'ok
+  getElem? dom name := dom.contents[name]?
+
 private def RefDomain.structEq (x y : RefDomain) :=
   let ⟨t1, d1, c1⟩ := x
   let ⟨t2, d2, c2⟩ := y
@@ -474,6 +478,23 @@ private def RemoteInfo.structBEq (x y : RemoteInfo) : Bool :=
 private unsafe def RemoteInfo.fastBEq (x y : RemoteInfo) : Bool :=
   if ptrEq x y then true else RemoteInfo.structBEq x y
 
+instance : Membership Name RemoteInfo where
+  mem ri dom := dom ∈ ri.domains
+
+instance : GetElem? RemoteInfo Name RefDomain (fun ri d => d ∈ ri) where
+  getElem xs x ok := xs.domains[x]'ok
+  getElem? xs x := xs.domains[x]?
+
+/--
+Looks up an object in a domain, returning all targets.
+
+Returns {lean type:="Option (Array RefObject)"}`none` if {name}`domain` is not a domain in {name}`remote` or if
+no object has {name}`canonicalName` as its canonical name in the domain.
+-/
+public def RemoteInfo.getDomainObject? (remote : RemoteInfo) (domain : Name) (canonicalName : String) : Option (Array RefObject) := do
+  let dom ← remote[domain]?
+  dom[canonicalName]?
+
 /--
 Boolean equality of information about remote documents.
 -/
@@ -595,6 +616,7 @@ public def updateRemotes (manual : Bool) (configFile : Option System.FilePath) (
     let lastUpdated := oldManifest.metadata[name]? |>.map (·.lastUpdated)
     if let some prior := lastUpdated then
       match updateFrequency with
+      | .always => pure ()
       | .days d =>
         if compare (prior + d) (← Std.Time.PlainDateTime.now) |>.isGE then
           found := oldXrefs[name]?
