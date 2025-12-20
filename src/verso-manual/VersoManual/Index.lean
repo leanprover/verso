@@ -448,7 +448,7 @@ where
       scroll-margin-top: calc(var(--verso-header-height) + 7.5rem);
     }
 
-    @media screen and (max-width: 700px) {
+    @media screen and (max-width: 992px) {
       /* On mobile, the sticky index takes up half the screen. */
       main .theIndex nav {
         position: static;

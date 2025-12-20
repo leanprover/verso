@@ -8,13 +8,13 @@
     --selected-color: var(--verso-selected-color, #def);
 }
 
-@media screen and (700px < width) {
+@media screen and (992px < width) {
     :root {
         --search-bar-width: 24rem;
     }
 }
 
-@media screen and (width <= 700px) {
+@media screen and (width <= 992px) {
     :root {
         --search-bar-width: 12rem;
     }
@@ -104,7 +104,7 @@
 
 /* Couple the domain tighter with the search term on smaller screens,
    otherwise it's easy to get lost in the results. */
-@media screen and (max-width: 700px) {
+@media screen and (max-width: 992px) {
     #search-wrapper .search-result {
         gap: 0;
         padding: 0.3rem 0.2rem;
@@ -135,7 +135,7 @@
 
 /* Couple the domain tighter with the search term on smaller screens,
    otherwise it's easy to get lost in the results. */
-@media screen and (max-width: 700px) {
+@media screen and (max-width: 992px) {
     #search-wrapper [role="listbox"].focus li[aria-selected="true"],
     #search-wrapper .search-result:hover {
         padding-bottom: calc(0.3rem - 1px);
@@ -187,7 +187,7 @@
 
 /* Couple the domain tighter with the search term on smaller screens,
    otherwise it's easy to get lost in the results. */
-@media screen and (max-width: 700px) {
+@media screen and (max-width: 992px) {
     #search-wrapper .search-result .domain {
         text-align: left;
     }
