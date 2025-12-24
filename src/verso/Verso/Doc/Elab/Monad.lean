@@ -312,7 +312,7 @@ public def PartElabM.setTitle (titlePreview : String) (titleInlines : Array (TSy
 public partial def PartElabM.closePartsUntil (outer : Nat) (endPos : String.Pos.Raw) : PartElabM Unit := do
   let level ← currentLevel
   if outer ≤ level then
-    match (← getThe PartElabM.State).partContext.close endPos with
+    match (← getThe PartElabM.State).partContext.close with
     | some ctxt' =>
       modifyThe PartElabM.State fun st => {st with partContext := ctxt'}
       if outer < level then
@@ -346,7 +346,7 @@ public def PartElabM.addBlock (block : TSyntax `term) (blockInternalDocReconstru
       deferredBlocks := st.deferredBlocks.push (name, blockDefSyntax)
     }
 
-public def PartElabM.addPart (finished : FinishedPart) : PartElabM Unit := modifyThe State fun st =>
+public def PartElabM.addPart (finished : IR.Part) : PartElabM Unit := modifyThe State fun st =>
   { st with partContext.priorParts := st.partContext.priorParts.push finished }
 
 public def PartElabM.addLinkDef (refName : TSyntax `str) (url : String) : PartElabM Unit := do
@@ -463,12 +463,12 @@ unsafe def inlineExpandersForUnsafe (x : Name) : DocElabM (Array InlineExpander)
 public opaque inlineExpandersFor (x : Name) : DocElabM (Array InlineExpander)
 
 /--
-Creates a term denoting a {lean}`VersoDoc` value from a {lean}`FinishedPart`. This is the final step
+Creates a term denoting a {lean}`VersoDoc` value from a {lean}`IR.Part`. This is the final step
 in turning a parsed verso doc into syntax.
 -/
-public def FinishedPart.toVersoDoc
+public def partToVersoDoc
     (genreSyntax : Term)
-    (finished : FinishedPart)
+    (finished : IR.Part)
     (ctx : DocElabContext)
     (docElabState : DocElabM.State)
     (partElabState : PartElabM.State)
@@ -523,8 +523,9 @@ public def FinishedPart.toVersoDoc
         Term.ensureNoUnassignedMVars decl
         withOptions (·.setBool `compiler.extract_closed false) <| addAndCompile decl
 
+  
+
   -- Generate and return outermost syntax
-  let finishedSyntax ← finished.toSyntax genreSyntax
   let .some docReconstructionPlaceholder := ctx.docReconstructionPlaceholder
     | throwError "No doc reconstruction placeholder available"
 

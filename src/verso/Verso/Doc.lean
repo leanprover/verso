@@ -62,6 +62,7 @@ public structure Genre : Type 1 where
   The mutable state used in the genre's traversal pass.
   -/
   TraverseState : Type
+deriving Inhabited
 
 @[expose]
 public def Genre.none : Genre := ⟨Empty, Empty, Empty, Unit, Unit⟩
@@ -659,49 +660,6 @@ private partial def Part.reprPrec [Repr genre.Inline] [Repr genre.Block] [Repr g
 public instance [Repr g.Inline] [Repr g.Block] [Repr g.PartMetadata] : Repr (Part g) where
   reprPrec := private Part.reprPrec
 
-public structure DocReconstruction where
-  highlightDeduplication : SubVerso.Highlighting.Export
-
-
-/--
-The result type of values created by Verso's {lit}`#doc` and {lit}`#docs` commands. A value of type
-{lean}`VersoDoc` represents a not-fully-evaluated document of type {lean}`Part` that can be turned
-into a value by invoking the `VersoDoc.toPart` method. The actual structure of a {lean}`VersoDoc`
-should not be relied on.
--/
-public structure VersoDoc (genre : Genre) where
-  construct : DocReconstruction → Part genre
-
-  /-- Serialization of the DocReconstruction data structure -/
-  docReconstructionData : String := "{}"
-
-instance : Inhabited (VersoDoc genre) where
-  default := VersoDoc.mk (fun _ => Inhabited.default) "{}"
-
-
-/--
-A {lean}`VersoDoc` represents a potentially-not-fully-evaluated {lean}`Part`. Calling {lean}`VersoDoc.toPart` forces
-evaluation of the {lean}`VersoDoc` to a {lean}`Part`.
--/
-public def VersoDoc.toPart: VersoDoc genre → Part genre
-  | .mk construct highlight =>
-    match Json.parse highlight with
-    | .error e => panic! s!"Failed to parse VersoDoc's Export data as JSON: {e}"
-    | .ok json =>
-      if let .ok highlightJson := json.getObjVal? "highlight" then
-        match SubVerso.Highlighting.Export.fromJson? highlightJson with
-        | .error e => panic! s!"Failed to deserialize Export data from parsed JSON: {e}"
-        | .ok table => construct ⟨table⟩
-      else construct ⟨{}⟩
-
-/--
-Replace the metadata in a VersoDoc.
-
-This is something of a hack used as a workaround in LiterateModuleDocs.
--/
-public def VersoDoc.withMetadata (metadata? : Option genre.PartMetadata)  : VersoDoc genre → VersoDoc genre
-  | .mk construct docReconstStr => .mk (fun docReconst => { construct docReconst with metadata := metadata? }) docReconstStr
-
 /--
 Identify function; this is a temporary compatibility shim to introduce a new type,
 VersoDoc, that will have a nontrival toPart method.
@@ -844,3 +802,172 @@ public partial def Genre.traversePart (p : Doc.Part g) : m (Doc.Part g) := do
 
 public partial def Genre.traverse (top : Part g) : m (Part g) :=
   g.traversePart top
+
+
+section
+open Lean.Syntax
+/--
+When elaborating document structures, we are building an internal
+representation ({lit}`IR`) relative to an unspecified {name}`Genre` that must
+be consistent for the entire elaborated structure once that structure is
+serialized and deserialized.
+-/
+opaque IR.genre : Genre -- Just for doc comments, works where a variable declaration does not
+
+/--
+A (partially) serializable {lean}`Verso.Doc.Part genre` for some {name}`genre`.
+-/
+public inductive IR.Part where
+  | mk (title : Array Term) (titleString : String) (metadata : Option Term) (content : Array Term) (subParts : Array Part)
+    /-- Syntax denoting a {lean}`Verso.Doc.Part genre` for some {name}`genre` -/
+  | included (name : Ident)
+deriving Repr, Inhabited
+
+open Lean.Syntax
+
+/--
+Partially-serializable document structures "bottom out" at syntax nodes, which
+we don't directly serialize. Instead, when we are serializing a
+partially-serializable data structure and reach a syntax node, we store the
+syntax node in a {name}`Snippets` table and serialize an index into the table.
+-/
+meta structure IR.Serializable.Snippets where
+  /-- Syntax denoting values of type {lean}`Verso.Doc.Inline genre` for some implicit {name}`genre`. -/
+  inlines : Array Term := #[]
+  /-- Syntax denoting values of type {lean}`Verso.Doc.Block genre` for some implicit {name}`genre`. -/
+  blocks : Array Term := #[]
+  /-- Syntax denoting values of type {lean}`genre.PartMetadata` for some implicit {name}`genre`. -/
+  partMetadata : Array Term := #[]
+  /-- Syntax denoting values of type {lean}`Verso.Doc.Part genre` for some implicit {name}`genre`. -/
+  parts : Array Term := #[]
+
+
+/--
+Deserializing partially-serialized document syntax requires a {name}`Snippets`
+structure to fill parts of the document structure that weren't serialized.
+-/
+public structure Serializable.Snippets (genre : Genre) : Type where
+  inlines : Array (Inline genre)
+  blocks : Array (Block genre)
+  partMetadata : Array genre.PartMetadata
+  parts : Array (Part genre)
+deriving Inhabited
+
+public def _root_.Lean.Json.getArr! (json : Json) : Array Json :=
+  match json.getArr? with
+    | .ok arr => arr
+    | .error e => panic s!"getArr! {e}"
+
+public def _root_.Lean.Json.getStr! (json : Json) : String :=
+  match json.getStr? with
+    | .ok arr => arr
+    | .error e => panic s!"getStr! {e}"
+
+public partial def Part.fromSnippetsAndJson : Json → ReaderM (Serializable.Snippets genre) (Part genre)
+  | .num (n : Nat) => do return (← read).parts[n]!
+  | .obj o => do
+    let snippets ← read
+    let title := o.get! "title" |>.getArr! |>.map (match ·.getNat? with
+      | .ok n => snippets.inlines[n]!
+      | .error e => panic! s!"Ill-formed JSON part serialization (title) {e}")
+    let titleString := o.get! "titleString" |>.getStr!
+    let metadata := match o.get! "metadata" with
+      | .null => .none
+      | .arr #[.num (n : Nat)] =>
+        match (snippets.partMetadata[n]?) with
+          | .some s => .some s
+          | .none => panic s!"Ill-formed JSON part serialization (metadata) {n}"
+      | json => panic! s!"Ill-formed JSON part serialization (metadata) {json}"
+    let content := o.get! "content" |>.getArr! |>.map (match ·.getNat? with
+      | .ok n => snippets.blocks[n]!
+      | .error e => panic! s!"Ill-formed JSON part serialization (content) {e}")
+    let subParts ← o.get! "subParts" |>.getArr! |>.mapM fromSnippetsAndJson
+    return Part.mk title titleString metadata content subParts
+  | json => panic s!"Ill-formed JSON part serialization {json}"
+
+
+end
+
+public structure DocReconstruction where
+  highlightDeduplication : SubVerso.Highlighting.Export
+
+
+/--
+The result type of values created by Verso's {lit}`#doc` and {lit}`#docs` commands. A value of type
+{lean}`VersoDoc` represents a not-fully-evaluated document of type {lean}`Part` that can be turned
+into a value by invoking the `VersoDoc.toPart` method. The actual structure of a {lean}`VersoDoc`
+should not be relied on.
+-/
+public structure VersoDoc (genre : Genre) where
+  /-- Snippets representing the non-serializable parts of a document-/
+  docSnippets : DocReconstruction → Serializable.Snippets genre
+
+  /-- Serialization of the DocReconstruction data structure -/
+  docReconstructionData : String := "{}"
+
+instance : Inhabited (VersoDoc genre) where
+  default := VersoDoc.mk (fun _ => Inhabited.default) "{}"
+
+
+/--
+A {lean}`VersoDoc` represents a potentially-not-fully-evaluated {lean}`Part`. Calling {lean}`VersoDoc.toPart` forces
+evaluation of the {lean}`VersoDoc` to a {lean}`Part`.
+-/
+public def VersoDoc.toPart: VersoDoc genre → Part genre
+  | .mk docSnippets docReconstruction =>
+    match Json.parse docReconstruction with
+    | .error e => panic! s!"Failed to deserialize VersoDoc's data data as JSON: {e}"
+    | .ok json =>
+      match json.getObjVal? "document" with
+      | .error e => panic! s!"Failed to find document: {e}"
+      | .ok doc =>
+        let snippets :=
+          if let .ok highlightJson := json.getObjVal? "highlight" then
+            match SubVerso.Highlighting.Export.fromJson? highlightJson with
+            | .error e => panic! s!"Failed to deserialize Export data from parsed JSON: {e}"
+            | .ok table => docSnippets ⟨table⟩
+          else docSnippets ⟨{}⟩
+        Id.run <| ReaderT.run (Part.fromSnippetsAndJson doc) snippets
+
+/--
+Replace the metadata in a VersoDoc.
+
+This is something of a hack used as a workaround in LiterateModuleDocs.
+-/
+public def VersoDoc.withMetadata (metadata? : Option genre.PartMetadata)  : VersoDoc genre → VersoDoc genre
+  | .mk docJson docSnippets construct docReconstStr => .mk docJson docSnippets (fun docReconst => { construct docReconst with metadata := metadata? }) docReconstStr
+
+open Lean in
+meta partial def IR.Part.toSnippetsAndJson [Monad m] [MonadRef m] [MonadQuotation m] : Part → StateT Serializable.Snippets m Json
+  | .mk title titleString metadata content subParts => do
+    let snippets ← get
+
+    let titleJson := title.mapIdx (fun n _ => .num <| n + snippets.inlines.size)
+    set { snippets with inlines := snippets.inlines ++ title }
+
+    let metadataJson ← match metadata with
+      | .none => pure Json.null
+      | .some s =>
+        let n := snippets.partMetadata.size
+        set { snippets with partMetadata := snippets.partMetadata.push s }
+        pure <| Json.arr #[.num n]
+
+    let contentJson := content.mapIdx (fun n _ => .num <| n + snippets.blocks.size)
+    set ({ snippets with blocks := snippets.blocks ++ content })
+
+    let subPartsJson ← subParts.mapM toSnippetsAndJson
+
+    return .mkObj [
+      ("title", .arr titleJson),
+      ("titleString", .str titleString),
+      ("metadata", metadataJson),
+      ("content", .arr contentJson),
+      ("subParts", .arr subPartsJson),
+    ]
+
+  | .included name => do
+    let snippets ← get
+    let stx ← ``(VersoDoc.toPart $name)
+    let n := snippets.parts.size
+    set { snippets with parts := snippets.parts.push stx }
+    return .num n

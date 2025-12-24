@@ -5,6 +5,7 @@ Author: David Thrane Christiansen, Rob Simmons
 -/
 module
 public import Verso.Doc
+meta import Verso.Doc
 
 open Lean
 
@@ -15,37 +16,13 @@ set_option doc.verso true
 namespace Verso.Doc.Elab
 
 public inductive TOC where
-  | mk (title : String) (titleSyntax : Syntax) (endPos : String.Pos.Raw) (children : Array TOC)
+  | mk (title : String) (titleSyntax : Array Term) (children : Array TOC)
   | included (name : Ident)
 deriving Repr, TypeName, Inhabited
 
-public inductive FinishedPart where
-  | mk (titleSyntax : Syntax) (expandedTitle : Array (TSyntax `term)) (titlePreview : String) (metadata : Option (TSyntax `term)) (blocks : Array (TSyntax `term)) (subParts : Array FinishedPart) (endPos : String.Pos.Raw)
-    /-- A name representing a value of type {lean}`VersoDoc` -/
-  | included (name : Ident)
-deriving Repr, BEq
-
-/--
-From a finished part, constructs syntax that denotes its {lean}`Part` value.
--/
-public partial def FinishedPart.toSyntax [Monad m] [MonadQuotation m]
-    (genre : TSyntax `term)
-    : FinishedPart → m Term
-  | .mk _titleStx titleInlines titleString metadata blocks subParts _endPos => do
-    let subStx ← subParts.mapM (toSyntax genre)
-    let metaStx ←
-      match metadata with
-      | none => `(none)
-      | some stx => `(some $stx)
-    -- Adding type annotations works around a limitation in list and array elaboration, where intermediate
-    -- let bindings introduced by "chunking" the elaboration may fail to infer types
-    let typedBlocks ← blocks.mapM fun b => `(($b : Block $genre))
-    ``(Part.mk #[$titleInlines,*] $(quote titleString) $metaStx #[$typedBlocks,*] #[$subStx,*])
-  | .included name => ``(VersoDoc.toPart $name)
-
-public partial def FinishedPart.toTOC : FinishedPart → TOC
-  | .mk titleStx _titleInlines titleString _metadata _blocks subParts endPos =>
-    .mk titleString titleStx endPos (subParts.map toTOC)
+public partial def partToTOC : IR.Part → TOC
+  | .mk titleInlines titleString _metadata _blocks subParts =>
+    .mk titleString titleInlines (subParts.map partToTOC)
   | .included name => .included name
 
 
@@ -67,13 +44,13 @@ public structure PartFrame where
   The sibling parts at the same nesting level as the part represented by this frame. These siblings
   are earlier in the document and have the same parent.
   -/
-  priorParts : Array FinishedPart
+  priorParts : Array IR.Part
 deriving Repr, Inhabited
 
-/-- Turn an previously active {name}`PartFrame` into a {name}`FinishedPart`. -/
-public def PartFrame.close (fr : PartFrame) (endPos : String.Pos.Raw) : FinishedPart :=
+/-- Turn an previously active {name}`PartFrame` into a {name}`IR.Part`. -/
+public def PartFrame.close (fr : PartFrame) : IR.Part :=
   let (titlePreview, titleInlines) := fr.expandedTitle.getD ("<anonymous>", #[])
-  .mk fr.titleSyntax titleInlines titlePreview fr.metadata fr.blocks fr.priorParts endPos
+  .mk titleInlines titlePreview fr.metadata fr.blocks fr.priorParts
 
 
 /-- References that must be local to the current blob of concrete document syntax -/
@@ -106,12 +83,12 @@ parts being built.
 public def PartContext.level (ctxt : PartContext) : Nat := ctxt.parents.size
 
 /--
-Closes the current part. The resulting {name}`FinishedPart` is appended to
+Closes the current part. The resulting {name}`IR.Part` is appended to
 {name (full := PartFrame.priorParts)}`priorParts`, and
 the top of the stack of our parents becomes the current frame. Returns
 {name}`none` if there are no parents.
 -/
-public def PartContext.close (ctxt : PartContext) (endPos : String.Pos.Raw) : Option PartContext := do
+public def PartContext.close (ctxt : PartContext) : Option PartContext := do
   let fr ← ctxt.parents.back?
   pure {
     parents := ctxt.parents.pop,
@@ -119,7 +96,7 @@ public def PartContext.close (ctxt : PartContext) (endPos : String.Pos.Raw) : Op
     titleSyntax := fr.titleSyntax,
     expandedTitle := fr.expandedTitle,
     metadata := fr.metadata
-    priorParts := fr.priorParts.push <| ctxt.toPartFrame.close endPos
+    priorParts := fr.priorParts.push <| ctxt.toPartFrame.close
   }
 
 /--
