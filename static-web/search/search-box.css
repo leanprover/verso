@@ -30,14 +30,14 @@
 }
 
 #search-wrapper .combobox .cb_edit {
-    background-color: white;
-    color: black;
+    background-color: var(--verso-background-color, white);
+    color: var(--verso-text-color, black);
     box-sizing: border-box;
     padding: 0;
     margin: 0;
     vertical-align: bottom;
     border: none;
-    border-bottom: 1px solid gray;
+    border-bottom: 1px solid var(--verso-border-color, gray);
     position: relative;
     cursor: pointer;
     width: var(--search-bar-width);
@@ -60,7 +60,7 @@
 #search-wrapper .cb_edit:empty:before {
     content: attr(placeholder);
     pointer-events: none;
-    color: #888;
+    color: var(--verso-text-color-light, #888);
     font-family: sans-serif;
     display: block;
 }
@@ -72,10 +72,10 @@
     top: calc(100%);
     width: var(--search-bar-width);
     list-style: none;
-    background-color: white;
+    background-color: var(--verso-background-color, white);
     display: none;
     box-sizing: border-box;
-    border: 2px currentcolor solid;
+    border: 2px solid var(--verso-border-color, currentcolor);
     max-height: 20rem;
     overflow: scroll;
     overflow-x: hidden;
@@ -129,8 +129,8 @@
     background-color: var(--selected-color);
     padding-bottom: calc(0.2rem - 1px);
     padding-top: calc(0.2rem - 1px);
-    border-bottom: 1px solid currentColor;
-    border-top: 1px solid currentColor;
+    border-bottom: 1px solid var(--verso-border-color, currentColor);
+    border-top: 1px solid var(--verso-border-color, currentColor);
 }
 
 /* Couple the domain tighter with the search term on smaller screens,
@@ -161,7 +161,7 @@
 
 #search-wrapper .search-result .domain {
     text-align: right;
-    color: #777;
+    color: var(--verso-text-color-light, #777);
     font-style: italic;
     font-family: var(--verso-structure-font-family);
     font-weight: normal;
@@ -195,7 +195,7 @@
 
 #search-wrapper .more-results {
     text-align: center;
-    color: #777;
+    color: var(--verso-text-color-light, #777);
     font-size: 0.7rem;
 }
 
@@ -221,5 +221,5 @@
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    background-color: white;
+    background-color: var(--verso-background-color, white);
 }
