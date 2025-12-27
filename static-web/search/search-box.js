@@ -796,7 +796,7 @@ class SearchBox {
                     if (i === allResults.length - 1 && j === dataItems.length - 1) {
                         lastOption = searchResult;
                     }
-                    if (currentOptionText === resultToText(searchResult)) {
+                    if (currentOptionText === resultToText(searchResult) && !newCurrentOption) {
                         newCurrentOption = searchResult;
                     }
                 }
@@ -820,7 +820,7 @@ class SearchBox {
                     if (i === allResults.length - 1) {
                         lastOption = searchResult;
                     }
-                    if (currentOptionText === resultToText(searchResult)) {
+                    if (currentOptionText === resultToText(searchResult) && !newCurrentOption) {
                         newCurrentOption = searchResult;
                     }
                 }

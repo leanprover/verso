@@ -98,6 +98,7 @@ where
 /--
 The empty HTML document.
 -/
+@[suggest_for Verso.Output.Html.nil Verso.Output.Html.none]
 public def Html.empty : Html := .seq #[]
 
 /--
