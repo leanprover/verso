@@ -30,7 +30,7 @@ def decorateClosing : TSyntax `block → DocElabM Unit
 
 
 /-- Elaborates a parsed block -/
-public partial def elabBlock' (block : TSyntax `block) : DocElabM Elab.Block :=
+public partial def elabBlock' (block : TSyntax `block) : DocElabM Target.Block :=
   withTraceNode `Elab.Verso.block (fun _ => pure m!"Block {block}") <|
   withRef block <| withFreshMacroScope <| withIncRecDepth <| do
   decorateClosing block

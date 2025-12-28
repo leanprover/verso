@@ -20,6 +20,8 @@ public inductive TOC where
   | included (name : Ident)
 deriving Repr, TypeName, Inhabited
 
+/- Elaboration targets -/
+namespace Target
 /--
 The result of elaborating an inline component of a document
 -/
@@ -46,8 +48,8 @@ deriving Repr, BEq
 end
 
 mutual
-public partial def ListItem.toTerm [Monad m] [MonadRef m] [MonadQuotation m] (genre : Term) : Array Block → m Term
-  | contents => do ``(Doc.ListItem.mk #[$(← contents.mapM (Block.toTerm genre)),*])
+public partial def ListItem.toTerm [Monad m] [MonadRef m] [MonadQuotation m] (genre : Term) : Array Target.Block → m Term
+  | contents => do ``(Doc.ListItem.mk #[$(← contents.mapM (Target.Block.toTerm genre)),*])
 
 public partial def DescItem.toTerm [Monad m] [MonadRef m] [MonadQuotation m] (genre : Term) : Array Inline × Array Block → m Term
   | (term, desc) => do ``(Doc.DescItem.mk #[$term,*] #[$(← desc.mapM (Block.toTerm genre)),*])
@@ -68,26 +70,25 @@ where
   | .negSucc n => ``(Int.negSucc $(quote n))
 end
 
+end Target
+
 variable (genre : Genre) in
 /--
 The result of elaborating a document part. Concretely denotes a {lean}`Doc.Part genre` for some
 unspecified {name}`genre`.
 -/
-public inductive Part where
-  | mk (titleSyntax : Syntax) (expandedTitle : Array Inline) (titlePreview : String) (metadata : Option Term) (blocks : Array Block) (subParts : Array Part) (endPos : String.Pos.Raw)
+public inductive FinishedPart where
+  | mk (titleSyntax : Syntax) (expandedTitle : Array Target.Inline) (titlePreview : String) (metadata : Option Term) (blocks : Array Target.Block) (subParts : Array FinishedPart) (endPos : String.Pos.Raw)
     /-- A name representing a value of type {lean}`DocThunk` -/
   | included (name : Ident)
 deriving Repr, BEq
 
-@[deprecated Part (since := "2025-12-28")]
-public def FinishedPart := Part
-
 /--
 From a finished part, constructs syntax that denotes its {lean}`Part` value.
 -/
-public partial def Part.toSyntax [Monad m] [MonadQuotation m]
+public partial def FinishedPart.toSyntax [Monad m] [MonadQuotation m]
     (genre : TSyntax `term)
-    : Part → m Term
+    : FinishedPart → m Term
   | .mk _titleStx titleInlines titleString metadata blocks subParts _endPos => do
     let subStx ← subParts.mapM (toSyntax genre)
     let metaStx ←
@@ -100,11 +101,10 @@ public partial def Part.toSyntax [Monad m] [MonadQuotation m]
     ``(Doc.Part.mk #[$titleInlines,*] $(quote titleString) $metaStx #[$typedBlocks,*] #[$subStx,*])
   | .included name => ``(DocThunk.force $name)
 
-public partial def Part.toTOC : Part → TOC
+public partial def FinishedPart.toTOC : FinishedPart → TOC
   | .mk titleStx _titleInlines titleString _metadata _blocks subParts endPos =>
     .mk titleString titleStx endPos (subParts.map toTOC)
   | .included name => .included name
-
 
 /--
 Information describing a part still under construction.
@@ -117,18 +117,18 @@ indicated by the header's level.
 -/
 public structure PartFrame where
   titleSyntax : Syntax
-  expandedTitle : Option (String × Array Inline) := none
+  expandedTitle : Option (String × Array Target.Inline) := none
   metadata : Option Term
-  blocks : Array Block
+  blocks : Array Target.Block
   /--
   The sibling parts at the same nesting level as the part represented by this frame. These siblings
   are earlier in the document and have the same parent.
   -/
-  priorParts : Array Part
+  priorParts : Array FinishedPart
 deriving Repr, Inhabited
 
 /-- Turn an previously active {name}`PartFrame` into a {name}`Part`. -/
-public def PartFrame.close (fr : PartFrame) (endPos : String.Pos.Raw) : Part :=
+public def PartFrame.close (fr : PartFrame) (endPos : String.Pos.Raw) : FinishedPart :=
   let (titlePreview, titleInlines) := fr.expandedTitle.getD ("<anonymous>", #[])
   .mk fr.titleSyntax titleInlines titlePreview fr.metadata fr.blocks fr.priorParts endPos
 

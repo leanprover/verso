@@ -524,7 +524,7 @@ def elabLiteratePage (x : Ident) (path : StrLit) (mod : Ident) (config : LitPage
       match p with
       | .mk t1 t2 t3 _ bs ps pos =>
         -- Propagate metadata fields
-        Part.mk t1 t2 t3 «meta» bs ps pos
+        FinishedPart.mk t1 t2 t3 «meta» bs ps pos
       | _ => p
     else finished
 

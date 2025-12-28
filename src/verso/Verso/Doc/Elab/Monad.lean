@@ -347,7 +347,7 @@ public def PartElabM.addBlock (block : TSyntax `term) (blockInternalDocReconstru
       deferredBlocks := st.deferredBlocks.push (name, blockDefSyntax)
     }
 
-public def PartElabM.addPart (finished : Part) : PartElabM Unit := modifyThe State fun st =>
+public def PartElabM.addPart (finished : FinishedPart) : PartElabM Unit := modifyThe State fun st =>
   { st with partContext.priorParts := st.partContext.priorParts.push finished }
 
 public def PartElabM.addLinkDef (refName : TSyntax `str) (url : String) : PartElabM Unit := do
@@ -467,9 +467,9 @@ public opaque inlineExpandersFor (x : Name) : DocElabM (Array InlineExpander)
 Creates a term denoting a {lean}`DocThunk` value from a {lean}`Part`. This is the final step
 in turning a parsed verso doc into syntax.
 -/
-public def Part.toThunkTerm
+public def FinishedPart.toThunkTerm
     (genreSyntax : Term)
-    (finished : Part)
+    (finished : FinishedPart)
     (ctx : DocElabContext)
     (docElabState : DocElabM.State)
     (partElabState : PartElabM.State)
@@ -535,13 +535,10 @@ public def Part.toThunkTerm
 
   ``(DocThunk.serialized (fun $docReconstructionPlaceholder => $finishedSyntax) $(quote reconstJson.compress) none)
 
-@[deprecated Part.toThunkTerm (since := "2025-11-28")]
-public def FinishedPart.toVersoDoc : Term → Part → DocElabContext → DocElabM.State → PartElabM.State → TermElabM Term := Part.toThunkTerm
+@[deprecated FinishedPart.toThunkTerm (since := "2025-11-28")]
+public def FinishedPart.toVersoDoc : Term → FinishedPart → DocElabContext → DocElabM.State → PartElabM.State → TermElabM Term := FinishedPart.toThunkTerm
 
-@[deprecated Part.toThunkTerm (since := "2025-11-28")]
-public def Part.toVersoDoc : Term → Part → DocElabContext → DocElabM.State → PartElabM.State → TermElabM Term := Part.toThunkTerm
-
-public abbrev BlockElab := Syntax → DocElabM Elab.Block
+public abbrev BlockElab := Syntax → DocElabM Target.Block
 
 initialize blockElabAttr : KeyedDeclsAttribute BlockElab ←
   mkDocExpanderAttribute `block_elab ``BlockElab "Indicates that this function expands block elements of a given name" `blockElabAttr

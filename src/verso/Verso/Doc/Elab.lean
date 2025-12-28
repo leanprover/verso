@@ -342,7 +342,7 @@ public meta def _root_.Lean.Doc.Syntax.command.expand : BlockElab := fun block =
         try
           let termStxs ← withFreshMacroScope <| e argVals
           expanderDocHover name "Command" resolvedName doc? sig?
-          return Block.concat (termStxs.map .stx)
+          return .concat (termStxs.map .stx)
         catch
           | ex@(.internal id) =>
             if id == unsupportedSyntaxExceptionId then pure ()
@@ -354,11 +354,11 @@ public meta def _root_.Lean.Doc.Syntax.command.expand : BlockElab := fun block =
 @[block_elab Lean.Doc.Syntax.para]
 public meta partial def _root_.Lean.Doc.Syntax.para.expand : BlockElab
   | `(block| para[ $args:inline* ]) => do
-    return Block.para (← args.mapM elabInline)
+    return .para (← args.mapM elabInline)
   | _ =>
     throwUnsupportedSyntax
 
-meta def elabLi (block : Syntax) : DocElabM (Syntax × Array Block) :=
+meta def elabLi (block : Syntax) : DocElabM (Syntax × Array Target.Block) :=
   withRef block <|
   match block with
   | `(list_item|*%$dot $contents:block*) => do
@@ -370,7 +370,7 @@ meta def elabLi (block : Syntax) : DocElabM (Syntax × Array Block) :=
 public meta def _root_.Lean.Doc.Syntax.ul.expand : BlockElab
   | `(block|ul{$itemStxs*}) => do
     let mut bullets : Array Syntax := #[]
-    let mut items : Array (Array Block) := #[]
+    let mut items : Array (Array Target.Block) := #[]
     for i in itemStxs do
       let (b, item) ← elabLi i
       bullets := bullets.push b
@@ -378,7 +378,7 @@ public meta def _root_.Lean.Doc.Syntax.ul.expand : BlockElab
     let info := DocListInfo.mk bullets itemStxs
     for b in bullets do
       pushInfoLeaf <| .ofCustomInfo {stx := b, value := Dynamic.mk info}
-    return Block.ul items
+    return .ul items
   | _ =>
     throwUnsupportedSyntax
 
@@ -386,7 +386,7 @@ public meta def _root_.Lean.Doc.Syntax.ul.expand : BlockElab
 public meta def _root_.Lean.Doc.Syntax.ol.expand : BlockElab
   | `(block|ol($start:num){$itemStxs*}) => do
     let mut bullets : Array Syntax := #[]
-    let mut items : Array (Array Block) := #[]
+    let mut items : Array (Array Target.Block) := #[]
     for i in itemStxs do
       let (b, item) ← elabLi i
       bullets := bullets.push b
@@ -394,11 +394,11 @@ public meta def _root_.Lean.Doc.Syntax.ol.expand : BlockElab
     let info := DocListInfo.mk bullets itemStxs
     for b in bullets do
       pushInfoLeaf <| .ofCustomInfo {stx := b, value := Dynamic.mk info}
-    return Block.ol start.getNat items
+    return .ol start.getNat items
   | _ =>
     throwUnsupportedSyntax
 
-meta def elabDesc (block : Syntax) : DocElabM (Syntax × Array Inline × Array Block) :=
+meta def elabDesc (block : Syntax) : DocElabM (Syntax × Array Target.Inline × Array Target.Block) :=
   withRef block <|
   match block with
   | `(desc_item|:%$colon $dts* => $dds*) => do
@@ -410,7 +410,7 @@ meta def elabDesc (block : Syntax) : DocElabM (Syntax × Array Inline × Array B
 public meta def _root_.Lean.Doc.Syntax.dl.expand : BlockElab
   | `(block|dl{$itemStxs*}) => do
     let mut colons : Array Syntax := #[]
-    let mut items : Array (Array Inline × Array Block) := #[]
+    let mut items : Array (Array Target.Inline × Array Target.Block) := #[]
     for i in itemStxs do
       let (b, term, desc) ← elabDesc i
       colons := colons.push b
@@ -418,14 +418,14 @@ public meta def _root_.Lean.Doc.Syntax.dl.expand : BlockElab
     let info := DocListInfo.mk colons itemStxs
     for b in colons do
       pushInfoLeaf <| .ofCustomInfo {stx := b, value := Dynamic.mk info}
-    return Block.dl items
+    return .dl items
   | _ =>
     throwUnsupportedSyntax
 
 @[block_elab Lean.Doc.Syntax.blockquote]
 public meta def _root_.Lean.Doc.Syntax.blockquote.expand : BlockElab
   | `(block|> $innerBlocks*) => do
-    return Block.blockquote (← innerBlocks.mapM elabBlock')
+    return .blockquote (← innerBlocks.mapM elabBlock')
   | _ =>
     throwUnsupportedSyntax
 
@@ -441,7 +441,7 @@ public meta def _root_.Lean.Doc.Syntax.codeblock.expand : BlockElab
       try
         let termStxs ← withFreshMacroScope <| e args contents
         expanderDocHover nameStx "Code block" name doc? sig?
-        return Block.concat (termStxs.map Block.stx)
+        return .concat (termStxs.map .stx)
       catch
         | ex@(.internal id) =>
           if id == unsupportedSyntaxExceptionId then pure ()
@@ -449,7 +449,7 @@ public meta def _root_.Lean.Doc.Syntax.codeblock.expand : BlockElab
         | ex => throw ex
     throwUnsupportedSyntax
   | `(block|``` | $contents:str ```) =>
-    pure <| Block.code contents.getString
+    pure <| .code contents.getString
   | _ =>
     throwUnsupportedSyntax
 
@@ -463,7 +463,7 @@ public meta def _root_.Lean.Doc.Syntax.directive.expand : BlockElab
       try
         let termStxs ← withFreshMacroScope <| e args contents
         expanderDocHover nameStx "Directive" name doc? sig?
-        return Block.concat (termStxs.map Block.stx)
+        return .concat (termStxs.map .stx)
       catch
         | ex@(.internal id) =>
           if id == unsupportedSyntaxExceptionId then pure ()

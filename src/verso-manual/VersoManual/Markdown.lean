@@ -359,7 +359,7 @@ To avoid off-by-one misunderstandings: The heading level is equal to
 the number of # characters in the opening sequence. (cf. [CommonMark
 Spec](https://spec.commonmark.org/0.31.2/))
 -/
-def displayPartStructure (part : Part) (level : Nat := 1) : String := match part with
+def displayPartStructure (part : FinishedPart) (level : Nat := 1) : String := match part with
   | .mk _ _ title _ _ subParts _ =>
        let partsStr : String := subParts.map (displayPartStructure · (level + 1))
          |>.toList |> String.join
