@@ -51,21 +51,19 @@ public structure SerializableAux where
 public partial def FinishedPart.serialize [Monad m] [MonadRef m] [MonadQuotation m] : FinishedPart → StateT SerializableAux m Lean.Json
   | .mk _titleSyntax title titlePreview metadata blocks subParts _endPos => do
     let aux ← get
-
     let titleJson := title.mapIdx (fun n _ => .num <| n + aux.inlines.size)
+    let contentJson := blocks.mapIdx (fun n _ => .num <| n + aux.blocks.size)
+    set ({ aux with
+      inlines := aux.inlines ++ title
+      blocks := aux.blocks ++ blocks })
 
+    let aux ← get
     let metadataJson ← match metadata with
       | .none => pure Json.null
       | .some s =>
         let n := aux.partMetadata.size
         set { aux with partMetadata := aux.partMetadata.push s }
         pure <| Json.arr #[.num n]
-
-    let contentJson := blocks.mapIdx (fun n _ => .num <| n + aux.blocks.size)
-
-    set ({ aux with
-      inlines := aux.inlines ++ title
-      blocks := aux.blocks ++ blocks })
 
     let subPartsJson ← subParts.mapM serialize
 
