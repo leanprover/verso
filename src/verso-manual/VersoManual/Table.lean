@@ -210,7 +210,7 @@ def table : DirectiveExpanderOf TableConfig
         throwErrorAt oneBlock s!"Expected all rows to have same number of columns, but got {rows.map (·.size)}"
 
       let flattened := rows.flatten
-      let blocks : Array (Syntax.TSepArray `term ",") ← flattened.mapM (·.mapM elabBlock)
+      let blocks : Array (Syntax.TSepArray `term ",") ← flattened.mapM (·.mapM elabBlockTerm)
       ``(Block.other (Block.table $(quote columns) $(quote cfg.header) $(quote cfg.name) $(quote cfg.alignment)) #[Block.ul #[$[Verso.Doc.ListItem.mk #[$blocks,*]],*]])
 
 where

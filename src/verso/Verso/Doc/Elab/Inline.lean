@@ -21,11 +21,11 @@ set_option backward.privateInPublic false
 public def throwUnexpected [Monad m] [MonadError m] (stx : Syntax) : m α :=
   throwErrorAt stx "unexpected syntax{indentD stx}"
 
-public partial def elabInline (inline : TSyntax `inline) : DocElabM (TSyntax `term) :=
+public partial def elabInline (inline : TSyntax `inline) : DocElabM Target.Inline :=
   withRef inline <| withFreshMacroScope <| withIncRecDepth <| do
   match inline.raw with
   | .missing =>
-    ``(sorryAx (Inline _) (synthetic := true))
+    ``(sorryAx (Doc.Inline _) (synthetic := true))
   | stx@(.node _ kind _) =>
     let env ← getEnv
     let result ← match (← liftMacroM (expandMacroImpl? env stx)) with

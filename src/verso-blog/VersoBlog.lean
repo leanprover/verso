@@ -62,7 +62,7 @@ Wraps the contents in an HTML `<div>` element with the provided `class`.
 @[directive]
 def htmlDiv : DirectiveExpanderOf ClassArgs
   | {«class»}, stxs => do
-    let contents ← stxs.mapM elabBlock
+    let contents ← stxs.mapM elabBlockTerm
     ``(Block.other (Blog.BlockExt.htmlDiv $(quote «class»)) #[ $contents,* ])
 
 
@@ -83,7 +83,7 @@ instance : FromArgs HtmlArgs DocElabM where
 def html : DirectiveExpanderOf HtmlArgs
   | {name, attrs}, stxs => do
     let tag := name.toString (escape := false)
-    let contents ← stxs.mapM elabBlock
+    let contents ← stxs.mapM elabBlockTerm
     ``(Block.other (Blog.BlockExt.htmlWrapper $(quote tag) $(quote attrs)) #[ $contents,* ])
 
 structure BlobArgs where

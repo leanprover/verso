@@ -5,3 +5,4 @@ Author: David Thrane Christiansen
 -/
 import Tests.VersoManual.Html
 import Tests.VersoManual.Html.SoftHyphenate
+import Tests.VersoManual.Markdown

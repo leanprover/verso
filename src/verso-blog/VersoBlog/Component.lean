@@ -312,7 +312,7 @@ elab_rules : command
         `(command|
           @[directive $x]
           def $dirName : DirectiveExpanderOf T
-            | $argPat, blocks => do `($qArgs #[$$(← blocks.mapM elabBlock),*]))
+            | $argPat, blocks => do `($qArgs #[$$(← blocks.mapM elabBlockTerm),*]))
       elabCommand cmd3
 
 
