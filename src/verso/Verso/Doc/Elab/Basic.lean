@@ -37,7 +37,7 @@ public partial def FinishedPart.toSyntax [Monad m] [MonadQuotation m]
     -- let bindings introduced by "chunking" the elaboration may fail to infer types
     let typedBlocks ← blocks.mapM fun b => `(($b : Block $genre))
     ``(Part.mk #[$titleInlines,*] $(quote titleString) $metaStx #[$typedBlocks,*] #[$subStx,*])
-  | .included name => ``(VersoDoc.toPart $name)
+  | .included name => ``(DocThunk.force $name)
 
 public partial def FinishedPart.toTOC : FinishedPart → TOC
   | .mk titleStx _titleInlines titleString _metadata _blocks subParts endPos =>

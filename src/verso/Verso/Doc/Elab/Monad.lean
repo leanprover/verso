@@ -468,12 +468,12 @@ public def quoteSerializableAux [Monad m] [MonadQuotation m]
     (aux : Doc.Elab.SerializableAux)
     : m Term := do
   let sortedDocs := aux.docs.toArray.qsort (lt := Name.quickLt)
-  let quotedDocs ← sortedDocs.mapM (fun name => ``(Prod.mk $(quote name) (VersoDoc.toPart $(mkIdent name))))
+  let quotedDocs ← sortedDocs.mapM (fun name => ``(Prod.mk $(quote name) (DocThunk.force $(mkIdent name))))
   ``(Doc.DeserializeAux.mk #[$aux.inlines,*] #[$aux.blocks,*] #[$aux.partMetadata,*] #[$quotedDocs,*])
 
 
 /--
-Creates a term denoting a {lean}`VersoDoc` value from a {lean}`FinishedPart`. This is the final step
+Creates a term denoting a {lean}`DocThunk` value from a {lean}`FinishedPart`. This is the final step
 in turning a parsed verso doc into syntax.
 -/
 public def FinishedPart.toVersoDoc
@@ -544,7 +544,7 @@ public def FinishedPart.toVersoDoc
     | .none => Json.mkObj []
     | .some table => Json.mkObj [("highlight", table.toExport.toJson)]
 
-  ``(VersoDoc.serialized (fun $docReconstructionPlaceholder => $quotedAux) $(quote partJson.compress) $(quote reconstJson.compress) none)
+  ``(DocThunk.serialized (fun $docReconstructionPlaceholder => $quotedAux) $(quote partJson.compress) $(quote reconstJson.compress) none)
 
 
 public abbrev BlockExpander := Syntax → DocElabM (TSyntax `term)

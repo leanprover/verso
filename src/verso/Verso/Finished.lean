@@ -1,3 +1,8 @@
+/-
+Copyright (c) 2023-2024 Lean FRO LLC. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+Author: Rob Simmons
+-/
 module
 import Verso.Doc
 
@@ -19,23 +24,16 @@ serialized and deserialized.
 -/
 opaque genre : Genre
 
-public inductive FinishedPart where
-  | mk (titleSyntax : Syntax)
-       (expandedTitle : Array Term)
-       (titlePreview : String)
-       (metadata : Option Term)
-       (blocks : Array Term)
-       (subParts : Array FinishedPart)
-       (endPos : String.Pos.Raw)
-    /-- A name representing an external module document -/
-  | included (name : Ident)
-deriving Repr, BEq
-
 /--
-Partially-serializable document structures "bottom out" at syntax nodes, which
-we don't directly serialize. Instead, when we are serializing a
-partially-serializable data structure and reach a syntax node, we store the
-syntax node in a {name}`SerializableAux` table and serialize an index into the table.
+Partially-serializable document structures can potentially "bottom out" as non-serializable data,
+represented as a {name}`Term` that, if elaborated and evaluated, represents part of a document.
+
+When serializing a partially-serializable document, these non-serializable segments are stored in
+a {name}`SerializableAux` data structure, and the serializable data contains an index into this
+data structure.
+
+To de-serialize the document, the terms in the data structure must be elaborated and evaluated to
+document data of the appropriate genre.
 -/
 public structure SerializableAux where
   /-- Syntax denoting values of type {lean}`Verso.Doc.Inline genre` for some implicit {name}`genre`. -/
@@ -44,11 +42,29 @@ public structure SerializableAux where
   blocks : Array Term := #[]
   /-- Syntax denoting values of type {lean}`genre.PartMetadata` for some implicit {name}`genre`. -/
   partMetadata : Array Term := #[]
-  /-- Other modules -/
+  /-- Other modules referenced in this document by name -/
   docs : NameSet := {}
 
+/--
+A {name}`FinishedPart` is the result of elaborating a document's part structure.
+-/
+public inductive FinishedPart where
+  | mk (titleSyntax : Syntax)
+       (expandedTitle : Array Term)
+       (titlePreview : String)
+       (metadata : Option Term)
+       (blocks : Array Term)
+       (subParts : Array FinishedPart)
+       (endPos : String.Pos.Raw)
+    /-- A name representing a Part-structured document in another module -/
+  | included (name : Ident)
+deriving Repr, BEq
 
-public partial def FinishedPart.serialize [Monad m] [MonadRef m] [MonadQuotation m] : FinishedPart → StateT SerializableAux m Lean.Json
+/--
+Transform a {name}`FinishedPart` into {name}`Json`, extracting any non-serializable data in the
+{name}`SerializableAux` data structure.
+-/
+public partial def FinishedPart.serialize [Monad m] [MonadRef m] [MonadQuotation m] : FinishedPart → StateT SerializableAux m Json
   | .mk _titleSyntax title titlePreview metadata blocks subParts _endPos => do
     let aux ← get
     let titleJson := title.mapIdx (fun n _ => .num <| n + aux.inlines.size)
