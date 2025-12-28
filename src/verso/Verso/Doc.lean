@@ -652,60 +652,6 @@ private partial def Part.reprPrec [Repr genre.Inline] [Repr genre.Block] [Repr g
 public instance [Repr g.Inline] [Repr g.Block] [Repr g.PartMetadata] : Repr (Part g) where
   reprPrec := private Part.reprPrec
 
-public structure DocReconstruction where
-  highlightDeduplication : SubVerso.Highlighting.Export
-
-
-/--
-The result type of values created by Verso's {lit}`#doc` and {lit}`#docs` commands. A value of type
-{name}`DocThunk` represents a not-fully-evaluated document of type {lean}`Part` that can be turned
-into a value by invoking the `DocThunk.force` method. The actual structure of a {name}`DocThunk`
-should not be relied on.
--/
-public structure DocThunk (genre : Genre) where
-  construct : DocReconstruction → Part genre
-
-  /-- Serialization of the DocReconstruction data structure -/
-  docReconstructionData : String := "{}"
-
-instance : Inhabited (DocThunk genre) where
-  default := DocThunk.mk (fun _ => Inhabited.default) "{}"
-
-
-/--
-A {name}`DocThunk` represents a potentially-not-fully-evaluated {name}`Part`. Calling
-{name}`DocThunk.force` forces evaluation of the {name}`DocThunk` to a {name}`Part`.
--/
-public def DocThunk.force: DocThunk genre → Part genre
-  | .mk construct highlight =>
-    match Json.parse highlight with
-    | .error e => panic! s!"Failed to parse DocThunk's Export data as JSON: {e}"
-    | .ok json =>
-      if let .ok highlightJson := json.getObjVal? "highlight" then
-        match SubVerso.Highlighting.Export.fromJson? highlightJson with
-        | .error e => panic! s!"Failed to deserialize Export data from parsed JSON: {e}"
-        | .ok table => construct ⟨table⟩
-      else construct ⟨{}⟩
-
-@[deprecated DocThunk (since := "2025-12-28")]
-public def VersoDoc : Genre → Type := DocThunk
-
-@[deprecated DocThunk.force (since := "2025-12-28")]
-public def VersoDoc.force : DocThunk genre → Part genre := DocThunk.force
-
-@[deprecated DocThunk.force (since := "2025-12-28")]
-public def VersoDoc.toPart : DocThunk genre → Part genre := DocThunk.force
-
-@[deprecated DocThunk.force (since := "2025-12-28")]
-public def DocThunk.toPart : DocThunk genre → Part genre := DocThunk.force
-
-/--
-Replace the metadata in a {name}`DocThunk`.
-
-This is something of a hack used as a workaround in LiterateModuleDocs.
--/
-public def DocThunk.withMetadata (metadata? : Option genre.PartMetadata)  : DocThunk genre → DocThunk genre
-  | .mk construct docReconstStr => .mk (fun docReconst => { construct docReconst with metadata := metadata? }) docReconstStr
 
 /--
 Specifies how to modify the context while traversing the contents of a given part.

@@ -14,6 +14,7 @@ import Lean.DocString
 
 import SubVerso.Highlighting
 import Verso.Doc
+import Verso.Doc.Reconstruct
 public import Verso.Doc.ArgParse
 public import Verso.Doc.Elab.InlineString
 meta import Verso.Doc.Elab.InlineString
@@ -532,7 +533,7 @@ public def FinishedPart.toThunkTerm
     | .none => Json.mkObj []
     | .some table => Json.mkObj [("highlight", table.toExport.toJson)]
 
-  ``(DocThunk.mk (fun $docReconstructionPlaceholder => $finishedSyntax) $(quote reconstJson.compress))
+  ``(DocThunk.serialized (fun $docReconstructionPlaceholder => $finishedSyntax) $(quote reconstJson.compress) none)
 
 @[deprecated FinishedPart.toThunkTerm (since := "2025-11-28")]
 public def FinishedPart.toVersoDoc : Term → FinishedPart → DocElabContext → DocElabM.State → PartElabM.State → TermElabM Term := FinishedPart.toThunkTerm

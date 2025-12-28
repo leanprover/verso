@@ -7,6 +7,7 @@ Author: David Thrane Christiansen
 import Lean.Data.Json
 import Lean.DocString.Extension
 import Verso.Doc
+import Verso.Doc.Reconstruct
 import SubVerso.Highlighting
 import SubVerso.Module
 import VersoLiterate.Basic
@@ -305,7 +306,7 @@ partial def modToPage [LoadLiterate g] (mod : LitMod) (title : Array (Inline g))
     let p' := stack.back
     stack := stack.pop
     p := pushPart p' p
-  return DocThunk.mk (fun _ => p) "{}"
+  return DocThunk.value p
 where
   docstringBlock (doc : LitVersoDocString) : Array (Block g) :=
     let parts := doc.subsections.map loadPart

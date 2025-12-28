@@ -5,6 +5,7 @@ Author: David Thrane Christiansen, Rob Simmons
 -/
 module
 public import Verso.Doc
+import Verso.Doc.Reconstruct
 
 open Lean
 

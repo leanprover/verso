@@ -9,6 +9,7 @@ public meta import Verso.Parser
 public import Lean.Elab.Command
 public meta import SubVerso.Highlighting.Export
 import Verso.Doc
+import Verso.Doc.Reconstruct
 public import Verso.Doc.Elab
 public meta import Verso.Doc.Elab.Monad
 import Verso.Doc.Concrete.InlineString
