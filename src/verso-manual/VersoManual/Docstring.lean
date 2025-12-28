@@ -1672,7 +1672,7 @@ private def getTactic? (name : String ⊕ Name) : TermElabM (Option TacticDoc) :
   return none
 
 @[directive]
-def tactic : DirectiveExpanderOf TacticDocsOptions
+def tactic : DirectiveElabOf TacticDocsOptions
   | opts, more => do
     let tactics ← getTacticOverloads opts.name
     let blame : Syntax := opts.name.elim TSyntax.raw TSyntax.raw
@@ -1695,8 +1695,8 @@ def tactic : DirectiveExpanderOf TacticDocsOptions
         let some mdAst := MD4Lean.parse str
           | throwError m!"Failed to parse docstring as Markdown. Docstring contents:\n{repr str}"
         mdAst.blocks.mapM (blockFromMarkdownWithLean [])
-    let userContents ← more.mapM elabBlockTerm
-    ``(Verso.Doc.Block.other (Block.tactic $(quote tactic) $(quote opts.show)) #[$(contents ++ userContents),*])
+    let userContents ← more.mapM elabBlock'
+    return .other (← ``(Block.tactic $(quote tactic) $(quote opts.show))) (contents.map .stx ++ userContents)
 
 def Inline.tactic : Inline where
   name := `Verso.Genre.Manual.tacticInline

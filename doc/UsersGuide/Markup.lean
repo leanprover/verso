@@ -282,7 +282,7 @@ open Lean Elab in
 open Verso.Parser in
 open Lean.Doc.Syntax in
 @[directive]
-def markupPreview : DirectiveExpanderOf MarkupPreviewConfig
+def markupPreview : DirectiveElabOf MarkupPreviewConfig
   | {title}, contents => do
     let #[blk1, blk2] := contents.filter nonempty
       | throwError "Expected precisely two code blocks, got {contents.filter nonempty}"
@@ -304,10 +304,10 @@ def markupPreview : DirectiveExpanderOf MarkupPreviewConfig
       throwErrorAt expected m!"Expected {indentD expected.getString} but got {indentD p}\n{hint}"
 
     Hover.addCustomHover contents s!"```\n{p}\n```"
-    ``(Block.other (MarkupExample $(quote title.getString)) #[
-      Block.code $(quote contents.getString),
-      Block.code $(quote <| toString <| p)
-    ])
+    return .other (← ``(MarkupExample $(quote title.getString))) #[
+      .code contents.getString,
+      .code p
+    ]
 where
   eq (s1 s2 : String) : Bool :=
     let lines1 := s1.trimAscii.split (· == '\n') |>.map (·.trimAsciiEnd) |>.toArray

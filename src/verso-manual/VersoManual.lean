@@ -161,10 +161,10 @@ paragraph. In HTML output, they are rendered with less space between them, and L
 a single paragraph (e.g. without extraneous indentation).
 -/
 @[directive]
-def paragraph : DirectiveExpanderOf Unit
+def paragraph : DirectiveElabOf Unit
   | (), stxs => do
-    let args ← stxs.mapM elabBlockTerm
-    ``(Block.other Block.paragraph #[ $[ $args ],* ])
+    let args ← stxs.mapM elabBlock'
+    return .other (← ``(Block.paragraph)) args
 
 structure Config extends HtmlConfig where
   destination : System.FilePath := "_out"
