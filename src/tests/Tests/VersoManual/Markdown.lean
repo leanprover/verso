@@ -8,7 +8,7 @@ import Verso.Doc.Elab.Monad
 import Lean.Elab.Term
 
 open Verso Doc Elab
-open Verso.Genre Manual Markdown
+open Verso.Genre Manual
 open Lean
 
 /--
@@ -20,7 +20,7 @@ To avoid off-by-one misunderstandings: The heading level is equal to
 the number of # characters in the opening sequence. (cf. [CommonMark
 Spec](https://spec.commonmark.org/0.31.2/))
 -/
-def displayPartStructure (part : Part) (level : Nat := 1) : String := match part with
+def displayPartStructure (part : FinishedPart) (level : Nat := 1) : String := match part with
   | .mk _ _ title _ _ subParts _ =>
        let partsStr : String := subParts.map (displayPartStructure · (level + 1))
          |>.toList |> String.join
@@ -38,7 +38,7 @@ def testAddPartFromMarkdown (input : String) : Elab.TermElabM String := do
   let addParts : PartElabM Unit := do
     let mut levels := []
     for block in parsed.blocks do
-      levels ← addPartFromMarkdown block levels
+      levels ← Markdown.addPartFromMarkdown block levels
     closePartsUntil 0 0
   let (_, _, part) ← addParts.run ⟨Syntax.node .none identKind #[], mkConst ``Manual, .always, .none⟩ default default
   part.partContext.priorParts.toList.map displayPartStructure |> String.join |> pure
