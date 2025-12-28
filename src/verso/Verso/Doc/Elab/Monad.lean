@@ -464,7 +464,7 @@ unsafe def inlineExpandersForUnsafe (x : Name) : DocElabM (Array InlineExpander)
 public opaque inlineExpandersFor (x : Name) : DocElabM (Array InlineExpander)
 
 /--
-Creates a term denoting a {lean}`DocThunk` value from a {lean}`Part`. This is the final step
+Creates a term denoting a {lean}`DocThunk` value from a {lean}`FinishedPart`. This is the final step
 in turning a parsed verso doc into syntax.
 -/
 public def FinishedPart.toThunkTerm

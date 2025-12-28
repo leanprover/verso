@@ -4,7 +4,6 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 module
-
 public import Verso.Doc.Elab.Monad
 meta import Verso.Doc.Elab.Monad
 public import Lean.DocString.Syntax
@@ -29,7 +28,11 @@ def decorateClosing : TSyntax `block → DocElabM Unit
   | _ => pure ()
 
 
-/-- Elaborates a parsed block -/
+variable (genre : Genre) in
+/--
+Elaborates a parsed block into a {name}`Target.Block`, which denotes an expression of type
+{lean}`Doc.Block genre` in an unspecified {name}`genre`.
+-/
 public partial def elabBlock' (block : TSyntax `block) : DocElabM Target.Block :=
   withTraceNode `Elab.Verso.block (fun _ => pure m!"Block {block}") <|
   withRef block <| withFreshMacroScope <| withIncRecDepth <| do
