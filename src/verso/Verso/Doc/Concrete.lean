@@ -8,6 +8,7 @@ public import Lean.Parser.Types
 public meta import Verso.Parser
 public import Lean.Elab.Command
 public meta import SubVerso.Highlighting.Export
+import Verso.Deserialize
 import Verso.Doc
 public import Verso.Doc.Elab
 public meta import Verso.Doc.Elab.Monad

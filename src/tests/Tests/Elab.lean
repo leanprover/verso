@@ -75,4 +75,3 @@ A variable like {lean}`(_ : Nat)`.
 :::::::
 A variable like {lean}`_`.
 :::::::
-

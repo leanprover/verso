@@ -5,8 +5,8 @@ Author: David Thrane Christiansen, Rob Simmons
 -/
 module
 public import Verso.Doc
-import Verso.VersoDoc
-public import Verso.Finished
+import Verso.Deserialize
+public import Verso.Serialize
 
 open Lean
 

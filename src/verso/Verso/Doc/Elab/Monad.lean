@@ -12,7 +12,8 @@ import Lean.Meta.Reduce
 import Lean.DocString.Syntax
 import Lean.DocString
 
-import SubVerso.Highlighting
+public import SubVerso.Highlighting
+import Verso.Deserialize
 import Verso.Doc
 public import Verso.Doc.ArgParse
 public import Verso.Doc.Elab.InlineString
@@ -21,7 +22,6 @@ public import Verso.Doc.Elab.Basic
 import Verso.Doc.Elab.ExpanderAttribute
 public import Verso.Doc.Name
 import Verso.Doc.DocName
-public import Verso.VersoDoc
 public import Verso.Instances
 
 set_option doc.verso true

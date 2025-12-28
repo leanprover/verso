@@ -6,7 +6,7 @@ Author: Rob Simmons
 module
 public import Verso.Doc
 public import SubVerso.Highlighting
-import Verso.Finished
+import Verso.Serialize
 
 set_option doc.verso true
 set_option pp.rawOnError true
@@ -109,7 +109,7 @@ A {lean}`DocThunk` represents a potentially-not-fully-evaluated {lean}`Part`. Ca
 public def DocThunk.force: DocThunk genre → Part genre
   | .serialized auxFn docStr highlight replacementMetadata? =>
     match (Json.parse highlight, Json.parse docStr) with
-    | (.error e, _) => panic! s!"Failed to parse VersoDoc's Export data as JSON: {e}"
+    | (.error e, _) => panic! s!"Failed to parse DocThunk's Export data as JSON: {e}"
     | (_, .error e) => panic! s!"Failed to parse doc data as JSON: {e}"
     | (.ok reconJson, .ok docJson) =>
       if let .ok highlightJson := reconJson.getObjVal? "highlight" then
