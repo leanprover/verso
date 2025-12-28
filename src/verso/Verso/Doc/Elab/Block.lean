@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 module
-public import Verso.Doc.Elab.Basic
+
 public import Verso.Doc.Elab.Monad
 meta import Verso.Doc.Elab.Monad
 public import Lean.DocString.Syntax

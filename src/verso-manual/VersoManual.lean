@@ -141,7 +141,7 @@ Inserts a reference to the provided tag.
 @[role]
 def ref : RoleExpanderOf RoleArgs
   | {canonicalName, domain, remote}, content => do
-    let content ← content.mapM Elab.elabInline
+    let content ← content.mapM elabInline
     ``(Inline.other (Inline.ref $(quote canonicalName) $(quote domain) $(quote remote)) #[$content,*])
 
 block_extension Block.paragraph where
