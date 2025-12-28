@@ -528,8 +528,8 @@ def elabLiteratePage (x : Ident) (path : StrLit) (mod : Ident) (config : LitPage
       | _ => p
     else finished
 
-  let ty ← ``(VersoDoc $genre)
-  let doc ← Command.runTermElabM fun _ => finished.toVersoDoc genre ctx docState partState
+  let ty ← ``(DocThunk $genre)
+  let doc ← Command.runTermElabM fun _ => finished.toThunkTerm genre ctx docState partState
   elabCommand <| ← `(def $x : $ty := $doc)
 
 end Literate

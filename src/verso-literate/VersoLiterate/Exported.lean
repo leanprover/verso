@@ -7,6 +7,7 @@ Author: David Thrane Christiansen
 import Lean.Data.Json
 import Lean.DocString.Extension
 import Verso.Doc
+import Verso.Doc.Reconstruct
 import SubVerso.Highlighting
 import SubVerso.Module
 import VersoLiterate.Basic
@@ -247,7 +248,7 @@ private partial def mdBlock : MD4Lean.Block → Except String (Block g)
   | .html .. => throw "Literal HTML in Markdown not supported"
   | .hr => throw "Thematic break (horizontal rule) in Markdown not supported"
 
-partial def modToPage [LoadLiterate g] (mod : LitMod) (title : Array (Inline g)) (titleString : String) : Except String (VersoDoc g) := do
+partial def modToPage [LoadLiterate g] (mod : LitMod) (title : Array (Inline g)) (titleString : String) : Except String (DocThunk g) := do
   let mut stack : Array (Part g) := #[]
   let mut p : Part g := {title, titleString, metadata := none, content := #[], subParts := #[]}
 
@@ -305,7 +306,7 @@ partial def modToPage [LoadLiterate g] (mod : LitMod) (title : Array (Inline g))
     let p' := stack.back
     stack := stack.pop
     p := pushPart p' p
-  return VersoDoc.mk (fun _ => p) "{}"
+  return DocThunk.value p
 where
   docstringBlock (doc : LitVersoDocString) : Array (Block g) :=
     let parts := doc.subsections.map loadPart

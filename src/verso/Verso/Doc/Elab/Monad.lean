@@ -14,6 +14,7 @@ import Lean.DocString
 
 import SubVerso.Highlighting
 import Verso.Doc
+import Verso.Doc.Reconstruct
 public import Verso.Doc.ArgParse
 public import Verso.Doc.Elab.InlineString
 meta import Verso.Doc.Elab.InlineString
@@ -463,10 +464,10 @@ unsafe def inlineExpandersForUnsafe (x : Name) : DocElabM (Array InlineExpander)
 public opaque inlineExpandersFor (x : Name) : DocElabM (Array InlineExpander)
 
 /--
-Creates a term denoting a {lean}`VersoDoc` value from a {lean}`FinishedPart`. This is the final step
+Creates a term denoting a {lean}`DocThunk` value from a {lean}`FinishedPart`. This is the final step
 in turning a parsed verso doc into syntax.
 -/
-public def FinishedPart.toVersoDoc
+public def FinishedPart.toThunkTerm
     (genreSyntax : Term)
     (finished : FinishedPart)
     (ctx : DocElabContext)
@@ -532,8 +533,10 @@ public def FinishedPart.toVersoDoc
     | .none => Json.mkObj []
     | .some table => Json.mkObj [("highlight", table.toExport.toJson)]
 
-  ``(VersoDoc.mk (fun $docReconstructionPlaceholder => $finishedSyntax) $(quote reconstJson.compress))
+  ``(DocThunk.serialized (fun $docReconstructionPlaceholder => $finishedSyntax) $(quote reconstJson.compress) none)
 
+@[deprecated FinishedPart.toThunkTerm (since := "2025-11-28")]
+public def FinishedPart.toVersoDoc : Term → FinishedPart → DocElabContext → DocElabM.State → PartElabM.State → TermElabM Term := FinishedPart.toThunkTerm
 
 public abbrev BlockExpander := Syntax → DocElabM (TSyntax `term)
 
