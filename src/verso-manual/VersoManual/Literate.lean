@@ -101,7 +101,7 @@ def getModuleWithDocs (path : StrLit) (mod : Ident) (title : StrLit) : PartElabM
     let title ← Meta.mkArrayLit (.app (mkConst ``Verso.Doc.Inline) g) title.toList
     withOptions (Compiler.LCNF.compiler.extract_closed.set · false) do
       addAndCompile <| .defnDecl {
-        name, levelParams := [], type := .app (mkConst ``Verso.Doc.VersoDoc) g,
+        name, levelParams := [], type := .app (mkConst ``Verso.Doc.DocThunk) g,
         value := ← Meta.mkAppM ``modToPage! #[
           ← Meta.mkAppM ``VersoLiterate.loadJsonString! #[mkConst jsonName, mkStrLit s!"JSON for {mod.getId}"],
           title,

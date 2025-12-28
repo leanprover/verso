@@ -12,13 +12,6 @@ import Verso.Doc.Name
 set_option doc.verso true
 set_option pp.rawOnError true
 
-/--
-Identify function; this is a temporary compatibility shim to introduce a new type,
-VersoDoc, that will have a nontrival toPart method.
--/
-@[deprecated "remove or use VersoDoc.toPart" (since := "2025-11-01")]
-public def Lean.Doc.Part.toPart (p : Lean.Doc.Part i b p) := p
-
 namespace Verso
 
 namespace Doc
@@ -665,28 +658,28 @@ public structure DocReconstruction where
 
 /--
 The result type of values created by Verso's {lit}`#doc` and {lit}`#docs` commands. A value of type
-{lean}`VersoDoc` represents a not-fully-evaluated document of type {lean}`Part` that can be turned
-into a value by invoking the `VersoDoc.toPart` method. The actual structure of a {lean}`VersoDoc`
+{name}`DocThunk` represents a not-fully-evaluated document of type {lean}`Part` that can be turned
+into a value by invoking the `DocThunk.force` method. The actual structure of a {name}`DocThunk`
 should not be relied on.
 -/
-public structure VersoDoc (genre : Genre) where
+public structure DocThunk (genre : Genre) where
   construct : DocReconstruction → Part genre
 
   /-- Serialization of the DocReconstruction data structure -/
   docReconstructionData : String := "{}"
 
-instance : Inhabited (VersoDoc genre) where
-  default := VersoDoc.mk (fun _ => Inhabited.default) "{}"
+instance : Inhabited (DocThunk genre) where
+  default := DocThunk.mk (fun _ => Inhabited.default) "{}"
 
 
 /--
-A {lean}`VersoDoc` represents a potentially-not-fully-evaluated {lean}`Part`. Calling {lean}`VersoDoc.toPart` forces
-evaluation of the {lean}`VersoDoc` to a {lean}`Part`.
+A {name}`DocThunk` represents a potentially-not-fully-evaluated {name}`Part`. Calling
+{name}`DocThunk.force` forces evaluation of the {name}`DocThunk` to a {name}`Part`.
 -/
-public def VersoDoc.toPart: VersoDoc genre → Part genre
+public def DocThunk.force: DocThunk genre → Part genre
   | .mk construct highlight =>
     match Json.parse highlight with
-    | .error e => panic! s!"Failed to parse VersoDoc's Export data as JSON: {e}"
+    | .error e => panic! s!"Failed to parse DocThunk's Export data as JSON: {e}"
     | .ok json =>
       if let .ok highlightJson := json.getObjVal? "highlight" then
         match SubVerso.Highlighting.Export.fromJson? highlightJson with
@@ -694,20 +687,25 @@ public def VersoDoc.toPart: VersoDoc genre → Part genre
         | .ok table => construct ⟨table⟩
       else construct ⟨{}⟩
 
+@[deprecated DocThunk (since := "2025-12-28")]
+public def VersoDoc : Genre → Type := DocThunk
+
+@[deprecated DocThunk.force (since := "2025-12-28")]
+public def VersoDoc.force : DocThunk genre → Part genre := DocThunk.force
+
+@[deprecated DocThunk.force (since := "2025-12-28")]
+public def VersoDoc.toPart : DocThunk genre → Part genre := DocThunk.force
+
+@[deprecated DocThunk.force (since := "2025-12-28")]
+public def DocThunk.toPart : DocThunk genre → Part genre := DocThunk.force
+
 /--
-Replace the metadata in a VersoDoc.
+Replace the metadata in a {name}`DocThunk`.
 
 This is something of a hack used as a workaround in LiterateModuleDocs.
 -/
-public def VersoDoc.withMetadata (metadata? : Option genre.PartMetadata)  : VersoDoc genre → VersoDoc genre
+public def DocThunk.withMetadata (metadata? : Option genre.PartMetadata)  : DocThunk genre → DocThunk genre
   | .mk construct docReconstStr => .mk (fun docReconst => { construct docReconst with metadata := metadata? }) docReconstStr
-
-/--
-Identify function; this is a temporary compatibility shim to introduce a new type,
-VersoDoc, that will have a nontrival toPart method.
--/
-@[deprecated "remove or use VersoDoc.toPart" (since := "2025-11-01")]
-public def Part.toPart (p : Part genre) := p
 
 /--
 Specifies how to modify the context while traversing the contents of a given part.
