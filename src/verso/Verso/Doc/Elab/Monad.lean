@@ -41,7 +41,7 @@ class HasLink (name : String) (doc : Name) where
   url : String
 
 class HasNote (name : String) (doc : Name) (genre : Genre) where
-  contents : Array (Doc.Inline genre)
+  contents : Array (Inline genre)
 
 private def linkRefName [Monad m] [MonadQuotation m] (docName : Name) (ref : TSyntax `str) : m Term := do
   ``(HasLink.url $(quote ref.getString) $(quote docName))
