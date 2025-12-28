@@ -70,7 +70,7 @@ info: (some (Verso.Genre.Manual.InlineLean.Inline.lean, [{"seq":
      {"tok": {"kind": {"withType": {"type": "Nat"}}, "content": "3"}}}]}},
  []]))-/
 #guard_msgs in
-#eval match inspect.toPart.content[0]! with
+#eval match inspect.force.content[0]! with
   | .para x => match x[0]! with
     | .other code _ => Option.some (code.name, code.data)
     | _ => .none

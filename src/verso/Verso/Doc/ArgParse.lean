@@ -9,7 +9,7 @@ public import Verso.Hover
 import Verso.Parser
 public import Verso.SyntaxUtils
 import Lean.Parser
-import Lean.Elab.GuardMsgs
+public import Lean.Elab.GuardMsgs
 public import Lean.Elab.InfoTree.Types
 public import Lean.ResolveName
 public import Lean.Elab.Term
