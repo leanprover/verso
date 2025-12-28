@@ -59,4 +59,4 @@ def draft : RoleExpanderOf Unit
 @[directive draft]
 def draftBlock : DirectiveExpanderOf Unit
   | (), contents => do
-    ``(Verso.Doc.Block.other Block.draft #[$[$(← contents.mapM elabBlock)],*])
+    ``(Verso.Doc.Block.other Block.draft #[$[$(← contents.mapM elabBlockTerm)],*])

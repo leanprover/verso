@@ -47,7 +47,7 @@ open Std (HashMap)
 
 open Verso.FS
 
-open Verso.Doc Elab
+open Verso.Doc
 open Verso.Multi
 open Verso.Genre.Manual.TeX
 open Verso.Genre.Manual.WordCount
@@ -139,9 +139,9 @@ end
 Inserts a reference to the provided tag.
 -/
 @[role]
-def ref : RoleExpanderOf RoleArgs
+def ref : Elab.RoleExpanderOf RoleArgs
   | {canonicalName, domain, remote}, content => do
-    let content ← content.mapM elabInline
+    let content ← content.mapM Elab.elabInline
     ``(Inline.other (Inline.ref $(quote canonicalName) $(quote domain) $(quote remote)) #[$content,*])
 
 block_extension Block.paragraph where
@@ -161,9 +161,9 @@ paragraph. In HTML output, they are rendered with less space between them, and L
 a single paragraph (e.g. without extraneous indentation).
 -/
 @[directive]
-def paragraph : DirectiveExpanderOf Unit
+def paragraph : Elab.DirectiveExpanderOf Unit
   | (), stxs => do
-    let args ← stxs.mapM elabBlock
+    let args ← stxs.mapM Elab.elabBlockTerm
     ``(Block.other Block.paragraph #[ $[ $args ],* ])
 
 structure Config extends HtmlConfig where

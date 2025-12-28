@@ -20,18 +20,74 @@ public inductive TOC where
   | included (name : Ident)
 deriving Repr, TypeName, Inhabited
 
-public inductive FinishedPart where
-  | mk (titleSyntax : Syntax) (expandedTitle : Array (TSyntax `term)) (titlePreview : String) (metadata : Option (TSyntax `term)) (blocks : Array (TSyntax `term)) (subParts : Array FinishedPart) (endPos : String.Pos.Raw)
+/--
+The result of elaborating an inline component of a document
+-/
+public abbrev Inline := Term
+
+variable (genre : Genre) in
+public section
+/--
+The result of elaborating a document block. Concretely denotes a {lean}`Doc.Block genre` for some
+unspecified {name}`genre`.
+-/
+public inductive Block where
+  | para (contents : Array Inline)
+  | code (content : String)
+  | ul (items : Array (Array Block))
+  | ol (start : Int) (items : Array (Array Block))
+  | dl (items : Array ((Array Inline) × (Array Block)))
+  | blockquote (items : Array Block)
+  | concat (content : Array Block)
+  | other (container : Term) (content : Array Block)
+  | stx (stx : Term)
+deriving Repr, BEq
+
+end
+
+mutual
+public partial def ListItem.toTerm [Monad m] [MonadRef m] [MonadQuotation m] (genre : Term) : Array Block → m Term
+  | contents => do ``(Doc.ListItem.mk #[$(← contents.mapM (Block.toTerm genre)),*])
+
+public partial def DescItem.toTerm [Monad m] [MonadRef m] [MonadQuotation m] (genre : Term) : Array Inline × Array Block → m Term
+  | (term, desc) => do ``(Doc.DescItem.mk #[$term,*] #[$(← desc.mapM (Block.toTerm genre)),*])
+
+public partial def Block.toTerm [Monad m] [MonadRef m] [MonadQuotation m] (genre : Term) : Block → m Term
+  | .para contents => ``(Doc.Block.para (genre := $(genre)) #[$contents,*])
+  | .code contents => ``(Doc.Block.code (genre := $(genre)) $(quote contents))
+  | .ul contents => do ``(Doc.Block.ul (genre := $(genre)) #[$(← contents.mapM (ListItem.toTerm genre)),*])
+  | .ol start contents => do ``(Doc.Block.ol (genre := $(genre)) $(← quoteInt start) #[$(← contents.mapM (ListItem.toTerm genre)),*])
+  | .dl contents => do ``(Doc.Block.dl (genre := $(genre)) #[$(← contents.mapM (DescItem.toTerm genre)),*])
+  | .blockquote contents => do ``(Doc.Block.blockquote (genre := $(genre)) #[$(← contents.mapM (Block.toTerm genre)),*])
+  | .concat content => do ``(Doc.Block.concat (genre := $(genre)) #[$(← content.mapM (Block.toTerm genre)),*])
+  | .other container content => do ``(Doc.Block.other (genre := $(genre)) $container #[$(← content.mapM (Block.toTerm genre)),*])
+  | .stx stx => pure stx
+where
+  quoteInt : Int → m Term
+  | .ofNat n => ``(Int.ofNat $(quote n))
+  | .negSucc n => ``(Int.negSucc $(quote n))
+end
+
+variable (genre : Genre) in
+/--
+The result of elaborating a document part. Concretely denotes a {lean}`Doc.Part genre` for some
+unspecified {name}`genre`.
+-/
+public inductive Part where
+  | mk (titleSyntax : Syntax) (expandedTitle : Array Inline) (titlePreview : String) (metadata : Option Term) (blocks : Array Block) (subParts : Array Part) (endPos : String.Pos.Raw)
     /-- A name representing a value of type {lean}`DocThunk` -/
   | included (name : Ident)
 deriving Repr, BEq
 
+@[deprecated Part (since := "2025-12-28")]
+public def FinishedPart := Part
+
 /--
 From a finished part, constructs syntax that denotes its {lean}`Part` value.
 -/
-public partial def FinishedPart.toSyntax [Monad m] [MonadQuotation m]
+public partial def Part.toSyntax [Monad m] [MonadQuotation m]
     (genre : TSyntax `term)
-    : FinishedPart → m Term
+    : Part → m Term
   | .mk _titleStx titleInlines titleString metadata blocks subParts _endPos => do
     let subStx ← subParts.mapM (toSyntax genre)
     let metaStx ←
@@ -40,11 +96,11 @@ public partial def FinishedPart.toSyntax [Monad m] [MonadQuotation m]
       | some stx => `(some $stx)
     -- Adding type annotations works around a limitation in list and array elaboration, where intermediate
     -- let bindings introduced by "chunking" the elaboration may fail to infer types
-    let typedBlocks ← blocks.mapM fun b => `(($b : Block $genre))
-    ``(Part.mk #[$titleInlines,*] $(quote titleString) $metaStx #[$typedBlocks,*] #[$subStx,*])
+    let typedBlocks ← blocks.mapM fun b => do ``(($(← b.toTerm genre) : Doc.Block $genre))
+    ``(Doc.Part.mk #[$titleInlines,*] $(quote titleString) $metaStx #[$typedBlocks,*] #[$subStx,*])
   | .included name => ``(DocThunk.force $name)
 
-public partial def FinishedPart.toTOC : FinishedPart → TOC
+public partial def Part.toTOC : Part → TOC
   | .mk titleStx _titleInlines titleString _metadata _blocks subParts endPos =>
     .mk titleString titleStx endPos (subParts.map toTOC)
   | .included name => .included name
@@ -61,18 +117,18 @@ indicated by the header's level.
 -/
 public structure PartFrame where
   titleSyntax : Syntax
-  expandedTitle : Option (String × Array (TSyntax `term)) := none
-  metadata : Option (TSyntax `term)
-  blocks : Array (TSyntax `term)
+  expandedTitle : Option (String × Array Inline) := none
+  metadata : Option Term
+  blocks : Array Block
   /--
   The sibling parts at the same nesting level as the part represented by this frame. These siblings
   are earlier in the document and have the same parent.
   -/
-  priorParts : Array FinishedPart
+  priorParts : Array Part
 deriving Repr, Inhabited
 
-/-- Turn an previously active {name}`PartFrame` into a {name}`FinishedPart`. -/
-public def PartFrame.close (fr : PartFrame) (endPos : String.Pos.Raw) : FinishedPart :=
+/-- Turn an previously active {name}`PartFrame` into a {name}`Part`. -/
+public def PartFrame.close (fr : PartFrame) (endPos : String.Pos.Raw) : Part :=
   let (titlePreview, titleInlines) := fr.expandedTitle.getD ("<anonymous>", #[])
   .mk fr.titleSyntax titleInlines titlePreview fr.metadata fr.blocks fr.priorParts endPos
 
@@ -107,7 +163,7 @@ parts being built.
 public def PartContext.level (ctxt : PartContext) : Nat := ctxt.parents.size
 
 /--
-Closes the current part. The resulting {name}`FinishedPart` is appended to
+Closes the current part. The resulting {name}`Part` is appended to
 {name (full := PartFrame.priorParts)}`priorParts`, and
 the top of the stack of our parents becomes the current frame. Returns
 {name}`none` if there are no parents.

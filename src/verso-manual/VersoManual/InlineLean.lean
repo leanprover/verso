@@ -536,7 +536,7 @@ def leanSection : DirectiveExpander
     let start ← `(block|```lean $arg | $(quote code) ```)
     let code := name?.map (s!"end {·}") |>.getD "end"
     let «end» ← `(block|```lean $arg | $(quote code) ```)
-    return #[← elabBlock start] ++ (← contents.mapM elabBlock) ++ #[← elabBlock «end»]
+    return #[← elabBlockTerm start] ++ (← contents.mapM elabBlockTerm) ++ #[← elabBlockTerm «end»]
 
 private def getClass : MessageSeverity → String
   | .error => "error"

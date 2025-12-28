@@ -25,7 +25,7 @@ public partial def elabInline (inline : TSyntax `inline) : DocElabM (TSyntax `te
   withRef inline <| withFreshMacroScope <| withIncRecDepth <| do
   match inline.raw with
   | .missing =>
-    ``(sorryAx (Inline _) (synthetic := true))
+    ``(sorryAx (Doc.Inline _) (synthetic := true))
   | stx@(.node _ kind _) =>
     let env ← getEnv
     let result ← match (← liftMacroM (expandMacroImpl? env stx)) with

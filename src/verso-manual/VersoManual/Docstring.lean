@@ -1695,7 +1695,7 @@ def tactic : DirectiveExpanderOf TacticDocsOptions
         let some mdAst := MD4Lean.parse str
           | throwError m!"Failed to parse docstring as Markdown. Docstring contents:\n{repr str}"
         mdAst.blocks.mapM (blockFromMarkdownWithLean [])
-    let userContents ← more.mapM elabBlock
+    let userContents ← more.mapM elabBlockTerm
     ``(Verso.Doc.Block.other (Block.tactic $(quote tactic) $(quote opts.show)) #[$(contents ++ userContents),*])
 
 def Inline.tactic : Inline where
@@ -1851,7 +1851,7 @@ def conv : DirectiveExpanderOf TacticDocsOptions
           | throwError "Failed to parse docstring as Markdown"
         mdAst.blocks.mapM (blockFromMarkdownWithLean [])
       else pure #[]
-    let userContents ← more.mapM elabBlock
+    let userContents ← more.mapM elabBlockTerm
     let some toShow := opts.show
       | throwError "An explicit 'show' is mandatory for conv docs (for now)"
     ``(Verso.Doc.Block.other (Block.conv $(quote tactic.name) $(quote toShow) $(quote tactic.docs?)) #[$(contents ++ userContents),*])

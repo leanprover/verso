@@ -41,7 +41,7 @@ class HasLink (name : String) (doc : Name) where
   url : String
 
 class HasNote (name : String) (doc : Name) (genre : Genre) where
-  contents : Array (Inline genre)
+  contents : Array (Doc.Inline genre)
 
 private def linkRefName [Monad m] [MonadQuotation m] (docName : Name) (ref : TSyntax `str) : m Term := do
   ``(HasLink.url $(quote ref.getString) $(quote docName))
@@ -343,11 +343,11 @@ public def PartElabM.addBlock (block : TSyntax `term) (blockInternalDocReconstru
 
   modifyThe PartElabM.State fun st =>
     { st with
-      partContext.blocks := st.partContext.blocks.push blockRefSyntax
+      partContext.blocks := st.partContext.blocks.push (.stx blockRefSyntax)
       deferredBlocks := st.deferredBlocks.push (name, blockDefSyntax)
     }
 
-public def PartElabM.addPart (finished : FinishedPart) : PartElabM Unit := modifyThe State fun st =>
+public def PartElabM.addPart (finished : Part) : PartElabM Unit := modifyThe State fun st =>
   { st with partContext.priorParts := st.partContext.priorParts.push finished }
 
 public def PartElabM.addLinkDef (refName : TSyntax `str) (url : String) : PartElabM Unit := do
@@ -464,12 +464,12 @@ unsafe def inlineExpandersForUnsafe (x : Name) : DocElabM (Array InlineExpander)
 public opaque inlineExpandersFor (x : Name) : DocElabM (Array InlineExpander)
 
 /--
-Creates a term denoting a {lean}`DocThunk` value from a {lean}`FinishedPart`. This is the final step
+Creates a term denoting a {lean}`DocThunk` value from a {lean}`Part`. This is the final step
 in turning a parsed verso doc into syntax.
 -/
-public def FinishedPart.toThunkTerm
+public def Part.toThunkTerm
     (genreSyntax : Term)
-    (finished : FinishedPart)
+    (finished : Part)
     (ctx : DocElabContext)
     (docElabState : DocElabM.State)
     (partElabState : PartElabM.State)
@@ -535,8 +535,23 @@ public def FinishedPart.toThunkTerm
 
   ``(DocThunk.serialized (fun $docReconstructionPlaceholder => $finishedSyntax) $(quote reconstJson.compress) none)
 
-@[deprecated FinishedPart.toThunkTerm (since := "2025-11-28")]
-public def FinishedPart.toVersoDoc : Term → FinishedPart → DocElabContext → DocElabM.State → PartElabM.State → TermElabM Term := FinishedPart.toThunkTerm
+@[deprecated Part.toThunkTerm (since := "2025-11-28")]
+public def FinishedPart.toVersoDoc : Term → Part → DocElabContext → DocElabM.State → PartElabM.State → TermElabM Term := Part.toThunkTerm
+
+@[deprecated Part.toThunkTerm (since := "2025-11-28")]
+public def Part.toVersoDoc : Term → Part → DocElabContext → DocElabM.State → PartElabM.State → TermElabM Term := Part.toThunkTerm
+
+public abbrev BlockElab := Syntax → DocElabM Elab.Block
+
+initialize blockElabAttr : KeyedDeclsAttribute BlockElab ←
+  mkDocExpanderAttribute `block_elab ``BlockElab "Indicates that this function expands block elements of a given name" `blockElabAttr
+
+unsafe def blockElabsForUnsafe (x : Name) : DocElabM (Array BlockElab) := do
+  let expanders := blockElabAttr.getEntries (← getEnv) x
+  return expanders.map (·.value) |>.toArray
+
+@[implemented_by blockElabsForUnsafe]
+public opaque blockElabsFor (x : Name) : DocElabM (Array BlockElab)
 
 public abbrev BlockExpander := Syntax → DocElabM (TSyntax `term)
 

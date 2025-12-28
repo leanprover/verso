@@ -136,7 +136,7 @@ public meta def _root_.Lean.Doc.Syntax.role.expand : InlineExpander
           try
             let termStxs ← withFreshMacroScope <| e argVals subjects
             expanderDocHover name "Role" resolvedName doc? sig?
-            let termStxs ← termStxs.mapM fun t => (``(($t : Inline $(⟨genre⟩))))
+            let termStxs ← termStxs.mapM fun t => (``(($t : Doc.Inline $(⟨genre⟩))))
             if h : termStxs.size = 1 then return termStxs[0]
             else return (← ``(Inline.concat (genre := $(⟨genre⟩)) #[$[$termStxs],*]))
           catch
@@ -234,7 +234,7 @@ where
       throwErrorAt cmd "{msg}\n{note}"
     let hygenicName := some <| mkIdent (← mkFreshUserName `docReconstInBlock)
     let blk ← withTheReader DocElabContext ({ · with docReconstructionPlaceholder := hygenicName }) <|
-      elabBlock cmd
+      elabBlockTerm cmd
     addBlock blk (blockInternalDocReconstructionPlaceholder := hygenicName)
 
 @[part_command Lean.Doc.Syntax.footnote_ref]
@@ -327,23 +327,22 @@ public meta def includeSection : PartCommand
 where
  resolved id := mkIdentFrom id <$> realizeGlobalConstNoOverloadWithInfo (mkIdentFrom id (docName id.getId))
 
-@[block_expander Lean.Doc.Syntax.command]
-public meta def _root_.Lean.Doc.Syntax.command.expand : BlockExpander := fun block =>
+@[block_elab Lean.Doc.Syntax.command]
+public meta def _root_.Lean.Doc.Syntax.command.expand : BlockElab := fun block =>
   match block with
   | `(block|command{$name $args*}) => do
     withTraceNode `Elab.Verso.block (fun _ => pure m!"Block role {name}") <|
     withRef block <| withFreshMacroScope <| withIncRecDepth <| do
-      let genre := (← readThe DocElabContext).genreSyntax
       let resolvedName ← realizeGlobalConstNoOverloadWithInfo name
       let exp ← blockCommandExpandersFor resolvedName
       let argVals ← parseArgs args
       if exp.isEmpty then
-        return ← appFallback block name resolvedName argVals none
+        return .stx (← appFallback block name resolvedName argVals none)
       for (e, doc?, sig?) in exp do
         try
           let termStxs ← withFreshMacroScope <| e argVals
           expanderDocHover name "Command" resolvedName doc? sig?
-          return (← ``(Block.concat (genre := $(⟨genre⟩)) #[$[$termStxs],*]))
+          return Block.concat (termStxs.map .stx)
         catch
           | ex@(.internal id) =>
             if id == unsupportedSyntaxExceptionId then pure ()
@@ -352,31 +351,26 @@ public meta def _root_.Lean.Doc.Syntax.command.expand : BlockExpander := fun blo
       throwUnsupportedSyntax
   | _ => throwUnsupportedSyntax
 
-@[block_expander Lean.Doc.Syntax.para]
-public meta partial def _root_.Lean.Doc.Syntax.para.expand : BlockExpander
+@[block_elab Lean.Doc.Syntax.para]
+public meta partial def _root_.Lean.Doc.Syntax.para.expand : BlockElab
   | `(block| para[ $args:inline* ]) => do
-    let genre := (← readThe DocElabContext).genreSyntax
-    ``(Block.para (genre := $(⟨genre⟩)) #[$[$(← args.mapM elabInline)],*])
+    return Block.para (← args.mapM elabInline)
   | _ =>
     throwUnsupportedSyntax
 
-
-meta def elabLi (block : Syntax) : DocElabM (Syntax × TSyntax `term) :=
+meta def elabLi (block : Syntax) : DocElabM (Syntax × Array Block) :=
   withRef block <|
   match block with
   | `(list_item|*%$dot $contents:block*) => do
-    let genre := (← readThe DocElabContext).genreSyntax
-    let item ← ``(ListItem.mk (α := Block $(⟨genre⟩)) #[$[$(← contents.mapM elabBlock)],*])
-    pure (dot, item)
+    pure (dot, ← contents.mapM elabBlock')
   | _ =>
     throwUnsupportedSyntax
 
-@[block_expander Lean.Doc.Syntax.ul]
-public meta def _root_.Lean.Doc.Syntax.ul.expand : BlockExpander
+@[block_elab Lean.Doc.Syntax.ul]
+public meta def _root_.Lean.Doc.Syntax.ul.expand : BlockElab
   | `(block|ul{$itemStxs*}) => do
-    let genre := (← readThe DocElabContext).genreSyntax
     let mut bullets : Array Syntax := #[]
-    let mut items : Array (TSyntax `term) := #[]
+    let mut items : Array (Array Block) := #[]
     for i in itemStxs do
       let (b, item) ← elabLi i
       bullets := bullets.push b
@@ -384,16 +378,15 @@ public meta def _root_.Lean.Doc.Syntax.ul.expand : BlockExpander
     let info := DocListInfo.mk bullets itemStxs
     for b in bullets do
       pushInfoLeaf <| .ofCustomInfo {stx := b, value := Dynamic.mk info}
-    ``(Block.ul (genre := $(⟨genre⟩)) #[$items,*])
+    return Block.ul items
   | _ =>
     throwUnsupportedSyntax
 
-@[block_expander Lean.Doc.Syntax.ol]
-public meta def _root_.Lean.Doc.Syntax.ol.expand : BlockExpander
+@[block_elab Lean.Doc.Syntax.ol]
+public meta def _root_.Lean.Doc.Syntax.ol.expand : BlockElab
   | `(block|ol($start:num){$itemStxs*}) => do
-    let genre := (← readThe DocElabContext).genreSyntax
     let mut bullets : Array Syntax := #[]
-    let mut items : Array (TSyntax `term) := #[]
+    let mut items : Array (Array Block) := #[]
     for i in itemStxs do
       let (b, item) ← elabLi i
       bullets := bullets.push b
@@ -401,49 +394,45 @@ public meta def _root_.Lean.Doc.Syntax.ol.expand : BlockExpander
     let info := DocListInfo.mk bullets itemStxs
     for b in bullets do
       pushInfoLeaf <| .ofCustomInfo {stx := b, value := Dynamic.mk info}
-    ``(Block.ol (genre := $(⟨genre⟩)) $start #[$items,*])
+    return Block.ol start.getNat items
   | _ =>
     throwUnsupportedSyntax
 
-meta def elabDesc (block : Syntax) : DocElabM (Syntax × TSyntax `term) :=
+meta def elabDesc (block : Syntax) : DocElabM (Syntax × Array Inline × Array Block) :=
   withRef block <|
   match block with
   | `(desc_item|:%$colon $dts* => $dds*) => do
-    let genre := (← readThe DocElabContext).genreSyntax
-    let item ← ``(DescItem.mk (α := Inline $(⟨genre⟩)) (β := Block $(⟨genre⟩))  #[$[$(← dts.mapM elabInline)],*] #[$[$(← dds.mapM elabBlock)],*])
-    pure (colon, item)
+    return (colon, ← dts.mapM elabInline, ← dds.mapM elabBlock')
   | _ =>
     throwUnsupportedSyntax
 
-@[block_expander Lean.Doc.Syntax.dl]
-public meta def _root_.Lean.Doc.Syntax.dl.expand : BlockExpander
+@[block_elab Lean.Doc.Syntax.dl]
+public meta def _root_.Lean.Doc.Syntax.dl.expand : BlockElab
   | `(block|dl{$itemStxs*}) => do
-    let genre := (← readThe DocElabContext).genreSyntax
     let mut colons : Array Syntax := #[]
-    let mut items : Array (TSyntax `term) := #[]
+    let mut items : Array (Array Inline × Array Block) := #[]
     for i in itemStxs do
-      let (b, item) ← elabDesc i
+      let (b, term, desc) ← elabDesc i
       colons := colons.push b
-      items := items.push item
+      items := items.push (term, desc)
     let info := DocListInfo.mk colons itemStxs
     for b in colons do
       pushInfoLeaf <| .ofCustomInfo {stx := b, value := Dynamic.mk info}
-    ``(Block.dl (genre := $(⟨genre⟩)) #[$[$items],*])
+    return Block.dl items
   | _ =>
     throwUnsupportedSyntax
 
-@[block_expander Lean.Doc.Syntax.blockquote]
-public meta def _root_.Lean.Doc.Syntax.blockquote.expand : BlockExpander
+@[block_elab Lean.Doc.Syntax.blockquote]
+public meta def _root_.Lean.Doc.Syntax.blockquote.expand : BlockElab
   | `(block|> $innerBlocks*) => do
-    ``(Block.blockquote #[$[$(← innerBlocks.mapM elabBlock)],*])
+    return Block.blockquote (← innerBlocks.mapM elabBlock')
   | _ =>
     throwUnsupportedSyntax
 
 
-@[block_expander Lean.Doc.Syntax.codeblock]
-public meta def _root_.Lean.Doc.Syntax.codeblock.expand : BlockExpander
+@[block_elab Lean.Doc.Syntax.codeblock]
+public meta def _root_.Lean.Doc.Syntax.codeblock.expand : BlockElab
   | `(block|``` $nameStx:ident $argsStx* | $contents:str ```) => do
-    let genre := (← readThe DocElabContext).genreSyntax
     let name ← realizeGlobalConstNoOverloadWithInfo nameStx
     let exp ← codeBlockExpandersFor name
     -- TODO typed syntax here
@@ -452,22 +441,21 @@ public meta def _root_.Lean.Doc.Syntax.codeblock.expand : BlockExpander
       try
         let termStxs ← withFreshMacroScope <| e args contents
         expanderDocHover nameStx "Code block" name doc? sig?
-        return (← ``(Block.concat (genre := $(⟨genre⟩)) #[$[$termStxs],*]))
+        return Block.concat (termStxs.map Block.stx)
       catch
         | ex@(.internal id) =>
           if id == unsupportedSyntaxExceptionId then pure ()
           else throw ex
         | ex => throw ex
     throwUnsupportedSyntax
-  | `(block|``` | $contents:str ```) => do
-    ``(Block.code $(quote contents.getString))
+  | `(block|``` | $contents:str ```) =>
+    pure <| Block.code contents.getString
   | _ =>
     throwUnsupportedSyntax
 
-@[block_expander Lean.Doc.Syntax.directive]
-public meta def _root_.Lean.Doc.Syntax.directive.expand : BlockExpander
+@[block_elab Lean.Doc.Syntax.directive]
+public meta def _root_.Lean.Doc.Syntax.directive.expand : BlockElab
   | `(block| ::: $nameStx:ident $argsStx* { $contents:block* } ) => do
-    let genre := (← readThe DocElabContext).genreSyntax
     let name ← realizeGlobalConstNoOverloadWithInfo nameStx
     let exp ← directiveExpandersFor name
     let args ← parseArgs argsStx
@@ -475,7 +463,7 @@ public meta def _root_.Lean.Doc.Syntax.directive.expand : BlockExpander
       try
         let termStxs ← withFreshMacroScope <| e args contents
         expanderDocHover nameStx "Directive" name doc? sig?
-        return (← ``(Block.concat (genre := $(⟨genre⟩)) #[$[$termStxs],*]))
+        return Block.concat (termStxs.map Block.stx)
       catch
         | ex@(.internal id) =>
           if id == unsupportedSyntaxExceptionId then pure ()
