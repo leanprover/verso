@@ -93,11 +93,11 @@ instance : FromArgs BlobArgs DocElabM where
   fromArgs := BlobArgs.mk <$> .positional `blobName .ident
 
 @[directive]
-def blob : DirectiveExpanderOf BlobArgs
+def blob : DirectiveElabOf BlobArgs
   | {blobName}, stxs => do
     if h : stxs.size > 0 then logErrorAt stxs[0] "Expected no contents"
     let actualName ← realizeGlobalConstNoOverloadWithInfo blobName
-    ``(Block.other (Blog.BlockExt.blob ($(mkIdentFrom blobName actualName) : Html)) #[])
+    return .other (← ``(Blog.BlockExt.blob ($(mkIdentFrom blobName actualName) : Html))) #[]
 
 @[role blob]
 def inlineBlob : RoleExpanderOf BlobArgs

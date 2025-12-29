@@ -24,9 +24,9 @@ def redBox : BlockComponent where
     pure {{<div class="red-box" id={{id}}>{{← contents.mapM goB}}</div>}}
 
 @[directive redBox]
-def redBoxImpl : DirectiveExpanderOf Unit
+def redBoxImpl : DirectiveElabOf Unit
   | (), stxs => do
-    ``(Block.other (Blog.BlockExt.component $(quote `redBox) Json.null) #[$(← stxs.mapM elabBlockTerm),*])
+    return .other (← ``(Blog.BlockExt.component $(quote `redBox) Json.null)) (← stxs.mapM elabBlock')
 
 block_component gallery where
   toHtml id _data _goI goB contents := do
@@ -49,17 +49,17 @@ block_component image where
 
 
 @[directive gallery]
-def galleryImpl : DirectiveExpanderOf Unit
+def galleryImpl : DirectiveElabOf Unit
   | (), stxs => do
     let #[stx] := stxs
       | logErrorAt (mkNullNode stxs) "Expected one block"
-        return (← `(sorry))
+        return .other (← `(sorry)) #[]
     let `(block| dl{ $item*}) := stx
       | throwErrorAt stx "Expected definition list"
     let items ← item.mapM getItem
-    ``(Block.other (Blog.BlockExt.component $(quote `gallery) Json.null) #[$(items),*])
+    return .other (← ``(Blog.BlockExt.component $(quote `gallery) Json.null)) items
 where
-  getItem : TSyntax `desc_item → DocElabM Term
+  getItem : TSyntax `desc_item → DocElabM Target.Block
     | `(desc_item|: $inls* => $desc $descs*) => do
       let #[inl] := inls.filter (fun
           | `(inline|$s:str) => s.getString.any (not ∘ Char.isWhitespace)
@@ -67,7 +67,7 @@ where
         | throwErrorAt (mkNullNode inls) "Expected one inline"
       let `(inline|image($alt)($url)) := inl
         | throwErrorAt inl "Expected an image"
-      `(Block.other (.component $(quote `image) (.arr #[$alt, $url])) #[$(← elabBlockTerm desc), $(← descs.mapM elabBlockTerm),*])
+      return .other (← `(.component $(quote `image) (.arr #[$alt, $url]))) (#[← elabBlock' desc] ++ (← descs.mapM elabBlock'))
     | stx => throwErrorAt stx "Expected an image and description, got {stx}"
 
 block_component +directive button' (onclick : String) where

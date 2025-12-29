@@ -185,7 +185,7 @@ instance : FromArgs TableConfig m := ⟨TableConfig.parse⟩
 end
 
 @[directive]
-def table : DirectiveExpanderOf TableConfig
+def table : DirectiveElabOf TableConfig
   | cfg, contents => do
     -- The table should be a list of lists. Extract them!
     let #[oneBlock] := contents
@@ -210,8 +210,9 @@ def table : DirectiveExpanderOf TableConfig
         throwErrorAt oneBlock s!"Expected all rows to have same number of columns, but got {rows.map (·.size)}"
 
       let flattened := rows.flatten
-      let blocks : Array (Syntax.TSepArray `term ",") ← flattened.mapM (·.mapM elabBlockTerm)
-      ``(Block.other (Block.table $(quote columns) $(quote cfg.header) $(quote cfg.name) $(quote cfg.alignment)) #[Block.ul #[$[Verso.Doc.ListItem.mk #[$blocks,*]],*]])
+      let blocks : Array (Array Target.Block) ← flattened.mapM (·.mapM elabBlock')
+      return .other (← ``(Block.table $(quote columns) $(quote cfg.header) $(quote cfg.name) $(quote cfg.alignment)))
+        #[.ul blocks]
 
 where
   getLi : Syntax → DocElabM (TSyntaxArray `block)
