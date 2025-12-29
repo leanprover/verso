@@ -463,7 +463,7 @@ public meta def _root_.Lean.Doc.Syntax.directive.expand : BlockElab
       try
         let termStxs ← withFreshMacroScope <| e args contents
         expanderDocHover nameStx "Directive" name doc? sig?
-        return .concat (termStxs.map .stx)
+        return .concat termStxs
       catch
         | ex@(.internal id) =>
           if id == unsupportedSyntaxExceptionId then pure ()

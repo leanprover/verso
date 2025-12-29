@@ -1672,7 +1672,7 @@ private def getTactic? (name : String ⊕ Name) : TermElabM (Option TacticDoc) :
   return none
 
 @[directive]
-def tactic : DirectiveExpanderOf TacticDocsOptions
+def tactic : DirectiveElabOf TacticDocsOptions
   | opts, more => do
     let tactics ← getTacticOverloads opts.name
     let blame : Syntax := opts.name.elim TSyntax.raw TSyntax.raw
@@ -1695,8 +1695,8 @@ def tactic : DirectiveExpanderOf TacticDocsOptions
         let some mdAst := MD4Lean.parse str
           | throwError m!"Failed to parse docstring as Markdown. Docstring contents:\n{repr str}"
         mdAst.blocks.mapM (blockFromMarkdownWithLean [])
-    let userContents ← more.mapM elabBlockTerm
-    ``(Verso.Doc.Block.other (Block.tactic $(quote tactic) $(quote opts.show)) #[$(contents ++ userContents),*])
+    let userContents ← more.mapM elabBlock'
+    return .other (← ``(Block.tactic $(quote tactic) $(quote opts.show))) (contents.map .stx ++ userContents)
 
 def Inline.tactic : Inline where
   name := `Verso.Genre.Manual.tacticInline
@@ -1842,7 +1842,7 @@ def getConvTactic (name : StrLit ⊕ Ident) (allowMissing : Option Bool) : TermE
     throwError m!"Conv tactic not found: {kind}"
 
 @[directive]
-def conv : DirectiveExpanderOf TacticDocsOptions
+def conv : DirectiveElabOf TacticDocsOptions
   | opts, more => do
     let tactic ← getConvTactic opts.name opts.allowMissing
     Doc.PointOfInterest.save (← getRef) tactic.name.toString
@@ -1851,10 +1851,10 @@ def conv : DirectiveExpanderOf TacticDocsOptions
           | throwError "Failed to parse docstring as Markdown"
         mdAst.blocks.mapM (blockFromMarkdownWithLean [])
       else pure #[]
-    let userContents ← more.mapM elabBlockTerm
+    let userContents ← more.mapM elabBlock'
     let some toShow := opts.show
       | throwError "An explicit 'show' is mandatory for conv docs (for now)"
-    ``(Verso.Doc.Block.other (Block.conv $(quote tactic.name) $(quote toShow) $(quote tactic.docs?)) #[$(contents ++ userContents),*])
+    return .other (← ``(Block.conv $(quote tactic.name) $(quote toShow) $(quote tactic.docs?))) (contents.map (.stx ·) ++ userContents)
 
 open Verso.Search in
 def convDomainMapper : DomainMapper := {

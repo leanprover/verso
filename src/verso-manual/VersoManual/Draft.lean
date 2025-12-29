@@ -57,6 +57,6 @@ def draft : RoleExpanderOf Unit
 
 /-- Hide draft-only content when in not in draft mode -/
 @[directive draft]
-def draftBlock : DirectiveExpanderOf Unit
+def draftBlock : DirectiveElabOf Unit
   | (), contents => do
-    ``(Verso.Doc.Block.other Block.draft #[$[$(← contents.mapM elabBlockTerm)],*])
+    return .other (← ``(Block.draft)) (← contents.mapM elabBlock')

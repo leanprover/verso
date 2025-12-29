@@ -60,10 +60,10 @@ def htmlSpan : RoleExpanderOf ClassArgs
 Wraps the contents in an HTML `<div>` element with the provided `class`.
 -/
 @[directive]
-def htmlDiv : DirectiveExpanderOf ClassArgs
+def htmlDiv : DirectiveElabOf ClassArgs
   | {«class»}, stxs => do
-    let contents ← stxs.mapM elabBlockTerm
-    ``(Block.other (Blog.BlockExt.htmlDiv $(quote «class»)) #[ $contents,* ])
+    let contents ← stxs.mapM elabBlock'
+    return .other (← ``(Blog.BlockExt.htmlDiv $(quote «class»))) contents
 
 
 private partial def attrs : ArgParse DocElabM (Array (String × String)) := List.toArray <$> .many attr
@@ -80,11 +80,11 @@ instance : FromArgs HtmlArgs DocElabM where
 
 
 @[directive]
-def html : DirectiveExpanderOf HtmlArgs
+def html : DirectiveElabOf HtmlArgs
   | {name, attrs}, stxs => do
     let tag := name.toString (escape := false)
-    let contents ← stxs.mapM elabBlockTerm
-    ``(Block.other (Blog.BlockExt.htmlWrapper $(quote tag) $(quote attrs)) #[ $contents,* ])
+    let contents ← stxs.mapM elabBlock'
+    return .other (← ``(Blog.BlockExt.htmlWrapper $(quote tag) $(quote attrs))) contents
 
 structure BlobArgs where
   blobName : Ident
@@ -93,11 +93,11 @@ instance : FromArgs BlobArgs DocElabM where
   fromArgs := BlobArgs.mk <$> .positional `blobName .ident
 
 @[directive]
-def blob : DirectiveExpanderOf BlobArgs
+def blob : DirectiveElabOf BlobArgs
   | {blobName}, stxs => do
     if h : stxs.size > 0 then logErrorAt stxs[0] "Expected no contents"
     let actualName ← realizeGlobalConstNoOverloadWithInfo blobName
-    ``(Block.other (Blog.BlockExt.blob ($(mkIdentFrom blobName actualName) : Html)) #[])
+    return .other (← ``(Blog.BlockExt.blob ($(mkIdentFrom blobName actualName) : Html))) #[]
 
 @[role blob]
 def inlineBlob : RoleExpanderOf BlobArgs

@@ -63,7 +63,7 @@ run_cmd do
   elabCommand <| ← `(private def $(mkIdent `allRootNames) : Array Name := #[$(names.map (quote · : Name → Term)),*])
 
 @[directive]
-public def progress : DirectiveExpanderOf Unit
+public def progress : DirectiveElabOf Unit
   | (), blocks => do
     let mut namespaces : NameSet := {}
     let mut exceptions : NameSet := {}
@@ -111,7 +111,7 @@ public def progress : DirectiveExpanderOf Unit
     let present' := present.toList.map (fun x => (x.1, String.intercalate " " (x.2.toList.map Name.toString)))
     let allTactics : Array Name := (← Elab.Tactic.Doc.allTacticDocs).map (fun t => t.internalName)
 
-    ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.progress $(quote namespaces.toArray) $(quote exceptions.toArray) $(quote present') $(quote allTactics)) #[])
+    return .other (← ``(Verso.Genre.Manual.Block.progress $(quote namespaces.toArray) $(quote exceptions.toArray) $(quote present') $(quote allTactics))) #[]
 
 @[block_extension Block.progress]
 public def progress.descr : BlockDescr where

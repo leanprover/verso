@@ -799,11 +799,27 @@ public abbrev DirectiveExpander := Array Arg → TSyntaxArray `block → DocElab
 
 public abbrev DirectiveExpanderOf α := α → TSyntaxArray `block → DocElabM Term
 
+public abbrev DirectiveElaborator := Array Arg → TSyntaxArray `block → DocElabM (Array Target.Block)
+
+/--
+The type of directive elaborators. In order to give a declaration of type {lean}`DirectiveElabOf α`
+the {lit}`@[directive]` annotation, it must be possible to synthesize {lean}`FromArgs α DocElabM`.
+-/
+public abbrev DirectiveElabOf (α : Type) := α → TSyntaxArray `block → DocElabM Target.Block
+
+public def directiveExpanderToElaborator (expander : DirectiveExpander) : DirectiveElaborator
+  | args, contents => do return (← expander args contents).map (.stx ·)
+
 
 initialize directiveExpanderAttr : KeyedDeclsAttribute DirectiveExpander ←
   mkDocExpanderAttribute `directive_expander ``DirectiveExpander "Indicates that this function is used to implement a given directive" `directiveExpanderAttr
 
-public def toDirective {α : Type} [FromArgs α DocElabM] (expander : α → TSyntaxArray `block → DocElabM Term) : DirectiveExpander :=
+public def toDirectiveTerm {α : Type} [FromArgs α DocElabM] (expander : α → TSyntaxArray `block → DocElabM Term) : DirectiveElaborator :=
+  fun args blocks => do
+    let v ← ArgParse.parse args
+    return #[.stx (← expander v blocks)]
+
+public def toDirective {α : Type} [FromArgs α DocElabM] (expander : α → TSyntaxArray `block → DocElabM Target.Block) : DirectiveElaborator :=
   fun args blocks => do
     let v ← ArgParse.parse args
     return #[← expander v blocks]
@@ -838,14 +854,29 @@ unsafe initialize registerBuiltinAttribute {
 
     let n ← mkFreshUserName <| declName ++ `directive
 
+    -- Find the appropriate adapter for both new (`DirectiveElabOf`) and legacy (`DirectiveExpanderOf`) declarations
+    let constructor ← match (← getEnv).find? declName |>.map (·.type.getAppFn) with
+      | some (Expr.const ``DirectiveExpanderOf _) => pure ``toDirectiveTerm
+      | some (Expr.const ``DirectiveElabOf _) => pure ``toDirective
+      | some e =>
+        logWarning m!"Declaration tagged with `@[directive]` has type{indentD e}\nwhich is not in \
+          one of the expected forms `{.ofConstName ``DirectiveExpanderOf} _` or \
+          `{.ofConstName ``DirectiveElabOf} _`"
+        pure ``toDirective
+      | none =>
+        logError m!"Unexpected error: definition of `{declName}` not found"
+        return
+
     let ((e, t), _) ← Meta.MetaM.run (ctx := {}) (s := {}) do
-      let e ← Meta.mkAppM ``toDirective #[.const declName []]
+      let e ← Meta.mkAppM constructor #[.const declName []]
       let e ← instantiateMVars e
       let t ← Meta.inferType e
 
-
       match_expr e with
-      | toDirective ty _ _ => saveSignature n ty
+      | toDirectiveTerm ty _ _ =>
+        saveSignature n ty
+      | toDirective ty _ _ =>
+        saveSignature n ty
       | _ => pure ()
 
       pure (e, t)
@@ -865,10 +896,10 @@ unsafe initialize registerBuiltinAttribute {
       directiveExpanderExt.addEntry env (directiveName, n)
 }
 
-private unsafe def directiveExpandersForUnsafe' (x : Name) : DocElabM (Array (DirectiveExpander × Option String × Option SigDoc)) := do
+private unsafe def directiveExpandersForUnsafe' (x : Name) : DocElabM (Array (DirectiveElaborator × Option String × Option SigDoc)) := do
   let expanders := directiveExpanderExt.getState (← getEnv) |>.find? x |>.getD #[]
   expanders.mapM fun n => do
-    let e ← evalConst DirectiveExpander n
+    let e ← evalConst DirectiveElaborator n
     let doc? ← findDocString? (← getEnv) n
     let sig := expanderSignatureExt.getState (← getEnv) |>.find? n
     return (e, doc?, sig)
@@ -877,11 +908,11 @@ private unsafe def directiveExpandersForUnsafe'' (x : Name) : DocElabM (Array Di
   let expanders := directiveExpanderAttr.getEntries (← getEnv) x
   return expanders.map (·.value) |>.toArray
 
-private unsafe def directiveExpandersForUnsafe (x : Name) : DocElabM (Array (DirectiveExpander × Option String × Option SigDoc)) := do
-  return (← directiveExpandersForUnsafe' x) ++ (← directiveExpandersForUnsafe'' x).map (·, none, none)
+private unsafe def directiveExpandersForUnsafe (x : Name) : DocElabM (Array (DirectiveElaborator × Option String × Option SigDoc)) := do
+  return (← directiveExpandersForUnsafe' x) ++ (← directiveExpandersForUnsafe'' x).map (directiveExpanderToElaborator ·, none, none)
 
 @[implemented_by directiveExpandersForUnsafe]
-public opaque directiveExpandersFor (x : Name) : DocElabM (Array (DirectiveExpander × Option String × Option SigDoc))
+public opaque directiveExpandersFor (x : Name) : DocElabM (Array (DirectiveElaborator × Option String × Option SigDoc))
 
 
 public abbrev BlockCommandExpander := Array Arg → DocElabM (Array (TSyntax `term))
