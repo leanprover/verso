@@ -43,7 +43,7 @@ instance : Inhabited (DocThunk genre) where
   default := .value default
 
 /--
-Replace the top-level metadata in a {name}`DocThunk` without forcing the thunk.
+Replaces the top-level metadata in a {name}`DocThunk` without forcing the thunk.
 -/
 public def DocThunk.withMetadata (metadata? : Option genre.PartMetadata)  : DocThunk genre → DocThunk genre
   | .serialized construct docReconstStr _ =>
