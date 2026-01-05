@@ -26,7 +26,7 @@ def redBox : BlockComponent where
 @[directive redBox]
 def redBoxImpl : DirectiveExpanderOf Unit
   | (), stxs => do
-    ``(Block.other (Blog.BlockExt.component $(quote `redBox) Json.null) #[$(← stxs.mapM elabBlock),*])
+    ``(Block.other (Blog.BlockExt.component $(quote `redBox) Json.null) #[$(← stxs.mapM elabBlockTerm),*])
 
 block_component gallery where
   toHtml id _data _goI goB contents := do
@@ -67,7 +67,7 @@ where
         | throwErrorAt (mkNullNode inls) "Expected one inline"
       let `(inline|image($alt)($url)) := inl
         | throwErrorAt inl "Expected an image"
-      `(Block.other (.component $(quote `image) (.arr #[$alt, $url])) #[$(← elabBlock desc), $(← descs.mapM elabBlock),*])
+      `(Block.other (.component $(quote `image) (.arr #[$alt, $url])) #[$(← elabBlockTerm desc), $(← descs.mapM elabBlockTerm),*])
     | stx => throwErrorAt stx "Expected an image and description, got {stx}"
 
 block_component +directive button' (onclick : String) where

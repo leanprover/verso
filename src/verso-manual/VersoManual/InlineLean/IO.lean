@@ -545,5 +545,5 @@ open IOExample in
 def ioExample : DirectiveExpanderOf Unit
  | (), blocks => do
     startExample
-    let body ← blocks.mapM elabBlock
+    let body ← blocks.mapM elabBlockTerm
     ``(Verso.Doc.Block.concat #[$body,*]) >>= endExample

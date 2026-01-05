@@ -163,7 +163,7 @@ a single paragraph (e.g. without extraneous indentation).
 @[directive]
 def paragraph : DirectiveExpanderOf Unit
   | (), stxs => do
-    let args ← stxs.mapM elabBlock
+    let args ← stxs.mapM elabBlockTerm
     ``(Block.other Block.paragraph #[ $[ $args ],* ])
 
 structure Config extends HtmlConfig where

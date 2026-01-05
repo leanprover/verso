@@ -343,7 +343,7 @@ public def PartElabM.addBlock (block : TSyntax `term) (blockInternalDocReconstru
 
   modifyThe PartElabM.State fun st =>
     { st with
-      partContext.blocks := st.partContext.blocks.push blockRefSyntax
+      partContext.blocks := st.partContext.blocks.push (.stx blockRefSyntax)
       deferredBlocks := st.deferredBlocks.push (name, blockDefSyntax)
     }
 
@@ -537,6 +537,18 @@ public def FinishedPart.toThunkTerm
 
 @[deprecated FinishedPart.toThunkTerm (since := "2025-11-28")]
 public def FinishedPart.toVersoDoc : Term → FinishedPart → DocElabContext → DocElabM.State → PartElabM.State → TermElabM Term := FinishedPart.toThunkTerm
+
+public abbrev BlockElab := Syntax → DocElabM Target.Block
+
+initialize blockElabAttr : KeyedDeclsAttribute BlockElab ←
+  mkDocExpanderAttribute `block_elab ``BlockElab "Indicates that this function expands block elements of a given name" `blockElabAttr
+
+unsafe def blockElabsForUnsafe (x : Name) : DocElabM (Array BlockElab) := do
+  let expanders := blockElabAttr.getEntries (← getEnv) x
+  return expanders.map (·.value) |>.toArray
+
+@[implemented_by blockElabsForUnsafe]
+public opaque blockElabsFor (x : Name) : DocElabM (Array BlockElab)
 
 public abbrev BlockExpander := Syntax → DocElabM (TSyntax `term)
 

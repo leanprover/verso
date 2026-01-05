@@ -8,7 +8,7 @@ import Verso.Doc.Elab.Monad
 import Lean.Elab.Term
 
 open Verso Doc Elab
-open Verso.Genre Manual Markdown
+open Verso.Genre Manual
 open Lean
 
 /--
@@ -38,7 +38,7 @@ def testAddPartFromMarkdown (input : String) : Elab.TermElabM String := do
   let addParts : PartElabM Unit := do
     let mut levels := []
     for block in parsed.blocks do
-      levels ← addPartFromMarkdown block levels
+      levels ← Markdown.addPartFromMarkdown block levels
     closePartsUntil 0 0
   let (_, _, part) ← addParts.run ⟨Syntax.node .none identKind #[], mkConst ``Manual, .always, .none⟩ default default
   part.partContext.priorParts.toList.map displayPartStructure |> String.join |> pure
