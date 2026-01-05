@@ -33,7 +33,7 @@ public partial def elabBlock (block : TSyntax `block) : DocElabM (TSyntax `term)
   decorateClosing block
   match block.raw with
   | .missing =>
-    ``(sorryAx Block (synthetic := true))
+    ``(sorryAx (Block _) (synthetic := true))
   | stx@(.node _ kind _) =>
     let env ← getEnv
     let result ← match (← liftMacroM (expandMacroImpl? env stx)) with
