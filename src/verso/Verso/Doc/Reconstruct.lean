@@ -55,7 +55,7 @@ public def DocThunk.withMetadata (metadata? : Option genre.PartMetadata)  : DocT
 A {name}`DocThunk` represents a potentially-not-fully-evaluated {name}`Part`. Calling
 {name}`DocThunk.force` forces evaluation of the {name}`DocThunk` to a {name}`Part`.
 -/
-public def DocThunk.force: DocThunk genre → Part genre
+public def DocThunk.force : DocThunk genre → Part genre
   | .serialized construct highlight metadata? =>
     match Json.parse highlight with
     | .error e => panic! s!"Failed to parse DocThunk's Export data as JSON: {e}"
