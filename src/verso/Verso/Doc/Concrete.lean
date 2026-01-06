@@ -121,22 +121,86 @@ private meta def replaceCategoryParser (cat : Name) (p : ParserFn) : Command.Com
     fun n => if n == cat then p else st n)
 
 /--
+The ending position of the last Verso command that was successfully parsed.
+
+The Lean command parser automatically skips whitespace and comments, but Lean comments can be Verso text, so we need to rewind and handle this ourself.
+-/
+meta initialize lastVersoEndPosExt : EnvExtension (Option String.Pos.Raw) ← registerEnvExtension (pure none)
+
+/--
+A version of `Lean.Syntax.updateTrailing` that converts `none` source info into `original` source info.
+
+This is a bit of a hack. Verso's parser concocts tokens that don't exist in the source document in order
+to make it easier to pattern match them with Lean quasiquotations, in a syntax that works in a Lean context.
+These tokens have `none` source info, which `Lean.Syntax.updateTrailing` leaves untouched. Here, though, we need
+them in order to communicate positions between command parses.
+-/
+private meta partial def updateSyntaxTrailing (trailing : Substring.Raw) : Syntax → Syntax
+  | .atom info val => .atom (updateInfoTrailing trailing info) val
+  | .ident info rawVal val pre => .ident (updateInfoTrailing trailing info) rawVal val pre
+  | n@(.node info k args) =>
+    if h : args.size = 0 then n
+    else
+     let i    := args.size - 1
+     let last := updateSyntaxTrailing trailing args[i]
+     let args := args.set i last;
+     Syntax.node info k args
+  | s => s
+where
+  updateInfoTrailing (trailing : Substring.Raw) : SourceInfo → SourceInfo
+    | .original leading pos _ endPos => .original leading pos trailing endPos
+    | .none =>
+      let pos := trailing.startPos
+      .original {trailing with startPos := pos, stopPos := pos} pos trailing pos
+    | info                                     => info
+
+
+private meta partial def getTailContext? (source : String) (stx : Syntax) : Option (String.Pos.Raw × Substring.Raw) :=
+  match stx with
+  | .missing => none
+  | .ident info .. | .atom info .. =>
+    match info with
+    | .none => none
+    | .synthetic _ endPos _ => pure (endPos, ⟨source, endPos, endPos⟩)
+    | .original _ _ trailing endPos => pure (endPos, trailing)
+  | .node info _k args =>
+    match info with
+    | .none => args.findSomeRev? (getTailContext? source)
+    | .synthetic _ endPos _ => pure (endPos, ⟨source, endPos, endPos⟩)
+    | .original _ _ trailing endPos => pure (endPos, trailing)
+
+
+/--
 Parses each top-level block as either an `addBlockCmd` or an `addLastBlockCmd`. (This is what
 Verso uses to replace the command parser.)
 -/
 private meta def versoBlockCommandFn (genre : Term) (title : String) : ParserFn := fun c s =>
   let iniSz  := s.stackSize
+  let lastPos? := lastVersoEndPosExt.getState c.env
+  let s := lastPos? |>.map s.setPos |>.getD s
   let s := recoverBlockWith #[.missing] (Verso.Parser.block {}) c s
   if s.hasError then s
   else
-    let s := s.pushSyntax genre
     let s := ignoreFn (manyFn blankLine) c s
+    let s := updateTrailing c s
+    let s := s.pushSyntax genre
     let i := s.pos
     if c.atEnd i then
       let s := s.pushSyntax (Syntax.mkStrLit title)
       s.mkNode ``addLastBlockCmd iniSz
     else
       s.mkNode ``addBlockCmd iniSz
+where
+  /--
+  Updates the trailing whitespace information in the syntax at the top of the stack based on
+  subsequently consumed whitespace.
+  -/
+  updateTrailing : ParserFn := fun c s =>
+    let top := s.stxStack.back
+    if let some ⟨_, tr⟩ := getTailContext? c.fileMap.source top then
+      let tr := { tr with stopPos := s.pos }
+      s.popSyntax.pushSyntax (updateSyntaxTrailing tr top)
+    else s
 
 /--
 As we elaborate a `#doc` command top-level-block by top-level-block, the Lean environment will
@@ -219,7 +283,7 @@ private meta def finishDoc (genreSyntax : Term) (title : StrLit) : Command.Comma
   let ty ← ``(VersoDoc $genreSyntax)
   Command.elabCommand (← `(def $n : $ty := $doc))
 
-syntax (name := replaceDoc) "#doc" "(" term ")" str "=>" : command
+syntax (name := replaceDoc) "#doc " "(" term ") " str " =>" : command
 elab_rules : command
   | `(command|#doc ( $genreSyntax:term ) $title:str =>%$tok) => open Lean Parser Elab Command in do
   elabCommand <| ← `(open scoped Lean.Doc.Syntax)
@@ -231,22 +295,50 @@ elab_rules : command
   modifyEnv fun env => originalCatParserExt.setState env (categoryParserFnExtension.getState env)
   replaceCategoryParser `command (versoBlockCommandFn genreSyntax titleString)
 
-  -- Edge case: if there's no blocks after the =>, the replacement command parser won't get called,
-  -- so we detect that case and call finishDoc.
   if let some stopPos := tok.getTailPos? then
     let txt ← getFileMap
+
+    -- Edge case: if there's a Lean comment right after `#doc`, then the Lean command parser will skip
+    -- it. We need to tell the Verso parser to start parsing right after skipping blank lines only.
+    let mut pos := txt.source.pos! stopPos
+    let mut newlinePos := pos
+    while h : pos ≠ txt.source.endPos do
+      if pos.get h == ' ' then
+        pos := pos.next h
+      else if pos.get h == '\n' then
+        pos := pos.next h
+        newlinePos := pos
+      else break
+    modifyEnv fun env => lastVersoEndPosExt.setState env (some newlinePos.offset)
+
+    -- Edge case: if there's no blocks after the =>, the replacement command parser won't get called,
+    -- so we detect that case and call finishDoc.
     if stopPos.extract txt.source txt.source.rawEndPos |>.all Char.isWhitespace then
       finishDoc genreSyntax title
+
+open Command in
+/--
+Updates the saved Verso parser position to the end of `b`'s trailing whitespace.
+-/
+private meta def updatePos (b : TSyntax `block) : CommandElabM Unit := do
+  let endPos? :=
+    if b.raw.isMissing then
+      none
+    else
+      b.raw.getTrailingTailPos?
+  modifyEnv fun env => lastVersoEndPosExt.setState env endPos?
 
 @[command_elab addBlockCmd]
 public meta def elabVersoBlock : Command.CommandElab
   | `(addBlockCmd| $b:block $_:term) => do
+    updatePos b
     runVersoBlock b
   | _ => throwUnsupportedSyntax
 
 @[command_elab addLastBlockCmd]
 public meta def elabVersoLastBlock : Command.CommandElab
   | `(addLastBlockCmd| $b:block $genre:term $title:str) => do
+    updatePos b
     runVersoBlock b
     -- Finish up the document
     finishDoc genre title
