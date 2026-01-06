@@ -139,14 +139,31 @@ private meta partial def updateSyntaxTrailing (trailing : Substring.Raw) : Synta
   | .atom info val => .atom (updateInfoTrailing trailing info) val
   | .ident info rawVal val pre => .ident (updateInfoTrailing trailing info) rawVal val pre
   | n@(.node info k args) =>
-    if h : args.size = 0 then n
-    else
-     let i    := args.size - 1
+    if let some i := findIdxRev? (not ∘ empty) args then
      let last := updateSyntaxTrailing trailing args[i]
      let args := args.set i last;
      Syntax.node info k args
+    else n
   | s => s
 where
+  findIdxRev? {α} (p : α → Bool) (xs : Array α) : Option (Fin xs.size) := do
+    if h : xs.size = 0 then failure
+    else
+      let mut n : Fin xs.size := ⟨xs.size - 1, by grind⟩
+      repeat
+        if p xs[n] then return n
+        if n.val = 0 then
+          break
+        else
+          n := ⟨n.val - 1, by grind⟩
+      failure
+
+  empty : Syntax → Bool
+  | .atom .. | .ident .. | .missing => false
+  | .node .none _ args | .node (.synthetic ..) _ args => args.all empty
+  | .node (.original leading _ trailing _) _ args =>
+    leading.startPos == leading.stopPos && trailing.startPos == trailing.stopPos && args.all empty
+
   updateInfoTrailing (trailing : Substring.Raw) : SourceInfo → SourceInfo
     | .original leading pos _ endPos => .original leading pos trailing endPos
     | .none =>
@@ -199,8 +216,9 @@ where
     let top := s.stxStack.back
     if let some ⟨_, tr⟩ := getTailContext? c.fileMap.source top then
       let tr := { tr with stopPos := s.pos }
-      s.popSyntax.pushSyntax (updateSyntaxTrailing tr top)
-    else s
+      s.popSyntax.pushSyntax <| updateSyntaxTrailing tr top
+    else
+      s
 
 /--
 As we elaborate a `#doc` command top-level-block by top-level-block, the Lean environment will
