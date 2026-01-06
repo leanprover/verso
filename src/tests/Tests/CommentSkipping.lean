@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 import Tests.CommentSkipping.Doc
+import Tests.CommentSkipping.Doc2
 
 /-!
 This test ensures that Lean's parser doesn't skip Lean comment syntax while parsing Verso blocks as
@@ -27,3 +28,17 @@ info: Verso.Doc.Part.mk
 -/
 #guard_msgs in
 #eval %doc Tests.CommentSkipping.Doc
+
+/--
+info: Verso.Doc.Part.mk
+  #[Verso.Doc.Inline.text "Title"]
+  "Title"
+  none
+  #[Verso.Doc.Block.blockquote #[],
+    Verso.Doc.Block.blockquote
+      #[(Verso.Doc.Block.para #[Verso.Doc.Inline.link #[(Verso.Doc.Inline.text "abc")] "http://example.com"])],
+    Verso.Doc.Block.blockquote #[(Verso.Doc.Block.para #[Verso.Doc.Inline.text "C", Verso.Doc.Inline.linebreak "\n"])]]
+  #[]
+-/
+#guard_msgs in
+#eval %doc Tests.CommentSkipping.Doc2
