@@ -24,7 +24,7 @@ info: Verso.Doc.Part.mk
   #[]
 -/
 #guard_msgs in
-  #eval regularLink.toPart
+  #eval regularLink.force
 
 
 /- ----- -/
@@ -46,7 +46,7 @@ info: Verso.Doc.Part.mk
   #[]
 -/
 #guard_msgs in
-  #eval refLink.toPart
+  #eval refLink.force
 
 
 /- ----- -/
@@ -68,7 +68,7 @@ info: Verso.Doc.Part.mk
   #[]
 -/
 #guard_msgs in
-  #eval noteLink.toPart
+  #eval noteLink.force
 
 
 /- ----- -/
@@ -95,7 +95,7 @@ info: Verso.Doc.Part.mk
   #[]
 -/
 #guard_msgs in
-  #eval refAndLink.toPart
+  #eval refAndLink.force
 
 #docs (.none) refAndLink2 "Ref/link ordering" :=
 :::::::
@@ -123,13 +123,13 @@ Here's [a link][to here][^note]!
 :::::::
 
 /-- info: true -/
-#guard_msgs in #eval refAndLink.toPart == refAndLink2.toPart
+#guard_msgs in #eval refAndLink.force == refAndLink2.force
 
 /-- info: true -/
-#guard_msgs in #eval refAndLink.toPart == refAndLink3.toPart
+#guard_msgs in #eval refAndLink.force == refAndLink3.force
 
 /-- info: true -/
-#guard_msgs in #eval refAndLink.toPart == refAndLink4.toPart
+#guard_msgs in #eval refAndLink.force == refAndLink4.force
 
 #docs (.none) refAndLinkRecursion "Ref/link recursion" :=
 :::::::
@@ -162,7 +162,7 @@ info: Verso.Doc.Part.mk
   #[]
 -/
 #guard_msgs in
-  #eval refAndLinkRecursion.toPart
+  #eval refAndLinkRecursion.force
 
 /--
 error: Already defined link [foo] as 'https://example.com'

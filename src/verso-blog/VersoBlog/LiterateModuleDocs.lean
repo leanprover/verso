@@ -78,7 +78,7 @@ def elabFromModuleDocs (x : Ident) (path : StrLit) (mod : Ident) (title : StrLit
     let title ← Meta.mkArrayLit (.app (mkConst ``Verso.Doc.Inline) g) title.toList
     withOptions (Compiler.LCNF.compiler.extract_closed.set · false) do
       addAndCompile <| .defnDecl {
-        name, levelParams := [], type := .app (mkConst ``Verso.Doc.VersoDoc) g,
+        name, levelParams := [], type := .app (mkConst ``Verso.Doc.DocThunk) g,
         value := ← Meta.mkAppM ``modToPage! #[
           ← Meta.mkAppM ``VersoLiterate.loadJsonString! #[mkConst jsonName, mkStrLit s!"JSON for {x.getId}"],
           title,
@@ -89,7 +89,7 @@ def elabFromModuleDocs (x : Ident) (path : StrLit) (mod : Ident) (title : StrLit
     pure name
 
   let metadata ← if let some m := metadata? then `(some $m) else `(none)
-  elabCommand <| ← `(command|def $x : VersoDoc $genre := $(mkIdent mod).withMetadata $metadata)
+  elabCommand <| ← `(command|def $x : DocThunk $genre := $(mkIdent mod).withMetadata $metadata)
 
 
 end

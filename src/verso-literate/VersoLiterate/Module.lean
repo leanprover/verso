@@ -30,7 +30,7 @@ def load (jsonFile : System.FilePath) : IO LitMod := do
   | .error e => throw <| .userError e
   | .ok v => pure v
 
-def modToPage! [LoadLiterate g] (mod : LitMod) (title : Array (Inline g)) (titleString : String) : VersoDoc g :=
+def modToPage! [LoadLiterate g] (mod : LitMod) (title : Array (Inline g)) (titleString : String) : DocThunk g :=
   match modToPage mod title titleString with
   | .error e => panic! s!"Couldn't load {titleString}: {e}"
   | .ok v => v
