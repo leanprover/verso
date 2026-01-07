@@ -12,7 +12,8 @@ import Lean.Meta.Reduce
 import Lean.DocString.Syntax
 import Lean.DocString
 
-import SubVerso.Highlighting
+public import SubVerso.Highlighting
+import Verso.Deserialize
 import Verso.Doc
 public import Verso.Doc.ArgParse
 public import Verso.Doc.Elab.InlineString
@@ -21,6 +22,7 @@ public import Verso.Doc.Elab.Basic
 import Verso.Doc.Elab.ExpanderAttribute
 public import Verso.Doc.Name
 import Verso.Doc.DocName
+public import Verso.Instances
 
 set_option doc.verso true
 
@@ -462,8 +464,16 @@ unsafe def inlineExpandersForUnsafe (x : Name) : DocElabM (Array InlineExpander)
 @[implemented_by inlineExpandersForUnsafe]
 public opaque inlineExpandersFor (x : Name) : DocElabM (Array InlineExpander)
 
+public def quoteSerializableAux [Monad m] [MonadQuotation m]
+    (aux : Doc.Elab.SerializableAux)
+    : m Term := do
+  let sortedDocs := aux.docs.toArray.qsort (lt := Name.quickLt)
+  let quotedDocs ← sortedDocs.mapM (fun name => ``(Prod.mk $(quote name) (DocThunk.force $(mkIdent name))))
+  ``(Doc.DeserializeAux.mk #[$aux.inlines,*] #[$aux.blocks,*] #[$aux.partMetadata,*] #[$quotedDocs,*])
+
+
 /--
-Creates a term denoting a {lean}`VersoDoc` value from a {lean}`FinishedPart`. This is the final step
+Creates a term denoting a {lean}`DocThunk` value from a {lean}`FinishedPart`. This is the final step
 in turning a parsed verso doc into syntax.
 -/
 public def FinishedPart.toVersoDoc
@@ -524,7 +534,9 @@ public def FinishedPart.toVersoDoc
         withOptions (·.setBool `compiler.extract_closed false) <| addAndCompile decl
 
   -- Generate and return outermost syntax
-  let finishedSyntax ← finished.toSyntax genreSyntax
+  let (partJson, aux) ← StateT.run finished.serialize {}
+  let quotedAux ← quoteSerializableAux aux
+
   let .some docReconstructionPlaceholder := ctx.docReconstructionPlaceholder
     | throwError "No doc reconstruction placeholder available"
 
@@ -532,7 +544,7 @@ public def FinishedPart.toVersoDoc
     | .none => Json.mkObj []
     | .some table => Json.mkObj [("highlight", table.toExport.toJson)]
 
-  ``(VersoDoc.mk (fun $docReconstructionPlaceholder => $finishedSyntax) $(quote reconstJson.compress))
+  ``(DocThunk.serialized (fun $docReconstructionPlaceholder => $quotedAux) $(quote partJson.compress) $(quote reconstJson.compress) none)
 
 
 public abbrev BlockExpander := Syntax → DocElabM (TSyntax `term)

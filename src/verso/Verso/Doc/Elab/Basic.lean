@@ -5,6 +5,8 @@ Author: David Thrane Christiansen, Rob Simmons
 -/
 module
 public import Verso.Doc
+import Verso.Deserialize
+public import Verso.Serialize
 
 open Lean
 
@@ -18,12 +20,6 @@ public inductive TOC where
   | mk (title : String) (titleSyntax : Syntax) (endPos : String.Pos.Raw) (children : Array TOC)
   | included (name : Ident)
 deriving Repr, TypeName, Inhabited
-
-public inductive FinishedPart where
-  | mk (titleSyntax : Syntax) (expandedTitle : Array (TSyntax `term)) (titlePreview : String) (metadata : Option (TSyntax `term)) (blocks : Array (TSyntax `term)) (subParts : Array FinishedPart) (endPos : String.Pos.Raw)
-    /-- A name representing a value of type {lean}`VersoDoc` -/
-  | included (name : Ident)
-deriving Repr, BEq
 
 /--
 From a finished part, constructs syntax that denotes its {lean}`Part` value.
@@ -41,7 +37,7 @@ public partial def FinishedPart.toSyntax [Monad m] [MonadQuotation m]
     -- let bindings introduced by "chunking" the elaboration may fail to infer types
     let typedBlocks ← blocks.mapM fun b => `(($b : Block $genre))
     ``(Part.mk #[$titleInlines,*] $(quote titleString) $metaStx #[$typedBlocks,*] #[$subStx,*])
-  | .included name => ``(VersoDoc.toPart $name)
+  | .included name => ``(DocThunk.force $name)
 
 public partial def FinishedPart.toTOC : FinishedPart → TOC
   | .mk titleStx _titleInlines titleString _metadata _blocks subParts endPos =>
