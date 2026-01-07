@@ -801,11 +801,19 @@ public abbrev DirectiveExpanderOf α := α → TSyntaxArray `block → DocElabM 
 
 public abbrev DirectiveElaborator := Array Arg → TSyntaxArray `block → DocElabM (Array Target.Block)
 
+#synth Quote Term
+
+/--
+The unspecified genre allows arbitrary terms to appear in the place of elaborated genre metadata
+-/
+public abbrev UnspecifiedGenre := Genre.mk Term Term Term Empty Empty
+
 /--
 The type of directive elaborators. In order to give a declaration of type {lean}`DirectiveElabOf α`
 the {lit}`@[directive]` annotation, it must be possible to synthesize {lean}`FromArgs α DocElabM`.
 -/
-public abbrev DirectiveElabOf (α : Type) := α → TSyntaxArray `block → DocElabM Target.Block
+public abbrev DirectiveElabOf (α : Type) (g : Genre := UnspecifiedGenre) :=
+  α → TSyntaxArray `block → DocElabM (Target.TypedBlock g)
 
 public def directiveExpanderToElaborator (expander : DirectiveExpander) : DirectiveElaborator
   | args, contents => do return (← expander args contents).map (.stx ·)
@@ -819,10 +827,10 @@ public def toDirectiveTerm {α : Type} [FromArgs α DocElabM] (expander : α →
     let v ← ArgParse.parse args
     return #[.stx (← expander v blocks)]
 
-public def toDirective {α : Type} [FromArgs α DocElabM] (expander : α → TSyntaxArray `block → DocElabM Target.Block) : DirectiveElaborator :=
+public def toDirective {α : Type} [FromArgs α DocElabM] (expander : α → TSyntaxArray `block → DocElabM (Target.TypedBlock g)) : DirectiveElaborator :=
   fun args blocks => do
     let v ← ArgParse.parse args
-    return #[← expander v blocks]
+    return #[(← expander v blocks).raw]
 
 syntax (name := directive) "directive " (ident)? : attr
 

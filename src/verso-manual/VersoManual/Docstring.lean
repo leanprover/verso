@@ -1695,7 +1695,7 @@ def tactic : DirectiveElabOf TacticDocsOptions
         let some mdAst := MD4Lean.parse str
           | throwError m!"Failed to parse docstring as Markdown. Docstring contents:\n{repr str}"
         mdAst.blocks.mapM (blockFromMarkdownWithLean [])
-    let userContents ← more.mapM elabBlock'
+    let userContents := (← more.mapM elabBlock').map (⟨·⟩)
     return .other (← ``(Block.tactic $(quote tactic) $(quote opts.show))) (contents.map .stx ++ userContents)
 
 def Inline.tactic : Inline where

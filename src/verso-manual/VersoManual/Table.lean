@@ -212,7 +212,7 @@ def table : DirectiveElabOf TableConfig
       let flattened := rows.flatten
       let blocks : Array (Array Target.Block) ← flattened.mapM (·.mapM elabBlock')
       return .other (← ``(Block.table $(quote columns) $(quote cfg.header) $(quote cfg.name) $(quote cfg.alignment)))
-        #[.ul blocks]
+        #[⟨.ul blocks⟩]
 
 where
   getLi : Syntax → DocElabM (TSyntaxArray `block)

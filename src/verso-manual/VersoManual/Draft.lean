@@ -59,4 +59,4 @@ def draft : RoleExpanderOf Unit
 @[directive draft]
 def draftBlock : DirectiveElabOf Unit
   | (), contents => do
-    return .other (← ``(Block.draft)) (← contents.mapM elabBlock')
+    return .other (← ``(Block.draft)) ((← contents.mapM elabBlock').map (⟨.⟩))

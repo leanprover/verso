@@ -38,12 +38,25 @@ public inductive Block where
   | code (content : String)
   | ul (items : Array (Array Block))
   | ol (start : Int) (items : Array (Array Block))
-  | dl (items : Array ((Array Inline) × (Array Block)))
+  | dl (items : Array (Array Inline × Array Block))
   | blockquote (items : Array Block)
   | concat (content : Array Block)
   | other (container : Term) (content : Array Block)
   | stx (stx : Term)
 deriving Repr, BEq
+
+/--
+A {name}`Target.Block` with a parameter specifying the intended genre
+-/
+public structure TypedBlock (g : Genre) where
+  raw : Block
+
+public def TypedBlock.ul (items : Array (Array (TypedBlock g))) : TypedBlock g := ⟨.ul (items.map (·.map (·.raw)))⟩
+public def TypedBlock.ol (start : Int) (items : Array (Array (TypedBlock g))) : TypedBlock g := ⟨.ol start (items.map (·.map (·.raw)))⟩
+public def TypedBlock.dl (items : Array (Array Inline × Array (TypedBlock g))) : TypedBlock g := ⟨.dl (items.map (fun ⟨term, desc⟩ => ⟨term, desc.map (·.raw)⟩))⟩
+public def TypedBlock.stx (stx : Term) : TypedBlock g := ⟨.stx stx⟩
+public def TypedBlock.other [Quote g.Block] (container : g.Block) (content : Array (TypedBlock g)) : TypedBlock g :=
+  ⟨Block.other (quote container) (content.map TypedBlock.raw)⟩
 
 end
 
