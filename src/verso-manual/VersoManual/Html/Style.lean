@@ -24,7 +24,7 @@ public def pageStyle : String := r####"
     --verso-logo-height: var(--verso-header-height);
 
     /** Table of Contents appearance **/
-    --verso-toc-background-color: #fafafa;
+    --verso-toc-background-color: var(--verso-surface-color, #fafafa);
     --verso-toc-text-color: var(--verso-text-color);
 
     /* How long should the ToC animation take? */
@@ -33,15 +33,15 @@ public def pageStyle : String := r####"
     /* How wide should the ToC be on non-mobile? */
     --verso-toc-width: 18rem;
 
-    /** Variables that control the “burger menu” appearance **/
+    /** Variables that control the "burger menu" appearance **/
     --verso-burger-height: 1.25rem;
     --verso-burger-width: 1.25rem;
     --verso-burger-line-width: 0.2rem;
     --verso-burger-line-radius: 0.2rem;
     --verso-burger-toc-visible-color: var(--verso-toc-text-color);
-    --verso-burger-toc-visible-shadow-color: #ffffff;
-    --verso-burger-toc-hidden-color: #0e2431;
-    --verso-burger-toc-hidden-shadow-color: #ffffff;
+    --verso-burger-toc-visible-shadow-color: var(--verso-background-color, #ffffff);
+    --verso-burger-toc-hidden-color: var(--verso-text-color, #0e2431);
+    --verso-burger-toc-hidden-shadow-color: var(--verso-background-color, #ffffff);
 
     /* The "burger menu" may need to get bigger for mobile screens */
     --verso-mobile-burger-height: 1.5rem;
@@ -85,6 +85,8 @@ html {
 body {
     margin: 0;
     padding: 0;
+    background-color: var(--verso-background-color, #ffffff);
+    color: var(--verso-text-color, #333333);
 }
 
 /******** Theme ********/
@@ -94,6 +96,7 @@ h1, h2, h3, h4, h5, h6 {
     font-weight: bold;
     text-rendering: optimizeLegibility;
     margin-top: 1.5rem;
+    color: var(--verso-structure-color, inherit);
 }
 
 p, dt, dd {
@@ -116,6 +119,14 @@ pre, code {
     overflow-y: clip;
 }
 
+a {
+    color: var(--verso-link-color, #386ee0);
+}
+
+a:hover {
+    color: var(--verso-link-hover-color, #0073e6);
+}
+
 /******** Page Layout ********/
 
 header {
@@ -124,11 +135,11 @@ header {
 	z-index: 99;
 	left: 0;
 	right: 0;
-	background: white;
+	background: var(--verso-background-color, white);
 	display: flex;
 	align-items: center;
 	height: var(--verso-header-height);
-	box-shadow: 0 0px 6px lightgray;
+	box-shadow: 0 0px 6px var(--verso-shadow-color, lightgray);
 }
 
 .header-logo-wrapper {
@@ -151,6 +162,35 @@ header {
     flex: 1;
 }
 
+/* Theme toggle button */
+#theme-toggle {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 1.25rem;
+    padding: 0.5rem;
+    margin-right: 0.5rem;
+    border-radius: 0.25rem;
+    line-height: 1;
+    transition: background-color 0.2s ease;
+}
+
+#theme-toggle:hover {
+    background-color: var(--verso-hover-highlight-color, #eeeeee);
+}
+
+#theme-toggle:focus {
+    outline: 2px solid var(--verso-link-color, #386ee0);
+    outline-offset: 2px;
+}
+
+@media screen and (max-width: 700px) {
+    #theme-toggle {
+        margin-right: 0.25rem;
+        padding: 0.25rem;
+    }
+}
+
 @media screen and (max-width: 1500px) {
     /* Add the padding of the content when the content moves to the left */
     padding-left: var(--verso--content-padding-x);
@@ -158,7 +198,7 @@ header {
 
 .header-title {
     text-decoration: none;
-    color: black;
+    color: var(--verso-text-color, black);
     font-size: 2rem;
     font-weight: bold;
     display: block;
@@ -240,7 +280,7 @@ main [id] {
     body:has(#toggle-toc:checked) .toc-backdrop {
         position: fixed;
         inset: 0;
-        background-color: #aaa8;
+        background-color: rgba(0, 0, 0, 0.5);
         z-index: 9;
     }
     html:has(#toggle-toc:checked) {
@@ -275,13 +315,13 @@ main [id] {
 }
 
 #toc a {
-    color: #333;
+    color: var(--verso-text-color, #333);
     text-decoration: none;
 }
 
 #toc a:hover {
     text-decoration: underline;
-    color: #000;
+    color: var(--verso-link-hover-color, #000);
 }
 
 .toc-title {
@@ -345,7 +385,7 @@ main [id] {
     width: calc(var(--verso-toc-triangle-width) + var(--verso-toc-triangle-left-space));
     height: var(--verso-toc-triangle-height);
     display: inline-block;
-    background-color: black;
+    background-color: var(--verso-text-color, black);
     content: ' ';
     transition: ease 0.2s;
     margin-right: var(--verso-toc-triangle-margin);
@@ -386,7 +426,7 @@ main [id] {
 }
 
 #toc .split-toc table {
-    border-left: 1px dotted;
+    border-left: 1px dotted var(--verso-border-color, currentColor);
     padding-left: 1.2rem;
     padding-top: 0.2rem;
 }
@@ -396,7 +436,7 @@ main [id] {
 }
 
 #toc .split-toc > ol {
-    border-left: 1px dotted;
+    border-left: 1px dotted var(--verso-border-color, currentColor);
     list-style-type: none;
     padding-left: 0.5rem;
     margin-left: 0;
@@ -443,7 +483,7 @@ main [id] {
     flex: 1;
     justify-content: center;
     align-items: center;
-    color: black;
+    color: var(--verso-text-color, black);
     text-decoration: none;
 }
 
@@ -798,7 +838,7 @@ main .section-toc a:hover {
 .permalink-widget > a {
   /* Don't show the colors here */
   color: transparent;
-  text-shadow: 0 0 0 gray;
+  text-shadow: 0 0 0 var(--verso-text-color-light, gray);
   text-decoration: none;
 }
 
@@ -881,18 +921,18 @@ main section li ol {
     overflow-x: auto;
     margin: 0px;
     margin: 0.5em .85em;
-    border-left: 0.2em solid red;
+    border-left: 0.2em solid var(--verso-error-indicator-color, red);
     padding: 0 0.45em;
 }
 
 /* Different color for warning */
 .lean-output.warning {
-    border-color: var(--verso-warning-color);
+    border-color: var(--verso-warning-indicator-color);
 }
 
 /* Different color for information */
 .lean-output.information {
-    border-color: #0000c0;
+    border-color: var(--verso-info-indicator-color, #0000c0);
 }
 
 

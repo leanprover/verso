@@ -7,13 +7,35 @@
     /* The font family used for code */
     --verso-code-font-family: monospace;
 
+    /** Background colors **/
+    --verso-background-color: #ffffff;
+    --verso-surface-color: #f9fbfd;
+
     /** Text colors **/
-    --verso-text-color: black;
+    --verso-text-color: #333333;
+    --verso-text-color-light: #64748b;
     --verso-code-color: black;
     --verso-structure-color: black;
 
+    /** Link colors **/
+    --verso-link-color: #386ee0;
+    --verso-link-hover-color: #0073e6;
+
+    /** Border colors **/
+    --verso-border-color: #e4ebf3;
+    --verso-border-color-light: #d1d9e2;
+
     /** Selected items (e.g. search results) */
     --verso-selected-color: #def;
+
+    /** Shadow colors **/
+    --verso-shadow-color: rgba(35, 55, 139, 0.1);
+
+    /** Hover/tooltip colors **/
+    --verso-hover-background-color: #e5e5e5;
+    --verso-hover-highlight-color: #eeeeee;
+    --verso-error-hover-color: #ffb3b3;
+    --verso-info-hover-color: #b3d4ff;
 
     /** Message colors **/
     /*
@@ -51,4 +73,88 @@
     --verso-code-var-weight: normal;
     --verso-code-var-style: italic;
     --verso-code-kw-font-family: var(--verso-code-font-family);
+}
+
+/** Dark mode - respects OS preference **/
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        /** Background colors **/
+        --verso-background-color: #1e1e1e;
+        --verso-surface-color: #181818;
+
+        /** Text colors **/
+        --verso-text-color: #eeeeee;
+        --verso-text-color-light: #bbbbbb;
+        --verso-code-color: #eeeeee;
+        --verso-structure-color: #eeeeee;
+
+        /** Link colors **/
+        --verso-link-color: #3b94ff;
+        --verso-link-hover-color: #4d9efc;
+
+        /** Border colors **/
+        --verso-border-color: #333333;
+        --verso-border-color-light: #444444;
+
+        /** Selected items (e.g. search results) */
+        --verso-selected-color: #2a4a6a;
+
+        /** Shadow colors **/
+        --verso-shadow-color: rgba(0, 0, 0, 0.5);
+
+        /** Hover/tooltip colors **/
+        --verso-hover-background-color: #3a3a3a;
+        --verso-hover-highlight-color: #444444;
+        --verso-error-hover-color: #5c2a2a;
+        --verso-info-hover-color: #2a3d5c;
+
+        /** Message colors **/
+        --verso-info-color: #eeeeee;
+        --verso-info-indicator-color: #4777ff;
+        --verso-warning-color: #eeeeee;
+        --verso-warning-indicator-color: #e7a71d;
+        --verso-error-color: #ff6666;
+        --verso-error-indicator-color: #ff4444;
+    }
+}
+
+/** Manual dark mode override **/
+:root[data-theme="dark"] {
+    /** Background colors **/
+    --verso-background-color: #1e1e1e;
+    --verso-surface-color: #181818;
+
+    /** Text colors **/
+    --verso-text-color: #eeeeee;
+    --verso-text-color-light: #bbbbbb;
+    --verso-code-color: #eeeeee;
+    --verso-structure-color: #eeeeee;
+
+    /** Link colors **/
+    --verso-link-color: #3b94ff;
+    --verso-link-hover-color: #4d9efc;
+
+    /** Border colors **/
+    --verso-border-color: #333333;
+    --verso-border-color-light: #444444;
+
+    /** Selected items (e.g. search results) */
+    --verso-selected-color: #2a4a6a;
+
+    /** Shadow colors **/
+    --verso-shadow-color: rgba(0, 0, 0, 0.5);
+
+    /** Hover/tooltip colors **/
+    --verso-hover-background-color: #3a3a3a;
+    --verso-hover-highlight-color: #444444;
+    --verso-error-hover-color: #5c2a2a;
+    --verso-info-hover-color: #2a3d5c;
+
+    /** Message colors **/
+    --verso-info-color: #eeeeee;
+    --verso-info-indicator-color: #4777ff;
+    --verso-warning-color: #eeeeee;
+    --verso-warning-indicator-color: #e7a71d;
+    --verso-error-color: #ff6666;
+    --verso-error-indicator-color: #ff4444;
 }
