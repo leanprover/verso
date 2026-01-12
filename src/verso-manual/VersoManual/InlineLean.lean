@@ -213,13 +213,12 @@ private def toHighlightedLeanInline (shouldShow : Bool) (hls : Highlighted) (str
   ``(Inline.other (Verso.Genre.Manual.InlineLean.Inline.lean $(← quoteHighlightViaSerialization hls)) #[Inline.code $(quote str.getString)])
 
 
-/--
-Elaborates the provided Lean command in the context of the current Verso module.
--/
-@[code_block]
-def lean : CodeBlockExpanderOf LeanBlockConfig
-  | config, str => withoutAsync <| do
-
+def elabCommands (config : LeanBlockConfig) (str : StrLit)
+    (toHighlightedLeanContent : (shouldShow : Bool) → (hls : Highlighted) → (str: StrLit) → DocElabM Term)
+    (minCommands : Option Nat := none)
+    (maxCommands : Option Nat := none) :
+    DocElabM Term :=
+  withoutAsync <| do
     PointOfInterest.save (← getRef) ((config.name.map (·.toString)).getD (abbrevFirstLine 20 str.getString))
       (kind := Lsp.SymbolKind.file)
       (detail? := some ("Lean code" ++ config.outlineMeta))
@@ -247,13 +246,23 @@ def lean : CodeBlockExpanderOf LeanBlockConfig
       let (cmd, ps', messages) := Parser.parseCommand ictx pmctx pstate cmdState.messages
       cmds := cmds.push cmd
       pstate := ps'
-      cmdState := {cmdState with messages := messages}
+      cmdState := { cmdState with messages := messages }
 
 
       cmdState ← withInfoTreeContext (mkInfoTree := pure ∘ InfoTree.node (.ofCommandInfo {elaborator := `Manual.Meta.lean, stx := cmd})) <|
         runCommand (Command.elabCommand cmd) cmd cctx cmdState
 
       if Parser.isTerminalCommand cmd then break
+
+    let nonTerm := cmds.filter (! Parser.isTerminalCommand ·)
+    if let some maxCmds := maxCommands then
+      if h : nonTerm.size > maxCmds then
+        logErrorAt nonTerm.back m!"Expected at most {maxCmds} commands, but got {nonTerm.size} commands."
+
+    if let some minCmds := minCommands then
+      if h : nonTerm.size < minCmds then
+        let blame := nonTerm[0]? |>.getD (← getRef)
+        logErrorAt blame m!"Expected at least {minCmds} commands, but got {nonTerm.size} commands."
 
     let origEnv ← getEnv
     try
@@ -271,7 +280,7 @@ def lean : CodeBlockExpanderOf LeanBlockConfig
         hls := hls ++ (← highlightIncludingUnparsed cmd nonSilentMsgs cmdState.infoState.trees (startPos? := lastPos))
         lastPos := (cmd.getTrailingTailPos?).getD lastPos
 
-      toHighlightedLeanBlock config.show hls str
+      toHighlightedLeanContent config.show hls str
     finally
       if !config.keep then
         setEnv origEnv
@@ -307,6 +316,22 @@ where
     match (← liftM <| EIO.toIO' <| ((log output).run cctx).run cmdState) with
     | .error _ => pure cmdState
     | .ok ((), cmdState) => pure cmdState
+
+/--
+Elaborates the provided Lean command in the context of the current Verso module.
+-/
+@[code_block]
+def lean : CodeBlockExpanderOf LeanBlockConfig
+  | config, str => elabCommands config str toHighlightedLeanBlock
+
+@[role]
+def leanCommand : RoleExpanderOf LeanBlockConfig
+  | config, inls => do
+    if let some str ← oneCodeStr? inls then
+      elabCommands config str toHighlightedLeanInline (minCommands := some 1) (maxCommands := some 1)
+    else
+      `(sorry)
+
 
 /--
 Elaborates the provided Lean term in the context of the current Verso module.
