@@ -257,12 +257,12 @@ def elabCommands (config : LeanBlockConfig) (str : StrLit)
     let nonTerm := cmds.filter (! Parser.isTerminalCommand ·)
     if let some maxCmds := maxCommands then
       if h : nonTerm.size > maxCmds then
-        logErrorAt nonTerm.back "Expected at most {maxCmd} commands, but got {nonTerm.size} commands."
+        logErrorAt nonTerm.back m!"Expected at most {maxCmds} commands, but got {nonTerm.size} commands."
 
     if let some minCmds := minCommands then
       if h : nonTerm.size < minCmds then
         let blame := nonTerm[0]? |>.getD (← getRef)
-        logErrorAt blame "Expected at least {maxCmd} commands, but got {nonTerm.size} commands."
+        logErrorAt blame m!"Expected at least {minCmds} commands, but got {nonTerm.size} commands."
 
     let origEnv ← getEnv
     try
