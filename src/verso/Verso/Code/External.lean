@@ -8,6 +8,7 @@ public import Verso.Doc
 import Verso.Doc.ArgParse
 import Verso.Doc.Elab
 public import Verso.Doc.Elab.Monad
+public meta import Verso.Doc.Helpers
 public meta import Verso.Code.External.Code
 import Verso.Code.External.Code
 public import Verso.Code.External.Config
@@ -62,32 +63,7 @@ public class ExternalCode (genre : Genre) where
 
 open ExternalCode
 
-private meta def oneCodeStr [Monad m] [MonadError m] (inlines : Array (TSyntax `inline)) : m StrLit := do
-  let #[code] := inlines
-    | (if inlines.size == 0 then (throwError ·) else (throwErrorAt (mkNullNode inlines) ·)) "Expected one code element"
-  let `(inline|code($code)) := code
-    | throwErrorAt code "Expected a code element"
-  return code
 
-private meta def oneCodeStr? [Monad m] [MonadError m] [MonadLog m] [AddMessageContext m] [MonadOptions m]
-    (inlines : Array (TSyntax `inline)) : m (Option StrLit) := do
-  let #[code] := inlines
-    | if inlines.size == 0 then
-        Lean.logError "Expected a code element"
-      else
-        logErrorAt (mkNullNode inlines) "Expected one code element"
-      return none
-  let `(inline|code($code)) := code
-    | logErrorAt code "Expected a code element"
-      return none
-  return some code
-
-
-private meta def oneCodeName [Monad m] [MonadError m] (inlines : Array (TSyntax `inline)) : m Ident := do
-  let code ← oneCodeStr inlines
-  let str := code.getString
-  let name := if str.contains '.' then str.toName else Name.str .anonymous str
-  return mkIdentFrom code name
 
 section
 
