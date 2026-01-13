@@ -16,7 +16,7 @@ set_option pp.rawOnError true
 :::::::
 /-- info: Verso.Doc.Part.mk #[Verso.Doc.Inline.text "Nothing"] "Nothing" none #[] #[] -/
 #guard_msgs in
-  #eval noDoc.toPart
+  #eval noDoc.force
 
 
 /- ----- -/
@@ -36,7 +36,7 @@ info: Verso.Doc.Part.mk
   #[]
 -/
 #guard_msgs in
-  #eval littleParagraph.toPart
+  #eval littleParagraph.force
 
 
 /- ----- -/
@@ -56,7 +56,7 @@ info: Verso.Doc.Part.mk
   #[]
 -/
 #guard_msgs in
-  #eval listOneItem.toPart
+  #eval listOneItem.force
 
 
 /- ----- -/
@@ -83,7 +83,7 @@ info: Verso.Doc.Part.mk
       #[]]
 -/
 #guard_msgs in
-  #eval sectionAndPara.toPart
+  #eval sectionAndPara.force
 
 
 /- ----- -/
@@ -128,7 +128,7 @@ info: Verso.Doc.Part.mk
           #[]]]
 -/
 #guard_msgs in
-  #eval nestedDoc1.toPart
+  #eval nestedDoc1.force
 
 
 /- ----- -/
@@ -173,7 +173,7 @@ info: Verso.Doc.Part.mk
           #[]]]
 -/
 #guard_msgs in
-  #eval nestedDoc2.toPart
+  #eval nestedDoc2.force
 
 
 /- ----- -/
@@ -223,7 +223,7 @@ info: Verso.Doc.Part.mk
           #[]]]
 -/
 #guard_msgs in
-  #eval nestedDoc3.toPart
+  #eval nestedDoc3.force
 
 
 /- ----- -/
@@ -260,7 +260,7 @@ info: Verso.Doc.Part.mk
       #[]]
 -/
 #guard_msgs in
-  #eval nestedDoc4.toPart
+  #eval nestedDoc4.force
 
 
 /- ----- -/

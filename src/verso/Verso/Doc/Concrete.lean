@@ -8,6 +8,7 @@ public import Lean.Parser.Types
 public meta import Verso.Parser
 public import Lean.Elab.Command
 public meta import SubVerso.Highlighting.Export
+import Verso.Deserialize
 import Verso.Doc
 public import Verso.Doc.Elab
 public meta import Verso.Doc.Elab.Monad
@@ -97,7 +98,7 @@ elab "#docs" "(" genre:term ")" n:ident title:str ":=" ":::::::" text:document "
       | none => panic! "No final token!"
     | _ => panic! "Nothing"
   let doc ← Command.runTermElabM fun _ => elabDoc genre title text.raw.getArgs endTok.getPos!
-  Command.elabCommand (← `(def $n : VersoDoc $genre := $doc))
+  Command.elabCommand (← `(def $n : DocThunk $genre := $doc))
 
 elab "#doc" "(" genre:term ")" title:str "=>" text:completeDocument eoi : term => do
   findGenreTm genre
@@ -298,7 +299,7 @@ private meta def finishDoc (genreSyntax : Term) (title : StrLit) : Command.Comma
 
   let n := mkIdentFrom title (← currentDocName)
   let doc ← Command.runTermElabM fun _ => finished.toVersoDoc genreSyntax versoEnv.ctx versoEnv.docState versoEnv.partState
-  let ty ← ``(VersoDoc $genreSyntax)
+  let ty ← ``(DocThunk $genreSyntax)
   Command.elabCommand (← `(def $n : $ty := $doc))
 
 syntax (name := replaceDoc) "#doc " "(" term ") " str " =>" : command
