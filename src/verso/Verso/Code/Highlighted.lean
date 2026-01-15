@@ -157,10 +157,10 @@ public def CodeLink.menuHtml (link : CodeLink) : Html :=
 
 public def CodeLink.manyHtml (links : Array CodeLink) (text : Html) : Html :=
   if h : links.size = 1 then
-    {{<a href={{links[0].href}} title={{links[0].description}}>{{text}}</a>}}
+    links[0].inlineHtml text
   else if h : links.size > 1 then
     let linkData := Json.arr (links.map ToJson.toJson) |>.compress
-    {{<a href={{links[0].href}} title={{links[0].description}} data-verso-links={{linkData}}>{{text}}</a>}}
+    links[0].inlineHtml text |>.setAttribute "data-verso-links" linkData
   else text
 
 open Lean (Name FVarId Level) in

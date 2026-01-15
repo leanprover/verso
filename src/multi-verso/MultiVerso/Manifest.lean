@@ -48,18 +48,22 @@ public def XrefSource.fromJson? (json : Json) : Except String XrefSource :=
 
 public inductive UpdateFrequency where
   | manual
+  | always
   | days (days : Day.Offset)
 deriving BEq, Repr
 
 public def UpdateFrequency.toJson (freq : UpdateFrequency) : Json :=
   match freq with
   | .manual => .str "manual"
+  | .always => .str "always"
   | .days i => json%{"days": $i.toInt}
 
 public def UpdateFrequency.fromJson? (freq : Json) : Except String UpdateFrequency := do
   match freq with
   | .str "manual" =>
     return .manual
+  | .str "always" =>
+    return .always
   | .obj o =>
     match o.toArray with
     | #[⟨"days", i⟩] =>

@@ -6,6 +6,7 @@ Author: David Thrane Christiansen
 module
 -- This module serves as the root of the `Verso` library.
 -- Import modules here that should be built as part of the library.
+public import Verso.CLI
 public import Verso.Code
 public import Verso.Doc
 public import Verso.Doc.ArgParse

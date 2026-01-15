@@ -49,6 +49,16 @@ lean_lib VersoManual where
   roots := #[`VersoManual]
   needs := #[staticWeb]
 
+input_file tutorialDefaultCss where
+  text := true
+  path := "src/verso-tutorial/default.css"
+
+@[default_target]
+lean_lib VersoTutorial where
+  srcDir := "src/verso-tutorial"
+  roots := #[`VersoTutorial]
+  needs := #[tutorialDefaultCss]
+
 @[default_target]
 lean_exe «verso» where
   root := `Main
@@ -146,6 +156,15 @@ lean_exe simplepage where
   root := `SimplePageMain
   supportInterpreter := true
 
+@[default_target]
+lean_lib TutorialExample where
+  srcDir := "examples/tutorial-examples"
+
+@[default_target]
+lean_exe «tutorial-example» where
+  srcDir := "examples/tutorial-examples"
+  root := `Main
+  supportInterpreter := true
 
 module_facet literate mod : System.FilePath := do
   let ws ← getWorkspace

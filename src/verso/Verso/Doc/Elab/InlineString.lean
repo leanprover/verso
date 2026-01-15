@@ -22,7 +22,7 @@ unsafe def inlineToStringForUnsafe (env : Environment) (x : Name) : Array Inline
 @[implemented_by inlineToStringForUnsafe]
 opaque inlineToStringFor (env : Environment) (x : Name) : Array InlineToString
 
-/-- Heuristically construct a plan string preview of the syntax of an inline element -/
+/-- Heuristically construct a plain string preview of the syntax of an inline element -/
 public def inlineToString (env : Environment) (inline : Syntax) : String := Id.run do
   let kind := inline.getKind
   let toStr ← inlineToStringFor env kind
