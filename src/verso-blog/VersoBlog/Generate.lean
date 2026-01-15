@@ -45,7 +45,7 @@ def Generate.Context.templateContext (ctxt : Generate.Context) (params : Templat
     path,
     builtInStyles := ctxt.xref.stylesheets,
     builtInScripts := ctxt.xref.scripts.insert Traverse.renderMathJs,
-    jsFiles := ctxt.xref.jsFiles.map (·.1),
+    jsFiles := ctxt.theme.jsFiles.map (·.1) ++ ctxt.xref.jsFiles.map (·.1),
     cssFiles := ctxt.theme.cssFiles.map (·.1) ++ ctxt.xref.cssFiles.map (·.1),
     components := ctxt.components
   }
