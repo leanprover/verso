@@ -520,5 +520,8 @@ where
     else
       pure attr
   rwTag (tag : String) (attrs : Array (String × String)) (content : Html) : ReaderT Path Id (Option Html) := do
-    if tag == "base" then pure none
-    else pure <| some <| .tag tag (← attrs.mapM rwAttr) content
+    if tag == "base" then return none
+    -- Don't rewrite URLs that come from remote content. This attribute is inserted by the `ref`
+    -- role when referring to remote content.
+    if attrs.any (·.1 == "data-verso-remote") then return none
+    return some <| .tag tag (← attrs.mapM rwAttr) content

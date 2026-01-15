@@ -14,19 +14,29 @@ public import Verso.Doc.Elab.Monad
 
 open Verso Genre Manual ArgParse
 open Verso.Doc.Elab
+open Verso.Multi (AllRemotes)
 open Lean (Json ToJson FromJson)
 
 namespace Verso.Genre.Manual
 
-public structure TechArgs where
+public structure DefTechArgs where
   key : Option String
   normalize : Bool
+
+public structure TechArgs extends DefTechArgs where
+  remote : Option String
 
 section
 variable [Monad m] [Lean.MonadError m] [MonadLiftT Lean.CoreM m]
 
+def DefTechArgs.parse : ArgParse m DefTechArgs :=
+  DefTechArgs.mk <$> .named `key .string true <*> .flag `normalize true
+
+public instance : FromArgs DefTechArgs m where
+  fromArgs := private DefTechArgs.parse
+
 def TechArgs.parse  : ArgParse m TechArgs :=
-  TechArgs.mk <$> .named `key .string true <*> .flag `normalize true
+  TechArgs.mk <$> fromArgs <*> .named `remote .string true
 
 public instance : FromArgs TechArgs m where
   fromArgs := private TechArgs.parse
@@ -78,7 +88,7 @@ of the automatically-derived key.
 Uses of `tech` use the same process to derive a key, and the key is matched against the `deftech` table.
 -/
 @[role]
-public def deftech : RoleExpanderOf TechArgs
+public def deftech : RoleExpanderOf DefTechArgs
   | {key, normalize}, content => do
 
     -- Heuristically guess at the string and key (usually works)
@@ -176,7 +186,7 @@ of the automatically-derived key.
 -/
 @[role]
 public def tech : RoleExpanderOf TechArgs
-  | {key, normalize}, content => do
+  | {key, normalize, remote}, content => do
 
     -- Heuristically guess at the string and key (usually works)
     let str := inlineToString (← getEnv) <| mkNullNode content
@@ -195,8 +205,12 @@ public def tech : RoleExpanderOf TechArgs
 
     `(let content : Array (Doc.Inline Verso.Genre.Manual) := #[$content,*]
       let k := ($(quote key) : Option String).getD (techString (Doc.Inline.concat content))
-      Doc.Inline.other {Inline.tech with data := Json.arr #[Json.str (if $(quote normalize) then normString k else k), Json.str $(quote loc)]} content)
+      Doc.Inline.other {Inline.tech with data := Json.arr #[Json.str (if $(quote normalize) then normString k else k), Json.str $(quote loc), $(quote remote).map Json.str |>.getD Json.null]} content)
 
+open Verso.Output Html in
+private def techLink (addr : String) (content : Html) (remote? : Option String := none) :=
+  let remoteAttr := remote?.map (fun r => #[("data-verso-remote", r)]) |>.getD #[]
+  {{<a class="technical-term" href={{addr}} {{remoteAttr}}>{{content}}</a>}}
 
 @[inline_extension tech]
 public def tech.descr : InlineDescr where
@@ -209,30 +223,54 @@ public def tech.descr : InlineDescr where
     open Verso.Output.Html in
     open Doc.Html in
     some <| fun go _id info content => do
-      let Json.arr #[.str key, .str loc] := info
+      let Json.arr #[.str key, .str loc, remote] := info
         | HtmlT.logError s!"Failed to decode glossary key and location from {info}"
           content.mapM go
-      match (← Doc.Html.HtmlT.state).get? glossaryState with
+      let remote ←
+        match remote with
+        | .null => pure none
+        | .str s => pure (some s)
+        | other => HtmlT.logError s!"Failed to decode optional remote from {other}"; pure none
+
+      match remote with
       | none =>
-        HtmlT.logError s!"{loc}: No glossary entries defined (looking up {info})"
-        content.mapM go
-      | some (.error e) => HtmlT.logError e; content.mapM go
-      | some (.ok (tech : Json)) =>
-        match tech.getObjValD key with
-        | .null =>
+        if let some term := (← Doc.Html.HtmlT.state).getDomainObject? technicalTermDomain key then
+          let ids := term.ids.toArray
+          if h : ids.size = 1 then
+            if let some link := (← HtmlT.state).resolveId ids[0] then
+              return techLink link.relativeLink (← content.mapM go)
+            else
+              HtmlT.logError s!"{loc}: No link target saved for internal ID of term \"{key}\""
+              content.mapM go
+          else
+            let st ← HtmlT.state
+            let potentialTargets := ids.map st.resolveId |>.map (·.map (·.link))
+            let potentialTargets := potentialTargets.map fun tgt? =>
+              s!" * {tgt?.getD "<no link>"}"
+            HtmlT.logError s!"{loc}: Ambiguous term def with key \"{key}\". Targets:\n{"\n".intercalate potentialTargets.toList}"
+            content.mapM go
+        else
           HtmlT.logError s!"{loc}: No term def with key \"{key}\""
           content.mapM go
-        | v =>
-          match FromJson.fromJson? v with
-          | .error e => HtmlT.logError e; content.mapM go
-          | .ok id =>
-            let xref ← Doc.Html.HtmlT.state
-            if let some link := xref.externalTags.get? id then
-              let addr := link.link
-              pure {{<a class="technical-term" href={{addr}}>{{← content.mapM go}}</a>}}
+      | some r =>
+        if let some remote := (← readThe AllRemotes)[r]? then
+          if let some objs := remote.getDomainObject? technicalTermDomain key then
+            if h : objs.size = 1 then
+              return techLink objs[0].link.link (← content.mapM go)
             else
-              Doc.Html.HtmlT.logError s!"{loc}: No external tag for {id}"
+              HtmlT.logError s!"{loc}: Ambiguous term def with key \"{key}\" in remote {r.quote} - {objs.map (·.link.link)} found"
               content.mapM go
+          else
+            let keys := remote.domains[technicalTermDomain]?
+              |>.map (·.contents.keysArray.qsortOrd.toList |> ", ".intercalate)
+              |>.map ("Keys are: " ++ ·)
+              |>.getD "Technical term domain not found."
+            HtmlT.logError s!"{loc}: No term def with key \"{key}\" in remote {r.quote}. {keys}"
+            content.mapM go
+        else
+          HtmlT.logError s!"{loc}: Remote {r.quote} not found in {(← readThe AllRemotes).allRemotes.keys}"
+          content.mapM go
+
   extraCss := [
     r#"
 a.technical-term {

@@ -265,12 +265,3 @@ where
     s.allErrors.map fun (pos, stk, e) => (mkSyntaxError ictx pos stk e)
 
 end Verso.SyntaxUtils
-
-namespace Verso.Doc.Concrete
-open Verso.Parser
-open Lean Elab Term
-
-public def stringToInlines [Monad m] [MonadError m] [MonadEnv m] [MonadQuotation m] (s : StrLit) : m (Array Syntax) :=
-  withRef s do
-    return (← textLine.parseString s.getString).getArgs
-end Verso.Doc.Concrete
