@@ -186,6 +186,9 @@ instance : Traverse Tutorial TraverseM where
     -- Next, assign a tag, prioritizing user-chosen external IDs
     «meta» := { «meta» with tag := ← withReader (TraversePart.inPart part) <| tagPart part «meta» (·.id) (·.tag) savePartXref }
 
+    -- Traverse the metadata's description
+    «meta» := { «meta» with summary := ← withReader (TraversePart.inPart part) <| Genre.traverseInline Manual «meta».summary }
+
     pure <|
       if «meta» == startMeta then none
       else pure { part with metadata := some «meta» }

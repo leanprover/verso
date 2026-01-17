@@ -1442,7 +1442,7 @@ instance : TeX.GenreTeX Manual (ReaderT ExtensionImpls IO) where
     impl goI goB id b.data content
   inline go i content := do
     let some id := i.id
-      | panic! "Inline {i.name} wasn't assigned an ID during traversal"
+      | panic! s!"Inline {i.name} wasn't assigned an ID during traversal"
     let some descr := (← readThe ExtensionImpls).getInline? i.name
       | panic! s!"Unknown inline {i.name} while rendering.\n\nKnown inlines: {(← readThe ExtensionImpls).inlineDescrs.toArray |>.map (·.fst) |>.qsort (·.toString < ·.toString)}"
     let some impl := descr.toTeX
@@ -1509,7 +1509,7 @@ instance : Html.GenreHtml Manual (ReaderT AllRemotes (ReaderT ExtensionImpls IO)
 
   inline go i content := do
     let some id := i.id
-      | panic! "Inline {i.name} wasn't assigned an ID during traversal"
+      | panic! s!"Inline {i.name} wasn't assigned an ID during traversal"
     let some descr := (← readThe ExtensionImpls).getInline? i.name
       | panic! s!"Unknown inline {i.name} with data {i.data} while rendering HTML.\n\nKnown inlines: {(← readThe ExtensionImpls).inlineDescrs.toArray |>.map (·.fst) |>.qsort (·.toString < ·.toString)}"
     let some impl := descr.toHtml
