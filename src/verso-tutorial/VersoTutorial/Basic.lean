@@ -25,7 +25,12 @@ open Lean
 open Verso.Doc (Genre)
 open Verso.Multi
 
-private def defaultToolchain := "leanprover/lean4:" ++ Lean.versionString
+private def defaultToolchain :=
+  if Lean.versionString.find? "nightly" |>.isSome then
+    "leanprover/lean4:nightly" ++ (Lean.versionString.split "nightly" |>.toArray[1]!).copy
+  else
+    "leanprover/lean4:" ++ Lean.versionString
+
 private def defaultLive := "lean-v" ++ Lean.versionString
 
 /-- A style by which example code in a tutorial should be made runnable. -/
