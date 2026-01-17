@@ -24,7 +24,9 @@ syntax:max (name := inlinesLit) "inlines!" noWs str : term
 syntax:max (name := blocksLit) "blocks!" noWs str : term
 
 open Lean Elab Term in
-elab_rules : term
+elab_rules : term <= ty
+  | `(inlines!"") => do
+    elabTerm (← ``(Lean.Doc.Inline.empty)) ty
   | `(inlines!%$tk$s) => do
     let inls ← stringToInlines s
     let gTerm ← `(term|_%$tk)
@@ -33,7 +35,9 @@ elab_rules : term
       ⟨gTerm, g, .onlyIfDefined, .none⟩
       { highlightDeduplicationTable := .none }
       (.init (← `(foo))) <| inls.mapM (elabInline ⟨·⟩)
-    elabTerm (← ``(Inline.concat #[ $[$tms],* ] )) none
+    elabTerm (← ``(Inline.concat #[ $[$tms],* ] )) ty
+  | `(blocks!"") => do
+    elabTerm (← ``(Lean.Doc.Block.empty)) ty
   | `(blocks!%$tk$s) => do
     let inls ← stringToBlocks s
     let g ← Meta.mkFreshExprMVar (some (.const ``Verso.Doc.Genre []))
@@ -42,7 +46,7 @@ elab_rules : term
       ⟨gTerm, g, .onlyIfDefined, .none⟩
       { highlightDeduplicationTable := .none }
       (.init (← `(foo))) <| inls.mapM (elabBlock ⟨·⟩)
-    elabTerm (← ``(Block.concat #[ $[$tms],* ] )) none
+    elabTerm (← ``(Block.concat #[ $[$tms],* ] )) ty
 
 
 set_option pp.rawOnError true
