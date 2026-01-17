@@ -12,7 +12,7 @@ open Verso.Genre.Manual InlineLean
 #doc (Tutorial) "RCases" =>
 %%%
 slug := "rcases"
-summary := "is a tactic for case analysis"
+summary := inlines!"is a tactic for case analysis"
 exampleStyle := .inlineLean `RCases
 %%%
 

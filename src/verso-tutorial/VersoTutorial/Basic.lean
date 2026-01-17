@@ -34,7 +34,7 @@ inductive ExampleCodeStyle where
   The example code should be extracted to a Lean project from the tutorial.
   -/
   | inlineLean (moduleName : Lean.Name) (toolchain := defaultToolchain) (liveProject := some defaultLive)
-deriving BEq, DecidableEq, Inhabited, Repr, ToJson, FromJson
+deriving BEq, Hashable, DecidableEq, Inhabited, Repr, ToJson, FromJson
 
 open Manual (Tag InternalId) in
 /-- Metadata on tutorials. -/
@@ -46,10 +46,10 @@ structure Tutorial.PartMetadata where
   /-- The internal unique ID, which is automatically assigned during traversal. -/
   id : Option InternalId := none
   /-- A summary to show on the overview page. -/
-  summary : String
+  summary : Verso.Doc.Inline Manual
   /-- How should the code samples in this tutorial be extracted to a downloadable tarball? -/
   exampleStyle : ExampleCodeStyle
-deriving BEq, DecidableEq, Inhabited, Repr, ToJson, FromJson
+deriving BEq, Hashable, Inhabited, Repr, ToJson, FromJson
 
 /--
 Information that tracks the current context of traversal for a set of tutorials.
@@ -100,7 +100,7 @@ open Manual (ExtensionImpls)
 
 /-- The metadata to use for a tutorial when the user does not specify any. -/
 def defaultMetadata (p : Part Tutorial) : Tutorial.PartMetadata :=
-  { slug := p.titleString.sluggify.toString, summary := "", exampleStyle := .inlineLean `Main }
+  { slug := p.titleString.sluggify.toString, summary := inlines!"", exampleStyle := .inlineLean `Main }
 
 instance : TraversePart Tutorial where
   inPart p ctx :=
@@ -185,6 +185,9 @@ instance : Traverse Tutorial TraverseM where
 
     -- Next, assign a tag, prioritizing user-chosen external IDs
     «meta» := { «meta» with tag := ← withReader (TraversePart.inPart part) <| tagPart part «meta» (·.id) (·.tag) savePartXref }
+
+    -- Traverse the metadata's description
+    «meta» := { «meta» with summary := ← withReader (TraversePart.inPart part) <| Genre.traverseInline Manual «meta».summary }
 
     pure <|
       if «meta» == startMeta then none

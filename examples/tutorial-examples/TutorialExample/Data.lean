@@ -11,7 +11,7 @@ open Verso.Genre.Manual.InlineLean
 #doc (Tutorial) "Inductive Types" =>
 %%%
 slug := "inductive-types"
-summary := "describes inductive types"
+summary := inlines!"describes inductive types"
 exampleStyle := .inlineLean `Data
 %%%
 
