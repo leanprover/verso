@@ -14,7 +14,7 @@ open Verso.Genre.Manual InlineLean
 #doc (Tutorial) "Using `Std.HashMap`" =>
 %%%
 slug := "hashmap"
-summary := "describes hash maps"
+summary := inlines!"describes hash maps"
 exampleStyle := .inlineLean `HashMap
 %%%
 
