@@ -27,7 +27,7 @@
     display: flex;
 }
 
-@media screen and (max-width: 700px) {
+@media screen and (max-width: 992px) {
     #highlight-controls {
         width: 100%;
         bottom: 0px;
@@ -46,7 +46,7 @@
     border: 1px solid #ddd;
 }
 
-@media screen and (max-width: 700px) {
+@media screen and (max-width: 992px) {
     /* Touch-friendly sizing */
     #highlight-prev,
     #highlight-next,
