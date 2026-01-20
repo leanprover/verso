@@ -12,3 +12,5 @@ _out
 *.hash
 profile.json
 profile.json.gz
+multi.json
+single.json
