@@ -209,7 +209,7 @@ def DeclType.ofName (c : Name)
               parentProjFns.mapIdxM fun i parentProj => do
                 let proj := mkApp (mkAppN (.const parentProj us) params) s
                 let type ← inferType proj >>= instantiateMVars
-                let projType ← withOptions (·.setInt `format.width 40 |>.setBool `pp.tagAppFns true) <| Widget.ppExprTagged type
+                let projType ← withOptions (·.set `format.width (40 : Int) |>.setBool `pp.tagAppFns true) <| Widget.ppExprTagged type
                 if let .const parentName _  := type.getAppFn then
                   pure ⟨parentProj, parentName, ← renderTagged none projType hlCtx, i⟩
                 else
@@ -222,8 +222,8 @@ def DeclType.ofName (c : Name)
               allFields.filterMapM fun fieldName => do
                 let proj ← mkProjection s fieldName
                 let type ← inferType proj >>= instantiateMVars
-                let type' ← withOptions (·.setInt `format.width 40 |>.setBool `pp.tagAppFns true) <| (Widget.ppExprTagged type)
-                let projType ← withOptions (·.setInt `format.width 40 |>.setBool `pp.tagAppFns true) <| ppExpr type
+                let type' ← withOptions (·.set `format.width (40 : Int) |>.setBool `pp.tagAppFns true) <| (Widget.ppExprTagged type)
+                let projType ← withOptions (·.set `format.width (40 : Int) |>.setBool `pp.tagAppFns true) <| ppExpr type
                 let fieldFrom? := findField? env c fieldName
                 let fieldPath? := fieldFrom? >>= (getStructurePathToBaseStructure? env · c)
                 let fieldFrom ← fieldPath?.getD [] |>.mapM (DocName.ofName (showUniverses := false))
