@@ -50,7 +50,8 @@ public def texContext [Monad m] : TeXT g m TeXContext := do
 public def header [Monad m] (name : TeX) : TeXT g m TeX := do
   let opts ← options
   let some i := opts.headerLevel
-    | logError s!"No more header nesting available at {name.asString}"; return \TeX{\textbf{\Lean{name}}}
+    | logError s!"No more header nesting available at {name.asString}"
+      return \TeX{\textcolor{"red"}{s!"Header nesting limit reached at {name.asString}"}}
   let header := opts.headerLevels[i]
   pure <| .raw (s!"\\{header}" ++ "{") ++ name ++ .raw "}"
 
