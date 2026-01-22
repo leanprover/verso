@@ -12,6 +12,7 @@ import Tests.HighlightedToTeX
 import Tests.HtmlEntities
 import Tests.Integration
 import Tests.Integration.SampleDoc
+import Tests.Integration.CodeContent
 import Tests.LeanCode
 import Tests.Integration.InheritanceDoc
 import Tests.ParserRegression

@@ -11,7 +11,9 @@ import VersoUtil.LzCompress
 import Tests
 
 structure Config where
+  verbose : Bool := false
   updateExpected : Bool := false
+  checkTeX : Bool := false
 
 open Verso.Search.Stemmer.Porter in
 def testStemmer (_ : Config) : IO Unit := do
@@ -37,8 +39,10 @@ Tests manual-genre TeX generation. `dir` is a subdirectory specific to a particu
 which is where actual output should go, and which contains the expected output directory.
 `doc` is the document to be rendered.
 -/
-def testTexOutput (dir : System.FilePath) (doc : Verso.Doc.VersoDoc Verso.Genre.Manual) :
-    Config →  IO Unit := fun config =>
+def testTexOutput
+    (dir : System.FilePath)
+    (doc : Verso.Doc.VersoDoc Verso.Genre.Manual)
+    (config : Config) : IO Unit := do
   let versoConfig : Verso.Genre.Manual.Config := {
     destination := "src/tests/integration" / dir / "output",
     emitTeX := true,
@@ -50,13 +54,13 @@ def testTexOutput (dir : System.FilePath) (doc : Verso.Doc.VersoDoc Verso.Genre.
     let logError (msg : String) := IO.eprintln msg
     ReaderT.run (emitTeX logError versoConfig doc.toPart) extension_impls%
 
-  Verso.Integration.runTests {
+  Verso.Integration.runTests { config with
     testDir := "src/tests/integration" / dir,
     updateExpected := config.updateExpected,
     runTest
   }
 
-def testZip (_ : Config) : IO Unit := do
+def testZip (cfg : Config) : IO Unit := do
   IO.println "Running zip tests with fixed files..."
   testExtract #[] .store
   testExtract #[] .deflate
@@ -74,16 +78,21 @@ def testZip (_ : Config) : IO Unit := do
     testExtract #[("T2.lean", me), ("other", bwd)] .store
     testExtract #[("T2.lean", me), ("other", bwd)] .deflate
   for _ in (0 : Nat)...10 do
-    IO.setRandSeed (← IO.monoNanosNow)
+    let seedValue ← IO.monoNanosNow
+    if cfg.verbose then IO.println s!"Seed is {seedValue}"
+    IO.setRandSeed seedValue
     let mut randFiles := #[]
     for _ in 0...(← IO.rand 0 15) do
       let name ← randName
       let size ← IO.rand 0 50000
       let content ← IO.getRandomBytes <| .ofNat size
       randFiles := randFiles.push (name, content)
-    IO.println s!"Running random zip test with {randFiles.size} files, sizes:"
-    for (x, y) in randFiles do
-      IO.println s!" * {x}: {y.size} bytes"
+    if cfg.verbose then
+      IO.println s!"Running random zip test with {randFiles.size} files, sizes:"
+      for (x, y) in randFiles do
+        IO.println s!" * {x}: {y.size} bytes"
+    else
+      IO.println s!"Running random zip test with {randFiles.size} files"
     testExtract randFiles .store
     testExtract randFiles .deflate
 
@@ -147,12 +156,15 @@ def tests := [
   testStemmer,
   testTexOutput "sample-doc" SampleDoc.doc,
   testTexOutput "inheritance-doc" InheritanceDoc.doc,
+  testTexOutput "code-content-doc" CodeContent.doc,
   testZip
 ]
 
 def getConfig (config : Config) : List String → IO Config
   | [] => pure config
   | "--update-expected" :: args => getConfig { config with updateExpected := true } args
+  | "--verbose" :: args | "-v" :: args => getConfig { config with verbose := true } args
+  | "--check-tex" :: args => getConfig { config with checkTeX := true } args
   | other :: _ => throw <| .userError s!"Didn't understand {other}"
 
 def main (args : List String) : IO UInt32 := do
