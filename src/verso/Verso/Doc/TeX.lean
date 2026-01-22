@@ -109,13 +109,14 @@ public def escapeForVerbatim (s : String) : String :=
 #eval escapeForVerbatim "{|}\\"
 
 /--
-Wraps some TeX (which is already assumed to be appropriately escaped in the approprate
+Wraps some TeX (which is already assumed to be appropriately escaped in the appropriate
 verbatim-like environment depending on whether we're in a fragile environment.
 -/
 public def verbatimInline [Monad m] [GenreTeX g m] (t : TeX) : TeXT g m Verso.Output.TeX := do
-  if (← texContext).inFragile
-  then pure (.seq #[.raw "\\texttt{", t, .raw "}"]) -- TODO: better escaping for texttt
-  else pure (.seq #[.raw "\\LeanVerb|", t, .raw "|"])
+  if (← texContext).inFragile then
+    pure (.seq #[.raw "\\texttt{", t, .raw "}"]) -- TODO: better escaping for texttt
+  else
+    pure (.seq #[.raw "\\LeanVerb|", t, .raw "|"])
 
 public partial defmethod Inline.toTeX [Monad m] [GenreTeX g m] : Inline g → TeXT g m TeX
   | .text str => pure <| .text str
@@ -142,9 +143,9 @@ public partial defmethod Block.toTeX [Monad m] [GenreTeX g m] : Block g → TeXT
   | .blockquote bs => do
     pure \TeX{\begin{quotation} \Lean{← bs.mapM Block.toTeX} \end{quotation}}
   | .ul items => do
-    pure \TeX{\begin{itemize} \Lean{← items.mapM fun li => do pure \TeX{\item " " \Lean{← li.contents.mapM Block.toTeX}}} \end{itemize} }
+    pure \TeX{\begin{itemize} \Lean{← items.mapM fun li => do pure \TeX{\item " " \Lean{← li.contents.mapM Block.toTeX} s!"\n"}} \end{itemize} }
   | .ol _start items => do -- TODO start numbering here
-    pure \TeX{\begin{enumerate} \Lean{← items.mapM fun li => do pure \TeX{\item " " \Lean{← li.contents.mapM Block.toTeX}}} \end{enumerate} }
+    pure \TeX{\begin{enumerate} \Lean{← items.mapM fun li => do pure \TeX{\item " " \Lean{← li.contents.mapM Block.toTeX} s!"\n"}}\end{enumerate} }
   | .dl items => do
     pure \TeX{\begin{description} \Lean{← items.mapM fun li => do pure \TeX{\item[\Lean{← li.term.mapM Inline.toTeX}] " " \Lean{← li.desc.mapM Block.toTeX}}} \end{description} }
   | .code content => do
