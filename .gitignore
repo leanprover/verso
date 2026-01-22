@@ -12,3 +12,9 @@ _out
 *.hash
 profile.json
 profile.json.gz
+/src/tests/integration/**/*.log
+/src/tests/integration/**/*.aux
+/src/tests/integration/**/*.out
+/src/tests/integration/**/*.pdf
+/src/tests/integration/**/*.toc
+

@@ -51,9 +51,15 @@ inline_extension Inline.lean (hls : Highlighted) via withHighlighting where
       saveExampleDefs id defs
       pure none
   toTeX :=
-    some <| fun go _ _ content => do
-      pure <| .seq <| ← content.mapM fun b => do
-        pure <| .seq #[← go b, .raw "\n"]
+    some <| fun _ _ data _ => do
+      let .arr #[hlJson, _] := data
+        | TeX.logError "Expected two-element JSON for Lean code" *> pure .empty
+      match FromJson.fromJson? hlJson with
+      | .error err =>
+        TeX.logError <| "Couldn't deserialize Lean code while rendering inline HTML: " ++ err
+        pure .empty
+      | .ok (hl : Highlighted) =>
+        hl.toTeX (g := Manual) (m := ReaderT ExtensionImpls IO)
   toHtml :=
     open Verso.Output.Html in
     some <| fun _ _ data _ => do

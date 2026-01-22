@@ -17,6 +17,8 @@ structure Config where
   updateExpected : Bool := false
   /-- How to run the test -/
   runTest : IO Unit
+  /-- Whether to see if lualatex builds the file -/
+  checkTeX : Bool
 
 /--
 Returns all non-directory filepaths that are children of `root`, which
@@ -86,5 +88,12 @@ def runTests (config : Config) : IO Unit := do
         IO.println s!"  Expected output differs from actual output"
         IO.println (Lean.Diff.linesToString d)
         throw <| .userError s!"Test in {config.testDir} failed"
+
+    if config.checkTeX then
+      discard <| IO.Process.run {
+        cwd := outputRoot / "tex",
+        cmd := "lualatex",
+        args := #["-halt-on-error", "-interaction=nonstopmode", "main.tex"]
+      }
 
   return
