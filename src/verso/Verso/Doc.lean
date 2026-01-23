@@ -167,6 +167,11 @@ public def Inline.other (container : genre.Inline) (content : Array (Inline genr
 
 public def Inline.empty : Inline genre := .concat #[]
 
+public def Inline.isEmpty : Inline genre → Bool
+  | .text s => s.isEmpty
+  | .concat xs => xs.attach.all fun ⟨x, _⟩ => x.isEmpty
+  | .code .. | .linebreak .. | .image .. | .link .. | .math .. | .other .. | .footnote .. | .bold .. | .emph .. => false
+
 public partial def Inline.rewriteOtherM [Monad m]
     (onInline :
       (Inline genre1 → m (Inline genre2)) →
@@ -445,6 +450,20 @@ public instance : Append (Lean.Doc.Block i b) where
   inferInstanceAs (Append (Lean.Doc.Block genre.Inline genre.Block))
 
 public def Block.empty : Block genre := .concat #[]
+
+public def Block.isEmpty : Block genre → Bool
+  | .concat xs | .blockquote xs => xs.attach.all fun ⟨x, _⟩ => x.isEmpty
+  | .para xs => xs.all (·.isEmpty)
+  | .code .. | .other ..=> false
+  | .ol _ xs | .ul xs => xs.attach.all fun ⟨⟨x⟩, _⟩ => x.attach.all fun ⟨y, _⟩ =>
+    y.isEmpty
+  | .dl xs => xs.attach.all fun ⟨⟨x, y⟩, _⟩ =>
+    (x.attach.all fun ⟨x', _⟩ => x'.isEmpty) && (y.attach.all fun ⟨y', _⟩ => y'.isEmpty)
+decreasing_by
+  all_goals (try decreasing_tactic)
+  all_goals
+    have := Array.sizeOf_lt_of_mem ‹_ ∈ xs›
+    grind
 
 public partial def Block.rewriteOtherM [Monad m]
     (onInline :
