@@ -1,13 +1,4 @@
-/-
-Copyright (c) 2023-2024 Lean FRO LLC. All rights reserved.
-Released under Apache 2.0 license as described in the file LICENSE.
-Author: David Thrane Christiansen
--/
-module
-namespace Verso.Genre.Manual.TeX
 
-public def preamble (title : String) (authors : List String) (date : String) (packages : List String) (extraPreamble : List String) : String :=
-r##"
 \documentclass{memoir}
 
 \usepackage{sourcecodepro}
@@ -88,9 +79,7 @@ fonttitle=\sffamily\fontsize{6pt}{7pt}\selectfont,
 boxed title style={top=-0.3mm,bottom=-0.3mm,left=-0.3mm,right=-0.3mm,boxrule=0.4pt},
 title={#2},#1}
 
-"## ++
-"\n".intercalate packages ++
-r##"
+
 \makechapterstyle{lean}{%
 \renewcommand*{\chaptitlefont}{\sffamily\HUGE}
 \renewcommand*{\chapnumfont}{\chaptitlefont}
@@ -116,12 +105,10 @@ r##"
 \renewcommand{\cftchapterpagefont}{\normalfont\sffamily}
 \renewcommand{\cftsectionpagefont}{\normalfont\sffamily}
 \setmonofont{DejaVu Sans Mono}
-"## ++
-"\n".intercalate extraPreamble ++
-r##"
-\title{\sffamily "## ++ title ++ r##"}
-\author{\sffamily "## ++ String.join (authors.intersperse r##" \and "##) ++ r##"}
-\date{\sffamily "## ++ date ++ r##"}
+
+\title{\sffamily Front Matter Test Document}
+\author{\sffamily Test Author}
+\date{\sffamily }
 
 \begin{document}
 
@@ -133,6 +120,51 @@ r##"
 
 \tableofcontents
 
-"##
 
-public def postamble : String := "\\end{document}"
+This is the introduction text that appears before any chapters.
+It should be part of the front matter.
+\chapter{Preface}
+
+This is an unnumbered preface section.
+It should appear in the front matter, before \LeanVerb|\symbol{92}mainmatter|.
+
+
+
+
+
+\mainmatter
+\chapter{Chapter One}
+
+This is the first numbered chapter.
+It should appear after \LeanVerb|\symbol{92}mainmatter|.
+
+
+
+
+\chapter{Chapter Two}
+
+This is the second numbered chapter.
+It should also appear after \LeanVerb|\symbol{92}mainmatter|.
+
+
+
+
+
+\backmatter
+\chapter{Acknowledgments}
+
+This is an unnumbered acknowledgments section at the end.
+It should appear in the back matter, after \LeanVerb|\symbol{92}backmatter|.
+
+
+
+
+\chapter{Index}
+
+This is an unnumbered index section.
+It should also appear in the back matter.
+
+
+
+
+\end{document}
