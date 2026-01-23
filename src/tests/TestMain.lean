@@ -42,11 +42,15 @@ which is where actual output should go, and which contains the expected output d
 def testTexOutput
     (dir : System.FilePath)
     (doc : Verso.Doc.VersoDoc Verso.Genre.Manual)
-    (config : Config) : IO Unit := do
+    (config : Config)
+    (extraFiles : List (System.FilePath × String) := [])
+    (extraFilesTeX : List (System.FilePath × String) := []) : IO Unit := do
   let versoConfig : Verso.Genre.Manual.Config := {
     destination := "src/tests/integration" / dir / "output",
     emitTeX := true,
-    emitHtmlMulti := .no
+    emitHtmlMulti := .no,
+    extraFiles,
+    extraFilesTeX
   }
 
   let runTest : IO Unit  :=
@@ -157,6 +161,9 @@ def tests := [
   testTexOutput "sample-doc" SampleDoc.doc,
   testTexOutput "inheritance-doc" InheritanceDoc.doc,
   testTexOutput "code-content-doc" CodeContent.doc,
+  testTexOutput "extra-files-doc" ExtraFilesDoc.doc
+    (extraFiles := [("src/tests/integration/extra-files-doc/test-data/shared", "shared")])
+    (extraFilesTeX := [("src/tests/integration/extra-files-doc/test-data/TeX-only", "TeX-only")]),
   testZip
 ]
 

@@ -57,6 +57,9 @@ def runTests (config : Config) : IO Unit := do
   let expectedRoot := config.testDir / "expected"
 
   if config.updateExpected then
+    unless ← System.FilePath.pathExists outputRoot do
+      IO.FS.createDirAll outputRoot
+      config.runTest
     let outputFiles := (← filesBelow outputRoot)
     IO.println s!"Updating expected outputs in {config.testDir}..."
     if ← System.FilePath.pathExists expectedRoot then do
@@ -64,7 +67,7 @@ def runTests (config : Config) : IO Unit := do
     copyFiles (outputFiles.map (fun p => (outputRoot / p, expectedRoot / p)))
   else
     unless ← System.FilePath.pathExists expectedRoot do
-      throw <| .userError s!"Expected output directory not found: {expectedRoot}"
+      IO.FS.createDirAll expectedRoot
     let expectedFiles := (← filesBelow expectedRoot)
 
     IO.println s!"Running test in {config.testDir}..."
