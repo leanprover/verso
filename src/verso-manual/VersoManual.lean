@@ -373,7 +373,11 @@ def emitTeX (logError : String → IO Unit) (config : Config) (text : Part Manua
     if config.verbose then
       IO.println s!"Saving {dir.join "main.tex"}"
     h.putStrLn (preamble text.titleString authors date packages.toList preambleItems.toList)
-    -- \frontmatter is inserted by our hardcoded preamble
+    -- \frontmatter is inserted by our hardcoded preamble before the ToC, so it doesn't get inserted
+    -- here. If there's any text at the start of the front matter, then we need to clear it to a new
+    -- recto page after the ToC
+    unless frontText.all (·.isEmpty) do
+      h.putStrLn "\\cleardoublepage"
     for b in frontMatter do
       h.putStrLn b.asString
     h.putStrLn "\n\\mainmatter"
