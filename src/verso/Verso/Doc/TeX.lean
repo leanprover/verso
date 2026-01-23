@@ -73,7 +73,7 @@ public class GenreTeX (genre : Genre) (m : Type → Type) where
   inline (inlineTeX : Inline genre → TeXT genre m TeX) (container : genre.Inline) (contents : Array (Inline genre)) : TeXT genre m TeX
 
 def escapeForTexHref (s : String) : String :=
-  s.replace "%" "\\%"
+  s |>.replace "%" r#"\%"# |>.replace "#" r##"\#"##
 
 /--
 Replaces characters with strings simultaneously.
