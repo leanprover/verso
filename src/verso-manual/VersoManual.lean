@@ -23,6 +23,7 @@ import MultiVerso
 
 import VersoManual.Basic
 import VersoManual.TeX
+import VersoManual.TeX.Config
 import VersoManual.Html
 import VersoManual.Html.Style
 import VersoManual.Draft
@@ -198,7 +199,8 @@ structure OutputConfig where
   verbose : Bool := false
 deriving ToJson, FromJson
 
-structure Config extends HtmlConfig, OutputConfig where
+structure Config extends HtmlConfig, TeXConfig, OutputConfig where
+  extraFiles : List (System.FilePath × String) := []
 
   maxTraversals : Nat := 20
 
@@ -342,6 +344,10 @@ def emitTeX (logError : String → IO Unit) (config : Config) (text : Part Manua
     for c in chapters do
       h.putStrLn c.asString
     h.putStrLn postamble
+  for (src, dest) in config.extraFiles do
+    copyRecursively logError src (dir.join dest)
+  for (src, dest) in config.extraFilesTeX do
+    copyRecursively logError src (dir.join dest)
 
 open Verso.Output (Html)
 
@@ -604,6 +610,8 @@ where
       h.putStrLn Html.Css.pageStyle
     for (src, dest) in config.extraFiles do
       copyRecursively logError src (dir.join dest)
+    for (src, dest) in config.extraFilesHtml do
+      copyRecursively logError src (dir.join dest)
     for f in state.extraJsFiles do
       ensureDir (dir.join "-verso-data")
       (dir / "-verso-data" / f.filename).parent |>.forM fun d => ensureDir d
@@ -674,6 +682,8 @@ where
     IO.FS.withFile (root / "book.css") .write fun h => do
       h.putStrLn Html.Css.pageStyle
     for (src, dest) in config.extraFiles do
+      copyRecursively logError src (root.join dest)
+    for (src, dest) in config.extraFilesHtml do
       copyRecursively logError src (root.join dest)
     state.writeFiles (root / "-verso-data")
 
