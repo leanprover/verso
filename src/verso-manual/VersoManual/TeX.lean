@@ -40,7 +40,7 @@ r##"
 % hyperref and also makes the link useful on paper. If already in a footnote, the URL is
 % in parentheses instead.
 \let\oldhref\href
-\RenewDocumentCommand{\href}{mm}{%
+\RenewDocumentCommand{\href}{vm}{%
   \ifinfootnote%
     #2~(\url{#1})%
   \else%
