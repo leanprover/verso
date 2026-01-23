@@ -23,6 +23,7 @@ import MultiVerso
 
 import VersoManual.Basic
 import VersoManual.TeX
+import VersoManual.TeX.Config
 import VersoManual.Html
 import VersoManual.Html.Style
 import VersoManual.Draft
@@ -198,7 +199,8 @@ structure OutputConfig where
   verbose : Bool := false
 deriving ToJson, FromJson
 
-structure Config extends HtmlConfig, OutputConfig where
+structure Config extends HtmlConfig, TeXConfig, OutputConfig where
+  extraFiles : List (System.FilePath × String) := []
 
   maxTraversals : Nat := 20
 
@@ -212,7 +214,7 @@ structure RenderConfig extends Config where
   /--
   How to insert links in rendered code
   -/
-  linkTargets : TraverseState → LinkTargets Manual.TraverseContext := TraverseState.localTargets
+  linkTargets : TraverseState → Multi.AllRemotes → LinkTargets Manual.TraverseContext := (·.localTargets ++ ·.remoteTargets)
 
 namespace Config
 
@@ -230,6 +232,21 @@ def addSearch (config : Config) : Config := { config with features := config.fea
 
 end Config
 
+namespace RenderConfig
+
+/--
+Adds a bundled version of KaTeX to the document.
+-/
+@[deprecated "Set the `features` field instead (though KaTeX is enabled by default, so this is probably not needed)" (since := "2025-11-12")]
+def addKaTeX (config : Config) : Config := { config with features := config.features.insert .KaTeX }
+
+/--
+Adds search dependencies to the configuration.
+-/
+@[deprecated "Set the `features` field instead (though search is enabled by default, so this is probably not needed)" (since := "2025-11-12")]
+def addSearch (config : Config) : Config := { config with features := config.features.insert .search }
+
+end RenderConfig
 
 /--
 Removes all parts that are specified as draft-only.
@@ -342,6 +359,10 @@ def emitTeX (logError : String → IO Unit) (config : Config) (text : Part Manua
     for c in chapters do
       h.putStrLn c.asString
     h.putStrLn postamble
+  for (src, dest) in config.extraFiles do
+    copyRecursively logError src (dir.join dest)
+  for (src, dest) in config.extraFilesTeX do
+    copyRecursively logError src (dir.join dest)
 
 open Verso.Output (Html)
 
@@ -570,7 +591,7 @@ where
     let opts : Html.Options IO := {logError := fun msg => logError msg}
     let ctxt := {logError}
     let definitionIds := state.definitionIds ctxt
-    let linkTargets := config.linkTargets state
+    let linkTargets := config.linkTargets state (← read)
     let titleHtml ← Html.seq <$> text.title.mapM (Manual.toHtml opts.lift ctxt state definitionIds linkTargets {})
     let introHtml ← Html.seq <$> text.content.mapM (Manual.toHtml opts.lift ctxt state definitionIds linkTargets {})
     let bookToc ← text.subParts.mapM (fun p => toc 0 opts (ctxt.inPart p) state definitionIds linkTargets p)
@@ -603,6 +624,8 @@ where
     IO.FS.withFile (dir.join "book.css") .write fun h => do
       h.putStrLn Html.Css.pageStyle
     for (src, dest) in config.extraFiles do
+      copyRecursively logError src (dir.join dest)
+    for (src, dest) in config.extraFilesHtml do
       copyRecursively logError src (dir.join dest)
     for f in state.extraJsFiles do
       ensureDir (dir.join "-verso-data")
@@ -660,7 +683,7 @@ where
     let opts : Html.Options IO := {logError := fun msg => logError msg}
     let ctxt := {logError}
     let definitionIds := state.definitionIds ctxt
-    let linkTargets := config.linkTargets state
+    let linkTargets := config.linkTargets state (← read)
     let toc ← text.subParts.toList.mapM fun p =>
       toc config.htmlDepth opts (ctxt.inPart p) state definitionIds linkTargets p
     let titleHtml ← Html.seq <$> text.title.mapM (Manual.toHtml opts.lift ctxt state definitionIds linkTargets {} ·)
@@ -674,6 +697,8 @@ where
     IO.FS.withFile (root / "book.css") .write fun h => do
       h.putStrLn Html.Css.pageStyle
     for (src, dest) in config.extraFiles do
+      copyRecursively logError src (root.join dest)
+    for (src, dest) in config.extraFilesHtml do
       copyRecursively logError src (root.join dest)
     state.writeFiles (root / "-verso-data")
 

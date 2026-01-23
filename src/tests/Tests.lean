@@ -13,6 +13,7 @@ import Tests.HtmlEntities
 import Tests.Integration
 import Tests.Integration.SampleDoc
 import Tests.Integration.CodeContent
+import Tests.Integration.ExtraFilesDoc
 import Tests.LeanCode
 import Tests.Integration.InheritanceDoc
 import Tests.ParserRegression
