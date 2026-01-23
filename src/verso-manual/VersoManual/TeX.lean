@@ -16,6 +16,7 @@ r##"
 
 \usepackage{fancyvrb}
 \usepackage{fvextra}
+\usepackage{xparse}
 
 \usepackage[most]{tcolorbox}
 
@@ -38,7 +39,8 @@ r##"
 % Redefines \href to show footnotes with URLs instead. This works around a page breaking bug in
 % hyperref and also makes the link useful on paper. If already in a footnote, the URL is
 % in parentheses instead.
-\renewcommand{\href}[2]{%
+\let\oldhref\href
+\RenewDocumentCommand{\href}{mm}{%
   \ifinfootnote%
     #2~(\url{#1})%
   \else%
