@@ -95,10 +95,26 @@ open Verso.Output Html in
 def Marginalia.html (content : Html) : Html :=
   {{<span class="marginalia"><span class="note">{{content}}</span></span>}}
 
+/-
+This is a slight misnomer as it is not literally rendered as a margin
+note, but rather a footnote. Nonetheless this code is here as it is
+the TeX/PDF analogue of the marginal notes that we render in HTML for
+bibliographic citations, and probably if there are other things that
+we wish to render as marginal notes in HTML, arguably it makes more
+stylistic sense to render them as footnotes in a fundamentally
+paginated format.
+-/
+open Verso.Output TeX in
+def Marginalia.TeX (content : TeX) : TeX :=
+  \TeX{ \footnote{ \Lean{ content } } }
+
 inline_extension Inline.margin where
   traverse _ _ _ := do
     pure none
-  toTeX := none
+  toTeX :=
+  open Verso.Output.TeX in
+  some <| fun goI _ _ content => do
+    pure <| Marginalia.TeX (← content.mapM goI)
   extraCss := [Marginalia.css]
   toHtml :=
     open Verso.Output.Html in

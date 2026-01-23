@@ -47,12 +47,20 @@ public def texContext [Monad m] : TeXT g m TeXContext := do
   let ⟨_, _, _, ctx⟩ ← read
   pure ctx
 
+private def mkHeader [Monad m] (opts : Options g m)
+    (level : Option (Fin opts.headerLevels.size)) (name : TeX) : TeXT g m TeX := do
+  let some i := level
+    | logError s!"No more header nesting available at {name.asString}"; return \TeX{\textbf{\Lean{name}}}
+  pure <| .raw (s!"\\{opts.headerLevels[i]}" ++ "{") ++ name ++ .raw "}"
+
+public def headerLevel [Monad m] (name : TeX) (level : Nat) : TeXT g m TeX := do
+  let opts ← options
+  let lev := if h : level < opts.headerLevels.size then some ⟨level, h⟩ else none
+  mkHeader opts lev name
+
 public def header [Monad m] (name : TeX) : TeXT g m TeX := do
   let opts ← options
-  let some i := opts.headerLevel
-    | logError s!"No more header nesting available at {name.asString}"; return \TeX{\textbf{\Lean{name}}}
-  let header := opts.headerLevels[i]
-  pure <| .raw (s!"\\{header}" ++ "{") ++ name ++ .raw "}"
+  mkHeader opts opts.headerLevel name
 
 public def inFragile [Monad m] (act : TeXT g m α) : TeXT g m α :=
   withReader (fun (opts, st, st', tctx) => (opts, st, st', { tctx with inFragile := true })) act
@@ -118,10 +126,13 @@ public def verbatimInline [Monad m] [GenreTeX g m] (t : TeX) : TeXT g m Verso.Ou
   else
     pure (.seq #[.raw "\\LeanVerb|", t, .raw "|"])
 
+public def makeLink (url : String) (content : TeX) : TeX :=
+  \TeX{\href{\Lean{.raw (escapeForTexHref url)}}{\Lean{content}}}
+
 public partial defmethod Inline.toTeX [Monad m] [GenreTeX g m] : Inline g → TeXT g m TeX
   | .text str => pure <| .text str
   | .link content dest => do
-    pure \TeX{\href{\Lean{.raw (escapeForTexHref dest)}}{\Lean{← content.mapM Inline.toTeX}}}
+    pure <| makeLink dest (← content.mapM Inline.toTeX)
   | .image _alt dest => do
     pure \TeX{\includegraphics{\Lean{.raw (toString (repr dest))}}} -- TODO link destinations
   | .footnote _name txt => do

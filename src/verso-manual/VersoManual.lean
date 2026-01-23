@@ -92,9 +92,18 @@ inline_extension Inline.ref (canonicalName : String) (domain : Option Name) (rem
     | .ok { resolvedDestination := some _, .. } | .ok { remote := some _, .. } =>
       pure none
   toTeX :=
-    some <| fun go _ _ content => do
-      pure <| .seq <| ← content.mapM fun b => do
-        pure <| .seq #[← go b, .raw "\n"]
+    open Verso.Output.TeX in
+    open Verso.Doc.TeX in
+    some <| fun go _ info content => do
+      match FromJson.fromJson? (α := RefInfo) info with
+      | .error e =>
+        TeX.logError e; content.mapM go
+      | .ok { canonicalName := name, domain, remote := none, resolvedDestination := none } =>
+        TeX.logError ("No destination found for tag '" ++ name ++ "' in " ++ toString domain); content.mapM go
+      | .ok { canonicalName := name, domain, remote := some remote, resolvedDestination := none } =>
+        TeX.logError ("No destination found for remote '" ++ remote ++ "' tag '" ++ name ++ "' in " ++ toString domain); content.mapM go
+      | .ok {resolvedDestination := some dest, ..} =>
+        pure <| makeLink dest (← content.mapM go)
   toHtml :=
     open Verso.Output.Html in
     some <| fun go _ info content => do

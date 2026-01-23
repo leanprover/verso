@@ -70,7 +70,7 @@ r##"
   {commandchars=\\\{\},fontsize=\small,breaklines=true}
 \DefineVerbatimEnvironment{FileVerbatim}{Verbatim}{commandchars=\\\{\},fontsize=\small,breaklines=true,frame=single,framesep=2mm,numbers=left}
 \CustomVerbatimCommand{\LeanVerb}{Verb}
-  {commandchars=\\\{\},fontsize=\small}
+  {commandchars=\\\{\},fontsize=\small,breaklines=true}
 \CustomVerbatimCommand{\FileListingVerb}{Verb}
   {commandchars=\\\{\},fontsize=\small,frame=single,framesep=2mm, numbers=left}
 

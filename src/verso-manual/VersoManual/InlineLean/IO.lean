@@ -181,7 +181,16 @@ end
 block_extension Block.exampleLeanFile (filename : String) where
   data := .str filename
   traverse _ _ _ := pure none
-  toTeX := none
+  toTeX :=
+  open Verso.Output.TeX in
+  some <| fun _ goB _ data blocks => do
+    let .str filename := data
+      | Verso.Doc.TeX.logError "Failed to deserialize filename from {data.compress} (expected a string)"
+        return .empty
+    let descr := \TeX{\texttt{\Lean{"File: " ++ filename} } }
+    pure <| .seq #[.raw "\\begin{FileVerbatim}[label={", descr, .raw "}]\n",
+    (← blocks.mapM goB), .raw "\n\\end{FileVerbatim}\n" ]
+
   extraCss := [exampleFileCss]
   toHtml := open Verso.Output Html in
     some <| fun _ goB _ data blocks => do
