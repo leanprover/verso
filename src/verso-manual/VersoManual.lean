@@ -319,6 +319,24 @@ def traverse (logError : String → IO Unit) (text : Part Manual) (config : Conf
   return (text, state)
 
 
+structure DividedDoc where
+  /-- Start text and leading unnumbered parts -/
+  frontMatter : Array (Doc.Block Manual) × Array (Part Manual)
+  /-- Numbered and unnumbered parts not at end -/
+  mainMatter : Array (Part Manual)
+  /-- Trailing unnumbered parts -/
+  backMatter : Array (Part Manual)
+
+def DividedDoc.ofPart (part : Part Manual) : DividedDoc :=
+  let leading := part.content
+  let prefaces := part.subParts.takeWhile isUnnumbered
+  let frontMatter := (leading, prefaces)
+  let rest := part.subParts.drop prefaces.size
+  let backMatter := rest |>.reverse |>.takeWhile isUnnumbered |>.reverse
+  let mainMatter := rest.extract 0 (rest.size - backMatter.size)
+  { frontMatter, mainMatter, backMatter }
+where
+  isUnnumbered (p : Part Manual) : Bool := p.metadata.map (·.number) |>.isEqSome false
 
 open IO.FS in
 def emitTeX (logError : String → IO Unit) (config : Config) (text : Part Manual) : ReaderT ExtensionImpls IO Unit := do
@@ -332,8 +350,11 @@ def emitTeX (logError : String → IO Unit) (config : Config) (text : Part Manua
   let date := text.metadata.bind (·.date) |>.getD ""
   let ctxt := {logError}
   let texCtxt := {}
-  let frontMatter ← text.content.mapM (·.toTeX (opts, ctxt, state, texCtxt))
-  let chapters ← text.subParts.mapM (·.toTeX (opts, ctxt, state, texCtxt))
+  let { frontMatter := (frontText, frontParts), mainMatter, backMatter } := DividedDoc.ofPart text
+  let frontMatter := (← frontText.mapM (·.toTeX (opts, ctxt, state, texCtxt)))
+  let frontMatter := frontMatter ++ (← frontParts.mapM (·.toTeX (opts, ctxt, state, texCtxt)))
+  let chapters ← mainMatter.mapM (·.toTeX (opts, ctxt, state, texCtxt))
+  let appendices ← backMatter.mapM (·.toTeX (opts, ctxt, state, texCtxt))
   let dir := config.destination.join "tex"
   ensureDir dir
   let mut packages : Std.HashSet String := {}
@@ -352,12 +373,20 @@ def emitTeX (logError : String → IO Unit) (config : Config) (text : Part Manua
     if config.verbose then
       IO.println s!"Saving {dir.join "main.tex"}"
     h.putStrLn (preamble text.titleString authors date packages.toList preambleItems.toList)
-    if frontMatter.size > 0 then
-      h.putStrLn "\\chapter*{Introduction}"
+    -- \frontmatter is inserted by our hardcoded preamble before the ToC, so it doesn't get inserted
+    -- here. If there's any text at the start of the front matter, then we need to clear it to a new
+    -- recto page after the ToC
+    unless frontText.all (·.isEmpty) do
+      h.putStrLn "\\cleardoublepage"
     for b in frontMatter do
       h.putStrLn b.asString
+    h.putStrLn "\n\\mainmatter"
     for c in chapters do
       h.putStrLn c.asString
+    unless appendices.all (·.isWhitespace) do
+      h.putStrLn "\n\\backmatter"
+      for a in appendices do
+        h.putStrLn a.asString
     h.putStrLn postamble
   for (src, dest) in config.extraFiles do
     copyRecursively logError src (dir.join dest)

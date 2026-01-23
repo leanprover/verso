@@ -106,8 +106,8 @@ title={#2},#1}
 \renewcommand{\cftsectionpagefont}{\normalfont\sffamily}
 \setmonofont{DejaVu Sans Mono}
 
-\title{\sffamily Title of the Doc}
-\author{\sffamily Harry Q. Bovik}
+\title{\sffamily Front Matter Test Document}
+\author{\sffamily Test Author}
 \date{\sffamily }
 
 \begin{document}
@@ -122,10 +122,50 @@ title={#2},#1}
 
 
 \cleardoublepage
-\begin{docstringBox}{structure}
-\LeanVerb|Verso.Integration.InheritanceDoc.FooExtends : Type|\tcblower Documentation for FooExtends\par\noindent\textbf{Constructor}\par \par \LeanVerb|Verso.Integration.InheritanceDoc.FooExtends.mk|\par\noindent\textbf{Extends}\par Verso.Integration.InheritanceDoc.FooExtends\par\noindent\textbf{Fields}\par \par \LeanVerb|barField1| : \LeanVerb|Bool|\par Inherited from \LeanVerb|BarExtended|\par \LeanVerb|barField2| : \LeanVerb|Unit|\par Inherited from \LeanVerb|BarExtended|\par \LeanVerb|fooField1| : \LeanVerb|Nat|\par Documentation for fooField1\par \LeanVerb|fooField2| : \LeanVerb|String|\par Documentation for fooField2
-\end{docstringBox}
+This is the introduction text that appears before any chapters.
+It should be part of the front matter.
+\chapter{Preface}
+
+This is an unnumbered preface section.
+It should appear in the front matter, before \LeanVerb|\symbol{92}mainmatter|.
+
+
+
 
 
 \mainmatter
+\chapter{Chapter One}
+
+This is the first numbered chapter.
+It should appear after \LeanVerb|\symbol{92}mainmatter|.
+
+
+
+
+\chapter{Chapter Two}
+
+This is the second numbered chapter.
+It should also appear after \LeanVerb|\symbol{92}mainmatter|.
+
+
+
+
+
+\backmatter
+\chapter{Acknowledgments}
+
+This is an unnumbered acknowledgments section at the end.
+It should appear in the back matter, after \LeanVerb|\symbol{92}backmatter|.
+
+
+
+
+\chapter{Index}
+
+This is an unnumbered index section.
+It should also appear in the back matter.
+
+
+
+
 \end{document}

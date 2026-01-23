@@ -133,7 +133,6 @@ r##"
 
 \tableofcontents
 
-\mainmatter
 "##
 
 public def postamble : String := "\\end{document}"
