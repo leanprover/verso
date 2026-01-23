@@ -31,7 +31,9 @@ inline_extension Inline.draft where
       pure none
     else
       pure (some <| .concat #[])
-  toTeX := none
+  toTeX :=
+    some <| fun go _ _ content => do
+      content.mapM go
   toHtml :=
     open Verso.Output.Html in
     some <| fun go _ _ content => do
@@ -43,7 +45,9 @@ block_extension Block.draft where
       pure none
     else
       pure (some <| .concat #[])
-  toTeX := none
+  toTeX :=
+    some <| fun _ goB _ _ content => do
+      content.mapM goB
   toHtml :=
     open Verso.Output.Html in
     some <| fun _ goB _ _ content => do

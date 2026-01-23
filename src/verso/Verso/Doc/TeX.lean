@@ -47,6 +47,14 @@ public def texContext [Monad m] : TeXT g m TeXContext := do
   let ⟨_, _, _, ctx⟩ ← read
   pure ctx
 
+-- FIXME: would like `header` to call this, but how to best
+-- streamline error handling to avoid making two redundant checks?
+public def headerLevel [Monad m] (name : TeX) (level : Nat) : TeXT g m TeX := do
+  let opts ← options
+  let some header := opts.headerLevels[level]?
+    | logError s!"No more header nesting available at {name.asString}"; return \TeX{\textbf{\Lean{name}}}
+  pure <| .raw (s!"\\{header}" ++ "{") ++ name ++ .raw "}"
+
 public def header [Monad m] (name : TeX) : TeXT g m TeX := do
   let opts ← options
   let some i := opts.headerLevel
@@ -118,10 +126,13 @@ public def verbatimInline [Monad m] [GenreTeX g m] (t : TeX) : TeXT g m Verso.Ou
   else
     pure (.seq #[.raw "\\LeanVerb|", t, .raw "|"])
 
+public def makeLink (url : String) (content : TeX) : TeX :=
+  \TeX{\href{\Lean{.raw (escapeForTexHref url)}}{\Lean{content}}}
+
 public partial defmethod Inline.toTeX [Monad m] [GenreTeX g m] : Inline g → TeXT g m TeX
   | .text str => pure <| .text str
   | .link content dest => do
-    pure \TeX{\href{\Lean{.raw (escapeForTexHref dest)}}{\Lean{← content.mapM Inline.toTeX}}}
+    pure <| makeLink dest (← content.mapM Inline.toTeX)
   | .image _alt dest => do
     pure \TeX{\includegraphics{\Lean{.raw (toString (repr dest))}}} -- TODO link destinations
   | .footnote _name txt => do

@@ -75,12 +75,42 @@ where
           .empty
       {{<section>{{hdrHtml}}{{paragraphedHtml txt}}</section>}}
 
+open Verso.Output.TeX in
+def LicenseInfo.toTeX [Monad m] [Doc.TeX.GenreTeX g m] (license : LicenseInfo) (headerLevel : Nat) :
+    Doc.TeX.TeXT g m TeX := do
+  let {identifier, dependency, howUsed, link, text} := license
+  let secHeader ← (Verso.Doc.TeX.headerLevel dependency headerLevel)
+  pure \TeX{
+   \Lean{secHeader}
+   \Lean{link.map (fun url => Verso.Doc.TeX.makeLink url url ++ .raw "\\par\n") |>.getD .empty}
+   \Lean{(howUsed |>.getD "")}
+   \par
+   \texttt{ \Lean{identifier} }
+   \par
+   \Lean{ ← text.mapM textTeX }
+  }
+where
+  textTeX
+    | (hdr?, txt) => do
+    let secHeader ←
+      if let some hdr := hdr? then
+        Verso.Doc.TeX.headerLevel hdr (headerLevel+1)
+      else
+        pure TeX.empty
+    pure \TeX{ \Lean{secHeader} \Lean{txt} }
+
 public section
 
 block_extension Block.licenseInfo where
   traverse _ _ _ := do
     pure none
-  toTeX := some <| fun _ _ _ _ _ => pure .empty
+  toTeX := open Verso.Output.TeX in
+    some <| fun _ _ _ _ _ => do
+      let ⟨_, ctx, state, _⟩ := (← read)
+      let headerLevel := ctx.headers.size + 1
+      let allLicenses := state.licenseInfo.toArray
+      let allLicenses := allLicenses.qsort (·.dependency.trimAscii.copy.toLower < ·.dependency.trimAscii.copy.toLower)
+      allLicenses.mapM (·.toTeX headerLevel)
   toHtml :=
     open Verso.Output.Html in
     some <| fun _ _ _ _ _ => do
