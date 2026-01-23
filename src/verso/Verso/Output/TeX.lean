@@ -52,24 +52,6 @@ namespace TeX
 /-- The empty TeX document -/
 public def empty : TeX := .seq #[]
 
-/-- Checks whether the document is equivalent to the empty string. -/
-public partial def isEmpty : TeX → Bool
-  | .seq xs => xs.all isEmpty
-  | .paragraphBreak => false
-  | .environment .. => false
-  | .command .. => false
-  | .text s => s.isEmpty
-  | .raw s => s.isEmpty
-
-/-- Checks whether the document contains only whitespace. -/
-public partial def isWhitespace : TeX → Bool
-  | .seq xs => xs.all isWhitespace
-  | .paragraphBreak => true
-  | .environment .. => false
-  | .command .. => false
-  | .text s => s.all Char.isWhitespace
-  | .raw s => s.all Char.isWhitespace
-
 /-- Converts a TeX document to a string to be processed by LaTeX -/
 public partial def asString (doc : TeX) : String :=
   match doc with
