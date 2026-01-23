@@ -7,9 +7,38 @@
 
 \usepackage{fancyvrb}
 \usepackage{fvextra}
+\usepackage{xparse}
 
 \usepackage[most]{tcolorbox}
-\usepackage{hyperref}
+
+% Detect whether we're in a footnote. This is used later to avoid \href rendering bugs.
+\newif\ifinfootnote
+\infootnotefalse
+
+\let\oldfootnote\footnote
+\renewcommand{\footnote}[1]{%
+  \oldfootnote{\infootnotetrue#1\infootnotefalse}%
+}
+
+\let\oldfootnotetext\footnotetext
+\renewcommand{\footnotetext}[1]{%
+  \oldfootnotetext{\infootnotetrue#1\infootnotefalse}%
+}
+
+\usepackage[breaklinks=true, hyperfootnotes=false]{hyperref}
+
+% Redefines \href to show footnotes with URLs instead. This works around a page breaking bug in
+% hyperref and also makes the link useful on paper. If already in a footnote, the URL is
+% in parentheses instead.
+\let\oldhref\href
+\RenewDocumentCommand{\href}{vm}{%
+  \ifinfootnote%
+    #2~(\url{#1})%
+  \else%
+    #2\footnote{\url{#1}}%
+  \fi%
+}
+
 \usepackage[normalem]{ulem}
 \newcommand{\coloredwave}[2]{\textcolor{#1}{\uwave{\textcolor{black}{#2}}}}
 \usepackage{newunicodechar}
@@ -19,6 +48,8 @@
 % DejaVu Sans Mono Oblique. \textup
 % is fontspec for "upright, not italic/oblique".
 \newunicodechar{✝}{\textup{✝}}
+% Work around missing U+2011 (non-breaking hyphen) in Source Serif Pro
+\newunicodechar{‑}{-}
 
 \definecolor{errorColor}{HTML}{ff0000}
 \definecolor{infoColor}{HTML}{007f00}

@@ -131,7 +131,7 @@ public partial defmethod Inline.toTeX [Monad m] [GenreTeX g m] : Inline g → Te
     pure \TeX{\emph{\Lean{← content.mapM toTeX}}}
   | .bold content => do
     pure \TeX{\textbf{\Lean{← content.mapM toTeX}}}
-  | .code str => verbatimInline (escapeForVerbatim str)
+  | .code str => verbatimInline (.raw <| escapeForVerbatim str)
   | .math .inline str => pure <| .raw s!"${str}$"
   | .math .display str => pure <| .raw s!"\\[{str}\\]"
   | .concat inlines => inlines.mapM toTeX
