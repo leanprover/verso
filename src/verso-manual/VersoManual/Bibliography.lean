@@ -127,19 +127,27 @@ def Citable.tag (c : Citable) : Slug :=
 
 def Citable.sortKey (c : Citable) := c.authors.map slugString |>.foldr (init := s!" {c.year}") (· ++ ", " ++ ·)
 
+/--
+Returns a human-readable formatted list of authors in HTML, panics if the array is empty.
+-/
 private def andList (xs : Array Html) : Html :=
-  if h : xs.size = 1 then xs[0]
+  if h : xs.size = 0 then panic! "tried to construct empty list of authors"
+  else if h : xs.size = 1 then xs[0]
   else if h : xs.size = 2 then xs[0] ++ " and " ++ xs[1]
   else
     open Html in
-    (xs.extract 0 (xs.size - 1)).foldr (init := {{" and " {{xs.back!}} }}) (· ++ ", " ++ ·)
+    (xs.extract 0 (xs.size - 1)).foldr (init := {{" and " {{xs.back}} }}) (· ++ ", " ++ ·)
 
+/--
+Returns a human-readable formatted list of authors in TeX, panics if the array is empty.
+-/
 private def andListTeX (xs : Array TeX) : TeX :=
-  if h : xs.size = 1 then xs[0]
+  if h : xs.size = 0 then panic! "tried to construct empty list of authors"
+  else if h : xs.size = 1 then xs[0]
   else if h : xs.size = 2 then xs[0] ++ " and " ++ xs[1]
   else
     open TeX in
-    (xs.extract 0 (xs.size - 1)).foldr (init := \TeX{" and " \Lean{xs.back!} }) (· ++ ", " ++ ·)
+    (xs.extract 0 (xs.size - 1)).foldr (init := \TeX{" and " \Lean{xs.back} }) (· ++ ", " ++ ·)
 
 partial def Bibliography.lastName (inl : Doc.Inline Manual) : Doc.Inline Manual :=
   let ws := words inl
