@@ -75,42 +75,17 @@ where
           .empty
       {{<section>{{hdrHtml}}{{paragraphedHtml txt}}</section>}}
 
-open Verso.Output.TeX in
-def LicenseInfo.toTeX [Monad m] [Doc.TeX.GenreTeX g m] (license : LicenseInfo) (headerLevel : Nat) :
-    Doc.TeX.TeXT g m TeX := do
-  let {identifier, dependency, howUsed, link, text} := license
-  let secHeader ← (Verso.Doc.TeX.headerLevel dependency headerLevel)
-  pure \TeX{
-   \Lean{secHeader}
-   \Lean{link.map (fun url => Verso.Doc.TeX.makeLink url url ++ .raw "\\par\n") |>.getD .empty}
-   \Lean{(howUsed |>.getD "")}
-   \par
-   \texttt{ \Lean{identifier} }
-   \par
-   \Lean{ ← text.mapM textTeX }
-  }
-where
-  textTeX
-    | (hdr?, txt) => do
-    let secHeader ←
-      if let some hdr := hdr? then
-        Verso.Doc.TeX.headerLevel hdr (headerLevel+1)
-      else
-        pure TeX.empty
-    pure \TeX{ \Lean{secHeader} \Lean{txt} }
-
 public section
 
 block_extension Block.licenseInfo where
   traverse _ _ _ := do
     pure none
+  /- The TeX output is intentionally empty. As we are not distributing code in the PDF, we don't believe
+  we have incur any obligation under the relevant licenses. Reconsider if we ever
+  find ourselves trying to embed js functionality in generated PDFs using open-source
+  libraries. -/
   toTeX := open Verso.Output.TeX in
-    some <| fun _ _ _ _ _ => do
-      let ⟨_, ctx, state, _⟩ := (← read)
-      let headerLevel := ctx.headers.size + 1
-      let allLicenses := state.licenseInfo.toArray
-      let allLicenses := allLicenses.qsort (·.dependency.trimAscii.copy.toLower < ·.dependency.trimAscii.copy.toLower)
-      allLicenses.mapM (·.toTeX headerLevel)
+    some <| fun _ _ _ _ _ => pure .empty
   toHtml :=
     open Verso.Output.Html in
     some <| fun _ _ _ _ _ => do
