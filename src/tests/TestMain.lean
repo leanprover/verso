@@ -153,7 +153,7 @@ def testBlog (_ : Config) : IO Unit := do
   if fails > 0 then
     throw <| .userError s!"{fails} blog tests failed"
 
-open Verso.Integration ExtraFilesDoc in
+open Verso.Integration in
 def tests := [
   testSerialization,
   testBlog,
@@ -161,9 +161,9 @@ def tests := [
   testTexOutput "sample-doc" SampleDoc.doc,
   testTexOutput "inheritance-doc" InheritanceDoc.doc,
   testTexOutput "code-content-doc" CodeContent.doc,
-  fun cfg => testTexOutput "extra-files-doc" ExtraFilesDoc.doc cfg
-    [("src/tests/integration/extra-files-doc/test-data/shared", "shared")]
-    [("src/tests/integration/extra-files-doc/test-data/TeX-only", "TeX-only")],
+  testTexOutput "extra-files-doc" ExtraFilesDoc.doc
+    (extraFiles := [("src/tests/integration/extra-files-doc/test-data/shared", "shared")])
+    (extraFilesTeX := [("src/tests/integration/extra-files-doc/test-data/TeX-only", "TeX-only")]),
   testZip
 ]
 
