@@ -444,6 +444,7 @@ public def page
         <link rel="stylesheet" href="-verso-search/search-box.css"/>
         <link rel="stylesheet" href="-verso-search/search-highlight.css"/>
         <link rel="stylesheet" href="-verso-search/domain-display.css"/>
+        <script src="theme-toggle.js"></script>
         {{extraJsFiles.map fun f => ({{<script src=s!"{f.1}" {{if f.2 then defer else #[]}}></script>}})}}
         {{extraStylesheets.map (fun url => {{<link rel="stylesheet" href={{url}}/> }})}}
         {{extraCss.toArray.map ({{<style>{{Html.text false ·.css}}</style>}})}}
@@ -465,6 +466,7 @@ public def page
           <div class="header-title-wrapper">
             <a href={{if let some dest := logoLink then dest else "/"}} class="header-title"><h1>{{bookTitle}}</h1></a>
           </div>
+          <button id="theme-toggle" type="button" aria-label="Toggle dark mode"></button>
         </header>
         <label for="toggle-toc" id="toggle-toc-click">
           <span class="line line1"/>
