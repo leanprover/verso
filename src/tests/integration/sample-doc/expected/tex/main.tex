@@ -61,7 +61,7 @@
   {commandchars=\\\{\},fontsize=\small,breaklines=true}
 \DefineVerbatimEnvironment{FileVerbatim}{Verbatim}{commandchars=\\\{\},fontsize=\small,breaklines=true,frame=single,framesep=2mm,numbers=left}
 \CustomVerbatimCommand{\LeanVerb}{Verb}
-  {commandchars=\\\{\},fontsize=\small}
+  {commandchars=\\\{\},fontsize=\small,breaklines=true}
 \CustomVerbatimCommand{\FileListingVerb}{Verb}
   {commandchars=\\\{\},fontsize=\small,frame=single,framesep=2mm, numbers=left}
 
@@ -128,6 +128,7 @@ Here's when a \LeanVerb|code inline|
 occurs right before a line break.And then here's a paragraph break.
 \end{docstringBox}
 
+Here is a test of \LeanVerb|escaping of things like \symbol{92}TeX in code inlines|
 
 \mainmatter
 \end{document}

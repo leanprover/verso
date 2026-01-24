@@ -80,7 +80,12 @@ public section
 block_extension Block.licenseInfo where
   traverse _ _ _ := do
     pure none
-  toTeX := some <| fun _ _ _ _ _ => pure .empty
+  /- The TeX output is intentionally empty. As we are not distributing code in the PDF, we don't believe
+  we have incur any obligation under the relevant licenses. Reconsider if we ever
+  find ourselves trying to embed js functionality in generated PDFs using open-source
+  libraries. -/
+  toTeX := open Verso.Output.TeX in
+    some <| fun _ _ _ _ _ => pure .empty
   toHtml :=
     open Verso.Output.Html in
     some <| fun _ _ _ _ _ => do
