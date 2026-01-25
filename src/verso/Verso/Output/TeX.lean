@@ -221,7 +221,7 @@ private def toHex (n : Nat) : String := Id.run do
 open Multi in
 /--
 Converts a slug to a valid LaTeX label, which may contain only letters 'a'-'Z' or 'A'-'Z', numbers
-'0'-'9', and hyphen. Hyphens are used to encode other characters (including hyphen itself) as their
+'0'-'9', and hyphen. Hyphens are encoded as "--", and are used to encode other characters as their
 hex code.
 -/
 public def labelForTeX (slug : Slug) : String := Id.run do
@@ -229,6 +229,8 @@ public def labelForTeX (slug : Slug) : String := Id.run do
   for c in slug.toString.chars do
     if c.isAlphanum then
       out := out.push c
+    else if c == '-' then
+      out := out |>.push '-' |>.push '-'
     else
       out := out ++ s!"-{toHex c.toNat}"
   return out
