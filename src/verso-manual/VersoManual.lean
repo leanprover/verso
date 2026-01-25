@@ -69,13 +69,13 @@ private structure RefInfo where
   canonicalName : String
   domain : Option Name
   remote : Option String
-  resolvedDestination : Option String := none
+  resolvedDestination : Option Link := none
 deriving BEq, ToJson, FromJson
 
 defmethod Part.htmlToc (part : Part Manual) : Bool :=
   part.metadata.map (·.htmlToc) |>.getD true
 
-inline_extension Inline.ref (canonicalName : String) (domain : Option Name) (remote : Option String) (resolvedDestination : Option String := none) where
+inline_extension Inline.ref (canonicalName : String) (domain : Option Name) (remote : Option String) (resolvedDestination : Option Link := none) where
   data := ToJson.toJson (RefInfo.mk canonicalName domain remote resolvedDestination)
   traverse := fun _ info content => do
     match FromJson.fromJson? (α := RefInfo) info with
@@ -86,7 +86,7 @@ inline_extension Inline.ref (canonicalName : String) (domain : Option Name) (rem
       match (← get).resolveDomainObject domain name with
       | .error _ => return none
       | .ok dest =>
-        return some <| .other (Inline.ref name (some domain) none (some dest.link)) content
+        return some <| .other (Inline.ref name (some domain) none (some dest)) content
     | .ok { canonicalName := name, domain := none, remote := some remote, resolvedDestination := none } =>
       return some <| .other (Inline.ref name (some sectionDomain) (some remote) none) content
     | .ok { resolvedDestination := some _, .. } | .ok { remote := some _, .. } =>
@@ -102,8 +102,15 @@ inline_extension Inline.ref (canonicalName : String) (domain : Option Name) (rem
         TeX.logError ("No destination found for tag '" ++ name ++ "' in " ++ toString domain); content.mapM go
       | .ok { canonicalName := name, domain, remote := some remote, resolvedDestination := none } =>
         TeX.logError ("No destination found for remote '" ++ remote ++ "' tag '" ++ name ++ "' in " ++ toString domain); content.mapM go
-      | .ok {resolvedDestination := some dest, ..} =>
-        pure <| makeLink dest (← content.mapM go)
+      | .ok {resolvedDestination := some dest, remote, ..} =>
+        if remote.isSome then
+          -- Inter-document links should be URLs
+          pure <| makeLink dest.link (← content.mapM go)
+        else
+          -- Intra-document links should be page references
+          let label := labelForTeX dest.htmlId
+          pure \TeX{\autoref{\Lean{label}}" (p."~\pageref{\Lean{label}} ")"}
+
   toHtml :=
     open Verso.Output.Html in
     some <| fun go _ info content => do
@@ -131,7 +138,7 @@ inline_extension Inline.ref (canonicalName : String) (domain : Option Name) (rem
         -- If any error was logged, just don't emit a link
         content.mapM go
       | .ok {resolvedDestination := some dest, ..} =>
-        pure {{<a href={{dest}}>{{← content.mapM go}}</a>}}
+        pure {{<a href={{dest.link}}>{{← content.mapM go}}</a>}}
 
 section
 open Lean
@@ -361,9 +368,11 @@ def emitTeX (logError : String → IO Unit) (config : Config) (text : Part Manua
   let texCtxt := {}
   let { frontMatter := (frontText, frontParts), mainMatter, backMatter } := DividedDoc.ofPart text
   let frontMatter := (← frontText.mapM (·.toTeX (opts, ctxt, state, texCtxt)))
-  let frontMatter := frontMatter ++ (← frontParts.mapM (·.toTeX (opts, ctxt, state, texCtxt)))
-  let chapters ← mainMatter.mapM (·.toTeX (opts, ctxt, state, texCtxt))
-  let appendices ← backMatter.mapM (·.toTeX (opts, ctxt, state, texCtxt))
+  -- Passing `none` as the label is fine here because traversal has assigned labels already so
+  -- there's no need for a fallback.
+  let frontMatter := frontMatter ++ (← frontParts.mapM (·.toTeX none (opts, ctxt, state, texCtxt)))
+  let chapters ← mainMatter.mapM (·.toTeX none (opts, ctxt, state, texCtxt))
+  let appendices ← backMatter.mapM (·.toTeX none (opts, ctxt, state, texCtxt))
   let dir := config.destination.join "tex"
   ensureDir dir
   let mut packages : Std.HashSet String := {}
