@@ -17,4 +17,6 @@ profile.json.gz
 /src/tests/integration/**/*.out
 /src/tests/integration/**/*.pdf
 /src/tests/integration/**/*.toc
-
+multi.json
+single.json
+*.html
