@@ -60,9 +60,9 @@ r##"
 % Work around missing U+2011 (non-breaking hyphen) in Source Serif Pro
 \newunicodechar{‑}{-}
 
-\definecolor{errorColor}{HTML}{ff0000}
-\definecolor{infoColor}{HTML}{007f00}
-\definecolor{warningColor}{HTML}{0000ff}
+\definecolor{errorColor}{HTML}{B91C1C}
+\definecolor{infoColor}{HTML}{1E6BB8}
+\definecolor{warningColor}{HTML}{D97706}
 \newcommand{\errorDecorate}[1]{\coloredwave{errorColor}{#1}}
 \newcommand{\infoDecorate}[1]{\coloredwave{infoColor}{#1}}
 \newcommand{\warningDecorate}[1]{\coloredwave{warningColor}{#1}}
@@ -73,6 +73,26 @@ r##"
   {commandchars=\\\{\},fontsize=\small,breaklines=true}
 \CustomVerbatimCommand{\FileListingVerb}{Verb}
   {commandchars=\\\{\},fontsize=\small,frame=single,framesep=2mm, numbers=left}
+
+%%% Trace messages
+\newlength{\traceindent}
+\setlength{\traceindent}{1.5em}
+
+\newcommand{\expandedIndicator}{$\blacktriangledown$\hspace{2pt}}
+\newcommand{\collapsedIndicator}{$\blacktriangleright$\hspace{2pt}}
+
+\newenvironment{expandedtrace}[1]{%
+  \par\noindent\expandedIndicator #1\par
+  \advance\leftskip by \traceindent
+}{%
+}
+
+\newenvironment{collapsedtrace}[1]{%
+  \par\noindent\collapsedIndicator #1\par
+  \advance\leftskip by \traceindent
+}{%
+}
+%%% End Trace messages
 
 \definecolor{bordercolor}{HTML}{98B2C0}
 \definecolor{medgray}{HTML}{555555}

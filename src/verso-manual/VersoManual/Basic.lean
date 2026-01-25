@@ -1430,7 +1430,13 @@ instance : Traverse Manual TraverseM where
 
 open Verso.Output.TeX in
 instance : TeX.GenreTeX Manual (ReaderT ExtensionImpls IO) where
-  part go _meta txt := go txt
+  part go metadata txt := do
+    let st ← TeX.state
+    let label? := do
+      let id ← metadata.id
+      let link ← st.externalTags[id]?
+      pure <| labelForTeX link.htmlId
+    go txt label?
   block goI goB b content := do
     let some id := b.id
       | panic! s!"Block {b.name} wasn't assigned an ID during traversal"

@@ -63,7 +63,7 @@ block_extension Block.literateDocstringPart (level : Nat) where
           Verso.Doc.TeX.logError s!"Expected a block at the beginning of a docstring section"
           pure .empty
       let contents := contents.extract 1
-      let sectionHeader ← Doc.TeX.headerLevel title level
+      let sectionHeader ← Doc.TeX.headerLevel title level none
       pure <| (sectionHeader ++ (← contents.mapM goB))
 
 instance : LoadLiterate Manual where
