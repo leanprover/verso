@@ -8,6 +8,7 @@ public import Lean.Elab.Term
 meta import Lean.Elab.Term
 public meta import Lean.Meta.Hint
 import Lean.Meta.Hint
+public import MultiVerso.Slug
 
 open Lean
 
@@ -99,6 +100,7 @@ scoped syntax "\\Lean{" term "}" : tex
 scoped syntax "\\begin{" macro_name "}" ("[" tex* "]")* ("{" tex* "}")* tex* "\\end{" macro_name "}" : tex
 scoped syntax "\\" macro_name ("[" tex* "]")* ("{" tex* "}")* : tex
 scoped syntax "s!" interpolatedStr(term) : tex
+scoped syntax "~" : tex
 
 scoped syntax str : tex
 end
@@ -151,6 +153,8 @@ meta partial def elabTeX (stx : TSyntax `tex) : TermElabM Expr := withRef stx do
         Meta.mkAppM ``TeX.seq #[arg]
     let req ← Meta.mkArrayLit (.const ``TeX []) req.toList
     Meta.mkAppM ``TeX.command #[toExpr command.macroName, opt, req]
+  | `(tex|~) => do
+    Meta.mkAppM ``TeX.raw #[toExpr "~"]
   | stx =>
     throwUnsupportedSyntax
 
@@ -194,3 +198,37 @@ info: Verso.Output.TeX.environment
 -/
 #guard_msgs in
 #eval repr <| \TeX{\begin{Verbatim}{s!"commandChars=\\\\"}"Hello, " \textbf{"world"}\end{Verbatim}}
+
+private def hexDigits := "0123456789ABCDEF".toList.toArray
+
+@[grind =, simp]
+theorem hexDigits_size : hexDigits.size = 16 := by decide
+
+private def toHex (n : Nat) : String := Id.run do
+  let mut n := n
+  let mut digits := #[]
+  repeat
+    if h : n < 16 then
+      digits := digits.push hexDigits[n]
+      break
+    else
+      digits := digits.push <| hexDigits[n % 16]'(by grind)
+      n := n >>> 4
+  -- Pad
+  let padding := (4 - digits.size).fold (init := "") (fun _ _ p => p.push '0')
+  digits.foldr (init := padding) fun c s => s.push c
+
+open Multi in
+/--
+Converts a slug to a valid LaTeX label, which may contain only letters 'a'-'Z' or 'A'-'Z', numbers
+'0'-'9', and hyphen. Hyphens are used to encode other characters (including hyphen itself) as their
+hex code.
+-/
+public def labelForTeX (slug : Slug) : String := Id.run do
+  let mut out := ""
+  for c in slug.toString.chars do
+    if c.isAlphanum then
+      out := out.push c
+    else
+      out := out ++ s!"-{toHex c.toNat}"
+  return out

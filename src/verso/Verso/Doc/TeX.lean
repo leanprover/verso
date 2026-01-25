@@ -40,6 +40,9 @@ public instance [Monad m] [Inhabited α] : Inhabited (TeXT g m α) := ⟨pure de
 public def options [Monad m] : TeXT g m (Options g m) := do
   pure (← read).fst
 
+public def state [Monad m] : TeXT g m g.TraverseState := do
+  pure (← read).2.2.1
+
 public def logError [Monad m] (message : String) : TeXT g m Unit := do
   (← options).logError message
 
@@ -48,19 +51,20 @@ public def texContext [Monad m] : TeXT g m TeXContext := do
   pure ctx
 
 private def mkHeader [Monad m] (opts : Options g m)
-    (level : Option (Fin opts.headerLevels.size)) (name : TeX) : TeXT g m TeX := do
+    (level : Option (Fin opts.headerLevels.size)) (name : TeX) (label : Option String) : TeXT g m TeX := do
   let some i := level
     | logError s!"No more header nesting available at {name.asString}"; return \TeX{\textbf{\Lean{name}}}
-  pure <| .raw (s!"\\{opts.headerLevels[i]}" ++ "{") ++ name ++ .raw "}"
+  let label := label.map (\TeX{\label{\Lean{.raw ·}}}) |>.getD .empty
+  pure <| .raw (s!"\\{opts.headerLevels[i]}" ++ "{") ++ name ++ .raw "}" ++ label
 
-public def headerLevel [Monad m] (name : TeX) (level : Nat) : TeXT g m TeX := do
+public def headerLevel [Monad m] (name : TeX) (level : Nat) (label : Option String) : TeXT g m TeX := do
   let opts ← options
   let lev := if h : level < opts.headerLevels.size then some ⟨level, h⟩ else none
-  mkHeader opts lev name
+  mkHeader opts lev name label
 
-public def header [Monad m] (name : TeX) : TeXT g m TeX := do
+public def header [Monad m] (name : TeX) (label : Option String) : TeXT g m TeX := do
   let opts ← options
-  mkHeader opts opts.headerLevel name
+  mkHeader opts opts.headerLevel name label
 
 public def inFragile [Monad m] (act : TeXT g m α) : TeXT g m α :=
   withReader (fun (opts, st, st', tctx) => (opts, st, st', { tctx with inFragile := true })) act
@@ -76,7 +80,9 @@ where
     else opts
 
 public class GenreTeX (genre : Genre) (m : Type → Type) where
-  part (partTeX : Part genre → TeXT genre m TeX) (metadata : genre.PartMetadata) (contents : Part genre) : TeXT genre m TeX
+  part
+    (partTeX : Part genre → (label : Option String) → TeXT genre m TeX)
+    (metadata : genre.PartMetadata) (contents : Part genre) : TeXT genre m TeX
   block (inlineTeX : Inline genre → TeXT genre m TeX) (blockTeX : Block genre → TeXT genre m TeX) (container : genre.Block) (contents : Array (Block genre)) : TeXT genre m TeX
   inline (inlineTeX : Inline genre → TeXT genre m TeX) (container : genre.Inline) (contents : Array (Inline genre)) : TeXT genre m TeX
 
@@ -165,15 +171,15 @@ public partial defmethod Block.toTeX [Monad m] [GenreTeX g m] : Block g → TeXT
   | .other container content => GenreTeX.block Inline.toTeX Block.toTeX container content
 
 
-public partial defmethod Part.toTeX [Monad m] [GenreTeX g m] (p : Part g) : TeXT g m TeX :=
+public partial defmethod Part.toTeX [Monad m] [GenreTeX g m] (p : Part g) (label : Option String) : TeXT g m TeX :=
   match p.metadata with
   | .none => do
     pure \TeX{
-      \Lean{← header (← inFragile <| p.title.mapM Inline.toTeX)}
+      \Lean{← header (← inFragile <| p.title.mapM Inline.toTeX) label}
       "\n\n"
       \Lean{← p.content.mapM (fun b => do pure <| TeX.seq #[← Block.toTeX b, .paragraphBreak])}
       "\n\n"
-      \Lean{← inHeader <| p.subParts.mapM Part.toTeX }
+      \Lean{← inHeader <| p.subParts.mapM (Part.toTeX · none)}
     }
   | some m =>
     GenreTeX.part Part.toTeX m p.withoutMetadata

@@ -578,9 +578,14 @@ block_extension Block.leanOutput via withHighlighting where
   traverse _ _ _ := do
     pure none
   toTeX :=
-    some <| fun _ go _ _ content => do
-      pure <| .seq <| ← content.mapM fun b => do
-        pure <| .seq #[← go b, .raw "\n"]
+    open Verso.Output.Html in
+    some <| fun _ _ _ data _ => do
+      match FromJson.fromJson? data with
+      | .error err =>
+        TeX.logError <| "Couldn't deserialize Lean output while rendering TeX: " ++ err ++ "\n" ++ toString data
+        pure .empty
+      | .ok ((msg, _summarize, expandTraces) : Highlighted.Message × Bool × List Name) =>
+        msg.toTeX (expandTraces := expandTraces) (g := Manual)
   toHtml :=
     open Verso.Output.Html in
     some <| fun _ _ _ data _ => do

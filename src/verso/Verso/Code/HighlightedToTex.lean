@@ -93,12 +93,26 @@ public defmethod Highlighted.Goal.toTeX [Monad m] [GenreTeX g m] (h : Highlighte
   rows := rows ++ #[verbatim (goalPrefix) ++ (← conclusion.toTeX)]
   pure \TeX{\begin{tabular}{"l"} \Lean{rows.map (· ++ .raw r#"\\"#)} \end{tabular}}
 
-def messageContentsToVerbatimTeX [Monad m] [GenreTeX g m] (h : Highlighted.MessageContents Highlighted) : TeXT g m Verso.Output.TeX :=
+open Verso.Output.TeX in
+partial def messageContentsToVerbatimTeX [Monad m] [GenreTeX g m] (h : Highlighted.MessageContents Highlighted) (expandTraces : List Lean.Name := []): TeXT g m Verso.Output.TeX :=
   match h with
   | .text str => pure str
   | .goal g => pure g.toString
   | .term t => pure t.toVerbatimTeX
-  | .trace _cls _msg _children _collapsed => pure .empty -- FIXME: what to render here?
+  | .trace cls msg children collapsed => do
+    let thisMsg ← messageContentsToVerbatimTeX msg
+    if !collapsed || cls ∈ expandTraces then
+      return \TeX{
+        \begin{expandedtrace}{\Lean{thisMsg}}
+          \Lean{← children.mapM messageContentsToVerbatimTeX}
+        \end{expandedtrace}
+      }
+    else
+      return \TeX{
+        \begin{collapsedtrace}{\Lean{thisMsg}}
+        \end{collapsedtrace}
+      }
+
   | .append mcs => do
       -- We are doing this two-step dance only because lean can't see termination
       -- when we directly call mcs.mapM messageContentsToVerbatimTeX. This probably
@@ -107,12 +121,20 @@ def messageContentsToVerbatimTeX [Monad m] [GenreTeX g m] (h : Highlighted.Messa
       let contents ← contentsM.mapM id
       pure (.seq contents)
 
-public defmethod Highlighted.Message.toTeX [Monad m] [GenreTeX g m] (h : Highlighted.Message) : TeXT g m Verso.Output.TeX := do
+public defmethod Highlighted.Message.toTeX [Monad m] [GenreTeX g m] (h : Highlighted.Message) (expandTraces : List Lean.Name := []) : TeXT g m Verso.Output.TeX := do
   let {severity, contents} := h
+  -- These colors are defined in our standard LaTeX preamble as `errorColor`, `warningColor`, and `infoColor`
   let rulecolor := s!"{severity}Color"
-  let body ← messageContentsToVerbatimTeX contents
+  let body ← messageContentsToVerbatimTeX contents expandTraces
   pure <| .seq #[
     .raw s!"\\begin\{LeanVerbatim}[formatcom=\\color\{{rulecolor}}, framesep=2mm, vspace=0pt, framerule=1.25mm, frame=leftline]\n",
     body,
     .raw "\n\\end{LeanVerbatim}\n"
+  ]
+
+public defmethod Highlighted.Message.toTeXInlinePlain [Monad m] [GenreTeX g m] (h : Highlighted.Message) (expandTraces : List Lean.Name := []) : TeXT g m Verso.Output.TeX := do
+  pure <| .seq #[
+    .raw r#"\LeanVerb|"#,
+    escapeForVerbatim <| h.contents.toString expandTraces,
+    .raw "|"
   ]

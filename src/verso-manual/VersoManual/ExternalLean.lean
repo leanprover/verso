@@ -182,9 +182,17 @@ inline_extension Inline.leanOutput
   traverse _ _ _ := do
     pure none
   toTeX :=
-    some <| fun go _ _  content => do
-      pure <| .seq <| ← content.mapM fun b => do
-        pure <| .seq #[← go b, .raw "\n"]
+    open Verso.Output.TeX in
+    some <| fun _ _ data _ => do
+      match FromJson.fromJson? data with
+      | .error err =>
+        TeX.logError <| "Couldn't deserialize Lean code while rendering TeX: " ++ err
+        pure .empty
+      | .ok ((txt, plain, expandTraces) : Highlighted.Message × Bool × List Name) =>
+        if plain then
+          txt.toTeXInlinePlain expandTraces
+        else
+          txt.toTeX expandTraces
   toHtml :=
     open Verso.Output.Html in
     some <| fun _ _ data _ => do
@@ -193,8 +201,7 @@ inline_extension Inline.leanOutput
         HtmlT.logError <| "Couldn't deserialize Lean code while rendering HTML: " ++ err
         pure .empty
       | .ok ((txt, plain, expandTraces) : Highlighted.Message × Bool × List Name) =>
-        let plainHtml := {{<code>{{txt.toString}}</code>}}
-        if plain then pure plainHtml
+        if plain then pure {{<code>{{txt.toString}}</code>}}
         else txt.toHtml expandTraces (g := Manual)
 
 open Verso.Code.External
