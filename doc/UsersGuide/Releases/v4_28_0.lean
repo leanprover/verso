@@ -18,4 +18,4 @@ file := "v4.28.0"
 %%%
 
 * Add Release Notes / Changelog to Verso Users guide (@ejgallego, #708)
-
+* Add LSP testing infrastructure for Verso documents (@ejgallego, #699)

@@ -153,6 +153,19 @@ def testBlog (_ : Config) : IO Unit := do
   if fails > 0 then
     throw <| .userError s!"{fails} blog tests failed"
 
+-- Interactive tests via the LSP server
+def testInteractive (_ : Config) : IO Unit := do
+  IO.println "Running interactive (LSP) tests..."
+  IO.println s!"current dir: {(← IO.Process.getCurrentDir)}"
+  -- We use the lower-level Process.spawn not to buffer the test output
+  -- Is this OK on windows ?
+  let child ← IO.Process.spawn { cmd := "src/tests/interactive/run_interactive.sh" }
+  let exitCode ← child.wait
+  if exitCode != 0 then
+    throw <| IO.userError s!"[!!!] interactive tests failed!"
+  -- Likely a more friendly rule on non-Unix
+  -- IO.Process.spwan { cmd := "bash", args := #["src/tests/interactive/run_interactive.sh"] } ...
+
 open Verso.Integration in
 def tests := [
   testSerialization,
@@ -165,7 +178,8 @@ def tests := [
     (extraFiles := [("src/tests/integration/extra-files-doc/test-data/shared", "shared")])
     (extraFilesTeX := [("src/tests/integration/extra-files-doc/test-data/TeX-only", "TeX-only")]),
   testTexOutput "front-matter-doc" FrontMatter.doc,
-  testZip
+  testZip,
+  testInteractive
 ]
 
 def getConfig (config : Config) : List String → IO Config
