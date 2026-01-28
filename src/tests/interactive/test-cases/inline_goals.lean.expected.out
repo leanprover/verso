@@ -1,0 +1,22 @@
+{"textDocument":
+ {"uri": "file:///src/tests/interactive/test-cases/inline_goals.lean"},
+ "position": {"line": 4, "character": 7}}
+{"range":
+ {"start": {"line": 4, "character": 2}, "end": {"line": 4, "character": 8}},
+ "contents":
+ {"value":
+  "`intros` repeatedly applies `intro` to introduce zero or more hypotheses\nuntil the goal is no longer a *binding expression*\n(i.e., a universal quantifier, function type, implication, or `have`/`let`),\nwithout performing any definitional reductions (no unfolding, beta, eta, etc.).\nThe introduced hypotheses receive inaccessible (hygienic) names.\n\n`intros x y z` is equivalent to `intro x y z` and exists only for historical reasons.\nThe `intro` tactic should be preferred in this case.\n\n## Properties and relations\n\n- `intros` succeeds even when it introduces no hypotheses.\n\n- `repeat intro` is like `intros`, but it performs definitional reductions\n  to expose binders, and as such it may introduce more hypotheses than `intros`.\n\n- `intros` is equivalent to `intro _ _ … _`,\n  with the fewest trailing `_` placeholders needed so that the goal is no longer a binding expression.\n  The trailing introductions do not perform any definitional reductions.\n\n## Examples\n\nImplications:\n```lean\nexample (p q : Prop) : p → q → p := by\n  intros\n  /- Tactic state\n     a✝¹ : p\n     a✝ : q\n     ⊢ p      -/\n  assumption\n```\n\nLet-bindings:\n```lean\nexample : let n := 1; let k := 2; n + k = 3 := by\n  intros\n  /- n✝ : Nat := 1\n     k✝ : Nat := 2\n     ⊢ n✝ + k✝ = 3 -/\n  rfl\n```\n\nDoes not unfold definitions:\n```lean\ndef AllEven (f : Nat → Nat) := ∀ n, f n % 2 = 0\n\nexample : ∀ (f : Nat → Nat), AllEven f → AllEven (fun k => f (k + 1)) := by\n  intros\n  /- Tactic state\n     f✝ : Nat → Nat\n     a✝ : AllEven f✝\n     ⊢ AllEven fun k => f✝ (k + 1) -/\n  sorry\n```\n",
+  "kind": "markdown"}}
+{"textDocument":
+ {"uri": "file:///src/tests/interactive/test-cases/inline_goals.lean"},
+ "position": {"line": 17, "character": 4}}
+{"range":
+ {"start": {"line": 17, "character": 3}, "end": {"line": 17, "character": 7}},
+ "contents":
+ {"value":
+  "Code block `Verso.Genre.Manual.InlineLean.lean`\n\nNamed: `name : Ident` (optional) — a name\n\nFlags:\n* `show` (default `true`) - Flag\n* `keep` (default `true`) - Flag\n* `error` (default `false`) - Flag\n* `fresh` (default `false`) - Flag\n\n\nElaborates the provided Lean command in the context of the current Verso module.\n",
+  "kind": "markdown"}}
+{"textDocument":
+ {"uri": "file:///src/tests/interactive/test-cases/inline_goals.lean"},
+ "position": {"line": 20, "character": 7}}
+null
