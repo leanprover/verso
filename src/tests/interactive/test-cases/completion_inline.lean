@@ -8,11 +8,12 @@ open Verso.Genre Manual InlineLean
 ```lean
 theorem test : ∀ (n : Nat), n = n := by
   intros
-     --^ textDocument/completion
+    --^ textDocument/completion
   rfl
 
-def a : Nat := Nat.add 3 2
-                --^ textDocument/completion
+def a (x y z : Nat) : x + y + z = x + (y + z):=
+  Nat.add_assoc x y z
+           --^ textDocument/completion
 
 #print a
 ```

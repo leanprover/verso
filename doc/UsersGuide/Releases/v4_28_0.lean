@@ -17,5 +17,6 @@ tag := "release-v4.28.0"
 file := "v4.28.0"
 %%%
 
-* Add Release Notes / Changelog to Verso Users guide (@ejgallego, #708)
-* Add LSP testing infrastructure for Verso documents (@ejgallego, #699)
+* Add Release Notes / Changelog to Verso Users guide (@david-christiansen, @ejgallego, #708)
+* Add LSP testing infrastructure for Verso documents (@david-christiansen, @ejgallego, #699)
+* Fix incorrect elaboration info for "full" Verso documents. This for example prevented inline lean code from displaying in the infoview (@david-christiansen, @ejgallego, #700)

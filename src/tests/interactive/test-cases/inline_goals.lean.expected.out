@@ -19,4 +19,5 @@
 {"textDocument":
  {"uri": "file:///src/tests/interactive/test-cases/inline_goals.lean"},
  "position": {"line": 20, "character": 7}}
-null
+{"rendered": "```lean\nn✝ : Nat\n⊢ n✝ = n✝\n```",
+ "goals": ["n✝ : Nat\n⊢ n✝ = n✝"]}
