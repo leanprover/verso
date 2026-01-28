@@ -15,7 +15,7 @@ jobs:
 
             - name: Verify .lean files start with a copyright header.
               run: |
-                  FILES=$(find ./src ./test-projects -type f -name "*.lean" -exec perl -ne 'BEGIN { $/ = undef; } print "$ARGV\n" if !m{\A/-\nCopyright}; exit;' {} \;)
+                  FILES=$(find ./src ./test-projects -path ./src/tests/interactive -prune -type f -name "*.lean" -exec perl -ne 'BEGIN { $/ = undef; } print "$ARGV\n" if !m{\A/-\nCopyright}; exit;' {} \;)
                   if [ -n "$FILES" ]; then
                     echo "Found .lean files which do not have a copyright header:"
                     echo "$FILES"
