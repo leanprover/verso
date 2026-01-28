@@ -1,0 +1,18 @@
+{"textDocument":
+ {"uri": "file:///src/tests/interactive/test-cases/infoview_verso.lean"},
+ "position": {"line": 5, "character": 17}}
+null
+{"textDocument":
+ {"uri": "file:///src/tests/interactive/test-cases/infoview_verso.lean"},
+ "position": {"line": 17, "character": 40}}
+null
+{"textDocument":
+ {"uri": "file:///src/tests/interactive/test-cases/infoview_verso.lean"},
+ "position": {"line": 20, "character": 30}}
+null
+{"textDocument":
+ {"uri": "file:///src/tests/interactive/test-cases/infoview_verso.lean"},
+ "position": {"line": 24, "character": 8}}
+{"range":
+ {"start": {"line": 23, "character": 3}, "end": {"line": 26, "character": 0}},
+ "goal": "docReconstInBlock✝ : Verso.Doc.DocReconstruction\n⊢ String"}
