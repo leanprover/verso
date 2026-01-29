@@ -39,32 +39,35 @@ public def highlightToken : String → Token.Kind → TeX
 | c, .withType _ => .raw c
 | c, .unknown => .raw c
 
-defmethod Highlighting.Token.toVerbatimTeX (t : Highlighting.Token) : Verso.Output.TeX :=
-  highlightToken (escapeForVerbatim t.content) t.kind
+defmethod Highlighting.Token.toVerbatimTeX (t : Highlighting.Token) (lineBreaks : Bool := false) : Verso.Output.TeX :=
+  highlightToken (escapeForVerbatim t.content lineBreaks) t.kind
 
 open Verso.Output.TeX in
 /--
 Returns TeX that is appropriate for the content of a `\Verb` environment (from package `fancyvrb`)
 with command characters `\`, `{`, and `}`.
+
+When `lineBreaks` is true, inserts line break opportunities in identifiers.
 -/
-public defmethod Highlighted.toVerbatimTeX : Highlighted → Verso.Output.TeX
-  | .token t => highlightToken (escapeForVerbatim t.content) t.kind
-  | .text str => .raw (escapeForVerbatim str)
-  | .seq hts => .seq <| hts.map (·.toVerbatimTeX)
+public defmethod Highlighted.toVerbatimTeX (h : Highlighted) (lineBreaks : Bool := false) : Verso.Output.TeX :=
+  match h with
+  | .token t => highlightToken (escapeForVerbatim t.content lineBreaks) t.kind
+  | .text str => .raw (escapeForVerbatim str lineBreaks)
+  | .seq hts => .seq <| hts.map (·.toVerbatimTeX lineBreaks)
   | .span info content =>
      if h : info.size > 0
-     then .seq #[.raw s!"\\{info[0].1.toString}Decorate\{", content.toVerbatimTeX, .raw "}"]
-     else content.toVerbatimTeX
-  | .tactics _info _start _end content => content.toVerbatimTeX
+     then .seq #[.raw s!"\\{info[0].1.toString}Decorate\{", content.toVerbatimTeX lineBreaks, .raw "}"]
+     else content.toVerbatimTeX lineBreaks
+  | .tactics _info _start _end content => content.toVerbatimTeX lineBreaks
   | .point _kind _info => \TeX{"[Point]"}
-  | .unparsed str => .raw (escapeForVerbatim str)
+  | .unparsed str => .raw (escapeForVerbatim str lineBreaks)
 
 def verbatimBlock (t : Verso.Output.TeX) : Verso.Output.TeX :=
   .seq #[.raw "\\begin{LeanVerbatim}\n", t, .raw "\n\\end{LeanVerbatim}\n"]
 
 public defmethod Highlighting.Token.toTeX [Monad m] [GenreTeX g m] (t : Highlighting.Token) :
     TeXT g m Verso.Output.TeX :=
-  verbatimInline (t.toVerbatimTeX)
+  verbatimInline (t.toVerbatimTeX (lineBreaks := true))
 
 public defmethod Highlighted.toTeX [Monad m] [GenreTeX g m] (t : Highlighted) :
     TeXT g m Verso.Output.TeX :=
@@ -72,9 +75,9 @@ public defmethod Highlighted.toTeX [Monad m] [GenreTeX g m] (t : Highlighted) :
   if strip.isEmpty then
     pure .empty
   else if strip.containsNewline then
-    pure <| verbatimBlock (strip.toVerbatimTeX)
+    pure <| verbatimBlock (strip.toVerbatimTeX (lineBreaks := false))
   else
-    verbatimInline (strip.toVerbatimTeX)
+    verbatimInline (strip.toVerbatimTeX (lineBreaks := true))
 
 
 open Verso.Output.TeX in

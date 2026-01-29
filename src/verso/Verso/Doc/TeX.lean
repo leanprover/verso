@@ -105,12 +105,12 @@ def replaceChars (s : String) (replace : Char → Option String) : String :=
   loop "" 0
 
 /--
-Escapes a string in an appropriate way for uses of `\Verb` and
+Escapes a single character in an appropriate way for uses of `\Verb` and
 `\begin{Verbatim}...\end{Verbatim}` (from package `fancyvrb`) with
 command characters `\`, `{`, and `}`.
 -/
-public def escapeForVerbatim (s : String) : String :=
-  replaceChars s fun
+private def escapeCharForVerbatim (c : Char) : Option String :=
+  match c with
   | '{' => some "\\symbol{123}"
   | '|' => some "\\symbol{124}"
   | '}' => some "\\symbol{125}"
@@ -118,9 +118,89 @@ public def escapeForVerbatim (s : String) : String :=
   | '#' => some "\\symbol{35}" -- FIXME: this is really just a test
   | _ => none
 
+/--
+Tracks the previous character class for inserting line break opportunities.
+-/
+private inductive PrevChar
+  /-- previous was lowercase letter -/
+  | lower
+  /-- previous was digit -/
+  | digit
+  /-- previous was '.' -/
+  | dot
+  /-- initial / anything else -/
+  | other
+
+/--
+Escapes a string in an appropriate way for uses of `\Verb` and
+`\begin{Verbatim}...\end{Verbatim}` (from package `fancyvrb`) with
+command characters `\`, `{`, and `}`.
+
+When `lineBreaks` is true, inserts line break opportunities:
+- After `.`: insert `\allowbreak{}` (no hyphen on break)
+- On lowercase→uppercase transition: insert `\-` (soft hyphen)
+- On digit→letter transition: insert `\-` (soft hyphen)
+-/
+public def escapeForVerbatim (s : String) (lineBreaks : Bool := false) : String :=
+  if !lineBreaks then
+    replaceChars s escapeCharForVerbatim
+  else Id.run do
+    let mut state : PrevChar := .other
+    let mut result : String := ""
+    for c in s.toList do
+      -- Emit break if transition warrants it
+      let break_ := match state with
+        | .dot => if c != '.' then "\\allowbreak{}" else ""
+        | .lower => if c.isUpper then "\\-" else ""
+        | .digit => if c.isAlpha then "\\-" else ""
+        | .other => ""
+      -- Emit escaped char
+      let escaped := escapeCharForVerbatim c |>.getD c.toString
+      -- Update state
+      state :=
+        if c.isLower then .lower
+        else if c.isDigit then .digit
+        else if c == '.' then .dot
+        else .other
+      result := result ++ break_ ++ escaped
+    return result
+
 /-- info: "\\symbol{123}\\symbol{124}\\symbol{125}\\symbol{92}" -/
 #guard_msgs in
 #eval escapeForVerbatim "{|}\\"
+
+-- Tests for lineBreaks functionality
+/-- info: "Nat.\\allowbreak{}add\\-One" -/
+#guard_msgs in
+#eval escapeForVerbatim "Nat.addOne" (lineBreaks := true)
+
+/-- info: "List.\\allowbreak{}map2\\-Fun" -/
+#guard_msgs in
+#eval escapeForVerbatim "List.map2Fun" (lineBreaks := true)
+
+/-- info: "x2\\-y" -/
+#guard_msgs in
+#eval escapeForVerbatim "x2y" (lineBreaks := true)
+
+/-- info: "Foo123" -/
+#guard_msgs in
+#eval escapeForVerbatim "Foo123" (lineBreaks := true)  -- no break before digits
+
+/-- info: "a..\\allowbreak{}b" -/
+#guard_msgs in
+#eval escapeForVerbatim "a..b" (lineBreaks := true)  -- only one break after dot sequence
+
+/-- info: "\\symbol{123}foo\\-Bar" -/
+#guard_msgs in
+#eval escapeForVerbatim "{fooBar" (lineBreaks := true)  -- escaping + line breaks
+
+/-- info: "plain" -/
+#guard_msgs in
+#eval escapeForVerbatim "plain" (lineBreaks := true)  -- no transitions
+
+/-- info: "Nat.addOne" -/
+#guard_msgs in
+#eval escapeForVerbatim "Nat.addOne"  -- lineBreaks := false (default), no breaks
 
 /--
 Wraps some TeX (which is already assumed to be appropriately escaped in the appropriate
