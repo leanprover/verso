@@ -158,11 +158,11 @@ lean_exe simplepage where
 
 @[default_target]
 lean_lib TutorialExample where
-  srcDir := "examples/tutorial-examples"
+  srcDir := "test-projects/tutorial-test"
 
 @[default_target]
 lean_exe «tutorial-example» where
-  srcDir := "examples/tutorial-examples"
+  srcDir := "test-projects/tutorial-test"
   root := `Main
   supportInterpreter := true
 
