@@ -35,7 +35,7 @@ jobs:
 
             - name: List all files
               run: |
-                  bash -c "find . -name "*.lean" -type f"
+                  bash -c "find . -name \"*.lean\" -type f"
 
             - name: lean version
               run: |
