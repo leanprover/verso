@@ -14,7 +14,10 @@ name: Continuous Integration
 jobs:
     build:
         name: Build and test
-        runs-on: nscloud-ubuntu-22.04-amd64-8x16
+        runs-on: ${{ matrix.os }}
+        strategy:
+            matrix:
+                os: [nscloud-ubuntu-22.04-amd64-8x16, macos-latest, windows-latest]
         env:
             # Used for browser tests. Placing them here allows caching to work right.
             PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers
@@ -22,7 +25,7 @@ jobs:
             - name: install elan
               run: |
                   set -o pipefail
-                  curl -sSfL https://github.com/leanprover/elan/releases/download/v3.0.0/elan-x86_64-unknown-linux-gnu.tar.gz | tar xz
+                  curl -sSfL https://github.com/leanprover/elan/releases/download/v4.1.2/elan-x86_64-unknown-linux-gnu.tar.gz | tar xz
                   ./elan-init -y --default-toolchain none
                   echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
 
@@ -188,6 +191,14 @@ jobs:
               run: uv run --project browser-tests --extra test pytest browser-tests -v
             # End browser testing
 
+    upload:
+        name: Upload Artifact and Releases
+        needs: build
+        runs-on: nscloud-ubuntu-22.04-amd64-8x16
+        env:
+            # Used for browser tests. Placing them here allows caching to work right.
+            PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers
+        steps:
             - name: Upload docs to artifact storage
               if: github.ref_type != 'tag' && github.ref != 'refs/heads/main'
               uses: actions/upload-artifact@v4
