@@ -24,7 +24,7 @@ jobs:
         steps:
             - name: install elan
               run: |
-                  set -o pipefail
+                  # set -o pipefail
                   curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf | sh -s -- -y --default-toolchain none
                   # curl -sSfL https://github.com/leanprover/elan/releases/download/v4.1.2/elan-x86_64-unknown-linux-gnu.tar.gz | tar xz
                   # elan-init -y --default-toolchain none
