@@ -25,25 +25,27 @@ jobs:
         steps:
             - name: install elan
               run: |
-                  # set -o pipefail
+                  set -o pipefail
                   curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf | sh -s -- -y --default-toolchain none
-                  # curl -sSfL https://github.com/leanprover/elan/releases/download/v4.1.2/elan-x86_64-unknown-linux-gnu.tar.gz | tar xz
-                  # elan-init -y --default-toolchain none
                   echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+              shell: bash
 
             - uses: actions/checkout@v5
 
             - name: List all files
               run: |
-                  bash -c "find . -name \"*.lean\" -type f"
+                  find . -name \"*.lean\" -type f
+              shell: bash
 
             - name: lean version
               run: |
                   lean --version
+              shell: bash
 
             - name: Compute short SHA
               id: shortSHA
               run: echo "short_sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+              shell: bash
 
             - name: Cache .lake
               uses: actions/cache@v4
@@ -64,10 +66,12 @@ jobs:
                   lake build
                   lake build :examples
                   popd
+              shell: bash
 
             - name: Build the project
               run: |
                   lake build
+              shell: bash
 
             - name: Install PDF Dependencies
               uses: zauguin/install-texlive@v4
@@ -114,23 +118,28 @@ jobs:
 
             - name: Check `tlmgr` version
               run: tlmgr --version
+              shell: bash
 
             - name: Run tests
               run: |
                   lake test -- --verbose --check-tex
+              shell: bash
 
             - name: Generate the test website
               run: |
                   lake exe demosite --output _out/test-projects/demosite
+              shell: bash
 
             - name: Generate the test genre's document
               run: |
                   lake exe simplepage
+              shell: bash
 
             - name: Generate some source HTML
               run: |
                   lake build Verso.Hover:literate
                   lake exe verso-html .lake/build/literate htmlout
+              shell: bash
 
             - name: Check internal links on the test website
               uses: lycheeverse/lychee-action@v2.6.1
