@@ -18,4 +18,3 @@ file := "v4.28.0"
 %%%
 
 * Add Release Notes / Changelog to Verso Users guide (@ejgallego, #708)
-

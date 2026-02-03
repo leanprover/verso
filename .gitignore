@@ -15,3 +15,4 @@ profile.json.gz
 multi.json
 single.json
 *.html
+*.produced.out

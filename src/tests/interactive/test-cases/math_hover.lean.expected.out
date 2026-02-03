@@ -1,0 +1,8 @@
+{"textDocument":
+ {"uri": "file:///src/tests/interactive/test-cases/math_hover.lean"},
+ "position": {"line": 7, "character": 6}}
+null
+{"textDocument":
+ {"uri": "file:///src/tests/interactive/test-cases/math_hover.lean"},
+ "position": {"line": 10, "character": 6}}
+null
