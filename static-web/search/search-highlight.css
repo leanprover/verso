@@ -13,11 +13,11 @@
     z-index: 99; /* The search box dropdown is 100, and should cover this */
     display: flex;
     gap: 4px;
-    background: white;
-    border: 1px solid #ccc;
+    background: var(--verso-background-color, white);
+    border: 1px solid var(--verso-border-color, #ccc);
     border-radius: 4px;
     padding: 4px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 4px var(--verso-shadow-color, rgba(0, 0, 0, 0.1));
     box-sizing: border-box;
     font-size: 0.9rem;
     font-family: system-ui, sans-serif;
@@ -42,8 +42,9 @@
     padding: 6px 8px;
     border-radius: 2px;
     cursor: pointer;
-    background: #f8f9fa;
-    border: 1px solid #ddd;
+    background: var(--verso-surface-color, #f8f9fa);
+    border: 1px solid var(--verso-border-color-light, #ddd);
+    color: var(--verso-text-color, inherit);
 }
 
 @media screen and (max-width: 700px) {
@@ -62,12 +63,13 @@
 
 #highlight-current-count {
     padding: 6px 8px;
-    background: #f8f9fa;
-    border: 1px solid #ddd;
+    background: var(--verso-surface-color, #f8f9fa);
+    border: 1px solid var(--verso-border-color-light, #ddd);
     border-radius: 2px;
     min-width: 40px;
     text-align: center;
     flex: 1 1 100%;
+    color: var(--verso-text-color, inherit);
 }
 
 #highlight-current-count:has(#highlight-current:not(:empty)) {
