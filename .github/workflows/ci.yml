@@ -217,3 +217,33 @@ jobs:
                     html-manual.zip \
                     --title "Release ${{ github.ref_name }}" \
                     --notes "Automated release for ${{ github.ref_name }}"
+
+              # deploy-info computes metadata that's shown in the Netlify interface
+              # about the deployment (for non-PR deploys)
+            - id: deploy-info
+              name: Compute Deployment Metadata
+              if: github.event_name != 'pull_request'
+              run: |
+                  set -e
+                  echo "message=$(git log -1 --pretty=format:"%s")" >> "$GITHUB_OUTPUT"
+
+            - name: Deploy Verso manual
+              id: deploy-lang
+              uses: nwtgck/actions-netlify@v2.0
+              if:
+                  github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref
+                  == 'main')
+              with:
+                  publish-dir: _out/html-multi
+                  production-branch: main
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  deploy-message: |
+                      ${{ github.event_name == 'pull_request' && format('pr#{0}: {1}', github.event.number, github.event.pull_request.title) || format('ref/{0}: {1}', github.ref_name, steps.deploy-info.outputs.message) }}
+                  enable-commit-comment: false
+                  enable-pull-request-comment: false
+                  github-deployment-environment: |
+                      ${{ github.event_name == 'pull_request' && format('verso-pr-#{0}', github.event.number) || 'verso-main' }}
+                  fails-without-credentials: true
+              env:
+                  NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+                  NETLIFY_SITE_ID: "8a89abd8-095b-4496-a9c1-381d2d5629ec" # TODO: if a tag, push to a different site for hosting under lean-lang.org
