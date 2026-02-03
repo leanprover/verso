@@ -237,6 +237,7 @@ jobs:
                   publish-dir: _out/html-multi
                   production-branch: main
                   github-token: ${{ secrets.GITHUB_TOKEN }}
+                  alias: ${{ github.event_name == 'pull_request' && format('verso-pr-{0}', github.event.number) || format('ref-{0}', github.ref_name) }}
                   deploy-message: |
                       ${{ github.event_name == 'pull_request' && format('pr#{0}: {1}', github.event.number, github.event.pull_request.title) || format('ref/{0}: {1}', github.ref_name, steps.deploy-info.outputs.message) }}
                   enable-commit-comment: false
