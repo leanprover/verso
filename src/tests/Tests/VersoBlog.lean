@@ -1,12 +1,12 @@
 /-
-Copyright (c) 2025 Lean FRO LLC. All rights reserved.
+Copyright (c) 2026 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-
 import Plausible
 import Plausible.ArbitraryFueled
 import VersoBlog
+import VersoBlog.LiterateLeanPage
 import Tests.Arbitrary
 
 open Lean
@@ -15,6 +15,11 @@ open Verso.Multi
 open Verso.NameMap
 open Plausible Gen Arbitrary
 
+/-! ## Tests for NameSuffixMap -/
+
+/-- info: #[(`a.b.c, 1), (`a.c, 4), (`b.c, 6), (`c, 3)] -/
+#guard_msgs in
+#eval NameSuffixMap.empty |>.insert `a.b.c 1 |>.insert `b.c 2 |>.insert `c 3 |>.insert `a.c 4 |>.insert `a.b 5 |>.insert `b.c 6 |>.get `c
 
 def freshIdOk (hint : LetterString) (path : Path) (howMany : Nat) : Bool := Id.run do
   let mut st : TraverseState := { remoteContent := {} }
@@ -51,7 +56,7 @@ def blogTests : List (Name × (Σ p, IO <| TestResult p)) := [
   (`freshId_second_is_hint_with_1, ⟨_, testProp <| ∀ h p, freshId_second_is_hint_with_1 h p⟩),
 ]
 
-public def runBlogTests : IO Nat := do
+def runBlogTests : IO Nat := do
   let mut failures := 0
   for (name, test) in blogTests do
     IO.print s!"{name}: "

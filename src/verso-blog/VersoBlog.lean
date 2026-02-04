@@ -193,10 +193,6 @@ where
         matchLength xs ys |>.map (· + 1)
       else none
 
-/-- info: #[(`a.b.c, 1), (`a.c, 4), (`b.c, 6), (`c, 3)] -/
-#guard_msgs in
-#eval NameSuffixMap.empty |>.insert `a.b.c 1 |>.insert `b.c 2 |>.insert `c 3 |>.insert `a.c 4 |>.insert `a.b 5 |>.insert `b.c 6 |>.get `c
-
 section
 
 inductive LeanExampleData where

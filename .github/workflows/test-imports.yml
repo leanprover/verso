@@ -1,0 +1,47 @@
+name: All test modules imported
+
+on: [pull_request, merge_group]
+
+jobs:
+    check-test-imports:
+        name: "Check all test modules are imported"
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Check all test modules are transitively imported
+              run: |
+                  # Convert file paths to module names and check imports
+                  # e.g., src/tests/Tests/Html.lean -> Tests.Html
+                  MISSING=()
+                  while IFS= read -r -d '' file; do
+                    # Convert path to module name
+                    module=$(echo "$file" | sed 's|^src/tests/||; s|\.lean$||; s|/|.|g')
+
+                    # Check if this module is imported (directly or transitively)
+                    # by searching for it in Tests.lean or any intermediate import file
+                    if grep -rq "import $module" src/tests/; then
+                      : # Module is imported, continue
+                    else
+                      # Check if it might be imported via a parent module
+                      # e.g., Tests.VersoManual.Html is imported if Tests.VersoManual imports it
+                      parent_dir=$(dirname "$file")
+                      parent_file="$parent_dir.lean"
+
+                      if [ -f "$parent_file" ] && grep -q "import $module" "$parent_file"; then
+                        : # Imported via parent
+                      else
+                        MISSING+=("$module")
+                      fi
+                    fi
+                  done < <(find src/tests/Tests -name "*.lean" -print0 | sort -z)
+
+                  if [ ${#MISSING[@]} -gt 0 ]; then
+                    echo "The following test modules are not transitively imported by the test suite:"
+                    printf '%s\n' "${MISSING[@]}"
+                    echo ""
+                    echo "Please add them to src/tests/Tests.lean or an appropriate intermediate import file."
+                    exit 1
+                  else
+                    echo "All test modules are transitively imported by the test suite."
+                  fi

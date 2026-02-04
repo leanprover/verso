@@ -5,3 +5,6 @@ Author: David Thrane Christiansen
 -/
 import Tests.VersoManual.Html
 import Tests.VersoManual.Html.SoftHyphenate
+import Tests.VersoManual.License
+import Tests.VersoManual.Markdown
+import Tests.VersoManual.WordCount

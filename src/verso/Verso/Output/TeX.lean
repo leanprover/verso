@@ -168,37 +168,6 @@ elab_rules : term
       Meta.mkAppM ``TeX.seq #[args]
 
 
-/-- info: Verso.Output.TeX.seq #[] -/
-#guard_msgs in
-#eval repr <| \TeX{}
-
-/-- info: Verso.Output.TeX.text "Hello, world!" -/
-#guard_msgs in
-#eval repr <| \TeX{"Hello, world!"}
-
-/--
-info: Verso.Output.TeX.command "hyperlink" #[] #[Verso.Output.TeX.raw "foo", Verso.Output.TeX.text ""]
--/
-#guard_msgs in
-#eval repr<| \TeX{\hyperlink{\Lean{.raw "foo" }}{\Lean{""}}}
-
-/--
-info: Verso.Output.TeX.seq
-  #[Verso.Output.TeX.text "Hello, ", Verso.Output.TeX.command "textbf" #[] #[Verso.Output.TeX.text "world"]]
--/
-#guard_msgs in
-#eval repr <| \TeX{"Hello, " \textbf{"world"}}
-
-/--
-info: Verso.Output.TeX.environment
-  "Verbatim"
-  #[]
-  #[Verso.Output.TeX.raw "commandChars=\\\\"]
-  #[Verso.Output.TeX.text "Hello, ", Verso.Output.TeX.command "textbf" #[] #[Verso.Output.TeX.text "world"]]
--/
-#guard_msgs in
-#eval repr <| \TeX{\begin{Verbatim}{s!"commandChars=\\\\"}"Hello, " \textbf{"world"}\end{Verbatim}}
-
 private def hexDigits := "0123456789ABCDEF".toList.toArray
 
 @[grind =, simp]

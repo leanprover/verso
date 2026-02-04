@@ -46,16 +46,6 @@ instance : WordCount String where
           state := false
     return wc
 
-/-- info: 4 -/
-#guard_msgs in
-#eval countWords (fun _ => false) "a b c d"
-/-- info: 4 -/
-#guard_msgs in
-#eval countWords (fun _ => false) "a b c    d"
-/-- info: 4 -/
-#guard_msgs in
-#eval countWords (fun _ => false) "  a b c    d"
-
 partial instance : WordCount (Verso.Doc.Inline Manual) where
   countWords skip i := inlineWordCount skip i
 where
@@ -106,25 +96,6 @@ def separatedNumber (n : Nat) : String :=
     s!"{separatedNumber before},{padding}{after}"
   else
     s!"{n}"
-
-/-- info: "0" -/
-#guard_msgs in
-#eval separatedNumber 0
-/-- info: "55" -/
-#guard_msgs in
-#eval separatedNumber 55
-/-- info: "555" -/
-#guard_msgs in
-#eval separatedNumber 555
-/-- info: "51,535" -/
-#guard_msgs in
-#eval separatedNumber 51535
-/-- info: "8,813,251,535" -/
-#guard_msgs in
-#eval separatedNumber 8813251535
-/-- info: "4,002" -/
-#guard_msgs in
-#eval separatedNumber 4002
 
 partial def wordCountReport (skip : Name → Bool) (indent : String) (depth : Nat) (p : Part Manual) : Nat × String := Id.run do
   let subReports := p.subParts.mapIdx fun i p =>
