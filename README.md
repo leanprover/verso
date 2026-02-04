@@ -54,9 +54,7 @@ Verso-based projects.
 
 ### Documentation
 
-The in-progress Verso manual
-([HTML](https://github.com/leanprover/verso/releases/download/latest/html-manual.zip),
-[PDF](https://github.com/leanprover/verso/releases/download/latest/manual.pdf))
+The [in-progress Verso manual](verso-user-manual.netlify.app)
 describes the Verso markup language and partially documents the
 built-in genres. Today, Verso is usable for running a website and blog
 and for writing long-form technical documentation, such as the
