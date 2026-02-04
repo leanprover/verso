@@ -70,20 +70,6 @@ def measure (word : String.Slice) : Nat :=
 
   aux word.startPos false 0
 
-/-- info: 0 -/
-#guard_msgs in
-#eval measure "tr".toSlice
-/-- info: 0 -/
-#guard_msgs in
-#eval measure "ee".toSlice
-/-- info: 0 -/
-#guard_msgs in
-#eval measure "tree".toSlice
-
-/-- info: 2 -/
-#guard_msgs in
-#eval measure "private".toSlice
-
 /--
 Checks whether the provided word contains a vowel.
 -/
@@ -191,10 +177,6 @@ def step1a : String.Slice → String.Slice :=
     .rw "s" ""
   ]
 
-/-- info: "abiliti" -/
-#guard_msgs in
-#eval step1a "abilities".toSlice |>.copy
-
 /--
 Step 1b of Porter's algorithm.
 -/
@@ -218,71 +200,11 @@ where
     if measure word == 1 && endsWithCvc word then return word.copy ++ "e" |>.toSlice
     word
 
-
-/-- info: "abiliti" -/
-#guard_msgs in
-#eval step1b "abiliti".toSlice |>.copy
-
-/-- info: "caress" -/
-#guard_msgs in
-#eval step1b (step1a "caresses".toSlice) |>.copy
-/-- info: "poni" -/
-#guard_msgs in
-#eval step1b (step1a "ponies".toSlice) |>.copy
-/-- info: "ti" -/
-#guard_msgs in
-#eval step1b (step1a "ties".toSlice) |>.copy
-/-- info: "caress" -/
-#guard_msgs in
-#eval step1b (step1a "caress".toSlice) |>.copy
-/-- info: "cat" -/
-#guard_msgs in
-#eval step1b (step1a "cats".toSlice) |>.copy
-
-/-- info: "feed" -/
-#guard_msgs in
-#eval step1b (step1a "feed".toSlice) |>.copy
-/-- info: "agree" -/
-#guard_msgs in
-#eval step1b (step1a "agreed".toSlice) |>.copy
-/-- info: "disable" -/
-#guard_msgs in
-#eval step1b (step1a "disabled".toSlice) |>.copy
-
-/-- info: "mat" -/
-#guard_msgs in
-#eval step1b (step1a "matting".toSlice) |>.copy
-/-- info: "mate" -/
-#guard_msgs in
-#eval step1b (step1a "mating".toSlice) |>.copy
-/-- info: "meet" -/
-#guard_msgs in
-#eval step1b (step1a "meeting".toSlice) |>.copy
-/-- info: "mill" -/
-#guard_msgs in
-#eval step1b (step1a "milling".toSlice) |>.copy
-/-- info: "mess" -/
-#guard_msgs in
-#eval step1b (step1a "messing".toSlice) |>.copy
-
-/-- info: "meet" -/
-#guard_msgs in
-#eval step1b (step1a "meetings".toSlice) |>.copy
-
 /--
 Step 1c of Porter's algorithm.
 -/
 def step1c (word : String.Slice) : String.Slice :=
   applyRules [.rw "y" "i" containsVowel] word
-
-/-- info: "happi" -/
-#guard_msgs in
-#eval step1c "happy".toSlice |>.copy
-
-/-- info: "abiliti" -/
-#guard_msgs in
-#eval step1c "abiliti".toSlice |>.copy
-
 
 /--
 Step 2 of Porter's algorithm. Simplifies many common suffixes.
@@ -317,15 +239,6 @@ where
     ("bli", "ble"),
     ("eli", "e")]
 
-/-- info: "sensible" -/
-#guard_msgs in
-#eval step2 "sensibiliti".toSlice |>.copy
-
-/-- info: "abiliti" -/
-#guard_msgs in
-#eval step2 "abiliti".toSlice |>.copy
-
-
 /--
 Step 3 of Porter's algorithm. Simplifies further common suffixes.
 -/
@@ -345,14 +258,6 @@ where
     ("ful", ""),
     ("ness", "")
   ]
-
-/-- info: "form" -/
-#guard_msgs in
-#eval step3 "formative".toSlice |>.copy
-
-/-- info: "able" -/
-#guard_msgs in
-#eval step3 "able".toSlice |>.copy
 
 /--
 Step 4 of Porter's algorithm. Removes many derivational suffixes.
@@ -396,15 +301,6 @@ def step5b (word : String.Slice) : String.Slice :=
   if measure word > 1 ∧ endsWithDoubleConsonant word ∧ word.endsWith "l" then
     word.dropEnd 1
   else word
-
-
-
-/-- info: "control" -/
-#guard_msgs in
-#eval step5b "controll".toSlice |>.copy
-/-- info: "roll" -/
-#guard_msgs in
-#eval step5b "roll".toSlice |>.copy
 
 /--
 Heuristically computes the stem of an English word using
