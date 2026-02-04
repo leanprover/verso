@@ -278,6 +278,9 @@ macro_rules
   | `(term|url_subst $pat* => $template*) =>
     `(fun s => url_subst(s) $pat* => $template*)
 
+/-- info: some (Except.ok "foo/foo/bar/baz/f.png") -/
+#guard_msgs in
+#eval (url_subst "xy/" z "/static/" pic ".jpg" => "foo/" z "/" pic ".png") "xy/foo/static/bar/baz/f.jpg"
 
 def getSubst [Monad m] : TSyntax ``url_case → m (List Pat × List Template)
   | `(url_case|$pat* => $template*) => do

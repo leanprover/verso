@@ -39,20 +39,6 @@ private def paragraphed (text : String) : Array String := Id.run do
 
   paras
 
-/-- info: #["One paragraph with lines", "and another", "and more more"] -/
-#guard_msgs in
-#eval paragraphed r#"
-
-One paragraph
-with lines
-
-and another
-
-and more
-more
-
-"#
-
 private def paragraphedHtml (text : String) : Html :=
   paragraphed text |>.map (fun (s : String) => {{<p>{{s}}</p>}})
 
