@@ -1,0 +1,38 @@
+name: No #eval in source files
+
+on: [pull_request, merge_group]
+
+jobs:
+    check-no-eval:
+        name: "Check no #eval in source files"
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Check for #eval in source files
+              run: |
+                  # Find #eval statements in module source files (excluding tests and test-projects)
+                  # Non-module files are allowed to have #eval since their private/scoped definitions
+                  # cannot be tested externally, and there's no phase issue with builds.
+                  OFFENDING_FILES=""
+                  for file in $(find ./src -path ./src/tests -prune -o \
+                    -path ./src/test-projects -prune -o \
+                    -name "*.lean" -type f -print | \
+                    xargs grep -l '#eval' 2>/dev/null || true); do
+                    # Check if file is a module file (has 'module' on its own line)
+                    if grep -q '^module$' "$file"; then
+                      OFFENDING_FILES="$OFFENDING_FILES $file"
+                    fi
+                  done
+                  if [ -n "$OFFENDING_FILES" ]; then
+                    echo "Found #eval statements in module source files (should be in src/tests/):"
+                    echo "$OFFENDING_FILES" | tr ' ' '\n' | grep -v '^$'
+                    echo ""
+                    echo "Offending lines:"
+                    # shellcheck disable=SC2086
+                    # OFFENDING_FILES is intentionally unquoted to allow word splitting
+                    grep -rn '#eval' $OFFENDING_FILES || true
+                    exit 1
+                  else
+                    echo "No #eval statements found in module source files."
+                  fi

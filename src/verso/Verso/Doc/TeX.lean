@@ -165,43 +165,6 @@ public def escapeForVerbatim (s : String) (lineBreaks : Bool := false) : String 
       result := result ++ break_ ++ escaped
     return result
 
-/-- info: "\\symbol{123}\\symbol{124}\\symbol{125}\\symbol{92}" -/
-#guard_msgs in
-#eval escapeForVerbatim "{|}\\"
-
--- Tests for lineBreaks functionality
-/-- info: "Nat.\\allowbreak{}add\\-One" -/
-#guard_msgs in
-#eval escapeForVerbatim "Nat.addOne" (lineBreaks := true)
-
-/-- info: "List.\\allowbreak{}map2\\-Fun" -/
-#guard_msgs in
-#eval escapeForVerbatim "List.map2Fun" (lineBreaks := true)
-
-/-- info: "x2\\-y" -/
-#guard_msgs in
-#eval escapeForVerbatim "x2y" (lineBreaks := true)
-
-/-- info: "Foo123" -/
-#guard_msgs in
-#eval escapeForVerbatim "Foo123" (lineBreaks := true)  -- no break before digits
-
-/-- info: "a..\\allowbreak{}b" -/
-#guard_msgs in
-#eval escapeForVerbatim "a..b" (lineBreaks := true)  -- only one break after dot sequence
-
-/-- info: "\\symbol{123}foo\\-Bar" -/
-#guard_msgs in
-#eval escapeForVerbatim "{fooBar" (lineBreaks := true)  -- escaping + line breaks
-
-/-- info: "plain" -/
-#guard_msgs in
-#eval escapeForVerbatim "plain" (lineBreaks := true)  -- no transitions
-
-/-- info: "Nat.addOne" -/
-#guard_msgs in
-#eval escapeForVerbatim "Nat.addOne"  -- lineBreaks := false (default), no breaks
-
 /--
 Wraps some TeX (which is already assumed to be appropriately escaped in the appropriate
 verbatim-like environment depending on whether we're in a fragile environment.

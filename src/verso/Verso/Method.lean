@@ -64,33 +64,4 @@ where
     | .ident info str _ preres => pure <| .ident info str n preres
     | other => throwErrorAt other "Not an identifier: {other}"
 
-namespace A.B.C
-  structure D where
-    field : Nat
-  deriving Repr
-
-  structure List (α : Type u) where
-    notReallyList : α
-end A.B.C
-
-namespace Other
-
-open A.B.C
-
-
-defmethod D.double : D → D
-  | ⟨n⟩ => ⟨n*2⟩
-
-/--
-error: 'List' is ambiguous - found: A.B.C.List, _root_.List
-
-Please write a more specific namespace.
--/
-#guard_msgs in
-defmethod List.wat (xs : List Nat) : Nat := 3
-
-end Other
-
-/-- info: { field := 6 } -/
-#guard_msgs in
-#eval (A.B.C.D.mk 3).double
+end
