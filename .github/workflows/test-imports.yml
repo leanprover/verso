@@ -11,13 +11,10 @@ jobs:
 
             - name: Check all test modules are transitively imported
               run: |
-                  # Get all test module files
-                  TEST_FILES=$(find src/tests/Tests -name "*.lean" | sort)
-
-                  # Convert file paths to module names
+                  # Convert file paths to module names and check imports
                   # e.g., src/tests/Tests/Html.lean -> Tests.Html
-                  MISSING=""
-                  for file in $TEST_FILES; do
+                  MISSING=()
+                  while IFS= read -r -d '' file; do
                     # Convert path to module name
                     module=$(echo "$file" | sed 's|^src/tests/||; s|\.lean$||; s|/|.|g')
 
@@ -34,14 +31,14 @@ jobs:
                       if [ -f "$parent_file" ] && grep -q "import $module" "$parent_file"; then
                         : # Imported via parent
                       else
-                        MISSING="$MISSING $module"
+                        MISSING+=("$module")
                       fi
                     fi
-                  done
+                  done < <(find src/tests/Tests -name "*.lean" -print0 | sort -z)
 
-                  if [ -n "$MISSING" ]; then
+                  if [ ${#MISSING[@]} -gt 0 ]; then
                     echo "The following test modules are not transitively imported by the test suite:"
-                    echo "$MISSING" | tr ' ' '\n' | grep -v '^$'
+                    printf '%s\n' "${MISSING[@]}"
                     echo ""
                     echo "Please add them to src/tests/Tests.lean or an appropriate intermediate import file."
                     exit 1
