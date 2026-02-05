@@ -14,7 +14,11 @@ name: Continuous Integration
 jobs:
     build:
         name: Build and test
-        runs-on: nscloud-ubuntu-22.04-amd64-8x16
+        continue-on-error: true
+        runs-on: ${{ matrix.os }}
+        strategy:
+            matrix:
+                os: [nscloud-ubuntu-22.04-amd64-8x16, macos-latest, windows-latest]
         env:
             # Used for browser tests. Placing them here allows caching to work right.
             PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers
@@ -22,23 +26,26 @@ jobs:
             - name: install elan
               run: |
                   set -o pipefail
-                  curl -sSfL https://github.com/leanprover/elan/releases/download/v3.0.0/elan-x86_64-unknown-linux-gnu.tar.gz | tar xz
-                  ./elan-init -y --default-toolchain none
+                  curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf | sh -s -- -y --default-toolchain none
                   echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+              shell: bash
 
             - uses: actions/checkout@v5
 
             - name: List all files
               run: |
-                  find . -name "*.lean" -type f
+                  find . -name \"*.lean\" -type f
+              shell: bash
 
             - name: lean version
               run: |
                   lean --version
+              shell: bash
 
             - name: Compute short SHA
               id: shortSHA
               run: echo "short_sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+              shell: bash
 
             - name: Cache .lake
               uses: actions/cache@v4
@@ -59,10 +66,12 @@ jobs:
                   lake build
                   lake build :examples
                   popd
+              shell: bash
 
             - name: Build the project
               run: |
                   lake build
+              shell: bash
 
             - name: Install PDF Dependencies
               uses: zauguin/install-texlive@v4
@@ -109,23 +118,28 @@ jobs:
 
             - name: Check `tlmgr` version
               run: tlmgr --version
+              shell: bash
 
             - name: Run tests
               run: |
                   lake test -- --verbose --check-tex
+              shell: bash
 
             - name: Generate the test website
               run: |
                   lake exe demosite --output _out/test-projects/demosite
+              shell: bash
 
             - name: Generate the test genre's document
               run: |
                   lake exe simplepage
+              shell: bash
 
             - name: Generate some source HTML
               run: |
                   lake build Verso.Hover:literate
                   lake exe verso-html .lake/build/literate htmlout
+              shell: bash
 
             - name: Check internal links on the test website
               uses: lycheeverse/lychee-action@v2.6.1
@@ -188,6 +202,14 @@ jobs:
               run: uv run --project browser-tests --extra test pytest browser-tests -v
             # End browser testing
 
+    upload:
+        name: Upload Artifact and Releases
+        needs: build
+        runs-on: nscloud-ubuntu-22.04-amd64-8x16
+        env:
+            # Used for browser tests. Placing them here allows caching to work right.
+            PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers
+        steps:
             - name: Upload docs to artifact storage
               if: github.ref_type != 'tag' && github.ref != 'refs/heads/main'
               uses: actions/upload-artifact@v4
