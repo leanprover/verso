@@ -241,7 +241,7 @@ where
     if stx.isOfKind ``moduleDoc then
       if let some declRange ← getDeclarationRange? stx then
         if stx[1].getKind == ``versoCommentBody then
-          let doc? := getVersoModuleDocs (← getEnv) |>.snippets |>.findSome? fun s =>
+          let doc? := getMainVersoModuleDocs (← getEnv) |>.snippets |>.findSome? fun s =>
              guard (s.declarationRange == declRange) *> some s
           if let some doc := doc? then
             return #[.modDoc (← toModLit doc)]
@@ -255,7 +255,7 @@ where
       if str.endsWith "▲" then
         let str := str.dropWhile (· ≠ '▼' : Char → Bool) |>.drop 1 |>.dropEnd 1
         let indentStr := str.takeWhile (· ≠ '◄' : Char → Bool)
-        let str := str.drop (indentStr.chars.count + 1)
+        let str := str.drop (indentStr.chars.length + 1)
         let declName := str.toName
         let i := indentStr.toNat!
         if let some v ← findInternalDocString? (← getEnv) declName then
