@@ -29,7 +29,7 @@ namespace Verso.Genre.Blog
 open Lean.Doc.Syntax
 open Verso ArgParse Doc Elab
 open Lean Elab
-open Verso.SyntaxUtils (parserInputString)
+open Verso.SyntaxUtils (inputContextFromStrLit)
 
 open SubVerso.Examples (loadExamples Example)
 open SubVerso.Examples.Messages (messagesMatch)
@@ -434,9 +434,32 @@ instance [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadErr
       .flag `showProofStates true "Show proof states in rendered page?"
 
 
+def parserInputString [Monad m] [MonadFileMap m]
+    (str : TSyntax `str) :
+    m String := do
+  let text ← getFileMap
+  let preString := (0 : String.Pos.Raw).extract text.source (str.raw.getPos?.getD 0)
+  let mut code := ""
+  let mut iter := preString.startPos
+  while h : iter ≠ preString.endPos do
+    let c := iter.get h
+    iter := iter.next h
+    if c == '\n' then
+      code := code.push '\n'
+    else
+      for _ in [0:c.utf8Size] do
+        code := code.push ' '
+  let strOriginal? : Option String := do
+    let ⟨start, stop⟩ ← str.raw.getRange?
+    start.extract text.source stop
+  code := code ++ strOriginal?.getD str.getString
+  return code
+
 @[code_block]
 def leanInit : CodeBlockExpanderOf LeanInitBlockConfig
   | config , str => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"leanInit") <| do
+    -- XXX [upstream]: can't use pos here due to `Parser.parseHeader` type
+    let (_pos, _context) ← inputContextFromStrLit str
     let context := Parser.mkInputContext (← parserInputString str) (← getFileName)
     let (header, state, msgs) ← Parser.parseHeader context
     if !header.raw[0].isNone then
@@ -471,12 +494,15 @@ open SubVerso.Highlighting Highlighted in
 def lean : CodeBlockExpanderOf LeanBlockConfig
   | config, str => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"lean block") <| withoutAsync do
     let x := config.exampleContext
-    let (commandState, state) ← match exampleContextExt.getState (← getEnv) |>.contexts.find? x.getId with
+    let (commandState, _state) ← match exampleContextExt.getState (← getEnv) |>.contexts.find? x.getId with
       | some (.inline commandState state) => pure (commandState, state)
       | some (.subproject ..) => throwErrorAt x "Expected an example context for inline Lean, but found a subproject"
       | some (.module ..) => throwErrorAt x "Expected an example context for inline Lean, but found a module"
       | none => throwErrorAt x "Can't find example context"
-    let context := Parser.mkInputContext (← parserInputString str) (← getFileName)
+
+    -- XXX: note state above unused, remove once we verify everything is fine
+    let (pos, context) ← inputContextFromStrLit str
+    let state := { pos }
     -- Process with empty messages to avoid duplicate output
     let s ←
       withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"Elaborating commands") <|
@@ -616,9 +642,6 @@ def leanInline : RoleExpanderOf LeanInlineConfig
     let {env, scopes, ngen, ..} := commandState
     let {openDecls, currNamespace, opts, ..} := scopes.head!
 
-
-    let altStr ← parserInputString str
-
     let leveller {α} : TermElabM α → TermElabM α :=
       if let some us := config.universes then
         let us :=
@@ -627,7 +650,7 @@ def leanInline : RoleExpanderOf LeanInlineConfig
         Elab.Term.withLevelNames us
       else id
 
-    match (← SyntaxUtils.runParserCategory `term altStr) with
+    match (← SyntaxUtils.runParserCategory `term str) with
     | .error e => throwErrorAt str e
     | .ok stx => withOptions (fun _ => opts) <| runWithOpenDecls scopes <| runWithVariables scopes fun _ => do
       let (newMsgs, type, tree) ← do
@@ -637,7 +660,7 @@ def leanInline : RoleExpanderOf LeanInlineConfig
           let (tree', t) ← do
 
             let expectedType ← config.type.mapM fun (s : StrLit) => do
-              match (← SyntaxUtils.runParserCategory `term s.getString) with
+              match (← SyntaxUtils.runParserCategory `term s) with
               | .error e => throwErrorAt str e
               | .ok stx => withEnableInfoTree false do
                 let t ← leveller <| Elab.Term.elabType stx

@@ -291,7 +291,9 @@ def markupPreview : DirectiveExpanderOf MarkupPreviewConfig
     let `(block|``` | $expected ```) := blk2
       | throwErrorAt blk1 "Expected anonymous code block"
 
-    let stx ← blocks {} |>.parseString contents.getString.trimAsciiEnd.copy
+-- XXX Fixme due to trimAsciiEnd
+--    let stx ← blocks {} |>.parseString contents.getString.trimAsciiEnd.copy
+    let stx ← blocks {} |>.parseString contents (versoStyle := true)
     let p ← preview stx
     let p := p.pretty (width := 35)
 
@@ -327,7 +329,7 @@ open Verso.Parser in
 def markupPreviewPre : CodeBlockExpanderOf MarkupPreviewConfig
   | {title}, contents => do
 
-    let stx ← blocks {} |>.parseString contents.getString
+    let stx ← blocks {} |>.parseString contents (versoStyle := true)
     let p ← preview stx
     let p := p.pretty (width := 35)
 
@@ -430,7 +432,7 @@ Metadata blocks begin and end with `%%%`, and they contain any syntax that would
 a b c
 ```
 ```
-<p> a b c </p>
+<p> a b c  </p>
 ```
 :::
 
@@ -690,7 +692,7 @@ A description item is a line that starts with zero or more spaces, followed by a
 
     <dt>  Item 2 </dt>
   <dd>
-    <p> Description of item 2 </p>
+    <p> Description of item 2  </p>
   </dd>
    </dl>
 ```
@@ -729,7 +731,7 @@ But not this one.
   <p> So is this one. </p>
 </blockquote>
 
-<p> But not this one. </p>
+<p> But not this one.  </p>
 ```
 :::
 
@@ -941,6 +943,7 @@ Hyperlinks consist of the link text in square brackets followed by the target in
   <a href="https://lean-lang.org">
     Lean
   </a>
+
 </p>
 ```
 :::
@@ -987,7 +990,9 @@ This makes it possible to represent values that begin or end with back-ticks:
 `` `quotedName ``
 ```
 ```
-<p> <code>"`quotedName"</code> </p>
+<p>
+  <code>"`quotedName"</code>
+</p>
 ```
 :::
 or with spaces:
@@ -996,7 +1001,9 @@ or with spaces:
 ``  one space  ``
 ```
 ```
-<p> <code>" one space "</code> </p>
+<p>
+  <code>" one space "</code>
+</p>
 ```
 :::
 
@@ -1011,6 +1018,7 @@ Images require both alternative text and an address for the image:
   <img
     src="image.png"
     alt="Alt text"/>
+
 </p>
 ```
 :::
@@ -1057,6 +1065,7 @@ $`\frac{1}{2}`-powered syntax]
     <math contents="\\frac{1}{2}"/>
     -powered syntax
   </ref>
+
 </p>
 ```
 :::
@@ -1071,6 +1080,7 @@ This one takes a single inline code element without needing square brackets:
   <lean >
     <code>"2 + f 4"</code>
   </lean>
+
 </p>
 ```
 :::

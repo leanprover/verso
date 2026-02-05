@@ -31,9 +31,8 @@ Parses, but does not validate, a module header.
 @[code_block]
 def imports : CodeBlockExpanderOf ImportsParams
   | { «show» } , str => do
-    let altStr ← parserInputString str
     let p := Parser.whitespace >> Parser.Module.header.fn
-    let headerStx ← p.parseString altStr
+    let headerStx ← p.parseString str
     let hl ← highlight headerStx #[] {}
     if «show» then
       ``(Block.other (Block.lean $(quote hl) {}) #[Block.code $(quote str.getString)])
