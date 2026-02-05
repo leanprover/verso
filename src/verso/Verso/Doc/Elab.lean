@@ -194,13 +194,13 @@ public meta def _root_.Lean.Doc.Syntax.code.expand : InlineExpander
 @[inline_expander Lean.Doc.Syntax.inline_math]
 public meta def _root_.Lean.Doc.Syntax.inline_math.expand : InlineExpander
   |  `(inline| \math code( $s )) =>
-    ``(Inline.math MathMode.inline $s)
+    ``(Inline.math MathMode.inline $(quote s.getString))
   | _ => throwUnsupportedSyntax
 
 @[inline_expander Lean.Doc.Syntax.display_math]
 public meta def _root_.Lean.Doc.Syntax.display_math.expand : InlineExpander
   |  `(inline| \displaymath code( $s )) =>
-    ``(Inline.math MathMode.display $s)
+    ``(Inline.math MathMode.display $(quote s.getString))
   | _ => throwUnsupportedSyntax
 
 
