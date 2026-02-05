@@ -454,7 +454,7 @@ meta def leanTerm : CodeBlockExpanderOf LeanInlineConfig
 
         let ((), tree') ← elabInlineLean `Manual.leanTerm str fun _vars => do
             let expectedType ← config.type.mapM fun (s : StrLit) => do
-              match Parser.runParserCategory (← getEnv) `term s.getString (← getFileName) with
+              match (← SyntaxUtils.runParserCategoryString `term s.getString) with
               | .error e => throwErrorAt stx e
               | .ok stx => withEnableInfoTree false do
                 let t ← leveller <| Elab.Term.elabType stx
@@ -520,7 +520,7 @@ meta def leanInline : RoleExpanderOf LeanInlineConfig
         let (t, tree') ← elabInlineLean `Manual.leanInline arg fun _ => do
 
             let expectedType ← config.type.mapM fun (s : StrLit) => do
-              match Parser.runParserCategory (← getEnv) `term s.getString (← getFileName) with
+              match (← SyntaxUtils.runParserCategoryString `term s.getString) with
               | .error e => throwErrorAt term e
               | .ok stx => withEnableInfoTree false do
                 let t ← leveller <| Elab.Term.elabType stx

@@ -36,7 +36,7 @@ namespace Verso.Genre.Blog
 open Lean.Doc (CodeView RoleView)
 open Verso ArgParse Doc Elab
 open Lean Elab
-open Verso.SyntaxUtils (parserInputString strLitInputContext)
+open Verso.SyntaxUtils (strLitInputContext)
 
 open SubVerso.Examples.Messages (messagesMatch)
 open SubVerso.Module (ModuleItem)
@@ -422,6 +422,28 @@ meta instance [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [Mon
       .flag `showProofStates true "Show proof states in rendered page?"
 
 
+-- `Parser.parseHeader` always starts at zero, so this caller still needs padding.
+private def parserInputString [Monad m] [MonadFileMap m]
+    (str : Lean.Doc.VersoCodeBlock) :
+    m String := do
+  let text ← getFileMap
+  let preString := (0 : String.Pos.Raw).extract text.source (str.raw.getPos?.getD 0)
+  let mut code := ""
+  let mut iter := preString.startPos
+  while h : iter ≠ preString.endPos do
+    let c := iter.get h
+    iter := iter.next h
+    if c == '\n' then
+      code := code.push '\n'
+    else
+      for _ in [0:c.utf8Size] do
+        code := code.push ' '
+  let strOriginal? : Option String := do
+    let ⟨start, stop⟩ ← str.raw.getRange?
+    start.extract text.source stop
+  code := code ++ strOriginal?.getD str.getVersoCodeBlock
+  return code
+
 @[code_block]
 meta def leanInit : CodeBlockExpanderOf LeanInitBlockConfig
   | config , str => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"leanInit") <| do
@@ -602,7 +624,6 @@ private meta def leanInlineImpl : RoleExpanderOf LeanInlineConfig
     let {openDecls, currNamespace, opts, ..} := scopes.head!
 
 
-    let altStr ← parserInputString str
 
     let leveller {α} : TermElabM α → TermElabM α :=
       if let some us := config.universes then
@@ -615,7 +636,7 @@ private meta def leanInlineImpl : RoleExpanderOf LeanInlineConfig
     let (newMsgs, type, tree, hls) ←
       try
         setEnv env
-        match (← SyntaxUtils.runParserCategory `term altStr) with
+        match (← SyntaxUtils.runParserCategory `term str.raw) with
         | .error e => throwErrorAt str e
         | .ok stx => withOptions (fun _ => opts) <| runWithOpenDecls scopes <| runWithVariables scopes fun _ => do
           let (newMsgs, type, tree) ← do
@@ -624,7 +645,7 @@ private meta def leanInlineImpl : RoleExpanderOf LeanInlineConfig
               Core.resetMessageLog
               let (tree', t) ← do
                 let expectedType ← config.type.mapM fun (s : StrLit) => do
-                  match (← SyntaxUtils.runParserCategory `term s.getString) with
+                  match (← SyntaxUtils.runParserCategoryString `term s.getString) with
                   | .error e => throwErrorAt str e
                   | .ok stx => withEnableInfoTree false do
                     let t ← leveller <| Elab.Term.elabType stx

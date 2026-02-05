@@ -187,32 +187,6 @@ public def strLitInputContext [Monad m] [MonadFileMap m] [MonadError m] (str : S
   let ictx := Parser.mkInputContext text.source fileName (endPos := endPos) (endPos_valid := by grind)
   return (ictx, startPos)
 
-/--
-Given a string literal, constructs a Lean string that can be parsed by the Lean parser, yielding
-correct source positions for items in the string literal.
--/
-public def parserInputString [Monad m] [MonadFileMap m] [Literal k]
-    (str : TSyntax k) :
-    m String := do
-  let text ← getFileMap
-  let preString := (0 : String.Pos.Raw).extract text.source (str.raw.getPos?.getD 0)
-  let mut code := ""
-  let mut iter := preString.startPos
-  while h : iter ≠ preString.endPos do
-    let c := iter.get h
-    iter := iter.next h
-    if c == '\n' then
-      code := code.push '\n'
-    else
-      for _ in [0:c.utf8Size] do
-        code := code.push ' '
-  let strOriginal? : Option String := do
-    let ⟨start, stop⟩ ← str.raw.getRange?
-    start.extract text.source stop
-  code := code ++ strOriginal?.getD (Literal.decode str)
-  return code
-
-
 public structure SyntaxError where
   pos : Position
   endPos : Position
@@ -496,8 +470,26 @@ public def runParserCategoryGen [Monad m] [MonadEnv m] [MonadLog m] [MonadOption
   else
     Except.error (errorFn ictx (s.mkError "end of input"))
 
-public def runParserCategory [Monad m] [MonadEnv m] [MonadLog m] [MonadOptions m]
+public def runParserCategoryString [Monad m] [MonadEnv m] [MonadLog m] [MonadOptions m]
   (catName : Name) (input : String) (fileName : Option String := none) : m (Except String Syntax) :=
   runParserCategoryGen runParserCategory.toErrorMsg catName input fileName
+
+/--
+Runs a syntax category on a span of the original source. The span excludes any enclosing
+markup delimiters. Use `runParserCategoryString` for decoded Lean string literals instead.
+-/
+public def runParserCategory [Monad m] [MonadEnv m] [MonadLog m] [MonadOptions m] [MonadError m]
+    (catName : Name) (input : Syntax) : m (Except String Syntax) := do
+  let (ictx, pos) ← strLitInputContext input (← getFileName)
+  let env ← getEnv
+  let p := andthenFn whitespace (categoryParserFnImpl catName)
+  let s := p.run ictx { env, options := ← getOptions } (getTokenTable env)
+    { mkParserState ictx.inputString with pos }
+  return if !s.allErrors.isEmpty then
+    .error (s.toErrorMsg ictx)
+  else if ictx.atEnd s.pos then
+    .ok s.stxStack.back
+  else
+    .error ((s.mkError "end of input").toErrorMsg ictx)
 
 end Verso.SyntaxUtils
