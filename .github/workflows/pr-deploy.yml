@@ -26,7 +26,7 @@ jobs:
                   sourceRunId: ${{ github.event.workflow_run.id }}
 
             - name: Download HTML manual artifact
-              uses: dawidd6/action-download-artifact@v7
+              uses: dawidd6/action-download-artifact@v14
               with:
                   run_id: ${{ github.event.workflow_run.id }}
                   name: html-manual-for-deploy
