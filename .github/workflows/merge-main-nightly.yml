@@ -18,7 +18,7 @@ jobs:
         if: github.repository == 'leanprover/verso'
         steps:
             - name: Checkout repository
-              uses: actions/checkout@v4
+              uses: actions/checkout@v6
               with:
                   ref: ${{ env.TARGET_BRANCH }}
                   fetch-depth: 0
