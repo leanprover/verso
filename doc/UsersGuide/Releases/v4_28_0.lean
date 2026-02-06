@@ -17,4 +17,5 @@ tag := "release-v4.28.0"
 file := "v4.28.0"
 %%%
 
-* Add Release Notes / Changelog to Verso Users guide (@ejgallego, #708)
+* Add Release Notes / Changelog to Verso Users guide (@david-christiansen, @ejgallego, #708)
+* Fix infoview display for inline lean code (@david-christiansen, @ejgallego, #700)

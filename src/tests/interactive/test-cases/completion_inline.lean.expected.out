@@ -1,8 +1,25 @@
 {"textDocument":
  {"uri": "file:///src/tests/interactive/test-cases/completion_inline.lean"},
- "position": {"line": 9, "character": 7}}
+ "position": {"line": 9, "character": 6}}
 {"items": [], "isIncomplete": true}
 {"textDocument":
  {"uri": "file:///src/tests/interactive/test-cases/completion_inline.lean"},
- "position": {"line": 13, "character": 18}}
-{"items": [], "isIncomplete": true}
+ "position": {"line": 14, "character": 13}}
+{"items":
+ [{"label": "add_sub_assoc",
+   "kind": 23,
+   "data":
+   ["file:///src/tests/interactive/test-cases/completion_inline.lean",
+    14,
+    13,
+    0,
+    "cNat.add_sub_assoc"]},
+  {"label": "add_assoc",
+   "kind": 23,
+   "data":
+   ["file:///src/tests/interactive/test-cases/completion_inline.lean",
+    14,
+    13,
+    0,
+    "cNat.add_assoc"]}],
+ "isIncomplete": false}
