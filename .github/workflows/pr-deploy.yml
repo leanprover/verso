@@ -35,7 +35,7 @@ jobs:
 
             - name: Deploy to Netlify
               id: netlify
-              uses: nwtgck/actions-netlify@v2.0
+              uses: nwtgck/actions-netlify@v3.0
               with:
                   publish-dir: html-manual
                   production-branch: main
