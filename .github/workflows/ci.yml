@@ -128,7 +128,7 @@ jobs:
                   lake exe verso-html .lake/build/literate htmlout
 
             - name: Check internal links on the test website
-              uses: lycheeverse/lychee-action@v2.6.1
+              uses: lycheeverse/lychee-action@v2.7.0
               with:
                   format: markdown
                   jobSummary: true
