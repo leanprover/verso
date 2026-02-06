@@ -1917,3 +1917,38 @@ def conv.descr : BlockDescr := withHighlighting {
   toTeX := some <| fun _goI goB _id _info contents => contents.mapM goB
   extraCss := [docstringStyle]
 }
+
+inline_extension Inline.conv (hl : Highlighted) via withHighlighting where
+  data := ToJson.toJson hl
+  traverse _ _ _ := pure none
+  toTeX :=
+    some <| fun go _ _ content => do
+      pure <| .seq <| ← content.mapM fun b => do
+        pure <| .seq #[← go b, .raw "\n"]
+  extraCss := [docstringStyle]
+  toHtml :=
+    open Verso.Output.Html Verso.Doc.Html in
+    some <| fun _ _ data _ => do
+      match FromJson.fromJson? data with
+      | .error err =>
+        HtmlT.logError <| "Couldn't deserialize conv tactic code while rendering HTML: " ++ err
+        pure .empty
+      | .ok (hl : Highlighted) =>
+        hl.inlineHtml (g := Manual) "examples"
+
+@[role_expander conv]
+def convInline : RoleExpander
+  | _args, inlines => do
+    let #[arg] := inlines
+      | throwError "Expected exactly one argument"
+    let `(inline|code( $convTac:str )) := arg
+      | throwErrorAt arg "Expected code literal with the conv tactic name"
+    let convTacName := convTac.getString.toName
+    let convTacDoc ← getConvTactic (.inr (mkIdent convTacName)) none
+
+    let hl : Highlighted := convToken convTacDoc convTac.getString
+
+    return #[← `(Verso.Doc.Inline.other (Inline.conv $(quote hl)) #[Verso.Doc.Inline.code $(quote convTac.getString)])]
+where
+  convToken (t : ConvTacticDoc) (showStr : String) : Highlighted :=
+    .token ⟨.keyword (some t.name) none t.docs?, showStr⟩

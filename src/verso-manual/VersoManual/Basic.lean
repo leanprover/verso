@@ -1216,7 +1216,8 @@ def TraverseState.localTargets (state : TraverseState) : Code.LinkTargets Manual
     state.linksFromDomain optionDomain x.toString "doc" s!"Documentation for option {x}"
   keyword := fun k _ctxt? =>
     state.linksFromDomain tacticDomain k.toString "doc" "Documentation for tactic" ++
-    state.linksFromDomain syntaxKindDomain k.toString "doc" "Documentation for syntax"
+    state.linksFromDomain syntaxKindDomain k.toString "doc" "Documentation for syntax" ++
+    state.linksFromDomain convDomain k.toString "doc" "Documentation for conv tactic"
 
 def _root_.Verso.Multi.AllRemotes.remoteTargets (remoteContent : AllRemotes) : Code.LinkTargets ρ where
   const := fun x _ctxt? =>
@@ -1225,7 +1226,8 @@ def _root_.Verso.Multi.AllRemotes.remoteTargets (remoteContent : AllRemotes) : C
     fromRemoteDomain optionDomain x.toString (s!"doc ({·})") (s!"Documentation for option {x} in {·}")
   keyword := fun k _ctxt? =>
     fromRemoteDomain tacticDomain k.toString (s!"doc ({·})") (s!"Documentation for tactic in {·}") ++
-    fromRemoteDomain syntaxKindDomain k.toString (s!"doc ({·})") (s!"Documentation for syntax in {·}")
+    fromRemoteDomain syntaxKindDomain k.toString (s!"doc ({·})") (s!"Documentation for syntax in {·}") ++
+    fromRemoteDomain convDomain k.toString (s!"doc ({·})") (s!"Documentation for conv tactic in {·}")
 where
 
   fromRemoteDomain (domain : Name) (canonicalName : String) (shortDescription description : String → String) : Array Code.CodeLink := Id.run do
