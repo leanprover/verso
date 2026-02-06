@@ -237,7 +237,7 @@ jobs:
 
             - name: Deploy Verso manual
               id: deploy-lang
-              uses: nwtgck/actions-netlify@v2.0
+              uses: nwtgck/actions-netlify@v3.0
               if: github.event_name == 'push' && github.ref_name == 'main'
               with:
                   publish-dir: _out/html-multi
