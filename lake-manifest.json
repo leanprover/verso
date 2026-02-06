@@ -15,7 +15,7 @@
    "type": "git",
    "subDir": null,
    "scope": "",
-   "rev": "92a0bac89cf9f9f7cb813484506e3fb7f7350ad4",
+   "rev": "7e097e9a076d5fbe48aa39aceee871af0d011101",
    "name": "MD4Lean",
    "manifestFile": "lake-manifest.json",
    "inputRev": "main",
