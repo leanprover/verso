@@ -1,0 +1,2 @@
+[filtering]
+ignorewarnings=url-content-too-large,url-too-long
