@@ -127,14 +127,12 @@ jobs:
                   lake build Verso.Hover:literate
                   lake exe verso-html .lake/build/literate htmlout
 
+            - name: Install linkchecker
+              run: pip install linkchecker
+
             - name: Check internal links on the test website
-              uses: lycheeverse/lychee-action@v2.6.1
-              with:
-                  format: markdown
-                  jobSummary: true
-                  args:
-                      --base './_out/test-projects/demosite' --no-progress --offline
-                      './_out/test-projects/demosite/**/*.html'
+              run: |
+                  linkchecker --config=.linkchecker/linkcheckerrc --no-status ./_out/test-projects/demosite/
 
             - name: Generate the manual
               run: |
