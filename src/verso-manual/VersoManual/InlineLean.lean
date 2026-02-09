@@ -28,7 +28,7 @@ open Verso ArgParse Doc Elab Genre.Manual Html Code Highlighted.WebAssets Expect
 open Lean Elab
 open SubVerso.Highlighting
 
-open Verso.SyntaxUtils (runParserCategory' SyntaxError parseStrLitAsCategory strLitInputContext)
+open Verso.SyntaxUtils (SyntaxError parseStrLitAsCategory strLitInputContext)
 
 open Lean.Doc.Syntax
 open Lean.Elab.Tactic.GuardMsgs
