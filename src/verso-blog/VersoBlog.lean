@@ -423,7 +423,7 @@ meta instance [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [Mon
 
 
 -- `Parser.parseHeader` always starts at zero, so this caller still needs padding.
-private def parserInputString [Monad m] [MonadFileMap m]
+private meta def parserInputString [Monad m] [MonadFileMap m]
     (str : Lean.Doc.VersoCodeBlock) :
     m String := do
   let text ← getFileMap
@@ -622,8 +622,6 @@ private meta def leanInlineImpl : RoleExpanderOf LeanInlineConfig
 
     let {env, scopes, ngen, ..} := commandState
     let {openDecls, currNamespace, opts, ..} := scopes.head!
-
-
 
     let leveller {α} : TermElabM α → TermElabM α :=
       if let some us := config.universes then

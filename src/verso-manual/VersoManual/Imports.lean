@@ -35,6 +35,7 @@ Parses, but does not validate, a module header.
 meta def imports : CodeBlockExpanderOf ImportsParams
   | { «show» } , str => do
     let p := Parser.whitespace >> Parser.Module.header.fn
+    -- The Verso code token spans the header contents without its enclosing fences.
     let headerStx ← parseStrLitWith p str
     let hl ← highlight headerStx #[] {}
     if «show» then
