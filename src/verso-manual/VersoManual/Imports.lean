@@ -32,7 +32,8 @@ Parses, but does not validate, a module header.
 def imports : CodeBlockExpanderOf ImportsParams
   | { «show» } , str => do
     let p := Parser.whitespace >> Parser.Module.header.fn
-    let headerStx ← p.parseString str
+    -- Provenance of `str` here is from Verso parser
+    let headerStx ← p.parseString str (versoStyle := true)
     let hl ← highlight headerStx #[] {}
     if «show» then
       ``(Block.other (Block.lean $(quote hl) {}) #[Block.code $(quote str.getString)])

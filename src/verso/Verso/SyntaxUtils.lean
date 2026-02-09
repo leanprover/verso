@@ -135,6 +135,10 @@ macro_rules
 end
 
 open Syntax in
+
+/-- get the inner start/end position of a string literal. If the
+ string is coming from Verso, this corresponds to the positions stored
+ in the syntax object, otherwise we must remove the quotes. -/
 def _root_.Lean.TSyntax.innerPos? (str : StrLit) (versoStyle : Bool) : Option (String.Pos.Raw × String.Pos.Raw) :=
   if versoStyle then
     match str.raw.getPos?, str.raw.getTailPos? with
@@ -264,6 +268,13 @@ public def runParserCategoryGen [Monad m] [MonadEnv m] [MonadLog m] [MonadOption
 public def runParserCategory [Monad m] [MonadEnv m] [MonadLog m] [MonadOptions m]
   (catName : Name) (input : StrLit) (versoStyle : Bool := true) (fileName : Option String := none) : m (Except String Syntax) :=
   runParserCategoryGen runParserCategory.toErrorMsg catName input versoStyle fileName
+
+/- This function can be used to check whether string are in Verso
+  style or in Lean style -/
+public def checkString (str : StrLit) : String :=
+  let s := str.getString
+  let sz := (str.raw.getTailPos?.getD 0 |>.byteIdx) - str.raw.getPos!.byteIdx
+  s!"real size: {s.length}, syntax size: {sz}"
 
 end Verso.SyntaxUtils
 
