@@ -196,7 +196,7 @@ where
 section
 
 inductive LeanExampleData where
-  | inline (commandState : Command.State) (parserState : Parser.ModuleParserState)
+  | inline (commandState : Command.State)
   | subproject (loaded : NameSuffixMap Example)
   | module (positioned : Array ModuleItem)
 deriving Inhabited
@@ -470,7 +470,7 @@ def leanInit : CodeBlockExpanderOf LeanInitBlockConfig
     if header.raw[1].isNone then -- if the "prelude" option was not set, use the current env
       let commandState := configureCommandState (← getEnv) {}
       let commandState := { commandState with scopes := [{ header := "", opts := pp.tagAppFns.set {} true }] }
-      modifyEnv <| fun env => exampleContextExt.modifyState env fun s => {s with contexts := s.contexts.insert config.exampleContext.getId (.inline commandState  state)}
+      modifyEnv <| fun env => exampleContextExt.modifyState env fun s => {s with contexts := s.contexts.insert config.exampleContext.getId (.inline commandState)}
     else
       if header.raw[2].getArgs.isEmpty then
         let (env, msgs) ← processHeader header opts msgs context 0
@@ -480,7 +480,7 @@ def leanInit : CodeBlockExpanderOf LeanInitBlockConfig
           liftM (m := IO) (throw <| IO.userError "Errors during import; aborting")
         let commandState := configureCommandState env {}
         let commandState := { commandState with scopes := [{ header := "", opts := pp.tagAppFns.set {} true }] }
-        modifyEnv <| fun env => exampleContextExt.modifyState env fun s => {s with contexts := s.contexts.insert config.exampleContext.getId (.inline commandState state)}
+        modifyEnv <| fun env => exampleContextExt.modifyState env fun s => {s with contexts := s.contexts.insert config.exampleContext.getId (.inline commandState)}
     if config.show then
       ``(Block.code $(quote str.getString)) -- TODO highlighting hack
     else
@@ -494,8 +494,8 @@ open SubVerso.Highlighting Highlighted in
 def lean : CodeBlockExpanderOf LeanBlockConfig
   | config, str => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"lean block") <| withoutAsync do
     let x := config.exampleContext
-    let (commandState, _state) ← match exampleContextExt.getState (← getEnv) |>.contexts.find? x.getId with
-      | some (.inline commandState state) => pure (commandState, state)
+    let commandState ← match exampleContextExt.getState (← getEnv) |>.contexts.find? x.getId with
+      | some (.inline commandState) => pure (commandState)
       | some (.subproject ..) => throwErrorAt x "Expected an example context for inline Lean, but found a subproject"
       | some (.module ..) => throwErrorAt x "Expected an example context for inline Lean, but found a module"
       | none => throwErrorAt x "Can't find example context"
@@ -527,7 +527,7 @@ def lean : CodeBlockExpanderOf LeanBlockConfig
 
     if config.keep && !config.error then
       modifyEnv fun env => exampleContextExt.modifyState env fun st => {st with
-        contexts := st.contexts.insert x.getId (.inline {s.commandState with messages := {} } s.parserState)
+        contexts := st.contexts.insert x.getId (.inline {s.commandState with messages := {} })
       }
     if let some infoName := config.name then
       modifyEnv fun env => messageContextExt.modifyState env fun st => {st with
@@ -633,8 +633,8 @@ def leanInline : RoleExpanderOf LeanInlineConfig
     let `(inline|code( $str:str )) := code
       | throwErrorAt code "Expected an inline code element"
     let x := config.exampleContext
-    let (commandState, _) ← match exampleContextExt.getState (← getEnv) |>.contexts.find? x.getId with
-      | some (.inline commandState state) => pure (commandState, state)
+    let commandState ← match exampleContextExt.getState (← getEnv) |>.contexts.find? x.getId with
+      | some (.inline commandState) => pure commandState
       | some (.subproject ..) => throwErrorAt x "Expected an example context for inline Lean, but found a subproject"
       | some (.module ..) => throwErrorAt x "Expected an example context for inline Lean, but found a module"
       | none => throwErrorAt x "Can't find example context"
