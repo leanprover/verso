@@ -615,7 +615,7 @@ private meta def leanInlineImpl : RoleExpanderOf LeanInlineConfig
     let (newMsgs, type, tree, hls) ←
       try
         setEnv env
-        match Parser.runParserCategory env `term altStr (← getFileName) with
+        match (← SyntaxUtils.runParserCategory `term altStr) with
         | .error e => throwErrorAt str e
         | .ok stx => withOptions (fun _ => opts) <| runWithOpenDecls scopes <| runWithVariables scopes fun _ => do
           let (newMsgs, type, tree) ← do
@@ -624,7 +624,7 @@ private meta def leanInlineImpl : RoleExpanderOf LeanInlineConfig
               Core.resetMessageLog
               let (tree', t) ← do
                 let expectedType ← config.type.mapM fun (s : StrLit) => do
-                  match Parser.runParserCategory env `term s.getString (← getFileName) with
+                  match (← SyntaxUtils.runParserCategory `term s.getString) with
                   | .error e => throwErrorAt str e
                   | .ok stx => withEnableInfoTree false do
                     let t ← leveller <| Elab.Term.elabType stx
