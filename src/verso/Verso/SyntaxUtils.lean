@@ -320,4 +320,11 @@ public def runParserCategory [Monad m] [MonadEnv m] [MonadLog m] [MonadOptions m
   (catName : Name) (input : StrLit) (versoStyle : Bool := true) (fileName : Option String := none) : m (Except String Syntax) :=
   runParserCategoryGen runParserCategory.toErrorMsg catName input versoStyle fileName
 
+/- This function can be used to check whether string are in Verso
+  style or in Lean style -/
+public def checkString (str : StrLit) : String :=
+  let s := str.getString
+  let sz := (str.raw.getTailPos?.getD 0 |>.byteIdx) - str.raw.getPos!.byteIdx
+  s!"real size: {s.length}, syntax size: {sz}"
+
 end Verso.SyntaxUtils

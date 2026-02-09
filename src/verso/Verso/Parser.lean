@@ -985,6 +985,8 @@ namespace Verso.Doc.Concrete
 open Verso.Parser
 open Lean Elab Term
 
+-- Important! Both functions below expect strings in "Lean style",
+-- that is to say, with positions including quotes around the string.
 public def stringToInlines [Monad m] [MonadError m] [MonadLog m] [MonadOptions m] [MonadEnv m] [MonadQuotation m] (s : StrLit) : m (Array Syntax) :=
   withRef s do
     return (← textLine.parseString s).getArgs
