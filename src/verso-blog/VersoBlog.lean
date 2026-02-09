@@ -627,7 +627,7 @@ def leanInline : RoleExpanderOf LeanInlineConfig
         Elab.Term.withLevelNames us
       else id
 
-    match Parser.runParserCategory env `term altStr (← getFileName) with
+    match (← SyntaxUtils.runParserCategory `term altStr) with
     | .error e => throwErrorAt str e
     | .ok stx => withOptions (fun _ => opts) <| runWithOpenDecls scopes <| runWithVariables scopes fun _ => do
       let (newMsgs, type, tree) ← do
@@ -637,7 +637,7 @@ def leanInline : RoleExpanderOf LeanInlineConfig
           let (tree', t) ← do
 
             let expectedType ← config.type.mapM fun (s : StrLit) => do
-              match Parser.runParserCategory env `term s.getString (← getFileName) with
+              match (← SyntaxUtils.runParserCategory `term s.getString) with
               | .error e => throwErrorAt str e
               | .ok stx => withEnableInfoTree false do
                 let t ← leveller <| Elab.Term.elabType stx

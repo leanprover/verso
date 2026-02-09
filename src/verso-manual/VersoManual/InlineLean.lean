@@ -28,7 +28,7 @@ open Verso ArgParse Doc Elab Genre.Manual Html Code Highlighted.WebAssets Expect
 open Lean Elab
 open SubVerso.Highlighting
 
-open Verso.SyntaxUtils (parserInputString runParserCategory' SyntaxError)
+open Verso.SyntaxUtils (parserInputString SyntaxError)
 
 open Lean.Doc.Syntax
 open Lean.Elab.Tactic.GuardMsgs
@@ -356,7 +356,7 @@ def leanTerm : CodeBlockExpanderOf LeanInlineConfig
         Elab.Term.withLevelNames us
       else id
 
-    match Parser.runParserCategory (← getEnv) `term altStr (← getFileName) with
+    match (← SyntaxUtils.runParserCategory `term altStr) with
     | .error e => throwErrorAt str e
     | .ok stx =>
       let (newMsgs, tree) ← do
@@ -366,7 +366,7 @@ def leanTerm : CodeBlockExpanderOf LeanInlineConfig
 
           let tree' ← runWithOpenDecls <| runWithVariables fun _vars => do
             let expectedType ← config.type.mapM fun (s : StrLit) => do
-              match Parser.runParserCategory (← getEnv) `term s.getString (← getFileName) with
+              match (← SyntaxUtils.runParserCategory `term s.getString) with
               | .error e => throwErrorAt stx e
               | .ok stx => withEnableInfoTree false do
                 let t ← leveller <| Elab.Term.elabType stx
@@ -433,7 +433,7 @@ def leanInline : RoleExpanderOf LeanInlineConfig
         Elab.Term.withLevelNames us
       else id
 
-    match Parser.runParserCategory (← getEnv) `term altStr (← getFileName) with
+    match (← SyntaxUtils.runParserCategory `term altStr) with
     | .error e => throwErrorAt term e
     | .ok stx =>
 
@@ -444,7 +444,7 @@ def leanInline : RoleExpanderOf LeanInlineConfig
           let (tree', t) ← runWithOpenDecls <| runWithVariables fun _ => do
 
             let expectedType ← config.type.mapM fun (s : StrLit) => do
-              match Parser.runParserCategory (← getEnv) `term s.getString (← getFileName) with
+              match (← SyntaxUtils.runParserCategory `term s.getString) with
               | .error e => throwErrorAt term e
               | .ok stx => withEnableInfoTree false do
                 let t ← leveller <| Elab.Term.elabType stx
@@ -516,7 +516,7 @@ def inst : RoleExpanderOf LeanBlockConfig
       | throwErrorAt arg "Expected code literal with the example name"
     let altStr ← parserInputString term
 
-    match Parser.runParserCategory (← getEnv) `term altStr (← getFileName) with
+    match (← SyntaxUtils.runParserCategory `term altStr) with
     | .error e => throwErrorAt term e
     | .ok stx =>
       let (newMsgs, tree) ← do

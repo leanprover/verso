@@ -15,7 +15,7 @@ open SubVerso.Highlighting
 open Verso Genre Manual ArgParse Doc Elab
 open Verso Output Html
 open Verso Code Highlighted WebAssets
-open Verso.SyntaxUtils
+open Verso.SyntaxUtils (parserInputString)
 open Lean Elab
 
 namespace Verso.Genre.Manual.InlineLean
@@ -63,7 +63,7 @@ def signature : CodeBlockExpanderOf SignatureConfig
     let col? := (← getRef).getPos? |>.map (← getFileMap).utf8PosToLspPos |>.map (·.character)
 
 
-    match Parser.runParserCategory (← getEnv) `signature_spec altStr (← getFileName) with
+    match (← SyntaxUtils.runParserCategory `signature_spec altStr) with
     | .error e => throwError e
     | .ok stx =>
       let `(signature_spec|$[$kw]? $name:declId $sig:declSig) := stx

@@ -16,7 +16,7 @@ open SubVerso.Highlighting
 open Verso Genre Manual ArgParse Doc Elab
 open Verso Output Html
 open Verso Code Highlighted WebAssets
-open Verso.SyntaxUtils
+open Verso.SyntaxUtils (SyntaxError)
 open Lean Elab
 
 namespace Verso.Genre.Manual.InlineLean
@@ -140,7 +140,8 @@ def syntaxError : CodeBlockExpanderOf SyntaxErrorConfig
       (detail? := some "Syntax error")
 
     let s := str.getString
-    match runParserCategory' (← getEnv) (← getOptions) config.category s with
+    let errorFn := SyntaxUtils.runParserCategory.toSyntaxErrors
+    match (← SyntaxUtils.runParserCategoryGen (errorFn := errorFn) config.category s) with
     | .ok stx =>
       throwErrorAt str m!"Expected a syntax error for category {config.category}, but got {indentD stx}"
     | .error es =>
