@@ -425,7 +425,7 @@ public def page
   let relativeRoot := String.join <| "./" :: path.toList.map (fun _ => "../")
   let defer := #[("defer", "defer")]
   {{
-    <html>
+    <html data-verso-dark-mode="true">
       <head>
         <script>
           {{addSlashJs}}

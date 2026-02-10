@@ -9,6 +9,10 @@
 
     /** Background colors **/
     --verso-background-color: #ffffff;
+    /*
+    "Surface" is a secondary background used for elevated UI regions, such as sidebars, controls,
+    and overlays that sit on top of the page background.
+    */
     --verso-surface-color: #f9fbfd;
 
     /** Text colors **/
@@ -24,6 +28,8 @@
     /** Border colors **/
     --verso-border-color: #e4ebf3;
     --verso-border-color-light: #d1d9e2;
+    --verso-search-box-border-color: #8ea1b3;
+    --verso-search-box-border-active-color: var(--verso-link-color);
 
     /** Selected items (e.g. search results) */
     --verso-selected-color: #def;
@@ -75,9 +81,9 @@
     --verso-code-kw-font-family: var(--verso-code-font-family);
 }
 
-/** Dark mode - respects OS preference **/
+/** Dark mode - opt-in via data-verso-dark-mode and respects OS preference **/
 @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
+    :root[data-verso-dark-mode]:not([data-theme="light"]) {
         /** Background colors **/
         --verso-background-color: #1e1e1e;
         --verso-surface-color: #181818;
@@ -93,8 +99,10 @@
         --verso-link-hover-color: #4d9efc;
 
         /** Border colors **/
-        --verso-border-color: #333333;
-        --verso-border-color-light: #444444;
+        --verso-border-color: #4c4c4c;
+        --verso-border-color-light: #666666;
+        --verso-search-box-border-color: #8694a3;
+        --verso-search-box-border-active-color: #5ca7ff;
 
         /** Selected items (e.g. search results) */
         --verso-selected-color: #2a4a6a;
@@ -119,7 +127,7 @@
 }
 
 /** Manual dark mode override **/
-:root[data-theme="dark"] {
+:root[data-verso-dark-mode][data-theme="dark"] {
     /** Background colors **/
     --verso-background-color: #1e1e1e;
     --verso-surface-color: #181818;
@@ -135,8 +143,10 @@
     --verso-link-hover-color: #4d9efc;
 
     /** Border colors **/
-    --verso-border-color: #333333;
-    --verso-border-color-light: #444444;
+    --verso-border-color: #4c4c4c;
+    --verso-border-color-light: #666666;
+    --verso-search-box-border-color: #8694a3;
+    --verso-search-box-border-active-color: #5ca7ff;
 
     /** Selected items (e.g. search results) */
     --verso-selected-color: #2a4a6a;

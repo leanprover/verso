@@ -26,6 +26,10 @@ input_file mathJs where
   text := true
   path := "static-web/math.js"
 
+input_file themeToggleJs where
+  text := true
+  path := "static-web/theme-toggle.js"
+
 input_dir vendorPopper where
   path := "vendored-js/popper"
 
@@ -70,7 +74,7 @@ lean_lib VersoBlog where
 lean_lib VersoManual where
   srcDir := "src/verso-manual"
   roots := #[`VersoManual]
-  needs := #[findJs]
+  needs := #[findJs, themeToggleJs]
 
 @[default_target]
 lean_exe «verso» where
