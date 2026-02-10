@@ -167,6 +167,8 @@ header {
     background: transparent;
     border: none;
     cursor: pointer;
+    position: relative;
+    z-index: 2;
     font-size: 1.25rem;
     padding: 0.5rem;
     margin-right: 0.5rem;

@@ -827,11 +827,6 @@ public def highlightingStyle : String := "
   border-color: var(--verso-warning-indicator-color);
 }
 
-.hl.lean .hover-info.messages > code.error {
-  background-color: #e5e5e5;
-  border-left: 0.2rem solid var(--verso-warning-color);
-}
-
 .tippy-box[data-theme~='warning'] .hl.lean .hover-info.messages > code.warning {
   background: none;
   border: none;

@@ -229,7 +229,7 @@
     z-index: 1;
     position: absolute;
     top: 0;
-    right: 0;
+    right: 3rem;
     bottom: 0;
     padding: 0 0.5rem;
     display: flex;
@@ -237,4 +237,10 @@
     justify-content: center;
     align-items: center;
     background-color: var(--verso-background-color, white);
+}
+
+@media screen and (max-width: 700px) {
+    #search-wrapper {
+        right: 2.25rem;
+    }
 }
