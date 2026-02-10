@@ -71,6 +71,21 @@ class TestDarkMode:
         finally:
             context.close()
 
+    def test_dark_system_preference_can_be_overridden_to_light(self, server: str, page: Page):
+        page.emulate_media(color_scheme="dark")
+        page.goto(f"{server}/Verso-Markup")
+
+        initial_theme, initial_stored = get_theme_state(page)
+        assert initial_theme is None
+        assert initial_stored is None
+        assert get_css_var(page, "--verso-background-color") == "#1e1e1e"
+
+        page.locator("#theme-toggle").click()
+        first_theme, first_stored = get_theme_state(page)
+        assert first_theme == "light"
+        assert first_stored == "light"
+        assert get_css_var(page, "--verso-background-color") == "#ffffff"
+
     def test_dark_mode_styles_require_opt_in_attribute(self, server: str, page: Page):
         page.emulate_media(color_scheme="dark")
         page.goto(f"{server}/Verso-Markup")
