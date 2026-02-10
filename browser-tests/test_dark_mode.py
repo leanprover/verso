@@ -7,6 +7,13 @@ def get_theme_state(page: Page) -> tuple[str | None, str | None]:
     return html_theme, stored_theme
 
 
+def get_css_var(page: Page, variable_name: str) -> str:
+    return page.evaluate(
+        """([name]) => getComputedStyle(document.documentElement).getPropertyValue(name).trim()""",
+        [variable_name],
+    )
+
+
 class TestDarkMode:
     def test_theme_toggle_asset_is_present_and_served(self, server: str, page: Page):
         page.goto(f"{server}/Verso-Markup")
@@ -63,3 +70,17 @@ class TestDarkMode:
             assert second_stored == "dark"
         finally:
             context.close()
+
+    def test_dark_mode_styles_require_opt_in_attribute(self, server: str, page: Page):
+        page.emulate_media(color_scheme="dark")
+        page.goto(f"{server}/Verso-Markup")
+
+        attr = page.evaluate("() => document.documentElement.hasAttribute('data-verso-dark-mode')")
+        assert attr is True
+        assert get_css_var(page, "--verso-background-color") == "#1e1e1e"
+
+        page.evaluate("() => document.documentElement.removeAttribute('data-verso-dark-mode')")
+        assert get_css_var(page, "--verso-background-color") == "#ffffff"
+
+        page.evaluate("() => document.documentElement.setAttribute('data-verso-dark-mode', 'true')")
+        assert get_css_var(page, "--verso-background-color") == "#1e1e1e"
