@@ -8,6 +8,16 @@ def get_theme_state(page: Page) -> tuple[str | None, str | None]:
 
 
 class TestDarkMode:
+    def test_theme_toggle_asset_is_present_and_served(self, server: str, page: Page):
+        page.goto(f"{server}/Verso-Markup")
+
+        script = page.locator('script[src="theme-toggle.js"]')
+        expect(script).to_have_count(1)
+
+        response = page.request.get(f"{server}/theme-toggle.js")
+        assert response.ok
+        assert response.status == 200
+
     def test_theme_toggle_cycles_and_updates_storage(self, server: str, page: Page):
         page.emulate_media(color_scheme="light")
         page.goto(f"{server}/Verso-Markup")
