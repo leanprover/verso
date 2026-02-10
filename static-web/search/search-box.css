@@ -36,8 +36,12 @@
     padding: 0;
     margin: 0;
     vertical-align: bottom;
-    border: none;
-    border-bottom: 1px solid var(--verso-border-color, gray);
+    border: 1px solid
+        var(
+            --verso-search-box-border-color,
+            var(--verso-border-color-light, var(--verso-border-color, gray))
+        );
+    border-radius: 0.25rem;
     position: relative;
     cursor: pointer;
     width: var(--search-bar-width);
@@ -47,11 +51,18 @@
     font-family: system-ui, sans-serif;
     /* Fix firefox eating spaces in textContent */
     white-space: -moz-pre-space;
+    transition:
+        border-color 0.15s ease-in-out,
+        background-color 0.15s ease-in-out;
 }
 
 #search-wrapper .combobox .group.focus .cb_edit,
 #search-wrapper .combobox .group .cb_edit:hover {
     background-color: var(--selected-color);
+    border-color: var(
+        --verso-search-box-border-active-color,
+        var(--verso-link-color, currentColor)
+    );
     outline: auto;
 }
 
@@ -75,7 +86,11 @@
     background-color: var(--verso-background-color, white);
     display: none;
     box-sizing: border-box;
-    border: 2px solid var(--verso-border-color, currentcolor);
+    border: 2px solid
+        var(
+            --verso-search-box-border-color,
+            var(--verso-border-color-light, var(--verso-border-color, currentcolor))
+        );
     max-height: 20rem;
     overflow: scroll;
     overflow-x: hidden;
