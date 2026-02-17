@@ -9,6 +9,7 @@ import VersoBlog.Basic
 import VersoBlog.LiterateLeanPage.Options
 import MD4Lean
 import VersoLiterate
+import Lean.Compiler.LCNF.ConfigOptions
 
 set_option doc.verso true
 

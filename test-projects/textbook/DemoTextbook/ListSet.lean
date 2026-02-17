@@ -132,7 +132,8 @@ theorem SameContents.setoid_eq_SameContents (xs ys : List α) :
     -- in the standard library
     let _ := setoid (α := α)
     (xs ≈ ys) = SameContents xs ys := by
-  simp [HasEquiv.Equiv, setoid]
+  rw [setoid]
+  simp [(· ≈ ·), instHasEquivOfSetoid]
 
 @[grind .]
 theorem ListSet.sound {xs ys : List α} :

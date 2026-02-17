@@ -9,7 +9,7 @@
  [{"label": "add_sub_assoc",
    "kind": 23,
    "data":
-   ["«external:file:///src/tests/interactive/test-cases/completion_inline.lean»",
+   ["file:///src/tests/interactive/test-cases/completion_inline.lean",
     14,
     13,
     0,
@@ -17,7 +17,7 @@
   {"label": "add_assoc",
    "kind": 23,
    "data":
-   ["«external:file:///src/tests/interactive/test-cases/completion_inline.lean»",
+   ["file:///src/tests/interactive/test-cases/completion_inline.lean",
     14,
     13,
     0,

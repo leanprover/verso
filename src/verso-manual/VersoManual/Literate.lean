@@ -7,6 +7,7 @@ import VersoManual.Basic
 import VersoManual.ExternalLean
 import VersoLiterate
 import Lean.Data.Json
+import Lean.Compiler.LCNF.ConfigOptions
 
 namespace Verso.Genre.Manual
 
