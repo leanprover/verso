@@ -116,22 +116,30 @@ public def Mem (features : HtmlFeatures) (f : HtmlFeature) : Prop := f ∈ featu
 public instance : Membership HtmlFeature HtmlFeatures where
   mem fs f := Mem fs f
 
-public theorem mem_iff_contains {fs : HtmlFeatures} {f : HtmlFeature} : f ∈ fs ↔ fs.contains f = true := by
+public theorem mem_iff_contains {fs : HtmlFeatures} {f : HtmlFeature} : f ∈ fs ↔ (fs.contains f = true) := by
   unfold contains
   apply HashSet.mem_iff_contains
 
 /--
 Membership is decidable.
 -/
-@[instance]
-public def instDecidableMem : Decidable (Mem fs f) :=
-  inferInstanceAs <| Decidable <| fs.contains f
+public instance instDecidableMem : Decidable (Mem fs f) :=
+  have inst : Decidable (fs.contains f = true) := inferInstance
+  match inst with
+  | .isTrue t =>
+    .isTrue <| by
+      simp only [Mem]
+      apply mem_iff_contains.mpr; assumption
+  | .isFalse f =>
+    .isFalse <| by
+      intro
+      apply f
+      apply mem_iff_contains.mp
+      simp only [(· ∈ ·)]
+      simp_all [Mem]
 
-/--
-Membership is decidable.
--/
-@[instance]
-public def instDecidableMembership {f : HtmlFeature} {fs : HtmlFeatures} : Decidable (f ∈  fs) :=
+@[inherit_doc instDecidableMem]
+public instance instDecidableMembership {f : HtmlFeature} {fs : HtmlFeatures} : Decidable (f ∈ fs) :=
   instDecidableMem
 
 @[simp, grind! .]

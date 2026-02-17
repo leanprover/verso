@@ -121,7 +121,7 @@ elab "#docs" "(" genre:term ")" n:ident title:str ":=" ":::::::" text:document "
   let doc ← Command.runTermElabM fun _ => elabDoc genre title text.raw.getArgs endTok.getPos!
   Command.elabCommand (← `(def $n : VersoDoc $genre := $doc))
 
-syntax docTermBody :=
+public syntax docTermBody :=
   atomic(":::" termDocument ":::") <|>
   atomic("::::" termDocument "::::") <|>
   atomic(":::::" termDocument ":::::") <|>
