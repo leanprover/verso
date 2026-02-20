@@ -134,6 +134,14 @@ jobs:
               run: |
                   linkchecker --config=.linkchecker/linkcheckerrc --no-status ./_out/test-projects/demosite/
 
+            - name: Generate the test tutorial site
+              run: |
+                  lake exe tutorial-example
+
+            - name: Check internal links on the test tutorial site
+              run: |
+                  linkchecker --config=.linkchecker/linkcheckerrc --no-status ./_out/tut/
+
             - name: Generate the manual
               run: |
                   ./generate.sh

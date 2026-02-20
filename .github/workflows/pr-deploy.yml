@@ -38,7 +38,7 @@ jobs:
               uses: nwtgck/actions-netlify@v3.0
               with:
                   publish-dir: html-manual
-                  production-branch: main
+                  production-deploy: false
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   alias: verso-pr-${{ steps.pr-info.outputs.pullRequestNumber }}
                   deploy-message:

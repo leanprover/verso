@@ -23,7 +23,7 @@ def content : Tutorials where
       tutorials := #[
         %doc TutorialExample.Data,
         %doc TutorialExample.HashMap,
-        literate_part⟨"." TutorialExample.Lit "Literately-Produced Tutorial" {slug := "literate", summary := "checks that we can load them", exampleStyle := .inlineLean `Lit} : Tutorial⟩ |>.toPart]
+        literate_part⟨"." TutorialExample.Lit "Literately-Produced Tutorial" {slug := "literate", summary := inlines!"checks that we can load them", exampleStyle := .inlineLean `Lit} : Tutorial⟩ |>.toPart]
     },
     { title := #[inlines!"Tactics"],
       titleString := "Tactics",
