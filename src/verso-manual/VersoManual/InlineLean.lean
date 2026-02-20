@@ -51,9 +51,15 @@ inline_extension Inline.lean (hls : Highlighted) via withHighlighting where
       saveExampleDefs id defs
       pure none
   toTeX :=
-    some <| fun go _ _ content => do
-      pure <| .seq <| ← content.mapM fun b => do
-        pure <| .seq #[← go b, .raw "\n"]
+    some <| fun _ _ data _ => do
+      let .arr #[hlJson, _] := data
+        | TeX.logError "Expected two-element JSON for Lean code" *> pure .empty
+      match FromJson.fromJson? hlJson with
+      | .error err =>
+        TeX.logError <| "Couldn't deserialize Lean code while rendering inline HTML: " ++ err
+        pure .empty
+      | .ok (hl : Highlighted) =>
+        hl.toTeX (g := Manual) (m := ReaderT ExtensionImpls IO)
   toHtml :=
     open Verso.Output.Html in
     some <| fun _ _ data _ => do
@@ -198,7 +204,9 @@ private def toHighlightedLeanBlock (shouldShow : Bool) (hls : Highlighted) (str:
 
   let range := Syntax.getRange? str
   let range := range.map (← getFileMap).utf8RangeToLspRange
-  ``(Block.other (Block.lean $(← quoteHighlightViaSerialization hls) (some $(quote (← getFileName))) $(quote range)) #[Block.code $(quote str.getString)])
+  ``(Block.other
+      (Block.lean $(← quoteHighlightViaSerialization hls) (some $(quote (← getFileName))) $(quote range))
+      #[Block.code $(quote str.getString)])
 
 /--
 Returns (syntax of) an Inline representation containing highlighted Lean code.
@@ -211,13 +219,12 @@ private def toHighlightedLeanInline (shouldShow : Bool) (hls : Highlighted) (str
   ``(Inline.other (Verso.Genre.Manual.InlineLean.Inline.lean $(← quoteHighlightViaSerialization hls)) #[Inline.code $(quote str.getString)])
 
 
-/--
-Elaborates the provided Lean command in the context of the current Verso module.
--/
-@[code_block]
-def lean : CodeBlockExpanderOf LeanBlockConfig
-  | config, str => withoutAsync <| do
-
+def elabCommands (config : LeanBlockConfig) (str : StrLit)
+    (toHighlightedLeanContent : (shouldShow : Bool) → (hls : Highlighted) → (str: StrLit) → DocElabM Term)
+    (minCommands : Option Nat := none)
+    (maxCommands : Option Nat := none) :
+    DocElabM Term :=
+  withoutAsync <| do
     PointOfInterest.save (← getRef) ((config.name.map (·.toString)).getD (abbrevFirstLine 20 str.getString))
       (kind := Lsp.SymbolKind.file)
       (detail? := some ("Lean code" ++ config.outlineMeta))
@@ -245,13 +252,23 @@ def lean : CodeBlockExpanderOf LeanBlockConfig
       let (cmd, ps', messages) := Parser.parseCommand ictx pmctx pstate cmdState.messages
       cmds := cmds.push cmd
       pstate := ps'
-      cmdState := {cmdState with messages := messages}
+      cmdState := { cmdState with messages := messages }
 
 
       cmdState ← withInfoTreeContext (mkInfoTree := pure ∘ InfoTree.node (.ofCommandInfo {elaborator := `Manual.Meta.lean, stx := cmd})) <|
         runCommand (Command.elabCommand cmd) cmd cctx cmdState
 
       if Parser.isTerminalCommand cmd then break
+
+    let nonTerm := cmds.filter (! Parser.isTerminalCommand ·)
+    if let some maxCmds := maxCommands then
+      if h : nonTerm.size > maxCmds then
+        logErrorAt nonTerm.back m!"Expected at most {maxCmds} commands, but got {nonTerm.size} commands."
+
+    if let some minCmds := minCommands then
+      if h : nonTerm.size < minCmds then
+        let blame := nonTerm[0]? |>.getD (← getRef)
+        logErrorAt blame m!"Expected at least {minCmds} commands, but got {nonTerm.size} commands."
 
     let origEnv ← getEnv
     try
@@ -264,10 +281,12 @@ def lean : CodeBlockExpanderOf LeanBlockConfig
 
       let mut hls := Highlighted.empty
       let nonSilentMsgs := cmdState.messages.toArray.filter (!·.isSilent)
+      let mut lastPos : String.Pos.Raw := cmds[0]? >>= (·.getRange?.map (·.start)) |>.getD 0
       for cmd in cmds do
-        hls := hls ++ (← highlight cmd nonSilentMsgs cmdState.infoState.trees)
+        hls := hls ++ (← highlightIncludingUnparsed cmd nonSilentMsgs cmdState.infoState.trees (startPos? := lastPos))
+        lastPos := (cmd.getTrailingTailPos?).getD lastPos
 
-      toHighlightedLeanBlock config.show hls str
+      toHighlightedLeanContent config.show hls str
     finally
       if !config.keep then
         setEnv origEnv
@@ -303,6 +322,22 @@ where
     match (← liftM <| EIO.toIO' <| ((log output).run cctx).run cmdState) with
     | .error _ => pure cmdState
     | .ok ((), cmdState) => pure cmdState
+
+/--
+Elaborates the provided Lean command in the context of the current Verso module.
+-/
+@[code_block]
+def lean : CodeBlockExpanderOf LeanBlockConfig
+  | config, str => elabCommands config str toHighlightedLeanBlock
+
+@[role]
+def leanCommand : RoleExpanderOf LeanBlockConfig
+  | config, inls => do
+    if let some str ← oneCodeStr? inls then
+      elabCommands config str toHighlightedLeanInline (minCommands := some 1) (maxCommands := some 1)
+    else
+      `(sorry)
+
 
 /--
 Elaborates the provided Lean term in the context of the current Verso module.
@@ -543,9 +578,14 @@ block_extension Block.leanOutput via withHighlighting where
   traverse _ _ _ := do
     pure none
   toTeX :=
-    some <| fun _ go _ _ content => do
-      pure <| .seq <| ← content.mapM fun b => do
-        pure <| .seq #[← go b, .raw "\n"]
+    open Verso.Output.Html in
+    some <| fun _ _ _ data _ => do
+      match FromJson.fromJson? data with
+      | .error err =>
+        TeX.logError <| "Couldn't deserialize Lean output while rendering TeX: " ++ err ++ "\n" ++ toString data
+        pure .empty
+      | .ok ((msg, _summarize, expandTraces) : Highlighted.Message × Bool × List Name) =>
+        msg.toTeX (expandTraces := expandTraces) (g := Manual)
   toHtml :=
     open Verso.Output.Html in
     some <| fun _ _ _ data _ => do

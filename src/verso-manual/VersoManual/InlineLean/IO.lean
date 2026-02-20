@@ -181,7 +181,16 @@ end
 block_extension Block.exampleLeanFile (filename : String) where
   data := .str filename
   traverse _ _ _ := pure none
-  toTeX := none
+  toTeX :=
+  open Verso.Output.TeX in
+  some <| fun _ goB _ data blocks => do
+    let .str filename := data
+      | Verso.Doc.TeX.logError "Failed to deserialize filename from {data.compress} (expected a string)"
+        return .empty
+    let descr := \TeX{\texttt{\Lean{"File: " ++ filename} } }
+    pure <| .seq #[.raw "\\begin{FileVerbatim}[label={", descr, .raw "}]\n",
+    (← blocks.mapM goB), .raw "\n\\end{FileVerbatim}\n" ]
+
   extraCss := [exampleFileCss]
   toHtml := open Verso.Output Html in
     some <| fun _ goB _ data blocks => do
@@ -194,7 +203,34 @@ block_extension Block.exampleLeanFile (filename : String) where
 @[block_extension Block.exampleFile]
 def Block.exampleFile.descr : BlockDescr := withHighlighting {
   traverse _ _ _ := pure none
-  toTeX := none
+
+  toTeX :=
+    open Verso.Output.TeX in
+    open Verso.Doc.TeX in
+    some <| fun _ _ _ data blocks => do
+      match FromJson.fromJson? (α := FileType) data with
+      | .error err =>
+        IO.println <| "Couldn't deserialize file metadata while rendering TeX: " ++ err
+        pure .empty
+      | .ok type =>
+        let str ←
+          match blocks with
+          | #[.code s] => pure s
+          | other =>
+            IO.println <| s!"Expected a single code block in an example file, but got {other.size} blocks"
+            return .empty
+        let str := str.trimAscii.copy
+        let descr : Output.TeX :=
+          match type with
+          | .stdin => \TeX{\texttt{"stdin"} }
+          | .stdout => \TeX{\texttt{"stdout"} }
+          | .stderr => \TeX{\texttt{"stderr"} }
+          | .input f => \TeX{\texttt{\Lean{"Input: " ++ f.toString} } }
+          | .output f => \TeX{\texttt{\Lean{"Output: " ++ f.toString} } }
+          | .other f => \TeX{\texttt{\Lean{"File: " ++ f.toString} } }
+        pure <| .seq #[.raw "\\begin{FileVerbatim}[label={", descr, .raw "}]\n", .raw str, .raw "\n\\end{FileVerbatim}\n" ]
+
+
   extraCss := [exampleFileCss]
   toHtml :=
     open Verso.Output Html in

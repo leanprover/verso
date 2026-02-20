@@ -193,10 +193,6 @@ where
         matchLength xs ys |>.map (· + 1)
       else none
 
-/-- info: #[(`a.b.c, 1), (`a.c, 4), (`b.c, 6), (`c, 3)] -/
-#guard_msgs in
-#eval NameSuffixMap.empty |>.insert `a.b.c 1 |>.insert `b.c 2 |>.insert `c 3 |>.insert `a.c 4 |>.insert `a.b 5 |>.insert `b.c 6 |>.get `c
-
 section
 
 inductive LeanExampleData where
@@ -833,7 +829,7 @@ def blogMain (theme : Theme) (site : Site) (linkTargets : Code.LinkTargets Trave
   let cfg ← opts {logError := logError} options
   let (site, xref) ← site.traverse cfg components
   let initGenCtx : Generate.Context := {
-    site := site,
+    theme, site,
     ctxt := { path := .root, config := cfg, components },
     xref := xref,
     dir := cfg.destination,
@@ -845,13 +841,16 @@ def blogMain (theme : Theme) (site : Site) (linkTargets : Code.LinkTargets Trave
   let (((), st), _) ← site.generate theme initGenCtx .empty {}
   IO.FS.writeFile (cfg.destination.join "-verso-docs.json") (toString st.dedup.docJson)
   for (name, content, srcMap?) in xref.jsFiles do
-    FS.ensureDir (cfg.destination.join "-verso-js")
-    IO.FS.writeFile (cfg.destination.join "-verso-js" |>.join name) content
+    FS.ensureDir (cfg.destination.join "-verso-data")
+    IO.FS.writeFile (cfg.destination.join "-verso-data" |>.join name) content
     if let some (name, content) := srcMap? then
-      IO.FS.writeFile (cfg.destination.join "-verso-js" |>.join name) content
-  for (name, content) in xref.cssFiles do
-    FS.ensureDir (cfg.destination.join "-verso-css")
-    IO.FS.writeFile (cfg.destination.join "-verso-css" |>.join name) content
+      IO.FS.writeFile (cfg.destination.join "-verso-data" |>.join name) content
+  for (name, content, _) in theme.jsFiles do
+    FS.ensureDir (cfg.destination.join "-verso-data")
+    IO.FS.writeFile (cfg.destination.join "-verso-data" |>.join name) content
+  for (name, content) in theme.cssFiles ++ xref.cssFiles do
+    FS.ensureDir (cfg.destination.join "-verso-data")
+    IO.FS.writeFile (cfg.destination.join "-verso-data" |>.join name) content
   if (← hasError.get) then
     IO.eprintln "Errors were encountered!"
     return 1

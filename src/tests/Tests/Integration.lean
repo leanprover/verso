@@ -17,6 +17,8 @@ structure Config where
   updateExpected : Bool := false
   /-- How to run the test -/
   runTest : IO Unit
+  /-- Whether to see if lualatex builds the file -/
+  checkTeX : Bool
 
 /--
 Returns all non-directory filepaths that are children of `root`, which
@@ -48,21 +50,26 @@ partial def copyFiles (pairs : Array (System.FilePath × System.FilePath)) :
 
 /-- Main test runner -/
 def runTests (config : Config) : IO Unit := do
-  unless ← System.FilePath.pathExists config.testDir do
-    throw <| .userError s!"Test directory not found: {config.testDir}"
-
   let outputRoot := config.testDir / "output"
   let expectedRoot := config.testDir / "expected"
 
   if config.updateExpected then
+    -- Create the test directory if it doesn't exist
+    unless ← System.FilePath.pathExists config.testDir do
+      IO.FS.createDirAll config.testDir
+    unless ← System.FilePath.pathExists outputRoot do
+      IO.FS.createDirAll outputRoot
+    config.runTest
     let outputFiles := (← filesBelow outputRoot)
     IO.println s!"Updating expected outputs in {config.testDir}..."
     if ← System.FilePath.pathExists expectedRoot then do
       IO.FS.removeDirAll expectedRoot
     copyFiles (outputFiles.map (fun p => (outputRoot / p, expectedRoot / p)))
   else
+    unless ← System.FilePath.pathExists config.testDir do
+      throw <| .userError s!"Test directory not found: {config.testDir}"
     unless ← System.FilePath.pathExists expectedRoot do
-      throw <| .userError s!"Expected output directory not found: {expectedRoot}"
+      IO.FS.createDirAll expectedRoot
     let expectedFiles := (← filesBelow expectedRoot)
 
     IO.println s!"Running test in {config.testDir}..."
@@ -86,5 +93,12 @@ def runTests (config : Config) : IO Unit := do
         IO.println s!"  Expected output differs from actual output"
         IO.println (Lean.Diff.linesToString d)
         throw <| .userError s!"Test in {config.testDir} failed"
+
+    if config.checkTeX then
+      discard <| IO.Process.run {
+        cwd := outputRoot / "tex",
+        cmd := "lualatex",
+        args := #["-halt-on-error", "-interaction=nonstopmode", "main.tex"]
+      }
 
   return

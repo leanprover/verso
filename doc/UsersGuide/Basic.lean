@@ -10,6 +10,7 @@ import UsersGuide.Manuals
 import UsersGuide.Elab
 import UsersGuide.Extensions
 import UsersGuide.Output
+import UsersGuide.Releases
 
 open Verso.Genre Manual
 
@@ -117,6 +118,7 @@ number := false
 
 {theIndex}
 
+{include 0 UsersGuide.Releases}
 
 # Dependencies
 %%%

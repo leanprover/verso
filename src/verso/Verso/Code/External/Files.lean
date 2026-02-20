@@ -85,7 +85,7 @@ def loadModuleContent' (projectDir : StrLit) (mod : String) (suppressNamespaces 
       if res.exitCode != 0 then reportFail projectDir cmd args res
 
   let runCmd (trace : MessageData) (args : Array String) : m Unit :=
-    withTraceNode `Elab.Verso.Code.External.loadModule (fun _ => pure trace) (runCmd' args)
+    withTraceNode `Elab.Verso.Code.External.loadModule (fun _ => pure <| trace.trace {cls := `command} #[m!"elan {" ".intercalate args.toList}"]) (runCmd' args)
 
   let toolchainFile ← IO.FS.Handle.mk toolchainfile .read
   -- Lake tends to get in trouble if used concurrently, so build the Lean code with a lock.
@@ -102,11 +102,13 @@ def loadModuleContent' (projectDir : StrLit) (mod : String) (suppressNamespaces 
   -- Very old Lake versions don't put things in .lake
   let lakeDir := if (← (projectDir / ".lake").isDir) then projectDir / ".lake" else projectDir
   let json ← IO.FS.readFile (lakeDir / hlFile)
-  let .ok json := Json.parse json
-    | throwError s!"Expected JSON array"
+  let json ←
+    match Json.parse json with
+    | .ok v => pure v
+    | .error err => throwError s!"Invalid JSON syntax in {lakeDir / hlFile}. {err}"
   match Module.fromJson? json with
   | .error err =>
-    throwError s!"Couldn't parse JSON from output file: {err}\nIn:\n{json}"
+    throwError s!"Couldn't deserialize JSON from output file: {err}\nIn:\n{json}"
   | .ok val => pure val.items
 
 where

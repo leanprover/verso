@@ -54,6 +54,24 @@ public structure DomainMapper where
   CSS to be used in the quick-jump box to customize results from the given domain.
   -/
   quickJumpCss : Option String := none
+  /--
+  JavaScript code to give a custom rendering for a searchable item. This should be a function that
+  takes three arguments:
+
+  {open DomainMapper}
+   * {lit}`searchable` is a Searchable object (returned by the {name}`dataToSearchables` function)
+     {lit}`Searchable` is the TypeScript type
+     {lit}`{searchKey: string, address: string, domainId: string, ref?: any}`. {lit}`searchKey` is
+     the text that the user can search for, {lit}`address` is the result's link destination,
+     {lit}`domainId` is the name of the Verso domain, and {lit}`ref` is arbitrary data that will
+     be passed to a custom rendering function if one exists.
+   * {lit}`matchedParts` is an array of objects with TypeScript type
+     {lit}`{t: 'text', v: string} | {t: 'highlight', v: string}`. Objects with {lit}`text` in the
+     {lit}`t` field are the parts of the search result that provide context, while objects with
+     {lit}`highlight` are the parts of the result that match the search string.
+   * {lit}`document` is the DOM document object
+  -/
+  customRender : Option String := none
 deriving Repr, DecidableEq, ToJson, FromJson
 
 /--
@@ -74,17 +92,20 @@ public def DomainMapper.withDefaultJs (domain : Lean.Name) (displayName classNam
     ref: value,
   }))"
 
-open Std Format in
 /--
 Generates JavaScript code for the provided domain mapper.
 -/
 public def DomainMapper.toJs (mapper : DomainMapper) : Std.Format :=
-  nest 2 <| group <|
-    text "{" ++ line ++
-    nest 2 (group ("dataToSearchables:" ++ line ++ mapper.dataToSearchables)) ++ "," ++ line ++
-    nest 2 (group ("className:" ++ line ++ text mapper.className.quote)) ++ "," ++ line ++
-    nest 2 (group ("displayName:" ++ line ++ text mapper.displayName.quote)) ++ line ++
-    text "}"
+  .nest 2 <| .group <|
+    .text "{" ++ .line ++
+    .nest 2 (.group ("dataToSearchables:" ++ .line ++ mapper.dataToSearchables)) ++ "," ++ .line ++
+    .nest 2 (.group ("className:" ++ .line ++ .text mapper.className.quote)) ++ "," ++ .line ++
+    .nest 2 (.group ("displayName:" ++ .line ++ .text mapper.displayName.quote)) ++ "," ++ .line ++
+    (match mapper.customRender with
+      | .none => .nil
+      | .some customRender =>
+          .nest 2 (.group ("customRender:" ++ .line ++ .text customRender)) ++ "," ++ .line) ++
+    .text "}"
 
 -- Objects could be included as literals, rather than defined, but that makes it more difficult to
 -- debug the resulting JS code if needed.

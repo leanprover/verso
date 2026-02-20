@@ -7,7 +7,7 @@ jobs:
         name: "Lint GitHub Actions workflows"
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v5
+            - uses: actions/checkout@v6
 
             - name: Run actionlint
               uses: reviewdog/action-actionlint@v1

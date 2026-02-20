@@ -17,7 +17,8 @@ block_extension Block.savedLean (file : String) (source : String) where
   data := .arr #[.str file, .str source]
 
   traverse _ _ _ := pure none
-  toTeX := none
+  toTeX := some fun _ goB _ _ contents =>
+    contents.mapM goB
   toHtml := some fun _ goB _ _ contents =>
     contents.mapM goB
 
@@ -25,7 +26,8 @@ block_extension Block.savedImport (file : String) (source : String) where
   data := .arr #[.str file, .str source]
 
   traverse _ _ _ := pure none
-  toTeX := none
+  toTeX := some fun _ _ _ _ _ =>
+    pure .empty
   toHtml := some fun _ _ _ _ _ =>
     pure .empty
 

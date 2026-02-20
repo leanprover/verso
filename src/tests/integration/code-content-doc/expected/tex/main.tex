@@ -1,0 +1,218 @@
+
+\documentclass{memoir}
+
+\usepackage{sourcecodepro}
+\usepackage{sourcesanspro}
+\usepackage{sourceserifpro}
+
+\usepackage{fancyvrb}
+\usepackage{fvextra}
+\usepackage{xparse}
+
+\usepackage[most]{tcolorbox}
+
+% Detect whether we're in a footnote. This is used later to avoid \href rendering bugs.
+\newif\ifinfootnote
+\infootnotefalse
+
+\let\oldfootnote\footnote
+\renewcommand{\footnote}[1]{%
+  \oldfootnote{\infootnotetrue#1\infootnotefalse}%
+}
+
+\let\oldfootnotetext\footnotetext
+\renewcommand{\footnotetext}[1]{%
+  \oldfootnotetext{\infootnotetrue#1\infootnotefalse}%
+}
+
+\usepackage[breaklinks=true, hyperfootnotes=false]{hyperref}
+
+% Redefines \href to show footnotes with URLs instead. This works around a page breaking bug in
+% hyperref and also makes the link useful on paper. If already in a footnote, the URL is
+% in parentheses instead.
+\let\oldhref\href
+\RenewDocumentCommand{\href}{mm}{%
+  \ifinfootnote%
+    #2~(\url{#1})%
+  \else%
+    #2\footnote{\url{#1}}%
+  \fi%
+}
+
+\usepackage[normalem]{ulem}
+\newcommand{\coloredwave}[2]{\textcolor{#1}{\uwave{\textcolor{black}{#2}}}}
+\usepackage{newunicodechar}
+
+% Work around the fact that
+% U+271D LATIN CROSS doesn't exist in
+% DejaVu Sans Mono Oblique. \textup
+% is fontspec for "upright, not italic/oblique".
+\newunicodechar{✝}{\textup{✝}}
+% Work around missing U+2011 (non-breaking hyphen) in Source Serif Pro
+\newunicodechar{‑}{-}
+
+\definecolor{errorColor}{HTML}{B91C1C}
+\definecolor{infoColor}{HTML}{1E6BB8}
+\definecolor{warningColor}{HTML}{D97706}
+\newcommand{\errorDecorate}[1]{\coloredwave{errorColor}{#1}}
+\newcommand{\infoDecorate}[1]{\coloredwave{infoColor}{#1}}
+\newcommand{\warningDecorate}[1]{\coloredwave{warningColor}{#1}}
+\DefineVerbatimEnvironment{LeanVerbatim}{Verbatim}
+  {commandchars=\\\{\},fontsize=\small,breaklines=true}
+\DefineVerbatimEnvironment{FileVerbatim}{Verbatim}{commandchars=\\\{\},fontsize=\small,breaklines=true,frame=single,framesep=2mm,numbers=left}
+\CustomVerbatimCommand{\LeanVerb}{Verb}
+  {commandchars=\\\{\},fontsize=\small,breaklines=true}
+\CustomVerbatimCommand{\FileListingVerb}{Verb}
+  {commandchars=\\\{\},fontsize=\small,frame=single,framesep=2mm, numbers=left}
+
+%%% Trace messages
+\newlength{\traceindent}
+\setlength{\traceindent}{1.5em}
+
+\newcommand{\expandedIndicator}{$\blacktriangledown$\hspace{2pt}}
+\newcommand{\collapsedIndicator}{$\blacktriangleright$\hspace{2pt}}
+
+\newenvironment{expandedtrace}[1]{%
+  \par\noindent\expandedIndicator #1\par
+  \advance\leftskip by \traceindent
+}{%
+}
+
+\newenvironment{collapsedtrace}[1]{%
+  \par\noindent\collapsedIndicator #1\par
+  \advance\leftskip by \traceindent
+}{%
+}
+%%% End Trace messages
+
+\definecolor{bordercolor}{HTML}{98B2C0}
+\definecolor{medgray}{HTML}{555555}
+\newtcolorbox{docstringBox}[2][]{colback=white,
+breakable,
+colframe=bordercolor,
+colbacktitle=white,
+enhanced,
+coltitle=medgray,
+attach boxed title to top left={xshift=2mm,yshift=-2mm},
+boxrule=0.4pt,
+fonttitle=\sffamily\fontsize{6pt}{7pt}\selectfont,
+boxed title style={top=-0.3mm,bottom=-0.3mm,left=-0.3mm,right=-0.3mm,boxrule=0.4pt},
+title={#2},#1}
+
+
+\makechapterstyle{lean}{%
+\renewcommand*{\chaptitlefont}{\sffamily\HUGE}
+\renewcommand*{\chapnumfont}{\chaptitlefont}
+% allow for 99 chapters!
+\settowidth{\chapindent}{\chapnumfont 999}
+\renewcommand*{\printchaptername}{}
+\renewcommand*{\chapternamenum}{}
+\renewcommand*{\chapnumfont}{\chaptitlefont}
+\renewcommand*{\printchapternum}{%
+\noindent\llap{\makebox[\chapindent][l]{%
+\chapnumfont \thechapter}}}
+\renewcommand*{\afterchapternum}{}
+}
+
+\chapterstyle{lean}
+
+\setsecheadstyle{\sffamily\bfseries\Large}
+\setsubsecheadstyle{\sffamily\bfseries\large}
+\setsubsubsecheadstyle{\sffamily\bfseries}
+
+\renewcommand{\cftchapterfont}{\normalfont\sffamily}
+\renewcommand{\cftsectionfont}{\normalfont\sffamily}
+\renewcommand{\cftchapterpagefont}{\normalfont\sffamily}
+\renewcommand{\cftsectionpagefont}{\normalfont\sffamily}
+\setmonofont{DejaVu Sans Mono}
+
+\title{\sffamily Title of the Doc}
+\author{\sffamily Harry Q. Bovik}
+\date{\sffamily }
+
+\begin{document}
+
+\frontmatter
+
+\begin{titlingpage}
+\maketitle
+\end{titlingpage}
+
+\tableofcontents
+
+
+\cleardoublepage
+Here is some code with vertical bars:
+\begin{LeanVerbatim}
+\textbf{def} or := (· \symbol{124}\symbol{124} ·)
+
+\end{LeanVerbatim}
+
+Here is some with a variety of interesting Unicode, including characters where UTF-16 is funky:
+\begin{LeanVerbatim}
+\textbf{def} Set (\textit{α} : Type u) : Type u := \textit{α} → Prop
+
+\textbf{instance} : EmptyCollection (Set \textit{α}) \textbf{where}
+  emptyCollection := \textbf{fun} _ => False
+
+\textbf{instance} : Union (Set \textit{α}) \textbf{where}
+  union \textit{a} \textit{b} := \textbf{fun} \textit{x} => \textit{a} \textit{x} ∨ \textit{b} \textit{x}
+
+\textbf{instance} : Inter (Set \textit{α}) \textbf{where}
+  inter \textit{a} \textit{b} := \textbf{fun} \textit{x} => \textit{a} \textit{x} ∧ \textit{b} \textit{x}
+
+\textbf{instance} : Membership \textit{α} (Set \textit{α}) \textbf{where}
+  mem \textit{a} \textit{x} := \textit{a} \textit{x}
+
+@[\textbf{ext}]
+\textbf{theorem} Set.ext \symbol{123}\textit{a} \textit{b} : Set \textit{α}\symbol{125} :
+    (∀ \textit{x}, \textit{x} ∈ \textit{a} ↔ \textit{x} ∈ \textit{b}) → \textit{a} = \textit{b} := \textbf{by}
+  \textbf{intro} \textit{h}
+  \textbf{funext} \textit{x}
+  \textbf{exact} propext (\textit{h} \textit{x})
+
+\textbf{instance} : HasSubset (Set \textit{α}) \textbf{where}
+  Subset \textit{a} \textit{b} := ∀ \textit{x}, \textit{x} ∈ \textit{a} → \textit{x} ∈ \textit{b}
+
+@[\textbf{simp}, \textbf{grind} .]
+\textbf{theorem} Set.subset_refl \symbol{123}\textit{a} : Set \textit{α}\symbol{125} : \textit{a} ⊆ \textit{a} := \textbf{by}
+  \textbf{simp} [(· ⊆ ·)]
+
+@[\textbf{grind} ←]
+\textbf{theorem} Set.subset_union \symbol{123}\textit{a} \textit{b} \textit{c} : Set \textit{α}\symbol{125} :
+    \textit{a} ⊆ \textit{b} → \textit{a} ⊆ \textit{b} ∪ \textit{c} := \textbf{by}
+  \textbf{simp} [(· ⊆ ·), (· ∪ ·), (· ∈ ·)]
+  \textbf{intro} \textit{h}
+  \textbf{solve_by_elim}
+
+\textbf{def} Set.powerset (\textit{a} : Set \textit{α}) : Set (Set \textit{α}) :=
+  \textbf{fun} (\textit{x} : Set \textit{α}) => \textit{x} ⊆ \textit{a}
+
+\textbf{notation} "𝒫 " \textit{x} => Set.powerset \textit{x}
+
+\textbf{theorem} Set.powerset_empty_nonempty :
+    ∃ (\textit{a} : Set \textit{α}), \textit{a} ∈ 𝒫 \symbol{123}\symbol{125} := \textbf{by}
+  \textbf{constructor}
+  \textbf{case} w => \textbf{exact} \symbol{123}\symbol{125}
+  \textbf{simp} [(· ∈ ·), powerset]
+
+@[\infoDecorate{\textbf{grind?} →}]
+\textbf{theorem} Set.powerset_empty_unique (\textit{x} \textit{y} : Set \textit{α}) :
+    \textit{x} ∈ (𝒫 \symbol{123}\symbol{125}) → \textit{y} ∈ (𝒫 \symbol{123}\symbol{125}) → \textit{x} = \textit{y} := \textbf{by}
+  \textbf{intro} \textit{hx} \textit{hy}
+  \textbf{ext} \textit{x'}
+  \textbf{exact} (iff_false_right (\textit{hy} \textit{x'})).mpr (\textit{hx} \textit{x'})
+
+\end{LeanVerbatim}
+
+And now some inline code:
+\begin{itemize}
+\item \LeanVerb|∀\textit{x} \textit{y} : Set _, \textit{x} ∈ ((𝒫 \textit{x}) ∪ (𝒫 \textit{y}))|
+\item \LeanVerb|true \symbol{124}\symbol{124} false|
+\item \LeanVerb|False → True|
+
+\end{itemize}
+
+
+\mainmatter
+\end{document}

@@ -32,6 +32,7 @@ authors := ["Harry Q. Bovik"]
 
 {docstring sample_constant}
 
+Here is a test of `escaping of things like \TeX in code inlines`
 :::::::
 
 end Verso.Integration.SampleDoc

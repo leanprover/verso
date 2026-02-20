@@ -26,7 +26,7 @@ jobs:
                   ./elan-init -y --default-toolchain none
                   echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
 
-            - uses: actions/checkout@v5
+            - uses: actions/checkout@v6
 
             - name: List all files
               run: |
@@ -41,7 +41,7 @@ jobs:
               run: echo "short_sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
 
             - name: Cache .lake
-              uses: actions/cache@v4
+              uses: actions/cache@v5
               with:
                   path: .lake
                   # The SHA is in the key to get the most recent cache possible, rather than just saving a single one for each Lean/deps version and not touching it.
@@ -63,32 +63,6 @@ jobs:
             - name: Build the project
               run: |
                   lake build
-
-            - name: Run tests
-              run: |
-                  lake test
-
-            - name: Generate the test website
-              run: |
-                  lake exe demosite --output _out/test-projects/demosite
-
-            - name: Generate the test genre's document
-              run: |
-                  lake exe simplepage
-
-            - name: Generate some source HTML
-              run: |
-                  lake build Verso.Hover:literate
-                  lake exe verso-html .lake/build/literate htmlout
-
-            - name: Check internal links on the test website
-              uses: lycheeverse/lychee-action@v2.6.1
-              with:
-                  format: markdown
-                  jobSummary: true
-                  args:
-                      --base './_out/test-projects/demosite' --no-progress --offline
-                      './_out/test-projects/demosite/**/*.html'
 
             - name: Install PDF Dependencies
               uses: zauguin/install-texlive@v4
@@ -136,6 +110,30 @@ jobs:
             - name: Check `tlmgr` version
               run: tlmgr --version
 
+            - name: Run tests
+              run: |
+                  lake test -- --verbose --check-tex
+
+            - name: Generate the test website
+              run: |
+                  lake exe demosite --output _out/test-projects/demosite
+
+            - name: Generate the test genre's document
+              run: |
+                  lake exe simplepage
+
+            - name: Generate some source HTML
+              run: |
+                  lake build Verso.Hover:literate
+                  lake exe verso-html .lake/build/literate htmlout
+
+            - name: Install linkchecker
+              run: pip install linkchecker
+
+            - name: Check internal links on the test website
+              run: |
+                  linkchecker --config=.linkchecker/linkcheckerrc --no-status ./_out/test-projects/demosite/
+
             - name: Generate the manual
               run: |
                   ./generate.sh
@@ -169,21 +167,20 @@ jobs:
 
             # Begin browser testing
             - name: Install uv
-              uses: astral-sh/setup-uv@v4
+              uses: astral-sh/setup-uv@v7
               with:
                   enable-cache: true
                   cache-dependency-glob: "browser-tests/pyproject.toml"
 
             - name: Cache Playwright browsers
-              uses: actions/cache@v4
+              uses: actions/cache@v5
               with:
                   path: .playwright-browsers
                   key: playwright-${{ runner.os }}-${{ hashFiles('browser-tests/uv.lock') }}
 
             - name: Install Playwright browsers
-              run:
-                  uv run --project browser-tests --extra test playwright install chromium firefox
-                  --with-deps
+              run: |
+                  uv run --project browser-tests --extra test playwright install chromium firefox --with-deps
 
             - name: Run browser tests
               run: uv run --project browser-tests --extra test pytest browser-tests -v
@@ -191,7 +188,7 @@ jobs:
 
             - name: Upload docs to artifact storage
               if: github.ref_type != 'tag' && github.ref != 'refs/heads/main'
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@v6
               with:
                   name: "Verso manual (PDF and HTML)"
                   path: |
@@ -218,3 +215,38 @@ jobs:
                     html-manual.zip \
                     --title "Release ${{ github.ref_name }}" \
                     --notes "Automated release for ${{ github.ref_name }}"
+
+              # deploy-info computes metadata that's shown in the Netlify interface
+              # about the deployment (for non-PR deploys)
+            - id: deploy-info
+              name: Compute Deployment Metadata
+              if: github.event_name != 'pull_request'
+              run: |
+                  set -e
+                  echo "message=$(git log -1 --pretty=format:"%s")" >> "$GITHUB_OUTPUT"
+
+            - name: Upload HTML manual for PR deployment
+              if: github.event_name == 'pull_request'
+              uses: actions/upload-artifact@v6
+              with:
+                  name: html-manual-for-deploy
+                  path: _out/html-multi
+                  retention-days: 1
+
+            - name: Deploy Verso manual
+              id: deploy-lang
+              uses: nwtgck/actions-netlify@v3.0
+              if: github.event_name == 'push' && github.ref_name == 'main'
+              with:
+                  publish-dir: _out/html-multi
+                  production-branch: main
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  alias: ref-${{ github.ref_name }}
+                  deploy-message:
+                      "ref/${{ github.ref_name }}: ${{ steps.deploy-info.outputs.message }}"
+                  enable-commit-comment: false
+                  github-deployment-environment: verso-main
+                  fails-without-credentials: true
+              env:
+                  NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+                  NETLIFY_SITE_ID: "8a89abd8-095b-4496-a9c1-381d2d5629ec" # TODO: if a tag, push to a different site for hosting under lean-lang.org

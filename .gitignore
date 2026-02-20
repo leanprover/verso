@@ -9,3 +9,10 @@ _out
 /.verso/
 /src/tests/integration/**/output
 /node_modules
+*.hash
+profile.json
+profile.json.gz
+multi.json
+single.json
+*.html
+*.produced.out

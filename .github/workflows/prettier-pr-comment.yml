@@ -1,0 +1,98 @@
+name: Prettier on PR Comment
+
+on:
+    issue_comment:
+        types: [created]
+
+jobs:
+    prettier:
+        # Only run on PR comments containing "!prettier"
+        if: >-
+            github.event.issue.pull_request && contains(github.event.comment.body, '!prettier')
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+            pull-requests: write
+        steps:
+            - name: Check user permission
+              uses: actions/github-script@v8
+              with:
+                  script: |
+                      const { data: permission } = await github.rest.repos.getCollaboratorPermissionLevel({
+                        owner: context.repo.owner,
+                        repo: context.repo.repo,
+                        username: context.payload.comment.user.login
+                      });
+                      const level = permission.permission;
+                      if (level !== 'admin' && level !== 'write') {
+                        core.setFailed(
+                          `User ${context.payload.comment.user.login} does not have write access (permission: ${level})`
+                        );
+                      }
+
+            - name: Get PR details
+              id: pr-details
+              uses: actions/github-script@v8
+              with:
+                  script: |
+                      const { data: pr } = await github.rest.pulls.get({
+                        owner: context.repo.owner,
+                        repo: context.repo.repo,
+                        pull_number: context.payload.issue.number
+                      });
+                      const isFork = pr.head.repo.full_name !== `${context.repo.owner}/${context.repo.repo}`;
+                      if (isFork && !pr.maintainer_can_modify) {
+                        core.setFailed(
+                          'Cannot push to this fork PR. The PR author must enable "Allow edits by maintainers".'
+                        );
+                      }
+
+            - name: Add reaction to acknowledge
+              uses: actions/github-script@v8
+              with:
+                  script: |
+                      await github.rest.reactions.createForIssueComment({
+                        owner: context.repo.owner,
+                        repo: context.repo.repo,
+                        comment_id: context.payload.comment.id,
+                        content: 'eyes'
+                      });
+
+            - name: Checkout repository
+              uses: actions/checkout@v6
+              with:
+                  token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Checkout PR branch
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: gh pr checkout ${{ github.event.issue.number }}
+
+            - name: Run Prettier
+              run: npx prettier@3.7.4 --write .
+
+            - name: Commit and push
+              id: commit
+              run: |
+                  git config user.name "github-actions[bot]"
+                  git config user.email "github-actions[bot]@users.noreply.github.com"
+                  git add -A
+                  if git diff --cached --quiet; then
+                    echo "No formatting changes needed"
+                    echo "changes=false" >> "$GITHUB_OUTPUT"
+                  else
+                    git commit -m "Run the Prettier code formatter"
+                    git push
+                    echo "changes=true" >> "$GITHUB_OUTPUT"
+                  fi
+
+            - name: Add completion reaction
+              uses: actions/github-script@v8
+              with:
+                  script: |
+                      await github.rest.reactions.createForIssueComment({
+                        owner: context.repo.owner,
+                        repo: context.repo.repo,
+                        comment_id: context.payload.comment.id,
+                        content: '${{ steps.commit.outputs.changes == 'true' && 'rocket' || '+1' }}'
+                      });

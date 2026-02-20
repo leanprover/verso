@@ -21,7 +21,7 @@ public structure StaticCssFile where
 deriving BEq, Repr, Hashable, Ord
 
 /--
-An extra JS file to be emitted and added to the page.
+An extra CSS file to be emitted and added to the page.
 -/
 public structure CssFile extends StaticCssFile where
   contents : CSS

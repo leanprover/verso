@@ -8,6 +8,7 @@ import Lean.Data.Json.Basic
 import VersoManual.Basic
 import VersoManual.HighlightedCode
 import Verso.Code.Highlighted.WebAssets
+import Verso.Code.HighlightedToTex
 
 import SubVerso.Highlighting
 
@@ -38,9 +39,15 @@ block_extension Block.lean
       saveExampleDefs id defs
       pure none
   toTeX :=
-    some <| fun _ go _ _ content => do
-      pure <| .seq <| ← content.mapM fun b => do
-        pure <| .seq #[← go b, .raw "\n"]
+    some <| fun _ _ _ data _ => do
+      let .arr #[hlJson, _ds, _, _] := data
+        | TeX.logError "Expected four-element JSON for Lean code" *> pure .empty
+      match FromJson.fromJson? hlJson with
+      | .error err =>
+        TeX.logError <| "Couldn't deserialize Lean code block while rendering TeX: " ++ err
+        pure .empty
+      | .ok (hl : Highlighted) =>
+        hl.toTeX (g := Manual) (m := ReaderT ExtensionImpls IO)
   toHtml :=
     open Verso.Output.Html in
     some <| fun _ _ _ data _ => do
@@ -51,10 +58,5 @@ block_extension Block.lean
         HtmlT.logError <| "Couldn't deserialize Lean code block while rendering HTML: " ++ err
         pure .empty
       | .ok (hl : Highlighted) =>
-        --if hl.toString.startsWith "namespace A" then
-          -- dbg_trace hl.toString
-          -- dbg_trace ds
-          -- have : Ord (Name × String) := Ord.lex ⟨fun x y => compare x.toString y.toString⟩ inferInstance
-          -- for (x, y) in (← HtmlT.definitionIds).toArray.qsortOrd do
-          --   dbg_trace "{x}\t=>\t{y}"
+
         hl.blockHtml (g := Manual) "examples"

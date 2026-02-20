@@ -167,6 +167,11 @@ public def Inline.other (container : genre.Inline) (content : Array (Inline genr
 
 public def Inline.empty : Inline genre := .concat #[]
 
+public def Inline.isEmpty : Inline genre → Bool
+  | .text s => s.isEmpty
+  | .concat xs => xs.attach.all fun ⟨x, _⟩ => x.isEmpty
+  | .code .. | .linebreak .. | .image .. | .link .. | .math .. | .other .. | .footnote .. | .bold .. | .emph .. => false
+
 public partial def Inline.rewriteOtherM [Monad m]
     (onInline :
       (Inline genre1 → m (Inline genre2)) →
@@ -210,7 +215,7 @@ private partial def Inline.toJson [ToJson i] : Lean.Doc.Inline i → Json
 public instance instToJsonLeanInline [ToJson i] : ToJson (Lean.Doc.Inline i) where
   toJson := private Inline.toJson
 
-@[instance] public abbrev instToJsonInline [ToJson genre.Inline] : ToJson (Inline genre) := instToJsonLeanInline
+@[reducible, instance] public def instToJsonInline [ToJson genre.Inline] : ToJson (Inline genre) := instToJsonLeanInline
 
 private partial def Inline.fromJson? [inst : FromJson i] (json : Json) : Except String (Lean.Doc.Inline i) := do
   let obj ← json.getObj?
@@ -247,7 +252,7 @@ private partial def Inline.fromJson? [inst : FromJson i] (json : Json) : Except 
 public instance instFromJsonLeanInline [FromJson i] : FromJson (Lean.Doc.Inline i) where
   fromJson? := private Inline.fromJson?
 
-@[instance] abbrev instFromJsonInline [FromJson genre.Inline] : FromJson (Inline genre) := instFromJsonLeanInline
+@[reducible, instance] def instFromJsonInline [FromJson genre.Inline] : FromJson (Inline genre) := instFromJsonLeanInline
 
 private partial def Inline.beq [BEq i] : Lean.Doc.Inline i → Lean.Doc.Inline i → Bool
   | .text str1, .text str2
@@ -266,7 +271,7 @@ private partial def Inline.beq [BEq i] : Lean.Doc.Inline i → Lean.Doc.Inline i
 public instance instBEqLeanInline [BEq i] : BEq (Lean.Doc.Inline i) where
   beq := private Inline.beq
 
-@[instance] public abbrev instBEqInline [BEq genre.Inline] : BEq (Inline genre) := instBEqLeanInline
+@[reducible, instance] public def instBEqInline [BEq genre.Inline] : BEq (Inline genre) := instBEqLeanInline
 
 private partial def Inline.hashCode [Hashable i] : Lean.Doc.Inline i → UInt64
   | .text str => mixHash 11 <| hash str
@@ -284,10 +289,10 @@ private partial def Inline.hashCode [Hashable i] : Lean.Doc.Inline i → UInt64
 public instance instHashableLeanInline [Hashable i] : Hashable (Lean.Doc.Inline i) where
   hash := private Inline.hashCode
 
-@[instance] public abbrev instHashableInline [Hashable genre.Inline] : Hashable (Inline genre) :=
+@[reducible, instance] public def instHashableInline [Hashable genre.Inline] : Hashable (Inline genre) :=
   instHashableLeanInline
 
-@[instance] public abbrev instOrdInline [Ord genre.Inline] : Ord (Inline genre) :=
+@[reducible, instance] public def instOrdInline [Ord genre.Inline] : Ord (Inline genre) :=
   inferInstanceAs (Ord (Lean.Doc.Inline genre.Inline))
 
 private def reprArray (r : α → Nat → Format) (arr : Array α) : Format :=
@@ -441,10 +446,24 @@ public instance : Append (Lean.Doc.Block i b) where
     | x, .concat xs => .concat (#[x] ++ xs)
     | x, y => .concat #[x, y]
 
-@[instance] public abbrev instAppendBlock : Append (Block genre) :=
+@[reducible, instance] public def instAppendBlock : Append (Block genre) :=
   inferInstanceAs (Append (Lean.Doc.Block genre.Inline genre.Block))
 
 public def Block.empty : Block genre := .concat #[]
+
+public def Block.isEmpty : Block genre → Bool
+  | .concat xs | .blockquote xs => xs.attach.all fun ⟨x, _⟩ => x.isEmpty
+  | .para xs => xs.all (·.isEmpty)
+  | .code .. | .other ..=> false
+  | .ol _ xs | .ul xs => xs.attach.all fun ⟨⟨x⟩, _⟩ => x.attach.all fun ⟨y, _⟩ =>
+    y.isEmpty
+  | .dl xs => xs.attach.all fun ⟨⟨x, y⟩, _⟩ =>
+    (x.attach.all fun ⟨x', _⟩ => x'.isEmpty) && (y.attach.all fun ⟨y', _⟩ => y'.isEmpty)
+decreasing_by
+  all_goals (try decreasing_tactic)
+  all_goals
+    have := Array.sizeOf_lt_of_mem ‹_ ∈ xs›
+    grind
 
 public partial def Block.rewriteOtherM [Monad m]
     (onInline :
@@ -489,7 +508,7 @@ private partial def Block.toJson [ToJson i] [ToJson b] : Lean.Doc.Block i b → 
 public instance instToJsonLeanBlock [ToJson i] [ToJson b] : ToJson (Lean.Doc.Block i b) where
   toJson := private Block.toJson
 
-@[instance] public abbrev instToJsonBLock [ToJson genre.Inline] [ToJson genre.Block] : ToJson (Block genre) :=
+@[reducible, instance] public def instToJsonBLock [ToJson genre.Inline] [ToJson genre.Block] : ToJson (Block genre) :=
   instToJsonLeanBlock
 
 private partial def Block.fromJson? [FromJson i] [FromJson b] (json : Json) : Except String (Lean.Doc.Block i b) := do
@@ -525,7 +544,7 @@ private partial def Block.fromJson? [FromJson i] [FromJson b] (json : Json) : Ex
 public instance instFromJsonLeanBlock [FromJson i] [FromJson b] : FromJson (Lean.Doc.Block i b) where
   fromJson? := private Block.fromJson?
 
-@[instance] public abbrev instFromJsonBlock [FromJson genre.Inline] [FromJson genre.Block] : FromJson (Block genre) :=
+@[reducible, instance] public def instFromJsonBlock [FromJson genre.Inline] [FromJson genre.Block] : FromJson (Block genre) :=
   instFromJsonLeanBlock
 
 private partial def Block.beq [BEq i] [BEq b] : Lean.Doc.Block i b → Lean.Doc.Block i b → Bool
@@ -543,7 +562,7 @@ private partial def Block.beq [BEq i] [BEq b] : Lean.Doc.Block i b → Lean.Doc.
 public instance instBEqLeanBlock [BEq genre.Inline] [BEq genre.Block] : BEq (Block genre) where
   beq := private Block.beq
 
-@[instance] public abbrev instBEqBlock [BEq genre.Inline] [BEq genre.Block] : BEq (Block genre) := instBEqLeanBlock
+@[reducible, instance] public def instBEqBlock [BEq genre.Inline] [BEq genre.Block] : BEq (Block genre) := instBEqLeanBlock
 
 -- Upstream has an instance, but the constructor names are the Lean ones rather than the Verso ones
 private partial def Block.reprPrec [Repr genre.Inline] [Repr genre.Block] (inline : Block genre) (prec : Nat) : Std.Format :=
@@ -583,7 +602,7 @@ private partial def Part.toJson [ToJson i] [ToJson b] [ToJson p] (p : Lean.Doc.P
 public instance instToJsonLeanPart [ToJson i] [ToJson b] [ToJson p] : ToJson (Lean.Doc.Part i b p) where
   toJson := private Part.toJson
 
-@[instance] public abbrev instToJsonPart
+@[reducible, instance] public def instToJsonPart
     [ToJson genre.Inline] [ToJson genre.Block] [ToJson genre.PartMetadata] :
     ToJson (Part genre) :=
   instToJsonLeanPart
@@ -600,7 +619,7 @@ private partial def Part.fromJson? [FromJson i] [FromJson b] [FromJson p]
 public instance instFromJsonLeanPart [FromJson i] [FromJson b] [FromJson p] : FromJson (Lean.Doc.Part i b p) where
   fromJson? := private Part.fromJson?
 
-@[instance] public abbrev instFromJsonPart
+@[reducible, instance] public def instFromJsonPart
     [FromJson genre.Inline] [FromJson genre.Block] [FromJson genre.PartMetadata] :
     FromJson (Part genre) :=
   instFromJsonLeanPart
@@ -629,8 +648,8 @@ public abbrev Part.content : Part genre → Array (Block genre) := Lean.Doc.Part
 @[inherit_doc Lean.Doc.Part.subParts]
 public abbrev Part.subParts : Part genre → Array (Part genre) := Lean.Doc.Part.subParts
 
-@[instance]
-public abbrev instBEqPart [BEq genre.Inline] [BEq genre.Block] [BEq genre.PartMetadata] : BEq (Part genre) :=
+@[reducible, instance]
+public def instBEqPart [BEq genre.Inline] [BEq genre.Block] [BEq genre.PartMetadata] : BEq (Part genre) :=
   inferInstanceAs (BEq (Lean.Doc.Part genre.Inline genre.Block genre.PartMetadata))
 
 public def Part.withoutSubparts (p : Part genre) : Part genre := { p with subParts := #[] }

@@ -23,7 +23,7 @@ public structure Link where
   path : Path
   /-- The HTML ID on the current page-/
   htmlId : Slug
-deriving ToJson, FromJson, BEq, Ord, Repr, Inhabited
+deriving ToJson, FromJson, BEq, Ord, Repr, Inhabited, Hashable
 
 /-- Constructs a link URL suitable for an `<a>` tag. -/
 public def Link.link (link : Link) : String :=
@@ -44,7 +44,7 @@ public structure RemoteLink extends Link where
   The part of the link to be prepended to the path, if present. Only used on links to other sites.
   -/
   root : String
-deriving ToJson, FromJson, BEq, Ord, Repr
+deriving ToJson, FromJson, BEq, Ord, Repr, Inhabited, Hashable
 
 @[inherit_doc Link.link]
 public def RemoteLink.link (link : RemoteLink) : String :=

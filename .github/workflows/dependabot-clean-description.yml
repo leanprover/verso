@@ -1,0 +1,63 @@
+name: Clean Dependabot PR descriptions
+
+on:
+    pull_request:
+        types: [opened]
+
+permissions:
+    pull-requests: write
+
+jobs:
+    clean-description:
+        if: github.repository == 'leanprover/verso' && github.actor == 'dependabot[bot]'
+        runs-on: ubuntu-latest
+        steps:
+            - run: npm install marked@latest
+
+            - name: Rewrite PR description and post original as comment
+              uses: actions/github-script@v8
+              with:
+                  script: |
+                      const { marked } = require('marked');
+                      const prNumber = context.payload.pull_request.number;
+                      const owner = context.repo.owner;
+                      const repo = context.repo.repo;
+                      const body = context.payload.pull_request.body || '';
+
+                      // Post the original description as a comment
+                      await github.rest.issues.createComment({
+                        owner, repo, issue_number: prNumber,
+                        body: body
+                      });
+
+                      // Parse the first line of the body to extract plain text and package URL
+                      const firstLine = body.split('\n')[0].trim();
+                      const tokens = marked.lexer(firstLine);
+
+                      let plainText = '';
+                      let packageUrl = '';
+                      function extractText(toks) {
+                        for (const tok of toks) {
+                          if (tok.type === 'link') {
+                            plainText += tok.text;
+                            if (!packageUrl) packageUrl = tok.href;
+                          } else if (tok.tokens) {
+                            extractText(tok.tokens);
+                          } else {
+                            plainText += tok.raw;
+                          }
+                        }
+                      }
+                      if (tokens.length > 0 && tokens[0].tokens) {
+                        extractText(tokens[0].tokens);
+                      }
+
+                      // Replace PR body with plain-text summary and release notes link
+                      const releasesUrl = packageUrl ? packageUrl + '/releases' : '';
+                      const newBody = releasesUrl
+                        ? plainText + '\n\n' + releasesUrl
+                        : plainText;
+                      await github.rest.pulls.update({
+                        owner, repo, pull_number: prNumber,
+                        body: newBody
+                      });

@@ -16,9 +16,38 @@ r##"
 
 \usepackage{fancyvrb}
 \usepackage{fvextra}
+\usepackage{xparse}
 
 \usepackage[most]{tcolorbox}
-\usepackage{hyperref}
+
+% Detect whether we're in a footnote. This is used later to avoid \href rendering bugs.
+\newif\ifinfootnote
+\infootnotefalse
+
+\let\oldfootnote\footnote
+\renewcommand{\footnote}[1]{%
+  \oldfootnote{\infootnotetrue#1\infootnotefalse}%
+}
+
+\let\oldfootnotetext\footnotetext
+\renewcommand{\footnotetext}[1]{%
+  \oldfootnotetext{\infootnotetrue#1\infootnotefalse}%
+}
+
+\usepackage[breaklinks=true, hyperfootnotes=false]{hyperref}
+
+% Redefines \href to show footnotes with URLs instead. This works around a page breaking bug in
+% hyperref and also makes the link useful on paper. If already in a footnote, the URL is
+% in parentheses instead.
+\let\oldhref\href
+\RenewDocumentCommand{\href}{mm}{%
+  \ifinfootnote%
+    #2~(\url{#1})%
+  \else%
+    #2\footnote{\url{#1}}%
+  \fi%
+}
+
 \usepackage[normalem]{ulem}
 \newcommand{\coloredwave}[2]{\textcolor{#1}{\uwave{\textcolor{black}{#2}}}}
 \usepackage{newunicodechar}
@@ -28,17 +57,42 @@ r##"
 % DejaVu Sans Mono Oblique. \textup
 % is fontspec for "upright, not italic/oblique".
 \newunicodechar{✝}{\textup{✝}}
+% Work around missing U+2011 (non-breaking hyphen) in Source Serif Pro
+\newunicodechar{‑}{-}
 
-\definecolor{errorColor}{HTML}{ff0000}
-\definecolor{infoColor}{HTML}{007f00}
-\definecolor{warningColor}{HTML}{0000ff}
+\definecolor{errorColor}{HTML}{B91C1C}
+\definecolor{infoColor}{HTML}{1E6BB8}
+\definecolor{warningColor}{HTML}{D97706}
 \newcommand{\errorDecorate}[1]{\coloredwave{errorColor}{#1}}
 \newcommand{\infoDecorate}[1]{\coloredwave{infoColor}{#1}}
 \newcommand{\warningDecorate}[1]{\coloredwave{warningColor}{#1}}
 \DefineVerbatimEnvironment{LeanVerbatim}{Verbatim}
   {commandchars=\\\{\},fontsize=\small,breaklines=true}
+\DefineVerbatimEnvironment{FileVerbatim}{Verbatim}{commandchars=\\\{\},fontsize=\small,breaklines=true,frame=single,framesep=2mm,numbers=left}
 \CustomVerbatimCommand{\LeanVerb}{Verb}
-  {commandchars=\\\{\},fontsize=\small}
+  {commandchars=\\\{\},fontsize=\small,breaklines=true}
+\CustomVerbatimCommand{\FileListingVerb}{Verb}
+  {commandchars=\\\{\},fontsize=\small,frame=single,framesep=2mm, numbers=left}
+
+%%% Trace messages
+\newlength{\traceindent}
+\setlength{\traceindent}{1.5em}
+
+\newcommand{\expandedIndicator}{$\blacktriangledown$\hspace{2pt}}
+\newcommand{\collapsedIndicator}{$\blacktriangleright$\hspace{2pt}}
+
+\newenvironment{expandedtrace}[1]{%
+  \par\noindent\expandedIndicator #1\par
+  \advance\leftskip by \traceindent
+}{%
+}
+
+\newenvironment{collapsedtrace}[1]{%
+  \par\noindent\collapsedIndicator #1\par
+  \advance\leftskip by \traceindent
+}{%
+}
+%%% End Trace messages
 
 \definecolor{bordercolor}{HTML}{98B2C0}
 \definecolor{medgray}{HTML}{555555}
@@ -99,7 +153,6 @@ r##"
 
 \tableofcontents
 
-\mainmatter
 "##
 
 public def postamble : String := "\\end{document}"

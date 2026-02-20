@@ -1,0 +1,4 @@
+/* This CSS file should only appear in HTML output */
+.html-specific {
+    color: blue;
+}

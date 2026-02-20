@@ -65,7 +65,7 @@ block_extension Block.lean (hls : Highlighted) (cfg : CodeConfig) via withHighli
         | .ok (_cfg : CodeConfig) =>
           let i := hl.indentation
           let hl := hl.deIndent i
-          pure hl.toTeX
+          hl.toTeX
   toHtml :=
     open Verso.Output.Html in
     some <| fun _ _ _ data _ => do
@@ -124,7 +124,7 @@ inline_extension Inline.lean (hls : Highlighted) (cfg : CodeConfig) via withHigh
         | .ok (_cfg : CodeConfig) =>
           let i := hl.indentation
           let hl := hl.deIndent i
-          pure hl.toTeX
+          hl.toTeX
   toHtml :=
     open Verso.Output.Html in
     some <| fun _ _ data _ => do
@@ -155,9 +155,15 @@ block_extension Block.leanOutput
   traverse _ _ _ := do
     pure none
   toTeX :=
-    some <| fun _ go _ _ content => do
-      pure <| .seq <| ← content.mapM fun b => do
-        pure <| .seq #[← go b, .raw "\n"]
+    open Verso.Output.TeX in
+    open Verso.Doc.TeX in
+    some <| fun _ _ _ data _ => do
+      match FromJson.fromJson? data with
+      | .error err =>
+        TeX.logError <| "Couldn't deserialize Lean code while rendering HTML: " ++ err
+        pure .empty
+      | .ok ((msg, _summarize, _expandTraces) : Highlighted.Message × Bool × List Name) =>
+        msg.toTeX
   toHtml :=
     open Verso.Output.Html in
     some <| fun _ _ _ data _ => do
@@ -176,9 +182,17 @@ inline_extension Inline.leanOutput
   traverse _ _ _ := do
     pure none
   toTeX :=
-    some <| fun go _ _  content => do
-      pure <| .seq <| ← content.mapM fun b => do
-        pure <| .seq #[← go b, .raw "\n"]
+    open Verso.Output.TeX in
+    some <| fun _ _ data _ => do
+      match FromJson.fromJson? data with
+      | .error err =>
+        TeX.logError <| "Couldn't deserialize Lean code while rendering TeX: " ++ err
+        pure .empty
+      | .ok ((txt, plain, expandTraces) : Highlighted.Message × Bool × List Name) =>
+        if plain then
+          txt.toTeXInlinePlain expandTraces
+        else
+          txt.toTeX expandTraces
   toHtml :=
     open Verso.Output.Html in
     some <| fun _ _ data _ => do
@@ -187,8 +201,7 @@ inline_extension Inline.leanOutput
         HtmlT.logError <| "Couldn't deserialize Lean code while rendering HTML: " ++ err
         pure .empty
       | .ok ((txt, plain, expandTraces) : Highlighted.Message × Bool × List Name) =>
-        let plainHtml := {{<code>{{txt.toString}}</code>}}
-        if plain then pure plainHtml
+        if plain then pure {{<code>{{txt.toString}}</code>}}
         else txt.toHtml expandTraces (g := Manual)
 
 open Verso.Code.External

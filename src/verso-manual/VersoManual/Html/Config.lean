@@ -18,7 +18,7 @@ open Lean
 
 public structure HtmlConfig extends HtmlAssets where
   htmlDepth := 2
-  extraFiles : List (System.FilePath × String) := []
+  extraFilesHtml : List (System.FilePath × String) := []
   /-- Extra elements to add to every page's `head` tag -/
   extraHead : Array Output.Html := #[]
   /-- Extra elements to add to every page's contents -/
@@ -48,11 +48,11 @@ public structure HtmlConfig extends HtmlAssets where
 
 public instance : ToJson HtmlConfig where
   toJson := private fun
-    | { toHtmlAssets, htmlDepth, extraFiles, extraHead, extraContents, logo, logoLink, sourceLink, issueLink, sectionTocDepth, rootTocDepth, features } =>
+    | { toHtmlAssets, htmlDepth, extraFilesHtml, extraHead, extraContents, logo, logoLink, sourceLink, issueLink, sectionTocDepth, rootTocDepth, features } =>
       json%{
         "toHtmlAssets": $toHtmlAssets,
         "htmlDepth": $htmlDepth,
-        "extraFiles": $extraFiles,
+        "extraFilesHtml": $extraFilesHtml,
         "extraHead": $extraHead,
         "extraContents": $extraContents,
         "logo": $logo,
@@ -68,7 +68,7 @@ public instance : FromJson HtmlConfig where
   fromJson? v := private do
     let toHtmlAssets <- v.getObjValAs? _ "toHtmlAssets"
     let htmlDepth <- v.getObjValAs? _ "htmlDepth"
-    let extraFiles <- v.getObjValAs? _ "extraFiles"
+    let extraFilesHtml <- v.getObjValAs? _ "extraFilesHtml"
     let extraHead <- v.getObjValAs? _ "extraHead"
     let extraContents <- v.getObjValAs? _ "extraContents"
     let logo <- v.getObjValAs? _ "logo"
@@ -78,4 +78,4 @@ public instance : FromJson HtmlConfig where
     let sectionTocDepth <- v.getObjValAs? _ "sectionTocDepth"
     let rootTocDepth <- v.getObjValAs? _ "rootTocDepth"
     let features <- v.getObjValAs? _ "features"
-    return { toHtmlAssets, htmlDepth, extraFiles, extraHead, extraContents, logo, logoLink, sourceLink, issueLink, sectionTocDepth, rootTocDepth, features }
+    return { toHtmlAssets, htmlDepth, extraFilesHtml, extraHead, extraContents, logo, logoLink, sourceLink, issueLink, sectionTocDepth, rootTocDepth, features }
