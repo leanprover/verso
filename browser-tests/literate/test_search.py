@@ -1,23 +1,163 @@
+import re
+
 from playwright.sync_api import expect, Page
 
 
 class TestSearch:
-    def test_search_box_exists(self, server: str, page: Page):
-        """Test that the search box is present and focusable."""
+    """Tests for search box, results, navigation, keyboard interaction, and ARIA."""
+
+    def test_search_box_present(self, server: str, page: Page):
+        """Test that role="searchbox" is visible and focusable."""
         page.goto(f"{server}/LitConfig/")
+        page.wait_for_load_state("networkidle")
 
         searchbox = page.get_by_role("searchbox")
         expect(searchbox).to_be_visible()
         searchbox.focus()
         expect(searchbox).to_be_focused()
 
-    def test_search_finds_content(self, server: str, page: Page):
-        """Test that typing in the search box produces results."""
+    def test_search_finds_results(self, server: str, page: Page):
+        """Test that typing a definition name shows results."""
         page.goto(f"{server}/LitConfig/")
+        page.wait_for_load_state("networkidle")
 
         searchbox = page.get_by_role("searchbox")
-        searchbox.type("hello")
+        searchbox.focus()
+        searchbox.type("hello", delay=50)
 
-        # Wait for search results to appear
-        results = page.get_by_label("Results")
+        # Wait for results to appear
+        results = page.locator('[role="listbox"]')
         expect(results).to_be_visible()
+
+        options = results.locator('[role="option"]')
+        assert options.count() >= 1, "Expected at least one search result for 'hello'"
+
+    def test_search_result_navigates(self, server: str, page: Page):
+        """Test that clicking a search result goes to the correct page."""
+        page.goto(f"{server}/LitConfig/")
+        page.wait_for_load_state("networkidle")
+
+        searchbox = page.get_by_role("searchbox")
+        searchbox.focus()
+        searchbox.type("double", delay=50)
+
+        results = page.locator('[role="listbox"]')
+        expect(results).to_be_visible()
+
+        # Click the first result
+        first_result = results.locator('[role="option"]').first
+        expect(first_result).to_be_visible()
+        first_result.click()
+        page.wait_for_load_state("networkidle")
+
+        # Should have navigated away from the current page
+        url = page.url
+        assert url != f"{server}/LitConfig/", f"Expected navigation from search result, still at {url}"
+
+    def test_search_no_results(self, server: str, page: Page):
+        """Test that gibberish query shows no results."""
+        page.goto(f"{server}/LitConfig/")
+        page.wait_for_load_state("networkidle")
+
+        searchbox = page.get_by_role("searchbox")
+        searchbox.focus()
+        searchbox.type("xyzzyqwert", delay=50)
+
+        # Wait a moment for search to process
+        page.wait_for_timeout(500)
+
+        # Either no listbox visible or it has no options
+        results = page.locator('[role="listbox"]')
+        if results.is_visible():
+            options = results.locator('[role="option"]')
+            assert options.count() == 0, f"Expected no results for gibberish, got {options.count()}"
+
+    def test_search_keyboard(self, server: str, page: Page):
+        """Test arrow keys move selection and Escape closes results."""
+        page.goto(f"{server}/LitConfig/")
+        page.wait_for_load_state("networkidle")
+
+        searchbox = page.get_by_role("searchbox")
+        searchbox.focus()
+        searchbox.type("double", delay=50)
+
+        results = page.locator('[role="listbox"]')
+        expect(results).to_be_visible()
+
+        # Wait for at least one option to be available
+        first_option = results.locator('[role="option"]').first
+        expect(first_option).to_be_visible()
+
+        # Arrow down should select a result - verify by checking aria-selected
+        page.keyboard.press("ArrowDown")
+
+        # The selected option should have aria-selected="true"
+        selected = results.locator('[aria-selected="true"]')
+        expect(selected).to_have_count(1)
+
+        # Escape should close the results
+        page.keyboard.press("Escape")
+        expect(results).not_to_be_visible()
+
+    def test_search_keyboard_enter(self, server: str, page: Page):
+        """Test that pressing Enter on a selected result navigates or closes results."""
+        page.goto(f"{server}/LitConfig/")
+        page.wait_for_load_state("networkidle")
+
+        searchbox = page.get_by_role("searchbox")
+        searchbox.focus()
+        searchbox.type("double", delay=50)
+
+        results = page.locator('[role="listbox"]')
+        expect(results).to_be_visible()
+
+        # Wait for first option
+        first_option = results.locator('[role="option"]').first
+        expect(first_option).to_be_visible()
+
+        # Select first result with arrow down, then press Enter
+        page.keyboard.press("ArrowDown")
+        selected = results.locator('[aria-selected="true"]')
+        expect(selected).to_have_count(1)
+
+        original_url = page.url
+        page.keyboard.press("Enter")
+
+        # Enter should either navigate to a new page or at least close the results
+        # Give navigation a moment to happen
+        page.wait_for_timeout(1000)
+
+        navigated = page.url != original_url
+        results_closed = not results.is_visible()
+        assert navigated or results_closed, (
+            "Expected Enter to navigate or close results, "
+            f"but URL is still {page.url} and results are still visible"
+        )
+
+    def test_search_aria(self, server: str, page: Page):
+        """Test ARIA attributes on search: autocomplete, expanded, controls, listbox, option."""
+        page.goto(f"{server}/LitConfig/")
+        page.wait_for_load_state("networkidle")
+
+        searchbox = page.get_by_role("searchbox")
+        expect(searchbox).to_have_attribute("aria-autocomplete", "list")
+        expect(searchbox).to_have_attribute("aria-expanded", "false")
+        expect(searchbox).to_have_attribute("aria-controls", re.compile(r".+"))
+        expect(searchbox).to_have_attribute("aria-haspopup", "listbox")
+
+        # Type to trigger results
+        searchbox.focus()
+        searchbox.type("hello", delay=50)
+
+        results = page.locator('[role="listbox"]')
+        expect(results).to_be_visible()
+
+        # Expanded should now be true
+        expect(searchbox).to_have_attribute("aria-expanded", "true")
+
+        # Results should have role="listbox" with aria-label
+        expect(results).to_have_attribute("aria-label", re.compile(r".+"))
+
+        # Each result should have role="option"
+        options = results.locator('[role="option"]')
+        assert options.count() >= 1
