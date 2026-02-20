@@ -1,8 +1,86 @@
 /* Verso Literate CSS */
 
 :root {
+    /* Font families */
     --verso-code-font-family: "Monaco", "Menlo", "Ubuntu Mono", monospace;
     --verso-text-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
+    /* Colors */
+    --verso-text-color: #333;
+    --verso-background-color: #ffffff;
+    --verso-surface-color: #f8f9fa;
+    --verso-border-color: #e9ecef;
+    --verso-link-color: #0066cc;
+    --verso-link-hover-bg: #e3f2fd;
+    --verso-muted-color: #6c757d;
+    --verso-current-bg: #0066cc;
+    --verso-current-fg: white;
+    --verso-breadcrumb-color: #495057;
+
+    /* Code boxes */
+    --verso-code-box-background-color: #f6f8fa;
+    --verso-code-box-border-color: #e1e4e8;
+
+    /* Prose */
+    --verso-prose-max-width: 65ch;
+    --verso-blockquote-border-color: #dfe2e5;
+    --verso-blockquote-color: #6a737d;
+    --verso-inline-code-bg: #f0f2f4;
+    --verso-docstring-border-color: #ddd;
+
+    /* Imports */
+    --verso-imports-summary-color: #586069;
+
+    /* Output */
+    --verso-output-color: #555;
+
+    /* Copy button */
+    --verso-copy-button-bg: #e9ecef;
+    --verso-copy-button-border: #d1d5db;
+    --verso-copy-button-color: #586069;
+    --verso-copy-button-hover-bg: #d1d5db;
+    --verso-copy-button-copied-color: #22863a;
+
+    /* Hamburger */
+    --verso-hamburger-bg: #fff;
+    --verso-hamburger-border: #dee2e6;
+    --verso-hamburger-bar-color: #333;
+
+    /* Syntax highlighting weight/style */
+    --verso-code-keyword-weight: bold;
+    --verso-code-keyword-style: normal;
+}
+
+/* Dark mode defaults */
+@media (prefers-color-scheme: dark) {
+    :root {
+        --verso-text-color: #e0e0e0;
+        --verso-background-color: #1a1a2e;
+        --verso-surface-color: #16213e;
+        --verso-border-color: #2a2a4a;
+        --verso-link-color: #64b5f6;
+        --verso-link-hover-bg: #1a2744;
+        --verso-muted-color: #9e9e9e;
+        --verso-current-bg: #1565c0;
+        --verso-current-fg: white;
+        --verso-breadcrumb-color: #bdbdbd;
+        --verso-code-box-background-color: #0f1525;
+        --verso-code-box-border-color: #2a2a4a;
+        --verso-blockquote-border-color: #3a3a5a;
+        --verso-blockquote-color: #9e9e9e;
+        --verso-inline-code-bg: #1a1a2e;
+        --verso-docstring-border-color: #3a3a5a;
+        --verso-imports-summary-color: #9e9e9e;
+        --verso-output-color: #bdbdbd;
+        --verso-copy-button-bg: #2a2a4a;
+        --verso-copy-button-border: #3a3a5a;
+        --verso-copy-button-color: #9e9e9e;
+        --verso-copy-button-hover-bg: #3a3a5a;
+        --verso-copy-button-copied-color: #66bb6a;
+        --verso-hamburger-bg: #16213e;
+        --verso-hamburger-border: #2a2a4a;
+        --verso-hamburger-bar-color: #e0e0e0;
+    }
 }
 
 /* Reset and base styles */
@@ -15,9 +93,30 @@
 body {
     font-family: var(--verso-text-font-family);
     line-height: 1.6;
-    color: #333;
+    color: var(--verso-text-color);
+    background: var(--verso-background-color);
     height: 100vh;
     overflow: hidden;
+}
+
+/* Accessibility: focus indicators */
+a:focus-visible,
+button:focus-visible,
+summary:focus-visible,
+input:focus-visible,
+[tabindex]:focus-visible {
+    outline: 2px solid var(--verso-link-color);
+    outline-offset: 2px;
+}
+
+/* Accessibility: reduced motion */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+    }
 }
 
 /* Skip-to-content link for accessibility */
@@ -25,8 +124,8 @@ body {
     position: absolute;
     top: -40px;
     left: 0;
-    background: #0066cc;
-    color: white;
+    background: var(--verso-link-color);
+    color: var(--verso-current-fg);
     padding: 0.5rem 1rem;
     z-index: 2000;
     transition: top 0.2s ease;
@@ -45,8 +144,8 @@ body {
 /* Sidebar */
 .sidebar {
     width: 300px;
-    background: #f8f9fa;
-    border-right: 1px solid #e9ecef;
+    background: var(--verso-surface-color);
+    border-right: 1px solid var(--verso-border-color);
     overflow-y: auto;
     flex-shrink: 0;
 }
@@ -82,11 +181,11 @@ body {
 }
 
 .module-tree summary:hover {
-    background-color: #e9ecef;
+    background-color: var(--verso-border-color);
 }
 
 .module-tree summary a {
-    color: #0066cc;
+    color: var(--verso-link-color);
     text-decoration: none;
 }
 
@@ -95,12 +194,12 @@ body {
 }
 
 .module-tree summary.current {
-    background-color: #0066cc;
-    color: white;
+    background-color: var(--verso-current-bg);
+    color: var(--verso-current-fg);
 }
 
 .module-tree summary.current a {
-    color: white;
+    color: var(--verso-current-fg);
 }
 
 .module-tree summary::before {
@@ -109,7 +208,7 @@ body {
     left: -0.75rem;
     transition: transform 0.2s ease;
     font-size: 0.75rem;
-    color: #6c757d;
+    color: var(--verso-muted-color);
 }
 
 .module-tree details[open] > summary::before {
@@ -123,7 +222,7 @@ body {
 }
 
 .module-tree .leaf a {
-    color: #0066cc;
+    color: var(--verso-link-color);
     text-decoration: none;
 }
 
@@ -132,12 +231,12 @@ body {
 }
 
 .module-tree .current {
-    background-color: #0066cc;
-    color: white;
+    background-color: var(--verso-current-bg);
+    color: var(--verso-current-fg);
 }
 
 .module-tree .current a {
-    color: white;
+    color: var(--verso-current-fg);
 }
 
 /* Main content area */
@@ -150,8 +249,8 @@ body {
 
 /* Title bar */
 .title-bar {
-    background: #fff;
-    border-bottom: 1px solid #e9ecef;
+    background: var(--verso-background-color);
+    border-bottom: 1px solid var(--verso-border-color);
     padding: 1rem 1.5rem;
     flex-shrink: 0;
     position: relative;
@@ -174,12 +273,12 @@ body {
 .breadcrumbs li:not(:last-child)::after {
     content: "\00B7";
     margin: 0;
-    color: #6c757d;
+    color: var(--verso-muted-color);
     font-weight: bold;
 }
 
 .breadcrumbs a {
-    color: #0066cc;
+    color: var(--verso-link-color);
     text-decoration: none;
     padding: 0.25rem 0.5rem;
     border-radius: 0.25rem;
@@ -187,15 +286,23 @@ body {
 }
 
 .breadcrumbs a:hover {
-    background-color: #e3f2fd;
+    background-color: var(--verso-link-hover-bg);
     text-decoration: underline;
 }
 
 .breadcrumbs .current {
     font-weight: 600;
-    color: #495057;
+    color: var(--verso-breadcrumb-color);
     padding: 0.25rem 0.5rem;
     border-radius: 0.25rem;
+}
+
+/* Content wrapper: flex row for code content + page ToC */
+.content-wrapper {
+    flex: 1;
+    display: flex;
+    flex-direction: row;
+    overflow: hidden;
 }
 
 /* Code content area */
@@ -203,13 +310,66 @@ body {
     flex: 1;
     overflow-y: auto;
     padding: 2rem;
-    background: #ffffff;
+    background: var(--verso-background-color);
+}
+
+/* Page table of contents (right sidebar) */
+.page-toc {
+    width: 220px;
+    flex-shrink: 0;
+    overflow-y: auto;
+    padding: 1.5rem 1rem;
+    border-left: 1px solid var(--verso-border-color);
+    font-size: 0.8125rem;
+    line-height: 1.5;
+}
+
+.page-toc-title {
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--verso-muted-color);
+    margin-bottom: 0.75rem;
+}
+
+.page-toc ul {
+    list-style: none;
+    padding-left: 0;
+}
+
+.page-toc li {
+    padding: 0.15rem 0;
+}
+
+.page-toc li.toc-level-2 {
+    padding-left: 0.75rem;
+}
+
+.page-toc li.toc-level-3 {
+    padding-left: 1.5rem;
+}
+
+.page-toc a {
+    color: var(--verso-muted-color);
+    text-decoration: none;
+    transition: color 0.15s ease;
+}
+
+.page-toc a:hover {
+    color: var(--verso-link-color);
+}
+
+@media (max-width: 1024px) {
+    .page-toc {
+        display: none;
+    }
 }
 
 /* Code boxes: contain highlighted code, markdown docstrings, verso docstrings */
 .code-box {
-    background: #f6f8fa;
-    border: 1px solid #e1e4e8;
+    background: var(--verso-code-box-background-color);
+    border: 1px solid var(--verso-code-box-border-color);
     border-radius: 0.5rem;
     padding: 1rem 1.5rem;
     margin-bottom: 1.5rem;
@@ -223,7 +383,7 @@ body {
 /* Prose (module docstrings) flowing between code boxes */
 .code-content > .verso-text.mod-doc,
 .code-content > .md-text.mod-doc {
-    max-width: 65ch;
+    max-width: var(--verso-prose-max-width);
     margin-bottom: 1.5rem;
     font-family: var(--verso-text-font-family);
     font-size: 1rem;
@@ -246,7 +406,7 @@ body {
     font-size: 1.75rem;
     margin-top: 1.5rem;
     margin-bottom: 0.75rem;
-    border-bottom: 1px solid #e9ecef;
+    border-bottom: 1px solid var(--verso-border-color);
     padding-bottom: 0.5rem;
 }
 
@@ -281,15 +441,15 @@ body {
 
 .code-content > .verso-text.mod-doc blockquote,
 .code-content > .md-text.mod-doc blockquote {
-    border-left: 4px solid #dfe2e5;
+    border-left: 4px solid var(--verso-blockquote-border-color);
     padding: 0.25rem 1rem;
-    color: #6a737d;
+    color: var(--verso-blockquote-color);
     margin: 0.5rem 0;
 }
 
 .code-content > .verso-text.mod-doc code,
 .code-content > .md-text.mod-doc code {
-    background: #f0f2f4;
+    background: var(--verso-inline-code-bg);
     padding: 0.15rem 0.3rem;
     border-radius: 0.2rem;
     font-family: var(--verso-code-font-family);
@@ -298,7 +458,7 @@ body {
 
 .code-content > .verso-text.mod-doc pre,
 .code-content > .md-text.mod-doc pre {
-    background: #f6f8fa;
+    background: var(--verso-code-box-background-color);
     padding: 0.75rem 1rem;
     border-radius: 0.375rem;
     overflow-x: auto;
@@ -312,7 +472,7 @@ body {
     margin-left: calc(var(--indent, 0) * 1ch);
     padding: 0.25rem 0.5rem;
     max-width: 40em;
-    border: 1px solid #ddd;
+    border: 1px solid var(--verso-docstring-border-color);
     border-radius: 1rem;
     width: max-content;
 }
@@ -391,17 +551,17 @@ pre,
 /* Imports list */
 .imports-list {
     margin-bottom: 1.5rem;
-    border: 1px solid #e1e4e8;
+    border: 1px solid var(--verso-code-box-border-color);
     border-radius: 0.375rem;
     padding: 0.5rem 1rem;
-    background: #f8f9fa;
+    background: var(--verso-surface-color);
 }
 
 .imports-list summary {
     cursor: pointer;
     font-weight: 600;
     font-size: 0.9rem;
-    color: #586069;
+    color: var(--verso-imports-summary-color);
     padding: 0.25rem 0;
 }
 
@@ -417,7 +577,7 @@ pre,
 }
 
 .imports-list a {
-    color: #0066cc;
+    color: var(--verso-link-color);
     text-decoration: none;
 }
 
@@ -427,11 +587,11 @@ pre,
 
 /* Command output blocks */
 .code-box .lean-output {
-    border-top: 1px solid #e1e4e8;
+    border-top: 1px solid var(--verso-code-box-border-color);
     padding: 0.5em 1em;
     font-family: var(--verso-code-font-family, monospace);
     white-space: pre-wrap;
-    color: #555;
+    color: var(--verso-output-color);
 }
 
 /* Copy button */
@@ -439,13 +599,13 @@ pre,
     position: absolute;
     top: 0.5rem;
     right: 0.5rem;
-    background: #e9ecef;
-    border: 1px solid #d1d5db;
+    background: var(--verso-copy-button-bg);
+    border: 1px solid var(--verso-copy-button-border);
     border-radius: 0.25rem;
     padding: 0.25rem 0.5rem;
     cursor: pointer;
     font-size: 0.75rem;
-    color: #586069;
+    color: var(--verso-copy-button-color);
     opacity: 0;
     transition: opacity 0.2s ease;
 }
@@ -455,11 +615,11 @@ pre,
 }
 
 .copy-button:hover {
-    background: #d1d5db;
+    background: var(--verso-copy-button-hover-bg);
 }
 
 .copy-button.copied {
-    color: #22863a;
+    color: var(--verso-copy-button-copied-color);
 }
 
 /* Landing page */
@@ -472,7 +632,7 @@ pre,
 .landing-page h1 {
     font-size: 2rem;
     margin-bottom: 1.5rem;
-    border-bottom: 2px solid #e9ecef;
+    border-bottom: 2px solid var(--verso-border-color);
     padding-bottom: 0.75rem;
 }
 
@@ -490,7 +650,7 @@ pre,
 }
 
 .module-toc a {
-    color: #0066cc;
+    color: var(--verso-link-color);
     text-decoration: none;
     font-family: var(--verso-code-font-family);
 }
@@ -510,8 +670,8 @@ pre,
     top: 1rem;
     left: 1rem;
     z-index: 1001;
-    background: #fff;
-    border: 1px solid #dee2e6;
+    background: var(--verso-hamburger-bg);
+    border: 1px solid var(--verso-hamburger-border);
     border-radius: 0.375rem;
     padding: 0.5rem;
     cursor: pointer;
@@ -522,7 +682,7 @@ pre,
     display: block;
     width: 20px;
     height: 2px;
-    background: #333;
+    background: var(--verso-hamburger-bar-color);
     margin: 4px 0;
     transition: 0.3s;
 }

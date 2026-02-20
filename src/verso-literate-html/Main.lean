@@ -51,11 +51,36 @@ This is determined at the item level rather than the code level.
 private def ModuleItem'.isImport (item : ModuleItem') : Bool :=
   item.kind == ``Lean.Parser.Command.import
 
-private def shouldShowDocstring (config : LiterateConfig) (declName : Name) : Bool :=
+private def shouldShowDocstring (config : ResolvedConfig) (declName : Name) : Bool :=
   if config.showDocstrings then
     !config.hideDocstringsFor.contains declName
   else
     config.showDocstringsFor.contains declName
+
+/-- Convert a theme key to a CSS custom property name: replace `_` with `-` and prepend `--verso-`. -/
+private def themeKeyToCssVar (key : String) : String :=
+  "--verso-" ++ key.map fun c => if c == '_' then '-' else c
+
+/-- Generate the content of `literate-theme.css` from light and dark theme maps.
+    Returns `none` if both maps are empty (no file should be written). -/
+def generateThemeCss (light : Std.TreeMap String String compare) (dark : Std.TreeMap String String compare) : Option String :=
+  if light.isEmpty && dark.isEmpty then none
+  else
+    let lightCss :=
+      if light.isEmpty then ""
+      else
+        let vars := light.foldl (init := "") fun acc k v =>
+          acc ++ s!"    {themeKeyToCssVar k}: {v};\n"
+        s!":root \{\n{vars}}\n"
+    let darkCss :=
+      if dark.isEmpty then ""
+      else
+        let vars := dark.foldl (init := "") fun acc k v =>
+          acc ++ s!"        {themeKeyToCssVar k}: {v};\n"
+        let vars2 := dark.foldl (init := "") fun acc k v =>
+          acc ++ s!"    {themeKeyToCssVar k}: {v};\n"
+        s!"@media (prefers-color-scheme: dark) \{\n    :root \{\n{vars}    }\n}\n:root[data-theme=\"dark\"] \{\n{vars2}}\n"
+    some (lightCss ++ darkCss)
 
 namespace VersoLiterateCode
 
@@ -154,7 +179,7 @@ def literate.css := include_str "literate.css"
 
 open Verso Output Html in
 /-- Render output messages for a list of code items, returning the combined HTML and updated state. -/
-private def renderOutputMessages (items : Array (Nat × ModuleItem')) (showOutput : Array Name)
+private def renderOutputMessages (items : Array (Nat × ModuleItem')) (showOutput : Array String)
     (hlCtx : HighlightHtmlM.Context Literate) (hlState : Hover.State Html) : Html × Hover.State Html :=
   items.foldl (init := (.empty, hlState)) fun (html, st) (_, cItem) =>
     let msgs := extractItemOutput cItem showOutput
@@ -176,6 +201,7 @@ def emitMod (root : Dir) (outDir: System.FilePath) (mod : LitMod) : EmitM Unit :
   let importNames := imports.flatMap (·.defines)
 
   let litConfig := (← read).litConfig
+  let resolved := litConfig.resolveForModule mod.name
 
   let ctx := { (← read) with
                options := {logError}
@@ -186,15 +212,15 @@ def emitMod (root : Dir) (outDir: System.FilePath) (mod : LitMod) : EmitM Unit :
     ⟨ctx.linkTargets, ctx.traverseContext, ctx.definitionIds, ctx.codeOptions⟩
 
   -- Apply hide_commands filtering
-  let contents := if litConfig.hideCommands.isEmpty then mod.contents
+  let contents := if resolved.hideCommands.isEmpty then mod.contents
     else mod.contents.filter fun item =>
-      !litConfig.hideCommands.contains item.kind
+      !matchesAnyCommandPattern item resolved.hideCommands
 
   -- Group items: modDoc items become prose, others go in code boxes
   let mut body : Html := .empty
 
   -- Imports section (collapsible)
-  if litConfig.showImports && !importNames.isEmpty then
+  if resolved.showImports && !importNames.isEmpty then
     let importLinks := importNames.map fun n =>
       if (root[n]?).isSome then
         let href := n.components.map (toString · ++ "/") |> String.join
@@ -216,10 +242,10 @@ def emitMod (root : Dir) (outDir: System.FilePath) (mod : LitMod) : EmitM Unit :
     let item := contents[itemIdx]
     -- Apply docstring filtering
     let item :=
-      if litConfig.showDocstrings && litConfig.hideDocstringsFor.isEmpty then item
+      if resolved.showDocstrings && resolved.hideDocstringsFor.isEmpty then item
       else { item with code := item.code.filter fun
         | .verso _ (some dn) _ | .markdown _ (some dn) _ =>
-          shouldShowDocstring litConfig dn
+          shouldShowDocstring resolved dn
         | _ => true }
     let hasModDoc := item.code.any Code.isModDoc
     if hasModDoc then
@@ -228,7 +254,7 @@ def emitMod (root : Dir) (outDir: System.FilePath) (mod : LitMod) : EmitM Unit :
         let (codeHtml, st) ← currentCodeItems.foldlM (init := (.empty, (← get).hlState)) fun (html, st) (idx, cItem) => do
           let (h, st') ← renderCode idx cItem |>.run ctx st
           pure (html ++ h, st')
-        let (outputHtml, st') := renderOutputMessages currentCodeItems litConfig.showOutput hlCtx st
+        let (outputHtml, st') := renderOutputMessages currentCodeItems resolved.showOutput hlCtx st
         modify (fun s => { s with hlState := st' })
         body := body ++ {{<div class="code-box">{{codeHtml}}{{outputHtml}}</div>}}
         currentCodeItems := #[]
@@ -244,7 +270,7 @@ def emitMod (root : Dir) (outDir: System.FilePath) (mod : LitMod) : EmitM Unit :
     let (codeHtml, st) ← currentCodeItems.foldlM (init := (.empty, (← get).hlState)) fun (html, st) (idx, cItem) => do
       let (h, st') ← renderCode idx cItem |>.run ctx st
       pure (html ++ h, st')
-    let (outputHtml, st') := renderOutputMessages currentCodeItems litConfig.showOutput hlCtx st
+    let (outputHtml, st') := renderOutputMessages currentCodeItems resolved.showOutput hlCtx st
     modify (fun s => { s with hlState := st' })
     body := body ++ {{<div class="code-box">{{codeHtml}}{{outputHtml}}</div>}}
 
@@ -259,6 +285,9 @@ def emitMod (root : Dir) (outDir: System.FilePath) (mod : LitMod) : EmitM Unit :
   let extraJsTags : Html := litConfig.extraJs.foldl (init := .empty) fun acc js =>
     acc ++ {{<script src={{(⟨js⟩ : System.FilePath).fileName.getD js}} defer="defer"></script>}}
 
+  let hasThemeCss := !litConfig.theme.isEmpty || !litConfig.themeDark.isEmpty
+  let themeCssTag : Html := if hasThemeCss then {{<link rel="stylesheet" href="literate-theme.css"/>}} else .empty
+
   let headContents : Html := {{
     {{ faviconTag }}
     {{ descTag }}
@@ -269,6 +298,7 @@ def emitMod (root : Dir) (outDir: System.FilePath) (mod : LitMod) : EmitM Unit :
     <style>{{Html.text false highlightingStyle}}</style>
     <link rel="stylesheet" href="tippy-border.css"/>
     <link rel="stylesheet" href="literate.css"/>
+    {{ themeCssTag }}
     <script src="copy-button.js" defer="defer"></script>
 
     <script src="-verso-search/elasticlunr.min.js"></script>
@@ -285,13 +315,20 @@ def emitMod (root : Dir) (outDir: System.FilePath) (mod : LitMod) : EmitM Unit :
     {{ extraJsTags }}
   }}
 
+  -- Build page ToC from headings
+  let headings := collectHeadings mod (← read).traverseState
+  let tocHtml := if headings.size >= 2 then buildPageToc headings else .empty
+
+  let modLabel := resolved.title.getD (toString mod.name)
   let pageTitle := match litConfig.metadata.title with
-    | some siteTitle => s!"{mod.name} — {siteTitle}"
-    | none => toString mod.name
+    | some siteTitle => s!"{modLabel} — {siteTitle}"
+    | none => modLabel
 
-  let pageHtml := page pageTitle siteRoot headContents mod.name root htmlId? body
+  let pageHtml := page pageTitle siteRoot headContents mod.name root htmlId? body (pageToc := tocHtml) (litConfig := litConfig)
 
-  let outFile := mod.name.components.map (·.toString) |>.foldl (init := outDir) (· / ·)
+  let outFile := match resolved.url with
+    | some u => outDir / u
+    | none => mod.name.components.foldl (init := outDir) fun dir c => dir / c.toString
 
   IO.FS.createDirAll outFile
 
@@ -322,10 +359,13 @@ partial def emitLandingPage (outDir : System.FilePath) (dir : Dir) (litConfig : 
     acc ++ {{<link rel="stylesheet" href={{(⟨css⟩ : System.FilePath).fileName.getD css}}/>}}
   let extraJsTags : Html := litConfig.extraJs.foldl (init := .empty) fun acc js =>
     acc ++ {{<script src={{(⟨js⟩ : System.FilePath).fileName.getD js}} defer="defer"></script>}}
+  let hasThemeCss := !litConfig.theme.isEmpty || !litConfig.themeDark.isEmpty
+  let themeCssTag : Html := if hasThemeCss then {{<link rel="stylesheet" href="literate-theme.css"/>}} else .empty
   let headContents : Html := {{
     {{ faviconTag }}
     {{ descTag }}
     <link rel="stylesheet" href="literate.css"/>
+    {{ themeCssTag }}
     <script src="-verso-search/elasticlunr.min.js"></script>
     <script src="-verso-search/fuzzysort.min.js"></script>
     <script src="-verso-search/searchIndex.js"></script>
@@ -382,6 +422,7 @@ The module still appears at its normal location; we just also render it as index
 -/
 def emitLandingFromModule (outDir : System.FilePath) (root : Dir) (modName : Name) (ctx : HtmlContext) : IO Unit := do
   let litConfig := ctx.litConfig
+  let resolved := litConfig.resolveForModule modName
   let some mod := root.findMod? modName
     | do IO.eprintln s!"Landing page module '{modName}' not found"; return
   let siteRoot := "./"
@@ -395,7 +436,7 @@ def emitLandingFromModule (outDir : System.FilePath) (root : Dir) (modName : Nam
   let hlCtx : HighlightHtmlM.Context Literate :=
     ⟨emitCtx.linkTargets, emitCtx.traverseContext, emitCtx.definitionIds, emitCtx.codeOptions⟩
   let mut body : Html := .empty
-  if litConfig.showImports && !importNames.isEmpty then
+  if resolved.showImports && !importNames.isEmpty then
     let importLinks := importNames.map fun n =>
       if (root[n]?).isSome then
         let href := n.components.map (toString · ++ "/") |> String.join
@@ -409,9 +450,9 @@ def emitLandingFromModule (outDir : System.FilePath) (root : Dir) (modName : Nam
       </details>
     }}
   -- Apply hide_commands filtering
-  let modContents := if litConfig.hideCommands.isEmpty then mod.contents
+  let modContents := if resolved.hideCommands.isEmpty then mod.contents
     else mod.contents.filter fun item =>
-      !litConfig.hideCommands.contains item.kind
+      !matchesAnyCommandPattern item resolved.hideCommands
   let mut currentCodeItems : Array (Nat × ModuleItem') := #[]
   let mut hlState : HtmlState := {}
   for h : itemIdx in [0:modContents.size] do
@@ -419,10 +460,10 @@ def emitLandingFromModule (outDir : System.FilePath) (root : Dir) (modName : Nam
     let item := modContents[itemIdx]
     -- Apply docstring filtering
     let item :=
-      if litConfig.showDocstrings && litConfig.hideDocstringsFor.isEmpty then item
+      if resolved.showDocstrings && resolved.hideDocstringsFor.isEmpty then item
       else { item with code := item.code.filter fun
         | .verso _ (some dn) _ | .markdown _ (some dn) _ =>
-          shouldShowDocstring litConfig dn
+          shouldShowDocstring resolved dn
         | _ => true }
     let hasModDoc := item.code.any Code.isModDoc
     if hasModDoc then
@@ -430,7 +471,7 @@ def emitLandingFromModule (outDir : System.FilePath) (root : Dir) (modName : Nam
         let (codeHtml, st) ← currentCodeItems.foldlM (init := (.empty, hlState.hlState)) fun (html, st) (idx, cItem) => do
           let (h, st') ← renderCode idx cItem |>.run emitCtx st
           pure (html ++ h, st')
-        let (outputHtml, st') := renderOutputMessages currentCodeItems litConfig.showOutput hlCtx st
+        let (outputHtml, st') := renderOutputMessages currentCodeItems resolved.showOutput hlCtx st
         hlState := { hlState with hlState := st' }
         body := body ++ {{<div class="code-box">{{codeHtml}}{{outputHtml}}</div>}}
         currentCodeItems := #[]
@@ -443,7 +484,7 @@ def emitLandingFromModule (outDir : System.FilePath) (root : Dir) (modName : Nam
     let (codeHtml, st) ← currentCodeItems.foldlM (init := (.empty, hlState.hlState)) fun (html, st) (idx, cItem) => do
       let (h, st') ← renderCode idx cItem |>.run emitCtx st
       pure (html ++ h, st')
-    let (outputHtml, st') := renderOutputMessages currentCodeItems litConfig.showOutput hlCtx st
+    let (outputHtml, st') := renderOutputMessages currentCodeItems resolved.showOutput hlCtx st
     hlState := { hlState with hlState := st' }
     body := body ++ {{<div class="code-box">{{codeHtml}}{{outputHtml}}</div>}}
   let faviconTag : Html := match litConfig.metadata.favicon with
@@ -456,6 +497,8 @@ def emitLandingFromModule (outDir : System.FilePath) (root : Dir) (modName : Nam
     acc ++ {{<link rel="stylesheet" href={{(⟨css⟩ : System.FilePath).fileName.getD css}}/>}}
   let extraJsTags : Html := litConfig.extraJs.foldl (init := .empty) fun acc js =>
     acc ++ {{<script src={{(⟨js⟩ : System.FilePath).fileName.getD js}} defer="defer"></script>}}
+  let hasThemeCss := !litConfig.theme.isEmpty || !litConfig.themeDark.isEmpty
+  let themeCssTag : Html := if hasThemeCss then {{<link rel="stylesheet" href="literate-theme.css"/>}} else .empty
   let headContents : Html := {{
     {{ faviconTag }}
     {{ descTag }}
@@ -465,6 +508,7 @@ def emitLandingFromModule (outDir : System.FilePath) (root : Dir) (modName : Nam
     <style>{{Html.text false highlightingStyle}}</style>
     <link rel="stylesheet" href="tippy-border.css"/>
     <link rel="stylesheet" href="literate.css"/>
+    {{ themeCssTag }}
     <script src="copy-button.js" defer="defer"></script>
     <script src="-verso-search/elasticlunr.min.js"></script>
     <script src="-verso-search/fuzzysort.min.js"></script>
@@ -478,10 +522,14 @@ def emitLandingFromModule (outDir : System.FilePath) (root : Dir) (modName : Nam
     {{ extraCssTags }}
     {{ extraJsTags }}
   }}
+  -- Build page ToC
+  let headings := collectHeadings mod ctx.traverseState
+  let tocHtml := if headings.size >= 2 then buildPageToc headings else .empty
+  let modLabel := resolved.title.getD (toString mod.name)
   let landingPageTitle := match litConfig.metadata.title with
-    | some siteTitle => s!"{mod.name} — {siteTitle}"
-    | none => toString mod.name
-  let pageHtml := page landingPageTitle siteRoot headContents mod.name root htmlId? body
+    | some siteTitle => s!"{modLabel} — {siteTitle}"
+    | none => modLabel
+  let pageHtml := page landingPageTitle siteRoot headContents mod.name root htmlId? body (pageToc := tocHtml) (litConfig := litConfig)
   IO.FS.writeFile (outDir / "index.html") <| "<!DOCTYPE html>\n" ++ pageHtml.asString
 
 end EmitLanding
@@ -506,6 +554,10 @@ def main (args : List String) : IO UInt32 := do
   let litConfig ← match config.configFile with
     | some path => loadLiterateConfig path
     | none => pure ({} : LiterateConfig)
+
+  -- Generate theme CSS file if theme overrides are present
+  if let some themeCssContent := generateThemeCss litConfig.theme litConfig.themeDark then
+    IO.FS.writeFile (config.outputDir / "literate-theme.css") themeCssContent
 
   -- Copy extra CSS files to output directory
   for css in litConfig.extraCss do

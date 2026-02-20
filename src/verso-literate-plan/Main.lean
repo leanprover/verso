@@ -18,6 +18,12 @@ def Name.isPrefixOf (prefix_ : Name) (name : Name) : Bool :=
   | .str parent _ => prefix_.isPrefixOf parent
   | .num parent _ => prefix_.isPrefixOf parent
 
+/-- A module with its library membership. -/
+structure LibModule where
+  library : Name
+  module : Name
+deriving Repr
+
 def main (args : List String) : IO UInt32 := do
   match args with
   | [moduleListFile, planOutputFile] =>
@@ -28,28 +34,53 @@ def main (args : List String) : IO UInt32 := do
     IO.eprintln "Usage: verso-literate-plan <module-list-file> <plan-output-file> [<literate.toml>]"
     return 1
 where
-  runPlan (moduleListFile planOutputFile : String) (tomlFile : Option String) : IO UInt32 := do
-    -- Read module list (one Name per line)
-    let moduleListContents ← IO.FS.readFile moduleListFile
-    let mut modules := moduleListContents.splitOn "\n"
+  /-- Parse a module list file. Each line is either:
+      - `library_name\tmodule_name` (tab-separated, new format)
+      - `module_name` (plain name, legacy format — library is set to anonymous) -/
+  parseModuleList (contents : String) : List LibModule :=
+    contents.splitOn "\n"
       |>.filter (!·.isEmpty)
-      |>.map String.toName
+      |>.map fun line =>
+        match line.splitOn "\t" with
+        | [lib, mod] => { library := lib.toName, module := mod.toName }
+        | _ => { library := .anonymous, module := line.toName }
+
+  /-- Check whether a target matches a module entry. A target matches if:
+      - `target.module` matches (prefix of module name), or
+      - `target.library` matches the module's library name
+      When both are specified, both must match. -/
+  targetMatches (target : Target) (entry : LibModule) : Bool :=
+    let libOk := match target.library with
+      | none => true
+      | some lib => lib == entry.library
+    let modOk := match target.module with
+      | none => true
+      | some mod => mod == entry.module || mod.isPrefixOf entry.module
+    -- At least one of library or module must be specified for a meaningful match
+    let hasConstraint := target.library.isSome || target.module.isSome
+    hasConstraint && libOk && modOk
+
+  runPlan (moduleListFile planOutputFile : String) (tomlFile : Option String) : IO UInt32 := do
+    -- Read module list
+    let moduleListContents ← IO.FS.readFile moduleListFile
+    let mut entries := parseModuleList moduleListContents
 
     -- Load config if TOML file provided
     let config ← match tomlFile with
       | some path => loadLiterateConfig path
       | none => pure ({} : LiterateConfig)
 
-    -- Apply target filtering: if targets is non-empty, filter to matching modules
+    -- Apply target filtering: if targets is non-empty, filter to matching entries
     if !config.targets.isEmpty then
-      let targetModules := config.targets.filterMap fun t => t.module
-      if !targetModules.isEmpty then
-        modules := modules.filter fun m => targetModules.any fun t => t == m || t.isPrefixOf m
+      entries := entries.filter fun entry =>
+        config.targets.any fun target => targetMatches target entry
 
     -- Apply exclusion: remove modules with excluded prefixes
     if !config.exclude.isEmpty then
-      modules := modules.filter fun m =>
-        !config.exclude.any fun e => e.isPrefixOf m
+      entries := entries.filter fun entry =>
+        !config.exclude.any fun e => e.isPrefixOf entry.module
+
+    let modules := entries.map (·.module)
 
     -- Validate: empty module set
     if modules.isEmpty then

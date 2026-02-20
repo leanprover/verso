@@ -223,10 +223,57 @@ where
 
 
 open SubVerso.Highlighting in
+/-- Collect the leading keyword token strings from highlighted code, in order.
+    Stops at the first non-keyword, non-whitespace token. Whitespace (`.text`)
+    tokens are skipped. This gives us e.g. `#["#eval"]` or `#["#print", "axioms"]`
+    or `#["set_option"]` for the corresponding commands. -/
+partial def leadingKeywords (hl : Highlighted) : Array String :=
+  go hl #[] |>.1
+where
+  /-- Returns `(keywords, done)` where `done` means we hit a non-keyword token. -/
+  go : Highlighted → Array String → Array String × Bool
+    | .token ⟨.keyword .., s⟩, acc => (acc.push s.trimAscii.toString, false)
+    | .text s, acc =>
+      if s.trimAscii.toString.isEmpty then (acc, false) -- skip whitespace
+      else (acc, true) -- non-empty text that isn't a keyword: stop
+    | .seq xs, acc =>
+      xs.foldl (init := (acc, false)) fun (acc, done) x =>
+        if done then (acc, true) else go x acc
+    | .span _ content, acc => go content acc
+    | .tactics _ _ _ content, acc => go content acc
+    | _, acc => (acc, true) -- any other node type: stop
+
+/-- Check whether a module item's highlighted code starts with a given keyword
+    pattern. The pattern is a space-separated sequence of keyword tokens
+    (e.g. `"#eval"`, `"#print axioms"`, `"set_option"`). The item's leading
+    keyword tokens must start with the pattern tokens in order. This means
+    `"#eval"` matches both `#eval expr` and `#eval in`, and `"#print"` matches
+    both `#print name` and `#print axioms name`. -/
+def matchesCommandPattern (item : ModuleItem') (pattern : String) : Bool :=
+  let patTokens := pattern.split (· == ' ') |>.filter (!·.isEmpty) |>.toArray
+  if patTokens.isEmpty then false
+  else
+    let hls := item.code.filterMap fun | .highlighted hl => some hl | _ => none
+    let hl := hls.foldl (init := SubVerso.Highlighting.Highlighted.seq #[]) fun acc h =>
+      SubVerso.Highlighting.Highlighted.seq #[acc, h]
+    let leadingKws := leadingKeywords hl
+    if leadingKws.size < patTokens.size then false
+    else
+      let rec check (i : Nat) : Bool :=
+        if i >= patTokens.size then true
+        else if leadingKws[i]! != patTokens[i]! then false
+        else check (i + 1)
+      check 0
+
+/-- Check whether a module item matches any of the given command patterns. -/
+def matchesAnyCommandPattern (item : ModuleItem') (patterns : Array String) : Bool :=
+  patterns.any (matchesCommandPattern item)
+
+open SubVerso.Highlighting in
 /-- Extract info-severity output messages from a module item, if the item's
-    syntax kind is in `showOutput`. Returns all info messages found. -/
-def extractItemOutput (item : ModuleItem') (showOutput : Array Name) : Array Highlighted.Message :=
-  if !showOutput.contains item.kind then #[]
+    leading keywords match any pattern in `showOutput`. Returns all info messages found. -/
+def extractItemOutput (item : ModuleItem') (showOutput : Array String) : Array Highlighted.Message :=
+  if !matchesAnyCommandPattern item showOutput then #[]
   else
     let hls := item.code.filterMap fun | .highlighted hl => some hl | _ => none
     let hl := hls.foldl (init := Highlighted.seq #[]) fun acc h => Highlighted.seq #[acc, h]
@@ -318,8 +365,54 @@ partial def collectDeclNames (d : Dir) : Std.HashSet Name := Id.run do
       out := out.insert x
   return out
 
+/-- Collect headings from a module's content items for the page table of contents.
+    Returns an array of (level, titleText, htmlId?) tuples. -/
+def collectHeadings (mod : LitMod) (traverseState : Literate.TraverseState)
+    : Array (Nat × String × Option String) := Id.run do
+  let mut headings : Array (Nat × String × Option String) := #[]
+  for h_item : itemIdx in [0:mod.contents.size] do
+    have : itemIdx < mod.contents.size := by have := h_item.2.1; grind
+    let item := mod.contents[itemIdx]
+    for h_code : codeIdx in [0:item.code.size] do
+      have : codeIdx < item.code.size := by have := h_code.2.1; grind
+      match item.code[codeIdx] with
+      | .modDoc doc =>
+        let htmlId := traverseState.modDocLink mod.name itemIdx codeIdx
+        for (lvl, part) in doc.sections do
+          headings := headings.push (lvl, part.titleString, htmlId.map (·.htmlId.toString))
+      | .markdownModDoc doc =>
+        let htmlId := traverseState.modDocLink mod.name itemIdx codeIdx
+        for b in doc.blocks do
+          match b with
+          | .header n title =>
+            let titleText := title.map mdHeaderText |>.toList |> String.join
+            headings := headings.push (n, titleText, htmlId.map (·.htmlId.toString))
+          | _ => pure ()
+      | _ => pure ()
+  return headings
+where
+  mdHeaderText : MD4Lean.Text → String
+    | .normal s => s
+    | .code s => s.toList |> String.join
+    | .em xs | .strong xs | .del xs => xs.map mdHeaderText |>.toList |> String.join
+    | .a _ _ _ txt => txt.map mdHeaderText |>.toList |> String.join
+    | _ => ""
+
 open Verso Output Html in
-partial def page (title : String) (siteRoot : String) (headContents : Html) (current : Name) (root : Dir) (htmlId? : Option String) (code : Html) : Html := {{
+/-- Build the page ToC HTML from collected headings. -/
+def buildPageToc (headings : Array (Nat × String × Option String)) : Html :=
+  let items := headings.map fun (lvl, title, htmlId?) =>
+    let levelClass := s!"toc-level-{lvl}"
+    match htmlId? with
+    | some id => {{<li class={{levelClass}}><a href={{s!"#{id}"}}>{{title}}</a></li>}}
+    | none => {{<li class={{levelClass}}>{{title}}</li>}}
+  {{<nav class="page-toc" aria-label="Page table of contents">
+      <div class="page-toc-title">"On this page"</div>
+      <ul>{{items}}</ul>
+    </nav>}}
+
+open Verso Output Html in
+partial def page (title : String) (siteRoot : String) (headContents : Html) (current : Name) (root : Dir) (htmlId? : Option String) (code : Html) (pageToc : Html := .empty) (litConfig : LiterateConfig := {}) : Html := {{
   <html>
     <head>
       <meta charset="utf-8" />
@@ -331,10 +424,10 @@ partial def page (title : String) (siteRoot : String) (headContents : Html) (cur
     <body>
       <a href="#main-content" class="skip-link">"Skip to content"</a>
       <!-- Checkbox hack for hamburger menu -->
-      <input type="checkbox" id="menu-toggle" class="menu-toggle" />
+      <input type="checkbox" id="menu-toggle" class="menu-toggle" role="button" aria-label="Menu" />
 
       <!-- Hamburger button -->
-      <label for="menu-toggle" class="hamburger">
+      <label for="menu-toggle" class="hamburger" aria-label="Toggle navigation">
         <span></span>
         <span></span>
         <span></span>
@@ -364,10 +457,14 @@ partial def page (title : String) (siteRoot : String) (headContents : Html) (cur
             </ol>
           </header>
 
-          <!-- Code content -->
-          <section class="code-content" {{htmlId?.map ("id", ·) |>.toArray}}>
-            {{code}}
-          </section>
+          <!-- Content wrapper: code + page ToC -->
+          <div class="content-wrapper">
+            <!-- Code content -->
+            <section class="code-content" {{htmlId?.map ("id", ·) |>.toArray}}>
+              {{code}}
+            </section>
+            {{ pageToc }}
+          </div>
         </main>
       </div>
     </body>
@@ -393,10 +490,16 @@ where
 
   toNavigation (current? : Option (List Name)) (name : Name) (dir : Dir) : Html :=
     let myName : Html :=
-      let name := if let .str _ s := name then s else name.toString
-      if let some x := dir.mod then {{
-        <a href={{x.name.components.map (toString · ++ "/") |> String.join}} title={{x.name.toString}}>{{name}}</a>
-      }} else name
+      if let some x := dir.mod then
+        let resolved := litConfig.resolveForModule x.name
+        let label := resolved.title.getD (if let .str _ s := name then s else name.toString)
+        let href := match resolved.url with
+          | some u => u ++ "/"
+          | none => x.name.components.map (toString · ++ "/") |> String.join
+        {{<a href={{href}} title={{x.name.toString}}>{{label}}</a>}}
+      else
+        let label := if let .str _ s := name then s else name.toString
+        (label : Html)
     if dir.children.isEmpty then
       navLeaf myName (current? == some [])
     else

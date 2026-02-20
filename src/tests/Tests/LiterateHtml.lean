@@ -244,9 +244,51 @@ private def testTargetsFiltering (data : TestData) : IO Unit := IO.FS.withTempDi
   if planModules.contains "LitConfig.NoDocstrings" then
     throw <| IO.userError "Plan with target LitConfig.Core should not contain LitConfig.NoDocstrings"
 
+/-- Library-level target filtering includes all modules belonging to that library. -/
+private def testTargetsLibrary (data : TestData) : IO Unit := IO.FS.withTempDir fun tmpDir => do
+  let planFile := tmpDir / "plan"
+  let tomlFile := tmpDir / "literate.toml"
+  IO.FS.writeFile tomlFile "[[targets]]\nlibrary = \"LitConfig\"\n"
+  runLiteratePlan data.moduleListFile planFile (some tomlFile)
+  let planContent ← IO.FS.readFile planFile
+  let planModules := planContent.splitOn "\n" |>.filter (!·.isEmpty)
+  -- All modules in the LitConfig library should be included
+  unless planModules.contains "LitConfig" do
+    throw <| IO.userError "Library target should include LitConfig"
+  unless planModules.contains "LitConfig.Core" do
+    throw <| IO.userError "Library target should include LitConfig.Core"
+  unless planModules.contains "LitConfig.Core.Basic" do
+    throw <| IO.userError "Library target should include LitConfig.Core.Basic"
+  unless planModules.contains "LitConfig.NoDocstrings" do
+    throw <| IO.userError "Library target should include LitConfig.NoDocstrings"
+
+/-- Library-level target filtering with a non-matching library produces an empty set. -/
+private def testTargetsLibraryNonexistent (data : TestData) : IO Unit := IO.FS.withTempDir fun tmpDir => do
+  let planFile := tmpDir / "plan"
+  let tomlFile := tmpDir / "literate.toml"
+  IO.FS.writeFile tomlFile "[[targets]]\nlibrary = \"NonexistentLib\"\n"
+  let (exitCode, _, _) ← runLiteratePlanCapture data.moduleListFile planFile (some tomlFile)
+  unless exitCode != 0 do
+    throw <| IO.userError "Library target with nonexistent library should fail"
+
+/-- Combined library + module target filters to modules that match both constraints. -/
+private def testTargetsLibraryAndModule (data : TestData) : IO Unit := IO.FS.withTempDir fun tmpDir => do
+  let planFile := tmpDir / "plan"
+  let tomlFile := tmpDir / "literate.toml"
+  IO.FS.writeFile tomlFile "[[targets]]\nlibrary = \"LitConfig\"\nmodule = \"LitConfig.Core\"\n"
+  runLiteratePlan data.moduleListFile planFile (some tomlFile)
+  let planContent ← IO.FS.readFile planFile
+  let planModules := planContent.splitOn "\n" |>.filter (!·.isEmpty)
+  unless planModules.contains "LitConfig.Core" do
+    throw <| IO.userError "Library+module target should include LitConfig.Core"
+  unless planModules.contains "LitConfig.Core.Basic" do
+    throw <| IO.userError "Library+module target should include LitConfig.Core.Basic"
+  if planModules.contains "LitConfig.NoDocstrings" then
+    throw <| IO.userError "Library+module target should not include LitConfig.NoDocstrings"
+
 /-- Commands listed in `hide_commands` produce no output while other commands remain visible. -/
 private def testHideCommands (data : TestData) : IO Unit := withTestDir data fun jsonDir htmlDir _ tomlFile => do
-  IO.FS.writeFile tomlFile "hide_commands = [\"Lean.Parser.Command.set_option\"]\n"
+  IO.FS.writeFile tomlFile "hide_commands = [\"set_option\"]\n"
   runLiterateHtml jsonDir htmlDir (configFile := some tomlFile)
 
   let litConfigHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "index.html")
@@ -485,6 +527,144 @@ private def testHtmlInvalidDocstringFor (data : TestData) : IO Unit := IO.FS.wit
   unless hasSubstring stderr "nonexistent_decl" do
     throw <| IO.userError "HTML invalid docstring_for: stderr should mention 'nonexistent_decl'"
 
+/-- Theme CSS file is generated and linked when theme overrides are present. -/
+private def testThemeCss (data : TestData) : IO Unit := IO.FS.withTempDir fun tmpDir => do
+  let htmlDir := tmpDir / "html"
+  let tomlFile := tmpDir / "literate.toml"
+  IO.FS.createDirAll htmlDir
+  IO.FS.writeFile tomlFile (String.intercalate "\n" [
+    "[theme]",
+    "code_box_background_color = \"#f0f0f0\"",
+    "text_color = \"#222\"",
+    "",
+    "[theme.dark]",
+    "text_color = \"#ddd\"",
+    ""
+  ])
+  runLiterateHtml data.jsonDir htmlDir (configFile := some tomlFile)
+
+  unless ← (htmlDir / "literate-theme.css").pathExists do
+    throw <| IO.userError "theme: literate-theme.css was not generated"
+  let themeCss ← IO.FS.readFile (htmlDir / "literate-theme.css")
+  unless hasSubstring themeCss "--verso-code-box-background-color" do
+    throw <| IO.userError "theme: literate-theme.css does not contain code box variable"
+  unless hasSubstring themeCss "#f0f0f0" do
+    throw <| IO.userError "theme: literate-theme.css does not contain light value"
+  unless hasSubstring themeCss "prefers-color-scheme: dark" do
+    throw <| IO.userError "theme: literate-theme.css does not contain dark media query"
+  unless hasSubstring themeCss "#ddd" do
+    throw <| IO.userError "theme: literate-theme.css does not contain dark value"
+  unless hasSubstring themeCss "data-theme" do
+    throw <| IO.userError "theme: literate-theme.css does not contain data-theme selector"
+  let litConfigHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "index.html")
+  unless hasSubstring litConfigHtml "literate-theme.css" do
+    throw <| IO.userError "theme: HTML does not link literate-theme.css"
+
+/-- No theme CSS file is generated when theme is empty. -/
+private def testThemeCssEmpty (data : TestData) : IO Unit := withTestDir data fun jsonDir htmlDir _ _ => do
+  runLiterateHtml jsonDir htmlDir
+  if ← (htmlDir / "literate-theme.css").pathExists then
+    throw <| IO.userError "theme empty: literate-theme.css should not exist with default config"
+  let litConfigHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "index.html")
+  if hasSubstring litConfigHtml "literate-theme.css" then
+    throw <| IO.userError "theme empty: HTML should not link literate-theme.css when no theme is set"
+
+/-- Per-module hide_commands overrides global config. -/
+private def testPerModuleHideCommands (data : TestData) : IO Unit := withTestDir data fun jsonDir htmlDir _ tomlFile => do
+  IO.FS.writeFile tomlFile (String.intercalate "\n" [
+    "[modules.\"LitConfig\"]",
+    "hide_commands = [\"set_option\"]",
+    ""
+  ])
+  runLiterateHtml jsonDir htmlDir (configFile := some tomlFile)
+
+  let litConfigHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "index.html")
+  if hasSubstring litConfigHtml "set_option" then
+    throw <| IO.userError "per-module hide_commands: LitConfig should not contain 'set_option'"
+  -- Core should NOT be affected (no module config)
+  let coreHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "Core" / "index.html")
+  unless hasSubstring coreHtml "code-box" do
+    throw <| IO.userError "per-module hide_commands: Core should still have code boxes"
+
+/-- Per-module title appears in the page title and navbar. -/
+private def testPerModuleTitle (data : TestData) : IO Unit := withTestDir data fun jsonDir htmlDir _ tomlFile => do
+  IO.FS.writeFile tomlFile (String.intercalate "\n" [
+    "[modules.\"LitConfig.Core\"]",
+    "title = \"Core Library\"",
+    ""
+  ])
+  runLiterateHtml jsonDir htmlDir (configFile := some tomlFile)
+
+  let coreHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "Core" / "index.html")
+  unless hasSubstring coreHtml "Core Library" do
+    throw <| IO.userError "per-module title: page should contain 'Core Library'"
+  -- Check navbar
+  let litConfigHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "index.html")
+  let navbarSection := litConfigHtml.splitOn "module-tree" |>.getD 1 "" |>.splitOn "</nav>" |>.head!
+  unless hasSubstring navbarSection "Core Library" do
+    throw <| IO.userError "per-module title: navbar should contain 'Core Library'"
+
+/-- CSS contains focus-visible indicators. -/
+private def testAccessibilityFocusVisible (data : TestData) : IO Unit := withTestDir data fun jsonDir htmlDir _ _ => do
+  runLiterateHtml jsonDir htmlDir
+  let css ← IO.FS.readFile (htmlDir / "literate.css")
+  unless hasSubstring css "focus-visible" do
+    throw <| IO.userError "accessibility: literate.css does not contain focus-visible rules"
+
+/-- CSS contains prefers-reduced-motion rules. -/
+private def testAccessibilityReducedMotion (data : TestData) : IO Unit := withTestDir data fun jsonDir htmlDir _ _ => do
+  runLiterateHtml jsonDir htmlDir
+  let css ← IO.FS.readFile (htmlDir / "literate.css")
+  unless hasSubstring css "prefers-reduced-motion" do
+    throw <| IO.userError "accessibility: literate.css does not contain prefers-reduced-motion"
+
+/-- Hamburger menu has ARIA attributes. -/
+private def testAccessibilityAria (data : TestData) : IO Unit := withTestDir data fun jsonDir htmlDir _ _ => do
+  runLiterateHtml jsonDir htmlDir
+  let litConfigHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "index.html")
+  unless hasSubstring litConfigHtml "aria-label=\"Menu\"" do
+    throw <| IO.userError "accessibility: hamburger input missing aria-label"
+  unless hasSubstring litConfigHtml "aria-label=\"Toggle navigation\"" do
+    throw <| IO.userError "accessibility: hamburger label missing aria-label"
+
+/-- LitConfig root module (with headings) gets a page ToC. -/
+private def testPageToc (data : TestData) : IO Unit := withTestDir data fun jsonDir htmlDir _ _ => do
+  runLiterateHtml jsonDir htmlDir
+  let litConfigHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "index.html")
+  unless hasSubstring litConfigHtml "page-toc" do
+    throw <| IO.userError "page ToC: LitConfig page should contain page-toc"
+  unless hasSubstring litConfigHtml "Page table of contents" do
+    throw <| IO.userError "page ToC: page-toc should have aria-label"
+  unless hasSubstring litConfigHtml "On this page" do
+    throw <| IO.userError "page ToC: page-toc should contain 'On this page' title"
+
+/-- NoDocstrings module (no headings) should not get a page ToC. -/
+private def testPageTocAbsent (data : TestData) : IO Unit := withTestDir data fun jsonDir htmlDir _ _ => do
+  runLiterateHtml jsonDir htmlDir
+  let noDocHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "NoDocstrings" / "index.html")
+  if hasSubstring noDocHtml "page-toc" then
+    throw <| IO.userError "page ToC absent: NoDocstrings page should not have a page-toc"
+
+/-- CSS contains dark mode defaults. -/
+private def testCssDarkMode (data : TestData) : IO Unit := withTestDir data fun jsonDir htmlDir _ _ => do
+  runLiterateHtml jsonDir htmlDir
+  let css ← IO.FS.readFile (htmlDir / "literate.css")
+  unless hasSubstring css "prefers-color-scheme: dark" do
+    throw <| IO.userError "dark mode: literate.css does not contain dark mode media query"
+
+/-- CSS uses custom properties (var(--verso-*)) throughout. -/
+private def testCssCustomProperties (data : TestData) : IO Unit := withTestDir data fun jsonDir htmlDir _ _ => do
+  runLiterateHtml jsonDir htmlDir
+  let css ← IO.FS.readFile (htmlDir / "literate.css")
+  unless hasSubstring css "--verso-text-color" do
+    throw <| IO.userError "CSS vars: literate.css does not define --verso-text-color"
+  unless hasSubstring css "--verso-background-color" do
+    throw <| IO.userError "CSS vars: literate.css does not define --verso-background-color"
+  unless hasSubstring css "--verso-link-color" do
+    throw <| IO.userError "CSS vars: literate.css does not define --verso-link-color"
+  unless hasSubstring css "var(--verso-text-color)" do
+    throw <| IO.userError "CSS vars: literate.css does not use var(--verso-text-color)"
+
 -- ===== Test runner =====
 
 private def htmlTests (data : TestData) : List (String × IO Unit) := [
@@ -497,6 +677,9 @@ private def htmlTests (data : TestData) : List (String × IO Unit) := [
   ("xref.json generated", testXrefJsonGenerated data),
   ("plan file content", testPlanFileContent data),
   ("targets filtering", testTargetsFiltering data),
+  ("targets library", testTargetsLibrary data),
+  ("targets library nonexistent", testTargetsLibraryNonexistent data),
+  ("targets library + module", testTargetsLibraryAndModule data),
   ("hide_commands", testHideCommands data),
   ("metadata title", testMetadataTitle data),
   ("extra CSS", testExtraCss data),
@@ -516,7 +699,18 @@ private def htmlTests (data : TestData) : List (String × IO Unit) := [
   ("plan landing_page not in set", testPlanLandingPageNotInSet data),
   ("plan empty module set", testPlanEmptyModuleSet data),
   ("plan order warning", testPlanOrderWarning data),
-  ("HTML invalid docstring_for", testHtmlInvalidDocstringFor data)
+  ("HTML invalid docstring_for", testHtmlInvalidDocstringFor data),
+  ("theme CSS", testThemeCss data),
+  ("theme CSS empty", testThemeCssEmpty data),
+  ("per-module hide_commands", testPerModuleHideCommands data),
+  ("per-module title", testPerModuleTitle data),
+  ("accessibility focus-visible", testAccessibilityFocusVisible data),
+  ("accessibility reduced-motion", testAccessibilityReducedMotion data),
+  ("accessibility ARIA", testAccessibilityAria data),
+  ("page ToC", testPageToc data),
+  ("page ToC absent", testPageTocAbsent data),
+  ("CSS dark mode", testCssDarkMode data),
+  ("CSS custom properties", testCssCustomProperties data)
 ]
 
 def testLiterateHtml : IO Unit := do
@@ -559,7 +753,10 @@ def testLiterateHtml : IO Unit := do
       IO.FS.createDirAll (jsonFile.parent.getD jsonDir)
       IO.FS.writeFile jsonFile json
 
-    IO.FS.writeFile moduleListFile ("\n".intercalate modules.toList ++ "\n")
+    -- Write module list with library annotations (tab-separated: library\tmodule)
+    -- All test modules belong to the "LitConfig" library
+    let moduleEntries := modules.map fun m => s!"LitConfig\t{m}"
+    IO.FS.writeFile moduleListFile ("\n".intercalate moduleEntries.toList ++ "\n")
 
     let data : TestData := { jsonDir, modules, moduleListFile }
 

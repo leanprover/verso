@@ -125,12 +125,12 @@ private def testInvalidToml : IO Unit := do
     caught := true
   assertTrue "invalid TOML should throw" caught
 
-/-- `hide_commands` is parsed into an array of `Name` values. -/
+/-- `hide_commands` is parsed into an array of keyword pattern strings. -/
 private def testHideCommands : IO Unit := do
-  let config ← loadFromString "hide_commands = [\"Lean.Parser.Command.set_option\", \"Lean.Parser.Command.check\"]\n"
+  let config ← loadFromString "hide_commands = [\"set_option\", \"#check\"]\n"
   assertEq "hide_commands length" config.hideCommands.size 2
-  assertEq "hide_commands[0]" config.hideCommands[0]! `Lean.Parser.Command.set_option
-  assertEq "hide_commands[1]" config.hideCommands[1]! `Lean.Parser.Command.check
+  assertEq "hide_commands[0]" config.hideCommands[0]! "set_option"
+  assertEq "hide_commands[1]" config.hideCommands[1]! "#check"
 
 /-- `[metadata]` table is parsed into a `Metadata` value. -/
 private def testMetadata : IO Unit := do
@@ -171,11 +171,11 @@ private def testHideDocstringsFor : IO Unit := do
   assertEq "hide_docstrings_for length" config.hideDocstringsFor.size 1
   assertEq "hide_docstrings_for[0]" config.hideDocstringsFor[0]! `Foo.internal
 
-/-- `show_output` is parsed into an array of `Name` values. -/
+/-- `show_output` is parsed into an array of keyword pattern strings. -/
 private def testShowOutput : IO Unit := do
-  let config ← loadFromString "show_output = [\"Lean.Parser.Command.eval\"]\n"
+  let config ← loadFromString "show_output = [\"#eval\"]\n"
   assertEq "show_output length" config.showOutput.size 1
-  assertEq "show_output[0]" config.showOutput[0]! `Lean.Parser.Command.eval
+  assertEq "show_output[0]" config.showOutput[0]! "#eval"
 
 /-- `show_output` defaults to the standard 4-element list. -/
 private def testShowOutputDefault : IO Unit := do
@@ -196,7 +196,7 @@ private def testShowImportsDefault : IO Unit := do
 private def testCombinedNew : IO Unit := do
   let toml := String.intercalate "\n" [
     "exclude = [\"Private\"]",
-    "hide_commands = [\"Lean.Parser.Command.set_option\"]",
+    "hide_commands = [\"set_option\"]",
     "extra_css = [\"style.css\"]",
     "show_docstrings = false",
     "show_docstrings_for = [\"Public.api\"]",
@@ -212,6 +212,100 @@ private def testCombinedNew : IO Unit := do
   assertEq "combined new: show_docstrings_for" config.showDocstringsFor.size 1
   let title ← assertSome "combined new: metadata.title" config.metadata.title
   assertEq "combined new: metadata.title value" title "Test"
+
+/-- `[theme]` light variables are parsed into theme map. -/
+private def testThemeLight : IO Unit := do
+  let toml := "[theme]\ncode_box_background_color = \"#fff\"\ntext_color = \"#111\"\n"
+  let config ← loadFromString toml
+  assertEq "theme size" config.theme.size 2
+  let bg ← assertSome "theme code_box_background_color" (config.theme.get? "code_box_background_color")
+  assertEq "theme code_box_background_color value" bg "#fff"
+  let tc ← assertSome "theme text_color" (config.theme.get? "text_color")
+  assertEq "theme text_color value" tc "#111"
+
+/-- `[theme.dark]` dark variables are parsed into themeDark map. -/
+private def testThemeDark : IO Unit := do
+  let toml := "[theme]\ntext_color = \"#333\"\n\n[theme.dark]\ntext_color = \"#eee\"\nbackground_color = \"#111\"\n"
+  let config ← loadFromString toml
+  assertEq "theme light size" config.theme.size 1
+  assertEq "themeDark size" config.themeDark.size 2
+  let dt ← assertSome "themeDark text_color" (config.themeDark.get? "text_color")
+  assertEq "themeDark text_color value" dt "#eee"
+  let db ← assertSome "themeDark background_color" (config.themeDark.get? "background_color")
+  assertEq "themeDark background_color value" db "#111"
+
+/-- Empty theme produces empty maps. -/
+private def testThemeEmpty : IO Unit := do
+  let config ← loadFromString ""
+  assertEq "theme empty size" config.theme.size 0
+  assertEq "themeDark empty size" config.themeDark.size 0
+
+/-- `[modules."Foo.Bar"]` is parsed into a ModuleConfig. -/
+private def testModulesConfig : IO Unit := do
+  let toml := "[modules.\"Foo.Bar\"]\ntitle = \"Custom Title\"\nurl = \"custom-url\"\nhide_commands = [\"set_option\"]\nshow_imports = false\n"
+  let config ← loadFromString toml
+  let mc ← assertSome "modules Foo.Bar" (config.modules.find? `Foo.Bar)
+  let t ← assertSome "modules Foo.Bar title" mc.title
+  assertEq "modules Foo.Bar title value" t "Custom Title"
+  let u ← assertSome "modules Foo.Bar url" mc.url
+  assertEq "modules Foo.Bar url value" u "custom-url"
+  let hc ← assertSome "modules Foo.Bar hideCommands" mc.hideCommands
+  assertEq "modules Foo.Bar hideCommands length" hc.size 1
+  let si ← assertSome "modules Foo.Bar showImports" mc.showImports
+  assertFalse "modules Foo.Bar showImports value" si
+
+/-- `resolveForModule` returns global defaults when no module config matches. -/
+private def testResolveNoMatch : IO Unit := do
+  let config ← loadFromString "hide_commands = [\"set_option\"]\n"
+  let resolved := config.resolveForModule `Unmatched.Module
+  assertEq "resolve no match: hideCommands" resolved.hideCommands.size 1
+  assertTrue "resolve no match: showImports" resolved.showImports
+  assertNone "resolve no match: title" resolved.title
+
+/-- `resolveForModule` picks the most-specific prefix match. -/
+private def testResolvePrefixMatch : IO Unit := do
+  let toml := String.intercalate "\n" [
+    "hide_commands = [\"set_option\"]",
+    "[modules.\"Foo\"]",
+    "show_imports = false",
+    "[modules.\"Foo.Bar\"]",
+    "title = \"Bar Title\"",
+    "show_imports = true",
+    ""
+  ]
+  let config ← loadFromString toml
+  -- Foo.Bar.Baz should match Foo.Bar (longest prefix)
+  let resolved := config.resolveForModule `Foo.Bar.Baz
+  let t ← assertSome "resolve prefix: title" resolved.title
+  assertEq "resolve prefix: title value" t "Bar Title"
+  assertTrue "resolve prefix: showImports" resolved.showImports
+  -- Foo.Qux should match Foo
+  let resolved2 := config.resolveForModule `Foo.Qux
+  assertFalse "resolve Foo prefix: showImports" resolved2.showImports
+  assertNone "resolve Foo prefix: title" resolved2.title
+  -- Exact match on Foo.Bar itself
+  let resolved3 := config.resolveForModule `Foo.Bar
+  let t3 ← assertSome "resolve exact: title" resolved3.title
+  assertEq "resolve exact: title value" t3 "Bar Title"
+
+/-- Module-level config overrides global defaults. -/
+private def testResolveOverridesGlobal : IO Unit := do
+  let toml := String.intercalate "\n" [
+    "show_imports = true",
+    "show_docstrings = true",
+    "[modules.\"MyMod\"]",
+    "show_imports = false",
+    "show_docstrings = false",
+    ""
+  ]
+  let config ← loadFromString toml
+  let resolved := config.resolveForModule `MyMod
+  assertFalse "resolve override: showImports" resolved.showImports
+  assertFalse "resolve override: showDocstrings" resolved.showDocstrings
+  -- Unmatched module still gets global defaults
+  let resolved2 := config.resolveForModule `Other
+  assertTrue "resolve global: showImports" resolved2.showImports
+  assertTrue "resolve global: showDocstrings" resolved2.showDocstrings
 
 -- ===== Test runner =====
 
@@ -236,7 +330,14 @@ private def configTests : List (String × IO Unit) := [
   ("show_output default", testShowOutputDefault),
   ("show_imports", testShowImports),
   ("show_imports default", testShowImportsDefault),
-  ("combined new", testCombinedNew)
+  ("combined new", testCombinedNew),
+  ("theme light", testThemeLight),
+  ("theme dark", testThemeDark),
+  ("theme empty", testThemeEmpty),
+  ("modules config", testModulesConfig),
+  ("resolve no match", testResolveNoMatch),
+  ("resolve prefix match", testResolvePrefixMatch),
+  ("resolve overrides global", testResolveOverridesGlobal)
 ]
 
 def runLiterateConfigTests : IO Nat := do

@@ -242,10 +242,10 @@ package_facet «literate-html» pkg : System.FilePath := do
   -- Fetch the HTML generator executable
   let htmlExeJob ← «verso-literate-html».fetch
 
-  -- Collect module names from all default-target libraries
-  let moduleNames ← pkg.leanLibs.foldlM (init := #[]) fun acc lib => do
+  -- Collect module names with their library membership
+  let moduleEntries ← pkg.leanLibs.foldlM (init := #[]) fun acc lib => do
     let mods ← (← lib.modules.fetch).await
-    return acc ++ mods.map (·.name.toString)
+    return acc ++ mods.map fun m => s!"{lib.name}\t{m.name}"
 
   htmlExeJob.bindM fun htmlExeFile =>
     planExeJob.bindM fun planExeFile =>
@@ -257,7 +257,7 @@ package_facet «literate-html» pkg : System.FilePath := do
           addPureTrace "No literate TOML config file"
 
         -- Write module list and create plan
-        let moduleList := ("\n".intercalate moduleNames.toList ++ "\n")
+        let moduleList := ("\n".intercalate moduleEntries.toList ++ "\n")
         addPureTrace moduleList
         buildFileUnlessUpToDate' moduleListFile do
           IO.FS.writeFile moduleListFile moduleList
