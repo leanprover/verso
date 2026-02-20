@@ -272,6 +272,43 @@ private def testShowDocstringsFalse (data : TestData) : IO Unit := withTestDir d
   unless hasSubstring litConfigHtml "A Test Module" do
     throw <| IO.userError "show_docstrings=false: module docstring 'A Test Module' should still appear"
 
+/-- `show_imports = false` hides the imports list. -/
+private def testShowImportsFalse (data : TestData) : IO Unit := withTestDir data fun jsonDir htmlDir _ tomlFile => do
+  IO.FS.writeFile tomlFile "show_imports = false\n"
+  runLiterateHtml jsonDir htmlDir (configFile := some tomlFile)
+
+  let coreHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "Core" / "index.html")
+  if hasSubstring coreHtml "imports-list" then
+    throw <| IO.userError "show_imports=false: page should not contain 'imports-list'"
+
+/-- Default config renders successfully (imports list depends on test data having populated import defines). -/
+private def testShowImportsDefault (data : TestData) : IO Unit := withTestDir data fun jsonDir htmlDir _ _ => do
+  runLiterateHtml jsonDir htmlDir
+
+  -- Verify the page renders without errors
+  let coreHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "Core" / "index.html")
+  unless hasSubstring coreHtml "code-box" do
+    throw <| IO.userError "show_imports default: Core page should contain code boxes"
+
+/-- Default config renders output blocks for #eval commands. -/
+private def testShowOutput (data : TestData) : IO Unit := withTestDir data fun jsonDir htmlDir _ _ => do
+  runLiterateHtml jsonDir htmlDir
+
+  let coreHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "Core" / "index.html")
+  -- Check for an actual lean-output element (class on a <pre> tag), not just the CSS rules
+  unless hasSubstring coreHtml "class=\"hl lean lean-output" do
+    throw <| IO.userError "show_output default: Core page should contain output block elements for #eval commands"
+
+/-- `show_output = []` suppresses all output blocks. -/
+private def testShowOutputEmpty (data : TestData) : IO Unit := withTestDir data fun jsonDir htmlDir _ tomlFile => do
+  IO.FS.writeFile tomlFile "show_output = []\n"
+  runLiterateHtml jsonDir htmlDir (configFile := some tomlFile)
+
+  let coreHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "Core" / "index.html")
+  -- Check that no actual lean-output elements exist (CSS rules in `<style>` don't count)
+  if hasSubstring coreHtml "class=\"hl lean lean-output" then
+    throw <| IO.userError "show_output=[]: Core page should not contain output block elements"
+
 /-- Docstrings are hidden for specific named declarations while other content remains. -/
 private def testHideDocstringsFor (data : TestData) : IO Unit := withTestDir data fun jsonDir htmlDir _ tomlFile => do
   IO.FS.writeFile tomlFile "hide_docstrings_for = [\"hello\"]\n"
@@ -299,7 +336,11 @@ private def htmlTests (data : TestData) : List (String × IO Unit) := [
   ("metadata title", testMetadataTitle data),
   ("extra CSS", testExtraCss data),
   ("show_docstrings = false", testShowDocstringsFalse data),
-  ("hide_docstrings_for", testHideDocstringsFor data)
+  ("hide_docstrings_for", testHideDocstringsFor data),
+  ("show_imports = false", testShowImportsFalse data),
+  ("show_imports default", testShowImportsDefault data),
+  ("show_output", testShowOutput data),
+  ("show_output = []", testShowOutputEmpty data)
 ]
 
 def testLiterateHtml : IO Unit := do

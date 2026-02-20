@@ -171,6 +171,27 @@ private def testHideDocstringsFor : IO Unit := do
   assertEq "hide_docstrings_for length" config.hideDocstringsFor.size 1
   assertEq "hide_docstrings_for[0]" config.hideDocstringsFor[0]! `Foo.internal
 
+/-- `show_output` is parsed into an array of `Name` values. -/
+private def testShowOutput : IO Unit := do
+  let config ← loadFromString "show_output = [\"Lean.Parser.Command.eval\"]\n"
+  assertEq "show_output length" config.showOutput.size 1
+  assertEq "show_output[0]" config.showOutput[0]! `Lean.Parser.Command.eval
+
+/-- `show_output` defaults to the standard 4-element list. -/
+private def testShowOutputDefault : IO Unit := do
+  let config ← loadFromString ""
+  assertEq "show_output default length" config.showOutput.size 4
+
+/-- `show_imports = false` is parsed correctly. -/
+private def testShowImports : IO Unit := do
+  let config ← loadFromString "show_imports = false\n"
+  assertFalse "show_imports" config.showImports
+
+/-- `show_imports` defaults to true. -/
+private def testShowImportsDefault : IO Unit := do
+  let config ← loadFromString ""
+  assertTrue "show_imports default" config.showImports
+
 /-- Multiple new fields combined in one config. -/
 private def testCombinedNew : IO Unit := do
   let toml := String.intercalate "\n" [
@@ -211,6 +232,10 @@ private def configTests : List (String × IO Unit) := [
   ("show_docstrings", testShowDocstrings),
   ("show_docstrings_for", testShowDocstringsFor),
   ("hide_docstrings_for", testHideDocstringsFor),
+  ("show_output", testShowOutput),
+  ("show_output default", testShowOutputDefault),
+  ("show_imports", testShowImports),
+  ("show_imports default", testShowImportsDefault),
   ("combined new", testCombinedNew)
 ]
 

@@ -425,6 +425,15 @@ pre,
     text-decoration: underline;
 }
 
+/* Command output blocks */
+.code-box .lean-output {
+    border-top: 1px solid #e1e4e8;
+    padding: 0.5em 1em;
+    font-family: var(--verso-code-font-family, monospace);
+    white-space: pre-wrap;
+    color: #555;
+}
+
 /* Copy button */
 .copy-button {
     position: absolute;

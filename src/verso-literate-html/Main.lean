@@ -152,6 +152,16 @@ end VersoLiterateCode
 
 def literate.css := include_str "literate.css"
 
+open Verso Output Html in
+/-- Render output messages for a list of code items, returning the combined HTML and updated state. -/
+private def renderOutputMessages (items : Array (Nat × ModuleItem')) (showOutput : Array Name)
+    (hlCtx : HighlightHtmlM.Context Literate) (hlState : Hover.State Html) : Html × Hover.State Html :=
+  items.foldl (init := (.empty, hlState)) fun (html, st) (_, cItem) =>
+    let msgs := extractItemOutput cItem showOutput
+    msgs.foldl (init := (html, st)) fun (html, st) msg =>
+      let (msgHtml, st') := msg.blockHtml (g := Literate) (summarize := false) |>.run hlCtx |>.run st
+      (html ++ msgHtml, st')
+
 open Verso Output Doc Html in
 def emitMod (root : Dir) (outDir: System.FilePath) (mod : LitMod) : EmitM Unit := do
   let components := mod.name.components
@@ -172,6 +182,9 @@ def emitMod (root : Dir) (outDir: System.FilePath) (mod : LitMod) : EmitM Unit :
                traverseContext := {currentModule := mod.name}
                codeOptions := {} }
 
+  let hlCtx : HighlightHtmlM.Context Literate :=
+    ⟨ctx.linkTargets, ctx.traverseContext, ctx.definitionIds, ctx.codeOptions⟩
+
   -- Apply hide_commands filtering
   let contents := if litConfig.hideCommands.isEmpty then mod.contents
     else mod.contents.filter fun item =>
@@ -181,7 +194,7 @@ def emitMod (root : Dir) (outDir: System.FilePath) (mod : LitMod) : EmitM Unit :
   let mut body : Html := .empty
 
   -- Imports section (collapsible)
-  if !importNames.isEmpty then
+  if litConfig.showImports && !importNames.isEmpty then
     let importLinks := importNames.map fun n =>
       if (root[n]?).isSome then
         let href := n.components.map (toString · ++ "/") |> String.join
@@ -215,8 +228,9 @@ def emitMod (root : Dir) (outDir: System.FilePath) (mod : LitMod) : EmitM Unit :
         let (codeHtml, st) ← currentCodeItems.foldlM (init := (.empty, (← get).hlState)) fun (html, st) (idx, cItem) => do
           let (h, st') ← renderCode idx cItem |>.run ctx st
           pure (html ++ h, st')
-        modify (fun s => { s with hlState := st })
-        body := body ++ {{<div class="code-box">{{codeHtml}}</div>}}
+        let (outputHtml, st') := renderOutputMessages currentCodeItems litConfig.showOutput hlCtx st
+        modify (fun s => { s with hlState := st' })
+        body := body ++ {{<div class="code-box">{{codeHtml}}{{outputHtml}}</div>}}
         currentCodeItems := #[]
       -- Render this item's code — modDoc parts render as prose, rest as inline code
       let (itemHtml, st) ← renderCode itemIdx item |>.run ctx (← get).hlState
@@ -230,8 +244,9 @@ def emitMod (root : Dir) (outDir: System.FilePath) (mod : LitMod) : EmitM Unit :
     let (codeHtml, st) ← currentCodeItems.foldlM (init := (.empty, (← get).hlState)) fun (html, st) (idx, cItem) => do
       let (h, st') ← renderCode idx cItem |>.run ctx st
       pure (html ++ h, st')
-    modify (fun s => { s with hlState := st })
-    body := body ++ {{<div class="code-box">{{codeHtml}}</div>}}
+    let (outputHtml, st') := renderOutputMessages currentCodeItems litConfig.showOutput hlCtx st
+    modify (fun s => { s with hlState := st' })
+    body := body ++ {{<div class="code-box">{{codeHtml}}{{outputHtml}}</div>}}
 
   let faviconTag : Html := match litConfig.metadata.favicon with
     | some fav => {{<link rel="icon" href={{(System.FilePath.fileName fav).getD fav}}/>}}
@@ -377,8 +392,10 @@ def emitLandingFromModule (outDir : System.FilePath) (root : Dir) (modName : Nam
                    options := {logError := fun msg => IO.eprintln msg}
                    traverseContext := {currentModule := mod.name}
                    codeOptions := {} }
+  let hlCtx : HighlightHtmlM.Context Literate :=
+    ⟨emitCtx.linkTargets, emitCtx.traverseContext, emitCtx.definitionIds, emitCtx.codeOptions⟩
   let mut body : Html := .empty
-  if !importNames.isEmpty then
+  if litConfig.showImports && !importNames.isEmpty then
     let importLinks := importNames.map fun n =>
       if (root[n]?).isSome then
         let href := n.components.map (toString · ++ "/") |> String.join
@@ -413,8 +430,9 @@ def emitLandingFromModule (outDir : System.FilePath) (root : Dir) (modName : Nam
         let (codeHtml, st) ← currentCodeItems.foldlM (init := (.empty, hlState.hlState)) fun (html, st) (idx, cItem) => do
           let (h, st') ← renderCode idx cItem |>.run emitCtx st
           pure (html ++ h, st')
-        hlState := { hlState with hlState := st }
-        body := body ++ {{<div class="code-box">{{codeHtml}}</div>}}
+        let (outputHtml, st') := renderOutputMessages currentCodeItems litConfig.showOutput hlCtx st
+        hlState := { hlState with hlState := st' }
+        body := body ++ {{<div class="code-box">{{codeHtml}}{{outputHtml}}</div>}}
         currentCodeItems := #[]
       let (itemHtml, st) ← renderCode itemIdx item |>.run emitCtx hlState.hlState
       hlState := { hlState with hlState := st }
@@ -425,8 +443,9 @@ def emitLandingFromModule (outDir : System.FilePath) (root : Dir) (modName : Nam
     let (codeHtml, st) ← currentCodeItems.foldlM (init := (.empty, hlState.hlState)) fun (html, st) (idx, cItem) => do
       let (h, st') ← renderCode idx cItem |>.run emitCtx st
       pure (html ++ h, st')
-    hlState := { hlState with hlState := st }
-    body := body ++ {{<div class="code-box">{{codeHtml}}</div>}}
+    let (outputHtml, st') := renderOutputMessages currentCodeItems litConfig.showOutput hlCtx st
+    hlState := { hlState with hlState := st' }
+    body := body ++ {{<div class="code-box">{{codeHtml}}{{outputHtml}}</div>}}
   let faviconTag : Html := match litConfig.metadata.favicon with
     | some fav => {{<link rel="icon" href={{(System.FilePath.fileName fav).getD fav}}/>}}
     | none => {{<link rel="icon" href="data:,"/>}}

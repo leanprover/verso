@@ -57,6 +57,10 @@ structure LiterateConfig where
   showDocstringsFor : Array Name := #[]
   /-- Declarations whose docstrings should be hidden (when `showDocstrings = true`). -/
   hideDocstringsFor : Array Name := #[]
+  /-- Syntax kinds whose output (info messages) should be displayed as a separate block. -/
+  showOutput : Array Name := #[`Lean.Parser.Command.eval, `Lean.Parser.Command.check, `Lean.Parser.Command.print, `Lean.reduceCmd]
+  /-- Whether to show the collapsible imports list on each page. -/
+  showImports : Bool := true
 deriving Repr, Inhabited
 
 /-- Decode a `[[targets]]` table entry into a `Target`. -/
@@ -94,9 +98,12 @@ def decodeLiterateConfig (table : Table) : Except String LiterateConfig :=
     let showDocstrings ← Table.tryDecodeD `show_docstrings (true : Bool) table
     let showDocstringsFor ← Table.tryDecodeD `show_docstrings_for (#[] : Array Name) table
     let hideDocstringsFor ← Table.tryDecodeD `hide_docstrings_for (#[] : Array Name) table
+    let showOutput ← Table.tryDecodeD `show_output (#[`Lean.Parser.Command.eval, `Lean.Parser.Command.check, `Lean.Parser.Command.print, `Lean.reduceCmd] : Array Name) table
+    let showImports ← Table.tryDecodeD `show_imports (true : Bool) table
     return { targets, exclude, order, orderChildren, landingPage,
              hideCommands, metadata, extraCss, extraJs,
-             showDocstrings, showDocstringsFor, hideDocstringsFor }
+             showDocstrings, showDocstringsFor, hideDocstringsFor,
+             showOutput, showImports }
   match decodeAction #[] with
   | .ok config errors =>
     if errors.isEmpty then

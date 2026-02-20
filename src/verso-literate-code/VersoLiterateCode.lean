@@ -11,6 +11,7 @@ import Verso.Output.Html.ElasticLunr
 import Std.Data.HashMap
 import Verso.FS
 import VersoSearch
+import Verso.Code.External.Code
 
 open Lean
 
@@ -220,6 +221,17 @@ where
       else
         (hl.dropTextRight 1, 0)
 
+
+open SubVerso.Highlighting in
+/-- Extract info-severity output messages from a module item, if the item's
+    syntax kind is in `showOutput`. Returns all info messages found. -/
+def extractItemOutput (item : ModuleItem') (showOutput : Array Name) : Array Highlighted.Message :=
+  if !showOutput.contains item.kind then #[]
+  else
+    let hls := item.code.filterMap fun | .highlighted hl => some hl | _ => none
+    let hl := hls.foldl (init := Highlighted.seq #[]) fun acc h => Highlighted.seq #[acc, h]
+    Verso.Code.External.allInfo hl |>.filterMap fun (msg, _) =>
+      if msg.severity == .info then some msg else none
 
 structure Dir where
   mod : Option LitMod := none
