@@ -694,7 +694,7 @@ public structure VersoDoc (genre : Genre) where
   /-- Serialization of the DocReconstruction data structure -/
   docReconstructionData : String := "{}"
 
-instance : Inhabited (VersoDoc genre) where
+public instance : Inhabited (VersoDoc genre) where
   default := VersoDoc.mk (fun _ => Inhabited.default) "{}"
 
 

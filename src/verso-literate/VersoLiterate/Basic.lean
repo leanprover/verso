@@ -3,14 +3,20 @@ Copyright (c) 2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-
+module
+public import Lean.Attributes
 import Lean.Elab.Term
 import Verso
-import MultiVerso
-import SubVerso.Highlighting
+import Lean.Elab.DocString.Builtin
+public import MultiVerso
+public import SubVerso.Highlighting
+public import Verso.Code.Highlighted
+public import Verso.Doc.Html
 import Std.Data.HashSet
 import Std.Data.TreeSet
 import Verso.BEq
+
+public section
 
 open Verso Doc
 open SubVerso.Highlighting
@@ -29,15 +35,20 @@ deriving ToJson, FromJson, Repr
 
 open Verso.BEq in
 instance : BEq Ext where
-  beq := ptrEqThen fun
+  beq := private ptrEqThen fun
     | .highlighted hl1, .highlighted hl2 =>
       ptrEqThen' hl1 hl2 (· == ·)
     | .data x, .data y =>
       ptrEqThen' x y (· == ·)
     | _, _ => false
 
-def InlineToLiterate := Name → Dynamic → Array (Doc.Inline Ext) → TermElabM (Option (Doc.Inline Ext))
-def BlockToLiterate := Name → Dynamic → Array (Doc.Block Ext Ext) → TermElabM (Option (Doc.Block Ext Ext))
+@[expose]
+def InlineToLiterate :=
+  Name → Dynamic → Array (Doc.Inline Ext) → TermElabM (Option (Doc.Inline Ext))
+
+@[expose]
+def BlockToLiterate :=
+  Name → Dynamic → Array (Doc.Block Ext Ext) → TermElabM (Option (Doc.Block Ext Ext))
 
 initialize inlineToLiterateAttr : TagAttribute ← registerTagAttribute `inline_to_literate ""
 initialize blockToLiterateAttr : TagAttribute ← registerTagAttribute `block_to_literate ""
@@ -205,7 +216,7 @@ private def nameMapEqWith (eq : β → β → Bool) : (x1 x2 : Lean.NameMap β) 
 
 
 instance : BEq State where
-  beq := ptrEqThen fun
+  beq := private ptrEqThen fun
     | ⟨u1, v1, w1, x1, y1, z1⟩, ⟨u2, v2, w2, x2, y2, z2⟩ =>
       hashMapEq u1 u2 &&
       treeSetEq v1 v2 &&
@@ -295,6 +306,7 @@ def State.linkTargets (state : State) : Code.LinkTargets ρ where
 structure Context where
   currentModule : Name := .anonymous
 
+@[expose]
 def Literate : Genre where
   PartMetadata := Empty
   Block := Ext

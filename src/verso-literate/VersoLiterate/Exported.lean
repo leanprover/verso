@@ -3,14 +3,20 @@ Copyright (c) 2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-
+module
 import Lean.Data.Json
 import Lean.DocString.Extension
+public import Lean.DocString.Types
+public import MD4Lean
+import Verso.BEq
 import Verso.Doc
 import SubVerso.Highlighting
 import SubVerso.Module
-import VersoLiterate.Basic
+import Verso.Output.Html
+import Verso.Output.Html.Entities
+public import VersoLiterate.Basic
 
+public section
 
 open Verso.Doc
 open Lean
@@ -27,7 +33,7 @@ deriving ToJson, FromJson, Repr
 
 open Verso.BEq in
 instance : BEq LitVersoDocString where
-  beq := ptrEqThen fun
+  beq := private ptrEqThen fun
     | ⟨text1, sub1⟩, ⟨text2, sub2⟩ =>
       ptrEqThen' text1 text2 (· == ·) &&
       ptrEqThen' sub1 sub2 (· == ·)
@@ -44,7 +50,7 @@ deriving ToJson, FromJson, Repr
 
 open Verso.BEq in
 instance : BEq LitVersoModuleDocs.Snippet where
-  beq := ptrEqThen fun
+  beq := private ptrEqThen fun
     | ⟨text1, sections1⟩, ⟨text2, sections2⟩ =>
       ptrEqThen' text1 text2 (· == ·) &&
       ptrEqThen' sections1 sections2 (· == ·)
@@ -73,7 +79,7 @@ deriving ToJson, FromJson, Repr
 
 open Verso.BEq in
 instance : BEq Code where
-  beq := ptrEqThen fun
+  beq := private ptrEqThen fun
     | .highlighted hl1, .highlighted hl2 =>
       ptrEqThen' hl1 hl2 (· == ·)
     | .markdown i1 d1? doc1 , .markdown i2 d2? doc2 =>
@@ -96,7 +102,7 @@ deriving Inhabited, Repr
 
 open Verso.BEq in
 instance : BEq ModuleItem' where
-  beq := ptrEqThen fun
+  beq := private ptrEqThen fun
     | ⟨r1, k1, d1, c1⟩, ⟨r2, k2, d2, c2⟩ =>
       r1 == r2 && k1 == k2 && d1 == d2 && ptrEqThen' c1 c2 (· == ·)
 
@@ -107,7 +113,7 @@ deriving Inhabited, Repr
 
 open Verso.BEq in
 instance : BEq LitMod where
-  beq := ptrEqThen fun
+  beq := private ptrEqThen fun
     | ⟨name1, contents1⟩, ⟨name2, contents2⟩ =>
       name1 == name2 && contents1 == contents2
 

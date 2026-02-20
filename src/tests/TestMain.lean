@@ -8,6 +8,7 @@ import Verso
 import VersoManual
 import VersoSearch.PorterStemmer
 import VersoUtil.LzCompress
+import VersoLiterate
 import Tests
 
 structure Config where
@@ -139,19 +140,27 @@ example : ¬ (P ∨ Q) ↔ ¬ P ∧ ¬ Q := by
     "wOguUYAAkJE1zsogVooHUaA0mi02ncBEJun9Bq5RuMVjN5msbNMxiktlgdrYwGB0MYAPx7OBlVwkZRwPx" ++
     "GEioIrQcSFY4QU5YyQfAxGWlidlwTn8JC+CCNCQMjiuAAGSHpjKZmrZB35B24EHcMDA5uEQA"
   if actual ≠ expected then
-    throw <| .userError "Mismatched lzCompress output"
+    throw <| IO.userError "Mismatched lzCompress output"
 
 def testSerialization (_ : Config) : IO Unit := do
   IO.println "Running serialization tests with Plausible..."
   let fails ← runSerializationTests
   if fails > 0 then
-    throw <| .userError s!"{fails} serialization tests failed"
+    throw <| IO.userError s!"{fails} serialization tests failed"
 
 def testBlog (_ : Config) : IO Unit := do
   IO.println "Running blog tests with Plausible..."
   let fails ← runBlogTests
   if fails > 0 then
-    throw <| .userError s!"{fails} blog tests failed"
+    throw <| IO.userError s!"{fails} blog tests failed"
+
+def testLiterateConfig (_ : Config) : IO Unit := do
+  let fails ← Tests.LiterateConfig.runLiterateConfigTests
+  if fails > 0 then
+    throw <| IO.userError s!"{fails} literate config tests failed"
+
+def testLiterateHtml (_ : Config) : IO Unit :=
+  Tests.LiterateHtml.testLiterateHtml
 
 -- Interactive tests via the LSP server
 def testInteractive (_ : Config) : IO Unit := do
@@ -176,7 +185,9 @@ def tests := [
     (extraFilesTeX := [("src/tests/integration/extra-files-doc/test-data/TeX-only", "TeX-only")]),
   testTexOutput "front-matter-doc" FrontMatter.doc,
   testZip,
-  testInteractive
+  testInteractive,
+  testLiterateConfig,
+  testLiterateHtml
 ]
 
 def getConfig (config : Config) : List String → IO Config
@@ -184,7 +195,7 @@ def getConfig (config : Config) : List String → IO Config
   | "--update-expected" :: args => getConfig { config with updateExpected := true } args
   | "--verbose" :: args | "-v" :: args => getConfig { config with verbose := true } args
   | "--check-tex" :: args => getConfig { config with checkTeX := true } args
-  | other :: _ => throw <| .userError s!"Didn't understand {other}"
+  | other :: _ => throw <| IO.userError s!"Didn't understand {other}"
 
 def main (args : List String) : IO UInt32 := do
   let config ← getConfig {} args

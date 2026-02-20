@@ -76,6 +76,11 @@ lean_exe «verso-literate» where
   srcDir := "src/verso-literate"
   supportInterpreter := true
 
+@[default_target]
+lean_lib VersoLiterateCode where
+  srcDir := "src/verso-literate-code"
+  roots := #[`VersoLiterateCode]
+
 input_file «verso-html-css» where
   text := true
   path := "src/verso-html/code.css"
@@ -85,6 +90,27 @@ lean_exe «verso-html» where
   root := `Main
   srcDir := "src/verso-html"
   needs := #[«verso-html-css»]
+  supportInterpreter := true
+
+input_file «verso-literate-html-css» where
+  text := true
+  path := "src/verso-literate-html/literate.css"
+
+input_dir literateStaticWeb where
+  text := true
+  path := "static-web/literate"
+
+@[default_target]
+lean_exe «verso-literate-html» where
+  root := `Main
+  srcDir := "src/verso-literate-html"
+  needs := #[«verso-literate-html-css», literateStaticWeb]
+  supportInterpreter := true
+
+@[default_target]
+lean_exe «verso-literate-plan» where
+  root := `Main
+  srcDir := "src/verso-literate-plan"
   supportInterpreter := true
 
 @[default_target]
@@ -197,3 +223,63 @@ package_facet literate pkg : Array System.FilePath := do
   let libs := Job.collectArray (← pkg.leanLibs.mapM (·.facet `literate |>.fetch))
   let exes := Job.collectArray (← pkg.leanExes.mapM (·.toLeanLib.facet `literate |>.fetch))
   return libs.zipWith (·.flatten ++ ·.flatten) exes
+
+package_facet «literate-html» pkg : System.FilePath := do
+  let ws ← getWorkspace
+  let buildDir := ws.root.buildDir
+  let litDir := buildDir / "literate"
+  let htmlDir := buildDir / "literate-html"
+  let planFile := buildDir / "literate-plan"
+  let moduleListFile := buildDir / "literate-modules"
+  let tomlFile := ws.root.dir / "literate.toml"
+
+  -- Build literate JSON for all libraries
+  let litJobs := Job.collectArray (← pkg.leanLibs.mapM (·.facet `literate |>.fetch))
+
+  -- Fetch the plan executable
+  let planExeJob ← «verso-literate-plan».fetch
+
+  -- Fetch the HTML generator executable
+  let htmlExeJob ← «verso-literate-html».fetch
+
+  -- Collect module names from all default-target libraries
+  let moduleNames ← pkg.leanLibs.foldlM (init := #[]) fun acc lib => do
+    let mods ← (← lib.modules.fetch).await
+    return acc ++ mods.map (·.name.toString)
+
+  htmlExeJob.bindM fun htmlExeFile =>
+    planExeJob.bindM fun planExeFile =>
+      litJobs.mapM fun _litFiles => do
+
+        if ← tomlFile.pathExists then
+          addTrace (← computeTrace tomlFile)
+        else
+          addPureTrace "No literate TOML config file"
+
+        -- Write module list and create plan
+        let moduleList := ("\n".intercalate moduleNames.toList ++ "\n")
+        addPureTrace moduleList
+        buildFileUnlessUpToDate' moduleListFile do
+          IO.FS.writeFile moduleListFile moduleList
+
+        buildFileUnlessUpToDate' planFile do
+          let planArgs := #[moduleListFile.toString, planFile.toString] ++
+            (if ← tomlFile.pathExists then #[tomlFile.toString] else #[])
+          proc {
+            cmd := planExeFile.toString
+            args := planArgs
+            env := ← getAugmentedEnv
+          }
+
+        -- Run HTML generator with --plan and optionally --config
+        buildUnlessUpToDate htmlDir (← getTrace) (htmlDir.addExtension "trace")  do
+          let mut htmlArgs := #[litDir.toString, htmlDir.toString, "--plan", planFile.toString]
+          IO.FS.createDirAll htmlDir
+          if ← tomlFile.pathExists then
+            htmlArgs := htmlArgs ++ #["--config", tomlFile.toString]
+          proc {
+            cmd := htmlExeFile.toString
+            args := htmlArgs
+            env := ← getAugmentedEnv
+          }
+        pure htmlDir
