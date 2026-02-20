@@ -51,6 +51,26 @@ where
       modules := modules.filter fun m =>
         !config.exclude.any fun e => e.isPrefixOf m
 
+    -- Validate: empty module set
+    if modules.isEmpty then
+      IO.eprintln "Error: no modules to render (after applying targets and exclusions)"
+      return 1
+
+    -- Validate: landing_page must be in the included set
+    if let some lp := config.landingPage then
+      unless modules.any (· == lp) do
+        IO.eprintln s!"Error: landing_page module '{lp}' is not in the included module set"
+        return 1
+
+    -- Validate: ordered modules should exist (warning only)
+    for m in config.order do
+      unless modules.any (· == m) do
+        IO.eprintln s!"Warning: ordered module '{m}' does not exist in the module set"
+    config.orderChildren.foldlM (init := ()) fun () parent children => do
+      for m in children do
+        unless modules.any (· == m) do
+          IO.eprintln s!"Warning: ordered child module '{m}' (under '{parent}') does not exist in the module set"
+
     -- Write plan file
     let planContents := "\n".intercalate (modules.map Name.toString)
     IO.FS.writeFile planOutputFile (planContents ++ "\n")

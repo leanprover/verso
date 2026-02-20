@@ -537,6 +537,18 @@ def main (args : List String) : IO UInt32 := do
   let dir := dir.applyExcludes litConfig.exclude
   let dir := dir.applyOrder litConfig.order litConfig.orderChildren
 
+  -- Validate: declarations in show_docstrings_for / hide_docstrings_for must exist
+  if !litConfig.showDocstringsFor.isEmpty || !litConfig.hideDocstringsFor.isEmpty then
+    let declNames := collectDeclNames dir
+    for d in litConfig.showDocstringsFor do
+      unless declNames.contains d do
+        errorCount.modify (· + 1)
+        IO.eprintln s!"Error: declaration '{d}' in show_docstrings_for does not exist"
+    for d in litConfig.hideDocstringsFor do
+      unless declNames.contains d do
+        errorCount.modify (· + 1)
+        IO.eprintln s!"Error: declaration '{d}' in hide_docstrings_for does not exist"
+
   let (dir, traverseState) ← traverse dir
   let ctx := {
     logError msg := errorCount.modify (· + 1) *> IO.eprintln msg

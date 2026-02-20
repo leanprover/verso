@@ -162,6 +162,54 @@ def testLiterateConfig (_ : Config) : IO Unit := do
 def testLiterateHtml (_ : Config) : IO Unit :=
   Tests.LiterateHtml.testLiterateHtml
 
+def testLiterateBrowser (_ : Config) : IO Unit := do
+  IO.println "Running literate browser tests (Playwright)..."
+  let projectDir := "test-projects/literate-config"
+  let modules := #["LitConfig", "LitConfig.Core", "LitConfig.Core.Basic", "LitConfig.NoDocstrings"]
+
+  IO.FS.withTempDir fun tmpDir => do
+    let jsonDir := tmpDir / "json"
+    let htmlDir := tmpDir / "html"
+    let moduleListFile := tmpDir / "modules"
+    IO.FS.createDirAll jsonDir
+    IO.FS.createDirAll htmlDir
+
+    -- Build JSON for all modules
+    IO.println "  Building literate JSON for browser tests..."
+    for mod in modules do
+      let json ← VersoLiterate.loadModuleJson projectDir mod
+      let jsonFile := mod.splitOn "." |>.foldl (init := jsonDir) (· / ·) |>.withExtension "json"
+      IO.FS.createDirAll (jsonFile.parent.getD jsonDir)
+      IO.FS.writeFile jsonFile json
+
+    IO.FS.writeFile moduleListFile ("\n".intercalate modules.toList ++ "\n")
+
+    -- Generate HTML site (default config, no plan filtering)
+    IO.println "  Generating literate HTML site..."
+    let child ← IO.Process.spawn {
+      cmd := "lake"
+      args := #["--quiet", "exe", "verso-literate-html", jsonDir.toString, htmlDir.toString]
+      stdout := .null
+      stderr := .inherit
+    }
+    let exitCode ← child.wait
+    if exitCode != 0 then
+      throw <| IO.userError s!"verso-literate-html failed with exit code {exitCode}"
+
+    -- Run Playwright tests
+    IO.println s!"  Running Playwright tests against {htmlDir}..."
+    let result ← IO.Process.output {
+      cmd := "uv"
+      args := #["run", "--project", "browser-tests", "--extra", "test",
+                "pytest", "browser-tests/literate", "-v",
+                "--site-dir", htmlDir.toString]
+    }
+    IO.print result.stdout
+    if result.exitCode != 0 then
+      IO.eprint result.stderr
+      throw <| IO.userError s!"Playwright browser tests failed with exit code {result.exitCode}"
+    IO.println "  Literate browser tests passed!"
+
 -- Interactive tests via the LSP server
 def testInteractive (_ : Config) : IO Unit := do
   IO.println "Running interactive (LSP) tests..."
@@ -187,7 +235,8 @@ def tests := [
   testZip,
   testInteractive,
   testLiterateConfig,
-  testLiterateHtml
+  testLiterateHtml,
+  testLiterateBrowser
 ]
 
 def getConfig (config : Config) : List String → IO Config

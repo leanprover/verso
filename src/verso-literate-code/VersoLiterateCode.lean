@@ -302,6 +302,22 @@ partial def definitionIds (d : Dir) : NameMap (Name × String) := Id.run do
     out := out.mergeWith (fun _ _ x => x) (definitionIds c.2)
   return out
 
+/-- Collect all declaration names from all modules in a Dir tree.
+    These are the names that appear in `Code.verso _ (some dn) _` and
+    `Code.markdown _ (some dn) _` patterns. -/
+partial def collectDeclNames (d : Dir) : Std.HashSet Name := Id.run do
+  let mut out : Std.HashSet Name := {}
+  if let some m := d.mod then
+    for item in m.contents do
+      for c in item.code do
+        match c with
+        | .verso _ (some dn) _ | .markdown _ (some dn) _ => out := out.insert dn
+        | _ => pure ()
+  for (_, child) in d.children do
+    for x in collectDeclNames child do
+      out := out.insert x
+  return out
+
 open Verso Output Html in
 partial def page (title : String) (siteRoot : String) (headContents : Html) (current : Name) (root : Dir) (htmlId? : Option String) (code : Html) : Html := {{
   <html>
