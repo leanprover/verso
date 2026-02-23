@@ -525,7 +525,7 @@ def lean : CodeBlockExpanderOf LeanBlockConfig
       if config.show then
         `(Block.other (Blog.BlockExt.highlightedCode { contextName := $(quote x.getId), showProofStates := $(quote config.showProofStates) } $(quote hls)) #[Block.code $(quote str.getString)])
       else
-        ``(Block.concat [])
+        ``(Block.concat #[])
 
 
 structure LeanInlineConfig where
