@@ -96,6 +96,7 @@ body {
     color: var(--verso-text-color);
     background: var(--verso-background-color);
     height: 100vh;
+    height: 100dvh;
     overflow: hidden;
 }
 
@@ -139,6 +140,7 @@ input:focus-visible,
 .layout {
     display: flex;
     height: 100vh;
+    height: 100dvh;
 }
 
 /* Sidebar */
@@ -178,6 +180,10 @@ input:focus-visible,
     list-style: none;
     position: relative;
     transition: background-color 0.2s ease;
+}
+
+.module-tree summary::-webkit-details-marker {
+    display: none;
 }
 
 .module-tree summary:hover {
@@ -540,8 +546,8 @@ input:focus-visible,
     margin-bottom: 0.5rem;
 }
 
-pre,
-.code-box .verso-text pre {
+.code-box .verso-text pre,
+.code-box .md-text pre {
     font-family: var(--verso-code-font-family, monospace);
 }
 

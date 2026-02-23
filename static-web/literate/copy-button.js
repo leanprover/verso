@@ -23,16 +23,21 @@
         var children = codeBox.childNodes;
         for (var i = 0; i < children.length; i++) {
             var child = children[i];
-            if (child !== button) {
+            if (child !== button && !child.classList?.contains("lean-output")) {
                 text += child.textContent;
             }
         }
         text = text.trim();
 
         if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(text).then(function () {
-                showCopied(button);
-            });
+            navigator.clipboard
+                .writeText(text)
+                .then(function () {
+                    showCopied(button);
+                })
+                .catch(function () {
+                    // clipboard write failed (e.g. permissions denied)
+                });
         } else {
             // Fallback for older browsers
             var textarea = document.createElement("textarea");

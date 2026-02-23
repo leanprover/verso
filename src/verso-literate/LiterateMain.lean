@@ -377,10 +377,6 @@ unsafe def go (suppressedNamespaces : Array Name) (extraImports : Array Name) (m
     IO.eprintln s!"error finding highlighted code: {toString e}"
     return 2
 
-structure LiterateConfig where
-  handleInline : ElabInline → Array (Lean.Doc.Inline ElabInline) → MetaM (Inline Literate)
-  handleBlock : ElabBlock → Array (Lean.Doc.Block ElabInline ElabBlock) → MetaM (Block Literate)
-
 structure Config where
   suppressedNamespaces : Array Name := #[]
   mod : String

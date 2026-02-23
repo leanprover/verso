@@ -147,8 +147,10 @@ def decodeModulesMap (table : Table) : DecodeM (NameMap ModuleConfig) := do
       for (k, v) in modulesTable.items do
         let modName := (k.toString (escape := false)).toName
         match decodeModuleConfig v #[] with
-        | .ok mc _ => result := result.insert modName mc
-        | .error () _ => pure ()  -- silently skip decode errors
+        | .ok mc errors =>
+          unless errors.isEmpty do modify (· ++ errors)
+          result := result.insert modName mc
+        | .error () errors => modify (· ++ errors)
       return result
     | _ => return {}
 
@@ -185,7 +187,7 @@ def decodeTheme (table : Table) : DecodeM (Std.TreeMap String String compare × 
     Module-level settings override global settings. -/
 def LiterateConfig.resolveForModule (config : LiterateConfig) (modName : Name) : ResolvedConfig :=
   let bestMatch := config.modules.foldl (init := (Name.anonymous, none)) fun (bestName, bestCfg) k v =>
-    if isPrefixOf k modName && k.components.length > bestName.components.length then
+    if k.isPrefixOf modName && k.components.length > bestName.components.length then
       (k, some v)
     else
       (bestName, bestCfg)
@@ -206,13 +208,6 @@ def LiterateConfig.resolveForModule (config : LiterateConfig) (modName : Name) :
       hideDocstringsFor := mc.hideDocstringsFor.getD config.hideDocstringsFor
       title := mc.title
       url := mc.url }
-where
-  isPrefixOf (prefix_ name : Name) : Bool :=
-    if prefix_ == name then true
-    else match name with
-    | .anonymous => false
-    | .str parent _ => isPrefixOf prefix_ parent
-    | .num parent _ => isPrefixOf prefix_ parent
 
 /-- Decodes a TOML table into a `LiterateConfig`. -/
 def decodeLiterateConfig (table : Table) : Except String LiterateConfig :=

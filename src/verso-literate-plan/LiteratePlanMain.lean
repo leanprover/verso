@@ -8,15 +8,6 @@ import VersoLiterate
 open Lean
 open VersoLiterate
 
-/--
-Whether `«prefix»` is a prefix of `name` (i.e. `name` is `«prefix»` or a child of it).
--/
-def Name.isPrefixOf («prefix» : Name) (name : Name) : Bool :=
-  if «prefix» == name then true
-  else match name with
-  | .anonymous => false
-  | .str parent _ => prefix.isPrefixOf parent
-  | .num parent _ => prefix.isPrefixOf parent
 
 /-- A module with its library membership. -/
 structure LibModule where

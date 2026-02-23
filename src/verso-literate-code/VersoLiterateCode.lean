@@ -66,7 +66,7 @@ where
   | .blockquote bs => {{<blockquote>{{blocks bs}}</blockquote>}}
   | .hr => {{<hr/>}}
   | .html xs => .text false (String.join xs.toList)
-  | .code _ _ _ ss => {{<pre>{{String.join ss.toList}}</pre>}}
+  | .code _ _ _ ss => {{<pre><code>{{String.join ss.toList}}</code></pre>}}
 
 
   blocks : Array MD4Lean.Block → Html
@@ -76,7 +76,7 @@ where
   | .normal s => s
   | .a href title _ txt => {{<a href={{attr href}} title={{attr title}}>{{texts txt}}</a>}}
   | .nullchar => .empty
-  | .em xs => {{<emph>{{texts xs}}</emph>}}
+  | .em xs => {{<em>{{texts xs}}</em>}}
   | .strong xs => {{<strong>{{texts xs}}</strong>}}
   | .del xs => {{<del>{{texts xs}}</del>}}
   | .br _ => {{<br />}}
@@ -117,7 +117,7 @@ where
   | .table hd rows =>
     ((hd.map fun h => texts h).toList |> " | ".intercalate) ++
     ((rows.map fun r => r.map (fun c => texts c) |>.toList |> " | ".intercalate).toList |> "\n".intercalate)
-  | .header n title => s!"#".pushn '#' n ++ " " ++ texts title ++ "\n\n"
+  | .header n title => "".pushn '#' n ++ " " ++ texts title ++ "\n\n"
   | .blockquote bs => bs.map block |>.map (s!"> {·}") |>.toList |> "\n\n".intercalate
   | .hr => ""
   | .html _ => ""
@@ -143,14 +143,6 @@ where
 
   texts : Array MD4Lean.Text → String
   | xs => xs.map text |>.toList |> String.join
-
-  attr : Array MD4Lean.AttrText → String
-    | xs => xs.map attrText |>.toList |> String.join
-
-  attrText : MD4Lean.AttrText → String
-  | .normal s => s
-  | .nullchar => ""
-  | .entity e => e
 
 partial def newlinesOnly : SubVerso.Highlighting.Highlighted → Bool
   | .seq xs =>
@@ -212,7 +204,7 @@ def renderCode [Monad m] (itemIdx : Nat) (item : VersoLiterate.ModuleItem') : Ht
     | .markdownModDoc doc =>
       let htmlId := (← read).traverseState.modDocLink (← read).traverseContext.currentModule itemIdx idx
       let idAttr := htmlId.map ("id", ·.htmlId.toString) |>.toArray
-      html := {{ <div class="md-text mod-doc" {{idAttr}}>{{md2Html doc}}</div>}}
+      html := html ++ {{ <div class="md-text mod-doc" {{idAttr}}>{{md2Html doc}}</div>}}
   return html
 where
   -- Trimming the leading newline is necessary because we display each section in HTML block mode,
@@ -230,7 +222,7 @@ where
       if hl.toStringSuffix 1 |>.endsWith "\n" then
         (hl.dropTextRight 1, trailingIndent.length)
       else
-        (hl.dropTextRight 1, 0)
+        (hl, 0)
 
 
 open SubVerso.Highlighting in
@@ -605,12 +597,12 @@ def reportHashSetDifferences [ToString α] [BEq α] [Hashable α] (a b : HashSet
 def reportDifferences (st1 st2 : State) : String :=
   let {htmlIds, usedInternalIds, usedHtmlIds, modDocs, moduleDomain, constantDefDomain} := st1
   let differingFields :=
-    if st2.htmlIds != htmlIds then ["htmlIds"] else [] ++
-    if st2.usedInternalIds != usedInternalIds then ["usedInternalIds"] else [] ++
-    if st2.usedHtmlIds != usedHtmlIds then ["usedHtmlIds where:\n" ++ reportHashSetDifferences usedHtmlIds st2.usedHtmlIds] else [] ++
-    if st2.modDocs != modDocs then ["modDocs"] else [] ++
-    if st2.moduleDomain != moduleDomain then ["moduleDomain"] else [] ++
-    if st2.constantDefDomain != constantDefDomain then ["constDefDomain"] else []
+    (if st2.htmlIds != htmlIds then ["htmlIds"] else []) ++
+    (if st2.usedInternalIds != usedInternalIds then ["usedInternalIds"] else []) ++
+    (if st2.usedHtmlIds != usedHtmlIds then ["usedHtmlIds where:\n" ++ reportHashSetDifferences usedHtmlIds st2.usedHtmlIds] else []) ++
+    (if st2.modDocs != modDocs then ["modDocs"] else []) ++
+    (if st2.moduleDomain != moduleDomain then ["moduleDomain"] else []) ++
+    (if st2.constantDefDomain != constantDefDomain then ["constDefDomain"] else [])
   "The following fields differ:\n" ++ "\n".intercalate (differingFields.map (s!" * {·}"))
 end
 
@@ -625,7 +617,6 @@ def traverse (dir : Dir) (maxIterations : Nat := 10) : IO (Dir × State) := do
   -- The last iteration is partial here so we can have both states to give an error report
   let result ← traverse1 dir |>.run {} |>.run startState
   if startState == result.2 then return result
-  dir := result.1
 
   throw <| .userError s!"Traversal made {maxIterations} iterations without terminating. {reportDifferences startState result.2}"
 

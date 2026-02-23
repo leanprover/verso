@@ -170,7 +170,6 @@ def testLiterateBrowser (_ : Config) : IO Unit := do
   IO.FS.withTempDir fun tmpDir => do
     let jsonDir := tmpDir / "json"
     let htmlDir := tmpDir / "html"
-    let moduleListFile := tmpDir / "modules"
     IO.FS.createDirAll jsonDir
     IO.FS.createDirAll htmlDir
 
@@ -181,8 +180,6 @@ def testLiterateBrowser (_ : Config) : IO Unit := do
       let jsonFile := mod.splitOn "." |>.foldl (init := jsonDir) (· / ·) |>.withExtension "json"
       IO.FS.createDirAll (jsonFile.parent.getD jsonDir)
       IO.FS.writeFile jsonFile json
-
-    IO.FS.writeFile moduleListFile ("\n".intercalate modules.toList ++ "\n")
 
     -- Generate module map from JSON directory
     let moduleMapFile := tmpDir / "module-map"

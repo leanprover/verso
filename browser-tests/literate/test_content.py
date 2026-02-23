@@ -35,7 +35,7 @@ class TestContent:
         # So we expect mod-doc and code-box elements interleaved.
         content = page.locator(".code-content")
         # Collect all mod-doc and code-box children in order
-        elements = content.locator(":scope > .mod-doc, :scope > .code-box, :scope > .verso-text.mod-doc, :scope > .md-text.mod-doc")
+        elements = content.locator(":scope > .mod-doc, :scope > .code-box")
         count = elements.count()
         assert count >= 3, f"Expected at least 3 content elements (mod-doc + code-box), got {count}"
 

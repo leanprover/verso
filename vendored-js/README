@@ -1,12 +1,13 @@
-This directory contains "vendored" dependencies, redistributed according to their licenses (all
-MIT).
+This directory contains "vendored" dependencies, redistributed according to their licenses.
 
 They are:
 
-elasticlunr - http://elasticlunr.com/
+elasticlunr - http://elasticlunr.com/ (MIT)
 
-tippy.js - https://github.com/atomiks/tippyjs
+tippy.js - https://github.com/atomiks/tippyjs (MIT)
 
-popper.js - https://popper.js.org/docs/v2/
+popper.js - https://popper.js.org/docs/v2/ (MIT)
 
-KaTeX - https://github.com/KaTeX/KaTeX
+KaTeX - https://github.com/KaTeX/KaTeX (MIT)
+
+axe-core - https://github.com/dequelabs/axe-core (MPL-2.0, test suite only)

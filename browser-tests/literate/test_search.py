@@ -63,14 +63,14 @@ class TestSearch:
         searchbox.focus()
         searchbox.type("xyzzyqwert", delay=50)
 
-        # Wait a moment for search to process
-        page.wait_for_timeout(500)
-
-        # Either no listbox visible or it has no options
+        # The listbox should either stay hidden or appear with no options.
+        # First type a real query to trigger the search UI, then clear and
+        # type gibberish — but since we typed gibberish directly, just
+        # verify the listbox either never appears or has no options.
         results = page.locator('[role="listbox"]')
-        if results.is_visible():
-            options = results.locator('[role="option"]')
-            assert options.count() == 0, f"Expected no results for gibberish, got {options.count()}"
+        options = results.locator('[role="option"]')
+        # Use expect with auto-retry: after search processes, there should be 0 options
+        expect(options).to_have_count(0)
 
     def test_search_keyboard(self, server: str, page: Page):
         """Test arrow keys move selection and Escape closes results."""
@@ -123,16 +123,9 @@ class TestSearch:
         original_url = page.url
         page.keyboard.press("Enter")
 
-        # Enter should either navigate to a new page or at least close the results
-        # Give navigation a moment to happen
-        page.wait_for_timeout(1000)
-
-        navigated = page.url != original_url
-        results_closed = not results.is_visible()
-        assert navigated or results_closed, (
-            "Expected Enter to navigate or close results, "
-            f"but URL is still {page.url} and results are still visible"
-        )
+        # Enter should either navigate to a new page or at least close the results.
+        # Use expect with auto-retry instead of a fixed timeout.
+        expect(page).not_to_have_url(original_url)
 
     def test_search_aria(self, server: str, page: Page):
         """Test ARIA attributes on search: autocomplete, expanded, controls, listbox, option."""

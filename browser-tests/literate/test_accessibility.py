@@ -1,4 +1,5 @@
 import re
+from pathlib import Path
 
 from playwright.sync_api import expect, Page
 
@@ -137,16 +138,9 @@ class TestAccessibility:
         page.goto(f"{server}/LitConfig/")
         page.wait_for_load_state("networkidle")
 
-        # Inject axe-core
-        page.evaluate("""() => {
-            return new Promise((resolve, reject) => {
-                const script = document.createElement('script');
-                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.10.2/axe.min.js';
-                script.onload = resolve;
-                script.onerror = reject;
-                document.head.appendChild(script);
-            });
-        }""")
+        # Inject axe-core from vendored local copy
+        axe_js_path = Path(__file__).parent.parent.parent / "vendored-js" / "axe-core" / "axe.min.js"
+        page.evaluate(axe_js_path.read_text())
 
         results = page.evaluate("""() => {
             return new Promise((resolve) => {
@@ -254,11 +248,13 @@ class TestAccessibility:
         fg = parse_rgb(colors["color"])
         bg = parse_rgb(colors["backgroundColor"])
 
-        if fg and bg:
-            l1 = relative_luminance(*fg)
-            l2 = relative_luminance(*bg)
-            contrast = (max(l1, l2) + 0.05) / (min(l1, l2) + 0.05)
-            assert contrast >= 4.5, (
-                f"Dark mode contrast ratio {contrast:.2f}:1 is below WCAG AA minimum 4.5:1 "
-                f"(fg={colors['color']}, bg={colors['backgroundColor']})"
-            )
+        assert fg is not None, f"Failed to parse foreground color: {colors['color']}"
+        assert bg is not None, f"Failed to parse background color: {colors['backgroundColor']}"
+
+        l1 = relative_luminance(*fg)
+        l2 = relative_luminance(*bg)
+        contrast = (max(l1, l2) + 0.05) / (min(l1, l2) + 0.05)
+        assert contrast >= 4.5, (
+            f"Dark mode contrast ratio {contrast:.2f}:1 is below WCAG AA minimum 4.5:1 "
+            f"(fg={colors['color']}, bg={colors['backgroundColor']})"
+        )

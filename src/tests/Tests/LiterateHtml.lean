@@ -781,7 +781,7 @@ def testLiterateHtml : IO Unit := do
       "ELAN_TOOLCHAIN", "DYLD_LIBRARY_PATH", "LD_LIBRARY_PATH"]
   let updateResult ← IO.Process.output {
     cmd := "elan"
-    args := #["run", "--install", "leanprover/lean4:v4.28.0-rc1", "lake", "update", "verso"]
+    args := #["run", "--install", rootToolchain.trimAscii.toString, "lake", "update", "verso"]
     cwd := projectDir
     env := lakeVars.map (·, none)
   }

@@ -72,34 +72,13 @@ def generateThemeCss (light : Std.TreeMap String String compare) (dark : Std.Tre
 
 namespace VersoLiterateCode
 
-/-- Collect all module names in a Dir tree. -/
-partial def Dir.allModuleNames (dir : Dir) (prefix_ : Name := .anonymous) : Array Name := Id.run do
-  let mut result := #[]
-  if let some m := dir.mod then
-    result := result.push m.name
-  for (n, child) in dir.children do
-    result := result ++ child.allModuleNames (prefix_ ++ n)
-  return result
-
-/-- Filter a Dir to only include modules in the given name set.
-    Intermediate namespace nodes are kept if they have descendants in the set. -/
-partial def Dir.filter (names : Std.HashSet Name) (dir : Dir) : Dir :=
-  let mod := dir.mod.bind fun m => if names.contains m.name then some m else none
-  let children := dir.children.filterMap fun (n, child) =>
-    let child' := child.filter names
-    if child'.mod.isSome || !child'.children.isEmpty then
-      some (n, child')
-    else
-      none
-  { mod, children }
-
 /-- Remove modules matching any excluded prefix and their children. -/
 partial def Dir.applyExcludes (excludes : Array Name) (dir : Dir) (prefix_ : Name := .anonymous) : Dir :=
   let mod := dir.mod.bind fun m =>
-    if excludes.any fun e => e == m.name || Name.isPrefixOf e m.name then none else some m
+    if excludes.any fun e => Name.isPrefixOf e m.name then none else some m
   let children := dir.children.filterMap fun (n, child) =>
     let fullName := prefix_ ++ n
-    if excludes.any fun e => e == fullName || Name.isPrefixOf e fullName then
+    if excludes.any fun e => Name.isPrefixOf e fullName then
       none
     else
       let child' := child.applyExcludes excludes fullName
@@ -108,13 +87,6 @@ partial def Dir.applyExcludes (excludes : Array Name) (dir : Dir) (prefix_ : Nam
       else
         none
   { mod, children }
-where
-  Name.isPrefixOf (prefix_ name : Name) : Bool :=
-    if prefix_ == name then true
-    else match name with
-    | .anonymous => false
-    | .str parent _ => Name.isPrefixOf prefix_ parent
-    | .num parent _ => Name.isPrefixOf prefix_ parent
 
 /-- Apply ordering: ordered modules appear first (in listed order), then
     remaining modules alphabetically.
@@ -145,10 +117,10 @@ partial def Dir.applyOrder (order : Array Name) (orderChildren : NameMap (Array 
     -- Partition: ordered first, then alphabetical remainder
     let ordered := childOrder.filterMap fun name =>
       -- The name in the order array is the full name; we need the last component
-      let lastComponent := name.components.getLast!
+      let lastComponent := name.components.getLastD name
       dir.children.find? (·.1 == lastComponent)
     let unordered := dir.children.filter fun (n, _) =>
-      !childOrder.any fun name => name.components.getLast! == n
+      !childOrder.any fun name => name.components.getLastD name == n
     let unordered := unordered.qsort (fun c c' => c.1.toString < c'.1.toString)
     ordered ++ unordered
   let children := children.map fun (n, child) =>
@@ -175,38 +147,71 @@ private def renderOutputMessages (items : Array (Nat × ModuleItem')) (showOutpu
       let (msgHtml, st') := msg.blockHtml (g := Literate) (summarize := false) |>.run hlCtx |>.run st
       (html ++ msgHtml, st')
 
+open Verso Output Html in
+/-- Build the `<head>` contents for a literate page. When `includeCodeAssets` is true,
+    includes popper/tippy/highlighting/copy-button assets needed for code hover tooltips. -/
+private def mkHeadContents (litConfig : LiterateConfig) (includeCodeAssets : Bool := true) : Html :=
+  let faviconTag : Html := match litConfig.metadata.favicon with
+    | some fav => {{<link rel="icon" href={{(System.FilePath.fileName fav).getD fav}}/>}}
+    | none => {{<link rel="icon" href="data:,"/>}}
+  let descTag : Html := match litConfig.metadata.description with
+    | some desc => {{<meta name="description" content={{desc}}/>}}
+    | none => .empty
+  let extraCssTags : Html := litConfig.extraCss.foldl (init := .empty) fun acc css =>
+    acc ++ {{<link rel="stylesheet" href={{(⟨css⟩ : System.FilePath).fileName.getD css}}/>}}
+  let extraJsTags : Html := litConfig.extraJs.foldl (init := .empty) fun acc js =>
+    acc ++ {{<script src={{(⟨js⟩ : System.FilePath).fileName.getD js}} defer="defer"></script>}}
+  let hasThemeCss := !litConfig.theme.isEmpty || !litConfig.themeDark.isEmpty
+  let themeCssTag : Html := if hasThemeCss then {{<link rel="stylesheet" href="literate-theme.css"/>}} else .empty
+  let codeAssets : Html := if includeCodeAssets then {{
+    <script src="popper.js"></script>
+    <script src="tippy.js"></script>
+    <script>{{Html.text false highlightingJs}}</script>
+    <style>{{Html.text false highlightingStyle}}</style>
+    <link rel="stylesheet" href="tippy-border.css"/>
+  }} else .empty
+  let copyButtonTag : Html := if includeCodeAssets then {{
+    <script src="copy-button.js" defer="defer"></script>
+  }} else .empty
+  {{
+    {{ faviconTag }}
+    {{ descTag }}
+    {{ codeAssets }}
+    <link rel="stylesheet" href="literate.css"/>
+    {{ themeCssTag }}
+    {{ copyButtonTag }}
+    <script src="-verso-search/elasticlunr.min.js"></script>
+    <script src="-verso-search/fuzzysort.min.js"></script>
+    <script src="-verso-search/searchIndex.js"></script>
+    <script type="module" src="-verso-search/search-init.js"></script>
+    <script src="-verso-search/domain-mappers.js" defer="defer"></script>
+    <link rel="stylesheet" href="-verso-search/search-box.css"/>
+    <link rel="stylesheet" href="-verso-search/search-highlight.css"/>
+    <link rel="stylesheet" href="-verso-search/domain-display.css"/>
+    <script src="-verso-search/search-highlight.js" defer="defer"></script>
+    {{ extraCssTags }}
+    {{ extraJsTags }}
+  }}
+
 open Verso Output Doc Html in
-def emitMod (root : Dir) (outDir: System.FilePath) (mod : LitMod) : EmitM Unit := do
-  let components := mod.name.components
-  let nesting := components.length
-
-  let siteRoot := if nesting = 0 then "./" else nesting.fold (init := "") fun _ _ s => s ++ "../"
-
-  let htmlId? := (← read).moduleIds.find? mod.name
-
-  -- Build imports list
-  let imports := mod.contents.filter ModuleItem'.isImport
-  let importNames := imports.flatMap (·.defines)
-
-  let litConfig := (← read).litConfig
-  let resolved := litConfig.resolveForModule mod.name
-
-  let ctx := { (← read) with
-               options := {logError}
-               traverseContext := {currentModule := mod.name}
-               codeOptions := {} }
-
+/-- Render the body HTML for a module page: imports section, code boxes, and prose.
+    Returns the body HTML and updated highlight state. -/
+private def renderModBody (root : Dir) (mod : LitMod) (resolved : ResolvedConfig)
+    (ctx : HtmlContext) (initHlState : HtmlState) : IO (Html × HtmlState) := do
+  let emitCtx := { ctx with
+                   options := {logError := ctx.logError}
+                   traverseContext := {currentModule := mod.name}
+                   codeOptions := {} }
   let hlCtx : HighlightHtmlM.Context Literate :=
-    ⟨ctx.linkTargets, ctx.traverseContext, ctx.definitionIds, ctx.codeOptions⟩
-
+    ⟨emitCtx.linkTargets, emitCtx.traverseContext, emitCtx.definitionIds, emitCtx.codeOptions⟩
   -- Apply hide_commands filtering
   let contents := if resolved.hideCommands.isEmpty then mod.contents
     else mod.contents.filter fun item =>
       !matchesAnyCommandPattern item resolved.hideCommands
-
-  -- Group items: modDoc items become prose, others go in code boxes
+  -- Build imports list
+  let imports := mod.contents.filter ModuleItem'.isImport
+  let importNames := imports.flatMap (·.defines)
   let mut body : Html := .empty
-
   -- Imports section (collapsible)
   if resolved.showImports && !importNames.isEmpty then
     let importLinks := importNames.map fun n =>
@@ -221,10 +226,9 @@ def emitMod (root : Dir) (outDir: System.FilePath) (mod : LitMod) : EmitM Unit :
         <ul>{{importLinks}}</ul>
       </details>
     }}
-
   -- Process items: prose (modDoc) flows between code boxes
   let mut currentCodeItems : Array (Nat × ModuleItem') := #[]
-
+  let mut hlState := initHlState
   for h : itemIdx in [0:contents.size] do
     have : itemIdx < contents.size := by have := h.2.1; grind
     let item := contents[itemIdx]
@@ -239,71 +243,44 @@ def emitMod (root : Dir) (outDir: System.FilePath) (mod : LitMod) : EmitM Unit :
     if hasModDoc then
       -- Flush any accumulated code items first
       if !currentCodeItems.isEmpty then
-        let (codeHtml, st) ← currentCodeItems.foldlM (init := (.empty, (← get).hlState)) fun (html, st) (idx, cItem) => do
-          let (h, st') ← renderCode idx cItem |>.run ctx st
+        let (codeHtml, st) ← currentCodeItems.foldlM (init := (.empty, hlState.hlState)) fun (html, st) (idx, cItem) => do
+          let (h, st') ← renderCode idx cItem |>.run emitCtx st
           pure (html ++ h, st')
         let (outputHtml, st') := renderOutputMessages currentCodeItems resolved.showOutput hlCtx st
-        modify (fun s => { s with hlState := st' })
+        hlState := { hlState with hlState := st' }
         unless codeHtml == .empty && outputHtml == .empty do
           body := body ++ {{<div class="code-box">{{codeHtml}}{{outputHtml}}</div>}}
         currentCodeItems := #[]
       -- Render this item's code — modDoc parts render as prose, rest as inline code
-      let (itemHtml, st) ← renderCode itemIdx item |>.run ctx (← get).hlState
-      modify (fun s => { s with hlState := st })
+      let (itemHtml, st) ← renderCode itemIdx item |>.run emitCtx hlState.hlState
+      hlState := { hlState with hlState := st }
       body := body ++ itemHtml
     else
       currentCodeItems := currentCodeItems.push (itemIdx, item)
-
   -- Flush remaining code items
   if !currentCodeItems.isEmpty then
-    let (codeHtml, st) ← currentCodeItems.foldlM (init := (.empty, (← get).hlState)) fun (html, st) (idx, cItem) => do
-      let (h, st') ← renderCode idx cItem |>.run ctx st
+    let (codeHtml, st) ← currentCodeItems.foldlM (init := (.empty, hlState.hlState)) fun (html, st) (idx, cItem) => do
+      let (h, st') ← renderCode idx cItem |>.run emitCtx st
       pure (html ++ h, st')
     let (outputHtml, st') := renderOutputMessages currentCodeItems resolved.showOutput hlCtx st
-    modify (fun s => { s with hlState := st' })
+    hlState := { hlState with hlState := st' }
     unless codeHtml == .empty && outputHtml == .empty do
       body := body ++ {{<div class="code-box">{{codeHtml}}{{outputHtml}}</div>}}
+  return (body, hlState)
 
-  let faviconTag : Html := match litConfig.metadata.favicon with
-    | some fav => {{<link rel="icon" href={{(System.FilePath.fileName fav).getD fav}}/>}}
-    | none => {{<link rel="icon" href="data:,"/>}}
-  let descTag : Html := match litConfig.metadata.description with
-    | some desc => {{<meta name="description" content={{desc}}/>}}
-    | none => .empty
-  let extraCssTags : Html := litConfig.extraCss.foldl (init := .empty) fun acc css =>
-    acc ++ {{<link rel="stylesheet" href={{(⟨css⟩ : System.FilePath).fileName.getD css}}/>}}
-  let extraJsTags : Html := litConfig.extraJs.foldl (init := .empty) fun acc js =>
-    acc ++ {{<script src={{(⟨js⟩ : System.FilePath).fileName.getD js}} defer="defer"></script>}}
+open Verso Output Doc Html in
+def emitMod (root : Dir) (outDir: System.FilePath) (mod : LitMod) : EmitM Unit := do
+  let components := mod.name.components
+  let nesting := components.length
+  let siteRoot := if nesting = 0 then "./" else nesting.fold (init := "") fun _ _ s => s ++ "../"
+  let htmlId? := (← read).moduleIds.find? mod.name
+  let litConfig := (← read).litConfig
+  let resolved := litConfig.resolveForModule mod.name
 
-  let hasThemeCss := !litConfig.theme.isEmpty || !litConfig.themeDark.isEmpty
-  let themeCssTag : Html := if hasThemeCss then {{<link rel="stylesheet" href="literate-theme.css"/>}} else .empty
+  let (body, hlState) ← renderModBody root mod resolved (← read) (← get)
+  set hlState
 
-  let headContents : Html := {{
-    {{ faviconTag }}
-    {{ descTag }}
-
-    <script src="popper.js"></script>
-    <script src="tippy.js"></script>
-    <script>{{Html.text false highlightingJs}}</script>
-    <style>{{Html.text false highlightingStyle}}</style>
-    <link rel="stylesheet" href="tippy-border.css"/>
-    <link rel="stylesheet" href="literate.css"/>
-    {{ themeCssTag }}
-    <script src="copy-button.js" defer="defer"></script>
-
-    <script src="-verso-search/elasticlunr.min.js"></script>
-    <script src="-verso-search/fuzzysort.min.js"></script>
-    <script src="-verso-search/searchIndex.js"></script>
-    <script type="module" src="-verso-search/search-init.js"></script>
-    <script src="-verso-search/domain-mappers.js" defer="defer"></script>
-    <link rel="stylesheet" href="-verso-search/search-box.css"/>
-    <link rel="stylesheet" href="-verso-search/search-highlight.css"/>
-    <link rel="stylesheet" href="-verso-search/domain-display.css"/>
-    <script src="-verso-search/search-highlight.js" defer="defer"></script>
-
-    {{ extraCssTags }}
-    {{ extraJsTags }}
-  }}
+  let headContents := mkHeadContents litConfig
 
   -- Build page ToC from headings
   let pageUrl := match resolved.url with
@@ -342,35 +319,7 @@ def emitDir (outDir : System.FilePath) (dir : Dir) : EmitM Unit := do
 
 open Verso Output Html in
 partial def emitLandingPage (outDir : System.FilePath) (dir : Dir) (litConfig : LiterateConfig := {}) : IO Unit := do
-  let faviconTag : Html := match litConfig.metadata.favicon with
-    | some fav => {{<link rel="icon" href={{(System.FilePath.fileName fav).getD fav}}/>}}
-    | none => {{<link rel="icon" href="data:,"/>}}
-  let descTag : Html := match litConfig.metadata.description with
-    | some desc => {{<meta name="description" content={{desc}}/>}}
-    | none => .empty
-  let extraCssTags : Html := litConfig.extraCss.foldl (init := .empty) fun acc css =>
-    acc ++ {{<link rel="stylesheet" href={{(⟨css⟩ : System.FilePath).fileName.getD css}}/>}}
-  let extraJsTags : Html := litConfig.extraJs.foldl (init := .empty) fun acc js =>
-    acc ++ {{<script src={{(⟨js⟩ : System.FilePath).fileName.getD js}} defer="defer"></script>}}
-  let hasThemeCss := !litConfig.theme.isEmpty || !litConfig.themeDark.isEmpty
-  let themeCssTag : Html := if hasThemeCss then {{<link rel="stylesheet" href="literate-theme.css"/>}} else .empty
-  let headContents : Html := {{
-    {{ faviconTag }}
-    {{ descTag }}
-    <link rel="stylesheet" href="literate.css"/>
-    {{ themeCssTag }}
-    <script src="-verso-search/elasticlunr.min.js"></script>
-    <script src="-verso-search/fuzzysort.min.js"></script>
-    <script src="-verso-search/searchIndex.js"></script>
-    <script type="module" src="-verso-search/search-init.js"></script>
-    <script src="-verso-search/domain-mappers.js" defer="defer"></script>
-    <link rel="stylesheet" href="-verso-search/search-box.css"/>
-    <link rel="stylesheet" href="-verso-search/search-highlight.css"/>
-    <link rel="stylesheet" href="-verso-search/domain-display.css"/>
-    <script src="-verso-search/search-highlight.js" defer="defer"></script>
-    {{ extraCssTags }}
-    {{ extraJsTags }}
-  }}
+  let headContents := mkHeadContents litConfig (includeCodeAssets := false)
   let landingTitle := litConfig.metadata.title.getD "Module Index"
   let toc := buildToc dir
   let pageContents : Html := {{
@@ -405,118 +354,23 @@ where
     let children := buildToc dir
     {{<li>{{link}}{{children}}</li>}}
 
-section EmitLanding
-
-open Verso Output Doc Html
-
+open Verso Output Doc Html in
 /--
 Emit the landing page using a specific module's rendered content.
 The module still appears at its normal location; we just also render it as index.html.
 -/
-def emitLandingFromModule (outDir : System.FilePath) (root : Dir) (modName : Name) (ctx : HtmlContext) : IO Unit := do
+def emitLandingFromModule (outDir : System.FilePath) (root : Dir) (modName : Name)
+    (ctx : HtmlContext) (initHlState : HtmlState := {}) : IO HtmlState := do
   let litConfig := ctx.litConfig
   let resolved := litConfig.resolveForModule modName
   let some mod := root.findMod? modName
-    | do IO.eprintln s!"Landing page module '{modName}' not found"; return
+    | do IO.eprintln s!"Landing page module '{modName}' not found"; return initHlState
   let siteRoot := "./"
   let htmlId? := ctx.moduleIds.find? mod.name
-  let imports := mod.contents.filter ModuleItem'.isImport
-  let importNames := imports.flatMap (·.defines)
-  let emitCtx := { ctx with
-                   options := {logError := fun msg => IO.eprintln msg}
-                   traverseContext := {currentModule := mod.name}
-                   codeOptions := {} }
-  let hlCtx : HighlightHtmlM.Context Literate :=
-    ⟨emitCtx.linkTargets, emitCtx.traverseContext, emitCtx.definitionIds, emitCtx.codeOptions⟩
-  let mut body : Html := .empty
-  if resolved.showImports && !importNames.isEmpty then
-    let importLinks := importNames.map fun n =>
-      if (root[n]?).isSome then
-        let href := n.components.map (toString · ++ "/") |> String.join
-        {{<li><a href={{href}}>{{n.toString}}</a></li>}}
-      else
-        {{<li>{{n.toString}}</li>}}
-    body := body ++ {{
-      <details class="imports-list">
-        <summary>"Imports"</summary>
-        <ul>{{importLinks}}</ul>
-      </details>
-    }}
-  -- Apply hide_commands filtering
-  let modContents := if resolved.hideCommands.isEmpty then mod.contents
-    else mod.contents.filter fun item =>
-      !matchesAnyCommandPattern item resolved.hideCommands
-  let mut currentCodeItems : Array (Nat × ModuleItem') := #[]
-  let mut hlState : HtmlState := {}
-  for h : itemIdx in [0:modContents.size] do
-    have : itemIdx < modContents.size := by have := h.2.1; grind
-    let item := modContents[itemIdx]
-    -- Apply docstring filtering
-    let item :=
-      if resolved.showDocstrings && resolved.hideDocstringsFor.isEmpty then item
-      else { item with code := item.code.filter fun
-        | .verso _ (some dn) _ | .markdown _ (some dn) _ =>
-          shouldShowDocstring resolved dn
-        | _ => true }
-    let hasModDoc := item.code.any Code.isModDoc
-    if hasModDoc then
-      if !currentCodeItems.isEmpty then
-        let (codeHtml, st) ← currentCodeItems.foldlM (init := (.empty, hlState.hlState)) fun (html, st) (idx, cItem) => do
-          let (h, st') ← renderCode idx cItem |>.run emitCtx st
-          pure (html ++ h, st')
-        let (outputHtml, st') := renderOutputMessages currentCodeItems resolved.showOutput hlCtx st
-        hlState := { hlState with hlState := st' }
-        unless codeHtml == .empty && outputHtml == .empty do
-          body := body ++ {{<div class="code-box">{{codeHtml}}{{outputHtml}}</div>}}
-        currentCodeItems := #[]
-      let (itemHtml, st) ← renderCode itemIdx item |>.run emitCtx hlState.hlState
-      hlState := { hlState with hlState := st }
-      body := body ++ itemHtml
-    else
-      currentCodeItems := currentCodeItems.push (itemIdx, item)
-  if !currentCodeItems.isEmpty then
-    let (codeHtml, st) ← currentCodeItems.foldlM (init := (.empty, hlState.hlState)) fun (html, st) (idx, cItem) => do
-      let (h, st') ← renderCode idx cItem |>.run emitCtx st
-      pure (html ++ h, st')
-    let (outputHtml, st') := renderOutputMessages currentCodeItems resolved.showOutput hlCtx st
-    hlState := { hlState with hlState := st' }
-    unless codeHtml == .empty && outputHtml == .empty do
-      body := body ++ {{<div class="code-box">{{codeHtml}}{{outputHtml}}</div>}}
-  let faviconTag : Html := match litConfig.metadata.favicon with
-    | some fav => {{<link rel="icon" href={{(System.FilePath.fileName fav).getD fav}}/>}}
-    | none => {{<link rel="icon" href="data:,"/>}}
-  let descTag : Html := match litConfig.metadata.description with
-    | some desc => {{<meta name="description" content={{desc}}/>}}
-    | none => .empty
-  let extraCssTags : Html := litConfig.extraCss.foldl (init := .empty) fun acc css =>
-    acc ++ {{<link rel="stylesheet" href={{(⟨css⟩ : System.FilePath).fileName.getD css}}/>}}
-  let extraJsTags : Html := litConfig.extraJs.foldl (init := .empty) fun acc js =>
-    acc ++ {{<script src={{(⟨js⟩ : System.FilePath).fileName.getD js}} defer="defer"></script>}}
-  let hasThemeCss := !litConfig.theme.isEmpty || !litConfig.themeDark.isEmpty
-  let themeCssTag : Html := if hasThemeCss then {{<link rel="stylesheet" href="literate-theme.css"/>}} else .empty
-  let headContents : Html := {{
-    {{ faviconTag }}
-    {{ descTag }}
-    <script src="popper.js"></script>
-    <script src="tippy.js"></script>
-    <script>{{Html.text false highlightingJs}}</script>
-    <style>{{Html.text false highlightingStyle}}</style>
-    <link rel="stylesheet" href="tippy-border.css"/>
-    <link rel="stylesheet" href="literate.css"/>
-    {{ themeCssTag }}
-    <script src="copy-button.js" defer="defer"></script>
-    <script src="-verso-search/elasticlunr.min.js"></script>
-    <script src="-verso-search/fuzzysort.min.js"></script>
-    <script src="-verso-search/searchIndex.js"></script>
-    <script type="module" src="-verso-search/search-init.js"></script>
-    <script src="-verso-search/domain-mappers.js" defer="defer"></script>
-    <link rel="stylesheet" href="-verso-search/search-box.css"/>
-    <link rel="stylesheet" href="-verso-search/search-highlight.css"/>
-    <link rel="stylesheet" href="-verso-search/domain-display.css"/>
-    <script src="-verso-search/search-highlight.js" defer="defer"></script>
-    {{ extraCssTags }}
-    {{ extraJsTags }}
-  }}
+
+  let (body, hlState) ← renderModBody root mod resolved ctx initHlState
+
+  let headContents := mkHeadContents litConfig
   -- Build page ToC
   let headings := collectHeadings mod ctx.traverseState
   let tocHtml := if headings.size >= 2 then buildPageToc headings else .empty
@@ -526,8 +380,7 @@ def emitLandingFromModule (outDir : System.FilePath) (root : Dir) (modName : Nam
     | none => modLabel
   let pageHtml := page landingPageTitle siteRoot headContents mod.name root htmlId? body (pageToc := tocHtml) (litConfig := litConfig)
   IO.FS.writeFile (outDir / "index.html") <| "<!DOCTYPE html>\n" ++ pageHtml.asString
-
-end EmitLanding
+  return hlState
 
 def main (args : List String) : IO UInt32 := do
   let config ←
@@ -595,16 +448,13 @@ def main (args : List String) : IO UInt32 := do
   let ((), st) ← emitDir config.outputDir dir |>.run ctx |>.run {}
 
   -- Landing page: use configured module or auto-generated ToC
-  match litConfig.landingPage with
-  | some landingModName =>
-    if let some _landingMod := dir.findMod? landingModName then
-      -- Emit the landing module's content as index.html using the same page template
-      emitLandingFromModule config.outputDir dir landingModName ctx
-    else
-      IO.eprintln s!"Warning: landing_page module '{landingModName}' not found, using default"
+  let st ← match litConfig.landingPage with
+    | some landingModName =>
+      -- emitLandingFromModule handles "not found" internally
+      emitLandingFromModule config.outputDir dir landingModName ctx st
+    | none =>
       emitLandingPage config.outputDir dir litConfig
-  | none =>
-    emitLandingPage config.outputDir dir litConfig
+      pure st
 
   emitIndex {} traverseState dir (config.outputDir / "-verso-search") ctx.logError
   let domainData : Verso.NameMap Verso.Multi.Domain := ({} : Verso.NameMap _)
