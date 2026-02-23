@@ -29,13 +29,49 @@ private def runLakeExe (name : String) (args : Array String) : IO Unit := do
   if exitCode != 0 then
     throw <| IO.userError s!"{name} failed with exit code {exitCode}"
 
-/-- Runs verso-literate-html with optional plan file and config file. -/
+/-- Generate a module-map file from a JSON directory.
+    Each .json file at `<jsonDir>/<A>/<B>.json` produces a line `A.B\t<path>`. -/
+private def generateModuleMap (jsonDir mapFile : System.FilePath) : IO Unit := do
+  let mut lines : Array String := #[]
+  let mut todo := [(jsonDir, "")]
+  repeat
+    match todo with
+    | [] => break
+    | (dir, pfx) :: rest =>
+      todo := rest
+      for entry in ← dir.readDir do
+        if ← entry.path.isDir then
+          let component := entry.fileName
+          let newPfx := if pfx.isEmpty then component else s!"{pfx}.{component}"
+          todo := (entry.path, newPfx) :: todo
+        else if entry.path.extension == some "json" then
+          let stem := entry.path.fileStem.getD ""
+          let modName := if pfx.isEmpty then stem else s!"{pfx}.{stem}"
+          lines := lines.push s!"{modName}\t{entry.path}"
+  IO.FS.writeFile mapFile ("\n".intercalate lines.toList ++ "\n")
+
+/-- Runs verso-literate-html with a module-map generated from a JSON directory. -/
 private def runLiterateHtml (jsonDir htmlDir : System.FilePath) (planFile configFile : Option System.FilePath := none) : IO Unit := do
-  let mut args := #[jsonDir.toString, htmlDir.toString]
+  -- If plan file is provided, filter the module map to only planned modules
+  let mapFile := htmlDir.addExtension "module-map"
   if let some pf := planFile then
-    args := args ++ #["--plan", pf.toString]
+    -- Generate full map, then filter by plan
+    let fullMapFile := htmlDir.addExtension "full-module-map"
+    generateModuleMap jsonDir fullMapFile
+    let fullContents ← IO.FS.readFile fullMapFile
+    let planContents ← IO.FS.readFile pf
+    let planNames := planContents.splitOn "\n" |>.filter (!·.isEmpty)
+    let filteredLines := fullContents.splitOn "\n" |>.filter fun line =>
+      if line.isEmpty then false
+      else match line.splitOn "\t" with
+        | [name, _] => planNames.contains name
+        | _ => false
+    IO.FS.writeFile mapFile ("\n".intercalate filteredLines ++ "\n")
+  else
+    generateModuleMap jsonDir mapFile
+  let mut args := #[htmlDir.toString, mapFile.toString]
   if let some cf := configFile then
-    args := args ++ #["--config", cf.toString]
+    args := args.push cf.toString
   runLakeExe "verso-literate-html" args
 
 /-- Runs verso-literate-plan to produce a plan file. -/
@@ -62,11 +98,24 @@ private def runLiteratePlanCapture (moduleListFile planFile : System.FilePath) (
 
 /-- Runs verso-literate-html capturing output, returning (exitCode, stdout, stderr). -/
 private def runLiterateHtmlCapture (jsonDir htmlDir : System.FilePath) (planFile configFile : Option System.FilePath := none) : IO (UInt32 × String × String) := do
-  let mut args := #[jsonDir.toString, htmlDir.toString]
+  let mapFile := htmlDir.addExtension "module-map"
   if let some pf := planFile then
-    args := args ++ #["--plan", pf.toString]
+    let fullMapFile := htmlDir.addExtension "full-module-map"
+    generateModuleMap jsonDir fullMapFile
+    let fullContents ← IO.FS.readFile fullMapFile
+    let planContents ← IO.FS.readFile pf
+    let planNames := planContents.splitOn "\n" |>.filter (!·.isEmpty)
+    let filteredLines := fullContents.splitOn "\n" |>.filter fun line =>
+      if line.isEmpty then false
+      else match line.splitOn "\t" with
+        | [name, _] => planNames.contains name
+        | _ => false
+    IO.FS.writeFile mapFile ("\n".intercalate filteredLines ++ "\n")
+  else
+    generateModuleMap jsonDir mapFile
+  let mut args := #[htmlDir.toString, mapFile.toString]
   if let some cf := configFile then
-    args := args ++ #["--config", cf.toString]
+    args := args.push cf.toString
   runLakeExeCapture "verso-literate-html" args
 
 /-- Shared test data: pre-built JSON directory and module list file. -/

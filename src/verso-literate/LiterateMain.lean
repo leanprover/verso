@@ -241,7 +241,7 @@ where
     if stx.isOfKind ``moduleDoc then
       if let some declRange ← getDeclarationRange? stx then
         if stx[1].getKind == ``versoCommentBody then
-          let doc? := getVersoModuleDocs (← getEnv) |>.snippets |>.findSome? fun s =>
+          let doc? := getMainVersoModuleDocs (← getEnv) |>.snippets |>.findSome? fun s =>
              guard (s.declarationRange == declRange) *> some s
           if let some doc := doc? then
             return #[.modDoc (← toModLit doc)]

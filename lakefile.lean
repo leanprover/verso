@@ -72,7 +72,7 @@ lean_lib VersoLiterate where
 
 @[default_target]
 lean_exe «verso-literate» where
-  root := `Main
+  root := `LiterateMain
   srcDir := "src/verso-literate"
   supportInterpreter := true
 
@@ -102,14 +102,14 @@ input_dir literateStaticWeb where
 
 @[default_target]
 lean_exe «verso-literate-html» where
-  root := `Main
+  root := `LiterateHtmlMain
   srcDir := "src/verso-literate-html"
   needs := #[«verso-literate-html-css», literateStaticWeb]
   supportInterpreter := true
 
 @[default_target]
 lean_exe «verso-literate-plan» where
-  root := `Main
+  root := `LiteratePlanMain
   srcDir := "src/verso-literate-plan"
   supportInterpreter := true
 
@@ -224,59 +224,75 @@ package_facet literate pkg : Array System.FilePath := do
   let exes := Job.collectArray (← pkg.leanExes.mapM (·.toLeanLib.facet `literate |>.fetch))
   return libs.zipWith (·.flatten ++ ·.flatten) exes
 
-package_facet «literate-html» pkg : System.FilePath := do
+package_facet literateHtml pkg : System.FilePath := do
   let ws ← getWorkspace
   let buildDir := ws.root.buildDir
-  let litDir := buildDir / "literate"
   let htmlDir := buildDir / "literate-html"
   let planFile := buildDir / "literate-plan"
   let moduleListFile := buildDir / "literate-modules"
+  let moduleMapFile := buildDir / "literate-module-map"
   let tomlFile := ws.root.dir / "literate.toml"
 
-  -- Build literate JSON for all libraries
-  let litJobs := Job.collectArray (← pkg.leanLibs.mapM (·.facet `literate |>.fetch))
+  -- Step 1: Collect all modules and make the plan
+  let allModules ← pkg.leanLibs.foldlM (init := #[]) fun acc lib => do
+    let mods ← (← lib.modules.fetch).await
+    return acc ++ mods.map fun m => (lib.name, m)
 
-  -- Fetch the plan executable
+  let moduleListContent :=
+    "\n".intercalate (allModules.map fun (libName, mod) => s!"{libName}\t{mod.name}").toList ++ "\n"
+
   let planExeJob ← «verso-literate-plan».fetch
-
-  -- Fetch the HTML generator executable
   let htmlExeJob ← «verso-literate-html».fetch
 
-  -- Collect module names with their library membership
-  let moduleEntries ← pkg.leanLibs.foldlM (init := #[]) fun acc lib => do
-    let mods ← (← lib.modules.fetch).await
-    return acc ++ mods.map fun m => s!"{lib.name}\t{m.name}"
+  planExeJob.bindM fun planExeFile => do
+    if ← tomlFile.pathExists then
+      addTrace (← computeTrace tomlFile)
+    else
+      addPureTrace "No literate TOML config file"
+    addPureTrace moduleListContent
 
-  htmlExeJob.bindM fun htmlExeFile =>
-    planExeJob.bindM fun planExeFile =>
-      litJobs.mapM fun _litFiles => do
+    buildFileUnlessUpToDate' moduleListFile do
+      IO.FS.writeFile moduleListFile moduleListContent
 
-        if ← tomlFile.pathExists then
-          addTrace (← computeTrace tomlFile)
-        else
-          addPureTrace "No literate TOML config file"
+    buildFileUnlessUpToDate' planFile do
+      let planArgs := #[moduleListFile.toString, planFile.toString] ++
+        (if ← tomlFile.pathExists then #[tomlFile.toString] else #[])
+      proc {
+        cmd := planExeFile.toString
+        args := planArgs
+        env := ← getAugmentedEnv
+      }
 
-        -- Write module list and create plan
-        let moduleList := ("\n".intercalate moduleEntries.toList ++ "\n")
-        addPureTrace moduleList
-        buildFileUnlessUpToDate' moduleListFile do
-          IO.FS.writeFile moduleListFile moduleList
+    -- Step 2: Read plan, fetch literate JSON for planned modules only
+    let planContents ← IO.FS.readFile planFile
+    let plannedNames := planContents.splitOn "\n"
+      |>.filter (!·.isEmpty)
+      |>.map String.toName
 
-        buildFileUnlessUpToDate' planFile do
-          let planArgs := #[moduleListFile.toString, planFile.toString] ++
-            (if ← tomlFile.pathExists then #[tomlFile.toString] else #[])
-          proc {
-            cmd := planExeFile.toString
-            args := planArgs
-            env := ← getAugmentedEnv
-          }
+    let litJobs ← plannedNames.filterMapM fun name => do
+      match allModules.find? fun (_, mod) => mod.name == name with
+      | some (_, mod) =>
+        let job ← mod.facet `literate |>.fetch
+        pure (some (name, job))
+      | none => pure none
 
-        -- Run HTML generator with --plan and optionally --config
-        buildUnlessUpToDate htmlDir (← getTrace) (htmlDir.addExtension "trace")  do
-          let mut htmlArgs := #[litDir.toString, htmlDir.toString, "--plan", planFile.toString]
+    (Job.collectArray (litJobs.map (·.2) |>.toArray)).bindM fun litFiles => do
+      -- Build module→JSON mapping (litFiles[i] corresponds to litJobs[i])
+      let mappingContent := "\n".intercalate
+        (litJobs.zip litFiles.toList |>.map fun ((name, _), jsonPath) =>
+          s!"{name}\t{jsonPath}") ++ "\n"
+      addPureTrace mappingContent
+
+      buildFileUnlessUpToDate' moduleMapFile do
+        IO.FS.writeFile moduleMapFile mappingContent
+
+      -- Step 3: Run HTML generator with module map
+      htmlExeJob.mapM fun htmlExeFile => do
+        buildUnlessUpToDate htmlDir (← getTrace) (htmlDir.addExtension "trace") do
           IO.FS.createDirAll htmlDir
+          let mut htmlArgs := #[htmlDir.toString, moduleMapFile.toString]
           if ← tomlFile.pathExists then
-            htmlArgs := htmlArgs ++ #["--config", tomlFile.toString]
+            htmlArgs := htmlArgs.push tomlFile.toString
           proc {
             cmd := htmlExeFile.toString
             args := htmlArgs

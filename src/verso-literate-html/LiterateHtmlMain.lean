@@ -15,26 +15,14 @@ open VersoLiterateCode
 open Std
 
 structure Config where
-  inputDir : System.FilePath
   outputDir : System.FilePath
-  planFile : Option System.FilePath := none
+  moduleMapFile : System.FilePath
   configFile : Option System.FilePath := none
 
 def getConfig : List String → Except String Config
-  | args => go args { inputDir := "", outputDir := "" }
-where
-  go : List String → Config → Except String Config
-  | "--plan" :: file :: rest, cfg => go rest { cfg with planFile := some file }
-  | "--config" :: file :: rest, cfg => go rest { cfg with configFile := some file }
-  | [], cfg =>
-    if cfg.inputDir.toString.isEmpty then
-      throw s!"Didn't understand args: []. Expected INDIR OUTDIR [--plan FILE] [--config FILE]"
-    else pure cfg
-  | [i, o], cfg => pure { cfg with inputDir := i, outputDir := o }
-  | i :: o :: rest, cfg =>
-    if cfg.inputDir.toString.isEmpty then go rest { cfg with inputDir := i, outputDir := o }
-    else throw s!"Didn't understand args: {i :: o :: rest}. Expected INDIR OUTDIR [--plan FILE] [--config FILE]"
-  | other, _ => throw s!"Didn't understand args: {other}. Expected INDIR OUTDIR [--plan FILE] [--config FILE]"
+  | [outputDir, moduleMapFile] => pure { outputDir, moduleMapFile }
+  | [outputDir, moduleMapFile, configFile] => pure { outputDir, moduleMapFile, configFile := some configFile }
+  | _ => throw "Usage: verso-literate-html OUTDIR MODULE-MAP [CONFIG]"
 
 /--
 Checks if a `Code` item is a module docstring (modDoc or markdownModDoc).
@@ -548,7 +536,7 @@ def main (args : List String) : IO UInt32 := do
   -- Copy the copy-button JS
   IO.FS.writeFile (config.outputDir / "copy-button.js") copyButtonJs
   emitSearchBox (config.outputDir / "-verso-search")
-  let dir ← loadDir config.inputDir
+  let dir ← loadModuleMap config.moduleMapFile
 
   -- Load config from TOML if provided
   let litConfig ← match config.configFile with
@@ -571,19 +559,6 @@ def main (args : List String) : IO UInt32 := do
   if let some favicon := litConfig.metadata.favicon then
     let name := (⟨favicon⟩ : System.FilePath).fileName.getD favicon
     IO.FS.writeFile (config.outputDir / name) (← IO.FS.readFile favicon)
-
-  -- Filter by plan file if provided
-  let dir ← match config.planFile with
-    | some planPath => do
-      if ← planPath.pathExists then
-        let planContents ← IO.FS.readFile planPath
-        let planNames := planContents.splitOn "\n"
-          |>.filter (!·.isEmpty)
-          |>.map String.toName
-        let nameSet := Std.HashSet.ofList planNames
-        pure <| dir.filter nameSet
-      else pure dir
-    | none => pure dir
 
   -- Apply nav tree transformations (exclude, then order)
   let dir := dir.applyExcludes litConfig.exclude

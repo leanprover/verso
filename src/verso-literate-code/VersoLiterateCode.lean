@@ -339,6 +339,20 @@ def loadDir (path : System.FilePath) : IO Dir := do
         dir := dir.insert (← load f)
   return dir
 
+/--
+Loads modules from a module-map file. Each line is `ModuleName\t/path/to/file.json`.
+-/
+def loadModuleMap (moduleMapFile : System.FilePath) : IO Dir := do
+  let contents ← IO.FS.readFile moduleMapFile
+  let mut dir : Dir := {}
+  for line in contents.splitOn "\n" do
+    if line.isEmpty then continue
+    match line.splitOn "\t" with
+    | [_, jsonPath] =>
+      dir := dir.insert (← load jsonPath)
+    | _ => throw <| .userError s!"Invalid module-map line: {line}"
+  return dir
+
 partial def definitionIds (d : Dir) : NameMap (Name × String) := Id.run do
   let mut out := {}
   if let some m := d.mod then

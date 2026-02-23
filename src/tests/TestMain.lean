@@ -184,11 +184,19 @@ def testLiterateBrowser (_ : Config) : IO Unit := do
 
     IO.FS.writeFile moduleListFile ("\n".intercalate modules.toList ++ "\n")
 
-    -- Generate HTML site (default config, no plan filtering)
+    -- Generate module map from JSON directory
+    let moduleMapFile := tmpDir / "module-map"
+    let mut mapLines : Array String := #[]
+    for mod in modules do
+      let jsonFile := mod.splitOn "." |>.foldl (init := jsonDir) (· / ·) |>.withExtension "json"
+      mapLines := mapLines.push s!"{mod}\t{jsonFile}"
+    IO.FS.writeFile moduleMapFile ("\n".intercalate mapLines.toList ++ "\n")
+
+    -- Generate HTML site
     IO.println "  Generating literate HTML site..."
     let child ← IO.Process.spawn {
       cmd := "lake"
-      args := #["--quiet", "exe", "verso-literate-html", jsonDir.toString, htmlDir.toString]
+      args := #["--quiet", "exe", "verso-literate-html", htmlDir.toString, moduleMapFile.toString]
       stdout := .null
       stderr := .inherit
     }
