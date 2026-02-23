@@ -34,6 +34,8 @@ The example project must depend on the same version of `subverso` that the docum
 Within the example project, examples are drawn from a module.
 Sometimes, the entire module is the example, while other cases use just some part of the module.
 To set a default module, use the option {option}`verso.exampleModule`.
+-- NOTE(rfc-role-resolution): `{index}` below is currently a plain function,
+-- not a registered role expander, and now fails under strict role resolution.
 When there is no default set, or to override it, the example code features all accept a keyword argument `module`.{index (subterm:="keyword argument")}[`module`]
 
 {optionDocs verso.exampleModule}

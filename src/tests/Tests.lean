@@ -23,6 +23,7 @@ import Tests.ParserRegression
 import Tests.Paths
 import Tests.PorterStemmer
 import Tests.Refs
+import Tests.RoleResolution
 import Tests.Serialization
 import Tests.TeX
 import Tests.TexUnit

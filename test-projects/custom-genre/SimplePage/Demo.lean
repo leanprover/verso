@@ -9,6 +9,8 @@ open Tutorial
 
 #doc (SimplePage) "An _Astounding_ Document" =>
 
+-- NOTE(rfc-role-resolution): these role calls currently rely on the removed
+-- fallback-to-function-application behavior and now fail during `lake build`.
 Today is {today}[]. This document was created on {date 2024 5 13}[].
 
 # One Section
