@@ -42,7 +42,6 @@ def freshId_second_is_hint_with_1 (hint : LetterString) (path : Path) : Bool := 
   let i' := st.freshId path hint.sluggify
   i != i' && (hint.isEmpty || (i == hint.sluggify && i' == (s!"{hint}1").sluggify))
 
-
 open scoped Plausible.Decorations in
 private def testProp
     (p : Prop) (cfg : Configuration := {})
@@ -65,3 +64,24 @@ def runBlogTests : IO Nat := do
     unless res matches .success .. do
       failures := failures + 1
   return failures
+
+-- Regression test for hidden blog Lean blocks.
+#doc (Post) "Hidden Lean Block Flags" =>
+```leanInit post
+```
+
+```lean post -show
+def base : Nat := 40
+```
+
+```lean post -keep
+def scratch : Nat := base + 2
+```
+
+```lean post
+example : base = 40 := rfl
+```
+
+```lean post +error
+#check scratch
+```
