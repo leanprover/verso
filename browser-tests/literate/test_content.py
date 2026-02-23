@@ -189,6 +189,24 @@ class TestContent:
         landing_text = landing.inner_text()
         assert "LitConfig" in landing_text, "Expected LitConfig in module ToC"
 
+    def test_no_empty_code_boxes(self, server: str, page: Page):
+        """Test that no page in the site has an empty code-box."""
+        pages_to_check = [
+            "/LitConfig/",
+            "/LitConfig/Core/",
+            "/LitConfig/Core/Basic/",
+            "/LitConfig/NoDocstrings/",
+        ]
+        for path in pages_to_check:
+            page.goto(f"{server}{path}")
+            page.wait_for_load_state("networkidle")
+
+            code_boxes = page.locator(".code-box")
+            for i in range(code_boxes.count()):
+                box = code_boxes.nth(i)
+                text = box.inner_text().strip()
+                assert text, f"Empty code-box found on {path} (box {i})"
+
     def test_page_title(self, server: str, page: Page):
         """Test that <h1> text matches the module name."""
         page.goto(f"{server}/LitConfig/")

@@ -98,7 +98,7 @@ structure LiterateConfig where
   modules : NameMap ModuleConfig := {}
 deriving Repr, Inhabited
 
-/-- Decode a `[[targets]]` table entry into a `Target`. -/
+/-- Decodes a `[[targets]]` table entry into a `Target`. -/
 def decodeTarget (v : Value) : EDecodeM Target := do
   let t ← v.decodeTable
   let library ← t.decode? (α := Name) `library
@@ -108,7 +108,7 @@ def decodeTarget (v : Value) : EDecodeM Target := do
 
 instance : DecodeToml Target := ⟨decodeTarget⟩
 
-/-- Decode a `[metadata]` table entry into a `Metadata`. -/
+/-- Decodes a `[metadata]` table entry into a `Metadata`. -/
 def decodeMetadata (v : Value) : EDecodeM Metadata := do
   let t ← v.decodeTable
   let title ← t.decode? (α := String) `title
@@ -118,7 +118,7 @@ def decodeMetadata (v : Value) : EDecodeM Metadata := do
 
 instance : DecodeToml Metadata := ⟨decodeMetadata⟩
 
-/-- Decode a `[modules."Foo.Bar"]` table entry into a `ModuleConfig`. -/
+/-- Decodes a `[modules."Foo.Bar"]` table entry into a `ModuleConfig`. -/
 def decodeModuleConfig (v : Value) : EDecodeM ModuleConfig := do
   let t ← v.decodeTable
   let title ← t.decode? (α := String) `title
@@ -134,7 +134,7 @@ def decodeModuleConfig (v : Value) : EDecodeM ModuleConfig := do
 
 instance : DecodeToml ModuleConfig := ⟨decodeModuleConfig⟩
 
-/-- Decode a `[modules]` table into a `NameMap ModuleConfig`.
+/-- Decodes a `[modules]` table into a `NameMap ModuleConfig`.
     TOML keys like `"Foo.Bar"` produce single-component Names, so we
     convert them to proper dotted Lean Names using `String.toName`. -/
 def decodeModulesMap (table : Table) : DecodeM (NameMap ModuleConfig) := do
@@ -152,7 +152,7 @@ def decodeModulesMap (table : Table) : DecodeM (NameMap ModuleConfig) := do
       return result
     | _ => return {}
 
-/-- Decode a `[theme]` table into light and dark CSS variable maps.
+/-- Decodes a `[theme]` table into light and dark CSS variable maps.
     Sub-keys that are strings become light-mode variables; the `dark` sub-table
     provides dark-mode overrides. -/
 def decodeThemeTable (themeTable : Table) : Std.TreeMap String String compare × Std.TreeMap String String compare :=

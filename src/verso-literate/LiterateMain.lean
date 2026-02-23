@@ -101,7 +101,7 @@ def commentEndToken (commentInfo : SourceInfo) : Syntax :=
 
 
 /--
-Return all stacks of syntax nodes satisfying `visit`, starting with such a node that also fulfills
+Returns all stacks of syntax nodes satisfying `visit`, starting with such a node that also fulfills
 `accept` (default "is leaf"), and ending with the root.
 -/
 partial def findStacks (root : Syntax) (visit : Syntax → Bool) (accept : Syntax → Bool := fun stx => !stx.hasArgs) : Array Syntax.Stack :=

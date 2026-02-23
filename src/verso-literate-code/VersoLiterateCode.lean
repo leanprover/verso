@@ -160,6 +160,17 @@ partial def newlinesOnly : SubVerso.Highlighting.Highlighted → Bool
   | .tactics _ _ _ hl | .span _ hl => newlinesOnly hl
   | .token .. | .unparsed .. | .point .. => false
 
+/--
+Returns `true` when the highlighted code contains no non-whitespace characters, proof states, or
+messages to show.
+-/
+partial def whitespaceOnly : SubVerso.Highlighting.Highlighted → Bool
+  | .seq xs => xs.all whitespaceOnly
+  | .text s => s.all Char.isWhitespace
+  | .token ⟨_, s⟩ | .unparsed s => s.all Char.isWhitespace
+  | .tactics data _ _ hl | .span data hl => data.isEmpty && whitespaceOnly hl
+  | .point .. => false
+
 open Verso.Output Html in
 open Verso Doc Html in
 open SubVerso.Highlighting in
@@ -182,7 +193,7 @@ def renderCode [Monad m] (itemIdx : Nat) (item : VersoLiterate.ModuleItem') : Ht
       if newlinesOnly hl then
         html := html ++ (← (Highlighted.text "\n").blockHtml (g := Literate) "lean" (trim := false))
         nextIndent := 0
-      else
+      else if !whitespaceOnly hl then
         let hl := trimLeading hl
         let (hl, i') := trimTrailing hl
         html := html ++ (← hl.blockHtml (g := Literate) "lean" (trim := false))
@@ -413,12 +424,14 @@ where
     | _ => ""
 
 open Verso Output Html in
-/-- Build the page ToC HTML from collected headings. -/
-def buildPageToc (headings : Array (Nat × String × Option String)) : Html :=
+/-- Build the page ToC HTML from collected headings.
+    `pageUrl` is the page's URL relative to the site root (e.g. `"LitConfig/"` or `"LitConfig/Core/"`),
+    needed because the `<base>` tag makes bare `#id` anchors resolve relative to the site root. -/
+def buildPageToc (headings : Array (Nat × String × Option String)) (pageUrl : String := "") : Html :=
   let items := headings.map fun (lvl, title, htmlId?) =>
     let levelClass := s!"toc-level-{lvl}"
     match htmlId? with
-    | some id => {{<li class={{levelClass}}><a href={{s!"#{id}"}}>{{title}}</a></li>}}
+    | some id => {{<li class={{levelClass}}><a href={{s!"{pageUrl}#{id}"}}>{{title}}</a></li>}}
     | none => {{<li class={{levelClass}}>{{title}}</li>}}
   {{<nav class="page-toc" aria-label="Page table of contents">
       <div class="page-toc-title">"On this page"</div>

@@ -470,10 +470,7 @@ input:focus-visible,
 .code-box .verso-text,
 .code-box .md-text {
     margin-left: calc(var(--indent, 0) * 1ch);
-    padding: 0.25rem 0.5rem;
     max-width: 40em;
-    border: 1px solid var(--verso-docstring-border-color);
-    border-radius: 1rem;
     width: max-content;
 }
 

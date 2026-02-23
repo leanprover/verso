@@ -141,11 +141,11 @@ class TestNavigation:
         title = toc.locator(".page-toc-title")
         expect(title).to_contain_text("On this page")
 
-        # Should have links with href="#..."
+        # Should have links with anchors (prefixed with page path due to <base> tag)
         links = toc.locator("a")
         assert links.count() >= 2, f"Expected at least 2 ToC links, got {links.count()}"
         href = links.first.get_attribute("href")
-        assert href and href.startswith("#"), f"Expected anchor link, got '{href}'"
+        assert href and "#" in href, f"Expected anchor link, got '{href}'"
 
     def test_page_toc_absent_few_headings(self, server: str, page: Page):
         """Test that pages with <2 headings do not show .page-toc."""
@@ -158,7 +158,7 @@ class TestNavigation:
         expect(toc).to_have_count(0)
 
     def test_page_toc_links(self, server: str, page: Page):
-        """Test that clicking a ToC link scrolls to the heading."""
+        """Test that clicking a ToC link stays on the same page and adds a hash."""
         page.goto(f"{server}/LitConfig/")
         page.wait_for_load_state("networkidle")
 
@@ -168,11 +168,10 @@ class TestNavigation:
 
         # Click the first ToC link
         link = toc.locator("a").first
-        target_href = link.get_attribute("href")
         link.click()
 
-        # The URL should now include the anchor
-        expect(page).to_have_url(re.compile(re.escape(target_href) + r"$"))
+        # Should stay on the LitConfig page with a hash fragment
+        expect(page).to_have_url(re.compile(r"/LitConfig/.*#"))
 
     def test_mobile_hamburger_open(self, server: str, page: Page):
         """Test that at 375x667 the hamburger is visible and clicking opens the sidebar."""

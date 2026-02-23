@@ -25,7 +25,7 @@ def getConfig : List String → Except String Config
   | _ => throw "Usage: verso-literate-html OUTDIR MODULE-MAP [CONFIG]"
 
 /--
-Checks if a `Code` item is a module docstring (modDoc or markdownModDoc).
+Whether a `Code` item is a module docstring (modDoc or markdownModDoc).
 -/
 private def Code.isModDoc : Code → Bool
   | .modDoc _ => true
@@ -33,7 +33,7 @@ private def Code.isModDoc : Code → Bool
   | _ => false
 
 /--
-Checks if a `Code` item is an import statement based on the module item's kind.
+Whether a `Code` item is an import statement based on the module item's kind.
 This is determined at the item level rather than the code level.
 -/
 private def ModuleItem'.isImport (item : ModuleItem') : Bool :=
@@ -49,7 +49,7 @@ private def shouldShowDocstring (config : ResolvedConfig) (declName : Name) : Bo
 private def themeKeyToCssVar (key : String) : String :=
   "--verso-" ++ key.map fun c => if c == '_' then '-' else c
 
-/-- Generate the content of `literate-theme.css` from light and dark theme maps.
+/-- Generates the content of `literate-theme.css` from light and dark theme maps.
     Returns `none` if both maps are empty (no file should be written). -/
 def generateThemeCss (light : Std.TreeMap String String compare) (dark : Std.TreeMap String String compare) : Option String :=
   if light.isEmpty && dark.isEmpty then none
@@ -244,7 +244,8 @@ def emitMod (root : Dir) (outDir: System.FilePath) (mod : LitMod) : EmitM Unit :
           pure (html ++ h, st')
         let (outputHtml, st') := renderOutputMessages currentCodeItems resolved.showOutput hlCtx st
         modify (fun s => { s with hlState := st' })
-        body := body ++ {{<div class="code-box">{{codeHtml}}{{outputHtml}}</div>}}
+        unless codeHtml == .empty && outputHtml == .empty do
+          body := body ++ {{<div class="code-box">{{codeHtml}}{{outputHtml}}</div>}}
         currentCodeItems := #[]
       -- Render this item's code — modDoc parts render as prose, rest as inline code
       let (itemHtml, st) ← renderCode itemIdx item |>.run ctx (← get).hlState
@@ -260,7 +261,8 @@ def emitMod (root : Dir) (outDir: System.FilePath) (mod : LitMod) : EmitM Unit :
       pure (html ++ h, st')
     let (outputHtml, st') := renderOutputMessages currentCodeItems resolved.showOutput hlCtx st
     modify (fun s => { s with hlState := st' })
-    body := body ++ {{<div class="code-box">{{codeHtml}}{{outputHtml}}</div>}}
+    unless codeHtml == .empty && outputHtml == .empty do
+      body := body ++ {{<div class="code-box">{{codeHtml}}{{outputHtml}}</div>}}
 
   let faviconTag : Html := match litConfig.metadata.favicon with
     | some fav => {{<link rel="icon" href={{(System.FilePath.fileName fav).getD fav}}/>}}
@@ -304,8 +306,11 @@ def emitMod (root : Dir) (outDir: System.FilePath) (mod : LitMod) : EmitM Unit :
   }}
 
   -- Build page ToC from headings
+  let pageUrl := match resolved.url with
+    | some u => u ++ "/"
+    | none => mod.name.components.map (toString · ++ "/") |> String.join
   let headings := collectHeadings mod (← read).traverseState
-  let tocHtml := if headings.size >= 2 then buildPageToc headings else .empty
+  let tocHtml := if headings.size >= 2 then buildPageToc headings pageUrl else .empty
 
   let modLabel := resolved.title.getD (toString mod.name)
   let pageTitle := match litConfig.metadata.title with
@@ -461,7 +466,8 @@ def emitLandingFromModule (outDir : System.FilePath) (root : Dir) (modName : Nam
           pure (html ++ h, st')
         let (outputHtml, st') := renderOutputMessages currentCodeItems resolved.showOutput hlCtx st
         hlState := { hlState with hlState := st' }
-        body := body ++ {{<div class="code-box">{{codeHtml}}{{outputHtml}}</div>}}
+        unless codeHtml == .empty && outputHtml == .empty do
+          body := body ++ {{<div class="code-box">{{codeHtml}}{{outputHtml}}</div>}}
         currentCodeItems := #[]
       let (itemHtml, st) ← renderCode itemIdx item |>.run emitCtx hlState.hlState
       hlState := { hlState with hlState := st }
@@ -474,7 +480,8 @@ def emitLandingFromModule (outDir : System.FilePath) (root : Dir) (modName : Nam
       pure (html ++ h, st')
     let (outputHtml, st') := renderOutputMessages currentCodeItems resolved.showOutput hlCtx st
     hlState := { hlState with hlState := st' }
-    body := body ++ {{<div class="code-box">{{codeHtml}}{{outputHtml}}</div>}}
+    unless codeHtml == .empty && outputHtml == .empty do
+      body := body ++ {{<div class="code-box">{{codeHtml}}{{outputHtml}}</div>}}
   let faviconTag : Html := match litConfig.metadata.favicon with
     | some fav => {{<link rel="icon" href={{(System.FilePath.fileName fav).getD fav}}/>}}
     | none => {{<link rel="icon" href="data:,"/>}}
