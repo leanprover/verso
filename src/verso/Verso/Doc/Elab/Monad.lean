@@ -627,6 +627,19 @@ private unsafe def roleExpandersForUnsafe (x : Name) : DocElabM (Array (RoleExpa
 @[implemented_by roleExpandersForUnsafe]
 public opaque roleExpandersFor (x : Name) : DocElabM (Array (RoleExpander × Option String × Option SigDoc))
 
+private unsafe def registeredRoleNamesUnsafe : DocElabM (Array Name) := do
+  let env ← getEnv
+  let mut names : NameSet := {}
+  for (n, _) in roleExpanderExt.getState env do
+    names := names.insert n
+  for (n, _) in env.constants do
+    if !(roleExpanderAttr.getEntries env n).isEmpty then
+      names := names.insert n
+  pure names.toList.toArray
+
+@[implemented_by registeredRoleNamesUnsafe]
+public opaque registeredRoleNames : DocElabM (Array Name)
+
 private unsafe def evalIOOptStringUnsafe (x : Name) : MetaM (Option SigDoc) := do
   evalConst (Option SigDoc) x
 
