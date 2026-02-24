@@ -12,7 +12,9 @@ genre as simply as possible.
 
 -/
 
-open Verso Doc
+open Verso Doc Elab
+open Verso.ArgParse
+open Lean (quote)
 
 namespace Tutorial
 
@@ -293,3 +295,38 @@ def today (_content : Array (Inline SimplePage)) : Inline SimplePage :=
 /-- Insert a particular date here -/
 def date (_content : Array (Inline SimplePage)) (year month day : Nat) : Inline SimplePage :=
   .other (.inl (.specific day month year)) #[]
+
+structure SectionRefArgs where
+  dest : String
+
+structure DateArgs where
+  year : Nat
+  month : Nat
+  day : Nat
+
+instance : FromArgs SectionRefArgs DocElabM where
+  fromArgs := SectionRefArgs.mk <$> .positional `dest .string
+
+instance : FromArgs DateArgs DocElabM where
+  fromArgs := DateArgs.mk <$>
+    .positional `year .nat <*>
+    .positional `month .nat <*>
+    .positional `day .nat
+
+@[role sectionRef]
+def sectionRefRole : RoleExpanderOf SectionRefArgs
+  | {dest}, content => do
+    let content ← content.mapM elabInline
+    ``(sectionRef #[$content,*] $(quote dest))
+
+@[role today]
+def todayRole : RoleExpanderOf Unit
+  | (), content => do
+    let content ← content.mapM elabInline
+    ``(today #[$content,*])
+
+@[role date]
+def dateRole : RoleExpanderOf DateArgs
+  | {year, month, day}, content => do
+    let content ← content.mapM elabInline
+    ``(date #[$content,*] $(quote year) $(quote month) $(quote day))

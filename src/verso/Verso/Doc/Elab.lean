@@ -120,7 +120,7 @@ private meta def expanderDocHover (stx : Syntax) (what : String) (name : Name) (
   Hover.addCustomHover stx out
 
 private meta def roleSuggestionThreshold (input _candidate : String) : Nat :=
-  if input.length < 5 then 1 else if input.length < 10 then 2 else 3
+  if input.length < 3 then 1 else if input.length < 7 then 2 else 3
 
 private meta def shortRoleName (name : Name) : String :=
   match name with
@@ -171,7 +171,11 @@ private meta def throwUnknownRoleError (name : Ident) : DocElabM α := do
   let suggestions := roleSuggestions available requested
   match suggestions.toList with
   | (_, best) :: _ =>
-    throwErrorAt name m!"No registered role `{name.getId}`. Did you mean role `{best}`?"
+    let hint ← MessageData.hint
+      m!"Did you mean role `{best}`?"
+      #[{suggestion := .string best}]
+      (ref? := some name)
+    throwErrorAt name m!"No registered role `{name.getId}`.{hint}"
   | [] =>
     if available.isEmpty then
       throwErrorAt name m!"No registered role `{name.getId}`. No roles are currently registered."

@@ -59,7 +59,10 @@ error: Function `wrongType` was found but likely not a role.
 :::::::
 
 /--
-error: No registered role `registred`. Did you mean role `registered`?
+error: No registered role `registred`.
+
+Hint: Did you mean role `registered`?
+  registe̲red
 -/
 #guard_msgs in
 #docs (.none) roleCase4 "Case 4" :=
@@ -68,7 +71,7 @@ error: No registered role `registred`. Did you mean role `registered`?
 :::::::
 
 /--
-error: No registered role `nothereatallzzzz`. Available roles (showing 20 of 37): anchor, anchorError, anchorInfo, anchorName, anchorTerm, anchorWarning, blob, citehere, citep, citet, conv, deftech, draft, htmlSpan, inst, label, lean, leanCommand, leanInline, leanKw
+error: No registered role `nothereatallzzzz`. Available roles (showing 20 of 40): anchor, anchorError, anchorInfo, anchorName, anchorTerm, anchorWarning, blob, citehere, citep, citet, conv, deftech, draft, htmlSpan, index, inst, label, lean, leanCommand, leanInline
 -/
 #guard_msgs in
 #docs (.none) roleCase5 "Case 5" :=
@@ -103,7 +106,10 @@ error: Role function `manualUnregistered` was found but not registered as a role
 :::::::
 
 /--
-error: No registered role `manualRegistred`. Did you mean role `manualRegistered`?
+error: No registered role `manualRegistred`.
+
+Hint: Did you mean role `manualRegistered`?
+  manualRegiste̲red
 -/
 #guard_msgs in
 #docs (Manual) roleCase3 "Manual Case 3" :=
@@ -112,7 +118,7 @@ error: No registered role `manualRegistred`. Did you mean role `manualRegistered
 :::::::
 
 /--
-error: No registered role `manualNowhereNearZzzzz`. Available roles (showing 20 of 38): anchor, anchorError, anchorInfo, anchorName, anchorTerm, anchorWarning, blob, citehere, citep, citet, conv, deftech, draft, htmlSpan, inst, label, lean, leanCommand, leanInline, leanKw
+error: No registered role `manualNowhereNearZzzzz`. Available roles (showing 20 of 41): anchor, anchorError, anchorInfo, anchorName, anchorTerm, anchorWarning, blob, citehere, citep, citet, conv, deftech, draft, htmlSpan, index, inst, label, lean, leanCommand, leanInline
 -/
 #guard_msgs in
 #docs (Manual) roleCase4 "Manual Case 4" :=
@@ -149,7 +155,10 @@ error: Role function `blogUnregistered` was found but not registered as a role. 
 :::::::
 
 /--
-error: No registered role `blogRegistred`. Did you mean role `blogRegistered`?
+error: No registered role `blogRegistred`.
+
+Hint: Did you mean role `blogRegistered`?
+  blogRegiste̲red
 -/
 #guard_msgs in
 #docs (Blog.Post) roleCase3 "Blog Case 3" :=
@@ -158,7 +167,7 @@ error: No registered role `blogRegistred`. Did you mean role `blogRegistered`?
 :::::::
 
 /--
-error: No registered role `blogNoCloseMatchZzzzz`. Available roles (showing 20 of 39): anchor, anchorError, anchorInfo, anchorName, anchorTerm, anchorWarning, blob, blogRegistered, citehere, citep, citet, conv, deftech, draft, htmlSpan, inst, label, lean, leanCommand, leanInline
+error: No registered role `blogNoCloseMatchZzzzz`. Available roles (showing 20 of 42): anchor, anchorError, anchorInfo, anchorName, anchorTerm, anchorWarning, blob, blogRegistered, citehere, citep, citet, conv, deftech, draft, htmlSpan, index, inst, label, lean, leanCommand
 -/
 #guard_msgs in
 #docs (Blog.Post) roleCase4 "Blog Case 4" :=

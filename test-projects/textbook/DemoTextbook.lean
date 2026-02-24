@@ -30,8 +30,6 @@ set_option pp.rawOnError true
 authors := ["David Thrane Christiansen"]
 %%%
 
--- NOTE(rfc-role-resolution): `{index}` here is currently a plain function,
--- not a registered role expander, and now fails under strict role resolution.
 {index}[example]
 Here's an example project showing how to build a certain kind of textbook with Verso.
 It's a good idea to read the document's source together with the rendered output, because it demonstrates how to use various features.
@@ -139,8 +137,6 @@ If incorrect hovers are appearing locally, then try disabling caching in your br
 
 # Using an Index
 
--- NOTE(rfc-role-resolution): all `{index}` uses in this section fail for the
--- same reason as above until they are migrated to registered roles.
 {index}[index]
 The index should contain an entry for “lorem ipsum”.
 {index}[lorem ipsum] foo

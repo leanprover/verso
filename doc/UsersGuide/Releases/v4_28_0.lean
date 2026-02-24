@@ -11,7 +11,7 @@ open Verso.Genre
 -- To allow ```` below
 set_option linter.verso.markup.codeBlock false
 
-#doc (Manual) "Verso 4.28.0 (unreleased)" =>
+#doc (Manual) "Verso 4.28.0" =>
 %%%
 tag := "release-v4.28.0"
 file := "v4.28.0"
