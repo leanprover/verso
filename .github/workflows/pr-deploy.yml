@@ -26,15 +26,18 @@ jobs:
                   sourceRunId: ${{ github.event.workflow_run.id }}
 
             - name: Download HTML manual artifact
+              id: manual-artifact
               uses: dawidd6/action-download-artifact@v15
               with:
                   run_id: ${{ github.event.workflow_run.id }}
                   name: html-manual-for-deploy
                   path: html-manual
                   allow_forks: true
+                  if_no_artifact_found: ignore
 
             - name: Deploy to Netlify
               id: netlify
+              if: steps.manual-artifact.outputs.found_artifact == 'true'
               uses: nwtgck/actions-netlify@v3.0
               with:
                   publish-dir: html-manual
@@ -54,6 +57,7 @@ jobs:
                   NETLIFY_SITE_ID: "8a89abd8-095b-4496-a9c1-381d2d5629ec"
 
             - name: Post deployment comment on PR
+              if: steps.manual-artifact.outputs.found_artifact == 'true'
               uses: marocchino/sticky-pull-request-comment@v2
               with:
                   number: ${{ steps.pr-info.outputs.pullRequestNumber }}
