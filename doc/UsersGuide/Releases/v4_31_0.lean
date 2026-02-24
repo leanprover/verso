@@ -17,6 +17,8 @@ file := "v4.31.0"
 
 * Refactored the build's error reporting into a {ref "feat-build-log"}[logging abstraction] with severities and structured source locations, improving the consistency of Verso's internal APIs and external error reports.
   While this was primarily an internal change, there is a {ref "feat-build-log-breaking"}[breaking change] to the signature of {name}`Verso.Genre.Manual.ExtraStep`.
+* Improve role resolution diagnostics with suggestions and actionable registration errors (#763).
+* Register legacy inline APIs as roles for compatibility (`today`, `date`, `sectionRef`, `index`, `see`, `seeAlso`) (#763).
 
 # Logging Abstraction
 %%%
