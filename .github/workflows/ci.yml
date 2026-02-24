@@ -233,8 +233,35 @@ jobs:
                   set -e
                   echo "message=$(git log -1 --pretty=format:"%s")" >> "$GITHUB_OUTPUT"
 
-            - name: Upload HTML manual for PR deployment
+            # We intentionally avoid third-party path-filter actions here to reduce
+            # CI supply-chain exposure; this uses only first-party GitHub actions.
+            - id: user-guide-changes
+              name: Check for user guide changes
               if: github.event_name == 'pull_request'
+              uses: actions/github-script@v8
+              with:
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  script: |
+                      const pull_number = context.payload.pull_request.number;
+                      const files = await github.paginate(
+                        github.rest.pulls.listFiles,
+                        {
+                          owner: context.repo.owner,
+                          repo: context.repo.repo,
+                          pull_number,
+                          per_page: 100,
+                        },
+                        (response) => response.data ?? []
+                      );
+                      const changed = files.some((file) =>
+                        file.filename.startsWith('doc/UsersGuide/')
+                      );
+                      core.setOutput('changed', changed ? 'true' : 'false');
+
+            - name: Upload HTML manual for PR deployment
+              if:
+                  github.event_name == 'pull_request' && steps.user-guide-changes.outputs.changed ==
+                  'true'
               uses: actions/upload-artifact@v6
               with:
                   name: html-manual-for-deploy
