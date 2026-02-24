@@ -136,6 +136,14 @@ private meta def roleSuggestions (candidates : Array (Name × String)) (input : 
   let close := close.qsort (fun x y => x.2 < y.2 || (x.2 == y.2 && x.1.2 < y.1.2))
   close.take count |>.map (·.1)
 
+private meta def closestRoleNames (candidates : Array (Name × String)) (input : String) (count : Nat := 5) : Array (Name × String) :=
+  let ranked := candidates.filterMap fun candidate =>
+    let cand := candidate.2
+    let limit := max cand.length input.length
+    EditDistance.levenshtein cand input limit <&> (candidate, ·)
+  let ranked := ranked.qsort (fun x y => x.2 < y.2 || (x.2 == y.2 && x.1.2 < y.1.2))
+  ranked.take count |>.map (·.1)
+
 private meta def availableRoleNames : DocElabM (Array Name) := do
   return (← registeredRoleNames).qsort (·.toString < ·.toString)
 
@@ -170,27 +178,27 @@ private meta def throwUnknownRoleError (name : Ident) : DocElabM α := do
   let available ← availableRoleDisplayNames
   let suggestions := roleSuggestions available requested
   match suggestions.toList with
-  | (_, best) :: _ =>
+  | _ :: _ =>
+    let best := suggestions[0]!.2
+    let hintSuggestions := suggestions.map fun (_, roleName) =>
+      ({suggestion := .string roleName} : Lean.Meta.Hint.Suggestion)
     let hint ← MessageData.hint
       m!"Did you mean role `{best}`?"
-      #[{suggestion := .string best}]
-      (ref? := some name)
+      hintSuggestions
+      (ref? := some name) (forceList := suggestions.size > 1)
     throwErrorAt name m!"No registered role `{name.getId}`.{hint}"
   | [] =>
     if available.isEmpty then
       throwErrorAt name m!"No registered role `{name.getId}`. No roles are currently registered."
     else
-      let mut uniqueNames := #[]
-      for (_, n) in available do
-        unless uniqueNames.contains n do
-          uniqueNames := uniqueNames.push n
-      let sortedNames := uniqueNames.qsort (· < ·)
-      let shown := sortedNames.take 20
-      let suffix :=
-        if sortedNames.size > shown.size then
-          s!" (showing {shown.size} of {sortedNames.size})"
-        else ""
-      throwErrorAt name m!"No registered role `{name.getId}`. Available roles{suffix}: {String.intercalate ", " shown.toList}"
+      let shown := closestRoleNames available requested
+      let hintSuggestions := shown.map fun (_, roleName) =>
+        ({suggestion := .string roleName} : Lean.Meta.Hint.Suggestion)
+      let hint ← MessageData.hint
+        m!"Closest registered roles:"
+        hintSuggestions
+        (ref? := some name) (forceList := true)
+      throwErrorAt name m!"No registered role `{name.getId}`.{hint}"
 
 private meta def resolveRoleName? (name : Ident) : DocElabM (Option Name) := do
   match (← observing (realizeGlobalConstWithInfos name)) with
