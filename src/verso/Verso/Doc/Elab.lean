@@ -7,6 +7,7 @@ module
 public import Verso.Doc.Elab.Monad
 meta import Verso.Doc.Elab.Monad
 public import Lean.DocString.Syntax
+public meta import Lean.Data.EditDistance
 import Verso.Doc.Elab.Inline
 public import Verso.Doc.Elab.Inline
 public meta import Verso.Doc.Elab.Inline
@@ -118,6 +119,95 @@ private meta def expanderDocHover (stx : Syntax) (what : String) (name : Name) (
     out := out ++ "\n\n" ++ d
   Hover.addCustomHover stx out
 
+private meta def roleSuggestionThreshold (input _candidate : String) : Nat :=
+  if input.length < 3 then 1 else if input.length < 7 then 2 else 3
+
+private meta def shortRoleName (name : Name) : String :=
+  match name with
+  | .anonymous => toString name
+  | .str _ s => s
+  | .num _ n => toString n
+
+private meta def roleSuggestions (candidates : Array (Name × String)) (input : String) (count : Nat := 10) : Array (Name × String) :=
+  let close := candidates.filterMap fun candidate =>
+    let cand := candidate.2
+    let limit := roleSuggestionThreshold input cand
+    EditDistance.levenshtein cand input limit <&> (candidate, ·)
+  let close := close.qsort (fun x y => x.2 < y.2 || (x.2 == y.2 && x.1.2 < y.1.2))
+  close.take count |>.map (·.1)
+
+private meta def closestRoleNames (candidates : Array (Name × String)) (input : String) (count : Nat := 5) : Array (Name × String) :=
+  let ranked := candidates.filterMap fun candidate =>
+    let cand := candidate.2
+    let limit := max cand.length input.length
+    EditDistance.levenshtein cand input limit <&> (candidate, ·)
+  let ranked := ranked.qsort (fun x y => x.2 < y.2 || (x.2 == y.2 && x.1.2 < y.1.2))
+  ranked.take count |>.map (·.1)
+
+private meta def availableRoleNames : DocElabM (Array Name) := do
+  return (← registeredRoleNames).qsort (·.toString < ·.toString)
+
+private meta def availableRoleDisplayNames : DocElabM (Array (Name × String)) := do
+  (← availableRoleNames).mapM fun full =>
+    return (full, shortRoleName full)
+
+private meta def isRoleFunctionType (declName : Name) : DocElabM Bool := do
+  let asCoreRole ← Meta.withNewMCtxDepth do
+    let c ← mkConstWithLevelParams declName
+    let t ← Meta.inferType c
+    Meta.isDefEq t (mkConst ``RoleExpander)
+  if asCoreRole then return true
+
+  Meta.withNewMCtxDepth do
+    try
+      let c ← mkConstWithLevelParams declName
+      discard <| Meta.mkAppM ``toRole #[c]
+      return true
+    catch
+      | _ => return false
+
+private meta def throwRoleNotRegisteredError (name : Ident) (resolvedName : Name) : DocElabM α := do
+  let shownName := shortRoleName resolvedName
+  if ← isRoleFunctionType resolvedName then
+    throwErrorAt name m!"Role function `{shownName}` was found but not registered as a role. Register it with `@[role]` or `@[role_expander ...]`."
+  else
+    throwErrorAt name m!"Function `{shownName}` was found but likely not a role."
+
+private meta def throwUnknownRoleError (name : Ident) : DocElabM α := do
+  let requested := name.getId.toString
+  let available ← availableRoleDisplayNames
+  let suggestions := roleSuggestions available requested
+  match suggestions.toList with
+  | _ :: _ =>
+    let best := suggestions[0]!.2
+    let hintSuggestions := suggestions.map fun (_, roleName) =>
+      ({suggestion := .string roleName} : Lean.Meta.Hint.Suggestion)
+    let hint ← MessageData.hint
+      m!"Did you mean role `{best}`?"
+      hintSuggestions
+      (ref? := some name) (forceList := suggestions.size > 1)
+    throwErrorAt name m!"No registered role `{name.getId}`.{hint}"
+  | [] =>
+    if available.isEmpty then
+      throwErrorAt name m!"No registered role `{name.getId}`. No roles are currently registered."
+    else
+      let shown := closestRoleNames available requested
+      let hintSuggestions := shown.map fun (_, roleName) =>
+        ({suggestion := .string roleName} : Lean.Meta.Hint.Suggestion)
+      let hint ← MessageData.hint
+        m!"Closest registered roles:"
+        hintSuggestions
+        (ref? := some name) (forceList := true)
+      throwErrorAt name m!"No registered role `{name.getId}`.{hint}"
+
+private meta def resolveRoleName? (name : Ident) : DocElabM (Option Name) := do
+  match (← observing (realizeGlobalConstWithInfos name)) with
+  | .ok [n] => pure (some n)
+  | .ok [] => pure none
+  | .ok ns =>
+    throwErrorAt name m!"Role name `{name.getId}` is ambiguous. Candidates: {String.intercalate ", " <| ns.map (·.toString)}"
+  | .error _ => pure none
+
 
 open Lean.Parser.Term in
 @[inline_expander Lean.Doc.Syntax.role]
@@ -125,13 +215,12 @@ public meta def _root_.Lean.Doc.Syntax.role.expand : InlineExpander
   | inline@`(inline| role{$name $args*} [$subjects*]) => do
       withRef inline <| withFreshMacroScope <| withIncRecDepth <| do
         let genre := (← readThe DocElabContext).genreSyntax
-        let resolvedName ← realizeGlobalConstNoOverloadWithInfo name
+        let some resolvedName ← resolveRoleName? name
+          | throwUnknownRoleError name
         let exp ← roleExpandersFor resolvedName
-        let argVals ← parseArgs args
         if exp.isEmpty then
-          -- If no expanders are registered, then try elaborating just as a
-          -- function application node
-          return ← appFallback inline name resolvedName argVals subjects
+          throwRoleNotRegisteredError name resolvedName
+        let argVals ← parseArgs args
         for (e, doc?, sig?) in exp do
           try
             let termStxs ← withFreshMacroScope <| e argVals subjects
