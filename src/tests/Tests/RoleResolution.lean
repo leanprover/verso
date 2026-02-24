@@ -71,7 +71,14 @@ Hint: Did you mean role `registered`?
 :::::::
 
 /--
-error: No registered role `nothereatallzzzz`. Available roles (showing 20 of 40): anchor, anchorError, anchorInfo, anchorName, anchorTerm, anchorWarning, blob, citehere, citep, citet, conv, deftech, draft, htmlSpan, index, inst, label, lean, leanCommand, leanInline
+error: No registered role `nothereatallzzzz`.
+
+Hint: Closest registered roles:
+  • n̵o̵t̵h̵e̵r̵e̵a̵t̵a̵l̵l̵z̵z̵z̵z̵c̲i̲t̲e̲h̲e̲r̲e̲
+  • n̵o̵t̵h̵e̵r̵e̵a̵t̵a̵l̵l̵z̵z̵z̵z̵a̲n̲c̲h̲o̲r̲N̲a̲m̲e̲
+  • n̵o̵t̵h̵e̵r̵e̵a̵t̵a̵l̵l̵z̵z̵z̵z̵a̲n̲c̲h̲o̲r̲W̲a̲r̲n̲i̲n̲g̲
+  • n̵o̵t̵h̵e̵r̵e̵a̵t̵a̵l̵l̵z̵z̵z̵z̵c̲i̲t̲e̲t̲
+  • n̵o̵t̵h̵e̵r̵e̵a̵t̵a̵l̵l̵z̵z̵z̵z̵h̲t̲m̲l̲S̲p̲a̲n̲
 -/
 #guard_msgs in
 #docs (.none) roleCase5 "Case 5" :=
@@ -118,7 +125,14 @@ Hint: Did you mean role `manualRegistered`?
 :::::::
 
 /--
-error: No registered role `manualNowhereNearZzzzz`. Available roles (showing 20 of 41): anchor, anchorError, anchorInfo, anchorName, anchorTerm, anchorWarning, blob, citehere, citep, citet, conv, deftech, draft, htmlSpan, index, inst, label, lean, leanCommand, leanInline
+error: No registered role `manualNowhereNearZzzzz`.
+
+Hint: Closest registered roles:
+  • m̵a̵n̵u̵a̵l̵N̵o̵w̵h̵e̵r̵e̵N̵e̵a̵r̵Z̵z̵z̵z̵z̵m̲a̲n̲u̲a̲l̲R̲e̲g̲i̲s̲t̲e̲r̲e̲d̲
+  • m̵a̵n̵u̵a̵l̵N̵o̵w̵h̵e̵r̵e̵N̵e̵a̵r̵Z̵z̵z̵z̵z̵a̲n̲c̲h̲o̲r̲N̲a̲m̲e̲
+  • m̵a̵n̵u̵a̵l̵N̵o̵w̵h̵e̵r̵e̵N̵e̵a̵r̵Z̵z̵z̵z̵z̵a̲n̲c̲h̲o̲r̲T̲e̲r̲m̲
+  • m̵a̵n̵u̵a̵l̵N̵o̵w̵h̵e̵r̵e̵N̵e̵a̵r̵Z̵z̵z̵z̵z̵a̲n̲c̲h̲o̲r̲W̲a̲r̲n̲i̲n̲g̲
+  • m̵a̵n̵u̵a̵l̵N̵o̵w̵h̵e̵r̵e̵N̵e̵a̵r̵Z̵z̵z̵z̵z̵m̲o̲d̲u̲l̲e̲N̲a̲m̲e̲
 -/
 #guard_msgs in
 #docs (Manual) roleCase4 "Manual Case 4" :=
@@ -167,7 +181,14 @@ Hint: Did you mean role `blogRegistered`?
 :::::::
 
 /--
-error: No registered role `blogNoCloseMatchZzzzz`. Available roles (showing 20 of 42): anchor, anchorError, anchorInfo, anchorName, anchorTerm, anchorWarning, blob, blogRegistered, citehere, citep, citet, conv, deftech, draft, htmlSpan, index, inst, label, lean, leanCommand
+error: No registered role `blogNoCloseMatchZzzzz`.
+
+Hint: Closest registered roles:
+  • b̵l̵o̵g̵N̵o̵C̵l̵o̵s̵e̵M̵a̵t̵c̵h̵Z̵z̵z̵z̵z̵b̲l̲o̲g̲R̲e̲g̲i̲s̲t̲e̲r̲e̲d̲
+  • b̵l̵o̵g̵N̵o̵C̵l̵o̵s̵e̵M̵a̵t̵c̵h̵Z̵z̵z̵z̵z̵l̲e̲a̲n̲C̲o̲m̲m̲a̲n̲d̲
+  • b̵l̵o̵g̵N̵o̵C̵l̵o̵s̵e̵M̵a̵t̵c̵h̵Z̵z̵z̵z̵z̵m̲o̲d̲u̲l̲e̲N̲a̲m̲e̲
+  • b̵l̵o̵g̵N̵o̵C̵l̵o̵s̵e̵M̵a̵t̵c̵h̵Z̵z̵z̵z̵z̵m̲o̲d̲u̲l̲e̲O̲u̲t̲
+  • b̵l̵o̵g̵N̵o̵C̵l̵o̵s̵e̵M̵a̵t̵c̵h̵Z̵z̵z̵z̵z̵m̲o̲d̲u̲l̲e̲W̲a̲r̲n̲i̲n̲g̲
 -/
 #guard_msgs in
 #docs (Blog.Post) roleCase4 "Blog Case 4" :=
