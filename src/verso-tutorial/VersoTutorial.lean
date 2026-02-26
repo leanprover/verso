@@ -467,7 +467,7 @@ def toSite (tuts : Tutorials) : EmitM Blog.Site := do
       let some m := tut.metadata
         | return none
       return some {
-        term := #[.link (← tut.title.mapM inlineToPage) s!"./{m.slug}/g"],
+        term := #[.link (← tut.title.mapM inlineToPage) s!"./{m.slug}/"],
         desc := (← tut.metadata.mapM ((Block.para #[·]) <$> inlineToPage ·.summary)).toArray
       }
     return { t with
