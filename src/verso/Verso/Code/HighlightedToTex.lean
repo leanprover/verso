@@ -25,10 +25,10 @@ returns TeX to display that token appropriately syntax-highlighted.
 -/
 public def highlightToken : String → Token.Kind → TeX
 | c, .keyword _ _ _ => .raw s!"\\textbf\{{c}}"
-| c, .const _ _ _ _ => .raw c
-| c, .anonCtor _ _ _ => .raw c
+| c, .const .. => .raw c
+| c, .anonCtor .. => .raw c
 | c, .option _ _ _ => .raw c
-| c, .var (.mk _) _ => .raw s!"\\textit\{{c}}"
+| c, .var .. => .raw s!"\\textit\{{c}}"
 | c, .str _ => .raw c
 | c, .docComment => .raw c
 | c, .sort _ => .raw c
@@ -82,7 +82,7 @@ public defmethod Highlighted.toTeX [Monad m] [GenreTeX g m] (t : Highlighted) :
 
 open Verso.Output.TeX in
 public defmethod Highlighted.Goal.toTeX [Monad m] [GenreTeX g m] (h : Highlighted.Goal Highlighted) : TeXT g m Verso.Output.TeX := do
-  let {name, goalPrefix, hypotheses, conclusion} := h
+  let {name, goalPrefix, hypotheses, conclusion, ..} := h
   let mut rows : Array TeX := #[]
   let verbatim (t : Verso.Output.TeX) : Verso.Output.TeX :=
     .seq #[.raw "\\LeanVerb|", t, .raw "|"]

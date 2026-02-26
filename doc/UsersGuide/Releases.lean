@@ -6,6 +6,7 @@ Author: Emilio J. Gallego Arias
 
 import VersoManual
 
+import UsersGuide.Releases.«v4_29_0_rc2»
 import UsersGuide.Releases.«v4_28_0»
 
 open Verso Genre Manual
@@ -26,4 +27,5 @@ Verso versioning follows Lean's.
 This means that we release a new version for each Lean release, usually once per month.
 In particular, note that Verso doesn't follow the [semantic versioning model](https://semver.org/).
 
+{include 0 UsersGuide.Releases.«v4_29_0_rc2»}
 {include 0 UsersGuide.Releases.«v4_28_0»}

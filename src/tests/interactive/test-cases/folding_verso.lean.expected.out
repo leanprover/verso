@@ -1,0 +1,49 @@
+{"textDocument":
+ {"uri": "file:///src/tests/interactive/test-cases/folding_verso.lean"},
+ "position": {"line": 15, "character": 2}}
+[{"startLine": 0, "kind": "imports", "endLine": 1},
+ {"startLine": 7, "kind": "comment", "endLine": 13},
+ {"startLine": 14, "kind": "region", "endLine": 15},
+ {"startLine": 18, "kind": "region", "endLine": 29},
+ {"startLine": 39, "kind": "region", "endLine": 41},
+ {"startLine": 42, "kind": "region", "endLine": 43}]
+{"textDocument":
+ {"uri": "file:///src/tests/interactive/test-cases/folding_verso.lean"},
+ "position": {"line": 29, "character": 2}}
+[{"startLine": 0, "endLine": 28},
+ {"startLine": 20, "endLine": 28},
+ {"startLine": 0, "endLine": 42},
+ {"startLine": 33, "endLine": 42},
+ {"startLine": 11, "endLine": 13},
+ {"startLine": 26, "endLine": 28},
+ {"startLine": 39, "endLine": 41},
+ {"startLine": 23, "endLine": 24},
+ {"startLine": 23, "endLine": 24},
+ {"startLine": 36, "endLine": 37},
+ {"startLine": 36, "endLine": 37},
+ {"startLine": 0, "kind": "imports", "endLine": 1},
+ {"startLine": 7, "kind": "comment", "endLine": 13},
+ {"startLine": 14, "kind": "region", "endLine": 15},
+ {"startLine": 18, "kind": "region", "endLine": 29},
+ {"startLine": 39, "kind": "region", "endLine": 41},
+ {"startLine": 42, "kind": "region", "endLine": 43}]
+{"textDocument":
+ {"uri": "file:///src/tests/interactive/test-cases/folding_verso.lean"},
+ "position": {"line": 41, "character": 2}}
+[{"startLine": 0, "endLine": 28},
+ {"startLine": 20, "endLine": 28},
+ {"startLine": 0, "endLine": 42},
+ {"startLine": 33, "endLine": 42},
+ {"startLine": 11, "endLine": 13},
+ {"startLine": 26, "endLine": 28},
+ {"startLine": 39, "endLine": 41},
+ {"startLine": 23, "endLine": 24},
+ {"startLine": 23, "endLine": 24},
+ {"startLine": 36, "endLine": 37},
+ {"startLine": 36, "endLine": 37},
+ {"startLine": 0, "kind": "imports", "endLine": 1},
+ {"startLine": 7, "kind": "comment", "endLine": 13},
+ {"startLine": 14, "kind": "region", "endLine": 15},
+ {"startLine": 18, "kind": "region", "endLine": 29},
+ {"startLine": 39, "kind": "region", "endLine": 41},
+ {"startLine": 42, "kind": "region", "endLine": 43}]
