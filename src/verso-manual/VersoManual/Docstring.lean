@@ -83,6 +83,10 @@ def ValDesc.documentableName : ValDesc m (Ident × Name) where
 
 end Verso.ArgParse
 
+private def renderTaggedInMeta (code : Lean.Widget.CodeWithInfos) := do
+  let hlCtx : SubVerso.Highlighting.Context := ⟨{}, false, false, [], false⟩
+  (renderTagged none code : ReaderT SubVerso.Highlighting.Context MetaM _) hlCtx
+
 namespace Verso.Genre.Manual.Block.Docstring
 
 inductive Visibility where
@@ -186,7 +190,7 @@ def DeclType.ofName (c : Name)
     (hideStructureConstructor : Bool := false) :
     MetaM DeclType := do
   let env ← getEnv
-  let hlCtx : SubVerso.Highlighting.Context := ⟨{}, false, false, []⟩
+
   let openDecls : List OpenDecl :=
     match c with
     | .str _ s => [.explicit c.getPrefix s.toName]
@@ -211,9 +215,9 @@ def DeclType.ofName (c : Name)
                 let type ← inferType proj >>= instantiateMVars
                 let projType ← withOptions (·.set `format.width (40 : Int) |>.setBool `pp.tagAppFns true) <| Widget.ppExprTagged type
                 if let .const parentName _  := type.getAppFn then
-                  pure ⟨parentProj, parentName, ← renderTagged none projType hlCtx, i⟩
+                  pure ⟨parentProj, parentName, ← renderTaggedInMeta projType, i⟩
                 else
-                  pure ⟨parentProj, .anonymous, ← renderTagged none projType hlCtx, i⟩
+                  pure ⟨parentProj, .anonymous, ← renderTaggedInMeta projType, i⟩
         let ancestors ← getAllParentStructures c
         let allFields := if hideFields then #[] else getStructureFieldsFlattened env c (includeSubobjectFields := true)
         let fieldInfo ←
@@ -242,12 +246,12 @@ def DeclType.ofName (c : Name)
                       if subobject?.isSome then findDocString? env projFn
                       else getDocString? env projFn
                     let visibility := Visibility.of env projFn
-                    let fieldName' := Highlighted.token ⟨.const projFn projType.pretty docString? true, fieldName.toString⟩
+                    let fieldName' := Highlighted.token ⟨.const projFn projType.pretty docString? true none, fieldName.toString⟩
 
-                    pure <| some { fieldName := fieldName', fieldFrom, type := ← renderTagged none type' hlCtx, subobject?,  projFn, binderInfo, autoParam, docString?, visibility}
+                    pure <| some { fieldName := fieldName', fieldFrom, type := ← renderTaggedInMeta type', subobject?,  projFn, binderInfo, autoParam, docString?, visibility}
                 else
                   let fieldName' := Highlighted.token ⟨.unknown, fieldName.toString⟩
-                  pure <| some { fieldName := fieldName', fieldFrom, type := ← renderTagged none type' hlCtx, subobject?,  projFn := .anonymous, binderInfo, autoParam, docString? := none, visibility := .public}
+                  pure <| some { fieldName := fieldName', fieldFrom, type := ← renderTaggedInMeta type' , subobject?,  projFn := .anonymous, binderInfo, autoParam, docString? := none, visibility := .public}
 
         let ctor? ←
           if hideStructureConstructor || isPrivateName ctor.name then pure none
@@ -306,6 +310,7 @@ def constructorSignature (signature : Highlighted) : Block where
 
 end Block
 
+
 def Signature.forName [Monad m] [MonadWithOptions m] [MonadEnv m] [MonadMCtx m] [MonadOptions m] [MonadResolveName m] [MonadNameGenerator m] [MonadLiftT MetaM m] [MonadLiftT BaseIO m] [MonadLiftT IO m] [MonadFileMap m] [Alternative m] (name : Name) : m Signature := do
   let (⟨fmt, infos⟩ : FormatWithInfos) ← withOptions (·.setBool `pp.tagAppFns true) <| Block.Docstring.ppSignature name (constantInfo := false)
 
@@ -325,11 +330,9 @@ def Signature.forName [Monad m] [MonadWithOptions m] [MonadEnv m] [MonadMCtx m] 
   let ttWide := Lean.Widget.TaggedText.prettyTagged (w := 72) fmt
   let sigWide ← Lean.Widget.tagCodeInfos ctx infos ttWide
 
-  let hlCtx : SubVerso.Highlighting.Context := ⟨{}, false, false, []⟩
-
   return {
-    wide := ← renderTagged none sigWide hlCtx
-    narrow := ← renderTagged none sigNarrow hlCtx
+    wide := ← renderTaggedInMeta sigWide
+    narrow := ← renderTaggedInMeta sigNarrow
   }
 
 
@@ -1193,7 +1196,7 @@ where
       m Highlighted := do
     let docs ← findDocString? (← getEnv) name
     let sig := toString (← (PrettyPrinter.ppSignature name)).1
-    pure <| .token ⟨.const name sig docs false, str⟩
+    pure <| .token ⟨.const name sig docs false none, str⟩
 
 open Lean Elab Term in
 private def attempt (str : String) (xs : List (String → DocElabM α)) : DocElabM α := do
@@ -1521,9 +1524,9 @@ def highlightDataValue (v : DataValue) : Highlighted :=
     | .ofString (v : String) => ⟨.str v, toString v⟩
     | .ofBool b =>
       if b then
-        ⟨.const ``true (sig_for% true) (some <| docs_for% true) false, "true"⟩
+        ⟨.const ``true (sig_for% true) (some <| docs_for% true) false none, "true"⟩
       else
-        ⟨.const ``false (sig_for% false) (some <| docs_for% false) false, "false"⟩
+        ⟨.const ``false (sig_for% false) (some <| docs_for% false) false none, "false"⟩
     | .ofName (v : Name) => ⟨.unknown, v.toString⟩
     | .ofNat (v : Nat) => ⟨.unknown, toString v⟩
     | .ofInt (v : Int) => ⟨.unknown, toString v⟩

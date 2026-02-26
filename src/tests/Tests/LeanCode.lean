@@ -58,7 +58,8 @@ info: (some (Verso.Genre.Manual.InlineLean.Inline.lean, [{"seq":
      {"tok":
       {"kind":
        {"const":
-        {"signature": "Verso.LeanCodeTest.x : Nat",
+        {"signatureFormat": null,
+         "signature": "Verso.LeanCodeTest.x : Nat",
          "name": ["Verso", "LeanCodeTest", "x"],
          "isDef": false,
          "docs": null}},
@@ -68,7 +69,8 @@ info: (some (Verso.Genre.Manual.InlineLean.Inline.lean, [{"seq":
     {"text": {"str": " "}},
     {"token":
      {"tok": {"kind": {"withType": {"type": "Nat"}}, "content": "3"}}}]}},
- []]))-/
+ []]))
+-/
 #guard_msgs in
 #eval match inspect.toPart.content[0]! with
   | .para x => match x[0]! with

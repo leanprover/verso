@@ -792,7 +792,7 @@ def constTok [Monad m] [MonadEnv m] [MonadLiftT MetaM m] [MonadLiftT IO m]
     m Highlighted := do
   let docs ← findDocString? (← getEnv) name
   let sig := toString (← (PrettyPrinter.ppSignature name)).1
-  pure <| .token ⟨.const name sig docs false, str⟩
+  pure <| .token ⟨.const name sig docs false none, str⟩
 
 @[role]
 def name : RoleExpanderOf NameConfig
