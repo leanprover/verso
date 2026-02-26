@@ -382,8 +382,10 @@ partial def docFromMod (project : System.FilePath) (mod : String)
           if !mdHeaders.back?.isEqSome lvl then
             mdHeaders := mdHeaders.push lvl
 
+          let titleSyntax ← arr inlines
           push {
-            titleSyntax := (← arr inlines),
+            rangeSyntax := titleSyntax,
+            selectionSyntax := titleSyntax,
             expandedTitle := some (txt.map inlineText |>.toList |> String.join, inlines),
             metadata := none,
             blocks := #[],
@@ -504,7 +506,8 @@ def elabLiteratePage (x : Ident) (path : StrLit) (mod : Ident) (config : LitPage
 
   let titleParts ← stringToInlines title
   let titleString := inlinesToString (← getEnv) titleParts
-  let initState : PartElabM.State := .init (.node .none nullKind titleParts)
+  let titleSyntax := .node .none nullKind titleParts
+  let initState : PartElabM.State := .init titleSyntax titleSyntax
 
   let items ← withTraceNode `verso.blog.literate.loadMod (fun _ => pure m!"Loading '{mod}' in '{path}'") <|
     loadLiteratePage path.getString mod.getId.toString
@@ -523,12 +526,8 @@ def elabLiteratePage (x : Ident) (path : StrLit) (mod : Ident) (config : LitPage
   let finished := partState.partContext.toPartFrame.close 0
   let finished :=
     -- Obey the Markdown convention of a single top-level header being the title of the document, if it's been followed
-    if let .mk _ _ _ «meta» #[] #[p] _ := finished then
-      match p with
-      | .mk t1 t2 t3 _ bs ps pos =>
-        -- Propagate metadata fields
-        FinishedPart.mk t1 t2 t3 «meta» bs ps pos
-      | _ => p
+    if let .mk _ _ _ _ metadata #[] #[p] _ := finished then
+      p.withMetadata metadata
     else finished
 
   let ty ← ``(VersoDoc $genre)

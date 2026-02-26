@@ -19,6 +19,7 @@ file := "v4.31.0"
   While this was primarily an internal change, there is a {ref "feat-build-log-breaking"}[breaking change] to the signature of {name}`Verso.Genre.Manual.ExtraStep`.
 * Improve role resolution diagnostics with suggestions and actionable registration errors (#763).
 * Register legacy inline APIs as roles for compatibility (`today`, `date`, `sectionRef`, `index`, `see`, `seeAlso`) (#763).
+* Preserve `#doc`/`#docs` source ranges for LSP document symbols and folding ranges (#771).
 
 # Logging Abstraction
 %%%

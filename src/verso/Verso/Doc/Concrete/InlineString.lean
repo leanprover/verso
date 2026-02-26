@@ -34,7 +34,7 @@ elab_rules : term <= ty
     let (tms, _) ← DocElabM.run
       ⟨gTerm, g, .onlyIfDefined, .none⟩
       { highlightDeduplicationTable := .none }
-      (.init (← `(foo))) <| inls.mapM (elabInline ⟨·⟩)
+      (.init tk tk) <| inls.mapM (elabInline ⟨·⟩)
     elabTerm (← ``(Inline.concat #[ $[$tms],* ] )) ty
   | `(blocks!"") => do
     elabTerm (← ``(Lean.Doc.Block.empty)) ty
@@ -45,7 +45,7 @@ elab_rules : term <= ty
     let (tms, _) ← DocElabM.run
       ⟨gTerm, g, .onlyIfDefined, .none⟩
       { highlightDeduplicationTable := .none }
-      (.init (← `(foo))) <| inls.mapM (elabBlock ⟨·⟩)
+      (.init tk tk) <| inls.mapM (elabBlock ⟨·⟩)
     elabTerm (← ``(Block.concat #[ $[$tms],* ] )) ty
 
 

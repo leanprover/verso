@@ -231,7 +231,7 @@ where
   fallback : PartElabM Unit := do
     if (← getThe PartElabM.State).partContext.priorParts.size > 0 then
       let which := (← getThe PartElabM.State).partContext.priorParts.back?.map fun
-        | .mk _ _ titleString .. => s!" (namely “{titleString}”)"
+        | .mk _ _ _ titleString .. => s!" (namely “{titleString}”)"
         | .included n => s!" (namely `{unDocName n.getId}`)"
       let which := which.getD ""
       let msg := m!"Block content found in a context where a header was expected."
@@ -285,7 +285,8 @@ public meta partial def _root_.Lean.Doc.Syntax.header.command : PartCommand
 
     -- Start a new subpart
     push {
-      titleSyntax := stx,
+      rangeSyntax := stx,
+      selectionSyntax := stx,
       expandedTitle := some (titleString, titleBits),
       metadata := none,
       blocks := #[],

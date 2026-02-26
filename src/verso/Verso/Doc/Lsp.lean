@@ -234,6 +234,15 @@ meta def rangeContains (outer inner : Lsp.Range) :=
   outer.start < inner.start && inner.«end» ≤ outer.«end» ||
   outer.start == inner.start && inner.«end» < outer.«end»
 
+-- TOC construction already checks that stored syntax anchors have recoverable ranges. If Lean's
+-- LSP conversion fails here, the metadata invariant was violated; dropping the symbol would hide
+-- the bug and may leave clients with partial outline or folding data.
+private meta def requireTOCLspRange (text : FileMap) (title what : String) (stx : Syntax) :
+    Lsp.Range :=
+  match text.lspRangeOfStx? stx with
+  | some range => range
+  | none => panic! s!"TOC {what} syntax has no LSP range for '{title}': {repr stx}"
+
 meta partial def mergeInto (sym : DocumentSymbol) (existing : Array DocumentSymbol) : Array DocumentSymbol := Id.run do
   let ⟨sym⟩ := sym
   for h : i in [0:existing.size] do
@@ -322,16 +331,17 @@ meta partial def handleSyms (_params : DocumentSymbolParams) (prev : RequestTask
     combineAnswers' (x y : DocumentSymbolResult) : DocumentSymbolResult :=
       ⟨mergeManyInto x.syms y.syms⟩
     tocSym (env) (text : FileMap) : TOC → BaseIO (Option DocumentSymbol)
-      | .mk title titleStx endPos children => do
-        let some selRange@⟨start, _⟩ := titleStx.lspRange text
-          | return none
+      | .mk title rangeStx selectionStx endPos children => do
+        let ⟨start, _⟩ := requireTOCLspRange text title "range" rangeStx
+        let selRange := requireTOCLspRange text title "selection" selectionStx
         let mut kids := #[]
         for c in children do
           if let some s ← tocSym env text c then kids := kids.push s
+        let range : Range := ⟨start, text.utf8PosToLspPos endPos⟩
         return some <| DocumentSymbol.mk {
           name := title,
           kind := SymbolKind.string,
-          range := ⟨start, text.utf8PosToLspPos endPos⟩,
+          range := range,
           selectionRange := selRange,
           children? := kids
         }
@@ -366,27 +376,18 @@ meta partial def handleSyms (_params : DocumentSymbolParams) (prev : RequestTask
             data.get? PointOfInterest |>.map (stx, ·)
           | _ => none
         for (stx, {title, selectionRange, kind, detail?}) in info do
-          if let some rng := stx.lspRange text then
-            -- Truncate the inner to the outer if the user made a mistake with it
-            let selectionRange := truncate rng (selectionRange.map text.utf8RangeToLspRange |>.getD rng)
+          if let some rng := text.lspRangeOfStx? stx then
+            let selectionRange := selectionRange.map text.utf8RangeToLspRange |>.getD rng
             let sym := .mk {
               name := title,
               range := rng,
-              selectionRange,
+              selectionRange := selectionRange,
               detail?,
               kind
             }
             -- mergeInto is needed here to keep the tree invariant
             syms := mergeInto sym syms
       pure syms
-    truncate (outer inner : Range) : Range :=
-      if inner.start < outer.start && inner.end < outer.end then outer
-      else if inner.start > outer.end then outer
-      else
-        let start := if outer.start > inner.start then outer.start else inner.start
-        let «end» := if outer.start < inner.start then outer.start else inner.start
-        ⟨start, «end»⟩
-
 -- Shamelessly cribbed from https://github.com/tydeu/lean4-alloy/blob/57792f4e8a9674f8b4b8b17742607a1db142d60e/Alloy/C/Server/SemanticTokens.lean
 structure SemanticTokenEntry where
   line : Nat
@@ -837,9 +838,6 @@ deriving instance FromJson for FoldingRangeKind
 deriving instance FromJson for FoldingRange
 end
 
-private meta def rangeOfStx? (text : FileMap) (stx : Syntax) :=
-  Lean.FileMap.utf8RangeToLspRange text <$> Lean.Syntax.getRange? stx
-
 open Lean Server Lsp RequestM in
 meta partial def handleFolding (_params : FoldingRangeParams) (prev : RequestTask (Array FoldingRange)) : RequestM (RequestTask (Array FoldingRange)) := do
   let doc ← readDoc
@@ -858,9 +856,9 @@ where
           let .ofCustomInfo ⟨_stx, data⟩ := info | result
           let some listInfo := data.get? DocListInfo | result
           if h : listInfo.items.size > 0 then
-            let some {start := {line := startLine, ..}, ..} := rangeOfStx? text listInfo.items[0]
+            let some {start := {line := startLine, ..}, ..} := text.lspRangeOfStx? listInfo.items[0]
               | result
-            let some {«end» := {line := endLine, ..}, ..} := rangeOfStx? text listInfo.items.back!
+            let some {«end» := {line := endLine, ..}, ..} := text.lspRangeOfStx? listInfo.items.back!
               | result
             result.push {startLine := startLine, endLine := endLine}
           else result
@@ -875,7 +873,7 @@ where
       | .node _ k children =>
         let here :=
           if isFoldable k then
-            if let some {start := {line:=startLine, ..}, «end» := {line := endLine, ..}} := rangeOfStx? text stx then
+            if let some {start := {line:=startLine, ..}, «end» := {line := endLine, ..}} := text.lspRangeOfStx? stx then
               #[{startLine, endLine}]
             else #[]
           else #[]
@@ -899,11 +897,11 @@ where
           match info with
           | .included _  :: more =>
             info := more
-          | (.mk _ titleStx endPos children) :: more =>
-            if let some {start := {line := startLine, ..}, ..} := rangeOfStx? text titleStx then
-              let {line := endLine, ..} := text.utf8PosToLspPos endPos
-              if endLine - 1 > startLine then
-                regions := regions.push {startLine := startLine, endLine := endLine - 1}
+          | (.mk title rangeStx _selectionStx endPos children) :: more =>
+            let {start := {line := startLine, ..}, ..} := requireTOCLspRange text title "range" rangeStx
+            let {line := endLine, ..} := text.utf8PosToLspPos endPos
+            if endLine - 1 > startLine then
+              regions := regions.push {startLine := startLine, endLine := endLine - 1}
             info := children.toList ++ more
           | [] => break
       pure regions

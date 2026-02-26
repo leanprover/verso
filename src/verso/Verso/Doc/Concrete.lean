@@ -75,17 +75,20 @@ meta def saveRefs [Monad m] [MonadInfoTree m] (st : DocElabM.State) (st' : PartE
 
 open PartElabM in
 /--
-All-at-once elaboration of verso document syntax to syntax denoting a verso `Part`. Implements
+All-at-once elaboration of verso document syntax to syntax denoting a verso `VersoDoc`. Implements
 elaboration of the `#docs` command and `#doc` term. The `#doc` command is incremental, and thus
 splits the logic in this function across multiple functions.
 -/
 private meta def elabDoc (genre: Term) (title: StrLit) (topLevelBlocks : Array Syntax) (endPos: String.Pos.Raw) : TermElabM Term := do
+  let rootRangeStx ← getRef
   let env ← getEnv
   let titleParts ← stringToInlines title
   let titleString := inlinesToString env titleParts
   let ctx ← DocElabContext.fromGenreTerm genre
   let initDocState : DocElabM.State := { highlightDeduplicationTable := .some {} }
-  let initPartState : PartElabM.State := .init (.node .none nullKind titleParts)
+  -- Use the complete document syntax for the range, and the title syntax for the selection.
+  -- This means that the outline contains all sub-parts, and clicking the root goes to the title.
+  let initPartState : PartElabM.State := .init rootRangeStx title.raw
 
   let ((), docElabState, partElabState) ←
     PartElabM.run ctx initDocState initPartState <| do
@@ -111,14 +114,16 @@ private meta def elabDoc (genre: Term) (title: StrLit) (topLevelBlocks : Array S
 
 elab "#docs" "(" genre:term ")" n:ident title:str ":=" ":::::::" text:document ":::::::" : command => do
   findGenreCmd genre
+  let rootRangeStx ← getRef
   let endTok :=
-    match ← getRef with
+    match rootRangeStx with
     | .node _ _ t =>
       match t.back? with
       | some x => x
       | none => panic! "No final token!"
     | _ => panic! "Nothing"
-  let doc ← Command.runTermElabM fun _ => elabDoc genre title text.raw.getArgs endTok.getPos!
+  let endPos := endTok.getTailPos?.getD endTok.getPos!
+  let doc ← Command.runTermElabM fun _ => elabDoc genre title text.raw.getArgs endPos
   Command.elabCommand (← `(def $n : VersoDoc $genre := $doc))
 
 public syntax docTermBody :=
@@ -158,7 +163,7 @@ elab "#doc" "(" genre:term ")" title:str "=>" text:completeDocument eoi : term =
   findGenreTm genre
   let endPos := (← getFileMap).source.rawEndPos
   let doc ← elabDoc genre title text.raw.getArgs endPos
-  Term.elabTerm (← `( ($(doc) : Part $genre))) none
+  Term.elabTerm (← `( ($(doc) : VersoDoc $genre))) none
 
 
 scoped syntax (name := addBlockCmd) block : command
@@ -282,7 +287,7 @@ public meta structure DocElabEnvironment where
   genreSyntax : Term := ⟨.missing⟩
   ctx : DocElabContext := ⟨.missing, mkConst ``Unit, .always, .none⟩
   docState : DocElabM.State := { highlightDeduplicationTable := some {} }
-  partState : PartElabM.State := .init (.node .none nullKind #[])
+  partState : PartElabM.State := .init (.node .none nullKind #[]) (.node .none nullKind #[])
 deriving Inhabited
 
 public meta initialize docEnvironmentExt : EnvExtension DocElabEnvironment ← registerEnvExtension (pure {})
@@ -322,13 +327,15 @@ in `elabDoc` across three functions: the prelude in `startDoc`, the loop body in
 and the postlude in `finishDoc`.
 -/
 
-private meta def startDoc (docStx : Syntax) (genreSyntax : Term) (title: StrLit) : Command.CommandElabM Unit := do
+private meta def startDoc (genreSyntax : Term) (title: StrLit) : Command.CommandElabM Unit := do
+  let rootRangeStx ← getRef
   let env ← getEnv
   let titleParts ← stringToInlines title
   let titleString := inlinesToString env titleParts
   let ctx ← Command.runTermElabM fun _ => DocElabContext.fromGenreTerm genreSyntax
   let initDocState : DocElabM.State := { highlightDeduplicationTable := .some {} }
-  let initPartState : PartElabM.State := .init docStx
+  -- See `elabDoc`: the current command anchors the root range; the title literal is the selection.
+  let initPartState : PartElabM.State := .init rootRangeStx title.raw
 
   modifyEnv (docEnvironmentExt.setState · ⟨genreSyntax, ctx, initDocState, initPartState⟩)
   runPartElabInEnv <| do
@@ -362,7 +369,7 @@ elab_rules : command
   | `(command|#doc ( $genreSyntax:term ) $title:str =>%$tok) => open Lean Parser Elab Command in do
   elabCommand <| ← `(open scoped Lean.Doc.Syntax)
 
-  startDoc (← getRef) genreSyntax title
+  startDoc genreSyntax title
 
   -- Sets up basic incremental evaluation of documents by replacing Lean's command-by-command parser
   -- with a top-level-block parser.
