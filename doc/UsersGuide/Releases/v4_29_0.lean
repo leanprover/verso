@@ -16,6 +16,7 @@ file := "v4.29.0"
 %%%
 
 * Fix Verso folding ranges / TOC for Lean.Doc syntax and #doc (#768)
+* Preserve incremental `#doc` command source ranges for LSP TOC/folding (#771)
 * Align Blog inline Lean role naming with Manual; add `{lean}` and deprecate `{leanInline}` (#762)
 * A zero-config {ref "literate429"}[literate programming] feature was added in [#809](https://github.com/leanprover/verso/pull/809).
 
