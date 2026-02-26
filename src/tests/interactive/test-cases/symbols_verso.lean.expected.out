@@ -1,0 +1,28 @@
+{"textDocument":
+ {"uri": "file:///src/tests/interactive/test-cases/symbols_verso.lean"},
+ "position": {"line": 11, "character": 2}}
+[]
+{"textDocument":
+ {"uri": "file:///src/tests/interactive/test-cases/symbols_verso.lean"},
+ "position": {"line": 16, "character": 2}}
+[{"selectionRange":
+  {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 12}},
+  "range":
+  {"start": {"line": 0, "character": 0}, "end": {"line": 11, "character": 0}},
+  "name": "Docs heading",
+  "kind": 15},
+ {"selectionRange":
+  {"start": {"line": 14, "character": 0}, "end": {"line": 14, "character": 30}},
+  "range":
+  {"start": {"line": 14, "character": 0}, "end": {"line": 18, "character": 0}},
+  "name": "Doc heading",
+  "kind": 15,
+  "children":
+  [{"selectionRange":
+    {"start": {"line": 15, "character": 0},
+     "end": {"line": 15, "character": 13}},
+    "range":
+    {"start": {"line": 15, "character": 0},
+     "end": {"line": 18, "character": 0}},
+    "name": "Doc heading",
+    "kind": 15}]}]

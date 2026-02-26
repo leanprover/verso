@@ -322,13 +322,13 @@ in `elabDoc` across three functions: the prelude in `startDoc`, the loop body in
 and the postlude in `finishDoc`.
 -/
 
-private meta def startDoc (genreSyntax : Term) (title: StrLit) : Command.CommandElabM Unit := do
+private meta def startDoc (docStx : Syntax) (genreSyntax : Term) (title: StrLit) : Command.CommandElabM Unit := do
   let env ← getEnv
   let titleParts ← stringToInlines title
   let titleString := inlinesToString env titleParts
   let ctx ← Command.runTermElabM fun _ => DocElabContext.fromGenreTerm genreSyntax
   let initDocState : DocElabM.State := { highlightDeduplicationTable := .some {} }
-  let initPartState : PartElabM.State := .init (.node .none nullKind titleParts)
+  let initPartState : PartElabM.State := .init docStx
 
   modifyEnv (docEnvironmentExt.setState · ⟨genreSyntax, ctx, initDocState, initPartState⟩)
   runPartElabInEnv <| do
@@ -361,7 +361,7 @@ elab_rules : command
   | `(command|#doc ( $genreSyntax:term ) $title:str =>%$tok) => open Lean Parser Elab Command in do
   elabCommand <| ← `(open scoped Lean.Doc.Syntax)
 
-  startDoc genreSyntax title
+  startDoc (← getRef) genreSyntax title
 
   -- Sets up basic incremental evaluation of documents by replacing Lean's command-by-command parser
   -- with a top-level-block parser.
