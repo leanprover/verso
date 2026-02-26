@@ -18,3 +18,4 @@ file := "v4.29.0-rc2"
 %%%
 
 * [fix: Verso folding ranges / TOC for Lean.Doc syntax and #doc](https://github.com/leanprover/verso/pull/768)
+* fix: preserve incremental `#doc` command source range for LSP TOC/folding
