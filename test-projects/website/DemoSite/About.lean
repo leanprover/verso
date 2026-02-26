@@ -70,11 +70,11 @@ where
       `(Block.other (.component $(quote `image) (.arr #[$alt, $url])) #[$(← elabBlock desc), $(← descs.mapM elabBlock),*])
     | stx => throwErrorAt stx "Expected an image and description, got {stx}"
 
-block_component +directive button' (onclick : String) where
+block_component +directive button' where
   toHtml id _ _ goB contents := do
     saveJs <| "window.addEventListener('load', () => {" ++
       s!"document.getElementById('{id}')?.addEventListener('click', () => " ++
-      "{ alert(" ++ onclick.quote ++ ");})});"
+      "{ alert('hello');});});"
     pure {{
       <button id={{id}}>
         {{← contents.mapM goB}}
@@ -82,7 +82,7 @@ block_component +directive button' (onclick : String) where
     }}
 
 
-inline_component button (onclick : String) where
+inline_component button where
   toHtml id _ goI contents := do
     saveJs <| "window.addEventListener('load', () => {" ++
       s!"document.getElementById('{id}')?.addEventListener('click', () => " ++
@@ -93,16 +93,10 @@ inline_component button (onclick : String) where
       </button>
     }}
 
-structure ButtonArgs where
-  onClick : String
-
-instance : FromArgs ButtonArgs DocElabM where
-  fromArgs := ButtonArgs.mk <$> .positional `onClick .string
-
 @[role button]
-def buttonImpl : RoleExpanderOf ButtonArgs
-  | {onClick}, contents => do
-    ``(button $(quote onClick) #[$(← contents.mapM elabInline),*])
+def buttonImpl : RoleExpanderOf Unit
+  | (), contents => do
+    ``(button #[$(← contents.mapM elabInline),*])
 
 end
 
@@ -114,7 +108,7 @@ This is a red box:
 
 :::redBox
 
-It contains things. {button ""}[like a button! *hooray!*]
+It contains things. {button}[like a button! *hooray!*]
 
 :::
 
@@ -127,7 +121,7 @@ It contains things. {button ""}[like a button! *hooray!*]
 :::
 
 
-:::button' "foo"
+:::button'
 
 Here's a button
 
