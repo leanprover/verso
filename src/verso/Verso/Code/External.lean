@@ -293,8 +293,8 @@ public meta def anchorInlineRole : RoleExpander
       throwError "Expected a positional argument first (the anchor name)"
 
 private meta def tokenHover : Token → Option String
-  | ⟨.const _ sig doc? _, _⟩ => some (mkHover sig doc?)
-  | ⟨.var _ ty, s⟩ => some (mkHover s!"{s} : {ty}" none)
+  | ⟨.const _ sig doc? .., _⟩ => some (mkHover sig doc?)
+  | ⟨.var _ ty _, s⟩ => some (mkHover s!"{s} : {ty}" none)
   | _ => none
 where mkHover (sig : String) (doc? : Option String) : String :=
   s!"```{sig}```" ++
