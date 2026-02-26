@@ -5,14 +5,32 @@ set_option doc.verso true
 
 open Verso Genre Manual InlineLean
 
-#docs (Manual) docsSym "Docs heading" :=
+#docs (Manual) docsSymOne "Docs heading one" :=
 :::::::
-# Docs heading
-Text
+# Docs heading one
+Text one
+
+## Docs subheading one
+More text one
 :::::::
 --^ textDocument/documentSymbol
 
-#doc (Manual) "Doc heading" =>
-# Doc heading
-Text
+#docs (Manual) docsSymTwo "Docs heading two" :=
+:::::::
+# Docs heading two
+Text two
+
+## Docs subheading two
+More text two
+:::::::
+
+#docs (Manual) docsSymThree "Docs heading three" :=
+:::::::
+# Docs heading three
+Text three
+
+## Docs subheading three
+More text three
+:::::::
+--^ textDocument/foldingRange
 --^ textDocument/documentSymbol

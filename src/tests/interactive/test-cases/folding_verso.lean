@@ -16,10 +16,13 @@ def ds : Nat :=
 0
 --^ textDocument/foldingRange
 
-#docs (Manual) docsFold "Docs heading" :=
+#docs (Manual) docsFoldOne "Docs heading one" :=
 :::::::
-# Docs heading
-Text
+# Docs heading one
+Text one
+
+## Docs subheading one
+More text one
 
 * one
 * two
@@ -27,6 +30,19 @@ Text
 ```lean
 #check Nat.succ
 ```
+:::::::
+--^ textDocument/foldingRange
+
+#docs (Manual) docsFoldTwo "Docs heading two" :=
+:::::::
+# Docs heading two
+Text two
+
+## Docs subheading two
+More text two
+
+* three
+* four
 :::::::
 --^ textDocument/foldingRange
 
@@ -34,10 +50,13 @@ Text
 # Doc heading
 Text and text
 
+## Doc subheading
+More text
+
 * one
 * two
+--^ textDocument/foldingRange
 
 ```lean
 #check Nat.succ
 ```
---^ textDocument/foldingRange

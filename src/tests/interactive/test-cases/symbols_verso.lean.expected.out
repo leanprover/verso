@@ -1,28 +1,41 @@
 {"textDocument":
  {"uri": "file:///src/tests/interactive/test-cases/symbols_verso.lean"},
- "position": {"line": 11, "character": 2}}
+ "position": {"line": 14, "character": 2}}
 []
 {"textDocument":
  {"uri": "file:///src/tests/interactive/test-cases/symbols_verso.lean"},
- "position": {"line": 16, "character": 2}}
+ "position": {"line": 33, "character": 2}}
+[{"startLine": 7, "endLine": 13},
+ {"startLine": 9, "endLine": 13},
+ {"startLine": 12, "endLine": 13},
+ {"startLine": 17, "endLine": 23},
+ {"startLine": 19, "endLine": 23},
+ {"startLine": 22, "endLine": 23},
+ {"startLine": 26, "endLine": 32},
+ {"startLine": 28, "endLine": 32},
+ {"startLine": 31, "endLine": 32},
+ {"startLine": 0, "kind": "imports", "endLine": 1},
+ {"startLine": 7, "kind": "region", "endLine": 14},
+ {"startLine": 17, "kind": "region", "endLine": 24},
+ {"startLine": 26, "kind": "region", "endLine": 33}]
+{"textDocument":
+ {"uri": "file:///src/tests/interactive/test-cases/symbols_verso.lean"},
+ "position": {"line": 33, "character": 2}}
 [{"selectionRange":
-  {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 12}},
+  {"start": {"line": 7, "character": 0}, "end": {"line": 14, "character": 7}},
   "range":
-  {"start": {"line": 0, "character": 0}, "end": {"line": 11, "character": 0}},
-  "name": "Docs heading",
+  {"start": {"line": 7, "character": 0}, "end": {"line": 14, "character": 0}},
+  "name": "Docs heading one",
   "kind": 15},
  {"selectionRange":
-  {"start": {"line": 14, "character": 0}, "end": {"line": 14, "character": 30}},
+  {"start": {"line": 17, "character": 0}, "end": {"line": 24, "character": 7}},
   "range":
-  {"start": {"line": 14, "character": 0}, "end": {"line": 18, "character": 0}},
-  "name": "Doc heading",
-  "kind": 15,
-  "children":
-  [{"selectionRange":
-    {"start": {"line": 15, "character": 0},
-     "end": {"line": 15, "character": 13}},
-    "range":
-    {"start": {"line": 15, "character": 0},
-     "end": {"line": 18, "character": 0}},
-    "name": "Doc heading",
-    "kind": 15}]}]
+  {"start": {"line": 17, "character": 0}, "end": {"line": 24, "character": 0}},
+  "name": "Docs heading two",
+  "kind": 15},
+ {"selectionRange":
+  {"start": {"line": 26, "character": 0}, "end": {"line": 33, "character": 7}},
+  "range":
+  {"start": {"line": 26, "character": 0}, "end": {"line": 33, "character": 0}},
+  "name": "Docs heading three",
+  "kind": 15}]
