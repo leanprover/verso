@@ -49,6 +49,8 @@ lean_lib VersoManual where
   roots := #[`VersoManual]
   needs := #[staticWeb]
 
+lean_lib Rob where
+
 input_file tutorialDefaultCss where
   text := true
   path := "src/verso-tutorial/default.css"

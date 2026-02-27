@@ -272,7 +272,7 @@ partial def removeDraftParts (part : Part Manual) : Part Manual :=
     if let some «meta» := p.metadata then
       !meta.draft
     else true
-  {part with subParts := sub.map removeDraftParts }
+  { part with subParts := sub.map removeDraftParts }
 
 def traverseMulti (depth : Nat) (path : Path) (part : Part Manual) : TraverseM (Part Manual) :=
   match depth with
@@ -302,36 +302,61 @@ def TraverseState.ofConfig (config : HtmlConfig) : TraverseState := Id.run do
   return st
 
 def traverse (logError : String → IO Unit) (text : Part Manual) (config : Config) : ReaderT ExtensionImpls IO (Part Manual × TraverseState) := do
+  let tStart ← IO.monoMsNow
   let topCtxt : Manual.TraverseContext := {logError, draft := config.draft}
   let mut state : Manual.TraverseState := .ofConfig config.toHtmlConfig
-  let mut text := text
-  if !config.draft then
-    text := removeDraftParts text
-  if config.verbose then
-    IO.println "Initializing extensions"
+  let mut text := { text with subParts := #[] }
+  IO.println s!"mm{text.content.size}"
+  let tZ ← IO.monoMsNow
+  --if !config.draft then
+  --  text := removeDraftParts text
+  let tZ' ← IO.monoMsNow
+  --if config.verbose then
+  IO.println "Initializing extensions"
+  let tBf ← IO.monoMsNow
   let extensionImpls ← readThe ExtensionImpls
   state := state
-    |>.setDomainTitle sectionDomain "Sections or chapters of the manual"
-    |>.addQuickJumpMapper sectionDomain sectionDomainMapper
-  for ⟨_, b⟩ in extensionImpls.blockDescrs do
+     |>.setDomainTitle sectionDomain "Sections or chapters of the manual"
+     |>.addQuickJumpMapper sectionDomain sectionDomainMapper
+  let tA ← IO.monoMsNow
+  IO.println s!"Extensions iniitalized in {tA - tBf}ms {tA}"
+  let g := extensionImpls.blockDescrs.toArray
+  IO.println s!" in {← IO.monoMsNow}"
+  let h := g.foldlM (init := state)
+   fun state ⟨a, b⟩ => do
+    IO.println s!"in loop for {a}, time is {← IO.monoMsNow}"
     if let some descr := b.get? BlockDescr then
-      state := descr.init state
+      return descr.init state
+    else return state
+  IO.println s!" there is about to be a timeskip {← IO.monoMsNow}"
+  state ← h
+  IO.println s!"after loop executes {← IO.monoMsNow}"
   for ⟨_, i⟩ in extensionImpls.inlineDescrs do
+    IO.println s!"inlineDescrs {← IO.monoMsNow}"
     if let some descr := i.get? InlineDescr then
       state := descr.init state
+  let tB ← IO.monoMsNow
+  let mut ts := #[]
+  let mut tTa ← IO.monoMsNow
   for i in [0:config.maxTraversals] do
-    if config.verbose then
-      IO.println s!"Traversal pass {i}"
+
+    IO.println s!"Traversal pass {i} {← IO.monoMsNow}"
     let startTime ← IO.monoMsNow
     let (text', state') ← traverseMulti config.htmlDepth #[] text |>.run extensionImpls topCtxt state
     let endTime ← IO.monoMsNow
     if config.verbose then
       IO.println s!"  ... pass {i} completed in {endTime - startTime} ms"
     if text' == text && state' == state then
+      IO.println s!"traversals {tZ - tStart} {tZ' - tZ} {tA - tZ'} {tB - tA} {ts} {(← IO.monoMsNow) - tStart}"
       return (text', state')
     else
       state := state'
       text := text'
+    let tTb ← IO.monoMsNow
+    ts := ts.push (tTb - tTa)
+    tTa := tTb
+  let tEnd ← IO.monoMsNow
+  IO.println s!"traversal nmns {tA - tStart} {tB - tA} {ts} {tEnd - tStart}"
   return (text, state)
 
 
@@ -359,7 +384,8 @@ def emitTeX (logError : String → IO Unit) (config : Config) (text : Part Manua
   let (text, state) ← traverse logError text config
   let opts : TeX.Options Manual (ReaderT ExtensionImpls IO) := {
     headerLevels := #["chapter", "section", "subsection", "subsubsection", "paragraph"],
-    headerLevel := some ⟨0, by simp +arith [Array.size, List.length]⟩,
+    headerLevel := some ⟨0, by simp +arith only [Array.size, List.length, Nat.zero_add,
+      Nat.reduceAdd, Nat.zero_lt_succ]⟩,
     logError := fun msg => logError msg
   }
   let authors := text.metadata.map (·.authors) |>.getD []
@@ -973,22 +999,26 @@ def helloWidget : Lean.Widget.Module where
 @[doc_finalize]
 public def shortcutToHTML (part : Lean.Doc.Part Genre.Manual.Inline Genre.Manual.Block Genre.Manual.PartMetadata) : Lean.Elab.Command.CommandElabM Unit := do
   let startTimeMs ← IO.monoMsNow
-  let .some path ← IO.getEnv "VERSO_OUTPUT_PATH"
+  let .some path := Option.some "_out" -- ← IO.getEnv "VERSO_OUTPUT_PATH"
     | return
   let destination : System.FilePath := ⟨path⟩
   Verso.FS.ensureDir destination
 
+  let tA ← IO.monoMsNow
   let extensionImpls := by exact extension_impls%
   let errLog ← IO.mkRef #[]
   let logError := fun err => do
     errLog.set ((← errLog.get).push err)
   let renderConfig : Verso.Genre.Manual.RenderConfig := { destination }
+  let tB ← IO.monoMsNow
 
   let (text, traversalState) ← Verso.Genre.Manual.traverseHtmlSingle logError renderConfig part extensionImpls
+  let tC ← IO.monoMsNow
   Verso.Genre.Manual.emitXrefsJson (destination.join "html-single") traversalState
   Verso.Genre.Manual.emitHtmlSingle logError renderConfig text traversalState extensionImpls
 
   let endTimeMs ← IO.monoMsNow
+  IO.println s!"setup {tB - startTimeMs}, traverse {tC - tB}, emit {endTimeMs - tC}, total {endTimeMs - startTimeMs}"
   let info: Json := .mkObj [
     ("event", .str "buildHtml"),
     ("elapsed", .num (endTimeMs - startTimeMs)),
