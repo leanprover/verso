@@ -24,7 +24,7 @@ Save the output of a Lean block.
 `name` is the name the author assigned to the block.
 -/
 def saveOutputs (name : Name) (msgs : List Highlighted.Message) : m Unit :=
-  modifyEnv (leanOutputs.modifyState · (·.insert name msgs))
+  modifyEnv (leanOutputs.modifyState · (.insert · name msgs))
 
 def getOrSuggest (key : Ident) (map : NameMap α) : m α := do
   match map.find? key.getId with
