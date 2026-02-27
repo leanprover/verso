@@ -25,7 +25,6 @@ meta def runFinalizer (docName : Ident) (finalizerName : Name) : Elab.Command.Co
   Elab.Command.elabCommand (← `(#eval $finalizer $doc))
 
 public meta def runFinalizers (docName : Ident) : Elab.Command.CommandElabM Unit := do
-  logInfo "Running finalizers"
   let state := docFinalizeAttr.ext.toEnvExtension.getState (← getEnv)
   for list in state.importedEntries do
     for finalizerName in list do
