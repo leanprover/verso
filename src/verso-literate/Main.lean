@@ -216,7 +216,7 @@ partial def highlightFrontendResult' (result : Compat.Frontend.FrontendResult)
   let modrefs := Lean.Server.findModuleRefs (← getFileMap) trees'
   let ids := build modrefs
 
-  let ctx := ⟨ids, true, false, sortSuppress suppressNamespaces⟩
+  let ctx := ⟨ids, true, false, sortSuppress suppressNamespaces, false⟩
 
   let mut code : Array (Array Code) := #[]
 

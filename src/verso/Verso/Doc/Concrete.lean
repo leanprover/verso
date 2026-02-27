@@ -348,6 +348,7 @@ private meta def finishDoc : Command.CommandElabM Unit:= do
 
   let versoEnv := docEnvironmentExt.getState (← getEnv)
   let finished := versoEnv.partState.partContext.toPartFrame.close endPos
+  pushInfoLeaf <| .ofCustomInfo {stx := (← getRef), value := Dynamic.mk finished.toTOC}
 
   let n := mkIdent (← currentDocName)
   let doc ← Command.runTermElabM fun _ => finished.toVersoDoc versoEnv.genreSyntax versoEnv.ctx versoEnv.docState versoEnv.partState

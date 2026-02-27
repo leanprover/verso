@@ -55,8 +55,9 @@ public def DocName.ofName (c : Name) (ppWidth : Nat := 40) (showUniverses := tru
 
     let docstring? ← if checkDocstring then getDocString? env c else Lean.findDocString? env c
 
-    let hlCtx : SubVerso.Highlighting.Context := ⟨{}, false, false, []⟩
-
-    pure { name := c, hlName := (← renderTagged none name hlCtx), signature := (← renderTagged none sig hlCtx), docstring? }
+    let hlCtx : SubVerso.Highlighting.Context := ⟨{}, false, false, [], false⟩
+    let hlName ← (renderTagged none name : ReaderT SubVerso.Highlighting.Context MetaM _) hlCtx
+    let signature ← (renderTagged none sig : ReaderT SubVerso.Highlighting.Context MetaM _) hlCtx
+    pure { name := c, hlName, signature, docstring? }
   else
-    pure { name := c, hlName := .token ⟨.const c "" none false, c.toString⟩, signature := Highlighted.seq #[], docstring? := none }
+    pure { name := c, hlName := .token ⟨.const c "" none false none, c.toString⟩, signature := Highlighted.seq #[], docstring? := none }

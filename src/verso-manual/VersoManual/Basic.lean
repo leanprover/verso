@@ -1151,7 +1151,7 @@ Extracts all names that are marked as definition sites, with both their occurren
 the underlying name.
 -/
 partial def definedNames : Highlighted → Array (Name × String)
-  | .token ⟨.const n _ _ true, s⟩ => #[(n, s)]
+  | .token ⟨.const n _ _ true _, s⟩ => #[(n, s)]
   | .token _ => #[]
   | .span _ hl | .tactics _ _ _ hl => definedNames hl
   | .seq hls => hls.map definedNames |>.foldl (· ++ ·) #[]
