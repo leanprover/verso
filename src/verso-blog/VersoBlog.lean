@@ -599,8 +599,7 @@ where
     modifyInfoState fun s => { s with trees := f s.trees }
 
 open SubVerso.Highlighting Highlighted in
-@[role]
-def leanInline : RoleExpanderOf LeanInlineConfig
+private def leanInlineImpl : RoleExpanderOf LeanInlineConfig
   | config, elts => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"lean block") <| do
     let #[code] := elts
       | throwError "Expected precisely one code element"
@@ -674,6 +673,19 @@ def leanInline : RoleExpanderOf LeanInlineConfig
       let hls := (← highlight stx #[] (PersistentArray.empty.push tree))
 
       `(Inline.other (Blog.InlineExt.highlightedCode { contextName := $(quote config.exampleContext.getId) } $(quote hls)) #[Inline.code $(quote str.getString)])
+
+@[role lean]
+def leanCanonical : RoleExpanderOf LeanInlineConfig :=
+  leanInlineImpl
+
+@[role]
+def leanInline : RoleExpanderOf LeanInlineConfig
+  | config, elts => do
+    if h : 0 < elts.size then
+      logWarningAt elts[0] "`{leanInline}` is deprecated; use `{lean}` instead."
+    else
+      logWarning "`{leanInline}` is deprecated; use `{lean}` instead."
+    leanInlineImpl config elts
 
 open Lean.Elab.Tactic.GuardMsgs
 export WhitespaceMode (exact lax normalized)
