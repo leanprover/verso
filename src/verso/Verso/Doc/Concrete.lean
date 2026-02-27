@@ -121,7 +121,7 @@ elab "#docs" "(" genre:term ")" n:ident title:str ":=" ":::::::" text:document "
   let doc ← Command.runTermElabM fun _ => elabDoc genre title text.raw.getArgs endTok.getPos!
   Command.elabCommand (← `(def $n : VersoDoc $genre := $doc))
 
-syntax docTermBody :=
+public syntax docTermBody :=
   atomic(":::" termDocument ":::") <|>
   atomic("::::" termDocument "::::") <|>
   atomic(":::::" termDocument ":::::") <|>
@@ -348,6 +348,7 @@ private meta def finishDoc : Command.CommandElabM Unit:= do
 
   let versoEnv := docEnvironmentExt.getState (← getEnv)
   let finished := versoEnv.partState.partContext.toPartFrame.close endPos
+  pushInfoLeaf <| .ofCustomInfo {stx := (← getRef), value := Dynamic.mk finished.toTOC}
 
   let n := mkIdent (← currentDocName)
   let doc ← Command.runTermElabM fun _ => finished.toVersoDoc versoEnv.genreSyntax versoEnv.ctx versoEnv.docState versoEnv.partState

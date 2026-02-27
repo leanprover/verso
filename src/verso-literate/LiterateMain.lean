@@ -216,7 +216,7 @@ partial def highlightFrontendResult' (result : Compat.Frontend.FrontendResult)
   let modrefs := Lean.Server.findModuleRefs (← getFileMap) trees'
   let ids := build modrefs
 
-  let ctx := ⟨ids, true, false, sortSuppress suppressNamespaces⟩
+  let ctx := ⟨ids, true, false, sortSuppress suppressNamespaces, false⟩
 
   let mut code : Array (Array Code) := #[]
 
@@ -255,7 +255,7 @@ where
       if str.endsWith "▲" then
         let str := str.dropWhile (· ≠ '▼' : Char → Bool) |>.drop 1 |>.dropEnd 1
         let indentStr := str.takeWhile (· ≠ '◄' : Char → Bool)
-        let str := str.drop (indentStr.chars.count + 1)
+        let str := str.drop (indentStr.chars.length + 1)
         let declName := str.toName
         let i := indentStr.toNat!
         if let some v ← findInternalDocString? (← getEnv) declName then

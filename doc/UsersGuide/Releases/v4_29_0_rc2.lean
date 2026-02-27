@@ -11,11 +11,10 @@ open Verso.Genre
 -- To allow ```` below
 set_option linter.verso.markup.codeBlock false
 
-#doc (Manual) "Verso 4.28.0" =>
+#doc (Manual) "Verso 4.29.0-rc2 (unreleased)" =>
 %%%
-tag := "release-v4.28.0"
-file := "v4.28.0"
+tag := "release-v4.29.0-rc2"
+file := "v4.29.0-rc2"
 %%%
 
-* Add Release Notes / Changelog to Verso Users guide (@david-christiansen, @ejgallego, #708)
-* Fix infoview display for inline lean code (@david-christiansen, @ejgallego, #700)
+* [fix: Verso folding ranges / TOC for Lean.Doc syntax and #doc](https://github.com/leanprover/verso/pull/768)

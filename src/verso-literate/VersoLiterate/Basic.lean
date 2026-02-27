@@ -59,7 +59,7 @@ def handleLocal : InlineToLiterate
     if let some { name, type, lctx, fvarId } := val.get? Lean.Doc.Data.Local then
       let (t, _) ← (Lean.Meta.ppExpr type).run {lctx := lctx} {}
       let s := match content with | #[.code s] => s | _ => name.toString
-      let i := .other (.highlighted <| .token ⟨.var fvarId (toString t), s⟩) #[.code s]
+      let i := .other (.highlighted <| .token ⟨.var fvarId (toString t) none, s⟩) #[.code s]
       return some i
     throwError "Wrong data"
   | _, _, _ => pure none
@@ -69,7 +69,7 @@ def handleConst : InlineToLiterate
     if let some { name } := val.get? Lean.Doc.Data.Const then
       let signature ← PrettyPrinter.ppSignature name
       let docs ← findDocString? (← getEnv) name
-      let k := .const name (toString signature.fmt) docs false
+      let k := .const name (toString signature.fmt) docs false none
       let s := match content with | #[.code s] => s | _ => name.toString
       let i := .other (.highlighted <| .token ⟨k, s⟩) #[.code s]
       return some i
@@ -92,8 +92,8 @@ def highlightDocCode : Lean.Doc.DocCode → Highlighted
         let k :=
           match info with
           | .const x sig
-          | .field x sig => .const x (sig.pretty 45) none false
-          | .var _ fv ty => .var fv (ty.pretty 45)
+          | .field x sig => .const x (sig.pretty 45) none false none
+          | .var _ fv ty => .var fv (ty.pretty 45) none
           | .option name declName => .option name declName none
           | .literal _litKind (some type) => .withType (type.pretty 45)
           | .literal .. => .unknown

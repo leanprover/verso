@@ -284,8 +284,8 @@ end
 public defmethod Token.Kind.addLink (tok : Token.Kind) (content : Html) : HighlightHtmlM g Html := do
   let ctxt := (← read).traverseContext
   match tok with
-  | .const x _ _ false => constLink x content (some ctxt)
-  | .const x _ _ true => defLink x content (some ctxt)
+  | .const x _ _ false _ => constLink x content (some ctxt)
+  | .const x _ _ true _ => defLink x content (some ctxt)
   | .option o .. => optionLink o content (some ctxt)
   | .var x .. => varLink x content (some ctxt)
   | .keyword (some k) .. => kwLink k content (some ctxt)
@@ -384,12 +384,22 @@ public defmethod Highlighted.containsNewline : (t : Highlighted) → Bool
 
 defmethod Token.Kind.hover? (tok : Token.Kind) : HighlightHtmlM g (Option Nat) :=
   match tok with
-  | .const _n sig doc _ | .anonCtor _n sig doc =>
+  | .const _n sig doc _ sigFmt =>
     let docs :=
       match doc with
       | none => .empty
       | some txt => separatedDocs txt
-    some <$> addHover {{ <code>{{sig}}</code> {{docs}} }}
+    match sigFmt with
+    | some fmt => some <$> addHover {{ <code data-rich-format={{fmt}}>{{sig}}</code> {{docs}} }}
+    | none => some <$> addHover {{ <code>{{sig}}</code> {{docs}} }}
+  | .anonCtor _n sig doc sigFmt =>
+    let docs :=
+      match doc with
+      | none => .empty
+      | some txt => separatedDocs txt
+    match sigFmt with
+    | some fmt => some <$> addHover {{ <code data-rich-format={{fmt}}>{{sig}}</code> {{docs}} }}
+    | none => some <$> addHover {{ <code>{{sig}}</code> {{docs}} }}
   | .option optName _declName doc =>
     let docs := match doc with
       | none => .empty
@@ -397,8 +407,10 @@ defmethod Token.Kind.hover? (tok : Token.Kind) : HighlightHtmlM g (Option Nat) :
     some <$> addHover {{ <code>{{toString optName}}</code> {{docs}} }}
   | .keyword _ _ none => pure none
   | .keyword _ _ (some doc) => some <$> addHover {{<code class="docstring">{{doc}}</code>}}
-  | .var _ type =>
-    some <$> addHover {{ <code>{{type}}</code> }}
+  | .var _ type tyFmt =>
+    match tyFmt with
+    | some fmt => some <$> addHover {{ <code data-rich-format={{fmt}}>{{type}}</code> }}
+    | none => some <$> addHover {{ <code>{{type}}</code> }}
   | .str s =>
     some <$> addHover {{ <code><span class="literal string">{{s.quote}}</span>" : String"</code>}}
   | .withType t =>
@@ -434,36 +446,12 @@ public defmethod Highlighted.Span.Kind.«class» : Highlighted.Span.Kind → Str
   | .warning => "warning"
   | .error => "error"
 
-public defmethod Token.Kind.«class» : Token.Kind → String
-  | .var .. => "var"
-  | .str .. => "literal string"
-  | .sort .. => "sort"
-  | .const .. => "const"
-  | .option .. => "option"
-  | .docComment => "doc-comment"
-  | .keyword .. => "keyword"
-  | .anonCtor .. => "unknown"
-  | .unknown => "unknown"
-  | .withType .. => "typed"
-  | .levelConst .. => "level-const"
-  | .levelVar .. => "level-var"
-  | .levelOp .. => "level-op"
-  | .moduleName .. => "module-name"
+public defmethod Token.Kind.«class» (k : Token.Kind) : String := k.cssClass
 
-public defmethod Token.Kind.data : Token.Kind → String
-  | .const n _ _ _ | .anonCtor n _ _ => "const-" ++ toString n
-  | .var ⟨v⟩ _ => "var-" ++ toString v
-  | .option n _ _ => "option-" ++ toString n
-  | .keyword _ (some occ) _ => "kw-occ-" ++ toString occ
-  | .sort (some d) => s!"sort-{hash d}" -- equal docstrings as a proxy for the same operator
-  | .levelVar x => s!"level-var-{x}"
-  | .levelConst i => s!"level-const-{i}"
-  | .levelOp op => s!"level-op-{op}"
-  | .moduleName m => s!"module-name-{m}"
-  | _ => ""
+public defmethod Token.Kind.data (k : Token.Kind) : String := k.binding
 
 public defmethod Token.Kind.idAttr : Token.Kind → HighlightHtmlM g (Array (String × String))
-  | .const n _ _ true => do
+  | .const n _ _ true _ => do
     if (← read).options.definitionsAsTargets then
       if let some id := (← read).definitionIds.find? n then
         return #[("id", id)]
@@ -505,13 +493,13 @@ public defmethod Token.toHtml (tok : Token) : HighlightHtmlM g Html := do
   }}
 
 public defmethod Highlighted.Goal.toHtml (exprHtml : expr → HighlightHtmlM g Html) (index : Nat) : Highlighted.Goal expr → HighlightHtmlM g Html
-  | {name, goalPrefix, hypotheses, conclusion} => do
+  | {name, goalPrefix, hypotheses, conclusion, ..} => do
     let hypsHtml : Html ←
       if hypotheses.size = 0 then pure .empty
       else pure {{
         <span class="hypotheses">
           {{← hypotheses.mapM fun
-              | ⟨names, t⟩ => do pure {{
+              | ⟨names, t, _⟩ => do pure {{
                   <span class="hypothesis">
                     <span class="name">{{(← names.mapM (·.toHtml)).toList.intersperse {{" "}} }}</span><span class="colon">":"</span>
                     <span class="type">{{← exprHtml t}}</span>
