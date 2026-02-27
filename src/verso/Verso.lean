@@ -13,6 +13,7 @@ public import Verso.Doc.ArgParse
 public import Verso.Doc.Concrete
 public import Verso.Doc.Elab
 public import Verso.Doc.Elab.ExpanderAttribute
+public import Verso.Doc.Elab.Finalize
 public import Verso.Doc.Elab.InlineString
 public import Verso.Doc.Elab.Monad
 public import Verso.Doc.Html

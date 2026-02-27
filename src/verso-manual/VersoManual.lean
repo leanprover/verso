@@ -966,3 +966,42 @@ where
       emit logError cfg text traverseState
       for step in extraSteps do
         step .single logError cfg.toConfig traverseState text
+
+@[widget_module]
+def helloWidget : Lean.Widget.Module where
+  javascript := "
+    /* __WORKBENCH FAKE WIDGET__ */
+    import * as React from 'react';
+    export default function(props) {
+      const name = props.name || 'world'
+      return React.createElement('p', {}, 'Hello ' + name + '!')
+    }"
+
+@[doc_finalize]
+public def shortcutToHTML (part : Lean.Doc.Part Genre.Manual.Inline Genre.Manual.Block Genre.Manual.PartMetadata) : Lean.Elab.Command.CommandElabM Unit := do
+  let startTimeMs ← IO.monoMsNow
+  let .some path ← IO.getEnv "VERSO_OUTPUT_PATH"
+    | return
+  let destination : System.FilePath := ⟨path⟩
+  Verso.FS.ensureDir destination
+
+  let extensionImpls := by exact extension_impls%
+  let errLog ← IO.mkRef #[]
+  let logError := fun err => do
+    errLog.set ((← errLog.get).push err)
+  let renderConfig : Verso.Genre.Manual.RenderConfig := { destination }
+
+  let (text, traversalState) ← Verso.Genre.Manual.traverseHtmlSingle logError renderConfig part extensionImpls
+  Verso.Genre.Manual.emitXrefsJson (destination.join "html-single") traversalState
+  Verso.Genre.Manual.emitHtmlSingle logError renderConfig text traversalState extensionImpls
+
+  let endTimeMs ← IO.monoMsNow
+  let info: Json := .mkObj [
+    ("event", .str "buildHtml"),
+    ("elapsed", .num (endTimeMs - startTimeMs)),
+    ("errors", .arr ((← errLog.get).map (.str ·)))
+  ]
+
+  IO.println s!"__WORKBENCH__ {info.compress}"
+
+  Lean.Elab.Command.liftCoreM <| Lean.Widget.savePanelWidgetInfo helloWidget.javascriptHash (pure info) (← Lean.Elab.Command.getRef)

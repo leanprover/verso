@@ -13,6 +13,7 @@ public import Verso.Doc.Elab
 public meta import Verso.Doc.Elab.Monad
 import Verso.Doc.Concrete.InlineString
 import Verso.Doc.Lsp
+public import Verso.Doc.Elab.Finalize
 
 namespace Verso.Doc.Concrete
 
@@ -120,6 +121,7 @@ elab "#docs" "(" genre:term ")" n:ident title:str ":=" ":::::::" text:document "
     | _ => panic! "Nothing"
   let doc ← Command.runTermElabM fun _ => elabDoc genre title text.raw.getArgs endTok.getPos!
   Command.elabCommand (← `(def $n : VersoDoc $genre := $doc))
+  Finalize.runFinalizers n
 
 public syntax docTermBody :=
   atomic(":::" termDocument ":::") <|>
@@ -355,6 +357,9 @@ private meta def finishDoc : Command.CommandElabM Unit:= do
 
   let ty ← ``(VersoDoc $versoEnv.genreSyntax)
   Command.elabCommand (← `(def $n : $ty := $doc))
+
+  Finalize.runFinalizers n
+
 
 syntax (name := replaceDoc) "#doc " "(" term ") " str " =>" : command
 elab_rules : command
