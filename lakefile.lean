@@ -4,6 +4,7 @@ open Lake DSL
 require subverso from git "https://github.com/leanprover/subverso"@"main"
 require MD4Lean from git "https://github.com/acmepjz/md4lean"@"main"
 require plausible from git "https://github.com/leanprover-community/plausible"@"main"
+require «doc-gen4» from git "https://github.com/leanprover/doc-gen4"@"main"
 
 package verso where
   precompileModules := false -- temporarily disabled to work around an issue with nightly-2025-03-30
@@ -197,3 +198,40 @@ package_facet literate pkg : Array System.FilePath := do
   let libs := Job.collectArray (← pkg.leanLibs.mapM (·.facet `literate |>.fetch))
   let exes := Job.collectArray (← pkg.leanExes.mapM (·.toLeanLib.facet `literate |>.fetch))
   return libs.zipWith (·.flatten ++ ·.flatten) exes
+
+lean_exe «verso-docgen-setup» where
+  root := `VersoManual.DB.Setup
+  srcDir := "src/verso-manual"
+  supportInterpreter := true
+
+package_facet docSource pkg : System.FilePath := do
+  let ws ← getWorkspace
+  let exeJob ← «verso-docgen-setup».fetch
+
+  let pkgDir := ws.root.dir
+  let buildDir := ws.root.buildDir
+  let tomlPath := pkgDir / "doc-sources.toml"
+  let wsDir := buildDir / "verso-doc-db"
+  let dbPath := wsDir / ".lake" / "build" / "api-docs.db"
+
+  let docgen4Dir := match ws.findPackageByName? `«doc-gen4» with
+    | some pkg => pkg.dir
+    | none => buildDir / ".." / "packages" / "doc-gen4"
+
+  exeJob.mapM fun exeFile => do
+    -- Add trace for the TOML config file so changes trigger rebuild
+    if ← tomlPath.pathExists then
+      addTrace (← fetchFileTrace tomlPath (text := true))
+
+    buildFileUnlessUpToDate' dbPath do
+      let args :=
+        if ← tomlPath.pathExists then
+          #[wsDir.toString, docgen4Dir.toString, pkgDir.toString, tomlPath.toString]
+        else
+          #[wsDir.toString, docgen4Dir.toString, pkgDir.toString]
+      proc {
+        cmd := exeFile.toString
+        args
+      }
+
+    pure dbPath
