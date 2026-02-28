@@ -140,7 +140,7 @@ header {
     padding-left: .5rem;
 }
 
-@media screen and (max-width: 700px) {
+@media screen and (max-width: 992px) {
     .header-logo-wrapper {
         display: none;
     }
@@ -174,7 +174,7 @@ header {
     }
 }
 
-@media screen and (max-width: 700px) {
+@media screen and (max-width: 992px) {
     /* There's no header logo on mobile, so the title just needs to reserve space for the burger */
     .header-title {
         margin-left: calc(var(--verso-burger-width) + 1.5rem); /* There's 0.5 rem padding on the burger, and we want some space */
@@ -215,7 +215,7 @@ main [id] {
 }
 
 /** Mobile **/
-@media screen and (max-width: 700px) {
+@media screen and (max-width: 992px) {
     .with-toc > main {
         padding-left: 0;
     }
@@ -233,7 +233,7 @@ main [id] {
     display: none;
 }
 
-@media screen and (max-width: 700px) {
+@media screen and (max-width: 992px) {
     .toc-backdrop {
         display: block;
     }
@@ -258,7 +258,7 @@ main [id] {
     width: var(--verso-toc-width);
 }
 
-@media screen and (max-width: 700px) {
+@media screen and (max-width: 992px) {
     #toc {
         /* Push the toc off the page on mobile */
         right: 100%;
@@ -510,7 +510,7 @@ main [id] {
     display: none;
 }
 
-@media screen and (max-width: 700px) {
+@media screen and (max-width: 992px) {
     #toggle-toc-click {
         display: inline-flex;
         cursor: pointer;
@@ -692,7 +692,7 @@ main > section {
     position: relative;
 }
 
-@media screen and (max-width: 700px) {
+@media screen and (max-width: 992px) {
     /* Remove extra margin on mobile. */
     main > section > :first-child {
         margin-top: 0;
