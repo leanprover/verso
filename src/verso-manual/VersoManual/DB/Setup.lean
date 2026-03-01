@@ -23,7 +23,7 @@ open Verso.Genre.Manual.DocSource
 
 /--
 Lake environment variables to clear when spawning a child `lake` process, to avoid inheriting
-the parent Lake's workspace configuration. Same set used by `VersoBlog.LiterateLeanPage`.
+the parent Lake's workspace configuration.
 -/
 private def lakeVars : Array String :=
   #["LAKE", "LAKE_HOME", "LAKE_PKG_URL_MAP",
@@ -31,11 +31,11 @@ private def lakeVars : Array String :=
     "LEAN_GITHASH",
     "ELAN_TOOLCHAIN", "DYLD_LIBRARY_PATH", "LD_LIBRARY_PATH"]
 
-/-- Environment variable settings that unset all Lake variables. -/
+/-- Environment variable settings that unset all Lake variables and disable doc-gen4 source links. -/
 private def cleanEnv : Array (String × Option String) :=
-  lakeVars.map (·, none)
+  lakeVars.map (·, none) ++ #[("DOCGEN_SRC", some "file")]
 
-/-- Read the `lean-toolchain` file from a directory. -/
+/-- Reads the `lean-toolchain` file from a directory. -/
 private def readToolchain (dir : System.FilePath) : IO String := do
   let tcPath := dir / "lean-toolchain"
   unless ← tcPath.pathExists do
@@ -43,7 +43,7 @@ private def readToolchain (dir : System.FilePath) : IO String := do
   let contents ← IO.FS.readFile tcPath
   return contents.trimAscii.toString
 
-/-- Run a shell command in the given directory, printing output and throwing on failure. -/
+/-- Runs a shell command in the given directory, printing output and throwing on failure. -/
 private def runCmd (cmd : String) (args : Array String) (cwd : System.FilePath) : IO Unit := do
   IO.println s!"  Running: {cmd} {" ".intercalate args.toList}"
   let result ← IO.Process.output {
@@ -55,7 +55,7 @@ private def runCmd (cmd : String) (args : Array String) (cwd : System.FilePath) 
   unless result.exitCode == 0 do
     throw <| .userError s!"Command '{cmd}' exited with code {result.exitCode}"
 
-/-- Check for a toolchain mismatch between the project and any path dependencies. -/
+/-- Checks for a toolchain mismatch between the project and any path dependencies. -/
 private def checkToolchainMismatch
     (projectDir : System.FilePath) (config : Config) : IO (Option String) := do
   let ourTc ← readToolchain projectDir
@@ -121,15 +121,14 @@ def main (args : List String) : IO UInt32 := do
     else libraries.map (· ++ ":docInfo")
 
   IO.println s!"Building documentation sources..."
-  for target in targets do
-    try
-      runCmd "lake" #["build", target] wsDir
-    catch e =>
-      -- On build failure, check for toolchain mismatch
-      if let some config := config? then
-        if let some mismatchMsg ← checkToolchainMismatch projectDir config then
-          IO.eprintln s!"Note: {mismatchMsg}"
-      throw e
+  try
+    runCmd "lake" (#["build"] ++ targets) wsDir
+  catch e =>
+    -- On build failure, check for toolchain mismatch
+    if let some config := config? then
+      if let some mismatchMsg ← checkToolchainMismatch projectDir config then
+        IO.eprintln s!"Note: {mismatchMsg}"
+    throw e
 
   -- Verify the database was produced inside the sub-workspace's build directory.
   let dbPath := wsDir / ".lake" / "build" / "api-docs.db"

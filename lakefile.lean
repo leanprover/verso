@@ -106,6 +106,7 @@ lean_exe «verso-demo» where
 lean_lib UsersGuide where
   srcDir := "doc"
   leanOptions := #[⟨`weak.linter.verso.manual.headerTags, true⟩]
+  needs := #[`@:docSource]
 
 @[default_target]
 lean_exe usersguide where
@@ -219,19 +220,17 @@ package_facet docSource pkg : System.FilePath := do
     | none => buildDir / ".." / "packages" / "doc-gen4"
 
   exeJob.mapM fun exeFile => do
-    -- Add trace for the TOML config file so changes trigger rebuild
-    if ← tomlPath.pathExists then
-      addTrace (← fetchFileTrace tomlPath (text := true))
-
-    buildFileUnlessUpToDate' dbPath do
-      let args :=
-        if ← tomlPath.pathExists then
-          #[wsDir.toString, docgen4Dir.toString, pkgDir.toString, tomlPath.toString]
-        else
-          #[wsDir.toString, docgen4Dir.toString, pkgDir.toString]
-      proc {
-        cmd := exeFile.toString
-        args
-      }
+    -- Always run the setup exe and let the inner `lake build` handle incrementality.
+    -- This avoids stale DB issues from incomplete traces — the inner workspace's own
+    -- build system correctly tracks all dependencies (doc-gen4, documented libraries, etc.).
+    let args :=
+      if ← tomlPath.pathExists then
+        #[wsDir.toString, docgen4Dir.toString, pkgDir.toString, tomlPath.toString]
+      else
+        #[wsDir.toString, docgen4Dir.toString, pkgDir.toString]
+    proc {
+      cmd := exeFile.toString
+      args
+    }
 
     pure dbPath

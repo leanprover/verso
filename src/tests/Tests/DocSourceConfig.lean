@@ -14,7 +14,7 @@ Tests for `Verso.Genre.Manual.DocSource.Config` — TOML parsing and lakefile ge
 open Verso.Genre.Manual.DocSource
 open Lake.Toml
 
-/-- Parse a TOML string into a `Table`. Throws on parse error. -/
+/-- Parses a TOML string into a `Table`. Throws on parse error. -/
 private def parseToml (input : String) : IO Table := do
   let ictx := Lean.Parser.mkInputContext input "<test>"
   match (← Lake.Toml.loadToml ictx |>.toBaseIO) with
@@ -23,18 +23,18 @@ private def parseToml (input : String) : IO Table := do
     let msgStrs ← msgs.toList.mapM fun msg => msg.data.toString
     throw <| .userError s!"TOML parse error:\n{"\n".intercalate msgStrs}"
 
-/-- Assert that two values are equal, throwing a descriptive error if not. -/
+/-- Asserts that two values are equal, throwing a descriptive error if not. -/
 private def assertEqual [BEq α] [Repr α] (label : String) (expected actual : α) : IO Unit := do
   unless expected == actual do
     throw <| IO.userError s!"{label}: expected\n  {repr expected}\nbut got\n  {repr actual}"
 
-/-- Assert that a result is an error. -/
+/-- Asserts that a result is an error. -/
 private def assertError [Repr α] (label : String) (result : Except String α) : IO Unit := do
   match result with
   | .error _ => pure ()
   | .ok v => throw <| IO.userError s!"{label}: expected an error but got\n  {repr v}"
 
-/-- Assert that a string contains a substring. -/
+/-- Asserts that a string contains a substring. -/
 private def assertContains (label : String) (haystack needle : String) : IO Unit := do
   unless (haystack.splitOn needle).length > 1 do
     throw <| IO.userError s!"{label}: expected string to contain '{needle}' but got:\n  {haystack}"

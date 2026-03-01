@@ -17,7 +17,7 @@ namespace Verso.Genre.Manual.DocSource
 
 open Lake.Toml
 
-/-- A dependency entry from `doc-sources.toml`, mirroring `[[require]]` in `lakefile.toml`. -/
+/-- Dependency entry from `doc-sources.toml`, mirroring `[[require]]` in `lakefile.toml`. -/
 structure Require where
   /-- The package name (must match the name declared in its lakefile). -/
   name : String
@@ -44,20 +44,20 @@ structure Config where
   setup : Array String := #[]
 deriving Repr, BEq, Inhabited
 
-/-- Extract a `String` from a TOML `Value`, or `none` if it's not a string. -/
+/-- Extracts a `String` from a TOML `Value`, or `none` if it's not a string. -/
 private def tomlString? : Value → Option String
   | .string _ s => some s
   | _ => none
 
 /--
-Extract an `Array String` from a TOML array of strings. Non-string elements are silently
+Extracts an `Array String` from a TOML array of strings. Non-string elements are silently
 skipped.
 -/
 private def tomlStringArray? : Value → Option (Array String)
   | .array _ vs => some <| vs.filterMap tomlString?
   | _ => none
 
-/-- Parse a single `[[require]]` entry from a TOML table value. -/
+/-- Parses a single `[[require]]` entry from a TOML table value. -/
 def Require.ofToml (v : Value) : Except String Require := do
   match v with
   | .table' _ t =>
@@ -73,7 +73,7 @@ def Require.ofToml (v : Value) : Except String Require := do
     pure { name, git, rev, path, subDir }
   | _ => throw "[[require]] entry must be a table"
 
-/-- Parse a `Config` from a TOML `Table`. -/
+/-- Parses a `Config` from a TOML `Table`. -/
 def Config.ofToml (table : Table) : Except String Config := do
   let require ← match table.find? `require with
     | some (.array _ vs) => vs.mapM Require.ofToml
@@ -87,7 +87,7 @@ def Config.ofToml (table : Table) : Except String Config := do
     | none => #[]
   pure { require, libraries, setup }
 
-/-- Load and parse a `doc-sources.toml` file. -/
+/-- Loads and parses a `doc-sources.toml` file. -/
 def Config.load (filePath : System.FilePath) : IO Config := do
   let input ← IO.FS.readFile filePath
   let ictx := Lean.Parser.mkInputContext input filePath.toString
@@ -101,7 +101,7 @@ def Config.load (filePath : System.FilePath) : IO Config := do
     throw <| .userError s!"Error parsing {filePath}:\n{"\n".intercalate msgStrs}"
 
 /--
-Split a command string into an executable name and arguments, respecting single and double
+Splits a command string into an executable name and arguments, respecting single and double
 quotes. Backslash escapes the next character inside double quotes. Unmatched quotes are
 treated as if closed at the end of the string.
 -/
@@ -152,14 +152,18 @@ def splitCommand (cmd : String) : Option (String × Array String) := do
   | [] => none
   | exe :: rest => some (exe, rest.toArray)
 
-/-- Generate a `require` declaration in lakefile.lean syntax for a single dependency. -/
+/-- Generates a `require` declaration in lakefile.lean syntax for a single dependency. -/
 def Require.toLakefileEntry (r : Require) (projectDir : System.FilePath) : String :=
   let name := s!"require «{r.name}»"
   match r.git, r.path with
   | some url, _ =>
+    -- Resolve relative git URLs against the project root, since the generated
+    -- lakefile lives in the managed workspace, not the project root.
+    let absUrl := if System.FilePath.isAbsolute ⟨url⟩ || (url.splitOn "://").length > 1 then url
+                  else (projectDir / url).toString
     let revPart := r.rev.map (s!" @ \"{·}\"") |>.getD ""
     let subDirPart := r.subDir.map (s!" / \"{·}\"") |>.getD ""
-    s!"{name} from git\n  \"{url}\"{revPart}{subDirPart}\n"
+    s!"{name} from git\n  \"{absUrl}\"{revPart}{subDirPart}\n"
   | _, some path =>
     -- Resolve relative paths against the project root to produce absolute paths,
     -- since the generated lakefile lives in the managed workspace, not the project root.
@@ -170,7 +174,7 @@ def Require.toLakefileEntry (r : Require) (projectDir : System.FilePath) : Strin
     s!"{name}\n"
 
 /--
-Generate a complete `lakefile.lean` for the managed doc-gen workspace.
+Generates a complete `lakefile.lean` for the managed doc-gen workspace.
 
 `config` is the parsed `doc-sources.toml` (or `none` for a core-only build).
 `docgen4Dir` is the absolute path to the doc-gen4 package checkout.
@@ -179,7 +183,7 @@ Generate a complete `lakefile.lean` for the managed doc-gen workspace.
 def generateLakefile (config : Option Config)
     (docgen4Dir : System.FilePath) (projectDir : System.FilePath) : String :=
   let header := "import Lake\nopen Lake DSL\n\npackage «docgen-workspace»\n\n"
-  let docgenReq := s!"require «doc-gen4» from \"{docgen4Dir}\"\n\n"
+  let docgenReq := s!"require «doc-gen4» from git\n  \"{docgen4Dir}\"\n\n"
   let userReqs := match config with
     | some cfg => cfg.require.map (·.toLakefileEntry projectDir) |>.toList |> String.join
     | none => ""
