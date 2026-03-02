@@ -304,6 +304,7 @@ public def HtmlAssets.writeFiles (assets : HtmlAssets) (destination : System.Fil
     match content with
     | .inl string => IO.FS.writeFile path string
     | .inr bytes => IO.FS.writeBinFile path bytes
+  assets.features.emitFiles destination
 
 open Verso.BEq in
 public instance : BEq HtmlAssets where

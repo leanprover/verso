@@ -45,7 +45,6 @@ public structure HtmlConfig extends HtmlAssets where
   -- KaTeX isn't appropriate; here, we want to initialize it properly.
   features := .all
 
-
 public instance : ToJson HtmlConfig where
   toJson := private fun
     | { toHtmlAssets, htmlDepth, extraFilesHtml, extraHead, extraContents, logo, logoLink, sourceLink, issueLink, sectionTocDepth, rootTocDepth } =>
