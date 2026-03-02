@@ -1,0 +1,63 @@
+name: Check PR title follows commit convention
+
+on:
+    pull_request:
+        types: [opened, edited, reopened]
+    merge_group:
+
+jobs:
+    check-pr-title:
+        name: "PR title follows commit convention"
+        runs-on: ubuntu-latest
+        steps:
+            - name: Check PR title
+              uses: actions/github-script@v8
+              with:
+                  script: |
+                      let title;
+                      if (context.eventName === 'merge_group') {
+                          // The merge commit message's first line is the commit subject
+                          title = context.payload.merge_group.head_commit.message.split('\n')[0];
+                      } else {
+                          title = context.payload.pull_request.title;
+                      }
+
+                      const types = ['feat', 'fix', 'doc', 'style', 'refactor', 'test', 'chore', 'perf'];
+                      const typePattern = types.join('|');
+                      const regex = new RegExp(`^(${typePattern}): .+$`);
+
+                      const errors = [];
+
+                      if (!regex.test(title)) {
+                          errors.push(`PR title does not match the required format: \`<type>: <subject>\``);
+                          errors.push(`Allowed types: ${types.join(', ')}`);
+                          errors.push(`Example: \`fix: correct typo in documentation\``);
+                          errors.push(`Example: \`feat: add RSS feed support\``);
+                      } else {
+                          // Extract subject (part after ": ")
+                          const colonIndex = title.indexOf(': ');
+                          const subject = title.substring(colonIndex + 2);
+
+                          if (/^[A-Z]/.test(subject)) {
+                              errors.push(`Subject must not start with a capital letter: \`${subject}\``);
+                          }
+
+                          if (subject.endsWith('.')) {
+                              errors.push(`Subject must not end with a period: \`${subject}\``);
+                          }
+                      }
+
+                      if (errors.length > 0) {
+                          const message = [
+                              'PR title does not follow the commit convention.',
+                              '',
+                              `Title: \`${title}\``,
+                              '',
+                              ...errors.map(e => `- ${e}`),
+                              '',
+                              'Format: `<type>: <subject>`',
+                          ].join('\n');
+                          core.setFailed(message);
+                      } else {
+                          core.info(`PR title is valid: ${title}`);
+                      }

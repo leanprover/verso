@@ -275,19 +275,21 @@ elab_rules : command
     let dirName := x.getId ++ `directive |> mkIdentFrom x
     let (toHtml?, other) ← splitToHtml contents
     let noJson ← argNames.mapM deJson
-    let arr : TSyntax `Lean.Parser.Term.doSeqItem ←
-      if !argNames.isEmpty then
-        `(Lean.Parser.Term.doSeqItem|
-          let .arr #[$(argNames.map (·.1)),*] := json
-            | HtmlT.logError s!"Expected array, got {json}"
-              return .empty)
-      else `(Lean.Parser.Term.doSeqItem|pure ())
     let toHtml ← toHtml?.mapM fun tm =>
-      `(Lean.Parser.Term.structInstField|
-        toHtml id json goI goB contents := do
-              $arr
-              $noJson*
-              ($tm id json goI goB contents))
+      if argNames.isEmpty then
+        `(Lean.Parser.Term.structInstField|
+          toHtml id json goI goB contents := do
+                ($tm id json goI goB contents))
+      else
+        `(Lean.Parser.Term.structInstField|
+          toHtml id json goI goB contents := do
+                match json with
+                | .arr #[$(argNames.map (·.1)),*] => do
+                  $noJson*
+                  ($tm id json goI goB contents)
+                | _ => do
+                  HtmlT.logError s!"Expected array, got {json}"
+                  return .empty)
     let other := toHtml.toArray ++ other
     let cmd2 ←
       `(command|
@@ -325,19 +327,21 @@ elab_rules : command
     let compName := x.getId ++ `comp |> mkIdentFrom x
     let (toHtml?, other) ← splitToHtml contents
     let noJson ← argNames.mapM deJson
-    let arr : TSyntax `Lean.Parser.Term.doSeqItem ←
-      if !argNames.isEmpty then
-        `(Lean.Parser.Term.doSeqItem|
-          let .arr #[$(argNames.map (·.1)),*] := json
-            | HtmlT.logError s!"Expected array, got {json}"
-              return .empty)
-      else `(Lean.Parser.Term.doSeqItem|pure ())
     let toHtml ← toHtml?.mapM fun tm =>
-      `(Lean.Parser.Term.structInstField|
-        toHtml id json goI contents := do
-              $arr
-              $noJson*
-              ($tm id json goI contents))
+      if argNames.isEmpty then
+        `(Lean.Parser.Term.structInstField|
+          toHtml id json goI contents := do
+                ($tm id json goI contents))
+      else
+        `(Lean.Parser.Term.structInstField|
+          toHtml id json goI contents := do
+                match json with
+                | .arr #[$(argNames.map (·.1)),*] => do
+                  $noJson*
+                  ($tm id json goI contents)
+                | _ => do
+                  HtmlT.logError s!"Expected array, got {json}"
+                  return .empty)
     let other := toHtml.toArray ++ other
     let cmd2 ←
       `(command|
