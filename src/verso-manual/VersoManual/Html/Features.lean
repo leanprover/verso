@@ -63,6 +63,48 @@ public instance : LawfulHashable HtmlFeature where
     intro f f' hEq
     cases f <;> cases f' <;> first | rfl | contradiction
 
+namespace HtmlFeature
+/--
+Returns the license information for a feature.
+-/
+public def licenseInfo : HtmlFeature → Array LicenseInfo
+  | .KaTeX => #[Licenses.KaTeX]
+  | .search => #[Licenses.fuzzysort, Licenses.w3Combobox, Licenses.elasticlunr.js]
+
+/--
+Returns the CSS file paths that should be referenced in page headers for a feature.
+-/
+public def cssFilePaths : HtmlFeature → Array String
+  | .KaTeX => #["katex/katex.css"]
+  -- This is handled specially due to the need to generate the search index
+  | .search => #[]
+
+/--
+Returns the JS file paths and whether they should be deferred, for page headers.
+-/
+public def jsFilePaths : HtmlFeature → Array (String × Bool)
+  | .KaTeX => #[("katex/katex.js", false), ("katex/math.js", false)]
+  -- This is handled specially due to the need to generate the search index
+  | .search => #[]
+
+/--
+Writes the files for a feature to the destination directory.
+-/
+public def emitFiles : HtmlFeature → System.FilePath → IO Unit
+  | .KaTeX, dir => do
+    IO.FS.createDirAll (dir / "katex")
+    IO.FS.writeFile (dir / "katex" / "katex.css") katex.css
+    IO.FS.writeFile (dir / "katex" / "katex.js") katex.js
+    IO.FS.writeFile (dir / "katex" / "math.js") math.js
+    for (name, contents) in katexFonts do
+      let path := dir / name
+      path.parent.forM IO.FS.createDirAll
+      IO.FS.writeBinFile path contents
+  -- This is handled specially due to the need to generate the search index
+  | .search, _ => pure ()
+
+end HtmlFeature
+
 namespace HtmlFeatures
 /--
 No HTML features are enabled.
@@ -255,6 +297,13 @@ public instance : FromJson HtmlFeatures where
 public instance [Monad m] : ForIn m HtmlFeatures HtmlFeature where
   forIn fs init step := private ForIn.forIn fs.toArray init step
 
+/--
+Writes the files for all enabled features to the destination directory.
+-/
+public def emitFiles (features : HtmlFeatures) (dir : System.FilePath) : IO Unit := do
+  for f in features do
+    f.emitFiles dir
+
 end HtmlFeatures
 
 /--
@@ -362,51 +411,6 @@ public def HtmlAssets.combine (assets moreAssets : HtmlAssets) : HtmlAssets := {
     licenseInfo := assets.licenseInfo.insertMany moreAssets.licenseInfo
   }
 
-/--
-Returns the license information for a feature.
--/
-public def HtmlFeature.licenseInfo : HtmlFeature → Array LicenseInfo
-  | .KaTeX => #[Licenses.KaTeX]
-  | .search => #[Licenses.fuzzysort, Licenses.w3Combobox, Licenses.elasticlunr.js]
-
-/--
-Returns the CSS file paths that should be referenced in page headers for a feature.
--/
-public def HtmlFeature.cssFilePaths : HtmlFeature → Array String
-  | .KaTeX => #["katex/katex.css"]
-  -- This is handled specially due to the need to generate the search index
-  | .search => #[]
-
-/--
-Returns the JS file paths and whether they should be deferred, for page headers.
--/
-public def HtmlFeature.jsFilePaths : HtmlFeature → Array (String × Bool)
-  | .KaTeX => #[("katex/katex.js", false), ("katex/math.js", false)]
-  -- This is handled specially due to the need to generate the search index
-  | .search => #[]
-
-/--
-Writes the files for a feature to the destination directory.
--/
-public def HtmlFeature.emitFiles : HtmlFeature → System.FilePath → IO Unit
-  | .KaTeX, dir => do
-    IO.FS.createDirAll (dir / "katex")
-    IO.FS.writeFile (dir / "katex" / "katex.css") katex.css
-    IO.FS.writeFile (dir / "katex" / "katex.js") katex.js
-    IO.FS.writeFile (dir / "katex" / "math.js") math.js
-    for (name, contents) in katexFonts do
-      let path := dir / name
-      path.parent.forM IO.FS.createDirAll
-      IO.FS.writeBinFile path contents
-  -- This is handled specially due to the need to generate the search index
-  | .search, _ => pure ()
-
-/--
-Writes the files for all enabled features to the destination directory.
--/
-public def HtmlFeatures.emitFiles (features : HtmlFeatures) (dir : System.FilePath) : IO Unit := do
-  for f in features do
-    f.emitFiles dir
 
 /--
 This is a legacy coercion for API compatibility.
