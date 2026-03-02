@@ -7,11 +7,15 @@ module
 import Lean.Meta
 public import Lean.Meta.Basic
 import Lean.PrettyPrinter.Delaborator
+import Lean.Parser.Command
 
 open Lean
 open Lean.PrettyPrinter Delaborator
 
 namespace Verso.Genre.Manual.Block.Docstring
+
+open Parser Command Term in
+meta def declSigWithId := leading_parser termParser maxPrec >> declSig
 
 def stripNS : Syntax → Syntax
   | .ident info substr x pre => .ident info substr x.getString!.toName pre
