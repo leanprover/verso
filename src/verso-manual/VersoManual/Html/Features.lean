@@ -46,13 +46,9 @@ A set of HTML features.
 -/
 public structure HtmlFeatures where
   private mk ::
-  private features : HashSet HtmlFeature
-deriving Repr
-
-public instance : BEq HtmlFeatures where
-  beq xs ys := private
-    xs.features.size == ys.features.size &&
-    xs.features.all ys.features.contains
+  private hasKaTeX : Bool
+  private hasSearch : Bool
+deriving Repr, Inhabited, BEq
 
 public instance : LawfulBEq HtmlFeature where
   rfl := by
@@ -66,85 +62,228 @@ public instance : LawfulHashable HtmlFeature where
     intro f f' hEq
     cases f <;> cases f' <;> first | rfl | contradiction
 
+namespace HtmlFeature
+/--
+Returns the license information for a feature.
+-/
+public def licenseInfo : HtmlFeature → Array LicenseInfo
+  | .KaTeX => #[Licenses.KaTeX]
+  | .search => #[Licenses.fuzzysort, Licenses.w3Combobox, Licenses.elasticlunr.js]
+
+/--
+Returns the CSS file paths that should be referenced in page headers for a feature.
+-/
+public def cssFilePaths : HtmlFeature → Array String
+  | .KaTeX => #["katex/katex.css"]
+  -- This is handled specially due to the need to generate the search index
+  | .search => #[]
+
+/--
+Returns the JS file paths and whether they should be deferred, for page headers.
+-/
+public def jsFilePaths : HtmlFeature → Array (String × Bool)
+  | .KaTeX => #[("katex/katex.js", false), ("katex/math.js", false)]
+  -- This is handled specially due to the need to generate the search index
+  | .search => #[]
+
+/--
+Writes the files for a feature to the destination directory.
+-/
+public def emitFiles : HtmlFeature → System.FilePath → IO Unit
+  | .KaTeX, dir => do
+    IO.FS.createDirAll (dir / "katex")
+    IO.FS.writeFile (dir / "katex" / "katex.css") katex.css
+    IO.FS.writeFile (dir / "katex" / "katex.js") katex.js
+    IO.FS.writeFile (dir / "katex" / "math.js") math.js
+    for (name, contents) in katexFonts do
+      let path := dir / name
+      path.parent.forM IO.FS.createDirAll
+      IO.FS.writeBinFile path contents
+  -- This is handled specially due to the need to generate the search index
+  | .search, _ => pure ()
+
+end HtmlFeature
+
 namespace HtmlFeatures
 /--
 No HTML features are enabled.
 -/
-public def empty : HtmlFeatures := ⟨{}⟩
+public def empty : HtmlFeatures := ⟨false, false⟩
 
 public instance : EmptyCollection HtmlFeatures := ⟨.empty⟩
 
+@[simp, grind _=_]
+theorem empty_is_empty : empty = {} := by simp [EmptyCollection.emptyCollection]
+
+@[simp, grind =]
+private theorem not_empty_hasKaTeX : ({} : HtmlFeatures).hasKaTeX = false := by
+  simp [EmptyCollection.emptyCollection, empty]
+
+@[simp, grind =]
+private theorem not_empty_hasSearch : ({} : HtmlFeatures).hasSearch = false := by
+  simp [EmptyCollection.emptyCollection, empty]
+
+/--
+Constructs a singleton set of HTML features.
+-/
+public def singleton (f : HtmlFeature) : HtmlFeatures :=
+  match f with
+    | .KaTeX => { hasKaTeX := true, hasSearch := false }
+    | .search => { hasKaTeX := false, hasSearch := true }
+
 public instance : Singleton HtmlFeature HtmlFeatures where
-  singleton x := private ⟨singleton x⟩
+  singleton x := singleton x
 
 /--
 Adds a feature to the feature set.
 -/
 public def insert (feature : HtmlFeature) (features : HtmlFeatures) : HtmlFeatures :=
-  { features with features := features.features.insert feature }
+  match feature with
+  | .KaTeX => { features with hasKaTeX := true }
+  | .search => { features with hasSearch := true }
 
 public instance : Insert HtmlFeature HtmlFeatures where
   insert x xs := insert x xs
+
+@[simp, grind =]
+theorem insert_empty_singleton : ({} : HtmlFeatures).insert f = {f} := by
+  cases f <;> simp [insert, Singleton.singleton, singleton]
 
 /--
 Converts a feature set into an array of features.
 -/
 public def toArray (features : HtmlFeatures) : Array HtmlFeature :=
-  features.features.toArray |>.qsortOrd
+  match features with
+  | ⟨true, true⟩ => #[.KaTeX, .search]
+  | ⟨true, false⟩ => #[.KaTeX]
+  | ⟨false, true⟩ => #[.search]
+  | ⟨false, false⟩ => #[]
 
 /--
 Converts an array of features into a feature set.
 -/
 public def ofArray (features : Array HtmlFeature) : HtmlFeatures :=
-  ⟨HashSet.ofArray features⟩
+  features.foldl (init := {}) (·.insert ·)
+
+/--
+Returns a feature set that contains the features in either set.
+-/
+public def union (fs fs' : HtmlFeatures) : HtmlFeatures :=
+  { hasKaTeX := fs.hasKaTeX || fs'.hasKaTeX, hasSearch := fs.hasSearch || fs'.hasSearch }
+
+public instance : Union HtmlFeatures where
+  union := union
+
+/--
+Returns a feature set that contains the features in both sets.
+-/
+public def inter (fs fs' : HtmlFeatures) : HtmlFeatures :=
+  { hasKaTeX := fs.hasKaTeX && fs'.hasKaTeX, hasSearch := fs.hasSearch && fs'.hasSearch }
+
+public instance : Inter HtmlFeatures where
+  inter := inter
 
 /--
 The feature set that includes all HTML features.
 -/
-public def all : HtmlFeatures := {.KaTeX, .search}
+public def all : HtmlFeatures := ⟨true, true⟩
 
 /--
 Checks whether the feature {name}`f` is enabled in {name}`features`.
 -/
-public def contains (features : HtmlFeatures) (f : HtmlFeature) : Bool := features.features.contains f
+public def contains (features : HtmlFeatures) (f : HtmlFeature) : Bool :=
+  match f with
+  | .KaTeX => features.hasKaTeX
+  | .search => features.hasSearch
 
 /--
 {name}`f` is a member of {name}`features`.
 -/
-public def Mem (features : HtmlFeatures) (f : HtmlFeature) : Prop := f ∈ features.features
+public def Mem (features : HtmlFeatures) (f : HtmlFeature) : Prop :=
+  features.contains f
 
 public instance : Membership HtmlFeature HtmlFeatures where
   mem fs f := Mem fs f
 
+@[grind _=_]
 public theorem mem_iff_contains {fs : HtmlFeatures} {f : HtmlFeature} : f ∈ fs ↔ (fs.contains f = true) := by
-  unfold contains
-  apply HashSet.mem_iff_contains
+  let ⟨hasK, hasS⟩ := fs
+  cases fs <;> cases f <;> repeat (cases ‹Bool›) <;>
+  simp [contains, Membership.mem, Mem]
+
+@[simp, grind .]
+public theorem mem_all {f : HtmlFeature} : f ∈ all := by
+  cases f <;> simp [all, Membership.mem, Mem, contains]
+
+@[simp, grind =]
+public theorem mem_union {f : HtmlFeature} {fs fs' : HtmlFeatures} :
+    f ∈ (fs ∪ fs') ↔ (f ∈ fs) ∨ (f ∈ fs') := by
+  simp [Union.union, union]
+  cases fs <;> cases fs' <;> cases f <;> repeat (cases ‹Bool›) <;>
+  simp [contains, Membership.mem, Mem]
+
+@[simp, grind =]
+public theorem union_empty {fs : HtmlFeatures} :
+    fs ∪ {} = fs := by
+  simp [Union.union, union, EmptyCollection.emptyCollection, empty]
+
+@[simp, grind =]
+public theorem empty_union {fs : HtmlFeatures} :
+    {} ∪ fs = fs := by
+  simp [Union.union, union, EmptyCollection.emptyCollection, empty]
+
+@[simp, grind =]
+public theorem union_all {fs : HtmlFeatures} :
+    fs ∪ all = all := by
+  simp [Union.union, union, all]
+
+@[simp, grind =]
+public theorem all_union {fs : HtmlFeatures} :
+    all ∪ fs = all := by
+  simp [Union.union, union, all]
+
+@[simp, grind =]
+public theorem mem_inter {f : HtmlFeature} {fs fs' : HtmlFeatures} :
+    f ∈ (fs ∩ fs') ↔ (f ∈ fs) ∧ (f ∈ fs') := by
+  simp [Inter.inter, inter]
+  cases fs <;> cases fs' <;> cases f <;> repeat (cases ‹Bool›) <;>
+  simp [contains, Membership.mem, Mem]
+
+@[simp, grind =]
+public theorem inter_empty {fs : HtmlFeatures} :
+    fs ∩ {} = {} := by
+  simp [Inter.inter, inter, EmptyCollection.emptyCollection, empty]
+
+@[simp, grind =]
+public theorem empty_inter {fs : HtmlFeatures} :
+    {} ∩ fs = {} := by
+  simp [Inter.inter, inter, EmptyCollection.emptyCollection, empty]
+
+@[simp, grind =]
+public theorem inter_all {fs : HtmlFeatures} :
+    fs ∩ all = fs := by
+  simp [Inter.inter, inter, all]
+
+@[simp, grind =]
+public theorem all_inter {fs : HtmlFeatures} :
+    all ∩ fs = fs := by
+  simp [Inter.inter, inter, all]
 
 /--
 Membership is decidable.
 -/
 public instance instDecidableMem : Decidable (Mem fs f) :=
-  have inst : Decidable (fs.contains f = true) := inferInstance
-  match inst with
-  | .isTrue t =>
-    .isTrue <| by
-      simp only [Mem]
-      apply mem_iff_contains.mpr; assumption
-  | .isFalse f =>
-    .isFalse <| by
-      intro
-      apply f
-      apply mem_iff_contains.mp
-      simp only [(· ∈ ·)]
-      simp_all [Mem]
+  if h : fs.contains f then
+    .isTrue <| by simp [Mem, *]
+  else .isFalse <| by simp [Mem, *]
 
 @[inherit_doc instDecidableMem]
 public instance instDecidableMembership {f : HtmlFeature} {fs : HtmlFeatures} : Decidable (f ∈ fs) :=
   instDecidableMem
 
-@[simp, grind! .]
+@[simp, grind .]
 public theorem all_contains_all (f : HtmlFeature) : all.contains f := by
-  cases f <;> simp [all] <;> decide +native
+  cases f <;> simp [all, contains]
 
 public instance : ToJson HtmlFeatures where
   toJson fs := private ToJson.toJson fs.toArray
@@ -157,6 +296,13 @@ public instance : FromJson HtmlFeatures where
 public instance [Monad m] : ForIn m HtmlFeatures HtmlFeature where
   forIn fs init step := private ForIn.forIn fs.toArray init step
 
+/--
+Writes the files for all enabled features to the destination directory.
+-/
+public def emitFiles (features : HtmlFeatures) (dir : System.FilePath) : IO Unit := do
+  for f in features do
+    f.emitFiles dir
+
 end HtmlFeatures
 
 /--
@@ -164,6 +310,9 @@ A collection of HTML assets that can be initialized in the manual configuration 
 custom elements during traversal.
 -/
 public structure HtmlAssets where
+  /-- Which bundled features should be included? -/
+  -- This default value is overridden in Verso.Genre.Manual.HtmlConfig
+  features : HtmlFeatures := .empty
   /-- Extra CSS to be included inline into every `<head>` via `<style>` tags -/
   extraCss : HashSet CSS := {}
   /-- Extra JS to be included inline into every `<head>` via `<script>` tags -/
@@ -203,12 +352,14 @@ public def HtmlAssets.writeFiles (assets : HtmlAssets) (destination : System.Fil
     match content with
     | .inl string => IO.FS.writeFile path string
     | .inr bytes => IO.FS.writeBinFile path bytes
+  assets.features.emitFiles destination
 
 open Verso.BEq in
 public instance : BEq HtmlAssets where
   beq := private ptrEqThen fun
-    | { extraCss := css1, extraJs := js1, extraJsFiles := jsFiles1, extraCssFiles := cssFiles1, extraDataFiles := data1, licenseInfo := license1 },
-      { extraCss := css2, extraJs := js2, extraJsFiles := jsFiles2, extraCssFiles := cssFiles2, extraDataFiles := data2, licenseInfo := license2 } =>
+    | { features := features1, extraCss := css1, extraJs := js1, extraJsFiles := jsFiles1, extraCssFiles := cssFiles1, extraDataFiles := data1, licenseInfo := license1 },
+      { features := features2, extraCss := css2, extraJs := js2, extraJsFiles := jsFiles2, extraCssFiles := cssFiles2, extraDataFiles := data2, licenseInfo := license2 } =>
+      features1 == features2 &&
       css1.size == css2.size && css1.all css2.contains &&
       js1.size == js2.size && js1.all js2.contains &&
       jsFiles1.size == jsFiles2.size && jsFiles1.all jsFiles2.contains &&
@@ -218,8 +369,9 @@ public instance : BEq HtmlAssets where
 
 public instance : ToJson HtmlAssets where
   toJson := private fun
-    | { extraCss, extraJs, extraJsFiles, extraCssFiles, extraDataFiles, licenseInfo } =>
+    | { features, extraCss, extraJs, extraJsFiles, extraCssFiles, extraDataFiles, licenseInfo } =>
       json%{
+        "features": $features,
         "extraCss": $extraCss.toArray,
         "extraJs": $extraJs.toArray,
         "extraJsFiles": $extraJsFiles.toArray,
@@ -230,13 +382,14 @@ public instance : ToJson HtmlAssets where
 
 public instance : FromJson HtmlAssets where
   fromJson? v := private do
+    let features ← v.getObjValAs? _ "features"
     let extraCss ← HashSet.ofArray <$> v.getObjValAs? (Array CSS) "extraCss"
     let extraJs ← HashSet.ofArray <$> v.getObjValAs? (Array JS) "extraJs"
     let extraJsFiles ← HashSet.ofArray <$> v.getObjValAs? (Array JsFile) "extraJsFiles"
     let extraCssFiles ← HashSet.ofArray <$> v.getObjValAs? (Array CssFile) "extraCssFiles"
     let extraDataFiles ← HashSet.ofArray <$> v.getObjValAs? (Array DataFile) "extraDataFiles"
     let licenseInfo ← HashSet.ofArray <$> v.getObjValAs? (Array LicenseInfo) "licenseInfo"
-    return { extraCss, extraJs, extraJsFiles, extraCssFiles, extraDataFiles, licenseInfo }
+    return { features, extraCss, extraJs, extraJsFiles, extraCssFiles, extraDataFiles, licenseInfo }
 
 /--
 Combines two sets of HTML assets.
@@ -245,6 +398,7 @@ If {name}`moreAssets` contains named file assets whose names conflict with those
 then the version in {name}`assets` is used.
 -/
 public def HtmlAssets.combine (assets moreAssets : HtmlAssets) : HtmlAssets := {
+    features := assets.features ∪ moreAssets.features,
     extraCss := assets.extraCss.insertMany moreAssets.extraCss,
     extraJs := assets.extraJs.insertMany moreAssets.extraJs,
     extraJsFiles := moreAssets.extraJsFiles.fold (init := assets.extraJsFiles) fun extraJsFiles jsFile =>
@@ -256,24 +410,6 @@ public def HtmlAssets.combine (assets moreAssets : HtmlAssets) : HtmlAssets := {
     licenseInfo := assets.licenseInfo.insertMany moreAssets.licenseInfo
   }
 
-/--
-Adds the HTML assets corresponding to a feature.
--/
-public def HtmlFeature.addAssets : HtmlFeature → HtmlAssets → HtmlAssets
-  | .KaTeX, st => { st with
-      extraCssFiles :=
-        st.extraCssFiles
-          |>.insert { filename := "katex/katex.css", contents := katex.css },
-      extraJsFiles :=
-        st.extraJsFiles
-          |>.insert {filename := "katex/katex.js", contents := katex.js, sourceMap? := none}
-          |>.insert {filename := "katex/math.js", contents := math.js, sourceMap? := none},
-      extraDataFiles := st.extraDataFiles.insertMany (katexFonts.map fun f => ⟨f.1, f.2⟩),
-      licenseInfo := st.licenseInfo.insert Licenses.KaTeX
-    }
-  | .search, st => { st with
-      licenseInfo := st.licenseInfo.insertMany [Licenses.fuzzysort, Licenses.w3Combobox, Licenses.elasticlunr.js]
-    }
 
 /--
 This is a legacy coercion for API compatibility.

@@ -298,7 +298,8 @@ open Verso.Output.Html in
 def TraverseState.ofConfig (config : HtmlConfig) : TraverseState := Id.run do
   let mut st : TraverseState := .initialize config.toHtmlAssets
   for f in config.features do
-    st := st.modifyHtmlAssets f.addAssets
+    for li in f.licenseInfo do
+      st := st.addLicenseInfo li
   return st
 
 def traverse (logError : String → IO Unit) (text : Part Manual) (config : Config) : ReaderT ExtensionImpls IO (Part Manual × TraverseState) := do
@@ -486,6 +487,12 @@ def page (toc : List Html.Toc)
   let extraJsFiles := extraJsFiles.map fun
     | (true, f) => (f.filename, f.defer)
     | (false, f) => ("/-verso-data/" ++ f.filename, f.defer)
+  let featureJsFiles :=
+    state.features.toArray.flatMap fun f =>
+      f.jsFilePaths.map fun (name, defer) => ("/-verso-data/" ++ name, defer)
+  let cssFiles :=
+    state.extraCssFiles.toArray.map (·.filename) ++
+    state.features.toArray.flatMap (fun f => f.cssFilePaths)
   Html.page toc path textTitle htmlBookTitle contents
     -- The extraCss, extraJs, extraCssFiles, and extraJsFiles in the config are absent here
     -- because they are included in the traverse state when it is initialized
@@ -496,8 +503,8 @@ def page (toc : List Html.Toc)
     (repoLink := config.sourceLink)
     (issueLink := config.issueLink)
     (localItems := localItems)
-    (extraStylesheets := state.extraCssFiles.toList.map ("/-verso-data/" ++ ·.filename))
-    (extraJsFiles := extraJsFiles)
+    (extraStylesheets := cssFiles.toList.map ("/-verso-data/" ++ ·))
+    (extraJsFiles := featureJsFiles ++ extraJsFiles)
     (extraHead := config.extraHead)
     (extraContents := config.extraContents)
 
