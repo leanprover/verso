@@ -50,7 +50,6 @@ public structure HtmlFeatures where
   private hasSearch : Bool
 deriving Repr, Inhabited, BEq
 
-
 public instance : LawfulBEq HtmlFeature where
   rfl := by
     intro f; cases f <;> rfl
