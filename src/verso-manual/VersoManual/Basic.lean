@@ -310,12 +310,13 @@ private def jsonMap (xs : HashMap α β) : Json :=
 
 instance : ToJson TraverseState where
   toJson st := private
-    let {tags, externalTags, domains, ids, extraCss, extraJs, extraJsFiles, extraCssFiles, extraDataFiles, quickJump, licenseInfo, contents} := st
+    let {tags, externalTags, domains, ids, features, extraCss, extraJs, extraJsFiles, extraCssFiles, extraDataFiles, quickJump, licenseInfo, contents} := st
     json%{
       "tags": $(jsonMap tags),
       "externalTags": $(jsonMap externalTags),
       "domains": $domains,
       "ids": $ids.toArray,
+      "features": $features,
       "extraCss": $extraCss.toArray,
       "extraJs": $extraJs.toArray,
       "extraJsFiles": $extraJsFiles.toArray,
@@ -343,6 +344,7 @@ public instance : FromJson TraverseState where
     let domains <- v.getObjValAs? _ "domains"
     let ids <- v.getObjValAs? (Array InternalId) "ids"
     let ids := .ofArray ids
+    let features ← v.getObjValAs? _ "features"
     let extraCss <- v.getObjValAs? (Array CSS) "extraCss"
     let extraCss := .ofArray extraCss
     let extraJs <- v.getObjValAs? (Array JS) "extraJs"
@@ -356,7 +358,7 @@ public instance : FromJson TraverseState where
     let licenseInfo := .ofArray licenseInfo
     let contents ← v.getObjValAs? (NameMap Json) "contents"
     let contents := ⟨contents⟩
-    return { tags, externalTags, domains, ids, extraCss, extraJs, extraJsFiles, extraCssFiles, extraDataFiles, quickJump, licenseInfo, contents }
+    return { tags, externalTags, domains, ids, features, extraCss, extraJs, extraJsFiles, extraCssFiles, extraDataFiles, quickJump, licenseInfo, contents }
 end
 /--
 Returns a fresh internal ID.
@@ -455,8 +457,9 @@ def addLicenseInfo (state : TraverseState) (licenseInfo : LicenseInfo) : Travers
   {state with licenseInfo := state.licenseInfo.insert licenseInfo}
 
 @[inherit_doc HtmlAssets.writeFiles]
-def writeFiles (state : TraverseState) (destination : System.FilePath) : IO Unit :=
+def writeFiles (state : TraverseState) (destination : System.FilePath) : IO Unit := do
   state.toHtmlAssets.writeFiles destination
+  state.features.emitFiles destination
 
 end TraverseState
 

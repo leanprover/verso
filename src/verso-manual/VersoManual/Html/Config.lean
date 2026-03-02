@@ -41,14 +41,14 @@ public structure HtmlConfig extends HtmlAssets where
   `none` means "unlimited".
   -/
   rootTocDepth : Option Nat := some 1
-  /--
-  Which bundled features should be included?
-  -/
-  features : HtmlFeatures := .all
+  -- This overrides the default value in HtmlAssets. That type may be used in other contexts where
+  -- KaTeX isn't appropriate; here, we want to initialize it properly.
+  features := .all
+
 
 public instance : ToJson HtmlConfig where
   toJson := private fun
-    | { toHtmlAssets, htmlDepth, extraFilesHtml, extraHead, extraContents, logo, logoLink, sourceLink, issueLink, sectionTocDepth, rootTocDepth, features } =>
+    | { toHtmlAssets, htmlDepth, extraFilesHtml, extraHead, extraContents, logo, logoLink, sourceLink, issueLink, sectionTocDepth, rootTocDepth } =>
       json%{
         "toHtmlAssets": $toHtmlAssets,
         "htmlDepth": $htmlDepth,
@@ -60,8 +60,7 @@ public instance : ToJson HtmlConfig where
         "sourceLink": $sourceLink,
         "issueLink": $issueLink,
         "sectionTocDepth": $sectionTocDepth,
-        "rootTocDepth": $rootTocDepth,
-        "features": $features
+        "rootTocDepth": $rootTocDepth
       }
 
 public instance : FromJson HtmlConfig where
@@ -77,5 +76,4 @@ public instance : FromJson HtmlConfig where
     let issueLink <- v.getObjValAs? _ "issueLink"
     let sectionTocDepth <- v.getObjValAs? _ "sectionTocDepth"
     let rootTocDepth <- v.getObjValAs? _ "rootTocDepth"
-    let features <- v.getObjValAs? _ "features"
-    return { toHtmlAssets, htmlDepth, extraFilesHtml, extraHead, extraContents, logo, logoLink, sourceLink, issueLink, sectionTocDepth, rootTocDepth, features }
+    return { toHtmlAssets, htmlDepth, extraFilesHtml, extraHead, extraContents, logo, logoLink, sourceLink, issueLink, sectionTocDepth, rootTocDepth }
