@@ -457,8 +457,8 @@ def addLicenseInfo (state : TraverseState) (licenseInfo : LicenseInfo) : Travers
   {state with licenseInfo := state.licenseInfo.insert licenseInfo}
 
 @[inherit_doc HtmlAssets.writeFiles]
-def writeFiles (state : TraverseState) (destination : System.FilePath) : IO Unit :=
-  state.toHtmlAssets.writeFiles destination
+def writeFiles (state : TraverseState) (source : StaticAssetSource) (destination : System.FilePath) : IO Unit :=
+  state.toHtmlAssets.writeFiles source destination
 
 end TraverseState
 
