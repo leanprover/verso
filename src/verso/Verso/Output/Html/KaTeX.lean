@@ -6,6 +6,8 @@ Author: David Thrane Christiansen
 module
 import VersoUtil.BinFiles
 meta import VersoUtil.BinFiles
+import Verso.Output.StaticAsset
+meta import Verso.Output.StaticAsset
 
 open Verso.BinFiles
 
@@ -16,21 +18,20 @@ namespace Verso.Output.Html
 /--
 The minified KaTeX CSS file's contents, to be placed parallel to the JS and fonts, in a file named `katex/katex.min.css`.
 -/
-public def katex.css : String :=
-  include_str "../../../../../vendored-js/katex/katex.min.css"
+public def katex.css : System.FilePath :=
+  "katex/katex.min.css"
 
 /--
 The minified KaTeX JS file's contents, to be placed parallel to the CSS and fonts, in a file named `katex/katex.min.js`.
 -/
-public def katex.js : String :=
-  include_str "../../../../../vendored-js/katex/katex.min.js"
+public def katex.js : System.FilePath :=
+  "katex/katex.min.js"
 
 /--
 The KaTeX font files. Keys are filenames of the form `katex/fonts/...`.
 -/
-public def katexFonts : Array (String × ByteArray):=
-  (include_bin_dir "../../../../../vendored-js/katex/fonts").map fun (name, contents) =>
-    (name.dropPrefix "../../../../../vendored-js/" |>.copy, contents)
+public def katexFonts : List System.FilePath :=
+  include_asset_dir "../../../../../vendored-js" "katex/fonts"
 
 /--
 A short script that renders all Verso math using KaTeX.
