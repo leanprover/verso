@@ -228,6 +228,10 @@ deriving ToJson, FromJson
 
 structure RenderConfig extends Config where
   /--
+  How to obtain static assets
+  -/
+  assetSource : Output.StaticAssetSource := .copied "."
+  /--
   How to insert links in rendered code
   -/
   linkTargets : TraverseState → Multi.AllRemotes → LinkTargets Manual.TraverseContext := (·.localTargets ++ ·.remoteTargets)
@@ -692,7 +696,7 @@ where
       if let some alt := text.metadata.bind (·.shortTitle) then
         alt
       else titleHtml
-    state.writeFiles (dir / "-verso-data")
+    state.writeFiles config.assetSource (dir / "-verso-data")
 
     IO.FS.withFile (dir.join "index.html") .write fun h => do
       if config.verbose then
@@ -754,7 +758,7 @@ where
       copyRecursively logError src (root.join dest)
     for (src, dest) in config.extraFilesHtml do
       copyRecursively logError src (root.join dest)
-    state.writeFiles (root / "-verso-data")
+    state.writeFiles config.assetSource (root / "-verso-data")
 
     emitPart titleToShow authors authorshipNote toc opts.lift ctxt state definitionIds linkTargets {} true config.htmlDepth root text
     let xrefJson ← IO.FS.readFile (root / "xref.json")

@@ -13,6 +13,7 @@ public import VersoManual.Html.CssFile
 import Verso.Output.Html.KaTeX
 public import VersoManual.LicenseInfo
 import VersoManual.LicenseInfo.Licenses
+public import Verso.Output.StaticAsset
 
 set_option doc.verso true
 set_option linter.missingDocs true
@@ -87,20 +88,27 @@ public def jsFilePaths : HtmlFeature → Array (String × Bool)
   | .search => #[]
 
 /--
+Copy, from the {lit}`sourceDir` to a specified {lit}`destDir`, a specific
+asset.
+-/
+public def emitFile (sourceDir : System.FilePath) (destDir : System.FilePath) (assetPath : System.FilePath) : IO Unit := do
+  let source := sourceDir / assetPath
+  let dest := destDir / assetPath
+  dest.parent.forM IO.FS.createDirAll
+  IO.FS.writeBinFile dest (← IO.FS.readBinFile source)
+
+/--
 Writes the files for a feature to the destination directory.
 -/
-public def emitFiles : HtmlFeature → System.FilePath → IO Unit
-  | .KaTeX, dir => do
-    IO.FS.createDirAll (dir / "katex")
-    IO.FS.writeFile (dir / "katex" / "katex.css") katex.css
-    IO.FS.writeFile (dir / "katex" / "katex.js") katex.js
-    IO.FS.writeFile (dir / "katex" / "math.js") math.js
-    for (name, contents) in katexFonts do
-      let path := dir / name
-      path.parent.forM IO.FS.createDirAll
-      IO.FS.writeBinFile path contents
-  -- This is handled specially due to the need to generate the search index
-  | .search, _ => pure ()
+public def emitFiles : HtmlFeature → System.FilePath → System.FilePath → IO Unit
+  | .KaTeX, sourceDir, destDir => do
+    let placeFile := emitFile sourceDir destDir
+    placeFile katex.css
+    placeFile katex.js
+    IO.FS.writeFile (destDir / "katex" / "math.js") math.js
+    for fontFile in katexFonts do
+      placeFile fontFile
+  | .search, _, _ => pure ()
 
 end HtmlFeature
 
@@ -299,9 +307,9 @@ public instance [Monad m] : ForIn m HtmlFeatures HtmlFeature where
 /--
 Writes the files for all enabled features to the destination directory.
 -/
-public def emitFiles (features : HtmlFeatures) (dir : System.FilePath) : IO Unit := do
+public def emitFiles (features : HtmlFeatures) (sourceDir : System.FilePath) (destDir : System.FilePath) : IO Unit := do
   for f in features do
-    f.emitFiles dir
+    f.emitFiles sourceDir destDir
 
 end HtmlFeatures
 
@@ -345,14 +353,16 @@ public def HtmlAssets.files (assets : HtmlAssets) : Array (String × (String ⊕
 /--
 Emits the extra CSS, JS, and data files to the specified destination directory, ensuring that it exists.
 -/
-public def HtmlAssets.writeFiles (assets : HtmlAssets) (destination : System.FilePath) : IO Unit := do
+public def HtmlAssets.writeFiles (source: Output.StaticAssetSource) (assets : HtmlAssets) (destination : System.FilePath) : IO Unit := do
   for (name, content) in assets.files do
     let path := destination / name
     path.parent.forM IO.FS.createDirAll
     match content with
     | .inl string => IO.FS.writeFile path string
     | .inr bytes => IO.FS.writeBinFile path bytes
-  assets.features.emitFiles destination
+  match source with
+    | .copied fromDir => assets.features.emitFiles fromDir destination
+    | .linked _ => pure ()
 
 open Verso.BEq in
 public instance : BEq HtmlAssets where
