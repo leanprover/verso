@@ -75,7 +75,7 @@ public def licenseInfo : HtmlFeature → Array LicenseInfo
 Returns the CSS file paths that should be referenced in page headers for a feature.
 -/
 public def cssFilePaths : HtmlFeature → Array String
-  | .KaTeX => #["katex/katex.css"]
+  | .KaTeX => #["katex/katex.min.css"]
   -- This is handled specially due to the need to generate the search index
   | .search => #[]
 
@@ -83,7 +83,7 @@ public def cssFilePaths : HtmlFeature → Array String
 Returns the JS file paths and whether they should be deferred, for page headers.
 -/
 public def jsFilePaths : HtmlFeature → Array (String × Bool)
-  | .KaTeX => #[("katex/katex.js", false), ("katex/math.js", false)]
+  | .KaTeX => #[("katex/katex.min.js", false), ("katex/math.js", false)]
   -- This is handled specially due to the need to generate the search index
   | .search => #[]
 
