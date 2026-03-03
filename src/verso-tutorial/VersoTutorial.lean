@@ -518,7 +518,7 @@ def emit (tutorials : Tutorials) (navSite : Option Blog.Site) : EmitM Unit := do
 
   let dir := (← read).config.destination
   ensureDir dir
-  (← readThe Manual.TraverseState).writeFiles (.copied ".") (dir / "-verso-data")
+  (← readThe Manual.TraverseState).writeFiles (.copied "./vendored-js") (dir / "-verso-data")
 
   let site ← toSite tutorials
   let (site, blogState) ← site.traverse (← blogConfig) (← read).components
@@ -526,7 +526,7 @@ def emit (tutorials : Tutorials) (navSite : Option Blog.Site) : EmitM Unit := do
   let state ← readThe Manual.TraverseState
 
   -- Why are we copying a second time to a slightly different directory?
-  state.writeFiles (.copied ".") dir
+  state.writeFiles (.copied "./vendored-js") dir
 
   let mut tutorialCode : HashMap String ((String × String) × Option LiveConfig) := {}
 
