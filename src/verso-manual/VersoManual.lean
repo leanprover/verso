@@ -230,7 +230,7 @@ structure RenderConfig extends Config where
   /--
   How to obtain static assets
   -/
-  assetSource : Output.StaticAssetSource := .copied "."
+  assetSource : Output.StaticAssetSource := .copied "./vendored-js"
   /--
   How to insert links in rendered code
   -/
