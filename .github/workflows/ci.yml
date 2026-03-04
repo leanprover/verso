@@ -67,7 +67,7 @@ jobs:
             - name: Install PDF Dependencies
               uses: zauguin/install-texlive@v4
               with:
-                  texlive_version: 2025
+                  texlive_version: 2026
                   packages: |
                       scheme-minimal
                       l3packages
@@ -90,8 +90,8 @@ jobs:
                       textcase
                       memoir
                       sourcecodepro
-                      sourcesanspro
-                      sourceserifpro
+                      sourcesans
+                      sourceserif
                       fvextra
                       upquote
                       lineno
