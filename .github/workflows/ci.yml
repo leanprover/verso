@@ -89,8 +89,8 @@ jobs:
                       textcase
                       memoir
                       sourcecodepro
-                      sourcesanspro
-                      sourceserifpro
+                      sourcesans
+                      sourceserif
                       fvextra
                       upquote
                       lineno
