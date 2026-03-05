@@ -271,7 +271,7 @@ where
     else if h : p.authors.size = 1 then
       go <| Bibliography.lastName p.authors[0]
     else if h : p.authors.size > 3 then
-      (· ++ {{<em>"et al"</em>}}) <$> go (Bibliography.lastName p.authors[0])
+      (· ++ {{" "<em>"et al."</em>}}) <$> go (Bibliography.lastName p.authors[0])
     else andList <$> p.authors.mapM (go ∘ Bibliography.lastName)
 
 open Verso.Doc.TeX in
@@ -308,7 +308,7 @@ where
     else if h : p.authors.size = 1 then
       go <| Bibliography.lastName p.authors[0]
     else if h : p.authors.size > 3 then
-      (· ++ \TeX{\em{"et al"} }) <$> go (Bibliography.lastName p.authors[0])
+      (· ++ \TeX{" " \em{"et al."} }) <$> go (Bibliography.lastName p.authors[0])
     else andListTeX <$> p.authors.mapM (go ∘ Bibliography.lastName)
 
 private def arrayOrd (ord : Ord α) : Ord (Array α) := inferInstance
