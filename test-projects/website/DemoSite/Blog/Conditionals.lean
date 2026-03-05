@@ -257,7 +257,7 @@ example : (123123190283102938019238098 * 1234124).toString.length > 14 := by
   [reduction] unfolded reducible declarations (max: 46, num: 1):
     [reduction] outParam ↦ 46
   [type_class] used instances (max: 54, num: 1):
-    [type_class] USize.instOfNat ↦ 54
+    [type_class] Lean.Grind.CommRing.OfCommSemiring.instOfNatQ ↦ 54
   [reduction] Axioms (possibly imported non-exposed defs) that were tried to be unfolded (max: 22, num: 1):
     [reduction] sorryAx ↦ 22
   use `set_option diagnostics.threshold <num>` to control threshold for reporting counters
