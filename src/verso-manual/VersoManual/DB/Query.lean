@@ -20,7 +20,7 @@ documentation types (`DeclType`, `Signature`, `DocName`, `FieldInfo`, `ParentInf
 namespace Verso.Genre.Manual.DB
 
 open Lean
-open DocGen4 (RenderedCode)
+open DocGen4 (FormatCode)
 open DocGen4.Process (DocInfo NameInfo)
 open DocGen4.DB (ReadDB openForReading builtinDocstringValues)
 open SubVerso.Highlighting (Highlighted Token)
@@ -43,45 +43,48 @@ def docNameOfNameInfo (ni : NameInfo)
     (showNamespace : Bool := true)
     (sigOverride : Option String := none) : DocName :=
   let docstring? := docStringOfDoc? ni.doc
-  let sigStr := sigOverride.getD s!"{ni.name} : {renderedCodeText ni.type}"
+  let sigStr := sigOverride.getD s!"{ni.name} : {formatCodeText ni.type}"
   let displayName := if showNamespace then ni.name.toString else ni.name.getString!
   let nameHl := Highlighted.token ⟨.const ni.name sigStr docstring? false none, displayName⟩
   { name := ni.name
     hlName := nameHl
-    signature := .seq #[nameHl, .text " : ", renderedCodeToHighlighted constInfo ni.type]
+    signature := .seq #[nameHl, .text " : ", formatCodeToHighlighted constInfo ni.type]
     docstring? }
 
 /-- Build a `Signature` from a doc-gen4 `Info`, including the declaration name. -/
 def signatureOfInfo (info : DocGen4.Process.Info)
     (constInfo : Lean.NameMap (String × Option String) := {}) : Signature :=
   let docstring? := docStringOfDoc? info.doc
-  let sigStr := s!"{info.name} : {renderedCodeText info.type}"
+  let sigStr := s!"{info.name} : {formatCodeText info.type}"
   let nameHl := Highlighted.token ⟨.const info.name sigStr docstring? false none, info.name.toString⟩
   let argsHl := info.args.map fun arg =>
-    Highlighted.seq #[.text " ", renderedCodeToHighlighted constInfo arg.binder]
+    Highlighted.seq #[.text " ", formatCodeToHighlighted constInfo arg.binder]
   let sepHl := Highlighted.text " : "
-  let typeHl := renderedCodeToHighlighted constInfo info.type
+  let typeHl := formatCodeToHighlighted constInfo info.type
   let sig := Highlighted.seq (#[nameHl] ++ argsHl ++ #[sepHl, typeHl])
   { wide := sig, narrow := sig }
 
 /--
-Extract the parent structure name from a `RenderedCode` type by finding the first `.const` tag.
-Falls back to `.anonymous` if no constant reference is found.
+Extract the parent structure name from a `FormatCode` type by rendering and finding the first
+`.const` tag. Falls back to `.anonymous` if no constant reference is found.
 -/
-private partial def parentNameOfRenderedCode : RenderedCode → Name
-  | .text _ => .anonymous
-  | .tag (.const name) _ => name
-  | .tag _ inner => parentNameOfRenderedCode inner
-  | .append xs => xs.foldl (init := .anonymous) fun acc x =>
-    if acc != .anonymous then acc else parentNameOfRenderedCode x
+private partial def parentNameOfFormatCode (fc : FormatCode) : Name :=
+  go fc.render
+where
+  go : DocGen4.RenderedCode → Name
+    | .text _ => .anonymous
+    | .tag (.const name) _ => name
+    | .tag _ inner => go inner
+    | .append xs => xs.foldl (init := .anonymous) fun acc x =>
+      if acc != .anonymous then acc else go x
 
 /-- Convert doc-gen4's `StructureParentInfo` array to Verso's `ParentInfo` array. -/
 def convertParents (parents : Array DocGen4.Process.StructureParentInfo)
     (constInfo : Lean.NameMap (String × Option String) := {}) : Array ParentInfo :=
   parents.mapIdx fun i p => {
     projFn := p.projFn
-    name := parentNameOfRenderedCode p.type
-    parent := renderedCodeToHighlighted constInfo p.type
+    name := parentNameOfFormatCode p.type
+    parent := formatCodeToHighlighted constInfo p.type
     index := i
   }
 
@@ -103,7 +106,7 @@ def convertFieldInfo (field : DocGen4.Process.FieldInfo)
     (constInfo : Lean.NameMap (String × Option String) := {}) : FieldInfo :=
   let fieldNameStr := field.name.getString!
   let docString? := docStringOfDoc? field.doc
-  let sigStr := s!"{field.name} : {renderedCodeText field.type}"
+  let sigStr := s!"{field.name} : {formatCodeText field.type}"
   let fieldName :=
     Highlighted.token ⟨.const field.name sigStr docString? true none, fieldNameStr⟩
   let fieldFrom : List DocName :=
@@ -126,7 +129,7 @@ def convertFieldInfo (field : DocGen4.Process.FieldInfo)
   {
     fieldName
     fieldFrom
-    type := renderedCodeToHighlighted constInfo field.type
+    type := formatCodeToHighlighted constInfo field.type
     projFn := field.name
     subobject? := none
     binderInfo := .default
@@ -151,7 +154,7 @@ private def prettyCtorSig (ctorName : Name) (structName : Name)
     -- Group consecutive fields with the same rendered type
     let mut groups : Array (Array String × String) := #[]
     for field in fields do
-      let typeStr := renderedCodeText field.type
+      let typeStr := formatCodeText field.type
       let fieldName := field.name.getString!
       match groups.back? with
       | some (names, t) =>
@@ -222,27 +225,27 @@ def buildDeclType (docInfo : DocInfo) (hideFields : Bool) (hideStructureConstruc
 (the declaration itself, its fields, constructors, etc.). -/
 private def localConstInfoMap (docInfo : DocInfo) : Lean.NameMap (String × Option String) :=
   let info := docInfo.toInfo
-  let sig := s!"{info.name} : {renderedCodeText info.type}"
+  let sig := s!"{info.name} : {formatCodeText info.type}"
   let m : Lean.NameMap (String × Option String) :=
     ({} : Lean.NameMap _).insert info.name (sig, docStringOfDoc? info.doc)
   match docInfo with
   | .inductiveInfo ind =>
     ind.ctors.foldl (init := m) fun m c =>
-      m.insert c.name (s!"{c.name} : {renderedCodeText c.type}", docStringOfDoc? c.doc)
+      m.insert c.name (s!"{c.name} : {formatCodeText c.type}", docStringOfDoc? c.doc)
   | .structureInfo s =>
     let ctorSig := prettyCtorSig s.ctor.name info.name s.fieldInfo
     let m := m.insert s.ctor.name (ctorSig, docStringOfDoc? s.ctor.doc)
     s.fieldInfo.foldl (init := m) fun m f =>
-      m.insert f.name (s!"{f.name} : {renderedCodeText f.type}", docStringOfDoc? f.doc)
+      m.insert f.name (s!"{f.name} : {formatCodeText f.type}", docStringOfDoc? f.doc)
   | .classInfo s =>
     let ctorSig := prettyCtorSig s.ctor.name info.name s.fieldInfo
     let m := m.insert s.ctor.name (ctorSig, docStringOfDoc? s.ctor.doc)
     s.fieldInfo.foldl (init := m) fun m f =>
-      m.insert f.name (s!"{f.name} : {renderedCodeText f.type}", docStringOfDoc? f.doc)
+      m.insert f.name (s!"{f.name} : {formatCodeText f.type}", docStringOfDoc? f.doc)
   | _ => m
 
-/-- Collect all `RenderedCode` values from a `DocInfo` (type, args, fields, constructors, parents). -/
-private def allRenderedCodes (docInfo : DocInfo) : Array RenderedCode :=
+/-- Collect all `FormatCode` values from a `DocInfo` (type, args, fields, constructors, parents). -/
+private def allFormatCodes (docInfo : DocInfo) : Array FormatCode :=
   let info := docInfo.toInfo
   let codes := #[info.type] ++ info.args.map (·.binder)
   match docInfo with
@@ -254,10 +257,10 @@ private def allRenderedCodes (docInfo : DocInfo) : Array RenderedCode :=
     codes ++ #[s.ctor.type] ++ s.fieldInfo.map (·.type) ++ s.parents.map (·.type)
   | _ => codes
 
-/-- Collect all constant names referenced in any `RenderedCode` of a `DocInfo`. -/
+/-- Collect all constant names referenced in any `FormatCode` of a `DocInfo`. -/
 private def referencedConstNames (docInfo : DocInfo) : Lean.NameSet :=
-  (allRenderedCodes docInfo).foldl (init := {}) fun acc rc =>
-    renderedCodeConstNames acc rc
+  (allFormatCodes docInfo).foldl (init := {}) fun acc fc =>
+    formatCodeConstNames acc fc
 
 /--
 Query the database for type and docstring hover data for a set of constant names.
@@ -299,9 +302,9 @@ private def queryConstHoverData (dbPath : System.FilePath) (names : Lean.NameSet
           | Except.error _ => pure ()
         versoDocStmt.reset
         versoDocStmt.clearBindings
-      match SQLite.Blob.fromBinary (α := RenderedCode) typeBlob with
-      | Except.ok rc =>
-        let sig := s!"{name} : {renderedCodeText rc}"
+      match SQLite.Blob.fromBinary (α := FormatCode) typeBlob with
+      | Except.ok fc =>
+        let sig := s!"{name} : {formatCodeText fc}"
         result := result.insert name (sig, doc?)
       | Except.error _ =>
         pure ()

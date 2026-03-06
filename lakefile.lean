@@ -4,7 +4,7 @@ open Lake DSL
 require subverso from git "https://github.com/leanprover/subverso"@"main"
 require MD4Lean from git "https://github.com/acmepjz/md4lean"@"main"
 require plausible from git "https://github.com/leanprover-community/plausible"@"main"
-require «doc-gen4» from git "https://github.com/leanprover/doc-gen4"@"main"
+require «doc-gen4» from git "https://github.com/david-christiansen/doc-gen4"@"pp-db"
 
 package verso where
   precompileModules := false -- temporarily disabled to work around an issue with nightly-2025-03-30
