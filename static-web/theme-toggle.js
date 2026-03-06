@@ -3,32 +3,53 @@
     "use strict";
 
     const STORAGE_KEY = "verso-theme";
+    const THEMES = {
+        system: { label: "System" },
+        light: { label: "Light" },
+        dark: { label: "Dark" },
+    };
+    const ICONS = {
+        system: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="12" rx="2"></rect><path d="M8 19.5h8"></path><path d="M10 16.5v3"></path><path d="M14 16.5v3"></path></svg>',
+        light: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2.5v3"></path><path d="M12 18.5v3"></path><path d="M4.9 4.9l2.1 2.1"></path><path d="M17 17l2.1 2.1"></path><path d="M2.5 12h3"></path><path d="M18.5 12h3"></path><path d="M4.9 19.1 7 17"></path><path d="M17 7l2.1-2.1"></path></svg>',
+        dark: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M21 13.2A8.8 8.8 0 1 1 10.8 3a7 7 0 0 0 10.2 10.2Z"></path></svg>',
+        chevron:
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m7 10 5 5 5-5"></path></svg>',
+    };
 
-    // Get the system preference
+    let toggleButton = null;
+    let toggleMenu = null;
+    let optionButtons = [];
+
     function getSystemTheme() {
         return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
     }
 
-    // Get the stored preference, or null if none
     function getStoredTheme() {
         try {
-            return localStorage.getItem(STORAGE_KEY);
+            const stored = localStorage.getItem(STORAGE_KEY);
+            return stored === "dark" || stored === "light" ? stored : null;
         } catch {
             return null;
         }
     }
 
-    // Set the theme on the document
+    function getSelectedTheme() {
+        return getStoredTheme() ?? "system";
+    }
+
+    function getEffectiveTheme() {
+        return getStoredTheme() ?? getSystemTheme();
+    }
+
     function setTheme(theme) {
         if (theme === "system") {
             document.documentElement.removeAttribute("data-theme");
         } else {
             document.documentElement.setAttribute("data-theme", theme);
         }
-        updateToggleIcon();
+        updateToggleUI();
     }
 
-    // Store the preference
     function storeTheme(theme) {
         try {
             if (theme === "system") {
@@ -41,79 +62,130 @@
         }
     }
 
-    // Get the effective (displayed) theme
-    function getEffectiveTheme() {
-        const stored = getStoredTheme();
-        if (stored === "dark" || stored === "light") {
-            return stored;
-        }
-        return getSystemTheme();
+    function closeMenu() {
+        if (!toggleButton || !toggleMenu) return;
+        toggleMenu.hidden = true;
+        toggleButton.setAttribute("aria-expanded", "false");
     }
 
-    // Update the toggle button icon
-    function updateToggleIcon() {
-        const toggle = document.getElementById("theme-toggle");
-        if (!toggle) return;
+    function openMenu() {
+        if (!toggleButton || !toggleMenu) return;
+        toggleMenu.hidden = false;
+        toggleButton.setAttribute("aria-expanded", "true");
+    }
 
-        const effective = getEffectiveTheme();
-        // Show sun when dark (click to go light), moon when light (click to go dark)
-        toggle.setAttribute(
-            "aria-label",
-            effective === "dark" ? "Switch to light mode" : "Switch to dark mode",
+    function applyTheme(theme) {
+        storeTheme(theme);
+        setTheme(theme);
+        closeMenu();
+    }
+
+    function updateToggleUI() {
+        const selectedTheme = getSelectedTheme();
+        const effectiveTheme = getEffectiveTheme();
+
+        if (toggleButton) {
+            const icon = toggleButton.querySelector(".theme-toggle-button-icon");
+            const chevron = toggleButton.querySelector(".theme-toggle-button-chevron");
+            if (icon) icon.innerHTML = ICONS[selectedTheme];
+            if (chevron) chevron.innerHTML = ICONS.chevron;
+
+            const label =
+                selectedTheme === "system"
+                    ? `Theme: System (currently ${effectiveTheme})`
+                    : `Theme: ${THEMES[selectedTheme].label}`;
+            toggleButton.setAttribute("aria-label", label);
+            toggleButton.title = label;
+        }
+
+        optionButtons.forEach((button) => {
+            const optionTheme = button.getAttribute("data-theme-option");
+            if (!optionTheme || !(optionTheme in THEMES)) return;
+
+            const icon = button.querySelector(".theme-toggle-option-icon");
+            if (icon) icon.innerHTML = ICONS[optionTheme];
+
+            button.setAttribute("aria-checked", String(optionTheme === selectedTheme));
+        });
+
+        const systemMeta = document.querySelector(
+            '[data-theme-option="system"] .theme-toggle-option-meta',
         );
-        toggle.innerHTML = effective === "dark" ? "☀️" : "🌙";
-    }
-
-    // Cycle through: system -> dark -> light -> system
-    function cycleTheme() {
-        const stored = getStoredTheme();
-        let newTheme;
-
-        if (stored === null) {
-            // Currently system preference - go to opposite of system
-            newTheme = getSystemTheme() === "dark" ? "light" : "dark";
-        } else if (stored === "dark") {
-            newTheme = "light";
-        } else {
-            newTheme = "system";
+        if (systemMeta) {
+            systemMeta.textContent = `Follow your OS setting (currently ${effectiveTheme})`;
         }
-
-        storeTheme(newTheme);
-        setTheme(newTheme);
     }
 
-    // Initialize theme on page load
     function initTheme() {
         const stored = getStoredTheme();
         if (stored === "dark" || stored === "light") {
-            setTheme(stored);
+            document.documentElement.setAttribute("data-theme", stored);
+        } else {
+            document.documentElement.removeAttribute("data-theme");
         }
-        // If system preference, don't set data-theme (CSS handles it)
     }
 
-    // Set up the toggle button click handler
     function initToggle() {
-        const toggle = document.getElementById("theme-toggle");
-        if (toggle) {
-            toggle.addEventListener("click", cycleTheme);
-            updateToggleIcon();
-        }
-    }
+        toggleButton = document.getElementById("theme-toggle-button");
+        toggleMenu = document.getElementById("theme-toggle-menu");
+        optionButtons = Array.from(document.querySelectorAll("[data-theme-option]"));
 
-    // Listen for system theme changes
-    function watchSystemTheme() {
-        window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
-            // Only update icon if using system preference
-            if (!getStoredTheme()) {
-                updateToggleIcon();
+        if (!toggleButton || !toggleMenu || optionButtons.length === 0) return;
+
+        toggleButton.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (toggleMenu.hidden) {
+                openMenu();
+            } else {
+                closeMenu();
             }
         });
+
+        optionButtons.forEach((button) => {
+            button.addEventListener("click", (event) => {
+                event.stopPropagation();
+                const optionTheme = event.currentTarget.getAttribute("data-theme-option");
+                if (optionTheme === "system" || optionTheme === "light" || optionTheme === "dark") {
+                    applyTheme(optionTheme);
+                }
+            });
+        });
+
+        document.addEventListener("click", (event) => {
+            const widget = document.getElementById("theme-toggle");
+            if (widget && event.target instanceof Node && !widget.contains(event.target)) {
+                closeMenu();
+            }
+        });
+
+        document.addEventListener("keydown", (event) => {
+            if (event.key === "Escape") {
+                closeMenu();
+            }
+        });
+
+        updateToggleUI();
     }
 
-    // Initialize immediately (before DOMContentLoaded) for theme to avoid flash
+    function watchSystemTheme() {
+        const media = window.matchMedia("(prefers-color-scheme: dark)");
+        const refresh = () => {
+            if (!getStoredTheme()) {
+                document.documentElement.removeAttribute("data-theme");
+                updateToggleUI();
+            }
+        };
+
+        if (typeof media.addEventListener === "function") {
+            media.addEventListener("change", refresh);
+        } else if (typeof media.addListener === "function") {
+            media.addListener(refresh);
+        }
+    }
+
     initTheme();
 
-    // Set up toggle and system watcher when DOM is ready
     if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", () => {
             initToggle();

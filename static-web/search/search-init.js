@@ -37,9 +37,14 @@ const searchHTML = `<div id="search-wrapper">
 // Initialize search box
 const data = fetch("xref.json").then((data) => data.json());
 window.addEventListener("load", () => {
-    const main = document.querySelector("header");
-    main.insertAdjacentHTML("beforeend", searchHTML);
-    const searchWrapper = document.querySelector(".combobox-list");
+    const slot = document.querySelector("#header-search-slot") ?? document.querySelector("header");
+    if (!slot) return;
+
+    slot.insertAdjacentHTML("beforeend", searchHTML);
+
+    const searchWrapper = document.querySelector("#search-wrapper .combobox-list");
+    if (!searchWrapper) return;
+
     data.then((data) => {
         registerSearch({ searchWrapper, data, domainMappers });
     });

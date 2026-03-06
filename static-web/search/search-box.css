@@ -16,7 +16,7 @@
 
 @media screen and (width <= 700px) {
     :root {
-        --search-bar-width: 12rem;
+        --search-bar-width: min(12rem, 42vw);
     }
 }
 
@@ -226,21 +226,8 @@
 /* Page layout */
 #search-wrapper {
     width: fit-content;
-    z-index: 1;
-    position: absolute;
-    top: 0;
-    right: 3rem;
-    bottom: 0;
-    padding: 0 0.5rem;
     display: flex;
-    flex-direction: column;
-    justify-content: center;
     align-items: center;
-    background-color: var(--verso-background-color, white);
-}
-
-@media screen and (max-width: 700px) {
-    #search-wrapper {
-        right: 2.25rem;
-    }
+    flex-shrink: 0;
+    background-color: transparent;
 }

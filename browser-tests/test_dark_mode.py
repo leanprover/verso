@@ -6,12 +6,17 @@ def get_theme_state(page: Page) -> tuple[str | None, str | None]:
     stored_theme = page.evaluate("() => localStorage.getItem('verso-theme')")
     return html_theme, stored_theme
 
+def get_color_scheme(page: Page) -> str:
+    return page.evaluate("""() => getComputedStyle(document.documentElement).colorScheme""")
 
-def get_css_var(page: Page, variable_name: str) -> str:
-    return page.evaluate(
-        """([name]) => getComputedStyle(document.documentElement).getPropertyValue(name).trim()""",
-        [variable_name],
-    )
+
+def get_body_background(page: Page) -> str:
+    return page.evaluate("""() => getComputedStyle(document.body).backgroundColor""")
+
+
+def select_theme(page: Page, theme: str) -> None:
+    page.locator("#theme-toggle-button").click()
+    page.locator(f'#theme-toggle-menu [data-theme-option="{theme}"]').click()
 
 
 class TestDarkMode:
@@ -25,38 +30,42 @@ class TestDarkMode:
         assert response.ok
         assert response.status == 200
 
-    def test_theme_toggle_cycles_and_updates_storage(self, server: str, page: Page):
+    def test_theme_menu_updates_storage(self, server: str, page: Page):
         page.emulate_media(color_scheme="light")
         page.goto(f"{server}/Verso-Markup")
 
-        toggle = page.locator("#theme-toggle")
+        toggle = page.locator("#theme-toggle-button")
         expect(toggle).to_have_count(1)
 
         initial_theme, initial_stored = get_theme_state(page)
         assert initial_theme is None
         assert initial_stored is None
+        assert get_color_scheme(page) == "light"
 
-        toggle.click()
+        select_theme(page, "dark")
         first_theme, first_stored = get_theme_state(page)
         assert first_theme == "dark"
         assert first_stored == "dark"
+        assert get_color_scheme(page) == "dark"
 
-        toggle.click()
+        select_theme(page, "light")
         second_theme, second_stored = get_theme_state(page)
         assert second_theme == "light"
         assert second_stored == "light"
+        assert get_color_scheme(page) == "light"
 
-        toggle.click()
+        select_theme(page, "system")
         third_theme, third_stored = get_theme_state(page)
         assert third_theme is None
         assert third_stored is None
+        assert get_color_scheme(page) == "light"
 
     def test_theme_preference_persists_across_page_loads(self, server: str, browser: Browser):
         context = browser.new_context(color_scheme="light")
         try:
             first_page = context.new_page()
             first_page.goto(f"{server}/Verso-Markup")
-            first_page.locator("#theme-toggle").click()
+            select_theme(first_page, "dark")
 
             first_theme, first_stored = get_theme_state(first_page)
             assert first_theme == "dark"
@@ -78,13 +87,22 @@ class TestDarkMode:
         initial_theme, initial_stored = get_theme_state(page)
         assert initial_theme is None
         assert initial_stored is None
-        assert get_css_var(page, "--verso-background-color") == "#1e1e1e"
+        assert get_body_background(page) == "rgb(30, 30, 30)"
+        assert get_color_scheme(page) == "dark"
 
-        page.locator("#theme-toggle").click()
+        select_theme(page, "light")
         first_theme, first_stored = get_theme_state(page)
         assert first_theme == "light"
         assert first_stored == "light"
-        assert get_css_var(page, "--verso-background-color") == "#ffffff"
+        assert get_body_background(page) == "rgb(255, 255, 255)"
+        assert get_color_scheme(page) == "light"
+
+        select_theme(page, "system")
+        second_theme, second_stored = get_theme_state(page)
+        assert second_theme is None
+        assert second_stored is None
+        assert get_body_background(page) == "rgb(30, 30, 30)"
+        assert get_color_scheme(page) == "dark"
 
     def test_dark_mode_styles_require_opt_in_attribute(self, server: str, page: Page):
         page.emulate_media(color_scheme="dark")
@@ -92,10 +110,13 @@ class TestDarkMode:
 
         attr = page.evaluate("() => document.documentElement.hasAttribute('data-verso-dark-mode')")
         assert attr is True
-        assert get_css_var(page, "--verso-background-color") == "#1e1e1e"
+        assert get_body_background(page) == "rgb(30, 30, 30)"
+        assert get_color_scheme(page) == "dark"
 
         page.evaluate("() => document.documentElement.removeAttribute('data-verso-dark-mode')")
-        assert get_css_var(page, "--verso-background-color") == "#ffffff"
+        assert get_body_background(page) == "rgb(255, 255, 255)"
+        assert get_color_scheme(page) == "light"
 
         page.evaluate("() => document.documentElement.setAttribute('data-verso-dark-mode', 'true')")
-        assert get_css_var(page, "--verso-background-color") == "#1e1e1e"
+        assert get_body_background(page) == "rgb(30, 30, 30)"
+        assert get_color_scheme(page) == "dark"

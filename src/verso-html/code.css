@@ -30,7 +30,7 @@ body {
 /* Sidebar */
 .sidebar {
     width: 300px;
-    background: var(--verso-surface-color, #f8f9fa);
+    background: var(--verso-secondary-background-color, var(--verso-surface-color, #f8f9fa));
     border-right: 1px solid var(--verso-border-color, #e9ecef);
     overflow-y: auto;
     flex-shrink: 0;

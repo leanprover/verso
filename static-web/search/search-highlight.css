@@ -42,7 +42,7 @@
     padding: 6px 8px;
     border-radius: 2px;
     cursor: pointer;
-    background: var(--verso-surface-color, #f8f9fa);
+    background: var(--verso-secondary-background-color, var(--verso-surface-color, #f8f9fa));
     border: 1px solid var(--verso-border-color-light, #ddd);
     color: var(--verso-text-color, inherit);
 }
@@ -63,7 +63,7 @@
 
 #highlight-current-count {
     padding: 6px 8px;
-    background: var(--verso-surface-color, #f8f9fa);
+    background: var(--verso-secondary-background-color, var(--verso-surface-color, #f8f9fa));
     border: 1px solid var(--verso-border-color-light, #ddd);
     border-radius: 2px;
     min-width: 40px;

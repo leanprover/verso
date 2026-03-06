@@ -433,6 +433,7 @@ public def page
         <base href={{relativeRoot}}/>
         <meta charset="utf-8"/>
         <meta name="viewport" content="height=device-height, width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1"/>
+        <meta name="color-scheme" content="light dark"/>
         <title>{{textTitle}}</title>
         <link rel="stylesheet" href="book.css" />
         <link rel="stylesheet" href="verso-vars.css" />
@@ -466,7 +467,38 @@ public def page
           <div class="header-title-wrapper">
             <a href={{if let some dest := logoLink then dest else "/"}} class="header-title"><h1>{{bookTitle}}</h1></a>
           </div>
-          <button id="theme-toggle" type="button" aria-label="Toggle dark mode"></button>
+          <div id="header-widgets">
+            <div id="header-search-slot"></div>
+            <div id="theme-toggle" class="theme-toggle">
+              <button id="theme-toggle-button" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="theme-toggle-menu" aria-label="Theme">
+                <span class="theme-toggle-button-icon" aria-hidden="true"></span>
+                <span class="theme-toggle-button-chevron" aria-hidden="true"></span>
+              </button>
+              <div id="theme-toggle-menu" class="theme-toggle-menu" role="menu" hidden="hidden">
+                <button type="button" class="theme-toggle-option" role="menuitemradio" data-theme-option="system" aria-checked="false">
+                  <span class="theme-toggle-option-icon" aria-hidden="true"></span>
+                  <span class="theme-toggle-option-copy">
+                    <span class="theme-toggle-option-label">"System"</span>
+                    <span class="theme-toggle-option-meta">"Follow your OS setting"</span>
+                  </span>
+                </button>
+                <button type="button" class="theme-toggle-option" role="menuitemradio" data-theme-option="light" aria-checked="false">
+                  <span class="theme-toggle-option-icon" aria-hidden="true"></span>
+                  <span class="theme-toggle-option-copy">
+                    <span class="theme-toggle-option-label">"Light"</span>
+                    <span class="theme-toggle-option-meta">"Always use the light palette"</span>
+                  </span>
+                </button>
+                <button type="button" class="theme-toggle-option" role="menuitemradio" data-theme-option="dark" aria-checked="false">
+                  <span class="theme-toggle-option-icon" aria-hidden="true"></span>
+                  <span class="theme-toggle-option-copy">
+                    <span class="theme-toggle-option-label">"Dark"</span>
+                    <span class="theme-toggle-option-meta">"Always use the dark palette"</span>
+                  </span>
+                </button>
+              </div>
+            </div>
+          </div>
         </header>
         <label for="toggle-toc" id="toggle-toc-click">
           <span class="line line1"/>

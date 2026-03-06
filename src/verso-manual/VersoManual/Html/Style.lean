@@ -24,7 +24,7 @@ public def pageStyle : String := r####"
     --verso-logo-height: var(--verso-header-height);
 
     /** Table of Contents appearance **/
-    --verso-toc-background-color: var(--verso-surface-color, #fafafa);
+    --verso-toc-background-color: var(--verso-secondary-background-color, var(--verso-surface-color, #fafafa));
     --verso-toc-text-color: var(--verso-text-color);
 
     /* How long should the ToC animation take? */
@@ -160,36 +160,156 @@ header {
 .header-title-wrapper {
     /* The title wrapper grows to fill up the header */
     flex: 1;
+    min-width: 0;
 }
 
-/* Theme toggle button */
-#theme-toggle {
-    background: transparent;
-    border: none;
-    cursor: pointer;
+#header-widgets {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding-right: 0.5rem;
+    flex-shrink: 0;
+}
+
+#header-search-slot {
+    display: flex;
+    align-items: center;
+}
+
+.theme-toggle {
     position: relative;
     z-index: 2;
-    font-size: 1.25rem;
-    padding: 0.5rem;
-    margin-right: 0.5rem;
-    border-radius: 0.25rem;
+}
+
+#theme-toggle-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.2rem;
+    min-width: 2.5rem;
+    height: 2.25rem;
+    padding: 0.35rem 0.45rem;
+    background: var(--verso-secondary-background-color, var(--verso-surface-color, #fafafa));
+    color: var(--verso-text-color, black);
+    border: 1px solid var(--verso-border-color-light, var(--verso-border-color, gray));
+    border-radius: 0.4rem;
+    cursor: pointer;
     line-height: 1;
-    transition: background-color 0.2s ease;
+    transition:
+        background-color 0.2s ease,
+        border-color 0.2s ease;
 }
 
-#theme-toggle:hover {
+#theme-toggle-button:hover,
+#theme-toggle-button[aria-expanded="true"] {
     background-color: var(--verso-hover-highlight-color, #eeeeee);
+    border-color: var(--verso-border-color, gray);
 }
 
-#theme-toggle:focus {
+#theme-toggle-button:focus {
     outline: 2px solid var(--verso-link-color, #386ee0);
     outline-offset: 2px;
 }
 
+.theme-toggle-button-icon,
+.theme-toggle-button-chevron,
+.theme-toggle-option-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.theme-toggle-button-icon svg,
+.theme-toggle-button-chevron svg,
+.theme-toggle-option-icon svg {
+    width: 1rem;
+    height: 1rem;
+    display: block;
+}
+
+.theme-toggle-button-chevron {
+    color: var(--verso-text-color-light, #64748b);
+}
+
+.theme-toggle-button-chevron svg {
+    width: 0.8rem;
+    height: 0.8rem;
+}
+
+.theme-toggle-menu {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 0.35rem);
+    z-index: 150;
+    min-width: 13rem;
+    padding: 0.35rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    background: var(--verso-secondary-background-color, var(--verso-surface-color, #fafafa));
+    border: 1px solid var(--verso-border-color, gray);
+    border-radius: 0.5rem;
+    box-shadow: 0 8px 18px var(--verso-shadow-color, lightgray);
+}
+
+.theme-toggle-menu[hidden] {
+    display: none;
+}
+
+.theme-toggle-option {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.45rem 0.55rem;
+    background: transparent;
+    color: var(--verso-text-color, black);
+    border: none;
+    border-radius: 0.35rem;
+    cursor: pointer;
+    font: inherit;
+    text-align: left;
+}
+
+.theme-toggle-option:hover,
+.theme-toggle-option:focus {
+    background-color: var(--verso-hover-highlight-color, #eeeeee);
+    outline: none;
+}
+
+.theme-toggle-option[aria-checked="true"] {
+    background-color: var(--verso-selected-color, #def);
+}
+
+.theme-toggle-option-copy {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.theme-toggle-option-label {
+    font-weight: 600;
+}
+
+.theme-toggle-option-meta {
+    font-size: 0.75rem;
+    color: var(--verso-text-color-light, #64748b);
+}
+
 @media screen and (max-width: 700px) {
-    #theme-toggle {
-        margin-right: 0.25rem;
-        padding: 0.25rem;
+    #header-widgets {
+        gap: 0.25rem;
+        padding-right: 0.25rem;
+    }
+
+    #theme-toggle-button {
+        min-width: 2.2rem;
+        height: 2rem;
+        padding: 0.25rem 0.35rem;
+    }
+
+    .theme-toggle-menu {
+        min-width: 11rem;
     }
 }
 
