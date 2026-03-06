@@ -126,11 +126,16 @@
     }
 
     function initToggle() {
+        const widget = document.getElementById("theme-toggle");
         toggleButton = document.getElementById("theme-toggle-button");
         toggleMenu = document.getElementById("theme-toggle-menu");
         optionButtons = Array.from(document.querySelectorAll("[data-theme-option]"));
 
         if (!toggleButton || !toggleMenu || optionButtons.length === 0) return;
+
+        if (widget) {
+            widget.hidden = false;
+        }
 
         toggleButton.addEventListener("click", (event) => {
             event.preventDefault();

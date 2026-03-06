@@ -120,3 +120,15 @@ class TestDarkMode:
         page.evaluate("() => document.documentElement.setAttribute('data-verso-dark-mode', 'true')")
         assert get_body_background(page) == "rgb(30, 30, 30)"
         assert get_color_scheme(page) == "dark"
+
+    def test_dark_mode_still_applies_without_javascript(self, server: str, browser: Browser):
+        context = browser.new_context(color_scheme="dark", java_script_enabled=False)
+        try:
+            page = context.new_page()
+            page.goto(f"{server}/Verso-Markup")
+
+            assert get_body_background(page) == "rgb(30, 30, 30)"
+            assert get_color_scheme(page) == "dark"
+            expect(page.locator("#theme-toggle")).to_be_hidden()
+        finally:
+            context.close()

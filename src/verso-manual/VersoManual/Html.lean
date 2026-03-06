@@ -469,7 +469,7 @@ public def page
           </div>
           <div id="header-widgets">
             <div id="header-search-slot"></div>
-            <div id="theme-toggle" class="theme-toggle">
+            <div id="theme-toggle" class="theme-toggle" hidden="hidden">
               <button id="theme-toggle-button" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="theme-toggle-menu" aria-label="Theme">
                 <span class="theme-toggle-button-icon" aria-hidden="true"></span>
                 <span class="theme-toggle-button-chevron" aria-hidden="true"></span>

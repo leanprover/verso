@@ -324,6 +324,7 @@ header {
     font-size: 2rem;
     font-weight: bold;
     display: block;
+    overflow: hidden;
     margin: 0 auto;
     max-width: var(--verso-content-max-width);
 }
@@ -349,6 +350,8 @@ header {
     font-size: inherit;
     font-weight: inherit;
     text-wrap: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 :root:has(header:empty) {
