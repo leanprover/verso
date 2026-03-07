@@ -80,6 +80,38 @@ class TestDarkMode:
         finally:
             context.close()
 
+    def test_theme_menu_supports_keyboard_navigation(self, server: str, page: Page):
+        page.emulate_media(color_scheme="light")
+        page.goto(f"{server}/Verso-Markup")
+
+        toggle = page.locator("#theme-toggle-button")
+        system = page.locator('#theme-toggle-menu [data-theme-option="system"]')
+        light = page.locator('#theme-toggle-menu [data-theme-option="light"]')
+        dark = page.locator('#theme-toggle-menu [data-theme-option="dark"]')
+
+        toggle.focus()
+        page.keyboard.press("Enter")
+        expect(page.locator("#theme-toggle-menu")).to_be_visible()
+        expect(system).to_be_focused()
+
+        page.keyboard.press("ArrowDown")
+        expect(light).to_be_focused()
+
+        page.keyboard.press("End")
+        expect(dark).to_be_focused()
+
+        page.keyboard.press("Enter")
+        theme, stored = get_theme_state(page)
+        assert theme == "dark"
+        assert stored == "dark"
+        expect(toggle).to_be_focused()
+
+        page.keyboard.press("Enter")
+        expect(page.locator("#theme-toggle-menu")).to_be_visible()
+        page.keyboard.press("Escape")
+        expect(page.locator("#theme-toggle-menu")).to_be_hidden()
+        expect(toggle).to_be_focused()
+
     def test_dark_system_preference_can_be_overridden_to_light(self, server: str, page: Page):
         page.emulate_media(color_scheme="dark")
         page.goto(f"{server}/Verso-Markup")

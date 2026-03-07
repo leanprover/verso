@@ -68,16 +68,48 @@
         toggleButton.setAttribute("aria-expanded", "false");
     }
 
-    function openMenu() {
+    function getSelectedOptionIndex() {
+        const selectedTheme = getSelectedTheme();
+        const index = optionButtons.findIndex(
+            (button) => button.getAttribute("data-theme-option") === selectedTheme,
+        );
+        return index === -1 ? 0 : index;
+    }
+
+    function focusOption(index) {
+        const button = optionButtons[index];
+        if (button) {
+            button.focus();
+        }
+    }
+
+    function focusAdjacentOption(delta) {
+        const currentIndex = optionButtons.findIndex((button) => button === document.activeElement);
+        const startIndex = currentIndex === -1 ? getSelectedOptionIndex() : currentIndex;
+        const nextIndex = (startIndex + delta + optionButtons.length) % optionButtons.length;
+        focusOption(nextIndex);
+    }
+
+    function closeMenuAndFocusToggle() {
+        closeMenu();
+        if (toggleButton) {
+            toggleButton.focus();
+        }
+    }
+
+    function openMenu(focusIndex = null) {
         if (!toggleButton || !toggleMenu) return;
         toggleMenu.hidden = false;
         toggleButton.setAttribute("aria-expanded", "true");
+        if (typeof focusIndex === "number") {
+            focusOption(focusIndex);
+        }
     }
 
     function applyTheme(theme) {
         storeTheme(theme);
         setTheme(theme);
-        closeMenu();
+        closeMenuAndFocusToggle();
     }
 
     function updateToggleUI() {
@@ -147,12 +179,43 @@
             }
         });
 
+        toggleButton.addEventListener("keydown", (event) => {
+            if (event.key === "Enter" || event.key === " " || event.key === "ArrowDown") {
+                event.preventDefault();
+                openMenu(getSelectedOptionIndex());
+            } else if (event.key === "ArrowUp") {
+                event.preventDefault();
+                openMenu(optionButtons.length - 1);
+            }
+        });
+
         optionButtons.forEach((button) => {
             button.addEventListener("click", (event) => {
                 event.stopPropagation();
                 const optionTheme = event.currentTarget.getAttribute("data-theme-option");
                 if (optionTheme === "system" || optionTheme === "light" || optionTheme === "dark") {
                     applyTheme(optionTheme);
+                }
+            });
+
+            button.addEventListener("keydown", (event) => {
+                if (event.key === "ArrowDown") {
+                    event.preventDefault();
+                    focusAdjacentOption(1);
+                } else if (event.key === "ArrowUp") {
+                    event.preventDefault();
+                    focusAdjacentOption(-1);
+                } else if (event.key === "Home") {
+                    event.preventDefault();
+                    focusOption(0);
+                } else if (event.key === "End") {
+                    event.preventDefault();
+                    focusOption(optionButtons.length - 1);
+                } else if (event.key === "Escape") {
+                    event.preventDefault();
+                    closeMenuAndFocusToggle();
+                } else if (event.key === "Tab") {
+                    closeMenu();
                 }
             });
         });
@@ -166,7 +229,7 @@
 
         document.addEventListener("keydown", (event) => {
             if (event.key === "Escape") {
-                closeMenu();
+                closeMenuAndFocusToggle();
             }
         });
 
