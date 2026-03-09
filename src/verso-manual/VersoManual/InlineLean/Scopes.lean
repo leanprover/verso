@@ -66,6 +66,6 @@ def runWithVariables (elabFn : Array Expr → TermElabM α) : TermElabM α := do
         -- We don't want to store messages produced when elaborating `(getVarDecls s)` because they have already been saved when we elaborated the `variable`(s) command.
         -- So, we use `Core.resetMessageLog`.
         Core.setMessageLog msgLog
-        let someType := mkSort levelZero
+        let someType := mkSort Level.zero
         Term.addAutoBoundImplicits' xs someType fun xs _ =>
           Term.withoutAutoBoundImplicit <| elabFn xs

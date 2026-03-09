@@ -105,6 +105,7 @@ def genreInline (g : Genre) [bg : BlogGenre g] : Blog.InlineExt → Array (Inlin
       traverse json (contents.map (·.cast bg.inline_eq)) <&>
         Option.map (·.cast bg.inline_eq.symm)
 
+@[implicit_reducible]
 def traverser (g : Genre) [bg : BlogGenre g] : Traverse g Blog.TraverseM where
   part _ := pure none
   block _ := pure ()
