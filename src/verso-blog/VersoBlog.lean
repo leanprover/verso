@@ -29,7 +29,7 @@ namespace Verso.Genre.Blog
 open Lean.Doc.Syntax
 open Verso ArgParse Doc Elab
 open Lean Elab
-open Verso.SyntaxUtils (parserInputString)
+open Verso.SyntaxUtils (parserInputString strLitInputContext)
 
 open SubVerso.Examples (loadExamples Example)
 open SubVerso.Examples.Messages (messagesMatch)
@@ -476,11 +476,7 @@ def lean : CodeBlockExpanderOf LeanBlockConfig
       | some (.subproject ..) => throwErrorAt x "Expected an example context for inline Lean, but found a subproject"
       | some (.module ..) => throwErrorAt x "Expected an example context for inline Lean, but found a module"
       | none => throwErrorAt x "Can't find example context"
-    let text ← getFileMap
-    let startPos := str.raw.getPos!
-    let endPos := str.raw.getTailPos?.getD startPos
-    let endPos := if endPos > text.source.rawEndPos then text.source.rawEndPos else endPos
-    let context := Parser.mkInputContext text.source (← getFileName) (endPos := endPos) (endPos_valid := by grind)
+    let (context, startPos) ← strLitInputContext str.raw (← getFileName)
     -- Process with empty messages to avoid duplicate output
     let s ←
       withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"Elaborating commands") <|

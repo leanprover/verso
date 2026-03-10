@@ -28,7 +28,7 @@ open Verso ArgParse Doc Elab Genre.Manual Html Code Highlighted.WebAssets Expect
 open Lean Elab
 open SubVerso.Highlighting
 
-open Verso.SyntaxUtils (runParserCategory' SyntaxError parseStrLitAsCategory)
+open Verso.SyntaxUtils (runParserCategory' SyntaxError parseStrLitAsCategory strLitInputContext)
 
 open Lean.Doc.Syntax
 open Lean.Elab.Tactic.GuardMsgs
@@ -260,11 +260,7 @@ def elabCommands (config : LeanBlockConfig) (str : StrLit)
       { sc with opts }
 
     let text ← getFileMap
-    let startPos := str.raw.getPos!
-    let endPos := str.raw.getTailPos? |>.getD startPos
-    let endPos := if endPos > text.source.rawEndPos then text.source.rawEndPos else endPos
-
-    let ictx := Parser.mkInputContext text.source (← getFileName) (endPos := endPos) (endPos_valid := by grind)
+    let (ictx, startPos) ← SyntaxUtils.strLitInputContext str.raw (← getFileName)
     let cctx : Command.Context := { fileName := ← getFileName, fileMap := text, snap? := none, cancelTk? := none}
 
     let mut cmdState : Command.State := { env := ← getEnv, maxRecDepth := ← MonadRecDepth.getMaxRecDepth, scopes := origScopes }
@@ -586,12 +582,21 @@ Elaborates the contained document in a new section.
 def leanSection : DirectiveExpander
   | args, contents => do
     let name? ← ArgParse.run ((some <$> .positional `name .string) <|> pure none) args
-    let arg ← `(doc_arg| -«show»)
-    let code := name?.map (s!"section {·}") |>.getD "section"
-    let start ← `(block|```lean $arg | $(quote code) ```)
-    let code := name?.map (s!"end {·}") |>.getD "end"
-    let «end» ← `(block|```lean $arg | $(quote code) ```)
-    return #[← elabBlock start] ++ (← contents.mapM elabBlock) ++ #[← elabBlock «end»]
+    let scopes ← getScopes
+    let curScope := scopes.head!
+    -- Push a new scope for each component of the section name (matching Lean's behavior for
+    -- `section a.b.c`), or a single anonymous scope if no name is given.
+    let headers := match name? with
+      | some n => n.toName.componentsRev.reverse.map (Name.toString ·)
+      | none => [""]
+    let newScopes := headers.foldl (init := scopes) fun acc header =>
+      { curScope with header } :: acc
+    setScopes newScopes
+    let result ← contents.mapM elabBlock
+    -- Pop the scopes we pushed
+    let scopes ← getScopes
+    setScopes (scopes.drop headers.length)
+    return result
 
 private def getClass : MessageSeverity → String
   | .error => "error"
