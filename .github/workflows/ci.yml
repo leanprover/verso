@@ -65,50 +65,7 @@ jobs:
                   lake build
 
             - name: Install PDF Dependencies
-              uses: zauguin/install-texlive@v4
-              with:
-                  texlive_version: 2026
-                  packages: |
-                      scheme-minimal
-                      l3packages
-                      tools
-                      latex-bin
-                      xpatch
-                      booktabs
-                      footmisc
-                      environ
-                      hyperref
-                      titlesec
-                      tocloft
-                      enumitem
-                      fmtcount
-                      glossaries
-                      datatool
-                      caption
-                      babel
-                      fontspec
-                      textcase
-                      memoir
-                      sourcecodepro
-                      sourcesans
-                      sourceserif
-                      fvextra
-                      upquote
-                      lineno
-                      float
-                      tcolorbox
-                      tikzfill
-                      pdfcol
-                      listings
-                      epstopdf-pkg
-                      pgf
-                      environ
-                      etoolbox
-                      ulem
-                      newunicodechar
-
-            - name: Check `tlmgr` version
-              run: tlmgr --version
+              uses: ./.github/actions/install-texlive
 
             - name: Run tests
               run: |
