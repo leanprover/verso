@@ -383,6 +383,178 @@ It is also possible to run the
 to format code for an branch without having Prettier installed; the
 action will run prettier and commit the formatted results.
 
+## Deployment Infrastructure
+
+TL;DR: push a tag of the form `vX.Y.Z` onto the commit that should be
+released as the manual for that version, and the rest is automatic.
+
+Deployment happens in GitHub Actions, in response to certain tags
+being pushed. Because the latest version of the GH action file will
+always be used, and we want to be able to mutate tags to re-deploy old
+manual versions (e.g. to update CSS for consistent look and feel while
+keeping content version-accurate), the steps of the workflow that
+might change are captured in scripts that are versioned along with the
+code.
+
+The files are:
+
+* `deploy/prep.sh` is used to set up the build, installing OS-level
+  dependencies.
+
+* `deploy/build.sh` is used to build the executable that generates the
+  manual.
+
+* `deploy/generate.sh` builds the manual, saving it in
+  `_out/html-multi` and packaging release assets.
+
+* `deploy/release.py` puts the generated HTML in the right place on a
+  new commit on the `deploy` branch.
+
+* `deploy/release_utils.py` contains shared utilities used by both
+  Python scripts (version parsing, version comparison, git helpers).
+
+Everything above is what needs to happen specifically to the single
+version of the documentation that is being updated in the course of
+the deploy. There is one further step, which is computing the desired
+state of the final `postdeploy` branch from the state in the `deploy`
+branch. This is done by the script `overlay.py`, which is triggered by
+pushes to `deploy`, and therefore runs at branch `main` rather than at
+the tag being pushed.
+
+* `deploy/overlay.py` processes `deploy` → `postdeploy`.
+
+### Deployment Overview
+
+The goal is to have versioned snapshots of the user's guide, with a
+structure like:
+
+* `https://verso.lean-lang.org/doc/latest/` — latest version
+* `https://verso.lean-lang.org/doc/stable/` — latest stable version
+* `https://verso.lean-lang.org/doc/4.29.0/` — guide for v4.29.0
+* `https://verso.lean-lang.org/doc/4.29.0-rc1/` — guide for v4.29.0-rc1
+
+and so forth. The root URL shows an index of all available versions.
+
+Orphan branches `deploy` and `postdeploy` contain the versioned
+content. For example, the `deploy` branch might contain:
+
+* `/4.29.0-rc1/` — built HTML for 4.29.0-rc1
+* `/4.29.0/` — built HTML for 4.29.0
+* `/4.28.0/` — built HTML for 4.28.0
+* `/latest/` — copy of `/4.29.0/` (the most recent version)
+* `/stable/` — copy of `/4.29.0/` (the most recent non-RC version)
+* `/index.html` — root page listing all versions
+
+The `latest` and `stable` directories are full copies rather than
+symlinks because Netlify deployment doesn't support symlinks.
+
+The `release.py` script is responsible for updating this structure. It
+takes the generated HTML directory, the version number, the commit
+SHA, and the deployment branch name as arguments, and then does the
+following:
+
+1. It copies the HTML to the branch (deleting an existing directory
+   first if needed).
+2. It stamps every HTML file with a comment containing the source
+   commit SHA and a UTC timestamp.
+3. It updates the `latest` directory to be a copy of the most recent
+   version, with all numbered releases being considered more recent
+   than any nightly and real releases being more recent than their
+   RCs.
+4. It updates the `stable` directory to be a copy of the most recent
+   non-RC version.
+5. It generates a root `index.html` listing all available versions.
+6. It commits the changes to the deployment branch, then switches
+   back to the original branch.
+
+A successful push to `deploy` triggers a GH action that runs the
+`overlay.py` script, which creates commits to `postdeploy` (based on
+`deploy`). These commits include all desired overlays.
+
+A successful push to `postdeploy` triggers a GH Action which
+publishes the content to Netlify.
+
+We might have named the two branches `predeploy` and `deploy`, but
+chose instead `deploy` and `postdeploy` so that we could leave
+unchanged any older tags that have workflows emitting commits to
+`deploy`.
+
+### Overlays
+
+The script `overlay.py` computes `postdeploy` from `deploy` any time
+`deploy` changes. Its purpose is to add metadata or make in-place
+changes to deployed content that is best thought of as a unified
+overlay on top of the data that exists at the historical version tags.
+
+Currently-applied overlays:
+
+* **`noindex` meta tag**: Added to every HTML file in every version
+  directory *except* `latest/`. This prevents search engines from
+  indexing old versions.
+* **Canonical URL**: Added to every HTML file, pointing to the
+  corresponding page under `latest/`. This tells search engines where
+  the authoritative version lives.
+
+Examples of additional overlays we might add in the future:
+
+* global CSS changes across all versions, for consistency
+* banners appended to sufficiently old versions describing how they
+  are deprecated and unsupported
+
+Interactions between overlays created by `overlay.py` and manual
+versions should be carefully considered to ensure
+backwards-compatibility.
+
+An overlay that simply injects a `<div>` inside old versions is
+relatively safe, because the document being injected into doesn't need to
+know about the injection. However, if a document depends rigidly on
+the presence of data created by the overlay mechanism, a problem could
+occur if the overlay changes to not produce that data in the future.
+
+Therefore we can be careful on both sides:
+
+* overlays should, ideally, as time goes on, only monotonically
+  produce more data, e.g. it should only add fields to injected
+  javascript values and avoid changing the contract of existing
+  fields.
+* documents should, ideally, fail gracefully if injected data they
+  expect to exist is missing
+
+### Local Testing
+
+To test `overlay.py` locally before pushing, do the following.
+
+* Ensure the deployment branches exist locally.
+* You'll probably want to do
+
+```
+git fetch
+git checkout deploy
+git reset --hard remotes/upstream/deploy
+git checkout postdeploy
+git reset --hard remotes/upstream/postdeploy
+```
+
+* From the repository checkout directory, on branch `main`, from a
+  clean working directory (i.e. make sure to commit any changes
+  you've made) run
+
+```shell
+python3 -B deploy/overlay.py . deploy postdeploy
+```
+
+* Inspect whatever `postdeploy` results you're interested in, e.g.
+
+```
+git show postdeploy:4.29.0-rc1/index.html
+# Expect to see <meta name="robots" content="noindex">
+```
+
+```
+git show postdeploy:latest/index.html
+# Expect to *not* see <meta name="robots" content="noindex">
+```
+
 ## Licenses
 
 Verso is licensed under the Apache license - please see the file

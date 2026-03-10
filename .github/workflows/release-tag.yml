@@ -1,0 +1,86 @@
+name: Deploy Tagged Version
+
+on:
+    push:
+        tags:
+            - "v4*"
+
+jobs:
+    deploy:
+        name: Build and deploy tagged version
+        runs-on: nscloud-ubuntu-22.04-amd64-8x16
+        permissions:
+            contents: write
+        steps:
+            - name: Install elan
+              run: |
+                  set -o pipefail
+                  curl -sSfL https://github.com/leanprover/elan/releases/download/v3.0.0/elan-x86_64-unknown-linux-gnu.tar.gz | tar xz
+                  ./elan-init -y --default-toolchain none
+                  echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+
+            - uses: actions/checkout@v6
+              with:
+                  fetch-depth: 0
+
+            - name: Lean version
+              run: lean --version
+
+            - name: Compute short SHA
+              id: shortSHA
+              run: echo "short_sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+            - name: Cache .lake
+              uses: actions/cache@v5
+              with:
+                  path: .lake
+                  key:
+                      ${{ runner.os }}-${{ hashFiles('lake-manifest.json') }}-${{
+                      hashFiles('lean-toolchain') }}-${{ steps.shortSHA.outputs.short_sha }}
+                  restore-keys: |
+                      ${{ runner.os }}-${{ hashFiles('lake-manifest.json') }}-${{ hashFiles('lean-toolchain') }}-
+
+            - name: Install OS dependencies
+              run: ./deploy/prep.sh
+
+            - name: Build the project
+              run: ./deploy/build.sh
+
+            - name: Install PDF Dependencies
+              uses: ./.github/actions/install-texlive
+
+            - name: Generate the manual
+              run: ./deploy/generate.sh
+
+            - name: Extract version from tag
+              id: version
+              run: |
+                  VERSION=${GITHUB_REF_NAME#v}
+                  echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+                  echo "Deploying version: $VERSION"
+
+            - name: Configure Git
+              run: |
+                  git config --global user.name "github-actions[bot]"
+                  git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+            - name: Deploy to deploy branch
+              run: |
+                  python -B deploy/release.py \
+                    _out/html-multi \
+                    "${{ steps.version.outputs.version }}" \
+                    "$GITHUB_SHA" \
+                    deploy
+
+            - name: Push deploy branch
+              run: git push origin deploy
+
+            - name: Create GitHub release
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                  gh release create ${{ github.ref_name }} \
+                    manual.pdf \
+                    html-manual.zip \
+                    --title "Release ${{ github.ref_name }}" \
+                    --notes "Automated release for ${{ github.ref_name }}"
