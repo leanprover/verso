@@ -323,6 +323,7 @@ where
       (· ++ \TeX{" " \em{"et al."} }) <$> go (Bibliography.lastName p.authors[0])
     else andListTeX <$> p.authors.mapM (go ∘ Bibliography.lastName)
 
+@[implicit_reducible]
 private def arrayOrd (ord : Ord α) : Ord (Array α) := inferInstance
 
 private partial def cmpCite : Json → Json → Ordering

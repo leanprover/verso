@@ -219,6 +219,43 @@ public defmethod ParserFn.parseString [Monad m] [MonadError m] [MonadEnv m] (p :
   else
     pure stk[0]
 
+/--
+Parses an original string literal.
+
+The provided string literal is used only for source positions; the `FileMap` is used to acquire the
+actual string contents.
+-/
+public def parseStrLitWith [Monad m] [MonadLog m] [MonadEnv m] [MonadOptions m] [MonadError m] [AddMessageContext m] (p : ParserFn) (input : StrLit) : m Syntax := do
+  let fileName ← getFileName
+  let startPos := input.raw.getPos!
+  let endPos := input.raw.getTailPos?.getD startPos
+  let text ← getFileMap
+  let endPos := if endPos > text.source.rawEndPos then text.source.rawEndPos else endPos
+  let ictx := mkInputContext text.source fileName (endPos := endPos) (endPos_valid := by grind)
+  let s := { mkParserState text.source with pos := startPos }
+  let env ← getEnv
+  let s := p.run ictx { env, options := ← getOptions } (getTokenTable env) s
+  if !s.allErrors.isEmpty then
+    for (pos, stk, err) in s.allErrors do
+      let err := mkSyntaxError ictx pos stk err
+      let start := text.ofPosition err.pos
+      let stop := text.ofPosition err.endPos
+      let blame := Syntax.mkStrLit (start.extract text.source stop)
+      logErrorAt blame err.text
+    return .missing
+  else if ictx.atEnd s.pos then
+    return s.stxStack.back
+  else
+    throwErrorAt input "Unparsed input: `{s.pos.extract text.source endPos}`"
+
+/--
+Parses an original string literal as part of a syntax category.
+
+The provided string literal is used only for source positions; the `FileMap` is used to acquire the
+actual string contents.
+-/
+public def parseStrLitAsCategory [Monad m] [MonadLog m] [MonadEnv m] [MonadOptions m] [MonadError m] [AddMessageContext m] (catName : Name) (input : StrLit) : m Syntax :=
+  parseStrLitWith (andthenFn whitespace (categoryParserFnImpl catName)) input
 
 open Lean.Parser in
 /--

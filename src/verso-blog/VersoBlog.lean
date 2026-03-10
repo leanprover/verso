@@ -476,11 +476,15 @@ def lean : CodeBlockExpanderOf LeanBlockConfig
       | some (.subproject ..) => throwErrorAt x "Expected an example context for inline Lean, but found a subproject"
       | some (.module ..) => throwErrorAt x "Expected an example context for inline Lean, but found a module"
       | none => throwErrorAt x "Can't find example context"
-    let context := Parser.mkInputContext (← parserInputString str) (← getFileName)
+    let text ← getFileMap
+    let startPos := str.raw.getPos!
+    let endPos := str.raw.getTailPos?.getD startPos
+    let endPos := if endPos > text.source.rawEndPos then text.source.rawEndPos else endPos
+    let context := Parser.mkInputContext text.source (← getFileName) (endPos := endPos) (endPos_valid := by grind)
     -- Process with empty messages to avoid duplicate output
     let s ←
       withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"Elaborating commands") <|
-      IO.processCommands context state { commandState with messages.unreported := {} }
+      IO.processCommands context { state with pos := startPos } { commandState with messages.unreported := {} }
     for t in s.commandState.infoState.trees do
       pushInfoTree t
 
@@ -583,7 +587,7 @@ def runWithVariables (scopes : List Scope) (elabFn : Array Expr → TermElabM α
         -- We don't want to store messages produced when elaborating `(getVarDecls s)` because they have already been saved when we elaborated the `variable`(s) command.
         -- So, we use `Core.resetMessageLog`.
         Core.setMessageLog msgLog
-        let someType := mkSort levelZero
+        let someType := mkSort Level.zero
         Term.addAutoBoundImplicits' xs someType fun xs _ =>
           Term.withoutAutoBoundImplicit <| elabFn xs
 
