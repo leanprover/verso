@@ -1,0 +1,1 @@
+window.docContents[25].resolve({"/Verso-Markup/#verso-markup":{"contents":"Lean's documentation markup language is a close relative of Markdown, but it's not identical to it.\n\n\n\n\n\n\n\n","context":"Writing Documentation in Lean with Verso","header":"2. Verso Markup","id":"/Verso-Markup/#verso-markup"}});
