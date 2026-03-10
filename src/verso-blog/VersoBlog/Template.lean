@@ -256,6 +256,7 @@ def inlineHtml (g : Genre) [bg : BlogGenre g]
 
 open Verso.Genre.Blog (TemplateT)
 
+@[implicit_reducible]
 def blogGenreHtml
     (g : Genre) [bg : BlogGenre g]
     [MonadConfig (HtmlM g)] [MonadPath (HtmlM g)]
