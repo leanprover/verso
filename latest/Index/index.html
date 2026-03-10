@@ -1,0 +1,3281 @@
+<!-- Generated from commit 7681e6e54a6d5147cef917f4607b276c035ae4a3 at 2026-03-10T10:44:16Z -->
+<!DOCTYPE html>
+<html>
+  <head>
+    <script>
+      (function(){
+  const {protocol:proto, host:hostName, pathname:path, search:srch, hash:hsh} = window.location;
+  if (!(path.endsWith("/") || path.endsWith(".html"))) {
+    window.location.replace(`${proto}//${hostName}${path}/${srch}${hsh}`);
+  }
+})()</script>
+    <base href="./../"><meta charset="utf-8">
+    <meta name="viewport" content="height=device-height, width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1">
+    <title>Index</title><link rel="stylesheet" href="book.css">
+    <link rel="stylesheet" href="verso-vars.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js" integrity="sha384-zbcZAIxlvJtNE3Dp5nxLXdXtXyxwOdnILY1TDPVmKFhl4r4nSUG1r8bcFXGVa4Te" crossorigin="anonymous"></script>
+    <script src="-verso-search/elasticlunr.min.js"></script>
+    <script src="-verso-search/fuzzysort.min.js"></script>
+    <script src="-verso-search/searchIndex.js"></script>
+    <script type="module" src="-verso-search/search-init.js"></script>
+    <link rel="stylesheet" href="-verso-search/search-box.css">
+    <link rel="stylesheet" href="-verso-search/search-highlight.css">
+    <link rel="stylesheet" href="-verso-search/domain-display.css">
+    <script src="-verso-data/popper.min.js"></script>
+    <script src="-verso-data/katex/math.js"></script>
+    <script src="-verso-data/tippy-bundle.umd.min.js"></script>
+    <script src="-verso-data/katex/katex.js"></script>
+    <link rel="stylesheet" href="-verso-data/tippy-border.css">
+    <link rel="stylesheet" href="-verso-data/katex/katex.css">
+    <style>
+.namedocs {
+  position: relative;
+  border: solid 1px #98B2C0;
+  border-radius: .5rem;
+  padding-top: var(--verso--box-padding);
+  margin-top: var(--verso--box-vertical-margin);
+  margin-bottom: var(--verso--box-vertical-margin);
+}
+
+.namedocs .text {
+  /* Causes margins on child elements to collapse inside the element, such
+     that the margins don't extend into parent with the background color.
+     The effect is that weird borders in the definition box don't happen anymore. */
+  display: flow-root;
+  /* Add a padding. this is the same as the margin applied to the first and last child.
+     The effect is that the padding looks the same size on all sides. */
+  padding: 0 var(--verso--box-padding);
+  border-top: 1px solid #98B2C0;
+}
+
+.namedocs .text > pre {
+  overflow-x: auto;
+}
+
+.namedocs .signature {
+  font-family: var(--verso-code-font-family);
+  margin-top: 0 !important;
+  margin-left: var(--verso--box-padding) !important;
+  margin-bottom: .75rem !important;
+}
+
+.namedocs .label {
+  display: block;
+  font-size: small;
+  font-family: var(--verso-structure-font-family);
+  position: absolute;
+  top: -0.65rem;
+  left: 1rem;
+  background: #fff;
+  padding: 0 .5rem .125rem;
+  border: 1px solid #98B2C0;
+  border-radius: 1rem;
+  color: #555;
+}
+
+.namedocs h1 {
+  font-size: inherit;
+  font-weight: bold
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+}
+
+.namedocs > .text .constructor {
+  padding-top: 0;
+  padding-right: 0;
+  padding-bottom: 0;
+  margin-top: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.namedocs > .text .constructor::before {
+  content: '| ';
+  display: block;
+  font-family: var(--verso-code-font-family);
+  font-weight: bold;
+  float: left;
+  width: 0.5rem;
+  white-space: pre;
+}
+
+.namedocs > .text .constructor .name-and-type {
+  padding-left: 0.5rem;
+  float: left;
+  margin-top: 0;
+  max-width: calc(100% - 1rem);
+}
+.namedocs > .text .constructor .docs {
+  clear: both;
+  padding-left: 1rem;
+}
+
+/* These margins work together with the padding on .text */
+.namedocs .text > :first-child {
+  margin-top: var(--verso--box-padding);
+}
+.namedocs .text > :last-child {
+  margin-bottom: var(--verso--box-padding);
+}
+
+.namedocs .methods td, .namedocs .fields td {
+  vertical-align: top;
+}
+.namedocs .inheritance {
+  vertical-align: top;
+  font-size: smaller;
+  font-family: var(--verso-structure-font-family);
+}
+.namedocs .inheritance ol {
+  display: inline-block;
+  margin: 0;
+  padding: 0;
+}
+.namedocs .inheritance ol li {
+  list-style-type: none;
+  display: inline-block;
+}
+.namedocs .inheritance ol li::after {
+  content: " > "
+}
+.namedocs .inheritance ol li:last-child::after {
+  content: "";
+}
+
+.namedocs .extends {
+  display: inline;
+  margin: 0;
+  padding: 0;
+}
+
+.namedocs .extends li {
+  list-style-type: none;
+  display: inline-block;
+}
+
+.namedocs .extends li label {
+  padding-right: 1rem;
+}
+
+.namedocs .subdocs .name-and-type {
+  font-size: 1rem;
+  margin-left: 0;
+  margin-top: 0;
+  margin-right: 0;
+  margin-bottom: 0.5rem;
+}
+
+.namedocs .subdocs .docs {
+  margin-left: 1.5rem;
+  margin-top: 0;
+  margin-right: 0;
+  margin-bottom: 0.5rem;
+}
+
+.namedocs:has(input[data-parent-idx]) [data-inherited-from] {
+  transition-property: opacity, display;
+  transition-duration: 0.4s;
+  transition-behavior: allow-discrete;
+  @starting-style { opacity: 0 !important; }
+}
+
+#this-page-items .tactic-name { font-weight: bold; }
+.namedocs:has(input[data-parent-idx="0"]) [data-inherited-from="0"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="0"]:checked) [data-inherited-from="0"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="0"]:checked):has(.inheritance[data-inherited-from="0"]:hover) [data-inherited-from]:not([data-inherited-from="0"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="1"]) [data-inherited-from="1"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="1"]:checked) [data-inherited-from="1"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="1"]:checked):has(.inheritance[data-inherited-from="1"]:hover) [data-inherited-from]:not([data-inherited-from="1"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="2"]) [data-inherited-from="2"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="2"]:checked) [data-inherited-from="2"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="2"]:checked):has(.inheritance[data-inherited-from="2"]:hover) [data-inherited-from]:not([data-inherited-from="2"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="3"]) [data-inherited-from="3"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="3"]:checked) [data-inherited-from="3"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="3"]:checked):has(.inheritance[data-inherited-from="3"]:hover) [data-inherited-from]:not([data-inherited-from="3"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="4"]) [data-inherited-from="4"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="4"]:checked) [data-inherited-from="4"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="4"]:checked):has(.inheritance[data-inherited-from="4"]:hover) [data-inherited-from]:not([data-inherited-from="4"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="5"]) [data-inherited-from="5"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="5"]:checked) [data-inherited-from="5"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="5"]:checked):has(.inheritance[data-inherited-from="5"]:hover) [data-inherited-from]:not([data-inherited-from="5"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="6"]) [data-inherited-from="6"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="6"]:checked) [data-inherited-from="6"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="6"]:checked):has(.inheritance[data-inherited-from="6"]:hover) [data-inherited-from]:not([data-inherited-from="6"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="7"]) [data-inherited-from="7"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="7"]:checked) [data-inherited-from="7"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="7"]:checked):has(.inheritance[data-inherited-from="7"]:hover) [data-inherited-from]:not([data-inherited-from="7"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="8"]) [data-inherited-from="8"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="8"]:checked) [data-inherited-from="8"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="8"]:checked):has(.inheritance[data-inherited-from="8"]:hover) [data-inherited-from]:not([data-inherited-from="8"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="9"]) [data-inherited-from="9"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="9"]:checked) [data-inherited-from="9"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="9"]:checked):has(.inheritance[data-inherited-from="9"]:hover) [data-inherited-from]:not([data-inherited-from="9"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="10"]) [data-inherited-from="10"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="10"]:checked) [data-inherited-from="10"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="10"]:checked):has(.inheritance[data-inherited-from="10"]:hover) [data-inherited-from]:not([data-inherited-from="10"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="11"]) [data-inherited-from="11"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="11"]:checked) [data-inherited-from="11"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="11"]:checked):has(.inheritance[data-inherited-from="11"]:hover) [data-inherited-from]:not([data-inherited-from="11"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="12"]) [data-inherited-from="12"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="12"]:checked) [data-inherited-from="12"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="12"]:checked):has(.inheritance[data-inherited-from="12"]:hover) [data-inherited-from]:not([data-inherited-from="12"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="13"]) [data-inherited-from="13"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="13"]:checked) [data-inherited-from="13"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="13"]:checked):has(.inheritance[data-inherited-from="13"]:hover) [data-inherited-from]:not([data-inherited-from="13"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="14"]) [data-inherited-from="14"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="14"]:checked) [data-inherited-from="14"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="14"]:checked):has(.inheritance[data-inherited-from="14"]:hover) [data-inherited-from]:not([data-inherited-from="14"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="15"]) [data-inherited-from="15"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="15"]:checked) [data-inherited-from="15"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="15"]:checked):has(.inheritance[data-inherited-from="15"]:hover) [data-inherited-from]:not([data-inherited-from="15"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="16"]) [data-inherited-from="16"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="16"]:checked) [data-inherited-from="16"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="16"]:checked):has(.inheritance[data-inherited-from="16"]:hover) [data-inherited-from]:not([data-inherited-from="16"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="17"]) [data-inherited-from="17"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="17"]:checked) [data-inherited-from="17"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="17"]:checked):has(.inheritance[data-inherited-from="17"]:hover) [data-inherited-from]:not([data-inherited-from="17"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="18"]) [data-inherited-from="18"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="18"]:checked) [data-inherited-from="18"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="18"]:checked):has(.inheritance[data-inherited-from="18"]:hover) [data-inherited-from]:not([data-inherited-from="18"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="19"]) [data-inherited-from="19"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="19"]:checked) [data-inherited-from="19"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="19"]:checked):has(.inheritance[data-inherited-from="19"]:hover) [data-inherited-from]:not([data-inherited-from="19"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="20"]) [data-inherited-from="20"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="20"]:checked) [data-inherited-from="20"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="20"]:checked):has(.inheritance[data-inherited-from="20"]:hover) [data-inherited-from]:not([data-inherited-from="20"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="21"]) [data-inherited-from="21"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="21"]:checked) [data-inherited-from="21"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="21"]:checked):has(.inheritance[data-inherited-from="21"]:hover) [data-inherited-from]:not([data-inherited-from="21"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="22"]) [data-inherited-from="22"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="22"]:checked) [data-inherited-from="22"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="22"]:checked):has(.inheritance[data-inherited-from="22"]:hover) [data-inherited-from]:not([data-inherited-from="22"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="23"]) [data-inherited-from="23"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="23"]:checked) [data-inherited-from="23"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="23"]:checked):has(.inheritance[data-inherited-from="23"]:hover) [data-inherited-from]:not([data-inherited-from="23"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="24"]) [data-inherited-from="24"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="24"]:checked) [data-inherited-from="24"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="24"]:checked):has(.inheritance[data-inherited-from="24"]:hover) [data-inherited-from]:not([data-inherited-from="24"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="25"]) [data-inherited-from="25"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="25"]:checked) [data-inherited-from="25"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="25"]:checked):has(.inheritance[data-inherited-from="25"]:hover) [data-inherited-from]:not([data-inherited-from="25"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="26"]) [data-inherited-from="26"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="26"]:checked) [data-inherited-from="26"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="26"]:checked):has(.inheritance[data-inherited-from="26"]:hover) [data-inherited-from]:not([data-inherited-from="26"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="27"]) [data-inherited-from="27"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="27"]:checked) [data-inherited-from="27"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="27"]:checked):has(.inheritance[data-inherited-from="27"]:hover) [data-inherited-from]:not([data-inherited-from="27"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="28"]) [data-inherited-from="28"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="28"]:checked) [data-inherited-from="28"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="28"]:checked):has(.inheritance[data-inherited-from="28"]:hover) [data-inherited-from]:not([data-inherited-from="28"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="29"]) [data-inherited-from="29"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="29"]:checked) [data-inherited-from="29"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="29"]:checked):has(.inheritance[data-inherited-from="29"]:hover) [data-inherited-from]:not([data-inherited-from="29"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="30"]) [data-inherited-from="30"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="30"]:checked) [data-inherited-from="30"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="30"]:checked):has(.inheritance[data-inherited-from="30"]:hover) [data-inherited-from]:not([data-inherited-from="30"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="31"]) [data-inherited-from="31"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="31"]:checked) [data-inherited-from="31"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="31"]:checked):has(.inheritance[data-inherited-from="31"]:hover) [data-inherited-from]:not([data-inherited-from="31"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="32"]) [data-inherited-from="32"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="32"]:checked) [data-inherited-from="32"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="32"]:checked):has(.inheritance[data-inherited-from="32"]:hover) [data-inherited-from]:not([data-inherited-from="32"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="33"]) [data-inherited-from="33"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="33"]:checked) [data-inherited-from="33"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="33"]:checked):has(.inheritance[data-inherited-from="33"]:hover) [data-inherited-from]:not([data-inherited-from="33"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="34"]) [data-inherited-from="34"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="34"]:checked) [data-inherited-from="34"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="34"]:checked):has(.inheritance[data-inherited-from="34"]:hover) [data-inherited-from]:not([data-inherited-from="34"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="35"]) [data-inherited-from="35"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="35"]:checked) [data-inherited-from="35"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="35"]:checked):has(.inheritance[data-inherited-from="35"]:hover) [data-inherited-from]:not([data-inherited-from="35"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="36"]) [data-inherited-from="36"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="36"]:checked) [data-inherited-from="36"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="36"]:checked):has(.inheritance[data-inherited-from="36"]:hover) [data-inherited-from]:not([data-inherited-from="36"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="37"]) [data-inherited-from="37"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="37"]:checked) [data-inherited-from="37"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="37"]:checked):has(.inheritance[data-inherited-from="37"]:hover) [data-inherited-from]:not([data-inherited-from="37"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="38"]) [data-inherited-from="38"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="38"]:checked) [data-inherited-from="38"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="38"]:checked):has(.inheritance[data-inherited-from="38"]:hover) [data-inherited-from]:not([data-inherited-from="38"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="39"]) [data-inherited-from="39"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="39"]:checked) [data-inherited-from="39"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="39"]:checked):has(.inheritance[data-inherited-from="39"]:hover) [data-inherited-from]:not([data-inherited-from="39"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="40"]) [data-inherited-from="40"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="40"]:checked) [data-inherited-from="40"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="40"]:checked):has(.inheritance[data-inherited-from="40"]:hover) [data-inherited-from]:not([data-inherited-from="40"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="41"]) [data-inherited-from="41"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="41"]:checked) [data-inherited-from="41"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="41"]:checked):has(.inheritance[data-inherited-from="41"]:hover) [data-inherited-from]:not([data-inherited-from="41"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="42"]) [data-inherited-from="42"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="42"]:checked) [data-inherited-from="42"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="42"]:checked):has(.inheritance[data-inherited-from="42"]:hover) [data-inherited-from]:not([data-inherited-from="42"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="43"]) [data-inherited-from="43"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="43"]:checked) [data-inherited-from="43"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="43"]:checked):has(.inheritance[data-inherited-from="43"]:hover) [data-inherited-from]:not([data-inherited-from="43"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="44"]) [data-inherited-from="44"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="44"]:checked) [data-inherited-from="44"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="44"]:checked):has(.inheritance[data-inherited-from="44"]:hover) [data-inherited-from]:not([data-inherited-from="44"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="45"]) [data-inherited-from="45"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="45"]:checked) [data-inherited-from="45"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="45"]:checked):has(.inheritance[data-inherited-from="45"]:hover) [data-inherited-from]:not([data-inherited-from="45"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="46"]) [data-inherited-from="46"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="46"]:checked) [data-inherited-from="46"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="46"]:checked):has(.inheritance[data-inherited-from="46"]:hover) [data-inherited-from]:not([data-inherited-from="46"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="47"]) [data-inherited-from="47"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="47"]:checked) [data-inherited-from="47"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="47"]:checked):has(.inheritance[data-inherited-from="47"]:hover) [data-inherited-from]:not([data-inherited-from="47"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="48"]) [data-inherited-from="48"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="48"]:checked) [data-inherited-from="48"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="48"]:checked):has(.inheritance[data-inherited-from="48"]:hover) [data-inherited-from]:not([data-inherited-from="48"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="49"]) [data-inherited-from="49"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="49"]:checked) [data-inherited-from="49"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="49"]:checked):has(.inheritance[data-inherited-from="49"]:hover) [data-inherited-from]:not([data-inherited-from="49"]) {
+  opacity: 0.5;
+}
+</style><style>
+.markup-example {
+  border: 1px solid #98B2C0;
+  border-radius: 0.5rem;
+  margin-bottom: var(--verso--box-vertical-margin);
+  margin-top: var(--verso--box-vertical-margin);
+  overflow: hidden;
+}
+
+.markup-example-header {
+  font-style: italic;
+  font-family: var(--verso-structure-font-family);
+  padding: var(--verso--box-padding);
+}
+
+.markup-example-header * {
+  margin: 0;
+}
+
+.markup-example > .content {
+  display: flex;
+}
+
+.markup-example > .content > .syntax, .markup-example > .content > .result {
+  flex: 1;
+  padding: 0 var(--verso--box-padding);
+  position: relative;
+  width: calc(50% - calc(4 * var(--verso--box-padding)));
+}
+
+.markup-example > .content > .syntax pre, .markup-example > .content > .result pre {
+
+}
+
+.markup-example > .content > .syntax > .title, .markup-example > .content > .result > .title {
+  font-family: var(--verso-structure-font-family);
+  padding: 0;
+  font-size: 0.875rem;
+}
+
+@media screen and (max-width: 700px) {
+  .markup-example > .content {
+    flex-direction: column;
+  }
+
+  .markup-example > .content > .syntax, .markup-example > .content > .result {
+    width: calc(100% - calc(2 * var(--verso--box-padding)));
+  }
+}
+</style><style>
+    main .theIndex {
+      padding-left: 0;
+      font-family: var(--verso-text-font-family);
+    }
+
+    main .theIndex nav {
+      position: sticky;
+      top: var(--verso-header-height);
+      background: white;
+      font-family: var(--verso-structure-font-family);
+    }
+
+    main .theIndex [id] {
+      /* This needs the combined height of the index header and the page header. We
+         know the height of the page header, but the index header height varies, so
+         we use the maximum height it gets which also works well for readers with
+         wide screens */
+      scroll-margin-top: calc(var(--verso-header-height) + 7.5rem);
+    }
+
+    @media screen and (max-width: 700px) {
+      /* On mobile, the sticky index takes up half the screen. */
+      main .theIndex nav {
+        position: static;
+      }
+
+      main .theIndex [id] {
+        /* On mobile, the index header is not sticky, so we just need to
+        be below the page header. */
+        scroll-margin-top: var(--verso-header-height);
+      }
+    }
+
+    main .theIndex nav ol {
+      padding: 0;
+    }
+
+    main .theIndex nav ol li {
+      display: inline-block;
+    }
+
+    main .theIndex nav ol li a {
+      /* Padding instead of margin to have a bigger click target */
+      padding-left: 0.5rem;
+      padding-right: 0.5rem;
+    }
+    /* Increase the size of the touch target on phones */
+    @media screen and (max-width: 700px) {
+      main .theIndex nav ol li a {
+        padding-left: 0.75rem;
+        padding-right: 0.75rem;
+      }
+    }
+
+    main .theIndex nav ol li:first-child a {
+      padding-left: 0;
+    }
+
+    main .theIndex nav ol li + li:before {
+      content: "|";
+    }
+
+    main .theIndex h1,
+    main .theIndex h2,
+    main .theIndex h3,
+    main .theIndex h4,
+    main .theIndex h5,
+    main .theIndex h6 {
+      margin-top: 0;
+    }
+
+    main .theIndex ol {
+      list-style-type: none;
+    }
+
+    main .theIndex .division > ol {
+      padding-left: 0;
+      display: flex;
+      flex-direction: column;
+      gap: .5rem;
+      overflow-wrap: break-word;
+    }
+
+   main .theIndex .division > ol > li {
+      margin-bottom: 0.5rem;
+    }
+
+    main .theIndex .division ol ol {
+      padding-left: 1rem;
+    }
+
+    main .theIndex .division {
+      break-inside: avoid;
+      counter-reset: none;
+      max-width: none;
+      width: auto;
+    }
+    </style><style>
+a.technical-term {
+  color: inherit;
+  text-decoration: currentcolor underline dotted;
+}
+a.technical-term:hover {
+  text-decoration: currentcolor underline solid;
+}
+/* Highlight the clicked term */
+.def-technical-term:target {
+  background-color: var(--verso-selected-color);
+  outline: auto;
+}
+</style><style>
+
+.hl.lean {
+  white-space: pre;
+  font-weight: normal;
+  font-style: normal;
+  font-size: inherit;
+}
+
+.hl.lean .keyword {
+  color: var(--verso-code-keyword-color,);
+  font-weight: var(--verso-code-keyword-weight, bold);
+  font-style: var(--verso-code-keyword-style, normal);
+  font-family: var(--verso-code-keyword-font-family,);
+}
+
+.hl.lean .const {
+  color: var(--verso-code-const-color,);
+  font-weight: var(--verso-code-const-weight, normal);
+  font-style: var(--verso-code-const-style, normal);
+  font-family: var(--verso-code-const-font-family,);
+}
+
+.hl.lean .var {
+  color: var(--verso-code-var-color,);
+  font-weight: var(--verso-code-var-weight, normal);
+  font-style: var(--verso-code-var-style, italic);
+  font-family: var(--verso-code-var-font-family,);
+
+  position: relative;
+}
+
+.hl.lean .literal, .hl.lean .unknown {
+  color: var(--verso-code-color,);
+  font-weight: normal;
+  font-style: normal;
+  font-family: var(--verso-code-font-family,);
+}
+
+.hover-container {
+  width: 0;
+  height: 0;
+  position: relative;
+  display: inline;
+}
+
+.hl.lean a {
+  color: inherit;
+  text-decoration: currentcolor underline dotted;
+}
+
+.hl.lean a:hover {
+  text-decoration: currentcolor underline solid;
+}
+
+.hl.lean .hover-info {
+  white-space: normal;
+}
+
+.hl.lean .token .hover-info {
+  display: none;
+  position: absolute;
+  background-color: #e5e5e5;
+  border: 1px solid black;
+  padding: 0.5rem;
+  z-index: 300;
+}
+
+.hl.lean .hover-info.messages {
+  max-height: 10rem;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+  padding: 0 0.5rem 0 0;
+  display: block;
+}
+
+.hl.lean .hover-info code {
+  white-space: pre-wrap;
+  background: none;
+  color: black;
+}
+
+.hl.lean .hover-info.messages > code {
+  padding: 0.5rem;
+  display: block;
+  width: fit-content;
+}
+
+.hl.lean .hover-info.messages > code:only-child {
+  margin: 0;
+}
+
+.hl.lean .hover-info.messages > code {
+  margin: 0.1rem;
+}
+
+.hl.lean .hover-info.messages > code:not(:first-child) {
+  margin-top: 0rem;
+}
+
+.hl.lean {
+}
+
+.hl.lean.block {
+  display: block;
+}
+
+.hl.lean.inline {
+  display: inline;
+  white-space: pre-wrap;
+}
+
+.hl.lean * {
+}
+
+.hl.lean .token {
+  transition: all 0.25s; /* Slight fade for highlights */
+}
+
+@media (hover: hover) {
+  .hl.lean .token.binding-hl, .hl.lean .literal.string:hover, .hl.lean .token.typed:hover {
+    background-color: #eee;
+    border-radius: 2px;
+    transition: none;
+  }
+}
+
+
+.hl.lean .has-info .token:not(.tactic-state):not(.tactic-state *), .hl.lean .has-info .inter-text:not(.tactic-state):not(.tactic-state *) {
+  text-decoration-style: wavy;
+  text-decoration-line: underline;
+  text-decoration-thickness: from-font;
+  text-decoration-skip-ink: none;
+}
+
+.hl.lean .has-info .hover-info {
+  display: none;
+  position: absolute;
+  transform: translate(0.25rem, 0.3rem);
+  border: 1px solid black;
+  padding: 0.5rem;
+  z-index: 400;
+  text-align: left;
+}
+
+.hl.lean .has-info.error :not(.tactic-state):not(.tactic-state *){
+  text-decoration-color: red;
+}
+
+@media (hover: hover) {
+  .hl.lean .has-info.error:hover {
+    background-color: #ffb3b3;
+  }
+}
+
+.hl.lean .hover-info.messages > code.error {
+  background-color: #e5e5e5;
+  border-left: 0.2rem solid #ffb3b3;
+}
+
+.tippy-box[data-theme~='error'] .hl.lean .hover-info.messages > code.error {
+  background: none;
+  border: none;
+}
+
+.error .verso-message, .error .verso-message .token, .error .verso-message label {
+  color: var(--verso-error-color);
+}
+
+.error .verso-message .case-label:has(input[type="checkbox"])::before {
+  background-color: var(--verso-error-color) !important;
+}
+
+.hl.lean .has-info.warning :not(.tactic-state):not(.tactic-state *) {
+  text-decoration-color: var(--verso-warning-indicator-color);
+}
+
+@media (hover: hover) {
+  .hl.lean .has-info.warning:hover {
+    background-color:var(--verso-warning-color);
+  }
+}
+
+.hl.lean .hover-info.messages > code.warning {
+  background-color: var(--verso-warning-color);
+}
+
+.lean-output {
+  border-left: 0.2em solid transparent;
+  padding: 0 0 0 0.5em;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.lean-output.error {
+  border-color: var(--verso-error-indicator-color);
+}
+
+.lean-output.information {
+  border-color: var(--verso-info-indicator-color);
+}
+
+.lean-output.warning {
+  border-color: var(--verso-warning-indicator-color);
+}
+
+.hl.lean .hover-info.messages > code.error {
+  background-color: #e5e5e5;
+  border-left: 0.2rem solid var(--verso-warning-color);
+}
+
+.tippy-box[data-theme~='warning'] .hl.lean .hover-info.messages > code.warning {
+  background: none;
+  border: none;
+}
+
+
+.hl.lean .has-info.information :not(.tactic-state):not(.tactic-state *) {
+  text-decoration-color: var(--verso-info-indicator-color, blue);
+}
+
+@media (hover: hover) {
+  .hl.lean .has-info.information:hover {
+    background-color: #4777ff;
+  }
+}
+
+
+.hl.lean .hover-info.messages > code.information {
+  background-color: #e5e5e5;
+  border-left: 0.2rem solid #4777ff;
+}
+
+.tippy-box[data-theme~='info'] .hl.lean .hover-info.messages > code.information {
+  background: none;
+  border: none;
+}
+
+.hl.lean div.docstring {
+  font-family: var(--verso-text-font-family, sans-serif);
+  white-space: normal;
+  max-width: calc(min(40rem, 90vw));
+  width: max-content;
+}
+
+.hl.lean div.docstring > :last-child {
+  margin-bottom: 0;
+}
+
+.hl.lean div.docstring > :first-child {
+  margin-top: 0;
+}
+
+.hl.lean .hover-info .sep {
+  display: block;
+  width: auto;
+  margin-left: 1rem;
+  margin-right: 1rem;
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+  padding: 0;
+  height: 1px;
+  border-top: 1px solid #ccc;
+}
+
+.hl.lean code {
+  font-family: var(--verso-code-font-family);
+}
+
+.hl.lean .tactic-state {
+  display: none;
+  position: relative;
+  width: fit-content;
+  border: 1px solid #888888;
+  border-radius: 0.1rem;
+  padding: 0.5rem;
+  font-family: sans-serif;
+  background-color: #ffffff;
+}
+
+.hl.lean.popup .tactic-state {
+  position: static;
+  display: block;
+  width: auto;
+  border: none;
+  padding: 0.5rem;
+  font-family: sans-serif;
+  background-color: #ffffff;
+}
+
+
+.hl.lean .tactic {
+  position: relative;
+  display: inline;
+  vertical-align: top;
+  /* Without these, mobile Safari will start making font sizes inconsistent when its text size adjustment feature is triggered.*/
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+.hl.lean .tactic:has(.tactic-toggle:checked) {
+  display: inline-grid;
+  grid-template-columns: 1fr;
+}
+
+.hl.lean .tactic-toggle:checked ~ .tactic-state {
+  display: inline-block;
+  vertical-align: top;
+  grid-row: 2;
+  justify-self: start;
+}
+
+.hl.lean .tactic > label {
+  position: relative;
+  grid-row: 1;
+  display: inline;
+}
+
+@media (hover: hover) {
+  .hl.lean .tactic:has(.tactic-toggle:not(:checked)) > label:hover {
+    background-color: #eeeeee;
+  }
+}
+
+.hl.lean .tactic-toggle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 0;
+  height: 0;
+  width: 0;
+  z-index: -10;
+}
+
+.hl.lean .tactic > label::after {
+  content: "";
+  border: 1px solid #bbbbbb;
+  /* These need to be em, not rem, to scale with the font */
+  border-radius: 1em;
+  height: 0.25em;
+  vertical-align: middle;
+  width: 0.6em;
+  margin-left: 0.1em;
+  margin-right: 0.1em;
+  display: inline-block;
+  transition: all 0.5s;
+}
+
+/*
+@media (hover: hover) {
+  .hl.lean .tactic > label:hover::after {
+    border: 1px solid #aaaaaa;
+    background-color: #aaaaaa;
+    transition: all 0.5s;
+  }
+}
+*/
+
+.hl.lean .tactic > label:has(+ .tactic-toggle:checked)::after {
+  border: 1px solid #999999;
+  background-color: #999999;
+  transition: all 0.5s;
+}
+
+.hl.lean .tactic-state .goal + .goal {
+  margin-top: 1.5em;
+}
+
+/*
+Some CSS frameworks customize details/summary in ways not compatible with Verso's output.
+*/
+
+.hl.lean details {
+  display: block !important;
+  margin: 0;
+}
+
+.hl.lean details summary {
+  display: list-item !important;
+  margin: 0;
+}
+
+.hl.lean details summary:focus {
+  outline: none;
+  outline-offset: none;
+  color: inherit;
+}
+
+.hl.lean ul > li {
+  margin-bottom: 0;
+}
+
+.hl.lean details summary::marker {
+  display: inline !important;
+}
+
+.hl.lean details > summary:first-of-type {
+  list-style-type: disclosure-closed;
+  list-style-position: inside;
+}
+
+.hl.lean details[open] > summary:first-of-type {
+  list-style-type: disclosure-open;
+}
+
+.hl.lean details summary::before, .hl.lean details summary::after {
+  content: "" !important;
+  background: none;
+  display: none;
+}
+
+.hl.lean .tactic-state summary {
+  /* These need to be em, not rem, to scale with the font */
+  margin-left: -0.5em;
+}
+
+.hl.lean .tactic-state details {
+  /* These need to be em, not rem, to scale with the font */
+  padding-left: 0.5em;
+}
+
+.hl.lean .case-label {
+  display: block;
+  position: relative;
+}
+
+.hl.lean .case-label input[type="checkbox"] {
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 0;
+  height: 0;
+  width: 0;
+  z-index: -10;
+}
+
+.hl.lean .case-label:has(input[type="checkbox"])::before {
+  display: inline-block;
+  background-color: black;
+  content: ' ';
+  transition: ease 0.2s;
+  margin-right: 0.7em;
+  clip-path: polygon(100% 0, 0 0, 50% 100%);
+  width: 0.6em;
+  height: 0.6em;
+  vertical-align: middle;
+}
+
+.hl.lean .case-label:has(input[type="checkbox"]:not(:checked))::before {
+  transform: rotate(-90deg);
+}
+
+.hl.lean .case-label:has(input[type="checkbox"]) {
+
+}
+
+.hl.lean .case-label:has(input[type="checkbox"]:checked) {
+
+}
+
+
+.hl.lean .labeled-case > :not(:first-child) {
+  max-height: 0px;
+  display: block;
+  overflow: hidden;
+  transition: max-height 0.1s ease-in;
+  /* These need to be em, not rem, to scale with the font */
+  margin-left: 0.5em;
+  margin-top: 0.1em;
+}
+
+.hl.lean .labeled-case:has(.case-label input[type="checkbox"]:checked) > :not(:first-child) {
+  max-height: 100%;
+}
+
+
+.hl.lean .goal-name::before {
+  font-style: normal;
+  content: "case ";
+}
+
+.hl.lean .goal-name {
+  font-style: italic;
+  font-family: var(--verso-code-font-family);
+  color: inherit;
+}
+
+.hl.lean .hypotheses {
+  display: table;
+}
+
+.hl.lean .hypothesis {
+  display: table-row;
+}
+
+.hl.lean .hypothesis > * {
+  display: table-cell;
+}
+
+
+.hl.lean .hypotheses .colon {
+  text-align: center;
+  /* This needs to be em, not rem, to scale with the font */
+  min-width: 1em;
+}
+
+.hl.lean .hypotheses .name {
+  text-align: right;
+}
+
+.hl.lean .hypotheses .name,
+.hl.lean .hypotheses .type,
+.hl.lean .conclusion .type {
+  font-family: var(--verso-code-font-family);
+}
+
+.tippy-box {
+  /* Without these, mobile Safari will start making font sizes inconsistent when its text size adjustment feature is triggered.*/
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+
+}
+
+.tippy-box[data-theme~='lean'] {
+  background-color: #e5e5e5;
+  color: black;
+  border: 1px solid black;
+}
+.tippy-box[data-theme~='lean'][data-placement^='top'] > .tippy-arrow::before {
+  border-top-color: #e5e5e5;
+}
+.tippy-box[data-theme~='lean'][data-placement^='bottom'] > .tippy-arrow::before {
+  border-bottom-color: #e5e5e5;
+}
+.tippy-box[data-theme~='lean'][data-placement^='left'] > .tippy-arrow::before {
+  border-left-color: #e5e5e5;
+}
+.tippy-box[data-theme~='lean'][data-placement^='right'] > .tippy-arrow::before {
+  border-right-color: #e5e5e5;
+}
+
+.tippy-box[data-theme~='message'][data-placement^='top'] > .tippy-arrow::before {
+  border-top-color: #e5e5e5;
+  border-width: 11px 11px 0;
+}
+.tippy-box[data-theme~='message'][data-placement^='top'] > .tippy-arrow::after {
+  bottom: -11px;
+  border-width: 11px 11px 0;
+}
+.tippy-box[data-theme~='message'][data-placement^='bottom'] > .tippy-arrow::before {
+  border-width: 0 11px 11px;
+}
+.tippy-box[data-theme~='message'][data-placement^='bottom'] > .tippy-arrow::after {
+  top: -11px;
+  border-width: 0 11px 11px;
+}
+.tippy-box[data-theme~='message'][data-placement^='left'] > .tippy-arrow::before {
+  border-left-color: #e5e5e5;
+  border-width: 11px 0 11px 11px;
+}
+.tippy-box[data-theme~='message'][data-placement^='left'] > .tippy-arrow::after {
+  right: -11px;
+  border-width: 11px 0 11px 11px;
+}
+
+.tippy-box[data-theme~='message'][data-placement^='right'] > .tippy-arrow::before {
+  border-right-color: #e5e5e5;
+  border-width: 11px 11px 11px 0;
+}
+.tippy-box[data-theme~='message'][data-placement^='right'] > .tippy-arrow::after {
+  left: -11px;
+  border-width: 11px 11px 11px 0;
+}
+
+
+
+.tippy-box[data-theme~='warning'] {
+  background-color: #e5e5e5;
+  color: black;
+  border: 3px solid var(--verso-warning-color);
+}
+
+.tippy-box[data-theme~='error'] {
+  background-color: #e5e5e5;
+  color: black;
+  border: 3px solid #f7a7af;
+}
+
+.tippy-box[data-theme~='info'] {
+  background-color: #e5e5e5;
+  color: black;
+  border: 3px solid #99b3c2;
+}
+
+.tippy-box[data-theme~='tactic'] {
+  background-color: white;
+  color: black;
+  border: 1px solid black;
+}
+.tippy-box[data-theme~='tactic'][data-placement^='top'] > .tippy-arrow::before {
+  border-top-color: white;
+}
+.tippy-box[data-theme~='tactic'][data-placement^='bottom'] > .tippy-arrow::before {
+  border-bottom-color: white;
+}
+.tippy-box[data-theme~='tactic'][data-placement^='left'] > .tippy-arrow::before {
+  border-left-color: white;
+}
+.tippy-box[data-theme~='tactic'][data-placement^='right'] > .tippy-arrow::before {
+  border-right-color: white;
+}
+
+.extra-doc-links {
+  list-style-type: none;
+  margin-left: 0;
+  padding: 0;
+}
+
+.extra-doc-links > li {
+  display: inline-block;
+}
+
+.extra-doc-links > li:not(:last-child)::after {
+  content: '|';
+  display: inline-block;
+  margin: 0 0.25em;
+}
+
+.verso-message .trace {
+  display: block;
+}
+
+.verso-message .trace > summary::marker {
+  color: var(--verso-text-color);
+}
+
+.verso-message .trace-children {
+  margin: 0;
+  padding: 0;
+}
+
+.verso-message .trace-children > li {
+  list-style-type: none;
+  margin-left: 1.5em;
+}
+
+.verso-message .trace-children > li:not(:has(.trace)) {
+  margin-left: 0;
+}
+
+.verso-message .trace-class {
+  color: color-mix(in srgb, currentColor 70%, transparent);
+  font-weight: bold;
+  margin: 0;
+  padding: 0;
+}
+
+.verso-message .text {
+  white-space: pre-wrap;
+}
+
+</style><script>
+      
+window.onload = () => {
+
+    // Don't show hovers inside of closed tactic states
+    function blockedByTactic(elem) {
+      let parent = elem.parentNode;
+      while (parent && "classList" in parent) {
+        if (parent.classList.contains("tactic")) {
+          const toggle = parent.querySelector("input.tactic-toggle");
+          if (toggle) {
+            return !toggle.checked;
+          }
+        }
+        parent = parent.parentNode;
+      }
+      return false;
+    }
+
+    function blockedByTippy(elem) {
+      // Don't show a new hover until the old ones are all closed.
+      // Scoped to the nearest "top-level block" to avoid being O(n) in the size of the document.
+      var block = elem;
+      const topLevel = new Set(["section", "body", "html", "nav", "header"]);
+      while (block.parentNode && !topLevel.has(block.parentNode.nodeName.toLowerCase())) {
+        block = block.parentNode;
+      }
+      for (const child of block.querySelectorAll(".token, .has-info")) {
+        if (child._tippy && child._tippy.state.isVisible) { return true };
+      }
+      return false;
+    }
+
+    for (const c of document.querySelectorAll(".hl.lean .token")) {
+        if (c.dataset.binding != "") {
+            c.addEventListener("mouseover", (event) => {
+                if (blockedByTactic(c)) {return;}
+                const context = c.closest(".hl.lean").dataset.leanContext;
+                for (const example of document.querySelectorAll(".hl.lean")) {
+                    if (example.dataset.leanContext == context) {
+                        for (const tok of example.querySelectorAll(".token")) {
+                            if (c.dataset.binding == tok.dataset.binding) {
+                                tok.classList.add("binding-hl");
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        c.addEventListener("mouseout", (event) => {
+            for (const tok of document.querySelectorAll(".hl.lean .token")) {
+                tok.classList.remove("binding-hl");
+            }
+        });
+    }
+    /* Render docstrings */
+    if ('undefined' !== typeof marked) {
+        for (const d of document.querySelectorAll("code.docstring, pre.docstring")) {
+            const str = d.innerText;
+            const html = marked.parse(str);
+            const rendered = document.createElement("div");
+            rendered.classList.add("docstring");
+            rendered.innerHTML = html;
+            d.parentNode.replaceChild(rendered, d);
+        }
+    }
+    // Add hovers
+    let docsJson = "-verso-docs.json";
+    fetch(docsJson).then((resp) => resp.json()).then((versoDocData) => {
+
+      function hideParentTooltips(element) {
+        let parent = element.parentElement;
+        while (parent) {
+          const tippyInstance = parent._tippy;
+          if (tippyInstance) {
+            tippyInstance.hide();
+          }
+          parent = parent.parentElement;
+        }
+      }
+
+
+
+      const defaultTippyProps = {
+        /* DEBUG -- remove the space: * /
+        onHide(any) { return false; },
+        trigger: "click",
+        // */
+        /* theme: "lean", */
+        maxWidth: "none",
+        appendTo: () => document.body,
+        interactive: true,
+        delay: [100, null],
+        /* ignoreAttributes: true, */
+        followCursor: 'initial',
+        onShow(inst) {
+          if (inst.reference.className == 'tactic') {
+
+            const toggle = inst.reference.querySelector("input.tactic-toggle");
+            if (toggle && toggle.checked) {
+              return false;
+            }
+            hideParentTooltips(inst.reference);
+            //if (blockedByTippy(inst.reference)) { return false; }
+
+          } else if (inst.reference.querySelector(".hover-info") || "versoHover" in inst.reference.dataset) {
+            if (blockedByTactic(inst.reference)) { return false };
+            if (blockedByTippy(inst.reference)) { return false; }
+          } else { // Nothing to show here!
+            return false;
+          }
+        },
+        content (tgt) {
+          const content = document.createElement("span");
+          if (tgt.className == 'tactic') {
+            const state = tgt.querySelector(".tactic-state").cloneNode(true);
+            state.style.display = "block";
+            content.appendChild(state);
+            content.style.display = "block";
+            content.className = "hl lean popup";
+          } else {
+            content.className = "hl lean";
+            content.style.display = "block";
+            content.style.maxHeight = "300px";
+            content.style.overflowY = "auto";
+            content.style.overflowX = "hidden";
+            const hoverId = tgt.dataset.versoHover;
+            const hoverInfo = tgt.querySelector(".hover-info");
+            if (hoverId) { // Docstrings from the table
+              // TODO stop doing an implicit conversion from string to number here
+              let data = versoDocData[hoverId];
+              if (data) {
+                const info = document.createElement("span");
+                info.className = "hover-info";
+                info.style.display = "block";
+                info.innerHTML = data;
+                content.appendChild(info);
+                /* Render docstrings - TODO server-side */
+                if ('undefined' !== typeof marked) {
+                    for (const d of content.querySelectorAll("code.docstring, pre.docstring")) {
+                        const str = d.innerText;
+                        const html = marked.parse(str);
+                        const rendered = document.createElement("div");
+                        rendered.classList.add("docstring");
+                        rendered.innerHTML = html;
+                        d.parentNode.replaceChild(rendered, d);
+                    }
+                }
+              } else {
+                content.innerHTML = "Failed to load doc ID: " + hoverId;
+              }
+            } else if (hoverInfo) { // The inline info, still used for compiler messages
+              content.appendChild(hoverInfo.cloneNode(true));
+            }
+            const extraLinks = tgt.parentElement.dataset['versoLinks'];
+            if (extraLinks) {
+              try {
+                const extras = JSON.parse(extraLinks);
+                const links = document.createElement('ul');
+                links.className = 'extra-doc-links';
+                extras.forEach((l) => {
+                  const li = document.createElement('li');
+                  li.innerHTML = "<a href=\"" + l['href'] + "\" title=\"" + l.long + "\">" + l.short + "</a>";
+                  links.appendChild(li);
+                });
+                content.appendChild(links);
+              } catch (error) {
+                console.error(error);
+              }
+            }
+          }
+          return content;
+        }
+      };
+
+
+      document.querySelectorAll('.hl.lean .const.token, .hl.lean .keyword.token, .hl.lean .literal.token, .hl.lean .option.token, .hl.lean .var.token, .hl.lean .typed.token, .hl.lean .level-var, .hl.lean .level-const, .hl.lean .level-op, .hl.lean .sort').forEach(element => {
+        element.setAttribute('data-tippy-theme', 'lean');
+      });
+      document.querySelectorAll('.hl.lean .has-info.warning').forEach(element => {
+        element.setAttribute('data-tippy-theme', 'warning message');
+      });
+      document.querySelectorAll('.hl.lean .has-info.information').forEach(element => {
+        element.setAttribute('data-tippy-theme', 'info message');
+      });
+      document.querySelectorAll('.hl.lean .has-info.error').forEach(element => {
+        element.setAttribute('data-tippy-theme', 'error message');
+      });
+      document.querySelectorAll('.hl.lean .tactic').forEach(element => {
+        element.setAttribute('data-tippy-theme', 'tactic');
+      });
+      let insts = tippy('.hl.lean .const.token, .hl.lean .keyword.token, .hl.lean .literal.token, .hl.lean .option.token, .hl.lean .var.token, .hl.lean .typed.token, .hl.lean .has-info, .hl.lean .tactic, .hl.lean .level-var, .hl.lean .level-const, .hl.lean .level-op, .hl.lean .sort', defaultTippyProps);
+  });
+}
+</script>
+    <script src="-verso-search/search-highlight.js" defer="defer"></script>
+    </head>
+  <body>
+    <header>
+      <div class="header-logo-wrapper"></div>
+      <div class="header-title-wrapper">
+        <a href="" class="header-title"><h1>
+            Documentation with Verso</h1>
+          </a></div>
+      </header>
+    <label for="toggle-toc" id="toggle-toc-click"><span class="line line1"></span><span class="line line2"></span><span class="line line3"></span></label><div class="with-toc">
+      <div class="toc-backdrop" onclick="document.getElementById('toggle-toc-click')?.click()"></div>
+      <nav id="toc">
+        <input type="checkbox" id="toggle-toc"><div class="first">
+          <a href="" class="toc-title"><h1>
+              Documentation with Verso</h1>
+            </a><div class="split-tocs">
+            <div class="split-toc book">
+              <div class="title">
+                <label for="--verso-manual-toc-----bookRoot" class="toggle-split-toc"><input type="checkbox" class="toggle-split-toc" id="--verso-manual-toc-----bookRoot" checked="checked"></label><span class="">Table of Contents</span></div>
+              <table><tr class="numbered"><td class="num">1.</td><td><a href="Genres/#genres">Genres</a></td></tr><tr class="numbered"><td class="num">2.</td><td><a href="Verso-Markup/#verso-markup">Verso Markup</a></td></tr><tr class="numbered"><td class="num">3.</td><td><a href="Building-Documents/#build-process">Building Documents</a></td></tr><tr class="numbered"><td class="num">4.</td><td><a href="Extensions/#extensions">Extensions</a></td></tr><tr class="numbered"><td class="num">5.</td><td><a href="Output-Formats/#outputs">Output Formats</a></td></tr><tr class="numbered"><td class="num">6.</td><td><a href="Websites/#website">Websites</a></td></tr><tr class="numbered"><td class="num">7.</td><td><a href="Manuals-and-Books/#manual">Manuals and Books</a></td></tr><tr class="current unnumbered"><td class="num"><td><a href="Index/#index">Index</a></td></tr><tr class="unnumbered"><td class="num"><td><a href="Dependencies/#dependencies">Dependencies</a></td></tr></table></div>
+            <div class="split-toc">
+              <div class="title">
+                <span class="no-toggle"></span><span class="unnumbered"></span><span class="current"><a href="Index/#index">Index</a></span></div>
+              </div>
+            </div>
+          </div>
+        <div class="last"></div>
+        </nav>
+      <main><div class="content-wrapper">
+          <nav class="prev-next-buttons">
+            <a class="local-button active" href="Manuals-and-Books/#manual" rel="prev" title="7. Manuals and Books"><span class="arrow">←</span><span class="where">7. Manuals and Books</span></a><a class="local-button active" href="Dependencies/#dependencies" rel="next" title="Dependencies"><span class="where">Dependencies</span><span class="arrow">→</span></a></nav>
+          <section>
+            <h1>
+              Index<span class="permalink-widget inline"><a href="find/?domain=Verso.Genre.Manual.section&amp;name=index" title="Permalink">🔗</a></span></h1>
+            <div class="theIndex">
+              <nav>
+                <ol>
+                  <li>
+                    <a href="Index/#---index-hdr-A">A</a></li>
+                  <li>
+                    <a href="Index/#---index-hdr-B">B</a></li>
+                  <li>
+                    <a href="Index/#---index-hdr-C">C</a></li>
+                  <li>
+                    <a href="Index/#---index-hdr-D">D</a></li>
+                  <li>
+                    <a href="Index/#---index-hdr-E">E</a></li>
+                  <li>
+                    <a href="Index/#---index-hdr-F">F</a></li>
+                  <li>
+                    <a href="Index/#---index-hdr-G">G</a></li>
+                  <li>
+                    <a href="Index/#---index-hdr-H">H</a></li>
+                  <li>
+                    <a href="Index/#---index-hdr-I">I</a></li>
+                  <li>
+                    <a href="Index/#---index-hdr-J">J</a></li>
+                  <li>
+                    <a href="Index/#---index-hdr-L">L</a></li>
+                  <li>
+                    <a href="Index/#---index-hdr-M">M</a></li>
+                  <li>
+                    <a href="Index/#---index-hdr-N">N</a></li>
+                  <li>
+                    <a href="Index/#---index-hdr-P">P</a></li>
+                  <li>
+                    <a href="Index/#---index-hdr-S">S</a></li>
+                  <li>
+                    <a href="Index/#---index-hdr-T">T</a></li>
+                  <li>
+                    <a href="Index/#---index-hdr-U">U</a></li>
+                  <li>
+                    <a href="Index/#---index-hdr-V">V</a></li>
+                  </ol>
+                </nav>
+              <div class="division">
+                <h2 id="---index-hdr-A">
+                  A</h2>
+                <ol>
+                  <li>
+                    <span id="---entry-ArgParse-Verso___ArgParse"><code>Arg&shy;Parse</code></span><ol>
+                      <li>
+                        <a href="Extensions/#Verso___ArgParse___fail"><span id="---entry-___key___---___k___-27"><code>Verso.<wbr>Arg&shy;Parse</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-adHocTemplates-Verso___Genre___Blog___Theme___adHocTemplates-_LPAR_structure-field_RPAR_"><code>ad&shy;Hoc&shy;Templates</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___Theme___mk"><span id="---entry-___key___---___k___-118"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Theme.<wbr>ad&shy;Hoc&shy;Templates</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-append-Verso___Output___Html___append"><code>append</code></span><ol>
+                      <li>
+                        <a href="Output-Formats/#Verso___Output___Html___append"><span id="---entry-___key___---___k___-60"><code>Verso.<wbr>Output.<wbr>Html.<wbr>append</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-archiveEntryTemplate-Verso___Genre___Blog___Theme___archiveEntryTemplate-_LPAR_structure-field_RPAR_"><code>archive&shy;Entry&shy;Template</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___Theme___mk"><span id="---entry-___key___---___k___-119"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Theme.<wbr>archive&shy;Entry&shy;Template</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-asString-Verso___Output___Html___asString"><code>as&shy;String</code></span><ol>
+                      <li>
+                        <a href="Output-Formats/#Verso___Output___Html___asString"><span id="---entry-___key___---___k___-63"><code>Verso.<wbr>Output.<wbr>Html.<wbr>as&shy;String</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-asString-Verso___Output___TeX___asString"><code>as&shy;String</code></span><ol>
+                      <li>
+                        <a href="Output-Formats/#Verso___Output___TeX___asString"><span id="---entry-___key___---___k___-72"><code>Verso.<wbr>Output.<wbr>TeX.<wbr>as&shy;String</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-assignedNumber-Verso___Genre___Manual___PartMetadata___assignedNumber-_LPAR_structure-field_RPAR_"><code>assigned&shy;Number</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___PartMetadata___mk"><span id="---entry-___key___---___k___-134"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>PartMetadata.<wbr>assigned&shy;Number</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-authors-Verso___Genre___Blog___Post___Meta___authors-_LPAR_structure-field_RPAR_"><code>authors</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___Post___Meta___mk"><span id="---entry-___key___---___k___-103"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Post.<wbr>Meta.<wbr>authors</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-authors-Verso___Genre___Manual___PartMetadata___authors-_LPAR_structure-field_RPAR_"><code>authors</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___PartMetadata___mk"><span id="---entry-___key___---___k___-135"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>PartMetadata.<wbr>authors</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-authorshipNote-Verso___Genre___Manual___PartMetadata___authorshipNote-_LPAR_structure-field_RPAR_"><code>authorship&shy;Note</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___PartMetadata___mk"><span id="---entry-___key___---___k___-136"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>PartMetadata.<wbr>authorship&shy;Note</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  </ol>
+                </div>
+              <div class="division">
+                <h2 id="---index-hdr-B">
+                  B</h2>
+                <ol>
+                  <li>
+                    <span id="---entry-Block-Verso___Doc___Block"><code>Block</code></span><ol>
+                      <li>
+                        <a href="Building-Documents/Elaboration/#Verso___Doc___Block"><span id="---entry-___key___---___k___-8"><code>Verso.<wbr>Doc.<wbr>Block</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-Block-Verso___Doc___Genre___Block-_LPAR_structure-field_RPAR_"><code>Block</code></span><ol>
+                      <li>
+                        <a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk"><span id="---entry-___key___---___k___"><code>Verso.<wbr>Doc.<wbr>Genre.<wbr>Block</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-Block-Verso___Genre___Manual___Block"><code>Block</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___Block___mk"><span id="---entry-___key___---___k___-150"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>Block</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-BlockDescr-Verso___Genre___Manual___BlockDescr"><code>Block&shy;Descr</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___BlockDescr___mk"><span id="---entry-___key___---___k___-161"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>Block&shy;Descr</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-BlockExt-Verso___Genre___Blog___BlockExt"><code>Block&shy;Ext</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___BlockExt___highlightedCode"><span id="---entry-___key___---___k___-75"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Block&shy;Ext</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-block-Verso___Doc___Traverse___block-_LPAR_class-method_RPAR_"><code>block</code></span><ol>
+                      <li>
+                        <a href="Building-Documents/Traversal/#Verso___Doc___Traverse___mk"><span id="---entry-___key___---___k___-12"><code>Verso.<wbr>Doc.<wbr>Traverse.<wbr>block</code> (class method)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-blogMain-Verso___Genre___Blog___blogMain"><code>blog&shy;Main</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___blogMain"><span id="---entry-___key___---___k___-108"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>blog&shy;Main</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-builtinHeader-Verso___Genre___Blog___Template___builtinHeader"><code>builtin&shy;Header</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___Template___builtinHeader"><span id="---entry-___key___---___k___-130"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Template.<wbr>builtin&shy;Header</code></span></a></li>
+                      </ol>
+                    </li>
+                  </ol>
+                </div>
+              <div class="division">
+                <h2 id="---index-hdr-C">
+                  C</h2>
+                <ol>
+                  <li>
+                    <span id="---entry-categories-Verso___Genre___Blog___Post___Meta___categories-_LPAR_structure-field_RPAR_"><code>categories</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___Post___Meta___mk"><span id="---entry-___key___---___k___-104"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Post.<wbr>Meta.<wbr>categories</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-categoryTemplate-Verso___Genre___Blog___Theme___categoryTemplate-_LPAR_structure-field_RPAR_"><code>category&shy;Template</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___Theme___mk"><span id="---entry-___key___---___k___-120"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Theme.<wbr>category&shy;Template</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-combine-Verso___Genre___Manual___HtmlAssets___combine"><code>combine</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___HtmlAssets___combine"><span id="---entry-___key___---___k___-183"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>HtmlAssets.<wbr>combine</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-cssFiles-Verso___Genre___Blog___Theme___cssFiles-_LPAR_structure-field_RPAR_"><code>css&shy;Files</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___Theme___mk"><span id="---entry-___key___---___k___-121"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Theme.<wbr>css&shy;Files</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  </ol>
+                </div>
+              <div class="division">
+                <h2 id="---index-hdr-D">
+                  D</h2>
+                <ol>
+                  <li>
+                    <span id="---entry-Dir-Verso___Genre___Blog___Dir"><code>Dir</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___Dir___page"><span id="---entry-___key___---___k___-112"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Dir</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-data-Verso___Genre___Manual___Block___data-_LPAR_structure-field_RPAR_"><code>data</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___Block___mk"><span id="---entry-___key___---___k___-152"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>Block.<wbr>data</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-data-Verso___Genre___Manual___Inline___data-_LPAR_structure-field_RPAR_"><code>data</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___Inline___mk"><span id="---entry-___key___---___k___-158"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>Inline.<wbr>data</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-date-Verso___Genre___Blog___Post___Meta___date-_LPAR_structure-field_RPAR_"><code>date</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___Post___Meta___mk"><span id="---entry-___key___---___k___-105"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Post.<wbr>Meta.<wbr>date</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-date-Verso___Genre___Manual___PartMetadata___date-_LPAR_structure-field_RPAR_"><code>date</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___PartMetadata___mk"><span id="---entry-___key___---___k___-137"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>PartMetadata.<wbr>date</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-deftech-Verso___Genre___Manual___deftech"><code>deftech</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___deftech"><span id="---entry-___key___---___k___-186"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>deftech</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-dependency-Verso___Genre___Manual___LicenseInfo___dependency-_LPAR_structure-field_RPAR_"><code>dependency</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___LicenseInfo___mk"><span id="---entry-___key___---___k___-190"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>LicenseInfo.<wbr>dependency</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-description-Verso___ArgParse___ValDesc___description-_LPAR_structure-field_RPAR_"><code>description</code></span><ol>
+                      <li>
+                        <a href="Extensions/#Verso___ArgParse___ValDesc___mk"><span id="---entry-___key___---___k___-43"><code>Verso.<wbr>ArgParse.<wbr>ValDesc.<wbr>description</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-draft-Verso___Genre___Blog___Post___Meta___draft-_LPAR_structure-field_RPAR_"><code>draft</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___Post___Meta___mk"><span id="---entry-___key___---___k___-106"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Post.<wbr>Meta.<wbr>draft</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-draft-Verso___Genre___Manual___PartMetadata___draft-_LPAR_structure-field_RPAR_"><code>draft</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___PartMetadata___mk"><span id="---entry-___key___---___k___-138"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>PartMetadata.<wbr>draft</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  </ol>
+                </div>
+              <div class="division">
+                <h2 id="---index-hdr-E">
+                  E</h2>
+                <ol>
+                  <li>
+                    <span id="---entry-empty-Verso___Output___Html___empty"><code>empty</code></span><ol>
+                      <li>
+                        <a href="Output-Formats/#Verso___Output___Html___empty"><span id="---entry-___key___---___k___-57"><code>Verso.<wbr>Output.<wbr>Html.<wbr>empty</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-empty-Verso___Output___TeX___empty"><code>empty</code></span><ol>
+                      <li>
+                        <a href="Output-Formats/#Verso___Output___TeX___empty"><span id="---entry-___key___---___k___-71"><code>Verso.<wbr>Output.<wbr>TeX.<wbr>empty</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-extraCss-Verso___Genre___Manual___HtmlAssets___extraCss-_LPAR_structure-field_RPAR_"><code>extra&shy;Css</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___HtmlAssets___mk"><span id="---entry-___key___---___k___-177"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>HtmlAssets.<wbr>extra&shy;Css</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-extraCssFiles-Verso___Genre___Manual___HtmlAssets___extraCssFiles-_LPAR_structure-field_RPAR_"><code>extra&shy;Css&shy;Files</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___HtmlAssets___mk"><span id="---entry-___key___---___k___-178"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>HtmlAssets.<wbr>extra&shy;Css&shy;Files</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-extraDataFiles-Verso___Genre___Manual___HtmlAssets___extraDataFiles-_LPAR_structure-field_RPAR_"><code>extra&shy;Data&shy;Files</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___HtmlAssets___mk"><span id="---entry-___key___---___k___-179"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>HtmlAssets.<wbr>extra&shy;Data&shy;Files</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-extraJs-Verso___Genre___Manual___HtmlAssets___extraJs-_LPAR_structure-field_RPAR_"><code>extra&shy;Js</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___HtmlAssets___mk"><span id="---entry-___key___---___k___-180"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>HtmlAssets.<wbr>extra&shy;Js</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-extraJsFiles-Verso___Genre___Manual___HtmlAssets___extraJsFiles-_LPAR_structure-field_RPAR_"><code>extra&shy;Js&shy;Files</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___HtmlAssets___mk"><span id="---entry-___key___---___k___-181"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>HtmlAssets.<wbr>extra&shy;Js&shy;Files</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  </ol>
+                </div>
+              <div class="division">
+                <h2 id="---index-hdr-F">
+                  F</h2>
+                <ol>
+                  <li>
+                    <span id="---entry-FromArgVal-Verso___ArgParse___FromArgVal"><code>From&shy;Arg&shy;Val</code></span><ol>
+                      <li>
+                        <a href="Extensions/#Verso___ArgParse___FromArgVal___mk"><span id="---entry-___key___---___k___-46"><code>Verso.<wbr>ArgParse.<wbr>From&shy;Arg&shy;Val</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-FromArgs-Verso___ArgParse___FromArgs"><code>From&shy;Args</code></span><ol>
+                      <li>
+                        <a href="Extensions/#Verso___ArgParse___FromArgs___mk"><span id="---entry-___key___---___k___-24"><code>Verso.<wbr>ArgParse.<wbr>From&shy;Args</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-file-Verso___Genre___Manual___PartMetadata___file-_LPAR_structure-field_RPAR_"><code>file</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___PartMetadata___mk"><span id="---entry-___key___---___k___-139"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>PartMetadata.<wbr>file</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-forM-List___forM"><code>for&shy;M</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#List___forM"><span id="---entry-___key___---___k___-184"><code>List.<wbr>for&shy;M</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-format-Verso___Output___Html___format"><code>format</code></span><ol>
+                      <li>
+                        <a href="Output-Formats/#Verso___Output___Html___format"><span id="---entry-___key___---___k___-62"><code>Verso.<wbr>Output.<wbr>Html.<wbr>format</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-fromArgVal-Verso___ArgParse___FromArgVal___fromArgVal-_LPAR_class-method_RPAR_"><code>from&shy;Arg&shy;Val</code></span><ol>
+                      <li>
+                        <a href="Extensions/#Verso___ArgParse___FromArgVal___mk"><span id="---entry-___key___---___k___-48"><code>Verso.<wbr>ArgParse.<wbr>From&shy;ArgVal.<wbr>from&shy;Arg&shy;Val</code> (class method)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-fromArgs-Verso___ArgParse___FromArgs___fromArgs-_LPAR_class-method_RPAR_"><code>from&shy;Args</code></span><ol>
+                      <li>
+                        <a href="Extensions/#Verso___ArgParse___FromArgs___mk"><span id="---entry-___key___---___k___-26"><code>Verso.<wbr>ArgParse.<wbr>FromArgs.<wbr>from&shy;Args</code> (class method)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-fromArray-Verso___Output___Html___fromArray"><code>from&shy;Array</code></span><ol>
+                      <li>
+                        <a href="Output-Formats/#Verso___Output___Html___fromArray"><span id="---entry-___key___---___k___-58"><code>Verso.<wbr>Output.<wbr>Html.<wbr>from&shy;Array</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-fromList-Verso___Output___Html___fromList"><code>from&shy;List</code></span><ol>
+                      <li>
+                        <a href="Output-Formats/#Verso___Output___Html___fromList"><span id="---entry-___key___---___k___-59"><code>Verso.<wbr>Output.<wbr>Html.<wbr>from&shy;List</code></span></a></li>
+                      </ol>
+                    </li>
+                  </ol>
+                </div>
+              <div class="division">
+                <h2 id="---index-hdr-G">
+                  G</h2>
+                <ol>
+                  <li>
+                    <span id="---entry-Genre-Verso___Doc___Genre"><code>Genre</code></span><ol>
+                      <li>
+                        <a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk"><span id="---entry-___key___---___k___-1"><code>Verso.<wbr>Doc.<wbr>Genre</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-genreBlock-Verso___Doc___Traverse___genreBlock-_LPAR_class-method_RPAR_"><code>genre&shy;Block</code></span><ol>
+                      <li>
+                        <a href="Building-Documents/Traversal/#Verso___Doc___Traverse___mk"><span id="---entry-___key___---___k___-13"><code>Verso.<wbr>Doc.<wbr>Traverse.<wbr>genre&shy;Block</code> (class method)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-genreInline-Verso___Doc___Traverse___genreInline-_LPAR_class-method_RPAR_"><code>genre&shy;Inline</code></span><ol>
+                      <li>
+                        <a href="Building-Documents/Traversal/#Verso___Doc___Traverse___mk"><span id="---entry-___key___---___k___-14"><code>Verso.<wbr>Doc.<wbr>Traverse.<wbr>genre&shy;Inline</code> (class method)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-genrePart-Verso___Doc___Traverse___genrePart-_LPAR_class-method_RPAR_"><code>genre&shy;Part</code></span><ol>
+                      <li>
+                        <a href="Building-Documents/Traversal/#Verso___Doc___Traverse___mk"><span id="---entry-___key___---___k___-15"><code>Verso.<wbr>Doc.<wbr>Traverse.<wbr>genre&shy;Part</code> (class method)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-get-Verso___ArgParse___ValDesc___get-_LPAR_structure-field_RPAR_"><code>get</code></span><ol>
+                      <li>
+                        <a href="Extensions/#Verso___ArgParse___ValDesc___mk"><span id="---entry-___key___---___k___-44"><code>Verso.<wbr>ArgParse.<wbr>ValDesc.<wbr>get</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  </ol>
+                </div>
+              <div class="division">
+                <h2 id="---index-hdr-H">
+                  H</h2>
+                <ol>
+                  <li>
+                    <span id="---entry-Html-Verso___Output___Html"><code>Html</code></span><ol>
+                      <li>
+                        <a href="Output-Formats/#Verso___Output___Html___text"><span id="---entry-___key___---___k___-53"><code>Verso.<wbr>Output.<wbr>Html</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-HtmlAssets-Verso___Genre___Manual___HtmlAssets"><code>Html&shy;Assets</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___HtmlAssets___mk"><span id="---entry-___key___---___k___-175"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>Html&shy;Assets</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-HtmlSplitMode-Verso___Genre___Manual___HtmlSplitMode"><code>Html&shy;Split&shy;Mode</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___HtmlSplitMode___default"><span id="---entry-___key___---___k___-147"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>Html&shy;Split&shy;Mode</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-howUsed-Verso___Genre___Manual___LicenseInfo___howUsed-_LPAR_structure-field_RPAR_"><code>how&shy;Used</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___LicenseInfo___mk"><span id="---entry-___key___---___k___-191"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>LicenseInfo.<wbr>how&shy;Used</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-htmlId-Verso___Genre___Blog___Page___Meta___htmlId-_LPAR_structure-field_RPAR_"><code>html&shy;Id</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___Page___Meta___mk"><span id="---entry-___key___---___k___-99"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Page.<wbr>Meta.<wbr>html&shy;Id</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-htmlId-Verso___Genre___Blog___Post___Meta___htmlId-_LPAR_structure-field_RPAR_"><code>html&shy;Id</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___Post___Meta___mk"><span id="---entry-___key___---___k___-107"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Post.<wbr>Meta.<wbr>html&shy;Id</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-htmlSplit-Verso___Genre___Manual___PartMetadata___htmlSplit-_LPAR_structure-field_RPAR_"><code>html&shy;Split</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___PartMetadata___mk"><span id="---entry-___key___---___k___-140"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>PartMetadata.<wbr>html&shy;Split</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-htmlToc-Verso___Genre___Manual___PartMetadata___htmlToc-_LPAR_structure-field_RPAR_"><code>html&shy;Toc</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___PartMetadata___mk"><span id="---entry-___key___---___k___-141"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>PartMetadata.<wbr>html&shy;Toc</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  </ol>
+                </div>
+              <div class="division">
+                <h2 id="---index-hdr-I">
+                  I</h2>
+                <ol>
+                  <li>
+                    <span id="---entry-Inline-Verso___Doc___Genre___Inline-_LPAR_structure-field_RPAR_"><code>Inline</code></span><ol>
+                      <li>
+                        <a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk"><span id="---entry-___key___---___k___-2"><code>Verso.<wbr>Doc.<wbr>Genre.<wbr>Inline</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-Inline-Verso___Doc___Inline"><code>Inline</code></span><ol>
+                      <li>
+                        <a href="Building-Documents/Elaboration/#Verso___Doc___Inline"><span id="---entry-___key___---___k___-9"><code>Verso.<wbr>Doc.<wbr>Inline</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-Inline-Verso___Genre___Manual___Inline"><code>Inline</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___Inline___mk"><span id="---entry-___key___---___k___-156"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>Inline</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-InlineDescr-Verso___Genre___Manual___InlineDescr"><code>Inline&shy;Descr</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___InlineDescr___mk"><span id="---entry-___key___---___k___-171"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>Inline&shy;Descr</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-InlineExt-Verso___Genre___Blog___InlineExt"><code>Inline&shy;Ext</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___InlineExt___highlightedCode"><span id="---entry-___key___---___k___-86"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Inline&shy;Ext</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-id-Verso___Genre___Manual___Block___id-_LPAR_structure-field_RPAR_"><code>id</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___Block___mk"><span id="---entry-___key___---___k___-153"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>Block.<wbr>id</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-id-Verso___Genre___Manual___Inline___id-_LPAR_structure-field_RPAR_"><code>id</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___Inline___mk"><span id="---entry-___key___---___k___-159"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>Inline.<wbr>id</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-id-Verso___Genre___Manual___PartMetadata___id-_LPAR_structure-field_RPAR_"><code>id</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___PartMetadata___mk"><span id="---entry-___key___---___k___-142"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>PartMetadata.<wbr>id</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-identifier-Verso___Genre___Manual___LicenseInfo___identifier-_LPAR_structure-field_RPAR_"><code>identifier</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___LicenseInfo___mk"><span id="---entry-___key___---___k___-192"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>LicenseInfo.<wbr>identifier</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-inBlock-Verso___Doc___TraverseBlock___inBlock-_LPAR_class-method_RPAR_"><code>in&shy;Block</code></span><ol>
+                      <li>
+                        <a href="Building-Documents/Traversal/#Verso___Doc___TraverseBlock___mk"><span id="---entry-___key___---___k___-23"><code>Verso.<wbr>Doc.<wbr>TraverseBlock.<wbr>in&shy;Block</code> (class method)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-inPart-Verso___Doc___TraversePart___inPart-_LPAR_class-method_RPAR_"><code>in&shy;Part</code></span><ol>
+                      <li>
+                        <a href="Building-Documents/Traversal/#Verso___Doc___TraversePart___mk"><span id="---entry-___key___---___k___-20"><code>Verso.<wbr>Doc.<wbr>TraversePart.<wbr>in&shy;Part</code> (class method)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <a href="Manuals-and-Books/#induction"><span id="---entry-induction"><code>induction</code></span></a></li>
+                  <li>
+                    <span id="---entry-init-_LSQ_anonymous_RSQ_-_LPAR_structure-field_RPAR_"><code>init</code></span><ol>
+                      <li>
+                        <span id="---entry-___key___---___k___-163"><code>[anonymous]</code> (structure field)</span> <a href="Manuals-and-Books/#Verso___Genre___Manual___BlockDescr___mk">(0)</a> <a href="Manuals-and-Books/#Verso___Genre___Manual___InlineDescr___mk">(1)</a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-inline-Verso___Doc___Traverse___inline-_LPAR_class-method_RPAR_"><code>inline</code></span><ol>
+                      <li>
+                        <a href="Building-Documents/Traversal/#Verso___Doc___Traverse___mk"><span id="---entry-___key___---___k___-16"><code>Verso.<wbr>Doc.<wbr>Traverse.<wbr>inline</code> (class method)</span></a></li>
+                      </ol>
+                    </li>
+                  </ol>
+                </div>
+              <div class="division">
+                <h2 id="---index-hdr-J">
+                  J</h2>
+                <ol>
+                  <li>
+                    <span id="---entry-jsFiles-Verso___Genre___Blog___Theme___jsFiles-_LPAR_structure-field_RPAR_"><code>js&shy;Files</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___Theme___mk"><span id="---entry-___key___---___k___-122"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Theme.<wbr>js&shy;Files</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  </ol>
+                </div>
+              <div class="division">
+                <h2 id="---index-hdr-L">
+                  L</h2>
+                <ol>
+                  <li>
+                    <span id="---entry-LicenseInfo-Verso___Genre___Manual___LicenseInfo"><code>License&shy;Info</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___LicenseInfo___mk"><span id="---entry-___key___---___k___-188"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>License&shy;Info</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <a href="Manuals-and-Books/#List___forM"><span id="---entry-List___forM"><code>List.<wbr>for&shy;M</code></span></a></li>
+                  <li>
+                    <span id="---entry-licenseInfo-Verso___Genre___Manual___HtmlAssets___licenseInfo-_LPAR_structure-field_RPAR_"><code>license&shy;Info</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___HtmlAssets___mk"><span id="---entry-___key___---___k___-182"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>HtmlAssets.<wbr>license&shy;Info</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-licenseInfo-Verso___Genre___Manual___licenseInfo"><code>license&shy;Info</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___licenseInfo"><span id="---entry-___key___---___k___-195"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>license&shy;Info</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-link-Verso___Genre___Manual___LicenseInfo___link-_LPAR_structure-field_RPAR_"><code>link</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___LicenseInfo___mk"><span id="---entry-___key___---___k___-193"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>LicenseInfo.<wbr>link</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-localContentItem-_LSQ_anonymous_RSQ_-_LPAR_structure-field_RPAR_"><code>local&shy;Content&shy;Item</code></span><ol>
+                      <li>
+                        <span id="---entry-___key___---___k___-164"><code>[anonymous]</code> (structure field)</span> <a href="Manuals-and-Books/#Verso___Genre___Manual___BlockDescr___mk">(0)</a> <a href="Manuals-and-Books/#Verso___Genre___Manual___InlineDescr___mk">(1)</a></li>
+                      </ol>
+                    </li>
+                  </ol>
+                </div>
+              <div class="division">
+                <h2 id="---index-hdr-M">
+                  M</h2>
+                <ol>
+                  <li>
+                    <span id="---entry-Manual-Verso___Genre___Manual"><code>Manual</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual"><span id="---entry-___key___---___k___-131"><code>Verso.<wbr>Genre.<wbr>Manual</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-Meta-Verso___Genre___Blog___Page___Meta"><code>Meta</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___Page___Meta___mk"><span id="---entry-___key___---___k___-97"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Page.<wbr>Meta</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-Meta-Verso___Genre___Blog___Post___Meta"><code>Meta</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___Post___Meta___mk"><span id="---entry-___key___---___k___-101"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Post.<wbr>Meta</code></span></a></li>
+                      </ol>
+                    </li>
+                  </ol>
+                </div>
+              <div class="division">
+                <h2 id="---index-hdr-N">
+                  N</h2>
+                <ol>
+                  <li>
+                    <span id="---entry-name-Verso___Genre___Manual___Block___name-_LPAR_structure-field_RPAR_"><code>name</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___Block___mk"><span id="---entry-___key___---___k___-154"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>Block.<wbr>name</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-name-Verso___Genre___Manual___Inline___name-_LPAR_structure-field_RPAR_"><code>name</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___Inline___mk"><span id="---entry-___key___---___k___-160"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>Inline.<wbr>name</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-named___-Verso___ArgParse___named___"><code>named'</code></span><ol>
+                      <li>
+                        <a href="Extensions/#Verso___ArgParse___named___"><span id="---entry-___key___---___k___-51"><code>Verso.<wbr>ArgParse.<wbr>named'</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-namedD___-Verso___ArgParse___namedD___"><code>named&shy;D'</code></span><ol>
+                      <li>
+                        <a href="Extensions/#Verso___ArgParse___namedD___"><span id="---entry-___key___---___k___-52"><code>Verso.<wbr>ArgParse.<wbr>named&shy;D'</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-namedD-Verso___ArgParse___namedD"><code>named&shy;D</code></span><ol>
+                      <li>
+                        <a href="Extensions/#Verso___ArgParse___namedD"><span id="---entry-___key___---___k___-49"><code>Verso.<wbr>ArgParse.<wbr>named&shy;D</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-number-Verso___Genre___Manual___PartMetadata___number-_LPAR_structure-field_RPAR_"><code>number</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___PartMetadata___mk"><span id="---entry-___key___---___k___-143"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>PartMetadata.<wbr>number</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  </ol>
+                </div>
+              <div class="division">
+                <h2 id="---index-hdr-P">
+                  P</h2>
+                <ol>
+                  <li>
+                    <span id="---entry-Page-Verso___Genre___Blog___Page"><code>Page</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___Page"><span id="---entry-___key___---___k___-73"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Page</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-Part-Verso___Doc___Part"><code>Part</code></span><ol>
+                      <li>
+                        <a href="Building-Documents/Elaboration/#Verso___Doc___Part"><span id="---entry-___key___---___k___-7"><code>Verso.<wbr>Doc.<wbr>Part</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-PartMetadata-Verso___Doc___Genre___PartMetadata-_LPAR_structure-field_RPAR_"><code>Part&shy;Metadata</code></span><ol>
+                      <li>
+                        <a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk"><span id="---entry-___key___---___k___-3"><code>Verso.<wbr>Doc.<wbr>Genre.<wbr>Part&shy;Metadata</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-PartMetadata-Verso___Genre___Manual___PartMetadata"><code>Part&shy;Metadata</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___PartMetadata___mk"><span id="---entry-___key___---___k___-132"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>Part&shy;Metadata</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-Post-Verso___Genre___Blog___Post"><code>Post</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___Post"><span id="---entry-___key___---___k___-74"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Post</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-pageTemplate-Verso___Genre___Blog___Theme___pageTemplate-_LPAR_structure-field_RPAR_"><code>page&shy;Template</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___Theme___mk"><span id="---entry-___key___---___k___-123"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Theme.<wbr>page&shy;Template</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-param-Verso___Genre___Blog___Template___param"><code>param</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___Template___param"><span id="---entry-___key___---___k___-128"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Template.<wbr>param</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-param___-Verso___Genre___Blog___Template___param___"><code>param?</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___Template___param___"><span id="---entry-___key___---___k___-129"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Template.<wbr>param?</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-part-Verso___Doc___Traverse___part-_LPAR_class-method_RPAR_"><code>part</code></span><ol>
+                      <li>
+                        <a href="Building-Documents/Traversal/#Verso___Doc___Traverse___mk"><span id="---entry-___key___---___k___-17"><code>Verso.<wbr>Doc.<wbr>Traverse.<wbr>part</code> (class method)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-positional___-Verso___ArgParse___positional___"><code>positional'</code></span><ol>
+                      <li>
+                        <a href="Extensions/#Verso___ArgParse___positional___"><span id="---entry-___key___---___k___-50"><code>Verso.<wbr>ArgParse.<wbr>positional'</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-postTemplate-Verso___Genre___Blog___Theme___postTemplate-_LPAR_structure-field_RPAR_"><code>post&shy;Template</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___Theme___mk"><span id="---entry-___key___---___k___-124"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Theme.<wbr>post&shy;Template</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <a href="Manuals-and-Books/#pp___deepTerms___threshold"><span id="---entry-pp___deepTerms___threshold"><code>pp.<wbr>deepTerms.<wbr>threshold</code></span></a></li>
+                  <li>
+                    <span id="---entry-preamble-Verso___Genre___Manual___BlockDescr___init-_LPAR_structure-field_RPAR_"><code>preamble</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___BlockDescr___mk"><span id="---entry-___key___---___k___-165"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>BlockDescr.<wbr>init</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-preamble-Verso___Genre___Manual___InlineDescr___init-_LPAR_structure-field_RPAR_"><code>preamble</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___InlineDescr___mk"><span id="---entry-___key___---___k___-173"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>InlineDescr.<wbr>init</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-primaryTemplate-Verso___Genre___Blog___Theme___primaryTemplate-_LPAR_structure-field_RPAR_"><code>primary&shy;Template</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___Theme___mk"><span id="---entry-___key___---___k___-125"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Theme.<wbr>primary&shy;Template</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-properties-Verso___Genre___Manual___Block___properties-_LPAR_structure-field_RPAR_"><code>properties</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___Block___mk"><span id="---entry-___key___---___k___-155"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>Block.<wbr>properties</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  </ol>
+                </div>
+              <div class="division">
+                <h2 id="---index-hdr-S">
+                  S</h2>
+                <ol>
+                  <li>
+                    <span id="---entry-Site-Verso___Genre___Blog___Site"><code>Site</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___Site___page"><span id="---entry-___key___---___k___-109"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Site</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-shortContextTitle-Verso___Genre___Manual___PartMetadata___shortContextTitle-_LPAR_structure-field_RPAR_"><code>short&shy;Context&shy;Title</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___PartMetadata___mk"><span id="---entry-___key___---___k___-144"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>PartMetadata.<wbr>short&shy;Context&shy;Title</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-shortTitle-Verso___Genre___Manual___PartMetadata___shortTitle-_LPAR_structure-field_RPAR_"><code>short&shy;Title</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___PartMetadata___mk"><span id="---entry-___key___---___k___-145"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>PartMetadata.<wbr>short&shy;Title</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-showInNav-Verso___Genre___Blog___Page___Meta___showInNav-_LPAR_structure-field_RPAR_"><code>show&shy;In&shy;Nav</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___Page___Meta___mk"><span id="---entry-___key___---___k___-100"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Page.<wbr>Meta.<wbr>show&shy;In&shy;Nav</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-signature-Verso___ArgParse___ValDesc___signature-_LPAR_structure-field_RPAR_"><code>signature</code></span><ol>
+                      <li>
+                        <a href="Extensions/#Verso___ArgParse___ValDesc___mk"><span id="---entry-___key___---___k___-45"><code>Verso.<wbr>ArgParse.<wbr>ValDesc.<wbr>signature</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  </ol>
+                </div>
+              <div class="division">
+                <h2 id="---index-hdr-T">
+                  T</h2>
+                <ol>
+                  <li>
+                    <span id="---entry-TeX-Verso___Output___TeX"><code>Te&shy;X</code></span><ol>
+                      <li>
+                        <a href="Output-Formats/#Verso___Output___TeX___text"><span id="---entry-___key___---___k___-64"><code>Verso.<wbr>Output.<wbr>Te&shy;X</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-Template-Verso___Genre___Blog___Template"><code>Template</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___Template"><span id="---entry-___key___---___k___-126"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Template</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-TemplateM-Verso___Genre___Blog___TemplateM"><code>Template&shy;M</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___TemplateM"><span id="---entry-___key___---___k___-127"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Template&shy;M</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-Theme-Verso___Genre___Blog___Theme"><code>Theme</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___Theme___mk"><span id="---entry-___key___---___k___-116"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Theme</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-Traverse-Verso___Doc___Traverse"><code>Traverse</code></span><ol>
+                      <li>
+                        <a href="Building-Documents/Traversal/#Verso___Doc___Traverse___mk"><span id="---entry-___key___---___k___-10"><code>Verso.<wbr>Doc.<wbr>Traverse</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-TraverseBlock-Verso___Doc___TraverseBlock"><code>Traverse&shy;Block</code></span><ol>
+                      <li>
+                        <a href="Building-Documents/Traversal/#Verso___Doc___TraverseBlock___mk"><span id="---entry-___key___---___k___-21"><code>Verso.<wbr>Doc.<wbr>Traverse&shy;Block</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-TraverseContext-Verso___Doc___Genre___TraverseContext-_LPAR_structure-field_RPAR_"><code>Traverse&shy;Context</code></span><ol>
+                      <li>
+                        <a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk"><span id="---entry-___key___---___k___-4"><code>Verso.<wbr>Doc.<wbr>Genre.<wbr>Traverse&shy;Context</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-TraversePart-Verso___Doc___TraversePart"><code>Traverse&shy;Part</code></span><ol>
+                      <li>
+                        <a href="Building-Documents/Traversal/#Verso___Doc___TraversePart___mk"><span id="---entry-___key___---___k___-18"><code>Verso.<wbr>Doc.<wbr>Traverse&shy;Part</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-TraverseState-Verso___Doc___Genre___TraverseState-_LPAR_structure-field_RPAR_"><code>Traverse&shy;State</code></span><ol>
+                      <li>
+                        <a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk"><span id="---entry-___key___---___k___-5"><code>Verso.<wbr>Doc.<wbr>Genre.<wbr>Traverse&shy;State</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-tag-Verso___Genre___Manual___PartMetadata___tag-_LPAR_structure-field_RPAR_"><code>tag</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___PartMetadata___mk"><span id="---entry-___key___---___k___-146"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>PartMetadata.<wbr>tag</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-tech-Verso___Genre___Manual___tech"><code>tech</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___tech"><span id="---entry-___key___---___k___-187"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>tech</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-text-Verso___Genre___Manual___LicenseInfo___text-_LPAR_structure-field_RPAR_"><code>text</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___LicenseInfo___mk"><span id="---entry-___key___---___k___-194"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>LicenseInfo.<wbr>text</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-threshold-pp___deepTerms___threshold"><code>threshold</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#pp___deepTerms___threshold"><span id="---entry-___key___---___k___-185"><code>pp.<wbr>deepTerms.<wbr>threshold</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-toHtml-_LSQ_anonymous_RSQ_-_LPAR_structure-field_RPAR_"><code>to&shy;Html</code></span><ol>
+                      <li>
+                        <span id="---entry-___key___---___k___-166"><code>[anonymous]</code> (structure field)</span> <a href="Manuals-and-Books/#Verso___Genre___Manual___BlockDescr___mk">(0)</a> <a href="Manuals-and-Books/#Verso___Genre___Manual___InlineDescr___mk">(1)</a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-toHtmlAssets-Verso___Genre___Manual___BlockDescr___toHtmlAssets-_LPAR_structure-field_RPAR_"><code>to&shy;Html&shy;Assets</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___BlockDescr___mk"><span id="---entry-___key___---___k___-167"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>BlockDescr.<wbr>to&shy;Html&shy;Assets</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-toHtmlAssets-Verso___Genre___Manual___InlineDescr___toHtmlAssets-_LPAR_structure-field_RPAR_"><code>to&shy;Html&shy;Assets</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___InlineDescr___mk"><span id="---entry-___key___---___k___-174"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>InlineDescr.<wbr>to&shy;Html&shy;Assets</code> (structure field)</span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-toTeX-_LSQ_anonymous_RSQ_-_LPAR_structure-field_RPAR_"><code>to&shy;Te&shy;X</code></span><ol>
+                      <li>
+                        <span id="---entry-___key___---___k___-168"><code>[anonymous]</code> (structure field)</span> <a href="Manuals-and-Books/#Verso___Genre___Manual___BlockDescr___mk">(0)</a> <a href="Manuals-and-Books/#Verso___Genre___Manual___InlineDescr___mk">(1)</a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-traverse-_LSQ_anonymous_RSQ_-_LPAR_structure-field_RPAR_"><code>traverse</code></span><ol>
+                      <li>
+                        <span id="---entry-___key___---___k___-169"><code>[anonymous]</code> (structure field)</span> <a href="Manuals-and-Books/#Verso___Genre___Manual___BlockDescr___mk">(0)</a> <a href="Manuals-and-Books/#Verso___Genre___Manual___InlineDescr___mk">(1)</a></li>
+                      </ol>
+                    </li>
+                  </ol>
+                </div>
+              <div class="division">
+                <h2 id="---index-hdr-U">
+                  U</h2>
+                <ol>
+                  <li>
+                    <span id="---entry-usePackages-_LSQ_anonymous_RSQ_-_LPAR_structure-field_RPAR_"><code>use&shy;Packages</code></span><ol>
+                      <li>
+                        <span id="---entry-___key___---___k___-170"><code>[anonymous]</code> (structure field)</span> <a href="Manuals-and-Books/#Verso___Genre___Manual___BlockDescr___mk">(0)</a> <a href="Manuals-and-Books/#Verso___Genre___Manual___InlineDescr___mk">(1)</a></li>
+                      </ol>
+                    </li>
+                  </ol>
+                </div>
+              <div class="division">
+                <h2 id="---index-hdr-V">
+                  V</h2>
+                <ol>
+                  <li>
+                    <span id="---entry-ValDesc-Verso___ArgParse___ValDesc"><code>Val&shy;Desc</code></span><ol>
+                      <li>
+                        <a href="Extensions/#Verso___ArgParse___ValDesc___mk"><span id="---entry-___key___---___k___-41"><code>Verso.<wbr>ArgParse.<wbr>Val&shy;Desc</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <a href="Extensions/#Verso___ArgParse___fail"><span id="---entry-Verso___ArgParse"><code>Verso.<wbr>Arg&shy;Parse</code></span></a></li>
+                  <li>
+                    <a href="Extensions/#Verso___ArgParse___FromArgVal___mk"><span id="---entry-Verso___ArgParse___FromArgVal"><code>Verso.<wbr>ArgParse.<wbr>From&shy;Arg&shy;Val</code></span></a></li>
+                  <li>
+                    <span id="---entry-Verso___ArgParse___FromArgVal___mk-Instance-constructor-of-Verso___ArgParse___FromArgVal"><code>Verso.<wbr>ArgParse.<wbr>From&shy;ArgVal.<wbr>mk</code></span><ol>
+                      <li>
+                        <a href="Extensions/#Verso___ArgParse___FromArgVal___mk"><span id="---entry-___key___---___k___-47">Instance constructor of <code>Verso.<wbr>ArgParse.<wbr>From&shy;Arg&shy;Val</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <a href="Extensions/#Verso___ArgParse___FromArgs___mk"><span id="---entry-Verso___ArgParse___FromArgs"><code>Verso.<wbr>ArgParse.<wbr>From&shy;Args</code></span></a></li>
+                  <li>
+                    <span id="---entry-Verso___ArgParse___FromArgs___mk-Instance-constructor-of-Verso___ArgParse___FromArgs"><code>Verso.<wbr>ArgParse.<wbr>FromArgs.<wbr>mk</code></span><ol>
+                      <li>
+                        <a href="Extensions/#Verso___ArgParse___FromArgs___mk"><span id="---entry-___key___---___k___-25">Instance constructor of <code>Verso.<wbr>ArgParse.<wbr>From&shy;Args</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <a href="Extensions/#Verso___ArgParse___ValDesc___mk"><span id="---entry-Verso___ArgParse___ValDesc"><code>Verso.<wbr>ArgParse.<wbr>Val&shy;Desc</code></span></a></li>
+                  <li>
+                    <span id="---entry-Verso___ArgParse___ValDesc___mk-Constructor-of-Verso___ArgParse___ValDesc"><code>Verso.<wbr>ArgParse.<wbr>ValDesc.<wbr>mk</code></span><ol>
+                      <li>
+                        <a href="Extensions/#Verso___ArgParse___ValDesc___mk"><span id="---entry-___key___---___k___-42">Constructor of <code>Verso.<wbr>ArgParse.<wbr>Val&shy;Desc</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-Verso___ArgParse___anyNamed-Constructor-of-Verso___ArgParse"><code>Verso.<wbr>ArgParse.<wbr>any&shy;Named</code></span><ol>
+                      <li>
+                        <a href="Extensions/#Verso___ArgParse___fail"><span id="---entry-___key___---___k___-28">Constructor of <code>Verso.<wbr>Arg&shy;Parse</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-Verso___ArgParse___done-Constructor-of-Verso___ArgParse"><code>Verso.<wbr>ArgParse.<wbr>done</code></span><ol>
+                      <li>
+                        <a href="Extensions/#Verso___ArgParse___fail"><span id="---entry-___key___---___k___-29">Constructor of <code>Verso.<wbr>Arg&shy;Parse</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-Verso___ArgParse___fail-Constructor-of-Verso___ArgParse"><code>Verso.<wbr>ArgParse.<wbr>fail</code></span><ol>
+                      <li>
+                        <a href="Extensions/#Verso___ArgParse___fail"><span id="---entry-___key___---___k___-30">Constructor of <code>Verso.<wbr>Arg&shy;Parse</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-Verso___ArgParse___flag-Constructor-of-Verso___ArgParse"><code>Verso.<wbr>ArgParse.<wbr>flag</code></span><ol>
+                      <li>
+                        <a href="Extensions/#Verso___ArgParse___fail"><span id="---entry-___key___---___k___-31">Constructor of <code>Verso.<wbr>Arg&shy;Parse</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-Verso___ArgParse___flagM-Constructor-of-Verso___ArgParse"><code>Verso.<wbr>ArgParse.<wbr>flag&shy;M</code></span><ol>
+                      <li>
+                        <a href="Extensions/#Verso___ArgParse___fail"><span id="---entry-___key___---___k___-32">Constructor of <code>Verso.<wbr>Arg&shy;Parse</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-Verso___ArgParse___lift-Constructor-of-Verso___ArgParse"><code>Verso.<wbr>ArgParse.<wbr>lift</code></span><ol>
+                      <li>
+                        <a href="Extensions/#Verso___ArgParse___fail"><span id="---entry-___key___---___k___-33">Constructor of <code>Verso.<wbr>Arg&shy;Parse</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-Verso___ArgParse___many-Constructor-of-Verso___ArgParse"><code>Verso.<wbr>ArgParse.<wbr>many</code></span><ol>
+                      <li>
+                        <a href="Extensions/#Verso___ArgParse___fail"><span id="---entry-___key___---___k___-34">Constructor of <code>Verso.<wbr>Arg&shy;Parse</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <a href="Extensions/#Verso___ArgParse___named___"><span id="---entry-Verso___ArgParse___named___"><code>Verso.<wbr>ArgParse.<wbr>named'</code></span></a></li>
+                  <li>
+                    <span id="---entry-Verso___ArgParse___named-Constructor-of-Verso___ArgParse"><code>Verso.<wbr>ArgParse.<wbr>named</code></span><ol>
+                      <li>
+                        <a href="Extensions/#Verso___ArgParse___fail"><span id="---entry-___key___---___k___-35">Constructor of <code>Verso.<wbr>Arg&shy;Parse</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <a href="Extensions/#Verso___ArgParse___namedD"><span id="---entry-Verso___ArgParse___namedD"><code>Verso.<wbr>ArgParse.<wbr>named&shy;D</code></span></a></li>
+                  <li>
+                    <a href="Extensions/#Verso___ArgParse___namedD___"><span id="---entry-Verso___ArgParse___namedD___"><code>Verso.<wbr>ArgParse.<wbr>named&shy;D'</code></span></a></li>
+                  <li>
+                    <span id="---entry-Verso___ArgParse___orElse-Constructor-of-Verso___ArgParse"><code>Verso.<wbr>ArgParse.<wbr>or&shy;Else</code></span><ol>
+                      <li>
+                        <a href="Extensions/#Verso___ArgParse___fail"><span id="---entry-___key___---___k___-36">Constructor of <code>Verso.<wbr>Arg&shy;Parse</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <a href="Extensions/#Verso___ArgParse___positional___"><span id="---entry-Verso___ArgParse___positional___"><code>Verso.<wbr>ArgParse.<wbr>positional'</code></span></a></li>
+                  <li>
+                    <span id="---entry-Verso___ArgParse___positional-Constructor-of-Verso___ArgParse"><code>Verso.<wbr>ArgParse.<wbr>positional</code></span><ol>
+                      <li>
+                        <a href="Extensions/#Verso___ArgParse___fail"><span id="---entry-___key___---___k___-37">Constructor of <code>Verso.<wbr>Arg&shy;Parse</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-Verso___ArgParse___pure-Constructor-of-Verso___ArgParse"><code>Verso.<wbr>ArgParse.<wbr>pure</code></span><ol>
+                      <li>
+                        <a href="Extensions/#Verso___ArgParse___fail"><span id="---entry-___key___---___k___-38">Constructor of <code>Verso.<wbr>Arg&shy;Parse</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-Verso___ArgParse___remaining-Constructor-of-Verso___ArgParse"><code>Verso.<wbr>ArgParse.<wbr>remaining</code></span><ol>
+                      <li>
+                        <a href="Extensions/#Verso___ArgParse___fail"><span id="---entry-___key___---___k___-39">Constructor of <code>Verso.<wbr>Arg&shy;Parse</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-Verso___ArgParse___seq-Constructor-of-Verso___ArgParse"><code>Verso.<wbr>ArgParse.<wbr>seq</code></span><ol>
+                      <li>
+                        <a href="Extensions/#Verso___ArgParse___fail"><span id="---entry-___key___---___k___-40">Constructor of <code>Verso.<wbr>Arg&shy;Parse</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <a href="Building-Documents/Elaboration/#Verso___Doc___Block"><span id="---entry-Verso___Doc___Block"><code>Verso.<wbr>Doc.<wbr>Block</code></span></a></li>
+                  <li>
+                    <a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk"><span id="---entry-Verso___Doc___Genre"><code>Verso.<wbr>Doc.<wbr>Genre</code></span></a></li>
+                  <li>
+                    <span id="---entry-Verso___Doc___Genre___mk-Constructor-of-Verso___Doc___Genre"><code>Verso.<wbr>Doc.<wbr>Genre.<wbr>mk</code></span><ol>
+                      <li>
+                        <a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk"><span id="---entry-___key___---___k___-6">Constructor of <code>Verso.<wbr>Doc.<wbr>Genre</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <a href="Building-Documents/Elaboration/#Verso___Doc___Inline"><span id="---entry-Verso___Doc___Inline"><code>Verso.<wbr>Doc.<wbr>Inline</code></span></a></li>
+                  <li>
+                    <a href="Building-Documents/Elaboration/#Verso___Doc___Part"><span id="---entry-Verso___Doc___Part"><code>Verso.<wbr>Doc.<wbr>Part</code></span></a></li>
+                  <li>
+                    <a href="Building-Documents/Traversal/#Verso___Doc___Traverse___mk"><span id="---entry-Verso___Doc___Traverse"><code>Verso.<wbr>Doc.<wbr>Traverse</code></span></a></li>
+                  <li>
+                    <span id="---entry-Verso___Doc___Traverse___mk-Instance-constructor-of-Verso___Doc___Traverse"><code>Verso.<wbr>Doc.<wbr>Traverse.<wbr>mk</code></span><ol>
+                      <li>
+                        <a href="Building-Documents/Traversal/#Verso___Doc___Traverse___mk"><span id="---entry-___key___---___k___-11">Instance constructor of <code>Verso.<wbr>Doc.<wbr>Traverse</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <a href="Building-Documents/Traversal/#Verso___Doc___TraverseBlock___mk"><span id="---entry-Verso___Doc___TraverseBlock"><code>Verso.<wbr>Doc.<wbr>Traverse&shy;Block</code></span></a></li>
+                  <li>
+                    <span id="---entry-Verso___Doc___TraverseBlock___mk-Instance-constructor-of-Verso___Doc___TraverseBlock"><code>Verso.<wbr>Doc.<wbr>TraverseBlock.<wbr>mk</code></span><ol>
+                      <li>
+                        <a href="Building-Documents/Traversal/#Verso___Doc___TraverseBlock___mk"><span id="---entry-___key___---___k___-22">Instance constructor of <code>Verso.<wbr>Doc.<wbr>Traverse&shy;Block</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <a href="Building-Documents/Traversal/#Verso___Doc___TraversePart___mk"><span id="---entry-Verso___Doc___TraversePart"><code>Verso.<wbr>Doc.<wbr>Traverse&shy;Part</code></span></a></li>
+                  <li>
+                    <span id="---entry-Verso___Doc___TraversePart___mk-Instance-constructor-of-Verso___Doc___TraversePart"><code>Verso.<wbr>Doc.<wbr>TraversePart.<wbr>mk</code></span><ol>
+                      <li>
+                        <a href="Building-Documents/Traversal/#Verso___Doc___TraversePart___mk"><span id="---entry-___key___---___k___-19">Instance constructor of <code>Verso.<wbr>Doc.<wbr>Traverse&shy;Part</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <a href="Websites/#Verso___Genre___Blog___BlockExt___highlightedCode"><span id="---entry-Verso___Genre___Blog___BlockExt"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Block&shy;Ext</code></span></a></li>
+                  <li>
+                    <span id="---entry-Verso___Genre___Blog___BlockExt___blob-Constructor-of-Verso___Genre___Blog___BlockExt"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>BlockExt.<wbr>blob</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___BlockExt___highlightedCode"><span id="---entry-___key___---___k___-76">Constructor of <code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Block&shy;Ext</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-Verso___Genre___Blog___BlockExt___component-Constructor-of-Verso___Genre___Blog___BlockExt"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>BlockExt.<wbr>component</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___BlockExt___highlightedCode"><span id="---entry-___key___---___k___-77">Constructor of <code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Block&shy;Ext</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-Verso___Genre___Blog___BlockExt___docstring-Constructor-of-Verso___Genre___Blog___BlockExt"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>BlockExt.<wbr>docstring</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___BlockExt___highlightedCode"><span id="---entry-___key___---___k___-78">Constructor of <code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Block&shy;Ext</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-Verso___Genre___Blog___BlockExt___docstringSection-Constructor-of-Verso___Genre___Blog___BlockExt"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>BlockExt.<wbr>docstring&shy;Section</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___BlockExt___highlightedCode"><span id="---entry-___key___---___k___-79">Constructor of <code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Block&shy;Ext</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-Verso___Genre___Blog___BlockExt___highlightedCode-Constructor-of-Verso___Genre___Blog___BlockExt"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>BlockExt.<wbr>highlighted&shy;Code</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___BlockExt___highlightedCode"><span id="---entry-___key___---___k___-80">Constructor of <code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Block&shy;Ext</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-Verso___Genre___Blog___BlockExt___htmlDetails-Constructor-of-Verso___Genre___Blog___BlockExt"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>BlockExt.<wbr>html&shy;Details</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___BlockExt___highlightedCode"><span id="---entry-___key___---___k___-81">Constructor of <code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Block&shy;Ext</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-Verso___Genre___Blog___BlockExt___htmlDiv-Constructor-of-Verso___Genre___Blog___BlockExt"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>BlockExt.<wbr>html&shy;Div</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___BlockExt___highlightedCode"><span id="---entry-___key___---___k___-82">Constructor of <code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Block&shy;Ext</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-Verso___Genre___Blog___BlockExt___htmlWrapper-Constructor-of-Verso___Genre___Blog___BlockExt"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>BlockExt.<wbr>html&shy;Wrapper</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___BlockExt___highlightedCode"><span id="---entry-___key___---___k___-83">Constructor of <code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Block&shy;Ext</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-Verso___Genre___Blog___BlockExt___lexedText-Constructor-of-Verso___Genre___Blog___BlockExt"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>BlockExt.<wbr>lexed&shy;Text</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___BlockExt___highlightedCode"><span id="---entry-___key___---___k___-84">Constructor of <code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Block&shy;Ext</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-Verso___Genre___Blog___BlockExt___message-Constructor-of-Verso___Genre___Blog___BlockExt"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>BlockExt.<wbr>message</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___BlockExt___highlightedCode"><span id="---entry-___key___---___k___-85">Constructor of <code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Block&shy;Ext</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <a href="Websites/#Verso___Genre___Blog___Dir___page"><span id="---entry-Verso___Genre___Blog___Dir"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Dir</code></span></a></li>
+                  <li>
+                    <span id="---entry-Verso___Genre___Blog___Dir___blog-Constructor-of-Verso___Genre___Blog___Dir"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Dir.<wbr>blog</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___Dir___page"><span id="---entry-___key___---___k___-113">Constructor of <code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Dir</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-Verso___Genre___Blog___Dir___page-Constructor-of-Verso___Genre___Blog___Dir"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Dir.<wbr>page</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___Dir___page"><span id="---entry-___key___---___k___-114">Constructor of <code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Dir</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-Verso___Genre___Blog___Dir___static-Constructor-of-Verso___Genre___Blog___Dir"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Dir.<wbr>static</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___Dir___page"><span id="---entry-___key___---___k___-115">Constructor of <code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Dir</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <a href="Websites/#Verso___Genre___Blog___InlineExt___highlightedCode"><span id="---entry-Verso___Genre___Blog___InlineExt"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Inline&shy;Ext</code></span></a></li>
+                  <li>
+                    <span id="---entry-Verso___Genre___Blog___InlineExt___blob-Constructor-of-Verso___Genre___Blog___InlineExt"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>InlineExt.<wbr>blob</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___InlineExt___highlightedCode"><span id="---entry-___key___---___k___-87">Constructor of <code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Inline&shy;Ext</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-Verso___Genre___Blog___InlineExt___component-Constructor-of-Verso___Genre___Blog___InlineExt"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>InlineExt.<wbr>component</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___InlineExt___highlightedCode"><span id="---entry-___key___---___k___-88">Constructor of <code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Inline&shy;Ext</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-Verso___Genre___Blog___InlineExt___customHighlight-Constructor-of-Verso___Genre___Blog___InlineExt"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>InlineExt.<wbr>custom&shy;Highlight</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___InlineExt___highlightedCode"><span id="---entry-___key___---___k___-89">Constructor of <code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Inline&shy;Ext</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-Verso___Genre___Blog___InlineExt___highlightedCode-Constructor-of-Verso___Genre___Blog___InlineExt"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>InlineExt.<wbr>highlighted&shy;Code</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___InlineExt___highlightedCode"><span id="---entry-___key___---___k___-90">Constructor of <code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Inline&shy;Ext</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-Verso___Genre___Blog___InlineExt___htmlSpan-Constructor-of-Verso___Genre___Blog___InlineExt"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>InlineExt.<wbr>html&shy;Span</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___InlineExt___highlightedCode"><span id="---entry-___key___---___k___-91">Constructor of <code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Inline&shy;Ext</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-Verso___Genre___Blog___InlineExt___label-Constructor-of-Verso___Genre___Blog___InlineExt"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>InlineExt.<wbr>label</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___InlineExt___highlightedCode"><span id="---entry-___key___---___k___-92">Constructor of <code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Inline&shy;Ext</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-Verso___Genre___Blog___InlineExt___lexedText-Constructor-of-Verso___Genre___Blog___InlineExt"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>InlineExt.<wbr>lexed&shy;Text</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___InlineExt___highlightedCode"><span id="---entry-___key___---___k___-93">Constructor of <code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Inline&shy;Ext</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-Verso___Genre___Blog___InlineExt___message-Constructor-of-Verso___Genre___Blog___InlineExt"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>InlineExt.<wbr>message</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___InlineExt___highlightedCode"><span id="---entry-___key___---___k___-94">Constructor of <code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Inline&shy;Ext</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-Verso___Genre___Blog___InlineExt___pageref-Constructor-of-Verso___Genre___Blog___InlineExt"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>InlineExt.<wbr>pageref</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___InlineExt___highlightedCode"><span id="---entry-___key___---___k___-95">Constructor of <code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Inline&shy;Ext</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-Verso___Genre___Blog___InlineExt___ref-Constructor-of-Verso___Genre___Blog___InlineExt"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>InlineExt.<wbr>ref</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___InlineExt___highlightedCode"><span id="---entry-___key___---___k___-96">Constructor of <code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Inline&shy;Ext</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <a href="Websites/#Verso___Genre___Blog___Page"><span id="---entry-Verso___Genre___Blog___Page"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Page</code></span></a></li>
+                  <li>
+                    <a href="Websites/#Verso___Genre___Blog___Page___Meta___mk"><span id="---entry-Verso___Genre___Blog___Page___Meta"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Page.<wbr>Meta</code></span></a></li>
+                  <li>
+                    <span id="---entry-Verso___Genre___Blog___Page___Meta___mk-Constructor-of-Verso___Genre___Blog___Page___Meta"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Page.<wbr>Meta.<wbr>mk</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___Page___Meta___mk"><span id="---entry-___key___---___k___-98">Constructor of <code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Page.<wbr>Meta</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <a href="Websites/#Verso___Genre___Blog___Post"><span id="---entry-Verso___Genre___Blog___Post"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Post</code></span></a></li>
+                  <li>
+                    <a href="Websites/#Verso___Genre___Blog___Post___Meta___mk"><span id="---entry-Verso___Genre___Blog___Post___Meta"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Post.<wbr>Meta</code></span></a></li>
+                  <li>
+                    <span id="---entry-Verso___Genre___Blog___Post___Meta___mk-Constructor-of-Verso___Genre___Blog___Post___Meta"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Post.<wbr>Meta.<wbr>mk</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___Post___Meta___mk"><span id="---entry-___key___---___k___-102">Constructor of <code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Post.<wbr>Meta</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <a href="Websites/#Verso___Genre___Blog___Site___page"><span id="---entry-Verso___Genre___Blog___Site"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Site</code></span></a></li>
+                  <li>
+                    <span id="---entry-Verso___Genre___Blog___Site___blog-Constructor-of-Verso___Genre___Blog___Site"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Site.<wbr>blog</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___Site___page"><span id="---entry-___key___---___k___-110">Constructor of <code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Site</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-Verso___Genre___Blog___Site___page-Constructor-of-Verso___Genre___Blog___Site"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Site.<wbr>page</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___Site___page"><span id="---entry-___key___---___k___-111">Constructor of <code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Site</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <a href="Websites/#Verso___Genre___Blog___Template"><span id="---entry-Verso___Genre___Blog___Template"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Template</code></span></a></li>
+                  <li>
+                    <a href="Websites/#Verso___Genre___Blog___Template___builtinHeader"><span id="---entry-Verso___Genre___Blog___Template___builtinHeader"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Template.<wbr>builtin&shy;Header</code></span></a></li>
+                  <li>
+                    <a href="Websites/#Verso___Genre___Blog___Template___param"><span id="---entry-Verso___Genre___Blog___Template___param"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Template.<wbr>param</code></span></a></li>
+                  <li>
+                    <a href="Websites/#Verso___Genre___Blog___Template___param___"><span id="---entry-Verso___Genre___Blog___Template___param___"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Template.<wbr>param?</code></span></a></li>
+                  <li>
+                    <a href="Websites/#Verso___Genre___Blog___TemplateM"><span id="---entry-Verso___Genre___Blog___TemplateM"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Template&shy;M</code></span></a></li>
+                  <li>
+                    <a href="Websites/#Verso___Genre___Blog___Theme___mk"><span id="---entry-Verso___Genre___Blog___Theme"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Theme</code></span></a></li>
+                  <li>
+                    <span id="---entry-Verso___Genre___Blog___Theme___mk-Constructor-of-Verso___Genre___Blog___Theme"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Theme.<wbr>mk</code></span><ol>
+                      <li>
+                        <a href="Websites/#Verso___Genre___Blog___Theme___mk"><span id="---entry-___key___---___k___-117">Constructor of <code>Verso.<wbr>Genre.<wbr>Blog.<wbr>Theme</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <a href="Websites/#Verso___Genre___Blog___blogMain"><span id="---entry-Verso___Genre___Blog___blogMain"><code>Verso.<wbr>Genre.<wbr>Blog.<wbr>blog&shy;Main</code></span></a></li>
+                  <li>
+                    <a href="Manuals-and-Books/#Verso___Genre___Manual"><span id="---entry-Verso___Genre___Manual"><code>Verso.<wbr>Genre.<wbr>Manual</code></span></a></li>
+                  <li>
+                    <a href="Manuals-and-Books/#Verso___Genre___Manual___Block___mk"><span id="---entry-Verso___Genre___Manual___Block"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>Block</code></span></a></li>
+                  <li>
+                    <span id="---entry-Verso___Genre___Manual___Block___mk-Constructor-of-Verso___Genre___Manual___Block"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>Block.<wbr>mk</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___Block___mk"><span id="---entry-___key___---___k___-151">Constructor of <code>Verso.<wbr>Genre.<wbr>Manual.<wbr>Block</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <a href="Manuals-and-Books/#Verso___Genre___Manual___BlockDescr___mk"><span id="---entry-Verso___Genre___Manual___BlockDescr"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>Block&shy;Descr</code></span></a></li>
+                  <li>
+                    <span id="---entry-Verso___Genre___Manual___BlockDescr___mk-Constructor-of-Verso___Genre___Manual___BlockDescr"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>BlockDescr.<wbr>mk</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___BlockDescr___mk"><span id="---entry-___key___---___k___-162">Constructor of <code>Verso.<wbr>Genre.<wbr>Manual.<wbr>Block&shy;Descr</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <a href="Manuals-and-Books/#Verso___Genre___Manual___HtmlAssets___mk"><span id="---entry-Verso___Genre___Manual___HtmlAssets"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>Html&shy;Assets</code></span></a></li>
+                  <li>
+                    <a href="Manuals-and-Books/#Verso___Genre___Manual___HtmlAssets___combine"><span id="---entry-Verso___Genre___Manual___HtmlAssets___combine"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>HtmlAssets.<wbr>combine</code></span></a></li>
+                  <li>
+                    <span id="---entry-Verso___Genre___Manual___HtmlAssets___mk-Constructor-of-Verso___Genre___Manual___HtmlAssets"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>HtmlAssets.<wbr>mk</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___HtmlAssets___mk"><span id="---entry-___key___---___k___-176">Constructor of <code>Verso.<wbr>Genre.<wbr>Manual.<wbr>Html&shy;Assets</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <a href="Manuals-and-Books/#Verso___Genre___Manual___HtmlSplitMode___default"><span id="---entry-Verso___Genre___Manual___HtmlSplitMode"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>Html&shy;Split&shy;Mode</code></span></a></li>
+                  <li>
+                    <span id="---entry-Verso___Genre___Manual___HtmlSplitMode___default-Constructor-of-Verso___Genre___Manual___HtmlSplitMode"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>Html&shy;SplitMode.<wbr>default</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___HtmlSplitMode___default"><span id="---entry-___key___---___k___-148">Constructor of <code>Verso.<wbr>Genre.<wbr>Manual.<wbr>Html&shy;Split&shy;Mode</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-Verso___Genre___Manual___HtmlSplitMode___never-Constructor-of-Verso___Genre___Manual___HtmlSplitMode"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>Html&shy;SplitMode.<wbr>never</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___HtmlSplitMode___default"><span id="---entry-___key___---___k___-149">Constructor of <code>Verso.<wbr>Genre.<wbr>Manual.<wbr>Html&shy;Split&shy;Mode</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <a href="Manuals-and-Books/#Verso___Genre___Manual___Inline___mk"><span id="---entry-Verso___Genre___Manual___Inline"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>Inline</code></span></a></li>
+                  <li>
+                    <span id="---entry-Verso___Genre___Manual___Inline___mk-Constructor-of-Verso___Genre___Manual___Inline"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>Inline.<wbr>mk</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___Inline___mk"><span id="---entry-___key___---___k___-157">Constructor of <code>Verso.<wbr>Genre.<wbr>Manual.<wbr>Inline</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <a href="Manuals-and-Books/#Verso___Genre___Manual___InlineDescr___mk"><span id="---entry-Verso___Genre___Manual___InlineDescr"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>Inline&shy;Descr</code></span></a></li>
+                  <li>
+                    <span id="---entry-Verso___Genre___Manual___InlineDescr___mk-Constructor-of-Verso___Genre___Manual___InlineDescr"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>InlineDescr.<wbr>mk</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___InlineDescr___mk"><span id="---entry-___key___---___k___-172">Constructor of <code>Verso.<wbr>Genre.<wbr>Manual.<wbr>Inline&shy;Descr</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <a href="Manuals-and-Books/#Verso___Genre___Manual___LicenseInfo___mk"><span id="---entry-Verso___Genre___Manual___LicenseInfo"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>License&shy;Info</code></span></a></li>
+                  <li>
+                    <span id="---entry-Verso___Genre___Manual___LicenseInfo___mk-Constructor-of-Verso___Genre___Manual___LicenseInfo"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>LicenseInfo.<wbr>mk</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___LicenseInfo___mk"><span id="---entry-___key___---___k___-189">Constructor of <code>Verso.<wbr>Genre.<wbr>Manual.<wbr>License&shy;Info</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <a href="Manuals-and-Books/#Verso___Genre___Manual___PartMetadata___mk"><span id="---entry-Verso___Genre___Manual___PartMetadata"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>Part&shy;Metadata</code></span></a></li>
+                  <li>
+                    <span id="---entry-Verso___Genre___Manual___PartMetadata___mk-Constructor-of-Verso___Genre___Manual___PartMetadata"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>PartMetadata.<wbr>mk</code></span><ol>
+                      <li>
+                        <a href="Manuals-and-Books/#Verso___Genre___Manual___PartMetadata___mk"><span id="---entry-___key___---___k___-133">Constructor of <code>Verso.<wbr>Genre.<wbr>Manual.<wbr>Part&shy;Metadata</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <a href="Manuals-and-Books/#Verso___Genre___Manual___deftech"><span id="---entry-Verso___Genre___Manual___deftech"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>deftech</code></span></a></li>
+                  <li>
+                    <a href="Manuals-and-Books/#Verso___Genre___Manual___licenseInfo"><span id="---entry-Verso___Genre___Manual___licenseInfo"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>license&shy;Info</code></span></a></li>
+                  <li>
+                    <a href="Manuals-and-Books/#Verso___Genre___Manual___tech"><span id="---entry-Verso___Genre___Manual___tech"><code>Verso.<wbr>Genre.<wbr>Manual.<wbr>tech</code></span></a></li>
+                  <li>
+                    <a href="Output-Formats/#Verso___Output___Html___text"><span id="---entry-Verso___Output___Html"><code>Verso.<wbr>Output.<wbr>Html</code></span></a></li>
+                  <li>
+                    <a href="Output-Formats/#Verso___Output___Html___append"><span id="---entry-Verso___Output___Html___append"><code>Verso.<wbr>Output.<wbr>Html.<wbr>append</code></span></a></li>
+                  <li>
+                    <a href="Output-Formats/#Verso___Output___Html___asString"><span id="---entry-Verso___Output___Html___asString"><code>Verso.<wbr>Output.<wbr>Html.<wbr>as&shy;String</code></span></a></li>
+                  <li>
+                    <a href="Output-Formats/#Verso___Output___Html___empty"><span id="---entry-Verso___Output___Html___empty"><code>Verso.<wbr>Output.<wbr>Html.<wbr>empty</code></span></a></li>
+                  <li>
+                    <a href="Output-Formats/#Verso___Output___Html___format"><span id="---entry-Verso___Output___Html___format"><code>Verso.<wbr>Output.<wbr>Html.<wbr>format</code></span></a></li>
+                  <li>
+                    <a href="Output-Formats/#Verso___Output___Html___fromArray"><span id="---entry-Verso___Output___Html___fromArray"><code>Verso.<wbr>Output.<wbr>Html.<wbr>from&shy;Array</code></span></a></li>
+                  <li>
+                    <a href="Output-Formats/#Verso___Output___Html___fromList"><span id="---entry-Verso___Output___Html___fromList"><code>Verso.<wbr>Output.<wbr>Html.<wbr>from&shy;List</code></span></a></li>
+                  <li>
+                    <span id="---entry-Verso___Output___Html___seq-Constructor-of-Verso___Output___Html"><code>Verso.<wbr>Output.<wbr>Html.<wbr>seq</code></span><ol>
+                      <li>
+                        <a href="Output-Formats/#Verso___Output___Html___text"><span id="---entry-___key___---___k___-54">Constructor of <code>Verso.<wbr>Output.<wbr>Html</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-Verso___Output___Html___tag-Constructor-of-Verso___Output___Html"><code>Verso.<wbr>Output.<wbr>Html.<wbr>tag</code></span><ol>
+                      <li>
+                        <a href="Output-Formats/#Verso___Output___Html___text"><span id="---entry-___key___---___k___-55">Constructor of <code>Verso.<wbr>Output.<wbr>Html</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-Verso___Output___Html___text-Constructor-of-Verso___Output___Html"><code>Verso.<wbr>Output.<wbr>Html.<wbr>text</code></span><ol>
+                      <li>
+                        <a href="Output-Formats/#Verso___Output___Html___text"><span id="---entry-___key___---___k___-56">Constructor of <code>Verso.<wbr>Output.<wbr>Html</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <a href="Output-Formats/#Verso___Output___Html___visitM"><span id="---entry-Verso___Output___Html___visitM"><code>Verso.<wbr>Output.<wbr>Html.<wbr>visit&shy;M</code></span></a></li>
+                  <li>
+                    <a href="Output-Formats/#Verso___Output___TeX___text"><span id="---entry-Verso___Output___TeX"><code>Verso.<wbr>Output.<wbr>Te&shy;X</code></span></a></li>
+                  <li>
+                    <a href="Output-Formats/#Verso___Output___TeX___asString"><span id="---entry-Verso___Output___TeX___asString"><code>Verso.<wbr>Output.<wbr>TeX.<wbr>as&shy;String</code></span></a></li>
+                  <li>
+                    <span id="---entry-Verso___Output___TeX___command-Constructor-of-Verso___Output___TeX"><code>Verso.<wbr>Output.<wbr>TeX.<wbr>command</code></span><ol>
+                      <li>
+                        <a href="Output-Formats/#Verso___Output___TeX___text"><span id="---entry-___key___---___k___-65">Constructor of <code>Verso.<wbr>Output.<wbr>Te&shy;X</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <a href="Output-Formats/#Verso___Output___TeX___empty"><span id="---entry-Verso___Output___TeX___empty"><code>Verso.<wbr>Output.<wbr>TeX.<wbr>empty</code></span></a></li>
+                  <li>
+                    <span id="---entry-Verso___Output___TeX___environment-Constructor-of-Verso___Output___TeX"><code>Verso.<wbr>Output.<wbr>TeX.<wbr>environment</code></span><ol>
+                      <li>
+                        <a href="Output-Formats/#Verso___Output___TeX___text"><span id="---entry-___key___---___k___-66">Constructor of <code>Verso.<wbr>Output.<wbr>Te&shy;X</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-Verso___Output___TeX___paragraphBreak-Constructor-of-Verso___Output___TeX"><code>Verso.<wbr>Output.<wbr>TeX.<wbr>paragraph&shy;Break</code></span><ol>
+                      <li>
+                        <a href="Output-Formats/#Verso___Output___TeX___text"><span id="---entry-___key___---___k___-67">Constructor of <code>Verso.<wbr>Output.<wbr>Te&shy;X</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-Verso___Output___TeX___raw-Constructor-of-Verso___Output___TeX"><code>Verso.<wbr>Output.<wbr>TeX.<wbr>raw</code></span><ol>
+                      <li>
+                        <a href="Output-Formats/#Verso___Output___TeX___text"><span id="---entry-___key___---___k___-68">Constructor of <code>Verso.<wbr>Output.<wbr>Te&shy;X</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-Verso___Output___TeX___seq-Constructor-of-Verso___Output___TeX"><code>Verso.<wbr>Output.<wbr>TeX.<wbr>seq</code></span><ol>
+                      <li>
+                        <a href="Output-Formats/#Verso___Output___TeX___text"><span id="---entry-___key___---___k___-69">Constructor of <code>Verso.<wbr>Output.<wbr>Te&shy;X</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-Verso___Output___TeX___text-Constructor-of-Verso___Output___TeX"><code>Verso.<wbr>Output.<wbr>TeX.<wbr>text</code></span><ol>
+                      <li>
+                        <a href="Output-Formats/#Verso___Output___TeX___text"><span id="---entry-___key___---___k___-70">Constructor of <code>Verso.<wbr>Output.<wbr>Te&shy;X</code></span></a></li>
+                      </ol>
+                    </li>
+                  <li>
+                    <span id="---entry-visitM-Verso___Output___Html___visitM"><code>visit&shy;M</code></span><ol>
+                      <li>
+                        <a href="Output-Formats/#Verso___Output___Html___visitM"><span id="---entry-___key___---___k___-61"><code>Verso.<wbr>Output.<wbr>Html.<wbr>visit&shy;M</code></span></a></li>
+                      </ol>
+                    </li>
+                  </ol>
+                </div>
+              </div>
+            </section>
+          <nav class="prev-next-buttons">
+            <a class="local-button active" href="Manuals-and-Books/#manual" rel="prev" title="7. Manuals and Books"><span class="arrow">←</span><span class="where">7. Manuals and Books</span></a><a class="local-button active" href="Dependencies/#dependencies" rel="next" title="Dependencies"><span class="where">Dependencies</span><span class="arrow">→</span></a></nav>
+          </div>
+        </main></div>
+    </body>
+  </html>
+

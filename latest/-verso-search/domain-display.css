@@ -1,0 +1,48 @@
+#search-wrapper .suggestion-domain {
+  font-family: var(--verso-code-font-family);
+  font-style: normal;
+  font-weight: normal;
+}
+
+#search-wrapper .doc-domain {
+  font-family: var(--verso-code-font-family);
+  font-style: normal;
+  font-weight: normal;
+}
+
+#search-wrapper .doc-option-domain {
+  font-family: var(--verso-code-font-family);
+  font-style: normal;
+  font-weight: normal;
+}
+
+#search-wrapper .conv-tactic-domain {
+  font-family: var(--verso-code-font-family);
+  font-style: normal;
+  font-weight: bold;
+}
+
+#search-wrapper .tech-term-domain {
+  font-family: var(--verso-text-font-family);
+  font-style: normal;
+  font-weight: normal;
+}
+
+#search-wrapper .section-domain {
+  font-family: var(--verso-structure-font-family);
+  font-style: normal;
+  font-weight: bold;
+}
+
+#search-wrapper .example-def {
+  font-family: var(--verso-code-font-family);
+  font-style: normal;
+  font-weight: normal;
+}
+
+#search-wrapper .tactic-domain {
+  font-family: var(--verso-code-font-family);
+  font-style: normal;
+  font-weight: bold;
+}
+

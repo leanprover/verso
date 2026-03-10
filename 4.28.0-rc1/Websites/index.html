@@ -1,0 +1,2366 @@
+<!-- Generated from commit 7681e6e54a6d5147cef917f4607b276c035ae4a3 at 2026-03-10T10:44:16Z -->
+<!DOCTYPE html>
+<html>
+  <head>
+    <script>
+      (function(){
+  const {protocol:proto, host:hostName, pathname:path, search:srch, hash:hsh} = window.location;
+  if (!(path.endsWith("/") || path.endsWith(".html"))) {
+    window.location.replace(`${proto}//${hostName}${path}/${srch}${hsh}`);
+  }
+})()</script>
+    <base href="./../"><meta charset="utf-8">
+    <meta name="viewport" content="height=device-height, width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1">
+    <title>Websites</title><link rel="stylesheet" href="book.css">
+    <link rel="stylesheet" href="verso-vars.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js" integrity="sha384-zbcZAIxlvJtNE3Dp5nxLXdXtXyxwOdnILY1TDPVmKFhl4r4nSUG1r8bcFXGVa4Te" crossorigin="anonymous"></script>
+    <script src="-verso-search/elasticlunr.min.js"></script>
+    <script src="-verso-search/fuzzysort.min.js"></script>
+    <script src="-verso-search/searchIndex.js"></script>
+    <script type="module" src="-verso-search/search-init.js"></script>
+    <link rel="stylesheet" href="-verso-search/search-box.css">
+    <link rel="stylesheet" href="-verso-search/search-highlight.css">
+    <link rel="stylesheet" href="-verso-search/domain-display.css">
+    <script src="-verso-data/popper.min.js"></script>
+    <script src="-verso-data/katex/math.js"></script>
+    <script src="-verso-data/tippy-bundle.umd.min.js"></script>
+    <script src="-verso-data/katex/katex.js"></script>
+    <link rel="stylesheet" href="-verso-data/tippy-border.css">
+    <link rel="stylesheet" href="-verso-data/katex/katex.css">
+    <style>
+.namedocs {
+  position: relative;
+  border: solid 1px #98B2C0;
+  border-radius: .5rem;
+  padding-top: var(--verso--box-padding);
+  margin-top: var(--verso--box-vertical-margin);
+  margin-bottom: var(--verso--box-vertical-margin);
+}
+
+.namedocs .text {
+  /* Causes margins on child elements to collapse inside the element, such
+     that the margins don't extend into parent with the background color.
+     The effect is that weird borders in the definition box don't happen anymore. */
+  display: flow-root;
+  /* Add a padding. this is the same as the margin applied to the first and last child.
+     The effect is that the padding looks the same size on all sides. */
+  padding: 0 var(--verso--box-padding);
+  border-top: 1px solid #98B2C0;
+}
+
+.namedocs .text > pre {
+  overflow-x: auto;
+}
+
+.namedocs .signature {
+  font-family: var(--verso-code-font-family);
+  margin-top: 0 !important;
+  margin-left: var(--verso--box-padding) !important;
+  margin-bottom: .75rem !important;
+}
+
+.namedocs .label {
+  display: block;
+  font-size: small;
+  font-family: var(--verso-structure-font-family);
+  position: absolute;
+  top: -0.65rem;
+  left: 1rem;
+  background: #fff;
+  padding: 0 .5rem .125rem;
+  border: 1px solid #98B2C0;
+  border-radius: 1rem;
+  color: #555;
+}
+
+.namedocs h1 {
+  font-size: inherit;
+  font-weight: bold
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+}
+
+.namedocs > .text .constructor {
+  padding-top: 0;
+  padding-right: 0;
+  padding-bottom: 0;
+  margin-top: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.namedocs > .text .constructor::before {
+  content: '| ';
+  display: block;
+  font-family: var(--verso-code-font-family);
+  font-weight: bold;
+  float: left;
+  width: 0.5rem;
+  white-space: pre;
+}
+
+.namedocs > .text .constructor .name-and-type {
+  padding-left: 0.5rem;
+  float: left;
+  margin-top: 0;
+  max-width: calc(100% - 1rem);
+}
+.namedocs > .text .constructor .docs {
+  clear: both;
+  padding-left: 1rem;
+}
+
+/* These margins work together with the padding on .text */
+.namedocs .text > :first-child {
+  margin-top: var(--verso--box-padding);
+}
+.namedocs .text > :last-child {
+  margin-bottom: var(--verso--box-padding);
+}
+
+.namedocs .methods td, .namedocs .fields td {
+  vertical-align: top;
+}
+.namedocs .inheritance {
+  vertical-align: top;
+  font-size: smaller;
+  font-family: var(--verso-structure-font-family);
+}
+.namedocs .inheritance ol {
+  display: inline-block;
+  margin: 0;
+  padding: 0;
+}
+.namedocs .inheritance ol li {
+  list-style-type: none;
+  display: inline-block;
+}
+.namedocs .inheritance ol li::after {
+  content: " > "
+}
+.namedocs .inheritance ol li:last-child::after {
+  content: "";
+}
+
+.namedocs .extends {
+  display: inline;
+  margin: 0;
+  padding: 0;
+}
+
+.namedocs .extends li {
+  list-style-type: none;
+  display: inline-block;
+}
+
+.namedocs .extends li label {
+  padding-right: 1rem;
+}
+
+.namedocs .subdocs .name-and-type {
+  font-size: 1rem;
+  margin-left: 0;
+  margin-top: 0;
+  margin-right: 0;
+  margin-bottom: 0.5rem;
+}
+
+.namedocs .subdocs .docs {
+  margin-left: 1.5rem;
+  margin-top: 0;
+  margin-right: 0;
+  margin-bottom: 0.5rem;
+}
+
+.namedocs:has(input[data-parent-idx]) [data-inherited-from] {
+  transition-property: opacity, display;
+  transition-duration: 0.4s;
+  transition-behavior: allow-discrete;
+  @starting-style { opacity: 0 !important; }
+}
+
+#this-page-items .tactic-name { font-weight: bold; }
+.namedocs:has(input[data-parent-idx="0"]) [data-inherited-from="0"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="0"]:checked) [data-inherited-from="0"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="0"]:checked):has(.inheritance[data-inherited-from="0"]:hover) [data-inherited-from]:not([data-inherited-from="0"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="1"]) [data-inherited-from="1"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="1"]:checked) [data-inherited-from="1"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="1"]:checked):has(.inheritance[data-inherited-from="1"]:hover) [data-inherited-from]:not([data-inherited-from="1"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="2"]) [data-inherited-from="2"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="2"]:checked) [data-inherited-from="2"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="2"]:checked):has(.inheritance[data-inherited-from="2"]:hover) [data-inherited-from]:not([data-inherited-from="2"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="3"]) [data-inherited-from="3"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="3"]:checked) [data-inherited-from="3"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="3"]:checked):has(.inheritance[data-inherited-from="3"]:hover) [data-inherited-from]:not([data-inherited-from="3"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="4"]) [data-inherited-from="4"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="4"]:checked) [data-inherited-from="4"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="4"]:checked):has(.inheritance[data-inherited-from="4"]:hover) [data-inherited-from]:not([data-inherited-from="4"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="5"]) [data-inherited-from="5"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="5"]:checked) [data-inherited-from="5"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="5"]:checked):has(.inheritance[data-inherited-from="5"]:hover) [data-inherited-from]:not([data-inherited-from="5"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="6"]) [data-inherited-from="6"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="6"]:checked) [data-inherited-from="6"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="6"]:checked):has(.inheritance[data-inherited-from="6"]:hover) [data-inherited-from]:not([data-inherited-from="6"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="7"]) [data-inherited-from="7"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="7"]:checked) [data-inherited-from="7"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="7"]:checked):has(.inheritance[data-inherited-from="7"]:hover) [data-inherited-from]:not([data-inherited-from="7"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="8"]) [data-inherited-from="8"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="8"]:checked) [data-inherited-from="8"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="8"]:checked):has(.inheritance[data-inherited-from="8"]:hover) [data-inherited-from]:not([data-inherited-from="8"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="9"]) [data-inherited-from="9"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="9"]:checked) [data-inherited-from="9"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="9"]:checked):has(.inheritance[data-inherited-from="9"]:hover) [data-inherited-from]:not([data-inherited-from="9"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="10"]) [data-inherited-from="10"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="10"]:checked) [data-inherited-from="10"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="10"]:checked):has(.inheritance[data-inherited-from="10"]:hover) [data-inherited-from]:not([data-inherited-from="10"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="11"]) [data-inherited-from="11"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="11"]:checked) [data-inherited-from="11"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="11"]:checked):has(.inheritance[data-inherited-from="11"]:hover) [data-inherited-from]:not([data-inherited-from="11"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="12"]) [data-inherited-from="12"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="12"]:checked) [data-inherited-from="12"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="12"]:checked):has(.inheritance[data-inherited-from="12"]:hover) [data-inherited-from]:not([data-inherited-from="12"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="13"]) [data-inherited-from="13"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="13"]:checked) [data-inherited-from="13"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="13"]:checked):has(.inheritance[data-inherited-from="13"]:hover) [data-inherited-from]:not([data-inherited-from="13"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="14"]) [data-inherited-from="14"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="14"]:checked) [data-inherited-from="14"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="14"]:checked):has(.inheritance[data-inherited-from="14"]:hover) [data-inherited-from]:not([data-inherited-from="14"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="15"]) [data-inherited-from="15"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="15"]:checked) [data-inherited-from="15"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="15"]:checked):has(.inheritance[data-inherited-from="15"]:hover) [data-inherited-from]:not([data-inherited-from="15"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="16"]) [data-inherited-from="16"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="16"]:checked) [data-inherited-from="16"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="16"]:checked):has(.inheritance[data-inherited-from="16"]:hover) [data-inherited-from]:not([data-inherited-from="16"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="17"]) [data-inherited-from="17"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="17"]:checked) [data-inherited-from="17"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="17"]:checked):has(.inheritance[data-inherited-from="17"]:hover) [data-inherited-from]:not([data-inherited-from="17"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="18"]) [data-inherited-from="18"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="18"]:checked) [data-inherited-from="18"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="18"]:checked):has(.inheritance[data-inherited-from="18"]:hover) [data-inherited-from]:not([data-inherited-from="18"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="19"]) [data-inherited-from="19"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="19"]:checked) [data-inherited-from="19"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="19"]:checked):has(.inheritance[data-inherited-from="19"]:hover) [data-inherited-from]:not([data-inherited-from="19"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="20"]) [data-inherited-from="20"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="20"]:checked) [data-inherited-from="20"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="20"]:checked):has(.inheritance[data-inherited-from="20"]:hover) [data-inherited-from]:not([data-inherited-from="20"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="21"]) [data-inherited-from="21"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="21"]:checked) [data-inherited-from="21"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="21"]:checked):has(.inheritance[data-inherited-from="21"]:hover) [data-inherited-from]:not([data-inherited-from="21"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="22"]) [data-inherited-from="22"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="22"]:checked) [data-inherited-from="22"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="22"]:checked):has(.inheritance[data-inherited-from="22"]:hover) [data-inherited-from]:not([data-inherited-from="22"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="23"]) [data-inherited-from="23"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="23"]:checked) [data-inherited-from="23"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="23"]:checked):has(.inheritance[data-inherited-from="23"]:hover) [data-inherited-from]:not([data-inherited-from="23"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="24"]) [data-inherited-from="24"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="24"]:checked) [data-inherited-from="24"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="24"]:checked):has(.inheritance[data-inherited-from="24"]:hover) [data-inherited-from]:not([data-inherited-from="24"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="25"]) [data-inherited-from="25"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="25"]:checked) [data-inherited-from="25"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="25"]:checked):has(.inheritance[data-inherited-from="25"]:hover) [data-inherited-from]:not([data-inherited-from="25"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="26"]) [data-inherited-from="26"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="26"]:checked) [data-inherited-from="26"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="26"]:checked):has(.inheritance[data-inherited-from="26"]:hover) [data-inherited-from]:not([data-inherited-from="26"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="27"]) [data-inherited-from="27"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="27"]:checked) [data-inherited-from="27"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="27"]:checked):has(.inheritance[data-inherited-from="27"]:hover) [data-inherited-from]:not([data-inherited-from="27"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="28"]) [data-inherited-from="28"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="28"]:checked) [data-inherited-from="28"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="28"]:checked):has(.inheritance[data-inherited-from="28"]:hover) [data-inherited-from]:not([data-inherited-from="28"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="29"]) [data-inherited-from="29"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="29"]:checked) [data-inherited-from="29"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="29"]:checked):has(.inheritance[data-inherited-from="29"]:hover) [data-inherited-from]:not([data-inherited-from="29"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="30"]) [data-inherited-from="30"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="30"]:checked) [data-inherited-from="30"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="30"]:checked):has(.inheritance[data-inherited-from="30"]:hover) [data-inherited-from]:not([data-inherited-from="30"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="31"]) [data-inherited-from="31"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="31"]:checked) [data-inherited-from="31"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="31"]:checked):has(.inheritance[data-inherited-from="31"]:hover) [data-inherited-from]:not([data-inherited-from="31"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="32"]) [data-inherited-from="32"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="32"]:checked) [data-inherited-from="32"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="32"]:checked):has(.inheritance[data-inherited-from="32"]:hover) [data-inherited-from]:not([data-inherited-from="32"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="33"]) [data-inherited-from="33"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="33"]:checked) [data-inherited-from="33"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="33"]:checked):has(.inheritance[data-inherited-from="33"]:hover) [data-inherited-from]:not([data-inherited-from="33"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="34"]) [data-inherited-from="34"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="34"]:checked) [data-inherited-from="34"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="34"]:checked):has(.inheritance[data-inherited-from="34"]:hover) [data-inherited-from]:not([data-inherited-from="34"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="35"]) [data-inherited-from="35"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="35"]:checked) [data-inherited-from="35"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="35"]:checked):has(.inheritance[data-inherited-from="35"]:hover) [data-inherited-from]:not([data-inherited-from="35"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="36"]) [data-inherited-from="36"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="36"]:checked) [data-inherited-from="36"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="36"]:checked):has(.inheritance[data-inherited-from="36"]:hover) [data-inherited-from]:not([data-inherited-from="36"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="37"]) [data-inherited-from="37"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="37"]:checked) [data-inherited-from="37"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="37"]:checked):has(.inheritance[data-inherited-from="37"]:hover) [data-inherited-from]:not([data-inherited-from="37"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="38"]) [data-inherited-from="38"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="38"]:checked) [data-inherited-from="38"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="38"]:checked):has(.inheritance[data-inherited-from="38"]:hover) [data-inherited-from]:not([data-inherited-from="38"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="39"]) [data-inherited-from="39"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="39"]:checked) [data-inherited-from="39"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="39"]:checked):has(.inheritance[data-inherited-from="39"]:hover) [data-inherited-from]:not([data-inherited-from="39"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="40"]) [data-inherited-from="40"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="40"]:checked) [data-inherited-from="40"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="40"]:checked):has(.inheritance[data-inherited-from="40"]:hover) [data-inherited-from]:not([data-inherited-from="40"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="41"]) [data-inherited-from="41"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="41"]:checked) [data-inherited-from="41"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="41"]:checked):has(.inheritance[data-inherited-from="41"]:hover) [data-inherited-from]:not([data-inherited-from="41"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="42"]) [data-inherited-from="42"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="42"]:checked) [data-inherited-from="42"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="42"]:checked):has(.inheritance[data-inherited-from="42"]:hover) [data-inherited-from]:not([data-inherited-from="42"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="43"]) [data-inherited-from="43"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="43"]:checked) [data-inherited-from="43"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="43"]:checked):has(.inheritance[data-inherited-from="43"]:hover) [data-inherited-from]:not([data-inherited-from="43"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="44"]) [data-inherited-from="44"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="44"]:checked) [data-inherited-from="44"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="44"]:checked):has(.inheritance[data-inherited-from="44"]:hover) [data-inherited-from]:not([data-inherited-from="44"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="45"]) [data-inherited-from="45"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="45"]:checked) [data-inherited-from="45"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="45"]:checked):has(.inheritance[data-inherited-from="45"]:hover) [data-inherited-from]:not([data-inherited-from="45"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="46"]) [data-inherited-from="46"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="46"]:checked) [data-inherited-from="46"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="46"]:checked):has(.inheritance[data-inherited-from="46"]:hover) [data-inherited-from]:not([data-inherited-from="46"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="47"]) [data-inherited-from="47"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="47"]:checked) [data-inherited-from="47"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="47"]:checked):has(.inheritance[data-inherited-from="47"]:hover) [data-inherited-from]:not([data-inherited-from="47"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="48"]) [data-inherited-from="48"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="48"]:checked) [data-inherited-from="48"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="48"]:checked):has(.inheritance[data-inherited-from="48"]:hover) [data-inherited-from]:not([data-inherited-from="48"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="49"]) [data-inherited-from="49"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="49"]:checked) [data-inherited-from="49"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="49"]:checked):has(.inheritance[data-inherited-from="49"]:hover) [data-inherited-from]:not([data-inherited-from="49"]) {
+  opacity: 0.5;
+}
+</style><style>
+.markup-example {
+  border: 1px solid #98B2C0;
+  border-radius: 0.5rem;
+  margin-bottom: var(--verso--box-vertical-margin);
+  margin-top: var(--verso--box-vertical-margin);
+  overflow: hidden;
+}
+
+.markup-example-header {
+  font-style: italic;
+  font-family: var(--verso-structure-font-family);
+  padding: var(--verso--box-padding);
+}
+
+.markup-example-header * {
+  margin: 0;
+}
+
+.markup-example > .content {
+  display: flex;
+}
+
+.markup-example > .content > .syntax, .markup-example > .content > .result {
+  flex: 1;
+  padding: 0 var(--verso--box-padding);
+  position: relative;
+  width: calc(50% - calc(4 * var(--verso--box-padding)));
+}
+
+.markup-example > .content > .syntax pre, .markup-example > .content > .result pre {
+
+}
+
+.markup-example > .content > .syntax > .title, .markup-example > .content > .result > .title {
+  font-family: var(--verso-structure-font-family);
+  padding: 0;
+  font-size: 0.875rem;
+}
+
+@media screen and (max-width: 700px) {
+  .markup-example > .content {
+    flex-direction: column;
+  }
+
+  .markup-example > .content > .syntax, .markup-example > .content > .result {
+    width: calc(100% - calc(2 * var(--verso--box-padding)));
+  }
+}
+</style><style>
+    main .theIndex {
+      padding-left: 0;
+      font-family: var(--verso-text-font-family);
+    }
+
+    main .theIndex nav {
+      position: sticky;
+      top: var(--verso-header-height);
+      background: white;
+      font-family: var(--verso-structure-font-family);
+    }
+
+    main .theIndex [id] {
+      /* This needs the combined height of the index header and the page header. We
+         know the height of the page header, but the index header height varies, so
+         we use the maximum height it gets which also works well for readers with
+         wide screens */
+      scroll-margin-top: calc(var(--verso-header-height) + 7.5rem);
+    }
+
+    @media screen and (max-width: 700px) {
+      /* On mobile, the sticky index takes up half the screen. */
+      main .theIndex nav {
+        position: static;
+      }
+
+      main .theIndex [id] {
+        /* On mobile, the index header is not sticky, so we just need to
+        be below the page header. */
+        scroll-margin-top: var(--verso-header-height);
+      }
+    }
+
+    main .theIndex nav ol {
+      padding: 0;
+    }
+
+    main .theIndex nav ol li {
+      display: inline-block;
+    }
+
+    main .theIndex nav ol li a {
+      /* Padding instead of margin to have a bigger click target */
+      padding-left: 0.5rem;
+      padding-right: 0.5rem;
+    }
+    /* Increase the size of the touch target on phones */
+    @media screen and (max-width: 700px) {
+      main .theIndex nav ol li a {
+        padding-left: 0.75rem;
+        padding-right: 0.75rem;
+      }
+    }
+
+    main .theIndex nav ol li:first-child a {
+      padding-left: 0;
+    }
+
+    main .theIndex nav ol li + li:before {
+      content: "|";
+    }
+
+    main .theIndex h1,
+    main .theIndex h2,
+    main .theIndex h3,
+    main .theIndex h4,
+    main .theIndex h5,
+    main .theIndex h6 {
+      margin-top: 0;
+    }
+
+    main .theIndex ol {
+      list-style-type: none;
+    }
+
+    main .theIndex .division > ol {
+      padding-left: 0;
+      display: flex;
+      flex-direction: column;
+      gap: .5rem;
+      overflow-wrap: break-word;
+    }
+
+   main .theIndex .division > ol > li {
+      margin-bottom: 0.5rem;
+    }
+
+    main .theIndex .division ol ol {
+      padding-left: 1rem;
+    }
+
+    main .theIndex .division {
+      break-inside: avoid;
+      counter-reset: none;
+      max-width: none;
+      width: auto;
+    }
+    </style><style>
+a.technical-term {
+  color: inherit;
+  text-decoration: currentcolor underline dotted;
+}
+a.technical-term:hover {
+  text-decoration: currentcolor underline solid;
+}
+/* Highlight the clicked term */
+.def-technical-term:target {
+  background-color: var(--verso-selected-color);
+  outline: auto;
+}
+</style><style>
+
+.hl.lean {
+  white-space: pre;
+  font-weight: normal;
+  font-style: normal;
+  font-size: inherit;
+}
+
+.hl.lean .keyword {
+  color: var(--verso-code-keyword-color,);
+  font-weight: var(--verso-code-keyword-weight, bold);
+  font-style: var(--verso-code-keyword-style, normal);
+  font-family: var(--verso-code-keyword-font-family,);
+}
+
+.hl.lean .const {
+  color: var(--verso-code-const-color,);
+  font-weight: var(--verso-code-const-weight, normal);
+  font-style: var(--verso-code-const-style, normal);
+  font-family: var(--verso-code-const-font-family,);
+}
+
+.hl.lean .var {
+  color: var(--verso-code-var-color,);
+  font-weight: var(--verso-code-var-weight, normal);
+  font-style: var(--verso-code-var-style, italic);
+  font-family: var(--verso-code-var-font-family,);
+
+  position: relative;
+}
+
+.hl.lean .literal, .hl.lean .unknown {
+  color: var(--verso-code-color,);
+  font-weight: normal;
+  font-style: normal;
+  font-family: var(--verso-code-font-family,);
+}
+
+.hover-container {
+  width: 0;
+  height: 0;
+  position: relative;
+  display: inline;
+}
+
+.hl.lean a {
+  color: inherit;
+  text-decoration: currentcolor underline dotted;
+}
+
+.hl.lean a:hover {
+  text-decoration: currentcolor underline solid;
+}
+
+.hl.lean .hover-info {
+  white-space: normal;
+}
+
+.hl.lean .token .hover-info {
+  display: none;
+  position: absolute;
+  background-color: #e5e5e5;
+  border: 1px solid black;
+  padding: 0.5rem;
+  z-index: 300;
+}
+
+.hl.lean .hover-info.messages {
+  max-height: 10rem;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+  padding: 0 0.5rem 0 0;
+  display: block;
+}
+
+.hl.lean .hover-info code {
+  white-space: pre-wrap;
+  background: none;
+  color: black;
+}
+
+.hl.lean .hover-info.messages > code {
+  padding: 0.5rem;
+  display: block;
+  width: fit-content;
+}
+
+.hl.lean .hover-info.messages > code:only-child {
+  margin: 0;
+}
+
+.hl.lean .hover-info.messages > code {
+  margin: 0.1rem;
+}
+
+.hl.lean .hover-info.messages > code:not(:first-child) {
+  margin-top: 0rem;
+}
+
+.hl.lean {
+}
+
+.hl.lean.block {
+  display: block;
+}
+
+.hl.lean.inline {
+  display: inline;
+  white-space: pre-wrap;
+}
+
+.hl.lean * {
+}
+
+.hl.lean .token {
+  transition: all 0.25s; /* Slight fade for highlights */
+}
+
+@media (hover: hover) {
+  .hl.lean .token.binding-hl, .hl.lean .literal.string:hover, .hl.lean .token.typed:hover {
+    background-color: #eee;
+    border-radius: 2px;
+    transition: none;
+  }
+}
+
+
+.hl.lean .has-info .token:not(.tactic-state):not(.tactic-state *), .hl.lean .has-info .inter-text:not(.tactic-state):not(.tactic-state *) {
+  text-decoration-style: wavy;
+  text-decoration-line: underline;
+  text-decoration-thickness: from-font;
+  text-decoration-skip-ink: none;
+}
+
+.hl.lean .has-info .hover-info {
+  display: none;
+  position: absolute;
+  transform: translate(0.25rem, 0.3rem);
+  border: 1px solid black;
+  padding: 0.5rem;
+  z-index: 400;
+  text-align: left;
+}
+
+.hl.lean .has-info.error :not(.tactic-state):not(.tactic-state *){
+  text-decoration-color: red;
+}
+
+@media (hover: hover) {
+  .hl.lean .has-info.error:hover {
+    background-color: #ffb3b3;
+  }
+}
+
+.hl.lean .hover-info.messages > code.error {
+  background-color: #e5e5e5;
+  border-left: 0.2rem solid #ffb3b3;
+}
+
+.tippy-box[data-theme~='error'] .hl.lean .hover-info.messages > code.error {
+  background: none;
+  border: none;
+}
+
+.error .verso-message, .error .verso-message .token, .error .verso-message label {
+  color: var(--verso-error-color);
+}
+
+.error .verso-message .case-label:has(input[type="checkbox"])::before {
+  background-color: var(--verso-error-color) !important;
+}
+
+.hl.lean .has-info.warning :not(.tactic-state):not(.tactic-state *) {
+  text-decoration-color: var(--verso-warning-indicator-color);
+}
+
+@media (hover: hover) {
+  .hl.lean .has-info.warning:hover {
+    background-color:var(--verso-warning-color);
+  }
+}
+
+.hl.lean .hover-info.messages > code.warning {
+  background-color: var(--verso-warning-color);
+}
+
+.lean-output {
+  border-left: 0.2em solid transparent;
+  padding: 0 0 0 0.5em;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.lean-output.error {
+  border-color: var(--verso-error-indicator-color);
+}
+
+.lean-output.information {
+  border-color: var(--verso-info-indicator-color);
+}
+
+.lean-output.warning {
+  border-color: var(--verso-warning-indicator-color);
+}
+
+.hl.lean .hover-info.messages > code.error {
+  background-color: #e5e5e5;
+  border-left: 0.2rem solid var(--verso-warning-color);
+}
+
+.tippy-box[data-theme~='warning'] .hl.lean .hover-info.messages > code.warning {
+  background: none;
+  border: none;
+}
+
+
+.hl.lean .has-info.information :not(.tactic-state):not(.tactic-state *) {
+  text-decoration-color: var(--verso-info-indicator-color, blue);
+}
+
+@media (hover: hover) {
+  .hl.lean .has-info.information:hover {
+    background-color: #4777ff;
+  }
+}
+
+
+.hl.lean .hover-info.messages > code.information {
+  background-color: #e5e5e5;
+  border-left: 0.2rem solid #4777ff;
+}
+
+.tippy-box[data-theme~='info'] .hl.lean .hover-info.messages > code.information {
+  background: none;
+  border: none;
+}
+
+.hl.lean div.docstring {
+  font-family: var(--verso-text-font-family, sans-serif);
+  white-space: normal;
+  max-width: calc(min(40rem, 90vw));
+  width: max-content;
+}
+
+.hl.lean div.docstring > :last-child {
+  margin-bottom: 0;
+}
+
+.hl.lean div.docstring > :first-child {
+  margin-top: 0;
+}
+
+.hl.lean .hover-info .sep {
+  display: block;
+  width: auto;
+  margin-left: 1rem;
+  margin-right: 1rem;
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+  padding: 0;
+  height: 1px;
+  border-top: 1px solid #ccc;
+}
+
+.hl.lean code {
+  font-family: var(--verso-code-font-family);
+}
+
+.hl.lean .tactic-state {
+  display: none;
+  position: relative;
+  width: fit-content;
+  border: 1px solid #888888;
+  border-radius: 0.1rem;
+  padding: 0.5rem;
+  font-family: sans-serif;
+  background-color: #ffffff;
+}
+
+.hl.lean.popup .tactic-state {
+  position: static;
+  display: block;
+  width: auto;
+  border: none;
+  padding: 0.5rem;
+  font-family: sans-serif;
+  background-color: #ffffff;
+}
+
+
+.hl.lean .tactic {
+  position: relative;
+  display: inline;
+  vertical-align: top;
+  /* Without these, mobile Safari will start making font sizes inconsistent when its text size adjustment feature is triggered.*/
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+.hl.lean .tactic:has(.tactic-toggle:checked) {
+  display: inline-grid;
+  grid-template-columns: 1fr;
+}
+
+.hl.lean .tactic-toggle:checked ~ .tactic-state {
+  display: inline-block;
+  vertical-align: top;
+  grid-row: 2;
+  justify-self: start;
+}
+
+.hl.lean .tactic > label {
+  position: relative;
+  grid-row: 1;
+  display: inline;
+}
+
+@media (hover: hover) {
+  .hl.lean .tactic:has(.tactic-toggle:not(:checked)) > label:hover {
+    background-color: #eeeeee;
+  }
+}
+
+.hl.lean .tactic-toggle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 0;
+  height: 0;
+  width: 0;
+  z-index: -10;
+}
+
+.hl.lean .tactic > label::after {
+  content: "";
+  border: 1px solid #bbbbbb;
+  /* These need to be em, not rem, to scale with the font */
+  border-radius: 1em;
+  height: 0.25em;
+  vertical-align: middle;
+  width: 0.6em;
+  margin-left: 0.1em;
+  margin-right: 0.1em;
+  display: inline-block;
+  transition: all 0.5s;
+}
+
+/*
+@media (hover: hover) {
+  .hl.lean .tactic > label:hover::after {
+    border: 1px solid #aaaaaa;
+    background-color: #aaaaaa;
+    transition: all 0.5s;
+  }
+}
+*/
+
+.hl.lean .tactic > label:has(+ .tactic-toggle:checked)::after {
+  border: 1px solid #999999;
+  background-color: #999999;
+  transition: all 0.5s;
+}
+
+.hl.lean .tactic-state .goal + .goal {
+  margin-top: 1.5em;
+}
+
+/*
+Some CSS frameworks customize details/summary in ways not compatible with Verso's output.
+*/
+
+.hl.lean details {
+  display: block !important;
+  margin: 0;
+}
+
+.hl.lean details summary {
+  display: list-item !important;
+  margin: 0;
+}
+
+.hl.lean details summary:focus {
+  outline: none;
+  outline-offset: none;
+  color: inherit;
+}
+
+.hl.lean ul > li {
+  margin-bottom: 0;
+}
+
+.hl.lean details summary::marker {
+  display: inline !important;
+}
+
+.hl.lean details > summary:first-of-type {
+  list-style-type: disclosure-closed;
+  list-style-position: inside;
+}
+
+.hl.lean details[open] > summary:first-of-type {
+  list-style-type: disclosure-open;
+}
+
+.hl.lean details summary::before, .hl.lean details summary::after {
+  content: "" !important;
+  background: none;
+  display: none;
+}
+
+.hl.lean .tactic-state summary {
+  /* These need to be em, not rem, to scale with the font */
+  margin-left: -0.5em;
+}
+
+.hl.lean .tactic-state details {
+  /* These need to be em, not rem, to scale with the font */
+  padding-left: 0.5em;
+}
+
+.hl.lean .case-label {
+  display: block;
+  position: relative;
+}
+
+.hl.lean .case-label input[type="checkbox"] {
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 0;
+  height: 0;
+  width: 0;
+  z-index: -10;
+}
+
+.hl.lean .case-label:has(input[type="checkbox"])::before {
+  display: inline-block;
+  background-color: black;
+  content: ' ';
+  transition: ease 0.2s;
+  margin-right: 0.7em;
+  clip-path: polygon(100% 0, 0 0, 50% 100%);
+  width: 0.6em;
+  height: 0.6em;
+  vertical-align: middle;
+}
+
+.hl.lean .case-label:has(input[type="checkbox"]:not(:checked))::before {
+  transform: rotate(-90deg);
+}
+
+.hl.lean .case-label:has(input[type="checkbox"]) {
+
+}
+
+.hl.lean .case-label:has(input[type="checkbox"]:checked) {
+
+}
+
+
+.hl.lean .labeled-case > :not(:first-child) {
+  max-height: 0px;
+  display: block;
+  overflow: hidden;
+  transition: max-height 0.1s ease-in;
+  /* These need to be em, not rem, to scale with the font */
+  margin-left: 0.5em;
+  margin-top: 0.1em;
+}
+
+.hl.lean .labeled-case:has(.case-label input[type="checkbox"]:checked) > :not(:first-child) {
+  max-height: 100%;
+}
+
+
+.hl.lean .goal-name::before {
+  font-style: normal;
+  content: "case ";
+}
+
+.hl.lean .goal-name {
+  font-style: italic;
+  font-family: var(--verso-code-font-family);
+  color: inherit;
+}
+
+.hl.lean .hypotheses {
+  display: table;
+}
+
+.hl.lean .hypothesis {
+  display: table-row;
+}
+
+.hl.lean .hypothesis > * {
+  display: table-cell;
+}
+
+
+.hl.lean .hypotheses .colon {
+  text-align: center;
+  /* This needs to be em, not rem, to scale with the font */
+  min-width: 1em;
+}
+
+.hl.lean .hypotheses .name {
+  text-align: right;
+}
+
+.hl.lean .hypotheses .name,
+.hl.lean .hypotheses .type,
+.hl.lean .conclusion .type {
+  font-family: var(--verso-code-font-family);
+}
+
+.tippy-box {
+  /* Without these, mobile Safari will start making font sizes inconsistent when its text size adjustment feature is triggered.*/
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+
+}
+
+.tippy-box[data-theme~='lean'] {
+  background-color: #e5e5e5;
+  color: black;
+  border: 1px solid black;
+}
+.tippy-box[data-theme~='lean'][data-placement^='top'] > .tippy-arrow::before {
+  border-top-color: #e5e5e5;
+}
+.tippy-box[data-theme~='lean'][data-placement^='bottom'] > .tippy-arrow::before {
+  border-bottom-color: #e5e5e5;
+}
+.tippy-box[data-theme~='lean'][data-placement^='left'] > .tippy-arrow::before {
+  border-left-color: #e5e5e5;
+}
+.tippy-box[data-theme~='lean'][data-placement^='right'] > .tippy-arrow::before {
+  border-right-color: #e5e5e5;
+}
+
+.tippy-box[data-theme~='message'][data-placement^='top'] > .tippy-arrow::before {
+  border-top-color: #e5e5e5;
+  border-width: 11px 11px 0;
+}
+.tippy-box[data-theme~='message'][data-placement^='top'] > .tippy-arrow::after {
+  bottom: -11px;
+  border-width: 11px 11px 0;
+}
+.tippy-box[data-theme~='message'][data-placement^='bottom'] > .tippy-arrow::before {
+  border-width: 0 11px 11px;
+}
+.tippy-box[data-theme~='message'][data-placement^='bottom'] > .tippy-arrow::after {
+  top: -11px;
+  border-width: 0 11px 11px;
+}
+.tippy-box[data-theme~='message'][data-placement^='left'] > .tippy-arrow::before {
+  border-left-color: #e5e5e5;
+  border-width: 11px 0 11px 11px;
+}
+.tippy-box[data-theme~='message'][data-placement^='left'] > .tippy-arrow::after {
+  right: -11px;
+  border-width: 11px 0 11px 11px;
+}
+
+.tippy-box[data-theme~='message'][data-placement^='right'] > .tippy-arrow::before {
+  border-right-color: #e5e5e5;
+  border-width: 11px 11px 11px 0;
+}
+.tippy-box[data-theme~='message'][data-placement^='right'] > .tippy-arrow::after {
+  left: -11px;
+  border-width: 11px 11px 11px 0;
+}
+
+
+
+.tippy-box[data-theme~='warning'] {
+  background-color: #e5e5e5;
+  color: black;
+  border: 3px solid var(--verso-warning-color);
+}
+
+.tippy-box[data-theme~='error'] {
+  background-color: #e5e5e5;
+  color: black;
+  border: 3px solid #f7a7af;
+}
+
+.tippy-box[data-theme~='info'] {
+  background-color: #e5e5e5;
+  color: black;
+  border: 3px solid #99b3c2;
+}
+
+.tippy-box[data-theme~='tactic'] {
+  background-color: white;
+  color: black;
+  border: 1px solid black;
+}
+.tippy-box[data-theme~='tactic'][data-placement^='top'] > .tippy-arrow::before {
+  border-top-color: white;
+}
+.tippy-box[data-theme~='tactic'][data-placement^='bottom'] > .tippy-arrow::before {
+  border-bottom-color: white;
+}
+.tippy-box[data-theme~='tactic'][data-placement^='left'] > .tippy-arrow::before {
+  border-left-color: white;
+}
+.tippy-box[data-theme~='tactic'][data-placement^='right'] > .tippy-arrow::before {
+  border-right-color: white;
+}
+
+.extra-doc-links {
+  list-style-type: none;
+  margin-left: 0;
+  padding: 0;
+}
+
+.extra-doc-links > li {
+  display: inline-block;
+}
+
+.extra-doc-links > li:not(:last-child)::after {
+  content: '|';
+  display: inline-block;
+  margin: 0 0.25em;
+}
+
+.verso-message .trace {
+  display: block;
+}
+
+.verso-message .trace > summary::marker {
+  color: var(--verso-text-color);
+}
+
+.verso-message .trace-children {
+  margin: 0;
+  padding: 0;
+}
+
+.verso-message .trace-children > li {
+  list-style-type: none;
+  margin-left: 1.5em;
+}
+
+.verso-message .trace-children > li:not(:has(.trace)) {
+  margin-left: 0;
+}
+
+.verso-message .trace-class {
+  color: color-mix(in srgb, currentColor 70%, transparent);
+  font-weight: bold;
+  margin: 0;
+  padding: 0;
+}
+
+.verso-message .text {
+  white-space: pre-wrap;
+}
+
+</style><script>
+      
+window.onload = () => {
+
+    // Don't show hovers inside of closed tactic states
+    function blockedByTactic(elem) {
+      let parent = elem.parentNode;
+      while (parent && "classList" in parent) {
+        if (parent.classList.contains("tactic")) {
+          const toggle = parent.querySelector("input.tactic-toggle");
+          if (toggle) {
+            return !toggle.checked;
+          }
+        }
+        parent = parent.parentNode;
+      }
+      return false;
+    }
+
+    function blockedByTippy(elem) {
+      // Don't show a new hover until the old ones are all closed.
+      // Scoped to the nearest "top-level block" to avoid being O(n) in the size of the document.
+      var block = elem;
+      const topLevel = new Set(["section", "body", "html", "nav", "header"]);
+      while (block.parentNode && !topLevel.has(block.parentNode.nodeName.toLowerCase())) {
+        block = block.parentNode;
+      }
+      for (const child of block.querySelectorAll(".token, .has-info")) {
+        if (child._tippy && child._tippy.state.isVisible) { return true };
+      }
+      return false;
+    }
+
+    for (const c of document.querySelectorAll(".hl.lean .token")) {
+        if (c.dataset.binding != "") {
+            c.addEventListener("mouseover", (event) => {
+                if (blockedByTactic(c)) {return;}
+                const context = c.closest(".hl.lean").dataset.leanContext;
+                for (const example of document.querySelectorAll(".hl.lean")) {
+                    if (example.dataset.leanContext == context) {
+                        for (const tok of example.querySelectorAll(".token")) {
+                            if (c.dataset.binding == tok.dataset.binding) {
+                                tok.classList.add("binding-hl");
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        c.addEventListener("mouseout", (event) => {
+            for (const tok of document.querySelectorAll(".hl.lean .token")) {
+                tok.classList.remove("binding-hl");
+            }
+        });
+    }
+    /* Render docstrings */
+    if ('undefined' !== typeof marked) {
+        for (const d of document.querySelectorAll("code.docstring, pre.docstring")) {
+            const str = d.innerText;
+            const html = marked.parse(str);
+            const rendered = document.createElement("div");
+            rendered.classList.add("docstring");
+            rendered.innerHTML = html;
+            d.parentNode.replaceChild(rendered, d);
+        }
+    }
+    // Add hovers
+    let docsJson = "-verso-docs.json";
+    fetch(docsJson).then((resp) => resp.json()).then((versoDocData) => {
+
+      function hideParentTooltips(element) {
+        let parent = element.parentElement;
+        while (parent) {
+          const tippyInstance = parent._tippy;
+          if (tippyInstance) {
+            tippyInstance.hide();
+          }
+          parent = parent.parentElement;
+        }
+      }
+
+
+
+      const defaultTippyProps = {
+        /* DEBUG -- remove the space: * /
+        onHide(any) { return false; },
+        trigger: "click",
+        // */
+        /* theme: "lean", */
+        maxWidth: "none",
+        appendTo: () => document.body,
+        interactive: true,
+        delay: [100, null],
+        /* ignoreAttributes: true, */
+        followCursor: 'initial',
+        onShow(inst) {
+          if (inst.reference.className == 'tactic') {
+
+            const toggle = inst.reference.querySelector("input.tactic-toggle");
+            if (toggle && toggle.checked) {
+              return false;
+            }
+            hideParentTooltips(inst.reference);
+            //if (blockedByTippy(inst.reference)) { return false; }
+
+          } else if (inst.reference.querySelector(".hover-info") || "versoHover" in inst.reference.dataset) {
+            if (blockedByTactic(inst.reference)) { return false };
+            if (blockedByTippy(inst.reference)) { return false; }
+          } else { // Nothing to show here!
+            return false;
+          }
+        },
+        content (tgt) {
+          const content = document.createElement("span");
+          if (tgt.className == 'tactic') {
+            const state = tgt.querySelector(".tactic-state").cloneNode(true);
+            state.style.display = "block";
+            content.appendChild(state);
+            content.style.display = "block";
+            content.className = "hl lean popup";
+          } else {
+            content.className = "hl lean";
+            content.style.display = "block";
+            content.style.maxHeight = "300px";
+            content.style.overflowY = "auto";
+            content.style.overflowX = "hidden";
+            const hoverId = tgt.dataset.versoHover;
+            const hoverInfo = tgt.querySelector(".hover-info");
+            if (hoverId) { // Docstrings from the table
+              // TODO stop doing an implicit conversion from string to number here
+              let data = versoDocData[hoverId];
+              if (data) {
+                const info = document.createElement("span");
+                info.className = "hover-info";
+                info.style.display = "block";
+                info.innerHTML = data;
+                content.appendChild(info);
+                /* Render docstrings - TODO server-side */
+                if ('undefined' !== typeof marked) {
+                    for (const d of content.querySelectorAll("code.docstring, pre.docstring")) {
+                        const str = d.innerText;
+                        const html = marked.parse(str);
+                        const rendered = document.createElement("div");
+                        rendered.classList.add("docstring");
+                        rendered.innerHTML = html;
+                        d.parentNode.replaceChild(rendered, d);
+                    }
+                }
+              } else {
+                content.innerHTML = "Failed to load doc ID: " + hoverId;
+              }
+            } else if (hoverInfo) { // The inline info, still used for compiler messages
+              content.appendChild(hoverInfo.cloneNode(true));
+            }
+            const extraLinks = tgt.parentElement.dataset['versoLinks'];
+            if (extraLinks) {
+              try {
+                const extras = JSON.parse(extraLinks);
+                const links = document.createElement('ul');
+                links.className = 'extra-doc-links';
+                extras.forEach((l) => {
+                  const li = document.createElement('li');
+                  li.innerHTML = "<a href=\"" + l['href'] + "\" title=\"" + l.long + "\">" + l.short + "</a>";
+                  links.appendChild(li);
+                });
+                content.appendChild(links);
+              } catch (error) {
+                console.error(error);
+              }
+            }
+          }
+          return content;
+        }
+      };
+
+
+      document.querySelectorAll('.hl.lean .const.token, .hl.lean .keyword.token, .hl.lean .literal.token, .hl.lean .option.token, .hl.lean .var.token, .hl.lean .typed.token, .hl.lean .level-var, .hl.lean .level-const, .hl.lean .level-op, .hl.lean .sort').forEach(element => {
+        element.setAttribute('data-tippy-theme', 'lean');
+      });
+      document.querySelectorAll('.hl.lean .has-info.warning').forEach(element => {
+        element.setAttribute('data-tippy-theme', 'warning message');
+      });
+      document.querySelectorAll('.hl.lean .has-info.information').forEach(element => {
+        element.setAttribute('data-tippy-theme', 'info message');
+      });
+      document.querySelectorAll('.hl.lean .has-info.error').forEach(element => {
+        element.setAttribute('data-tippy-theme', 'error message');
+      });
+      document.querySelectorAll('.hl.lean .tactic').forEach(element => {
+        element.setAttribute('data-tippy-theme', 'tactic');
+      });
+      let insts = tippy('.hl.lean .const.token, .hl.lean .keyword.token, .hl.lean .literal.token, .hl.lean .option.token, .hl.lean .var.token, .hl.lean .typed.token, .hl.lean .has-info, .hl.lean .tactic, .hl.lean .level-var, .hl.lean .level-const, .hl.lean .level-op, .hl.lean .sort', defaultTippyProps);
+  });
+}
+</script>
+    <script src="-verso-search/search-highlight.js" defer="defer"></script>
+    </head>
+  <body>
+    <header>
+      <div class="header-logo-wrapper"></div>
+      <div class="header-title-wrapper">
+        <a href="" class="header-title"><h1>
+            Documentation with Verso</h1>
+          </a></div>
+      </header>
+    <label for="toggle-toc" id="toggle-toc-click"><span class="line line1"></span><span class="line line2"></span><span class="line line3"></span></label><div class="with-toc">
+      <div class="toc-backdrop" onclick="document.getElementById('toggle-toc-click')?.click()"></div>
+      <nav id="toc">
+        <input type="checkbox" id="toggle-toc"><div class="first">
+          <a href="" class="toc-title"><h1>
+              Documentation with Verso</h1>
+            </a><div class="split-tocs">
+            <div class="split-toc book">
+              <div class="title">
+                <label for="--verso-manual-toc-----bookRoot" class="toggle-split-toc"><input type="checkbox" class="toggle-split-toc" id="--verso-manual-toc-----bookRoot" checked="checked"></label><span class="">Table of Contents</span></div>
+              <table><tr class="numbered"><td class="num">1.</td><td><a href="Genres/#genres">Genres</a></td></tr><tr class="numbered"><td class="num">2.</td><td><a href="Verso-Markup/#verso-markup">Verso Markup</a></td></tr><tr class="numbered"><td class="num">3.</td><td><a href="Building-Documents/#build-process">Building Documents</a></td></tr><tr class="numbered"><td class="num">4.</td><td><a href="Extensions/#extensions">Extensions</a></td></tr><tr class="numbered"><td class="num">5.</td><td><a href="Output-Formats/#outputs">Output Formats</a></td></tr><tr class="current numbered"><td class="num">6.</td><td><a href="Websites/#website">Websites</a></td></tr><tr class="numbered"><td class="num">7.</td><td><a href="Manuals-and-Books/#manual">Manuals and Books</a></td></tr><tr class="unnumbered"><td class="num"><td><a href="Index/#index">Index</a></td></tr><tr class="unnumbered"><td class="num"><td><a href="Dependencies/#dependencies">Dependencies</a></td></tr></table></div>
+            <div class="split-toc">
+              <div class="title">
+                <label for="--verso-manual-toc-website" class="toggle-split-toc"><input type="checkbox" class="toggle-split-toc" id="--verso-manual-toc-website" checked="checked"></label><span class="number">6.</span> <span class="current"><a href="Websites/#website">Websites</a></span></div>
+              <ol>
+                <li>
+                  <a href="Websites/#Verso___Genre___Blog___Page"><code>Page</code></a></li>
+                <li>
+                  <a href="Websites/#Verso___Genre___Blog___Post"><code>Post</code></a></li>
+                <li>
+                  <a href="Websites/#Verso___Genre___Blog___BlockExt___highlightedCode"><code>BlockExt</code></a></li>
+                <li>
+                  <a href="Websites/#Verso___Genre___Blog___InlineExt___highlightedCode"><code>InlineExt</code></a></li>
+                <li>
+                  <a href="Websites/#Verso___Genre___Blog___Page___Meta___mk"><code>Verso.Genre.Blog.Page.Meta</code></a></li>
+                <li>
+                  <a href="Websites/#Verso___Genre___Blog___Post___Meta___mk"><code>Verso.Genre.Blog.Post.Meta</code></a></li>
+                <li>
+                  <span class="header head-1"><span class="level-num">1.</span> <a href="Websites/#blogMain">Generating a Site</a></span></li>
+                <li>
+                  <a href="Websites/#Verso___Genre___Blog___blogMain"><code>blogMain</code></a></li>
+                <li>
+                  <span class="header head-1"><span class="level-num">2.</span> <a href="Websites/#site-config">Configuring a Site</a></span></li>
+                <li>
+                  <a href="Websites/#Verso___Genre___Blog___Site___page"><code>Site</code></a></li>
+                <li>
+                  <a href="Websites/#Verso___Genre___Blog___Dir___page"><code>Dir</code></a></li>
+                <li>
+                  <a href="Websites/#Verso___Genre___Blog___Theme___mk"><code>Theme</code></a></li>
+                <li>
+                  <a href="Websites/#Verso___Genre___Blog___Template"><code>Template</code></a></li>
+                <li>
+                  <a href="Websites/#Verso___Genre___Blog___TemplateM"><code>TemplateM</code></a></li>
+                <li>
+                  <a href="Websites/#Verso___Genre___Blog___Template___param"><code>param</code></a></li>
+                <li>
+                  <a href="Websites/#Verso___Genre___Blog___Template___param___"><code>param?</code></a></li>
+                <li>
+                  <a href="Websites/#Verso___Genre___Blog___Template___builtinHeader"><code>builtinHeader</code></a></li>
+                </ol>
+              </div>
+            </div>
+          </div>
+        <div class="last"></div>
+        </nav>
+      <main><div class="content-wrapper">
+          <nav class="prev-next-buttons">
+            <a class="local-button active" href="Output-Formats/#outputs" rel="prev" title="5. Output Formats"><span class="arrow">←</span><span class="where">5. Output Formats</span></a><a class="local-button active" href="Manuals-and-Books/#manual" rel="next" title="7. Manuals and Books"><span class="where">7. Manuals and Books</span><span class="arrow">→</span></a></nav>
+          <section>
+            <h1>
+              6. Websites<span class="permalink-widget inline"><a href="find/?domain=Verso.Genre.Manual.section&amp;name=website" title="Permalink">🔗</a></span></h1>
+            <p>
+              Verso's website genre is a static site generator.
+It contains two Verso <code class="hl lean inline" data-lean-context="examples"><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre"><span class="const token" data-binding="const-Verso.Doc.Genre" data-verso-hover="10">Genre</span></a></code>s: <code class="hl lean inline" data-lean-context="examples"><a href="Websites/#Verso___Genre___Blog___Page" title="Documentation for Verso.Genre.Blog.Page"><span class="const token" data-binding="const-Verso.Genre.Blog.Page" data-verso-hover="130">Page</span></a></code> and <code class="hl lean inline" data-lean-context="examples"><a href="Websites/#Verso___Genre___Blog___Post" title="Documentation for Verso.Genre.Blog.Post"><span class="const token" data-binding="const-Verso.Genre.Blog.Post" data-verso-hover="131">Post</span></a></code>, which are identical except for their metadata:</p>
+            <div class="namedocs" id="Verso___Genre___Blog___Page">
+              <span class="permalink-widget block"><a href="find/?domain=Verso.Genre.Manual.doc&amp;name=Verso.Genre.Blog.Page" title="Permalink">🔗</a></span><span class="label">def</span><pre class="signature hl lean block"><div class="wide-only"><span class="unknown token" data-binding="">Verso.Genre.Blog.Page</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre"><span class="const token" data-binding="const-Verso.Doc.Genre" data-verso-hover="10">Genre</span></a></div><div class="narrow-only"><span class="unknown token" data-binding="">Verso.Genre.Blog.Page</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre"><span class="const token" data-binding="const-Verso.Doc.Genre" data-verso-hover="10">Genre</span></a></div></pre><div class="text">
+                <p>
+                  An ordinary web page that is not a blog post.</p>
+                </div>
+              </div>
+            <div class="namedocs" id="Verso___Genre___Blog___Post">
+              <span class="permalink-widget block"><a href="find/?domain=Verso.Genre.Manual.doc&amp;name=Verso.Genre.Blog.Post" title="Permalink">🔗</a></span><span class="label">def</span><pre class="signature hl lean block"><div class="wide-only"><span class="unknown token" data-binding="">Verso.Genre.Blog.Post</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre"><span class="const token" data-binding="const-Verso.Doc.Genre" data-verso-hover="10">Genre</span></a></div><div class="narrow-only"><span class="unknown token" data-binding="">Verso.Genre.Blog.Post</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Building-Documents/Elaboration/#Verso___Doc___Genre___mk" title="Documentation for Verso.Doc.Genre"><span class="const token" data-binding="const-Verso.Doc.Genre" data-verso-hover="10">Genre</span></a></div></pre><div class="text">
+                <p>
+                  A blog post.</p>
+                </div>
+              </div>
+            <p>
+              Both feature the same set of extensions:</p>
+            <div class="namedocs" id="Verso___Genre___Blog___BlockExt___highlightedCode">
+              <span class="permalink-widget block"><a href="find/?domain=Verso.Genre.Manual.doc&amp;name=Verso.Genre.Blog.BlockExt.lexedText" title="Permalink">🔗</a></span><span class="label">inductive type</span><pre class="signature hl lean block"><div class="wide-only"><span class="unknown token" data-binding="">Verso.Genre.Blog.BlockExt</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="sort token" data-binding="sort-7243200735919010059" data-verso-hover="1">Type</span></div><div class="narrow-only"><span class="unknown token" data-binding="">Verso.Genre.Blog.BlockExt</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="sort token" data-binding="sort-7243200735919010059" data-verso-hover="1">Type</span></div></pre><div class="text">
+                <p>
+                  The additional blocks available in pages and posts.</p>
+                <h1>
+                  Constructors</h1>
+                <div class="constructor">
+                  <pre class="name-and-type hl lean"><span class="unknown token" data-binding="">highlightedCode</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.11" data-verso-hover="132">opts</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Verso.Genre.Blog.CodeOpts" data-verso-hover="133">Blog.CodeOpts</span><span class="unknown token" data-binding="">)</span><span class="inter-text">
+  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.12" data-verso-hover="134">highlighted</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-SubVerso.Highlighting.Highlighted" data-verso-hover="135">SubVerso.Highlighting.Highlighted</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text">
+  </span><a href="Websites/#Verso___Genre___Blog___BlockExt___highlightedCode" title="Documentation for Verso.Genre.Blog.BlockExt"><span class="const token" data-binding="const-Verso.Genre.Blog.BlockExt" data-verso-hover="136">Blog.BlockExt</span></a></pre><div class="docs">
+                    <p>
+                      Highlighted Lean code.</p>
+                    </div>
+                  </div>
+                <div class="constructor">
+                  <pre class="name-and-type hl lean"><span class="unknown token" data-binding="">message</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.13" data-verso-hover="71">summarize</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Bool" data-verso-hover="72">Bool</span><span class="unknown token" data-binding="">)</span><span class="inter-text">
+  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.14" data-verso-hover="137">msg</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-SubVerso.Highlighting.Highlighted.Message" data-verso-hover="138">SubVerso.Highlighting.Highlighted.Message</span><span class="unknown token" data-binding="">)</span><span class="inter-text">
+  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.15" data-verso-hover="139">expandTraces</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-List" data-verso-hover="81">List</span><span class="inter-text"> </span><span class="const token" data-binding="const-Lean.Name" data-verso-hover="67">Lean.Name</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Websites/#Verso___Genre___Blog___BlockExt___highlightedCode" title="Documentation for Verso.Genre.Blog.BlockExt"><span class="const token" data-binding="const-Verso.Genre.Blog.BlockExt" data-verso-hover="136">Blog.BlockExt</span></a></pre><div class="docs">
+                    <p>
+                      Highlighted Lean messages.</p>
+                    </div>
+                  </div>
+                <div class="constructor">
+                  <pre class="name-and-type hl lean"><span class="unknown token" data-binding="">lexedText</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.16" data-verso-hover="140">content</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Verso.Genre.Blog.LexedText" data-verso-hover="141">Blog.LexedText</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Websites/#Verso___Genre___Blog___BlockExt___highlightedCode" title="Documentation for Verso.Genre.Blog.BlockExt"><span class="const token" data-binding="const-Verso.Genre.Blog.BlockExt" data-verso-hover="136">Blog.BlockExt</span></a></pre><div class="docs">
+                    <p>
+                      Lexed text, to be displayed with highlighted syntax.</p>
+                    </div>
+                  </div>
+                <div class="constructor">
+                  <pre class="name-and-type hl lean"><span class="unknown token" data-binding="">htmlDiv</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.17" data-verso-hover="63">classes</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="64">String</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Websites/#Verso___Genre___Blog___BlockExt___highlightedCode" title="Documentation for Verso.Genre.Blog.BlockExt"><span class="const token" data-binding="const-Verso.Genre.Blog.BlockExt" data-verso-hover="136">Blog.BlockExt</span></a></pre><div class="docs">
+                    <p>
+                      When rendered, the content is wrapped in a <code class="hl lean inline" data-lean-context="docstring-examples"><span class="unknown token" data-binding="">&lt;</span><span class="unknown token" data-binding="">div</span><span class="unknown token" data-binding="">&gt;</span></code> with the given classes.</p>
+                    </div>
+                  </div>
+                <div class="constructor">
+                  <pre class="name-and-type hl lean"><span class="unknown token" data-binding="">htmlWrapper</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.18" data-verso-hover="63">tag</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="64">String</span><span class="unknown token" data-binding="">)</span><span class="inter-text">
+  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.19" data-verso-hover="98">attributes</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Array" data-verso-hover="41">Array</span><span class="inter-text"> </span><span class="const token" data-binding="const-Prod" data-verso-hover="75">(</span><span class="const token" data-binding="const-String" data-verso-hover="64">String</span><span class="inter-text"> </span><span class="const token" data-binding="const-Prod" data-verso-hover="75">×</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="64">String</span><span class="const token" data-binding="const-Prod" data-verso-hover="75">)</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Websites/#Verso___Genre___Blog___BlockExt___highlightedCode" title="Documentation for Verso.Genre.Blog.BlockExt"><span class="const token" data-binding="const-Verso.Genre.Blog.BlockExt" data-verso-hover="136">Blog.BlockExt</span></a></pre><div class="docs">
+                    <p>
+                      When rendered, the content is wrapped in the specified HTML tag.</p>
+                    </div>
+                  </div>
+                <div class="constructor">
+                  <pre class="name-and-type hl lean"><span class="unknown token" data-binding="">htmlDetails</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.20" data-verso-hover="63">classes</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="64">String</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.21" data-verso-hover="142">summary</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="96">Output.Html</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text">
+  </span><a href="Websites/#Verso___Genre___Blog___BlockExt___highlightedCode" title="Documentation for Verso.Genre.Blog.BlockExt"><span class="const token" data-binding="const-Verso.Genre.Blog.BlockExt" data-verso-hover="136">Blog.BlockExt</span></a></pre><div class="docs">
+                    <p>
+                      When rendered, the content is wrapped in a <code class="hl lean inline" data-lean-context="docstring-examples"><span class="unknown token" data-binding="">&lt;</span><span class="unknown token" data-binding="">details</span><span class="unknown token" data-binding="">&gt;</span></code> tag with the given summary.</p>
+                    </div>
+                  </div>
+                <div class="constructor">
+                  <pre class="name-and-type hl lean"><span class="unknown token" data-binding="">blob</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.22" data-verso-hover="142">html</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="96">Output.Html</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Websites/#Verso___Genre___Blog___BlockExt___highlightedCode" title="Documentation for Verso.Genre.Blog.BlockExt"><span class="const token" data-binding="const-Verso.Genre.Blog.BlockExt" data-verso-hover="136">Blog.BlockExt</span></a></pre><div class="docs">
+                    <p>
+                      A blob of HTML. The contents are discarded.</p>
+                    </div>
+                  </div>
+                <div class="constructor">
+                  <pre class="name-and-type hl lean"><span class="unknown token" data-binding="">component</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.23" data-verso-hover="66">name</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Lean.Name" data-verso-hover="67">Lean.Name</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.24" data-verso-hover="143">data</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Lean.Json" data-verso-hover="144">Lean.Json</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text">
+  </span><a href="Websites/#Verso___Genre___Blog___BlockExt___highlightedCode" title="Documentation for Verso.Genre.Blog.BlockExt"><span class="const token" data-binding="const-Verso.Genre.Blog.BlockExt" data-verso-hover="136">Blog.BlockExt</span></a></pre><div class="docs">
+                    <p>
+                      A reference to a component.</p>
+                    </div>
+                  </div>
+                <div class="constructor">
+                  <pre class="name-and-type hl lean"><span class="unknown token" data-binding="">docstring</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.25" data-verso-hover="145">indent</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Nat" data-verso-hover="111">Nat</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.26" data-verso-hover="146">declName?</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Option" data-verso-hover="31">Option</span><span class="inter-text"> </span><span class="const token" data-binding="const-Lean.Name" data-verso-hover="67">Lean.Name</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text">
+  </span><a href="Websites/#Verso___Genre___Blog___BlockExt___highlightedCode" title="Documentation for Verso.Genre.Blog.BlockExt"><span class="const token" data-binding="const-Verso.Genre.Blog.BlockExt" data-verso-hover="136">Blog.BlockExt</span></a></pre><div class="docs">
+                    <p>
+                      A Lean docstring that was indented <code class="hl lean inline" data-lean-context="docstring-examples"><span class="var token" data-binding="var-_uniq.42" data-verso-hover="145">indent</span></code> spaces in the original source.</p>
+                    </div>
+                  </div>
+                <div class="constructor">
+                  <pre class="name-and-type hl lean"><span class="unknown token" data-binding="">docstringSection</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.27" data-verso-hover="145">level</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Nat" data-verso-hover="111">Nat</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Websites/#Verso___Genre___Blog___BlockExt___highlightedCode" title="Documentation for Verso.Genre.Blog.BlockExt"><span class="const token" data-binding="const-Verso.Genre.Blog.BlockExt" data-verso-hover="136">Blog.BlockExt</span></a></pre><div class="docs">
+                    <p>
+                      A section in a Lean docstring.</p>
+                    <p>
+                      Lean docstrings may contain nested headers, but they are not sections of the document as a whole.
+The contents of a docstring section are expected to be a paragraph that contains the section's
+title, followed by the actual content.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            <div class="namedocs" id="Verso___Genre___Blog___InlineExt___highlightedCode">
+              <span class="permalink-widget block"><a href="find/?domain=Verso.Genre.Manual.doc&amp;name=Verso.Genre.Blog.InlineExt.customHighlight" title="Permalink">🔗</a></span><span class="label">inductive type</span><pre class="signature hl lean block"><div class="wide-only"><span class="unknown token" data-binding="">Verso.Genre.Blog.InlineExt</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="sort token" data-binding="sort-7243200735919010059" data-verso-hover="1">Type</span></div><div class="narrow-only"><span class="unknown token" data-binding="">Verso.Genre.Blog.InlineExt</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="sort token" data-binding="sort-7243200735919010059" data-verso-hover="1">Type</span></div></pre><div class="text">
+                <p>
+                  The additional inline elements available in pages and posts.</p>
+                <h1>
+                  Constructors</h1>
+                <div class="constructor">
+                  <pre class="name-and-type hl lean"><span class="unknown token" data-binding="">highlightedCode</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.47" data-verso-hover="132">opts</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Verso.Genre.Blog.CodeOpts" data-verso-hover="133">Blog.CodeOpts</span><span class="unknown token" data-binding="">)</span><span class="inter-text">
+  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.48" data-verso-hover="134">highlighted</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-SubVerso.Highlighting.Highlighted" data-verso-hover="135">SubVerso.Highlighting.Highlighted</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text">
+  </span><a href="Websites/#Verso___Genre___Blog___InlineExt___highlightedCode" title="Documentation for Verso.Genre.Blog.InlineExt"><span class="const token" data-binding="const-Verso.Genre.Blog.InlineExt" data-verso-hover="147">Blog.InlineExt</span></a></pre><div class="docs">
+                    <p>
+                      Highlighted Lean code.</p>
+                    </div>
+                  </div>
+                <div class="constructor">
+                  <pre class="name-and-type hl lean"><span class="unknown token" data-binding="">message</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.49" data-verso-hover="137">msg</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-SubVerso.Highlighting.Highlighted.Message" data-verso-hover="138">SubVerso.Highlighting.Highlighted.Message</span><span class="unknown token" data-binding="">)</span><span class="inter-text">
+  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.50" data-verso-hover="139">expandTraces</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-List" data-verso-hover="81">List</span><span class="inter-text"> </span><span class="const token" data-binding="const-Lean.Name" data-verso-hover="67">Lean.Name</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Websites/#Verso___Genre___Blog___InlineExt___highlightedCode" title="Documentation for Verso.Genre.Blog.InlineExt"><span class="const token" data-binding="const-Verso.Genre.Blog.InlineExt" data-verso-hover="147">Blog.InlineExt</span></a></pre><div class="docs">
+                    <p>
+                      Highlighted Lean messages.</p>
+                    </div>
+                  </div>
+                <div class="constructor">
+                  <pre class="name-and-type hl lean"><span class="unknown token" data-binding="">lexedText</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.51" data-verso-hover="140">content</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Verso.Genre.Blog.LexedText" data-verso-hover="141">Blog.LexedText</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Websites/#Verso___Genre___Blog___InlineExt___highlightedCode" title="Documentation for Verso.Genre.Blog.InlineExt"><span class="const token" data-binding="const-Verso.Genre.Blog.InlineExt" data-verso-hover="147">Blog.InlineExt</span></a></pre><div class="docs">
+                    <p>
+                      Lexed text, to be displayed with highlighted syntax.</p>
+                    </div>
+                  </div>
+                <div class="constructor">
+                  <pre class="name-and-type hl lean"><span class="unknown token" data-binding="">customHighlight</span><span class="inter-text">
+  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.52" data-verso-hover="134">highlighted</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-SubVerso.Highlighting.Highlighted" data-verso-hover="135">SubVerso.Highlighting.Highlighted</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text">
+  </span><a href="Websites/#Verso___Genre___Blog___InlineExt___highlightedCode" title="Documentation for Verso.Genre.Blog.InlineExt"><span class="const token" data-binding="const-Verso.Genre.Blog.InlineExt" data-verso-hover="147">Blog.InlineExt</span></a></pre><div class="docs">
+                    <p>
+                      Highlighted code that is not necessarily from Lean.</p>
+                    </div>
+                  </div>
+                <div class="constructor">
+                  <pre class="name-and-type hl lean"><span class="unknown token" data-binding="">label</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.53" data-verso-hover="66">name</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Lean.Name" data-verso-hover="67">Lean.Name</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Websites/#Verso___Genre___Blog___InlineExt___highlightedCode" title="Documentation for Verso.Genre.Blog.InlineExt"><span class="const token" data-binding="const-Verso.Genre.Blog.InlineExt" data-verso-hover="147">Blog.InlineExt</span></a></pre><div class="docs">
+                    <p>
+                      A label to serve as a cross-reference target.</p>
+                    </div>
+                  </div>
+                <div class="constructor">
+                  <pre class="name-and-type hl lean"><span class="unknown token" data-binding="">ref</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.54" data-verso-hover="66">name</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Lean.Name" data-verso-hover="67">Lean.Name</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Websites/#Verso___Genre___Blog___InlineExt___highlightedCode" title="Documentation for Verso.Genre.Blog.InlineExt"><span class="const token" data-binding="const-Verso.Genre.Blog.InlineExt" data-verso-hover="147">Blog.InlineExt</span></a></pre><div class="docs">
+                    <p>
+                      A reference to a label.</p>
+                    </div>
+                  </div>
+                <div class="constructor">
+                  <pre class="name-and-type hl lean"><span class="unknown token" data-binding="">pageref</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.55" data-verso-hover="66">name</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Lean.Name" data-verso-hover="67">Lean.Name</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.56" data-verso-hover="148">id?</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Option" data-verso-hover="31">Option</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="64">String</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text">
+  </span><a href="Websites/#Verso___Genre___Blog___InlineExt___highlightedCode" title="Documentation for Verso.Genre.Blog.InlineExt"><span class="const token" data-binding="const-Verso.Genre.Blog.InlineExt" data-verso-hover="147">Blog.InlineExt</span></a></pre><div class="docs">
+                    <p>
+                      A reference to a page or post's internal name as a Lean value, to be shown as a link.
+If <code class="hl lean inline" data-lean-context="docstring-examples"><span class="var token" data-binding="var-_uniq.70" data-verso-hover="148">id?</span></code> is <code class="hl lean inline" data-lean-context="docstring-examples"><span class="const token" data-binding="const-Option.some" data-verso-hover="149">some</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.78" data-verso-hover="150">X</span></code>, then the link is suffixed with <code class="hl lean inline" data-lean-context="docstring-examples"><span class="unknown token" data-binding="">#</span><span class="unknown token" data-binding="">X</span></code>.</p>
+                    </div>
+                  </div>
+                <div class="constructor">
+                  <pre class="name-and-type hl lean"><span class="unknown token" data-binding="">htmlSpan</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.57" data-verso-hover="63">classes</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="64">String</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Websites/#Verso___Genre___Blog___InlineExt___highlightedCode" title="Documentation for Verso.Genre.Blog.InlineExt"><span class="const token" data-binding="const-Verso.Genre.Blog.InlineExt" data-verso-hover="147">Blog.InlineExt</span></a></pre><div class="docs">
+                    <p>
+                      An HTML span element with the given classes.</p>
+                    </div>
+                  </div>
+                <div class="constructor">
+                  <pre class="name-and-type hl lean"><span class="unknown token" data-binding="">blob</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.58" data-verso-hover="142">html</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="96">Output.Html</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Websites/#Verso___Genre___Blog___InlineExt___highlightedCode" title="Documentation for Verso.Genre.Blog.InlineExt"><span class="const token" data-binding="const-Verso.Genre.Blog.InlineExt" data-verso-hover="147">Blog.InlineExt</span></a></pre><div class="docs">
+                    <p>
+                      A blob of HTML. The contents are discarded.</p>
+                    </div>
+                  </div>
+                <div class="constructor">
+                  <pre class="name-and-type hl lean"><span class="unknown token" data-binding="">component</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.59" data-verso-hover="66">name</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Lean.Name" data-verso-hover="67">Lean.Name</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.60" data-verso-hover="143">data</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Lean.Json" data-verso-hover="144">Lean.Json</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text">
+  </span><a href="Websites/#Verso___Genre___Blog___InlineExt___highlightedCode" title="Documentation for Verso.Genre.Blog.InlineExt"><span class="const token" data-binding="const-Verso.Genre.Blog.InlineExt" data-verso-hover="147">Blog.InlineExt</span></a></pre><div class="docs">
+                    <p>
+                      A reference to a component.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            <p>
+              However, their metadata are different:</p>
+            <div class="namedocs" id="Verso___Genre___Blog___Page___Meta___mk">
+              <span class="permalink-widget block"><a href="find/?domain=Verso.Genre.Manual.doc&amp;name=Verso.Genre.Blog.Page.Meta" title="Permalink">🔗</a></span><span class="label">structure</span><pre class="signature hl lean block"><div class="wide-only"><span class="unknown token" data-binding="">Verso.Genre.Blog.Page.Meta</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="sort token" data-binding="sort-7243200735919010059" data-verso-hover="1">Type</span></div><div class="narrow-only"><span class="unknown token" data-binding="">Verso.Genre.Blog.Page.Meta</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="sort token" data-binding="sort-7243200735919010059" data-verso-hover="1">Type</span></div></pre><div class="text">
+                <p>
+                  The metadata used for non-blog-post pages</p>
+                <h1>
+                  Constructor</h1>
+                <section class="subdocs">
+                  <pre class="name-and-type hl lean"><a href="Websites/#Verso___Genre___Blog___Page___Meta___mk" title="Documentation for Verso.Genre.Blog.Page.Meta.mk"><span class="const token" data-binding="const-Verso.Genre.Blog.Page.Meta.mk" data-verso-hover="151">Verso.Genre.Blog.Page.Meta.mk</span></a></pre><div class="docs"></div>
+                  </section>
+                <h1>
+                  Fields</h1>
+                <section class="subdocs">
+                  <pre class="name-and-type hl lean"><span class="const token" data-binding="const-Verso.Genre.Blog.Page.Meta.showInNav" data-verso-hover="152">showInNav</span> : <span class="const token" data-binding="const-Bool" data-verso-hover="72">Bool</span></pre><div class="docs">
+                    <p>
+                      Whether to hide this page/part from navigation entries</p>
+                    </div>
+                  </section>
+                <section class="subdocs">
+                  <pre class="name-and-type hl lean"><span class="const token" data-binding="const-Verso.Genre.Blog.Page.Meta.htmlId" data-verso-hover="153">htmlId</span> : <span class="const token" data-binding="const-Option" data-verso-hover="31">Option</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="64">String</span></pre><div class="docs">
+                    <p>
+                      The HTML ID to assign to the header</p>
+                    </div>
+                  </section>
+                </div>
+              </div>
+            <div class="namedocs" id="Verso___Genre___Blog___Post___Meta___mk">
+              <span class="permalink-widget block"><a href="find/?domain=Verso.Genre.Manual.doc&amp;name=Verso.Genre.Blog.Post.Meta.date" title="Permalink">🔗</a></span><span class="label">structure</span><pre class="signature hl lean block"><div class="wide-only"><span class="unknown token" data-binding="">Verso.Genre.Blog.Post.Meta</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="sort token" data-binding="sort-7243200735919010059" data-verso-hover="1">Type</span></div><div class="narrow-only"><span class="unknown token" data-binding="">Verso.Genre.Blog.Post.Meta</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="sort token" data-binding="sort-7243200735919010059" data-verso-hover="1">Type</span></div></pre><div class="text">
+                <p>
+                  The metadata used for blog posts</p>
+                <h1>
+                  Constructor</h1>
+                <section class="subdocs">
+                  <pre class="name-and-type hl lean"><a href="Websites/#Verso___Genre___Blog___Post___Meta___mk" title="Documentation for Verso.Genre.Blog.Post.Meta.mk"><span class="const token" data-binding="const-Verso.Genre.Blog.Post.Meta.mk" data-verso-hover="154">Verso.Genre.Blog.Post.Meta.mk</span></a></pre><div class="docs"></div>
+                  </section>
+                <h1>
+                  Fields</h1>
+                <section class="subdocs">
+                  <pre class="name-and-type hl lean"><span class="const token" data-binding="const-Verso.Genre.Blog.Post.Meta.date" data-verso-hover="155">date</span> : <span class="const token" data-binding="const-Verso.Genre.Blog.Date" data-verso-hover="156">Blog.Date</span></pre><div class="docs">
+                    <p>
+                      The post's date. By default, this is used in the URL as well as included in the content.</p>
+                    </div>
+                  </section>
+                <section class="subdocs">
+                  <pre class="name-and-type hl lean"><span class="const token" data-binding="const-Verso.Genre.Blog.Post.Meta.authors" data-verso-hover="157">authors</span> : <span class="const token" data-binding="const-List" data-verso-hover="81">List</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="64">String</span></pre><div class="docs">
+                    <p>
+                      The authors of the post</p>
+                    </div>
+                  </section>
+                <section class="subdocs">
+                  <pre class="name-and-type hl lean"><span class="const token" data-binding="const-Verso.Genre.Blog.Post.Meta.categories" data-verso-hover="158">categories</span> : <span class="const token" data-binding="const-List" data-verso-hover="81">List</span><span class="inter-text"> </span><span class="const token" data-binding="const-Verso.Genre.Blog.Post.Category" data-verso-hover="159">Post.Category</span></pre><div class="docs">
+                    <p>
+                      The categories in which to include the post</p>
+                    </div>
+                  </section>
+                <section class="subdocs">
+                  <pre class="name-and-type hl lean"><span class="const token" data-binding="const-Verso.Genre.Blog.Post.Meta.draft" data-verso-hover="160">draft</span> : <span class="const token" data-binding="const-Bool" data-verso-hover="72">Bool</span></pre><div class="docs">
+                    <p>
+                      If <code class="hl lean inline" data-lean-context="docstring-examples"><span class="const token" data-binding="const-Bool.true" data-verso-hover="49">true</span></code>, the post is not rendered by default</p>
+                    </div>
+                  </section>
+                <section class="subdocs">
+                  <pre class="name-and-type hl lean"><span class="const token" data-binding="const-Verso.Genre.Blog.Post.Meta.htmlId" data-verso-hover="153">htmlId</span> : <span class="const token" data-binding="const-Option" data-verso-hover="31">Option</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="64">String</span></pre><div class="docs">
+                    <p>
+                      The HTML ID to assign to the header</p>
+                    </div>
+                  </section>
+                </div>
+              </div>
+            <section>
+              <h2 id="blogMain">
+                6.1. Generating a Site<span class="permalink-widget inline"><a href="find/?domain=Verso.Genre.Manual.section&amp;name=blogMain" title="Permalink">🔗</a></span></h2>
+              <p>
+                Blogs should have an executable that invokes <code>blogMain</code> on the appropriate <a href="Websites/#site-config">site and theme</a>, forwarding on command-line arguments.
+It is responsible for <a href="Building-Documents/Traversal/#traversal">traversing</a> the site and generating the HTML.</p>
+              <div class="namedocs" id="Verso___Genre___Blog___blogMain">
+                <span class="permalink-widget block"><a href="find/?domain=Verso.Genre.Manual.doc&amp;name=Verso.Genre.Blog.blogMain" title="Permalink">🔗</a></span><span class="label">def</span><pre class="signature hl lean block"><div class="wide-only"><span class="unknown token" data-binding="">Verso.Genre.Blog.blogMain</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.167" data-verso-hover="161">theme</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Websites/#Verso___Genre___Blog___Theme___mk" title="Documentation for Verso.Genre.Blog.Theme"><span class="const token" data-binding="const-Verso.Genre.Blog.Theme" data-verso-hover="162">Blog.Theme</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.168" data-verso-hover="163">site</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Websites/#Verso___Genre___Blog___Site___page" title="Documentation for Verso.Genre.Blog.Site"><span class="const token" data-binding="const-Verso.Genre.Blog.Site" data-verso-hover="164">Blog.Site</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text">
+  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.170" data-verso-hover="165">linkTargets</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Verso.Code.LinkTargets" data-verso-hover="166">Code.LinkTargets</span><span class="inter-text"> </span><span class="const token" data-binding="const-Verso.Genre.Blog.TraverseContext" data-verso-hover="167">Blog.TraverseContext</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:=</span><span class="inter-text"> </span><span class="const token" data-binding="const-Verso.Code.LinkTargets.mk" data-verso-hover="168">{</span><span class="inter-text"> </span><span class="const token" data-binding="const-Verso.Code.LinkTargets.mk" data-verso-hover="168">}</span><span class="unknown token" data-binding="">)</span><span class="inter-text">
+  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.171" data-verso-hover="169">options</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-List" data-verso-hover="81">List</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="64">String</span><span class="unknown token" data-binding="">)</span><span class="inter-text">
+  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.172" data-verso-hover="170">components</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Verso.Genre.Blog.Components" data-verso-hover="171">Blog.Components</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:=</span><span class="inter-text"> </span><span class="unknown token" data-binding="">by</span><span class="inter-text"> </span><span class="unknown token" data-binding="">exact</span><span class="inter-text"> </span><span class="unknown token" data-binding="">%registered_components)</span><span class="inter-text">
+  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.173" data-verso-hover="172">header</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="64">String</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:=</span><span class="inter-text"> </span><span class="const token" data-binding="const-Verso.Output.Html.doctype" data-verso-hover="173">Output.Html.doctype</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-IO" data-verso-hover="174">IO</span><span class="inter-text"> </span><span class="const token" data-binding="const-UInt32" data-verso-hover="175">UInt32</span></div><div class="narrow-only"><span class="unknown token" data-binding="">Verso.Genre.Blog.blogMain</span><span class="inter-text">
+  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.167" data-verso-hover="161">theme</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Websites/#Verso___Genre___Blog___Theme___mk" title="Documentation for Verso.Genre.Blog.Theme"><span class="const token" data-binding="const-Verso.Genre.Blog.Theme" data-verso-hover="162">Blog.Theme</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.168" data-verso-hover="163">site</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Websites/#Verso___Genre___Blog___Site___page" title="Documentation for Verso.Genre.Blog.Site"><span class="const token" data-binding="const-Verso.Genre.Blog.Site" data-verso-hover="164">Blog.Site</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text">
+  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.170" data-verso-hover="165">linkTargets</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text">
+    </span><span class="const token" data-binding="const-Verso.Code.LinkTargets" data-verso-hover="166">Code.LinkTargets</span><span class="inter-text">
+      </span><span class="const token" data-binding="const-Verso.Genre.Blog.TraverseContext" data-verso-hover="167">Blog.TraverseContext</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:=</span><span class="inter-text">
+    </span><span class="const token" data-binding="const-Verso.Code.LinkTargets.mk" data-verso-hover="168">{</span><span class="inter-text"> </span><span class="const token" data-binding="const-Verso.Code.LinkTargets.mk" data-verso-hover="168">}</span><span class="unknown token" data-binding="">)</span><span class="inter-text">
+  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.171" data-verso-hover="169">options</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-List" data-verso-hover="81">List</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="64">String</span><span class="unknown token" data-binding="">)</span><span class="inter-text">
+  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.172" data-verso-hover="170">components</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Verso.Genre.Blog.Components" data-verso-hover="171">Blog.Components</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:=</span><span class="inter-text"> </span><span class="unknown token" data-binding="">by</span><span class="inter-text">
+    </span><span class="unknown token" data-binding="">exact</span><span class="inter-text"> </span><span class="unknown token" data-binding="">%registered_components)</span><span class="inter-text">
+  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.173" data-verso-hover="172">header</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="64">String</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:=</span><span class="inter-text">
+    </span><span class="const token" data-binding="const-Verso.Output.Html.doctype" data-verso-hover="173">Output.Html.doctype</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text">
+  </span><span class="const token" data-binding="const-IO" data-verso-hover="174">IO</span><span class="inter-text"> </span><span class="const token" data-binding="const-UInt32" data-verso-hover="175">UInt32</span></div></pre><div class="text">
+                  <p>
+                    Generates the HTML for <code class="hl lean inline" data-lean-context="docstring-examples"><span class="var token" data-binding="var-_uniq.133" data-verso-hover="163">site</span></code>.</p>
+                  <p>
+                    Parameters:</p>
+                  <ul>
+                    <li>
+                      <p>
+                        <code class="hl lean inline" data-lean-context="docstring-examples"><span class="var token" data-binding="var-_uniq.146" data-verso-hover="161">theme</span></code> is the theme used to render content.</p>
+                      </li>
+                    <li>
+                      <p>
+                        <code class="hl lean inline" data-lean-context="docstring-examples"><span class="var token" data-binding="var-_uniq.147" data-verso-hover="163">site</span></code> is the site to be generated.</p>
+                      </li>
+                    <li>
+                      <p>
+                        <code class="hl lean inline" data-lean-context="docstring-examples"><span class="var token" data-binding="var-_uniq.149" data-verso-hover="169">options</span></code> are the command-line options provided by a user.</p>
+                      </li>
+                    </ul>
+                  <p>
+                    Optional parameters:</p>
+                  <ul>
+                    <li>
+                      <p>
+                        <code class="hl lean inline" data-lean-context="docstring-examples"><span class="var token" data-binding="var-_uniq.162" data-verso-hover="165">linkTargets</span></code> specifies how to create hyperlinks from Lean code to further documentation. By
+default, no links are generated.</p>
+                      </li>
+                    <li>
+                      <p>
+                        <code class="hl lean inline" data-lean-context="docstring-examples"><span class="var token" data-binding="var-_uniq.164" data-verso-hover="170">components</span></code> contains the implementation of the components. This is automatically filled out from
+a table.</p>
+                      </li>
+                    <li>
+                      <p>
+                        <code class="hl lean inline" data-lean-context="docstring-examples"><span class="var token" data-binding="var-_uniq.165" data-verso-hover="172">header</span></code> is emitted prior to each HTML document. By default, it produces a <code class="hl lean inline" data-lean-context="docstring-examples"><span class="unknown token" data-binding="">&lt;</span><span class="unknown token" data-binding="">doctype</span><span class="unknown token" data-binding="">&gt;</span></code>, but it
+can be overridden to integrate with other static site generators.</p>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </section>
+            <section>
+              <h2 id="site-config">
+                6.2. Configuring a Site<span class="permalink-widget inline"><a href="find/?domain=Verso.Genre.Manual.section&amp;name=site-config" title="Permalink">🔗</a></span></h2>
+              <p>
+                The URL layout of a site is specified via a <code class="hl lean inline" data-lean-context="examples"><a href="Websites/#Verso___Genre___Blog___Site___page" title="Documentation for Verso.Genre.Blog.Site"><span class="const token" data-binding="const-Verso.Genre.Blog.Site" data-verso-hover="164">Site</span></a></code>:</p>
+              <div class="namedocs" id="Verso___Genre___Blog___Site___page">
+                <span class="permalink-widget block"><a href="find/?domain=Verso.Genre.Manual.doc&amp;name=Verso.Genre.Blog.Site" title="Permalink">🔗</a></span><span class="label">inductive type</span><pre class="signature hl lean block"><div class="wide-only"><span class="unknown token" data-binding="">Verso.Genre.Blog.Site</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="sort token" data-binding="sort-7243200735919010059" data-verso-hover="1">Type</span></div><div class="narrow-only"><span class="unknown token" data-binding="">Verso.Genre.Blog.Site</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="sort token" data-binding="sort-7243200735919010059" data-verso-hover="1">Type</span></div></pre><div class="text">
+                  <p>
+                    A specification of the layout of an entire site</p>
+                  <h1>
+                    Constructors</h1>
+                  <div class="constructor">
+                    <pre class="name-and-type hl lean"><span class="unknown token" data-binding="">page</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.178" data-verso-hover="66">id</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Lean.Name" data-verso-hover="67">Lean.Name</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.180" data-verso-hover="176">text</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Building-Documents/Elaboration/#Verso___Doc___Part" title="Documentation for Verso.Doc.Part"><span class="const token" data-binding="const-Verso.Doc.Part" data-verso-hover="177">Part</span></a><span class="inter-text"> </span><a href="Websites/#Verso___Genre___Blog___Page" title="Documentation for Verso.Genre.Blog.Page"><span class="const token" data-binding="const-Verso.Genre.Blog.Page" data-verso-hover="130">Page</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text">
+  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.181" data-verso-hover="178">contents</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Array" data-verso-hover="41">Array</span><span class="inter-text"> </span><a href="Websites/#Verso___Genre___Blog___Dir___page" title="Documentation for Verso.Genre.Blog.Dir"><span class="const token" data-binding="const-Verso.Genre.Blog.Dir" data-verso-hover="179">Blog.Dir</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Websites/#Verso___Genre___Blog___Site___page" title="Documentation for Verso.Genre.Blog.Site"><span class="const token" data-binding="const-Verso.Genre.Blog.Site" data-verso-hover="164">Blog.Site</span></a></pre><div class="docs">
+                      <p>
+                        The root of the site is a page</p>
+                      </div>
+                    </div>
+                  <div class="constructor">
+                    <pre class="name-and-type hl lean"><span class="unknown token" data-binding="">blog</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.182" data-verso-hover="66">id</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Lean.Name" data-verso-hover="67">Lean.Name</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.184" data-verso-hover="176">text</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Building-Documents/Elaboration/#Verso___Doc___Part" title="Documentation for Verso.Doc.Part"><span class="const token" data-binding="const-Verso.Doc.Part" data-verso-hover="177">Part</span></a><span class="inter-text"> </span><a href="Websites/#Verso___Genre___Blog___Page" title="Documentation for Verso.Genre.Blog.Page"><span class="const token" data-binding="const-Verso.Genre.Blog.Page" data-verso-hover="130">Page</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text">
+  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.185" data-verso-hover="180">contents</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Array" data-verso-hover="41">Array</span><span class="inter-text"> </span><span class="const token" data-binding="const-Verso.Genre.Blog.BlogPost" data-verso-hover="181">Blog.BlogPost</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Websites/#Verso___Genre___Blog___Site___page" title="Documentation for Verso.Genre.Blog.Site"><span class="const token" data-binding="const-Verso.Genre.Blog.Site" data-verso-hover="164">Blog.Site</span></a></pre><div class="docs">
+                      <p>
+                        The root of the site is a blog with its associated posts</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              <div class="namedocs" id="Verso___Genre___Blog___Dir___page">
+                <span class="permalink-widget block"><a href="find/?domain=Verso.Genre.Manual.doc&amp;name=Verso.Genre.Blog.Dir.blog" title="Permalink">🔗</a></span><span class="label">inductive type</span><pre class="signature hl lean block"><div class="wide-only"><span class="unknown token" data-binding="">Verso.Genre.Blog.Dir</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="sort token" data-binding="sort-7243200735919010059" data-verso-hover="1">Type</span></div><div class="narrow-only"><span class="unknown token" data-binding="">Verso.Genre.Blog.Dir</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="sort token" data-binding="sort-7243200735919010059" data-verso-hover="1">Type</span></div></pre><div class="text">
+                  <p>
+                    A directory within the layout of a site.</p>
+                  <h1>
+                    Constructors</h1>
+                  <div class="constructor">
+                    <pre class="name-and-type hl lean"><span class="unknown token" data-binding="">page</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.193" data-verso-hover="63">name</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="64">String</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.194" data-verso-hover="66">id</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Lean.Name" data-verso-hover="67">Lean.Name</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.196" data-verso-hover="176">text</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Building-Documents/Elaboration/#Verso___Doc___Part" title="Documentation for Verso.Doc.Part"><span class="const token" data-binding="const-Verso.Doc.Part" data-verso-hover="177">Part</span></a><span class="inter-text"> </span><a href="Websites/#Verso___Genre___Blog___Page" title="Documentation for Verso.Genre.Blog.Page"><span class="const token" data-binding="const-Verso.Genre.Blog.Page" data-verso-hover="130">Page</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text">
+  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.197" data-verso-hover="178">contents</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Array" data-verso-hover="41">Array</span><span class="inter-text"> </span><a href="Websites/#Verso___Genre___Blog___Dir___page" title="Documentation for Verso.Genre.Blog.Dir"><span class="const token" data-binding="const-Verso.Genre.Blog.Dir" data-verso-hover="179">Blog.Dir</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Websites/#Verso___Genre___Blog___Dir___page" title="Documentation for Verso.Genre.Blog.Dir"><span class="const token" data-binding="const-Verso.Genre.Blog.Dir" data-verso-hover="179">Blog.Dir</span></a></pre><div class="docs">
+                      <p>
+                        The directory's root is the provided page</p>
+                      </div>
+                    </div>
+                  <div class="constructor">
+                    <pre class="name-and-type hl lean"><span class="unknown token" data-binding="">blog</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.198" data-verso-hover="63">name</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="64">String</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.199" data-verso-hover="66">id</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Lean.Name" data-verso-hover="67">Lean.Name</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.201" data-verso-hover="176">text</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Building-Documents/Elaboration/#Verso___Doc___Part" title="Documentation for Verso.Doc.Part"><span class="const token" data-binding="const-Verso.Doc.Part" data-verso-hover="177">Part</span></a><span class="inter-text"> </span><a href="Websites/#Verso___Genre___Blog___Page" title="Documentation for Verso.Genre.Blog.Page"><span class="const token" data-binding="const-Verso.Genre.Blog.Page" data-verso-hover="130">Page</span></a><span class="unknown token" data-binding="">)</span><span class="inter-text">
+  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.202" data-verso-hover="180">contents</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-Array" data-verso-hover="41">Array</span><span class="inter-text"> </span><span class="const token" data-binding="const-Verso.Genre.Blog.BlogPost" data-verso-hover="181">Blog.BlogPost</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Websites/#Verso___Genre___Blog___Dir___page" title="Documentation for Verso.Genre.Blog.Dir"><span class="const token" data-binding="const-Verso.Genre.Blog.Dir" data-verso-hover="179">Blog.Dir</span></a></pre><div class="docs">
+                      <p>
+                        The directory's root is a blog</p>
+                      </div>
+                    </div>
+                  <div class="constructor">
+                    <pre class="name-and-type hl lean"><span class="unknown token" data-binding="">static</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.203" data-verso-hover="63">name</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="64">String</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.204" data-verso-hover="182">files</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-System.FilePath" data-verso-hover="183">System.FilePath</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Websites/#Verso___Genre___Blog___Dir___page" title="Documentation for Verso.Genre.Blog.Dir"><span class="const token" data-binding="const-Verso.Genre.Blog.Dir" data-verso-hover="179">Blog.Dir</span></a></pre><div class="docs">
+                      <p>
+                        The directory's root contains static files, copied from <code class="hl lean inline" data-lean-context="docstring-examples"><span class="var token" data-binding="var-_uniq.214" data-verso-hover="182">files</span></code> when the site is generated</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              <p>
+                These are usually constructed using a small embedded configuration language.</p>
+              <p>
+                A blog is rendered using a theme, which is a collection of templates.
+Templates are monadic functions that construct <code class="hl lean inline" data-lean-context="examples"><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="96">Html</span></a></code> from a set of dynamically-typed parameters.</p>
+              <div class="namedocs" id="Verso___Genre___Blog___Theme___mk">
+                <span class="permalink-widget block"><a href="find/?domain=Verso.Genre.Manual.doc&amp;name=Verso.Genre.Blog.Theme.cssFiles" title="Permalink">🔗</a></span><span class="label">structure</span><pre class="signature hl lean block"><div class="wide-only"><span class="unknown token" data-binding="">Verso.Genre.Blog.Theme</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="sort token" data-binding="sort-7243200735919010059" data-verso-hover="1">Type</span></div><div class="narrow-only"><span class="unknown token" data-binding="">Verso.Genre.Blog.Theme</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="sort token" data-binding="sort-7243200735919010059" data-verso-hover="1">Type</span></div></pre><div class="text">
+                  <p>
+                    A specification of how to render a site.</p>
+                  <h1>
+                    Constructor</h1>
+                  <section class="subdocs">
+                    <pre class="name-and-type hl lean"><a href="Websites/#Verso___Genre___Blog___Theme___mk" title="Documentation for Verso.Genre.Blog.Theme.mk"><span class="const token" data-binding="const-Verso.Genre.Blog.Theme.mk" data-verso-hover="184">Verso.Genre.Blog.Theme.mk</span></a></pre><div class="docs"></div>
+                    </section>
+                  <h1>
+                    Fields</h1>
+                  <section class="subdocs">
+                    <pre class="name-and-type hl lean"><span class="const token" data-binding="const-Verso.Genre.Blog.Theme.primaryTemplate" data-verso-hover="185">primaryTemplate</span> : <a href="Websites/#Verso___Genre___Blog___Template" title="Documentation for Verso.Genre.Blog.Template"><span class="const token" data-binding="const-Verso.Genre.Blog.Template" data-verso-hover="186">Blog.Template</span></a></pre><div class="docs">
+                      <p>
+                        The template used to render every page. It should construct an HTML value for the entire page,
+including the <code class="hl lean inline" data-lean-context="docstring-examples"><span class="unknown token" data-binding="">&lt;</span><span class="unknown token" data-binding="">html</span><span class="unknown token" data-binding="">&gt;</span></code> element.</p>
+                      <p>
+                        In the <code class="hl lean inline" data-lean-context="docstring-examples"><span class="unknown token" data-binding="">&lt;</span><span class="unknown token" data-binding="">head</span><span class="unknown token" data-binding="">&gt;</span></code> element, it should invoke <code class="hl lean inline" data-lean-context="docstring-examples"><span class="unknown token" data-binding="">builtinHeader</span></code> to ensure that the required dependencies
+are present and that Verso-specific initialization is performed.</p>
+                      <p>
+                        In the body, it should check whether the parameter <code class="hl lean inline" data-lean-context="docstring-examples"><span class="literal string token" data-binding="" data-verso-hover="187">"posts"</span></code> of type <code class="hl lean inline" data-lean-context="docstring-examples"><span class="unknown token" data-binding="">Html</span></code> is present. If so, the
+page being rendered is a blog index, so it should place the parameter's value as a list of posts.
+If <code class="hl lean inline" data-lean-context="docstring-examples"><span class="literal string token" data-binding="" data-verso-hover="188">"categories"</span></code> of type <code class="hl lean inline" data-lean-context="docstring-examples"><span class="const token" data-binding="const-Verso.Genre.Blog.Post.Categories" data-verso-hover="189">Post.Categories</span></code> is present, it should render the contents as a
+category list.</p>
+                      <p>
+                        The parameter <code class="hl lean inline" data-lean-context="docstring-examples"><span class="literal string token" data-binding="" data-verso-hover="190">"content"</span></code> of type <code class="hl lean inline" data-lean-context="docstring-examples"><span class="unknown token" data-binding="">Html</span></code> contains the content of the page. It should be placed
+accordingly in the result.</p>
+                      </div>
+                    </section>
+                  <section class="subdocs">
+                    <pre class="name-and-type hl lean"><span class="const token" data-binding="const-Verso.Genre.Blog.Theme.pageTemplate" data-verso-hover="191">pageTemplate</span> : <a href="Websites/#Verso___Genre___Blog___Template" title="Documentation for Verso.Genre.Blog.Template"><span class="const token" data-binding="const-Verso.Genre.Blog.Template" data-verso-hover="186">Blog.Template</span></a></pre><div class="docs">
+                      <p>
+                        Pages are rendered using <code class="hl lean inline" data-lean-context="docstring-examples"><span class="var token" data-binding="var-_uniq.290" data-verso-hover="192">pageTemplate</span></code>, with the result being passed in the <code class="hl lean inline" data-lean-context="docstring-examples"><span class="literal string token" data-binding="" data-verso-hover="190">"content"</span></code> parameter
+to <code class="hl lean inline" data-lean-context="docstring-examples"><span class="var token" data-binding="var-_uniq.289" data-verso-hover="192">primaryTemplate</span></code>. This template should use the <code class="hl lean inline" data-lean-context="docstring-examples"><span class="literal string token" data-binding="" data-verso-hover="193">"title"</span></code> and <code class="hl lean inline" data-lean-context="docstring-examples"><span class="literal string token" data-binding="" data-verso-hover="190">"content"</span></code> parameters to
+construct the contents of the page.</p>
+                      </div>
+                    </section>
+                  <section class="subdocs">
+                    <pre class="name-and-type hl lean"><span class="const token" data-binding="const-Verso.Genre.Blog.Theme.postTemplate" data-verso-hover="194">postTemplate</span> : <a href="Websites/#Verso___Genre___Blog___Template" title="Documentation for Verso.Genre.Blog.Template"><span class="const token" data-binding="const-Verso.Genre.Blog.Template" data-verso-hover="186">Blog.Template</span></a></pre><div class="docs">
+                      <p>
+                        Blog posts are rendered using <code class="hl lean inline" data-lean-context="docstring-examples"><span class="var token" data-binding="var-_uniq.302" data-verso-hover="192">pageTemplate</span></code>, with the result being passed in the <code class="hl lean inline" data-lean-context="docstring-examples"><span class="literal string token" data-binding="" data-verso-hover="190">"content"</span></code>
+parameter to <code class="hl lean inline" data-lean-context="docstring-examples"><span class="var token" data-binding="var-_uniq.301" data-verso-hover="192">primaryTemplate</span></code>. This template should use the <code class="hl lean inline" data-lean-context="docstring-examples"><span class="literal string token" data-binding="" data-verso-hover="193">"title"</span></code> and <code class="hl lean inline" data-lean-context="docstring-examples"><span class="literal string token" data-binding="" data-verso-hover="190">"content"</span></code> parameters
+to construct the contents of the post. Additionally, the <code class="hl lean inline" data-lean-context="docstring-examples"><span class="literal string token" data-binding="" data-verso-hover="195">"metadata"</span></code> template of type
+<code class="hl lean inline" data-lean-context="docstring-examples"><span class="literal string token" data-binding="" data-verso-hover="196">"Post.PartMetadata"</span></code> may be present; if so, it can be used to render the author, date, and
+categories of the post.</p>
+                      </div>
+                    </section>
+                  <section class="subdocs">
+                    <pre class="name-and-type hl lean"><span class="const token" data-binding="const-Verso.Genre.Blog.Theme.archiveEntryTemplate" data-verso-hover="197">archiveEntryTemplate</span> : <a href="Websites/#Verso___Genre___Blog___Template" title="Documentation for Verso.Genre.Blog.Template"><span class="const token" data-binding="const-Verso.Genre.Blog.Template" data-verso-hover="186">Blog.Template</span></a></pre><div class="docs">
+                      <p>
+                        The template used to summarize a blog post in a post archive. It receives the parameters <code class="hl lean inline" data-lean-context="docstring-examples"><span class="literal string token" data-binding="" data-verso-hover="198">"post"</span></code>,
+which contains the post, and <code class="hl lean inline" data-lean-context="docstring-examples"><span class="literal string token" data-binding="" data-verso-hover="199">"summary"</span></code>, which contains the HTML summary to display.</p>
+                      </div>
+                    </section>
+                  <section class="subdocs">
+                    <pre class="name-and-type hl lean"><span class="const token" data-binding="const-Verso.Genre.Blog.Theme.categoryTemplate" data-verso-hover="200">categoryTemplate</span> : <a href="Websites/#Verso___Genre___Blog___Template" title="Documentation for Verso.Genre.Blog.Template"><span class="const token" data-binding="const-Verso.Genre.Blog.Template" data-verso-hover="186">Blog.Template</span></a></pre><div class="docs">
+                      <p>
+                        The template used to display a category at the top of a category's post list. It receives one
+parameter, <code class="hl lean inline" data-lean-context="docstring-examples"><span class="literal string token" data-binding="" data-verso-hover="201">"category"</span></code>, which contains a <code class="hl lean inline" data-lean-context="docstring-examples"><span class="const token" data-binding="const-Verso.Genre.Blog.Post.Category" data-verso-hover="159">Post.Category</span></code>.</p>
+                      </div>
+                    </section>
+                  <section class="subdocs">
+                    <pre class="name-and-type hl lean"><span class="const token" data-binding="const-Verso.Genre.Blog.Theme.adHocTemplates" data-verso-hover="202">adHocTemplates</span> : <span class="const token" data-binding="const-Array" data-verso-hover="41">Array</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="64">String</span><span class="inter-text"> </span><span class="unknown token" data-binding="">→</span><span class="inter-text"> </span><span class="const token" data-binding="const-Option" data-verso-hover="31">Option</span><span class="inter-text"> </span><span class="const token" data-binding="const-Verso.Genre.Blog.Template.Override" data-verso-hover="203">Blog.Template.Override</span></pre><div class="docs">
+                      <p>
+                        Customize the rendering of a given path by replacing the
+template and providing additional parameters</p>
+                      </div>
+                    </section>
+                  <section class="subdocs">
+                    <pre class="name-and-type hl lean"><span class="const token" data-binding="const-Verso.Genre.Blog.Theme.cssFiles" data-verso-hover="204">cssFiles</span> : <span class="const token" data-binding="const-Array" data-verso-hover="41">Array</span><span class="inter-text"> </span><span class="const token" data-binding="const-Prod" data-verso-hover="75">(</span><span class="const token" data-binding="const-String" data-verso-hover="64">String</span><span class="inter-text"> </span><span class="const token" data-binding="const-Prod" data-verso-hover="75">×</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="64">String</span><span class="const token" data-binding="const-Prod" data-verso-hover="75">)</span></pre><div class="docs">
+                      <p>
+                        CSS files to be referenced in <code class="hl lean inline" data-lean-context="docstring-examples"><span class="unknown token" data-binding="">&lt;</span><span class="unknown token" data-binding="">head</span><span class="unknown token" data-binding="">&gt;</span></code> and added to generated code.</p>
+                      </div>
+                    </section>
+                  <section class="subdocs">
+                    <pre class="name-and-type hl lean"><span class="const token" data-binding="const-Verso.Genre.Blog.Theme.jsFiles" data-verso-hover="205">jsFiles</span> : <span class="const token" data-binding="const-Array" data-verso-hover="41">Array</span><span class="inter-text"> </span><span class="const token" data-binding="const-Prod" data-verso-hover="75">(</span><span class="const token" data-binding="const-String" data-verso-hover="64">String</span><span class="inter-text"> </span><span class="const token" data-binding="const-Prod" data-verso-hover="75">×</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="64">String</span><span class="inter-text"> </span><span class="const token" data-binding="const-Prod" data-verso-hover="75">×</span><span class="inter-text"> </span><span class="const token" data-binding="const-Bool" data-verso-hover="72">Bool</span><span class="const token" data-binding="const-Prod" data-verso-hover="75">)</span></pre><div class="docs">
+                      <p>
+                        JS files to be referenced in <code class="hl lean inline" data-lean-context="docstring-examples"><span class="unknown token" data-binding="">&lt;</span><span class="unknown token" data-binding="">head</span><span class="unknown token" data-binding="">&gt;</span></code> or at the end of <code class="hl lean inline" data-lean-context="docstring-examples"><span class="unknown token" data-binding="">&lt;</span><span class="unknown token" data-binding="">body</span><span class="unknown token" data-binding="">&gt;</span></code> and added to generated code.</p>
+                      </div>
+                    </section>
+                  </div>
+                </div>
+              <div class="namedocs" id="Verso___Genre___Blog___Template">
+                <span class="permalink-widget block"><a href="find/?domain=Verso.Genre.Manual.doc&amp;name=Verso.Genre.Blog.Template" title="Permalink">🔗</a></span><span class="label">def</span><pre class="signature hl lean block"><div class="wide-only"><span class="unknown token" data-binding="">Verso.Genre.Blog.Template</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="sort token" data-binding="sort-7243200735919010059" data-verso-hover="1">Type</span></div><div class="narrow-only"><span class="unknown token" data-binding="">Verso.Genre.Blog.Template</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="sort token" data-binding="sort-7243200735919010059" data-verso-hover="1">Type</span></div></pre><div class="text">
+                  <p>
+                    A procedure for producing HTML from parameters. An abbreviation for <code class="hl lean inline" data-lean-context="docstring-examples"><span class="unknown token" data-binding="">TemplateM</span><span class="inter-text"> </span><span class="unknown token" data-binding="">Html</span></code></p>
+                  </div>
+                </div>
+              <div class="namedocs" id="Verso___Genre___Blog___TemplateM">
+                <span class="permalink-widget block"><a href="find/?domain=Verso.Genre.Manual.doc&amp;name=Verso.Genre.Blog.TemplateM" title="Permalink">🔗</a></span><span class="label">def</span><pre class="signature hl lean block"><div class="wide-only"><span class="unknown token" data-binding="">Verso.Genre.Blog.TemplateM</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.422" data-verso-hover="53">α</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="sort token" data-binding="sort-7243200735919010059" data-verso-hover="1">Type</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="sort token" data-binding="sort-7243200735919010059" data-verso-hover="1">Type</span></div><div class="narrow-only"><span class="unknown token" data-binding="">Verso.Genre.Blog.TemplateM</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.422" data-verso-hover="53">α</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="sort token" data-binding="sort-7243200735919010059" data-verso-hover="1">Type</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text">
+  </span><span class="sort token" data-binding="sort-7243200735919010059" data-verso-hover="1">Type</span></div></pre><div class="text">
+                  <p>
+                    A monad that provides template instantiation via dynamically-typed parameters.</p>
+                  </div>
+                </div>
+              <div class="namedocs" id="Verso___Genre___Blog___Template___param">
+                <span class="permalink-widget block"><a href="find/?domain=Verso.Genre.Manual.doc&amp;name=Verso.Genre.Blog.Template.param" title="Permalink">🔗</a></span><span class="label">def</span><pre class="signature hl lean block"><div class="wide-only"><span class="unknown token" data-binding="">Verso.Genre.Blog.Template.param</span><span class="inter-text"> </span><span class="unknown token" data-binding="">{</span><span class="var token" data-binding="var-_uniq.429" data-verso-hover="53">α</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="sort token" data-binding="sort-7243200735919010059" data-verso-hover="1">Type</span><span class="unknown token" data-binding="">}</span><span class="inter-text"> </span><span class="unknown token" data-binding="">[</span><span class="const token" data-binding="const-TypeName" data-verso-hover="206">TypeName</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.429" data-verso-hover="53">α</span><span class="unknown token" data-binding="">]</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.431" data-verso-hover="63">key</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="64">String</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text">
+  </span><a href="Websites/#Verso___Genre___Blog___TemplateM" title="Documentation for Verso.Genre.Blog.TemplateM"><span class="const token" data-binding="const-Verso.Genre.Blog.TemplateM" data-verso-hover="207">Blog.TemplateM</span></a><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.429" data-verso-hover="53">α</span></div><div class="narrow-only"><span class="unknown token" data-binding="">Verso.Genre.Blog.Template.param</span><span class="inter-text"> </span><span class="unknown token" data-binding="">{</span><span class="var token" data-binding="var-_uniq.429" data-verso-hover="53">α</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="sort token" data-binding="sort-7243200735919010059" data-verso-hover="1">Type</span><span class="unknown token" data-binding="">}</span><span class="inter-text">
+  </span><span class="unknown token" data-binding="">[</span><span class="const token" data-binding="const-TypeName" data-verso-hover="206">TypeName</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.429" data-verso-hover="53">α</span><span class="unknown token" data-binding="">]</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.431" data-verso-hover="63">key</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="64">String</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text">
+  </span><a href="Websites/#Verso___Genre___Blog___TemplateM" title="Documentation for Verso.Genre.Blog.TemplateM"><span class="const token" data-binding="const-Verso.Genre.Blog.TemplateM" data-verso-hover="207">Blog.TemplateM</span></a><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.429" data-verso-hover="53">α</span></div></pre><div class="text">
+                  <p>
+                    Returns the value of the given template, if it exists. If it does not exist or if it exists but has
+the wrong type, an exception is thrown.</p>
+                  </div>
+                </div>
+              <div class="namedocs" id="Verso___Genre___Blog___Template___param___">
+                <span class="permalink-widget block"><a href="find/?domain=Verso.Genre.Manual.doc&amp;name=Verso.Genre.Blog.Template.param?" title="Permalink">🔗</a></span><span class="label">def</span><pre class="signature hl lean block"><div class="wide-only"><span class="unknown token" data-binding="">Verso.Genre.Blog.Template.param?</span><span class="inter-text"> </span><span class="unknown token" data-binding="">{</span><span class="var token" data-binding="var-_uniq.439" data-verso-hover="53">α</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="sort token" data-binding="sort-7243200735919010059" data-verso-hover="1">Type</span><span class="unknown token" data-binding="">}</span><span class="inter-text"> </span><span class="unknown token" data-binding="">[</span><span class="const token" data-binding="const-TypeName" data-verso-hover="206">TypeName</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.439" data-verso-hover="53">α</span><span class="unknown token" data-binding="">]</span><span class="inter-text">
+  </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.441" data-verso-hover="63">key</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="64">String</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Websites/#Verso___Genre___Blog___TemplateM" title="Documentation for Verso.Genre.Blog.TemplateM"><span class="const token" data-binding="const-Verso.Genre.Blog.TemplateM" data-verso-hover="207">Blog.TemplateM</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="const token" data-binding="const-Option" data-verso-hover="31">Option</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.439" data-verso-hover="53">α</span><span class="unknown token" data-binding="">)</span></div><div class="narrow-only"><span class="unknown token" data-binding="">Verso.Genre.Blog.Template.param?</span><span class="inter-text">
+  </span><span class="unknown token" data-binding="">{</span><span class="var token" data-binding="var-_uniq.439" data-verso-hover="53">α</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="sort token" data-binding="sort-7243200735919010059" data-verso-hover="1">Type</span><span class="unknown token" data-binding="">}</span><span class="inter-text"> </span><span class="unknown token" data-binding="">[</span><span class="const token" data-binding="const-TypeName" data-verso-hover="206">TypeName</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.439" data-verso-hover="53">α</span><span class="unknown token" data-binding="">]</span><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="var token" data-binding="var-_uniq.441" data-verso-hover="63">key</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><span class="const token" data-binding="const-String" data-verso-hover="64">String</span><span class="unknown token" data-binding="">)</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text">
+  </span><a href="Websites/#Verso___Genre___Blog___TemplateM" title="Documentation for Verso.Genre.Blog.TemplateM"><span class="const token" data-binding="const-Verso.Genre.Blog.TemplateM" data-verso-hover="207">Blog.TemplateM</span></a><span class="inter-text"> </span><span class="unknown token" data-binding="">(</span><span class="const token" data-binding="const-Option" data-verso-hover="31">Option</span><span class="inter-text"> </span><span class="var token" data-binding="var-_uniq.439" data-verso-hover="53">α</span><span class="unknown token" data-binding="">)</span></div></pre><div class="text">
+                  <p>
+                    Returns the value of the given template, if it exists.
+If it exists but has the wrong type, an exception is thrown.</p>
+                  </div>
+                </div>
+              <div class="namedocs" id="Verso___Genre___Blog___Template___builtinHeader">
+                <span class="permalink-widget block"><a href="find/?domain=Verso.Genre.Manual.doc&amp;name=Verso.Genre.Blog.Template.builtinHeader" title="Permalink">🔗</a></span><span class="label">def</span><pre class="signature hl lean block"><div class="wide-only"><span class="unknown token" data-binding="">Verso.Genre.Blog.Template.builtinHeader</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text"> </span><a href="Websites/#Verso___Genre___Blog___TemplateM" title="Documentation for Verso.Genre.Blog.TemplateM"><span class="const token" data-binding="const-Verso.Genre.Blog.TemplateM" data-verso-hover="207">Blog.TemplateM</span></a><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="96">Output.Html</span></a></div><div class="narrow-only"><span class="unknown token" data-binding="">Verso.Genre.Blog.Template.builtinHeader</span><span class="inter-text"> </span><span class="unknown token" data-binding="">:</span><span class="inter-text">
+  </span><a href="Websites/#Verso___Genre___Blog___TemplateM" title="Documentation for Verso.Genre.Blog.TemplateM"><span class="const token" data-binding="const-Verso.Genre.Blog.TemplateM" data-verso-hover="207">Blog.TemplateM</span></a><span class="inter-text"> </span><a href="Output-Formats/#Verso___Output___Html___text" title="Documentation for Verso.Output.Html"><span class="const token" data-binding="const-Verso.Output.Html" data-verso-hover="96">Output.Html</span></a></div></pre><div class="text">
+                  <p>
+                    Contains the contents of <code class="hl lean inline" data-lean-context="docstring-examples"><span class="unknown token" data-binding="">&lt;</span><span class="unknown token" data-binding="">head</span><span class="unknown token" data-binding="">&gt;</span></code> that are needed for proper functioning of the site.</p>
+                  </div>
+                </div>
+              </section>
+            </section>
+          <nav class="prev-next-buttons">
+            <a class="local-button active" href="Output-Formats/#outputs" rel="prev" title="5. Output Formats"><span class="arrow">←</span><span class="where">5. Output Formats</span></a><a class="local-button active" href="Manuals-and-Books/#manual" rel="next" title="7. Manuals and Books"><span class="where">7. Manuals and Books</span><span class="arrow">→</span></a></nav>
+          </div>
+        </main></div>
+    </body>
+  </html>
+

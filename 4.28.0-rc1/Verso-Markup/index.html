@@ -1,0 +1,2810 @@
+<!-- Generated from commit 7681e6e54a6d5147cef917f4607b276c035ae4a3 at 2026-03-10T10:44:16Z -->
+<!DOCTYPE html>
+<html>
+  <head>
+    <script>
+      (function(){
+  const {protocol:proto, host:hostName, pathname:path, search:srch, hash:hsh} = window.location;
+  if (!(path.endsWith("/") || path.endsWith(".html"))) {
+    window.location.replace(`${proto}//${hostName}${path}/${srch}${hsh}`);
+  }
+})()</script>
+    <base href="./../"><meta charset="utf-8">
+    <meta name="viewport" content="height=device-height, width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1">
+    <title>Verso Markup</title><link rel="stylesheet" href="book.css">
+    <link rel="stylesheet" href="verso-vars.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js" integrity="sha384-zbcZAIxlvJtNE3Dp5nxLXdXtXyxwOdnILY1TDPVmKFhl4r4nSUG1r8bcFXGVa4Te" crossorigin="anonymous"></script>
+    <script src="-verso-search/elasticlunr.min.js"></script>
+    <script src="-verso-search/fuzzysort.min.js"></script>
+    <script src="-verso-search/searchIndex.js"></script>
+    <script type="module" src="-verso-search/search-init.js"></script>
+    <link rel="stylesheet" href="-verso-search/search-box.css">
+    <link rel="stylesheet" href="-verso-search/search-highlight.css">
+    <link rel="stylesheet" href="-verso-search/domain-display.css">
+    <script src="-verso-data/popper.min.js"></script>
+    <script src="-verso-data/katex/math.js"></script>
+    <script src="-verso-data/tippy-bundle.umd.min.js"></script>
+    <script src="-verso-data/katex/katex.js"></script>
+    <link rel="stylesheet" href="-verso-data/tippy-border.css">
+    <link rel="stylesheet" href="-verso-data/katex/katex.css">
+    <style>
+.namedocs {
+  position: relative;
+  border: solid 1px #98B2C0;
+  border-radius: .5rem;
+  padding-top: var(--verso--box-padding);
+  margin-top: var(--verso--box-vertical-margin);
+  margin-bottom: var(--verso--box-vertical-margin);
+}
+
+.namedocs .text {
+  /* Causes margins on child elements to collapse inside the element, such
+     that the margins don't extend into parent with the background color.
+     The effect is that weird borders in the definition box don't happen anymore. */
+  display: flow-root;
+  /* Add a padding. this is the same as the margin applied to the first and last child.
+     The effect is that the padding looks the same size on all sides. */
+  padding: 0 var(--verso--box-padding);
+  border-top: 1px solid #98B2C0;
+}
+
+.namedocs .text > pre {
+  overflow-x: auto;
+}
+
+.namedocs .signature {
+  font-family: var(--verso-code-font-family);
+  margin-top: 0 !important;
+  margin-left: var(--verso--box-padding) !important;
+  margin-bottom: .75rem !important;
+}
+
+.namedocs .label {
+  display: block;
+  font-size: small;
+  font-family: var(--verso-structure-font-family);
+  position: absolute;
+  top: -0.65rem;
+  left: 1rem;
+  background: #fff;
+  padding: 0 .5rem .125rem;
+  border: 1px solid #98B2C0;
+  border-radius: 1rem;
+  color: #555;
+}
+
+.namedocs h1 {
+  font-size: inherit;
+  font-weight: bold
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+}
+
+.namedocs > .text .constructor {
+  padding-top: 0;
+  padding-right: 0;
+  padding-bottom: 0;
+  margin-top: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.namedocs > .text .constructor::before {
+  content: '| ';
+  display: block;
+  font-family: var(--verso-code-font-family);
+  font-weight: bold;
+  float: left;
+  width: 0.5rem;
+  white-space: pre;
+}
+
+.namedocs > .text .constructor .name-and-type {
+  padding-left: 0.5rem;
+  float: left;
+  margin-top: 0;
+  max-width: calc(100% - 1rem);
+}
+.namedocs > .text .constructor .docs {
+  clear: both;
+  padding-left: 1rem;
+}
+
+/* These margins work together with the padding on .text */
+.namedocs .text > :first-child {
+  margin-top: var(--verso--box-padding);
+}
+.namedocs .text > :last-child {
+  margin-bottom: var(--verso--box-padding);
+}
+
+.namedocs .methods td, .namedocs .fields td {
+  vertical-align: top;
+}
+.namedocs .inheritance {
+  vertical-align: top;
+  font-size: smaller;
+  font-family: var(--verso-structure-font-family);
+}
+.namedocs .inheritance ol {
+  display: inline-block;
+  margin: 0;
+  padding: 0;
+}
+.namedocs .inheritance ol li {
+  list-style-type: none;
+  display: inline-block;
+}
+.namedocs .inheritance ol li::after {
+  content: " > "
+}
+.namedocs .inheritance ol li:last-child::after {
+  content: "";
+}
+
+.namedocs .extends {
+  display: inline;
+  margin: 0;
+  padding: 0;
+}
+
+.namedocs .extends li {
+  list-style-type: none;
+  display: inline-block;
+}
+
+.namedocs .extends li label {
+  padding-right: 1rem;
+}
+
+.namedocs .subdocs .name-and-type {
+  font-size: 1rem;
+  margin-left: 0;
+  margin-top: 0;
+  margin-right: 0;
+  margin-bottom: 0.5rem;
+}
+
+.namedocs .subdocs .docs {
+  margin-left: 1.5rem;
+  margin-top: 0;
+  margin-right: 0;
+  margin-bottom: 0.5rem;
+}
+
+.namedocs:has(input[data-parent-idx]) [data-inherited-from] {
+  transition-property: opacity, display;
+  transition-duration: 0.4s;
+  transition-behavior: allow-discrete;
+  @starting-style { opacity: 0 !important; }
+}
+
+#this-page-items .tactic-name { font-weight: bold; }
+.namedocs:has(input[data-parent-idx="0"]) [data-inherited-from="0"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="0"]:checked) [data-inherited-from="0"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="0"]:checked):has(.inheritance[data-inherited-from="0"]:hover) [data-inherited-from]:not([data-inherited-from="0"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="1"]) [data-inherited-from="1"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="1"]:checked) [data-inherited-from="1"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="1"]:checked):has(.inheritance[data-inherited-from="1"]:hover) [data-inherited-from]:not([data-inherited-from="1"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="2"]) [data-inherited-from="2"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="2"]:checked) [data-inherited-from="2"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="2"]:checked):has(.inheritance[data-inherited-from="2"]:hover) [data-inherited-from]:not([data-inherited-from="2"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="3"]) [data-inherited-from="3"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="3"]:checked) [data-inherited-from="3"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="3"]:checked):has(.inheritance[data-inherited-from="3"]:hover) [data-inherited-from]:not([data-inherited-from="3"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="4"]) [data-inherited-from="4"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="4"]:checked) [data-inherited-from="4"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="4"]:checked):has(.inheritance[data-inherited-from="4"]:hover) [data-inherited-from]:not([data-inherited-from="4"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="5"]) [data-inherited-from="5"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="5"]:checked) [data-inherited-from="5"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="5"]:checked):has(.inheritance[data-inherited-from="5"]:hover) [data-inherited-from]:not([data-inherited-from="5"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="6"]) [data-inherited-from="6"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="6"]:checked) [data-inherited-from="6"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="6"]:checked):has(.inheritance[data-inherited-from="6"]:hover) [data-inherited-from]:not([data-inherited-from="6"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="7"]) [data-inherited-from="7"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="7"]:checked) [data-inherited-from="7"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="7"]:checked):has(.inheritance[data-inherited-from="7"]:hover) [data-inherited-from]:not([data-inherited-from="7"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="8"]) [data-inherited-from="8"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="8"]:checked) [data-inherited-from="8"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="8"]:checked):has(.inheritance[data-inherited-from="8"]:hover) [data-inherited-from]:not([data-inherited-from="8"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="9"]) [data-inherited-from="9"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="9"]:checked) [data-inherited-from="9"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="9"]:checked):has(.inheritance[data-inherited-from="9"]:hover) [data-inherited-from]:not([data-inherited-from="9"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="10"]) [data-inherited-from="10"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="10"]:checked) [data-inherited-from="10"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="10"]:checked):has(.inheritance[data-inherited-from="10"]:hover) [data-inherited-from]:not([data-inherited-from="10"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="11"]) [data-inherited-from="11"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="11"]:checked) [data-inherited-from="11"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="11"]:checked):has(.inheritance[data-inherited-from="11"]:hover) [data-inherited-from]:not([data-inherited-from="11"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="12"]) [data-inherited-from="12"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="12"]:checked) [data-inherited-from="12"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="12"]:checked):has(.inheritance[data-inherited-from="12"]:hover) [data-inherited-from]:not([data-inherited-from="12"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="13"]) [data-inherited-from="13"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="13"]:checked) [data-inherited-from="13"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="13"]:checked):has(.inheritance[data-inherited-from="13"]:hover) [data-inherited-from]:not([data-inherited-from="13"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="14"]) [data-inherited-from="14"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="14"]:checked) [data-inherited-from="14"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="14"]:checked):has(.inheritance[data-inherited-from="14"]:hover) [data-inherited-from]:not([data-inherited-from="14"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="15"]) [data-inherited-from="15"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="15"]:checked) [data-inherited-from="15"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="15"]:checked):has(.inheritance[data-inherited-from="15"]:hover) [data-inherited-from]:not([data-inherited-from="15"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="16"]) [data-inherited-from="16"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="16"]:checked) [data-inherited-from="16"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="16"]:checked):has(.inheritance[data-inherited-from="16"]:hover) [data-inherited-from]:not([data-inherited-from="16"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="17"]) [data-inherited-from="17"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="17"]:checked) [data-inherited-from="17"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="17"]:checked):has(.inheritance[data-inherited-from="17"]:hover) [data-inherited-from]:not([data-inherited-from="17"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="18"]) [data-inherited-from="18"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="18"]:checked) [data-inherited-from="18"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="18"]:checked):has(.inheritance[data-inherited-from="18"]:hover) [data-inherited-from]:not([data-inherited-from="18"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="19"]) [data-inherited-from="19"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="19"]:checked) [data-inherited-from="19"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="19"]:checked):has(.inheritance[data-inherited-from="19"]:hover) [data-inherited-from]:not([data-inherited-from="19"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="20"]) [data-inherited-from="20"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="20"]:checked) [data-inherited-from="20"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="20"]:checked):has(.inheritance[data-inherited-from="20"]:hover) [data-inherited-from]:not([data-inherited-from="20"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="21"]) [data-inherited-from="21"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="21"]:checked) [data-inherited-from="21"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="21"]:checked):has(.inheritance[data-inherited-from="21"]:hover) [data-inherited-from]:not([data-inherited-from="21"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="22"]) [data-inherited-from="22"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="22"]:checked) [data-inherited-from="22"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="22"]:checked):has(.inheritance[data-inherited-from="22"]:hover) [data-inherited-from]:not([data-inherited-from="22"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="23"]) [data-inherited-from="23"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="23"]:checked) [data-inherited-from="23"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="23"]:checked):has(.inheritance[data-inherited-from="23"]:hover) [data-inherited-from]:not([data-inherited-from="23"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="24"]) [data-inherited-from="24"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="24"]:checked) [data-inherited-from="24"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="24"]:checked):has(.inheritance[data-inherited-from="24"]:hover) [data-inherited-from]:not([data-inherited-from="24"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="25"]) [data-inherited-from="25"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="25"]:checked) [data-inherited-from="25"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="25"]:checked):has(.inheritance[data-inherited-from="25"]:hover) [data-inherited-from]:not([data-inherited-from="25"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="26"]) [data-inherited-from="26"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="26"]:checked) [data-inherited-from="26"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="26"]:checked):has(.inheritance[data-inherited-from="26"]:hover) [data-inherited-from]:not([data-inherited-from="26"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="27"]) [data-inherited-from="27"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="27"]:checked) [data-inherited-from="27"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="27"]:checked):has(.inheritance[data-inherited-from="27"]:hover) [data-inherited-from]:not([data-inherited-from="27"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="28"]) [data-inherited-from="28"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="28"]:checked) [data-inherited-from="28"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="28"]:checked):has(.inheritance[data-inherited-from="28"]:hover) [data-inherited-from]:not([data-inherited-from="28"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="29"]) [data-inherited-from="29"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="29"]:checked) [data-inherited-from="29"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="29"]:checked):has(.inheritance[data-inherited-from="29"]:hover) [data-inherited-from]:not([data-inherited-from="29"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="30"]) [data-inherited-from="30"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="30"]:checked) [data-inherited-from="30"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="30"]:checked):has(.inheritance[data-inherited-from="30"]:hover) [data-inherited-from]:not([data-inherited-from="30"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="31"]) [data-inherited-from="31"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="31"]:checked) [data-inherited-from="31"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="31"]:checked):has(.inheritance[data-inherited-from="31"]:hover) [data-inherited-from]:not([data-inherited-from="31"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="32"]) [data-inherited-from="32"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="32"]:checked) [data-inherited-from="32"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="32"]:checked):has(.inheritance[data-inherited-from="32"]:hover) [data-inherited-from]:not([data-inherited-from="32"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="33"]) [data-inherited-from="33"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="33"]:checked) [data-inherited-from="33"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="33"]:checked):has(.inheritance[data-inherited-from="33"]:hover) [data-inherited-from]:not([data-inherited-from="33"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="34"]) [data-inherited-from="34"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="34"]:checked) [data-inherited-from="34"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="34"]:checked):has(.inheritance[data-inherited-from="34"]:hover) [data-inherited-from]:not([data-inherited-from="34"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="35"]) [data-inherited-from="35"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="35"]:checked) [data-inherited-from="35"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="35"]:checked):has(.inheritance[data-inherited-from="35"]:hover) [data-inherited-from]:not([data-inherited-from="35"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="36"]) [data-inherited-from="36"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="36"]:checked) [data-inherited-from="36"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="36"]:checked):has(.inheritance[data-inherited-from="36"]:hover) [data-inherited-from]:not([data-inherited-from="36"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="37"]) [data-inherited-from="37"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="37"]:checked) [data-inherited-from="37"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="37"]:checked):has(.inheritance[data-inherited-from="37"]:hover) [data-inherited-from]:not([data-inherited-from="37"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="38"]) [data-inherited-from="38"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="38"]:checked) [data-inherited-from="38"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="38"]:checked):has(.inheritance[data-inherited-from="38"]:hover) [data-inherited-from]:not([data-inherited-from="38"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="39"]) [data-inherited-from="39"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="39"]:checked) [data-inherited-from="39"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="39"]:checked):has(.inheritance[data-inherited-from="39"]:hover) [data-inherited-from]:not([data-inherited-from="39"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="40"]) [data-inherited-from="40"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="40"]:checked) [data-inherited-from="40"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="40"]:checked):has(.inheritance[data-inherited-from="40"]:hover) [data-inherited-from]:not([data-inherited-from="40"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="41"]) [data-inherited-from="41"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="41"]:checked) [data-inherited-from="41"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="41"]:checked):has(.inheritance[data-inherited-from="41"]:hover) [data-inherited-from]:not([data-inherited-from="41"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="42"]) [data-inherited-from="42"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="42"]:checked) [data-inherited-from="42"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="42"]:checked):has(.inheritance[data-inherited-from="42"]:hover) [data-inherited-from]:not([data-inherited-from="42"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="43"]) [data-inherited-from="43"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="43"]:checked) [data-inherited-from="43"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="43"]:checked):has(.inheritance[data-inherited-from="43"]:hover) [data-inherited-from]:not([data-inherited-from="43"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="44"]) [data-inherited-from="44"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="44"]:checked) [data-inherited-from="44"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="44"]:checked):has(.inheritance[data-inherited-from="44"]:hover) [data-inherited-from]:not([data-inherited-from="44"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="45"]) [data-inherited-from="45"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="45"]:checked) [data-inherited-from="45"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="45"]:checked):has(.inheritance[data-inherited-from="45"]:hover) [data-inherited-from]:not([data-inherited-from="45"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="46"]) [data-inherited-from="46"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="46"]:checked) [data-inherited-from="46"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="46"]:checked):has(.inheritance[data-inherited-from="46"]:hover) [data-inherited-from]:not([data-inherited-from="46"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="47"]) [data-inherited-from="47"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="47"]:checked) [data-inherited-from="47"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="47"]:checked):has(.inheritance[data-inherited-from="47"]:hover) [data-inherited-from]:not([data-inherited-from="47"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="48"]) [data-inherited-from="48"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="48"]:checked) [data-inherited-from="48"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="48"]:checked):has(.inheritance[data-inherited-from="48"]:hover) [data-inherited-from]:not([data-inherited-from="48"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="49"]) [data-inherited-from="49"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="49"]:checked) [data-inherited-from="49"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="49"]:checked):has(.inheritance[data-inherited-from="49"]:hover) [data-inherited-from]:not([data-inherited-from="49"]) {
+  opacity: 0.5;
+}
+</style><style>
+.markup-example {
+  border: 1px solid #98B2C0;
+  border-radius: 0.5rem;
+  margin-bottom: var(--verso--box-vertical-margin);
+  margin-top: var(--verso--box-vertical-margin);
+  overflow: hidden;
+}
+
+.markup-example-header {
+  font-style: italic;
+  font-family: var(--verso-structure-font-family);
+  padding: var(--verso--box-padding);
+}
+
+.markup-example-header * {
+  margin: 0;
+}
+
+.markup-example > .content {
+  display: flex;
+}
+
+.markup-example > .content > .syntax, .markup-example > .content > .result {
+  flex: 1;
+  padding: 0 var(--verso--box-padding);
+  position: relative;
+  width: calc(50% - calc(4 * var(--verso--box-padding)));
+}
+
+.markup-example > .content > .syntax pre, .markup-example > .content > .result pre {
+
+}
+
+.markup-example > .content > .syntax > .title, .markup-example > .content > .result > .title {
+  font-family: var(--verso-structure-font-family);
+  padding: 0;
+  font-size: 0.875rem;
+}
+
+@media screen and (max-width: 700px) {
+  .markup-example > .content {
+    flex-direction: column;
+  }
+
+  .markup-example > .content > .syntax, .markup-example > .content > .result {
+    width: calc(100% - calc(2 * var(--verso--box-padding)));
+  }
+}
+</style><style>
+    main .theIndex {
+      padding-left: 0;
+      font-family: var(--verso-text-font-family);
+    }
+
+    main .theIndex nav {
+      position: sticky;
+      top: var(--verso-header-height);
+      background: white;
+      font-family: var(--verso-structure-font-family);
+    }
+
+    main .theIndex [id] {
+      /* This needs the combined height of the index header and the page header. We
+         know the height of the page header, but the index header height varies, so
+         we use the maximum height it gets which also works well for readers with
+         wide screens */
+      scroll-margin-top: calc(var(--verso-header-height) + 7.5rem);
+    }
+
+    @media screen and (max-width: 700px) {
+      /* On mobile, the sticky index takes up half the screen. */
+      main .theIndex nav {
+        position: static;
+      }
+
+      main .theIndex [id] {
+        /* On mobile, the index header is not sticky, so we just need to
+        be below the page header. */
+        scroll-margin-top: var(--verso-header-height);
+      }
+    }
+
+    main .theIndex nav ol {
+      padding: 0;
+    }
+
+    main .theIndex nav ol li {
+      display: inline-block;
+    }
+
+    main .theIndex nav ol li a {
+      /* Padding instead of margin to have a bigger click target */
+      padding-left: 0.5rem;
+      padding-right: 0.5rem;
+    }
+    /* Increase the size of the touch target on phones */
+    @media screen and (max-width: 700px) {
+      main .theIndex nav ol li a {
+        padding-left: 0.75rem;
+        padding-right: 0.75rem;
+      }
+    }
+
+    main .theIndex nav ol li:first-child a {
+      padding-left: 0;
+    }
+
+    main .theIndex nav ol li + li:before {
+      content: "|";
+    }
+
+    main .theIndex h1,
+    main .theIndex h2,
+    main .theIndex h3,
+    main .theIndex h4,
+    main .theIndex h5,
+    main .theIndex h6 {
+      margin-top: 0;
+    }
+
+    main .theIndex ol {
+      list-style-type: none;
+    }
+
+    main .theIndex .division > ol {
+      padding-left: 0;
+      display: flex;
+      flex-direction: column;
+      gap: .5rem;
+      overflow-wrap: break-word;
+    }
+
+   main .theIndex .division > ol > li {
+      margin-bottom: 0.5rem;
+    }
+
+    main .theIndex .division ol ol {
+      padding-left: 1rem;
+    }
+
+    main .theIndex .division {
+      break-inside: avoid;
+      counter-reset: none;
+      max-width: none;
+      width: auto;
+    }
+    </style><style>
+a.technical-term {
+  color: inherit;
+  text-decoration: currentcolor underline dotted;
+}
+a.technical-term:hover {
+  text-decoration: currentcolor underline solid;
+}
+/* Highlight the clicked term */
+.def-technical-term:target {
+  background-color: var(--verso-selected-color);
+  outline: auto;
+}
+</style><style>
+
+.hl.lean {
+  white-space: pre;
+  font-weight: normal;
+  font-style: normal;
+  font-size: inherit;
+}
+
+.hl.lean .keyword {
+  color: var(--verso-code-keyword-color,);
+  font-weight: var(--verso-code-keyword-weight, bold);
+  font-style: var(--verso-code-keyword-style, normal);
+  font-family: var(--verso-code-keyword-font-family,);
+}
+
+.hl.lean .const {
+  color: var(--verso-code-const-color,);
+  font-weight: var(--verso-code-const-weight, normal);
+  font-style: var(--verso-code-const-style, normal);
+  font-family: var(--verso-code-const-font-family,);
+}
+
+.hl.lean .var {
+  color: var(--verso-code-var-color,);
+  font-weight: var(--verso-code-var-weight, normal);
+  font-style: var(--verso-code-var-style, italic);
+  font-family: var(--verso-code-var-font-family,);
+
+  position: relative;
+}
+
+.hl.lean .literal, .hl.lean .unknown {
+  color: var(--verso-code-color,);
+  font-weight: normal;
+  font-style: normal;
+  font-family: var(--verso-code-font-family,);
+}
+
+.hover-container {
+  width: 0;
+  height: 0;
+  position: relative;
+  display: inline;
+}
+
+.hl.lean a {
+  color: inherit;
+  text-decoration: currentcolor underline dotted;
+}
+
+.hl.lean a:hover {
+  text-decoration: currentcolor underline solid;
+}
+
+.hl.lean .hover-info {
+  white-space: normal;
+}
+
+.hl.lean .token .hover-info {
+  display: none;
+  position: absolute;
+  background-color: #e5e5e5;
+  border: 1px solid black;
+  padding: 0.5rem;
+  z-index: 300;
+}
+
+.hl.lean .hover-info.messages {
+  max-height: 10rem;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+  padding: 0 0.5rem 0 0;
+  display: block;
+}
+
+.hl.lean .hover-info code {
+  white-space: pre-wrap;
+  background: none;
+  color: black;
+}
+
+.hl.lean .hover-info.messages > code {
+  padding: 0.5rem;
+  display: block;
+  width: fit-content;
+}
+
+.hl.lean .hover-info.messages > code:only-child {
+  margin: 0;
+}
+
+.hl.lean .hover-info.messages > code {
+  margin: 0.1rem;
+}
+
+.hl.lean .hover-info.messages > code:not(:first-child) {
+  margin-top: 0rem;
+}
+
+.hl.lean {
+}
+
+.hl.lean.block {
+  display: block;
+}
+
+.hl.lean.inline {
+  display: inline;
+  white-space: pre-wrap;
+}
+
+.hl.lean * {
+}
+
+.hl.lean .token {
+  transition: all 0.25s; /* Slight fade for highlights */
+}
+
+@media (hover: hover) {
+  .hl.lean .token.binding-hl, .hl.lean .literal.string:hover, .hl.lean .token.typed:hover {
+    background-color: #eee;
+    border-radius: 2px;
+    transition: none;
+  }
+}
+
+
+.hl.lean .has-info .token:not(.tactic-state):not(.tactic-state *), .hl.lean .has-info .inter-text:not(.tactic-state):not(.tactic-state *) {
+  text-decoration-style: wavy;
+  text-decoration-line: underline;
+  text-decoration-thickness: from-font;
+  text-decoration-skip-ink: none;
+}
+
+.hl.lean .has-info .hover-info {
+  display: none;
+  position: absolute;
+  transform: translate(0.25rem, 0.3rem);
+  border: 1px solid black;
+  padding: 0.5rem;
+  z-index: 400;
+  text-align: left;
+}
+
+.hl.lean .has-info.error :not(.tactic-state):not(.tactic-state *){
+  text-decoration-color: red;
+}
+
+@media (hover: hover) {
+  .hl.lean .has-info.error:hover {
+    background-color: #ffb3b3;
+  }
+}
+
+.hl.lean .hover-info.messages > code.error {
+  background-color: #e5e5e5;
+  border-left: 0.2rem solid #ffb3b3;
+}
+
+.tippy-box[data-theme~='error'] .hl.lean .hover-info.messages > code.error {
+  background: none;
+  border: none;
+}
+
+.error .verso-message, .error .verso-message .token, .error .verso-message label {
+  color: var(--verso-error-color);
+}
+
+.error .verso-message .case-label:has(input[type="checkbox"])::before {
+  background-color: var(--verso-error-color) !important;
+}
+
+.hl.lean .has-info.warning :not(.tactic-state):not(.tactic-state *) {
+  text-decoration-color: var(--verso-warning-indicator-color);
+}
+
+@media (hover: hover) {
+  .hl.lean .has-info.warning:hover {
+    background-color:var(--verso-warning-color);
+  }
+}
+
+.hl.lean .hover-info.messages > code.warning {
+  background-color: var(--verso-warning-color);
+}
+
+.lean-output {
+  border-left: 0.2em solid transparent;
+  padding: 0 0 0 0.5em;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.lean-output.error {
+  border-color: var(--verso-error-indicator-color);
+}
+
+.lean-output.information {
+  border-color: var(--verso-info-indicator-color);
+}
+
+.lean-output.warning {
+  border-color: var(--verso-warning-indicator-color);
+}
+
+.hl.lean .hover-info.messages > code.error {
+  background-color: #e5e5e5;
+  border-left: 0.2rem solid var(--verso-warning-color);
+}
+
+.tippy-box[data-theme~='warning'] .hl.lean .hover-info.messages > code.warning {
+  background: none;
+  border: none;
+}
+
+
+.hl.lean .has-info.information :not(.tactic-state):not(.tactic-state *) {
+  text-decoration-color: var(--verso-info-indicator-color, blue);
+}
+
+@media (hover: hover) {
+  .hl.lean .has-info.information:hover {
+    background-color: #4777ff;
+  }
+}
+
+
+.hl.lean .hover-info.messages > code.information {
+  background-color: #e5e5e5;
+  border-left: 0.2rem solid #4777ff;
+}
+
+.tippy-box[data-theme~='info'] .hl.lean .hover-info.messages > code.information {
+  background: none;
+  border: none;
+}
+
+.hl.lean div.docstring {
+  font-family: var(--verso-text-font-family, sans-serif);
+  white-space: normal;
+  max-width: calc(min(40rem, 90vw));
+  width: max-content;
+}
+
+.hl.lean div.docstring > :last-child {
+  margin-bottom: 0;
+}
+
+.hl.lean div.docstring > :first-child {
+  margin-top: 0;
+}
+
+.hl.lean .hover-info .sep {
+  display: block;
+  width: auto;
+  margin-left: 1rem;
+  margin-right: 1rem;
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+  padding: 0;
+  height: 1px;
+  border-top: 1px solid #ccc;
+}
+
+.hl.lean code {
+  font-family: var(--verso-code-font-family);
+}
+
+.hl.lean .tactic-state {
+  display: none;
+  position: relative;
+  width: fit-content;
+  border: 1px solid #888888;
+  border-radius: 0.1rem;
+  padding: 0.5rem;
+  font-family: sans-serif;
+  background-color: #ffffff;
+}
+
+.hl.lean.popup .tactic-state {
+  position: static;
+  display: block;
+  width: auto;
+  border: none;
+  padding: 0.5rem;
+  font-family: sans-serif;
+  background-color: #ffffff;
+}
+
+
+.hl.lean .tactic {
+  position: relative;
+  display: inline;
+  vertical-align: top;
+  /* Without these, mobile Safari will start making font sizes inconsistent when its text size adjustment feature is triggered.*/
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+.hl.lean .tactic:has(.tactic-toggle:checked) {
+  display: inline-grid;
+  grid-template-columns: 1fr;
+}
+
+.hl.lean .tactic-toggle:checked ~ .tactic-state {
+  display: inline-block;
+  vertical-align: top;
+  grid-row: 2;
+  justify-self: start;
+}
+
+.hl.lean .tactic > label {
+  position: relative;
+  grid-row: 1;
+  display: inline;
+}
+
+@media (hover: hover) {
+  .hl.lean .tactic:has(.tactic-toggle:not(:checked)) > label:hover {
+    background-color: #eeeeee;
+  }
+}
+
+.hl.lean .tactic-toggle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 0;
+  height: 0;
+  width: 0;
+  z-index: -10;
+}
+
+.hl.lean .tactic > label::after {
+  content: "";
+  border: 1px solid #bbbbbb;
+  /* These need to be em, not rem, to scale with the font */
+  border-radius: 1em;
+  height: 0.25em;
+  vertical-align: middle;
+  width: 0.6em;
+  margin-left: 0.1em;
+  margin-right: 0.1em;
+  display: inline-block;
+  transition: all 0.5s;
+}
+
+/*
+@media (hover: hover) {
+  .hl.lean .tactic > label:hover::after {
+    border: 1px solid #aaaaaa;
+    background-color: #aaaaaa;
+    transition: all 0.5s;
+  }
+}
+*/
+
+.hl.lean .tactic > label:has(+ .tactic-toggle:checked)::after {
+  border: 1px solid #999999;
+  background-color: #999999;
+  transition: all 0.5s;
+}
+
+.hl.lean .tactic-state .goal + .goal {
+  margin-top: 1.5em;
+}
+
+/*
+Some CSS frameworks customize details/summary in ways not compatible with Verso's output.
+*/
+
+.hl.lean details {
+  display: block !important;
+  margin: 0;
+}
+
+.hl.lean details summary {
+  display: list-item !important;
+  margin: 0;
+}
+
+.hl.lean details summary:focus {
+  outline: none;
+  outline-offset: none;
+  color: inherit;
+}
+
+.hl.lean ul > li {
+  margin-bottom: 0;
+}
+
+.hl.lean details summary::marker {
+  display: inline !important;
+}
+
+.hl.lean details > summary:first-of-type {
+  list-style-type: disclosure-closed;
+  list-style-position: inside;
+}
+
+.hl.lean details[open] > summary:first-of-type {
+  list-style-type: disclosure-open;
+}
+
+.hl.lean details summary::before, .hl.lean details summary::after {
+  content: "" !important;
+  background: none;
+  display: none;
+}
+
+.hl.lean .tactic-state summary {
+  /* These need to be em, not rem, to scale with the font */
+  margin-left: -0.5em;
+}
+
+.hl.lean .tactic-state details {
+  /* These need to be em, not rem, to scale with the font */
+  padding-left: 0.5em;
+}
+
+.hl.lean .case-label {
+  display: block;
+  position: relative;
+}
+
+.hl.lean .case-label input[type="checkbox"] {
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 0;
+  height: 0;
+  width: 0;
+  z-index: -10;
+}
+
+.hl.lean .case-label:has(input[type="checkbox"])::before {
+  display: inline-block;
+  background-color: black;
+  content: ' ';
+  transition: ease 0.2s;
+  margin-right: 0.7em;
+  clip-path: polygon(100% 0, 0 0, 50% 100%);
+  width: 0.6em;
+  height: 0.6em;
+  vertical-align: middle;
+}
+
+.hl.lean .case-label:has(input[type="checkbox"]:not(:checked))::before {
+  transform: rotate(-90deg);
+}
+
+.hl.lean .case-label:has(input[type="checkbox"]) {
+
+}
+
+.hl.lean .case-label:has(input[type="checkbox"]:checked) {
+
+}
+
+
+.hl.lean .labeled-case > :not(:first-child) {
+  max-height: 0px;
+  display: block;
+  overflow: hidden;
+  transition: max-height 0.1s ease-in;
+  /* These need to be em, not rem, to scale with the font */
+  margin-left: 0.5em;
+  margin-top: 0.1em;
+}
+
+.hl.lean .labeled-case:has(.case-label input[type="checkbox"]:checked) > :not(:first-child) {
+  max-height: 100%;
+}
+
+
+.hl.lean .goal-name::before {
+  font-style: normal;
+  content: "case ";
+}
+
+.hl.lean .goal-name {
+  font-style: italic;
+  font-family: var(--verso-code-font-family);
+  color: inherit;
+}
+
+.hl.lean .hypotheses {
+  display: table;
+}
+
+.hl.lean .hypothesis {
+  display: table-row;
+}
+
+.hl.lean .hypothesis > * {
+  display: table-cell;
+}
+
+
+.hl.lean .hypotheses .colon {
+  text-align: center;
+  /* This needs to be em, not rem, to scale with the font */
+  min-width: 1em;
+}
+
+.hl.lean .hypotheses .name {
+  text-align: right;
+}
+
+.hl.lean .hypotheses .name,
+.hl.lean .hypotheses .type,
+.hl.lean .conclusion .type {
+  font-family: var(--verso-code-font-family);
+}
+
+.tippy-box {
+  /* Without these, mobile Safari will start making font sizes inconsistent when its text size adjustment feature is triggered.*/
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+
+}
+
+.tippy-box[data-theme~='lean'] {
+  background-color: #e5e5e5;
+  color: black;
+  border: 1px solid black;
+}
+.tippy-box[data-theme~='lean'][data-placement^='top'] > .tippy-arrow::before {
+  border-top-color: #e5e5e5;
+}
+.tippy-box[data-theme~='lean'][data-placement^='bottom'] > .tippy-arrow::before {
+  border-bottom-color: #e5e5e5;
+}
+.tippy-box[data-theme~='lean'][data-placement^='left'] > .tippy-arrow::before {
+  border-left-color: #e5e5e5;
+}
+.tippy-box[data-theme~='lean'][data-placement^='right'] > .tippy-arrow::before {
+  border-right-color: #e5e5e5;
+}
+
+.tippy-box[data-theme~='message'][data-placement^='top'] > .tippy-arrow::before {
+  border-top-color: #e5e5e5;
+  border-width: 11px 11px 0;
+}
+.tippy-box[data-theme~='message'][data-placement^='top'] > .tippy-arrow::after {
+  bottom: -11px;
+  border-width: 11px 11px 0;
+}
+.tippy-box[data-theme~='message'][data-placement^='bottom'] > .tippy-arrow::before {
+  border-width: 0 11px 11px;
+}
+.tippy-box[data-theme~='message'][data-placement^='bottom'] > .tippy-arrow::after {
+  top: -11px;
+  border-width: 0 11px 11px;
+}
+.tippy-box[data-theme~='message'][data-placement^='left'] > .tippy-arrow::before {
+  border-left-color: #e5e5e5;
+  border-width: 11px 0 11px 11px;
+}
+.tippy-box[data-theme~='message'][data-placement^='left'] > .tippy-arrow::after {
+  right: -11px;
+  border-width: 11px 0 11px 11px;
+}
+
+.tippy-box[data-theme~='message'][data-placement^='right'] > .tippy-arrow::before {
+  border-right-color: #e5e5e5;
+  border-width: 11px 11px 11px 0;
+}
+.tippy-box[data-theme~='message'][data-placement^='right'] > .tippy-arrow::after {
+  left: -11px;
+  border-width: 11px 11px 11px 0;
+}
+
+
+
+.tippy-box[data-theme~='warning'] {
+  background-color: #e5e5e5;
+  color: black;
+  border: 3px solid var(--verso-warning-color);
+}
+
+.tippy-box[data-theme~='error'] {
+  background-color: #e5e5e5;
+  color: black;
+  border: 3px solid #f7a7af;
+}
+
+.tippy-box[data-theme~='info'] {
+  background-color: #e5e5e5;
+  color: black;
+  border: 3px solid #99b3c2;
+}
+
+.tippy-box[data-theme~='tactic'] {
+  background-color: white;
+  color: black;
+  border: 1px solid black;
+}
+.tippy-box[data-theme~='tactic'][data-placement^='top'] > .tippy-arrow::before {
+  border-top-color: white;
+}
+.tippy-box[data-theme~='tactic'][data-placement^='bottom'] > .tippy-arrow::before {
+  border-bottom-color: white;
+}
+.tippy-box[data-theme~='tactic'][data-placement^='left'] > .tippy-arrow::before {
+  border-left-color: white;
+}
+.tippy-box[data-theme~='tactic'][data-placement^='right'] > .tippy-arrow::before {
+  border-right-color: white;
+}
+
+.extra-doc-links {
+  list-style-type: none;
+  margin-left: 0;
+  padding: 0;
+}
+
+.extra-doc-links > li {
+  display: inline-block;
+}
+
+.extra-doc-links > li:not(:last-child)::after {
+  content: '|';
+  display: inline-block;
+  margin: 0 0.25em;
+}
+
+.verso-message .trace {
+  display: block;
+}
+
+.verso-message .trace > summary::marker {
+  color: var(--verso-text-color);
+}
+
+.verso-message .trace-children {
+  margin: 0;
+  padding: 0;
+}
+
+.verso-message .trace-children > li {
+  list-style-type: none;
+  margin-left: 1.5em;
+}
+
+.verso-message .trace-children > li:not(:has(.trace)) {
+  margin-left: 0;
+}
+
+.verso-message .trace-class {
+  color: color-mix(in srgb, currentColor 70%, transparent);
+  font-weight: bold;
+  margin: 0;
+  padding: 0;
+}
+
+.verso-message .text {
+  white-space: pre-wrap;
+}
+
+</style><script>
+      
+window.onload = () => {
+
+    // Don't show hovers inside of closed tactic states
+    function blockedByTactic(elem) {
+      let parent = elem.parentNode;
+      while (parent && "classList" in parent) {
+        if (parent.classList.contains("tactic")) {
+          const toggle = parent.querySelector("input.tactic-toggle");
+          if (toggle) {
+            return !toggle.checked;
+          }
+        }
+        parent = parent.parentNode;
+      }
+      return false;
+    }
+
+    function blockedByTippy(elem) {
+      // Don't show a new hover until the old ones are all closed.
+      // Scoped to the nearest "top-level block" to avoid being O(n) in the size of the document.
+      var block = elem;
+      const topLevel = new Set(["section", "body", "html", "nav", "header"]);
+      while (block.parentNode && !topLevel.has(block.parentNode.nodeName.toLowerCase())) {
+        block = block.parentNode;
+      }
+      for (const child of block.querySelectorAll(".token, .has-info")) {
+        if (child._tippy && child._tippy.state.isVisible) { return true };
+      }
+      return false;
+    }
+
+    for (const c of document.querySelectorAll(".hl.lean .token")) {
+        if (c.dataset.binding != "") {
+            c.addEventListener("mouseover", (event) => {
+                if (blockedByTactic(c)) {return;}
+                const context = c.closest(".hl.lean").dataset.leanContext;
+                for (const example of document.querySelectorAll(".hl.lean")) {
+                    if (example.dataset.leanContext == context) {
+                        for (const tok of example.querySelectorAll(".token")) {
+                            if (c.dataset.binding == tok.dataset.binding) {
+                                tok.classList.add("binding-hl");
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        c.addEventListener("mouseout", (event) => {
+            for (const tok of document.querySelectorAll(".hl.lean .token")) {
+                tok.classList.remove("binding-hl");
+            }
+        });
+    }
+    /* Render docstrings */
+    if ('undefined' !== typeof marked) {
+        for (const d of document.querySelectorAll("code.docstring, pre.docstring")) {
+            const str = d.innerText;
+            const html = marked.parse(str);
+            const rendered = document.createElement("div");
+            rendered.classList.add("docstring");
+            rendered.innerHTML = html;
+            d.parentNode.replaceChild(rendered, d);
+        }
+    }
+    // Add hovers
+    let docsJson = "-verso-docs.json";
+    fetch(docsJson).then((resp) => resp.json()).then((versoDocData) => {
+
+      function hideParentTooltips(element) {
+        let parent = element.parentElement;
+        while (parent) {
+          const tippyInstance = parent._tippy;
+          if (tippyInstance) {
+            tippyInstance.hide();
+          }
+          parent = parent.parentElement;
+        }
+      }
+
+
+
+      const defaultTippyProps = {
+        /* DEBUG -- remove the space: * /
+        onHide(any) { return false; },
+        trigger: "click",
+        // */
+        /* theme: "lean", */
+        maxWidth: "none",
+        appendTo: () => document.body,
+        interactive: true,
+        delay: [100, null],
+        /* ignoreAttributes: true, */
+        followCursor: 'initial',
+        onShow(inst) {
+          if (inst.reference.className == 'tactic') {
+
+            const toggle = inst.reference.querySelector("input.tactic-toggle");
+            if (toggle && toggle.checked) {
+              return false;
+            }
+            hideParentTooltips(inst.reference);
+            //if (blockedByTippy(inst.reference)) { return false; }
+
+          } else if (inst.reference.querySelector(".hover-info") || "versoHover" in inst.reference.dataset) {
+            if (blockedByTactic(inst.reference)) { return false };
+            if (blockedByTippy(inst.reference)) { return false; }
+          } else { // Nothing to show here!
+            return false;
+          }
+        },
+        content (tgt) {
+          const content = document.createElement("span");
+          if (tgt.className == 'tactic') {
+            const state = tgt.querySelector(".tactic-state").cloneNode(true);
+            state.style.display = "block";
+            content.appendChild(state);
+            content.style.display = "block";
+            content.className = "hl lean popup";
+          } else {
+            content.className = "hl lean";
+            content.style.display = "block";
+            content.style.maxHeight = "300px";
+            content.style.overflowY = "auto";
+            content.style.overflowX = "hidden";
+            const hoverId = tgt.dataset.versoHover;
+            const hoverInfo = tgt.querySelector(".hover-info");
+            if (hoverId) { // Docstrings from the table
+              // TODO stop doing an implicit conversion from string to number here
+              let data = versoDocData[hoverId];
+              if (data) {
+                const info = document.createElement("span");
+                info.className = "hover-info";
+                info.style.display = "block";
+                info.innerHTML = data;
+                content.appendChild(info);
+                /* Render docstrings - TODO server-side */
+                if ('undefined' !== typeof marked) {
+                    for (const d of content.querySelectorAll("code.docstring, pre.docstring")) {
+                        const str = d.innerText;
+                        const html = marked.parse(str);
+                        const rendered = document.createElement("div");
+                        rendered.classList.add("docstring");
+                        rendered.innerHTML = html;
+                        d.parentNode.replaceChild(rendered, d);
+                    }
+                }
+              } else {
+                content.innerHTML = "Failed to load doc ID: " + hoverId;
+              }
+            } else if (hoverInfo) { // The inline info, still used for compiler messages
+              content.appendChild(hoverInfo.cloneNode(true));
+            }
+            const extraLinks = tgt.parentElement.dataset['versoLinks'];
+            if (extraLinks) {
+              try {
+                const extras = JSON.parse(extraLinks);
+                const links = document.createElement('ul');
+                links.className = 'extra-doc-links';
+                extras.forEach((l) => {
+                  const li = document.createElement('li');
+                  li.innerHTML = "<a href=\"" + l['href'] + "\" title=\"" + l.long + "\">" + l.short + "</a>";
+                  links.appendChild(li);
+                });
+                content.appendChild(links);
+              } catch (error) {
+                console.error(error);
+              }
+            }
+          }
+          return content;
+        }
+      };
+
+
+      document.querySelectorAll('.hl.lean .const.token, .hl.lean .keyword.token, .hl.lean .literal.token, .hl.lean .option.token, .hl.lean .var.token, .hl.lean .typed.token, .hl.lean .level-var, .hl.lean .level-const, .hl.lean .level-op, .hl.lean .sort').forEach(element => {
+        element.setAttribute('data-tippy-theme', 'lean');
+      });
+      document.querySelectorAll('.hl.lean .has-info.warning').forEach(element => {
+        element.setAttribute('data-tippy-theme', 'warning message');
+      });
+      document.querySelectorAll('.hl.lean .has-info.information').forEach(element => {
+        element.setAttribute('data-tippy-theme', 'info message');
+      });
+      document.querySelectorAll('.hl.lean .has-info.error').forEach(element => {
+        element.setAttribute('data-tippy-theme', 'error message');
+      });
+      document.querySelectorAll('.hl.lean .tactic').forEach(element => {
+        element.setAttribute('data-tippy-theme', 'tactic');
+      });
+      let insts = tippy('.hl.lean .const.token, .hl.lean .keyword.token, .hl.lean .literal.token, .hl.lean .option.token, .hl.lean .var.token, .hl.lean .typed.token, .hl.lean .has-info, .hl.lean .tactic, .hl.lean .level-var, .hl.lean .level-const, .hl.lean .level-op, .hl.lean .sort', defaultTippyProps);
+  });
+}
+</script>
+    <script src="-verso-search/search-highlight.js" defer="defer"></script>
+    </head>
+  <body>
+    <header>
+      <div class="header-logo-wrapper"></div>
+      <div class="header-title-wrapper">
+        <a href="" class="header-title"><h1>
+            Documentation with Verso</h1>
+          </a></div>
+      </header>
+    <label for="toggle-toc" id="toggle-toc-click"><span class="line line1"></span><span class="line line2"></span><span class="line line3"></span></label><div class="with-toc">
+      <div class="toc-backdrop" onclick="document.getElementById('toggle-toc-click')?.click()"></div>
+      <nav id="toc">
+        <input type="checkbox" id="toggle-toc"><div class="first">
+          <a href="" class="toc-title"><h1>
+              Documentation with Verso</h1>
+            </a><div class="split-tocs">
+            <div class="split-toc book">
+              <div class="title">
+                <label for="--verso-manual-toc-----bookRoot" class="toggle-split-toc"><input type="checkbox" class="toggle-split-toc" id="--verso-manual-toc-----bookRoot" checked="checked"></label><span class="">Table of Contents</span></div>
+              <table><tr class="numbered"><td class="num">1.</td><td><a href="Genres/#genres">Genres</a></td></tr><tr class="current numbered"><td class="num">2.</td><td><a href="Verso-Markup/#verso-markup">Verso Markup</a></td></tr><tr class="numbered"><td class="num">3.</td><td><a href="Building-Documents/#build-process">Building Documents</a></td></tr><tr class="numbered"><td class="num">4.</td><td><a href="Extensions/#extensions">Extensions</a></td></tr><tr class="numbered"><td class="num">5.</td><td><a href="Output-Formats/#outputs">Output Formats</a></td></tr><tr class="numbered"><td class="num">6.</td><td><a href="Websites/#website">Websites</a></td></tr><tr class="numbered"><td class="num">7.</td><td><a href="Manuals-and-Books/#manual">Manuals and Books</a></td></tr><tr class="unnumbered"><td class="num"><td><a href="Index/#index">Index</a></td></tr><tr class="unnumbered"><td class="num"><td><a href="Dependencies/#dependencies">Dependencies</a></td></tr></table></div>
+            <div class="split-toc">
+              <div class="title">
+                <label for="--verso-manual-toc-verso-markup" class="toggle-split-toc"><input type="checkbox" class="toggle-split-toc" id="--verso-manual-toc-verso-markup" checked="checked"></label><span class="number">2.</span> <span class="current"><a href="Verso-Markup/#verso-markup">Verso Markup</a></span></div>
+              <table><tr class="numbered"><td class="num">2.1.</td><td><a href="Verso-Markup/#markup-design-principles">Design Principles</a></td></tr><tr class="numbered"><td class="num">2.2.</td><td><a href="Verso-Markup/#markup-syntax">Syntax</a></td></tr><tr class="numbered"><td class="num">2.3.</td><td><a href="Verso-Markup/#differences-from-markdown">Differences from Markdown</a></td></tr></table></div>
+            </div>
+          </div>
+        <div class="last"></div>
+        </nav>
+      <main><div class="content-wrapper">
+          <nav class="prev-next-buttons">
+            <a class="local-button active" href="Genres/#genres" rel="prev" title="1. Genres"><span class="arrow">←</span><span class="where">1. Genres</span></a><a class="local-button active" href="Building-Documents/#build-process" rel="next" title="3. Building Documents"><span class="where">3. Building Documents</span><span class="arrow">→</span></a></nav>
+          <section>
+            <h1>
+              2. Verso Markup<span class="permalink-widget inline"><a href="find/?domain=Verso.Genre.Manual.section&amp;name=verso-markup" title="Permalink">🔗</a></span></h1>
+            <p>
+              Lean's documentation markup language is a close relative of Markdown, but it's not identical to it.</p>
+            <section>
+              <h2 id="markup-design-principles">
+                2.1. Design Principles<span class="permalink-widget inline"><a href="find/?domain=Verso.Genre.Manual.section&amp;name=markup-design-principles" title="Permalink">🔗</a></span></h2>
+              <dl><dt> Syntax errors</dt><dd><p>
+                    Fail fast rather than producing unexpected output or having complicated rules.</p>
+                  </dd><dt> Reduce lookahead</dt><dd><p>
+                    Parsing should succeed or fail as locally as possible.</p>
+                  </dd><dt> Extensibility</dt><dd><p>
+                    There should be dedicated features for compositionally adding new kinds of content, rather than relying on a collection of ad-hoc textual subformats.</p>
+                  </dd><dt> Assume Unicode</dt><dd><p>
+                    Lean users are used to entering Unicode directly and have good tools for it, so there's no need to support alternative textual syntaxes for characters not on keyboards such as em dashes or typographical quotes.</p>
+                  </dd><dt> Markdown compatibility</dt><dd><p>
+                    Users benefit from existing muscle memory and familiarity when it doesn't lead to violations of the other principles.</p>
+                  </dd></dl></section>
+            <section>
+              <h2 id="markup-syntax">
+                2.2. Syntax<span class="permalink-widget inline"><a href="find/?domain=Verso.Genre.Manual.section&amp;name=markup-syntax" title="Permalink">🔗</a></span></h2>
+              <p>
+                Like Markdown, Lean's markup has three primary syntactic categories:</p>
+              <dl><dt> Document structure</dt><dd><p>
+                    Headers, footnote definitions, and named links give greater structure to a document. They may not be nested inside of blocks.</p>
+                  </dd><dt> Block elements</dt><dd><p>
+                    The main organization of written text, including paragraphs, lists, and quotations. Some blocks may be nested: for example, lists may contain other lists.</p>
+                  </dd><dt> Inline elements</dt><dd><p>
+                    The ordinary content of written text, such as text itself, bold or emphasized text, and hyperlinks.</p>
+                  </dd></dl><section>
+                <h3 id="document-structure">
+                  2.2.1. Document Structure<span class="permalink-widget inline"><a href="find/?domain=Verso.Genre.Manual.section&amp;name=document-structure" title="Permalink">🔗</a></span></h3>
+                <p>
+                  Documents are organized into <span id="--tech-term-parts" class="def-technical-term"><em>parts</em></span>.
+A part is a logical division of the content of the document, such as a chapter, section, subsection, or volume.
+Parts may have associated metadata, such as authors, publication dates, internal identifiers for cross-referencing, or desired URLs; the specific metadata associated with a part is determined by the document's <a class="technical-term" href="Genres/#--tech-term-genres">genre</a>.</p>
+                <p>
+                  A part contains a sequence of blocks followed by a sequence of sub-parts, either of which may be empty.</p>
+                <p>
+                  A part is introduced with a <span id="--tech-term-header" class="def-technical-term"><em>header</em></span>.
+Headers consist of one or more hash marks (<code>#</code>) at the beginning of a line followed by a sequence of inlines.
+The number of hash marks indicates the nesting of a header, and headers with more hash marks indicate parts at a lower level.
+A lower-level header introduces a sub-part of the preceding header, while a header at a level at least as high as the preceding header terminates that part.
+In other words, header levels induce a tree structure on the document.</p>
+                <p>
+                  Headers must be well-nested: the first header in a document must have exactly one hash mark, and all subsequent headers may have at most one more hash mark than the preceding header.
+This is a <em>syntactic</em> requirement: regardless of whether a Verso file contains the text of a whole book, a chapter, or just a single section, its outermost header must be introduced with a single hash mark.
+Headers indicate the logical nesting structure of the document, rather than the headers to be chosen when rendering the document to output formats such as HTML.</p>
+                <p>
+                  Metadata may be associated with a header by following it with a <span id="--tech-term-metadata-block" class="def-technical-term"><em>metadata block</em></span>.
+Metadata blocks begin and end with <code>%%%</code>, and they contain any syntax that would be acceptable in a Lean structure initializer.</p>
+                <div class="markup-example">
+                  <div class="markup-example-header">
+                    Header</div>
+                  <div class="content">
+                    <div class="syntax">
+                      <div class="title">
+                        Verso Markup</div>
+                      <pre># Top-Level Header
+</pre></div>
+                    <div class="result">
+                      <div class="title">
+                        Result</div>
+                      <pre>&lt;h1&gt;Top-Level Header&lt;/h1&gt;
+</pre></div>
+                    </div>
+                  </div>
+                <div class="markup-example">
+                  <div class="markup-example-header">
+                    Blah</div>
+                  <div class="content">
+                    <div class="syntax">
+                      <div class="title">
+                        Verso Markup</div>
+                      <pre>a b c
+</pre></div>
+                    <div class="result">
+                      <div class="title">
+                        Result</div>
+                      <pre>&lt;p&gt; a b c &lt;/p&gt;</pre></div>
+                    </div>
+                  </div>
+                </section>
+              <section>
+                <h3 id="block-syntax">
+                  2.2.2. Block Syntax<span class="permalink-widget inline"><a href="find/?domain=Verso.Genre.Manual.section&amp;name=block-syntax" title="Permalink">🔗</a></span></h3>
+                <p>
+                  Paragraphs are undecorated: any sequence of inlines that is not another block is a paragraph.
+Paragraphs continue until a <span id="--tech-term-blank-line" class="def-technical-term"><em>blank line</em></span> (that is, a line containing only whitespace) or another block begins:</p>
+                <div class="markup-example">
+                  <div class="markup-example-header">
+                    Paragraphs</div>
+                  <div class="content">
+                    <div class="syntax">
+                      <div class="title">
+                        Verso Markup</div>
+                      <pre>This is one paragraph.
+Even though this sentence is on a
+new line, the paragraph continues.
+
+This is a new paragraph.
+* This list stopped the paragraph.
+* As in Markdown and SGML, lists
+  are not part of paragraphs.
+</pre></div>
+                    <div class="result">
+                      <div class="title">
+                        Result</div>
+                      <pre>&lt;p&gt;
+  This is one paragraph. Even
+  though this sentence is on a new
+  line, the paragraph continues.
+&lt;/p&gt;
+
+&lt;p&gt; This is a new paragraph. &lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;
+    &lt;p&gt;
+      This list stopped the
+      paragraph.
+    &lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;
+      As in Markdown and SGML,
+      lists   are not part of
+      paragraphs.
+    &lt;/p&gt;
+  &lt;/li&gt;
+&lt;/ul&gt;</pre></div>
+                    </div>
+                  </div>
+                <section>
+                  <h4 id="list-syntax">
+                    2.2.2.1. Lists<span class="permalink-widget inline"><a href="find/?domain=Verso.Genre.Manual.section&amp;name=list-syntax" title="Permalink">🔗</a></span></h4>
+                  <p>
+                    There are three kinds of lists:</p>
+                  <dl><dt> Unordered lists</dt><dd><p>
+                        Unordered lists indicate that the order of the items in the list is not of primary importance.
+  They correspond to <code>&lt;ul&gt;</code> in HTML or <code>\begin{itemize}</code> in LaTeX.</p>
+                      </dd><dt> Ordered lists</dt><dd><p>
+                        Unordered lists indicate that the order of the items in the list is important.
+  They correspond to <code>&lt;ol&gt;</code> in HTML or <code>\begin{enumerate}</code> in LaTeX.</p>
+                      </dd><dt> Description lists</dt><dd><p>
+                        Description lists associate a term with more information. This very list is a description list.
+  They correspond to <code>&lt;dl&gt;</code> in HTML or <code>\begin{description}</code> in LaTeX.</p>
+                      </dd></dl><p>
+                    A line that begins with zero or more spaces followed by a <code>*</code>, <code>-</code>, or <code>+</code> starts an item of an unordered list.
+This character is called the <span id="--tech-term-list-item-indicator" class="def-technical-term"><em>list item indicator</em></span>.
+Subsequent items are part of the same list if they use the same indicator character and have the same indentation.
+Any subsequent blocks whose first character is indented further than the indicator are part of the item itself; items may contain multiple blocks, or even other lists.</p>
+                  <div class="markup-example">
+                    <div class="markup-example-header">
+                      Unordered Lists</div>
+                    <div class="content">
+                      <div class="syntax">
+                        <div class="title">
+                          Verso Markup</div>
+                        <pre>* A list with two items
+* They both start in column 0
+</pre></div>
+                      <div class="result">
+                        <div class="title">
+                          Result</div>
+                        <pre>&lt;ul&gt;
+  &lt;li&gt;
+    &lt;p&gt; A list with two items &lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;
+      They both start in column 0
+    &lt;/p&gt;
+  &lt;/li&gt;
+&lt;/ul&gt;</pre></div>
+                      </div>
+                    </div>
+                  <div class="markup-example">
+                    <div class="markup-example-header">
+                      Indented Unordered Lists</div>
+                    <div class="content">
+                      <div class="syntax">
+                        <div class="title">
+                          Verso Markup</div>
+                        <pre> * A list with two items
+ * They both start in column 1
+</pre></div>
+                      <div class="result">
+                        <div class="title">
+                          Result</div>
+                        <pre>&lt;ul&gt;
+  &lt;li&gt;
+    &lt;p&gt; A list with two items &lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;
+      They both start in column 1
+    &lt;/p&gt;
+  &lt;/li&gt;
+&lt;/ul&gt;</pre></div>
+                      </div>
+                    </div>
+                  <div class="markup-example">
+                    <div class="markup-example-header">
+                      List Indicators</div>
+                    <div class="content">
+                      <div class="syntax">
+                        <div class="title">
+                          Verso Markup</div>
+                        <pre> * Two lists
+ + They have different indicators.
+</pre></div>
+                      <div class="result">
+                        <div class="title">
+                          Result</div>
+                        <pre>&lt;ul&gt;
+  &lt;li&gt; &lt;p&gt; Two lists &lt;/p&gt; &lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;
+    &lt;p&gt;
+      They have different
+      indicators.
+    &lt;/p&gt;
+  &lt;/li&gt;
+&lt;/ul&gt;</pre></div>
+                      </div>
+                    </div>
+                  <div class="markup-example">
+                    <div class="markup-example-header">
+                      List Indentation Sensitivity</div>
+                    <div class="content">
+                      <div class="syntax">
+                        <div class="title">
+                          Verso Markup</div>
+                        <pre> * A list with one element
+* Another list, due to different
+  indentation
+</pre></div>
+                      <div class="result">
+                        <div class="title">
+                          Result</div>
+                        <pre>&lt;ul&gt;
+  &lt;li&gt;
+    &lt;p&gt;
+      A list with one element
+    &lt;/p&gt;
+  &lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;
+    &lt;p&gt;
+      Another list, due to
+      different   indentation
+    &lt;/p&gt;
+  &lt;/li&gt;
+&lt;/ul&gt;</pre></div>
+                      </div>
+                    </div>
+                  <div class="markup-example">
+                    <div class="markup-example-header">
+                      Sub-Lists</div>
+                    <div class="content">
+                      <div class="syntax">
+                        <div class="title">
+                          Verso Markup</div>
+                        <pre>* A list with one item.
+  It contains this paragraph
+
+  * And this other sub-list
+
+  And this paragraph
+</pre></div>
+                      <div class="result">
+                        <div class="title">
+                          Result</div>
+                        <pre>&lt;ul&gt;
+  &lt;li&gt;
+    &lt;p&gt;
+      A list with one item.   It
+      contains this paragraph
+    &lt;/p&gt;&lt;ul&gt;
+      &lt;li&gt;
+        &lt;p&gt;
+          And this other sub-list
+        &lt;/p&gt;
+      &lt;/li&gt;
+    &lt;/ul&gt;&lt;p&gt;
+      And this paragraph
+    &lt;/p&gt;
+  &lt;/li&gt;
+&lt;/ul&gt;</pre></div>
+                      </div>
+                    </div>
+                  <p>
+                    A line that starts with zero or more spaces, followed by one or more digits and then either a period (e.g. <code>1.</code>) or a closing parenthesis (<code>1)</code>), begins an item of an ordered list.
+Like unordered lists, ordered lists are sensitive to both indentation and indicator characters.</p>
+                  <div class="markup-example">
+                    <div class="markup-example-header">
+                      Ordered Lists</div>
+                    <div class="content">
+                      <div class="syntax">
+                        <div class="title">
+                          Verso Markup</div>
+                        <pre>1. First, write a number.
+2. Then, an indicator (`.` or `)`)
+</pre></div>
+                      <div class="result">
+                        <div class="title">
+                          Result</div>
+                        <pre>&lt;ol&gt;
+  &lt;li&gt;
+    &lt;p&gt; First, write a number. &lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;
+      Then, an indicator
+      (&lt;code&gt;"."&lt;/code&gt; or
+      &lt;code&gt;")"&lt;/code&gt;)
+    &lt;/p&gt;
+  &lt;/li&gt;
+&lt;/ol&gt;</pre></div>
+                      </div>
+                    </div>
+                  <div class="markup-example">
+                    <div class="markup-example-header">
+                      Ordered Lists and Indicators</div>
+                    <div class="content">
+                      <div class="syntax">
+                        <div class="title">
+                          Verso Markup</div>
+                        <pre>1. Two lists
+2) They have different indicators.
+</pre></div>
+                      <div class="result">
+                        <div class="title">
+                          Result</div>
+                        <pre>&lt;ol&gt;
+  &lt;li&gt; &lt;p&gt; Two lists &lt;/p&gt; &lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;
+    &lt;p&gt;
+      They have different
+      indicators.
+    &lt;/p&gt;
+  &lt;/li&gt;
+&lt;/ol&gt;</pre></div>
+                      </div>
+                    </div>
+                  <p>
+                    Description lists consist of a sequence of description items that have the same indentation.
+A description item is a line that starts with zero or more spaces, followed by a colon, followed by a sequence of inlines and a blank line. After the blank line, there must be one or more blocks with indentation greater than the colon.</p>
+                  <div class="markup-example">
+                    <div class="markup-example-header">
+                      Description Lists</div>
+                    <div class="content">
+                      <div class="syntax">
+                        <div class="title">
+                          Verso Markup</div>
+                        <pre>: Item 1
+
+  Description of item 1
+
+: Item 2
+
+  Description of item 2
+</pre></div>
+                      <div class="result">
+                        <div class="title">
+                          Result</div>
+                        <pre>&lt;dl&gt;
+    &lt;dt&gt;  Item 1 &lt;/dt&gt;
+  &lt;dd&gt;
+    &lt;p&gt; Description of item 1 &lt;/p&gt;
+  &lt;/dd&gt;
+  
+    &lt;dt&gt;  Item 2 &lt;/dt&gt;
+  &lt;dd&gt;
+    &lt;p&gt; Description of item 2 &lt;/p&gt;
+  &lt;/dd&gt;
+   &lt;/dl&gt;</pre></div>
+                      </div>
+                    </div>
+                  </section>
+                <section>
+                  <h4 id="quote-syntax">
+                    2.2.2.2. Quotes<span class="permalink-widget inline"><a href="find/?domain=Verso.Genre.Manual.section&amp;name=quote-syntax" title="Permalink">🔗</a></span></h4>
+                  <p>
+                    Quotation blocks show that a sequence of blocks were spoken by someone other than the author. They consist of a line that starts with zero or more spaces, followed by a greater-than sign (<code>&gt;</code>), followed by a sequence of blocks that are indented more than the greater-than sign.</p>
+                  <div class="markup-example">
+                    <div class="markup-example-header">
+                      Quotations</div>
+                    <div class="content">
+                      <div class="syntax">
+                        <div class="title">
+                          Verso Markup</div>
+                        <pre>It is said that:
+&gt; Quotations are excellent.
+
+  This paragraph is part of the
+  quotation.
+
+ So is this one.
+
+But not this one.
+</pre></div>
+                      <div class="result">
+                        <div class="title">
+                          Result</div>
+                        <pre>&lt;p&gt; It is said that: &lt;/p&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;
+    Quotations are excellent.
+  &lt;/p&gt;
+  &lt;p&gt;
+    This paragraph is part of the  
+    quotation.
+  &lt;/p&gt;
+  &lt;p&gt; So is this one. &lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt; But not this one. &lt;/p&gt;</pre></div>
+                      </div>
+                    </div>
+                  </section>
+                <section>
+                  <h4 id="code-block-syntax">
+                    2.2.2.3. Code Blocks<span class="permalink-widget inline"><a href="find/?domain=Verso.Genre.Manual.section&amp;name=code-block-syntax" title="Permalink">🔗</a></span></h4>
+                  <p>
+                    <span id="--tech-term-Code-blocks" class="def-technical-term">Code blocks</span> begin with three or more back-ticks at the start of a line (they may be preceded by spaces).
+This is referred to as a <span id="--tech-term-fence" class="def-technical-term"><em>fence</em></span>.
+They may optionally have a name and a sequence of arguments after the back-ticks.
+The code block continues until a line that contains only the same number of back-ticks at the same indentation.
+Every line in the code block must be at least as indented as the fence, and it denotes the string that results from removing the indentation from each line.
+Code blocks may not contain a sequence of back-ticks that is at least as long as the fence; to add more back-ticks to the code block, the fence must be made larger.</p>
+                  <div class="markup-example">
+                    <div class="markup-example-header">
+                      Code Blocks</div>
+                    <div class="content">
+                      <div class="syntax">
+                        <div class="title">
+                          Verso Markup</div>
+                        <pre>```
+This is a code block
+with two lines
+```
+</pre></div>
+                      <div class="result">
+                        <div class="title">
+                          Result</div>
+                        <pre>&lt;codeblock&gt;
+  1|This is a code block⏎
+  2|with two lines⏎
+&lt;/codeblock&gt;</pre></div>
+                      </div>
+                    </div>
+                  <div class="markup-example">
+                    <div class="markup-example-header">
+                      Code Blocks as Extensions</div>
+                    <div class="content">
+                      <div class="syntax">
+                        <div class="title">
+                          Verso Markup</div>
+                        <pre>```lean
+-- This code block is named
+-- `lean`. It was called with
+-- no arguments.
+def x := 5
+```
+</pre></div>
+                      <div class="result">
+                        <div class="title">
+                          Result</div>
+                        <pre>&lt;lean &gt;
+  1|-- This code block is named⏎
+  2|-- `lean`. It was called with⏎
+  3|-- no arguments.⏎
+  4|def x := 5⏎
+&lt;/lean&gt;</pre></div>
+                      </div>
+                    </div>
+                  <div class="markup-example">
+                    <div class="markup-example-header">
+                      Indented Code Blocks</div>
+                    <div class="content">
+                      <div class="syntax">
+                        <div class="title">
+                          Verso Markup</div>
+                        <pre>  ```lean
+  -- This indented code block
+  -- denotes the de-indented
+  -- string
+  def x := 5
+  ```
+</pre></div>
+                      <div class="result">
+                        <div class="title">
+                          Result</div>
+                        <pre>&lt;lean &gt;
+  1|-- This indented code block⏎
+  2|-- denotes the de-indented⏎
+  3|-- string⏎
+  4|def x := 5⏎
+&lt;/lean&gt;</pre></div>
+                      </div>
+                    </div>
+                  <div class="markup-example">
+                    <div class="markup-example-header">
+                      Code Blocks and Arguments</div>
+                    <div class="content">
+                      <div class="syntax">
+                        <div class="title">
+                          Verso Markup</div>
+                        <pre>```lean (error := true)
+-- This code block is named
+-- `lean`, called with the
+-- named argument `error`
+-- set to `true`.
+def x : String := 5
+```
+</pre></div>
+                      <div class="result">
+                        <div class="title">
+                          Result</div>
+                        <pre>&lt;lean  error="true"&gt;
+  1|-- This code block is named⏎
+  2|-- `lean`, called with the⏎
+  3|-- named argument `error`⏎
+  4|-- set to `true`.⏎
+  5|def x : String := 5⏎
+&lt;/lean&gt;</pre></div>
+                      </div>
+                    </div>
+                  <p>
+                    When a code block has a name, then the name is resolved in the current Lean namespace and used to select an implementation.
+The <a href="Extensions/#extensions">chapter on Verso markup extensions</a> has more details on this process.</p>
+                  </section>
+                <section>
+                  <h4 id="directive-syntax">
+                    2.2.2.4. Directives<span class="permalink-widget inline"><a href="find/?domain=Verso.Genre.Manual.section&amp;name=directive-syntax" title="Permalink">🔗</a></span></h4>
+                  <p>
+                    A <span id="--tech-term-directive" class="def-technical-term"><em>directive</em></span> is a kind of block with no meaning other than that assigned by extensions, akin to a custom environment in LaTeX or a <code>&lt;div&gt;</code> tag in HTML.
+Directives begin with three or more colons and a name with zero or more arguments, and end with the same number of colons at the same indentation on a line by themselves.
+They may contain any number of blocks, which must be indented at least as much as the colons.
+Nested directives must begin and end with strictly fewer colons than the surrounding directives.</p>
+                  <p>
+                    The <a href="Extensions/#extensions">chapter on Verso markup extensions</a> describes the processing of directives in more detail.</p>
+                  <p>
+                    This is an empty directive:</p>
+                  <div class="markup-example">
+                    <div class="markup-example-header">
+                      Directives</div>
+                    <div class="content">
+                      <div class="syntax">
+                        <div class="title">
+                          Verso Markup</div>
+                        <pre>:::nothing
+:::
+</pre></div>
+                      <div class="result">
+                        <div class="title">
+                          Result</div>
+                        <pre>&lt;nothing &gt;  &lt;/nothing&gt;</pre></div>
+                      </div>
+                    </div>
+                  <p>
+                    This directive contains a directive and a paragraph:</p>
+                  <div class="markup-example">
+                    <div class="markup-example-header">
+                      Nested Directives</div>
+                    <div class="content">
+                      <div class="syntax">
+                        <div class="title">
+                          Verso Markup</div>
+                        <pre>::::outer
+:::inner
+Hello
+:::
+This is a paragraph
+::::
+</pre></div>
+                      <div class="result">
+                        <div class="title">
+                          Result</div>
+                        <pre>&lt;outer &gt;
+  &lt;inner &gt; &lt;p&gt; Hello &lt;/p&gt; &lt;/inner&gt;
+  &lt;p&gt; This is a paragraph &lt;/p&gt;
+&lt;/outer&gt;</pre></div>
+                      </div>
+                    </div>
+                  </section>
+                <section>
+                  <h4 id="command-block-syntax">
+                    2.2.2.5. Commands<span class="permalink-widget inline"><a href="find/?domain=Verso.Genre.Manual.section&amp;name=command-block-syntax" title="Permalink">🔗</a></span></h4>
+                  <p>
+                    A line that consists of only a set of curly braces that contain a name and zero or more arguments is a <span id="--tech-term-command" class="def-technical-term"><em>command</em></span>.
+The name is used to select an implementation for the command, which is then invoked during elaboration.
+The <a href="Extensions/#extensions">chapter on Verso markup extensions</a> has more details on this process.</p>
+                  <div class="markup-example">
+                    <div class="markup-example-header">
+                      Commands</div>
+                    <div class="content">
+                      <div class="syntax">
+                        <div class="title">
+                          Verso Markup</div>
+                        <pre>{include 0 MyChapter}
+</pre></div>
+                      <div class="result">
+                        <div class="title">
+                          Result</div>
+                        <pre>&lt;include  0 MyChapter/&gt;</pre></div>
+                      </div>
+                    </div>
+                  </section>
+                </section>
+              <section>
+                <h3 id="inline-syntax">
+                  2.2.3. Inline Syntax<span class="permalink-widget inline"><a href="find/?domain=Verso.Genre.Manual.section&amp;name=inline-syntax" title="Permalink">🔗</a></span></h3>
+                <p>
+                  Emphasis is written with underscores:</p>
+                <div class="markup-example">
+                  <div class="markup-example-header">
+                    Emphasis</div>
+                  <div class="content">
+                    <div class="syntax">
+                      <div class="title">
+                        Verso Markup</div>
+                      <pre>Here's some _emphasized_ text
+</pre></div>
+                    <div class="result">
+                      <div class="title">
+                        Result</div>
+                      <pre>&lt;p&gt;
+  Here's some
+  &lt;emph&gt; emphasized &lt;/emph&gt; text
+&lt;/p&gt;</pre></div>
+                    </div>
+                  </div>
+                <p>
+                  Emphasis can be nested by using more underscores for the outer emphasis:</p>
+                <div class="markup-example">
+                  <div class="markup-example-header">
+                    Nested Emphasis</div>
+                  <div class="content">
+                    <div class="syntax">
+                      <div class="title">
+                        Verso Markup</div>
+                      <pre>Here's some __emphasized text
+with _extra_ emphasis__ inside
+</pre></div>
+                    <div class="result">
+                      <div class="title">
+                        Result</div>
+                      <pre>&lt;p&gt;
+  Here's some
+  &lt;emph&gt;
+    emphasized text with
+    &lt;emph&gt; extra &lt;/emph&gt; emphasis
+  &lt;/emph&gt;
+  inside
+&lt;/p&gt;</pre></div>
+                    </div>
+                  </div>
+                <p>
+                  Strong emphasis (bold) is written with asterisks:</p>
+                <div class="markup-example">
+                  <div class="markup-example-header">
+                    Strong Emphasis (Bold)</div>
+                  <div class="content">
+                    <div class="syntax">
+                      <div class="title">
+                        Verso Markup</div>
+                      <pre>Here's some *bold* text
+</pre></div>
+                    <div class="result">
+                      <div class="title">
+                        Result</div>
+                      <pre>&lt;p&gt;
+  Here's some &lt;bold&gt;bold&lt;/bold&gt;
+  text
+&lt;/p&gt;</pre></div>
+                    </div>
+                  </div>
+                <p>
+                  Hyperlinks consist of the link text in square brackets followed by the target in parentheses:</p>
+                <div class="markup-example">
+                  <div class="markup-example-header">
+                    Links</div>
+                  <div class="content">
+                    <div class="syntax">
+                      <div class="title">
+                        Verso Markup</div>
+                      <pre>[Lean](https://lean-lang.org)
+</pre></div>
+                    <div class="result">
+                      <div class="title">
+                        Result</div>
+                      <pre>&lt;p&gt;
+  &lt;a href="https://lean-lang.org"&gt;
+    Lean
+  &lt;/a&gt;
+&lt;/p&gt;</pre></div>
+                    </div>
+                  </div>
+                <p>
+                  Link targets may also be named:</p>
+                <div class="markup-example">
+                  <div class="markup-example-header">
+                    Named Link Targets</div>
+                  <div class="content">
+                    <div class="syntax">
+                      <div class="title">
+                        Verso Markup</div>
+                      <pre>The [Lean website][lean]
+
+[lean]: https://lean-lang.org
+</pre></div>
+                    <div class="result">
+                      <div class="title">
+                        Result</div>
+                      <pre>&lt;p&gt;
+  The
+  &lt;a href="(value of «lean»)"&gt;Lean
+  website&lt;/a&gt;
+&lt;/p&gt;
+
+where
+  «lean» := https://lean-lang.org</pre></div>
+                    </div>
+                  </div>
+                <p>
+                  Literal code elements are written in back-ticks.
+The same number of back-ticks that opens a code element must be used to close it, and the code element may not contain a sequence of back-ticks that's at least as long as its opener and closer.</p>
+                <div class="markup-example">
+                  <div class="markup-example-header">
+                    Literal Code</div>
+                  <div class="content">
+                    <div class="syntax">
+                      <div class="title">
+                        Verso Markup</div>
+                      <pre>The definition of `main`
+</pre></div>
+                    <div class="result">
+                      <div class="title">
+                        Result</div>
+                      <pre>&lt;p&gt;
+  The definition of
+  &lt;code&gt;"main"&lt;/code&gt;
+&lt;/p&gt;</pre></div>
+                    </div>
+                  </div>
+                <p>
+                  As a special case, code inlines that being and end with a space denote the string that results from removing one leading and trailing space.
+This makes it possible to represent values that begin or end with back-ticks:</p>
+                <div class="markup-example">
+                  <div class="markup-example-header">
+                    Spaces in Code</div>
+                  <div class="content">
+                    <div class="syntax">
+                      <div class="title">
+                        Verso Markup</div>
+                      <pre>`` `quotedName ``
+</pre></div>
+                    <div class="result">
+                      <div class="title">
+                        Result</div>
+                      <pre>&lt;p&gt; &lt;code&gt;"`quotedName"&lt;/code&gt; &lt;/p&gt;</pre></div>
+                    </div>
+                  </div>
+                <p>
+                  or with spaces:</p>
+                <div class="markup-example">
+                  <div class="markup-example-header">
+                    Multiple Spaces in Code</div>
+                  <div class="content">
+                    <div class="syntax">
+                      <div class="title">
+                        Verso Markup</div>
+                      <pre>``  one space  ``
+</pre></div>
+                    <div class="result">
+                      <div class="title">
+                        Result</div>
+                      <pre>&lt;p&gt; &lt;code&gt;" one space "&lt;/code&gt; &lt;/p&gt;</pre></div>
+                    </div>
+                  </div>
+                <div class="paragraph">
+                  <p>
+                    Images require both alternative text and an address for the image:</p>
+                  <div class="markup-example">
+                    <div class="markup-example-header">
+                      Images</div>
+                    <div class="content">
+                      <div class="syntax">
+                        <div class="title">
+                          Verso Markup</div>
+                        <pre>![Alt text](image.png)
+</pre></div>
+                      <div class="result">
+                        <div class="title">
+                          Result</div>
+                        <pre>&lt;p&gt;
+  &lt;img
+    src="image.png"
+    alt="Alt text"/&gt;
+&lt;/p&gt;</pre></div>
+                      </div>
+                    </div>
+                  <div class="markup-example">
+                    <div class="markup-example-header">
+                      Named Image Addresses</div>
+                    <div class="content">
+                      <div class="syntax">
+                        <div class="title">
+                          Verso Markup</div>
+                        <pre>![Alternative text][image]
+
+[image]: image.png
+</pre></div>
+                      <div class="result">
+                        <div class="title">
+                          Result</div>
+                        <pre>&lt;p&gt;
+  &lt;img
+    src="value of «image»"
+    alt="Alternative text"/&gt;
+&lt;/p&gt;
+
+where «image» := image.png</pre></div>
+                      </div>
+                    </div>
+                  </div>
+                <p>
+                  TeX math can be included using a single or double dollar sign followed by code. Two dollar signs results in display-mode math, so <code>$`\sum_{i=0}^{10} i`</code> results in <code class="math inline">\sum_{i=0}^{10} i</code> while <code>$$`\sum_{i=0}^{10} i`</code> results in: <code class="math display">\sum_{i=0}^{10} i</code></p>
+                <p>
+                  A <span id="--tech-term-role" class="def-technical-term"><em>role</em></span> indicates that subsequent inlines have a special meaning.
+Roles can be used to trigger special handling of code (e.g. elaboration), register definitions and uses of technical terms, add marginal notes, and much more.
+They correspond to custom commands in LaTeX.
+A role consists of curly braces that contain a name and arguments, all on the same line, followed immediately either by a self-delimiting inline or by square brackets that contain zero or more inlines.</p>
+                <p>
+                  An inline is <span id="--tech-term-self-delimiting" class="def-technical-term"><em>self-delimiting</em></span> if it has distinct start and end tokens that make its ending position clear.
+Emphasis, strong emphasis, code, links, images, math, and roles are self-delimiting.</p>
+                <div class="paragraph">
+                  <p>
+                    This role contains multiple inlines using square brackets:</p>
+                  <div class="markup-example">
+                    <div class="markup-example-header">
+                      Roles With Explicit Scope</div>
+                    <div class="content">
+                      <div class="syntax">
+                        <div class="title">
+                          Verso Markup</div>
+                        <pre>{ref "chapter-tag"}[the chapter on
+$`\frac{1}{2}`-powered syntax]
+</pre></div>
+                      <div class="result">
+                        <div class="title">
+                          Result</div>
+                        <pre>&lt;p&gt;
+  &lt;ref "chapter-tag"&gt;
+    the chapter on  
+    &lt;math contents="\\frac{1}{2}"/&gt;
+    -powered syntax
+  &lt;/ref&gt;
+&lt;/p&gt;</pre></div>
+                      </div>
+                    </div>
+                  <p>
+                    This one takes a single inline code element without needing square brackets:</p>
+                  <div class="markup-example">
+                    <div class="markup-example-header">
+                      Single-Argument Roles</div>
+                    <div class="content">
+                      <div class="syntax">
+                        <div class="title">
+                          Verso Markup</div>
+                        <pre>{lean}`2 + f 4`
+</pre></div>
+                      <div class="result">
+                        <div class="title">
+                          Result</div>
+                        <pre>&lt;p&gt;
+  &lt;lean &gt;
+    &lt;code&gt;"2 + f 4"&lt;/code&gt;
+  &lt;/lean&gt;
+&lt;/p&gt;</pre></div>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              </section>
+            <section>
+              <h2 id="differences-from-markdown">
+                2.3. Differences from Markdown<span class="permalink-widget inline"><a href="find/?domain=Verso.Genre.Manual.section&amp;name=differences-from-markdown" title="Permalink">🔗</a></span></h2>
+              <p>
+                This is a quick "cheat sheet" for those who are used to Markdown, documenting the differences.</p>
+              <section>
+                <h3 id="syntax-errors">
+                  2.3.1. Syntax Errors<span class="permalink-widget inline"><a href="find/?domain=Verso.Genre.Manual.section&amp;name=syntax-errors" title="Permalink">🔗</a></span></h3>
+                <p>
+                  While Markdown includes a set of precedence rules to govern the meaning of mismatched delimiters (such as in <code>what _is *bold_ or emph*?</code>), these are syntax errors in Lean's markup.
+Similarly, Markdown specifies that unmatched delimiters (such as <code>*</code> or <code>_</code>) should be included as characters, while Lean's markup requires explicit escaping of delimiters.</p>
+                <p>
+                  This is based on the principle that, for long-form technical writing, it's better to catch typos while writing than while reviewing the text later.</p>
+                </section>
+              <section>
+                <h3 id="reduced-lookahead">
+                  2.3.2. Reduced Lookahead<span class="permalink-widget inline"><a href="find/?domain=Verso.Genre.Manual.section&amp;name=reduced-lookahead" title="Permalink">🔗</a></span></h3>
+                <p>
+                  In Markdown, whether <code>[this][here]</code> is a link depends on whether <code>here</code> is defined as a link reference target somewhere in the document.
+In Lean's markup, it is always a link, and it is an error if <code>here</code> is not defined as a link target.</p>
+                </section>
+              <section>
+                <h3 id="header-nesting">
+                  2.3.3. Header Nesting<span class="permalink-widget inline"><a href="find/?domain=Verso.Genre.Manual.section&amp;name=header-nesting" title="Permalink">🔗</a></span></h3>
+                <p>
+                  In Lean's markup, every document already has a title, so there's no need to use the highest level header (<code>#</code>) to specify one.
+Additionally, all documents are required to use <code>#</code> for their top-level header, <code>##</code> for the next level, and so forth, because a single file may represent a section, a chapter, or even a whole book.
+Authors should not need to maintain a global mapping from header levels to document structures, so Lean's markup automatically assigns these based on the structure of the document.</p>
+                </section>
+              <section>
+                <h3 id="genre-specific-extensions">
+                  2.3.4. Genre-Specific Extensions<span class="permalink-widget inline"><a href="find/?domain=Verso.Genre.Manual.section&amp;name=genre-specific-extensions" title="Permalink">🔗</a></span></h3>
+                <p>
+                  Markdown has no standard way for specific tools or styles of writing to express domain- or <a href="Genres/#genres">genre</a>-specific concepts.
+Lean's markup provides standard syntaxes to use for this purpose, enabling compositional extensions.</p>
+                </section>
+              <section>
+                <h3 id="removed-md-features">
+                  2.3.5. Fewer Unused Features<span class="permalink-widget inline"><a href="find/?domain=Verso.Genre.Manual.section&amp;name=removed-md-features" title="Permalink">🔗</a></span></h3>
+                <p>
+                  Markdown has a number of features that are rarely used in practice.
+They have been removed from Verso to reduce surprises while using it and make documents more predictable.
+This includes:</p>
+                <ul>
+                  <li>
+                    <p>
+                      the distinction between <a href="https://spec.commonmark.org/0.31.2/#tight">tight</a> and <a href="https://spec.commonmark.org/0.31.2/#loose">loose</a> lists,</p>
+                    </li>
+                  <li>
+                    <p>
+                      <a href="https://spec.commonmark.org/0.31.2/#indented-code-blocks">four-space indentation</a> to create code blocks,</p>
+                    </li>
+                  <li>
+                    <p>
+                      <a href="https://spec.commonmark.org/0.31.2/#setext-headings">Setext-style headers</a>, indicated with underlines instead of leading hash marks (<code>#</code>),</p>
+                    </li>
+                  <li>
+                    <p>
+                      <a href="https://spec.commonmark.org/0.31.2/#hard-line-breaks">hard line break syntax</a>,</p>
+                    </li>
+                  <li>
+                    <p>
+                      and <a href="https://spec.commonmark.org/0.31.2/#entity-and-numeric-character-references">HTML entities and character references</a></p>
+                    </li>
+                  </ul>
+                <p>
+                  Other Markdown features don't make sense for non-HTML output, and can be implemented by a <a class="technical-term" href="Genres/#--tech-term-genres">genre</a> using code blocks or directives.
+They have also been removed from Verso.
+In particular, this includes <a href="https://spec.commonmark.org/0.31.2/#html-blocks">HTML blocks</a>, <a href="https://spec.commonmark.org/0.31.2/#raw-html">raw HTML</a> and <a href="https://spec.commonmark.org/0.31.2/#thematic-breaks">thematic breaks</a>.</p>
+                <p>
+                  Finally, some Markdown features are used by a minority of authors, and make sense in all backends, but were not deemed worth the complexity budget.
+In particular, this includes <a href="https://spec.commonmark.org/0.31.2/#autolinks">auto-links</a>.
+</p>
+                </section>
+              </section>
+            </section>
+          <nav class="prev-next-buttons">
+            <a class="local-button active" href="Genres/#genres" rel="prev" title="1. Genres"><span class="arrow">←</span><span class="where">1. Genres</span></a><a class="local-button active" href="Building-Documents/#build-process" rel="next" title="3. Building Documents"><span class="where">3. Building Documents</span><span class="arrow">→</span></a></nav>
+          </div>
+        </main></div>
+    </body>
+  </html>
+
