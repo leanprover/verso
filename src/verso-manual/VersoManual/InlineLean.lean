@@ -219,6 +219,26 @@ private def toHighlightedLeanInline (shouldShow : Bool) (hls : Highlighted) (str
   ``(Inline.other (Verso.Genre.Manual.InlineLean.Inline.lean $(← quoteHighlightViaSerialization hls)) #[Inline.code $(quote str.getString)])
 
 
+/--
+Sets `linter.unusedVariables` to `false` in all `CommandContextInfo.options` within an info tree.
+
+This prevents the outer unused variable linter from re-processing variables that the inner linter
+(running via `elabCommandTopLevel`) has already correctly handled. This is needed to allow the
+unused variable linter to do the right thing for embedded Lean code. On the one hand, the linter
+needs to run, so that its warnings are accurately recorded. But the linter also may run on the Verso
+document, at which time it can inspect the info trees left behind by the embedded Lean and generate
+spurious warnings. Turning it off before saving info trees works around this issue.
+-/
+private partial def disableUnusedVarLinterInInfoTree : InfoTree → InfoTree
+  | .context (.commandCtx ci) child =>
+    .context (.commandCtx { ci with options := Lean.Linter.linter.unusedVariables.set ci.options false })
+      (disableUnusedVarLinterInInfoTree child)
+  | .context pci child =>
+    .context pci (disableUnusedVarLinterInInfoTree child)
+  | .node info children =>
+    .node info (children.map disableUnusedVarLinterInInfoTree)
+  | .hole id => .hole id
+
 def elabCommands (config : LeanBlockConfig) (str : StrLit)
     (toHighlightedLeanContent : (shouldShow : Bool) → (hls : Highlighted) → (str: StrLit) → DocElabM Term)
     (minCommands : Option Nat := none)
@@ -233,9 +253,11 @@ def elabCommands (config : LeanBlockConfig) (str : StrLit)
 
     let origScopes ← if config.fresh then pure [{header := ""}] else getScopes
 
-    -- Turn off async elaboration so that info trees and messages are available when highlighting syntax
+    -- Turn off async elaboration so that info trees and messages are available when highlighting syntax.
     let origScopes := origScopes.modifyHead fun sc =>
-      { sc with opts := pp.tagAppFns.set (Elab.async.set sc.opts false) true }
+      let opts := Elab.async.set sc.opts false
+      let opts := pp.tagAppFns.set opts true
+      { sc with opts }
 
     let altStr ← parserInputString str
 
@@ -255,8 +277,16 @@ def elabCommands (config : LeanBlockConfig) (str : StrLit)
       cmdState := { cmdState with messages := messages }
 
 
+      -- Use elabCommandTopLevel so that linters run after each command (matching Lean's normal
+      -- behavior). Since it resets messages and infoState, save and restore them to accumulate.
+      let savedMsgs := cmdState.messages
+      let savedTrees := cmdState.infoState.trees
       cmdState ← withInfoTreeContext (mkInfoTree := pure ∘ InfoTree.node (.ofCommandInfo {elaborator := `Manual.Meta.lean, stx := cmd})) <|
-        runCommand (Command.elabCommand cmd) cmd cctx cmdState
+        runCommand (Command.elabCommandTopLevel cmd) cmd cctx cmdState
+      cmdState := { cmdState with
+        messages := savedMsgs ++ cmdState.messages,
+        infoState := { cmdState.infoState with trees := savedTrees ++ cmdState.infoState.trees }
+      }
 
       if Parser.isTerminalCommand cmd then break
 
@@ -275,8 +305,10 @@ def elabCommands (config : LeanBlockConfig) (str : StrLit)
       setEnv cmdState.env
       setScopes cmdState.scopes
 
+      -- The inner linter has already run correctly via elabCommandTopLevel, so we need to avoid
+      -- re-running it.
       for t in cmdState.infoState.trees do
-        pushInfoTree t
+        pushInfoTree (disableUnusedVarLinterInInfoTree t)
 
 
       let mut hls := Highlighted.empty

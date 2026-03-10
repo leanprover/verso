@@ -77,3 +77,34 @@ info: (some (Verso.Genre.Manual.InlineLean.Inline.lean, [{"seq":
     | .other code _ => Option.some (code.name, code.data)
     | _ => .none
   | _ => .none
+
+-- Ensure no spurious unused variable warning for `α`
+#docs (Genre.Manual) mutualInductiveTest "Mutual Inductive Test" :=
+:::::::
+```lean
+mutual
+  inductive TreeA (α : Type) where
+    | leafA : TreeA α
+    | nodeA : α → TreeB α → TreeA α
+
+  inductive TreeB (α : Type) where
+    | leafB : TreeB α
+    | nodeB : α → TreeA α → TreeB α
+end
+```
+:::::::
+
+-- Genuinely unused variable in a code block: the inner linter produces a warning that
+-- appears in the generated highlighted output (via `nonSilentMsgs` in `elabCommands`).
+-- `reportMessages` silences non-error messages, so no build warning is emitted.
+#docs (Genre.Manual) unusedVarTest "Unused Var Test" :=
+:::::::
+```lean (name := unusedVar)
+def unusedArgFn (unused : Nat) : Nat := 0
+```
+```leanOutput unusedVar
+unused variable `unused`
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+```
+:::::::
