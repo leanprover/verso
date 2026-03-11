@@ -592,10 +592,16 @@ def leanSection : DirectiveExpander
     let newScopes := headers.foldl (init := scopes) fun acc header =>
       { curScope with header } :: acc
     setScopes newScopes
+    -- Push scoped environment extensions for each scope level (matching what `section` does),
+    -- so that local macros and scoped attributes defined inside are properly deactivated on exit.
+    for _ in headers do
+      Lean.pushScope
     let result ← contents.mapM elabBlock
-    -- Pop the scopes we pushed
+    -- Pop the scopes we pushed (both the scope list and the scoped extensions)
     let scopes ← getScopes
     setScopes (scopes.drop headers.length)
+    for _ in headers do
+      Lean.popScope
     return result
 
 private def getClass : MessageSeverity → String

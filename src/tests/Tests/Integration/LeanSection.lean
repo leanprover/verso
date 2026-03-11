@@ -28,6 +28,26 @@ The variable {lean}`n` should be in scope here.
 
 After the section, `n` should no longer be in scope.
 
+:::leanSection "MacroScope"
+
+```lean -show
+private axiom innerVal : Nat
+local macro "myMacroTerm" : term => ``(innerVal)
+```
+
+Inside the section, {lean}`myMacroTerm` resolves to `innerVal`.
+
+:::
+
+Right after the section closes, `myMacroTerm` should be unknown: {lean +error}`myMacroTerm`
+
+```lean -show
+private axiom outerVal : Nat
+local macro "myMacroTerm" : term => ``(outerVal)
+```
+
+After the section, {lean}`myMacroTerm` should resolve unambiguously to `outerVal` only.
+
 :::::::
 
 end Verso.Integration.LeanSection
