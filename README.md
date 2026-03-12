@@ -500,6 +500,10 @@ Currently-applied overlays:
   every version's `-verso-search/` directory are replaced with the
   versions from `main` at the time of deployment. This ensures all
   deployed versions use the latest Unicode input implementation.
+- **Statistics HTML**: The contents of `static-web/stats.html` from
+  `main` are injected as the last element of `<head>` in every HTML
+  file in every version directory. This allows site-wide statistics or
+  analytics code to be updated without rebuilding old versions.
 
 Examples of additional overlays we might add in the future:
 
