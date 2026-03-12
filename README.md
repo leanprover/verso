@@ -495,6 +495,11 @@ Currently-applied overlays:
 - **Canonical URL**: Added to every HTML file, pointing to the
   corresponding page under `latest/`. This tells search engines where
   the authoritative version lives.
+- **Unicode input JS files**: The vendored Unicode input files
+  (`unicode-input.min.js` and `unicode-input-component.min.js`) in
+  every version's `-verso-search/` directory are replaced with the
+  versions from `main` at the time of deployment. This ensures all
+  deployed versions use the latest Unicode input implementation.
 
 Examples of additional overlays we might add in the future:
 
