@@ -42,6 +42,23 @@ class TestSearch:
           - listbox "Results":
             - listitem: No results""".strip())
 
+    def test_unicode_input(self, server: str, page: Page):
+        """Test that the search box converts Unicode abbreviations."""
+        page.goto(f"{server}")
+
+        searchbox = page.get_by_role("searchbox")
+        # \alpha has longer completions (alphaphi), so eager replacement won't fire.
+        # Press Tab to force replacement.
+        searchbox.type("\\alpha")
+        searchbox.press("Tab")
+        expect(searchbox).to_match_aria_snapshot('- searchbox "Search": α')
+
+        searchbox.clear()
+        # Similarly \to has longer completions (\top etc.), so use Tab.
+        searchbox.type("\\to")
+        searchbox.press("Tab")
+        expect(searchbox).to_match_aria_snapshot('- searchbox "Search": →')
+
     def test_suggestion(self, server: str, page: Page):
         """Test that the search box can find suggestions."""
         page.goto(f"{server}") 
