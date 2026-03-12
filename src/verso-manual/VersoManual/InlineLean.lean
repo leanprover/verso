@@ -387,6 +387,7 @@ def leanTerm : CodeBlockExpanderOf LeanInlineConfig
     let stx ← parseStrLitAsCategory `term str
     let (newMsgs, tree) ← do
       let initMsgs ← Core.getMessageLog
+      let origTrees ← getResetInfoTrees
       try
         Core.resetMessageLog
 
@@ -410,10 +411,12 @@ def leanTerm : CodeBlockExpanderOf LeanInlineConfig
             env := ← getEnv, fileMap := ← getFileMap, mctx := ← getMCtx, currNamespace := ← getCurrNamespace,
             openDecls := ← getOpenDecls, options := ← getOptions, ngen := ← getNGen
           }
-          pure <| InfoTree.context ctx (.node (Info.ofCommandInfo ⟨`Manual.leanInline, str⟩) (← getInfoState).trees)
+          let innerTrees ← getResetInfoTrees
+          pure <| InfoTree.context ctx (.node (Info.ofCommandInfo ⟨`Manual.leanTerm, str⟩) innerTrees)
         pure (← Core.getMessageLog, tree')
       finally
         Core.setMessageLog initMsgs
+        for t in origTrees do pushInfoTree t
 
     if let some name := config.name then
       let msgs ← newMsgs.toList.mapM fun (msg : Message) => do
@@ -423,7 +426,7 @@ def leanTerm : CodeBlockExpanderOf LeanInlineConfig
 
       saveOutputs name msgs
 
-    pushInfoTree tree
+    pushInfoTree (disableUnusedVarLinterInInfoTree tree)
 
     if config.error then
       if newMsgs.hasErrors then
@@ -461,6 +464,7 @@ def leanInline : RoleExpanderOf LeanInlineConfig
     let stx ← parseStrLitAsCategory `term term
     let (newMsgs, type, tree) ← do
       let initMsgs ← Core.getMessageLog
+      let origTrees ← getResetInfoTrees
       try
         Core.resetMessageLog
         let (tree', t) ← runWithOpenDecls <| runWithVariables fun _ => do
@@ -487,10 +491,12 @@ def leanInline : RoleExpanderOf LeanInlineConfig
             env := ← getEnv, fileMap := ← getFileMap, mctx := ← getMCtx, currNamespace := ← getCurrNamespace,
             openDecls := ← getOpenDecls, options := ← getOptions, ngen := ← getNGen
           }
-          pure <| (InfoTree.context ctx (.node (Info.ofCommandInfo ⟨`Manual.leanInline, arg⟩) (← getInfoState).trees), t)
+          let innerTrees ← getResetInfoTrees
+          pure <| (InfoTree.context ctx (.node (Info.ofCommandInfo ⟨`Manual.leanInline, arg⟩) innerTrees), t)
         pure (← Core.getMessageLog, t, tree')
       finally
         Core.setMessageLog initMsgs
+        for t in origTrees do pushInfoTree t
 
     if let some name := config.name then
 
@@ -501,7 +507,7 @@ def leanInline : RoleExpanderOf LeanInlineConfig
 
       saveOutputs name msgs
 
-    pushInfoTree tree
+    pushInfoTree (disableUnusedVarLinterInInfoTree tree)
 
     if let `(inline|role{%$s $f $_*}%$e[$_*]) ← getRef then
       Hover.addCustomHover (mkNullNode #[s, e]) type
@@ -541,6 +547,7 @@ def inst : RoleExpanderOf LeanBlockConfig
 
     let (newMsgs, tree) ← do
       let initMsgs ← Core.getMessageLog
+      let origTrees ← getResetInfoTrees
       try
         Core.resetMessageLog
         let tree' ← runWithOpenDecls <| runWithVariables fun _ => do
@@ -554,10 +561,12 @@ def inst : RoleExpanderOf LeanBlockConfig
             env := ← getEnv, fileMap := ← getFileMap, mctx := ← getMCtx, currNamespace := ← getCurrNamespace,
             openDecls := ← getOpenDecls, options := ← getOptions, ngen := ← getNGen
           }
-          pure <| InfoTree.context ctx (.node (Info.ofCommandInfo ⟨`Manual.leanInline, arg⟩) (← getInfoState).trees)
+          let innerTrees ← getResetInfoTrees
+          pure <| InfoTree.context ctx (.node (Info.ofCommandInfo ⟨`Manual.inst, arg⟩) innerTrees)
         pure (← Core.getMessageLog, tree')
       finally
         Core.setMessageLog initMsgs
+        for t in origTrees do pushInfoTree t
 
     if let some name := config.name then
       let msgs ← newMsgs.toList.mapM fun (msg : Message) => do
@@ -567,7 +576,7 @@ def inst : RoleExpanderOf LeanBlockConfig
 
       saveOutputs name msgs
 
-    pushInfoTree tree
+    pushInfoTree (disableUnusedVarLinterInInfoTree tree)
 
     reportMessages config.error term newMsgs
 
