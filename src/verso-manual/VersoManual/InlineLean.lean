@@ -28,7 +28,7 @@ open Verso ArgParse Doc Elab Genre.Manual Html Code Highlighted.WebAssets Expect
 open Lean Elab
 open SubVerso.Highlighting
 
-open Verso.SyntaxUtils (parserInputString runParserCategory' SyntaxError)
+open Verso.SyntaxUtils (inputContextFromStrLit)
 
 open Lean.Doc.Syntax
 open Lean.Elab.Tactic.GuardMsgs
@@ -259,13 +259,13 @@ def elabCommands (config : LeanBlockConfig) (str : StrLit)
       let opts := pp.tagAppFns.set opts true
       { sc with opts }
 
-    let altStr ← parserInputString str
+    let (pos, ictx) ← inputContextFromStrLit str
 
-    let ictx := Parser.mkInputContext altStr (← getFileName)
-    let cctx : Command.Context := { fileName := ← getFileName, fileMap := FileMap.ofString altStr, snap? := none, cancelTk? := none}
+    let fileMap ← getFileMap
+    let cctx : Command.Context := { fileName := ← getFileName, fileMap, snap? := none, cancelTk? := none}
 
     let mut cmdState : Command.State := {env := ← getEnv, maxRecDepth := ← MonadRecDepth.getMaxRecDepth, scopes := origScopes}
-    let mut pstate := {pos := 0, recovering := false}
+    let mut pstate := {pos}
     let mut cmds := #[]
 
     repeat
@@ -378,8 +378,6 @@ Elaborates the provided Lean term in the context of the current Verso module.
 def leanTerm : CodeBlockExpanderOf LeanInlineConfig
   | config, str => withoutAsync <| do
 
-    let altStr ← parserInputString str
-
     let leveller :=
       if let some us := config.universes then
         let us :=
@@ -388,7 +386,7 @@ def leanTerm : CodeBlockExpanderOf LeanInlineConfig
         Elab.Term.withLevelNames us
       else id
 
-    match Parser.runParserCategory (← getEnv) `term altStr (← getFileName) with
+    match (← SyntaxUtils.runParserCategory `term str) with
     | .error e => throwErrorAt str e
     | .ok stx =>
       let (newMsgs, tree) ← do
@@ -397,15 +395,15 @@ def leanTerm : CodeBlockExpanderOf LeanInlineConfig
           Core.resetMessageLog
 
           let tree' ← runWithOpenDecls <| runWithVariables fun _vars => do
-            let expectedType ← config.type.mapM fun (s : StrLit) => do
-              match Parser.runParserCategory (← getEnv) `term s.getString (← getFileName) with
+            let expectedType ← config.type.mapM fun (str : StrLit) => do
+              match (← SyntaxUtils.runParserCategory `term str) with
               | .error e => throwErrorAt stx e
               | .ok stx => withEnableInfoTree false do
                 let t ← leveller <| Elab.Term.elabType stx
                 Term.synthesizeSyntheticMVarsNoPostponing
                 let t ← instantiateMVars t
                 if t.hasExprMVar || t.hasLevelMVar then
-                  throwErrorAt s "Type contains metavariables: {t}"
+                  throwErrorAt str "Type contains metavariables: {t}"
                 pure t
 
             let e ← Elab.Term.elabTerm (catchExPostpone := true) stx expectedType
@@ -455,7 +453,6 @@ def leanInline : RoleExpanderOf LeanInlineConfig
       | throwError "Expected exactly one argument"
     let `(inline|code( $term:str )) := arg
       | throwErrorAt arg "Expected code literal with the example name"
-    let altStr ← parserInputString term
 
     let leveller :=
       if let some us := config.universes then
@@ -465,7 +462,7 @@ def leanInline : RoleExpanderOf LeanInlineConfig
         Elab.Term.withLevelNames us
       else id
 
-    match Parser.runParserCategory (← getEnv) `term altStr (← getFileName) with
+    match (← SyntaxUtils.runParserCategory `term term) with
     | .error e => throwErrorAt term e
     | .ok stx =>
 
@@ -475,15 +472,15 @@ def leanInline : RoleExpanderOf LeanInlineConfig
           Core.resetMessageLog
           let (tree', t) ← runWithOpenDecls <| runWithVariables fun _ => do
 
-            let expectedType ← config.type.mapM fun (s : StrLit) => do
-              match Parser.runParserCategory (← getEnv) `term s.getString (← getFileName) with
+            let expectedType ← config.type.mapM fun (str : StrLit) => do
+              match (← SyntaxUtils.runParserCategory `term str) with
               | .error e => throwErrorAt term e
               | .ok stx => withEnableInfoTree false do
                 let t ← leveller <| Elab.Term.elabType stx
                 Term.synthesizeSyntheticMVarsNoPostponing
                 let t ← instantiateMVars t
                 if t.hasExprMVar || t.hasLevelMVar then
-                  throwErrorAt s "Type contains metavariables: {t}"
+                  throwErrorAt str "Type contains metavariables: {t}"
                 pure t
 
             let e ← leveller <| Elab.Term.elabTerm (catchExPostpone := true) stx expectedType
@@ -546,9 +543,8 @@ def inst : RoleExpanderOf LeanBlockConfig
       | throwError "Expected exactly one argument"
     let `(inline|code( $term:str )) := arg
       | throwErrorAt arg "Expected code literal with the example name"
-    let altStr ← parserInputString term
 
-    match Parser.runParserCategory (← getEnv) `term altStr (← getFileName) with
+    match (← SyntaxUtils.runParserCategory `term term) with
     | .error e => throwErrorAt term e
     | .ok stx =>
       let (newMsgs, tree) ← do
