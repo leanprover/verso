@@ -4,6 +4,11 @@ import os
 from release_utils import run_git_command, is_git_ancestor, find_latest_version, find_latest_stable_version
 from pathlib import Path
 
+UNICODE_INPUT_FILES = [
+    "unicode-input.min.js",
+    "unicode-input-component.min.js",
+]
+
 
 def add_metadata(directory, version_name, extensions=(".html", ".htm")):
     """
@@ -45,14 +50,38 @@ def add_metadata(directory, version_name, extensions=(".html", ".htm")):
                     print(f"Skipped: {filepath}")
 
 
+def replace_unicode_input_files(directory, unicode_input_files):
+    """
+    Recursively walk through `directory`, find all -verso-search subdirectories,
+    and replace Unicode input JS files with the provided contents from main.
+
+    Args:
+        directory (Path): The version directory to search within
+        unicode_input_files (dict): Map from filename to bytes content
+    """
+    for root, dirs, files in os.walk(directory):
+        if os.path.basename(root) == "-verso-search":
+            for filename, content in unicode_input_files.items():
+                filepath = os.path.join(root, filename)
+                if os.path.exists(filepath):
+                    with open(filepath, "wb") as f:
+                        f.write(content)
+                    print(f"Replaced Unicode input file: {filepath}")
+                else:
+                    print(f"Skipped (not present): {filepath}")
+
+
 # This function is the right thing to change to change the
 # content of the overlays that are applied.
-def apply_overlays(deploy_dir):
+def apply_overlays(deploy_dir, unicode_input_files=None):
     """
     Apply desired overlays inside current directory.
 
     Args:
         deploy_dir (str): Directory containing all versions
+        unicode_input_files (dict): Map from filename to bytes content, read
+            from main before switching to the deploy branch. If None or empty,
+            the Unicode input file replacement overlay is skipped.
     """
     latest_version = find_latest_version(deploy_dir)
     latest_stable_version = find_latest_stable_version(deploy_dir)
@@ -62,6 +91,8 @@ def apply_overlays(deploy_dir):
         # Check for index.html to identify version directories
         if inner.is_dir() and (inner / "index.html").is_file():
             add_metadata(inner, str(inner))
+            if unicode_input_files:
+                replace_unicode_input_files(inner, unicode_input_files)
 
 
 def deploy_overlays(deploy_dir, src_branch, tgt_branch):
@@ -79,6 +110,18 @@ def deploy_overlays(deploy_dir, src_branch, tgt_branch):
     os.chdir(deploy_dir)
     # Save current git commit to restore later
     current_branch = run_git_command(["git", "branch", "--show-current"])
+
+    # Read Unicode input files from the current branch (main) before switching
+    unicode_input_files = {}
+    for filename in UNICODE_INPUT_FILES:
+        filepath = Path(deploy_dir) / "static-web" / "search" / filename
+        if filepath.exists():
+            with open(filepath, "rb") as f:
+                unicode_input_files[filename] = f.read()
+            print(f"overlay.py: read Unicode input file from main: {filepath}")
+        else:
+            print(f"overlay.py: Unicode input file not found on main, skipping: {filepath}")
+
     try:
         if is_git_ancestor(tgt_branch, src_branch):
             raise Exception(
@@ -92,7 +135,7 @@ def deploy_overlays(deploy_dir, src_branch, tgt_branch):
             return
 
         print("Applying overlays...")
-        apply_overlays(deploy_dir)
+        apply_overlays(deploy_dir, unicode_input_files)
         print("Creating merge commit...")
         # Add version directories and aliases (stable may not exist for RC releases)
         add_paths = ["4*", "latest"]
