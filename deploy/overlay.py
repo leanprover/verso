@@ -9,6 +9,8 @@ UNICODE_INPUT_FILES = [
     "unicode-input-component.min.js",
 ]
 
+STATS_HTML_FILE = "stats.html"
+
 
 def add_metadata(directory, version_name, extensions=(".html", ".htm")):
     """
@@ -71,9 +73,37 @@ def replace_unicode_input_files(directory, unicode_input_files):
                     print(f"Skipped (not present): {filepath}")
 
 
+def inject_stats_html(directory, stats_html_content, extensions=(".html", ".htm")):
+    """
+    Recursively walk through `directory`, find all HTML files,
+    and insert stats_html_content as the last element of <head>.
+
+    Args:
+        directory (Path): The directory in which to recursively modify files
+        stats_html_content (str): HTML content to inject before </head>
+    """
+    for root, _, files in os.walk(directory):
+        for filename in files:
+            if filename.lower().endswith(extensions):
+                filepath = os.path.join(root, filename)
+                with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+                    content = f.read()
+
+                if "</head>" in content:
+                    new_content = content.replace(
+                        "</head>",
+                        f'{stats_html_content}</head>'
+                    )
+                    with open(filepath, "w", encoding="utf-8") as f:
+                        f.write(new_content)
+                    print(f"Injected stats HTML: {filepath}")
+                else:
+                    print(f"Skipped stats HTML injection (no </head>): {filepath}")
+
+
 # This function is the right thing to change to change the
 # content of the overlays that are applied.
-def apply_overlays(deploy_dir, unicode_input_files=None):
+def apply_overlays(deploy_dir, unicode_input_files=None, stats_html_content=None):
     """
     Apply desired overlays inside current directory.
 
@@ -82,6 +112,8 @@ def apply_overlays(deploy_dir, unicode_input_files=None):
         unicode_input_files (dict): Map from filename to bytes content, read
             from main before switching to the deploy branch. If None or empty,
             the Unicode input file replacement overlay is skipped.
+        stats_html_content (str): Content of stats.html from main. If None,
+            the stats HTML injection overlay is skipped.
     """
     latest_version = find_latest_version(deploy_dir)
     latest_stable_version = find_latest_stable_version(deploy_dir)
@@ -93,6 +125,8 @@ def apply_overlays(deploy_dir, unicode_input_files=None):
             add_metadata(inner, str(inner))
             if unicode_input_files:
                 replace_unicode_input_files(inner, unicode_input_files)
+            if stats_html_content is not None:
+                inject_stats_html(inner, stats_html_content)
 
 
 def deploy_overlays(deploy_dir, src_branch, tgt_branch):
@@ -122,6 +156,16 @@ def deploy_overlays(deploy_dir, src_branch, tgt_branch):
         else:
             print(f"overlay.py: Unicode input file not found on main, skipping: {filepath}")
 
+    # Read stats.html from the current branch (main) before switching
+    stats_html_content = None
+    stats_html_path = Path(deploy_dir) / "doc" / STATS_HTML_FILE
+    if stats_html_path.exists():
+        with open(stats_html_path, "r", encoding="utf-8") as f:
+            stats_html_content = f.read()
+        print(f"overlay.py: read stats HTML from main: {stats_html_path}")
+    else:
+        print(f"overlay.py: stats HTML not found on main, skipping: {stats_html_path}")
+
     try:
         if is_git_ancestor(tgt_branch, src_branch):
             raise Exception(
@@ -135,7 +179,7 @@ def deploy_overlays(deploy_dir, src_branch, tgt_branch):
             return
 
         print("Applying overlays...")
-        apply_overlays(deploy_dir, unicode_input_files)
+        apply_overlays(deploy_dir, unicode_input_files, stats_html_content)
         print("Creating merge commit...")
         # Add version directories and aliases (stable may not exist for RC releases)
         add_paths = ["4*", "latest"]
