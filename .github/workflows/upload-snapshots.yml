@@ -1,0 +1,41 @@
+name: Deploy postdeploy branch
+
+on:
+    workflow_run:
+        workflows: ["Apply Overlays"]
+        types:
+            - completed
+
+    push:
+        branches:
+            - postdeploy
+
+    workflow_dispatch:
+
+jobs:
+    deploy:
+        name: Deploy to Netlify
+        runs-on: ubuntu-latest
+        if:
+            ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion ==
+            'success' }}
+        steps:
+            - name: Checkout postdeploy branch
+              uses: actions/checkout@v6
+              with:
+                  ref: postdeploy
+
+            - name: Deploy to Netlify
+              uses: nwtgck/actions-netlify@v3.0
+              with:
+                  publish-dir: "."
+                  production-branch: postdeploy
+                  production-deploy: true
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  deploy-message: "Deploy from ${{ github.ref }}"
+                  enable-commit-comment: false
+                  enable-pull-request-comment: false
+                  fails-without-credentials: true
+              env:
+                  NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+                  NETLIFY_SITE_ID: "3f1f4220-2096-4197-9fd9-4754cc80a2d2"
