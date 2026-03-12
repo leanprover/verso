@@ -94,6 +94,17 @@ end
 ```
 :::::::
 
+-- Ensure no spurious unused variable warning for named binders in {lean}`...` inline terms.
+-- In term like `(x : Nat) → String`, `x` is a named binder that doesn't appear in the body,
+-- but the metalanguage's unused variable linter should not re-fire on the info tree pushed
+-- by leanInline.
+#guard_msgs in
+#docs (Genre.Manual) inlineNamedBinderType "Inline Named Binder Type" :=
+:::::::
+{lean}`(x : Nat) → String`
+:::::::
+
+
 -- Genuinely unused variable in a code block: the inner linter produces a warning that
 -- appears in the generated highlighted output (via `nonSilentMsgs` in `elabCommands`).
 -- `reportMessages` silences non-error messages, so no build warning is emitted.
