@@ -7,6 +7,7 @@ import Lean.Environment
 import Lean.Message
 import Lean.Exception
 import Verso
+import VersoManual.InlineLean.Baffler
 
 open Lean
 open SubVerso.Highlighting
