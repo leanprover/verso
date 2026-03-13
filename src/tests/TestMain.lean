@@ -153,6 +153,11 @@ def testBlog (_ : Config) : IO Unit := do
   if fails > 0 then
     throw <| .userError s!"{fails} blog tests failed"
 
+def testDocSourceConfig (_ : Config) : IO Unit := do
+  let fails ← runDocSourceConfigTests
+  if fails > 0 then
+    throw <| .userError s!"{fails} doc source config tests failed"
+
 -- Interactive tests via the LSP server
 def testInteractive (_ : Config) : IO Unit := do
   IO.println "Running interactive (LSP) tests..."
@@ -167,6 +172,7 @@ open Verso.Integration in
 def tests := [
   testSerialization,
   testBlog,
+  testDocSourceConfig,
   testStemmer,
   testTexOutput "sample-doc" SampleDoc.doc,
   testTexOutput "inheritance-doc" InheritanceDoc.doc,
