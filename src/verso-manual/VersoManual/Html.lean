@@ -425,7 +425,7 @@ public def page
   let relativeRoot := String.join <| "./" :: path.toList.map (fun _ => "../")
   let defer := #[("defer", "defer")]
   {{
-    <html>
+    <html data-verso-dark-mode="true">
       <head>
         <script>
           {{addSlashJs}}
@@ -433,6 +433,7 @@ public def page
         <base href={{relativeRoot}}/>
         <meta charset="utf-8"/>
         <meta name="viewport" content="height=device-height, width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1"/>
+        <meta name="color-scheme" content="light dark"/>
         <title>{{textTitle}}</title>
         <link rel="stylesheet" href="book.css" />
         <link rel="stylesheet" href="verso-vars.css" />
@@ -444,6 +445,7 @@ public def page
         <link rel="stylesheet" href="-verso-search/search-box.css"/>
         <link rel="stylesheet" href="-verso-search/search-highlight.css"/>
         <link rel="stylesheet" href="-verso-search/domain-display.css"/>
+        <script src="theme-toggle.js"></script>
         {{extraJsFiles.map fun f => ({{<script src=s!"{f.1}" {{if f.2 then defer else #[]}}></script>}})}}
         {{extraStylesheets.map (fun url => {{<link rel="stylesheet" href={{url}}/> }})}}
         {{extraCss.toArray.map ({{<style>{{Html.text false ·.css}}</style>}})}}
@@ -464,6 +466,38 @@ public def page
           </div>
           <div class="header-title-wrapper">
             <a href={{if let some dest := logoLink then dest else "/"}} class="header-title"><h1>{{bookTitle}}</h1></a>
+          </div>
+          <div id="header-widgets">
+            <div id="header-search-slot"></div>
+            <div id="theme-toggle" class="theme-toggle" hidden="hidden">
+              <button id="theme-toggle-button" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="theme-toggle-menu" aria-label="Theme">
+                <span class="theme-toggle-button-icon" aria-hidden="true"></span>
+                <span class="theme-toggle-button-chevron" aria-hidden="true"></span>
+              </button>
+              <div id="theme-toggle-menu" class="theme-toggle-menu" role="menu" hidden="hidden">
+                <button type="button" class="theme-toggle-option" role="menuitemradio" data-theme-option="system" aria-checked="false">
+                  <span class="theme-toggle-option-icon" aria-hidden="true"></span>
+                  <span class="theme-toggle-option-copy">
+                    <span class="theme-toggle-option-label">"System"</span>
+                    <span class="theme-toggle-option-meta">"Follow your OS setting"</span>
+                  </span>
+                </button>
+                <button type="button" class="theme-toggle-option" role="menuitemradio" data-theme-option="light" aria-checked="false">
+                  <span class="theme-toggle-option-icon" aria-hidden="true"></span>
+                  <span class="theme-toggle-option-copy">
+                    <span class="theme-toggle-option-label">"Light"</span>
+                    <span class="theme-toggle-option-meta">"Always use the light palette"</span>
+                  </span>
+                </button>
+                <button type="button" class="theme-toggle-option" role="menuitemradio" data-theme-option="dark" aria-checked="false">
+                  <span class="theme-toggle-option-icon" aria-hidden="true"></span>
+                  <span class="theme-toggle-option-copy">
+                    <span class="theme-toggle-option-label">"Dark"</span>
+                    <span class="theme-toggle-option-meta">"Always use the dark palette"</span>
+                  </span>
+                </button>
+              </div>
+            </div>
           </div>
         </header>
         <label for="toggle-toc" id="toggle-toc-click">

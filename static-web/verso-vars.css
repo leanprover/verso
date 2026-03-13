@@ -1,4 +1,6 @@
 :root {
+    color-scheme: light;
+
     /** Typography **/
     /* The font family used for headers, ToC entries, etc */
     --verso-structure-font-family: "Helvetica Neue", "Segoe UI", "Roboto", Arial, sans-serif;
@@ -7,13 +9,59 @@
     /* The font family used for code */
     --verso-code-font-family: monospace;
 
+    /** Background colors **/
+    --verso-background-color: #ffffff;
+    --verso-background-color: light-dark(#ffffff, #1e1e1e);
+    /*
+    Secondary background used for elevated UI regions, such as sidebars, controls,
+    and overlays that sit on top of the page background.
+    */
+    --verso-secondary-background-color: #f9fbfd;
+    --verso-secondary-background-color: light-dark(#f9fbfd, #181818);
+    --verso-surface-color: var(--verso-secondary-background-color);
+
     /** Text colors **/
-    --verso-text-color: black;
+    --verso-text-color: #333333;
+    --verso-text-color: light-dark(#333333, #eeeeee);
+    --verso-text-color-light: #64748b;
+    --verso-text-color-light: light-dark(#64748b, #bbbbbb);
     --verso-code-color: black;
+    --verso-code-color: light-dark(black, #eeeeee);
     --verso-structure-color: black;
+    --verso-structure-color: light-dark(black, #eeeeee);
+
+    /** Link colors **/
+    --verso-link-color: #386ee0;
+    --verso-link-color: light-dark(#386ee0, #3b94ff);
+    --verso-link-hover-color: #0073e6;
+    --verso-link-hover-color: light-dark(#0073e6, #4d9efc);
+
+    /** Border colors **/
+    --verso-border-color: #e4ebf3;
+    --verso-border-color: light-dark(#e4ebf3, #696969);
+    --verso-border-color-light: #d1d9e2;
+    --verso-border-color-light: light-dark(#d1d9e2, #8a8a8a);
+    --verso-search-box-border-color: #8ea1b3;
+    --verso-search-box-border-color: light-dark(#8ea1b3, #9aa7b6);
+    --verso-search-box-border-active-color: var(--verso-link-color);
 
     /** Selected items (e.g. search results) */
     --verso-selected-color: #def;
+    --verso-selected-color: light-dark(#def, #2a4a6a);
+
+    /** Shadow colors **/
+    --verso-shadow-color: rgba(35, 55, 139, 0.1);
+    --verso-shadow-color: light-dark(rgba(35, 55, 139, 0.1), rgba(0, 0, 0, 0.5));
+
+    /** Hover/tooltip colors **/
+    --verso-hover-background-color: #e5e5e5;
+    --verso-hover-background-color: light-dark(#e5e5e5, #3a3a3a);
+    --verso-hover-highlight-color: #eeeeee;
+    --verso-hover-highlight-color: light-dark(#eeeeee, #444444);
+    --verso-error-hover-color: #ffb3b3;
+    --verso-error-hover-color: light-dark(#ffb3b3, #5c2a2a);
+    --verso-info-hover-color: #b3d4ff;
+    --verso-info-hover-color: light-dark(#b3d4ff, #2a3d5c);
 
     /** Message colors **/
     /*
@@ -23,11 +71,15 @@
     wavy underline or a bar in the margin).
     */
     --verso-info-color: black;
+    --verso-info-color: light-dark(black, #eeeeee);
     --verso-info-indicator-color: #4777ff;
     --verso-warning-color: black;
+    --verso-warning-color: light-dark(black, #eeeeee);
     --verso-warning-indicator-color: #e7a71d; /* 2.11 contrast ratio for white, 9.94 for black */
     --verso-error-color: #cc0000;
+    --verso-error-color: light-dark(#cc0000, #ff6666);
     --verso-error-indicator-color: #ff0000;
+    --verso-error-indicator-color: light-dark(#ff0000, #ff4444);
 
     /** Code Highlighting **/
     /*
@@ -51,4 +103,14 @@
     --verso-code-var-weight: normal;
     --verso-code-var-style: italic;
     --verso-code-kw-font-family: var(--verso-code-font-family);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root[data-verso-dark-mode]:not([data-theme="light"]) {
+        color-scheme: dark;
+    }
+}
+
+:root[data-verso-dark-mode][data-theme="dark"] {
+    color-scheme: dark;
 }

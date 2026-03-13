@@ -16,7 +16,7 @@
 
 @media screen and (width <= 700px) {
     :root {
-        --search-bar-width: 12rem;
+        --search-bar-width: min(12rem, 42vw);
     }
 }
 
@@ -30,14 +30,18 @@
 }
 
 #search-wrapper .combobox .cb_edit {
-    background-color: white;
-    color: black;
+    background-color: var(--verso-background-color, white);
+    color: var(--verso-text-color, black);
     box-sizing: border-box;
     padding: 0;
     margin: 0;
     vertical-align: bottom;
-    border: none;
-    border-bottom: 1px solid gray;
+    border: 1px solid
+        var(
+            --verso-search-box-border-color,
+            var(--verso-border-color-light, var(--verso-border-color, gray))
+        );
+    border-radius: 0.25rem;
     position: relative;
     cursor: pointer;
     width: var(--search-bar-width);
@@ -47,11 +51,18 @@
     font-family: system-ui, sans-serif;
     /* Fix firefox eating spaces in textContent */
     white-space: -moz-pre-space;
+    transition:
+        border-color 0.15s ease-in-out,
+        background-color 0.15s ease-in-out;
 }
 
 #search-wrapper .combobox .group.focus .cb_edit,
 #search-wrapper .combobox .group .cb_edit:hover {
     background-color: var(--selected-color);
+    border-color: var(
+        --verso-search-box-border-active-color,
+        var(--verso-link-color, currentColor)
+    );
     outline: auto;
 }
 
@@ -60,7 +71,7 @@
 #search-wrapper .cb_edit:empty:before {
     content: attr(placeholder);
     pointer-events: none;
-    color: #888;
+    color: var(--verso-text-color-light, #888);
     font-family: sans-serif;
     display: block;
 }
@@ -72,10 +83,14 @@
     top: calc(100%);
     width: var(--search-bar-width);
     list-style: none;
-    background-color: white;
+    background-color: var(--verso-background-color, white);
     display: none;
     box-sizing: border-box;
-    border: 2px currentcolor solid;
+    border: 2px solid
+        var(
+            --verso-search-box-border-color,
+            var(--verso-border-color-light, var(--verso-border-color, currentcolor))
+        );
     max-height: 20rem;
     overflow: scroll;
     overflow-x: hidden;
@@ -129,8 +144,8 @@
     background-color: var(--selected-color);
     padding-bottom: calc(0.2rem - 1px);
     padding-top: calc(0.2rem - 1px);
-    border-bottom: 1px solid currentColor;
-    border-top: 1px solid currentColor;
+    border-bottom: 1px solid var(--verso-border-color, currentColor);
+    border-top: 1px solid var(--verso-border-color, currentColor);
 }
 
 /* Couple the domain tighter with the search term on smaller screens,
@@ -161,7 +176,7 @@
 
 #search-wrapper .search-result .domain {
     text-align: right;
-    color: #777;
+    color: var(--verso-text-color-light, #777);
     font-style: italic;
     font-family: var(--verso-structure-font-family);
     font-weight: normal;
@@ -195,7 +210,7 @@
 
 #search-wrapper .more-results {
     text-align: center;
-    color: #777;
+    color: var(--verso-text-color-light, #777);
     font-size: 0.7rem;
 }
 
@@ -211,15 +226,8 @@
 /* Page layout */
 #search-wrapper {
     width: fit-content;
-    z-index: 1;
-    position: absolute;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    padding: 0 0.5rem;
     display: flex;
-    flex-direction: column;
-    justify-content: center;
     align-items: center;
-    background-color: white;
+    flex-shrink: 0;
+    background-color: transparent;
 }
