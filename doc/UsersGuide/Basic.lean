@@ -113,6 +113,7 @@ Mixing incompatible features results in an ordinary Lean type error.
 # Index
 %%%
 tag := "index"
+file := "the-index"
 number := false
 %%%
 

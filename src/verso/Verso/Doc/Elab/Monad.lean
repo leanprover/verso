@@ -364,7 +364,7 @@ public def PartElabM.addLinkDef (refName : TSyntax `str) (url : String) : PartEl
       hints := .abbrev,
       safety := .safe
     }
-    setReducibilityStatus n .instanceReducible
+    setReducibilityStatus n .implicitReducible
     Meta.addInstance n AttributeKind.global (eval_prio default)
     modifyThe State fun st => {st with linkDefs := st.linkDefs.insert strName ⟨refName, url⟩}
 
@@ -407,7 +407,7 @@ public def PartElabM.addFootnoteDef (refName : TSyntax `str) (content : Array (T
       hints := .abbrev,
       safety := .safe
     }
-    setReducibilityStatus n .instanceReducible
+    setReducibilityStatus n .implicitReducible
     Meta.addInstance n AttributeKind.global (eval_prio default)
     modifyThe State fun st => {st with footnoteDefs := st.footnoteDefs.insert strName ⟨refName, content⟩}
   | some _ =>

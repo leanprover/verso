@@ -85,7 +85,7 @@ def dirLinks : Site → TemplateM (Array Html)
     subs.filterMapM fun
       | .page name _id txt .. | .blog name _id txt .. =>
         if txt.metadata.map (·.showInNav) |>.getD true then
-          pure <| some {{<li><a href={{name}}>{{txt.titleString}}</a></li>}}
+          pure <| some {{<li><a href=s!"{name}/">{{txt.titleString}}</a></li>}}
         else
           pure none
       | .static .. => pure none

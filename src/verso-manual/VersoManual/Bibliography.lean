@@ -184,7 +184,13 @@ def Citable.bibHtml [Monad m]
     return {{ {{authors}} s!", {p.year}. " {{ link {{"“" {{← go p.title}} "”"}} }} ". In " <em>{{← go p.booktitle}}"."</em>{{(← p.series.mapM go).map ({{" (" {{·}} ")" }}) |>.getD .empty}} }}
   | .article p =>
     let authors ← andList <$> p.authors.mapM go
-    return {{ {{authors}} " (" {{(← p.month.mapM go).map (· ++ {{" "}}) |>.getD .empty}}s!"{p.year}" "). " {{ link {{"“" {{← go p.title}} "”"}} }} ". " <em>{{← go p.journal}}"."</em> <strong>{{← go p.volume}}</strong>" "{{← go p.number}} {{p.pages.map (fun (x, y) => s!"pp. {x}–{y}") |>.getD .empty }}  "."}}
+    let journalDot := if (slugString p.journal).endsWith "." then "" else "."
+    let numberInl ← go p.number
+    let numberHtml : Html := if (slugString p.number).isEmpty then .empty
+                              else {{"(" {{numberInl}} ")"}}
+    let pagesHtml : Html := p.pages.map (fun (x, y) => {{", pp. " s!"{x}–{y}"}})
+                             |>.getD .empty
+    return {{ {{authors}} " (" {{(← p.month.mapM go).map (· ++ {{" "}}) |>.getD .empty}}s!"{p.year}" "). " {{ link {{"“" {{← go p.title}} "”"}} }} ". " <em>{{← go p.journal}}{{journalDot}}</em>" " <strong>{{← go p.volume}}</strong>{{numberHtml}}{{pagesHtml}}"."}}
   | .thesis p =>
     return {{ {{← go p.author}} s!", {p.year}. " <em>{{link (← go p.title)}}</em> ". " {{← go p.degree}} ", " {{← go p.university}} }}
   | .arXiv p =>
@@ -212,15 +218,21 @@ def Citable.bibTeX (go : Doc.Inline Genre.Manual → TeXT Manual (ReaderT Extens
      }
   | .article p =>
     let authors ← andListTeX <$> p.authors.mapM go
+    let journalDot := if (slugString p.journal).endsWith "." then "" else "."
+    let numberInl ← go p.number
+    let numberTeX : TeX := if (slugString p.number).isEmpty then .empty
+                            else \TeX{"(" \Lean{numberInl} ")"}
+    let pagesTeX : TeX := p.pages.map (fun (x, y) => \TeX{", pp.~" \Lean{toString x} "--" \Lean{toString y} })
+                           |>.getD .empty
     return \TeX{
        \Lean{authors}  " ("
        \Lean{ (← p.month.mapM go).map (fun x => \TeX{\Lean{x} " "}) |>.getD .empty  }
        \Lean{toString p.year} "). "
-       \Lean{ link \TeX{ "``" \Lean{← go p.title} "''" } } ". In "
-       \em{ \Lean{ ← go p.journal } "." }
-       \Lean{ ← go p.volume } " "
-       \Lean{ ← go p.number }
-       \Lean{ p.pages.map (fun (x, y) => \TeX{\Lean{toString x} "-" \Lean{toString y} }) |>.getD .empty }
+       \Lean{ link \TeX{ "``" \Lean{← go p.title} "''" } } ". "
+       \em{ \Lean{ ← go p.journal } \Lean{journalDot} }
+       "~" \textbf{ \Lean{ ← go p.volume } }
+       \Lean{numberTeX}
+       \Lean{pagesTeX}
        "."
      }
   | .thesis p =>
@@ -271,7 +283,7 @@ where
     else if h : p.authors.size = 1 then
       go <| Bibliography.lastName p.authors[0]
     else if h : p.authors.size > 3 then
-      (· ++ {{<em>"et al"</em>}}) <$> go (Bibliography.lastName p.authors[0])
+      (· ++ {{" "<em>"et al."</em>}}) <$> go (Bibliography.lastName p.authors[0])
     else andList <$> p.authors.mapM (go ∘ Bibliography.lastName)
 
 open Verso.Doc.TeX in
@@ -308,9 +320,10 @@ where
     else if h : p.authors.size = 1 then
       go <| Bibliography.lastName p.authors[0]
     else if h : p.authors.size > 3 then
-      (· ++ \TeX{\em{"et al"} }) <$> go (Bibliography.lastName p.authors[0])
+      (· ++ \TeX{" " \em{"et al."} }) <$> go (Bibliography.lastName p.authors[0])
     else andListTeX <$> p.authors.mapM (go ∘ Bibliography.lastName)
 
+@[implicit_reducible]
 private def arrayOrd (ord : Ord α) : Ord (Array α) := inferInstance
 
 private partial def cmpCite : Json → Json → Ordering

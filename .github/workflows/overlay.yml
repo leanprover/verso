@@ -1,0 +1,54 @@
+# This workflow applies HTML overlays (canonical URLs, robots noindex) to
+# deployed content and pushes to the postdeploy branch.
+#
+# In normal operation, the workflow_run trigger fires when release-tag.yml completes.
+# Pushes made by release-tag.yml using GITHUB_TOKEN do NOT trigger the push events
+# (GitHub prevents this to avoid infinite loops).
+
+name: Apply Overlays
+
+on:
+    workflow_run:
+        workflows: ["Deploy Tagged Version"]
+        types:
+            - completed
+
+    push:
+        branches:
+            - deploy
+
+    workflow_dispatch:
+
+jobs:
+    apply-overlays:
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+        if:
+            ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion ==
+            'success' }}
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v6
+
+            - name: Set up Python
+              uses: actions/setup-python@v6
+              with:
+                  python-version: "3.12"
+
+            - name: Configure Git
+              run: |
+                  git config --global user.name "github-actions[bot]"
+                  git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+                  git fetch origin deploy:deploy
+                  git fetch origin postdeploy:postdeploy
+
+            - name: Apply overlays
+              run: |
+                  echo "Adding overlays to predeploy"
+                  # -B to prevent creation of __pycache__ directory
+                  # which would get committed due to lack of .gitignore
+                  python -B deploy/overlay.py . deploy postdeploy
+
+            - name: Push postdeploy branch
+              run: git push origin postdeploy

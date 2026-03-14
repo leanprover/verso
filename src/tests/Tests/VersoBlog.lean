@@ -85,3 +85,23 @@ example : base = 40 := rfl
 ```lean post +error
 #check scratch
 ```
+
+-- Regression test for inline Lean role naming in Blog:
+-- canonical `{lean}` works without warnings.
+#docs (Post) inlineLeanRoleNames "Inline Lean Role Names" :=
+```leanInit post
+```
+
+Canonical role: {lean post}`Nat.succ 1`.
+
+/--
+warning: `{leanInline}` is deprecated; use `{lean}` instead.
+-/
+#docs (Post) inlineLeanRoleNamesDeprecated "Inline Lean Role Names (deprecated alias)" :=
+```leanInit post2
+```
+
+Legacy role: {leanInline post2}`Nat.succ 1`.
+
+#guard inlineLeanRoleNames.toPart.content.size > 0
+#guard inlineLeanRoleNamesDeprecated.toPart.content.size > 0

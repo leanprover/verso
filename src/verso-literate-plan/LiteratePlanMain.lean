@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 import VersoLiterate
+import Std.Data.HashMap
 
 open Lean
 open VersoLiterate
@@ -92,6 +93,21 @@ where
       for m in children do
         unless modules.any (· == m) do
           IO.eprintln s!"Warning: ordered child module '{m}' (under '{parent}') does not exist in the module set"
+
+    -- Validate: no duplicate URLs
+    let mut urlMap : Std.HashMap String Name := {}
+    let mut hasDuplicateUrl := false
+    for m in modules do
+      let resolved := config.resolveForModule m
+      let url := match resolved.url with
+        | some u => u
+        | none => "/".intercalate (m.components.map toString)
+      match urlMap[url]? with
+      | some other =>
+        IO.eprintln s!"Error: modules '{other}' and '{m}' resolve to the same URL '{url}'"
+        hasDuplicateUrl := true
+      | none => urlMap := urlMap.insert url m
+    if hasDuplicateUrl then return 1
 
     -- Write plan file
     let planContents := "\n".intercalate (modules.map Name.toString)

@@ -653,6 +653,43 @@ private def testPerModuleTitle (data : TestData) : IO Unit := withTestDir data f
   unless hasSubstring navbarSection "Core Library" do
     throw <| IO.userError "per-module title: navbar should contain 'Core Library'"
 
+/-- Per-module URL override places the HTML at the custom path and updates navbar links. -/
+private def testPerModuleUrl (data : TestData) : IO Unit := withTestDir data fun jsonDir htmlDir _ tomlFile => do
+  IO.FS.writeFile tomlFile (String.intercalate "\n" [
+    "[modules.\"LitConfig.Core\"]",
+    "url = \"core-docs\"",
+    ""
+  ])
+  runLiterateHtml jsonDir htmlDir (configFile := some tomlFile)
+
+  -- HTML should be at the custom URL path, not the default
+  unless ← (htmlDir / "core-docs" / "index.html").pathExists do
+    throw <| IO.userError "per-module url: expected HTML at core-docs/index.html"
+  if ← (htmlDir / "LitConfig" / "Core" / "index.html").pathExists then
+    throw <| IO.userError "per-module url: HTML should not exist at default path LitConfig/Core/index.html"
+  -- Navbar should link to the custom URL
+  let litConfigHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "index.html")
+  let navbarSection := litConfigHtml.splitOn "module-tree" |>.getD 1 "" |>.splitOn "</nav>" |>.head!
+  unless hasSubstring navbarSection "core-docs/" do
+    throw <| IO.userError "per-module url: navbar should link to 'core-docs/'"
+
+/-- Plan fails when two modules resolve to the same URL. -/
+private def testPlanDuplicateUrl (data : TestData) : IO Unit := IO.FS.withTempDir fun tmpDir => do
+  let planFile := tmpDir / "plan"
+  let tomlFile := tmpDir / "literate.toml"
+  -- Set LitConfig.Core's url to "LitConfig/NoDocstrings" which collides with the default
+  -- URL for LitConfig.NoDocstrings
+  IO.FS.writeFile tomlFile (String.intercalate "\n" [
+    "[modules.\"LitConfig.Core\"]",
+    "url = \"LitConfig/NoDocstrings\"",
+    ""
+  ])
+  let (exitCode, _, stderr) ← runLiteratePlanCapture data.moduleListFile planFile (some tomlFile)
+  if exitCode == 0 then
+    throw <| IO.userError "plan duplicate url: should have failed with non-zero exit code"
+  unless hasSubstring stderr "same URL" do
+    throw <| IO.userError s!"plan duplicate url: stderr should mention 'same URL', got: {stderr}"
+
 /-- CSS contains focus-visible indicators. -/
 private def testAccessibilityFocusVisible (data : TestData) : IO Unit := withTestDir data fun jsonDir htmlDir _ _ => do
   runLiterateHtml jsonDir htmlDir
@@ -753,6 +790,8 @@ private def htmlTests (data : TestData) : List (String × IO Unit) := [
   ("theme CSS empty", testThemeCssEmpty data),
   ("per-module hide_commands", testPerModuleHideCommands data),
   ("per-module title", testPerModuleTitle data),
+  ("per-module url", testPerModuleUrl data),
+  ("plan duplicate url", testPlanDuplicateUrl data),
   ("accessibility focus-visible", testAccessibilityFocusVisible data),
   ("accessibility reduced-motion", testAccessibilityReducedMotion data),
   ("accessibility ARIA", testAccessibilityAria data),
