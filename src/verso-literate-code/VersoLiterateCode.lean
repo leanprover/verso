@@ -144,6 +144,130 @@ where
   texts : Array MD4Lean.Text → String
   | xs => xs.map text |>.toList |> String.join
 
+section ImageRewriting
+
+/-- Whether a URL string is a relative path (not absolute and not a protocol URL). -/
+private def isRelativeImagePath (url : String) : Bool :=
+  !url.startsWith "/" && (url.splitOn "://").length <= 1
+
+/-- Convert an MD4Lean `AttrText` array to a plain string. -/
+private def attrTextToString (src : Array MD4Lean.AttrText) : String :=
+  String.join (src.map (fun | .normal s => s | .entity e => e | .nullchar => "") |>.toList)
+
+open MD4Lean in
+/-- Rewrite image URLs in an MD4Lean document using the given function.
+    Only relative image paths are rewritten; absolute paths and protocol URLs are left as-is. -/
+partial def rewriteMdImageUrls (f : String → String) (doc : Document) : Document :=
+  { doc with blocks := doc.blocks.map rewriteBlock }
+where
+  rewriteBlock : Block → Block
+    | .p txt => .p (txt.map rewriteText)
+    | .ul tight marker items => .ul tight marker (items.map fun ⟨c, m, s, bs⟩ => ⟨c, m, s, bs.map rewriteBlock⟩)
+    | .ol tight marker start items => .ol tight marker start (items.map fun ⟨c, m, s, bs⟩ => ⟨c, m, s, bs.map rewriteBlock⟩)
+    | .table hd rows => .table (hd.map (·.map rewriteText)) (rows.map (·.map (·.map rewriteText)))
+    | .header n title => .header n (title.map rewriteText)
+    | .blockquote bs => .blockquote (bs.map rewriteBlock)
+    | b => b
+
+  rewriteText : Text → Text
+    | .img src title alt =>
+      let s := attrTextToString src
+      if isRelativeImagePath s then .img #[.normal (f s)] title alt
+      else .img src title alt
+    | .a href title checked xs => .a href title checked (xs.map rewriteText)
+    | .em xs => .em (xs.map rewriteText)
+    | .strong xs => .strong (xs.map rewriteText)
+    | .del xs => .del (xs.map rewriteText)
+    | .u xs => .u (xs.map rewriteText)
+    | .wikiLink target xs => .wikiLink target (xs.map rewriteText)
+    | t => t
+
+open Lean.Doc in
+/-- Rewrite image URLs in Verso inline content. -/
+partial def rewriteVersoInlineImageUrls (f : String → String) : Inline Ext → Inline Ext
+  | .image alt url => .image alt (if isRelativeImagePath url then f url else url)
+  | .concat xs => .concat (xs.map (rewriteVersoInlineImageUrls f))
+  | .emph xs => .emph (xs.map (rewriteVersoInlineImageUrls f))
+  | .bold xs => .bold (xs.map (rewriteVersoInlineImageUrls f))
+  | .link xs url => .link (xs.map (rewriteVersoInlineImageUrls f)) url
+  | .footnote name xs => .footnote name (xs.map (rewriteVersoInlineImageUrls f))
+  | .other ext xs => .other ext (xs.map (rewriteVersoInlineImageUrls f))
+  | i => i
+
+open Lean.Doc in
+/-- Rewrite image URLs in a Verso block. -/
+partial def rewriteVersoBlockImageUrls (f : String → String) : Block Ext Ext → Block Ext Ext
+  | .para xs => .para (xs.map (rewriteVersoInlineImageUrls f))
+  | .ul items => .ul (items.map fun i => ⟨i.contents.map (rewriteVersoBlockImageUrls f)⟩)
+  | .ol start items => .ol start (items.map fun i => ⟨i.contents.map (rewriteVersoBlockImageUrls f)⟩)
+  | .dl items => .dl (items.map fun i =>
+      ⟨i.term.map (rewriteVersoInlineImageUrls f), i.desc.map (rewriteVersoBlockImageUrls f)⟩)
+  | .blockquote xs => .blockquote (xs.map (rewriteVersoBlockImageUrls f))
+  | .concat xs => .concat (xs.map (rewriteVersoBlockImageUrls f))
+  | .other ext xs => .other ext (xs.map (rewriteVersoBlockImageUrls f))
+  | b => b
+
+open Lean.Doc in
+/-- Rewrite image URLs in a Verso part. -/
+partial def rewriteVersoPartImageUrls (f : String → String) (p : Part Ext Ext Empty) : Part Ext Ext Empty :=
+  { p with
+    title := p.title.map (rewriteVersoInlineImageUrls f)
+    content := p.content.map (rewriteVersoBlockImageUrls f)
+    subParts := p.subParts.map (rewriteVersoPartImageUrls f) }
+
+/-- Rewrite image URLs in a single Code item. -/
+def rewriteCodeImageUrls (f : String → String) : Code → Code
+  | .markdown i d doc => .markdown i d (rewriteMdImageUrls f doc)
+  | .markdownModDoc doc => .markdownModDoc (rewriteMdImageUrls f doc)
+  | .verso i d doc => .verso i d {
+      text := doc.text.map (rewriteVersoBlockImageUrls f)
+      subsections := doc.subsections.map (rewriteVersoPartImageUrls f)
+    }
+  | .modDoc doc => .modDoc {
+      text := doc.text.map (rewriteVersoBlockImageUrls f)
+      sections := doc.sections.map fun (lvl, p) => (lvl, rewriteVersoPartImageUrls f p)
+    }
+  | c => c
+
+/-- Rewrite image URLs in all content of a LitMod. -/
+def rewriteModImageUrls (f : String → String) (mod : LitMod) : LitMod :=
+  { mod with contents := mod.contents.map fun item =>
+      { item with code := item.code.map (rewriteCodeImageUrls f) } }
+
+/-- Compute the parent directory path from a module name's components.
+    E.g., `Foo.Bar.Baz` → `"Foo/Bar/"`, `Foo` → `""`. -/
+private def moduleParentPath (modName : Name) : String :=
+  let components := modName.components.map toString
+  match components.dropLast with
+  | [] => ""
+  | parents => "/".intercalate parents ++ "/"
+
+/-- Process images for a module: copy image files from source to output directory
+    and rewrite URLs in the module content.
+    Returns the modified `LitMod` with rewritten image URLs. -/
+def processModuleImages (modName : Name) (srcDir : System.FilePath) (outDir : System.FilePath)
+    (mod : LitMod) : IO LitMod := do
+  if mod.images.isEmpty then return mod
+  let parentPath := moduleParentPath modName
+  -- Copy each image and build the URL rewriting function
+  for imgRef in mod.images do
+    let libRelPath := (parentPath ++ imgRef : String)
+    let srcPath := srcDir / libRelPath
+    let destPath := outDir / "-verso-images" / libRelPath
+    if ← srcPath.pathExists then
+      if let some parent := destPath.parent then
+        IO.FS.createDirAll parent
+      let contents ← IO.FS.readBinFile srcPath
+      IO.FS.writeBinFile destPath contents
+    else
+      IO.eprintln s!"Warning: image '{imgRef}' referenced in module '{modName}' not found at {srcPath}"
+  -- Rewrite URLs in the module content
+  let rewrite (imgRef : String) : String :=
+    "-verso-images/" ++ parentPath ++ imgRef
+  return rewriteModImageUrls rewrite mod
+
+end ImageRewriting
+
 partial def newlinesOnly : SubVerso.Highlighting.Highlighted → Bool
   | .seq xs =>
     let nonEmpty := xs.filter (!·.isEmpty)
@@ -343,18 +467,27 @@ def loadDir (path : System.FilePath) : IO Dir := do
   return dir
 
 /--
-Loads modules from a module-map file. Each line is `ModuleName\t/path/to/file.json`.
+Loads modules from a module-map file. Each line is either:
+- `ModuleName\t/path/to/file.json\t/path/to/srcDir` (with source directory)
+- `ModuleName\t/path/to/file.json` (without source directory, for backwards compatibility)
+
+Returns the module directory tree and a mapping from module names to source directories.
 -/
-def loadModuleMap (moduleMapFile : System.FilePath) : IO Dir := do
+def loadModuleMap (moduleMapFile : System.FilePath) : IO (Dir × Lean.NameMap System.FilePath) := do
   let contents ← IO.FS.readFile moduleMapFile
   let mut dir : Dir := {}
+  let mut srcDirs : Lean.NameMap System.FilePath := {}
   for line in contents.splitOn "\n" do
     if line.isEmpty then continue
     match line.splitOn "\t" with
+    | [name, jsonPath, srcDir] =>
+      let mod ← load jsonPath
+      dir := dir.insert mod
+      srcDirs := srcDirs.insert name.toName ⟨srcDir⟩
     | [_, jsonPath] =>
       dir := dir.insert (← load jsonPath)
     | _ => throw <| .userError s!"Invalid module-map line: {line}"
-  return dir
+  return (dir, srcDirs)
 
 partial def definitionIds (d : Dir) : NameMap (Name × String) := Id.run do
   let mut out := {}

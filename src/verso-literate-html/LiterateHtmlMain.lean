@@ -269,7 +269,12 @@ private def renderModBody (root : Dir) (mod : LitMod) (resolved : ResolvedConfig
   return (body, hlState)
 
 open Verso Output Doc Html in
-def emitMod (root : Dir) (outDir: System.FilePath) (mod : LitMod) : EmitM Unit := do
+def emitMod (root : Dir) (outDir: System.FilePath) (mod : LitMod)
+    (srcDirs : Lean.NameMap System.FilePath := {}) : EmitM Unit := do
+  -- Process images: copy files and rewrite URLs in content
+  let mod ← match srcDirs.find? mod.name with
+    | some srcDir => processModuleImages mod.name srcDir outDir mod
+    | none => pure mod
   let components := mod.name.components
   let nesting := components.length
   let siteRoot := if nesting = 0 then "./" else nesting.fold (init := "") fun _ _ s => s ++ "../"
@@ -304,7 +309,8 @@ def emitMod (root : Dir) (outDir: System.FilePath) (mod : LitMod) : EmitM Unit :
 
   IO.FS.writeFile (outFile / "index.html") <| "<!DOCTYPE html>\n" ++ pageHtml.asString
 
-def emitDir (outDir : System.FilePath) (dir : Dir) : EmitM Unit := do
+def emitDir (outDir : System.FilePath) (dir : Dir)
+    (srcDirs : Lean.NameMap System.FilePath := {}) : EmitM Unit := do
   let root := dir
   let mut todo := [dir]
   repeat
@@ -313,7 +319,7 @@ def emitDir (outDir : System.FilePath) (dir : Dir) : EmitM Unit := do
     | d :: ds =>
       todo := ds
       if let some m := d.mod then
-        emitMod root outDir m
+        emitMod root outDir m srcDirs
       for c in d.children do
         todo := c.2 :: todo
 
@@ -360,11 +366,16 @@ Emit the landing page using a specific module's rendered content.
 The module still appears at its normal location; we just also render it as index.html.
 -/
 def emitLandingFromModule (outDir : System.FilePath) (root : Dir) (modName : Name)
-    (ctx : HtmlContext) (initHlState : HtmlState := {}) : IO HtmlState := do
+    (ctx : HtmlContext) (initHlState : HtmlState := {})
+    (srcDirs : Lean.NameMap System.FilePath := {}) : IO HtmlState := do
   let litConfig := ctx.litConfig
   let resolved := litConfig.resolveForModule modName
   let some mod := root.findMod? modName
     | do IO.eprintln s!"Landing page module '{modName}' not found"; return initHlState
+  -- Process images for landing page module
+  let mod ← match srcDirs.find? mod.name with
+    | some srcDir => processModuleImages mod.name srcDir outDir mod
+    | none => pure mod
   let siteRoot := "./"
   let htmlId? := ctx.moduleIds.find? mod.name
 
@@ -396,7 +407,7 @@ def main (args : List String) : IO UInt32 := do
   -- Copy the copy-button JS
   IO.FS.writeFile (config.outputDir / "copy-button.js") copyButtonJs
   emitSearchBox (config.outputDir / "-verso-search")
-  let dir ← loadModuleMap config.moduleMapFile
+  let (dir, srcDirs) ← loadModuleMap config.moduleMapFile
 
   -- Load config from TOML if provided
   let litConfig ← match config.configFile with
@@ -445,13 +456,13 @@ def main (args : List String) : IO UInt32 := do
     traverseState
     litConfig
   }
-  let ((), st) ← emitDir config.outputDir dir |>.run ctx |>.run {}
+  let ((), st) ← emitDir config.outputDir dir srcDirs |>.run ctx |>.run {}
 
   -- Landing page: use configured module or auto-generated ToC
   let st ← match litConfig.landingPage with
     | some landingModName =>
       -- emitLandingFromModule handles "not found" internally
-      emitLandingFromModule config.outputDir dir landingModName ctx st
+      emitLandingFromModule config.outputDir dir landingModName ctx st srcDirs
     | none =>
       emitLandingPage config.outputDir dir litConfig
       pure st

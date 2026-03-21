@@ -20,7 +20,8 @@ def loadJsonString (jsonString : String) (blame := "JSON string") : Except Strin
   let itemsJson ← json.getObjVal? "items" |>.mapError (s!"Error decoding items in {blame}: {·}")
   let eItems ← FromJson.fromJson? (α := VersoLiterate.ExportedModuleItems) itemsJson |>.mapError (s!"Error decoding {blame}: {·}")
   let items ← eItems.toModuleItems
-  pure { name := name.toName, contents := items }
+  let images := (json.getObjValAs? (Array String) "images").toOption.getD #[]
+  pure { name := name.toName, contents := items, images }
 
 def loadJsonString! (jsonString : String) (blame := "JSON string") : LitMod :=
   match loadJsonString jsonString blame with

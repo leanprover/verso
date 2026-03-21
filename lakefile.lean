@@ -236,10 +236,10 @@ package_facet literateHtml pkg : System.FilePath := do
   -- Step 1: Collect all modules and make the plan
   let allModules ← pkg.leanLibs.foldlM (init := #[]) fun acc lib => do
     let mods ← (← lib.modules.fetch).await
-    return acc ++ mods.map fun m => (lib.name, m)
+    return acc ++ mods.map fun m => (lib.name, m, lib.srcDir)
 
   let moduleListContent :=
-    "\n".intercalate (allModules.map fun (libName, mod) => s!"{libName}\t{mod.name}").toList ++ "\n"
+    "\n".intercalate (allModules.map fun (libName, mod, _) => s!"{libName}\t{mod.name}").toList ++ "\n"
 
   let planExeJob ← «verso-literate-plan».fetch
   let htmlExeJob ← «verso-literate-html».fetch
@@ -270,17 +270,17 @@ package_facet literateHtml pkg : System.FilePath := do
       |>.map String.toName
 
     let litJobs ← plannedNames.filterMapM fun name => do
-      match allModules.find? fun (_, mod) => mod.name == name with
-      | some (_, mod) =>
+      match allModules.find? fun (_, mod, _) => mod.name == name with
+      | some (_, mod, srcDir) =>
         let job ← mod.facet `literate |>.fetch
-        pure (some (name, job))
+        pure (some (name, job, srcDir))
       | none => pure none
 
-    (Job.collectArray (litJobs.map (·.2) |>.toArray)).bindM fun litFiles => do
+    (Job.collectArray (litJobs.map (·.2.1) |>.toArray)).bindM fun litFiles => do
       -- Build module→JSON mapping (litFiles[i] corresponds to litJobs[i])
       let mappingContent := "\n".intercalate
-        (litJobs.zip litFiles.toList |>.map fun ((name, _), jsonPath) =>
-          s!"{name}\t{jsonPath}") ++ "\n"
+        (litJobs.zip litFiles.toList |>.map fun ((name, _, srcDir), jsonPath) =>
+          s!"{name}\t{jsonPath}\t{srcDir}") ++ "\n"
       addPureTrace mappingContent
 
       buildFileUnlessUpToDate' moduleMapFile do

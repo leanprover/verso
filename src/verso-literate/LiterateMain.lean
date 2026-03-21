@@ -325,6 +325,93 @@ where
 end
 
 
+section ImageCollection
+
+/-- Whether a URL string is a relative path (not absolute and not a protocol URL). -/
+private def isRelativeImagePath (url : String) : Bool :=
+  !url.startsWith "/" && (url.splitOn "://").length <= 1
+
+/-- Convert an MD4Lean `AttrText` array to a plain string. -/
+private def attrTextToString (src : Array MD4Lean.AttrText) : String :=
+  String.join (src.map (fun | .normal s => s | .entity e => e | .nullchar => "") |>.toList)
+
+open MD4Lean in
+/-- Collect relative image paths from an MD4Lean document. -/
+private partial def collectMdImages (doc : Document) : Array String :=
+  doc.blocks.foldl (fun acc b => acc ++ collectBlock b) #[]
+where
+  collectBlock : Block → Array String
+    | .p txt => collectTexts txt
+    | .ul _ _ items => items.foldl (fun acc ⟨_, _, _, bs⟩ => acc ++ bs.foldl (fun a b => a ++ collectBlock b) #[]) #[]
+    | .ol _ _ _ items => items.foldl (fun acc ⟨_, _, _, bs⟩ => acc ++ bs.foldl (fun a b => a ++ collectBlock b) #[]) #[]
+    | .table hd rows =>
+      hd.foldl (fun acc ts => acc ++ collectTexts ts) #[]
+      ++ rows.foldl (fun acc r => acc ++ r.foldl (fun a ts => a ++ collectTexts ts) #[]) #[]
+    | .header _ title => collectTexts title
+    | .blockquote bs => bs.foldl (fun acc b => acc ++ collectBlock b) #[]
+    | .hr | .html _ | .code _ _ _ _ => #[]
+
+  collectText : Text → Array String
+    | .img src _title _alt =>
+      let s := attrTextToString src
+      if isRelativeImagePath s then #[s] else #[]
+    | .a _ _ _ xs | .em xs | .strong xs | .del xs | .u xs | .wikiLink _ xs => collectTexts xs
+    | .normal _ | .nullchar | .br _ | .softbr _ | .code _ | .entity _ | .latexMath _ | .latexMathDisplay _ => #[]
+
+  collectTexts (xs : Array Text) : Array String :=
+    xs.foldl (fun acc t => acc ++ collectText t) #[]
+
+open Lean.Doc in
+/-- Collect relative image paths from Verso inline content. -/
+private partial def collectVersoInlineImages (i : Inline Ext) : Array String :=
+  match i with
+  | .image _alt url => if isRelativeImagePath url then #[url] else #[]
+  | .concat xs | .emph xs | .bold xs => xs.foldl (fun acc x => acc ++ collectVersoInlineImages x) #[]
+  | .link xs _ => xs.foldl (fun acc x => acc ++ collectVersoInlineImages x) #[]
+  | .footnote _ xs | .other _ xs => xs.foldl (fun acc x => acc ++ collectVersoInlineImages x) #[]
+  | .text _ | .linebreak _ | .code _ | .math _ _ => #[]
+
+open Lean.Doc in
+/-- Collect relative image paths from a Verso block. -/
+private partial def collectVersoBlockImages (b : Block Ext Ext) : Array String :=
+  match b with
+  | .para xs => xs.foldl (fun acc x => acc ++ collectVersoInlineImages x) #[]
+  | .ul items => items.foldl (fun acc i => acc ++ i.contents.foldl (fun a b => a ++ collectVersoBlockImages b) #[]) #[]
+  | .ol _ items => items.foldl (fun acc i => acc ++ i.contents.foldl (fun a b => a ++ collectVersoBlockImages b) #[]) #[]
+  | .dl items => items.foldl (fun acc i =>
+      acc ++ i.term.foldl (fun a t => a ++ collectVersoInlineImages t) #[]
+          ++ i.desc.foldl (fun a b => a ++ collectVersoBlockImages b) #[]) #[]
+  | .blockquote xs | .concat xs => xs.foldl (fun acc x => acc ++ collectVersoBlockImages x) #[]
+  | .other _ xs => xs.foldl (fun acc x => acc ++ collectVersoBlockImages x) #[]
+  | .code _ => #[]
+
+open Lean.Doc in
+/-- Collect relative image paths from a Verso part. -/
+private partial def collectVersoPartImages (p : Part Ext Ext Empty) : Array String :=
+  p.title.foldl (fun acc x => acc ++ collectVersoInlineImages x) #[]
+  ++ p.content.foldl (fun acc x => acc ++ collectVersoBlockImages x) #[]
+  ++ p.subParts.foldl (fun acc x => acc ++ collectVersoPartImages x) #[]
+
+/-- Collect relative image paths from a single `Code` item. -/
+private def collectCodeImages : Code → Array String
+  | .markdown _ _ doc | .markdownModDoc doc => collectMdImages doc
+  | .verso _ _ doc =>
+    doc.text.foldl (fun acc b => acc ++ collectVersoBlockImages b) #[]
+    ++ doc.subsections.foldl (fun acc p => acc ++ collectVersoPartImages p) #[]
+  | .modDoc doc =>
+    doc.text.foldl (fun acc b => acc ++ collectVersoBlockImages b) #[]
+    ++ doc.sections.foldl (fun acc (_, p) => acc ++ collectVersoPartImages p) #[]
+  | .highlighted _ => #[]
+
+/-- Collect all unique relative image paths from module items. -/
+private def collectItemImages (items : Array ModuleItem') : Array String :=
+  let all := items.foldl (fun acc item =>
+    acc ++ item.code.foldl (fun a c => a ++ collectCodeImages c) #[]) #[]
+  all.toList.eraseDups.toArray
+
+end ImageCollection
+
+
 unsafe def go (suppressedNamespaces : Array Name) (extraImports : Array Name) (mod : String) (out : IO.FS.Stream) : IO UInt32 := do
   try
     initSearchPath (← findSysroot)
@@ -367,9 +454,10 @@ unsafe def go (suppressedNamespaces : Array Name) (extraImports : Array Name) (m
       code := hl,
     }
 
+    let images := collectItemImages items
     let items := exportItems items
 
-    out.putStrLn (json%{"module": $mod, "items": $(toJson items)}).compress
+    out.putStrLn (json%{"module": $mod, "items": $(toJson items), "images": $(toJson images)}).compress
 
     return (0 : UInt32)
 

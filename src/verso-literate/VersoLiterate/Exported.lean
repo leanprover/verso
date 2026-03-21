@@ -109,13 +109,15 @@ instance : BEq ModuleItem' where
 structure LitMod where
   name : Name
   contents : Array ModuleItem'
+  /-- Image paths referenced in the module content, relative to the source file. -/
+  images : Array String := #[]
 deriving Inhabited, Repr
 
 open Verso.BEq in
 instance : BEq LitMod where
   beq := private ptrEqThen fun
-    | ⟨name1, contents1⟩, ⟨name2, contents2⟩ =>
-      name1 == name2 && contents1 == contents2
+    | ⟨name1, contents1, images1⟩, ⟨name2, contents2, images2⟩ =>
+      name1 == name2 && contents1 == contents2 && images1 == images2
 
 
 section

@@ -30,10 +30,15 @@ private def runLakeExe (name : String) (args : Array String) : IO Unit := do
     throw <| IO.userError s!"{name} failed with exit code {exitCode}"
 
 /-- Generate a module-map file from a JSON directory.
-    Each .json file at `<jsonDir>/<A>/<B>.json` produces a line `A.B\t<path>`. -/
-private def generateModuleMap (jsonDir mapFile : System.FilePath) : IO Unit := do
+    Each .json file at `<jsonDir>/<A>/<B>.json` produces a line `A.B\t<path>[\t<srcDir>]`.
+    If `sourceDir` is provided, it is appended as a third tab-separated column. -/
+private def generateModuleMap (jsonDir mapFile : System.FilePath)
+    (sourceDir : Option System.FilePath := none) : IO Unit := do
   let mut lines : Array String := #[]
   let mut todo := [(jsonDir, "")]
+  let srcSuffix := match sourceDir with
+    | some s => s!"\t{s}"
+    | none => ""
   repeat
     match todo with
     | [] => break
@@ -47,28 +52,30 @@ private def generateModuleMap (jsonDir mapFile : System.FilePath) : IO Unit := d
         else if entry.path.extension == some "json" then
           let stem := entry.path.fileStem.getD ""
           let modName := if pfx.isEmpty then stem else s!"{pfx}.{stem}"
-          lines := lines.push s!"{modName}\t{entry.path}"
+          lines := lines.push s!"{modName}\t{entry.path}{srcSuffix}"
   IO.FS.writeFile mapFile ("\n".intercalate lines.toList ++ "\n")
 
 /-- Runs verso-literate-html with a module-map generated from a JSON directory. -/
-private def runLiterateHtml (jsonDir htmlDir : System.FilePath) (planFile configFile : Option System.FilePath := none) : IO Unit := do
+private def runLiterateHtml (jsonDir htmlDir : System.FilePath)
+    (planFile configFile : Option System.FilePath := none)
+    (sourceDir : Option System.FilePath := none) : IO Unit := do
   -- If plan file is provided, filter the module map to only planned modules
   let mapFile := htmlDir.addExtension "module-map"
   if let some pf := planFile then
     -- Generate full map, then filter by plan
     let fullMapFile := htmlDir.addExtension "full-module-map"
-    generateModuleMap jsonDir fullMapFile
+    generateModuleMap jsonDir fullMapFile sourceDir
     let fullContents ← IO.FS.readFile fullMapFile
     let planContents ← IO.FS.readFile pf
     let planNames := planContents.splitOn "\n" |>.filter (!·.isEmpty)
     let filteredLines := fullContents.splitOn "\n" |>.filter fun line =>
       if line.isEmpty then false
       else match line.splitOn "\t" with
-        | [name, _] => planNames.contains name
+        | name :: _ :: _ => planNames.contains name
         | _ => false
     IO.FS.writeFile mapFile ("\n".intercalate filteredLines ++ "\n")
   else
-    generateModuleMap jsonDir mapFile
+    generateModuleMap jsonDir mapFile sourceDir
   let mut args := #[htmlDir.toString, mapFile.toString]
   if let some cf := configFile then
     args := args.push cf.toString
@@ -97,22 +104,24 @@ private def runLiteratePlanCapture (moduleListFile planFile : System.FilePath) (
   runLakeExeCapture "verso-literate-plan" args
 
 /-- Runs verso-literate-html capturing output, returning (exitCode, stdout, stderr). -/
-private def runLiterateHtmlCapture (jsonDir htmlDir : System.FilePath) (planFile configFile : Option System.FilePath := none) : IO (UInt32 × String × String) := do
+private def runLiterateHtmlCapture (jsonDir htmlDir : System.FilePath)
+    (planFile configFile : Option System.FilePath := none)
+    (sourceDir : Option System.FilePath := none) : IO (UInt32 × String × String) := do
   let mapFile := htmlDir.addExtension "module-map"
   if let some pf := planFile then
     let fullMapFile := htmlDir.addExtension "full-module-map"
-    generateModuleMap jsonDir fullMapFile
+    generateModuleMap jsonDir fullMapFile sourceDir
     let fullContents ← IO.FS.readFile fullMapFile
     let planContents ← IO.FS.readFile pf
     let planNames := planContents.splitOn "\n" |>.filter (!·.isEmpty)
     let filteredLines := fullContents.splitOn "\n" |>.filter fun line =>
       if line.isEmpty then false
       else match line.splitOn "\t" with
-        | [name, _] => planNames.contains name
+        | name :: _ :: _ => planNames.contains name
         | _ => false
     IO.FS.writeFile mapFile ("\n".intercalate filteredLines ++ "\n")
   else
-    generateModuleMap jsonDir mapFile
+    generateModuleMap jsonDir mapFile sourceDir
   let mut args := #[htmlDir.toString, mapFile.toString]
   if let some cf := configFile then
     args := args.push cf.toString
@@ -738,6 +747,30 @@ private def testCssDarkMode (data : TestData) : IO Unit := withTestDir data fun 
   unless hasSubstring css "prefers-color-scheme: dark" do
     throw <| IO.userError "dark mode: literate.css does not contain dark mode media query"
 
+/-- Images referenced in module docstrings are copied to the output and their URLs are rewritten. -/
+private def testImageCopying (data : TestData) (projectDir : System.FilePath) : IO Unit := IO.FS.withTempDir fun tmpDir => do
+  let htmlDir := tmpDir / "html"
+  IO.FS.createDirAll htmlDir
+  let srcDir ← IO.FS.realPath projectDir
+  runLiterateHtml data.jsonDir htmlDir (sourceDir := some srcDir)
+
+  -- Verify copied image file exists at the rewritten path
+  let imgDest := htmlDir / "-verso-images" / "images" / "test-diagram.png"
+  unless ← imgDest.pathExists do
+    throw <| IO.userError s!"image copying: expected image at {imgDest}"
+
+  -- Verify the HTML references the rewritten URL
+  let litConfigHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "index.html")
+  unless hasSubstring litConfigHtml "-verso-images/images/test-diagram.png" do
+    throw <| IO.userError "image copying: HTML should reference rewritten image URL '-verso-images/images/test-diagram.png'"
+
+  -- Verify the raw source-relative path does NOT appear as an unprocessed img src
+  -- (The raw text "images/test-diagram.png" may still appear in alt text or elsewhere,
+  -- but it should not appear as a src attribute value without the -verso-images prefix)
+  let srcAttrRaw := "src=\"images/test-diagram.png\""
+  if hasSubstring litConfigHtml srcAttrRaw then
+    throw <| IO.userError s!"image copying: HTML should not contain unprocessed '{srcAttrRaw}'"
+
 /-- CSS uses custom properties (var(--verso-*)) throughout. -/
 private def testCssCustomProperties (data : TestData) : IO Unit := withTestDir data fun jsonDir htmlDir _ _ => do
   runLiterateHtml jsonDir htmlDir
@@ -753,7 +786,7 @@ private def testCssCustomProperties (data : TestData) : IO Unit := withTestDir d
 
 -- ===== Test runner =====
 
-private def htmlTests (data : TestData) : List (String × IO Unit) := [
+private def htmlTests (data : TestData) (projectDir : System.FilePath) : List (String × IO Unit) := [
   ("default behavior", testDefaultBehavior data),
   ("exclude", testExclude data),
   ("navbar order", testNavbarOrder data),
@@ -798,7 +831,8 @@ private def htmlTests (data : TestData) : List (String × IO Unit) := [
   ("page ToC", testPageToc data),
   ("page ToC absent", testPageTocAbsent data),
   ("CSS dark mode", testCssDarkMode data),
-  ("CSS custom properties", testCssCustomProperties data)
+  ("CSS custom properties", testCssCustomProperties data),
+  ("image copying", testImageCopying data projectDir)
 ]
 
 def testLiterateHtml : IO Unit := do
@@ -849,7 +883,7 @@ def testLiterateHtml : IO Unit := do
     let data : TestData := { jsonDir, modules, moduleListFile }
 
     let mut failures := 0
-    for (name, test) in htmlTests data do
+    for (name, test) in htmlTests data projectDir do
       IO.print s!"  {name}... "
       try
         test

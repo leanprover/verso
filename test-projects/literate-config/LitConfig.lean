@@ -23,6 +23,9 @@ def hello : String := "Hello, literate world!"
 
 /-!
 We can also have inline code references like {name}`hello`.
+
+Here is a diagram:
+![Test diagram](images/test-diagram.png)
 -/
 
 #check hello
