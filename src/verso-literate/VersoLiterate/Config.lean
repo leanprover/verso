@@ -41,6 +41,7 @@ structure ModuleConfig where
   showDocstrings : Option Bool := none
   showDocstringsFor : Option (Array Name) := none
   hideDocstringsFor : Option (Array Name) := none
+  docstringsAsText : Option Bool := none
 deriving Repr, BEq, Inhabited
 
 /-- The merged result of resolving per-module config against global defaults. -/
@@ -51,6 +52,7 @@ structure ResolvedConfig where
   showDocstrings : Bool
   showDocstringsFor : Array Name
   hideDocstringsFor : Array Name
+  docstringsAsText : Bool
   title : Option String := none
   url : Option String := none
 deriving Repr, BEq, Inhabited
@@ -84,6 +86,9 @@ structure LiterateConfig where
   showDocstringsFor : Array Name := #[]
   /-- Declarations whose docstrings should be hidden (when `showDocstrings = true`). -/
   hideDocstringsFor : Array Name := #[]
+  /-- When true, declaration docstrings render as prose text (like module docstrings)
+      instead of inside code boxes. -/
+  docstringsAsText : Bool := false
   /-- Command keyword patterns whose output (info messages) should be displayed as a
       separate block (e.g. `"#eval"`, `"#check"`, `"#print"`). Matching works the same
       way as `hideCommands`. -/
@@ -129,8 +134,9 @@ def decodeModuleConfig (v : Value) : EDecodeM ModuleConfig := do
   let showDocstrings ← t.decode? (α := Bool) `show_docstrings
   let showDocstringsFor ← t.decode? (α := Array Name) `show_docstrings_for
   let hideDocstringsFor ← t.decode? (α := Array Name) `hide_docstrings_for
+  let docstringsAsText ← t.decode? (α := Bool) `docstrings_as_text
   return { title, url, hideCommands, showOutput, showImports,
-           showDocstrings, showDocstringsFor, hideDocstringsFor }
+           showDocstrings, showDocstringsFor, hideDocstringsFor, docstringsAsText }
 
 instance : DecodeToml ModuleConfig := ⟨decodeModuleConfig⟩
 
@@ -192,22 +198,26 @@ def LiterateConfig.resolveForModule (config : LiterateConfig) (modName : Name) :
     else
       (bestName, bestCfg)
   match bestMatch.2 with
-  | none =>
-    { hideCommands := config.hideCommands
-      showOutput := config.showOutput
-      showImports := config.showImports
-      showDocstrings := config.showDocstrings
-      showDocstringsFor := config.showDocstringsFor
-      hideDocstringsFor := config.hideDocstringsFor }
-  | some mc =>
-    { hideCommands := mc.hideCommands.getD config.hideCommands
-      showOutput := mc.showOutput.getD config.showOutput
-      showImports := mc.showImports.getD config.showImports
-      showDocstrings := mc.showDocstrings.getD config.showDocstrings
-      showDocstringsFor := mc.showDocstringsFor.getD config.showDocstringsFor
-      hideDocstringsFor := mc.hideDocstringsFor.getD config.hideDocstringsFor
-      title := mc.title
-      url := mc.url }
+  | none => {
+      hideCommands := config.hideCommands,
+      showOutput := config.showOutput,
+      showImports := config.showImports,
+      showDocstrings := config.showDocstrings,
+      showDocstringsFor := config.showDocstringsFor,
+      hideDocstringsFor := config.hideDocstringsFor,
+      docstringsAsText := config.docstringsAsText,
+    }
+  | some mc => {
+      hideCommands := mc.hideCommands.getD config.hideCommands,
+      showOutput := mc.showOutput.getD config.showOutput,
+      showImports := mc.showImports.getD config.showImports,
+      showDocstrings := mc.showDocstrings.getD config.showDocstrings,
+      showDocstringsFor := mc.showDocstringsFor.getD config.showDocstringsFor,
+      hideDocstringsFor := mc.hideDocstringsFor.getD config.hideDocstringsFor,
+      docstringsAsText := mc.docstringsAsText.getD config.docstringsAsText,
+      title := mc.title,
+      url := mc.url
+    }
 
 /-- Decodes a TOML table into a `LiterateConfig`. -/
 def decodeLiterateConfig (table : Table) : Except String LiterateConfig :=
@@ -224,6 +234,7 @@ def decodeLiterateConfig (table : Table) : Except String LiterateConfig :=
     let showDocstrings ← Table.tryDecodeD `show_docstrings (true : Bool) table
     let showDocstringsFor ← Table.tryDecodeD `show_docstrings_for (#[] : Array Name) table
     let hideDocstringsFor ← Table.tryDecodeD `hide_docstrings_for (#[] : Array Name) table
+    let docstringsAsText ← Table.tryDecodeD `docstrings_as_text (false : Bool) table
     let showOutput ← Table.tryDecodeD `show_output (#["#eval", "#check", "#print", "#reduce"] : Array String) table
     let showImports ← Table.tryDecodeD `show_imports (true : Bool) table
     let (theme, themeDark) ← decodeTheme table
@@ -231,7 +242,7 @@ def decodeLiterateConfig (table : Table) : Except String LiterateConfig :=
     return { targets, exclude, order, orderChildren, landingPage,
              hideCommands, metadata, extraCss, extraJs,
              showDocstrings, showDocstringsFor, hideDocstringsFor,
-             showOutput, showImports, theme, themeDark, modules }
+             docstringsAsText, showOutput, showImports, theme, themeDark, modules }
   match decodeAction #[] with
   | .ok config errors =>
     if errors.isEmpty then

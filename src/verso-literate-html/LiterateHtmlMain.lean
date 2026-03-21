@@ -33,6 +33,14 @@ private def Code.isModDoc : Code → Bool
   | _ => false
 
 /--
+Whether a `Code` item is a declaration docstring (verso or markdown).
+-/
+private def Code.isDeclDoc : Code → Bool
+  | .verso _ _ _ => true
+  | .markdown _ _ _ => true
+  | _ => false
+
+/--
 Whether a `Code` item is an import statement based on the module item's kind.
 This is determined at the item level rather than the code level.
 -/
@@ -239,8 +247,9 @@ private def renderModBody (root : Dir) (mod : LitMod) (resolved : ResolvedConfig
         | .verso _ (some dn) _ | .markdown _ (some dn) _ =>
           shouldShowDocstring resolved dn
         | _ => true }
-    let hasModDoc := item.code.any Code.isModDoc
-    if hasModDoc then
+    let hasProse := item.code.any Code.isModDoc ||
+      (resolved.docstringsAsText && item.code.any Code.isDeclDoc)
+    if hasProse then
       -- Flush any accumulated code items first
       if !currentCodeItems.isEmpty then
         let mut boxHtml : Html := .empty
@@ -253,7 +262,7 @@ private def renderModBody (root : Dir) (mod : LitMod) (resolved : ResolvedConfig
           body := body ++ {{<div class="code-box">{{boxHtml}}</div>}}
         currentCodeItems := #[]
       -- Render this item's code — modDoc parts render as prose, rest as inline code
-      let (itemHtml, st) ← renderCode itemIdx item |>.run emitCtx hlState.hlState
+      let (itemHtml, st) ← renderCode itemIdx item (docstringsAsText := resolved.docstringsAsText) |>.run emitCtx hlState.hlState
       hlState := { hlState with hlState := st }
       body := body ++ itemHtml
     else

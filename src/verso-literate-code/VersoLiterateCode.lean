@@ -290,13 +290,14 @@ partial def whitespaceOnly : SubVerso.Highlighting.Highlighted → Bool
 open Verso.Output Html in
 open Verso Doc Html in
 open SubVerso.Highlighting in
-def renderCode [Monad m] (itemIdx : Nat) (item : VersoLiterate.ModuleItem') : HtmlT Literate m Html := do
+def renderCode [Monad m] (itemIdx : Nat) (item : VersoLiterate.ModuleItem') (docstringsAsText : Bool := false) : HtmlT Literate m Html := do
   let mut html := .empty
   let mut nextIndent := 0
+  let docCls := if docstringsAsText then "mod-doc" else ""
   for c in item.code, idx in 0...* do
     match c with
     | .markdown i _ s =>
-      html := html ++ {{<div class="md-text" style=s!"--indent: {i}">{{md2Html s}}</div>}}
+      html := html ++ {{<div class=s!"md-text {docCls}" style=s!"--indent: {i}">{{md2Html s}}</div>}}
     | .verso i _ x => do
       let text ←
         withReader (fun ρ => {ρ with codeOptions.identifierWordBreaks := true}) <|
@@ -304,7 +305,7 @@ def renderCode [Monad m] (itemIdx : Nat) (item : VersoLiterate.ModuleItem') : Ht
       let sub ←
         withReader (fun ρ => {ρ with codeOptions.identifierWordBreaks := true}) <|
         x.subsections.mapM fun p : Part Literate => ToHtml.toHtml p
-      html := html ++ {{ <div class="verso-text" style=s!"--indent: {i}">{{text ++ sub}}</div> }}
+      html := html ++ {{ <div class=s!"verso-text {docCls}" style=s!"--indent: {i}">{{text ++ sub}}</div> }}
     | .highlighted hl =>
       if newlinesOnly hl then
         html := html ++ (← (Highlighted.text "\n").blockHtml (g := Literate) "lean" (trim := false))

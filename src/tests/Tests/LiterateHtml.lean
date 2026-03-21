@@ -785,6 +785,38 @@ private def testSingleRootNavFlattening (data : TestData) : IO Unit := withTestD
   unless hasSubstring navbarSection "<div class=\"nav-title" do
     throw <| IO.userError "single-root nav: root entry should be a nav-title div, not a collapsible details"
 
+/-- `docstrings_as_text = true` renders declaration docstrings as prose (mod-doc class). -/
+private def testDocstringsAsText (data : TestData) : IO Unit := withTestDir data fun jsonDir htmlDir _ tomlFile => do
+  IO.FS.writeFile tomlFile "docstrings_as_text = true\n"
+  runLiterateHtml jsonDir htmlDir (configFile := some tomlFile)
+
+  let litConfigHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "index.html")
+  -- "A greeting message" docstring should appear as prose with mod-doc class
+  unless hasSubstring litConfigHtml "A greeting message" do
+    throw <| IO.userError "docstrings_as_text: 'A greeting message' should still appear"
+  unless hasSubstring litConfigHtml "mod-doc" do
+    throw <| IO.userError "docstrings_as_text: page should contain 'mod-doc' class for declaration docstrings"
+
+/-- `docstrings_as_text` defaults to false: declaration docstrings render inside code boxes. -/
+private def testDocstringsAsTextDefault (data : TestData) : IO Unit := withTestDir data fun jsonDir htmlDir _ _ => do
+  runLiterateHtml jsonDir htmlDir
+
+  let litConfigHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "index.html")
+  -- "A greeting message" should appear but NOT with mod-doc class on the declaration docstring div
+  unless hasSubstring litConfigHtml "A greeting message" do
+    throw <| IO.userError "docstrings_as_text default: 'A greeting message' should appear"
+  -- The declaration docstring should be in a verso-text or md-text div WITHOUT mod-doc
+  -- Check that the docstring text is not in a mod-doc div
+  let parts := litConfigHtml.splitOn "A greeting message"
+  -- The text before the docstring should not end with a mod-doc div opening
+  let before := parts.head!
+  let lastModDoc := before.splitOn "mod-doc" |>.getLast!
+  let lastDivClose := lastModDoc.splitOn "</div>" |>.length
+  -- If there's a </div> between the last mod-doc and "A greeting message", the docstring
+  -- is not inside a mod-doc div
+  unless lastDivClose > 1 do
+    throw <| IO.userError "docstrings_as_text default: declaration docstring should not be in a mod-doc div"
+
 /-- CSS uses custom properties (var(--verso-*)) throughout. -/
 private def testCssCustomProperties (data : TestData) : IO Unit := withTestDir data fun jsonDir htmlDir _ _ => do
   runLiterateHtml jsonDir htmlDir
@@ -847,7 +879,9 @@ private def htmlTests (data : TestData) (projectDir : System.FilePath) : List (S
   ("CSS dark mode", testCssDarkMode data),
   ("CSS custom properties", testCssCustomProperties data),
   ("image copying", testImageCopying data projectDir),
-  ("single-root nav flattening", testSingleRootNavFlattening data)
+  ("single-root nav flattening", testSingleRootNavFlattening data),
+  ("docstrings_as_text", testDocstringsAsText data),
+  ("docstrings_as_text default", testDocstringsAsTextDefault data)
 ]
 
 def testLiterateHtml : IO Unit := do
