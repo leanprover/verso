@@ -83,8 +83,8 @@ def ValDesc.documentableName : ValDesc m (Ident × Name) where
 
 end Verso.ArgParse
 
-private def renderTaggedInMeta (code : Lean.Widget.CodeWithInfos) := do
-  let hlCtx : SubVerso.Highlighting.Context := ⟨{}, false, false, [], false⟩
+private def renderTaggedInMeta (code : Lean.Widget.CodeWithInfos) : MetaM Highlighted := do
+  let hlCtx : SubVerso.Highlighting.Context := ⟨{}, false, false, [], false, (← IO.mkRef {})⟩
   (renderTagged none code : ReaderT SubVerso.Highlighting.Context MetaM _) hlCtx
 
 namespace Verso.Genre.Manual.Block.Docstring
