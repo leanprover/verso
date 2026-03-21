@@ -86,6 +86,41 @@ class TestContent:
         main = page.locator("#main-content")
         expect(main).to_contain_text("10")
 
+    def test_command_output_interleaving(self, server: str, page: Page):
+        """Test that each command's output appears right after its code, not batched."""
+        page.goto(f"{server}/LitConfig/Core/Basic/")
+        page.wait_for_load_state("networkidle")
+
+        # Core/Basic has #check ident followed by #eval ident 42
+        # The outputs should be interleaved with the code, not grouped at the end
+        code_box = page.locator(".code-box").first
+        children = code_box.locator(":scope > *")
+        count = children.count()
+        assert count >= 2, f"Expected at least 2 children in code-box, got {count}"
+
+        # Walk child elements and verify outputs don't all come after all code
+        # We expect: code, output, code, output (not: code, code, output, output)
+        types = []
+        for i in range(count):
+            child = children.nth(i)
+            cls = child.get_attribute("class") or ""
+            if "lean-output" in cls:
+                types.append("output")
+            elif child.evaluate("el => el.tagName") in ["PRE", "DIV", "CODE"]:
+                types.append("code")
+
+        # There should be at least one output that is NOT at the end after all code
+        # i.e., the pattern should not be [code, code, ..., output, output, ...]
+        first_output = next((i for i, t in enumerate(types) if t == "output"), None)
+        last_code = next(
+            (len(types) - 1 - i for i, t in enumerate(reversed(types)) if t == "code"),
+            None,
+        )
+        if first_output is not None and last_code is not None:
+            assert first_output < last_code, (
+                f"Outputs are batched after all code blocks instead of interleaved: {types}"
+            )
+
     def test_code_box_no_line_numbers(self, server: str, page: Page):
         """Test that code boxes do not contain line number elements."""
         page.goto(f"{server}/LitConfig/")

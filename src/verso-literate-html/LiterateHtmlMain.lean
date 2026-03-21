@@ -243,13 +243,14 @@ private def renderModBody (root : Dir) (mod : LitMod) (resolved : ResolvedConfig
     if hasModDoc then
       -- Flush any accumulated code items first
       if !currentCodeItems.isEmpty then
-        let (codeHtml, st) ← currentCodeItems.foldlM (init := (.empty, hlState.hlState)) fun (html, st) (idx, cItem) => do
-          let (h, st') ← renderCode idx cItem |>.run emitCtx st
-          pure (html ++ h, st')
-        let (outputHtml, st') := renderOutputMessages currentCodeItems resolved.showOutput hlCtx st
-        hlState := { hlState with hlState := st' }
-        unless codeHtml == .empty && outputHtml == .empty do
-          body := body ++ {{<div class="code-box">{{codeHtml}}{{outputHtml}}</div>}}
+        let mut boxHtml : Html := .empty
+        for (idx, cItem) in currentCodeItems do
+          let (codeHtml, st) ← renderCode idx cItem |>.run emitCtx hlState.hlState
+          let (outputHtml, st') := renderOutputMessages #[(idx, cItem)] resolved.showOutput hlCtx st
+          hlState := { hlState with hlState := st' }
+          boxHtml := boxHtml ++ codeHtml ++ outputHtml
+        unless boxHtml == .empty do
+          body := body ++ {{<div class="code-box">{{boxHtml}}</div>}}
         currentCodeItems := #[]
       -- Render this item's code — modDoc parts render as prose, rest as inline code
       let (itemHtml, st) ← renderCode itemIdx item |>.run emitCtx hlState.hlState
@@ -259,13 +260,14 @@ private def renderModBody (root : Dir) (mod : LitMod) (resolved : ResolvedConfig
       currentCodeItems := currentCodeItems.push (itemIdx, item)
   -- Flush remaining code items
   if !currentCodeItems.isEmpty then
-    let (codeHtml, st) ← currentCodeItems.foldlM (init := (.empty, hlState.hlState)) fun (html, st) (idx, cItem) => do
-      let (h, st') ← renderCode idx cItem |>.run emitCtx st
-      pure (html ++ h, st')
-    let (outputHtml, st') := renderOutputMessages currentCodeItems resolved.showOutput hlCtx st
-    hlState := { hlState with hlState := st' }
-    unless codeHtml == .empty && outputHtml == .empty do
-      body := body ++ {{<div class="code-box">{{codeHtml}}{{outputHtml}}</div>}}
+    let mut boxHtml : Html := .empty
+    for (idx, cItem) in currentCodeItems do
+      let (codeHtml, st) ← renderCode idx cItem |>.run emitCtx hlState.hlState
+      let (outputHtml, st') := renderOutputMessages #[(idx, cItem)] resolved.showOutput hlCtx st
+      hlState := { hlState with hlState := st' }
+      boxHtml := boxHtml ++ codeHtml ++ outputHtml
+    unless boxHtml == .empty do
+      body := body ++ {{<div class="code-box">{{boxHtml}}</div>}}
   return (body, hlState)
 
 open Verso Output Doc Html in
