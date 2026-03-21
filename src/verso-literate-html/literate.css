@@ -81,6 +81,70 @@
         --verso-hamburger-border: #2a2a4a;
         --verso-hamburger-bar-color: #e0e0e0;
     }
+
+    /* Hover tooltips (tippy) */
+    .tippy-box[data-theme~='lean'],
+    .tippy-box[data-theme~='error'],
+    .tippy-box[data-theme~='warning'],
+    .tippy-box[data-theme~='info'] {
+        background-color: #2a2a4a;
+        color: #e0e0e0;
+        border-color: #4a4a6a;
+    }
+    .tippy-box[data-theme~='lean'] > .tippy-arrow::before,
+    .tippy-box[data-theme~='error'] > .tippy-arrow::before,
+    .tippy-box[data-theme~='warning'] > .tippy-arrow::before,
+    .tippy-box[data-theme~='info'] > .tippy-arrow::before {
+        border-color: #2a2a4a;
+    }
+    .tippy-box[data-theme~='tactic'] {
+        background-color: #2a2a4a;
+        color: #e0e0e0;
+        border-color: #4a4a6a;
+    }
+    .tippy-box[data-theme~='tactic'] > .tippy-arrow::before {
+        border-color: #2a2a4a;
+    }
+    .tippy-box[data-theme~='message'] > .tippy-arrow::before {
+        border-color: #2a2a4a;
+    }
+
+    /* Binding highlight on hover */
+    .hl.lean .token.binding-hl,
+    .hl.lean .literal.string:hover,
+    .hl.lean .token.typed:hover {
+        background-color: #3a3a5a;
+    }
+
+    /* Popup content inside tooltips */
+    .hl.lean.popup {
+        background-color: #2a2a4a;
+        color: #e0e0e0;
+    }
+    .hl.lean .hover-info {
+        color: #e0e0e0;
+    }
+    .hl.lean .hover-info code {
+        color: #e0e0e0;
+    }
+    .hl.lean .hover-info .sep {
+        border-top-color: #4a4a6a;
+    }
+
+    /* Diagnostic message backgrounds */
+    .hl.lean .hover-info.messages > code.error,
+    .hl.lean .hover-info.messages > code.warning,
+    .hl.lean .hover-info.messages > code.information {
+        background-color: #1a1a2e;
+    }
+
+    /* Tactic state */
+    .hl.lean .tactic-state,
+    .hl.lean.popup .tactic-state {
+        background-color: #2a2a4a;
+        color: #e0e0e0;
+        border-color: #4a4a6a;
+    }
 }
 
 /* Reset and base styles */

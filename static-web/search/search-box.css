@@ -30,8 +30,8 @@
 }
 
 #search-wrapper .combobox .cb_edit {
-    background-color: white;
-    color: black;
+    background-color: var(--verso-background-color, white);
+    color: var(--verso-text-color, black);
     box-sizing: border-box;
     padding: 0;
     margin: 0;
