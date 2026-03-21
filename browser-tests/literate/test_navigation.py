@@ -240,3 +240,33 @@ class TestNavigation:
         expect(searchbox).to_be_visible()
         searchbox.focus()
         expect(searchbox).to_be_focused()
+
+    def test_single_root_nav_title(self, server: str, page: Page):
+        """Test that a single-root site uses nav-title instead of collapsible details."""
+        page.goto(f"{server}/LitConfig/")
+        page.wait_for_load_state("networkidle")
+
+        nav = page.locator("nav.module-tree")
+
+        # Should have a .nav-title element for the single root
+        nav_title = nav.locator(".nav-title")
+        expect(nav_title).to_have_count(1)
+        expect(nav_title).to_contain_text("LitConfig")
+
+        # The nav-title should not be inside a <details> element
+        nav_title_in_details = nav.locator("details .nav-title")
+        expect(nav_title_in_details).to_have_count(0)
+
+    def test_single_root_children_not_indented(self, server: str, page: Page):
+        """Test that top-level children in single-root nav are not indented."""
+        page.goto(f"{server}/LitConfig/")
+        page.wait_for_load_state("networkidle")
+
+        nav = page.locator("nav.module-tree")
+
+        # Direct child leaves/details of the nav should have no margin-left
+        direct_leaf = nav.locator(":scope > .leaf").first
+        margin = direct_leaf.evaluate("el => getComputedStyle(el).marginLeft")
+        assert margin == "0px", (
+            f"Expected direct child leaf margin-left to be '0px', got '{margin}'"
+        )

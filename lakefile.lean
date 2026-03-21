@@ -288,11 +288,14 @@ package_facet literateHtml pkg : System.FilePath := do
           s!"{name}\t{jsonPath}\t{srcDir}") ++ "\n"
       addPureTrace mappingContent
 
-      buildFileUnlessUpToDate' moduleMapFile do
+      buildFileUnlessUpToDate' (text := true) moduleMapFile do
         IO.FS.writeFile moduleMapFile mappingContent
 
       -- Step 3: Run HTML generator with module map
       htmlExeJob.mapM fun htmlExeFile => do
+        -- Re-add traces that were reset by buildFileUnlessUpToDate'
+        for jsonPath in litFiles do
+          addTrace (← computeTrace jsonPath)
         if ← tomlFile.pathExists then
           addTrace (← computeTrace tomlFile)
         buildUnlessUpToDate htmlDir (← getTrace) (htmlDir.addExtension "trace") do

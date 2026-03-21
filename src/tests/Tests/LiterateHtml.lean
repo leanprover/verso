@@ -771,6 +771,20 @@ private def testImageCopying (data : TestData) (projectDir : System.FilePath) : 
   if hasSubstring litConfigHtml srcAttrRaw then
     throw <| IO.userError s!"image copying: HTML should not contain unprocessed '{srcAttrRaw}'"
 
+/-- Single-root project: navbar uses nav-title header instead of collapsible details. -/
+private def testSingleRootNavFlattening (data : TestData) : IO Unit := withTestDir data fun jsonDir htmlDir _ _ => do
+  runLiterateHtml jsonDir htmlDir
+
+  let litConfigHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "index.html")
+  let navbarSection := litConfigHtml.splitOn "module-tree" |>.getD 1 "" |>.splitOn "</nav>" |>.head!
+  -- Should have a nav-title div for the single root
+  unless hasSubstring navbarSection "nav-title" do
+    throw <| IO.userError "single-root nav: navbar should contain 'nav-title' class"
+  -- The top-level children should be direct leaves/details, not nested inside a root <details>
+  -- Check that LitConfig appears in a nav-title, not in a <summary>
+  unless hasSubstring navbarSection "<div class=\"nav-title" do
+    throw <| IO.userError "single-root nav: root entry should be a nav-title div, not a collapsible details"
+
 /-- CSS uses custom properties (var(--verso-*)) throughout. -/
 private def testCssCustomProperties (data : TestData) : IO Unit := withTestDir data fun jsonDir htmlDir _ _ => do
   runLiterateHtml jsonDir htmlDir
@@ -832,7 +846,8 @@ private def htmlTests (data : TestData) (projectDir : System.FilePath) : List (S
   ("page ToC absent", testPageTocAbsent data),
   ("CSS dark mode", testCssDarkMode data),
   ("CSS custom properties", testCssCustomProperties data),
-  ("image copying", testImageCopying data projectDir)
+  ("image copying", testImageCopying data projectDir),
+  ("single-root nav flattening", testSingleRootNavFlattening data)
 ]
 
 def testLiterateHtml : IO Unit := do
@@ -896,5 +911,89 @@ def testLiterateHtml : IO Unit := do
       IO.println "  All literate HTML tests passed!"
     else
       throw <| IO.userError s!"{failures} literate HTML test(s) failed"
+
+-- ===== Multi-root project tests =====
+
+/-- Multi-root project: navbar uses collapsible details for top-level entries, not nav-title. -/
+private def testMultiRootNavTree (data : TestData) : IO Unit := withTestDir data fun jsonDir htmlDir _ _ => do
+  runLiterateHtml jsonDir htmlDir
+
+  let libAHtml ← IO.FS.readFile (htmlDir / "LibA" / "index.html")
+  let navbarSection := libAHtml.splitOn "module-tree" |>.getD 1 "" |>.splitOn "</nav>" |>.head!
+  -- Should NOT have nav-title (that's for single-root only)
+  if hasSubstring navbarSection "nav-title" then
+    throw <| IO.userError "multi-root nav: navbar should not contain 'nav-title' class"
+  -- Should have both LibA and LibB as collapsible details
+  unless hasSubstring navbarSection "LibA" do
+    throw <| IO.userError "multi-root nav: navbar should contain 'LibA'"
+  unless hasSubstring navbarSection "LibB" do
+    throw <| IO.userError "multi-root nav: navbar should contain 'LibB'"
+  -- Should use <details> for top-level entries
+  unless hasSubstring navbarSection "<details" do
+    throw <| IO.userError "multi-root nav: navbar should use <details> for top-level entries"
+
+private def multiRootHtmlTests (data : TestData) : List (String × IO Unit) := [
+  ("multi-root nav tree", testMultiRootNavTree data)
+]
+
+def testLiterateHtmlMultiRoot : IO Unit := do
+  IO.println "Running multi-root literate HTML tests..."
+  let projectDir := "test-projects/literate-multi-root"
+  let modules := #["LibA", "LibA.Core", "LibB", "LibB.Utils"]
+
+  let rootToolchain ← IO.FS.readFile "lean-toolchain"
+  let testToolchain ← IO.FS.readFile (projectDir / "lean-toolchain")
+  unless rootToolchain == testToolchain do
+    throw <| IO.userError s!"{projectDir}/lean-toolchain ({testToolchain.trimAscii}) does not match root lean-toolchain ({rootToolchain.trimAscii})"
+
+  let lakeVars :=
+    #["LAKE", "LAKE_HOME", "LAKE_PKG_URL_MAP",
+      "LEAN_SYSROOT", "LEAN_AR", "LEAN_PATH", "LEAN_SRC_PATH",
+      "LEAN_GITHASH",
+      "ELAN_TOOLCHAIN", "DYLD_LIBRARY_PATH", "LD_LIBRARY_PATH"]
+  let updateResult ← IO.Process.output {
+    cmd := "elan"
+    args := #["run", "--install", rootToolchain.trimAscii.toString, "lake", "update", "verso"]
+    cwd := projectDir
+    env := lakeVars.map (·, none)
+  }
+  if updateResult.exitCode != 0 then
+    IO.eprintln s!"lake update stderr: {updateResult.stderr}"
+    throw <| IO.userError s!"lake update verso failed with exit code {updateResult.exitCode}"
+
+  IO.FS.withTempDir fun sharedTmpDir => do
+    let jsonDir := sharedTmpDir / "json"
+    let moduleListFile := sharedTmpDir / "modules"
+    IO.FS.createDirAll jsonDir
+
+    IO.println "  Building literate JSON for multi-root test modules..."
+    for mod in modules do
+      let json ← VersoLiterate.loadModuleJson projectDir mod
+      let jsonFile := mod.splitOn "." |>.foldl (init := jsonDir) (· / ·) |>.withExtension "json"
+      IO.FS.createDirAll (jsonFile.parent.getD jsonDir)
+      IO.FS.writeFile jsonFile json
+
+    -- Write module list with library annotations
+    let moduleEntries := modules.map fun m =>
+      let lib := if m.startsWith "LibA" then "LibA" else "LibB"
+      s!"{lib}\t{m}"
+    IO.FS.writeFile moduleListFile ("\n".intercalate moduleEntries.toList ++ "\n")
+
+    let data : TestData := { jsonDir, modules, moduleListFile }
+
+    let mut failures := 0
+    for (name, test) in multiRootHtmlTests data do
+      IO.print s!"  {name}... "
+      try
+        test
+        IO.println "passed"
+      catch e =>
+        IO.eprintln s!"FAILED - {e}"
+        failures := failures + 1
+
+    if failures == 0 then
+      IO.println "  All multi-root literate HTML tests passed!"
+    else
+      throw <| IO.userError s!"{failures} multi-root literate HTML test(s) failed"
 
 end Tests.LiterateHtml

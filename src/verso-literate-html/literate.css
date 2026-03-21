@@ -245,6 +245,30 @@ input:focus-visible,
     color: var(--verso-current-fg);
 }
 
+/* Single-root nav: no indent for top-level children */
+.module-tree > .leaf,
+.module-tree > details {
+    margin-left: 0;
+}
+
+/* Single-root nav title */
+.module-tree .nav-title {
+    font-weight: bold;
+    padding: 0.25rem 0.5rem;
+    margin-bottom: 0.25rem;
+    font-size: 1rem;
+    color: var(--verso-structure-color);
+}
+
+.module-tree .nav-title a {
+    color: var(--verso-structure-color);
+    text-decoration: none;
+}
+
+.module-tree .nav-title a:hover {
+    text-decoration: underline;
+}
+
 /* Main content area */
 .main-area {
     flex: 1;

@@ -589,13 +589,7 @@ partial def page (title : String) (siteRoot : String) (headContents : Html) (cur
         <aside class="sidebar">
           <div class="sidebar-content">
             <nav class="module-tree" aria-label="Module navigation">
-              {{let curr := current.components
-                root.children.map fun (x, d) =>
-                  if let c :: cs := curr then
-                    if x == c then
-                      toNavigation (some cs) x d
-                    else toNavigation none x d
-                  else toNavigation none x d }}
+              {{navTree current root litConfig}}
               </nav>
           </div>
         </aside>
@@ -639,6 +633,43 @@ where
   navLeaf (myName : Html) (current : Bool) : Html := {{<div class=s!"leaf{if current then " current" else ""}">{{myName}}</div>}}
   navNode (myName : Html) («open» : Bool) (current : Bool) (children : Array Html) : Html :=
     {{<details {{if «open» then #[("open", "")] else #[]}}><summary {{if current then #[("class", "current")] else #[]}}>{{myName}}</summary>{{children}}</details>}}
+
+  /-- When there is exactly one top-level entry, render it as a non-collapsible title header
+      with its children as top-level nav entries. Otherwise, render the normal tree. -/
+  navTree (current : Name) (root : Dir) (litConfig : LiterateConfig) : Array Html :=
+    let curr := current.components
+    match root.children with
+    | #[(rootName, rootDir)] =>
+      -- Single root: render as title + flat children
+      let rootLabel : Html :=
+        if let some x := rootDir.mod then
+          let resolved := litConfig.resolveForModule x.name
+          let label := resolved.title.getD (if let .str _ s := rootName then s else rootName.toString)
+          let href := match resolved.url with
+            | some u => u ++ "/"
+            | none => x.name.components.map (toString · ++ "/") |> String.join
+          {{<a href={{href}} title={{x.name.toString}}>{{label}}</a>}}
+        else
+          let label := if let .str _ s := rootName then s else rootName.toString
+          (label : Html)
+      let childCurr := match curr with
+        | c :: cs => if c == rootName then some cs else none
+        | [] => none
+      #[{{<div class=s!"nav-title{if childCurr == some [] then " current" else ""}">{{rootLabel}}</div>}}] ++
+        rootDir.children.map fun (x, d) =>
+          match childCurr with
+          | some (c :: cs) =>
+            if c == x then toNavigation (some cs) (rootName ++ x) d
+            else toNavigation none (rootName ++ x) d
+          | _ => toNavigation none (rootName ++ x) d
+    | _ =>
+      -- Multiple roots: normal tree rendering
+      root.children.map fun (x, d) =>
+        if let c :: cs := curr then
+          if x == c then
+            toNavigation (some cs) x d
+          else toNavigation none x d
+        else toNavigation none x d
 
   toNavigation (current? : Option (List Name)) (name : Name) (dir : Dir) : Html :=
     let myName : Html :=

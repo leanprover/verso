@@ -221,5 +221,5 @@
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    background-color: white;
+    background-color: var(--verso-background-color, white);
 }

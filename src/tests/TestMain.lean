@@ -162,6 +162,58 @@ def testLiterateConfig (_ : Config) : IO Unit := do
 def testLiterateHtml (_ : Config) : IO Unit :=
   Tests.LiterateHtml.testLiterateHtml
 
+def testLiterateHtmlMultiRoot (_ : Config) : IO Unit :=
+  Tests.LiterateHtml.testLiterateHtmlMultiRoot
+
+def testLiterateBrowserMultiRoot (_ : Config) : IO Unit := do
+  IO.println "Running multi-root literate browser tests (Playwright)..."
+  let projectDir := "test-projects/literate-multi-root"
+  let modules := #["LibA", "LibA.Core", "LibB", "LibB.Utils"]
+
+  IO.FS.withTempDir fun tmpDir => do
+    let jsonDir := tmpDir / "json"
+    let htmlDir := tmpDir / "html"
+    IO.FS.createDirAll jsonDir
+    IO.FS.createDirAll htmlDir
+
+    IO.println "  Building literate JSON for multi-root browser tests..."
+    for mod in modules do
+      let json ← VersoLiterate.loadModuleJson projectDir mod
+      let jsonFile := mod.splitOn "." |>.foldl (init := jsonDir) (· / ·) |>.withExtension "json"
+      IO.FS.createDirAll (jsonFile.parent.getD jsonDir)
+      IO.FS.writeFile jsonFile json
+
+    let moduleMapFile := tmpDir / "module-map"
+    let mut mapLines : Array String := #[]
+    for mod in modules do
+      let jsonFile := mod.splitOn "." |>.foldl (init := jsonDir) (· / ·) |>.withExtension "json"
+      mapLines := mapLines.push s!"{mod}\t{jsonFile}"
+    IO.FS.writeFile moduleMapFile ("\n".intercalate mapLines.toList ++ "\n")
+
+    IO.println "  Generating multi-root literate HTML site..."
+    let child ← IO.Process.spawn {
+      cmd := "lake"
+      args := #["--quiet", "exe", "verso-literate-html", htmlDir.toString, moduleMapFile.toString]
+      stdout := .null
+      stderr := .inherit
+    }
+    let exitCode ← child.wait
+    if exitCode != 0 then
+      throw <| IO.userError s!"verso-literate-html failed with exit code {exitCode}"
+
+    IO.println s!"  Running Playwright tests against {htmlDir}..."
+    let result ← IO.Process.output {
+      cmd := "uv"
+      args := #["run", "--project", "browser-tests", "--extra", "test",
+                "pytest", "browser-tests/literate-multi-root", "-v",
+                "--site-dir", htmlDir.toString]
+    }
+    IO.print result.stdout
+    if result.exitCode != 0 then
+      IO.eprint result.stderr
+      throw <| IO.userError s!"Playwright multi-root browser tests failed with exit code {result.exitCode}"
+    IO.println "  Multi-root literate browser tests passed!"
+
 def testLiterateBrowser (_ : Config) : IO Unit := do
   IO.println "Running literate browser tests (Playwright)..."
   let projectDir := "test-projects/literate-config"
@@ -241,7 +293,9 @@ def tests := [
   testInteractive,
   testLiterateConfig,
   testLiterateHtml,
-  testLiterateBrowser
+  testLiterateHtmlMultiRoot,
+  testLiterateBrowser,
+  testLiterateBrowserMultiRoot
 ]
 
 def getConfig (config : Config) : List String → IO Config
