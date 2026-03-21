@@ -254,6 +254,11 @@ package_facet literateHtml pkg : System.FilePath := do
     buildFileUnlessUpToDate' moduleListFile do
       IO.FS.writeFile moduleListFile moduleListContent
 
+    -- Re-add TOML trace (buildFileUnlessUpToDate' resets trace to output file hash)
+    if ← tomlFile.pathExists then
+      addTrace (← computeTrace tomlFile)
+    addPureTrace moduleListContent
+
     buildFileUnlessUpToDate' planFile do
       let planArgs := #[moduleListFile.toString, planFile.toString] ++
         (if ← tomlFile.pathExists then #[tomlFile.toString] else #[])
@@ -288,6 +293,8 @@ package_facet literateHtml pkg : System.FilePath := do
 
       -- Step 3: Run HTML generator with module map
       htmlExeJob.mapM fun htmlExeFile => do
+        if ← tomlFile.pathExists then
+          addTrace (← computeTrace tomlFile)
         buildUnlessUpToDate htmlDir (← getTrace) (htmlDir.addExtension "trace") do
           IO.FS.createDirAll htmlDir
           let mut htmlArgs := #[htmlDir.toString, moduleMapFile.toString]
