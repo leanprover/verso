@@ -329,7 +329,7 @@ Dark-mode overrides are specified under `[theme.dark]`:
 ```
 [theme.dark]
 background_color = "#1a1a2e"
-link_color = "#7dd4ad"
+link_color = "#5cb89a"
 ```
 
 Any variable not overridden retains its default value.
