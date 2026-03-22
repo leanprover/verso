@@ -110,6 +110,8 @@ Mixing incompatible features results in an ordinary Lean type error.
 
 {include 0 UsersGuide.Manuals}
 
+{include 0 UsersGuide.Literate}
+
 # Index
 %%%
 tag := "index"
