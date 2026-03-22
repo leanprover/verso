@@ -660,13 +660,12 @@ input:focus-visible,
     font-family: var(--verso-code-font-family, monospace);
 }
 
-/* Imports list */
+/* Imports list (collapsible, collapsed by default) */
 .imports-list {
     margin-bottom: 1.5rem;
     border: 1px solid var(--verso-code-box-border-color);
     border-radius: 0.375rem;
-    padding: 0.5rem 1rem;
-    background: var(--verso-surface-color);
+    background: var(--verso-code-box-background-color, var(--verso-surface-color));
 }
 
 .imports-list summary {
@@ -674,27 +673,11 @@ input:focus-visible,
     font-weight: 600;
     font-size: 0.9rem;
     color: var(--verso-imports-summary-color);
-    padding: 0.25rem 0;
+    padding: 0.5rem 1rem;
 }
 
-.imports-list ul {
-    list-style: none;
-    padding: 0.5rem 0 0;
-    font-family: var(--verso-code-font-family);
-    font-size: 0.875rem;
-}
-
-.imports-list li {
-    padding: 0.15rem 0;
-}
-
-.imports-list a {
-    color: var(--verso-link-color);
-    text-decoration: none;
-}
-
-.imports-list a:hover {
-    text-decoration: underline;
+.imports-list .imports-code {
+    padding: 0 var(--verso--box-padding, 1rem) var(--verso--box-padding, 1rem);
 }
 
 /* Command output blocks */

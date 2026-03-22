@@ -405,14 +405,15 @@ private def testShowImportsFalse (data : TestData) : IO Unit := withTestDir data
   if hasSubstring coreHtml "imports-list" then
     throw <| IO.userError "show_imports=false: page should not contain 'imports-list'"
 
-/-- Default config renders successfully (imports list depends on test data having populated import defines). -/
+/-- Default config shows imports in a collapsible details element. -/
 private def testShowImportsDefault (data : TestData) : IO Unit := withTestDir data fun jsonDir htmlDir _ _ => do
   runLiterateHtml jsonDir htmlDir
 
-  -- Verify the page renders without errors
   let coreHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "Core" / "index.html")
-  unless hasSubstring coreHtml "code-box" do
-    throw <| IO.userError "show_imports default: Core page should contain code boxes"
+  unless hasSubstring coreHtml "imports-list" do
+    throw <| IO.userError "show_imports default: Core page should contain 'imports-list'"
+  unless hasSubstring coreHtml "<details" do
+    throw <| IO.userError "show_imports default: imports should be in a collapsible <details> element"
 
 /-- Default config renders output blocks for #eval commands. -/
 private def testShowOutput (data : TestData) : IO Unit := withTestDir data fun jsonDir htmlDir _ _ => do

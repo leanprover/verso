@@ -131,27 +131,25 @@ class TestContent:
         expect(line_numbers).to_have_count(0)
 
     def test_collapsible_imports_toggle(self, server: str, page: Page):
-        """Test that details.imports-list opens and closes, showing import names."""
+        """Test that details.imports-list opens and closes, showing import code."""
         page.goto(f"{server}/LitConfig/")
         page.wait_for_load_state("networkidle")
 
         imports_list = page.locator("details.imports-list")
-        if imports_list.count() == 0:
-            # Module may not have imports rendered; skip
-            return
+        assert imports_list.count() >= 1, "Expected imports-list details element"
 
-        # Initially may or may not be open - click summary to toggle
+        # Should be collapsed by default
+        assert not imports_list.evaluate("el => el.open"), "imports-list should be collapsed by default"
+
+        # Click summary to open
         summary = imports_list.locator("summary")
         expect(summary).to_be_visible()
-
-        # Open it
-        if not imports_list.evaluate("el => el.open"):
-            summary.click()
+        summary.click()
         expect(imports_list).to_have_attribute("open", "")
 
-        # Should show import names inside
-        items = imports_list.locator("ul li")
-        assert items.count() >= 1, "Expected at least one import listed"
+        # Should show highlighted import code inside
+        code = imports_list.locator(".imports-code .hl.lean")
+        assert code.count() >= 1, "Expected highlighted import code"
 
         # Close it
         summary.click()

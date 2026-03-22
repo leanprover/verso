@@ -45,7 +45,7 @@ Whether a `Code` item is an import statement based on the module item's kind.
 This is determined at the item level rather than the code level.
 -/
 private def ModuleItem'.isImport (item : ModuleItem') : Bool :=
-  item.kind == ``Lean.Parser.Command.import
+  item.kind == ``Lean.Parser.Module.header
 
 private def shouldShowDocstring (config : ResolvedConfig) (declName : Name) : Bool :=
   if config.showDocstrings then
@@ -204,7 +204,7 @@ private def mkHeadContents (litConfig : LiterateConfig) (includeCodeAssets : Boo
 open Verso Output Doc Html in
 /-- Render the body HTML for a module page: imports section, code boxes, and prose.
     Returns the body HTML and updated highlight state. -/
-private def renderModBody (root : Dir) (mod : LitMod) (resolved : ResolvedConfig)
+private def renderModBody (mod : LitMod) (resolved : ResolvedConfig)
     (ctx : HtmlContext) (initHlState : HtmlState) : IO (Html × HtmlState) := do
   let emitCtx := { ctx with
                    options := {logError := ctx.logError}
@@ -212,31 +212,32 @@ private def renderModBody (root : Dir) (mod : LitMod) (resolved : ResolvedConfig
                    codeOptions := {} }
   let hlCtx : HighlightHtmlM.Context Literate :=
     ⟨emitCtx.linkTargets, emitCtx.traverseContext, emitCtx.definitionIds, emitCtx.codeOptions⟩
-  -- Apply hide_commands filtering
-  let contents := if resolved.hideCommands.isEmpty then mod.contents
-    else mod.contents.filter fun item =>
-      !matchesAnyCommandPattern item resolved.hideCommands
-  -- Build imports list
-  let imports := mod.contents.filter ModuleItem'.isImport
-  let importNames := imports.flatMap (·.defines)
+  -- Apply hide_commands filtering and remove import items (handled separately)
+  let contents := mod.contents.filter fun item =>
+    !ModuleItem'.isImport item &&
+    (resolved.hideCommands.isEmpty || !matchesAnyCommandPattern item resolved.hideCommands)
   let mut body : Html := .empty
-  -- Imports section (collapsible)
-  if resolved.showImports && !importNames.isEmpty then
-    let importLinks := importNames.map fun n =>
-      if (root[n]?).isSome then
-        let href := n.components.map (toString · ++ "/") |> String.join
-        {{<li><a href={{href}}>{{n.toString}}</a></li>}}
-      else
-        {{<li>{{n.toString}}</li>}}
+  -- Collect import items into a collapsible section, rendered before other content
+  let mut importHtml : Html := .empty
+  let mut importHlState := initHlState
+  for h : itemIdx in [0:mod.contents.size] do
+    have : itemIdx < mod.contents.size := by have := h.2.1; grind
+    let item := mod.contents[itemIdx]
+    if ModuleItem'.isImport item then
+      let (codeHtml, st) ← renderCode itemIdx item |>.run emitCtx importHlState.hlState
+      importHlState := { importHlState with hlState := st }
+      importHtml := importHtml ++ codeHtml
+  if resolved.showImports && importHtml != .empty then
     body := body ++ {{
       <details class="imports-list">
         <summary>"Imports"</summary>
-        <ul>{{importLinks}}</ul>
+        <div class="imports-code">{{importHtml}}</div>
       </details>
     }}
+  let hlState := importHlState
   -- Process items: prose (modDoc) flows between code boxes
   let mut currentCodeItems : Array (Nat × ModuleItem') := #[]
-  let mut hlState := initHlState
+  let mut hlState := hlState
   for h : itemIdx in [0:contents.size] do
     have : itemIdx < contents.size := by have := h.2.1; grind
     let item := contents[itemIdx]
@@ -319,7 +320,7 @@ def emitMod (root : Dir) (outDir: System.FilePath) (mod : LitMod)
   let litConfig := (← read).litConfig
   let resolved := litConfig.resolveForModule mod.name
 
-  let (body, hlState) ← renderModBody root mod resolved (← read) (← get)
+  let (body, hlState) ← renderModBody mod resolved (← read) (← get)
   set hlState
 
   let headContents := mkHeadContents litConfig
@@ -416,7 +417,7 @@ def emitLandingFromModule (outDir : System.FilePath) (root : Dir) (modName : Nam
   let siteRoot := "./"
   let htmlId? := ctx.moduleIds.find? mod.name
 
-  let (body, hlState) ← renderModBody root mod resolved ctx initHlState
+  let (body, hlState) ← renderModBody mod resolved ctx initHlState
 
   let headContents := mkHeadContents litConfig
   -- Build page ToC
