@@ -686,11 +686,14 @@ where
       let rootLabel : Html :=
         if let some x := rootDir.mod then
           let resolved := litConfig.resolveForModule x.name
-          let label := resolved.title.getD (if let .str _ s := rootName then s else rootName.toString)
+          let (label, hasCustomTitle) := match resolved.title with
+            | some t => (t, true)
+            | none => (if let .str _ s := rootName then s else rootName.toString, false)
           let href := match resolved.url with
             | some u => u ++ "/"
             | none => x.name.components.map (toString · ++ "/") |> String.join
-          {{<a href={{href}} title={{x.name.toString}}>{{label}}</a>}}
+          let cls := if hasCustomTitle then "custom-title" else ""
+          {{<a href={{href}} title={{x.name.toString}} class={{cls}}>{{label}}</a>}}
         else
           let label := if let .str _ s := rootName then s else rootName.toString
           (label : Html)
@@ -717,11 +720,14 @@ where
     let myName : Html :=
       if let some x := dir.mod then
         let resolved := litConfig.resolveForModule x.name
-        let label := resolved.title.getD (if let .str _ s := name then s else name.toString)
+        let (label, hasCustomTitle) := match resolved.title with
+          | some t => (t, true)
+          | none => (if let .str _ s := name then s else name.toString, false)
         let href := match resolved.url with
           | some u => u ++ "/"
           | none => x.name.components.map (toString · ++ "/") |> String.join
-        {{<a href={{href}} title={{x.name.toString}}>{{label}}</a>}}
+        let cls := if hasCustomTitle then "custom-title" else ""
+        {{<a href={{href}} title={{x.name.toString}} class={{cls}}>{{label}}</a>}}
       else
         let label := if let .str _ s := name then s else name.toString
         (label : Html)

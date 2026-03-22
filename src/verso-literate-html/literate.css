@@ -347,6 +347,10 @@ input:focus-visible,
     text-decoration: underline;
 }
 
+.module-tree .custom-title {
+    font-family: var(--verso-structure-font-family);
+}
+
 /* Main content area */
 .main-area {
     flex: 1;
