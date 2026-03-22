@@ -46,6 +46,11 @@
     --verso-hamburger-border: #dee2e6;
     --verso-hamburger-bar-color: #333;
 
+    /* Diagnostic indicators */
+    --verso-warning-indicator-color: #b8860b;
+    --verso-error-indicator-color: #dc3545;
+    --verso-info-indicator-color: #0066cc;
+
     /* Syntax highlighting weight/style */
     --verso-code-keyword-weight: bold;
     --verso-code-keyword-style: normal;
@@ -80,6 +85,10 @@
         --verso-hamburger-bg: #16213e;
         --verso-hamburger-border: #2a2a4a;
         --verso-hamburger-bar-color: #e0e0e0;
+        --verso-warning-indicator-color: #ffc107;
+        --verso-error-indicator-color: #ff6b6b;
+        --verso-info-indicator-color: #64b5f6;
+        --verso-selected-color: #1a2744;
     }
 
     /* Hover tooltips (tippy) */
@@ -113,6 +122,11 @@
     .hl.lean .token.binding-hl,
     .hl.lean .literal.string:hover,
     .hl.lean .token.typed:hover {
+        background-color: #3a3a5a;
+    }
+
+    /* Tactic/proof state hover */
+    .hl.lean .tactic:has(.tactic-toggle:not(:checked)) > label:hover {
         background-color: #3a3a5a;
     }
 
@@ -472,6 +486,13 @@ input:focus-visible,
     line-height: 1.5;
     overflow-x: auto;
     position: relative;
+}
+
+/* Highlight the target definition when navigating via #id */
+.hl.lean .token:target {
+    background-color: var(--verso-selected-color, #def);
+    outline: auto;
+    scroll-margin-top: 4rem;
 }
 
 /* Prose (module docstrings) flowing between code boxes */

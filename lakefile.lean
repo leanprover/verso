@@ -204,6 +204,7 @@ module_facet literate mod : System.FilePath := do
   exeJob.bindM fun exeFile =>
     modJob.mapM fun _oleanPath => do
       addLeanTrace
+      addTrace (← computeTrace exeFile)
       buildFileUnlessUpToDate' (text := true) litFile <|
         proc {
           cmd := exeFile.toString

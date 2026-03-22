@@ -22,3 +22,6 @@ Here are some examples:
 
 #eval double 5
 #eval triple 5
+
+/-- An anonymous example docstring. -/
+example : 1 + 1 = 2 := rfl

@@ -247,9 +247,9 @@ private def renderModBody (root : Dir) (mod : LitMod) (resolved : ResolvedConfig
         | .verso _ (some dn) _ | .markdown _ (some dn) _ =>
           shouldShowDocstring resolved dn
         | _ => true }
-    let hasProse := item.code.any Code.isModDoc ||
-      (resolved.docstringsAsText && item.code.any Code.isDeclDoc)
-    if hasProse then
+    let hasModDoc := item.code.any Code.isModDoc
+    let hasDeclDocAsText := resolved.docstringsAsText && item.code.any Code.isDeclDoc
+    if hasModDoc then
       -- Flush any accumulated code items first
       if !currentCodeItems.isEmpty then
         let mut boxHtml : Html := .empty
@@ -262,9 +262,35 @@ private def renderModBody (root : Dir) (mod : LitMod) (resolved : ResolvedConfig
           body := body ++ {{<div class="code-box">{{boxHtml}}</div>}}
         currentCodeItems := #[]
       -- Render this item's code — modDoc parts render as prose, rest as inline code
-      let (itemHtml, st) ← renderCode itemIdx item (docstringsAsText := resolved.docstringsAsText) |>.run emitCtx hlState.hlState
+      let (itemHtml, st) ← renderCode itemIdx item |>.run emitCtx hlState.hlState
       hlState := { hlState with hlState := st }
       body := body ++ itemHtml
+    else if hasDeclDocAsText then
+      -- Flush any accumulated code items first
+      if !currentCodeItems.isEmpty then
+        let mut boxHtml : Html := .empty
+        for (idx, cItem) in currentCodeItems do
+          let (codeHtml, st) ← renderCode idx cItem |>.run emitCtx hlState.hlState
+          let (outputHtml, st') := renderOutputMessages #[(idx, cItem)] resolved.showOutput hlCtx st
+          hlState := { hlState with hlState := st' }
+          boxHtml := boxHtml ++ codeHtml ++ outputHtml
+        unless boxHtml == .empty do
+          body := body ++ {{<div class="code-box">{{boxHtml}}</div>}}
+        currentCodeItems := #[]
+      -- Split: render declaration docstrings as prose, then remaining code in a code box
+      let docItem := { item with code := item.code.filter Code.isDeclDoc }
+      -- Drop leading newline-only highlighted entries left over from the split
+      let remainingCode := (item.code.filter (!Code.isDeclDoc ·)).toList.dropWhile
+        fun | .highlighted hl => newlinesOnly hl | _ => false
+      let codeItem := { item with code := remainingCode.toArray }
+      let (docHtml, st) ← renderCode itemIdx docItem (docstringsAsText := true) |>.run emitCtx hlState.hlState
+      hlState := { hlState with hlState := st }
+      body := body ++ docHtml
+      let (codeHtml, st) ← renderCode itemIdx codeItem |>.run emitCtx hlState.hlState
+      let (outputHtml, st') := renderOutputMessages #[(itemIdx, codeItem)] resolved.showOutput hlCtx st
+      hlState := { hlState with hlState := st' }
+      unless codeHtml == .empty do
+        body := body ++ {{<div class="code-box">{{codeHtml ++ outputHtml}}</div>}}
     else
       currentCodeItems := currentCodeItems.push (itemIdx, item)
   -- Flush remaining code items

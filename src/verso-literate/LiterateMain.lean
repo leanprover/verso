@@ -269,9 +269,42 @@ where
             pure <| Code.verso i (some declName) x
         else pure none
       else pure none
-    pure <| hl.map fun
-      | .inl hl => .highlighted hl
+    let code := hl.map fun
+      | .inl hl => Code.highlighted hl
       | .inr c => c
+    -- Extract any remaining doc-comment tokens (from anonymous declarations like `example`)
+    -- as separate .markdown entries
+    pure <| code.flatMap extractDocComments
+
+  /-- Splits a `Code.highlighted` at doc-comment tokens, extracting them as `.markdown` entries.
+      Non-highlighted code entries pass through unchanged. -/
+  extractDocComments (c : Code) : Array Code :=
+    match c with
+    | .highlighted hl => extractFromHighlighted hl
+    | other => #[other]
+
+  /-- Parse a raw docstring comment text (including `/--` and `-/` delimiters) into markdown. -/
+  parseDocComment (text : String) : Code :=
+    let docText := (text.dropPrefix "/-- " |>.toString |>.dropSuffix " -/"
+          |>.dropSuffix "\n-/" |>.dropSuffix "-/").trimAsciiEnd.toString
+    match MD4Lean.parse docText with
+    | some md => .markdown 0 none md
+    | none => .markdown 0 none ⟨#[.code #[] #[] none #[docText]]⟩
+
+  /-- Walk a `Highlighted` tree and split out doc-comment tokens as `.markdown` code entries. -/
+  extractFromHighlighted (hl : Highlighted) : Array Code :=
+    match hl with
+    | .seq xs =>
+      let init : Array Code × Array Highlighted := (#[], #[])
+      let (result, pending) := xs.foldl (init := init) fun (result, pending) x =>
+        match x with
+        | .token ⟨.docComment, text⟩ =>
+          let result := if pending.isEmpty then result else result.push (.highlighted (.seq pending))
+          (result.push (parseDocComment text), #[])
+        | other => (result, pending.push other)
+      if pending.isEmpty then result else result.push (.highlighted (.seq pending))
+    | .token ⟨.docComment, text⟩ => #[parseDocComment text]
+    | _ => #[Code.highlighted hl]
 
   toLit (doc : VersoDocString) : HighlightM (LitVersoDocString) := do
     pure { text := ← doc.text.mapM blockToLit, subsections := ← doc.subsections.mapM partToLit }

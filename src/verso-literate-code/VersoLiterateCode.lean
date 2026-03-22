@@ -287,17 +287,58 @@ partial def whitespaceOnly : SubVerso.Highlighting.Highlighted → Bool
   | .tactics data _ _ hl | .span data hl => data.isEmpty && whitespaceOnly hl
   | .point .. => false
 
+open SubVerso.Highlighting in
+/--
+Removes leading text characters from highlighted code while `p` holds.
+Stops at the first non-text content or the first character where `p` is false.
+Analogous to `String.dropWhile` but for `Highlighted`.
+-/
+partial def _root_.SubVerso.Highlighting.Highlighted.dropTextWhile
+    (p : Char → Bool) (hl : Highlighted) : Highlighted := Id.run do
+  let mut todo := [hl]
+  let mut out : Highlighted := Highlighted.seq #[]
+  repeat
+    match todo with
+    | [] => break
+    | h :: more =>
+      match h with
+      | Highlighted.seq xs =>
+        todo := xs.toList ++ more
+      | Highlighted.text s =>
+        let remaining := s.dropWhile p |>.copy
+        if remaining.isEmpty then
+          todo := more
+        else
+          out := out ++ Highlighted.text remaining
+          for hl' in more do out := out ++ hl'
+          return out
+      | Highlighted.unparsed s =>
+        let remaining := s.dropWhile p |>.copy
+        if remaining.isEmpty then
+          todo := more
+        else
+          out := out ++ Highlighted.unparsed remaining
+          for hl' in more do out := out ++ hl'
+          return out
+      | other =>
+        out := out ++ other
+        for hl' in more do out := out ++ hl'
+        return out
+  return out
+
 open Verso.Output Html in
 open Verso Doc Html in
 open SubVerso.Highlighting in
 def renderCode [Monad m] (itemIdx : Nat) (item : VersoLiterate.ModuleItem') (docstringsAsText : Bool := false) : HtmlT Literate m Html := do
   let mut html := .empty
   let mut nextIndent := 0
+  let mut hasContent := false
   let docCls := if docstringsAsText then "mod-doc" else ""
   for c in item.code, idx in 0...* do
     match c with
     | .markdown i _ s =>
       html := html ++ {{<div class=s!"md-text {docCls}" style=s!"--indent: {i}">{{md2Html s}}</div>}}
+      hasContent := true
     | .verso i _ x => do
       let text ←
         withReader (fun ρ => {ρ with codeOptions.identifierWordBreaks := true}) <|
@@ -306,15 +347,19 @@ def renderCode [Monad m] (itemIdx : Nat) (item : VersoLiterate.ModuleItem') (doc
         withReader (fun ρ => {ρ with codeOptions.identifierWordBreaks := true}) <|
         x.subsections.mapM fun p : Part Literate => ToHtml.toHtml p
       html := html ++ {{ <div class=s!"verso-text {docCls}" style=s!"--indent: {i}">{{text ++ sub}}</div> }}
+      hasContent := true
     | .highlighted hl =>
       if newlinesOnly hl then
-        html := html ++ (← (Highlighted.text "\n").blockHtml (g := Literate) "lean" (trim := false))
+        -- Skip leading newlines before any content has been rendered
+        if hasContent then
+          html := html ++ (← (Highlighted.text "\n").blockHtml (g := Literate) "lean" (trim := false))
         nextIndent := 0
       else if !whitespaceOnly hl then
         let hl := trimLeading hl
         let (hl, i') := trimTrailing hl
         html := html ++ (← hl.blockHtml (g := Literate) "lean" (trim := false))
         nextIndent := i'
+        hasContent := true
     | .modDoc doc =>
       let htmlId := (← read).traverseState.modDocLink (← read).traverseContext.currentModule itemIdx idx
       let text ←
@@ -334,12 +379,8 @@ def renderCode [Monad m] (itemIdx : Nat) (item : VersoLiterate.ModuleItem') (doc
 where
   -- Trimming the leading newline is necessary because we display each section in HTML block mode,
   -- and we don't want to end up with an extra visual blank line between sections.
-  trimLeading : SubVerso.Highlighting.Highlighted → SubVerso.Highlighting.Highlighted
-    | hl =>
-      if hl.toStringPrefix 1 |>.startsWith "\n" then
-        hl.dropText 1
-      else
-        hl
+  trimLeading (hl : SubVerso.Highlighting.Highlighted) : SubVerso.Highlighting.Highlighted :=
+    hl.dropTextWhile (· == '\n')
   trimTrailing : SubVerso.Highlighting.Highlighted → (SubVerso.Highlighting.Highlighted × Nat)
     | hl =>
       let trailingIndent := hl.takeStringRightWhile (· == ' ')
