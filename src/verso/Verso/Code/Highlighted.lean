@@ -1529,12 +1529,23 @@ window.onload = () => {
         return 'lean';
       }
 
+      function ensureTippy(el) {
+        if (el._tippy) return;
+        el.setAttribute('data-tippy-theme', getTheme(el));
+        tippy(el, Object.assign({}, defaultTippyProps, {showOnCreate: true}));
+      }
+
       document.querySelectorAll('.hl.lean').forEach(container => {
         container.addEventListener('mouseenter', (e) => {
           const tgt = e.target.closest(tippySelector);
-          if (!tgt || tgt._tippy || !container.contains(tgt)) return;
-          tgt.setAttribute('data-tippy-theme', getTheme(tgt));
-          tippy(tgt, Object.assign({}, defaultTippyProps, {showOnCreate: true}));
+          if (!tgt || !container.contains(tgt)) return;
+          // If inside a .tactic, ensure the .tactic itself has a tippy too.
+          // The mouse can skip over .tactic and land on a child token directly
+          // (especially when zoomed out), so .tactic might not get its own
+          // mouseenter event.
+          const tactic = tgt.closest('.tactic');
+          if (tactic && container.contains(tactic)) ensureTippy(tactic);
+          ensureTippy(tgt);
         }, true);
       });
   });
