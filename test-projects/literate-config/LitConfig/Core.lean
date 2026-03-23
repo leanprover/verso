@@ -17,7 +17,7 @@ def double (n : Nat) : Nat := n * 2
 def triple (n : Nat) : Nat := n * 3
 
 /-!
-Here are some examples:
+Here are some examples using the {kw}`where` keyword:
 -/
 
 #eval double 5

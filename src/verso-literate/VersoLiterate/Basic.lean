@@ -145,7 +145,15 @@ def handleTactic : InlineToLiterate
     throwError "Wrong data"
   | _, _, _ => pure none
 
-def inline := #[handleLocal, handleConst, handlePostponed, handleAttr, handleTerm, handleOption, handleModName, handleTactic]
+def handleKwAtom : InlineToLiterate
+  | name, _val, content => do
+    -- Data.Atom is mistakenly marked private in Lean. Here's a workaround until we fix that.
+    -- Check the name's suffix because private names have a mangled prefix:
+    unless name.toString.endsWith "Lean.Doc.Data.Atom" do return none
+    let some s := (match content with | #[.code s] => some s | _ => none) | return none
+    return some <| .other (.highlighted <| .token ⟨.keyword none none none, s⟩) content
+
+def inline := #[handleLocal, handleConst, handlePostponed, handleAttr, handleTerm, handleOption, handleModName, handleTactic, handleKwAtom]
 
 end Builtin
 

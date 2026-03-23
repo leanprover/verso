@@ -185,6 +185,16 @@ private def testDefaultBehavior (data : TestData) : IO Unit := withTestDir data 
   unless hasSubstring noDocHtml "code-box" do
     throw <| IO.userError "NoDocstrings page does not contain code boxes"
 
+/-- The `{kw}` docstring role renders keyword atoms in the HTML output. -/
+private def testKeywordRole (data : TestData) : IO Unit := withTestDir data fun jsonDir htmlDir _ _ => do
+  runLiterateHtml jsonDir htmlDir
+  let coreHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "Core" / "index.html")
+  -- The module docstring contains {kw}`where`, which should render as a keyword-highlighted token
+  unless hasSubstring coreHtml "where" do
+    throw <| IO.userError "Core page does not contain keyword 'where' from {kw} role"
+  unless hasSubstring coreHtml "keyword" do
+    throw <| IO.userError "Core page does not contain 'keyword' CSS class for {kw} role"
+
 /-- Excluded modules produce no HTML output and are absent from the navbar. -/
 private def testExclude (data : TestData) : IO Unit := withTestDir data fun jsonDir htmlDir planFile tomlFile => do
   IO.FS.writeFile tomlFile "exclude = [\"LitConfig.NoDocstrings\"]\n"
@@ -882,7 +892,8 @@ private def htmlTests (data : TestData) (projectDir : System.FilePath) : List (S
   ("image copying", testImageCopying data projectDir),
   ("single-root nav flattening", testSingleRootNavFlattening data),
   ("docstrings_as_text", testDocstringsAsText data),
-  ("docstrings_as_text default", testDocstringsAsTextDefault data)
+  ("docstrings_as_text default", testDocstringsAsTextDefault data),
+  ("keyword role", testKeywordRole data)
 ]
 
 def testLiterateHtml : IO Unit := do
