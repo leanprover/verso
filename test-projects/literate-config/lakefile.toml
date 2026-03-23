@@ -7,3 +7,4 @@ path = "../.."
 
 [[lean_lib]]
 name = "LitConfig"
+leanOptions = [{name = "doc.verso", value = true}]

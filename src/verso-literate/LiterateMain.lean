@@ -445,7 +445,7 @@ private def collectItemImages (items : Array ModuleItem') : Array String :=
 end ImageCollection
 
 
-unsafe def go (suppressedNamespaces : Array Name) (extraImports : Array Name) (mod : String) (out : IO.FS.Stream) : IO UInt32 := do
+unsafe def go (suppressedNamespaces : Array Name) (extraImports : Array Name) (mod : String) (leanOptions : Options) (out : IO.FS.Stream) : IO UInt32 := do
   try
     initSearchPath (← findSysroot)
     let modName := mod.toName
@@ -466,7 +466,8 @@ unsafe def go (suppressedNamespaces : Array Name) (extraImports : Array Name) (m
     let env ← Compat.importModules (extraImports.map ({module := ·}) ++ imports) {}
     let pctx : Frontend.Context := {inputCtx := ictx}
 
-    let scopes := [{header := "", opts := maxHeartbeats.set {} 10000000 }]
+    let opts := leanOptions.mergeBy (fun _ _ v => v) (maxHeartbeats.set {} 10000000)
+    let scopes := [{header := "", opts}]
     let commandState := { env, maxRecDepth := defaultMaxRecDepth, messages := msgs, scopes }
     let cmdPos := parserState.pos
     let cmdSt ← IO.mkRef {commandState, parserState, cmdPos}
@@ -503,6 +504,43 @@ structure Config where
   mod : String
   outFile : Option String := none
   extraImports : Array Name := #[]
+  leanOptions : Options := {}
+
+/-- Parse a `-Dname=value` flag into a Lean option, registering it in `opts`.
+    Uses the registered option declaration to determine the expected type. -/
+private def parseDOption (arg : String) (opts : Options) : IO Options := do
+  let arg := arg.drop 2  -- drop "-D"
+  let parts := arg.split "=" |>.toList
+  match parts with
+  | [name, value] =>
+    let name := String.toName name.copy
+    let value := value.copy
+    let decl ← getOptionDecl name
+    match decl.defValue with
+    | .ofBool _ =>
+      match value with
+      | "true" => return opts.setBool name true
+      | "false" => return opts.setBool name false
+      | _ => throw <| .userError s!"Invalid boolean value for option {name}: {value}"
+    | .ofNat _ =>
+      if let some n := value.toNat? then
+        return opts.insert name (DataValue.ofNat n)
+      else
+        throw <| .userError s!"Invalid natural number value for option {name}: {value}"
+    | .ofInt _ =>
+      if let some n := value.toInt? then
+        return opts.insert name (DataValue.ofInt n)
+      else
+        throw <| .userError s!"Invalid integer value for option {name}: {value}"
+    | .ofString _ =>
+      -- No quote removal needed: the shell removes quotes and interprets escapes before we see the
+      -- value
+      return opts.insert name (DataValue.ofString value)
+    | .ofName _ =>
+      return opts.insert name (DataValue.ofName (String.toName value))
+    | .ofSyntax _ =>
+      throw <| .userError s!"Cannot set syntax-valued option {name} via -D flag"
+  | _ => throw <| .userError s!"Invalid -D option: {arg}"
 
 def Config.fromArgs (args : List String) : IO Config := go {mod := ""} args
 where
@@ -524,22 +562,34 @@ where
         go { cfg with extraImports := cfg.extraImports.push mod.toName } more
       else
         throw <| .userError "No import given after --import"
-    | [mod] => pure { cfg with mod }
-    | [mod, outFile] => pure { cfg with mod, outFile := some outFile }
-    | other => throw <| .userError s!"Didn't understand remaining arguments: {other}"
+    | arg :: more => do
+      if arg.startsWith "-D" then
+        let opts ← parseDOption arg cfg.leanOptions
+        go { cfg with leanOptions := opts } more
+      else if cfg.mod.isEmpty then
+        go { cfg with mod := arg } more
+      else if cfg.outFile.isNone then
+        go { cfg with outFile := some arg } more
+      else
+        throw <| .userError s!"Didn't understand remaining arguments: {arg :: more}"
+    | [] =>
+      if cfg.mod.isEmpty then
+        throw <| .userError "No module provided"
+      else
+        pure cfg
 
 unsafe def main (args : List String) : IO UInt32 := do
   try
-    let {suppressedNamespaces, mod, outFile, extraImports} ← Config.fromArgs args
+    let {suppressedNamespaces, mod, outFile, extraImports, leanOptions} ← Config.fromArgs args
     if mod.isEmpty then throw <| .userError s!"No import module provided"
     match outFile with
     | none =>
-      go suppressedNamespaces extraImports mod (← IO.getStdout)
+      go suppressedNamespaces extraImports mod leanOptions (← IO.getStdout)
     | some outFile =>
       if let some p := (outFile : System.FilePath).parent then
         IO.FS.createDirAll p
       IO.FS.withFile outFile .write fun h =>
-        go suppressedNamespaces extraImports mod (.ofHandle h)
+        go suppressedNamespaces extraImports mod leanOptions (.ofHandle h)
   catch e =>
     IO.eprintln e
     IO.println helpText

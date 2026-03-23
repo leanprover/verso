@@ -192,6 +192,19 @@ lean_exe «tutorial-example» where
   root := `Main
   supportInterpreter := true
 
+private def leanOptionArgs (m : Module) : Array String := Id.run do
+  let opts := Module.leanOptions m
+  let vals := Lean.LeanOptions.values opts
+  let mut args : Array String := #[]
+  for (name, val) in vals.toList do
+    let valStr :=
+      match val with
+      | .ofString s => s
+      | .ofBool b => toString b
+      | .ofNat n => toString n
+    args := args.push s!"-D{name}={valStr}"
+  return args
+
 module_facet literate mod : System.FilePath := do
   let ws ← getWorkspace
 
@@ -201,14 +214,17 @@ module_facet literate mod : System.FilePath := do
   let buildDir := ws.root.buildDir
   let litFile := mod.filePath (buildDir / "literate") "json"
 
+  let optArgs := leanOptionArgs mod
+
   exeJob.bindM fun exeFile =>
     modJob.mapM fun _oleanPath => do
       addLeanTrace
       addTrace (← computeTrace exeFile)
+      addPureTrace (toString optArgs) "leanOptions"
       buildFileUnlessUpToDate' (text := true) litFile <|
         proc {
           cmd := exeFile.toString
-          args := #[mod.name.toString, litFile.toString]
+          args := #[mod.name.toString, litFile.toString] ++ optArgs
           env := ← getAugmentedEnv
         }
       pure litFile

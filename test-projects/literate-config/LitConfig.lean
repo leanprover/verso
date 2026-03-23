@@ -2,8 +2,6 @@ import LitConfig.Core
 import LitConfig.NoDocstrings
 import Verso
 
-set_option doc.verso true
-
 /-!
 # LitConfig: A Test Module
 
@@ -20,6 +18,21 @@ Below is a simple definition.
 
 /-- A greeting message. -/
 def hello : String := "Hello, literate world!"
+
+/--
+Given {lean}`n : Nat`, compute {name}`double` of {name}`n`.
+-/
+def doubleIt (n : Nat) : Nat := double n
+
+/--
+Given {lean}`n : Nat`, {name}`double` returns {lean}`n * 2`.
+-/
+theorem double_spec {n : Nat} : double n = n * 2 := rfl
+
+/--
+A variant: {name}`double` is the same as adding {lean}`n` to itself.
+-/
+theorem double_spec' {n : Nat} : double n = n + n := by simp [double]; omega
 
 /-!
 We can also have inline code references like {name}`hello`.
