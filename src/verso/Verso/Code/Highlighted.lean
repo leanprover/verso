@@ -1377,18 +1377,19 @@ window.onload = () => {
     for (const container of document.querySelectorAll(\".hl.lean\")) {
       container.addEventListener(\"mouseover\", (event) => {
         const c = event.target.closest(\".token\");
-        if (!c || !container.contains(c)) return;
-        const binding = c.dataset.binding;
-        if (!binding || binding === \"\" || blockedByTactic(c)) {
-          currentBinding = null;
-          currentContext = null;
+        if (c && container.contains(c)) {
+          const binding = !blockedByTactic(c) ? c.dataset.binding : null;
+          const newBinding = (binding && binding !== \"\") ? binding : null;
+          if (newBinding === currentBinding) return;
+          currentBinding = newBinding;
+          currentContext = newBinding ? container.dataset.leanContext : null;
           syncHighlights();
-          return;
+        } else {
+          // Mouse is on a non-token element (wrapper, whitespace, etc.).
+          // Only clear if we're not inside a currently-highlighted token's subtree.
+          if (currentBinding && highlightedTokens.some(tok => tok.contains(event.target))) return;
+          if (currentBinding) { currentBinding = null; currentContext = null; syncHighlights(); }
         }
-        if (binding === currentBinding) return;
-        currentBinding = binding;
-        currentContext = container.dataset.leanContext;
-        syncHighlights();
       });
       container.addEventListener(\"mouseout\", (event) => {
         const related = event.relatedTarget;
