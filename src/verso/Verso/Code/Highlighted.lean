@@ -1507,9 +1507,10 @@ window.onload = () => {
         container.addEventListener('mouseenter', (e) => {
           let tgt = e.target.closest(tippySelector);
           if (!tgt || !container.contains(tgt)) return;
-          // Prefer the enclosing .tactic element so proof states get tooltips
+          // Prefer the enclosing .tactic element for tokens in the tactic label,
+          // but not for tokens inside the expanded .tactic-state
           const tactic = tgt.closest('.tactic');
-          if (tactic && container.contains(tactic)) tgt = tactic;
+          if (tactic && container.contains(tactic) && !tgt.closest('.tactic-state')) tgt = tactic;
           if (tgt._tippy) return;
           tgt.setAttribute('data-tippy-theme', getTheme(tgt));
           tippy(tgt, Object.assign({}, defaultTippyProps, {showOnCreate: true}));
