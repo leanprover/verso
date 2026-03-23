@@ -1503,14 +1503,21 @@ window.onload = () => {
         return 'lean';
       }
 
+      function tacticIsClosed(tacticEl) {
+        const toggle = tacticEl.querySelector('input.tactic-toggle');
+        return toggle && !toggle.checked;
+      }
+
       document.querySelectorAll('.hl.lean').forEach(container => {
         container.addEventListener('mouseenter', (e) => {
           let tgt = e.target.closest(tippySelector);
           if (!tgt || !container.contains(tgt)) return;
-          // Prefer the enclosing .tactic element for tokens in the tactic label,
-          // but not for tokens inside the expanded .tactic-state
+          // When a tactic is closed, show its proof-state tooltip instead of
+          // individual token hovers. When open, let tokens handle themselves.
           const tactic = tgt.closest('.tactic');
-          if (tactic && container.contains(tactic) && !tgt.closest('.tactic-state')) tgt = tactic;
+          if (tactic && container.contains(tactic) && !tgt.closest('.tactic-state') && tacticIsClosed(tactic)) {
+            tgt = tactic;
+          }
           if (tgt._tippy) return;
           tgt.setAttribute('data-tippy-theme', getTheme(tgt));
           tippy(tgt, Object.assign({}, defaultTippyProps, {showOnCreate: true}));
