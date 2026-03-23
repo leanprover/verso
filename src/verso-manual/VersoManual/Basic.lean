@@ -253,7 +253,7 @@ instance : GetElem? Domains Name Domain (fun ds d => ds.contents.contains d) whe
 instance : EmptyCollection Domains := ⟨({} : NameMap Domain)⟩
 
 instance [Monad m] : ForIn m Domains (Name × Domain) where
-  forIn doms init f := inferInstanceAs (ForIn m (NameMap Domain) (NameMap.PublicName × Domain)) |>.forIn doms init fun (n, dom) v =>
+  forIn doms init f := (inferInstance : ForIn m (NameMap Domain) (NameMap.PublicName × Domain)) |>.forIn doms init fun (n, dom) v =>
     -- Eta expansion uses a coercion
     f (n, dom) v
 

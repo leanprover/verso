@@ -113,7 +113,7 @@ instance [GenreHtml Manual m] : GenreHtml Tutorial m where
     HtmlT.cast <| inst.inline (HtmlT.cast <| go ·) container content
 
 where
-  inst := (inferInstanceAs (GenreHtml Manual m))
+  inst := (inferInstance : GenreHtml Manual m)
 
 variable [Monad m] [MonadReaderOf Manual.TraverseState m]
 
