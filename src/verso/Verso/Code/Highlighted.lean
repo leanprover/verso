@@ -1439,12 +1439,10 @@ window.onload = () => {
         /* ignoreAttributes: true, */
         followCursor: 'initial',
         onShow(inst) {
-          console.log('[onShow]', inst.reference.className, inst.reference.textContent.trim().substring(0, 30));
           if (inst.reference.className == 'tactic') {
 
             const toggle = inst.reference.querySelector(\"input.tactic-toggle\");
             if (toggle && toggle.checked) {
-              console.log('[onShow] BLOCKED: tactic open');
               return false;
             }
             hideParentTooltips(inst.reference);
@@ -1454,12 +1452,8 @@ window.onload = () => {
             if (blockedByTactic(inst.reference)) { return false };
             if (blockedByTippy(inst.reference)) { return false; }
           } else { // Nothing to show here!
-            console.log('[onShow] BLOCKED: no content');
             return false;
           }
-        },
-        onHide(inst) {
-          console.log('[onHide]', inst.reference.className, inst.reference.textContent.trim().substring(0, 30));
         },
         content (tgt) {
           const content = document.createElement(\"span\");
@@ -1538,43 +1532,36 @@ window.onload = () => {
       function initTippy(el) {
         if (el._tippy) return;
         el.setAttribute('data-tippy-theme', getTheme(el));
-        const props = el.classList.contains('tactic')
-          ? Object.assign({}, defaultTippyProps, {followCursor: false, delay: 0, appendTo: 'parent'})
-          : defaultTippyProps;
-        tippy(el, props);
+        tippy(el, defaultTippyProps);
       }
 
-      // When a tactic is opened, create tippy instances for its contents.
-      function initTacticContents(tacticEl) {
-        if (tacticEl.dataset.versoTacticInit) return;
-        tacticEl.dataset.versoTacticInit = '1';
-        const toggle = tacticEl.querySelector('input.tactic-toggle');
-        if (!toggle) return;
-        toggle.addEventListener('change', () => {
-          if (toggle.checked && !tacticEl.dataset.versoContentsInit) {
-            tacticEl.dataset.versoContentsInit = '1';
-            for (const el of tacticEl.querySelectorAll(tippySelector)) {
-              if (el === tacticEl) continue;
-              initTippy(el);
-            }
-          }
-        });
-      }
-
-      // Initialize a container: create tippy instances for visible hoverable
+      // Initialize a container: create tippy instances for all hoverable
       // elements and set up binding highlight handlers. Elements inside
-      // .tactic are deferred — only the .tactic itself gets a tippy when
-      // closed, and inner elements get tippys when the tactic is opened.
+      // .tactic-state are deferred until the proof state is opened (they
+      // are hidden and account for most of the element count).
       function initContainer(container) {
         if (container.dataset.versoInit) return;
         container.dataset.versoInit = '1';
         initBindingHighlights(container);
         for (const el of container.querySelectorAll(tippySelector)) {
-          if (el.closest('.tactic') && !el.classList.contains('tactic')) continue;
+          if (el.closest('.tactic-state')) continue;
           initTippy(el);
         }
         for (const tactic of container.querySelectorAll('.tactic')) {
-          initTacticContents(tactic);
+          if (tactic.dataset.versoTacticInit) continue;
+          tactic.dataset.versoTacticInit = '1';
+          const toggle = tactic.querySelector('input.tactic-toggle');
+          if (!toggle) continue;
+          const state = tactic.querySelector('.tactic-state');
+          if (!state) continue;
+          toggle.addEventListener('change', () => {
+            if (toggle.checked && !state.dataset.versoInit) {
+              state.dataset.versoInit = '1';
+              for (const el of state.querySelectorAll(tippySelector)) {
+                initTippy(el);
+              }
+            }
+          });
         }
       }
 
