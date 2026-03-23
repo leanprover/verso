@@ -11,6 +11,7 @@ import UsersGuide.Elab
 import UsersGuide.Extensions
 import UsersGuide.Output
 import UsersGuide.Releases
+import UsersGuide.Literate
 
 open Verso.Genre Manual
 
