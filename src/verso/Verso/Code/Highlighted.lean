@@ -1505,8 +1505,12 @@ window.onload = () => {
 
       document.querySelectorAll('.hl.lean').forEach(container => {
         container.addEventListener('mouseenter', (e) => {
-          const tgt = e.target.closest(tippySelector);
-          if (!tgt || tgt._tippy || !container.contains(tgt)) return;
+          let tgt = e.target.closest(tippySelector);
+          if (!tgt || !container.contains(tgt)) return;
+          // Prefer the enclosing .tactic element so proof states get tooltips
+          const tactic = tgt.closest('.tactic');
+          if (tactic && container.contains(tactic)) tgt = tactic;
+          if (tgt._tippy) return;
           tgt.setAttribute('data-tippy-theme', getTheme(tgt));
           tippy(tgt, Object.assign({}, defaultTippyProps, {showOnCreate: true}));
         }, true);
