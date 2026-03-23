@@ -1527,15 +1527,43 @@ window.onload = () => {
         return 'lean';
       }
 
-      // Initialize a container: create tippy instances for all hoverable
-      // elements and set up binding highlight handlers.
+      function initTippy(el) {
+        if (el._tippy) return;
+        el.setAttribute('data-tippy-theme', getTheme(el));
+        tippy(el, defaultTippyProps);
+      }
+
+      // Initialize tippy instances inside a .tactic-state when it's opened.
+      function initTacticState(tacticEl) {
+        if (tacticEl.dataset.versoTacticInit) return;
+        tacticEl.dataset.versoTacticInit = '1';
+        const toggle = tacticEl.querySelector('input.tactic-toggle');
+        if (!toggle) return;
+        const state = tacticEl.querySelector('.tactic-state');
+        if (!state) return;
+        toggle.addEventListener('change', () => {
+          if (toggle.checked && !state.dataset.versoInit) {
+            state.dataset.versoInit = '1';
+            for (const el of state.querySelectorAll(tippySelector)) {
+              initTippy(el);
+            }
+          }
+        });
+      }
+
+      // Initialize a container: create tippy instances for visible hoverable
+      // elements and set up binding highlight handlers. Elements inside hidden
+      // .tactic-state are deferred until the proof state is opened.
       function initContainer(container) {
         if (container.dataset.versoInit) return;
         container.dataset.versoInit = '1';
         initBindingHighlights(container);
         for (const el of container.querySelectorAll(tippySelector)) {
-          el.setAttribute('data-tippy-theme', getTheme(el));
-          tippy(el, defaultTippyProps);
+          if (el.closest('.tactic-state')) continue;
+          initTippy(el);
+        }
+        for (const tactic of container.querySelectorAll('.tactic')) {
+          initTacticState(tactic);
         }
       }
 
