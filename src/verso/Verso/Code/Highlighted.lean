@@ -1440,10 +1440,12 @@ window.onload = () => {
         /* ignoreAttributes: true, */
         followCursor: 'initial',
         onShow(inst) {
+          console.log('[onShow]', inst.reference.className, inst.reference.textContent.trim().substring(0, 30));
           if (inst.reference.className == 'tactic') {
 
             const toggle = inst.reference.querySelector(\"input.tactic-toggle\");
             if (toggle && toggle.checked) {
+              console.log('[onShow] BLOCKED: tactic open');
               return false;
             }
             hideParentTooltips(inst.reference);
@@ -1453,8 +1455,12 @@ window.onload = () => {
             if (blockedByTactic(inst.reference)) { return false };
             if (blockedByTippy(inst.reference)) { return false; }
           } else { // Nothing to show here!
+            console.log('[onShow] BLOCKED: no content');
             return false;
           }
+        },
+        onHide(inst) {
+          console.log('[onHide]', inst.reference.className, inst.reference.textContent.trim().substring(0, 30));
         },
         content (tgt) {
           const content = document.createElement(\"span\");
@@ -1533,7 +1539,10 @@ window.onload = () => {
       function initTippy(el) {
         if (el._tippy) return;
         el.setAttribute('data-tippy-theme', getTheme(el));
-        tippy(el, defaultTippyProps);
+        const props = el.classList.contains('tactic')
+          ? Object.assign({}, defaultTippyProps, {followCursor: false})
+          : defaultTippyProps;
+        tippy(el, props);
       }
 
       // When a tactic is opened, create tippy instances for its contents.
