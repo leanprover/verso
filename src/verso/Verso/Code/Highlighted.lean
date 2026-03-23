@@ -1344,7 +1344,8 @@ window.onload = () => {
       return false;
     }
 
-    // Binding highlight state. syncHighlights() ensures highlightedTokens
+    // Binding highlight via event delegation — one listener per container
+    // instead of per-token. syncHighlights() ensures highlightedTokens
     // matches currentBinding atomically (no intermediate blank state).
     let highlightedTokens = [];
     let currentBinding = null;
@@ -1372,22 +1373,21 @@ window.onload = () => {
       }
     }
 
-    function initBindingHighlights(container) {
+    for (const container of document.querySelectorAll(\".hl.lean\")) {
       container.addEventListener(\"mouseover\", (event) => {
-        // Ignore everything inside closed tactics so the .tactic tippy isn't disturbed.
-        if (blockedByTactic(event.target)) return;
         const c = event.target.closest(\".token\");
-        if (c && container.contains(c)) {
-          const binding = c.dataset.binding;
-          const newBinding = (binding && binding !== \"\") ? binding : null;
-          if (newBinding === currentBinding) return;
-          currentBinding = newBinding;
-          currentContext = newBinding ? container.dataset.leanContext : null;
-          syncHighlights();
-        } else {
+        if (!c || !container.contains(c)) {
           if (currentBinding && highlightedTokens.some(tok => tok.contains(event.target))) return;
           if (currentBinding) { currentBinding = null; currentContext = null; syncHighlights(); }
+          return;
         }
+        if (blockedByTactic(c)) return;
+        const binding = c.dataset.binding;
+        const newBinding = (binding && binding !== \"\") ? binding : null;
+        if (newBinding === currentBinding) return;
+        currentBinding = newBinding;
+        currentContext = newBinding ? container.dataset.leanContext : null;
+        syncHighlights();
       });
       container.addEventListener(\"mouseout\", (event) => {
         const related = event.relatedTarget;
@@ -1529,54 +1529,13 @@ window.onload = () => {
         return 'lean';
       }
 
-      function initTippy(el) {
-        if (el._tippy) return;
-        el.setAttribute('data-tippy-theme', getTheme(el));
-        tippy(el, defaultTippyProps);
-      }
-
-      // Initialize a container: create tippy instances for all hoverable
-      // elements and set up binding highlight handlers. Elements inside
-      // .tactic-state are deferred until the proof state is opened (they
-      // are hidden and account for most of the element count).
-      function initContainer(container) {
-        if (container.dataset.versoInit) return;
-        container.dataset.versoInit = '1';
-        initBindingHighlights(container);
-        for (const el of container.querySelectorAll(tippySelector)) {
-          if (el.closest('.tactic-state')) continue;
-          initTippy(el);
-        }
-        for (const tactic of container.querySelectorAll('.tactic')) {
-          if (tactic.dataset.versoTacticInit) continue;
-          tactic.dataset.versoTacticInit = '1';
-          const toggle = tactic.querySelector('input.tactic-toggle');
-          if (!toggle) continue;
-          const state = tactic.querySelector('.tactic-state');
-          if (!state) continue;
-          toggle.addEventListener('change', () => {
-            if (toggle.checked && !state.dataset.versoInit) {
-              state.dataset.versoInit = '1';
-              for (const el of state.querySelectorAll(tippySelector)) {
-                initTippy(el);
-              }
-            }
-          });
-        }
-      }
-
-      // Defer initialization to when containers enter the viewport.
-      const observer = new IntersectionObserver((entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            initContainer(entry.target);
-            observer.unobserve(entry.target);
-          }
-        }
-      }, { rootMargin: '200px' });
-
       document.querySelectorAll('.hl.lean').forEach(container => {
-        observer.observe(container);
+        container.addEventListener('mouseenter', (e) => {
+          const tgt = e.target.closest(tippySelector);
+          if (!tgt || tgt._tippy || !container.contains(tgt)) return;
+          tgt.setAttribute('data-tippy-theme', getTheme(tgt));
+          tippy(tgt, Object.assign({}, defaultTippyProps, {showOnCreate: true}));
+        }, true);
       });
   });
 }
