@@ -1374,11 +1374,10 @@ window.onload = () => {
 
     function initBindingHighlights(container) {
       container.addEventListener(\"mouseover\", (event) => {
+        // Ignore everything inside closed tactics so the .tactic tippy isn't disturbed.
+        if (blockedByTactic(event.target)) return;
         const c = event.target.closest(\".token\");
         if (c && container.contains(c)) {
-          // Ignore tokens inside closed tactics entirely — no binding
-          // highlights and no clearing, so the .tactic tippy isn't disturbed.
-          if (blockedByTactic(c)) return;
           const binding = c.dataset.binding;
           const newBinding = (binding && binding !== \"\") ? binding : null;
           if (newBinding === currentBinding) return;
