@@ -256,7 +256,7 @@ public instance : MonadQuotation DocElabM := inferInstanceAs <| MonadQuotation (
 public instance : Monad DocElabM := inferInstanceAs <| Monad (ReaderT DocElabContext (ReaderT PartElabM.State (StateT DocElabM.State TermElabM)))
 
 public instance : MonadControl TermElabM DocElabM :=
-  let ⟨stM, liftWith, restoreM⟩ := inferInstanceAs <| MonadControlT TermElabM (ReaderT DocElabContext (ReaderT PartElabM.State (StateT DocElabM.State TermElabM)))
+  let ⟨stM, liftWith, restoreM⟩ := (inferInstance : MonadControlT TermElabM (ReaderT DocElabContext (ReaderT PartElabM.State (StateT DocElabM.State TermElabM))))
   {stM, liftWith, restoreM := (· >>= restoreM)}
 
 public instance : MonadExceptOf Exception DocElabM := inferInstanceAs <| MonadExceptOf Exception (ReaderT DocElabContext (ReaderT PartElabM.State (StateT DocElabM.State TermElabM)))
