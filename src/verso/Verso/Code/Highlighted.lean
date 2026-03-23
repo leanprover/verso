@@ -1539,7 +1539,7 @@ window.onload = () => {
         if (el._tippy) return;
         el.setAttribute('data-tippy-theme', getTheme(el));
         const props = el.classList.contains('tactic')
-          ? Object.assign({}, defaultTippyProps, {followCursor: false, delay: 0})
+          ? Object.assign({}, defaultTippyProps, {followCursor: false, delay: 0, appendTo: 'parent'})
           : defaultTippyProps;
         tippy(el, props);
       }
