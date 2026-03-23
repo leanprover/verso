@@ -1487,22 +1487,24 @@ window.onload = () => {
       };
 
 
-      document.querySelectorAll('.hl.lean .const.token, .hl.lean .keyword.token, .hl.lean .literal.token, .hl.lean .option.token, .hl.lean .var.token, .hl.lean .typed.token, .hl.lean .level-var, .hl.lean .level-const, .hl.lean .level-op, .hl.lean .sort').forEach(element => {
-        element.setAttribute('data-tippy-theme', 'lean');
+      const tippySelector = '.const.token, .keyword.token, .literal.token, .option.token, .var.token, .typed.token, .has-info, .tactic, .level-var, .level-const, .level-op, .sort';
+
+      function getTheme(el) {
+        if (el.matches('.has-info.warning')) return 'warning message';
+        if (el.matches('.has-info.error')) return 'error message';
+        if (el.matches('.has-info.information')) return 'info message';
+        if (el.matches('.tactic')) return 'tactic';
+        return 'lean';
+      }
+
+      document.querySelectorAll('.hl.lean').forEach(container => {
+        container.addEventListener('mouseenter', (e) => {
+          const tgt = e.target.closest(tippySelector);
+          if (!tgt || tgt._tippy || !container.contains(tgt)) return;
+          tgt.setAttribute('data-tippy-theme', getTheme(tgt));
+          tippy(tgt, Object.assign({}, defaultTippyProps, {showOnCreate: true}));
+        }, true);
       });
-      document.querySelectorAll('.hl.lean .has-info.warning').forEach(element => {
-        element.setAttribute('data-tippy-theme', 'warning message');
-      });
-      document.querySelectorAll('.hl.lean .has-info.information').forEach(element => {
-        element.setAttribute('data-tippy-theme', 'info message');
-      });
-      document.querySelectorAll('.hl.lean .has-info.error').forEach(element => {
-        element.setAttribute('data-tippy-theme', 'error message');
-      });
-      document.querySelectorAll('.hl.lean .tactic').forEach(element => {
-        element.setAttribute('data-tippy-theme', 'tactic');
-      });
-      let insts = tippy('.hl.lean .const.token, .hl.lean .keyword.token, .hl.lean .literal.token, .hl.lean .option.token, .hl.lean .var.token, .hl.lean .typed.token, .hl.lean .has-info, .hl.lean .tactic, .hl.lean .level-var, .hl.lean .level-const, .hl.lean .level-op, .hl.lean .sort', defaultTippyProps);
   });
 }
 "
