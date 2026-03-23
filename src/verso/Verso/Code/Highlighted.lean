@@ -1547,7 +1547,14 @@ window.onload = () => {
           }
           if (tgt._tippy) return;
           tgt.setAttribute('data-tippy-theme', getTheme(tgt));
-          tippy(tgt, Object.assign({}, defaultTippyProps, {showOnCreate: true}));
+          tippy(tgt, defaultTippyProps);
+          // Tippy uses mouseenter as its trigger, but mouseenter already
+          // fired before the instance existed. Re-dispatch it with the
+          // current mouse coordinates so tippy can position correctly
+          // (needed for followCursor: 'initial') and start its show flow.
+          tgt.dispatchEvent(new MouseEvent('mouseenter', {
+            bubbles: false, clientX: e.clientX, clientY: e.clientY
+          }));
         });
       });
   });
