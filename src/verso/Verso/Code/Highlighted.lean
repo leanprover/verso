@@ -1344,10 +1344,8 @@ window.onload = () => {
       return false;
     }
 
-    // Binding highlight via event delegation.
-    // Invariant: every element in highlightedTokens has class \"binding-hl\" iff
-    // its data-binding matches currentBinding. syncHighlights() enforces this
-    // atomically after any state change.
+    // Binding highlight state. syncHighlights() ensures highlightedTokens
+    // matches currentBinding atomically (no intermediate blank state).
     let highlightedTokens = [];
     let currentBinding = null;
     let currentContext = null;
@@ -1374,7 +1372,7 @@ window.onload = () => {
       }
     }
 
-    for (const container of document.querySelectorAll(\".hl.lean\")) {
+    function initBindingHighlights(container) {
       container.addEventListener(\"mouseover\", (event) => {
         const c = event.target.closest(\".token\");
         if (c && container.contains(c)) {
@@ -1385,8 +1383,6 @@ window.onload = () => {
           currentContext = newBinding ? container.dataset.leanContext : null;
           syncHighlights();
         } else {
-          // Mouse is on a non-token element (wrapper, whitespace, etc.).
-          // Only clear if we're not inside a currently-highlighted token's subtree.
           if (currentBinding && highlightedTokens.some(tok => tok.contains(event.target))) return;
           if (currentBinding) { currentBinding = null; currentContext = null; syncHighlights(); }
         }
@@ -1399,6 +1395,7 @@ window.onload = () => {
         syncHighlights();
       });
     }
+
     /* Render docstrings */
     if ('undefined' !== typeof marked) {
         for (const d of document.querySelectorAll(\"code.docstring, pre.docstring\")) {
@@ -1530,32 +1527,30 @@ window.onload = () => {
         return 'lean';
       }
 
-      function tacticIsClosed(tacticEl) {
-        const toggle = tacticEl.querySelector('input.tactic-toggle');
-        return toggle && !toggle.checked;
+      // Initialize a container: create tippy instances for all hoverable
+      // elements and set up binding highlight handlers.
+      function initContainer(container) {
+        if (container.dataset.versoInit) return;
+        container.dataset.versoInit = '1';
+        initBindingHighlights(container);
+        for (const el of container.querySelectorAll(tippySelector)) {
+          el.setAttribute('data-tippy-theme', getTheme(el));
+          tippy(el, defaultTippyProps);
+        }
       }
 
-      document.querySelectorAll('.hl.lean').forEach(container => {
-        container.addEventListener('mouseover', (e) => {
-          let tgt = e.target.closest(tippySelector);
-          if (!tgt || !container.contains(tgt)) return;
-          // When a tactic is closed, show its proof-state tooltip instead of
-          // individual token hovers. When open, let tokens handle themselves.
-          const tactic = tgt.closest('.tactic');
-          if (tactic && container.contains(tactic) && !tgt.closest('.tactic-state') && tacticIsClosed(tactic)) {
-            tgt = tactic;
+      // Defer initialization to when containers enter the viewport.
+      const observer = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            initContainer(entry.target);
+            observer.unobserve(entry.target);
           }
-          if (tgt._tippy) return;
-          tgt.setAttribute('data-tippy-theme', getTheme(tgt));
-          tippy(tgt, defaultTippyProps);
-          // Tippy uses mouseenter as its trigger, but mouseenter already
-          // fired before the instance existed. Re-dispatch it with the
-          // current mouse coordinates so tippy can position correctly
-          // (needed for followCursor: 'initial') and start its show flow.
-          tgt.dispatchEvent(new MouseEvent('mouseenter', {
-            bubbles: false, clientX: e.clientX, clientY: e.clientY
-          }));
-        });
+        }
+      }, { rootMargin: '200px' });
+
+      document.querySelectorAll('.hl.lean').forEach(container => {
+        observer.observe(container);
       });
   });
 }
