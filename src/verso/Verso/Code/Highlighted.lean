@@ -1376,7 +1376,10 @@ window.onload = () => {
       container.addEventListener(\"mouseover\", (event) => {
         const c = event.target.closest(\".token\");
         if (c && container.contains(c)) {
-          const binding = !blockedByTactic(c) ? c.dataset.binding : null;
+          // Ignore tokens inside closed tactics entirely — no binding
+          // highlights and no clearing, so the .tactic tippy isn't disturbed.
+          if (blockedByTactic(c)) return;
+          const binding = c.dataset.binding;
           const newBinding = (binding && binding !== \"\") ? binding : null;
           if (newBinding === currentBinding) return;
           currentBinding = newBinding;
@@ -1533,18 +1536,17 @@ window.onload = () => {
         tippy(el, defaultTippyProps);
       }
 
-      // Initialize tippy instances inside a .tactic-state when it's opened.
-      function initTacticState(tacticEl) {
+      // When a tactic is opened, create tippy instances for its contents.
+      function initTacticContents(tacticEl) {
         if (tacticEl.dataset.versoTacticInit) return;
         tacticEl.dataset.versoTacticInit = '1';
         const toggle = tacticEl.querySelector('input.tactic-toggle');
         if (!toggle) return;
-        const state = tacticEl.querySelector('.tactic-state');
-        if (!state) return;
         toggle.addEventListener('change', () => {
-          if (toggle.checked && !state.dataset.versoInit) {
-            state.dataset.versoInit = '1';
-            for (const el of state.querySelectorAll(tippySelector)) {
+          if (toggle.checked && !tacticEl.dataset.versoContentsInit) {
+            tacticEl.dataset.versoContentsInit = '1';
+            for (const el of tacticEl.querySelectorAll(tippySelector)) {
+              if (el === tacticEl) continue;
               initTippy(el);
             }
           }
@@ -1552,18 +1554,19 @@ window.onload = () => {
       }
 
       // Initialize a container: create tippy instances for visible hoverable
-      // elements and set up binding highlight handlers. Elements inside hidden
-      // .tactic-state are deferred until the proof state is opened.
+      // elements and set up binding highlight handlers. Elements inside
+      // .tactic are deferred — only the .tactic itself gets a tippy when
+      // closed, and inner elements get tippys when the tactic is opened.
       function initContainer(container) {
         if (container.dataset.versoInit) return;
         container.dataset.versoInit = '1';
         initBindingHighlights(container);
         for (const el of container.querySelectorAll(tippySelector)) {
-          if (el.closest('.tactic-state')) continue;
+          if (el.closest('.tactic') && !el.classList.contains('tactic')) continue;
           initTippy(el);
         }
         for (const tactic of container.querySelectorAll('.tactic')) {
-          initTacticState(tactic);
+          initTacticContents(tactic);
         }
       }
 
