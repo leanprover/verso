@@ -1344,18 +1344,36 @@ window.onload = () => {
       return false;
     }
 
-    // Binding highlight via event delegation (avoids per-token listeners)
+    // Binding highlight via event delegation (avoids per-token listeners).
+    // Tracks current binding to skip redundant DOM work when moving between
+    // tokens with the same binding or between tokens in the same container.
     let highlightedTokens = [];
+    let currentBinding = null;
+
+    function clearBindingHighlight() {
+      for (const tok of highlightedTokens) tok.classList.remove(\"binding-hl\");
+      highlightedTokens = [];
+      currentBinding = null;
+    }
+
     for (const container of document.querySelectorAll(\".hl.lean\")) {
       container.addEventListener(\"mouseover\", (event) => {
         const c = event.target.closest(\".token\");
-        if (!c || !c.dataset.binding || c.dataset.binding === \"\" || !container.contains(c)) return;
+        if (!c || !container.contains(c)) return;
+        const binding = c.dataset.binding;
+        if (!binding || binding === \"\") {
+          clearBindingHighlight();
+          return;
+        }
+        if (binding === currentBinding) return;
+        clearBindingHighlight();
         if (blockedByTactic(c)) return;
+        currentBinding = binding;
         const context = container.dataset.leanContext;
         for (const example of document.querySelectorAll(\".hl.lean\")) {
           if (example.dataset.leanContext == context) {
             for (const tok of example.querySelectorAll(\".token\")) {
-              if (tok.dataset.binding === c.dataset.binding) {
+              if (tok.dataset.binding === binding) {
                 tok.classList.add(\"binding-hl\");
                 highlightedTokens.push(tok);
               }
@@ -1364,12 +1382,10 @@ window.onload = () => {
         }
       });
       container.addEventListener(\"mouseout\", (event) => {
-        const c = event.target.closest(\".token\");
-        if (!c || !container.contains(c)) return;
-        for (const tok of highlightedTokens) {
-          tok.classList.remove(\"binding-hl\");
-        }
-        highlightedTokens = [];
+        // Only clear when actually leaving the container, not when moving between tokens
+        const related = event.relatedTarget;
+        if (related && related.closest && related.closest(\".hl.lean\") === container) return;
+        clearBindingHighlight();
       });
     }
     /* Render docstrings */
