@@ -153,7 +153,21 @@ def handleKwAtom : InlineToLiterate
     let some s := (match content with | #[.code s] => some s | _ => none) | return none
     return some <| .other (.highlighted <| .token ⟨.keyword none none none, s⟩) content
 
-def inline := #[handleLocal, handleConst, handlePostponed, handleAttr, handleTerm, handleOption, handleModName, handleTactic, handleKwAtom]
+def handleSyntax : InlineToLiterate
+  | ``Lean.Doc.Data.Syntax, val, content => do
+    if let some { .. } := val.get? Lean.Doc.Data.Syntax then
+      return some <| .concat content
+    throwError "Wrong data"
+  | _, _, _ => pure none
+
+def handleSyntaxCat : InlineToLiterate
+  | ``Lean.Doc.Data.SyntaxCat, val, content => do
+    if let some { .. } := val.get? Lean.Doc.Data.SyntaxCat then
+      return some <| .concat content
+    throwError "Wrong data"
+  | _, _, _ => pure none
+
+def inline := #[handleLocal, handleConst, handlePostponed, handleAttr, handleTerm, handleOption, handleModName, handleTactic, handleKwAtom, handleSyntax, handleSyntaxCat]
 
 end Builtin
 
