@@ -1535,7 +1535,7 @@ window.onload = () => {
       }
 
       document.querySelectorAll('.hl.lean').forEach(container => {
-        container.addEventListener('mouseenter', (e) => {
+        container.addEventListener('mouseover', (e) => {
           let tgt = e.target.closest(tippySelector);
           if (!tgt || !container.contains(tgt)) return;
           // When a tactic is closed, show its proof-state tooltip instead of
@@ -1547,7 +1547,7 @@ window.onload = () => {
           if (tgt._tippy) return;
           tgt.setAttribute('data-tippy-theme', getTheme(tgt));
           tippy(tgt, Object.assign({}, defaultTippyProps, {showOnCreate: true}));
-        }, true);
+        });
       });
   });
 }
