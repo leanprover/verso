@@ -7,8 +7,8 @@ Author: David Thrane Christiansen
 module
 import Lean.Data.Json
 public import Lean.Data.Json.FromToJson
-import Verso.BEq
-import VersoUtil.BinFiles.Z85
+public import Verso.BEq
+public import VersoUtil.BinFiles.Z85
 
 namespace Verso.Genre.Manual
 open Lean
