@@ -1344,27 +1344,33 @@ window.onload = () => {
       return false;
     }
 
-    for (const c of document.querySelectorAll(\".hl.lean .token\")) {
-        if (c.dataset.binding != \"\") {
-            c.addEventListener(\"mouseover\", (event) => {
-                if (blockedByTactic(c)) {return;}
-                const context = c.closest(\".hl.lean\").dataset.leanContext;
-                for (const example of document.querySelectorAll(\".hl.lean\")) {
-                    if (example.dataset.leanContext == context) {
-                        for (const tok of example.querySelectorAll(\".token\")) {
-                            if (c.dataset.binding == tok.dataset.binding) {
-                                tok.classList.add(\"binding-hl\");
-                            }
-                        }
-                    }
-                }
-            });
-        }
-        c.addEventListener(\"mouseout\", (event) => {
-            for (const tok of document.querySelectorAll(\".hl.lean .token\")) {
-                tok.classList.remove(\"binding-hl\");
+    // Binding highlight via event delegation (avoids per-token listeners)
+    let highlightedTokens = [];
+    for (const container of document.querySelectorAll(\".hl.lean\")) {
+      container.addEventListener(\"mouseover\", (event) => {
+        const c = event.target.closest(\".token\");
+        if (!c || !c.dataset.binding || c.dataset.binding === \"\" || !container.contains(c)) return;
+        if (blockedByTactic(c)) return;
+        const context = container.dataset.leanContext;
+        for (const example of document.querySelectorAll(\".hl.lean\")) {
+          if (example.dataset.leanContext == context) {
+            for (const tok of example.querySelectorAll(\".token\")) {
+              if (tok.dataset.binding === c.dataset.binding) {
+                tok.classList.add(\"binding-hl\");
+                highlightedTokens.push(tok);
+              }
             }
-        });
+          }
+        }
+      });
+      container.addEventListener(\"mouseout\", (event) => {
+        const c = event.target.closest(\".token\");
+        if (!c || !container.contains(c)) return;
+        for (const tok of highlightedTokens) {
+          tok.classList.remove(\"binding-hl\");
+        }
+        highlightedTokens = [];
+      });
     }
     /* Render docstrings */
     if ('undefined' !== typeof marked) {
