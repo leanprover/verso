@@ -966,8 +966,8 @@ public def highlightingStyle : String := "
   display: inline;
 }
 
+/* DEBUG: no visual change, just test if the class toggle itself flickers */
 .hl.lean .tactic.tactic-hover:not(.tactic-open) > label {
-  background-color: #eeeeee;
 }
 
 .hl.lean .tactic-toggle {
@@ -1371,11 +1371,10 @@ window.onload = () => {
       }
     }
 
+    // DEBUG: binding highlights entirely disabled
+    /*
     for (const container of document.querySelectorAll(\".hl.lean\")) {
       container.addEventListener(\"mouseover\", (event) => {
-        // Skip all binding highlight processing inside closed tactics.
-        // blockedByTactic only checks parentNode, so use closest to also
-        // catch the .tactic element itself as the event target.
         const tactic = event.target.closest && event.target.closest('.tactic');
         if (tactic) {
           const toggle = tactic.querySelector('input.tactic-toggle');
@@ -1402,6 +1401,7 @@ window.onload = () => {
         syncHighlights();
       });
     }
+    */
 
     // Sync tactic classes via JS (avoids expensive :has() and unreliable :hover in CSS)
     for (const toggle of document.querySelectorAll('.tactic-toggle')) {
