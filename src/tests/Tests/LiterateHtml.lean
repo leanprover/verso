@@ -906,10 +906,10 @@ def testLiterateHtml : IO Unit := do
   let modules := #["LitConfig", "LitConfig.Core", "LitConfig.Core.Basic", "LitConfig.NoDocstrings"]
 
   -- First verify test project toolchain matches root toolchain
-  let rootToolchain ← IO.FS.readFile "lean-toolchain"
-  let testToolchain ← IO.FS.readFile (projectDir / "lean-toolchain")
+  let rootToolchain := (← IO.FS.readFile "lean-toolchain").trimAscii
+  let testToolchain := (← IO.FS.readFile (projectDir / "lean-toolchain")).trimAscii
   unless rootToolchain == testToolchain do
-    throw <| IO.userError s!"test-projects/literate-config/lean-toolchain ({testToolchain.trimAscii}) does not match root lean-toolchain ({rootToolchain.trimAscii})"
+    throw <| IO.userError s!"test-projects/literate-config/lean-toolchain ({testToolchain}) does not match root lean-toolchain ({rootToolchain})"
 
   -- Next, ensure test project manifest is up to date
   let lakeVars :=
@@ -991,10 +991,10 @@ def testLiterateHtmlMultiRoot : IO Unit := do
   let projectDir := "test-projects/literate-multi-root"
   let modules := #["LibA", "LibA.Core", "LibB", "LibB.Utils"]
 
-  let rootToolchain ← IO.FS.readFile "lean-toolchain"
-  let testToolchain ← IO.FS.readFile (projectDir / "lean-toolchain")
+  let rootToolchain := (← IO.FS.readFile "lean-toolchain").trimAscii
+  let testToolchain := (← IO.FS.readFile (projectDir / "lean-toolchain")).trimAscii
   unless rootToolchain == testToolchain do
-    throw <| IO.userError s!"{projectDir}/lean-toolchain ({testToolchain.trimAscii}) does not match root lean-toolchain ({rootToolchain.trimAscii})"
+    throw <| IO.userError s!"{projectDir}/lean-toolchain ({testToolchain}) does not match root lean-toolchain ({rootToolchain})"
 
   let lakeVars :=
     #["LAKE", "LAKE_HOME", "LAKE_PKG_URL_MAP",
