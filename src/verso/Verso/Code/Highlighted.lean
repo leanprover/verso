@@ -1535,7 +1535,7 @@ window.onload = () => {
         // For .tactic, position relative to the element (not the cursor)
         // to avoid off-screen placement causing flicker.
         const props = el.classList.contains('tactic')
-          ? Object.assign({}, defaultTippyProps, {showOnCreate: true, appendTo: 'parent'})
+          ? Object.assign({}, defaultTippyProps, {showOnCreate: true, appendTo: () => el})
           : Object.assign({}, defaultTippyProps, {showOnCreate: true});
         tippy(el, props);
       }
