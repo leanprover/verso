@@ -1566,8 +1566,12 @@ window.onload = () => {
           // The mouse can skip over .tactic and land on a child token directly
           // (especially when zoomed out), so .tactic might not get its own
           // mouseenter event.
-          // DEBUG: skip all tippy inside tactics
-          if (tgt.closest('.tactic') || tgt.classList.contains('tactic')) return;
+          // If inside a .tactic, ensure the .tactic itself has a tippy too.
+          // The mouse can skip over .tactic and land on a child token directly
+          // (especially when zoomed out), so .tactic might not get its own
+          // mouseenter event.
+          const tactic = tgt.closest('.tactic');
+          if (tactic && container.contains(tactic)) ensureTippy(tactic);
           ensureTippy(tgt);
         }, true);
       });
