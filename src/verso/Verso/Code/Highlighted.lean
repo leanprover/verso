@@ -1566,12 +1566,14 @@ window.onload = () => {
           // The mouse can skip over .tactic and land on a child token directly
           // (especially when zoomed out), so .tactic might not get its own
           // mouseenter event.
-          // If inside a .tactic, ensure the .tactic itself has a tippy too.
-          // The mouse can skip over .tactic and land on a child token directly
-          // (especially when zoomed out), so .tactic might not get its own
-          // mouseenter event.
+          // If inside a closed .tactic, create the tippy on the .tactic
+          // (not the inner token) so the proof state tooltip shows.
+          // The mouse can skip over .tactic and land on a child directly.
           const tactic = tgt.closest('.tactic');
-          if (tactic && container.contains(tactic)) ensureTippy(tactic);
+          if (tactic && container.contains(tactic)) {
+            const toggle = tactic.querySelector('input.tactic-toggle');
+            if (toggle && !toggle.checked) { ensureTippy(tactic); return; }
+          }
           ensureTippy(tgt);
         }, true);
       });
