@@ -1168,7 +1168,10 @@ Some CSS frameworks customize details/summary in ways not compatible with Verso'
   /* Without these, mobile Safari will start making font sizes inconsistent when its text size adjustment feature is triggered.*/
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+}
 
+.tippy-box > .tippy-arrow {
+  pointer-events: none;
 }
 
 .tippy-box[data-theme~='lean'] {
@@ -1332,6 +1335,7 @@ window.onload = () => {
 
     // Track whether any tippy is visible (O(1) check instead of DOM scan)
     let visibleTippyCount = 0;
+    Object.defineProperty(window, '_vtc', { get() { return visibleTippyCount; } });
     function blockedByTippy(elem) {
       return visibleTippyCount > 0;
     }
@@ -1418,7 +1422,6 @@ window.onload = () => {
         offset: [0, 15],
         onShow(inst) {
           if (inst.reference.className == 'tactic') {
-            inst.setProps({followCursor: false, placement: 'bottom-start'});
             const toggle = inst.reference.querySelector(\"input.tactic-toggle\");
             if (toggle && toggle.checked) {
               return false;
@@ -1514,7 +1517,25 @@ window.onload = () => {
       document.querySelectorAll('.hl.lean .tactic').forEach(element => {
         element.setAttribute('data-tippy-theme', 'tactic');
       });
-      let insts = tippy('.hl.lean .const.token, .hl.lean .keyword.token, .hl.lean .literal.token, .hl.lean .option.token, .hl.lean .var.token, .hl.lean .typed.token, .hl.lean .has-info, .hl.lean .tactic, .hl.lean .level-var, .hl.lean .level-const, .hl.lean .level-op, .hl.lean .sort', defaultTippyProps);
+      tippy('.hl.lean .const.token, .hl.lean .keyword.token, .hl.lean .literal.token, .hl.lean .option.token, .hl.lean .var.token, .hl.lean .typed.token, .hl.lean .has-info, .hl.lean .level-var, .hl.lean .level-const, .hl.lean .level-op, .hl.lean .sort', defaultTippyProps);
+      tippy('.hl.lean .tactic', Object.assign({}, defaultTippyProps, {followCursor: false, placement: 'bottom-start'}));
+
+      // Disable/enable token tippys inside tactics based on checkbox state
+      function updateTacticChildTippys(tactic) {
+        const toggle = tactic.querySelector('input.tactic-toggle');
+        if (!toggle) return;
+        const isOpen = toggle.checked;
+        tactic.querySelectorAll('.token').forEach(tok => {
+          if (tok._tippy) {
+            if (isOpen) tok._tippy.enable(); else tok._tippy.disable();
+          }
+        });
+      }
+      document.querySelectorAll('.hl.lean .tactic').forEach(tactic => {
+        updateTacticChildTippys(tactic);
+        const toggle = tactic.querySelector('input.tactic-toggle');
+        if (toggle) toggle.addEventListener('change', () => updateTacticChildTippys(tactic));
+      });
   });
 }
 "
