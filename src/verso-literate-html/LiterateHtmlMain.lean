@@ -53,12 +53,14 @@ private def shouldShowDocstring (config : ResolvedConfig) (declName : Name) : Bo
   else
     config.showDocstringsFor.contains declName
 
-/-- Convert a theme key to a CSS custom property name: replace `_` with `-` and prepend `--verso-`. -/
+/-- Converts a theme key to a CSS custom property name: replace `_` with `-` and prepend `--verso-`. -/
 private def themeKeyToCssVar (key : String) : String :=
   "--verso-" ++ key.map fun c => if c == '_' then '-' else c
 
-/-- Generates the content of `literate-theme.css` from light and dark theme maps.
-    Returns `none` if both maps are empty (no file should be written). -/
+/--
+Generates the content of `literate-theme.css` from light and dark theme maps.
+Returns `none` if both maps are empty (no file should be written).
+-/
 def generateThemeCss (light : Std.TreeMap String String compare) (dark : Std.TreeMap String String compare) : Option String :=
   if light.isEmpty && dark.isEmpty then none
   else
@@ -80,7 +82,7 @@ def generateThemeCss (light : Std.TreeMap String String compare) (dark : Std.Tre
 
 namespace VersoLiterateCode
 
-/-- Remove modules matching any excluded prefix and their children. -/
+/-- Removes modules matching any excluded prefix and their children. -/
 partial def Dir.applyExcludes (excludes : Array Name) (dir : Dir) (prefix_ : Name := .anonymous) : Dir :=
   let mod := dir.mod.bind fun m =>
     if excludes.any fun e => Name.isPrefixOf e m.name then none else some m
@@ -96,10 +98,12 @@ partial def Dir.applyExcludes (excludes : Array Name) (dir : Dir) (prefix_ : Nam
         none
   { mod, children }
 
-/-- Apply ordering: ordered modules appear first (in listed order), then
-    remaining modules alphabetically.
-    `order` specifies the ordering of direct children of the Dir tree root.
-    `orderChildren` specifies the ordering of children of specific parent nodes. -/
+/--
+Applies ordering: ordered modules appear first (in listed order), then
+remaining modules alphabetically.
+`order` specifies the ordering of direct children of the Dir tree root.
+`orderChildren` specifies the ordering of children of specific parent nodes.
+-/
 partial def Dir.applyOrder (order : Array Name) (orderChildren : NameMap (Array Name))
     (dir : Dir) (prefix_ : Name := .anonymous) : Dir :=
   -- Determine the ordering for this level's children
@@ -135,7 +139,7 @@ partial def Dir.applyOrder (order : Array Name) (orderChildren : NameMap (Array 
     (n, child.applyOrder order orderChildren (prefix_ ++ n))
   { dir with children }
 
-/-- Find a module by name in the Dir tree. -/
+/-- Finds a module by name in the Dir tree. -/
 partial def Dir.findMod? (dir : Dir) (name : Name) : Option LitMod := do
   if let some m := dir.mod then
     if m.name == name then return m
@@ -146,7 +150,7 @@ end VersoLiterateCode
 def literate.css := include_str "literate.css"
 
 open Verso Output Html in
-/-- Render output messages for a list of code items, returning the combined HTML and updated state. -/
+/-- Renders output messages for a list of code items, returning the combined HTML and updated state. -/
 private def renderOutputMessages (items : Array (Nat × ModuleItem')) (showOutput : Array String)
     (hlCtx : HighlightHtmlM.Context Literate) (hlState : Hover.State Html) : Html × Hover.State Html :=
   items.foldl (init := (.empty, hlState)) fun (html, st) (_, cItem) =>
@@ -156,8 +160,10 @@ private def renderOutputMessages (items : Array (Nat × ModuleItem')) (showOutpu
       (html ++ msgHtml, st')
 
 open Verso Output Html in
-/-- Build the `<head>` contents for a literate page. When `includeCodeAssets` is true,
-    includes popper/tippy/highlighting/copy-button assets needed for code hover tooltips. -/
+/--
+Builds the `<head>` contents for a literate page. When `includeCodeAssets` is true,
+includes popper/tippy/highlighting/copy-button assets needed for code hover tooltips.
+-/
 private def mkHeadContents (litConfig : LiterateConfig) (includeCodeAssets : Bool := true) : Html :=
   let faviconTag : Html := match litConfig.metadata.favicon with
     | some fav => {{<link rel="icon" href={{(System.FilePath.fileName fav).getD fav}}/>}}
@@ -201,8 +207,10 @@ private def mkHeadContents (litConfig : LiterateConfig) (includeCodeAssets : Boo
   }}
 
 open Verso Output Doc Html in
-/-- Render the body HTML for a module page: imports section, code boxes, and prose.
-    Returns the body HTML and updated highlight state. -/
+/--
+Renders the body HTML for a module page: imports section, code boxes, and prose.
+Returns the body HTML and updated highlight state.
+-/
 private def renderModBody (mod : LitMod) (resolved : ResolvedConfig)
     (ctx : HtmlContext) (initHlState : HtmlState) : IO (Html × HtmlState) := do
   let emitCtx := { ctx with
@@ -399,7 +407,7 @@ where
 
 open Verso Output Doc Html in
 /--
-Emit the landing page using a specific module's rendered content.
+Emits the landing page using a specific module's rendered content.
 The module still appears at its normal location; we just also render it as index.html.
 -/
 def emitLandingFromModule (outDir : System.FilePath) (root : Dir) (modName : Name)

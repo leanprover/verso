@@ -473,8 +473,8 @@ public def FinishedPart.toVersoDoc
     (finished : FinishedPart)
     (ctx : DocElabContext)
     (docElabState : DocElabM.State)
-    (partElabState : PartElabM.State)
-    : TermElabM Term := do
+    (partElabState : PartElabM.State) :
+    TermElabM Term := do
 
   -- Check internal refs
   for (ref, uses) in docElabState.footnoteRefs do

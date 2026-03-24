@@ -150,13 +150,15 @@ section ImageRewriting
 private def isRelativeImagePath (url : String) : Bool :=
   !url.startsWith "/" && (url.splitOn "://").length <= 1
 
-/-- Convert an MD4Lean `AttrText` array to a plain string. -/
+/-- Converts an MD4Lean `AttrText` array to a plain string. -/
 private def attrTextToString (src : Array MD4Lean.AttrText) : String :=
   String.join (src.map (fun | .normal s => s | .entity e => e | .nullchar => "") |>.toList)
 
 open MD4Lean in
-/-- Rewrite image URLs in an MD4Lean document using the given function.
-    Only relative image paths are rewritten; absolute paths and protocol URLs are left as-is. -/
+/--
+Rewrites image URLs in an MD4Lean document using the given function.
+Only relative image paths are rewritten; absolute paths and protocol URLs are left as-is.
+-/
 partial def rewriteMdImageUrls (f : String → String) (doc : Document) : Document :=
   { doc with blocks := doc.blocks.map rewriteBlock }
 where
@@ -183,7 +185,7 @@ where
     | t => t
 
 open Lean.Doc in
-/-- Rewrite image URLs in Verso inline content. -/
+/-- Rewrites image URLs in Verso inline content. -/
 partial def rewriteVersoInlineImageUrls (f : String → String) : Inline Ext → Inline Ext
   | .image alt url => .image alt (if isRelativeImagePath url then f url else url)
   | .concat xs => .concat (xs.map (rewriteVersoInlineImageUrls f))
@@ -195,7 +197,7 @@ partial def rewriteVersoInlineImageUrls (f : String → String) : Inline Ext →
   | i => i
 
 open Lean.Doc in
-/-- Rewrite image URLs in a Verso block. -/
+/-- Rewrites image URLs in a Verso block. -/
 partial def rewriteVersoBlockImageUrls (f : String → String) : Block Ext Ext → Block Ext Ext
   | .para xs => .para (xs.map (rewriteVersoInlineImageUrls f))
   | .ul items => .ul (items.map fun i => ⟨i.contents.map (rewriteVersoBlockImageUrls f)⟩)
@@ -208,14 +210,14 @@ partial def rewriteVersoBlockImageUrls (f : String → String) : Block Ext Ext �
   | b => b
 
 open Lean.Doc in
-/-- Rewrite image URLs in a Verso part. -/
+/-- Rewrites image URLs in a Verso part. -/
 partial def rewriteVersoPartImageUrls (f : String → String) (p : Part Ext Ext Empty) : Part Ext Ext Empty :=
   { p with
     title := p.title.map (rewriteVersoInlineImageUrls f)
     content := p.content.map (rewriteVersoBlockImageUrls f)
     subParts := p.subParts.map (rewriteVersoPartImageUrls f) }
 
-/-- Rewrite image URLs in a single Code item. -/
+/-- Rewrites image URLs in a single Code item. -/
 def rewriteCodeImageUrls (f : String → String) : Code → Code
   | .markdown i d doc => .markdown i d (rewriteMdImageUrls f doc)
   | .markdownModDoc doc => .markdownModDoc (rewriteMdImageUrls f doc)
@@ -229,22 +231,26 @@ def rewriteCodeImageUrls (f : String → String) : Code → Code
     }
   | c => c
 
-/-- Rewrite image URLs in all content of a LitMod. -/
+/-- Rewrites image URLs in all content of a LitMod. -/
 def rewriteModImageUrls (f : String → String) (mod : LitMod) : LitMod :=
   { mod with contents := mod.contents.map fun item =>
       { item with code := item.code.map (rewriteCodeImageUrls f) } }
 
-/-- Compute the parent directory path from a module name's components.
-    E.g., `Foo.Bar.Baz` → `"Foo/Bar/"`, `Foo` → `""`. -/
+/--
+Computes the parent directory path from a module name's components.
+E.g., `Foo.Bar.Baz` → `"Foo/Bar/"`, `Foo` → `""`.
+-/
 private def moduleParentPath (modName : Name) : String :=
   let components := modName.components.map toString
   match components.dropLast with
   | [] => ""
   | parents => "/".intercalate parents ++ "/"
 
-/-- Process images for a module: copy image files from source to output directory
-    and rewrite URLs in the module content.
-    Returns the modified `LitMod` with rewritten image URLs. -/
+/--
+Processes images for a module: copies image files from source to output directory
+and rewrites URLs in the module content.
+Returns the modified `LitMod` with rewritten image URLs.
+-/
 def processModuleImages (modName : Name) (srcDir : System.FilePath) (outDir : System.FilePath)
     (mod : LitMod) : IO LitMod := do
   if mod.images.isEmpty then return mod
@@ -392,10 +398,12 @@ where
 
 
 open SubVerso.Highlighting in
-/-- Collect the leading keyword token strings from highlighted code, in order.
-    Stops at the first non-keyword, non-whitespace token. Whitespace (`.text`)
-    tokens are skipped. This gives us e.g. `#["#eval"]` or `#["#print", "axioms"]`
-    or `#["set_option"]` for the corresponding commands. -/
+/--
+Collects the leading keyword token strings from highlighted code, in order.
+Stops at the first non-keyword, non-whitespace token. Whitespace (`.text`)
+tokens are skipped. This gives us e.g. `#["#eval"]` or `#["#print", "axioms"]`
+or `#["set_option"]` for the corresponding commands.
+-/
 partial def leadingKeywords (hl : Highlighted) : Array String :=
   go hl #[] |>.1
 where
@@ -412,12 +420,14 @@ where
     | .tactics _ _ _ content, acc => go content acc
     | _, acc => (acc, true) -- any other node type: stop
 
-/-- Check whether a module item's highlighted code starts with a given keyword
-    pattern. The pattern is a space-separated sequence of keyword tokens
-    (e.g. `"#eval"`, `"#print axioms"`, `"set_option"`). The item's leading
-    keyword tokens must start with the pattern tokens in order. This means
-    `"#eval"` matches both `#eval expr` and `#eval in`, and `"#print"` matches
-    both `#print name` and `#print axioms name`. -/
+/--
+Checks whether a module item's highlighted code starts with a given keyword
+pattern. The pattern is a space-separated sequence of keyword tokens
+(e.g. `"#eval"`, `"#print axioms"`, `"set_option"`). The item's leading
+keyword tokens must start with the pattern tokens in order. This means
+`"#eval"` matches both `#eval expr` and `#eval in`, and `"#print"` matches
+both `#print name` and `#print axioms name`.
+-/
 def matchesCommandPattern (item : ModuleItem') (pattern : String) : Bool :=
   let patTokens := pattern.split (· == ' ') |>.filter (!·.isEmpty) |>.toArray
   if patTokens.isEmpty then false
@@ -434,13 +444,15 @@ def matchesCommandPattern (item : ModuleItem') (pattern : String) : Bool :=
         else check (i + 1)
       check 0
 
-/-- Check whether a module item matches any of the given command patterns. -/
+/-- Checks whether a module item matches any of the given command patterns. -/
 def matchesAnyCommandPattern (item : ModuleItem') (patterns : Array String) : Bool :=
   patterns.any (matchesCommandPattern item)
 
 open SubVerso.Highlighting in
-/-- Extract info-severity output messages from a module item, if the item's
-    leading keywords match any pattern in `showOutput`. Returns all info messages found. -/
+/--
+Extracts info-severity output messages from a module item, if the item's
+leading keywords match any pattern in `showOutput`. Returns all info messages found.
+-/
 def extractItemOutput (item : ModuleItem') (showOutput : Array String) : Array Highlighted.Message :=
   if !matchesAnyCommandPattern item showOutput then #[]
   else
@@ -541,9 +553,11 @@ partial def definitionIds (d : Dir) : NameMap (Name × String) := Id.run do
     out := out.mergeWith (fun _ _ x => x) (definitionIds c.2)
   return out
 
-/-- Collect all declaration names from all modules in a Dir tree.
-    These are the names that appear in `Code.verso _ (some dn) _` and
-    `Code.markdown _ (some dn) _` patterns. -/
+/--
+Collects all declaration names from all modules in a Dir tree.
+These are the names that appear in `Code.verso _ (some dn) _` and
+`Code.markdown _ (some dn) _` patterns.
+-/
 partial def collectDeclNames (d : Dir) : Std.HashSet Name := Id.run do
   let mut out : Std.HashSet Name := {}
   if let some m := d.mod then
@@ -557,10 +571,12 @@ partial def collectDeclNames (d : Dir) : Std.HashSet Name := Id.run do
       out := out.insert x
   return out
 
-/-- Collect headings from a module's content items for the page table of contents.
-    Returns an array of (level, titleText, htmlId?) tuples. -/
-def collectHeadings (mod : LitMod) (traverseState : Literate.TraverseState)
-    : Array (Nat × String × Option String) := Id.run do
+/--
+Collects headings from a module's content items for the page table of contents.
+Returns an array of `(level, titleText, htmlId?)` tuples.
+-/
+def collectHeadings (mod : LitMod) (traverseState : Literate.TraverseState) :
+    Array (Nat × String × Option String) := Id.run do
   let mut headings : Array (Nat × String × Option String) := #[]
   for h_item : itemIdx in [0:mod.contents.size] do
     have : itemIdx < mod.contents.size := by have := h_item.2.1; grind
@@ -591,9 +607,11 @@ where
     | _ => ""
 
 open Verso Output Html in
-/-- Build the page ToC HTML from collected headings.
-    `pageUrl` is the page's URL relative to the site root (e.g. `"LitConfig/"` or `"LitConfig/Core/"`),
-    needed because the `<base>` tag makes bare `#id` anchors resolve relative to the site root. -/
+/--
+Builds the page ToC HTML from collected headings.
+`pageUrl` is the page's URL relative to the site root (e.g. `"LitConfig/"` or `"LitConfig/Core/"`),
+needed because the `<base>` tag makes bare `#id` anchors resolve relative to the site root.
+-/
 def buildPageToc (headings : Array (Nat × String × Option String)) (pageUrl : String := "") : Html :=
   let items := headings.map fun (lvl, title, htmlId?) =>
     let levelClass := s!"toc-level-{lvl}"
@@ -676,8 +694,10 @@ where
   navNode (myName : Html) («open» : Bool) (current : Bool) (children : Array Html) : Html :=
     {{<details {{if «open» then #[("open", "")] else #[]}}><summary {{if current then #[("class", "current")] else #[]}}>{{myName}}</summary>{{children}}</details>}}
 
-  /-- When there is exactly one top-level entry, render it as a non-collapsible title header
-      with its children as top-level nav entries. Otherwise, render the normal tree. -/
+  /--
+  When there is exactly one top-level entry, render it as a non-collapsible title header
+  with its children as top-level nav entries. Otherwise, render the normal tree.
+  -/
   navTree (current : Name) (root : Dir) (litConfig : LiterateConfig) : Array Html :=
     let curr := current.components
     match root.children with

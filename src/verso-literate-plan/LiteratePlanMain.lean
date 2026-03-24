@@ -26,9 +26,11 @@ def main (args : List String) : IO UInt32 := do
     IO.eprintln "Usage: verso-literate-plan <module-list-file> <plan-output-file> [<literate.toml>]"
     return 1
 where
-  /-- Parse a module list file. Each line is either:
-      - `library_name\tmodule_name` (tab-separated, new format)
-      - `module_name` (plain name, legacy format — library is set to anonymous) -/
+  /--
+  Parses a module list file. Each line is either:
+  - `library_name\tmodule_name` (tab-separated, new format)
+  - `module_name` (plain name, legacy format — library is set to anonymous)
+  -/
   parseModuleList (contents : String) : List LibModule :=
     contents.splitOn "\n"
       |>.filter (!·.isEmpty)
@@ -37,10 +39,12 @@ where
         | [lib, mod] => { library := lib.toName, module := mod.toName }
         | _ => { library := .anonymous, module := line.toName }
 
-  /-- Check whether a target matches a module entry. A target matches if:
-      - `target.module` matches (prefix of module name), or
-      - `target.library` matches the module's library name
-      When both are specified, both must match. -/
+  /--
+  Checks whether a target matches a module entry. A target matches if:
+  - `target.module` matches (prefix of module name), or
+  - `target.library` matches the module's library name
+  When both are specified, both must match.
+  -/
   targetMatches (target : Target) (entry : LibModule) : Bool :=
     let libOk := match target.library with
       | none => true

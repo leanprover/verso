@@ -69,10 +69,12 @@ structure LiterateConfig where
   orderChildren : NameMap (Array Name) := {}
   /-- Module whose rendered content becomes the landing page. -/
   landingPage : Option Name := none
-  /-- Command keyword patterns to hide (e.g. `"import"`, `"set_option"`, `"#eval"`).
-      Each pattern is a space-separated sequence of keyword tokens that must appear
-      at the start of the command's highlighted code. Matching is done on keyword
-      token content, so `"#eval"` matches both `#eval` and `#eval in`. -/
+  /--
+  Command keyword patterns to hide (e.g. `"import"`, `"set_option"`, `"#eval"`).
+  Each pattern is a space-separated sequence of keyword tokens that must appear
+  at the start of the command's highlighted code. Matching is done on keyword
+  token content, so `"#eval"` matches both `#eval` and `#eval in`.
+  -/
   hideCommands : Array String := #[]
   /-- Site metadata (title, description, favicon). -/
   metadata : Metadata := {}
@@ -86,12 +88,16 @@ structure LiterateConfig where
   showDocstringsFor : Array Name := #[]
   /-- Declarations whose docstrings should be hidden (when `showDocstrings = true`). -/
   hideDocstringsFor : Array Name := #[]
-  /-- When true, declaration docstrings render as prose text (like module docstrings)
-      instead of inside code boxes. -/
+  /--
+  When true, declaration docstrings render as prose text (like module docstrings)
+  instead of inside code boxes.
+  -/
   docstringsAsText : Bool := false
-  /-- Command keyword patterns whose output (info messages) should be displayed as a
-      separate block (e.g. `"#eval"`, `"#check"`, `"#print"`). Matching works the same
-      way as `hideCommands`. -/
+  /--
+  Command keyword patterns whose output (info messages) should be displayed as a
+  separate block (e.g. `"#eval"`, `"#check"`, `"#print"`). Matching works the same
+  way as `hideCommands`.
+  -/
   showOutput : Array String := #["#eval", "#check", "#print", "#reduce"]
   /-- Whether to show the collapsible imports list on each page. -/
   showImports : Bool := true
@@ -140,9 +146,11 @@ def decodeModuleConfig (v : Value) : EDecodeM ModuleConfig := do
 
 instance : DecodeToml ModuleConfig := ⟨decodeModuleConfig⟩
 
-/-- Decodes a `[modules]` table into a `NameMap ModuleConfig`.
-    TOML keys like `"Foo.Bar"` produce single-component Names, so we
-    convert them to proper dotted Lean Names using `String.toName`. -/
+/--
+Decodes a `[modules]` table into a `NameMap ModuleConfig`.
+TOML keys like `"Foo.Bar"` produce single-component Names, so we
+convert them to proper dotted Lean Names using `String.toName`.
+-/
 def decodeModulesMap (table : Table) : DecodeM (NameMap ModuleConfig) := do
   match table.find? `modules with
   | none => return {}
@@ -160,9 +168,11 @@ def decodeModulesMap (table : Table) : DecodeM (NameMap ModuleConfig) := do
       return result
     | _ => return {}
 
-/-- Decodes a `[theme]` table into light and dark CSS variable maps.
-    Sub-keys that are strings become light-mode variables; the `dark` sub-table
-    provides dark-mode overrides. -/
+/--
+Decodes a `[theme]` table into light and dark CSS variable maps.
+Sub-keys that are strings become light-mode variables; the `dark` sub-table
+provides dark-mode overrides.
+-/
 def decodeThemeTable (themeTable : Table) : Std.TreeMap String String compare × Std.TreeMap String String compare :=
   let (light, dark) := themeTable.items.foldl (init := ({}, {})) fun (light, dark) (k, v) =>
     if k == `dark then
@@ -188,9 +198,11 @@ def decodeTheme (table : Table) : DecodeM (Std.TreeMap String String compare × 
     | .table' _ themeTable => return decodeThemeTable themeTable
     | _ => return ({}, {})
 
-/-- Resolve per-module configuration for a given module name by finding the
-    longest-prefix match in `modules` and merging with global defaults.
-    Module-level settings override global settings. -/
+/--
+Resolves per-module configuration for a given module name by finding the
+longest-prefix match in `modules` and merging with global defaults.
+Module-level settings override global settings.
+-/
 def LiterateConfig.resolveForModule (config : LiterateConfig) (modName : Name) : ResolvedConfig :=
   let bestMatch := config.modules.foldl (init := (Name.anonymous, none)) fun (bestName, bestCfg) k v =>
     if k.isPrefixOf modName && k.components.length > bestName.components.length then

@@ -279,14 +279,16 @@ where
     -- as separate .markdown entries
     pure <| code.flatMap extractDocComments
 
-  /-- Splits a `Code.highlighted` at doc-comment tokens, extracting them as `.markdown` entries.
-      Non-highlighted code entries pass through unchanged. -/
+  /--
+  Splits a `Code.highlighted` at doc-comment tokens, extracting them as `.markdown` entries.
+  Non-highlighted code entries pass through unchanged.
+  -/
   extractDocComments (c : Code) : Array Code :=
     match c with
     | .highlighted hl => extractFromHighlighted hl
     | other => #[other]
 
-  /-- Parse a raw docstring comment text (including `/--` and `-/` delimiters) into markdown. -/
+  /-- Parses a raw docstring comment text (including `/--` and `-/` delimiters) into markdown. -/
   parseDocComment (text : String) : Code :=
     let docText := (text.dropPrefix "/-- " |>.toString |>.dropSuffix " -/"
           |>.dropSuffix "\n-/" |>.dropSuffix "-/").trimAsciiEnd.toString
@@ -294,7 +296,7 @@ where
     | some md => .markdown 0 none md
     | none => .markdown 0 none ⟨#[.code #[] #[] none #[docText]]⟩
 
-  /-- Walk a `Highlighted` tree and split out doc-comment tokens as `.markdown` code entries. -/
+  /-- Walks a `Highlighted` tree and splits out doc-comment tokens as `.markdown` code entries. -/
   extractFromHighlighted (hl : Highlighted) : Array Code :=
     match hl with
     | .seq xs =>
@@ -367,12 +369,12 @@ section ImageCollection
 private def isRelativeImagePath (url : String) : Bool :=
   !url.startsWith "/" && (url.splitOn "://").length <= 1
 
-/-- Convert an MD4Lean `AttrText` array to a plain string. -/
+/-- Converts an MD4Lean `AttrText` array to a plain string. -/
 private def attrTextToString (src : Array MD4Lean.AttrText) : String :=
   String.join (src.map (fun | .normal s => s | .entity e => e | .nullchar => "") |>.toList)
 
 open MD4Lean in
-/-- Collect relative image paths from an MD4Lean document. -/
+/-- Collects relative image paths from an MD4Lean document. -/
 private partial def collectMdImages (doc : Document) : Array String :=
   doc.blocks.foldl (fun acc b => acc ++ collectBlock b) #[]
 where
@@ -398,7 +400,7 @@ where
     xs.foldl (fun acc t => acc ++ collectText t) #[]
 
 open Lean.Doc in
-/-- Collect relative image paths from Verso inline content. -/
+/-- Collects relative image paths from Verso inline content. -/
 private partial def collectVersoInlineImages (i : Inline Ext) : Array String :=
   match i with
   | .image _alt url => if isRelativeImagePath url then #[url] else #[]
@@ -408,7 +410,7 @@ private partial def collectVersoInlineImages (i : Inline Ext) : Array String :=
   | .text _ | .linebreak _ | .code _ | .math _ _ => #[]
 
 open Lean.Doc in
-/-- Collect relative image paths from a Verso block. -/
+/-- Collects relative image paths from a Verso block. -/
 private partial def collectVersoBlockImages (b : Block Ext Ext) : Array String :=
   match b with
   | .para xs => xs.foldl (fun acc x => acc ++ collectVersoInlineImages x) #[]
@@ -422,13 +424,13 @@ private partial def collectVersoBlockImages (b : Block Ext Ext) : Array String :
   | .code _ => #[]
 
 open Lean.Doc in
-/-- Collect relative image paths from a Verso part. -/
+/-- Collects relative image paths from a Verso part. -/
 private partial def collectVersoPartImages (p : Part Ext Ext Empty) : Array String :=
   p.title.foldl (fun acc x => acc ++ collectVersoInlineImages x) #[]
   ++ p.content.foldl (fun acc x => acc ++ collectVersoBlockImages x) #[]
   ++ p.subParts.foldl (fun acc x => acc ++ collectVersoPartImages x) #[]
 
-/-- Collect relative image paths from a single `Code` item. -/
+/-- Collects relative image paths from a single `Code` item. -/
 private def collectCodeImages : Code → Array String
   | .markdown _ _ doc | .markdownModDoc doc => collectMdImages doc
   | .verso _ _ doc =>
@@ -439,7 +441,7 @@ private def collectCodeImages : Code → Array String
     ++ doc.sections.foldl (fun acc (_, p) => acc ++ collectVersoPartImages p) #[]
   | .highlighted _ => #[]
 
-/-- Collect all unique relative image paths from module items. -/
+/-- Collects all unique relative image paths from module items. -/
 private def collectItemImages (items : Array ModuleItem') : Array String :=
   let all := items.foldl (fun acc item =>
     acc ++ item.code.foldl (fun a c => a ++ collectCodeImages c) #[]) #[]
@@ -509,8 +511,10 @@ structure Config where
   extraImports : Array Name := #[]
   leanOptions : Options := {}
 
-/-- Parse a `-Dname=value` flag into a Lean option, registering it in `opts`.
-    Uses the registered option declaration to determine the expected type. -/
+/--
+Parses a `-Dname=value` flag into a Lean option, registering it in `opts`.
+Uses the registered option declaration to determine the expected type.
+-/
 private def parseDOption (arg : String) (opts : Options) : IO Options := do
   let arg := arg.drop 2  -- drop "-D"
   let parts := arg.split "=" |>.toList

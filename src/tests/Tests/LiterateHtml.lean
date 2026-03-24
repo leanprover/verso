@@ -29,9 +29,11 @@ private def runLakeExe (name : String) (args : Array String) : IO Unit := do
   if exitCode != 0 then
     throw <| IO.userError s!"{name} failed with exit code {exitCode}"
 
-/-- Generate a module-map file from a JSON directory.
-    Each .json file at `<jsonDir>/<A>/<B>.json` produces a line `A.B\t<path>[\t<srcDir>]`.
-    If `sourceDir` is provided, it is appended as a third tab-separated column. -/
+/--
+Generates a module-map file from a JSON directory.
+Each .json file at `<jsonDir>/<A>/<B>.json` produces a line `A.B\t<path>[\t<srcDir>]`.
+If `sourceDir` is provided, it is appended as a third tab-separated column.
+-/
 private def generateModuleMap (jsonDir mapFile : System.FilePath)
     (sourceDir : Option System.FilePath := none) : IO Unit := do
   let mut lines : Array String := #[]
@@ -133,8 +135,10 @@ structure TestData where
   modules : Array String
   moduleListFile : System.FilePath
 
-/-- Run a test in an independent temporary directory. The callback receives
-    the shared JSON dir, a fresh HTML output dir, and paths for plan/toml files. -/
+/--
+Runs a test in an independent temporary directory. The callback receives
+the shared JSON dir, a fresh HTML output dir, and paths for plan/toml files.
+-/
 private def withTestDir (data : TestData)
     (test : System.FilePath → System.FilePath → System.FilePath → System.FilePath → IO Unit) : IO Unit :=
   IO.FS.withTempDir fun tmpDir => do
