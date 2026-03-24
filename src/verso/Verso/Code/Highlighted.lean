@@ -1330,18 +1330,10 @@ window.onload = () => {
       return false;
     }
 
+    // Track visible tippy count via lifecycle hooks (O(1) instead of DOM scan)
+    let visibleTippyCount = 0;
     function blockedByTippy(elem) {
-      // Don't show a new hover until the old ones are all closed.
-      // Scoped to the nearest \"top-level block\" to avoid being O(n) in the size of the document.
-      var block = elem;
-      const topLevel = new Set([\"section\", \"body\", \"html\", \"nav\", \"header\"]);
-      while (block.parentNode && !topLevel.has(block.parentNode.nodeName.toLowerCase())) {
-        block = block.parentNode;
-      }
-      for (const child of block.querySelectorAll(\".token, .has-info\")) {
-        if (child._tippy && child._tippy.state.isVisible) { return true };
-      }
-      return false;
+      return visibleTippyCount > 0;
     }
 
     for (const c of document.querySelectorAll(\".hl.lean .token\")) {
@@ -1423,6 +1415,8 @@ window.onload = () => {
             return false;
           }
         },
+        onShown(inst) { visibleTippyCount++; },
+        onHidden(inst) { visibleTippyCount = Math.max(0, visibleTippyCount - 1); },
         content (tgt) {
           const content = document.createElement(\"span\");
           if (tgt.className == 'tactic') {
