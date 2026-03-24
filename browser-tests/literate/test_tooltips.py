@@ -11,10 +11,10 @@ TIPPY_SELECTOR = (
 
 
 class TestTooltips:
-    """Tests for lazy Tippy tooltip initialization on code elements."""
+    """Tests for Tippy tooltip behavior on code elements."""
 
-    def test_no_tippy_instances_on_load(self, server: str, page: Page):
-        """No Tippy instances should exist before any hover interaction."""
+    def test_tippy_instances_on_load(self, server: str, page: Page):
+        """Tippy instances should be eagerly created on page load."""
         page.goto(f"{server}/LitConfig/Core/")
         page.wait_for_load_state("networkidle")
 
@@ -22,21 +22,24 @@ class TestTooltips:
         count = page.locator(".hl.lean .const.token").count()
         assert count > 0, "Expected .const.token elements on the page"
 
-        # But none should have a Tippy instance yet
+        # All eligible elements should have Tippy instances after load
         tippy_count = page.evaluate(
             f"() => document.querySelectorAll('{TIPPY_SELECTOR}').length"
         )
-        initialized = page.evaluate(f"""() => {{
+        initialized = page.evaluate(
+            f"""() => {{
             const els = document.querySelectorAll('{TIPPY_SELECTOR}');
             return Array.from(els).filter(el => el._tippy).length;
-        }}""")
+        }}"""
+        )
         assert tippy_count > 0, "Expected tooltip-eligible elements"
-        assert initialized == 0, (
-            f"Expected 0 Tippy instances on load, but {initialized}/{tippy_count} were initialized"
+        assert initialized == tippy_count, (
+            f"Expected all {tippy_count} elements to have Tippy instances, "
+            f"but only {initialized} were initialized"
         )
 
     def test_hover_creates_tooltip(self, server: str, page: Page):
-        """Hovering a code token should create and show a Tippy tooltip."""
+        """Hovering a code token should show a Tippy tooltip."""
         page.goto(f"{server}/LitConfig/Core/")
         page.wait_for_load_state("networkidle")
 
@@ -105,23 +108,3 @@ class TestTooltips:
         assert first_id == second_id, (
             f"Expected same Tippy instance on re-hover (id {first_id}), got new instance (id {second_id})"
         )
-
-    def test_only_hovered_element_gets_instance(self, server: str, page: Page):
-        """Only the hovered token should get a Tippy instance, not its siblings."""
-        page.goto(f"{server}/LitConfig/Core/")
-        page.wait_for_load_state("networkidle")
-
-        tokens = page.locator(".hl.lean .const.token")
-        assert tokens.count() >= 2, "Need at least 2 .const.token elements"
-
-        # Hover only the first token
-        tokens.first.hover()
-        page.wait_for_function(
-            "el => !!el._tippy",
-            arg=tokens.first.element_handle(),
-            timeout=5000,
-        )
-
-        # The second token should not have an instance
-        has_tippy = page.evaluate("el => !!el._tippy", tokens.nth(1).element_handle())
-        assert not has_tippy, "Non-hovered token should not have a Tippy instance"
