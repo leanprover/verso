@@ -65,6 +65,24 @@ jobs:
             - name: Install PDF Dependencies
               uses: ./.github/actions/install-texlive
 
+            # Install uv and Playwright before tests, since lake test
+            # runs literate browser tests that need them
+            - name: Install uv
+              uses: astral-sh/setup-uv@v7
+              with:
+                  enable-cache: true
+                  cache-dependency-glob: "browser-tests/pyproject.toml"
+
+            - name: Cache Playwright browsers
+              uses: actions/cache@v5
+              with:
+                  path: .playwright-browsers
+                  key: playwright-${{ runner.os }}-${{ hashFiles('browser-tests/uv.lock') }}
+
+            - name: Install Playwright browsers
+              run: |
+                  uv run --project browser-tests --extra test playwright install chromium firefox --with-deps
+
             - name: Run tests
               run: |
                   lake test -- --verbose --check-tex
@@ -128,26 +146,9 @@ jobs:
                   grep -qF '<a href="blog/">blog</a> genre' _out/demosite/about/index.html
                   grep -qF '<base href=".././">' _out/demosite/about/index.html
 
-            # Begin browser testing
-            - name: Install uv
-              uses: astral-sh/setup-uv@v7
-              with:
-                  enable-cache: true
-                  cache-dependency-glob: "browser-tests/pyproject.toml"
-
-            - name: Cache Playwright browsers
-              uses: actions/cache@v5
-              with:
-                  path: .playwright-browsers
-                  key: playwright-${{ runner.os }}-${{ hashFiles('browser-tests/uv.lock') }}
-
-            - name: Install Playwright browsers
-              run: |
-                  uv run --project browser-tests --extra test playwright install chromium firefox --with-deps
-
+            # uv and Playwright are installed before `lake test` above
             - name: Run browser tests
               run: uv run --project browser-tests --extra test pytest browser-tests -v
-            # End browser testing
 
             - name: Upload docs to artifact storage
               if: github.ref != 'refs/heads/main'
