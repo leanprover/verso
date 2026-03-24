@@ -1335,7 +1335,6 @@ window.onload = () => {
 
     // Track whether any tippy is visible (O(1) check instead of DOM scan)
     let visibleTippyCount = 0;
-    Object.defineProperty(window, '_vtc', { get() { return visibleTippyCount; } });
     function blockedByTippy(elem) {
       return visibleTippyCount > 0;
     }
@@ -1408,9 +1407,6 @@ window.onload = () => {
 
 
       const defaultTippyProps = {
-        onHide(any) {
-          console.log(\"hide\", any);
-        },
         /* DEBUG -- remove the space: * /
         onHide(any) { return false; },
         trigger: \"click\",

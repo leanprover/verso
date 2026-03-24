@@ -15,7 +15,7 @@ def popper := include_str "../../../../../vendored-js/popper/popper.min.js"
 
 def popper.map := include_str "../../../../../vendored-js/popper/popper.min.js.map"
 
-def tippy := include_str "../../../../../vendored-js/tippy/tippy-bundle.umd.js"
+def tippy := include_str "../../../../../vendored-js/tippy/tippy-bundle.umd.min.js"
 
 def tippy.map := include_str "../../../../../vendored-js/tippy/tippy-bundle.umd.min.js.map.json"
 
