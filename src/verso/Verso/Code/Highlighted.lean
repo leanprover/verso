@@ -1375,13 +1375,13 @@ window.onload = () => {
 
     for (const container of document.querySelectorAll(\".hl.lean\")) {
       container.addEventListener(\"mouseover\", (event) => {
+        if (blockedByTactic(event.target)) return;
         const c = event.target.closest(\".token\");
         if (!c || !container.contains(c)) {
           if (currentBinding && highlightedTokens.some(tok => tok.contains(event.target))) return;
           if (currentBinding) { currentBinding = null; currentContext = null; syncHighlights(); }
           return;
         }
-        if (blockedByTactic(c)) return;
         const binding = c.dataset.binding;
         const newBinding = (binding && binding !== \"\") ? binding : null;
         if (newBinding === currentBinding) return;
@@ -1534,13 +1534,10 @@ window.onload = () => {
         el.setAttribute('data-tippy-theme', getTheme(el));
         // For .tactic, position relative to the element (not the cursor)
         // to avoid off-screen placement causing flicker.
-        if (el.classList.contains('tactic')) {
-          debugger; // Break here to inspect tactic tippy creation
-          const props = Object.assign({}, defaultTippyProps, {showOnCreate: true, followCursor: false, inlinePositioning: true});
-          tippy(el, props);
-        } else {
-          tippy(el, Object.assign({}, defaultTippyProps, {showOnCreate: true}));
-        }
+        const props = el.classList.contains('tactic')
+          ? Object.assign({}, defaultTippyProps, {showOnCreate: true, appendTo: 'parent'})
+          : Object.assign({}, defaultTippyProps, {showOnCreate: true});
+        tippy(el, props);
       }
 
       document.querySelectorAll('.hl.lean').forEach(container => {
