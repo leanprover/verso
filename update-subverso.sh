@@ -63,8 +63,18 @@ find test-projects -name "lake-manifest.json" -not -path "$ROOT_MANIFEST" | grep
             exit 1
         fi
 
-        # Update the rev field for subverso
-        jq --arg rev "$SUBVERSO_NOMODULE_REV" '.packages = (.packages | map(
+        # Projects that depend on Verso as a path dependency inherit its
+        # `module` status and need the modulized SubVerso rev. Other
+        # projects need the de-modulized rev.
+        if jq -e '.packages[] | select(.name == "verso" and .type == "path")' "$manifest_file" > /dev/null 2>&1; then
+            TARGET_REV="$SUBVERSO_REV"
+            echo "  Uses Verso path dependency → modulized rev"
+        else
+            TARGET_REV="$SUBVERSO_NOMODULE_REV"
+            echo "  Standalone project → de-modulized rev"
+        fi
+
+        jq --arg rev "$TARGET_REV" '.packages = (.packages | map(
             if .name == "subverso" then
                 .rev = $rev
             else
