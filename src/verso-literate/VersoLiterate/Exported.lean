@@ -32,11 +32,14 @@ structure LitVersoDocString where
 deriving ToJson, FromJson, Repr
 
 open Verso.BEq in
-instance : BEq LitVersoDocString where
-  beq := private ptrEqThen fun
+private def LitVersoDocString.beq : LitVersoDocString → LitVersoDocString → Bool :=
+  ptrEqThen fun
     | ⟨text1, sub1⟩, ⟨text2, sub2⟩ =>
       ptrEqThen' text1 text2 (· == ·) &&
       ptrEqThen' sub1 sub2 (· == ·)
+
+instance : BEq LitVersoDocString where
+  beq := private LitVersoDocString.beq
 
 structure LitVersoModuleDocs.Snippet where
   /-- Text to be inserted after the prior snippet's ending text. -/
@@ -49,11 +52,15 @@ structure LitVersoModuleDocs.Snippet where
 deriving ToJson, FromJson, Repr
 
 open Verso.BEq in
-instance : BEq LitVersoModuleDocs.Snippet where
-  beq := private ptrEqThen fun
+private def LitVersoModuleDocs.Snippet.beq : LitVersoModuleDocs.Snippet → LitVersoModuleDocs.Snippet → Bool :=
+  ptrEqThen fun
     | ⟨text1, sections1⟩, ⟨text2, sections2⟩ =>
       ptrEqThen' text1 text2 (· == ·) &&
       ptrEqThen' sections1 sections2 (· == ·)
+
+open Verso.BEq in
+instance : BEq LitVersoModuleDocs.Snippet where
+  beq := private LitVersoModuleDocs.Snippet.beq
 
 instance : ToJson Char where
   toJson c := c.toString
@@ -78,8 +85,8 @@ inductive Code where
 deriving ToJson, FromJson, Repr
 
 open Verso.BEq in
-instance : BEq Code where
-  beq := private ptrEqThen fun
+private def Code.beq : Code → Code → Bool :=
+  ptrEqThen fun
     | .highlighted hl1, .highlighted hl2 =>
       ptrEqThen' hl1 hl2 (· == ·)
     | .markdown i1 d1? doc1 , .markdown i2 d2? doc2 =>
@@ -93,6 +100,10 @@ instance : BEq Code where
       ptrEqThen' d1 d2 (· == ·)
     | _, _ => false
 
+open Verso.BEq in
+instance : BEq Code where
+  beq := private Code.beq
+
 structure ModuleItem' where
   range : Option (Lean.Position × Lean.Position)
   kind : SyntaxNodeKind
@@ -101,10 +112,14 @@ structure ModuleItem' where
 deriving Inhabited, Repr
 
 open Verso.BEq in
-instance : BEq ModuleItem' where
-  beq := private ptrEqThen fun
+private def ModuleItem'.beq : ModuleItem' → ModuleItem' → Bool :=
+  ptrEqThen fun
     | ⟨r1, k1, d1, c1⟩, ⟨r2, k2, d2, c2⟩ =>
       r1 == r2 && k1 == k2 && d1 == d2 && ptrEqThen' c1 c2 (· == ·)
+
+open Verso.BEq in
+instance : BEq ModuleItem' where
+  beq := private ModuleItem'.beq
 
 structure LitMod where
   name : Name
@@ -114,11 +129,14 @@ structure LitMod where
 deriving Inhabited, Repr
 
 open Verso.BEq in
-instance : BEq LitMod where
-  beq := private ptrEqThen fun
+private def LitMod.beq : LitMod → LitMod → Bool :=
+  ptrEqThen fun
     | ⟨name1, contents1, images1⟩, ⟨name2, contents2, images2⟩ =>
       name1 == name2 && contents1 == contents2 && images1 == images2
 
+open Verso.BEq in
+instance : BEq LitMod where
+  beq := private LitMod.beq
 
 section
 open SubVerso.Highlighting Export
@@ -178,7 +196,6 @@ def exportItems (items : Array ModuleItem') : ExportedModuleItems :=
 def ExportedModuleItems.toModuleItems (e : ExportedModuleItems) : Except String (Array ModuleItem') := do
   let e' := e.toExport
   e.items.mapM (getModuleItem' e')
-
 
 end
 

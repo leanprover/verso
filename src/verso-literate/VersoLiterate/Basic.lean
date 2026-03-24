@@ -34,13 +34,17 @@ inductive Ext where
 deriving ToJson, FromJson, Repr
 
 open Verso.BEq in
-instance : BEq Ext where
-  beq := private ptrEqThen fun
+private def Ext.beq : Ext → Ext → Bool :=
+  ptrEqThen fun
     | .highlighted hl1, .highlighted hl2 =>
       ptrEqThen' hl1 hl2 (· == ·)
     | .data x, .data y =>
       ptrEqThen' x y (· == ·)
     | _, _ => false
+
+open Verso.BEq in
+instance : BEq Ext where
+  beq := private Ext.beq
 
 @[expose]
 def InlineToLiterate :=
@@ -236,9 +240,8 @@ private def treeMapEqWith (eq : β → β → Bool) : (x1 x2 : TreeMap α β) �
 private def nameMapEqWith (eq : β → β → Bool) : (x1 x2 : Lean.NameMap β) → Bool := ptrEqThen fun l r =>
   l.size = r.size && l.foldl (init := true) fun soFar k v => soFar && ((r.find? k).map (ptrEqThen eq v)).getD false
 
-
-instance : BEq State where
-  beq := private ptrEqThen fun
+private def State.beq : State → State → Bool :=
+  ptrEqThen fun
     | ⟨u1, v1, w1, x1, y1, z1⟩, ⟨u2, v2, w2, x2, y2, z2⟩ =>
       hashMapEq u1 u2 &&
       treeSetEq v1 v2 &&
@@ -246,6 +249,9 @@ instance : BEq State where
       nameMapEqWith (hashMapEqWith (· == ·)) x1 x2 &&
       y1 == y2 &&
       z1 == z2
+
+instance : BEq State where
+  beq := private State.beq
 
 end
 
