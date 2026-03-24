@@ -1336,27 +1336,44 @@ window.onload = () => {
       return visibleTippyCount > 0;
     }
 
-    for (const c of document.querySelectorAll(\".hl.lean .token\")) {
-        if (c.dataset.binding != \"\") {
-            c.addEventListener(\"mouseover\", (event) => {
-                if (blockedByTactic(c)) {return;}
-                const context = c.closest(\".hl.lean\").dataset.leanContext;
-                for (const example of document.querySelectorAll(\".hl.lean\")) {
-                    if (example.dataset.leanContext == context) {
-                        for (const tok of example.querySelectorAll(\".token\")) {
-                            if (c.dataset.binding == tok.dataset.binding) {
-                                tok.classList.add(\"binding-hl\");
-                            }
-                        }
-                    }
-                }
-            });
-        }
-        c.addEventListener(\"mouseout\", (event) => {
-            for (const tok of document.querySelectorAll(\".hl.lean .token.binding-hl\")) {
-                tok.classList.remove(\"binding-hl\");
+    // Binding highlights via event delegation with cached lookups
+    const bindingCache = new Map(); // context+binding -> [token elements]
+    let highlightedTokens = [];
+    function getBindingTokens(context, binding) {
+      const key = context + \"\\0\" + binding;
+      let tokens = bindingCache.get(key);
+      if (!tokens) {
+        tokens = [];
+        for (const example of document.querySelectorAll(\".hl.lean\")) {
+          if (example.dataset.leanContext == context) {
+            for (const tok of example.querySelectorAll(\".token[data-binding=\\\"\" + CSS.escape(binding) + \"\\\"]\")) {
+              tokens.push(tok);
             }
-        });
+          }
+        }
+        bindingCache.set(key, tokens);
+      }
+      return tokens;
+    }
+    for (const container of document.querySelectorAll(\".hl.lean\")) {
+      container.addEventListener(\"mouseover\", (event) => {
+        const c = event.target.closest(\".token\");
+        if (!c || !c.dataset.binding || c.dataset.binding === \"\" || !container.contains(c)) return;
+        if (blockedByTactic(c)) return;
+        const tokens = getBindingTokens(container.dataset.leanContext, c.dataset.binding);
+        for (const tok of tokens) {
+          tok.classList.add(\"binding-hl\");
+        }
+        highlightedTokens = tokens;
+      });
+      container.addEventListener(\"mouseout\", (event) => {
+        const c = event.target.closest(\".token\");
+        if (!c || !container.contains(c)) return;
+        for (const tok of highlightedTokens) {
+          tok.classList.remove(\"binding-hl\");
+        }
+        highlightedTokens = [];
+      });
     }
     /* Render docstrings */
     if ('undefined' !== typeof marked) {
