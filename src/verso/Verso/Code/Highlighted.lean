@@ -1408,6 +1408,9 @@ window.onload = () => {
 
 
       const defaultTippyProps = {
+        onHide(any) {
+          console.log(\"hide\", any);
+        },
         /* DEBUG -- remove the space: * /
         onHide(any) { return false; },
         trigger: \"click\",
@@ -1517,24 +1520,40 @@ window.onload = () => {
       document.querySelectorAll('.hl.lean .tactic').forEach(element => {
         element.setAttribute('data-tippy-theme', 'tactic');
       });
-      tippy('.hl.lean .const.token, .hl.lean .keyword.token, .hl.lean .literal.token, .hl.lean .option.token, .hl.lean .var.token, .hl.lean .typed.token, .hl.lean .has-info, .hl.lean .level-var, .hl.lean .level-const, .hl.lean .level-op, .hl.lean .sort', defaultTippyProps);
+      // Skip tokens inside closed tactics — they interfere with tactic tippys
+      const closedTactics = new Set();
+      document.querySelectorAll('.hl.lean .tactic').forEach(tactic => {
+        const toggle = tactic.querySelector('input.tactic-toggle');
+        if (toggle && !toggle.checked) closedTactics.add(tactic);
+      });
+      function isInsideClosedTactic(el) {
+        const tactic = el.closest('.tactic');
+        return tactic && closedTactics.has(tactic);
+      }
+
+      const tokenSelector = '.hl.lean .const.token, .hl.lean .keyword.token, .hl.lean .literal.token, .hl.lean .option.token, .hl.lean .var.token, .hl.lean .typed.token, .hl.lean .has-info, .hl.lean .level-var, .hl.lean .level-const, .hl.lean .level-op, .hl.lean .sort';
+      tippy(Array.from(document.querySelectorAll(tokenSelector)).filter(el => !isInsideClosedTactic(el)), defaultTippyProps);
       tippy('.hl.lean .tactic', Object.assign({}, defaultTippyProps, {followCursor: false, placement: 'bottom-start'}));
 
-      // Disable/enable token tippys inside tactics based on checkbox state
-      function updateTacticChildTippys(tactic) {
+      // Create/destroy token tippys when tactic checkbox toggles
+      const tacticTippySelector = '.const.token, .keyword.token, .literal.token, .option.token, .var.token, .typed.token, .has-info, .level-var, .level-const, .level-op, .sort';
+      document.querySelectorAll('.hl.lean .tactic').forEach(tactic => {
         const toggle = tactic.querySelector('input.tactic-toggle');
-        if (!toggle) return;
-        const isOpen = toggle.checked;
-        tactic.querySelectorAll('.token').forEach(tok => {
-          if (tok._tippy) {
-            if (isOpen) tok._tippy.enable(); else tok._tippy.disable();
+        if (toggle) toggle.addEventListener('change', () => {
+          if (toggle.checked) {
+            closedTactics.delete(tactic);
+            tactic.querySelectorAll('.token').forEach(tok => {
+              if (!tok._tippy && tok.matches(tacticTippySelector)) {
+                tippy(tok, defaultTippyProps);
+              }
+            });
+          } else {
+            closedTactics.add(tactic);
+            tactic.querySelectorAll('.token').forEach(tok => {
+              if (tok._tippy) tok._tippy.destroy();
+            });
           }
         });
-      }
-      document.querySelectorAll('.hl.lean .tactic').forEach(tactic => {
-        updateTacticChildTippys(tactic);
-        const toggle = tactic.querySelector('input.tactic-toggle');
-        if (toggle) toggle.addEventListener('change', () => updateTacticChildTippys(tactic));
       });
   });
 }
