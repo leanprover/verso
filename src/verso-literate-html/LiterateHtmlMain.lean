@@ -192,7 +192,6 @@ private def mkHeadContents (litConfig : LiterateConfig) (includeCodeAssets : Boo
     <script src="-verso-search/fuzzysort.min.js"></script>
     <script src="-verso-search/searchIndex.js"></script>
     <script type="module" src="-verso-search/search-init.js"></script>
-    <script src="-verso-search/domain-mappers.js" defer="defer"></script>
     <link rel="stylesheet" href="-verso-search/search-box.css"/>
     <link rel="stylesheet" href="-verso-search/search-highlight.css"/>
     <link rel="stylesheet" href="-verso-search/domain-display.css"/>
