@@ -6,10 +6,8 @@ Author: Emilio J. Gallego Arias
 
 import VersoManual
 
-open Verso.Genre
+open Verso.Genre Manual
 
--- To allow ```` below
-set_option linter.verso.markup.codeBlock false
 
 #doc (Manual) "Verso 4.29.0 (unreleased)" =>
 %%%
@@ -19,3 +17,13 @@ file := "v4.29.0"
 
 * Fix Verso folding ranges / TOC for Lean.Doc syntax and #doc (#768)
 * Align Blog inline Lean role naming with Manual; add `{lean}` and deprecate `{leanInline}` (#762)
+* A zero-config {ref "literate-4.29"}[literate programming] feature was added in [#809](https://github.com/leanprover/verso/pull/809)
+
+# Literate Programming
+%%%
+tag := "literate-4.29"
+%%%
+
+PR [#809](https://github.com/leanprover/verso/pull/809) added support for a simple literate programming system, in which module docstrings are rendered as the text of a page.
+While no configuration is necessary to use it, aside from adding Verso as a dependency, some configuration is possible in order to customize aspects of the display.
+See {ref "literate"}[its section in this guide] for more details.
