@@ -966,10 +966,8 @@ public def highlightingStyle : String := "
   display: inline;
 }
 
-@media (hover: hover) {
-  .hl.lean .tactic:has(> .tactic-toggle:not(:checked)) > label:hover {
-    background-color: #eeeeee;
-  }
+.hl.lean .tactic.tactic-hover:not(.tactic-open) > label {
+  background-color: #eeeeee;
 }
 
 .hl.lean .tactic-toggle {
@@ -1006,7 +1004,7 @@ public def highlightingStyle : String := "
 }
 */
 
-.hl.lean .tactic > label:has(+ .tactic-toggle:checked)::after {
+.hl.lean .tactic.tactic-open > label::after {
   border: 1px solid #999999;
   background-color: #999999;
   transition: all 0.5s;
@@ -1403,6 +1401,19 @@ window.onload = () => {
         currentContext = null;
         syncHighlights();
       });
+    }
+
+    // Sync tactic classes via JS (avoids expensive :has() and unreliable :hover in CSS)
+    for (const toggle of document.querySelectorAll('.tactic-toggle')) {
+      const tactic = toggle.closest('.tactic');
+      if (!tactic) continue;
+      const update = () => tactic.classList.toggle('tactic-open', toggle.checked);
+      toggle.addEventListener('change', update);
+      update();
+    }
+    for (const tactic of document.querySelectorAll('.hl.lean .tactic')) {
+      tactic.addEventListener('mouseenter', () => tactic.classList.add('tactic-hover'));
+      tactic.addEventListener('mouseleave', () => tactic.classList.remove('tactic-hover'));
     }
 
     /* Render docstrings */
