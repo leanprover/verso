@@ -1,9 +1,9 @@
 # Literate Config Test Project
 
 This is a test project for Verso's simple literate programming system.
-It is a small, self-contained Lean project that exercises
-the literate features: module docstrings rendered as prose, syntax
-highlighting, cross-references, and image copying.
+It is a small, self-contained Lean project that exercises the literate
+features: module docstrings rendered as prose, syntax highlighting,
+cross-references, and image copying.
 
 ## How the Test Suite Uses This Project
 

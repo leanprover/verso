@@ -4,7 +4,8 @@
     /* Font families */
     --verso-code-font-family: "Monaco", "Menlo", "Ubuntu Mono", monospace;
     --verso-text-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    --verso-structure-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --verso-structure-font-family:
+        -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 
     /* Colors */
     --verso-text-color: #333;
@@ -101,29 +102,29 @@
     }
 
     /* Hover tooltips (tippy) */
-    .tippy-box[data-theme~='lean'],
-    .tippy-box[data-theme~='error'],
-    .tippy-box[data-theme~='warning'],
-    .tippy-box[data-theme~='info'] {
+    .tippy-box[data-theme~="lean"],
+    .tippy-box[data-theme~="error"],
+    .tippy-box[data-theme~="warning"],
+    .tippy-box[data-theme~="info"] {
         background-color: #2a2a4a;
         color: #e0e0e0;
         border-color: #4a4a6a;
     }
-    .tippy-box[data-theme~='lean'] > .tippy-arrow::before,
-    .tippy-box[data-theme~='error'] > .tippy-arrow::before,
-    .tippy-box[data-theme~='warning'] > .tippy-arrow::before,
-    .tippy-box[data-theme~='info'] > .tippy-arrow::before {
+    .tippy-box[data-theme~="lean"] > .tippy-arrow::before,
+    .tippy-box[data-theme~="error"] > .tippy-arrow::before,
+    .tippy-box[data-theme~="warning"] > .tippy-arrow::before,
+    .tippy-box[data-theme~="info"] > .tippy-arrow::before {
         border-color: #2a2a4a;
     }
-    .tippy-box[data-theme~='tactic'] {
+    .tippy-box[data-theme~="tactic"] {
         background-color: #2a2a4a;
         color: #e0e0e0;
         border-color: #4a4a6a;
     }
-    .tippy-box[data-theme~='tactic'] > .tippy-arrow::before {
+    .tippy-box[data-theme~="tactic"] > .tippy-arrow::before {
         border-color: #2a2a4a;
     }
-    .tippy-box[data-theme~='message'] > .tippy-arrow::before {
+    .tippy-box[data-theme~="message"] > .tippy-arrow::before {
         border-color: #2a2a4a;
     }
 
