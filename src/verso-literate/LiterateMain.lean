@@ -242,7 +242,10 @@ where
       if let some declRange ← getDeclarationRange? stx then
         if stx[1].getKind == ``versoCommentBody then
           let doc? := getMainVersoModuleDocs (← getEnv) |>.snippets |>.findSome? fun s =>
-             guard (s.declarationRange == declRange) *> some s
+            -- It's important to only check the leading position, because the trailing
+            -- position gets updated in the very last item. This would mean that a
+            -- trailing moduledoc wouldn't compare properly here.
+            guard (s.declarationRange.pos == declRange.pos) *> some s
           if let some doc := doc? then
             return #[.modDoc (← toModLit doc)]
         else if stx[1].isAtom then
