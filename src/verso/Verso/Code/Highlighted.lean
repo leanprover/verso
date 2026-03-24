@@ -966,13 +966,11 @@ public def highlightingStyle : String := "
   display: inline;
 }
 
-/* DEBUG: disabled to test flicker
 @media (hover: hover) {
-  .hl.lean .tactic:has(.tactic-toggle:not(:checked)) > label:hover {
+  .hl.lean .tactic:has(> .tactic-toggle:not(:checked)) > label:hover {
     background-color: #eeeeee;
   }
 }
-*/
 
 .hl.lean .tactic-toggle {
   position: absolute;
