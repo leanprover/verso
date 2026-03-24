@@ -1330,7 +1330,7 @@ window.onload = () => {
       return false;
     }
 
-    // Track visible tippy count via lifecycle hooks (O(1) instead of DOM scan)
+    // Track whether any tippy is visible (O(1) check instead of DOM scan)
     let visibleTippyCount = 0;
     function blockedByTippy(elem) {
       return visibleTippyCount > 0;
@@ -1424,7 +1424,7 @@ window.onload = () => {
               return false;
             }
             hideParentTooltips(inst.reference);
-            //if (blockedByTippy(inst.reference)) { return false; }
+            if (blockedByTippy(inst.reference)) { return false; }
 
           } else if (inst.reference.querySelector(\".hover-info\") || \"versoHover\" in inst.reference.dataset) {
             if (blockedByTactic(inst.reference)) { return false };
