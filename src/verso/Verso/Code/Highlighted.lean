@@ -1375,7 +1375,14 @@ window.onload = () => {
 
     for (const container of document.querySelectorAll(\".hl.lean\")) {
       container.addEventListener(\"mouseover\", (event) => {
-        if (blockedByTactic(event.target)) return;
+        // Skip all binding highlight processing inside closed tactics.
+        // blockedByTactic only checks parentNode, so use closest to also
+        // catch the .tactic element itself as the event target.
+        const tactic = event.target.closest && event.target.closest('.tactic');
+        if (tactic) {
+          const toggle = tactic.querySelector('input.tactic-toggle');
+          if (toggle && !toggle.checked) return;
+        }
         const c = event.target.closest(\".token\");
         if (!c || !container.contains(c)) {
           if (currentBinding && highlightedTokens.some(tok => tok.contains(event.target))) return;
