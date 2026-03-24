@@ -1353,7 +1353,7 @@ window.onload = () => {
             });
         }
         c.addEventListener(\"mouseout\", (event) => {
-            for (const tok of document.querySelectorAll(\".hl.lean .token\")) {
+            for (const tok of document.querySelectorAll(\".hl.lean .token.binding-hl\")) {
                 tok.classList.remove(\"binding-hl\");
             }
         });
@@ -1395,9 +1395,10 @@ window.onload = () => {
         maxWidth: \"none\",
         appendTo: () => document.body,
         interactive: true,
-        delay: [100, null],
+        delay: [0, null],
         /* ignoreAttributes: true, */
         followCursor: 'initial',
+        offset: [0, 15],
         onShow(inst) {
           if (inst.reference.className == 'tactic') {
 
