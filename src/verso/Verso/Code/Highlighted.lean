@@ -1534,10 +1534,13 @@ window.onload = () => {
         el.setAttribute('data-tippy-theme', getTheme(el));
         // For .tactic, position relative to the element (not the cursor)
         // to avoid off-screen placement causing flicker.
-        const props = el.classList.contains('tactic')
-          ? Object.assign({}, defaultTippyProps, {showOnCreate: true, followCursor: false, inlinePositioning: true})
-          : Object.assign({}, defaultTippyProps, {showOnCreate: true});
-        tippy(el, props);
+        if (el.classList.contains('tactic')) {
+          debugger; // Break here to inspect tactic tippy creation
+          const props = Object.assign({}, defaultTippyProps, {showOnCreate: true, followCursor: false, inlinePositioning: true});
+          tippy(el, props);
+        } else {
+          tippy(el, Object.assign({}, defaultTippyProps, {showOnCreate: true}));
+        }
       }
 
       document.querySelectorAll('.hl.lean').forEach(container => {
