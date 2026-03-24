@@ -1418,7 +1418,7 @@ window.onload = () => {
         offset: [0, 15],
         onShow(inst) {
           if (inst.reference.className == 'tactic') {
-
+            inst.setProps({followCursor: false, placement: 'bottom-start'});
             const toggle = inst.reference.querySelector(\"input.tactic-toggle\");
             if (toggle && toggle.checked) {
               return false;
