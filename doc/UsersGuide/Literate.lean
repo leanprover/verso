@@ -60,10 +60,8 @@ Each `[[targets]]` entry has the following keys:
 
  * `library` — the name of a library; all modules belonging to it are included
  * `module` — the name of a single module
- * `package` — the Lake package containing the library or module (required for dependencies; omit for the local package)
 
 An entry may specify `library` alone, `module` alone, or both (in which case the module must belong to the named library).
-If a `package` is specified but neither `library` nor `module`, all the package's default library targets are selected.
 
 ```
 # Include all modules in a library
@@ -73,11 +71,6 @@ library = "MyLib"
 # Include a specific module
 [[targets]]
 module = "MyLib.Special.Page"
-
-# Include a library from a dependency
-[[targets]]
-library = "Mathlib.Topology"
-package = "mathlib"
 ```
 
 ## Exclusion

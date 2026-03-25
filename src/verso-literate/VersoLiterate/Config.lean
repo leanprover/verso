@@ -21,7 +21,6 @@ namespace VersoLiterate
 structure Target where
   library : Option Name := none
   module : Option Name := none
-  package : Option Name := none
 deriving Repr, BEq, Inhabited
 
 /-- Site metadata (title, description, favicon). -/
@@ -114,8 +113,7 @@ def decodeTarget (v : Value) : EDecodeM Target := do
   let t ← v.decodeTable
   let library ← t.decode? (α := Name) `library
   let module ← t.decode? (α := Name) `module
-  let package ← t.decode? (α := Name) `package
-  return { library, module, package }
+  return { library, module }
 
 instance : DecodeToml Target := ⟨decodeTarget⟩
 
