@@ -59,10 +59,15 @@ lean_lib VersoTutorial where
   roots := #[`VersoTutorial]
   needs := #[tutorialDefaultCss]
 
+input_file ghSetupLiteratePages where
+  text := true
+  path := "gh-setup/verso-literate-pages.yml"
+
 @[default_target]
 lean_exe «verso» where
   root := `Main
   srcDir := "src/cli"
+  needs := #[ghSetupLiteratePages]
   supportInterpreter := true
 
 @[default_target]
@@ -241,14 +246,52 @@ package_facet literate pkg : Array System.FilePath := do
   let exes := Job.collectArray (← pkg.leanExes.mapM (·.toLeanLib.facet `literate |>.fetch))
   return libs.zipWith (·.flatten ++ ·.flatten) exes
 
-package_facet literateHtml pkg : System.FilePath := do
+section
+variable [Monad m]
+variable [MonadWorkspace m] [MonadLog m]
+variable [MonadLiftT BaseIO m] [MonadLiftT IO m]
+
+def checkDeployActions (pkg : Package) : m Unit := do
   let ws ← getWorkspace
-  let buildDir := ws.root.buildDir
+  -- This is the build directory of the current root package (that is, the one t
+  let buildDir := pkg.buildDir
+  -- Check GitHub Pages workflow staleness
+  let workflowFile : System.FilePath :=
+    pkg.dir / ".github" / "workflows" / "verso-literate-pages.yml"
+  let sentinelFile : System.FilePath := buildDir / ".literate-pages-prompted"
+  let normalizeNl := fun (s : String) =>
+    "\n".intercalate (s.splitOn "\n" |>.map fun (l : String) => l.trimAsciiEnd.copy)
+
+  let some versoPkg ← pure (ws.findPackageByName? `verso)
+    | Lake.logError "Verso was not found in the workspace"; return
+
+  let ghPagesSetupFile : System.FilePath :=
+    versoPkg.dir / "gh-setup" / "verso-literate-pages.yml"
+  let ghPagesSetupContent ← IO.FS.readFile ghPagesSetupFile
+
+  -- If the user already has the workflow file that we are producing, check for
+  -- stale content
+  if ← workflowFile.pathExists then
+    let existingContent ← IO.FS.readFile workflowFile
+    unless normalizeNl existingContent == normalizeNl ghPagesSetupContent do
+      Lake.logWarning <|
+        s!"{workflowFile} is outdated. Run `lake exe verso setup-literate` to update it."
+    return
+
+  -- If the workflow file doesn't exist, then check whether we've already told the user how to set
+  -- it up. If not, tell them.
+  unless ← sentinelFile.pathExists do
+    Lake.logInfo "Run `lake exe verso setup-literate` to set up GitHub Pages deployment."
+    IO.FS.writeFile sentinelFile ""
+end
+
+package_facet literateHtml pkg : System.FilePath := do
+  let buildDir := pkg.buildDir
   let htmlDir := buildDir / "literate-html"
   let planFile := buildDir / "literate-plan"
   let moduleListFile := buildDir / "literate-modules"
   let moduleMapFile := buildDir / "literate-module-map"
-  let tomlFile := ws.root.dir / "literate.toml"
+  let tomlFile := pkg.dir / "literate.toml"
 
   -- Step 1: Collect all modules and make the plan
   let allModules ← pkg.leanLibs.foldlM (init := #[]) fun acc lib => do
@@ -325,4 +368,7 @@ package_facet literateHtml pkg : System.FilePath := do
             args := htmlArgs
             env := ← getAugmentedEnv
           }
+
+        checkDeployActions pkg
+
         pure htmlDir

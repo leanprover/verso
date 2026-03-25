@@ -147,8 +147,9 @@ jobs:
                   grep -qF '<base href=".././">' _out/demosite/about/index.html
 
             # uv and Playwright are installed before `lake test` above.
-            # Literate browser tests are run as part of `lake test`;
-            # this step runs only the non-literate browser tests (search, redirects, KaTeX).
+            - name: Run literate browser tests
+              run: src/tests/run_literate_browser_tests.sh
+
             - name: Run browser tests
               run: |
                   uv run --project browser-tests --extra test pytest \

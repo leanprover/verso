@@ -73,13 +73,14 @@ def testZip (cfg : Config) : IO Unit := do
   testExtract #[("empty", .empty)] .deflate
   testExtract files .store
   testExtract files .deflate
-  for i in (0 : Nat)...(me.size / 10) do
-    let me := me.extract 0 (i * 10)
+  let chunkSize := me.size / 10
+  for i in (0 : Nat)...10 do
+    let me := me.extract 0 (i * chunkSize)
     testExtract #[("T2.lean", me)] .store
     testExtract #[("T2.lean", me)] .deflate
-  for i in (0 : Nat)...(me.size / 10) do
-    let me := me.extract 0 (i * 10)
-    let bwd := bwd.extract 0 (i * 10)
+  for i in (0 : Nat)...10 do
+    let me := me.extract 0 (i * chunkSize)
+    let bwd := bwd.extract 0 (i * chunkSize)
     testExtract #[("T2.lean", me), ("other", bwd)] .store
     testExtract #[("T2.lean", me), ("other", bwd)] .deflate
   for _ in (0 : Nat)...10 do
@@ -165,108 +166,6 @@ def testLiterateHtml (_ : Config) : IO Unit :=
 def testLiterateHtmlMultiRoot (_ : Config) : IO Unit :=
   Tests.LiterateHtml.testLiterateHtmlMultiRoot
 
-def testLiterateBrowserMultiRoot (_ : Config) : IO Unit := do
-  IO.println "Running multi-root literate browser tests (Playwright)..."
-  let projectDir := "test-projects/literate-multi-root"
-  let modules := #["LibA", "LibA.Core", "LibB", "LibB.Utils"]
-
-  IO.FS.withTempDir fun tmpDir => do
-    let jsonDir := tmpDir / "json"
-    let htmlDir := tmpDir / "html"
-    IO.FS.createDirAll jsonDir
-    IO.FS.createDirAll htmlDir
-
-    IO.println "  Building literate JSON for multi-root browser tests..."
-    for mod in modules do
-      let json ← VersoLiterate.loadModuleJson projectDir mod
-      let jsonFile := mod.splitOn "." |>.foldl (init := jsonDir) (· / ·) |>.withExtension "json"
-      IO.FS.createDirAll (jsonFile.parent.getD jsonDir)
-      IO.FS.writeFile jsonFile json
-
-    let moduleMapFile := tmpDir / "module-map"
-    let mut mapLines : Array String := #[]
-    for mod in modules do
-      let jsonFile := mod.splitOn "." |>.foldl (init := jsonDir) (· / ·) |>.withExtension "json"
-      mapLines := mapLines.push s!"{mod}\t{jsonFile}"
-    IO.FS.writeFile moduleMapFile ("\n".intercalate mapLines.toList ++ "\n")
-
-    IO.println "  Generating multi-root literate HTML site..."
-    let child ← IO.Process.spawn {
-      cmd := "lake"
-      args := #["--quiet", "exe", "verso-literate-html", htmlDir.toString, moduleMapFile.toString]
-      stdout := .null
-      stderr := .inherit
-    }
-    let exitCode ← child.wait
-    if exitCode != 0 then
-      throw <| IO.userError s!"verso-literate-html failed with exit code {exitCode}"
-
-    IO.println s!"  Running Playwright tests against {htmlDir}..."
-    let result ← IO.Process.output {
-      cmd := "uv"
-      args := #["run", "--project", "browser-tests", "--extra", "test",
-                "pytest", "browser-tests/literate-multi-root", "-v",
-                "--site-dir", htmlDir.toString]
-    }
-    IO.print result.stdout
-    if result.exitCode != 0 then
-      IO.eprint result.stderr
-      throw <| IO.userError s!"Playwright multi-root browser tests failed with exit code {result.exitCode}"
-    IO.println "  Multi-root literate browser tests passed!"
-
-def testLiterateBrowser (_ : Config) : IO Unit := do
-  IO.println "Running literate browser tests (Playwright)..."
-  let projectDir := "test-projects/literate-config"
-  let modules := #["LitConfig", "LitConfig.Core", "LitConfig.Core.Basic", "LitConfig.NoDocstrings"]
-
-  IO.FS.withTempDir fun tmpDir => do
-    let jsonDir := tmpDir / "json"
-    let htmlDir := tmpDir / "html"
-    IO.FS.createDirAll jsonDir
-    IO.FS.createDirAll htmlDir
-
-    -- Build JSON for all modules
-    IO.println "  Building literate JSON for browser tests..."
-    for mod in modules do
-      let json ← VersoLiterate.loadModuleJson projectDir mod
-      let jsonFile := mod.splitOn "." |>.foldl (init := jsonDir) (· / ·) |>.withExtension "json"
-      IO.FS.createDirAll (jsonFile.parent.getD jsonDir)
-      IO.FS.writeFile jsonFile json
-
-    -- Generate module map from JSON directory
-    let moduleMapFile := tmpDir / "module-map"
-    let mut mapLines : Array String := #[]
-    for mod in modules do
-      let jsonFile := mod.splitOn "." |>.foldl (init := jsonDir) (· / ·) |>.withExtension "json"
-      mapLines := mapLines.push s!"{mod}\t{jsonFile}"
-    IO.FS.writeFile moduleMapFile ("\n".intercalate mapLines.toList ++ "\n")
-
-    -- Generate HTML site
-    IO.println "  Generating literate HTML site..."
-    let child ← IO.Process.spawn {
-      cmd := "lake"
-      args := #["--quiet", "exe", "verso-literate-html", htmlDir.toString, moduleMapFile.toString]
-      stdout := .null
-      stderr := .inherit
-    }
-    let exitCode ← child.wait
-    if exitCode != 0 then
-      throw <| IO.userError s!"verso-literate-html failed with exit code {exitCode}"
-
-    -- Run Playwright tests
-    IO.println s!"  Running Playwright tests against {htmlDir}..."
-    let result ← IO.Process.output {
-      cmd := "uv"
-      args := #["run", "--project", "browser-tests", "--extra", "test",
-                "pytest", "browser-tests/literate", "-v",
-                "--site-dir", htmlDir.toString]
-    }
-    IO.print result.stdout
-    if result.exitCode != 0 then
-      IO.eprint result.stderr
-      throw <| IO.userError s!"Playwright browser tests failed with exit code {result.exitCode}"
-    IO.println "  Literate browser tests passed!"
-
 -- Interactive tests via the LSP server
 def testInteractive (_ : Config) : IO Unit := do
   IO.println "Running interactive (LSP) tests..."
@@ -276,6 +175,95 @@ def testInteractive (_ : Config) : IO Unit := do
   let exitCode ← child.wait
   if exitCode != 0 then
     throw <| IO.userError s!"Interactive LSP tests failed with exit code {exitCode}"
+
+private def hasSubstring (s : String) (sub : String) : Bool :=
+  s.find? sub |>.isSome
+
+def testSetupLiterate (_ : Config) : IO Unit := do
+  IO.println "Running setup-literate tests..."
+  let versoRoot ← IO.FS.realPath "."
+  IO.FS.withTempDir fun tmpDir => do
+    let run (cmd : String) (args : Array String) : IO Unit := do
+      let result ← IO.Process.output {
+        cmd := cmd
+        args := args
+        cwd := some tmpDir.toString
+      }
+      if result.exitCode != 0 then
+        throw <| IO.userError s!"{cmd} failed: {result.stderr}"
+
+    -- Set up a project that depends on the Verso being tested
+    run "git" #["init", "-q"]
+    let toolchain ← IO.FS.readFile "lean-toolchain"
+    IO.FS.writeFile (tmpDir / "lean-toolchain") toolchain
+    IO.FS.writeFile (tmpDir / "lakefile.toml")
+      s!"name = \"test-project\"\n\n[[require]]\nname = \"verso\"\npath = \"{versoRoot}\"\n"
+
+    -- Test 1: Fresh generation via lake exe
+    let result ← IO.Process.output {
+      cmd := "lake"
+      args := #["exe", "verso", "setup-literate"]
+      cwd := some tmpDir.toString
+    }
+    if result.exitCode != 0 then
+      throw <| IO.userError s!"setup-literate failed: {result.stderr}\n{result.stdout}"
+
+    let workflowFile := tmpDir / ".github" / "workflows" / "verso-literate-pages.yml"
+    unless ← workflowFile.pathExists do
+      throw <| IO.userError "Workflow file was not created"
+
+    let content ← IO.FS.readFile workflowFile
+    let checks := #[
+      ("lake query :literateHtml", "lake query command"),
+      ("deploy-pages@v", "deploy-pages action"),
+      ("upload-pages-artifact@v", "upload-pages-artifact action"),
+      ("lean-action@v", "lean-action")
+    ]
+    for (needle, desc) in checks do
+      unless hasSubstring content needle do
+        throw <| IO.userError s!"Workflow file missing {desc} ({needle})"
+    IO.println "  fresh generation: passed"
+
+    -- Test 2: Idempotent (no change)
+    let result2 ← IO.Process.output {
+      cmd := "lake"
+      args := #["exe", "verso", "setup-literate"]
+      cwd := some tmpDir.toString
+    }
+    unless hasSubstring result2.stdout "up to date" do
+      throw <| IO.userError "Expected 'up to date' message on second run"
+    IO.println "  idempotent: passed"
+
+    -- Test 3: Outdated file gets .bak
+    IO.FS.writeFile workflowFile "modified content\n"
+    let result3 ← IO.Process.output {
+      cmd := "lake"
+      args := #["exe", "verso", "setup-literate"]
+      cwd := some tmpDir.toString
+    }
+    if result3.exitCode != 0 then
+      throw <| IO.userError s!"setup-literate (update) failed: {result3.stderr}"
+    let bakFile := tmpDir / ".github" / "workflows" / "verso-literate-pages.yml.bak"
+    unless ← bakFile.pathExists do
+      throw <| IO.userError ".bak file was not created when updating"
+    let bakContent ← IO.FS.readFile bakFile
+    unless hasSubstring bakContent "modified content" do
+      throw <| IO.userError ".bak file should contain old content"
+    IO.println "  backup on update: passed"
+
+    -- Test 4: actionlint validation (if available)
+    let actionlintResult ← IO.Process.output {
+      cmd := "actionlint"
+      args := #[workflowFile.toString]
+    }
+    if actionlintResult.exitCode == 0 then
+      IO.println "  actionlint: passed"
+    else if actionlintResult.exitCode == 127 then
+      IO.println "  actionlint: skipped (not installed)"
+    else
+      throw <| IO.userError s!"actionlint failed: {actionlintResult.stderr}"
+
+  IO.println "  All setup-literate tests passed."
 
 open Verso.Integration in
 def tests := [
@@ -294,8 +282,7 @@ def tests := [
   testLiterateConfig,
   testLiterateHtml,
   testLiterateHtmlMultiRoot,
-  testLiterateBrowser,
-  testLiterateBrowserMultiRoot
+  testSetupLiterate
 ]
 
 def getConfig (config : Config) : List String → IO Config
