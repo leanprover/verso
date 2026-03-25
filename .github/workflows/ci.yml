@@ -83,6 +83,10 @@ jobs:
               run: |
                   uv run --project browser-tests --extra test playwright install chromium firefox --with-deps
 
+            - name: Install actionlint
+              run: |
+                  curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash | bash -s -- -b /usr/local/bin
+
             - name: Run tests
               run: |
                   lake test -- --verbose --check-tex
@@ -147,6 +151,30 @@ jobs:
                   grep -qF '<base href=".././">' _out/demosite/about/index.html
 
             # uv and Playwright are installed before `lake test` above.
+            - name: Cache literate-config test project
+              uses: actions/cache@v5
+              with:
+                  path: test-projects/literate-config/.lake
+                  key:
+                      literate-config-${{ runner.os }}-${{
+                      hashFiles('test-projects/literate-config/lean-toolchain') }}-${{
+                      hashFiles('test-projects/literate-config/lake-manifest.json') }}-${{
+                      steps.shortSHA.outputs.short_sha }}
+                  restore-keys: |
+                      literate-config-${{ runner.os }}-${{ hashFiles('test-projects/literate-config/lean-toolchain') }}-${{ hashFiles('test-projects/literate-config/lake-manifest.json') }}-
+
+            - name: Cache literate-multi-root test project
+              uses: actions/cache@v5
+              with:
+                  path: test-projects/literate-multi-root/.lake
+                  key:
+                      literate-multi-root-${{ runner.os }}-${{
+                      hashFiles('test-projects/literate-multi-root/lean-toolchain') }}-${{
+                      hashFiles('test-projects/literate-multi-root/lake-manifest.json') }}-${{
+                      steps.shortSHA.outputs.short_sha }}
+                  restore-keys: |
+                      literate-multi-root-${{ runner.os }}-${{ hashFiles('test-projects/literate-multi-root/lean-toolchain') }}-${{ hashFiles('test-projects/literate-multi-root/lake-manifest.json') }}-
+
             - name: Run literate browser tests
               run: src/tests/run_literate_browser_tests.sh
 
