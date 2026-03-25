@@ -420,7 +420,7 @@ def emitLandingFromModule (outDir : System.FilePath) (root : Dir) (modName : Nam
   let litConfig := ctx.litConfig
   let resolved := litConfig.resolveForModule modName
   let some mod := root.findMod? modName
-    | do IO.eprintln s!"Landing page module '{modName}' not found"; return initHlState
+    | throw <| .userError s!"Landing page module '{modName}' not found"
   -- Process images for landing page module
   let mod ← match srcDirs.find? mod.name with
     | some srcDir => processModuleImages mod.name srcDir outDir mod
@@ -510,7 +510,6 @@ def main (args : List String) : IO UInt32 := do
   -- Landing page: use configured module or auto-generated ToC
   let st ← match litConfig.landingPage with
     | some landingModName =>
-      -- emitLandingFromModule handles "not found" internally
       emitLandingFromModule config.outputDir dir landingModName ctx st srcDirs
     | none =>
       emitLandingPage config.outputDir dir litConfig

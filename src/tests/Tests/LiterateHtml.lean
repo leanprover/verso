@@ -241,6 +241,19 @@ private def testLandingPage (data : TestData) : IO Unit := withTestDir data fun 
   unless ← (htmlDir / "LitConfig" / "Core" / "index.html").pathExists do
     throw <| IO.userError "Core module should still exist at its normal location"
 
+/-- HTML generation fails when landing_page names a module not in the loaded module tree. -/
+private def testHtmlLandingPageNotFound (data : TestData) : IO Unit := withTestDir data fun jsonDir htmlDir planFile tomlFile => do
+  -- Use a landing_page that won't be in the module tree.
+  -- Write a plan that includes only the real modules (so planning succeeds),
+  -- but the TOML references a module that doesn't exist.
+  IO.FS.writeFile tomlFile "landing_page = \"NonExistent.Module\"\n"
+  runLiteratePlan data.moduleListFile planFile none
+  let (exitCode, _, stderr) ← runLiterateHtmlCapture jsonDir htmlDir (some planFile) (some tomlFile)
+  if exitCode == 0 then
+    throw <| IO.userError "HTML landing_page not found: should have failed with non-zero exit code"
+  unless hasSubstring stderr "not found" do
+    throw <| IO.userError "HTML landing_page not found: stderr should mention 'not found'"
+
 /-- Excluding a parent module also removes all its children from the output. -/
 private def testRecursiveExclusion (data : TestData) : IO Unit := withTestDir data fun jsonDir htmlDir planFile tomlFile => do
   IO.FS.writeFile tomlFile "exclude = [\"LitConfig.Core\"]\n"
@@ -852,6 +865,7 @@ private def htmlTests (data : TestData) (projectDir : System.FilePath) : List (S
   ("exclude", testExclude data),
   ("navbar order", testNavbarOrder data),
   ("landing page", testLandingPage data),
+  ("HTML landing_page not found", testHtmlLandingPageNotFound data),
   ("recursive exclusion", testRecursiveExclusion data),
   ("order_children", testOrderChildren data),
   ("xref.json generated", testXrefJsonGenerated data),
