@@ -1,0 +1,1474 @@
+{"Verso.Genre.Manual.section":
+ {"title": "Sections or chapters of the manual",
+  "description": null,
+  "contents":
+  {"website":
+   [{"id": "website",
+     "data":
+     {"title": "Websites",
+      "shortTitle": null,
+      "sectionNum": "6.",
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Websites", "shortTitle": null, "number": "6"}]},
+     "address": "/Websites/"}],
+   "verso-markup":
+   [{"id": "verso-markup",
+     "data":
+     {"title": "Verso Markup",
+      "shortTitle": null,
+      "sectionNum": "2.",
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Verso Markup", "shortTitle": null, "number": "2"}]},
+     "address": "/Verso-Markup/"}],
+   "traversal":
+   [{"id": "traversal",
+     "data":
+     {"title": "Traversal",
+      "shortTitle": null,
+      "sectionNum": "3.3.",
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Building Documents", "shortTitle": null, "number": "3"},
+       {"title": "Traversal", "shortTitle": null, "number": "3"}]},
+     "address": "/Building-Documents/Traversal/"}],
+   "tech-terms":
+   [{"id": "tech-terms",
+     "data":
+     {"title": "Technical Terminology",
+      "shortTitle": "Glossary",
+      "sectionNum": "7.4.",
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Manuals and Books", "shortTitle": null, "number": "7"},
+       {"title": "Technical Terminology",
+        "shortTitle": "Glossary",
+        "number": "4"}]},
+     "address": "/Manuals-and-Books/"}],
+   "syntax-errors":
+   [{"id": "syntax-errors",
+     "data":
+     {"title": "Syntax Errors",
+      "shortTitle": null,
+      "sectionNum": "2.3.1.",
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Verso Markup", "shortTitle": null, "number": "2"},
+       {"title": "Differences from Markdown",
+        "shortTitle": null,
+        "number": "3"},
+       {"title": "Syntax Errors", "shortTitle": null, "number": "1"}]},
+     "address": "/Verso-Markup/"}],
+   "site-config":
+   [{"id": "site-config",
+     "data":
+     {"title": "Configuring a Site",
+      "shortTitle": null,
+      "sectionNum": "6.2.",
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Websites", "shortTitle": null, "number": "6"},
+       {"title": "Configuring a Site", "shortTitle": null, "number": "2"}]},
+     "address": "/Websites/"}],
+   "removed-md-features":
+   [{"id": "removed-md-features",
+     "data":
+     {"title": "Fewer Unused Features",
+      "shortTitle": null,
+      "sectionNum": "2.3.5.",
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Verso Markup", "shortTitle": null, "number": "2"},
+       {"title": "Differences from Markdown",
+        "shortTitle": null,
+        "number": "3"},
+       {"title": "Fewer Unused Features", "shortTitle": null, "number": "5"}]},
+     "address": "/Verso-Markup/"}],
+   "release-v4___29___0":
+   [{"id": "release-v4___29___0",
+     "data":
+     {"title": "Verso 4.29.0 (unreleased)",
+      "shortTitle": null,
+      "sectionNum": null,
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Release Notes", "shortTitle": null, "number": null},
+       {"title": "Verso 4.29.0 (unreleased)",
+        "shortTitle": null,
+        "number": "1"}]},
+     "address": "/releases/"}],
+   "release-v4___28___0":
+   [{"id": "release-v4___28___0",
+     "data":
+     {"title": "Verso 4.28.0",
+      "shortTitle": null,
+      "sectionNum": null,
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Release Notes", "shortTitle": null, "number": null},
+       {"title": "Verso 4.28.0", "shortTitle": null, "number": "2"}]},
+     "address": "/releases/"}],
+   "release-notes":
+   [{"id": "release-notes",
+     "data":
+     {"title": "Release Notes",
+      "shortTitle": null,
+      "sectionNum": null,
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Release Notes", "shortTitle": null, "number": null}]},
+     "address": "/releases/"}],
+   "reduced-lookahead":
+   [{"id": "reduced-lookahead",
+     "data":
+     {"title": "Reduced Lookahead",
+      "shortTitle": null,
+      "sectionNum": "2.3.2.",
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Verso Markup", "shortTitle": null, "number": "2"},
+       {"title": "Differences from Markdown",
+        "shortTitle": null,
+        "number": "3"},
+       {"title": "Reduced Lookahead", "shortTitle": null, "number": "2"}]},
+     "address": "/Verso-Markup/"}],
+   "quote-syntax":
+   [{"id": "quote-syntax",
+     "data":
+     {"title": "Quotes",
+      "shortTitle": null,
+      "sectionNum": "2.2.2.2.",
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Verso Markup", "shortTitle": null, "number": "2"},
+       {"title": "Syntax", "shortTitle": null, "number": "2"},
+       {"title": "Block Syntax", "shortTitle": null, "number": "2"},
+       {"title": "Quotes", "shortTitle": null, "number": "2"}]},
+     "address": "/Verso-Markup/"}],
+   "paragraph-directive":
+   [{"id": "paragraph-directive",
+     "data":
+     {"title": "Paragraphs",
+      "shortTitle": null,
+      "sectionNum": "7.2.",
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Manuals and Books", "shortTitle": null, "number": "7"},
+       {"title": "Paragraphs", "shortTitle": null, "number": "2"}]},
+     "address": "/Manuals-and-Books/"}],
+   "outputs":
+   [{"id": "outputs",
+     "data":
+     {"title": "Output Formats",
+      "shortTitle": null,
+      "sectionNum": "5.",
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Output Formats", "shortTitle": null, "number": "5"}]},
+     "address": "/Output-Formats/"}],
+   "output-tex":
+   [{"id": "output-tex",
+     "data":
+     {"title": "TeX",
+      "shortTitle": null,
+      "sectionNum": "5.2.",
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Output Formats", "shortTitle": null, "number": "5"},
+       {"title": "TeX", "shortTitle": null, "number": "2"}]},
+     "address": "/Output-Formats/"}],
+   "output-html":
+   [{"id": "output-html",
+     "data":
+     {"title": "HTML",
+      "shortTitle": null,
+      "sectionNum": "5.1.",
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Output Formats", "shortTitle": null, "number": "5"},
+       {"title": "HTML", "shortTitle": null, "number": "1"}]},
+     "address": "/Output-Formats/"}],
+   "output-gen":
+   [{"id": "output-gen",
+     "data":
+     {"title": "Output Generation",
+      "shortTitle": null,
+      "sectionNum": "3.4.",
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Building Documents", "shortTitle": null, "number": "3"},
+       {"title": "Output Generation", "shortTitle": null, "number": "4"}]},
+     "address": "/Building-Documents/Output-Generation/"}],
+   "oss-licenses":
+   [{"id": "oss-licenses",
+     "data":
+     {"title": "Open-Source Licenses",
+      "shortTitle": null,
+      "sectionNum": "7.5.",
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Manuals and Books", "shortTitle": null, "number": "7"},
+       {"title": "Open-Source Licenses", "shortTitle": null, "number": "5"}]},
+     "address": "/Manuals-and-Books/"}],
+   "markup-syntax":
+   [{"id": "markup-syntax",
+     "data":
+     {"title": "Syntax",
+      "shortTitle": null,
+      "sectionNum": "2.2.",
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Verso Markup", "shortTitle": null, "number": "2"},
+       {"title": "Syntax", "shortTitle": null, "number": "2"}]},
+     "address": "/Verso-Markup/"}],
+   "markup-design-principles":
+   [{"id": "markup-design-principles",
+     "data":
+     {"title": "Design Principles",
+      "shortTitle": null,
+      "sectionNum": "2.1.",
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Verso Markup", "shortTitle": null, "number": "2"},
+       {"title": "Design Principles", "shortTitle": null, "number": "1"}]},
+     "address": "/Verso-Markup/"}],
+   "manual-tags":
+   [{"id": "manual-tags",
+     "data":
+     {"title": "Tags and References",
+      "shortTitle": null,
+      "sectionNum": "7.1.",
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Manuals and Books", "shortTitle": null, "number": "7"},
+       {"title": "Tags and References", "shortTitle": null, "number": "1"}]},
+     "address": "/Manuals-and-Books/"}],
+   "manual":
+   [{"id": "manual",
+     "data":
+     {"title": "Manuals and Books",
+      "shortTitle": null,
+      "sectionNum": "7.",
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Manuals and Books", "shortTitle": null, "number": "7"}]},
+     "address": "/Manuals-and-Books/"}],
+   "list-syntax":
+   [{"id": "list-syntax",
+     "data":
+     {"title": "Lists",
+      "shortTitle": null,
+      "sectionNum": "2.2.2.1.",
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Verso Markup", "shortTitle": null, "number": "2"},
+       {"title": "Syntax", "shortTitle": null, "number": "2"},
+       {"title": "Block Syntax", "shortTitle": null, "number": "2"},
+       {"title": "Lists", "shortTitle": null, "number": "1"}]},
+     "address": "/Verso-Markup/"}],
+   "inline-syntax":
+   [{"id": "inline-syntax",
+     "data":
+     {"title": "Inline Syntax",
+      "shortTitle": null,
+      "sectionNum": "2.2.3.",
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Verso Markup", "shortTitle": null, "number": "2"},
+       {"title": "Syntax", "shortTitle": null, "number": "2"},
+       {"title": "Inline Syntax", "shortTitle": null, "number": "3"}]},
+     "address": "/Verso-Markup/"}],
+   "index":
+   [{"id": "index",
+     "data":
+     {"title": "Index",
+      "shortTitle": null,
+      "sectionNum": null,
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Index", "shortTitle": null, "number": null}]},
+     "address": "/the-index/"}],
+   "header-nesting":
+   [{"id": "header-nesting",
+     "data":
+     {"title": "Header Nesting",
+      "shortTitle": null,
+      "sectionNum": "2.3.3.",
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Verso Markup", "shortTitle": null, "number": "2"},
+       {"title": "Differences from Markdown",
+        "shortTitle": null,
+        "number": "3"},
+       {"title": "Header Nesting", "shortTitle": null, "number": "3"}]},
+     "address": "/Verso-Markup/"}],
+   "genres":
+   [{"id": "genres",
+     "data":
+     {"title": "Genres",
+      "shortTitle": null,
+      "sectionNum": "1.",
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Genres", "shortTitle": null, "number": "1"}]},
+     "address": "/Genres/"}],
+   "genre-specific-extensions":
+   [{"id": "genre-specific-extensions",
+     "data":
+     {"title": "Genre-Specific Extensions",
+      "shortTitle": null,
+      "sectionNum": "2.3.4.",
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Verso Markup", "shortTitle": null, "number": "2"},
+       {"title": "Differences from Markdown",
+        "shortTitle": null,
+        "number": "3"},
+       {"title": "Genre-Specific Extensions",
+        "shortTitle": null,
+        "number": "4"}]},
+     "address": "/Verso-Markup/"}],
+   "extensions":
+   [{"id": "extensions",
+     "data":
+     {"title": "Extensions",
+      "shortTitle": null,
+      "sectionNum": "4.",
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Extensions", "shortTitle": null, "number": "4"}]},
+     "address": "/Extensions/"}],
+   "extension-syntax":
+   [{"id": "extension-syntax",
+     "data":
+     {"title": "Syntax",
+      "shortTitle": null,
+      "sectionNum": "4.1.",
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Extensions", "shortTitle": null, "number": "4"},
+       {"title": "Syntax", "shortTitle": null, "number": "1"}]},
+     "address": "/Extensions/"}],
+   "elaboration":
+   [{"id": "elaboration",
+     "data":
+     {"title": "Elaboration",
+      "shortTitle": null,
+      "sectionNum": "3.1.",
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Building Documents", "shortTitle": null, "number": "3"},
+       {"title": "Elaboration", "shortTitle": null, "number": "1"}]},
+     "address": "/Building-Documents/Elaboration/"}],
+   "elab-extensions":
+   [{"id": "elab-extensions",
+     "data":
+     {"title": "Elaborating Extensions",
+      "shortTitle": null,
+      "sectionNum": "4.2.",
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Extensions", "shortTitle": null, "number": "4"},
+       {"title": "Elaborating Extensions", "shortTitle": null, "number": "2"}]},
+     "address": "/Extensions/"}],
+   "document-structure":
+   [{"id": "document-structure",
+     "data":
+     {"title": "Document Structure",
+      "shortTitle": null,
+      "sectionNum": "2.2.1.",
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Verso Markup", "shortTitle": null, "number": "2"},
+       {"title": "Syntax", "shortTitle": null, "number": "2"},
+       {"title": "Document Structure", "shortTitle": null, "number": "1"}]},
+     "address": "/Verso-Markup/"}],
+   "docstrings":
+   [{"id": "docstrings",
+     "data":
+     {"title": "Docstrings",
+      "shortTitle": null,
+      "sectionNum": "7.3.",
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Manuals and Books", "shortTitle": null, "number": "7"},
+       {"title": "Docstrings", "shortTitle": null, "number": "3"}]},
+     "address": "/Manuals-and-Books/"}],
+   "directive-syntax":
+   [{"id": "directive-syntax",
+     "data":
+     {"title": "Directives",
+      "shortTitle": null,
+      "sectionNum": "2.2.2.4.",
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Verso Markup", "shortTitle": null, "number": "2"},
+       {"title": "Syntax", "shortTitle": null, "number": "2"},
+       {"title": "Block Syntax", "shortTitle": null, "number": "2"},
+       {"title": "Directives", "shortTitle": null, "number": "4"}]},
+     "address": "/Verso-Markup/"}],
+   "differences-from-markdown":
+   [{"id": "differences-from-markdown",
+     "data":
+     {"title": "Differences from Markdown",
+      "shortTitle": null,
+      "sectionNum": "2.3.",
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Verso Markup", "shortTitle": null, "number": "2"},
+       {"title": "Differences from Markdown",
+        "shortTitle": null,
+        "number": "3"}]},
+     "address": "/Verso-Markup/"}],
+   "dependencies":
+   [{"id": "dependencies",
+     "data":
+     {"title": "Dependencies",
+      "shortTitle": null,
+      "sectionNum": null,
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Dependencies", "shortTitle": null, "number": null}]},
+     "address": "/Dependencies/"}],
+   "compilation":
+   [{"id": "compilation",
+     "data":
+     {"title": "Compilation",
+      "shortTitle": null,
+      "sectionNum": "3.2.",
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Building Documents", "shortTitle": null, "number": "3"},
+       {"title": "Compilation", "shortTitle": null, "number": "2"}]},
+     "address": "/Building-Documents/Compilation/"}],
+   "command-block-syntax":
+   [{"id": "command-block-syntax",
+     "data":
+     {"title": "Commands",
+      "shortTitle": null,
+      "sectionNum": "2.2.2.5.",
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Verso Markup", "shortTitle": null, "number": "2"},
+       {"title": "Syntax", "shortTitle": null, "number": "2"},
+       {"title": "Block Syntax", "shortTitle": null, "number": "2"},
+       {"title": "Commands", "shortTitle": null, "number": "5"}]},
+     "address": "/Verso-Markup/"}],
+   "code-block-syntax":
+   [{"id": "code-block-syntax",
+     "data":
+     {"title": "Code Blocks",
+      "shortTitle": null,
+      "sectionNum": "2.2.2.3.",
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Verso Markup", "shortTitle": null, "number": "2"},
+       {"title": "Syntax", "shortTitle": null, "number": "2"},
+       {"title": "Block Syntax", "shortTitle": null, "number": "2"},
+       {"title": "Code Blocks", "shortTitle": null, "number": "3"}]},
+     "address": "/Verso-Markup/"}],
+   "build-process":
+   [{"id": "build-process",
+     "data":
+     {"title": "Building Documents",
+      "shortTitle": null,
+      "sectionNum": "3.",
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Building Documents", "shortTitle": null, "number": "3"}]},
+     "address": "/Building-Documents/"}],
+   "blogMain":
+   [{"id": "blogMain",
+     "data":
+     {"title": "Generating a Site",
+      "shortTitle": null,
+      "sectionNum": "6.1.",
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Websites", "shortTitle": null, "number": "6"},
+       {"title": "Generating a Site", "shortTitle": null, "number": "1"}]},
+     "address": "/Websites/"}],
+   "block-syntax":
+   [{"id": "block-syntax",
+     "data":
+     {"title": "Block Syntax",
+      "shortTitle": null,
+      "sectionNum": "2.2.2.",
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Verso Markup", "shortTitle": null, "number": "2"},
+       {"title": "Syntax", "shortTitle": null, "number": "2"},
+       {"title": "Block Syntax", "shortTitle": null, "number": "2"}]},
+     "address": "/Verso-Markup/"}],
+   "Writing-Documentation-in-Lean-with-Verso":
+   [{"id": "Writing-Documentation-in-Lean-with-Verso",
+     "data":
+     {"title": "Writing Documentation in Lean with Verso",
+      "shortTitle": "Documentation with Verso",
+      "sectionNum": "",
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null}]},
+     "address": "/"}],
+   "ArgParse":
+   [{"id": "ArgParse",
+     "data":
+     {"title": "Parsing Arguments",
+      "shortTitle": null,
+      "sectionNum": "4.2.1.",
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Extensions", "shortTitle": null, "number": "4"},
+       {"title": "Elaborating Extensions", "shortTitle": null, "number": "2"},
+       {"title": "Parsing Arguments", "shortTitle": null, "number": "1"}]},
+     "address": "/Extensions/"}]}},
+ "Verso.Genre.Manual.example":
+ {"title": "Verso.Genre.Manual.example",
+  "description": null,
+  "contents":
+  {"mkList":
+   [{"id": "mkList",
+     "data":
+     {"/Output-Formats/#mkList-next":
+      {"display": "mkList",
+       "context":
+       ["Writing Documentation in Lean with Verso", "Output Formats", "TeX"]},
+      "/Output-Formats/#mkList":
+      {"display": "mkList",
+       "context":
+       ["Writing Documentation in Lean with Verso", "Output Formats", "HTML"]}},
+     "address": "/Output-Formats/"},
+    {"id": "mkList-next",
+     "data":
+     {"/Output-Formats/#mkList-next":
+      {"display": "mkList",
+       "context":
+       ["Writing Documentation in Lean with Verso", "Output Formats", "TeX"]},
+      "/Output-Formats/#mkList":
+      {"display": "mkList",
+       "context":
+       ["Writing Documentation in Lean with Verso", "Output Formats", "HTML"]}},
+     "address": "/Output-Formats/"}]}},
+ "Verso.Genre.Manual.doc.tech":
+ {"title": "Terminology",
+  "description": "Definitions of technical terms",
+  "contents":
+  {"traversal":
+   [{"id": "--tech-term-traversal",
+     "data": {"term": "traversal"},
+     "address": "/Building-Documents/Traversal/"}],
+   "technical term":
+   [{"id": "--tech-term-technical-term",
+     "data": {"term": "technical term"},
+     "address": "/Manuals-and-Books/"}],
+   "self delimiting":
+   [{"id": "--tech-term-self-delimiting",
+     "data": {"term": "self-delimiting"},
+     "address": "/Verso-Markup/"}],
+   "role":
+   [{"id": "--tech-term-role",
+     "data": {"term": "role"},
+     "address": "/Verso-Markup/"}],
+   "part":
+   [{"id": "--tech-term-parts",
+     "data": {"term": "parts"},
+     "address": "/Verso-Markup/"}],
+   "metadata block":
+   [{"id": "--tech-term-metadata-block",
+     "data": {"term": "metadata block"},
+     "address": "/Verso-Markup/"}],
+   "list item indicator":
+   [{"id": "--tech-term-list-item-indicator",
+     "data": {"term": "list item indicator"},
+     "address": "/Verso-Markup/"}],
+   "header":
+   [{"id": "--tech-term-header",
+     "data": {"term": "header"},
+     "address": "/Verso-Markup/"}],
+   "genre":
+   [{"id": "--tech-term-genres",
+     "data": {"term": "genres"},
+     "address": "/Genres/"}],
+   "fence":
+   [{"id": "--tech-term-fence",
+     "data": {"term": "fence"},
+     "address": "/Verso-Markup/"}],
+   "expander":
+   [{"id": "--tech-term-expander",
+     "data": {"term": "expander"},
+     "address": "/Extensions/"}],
+   "directive":
+   [{"id": "--tech-term-directive",
+     "data": {"term": "directive"},
+     "address": "/Verso-Markup/"}],
+   "command":
+   [{"id": "--tech-term-command",
+     "data": {"term": "command"},
+     "address": "/Verso-Markup/"}],
+   "code block":
+   [{"id": "--tech-term-Code-blocks",
+     "data": {"term": "Code blocks"},
+     "address": "/Verso-Markup/"}],
+   "blank line":
+   [{"id": "--tech-term-blank-line",
+     "data": {"term": "blank line"},
+     "address": "/Verso-Markup/"}]}},
+ "Verso.Genre.Manual.doc.tactic.conv":
+ {"title": "Conversion Tactics",
+  "description": "Tactics for performing targeted rewriting of subterms",
+  "contents": {}},
+ "Verso.Genre.Manual.doc.tactic":
+ {"title": "Tactic Documentation",
+  "description": "Detailed descriptions of tactics",
+  "contents":
+  {"Lean.Parser.Tactic.induction":
+   [{"id": "induction",
+     "data": {"userName": "induction"},
+     "address": "/Manuals-and-Books/"}]}},
+ "Verso.Genre.Manual.doc.suggestion":
+ {"title": "Lean constant suggestions",
+  "description": "Search suggestions for Lean constants",
+  "contents":
+  {"Verso.Output.Html.none↪Verso.Output.Html.empty":
+   [{"id": "Verso___Output___Html___empty",
+     "data":
+     {"suggestedRedirect": "Verso.Output.Html.empty",
+      "searchTerm": "Verso.Output.Html.none"},
+     "address": "/Output-Formats/"}],
+   "Verso.Output.Html.nil↪Verso.Output.Html.empty":
+   [{"id": "Verso___Output___Html___empty",
+     "data":
+     {"suggestedRedirect": "Verso.Output.Html.empty",
+      "searchTerm": "Verso.Output.Html.nil"},
+     "address": "/Output-Formats/"}]}},
+ "Verso.Genre.Manual.doc.option":
+ {"title": "Compiler options",
+  "description": null,
+  "contents":
+  {"pp.deepTerms.threshold":
+   [{"id": "pp___deepTerms___threshold",
+     "data": null,
+     "address": "/Manuals-and-Books/"}]}},
+ "Verso.Genre.Manual.doc":
+ {"title": "Lean constant reference",
+  "description": "Documentation for Lean constants",
+  "contents":
+  {"[anonymous]":
+   [{"id": "Verso___Genre___Manual___InlineDescr___mk",
+     "data": null,
+     "address": "/Manuals-and-Books/"},
+    {"id": "Verso___Genre___Manual___BlockDescr___mk",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Output.TeX.text":
+   [{"id": "Verso___Output___TeX___text",
+     "data": null,
+     "address": "/Output-Formats/"}],
+   "Verso.Output.TeX.seq":
+   [{"id": "Verso___Output___TeX___text",
+     "data": null,
+     "address": "/Output-Formats/"}],
+   "Verso.Output.TeX.raw":
+   [{"id": "Verso___Output___TeX___text",
+     "data": null,
+     "address": "/Output-Formats/"}],
+   "Verso.Output.TeX.paragraphBreak":
+   [{"id": "Verso___Output___TeX___text",
+     "data": null,
+     "address": "/Output-Formats/"}],
+   "Verso.Output.TeX.environment":
+   [{"id": "Verso___Output___TeX___text",
+     "data": null,
+     "address": "/Output-Formats/"}],
+   "Verso.Output.TeX.empty":
+   [{"id": "Verso___Output___TeX___empty",
+     "data": null,
+     "address": "/Output-Formats/"}],
+   "Verso.Output.TeX.command":
+   [{"id": "Verso___Output___TeX___text",
+     "data": null,
+     "address": "/Output-Formats/"}],
+   "Verso.Output.TeX.asString":
+   [{"id": "Verso___Output___TeX___asString",
+     "data": null,
+     "address": "/Output-Formats/"}],
+   "Verso.Output.TeX":
+   [{"id": "Verso___Output___TeX___text",
+     "data": null,
+     "address": "/Output-Formats/"}],
+   "Verso.Output.Html.visitM":
+   [{"id": "Verso___Output___Html___visitM",
+     "data": null,
+     "address": "/Output-Formats/"}],
+   "Verso.Output.Html.text":
+   [{"id": "Verso___Output___Html___text",
+     "data": null,
+     "address": "/Output-Formats/"}],
+   "Verso.Output.Html.tag":
+   [{"id": "Verso___Output___Html___text",
+     "data": null,
+     "address": "/Output-Formats/"}],
+   "Verso.Output.Html.seq":
+   [{"id": "Verso___Output___Html___text",
+     "data": null,
+     "address": "/Output-Formats/"}],
+   "Verso.Output.Html.fromList":
+   [{"id": "Verso___Output___Html___fromList",
+     "data": null,
+     "address": "/Output-Formats/"}],
+   "Verso.Output.Html.fromArray":
+   [{"id": "Verso___Output___Html___fromArray",
+     "data": null,
+     "address": "/Output-Formats/"}],
+   "Verso.Output.Html.format":
+   [{"id": "Verso___Output___Html___format",
+     "data": null,
+     "address": "/Output-Formats/"}],
+   "Verso.Output.Html.empty":
+   [{"id": "Verso___Output___Html___empty",
+     "data": null,
+     "address": "/Output-Formats/"}],
+   "Verso.Output.Html.asString":
+   [{"id": "Verso___Output___Html___asString",
+     "data": null,
+     "address": "/Output-Formats/"}],
+   "Verso.Output.Html.append":
+   [{"id": "Verso___Output___Html___append",
+     "data": null,
+     "address": "/Output-Formats/"}],
+   "Verso.Output.Html":
+   [{"id": "Verso___Output___Html___text",
+     "data": null,
+     "address": "/Output-Formats/"}],
+   "Verso.Genre.Manual.tech":
+   [{"id": "Verso___Genre___Manual___tech",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.licenseInfo":
+   [{"id": "Verso___Genre___Manual___licenseInfo",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.deftech":
+   [{"id": "Verso___Genre___Manual___deftech",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.PartMetadata.tag":
+   [{"id": "Verso___Genre___Manual___PartMetadata___mk",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.PartMetadata.shortTitle":
+   [{"id": "Verso___Genre___Manual___PartMetadata___mk",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.PartMetadata.shortContextTitle":
+   [{"id": "Verso___Genre___Manual___PartMetadata___mk",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.PartMetadata.number":
+   [{"id": "Verso___Genre___Manual___PartMetadata___mk",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.PartMetadata.mk":
+   [{"id": "Verso___Genre___Manual___PartMetadata___mk",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.PartMetadata.id":
+   [{"id": "Verso___Genre___Manual___PartMetadata___mk",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.PartMetadata.htmlToc":
+   [{"id": "Verso___Genre___Manual___PartMetadata___mk",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.PartMetadata.htmlSplit":
+   [{"id": "Verso___Genre___Manual___PartMetadata___mk",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.PartMetadata.file":
+   [{"id": "Verso___Genre___Manual___PartMetadata___mk",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.PartMetadata.draft":
+   [{"id": "Verso___Genre___Manual___PartMetadata___mk",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.PartMetadata.date":
+   [{"id": "Verso___Genre___Manual___PartMetadata___mk",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.PartMetadata.authorshipNote":
+   [{"id": "Verso___Genre___Manual___PartMetadata___mk",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.PartMetadata.authors":
+   [{"id": "Verso___Genre___Manual___PartMetadata___mk",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.PartMetadata.assignedNumber":
+   [{"id": "Verso___Genre___Manual___PartMetadata___mk",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.PartMetadata":
+   [{"id": "Verso___Genre___Manual___PartMetadata___mk",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.LicenseInfo.text":
+   [{"id": "Verso___Genre___Manual___LicenseInfo___mk",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.LicenseInfo.mk":
+   [{"id": "Verso___Genre___Manual___LicenseInfo___mk",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.LicenseInfo.link":
+   [{"id": "Verso___Genre___Manual___LicenseInfo___mk",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.LicenseInfo.identifier":
+   [{"id": "Verso___Genre___Manual___LicenseInfo___mk",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.LicenseInfo.howUsed":
+   [{"id": "Verso___Genre___Manual___LicenseInfo___mk",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.LicenseInfo.dependency":
+   [{"id": "Verso___Genre___Manual___LicenseInfo___mk",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.LicenseInfo":
+   [{"id": "Verso___Genre___Manual___LicenseInfo___mk",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.InlineDescr.toHtmlAssets":
+   [{"id": "Verso___Genre___Manual___InlineDescr___mk",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.InlineDescr.mk":
+   [{"id": "Verso___Genre___Manual___InlineDescr___mk",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.InlineDescr":
+   [{"id": "Verso___Genre___Manual___InlineDescr___mk",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.Inline.name":
+   [{"id": "Verso___Genre___Manual___Inline___mk",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.Inline.mk":
+   [{"id": "Verso___Genre___Manual___Inline___mk",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.Inline.id":
+   [{"id": "Verso___Genre___Manual___Inline___mk",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.Inline.data":
+   [{"id": "Verso___Genre___Manual___Inline___mk",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.Inline":
+   [{"id": "Verso___Genre___Manual___Inline___mk",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.HtmlSplitMode.never":
+   [{"id": "Verso___Genre___Manual___HtmlSplitMode___default",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.HtmlSplitMode.default":
+   [{"id": "Verso___Genre___Manual___HtmlSplitMode___default",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.HtmlSplitMode":
+   [{"id": "Verso___Genre___Manual___HtmlSplitMode___default",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.HtmlAssets.mk":
+   [{"id": "Verso___Genre___Manual___HtmlAssets___mk",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.HtmlAssets.licenseInfo":
+   [{"id": "Verso___Genre___Manual___HtmlAssets___mk",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.HtmlAssets.features":
+   [{"id": "Verso___Genre___Manual___HtmlAssets___mk",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.HtmlAssets.extraJsFiles":
+   [{"id": "Verso___Genre___Manual___HtmlAssets___mk",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.HtmlAssets.extraJs":
+   [{"id": "Verso___Genre___Manual___HtmlAssets___mk",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.HtmlAssets.extraDataFiles":
+   [{"id": "Verso___Genre___Manual___HtmlAssets___mk",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.HtmlAssets.extraCssFiles":
+   [{"id": "Verso___Genre___Manual___HtmlAssets___mk",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.HtmlAssets.extraCss":
+   [{"id": "Verso___Genre___Manual___HtmlAssets___mk",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.HtmlAssets.combine":
+   [{"id": "Verso___Genre___Manual___HtmlAssets___combine",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.HtmlAssets":
+   [{"id": "Verso___Genre___Manual___HtmlAssets___mk",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.BlockDescr.toHtmlAssets":
+   [{"id": "Verso___Genre___Manual___BlockDescr___mk",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.BlockDescr.mk":
+   [{"id": "Verso___Genre___Manual___BlockDescr___mk",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.BlockDescr":
+   [{"id": "Verso___Genre___Manual___BlockDescr___mk",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.Block.properties":
+   [{"id": "Verso___Genre___Manual___Block___mk",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.Block.name":
+   [{"id": "Verso___Genre___Manual___Block___mk",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.Block.mk":
+   [{"id": "Verso___Genre___Manual___Block___mk",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.Block.id":
+   [{"id": "Verso___Genre___Manual___Block___mk",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.Block.data":
+   [{"id": "Verso___Genre___Manual___Block___mk",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.Block":
+   [{"id": "Verso___Genre___Manual___Block___mk",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual":
+   [{"id": "Verso___Genre___Manual",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Blog.blogMain":
+   [{"id": "Verso___Genre___Blog___blogMain",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.Theme.primaryTemplate":
+   [{"id": "Verso___Genre___Blog___Theme___mk",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.Theme.postTemplate":
+   [{"id": "Verso___Genre___Blog___Theme___mk",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.Theme.pageTemplate":
+   [{"id": "Verso___Genre___Blog___Theme___mk",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.Theme.mk":
+   [{"id": "Verso___Genre___Blog___Theme___mk",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.Theme.jsFiles":
+   [{"id": "Verso___Genre___Blog___Theme___mk",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.Theme.cssFiles":
+   [{"id": "Verso___Genre___Blog___Theme___mk",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.Theme.categoryTemplate":
+   [{"id": "Verso___Genre___Blog___Theme___mk",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.Theme.archiveEntryTemplate":
+   [{"id": "Verso___Genre___Blog___Theme___mk",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.Theme.adHocTemplates":
+   [{"id": "Verso___Genre___Blog___Theme___mk",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.Theme":
+   [{"id": "Verso___Genre___Blog___Theme___mk",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.TemplateM":
+   [{"id": "Verso___Genre___Blog___TemplateM",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.Template.param?":
+   [{"id": "Verso___Genre___Blog___Template___param___",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.Template.param":
+   [{"id": "Verso___Genre___Blog___Template___param",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.Template.builtinHeader":
+   [{"id": "Verso___Genre___Blog___Template___builtinHeader",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.Template":
+   [{"id": "Verso___Genre___Blog___Template",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.Site.page":
+   [{"id": "Verso___Genre___Blog___Site___page",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.Site.blog":
+   [{"id": "Verso___Genre___Blog___Site___page",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.Site":
+   [{"id": "Verso___Genre___Blog___Site___page",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.Post.Meta.mk":
+   [{"id": "Verso___Genre___Blog___Post___Meta___mk",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.Post.Meta.htmlId":
+   [{"id": "Verso___Genre___Blog___Post___Meta___mk",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.Post.Meta.draft":
+   [{"id": "Verso___Genre___Blog___Post___Meta___mk",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.Post.Meta.date":
+   [{"id": "Verso___Genre___Blog___Post___Meta___mk",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.Post.Meta.categories":
+   [{"id": "Verso___Genre___Blog___Post___Meta___mk",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.Post.Meta.authors":
+   [{"id": "Verso___Genre___Blog___Post___Meta___mk",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.Post.Meta":
+   [{"id": "Verso___Genre___Blog___Post___Meta___mk",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.Post":
+   [{"id": "Verso___Genre___Blog___Post",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.Page.Meta.showInNav":
+   [{"id": "Verso___Genre___Blog___Page___Meta___mk",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.Page.Meta.mk":
+   [{"id": "Verso___Genre___Blog___Page___Meta___mk",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.Page.Meta.htmlId":
+   [{"id": "Verso___Genre___Blog___Page___Meta___mk",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.Page.Meta":
+   [{"id": "Verso___Genre___Blog___Page___Meta___mk",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.Page":
+   [{"id": "Verso___Genre___Blog___Page",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.InlineExt.ref":
+   [{"id": "Verso___Genre___Blog___InlineExt___highlightedCode",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.InlineExt.pageref":
+   [{"id": "Verso___Genre___Blog___InlineExt___highlightedCode",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.InlineExt.message":
+   [{"id": "Verso___Genre___Blog___InlineExt___highlightedCode",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.InlineExt.lexedText":
+   [{"id": "Verso___Genre___Blog___InlineExt___highlightedCode",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.InlineExt.label":
+   [{"id": "Verso___Genre___Blog___InlineExt___highlightedCode",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.InlineExt.htmlSpan":
+   [{"id": "Verso___Genre___Blog___InlineExt___highlightedCode",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.InlineExt.highlightedCode":
+   [{"id": "Verso___Genre___Blog___InlineExt___highlightedCode",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.InlineExt.customHighlight":
+   [{"id": "Verso___Genre___Blog___InlineExt___highlightedCode",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.InlineExt.component":
+   [{"id": "Verso___Genre___Blog___InlineExt___highlightedCode",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.InlineExt.blob":
+   [{"id": "Verso___Genre___Blog___InlineExt___highlightedCode",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.InlineExt":
+   [{"id": "Verso___Genre___Blog___InlineExt___highlightedCode",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.Dir.static":
+   [{"id": "Verso___Genre___Blog___Dir___page",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.Dir.page":
+   [{"id": "Verso___Genre___Blog___Dir___page",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.Dir.blog":
+   [{"id": "Verso___Genre___Blog___Dir___page",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.Dir":
+   [{"id": "Verso___Genre___Blog___Dir___page",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.BlockExt.message":
+   [{"id": "Verso___Genre___Blog___BlockExt___highlightedCode",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.BlockExt.lexedText":
+   [{"id": "Verso___Genre___Blog___BlockExt___highlightedCode",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.BlockExt.htmlWrapper":
+   [{"id": "Verso___Genre___Blog___BlockExt___highlightedCode",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.BlockExt.htmlDiv":
+   [{"id": "Verso___Genre___Blog___BlockExt___highlightedCode",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.BlockExt.htmlDetails":
+   [{"id": "Verso___Genre___Blog___BlockExt___highlightedCode",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.BlockExt.highlightedCode":
+   [{"id": "Verso___Genre___Blog___BlockExt___highlightedCode",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.BlockExt.docstringSection":
+   [{"id": "Verso___Genre___Blog___BlockExt___highlightedCode",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.BlockExt.docstring":
+   [{"id": "Verso___Genre___Blog___BlockExt___highlightedCode",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.BlockExt.component":
+   [{"id": "Verso___Genre___Blog___BlockExt___highlightedCode",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.BlockExt.blob":
+   [{"id": "Verso___Genre___Blog___BlockExt___highlightedCode",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Genre.Blog.BlockExt":
+   [{"id": "Verso___Genre___Blog___BlockExt___highlightedCode",
+     "data": null,
+     "address": "/Websites/"}],
+   "Verso.Doc.TraversePart.mk":
+   [{"id": "Verso___Doc___TraversePart___mk",
+     "data": null,
+     "address": "/Building-Documents/Traversal/"}],
+   "Verso.Doc.TraversePart.inPart":
+   [{"id": "Verso___Doc___TraversePart___mk",
+     "data": null,
+     "address": "/Building-Documents/Traversal/"}],
+   "Verso.Doc.TraversePart":
+   [{"id": "Verso___Doc___TraversePart___mk",
+     "data": null,
+     "address": "/Building-Documents/Traversal/"}],
+   "Verso.Doc.TraverseBlock.mk":
+   [{"id": "Verso___Doc___TraverseBlock___mk",
+     "data": null,
+     "address": "/Building-Documents/Traversal/"}],
+   "Verso.Doc.TraverseBlock.inBlock":
+   [{"id": "Verso___Doc___TraverseBlock___mk",
+     "data": null,
+     "address": "/Building-Documents/Traversal/"}],
+   "Verso.Doc.TraverseBlock":
+   [{"id": "Verso___Doc___TraverseBlock___mk",
+     "data": null,
+     "address": "/Building-Documents/Traversal/"}],
+   "Verso.Doc.Traverse.part":
+   [{"id": "Verso___Doc___Traverse___mk",
+     "data": null,
+     "address": "/Building-Documents/Traversal/"}],
+   "Verso.Doc.Traverse.mk":
+   [{"id": "Verso___Doc___Traverse___mk",
+     "data": null,
+     "address": "/Building-Documents/Traversal/"}],
+   "Verso.Doc.Traverse.inline":
+   [{"id": "Verso___Doc___Traverse___mk",
+     "data": null,
+     "address": "/Building-Documents/Traversal/"}],
+   "Verso.Doc.Traverse.genrePart":
+   [{"id": "Verso___Doc___Traverse___mk",
+     "data": null,
+     "address": "/Building-Documents/Traversal/"}],
+   "Verso.Doc.Traverse.genreInline":
+   [{"id": "Verso___Doc___Traverse___mk",
+     "data": null,
+     "address": "/Building-Documents/Traversal/"}],
+   "Verso.Doc.Traverse.genreBlock":
+   [{"id": "Verso___Doc___Traverse___mk",
+     "data": null,
+     "address": "/Building-Documents/Traversal/"}],
+   "Verso.Doc.Traverse.block":
+   [{"id": "Verso___Doc___Traverse___mk",
+     "data": null,
+     "address": "/Building-Documents/Traversal/"}],
+   "Verso.Doc.Traverse":
+   [{"id": "Verso___Doc___Traverse___mk",
+     "data": null,
+     "address": "/Building-Documents/Traversal/"}],
+   "Verso.Doc.Part":
+   [{"id": "Verso___Doc___Part",
+     "data": null,
+     "address": "/Building-Documents/Elaboration/"}],
+   "Verso.Doc.Inline":
+   [{"id": "Verso___Doc___Inline",
+     "data": null,
+     "address": "/Building-Documents/Elaboration/"}],
+   "Verso.Doc.Genre.mk":
+   [{"id": "Verso___Doc___Genre___mk",
+     "data": null,
+     "address": "/Building-Documents/Elaboration/"}],
+   "Verso.Doc.Genre.TraverseState":
+   [{"id": "Verso___Doc___Genre___mk",
+     "data": null,
+     "address": "/Building-Documents/Elaboration/"}],
+   "Verso.Doc.Genre.TraverseContext":
+   [{"id": "Verso___Doc___Genre___mk",
+     "data": null,
+     "address": "/Building-Documents/Elaboration/"}],
+   "Verso.Doc.Genre.PartMetadata":
+   [{"id": "Verso___Doc___Genre___mk",
+     "data": null,
+     "address": "/Building-Documents/Elaboration/"}],
+   "Verso.Doc.Genre.Inline":
+   [{"id": "Verso___Doc___Genre___mk",
+     "data": null,
+     "address": "/Building-Documents/Elaboration/"}],
+   "Verso.Doc.Genre.Block":
+   [{"id": "Verso___Doc___Genre___mk",
+     "data": null,
+     "address": "/Building-Documents/Elaboration/"}],
+   "Verso.Doc.Genre":
+   [{"id": "Verso___Doc___Genre___mk",
+     "data": null,
+     "address": "/Building-Documents/Elaboration/"}],
+   "Verso.Doc.Block":
+   [{"id": "Verso___Doc___Block",
+     "data": null,
+     "address": "/Building-Documents/Elaboration/"}],
+   "Verso.ArgParse.seq":
+   [{"id": "Verso___ArgParse___fail", "data": null, "address": "/Extensions/"}],
+   "Verso.ArgParse.remaining":
+   [{"id": "Verso___ArgParse___fail", "data": null, "address": "/Extensions/"}],
+   "Verso.ArgParse.pure":
+   [{"id": "Verso___ArgParse___fail", "data": null, "address": "/Extensions/"}],
+   "Verso.ArgParse.positional'":
+   [{"id": "Verso___ArgParse___positional___",
+     "data": null,
+     "address": "/Extensions/"}],
+   "Verso.ArgParse.positional":
+   [{"id": "Verso___ArgParse___fail", "data": null, "address": "/Extensions/"}],
+   "Verso.ArgParse.orElse":
+   [{"id": "Verso___ArgParse___fail", "data": null, "address": "/Extensions/"}],
+   "Verso.ArgParse.namedD'":
+   [{"id": "Verso___ArgParse___namedD___",
+     "data": null,
+     "address": "/Extensions/"}],
+   "Verso.ArgParse.namedD":
+   [{"id": "Verso___ArgParse___namedD",
+     "data": null,
+     "address": "/Extensions/"}],
+   "Verso.ArgParse.named'":
+   [{"id": "Verso___ArgParse___named___",
+     "data": null,
+     "address": "/Extensions/"}],
+   "Verso.ArgParse.named":
+   [{"id": "Verso___ArgParse___fail", "data": null, "address": "/Extensions/"}],
+   "Verso.ArgParse.many":
+   [{"id": "Verso___ArgParse___fail", "data": null, "address": "/Extensions/"}],
+   "Verso.ArgParse.lift":
+   [{"id": "Verso___ArgParse___fail", "data": null, "address": "/Extensions/"}],
+   "Verso.ArgParse.flagM":
+   [{"id": "Verso___ArgParse___fail", "data": null, "address": "/Extensions/"}],
+   "Verso.ArgParse.flag":
+   [{"id": "Verso___ArgParse___fail", "data": null, "address": "/Extensions/"}],
+   "Verso.ArgParse.fail":
+   [{"id": "Verso___ArgParse___fail", "data": null, "address": "/Extensions/"}],
+   "Verso.ArgParse.done":
+   [{"id": "Verso___ArgParse___fail", "data": null, "address": "/Extensions/"}],
+   "Verso.ArgParse.anyNamed":
+   [{"id": "Verso___ArgParse___fail", "data": null, "address": "/Extensions/"}],
+   "Verso.ArgParse.ValDesc.signature":
+   [{"id": "Verso___ArgParse___ValDesc___mk",
+     "data": null,
+     "address": "/Extensions/"}],
+   "Verso.ArgParse.ValDesc.mk":
+   [{"id": "Verso___ArgParse___ValDesc___mk",
+     "data": null,
+     "address": "/Extensions/"}],
+   "Verso.ArgParse.ValDesc.get":
+   [{"id": "Verso___ArgParse___ValDesc___mk",
+     "data": null,
+     "address": "/Extensions/"}],
+   "Verso.ArgParse.ValDesc.description":
+   [{"id": "Verso___ArgParse___ValDesc___mk",
+     "data": null,
+     "address": "/Extensions/"}],
+   "Verso.ArgParse.ValDesc":
+   [{"id": "Verso___ArgParse___ValDesc___mk",
+     "data": null,
+     "address": "/Extensions/"}],
+   "Verso.ArgParse.FromArgs.mk":
+   [{"id": "Verso___ArgParse___FromArgs___mk",
+     "data": null,
+     "address": "/Extensions/"}],
+   "Verso.ArgParse.FromArgs.fromArgs":
+   [{"id": "Verso___ArgParse___FromArgs___mk",
+     "data": null,
+     "address": "/Extensions/"}],
+   "Verso.ArgParse.FromArgs":
+   [{"id": "Verso___ArgParse___FromArgs___mk",
+     "data": null,
+     "address": "/Extensions/"}],
+   "Verso.ArgParse.FromArgVal.mk":
+   [{"id": "Verso___ArgParse___FromArgVal___mk",
+     "data": null,
+     "address": "/Extensions/"}],
+   "Verso.ArgParse.FromArgVal.fromArgVal":
+   [{"id": "Verso___ArgParse___FromArgVal___mk",
+     "data": null,
+     "address": "/Extensions/"}],
+   "Verso.ArgParse.FromArgVal":
+   [{"id": "Verso___ArgParse___FromArgVal___mk",
+     "data": null,
+     "address": "/Extensions/"}],
+   "Verso.ArgParse":
+   [{"id": "Verso___ArgParse___fail", "data": null, "address": "/Extensions/"}],
+   "List.forM":
+   [{"id": "List___forM", "data": null, "address": "/Manuals-and-Books/"}]}}}
