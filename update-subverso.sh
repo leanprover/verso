@@ -66,9 +66,15 @@ find test-projects -name "lake-manifest.json" -not -path "$ROOT_MANIFEST" | grep
         # Projects that depend on Verso as a path dependency inherit its
         # `module` status and need the modulized SubVerso rev. Other
         # projects need the de-modulized rev.
+        # The directory containing this manifest's project
+        project_dir=$(dirname "$manifest_file")
+
         if jq -e '.packages[] | select(.name == "verso" and .type == "path")' "$manifest_file" > /dev/null 2>&1; then
             TARGET_REV="$SUBVERSO_REV"
             echo "  Uses Verso path dependency → modulized rev"
+            # Keep toolchain in sync with root
+            cp lean-toolchain "$project_dir/lean-toolchain"
+            echo "  Copied lean-toolchain to $project_dir/"
         else
             TARGET_REV="$SUBVERSO_NOMODULE_REV"
             echo "  Standalone project → de-modulized rev"
