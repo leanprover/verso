@@ -98,19 +98,23 @@ where
         unless modules.any (· == m) do
           IO.eprintln s!"Warning: ordered child module '{m}' (under '{parent}') does not exist in the module set"
 
-    -- Validate: no duplicate URLs
-    let mut urlMap : Std.HashMap String Name := {}
+    -- Validate: no duplicate URLs (case-insensitive to catch collisions on macOS)
+    let mut urlMap : Std.HashMap String (String × Name) := {}
     let mut hasDuplicateUrl := false
     for m in modules do
       let resolved := config.resolveForModule m
       let url := match resolved.url with
-        | some u => u
+        | some u => (u.dropEndWhile '/').copy
         | none => "/".intercalate (m.components.map toString)
-      match urlMap[url]? with
-      | some other =>
-        IO.eprintln s!"Error: modules '{other}' and '{m}' resolve to the same URL '{url}'"
+      let key := url.toLower
+      match urlMap[key]? with
+      | some (otherUrl, other) =>
+        if url == otherUrl then
+          IO.eprintln s!"Error: modules '{other}' and '{m}' resolve to the same URL '{url}'"
+        else
+          IO.eprintln s!"Error: modules '{other}' (URL '{otherUrl}') and '{m}' (URL '{url}') differ only in case and will collide on case-insensitive filesystems"
         hasDuplicateUrl := true
-      | none => urlMap := urlMap.insert url m
+      | none => urlMap := urlMap.insert key (url, m)
     if hasDuplicateUrl then return 1
 
     -- Write plan file

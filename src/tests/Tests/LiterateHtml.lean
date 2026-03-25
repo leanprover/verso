@@ -727,6 +727,38 @@ private def testPlanDuplicateUrl (data : TestData) : IO Unit := IO.FS.withTempDi
   unless hasSubstring stderr "same URL" do
     throw <| IO.userError s!"plan duplicate url: stderr should mention 'same URL', got: {stderr}"
 
+/-- URLs that differ only by a trailing slash are detected as duplicates. -/
+private def testPlanDuplicateUrlTrailingSlash (data : TestData) : IO Unit := IO.FS.withTempDir fun tmpDir => do
+  let planFile := tmpDir / "plan"
+  let tomlFile := tmpDir / "literate.toml"
+  IO.FS.writeFile tomlFile (String.intercalate "\n" [
+    "[modules.\"LitConfig.Core\"]",
+    "url = \"LitConfig/NoDocstrings/\"",
+    ""
+  ])
+  let (exitCode, _, stderr) ← runLiteratePlanCapture data.moduleListFile planFile (some tomlFile)
+  if exitCode == 0 then
+    throw <| IO.userError "plan duplicate url trailing slash: should have failed with non-zero exit code"
+  unless hasSubstring stderr "same URL" do
+    throw <| IO.userError s!"plan duplicate url trailing slash: stderr should mention 'same URL', got: {stderr}"
+
+/-- URLs that differ only in case are detected as duplicates. -/
+private def testPlanDuplicateUrlCase (data : TestData) : IO Unit := IO.FS.withTempDir fun tmpDir => do
+  let planFile := tmpDir / "plan"
+  let tomlFile := tmpDir / "literate.toml"
+  IO.FS.writeFile tomlFile (String.intercalate "\n" [
+    "[modules.\"LitConfig.Core\"]",
+    "url = \"litconfig/nodocstrings\"",
+    "[modules.\"LitConfig.NoDocstrings\"]",
+    "url = \"LitConfig/NoDocstrings\"",
+    ""
+  ])
+  let (exitCode, _, stderr) ← runLiteratePlanCapture data.moduleListFile planFile (some tomlFile)
+  if exitCode == 0 then
+    throw <| IO.userError "plan duplicate url case: should have failed with non-zero exit code"
+  unless hasSubstring stderr "differ only in case" do
+    throw <| IO.userError s!"plan duplicate url case: stderr should mention 'differ only in case', got: {stderr}"
+
 /-- CSS contains focus-visible indicators. -/
 private def testAccessibilityFocusVisible (data : TestData) : IO Unit := withTestDir data fun jsonDir htmlDir _ _ => do
   runLiterateHtml jsonDir htmlDir
@@ -900,6 +932,8 @@ private def htmlTests (data : TestData) (projectDir : System.FilePath) : List (S
   ("per-module title", testPerModuleTitle data),
   ("per-module url", testPerModuleUrl data),
   ("plan duplicate url", testPlanDuplicateUrl data),
+  ("plan duplicate url trailing slash", testPlanDuplicateUrlTrailingSlash data),
+  ("plan duplicate url case", testPlanDuplicateUrlCase data),
   ("accessibility focus-visible", testAccessibilityFocusVisible data),
   ("accessibility reduced-motion", testAccessibilityReducedMotion data),
   ("accessibility ARIA", testAccessibilityAria data),
