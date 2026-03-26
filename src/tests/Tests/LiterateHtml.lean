@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 import VersoLiterate
+import VersoLiterateCode
 
 set_option maxRecDepth 1024
 
@@ -884,22 +885,55 @@ private def testImageCopying (data : TestData) (projectDir : System.FilePath) : 
   let srcDir ← IO.FS.realPath projectDir
   runLiterateHtml data.jsonDir htmlDir (sourceDir := some srcDir)
 
-  -- Verify copied image file exists at the rewritten path
-  let imgDest := htmlDir / "-verso-images" / "images" / "test-diagram.png"
+  -- Verify copied image file exists in the flat -verso-images directory
+  let imgDest := htmlDir / "-verso-images" / "LitConfig--test-diagram.png"
   unless ← imgDest.pathExists do
     throw <| IO.userError s!"image copying: expected image at {imgDest}"
 
+  -- Verify no subdirectories exist inside -verso-images (flat layout)
+  let imgDirContents ← (htmlDir / "-verso-images").readDir
+  for entry in imgDirContents do
+    if (← entry.path.isDir) then
+      throw <| IO.userError s!"image copying: -verso-images should be flat, but found subdirectory {entry.path}"
+
   -- Verify the HTML references the rewritten URL
   let litConfigHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "index.html")
-  unless hasSubstring litConfigHtml "-verso-images/images/test-diagram.png" do
-    throw <| IO.userError "image copying: HTML should reference rewritten image URL '-verso-images/images/test-diagram.png'"
+  unless hasSubstring litConfigHtml "-verso-images/LitConfig--test-diagram.png" do
+    throw <| IO.userError "image copying: HTML should reference rewritten image URL '-verso-images/LitConfig--test-diagram.png'"
 
   -- Verify the raw source-relative path does NOT appear as an unprocessed img src
-  -- (The raw text "images/test-diagram.png" may still appear in alt text or elsewhere,
-  -- but it should not appear as a src attribute value without the -verso-images prefix)
   let srcAttrRaw := "src=\"images/test-diagram.png\""
   if hasSubstring litConfigHtml srcAttrRaw then
     throw <| IO.userError s!"image copying: HTML should not contain unprocessed '{srcAttrRaw}'"
+
+/-- Image paths with '..' are resolved correctly and copied into the flat output directory. -/
+private def testImagePathTraversal : IO Unit := IO.FS.withTempDir fun tmpDir => do
+  -- srcDir is the library root; moduleParentPath prepends the module's parent dirs
+  let srcDir := tmpDir / "src"
+  let outDir := tmpDir / "out"
+  IO.FS.createDirAll (srcDir / "Sub")
+  IO.FS.createDirAll outDir
+  -- Create image at src/shared.png (sibling of Sub/)
+  IO.FS.writeBinFile (srcDir / "shared.png") (ByteArray.mk #[0x89])
+  -- Module Sub.Mod: moduleParentPath gives "Sub/", so libRelPath = "Sub/../shared.png"
+  -- which resolves to src/shared.png
+  let mod : VersoLiterate.LitMod := {
+    name := `Sub.Mod
+    contents := #[]
+    images := #["../shared.png"]
+  }
+  let _ ← VersoLiterateCode.processModuleImages `Sub.Mod srcDir outDir mod
+  -- The image should be copied into the flat -verso-images directory
+  let imgDir := outDir / "-verso-images"
+  unless ← imgDir.pathExists do
+    throw <| IO.userError "image traversal: -verso-images directory should exist"
+  unless ← (imgDir / "Sub-Mod--shared.png").pathExists do
+    throw <| IO.userError "image traversal: expected flattened image 'Sub-Mod--shared.png'"
+  -- No subdirectories should exist
+  let entries ← imgDir.readDir
+  for entry in entries do
+    if ← entry.path.isDir then
+      throw <| IO.userError s!"image traversal: -verso-images should be flat, found subdirectory {entry.path}"
 
 /-- Single-root project: navbar uses nav-title header instead of collapsible details. -/
 private def testSingleRootNavFlattening (data : TestData) : IO Unit := withTestDir data fun jsonDir htmlDir _ _ => do
@@ -1014,6 +1048,7 @@ private def htmlTests (data : TestData) (projectDir : System.FilePath) : List (S
   ("CSS dark mode", testCssDarkMode data),
   ("CSS custom properties", testCssCustomProperties data),
   ("image copying", testImageCopying data projectDir),
+  ("image path traversal", testImagePathTraversal),
   ("single-root nav flattening", testSingleRootNavFlattening data),
   ("docstrings_as_text", testDocstringsAsText data),
   ("docstrings_as_text default", testDocstringsAsTextDefault data),

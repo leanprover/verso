@@ -319,29 +319,58 @@ private def moduleParentPath (modName : Name) : String :=
   | parents => "/".intercalate parents ++ "/"
 
 /--
-Processes images for a module: copies image files from source to output directory
-and rewrites URLs in the module content.
-Returns the modified `LitMod` with rewritten image URLs.
+Flattens a module-relative image reference into a unique filename for the flat image directory,
+returned together with its file extension. The module name is used as a prefix to reduce collisions,
+which are resolved later with numeric suffixes.
+
+For example, module `Foo.Bar` with image `images/diagram.png` yields `Foo-Bar--diagram.png`.
+-/
+private def flatImageName (modName : Name) (imgRef : String) : String × String :=
+  let modPrefix := "-".intercalate (modName.components.map toString)
+  let fileName := (imgRef.takeEndWhile (· ≠ '/'))
+  let (base, ext) :=
+    if let some dot := fileName.revFind? '.' then
+      (fileName.sliceTo dot, fileName.sliceFrom dot)
+    else (fileName, "")
+  (s!"{modPrefix}--{base}", ext.copy)
+
+/--
+Processes images for a module: copies image files into a flat output directory and rewrites URLs in
+the module content. Returns the modified `LitMod` with rewritten image URLs.
 -/
 def processModuleImages (modName : Name) (srcDir : System.FilePath) (outDir : System.FilePath)
     (mod : LitMod) : IO LitMod := do
   if mod.images.isEmpty then return mod
   let parentPath := moduleParentPath modName
-  -- Copy each image and build the URL rewriting function
+  let imgDir := outDir / "-verso-images"
+  IO.FS.createDirAll imgDir
+  let mut rewriteMap : Std.HashMap String String := {}
   for imgRef in mod.images do
     let libRelPath := (parentPath ++ imgRef : String)
     let srcPath := srcDir / libRelPath
-    let destPath := outDir / "-verso-images" / libRelPath
+    let (stem, ext) := flatImageName modName imgRef
+    let destName := stem ++ ext
+    let destPath := imgDir / destName
     if ← srcPath.pathExists then
-      if let some parent := destPath.parent then
-        IO.FS.createDirAll parent
       let contents ← IO.FS.readBinFile srcPath
-      IO.FS.writeBinFile destPath contents
+      -- Disambiguate if dest already exists with different content
+      let mut finalName := destName
+      let mut finalDest := destPath
+      let mut counter := 1
+      while ← finalDest.pathExists do
+        let existing ← IO.FS.readBinFile finalDest
+        if contents == existing then break
+        counter := counter + 1
+        finalName := s!"{stem}{counter}{ext}"
+        finalDest := imgDir / finalName
+      IO.FS.writeBinFile finalDest contents
+      rewriteMap := rewriteMap.insert imgRef ("-verso-images/" ++ finalName)
     else
       IO.eprintln s!"Warning: image '{imgRef}' referenced in module '{modName}' not found at {srcPath}"
   -- Rewrite URLs in the module content
   let rewrite (imgRef : String) : String :=
-    "-verso-images/" ++ parentPath ++ imgRef
+    let (stem, ext) := flatImageName modName imgRef
+    rewriteMap[imgRef]?.getD ("-verso-images/" ++ stem ++ ext)
   return rewriteModImageUrls rewrite mod
 
 end ImageRewriting
