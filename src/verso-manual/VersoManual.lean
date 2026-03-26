@@ -675,6 +675,8 @@ where
     emitFindHtml toc dir state xrefJson config.toConfig
     IO.FS.withFile (dir.join "verso-vars.css") .write fun h => do
       h.putStrLn Html.«verso-vars.css»
+    IO.FS.withFile (dir.join "theme-toggle.js") .write fun h => do
+      h.putStrLn themeToggle.js
     IO.FS.withFile (dir.join "book.css") .write fun h => do
       h.putStrLn Html.Css.pageStyle
     for (src, dest) in config.extraFiles do
@@ -748,6 +750,8 @@ where
       else titleHtml
     IO.FS.withFile (root / "verso-vars.css") .write fun h => do
       h.putStrLn Html.«verso-vars.css»
+    IO.FS.withFile (root / "theme-toggle.js") .write fun h => do
+      h.putStrLn themeToggle.js
     IO.FS.withFile (root / "book.css") .write fun h => do
       h.putStrLn Html.Css.pageStyle
     for (src, dest) in config.extraFiles do

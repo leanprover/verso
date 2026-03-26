@@ -7,3 +7,5 @@ module
 namespace Verso.Genre.Manual
 
 public def find.js := include_str "../../../static-web/find.js"
+
+public def themeToggle.js := include_str "../../../static-web/theme-toggle.js"

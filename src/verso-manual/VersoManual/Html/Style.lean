@@ -24,7 +24,7 @@ public def pageStyle : String := r####"
     --verso-logo-height: var(--verso-header-height);
 
     /** Table of Contents appearance **/
-    --verso-toc-background-color: #fafafa;
+    --verso-toc-background-color: var(--verso-secondary-background-color, var(--verso-surface-color, #fafafa));
     --verso-toc-text-color: var(--verso-text-color);
 
     /* How long should the ToC animation take? */
@@ -33,15 +33,15 @@ public def pageStyle : String := r####"
     /* How wide should the ToC be on non-mobile? */
     --verso-toc-width: 18rem;
 
-    /** Variables that control the “burger menu” appearance **/
+    /** Variables that control the "burger menu" appearance **/
     --verso-burger-height: 1.25rem;
     --verso-burger-width: 1.25rem;
     --verso-burger-line-width: 0.2rem;
     --verso-burger-line-radius: 0.2rem;
     --verso-burger-toc-visible-color: var(--verso-toc-text-color);
-    --verso-burger-toc-visible-shadow-color: #ffffff;
-    --verso-burger-toc-hidden-color: #0e2431;
-    --verso-burger-toc-hidden-shadow-color: #ffffff;
+    --verso-burger-toc-visible-shadow-color: var(--verso-background-color, #ffffff);
+    --verso-burger-toc-hidden-color: var(--verso-text-color, #0e2431);
+    --verso-burger-toc-hidden-shadow-color: var(--verso-background-color, #ffffff);
 
     /* The "burger menu" may need to get bigger for mobile screens */
     --verso-mobile-burger-height: 1.5rem;
@@ -85,6 +85,8 @@ html {
 body {
     margin: 0;
     padding: 0;
+    background-color: var(--verso-background-color, #ffffff);
+    color: var(--verso-text-color, #333333);
 }
 
 /******** Theme ********/
@@ -94,6 +96,7 @@ h1, h2, h3, h4, h5, h6 {
     font-weight: bold;
     text-rendering: optimizeLegibility;
     margin-top: 1.5rem;
+    color: var(--verso-structure-color, inherit);
 }
 
 p, dt, dd {
@@ -116,6 +119,14 @@ pre, code {
     overflow-y: clip;
 }
 
+a {
+    color: var(--verso-link-color, #386ee0);
+}
+
+a:hover {
+    color: var(--verso-link-hover-color, #0073e6);
+}
+
 /******** Page Layout ********/
 
 header {
@@ -124,11 +135,11 @@ header {
 	z-index: 99;
 	left: 0;
 	right: 0;
-	background: white;
+	background: var(--verso-background-color, white);
 	display: flex;
 	align-items: center;
 	height: var(--verso-header-height);
-	box-shadow: 0 0px 6px lightgray;
+	box-shadow: 0 0px 6px var(--verso-shadow-color, lightgray);
 }
 
 .header-logo-wrapper {
@@ -149,6 +160,157 @@ header {
 .header-title-wrapper {
     /* The title wrapper grows to fill up the header */
     flex: 1;
+    min-width: 0;
+}
+
+#header-widgets {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding-right: 0.5rem;
+    flex-shrink: 0;
+}
+
+#header-search-slot {
+    display: flex;
+    align-items: center;
+}
+
+.theme-toggle {
+    position: relative;
+    z-index: 2;
+}
+
+#theme-toggle-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.2rem;
+    min-width: 2.5rem;
+    height: 2.25rem;
+    padding: 0.35rem 0.45rem;
+    background: var(--verso-secondary-background-color, var(--verso-surface-color, #fafafa));
+    color: var(--verso-text-color, black);
+    border: 1px solid var(--verso-border-color-light, var(--verso-border-color, gray));
+    border-radius: 0.4rem;
+    cursor: pointer;
+    line-height: 1;
+    transition:
+        background-color 0.2s ease,
+        border-color 0.2s ease;
+}
+
+#theme-toggle-button:hover,
+#theme-toggle-button[aria-expanded="true"] {
+    background-color: var(--verso-hover-highlight-color, #eeeeee);
+    border-color: var(--verso-border-color, gray);
+}
+
+#theme-toggle-button:focus {
+    outline: 2px solid var(--verso-link-color, #386ee0);
+    outline-offset: 2px;
+}
+
+.theme-toggle-button-icon,
+.theme-toggle-button-chevron,
+.theme-toggle-option-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.theme-toggle-button-icon svg,
+.theme-toggle-button-chevron svg,
+.theme-toggle-option-icon svg {
+    width: 1rem;
+    height: 1rem;
+    display: block;
+}
+
+.theme-toggle-button-chevron {
+    color: var(--verso-text-color-light, #64748b);
+}
+
+.theme-toggle-button-chevron svg {
+    width: 0.8rem;
+    height: 0.8rem;
+}
+
+.theme-toggle-menu {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 0.35rem);
+    z-index: 150;
+    min-width: 13rem;
+    padding: 0.35rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    background: var(--verso-secondary-background-color, var(--verso-surface-color, #fafafa));
+    border: 1px solid var(--verso-border-color, gray);
+    border-radius: 0.5rem;
+    box-shadow: 0 8px 18px var(--verso-shadow-color, lightgray);
+}
+
+.theme-toggle-menu[hidden] {
+    display: none;
+}
+
+.theme-toggle-option {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.45rem 0.55rem;
+    background: transparent;
+    color: var(--verso-text-color, black);
+    border: none;
+    border-radius: 0.35rem;
+    cursor: pointer;
+    font: inherit;
+    text-align: left;
+}
+
+.theme-toggle-option:hover,
+.theme-toggle-option:focus {
+    background-color: var(--verso-hover-highlight-color, #eeeeee);
+    outline: none;
+}
+
+.theme-toggle-option[aria-checked="true"] {
+    background-color: var(--verso-selected-color, #def);
+}
+
+.theme-toggle-option-copy {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.theme-toggle-option-label {
+    font-weight: 600;
+}
+
+.theme-toggle-option-meta {
+    font-size: 0.75rem;
+    color: var(--verso-text-color-light, #64748b);
+}
+
+@media screen and (max-width: 700px) {
+    #header-widgets {
+        gap: 0.25rem;
+        padding-right: 0.25rem;
+    }
+
+    #theme-toggle-button {
+        min-width: 2.2rem;
+        height: 2rem;
+        padding: 0.25rem 0.35rem;
+    }
+
+    .theme-toggle-menu {
+        min-width: 11rem;
+    }
 }
 
 @media screen and (max-width: 1500px) {
@@ -158,10 +320,11 @@ header {
 
 .header-title {
     text-decoration: none;
-    color: black;
+    color: var(--verso-text-color, black);
     font-size: 2rem;
     font-weight: bold;
     display: block;
+    overflow: hidden;
     margin: 0 auto;
     max-width: var(--verso-content-max-width);
 }
@@ -187,6 +350,8 @@ header {
     font-size: inherit;
     font-weight: inherit;
     text-wrap: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 :root:has(header:empty) {
@@ -240,7 +405,7 @@ main [id] {
     body:has(#toggle-toc:checked) .toc-backdrop {
         position: fixed;
         inset: 0;
-        background-color: #aaa8;
+        background-color: rgba(0, 0, 0, 0.5);
         z-index: 9;
     }
     html:has(#toggle-toc:checked) {
@@ -275,13 +440,13 @@ main [id] {
 }
 
 #toc a {
-    color: #333;
+    color: var(--verso-text-color, #333);
     text-decoration: none;
 }
 
 #toc a:hover {
     text-decoration: underline;
-    color: #000;
+    color: var(--verso-link-hover-color, #000);
 }
 
 .toc-title {
@@ -345,7 +510,7 @@ main [id] {
     width: calc(var(--verso-toc-triangle-width) + var(--verso-toc-triangle-left-space));
     height: var(--verso-toc-triangle-height);
     display: inline-block;
-    background-color: black;
+    background-color: var(--verso-text-color, black);
     content: ' ';
     transition: ease 0.2s;
     margin-right: var(--verso-toc-triangle-margin);
@@ -386,7 +551,7 @@ main [id] {
 }
 
 #toc .split-toc table {
-    border-left: 1px dotted;
+    border-left: 1px dotted var(--verso-border-color, currentColor);
     padding-left: 1.2rem;
     padding-top: 0.2rem;
 }
@@ -396,7 +561,7 @@ main [id] {
 }
 
 #toc .split-toc > ol {
-    border-left: 1px dotted;
+    border-left: 1px dotted var(--verso-border-color, currentColor);
     list-style-type: none;
     padding-left: 0.5rem;
     margin-left: 0;
@@ -443,7 +608,7 @@ main [id] {
     flex: 1;
     justify-content: center;
     align-items: center;
-    color: black;
+    color: var(--verso-text-color, black);
     text-decoration: none;
 }
 
@@ -798,7 +963,7 @@ main .section-toc a:hover {
 .permalink-widget > a {
   /* Don't show the colors here */
   color: transparent;
-  text-shadow: 0 0 0 gray;
+  text-shadow: 0 0 0 var(--verso-text-color-light, gray);
   text-decoration: none;
 }
 
@@ -881,18 +1046,18 @@ main section li ol {
     overflow-x: auto;
     margin: 0px;
     margin: 0.5em .85em;
-    border-left: 0.2em solid red;
+    border-left: 0.2em solid var(--verso-error-indicator-color, red);
     padding: 0 0.45em;
 }
 
 /* Different color for warning */
 .lean-output.warning {
-    border-color: var(--verso-warning-color);
+    border-color: var(--verso-warning-indicator-color);
 }
 
 /* Different color for information */
 .lean-output.information {
-    border-color: #0000c0;
+    border-color: var(--verso-info-indicator-color, #0000c0);
 }
 
 
