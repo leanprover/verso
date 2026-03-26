@@ -324,12 +324,10 @@ def emitMod (root : Dir) (outDir: System.FilePath) (mod : LitMod)
   let mod ← match srcDirs.find? mod.name with
     | some srcDir => processModuleImages mod.name srcDir outDir mod
     | none => pure mod
-  let components := mod.name.components
-  let nesting := components.length
-  let siteRoot := if nesting = 0 then "./" else nesting.fold (init := "") fun _ _ s => s ++ "../"
   let htmlId? := (← read).moduleIds.find? mod.name
   let litConfig := (← read).litConfig
   let resolved := litConfig.resolveForModule mod.name
+  let ctx := moduleContext mod.name litConfig
 
   let (body, hlState) ← renderModBody mod resolved (← read) (← get)
   set hlState
@@ -337,22 +335,17 @@ def emitMod (root : Dir) (outDir: System.FilePath) (mod : LitMod)
   let headContents := mkHeadContents litConfig
 
   -- Build page ToC from headings
-  let pageUrl := match resolved.url with
-    | some u => u ++ "/"
-    | none => mod.name.components.map (toString · ++ "/") |> String.join
   let headings := collectHeadings mod (← read).traverseState
-  let tocHtml := if headings.size >= 2 then buildPageToc headings pageUrl else .empty
+  let tocHtml := if headings.size >= 2 then buildPageToc headings ctx.href else .empty
 
   let modLabel := resolved.title.getD (toString mod.name)
   let pageTitle := match litConfig.metadata.title with
     | some siteTitle => s!"{modLabel} — {siteTitle}"
     | none => modLabel
 
-  let pageHtml := page pageTitle siteRoot headContents mod.name root htmlId? body (pageToc := tocHtml) (litConfig := litConfig)
+  let pageHtml := page pageTitle ctx.siteRoot headContents mod.name root htmlId? body (pageToc := tocHtml) (litConfig := litConfig)
 
-  let outFile := match resolved.url with
-    | some u => outDir / u
-    | none => mod.name.components.foldl (init := outDir) fun dir c => dir / c.toString
+  let outFile := ctx.outPath outDir
 
   IO.FS.createDirAll outFile
 
@@ -401,8 +394,8 @@ where
   tocEntry (dir : Dir) : Html :=
     let link : Html :=
       if let some m := dir.mod then
-        let href := m.name.components.map (toString · ++ "/") |> String.join
-        {{<a href={{href}}>{{m.name.toString}}</a>}}
+        let ctx := moduleContext m.name litConfig
+        {{<a href={{ctx.href}}>{{m.name.toString}}</a>}}
       else
         -- namespace-only node (no module file)
         .empty

@@ -251,7 +251,10 @@ The full set of keys available under `[modules."..."]`:
 
 : `url`
 
-  URL path. The default value is derived from the module's name.
+  URL path for this module's page. The default is derived from the module name (e.g., `MyLib.Data.Basic` is served at `MyLib/Data/Basic/`).
+  When a `url` override is set on a parent module, child modules inherit it as a prefix.
+  For example, if `MyLib.Data` has `url = "data-docs"`, then `MyLib.Data.Basic` is served at `data-docs/Basic/` rather than `MyLib/Data/Basic/`.
+  To override a child independently, give it its own `[modules]` entry.
 
 : `hide_commands`
 

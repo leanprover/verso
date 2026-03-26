@@ -690,6 +690,35 @@ private def testPerModuleTitle (data : TestData) : IO Unit := withTestDir data f
   unless hasSubstring navbarSection "Core Library" do
     throw <| IO.userError "per-module title: navbar should contain 'Core Library'"
 
+/-- Per-module title appears in breadcrumbs without code formatting. -/
+private def testPerModuleTitleBreadcrumbs (data : TestData) : IO Unit := withTestDir data fun jsonDir htmlDir _ tomlFile => do
+  IO.FS.writeFile tomlFile (String.intercalate "\n" [
+    "[modules.\"LitConfig.Core\"]",
+    "title = \"Core Library\"",
+    ""
+  ])
+  runLiterateHtml jsonDir htmlDir (configFile := some tomlFile)
+
+  -- On the Core page itself, breadcrumbs should show "Core Library" as current (last entry)
+  let coreHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "Core" / "index.html")
+  let breadcrumbSection := coreHtml.splitOn "breadcrumbs" |>.getD 1 "" |>.splitOn "</ol>" |>.head!
+  -- Custom title should appear without <code> wrapping
+  unless hasSubstring breadcrumbSection "Core Library" do
+    throw <| IO.userError "title breadcrumbs: should display custom title 'Core Library'"
+  if hasSubstring breadcrumbSection "<code>Core Library</code>" then
+    throw <| IO.userError "title breadcrumbs: custom title should not be wrapped in <code>"
+  -- On a child page, the ancestor breadcrumb should show "Core Library" as a link
+  let basicHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "Core" / "Basic" / "index.html")
+  let childBcSection := basicHtml.splitOn "breadcrumbs" |>.getD 1 "" |>.splitOn "</ol>" |>.head!
+  unless hasSubstring childBcSection "Core Library" do
+    throw <| IO.userError "title breadcrumbs: child page should show ancestor custom title 'Core Library'"
+  -- The ancestor link with custom title should not use <code>
+  if hasSubstring childBcSection "<code>Core Library</code>" then
+    throw <| IO.userError "title breadcrumbs: ancestor custom title should not be wrapped in <code>"
+  -- But the "LitConfig" ancestor should still use <code> (no custom title)
+  unless hasSubstring childBcSection "<code>LitConfig</code>" do
+    throw <| IO.userError "title breadcrumbs: module name ancestor should be in <code>"
+
 /-- Per-module URL override places the HTML at the custom path and updates navbar links. -/
 private def testPerModuleUrl (data : TestData) : IO Unit := withTestDir data fun jsonDir htmlDir _ tomlFile => do
   IO.FS.writeFile tomlFile (String.intercalate "\n" [
@@ -709,6 +738,47 @@ private def testPerModuleUrl (data : TestData) : IO Unit := withTestDir data fun
   let navbarSection := litConfigHtml.splitOn "module-tree" |>.getD 1 "" |>.splitOn "</nav>" |>.head!
   unless hasSubstring navbarSection "core-docs/" do
     throw <| IO.userError "per-module url: navbar should link to 'core-docs/'"
+  -- Base href should reflect custom URL depth (1 segment = "../"), not module name depth
+  let coreDocsHtml ← IO.FS.readFile (htmlDir / "core-docs" / "index.html")
+  unless hasSubstring coreDocsHtml "base href=\"../\"" do
+    throw <| IO.userError "per-module url: base href should be '../' (depth 1), not '../../../' (depth 3)"
+  -- Breadcrumbs should show module name labels (not URL segments)
+  let breadcrumbSection := coreDocsHtml.splitOn "breadcrumbs" |>.getD 1 "" |>.splitOn "</ol>" |>.head!
+  -- The breadcrumb should display "Core" (module name), not "core-docs" (URL segment)
+  unless hasSubstring breadcrumbSection ">Core<" do
+    throw <| IO.userError "per-module url: breadcrumb should display module name 'Core'"
+  -- The ancestor breadcrumb should link to LitConfig/
+  unless hasSubstring breadcrumbSection "href=\"LitConfig/\"" do
+    throw <| IO.userError "per-module url: ancestor breadcrumb should link to 'LitConfig/'"
+  -- Landing page should link to custom URL
+  let landingHtml ← IO.FS.readFile (htmlDir / "index.html")
+  unless hasSubstring landingHtml "core-docs/" do
+    throw <| IO.userError "per-module url: landing page should link to 'core-docs/'"
+  if hasSubstring (landingHtml.splitOn "module-toc" |>.getD 1 "" |>.splitOn "</ul>" |>.head!) "LitConfig/Core/" then
+    throw <| IO.userError "per-module url: landing page should not link to 'LitConfig/Core/'"
+
+/-- URL overrides on a parent module propagate to children via relative append. -/
+private def testPerModuleUrlInheritance (data : TestData) : IO Unit := withTestDir data fun jsonDir htmlDir _ tomlFile => do
+  IO.FS.writeFile tomlFile (String.intercalate "\n" [
+    "[modules.\"LitConfig.Core\"]",
+    "url = \"core-docs\"",
+    ""
+  ])
+  runLiterateHtml jsonDir htmlDir (configFile := some tomlFile)
+
+  -- Child module LitConfig.Core.Basic should be at core-docs/Basic/, not LitConfig/Core/Basic/
+  unless ← (htmlDir / "core-docs" / "Basic" / "index.html").pathExists do
+    throw <| IO.userError "url inheritance: expected HTML at core-docs/Basic/index.html"
+  if ← (htmlDir / "LitConfig" / "Core" / "Basic" / "index.html").pathExists then
+    throw <| IO.userError "url inheritance: HTML should not exist at default path LitConfig/Core/Basic/"
+  -- Base href for child should reflect depth 2 (core-docs/Basic)
+  let childHtml ← IO.FS.readFile (htmlDir / "core-docs" / "Basic" / "index.html")
+  unless hasSubstring childHtml "base href=\"../../\"" do
+    throw <| IO.userError "url inheritance: child base href should be '../../' (depth 2)"
+  -- Navbar should link to the child at core-docs/Basic/
+  let navbarSection := childHtml.splitOn "module-tree" |>.getD 1 "" |>.splitOn "</nav>" |>.head!
+  unless hasSubstring navbarSection "core-docs/Basic/" do
+    throw <| IO.userError "url inheritance: navbar should link to 'core-docs/Basic/'"
 
 /-- Plan fails when two modules resolve to the same URL. -/
 private def testPlanDuplicateUrl (data : TestData) : IO Unit := IO.FS.withTempDir fun tmpDir => do
@@ -930,7 +1000,9 @@ private def htmlTests (data : TestData) (projectDir : System.FilePath) : List (S
   ("theme CSS empty", testThemeCssEmpty data),
   ("per-module hide_commands", testPerModuleHideCommands data),
   ("per-module title", testPerModuleTitle data),
+  ("per-module title breadcrumbs", testPerModuleTitleBreadcrumbs data),
   ("per-module url", testPerModuleUrl data),
+  ("per-module url inheritance", testPerModuleUrlInheritance data),
   ("plan duplicate url", testPlanDuplicateUrl data),
   ("plan duplicate url trailing slash", testPlanDuplicateUrlTrailingSlash data),
   ("plan duplicate url case", testPlanDuplicateUrlCase data),

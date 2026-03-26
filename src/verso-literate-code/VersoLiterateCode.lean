@@ -23,6 +23,79 @@ open Std
 
 namespace VersoLiterateCode
 
+/-- A single breadcrumb entry for navigating the module hierarchy. -/
+structure BreadcrumbEntry where
+  /-- Display label: custom title or module name component. -/
+  title : String
+  /-- Whether `title` is a custom title (renders as plain text) vs module name (renders in `<code>`). -/
+  isCustomTitle : Bool
+  /--
+  URL href for this module relative to site root, with trailing slash.
+  e.g. `"Foo/Bar/"` or `"core-docs/Basic/"`.
+  -/
+  href : String
+  /-- Whether this module exists as a page. Namespace-only entries are not links. -/
+  isLink : Bool
+deriving Repr, BEq, Hashable, Inhabited
+
+/-- Canonical route and display context for a module page. -/
+structure ModuleContext where
+  /-- Ancestor breadcrumb entries (parent modules, from root to immediate parent). -/
+  parents : Array BreadcrumbEntry
+  /-- This module's breadcrumb entry. -/
+  self : BreadcrumbEntry
+deriving Repr, BEq, Hashable, Inhabited
+
+namespace ModuleContext
+
+/-- URL href relative to site root, with trailing slash. -/
+def href (ctx : ModuleContext) : String := ctx.self.href
+
+/-- Filesystem output path relative to the output directory. -/
+def outPath (ctx : ModuleContext) (outDir : System.FilePath) : System.FilePath :=
+  let segments := ctx.self.href.splitOn "/" |>.filter (· ≠ "")
+  segments.foldl (init := outDir) fun dir (seg : String) => dir / seg
+
+/-- Nesting depth (number of URL path segments). -/
+def depth (ctx : ModuleContext) : Nat :=
+  (ctx.self.href.splitOn "/" |>.filter (· ≠ "")).length
+
+/-- `<base href="...">` value: `"./"` for depth 0, `"../../"` for depth 2, etc. -/
+def siteRoot (ctx : ModuleContext) : String :=
+  let d := ctx.depth
+  if d = 0 then "./" else d.fold (init := "") fun _ _ s => s ++ "../"
+
+end ModuleContext
+
+/--
+Builds the `ModuleContext` for a module, resolving titles and URLs for each ancestor.
+`moduleExists?` determines whether a given module name has a page (for link generation).
+-/
+def moduleContext (modName : Name) (litConfig : LiterateConfig)
+    (moduleExists? : Name → Bool := fun _ => true) : ModuleContext := Id.run do
+  let components := modName.components
+  let mut entries : Array BreadcrumbEntry := #[]
+  let mut modPrefix := Name.anonymous
+  for h : i in [0:components.length] do
+    have : i < components.length := by have := h.2.1; grind
+    modPrefix := modPrefix.mkStr (components[i].toString)
+    let resolved := litConfig.resolveForModule modPrefix
+    let segments := match resolved.url with
+      | some u => u.splitOn "/" |>.filter (· ≠ "")
+      | none => modPrefix.components.map toString
+    let href := segments.map (· ++ "/") |> String.join
+    let (title, isCustom) := match resolved.title with
+      | some t => (t, true)
+      | none => (components[i].toString, false)
+    entries := entries.push {
+      title, isCustomTitle := isCustom, href,
+      isLink := moduleExists? modPrefix
+    }
+  if h : entries.size = 0 then
+    return { parents := #[], self := default }
+  else
+    return { parents := entries.pop, self := entries.back }
+
 structure HtmlContext where
   logError : String → IO Unit
   definitionIds : NameMap String
@@ -30,7 +103,6 @@ structure HtmlContext where
   traverseState : Literate.TraverseState
   linkTargets : LinkTargets Literate.TraverseContext
   litConfig : LiterateConfig := {}
-
 
 open Verso.Output in
 structure HtmlState where
@@ -678,17 +750,17 @@ partial def page (title : String) (siteRoot : String) (headContents : Html) (cur
 }}
 where
   breadcrumbs := Id.run do
-    let components := current.components
-    if h : components = [] then return Html.empty
-    else
-      let mut breadcrumbs := .empty
-      for h : i in [0:components.length - 1] do
-        let addr := components.take (i+1) |>.map (·.toString) |> "/".intercalate
-        have : i < components.length := by
-          have := h.2.1
-          grind
-        breadcrumbs := breadcrumbs ++ {{<li><a href={{addr}}><code>{{toString components[i]}}</code></a></li>}}
-      return breadcrumbs ++ {{<li><span class="current">{{toString <| components.getLast h}}</span></li>}}
+    let ctx := moduleContext current litConfig
+    let mkLabel (e : BreadcrumbEntry) : Html :=
+      if e.isCustomTitle then e.title else {{<code>{{e.title}}</code>}}
+    let mut bc := Html.empty
+    for e in ctx.parents do
+      if e.isLink then
+        bc := bc ++ {{<li><a href={{e.href}}>{{mkLabel e}}</a></li>}}
+      else
+        bc := bc ++ {{<li>{{mkLabel e}}</li>}}
+    bc := bc ++ {{<li><span class="current">{{mkLabel ctx.self}}</span></li>}}
+    return bc
 
   navLeaf (myName : Html) (current : Bool) : Html := {{<div class=s!"leaf{if current then " current" else ""}">{{myName}}</div>}}
   navNode (myName : Html) («open» : Bool) (current : Bool) (children : Array Html) : Html :=
@@ -705,15 +777,12 @@ where
       -- Single root: render as title + flat children
       let rootLabel : Html :=
         if let some x := rootDir.mod then
-          let resolved := litConfig.resolveForModule x.name
-          let (label, hasCustomTitle) := match resolved.title with
-            | some t => (t, true)
-            | none => (if let .str _ s := rootName then s else rootName.toString, false)
-          let href := match resolved.url with
-            | some u => u ++ "/"
-            | none => x.name.components.map (toString · ++ "/") |> String.join
+          let ctx := moduleContext x.name litConfig
+          let (label, hasCustomTitle) := match ctx.self.isCustomTitle with
+            | true => (ctx.self.title, true)
+            | false => (if let .str _ s := rootName then s else rootName.toString, false)
           let cls := if hasCustomTitle then "custom-title" else ""
-          {{<a href={{href}} title={{x.name.toString}} class={{cls}}>{{label}}</a>}}
+          {{<a href={{ctx.href}} title={{x.name.toString}} class={{cls}}>{{label}}</a>}}
         else
           let label := if let .str _ s := rootName then s else rootName.toString
           (label : Html)
@@ -739,15 +808,12 @@ where
   toNavigation (current? : Option (List Name)) (name : Name) (dir : Dir) : Html :=
     let myName : Html :=
       if let some x := dir.mod then
-        let resolved := litConfig.resolveForModule x.name
-        let (label, hasCustomTitle) := match resolved.title with
-          | some t => (t, true)
-          | none => (if let .str _ s := name then s else name.toString, false)
-        let href := match resolved.url with
-          | some u => u ++ "/"
-          | none => x.name.components.map (toString · ++ "/") |> String.join
+        let ctx := moduleContext x.name litConfig
+        let (label, hasCustomTitle) := match ctx.self.isCustomTitle with
+          | true => (ctx.self.title, true)
+          | false => (if let .str _ s := name then s else name.toString, false)
         let cls := if hasCustomTitle then "custom-title" else ""
-        {{<a href={{href}} title={{x.name.toString}} class={{cls}}>{{label}}</a>}}
+        {{<a href={{ctx.href}} title={{x.name.toString}} class={{cls}}>{{label}}</a>}}
       else
         let label := if let .str _ s := name then s else name.toString
         (label : Html)

@@ -217,7 +217,18 @@ def LiterateConfig.resolveForModule (config : LiterateConfig) (modName : Name) :
       hideDocstringsFor := config.hideDocstringsFor,
       docstringsAsText := config.docstringsAsText,
     }
-  | some mc => {
+  | some mc =>
+    -- Apply relative-append when this is a prefix (not exact) match
+    let url :=
+      mc.url.map fun u =>
+        let matchedPrefix := bestMatch.1
+        if matchedPrefix == modName then
+          u
+        else
+          let suffix := modName.components.drop matchedPrefix.components.length
+          let suffixStr := "/".intercalate (suffix.map toString)
+          (u.dropEndWhile '/').copy ++ "/" ++ suffixStr
+    {
       hideCommands := mc.hideCommands.getD config.hideCommands,
       showOutput := mc.showOutput.getD config.showOutput,
       showImports := mc.showImports.getD config.showImports,
@@ -226,7 +237,7 @@ def LiterateConfig.resolveForModule (config : LiterateConfig) (modName : Name) :
       hideDocstringsFor := mc.hideDocstringsFor.getD config.hideDocstringsFor,
       docstringsAsText := mc.docstringsAsText.getD config.docstringsAsText,
       title := mc.title,
-      url := mc.url
+      url
     }
 
 /-- Decodes a TOML table into a `LiterateConfig`. -/
