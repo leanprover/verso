@@ -316,6 +316,7 @@ package_facet literateHtml pkg : System.FilePath := do
     addPureTrace moduleListContent
 
     buildFileUnlessUpToDate' moduleListFile do
+      IO.FS.createDirAll buildDir
       IO.FS.writeFile moduleListFile moduleListContent
 
     -- Re-add TOML trace (buildFileUnlessUpToDate' resets trace to output file hash)
