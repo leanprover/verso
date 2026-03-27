@@ -96,7 +96,7 @@ instance : VersoLiterate.LoadLiterate Tutorial where
   docstringPart := inst.docstringPart
 
 where
-  inst := inferInstanceAs <| VersoLiterate.LoadLiterate Manual
+  inst := (inferInstance : VersoLiterate.LoadLiterate Manual)
 
 namespace Tutorial
 

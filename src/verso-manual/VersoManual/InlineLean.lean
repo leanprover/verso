@@ -219,6 +219,26 @@ private def toHighlightedLeanInline (shouldShow : Bool) (hls : Highlighted) (str
   ``(Inline.other (Verso.Genre.Manual.InlineLean.Inline.lean $(← quoteHighlightViaSerialization hls)) #[Inline.code $(quote str.getString)])
 
 
+/--
+Sets `linter.unusedVariables` to `false` in all `CommandContextInfo.options` within an info tree.
+
+This prevents the outer unused variable linter from re-processing variables that the inner linter
+(running via `elabCommandTopLevel`) has already correctly handled. This is needed to allow the
+unused variable linter to do the right thing for embedded Lean code. On the one hand, the linter
+needs to run, so that its warnings are accurately recorded. But the linter also may run on the Verso
+document, at which time it can inspect the info trees left behind by the embedded Lean and generate
+spurious warnings. Turning it off before saving info trees works around this issue.
+-/
+private partial def disableUnusedVarLinterInInfoTree : InfoTree → InfoTree
+  | .context (.commandCtx ci) child =>
+    .context (.commandCtx { ci with options := Lean.Linter.linter.unusedVariables.set ci.options false })
+      (disableUnusedVarLinterInInfoTree child)
+  | .context pci child =>
+    .context pci (disableUnusedVarLinterInInfoTree child)
+  | .node info children =>
+    .node info (children.map disableUnusedVarLinterInInfoTree)
+  | .hole id => .hole id
+
 def elabCommands (config : LeanBlockConfig) (str : StrLit)
     (toHighlightedLeanContent : (shouldShow : Bool) → (hls : Highlighted) → (str: StrLit) → DocElabM Term)
     (minCommands : Option Nat := none)
@@ -233,9 +253,11 @@ def elabCommands (config : LeanBlockConfig) (str : StrLit)
 
     let origScopes ← if config.fresh then pure [{header := ""}] else getScopes
 
-    -- Turn off async elaboration so that info trees and messages are available when highlighting syntax
+    -- Turn off async elaboration so that info trees and messages are available when highlighting syntax.
     let origScopes := origScopes.modifyHead fun sc =>
-      { sc with opts := pp.tagAppFns.set (Elab.async.set sc.opts false) true }
+      let opts := Elab.async.set sc.opts false
+      let opts := pp.tagAppFns.set opts true
+      { sc with opts }
 
     let altStr ← parserInputString str
 
@@ -255,8 +277,16 @@ def elabCommands (config : LeanBlockConfig) (str : StrLit)
       cmdState := { cmdState with messages := messages }
 
 
+      -- Use elabCommandTopLevel so that linters run after each command (matching Lean's normal
+      -- behavior). Since it resets messages and infoState, save and restore them to accumulate.
+      let savedMsgs := cmdState.messages
+      let savedTrees := cmdState.infoState.trees
       cmdState ← withInfoTreeContext (mkInfoTree := pure ∘ InfoTree.node (.ofCommandInfo {elaborator := `Manual.Meta.lean, stx := cmd})) <|
-        runCommand (Command.elabCommand cmd) cmd cctx cmdState
+        runCommand (Command.elabCommandTopLevel cmd) cmd cctx cmdState
+      cmdState := { cmdState with
+        messages := savedMsgs ++ cmdState.messages,
+        infoState := { cmdState.infoState with trees := savedTrees ++ cmdState.infoState.trees }
+      }
 
       if Parser.isTerminalCommand cmd then break
 
@@ -275,8 +305,10 @@ def elabCommands (config : LeanBlockConfig) (str : StrLit)
       setEnv cmdState.env
       setScopes cmdState.scopes
 
+      -- The inner linter has already run correctly via elabCommandTopLevel, so we need to avoid
+      -- re-running it.
       for t in cmdState.infoState.trees do
-        pushInfoTree t
+        pushInfoTree (disableUnusedVarLinterInInfoTree t)
 
 
       let mut hls := Highlighted.empty
@@ -361,6 +393,7 @@ def leanTerm : CodeBlockExpanderOf LeanInlineConfig
     | .ok stx =>
       let (newMsgs, tree) ← do
         let initMsgs ← Core.getMessageLog
+        let origTrees ← getResetInfoTrees
         try
           Core.resetMessageLog
 
@@ -380,14 +413,19 @@ def leanTerm : CodeBlockExpanderOf LeanInlineConfig
             Term.synthesizeSyntheticMVarsNoPostponing
             let _ ← Term.levelMVarToParam (← instantiateMVars e)
 
+
             let ctx := PartialContextInfo.commandCtx {
               env := ← getEnv, fileMap := ← getFileMap, mctx := ← getMCtx, currNamespace := ← getCurrNamespace,
-              openDecls := ← getOpenDecls, options := ← getOptions, ngen := ← getNGen
+              openDecls := ← getOpenDecls,
+              options := ← getOptions,
+              ngen := ← getNGen
             }
-            pure <| InfoTree.context ctx (.node (Info.ofCommandInfo ⟨`Manual.leanInline, str⟩) (← getInfoState).trees)
+            let innerTrees ← getResetInfoTrees
+            pure <| InfoTree.context ctx (.node (Info.ofCommandInfo ⟨`Manual.leanTerm, str⟩) innerTrees)
           pure (← Core.getMessageLog, tree')
         finally
           Core.setMessageLog initMsgs
+          for t in origTrees do pushInfoTree t
 
       if let some name := config.name then
         let msgs ← newMsgs.toList.mapM fun (msg : Message) => do
@@ -397,7 +435,7 @@ def leanTerm : CodeBlockExpanderOf LeanInlineConfig
 
         saveOutputs name msgs
 
-      pushInfoTree tree
+      pushInfoTree (disableUnusedVarLinterInInfoTree tree)
 
       if config.error then
         if newMsgs.hasErrors then
@@ -439,6 +477,7 @@ def leanInline : RoleExpanderOf LeanInlineConfig
 
       let (newMsgs, type, tree) ← do
         let initMsgs ← Core.getMessageLog
+        let origTrees ← getResetInfoTrees
         try
           Core.resetMessageLog
           let (tree', t) ← runWithOpenDecls <| runWithVariables fun _ => do
@@ -463,12 +502,16 @@ def leanInline : RoleExpanderOf LeanInlineConfig
             Term.synthesizeSyntheticMVarsNoPostponing
             let ctx := PartialContextInfo.commandCtx {
               env := ← getEnv, fileMap := ← getFileMap, mctx := ← getMCtx, currNamespace := ← getCurrNamespace,
-              openDecls := ← getOpenDecls, options := ← getOptions, ngen := ← getNGen
+              openDecls := ← getOpenDecls,
+              options := ← getOptions,
+              ngen := ← getNGen
             }
-            pure <| (InfoTree.context ctx (.node (Info.ofCommandInfo ⟨`Manual.leanInline, arg⟩) (← getInfoState).trees), t)
+            let innerTrees ← getResetInfoTrees
+            pure <| (InfoTree.context ctx (.node (Info.ofCommandInfo ⟨`Manual.leanInline, arg⟩) innerTrees), t)
           pure (← Core.getMessageLog, t, tree')
         finally
           Core.setMessageLog initMsgs
+          for t in origTrees do pushInfoTree t
 
       if let some name := config.name then
 
@@ -479,7 +522,7 @@ def leanInline : RoleExpanderOf LeanInlineConfig
 
         saveOutputs name msgs
 
-      pushInfoTree tree
+      pushInfoTree (disableUnusedVarLinterInInfoTree tree)
 
       if let `(inline|role{%$s $f $_*}%$e[$_*]) ← getRef then
         Hover.addCustomHover (mkNullNode #[s, e]) type
@@ -521,6 +564,7 @@ def inst : RoleExpanderOf LeanBlockConfig
     | .ok stx =>
       let (newMsgs, tree) ← do
         let initMsgs ← Core.getMessageLog
+        let origTrees ← getResetInfoTrees
         try
           Core.resetMessageLog
           let tree' ← runWithOpenDecls <| runWithVariables fun _ => do
@@ -530,14 +574,20 @@ def inst : RoleExpanderOf LeanBlockConfig
             Term.synthesizeSyntheticMVarsNoPostponing
             -- TODO this is the only difference from the normal inline Lean. Abstract the commonalities out!
             discard <| Meta.synthInstance e
+
+
             let ctx := PartialContextInfo.commandCtx {
               env := ← getEnv, fileMap := ← getFileMap, mctx := ← getMCtx, currNamespace := ← getCurrNamespace,
-              openDecls := ← getOpenDecls, options := ← getOptions, ngen := ← getNGen
+              openDecls := ← getOpenDecls,
+              options := ← getOptions,
+              ngen := ← getNGen
             }
-            pure <| InfoTree.context ctx (.node (Info.ofCommandInfo ⟨`Manual.leanInline, arg⟩) (← getInfoState).trees)
+            let innerTrees ← getResetInfoTrees
+            pure <| InfoTree.context ctx (.node (Info.ofCommandInfo ⟨`Manual.inst, arg⟩) innerTrees)
           pure (← Core.getMessageLog, tree')
         finally
           Core.setMessageLog initMsgs
+          for t in origTrees do pushInfoTree t
 
       if let some name := config.name then
         let msgs ← newMsgs.toList.mapM fun (msg : Message) => do
@@ -547,7 +597,7 @@ def inst : RoleExpanderOf LeanBlockConfig
 
         saveOutputs name msgs
 
-      pushInfoTree tree
+      pushInfoTree (disableUnusedVarLinterInInfoTree tree)
 
       reportMessages config.error term newMsgs
 

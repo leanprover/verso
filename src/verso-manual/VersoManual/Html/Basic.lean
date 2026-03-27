@@ -31,12 +31,12 @@ public instance : ToString CSS := ⟨CSS.css⟩
 public instance : LE CSS where
   le x y := x.css ≤ y.css
 
-public instance : DecidableLE CSS := fun x y => inferInstanceAs (DecidableLE String) x.css y.css
+public instance : DecidableLE CSS := fun x y => (inferInstance : DecidableLE String) x.css y.css
 
 public instance : LT CSS where
   lt x y := x.css < y.css
 
-public instance : DecidableLT CSS := fun x y => inferInstanceAs (DecidableLT String) x.css y.css
+public instance : DecidableLT CSS := fun x y => (inferInstance : DecidableLT String) x.css y.css
 
 public instance : Coe String CSS where
   coe := CSS.mk
@@ -61,12 +61,12 @@ public instance : ToString JS := ⟨JS.js⟩
 public instance : LE JS where
   le x y := x.js ≤ y.js
 
-public instance : DecidableLE JS := fun x y => inferInstanceAs (DecidableLE String) x.js y.js
+public instance : DecidableLE JS := fun x y => (inferInstance : DecidableLE String) x.js y.js
 
 public instance : LT JS where
   lt x y := x.js < y.js
 
-public instance : DecidableLT JS := fun x y => inferInstanceAs (DecidableLT String) x.js y.js
+public instance : DecidableLT JS := fun x y => (inferInstance : DecidableLT String) x.js y.js
 
 public instance : Coe String JS where
   coe := JS.mk

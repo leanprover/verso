@@ -55,7 +55,7 @@ public def DocName.ofName (c : Name) (ppWidth : Nat := 40) (showUniverses := tru
 
     let docstring? ← if checkDocstring then getDocString? env c else Lean.findDocString? env c
 
-    let hlCtx : SubVerso.Highlighting.Context := ⟨{}, false, false, [], false⟩
+    let hlCtx : SubVerso.Highlighting.Context := ⟨{}, false, false, [], false, (← IO.mkRef {})⟩
     let hlName ← (renderTagged none name : ReaderT SubVerso.Highlighting.Context MetaM _) hlCtx
     let signature ← (renderTagged none sig : ReaderT SubVerso.Highlighting.Context MetaM _) hlCtx
     pure { name := c, hlName, signature, docstring? }

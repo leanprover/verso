@@ -32,3 +32,5 @@ import Tests.VersoManual
 import Tests.Z85
 import Tests.Zip
 import Tests.DocSourceConfig
+import Tests.LiterateConfig
+import Tests.LiterateHtml

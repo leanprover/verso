@@ -4,8 +4,6 @@ on:
             - master
             - main
             - nightly-testing
-        tags:
-            - "v4*"
     pull_request:
     merge_group:
 
@@ -65,50 +63,29 @@ jobs:
                   lake build
 
             - name: Install PDF Dependencies
-              uses: zauguin/install-texlive@v4
-              with:
-                  texlive_version: 2026
-                  packages: |
-                      scheme-minimal
-                      l3packages
-                      tools
-                      latex-bin
-                      xpatch
-                      booktabs
-                      footmisc
-                      environ
-                      hyperref
-                      titlesec
-                      tocloft
-                      enumitem
-                      fmtcount
-                      glossaries
-                      datatool
-                      caption
-                      babel
-                      fontspec
-                      textcase
-                      memoir
-                      sourcecodepro
-                      sourcesans
-                      sourceserif
-                      fvextra
-                      upquote
-                      lineno
-                      float
-                      tcolorbox
-                      tikzfill
-                      pdfcol
-                      listings
-                      epstopdf-pkg
-                      pgf
-                      environ
-                      etoolbox
-                      ulem
-                      newunicodechar
+              uses: ./.github/actions/install-texlive
 
-            - name: Check `tlmgr` version
-              run: tlmgr --version
+            # Install uv and Playwright before tests, since lake test
+            # runs literate browser tests that need them
+            - name: Install uv
+              uses: astral-sh/setup-uv@v7
+              with:
+                  enable-cache: true
+                  cache-dependency-glob: "browser-tests/pyproject.toml"
+
+            - name: Cache Playwright browsers
+              uses: actions/cache@v5
+              with:
+                  path: .playwright-browsers
+                  key: playwright-${{ runner.os }}-${{ hashFiles('browser-tests/uv.lock') }}
+
+            - name: Install Playwright browsers
+              run: |
+                  uv run --project browser-tests --extra test playwright install chromium firefox --with-deps
+
+            - name: Install actionlint
+              run: |
+                  curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash | bash -s -- latest /usr/local/bin
 
             - name: Run tests
               run: |
@@ -173,29 +150,43 @@ jobs:
                   grep -qF '<a href="blog/">blog</a> genre' _out/demosite/about/index.html
                   grep -qF '<base href=".././">' _out/demosite/about/index.html
 
-            # Begin browser testing
-            - name: Install uv
-              uses: astral-sh/setup-uv@v7
-              with:
-                  enable-cache: true
-                  cache-dependency-glob: "browser-tests/pyproject.toml"
-
-            - name: Cache Playwright browsers
+            # uv and Playwright are installed before `lake test` above.
+            - name: Cache literate-config test project
               uses: actions/cache@v5
               with:
-                  path: .playwright-browsers
-                  key: playwright-${{ runner.os }}-${{ hashFiles('browser-tests/uv.lock') }}
+                  path: test-projects/literate-config/.lake
+                  key:
+                      literate-config-${{ runner.os }}-${{
+                      hashFiles('test-projects/literate-config/lean-toolchain') }}-${{
+                      hashFiles('test-projects/literate-config/lake-manifest.json') }}-${{
+                      steps.shortSHA.outputs.short_sha }}
+                  restore-keys: |
+                      literate-config-${{ runner.os }}-${{ hashFiles('test-projects/literate-config/lean-toolchain') }}-${{ hashFiles('test-projects/literate-config/lake-manifest.json') }}-
 
-            - name: Install Playwright browsers
-              run: |
-                  uv run --project browser-tests --extra test playwright install chromium firefox --with-deps
+            - name: Cache literate-multi-root test project
+              uses: actions/cache@v5
+              with:
+                  path: test-projects/literate-multi-root/.lake
+                  key:
+                      literate-multi-root-${{ runner.os }}-${{
+                      hashFiles('test-projects/literate-multi-root/lean-toolchain') }}-${{
+                      hashFiles('test-projects/literate-multi-root/lake-manifest.json') }}-${{
+                      steps.shortSHA.outputs.short_sha }}
+                  restore-keys: |
+                      literate-multi-root-${{ runner.os }}-${{ hashFiles('test-projects/literate-multi-root/lean-toolchain') }}-${{ hashFiles('test-projects/literate-multi-root/lake-manifest.json') }}-
+
+            - name: Run literate browser tests
+              run: src/tests/run_literate_browser_tests.sh
 
             - name: Run browser tests
-              run: uv run --project browser-tests --extra test pytest browser-tests -v
-            # End browser testing
+              run: |
+                  uv run --project browser-tests --extra test pytest \
+                    browser-tests/test_search.py \
+                    browser-tests/test_redirect.py \
+                    browser-tests/test_katex.py -v
 
             - name: Upload docs to artifact storage
-              if: github.ref_type != 'tag' && github.ref != 'refs/heads/main'
+              if: github.ref != 'refs/heads/main'
               uses: actions/upload-artifact@v7
               with:
                   name: "Verso manual (PDF and HTML)"
@@ -204,7 +195,7 @@ jobs:
                       html-manual.zip
 
             - uses: "marvinpinto/action-automatic-releases@v1.2.1"
-              if: github.ref_type != 'tag' && github.ref == 'refs/heads/main'
+              if: github.ref == 'refs/heads/main'
               with:
                   repo_token: "${{ secrets.GITHUB_TOKEN }}"
                   automatic_release_tag: "latest"
@@ -212,17 +203,6 @@ jobs:
                   files: |
                       manual.pdf
                       html-manual.zip
-
-            - name: Create release from tag
-              if: github.ref_type == 'tag' && startsWith(github.ref_name, 'v4')
-              env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-              run: |
-                  gh release create ${{ github.ref_name }} \
-                    manual.pdf \
-                    html-manual.zip \
-                    --title "Release ${{ github.ref_name }}" \
-                    --notes "Automated release for ${{ github.ref_name }}"
 
               # deploy-info computes metadata that's shown in the Netlify interface
               # about the deployment (for non-PR deploys)

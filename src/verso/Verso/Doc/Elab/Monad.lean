@@ -256,7 +256,7 @@ public instance : MonadQuotation DocElabM := inferInstanceAs <| MonadQuotation (
 public instance : Monad DocElabM := inferInstanceAs <| Monad (ReaderT DocElabContext (ReaderT PartElabM.State (StateT DocElabM.State TermElabM)))
 
 public instance : MonadControl TermElabM DocElabM :=
-  let ⟨stM, liftWith, restoreM⟩ := inferInstanceAs <| MonadControlT TermElabM (ReaderT DocElabContext (ReaderT PartElabM.State (StateT DocElabM.State TermElabM)))
+  let ⟨stM, liftWith, restoreM⟩ := (inferInstance : MonadControlT TermElabM (ReaderT DocElabContext (ReaderT PartElabM.State (StateT DocElabM.State TermElabM))))
   {stM, liftWith, restoreM := (· >>= restoreM)}
 
 public instance : MonadExceptOf Exception DocElabM := inferInstanceAs <| MonadExceptOf Exception (ReaderT DocElabContext (ReaderT PartElabM.State (StateT DocElabM.State TermElabM)))
@@ -473,8 +473,8 @@ public def FinishedPart.toVersoDoc
     (finished : FinishedPart)
     (ctx : DocElabContext)
     (docElabState : DocElabM.State)
-    (partElabState : PartElabM.State)
-    : TermElabM Term := do
+    (partElabState : PartElabM.State) :
+    TermElabM Term := do
 
   -- Check internal refs
   for (ref, uses) in docElabState.footnoteRefs do

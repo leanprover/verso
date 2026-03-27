@@ -16,3 +16,4 @@ multi.json
 single.json
 *.html
 *.produced.out
+__pycache__

@@ -1,0 +1,12 @@
+name = "literate-multi-root-test"
+defaultTargets = ["LibA", "LibB"]
+
+[[require]]
+name = "verso"
+path = "../.."
+
+[[lean_lib]]
+name = "LibA"
+
+[[lean_lib]]
+name = "LibB"
