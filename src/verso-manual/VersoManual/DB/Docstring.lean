@@ -151,8 +151,11 @@ def dbDocstring : BlockCommandOf DBDocstringConfig
       -- Build DeclType from DocInfo
       let declType := buildDeclType docInfo (hideFields := hideFields) (hideStructureConstructor := hideCtor) ci
 
-      -- Build Signature (includes declaration name)
-      let signature := signatureOfInfo info ci
+      -- Build Signature (includes declaration name and universe parameters)
+      let levelParams := match (← getEnv).find? name with
+        | some ci => ci.levelParams
+        | none => []
+      let signature := signatureOfInfo info ci (levelParams := levelParams)
 
       -- Build extras for structures and inductives
       let extras ← getExtras name declType

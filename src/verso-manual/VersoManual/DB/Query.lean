@@ -51,18 +51,15 @@ def docNameOfNameInfo (ni : NameInfo)
     signature := .seq #[nameHl, .text " : ", formatCodeToHighlighted constInfo ni.type]
     docstring? }
 
-/-- Build a `Signature` from a doc-gen4 `Info`, including the declaration name. -/
+/-- Build a `Signature` from a doc-gen4 `Info`, including the declaration name.
+Combines all `FormatCode` pieces (name, args, type) into a single `Format` document,
+then renders at width 72 (wide) and 42 (narrow) for proper line-breaking. -/
 def signatureOfInfo (info : DocGen4.Process.Info)
-    (constInfo : Lean.NameMap (String × Option String) := {}) : Signature :=
-  let docstring? := docStringOfDoc? info.doc
-  let sigStr := s!"{info.name} : {formatCodeText info.type}"
-  let nameHl := Highlighted.token ⟨.const info.name sigStr docstring? false none, info.name.toString⟩
-  let argsHl := info.args.map fun arg =>
-    Highlighted.seq #[.text " ", formatCodeToHighlighted constInfo arg.binder]
-  let sepHl := Highlighted.text " : "
-  let typeHl := formatCodeToHighlighted constInfo info.type
-  let sig := Highlighted.seq (#[nameHl] ++ argsHl ++ #[sepHl, typeHl])
-  { wide := sig, narrow := sig }
+    (constInfo : Lean.NameMap (String × Option String) := {})
+    (levelParams : List Name := []) : Signature :=
+  let sigFc := buildSignatureFormatCode info.name levelParams (info.args.map (·.binder)) info.type
+  { wide := formatCodeToHighlighted constInfo sigFc 72
+    narrow := formatCodeToHighlighted constInfo sigFc 42 }
 
 /--
 Extract the parent structure name from a `FormatCode` type by rendering and finding the first
