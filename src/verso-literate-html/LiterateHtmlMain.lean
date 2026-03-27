@@ -220,6 +220,33 @@ private def renderModBody (mod : LitMod) (resolved : ResolvedConfig)
                    codeOptions := {} }
   let hlCtx : HighlightHtmlM.Context Literate :=
     ⟨emitCtx.linkTargets, emitCtx.traverseContext, emitCtx.definitionIds, emitCtx.codeOptions⟩
+
+  -- Render a single code item and its output messages
+  let renderCodeItemWithOutput (idx : Nat) (item : ModuleItem') (hlState : HtmlState) : IO (Html × HtmlState) := do
+    let ((codeHtml, _, _), st) ← renderCode idx item |>.run emitCtx hlState.hlState
+    let (outputHtml, st') := renderOutputMessages #[(idx, item)] resolved.showOutput hlCtx st
+    return (codeHtml ++ outputHtml, { hlState with hlState := st' })
+
+  -- Render accumulated code items into a code box
+  let flushCodeItems (items : Array (Nat × ModuleItem')) (hlState : HtmlState) : IO (Html × HtmlState) := do
+    if items.isEmpty then return (.empty, hlState)
+    let mut boxHtml : Html := .empty
+    let mut hlState := hlState
+    for (idx, cItem) in items do
+      let (itemHtml, hlState') ← renderCodeItemWithOutput idx cItem hlState
+      hlState := hlState'
+      boxHtml := boxHtml ++ itemHtml
+    if boxHtml == .empty then return (.empty, hlState)
+    return ({{<div class="code-box">{{boxHtml}}</div>}}, hlState)
+
+  -- Filter docstrings based on resolved config
+  let filterDocstrings (item : ModuleItem') : ModuleItem' :=
+    if resolved.showDocstrings && resolved.hideDocstringsFor.isEmpty then item
+    else { item with code := item.code.filter fun
+      | .verso _ (some dn) _ | .markdown _ (some dn) _ =>
+        shouldShowDocstring resolved dn
+      | _ => true }
+
   -- Apply hide_commands filtering and remove import items (handled separately).
   -- Preserve original indices so that mod-doc anchor lookups (keyed by original item index) work.
   let contents := Id.run do
@@ -230,7 +257,9 @@ private def renderModBody (mod : LitMod) (resolved : ResolvedConfig)
          (resolved.hideCommands.isEmpty || !matchesAnyCommandPattern item resolved.hideCommands) then
         contents := contents.push (origIdx, item)
     pure contents
+
   let mut body : Html := .empty
+
   -- Collect import items into a collapsible section, rendered before other content
   let mut importHtml : Html := .empty
   let mut importHlState := initHlState
@@ -247,78 +276,51 @@ private def renderModBody (mod : LitMod) (resolved : ResolvedConfig)
         <div class="imports-code">{{importHtml}}</div>
       </details>
     }}
-  let hlState := importHlState
+
   -- Process items: prose (modDoc) flows between code boxes
   let mut currentCodeItems : Array (Nat × ModuleItem') := #[]
-  let mut hlState := hlState
+  let mut hlState := importHlState
   let mut allHeadings : Array (Nat × String × String) := #[]
   let mut usedIds := ctx.traverseState.usedHtmlIds
   for (origIdx, item) in contents do
-    -- Apply docstring filtering
-    let item :=
-      if resolved.showDocstrings && resolved.hideDocstringsFor.isEmpty then item
-      else { item with code := item.code.filter fun
-        | .verso _ (some dn) _ | .markdown _ (some dn) _ =>
-          shouldShowDocstring resolved dn
-        | _ => true }
+    let item := filterDocstrings item
     let hasModDoc := item.code.any Code.isModDoc
     let hasDeclDocAsText := resolved.docstringsAsText && item.code.any Code.isDeclDoc
     if hasModDoc then
-      -- Flush any accumulated code items first
-      if !currentCodeItems.isEmpty then
-        let mut boxHtml : Html := .empty
-        for (idx, cItem) in currentCodeItems do
-          let ((codeHtml, _, _), st) ← renderCode idx cItem |>.run emitCtx hlState.hlState
-          let (outputHtml, st') := renderOutputMessages #[(idx, cItem)] resolved.showOutput hlCtx st
-          hlState := { hlState with hlState := st' }
-          boxHtml := boxHtml ++ codeHtml ++ outputHtml
-        unless boxHtml == .empty do
-          body := body ++ {{<div class="code-box">{{boxHtml}}</div>}}
-        currentCodeItems := #[]
-      -- Render this item's code — modDoc parts render as prose, rest as inline code
+      -- Flush accumulated code items, then render modDoc as prose
+      let (flushHtml, hlState') ← flushCodeItems currentCodeItems hlState
+      hlState := hlState'
+      body := body ++ flushHtml
+      currentCodeItems := #[]
       let ((itemHtml, hdgs, usedIds'), st) ← renderCode origIdx item (usedHtmlIds := usedIds) |>.run emitCtx hlState.hlState
       hlState := { hlState with hlState := st }
       usedIds := usedIds'
       allHeadings := allHeadings ++ hdgs
       body := body ++ itemHtml
     else if hasDeclDocAsText then
-      -- Flush any accumulated code items first
-      if !currentCodeItems.isEmpty then
-        let mut boxHtml : Html := .empty
-        for (idx, cItem) in currentCodeItems do
-          let ((codeHtml, _, _), st) ← renderCode idx cItem |>.run emitCtx hlState.hlState
-          let (outputHtml, st') := renderOutputMessages #[(idx, cItem)] resolved.showOutput hlCtx st
-          hlState := { hlState with hlState := st' }
-          boxHtml := boxHtml ++ codeHtml ++ outputHtml
-        unless boxHtml == .empty do
-          body := body ++ {{<div class="code-box">{{boxHtml}}</div>}}
-        currentCodeItems := #[]
-      -- Split: render declaration docstrings as prose, then remaining code in a code box
+      -- Flush accumulated code items, then split docstrings from code
+      let (flushHtml, hlState') ← flushCodeItems currentCodeItems hlState
+      hlState := hlState'
+      body := body ++ flushHtml
+      currentCodeItems := #[]
       let docItem := { item with code := item.code.filter Code.isDeclDoc }
-      -- Drop leading newline-only highlighted entries left over from the split
       let remainingCode := (item.code.filter (!Code.isDeclDoc ·)).toList.dropWhile
         fun | .highlighted hl => newlinesOnly hl | _ => false
       let codeItem := { item with code := remainingCode.toArray }
       let ((docHtml, _), st) ← renderCode origIdx docItem (docstringsAsText := true) |>.run emitCtx hlState.hlState
       hlState := { hlState with hlState := st }
       body := body ++ docHtml
-      let ((codeHtml, _, _), st) ← renderCode origIdx codeItem |>.run emitCtx hlState.hlState
-      let (outputHtml, st') := renderOutputMessages #[(origIdx, codeItem)] resolved.showOutput hlCtx st
-      hlState := { hlState with hlState := st' }
-      unless codeHtml == .empty do
-        body := body ++ {{<div class="code-box">{{codeHtml ++ outputHtml}}</div>}}
+      let (codeBoxHtml, hlState') ← renderCodeItemWithOutput origIdx codeItem hlState
+      hlState := hlState'
+      unless codeBoxHtml == .empty do
+        body := body ++ {{<div class="code-box">{{codeBoxHtml}}</div>}}
     else
       currentCodeItems := currentCodeItems.push (origIdx, item)
+
   -- Flush remaining code items
-  if !currentCodeItems.isEmpty then
-    let mut boxHtml : Html := .empty
-    for (idx, cItem) in currentCodeItems do
-      let ((codeHtml, _, _), st) ← renderCode idx cItem |>.run emitCtx hlState.hlState
-      let (outputHtml, st') := renderOutputMessages #[(idx, cItem)] resolved.showOutput hlCtx st
-      hlState := { hlState with hlState := st' }
-      boxHtml := boxHtml ++ codeHtml ++ outputHtml
-    unless boxHtml == .empty do
-      body := body ++ {{<div class="code-box">{{boxHtml}}</div>}}
+  let (flushHtml, hlState') ← flushCodeItems currentCodeItems hlState
+  hlState := hlState'
+  body := body ++ flushHtml
   return (body, hlState, allHeadings)
 
 open Verso Output Doc Html in
