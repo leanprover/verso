@@ -180,6 +180,7 @@ private def mkHeadContents (litConfig : LiterateConfig) (includeCodeAssets : Boo
   let codeAssets : Html := if includeCodeAssets then {{
     <script src="popper.js"></script>
     <script src="tippy.js"></script>
+    <script src="marked.js"></script>
     <script>{{Html.text false highlightingJs}}</script>
     <style>{{Html.text false highlightingStyle}}</style>
     <link rel="stylesheet" href="tippy-border.css"/>
@@ -447,6 +448,7 @@ def main (args : List String) : IO UInt32 := do
   IO.FS.writeFile (config.outputDir / "popper.js") Verso.Code.Highlighted.WebAssets.popper
   IO.FS.writeFile (config.outputDir / "tippy.js") Verso.Code.Highlighted.WebAssets.tippy
   IO.FS.writeFile (config.outputDir / "tippy-border.css") Verso.Code.Highlighted.WebAssets.tippy.border.css
+  IO.FS.writeFile (config.outputDir / "marked.js") Verso.Code.Highlighted.WebAssets.marked
   IO.FS.writeFile (config.outputDir / "literate.css") literate.css
   -- Copy the copy-button JS
   IO.FS.writeFile (config.outputDir / "copy-button.js") copyButtonJs

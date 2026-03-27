@@ -10,4 +10,6 @@ popper.js - https://popper.js.org/docs/v2/ (MIT)
 
 KaTeX - https://github.com/KaTeX/KaTeX (MIT)
 
+marked - https://github.com/markedjs/marked (MIT)
+
 axe-core - https://github.com/dequelabs/axe-core (MPL-2.0, test suite only)
