@@ -54,7 +54,7 @@ jobs:
                   NETLIFY_SITE_ID: "8a89abd8-095b-4496-a9c1-381d2d5629ec"
 
             - name: Post deployment comment on PR
-              uses: marocchino/sticky-pull-request-comment@v2
+              uses: marocchino/sticky-pull-request-comment@v3
               with:
                   number: ${{ steps.pr-info.outputs.pullRequestNumber }}
                   header: netlify-preview
