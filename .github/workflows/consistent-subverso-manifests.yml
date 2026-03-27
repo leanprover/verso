@@ -5,7 +5,7 @@ on:
     pull_request:
     merge_group:
 
-name: Consistent SubVerso dependencies
+name: Consistent subproject dependencies
 
 jobs:
     build:
@@ -49,3 +49,21 @@ jobs:
                   find . -name lake-manifest.json -not -path ./lake-manifest.json -print0 | \
                     xargs -0 jq -e --arg root "$ROOT_REV" --arg demod "$DEMOD_REV" \
                     'all(.packages[] | select(.name == "subverso") | .rev; . == $root or . == $demod)'
+
+            - name: Check that literate test projects match root lean-toolchain
+              run: |
+                  ROOT_TC=$(cat lean-toolchain)
+                  echo "Root lean-toolchain: $ROOT_TC"
+                  FAILED=0
+                  for proj in test-projects/literate-config test-projects/literate-multi-root; do
+                    PROJ_TC=$(cat "$proj/lean-toolchain")
+                    if [ "$PROJ_TC" != "$ROOT_TC" ]; then
+                      echo "MISMATCH: $proj/lean-toolchain ($PROJ_TC) does not match root ($ROOT_TC)"
+                      FAILED=1
+                    else
+                      echo "OK: $proj/lean-toolchain"
+                    fi
+                  done
+                  if [ "$FAILED" -ne 0 ]; then
+                    exit 1
+                  fi

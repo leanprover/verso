@@ -31,3 +31,5 @@ import Tests.VersoBlog
 import Tests.VersoManual
 import Tests.Z85
 import Tests.Zip
+import Tests.LiterateConfig
+import Tests.LiterateHtml

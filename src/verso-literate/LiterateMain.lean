@@ -101,7 +101,7 @@ def commentEndToken (commentInfo : SourceInfo) : Syntax :=
 
 
 /--
-Return all stacks of syntax nodes satisfying `visit`, starting with such a node that also fulfills
+Returns all stacks of syntax nodes satisfying `visit`, starting with such a node that also fulfills
 `accept` (default "is leaf"), and ending with the root.
 -/
 partial def findStacks (root : Syntax) (visit : Syntax → Bool) (accept : Syntax → Bool := fun stx => !stx.hasArgs) : Array Syntax.Stack :=
@@ -242,7 +242,10 @@ where
       if let some declRange ← getDeclarationRange? stx then
         if stx[1].getKind == ``versoCommentBody then
           let doc? := getMainVersoModuleDocs (← getEnv) |>.snippets |>.findSome? fun s =>
-             guard (s.declarationRange == declRange) *> some s
+            -- It's important to only check the leading position, because the trailing
+            -- position gets updated in the very last item. This would mean that a
+            -- trailing moduledoc wouldn't compare properly here.
+            guard (s.declarationRange.pos == declRange.pos) *> some s
           if let some doc := doc? then
             return #[.modDoc (← toModLit doc)]
         else if stx[1].isAtom then
@@ -269,9 +272,44 @@ where
             pure <| Code.verso i (some declName) x
         else pure none
       else pure none
-    pure <| hl.map fun
-      | .inl hl => .highlighted hl
+    let code := hl.map fun
+      | .inl hl => Code.highlighted hl
       | .inr c => c
+    -- Extract any remaining doc-comment tokens (from anonymous declarations like `example`)
+    -- as separate .markdown entries
+    pure <| code.flatMap extractDocComments
+
+  /--
+  Splits a `Code.highlighted` at doc-comment tokens, extracting them as `.markdown` entries.
+  Non-highlighted code entries pass through unchanged.
+  -/
+  extractDocComments (c : Code) : Array Code :=
+    match c with
+    | .highlighted hl => extractFromHighlighted hl
+    | other => #[other]
+
+  /-- Parses a raw docstring comment text (including `/--` and `-/` delimiters) into markdown. -/
+  parseDocComment (text : String) : Code :=
+    let docText := (text.dropPrefix "/-- " |>.toString |>.dropSuffix " -/"
+          |>.dropSuffix "\n-/" |>.dropSuffix "-/").trimAsciiEnd.toString
+    match MD4Lean.parse docText with
+    | some md => .markdown 0 none md
+    | none => .markdown 0 none ⟨#[.code #[] #[] none #[docText]]⟩
+
+  /-- Walks a `Highlighted` tree and splits out doc-comment tokens as `.markdown` code entries. -/
+  extractFromHighlighted (hl : Highlighted) : Array Code :=
+    match hl with
+    | .seq xs =>
+      let init : Array Code × Array Highlighted := (#[], #[])
+      let (result, pending) := xs.foldl (init := init) fun (result, pending) x =>
+        match x with
+        | .token ⟨.docComment, text⟩ =>
+          let result := if pending.isEmpty then result else result.push (.highlighted (.seq pending))
+          (result.push (parseDocComment text), #[])
+        | other => (result, pending.push other)
+      if pending.isEmpty then result else result.push (.highlighted (.seq pending))
+    | .token ⟨.docComment, text⟩ => #[parseDocComment text]
+    | _ => #[Code.highlighted hl]
 
   toLit (doc : VersoDocString) : HighlightM (LitVersoDocString) := do
     pure { text := ← doc.text.mapM blockToLit, subsections := ← doc.subsections.mapM partToLit }
@@ -325,7 +363,94 @@ where
 end
 
 
-unsafe def go (suppressedNamespaces : Array Name) (extraImports : Array Name) (mod : String) (out : IO.FS.Stream) : IO UInt32 := do
+section ImageCollection
+
+/-- Whether a URL string is a relative path (not absolute and not a protocol URL). -/
+private def isRelativeImagePath (url : String) : Bool :=
+  !url.startsWith "/" && (url.splitOn "://").length <= 1
+
+/-- Converts an MD4Lean `AttrText` array to a plain string. -/
+private def attrTextToString (src : Array MD4Lean.AttrText) : String :=
+  String.join (src.map (fun | .normal s => s | .entity e => e | .nullchar => "") |>.toList)
+
+open MD4Lean in
+/-- Collects relative image paths from an MD4Lean document. -/
+private partial def collectMdImages (doc : Document) : Array String :=
+  doc.blocks.foldl (fun acc b => acc ++ collectBlock b) #[]
+where
+  collectBlock : Block → Array String
+    | .p txt => collectTexts txt
+    | .ul _ _ items => items.foldl (fun acc ⟨_, _, _, bs⟩ => acc ++ bs.foldl (fun a b => a ++ collectBlock b) #[]) #[]
+    | .ol _ _ _ items => items.foldl (fun acc ⟨_, _, _, bs⟩ => acc ++ bs.foldl (fun a b => a ++ collectBlock b) #[]) #[]
+    | .table hd rows =>
+      hd.foldl (fun acc ts => acc ++ collectTexts ts) #[]
+      ++ rows.foldl (fun acc r => acc ++ r.foldl (fun a ts => a ++ collectTexts ts) #[]) #[]
+    | .header _ title => collectTexts title
+    | .blockquote bs => bs.foldl (fun acc b => acc ++ collectBlock b) #[]
+    | .hr | .html _ | .code _ _ _ _ => #[]
+
+  collectText : Text → Array String
+    | .img src _title _alt =>
+      let s := attrTextToString src
+      if isRelativeImagePath s then #[s] else #[]
+    | .a _ _ _ xs | .em xs | .strong xs | .del xs | .u xs | .wikiLink _ xs => collectTexts xs
+    | .normal _ | .nullchar | .br _ | .softbr _ | .code _ | .entity _ | .latexMath _ | .latexMathDisplay _ => #[]
+
+  collectTexts (xs : Array Text) : Array String :=
+    xs.foldl (fun acc t => acc ++ collectText t) #[]
+
+open Lean.Doc in
+/-- Collects relative image paths from Verso inline content. -/
+private partial def collectVersoInlineImages (i : Inline Ext) : Array String :=
+  match i with
+  | .image _alt url => if isRelativeImagePath url then #[url] else #[]
+  | .concat xs | .emph xs | .bold xs => xs.foldl (fun acc x => acc ++ collectVersoInlineImages x) #[]
+  | .link xs _ => xs.foldl (fun acc x => acc ++ collectVersoInlineImages x) #[]
+  | .footnote _ xs | .other _ xs => xs.foldl (fun acc x => acc ++ collectVersoInlineImages x) #[]
+  | .text _ | .linebreak _ | .code _ | .math _ _ => #[]
+
+open Lean.Doc in
+/-- Collects relative image paths from a Verso block. -/
+private partial def collectVersoBlockImages (b : Block Ext Ext) : Array String :=
+  match b with
+  | .para xs => xs.foldl (fun acc x => acc ++ collectVersoInlineImages x) #[]
+  | .ul items => items.foldl (fun acc i => acc ++ i.contents.foldl (fun a b => a ++ collectVersoBlockImages b) #[]) #[]
+  | .ol _ items => items.foldl (fun acc i => acc ++ i.contents.foldl (fun a b => a ++ collectVersoBlockImages b) #[]) #[]
+  | .dl items => items.foldl (fun acc i =>
+      acc ++ i.term.foldl (fun a t => a ++ collectVersoInlineImages t) #[]
+          ++ i.desc.foldl (fun a b => a ++ collectVersoBlockImages b) #[]) #[]
+  | .blockquote xs | .concat xs => xs.foldl (fun acc x => acc ++ collectVersoBlockImages x) #[]
+  | .other _ xs => xs.foldl (fun acc x => acc ++ collectVersoBlockImages x) #[]
+  | .code _ => #[]
+
+open Lean.Doc in
+/-- Collects relative image paths from a Verso part. -/
+private partial def collectVersoPartImages (p : Part Ext Ext Empty) : Array String :=
+  p.title.foldl (fun acc x => acc ++ collectVersoInlineImages x) #[]
+  ++ p.content.foldl (fun acc x => acc ++ collectVersoBlockImages x) #[]
+  ++ p.subParts.foldl (fun acc x => acc ++ collectVersoPartImages x) #[]
+
+/-- Collects relative image paths from a single `Code` item. -/
+private def collectCodeImages : Code → Array String
+  | .markdown _ _ doc | .markdownModDoc doc => collectMdImages doc
+  | .verso _ _ doc =>
+    doc.text.foldl (fun acc b => acc ++ collectVersoBlockImages b) #[]
+    ++ doc.subsections.foldl (fun acc p => acc ++ collectVersoPartImages p) #[]
+  | .modDoc doc =>
+    doc.text.foldl (fun acc b => acc ++ collectVersoBlockImages b) #[]
+    ++ doc.sections.foldl (fun acc (_, p) => acc ++ collectVersoPartImages p) #[]
+  | .highlighted _ => #[]
+
+/-- Collects all unique relative image paths from module items. -/
+private def collectItemImages (items : Array ModuleItem') : Array String :=
+  let all := items.foldl (fun acc item =>
+    acc ++ item.code.foldl (fun a c => a ++ collectCodeImages c) #[]) #[]
+  all.toList.eraseDups.toArray
+
+end ImageCollection
+
+
+unsafe def go (suppressedNamespaces : Array Name) (extraImports : Array Name) (mod : String) (leanOptions : Options) (out : IO.FS.Stream) : IO UInt32 := do
   try
     initSearchPath (← findSysroot)
     let modName := mod.toName
@@ -346,7 +471,8 @@ unsafe def go (suppressedNamespaces : Array Name) (extraImports : Array Name) (m
     let env ← Compat.importModules (extraImports.map ({module := ·}) ++ imports) {}
     let pctx : Frontend.Context := {inputCtx := ictx}
 
-    let scopes := [{header := "", opts := maxHeartbeats.set {} 10000000 }]
+    let opts := leanOptions.mergeBy (fun _ _ v => v) (maxHeartbeats.set {} 10000000)
+    let scopes := [{header := "", opts}]
     let commandState := { env, maxRecDepth := defaultMaxRecDepth, messages := msgs, scopes }
     let cmdPos := parserState.pos
     let cmdSt ← IO.mkRef {commandState, parserState, cmdPos}
@@ -367,9 +493,10 @@ unsafe def go (suppressedNamespaces : Array Name) (extraImports : Array Name) (m
       code := hl,
     }
 
+    let images := collectItemImages items
     let items := exportItems items
 
-    out.putStrLn (json%{"module": $mod, "items": $(toJson items)}).compress
+    out.putStrLn (json%{"module": $mod, "items": $(toJson items), "images": $(toJson images)}).compress
 
     return (0 : UInt32)
 
@@ -377,15 +504,50 @@ unsafe def go (suppressedNamespaces : Array Name) (extraImports : Array Name) (m
     IO.eprintln s!"error finding highlighted code: {toString e}"
     return 2
 
-structure LiterateConfig where
-  handleInline : ElabInline → Array (Lean.Doc.Inline ElabInline) → MetaM (Inline Literate)
-  handleBlock : ElabBlock → Array (Lean.Doc.Block ElabInline ElabBlock) → MetaM (Block Literate)
-
 structure Config where
   suppressedNamespaces : Array Name := #[]
   mod : String
   outFile : Option String := none
   extraImports : Array Name := #[]
+  leanOptions : Options := {}
+
+/--
+Parses a `-Dname=value` flag into a Lean option, registering it in `opts`.
+Uses the registered option declaration to determine the expected type.
+-/
+private def parseDOption (arg : String) (opts : Options) : IO Options := do
+  let arg := arg.drop 2  -- drop "-D"
+  let parts := arg.split "=" |>.toList
+  match parts with
+  | [name, value] =>
+    let name := String.toName name.copy
+    let value := value.copy
+    let decl ← getOptionDecl name
+    match decl.defValue with
+    | .ofBool _ =>
+      match value with
+      | "true" => return opts.setBool name true
+      | "false" => return opts.setBool name false
+      | _ => throw <| .userError s!"Invalid boolean value for option {name}: {value}"
+    | .ofNat _ =>
+      if let some n := value.toNat? then
+        return opts.insert name (DataValue.ofNat n)
+      else
+        throw <| .userError s!"Invalid natural number value for option {name}: {value}"
+    | .ofInt _ =>
+      if let some n := value.toInt? then
+        return opts.insert name (DataValue.ofInt n)
+      else
+        throw <| .userError s!"Invalid integer value for option {name}: {value}"
+    | .ofString _ =>
+      -- No quote removal needed: the shell removes quotes and interprets escapes before we see the
+      -- value
+      return opts.insert name (DataValue.ofString value)
+    | .ofName _ =>
+      return opts.insert name (DataValue.ofName (String.toName value))
+    | .ofSyntax _ =>
+      throw <| .userError s!"Cannot set syntax-valued option {name} via -D flag"
+  | _ => throw <| .userError s!"Invalid -D option: {arg}"
 
 def Config.fromArgs (args : List String) : IO Config := go {mod := ""} args
 where
@@ -407,22 +569,34 @@ where
         go { cfg with extraImports := cfg.extraImports.push mod.toName } more
       else
         throw <| .userError "No import given after --import"
-    | [mod] => pure { cfg with mod }
-    | [mod, outFile] => pure { cfg with mod, outFile := some outFile }
-    | other => throw <| .userError s!"Didn't understand remaining arguments: {other}"
+    | arg :: more => do
+      if arg.startsWith "-D" then
+        let opts ← parseDOption arg cfg.leanOptions
+        go { cfg with leanOptions := opts } more
+      else if cfg.mod.isEmpty then
+        go { cfg with mod := arg } more
+      else if cfg.outFile.isNone then
+        go { cfg with outFile := some arg } more
+      else
+        throw <| .userError s!"Didn't understand remaining arguments: {arg :: more}"
+    | [] =>
+      if cfg.mod.isEmpty then
+        throw <| .userError "No module provided"
+      else
+        pure cfg
 
 unsafe def main (args : List String) : IO UInt32 := do
   try
-    let {suppressedNamespaces, mod, outFile, extraImports} ← Config.fromArgs args
+    let {suppressedNamespaces, mod, outFile, extraImports, leanOptions} ← Config.fromArgs args
     if mod.isEmpty then throw <| .userError s!"No import module provided"
     match outFile with
     | none =>
-      go suppressedNamespaces extraImports mod (← IO.getStdout)
+      go suppressedNamespaces extraImports mod leanOptions (← IO.getStdout)
     | some outFile =>
       if let some p := (outFile : System.FilePath).parent then
         IO.FS.createDirAll p
       IO.FS.withFile outFile .write fun h =>
-        go suppressedNamespaces extraImports mod (.ofHandle h)
+        go suppressedNamespaces extraImports mod leanOptions (.ofHandle h)
   catch e =>
     IO.eprintln e
     IO.println helpText

@@ -30,8 +30,8 @@
 }
 
 #search-wrapper .combobox .cb_edit {
-    background-color: white;
-    color: black;
+    background-color: var(--verso-background-color, white);
+    color: var(--verso-text-color, black);
     box-sizing: border-box;
     padding: 0;
     margin: 0;
@@ -72,7 +72,8 @@
     top: calc(100%);
     width: var(--search-bar-width);
     list-style: none;
-    background-color: white;
+    background-color: var(--verso-background-color, white);
+    color: var(--verso-text-color, black);
     display: none;
     box-sizing: border-box;
     border: 2px currentcolor solid;
@@ -161,7 +162,7 @@
 
 #search-wrapper .search-result .domain {
     text-align: right;
-    color: #777;
+    color: var(--verso-muted-color, #777);
     font-style: italic;
     font-family: var(--verso-structure-font-family);
     font-weight: normal;
@@ -221,5 +222,5 @@
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    background-color: white;
+    background-color: var(--verso-background-color, white);
 }

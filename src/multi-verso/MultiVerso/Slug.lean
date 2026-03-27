@@ -169,7 +169,7 @@ Appends two slugs by appending their underlying strings.
 def append : Slug → Slug → Slug
   | ⟨s1⟩, ⟨s2⟩ => ⟨s1 ++ s2⟩
 
-@[instance_reducible, instance, expose, inherit_doc append]
+@[implicit_reducible, instance, expose, inherit_doc append]
 public def instAppendSlug : Append Slug where
   append := Slug.append
 
