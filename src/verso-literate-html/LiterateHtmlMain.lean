@@ -212,7 +212,8 @@ Renders the body HTML for a module page: imports section, code boxes, and prose.
 Returns the body HTML and updated highlight state.
 -/
 private def renderModBody (mod : LitMod) (resolved : ResolvedConfig)
-    (ctx : HtmlContext) (initHlState : HtmlState) : IO (Html × HtmlState) := do
+    (ctx : HtmlContext) (initHlState : HtmlState) :
+    IO (Html × HtmlState × Array (Nat × String × String)) := do
   let emitCtx := { ctx with
                    options := {logError := ctx.logError}
                    traverseContext := {currentModule := mod.name}
@@ -233,11 +234,10 @@ private def renderModBody (mod : LitMod) (resolved : ResolvedConfig)
   -- Collect import items into a collapsible section, rendered before other content
   let mut importHtml : Html := .empty
   let mut importHlState := initHlState
-  for h : itemIdx in [0:mod.contents.size] do
-    have : itemIdx < mod.contents.size := by have := h.2.1; grind
+  for h : itemIdx in 0...mod.contents.size do
     let item := mod.contents[itemIdx]
     if ModuleItem'.isImport item then
-      let (codeHtml, st) ← renderCode itemIdx item |>.run emitCtx importHlState.hlState
+      let ((codeHtml, _, _), st) ← renderCode itemIdx item |>.run emitCtx importHlState.hlState
       importHlState := { importHlState with hlState := st }
       importHtml := importHtml ++ codeHtml
   if resolved.showImports && importHtml != .empty then
@@ -251,6 +251,8 @@ private def renderModBody (mod : LitMod) (resolved : ResolvedConfig)
   -- Process items: prose (modDoc) flows between code boxes
   let mut currentCodeItems : Array (Nat × ModuleItem') := #[]
   let mut hlState := hlState
+  let mut allHeadings : Array (Nat × String × String) := #[]
+  let mut usedIds := ctx.traverseState.usedHtmlIds
   for (origIdx, item) in contents do
     -- Apply docstring filtering
     let item :=
@@ -266,7 +268,7 @@ private def renderModBody (mod : LitMod) (resolved : ResolvedConfig)
       if !currentCodeItems.isEmpty then
         let mut boxHtml : Html := .empty
         for (idx, cItem) in currentCodeItems do
-          let (codeHtml, st) ← renderCode idx cItem |>.run emitCtx hlState.hlState
+          let ((codeHtml, _, _), st) ← renderCode idx cItem |>.run emitCtx hlState.hlState
           let (outputHtml, st') := renderOutputMessages #[(idx, cItem)] resolved.showOutput hlCtx st
           hlState := { hlState with hlState := st' }
           boxHtml := boxHtml ++ codeHtml ++ outputHtml
@@ -274,15 +276,17 @@ private def renderModBody (mod : LitMod) (resolved : ResolvedConfig)
           body := body ++ {{<div class="code-box">{{boxHtml}}</div>}}
         currentCodeItems := #[]
       -- Render this item's code — modDoc parts render as prose, rest as inline code
-      let (itemHtml, st) ← renderCode origIdx item |>.run emitCtx hlState.hlState
+      let ((itemHtml, hdgs, usedIds'), st) ← renderCode origIdx item (usedHtmlIds := usedIds) |>.run emitCtx hlState.hlState
       hlState := { hlState with hlState := st }
+      usedIds := usedIds'
+      allHeadings := allHeadings ++ hdgs
       body := body ++ itemHtml
     else if hasDeclDocAsText then
       -- Flush any accumulated code items first
       if !currentCodeItems.isEmpty then
         let mut boxHtml : Html := .empty
         for (idx, cItem) in currentCodeItems do
-          let (codeHtml, st) ← renderCode idx cItem |>.run emitCtx hlState.hlState
+          let ((codeHtml, _, _), st) ← renderCode idx cItem |>.run emitCtx hlState.hlState
           let (outputHtml, st') := renderOutputMessages #[(idx, cItem)] resolved.showOutput hlCtx st
           hlState := { hlState with hlState := st' }
           boxHtml := boxHtml ++ codeHtml ++ outputHtml
@@ -295,10 +299,10 @@ private def renderModBody (mod : LitMod) (resolved : ResolvedConfig)
       let remainingCode := (item.code.filter (!Code.isDeclDoc ·)).toList.dropWhile
         fun | .highlighted hl => newlinesOnly hl | _ => false
       let codeItem := { item with code := remainingCode.toArray }
-      let (docHtml, st) ← renderCode origIdx docItem (docstringsAsText := true) |>.run emitCtx hlState.hlState
+      let ((docHtml, _), st) ← renderCode origIdx docItem (docstringsAsText := true) |>.run emitCtx hlState.hlState
       hlState := { hlState with hlState := st }
       body := body ++ docHtml
-      let (codeHtml, st) ← renderCode origIdx codeItem |>.run emitCtx hlState.hlState
+      let ((codeHtml, _, _), st) ← renderCode origIdx codeItem |>.run emitCtx hlState.hlState
       let (outputHtml, st') := renderOutputMessages #[(origIdx, codeItem)] resolved.showOutput hlCtx st
       hlState := { hlState with hlState := st' }
       unless codeHtml == .empty do
@@ -309,13 +313,13 @@ private def renderModBody (mod : LitMod) (resolved : ResolvedConfig)
   if !currentCodeItems.isEmpty then
     let mut boxHtml : Html := .empty
     for (idx, cItem) in currentCodeItems do
-      let (codeHtml, st) ← renderCode idx cItem |>.run emitCtx hlState.hlState
+      let ((codeHtml, _, _), st) ← renderCode idx cItem |>.run emitCtx hlState.hlState
       let (outputHtml, st') := renderOutputMessages #[(idx, cItem)] resolved.showOutput hlCtx st
       hlState := { hlState with hlState := st' }
       boxHtml := boxHtml ++ codeHtml ++ outputHtml
     unless boxHtml == .empty do
       body := body ++ {{<div class="code-box">{{boxHtml}}</div>}}
-  return (body, hlState)
+  return (body, hlState, allHeadings)
 
 open Verso Output Doc Html in
 def emitMod (root : Dir) (outDir: System.FilePath) (mod : LitMod)
@@ -329,13 +333,11 @@ def emitMod (root : Dir) (outDir: System.FilePath) (mod : LitMod)
   let resolved := litConfig.resolveForModule mod.name
   let ctx := moduleContext mod.name litConfig
 
-  let (body, hlState) ← renderModBody mod resolved (← read) (← get)
+  let (body, hlState, headings) ← renderModBody mod resolved (← read) (← get)
   set hlState
 
   let headContents := mkHeadContents litConfig
 
-  -- Build page ToC from headings
-  let headings := collectHeadings mod (← read).traverseState
   let tocHtml := if headings.size >= 2 then buildPageToc headings ctx.href else .empty
 
   let modLabel := resolved.title.getD (toString mod.name)
@@ -421,11 +423,9 @@ def emitLandingFromModule (outDir : System.FilePath) (root : Dir) (modName : Nam
   let siteRoot := "./"
   let htmlId? := ctx.moduleIds.find? mod.name
 
-  let (body, hlState) ← renderModBody mod resolved ctx initHlState
+  let (body, hlState, headings) ← renderModBody mod resolved ctx initHlState
 
   let headContents := mkHeadContents litConfig
-  -- Build page ToC
-  let headings := collectHeadings mod ctx.traverseState
   let tocHtml := if headings.size >= 2 then buildPageToc headings else .empty
   let modLabel := resolved.title.getD (toString mod.name)
   let landingPageTitle := match litConfig.metadata.title with

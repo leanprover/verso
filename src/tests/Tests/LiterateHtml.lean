@@ -864,6 +864,51 @@ private def testPageToc (data : TestData) : IO Unit := withTestDir data fun json
   unless hasSubstring litConfigHtml "On this page" do
     throw <| IO.userError "page ToC: page-toc should contain 'On this page' title"
 
+/-- Page ToC entries for headings in the same modDoc block have distinct anchors. -/
+private def testPageTocDistinctAnchors (data : TestData) : IO Unit := withTestDir data fun jsonDir htmlDir _ _ => do
+  runLiterateHtml jsonDir htmlDir
+  let litConfigHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "index.html")
+  -- Extract the page-toc nav element content
+  let tocSection := litConfigHtml.splitOn "<nav class=\"page-toc\"" |>.getD 1 "" |>.splitOn "</nav>" |>.head!
+  -- Extract all href values from ToC links
+  let hrefs := tocSection.splitOn "href=\"" |>.drop 1 |>.map fun s => s.splitOn "\"" |>.head!
+  -- There should be at least 2 headings
+  unless hrefs.length >= 2 do
+    throw <| IO.userError s!"page ToC distinct anchors: expected at least 2 ToC entries, got {hrefs.length}"
+  -- All hrefs should be distinct (not sharing the same anchor)
+  let uniqueHrefs := hrefs.eraseDups
+  unless uniqueHrefs.length == hrefs.length do
+    throw <| IO.userError s!"page ToC distinct anchors: ToC entries share anchors: {hrefs}"
+  -- Each anchor should correspond to an id in the HTML
+  for href in hrefs do
+    let parts := href.splitOn "#"
+    if let _ :: anchor :: _ := parts then
+      unless hasSubstring litConfigHtml s!"id=\"{anchor}\"" do
+        throw <| IO.userError s!"page ToC distinct anchors: anchor '{anchor}' not found as an id in the HTML"
+
+/-- Nested Verso sections produce distinct ToC entries at each level. -/
+private def testPageTocNestedSections (data : TestData) : IO Unit := withTestDir data fun jsonDir htmlDir _ _ => do
+  runLiterateHtml jsonDir htmlDir
+  let coreHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "Core" / "index.html")
+  -- Should have a page ToC
+  unless hasSubstring coreHtml "page-toc" do
+    throw <| IO.userError "nested ToC: Core page should have a page-toc"
+  let tocSection := coreHtml.splitOn "<nav class=\"page-toc\"" |>.getD 1 "" |>.splitOn "</nav>" |>.head!
+  let hrefs := tocSection.splitOn "href=\"" |>.drop 1 |>.map fun s => s.splitOn "\"" |>.head!
+  -- Should have at least 3 headings (Core Module, Natural Number Utilities, Doubling)
+  unless hrefs.length >= 3 do
+    throw <| IO.userError s!"nested ToC: expected at least 3 ToC entries, got {hrefs.length}"
+  -- All distinct
+  let uniqueHrefs := hrefs.eraseDups
+  unless uniqueHrefs.length == hrefs.length do
+    throw <| IO.userError s!"nested ToC: ToC entries share anchors: {hrefs}"
+  -- Each anchor exists in the HTML
+  for href in hrefs do
+    let parts := href.splitOn "#"
+    if let _ :: anchor :: _ := parts then
+      unless hasSubstring coreHtml s!"id=\"{anchor}\"" do
+        throw <| IO.userError s!"nested ToC: anchor '{anchor}' not found as id in HTML"
+
 /-- NoDocstrings module (no headings) should not get a page ToC. -/
 private def testPageTocAbsent (data : TestData) : IO Unit := withTestDir data fun jsonDir htmlDir _ _ => do
   runLiterateHtml jsonDir htmlDir
@@ -1044,6 +1089,8 @@ private def htmlTests (data : TestData) (projectDir : System.FilePath) : List (S
   ("accessibility reduced-motion", testAccessibilityReducedMotion data),
   ("accessibility ARIA", testAccessibilityAria data),
   ("page ToC", testPageToc data),
+  ("page ToC distinct anchors", testPageTocDistinctAnchors data),
+  ("page ToC nested sections", testPageTocNestedSections data),
   ("page ToC absent", testPageTocAbsent data),
   ("CSS dark mode", testCssDarkMode data),
   ("CSS custom properties", testCssCustomProperties data),

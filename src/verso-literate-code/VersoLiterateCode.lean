@@ -113,13 +113,34 @@ abbrev EmitM := ReaderT HtmlContext (StateRefT HtmlState IO)
 def logError (msg : String) : EmitM Unit := do
   (← read).logError msg
 
-open Verso.Output Html in
+open Verso.Output Html Verso.Multi in
 open MD4Lean in
-partial def md2Html (md : MD4Lean.Document) : Html := Id.run do
-  let mut out := .empty
+/--
+Renders a Markdown document to HTML, optionally generating unique heading IDs. When `trackHeadings`
+is true, returns heading entries and updated used-ID set. When false, headers render without IDs and
+are not included in the heading entry list. Typically, headers in docstrings do not receive IDs and
+are not tracked, while headers in moduledocs do.
+-/
+partial def md2Html (md : MD4Lean.Document) (trackHeadings : Bool := false)
+    (usedIds : Std.HashSet Slug := {}) :
+    Html × Array (Nat × String × String) × Std.HashSet Slug := Id.run do
+  let mut out := Html.empty
+  let mut hdgs : Array (Nat × String × String) := #[]
+  let mut used := usedIds
   for b in md.blocks do
-    out := out ++ block b
-  out
+    match b with
+    | .header n title =>
+      if trackHeadings then
+        let titleText := title.map headerText |>.toList |> String.join
+        let slug := Slug.unique used titleText.sluggify
+        used := used.insert slug
+        let hId := toString slug
+        hdgs := hdgs.push (n, titleText, hId)
+        out := out ++ .tag s!"h{n + 1}" #[("id", hId)] (texts title)
+      else
+        out := out ++ block (.header n title)
+    | b => out := out ++ block b
+  (out, hdgs, used)
 
 where
   block : MD4Lean.Block → Html
@@ -140,9 +161,15 @@ where
   | .html xs => .text false (String.join xs.toList)
   | .code _ _ _ ss => {{<pre><code>{{String.join ss.toList}}</code></pre>}}
 
-
   blocks : Array MD4Lean.Block → Html
   | xs => xs.map block
+
+  headerText : MD4Lean.Text → String
+  | .normal s => s
+  | .code s => s.toList |> String.join
+  | .em xs | .strong xs | .del xs => xs.map headerText |>.toList |> String.join
+  | .a _ _ _ txt => txt.map headerText |>.toList |> String.join
+  | _ => ""
 
   text : MD4Lean.Text → Html
   | .normal s => s
@@ -433,18 +460,54 @@ partial def _root_.SubVerso.Highlighting.Highlighted.dropTextWhile
         return out
   return out
 
+open Verso.Output Html Verso.Multi Verso Doc Html in
+/--
+Renders a `Part Literate` to HTML, generating a unique heading ID for the part's title
+and recursively for all sub-parts. Returns the HTML, accumulated headings, and updated used-ID set.
+Replicates the structure of `Verso.Doc.Html.Part.toHtml` but with heading ID assignment.
+-/
+partial def partToHtmlWithIds [Monad m] (p : Part Literate) (usedIds : Std.HashSet Slug) :
+    HtmlT Literate m (Html × Array (Nat × String × String) × Std.HashSet Slug) := do
+  let slug := Slug.unique usedIds (toString p.titleString).sluggify
+  let mut used := usedIds.insert slug
+  let hId := toString slug
+  let level := (← HtmlT.options).headerLevel
+  let titleHtml : Html := .seq (← p.title.mapM fun (i : Inline Literate) => ToHtml.toHtml i)
+  let headerHtml := mkPartHeader level titleHtml (headerAttrs := #[("id", hId)])
+  let contentHtml ← p.content.mapM fun (b : Block Literate) => ToHtml.toHtml b
+  let mut subHtml := Html.empty
+  let mut hdgs : Array (Nat × String × String) := #[(level, p.titleString, hId)]
+  for subPart in p.subParts do
+    let (subPartHtml, subHdgs, used') ←
+      HtmlT.withOptions (fun o => {o with headerLevel := o.headerLevel + 1}) <|
+      partToHtmlWithIds subPart used
+    used := used'
+    hdgs := hdgs ++ subHdgs
+    subHtml := subHtml ++ subPartHtml
+  let html := {{<section>{{headerHtml}}{{contentHtml}}{{subHtml}}</section>}}
+  return (html, hdgs, used)
+
 open Verso.Output Html in
-open Verso Doc Html in
+open Verso Doc Html Verso.Multi in
 open SubVerso.Highlighting in
-def renderCode [Monad m] (itemIdx : Nat) (item : VersoLiterate.ModuleItem') (docstringsAsText : Bool := false) : HtmlT Literate m Html := do
+/--
+Renders a module item's code to HTML.
+
+Returns the HTML and any headings encountered (for ToC generation). Each heading is `(level, title,
+htmlId)`.
+-/
+def renderCode [Monad m] (itemIdx : Nat) (item : VersoLiterate.ModuleItem') (docstringsAsText : Bool := false)
+    (usedHtmlIds : Std.HashSet Slug := {}) : HtmlT Literate m (Html × Array (Nat × String × String) × Std.HashSet Slug) := do
   let mut html := .empty
   let mut nextIndent := 0
   let mut hasContent := false
+  let mut headings : Array (Nat × String × String) := #[]
+  let mut usedIds := usedHtmlIds
   let docCls := if docstringsAsText then "mod-doc" else ""
   for c in item.code, idx in 0...* do
     match c with
     | .markdown i _ s =>
-      html := html ++ {{<div class=s!"md-text {docCls}" style=s!"--indent: {i}">{{md2Html s}}</div>}}
+      html := html ++ {{<div class=s!"md-text {docCls}" style=s!"--indent: {i}">{{(md2Html s).1}}</div>}}
       hasContent := true
     | .verso i _ x => do
       let text ←
@@ -452,12 +515,11 @@ def renderCode [Monad m] (itemIdx : Nat) (item : VersoLiterate.ModuleItem') (doc
         x.text.mapM fun b : Block Literate => ToHtml.toHtml b
       let sub ←
         withReader (fun ρ => {ρ with codeOptions.identifierWordBreaks := true}) <|
-        x.subsections.mapM fun p : Part Literate => ToHtml.toHtml p
+        x.subsections.mapM fun (p : Part Literate) => ToHtml.toHtml p
       html := html ++ {{ <div class=s!"verso-text {docCls}" style=s!"--indent: {i}">{{text ++ sub}}</div> }}
       hasContent := true
     | .highlighted hl =>
       if newlinesOnly hl then
-        -- Skip leading newlines before any content has been rendered
         if hasContent then
           html := html ++ (← (Highlighted.text "\n").blockHtml (g := Literate) "lean" (trim := false))
         nextIndent := 0
@@ -472,17 +534,24 @@ def renderCode [Monad m] (itemIdx : Nat) (item : VersoLiterate.ModuleItem') (doc
       let text ←
         withReader (fun ρ => {ρ with codeOptions.identifierWordBreaks := true}) <|
         doc.text.mapM fun b : Block Literate => ToHtml.toHtml b
-      let sub ←
-        withReader (fun ρ => {ρ with codeOptions.identifierWordBreaks := true}) <|
-        doc.sections.mapM fun (lvl, p) =>
-          withReader (fun ρ => {ρ with options.headerLevel := lvl + 1 }) <| ToHtml.toHtml (α := Part Literate) p
+      let mut sub := Html.empty
+      for (lvl, p) in doc.sections do
+        let (sectionHtml, sectionHdgs, usedIds') ←
+          withReader (fun ρ => {ρ with codeOptions.identifierWordBreaks := true, options.headerLevel := lvl + 1}) <|
+          partToHtmlWithIds p usedIds
+        usedIds := usedIds'
+        headings := headings ++ sectionHdgs
+        sub := sub ++ sectionHtml
       let idAttr := htmlId.map ("id", ·.htmlId.toString) |>.toArray
       html := html ++ {{ <div class="verso-text mod-doc" {{ idAttr }} style=s!"--indent: {nextIndent}">{{text ++ sub}}</div> }}
     | .markdownModDoc doc =>
       let htmlId := (← read).traverseState.modDocLink (← read).traverseContext.currentModule itemIdx idx
       let idAttr := htmlId.map ("id", ·.htmlId.toString) |>.toArray
-      html := html ++ {{ <div class="md-text mod-doc" {{idAttr}}>{{md2Html doc}}</div>}}
-  return html
+      let (mdHtml, mdHdgs, used') := md2Html doc (trackHeadings := true) usedIds
+      usedIds := used'
+      headings := headings ++ mdHdgs
+      html := html ++ {{ <div class="md-text mod-doc" {{idAttr}}>{{mdHtml}}</div>}}
+  return (html, headings, usedIds)
 where
   -- Trimming the leading newline is necessary because we display each section in HTML block mode,
   -- and we don't want to end up with an extra visual blank line between sections.
@@ -672,53 +741,16 @@ partial def collectDeclNames (d : Dir) : Std.HashSet Name := Id.run do
       out := out.insert x
   return out
 
-/--
-Collects headings from a module's content items for the page table of contents.
-Returns an array of `(level, titleText, htmlId?)` tuples.
--/
-def collectHeadings (mod : LitMod) (traverseState : Literate.TraverseState) :
-    Array (Nat × String × Option String) := Id.run do
-  let mut headings : Array (Nat × String × Option String) := #[]
-  for h_item : itemIdx in [0:mod.contents.size] do
-    have : itemIdx < mod.contents.size := by have := h_item.2.1; grind
-    let item := mod.contents[itemIdx]
-    for h_code : codeIdx in [0:item.code.size] do
-      have : codeIdx < item.code.size := by have := h_code.2.1; grind
-      match item.code[codeIdx] with
-      | .modDoc doc =>
-        let htmlId := traverseState.modDocLink mod.name itemIdx codeIdx
-        for (lvl, part) in doc.sections do
-          headings := headings.push (lvl, part.titleString, htmlId.map (·.htmlId.toString))
-      | .markdownModDoc doc =>
-        let htmlId := traverseState.modDocLink mod.name itemIdx codeIdx
-        for b in doc.blocks do
-          match b with
-          | .header n title =>
-            let titleText := title.map mdHeaderText |>.toList |> String.join
-            headings := headings.push (n, titleText, htmlId.map (·.htmlId.toString))
-          | _ => pure ()
-      | _ => pure ()
-  return headings
-where
-  mdHeaderText : MD4Lean.Text → String
-    | .normal s => s
-    | .code s => s.toList |> String.join
-    | .em xs | .strong xs | .del xs => xs.map mdHeaderText |>.toList |> String.join
-    | .a _ _ _ txt => txt.map mdHeaderText |>.toList |> String.join
-    | _ => ""
-
 open Verso Output Html in
 /--
 Builds the page ToC HTML from collected headings.
 `pageUrl` is the page's URL relative to the site root (e.g. `"LitConfig/"` or `"LitConfig/Core/"`),
 needed because the `<base>` tag makes bare `#id` anchors resolve relative to the site root.
 -/
-def buildPageToc (headings : Array (Nat × String × Option String)) (pageUrl : String := "") : Html :=
-  let items := headings.map fun (lvl, title, htmlId?) =>
+def buildPageToc (headings : Array (Nat × String × String)) (pageUrl : String := "") : Html :=
+  let items := headings.map fun (lvl, title, id) =>
     let levelClass := s!"toc-level-{lvl}"
-    match htmlId? with
-    | some id => {{<li class={{levelClass}}><a href={{s!"{pageUrl}#{id}"}}>{{title}}</a></li>}}
-    | none => {{<li class={{levelClass}}>{{title}}</li>}}
+    {{<li class={{levelClass}}><a href={{s!"{pageUrl}#{id}"}}>{{title}}</a></li>}}
   {{<nav class="page-toc" aria-label="Page table of contents">
       <div class="page-toc-title">"On this page"</div>
       <ul>{{items}}</ul>

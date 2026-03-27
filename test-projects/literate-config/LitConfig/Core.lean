@@ -4,10 +4,14 @@ import LitConfig.Core.Basic
 # Core Module
 
 This is the core module with some basic definitions.
--/
 
-/-!
 ## Natural Number Utilities
+
+Basic operations on natural numbers.
+
+### Doubling
+
+Functions that double values.
 -/
 
 /-- Doubles a natural number. -/
