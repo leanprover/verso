@@ -213,7 +213,7 @@ Returns the body HTML and updated highlight state.
 -/
 private def renderModBody (mod : LitMod) (resolved : ResolvedConfig)
     (ctx : HtmlContext) (initHlState : HtmlState) :
-    IO (Html × HtmlState × Array (Nat × String × String)) := do
+    IO (Html × HtmlState × Array Heading) := do
   let emitCtx := { ctx with
                    options := {logError := ctx.logError}
                    traverseContext := {currentModule := mod.name}
@@ -280,7 +280,7 @@ private def renderModBody (mod : LitMod) (resolved : ResolvedConfig)
   -- Process items: prose (modDoc) flows between code boxes
   let mut currentCodeItems : Array (Nat × ModuleItem') := #[]
   let mut hlState := importHlState
-  let mut allHeadings : Array (Nat × String × String) := #[]
+  let mut allHeadings : Array Heading := #[]
   let mut usedIds := ctx.traverseState.usedHtmlIds
   for (origIdx, item) in contents do
     let item := filterDocstrings item

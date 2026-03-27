@@ -105,6 +105,16 @@ structure HtmlContext where
   litConfig : LiterateConfig := {}
 
 open Verso.Output in
+/-- A heading collected during rendering, for page ToC generation. -/
+structure Heading where
+  /-- The level of the header, 1-indexed. -/
+  level : Nat
+  /-- The contents of the `<h{level}>` tag. -/
+  title : Html
+  /-- The ID attribute. -/
+  htmlId : String
+
+open Verso.Output in
 structure HtmlState where
   hlState : Hover.State Html := {}
 
@@ -123,9 +133,9 @@ are not tracked, while headers in moduledocs do.
 -/
 partial def md2Html (md : MD4Lean.Document) (trackHeadings : Bool := false)
     (usedIds : Std.HashSet Slug := {}) :
-    Html × Array (Nat × String × String) × Std.HashSet Slug := Id.run do
+    Html × Array Heading × Std.HashSet Slug := Id.run do
   let mut out := Html.empty
-  let mut hdgs : Array (Nat × String × String) := #[]
+  let mut hdgs : Array Heading := #[]
   let mut used := usedIds
   for b in md.blocks do
     match b with
@@ -135,8 +145,9 @@ partial def md2Html (md : MD4Lean.Document) (trackHeadings : Bool := false)
         let slug := Slug.unique used titleText.sluggify
         used := used.insert slug
         let hId := toString slug
-        hdgs := hdgs.push (n, titleText, hId)
-        out := out ++ .tag s!"h{n + 1}" #[("id", hId)] (texts title)
+        let titleHtml := texts title
+        hdgs := hdgs.push { level := n, title := titleHtml, htmlId := hId }
+        out := out ++ .tag s!"h{n + 1}" #[("id", hId)] titleHtml
       else
         out := out ++ block (.header n title)
     | b => out := out ++ block b
@@ -467,7 +478,7 @@ and recursively for all sub-parts. Returns the HTML, accumulated headings, and u
 Replicates the structure of `Verso.Doc.Html.Part.toHtml` but with heading ID assignment.
 -/
 partial def partToHtmlWithIds [Monad m] (p : Part Literate) (usedIds : Std.HashSet Slug) :
-    HtmlT Literate m (Html × Array (Nat × String × String) × Std.HashSet Slug) := do
+    HtmlT Literate m (Html × Array Heading × Std.HashSet Slug) := do
   let slug := Slug.unique usedIds (toString p.titleString).sluggify
   let mut used := usedIds.insert slug
   let hId := toString slug
@@ -476,7 +487,7 @@ partial def partToHtmlWithIds [Monad m] (p : Part Literate) (usedIds : Std.HashS
   let headerHtml := mkPartHeader level titleHtml (headerAttrs := #[("id", hId)])
   let contentHtml ← p.content.mapM fun (b : Block Literate) => ToHtml.toHtml b
   let mut subHtml := Html.empty
-  let mut hdgs : Array (Nat × String × String) := #[(level, p.titleString, hId)]
+  let mut hdgs : Array Heading := #[{ level, title := titleHtml, htmlId := hId }]
   for subPart in p.subParts do
     let (subPartHtml, subHdgs, used') ←
       HtmlT.withOptions (fun o => {o with headerLevel := o.headerLevel + 1}) <|
@@ -497,11 +508,11 @@ Returns the HTML and any headings encountered (for ToC generation). Each heading
 htmlId)`.
 -/
 def renderCode [Monad m] (itemIdx : Nat) (item : VersoLiterate.ModuleItem') (docstringsAsText : Bool := false)
-    (usedHtmlIds : Std.HashSet Slug := {}) : HtmlT Literate m (Html × Array (Nat × String × String) × Std.HashSet Slug) := do
+    (usedHtmlIds : Std.HashSet Slug := {}) : HtmlT Literate m (Html × Array Heading × Std.HashSet Slug) := do
   let mut html := .empty
   let mut nextIndent := 0
   let mut hasContent := false
-  let mut headings : Array (Nat × String × String) := #[]
+  let mut headings : Array Heading := #[]
   let mut usedIds := usedHtmlIds
   let docCls := if docstringsAsText then "mod-doc" else ""
   for c in item.code, idx in 0...* do
@@ -747,10 +758,10 @@ Builds the page ToC HTML from collected headings.
 `pageUrl` is the page's URL relative to the site root (e.g. `"LitConfig/"` or `"LitConfig/Core/"`),
 needed because the `<base>` tag makes bare `#id` anchors resolve relative to the site root.
 -/
-def buildPageToc (headings : Array (Nat × String × String)) (pageUrl : String := "") : Html :=
-  let items := headings.map fun (lvl, title, id) =>
-    let levelClass := s!"toc-level-{lvl}"
-    {{<li class={{levelClass}}><a href={{s!"{pageUrl}#{id}"}}>{{title}}</a></li>}}
+def buildPageToc (headings : Array Heading) (pageUrl : String := "") : Html :=
+  let items := headings.map fun h =>
+    let levelClass := s!"toc-level-{h.level}"
+    {{<li class={{levelClass}}><a href={{s!"{pageUrl}#{h.htmlId}"}}>{{h.title}}</a></li>}}
   {{<nav class="page-toc" aria-label="Page table of contents">
       <div class="page-toc-title">"On this page"</div>
       <ul>{{items}}</ul>
