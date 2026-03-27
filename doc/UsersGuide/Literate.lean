@@ -52,7 +52,7 @@ An empty `literate.toml` file is equivalent to having no file at all.
 tag := "literate-targets"
 %%%
 
-By default, all libraries that are default build targets are included.
+By default, all libraries and executables that are default build targets are included.
 To override this, specify explicit targets using `[[targets]]` entries.
 When `targets` is specified, only the listed libraries and modules are included, replacing the default targets entirely.
 

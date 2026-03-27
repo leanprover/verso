@@ -293,8 +293,12 @@ package_facet literateHtml pkg : System.FilePath := do
   let moduleMapFile := buildDir / "literate-module-map"
   let tomlFile := pkg.dir / "literate.toml"
 
-  -- Step 1: Collect all modules and make the plan
+  -- Step 1: Collect all modules from libraries and executables
   let allModules ← pkg.leanLibs.foldlM (init := #[]) fun acc lib => do
+    let mods ← (← lib.modules.fetch).await
+    return acc ++ mods.map fun m => (lib.name, m, lib.srcDir)
+  let allModules ← pkg.leanExes.foldlM (init := allModules) fun acc exe => do
+    let lib := exe.toLeanLib
     let mods ← (← lib.modules.fetch).await
     return acc ++ mods.map fun m => (lib.name, m, lib.srcDir)
 
