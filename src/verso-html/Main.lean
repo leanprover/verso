@@ -53,9 +53,11 @@ def emitMod (root : Dir) (outDir: System.FilePath) (mod : LitMod) : EmitM Unit :
                traverseContext := {currentModule := mod.name}
                codeOptions := {} }
 
-  let (body, st) ← mod.contents.mapIdxM (renderCode) |>.run ctx (← get).hlState
+  let (results, st) ← mod.contents.mapIdxM (renderCode) |>.run ctx (← get).hlState
+  -- Discard the accumulated headers because there's no local ToC here
+  let body : Html := .seq (results.map (·.1))
 
-  modify (fun s => { s with hlState := st })
+  modify ({ · with hlState := st })
   let headContents : Html := {{
     <!-- Stop favicon requests -->
     <link rel="icon" href="data:," />
