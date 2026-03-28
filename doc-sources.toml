@@ -1,5 +1,1 @@
 libraries = ["Verso", "VersoManual"]
-
-[[require]]
-name = "verso"
-git = "."

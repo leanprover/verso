@@ -117,19 +117,20 @@ def buildSignatureFormatCode (name : Lean.Name) (levelParams : List Lean.Name)
   let univSuffix := if levelParams.isEmpty then ""
     else ".{" ++ ", ".intercalate (levelParams.map Lean.Name.toString) ++ "}"
   let nameFmt : Lean.Format := .tag 0 (.text name.toString) ++ .text univSuffix
-  -- Accumulate args and type, matching ppIndent declSig structure:
-  -- name ++ group(nest 2 (line ++ binder₁ ++ line ++ binder₂ ++ " :" ++ line ++ type))
-  let mut body : Lean.Format := .nil
+  -- The name, each argument, and the return type are all pieces in a single fill group
+  -- with nest 2. The fill group packs greedily — fitting as many pieces per line as
+  -- possible. The " :" is glued to the last argument so the colon stays on the same
+  -- line, with a .line break before the return type.
+  let mut body : Lean.Format := nameFmt
   for arg in args do
     let (fmt, tags', lvs') := appendFormatCode arg tags localVars
     tags := tags'
     localVars := lvs'
-    body := body ++ .line ++ .group fmt
+    body := body ++ .line ++ fmt
   let (typeFmt, tags', lvs') := appendFormatCode type tags localVars
   tags := tags'
   localVars := lvs'
-  body := body ++ " : " ++ typeFmt
-  let sigFmt := nameFmt ++ .group (.nest 2 body)
+  let sigFmt := .group (.nest 2 (body ++ " :" ++ .line ++ typeFmt)) .fill
   return { fmt := sigFmt, tags, localVars }
 
 end Verso.Genre.Manual.DB

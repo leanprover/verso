@@ -32,7 +32,7 @@ namespace Verso.Genre.Manual.DB
 /-- Locate the doc-gen4 database path relative to the current working directory. -/
 private def getDbPath : IO System.FilePath := do
   let cwd ← IO.currentDir
-  return cwd / ".lake" / "build" / "verso-doc-db" / ".lake" / "build" / "api-docs.db"
+  return cwd / ".lake" / "build" / "api-docs.db"
 
 
 private structure DBDocstringConfig where
