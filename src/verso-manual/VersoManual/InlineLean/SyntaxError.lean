@@ -3,13 +3,17 @@ Copyright (c) 2024-2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
+module
 import Lean.Elab.InfoTree.Types
 
 import Verso
-import VersoManual.Basic
+public meta import Verso.WithoutAsync
+public import VersoManual.Basic
 import VersoManual.HighlightedCode
-import VersoManual.InlineLean.Outputs
+public meta import VersoManual.InlineLean.Outputs
 import SubVerso.Examples
+public import Verso.Doc.Elab.Monad
+public meta import Verso.Doc.PointOfInterest
 
 open SubVerso.Highlighting
 
@@ -22,7 +26,7 @@ open Lean Elab
 namespace Verso.Genre.Manual.InlineLean
 
 
-block_extension Block.syntaxError via withHighlighting where
+public block_extension Block.syntaxError via withHighlighting where
   traverse _ _ _ := pure none
   toTeX :=
     some <| fun _ go _ _ content => do
@@ -110,7 +114,7 @@ block_extension Block.syntaxError via withHighlighting where
         pure {{<pre class="syntax-error hl lean">{{out}}</pre>}}
 
 
-structure SyntaxErrorConfig where
+public structure SyntaxErrorConfig where
   name : Name
   «show» : Bool := true
   category : Name := `command
@@ -119,20 +123,19 @@ structure SyntaxErrorConfig where
 section
 variable [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m]
 
-def SyntaxErrorConfig.parse : ArgParse m SyntaxErrorConfig :=
-  SyntaxErrorConfig.mk <$>
-    .positional `name (ValDesc.name.as "name for later reference") <*>
-    .flag `show true <*>
-    .namedD `category (ValDesc.name.as "syntax category (default `command`)") `command <*>
-    .namedD `precedence .nat 0
-
-instance : FromArgs SyntaxErrorConfig m := ⟨SyntaxErrorConfig.parse⟩
+public meta instance : FromArgs SyntaxErrorConfig m where
+  fromArgs :=
+    SyntaxErrorConfig.mk <$>
+      .positional `name (ValDesc.name.as "name for later reference") <*>
+      .flag `show true <*>
+      .namedD `category (ValDesc.name.as "syntax category (default `command`)") `command <*>
+      .namedD `precedence .nat 0
 
 end
 
 open Lean.Parser in
 @[code_block]
-def syntaxError : CodeBlockExpanderOf SyntaxErrorConfig
+public meta def syntaxError : CodeBlockExpanderOf SyntaxErrorConfig
   | config, str => withoutAsync do
 
     PointOfInterest.save (← getRef) config.name.toString

@@ -11,6 +11,8 @@ import Std.Data.HashSet
 
 import Verso.Doc.ArgParse
 import Verso.Doc.Elab
+public meta import Verso.Doc.Elab.Block
+public meta import Verso.Doc.Elab.Inline
 public import Verso.Doc.Elab.Monad
 meta import Verso.Doc.Elab.Monad
 public import VersoManual.Basic
@@ -25,7 +27,7 @@ public section
 
 namespace Verso.Genre.Manual
 
-inline_extension Inline.draft where
+public inline_extension Inline.draft where
   traverse _id _data _contents := do
     if (← isDraft) then
       pure none
@@ -39,7 +41,7 @@ inline_extension Inline.draft where
     some <| fun go _ _ content => do
       content.mapM go
 
-block_extension Block.draft where
+public block_extension Block.draft where
   traverse _id _data _contents := do
     if (← isDraft) then
       pure none
@@ -55,12 +57,12 @@ block_extension Block.draft where
 
 /-- Hide draft-only content when in not in draft mode -/
 @[role]
-def draft : RoleExpanderOf Unit
+meta def draft : RoleExpanderOf Unit
   | (), contents => do
     ``(Verso.Doc.Inline.other Inline.draft #[$[$(← contents.mapM elabInline)],*])
 
 /-- Hide draft-only content when in not in draft mode -/
 @[directive draft]
-def draftBlock : DirectiveExpanderOf Unit
+meta def draftBlock : DirectiveExpanderOf Unit
   | (), contents => do
     ``(Verso.Doc.Block.other Block.draft #[$[$(← contents.mapM elabBlock)],*])

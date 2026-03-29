@@ -3,12 +3,18 @@ Copyright (c) 2023-2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-import SubVerso.Helper
-import SubVerso.Module
+module
+public meta import SubVerso.Helper
+public meta import SubVerso.Module
 import Verso.Doc.Concrete
+public meta import Verso.Doc.Elab.Inline
+public import Verso.Doc.Elab.Monad
+public meta import Verso.Parser
 import VersoBlog.Basic
 import VersoBlog.LiterateLeanPage.Options
-import MD4Lean
+public meta import VersoBlog.LiterateLeanPage.Options
+public meta import MD4Lean
+public section
 
 open Verso Doc
 open Lean
@@ -24,7 +30,7 @@ structure LitPageConfig where
   header : Bool := false
 
 open System in
-def loadModuleContent
+meta def loadModuleContent
     (leanProject : FilePath) (mod : String)
     (overrideToolchain : Option String := none) : IO (Array ModuleItem) := do
 
@@ -94,7 +100,7 @@ structure Helper where
   highlight (term : String) (type? : Option String) : IO Highlighted
 
 open System in
-def Helper.fromModule
+meta def Helper.fromModule
     (leanProject : FilePath) (mod : String)
     (overrideToolchain : Option String := none) : IO Helper := do
 
@@ -191,11 +197,11 @@ where
       decorateOut "stderr" res.stderr
 
 
-def loadLiteratePage (root : System.FilePath) (module : String) : IO (Array ModuleItem) := do
+meta def loadLiteratePage (root : System.FilePath) (module : String) : IO (Array ModuleItem) := do
   loadModuleContent root module
 
 
-inductive Pat where
+meta inductive Pat where
   | char : Char → Pat
   | str : String → Pat
   | var : Name → Pat
@@ -203,7 +209,7 @@ inductive Pat where
 deriving BEq, Hashable, Repr, Inhabited
 
 -- TODO rewrite with dynamic programming
-partial def Pat.match (p : List Pat) (str : String) : Option (Lean.NameMap String) :=
+meta partial def Pat.match (p : List Pat) (str : String) : Option (Lean.NameMap String) :=
   go str.startPos p
 where
   go iter
@@ -244,12 +250,12 @@ where
               continue
       failure
 
-inductive Template where
+meta inductive Template where
   | str : String → Template
   | var : Name → Template
 deriving BEq, Hashable, Repr, Inhabited
 
-def Template.subst (vars : Lean.NameMap String) : Template → Except String String
+meta def Template.subst (vars : Lean.NameMap String) : Template → Except String String
   | .str s => pure s
   | .var x => if let some s := vars.find? x then pure s else throw s!"Not found: '{x}'"
 
@@ -282,7 +288,7 @@ macro_rules
 #guard_msgs in
 #eval (url_subst "xy/" z "/static/" pic ".jpg" => "foo/" z "/" pic ".png") "xy/foo/static/bar/baz/f.jpg"
 
-def getSubst [Monad m] : TSyntax ``url_case → m (List Pat × List Template)
+meta def getSubst [Monad m] : TSyntax ``url_case → m (List Pat × List Template)
   | `(url_case|$pat* => $template*) => do
     let pat := pat.map fun
       | `(url_pattern| *) => Pat.any
@@ -308,7 +314,7 @@ section
 variable [Monad m] [MonadError m] [MonadQuotation m]
 
 
-partial def getModuleDocString (hl : Highlighted) : m String := do
+meta partial def getModuleDocString (hl : Highlighted) : m String := do
   let str := (← getString hl).trimAscii
   let str := str.dropPrefix "/-!" |>.dropSuffix "-/" |>.trimAscii |>.copy
   pure str
@@ -321,7 +327,7 @@ where getString : Highlighted → m String
   | .token ⟨_, txt⟩ => pure txt
 end
 
-def getFirstMessage : Highlighted → Option (Highlighted.Span.Kind × Highlighted.MessageContents Highlighted)
+meta def getFirstMessage : Highlighted → Option (Highlighted.Span.Kind × Highlighted.MessageContents Highlighted)
   | .span msgs x =>
     msgs[0]? <|> getFirstMessage x
   | .point k m => pure (k, m)
@@ -351,7 +357,7 @@ partial def examplesFromMod [Monad m] [MonadError m]
 
 open Elab PartElabM in
 open Lean.Parser.Command in
-partial def docFromMod (project : System.FilePath) (mod : String)
+meta partial def docFromMod (project : System.FilePath) (mod : String)
     (config : LitPageConfig) (content : Array ModuleItem)
     (rewriter : Array (List Pat × List Template)) : PartElabM Unit := do
   let mut mdHeaders : Array Nat := #[]
@@ -494,7 +500,7 @@ syntax rewrites := "rewriting " ("| " url_case)+
 open Verso Doc in
 open Lean Elab Command in
 open PartElabM in
-def elabLiteratePage (x : Ident) (path : StrLit) (mod : Ident) (config : LitPageConfig) (title : StrLit) (genre : Term) (metadata? : Option Term) (rw : Option (TSyntax ``rewrites)) : CommandElabM Unit :=
+meta def elabLiteratePage (x : Ident) (path : StrLit) (mod : Ident) (config : LitPageConfig) (title : StrLit) (genre : Term) (metadata? : Option Term) (rw : Option (TSyntax ``rewrites)) : CommandElabM Unit :=
   withTraceNode `verso.blog.literate (fun _ => pure m!"Literate '{title.getString}'") do
 
   let rewriter ← rw.mapM fun
@@ -590,8 +596,9 @@ prevented elaboration of inline elements.
 syntax "def_literate_post " ident optConfig " from " ident " in " str " as " str (" with " term)? (rewrites)? : command
 
 
-
+meta section
 declare_config_elab litPageConfig LitPageConfig
+end
 
 open Verso Doc in
 open Lean Elab Command in

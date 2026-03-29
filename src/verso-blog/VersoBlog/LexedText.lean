@@ -3,9 +3,13 @@ Copyright (c) 2023-2024 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-import Lean.Parser
-import Lean.Data.Json.FromToJson
-import Verso.Instances.Deriving
+module
+public import Lean.Parser
+public import Lean.Data.Json.FromToJson.Basic
+meta import Verso.Instances.Deriving
+import Verso.Instances
+import Lean.DocString.Parser
+public section
 
 open Lean (ToJson FromJson)
 
@@ -63,4 +67,4 @@ def highlight (hl : Highlighter) (str : String) : IO LexedText := do
   pure ⟨hl.name, out⟩
 
 def token (kind : Name) (p : ParserFn) : ParserFn :=
-  nodeFn kind <| Lean.Doc.Parser.ignoreFn p
+  nodeFn kind <| Doc.Parser.ignoreFn p

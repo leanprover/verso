@@ -3,9 +3,19 @@ Copyright (c) 2025-2026 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-import DocGen4
+module
+import DocGen4.DB
+
+import DocGen4.Load
+import Lean.DocString
+import Lean.Parser.Extension
 import SQLite
+import VersoManual.DB
 import VersoManual.DB.Config
+
+
+
+public section
 
 /-! # Doc Source Analysis
 
@@ -19,7 +29,43 @@ It calls doc-gen4's API directly, relying on `LEAN_PATH` (set by Lake via `getAu
 locate the `.olean` files.
 -/
 
-open DocGen4 DocGen4.Process DocGen4.DB
+open DocGen4 Process
+open Lean
+
+/-- Collect conv tactics from the environment and write them to the database.
+
+This is a temporary measure until doc-gen4 is updated to collect conv tactics.
+Conv tactics are stored in their own `conv_tactics` table, separate from the regular `tactics`
+table, because regular tactics have additional machinery (aliases, tags, extension docs, custom
+names) that conv tactics don't yet have.
+-/
+private unsafe def saveConvTactics (env : Environment) (buildDir dbFile : String) : IO Unit := do
+  let dbPath : System.FilePath := buildDir / dbFile
+  let sqlite ← SQLite.open dbPath.toString
+  sqlite.exec
+    "CREATE TABLE IF NOT EXISTS conv_tactics (
+      module_name TEXT NOT NULL,
+      internal_name TEXT NOT NULL,
+      user_name TEXT NOT NULL,
+      doc_string TEXT NOT NULL,
+      PRIMARY KEY (module_name, internal_name)
+    )"
+  let stmt ← sqlite.prepare
+    "INSERT OR IGNORE INTO conv_tactics (module_name, internal_name, user_name, doc_string) VALUES (?, ?, ?, ?)"
+  let some convs := (Parser.parserExtension.getState env).categories.find? `conv
+    | return
+  for ⟨kind, ()⟩ in convs.kinds do
+    let some modIdx := env.getModuleIdxFor? kind | continue
+    let moduleName := env.header.moduleNames[modIdx]!
+    let docString := (← findDocString? env kind).getD ""
+    let userName := kind.getString!
+    stmt.bind 1 moduleName.toString
+    stmt.bind 2 kind.toString
+    stmt.bind 3 userName
+    stmt.bind 4 docString
+    let _ ← stmt.step
+    stmt.reset
+    stmt.clearBindings
 
 /-- Flush the WAL so the database file is self-contained. -/
 private def walCheckpoint (dbPath : System.FilePath) : IO Unit := do
@@ -83,13 +129,20 @@ unsafe def main (args : List String) : IO UInt32 := do
     for coreModule in [`Init, `Std, `Lake, `Lean] do
       IO.println s!"Analyzing core module: {coreModule}"
       let doc ← load <| .analyzePrefixModules coreModule
-      updateModuleDb builtinDocstringValues doc opts.buildDir opts.dbFile none
+      updateModuleDb DB.builtinDocstringValues doc opts.buildDir opts.dbFile none
 
   -- Generate documentation for specified modules (each as a prefix analysis)
   for mod in allModules do
     IO.println s!"Analyzing module prefix: {mod}"
     let doc ← load <| .analyzePrefixModules mod
-    updateModuleDb builtinDocstringValues doc opts.buildDir opts.dbFile none
+    updateModuleDb DB.builtinDocstringValues doc opts.buildDir opts.dbFile none
+
+  -- Collect and store conv tactics (not yet handled by doc-gen4)
+  let allPrefixes := (if opts.includeCore then [`Init, `Std, `Lake, `Lean] else []) ++ allModules
+  if !allPrefixes.isEmpty then
+    IO.println "Collecting conv tactics..."
+    let env ← DocGen4.envOfImports allPrefixes.toArray
+    saveConvTactics env opts.buildDir opts.dbFile
 
   -- Flush WAL so the database file is self-contained for readers
   let dbPath : System.FilePath := opts.buildDir / opts.dbFile

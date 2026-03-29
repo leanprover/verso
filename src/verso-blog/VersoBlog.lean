@@ -3,24 +3,41 @@ Copyright (c) 2023-2024 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
+module
+public meta import Lean.Data.FuzzyMatching
 
 import SubVerso.Highlighting
 import SubVerso.Examples
+public import SubVerso.Module
+public meta import SubVerso.Examples.Messages
+public import SubVerso.Examples.Env
+public import SubVerso.Examples
 
 import VersoBlog.Basic
-import VersoBlog.LiterateLeanPage
+public import VersoBlog.NameSuffixMap
+public meta import VersoBlog.NameSuffixMap
+public import VersoBlog.LiterateLeanPage
 import VersoBlog.LiterateModuleDocs
 import VersoBlog.Generate
 import VersoBlog.Site
 import VersoBlog.Site.Syntax
 import VersoBlog.Template
-import VersoBlog.Theme
-import VersoBlog.Traverse
-import Verso.Doc.ArgParse
+public import VersoBlog.Theme
+public import VersoBlog.Traverse
+public import Verso.Code.Highlighted
+public import Verso.Doc.ArgParse
+public import Verso.Doc.Elab.Block
+public import Verso.Doc.Elab.Inline
+public import Verso.Doc.Elab.Monad
 import Verso.Doc.Lsp
 import Verso.Doc.Suggestion
+public import Verso.Doc.Suggestion.Basic
+import Verso.FS
 import Verso.Hover
-import Verso.WithoutAsync
+public meta import Verso.Output.Html
+public meta import Verso.WithoutAsync
+public section
+
 open Verso.Output Html
 
 namespace Verso.Genre.Blog
@@ -32,17 +49,14 @@ open Lean Elab
 open Verso.SyntaxUtils (parserInputString)
 
 open SubVerso.Examples (loadExamples Example)
-open SubVerso.Examples.Messages (messagesMatch)
 open SubVerso.Module (ModuleItem)
 
-def classArgs : ArgParse DocElabM String := .named `«class» .string false
-
-structure ClassArgs where
+meta structure ClassArgs where
   «class» : String
 
 section
 variable [Monad m] [MonadError m]
-instance : FromArgs ClassArgs m where
+meta instance : FromArgs ClassArgs m where
   fromArgs := ClassArgs.mk <$> .named `«class» .string false
 end
 
@@ -50,7 +64,7 @@ end
 Wraps the contents in an HTML `<span>` element with the provided `class`.
 -/
 @[role]
-def htmlSpan : RoleExpanderOf ClassArgs
+meta def htmlSpan : RoleExpanderOf ClassArgs
   | {«class»}, stxs => do
     let contents ← stxs.mapM elabInline
     ``(Inline.other (Blog.InlineExt.htmlSpan $(quote «class»)) #[$contents,*])
@@ -60,13 +74,13 @@ def htmlSpan : RoleExpanderOf ClassArgs
 Wraps the contents in an HTML `<div>` element with the provided `class`.
 -/
 @[directive]
-def htmlDiv : DirectiveExpanderOf ClassArgs
+meta def htmlDiv : DirectiveExpanderOf ClassArgs
   | {«class»}, stxs => do
     let contents ← stxs.mapM elabBlock
     ``(Block.other (Blog.BlockExt.htmlDiv $(quote «class»)) #[ $contents,* ])
 
 
-private partial def attrs : ArgParse DocElabM (Array (String × String)) := List.toArray <$> .many attr
+meta partial def attrs : ArgParse DocElabM (Array (String × String)) := List.toArray <$> .many attr
 where
   attr : ArgParse DocElabM (String × String) :=
     (fun (k, v) => (k.getId.toString (escape := false), v)) <$> .anyNamed `attribute .string
@@ -75,12 +89,12 @@ structure HtmlArgs where
   name : Name
   attrs : Array (String × String)
 
-instance : FromArgs HtmlArgs DocElabM where
+meta instance : FromArgs HtmlArgs DocElabM where
   fromArgs := HtmlArgs.mk <$> .positional `name .name <*> attrs
 
 
 @[directive]
-def html : DirectiveExpanderOf HtmlArgs
+meta def html : DirectiveExpanderOf HtmlArgs
   | {name, attrs}, stxs => do
     let tag := name.toString (escape := false)
     let contents ← stxs.mapM elabBlock
@@ -89,18 +103,18 @@ def html : DirectiveExpanderOf HtmlArgs
 structure BlobArgs where
   blobName : Ident
 
-instance : FromArgs BlobArgs DocElabM where
+meta instance : FromArgs BlobArgs DocElabM where
   fromArgs := BlobArgs.mk <$> .positional `blobName .ident
 
 @[directive]
-def blob : DirectiveExpanderOf BlobArgs
+meta def blob : DirectiveExpanderOf BlobArgs
   | {blobName}, stxs => do
     if h : stxs.size > 0 then logErrorAt stxs[0] "Expected no contents"
     let actualName ← realizeGlobalConstNoOverloadWithInfo blobName
     ``(Block.other (Blog.BlockExt.blob ($(mkIdentFrom blobName actualName) : Html)) #[])
 
 @[role blob]
-def inlineBlob : RoleExpanderOf BlobArgs
+meta def inlineBlob : RoleExpanderOf BlobArgs
   | {blobName}, stxs => do
     if h : stxs.size > 0 then logErrorAt stxs[0] "Expected no contents"
     let actualName ← realizeGlobalConstNoOverloadWithInfo blobName
@@ -109,17 +123,17 @@ def inlineBlob : RoleExpanderOf BlobArgs
 structure LabelArgs where
   label : Name
 
-instance : FromArgs LabelArgs DocElabM where
+meta instance : FromArgs LabelArgs DocElabM where
   fromArgs := LabelArgs.mk <$> .positional `blobName .name
 
 @[role]
-def label : RoleExpanderOf LabelArgs
+meta def label : RoleExpanderOf LabelArgs
   | {label}, stxs => do
     let args ← stxs.mapM elabInline
     ``(Inline.other (Blog.InlineExt.label $(quote label)) #[ $[ $args ],* ])
 
 @[role]
-def ref : RoleExpanderOf LabelArgs
+meta def ref : RoleExpanderOf LabelArgs
   | {label}, stxs => do
     let args ← stxs.mapM elabInline
     ``(Inline.other (Blog.InlineExt.ref $(quote label)) #[ $[ $args ],* ])
@@ -128,70 +142,19 @@ structure PageLinkArgs where
   page : Name
   id? : Option String
 
-instance : FromArgs PageLinkArgs DocElabM where
+meta instance : FromArgs PageLinkArgs DocElabM where
   fromArgs :=
     PageLinkArgs.mk <$>
       .positional `page .name <*>
       (some <$> .positional `id .string <|> pure none)
 
 @[role]
-def page_link : RoleExpanderOf PageLinkArgs
+meta def page_link : RoleExpanderOf PageLinkArgs
   | {page, id?}, stxs => do
     let inls ← stxs.mapM elabInline
     ``(Inline.other (Blog.InlineExt.pageref $(quote page) $(quote id?)) #[ $[ $inls ],* ])
 
 
--- The assumption here is that suffixes are _mostly_ unique, so the arrays will likely be very
--- small.
-structure NameSuffixMap (α : Type) : Type where
-  contents : Lean.NameMap (Array (Name × α)) := {}
-deriving Inhabited
-
-def NameSuffixMap.empty : NameSuffixMap α := {}
-
-def NameSuffixMap.insert (map : NameSuffixMap α) (key : Name) (val : α) : NameSuffixMap α := Id.run do
-  let some last := key.components.getLast?
-    | map
-  let mut arr := map.contents.find? last |>.getD #[]
-  for h : i in [0:arr.size] do
-    have : i < arr.size := by get_elem_tactic
-    if arr[i].fst == key then
-      return {map with contents := map.contents.insert last (arr.set i (key, val))}
-  return {map with contents := map.contents.insert last (arr.push (key, val))}
-
-def NameSuffixMap.toArray (map : NameSuffixMap α) : Array (Name × α) := Id.run do
-  let mut arr := #[]
-  for (_, arr') in map.contents.toList do
-    arr := arr ++ arr'
-  arr.qsort (fun x y => x.fst.toString < y.fst.toString)
-
-def NameSuffixMap.toList (map : NameSuffixMap α) : List (Name × α) := map.toArray.toList
-
-def NameSuffixMap.get (map : NameSuffixMap α) (key : Name) : Array (Name × α) := Id.run do
-  let ks := key.componentsRev
-  let some k' := ks.head?
-    | #[]
-  let some candidates := map.contents.find? k'
-    | #[]
-  let mut result := none
-  for (n, c) in candidates do
-    match matchLength ks n.componentsRev, result with
-    | none, _ => continue
-    | some l, none => result := some (l, #[(n, c)])
-    | some l, some (l', found) =>
-      if l > l' then result := some (l, #[(n, c)])
-      else if l == l' then result := some (l', found.push (n, c))
-      else continue
-  let res := result.map Prod.snd |>.getD #[]
-  res.qsort (fun x y => x.fst.toString < y.fst.toString)
-where
-  matchLength : List Name → List Name → Option Nat
-    | [], _ => some 0
-    | _ :: _, [] => none
-    | x::xs, y::ys =>
-      if x == y then
-        matchLength xs ys |>.map (· + 1)
-      else none
 
 section
 
@@ -201,29 +164,29 @@ inductive LeanExampleData where
   | module (positioned : Array ModuleItem)
 deriving Inhabited
 
-structure ExampleContext where
+meta structure ExampleContext where
   contexts : Lean.NameMap LeanExampleData := {}
 deriving Inhabited
 
-initialize exampleContextExt : EnvExtension ExampleContext ← registerEnvExtension (pure {})
+meta initialize exampleContextExt : EnvExtension ExampleContext ← registerEnvExtension (pure {})
 
-structure ExampleMessages where
+meta structure ExampleMessages where
   messages : NameSuffixMap ((Environment × MessageLog) ⊕ List (MessageSeverity × String)) := {}
 deriving Inhabited
 
-initialize messageContextExt : EnvExtension ExampleMessages ← registerEnvExtension (pure {})
+meta initialize messageContextExt : EnvExtension ExampleMessages ← registerEnvExtension (pure {})
 
 initialize registerTraceClass `Elab.Verso.block.lean
 
 
-def leanExampleProject.Args := Name × String
+@[expose] meta def leanExampleProject.Args := Name × String
 
-instance : FromArgs leanExampleProject.Args DocElabM :=
+meta instance : FromArgs leanExampleProject.Args DocElabM :=
   ⟨(·, ·) <$> .positional `name .name <*> .positional `projectDir .string⟩
 
 open System in
 @[block_command]
-def leanExampleProject : BlockCommandOf leanExampleProject.Args
+meta def leanExampleProject : BlockCommandOf leanExampleProject.Args
   | (name, projectDir) => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"Loading example project") <| do
     if exampleContextExt.getState (← getEnv) |>.contexts |>.contains name then
       throwError "Example context '{name}' already defined in this module"
@@ -244,13 +207,14 @@ def leanExampleProject : BlockCommandOf leanExampleProject.Args
     Verso.Hover.addCustomHover (← getRef) <| "Contains:\n" ++ String.join (savedExamples.toList.map (s!" * `{toString ·.fst}`\n"))
     ``(Block.concat #[])
 
-def leanExampleModule.Args := Name × String × Name
-instance : FromArgs leanExampleModule.Args DocElabM :=
+@[expose] meta def leanExampleModule.Args := Name × String × Name
+
+meta instance : FromArgs leanExampleModule.Args DocElabM :=
   ⟨(·, ·, ·) <$> .positional `name .name <*> .positional `projectDir .string <*> .positional `module .name⟩
 
 open System in
 @[block_command]
-def leanExampleModule : BlockCommandOf leanExampleModule.Args
+meta def leanExampleModule : BlockCommandOf leanExampleModule.Args
   | (name, projectDir, module) => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"Loading example project") <| do
     if exampleContextExt.getState (← getEnv) |>.contexts |>.contains name then
       throwError "Example context '{name}' already defined in this module"
@@ -265,7 +229,7 @@ def leanExampleModule : BlockCommandOf leanExampleModule.Args
     ``(Block.concat #[])
 
 
-private def getSubproject (project : Ident) : TermElabM (NameSuffixMap Example) := do
+private meta def getSubproject (project : Ident) : TermElabM (NameSuffixMap Example) := do
   let some ctxt := exampleContextExt.getState (← getEnv) |>.contexts |>.find? project.getId
     | throwErrorAt project "Subproject '{project}' not loaded"
   let .subproject projectExamples := ctxt
@@ -273,14 +237,14 @@ private def getSubproject (project : Ident) : TermElabM (NameSuffixMap Example) 
   Verso.Hover.addCustomHover project <| "Contains:\n" ++ String.join (projectExamples.toList.map (s!" * `{toString ·.fst}`\n"))
   pure projectExamples
 
-private def getModule (project : Ident) : TermElabM (Array ModuleItem) := do
+private meta def getModule (project : Ident) : TermElabM (Array ModuleItem) := do
   let some ctxt := exampleContextExt.getState (← getEnv) |>.contexts |>.find? project.getId
     | throwErrorAt project "Subproject '{project}' not loaded"
   let .module modExamples := ctxt
     | throwErrorAt project "'{project}' is not loaded as a subproject"
   pure modExamples
 
-def NameSuffixMap.getOrSuggest [Monad m] [MonadInfoTree m] [MonadError m]
+meta def NameSuffixMap.getOrSuggest [Monad m] [MonadInfoTree m] [MonadError m]
     (map : NameSuffixMap α) (key : Ident) : m (Name × α) := do
   match map.get key.getId with
   | #[(n', v)] =>
@@ -306,13 +270,13 @@ structure LeanCommandConfig where
 section
 variable [Monad m] [MonadError m] [MonadLiftT CoreM m]
 
-instance : FromArgs LeanCommandConfig m where
+meta instance : FromArgs LeanCommandConfig m where
   fromArgs :=
     LeanCommandConfig.mk <$> .positional `project .ident <*> .positional `exampleName .ident <*> .flag `showProofStates true
 end
 
 @[block_command]
-def leanCommand : BlockCommandOf LeanCommandConfig
+meta def leanCommand : BlockCommandOf LeanCommandConfig
   | { project, exampleName, showProofStates } => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"leanCommand") <| do
     let projectExamples ← getSubproject project
     let (_, {highlighted := hls, original := str, ..}) ← projectExamples.getOrSuggest exampleName
@@ -324,10 +288,10 @@ structure LeanCommandAtArgs where
   line : Nat
   endLine? : Option Nat
 
-instance [Monad m] [MonadError m] : FromArgs LeanCommandAtArgs m where
+meta instance [Monad m] [MonadError m] : FromArgs LeanCommandAtArgs m where
   fromArgs := LeanCommandAtArgs.mk <$> .positional `project .ident <*> .positional `line .nat <*> (some <$> .positional `endLine .nat <|> pure none)
 
-private def useRange (startLine : Nat) (endLine? : Option Nat) (range : Position × Position) : Bool :=
+private meta def useRange (startLine : Nat) (endLine? : Option Nat) (range : Position × Position) : Bool :=
   let startLine' := range.1.line
   let endLine' := range.2.line
   if let some endLine := endLine? then
@@ -336,7 +300,7 @@ private def useRange (startLine : Nat) (endLine? : Option Nat) (range : Position
     startLine ≥ startLine' && startLine ≤ endLine' -- point is in region
 
 @[block_command]
-def leanCommandAt : BlockCommandOf LeanCommandAtArgs
+meta def leanCommandAt : BlockCommandOf LeanCommandAtArgs
   | {project, line, endLine?} => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"leanCommand") <| do
     let projectExamples ← getModule project
 
@@ -359,11 +323,11 @@ def leanCommandAt : BlockCommandOf LeanCommandAtArgs
 
 structure NoArgs where
 
-instance : FromArgs NoArgs m where
+meta instance : FromArgs NoArgs m where
   fromArgs := pure ⟨⟩
 
 @[role]
-def leanKw : RoleExpanderOf NoArgs
+meta def leanKw : RoleExpanderOf NoArgs
   | ⟨⟩, #[arg] => do
     let `(inline|code( $kw:str )) := arg
       | throwErrorAt arg "Expected code literal with the keyword"
@@ -379,14 +343,14 @@ structure LeanTermArgs where
   project : Ident
   showProofStates : Bool
 
-instance : FromArgs LeanTermArgs DocElabM where
+meta instance : FromArgs LeanTermArgs DocElabM where
   fromArgs :=
     LeanTermArgs.mk <$>
       .positional `project .ident <*>
       .flag `showProofStates true
 
 @[role]
-def leanTerm : RoleExpanderOf LeanTermArgs
+meta def leanTerm : RoleExpanderOf LeanTermArgs
   | {project, showProofStates}, #[arg] => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"leanTerm") <| do
     let `(inline|code( $name:str )) := arg
       | throwErrorAt arg "Expected code literal with the example name"
@@ -411,7 +375,7 @@ structure LeanBlockConfig where
   /-- Whether to render proof states -/
   showProofStates : Bool
 
-instance [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m] : FromArgs LeanBlockConfig m where
+meta instance [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m] : FromArgs LeanBlockConfig m where
   fromArgs :=
     LeanBlockConfig.mk <$>
       .positional `exampleContext .ident <*>
@@ -421,9 +385,9 @@ instance [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadErr
       .flag `error false "Error expected in code?" <*>
       .flag `showProofStates true "Show proof states in rendered page?"
 
-def LeanInitBlockConfig := LeanBlockConfig
+@[expose] def LeanInitBlockConfig := LeanBlockConfig
 
-instance [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m] : FromArgs LeanInitBlockConfig m where
+meta instance [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m] : FromArgs LeanInitBlockConfig m where
   fromArgs :=
     LeanBlockConfig.mk <$>
       .positional `exampleContext .ident <*>
@@ -435,7 +399,7 @@ instance [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadErr
 
 
 @[code_block]
-def leanInit : CodeBlockExpanderOf LeanInitBlockConfig
+meta def leanInit : CodeBlockExpanderOf LeanInitBlockConfig
   | config , str => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"leanInit") <| do
     let context := Parser.mkInputContext (← parserInputString str) (← getFileName)
     let (header, state, msgs) ← Parser.parseHeader context
@@ -468,7 +432,7 @@ where
 
 open SubVerso.Highlighting Highlighted in
 @[code_block]
-def lean : CodeBlockExpanderOf LeanBlockConfig
+meta def lean : CodeBlockExpanderOf LeanBlockConfig
   | config, str => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"lean block") <| withoutAsync do
     let x := config.exampleContext
     let (commandState, state) ← match exampleContextExt.getState (← getEnv) |>.contexts.find? x.getId with
@@ -535,7 +499,7 @@ structure LeanInlineConfig where
   /-- Universe variables allowed in the term -/
   universes : Option StrLit
 
-instance [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m] : FromArgs LeanInlineConfig m where
+meta instance [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m] : FromArgs LeanInlineConfig m where
   fromArgs := LeanInlineConfig.mk <$> .positional `exampleContext .ident <*> .named `type strLit true <*> .named `universes strLit true
 where
   strLit : ValDesc m StrLit := {
@@ -551,7 +515,7 @@ open Lean Elab Command in
 Runs an elaborator action with the current namespace and open declarations that have been found via
 inline Lean blocks.
 -/
-def runWithOpenDecls (scopes : List Scope) (act : TermElabM α) : TermElabM α := do
+meta def runWithOpenDecls (scopes : List Scope) (act : TermElabM α) : TermElabM α := do
   let scope := scopes.head!
   withTheReader Core.Context ({· with currNamespace := scope.currNamespace, openDecls := scope.openDecls}) do
     let initNames := (← getThe Term.State).levelNames
@@ -568,7 +532,7 @@ Runs an elaborator action with the section variables that have been established 
 This is a version of `Lean.Elab.Command.runTermElabM`.
 -/
 
-def runWithVariables (scopes : List Scope) (elabFn : Array Expr → TermElabM α) : TermElabM α := do
+meta def runWithVariables (scopes : List Scope) (elabFn : Array Expr → TermElabM α) : TermElabM α := do
   let scope := scopes.head!
   Term.withAutoBoundImplicit do
     let msgLog ← Core.getMessageLog
@@ -599,7 +563,7 @@ where
     modifyInfoState fun s => { s with trees := f s.trees }
 
 open SubVerso.Highlighting Highlighted in
-private def leanInlineImpl : RoleExpanderOf LeanInlineConfig
+private meta def leanInlineImpl : RoleExpanderOf LeanInlineConfig
   | config, elts => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"lean block") <| do
     let #[code] := elts
       | throwError "Expected precisely one code element"
@@ -675,11 +639,11 @@ private def leanInlineImpl : RoleExpanderOf LeanInlineConfig
       `(Inline.other (Blog.InlineExt.highlightedCode { contextName := $(quote config.exampleContext.getId) } $(quote hls)) #[Inline.code $(quote str.getString)])
 
 @[role lean]
-def leanCanonical : RoleExpanderOf LeanInlineConfig :=
+meta def leanCanonical : RoleExpanderOf LeanInlineConfig :=
   leanInlineImpl
 
 @[role]
-def leanInline : RoleExpanderOf LeanInlineConfig
+meta def leanInline : RoleExpanderOf LeanInlineConfig
   | config, elts => do
     if h : 0 < elts.size then
       logWarningAt elts[0] "`{leanInline}` is deprecated; use `{lean}` instead."
@@ -696,7 +660,7 @@ structure LeanOutputConfig where
   summarize : Bool
   whitespace : WhitespaceMode
 
-instance [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m] : FromArgs LeanOutputConfig m where
+meta instance [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m] : FromArgs LeanOutputConfig m where
   fromArgs :=
     LeanOutputConfig.mk <$>
       .positional `name output <*>
@@ -726,7 +690,7 @@ private def leanOutputInline [bg : BlogGenre genre] (message : Highlighted.Messa
     .other (bg.inline_eq ▸ InlineExt.message message expandTraces) #[.code message.toString]
 
 @[code_block]
-def leanOutput : CodeBlockExpanderOf LeanOutputConfig
+meta def leanOutput : CodeBlockExpanderOf LeanOutputConfig
   | config, str => withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"leanOutput") <| do
     let (_, savedInfo) ← messageContextExt.getState (← getEnv) |>.messages |>.getOrSuggest config.name
     let messages ← match savedInfo with
@@ -788,7 +752,7 @@ where
     pure <| withNewline <| head ++ (← message.data.toString)
 
   mostlyEqual (ws : WhitespaceMode) (s1 s2 : String) : Bool :=
-    messagesMatch (ws.apply s1.trimAscii.copy) (ws.apply s2.trimAscii.copy)
+    SubVerso.Examples.Messages.messagesMatch (ws.apply s1.trimAscii.copy) (ws.apply s2.trimAscii.copy)
 
 open Lean Elab Command in
 elab "define_lexed_text" blockName:ident " ← " lexerName:ident : command => do
@@ -893,7 +857,7 @@ instance [bg : BlogGenre genre] : ExternalCode genre where
     .other (bg.inline_eq ▸ InlineExt.highlightedCode { cfg with contextName := `verso } hl) #[]
   leanBlock hl cfg :=
     .other (bg.block_eq ▸ BlockExt.highlightedCode { cfg with contextName := `verso } hl) #[]
-  leanOutputInline message plain (expandTraces := []) :=
+  leanOutputInline message plain (expandTraces := []) := private
     leanOutputInline message plain (expandTraces := expandTraces)
-  leanOutputBlock message (summarize := false) (expandTraces : List Name := []) :=
+  leanOutputBlock message (summarize := false) (expandTraces : List Name := []) := private
     leanOutputBlock message (summarize := summarize) (expandTraces := expandTraces)

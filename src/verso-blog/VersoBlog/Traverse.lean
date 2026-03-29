@@ -3,8 +3,11 @@ Copyright (c) 2023-2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-import VersoBlog.Basic
-import VersoBlog.Component
+module
+public import Verso.Code
+public import VersoBlog.Basic
+public import VersoBlog.Component
+public section
 
 open Verso Code Highlighted WebAssets
 

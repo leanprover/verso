@@ -664,6 +664,8 @@ unsafe initialize registerBuiltinAttribute {
       | `(attr|role $x) => realizeGlobalConstNoOverloadWithInfo x
       | _ => throwError "Invalid `role` attribute"
 
+    ensureAttrDeclIsMeta `role declName k
+
     let n ← mkFreshUserName <| declName ++ `role
 
     let ((e, t), _) ← Meta.MetaM.run (ctx := {}) (s := {}) do
@@ -678,7 +680,7 @@ unsafe initialize registerBuiltinAttribute {
 
       pure (e, t)
 
-    addAndCompile <| .defnDecl {
+    let decl := Declaration.defnDecl {
       name := n,
       levelParams := [],
       type := t,
@@ -686,6 +688,12 @@ unsafe initialize registerBuiltinAttribute {
       hints := .opaque,
       safety := .safe
     }
+    addDecl decl
+
+    if (← getEnv).header.isModule then
+      modifyEnv (markMeta · n)
+
+    compileDecl decl
 
     addDocStringCore' n (← findSimpleDocString? (← getEnv) declName)
 
@@ -735,6 +743,8 @@ unsafe initialize registerBuiltinAttribute {
       | `(attr|code_block $x) => realizeGlobalConstNoOverloadWithInfo x
       | _ => throwError "Invalid `code_block` attribute"
 
+    ensureAttrDeclIsMeta `code_block declName k
+
     let n ← mkFreshUserName <| declName ++ `code_block
 
     let ((e, t), _) ← Meta.MetaM.run (ctx := {}) (s := {}) do
@@ -749,7 +759,7 @@ unsafe initialize registerBuiltinAttribute {
 
       pure (e, t)
 
-    addAndCompile <| .defnDecl {
+    let decl := Declaration.defnDecl {
       name := n,
       levelParams := [],
       type := t,
@@ -757,6 +767,12 @@ unsafe initialize registerBuiltinAttribute {
       hints := .opaque,
       safety := .safe
     }
+    addDecl decl
+
+    if (← getEnv).header.isModule then
+      modifyEnv (markMeta · n)
+
+    compileDecl decl
 
     addDocStringCore' n (← findSimpleDocString? (← getEnv) declName)
 
@@ -823,6 +839,8 @@ unsafe initialize registerBuiltinAttribute {
       | `(attr|directive $x) => realizeGlobalConstNoOverloadWithInfo x
       | _ => throwError "Invalid `directive` attribute"
 
+    ensureAttrDeclIsMeta `directive declName k
+
     let n ← mkFreshUserName <| declName ++ `directive
 
     let ((e, t), _) ← Meta.MetaM.run (ctx := {}) (s := {}) do
@@ -837,7 +855,7 @@ unsafe initialize registerBuiltinAttribute {
 
       pure (e, t)
 
-    addAndCompile <| .defnDecl {
+    let decl := Declaration.defnDecl {
       name := n,
       levelParams := [],
       type := t,
@@ -845,6 +863,12 @@ unsafe initialize registerBuiltinAttribute {
       hints := .opaque,
       safety := .safe
     }
+    addDecl decl
+
+    if (← getEnv).header.isModule then
+      modifyEnv (markMeta · n)
+
+    compileDecl decl
 
     addDocStringCore' n (← findSimpleDocString? (← getEnv) declName)
 
@@ -911,6 +935,8 @@ unsafe initialize registerBuiltinAttribute {
       | `(attr|block_command $x) => realizeGlobalConstNoOverloadWithInfo x
       | _ => throwError "Invalid `block_command` attribute"
 
+    ensureAttrDeclIsMeta `block_command declName k
+
     let n ← mkFreshUserName <| declName ++ `block_command
 
     let ((e, t), _) ← Meta.MetaM.run (ctx := {}) (s := {}) do
@@ -924,7 +950,7 @@ unsafe initialize registerBuiltinAttribute {
 
       pure (e, t)
 
-    addAndCompile <| .defnDecl {
+    let decl := Declaration.defnDecl {
       name := n,
       levelParams := [],
       type := t,
@@ -932,6 +958,12 @@ unsafe initialize registerBuiltinAttribute {
       hints := .opaque,
       safety := .safe
     }
+    addDecl decl
+
+    if (← getEnv).header.isModule then
+      modifyEnv (markMeta · n)
+
+    compileDecl decl
 
     addDocStringCore' n (← findSimpleDocString? (← getEnv) declName)
 

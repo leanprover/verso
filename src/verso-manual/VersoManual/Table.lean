@@ -3,10 +3,12 @@ Copyright (c) 2024-2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-
-import VersoManual.Basic
+module
+public import VersoManual.Basic
 import Verso.Doc.ArgParse
 import Verso.Doc.Elab
+public meta import Verso.Doc.Elab.Block
+public import Verso.Doc.Elab.Monad
 
 open Verso Doc Elab
 open Verso.Genre Manual
@@ -19,13 +21,13 @@ set_option pp.rawOnError true
 
 namespace Verso.Genre.Manual
 
-inductive TableConfig.Alignment where
+public inductive TableConfig.Alignment where
   | left | right | center
 deriving ToJson, FromJson, DecidableEq, Repr, Ord
 
 open Syntax in
 open TableConfig.Alignment in
-instance : Quote TableConfig.Alignment where
+meta instance : Quote TableConfig.Alignment where
   quote
     | .left => mkCApp ``left #[]
     | .center => mkCApp ``center #[]
@@ -42,14 +44,14 @@ def Alignment.htmlClass : Alignment → String
 end TableConfig
 
 
-structure TableConfig where
+public structure TableConfig where
   /-- Name for refs -/
   name : Option String := none
   header : Bool := false
   /-- Alignment in the text (`none` means defer to stylesheet default) -/
   alignment : Option TableConfig.Alignment := none
 
-block_extension Block.table (columns : Nat) (header : Bool) (tag : Option String) (alignment : Option TableConfig.Alignment) (assignedTag : Option Tag := none) where
+public block_extension Block.table (columns : Nat) (header : Bool) (tag : Option String) (alignment : Option TableConfig.Alignment) (assignedTag : Option Tag := none) where
   data := ToJson.toJson (columns, header, tag, assignedTag, alignment)
 
   traverse id data contents := do
@@ -164,8 +166,9 @@ table.tabular td > p:last-child, table.tabular th > p:first-child {
 section
 variable [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m] [MonadFileMap m]
 
-def TableConfig.parse : ArgParse m TableConfig :=
-  TableConfig.mk <$> .named `tag .string true <*> .flag `header true <*> .named `align alignment true
+public meta instance : FromArgs TableConfig m where
+  fromArgs :=
+    TableConfig.mk <$> .named `tag .string true <*> .flag `header true <*> .named `align alignment true
 where
   alignment := {
     description := "Alignment of the table ('left', 'right', or 'center')"
@@ -179,13 +182,10 @@ where
         | _ => throwErrorAt x "Expected 'left', 'right', or 'center'"
       | .num x | .str x => throwErrorAt x "Expected 'left', 'right', or 'center'"
   }
-
-instance : FromArgs TableConfig m := ⟨TableConfig.parse⟩
-
 end
 
 @[directive]
-def table : DirectiveExpanderOf TableConfig
+public meta def table : DirectiveExpanderOf TableConfig
   | cfg, contents => do
     -- The table should be a list of lists. Extract them!
     let #[oneBlock] := contents

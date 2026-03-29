@@ -3,22 +3,30 @@ Copyright (c) 2024-2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-
+module
 import Lean.Elab.Command
 import Lean.Elab.InfoTree
 
 import Verso
 import Verso.FS
 import Verso.Doc.ArgParse
-import Verso.Doc.Elab.Monad
+public import Verso.Doc.Elab.Monad
+public meta import Verso.Doc.Elab.Block
+public meta import Verso.Doc.Suggestion.Basic
 import Verso.Code
 import Verso.Instances
 
 import SubVerso.Highlighting
 import SubVerso.Examples
+public meta import SubVerso.Module
 
+public import VersoManual.Basic
+import VersoManual.HighlightedCode
 import VersoManual.InlineLean.Scopes
-import VersoManual.InlineLean.IO.Context
+public import VersoManual.InlineLean.IO.Context
+meta import VersoManual.InlineLean.IO.Context
+import VersoManual.InlineLean.IO.Data
+public meta import VersoManual.InlineLean.IO.Data
 import VersoManual.InlineLean.Block
 
 
@@ -34,29 +42,23 @@ open Verso.Genre.Manual.InlineLean.IOExample
 
 namespace Verso.Genre.Manual.InlineLean
 
-inductive FileType where
-  | stdin | stdout | stderr
-  | input (file : System.FilePath)
-  | output (file : System.FilePath)
-  | other (file : System.FilePath)
-deriving ToJson, FromJson, Repr, BEq, DecidableEq, Quote
 
 
-def Block.exampleFile (type : FileType) : Block where
+public def Block.exampleFile (type : FileType) : Block where
   data := ToJson.toJson type
 
-structure ExampleFileConfig where
+public structure ExampleFileConfig where
   type : FileType
   «show» : Bool := true
 
-def FileType.parse [Monad m] [MonadError m] : ArgParse m FileType :=
-    (.positional `type (literally `stdin) *> pure .stdin) <|>
-    (.positional `type (literally `stdout) *> pure .stdout) <|>
-    (.positional `type (literally `stderr) *> pure .stderr) <|>
-    (.positional `type (literally `stderr) *> pure .stderr) <|>
-    (FileType.input <$> (.positional `type (literally `input) *> .positional `filename path)) <|>
-    (FileType.output <$> (.positional `type (literally `output) *> .positional `filename path)) <|>
-    (FileType.other <$> (.positional `type (literally `other) *> .positional `filename path))
+public meta def FileType.parse [Monad m] [MonadError m] : ArgParse m FileType :=
+  (.positional `type (literally `stdin) *> pure .stdin) <|>
+  (.positional `type (literally `stdout) *> pure .stdout) <|>
+  (.positional `type (literally `stderr) *> pure .stderr) <|>
+  (.positional `type (literally `stderr) *> pure .stderr) <|>
+  (FileType.input <$> (.positional `type (literally `input) *> .positional `filename path)) <|>
+  (FileType.output <$> (.positional `type (literally `output) *> .positional `filename path)) <|>
+  (FileType.other <$> (.positional `type (literally `other) *> .positional `filename path))
 where
   path : ValDesc m System.FilePath := Coe.coe <$> ValDesc.string
 
@@ -72,18 +74,17 @@ section
 
 variable [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m]
 
-def ExampleFileConfig.parse  : ArgParse m ExampleFileConfig :=
-  ExampleFileConfig.mk <$> FileType.parse <*> (.flag `show true)
 
-def IOExample.exampleFileSyntax [Monad m] [MonadQuotation m] (type : FileType) (contents : String) : m Term := do
+meta def IOExample.exampleFileSyntax [Monad m] [MonadQuotation m] (type : FileType) (contents : String) : m Term := do
   ``(Block.other (Block.exampleFile $(quote type)) #[Block.code $(quote contents)])
 
-instance : FromArgs ExampleFileConfig m := ⟨ExampleFileConfig.parse⟩
+public meta instance : FromArgs ExampleFileConfig m where
+  fromArgs := ExampleFileConfig.mk <$> FileType.parse <*> (.flag `show true)
 
 end
 
 @[code_block]
-def exampleFile : CodeBlockExpanderOf ExampleFileConfig
+public meta def exampleFile : CodeBlockExpanderOf ExampleFileConfig
   | config, str => do
     let s := str.getString
     if config.show then
@@ -178,7 +179,7 @@ where
     if lines.back? == some "" then lines.pop else lines
 end
 
-block_extension Block.exampleLeanFile (filename : String) where
+public block_extension Block.exampleLeanFile (filename : String) where
   data := .str filename
   traverse _ _ _ := pure none
   toTeX :=
@@ -280,7 +281,7 @@ private def getSubversoDir : IO System.FilePath := do
     throw <| IO.userError s!"SubVerso directory {p} not found"
 
 
-def startExample [Monad m] [MonadEnv m] [MonadError m] [MonadQuotation m] [MonadRef m] : m Unit := do
+meta def startExample [Monad m] [MonadEnv m] [MonadError m] [MonadQuotation m] [MonadRef m] : m Unit := do
   match ioExampleCtx.getState (← getEnv) with
   | some _ => throwError "Can't initialize - already in a context"
   | none =>
@@ -288,7 +289,7 @@ def startExample [Monad m] [MonadEnv m] [MonadError m] [MonadQuotation m] [Monad
     modifyEnv fun env =>
       ioExampleCtx.setState env (some {leanCodeName})
 
-def saveLeanCode (src : StrLit) : DocElabM Ident := do
+meta def saveLeanCode (src : StrLit) : DocElabM Ident := do
   match ioExampleCtx.getState (← getEnv) with
   | none => throwError "Can't set Lean code - not in an IO example"
   | some st =>
@@ -298,20 +299,19 @@ def saveLeanCode (src : StrLit) : DocElabM Ident := do
       return st.leanCodeName
     else throwError "Code already specified"
 
-
-def saveInputFile [Monad m] [MonadEnv m] [MonadError m] (name : System.FilePath) (contents : StrLit) : m Unit := do
+meta def saveInputFile [Monad m] [MonadEnv m] [MonadError m] (name : System.FilePath) (contents : StrLit) : m Unit := do
   match ioExampleCtx.getState (← getEnv) with
   | none => throwError "Can't save file - not in an IO example"
   | some st =>
     modifyEnv fun env => ioExampleCtx.setState env (some {st with inputFiles := st.inputFiles.push (name, contents)})
 
-def saveOutputFile [Monad m] [MonadEnv m] [MonadError m] (name : System.FilePath) (contents : StrLit) : m Unit := do
+meta def saveOutputFile [Monad m] [MonadEnv m] [MonadError m] (name : System.FilePath) (contents : StrLit) : m Unit := do
   match ioExampleCtx.getState (← getEnv) with
   | none => throwError "Can't save file - not in an IO example"
   | some st =>
     modifyEnv fun env => ioExampleCtx.setState env (some {st with outputFiles := st.outputFiles.push (name, contents)})
 
-def saveStdin [Monad m] [MonadEnv m] [MonadError m] (contents : StrLit) : m Unit := do
+meta def saveStdin [Monad m] [MonadEnv m] [MonadError m] (contents : StrLit) : m Unit := do
   match ioExampleCtx.getState (← getEnv) with
   | none => throwError "Can't save stdin - not in an IO example"
   | some st =>
@@ -319,7 +319,7 @@ def saveStdin [Monad m] [MonadEnv m] [MonadError m] (contents : StrLit) : m Unit
     | none => modifyEnv fun env => ioExampleCtx.setState env (some {st with stdin := some contents})
     | some _ => throwError "stdin already specified"
 
-def saveStdout [Monad m] [MonadEnv m] [MonadError m] (contents : StrLit) : m Unit := do
+meta def saveStdout [Monad m] [MonadEnv m] [MonadError m] (contents : StrLit) : m Unit := do
   match ioExampleCtx.getState (← getEnv) with
   | none => throwError "Can't save stdout - not in an IO example"
   | some st =>
@@ -327,7 +327,7 @@ def saveStdout [Monad m] [MonadEnv m] [MonadError m] (contents : StrLit) : m Uni
     | none => modifyEnv fun env => ioExampleCtx.setState env (some {st with stdout := some contents})
     | some _ => throwError "stdout already specified"
 
-def saveStderr [Monad m] [MonadEnv m] [MonadError m] (contents : StrLit) : m Unit := do
+meta def saveStderr [Monad m] [MonadEnv m] [MonadError m] (contents : StrLit) : m Unit := do
   match ioExampleCtx.getState (← getEnv) with
   | none => throwError "Can't save stderr - not in an IO example"
   | some st =>
@@ -336,7 +336,7 @@ def saveStderr [Monad m] [MonadEnv m] [MonadError m] (contents : StrLit) : m Uni
     | some _ => throwError "stderr already specified"
 
 
-def check
+meta def check
     (leanCode : StrLit) (leanCodeName : Name)
     (inputFiles outputFiles : Array (System.FilePath × StrLit))
     (stdin stdout stderr : Option StrLit) : DocElabM Highlighted :=
@@ -437,7 +437,7 @@ where
   shorten (str : String) : String :=
     if str.length < 30 then str else (str.take 30).copy ++ "…"
 
-def endExample (body : TSyntax `term) : DocElabM (TSyntax `term) := do
+meta def endExample (body : TSyntax `term) : DocElabM (TSyntax `term) := do
   match ioExampleCtx.getState (← getEnv) with
   | none => throwErrorAt body "Can't end example - never started"
   | some {code, leanCodeName, inputFiles, outputFiles, stdin, stdout, stderr} => do
@@ -455,22 +455,18 @@ def endExample (body : TSyntax `term) : DocElabM (TSyntax `term) := do
 section
 variable [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m]
 
-structure Config where
+public structure Config where
   tag : Option String := none
   «show» : Bool := true
 
-def Config.parse : ArgParse m Config :=
-  Config.mk <$> .named `tag .string true <*> (.flag `show true)
+public meta instance : FromArgs Config m where
+  fromArgs := Config.mk <$> .named `tag .string true <*> (.flag `show true)
 
-instance : FromArgs Config m := ⟨Config.parse⟩
-
-structure FileConfig extends Config where
+public structure FileConfig extends Config where
   name : String
 
-def FileConfig.parse : ArgParse m FileConfig :=
-  FileConfig.mk <$> Config.parse <*> .positional `name .string
-
-instance : FromArgs FileConfig m := ⟨FileConfig.parse⟩
+public meta instance : FromArgs FileConfig m where
+  fromArgs := FileConfig.mk <$> fromArgs <*> .positional `name .string
 
 end
 
@@ -478,7 +474,7 @@ end IOExample
 
 open IOExample in
 @[code_block]
-def inputFile : CodeBlockExpanderOf FileConfig
+public meta def inputFile : CodeBlockExpanderOf FileConfig
   | opts, str => do
     saveInputFile opts.name str
     -- The quote step here is to prevent the editor from showing document AST internals when the
@@ -490,7 +486,7 @@ def inputFile : CodeBlockExpanderOf FileConfig
 
 open IOExample in
 @[code_block]
-def outputFile : CodeBlockExpanderOf FileConfig
+public meta def outputFile : CodeBlockExpanderOf FileConfig
   | opts, str => do
     saveOutputFile opts.name str
     -- The quote step here is to prevent the editor from showing document AST internals when the
@@ -502,7 +498,7 @@ def outputFile : CodeBlockExpanderOf FileConfig
 
 open IOExample in
 @[code_block]
-def stdin : CodeBlockExpanderOf Config
+public meta def stdin : CodeBlockExpanderOf Config
   | opts, str => do
     saveStdin str
     -- The quote step here is to prevent the editor from showing document AST internals when the
@@ -514,7 +510,7 @@ def stdin : CodeBlockExpanderOf Config
 
 open IOExample in
 @[code_block]
-def stdout : CodeBlockExpanderOf Config
+public meta def stdout : CodeBlockExpanderOf Config
   | opts, str => do
     saveStdout str
     -- The quote step here is to prevent the editor from showing document AST internals when the
@@ -526,7 +522,7 @@ def stdout : CodeBlockExpanderOf Config
 
 open IOExample in
 @[code_block]
-def stderr : CodeBlockExpanderOf Config
+public meta def stderr : CodeBlockExpanderOf Config
   | opts, str => do
     saveStderr str
     -- The quote step here is to prevent the editor from showing document AST internals when the
@@ -536,10 +532,9 @@ def stderr : CodeBlockExpanderOf Config
     else
       ``(Block.concat #[])
 
-
 open IOExample in
 @[code_block]
-def ioLean : CodeBlockExpanderOf Config
+public meta def ioLean : CodeBlockExpanderOf Config
   | opts, str => do
     let x ← saveLeanCode str
     if opts.show then
@@ -551,7 +546,7 @@ def ioLean : CodeBlockExpanderOf Config
 
 open IOExample in
 @[directive ioExample]
-def ioExample : DirectiveExpanderOf Unit
+public meta def ioExample : DirectiveExpanderOf Unit
  | (), blocks => do
     startExample
     let body ← blocks.mapM elabBlock

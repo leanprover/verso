@@ -3,13 +3,21 @@ Copyright (c) 2025-2026 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
+module
+public import Lean.DocString.Extension
+
 import DocGen4.DB
 import DocGen4.DB.VersoDocString
-import DocGen4.Process.Base
+public import DocGen4.Process.Base
 import SQLite
+public meta import SQLite
 
 import VersoManual.DB.Convert
 import VersoManual.Docstring
+public import VersoManual.Docstring.Basic
+public import VersoManual.Docstring.DeclInfo
+public import VersoManual.Docstring.DocName
+public section
 
 /-! # DB Querying and Type Reconstruction
 
@@ -345,5 +353,81 @@ def lookupDocInfo (dbPath : System.FilePath) (name : Name) :
   return mod.members.findSome? fun
     | .docInfo di => if di.toInfo.name == name then some di else none
     | _ => none
+
+/-- Result of looking up a tactic in the database. -/
+structure TacticLookupResult where
+  internalName : Name
+  userName : String
+  docString : Option String
+  tags : Array Name
+deriving Inhabited
+
+private def readTacticRow (_sqlite : SQLite) (tacStmt tagStmt : SQLite.Stmt) :
+    IO TacticLookupResult := do
+  let internalName := (← tacStmt.columnText 0).toName
+  let userName ← tacStmt.columnText 1
+  let docStr ← tacStmt.columnText 2
+  let moduleName ← tacStmt.columnText 3
+  -- Load tags
+  tagStmt.reset
+  tagStmt.clearBindings
+  tagStmt.bind 1 moduleName
+  tagStmt.bind 2 internalName.toString
+  let mut tags : Array Name := #[]
+  while (← tagStmt.step) do
+    tags := tags.push (← tagStmt.columnText 0).toName
+  return {
+    internalName
+    userName
+    docString := if docStr.isEmpty then none else some docStr
+    tags
+  }
+
+/-- Look up tactics by internal name. -/
+def lookupTacticByName (dbPath : System.FilePath) (name : Name) :
+    IO (Array TacticLookupResult) := do
+  let sqlite ← SQLite.openWith dbPath .readonly
+  let tacStmt ← sqlite.prepare
+    "SELECT t.internal_name, t.user_name, t.doc_string, t.module_name FROM tactics t WHERE t.internal_name = ?"
+  let tagStmt ← sqlite.prepare
+    "SELECT tag FROM tactic_tags WHERE module_name = ? AND internal_name = ?"
+  tacStmt.bind 1 name.toString
+  let mut results := #[]
+  while (← tacStmt.step) do
+    results := results.push (← readTacticRow sqlite tacStmt tagStmt)
+  return results
+
+/-- Look up tactics by user-facing name. -/
+def lookupTacticByUserName (dbPath : System.FilePath) (userName : String) :
+    IO (Array TacticLookupResult) := do
+  let sqlite ← SQLite.openWith dbPath .readonly
+  let tacStmt ← sqlite.prepare
+    "SELECT t.internal_name, t.user_name, t.doc_string, t.module_name FROM tactics t WHERE t.user_name = ?"
+  let tagStmt ← sqlite.prepare
+    "SELECT tag FROM tactic_tags WHERE module_name = ? AND internal_name = ?"
+  tacStmt.bind 1 userName
+  let mut results := #[]
+  while (← tacStmt.step) do
+    results := results.push (← readTacticRow sqlite tacStmt tagStmt)
+  return results
+
+/-- Load all conv tactics from the `conv_tactics` table. -/
+def lookupConvTactics (dbPath : System.FilePath) :
+    IO (Array TacticLookupResult) := do
+  let sqlite ← SQLite.openWith dbPath .readonly
+  let stmt ← sqlite.prepare
+    "SELECT internal_name, user_name, doc_string, module_name FROM conv_tactics"
+  let mut results := #[]
+  while (← stmt.step) do
+    let internalName := (← stmt.columnText 0).toName
+    let userName ← stmt.columnText 1
+    let docStr ← stmt.columnText 2
+    results := results.push {
+      internalName
+      userName
+      docString := if docStr.isEmpty then none else some docStr
+      tags := #[]
+    }
+  return results
 
 end Verso.Genre.Manual.DB

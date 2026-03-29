@@ -3,14 +3,16 @@ Copyright (c) 2024-2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-
+module
 import Lean.Data.Json.Basic
-import VersoManual.Basic
+public import VersoManual.Basic
 import VersoManual.HighlightedCode
 import Verso.Code.Highlighted.WebAssets
 import Verso.Code.HighlightedToTex
 
 import SubVerso.Highlighting
+
+public section
 
 open Verso Genre Manual
 open Verso Code Highlighted WebAssets
@@ -20,7 +22,7 @@ open SubVerso.Highlighting
 
 namespace Verso.Genre.Manual.InlineLean
 
-block_extension Block.lean
+public block_extension Block.lean
     (hls : Highlighted) (file : Option System.FilePath := none) (range : Option Lsp.Range := none)
     via withHighlighting where
   init s := s.addQuickJumpMapper exampleDomain exampleDomainMapper

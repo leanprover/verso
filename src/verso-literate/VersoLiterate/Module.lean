@@ -40,7 +40,7 @@ def modToPage! [LoadLiterate g] (mod : LitMod) (title : Array (Inline g)) (title
   | .ok v => v
 
 open System in
-def loadModuleJson
+meta def loadModuleJson
     (leanProject : FilePath) (mod : String)
     (overrideToolchain : Option String := none) : IO String := do
 

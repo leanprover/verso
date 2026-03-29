@@ -1,1 +1,1 @@
-libraries = ["Verso", "VersoManual"]
+libraries = ["Verso", "VersoManual", "VersoBlog"]

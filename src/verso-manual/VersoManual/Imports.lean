@@ -3,11 +3,12 @@ Copyright (c) 2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-
+module
 import Verso.Doc.ArgParse
 import Verso.Doc.Elab
 import SubVerso.Highlighting.Code
 import VersoManual.ExternalLean
+public import Verso.Doc.Elab.Monad
 
 open scoped Lean.Doc.Syntax
 
@@ -19,17 +20,17 @@ open ArgParse
 
 namespace Verso.Genre.Manual
 
-structure ImportsParams where
+public structure ImportsParams where
   «show» : Bool := true
 
-instance : FromArgs ImportsParams m where
+public meta instance : FromArgs ImportsParams m where
   fromArgs := ImportsParams.mk <$> .flag `show true (some "Whether to show the import header")
 
 /--
 Parses, but does not validate, a module header.
 -/
 @[code_block]
-def imports : CodeBlockExpanderOf ImportsParams
+public meta def imports : CodeBlockExpanderOf ImportsParams
   | { «show» } , str => do
     let altStr ← parserInputString str
     let p := Parser.whitespace >> Parser.Module.header.fn

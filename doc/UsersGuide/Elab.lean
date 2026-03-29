@@ -3,11 +3,11 @@ Copyright (c) 2023-2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-
+module
 import Lean.DocString.Syntax
-import VersoManual
+public import VersoManual
 
-open Verso Genre Manual
+open Verso Genre Manual DB
 
 open Verso.Genre.Manual.InlineLean
 
@@ -39,20 +39,20 @@ Other syntax is translated into the appropriate constructors of Verso's data.
 
 All Verso documents are parameterized by their {tech}[genre]:
 
-{docstring Verso.Doc.Genre}
+{dbDocstring Verso.Doc.Genre}
 
 Each document consists of a {name Verso.Doc.Part}`Part`.
 The part's title is the title of the entire document.
 
-{docstring Verso.Doc.Part}
+{dbDocstring Verso.Doc.Part}
 
 {name Verso.Doc.Part}`Part`s contain {name Verso.Doc.Block}`Block`s:
 
-{docstring Verso.Doc.Block}
+{dbDocstring Verso.Doc.Block}
 
 {name Verso.Doc.Block}`Block`s contain {name Verso.Doc.Inline}`Inline`s:
 
-{docstring Verso.Doc.Inline}
+{dbDocstring Verso.Doc.Inline}
 
 The {name Verso.Doc.Part.metadata}`metadata` field of {name Verso.Doc.Part}`Part` typically gets its value from a metadata block written by the author, though it may be assigned more information during traversal.
 The {name Verso.Doc.Block.other}`Block.other` and {name Verso.Doc.Inline.other}`Inline.other` constructors typically result from elaborating {ref "elab-extensions"}[extension points].
@@ -87,11 +87,11 @@ Verso provides a general-purpose traversal mechanism for {name Verso.Doc.Part}`P
 To use this framework, genres should define instances of {name Verso.Doc.Traverse}`Traverse`, which specifies the traversal of a genre's custom elements.
 Additionally, instances of {name Verso.Doc.TraversePart}`GenrePart` and {name Verso.Doc.TraverseBlock}`GenreBlock` specify how traversal keeps track of the current position in a document.
 
-{docstring Verso.Doc.Traverse}
+{dbDocstring Verso.Doc.Traverse}
 
-{docstring Verso.Doc.TraversePart}
+{dbDocstring Verso.Doc.TraversePart}
 
-{docstring Verso.Doc.TraverseBlock}
+{dbDocstring Verso.Doc.TraverseBlock}
 
 # Output Generation
 %%%

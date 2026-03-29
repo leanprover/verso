@@ -3,9 +3,11 @@ Copyright (c) 2024-2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-
+module
 import Lean.Elab.Command
-import Lean.Environment
+public import Lean.Environment
+public import Lean.Elab.Command.Scope
+public import Lean.Elab.Term.TermElabM
 
 open Lean Elab Command
 
@@ -25,18 +27,18 @@ def initScopes [Monad m] [MonadEnv m] [MonadOptions m] [MonadResolveName m] : m 
       }
     modifyEnv (leanSampleScopes.setState · [basicSc])
 
-def getScopes [Monad m] [MonadEnv m] [MonadOptions m] [MonadResolveName m] : m (List Scope) := do
+public def getScopes [Monad m] [MonadEnv m] [MonadOptions m] [MonadResolveName m] : m (List Scope) := do
   initScopes
   return leanSampleScopes.getState (← getEnv)
 
-def setScopes [Monad m] [MonadEnv m] (scopes : List Scope) : m Unit := do
+public def setScopes [Monad m] [MonadEnv m] (scopes : List Scope) : m Unit := do
   modifyEnv (leanSampleScopes.setState · scopes)
 
 /--
 Runs an elaborator action with the current namespace and open declarations that have been found via
 inline Lean blocks.
 -/
-def runWithOpenDecls (act : TermElabM α) : TermElabM α := do
+public def runWithOpenDecls (act : TermElabM α) : TermElabM α := do
   let scope := (← getScopes).head!
   withTheReader Core.Context ({· with currNamespace := scope.currNamespace, openDecls := scope.openDecls}) do
     let initNames := (← getThe Term.State).levelNames
@@ -51,7 +53,7 @@ Runs an elaborator action with the section variables that have been established 
 
 This is a version of `Lean.Elab.Command.runTermElabM`.
 -/
-def runWithVariables (elabFn : Array Expr → TermElabM α) : TermElabM α := do
+public def runWithVariables (elabFn : Array Expr → TermElabM α) : TermElabM α := do
   let scope := (← getScopes).head!
   Term.withAutoBoundImplicit do
     let msgLog ← Core.getMessageLog

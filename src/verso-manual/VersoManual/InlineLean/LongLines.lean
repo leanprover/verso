@@ -3,14 +3,15 @@ Copyright (c) 2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-import Lean.Data.Lsp.Utf16
-import Lean.Data.Options
-import Lean.Data.Position
-import Lean.Log
+module
+public import Lean.Data.Lsp.Utf16
+public import Lean.Data.Options
+public import Lean.Data.Position
+public import Lean.Log
 
 open Lean MonadOptions
 
-register_option verso.code.warnLineLength : Nat := {
+public register_option verso.code.warnLineLength : Nat := {
   defValue := 60
   descr := "The example code line length at which to issue warnings. Set to 0 for no warnings."
 }
@@ -21,7 +22,7 @@ def getWarnLineLength [Monad m] [MonadOptions m] : m (Option Nat) := do
   let val := (← getOptions).get verso.code.warnLineLength.name verso.code.warnLineLength.defValue
   if val = 0 then return none else return some val
 
-def warnLongLines [Monad m] [MonadFileMap m] [MonadLog m] [AddMessageContext m] [MonadOptions m] (indent? : Option Nat) (str : StrLit) : m Unit := do
+public def warnLongLines [Monad m] [MonadFileMap m] [MonadLog m] [AddMessageContext m] [MonadOptions m] (indent? : Option Nat) (str : StrLit) : m Unit := do
   let some maxCodeColumns ← getWarnLineLength
     | pure ()
   let fileMap ← getFileMap

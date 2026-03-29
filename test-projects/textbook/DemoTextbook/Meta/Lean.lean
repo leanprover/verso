@@ -13,7 +13,7 @@ open Lean
 
 namespace DemoTextbook
 
-block_extension Block.savedLean (file : String) (source : String) where
+public block_extension Block.savedLean (file : String) (source : String) where
   data := .arr #[.str file, .str source]
 
   traverse _ _ _ := pure none
@@ -22,7 +22,7 @@ block_extension Block.savedLean (file : String) (source : String) where
   toHtml := some fun _ goB _ _ contents =>
     contents.mapM goB
 
-block_extension Block.savedImport (file : String) (source : String) where
+public block_extension Block.savedImport (file : String) (source : String) where
   data := .arr #[.str file, .str source]
 
   traverse _ _ _ := pure none

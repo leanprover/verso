@@ -3,11 +3,12 @@ Copyright (c) 2023-2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
+module
 import Lean.DocString.Syntax
-import VersoManual
+public import VersoManual
 import VersoBlog
 
-open Verso Genre Manual
+open Verso Genre Manual DB
 
 open Verso.Genre.Blog (Page Post)
 
@@ -33,21 +34,21 @@ tag := "output-html"
 Verso's {name}`Html` type represents HTML documents.
 They are typically produced using an embedded DSL that is available when the namespace `Verso.Output.Html` is opened.
 
-{docstring Html}
+{dbDocstring Html}
 
-{docstring Html.empty}
+{dbDocstring Html.empty}
 
-{docstring Html.fromArray}
+{dbDocstring Html.fromArray}
 
-{docstring Html.fromList}
+{dbDocstring Html.fromList}
 
-{docstring Html.append}
+{dbDocstring Html.append}
 
-{docstring Html.visitM}
+{dbDocstring Html.visitM}
 
-{docstring Html.format}
+{dbDocstring Html.format}
 
-{docstring Html.asString}
+{dbDocstring Html.asString}
 
 HTML documents are written in double curly braces, in a syntax very much like HTML itself.
 The differences are:
@@ -87,11 +88,11 @@ tag := "output-tex"
 Verso's {name}`TeX` type represents LaTeX documents.
 They are typically produced using an embedded DSL that is available when the namespace `Verso.Output.TeX` is opened.
 
-{docstring TeX}
+{dbDocstring TeX}
 
-{docstring TeX.empty}
+{dbDocstring TeX.empty}
 
-{docstring TeX.asString}
+{dbDocstring TeX.asString}
 
 TeX documents are written in `\TeX{...}`, in a syntax very much like LaTeX itself.
 The differences are:

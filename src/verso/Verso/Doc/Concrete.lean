@@ -354,7 +354,7 @@ private meta def finishDoc : Command.CommandElabM Unit:= do
   let doc ← Command.runTermElabM fun _ => finished.toVersoDoc versoEnv.genreSyntax versoEnv.ctx versoEnv.docState versoEnv.partState
 
   let ty ← ``(VersoDoc $versoEnv.genreSyntax)
-  Command.elabCommand (← `(def $n : $ty := $doc))
+  Command.elabCommand (← `(public def $n : $ty := $doc))
 
 syntax (name := replaceDoc) "#doc " "(" term ") " str " =>" : command
 elab_rules : command

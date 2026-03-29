@@ -3,14 +3,21 @@ Copyright (c) 2023-2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
+module
 import Lean.DocString.Syntax
+public import Verso.Doc.Elab.Monad
+public meta import Verso.Parser
+import Verso
 import VersoManual
+public import VersoManual.Basic
+import VersoManual.InlineLean.LongLines
+public meta import VersoManual.InlineLean.LongLines
 
 set_option guard_msgs.diff true
 
 open Verso Genre Manual
 
-section
+meta section
 open Lean
 open Lean.Doc.Syntax
 
@@ -129,7 +136,7 @@ partial def preview (stx : Syntax) : m Std.Format :=
       throwErrorAt stx "Didn't understand {Verso.SyntaxUtils.ppSyntax stx} for preview"
 end
 
-block_extension MarkupExample (title : String) where
+public block_extension MarkupExample (title : String) where
   data := title
   traverse _ _ _ := pure none
   toHtml := some fun _goI goB _id data contents => open Verso.Output.Html in do
@@ -266,15 +273,15 @@ open Lean
 open ArgParse
 open Doc.Elab
 
-structure MarkupPreviewConfig where
+public structure MarkupPreviewConfig where
   title : StrLit
 
-instance : FromArgs MarkupPreviewConfig DocElabM where
+public meta instance : FromArgs MarkupPreviewConfig DocElabM where
   fromArgs := MarkupPreviewConfig.mk <$> .positional `title .strLit
 
 end
 
-private def withNl (s : String) : String := if s.endsWith "\n" then s else s.push '\n'
+private meta def withNl (s : String) : String := if s.endsWith "\n" then s else s.push '\n'
 
 
 open Verso Doc Elab in
@@ -282,7 +289,7 @@ open Lean Elab in
 open Verso.Parser in
 open Lean.Doc.Syntax in
 @[directive]
-def markupPreview : DirectiveExpanderOf MarkupPreviewConfig
+public meta def markupPreview : DirectiveExpanderOf MarkupPreviewConfig
   | {title}, contents => do
     let #[blk1, blk2] := contents.filter nonempty
       | throwError "Expected precisely two code blocks, got {contents.filter nonempty}"
@@ -324,7 +331,7 @@ where
 open Lean Verso Doc Elab in
 open Verso.Parser in
 @[code_block markupPreview]
-def markupPreviewPre : CodeBlockExpanderOf MarkupPreviewConfig
+public meta def markupPreviewPre : CodeBlockExpanderOf MarkupPreviewConfig
   | {title}, contents => do
 
     let stx ← blocks {} |>.parseString contents.getString

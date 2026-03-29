@@ -3,11 +3,17 @@ Copyright (c) 2023-2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-
-import Verso.Doc
-import Verso.Doc.Concrete
+module
+import Verso.CLI
+public import Verso.Doc
+public import Verso.Doc.ArgParse
+public import Verso.Doc.Concrete
+public meta import Verso.Doc.Elab.Block
+public meta import Verso.Doc.Elab.Inline
+public import Verso.Doc.Elab.Monad
 import Verso.Doc.TeX
 import Verso.Doc.Html
+import Verso.Method
 import Verso.Output.TeX
 import Verso.Output.Html
 import Verso.Output.Html.CssVars
@@ -16,33 +22,38 @@ import Verso.Output.Html.ElasticLunr
 import Verso.Doc.Lsp
 import Verso.Doc.Elab
 import Verso.FS
+public meta import Verso.Linters
 
 import VersoSearch
 
 import MultiVerso
 
-import VersoManual.Basic
+public import VersoManual.Basic
+public import VersoManual.DB
 import VersoManual.TeX
-import VersoManual.TeX.Config
+public import VersoManual.TeX.Config
 import VersoManual.Html
-import VersoManual.Html.Style
-import VersoManual.Draft
-import VersoManual.Imports
-import VersoManual.Index
-import VersoManual.License
-import VersoManual.Glossary
-import VersoManual.Docstring
+public import VersoManual.Html.Config
+public import VersoManual.Html
+public import VersoManual.Html.Style
+public import VersoManual.Draft
+public import VersoManual.Imports
+public import VersoManual.Index
+public import VersoManual.License
+public import VersoManual.Glossary
+public import VersoManual.Docstring
 import VersoManual.WebAssets
 import VersoManual.WordCount
-import VersoManual.Linters
+public import VersoManual.Linters
 import VersoManual.LocalContents
-import VersoManual.InlineLean
-import VersoManual.ExternalLean
-import VersoManual.Literate
-import VersoManual.Marginalia
-import VersoManual.Bibliography
-import VersoManual.Table
+public import VersoManual.InlineLean
+public import VersoManual.ExternalLean
+public import VersoManual.Literate
+public import VersoManual.Marginalia
+public import VersoManual.Bibliography
+public import VersoManual.Table
 import VersoManual.DB
+public section
 
 open Lean (Name NameMap Json ToJson FromJson quote)
 
@@ -76,7 +87,7 @@ deriving BEq, ToJson, FromJson
 defmethod Part.htmlToc (part : Part Manual) : Bool :=
   part.metadata.map (·.htmlToc) |>.getD true
 
-inline_extension Inline.ref (canonicalName : String) (domain : Option Name) (remote : Option String) (resolvedDestination : Option Link := none) where
+public inline_extension Inline.ref (canonicalName : String) (domain : Option Name) (remote : Option String) (resolvedDestination : Option Link := none) where
   data := ToJson.toJson (RefInfo.mk canonicalName domain remote resolvedDestination)
   traverse := fun _ info content => do
     match FromJson.fromJson? (α := RefInfo) info with
@@ -150,7 +161,7 @@ structure RoleArgs where
   domain : Option Name
   remote : Option String := none
 
-instance : FromArgs RoleArgs m where
+meta instance : FromArgs RoleArgs m where
   fromArgs :=
     RoleArgs.mk <$>
       .positional `canonicalName (ValDesc.string.as "canonical name (string literal)") <*>
@@ -170,12 +181,12 @@ end
 Inserts a reference to the provided tag.
 -/
 @[role]
-def ref : RoleExpanderOf RoleArgs
+meta def ref : RoleExpanderOf RoleArgs
   | {canonicalName, domain, remote}, content => do
     let content ← content.mapM elabInline
     ``(Inline.other (Inline.ref $(quote canonicalName) $(quote domain) $(quote remote)) #[$content,*])
 
-block_extension Block.paragraph where
+public block_extension Block.paragraph where
   traverse := fun _ _ _ => pure none
   toTeX :=
     some <| fun _ go _ _ content => do
@@ -192,7 +203,7 @@ paragraph. In HTML output, they are rendered with less space between them, and L
 a single paragraph (e.g. without extraneous indentation).
 -/
 @[directive]
-def paragraph : DirectiveExpanderOf Unit
+meta def paragraph : DirectiveExpanderOf Unit
   | (), stxs => do
     let args ← stxs.mapM elabBlock
     ``(Block.other Block.paragraph #[ $[ $args ],* ])
@@ -415,7 +426,8 @@ def emitTeX (logError : String → IO Unit) (config : Config) (text : Part Manua
 
 open Verso.Output (Html)
 
-instance : Inhabited (StateT (State Html) (ReaderT ExtensionImpls IO) Html.Toc) where
+open Verso.Genre.Manual.Html in
+instance : Inhabited (StateT (State Html) (ReaderT ExtensionImpls IO) Toc) where
   default := fun _ => default
 
 
