@@ -159,8 +159,10 @@ public meta def docstring : BlockCommandOf DocstringConfig
       -- Find constructors and instance/structure fields
       let extras ← getExtras name declType
 
+      let altNames ← Lean.getStoredSuggestions name
+
       ``(Verso.Doc.Block.other
-          (Verso.Genre.Manual.Block.docstring $(quote name) $(quote declType) $(quote signature) $(quote customLabel) $(quote (#[] : Array Name)))
+          (Verso.Genre.Manual.Block.docstring $(quote name) $(quote declType) $(quote signature) $(quote customLabel) $(quote altNames.toArray))
           #[$(blockStx ++ extras),*])
 
 open Lean Elab Tactic Doc in
