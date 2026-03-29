@@ -355,7 +355,7 @@ def tryElabCodeTermWith (mk : Highlighted → String → DocElabM α) (str : Str
 
 
 declare_syntax_cat doc_metavar
-scoped syntax (name := docMetavar) term ":" term : doc_metavar
+syntax (name := docMetavar) term ":" term : doc_metavar
 
 
 open Lean Elab Term in
