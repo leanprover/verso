@@ -39,7 +39,7 @@ Conv tactics are stored in their own `conv_tactics` table, separate from the reg
 table, because regular tactics have additional machinery (aliases, tags, extension docs, custom
 names) that conv tactics don't yet have.
 -/
-private unsafe def saveConvTactics (env : Environment) (buildDir dbFile : String) : IO Unit := do
+private def saveConvTactics (env : Environment) (buildDir dbFile : String) : IO Unit := do
   let dbPath : System.FilePath := buildDir / dbFile
   let sqlite ← SQLite.open dbPath.toString
   sqlite.exec
@@ -107,7 +107,7 @@ private def parseArgs : List String → IO Args
   | _ => throw <| .userError
     "Usage: verso-docgen-analyze <build-dir> <db-file> [--core] [--toml <path>] [<module> ...]"
 
-unsafe def main (args : List String) : IO UInt32 := do
+def main (args : List String) : IO UInt32 := do
   let opts ← parseArgs args
 
   -- Read additional modules from doc-sources.toml if provided

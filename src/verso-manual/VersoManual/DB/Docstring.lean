@@ -37,10 +37,24 @@ open Verso.Genre.Manual hiding docstring tactic conv
 
 namespace Verso.Genre.Manual.DB
 
-/-- Locate the doc-gen4 database path relative to the current working directory. -/
+/-- Cache for the database path, populated on first use by querying Lake. -/
+meta initialize dbPathCache : IO.Ref (Option System.FilePath) ← IO.mkRef none
+
+/-- Locate the doc-gen4 database path by asking Lake for the `docSource` facet output.
+Uses `--no-build` so that elaboration never triggers a long doc-gen4 build; if the database
+is not up-to-date, the user is told to run `lake build` explicitly.
+The result is cached so that `lake query` is invoked at most once per process. -/
 private meta def getDbPath : IO System.FilePath := do
-  let cwd ← IO.currentDir
-  return cwd / ".lake" / "build" / "api-docs.db"
+  if let some path := (← dbPathCache.get) then
+    return path
+  let out ← IO.Process.output {cmd := "lake", args := #["query", "--no-build", "@:docSource"]}
+  if out.exitCode != 0 then
+    throw <| .userError s!"Documentation database is not up-to-date. Run `lake build` to generate it.\n\
+      Make sure your lakefile includes `needs := #[`@:docSource]` on the library that uses DB docstrings.\n\
+      Lake stderr:\n{out.stderr}"
+  let path : System.FilePath := ⟨out.stdout.trimAscii.copy⟩
+  dbPathCache.set (some path)
+  return path
 
 
 public structure DBDocstringConfig where
