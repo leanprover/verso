@@ -3,12 +3,18 @@ Copyright (c) 2024-2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
+module
 import Lean.Elab.InfoTree.Types
 
 import Verso
-import VersoManual.Basic
+public meta import Verso.WithoutAsync
+public meta import Verso.Code.Highlighted
+public import VersoManual.Basic
 import VersoManual.HighlightedCode
-import SubVerso.Examples
+public import SubVerso.Examples
+public import Verso.Doc.Elab.Monad
+public meta import Verso.Doc.PointOfInterest
+public meta import Verso.Doc.Suggestion.Basic
 
 open SubVerso.Highlighting
 
@@ -20,7 +26,7 @@ open Lean Elab
 
 namespace Verso.Genre.Manual.InlineLean
 
-block_extension Block.signature via withHighlighting where
+public block_extension Block.signature via withHighlighting where
   traverse _ _ _ := do
     pure none
   toTeX :=
@@ -41,23 +47,19 @@ block_extension Block.signature via withHighlighting where
 declare_syntax_cat signature_spec
 syntax ("def" <|> "theorem")? declId declSig : signature_spec
 
-structure SignatureConfig where
+public structure SignatureConfig where
   «show» : Bool := true
 
 section
 
 variable [Monad m] [MonadError m] [MonadLiftT CoreM m]
 
-def SignatureConfig.parse  : ArgParse m SignatureConfig :=
-  SignatureConfig.mk <$>
-    (.flag `show true)
-
-instance : FromArgs SignatureConfig m where
-  fromArgs := SignatureConfig.parse
+public meta instance : FromArgs SignatureConfig m where
+  fromArgs := SignatureConfig.mk <$> .flag `show true
 end
 
 @[code_block]
-def signature : CodeBlockExpanderOf SignatureConfig
+public meta def signature : CodeBlockExpanderOf SignatureConfig
   | {«show»}, str => withoutAsync do
     let altStr ← parserInputString str
     let col? := (← getRef).getPos? |>.map (← getFileMap).utf8PosToLspPos |>.map (·.character)

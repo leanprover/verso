@@ -3,13 +3,15 @@ Copyright (c) 2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-
+module
 import Verso
-import VersoManual.Basic
+public import VersoManual.Basic
 import VersoManual.HighlightedCode
-import Verso.Code.External
+public import Verso.Code.External
 import Verso.Code.HighlightedToTex
-import SubVerso.Examples.Messages
+public import SubVerso.Examples.Messages
+
+public section
 
 set_option linter.missingDocs true
 
@@ -18,15 +20,14 @@ open Lean.Meta.Hint
 
 open Verso Log Doc Elab ArgParse Genre.Manual Code Output Html Highlighted WebAssets
 open SubVerso.Highlighting
-open SubVerso.Examples.Messages
+
 
 open Std
 
 open Verso.Code.External
 
 namespace Verso.Genre.Manual
-
-block_extension Block.lean (hls : Highlighted) (cfg : CodeConfig) via withHighlighting where
+public block_extension Block.lean (hls : Highlighted) (cfg : CodeConfig) via withHighlighting where
   init st :=
     st.addQuickJumpMapper exampleDomain exampleDomainMapper
   data :=
@@ -87,7 +88,7 @@ block_extension Block.lean (hls : Highlighted) (cfg : CodeConfig) via withHighli
           withReader ({ · with codeOptions.inlineProofStates := cfg.showProofStates, codeOptions.definitionsAsTargets := cfg.defSite.getD true }) <|
             hl.blockHtml (g := Manual) "examples"
 
-inline_extension Inline.lean (hls : Highlighted) (cfg : CodeConfig) via withHighlighting where
+public inline_extension Inline.lean (hls : Highlighted) (cfg : CodeConfig) via withHighlighting where
   data :=
     let defined := definedNames hls
     Json.arr #[ToJson.toJson cfg, ToJson.toJson hls, ToJson.toJson defined]
@@ -148,7 +149,7 @@ inline_extension Inline.lean (hls : Highlighted) (cfg : CodeConfig) via withHigh
               codeOptions.inlineProofStates := cfg.showProofStates, codeOptions.definitionsAsTargets := cfg.defSite.getD false }) <|
             hl.inlineHtml (g := Manual) "examples"
 
-block_extension Block.leanOutput
+public block_extension Block.leanOutput
     (message : Highlighted.Message) (summarize : Bool := false) (expandTraces : List Name := [])
     via withHighlighting where
   data := ToJson.toJson (message, summarize, expandTraces)
@@ -175,7 +176,7 @@ block_extension Block.leanOutput
         msg.blockHtml summarize expandTraces (g := Manual)
 
 
-inline_extension Inline.leanOutput
+public inline_extension Inline.leanOutput
     (message : Highlighted.Message) (plain : Bool) (expandTraces : List Name)
     via withHighlighting where
   data := ToJson.toJson (message, plain, expandTraces)
@@ -206,7 +207,7 @@ inline_extension Inline.leanOutput
 
 open Verso.Code.External
 
-instance : ExternalCode Manual where
+public instance : ExternalCode Manual where
   leanInline hl cfg :=
     .other (Inline.lean hl cfg) #[]
   leanBlock hl cfg :=

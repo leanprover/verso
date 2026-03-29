@@ -3,19 +3,24 @@ Copyright (c) 2023-2024 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-
+module
 import Std.Data.HashSet
 
 import SubVerso.Highlighting
 
 import Verso.Doc
+public import Verso.Doc.DocName
+import Verso.Method
 import Verso.Doc.Html
+public import Verso.Instances
 import VersoBlog.Basic
-import VersoBlog.Site
-import VersoBlog.Component
-import Verso.Output.Html
+public import VersoBlog.Site
+public import VersoBlog.Component
+public import VersoBlog.LexedText
+public import Verso.Output.Html
 import Verso.Output.Html.CssVars
 import Verso.Code
+public section
 
 open Std (HashSet TreeMap)
 
@@ -51,7 +56,7 @@ instance : Coe Html Template.Params.Val where
    | other => ⟨.mk other, #[]⟩
 
 
-def Params := TreeMap String Params.Val
+@[expose] def Params := TreeMap String Params.Val
 
 instance : EmptyCollection Params := inferInstanceAs <| EmptyCollection (TreeMap _ _ _)
 
@@ -271,7 +276,7 @@ def blogGenreHtml
   inline := bg.inline_eq ▸ inlineHtml g
 
 
-private def mkHd (htmlId : Option String) (lvl : Nat) (contents : Html)  : Html :=
+def mkHd (htmlId : Option String) (lvl : Nat) (contents : Html)  : Html :=
   mkPartHeader lvl contents (htmlId.map (fun x => #[("id", x)]) |>.getD #[])
 
 instance : GenreHtml Page ComponentM := blogGenreHtml Page fun go metadata part =>

@@ -3,11 +3,21 @@ Copyright (c) 2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-import VersoManual.Basic
-import VersoManual.ExternalLean
+module
+public import Verso.Code.External
+import Verso.Doc.Concrete
+public import VersoManual.Basic
+public import VersoManual.ExternalLean
 import VersoLiterate
+public import VersoLiterate.Basic
+public import VersoLiterate.Module
+public meta import Verso.Parser
 import Lean.Data.Json
-import Lean.Compiler.LCNF.ConfigOptions
+public meta import Lean.Compiler.LCNF.ConfigOptions
+public meta import Verso.Doc.Elab.Inline
+public import Verso.Doc.Elab
+
+public section
 
 namespace Verso.Genre.Manual
 
@@ -17,14 +27,14 @@ open Verso.Output Html
 open Verso.Doc.Html
 open Lean
 
-block_extension Block.literateDocstring where
+public block_extension Block.literateDocstring where
   traverse _ _ _ _ := pure none
   toHtml := some fun _goI goB _id _data contents => do
     pure {{<div class="literate-docstring">{{← contents.mapM goB}}</div>}}
   toTeX := some fun _goI goB _id _data contents => do
     contents.mapM goB
 
-block_extension Block.literateDocstringPart (level : Nat) where
+public block_extension Block.literateDocstringPart (level : Nat) where
   data := level
   traverse _ _ _ _ := pure none
   toHtml := some fun goI goB _id data contents => do
@@ -67,7 +77,7 @@ block_extension Block.literateDocstringPart (level : Nat) where
       let sectionHeader ← Doc.TeX.headerLevel title level none
       pure <| (sectionHeader ++ (← contents.mapM goB))
 
-instance : LoadLiterate Manual where
+public instance : LoadLiterate Manual where
   inline goI
     | .highlighted hl, _ => ExternalCode.leanInline hl {}
     | .data .., content => .concat <| content.map goI
@@ -86,7 +96,7 @@ open Verso.Doc Elab Concrete
 open Lean.Elab Command Term
 open PartElabM
 
-def getModuleWithDocs (path : StrLit) (mod : Ident) (title : StrLit) (metadata? : Option Term) (genre : Syntax := mkIdent ``Manual) : TermElabM Name :=
+meta def getModuleWithDocs (path : StrLit) (mod : Ident) (title : StrLit) (metadata? : Option Term) (genre : Syntax := mkIdent ``Manual) : TermElabM Name :=
   withTraceNode `verso.blog.literate (fun _ => pure m!"Literate '{title.getString}'") do
 
   let titleParts ← stringToInlines title
@@ -139,19 +149,19 @@ open ArgParse
 
 variable [Monad m] [MonadError m] [MonadLiftT CoreM m]
 
-structure IncludeLiterateConfig where
+meta structure IncludeLiterateConfig where
   path : StrLit
   level : Option NumLit
   modName : Ident
   title : StrLit
 
-instance : FromArgs IncludeLiterateConfig m where
+meta instance : FromArgs IncludeLiterateConfig m where
   fromArgs :=
     IncludeLiterateConfig.mk <$> .positional' `path  <*> .named' `level true <*> .positional' `name <*> .positional' `title
 
 
 @[part_command Lean.Doc.Syntax.command]
-def includeLiterateSection : PartCommand
+meta def includeLiterateSection : PartCommand
   | `(block|command{includeLiterate $args* }) => do
     let {path, level, modName, title} ← parseThe IncludeLiterateConfig (← parseArgs args)
     let ref ← getRef

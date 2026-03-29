@@ -3,17 +3,20 @@ Copyright (c) 2024 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-
+module
 import Lean.Data.Json
 import Lean.Elab.InfoTree.Types
 
+public meta import Verso.Doc.Elab.Inline
+public import Verso.Doc.Elab.Monad
+public meta import Verso.Doc.Elab.Monad
 import Verso.Output.Html
 import Verso.Output.TeX
 import MultiVerso.Path
 import MultiVerso.Slug
-import VersoManual.Basic
-import VersoManual.Marginalia
-
+public import VersoManual.Basic
+public import VersoManual.Marginalia
+public section
 
 open Lean Elab
 open Verso Doc Elab Html
@@ -352,7 +355,7 @@ private partial def cmpCite : Json → Json → Ordering
     (arrayOrd inst).compare a1 a2
 
 
-inline_extension Inline.cite (citations : List Citable) (style : Style := .parenthetical) where
+public inline_extension Inline.cite (citations : List Citable) (style : Style := .parenthetical) where
    -- The nested bit here _should_ be a no-op, but it's to avoid deserialization overhead during the traverse pass
   data := ToJson.toJson (ToJson.toJson citations, style)
   traverse _ data _ := do
@@ -390,19 +393,18 @@ inline_extension Inline.cite (citations : List Citable) (style : Style := .paren
         | .ok (v' : List Citable) =>
           Citable.inlineHtml go v' v.2
 
-structure CiteConfig where
+public structure CiteConfig where
   citations : List Name
 
 section
 variable [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m] [MonadFileMap m]
 
-partial def CiteConfig.parse : ArgParse m CiteConfig :=
-  CiteConfig.mk <$> many1 (.positional `citation .resolvedName)
+public meta instance : FromArgs CiteConfig m where
+  fromArgs :=
+    CiteConfig.mk <$> many1 (.positional `citation .resolvedName)
 where
   many1 p := (· :: ·) <$> p <*> .many p
 
-instance : FromArgs CiteConfig m where
-  fromArgs := CiteConfig.parse
 
 end
 
@@ -413,19 +415,19 @@ export Verso.Genre.Manual.Bibliography (InProceedings Thesis ArXiv Article)
 open Bibliography
 
 @[role]
-def citep : RoleExpanderOf CiteConfig
+public meta def citep : RoleExpanderOf CiteConfig
   | config, extra => do
     let xs := config.citations.map mkIdent |>.toArray
     ``(Doc.Inline.other (Inline.cite ([$xs,*] : List Citable) Style.parenthetical) #[$(← extra.mapM elabInline),*])
 
 @[role]
-def citet : RoleExpanderOf CiteConfig
+public meta def citet : RoleExpanderOf CiteConfig
   | config, extra => do
     let xs := config.citations.map mkIdent |>.toArray
     ``(Doc.Inline.other (Inline.cite ([$xs,*] : List Citable) Style.textual) #[$(← extra.mapM elabInline),*])
 
 @[role]
-def citehere : RoleExpanderOf CiteConfig
+public meta def citehere : RoleExpanderOf CiteConfig
   | config, extra => do
     let xs := config.citations.map mkIdent |>.toArray
     ``(Doc.Inline.other (Inline.cite ([$xs,*] : List Citable) Style.here) #[$(← extra.mapM elabInline),*])

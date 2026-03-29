@@ -63,7 +63,7 @@ where
 
 public section
 
-block_extension Block.licenseInfo where
+public block_extension Block.licenseInfo where
   traverse _ _ _ := do
     pure none
   /- The TeX output is intentionally empty. As we are not distributing code in the PDF, we don't believe

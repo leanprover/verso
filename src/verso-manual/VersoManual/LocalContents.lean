@@ -3,10 +3,14 @@ Copyright (c) 2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
+module
 import Verso
+public import Verso.Doc.Html
 import MultiVerso.Slug
-import VersoManual.Basic
+public import VersoManual.Basic
 
+public import Lean.Attributes
+public import Lean.Elab.Term.TermElabM
 
 open Lean
 open Verso.Multi
@@ -22,10 +26,10 @@ def LocalContentItemRecognizer.failure : LocalContentItemRecognizer := fun _ => 
 
 def LocalContentItemRecognizer.orElse (r1 r2 : LocalContentItemRecognizer) : LocalContentItemRecognizer := fun b => r1 b <|> r2 b
 
-initialize localContentAttr : TagAttribute ←
+meta initialize localContentAttr : TagAttribute ←
   registerTagAttribute `local_content_list "Functions that recognize items for the page-local table of contents"
 
-private def localContentRecognizers [Monad m] [MonadLiftT MetaM m] [MonadOptions m] [MonadEnv m] [MonadError m] : m (Array Name) := do
+private meta def localContentRecognizers [Monad m] [MonadLiftT MetaM m] [MonadOptions m] [MonadEnv m] [MonadError m] : m (Array Name) := do
   let st := localContentAttr.ext.toEnvExtension.getState (← getEnv)
   let st' := st.importedEntries.flatten ++ st.state.toArray
 
@@ -46,13 +50,13 @@ scoped elab "local_content_recognizer_fun" : term => do
     stx ← `($(mkIdent f) <|> $stx)
   elabTerm stx none
 
-structure HeaderStatus where
+public structure HeaderStatus where
   level : Nat
   numbering : Option String
 deriving Repr
 
 open Verso.Output in
-structure LocalContentItem where
+public structure LocalContentItem where
   header? : Option HeaderStatus
   dest : String
   linkTexts : Array (String × Html)
@@ -86,7 +90,7 @@ partial def toNone : Doc.Inline Manual → Doc.Inline Genre.none
 
 open Verso.Output Html
 
-def LocalContentItem.toHtml (item : LocalContentItem) : Html :=
+public def LocalContentItem.toHtml (item : LocalContentItem) : Html :=
   have := item.linkTexts_nonempty
   let txt := {{<a href={{item.dest}}>{{item.linkTexts[0].2}}</a>}}
   if let some ⟨level, numbering⟩ := item.header? then
@@ -191,7 +195,7 @@ def uniquifyLocalItems (items : Array LocalContentItem) : Array LocalContentItem
 /--
 How far down the tree should be traversed when collecting local items?
 -/
-inductive SubpartSpec where
+public inductive SubpartSpec where
   /-- Include only the part itself, as a header. -/
   | none
   /-- Include `n` levels of content below the current header. -/
@@ -200,7 +204,7 @@ inductive SubpartSpec where
   | all
 deriving DecidableEq, Repr
 
-instance : Ord SubpartSpec where
+public instance : Ord SubpartSpec where
   compare
     | .none, .none => .eq
     | .none, _ => .lt
@@ -259,7 +263,7 @@ where
   withoutPrefix (str : String) (prefix? : Option String) : String :=
     prefix?.bind (str.dropPrefix? · |>.map String.Slice.copy) |>.getD str
 
-def localContents [Monad m] [ToHtml Manual m (Doc.Inline Manual)] [MonadReaderOf ExtensionImpls m]
+public def localContents [Monad m] [ToHtml Manual m (Doc.Inline Manual)] [MonadReaderOf ExtensionImpls m]
     (opts : Html.Options m) (ctxt : TraverseContext) (xref : TraverseState)
     (p : Part Manual)
     (sectionNumPrefix : Option String := none)

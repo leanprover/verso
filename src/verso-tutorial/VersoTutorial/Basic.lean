@@ -144,7 +144,7 @@ def savePartXref (slug : Slug) (id : InternalId) (part : Part Tutorial) : Manual
         "sectionNum": null
       })
 
-block_extension Block.displayOnly where
+public block_extension Block.displayOnly where
   traverse _ _ _ _ := pure none
   toHtml := some <| fun _ goB _ _ content => content.mapM goB
   toTeX := some <| fun _ goB _ _ content => content.mapM goB
@@ -155,7 +155,7 @@ def displayOnly : Elab.DirectiveExpanderOf Unit
   | (), contents => do
     ``(Block.other Block.displayOnly #[$(← contents.mapM Elab.elabBlock),*])
 
-block_extension Block.codeOnly where
+public block_extension Block.codeOnly where
   traverse _ _ _ _ := pure none
   toHtml := some <| fun _ _ _ _ _ => pure .empty
   toTeX := some <| fun _ _ _ _ _ => pure .empty

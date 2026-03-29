@@ -3,14 +3,19 @@ Copyright (c) 2023-2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
+module
 import Lean.DocString.Syntax
-import VersoManual
+public import VersoManual
 import VersoBlog
 
-open Verso Genre Manual
+open Verso Genre
+open Verso.Genre.Manual hiding docstring tactic conv
+open Verso.Genre.Manual.DocGen
 
 open InlineLean
 open Verso.Doc
+
+set_option pp.rawOnError true
 
 #doc (Manual) "Manuals and Books" =>
 %%%
@@ -22,6 +27,7 @@ Verso's {name}`Manual` genre can be used to write reference manuals, textbooks, 
 It supports generating both HTML and PDFs via LaTeX, but the PDF support is relatively immature and untested compared to the HTML support.
 
 {docstring Manual}
+
 
 {docstring Manual.PartMetadata}
 
@@ -143,6 +149,83 @@ results in
 ::::
 
 
+## Docstrings From `doc-gen4` (Experimental)
+%%%
+tag := "docgen-docstrings"
+%%%
+
+:::paragraph
+Ordinarily, the {name Verso.Genre.Manual.docstring}`docstring` command extracts documentation directly from the Lean environment.
+This requires that the documented library be imported into the Verso document, which has two drawbacks:
+
+ * Declarations from Verso itself and its dependencies are present in the environment alongside the documented library, making it difficult to distinguish the two.
+ * When using the module system, docstrings are saved in the server `.olean`, and are not available when building at the command line.
+  This means that complicated documents written in Verso cannot get the benefits of the module system, such as improved incremental rebuilds and less memory use.
+ * Documentation does not necessarily have a global view of the package being documented, making it difficult to automatically take care of cross-cutting concerns such as listing all instances of a type class.
+:::
+
+The {name}`DocGen.docstring` command is an experimental alternative implementation that displays docstrings extracted by `doc-gen4` rather than from the Lean environment.
+It produces the same output as the standard {name Verso.Genre.Manual.docstring}`docstring` command.
+
+Before the text that includes the docstrings is built, `doc-gen4` is invoked to produce a SQLite database that includes the documented declarations.
+Then, each page of documentation reads this database during elaboration.
+
+### Setup
+
+To use docstrings from `doc-gen4`, two pieces of configuration are needed:
+ * The documentation extraction tool must be configured to include the correct libraries.
+ * Lake needs to run this tool prior to building the documetnation.
+
+The extraction tool is configured in a file called `doc-sources.toml` in the root of the package in which documentation is written.
+It contains two fields: `libraries` is an array of strings, each of which is a library's module root, and `include_core` is a Boolean that determines whether the Lean standard library and metaprogramming API are included (defaulting to `true`).
+
+:::paragraph
+For example, to include `MyLib` and `MyOtherLib` along with the Lean standard library, use this file:
+```
+libraries = ["MyLib", "MyOtherLib"]
+```
+:::
+
+To instruct Lake to build the documentation database before building the document that refers to it, add a `needs` field to the documentation in the Lake configuration file.
+In particular, the package facet `docSource` uses the package's `doc-sources.toml` to create the database.
+To avoid problems with circularity, the library that contains the documentation should not be in `doc-sources.toml`.
+
+:::paragraph
+For example, a suitable `needs` field may look like this, where `MyDocs` is a document written in the manual genre:
+
+```
+lean_lib MyDocs where
+  needs := #[`@:docSource]
+```
+:::
+
+### Usage
+
+:::paragraph
+The `docstring` command and the `tactic` and `conv` directives have equivalents based on the database.
+These equivalents have the same API as the environment-based versions, but they are in the `Verso.Genre.Manual.DocGen` namespace.
+The indended mode of use is that the original commands should be hidden when opening the `Verso.Genre.Manual` namespace.
+For example:
+```
+open Verso Genre
+open Verso.Genre.Manual hiding docstring tactic conv
+open Verso.Genre.Manual.DocGen
+```
+:::
+
+### Editor Experience
+
+Before the first `lake build`, `DocGen.docstring` commands show an error directing you to run `lake build`.
+After the documentation data has been generated, the editor is fully responsive.
+If you change the documented library, running `lake build` again updates the data.
+
+### Coexistence with Environment-Based Commands
+
+The doc-gen-sourced commands live in the `Verso.Genre.Manual.DocGen` namespace and do not replace the standard commands.
+Projects that document declarations available in their own environment can continue to use `docstring` with no changes.
+Both sets of commands produce the same block types, so they can coexist within a single document if needed.
+
+
 # Technical Terminology
 %%%
 shortTitle := "Glossary"
@@ -157,7 +240,6 @@ References to technical terms are valid both before and after their definition s
 {docstring deftech}
 
 {docstring tech}
-
 
 # Open-Source Licenses
 %%%

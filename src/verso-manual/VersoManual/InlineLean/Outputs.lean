@@ -3,10 +3,13 @@ Copyright (c) 2024-2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-import Lean.Environment
-import Lean.Message
-import Lean.Exception
-import Verso
+module
+import Lean.Data.EditDistance
+public import Lean.Environment
+public import Lean.Message
+public import Lean.Exception
+public import SubVerso.Highlighting.Highlighted
+public import Verso.Doc.Suggestion.Basic
 
 open Lean
 open SubVerso.Highlighting
@@ -19,11 +22,11 @@ initialize leanOutputs : EnvExtension (NameMap (List Highlighted.Message)) ←
 variable [Monad m] [MonadEnv m] [Elab.MonadInfoTree m] [MonadError m]
 
 /--
-Save the output of a Lean block.
+Saves the output of a Lean block.
 
 `name` is the name the author assigned to the block.
 -/
-def saveOutputs (name : Name) (msgs : List Highlighted.Message) : m Unit :=
+public def saveOutputs (name : Name) (msgs : List Highlighted.Message) : m Unit :=
   modifyEnv (leanOutputs.modifyState · (·.insert name msgs))
 
 def getOrSuggest (key : Ident) (map : NameMap α) : m α := do
@@ -46,5 +49,5 @@ where
     else if l < 10 then 2
     else 3
 
-def getOutputs (name : Ident) : m (List Highlighted.Message):= do
+public def getOutputs (name : Ident) : m (List Highlighted.Message):= do
   leanOutputs.getState (← getEnv) |> getOrSuggest name

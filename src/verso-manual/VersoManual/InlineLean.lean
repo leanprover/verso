@@ -3,22 +3,34 @@ Copyright (c) 2024-2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-
+module
 import Lean.Elab.Command
+import Lean.Elab.GuardMsgs
 import Lean.Elab.InfoTree
 
-import SubVerso.Highlighting
-import SubVerso.Examples
+public import SubVerso.Highlighting
+public import SubVerso.Examples.Messages.NormalizeMetavars
+public meta import SubVerso.Examples.Messages
 
 import Verso
 
-import VersoManual.Basic
+public import Verso.Doc.Elab.Monad
+public import Verso.Doc.Elab.Block
+public meta import Verso.Doc.Helpers
+public meta import Verso.Doc.PointOfInterest
+public meta import Verso.Hint
+public meta import Verso.Log
+public meta import Verso.WithoutAsync
+public import VersoManual.Basic
 import VersoManual.HighlightedCode
-import VersoManual.InlineLean.Block
+public import VersoManual.InlineLean.Block
 import VersoManual.InlineLean.IO
-import VersoManual.InlineLean.LongLines
+public meta import VersoManual.InlineLean.LongLines
+public import VersoManual.InlineLean.LongLines
 import VersoManual.InlineLean.Option
 import VersoManual.InlineLean.Outputs
+public meta import VersoManual.InlineLean.Outputs
+public meta import VersoManual.InlineLean.Scopes
 import VersoManual.InlineLean.Scopes
 import VersoManual.InlineLean.Signature
 import VersoManual.InlineLean.SyntaxError
@@ -35,7 +47,7 @@ open Lean.Elab.Tactic.GuardMsgs
 
 namespace Verso.Genre.Manual.InlineLean
 
-inline_extension Inline.lean (hls : Highlighted) via withHighlighting where
+public inline_extension Inline.lean (hls : Highlighted) via withHighlighting where
   data :=
     let defined := definedNames hls
     Json.arr #[ToJson.toJson hls, ToJson.toJson defined]
@@ -77,26 +89,26 @@ section Config
 
 variable [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m]
 
-structure LeanBlockConfig where
+public structure LeanBlockConfig where
   «show» : Bool
   keep : Bool
   name : Option Name
   error : Bool
   fresh : Bool
 
-def LeanBlockConfig.parse : ArgParse m LeanBlockConfig :=
-  LeanBlockConfig.mk <$> .flag `show true <*> .flag `keep true <*> .named `name .name true <*> .flag `error false <*> .flag `fresh false
+public meta instance : FromArgs LeanBlockConfig m where
+  fromArgs :=
+    LeanBlockConfig.mk <$> .flag `show true <*> .flag `keep true <*> .named `name .name true <*> .flag `error false <*> .flag `fresh false
 
-instance : FromArgs LeanBlockConfig m := ⟨LeanBlockConfig.parse⟩
-
-structure LeanInlineConfig extends LeanBlockConfig where
+public structure LeanInlineConfig extends LeanBlockConfig where
   /-- The expected type of the term -/
   type : Option StrLit
   /-- Universe variables allowed in the term -/
   universes : Option StrLit
 
-def LeanInlineConfig.parse : ArgParse m LeanInlineConfig :=
-  LeanInlineConfig.mk <$> LeanBlockConfig.parse <*> .named `type strLit true <*> .named `universes strLit true
+public meta instance : FromArgs LeanInlineConfig m where
+  fromArgs :=
+    LeanInlineConfig.mk <$> fromArgs <*> .named `type strLit true <*> .named `universes strLit true
 where
   strLit : ValDesc m StrLit := {
     description := "string literal containing an expected type",
@@ -106,19 +118,17 @@ where
       | other => throwError "Expected string, got {repr other}"
   }
 
-instance : FromArgs LeanInlineConfig m := ⟨LeanInlineConfig.parse⟩
-
 end Config
 
 
 open Verso.Genre.Manual.InlineLean.Scopes (getScopes setScopes runWithOpenDecls runWithVariables)
 
-private def abbrevFirstLine (width : Nat) (str : String) : String :=
+private meta def abbrevFirstLine (width : Nat) (str : String) : String :=
   let str := str.trimAsciiStart
   let short := str.take width |>.replace "\n" "⏎"
   if short.toSlice == str then short else short ++ "…"
 
-def LeanBlockConfig.outlineMeta : LeanBlockConfig → String
+meta def LeanBlockConfig.outlineMeta : LeanBlockConfig → String
   | {«show», error, ..} =>
     match «show», error with
     | true, true => " (error)"
@@ -126,7 +136,7 @@ def LeanBlockConfig.outlineMeta : LeanBlockConfig → String
     | false, false => " (hidden)"
     | _, _ => " "
 
-def firstToken? (stx : Syntax) : Option Syntax :=
+meta def firstToken? (stx : Syntax) : Option Syntax :=
   stx.find? fun
     | .ident info .. => usable info
     | .atom info .. => usable info
@@ -147,7 +157,7 @@ is `some false`, then the author expected no errors; in this case, messages are 
 `none` case and an additional error is thrown. If it is `some true`, then errors are downgraded to
 warnings and all messages are logged silently.
 -/
-def reportMessages {m} [Monad m] [MonadLog m] [MonadError m]
+public meta def reportMessages {m} [Monad m] [MonadLog m] [MonadError m]
     (errorExpected : Option Bool) (blame : Syntax) (messages : MessageLog) :
     m Unit := do
   match errorExpected with
@@ -168,7 +178,7 @@ def reportMessages {m} [Monad m] [MonadLog m] [MonadError m]
     if messages.hasErrors then
       throwErrorAt blame "No error expected in code block, one occurred"
 
-def reconstructHighlight (docReconst : DocReconstruction) (key : Export.Key) :=
+public def reconstructHighlight (docReconst : DocReconstruction) (key : Export.Key) :=
   match docReconst.highlightDeduplication.toHighlighted key with
   | .error msg => panic! s!"Unable to export key {key}: {msg}"
   | .ok v => v
@@ -179,7 +189,7 @@ within the DocElabM monad, `← quoteHighlightViaSerialization hls` will result 
 represents the same highlight as `quote hls`, but will hopefully produce smaller code because of
 quoting a compressed version of the highlighted code.
 -/
-private def quoteHighlightViaSerialization (hls : Highlighted) : DocElabM Term := do
+private meta def quoteHighlightViaSerialization (hls : Highlighted) : DocElabM Term := do
   match (( ← readThe DocElabContext).docReconstructionPlaceholder, (← getThe DocElabM.State).highlightDeduplicationTable) with
     | (.some placeholder, .some exportTable) =>
       let (key, exportTable) := hls.export.run exportTable
@@ -193,7 +203,7 @@ private def quoteHighlightViaSerialization (hls : Highlighted) : DocElabM Term :
 De-indents and returns (syntax of) a Block representation containing highlighted Lean code.
 The argument `hls` must be a highlighting of the parsed string `str`.
 -/
-private def toHighlightedLeanBlock (shouldShow : Bool) (hls : Highlighted) (str: StrLit) : DocElabM Term := do
+private meta def toHighlightedLeanBlock (shouldShow : Bool) (hls : Highlighted) (str: StrLit) : DocElabM Term := do
   if !shouldShow then
     return ← ``(Block.concat #[])
 
@@ -212,7 +222,7 @@ private def toHighlightedLeanBlock (shouldShow : Bool) (hls : Highlighted) (str:
 Returns (syntax of) an Inline representation containing highlighted Lean code.
 The argument `hls` must be a highlighting of the parsed string `str`.
 -/
-private def toHighlightedLeanInline (shouldShow : Bool) (hls : Highlighted) (str : StrLit) : DocElabM Term := do
+private meta def toHighlightedLeanInline (shouldShow : Bool) (hls : Highlighted) (str : StrLit) : DocElabM Term := do
   if !shouldShow then
     return ← ``(Inline.concat #[])
 
@@ -229,7 +239,7 @@ needs to run, so that its warnings are accurately recorded. But the linter also 
 document, at which time it can inspect the info trees left behind by the embedded Lean and generate
 spurious warnings. Turning it off before saving info trees works around this issue.
 -/
-private partial def disableUnusedVarLinterInInfoTree : InfoTree → InfoTree
+private meta partial def disableUnusedVarLinterInInfoTree : InfoTree → InfoTree
   | .context (.commandCtx ci) child =>
     .context (.commandCtx { ci with options := Lean.Linter.linter.unusedVariables.set ci.options false })
       (disableUnusedVarLinterInInfoTree child)
@@ -239,7 +249,7 @@ private partial def disableUnusedVarLinterInInfoTree : InfoTree → InfoTree
     .node info (children.map disableUnusedVarLinterInInfoTree)
   | .hole id => .hole id
 
-def elabCommands (config : LeanBlockConfig) (str : StrLit)
+public meta def elabCommands (config : LeanBlockConfig) (str : StrLit)
     (toHighlightedLeanContent : (shouldShow : Bool) → (hls : Highlighted) → (str: StrLit) → DocElabM Term)
     (minCommands : Option Nat := none)
     (maxCommands : Option Nat := none) :
@@ -359,11 +369,11 @@ where
 Elaborates the provided Lean command in the context of the current Verso module.
 -/
 @[code_block]
-def lean : CodeBlockExpanderOf LeanBlockConfig
+public meta def lean : CodeBlockExpanderOf LeanBlockConfig
   | config, str => elabCommands config str toHighlightedLeanBlock
 
 @[role]
-def leanCommand : RoleExpanderOf LeanBlockConfig
+public meta def leanCommand : RoleExpanderOf LeanBlockConfig
   | config, inls => do
     if let some str ← oneCodeStr? inls then
       elabCommands config str toHighlightedLeanInline (minCommands := some 1) (maxCommands := some 1)
@@ -375,7 +385,7 @@ def leanCommand : RoleExpanderOf LeanBlockConfig
 Elaborates the provided Lean term in the context of the current Verso module.
 -/
 @[code_block]
-def leanTerm : CodeBlockExpanderOf LeanInlineConfig
+public meta def leanTerm : CodeBlockExpanderOf LeanInlineConfig
   | config, str => withoutAsync <| do
 
     let altStr ← parserInputString str
@@ -454,7 +464,7 @@ def leanTerm : CodeBlockExpanderOf LeanInlineConfig
 Elaborates the provided Lean term in the context of the current Verso module.
 -/
 @[role lean]
-def leanInline : RoleExpanderOf LeanInlineConfig
+public meta def leanInline : RoleExpanderOf LeanInlineConfig
   -- Async elab is turned off to make sure that info trees and messages are available when highlighting
   | config, inlines => withoutAsync do
     let #[arg] := inlines
@@ -551,7 +561,7 @@ def leanInline : RoleExpanderOf LeanInlineConfig
 Elaborates the provided term in the current Verso context, then ensures that it's a type class that has an instance.
 -/
 @[role]
-def inst : RoleExpanderOf LeanBlockConfig
+public meta def inst : RoleExpanderOf LeanBlockConfig
   | config, inlines => withoutAsync <| do
     let #[arg] := inlines
       | throwError "Expected exactly one argument"
@@ -609,7 +619,7 @@ def inst : RoleExpanderOf LeanBlockConfig
 Elaborates the contained document in a new section.
 -/
 @[directive_expander leanSection]
-def leanSection : DirectiveExpander
+public meta def leanSection : DirectiveExpander
   | args, contents => do
     let name? ← ArgParse.run ((some <$> .positional `name .string) <|> pure none) args
     let arg ← `(doc_arg| -«show»)
@@ -624,7 +634,7 @@ private def getClass : MessageSeverity → String
   | .information => "information"
   | .warning => "warning"
 
-block_extension Block.leanOutput via withHighlighting where
+public block_extension Block.leanOutput via withHighlighting where
   traverse _ _ _ := do
     pure none
   toTeX :=
@@ -647,7 +657,7 @@ block_extension Block.leanOutput via withHighlighting where
         msg.blockHtml summarize (expandTraces := expandTraces) (g := Manual)
 
 
-structure LeanOutputConfig where
+public structure LeanOutputConfig where
   name : Ident
   «show» : Bool := true
   severity : Option MessageSeverity
@@ -662,18 +672,19 @@ structure LeanOutputConfig where
 section
 variable [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m]
 
-def LeanOutputConfig.parser : ArgParse m LeanOutputConfig :=
-  LeanOutputConfig.mk <$>
-    .positional `name output <*>
-    .flag `show true <*>
-    .named `severity .messageSeverity true <*>
-    .flag `summarize false <*>
-    .namedD `whitespace .whitespaceMode .exact <*>
-    .flag `normalizeMetas true <*>
-    .namedD `allowDiff .nat 0 <*>
-    .many (.named `expandTrace .name false) <*>
-    .named `startAt .string true <*>
-    .named `stopAt .string true
+public meta instance : FromArgs LeanOutputConfig m where
+  fromArgs :=
+    LeanOutputConfig.mk <$>
+      .positional `name output <*>
+      .flag `show true <*>
+      .named `severity .messageSeverity true <*>
+      .flag `summarize false <*>
+      .namedD `whitespace .whitespaceMode .exact <*>
+      .flag `normalizeMetas true <*>
+      .namedD `allowDiff .nat 0 <*>
+      .many (.named `expandTrace .name false) <*>
+      .named `startAt .string true <*>
+      .named `stopAt .string true
 where
   output : ValDesc m Ident := {
     description := "output name",
@@ -682,17 +693,14 @@ where
       | .name x => pure x
       | other => throwError "Expected output name, got {repr other}"
   }
-
-instance : FromArgs LeanOutputConfig m := ⟨LeanOutputConfig.parser⟩
-
 end
 
-private def withNl (s : String) : String :=
+private meta def withNl (s : String) : String :=
   if s.endsWith "\n" then s else s ++ "\n"
 
 open SubVerso.Examples.Messages in
 @[code_block]
-def leanOutput : CodeBlockExpanderOf LeanOutputConfig
+public meta def leanOutput : CodeBlockExpanderOf LeanOutputConfig
  | config, str => do
 
     PointOfInterest.save (← getRef) (config.name.getId.toString)
@@ -797,7 +805,7 @@ where
     (insDel.size, Diff.linesToString d)
 
 
-inline_extension Inline.name via withHighlighting where
+public inline_extension Inline.name via withHighlighting where
   traverse _ _ _ := do
     pure none
   toTeX := some <| fun go _ _ content => content.mapM go
@@ -811,14 +819,14 @@ inline_extension Inline.name via withHighlighting where
       | .ok (hl : Highlighted) =>
         hl.inlineHtml (g := Manual) "examples"
 
-structure NameConfig where
+public structure NameConfig where
   full : Option Name
 
 section
 variable [Monad m] [MonadError m] [MonadLiftT CoreM m] [MonadLiftT TermElabM m]
 
-def NameConfig.parse : ArgParse m NameConfig :=
-  NameConfig.mk <$> ((fun _ => none) <$> .done <|> .positional `name ref)
+public meta instance : FromArgs NameConfig m where
+  fromArgs := NameConfig.mk <$> ((fun _ => none) <$> .done <|> .positional `name ref)
 where
   ref : ValDesc m (Option Name) := {
     description := "reference name"
@@ -833,11 +841,9 @@ where
           | _ => return none
       | other => throwError "Expected reference name, got {repr other}"
   }
-
-instance : FromArgs NameConfig m := ⟨NameConfig.parse⟩
 end
 
-def constTok [Monad m] [MonadEnv m] [MonadLiftT MetaM m] [MonadLiftT IO m]
+public meta def constTok [Monad m] [MonadEnv m] [MonadLiftT MetaM m] [MonadLiftT IO m]
     (name : Name) (str : String) :
     m Highlighted := do
   let docs ← findDocString? (← getEnv) name
@@ -845,7 +851,7 @@ def constTok [Monad m] [MonadEnv m] [MonadLiftT MetaM m] [MonadLiftT IO m]
   pure <| .token ⟨.const name sig docs false none, str⟩
 
 @[role]
-def name : RoleExpanderOf NameConfig
+public meta def name : RoleExpanderOf NameConfig
   | cfg, #[arg] => do
     let `(inline|code( $name:str )) := arg
       | throwErrorAt arg "Expected code literal with the example name"
@@ -873,7 +879,7 @@ def name : RoleExpanderOf NameConfig
 -- Placeholder for module names (eventually hyperlinking these will be important, so better to tag them now)
 
 @[role]
-def module : RoleExpanderOf Unit
+public meta def module : RoleExpanderOf Unit
   | (), #[arg] => do
     let `(inline|code( $name:str )) := arg
       | throwErrorAt arg "Expected code literal with the module's name"

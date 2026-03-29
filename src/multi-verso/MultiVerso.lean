@@ -281,7 +281,7 @@ public structure RefDomain where
   contents : HashMap String (Array RefObject)
 deriving Inhabited, Repr
 
-instance : GetElem? RefDomain String (Array RefObject) fun dom name => name ∈ dom.contents where
+public instance : GetElem? RefDomain String (Array RefObject) fun dom name => name ∈ dom.contents where
   getElem dom name ok := dom.contents[name]'ok
   getElem? dom name := dom.contents[name]?
 

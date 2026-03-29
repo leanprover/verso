@@ -4,6 +4,7 @@ open Lake DSL
 require subverso from git "https://github.com/leanprover/subverso"@"main"
 require MD4Lean from git "https://github.com/acmepjz/md4lean"@"main"
 require plausible from git "https://github.com/leanprover-community/plausible"@"main"
+require «doc-gen4» from git "https://github.com/david-christiansen/doc-gen4"@"pp-db"
 
 package verso where
   precompileModules := false -- temporarily disabled to work around an issue with nightly-2025-03-30
@@ -136,6 +137,7 @@ lean_exe «verso-demo» where
 lean_lib UsersGuide where
   srcDir := "doc"
   leanOptions := #[⟨`weak.linter.verso.manual.headerTags, true⟩]
+  needs := #[`@:docSource]
 
 @[default_target]
 lean_exe usersguide where
@@ -245,6 +247,41 @@ package_facet literate pkg : Array System.FilePath := do
   let libs := Job.collectArray (← pkg.leanLibs.mapM (·.facet `literate |>.fetch))
   let exes := Job.collectArray (← pkg.leanExes.mapM (·.toLeanLib.facet `literate |>.fetch))
   return libs.zipWith (·.flatten ++ ·.flatten) exes
+
+lean_exe «verso-docgen-analyze» where
+  root := `VersoManual.DB.Analyze
+  srcDir := "src/verso-manual"
+  supportInterpreter := true
+
+package_facet docSource pkg : System.FilePath := do
+  let ws ← getWorkspace
+  let exeJob ← «verso-docgen-analyze».fetch
+  let buildDir := ws.root.buildDir
+  let tomlPath := ws.root.dir / "doc-sources.toml"
+  let dbPath := buildDir / "api-docs.db"
+
+  -- The exe reads doc-sources.toml to determine which libraries to analyze.
+  -- It uses LEAN_PATH to locate their .olean files.
+  -- We don't depend on those libraries' olean jobs here to avoid build cycles
+  -- (modules that consume the DB declare `needs := #[`@:docSource]`, which
+  -- would create a cycle if we also depended on all libraries).
+  exeJob.mapM fun exeFile => do
+    addTrace (← computeTrace exeFile)
+    if ← tomlPath.pathExists then
+      addTrace (← computeTrace tomlPath)
+
+    buildFileUnlessUpToDate' dbPath do
+      IO.FS.createDirAll buildDir
+      let mut args := #[buildDir.toString, "api-docs.db"]
+      if ← tomlPath.pathExists then
+        args := args ++ #["--toml", tomlPath.toString]
+      proc {
+        cmd := exeFile.toString
+        args
+        env := ← getAugmentedEnv
+      }
+
+    pure dbPath
 
 section
 variable [Monad m]

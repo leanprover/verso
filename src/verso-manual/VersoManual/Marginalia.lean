@@ -3,12 +3,14 @@ Copyright (c) 2024 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-
+module
 import Verso
 import Verso.Doc.ArgParse
-import Verso.Doc.Elab.Monad
+public import Verso.Doc.Elab.Inline
+public import Verso.Doc.Elab.Monad
 import Verso.Code
-import VersoManual.Basic
+public import VersoManual.Basic
+
 
 namespace Verso.Genre.Manual
 
@@ -16,7 +18,7 @@ open Lean Elab
 open Verso ArgParse Doc Elab Genre.Manual Html Code Highlighted.WebAssets
 open SubVerso.Highlighting Highlighted
 
-def Marginalia.css := r#"
+public def Marginalia.css := r#"
 .marginalia .note {
   position: relative;
   padding: 0.5rem;
@@ -92,7 +94,7 @@ body {
 "#
 
 open Verso.Output Html in
-def Marginalia.html (content : Html) : Html :=
+public def Marginalia.html (content : Html) : Html :=
   {{<span class="marginalia"><span class="note">{{content}}</span></span>}}
 
 /-
@@ -105,10 +107,10 @@ stylistic sense to render them as footnotes in a fundamentally
 paginated format.
 -/
 open Verso.Output TeX in
-def Marginalia.TeX (content : TeX) : TeX :=
+public def Marginalia.TeX (content : TeX) : TeX :=
   \TeX{ \footnote{ \Lean{ content } } }
 
-inline_extension Inline.margin where
+public inline_extension Inline.margin where
   traverse _ _ _ := do
     pure none
   toTeX :=
@@ -122,7 +124,7 @@ inline_extension Inline.margin where
       Marginalia.html <$> content.mapM goI
 
 @[role]
-def margin : RoleExpanderOf Unit
+public meta def margin : RoleExpanderOf Unit
   | (), inlines => do
     let content ← inlines.mapM elabInline
     ``(Doc.Inline.other Inline.margin #[$content,*])

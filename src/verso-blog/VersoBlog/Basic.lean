@@ -3,22 +3,25 @@ Copyright (c) 2023-2024 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-import Lean.Data.Json.FromToJson
+module
+public import Lean.Data.Json.FromToJson.Basic
 
 import Std.Data.HashMap
 import Std.Data.HashSet
 
-import SubVerso.Highlighting
-
+public import SubVerso.Highlighting
 
 import Verso.Code
-import Verso.Doc
+public import Verso.Doc
 import Verso.Doc.Html
+public import Verso.Output.Html
 import Verso.Method
-import MultiVerso
+public import MultiVerso
+public import MultiVerso.Path
+public import MultiVerso.Slug
 
-
-import VersoBlog.LexedText
+public import VersoBlog.LexedText
+public section
 
 open Std (HashSet HashMap)
 open Lean (Json ToJson FromJson)
@@ -288,6 +291,7 @@ deriving Repr, BEq, ToJson, FromJson
 /--
 An ordinary web page that is not a blog post.
 -/
+@[expose]
 def Page : Genre where
   PartMetadata := Page.Meta
   Block := Blog.BlockExt
@@ -326,6 +330,7 @@ deriving TypeName, Repr
 /--
 A blog post.
 -/
+@[expose]
 def Post : Genre where
   PartMetadata := Post.Meta
   Block := Blog.BlockExt

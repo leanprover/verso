@@ -3,11 +3,15 @@ Copyright (c) 2023-2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
+module
 import Lean.DocString.Syntax
-import VersoManual
-import VersoBlog
+public import VersoManual
+public meta import VersoManual.DB
+meta import VersoBlog
 
-open Verso Genre Manual
+open Verso Genre
+open Verso.Genre.Manual hiding docstring tactic conv
+open Verso.Genre.Manual.DocGen
 
 open Verso.Genre.Blog (Page Post)
 
@@ -44,7 +48,7 @@ However, their metadata are different:
 tag := "blogMain"
 %%%
 
-Blogs should have an executable that invokes `blogMain` on the appropriate {ref "site-config"}[site and theme], forwarding on command-line arguments.
+Blogs should have an executable that invokes {name Verso.Genre.Blog.blogMain}`blogMain` on the appropriate {ref "site-config"}[site and theme], forwarding on command-line arguments.
 It is responsible for {ref "traversal"}[traversing] the site and generating the HTML.
 
 {docstring Blog.blogMain}

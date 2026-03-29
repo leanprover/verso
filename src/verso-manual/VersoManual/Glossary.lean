@@ -8,9 +8,12 @@ import Lean.Data.Json
 import Lean.Data.Json.FromToJson
 
 import Verso.Doc.Elab
-import Verso.Doc.PointOfInterest
+public meta import Verso.Doc.PointOfInterest
 public import VersoManual.Basic
+public import VersoManual.Glossary.Norm
+public meta import VersoManual.Glossary.Norm
 public import Verso.Doc.Elab.Monad
+public meta import Verso.Doc.Elab.Inline
 
 open Verso Genre Manual ArgParse
 open Verso.Doc.Elab
@@ -29,17 +32,11 @@ public structure TechArgs extends DefTechArgs where
 section
 variable [Monad m] [Lean.MonadError m] [MonadLiftT Lean.CoreM m]
 
-def DefTechArgs.parse : ArgParse m DefTechArgs :=
-  DefTechArgs.mk <$> .named `key .string true <*> .flag `normalize true
+public meta instance : FromArgs DefTechArgs m where
+  fromArgs := DefTechArgs.mk <$> .named `key .string true <*> .flag `normalize true
 
-public instance : FromArgs DefTechArgs m where
-  fromArgs := private DefTechArgs.parse
-
-def TechArgs.parse  : ArgParse m TechArgs :=
-  TechArgs.mk <$> fromArgs <*> .named `remote .string true
-
-public instance : FromArgs TechArgs m where
-  fromArgs := private TechArgs.parse
+public meta instance : FromArgs TechArgs m where
+  fromArgs := TechArgs.mk <$> fromArgs <*> .named `remote .string true
 
 end
 
@@ -50,7 +47,7 @@ private theorem glossaryState.isPublic : NameMap.isPublic glossaryState := by gr
 public def Inline.deftech : Inline where
   name := `Verso.Genre.Manual.deftech
 
-private partial def techString (text : Doc.Inline Manual) : String :=
+public partial def techString (text : Doc.Inline Manual) : String :=
   match text with
   | .code str | .math _ str | .text str | .linebreak str => str
   | .image .. | .footnote .. => ""
@@ -59,17 +56,6 @@ private partial def techString (text : Doc.Inline Manual) : String :=
   | .bold txt
   | .emph txt
   | .link txt _href => String.join <| txt.toList.map techString
-
--- Implements the normalization procedure used in Scribble
-private partial def normString (term : String) : String := Id.run do
-  let mut str := term.toLower
-  if str.endsWith "ies" then
-    str := (str.dropEnd 3).copy ++ "y"
-  if str.endsWith "s" then
-    str := str.dropEnd 1 |>.copy
-  str := str.replace "‑" "-"
-  String.intercalate " " (str.splitToList (fun c => c.isWhitespace || c == '-') |>.filter (!·.isEmpty))
-
 
 open Lean in
 /--
@@ -88,7 +74,7 @@ of the automatically-derived key.
 Uses of `tech` use the same process to derive a key, and the key is matched against the `deftech` table.
 -/
 @[role]
-public def deftech : RoleExpanderOf DefTechArgs
+public meta def deftech : RoleExpanderOf DefTechArgs
   | {key, normalize}, content => do
 
     -- Heuristically guess at the string and key (usually works)
@@ -185,7 +171,7 @@ Call with `(normalize := false)` to disable normalization, and `(key := some k)`
 of the automatically-derived key.
 -/
 @[role]
-public def tech : RoleExpanderOf TechArgs
+public meta def tech : RoleExpanderOf TechArgs
   | {key, normalize, remote}, content => do
 
     -- Heuristically guess at the string and key (usually works)

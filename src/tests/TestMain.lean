@@ -166,6 +166,16 @@ def testLiterateHtml (_ : Config) : IO Unit :=
 def testLiterateHtmlMultiRoot (_ : Config) : IO Unit :=
   Tests.LiterateHtml.testLiterateHtmlMultiRoot
 
+def testDocSourceConfig (_ : Config) : IO Unit := do
+  let fails ← runDocSourceConfigTests
+  if fails > 0 then
+    throw <| .userError s!"{fails} doc source config tests failed"
+
+def testIndentColumn (_ : Config) : IO Unit := do
+  let fails ← runIndentColumnTests
+  if fails > 0 then
+    throw <| .userError s!"{fails} indentColumn tests failed"
+
 -- Interactive tests via the LSP server
 def testInteractive (_ : Config) : IO Unit := do
   IO.println "Running interactive (LSP) tests..."
@@ -266,6 +276,8 @@ open Verso.Integration in
 def tests := [
   testSerialization,
   testBlog,
+  testDocSourceConfig,
+  testIndentColumn,
   testStemmer,
   testTexOutput "sample-doc" SampleDoc.doc,
   testTexOutput "inheritance-doc" InheritanceDoc.doc,

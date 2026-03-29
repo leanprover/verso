@@ -809,7 +809,7 @@ meta def extContents := structInstFields (sepByIndent Term.structInstField "; " 
 Defines a new block extension.
 
 ```
-block_extension NAME PARAMS [via MIXINS,+] where
+public block_extension NAME PARAMS [via MIXINS,+] where
   data := ...
   fields*
 ```
@@ -824,12 +824,12 @@ The remaining fields are used to define traversal and output generation for the 
 block descriptor is then processed by `MIXINS`, from left to right, before being added to the block
 descriptor table.
 -/
-syntax "block_extension" ident (ppSpace bracketedBinder)* (&" via " ident,+)? ppIndent(ppSpace "where" extContents) : command
+syntax (visibility)? "block_extension" ident (ppSpace bracketedBinder)* (&" via " ident,+)? ppIndent(ppSpace "where" extContents) : command
 /--
 Defines a new inline extension.
 
 ```
-inline_extension NAME PARAMS [via MIXINS,+] where
+public inline_extension NAME PARAMS [via MIXINS,+] where
   data := ...
   fields*
 ```
@@ -844,7 +844,7 @@ The remaining fields are used to define traversal and output generation for the 
 resulting inline descriptor is then processed by `MIXINS`, from left to right, before being added to
 the inline descriptor table.
 -/
-syntax "inline_extension" ident (ppSpace bracketedBinder)* (&" via " ident,+)? ppIndent(ppSpace "where" extContents) : command
+syntax (visibility)? "inline_extension" ident (ppSpace bracketedBinder)* (&" via " ident,+)? ppIndent(ppSpace "where" extContents) : command
 
 meta def isDataField : Lean.TSyntax ``Lean.Parser.Term.structInstField → Bool
   | `(Lean.Parser.Term.structInstField|data := $_) => true
@@ -853,13 +853,13 @@ meta def isDataField : Lean.TSyntax ``Lean.Parser.Term.structInstField → Bool
 
 open Lean Elab Command in
 elab_rules : command
-  | `(block_extension $x $args* $[via $mixins,*]? where $contents;*) => do
+  | `($[$v]? block_extension $x $args* $[via $mixins,*]? where $contents;*) => do
     let (data, nonData) := (contents : Array _).partition isDataField
     if data.size > 1 then
       for x in data do
         logErrorAt x "Multiple 'data' fields found"
     let cmd1 ←
-      `(command| def $x $args* : Block where $data;*)
+      `(command| $[$v:visibility]? def $x $args* : Block where $data;*)
     let innerDescrName := x.getId ++ `descr.inner |> mkIdentFrom x
     let descrName := x.getId ++ `descr |> mkIdentFrom x
     let applyMixins (x : Term) : CommandElabM Term :=
@@ -878,13 +878,13 @@ elab_rules : command
 
 open Lean Elab Command in
 elab_rules : command
-  | `(inline_extension $x $args* $[via $mixins,*]? where $contents;*) => do
+  | `($[$v]? inline_extension $x $args* $[via $mixins,*]? where $contents;*) => do
     let (data, nonData) := (contents : Array _).partition isDataField
     if data.size > 1 then
       for x in data do
         logErrorAt x "Multiple 'data' fields found"
     let cmd1 ←
-      `(command| def $x $args* : Inline where $data;*)
+      `(command| $[$v:visibility]? def $x $args* : Inline where $data;*)
     let innerDescrName := x.getId ++ `descr.inner |> mkIdentFrom x
     let descrName := x.getId ++ `descr |> mkIdentFrom x
     let applyMixins (x : Term) : CommandElabM Term :=

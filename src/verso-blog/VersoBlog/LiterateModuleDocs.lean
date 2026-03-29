@@ -3,13 +3,19 @@ Copyright (c) 2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
+module
 import SubVerso.Helper
 import SubVerso.Module
-import VersoBlog.Basic
+public import Verso.Doc.Concrete
+public import Verso.Doc.Elab.Monad
+public import VersoBlog.Basic
 import VersoBlog.LiterateLeanPage.Options
 import MD4Lean
 import VersoLiterate
-import Lean.Compiler.LCNF.ConfigOptions
+public import VersoLiterate.Module
+public import VersoLiterate.Basic
+public meta import Lean.Compiler.LCNF.ConfigOptions
+public section
 
 set_option doc.verso true
 
@@ -49,7 +55,7 @@ variable [Monad m] [MonadError m] [MonadQuotation m]
 open Verso Doc in
 open Lean Elab Command Term in
 open PartElabM in
-def elabFromModuleDocs (x : Ident) (path : StrLit) (mod : Ident) (title : StrLit) (genre : Term) (metadata? : Option Term) : CommandElabM Unit :=
+meta def elabFromModuleDocs (x : Ident) (path : StrLit) (mod : Ident) (title : StrLit) (genre : Term) (metadata? : Option Term) : CommandElabM Unit :=
   withTraceNode `verso.blog.literate (fun _ => pure m!"Literate '{title.getString}'") do
 
   let titleParts ← stringToInlines title
