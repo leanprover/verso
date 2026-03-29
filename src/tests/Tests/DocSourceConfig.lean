@@ -7,9 +7,12 @@ import Lake.Toml
 import VersoManual.DB.Config
 
 /-!
-# Tests for Doc Source Configuration Parsing
+# Tests for Documentation Source Configuration Parsing
 
 Tests for `Verso.Genre.Manual.DocSource.Config` — TOML parsing for `doc-sources.toml`.
+
+This file describes the libraries that are being documented in a Verso project. The libraries should
+be available in the current workspace.
 -/
 
 open Verso.Genre.Manual.DocSource
