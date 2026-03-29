@@ -20,9 +20,7 @@ public import VersoManual.Docstring.DocName
 public section
 
 /-!
-# DB Querying and Type Reconstruction
-
-High-level API for querying the doc-gen4 database and converting the results into Verso's
+High-level API for querying the `doc-gen4` database and converting the results into Verso's
 documentation types (`DeclType`, `Signature`, `DocName`, `FieldInfo`, `ParentInfo`).
 -/
 
@@ -36,7 +34,7 @@ open SubVerso.Highlighting (Highlighted Token)
 open Verso.Genre.Manual (Signature)
 open Verso.Genre.Manual.Block.Docstring (DeclType DocName FieldInfo ParentInfo Visibility)
 
-/-- Extracts a markdown docstring from a doc-gen4 `NameInfo.doc` field. -/
+/-- Extracts a Markdown docstring from a doc-gen4 `NameInfo.doc` field. -/
 def docStringOfDoc? (doc : Option (String ⊕ VersoDocString)) : Option String :=
   doc.bind fun
     | .inl md => some md
@@ -52,31 +50,36 @@ parameters for structure constructors).
 def docNameOfNameInfo (ni : NameInfo)
     (constInfo : Lean.NameMap (String × Option String) := {})
     (showNamespace : Bool := true)
-    (sigOverride : Option String := none) : DocName :=
-  let docstring? := docStringOfDoc? ni.doc
-  let sigStr := sigOverride.getD s!"{ni.name} : {formatCodeText ni.type}"
-  let displayName := if showNamespace then ni.name.toString else ni.name.getString!
-  let nameHl := Highlighted.token ⟨.const ni.name sigStr docstring? false none, displayName⟩
-  { name := ni.name
-    hlName := nameHl
-    signature := .seq #[nameHl, .text " : ", formatCodeToHighlighted constInfo ni.type]
-    docstring? }
+    (sigOverride : Option String := none) : DocName where
+  name := ni.name
+  hlName := nameHl
+  signature := .seq #[nameHl, .text " : ", formatCodeToHighlighted constInfo ni.type]
+  docstring?
+where
+  docstring? := docStringOfDoc? ni.doc
+  sigStr := sigOverride.getD s!"{ni.name} : {formatCodeText ni.type}"
+  displayName := if showNamespace then ni.name.toString else ni.name.getString!
+  nameHl := Highlighted.token ⟨.const ni.name sigStr docstring? false none, displayName⟩
+
 
 /--
 Builds a `Signature` from a doc-gen4 `Info`, including the declaration name.
 Combines all `FormatCode` pieces (name, args, type) into a single `Format` document,
-then renders at width 72 (wide) and 42 (narrow) for proper line-breaking.
+then renders at width 72 (wide) and 42 (narrow).
 -/
 def signatureOfInfo (info : DocGen4.Process.Info)
     (constInfo : Lean.NameMap (String × Option String) := {})
-    (levelParams : List Name := []) : Signature :=
-  let sigFc := buildSignatureFormatCode info.name levelParams (info.args.map (·.binder)) info.type
-  { wide := formatCodeToHighlighted constInfo sigFc 72
-    narrow := formatCodeToHighlighted constInfo sigFc 42 }
+    (levelParams : List Name := []) : Signature where
+  wide := formatCodeToHighlighted constInfo sigFc 72
+  narrow := formatCodeToHighlighted constInfo sigFc 42
+where
+  sigFc := buildSignatureFormatCode info.name levelParams (info.args.map (·.binder)) info.type
 
 /--
-Extracts the parent structure name from a `FormatCode` type by rendering and finding the first
+Extracts the parent structure name from a `FormatCode` by rendering and finding the first
 `.const` tag. Falls back to `.anonymous` if no constant reference is found.
+
+The database doesn't independently represent the name, just the full type.
 -/
 private partial def parentNameOfFormatCode (fc : FormatCode) : Name :=
   go fc.render
@@ -88,7 +91,7 @@ where
     | .append xs => xs.foldl (init := .anonymous) fun acc x =>
       if acc != .anonymous then acc else go x
 
-/-- Converts doc-gen4's `StructureParentInfo` array to Verso's `ParentInfo` array. -/
+/-- Converts `doc-gen4`'s `StructureParentInfo` array to Verso's `ParentInfo` array. -/
 def convertParents (parents : Array DocGen4.Process.StructureParentInfo)
     (constInfo : Lean.NameMap (String × Option String) := {}) : Array ParentInfo :=
   parents.mapIdx fun i p => {
@@ -99,9 +102,9 @@ def convertParents (parents : Array DocGen4.Process.StructureParentInfo)
   }
 
 /--
-Converts a doc-gen4 `Process.FieldInfo` to Verso's `Block.Docstring.FieldInfo`.
+Converts a `doc-gen4` `Process.FieldInfo` to Verso's `Block.Docstring.FieldInfo`.
 
-Some fields are simplified because the database doesn't carry the full information:
+Some fields are simplified because the database doesn't yet carry the full information:
 - `subobject?` is always `none`
 - `binderInfo` is always `BinderInfo.default`
 - `autoParam` is always `false`
@@ -137,26 +140,26 @@ def convertFieldInfo (field : DocGen4.Process.FieldInfo)
         [parentDocName]
       | none => []
   {
-    fieldName
-    fieldFrom
-    type := formatCodeToHighlighted constInfo field.type
-    projFn := field.name
-    subobject? := none
-    binderInfo := .default
-    autoParam := false
-    docString?
-    visibility := .public
+    fieldName,
+    fieldFrom,
+    type := formatCodeToHighlighted constInfo field.type,
+    projFn := field.name,
+    subobject? := none,
+    binderInfo := .default,
+    autoParam := false,
+    docString?,
+    visibility := .public,
   }
 
 /--
-Builds a pretty constructor hover signature from a structure's fields.
-Groups consecutive fields with the same type, e.g. `(shortTitle shortContextTitle : Option String)`.
+Builds a pretty constructor hover signature from a structure's fields, reconstructing it from the stored
+type because the database does not yet include a rendered signature for structure constructors.
+For example, it groups consecutive fields with the same type, e.g. `(shortTitle shortContextTitle : Option String)`.
 Returns a string like `Struct.mk (field1 : Type1) (field2 field3 : Type2) : Struct`.
-
-NOTE: This is a workaround because doc-gen4 currently stores the structure constructor as `NameInfo`
-(without args). Once doc-gen4 is changed to store the constructor as `Info` (with pretty-printed
-binder args), this function should be replaced by directly using the constructor's `args` field.
 -/
+-- NOTE: This is a workaround because doc-gen4 currently stores the structure constructor as `NameInfo`
+-- (without args). Once doc-gen4 is changed to store the constructor as `Info` (with pretty-printed
+-- binder args), this function should be replaced by directly using the constructor's `args` field.
 private def prettyCtorSig (ctorName : Name) (structName : Name)
     (fields : Array DocGen4.Process.FieldInfo) : String :=
   let resultType := structName.toString
@@ -199,11 +202,11 @@ private def buildStructureDeclType (isClass : Bool) (info : DocGen4.Process.Stru
   .structure isClass ctor? fieldNames fieldInfo parents #[]
 
 /--
-Reconstructs a `DeclType` from a doc-gen4 `DocInfo`.
+Reconstructs a `DeclType` from a doc-gen4 `DocInfo`:
 
-For structures and classes, converts constructor, field, and parent information.
-For inductives, converts constructor `DocName` values.
-For definitions, opaques, axioms: extracts safety information.
+* For structures and classes, converts constructor, field, and parent information.
+* For inductives, converts constructor `DocName` values.
+* For definitions, opaque definitions, and axioms: extracts safety information.
 -/
 def buildDeclType (docInfo : DocInfo) (hideFields : Bool) (hideStructureConstructor : Bool)
     (constInfo : Lean.NameMap (String × Option String) := {}) : DeclType :=
@@ -234,8 +237,12 @@ def buildDeclType (docInfo : DocInfo) (hideFields : Bool) (hideStructureConstruc
     .other
 
 /--
-Builds a `NameMap` of hover data for constants directly contained in a `DocInfo`
-(the declaration itself, its fields, constructors, etc.).
+Builds a `NameMap` of hover data for constants directly referenced in a `DocInfo`, including the
+declaration itself, its fields, constructors, etc. These are saved to be shown in hovers.
+
+The companion function `constInfoMap` then extends this with externally referenced constants (types
+mentioned in signatures, etc.) by looking those up in the DB. This function avoids a DB round-trip
+for those already in the `DocInfo` being processed.
 -/
 private def localConstInfoMap (docInfo : DocInfo) : Lean.NameMap (String × Option String) :=
   let info := docInfo.toInfo
@@ -274,7 +281,7 @@ private def allFormatCodes (docInfo : DocInfo) : Array FormatCode :=
   | _ => codes
 
 /-- Collects all constant names referenced in any `FormatCode` of a `DocInfo`. -/
-private def referencedConstNames (docInfo : DocInfo) : Lean.NameSet :=
+private def referencedConstNames (docInfo : DocInfo) : NameSet :=
   (allFormatCodes docInfo).foldl (init := {}) fun acc fc =>
     formatCodeConstNames acc fc
 
@@ -282,7 +289,7 @@ private def referencedConstNames (docInfo : DocInfo) : Lean.NameSet :=
 Queries the database for type and docstring hover data for a set of constant names.
 Returns a `NameMap` of `(typeString, docstring?)` suitable for use as `constInfo`.
 -/
-private def queryConstHoverData (dbPath : System.FilePath) (names : Lean.NameSet) :
+private def queryConstHoverData (dbPath : System.FilePath) (names : NameSet) :
     IO (Lean.NameMap (String × Option String)) := do
   let sqlite ← SQLite.openWith dbPath .readonly
   let typeStmt ← sqlite.prepare
@@ -292,6 +299,7 @@ private def queryConstHoverData (dbPath : System.FilePath) (names : Lean.NameSet
   let versoDocStmt ← sqlite.prepare
     "SELECT content FROM declaration_verso_docstrings WHERE module_name = ? AND position = ?"
   let mut result : Lean.NameMap (String × Option String) := {}
+  -- TODO: Once doc-gen4 gets an extension mechanism for these, we'll need to use it here.
   have : SQLite.Blob.FromBinary VersoDocString := DocGen4.DB.versoDocStringFromBinary builtinDocstringValues
   for name in names do
     typeStmt.bind 1 name.toString
@@ -331,26 +339,27 @@ private def queryConstHoverData (dbPath : System.FilePath) (names : Lean.NameSet
 /--
 Builds a complete `NameMap` of hover data for a `DocInfo`, including both locally-defined names
 (the declaration, its fields/constructors) and externally-referenced constants (looked up in the DB).
+
+The values in the map pair signatures with optional Markdown docstrings.
 -/
 def constInfoMap (dbPath : System.FilePath) (docInfo : DocInfo) :
     IO (Lean.NameMap (String × Option String)) := do
-  let local_ := localConstInfoMap docInfo
+  let locallyAvailable := localConstInfoMap docInfo
   let referenced := referencedConstNames docInfo
   -- Only query the DB for names not already in the local map
   let mut missing : Lean.NameSet := {}
   for name in referenced do
-    unless local_.contains name do
+    unless locallyAvailable.contains name do
       missing := missing.insert name
-  if missing.isEmpty then return local_
+  if missing.isEmpty then return locallyAvailable
   let external ← queryConstHoverData dbPath missing
-  -- Merge: local takes precedence
-  return external.foldl (init := local_) fun m name val =>
+  return external.foldl (init := locallyAvailable) fun m name val =>
     if m.contains name then m else m.insert name val
 
 /--
-Opens the doc-gen4 database at the given path and looks up a declaration by name.
+Opens the `doc-gen4` database at the given path and looks up a declaration by name.
 
-Returns `none` if the name is not found. Throws on IO errors (missing file, corrupt DB).
+Returns `none` if the name is not found. Throws on IO errors.
 -/
 def lookupDocInfo (dbPath : System.FilePath) (name : Name) :
     IO (Option DocInfo) := do
@@ -371,6 +380,12 @@ structure TacticLookupResult where
   userName : String
   docString : Option String
   tags : Array Name
+deriving Inhabited
+
+/-- Result of looking up a conv tactic in the database. -/
+structure ConvTacticLookupResult where
+  internalName : Name
+  docString : Option String
 deriving Inhabited
 
 private def readTacticRow (_sqlite : SQLite) (tacStmt tagStmt : SQLite.Stmt) :
@@ -424,21 +439,16 @@ def lookupTacticByUserName (dbPath : System.FilePath) (userName : String) :
 
 /-- Loads all conv tactics from the `conv_tactics` table. -/
 def lookupConvTactics (dbPath : System.FilePath) :
-    IO (Array TacticLookupResult) := do
+    IO (Array ConvTacticLookupResult) := do
   let sqlite ← SQLite.openWith dbPath .readonly
   let stmt ← sqlite.prepare
-    "SELECT internal_name, user_name, doc_string, module_name FROM conv_tactics"
+    "SELECT internal_name, doc_string FROM conv_tactics"
   let mut results := #[]
   while (← stmt.step) do
     let internalName := (← stmt.columnText 0).toName
-    let userName ← stmt.columnText 1
-    let docStr ← stmt.columnText 2
+    let docStr ← stmt.columnText 1
     results := results.push {
       internalName
-      userName
       docString := if docStr.isEmpty then none else some docStr
-      tags := #[]
     }
   return results
-
-end Verso.Genre.Manual.DB

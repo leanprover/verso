@@ -171,6 +171,11 @@ def testDocSourceConfig (_ : Config) : IO Unit := do
   if fails > 0 then
     throw <| .userError s!"{fails} doc source config tests failed"
 
+def testIndentColumn (_ : Config) : IO Unit := do
+  let fails ← runIndentColumnTests
+  if fails > 0 then
+    throw <| .userError s!"{fails} indentColumn tests failed"
+
 -- Interactive tests via the LSP server
 def testInteractive (_ : Config) : IO Unit := do
   IO.println "Running interactive (LSP) tests..."
@@ -272,6 +277,7 @@ def tests := [
   testSerialization,
   testBlog,
   testDocSourceConfig,
+  testIndentColumn,
   testStemmer,
   testTexOutput "sample-doc" SampleDoc.doc,
   testTexOutput "inheritance-doc" InheritanceDoc.doc,

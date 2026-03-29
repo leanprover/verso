@@ -26,7 +26,7 @@ structure Config where
   /--
   Whether to include declarations from the Lean core libraries (`Init`, `Std`, `Lake`, `Lean`).
   -/
-  includeCore : Bool := false
+  includeCore : Bool := true
 deriving Repr, BEq, Inhabited
 
 /-- Extracts a `String` from a TOML `Value`, or throws if it's not a string. -/
@@ -51,7 +51,7 @@ def Config.ofToml (table : Table) : Except String Config := do
     | none => pure #[]
   let includeCore ← match table.find? `include_core with
     | some v => tomlBool v
-    | none => pure false
+    | none => pure true
   pure { libraries, includeCore }
 
 /-- Loads and parses a `doc-sources.toml` file. -/

@@ -40,7 +40,7 @@ private def testEmptyConfig : IO Unit := do
   let table ← parseToml ""
   let config ← IO.ofExcept <| Config.ofToml table
   assertEqual "empty config libraries" #[] config.libraries
-  assertEqual "empty config includeCore" false config.includeCore
+  assertEqual "empty config includeCore" true config.includeCore
 
 private def testLibrariesField : IO Unit := do
   let table ← parseToml "
@@ -58,10 +58,10 @@ libraries = [\"Init\"]
 
 private def testIncludeCore : IO Unit := do
   let table ← parseToml "
-include_core = true
+include_core = false
 "
   let config ← IO.ofExcept <| Config.ofToml table
-  assertEqual "includeCore" true config.includeCore
+  assertEqual "includeCore" false config.includeCore
 
 private def testIncludeCoreFalse : IO Unit := do
   let table ← parseToml "

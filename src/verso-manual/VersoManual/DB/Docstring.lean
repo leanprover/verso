@@ -22,15 +22,15 @@ import MD4Lean
 public section
 
 /-!
-# DB-Backed Docstring Command
+# DocGen-Backed Docstring Command
 
-A `{docstring}` block command that reads documentation data from a doc-gen4 SQLite database rather
-than from the Lean `Environment`. Produces the same `Block.docstring` output as the existing
+A `{docstring}` block command that reads documentation data from a `doc-gen4` SQLite database rather
+than from the Lean environment. Produces the same `Block.docstring` output as the existing
 environment-based `{docstring}` command, so the HTML/TeX rendering pipeline works unchanged.
 -/
 
 open Lean
-open Verso.Doc.Elab.PartElabM
+open Verso.Doc.Elab PartElabM
 open Verso.Code
 open Verso.ArgParse
 open SubVerso.Highlighting
@@ -50,7 +50,7 @@ The result is cached so that `lake query` is invoked at most once per process.
 private meta def getDbPath : IO System.FilePath := do
   if let some path := (← dbPathCache.get) then
     return path
-  let out ← IO.Process.output {cmd := "lake", args := #["query", "--no-build", "@:docSource"]}
+  let out ← IO.Process.output { cmd := "lake", args := #["query", "--no-build", "@:docSource"] }
   if out.exitCode != 0 then
     throw <| .userError s!"Documentation database is not up-to-date. Run `lake build` to generate it.\n\
       Make sure your lakefile includes `needs := #[`@:docSource]` on the library that uses DB docstrings.\n\
@@ -59,32 +59,8 @@ private meta def getDbPath : IO System.FilePath := do
   dbPathCache.set (some path)
   return path
 
-
-public structure DBDocstringConfig where
-  name : Ident × Name
-  allowMissing : Bool
-  hideFields : Bool := false
-  hideStructureConstructor : Bool := false
-  label : Option String := none
-
-section
-variable {m} [Monad m] [MonadOptions m] [MonadEnv m] [MonadLiftT CoreM m] [MonadError m]
-  [MonadLog m] [AddMessageContext m] [Lean.Elab.MonadInfoTree m] [MonadLiftT MetaM m]
-
-public meta instance : FromArgs DBDocstringConfig m where
-  fromArgs :=
-    DBDocstringConfig.mk <$>
-      .positional `name .documentableName <*>
-      .flagM `allowMissing (verso.docstring.allowMissing.get <$> getOptions)
-        "Warn instead of error on missing docstrings (defaults to value of option `verso.docstring.allowMissing)" <*>
-      .flag `hideFields false <*>
-      .flag `hideStructureConstructor false <*>
-      .named `label .string true
-
-end
-
 private meta def getExtras (name : Name) (declType : Block.Docstring.DeclType) :
-    Verso.Doc.Elab.DocElabM (Array Term) :=
+    DocElabM (Array Term) :=
   match declType with
   | .structure isClass constructor? _ fieldInfo parents _ => do
     let ctorRow : Option Term ← constructor?.mapM fun constructor => do
@@ -141,29 +117,26 @@ end DB
 namespace DocGen
 open DB
 
-open Verso.Genre.Manual.Markdown in
-open Verso.Doc.Elab in
+open Verso.Genre.Manual.Markdown
+
 @[block_command]
-public meta def docstring : BlockCommandOf DBDocstringConfig
-  | ⟨(x, name), allowMissing, hideFields, hideCtor, customLabel⟩ => do
+public meta def docstring : BlockCommandOf DocstringConfig
+  | { name := (x, name), allowMissing, hideFields, hideStructureConstructor, label := customLabel } => do
     let opts : Options → Options :=
       (verso.docstring.allowMissing.set · allowMissing)
     withOptions opts do
       Doc.PointOfInterest.save (← getRef) name.toString (detail? := some "Documentation")
 
-      -- Locate and open the database
       let dbPath ← getDbPath
       unless ← dbPath.pathExists do
         throwErrorAt x m!"Documentation database not found at '{dbPath}'. Run `lake build` to generate it."
 
-      -- Look up the declaration
       let some docInfo ← lookupDocInfo dbPath name
         | throwErrorAt x m!"'{name}' not found in the documentation database."
 
       let info := docInfo.toInfo
       let ci ← constInfoMap dbPath docInfo
 
-      -- Extract and parse docstring
       let blockStx ← do
         match docStringOfDoc? info.doc with
         | none => pure #[]
@@ -172,43 +145,36 @@ public meta def docstring : BlockCommandOf DBDocstringConfig
             | throwErrorAt x "Failed to parse docstring as Markdown"
           ast.blocks.mapM (blockFromMarkdown · (handleHeaders := strongEmphHeaders))
 
-      -- Check deprecation
       let isDeprecated := info.attrs.any (·.startsWith "deprecated")
       if !(← Docstring.getAllowDeprecated) && isDeprecated then
         Lean.logError m!"'{name}' is deprecated.\n\nSet option 'verso.docstring.allowDeprecated' to 'true' to allow documentation for deprecated names."
 
-      -- Build DeclType from DocInfo
-      let declType := buildDeclType docInfo (hideFields := hideFields) (hideStructureConstructor := hideCtor) ci
+      let declType := buildDeclType docInfo (hideFields := hideFields) (hideStructureConstructor := hideStructureConstructor) ci
 
-      -- Build Signature (includes declaration name and universe parameters)
       let levelParams := match (← getEnv).find? name with
         | some ci => ci.levelParams
         | none => []
       let signature := signatureOfInfo info ci (levelParams := levelParams)
 
-      -- Build extras for structures and inductives
+      -- Find constructors and instance/structure fields
       let extras ← getExtras name declType
 
       ``(Verso.Doc.Block.other
           (Verso.Genre.Manual.Block.docstring $(quote name) $(quote declType) $(quote signature) $(quote customLabel) $(quote (#[] : Array Name)))
           #[$(blockStx ++ extras),*])
 
-open Verso.Genre.Manual.Markdown in
-open Verso.Doc.Elab in
 open Lean Elab Tactic Doc in
 @[directive]
 public meta def tactic : DirectiveExpanderOf TacticDocsOptions
-  | ⟨name, «show», replace, allowMissing⟩, more => do
+  | { name, «show», replace, allowMissing }, more => do
     let opts : Options → Options :=
       (verso.docstring.allowMissing.set · allowMissing)
     withOptions opts do
-      -- Locate and open the database
       let dbPath ← getDbPath
       let blame : Syntax := name.elim TSyntax.raw TSyntax.raw
       unless ← dbPath.pathExists do
         throwErrorAt blame m!"Documentation database not found at '{dbPath}'. Run `lake build` to generate it."
 
-      -- Look up the tactic
       let results : Array TacticLookupResult ← match name with
         | .inr ident => lookupTacticByName dbPath ident.getId
         | .inl str => lookupTacticByUserName dbPath str.getString
@@ -226,7 +192,6 @@ public meta def tactic : DirectiveExpanderOf TacticDocsOptions
       if results.size > 1 then
         logWarningAt blame s!"Found {results.size} overloads: {results.map (toString ·.internalName) |>.toList |> ", ".intercalate}"
 
-      -- Convert to TacticDoc
       let tacticDoc : TacticDoc := {
         internalName := result.internalName
         userName := result.userName
@@ -250,11 +215,9 @@ public meta def tactic : DirectiveExpanderOf TacticDocsOptions
       let userContents ← more.mapM elabBlock
       ``(Verso.Doc.Block.other (Block.tactic $(quote tacticDoc) $(quote «show»)) #[$(contents ++ userContents),*])
 
-open Verso.Genre.Manual.Markdown in
-open Verso.Doc.Elab in
 @[directive]
 public meta def conv : DirectiveExpanderOf TacticDocsOptions
-  | ⟨name, «show», _replace, allowMissing⟩, more => do
+  | { name, «show», replace := _, allowMissing }, more => do
     let opts : Options → Options :=
       (verso.docstring.allowMissing.set · allowMissing)
     withOptions opts do
@@ -281,4 +244,3 @@ public meta def conv : DirectiveExpanderOf TacticDocsOptions
         | throwError "An explicit 'show' is mandatory for conv docs (for now)"
       let userContents ← more.mapM elabBlock
       ``(Verso.Doc.Block.other (Block.conv $(quote result.internalName) $(quote toShow) $(quote result.docString)) #[$(contents ++ userContents),*])
-

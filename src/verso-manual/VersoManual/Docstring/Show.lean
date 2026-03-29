@@ -21,7 +21,8 @@ open Lean
 
 namespace Verso.Genre.Manual
 
-private def indentColumn (str : String) : Nat := Id.run do
+/-- Finds the minimum indentation column across non-blank lines in a string. -/
+def indentColumn (str : String) : Nat := Id.run do
   let mut i : Option Nat := none
   for line in str.splitToList (· == '\n') do
     let leading := line.takeWhile Char.isWhitespace
@@ -31,25 +32,6 @@ private def indentColumn (str : String) : Nat := Id.run do
       if leading.length < i' then i := some leading.length
     else i := some leading.length
   return i.getD 0
-
-/-- info: 0 -/
-#guard_msgs in
-#eval indentColumn ""
-/-- info: 0 -/
-#guard_msgs in
-#eval indentColumn "abc"
-/-- info: 3 -/
-#guard_msgs in
-#eval indentColumn "   abc"
-/-- info: 3 -/
-#guard_msgs in
-#eval indentColumn "   abc\n\n   def"
-/-- info: 2 -/
-#guard_msgs in
-#eval indentColumn "   abc\n\n  def"
-/-- info: 2 -/
-#guard_msgs in
-#eval indentColumn "   abc\n\n  def\n    a"
 
 def leanFromMarkdown := ()
 
