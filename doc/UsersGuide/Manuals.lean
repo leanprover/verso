@@ -8,7 +8,9 @@ import Lean.DocString.Syntax
 public import VersoManual
 import VersoBlog
 
-open Verso Genre Manual DB
+open Verso Genre
+open Verso.Genre.Manual hiding docstring tactic conv
+open Verso.Genre.Manual.DB
 
 open InlineLean
 open Verso.Doc
@@ -24,25 +26,25 @@ htmlSplit := .never
 Verso's {name}`Manual` genre can be used to write reference manuals, textbooks, or other book-like documents.
 It supports generating both HTML and PDFs via LaTeX, but the PDF support is relatively immature and untested compared to the HTML support.
 
-{dbDocstring Manual}
+{docstring Manual}
 
 
-{dbDocstring Manual.PartMetadata}
+{docstring Manual.PartMetadata}
 
-{dbDocstring Manual.HtmlSplitMode}
+{docstring Manual.HtmlSplitMode}
 
 The {name}`Manual` genre's block and inline element types are extensible.
 In the document, they consist of instances of {name}`Manual.Block` and {name}`Manual.Inline`, respectively:
 
-{dbDocstring Manual.Block}
+{docstring Manual.Block}
 
-{dbDocstring Manual.Inline}
+{docstring Manual.Inline}
 
 The fields {name}`Block.name` and {name Manual.Inline.name}`Inline.name` are used to look up concrete implementations of traversal and output generation in run-time tables that contain descriptions:
 
-{dbDocstring Manual.BlockDescr}
+{docstring Manual.BlockDescr}
 
-{dbDocstring Manual.InlineDescr}
+{docstring Manual.InlineDescr}
 
 Typically, the `inline_extension` and `block_extension` commands are used to simultaneously define an element and its descriptor, registering them for use by {name}`manualMain`.
 
@@ -51,11 +53,11 @@ The type {name}`HtmlAssets` contains CSS and JavaScript code.
 {name}`Manual.TraverseState`, {name}`Manual.BlockDescr`, and {name}`Manual.InlineDescr` all inherit from this structure.
 During traversal, HTML assets are collected; they are all included in the final rendered document.
 
-{dbDocstring Manual.HtmlAssets}
+{docstring Manual.HtmlAssets}
 
 Use {name}`HtmlAssets.combine` to combine multiple assets.
 
-{dbDocstring Manual.HtmlAssets.combine}
+{docstring Manual.HtmlAssets.combine}
 
 :::
 
@@ -96,12 +98,12 @@ tag := "docstrings"
 Docstrings can be included using the `docstring` directive. For instance,
 
 ```
-{dbDocstring List.forM}
+{docstring List.forM}
 ```
 
 results in
 
-{dbDocstring List.forM}
+{docstring List.forM}
 
 The {name}`docstring` command takes a positional parameter which is the documented name.
 It also accepts the following optional named parameters:
@@ -126,13 +128,13 @@ It also accepts the following optional named parameters:
 The {name}`tactic` directive and the {name}`optionDocs` command can be used to show documentation for tactics and compiler options, respectively.
 
 ```
-:::dbTactic "induction"
+:::tactic "induction"
 :::
 ```
 
 results in
 
-:::dbTactic "induction"
+:::tactic "induction"
 :::
 
 and
@@ -158,9 +160,9 @@ Elsewhere in the document, `tech` can be used to annotate a use site of a techni
 A {deftech}_technical term_ is a term with a specific meaning that's used precisely, like this one.
 References to technical terms are valid both before and after their definition sites.
 
-{dbDocstring deftech}
+{docstring deftech}
 
-{dbDocstring tech}
+{docstring tech}
 
 # Open-Source Licenses
 %%%
@@ -171,8 +173,8 @@ To facilitate providing appropriate credit to the authors of open-source JavaScr
 This is done using the {name HtmlAssets.licenseInfo}`licenseInfo` field that {name}`BlockDescr` and {name}`InlineDescr` inherit from {name}`HtmlAssets`.
 These contain a {name}`LicenseInfo`:
 
-{dbDocstring LicenseInfo}
+{docstring LicenseInfo}
 
 The {name}`licenseInfo` command displays the licenses for all components that were included in the generated document:
 
-{dbDocstring licenseInfo}
+{docstring licenseInfo}

@@ -9,7 +9,9 @@ public import VersoManual
 public meta import VersoManual.DB
 meta import VersoBlog
 
-open Verso Genre Manual
+open Verso Genre
+open Verso.Genre.Manual hiding docstring tactic conv
+open Verso.Genre.Manual.DB
 
 open Verso.Genre.Blog (Page Post)
 
@@ -25,21 +27,21 @@ htmlSplit := .never
 Verso's website genre is a static site generator.
 It contains two Verso {name}`Genre`s: {name}`Page` and {name}`Post`, which are identical except for their metadata:
 
-{DB.dbDocstring Page}
+{docstring Page}
 
-{DB.dbDocstring Post}
+{docstring Post}
 
 Both feature the same set of extensions:
 
-{DB.dbDocstring Blog.BlockExt}
+{docstring Blog.BlockExt}
 
-{DB.dbDocstring Blog.InlineExt}
+{docstring Blog.InlineExt}
 
 However, their metadata are different:
 
-{DB.dbDocstring Page.Meta}
+{docstring Page.Meta}
 
-{DB.dbDocstring Post.Meta}
+{docstring Post.Meta}
 
 # Generating a Site
 %%%
@@ -49,7 +51,7 @@ tag := "blogMain"
 Blogs should have an executable that invokes {name Verso.Genre.Blog.blogMain}`blogMain` on the appropriate {ref "site-config"}[site and theme], forwarding on command-line arguments.
 It is responsible for {ref "traversal"}[traversing] the site and generating the HTML.
 
-{DB.dbDocstring Blog.blogMain}
+{docstring Blog.blogMain}
 
 # Configuring a Site
 %%%
@@ -58,23 +60,23 @@ tag := "site-config"
 
 The URL layout of a site is specified via a {name Blog.Site}`Site`:
 
-{DB.dbDocstring Blog.Site}
+{docstring Blog.Site}
 
-{DB.dbDocstring Blog.Dir}
+{docstring Blog.Dir}
 
 These are usually constructed using a small embedded configuration language.
 
 A blog is rendered using a theme, which is a collection of templates.
 Templates are monadic functions that construct {name Verso.Output.Html}`Html` from a set of dynamically-typed parameters.
 
-{DB.dbDocstring Blog.Theme}
+{docstring Blog.Theme}
 
-{DB.dbDocstring Blog.Template}
+{docstring Blog.Template}
 
-{DB.dbDocstring Blog.TemplateM}
+{docstring Blog.TemplateM}
 
-{DB.dbDocstring Blog.Template.param}
+{docstring Blog.Template.param}
 
-{DB.dbDocstring Blog.Template.param?}
+{docstring Blog.Template.param?}
 
-{DB.dbDocstring Blog.Template.builtinHeader}
+{docstring Blog.Template.builtinHeader}

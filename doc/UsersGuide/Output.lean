@@ -8,7 +8,9 @@ import Lean.DocString.Syntax
 public import VersoManual
 import VersoBlog
 
-open Verso Genre Manual DB
+open Verso Genre
+open Verso.Genre.Manual hiding docstring tactic conv
+open Verso.Genre.Manual.DB
 
 open Verso.Genre.Blog (Page Post)
 
@@ -34,21 +36,21 @@ tag := "output-html"
 Verso's {name}`Html` type represents HTML documents.
 They are typically produced using an embedded DSL that is available when the namespace `Verso.Output.Html` is opened.
 
-{dbDocstring Html}
+{docstring Html}
 
-{dbDocstring Html.empty}
+{docstring Html.empty}
 
-{dbDocstring Html.fromArray}
+{docstring Html.fromArray}
 
-{dbDocstring Html.fromList}
+{docstring Html.fromList}
 
-{dbDocstring Html.append}
+{docstring Html.append}
 
-{dbDocstring Html.visitM}
+{docstring Html.visitM}
 
-{dbDocstring Html.format}
+{docstring Html.format}
 
-{dbDocstring Html.asString}
+{docstring Html.asString}
 
 HTML documents are written in double curly braces, in a syntax very much like HTML itself.
 The differences are:
@@ -88,11 +90,11 @@ tag := "output-tex"
 Verso's {name}`TeX` type represents LaTeX documents.
 They are typically produced using an embedded DSL that is available when the namespace `Verso.Output.TeX` is opened.
 
-{dbDocstring TeX}
+{docstring TeX}
 
-{dbDocstring TeX.empty}
+{docstring TeX.empty}
 
-{dbDocstring TeX.asString}
+{docstring TeX.asString}
 
 TeX documents are written in `\TeX{...}`, in a syntax very much like LaTeX itself.
 The differences are:

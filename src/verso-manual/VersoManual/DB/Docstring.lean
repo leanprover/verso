@@ -23,7 +23,7 @@ public section
 
 /-! # DB-Backed Docstring Command
 
-A `{dbDocstring}` block command that reads documentation data from a doc-gen4 SQLite database rather
+A `{docstring}` block command that reads documentation data from a doc-gen4 SQLite database rather
 than from the Lean `Environment`. Produces the same `Block.docstring` output as the existing
 environment-based `{docstring}` command, so the HTML/TeX rendering pipeline works unchanged.
 -/
@@ -33,6 +33,7 @@ open Verso.Doc.Elab.PartElabM
 open Verso.Code
 open Verso.ArgParse
 open SubVerso.Highlighting
+open Verso.Genre.Manual hiding docstring tactic conv
 
 namespace Verso.Genre.Manual.DB
 
@@ -121,7 +122,7 @@ private meta def getExtras (name : Name) (declType : Block.Docstring.DeclType) :
 open Verso.Genre.Manual.Markdown in
 open Verso.Doc.Elab in
 @[block_command]
-public meta def dbDocstring : BlockCommandOf DBDocstringConfig
+public meta def docstring : BlockCommandOf DBDocstringConfig
   | ⟨(x, name), allowMissing, hideFields, hideCtor, customLabel⟩ => do
     let opts : Options → Options :=
       (verso.docstring.allowMissing.set · allowMissing)
@@ -174,7 +175,7 @@ open Verso.Genre.Manual.Markdown in
 open Verso.Doc.Elab in
 open Lean Elab Tactic Doc in
 @[directive]
-public meta def dbTactic : DirectiveExpanderOf TacticDocsOptions
+public meta def tactic : DirectiveExpanderOf TacticDocsOptions
   | ⟨name, «show», replace, allowMissing⟩, more => do
     let opts : Options → Options :=
       (verso.docstring.allowMissing.set · allowMissing)
@@ -230,7 +231,7 @@ public meta def dbTactic : DirectiveExpanderOf TacticDocsOptions
 open Verso.Genre.Manual.Markdown in
 open Verso.Doc.Elab in
 @[directive]
-public meta def dbConv : DirectiveExpanderOf TacticDocsOptions
+public meta def conv : DirectiveExpanderOf TacticDocsOptions
   | ⟨name, «show», _replace, allowMissing⟩, more => do
     let opts : Options → Options :=
       (verso.docstring.allowMissing.set · allowMissing)

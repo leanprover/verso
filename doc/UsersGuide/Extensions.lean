@@ -7,7 +7,9 @@ module
 import Lean.DocString.Syntax
 public import VersoManual
 
-open Verso Genre Manual DB
+open Verso Genre
+open Verso.Genre.Manual hiding docstring tactic conv
+open Verso.Genre.Manual.DB
 open InlineLean
 
 #doc (Manual) "Extensions" =>
@@ -83,27 +85,27 @@ tag := "ArgParse"
 This grammar is fairly restrictive, so each extension is responsible for parsing their arguments in order to afford sufficient flexibility.
 Arguments are parsed via instances of {name Verso.ArgParse.FromArgs}`FromArgs`:
 
-{dbDocstring Verso.ArgParse.FromArgs}
+{docstring Verso.ArgParse.FromArgs}
 
 Implementations of {name Verso.ArgParse.FromArgs.fromArgs}`FromArgs.fromArgs` specify parsers written using {name Verso.ArgParse}`ArgParse`:
 
-{dbDocstring Verso.ArgParse}
+{docstring Verso.ArgParse}
 
 Individual argument values are matched using {name Verso.ArgParse.ValDesc}`ValDesc`:
 
-{dbDocstring Verso.ArgParse.ValDesc}
+{docstring Verso.ArgParse.ValDesc}
 
 A canonical value description for a Lean type can be registered via an instance of {name Verso.ArgParse.FromArgVal}`FromArgVal`:
 
-{dbDocstring Verso.ArgParse.FromArgVal}
+{docstring Verso.ArgParse.FromArgVal}
 
 
 In addition to the constructors of {name Verso.ArgParse}`ArgParse`, the {name}`Applicative` and {name}`Functor` instances are important, as well as the following helpers:
 
-{dbDocstring Verso.ArgParse.namedD}
+{docstring Verso.ArgParse.namedD}
 
-{dbDocstring Verso.ArgParse.positional'}
+{docstring Verso.ArgParse.positional'}
 
-{dbDocstring Verso.ArgParse.named'}
+{docstring Verso.ArgParse.named'}
 
-{dbDocstring Verso.ArgParse.namedD'}
+{docstring Verso.ArgParse.namedD'}
