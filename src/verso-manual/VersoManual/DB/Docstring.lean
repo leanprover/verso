@@ -21,7 +21,8 @@ import Verso.Doc.PointOfInterest
 import MD4Lean
 public section
 
-/-! # DB-Backed Docstring Command
+/-!
+# DB-Backed Docstring Command
 
 A `{docstring}` block command that reads documentation data from a doc-gen4 SQLite database rather
 than from the Lean `Environment`. Produces the same `Block.docstring` output as the existing
@@ -40,10 +41,12 @@ namespace Verso.Genre.Manual.DB
 /-- Cache for the database path, populated on first use by querying Lake. -/
 meta initialize dbPathCache : IO.Ref (Option System.FilePath) ← IO.mkRef none
 
-/-- Locates the doc-gen4 database path by asking Lake for the `docSource` facet output.
+/--
+Locates the doc-gen4 database path by asking Lake for the `docSource` facet output.
 Uses `--no-build` so that elaboration never triggers a long doc-gen4 build; if the database
 is not up-to-date, the user is told to run `lake build` explicitly.
-The result is cached so that `lake query` is invoked at most once per process. -/
+The result is cached so that `lake query` is invoked at most once per process.
+-/
 private meta def getDbPath : IO System.FilePath := do
   if let some path := (← dbPathCache.get) then
     return path

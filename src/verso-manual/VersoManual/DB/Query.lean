@@ -19,7 +19,8 @@ public import VersoManual.Docstring.DeclInfo
 public import VersoManual.Docstring.DocName
 public section
 
-/-! # DB Querying and Type Reconstruction
+/-!
+# DB Querying and Type Reconstruction
 
 High-level API for querying the doc-gen4 database and converting the results into Verso's
 documentation types (`DeclType`, `Signature`, `DocName`, `FieldInfo`, `ParentInfo`).
@@ -41,11 +42,13 @@ def docStringOfDoc? (doc : Option (String ⊕ VersoDocString)) : Option String :
     | .inl md => some md
     | .inr v => some (DocGen4.Process.versoDocToMarkdown v)
 
-/-- Builds a `DocName` from a doc-gen4 `NameInfo`.
+/--
+Builds a `DocName` from a doc-gen4 `NameInfo`.
 When `showNamespace` is `true` (the default), the full qualified name is displayed.
 When `false`, only the last component is shown (used for inductive constructors).
 The `sigOverride` parameter allows providing a custom hover signature string (e.g., with named
-parameters for structure constructors). -/
+parameters for structure constructors).
+-/
 def docNameOfNameInfo (ni : NameInfo)
     (constInfo : Lean.NameMap (String × Option String) := {})
     (showNamespace : Bool := true)
@@ -59,9 +62,11 @@ def docNameOfNameInfo (ni : NameInfo)
     signature := .seq #[nameHl, .text " : ", formatCodeToHighlighted constInfo ni.type]
     docstring? }
 
-/-- Builds a `Signature` from a doc-gen4 `Info`, including the declaration name.
+/--
+Builds a `Signature` from a doc-gen4 `Info`, including the declaration name.
 Combines all `FormatCode` pieces (name, args, type) into a single `Format` document,
-then renders at width 72 (wide) and 42 (narrow) for proper line-breaking. -/
+then renders at width 72 (wide) and 42 (narrow) for proper line-breaking.
+-/
 def signatureOfInfo (info : DocGen4.Process.Info)
     (constInfo : Lean.NameMap (String × Option String) := {})
     (levelParams : List Name := []) : Signature :=
@@ -143,13 +148,15 @@ def convertFieldInfo (field : DocGen4.Process.FieldInfo)
     visibility := .public
   }
 
-/-- Builds a pretty constructor hover signature from a structure's fields.
+/--
+Builds a pretty constructor hover signature from a structure's fields.
 Groups consecutive fields with the same type, e.g. `(shortTitle shortContextTitle : Option String)`.
 Returns a string like `Struct.mk (field1 : Type1) (field2 field3 : Type2) : Struct`.
 
 NOTE: This is a workaround because doc-gen4 currently stores the structure constructor as `NameInfo`
 (without args). Once doc-gen4 is changed to store the constructor as `Info` (with pretty-printed
-binder args), this function should be replaced by directly using the constructor's `args` field. -/
+binder args), this function should be replaced by directly using the constructor's `args` field.
+-/
 private def prettyCtorSig (ctorName : Name) (structName : Name)
     (fields : Array DocGen4.Process.FieldInfo) : String :=
   let resultType := structName.toString
@@ -226,8 +233,10 @@ def buildDeclType (docInfo : DocInfo) (hideFields : Bool) (hideStructureConstruc
   | .ctorInfo _info =>
     .other
 
-/-- Builds a `NameMap` of hover data for constants directly contained in a `DocInfo`
-(the declaration itself, its fields, constructors, etc.). -/
+/--
+Builds a `NameMap` of hover data for constants directly contained in a `DocInfo`
+(the declaration itself, its fields, constructors, etc.).
+-/
 private def localConstInfoMap (docInfo : DocInfo) : Lean.NameMap (String × Option String) :=
   let info := docInfo.toInfo
   let sig := s!"{info.name} : {formatCodeText info.type}"
@@ -249,7 +258,9 @@ private def localConstInfoMap (docInfo : DocInfo) : Lean.NameMap (String × Opti
       m.insert f.name (s!"{f.name} : {formatCodeText f.type}", docStringOfDoc? f.doc)
   | _ => m
 
-/-- Collects all `FormatCode` values from a `DocInfo` (type, args, fields, constructors, parents). -/
+/--
+Collects all `FormatCode` values from a `DocInfo` (type, args, fields, constructors, parents).
+-/
 private def allFormatCodes (docInfo : DocInfo) : Array FormatCode :=
   let info := docInfo.toInfo
   let codes := #[info.type] ++ info.args.map (·.binder)

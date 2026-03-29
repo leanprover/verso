@@ -8,7 +8,8 @@ public import DocGen4.RenderedCode
 public import SubVerso.Highlighting.Highlighted
 public section
 
-/-! # FormatCode → Highlighted Conversion
+/-!
+# FormatCode → Highlighted Conversion
 
 Doc-gen4 stores types as `FormatCode` (a `Format` document with semantic tags) in its database.
 Verso renders all code using SubVerso's `Highlighted` type. This module converts between them
@@ -72,8 +73,10 @@ partial def renderedCodeConstNames (acc : Lean.NameSet := {}) : RenderedCode →
 def formatCodeText (fc : FormatCode) (width : Nat := Std.Format.defWidth) : String :=
   renderedCodeText (fc.render width)
 
-/-- Converts a `FormatCode` to `Highlighted` by rendering at the given width. Local variable
-tags are resolved using the `FormatCode.localVars` array for hover information. -/
+/--
+Converts a `FormatCode` to `Highlighted` by rendering at the given width. Local variable
+tags are resolved using the `FormatCode.localVars` array for hover information.
+-/
 def formatCodeToHighlighted (constInfo : Lean.NameMap (String × Option String) := {})
     (fc : FormatCode) (width : Nat := Std.Format.defWidth) : Highlighted :=
   renderedCodeToHighlighted constInfo fc.localVars (fc.render width)
@@ -90,8 +93,10 @@ private partial def offsetFormatTags (offset : Nat) : Lean.Format → Lean.Forma
   | .group f beh => .group (offsetFormatTags offset f) beh
   | f => f
 
-/-- Appends a `FormatCode` to accumulators, remapping tag and localVar indices. Returns the
-remapped `Format` for the appended code. -/
+/--
+Appends a `FormatCode` to accumulators, remapping tag and localVar indices. Returns the
+remapped `Format` for the appended code.
+-/
 private def appendFormatCode (fc : FormatCode)
     (tags : Array RenderedCode.Tag) (localVars : Array (Lean.Name × Option Lean.Format))
     : Lean.Format × Array RenderedCode.Tag × Array (Lean.Name × Option Lean.Format) :=
@@ -105,10 +110,12 @@ private def appendFormatCode (fc : FormatCode)
     (n, tf?.map (offsetFormatTags tagOff))
   (fmt, tags ++ newTags, localVars ++ newLVs)
 
-/-- Builds a combined `FormatCode` for a full declaration signature:
+/--
+Builds a combined `FormatCode` for a full declaration signature:
 `name.{u, v} arg₁ arg₂ … : type`. Each argument and the `: type` suffix are wrapped in
 their own `Format.group` so the pretty printer uses fill-style line breaking — fitting as
-many arguments per line as possible rather than all-or-nothing. -/
+many arguments per line as possible rather than all-or-nothing.
+-/
 def buildSignatureFormatCode (name : Lean.Name) (levelParams : List Lean.Name)
     (args : Array FormatCode) (type : FormatCode)
     : FormatCode := Id.run do

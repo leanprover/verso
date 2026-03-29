@@ -38,7 +38,10 @@ public structure FieldInfo where
   fieldFrom : List DocName
   type : Highlighted
   projFn : Name
-  /-- It is `some parentStructName` if it is a subobject, and `parentStructName` is the name of the parent structure -/
+  /--
+  It is `some parentStructName` if it is a subobject, and `parentStructName` is the name of
+  the parent structure.
+  -/
   subobject? : Option Name
   binderInfo : BinderInfo
   autoParam  : Bool

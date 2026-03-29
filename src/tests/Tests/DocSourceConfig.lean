@@ -6,7 +6,8 @@ Author: David Thrane Christiansen
 import Lake.Toml
 import VersoManual.DB.Config
 
-/-! # Tests for Doc Source Configuration Parsing
+/-!
+# Tests for Doc Source Configuration Parsing
 
 Tests for `Verso.Genre.Manual.DocSource.Config` — TOML parsing for `doc-sources.toml`.
 -/

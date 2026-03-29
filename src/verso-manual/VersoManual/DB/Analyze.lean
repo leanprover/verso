@@ -17,7 +17,8 @@ import VersoManual.DB.Config
 
 public section
 
-/-! # Doc Source Analysis
+/-!
+# Doc Source Analysis
 
 Executable that runs doc-gen4's analysis on pre-built `.olean` files and writes the results to a
 SQLite database. Called by the `docSource` Lake package facet.
@@ -32,7 +33,8 @@ locate the `.olean` files.
 open DocGen4 Process
 open Lean
 
-/-- Collects conv tactics from the environment and writes them to the database.
+/--
+Collects conv tactics from the environment and writes them to the database.
 
 This is a temporary measure until doc-gen4 is updated to collect conv tactics.
 Conv tactics are stored in their own `conv_tactics` table, separate from the regular `tactics`

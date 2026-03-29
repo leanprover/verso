@@ -8,7 +8,8 @@ import Lake.Toml
 public import Lake.Toml.Data.Value
 public section
 
-/-! # Doc Source Configuration
+/-!
+# Doc Source Configuration
 
 Parsing for `doc-sources.toml`, which declares which libraries' documentation should be built by
 the `docSource` Lake package facet.
