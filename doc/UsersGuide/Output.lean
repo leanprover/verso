@@ -10,7 +10,7 @@ import VersoBlog
 
 open Verso Genre
 open Verso.Genre.Manual hiding docstring tactic conv
-open Verso.Genre.Manual.DB
+open Verso.Genre.Manual.DocGen
 
 open Verso.Genre.Blog (Page Post)
 

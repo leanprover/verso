@@ -12,7 +12,7 @@
    "type": "git",
    "subDir": null,
    "scope": "",
-   "rev": "bc64f503cdc1729fefb0b625577d3c0ff53c6e38",
+   "rev": "1bec291d9b93db694d25887e9695f5e277102e79",
    "name": "«doc-gen4»",
    "manifestFile": "lake-manifest.json",
    "inputRev": "pp-db",

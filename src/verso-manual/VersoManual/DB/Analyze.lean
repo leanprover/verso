@@ -18,16 +18,12 @@ import VersoManual.DB.Config
 public section
 
 /-!
-# Doc Source Analysis
+# Documentation Extraction
 
 Executable that runs doc-gen4's analysis on pre-built `.olean` files and writes the results to a
 SQLite database. Called by the `docSource` Lake package facet.
 
-Usage: `verso-docgen-analyze <build-dir> <db-file> [--core] [--toml <path>] [<module> ...]`
-
-Unlike the previous `verso-docgen-setup` approach, this does not create a nested Lake workspace.
-It calls doc-gen4's API directly, relying on `LEAN_PATH` (set by Lake via `getAugmentedEnv`) to
-locate the `.olean` files.
+Usage: `verso-docgen-analyze <build-dir> <db-file> [--toml <path>] [<module> ...]`
 -/
 
 open DocGen4 Process
@@ -35,11 +31,6 @@ open Lean
 
 /--
 Collects conv tactics from the environment and writes them to the database.
-
-This is a temporary measure until doc-gen4 is updated to collect conv tactics.
-Conv tactics are stored in their own `conv_tactics` table, separate from the regular `tactics`
-table, because regular tactics have additional machinery (aliases, tags, extension docs, custom
-names) that conv tactics don't yet have.
 -/
 private def saveConvTactics (env : Environment) (buildDir dbFile : String) : IO Unit := do
   let dbPath : System.FilePath := buildDir / dbFile
@@ -69,32 +60,30 @@ private def saveConvTactics (env : Environment) (buildDir dbFile : String) : IO 
     stmt.reset
     stmt.clearBindings
 
-/-- Flushes the WAL so the database file is self-contained. -/
+/-- Flushes the write-ahead-log so the database file is self-contained. -/
 private def walCheckpoint (dbPath : System.FilePath) : IO Unit := do
   let db ← SQLite.open dbPath.toString
   db.exec "PRAGMA wal_checkpoint(TRUNCATE)"
   db.exec "PRAGMA optimize"
 
-/-- Parses command-line arguments into structured options. -/
 private structure Args where
+  /-- The Lake build directory containing `.olean` and `.ilean` files. -/
   buildDir : String
+  /-- Path to the SQLite database file to write. -/
   dbFile : String
-  includeCore : Bool
+  /-- Optional path to a TOML configuration file for doc-source overrides. -/
   tomlPath : Option System.FilePath
+  /-- The list of root module names to analyze. -/
   modules : List Lean.Name
 deriving Inhabited
 
 private def parseArgs : List String → IO Args
   | buildDir :: dbFile :: rest => do
-    let mut includeCore := false
     let mut tomlPath : Option System.FilePath := none
     let mut moduleArgs : List String := []
     let mut remaining := rest
     while !remaining.isEmpty do
       match remaining with
-      | "--core" :: tail =>
-        includeCore := true
-        remaining := tail
       | "--toml" :: path :: tail =>
         tomlPath := some ⟨path⟩
         remaining := tail
@@ -103,31 +92,29 @@ private def parseArgs : List String → IO Args
         remaining := tail
       | [] => break
     pure {
-      buildDir, dbFile, includeCore, tomlPath
+      buildDir, dbFile, tomlPath
       modules := moduleArgs.map String.toName
     }
   | _ => throw <| .userError
-    "Usage: verso-docgen-analyze <build-dir> <db-file> [--core] [--toml <path>] [<module> ...]"
+    "Usage: verso-docgen-analyze <build-dir> <db-file> [--toml <path>] [<module> ...]"
 
 def main (args : List String) : IO UInt32 := do
   let opts ← parseArgs args
 
-  -- Read additional modules from doc-sources.toml if provided
-  let tomlModules ← do
+  -- Read configuration from doc-sources.toml if provided
+  let config ← do
     if let some tomlPath := opts.tomlPath then
-      let config ← Verso.Genre.Manual.DocSource.Config.load tomlPath
-      -- Library names in the TOML are treated as module prefixes to analyze
-      pure <| config.libraries.toList.map String.toName
+      Verso.Genre.Manual.DocSource.Config.load tomlPath
     else
-      pure []
-  let allModules := opts.modules ++ tomlModules
+      pure {}
+  let allModules := opts.modules ++ config.libraries.toList.map String.toName
 
-  if allModules.isEmpty && !opts.includeCore then
-    IO.eprintln "No modules to analyze. Provide module names, --toml, or --core."
+  if allModules.isEmpty && !config.includeCore then
+    IO.eprintln "No modules to analyze. Provide module names or a --toml config."
     return 1
 
   -- Generate core documentation (Init, Std, Lake, Lean)
-  if opts.includeCore then
+  if config.includeCore then
     for coreModule in [`Init, `Std, `Lake, `Lean] do
       IO.println s!"Analyzing core module: {coreModule}"
       let doc ← load <| .analyzePrefixModules coreModule
@@ -140,7 +127,7 @@ def main (args : List String) : IO UInt32 := do
     updateModuleDb DB.builtinDocstringValues doc opts.buildDir opts.dbFile none
 
   -- Collect and store conv tactics (not yet handled by doc-gen4)
-  let allPrefixes := (if opts.includeCore then [`Init, `Std, `Lake, `Lean] else []) ++ allModules
+  let allPrefixes := (if config.includeCore then [`Init, `Std, `Lake, `Lean] else []) ++ allModules
   if !allPrefixes.isEmpty then
     IO.println "Collecting conv tactics..."
     let env ← DocGen4.envOfImports allPrefixes.toArray

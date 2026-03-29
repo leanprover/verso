@@ -9,10 +9,10 @@ public import Lake.Toml.Data.Value
 public section
 
 /-!
-# Doc Source Configuration
+# Document Source Configuration
 
 Parsing for `doc-sources.toml`, which declares which libraries' documentation should be built by
-the `docSource` Lake package facet.
+the `docSource` Lake package facet and thus made available in Verso documents.
 -/
 
 namespace Verso.Genre.Manual.DocSource
@@ -21,29 +21,38 @@ open Lake.Toml
 
 /-- Parsed contents of a `doc-sources.toml` file. -/
 structure Config where
-  /-- Which library targets to document. -/
+  /-- Which library targets to process. -/
   libraries : Array String := #[]
+  /--
+  Whether to include declarations from the Lean core libraries (`Init`, `Std`, `Lake`, `Lean`).
+  -/
+  includeCore : Bool := false
 deriving Repr, BEq, Inhabited
 
-/-- Extracts a `String` from a TOML `Value`, or `none` if it's not a string. -/
-private def tomlString? : Value → Option String
-  | .string _ s => some s
-  | _ => none
+/-- Extracts a `String` from a TOML `Value`, or throws if it's not a string. -/
+private def tomlString : Value → Except String String
+  | .string _ s => pure s
+  | v => throw s!"expected string, got {v}"
 
-/--
-Extracts an `Array String` from a TOML array of strings. Non-string elements are silently
-skipped.
--/
-private def tomlStringArray? : Value → Option (Array String)
-  | .array _ vs => some <| vs.filterMap tomlString?
-  | _ => none
+/-- Extracts an `Array String` from a TOML array of strings. -/
+private def tomlStringArray : Value → Except String (Array String)
+  | .array _ vs => vs.mapM tomlString
+  | v => throw s!"expected array of strings, got {v}"
+
+/-- Extracts a `Bool` from a TOML `Value`, or throws if it's not a boolean. -/
+private def tomlBool : Value → Except String Bool
+  | .boolean _ b => pure b
+  | v => throw s!"expected boolean, got {v}"
 
 /-- Parses a `Config` from a TOML `Table`. -/
 def Config.ofToml (table : Table) : Except String Config := do
-  let libraries := match table.find? `libraries with
-    | some v => tomlStringArray? v |>.getD #[]
-    | none => #[]
-  pure { libraries }
+  let libraries ← match table.find? `libraries with
+    | some v => tomlStringArray v
+    | none => pure #[]
+  let includeCore ← match table.find? `include_core with
+    | some v => tomlBool v
+    | none => pure false
+  pure { libraries, includeCore }
 
 /-- Loads and parses a `doc-sources.toml` file. -/
 def Config.load (filePath : System.FilePath) : IO Config := do
@@ -57,5 +66,3 @@ def Config.load (filePath : System.FilePath) : IO Config := do
   | .error msgs =>
     let msgStrs ← msgs.toList.mapM fun msg => msg.data.toString
     throw <| .userError s!"Error parsing {filePath}:\n{"\n".intercalate msgStrs}"
-
-end Verso.Genre.Manual.DocSource

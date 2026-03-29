@@ -136,6 +136,11 @@ private meta def getExtras (name : Name) (declType : Block.Docstring.DeclType) :
     pure #[← ``(Verso.Doc.Block.other (Verso.Genre.Manual.Block.docstringSection "Constructors") #[$ctorSigs,*])]
   | _ => pure #[]
 
+end DB
+
+namespace DocGen
+open DB
+
 open Verso.Genre.Manual.Markdown in
 open Verso.Doc.Elab in
 @[block_command]
@@ -277,4 +282,3 @@ public meta def conv : DirectiveExpanderOf TacticDocsOptions
       let userContents ← more.mapM elabBlock
       ``(Verso.Doc.Block.other (Block.conv $(quote result.internalName) $(quote toShow) $(quote result.docString)) #[$(contents ++ userContents),*])
 
-end Verso.Genre.Manual.DB

@@ -272,7 +272,7 @@ package_facet docSource pkg : System.FilePath := do
 
     buildFileUnlessUpToDate' dbPath do
       IO.FS.createDirAll buildDir
-      let mut args := #[buildDir.toString, "api-docs.db", "--core"]
+      let mut args := #[buildDir.toString, "api-docs.db"]
       if ← tomlPath.pathExists then
         args := args ++ #["--toml", tomlPath.toString]
       proc {

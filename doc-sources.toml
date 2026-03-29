@@ -1,1 +1,2 @@
 libraries = ["Verso", "VersoManual", "VersoBlog"]
+include_core = true

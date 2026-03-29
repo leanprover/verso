@@ -40,6 +40,7 @@ private def testEmptyConfig : IO Unit := do
   let table ← parseToml ""
   let config ← IO.ofExcept <| Config.ofToml table
   assertEqual "empty config libraries" #[] config.libraries
+  assertEqual "empty config includeCore" false config.includeCore
 
 private def testLibrariesField : IO Unit := do
   let table ← parseToml "
@@ -55,6 +56,22 @@ libraries = [\"Init\"]
   let config ← IO.ofExcept <| Config.ofToml table
   assertEqual "libraries only" #["Init"] config.libraries
 
+private def testIncludeCore : IO Unit := do
+  let table ← parseToml "
+include_core = true
+"
+  let config ← IO.ofExcept <| Config.ofToml table
+  assertEqual "includeCore" true config.includeCore
+
+private def testIncludeCoreFalse : IO Unit := do
+  let table ← parseToml "
+include_core = false
+libraries = [\"Foo\"]
+"
+  let config ← IO.ofExcept <| Config.ofToml table
+  assertEqual "includeCore false" false config.includeCore
+  assertEqual "libraries with core false" #["Foo"] config.libraries
+
 -- ============================================================================
 -- Test runner
 -- ============================================================================
@@ -63,6 +80,8 @@ private def docSourceConfigTests : List (String × IO Unit) := [
   ("Config.ofToml: empty config", testEmptyConfig),
   ("Config.ofToml: libraries field", testLibrariesField),
   ("Config.ofToml: libraries only", testLibrariesOnly),
+  ("Config.ofToml: include_core true", testIncludeCore),
+  ("Config.ofToml: include_core false", testIncludeCoreFalse),
 ]
 
 public def runDocSourceConfigTests : IO Nat := do

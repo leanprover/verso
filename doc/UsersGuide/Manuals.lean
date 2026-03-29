@@ -10,7 +10,7 @@ import VersoBlog
 
 open Verso Genre
 open Verso.Genre.Manual hiding docstring tactic conv
-open Verso.Genre.Manual.DB
+open Verso.Genre.Manual.DocGen
 
 open InlineLean
 open Verso.Doc
@@ -147,6 +147,82 @@ results in
 
 {optionDocs pp.deepTerms.threshold}
 ::::
+
+For projects that need to document an external library without importing it, or that use Lean's new module system, the experimental {ref "docgen-docstrings"}[doc-gen-sourced docstring commands] read documentation extracted by doc-gen4 instead.
+
+## Doc-Gen-Sourced Documentation (Experimental)
+%%%
+tag := "docgen-docstrings"
+%%%
+
+:::paragraph
+Ordinarily, the `docstring` command extracts documentation directly from the Lean `Environment`.
+This requires that the documented library be imported into the Verso document, which has two drawbacks:
+
+ * Declarations from Verso itself and its dependencies are present in the environment alongside the documented library, making it difficult to distinguish the two.
+ * Under Lean's new module system, docstrings from other modules are not available.
+
+The `DocGen.docstring` command is an experimental alternative that reads documentation extracted by doc-gen4 rather than from the environment.
+It produces the same output as the standard `docstring` command, so the HTML and TeX rendering pipelines work unchanged.
+We hope that this will become the standard way to include docstrings in Verso documents.
+:::
+
+### Setup
+
+To use doc-gen-sourced docstrings, two pieces of configuration are needed.
+
+First, create a `doc-sources.toml` file in your project root that lists the library targets to document:
+
+```
+libraries = ["MyLib", "MyLib.Extra"]
+```
+
+Second, add a `needs` declaration to the library target that contains your documentation, so that Lake builds the documentation data before elaborating your document:
+
+```
+lean_lib MyDocs where
+  needs := #[`@:docSource]
+```
+
+After this setup, run `lake build` once to generate the documentation data.
+Subsequent builds update it incrementally.
+
+### Usage
+
+Import `VersoManual.DB` and open the `Verso.Genre.Manual.DocGen` namespace.
+Then use `DocGen.docstring` in place of `docstring`:
+
+```
+{DocGen.docstring Std.HashMap.insert}
+```
+
+The `DocGen.docstring` command accepts the same named parameters as the standard `docstring` command: `allowMissing`, `hideFields`, `hideStructureConstructor`, and `label`.
+
+Tactic and conv tactic documentation are available via directives:
+
+```
+:::DocGen.tactic "simp"
+:::
+```
+
+```
+:::DocGen.conv "ring_nf"
+:::
+```
+
+The `DocGen.tactic` directive accepts the same parameters as the standard `tactic` directive, including `show` and `replace`.
+
+### Editor Experience
+
+Before the first `lake build`, `DocGen.docstring` commands show an error directing you to run `lake build`.
+After the documentation data has been generated, the editor is fully responsive.
+If you change the documented library, running `lake build` again updates the data.
+
+### Coexistence with Environment-Based Commands
+
+The doc-gen-sourced commands live in the `Verso.Genre.Manual.DocGen` namespace and do not replace the standard commands.
+Projects that document declarations available in their own environment can continue to use `docstring` with no changes.
+Both sets of commands produce the same block types, so they can coexist within a single document if needed.
 
 
 # Technical Terminology

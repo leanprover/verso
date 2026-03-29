@@ -8,15 +8,6 @@ public import DocGen4.RenderedCode
 public import SubVerso.Highlighting.Highlighted
 public section
 
-/-!
-# FormatCode → Highlighted Conversion
-
-Doc-gen4 stores types as `FormatCode` (a `Format` document with semantic tags) in its database.
-Verso renders all code using SubVerso's `Highlighted` type. This module converts between them
-by rendering `FormatCode` to `RenderedCode` at a given width, then mapping tags to `Highlighted`
-tokens.
--/
-
 namespace Verso.Genre.Manual.DB
 
 open DocGen4 (RenderedCode FormatCode SortFormer)
@@ -40,8 +31,8 @@ The `constInfo` parameter provides hover data for known constants: a map from `N
 -/
 partial def renderedCodeToHighlighted
     (constInfo : Lean.NameMap (String × Option String) := {})
-    (localVars : Array (Lean.Name × Option Lean.Format) := #[])
-    : RenderedCode → Highlighted
+    (localVars : Array (Lean.Name × Option Lean.Format) := #[]) :
+    RenderedCode → Highlighted
   | .text s => .text s
   | .tag t inner =>
     let content := renderedCodeText inner
@@ -85,7 +76,7 @@ def formatCodeToHighlighted (constInfo : Lean.NameMap (String × Option String) 
 def formatCodeConstNames (acc : Lean.NameSet := {}) (fc : FormatCode) : Lean.NameSet :=
   renderedCodeConstNames acc fc.render
 
-/-- Remaps all `Format.tag` indices by adding `offset`. -/
+/-- Remaps all `Format.tag` indices by adding `offset`, as preparation for combining documents. -/
 private partial def offsetFormatTags (offset : Nat) : Lean.Format → Lean.Format
   | .tag n f => .tag (n + offset) (offsetFormatTags offset f)
   | .nest n f => .nest n (offsetFormatTags offset f)
@@ -94,12 +85,14 @@ private partial def offsetFormatTags (offset : Nat) : Lean.Format → Lean.Forma
   | f => f
 
 /--
-Appends a `FormatCode` to accumulators, remapping tag and localVar indices. Returns the
-remapped `Format` for the appended code.
+Prepares to append a `FormatCode` to another one whose metadata is given by `tags` and `localVars`.
+The resulting data contains both sets of metadata, with data in `tags` and `localVars` unchanged.
+This allows the code associated with `tags` and `localVars` to be appended unmodified to the result
+of this function.
 -/
-private def appendFormatCode (fc : FormatCode)
-    (tags : Array RenderedCode.Tag) (localVars : Array (Lean.Name × Option Lean.Format))
-    : Lean.Format × Array RenderedCode.Tag × Array (Lean.Name × Option Lean.Format) :=
+private def prepareAppend (fc : FormatCode)
+    (tags : Array RenderedCode.Tag) (localVars : Array (Lean.Name × Option Lean.Format)) :
+    Lean.Format × Array RenderedCode.Tag × Array (Lean.Name × Option Lean.Format) :=
   let tagOff := tags.size
   let lvOff := localVars.size
   let fmt := offsetFormatTags tagOff fc.fmt
@@ -111,10 +104,7 @@ private def appendFormatCode (fc : FormatCode)
   (fmt, tags ++ newTags, localVars ++ newLVs)
 
 /--
-Builds a combined `FormatCode` for a full declaration signature:
-`name.{u, v} arg₁ arg₂ … : type`. Each argument and the `: type` suffix are wrapped in
-their own `Format.group` so the pretty printer uses fill-style line breaking — fitting as
-many arguments per line as possible rather than all-or-nothing.
+Builds a combined `FormatCode` for a full declaration signature: `name.{u, v} arg₁ arg₂ … : type`.
 -/
 def buildSignatureFormatCode (name : Lean.Name) (levelParams : List Lean.Name)
     (args : Array FormatCode) (type : FormatCode)
@@ -129,17 +119,20 @@ def buildSignatureFormatCode (name : Lean.Name) (levelParams : List Lean.Name)
   -- The name, each argument, and the return type are all pieces in a single fill group
   -- with nest 2. The fill group packs greedily — fitting as many pieces per line as
   -- possible. The " :" is glued to the last argument so the colon stays on the same
-  -- line, with a .line break before the return type.
+  -- line, with a .line break before the return type. This gives results like:
+  -- ```
+  -- foo.{u, v} (x : A) (y z : B)
+  --   (w : A) :
+  --   SuperLongReturnType
+  -- ```
   let mut body : Lean.Format := nameFmt
   for arg in args do
-    let (fmt, tags', lvs') := appendFormatCode arg tags localVars
+    let (fmt, tags', lvs') := prepareAppend arg tags localVars
     tags := tags'
     localVars := lvs'
     body := body ++ .line ++ fmt
-  let (typeFmt, tags', lvs') := appendFormatCode type tags localVars
+  let (typeFmt, tags', lvs') := prepareAppend type tags localVars
   tags := tags'
   localVars := lvs'
   let sigFmt := .group (.nest 2 (body ++ " :" ++ .line ++ typeFmt)) .fill
   return { fmt := sigFmt, tags, localVars }
-
-end Verso.Genre.Manual.DB
