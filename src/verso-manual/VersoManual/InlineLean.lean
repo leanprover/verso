@@ -157,7 +157,7 @@ is `some false`, then the author expected no errors; in this case, messages are 
 `none` case and an additional error is thrown. If it is `some true`, then errors are downgraded to
 warnings and all messages are logged silently.
 -/
-meta def reportMessages {m} [Monad m] [MonadLog m] [MonadError m]
+public meta def reportMessages {m} [Monad m] [MonadLog m] [MonadError m]
     (errorExpected : Option Bool) (blame : Syntax) (messages : MessageLog) :
     m Unit := do
   match errorExpected with
@@ -249,7 +249,7 @@ private meta partial def disableUnusedVarLinterInInfoTree : InfoTree → InfoTre
     .node info (children.map disableUnusedVarLinterInInfoTree)
   | .hole id => .hole id
 
-meta def elabCommands (config : LeanBlockConfig) (str : StrLit)
+public meta def elabCommands (config : LeanBlockConfig) (str : StrLit)
     (toHighlightedLeanContent : (shouldShow : Bool) → (hls : Highlighted) → (str: StrLit) → DocElabM Term)
     (minCommands : Option Nat := none)
     (maxCommands : Option Nat := none) :
@@ -843,7 +843,7 @@ where
   }
 end
 
-meta def constTok [Monad m] [MonadEnv m] [MonadLiftT MetaM m] [MonadLiftT IO m]
+public meta def constTok [Monad m] [MonadEnv m] [MonadLiftT MetaM m] [MonadLiftT IO m]
     (name : Name) (str : String) :
     m Highlighted := do
   let docs ← findDocString? (← getEnv) name
