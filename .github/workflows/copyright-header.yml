@@ -15,10 +15,22 @@ jobs:
 
             - name: Verify .lean files start with a copyright header.
               run: |
-                  FILES=$(find ./src ./test-projects -path ./src/tests/interactive -prune -type f -name "*.lean" -exec perl -ne 'BEGIN { $/ = undef; } print "$ARGV\n" if !m{\A/-\nCopyright}; exit;' {} \;)
-                  if [ -n "$FILES" ]; then
+                  OFFENDING=()
+                  while IFS= read -r -d '' file; do
+                    if ! head -1 "$file" | grep -q '^/-$'; then
+                      OFFENDING+=("$file")
+                    elif ! head -2 "$file" | tail -1 | grep -q '^Copyright'; then
+                      OFFENDING+=("$file")
+                    fi
+                  done < <(find ./src ./test-projects \
+                    -path ./src/tests/interactive -prune -o \
+                    -path '*/.lake' -prune -o \
+                    -path './test-projects/literate-*' -prune -o \
+                    -type f -name "*.lean" -print0)
+
+                  if [ ${#OFFENDING[@]} -gt 0 ]; then
                     echo "Found .lean files which do not have a copyright header:"
-                    echo "$FILES"
+                    printf '%s\n' "${OFFENDING[@]}"
                     exit 1
                   else
                     echo "All copyright headers present."
