@@ -18,6 +18,7 @@ file := "v4.29.0"
 * Fix Verso folding ranges / TOC for Lean.Doc syntax and #doc (#768)
 * Align Blog inline Lean role naming with Manual; add `{lean}` and deprecate `{leanInline}` (#762)
 * A zero-config {ref "literate429"}[literate programming] feature was added in [#809](https://github.com/leanprover/verso/pull/809).
+* A {ref "docgen429"}[`doc-gen4`-based backend for extracted API docs] was added in [#776](https://github.com/leanprover/verso/pull/776).
 
 
 # Literate Programming
@@ -30,6 +31,9 @@ While no configuration is necessary to use it, aside from adding Verso as a depe
 See {ref "literate"}[its section in this guide] for more details.
 
 # Docstrings via `doc-gen4`
+%%%
+tag := "docgen429"
+%%%
 
 PR [#776](https://github.com/leanprover/verso/pull/776) implements an alternative backend for the docstring features in the manual genre.
 Instead of retrieving them from the in-memory Lean environment, they can be read from a SQLite database dumped by `doc-gen4`.
