@@ -21,14 +21,14 @@ namespace Verso.Genre.Manual.DB
 open DocGen4 (RenderedCode FormatCode SortFormer)
 open SubVerso.Highlighting (Highlighted Token)
 
-/-- Extract plain text content from a `RenderedCode` tree, discarding all tags. -/
+/-- Extracts plain text content from a `RenderedCode` tree, discarding all tags. -/
 partial def renderedCodeText : RenderedCode → String
   | .text s => s
   | .tag _ inner => renderedCodeText inner
   | .append xs => String.join (xs.toList.map renderedCodeText)
 
 /--
-Convert a `RenderedCode` value to a `Highlighted` value (for Verso's rendering pipeline).
+Converts a `RenderedCode` value to a `Highlighted` value (for Verso's rendering pipeline).
 
 The `localVars` parameter (from `FormatCode.localVars`) maps local variable indices to
 `(userName, typeFormat?)`. When a `.localVar idx isBinder` tag is encountered, a
@@ -61,28 +61,28 @@ partial def renderedCodeToHighlighted
     | .otherExpr => renderedCodeToHighlighted constInfo localVars inner
   | .append xs => .seq (xs.map (renderedCodeToHighlighted constInfo localVars))
 
-/-- Collect all constant names referenced in a `RenderedCode` tree. -/
+/-- Collects all constant names referenced in a `RenderedCode` tree. -/
 partial def renderedCodeConstNames (acc : Lean.NameSet := {}) : RenderedCode → Lean.NameSet
   | .text _ => acc
   | .tag (.const name) inner => renderedCodeConstNames (acc.insert name) inner
   | .tag _ inner => renderedCodeConstNames acc inner
   | .append xs => xs.foldl (init := acc) fun a x => renderedCodeConstNames a x
 
-/-- Extract plain text from a `FormatCode` by rendering at the given width. -/
+/-- Extracts plain text from a `FormatCode` by rendering at the given width. -/
 def formatCodeText (fc : FormatCode) (width : Nat := Std.Format.defWidth) : String :=
   renderedCodeText (fc.render width)
 
-/-- Convert a `FormatCode` to `Highlighted` by rendering at the given width. Local variable
+/-- Converts a `FormatCode` to `Highlighted` by rendering at the given width. Local variable
 tags are resolved using the `FormatCode.localVars` array for hover information. -/
 def formatCodeToHighlighted (constInfo : Lean.NameMap (String × Option String) := {})
     (fc : FormatCode) (width : Nat := Std.Format.defWidth) : Highlighted :=
   renderedCodeToHighlighted constInfo fc.localVars (fc.render width)
 
-/-- Collect all constant names referenced in a `FormatCode`. -/
+/-- Collects all constant names referenced in a `FormatCode`. -/
 def formatCodeConstNames (acc : Lean.NameSet := {}) (fc : FormatCode) : Lean.NameSet :=
   renderedCodeConstNames acc fc.render
 
-/-- Remap all `Format.tag` indices by adding `offset`. -/
+/-- Remaps all `Format.tag` indices by adding `offset`. -/
 private partial def offsetFormatTags (offset : Nat) : Lean.Format → Lean.Format
   | .tag n f => .tag (n + offset) (offsetFormatTags offset f)
   | .nest n f => .nest n (offsetFormatTags offset f)
@@ -90,7 +90,7 @@ private partial def offsetFormatTags (offset : Nat) : Lean.Format → Lean.Forma
   | .group f beh => .group (offsetFormatTags offset f) beh
   | f => f
 
-/-- Append a `FormatCode` to accumulators, remapping tag and localVar indices. Returns the
+/-- Appends a `FormatCode` to accumulators, remapping tag and localVar indices. Returns the
 remapped `Format` for the appended code. -/
 private def appendFormatCode (fc : FormatCode)
     (tags : Array RenderedCode.Tag) (localVars : Array (Lean.Name × Option Lean.Format))
@@ -105,7 +105,7 @@ private def appendFormatCode (fc : FormatCode)
     (n, tf?.map (offsetFormatTags tagOff))
   (fmt, tags ++ newTags, localVars ++ newLVs)
 
-/-- Build a combined `FormatCode` for a full declaration signature:
+/-- Builds a combined `FormatCode` for a full declaration signature:
 `name.{u, v} arg₁ arg₂ … : type`. Each argument and the `: type` suffix are wrapped in
 their own `Format.group` so the pretty printer uses fill-style line breaking — fitting as
 many arguments per line as possible rather than all-or-nothing. -/

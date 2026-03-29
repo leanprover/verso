@@ -23,7 +23,7 @@ private def parseToml (input : String) : IO Table := do
     let msgStrs ← msgs.toList.mapM fun msg => msg.data.toString
     throw <| .userError s!"TOML parse error:\n{"\n".intercalate msgStrs}"
 
-/-- Asserts that two values are equal, throwing a descriptive error if not. -/
+/-- Checks that two values are equal, throwing a descriptive error if not. -/
 private def assertEqual [BEq α] [Repr α] (label : String) (expected actual : α) : IO Unit := do
   unless expected == actual do
     throw <| IO.userError s!"{label}: expected\n  {repr expected}\nbut got\n  {repr actual}"

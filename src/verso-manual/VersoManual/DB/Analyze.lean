@@ -32,7 +32,7 @@ locate the `.olean` files.
 open DocGen4 Process
 open Lean
 
-/-- Collect conv tactics from the environment and write them to the database.
+/-- Collects conv tactics from the environment and writes them to the database.
 
 This is a temporary measure until doc-gen4 is updated to collect conv tactics.
 Conv tactics are stored in their own `conv_tactics` table, separate from the regular `tactics`
@@ -67,13 +67,13 @@ private def saveConvTactics (env : Environment) (buildDir dbFile : String) : IO 
     stmt.reset
     stmt.clearBindings
 
-/-- Flush the WAL so the database file is self-contained. -/
+/-- Flushes the WAL so the database file is self-contained. -/
 private def walCheckpoint (dbPath : System.FilePath) : IO Unit := do
   let db ← SQLite.open dbPath.toString
   db.exec "PRAGMA wal_checkpoint(TRUNCATE)"
   db.exec "PRAGMA optimize"
 
-/-- Parse command-line arguments into structured options. -/
+/-- Parses command-line arguments into structured options. -/
 private structure Args where
   buildDir : String
   dbFile : String

@@ -40,7 +40,7 @@ namespace Verso.Genre.Manual.DB
 /-- Cache for the database path, populated on first use by querying Lake. -/
 meta initialize dbPathCache : IO.Ref (Option System.FilePath) ← IO.mkRef none
 
-/-- Locate the doc-gen4 database path by asking Lake for the `docSource` facet output.
+/-- Locates the doc-gen4 database path by asking Lake for the `docSource` facet output.
 Uses `--no-build` so that elaboration never triggers a long doc-gen4 build; if the database
 is not up-to-date, the user is told to run `lake build` explicitly.
 The result is cached so that `lake query` is invoked at most once per process. -/
