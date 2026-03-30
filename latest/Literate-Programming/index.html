@@ -1,0 +1,2199 @@
+<!-- Generated from commit 7ae82ac2ae54ae5dcc9948a701669e9b596e5cae at 2026-03-30T11:07:59Z -->
+<!DOCTYPE html>
+<html>
+  <head>
+    <script>
+      (function(){
+  const {protocol:proto, host:hostName, pathname:path, search:srch, hash:hsh} = window.location;
+  if (!(path.endsWith("/") || path.endsWith(".html"))) {
+    window.location.replace(`${proto}//${hostName}${path}/${srch}${hsh}`);
+  }
+})()</script>
+    <base href="./../"><meta charset="utf-8">
+    <meta name="viewport" content="height=device-height, width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1">
+    <title>Literate Programming</title><link rel="stylesheet" href="book.css">
+    <link rel="stylesheet" href="verso-vars.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js" integrity="sha384-zbcZAIxlvJtNE3Dp5nxLXdXtXyxwOdnILY1TDPVmKFhl4r4nSUG1r8bcFXGVa4Te" crossorigin="anonymous"></script>
+    <script src="-verso-search/elasticlunr.min.js"></script>
+    <script src="-verso-search/fuzzysort.min.js"></script>
+    <script src="-verso-search/searchIndex.js"></script>
+    <script type="module" src="-verso-search/search-init.js"></script>
+    <link rel="stylesheet" href="-verso-search/search-box.css">
+    <link rel="stylesheet" href="-verso-search/search-highlight.css">
+    <link rel="stylesheet" href="-verso-search/domain-display.css">
+    <script src="-verso-data/katex/katex.js"></script>
+    <script src="-verso-data/katex/math.js"></script>
+    <script src="-verso-data/popper.min.js"></script>
+    <script src="-verso-data/tippy-bundle.umd.min.js"></script>
+    <link rel="stylesheet" href="-verso-data/tippy-border.css">
+    <link rel="stylesheet" href="-verso-data/katex/katex.css">
+    <style>
+.namedocs {
+  position: relative;
+  border: solid 1px #98B2C0;
+  border-radius: .5rem;
+  padding-top: var(--verso--box-padding);
+  margin-top: var(--verso--box-vertical-margin);
+  margin-bottom: var(--verso--box-vertical-margin);
+}
+
+.namedocs .text {
+  /* Causes margins on child elements to collapse inside the element, such
+     that the margins don't extend into parent with the background color.
+     The effect is that weird borders in the definition box don't happen anymore. */
+  display: flow-root;
+  /* Add a padding. this is the same as the margin applied to the first and last child.
+     The effect is that the padding looks the same size on all sides. */
+  padding: 0 var(--verso--box-padding);
+  border-top: 1px solid #98B2C0;
+}
+
+.namedocs .text > pre {
+  overflow-x: auto;
+}
+
+.namedocs .signature {
+  font-family: var(--verso-code-font-family);
+  margin-top: 0 !important;
+  margin-left: var(--verso--box-padding) !important;
+  margin-bottom: .75rem !important;
+}
+
+.namedocs .label {
+  display: block;
+  font-size: small;
+  font-family: var(--verso-structure-font-family);
+  position: absolute;
+  top: -0.65rem;
+  left: 1rem;
+  background: #fff;
+  padding: 0 .5rem .125rem;
+  border: 1px solid #98B2C0;
+  border-radius: 1rem;
+  color: #555;
+}
+
+.namedocs h1 {
+  font-size: inherit;
+  font-weight: bold
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+}
+
+.namedocs > .text .constructor {
+  padding-top: 0;
+  padding-right: 0;
+  padding-bottom: 0;
+  margin-top: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.namedocs > .text .constructor::before {
+  content: '| ';
+  display: block;
+  font-family: var(--verso-code-font-family);
+  font-weight: bold;
+  float: left;
+  width: 0.5rem;
+  white-space: pre;
+}
+
+.namedocs > .text .constructor .name-and-type {
+  padding-left: 0.5rem;
+  float: left;
+  margin-top: 0;
+  max-width: calc(100% - 1rem);
+}
+.namedocs > .text .constructor .docs {
+  clear: both;
+  padding-left: 1rem;
+}
+
+/* These margins work together with the padding on .text */
+.namedocs .text > :first-child {
+  margin-top: var(--verso--box-padding);
+}
+.namedocs .text > :last-child {
+  margin-bottom: var(--verso--box-padding);
+}
+
+.namedocs .methods td, .namedocs .fields td {
+  vertical-align: top;
+}
+.namedocs .inheritance {
+  vertical-align: top;
+  font-size: smaller;
+  font-family: var(--verso-structure-font-family);
+}
+.namedocs .inheritance ol {
+  display: inline-block;
+  margin: 0;
+  padding: 0;
+}
+.namedocs .inheritance ol li {
+  list-style-type: none;
+  display: inline-block;
+}
+.namedocs .inheritance ol li::after {
+  content: " > "
+}
+.namedocs .inheritance ol li:last-child::after {
+  content: "";
+}
+
+.namedocs .extends {
+  display: inline;
+  margin: 0;
+  padding: 0;
+}
+
+.namedocs .extends li {
+  list-style-type: none;
+  display: inline-block;
+}
+
+.namedocs .extends li label {
+  padding-right: 1rem;
+}
+
+.namedocs .subdocs .name-and-type {
+  font-size: 1rem;
+  margin-left: 0;
+  margin-top: 0;
+  margin-right: 0;
+  margin-bottom: 0.5rem;
+}
+
+.namedocs .subdocs .docs {
+  margin-left: 1.5rem;
+  margin-top: 0;
+  margin-right: 0;
+  margin-bottom: 0.5rem;
+}
+
+.namedocs:has(input[data-parent-idx]) [data-inherited-from] {
+  transition-property: opacity, display;
+  transition-duration: 0.4s;
+  transition-behavior: allow-discrete;
+  @starting-style { opacity: 0 !important; }
+}
+
+#this-page-items .tactic-name { font-weight: bold; }
+.namedocs:has(input[data-parent-idx="0"]) [data-inherited-from="0"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="0"]:checked) [data-inherited-from="0"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="0"]:checked):has(.inheritance[data-inherited-from="0"]:hover) [data-inherited-from]:not([data-inherited-from="0"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="1"]) [data-inherited-from="1"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="1"]:checked) [data-inherited-from="1"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="1"]:checked):has(.inheritance[data-inherited-from="1"]:hover) [data-inherited-from]:not([data-inherited-from="1"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="2"]) [data-inherited-from="2"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="2"]:checked) [data-inherited-from="2"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="2"]:checked):has(.inheritance[data-inherited-from="2"]:hover) [data-inherited-from]:not([data-inherited-from="2"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="3"]) [data-inherited-from="3"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="3"]:checked) [data-inherited-from="3"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="3"]:checked):has(.inheritance[data-inherited-from="3"]:hover) [data-inherited-from]:not([data-inherited-from="3"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="4"]) [data-inherited-from="4"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="4"]:checked) [data-inherited-from="4"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="4"]:checked):has(.inheritance[data-inherited-from="4"]:hover) [data-inherited-from]:not([data-inherited-from="4"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="5"]) [data-inherited-from="5"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="5"]:checked) [data-inherited-from="5"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="5"]:checked):has(.inheritance[data-inherited-from="5"]:hover) [data-inherited-from]:not([data-inherited-from="5"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="6"]) [data-inherited-from="6"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="6"]:checked) [data-inherited-from="6"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="6"]:checked):has(.inheritance[data-inherited-from="6"]:hover) [data-inherited-from]:not([data-inherited-from="6"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="7"]) [data-inherited-from="7"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="7"]:checked) [data-inherited-from="7"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="7"]:checked):has(.inheritance[data-inherited-from="7"]:hover) [data-inherited-from]:not([data-inherited-from="7"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="8"]) [data-inherited-from="8"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="8"]:checked) [data-inherited-from="8"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="8"]:checked):has(.inheritance[data-inherited-from="8"]:hover) [data-inherited-from]:not([data-inherited-from="8"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="9"]) [data-inherited-from="9"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="9"]:checked) [data-inherited-from="9"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="9"]:checked):has(.inheritance[data-inherited-from="9"]:hover) [data-inherited-from]:not([data-inherited-from="9"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="10"]) [data-inherited-from="10"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="10"]:checked) [data-inherited-from="10"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="10"]:checked):has(.inheritance[data-inherited-from="10"]:hover) [data-inherited-from]:not([data-inherited-from="10"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="11"]) [data-inherited-from="11"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="11"]:checked) [data-inherited-from="11"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="11"]:checked):has(.inheritance[data-inherited-from="11"]:hover) [data-inherited-from]:not([data-inherited-from="11"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="12"]) [data-inherited-from="12"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="12"]:checked) [data-inherited-from="12"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="12"]:checked):has(.inheritance[data-inherited-from="12"]:hover) [data-inherited-from]:not([data-inherited-from="12"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="13"]) [data-inherited-from="13"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="13"]:checked) [data-inherited-from="13"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="13"]:checked):has(.inheritance[data-inherited-from="13"]:hover) [data-inherited-from]:not([data-inherited-from="13"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="14"]) [data-inherited-from="14"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="14"]:checked) [data-inherited-from="14"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="14"]:checked):has(.inheritance[data-inherited-from="14"]:hover) [data-inherited-from]:not([data-inherited-from="14"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="15"]) [data-inherited-from="15"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="15"]:checked) [data-inherited-from="15"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="15"]:checked):has(.inheritance[data-inherited-from="15"]:hover) [data-inherited-from]:not([data-inherited-from="15"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="16"]) [data-inherited-from="16"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="16"]:checked) [data-inherited-from="16"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="16"]:checked):has(.inheritance[data-inherited-from="16"]:hover) [data-inherited-from]:not([data-inherited-from="16"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="17"]) [data-inherited-from="17"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="17"]:checked) [data-inherited-from="17"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="17"]:checked):has(.inheritance[data-inherited-from="17"]:hover) [data-inherited-from]:not([data-inherited-from="17"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="18"]) [data-inherited-from="18"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="18"]:checked) [data-inherited-from="18"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="18"]:checked):has(.inheritance[data-inherited-from="18"]:hover) [data-inherited-from]:not([data-inherited-from="18"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="19"]) [data-inherited-from="19"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="19"]:checked) [data-inherited-from="19"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="19"]:checked):has(.inheritance[data-inherited-from="19"]:hover) [data-inherited-from]:not([data-inherited-from="19"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="20"]) [data-inherited-from="20"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="20"]:checked) [data-inherited-from="20"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="20"]:checked):has(.inheritance[data-inherited-from="20"]:hover) [data-inherited-from]:not([data-inherited-from="20"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="21"]) [data-inherited-from="21"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="21"]:checked) [data-inherited-from="21"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="21"]:checked):has(.inheritance[data-inherited-from="21"]:hover) [data-inherited-from]:not([data-inherited-from="21"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="22"]) [data-inherited-from="22"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="22"]:checked) [data-inherited-from="22"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="22"]:checked):has(.inheritance[data-inherited-from="22"]:hover) [data-inherited-from]:not([data-inherited-from="22"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="23"]) [data-inherited-from="23"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="23"]:checked) [data-inherited-from="23"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="23"]:checked):has(.inheritance[data-inherited-from="23"]:hover) [data-inherited-from]:not([data-inherited-from="23"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="24"]) [data-inherited-from="24"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="24"]:checked) [data-inherited-from="24"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="24"]:checked):has(.inheritance[data-inherited-from="24"]:hover) [data-inherited-from]:not([data-inherited-from="24"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="25"]) [data-inherited-from="25"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="25"]:checked) [data-inherited-from="25"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="25"]:checked):has(.inheritance[data-inherited-from="25"]:hover) [data-inherited-from]:not([data-inherited-from="25"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="26"]) [data-inherited-from="26"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="26"]:checked) [data-inherited-from="26"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="26"]:checked):has(.inheritance[data-inherited-from="26"]:hover) [data-inherited-from]:not([data-inherited-from="26"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="27"]) [data-inherited-from="27"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="27"]:checked) [data-inherited-from="27"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="27"]:checked):has(.inheritance[data-inherited-from="27"]:hover) [data-inherited-from]:not([data-inherited-from="27"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="28"]) [data-inherited-from="28"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="28"]:checked) [data-inherited-from="28"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="28"]:checked):has(.inheritance[data-inherited-from="28"]:hover) [data-inherited-from]:not([data-inherited-from="28"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="29"]) [data-inherited-from="29"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="29"]:checked) [data-inherited-from="29"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="29"]:checked):has(.inheritance[data-inherited-from="29"]:hover) [data-inherited-from]:not([data-inherited-from="29"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="30"]) [data-inherited-from="30"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="30"]:checked) [data-inherited-from="30"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="30"]:checked):has(.inheritance[data-inherited-from="30"]:hover) [data-inherited-from]:not([data-inherited-from="30"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="31"]) [data-inherited-from="31"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="31"]:checked) [data-inherited-from="31"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="31"]:checked):has(.inheritance[data-inherited-from="31"]:hover) [data-inherited-from]:not([data-inherited-from="31"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="32"]) [data-inherited-from="32"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="32"]:checked) [data-inherited-from="32"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="32"]:checked):has(.inheritance[data-inherited-from="32"]:hover) [data-inherited-from]:not([data-inherited-from="32"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="33"]) [data-inherited-from="33"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="33"]:checked) [data-inherited-from="33"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="33"]:checked):has(.inheritance[data-inherited-from="33"]:hover) [data-inherited-from]:not([data-inherited-from="33"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="34"]) [data-inherited-from="34"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="34"]:checked) [data-inherited-from="34"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="34"]:checked):has(.inheritance[data-inherited-from="34"]:hover) [data-inherited-from]:not([data-inherited-from="34"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="35"]) [data-inherited-from="35"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="35"]:checked) [data-inherited-from="35"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="35"]:checked):has(.inheritance[data-inherited-from="35"]:hover) [data-inherited-from]:not([data-inherited-from="35"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="36"]) [data-inherited-from="36"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="36"]:checked) [data-inherited-from="36"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="36"]:checked):has(.inheritance[data-inherited-from="36"]:hover) [data-inherited-from]:not([data-inherited-from="36"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="37"]) [data-inherited-from="37"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="37"]:checked) [data-inherited-from="37"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="37"]:checked):has(.inheritance[data-inherited-from="37"]:hover) [data-inherited-from]:not([data-inherited-from="37"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="38"]) [data-inherited-from="38"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="38"]:checked) [data-inherited-from="38"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="38"]:checked):has(.inheritance[data-inherited-from="38"]:hover) [data-inherited-from]:not([data-inherited-from="38"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="39"]) [data-inherited-from="39"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="39"]:checked) [data-inherited-from="39"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="39"]:checked):has(.inheritance[data-inherited-from="39"]:hover) [data-inherited-from]:not([data-inherited-from="39"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="40"]) [data-inherited-from="40"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="40"]:checked) [data-inherited-from="40"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="40"]:checked):has(.inheritance[data-inherited-from="40"]:hover) [data-inherited-from]:not([data-inherited-from="40"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="41"]) [data-inherited-from="41"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="41"]:checked) [data-inherited-from="41"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="41"]:checked):has(.inheritance[data-inherited-from="41"]:hover) [data-inherited-from]:not([data-inherited-from="41"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="42"]) [data-inherited-from="42"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="42"]:checked) [data-inherited-from="42"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="42"]:checked):has(.inheritance[data-inherited-from="42"]:hover) [data-inherited-from]:not([data-inherited-from="42"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="43"]) [data-inherited-from="43"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="43"]:checked) [data-inherited-from="43"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="43"]:checked):has(.inheritance[data-inherited-from="43"]:hover) [data-inherited-from]:not([data-inherited-from="43"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="44"]) [data-inherited-from="44"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="44"]:checked) [data-inherited-from="44"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="44"]:checked):has(.inheritance[data-inherited-from="44"]:hover) [data-inherited-from]:not([data-inherited-from="44"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="45"]) [data-inherited-from="45"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="45"]:checked) [data-inherited-from="45"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="45"]:checked):has(.inheritance[data-inherited-from="45"]:hover) [data-inherited-from]:not([data-inherited-from="45"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="46"]) [data-inherited-from="46"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="46"]:checked) [data-inherited-from="46"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="46"]:checked):has(.inheritance[data-inherited-from="46"]:hover) [data-inherited-from]:not([data-inherited-from="46"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="47"]) [data-inherited-from="47"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="47"]:checked) [data-inherited-from="47"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="47"]:checked):has(.inheritance[data-inherited-from="47"]:hover) [data-inherited-from]:not([data-inherited-from="47"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="48"]) [data-inherited-from="48"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="48"]:checked) [data-inherited-from="48"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="48"]:checked):has(.inheritance[data-inherited-from="48"]:hover) [data-inherited-from]:not([data-inherited-from="48"]) {
+  opacity: 0.5;
+}
+.namedocs:has(input[data-parent-idx="49"]) [data-inherited-from="49"] {
+  display: none;
+  opacity: 0;
+}
+.namedocs:has(input[data-parent-idx="49"]:checked) [data-inherited-from="49"] {
+  display: block;
+  transform: none;
+  opacity: 1;
+}
+.namedocs:has(input[data-parent-idx="49"]:checked):has(.inheritance[data-inherited-from="49"]:hover) [data-inherited-from]:not([data-inherited-from="49"]) {
+  opacity: 0.5;
+}
+</style><style>
+.markup-example {
+  border: 1px solid #98B2C0;
+  border-radius: 0.5rem;
+  margin-bottom: var(--verso--box-vertical-margin);
+  margin-top: var(--verso--box-vertical-margin);
+  overflow: hidden;
+}
+
+.markup-example-header {
+  font-style: italic;
+  font-family: var(--verso-structure-font-family);
+  padding: var(--verso--box-padding);
+}
+
+.markup-example-header * {
+  margin: 0;
+}
+
+.markup-example > .content {
+  display: flex;
+}
+
+.markup-example > .content > .syntax, .markup-example > .content > .result {
+  flex: 1;
+  padding: 0 var(--verso--box-padding);
+  position: relative;
+  width: calc(50% - calc(4 * var(--verso--box-padding)));
+}
+
+.markup-example > .content > .syntax pre, .markup-example > .content > .result pre {
+
+}
+
+.markup-example > .content > .syntax > .title, .markup-example > .content > .result > .title {
+  font-family: var(--verso-structure-font-family);
+  padding: 0;
+  font-size: 0.875rem;
+}
+
+@media screen and (max-width: 700px) {
+  .markup-example > .content {
+    flex-direction: column;
+  }
+
+  .markup-example > .content > .syntax, .markup-example > .content > .result {
+    width: calc(100% - calc(2 * var(--verso--box-padding)));
+  }
+}
+</style><style>
+    main .theIndex {
+      padding-left: 0;
+      font-family: var(--verso-text-font-family);
+    }
+
+    main .theIndex nav {
+      position: sticky;
+      top: var(--verso-header-height);
+      background: white;
+      font-family: var(--verso-structure-font-family);
+    }
+
+    main .theIndex [id] {
+      /* This needs the combined height of the index header and the page header. We
+         know the height of the page header, but the index header height varies, so
+         we use the maximum height it gets which also works well for readers with
+         wide screens */
+      scroll-margin-top: calc(var(--verso-header-height) + 7.5rem);
+    }
+
+    @media screen and (max-width: 700px) {
+      /* On mobile, the sticky index takes up half the screen. */
+      main .theIndex nav {
+        position: static;
+      }
+
+      main .theIndex [id] {
+        /* On mobile, the index header is not sticky, so we just need to
+        be below the page header. */
+        scroll-margin-top: var(--verso-header-height);
+      }
+    }
+
+    main .theIndex nav ol {
+      padding: 0;
+    }
+
+    main .theIndex nav ol li {
+      display: inline-block;
+    }
+
+    main .theIndex nav ol li a {
+      /* Padding instead of margin to have a bigger click target */
+      padding-left: 0.5rem;
+      padding-right: 0.5rem;
+    }
+    /* Increase the size of the touch target on phones */
+    @media screen and (max-width: 700px) {
+      main .theIndex nav ol li a {
+        padding-left: 0.75rem;
+        padding-right: 0.75rem;
+      }
+    }
+
+    main .theIndex nav ol li:first-child a {
+      padding-left: 0;
+    }
+
+    main .theIndex nav ol li + li:before {
+      content: "|";
+    }
+
+    main .theIndex h1,
+    main .theIndex h2,
+    main .theIndex h3,
+    main .theIndex h4,
+    main .theIndex h5,
+    main .theIndex h6 {
+      margin-top: 0;
+    }
+
+    main .theIndex ol {
+      list-style-type: none;
+    }
+
+    main .theIndex .division > ol {
+      padding-left: 0;
+      display: flex;
+      flex-direction: column;
+      gap: .5rem;
+      overflow-wrap: break-word;
+    }
+
+   main .theIndex .division > ol > li {
+      margin-bottom: 0.5rem;
+    }
+
+    main .theIndex .division ol ol {
+      padding-left: 1rem;
+    }
+
+    main .theIndex .division {
+      break-inside: avoid;
+      counter-reset: none;
+      max-width: none;
+      width: auto;
+    }
+    </style><style>
+a.technical-term {
+  color: inherit;
+  text-decoration: currentcolor underline dotted;
+}
+a.technical-term:hover {
+  text-decoration: currentcolor underline solid;
+}
+/* Highlight the clicked term */
+.def-technical-term:target {
+  background-color: var(--verso-selected-color);
+  outline: auto;
+}
+</style><style>
+
+.hl.lean {
+  white-space: pre;
+  font-weight: normal;
+  font-style: normal;
+  font-size: inherit;
+}
+
+.hl.lean .keyword {
+  color: var(--verso-code-keyword-color,);
+  font-weight: var(--verso-code-keyword-weight, bold);
+  font-style: var(--verso-code-keyword-style, normal);
+  font-family: var(--verso-code-keyword-font-family,);
+}
+
+.hl.lean .const {
+  color: var(--verso-code-const-color,);
+  font-weight: var(--verso-code-const-weight, normal);
+  font-style: var(--verso-code-const-style, normal);
+  font-family: var(--verso-code-const-font-family,);
+}
+
+.hl.lean .var {
+  color: var(--verso-code-var-color,);
+  font-weight: var(--verso-code-var-weight, normal);
+  font-style: var(--verso-code-var-style, italic);
+  font-family: var(--verso-code-var-font-family,);
+
+  position: relative;
+}
+
+.hl.lean .literal, .hl.lean .unknown {
+  color: var(--verso-code-color,);
+  font-weight: normal;
+  font-style: normal;
+  font-family: var(--verso-code-font-family,);
+}
+
+.hover-container {
+  width: 0;
+  height: 0;
+  position: relative;
+  display: inline;
+}
+
+.hl.lean a {
+  color: inherit;
+  text-decoration: currentcolor underline dotted;
+}
+
+.hl.lean a:hover {
+  text-decoration: currentcolor underline solid;
+}
+
+.hl.lean .hover-info {
+  white-space: normal;
+}
+
+.hl.lean .token .hover-info {
+  display: none;
+  position: absolute;
+  background-color: #e5e5e5;
+  border: 1px solid black;
+  padding: 0.5rem;
+  z-index: 300;
+}
+
+.hl.lean .hover-info.messages {
+  max-height: 10rem;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+  padding: 0 0.5rem 0 0;
+  display: block;
+}
+
+.hl.lean .hover-info code {
+  white-space: pre-wrap;
+  background: none;
+  color: black;
+}
+
+.hl.lean .hover-info.messages > code {
+  padding: 0.5rem;
+  display: block;
+  width: fit-content;
+}
+
+.hl.lean .hover-info.messages > code:only-child {
+  margin: 0;
+}
+
+.hl.lean .hover-info.messages > code {
+  margin: 0.1rem;
+}
+
+.hl.lean .hover-info.messages > code:not(:first-child) {
+  margin-top: 0rem;
+}
+
+.hl.lean {
+}
+
+.hl.lean.block {
+  display: block;
+}
+
+.hl.lean.inline {
+  display: inline;
+  white-space: pre-wrap;
+}
+
+.hl.lean * {
+}
+
+.hl.lean .token {
+  transition: all 0.25s; /* Slight fade for highlights */
+}
+
+@media (hover: hover) {
+  .hl.lean .token.binding-hl, .hl.lean .literal.string:hover, .hl.lean .token.typed:hover {
+    background-color: #eee;
+    border-radius: 2px;
+    transition: none;
+  }
+}
+
+
+.hl.lean .has-info .token:not(.tactic-state):not(.tactic-state *), .hl.lean .has-info .inter-text:not(.tactic-state):not(.tactic-state *) {
+  text-decoration-style: wavy;
+  text-decoration-line: underline;
+  text-decoration-thickness: from-font;
+  text-decoration-skip-ink: none;
+}
+
+.hl.lean .has-info .hover-info {
+  display: none;
+  position: absolute;
+  transform: translate(0.25rem, 0.3rem);
+  border: 1px solid black;
+  padding: 0.5rem;
+  z-index: 400;
+  text-align: left;
+}
+
+.hl.lean .has-info.error :not(.tactic-state):not(.tactic-state *){
+  text-decoration-color: red;
+}
+
+@media (hover: hover) {
+  .hl.lean .has-info.error:hover {
+    background-color: #ffb3b3;
+  }
+}
+
+.hl.lean .hover-info.messages > code.error {
+  background-color: #e5e5e5;
+  border-left: 0.2rem solid #ffb3b3;
+}
+
+.tippy-box[data-theme~='error'] .hl.lean .hover-info.messages > code.error {
+  background: none;
+  border: none;
+}
+
+.error .verso-message, .error .verso-message .token, .error .verso-message label {
+  color: var(--verso-error-color);
+}
+
+.error .verso-message .case-label:has(input[type="checkbox"])::before {
+  background-color: var(--verso-error-color) !important;
+}
+
+.hl.lean .has-info.warning :not(.tactic-state):not(.tactic-state *) {
+  text-decoration-color: var(--verso-warning-indicator-color);
+}
+
+@media (hover: hover) {
+  .hl.lean .has-info.warning:hover {
+    background-color:var(--verso-warning-color);
+  }
+}
+
+.hl.lean .hover-info.messages > code.warning {
+  background-color: var(--verso-warning-color);
+}
+
+.lean-output {
+  border-left: 0.2em solid transparent;
+  padding: 0 0 0 0.5em;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.lean-output.error {
+  border-color: var(--verso-error-indicator-color);
+}
+
+.lean-output.information {
+  border-color: var(--verso-info-indicator-color);
+}
+
+.lean-output.warning {
+  border-color: var(--verso-warning-indicator-color);
+}
+
+.hl.lean .hover-info.messages > code.error {
+  background-color: #e5e5e5;
+  border-left: 0.2rem solid var(--verso-warning-color);
+}
+
+.tippy-box[data-theme~='warning'] .hl.lean .hover-info.messages > code.warning {
+  background: none;
+  border: none;
+}
+
+
+.hl.lean .has-info.information :not(.tactic-state):not(.tactic-state *) {
+  text-decoration-color: var(--verso-info-indicator-color, blue);
+}
+
+@media (hover: hover) {
+  .hl.lean .has-info.information:hover {
+    background-color: #4777ff;
+  }
+}
+
+
+.hl.lean .hover-info.messages > code.information {
+  background-color: #e5e5e5;
+  border-left: 0.2rem solid #4777ff;
+}
+
+.tippy-box[data-theme~='info'] .hl.lean .hover-info.messages > code.information {
+  background: none;
+  border: none;
+}
+
+.hl.lean div.docstring {
+  font-family: var(--verso-text-font-family, sans-serif);
+  white-space: normal;
+  max-width: calc(min(40rem, 90vw));
+  width: max-content;
+}
+
+.hl.lean div.docstring > :last-child {
+  margin-bottom: 0;
+}
+
+.hl.lean div.docstring > :first-child {
+  margin-top: 0;
+}
+
+.hl.lean .hover-info .sep {
+  display: block;
+  width: auto;
+  margin-left: 1rem;
+  margin-right: 1rem;
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+  padding: 0;
+  height: 1px;
+  border-top: 1px solid #ccc;
+}
+
+.hl.lean code {
+  font-family: var(--verso-code-font-family);
+}
+
+.hl.lean .tactic-state {
+  display: none;
+  position: relative;
+  width: fit-content;
+  border: 1px solid #888888;
+  border-radius: 0.1rem;
+  padding: 0.5rem;
+  font-family: sans-serif;
+  background-color: #ffffff;
+}
+
+.hl.lean.popup .tactic-state {
+  position: static;
+  display: block;
+  width: auto;
+  border: none;
+  padding: 0.5rem;
+  font-family: sans-serif;
+  background-color: #ffffff;
+}
+
+
+.hl.lean .tactic {
+  position: relative;
+  display: inline;
+  vertical-align: top;
+  /* Without these, mobile Safari will start making font sizes inconsistent when its text size adjustment feature is triggered.*/
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+.hl.lean .tactic:has(.tactic-toggle:checked) {
+  display: inline-grid;
+  grid-template-columns: 1fr;
+}
+
+.hl.lean .tactic-toggle:checked ~ .tactic-state {
+  display: inline-block;
+  vertical-align: top;
+  grid-row: 2;
+  justify-self: start;
+}
+
+.hl.lean .tactic > label {
+  position: relative;
+  grid-row: 1;
+  display: inline;
+}
+
+@media (hover: hover) {
+  .hl.lean .tactic:has(.tactic-toggle:not(:checked)) > label:hover {
+    background-color: #eeeeee;
+  }
+}
+
+.hl.lean .tactic-toggle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 0;
+  height: 0;
+  width: 0;
+  z-index: -10;
+}
+
+.hl.lean .tactic > label::after {
+  content: "";
+  border: 1px solid #bbbbbb;
+  /* These need to be em, not rem, to scale with the font */
+  border-radius: 1em;
+  height: 0.25em;
+  vertical-align: middle;
+  width: 0.6em;
+  margin-left: 0.1em;
+  margin-right: 0.1em;
+  display: inline-block;
+  transition: all 0.5s;
+}
+
+/*
+@media (hover: hover) {
+  .hl.lean .tactic > label:hover::after {
+    border: 1px solid #aaaaaa;
+    background-color: #aaaaaa;
+    transition: all 0.5s;
+  }
+}
+*/
+
+.hl.lean .tactic > label:has(+ .tactic-toggle:checked)::after {
+  border: 1px solid #999999;
+  background-color: #999999;
+  transition: all 0.5s;
+}
+
+.hl.lean .tactic-state .goal + .goal {
+  margin-top: 1.5em;
+}
+
+/*
+Some CSS frameworks customize details/summary in ways not compatible with Verso's output.
+*/
+
+.hl.lean details {
+  display: block !important;
+  margin: 0;
+}
+
+.hl.lean details summary {
+  display: list-item !important;
+  margin: 0;
+}
+
+.hl.lean details summary:focus {
+  outline: none;
+  outline-offset: none;
+  color: inherit;
+}
+
+.hl.lean ul > li {
+  margin-bottom: 0;
+}
+
+.hl.lean details summary::marker {
+  display: inline !important;
+}
+
+.hl.lean details > summary:first-of-type {
+  list-style-type: disclosure-closed;
+  list-style-position: inside;
+}
+
+.hl.lean details[open] > summary:first-of-type {
+  list-style-type: disclosure-open;
+}
+
+.hl.lean details summary::before, .hl.lean details summary::after {
+  content: "" !important;
+  background: none;
+  display: none;
+}
+
+.hl.lean .tactic-state summary {
+  /* These need to be em, not rem, to scale with the font */
+  margin-left: -0.5em;
+}
+
+.hl.lean .tactic-state details {
+  /* These need to be em, not rem, to scale with the font */
+  padding-left: 0.5em;
+}
+
+.hl.lean .case-label {
+  display: block;
+  position: relative;
+}
+
+.hl.lean .case-label input[type="checkbox"] {
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 0;
+  height: 0;
+  width: 0;
+  z-index: -10;
+}
+
+.hl.lean .case-label:has(input[type="checkbox"])::before {
+  display: inline-block;
+  background-color: black;
+  content: ' ';
+  transition: ease 0.2s;
+  margin-right: 0.7em;
+  clip-path: polygon(100% 0, 0 0, 50% 100%);
+  width: 0.6em;
+  height: 0.6em;
+  vertical-align: middle;
+}
+
+.hl.lean .case-label:has(input[type="checkbox"]:not(:checked))::before {
+  transform: rotate(-90deg);
+}
+
+.hl.lean .case-label:has(input[type="checkbox"]) {
+
+}
+
+.hl.lean .case-label:has(input[type="checkbox"]:checked) {
+
+}
+
+
+.hl.lean .labeled-case > :not(:first-child) {
+  max-height: 0px;
+  display: block;
+  overflow: hidden;
+  transition: max-height 0.1s ease-in;
+  /* These need to be em, not rem, to scale with the font */
+  margin-left: 0.5em;
+  margin-top: 0.1em;
+}
+
+.hl.lean .labeled-case:has(.case-label input[type="checkbox"]:checked) > :not(:first-child) {
+  max-height: 100%;
+}
+
+
+.hl.lean .goal-name::before {
+  font-style: normal;
+  content: "case ";
+}
+
+.hl.lean .goal-name {
+  font-style: italic;
+  font-family: var(--verso-code-font-family);
+  color: inherit;
+}
+
+.hl.lean .hypotheses {
+  display: table;
+}
+
+.hl.lean .hypothesis {
+  display: table-row;
+}
+
+.hl.lean .hypothesis > * {
+  display: table-cell;
+}
+
+
+.hl.lean .hypotheses .colon {
+  text-align: center;
+  /* This needs to be em, not rem, to scale with the font */
+  min-width: 1em;
+}
+
+.hl.lean .hypotheses .name {
+  text-align: right;
+}
+
+.hl.lean .hypotheses .name,
+.hl.lean .hypotheses .type,
+.hl.lean .conclusion .type {
+  font-family: var(--verso-code-font-family);
+}
+
+.tippy-box {
+  /* Without these, mobile Safari will start making font sizes inconsistent when its text size adjustment feature is triggered.*/
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+.tippy-box[data-theme~='lean'] {
+  background-color: #e5e5e5;
+  color: black;
+  border: 1px solid black;
+}
+.tippy-box[data-theme~='lean'][data-placement^='top'] > .tippy-arrow::before {
+  border-top-color: #e5e5e5;
+}
+.tippy-box[data-theme~='lean'][data-placement^='bottom'] > .tippy-arrow::before {
+  border-bottom-color: #e5e5e5;
+}
+.tippy-box[data-theme~='lean'][data-placement^='left'] > .tippy-arrow::before {
+  border-left-color: #e5e5e5;
+}
+.tippy-box[data-theme~='lean'][data-placement^='right'] > .tippy-arrow::before {
+  border-right-color: #e5e5e5;
+}
+
+.tippy-box[data-theme~='message'][data-placement^='top'] > .tippy-arrow::before {
+  border-top-color: #e5e5e5;
+  border-width: 11px 11px 0;
+}
+.tippy-box[data-theme~='message'][data-placement^='top'] > .tippy-arrow::after {
+  bottom: -11px;
+  border-width: 11px 11px 0;
+}
+.tippy-box[data-theme~='message'][data-placement^='bottom'] > .tippy-arrow::before {
+  border-width: 0 11px 11px;
+}
+.tippy-box[data-theme~='message'][data-placement^='bottom'] > .tippy-arrow::after {
+  top: -11px;
+  border-width: 0 11px 11px;
+}
+.tippy-box[data-theme~='message'][data-placement^='left'] > .tippy-arrow::before {
+  border-left-color: #e5e5e5;
+  border-width: 11px 0 11px 11px;
+}
+.tippy-box[data-theme~='message'][data-placement^='left'] > .tippy-arrow::after {
+  right: -11px;
+  border-width: 11px 0 11px 11px;
+}
+
+.tippy-box[data-theme~='message'][data-placement^='right'] > .tippy-arrow::before {
+  border-right-color: #e5e5e5;
+  border-width: 11px 11px 11px 0;
+}
+.tippy-box[data-theme~='message'][data-placement^='right'] > .tippy-arrow::after {
+  left: -11px;
+  border-width: 11px 11px 11px 0;
+}
+
+
+
+.tippy-box[data-theme~='warning'] {
+  background-color: #e5e5e5;
+  color: black;
+  border: 3px solid var(--verso-warning-color);
+}
+
+.tippy-box[data-theme~='error'] {
+  background-color: #e5e5e5;
+  color: black;
+  border: 3px solid #f7a7af;
+}
+
+.tippy-box[data-theme~='info'] {
+  background-color: #e5e5e5;
+  color: black;
+  border: 3px solid #99b3c2;
+}
+
+.tippy-box[data-theme~='tactic'] {
+  background-color: white;
+  color: black;
+  border: 1px solid black;
+}
+.tippy-box[data-theme~='tactic'][data-placement^='top'] > .tippy-arrow::before {
+  border-top-color: white;
+}
+.tippy-box[data-theme~='tactic'][data-placement^='bottom'] > .tippy-arrow::before {
+  border-bottom-color: white;
+}
+.tippy-box[data-theme~='tactic'][data-placement^='left'] > .tippy-arrow::before {
+  border-left-color: white;
+}
+.tippy-box[data-theme~='tactic'][data-placement^='right'] > .tippy-arrow::before {
+  border-right-color: white;
+}
+
+.extra-doc-links {
+  list-style-type: none;
+  margin-left: 0;
+  padding: 0;
+}
+
+.extra-doc-links > li {
+  display: inline-block;
+}
+
+.extra-doc-links > li:not(:last-child)::after {
+  content: '|';
+  display: inline-block;
+  margin: 0 0.25em;
+}
+
+.verso-message .trace {
+  display: block;
+}
+
+.verso-message .trace > summary::marker {
+  color: var(--verso-text-color);
+}
+
+.verso-message .trace-children {
+  margin: 0;
+  padding: 0;
+}
+
+.verso-message .trace-children > li {
+  list-style-type: none;
+  margin-left: 1.5em;
+}
+
+.verso-message .trace-children > li:not(:has(.trace)) {
+  margin-left: 0;
+}
+
+.verso-message .trace-class {
+  color: color-mix(in srgb, currentColor 70%, transparent);
+  font-weight: bold;
+  margin: 0;
+  padding: 0;
+}
+
+.verso-message .text {
+  white-space: pre-wrap;
+}
+
+</style><script>
+      
+window.onload = () => {
+
+    // Don't show hovers inside of closed tactic states
+    function blockedByTactic(elem) {
+      let parent = elem.parentNode;
+      while (parent && "classList" in parent) {
+        if (parent.classList.contains("tactic")) {
+          const toggle = parent.querySelector("input.tactic-toggle");
+          if (toggle) {
+            return !toggle.checked;
+          }
+        }
+        parent = parent.parentNode;
+      }
+      return false;
+    }
+
+    // Track whether any tippy is visible (O(1) check instead of DOM scan)
+    let visibleTippyCount = 0;
+    function blockedByTippy(elem) {
+      return visibleTippyCount > 0;
+    }
+
+    // Binding highlights via event delegation with cached lookups
+    const bindingCache = new Map(); // context+binding -> [token elements]
+    let highlightedTokens = [];
+    function getBindingTokens(context, binding) {
+      const key = context + "\0" + binding;
+      let tokens = bindingCache.get(key);
+      if (!tokens) {
+        tokens = [];
+        for (const example of document.querySelectorAll(".hl.lean")) {
+          if (example.dataset.leanContext == context) {
+            for (const tok of example.querySelectorAll(".token[data-binding=\"" + CSS.escape(binding) + "\"]")) {
+              tokens.push(tok);
+            }
+          }
+        }
+        bindingCache.set(key, tokens);
+      }
+      return tokens;
+    }
+    for (const container of document.querySelectorAll(".hl.lean")) {
+      container.addEventListener("mouseover", (event) => {
+        const c = event.target.closest(".token");
+        if (!c || !c.dataset.binding || c.dataset.binding === "" || !container.contains(c)) return;
+        if (blockedByTactic(c)) return;
+        const tokens = getBindingTokens(container.dataset.leanContext, c.dataset.binding);
+        for (const tok of tokens) {
+          tok.classList.add("binding-hl");
+        }
+        highlightedTokens = tokens;
+      });
+      container.addEventListener("mouseout", (event) => {
+        const c = event.target.closest(".token");
+        if (!c || !container.contains(c)) return;
+        for (const tok of highlightedTokens) {
+          tok.classList.remove("binding-hl");
+        }
+        highlightedTokens = [];
+      });
+    }
+    /* Render docstrings */
+    if ('undefined' !== typeof marked) {
+        for (const d of document.querySelectorAll("code.docstring, pre.docstring")) {
+            const str = d.innerText;
+            const html = marked.parse(str);
+            const rendered = document.createElement("div");
+            rendered.classList.add("docstring");
+            rendered.innerHTML = html;
+            d.parentNode.replaceChild(rendered, d);
+        }
+    }
+    // Add hovers
+    let docsJson = "-verso-docs.json";
+    fetch(docsJson).then((resp) => resp.json()).then((versoDocData) => {
+
+      function hideParentTooltips(element) {
+        let parent = element.parentElement;
+        while (parent) {
+          const tippyInstance = parent._tippy;
+          if (tippyInstance) {
+            tippyInstance.hide();
+          }
+          parent = parent.parentElement;
+        }
+      }
+
+
+
+      const defaultTippyProps = {
+        /* DEBUG -- remove the space: * /
+        onHide(any) { return false; },
+        trigger: "click",
+        // */
+        /* theme: "lean", */
+        maxWidth: "none",
+        appendTo: () => document.body,
+        interactive: true,
+        delay: [100, null],
+        /* ignoreAttributes: true, */
+        followCursor: 'initial',
+        onShow(inst) {
+          if (inst.reference.className == 'tactic') {
+            const toggle = inst.reference.querySelector("input.tactic-toggle");
+            if (toggle && toggle.checked) {
+              return false;
+            }
+            hideParentTooltips(inst.reference);
+            if (blockedByTippy(inst.reference)) { return false; }
+
+          } else if (inst.reference.querySelector(".hover-info") || "versoHover" in inst.reference.dataset) {
+            if (blockedByTactic(inst.reference)) { return false };
+            if (blockedByTippy(inst.reference)) { return false; }
+          } else { // Nothing to show here!
+            return false;
+          }
+        },
+        onShown(inst) { visibleTippyCount++; },
+        onHidden(inst) { visibleTippyCount = Math.max(0, visibleTippyCount - 1); },
+        content (tgt) {
+          const content = document.createElement("span");
+          if (tgt.className == 'tactic') {
+            const state = tgt.querySelector(".tactic-state").cloneNode(true);
+            state.style.display = "block";
+            content.appendChild(state);
+            content.style.display = "block";
+            content.className = "hl lean popup";
+          } else {
+            content.className = "hl lean";
+            content.style.display = "block";
+            content.style.maxHeight = "300px";
+            content.style.overflowY = "auto";
+            content.style.overflowX = "hidden";
+            const hoverId = tgt.dataset.versoHover;
+            const hoverInfo = tgt.querySelector(".hover-info");
+            if (hoverId) { // Docstrings from the table
+              // TODO stop doing an implicit conversion from string to number here
+              let data = versoDocData[hoverId];
+              if (data) {
+                const info = document.createElement("span");
+                info.className = "hover-info";
+                info.style.display = "block";
+                info.innerHTML = data;
+                content.appendChild(info);
+                /* Render docstrings - TODO server-side */
+                if ('undefined' !== typeof marked) {
+                    for (const d of content.querySelectorAll("code.docstring, pre.docstring")) {
+                        const str = d.innerText;
+                        const html = marked.parse(str);
+                        const rendered = document.createElement("div");
+                        rendered.classList.add("docstring");
+                        rendered.innerHTML = html;
+                        d.parentNode.replaceChild(rendered, d);
+                    }
+                }
+              } else {
+                content.innerHTML = "Failed to load doc ID: " + hoverId;
+              }
+            } else if (hoverInfo) { // The inline info, still used for compiler messages
+              content.appendChild(hoverInfo.cloneNode(true));
+            }
+            const extraLinks = tgt.parentElement.dataset['versoLinks'];
+            if (extraLinks) {
+              try {
+                const extras = JSON.parse(extraLinks);
+                const links = document.createElement('ul');
+                links.className = 'extra-doc-links';
+                extras.forEach((l) => {
+                  const li = document.createElement('li');
+                  li.innerHTML = "<a href=\"" + l['href'] + "\" title=\"" + l.long + "\">" + l.short + "</a>";
+                  links.appendChild(li);
+                });
+                content.appendChild(links);
+              } catch (error) {
+                console.error(error);
+              }
+            }
+          }
+          return content;
+        }
+      };
+
+
+      document.querySelectorAll('.hl.lean .const.token, .hl.lean .keyword.token, .hl.lean .literal.token, .hl.lean .option.token, .hl.lean .var.token, .hl.lean .typed.token, .hl.lean .level-var, .hl.lean .level-const, .hl.lean .level-op, .hl.lean .sort').forEach(element => {
+        element.setAttribute('data-tippy-theme', 'lean');
+      });
+      document.querySelectorAll('.hl.lean .has-info.warning').forEach(element => {
+        element.setAttribute('data-tippy-theme', 'warning message');
+      });
+      document.querySelectorAll('.hl.lean .has-info.information').forEach(element => {
+        element.setAttribute('data-tippy-theme', 'info message');
+      });
+      document.querySelectorAll('.hl.lean .has-info.error').forEach(element => {
+        element.setAttribute('data-tippy-theme', 'error message');
+      });
+      document.querySelectorAll('.hl.lean .tactic').forEach(element => {
+        element.setAttribute('data-tippy-theme', 'tactic');
+      });
+      // Skip tokens inside closed tactics — they interfere with tactic tippys
+      const closedTactics = new Set();
+      document.querySelectorAll('.hl.lean .tactic').forEach(tactic => {
+        const toggle = tactic.querySelector('input.tactic-toggle');
+        if (toggle && !toggle.checked) closedTactics.add(tactic);
+      });
+      function isInsideClosedTactic(el) {
+        const tactic = el.closest('.tactic');
+        return tactic && tactic !== el && closedTactics.has(tactic);
+      }
+
+      const tokenSelector = '.hl.lean .const.token, .hl.lean .keyword.token, .hl.lean .literal.token, .hl.lean .option.token, .hl.lean .var.token, .hl.lean .typed.token, .hl.lean .has-info, .hl.lean .tactic, .hl.lean .level-var, .hl.lean .level-const, .hl.lean .level-op, .hl.lean .sort';
+      tippy(Array.from(document.querySelectorAll(tokenSelector)).filter(el => !isInsideClosedTactic(el)), defaultTippyProps);
+
+      // Create/destroy token tippys when tactic checkbox toggles
+      const tacticTippySelector = '.const.token, .keyword.token, .literal.token, .option.token, .var.token, .typed.token, .has-info, .level-var, .level-const, .level-op, .sort';
+      document.querySelectorAll('.hl.lean .tactic').forEach(tactic => {
+        const toggle = tactic.querySelector('input.tactic-toggle');
+        if (toggle) toggle.addEventListener('change', () => {
+          if (toggle.checked) {
+            closedTactics.delete(tactic);
+            tactic.querySelectorAll('.token').forEach(tok => {
+              if (!tok._tippy && tok.matches(tacticTippySelector)) {
+                tippy(tok, defaultTippyProps);
+              }
+            });
+          } else {
+            closedTactics.add(tactic);
+            tactic.querySelectorAll('.token').forEach(tok => {
+              if (tok._tippy) tok._tippy.destroy();
+            });
+          }
+        });
+      });
+  });
+}
+</script>
+    <script src="-verso-search/search-highlight.js" defer="defer"></script>
+    </head>
+  <body>
+    <header>
+      <div class="header-logo-wrapper"></div>
+      <div class="header-title-wrapper">
+        <a href="" class="header-title"><h1>
+            Documentation with Verso</h1>
+          </a></div>
+      </header>
+    <label for="toggle-toc" id="toggle-toc-click"><span class="line line1"></span><span class="line line2"></span><span class="line line3"></span></label><div class="with-toc">
+      <div class="toc-backdrop" onclick="document.getElementById('toggle-toc-click')?.click()"></div>
+      <nav id="toc">
+        <input type="checkbox" id="toggle-toc"><div class="first">
+          <a href="" class="toc-title"><h1>
+              Documentation with Verso</h1>
+            </a><div class="split-tocs">
+            <div class="split-toc book">
+              <div class="title">
+                <label for="--verso-manual-toc-----bookRoot" class="toggle-split-toc"><input type="checkbox" class="toggle-split-toc" id="--verso-manual-toc-----bookRoot" checked="checked"></label><span class="">Table of Contents</span></div>
+              <table><tr class="numbered"><td class="num">1.</td><td><a href="Genres/#genres">Genres</a></td></tr><tr class="numbered"><td class="num">2.</td><td><a href="Verso-Markup/#verso-markup">Verso Markup</a></td></tr><tr class="numbered"><td class="num">3.</td><td><a href="Building-Documents/#build-process">Building Documents</a></td></tr><tr class="numbered"><td class="num">4.</td><td><a href="Extensions/#extensions">Extensions</a></td></tr><tr class="numbered"><td class="num">5.</td><td><a href="Output-Formats/#outputs">Output Formats</a></td></tr><tr class="numbered"><td class="num">6.</td><td><a href="Websites/#website">Websites</a></td></tr><tr class="numbered"><td class="num">7.</td><td><a href="Manuals-and-Books/#manual">Manuals and Books</a></td></tr><tr class="current numbered"><td class="num">8.</td><td><a href="Literate-Programming/#literate">Literate Programming</a></td></tr><tr class="unnumbered"><td class="num"><td><a href="the-index/#index">Index</a></td></tr><tr class="unnumbered"><td class="num"><td><a href="releases/#release-notes">Release Notes</a></td></tr><tr class="unnumbered"><td class="num"><td><a href="Dependencies/#dependencies">Dependencies</a></td></tr></table></div>
+            <div class="split-toc">
+              <div class="title">
+                <label for="--verso-manual-toc-literate" class="toggle-split-toc"><input type="checkbox" class="toggle-split-toc" id="--verso-manual-toc-literate" checked="checked"></label><span class="number">8.</span> <span class="current"><a href="Literate-Programming/#literate">Literate Programming</a></span></div>
+              <table><tr class="numbered"><td class="num">8.1.</td><td><a href="Literate-Programming/#Writing-Documentation-in-Lean-with-Verso--Literate-Programming--HTML-Output">HTML Output</a></td></tr><tr class="numbered"><td class="num">8.2.</td><td><a href="Literate-Programming/#Writing-Documentation-in-Lean-with-Verso--Literate-Programming--Configuration">Configuration</a></td></tr><tr class="numbered"><td class="num">8.3.</td><td><a href="Literate-Programming/#literate-config-ref">Configuration File Reference</a></td></tr><tr class="numbered"><td class="num">8.4.</td><td><a href="Literate-Programming/#literate-deployment">Deployment</a></td></tr></table></div>
+            </div>
+          </div>
+        <div class="last"></div>
+        </nav>
+      <main><div class="content-wrapper">
+          <nav class="prev-next-buttons">
+            <a class="local-button active" href="Manuals-and-Books/#manual" rel="prev" title="7. Manuals and Books"><span class="arrow">←</span><span class="where">7. Manuals and Books</span></a><a class="local-button active" href="the-index/#index" rel="next" title="Index"><span class="where">Index</span><span class="arrow">→</span></a></nav>
+          <section>
+            <h1>
+              8. Literate Programming<span class="permalink-widget inline"><a href="find/?domain=Verso.Genre.Manual.section&amp;name=literate" title="Permalink">🔗</a></span></h1>
+            <p>
+              Lean code, including Verso-format docstrings, can be rendered as a Web page without any further configuration.
+Only two steps are necessary:</p>
+            <ol start="1">
+              <li>
+                <p>
+                  Add a dependency to Verso to your Lake configuration</p>
+                </li>
+              <li>
+                <p>
+                  Run <code>lake query :literateHtml</code>.
+  Using <code>lake query</code> instead of <code>lake build</code> means that after the HTML is built, its path is printed to the console.</p>
+                </li>
+              </ol>
+            <section>
+              <h2 id="Writing-Documentation-in-Lean-with-Verso--Literate-Programming--HTML-Output">
+                8.1. HTML Output<span class="permalink-widget inline"><a href="find/?domain=Verso.Genre.Manual.section&amp;name=Writing-Documentation-in-Lean-with-Verso--Literate-Programming--HTML-Output" title="Permalink">🔗</a></span></h2>
+              <p>
+                By default, HTML is generated for all of the current package's default targets.
+The resulting website includes a search box that can search both defined names and documentation and a navigation bar with a hierarchical overview of all included modules.
+Both Markdown and Verso docstrings are rendered to HTML, though Verso docstrings have more features due the the greater available metadata.
+The site has both light and dark mode themes.</p>
+              </section>
+            <section>
+              <h2 id="Writing-Documentation-in-Lean-with-Verso--Literate-Programming--Configuration">
+                8.2. Configuration<span class="permalink-widget inline"><a href="find/?domain=Verso.Genre.Manual.section&amp;name=Writing-Documentation-in-Lean-with-Verso--Literate-Programming--Configuration" title="Permalink">🔗</a></span></h2>
+              <p>
+                The default site can be customized by placing a <code>literate.toml</code> file at the workspace root.
+The following aspects can be customized:</p>
+              <ul>
+                <li>
+                  <p>
+                    The set of modules that are included</p>
+                  </li>
+                <li>
+                  <p>
+                    Each module's title</p>
+                  </li>
+                <li>
+                  <p>
+                    The order in which the modules are listed</p>
+                  </li>
+                </ul>
+              </section>
+            <section>
+              <h2 id="literate-config-ref">
+                8.3. Configuration File Reference<span class="permalink-widget inline"><a href="find/?domain=Verso.Genre.Manual.section&amp;name=literate-config-ref" title="Permalink">🔗</a></span></h2>
+              <p>
+                All configuration is optional.
+An empty <code>literate.toml</code> file is equivalent to having no file at all.</p>
+              <section>
+                <h3 id="literate-targets">
+                  8.3.1. Targets<span class="permalink-widget inline"><a href="find/?domain=Verso.Genre.Manual.section&amp;name=literate-targets" title="Permalink">🔗</a></span></h3>
+                <p>
+                  By default, all libraries and executables that are default build targets are included.
+To override this, specify explicit targets using <code>[[targets]]</code> entries.
+When <code>targets</code> is specified, only the listed libraries and modules are included, replacing the default targets entirely.</p>
+                <p>
+                  Each <code>[[targets]]</code> entry has the following keys:</p>
+                <ul>
+                  <li>
+                    <p>
+                      <code>library</code> — the name of a library; all modules belonging to it are included</p>
+                    </li>
+                  <li>
+                    <p>
+                      <code>module</code> — the name of a single module</p>
+                    </li>
+                  </ul>
+                <p>
+                  An entry may specify <code>library</code> alone, <code>module</code> alone, or both (in which case the module must belong to the named library).</p>
+                <pre># Include all modules in a library
+[[targets]]
+library = "MyLib"
+
+# Include a specific module
+[[targets]]
+module = "MyLib.Special.Page"
+</pre></section>
+              <section>
+                <h3 id="literate-exclude">
+                  8.3.2. Exclusion<span class="permalink-widget inline"><a href="find/?domain=Verso.Genre.Manual.section&amp;name=literate-exclude" title="Permalink">🔗</a></span></h3>
+                <p>
+                  Modules can be excluded from the site.
+Exclusion is recursive: the named module and all its children are removed.</p>
+                <pre>exclude = ["MyLib.Internal", "MyLib.Deprecated"]
+</pre><p>
+                  If both <code>targets</code> and <code>exclude</code> are specified, exclusion further narrows the target set.</p>
+                </section>
+              <section>
+                <h3 id="literate-ordering">
+                  8.3.3. Ordering<span class="permalink-widget inline"><a href="find/?domain=Verso.Genre.Manual.section&amp;name=literate-ordering" title="Permalink">🔗</a></span></h3>
+                <p>
+                  By default, modules appear in the navigation bar in hierarchical alphabetical order.
+The <code>order</code> key specifies an ordering for top-level siblings: listed modules appear first in the given order, and unlisted modules follow alphabetically.</p>
+                <pre>order = ["MyLib.Introduction", "MyLib.Core"]
+</pre><p>
+                  To order children within a namespace, use <code>[order_children]</code>:</p>
+                <pre>[order_children]
+"MyLib.Core" = ["MyLib.Core.Basic", "MyLib.Core.Syntax"]
+</pre><p>
+                  This is safe by default: newly added modules appear automatically in the alphabetical tail without requiring configuration changes.</p>
+                </section>
+              <section>
+                <h3 id="literate-landing-page">
+                  8.3.4. Landing Page<span class="permalink-widget inline"><a href="find/?domain=Verso.Genre.Manual.section&amp;name=literate-landing-page" title="Permalink">🔗</a></span></h3>
+                <p>
+                  By default, the landing page is an auto-generated table of contents listing all included modules.
+To replace it with the rendered content of a specific module:</p>
+                <pre>landing_page = "MyLib.Introduction"
+</pre><p>
+                  The module remains in its normal position in the navigation bar.</p>
+                </section>
+              <section>
+                <h3 id="literate-hide-commands">
+                  8.3.5. Command Visibility<span class="permalink-widget inline"><a href="find/?domain=Verso.Genre.Manual.section&amp;name=literate-hide-commands" title="Permalink">🔗</a></span></h3>
+                <p>
+                  Commands are identified by their leading keywords.
+Each pattern is matched against the first keyword tokens that appear in the command; for example, <code>"def"</code> matches <code>def</code> commands and <code>"#eval"</code> matches <code>#eval</code> commands.
+Multi-word patterns like <code>"#print axioms"</code> match commands whose leading keywords start with that sequence.
+By default, everything except the module header is shown (the module header is present but collapsed by default).</p>
+                <pre>hide_commands = ["import", "open", "set_option"]
+</pre><p>
+                  Because matching uses only the leading keywords, <code>#eval</code> and <code>#eval in</code> are both matched by the pattern <code>"#eval"</code>.</p>
+                <p>
+                  This can be scoped per module prefix via <code>[modules]</code> (see <a href="Literate-Programming/#literate-per-module">Per-Module Configuration</a> below).</p>
+                </section>
+              <section>
+                <h3 id="literate-show-output">
+                  8.3.6. Command Output<span class="permalink-widget inline"><a href="find/?domain=Verso.Genre.Manual.section&amp;name=literate-show-output" title="Permalink">🔗</a></span></h3>
+                <p>
+                  Some commands produce output (e.g., <code>#eval</code>, <code>#check</code>).
+To make the output visible, the generated HTML will display this output immediately after the command that produced it.
+A configurable list controls which commands have their output displayed in the rendered code box.
+The default list includes <code>#eval</code>, <code>#check</code>, <code>#print</code>, and <code>#reduce</code>.</p>
+                <pre>show_output = ["#eval", "#check", "#print", "#reduce"]
+</pre><p>
+                  This can be scoped per module prefix via <code>[modules]</code>.</p>
+                </section>
+              <section>
+                <h3 id="literate-imports">
+                  8.3.7. Imports List<span class="permalink-widget inline"><a href="find/?domain=Verso.Genre.Manual.section&amp;name=literate-imports" title="Permalink">🔗</a></span></h3>
+                <p>
+                  Each page shows a collapsible list of imports, collapsed by default.
+Imports whose modules are included in the site appear as links; the rest appear as plain text.
+To disable the imports list:</p>
+                <pre>show_imports = false
+</pre><p>
+                  This can be scoped per module prefix via <code>[modules]</code>.</p>
+                </section>
+              <section>
+                <h3 id="literate-docstrings">
+                  8.3.8. Declaration Docstrings<span class="permalink-widget inline"><a href="find/?domain=Verso.Genre.Manual.section&amp;name=literate-docstrings" title="Permalink">🔗</a></span></h3>
+                <p>
+                  By default, declaration docstrings (<code>/-- ... -/</code>) are shown in code boxes alongside the definitions they document.
+If the docstrings are part of the API of the program but are not intended to be shown to readers, then they can be removed.
+This can be controlled globally and overridden per declaration:</p>
+                <pre># Hide all declaration docstrings
+show_docstrings = false
+
+# ...but still show these specific ones
+show_docstrings_for = ["MyLib.Core.mainFunction"]
+</pre><p>
+                  Alternatively, docstrings can be shown by default with specific exceptions hidden:</p>
+                <pre># Show all (this is the default)
+show_docstrings = true
+
+# ...but hide these
+hide_docstrings_for = ["MyLib.Internal.helper"]
+</pre><section>
+                  <h4 id="Writing-Documentation-in-Lean-with-Verso--Literate-Programming--Configuration-File-Reference--Declaration-Docstrings--Declaration-Docstrings-as-Text">
+                    8.3.8.1. Declaration Docstrings as Text<span class="permalink-widget inline"><a href="find/?domain=Verso.Genre.Manual.section&amp;name=Writing-Documentation-in-Lean-with-Verso--Literate-Programming--Configuration-File-Reference--Declaration-Docstrings--Declaration-Docstrings-as-Text" title="Permalink">🔗</a></span></h4>
+                  <p>
+                    By default, declaration docstrings render inside code boxes, visually grouped with the code.
+However, in some documents, the docstrings should be seen as part of the text.
+Setting <code>docstrings_as_text</code> causes them to render as prose text between code boxes instead, which is useful when they contain substantial prose or theorem names.</p>
+                  <pre>docstrings_as_text = true
+</pre><p>
+                    This can be scoped per module prefix via <code>[modules]</code>.</p>
+                  </section>
+                </section>
+              <section>
+                <h3 id="literate-per-module">
+                  8.3.9. Per-Module Configuration<span class="permalink-widget inline"><a href="find/?domain=Verso.Genre.Manual.section&amp;name=literate-per-module" title="Permalink">🔗</a></span></h3>
+                <p>
+                  Any top-level setting that controls content rendering can be scoped to a module prefix using <code>[modules]</code>.
+The most specific matching prefix wins.
+Unset keys inherit from the global defaults.</p>
+                <pre># Global defaults
+hide_commands = ["import", "open", "set_option"]
+show_docstrings = true
+
+# Override for the tutorial subtree
+[modules."MyLib.Tutorial"]
+hide_commands = ["import"]
+show_docstrings = false
+show_docstrings_for = ["MyLib.Tutorial.mainExample"]
+
+# Further override for a child module
+[modules."MyLib.Tutorial.Namespaces"]
+hide_commands = ["import", "set_option"]
+</pre><p>
+                  Per-module entries can also set a page title and URL slug:</p>
+                <pre>[modules."MyLib.Core.Basic"]
+title = "Getting Started"
+url = "getting-started"
+</pre><p>
+                  The full set of keys available under <code>[modules."..."]</code>:</p>
+                <dl><dt> <code>title</code></dt><dd><p>
+                      Page title and navbar label. The default value is the module's name.</p>
+                    </dd><dt> <code>url</code></dt><dd><p>
+                      URL path for this module's page. The default is derived from the module name (e.g., <code>MyLib.Data.Basic</code> is served at <code>MyLib/Data/Basic/</code>).
+  When a <code>url</code> override is set on a parent module, child modules inherit it as a prefix.
+  For example, if <code>MyLib.Data</code> has <code>url = "data-docs"</code>, then <code>MyLib.Data.Basic</code> is served at <code>data-docs/Basic/</code> rather than <code>MyLib/Data/Basic/</code>.
+  To override a child independently, give it its own <code>[modules]</code> entry.</p>
+                    </dd><dt> <code>hide_commands</code></dt><dd><p>
+                      Commands to hide in the output.</p>
+                    </dd><dt> <code>show_output</code></dt><dd><p>
+                      Commands whose output is shown.</p>
+                    </dd><dt> <code>show_imports</code></dt><dd><p>
+                      Whether to show the collapsible imports list.</p>
+                    </dd><dt> <code>show_docstrings</code></dt><dd><p>
+                      Whether to show declaration docstrings</p>
+                    </dd><dt> <code>show_docstrings_for</code></dt><dd><p>
+                      Declarations whose docstrings should be shown regardless of the <code>show_docstrings</code> setting.</p>
+                    </dd><dt> <code>hide_docstrings_for</code></dt><dd><p>
+                      Declarations whose docstrings should be hidden regardless of the <code>show_docstrings</code> setting.</p>
+                    </dd><dt> <code>docstrings_as_text</code></dt><dd><p>
+                      Wender declaration docstrings as prose text. The default is <code>false</code>, causing them to be visually grouped with the code.</p>
+                    </dd></dl><p>
+                  Module names are quoted as strings because TOML dot-separated keys would otherwise be ambiguous with config key names.</p>
+                </section>
+              <section>
+                <h3 id="literate-metadata">
+                  8.3.10. Site Metadata<span class="permalink-widget inline"><a href="find/?domain=Verso.Genre.Manual.section&amp;name=literate-metadata" title="Permalink">🔗</a></span></h3>
+                <p>
+                  Defaults are discovered from the Lake configuration.
+Override them in <code>literate.toml</code>:</p>
+                <pre>[metadata]
+title = "My Library"
+description = "A Lean library for ..."
+favicon = "images/favicon.png"
+</pre><p>
+                  No favicon is included by default.
+If <code>favicon</code> is set, the file is copied to the output directory and linked from every page.</p>
+                </section>
+              <section>
+                <h3 id="literate-theming">
+                  8.3.11. Theming<span class="permalink-widget inline"><a href="find/?domain=Verso.Genre.Manual.section&amp;name=literate-theming" title="Permalink">🔗</a></span></h3>
+                <p>
+                  CSS variables can be overridden under <code>[theme]</code>.
+Keys are the variable names without the <code>--verso-</code> prefix, with hyphens replaced by underscores:</p>
+                <pre>[theme]
+text_font_family = "Georgia, serif"
+code_font_family = "'Fira Code', monospace"
+background_color = "#fefefe"
+link_color = "#1a6b47"
+</pre><p>
+                  Dark-mode overrides are specified under <code>[theme.dark]</code>:</p>
+                <pre>[theme.dark]
+background_color = "#1a1a2e"
+link_color = "#5cb89a"
+</pre><p>
+                  Any variable not overridden retains its default value.</p>
+                </section>
+              <section>
+                <h3 id="literate-extra-assets">
+                  8.3.12. Extra CSS and JavaScript<span class="permalink-widget inline"><a href="find/?domain=Verso.Genre.Manual.section&amp;name=literate-extra-assets" title="Permalink">🔗</a></span></h3>
+                <p>
+                  Additional CSS or JavaScript files can be included.
+Paths are relative to the project root.
+CSS files are added as <code>&lt;link&gt;</code> tags and JS files as <code>&lt;script&gt;</code> tags in every page:</p>
+                <pre>extra_css = ["custom/style.css", "custom/print.css"]
+extra_js = ["custom/analytics.js"]
+</pre><p>
+                  These files are copied into the output directory and linked after the default Verso styles, so custom CSS can override any built-in rules.</p>
+                </section>
+              </section>
+            <section>
+              <h2 id="literate-deployment">
+                8.4. Deployment<span class="permalink-widget inline"><a href="find/?domain=Verso.Genre.Manual.section&amp;name=literate-deployment" title="Permalink">🔗</a></span></h2>
+              <p>
+                The site generated by <code>lake build :literateHtml</code> is a self-contained static site that can be deployed to any static hosting provider.
+Running <code>lake query :literateHtml</code> builds the HTML and prints its path; this can be combined with a deployment script.
+Verso includes tools to automate the setup of deployment to <a href="https://docs.github.com/en/pages">GitHub Pages</a>.</p>
+              <section>
+                <h3 id="Writing-Documentation-in-Lean-with-Verso--Literate-Programming--Deployment--GitHub-Pages">
+                  8.4.1. GitHub Pages<span class="permalink-widget inline"><a href="find/?domain=Verso.Genre.Manual.section&amp;name=Writing-Documentation-in-Lean-with-Verso--Literate-Programming--Deployment--GitHub-Pages" title="Permalink">🔗</a></span></h3>
+                <p>
+                  To enable deployment to GitHub Pages, run:</p>
+                <pre>lake exe verso setup-literate
+</pre><p>
+                  This generates a GitHub Actions workflow file at <code>.github/workflows/verso-literate-pages.yml</code> that automatically builds and deploys the site on every push to <code>main</code>.</p>
+                <p>
+                  After generating the workflow:</p>
+                <ol start="1">
+                  <li>
+                    <p>
+                      Go to the repository's <em>Settings → Pages → Source</em> and select <em>GitHub Actions</em>.</p>
+                    </li>
+                  <li>
+                    <p>
+                      Commit and push the generated workflow file.</p>
+                    </li>
+                  </ol>
+                <p>
+                  As usual, make sure that <code>lake-manifest.json</code> is committed to the repository.</p>
+                <p>
+                  The first build may be slow because it compiles the full Lean project.
+Subsequent builds are faster thanks to <code>.lake</code> caching.</p>
+                <p>
+                  When Verso is upgraded, <code>lake build :literateHtml</code> will warn if the workflow file is outdated.
+Re-running <code>lake exe verso setup-literate</code> updates it, saving the previous version as a <code>.bak</code> file so that any manual customizations can be merged by hand.
+</p>
+                </section>
+              </section>
+            </section>
+          <nav class="prev-next-buttons">
+            <a class="local-button active" href="Manuals-and-Books/#manual" rel="prev" title="7. Manuals and Books"><span class="arrow">←</span><span class="where">7. Manuals and Books</span></a><a class="local-button active" href="the-index/#index" rel="next" title="Index"><span class="where">Index</span><span class="arrow">→</span></a></nav>
+          </div>
+        </main></div>
+    </body>
+  </html>
+

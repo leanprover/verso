@@ -10,7 +10,7 @@
  "93":
  "<code>Functor.{u, v} (f : Type u → Type v) : Type (max (u + 1) v)</code><span class=\"sep\"></span><code class=\"docstring\">A functor in the sense used in functional programming, which means a function `f : Type u → Type v`\nhas a way of mapping a function over its contents. This `map` operator is written `&lt;$&gt;`, and\noverloaded via `Functor` instances.\n\nThis `map` function should respect identity and function composition. In other words, for all terms\n`v : f α`, it should be the case that:\n\n * `id &lt;$&gt; v = v`\n\n * For all functions `h : β → γ` and `g : α → β`, `(h ∘ g) &lt;$&gt; v = h &lt;$&gt; g &lt;$&gt; v`\n\nWhile all `Functor` instances should live up to these requirements, they are not required to _prove_\nthat they do. Proofs may be required or provided via the `LawfulFunctor` class.\n\nAssuming that instances are lawful, this definition corresponds to the category-theoretic notion of\n[functor](https://en.wikipedia.org/wiki/Functor) in the special case where the category is the\ncategory of types and functions between them.\n</code>",
  "92":
- "<code>Applicative.{u, v} (f : Type u → Type v) : Type (max (u + 1) v)</code><span class=\"sep\"></span><code class=\"docstring\">An [applicative functor](https://lean-lang.org/doc/reference/4.28.0/find/?domain=Verso.Genre.Manual.section&name=monads-and-do) is more powerful than a `Functor`, but\nless powerful than a `Monad`.\n\nApplicative functors capture sequencing of effects with the `&lt;*&gt;` operator, overloaded as `seq`, but\nnot data-dependent effects. The results of earlier computations cannot be used to control later\neffects.\n\nApplicative functors should satisfy four laws. Instances of `Applicative` are not required to prove\nthat they satisfy these laws, which are part of the `LawfulApplicative` class.\n</code>",
+ "<code>Applicative.{u, v} (f : Type u → Type v) : Type (max (u + 1) v)</code><span class=\"sep\"></span><code class=\"docstring\">An [applicative functor](https://lean-lang.org/doc/reference/4.29.0/find/?domain=Verso.Genre.Manual.section&name=monads-and-do) is more powerful than a `Functor`, but\nless powerful than a `Monad`.\n\nApplicative functors capture sequencing of effects with the `&lt;*&gt;` operator, overloaded as `seq`, but\nnot data-dependent effects. The results of earlier computations cannot be used to control later\neffects.\n\nApplicative functors should satisfy four laws. Instances of `Applicative` are not required to prove\nthat they satisfy these laws, which are part of the `LawfulApplicative` class.\n</code>",
  "91":
  "<code>ArgParse.ValDesc m α</code><span class=\"sep\"></span><code class=\"docstring\">A canonical way to convert a Verso argument into a given type.\n</code>",
  "90":
@@ -123,159 +123,163 @@
  "<code>[MonadReader g.TraverseContext m] → [MonadState g.TraverseState m] → Doc.Block g → m Unit</code><span class=\"sep\"></span><code class=\"docstring\">The effects carried out before traversing a `Block`\\.\n  </code>",
  "32":
  "<code>Verso.Doc.Genre.PartMetadata (self : Doc.Genre) : Type</code><span class=\"sep\"></span><code class=\"docstring\">The metadata that may be associated with each `Part` \\(e\\.g\\. author, publication date,\n  cross\\-referencing identifier\\)\\.\n  </code>",
- "313":
+ "315":
  "<code>Verso.Doc.Elab.BlockCommandOf.{u_1} (α : Sort u_1) : Sort (max 1 u_1)</code>",
- "312":
+ "314":
  "<code>Verso.Genre.Manual.licenseInfo : Elab.BlockCommandOf Unit</code><span class=\"sep\"></span><code class=\"docstring\">Displays the open-source licenses of components used to build the document.\n</code>",
- "311":
+ "313":
  "<code>Array (Option String × String)</code><span class=\"sep\"></span><code class=\"docstring\">The license or notice text in plain text, divided into sections with optional headers.\n</code>",
- "310":
+ "312":
  "<code>Option String</code><span class=\"sep\"></span><code class=\"docstring\">A link target used to credit the dependency's author </code>",
+ "311":
+ "<code>Option String</code><span class=\"sep\"></span><code class=\"docstring\">How is the dependency used? This can give better credit.\n\nExamples:\n* \"The display of mathematical formulae is powered by KaTeX.\"\n* \"The graphs are rendered using Chart.js.\"\n</code>",
+ "310":
+ "<code>String</code><span class=\"sep\"></span><code class=\"docstring\">Dependency name. This is used in a header, and for alphabetical sorting. </code>",
  "31":
  "<code>Option.{u} (α : Type u) : Type u</code><span class=\"sep\"></span><code class=\"docstring\">Optional values, which are either `some` around a value from the underlying type or `none`.\n\n`Option` can represent nullable types or computations that might fail. In the codomain of a function\ntype, it can also represent partiality.\n</code>",
  "309":
- "<code>Option String</code><span class=\"sep\"></span><code class=\"docstring\">How is the dependency used? This can give better credit.\n\nExamples:\n* \"The display of mathematical formulae is powered by KaTeX.\"\n* \"The graphs are rendered using Chart.js.\"\n</code>",
- "308":
- "<code>String</code><span class=\"sep\"></span><code class=\"docstring\">Dependency name. This is used in a header, and for alphabetical sorting. </code>",
- "307":
  "<code>String</code><span class=\"sep\"></span><code class=\"docstring\">SPDX license identifier </code>",
- "306":
+ "308":
  "<code>Verso.Genre.Manual.LicenseInfo.mk (identifier dependency : String) (howUsed link : Option String)\n  (text : Array (Option String × String)) : LicenseInfo</code>",
- "305":
+ "307":
  "<code>Verso.Genre.Manual.HtmlAssets.licenseInfo (self : HtmlAssets) : Std.HashSet LicenseInfo</code><span class=\"sep\"></span><code class=\"docstring\">Open\\-source licenses, to be collected for display in the final document\\. </code>",
- "304": "<code>Verso.Genre.Manual.TechArgs : Type</code>",
- "303":
+ "306": "<code>Verso.Genre.Manual.TechArgs : Type</code>",
+ "305":
  "<code>Verso.Genre.Manual.deftech : Elab.RoleExpanderOf DefTechArgs</code><span class=\"sep\"></span><code class=\"docstring\">Defines a technical term.\n\nInternally, these definitions are saved according to a key that is derived by stripping formatting\ninformation from the arguments in `args`, and then normalizing the resulting string by:\n\n 1. lowercasing it\n 2. replacing trailing `\"ies\"` with `\"y\"`\n 3. replacing consecutive runs of whitespace and/or hyphens with a single space\n\nCall with `(normalize := false)` to disable normalization, and `(key := some k)` to use `k` instead\nof the automatically-derived key.\n\nUses of `tech` use the same process to derive a key, and the key is matched against the `deftech` table.\n</code>",
- "302":
+ "304":
  "<code>Verso.Genre.Manual.tech : Elab.RoleExpanderOf TechArgs</code><span class=\"sep\"></span><code class=\"docstring\">Emits a reference to a technical term defined with `deftech.`\n\nInternally, these terms are found according to a key that is derived by stripping formatting\ninformation from the arguments in `args`, and then normalizing the resulting string by:\n\n 1. lowercasing it\n 2. replacing trailing `\"ies\"` with `\"y\"`\n 3. replacing consecutive runs of whitespace and/or hyphens with a single space\n\nCall with `(normalize := false)` to disable normalization, and `(key := some k)` to use `k` instead\nof the automatically-derived key.\n</code>",
- "301": "<code><span class=\"literal string\">\"y\"</span> : String</code>",
- "300": "<code><span class=\"literal string\">\"ies\"</span> : String</code>",
+ "303": "<code><span class=\"literal string\">\"y\"</span> : String</code>",
+ "302": "<code><span class=\"literal string\">\"ies\"</span> : String</code>",
+ "301": "<code>Verso.Genre.Manual.DefTechArgs : Type</code>",
+ "300":
+ "<code>Verso.Doc.Elab.RoleExpanderOf.{u_1} (α : Sort u_1) : Sort (max 1 u_1)</code>",
  "30":
- "<code>MonadState.{u, v} (σ : outParam (Type u)) (m : Type u → Type v) : Type (max (u + 1) v)</code><span class=\"sep\"></span><code class=\"docstring\">State monads provide a value of a given type (the _state_) that can be retrieved or replaced.\nInstances may implement these operations by passing state values around, by using a mutable\nreference cell (e.g. `ST.Ref σ`), or in other ways.\n\nIn this class, `σ` is an `outParam`, which means that it is inferred from `m`. `MonadStateOf σ`\nprovides the same operations, but allows `σ` to influence instance synthesis.\n\nThe mutable state of a state monad is visible between multiple `do`-blocks or functions, unlike\n[local mutable state](https://lean-lang.org/doc/reference/4.28.0/find/?domain=Verso.Genre.Manual.section&name=do-notation-let-mut) in `do`-notation.\n</code>",
+ "<code>MonadState.{u, v} (σ : outParam (Type u)) (m : Type u → Type v) : Type (max (u + 1) v)</code><span class=\"sep\"></span><code class=\"docstring\">State monads provide a value of a given type (the _state_) that can be retrieved or replaced.\nInstances may implement these operations by passing state values around, by using a mutable\nreference cell (e.g. `ST.Ref σ`), or in other ways.\n\nIn this class, `σ` is an `outParam`, which means that it is inferred from `m`. `MonadStateOf σ`\nprovides the same operations, but allows `σ` to influence instance synthesis.\n\nThe mutable state of a state monad is visible between multiple `do`-blocks or functions, unlike\n[local mutable state](https://lean-lang.org/doc/reference/4.29.0/find/?domain=Verso.Genre.Manual.section&name=do-notation-let-mut) in `do`-notation.\n</code>",
  "3":
  "<code>Type</code><span class=\"sep\"></span><code class=\"docstring\">The metadata that may be associated with each `Part` \\(e\\.g\\. author, publication date,\n  cross\\-referencing identifier\\)\\.\n  </code>",
- "299": "<code>Verso.Genre.Manual.DefTechArgs : Type</code>",
- "298":
- "<code>Verso.Doc.Elab.RoleExpanderOf.{u_1} (α : Sort u_1) : Sort (max 1 u_1)</code>",
- "297":
+ "299":
  "<code>pp.deepTerms</code><span class=\"sep\"></span><code class=\"docstring\">(pretty printer) display deeply nested terms, replacing them with `⋯` if set to false</code>",
- "296": "<code>?m.27</code>",
- "295": "<code>sorry → sorry</code>",
- "294":
+ "298": "<code>?m.27</code>",
+ "297": "<code>sorry → sorry</code>",
+ "296":
  "<code class=\"docstring\">Assuming `x` is a variable in the local context with an inductive type,\n`induction x` applies induction on `x` to the main goal,\nproducing one goal for each constructor of the inductive type,\nin which the target is replaced by a general instance of that constructor\nand an inductive hypothesis is added for each recursive argument to the constructor.\nIf the type of an element in the local context depends on `x`,\nthat element is reverted and reintroduced afterward,\nso that the inductive hypothesis incorporates that hypothesis as well.\n\nFor example, given `n : Nat` and a goal with a hypothesis `h : P n` and target `Q n`,\n`induction n` produces one goal with hypothesis `h : P 0` and target `Q 0`,\nand one goal with hypotheses `h : P (Nat.succ a)` and `ih₁ : P a → Q a` and target `Q (Nat.succ a)`.\nHere the names `a` and `ih₁` are chosen automatically and are not accessible.\nYou can use `with` to provide the variables names for each constructor.\n- `induction e`, where `e` is an expression instead of a variable,\n  generalizes `e` in the goal, and then performs induction on the resulting variable.\n- `induction e using r` allows the user to specify the principle of induction that should be used.\n  Here `r` should be a term whose result type must be of the form `C t`,\n  where `C` is a bound variable and `t` is a (possibly empty) sequence of bound variables\n- `induction e generalizing z₁ ... zₙ`, where `z₁ ... zₙ` are variables in the local context,\n  generalizes over `z₁ ... zₙ` before applying the induction but then introduces them in each goal.\n  In other words, the net effect is that each inductive hypothesis is generalized.\n- Given `x : Nat`, `induction x with | zero =&gt; tac₁ | succ x' ih =&gt; tac₂`\n  uses tactic `tac₁` for the `zero` case, and `tac₂` for the `succ` case.\n</code>",
- "293":
+ "295":
  "<code>Verso.Genre.Manual.optionDocs : Elab.BlockCommandOf optionDocs.Args</code>",
- "292":
+ "294":
  "<code>Verso.Genre.Manual.tactic : Elab.DirectiveExpanderOf TacticDocsOptions</code>",
- "291":
+ "293":
  "<code>Verso.Genre.Manual.docstring : Elab.BlockCommandOf DocstringConfig</code>",
- "290":
+ "292":
  "<code>List.forA.{u, v, w} {m : Type u → Type v} [Applicative m] {α : Type w} («as» : List α) (f : α → m PUnit) : m PUnit</code><span class=\"sep\"></span><code class=\"docstring\">Applies the applicative action `f` to every element in the list, in order.\n\nIf `m` is also a `Monad`, then using `List.forM` can be more efficient.\n\n`List.mapA` is a variant that collects results.\n</code>",
+ "291":
+ "<code>List.mapM.{u, v, w} {m : Type u → Type v} [Monad m] {α : Type w} {β : Type u} (f : α → m β) («as» : List α) : m (List β)</code><span class=\"sep\"></span><code class=\"docstring\">Applies the monadic action `f` to every element in the list, left-to-right, and returns the list of\nresults.\n\nThis implementation is tail recursive. `List.mapM'` is a non-tail-recursive variant that may be\nmore convenient to reason about. `List.forM` is the variant that discards the results and\n`List.mapA` is the variant that works with `Applicative`.\n</code>",
+ "290":
+ "<code>PUnit.{u} : Sort u</code><span class=\"sep\"></span><code class=\"docstring\">The canonical universe-polymorphic type with just one element.\n\nIt should be used in contexts that require a type to be universe polymorphic, thus disallowing\n`Unit`.\n</code>",
  "29":
  "<code>MonadReader.{u, v} (ρ : outParam (Type u)) (m : Type u → Type v) : Type v</code><span class=\"sep\"></span><code class=\"docstring\">Reader monads provide the ability to implicitly thread a value through a computation. The value can\nbe read, but not written. A `MonadWithReader ρ` instance additionally allows the value to be locally\noverridden for a sub-computation.\n\nIn this class, `ρ` is an `outParam`, which means that it is inferred from `m`. `MonadReaderOf ρ`\nprovides the same operations, but allows `ρ` to influence instance synthesis.\n</code>",
- "289":
- "<code>List.mapM.{u, v, w} {m : Type u → Type v} [Monad m] {α : Type w} {β : Type u} (f : α → m β) («as» : List α) : m (List β)</code><span class=\"sep\"></span><code class=\"docstring\">Applies the monadic action `f` to every element in the list, left-to-right, and returns the list of\nresults.\n\nThis implementation is tail recursive. `List.mapM'` is a non-tail-recursive variant that may be\nmore convenient to reason about. `List.forM` is the variant that discards the results and\n`List.mapA` is the variant that works with `Applicative`.\n</code>",
- "288":
- "<code>PUnit.{u} : Sort u</code><span class=\"sep\"></span><code class=\"docstring\">The canonical universe-polymorphic type with just one element.\n\nIt should be used in contexts that require a type to be universe polymorphic, thus disallowing\n`Unit`.\n</code>",
- "287": "<code>α → m PUnit</code>",
- "286": "<code>List α</code>",
- "285": "<code>Type w</code>",
- "284": "<code>Type u → Type v</code>",
- "283":
+ "289": "<code>α → m PUnit</code>",
+ "288": "<code>List α</code>",
+ "287": "<code>Type w</code>",
+ "286": "<code>Type u → Type v</code>",
+ "285":
  "<code>Verso.Genre.Manual.paragraph : Elab.DirectiveExpanderOf Unit</code><span class=\"sep\"></span><code class=\"docstring\">Indicates that all the block-level elements contained within the directive are a single logical\nparagraph. In HTML output, they are rendered with less space between them, and LaTeX renders them as\na single paragraph (e.g. without extraneous indentation).\n</code>",
- "282": "<code>HtmlAssets</code>",
- "281":
+ "284": "<code>HtmlAssets</code>",
+ "283":
  "<code>Verso.Genre.Manual.HtmlAssets.combine (assets moreAssets : HtmlAssets) : HtmlAssets</code><span class=\"sep\"></span><code class=\"docstring\">Combines two sets of HTML assets\\.\n\nIf `moreAssets` contains named file assets whose names conflict with those in `assets`,\nthen the version in `assets` is used\\.\n</code>",
- "280":
+ "282":
  "<code>Std.HashSet LicenseInfo</code><span class=\"sep\"></span><code class=\"docstring\">Open\\-source licenses, to be collected for display in the final document\\. </code>",
+ "281":
+ "<code>Std.HashSet DataFile</code><span class=\"sep\"></span><code class=\"docstring\">Extra files to be placed in the Verso data directory </code>",
+ "280":
+ "<code>Std.HashSet CssFile</code><span class=\"sep\"></span><code class=\"docstring\">Extra CSS to be written to the filesystem in the Verso data directory and loaded by each `&lt;head&gt;` </code>",
  "28":
  "<code>[MonadReader g.TraverseContext m] → [MonadState g.TraverseState m] → Doc.Part g → m (Option g.PartMetadata)</code><span class=\"sep\"></span><code class=\"docstring\">The effects carried out before traversing a `Part`\\.\n  </code>",
  "279":
- "<code>Std.HashSet DataFile</code><span class=\"sep\"></span><code class=\"docstring\">Extra files to be placed in the Verso data directory </code>",
- "278":
- "<code>Std.HashSet CssFile</code><span class=\"sep\"></span><code class=\"docstring\">Extra CSS to be written to the filesystem in the Verso data directory and loaded by each `&lt;head&gt;` </code>",
- "277":
  "<code>Std.HashSet JsFile</code><span class=\"sep\"></span><code class=\"docstring\">Extra JS to be written to the filesystem in the Verso data directory and loaded by each `&lt;head&gt;` </code>",
- "276":
+ "278":
  "<code>Std.HashSet JS</code><span class=\"sep\"></span><code class=\"docstring\">Extra JS to be included inline into every `&lt;head&gt;` via `&lt;script&gt;` tags </code>",
- "275":
+ "277":
  "<code>Std.HashSet CSS</code><span class=\"sep\"></span><code class=\"docstring\">Extra CSS to be included inline into every `&lt;head&gt;` via `&lt;style&gt;` tags </code>",
+ "276":
+ "<code>HtmlFeatures</code><span class=\"sep\"></span><code class=\"docstring\">Which bundled features should be included? </code>",
+ "275":
+ "<code>Verso.Genre.Manual.HtmlAssets.mk (features : HtmlFeatures) (extraCss : Std.HashSet CSS) (extraJs : Std.HashSet JS)\n  (extraJsFiles : Std.HashSet JsFile) (extraCssFiles : Std.HashSet CssFile) (extraDataFiles : Std.HashSet DataFile)\n  (licenseInfo : Std.HashSet LicenseInfo) : HtmlAssets</code>",
  "274":
- "<code>Verso.Genre.Manual.HtmlAssets.mk (extraCss : Std.HashSet CSS) (extraJs : Std.HashSet JS)\n  (extraJsFiles : Std.HashSet JsFile) (extraCssFiles : Std.HashSet CssFile) (extraDataFiles : Std.HashSet DataFile)\n  (licenseInfo : Std.HashSet LicenseInfo) : HtmlAssets</code>",
- "273":
  "<code>Verso.Genre.Manual.InlineDescr : Type</code><span class=\"sep\"></span><code class=\"docstring\">Implementations of all the operations needed to use an inline element. </code>",
- "272":
+ "273":
  "<code>Verso.Genre.Manual.BlockDescr : Type</code><span class=\"sep\"></span><code class=\"docstring\">Implementations of all the operations needed to use a block.\n</code>",
- "271":
+ "272":
  "<code>Verso.Genre.Manual.manualMain (text : Part Manual) (extensionImpls : ExtensionImpls := by exact extension_impls%)\n  (options : List String) (config : RenderConfig := { }) (extraSteps : List ExtraStep := []) : IO UInt32</code>",
- "270":
+ "271":
  "<code>Verso.Genre.Manual.InlineToTeX (genre : Genre) (m : Type → Type) : Type</code>",
+ "270":
+ "<code>Option (InlineToTeX Manual (ReaderT ExtensionImpls IO))</code><span class=\"sep\"></span><code class=\"docstring\">How to generate TeX. If `none`, generating TeX from a document that contains this inline will fail. </code>",
  "27":
  "<code>Verso.Doc.Traverse.mk {g : Doc.Genre} {m : outParam (Type → Type)}\n  (part : [MonadReader g.TraverseContext m] → [MonadState g.TraverseState m] → Doc.Part g → m (Option g.PartMetadata))\n  (block : [MonadReader g.TraverseContext m] → [MonadState g.TraverseState m] → Doc.Block g → m Unit)\n  (inline : [MonadReader g.TraverseContext m] → [MonadState g.TraverseState m] → Doc.Inline g → m Unit)\n  (genrePart :\n    [MonadReader g.TraverseContext m] →\n      [MonadState g.TraverseState m] → g.PartMetadata → Doc.Part g → m (Option (Doc.Part g)))\n  (genreBlock :\n    [MonadReader g.TraverseContext m] →\n      [MonadState g.TraverseState m] → g.Block → Array (Doc.Block g) → m (Option (Doc.Block g)))\n  (genreInline :\n    [MonadReader g.TraverseContext m] →\n      [MonadState g.TraverseState m] → g.Inline → Array (Doc.Inline g) → m (Option (Doc.Inline g))) :\n  Doc.Traverse g m</code>",
  "269":
- "<code>Option (InlineToTeX Manual (ReaderT ExtensionImpls IO))</code><span class=\"sep\"></span><code class=\"docstring\">How to generate TeX. If `none`, generating TeX from a document that contains this inline will fail. </code>",
- "268":
  "<code>Verso.Doc.Inline (genre : Genre) : Type</code><span class=\"sep\"></span><code class=\"docstring\">Inline content that is part of the text flow.\n</code>",
- "267":
+ "268":
  "<code>InternalId → Lean.Json → Array (Doc.Inline Manual) → Except String (Array (String × Output.Html))</code><span class=\"sep\"></span><code class=\"docstring\">Should this inline be an entry in the page-local ToC? If so, how should it be represented?\n\nEntries should be returned as a preference-ordered array of representations. Each representation\nconsists of a string and some HTML; the string should represent the HTML's content if all\nformatting were stripped. Items are compared for string equality, with later suggestions used in\ncase of overlap, but the HTML is what's displayed.\n\nThe empty array means that the inline should not be included.\n</code>",
- "266":
+ "267":
  "<code>Verso.Genre.Manual.InlineToHtml (genre : Genre) (m : Type → Type) : Type</code>",
- "265":
+ "266":
  "<code>Option (InlineToHtml Manual (ReaderT Multi.AllRemotes (ReaderT ExtensionImpls IO)))</code><span class=\"sep\"></span><code class=\"docstring\">How to generate HTML. If `none`, generating HTML from a document that contains this inline will fail.\n</code>",
- "264":
+ "265":
  "<code>Verso.Genre.Manual.InlineTraversal (genre : Genre) : Type</code>",
- "263":
+ "264":
  "<code>InlineTraversal Manual</code><span class=\"sep\"></span><code class=\"docstring\">Given the contents of the `data` field of the corresponding `Manual.Inline` and the contained\ninline elements, carry out the traversal pass.\n\nIn addition to updating the cross-reference state through the available monadic effects, a\ntraversal may additionally replace the element with another one. This can be used to e.g. emit\na cross-reference once the target becomes available in the state. To replace the element,\nreturn `some`. To leave it as is, return `none`.\n</code>",
- "262":
+ "263":
  "<code>Verso.Genre.Manual.InlineDescr.mk (toHtmlAssets : HtmlAssets) (init : TraverseState → TraverseState)\n  (traverse : InlineTraversal Manual)\n  (toHtml : Option (InlineToHtml Manual (ReaderT Multi.AllRemotes (ReaderT ExtensionImpls IO))))\n  (localContentItem : InternalId → Lean.Json → Array (Doc.Inline Manual) → Except String (Array (String × Output.Html)))\n  (toTeX : Option (InlineToTeX Manual (ReaderT ExtensionImpls IO))) (usePackages preamble : List String) : InlineDescr</code>",
- "261":
+ "262":
  "<code>List String</code><span class=\"sep\"></span><code class=\"docstring\">Required items in the TeX preamble </code>",
- "260":
+ "261":
  "<code>List String</code><span class=\"sep\"></span><code class=\"docstring\">Required TeX `\\usepackage` lines </code>",
+ "260":
+ "<code>Verso.Genre.Manual.BlockToTeX (genre : Genre) (m : Type → Type) : Type</code>",
  "26":
  "<code>Verso.Genre.Manual.Inline : Type</code><span class=\"sep\"></span><code class=\"docstring\">A custom inline. The `name` field should correspond to an entry in the block descriptions table.\n</code>",
  "259":
- "<code>Verso.Genre.Manual.BlockToTeX (genre : Genre) (m : Type → Type) : Type</code>",
- "258":
  "<code>Option (BlockToTeX Manual (ReaderT ExtensionImpls IO))</code><span class=\"sep\"></span><code class=\"docstring\">How to generate TeX. If `none`, generating TeX from a document that contains this block will fail. </code>",
- "257":
+ "258":
  "<code>Except.{u, v} (ε : Type u) (α : Type v) : Type (max u v)</code><span class=\"sep\"></span><code class=\"docstring\">`Except ε α` is a type which represents either an error of type `ε` or a successful result with a\nvalue of type `α`.\n\n`Except ε : Type u → Type v` is a `Monad` that represents computations that may throw exceptions:\nthe `pure` operation is `Except.ok` and the `bind` operation returns the first encountered\n`Except.error`.\n</code>",
- "256":
+ "257":
  "<code>Verso.Doc.Block (genre : Genre) : Type</code><span class=\"sep\"></span><code class=\"docstring\">Block-level content in a document.\n</code>",
- "255":
+ "256":
  "<code>InternalId → Lean.Json → Array (Doc.Block Manual) → Except String (Array (String × Output.Html))</code><span class=\"sep\"></span><code class=\"docstring\">Should this block be an entry in the page-local ToC? If so, how should it be represented?\n\nEntries should be returned as a preference-ordered array of representations. Each representation\nconsists of a string and some HTML; the string should represent the HTML's content if all\nformatting were stripped. Items are compared for string equality, with later suggestions used in\ncase of overlap, but the HTML is what's displayed. Exceptions are logged as errors during HTML\ngeneration.\n\nThe empty array means that the block should not be included.\n</code>",
- "254": "<code>Verso.Genre.Manual.ExtensionImpls : Type</code>",
- "253":
+ "255": "<code>Verso.Genre.Manual.ExtensionImpls : Type</code>",
+ "254":
  "<code>Verso.Multi.AllRemotes : Type</code><span class=\"sep\"></span><code class=\"docstring\">All remote data that was loaded\\.\n</code>",
- "252":
+ "253":
  "<code>ReaderT.{u, v} (ρ : Type u) (m : Type u → Type v) (α : Type u) : Type (max u v)</code><span class=\"sep\"></span><code class=\"docstring\">Adds the ability to access a read-only value of type `ρ` to a monad. The value can be locally\noverridden by `withReader`, but it cannot be mutated.\n\nActions in the resulting monad are functions that take the local value as a parameter, returning\nordinary actions in `m`.\n</code>",
- "251":
+ "252":
  "<code>Verso.Genre.Manual.BlockToHtml (genre : Genre) (m : Type → Type) : Type</code>",
- "250":
+ "251":
  "<code>Option (BlockToHtml Manual (ReaderT Multi.AllRemotes (ReaderT ExtensionImpls IO)))</code><span class=\"sep\"></span><code class=\"docstring\">How to generate HTML. If `none`, generating HTML from a document that contains this block will fail.\n</code>",
+ "250": "<code>Verso.Genre.Manual.BlockTraversal (genre : Genre) : Type</code>",
  "25":
  "<code>Verso.Genre.Manual.Block : Type</code><span class=\"sep\"></span><code class=\"docstring\">A custom block. The `name` field should correspond to an entry in the block descriptions table.\n</code>",
- "249": "<code>Verso.Genre.Manual.BlockTraversal (genre : Genre) : Type</code>",
- "248":
+ "249":
  "<code>BlockTraversal Manual</code><span class=\"sep\"></span><code class=\"docstring\">How the traversal phase should process this block </code>",
- "247": "<code>Verso.Genre.Manual.TraverseState : Type</code>",
- "246":
+ "248": "<code>Verso.Genre.Manual.TraverseState : Type</code>",
+ "247":
  "<code>TraverseState → TraverseState</code><span class=\"sep\"></span><code class=\"docstring\">All registered initializers are called in the state prior to the first traversal. </code>",
- "245":
+ "246":
  "<code>Verso.Genre.Manual.LicenseInfo : Type</code><span class=\"sep\"></span><code class=\"docstring\">A description of an open-source license used by a frontend component that's included in\ngenerated HTML. This is used to create an attribution page.\n</code>",
- "244": "<code>Verso.Genre.Manual.DataFile : Type</code>",
- "243":
+ "245": "<code>Verso.Genre.Manual.DataFile : Type</code>",
+ "244":
  "<code>Verso.Genre.Manual.CssFile : Type</code><span class=\"sep\"></span><code class=\"docstring\">An extra CSS file to be emitted and added to the page.\n</code>",
- "242":
+ "243":
  "<code>Verso.Genre.Manual.JsFile : Type</code><span class=\"sep\"></span><code class=\"docstring\">An extra JS file to be emitted and added to the page.\n</code>",
- "241":
+ "242":
  "<code>Verso.Genre.Manual.JS : Type</code><span class=\"sep\"></span><code class=\"docstring\">JavaScript code\\.\n</code>",
- "240":
+ "241":
  "<code>Verso.Genre.Manual.CSS : Type</code><span class=\"sep\"></span><code class=\"docstring\">Cascading Stylesheet code\\.\n</code>",
+ "240":
+ "<code>Std.HashSet.{u} (α : Type u) [BEq α] [Hashable α] : Type u</code><span class=\"sep\"></span><code class=\"docstring\">Hash sets.\n\nThis is a simple separate-chaining hash table. The data of the hash set consists of a cached size\nand an array of buckets, where each bucket is a linked list of keys. The number of buckets\nis always a power of two. The hash set doubles its size upon inserting an element such that the\nnumber of elements is more than 75% of the number of buckets.\n\nThe hash table is backed by an `Array`. Users should make sure that the hash set is used linearly to\navoid expensive copies.\n\nThe hash set uses `==` (provided by the `BEq` typeclass) to compare elements and `hash` (provided by\nthe `Hashable` typeclass) to hash them. To ensure that the operations behave as expected, `==`\nshould be an equivalence relation and `a == b` should imply `hash a = hash b` (see also the\n`EquivBEq` and `LawfulHashable` typeclasses). Both of these conditions are automatic if the BEq\ninstance is lawful, i.e., if `a == b` implies `a = b`.\n\nThese hash sets contain a bundled well-formedness invariant, which means that they cannot\nbe used in nested inductive types. For these use cases, `Std.Data.HashSet.Raw` and\n`Std.Data.HashSet.Raw.WF` unbundle the invariant from the hash set. When in doubt, prefer\n`HashSet` over `HashSet.Raw`.\n</code>",
  "24":
  "<code>MonadWithReader.withReader.{u, v} {ρ : outParam (Type u)} {m : Type u → Type v} [self : MonadWithReader ρ m]\n  {α : Type u} (f : ρ → ρ) (x : m α) : m α</code><span class=\"sep\"></span><code class=\"docstring\">Locally modifies the reader monad's value while running an action.\n\nDuring the inner action `x`, reading the value returns `f` applied to the original value. After\ncontrol returns from `x`, the reader monad's value is restored.\n</code>",
  "239":
- "<code>Std.HashSet.{u} (α : Type u) [BEq α] [Hashable α] : Type u</code><span class=\"sep\"></span><code class=\"docstring\">Hash sets.\n\nThis is a simple separate-chaining hash table. The data of the hash set consists of a cached size\nand an array of buckets, where each bucket is a linked list of keys. The number of buckets\nis always a power of two. The hash set doubles its size upon inserting an element such that the\nnumber of elements is more than 75% of the number of buckets.\n\nThe hash table is backed by an `Array`. Users should make sure that the hash set is used linearly to\navoid expensive copies.\n\nThe hash set uses `==` (provided by the `BEq` typeclass) to compare elements and `hash` (provided by\nthe `Hashable` typeclass) to hash them. To ensure that the operations behave as expected, `==`\nshould be an equivalence relation and `a == b` should imply `hash a = hash b` (see also the\n`EquivBEq` and `LawfulHashable` typeclasses). Both of these conditions are automatic if the BEq\ninstance is lawful, i.e., if `a == b` implies `a = b`.\n\nThese hash sets contain a bundled well-formedness invariant, which means that they cannot\nbe used in nested inductive types. For these use cases, `Std.Data.HashSet.Raw` and\n`Std.Data.HashSet.Raw.WF` unbundle the invariant from the hash set. When in doubt, prefer\n`HashSet` over `HashSet.Raw`.\n</code>",
+ "<code>Verso.Genre.Manual.HtmlFeatures : Type</code><span class=\"sep\"></span><code class=\"docstring\">A set of HTML features\\.\n</code>",
  "238":
  "<code>Verso.Genre.Manual.HtmlAssets : Type</code><span class=\"sep\"></span><code class=\"docstring\">A collection of HTML assets that can be initialized in the manual configuration and enlarged by\ncustom elements during traversal\\.\n</code>",
  "237":
@@ -524,7 +528,7 @@
  "105":
  "<code>optParam (Bool → String → m (Option Html)) fun x x_1 =&gt; pure none</code>",
  "104":
- "<code>Monad.{u, v} (m : Type u → Type v) : Type (max (u + 1) v)</code><span class=\"sep\"></span><code class=\"docstring\">[Monads](https://en.wikipedia.org/wiki/Monad_(functional_programming)) are an abstraction of\nsequential control flow and side effects used in functional programming. Monads allow both\nsequencing of effects and data-dependent effects: the values that result from an early step may\ninfluence the effects carried out in a later step.\n\nThe `Monad` API may be used directly. However, it is most commonly accessed through\n[`do`-notation](https://lean-lang.org/doc/reference/4.28.0/find/?domain=Verso.Genre.Manual.section&name=do-notation).\n\nMost `Monad` instances provide implementations of `pure` and `bind`, and use default implementations\nfor the other methods inherited from `Applicative`. Monads should satisfy certain laws, but\ninstances are not required to prove this. An instance of `LawfulMonad` expresses that a given\nmonad's operations are lawful.\n</code>",
+ "<code>Monad.{u, v} (m : Type u → Type v) : Type (max (u + 1) v)</code><span class=\"sep\"></span><code class=\"docstring\">[Monads](https://en.wikipedia.org/wiki/Monad_(functional_programming)) are an abstraction of\nsequential control flow and side effects used in functional programming. Monads allow both\nsequencing of effects and data-dependent effects: the values that result from an early step may\ninfluence the effects carried out in a later step.\n\nThe `Monad` API may be used directly. However, it is most commonly accessed through\n[`do`-notation](https://lean-lang.org/doc/reference/4.29.0/find/?domain=Verso.Genre.Manual.section&name=do-notation).\n\nMost `Monad` instances provide implementations of `pure` and `bind`, and use default implementations\nfor the other methods inherited from `Applicative`. Monads should satisfy certain laws, but\ninstances are not required to prove this. An instance of `LawfulMonad` expresses that a given\nmonad's operations are lawful.\n</code>",
  "103": "<code>Type → Type u_1</code>",
  "102": "<code>List Html</code>",
  "101":
