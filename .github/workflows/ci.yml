@@ -127,20 +127,23 @@ jobs:
                   cp README-html.md html-multi/README.md
                   zip -r html-manual.zip html-multi
 
-            - name: Install TypeScript
-              run: |
-                  sudo apt update && sudo apt install node-typescript
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: "lts/*"
+                  cache: npm
+
+            - run: npm ci
 
             - name: Type check the search bar code
               run: |
                   pushd _out/html-multi/-verso-search
-                  tsc --noEmit -p jsconfig.json
+                  npx tsc --noEmit -p jsconfig.json
                   popd
 
             - name: Type check the xref redirect JS code
               run: |
                   pushd static-web
-                  tsc --noEmit -p jsconfig.json
+                  npx tsc --noEmit -p jsconfig.json
                   popd
 
             - name: Generate the demo site and make sure page_link works
