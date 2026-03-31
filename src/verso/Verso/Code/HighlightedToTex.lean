@@ -123,6 +123,7 @@ partial def messageContentsToVerbatimTeX [Monad m] [GenreTeX g m] (h : Highlight
       let contentsM := mcs.map messageContentsToVerbatimTeX
       let contents ← contentsM.mapM id
       pure (.seq contents)
+  | .widget _hash _props alt => messageContentsToVerbatimTeX alt expandTraces
 
 public defmethod Highlighted.Message.toTeX [Monad m] [GenreTeX g m] (h : Highlighted.Message) (expandTraces : List Lean.Name := []) : TeXT g m Verso.Output.TeX := do
   let {severity, contents} := h

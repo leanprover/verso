@@ -485,7 +485,7 @@ private meta def severityHint (wanted : String) (stx : Syntax) : DocElabM Messag
 
 open SubVerso.Highlighting Highlighted in
 private meta partial def findTrace? (header : String) : MessageContents Highlighted → Option (MessageContents Highlighted)
-  | .text .. | .term .. | .goal .. => none
+  | .text .. | .term .. | .goal .. | .widget .. => none
   | .append xs =>
     xs.findSome? (findTrace? header)
   | t@(.trace _ msg chs _) =>

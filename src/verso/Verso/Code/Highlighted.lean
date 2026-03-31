@@ -562,6 +562,17 @@ public partial defmethod Highlighted.MessageContents.toHtml (expandTraces : List
       }}
 
   | .goal g => g.toHtml exprHtml 0
+  | .widget hash props alt => do
+    let altHtml ← alt.toHtml expandTraces maxTraceDepth exprHtml
+    -- Render the alt text as fallback; embed widget data for future JS-based rendering.
+    -- When @leanprover/infoview shim is available, JS can hydrate these containers.
+    return {{
+      <span class="widget-message"
+            "data-widget-hash"={{toString hash}}
+            "data-widget-props"={{props}}>
+        {{altHtml}}
+      </span>
+    }}
 
 
 def spanClass (infos : Array (Highlighted.Span.Kind × α)) : Option String := Id.run do
