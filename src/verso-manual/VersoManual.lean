@@ -42,7 +42,6 @@ import VersoManual.Literate
 import VersoManual.Marginalia
 import VersoManual.Bibliography
 import VersoManual.Table
-import VersoManual.Figure
 
 open Lean (Name NameMap Json ToJson FromJson quote)
 
