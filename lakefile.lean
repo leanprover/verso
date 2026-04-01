@@ -61,7 +61,7 @@ lean_lib VersoTutorial where
 
 @[default_target]
 lean_exe «verso» where
-  root := `Main
+  root := `VersoMain
   srcDir := "src/cli"
   supportInterpreter := true
 
@@ -72,7 +72,7 @@ lean_lib VersoLiterate where
 
 @[default_target]
 lean_exe «verso-literate» where
-  root := `Main
+  root := `VersoLiterateMain
   srcDir := "src/verso-literate"
   supportInterpreter := true
 
@@ -82,7 +82,7 @@ input_file «verso-html-css» where
 
 @[default_target]
 lean_exe «verso-html» where
-  root := `Main
+  root := `VersoHtmlMain
   srcDir := "src/verso-html"
   needs := #[«verso-html-css»]
   supportInterpreter := true
@@ -95,11 +95,6 @@ lean_lib Tests where
 lean_exe «verso-tests» where
   root := `TestMain
   srcDir := "src/tests"
-  supportInterpreter := true
-
-@[default_target]
-lean_exe «verso-demo» where
-  root := `Main
   supportInterpreter := true
 
 lean_lib UsersGuide where
@@ -163,7 +158,7 @@ lean_lib TutorialExample where
 @[default_target]
 lean_exe «tutorial-example» where
   srcDir := "test-projects/tutorial-test"
-  root := `Main
+  root := `TutorialExampleMain
   supportInterpreter := true
 
 module_facet literate mod : System.FilePath := do

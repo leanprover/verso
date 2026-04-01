@@ -12,6 +12,8 @@ import Std.Data.HashSet
 import Verso.Doc.ArgParse
 import Verso.Doc.Elab
 public import Verso.Doc.Elab.Monad
+public meta import Verso.Doc.Elab.Inline
+public meta import Verso.Doc.Elab.Block
 meta import Verso.Doc.Elab.Monad
 public import VersoManual.Basic
 
@@ -55,12 +57,12 @@ block_extension Block.draft where
 
 /-- Hide draft-only content when in not in draft mode -/
 @[role]
-def draft : RoleExpanderOf Unit
+meta def draft : RoleExpanderOf Unit
   | (), contents => do
     ``(Verso.Doc.Inline.other Inline.draft #[$[$(← contents.mapM elabInline)],*])
 
 /-- Hide draft-only content when in not in draft mode -/
 @[directive draft]
-def draftBlock : DirectiveExpanderOf Unit
+meta def draftBlock : DirectiveExpanderOf Unit
   | (), contents => do
     ``(Verso.Doc.Block.other Block.draft #[$[$(← contents.mapM elabBlock)],*])
