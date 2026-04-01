@@ -14,7 +14,6 @@ public section
 
 open Lean Parser Elab Command
 
-@[run_builtin_parser_attribute_hooks]
 meta def method := leading_parser
   declModifiers false >> "defmethod " >> declId >> ppIndent optDeclSig >> declVal >> optDefDeriving
 
