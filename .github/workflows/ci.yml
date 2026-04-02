@@ -127,7 +127,7 @@ jobs:
                   cp README-html.md html-multi/README.md
                   zip -r html-manual.zip html-multi
 
-            - uses: actions/setup-node@v4
+            - uses: actions/setup-node@v6
               with:
                   node-version: "lts/*"
                   cache: npm
