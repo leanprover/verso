@@ -985,13 +985,15 @@ namespace Verso.Doc.Concrete
 open Verso.Parser
 open Lean Elab Term
 
-public def stringToInlines [Monad m] [MonadError m] [MonadEnv m] [MonadQuotation m] (s : StrLit) : m (Array Syntax) :=
+-- Important! Both functions below expect strings in "Lean style",
+-- that is to say, with positions including quotes around the string.
+public def stringToInlines [Monad m] [MonadError m] [MonadLog m] [MonadOptions m] [MonadEnv m] [MonadQuotation m] (s : StrLit) : m (Array Syntax) :=
   withRef s do
-    return (← textLine.parseString s.getString).getArgs
+    return (← textLine.parseString s).getArgs
 
 open Lean Elab Term in
-public def stringToBlocks [Monad m] [MonadError m] [MonadEnv m] [MonadQuotation m] (s : StrLit) : m (Array Syntax) :=
+public def stringToBlocks [Monad m] [MonadError m] [MonadLog m] [MonadOptions m] [MonadEnv m] [MonadQuotation m] (s : StrLit) : m (Array Syntax) :=
   withRef s do
-    return (← (blocks {}).parseString s.getString).getArgs
+    return (← (blocks {}).parseString s).getArgs
 
 end Verso.Doc.Concrete
