@@ -1268,7 +1268,7 @@ def sectionDomainMapper : DomainMapper := {
   dataToSearchables :=
     "(domainData) =>
     Object.entries(domainData.contents).map(([key, value]) => ({
-      searchKey: `${value[0].data.sectionNum} ${value[0].data.title}`,
+      searchKey: `${value[0].data.sectionNum ?? ''} ${value[0].data.title}`,
       address: `${value[0].address}#${value[0].id}`,
       domainId: 'Verso.Genre.Manual.section',
       ref: value,
