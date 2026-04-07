@@ -27,4 +27,4 @@ Mi proin sed libero enim sed faucibus turpis. Nibh ipsum consequat nisl vel pret
 
 Eget mi proin sed libero enim. Nisl nunc mi ipsum faucibus vitae aliquet nec ullamcorper sit. Tincidunt arcu non sodales neque sodales ut etiam sit. Sed nisi lacus sed viverra tellus. Parturient montes nascetur ridiculus mus mauris vitae. Arcu cursus vitae congue mauris rhoncus. Est sit amet facilisis magna etiam tempor. Egestas diam in arcu cursus euismod quis. Sollicitudin tempor id eu nisl nunc mi. At auctor urna nunc id cursus metus aliquam. Ut sem viverra aliquet eget sit amet tellus cras adipiscing. Massa ultricies mi quis hendrerit dolor magna eget. Fermentum odio eu feugiat pretium nibh. Urna porttitor rhoncus dolor purus non. Egestas dui id ornare arcu. Massa id neque aliquam vestibulum morbi blandit.
 
-{include AnotherSection}
+{include SimplePage.AnotherSection}

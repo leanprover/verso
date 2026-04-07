@@ -1,5 +1,7 @@
 import SimplePage
 
+namespace AnotherSectionNamespace
+
 #doc (Tutorial.SimplePage) "Another Section" =>
 %%%
 tag := "another"
