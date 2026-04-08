@@ -163,9 +163,6 @@ instance : Shrinkable Domain where
 def Letter := Char
 deriving BEq, ToString, Repr, Ord, Hashable
 
--- Duplicate the BEq instance in the meta phase for use by Shrinkable
-meta instance : BEq Letter := ⟨fun a b => a.val == b.val⟩
-
 def letters : Vector Char 26 := "abcdefghijklmnopqrstuvwxyz".toList.toArray.toVector
 
 instance : Arbitrary Letter where
@@ -175,7 +172,7 @@ instance : Arbitrary Letter where
 
 instance instShrinkableLetter : Shrinkable Letter where
   shrink c :=
-    if let some i := letters.findFinIdx? (· == c) then
+    if let some i := letters.findFinIdx? (·.val == c.val) then
       letters.take i |>.toList
     else []
 
