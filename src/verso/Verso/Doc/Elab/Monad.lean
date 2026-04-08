@@ -640,7 +640,7 @@ private def saveSignature (expanderName : Name) (argTy : Expr) : MetaM Unit := d
   let s ← instantiateExprMVars s
   let s ← Meta.whnf s
   let name ← mkFreshUserName <| expanderName ++ `signature
-  addAndCompile <| .defnDecl {
+  let decl := Declaration.defnDecl {
     name,
     levelParams := [],
     type := .app (.const ``Option [0]) (.const ``SigDoc []),
@@ -648,6 +648,10 @@ private def saveSignature (expanderName : Name) (argTy : Expr) : MetaM Unit := d
     hints := .opaque,
     safety := .safe
   }
+  addDecl decl
+  modifyEnv (markMeta · name)
+  withOptions (·.setBool `compiler.relaxedMetaCheck true) do
+    compileDecl decl
   let str? ← evalOptMsg name
   if let some str := str? then
     modifyEnv (expanderSignatureExt.addEntry · (expanderName, str))
@@ -678,7 +682,7 @@ unsafe initialize registerBuiltinAttribute {
 
       pure (e, t)
 
-    addAndCompile <| .defnDecl {
+    let decl := Declaration.defnDecl {
       name := n,
       levelParams := [],
       type := t,
@@ -686,6 +690,10 @@ unsafe initialize registerBuiltinAttribute {
       hints := .opaque,
       safety := .safe
     }
+    addDecl decl
+    if isMarkedMeta (← getEnv) declName then
+      modifyEnv (markMeta · n)
+    compileDecl decl
 
     addDocStringCore' n (← findSimpleDocString? (← getEnv) declName)
 
@@ -749,7 +757,7 @@ unsafe initialize registerBuiltinAttribute {
 
       pure (e, t)
 
-    addAndCompile <| .defnDecl {
+    let decl := Declaration.defnDecl {
       name := n,
       levelParams := [],
       type := t,
@@ -757,6 +765,10 @@ unsafe initialize registerBuiltinAttribute {
       hints := .opaque,
       safety := .safe
     }
+    addDecl decl
+    if isMarkedMeta (← getEnv) declName then
+      modifyEnv (markMeta · n)
+    compileDecl decl
 
     addDocStringCore' n (← findSimpleDocString? (← getEnv) declName)
 
@@ -837,7 +849,7 @@ unsafe initialize registerBuiltinAttribute {
 
       pure (e, t)
 
-    addAndCompile <| .defnDecl {
+    let decl := Declaration.defnDecl {
       name := n,
       levelParams := [],
       type := t,
@@ -845,6 +857,10 @@ unsafe initialize registerBuiltinAttribute {
       hints := .opaque,
       safety := .safe
     }
+    addDecl decl
+    if isMarkedMeta (← getEnv) declName then
+      modifyEnv (markMeta · n)
+    compileDecl decl
 
     addDocStringCore' n (← findSimpleDocString? (← getEnv) declName)
 
@@ -924,7 +940,7 @@ unsafe initialize registerBuiltinAttribute {
 
       pure (e, t)
 
-    addAndCompile <| .defnDecl {
+    let decl := Declaration.defnDecl {
       name := n,
       levelParams := [],
       type := t,
@@ -932,6 +948,10 @@ unsafe initialize registerBuiltinAttribute {
       hints := .opaque,
       safety := .safe
     }
+    addDecl decl
+    if isMarkedMeta (← getEnv) declName then
+      modifyEnv (markMeta · n)
+    compileDecl decl
 
     addDocStringCore' n (← findSimpleDocString? (← getEnv) declName)
 

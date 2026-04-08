@@ -7,6 +7,7 @@ module
 import Lean.Meta
 public import Lean.Meta.Basic
 import Lean.PrettyPrinter.Delaborator
+import Lean.PrettyPrinter.Delaborator.DeclWithSig
 
 open Lean
 open Lean.PrettyPrinter Delaborator

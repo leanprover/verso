@@ -161,7 +161,9 @@ instance : Shrinkable Domain where
 
 @[expose]
 def Letter := Char
-deriving BEq, ToString, Repr, Ord, Hashable
+deriving ToString, Repr, Ord, Hashable
+
+meta instance : BEq Letter := ⟨fun a b => a.val == b.val⟩
 
 def letters : Vector Char 26 := "abcdefghijklmnopqrstuvwxyz".toList.toArray.toVector
 
