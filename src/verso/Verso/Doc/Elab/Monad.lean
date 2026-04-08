@@ -633,6 +633,15 @@ private unsafe def evalIOOptStringUnsafe (x : Name) : MetaM (Option SigDoc) := d
 @[implemented_by evalIOOptStringUnsafe]
 private opaque evalOptMsg (x : Name) : MetaM (Option SigDoc)
 
+-- TODO: replace with `addAndCompile (markMeta := ...)` when available
+-- https://github.com/leanprover/lean4/pull/13311
+private def addAndCompileMeta (decl : Declaration) (srcDeclName : Name) : CoreM Unit := do
+  addDecl decl
+  if isMarkedMeta (← getEnv) srcDeclName then
+    for n in decl.getNames do
+      modifyEnv (markMeta · n)
+  compileDecl decl
+
 private def saveSignature (expanderName : Name) (argTy : Expr) : MetaM Unit := do
   let s ← Meta.mkAppM ``sig #[argTy]
   let inst ← Meta.synthInstance (mkApp2 (.const ``FromArgs []) argTy (.const ``DocElabM []))
@@ -690,10 +699,7 @@ unsafe initialize registerBuiltinAttribute {
       hints := .opaque,
       safety := .safe
     }
-    addDecl decl
-    if isMarkedMeta (← getEnv) declName then
-      modifyEnv (markMeta · n)
-    compileDecl decl
+    addAndCompileMeta decl declName
 
     addDocStringCore' n (← findSimpleDocString? (← getEnv) declName)
 
@@ -765,10 +771,7 @@ unsafe initialize registerBuiltinAttribute {
       hints := .opaque,
       safety := .safe
     }
-    addDecl decl
-    if isMarkedMeta (← getEnv) declName then
-      modifyEnv (markMeta · n)
-    compileDecl decl
+    addAndCompileMeta decl declName
 
     addDocStringCore' n (← findSimpleDocString? (← getEnv) declName)
 
@@ -857,10 +860,7 @@ unsafe initialize registerBuiltinAttribute {
       hints := .opaque,
       safety := .safe
     }
-    addDecl decl
-    if isMarkedMeta (← getEnv) declName then
-      modifyEnv (markMeta · n)
-    compileDecl decl
+    addAndCompileMeta decl declName
 
     addDocStringCore' n (← findSimpleDocString? (← getEnv) declName)
 
@@ -948,10 +948,7 @@ unsafe initialize registerBuiltinAttribute {
       hints := .opaque,
       safety := .safe
     }
-    addDecl decl
-    if isMarkedMeta (← getEnv) declName then
-      modifyEnv (markMeta · n)
-    compileDecl decl
+    addAndCompileMeta decl declName
 
     addDocStringCore' n (← findSimpleDocString? (← getEnv) declName)
 
