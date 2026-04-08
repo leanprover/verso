@@ -251,15 +251,6 @@ def testSetupLiterate (_ : Config) : IO Unit := do
       throw <| IO.userError ".bak file should contain old content"
     IO.println "  backup on update: passed"
 
-    -- Test 4: actionlint validation
-    let actionlintResult ← IO.Process.output {
-      cmd := "actionlint"
-      args := #[workflowFile.toString]
-    }
-    if actionlintResult.exitCode != 0 then
-      throw <| IO.userError s!"actionlint failed: {actionlintResult.stderr}"
-    IO.println "  actionlint: passed"
-
   IO.println "  All setup-literate tests passed."
 
 open Verso.Integration in

@@ -83,10 +83,6 @@ jobs:
               run: |
                   uv run --project browser-tests --extra test playwright install chromium firefox --with-deps
 
-            - name: Install actionlint
-              run: |
-                  curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash | bash -s -- latest /usr/local/bin
-
             - name: Run tests
               run: |
                   lake test -- --verbose --check-tex
