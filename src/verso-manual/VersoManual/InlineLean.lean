@@ -265,7 +265,7 @@ def elabCommands (config : LeanBlockConfig) (str : StrLit)
     let cctx : Command.Context := { fileName := ← getFileName, fileMap := FileMap.ofString altStr, snap? := none, cancelTk? := none}
 
     let mut cmdState : Command.State := {env := ← getEnv, maxRecDepth := ← MonadRecDepth.getMaxRecDepth, scopes := origScopes}
-    let mut pstate := {pos := 0, recovering := false}
+    let mut pstate := {pos := 0, recovering := false, hasLeading := false}
     let mut cmds := #[]
 
     repeat
