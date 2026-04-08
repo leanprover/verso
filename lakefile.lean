@@ -128,11 +128,6 @@ lean_exe «verso-tests» where
   srcDir := "src/tests"
   supportInterpreter := true
 
-@[default_target]
-lean_exe «verso-demo» where
-  root := `VersoDemoMain
-  supportInterpreter := true
-
 lean_lib UsersGuide where
   srcDir := "doc"
   leanOptions := #[⟨`weak.linter.verso.manual.headerTags, true⟩]

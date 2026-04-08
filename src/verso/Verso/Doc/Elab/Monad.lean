@@ -649,7 +649,7 @@ private def saveSignature (expanderName : Name) (argTy : Expr) : MetaM Unit := d
   let s ← instantiateExprMVars s
   let s ← Meta.whnf s
   let name ← mkFreshUserName <| expanderName ++ `signature
-  let decl := Declaration.defnDecl {
+  let decl : Declaration := .defnDecl {
     name,
     levelParams := [],
     type := .app (.const ``Option [0]) (.const ``SigDoc []),
@@ -657,6 +657,8 @@ private def saveSignature (expanderName : Name) (argTy : Expr) : MetaM Unit := d
     hints := .opaque,
     safety := .safe
   }
+  -- Must mark meta before compileDecl, and use relaxedMetaCheck because the
+  -- signature expression may reference non-meta instances from the same module.
   addDecl decl
   modifyEnv (markMeta · name)
   withOptions (·.setBool `compiler.relaxedMetaCheck true) do
@@ -691,15 +693,14 @@ unsafe initialize registerBuiltinAttribute {
 
       pure (e, t)
 
-    let decl := Declaration.defnDecl {
+    addAndCompileMeta (.defnDecl {
       name := n,
       levelParams := [],
       type := t,
       value := e,
       hints := .opaque,
       safety := .safe
-    }
-    addAndCompileMeta decl declName
+    }) declName
 
     addDocStringCore' n (← findSimpleDocString? (← getEnv) declName)
 
@@ -763,15 +764,14 @@ unsafe initialize registerBuiltinAttribute {
 
       pure (e, t)
 
-    let decl := Declaration.defnDecl {
+    addAndCompileMeta (.defnDecl {
       name := n,
       levelParams := [],
       type := t,
       value := e,
       hints := .opaque,
       safety := .safe
-    }
-    addAndCompileMeta decl declName
+    }) declName
 
     addDocStringCore' n (← findSimpleDocString? (← getEnv) declName)
 
@@ -852,15 +852,14 @@ unsafe initialize registerBuiltinAttribute {
 
       pure (e, t)
 
-    let decl := Declaration.defnDecl {
+    addAndCompileMeta (.defnDecl {
       name := n,
       levelParams := [],
       type := t,
       value := e,
       hints := .opaque,
       safety := .safe
-    }
-    addAndCompileMeta decl declName
+    }) declName
 
     addDocStringCore' n (← findSimpleDocString? (← getEnv) declName)
 
@@ -940,15 +939,14 @@ unsafe initialize registerBuiltinAttribute {
 
       pure (e, t)
 
-    let decl := Declaration.defnDecl {
+    addAndCompileMeta (.defnDecl {
       name := n,
       levelParams := [],
       type := t,
       value := e,
       hints := .opaque,
       safety := .safe
-    }
-    addAndCompileMeta decl declName
+    }) declName
 
     addDocStringCore' n (← findSimpleDocString? (← getEnv) declName)
 
