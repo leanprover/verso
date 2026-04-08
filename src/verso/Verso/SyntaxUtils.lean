@@ -135,6 +135,23 @@ macro_rules
 end
 
 /--
+Returns an `InputContext` and start position for parsing the contents of a string literal that was
+part of the original source file.
+
+Throws an error if the string literal has no source position (e.g. because it was created by a
+macro or quotation rather than parsed from the source). The end position is clamped to the end of
+the source.
+-/
+public def strLitInputContext [Monad m] [MonadFileMap m] [MonadError m] (str : Syntax) (fileName : String) : m (InputContext × String.Pos.Raw) := do
+  let some startPos := str.getPos?
+    | throwErrorAt str "Expected an original string literal with source positions, but it has none"
+  let endPos := str.getTailPos?.getD startPos
+  let text ← getFileMap
+  let endPos := if endPos > text.source.rawEndPos then text.source.rawEndPos else endPos
+  let ictx := Parser.mkInputContext text.source fileName (endPos := endPos) (endPos_valid := by grind)
+  return (ictx, startPos)
+
+/--
 Given a string literal, constructs a Lean string that can be parsed by the Lean parser, yielding
 correct source positions for items in the string literal.
 -/
@@ -219,6 +236,39 @@ public defmethod ParserFn.parseString [Monad m] [MonadError m] [MonadEnv m] (p :
   else
     pure stk[0]
 
+/--
+Parses an original string literal.
+
+The provided string literal is used only for source positions; the `FileMap` is used to acquire the
+actual string contents.
+-/
+public def parseStrLitWith [Monad m] [MonadLog m] [MonadEnv m] [MonadOptions m] [MonadError m] [AddMessageContext m] (p : ParserFn) (input : StrLit) : m Syntax := do
+  let (ictx, startPos) ← strLitInputContext input.raw (← getFileName)
+  let text ← getFileMap
+  let s := { mkParserState text.source with pos := startPos }
+  let env ← getEnv
+  let s := p.run ictx { env, options := ← getOptions } (getTokenTable env) s
+  if !s.allErrors.isEmpty then
+    for (pos, stk, err) in s.allErrors do
+      let err := mkSyntaxError ictx pos stk err
+      let start := text.ofPosition err.pos
+      let stop := text.ofPosition err.endPos
+      let blame := Syntax.mkStrLit (start.extract text.source stop)
+      logErrorAt blame err.text
+    return .missing
+  else if ictx.atEnd s.pos then
+    return s.stxStack.back
+  else
+    throwErrorAt input "Unparsed input: `{s.pos.extract text.source ictx.endPos}`"
+
+/--
+Parses an original string literal as part of a syntax category.
+
+The provided string literal is used only for source positions; the `FileMap` is used to acquire the
+actual string contents.
+-/
+public def parseStrLitAsCategory [Monad m] [MonadLog m] [MonadEnv m] [MonadOptions m] [MonadError m] [AddMessageContext m] (catName : Name) (input : StrLit) : m Syntax :=
+  parseStrLitWith (andthenFn whitespace (categoryParserFnImpl catName)) input
 
 open Lean.Parser in
 /--
