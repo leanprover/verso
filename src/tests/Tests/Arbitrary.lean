@@ -163,6 +163,10 @@ instance : Shrinkable Domain where
 def Letter := Char
 deriving BEq, ToString, Repr, Ord, Hashable
 
+-- `deriving BEq` does not produce a meta instance inside `public meta section`,
+-- but `Shrinkable Letter` needs one. See https://github.com/leanprover/lean4/issues/XXXXX
+meta instance : BEq Letter := ⟨fun a b => a.val == b.val⟩
+
 def letters : Vector Char 26 := "abcdefghijklmnopqrstuvwxyz".toList.toArray.toVector
 
 instance : Arbitrary Letter where
@@ -172,7 +176,7 @@ instance : Arbitrary Letter where
 
 instance instShrinkableLetter : Shrinkable Letter where
   shrink c :=
-    if let some i := letters.findFinIdx? (·.val == c.val) then
+    if let some i := letters.findFinIdx? (· == c) then
       letters.take i |>.toList
     else []
 
