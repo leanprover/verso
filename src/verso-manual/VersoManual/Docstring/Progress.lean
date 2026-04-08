@@ -35,7 +35,7 @@ public def Block.progress
   name := `Verso.Genre.Manual.Block.progress
   data := toJson (namespaces, exceptions, present, tactics)
 
-private def ignore [Monad m] [MonadLiftT CoreM m] [MonadEnv m] (x : Name) : m Bool := do
+private meta def ignore [Monad m] [MonadLiftT CoreM m] [MonadEnv m] (x : Name) : m Bool := do
   if (← Meta.Simp.isSimproc x) then return true
   let env ← getEnv
   return isPrivateName x ||
@@ -63,7 +63,7 @@ run_cmd do
   elabCommand <| ← `(private def $(mkIdent `allRootNames) : Array Name := #[$(names.map (quote · : Name → Term)),*])
 
 @[directive]
-public def progress : DirectiveExpanderOf Unit
+public meta def progress : DirectiveExpanderOf Unit
   | (), blocks => do
     let mut namespaces : NameSet := {}
     let mut exceptions : NameSet := {}

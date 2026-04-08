@@ -65,7 +65,7 @@ input_file ghSetupLiteratePages where
 
 @[default_target]
 lean_exe «verso» where
-  root := `Main
+  root := `VersoMain
   srcDir := "src/cli"
   needs := #[ghSetupLiteratePages]
   supportInterpreter := true
@@ -92,7 +92,7 @@ input_file «verso-html-css» where
 
 @[default_target]
 lean_exe «verso-html» where
-  root := `Main
+  root := `VersoHtmlMain
   srcDir := "src/verso-html"
   needs := #[«verso-html-css»]
   supportInterpreter := true
@@ -126,11 +126,6 @@ lean_lib Tests where
 lean_exe «verso-tests» where
   root := `TestMain
   srcDir := "src/tests"
-  supportInterpreter := true
-
-@[default_target]
-lean_exe «verso-demo» where
-  root := `Main
   supportInterpreter := true
 
 lean_lib UsersGuide where
@@ -194,7 +189,7 @@ lean_lib TutorialExample where
 @[default_target]
 lean_exe «tutorial-example» where
   srcDir := "test-projects/tutorial-test"
-  root := `Main
+  root := `TutorialExampleMain
   supportInterpreter := true
 
 private def leanOptionArgs (m : Module) : Array String := Id.run do
