@@ -1,11 +1,11 @@
-{"version": "1.1.0",
+{"version": "1.2.0",
  "packagesDir": ".lake/packages",
  "packages":
  [{"url": "https://github.com/leanprover-community/plausible",
    "type": "git",
    "subDir": null,
    "scope": "",
-   "rev": "83e90935a17ca19ebe4b7893c7f7066e266f50d3",
+   "rev": "2541d6b9e923b0b2f867d7b037ac344551cc7feb",
    "name": "plausible",
    "manifestFile": "lake-manifest.json",
    "inputRev": "main",
@@ -32,4 +32,5 @@
    "inherited": false,
    "configFile": "lakefile.lean"}],
  "name": "verso",
- "lakeDir": ".lake"}
+ "lakeDir": ".lake",
+ "fixedToolchain": false}

@@ -640,7 +640,7 @@ private def saveSignature (expanderName : Name) (argTy : Expr) : MetaM Unit := d
   let s ← instantiateExprMVars s
   let s ← Meta.whnf s
   let name ← mkFreshUserName <| expanderName ++ `signature
-  addAndCompile <| .defnDecl {
+  let decl := Declaration.defnDecl {
     name,
     levelParams := [],
     type := .app (.const ``Option [0]) (.const ``SigDoc []),
@@ -648,6 +648,12 @@ private def saveSignature (expanderName : Name) (argTy : Expr) : MetaM Unit := d
     hints := .opaque,
     safety := .safe
   }
+  addDecl decl
+
+  if (← getEnv).header.isModule then
+    modifyEnv (markMeta · name)
+
+  compileDecl decl
   let str? ← evalOptMsg name
   if let some str := str? then
     modifyEnv (expanderSignatureExt.addEntry · (expanderName, str))
@@ -664,6 +670,8 @@ unsafe initialize registerBuiltinAttribute {
       | `(attr|role $x) => realizeGlobalConstNoOverloadWithInfo x
       | _ => throwError "Invalid `role` attribute"
 
+    ensureAttrDeclIsMeta `role declName k
+
     let n ← mkFreshUserName <| declName ++ `role
 
     let ((e, t), _) ← Meta.MetaM.run (ctx := {}) (s := {}) do
@@ -678,7 +686,7 @@ unsafe initialize registerBuiltinAttribute {
 
       pure (e, t)
 
-    addAndCompile <| .defnDecl {
+    let decl := Declaration.defnDecl {
       name := n,
       levelParams := [],
       type := t,
@@ -686,6 +694,12 @@ unsafe initialize registerBuiltinAttribute {
       hints := .opaque,
       safety := .safe
     }
+    addDecl decl
+
+    if (← getEnv).header.isModule then
+      modifyEnv (markMeta · n)
+
+    compileDecl decl
 
     addDocStringCore' n (← findSimpleDocString? (← getEnv) declName)
 
@@ -735,6 +749,8 @@ unsafe initialize registerBuiltinAttribute {
       | `(attr|code_block $x) => realizeGlobalConstNoOverloadWithInfo x
       | _ => throwError "Invalid `code_block` attribute"
 
+    ensureAttrDeclIsMeta `code_block declName k
+
     let n ← mkFreshUserName <| declName ++ `code_block
 
     let ((e, t), _) ← Meta.MetaM.run (ctx := {}) (s := {}) do
@@ -749,7 +765,7 @@ unsafe initialize registerBuiltinAttribute {
 
       pure (e, t)
 
-    addAndCompile <| .defnDecl {
+    let decl := Declaration.defnDecl {
       name := n,
       levelParams := [],
       type := t,
@@ -757,6 +773,12 @@ unsafe initialize registerBuiltinAttribute {
       hints := .opaque,
       safety := .safe
     }
+    addDecl decl
+
+    if (← getEnv).header.isModule then
+      modifyEnv (markMeta · n)
+
+    compileDecl decl
 
     addDocStringCore' n (← findSimpleDocString? (← getEnv) declName)
 
@@ -823,6 +845,8 @@ unsafe initialize registerBuiltinAttribute {
       | `(attr|directive $x) => realizeGlobalConstNoOverloadWithInfo x
       | _ => throwError "Invalid `directive` attribute"
 
+    ensureAttrDeclIsMeta `directive declName k
+
     let n ← mkFreshUserName <| declName ++ `directive
 
     let ((e, t), _) ← Meta.MetaM.run (ctx := {}) (s := {}) do
@@ -837,7 +861,7 @@ unsafe initialize registerBuiltinAttribute {
 
       pure (e, t)
 
-    addAndCompile <| .defnDecl {
+    let decl := Declaration.defnDecl {
       name := n,
       levelParams := [],
       type := t,
@@ -845,6 +869,12 @@ unsafe initialize registerBuiltinAttribute {
       hints := .opaque,
       safety := .safe
     }
+    addDecl decl
+
+    if (← getEnv).header.isModule then
+      modifyEnv (markMeta · n)
+
+    compileDecl decl
 
     addDocStringCore' n (← findSimpleDocString? (← getEnv) declName)
 
@@ -911,6 +941,8 @@ unsafe initialize registerBuiltinAttribute {
       | `(attr|block_command $x) => realizeGlobalConstNoOverloadWithInfo x
       | _ => throwError "Invalid `block_command` attribute"
 
+    ensureAttrDeclIsMeta `block_command declName k
+
     let n ← mkFreshUserName <| declName ++ `block_command
 
     let ((e, t), _) ← Meta.MetaM.run (ctx := {}) (s := {}) do
@@ -924,7 +956,7 @@ unsafe initialize registerBuiltinAttribute {
 
       pure (e, t)
 
-    addAndCompile <| .defnDecl {
+    let decl := Declaration.defnDecl {
       name := n,
       levelParams := [],
       type := t,
@@ -932,6 +964,12 @@ unsafe initialize registerBuiltinAttribute {
       hints := .opaque,
       safety := .safe
     }
+    addDecl decl
+
+    if (← getEnv).header.isModule then
+      modifyEnv (markMeta · n)
+
+    compileDecl decl
 
     addDocStringCore' n (← findSimpleDocString? (← getEnv) declName)
 
