@@ -164,7 +164,7 @@ def Letter := Char
 deriving BEq, ToString, Repr, Ord, Hashable
 
 -- `deriving BEq` does not produce a meta instance inside `public meta section`,
--- but `Shrinkable Letter` needs one. See https://github.com/leanprover/lean4/issues/XXXXX
+-- but `Shrinkable Letter` needs one. See https://github.com/leanprover/lean4/issues/13313
 meta instance : BEq Letter := ⟨fun a b => a.val == b.val⟩
 
 def letters : Vector Char 26 := "abcdefghijklmnopqrstuvwxyz".toList.toArray.toVector
