@@ -77,7 +77,7 @@ lean_lib VersoLiterate where
 
 @[default_target]
 lean_exe «verso-literate» where
-  root := `LiterateMain
+  root := `VersoLiterateMain
   srcDir := "src/verso-literate"
   supportInterpreter := true
 
