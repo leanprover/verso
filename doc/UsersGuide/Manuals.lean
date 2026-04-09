@@ -84,6 +84,65 @@ Verso's markup language shares one key limitation with Markdown and HTML: bullet
 However, there's no _a priori_ reason to reject this, and many real documents include lists in paragraphs.
 When using the {name}`paragraph` directive, HTML output wraps the contents in a suitable element that causes their internal margins to be a bit smaller, and TeX output omits the blank line that would signal a paragraph break to TeX.
 
+# Tables
+%%%
+tag := "table-directive"
+%%%
+
+The {name}`table` directive is used to implement tables.
+Tables are written as bulleted list of bulleted lists; the outer lists are rows, and the inner lists are columns; each row must contain the same number of columns.
+
+The flag `header` determines whether the first row should be considered as table data or as headers for the remaining rows.
+The named paramter `align`, which may be {name TableConfig.Alignment.left}`left`, {name TableConfig.Alignment.center}`center`, or {name TableConfig.Alignment.right}`right`, determines the alignment of the table with respect to the surrounding text.
+
+::::paragraph
+This table maps $`n` to $`n!`:
+```
+:::table +header (align := center)
+*
+  * $`n`
+  * $`n!`
+*
+  * 0
+  * 1
+*
+  * 1
+  * 1
+*
+  * 2
+  * 2
+*
+  * 3
+  * 6
+*
+  * 4
+  * 24
+:::
+```
+
+It is rendered as follows:
+:::table +header (align := center)
+*
+  * $`n`
+  * $`n!`
+*
+  * 0
+  * 1
+*
+  * 1
+  * 1
+*
+  * 2
+  * 2
+*
+  * 3
+  * 6
+*
+  * 4
+  * 24
+:::
+::::
+
 # Docstrings
 %%%
 tag := "docstrings"
