@@ -74,6 +74,22 @@ Specifying a tag has the following benefits:
 Tags should be specified for all sections that the author considers to have a stable identity.
 :::
 
+:::paragraph
+To refer to a tag, use the {name}`ref` role.
+It takes the following parameters:
+ * A mandatory _canonical name_, which is the tag assigned to some content.
+  By default, this is expected to be a section tag; specifying alternative domains allows the cross reference to be resolved in some other namespace.
+ * An optional named argument `domain`, which determines the namespace in which the canonical name is looked up. If no domain is provided, then `domain` defaults to section tags, but other kinds of content may add their cross-references to other namespaces.
+ * An optional named argument `remote`, which causes the name to be looked up in data loaded from some other Verso document.
+:::
+
+:::paragraph
+A {ref "manual-tags"}[reference to this very section] can be created using its tag `"manual-tags"`:
+```
+{ref "manual-tags"}[reference to this very section]
+```
+:::
+
 # Paragraphs
 %%%
 tag := "paragraph-directive"
