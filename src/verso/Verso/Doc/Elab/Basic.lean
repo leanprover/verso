@@ -35,8 +35,9 @@ public partial def FinishedPart.toSyntax [Monad m] [MonadQuotation m]
     let subStx ← subParts.mapM (toSyntax genre)
     let metaStx ←
       match metadata with
-      | none => `(none)
-      | some stx => `(some $stx)
+      | none => ``(none)
+      | some stx => ``(some $stx)
+    let metaStx ← ``(($metaStx : Option (Verso.Doc.Genre.PartMetadata $genre)))
     -- Adding type annotations works around a limitation in list and array elaboration, where intermediate
     -- let bindings introduced by "chunking" the elaboration may fail to infer types
     let typedBlocks ← blocks.mapM fun b => `(($b : Block $genre))
