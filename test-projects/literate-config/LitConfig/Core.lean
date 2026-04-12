@@ -21,7 +21,7 @@ def double (n : Nat) : Nat := n * 2
 def triple (n : Nat) : Nat := n * 3
 
 /-!
-Here are some examples using the {kw}`where` keyword:
+Here are some examples using the {kw (of := Lean.«command__Unif_hint____Where_|_-⊢__»)}`where` keyword:
 -/
 
 #eval double 5

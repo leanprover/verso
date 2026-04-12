@@ -1,5 +1,5 @@
 {
-  "version": "1.1.0",
+  "version": "1.2.0",
   "packagesDir": ".lake/packages",
   "packages": [
     {
@@ -16,7 +16,7 @@
       "type": "git",
       "subDir": null,
       "scope": "",
-      "rev": "22a0afa903bcf65285152eea298a3d319badc78d",
+      "rev": "2541d6b9e923b0b2f867d7b037ac344551cc7feb",
       "name": "plausible",
       "manifestFile": "lake-manifest.json",
       "inputRev": "main",
@@ -40,7 +40,7 @@
       "type": "git",
       "subDir": null,
       "scope": "",
-      "rev": "52b9dfbd2658408e37ae6e8b72601ddeaaa25a0c",
+      "rev": "ce893b9042128037e2d3c0158b9567fab9fae268",
       "name": "subverso",
       "manifestFile": "lake-manifest.json",
       "inputRev": "main",
@@ -49,5 +49,6 @@
     }
   ],
   "name": "«literate-config-test»",
-  "lakeDir": ".lake"
+  "lakeDir": ".lake",
+  "fixedToolchain": false
 }

@@ -101,7 +101,7 @@ warning: `{leanInline}` is deprecated; use `{lean}` instead.
 ```leanInit post2
 ```
 
-Legacy role: {leanInline post2}`Nat.succ 1`.
+Legacy role: {lean post2}`Nat.succ 1`.
 
 #guard inlineLeanRoleNames.toPart.content.size > 0
 #guard inlineLeanRoleNamesDeprecated.toPart.content.size > 0
