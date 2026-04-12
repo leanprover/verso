@@ -508,9 +508,10 @@ def page (toc : List Html.Toc)
     (extraHead := config.extraHead)
     (extraContents := config.extraContents)
 
-def relativizeLinks (html : Html) : Html :=
-    -- Make all absolute URLS be relative to the site root, because that'll make them `<base>`-relative
-    Html.relativize #[] html
+def relativizeLinks (path : Path) (html : Html) : Html :=
+    -- Make all absolute URLS be relative to the site root, because that'll make them `<base>`-relative.
+    -- Also adjusts relative image URLs to account for the <base> tag.
+    Html.relativize path html
 
 open Output.Html in
 def xref (toc : List Html.Toc) (xrefJson : String) (findJs : String) (state : TraverseState) (config : Config) : Html :=
@@ -534,7 +535,7 @@ def emitXrefsJson (dir : System.FilePath) (state : TraverseState) : IO Unit := d
 def emitFindHtml (toc : List Html.Toc) (dir : System.FilePath) (state : TraverseState) (xrefJson : String) (config : Config) : IO Unit := do
   emitXrefsJson dir state
   ensureDir (dir / "find")
-  IO.FS.writeFile (dir / "find" / "index.html") (Html.doctype ++ (relativizeLinks <| xref toc xrefJson find.js state config).asString)
+  IO.FS.writeFile (dir / "find" / "index.html") (Html.doctype ++ (relativizeLinks #["find"] <| xref toc xrefJson find.js state config).asString)
 
 
 section
@@ -698,7 +699,7 @@ where
       if config.verbose then
         IO.println s!"Saving {dir.join "index.html"}"
       h.putStrLn Html.doctype
-      h.putStrLn <| Html.asString <| relativizeLinks <|
+      h.putStrLn <| Html.asString <| relativizeLinks ctxt.path <|
         page toc ctxt.path text.titleString titleToShow pageContent state config.toConfig thisPageToc (showNavButtons := false)
 
 
@@ -816,7 +817,7 @@ where
       if config.verbose then
         IO.println s!"Saving {dir.join "index.html"}"
       h.putStrLn Html.doctype
-      h.putStrLn <| Html.asString <| relativizeLinks <|
+      h.putStrLn <| Html.asString <| relativizeLinks ctxt.path <|
         page bookContents ctxt.path part.titleString bookTitle pageContent state config.toConfig thisPageToc
     if depth > 0 ∧ part.htmlSplit != .never then
       for p in part.subParts do

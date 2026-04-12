@@ -511,6 +511,11 @@ public def relativize (path : Path) (html : Html) : Html :=
   html.visitM (m := ReaderT Path Id) (tag := rwTag) |>.run path
 where
   urlAttr (name : String) : Bool := name ∈ ["href", "src", "data", "poster"]
+  isRelativeContentUrl (url : String) : Bool :=
+    !"/".isPrefixOf url &&
+    !url.startsWith "http://" && !url.startsWith "https://" &&
+    !url.startsWith "data:" && !url.startsWith "mailto:" &&
+    !url.startsWith "#" && !url.startsWith "javascript:"
   rwAttr (attr : String × String) : ReaderT Path Id (String × String) := do
     if urlAttr attr.fst && "/".isPrefixOf attr.snd then
       let path := (← read)
@@ -524,4 +529,17 @@ where
     -- Don't rewrite URLs that come from remote content. This attribute is inserted by the `ref`
     -- role when referring to remote content.
     if attrs.any (·.1 == "data-verso-remote") then return none
-    return some <| .tag tag (← attrs.mapM rwAttr) content
+    let attrs ← attrs.mapM rwAttr
+    -- For <img> tags with relative src paths, prefix with the page path so that
+    -- the URL resolves correctly via the <base> tag.  User-authored image
+    -- references (from Markdown ![alt](path)) produce page-relative URLs, but
+    -- the <base> tag makes the browser resolve them from the site root.
+    let path := (← read)
+    if tag == "img" && path.size > 0 then
+      let attrs := attrs.map fun attr =>
+        if attr.fst == "src" && isRelativeContentUrl attr.snd then
+          let pathPrefix := String.join (path.toList.map (· ++ "/"))
+          { attr with snd := pathPrefix ++ attr.snd }
+        else attr
+      return some <| .tag tag attrs content
+    return some <| .tag tag attrs content
