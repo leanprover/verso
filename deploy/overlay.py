@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
 import argparse
 import os
-from release_utils import run_git_command, is_git_ancestor, find_latest_version, find_latest_stable_version
+from release_utils import (
+    run_git_command,
+    is_git_ancestor,
+    find_latest_version,
+    find_latest_stable_version,
+)
 from pathlib import Path
 
 UNICODE_INPUT_FILES = [
@@ -36,12 +41,18 @@ def add_metadata(directory, version_name, extensions=(".html", ".htm")):
                         canonical_path = f"latest/{filename}"
                     else:
                         canonical_path = f"latest/{relative}/{filename}"
-                    href = f"https://verso.lean-lang.org/doc/{canonical_path}".removesuffix("index.html")
+                    href = f"https://verso.lean-lang.org/doc/{canonical_path}".removesuffix(
+                        "index.html"
+                    )
 
-                    noindex = '' if version_name == "latest" else '\n<meta name="robots" content="noindex">'
+                    noindex = (
+                        ""
+                        if version_name == "latest"
+                        else '\n<meta name="robots" content="noindex">'
+                    )
                     new_content = content.replace(
                         "<head>",
-                        f'<head>{noindex}\n<link rel="canonical" href="{href}" />\n'
+                        f'<head>{noindex}\n<link rel="canonical" href="{href}" />\n',
                     )
 
                     # Write back the modified file
@@ -91,8 +102,7 @@ def inject_stats_html(directory, stats_html_content, extensions=(".html", ".htm"
 
                 if "</head>" in content:
                     new_content = content.replace(
-                        "</head>",
-                        f'{stats_html_content}</head>'
+                        "</head>", f"{stats_html_content}</head>"
                     )
                     with open(filepath, "w", encoding="utf-8") as f:
                         f.write(new_content)
@@ -154,7 +164,9 @@ def deploy_overlays(deploy_dir, src_branch, tgt_branch):
                 unicode_input_files[filename] = f.read()
             print(f"overlay.py: read Unicode input file from main: {filepath}")
         else:
-            print(f"overlay.py: Unicode input file not found on main, skipping: {filepath}")
+            print(
+                f"overlay.py: Unicode input file not found on main, skipping: {filepath}"
+            )
 
     # Read stats.html from the current branch (main) before switching
     stats_html_content = None
@@ -196,7 +208,19 @@ def deploy_overlays(deploy_dir, src_branch, tgt_branch):
         # All of this complication is due to the fact that "-s theirs" doesn't
         # exist and "-X theirs" isn't what we want.
         # (see https://stackoverflow.com/questions/4911794 for context)
-        run_git_command(["git", "merge", "-m", "merge overlays", "--no-ff", "--no-edit", "-s", "ours", tgt_branch])
+        run_git_command(
+            [
+                "git",
+                "merge",
+                "-m",
+                "merge overlays",
+                "--no-ff",
+                "--no-edit",
+                "-s",
+                "ours",
+                tgt_branch,
+            ]
+        )
         run_git_command(["git", "switch", tgt_branch])
         run_git_command(["git", "reset", "--hard", src_branch, "--"])
         run_git_command(["git", "switch", src_branch])
@@ -210,14 +234,18 @@ def deploy_overlays(deploy_dir, src_branch, tgt_branch):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Apply overlays to a deployment branch")
+    parser = argparse.ArgumentParser(
+        description="Apply overlays to a deployment branch"
+    )
     parser.add_argument("deploy_dir", help="Directory to operate on")
     parser.add_argument("src_branch", help="Git branch to apply overlays to")
     parser.add_argument("tgt_branch", help="Git branch to commit to")
 
     args = parser.parse_args()
 
-    print(f"Applying overlays to {args.deploy_dir} branch {args.src_branch} to produce {args.tgt_branch}")
+    print(
+        f"Applying overlays to {args.deploy_dir} branch {args.src_branch} to produce {args.tgt_branch}"
+    )
 
     deploy_overlays(args.deploy_dir, args.src_branch, args.tgt_branch)
 

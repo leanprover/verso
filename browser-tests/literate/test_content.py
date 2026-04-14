@@ -37,7 +37,9 @@ class TestContent:
         # Collect all mod-doc and code-box children in order
         elements = content.locator(":scope > .mod-doc, :scope > .code-box")
         count = elements.count()
-        assert count >= 3, f"Expected at least 3 content elements (mod-doc + code-box), got {count}"
+        assert count >= 3, (
+            f"Expected at least 3 content elements (mod-doc + code-box), got {count}"
+        )
 
         # Verify we have both types
         classes = [elements.nth(i).evaluate("el => el.className") for i in range(count)]
@@ -139,7 +141,9 @@ class TestContent:
         assert imports_list.count() >= 1, "Expected imports-list details element"
 
         # Should be collapsed by default
-        assert not imports_list.evaluate("el => el.open"), "imports-list should be collapsed by default"
+        assert not imports_list.evaluate("el => el.open"), (
+            "imports-list should be collapsed by default"
+        )
 
         # Click summary to open
         summary = imports_list.locator("summary")
@@ -165,7 +169,9 @@ class TestContent:
 
         # Before hover: opacity should be 0 (CSS: .copy-button { opacity: 0 })
         opacity = copy_btn.evaluate("el => getComputedStyle(el).opacity")
-        assert opacity == "0", f"Expected copy button opacity 0 before hover, got {opacity}"
+        assert opacity == "0", (
+            f"Expected copy button opacity 0 before hover, got {opacity}"
+        )
 
         # Verify the CSS rule exists: .code-box:hover .copy-button { opacity: 1 }
         has_hover_rule = page.evaluate("""() => {
@@ -180,7 +186,9 @@ class TestContent:
             }
             return false;
         }""")
-        assert has_hover_rule, "Expected CSS rule .code-box:hover .copy-button { opacity: 1 }"
+        assert has_hover_rule, (
+            "Expected CSS rule .code-box:hover .copy-button { opacity: 1 }"
+        )
 
     def test_copy_button_click(self, server: str, page: Page):
         """Test that clicking the copy button adds .copied class."""
@@ -250,4 +258,6 @@ class TestContent:
         # The h1 in module pages comes from the module docstring heading
         # LitConfig has "# LitConfig: A Test Module" as its first heading
         h1_text = h1.inner_text()
-        assert "LitConfig" in h1_text, f"Expected h1 to contain 'LitConfig', got '{h1_text}'"
+        assert "LitConfig" in h1_text, (
+            f"Expected h1 to contain 'LitConfig', got '{h1_text}'"
+        )
