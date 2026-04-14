@@ -1,0 +1,10 @@
+name = "literate-config-test"
+defaultTargets = ["LitConfig"]
+
+[[require]]
+name = "verso"
+path = "../.."
+
+[[lean_lib]]
+name = "LitConfig"
+leanOptions = [{name = "doc.verso", value = true}]
