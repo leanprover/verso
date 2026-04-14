@@ -1,8 +1,7 @@
-
-
 import pytest
 import re
 from playwright.sync_api import expect, Page
+
 
 class TestRedirect:
     def test_redirect(self, server: str, page: Page, redirect_case: tuple[str, str]):

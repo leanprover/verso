@@ -15,8 +15,9 @@ REDIRECTS_JSON_PATH = DEFAULT_SITE_DIR + "/xref.json"
 def find_free_port():
     """Find an available port by binding to port 0."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(('127.0.0.1', 0))
+        s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]
+
 
 def load_redirects():
     """Load redirects from JSON file and return a list of (source, target) tuples."""
@@ -24,8 +25,11 @@ def load_redirects():
     with open(json_path) as f:
         data = json.load(f)
 
-    sections = data['Verso.Genre.Manual.section']['contents']
-    return [(s, sections[s][0]['address'] + '#' + sections[s][0]['id']) for s in sections]
+    sections = data["Verso.Genre.Manual.section"]["contents"]
+    return [
+        (s, sections[s][0]["address"] + "#" + sections[s][0]["id"]) for s in sections
+    ]
+
 
 def get_sample_redirects(n=10):
     """Get a random sample of n redirects for testing."""
@@ -34,45 +38,48 @@ def get_sample_redirects(n=10):
         return redirects
     return random.sample(redirects, n)
 
+
 def pytest_addoption(parser):
     parser.addoption(
         "--port",
         action="store",
         default=None,
-        help="Port for the local test server (default: auto-select)"
+        help="Port for the local test server (default: auto-select)",
     )
     parser.addoption(
         "--site-dir",
         action="store",
         default=DEFAULT_SITE_DIR,
-        help="Path to the built site directory"
+        help="Path to the built site directory",
     )
     parser.addoption(
         "--server-url",
         action="store",
         default=None,
-        help="Use an existing server instead of starting one (e.g., http://localhost:3000)"
+        help="Use an existing server instead of starting one (e.g., http://localhost:3000)",
     )
     parser.addoption(
         "--num-redirects",
         action="store",
         default=10,
         type=int,
-        help="Number of random redirects to test (default: 10)"
+        help="Number of random redirects to test (default: 10)",
     )
     parser.addoption(
         "--seed",
         action="store",
         default=None,
         type=int,
-        help="Random seed for reproducible redirect selection"
+        help="Random seed for reproducible redirect selection",
     )
+
 
 def pytest_configure(config):
     """Set random seed if provided."""
     seed = config.getoption("--seed")
     if seed is not None:
         random.seed(seed)
+
 
 def pytest_generate_tests(metafunc):
     """Generate test cases for each sampled redirect."""
@@ -82,6 +89,7 @@ def pytest_generate_tests(metafunc):
         # Create readable test IDs
         ids = [f"{source}->{target}" for source, target in redirects]
         metafunc.parametrize("redirect_case", redirects, ids=ids)
+
 
 @pytest.fixture(scope="session")
 def server(request):
@@ -105,17 +113,19 @@ def server(request):
         ["python", "-m", "http.server", str(port), "--bind", "127.0.0.1"],
         cwd=site_dir,
         stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL
+        stderr=subprocess.DEVNULL,
     )
     time.sleep(1)
     yield f"http://127.0.0.1:{port}"
     proc.terminate()
     proc.wait()
 
+
 @pytest.fixture(scope="session")
 def playwright_instance():
     with sync_playwright() as p:
         yield p
+
 
 @pytest.fixture(scope="session", params=["chromium", "firefox"])
 def browser(request, playwright_instance):
@@ -124,6 +134,7 @@ def browser(request, playwright_instance):
     browser = getattr(playwright_instance, browser_type).launch()
     yield browser
     browser.close()
+
 
 @pytest.fixture
 def page(browser):
