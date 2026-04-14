@@ -8,6 +8,7 @@ import Verso
 import VersoManual
 import VersoSearch.PorterStemmer
 import VersoUtil.LzCompress
+import VersoLiterate
 import Tests
 
 structure Config where
@@ -72,13 +73,14 @@ def testZip (cfg : Config) : IO Unit := do
   testExtract #[("empty", .empty)] .deflate
   testExtract files .store
   testExtract files .deflate
-  for i in (0 : Nat)...(me.size / 10) do
-    let me := me.extract 0 (i * 10)
+  let chunkSize := me.size / 10
+  for i in (0 : Nat)...10 do
+    let me := me.extract 0 (i * chunkSize)
     testExtract #[("T2.lean", me)] .store
     testExtract #[("T2.lean", me)] .deflate
-  for i in (0 : Nat)...(me.size / 10) do
-    let me := me.extract 0 (i * 10)
-    let bwd := bwd.extract 0 (i * 10)
+  for i in (0 : Nat)...10 do
+    let me := me.extract 0 (i * chunkSize)
+    let bwd := bwd.extract 0 (i * chunkSize)
     testExtract #[("T2.lean", me), ("other", bwd)] .store
     testExtract #[("T2.lean", me), ("other", bwd)] .deflate
   for _ in (0 : Nat)...10 do
@@ -139,19 +141,30 @@ example : ¬ (P ∨ Q) ↔ ¬ P ∧ ¬ Q := by
     "wOguUYAAkJE1zsogVooHUaA0mi02ncBEJun9Bq5RuMVjN5msbNMxiktlgdrYwGB0MYAPx7OBlVwkZRwPx" ++
     "GEioIrQcSFY4QU5YyQfAxGWlidlwTn8JC+CCNCQMjiuAAGSHpjKZmrZB35B24EHcMDA5uEQA"
   if actual ≠ expected then
-    throw <| .userError "Mismatched lzCompress output"
+    throw <| IO.userError "Mismatched lzCompress output"
 
 def testSerialization (_ : Config) : IO Unit := do
   IO.println "Running serialization tests with Plausible..."
   let fails ← runSerializationTests
   if fails > 0 then
-    throw <| .userError s!"{fails} serialization tests failed"
+    throw <| IO.userError s!"{fails} serialization tests failed"
 
 def testBlog (_ : Config) : IO Unit := do
   IO.println "Running blog tests with Plausible..."
   let fails ← runBlogTests
   if fails > 0 then
-    throw <| .userError s!"{fails} blog tests failed"
+    throw <| IO.userError s!"{fails} blog tests failed"
+
+def testLiterateConfig (_ : Config) : IO Unit := do
+  let fails ← Tests.LiterateConfig.runLiterateConfigTests
+  if fails > 0 then
+    throw <| IO.userError s!"{fails} literate config tests failed"
+
+def testLiterateHtml (_ : Config) : IO Unit :=
+  Tests.LiterateHtml.testLiterateHtml
+
+def testLiterateHtmlMultiRoot (_ : Config) : IO Unit :=
+  Tests.LiterateHtml.testLiterateHtmlMultiRoot
 
 -- Interactive tests via the LSP server
 def testInteractive (_ : Config) : IO Unit := do
@@ -162,6 +175,83 @@ def testInteractive (_ : Config) : IO Unit := do
   let exitCode ← child.wait
   if exitCode != 0 then
     throw <| IO.userError s!"Interactive LSP tests failed with exit code {exitCode}"
+
+private def hasSubstring (s : String) (sub : String) : Bool :=
+  s.find? sub |>.isSome
+
+def testSetupLiterate (_ : Config) : IO Unit := do
+  IO.println "Running setup-literate tests..."
+  let versoRoot ← IO.FS.realPath "."
+  IO.FS.withTempDir fun tmpDir => do
+    let run (cmd : String) (args : Array String) : IO Unit := do
+      let result ← IO.Process.output {
+        cmd := cmd
+        args := args
+        cwd := some tmpDir.toString
+      }
+      if result.exitCode != 0 then
+        throw <| IO.userError s!"{cmd} failed: {result.stderr}"
+
+    -- Set up a project that depends on the Verso being tested
+    run "git" #["init", "-q"]
+    let toolchain ← IO.FS.readFile "lean-toolchain"
+    IO.FS.writeFile (tmpDir / "lean-toolchain") toolchain
+    IO.FS.writeFile (tmpDir / "lakefile.toml")
+      s!"name = \"test-project\"\n\n[[require]]\nname = \"verso\"\npath = \"{versoRoot}\"\n"
+
+    -- Test 1: Fresh generation via lake exe
+    let result ← IO.Process.output {
+      cmd := "lake"
+      args := #["exe", "verso", "setup-literate"]
+      cwd := some tmpDir.toString
+    }
+    if result.exitCode != 0 then
+      throw <| IO.userError s!"setup-literate failed: {result.stderr}\n{result.stdout}"
+
+    let workflowFile := tmpDir / ".github" / "workflows" / "verso-literate-pages.yml"
+    unless ← workflowFile.pathExists do
+      throw <| IO.userError "Workflow file was not created"
+
+    let content ← IO.FS.readFile workflowFile
+    let checks := #[
+      ("lake query :literateHtml", "lake query command"),
+      ("deploy-pages@v", "deploy-pages action"),
+      ("upload-pages-artifact@v", "upload-pages-artifact action"),
+      ("lean-action@v", "lean-action")
+    ]
+    for (needle, desc) in checks do
+      unless hasSubstring content needle do
+        throw <| IO.userError s!"Workflow file missing {desc} ({needle})"
+    IO.println "  fresh generation: passed"
+
+    -- Test 2: Idempotent (no change)
+    let result2 ← IO.Process.output {
+      cmd := "lake"
+      args := #["exe", "verso", "setup-literate"]
+      cwd := some tmpDir.toString
+    }
+    unless hasSubstring result2.stdout "up to date" do
+      throw <| IO.userError "Expected 'up to date' message on second run"
+    IO.println "  idempotent: passed"
+
+    -- Test 3: Outdated file gets .bak
+    IO.FS.writeFile workflowFile "modified content\n"
+    let result3 ← IO.Process.output {
+      cmd := "lake"
+      args := #["exe", "verso", "setup-literate"]
+      cwd := some tmpDir.toString
+    }
+    if result3.exitCode != 0 then
+      throw <| IO.userError s!"setup-literate (update) failed: {result3.stderr}"
+    let bakFile := tmpDir / ".github" / "workflows" / "verso-literate-pages.yml.bak"
+    unless ← bakFile.pathExists do
+      throw <| IO.userError ".bak file was not created when updating"
+    let bakContent ← IO.FS.readFile bakFile
+    unless hasSubstring bakContent "modified content" do
+      throw <| IO.userError ".bak file should contain old content"
+    IO.println "  backup on update: passed"
+
+  IO.println "  All setup-literate tests passed."
 
 open Verso.Integration in
 def tests := [
@@ -176,7 +266,11 @@ def tests := [
     (extraFilesTeX := [("src/tests/integration/extra-files-doc/test-data/TeX-only", "TeX-only")]),
   testTexOutput "front-matter-doc" FrontMatter.doc,
   testZip,
-  testInteractive
+  testInteractive,
+  testLiterateConfig,
+  testLiterateHtml,
+  testLiterateHtmlMultiRoot,
+  testSetupLiterate
 ]
 
 def getConfig (config : Config) : List String → IO Config
@@ -184,7 +278,7 @@ def getConfig (config : Config) : List String → IO Config
   | "--update-expected" :: args => getConfig { config with updateExpected := true } args
   | "--verbose" :: args | "-v" :: args => getConfig { config with verbose := true } args
   | "--check-tex" :: args => getConfig { config with checkTeX := true } args
-  | other :: _ => throw <| .userError s!"Didn't understand {other}"
+  | other :: _ => throw <| IO.userError s!"Didn't understand {other}"
 
 def main (args : List String) : IO UInt32 := do
   let config ← getConfig {} args

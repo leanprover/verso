@@ -1,4 +1,4 @@
-lake-manifest.json
+**/lake-manifest.json
 .lake
 
 # build files

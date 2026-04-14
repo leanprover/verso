@@ -1,0 +1,108 @@
+name: Update SubVerso
+
+on:
+    workflow_dispatch: # Manual triggering only
+
+jobs:
+    update-subverso:
+        name: Update SubVerso and open PR
+        runs-on: nscloud-ubuntu-22.04-amd64-8x16
+        if: github.repository == 'leanprover/verso'
+        env:
+            PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers
+        permissions:
+            contents: write
+            pull-requests: write
+
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v6
+              with:
+                  ref: main
+                  token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Configure Git
+              run: |
+                  git config user.name "github-actions[bot]"
+                  git config user.email "github-actions[bot]@users.noreply.github.com"
+
+            - name: Install elan
+              run: |
+                  set -o pipefail
+                  curl -sSfL https://github.com/leanprover/elan/releases/download/v4.1.2/elan-x86_64-unknown-linux-gnu.tar.gz | tar xz
+                  ./elan-init -y --default-toolchain none
+                  echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+
+            - name: Update SubVerso
+              run: |
+                  lake --keep-toolchain update subverso
+
+            - name: Check for changes
+              id: check-changes
+              run: |
+                  if git diff --quiet; then
+                    echo "No changes detected — SubVerso is already up to date."
+                    echo "changed=false" >> "$GITHUB_OUTPUT"
+                  else
+                    echo "SubVerso update produced changes."
+                    echo "changed=true" >> "$GITHUB_OUTPUT"
+                  fi
+
+            - name: Propagate SubVerso update
+              if: steps.check-changes.outputs.changed == 'true'
+              run: |
+                  ./update-subverso.sh
+
+            - name: Build
+              if: steps.check-changes.outputs.changed == 'true'
+              run: |
+                  lake build
+
+            - name: Install PDF Dependencies
+              if: steps.check-changes.outputs.changed == 'true'
+              uses: ./.github/actions/install-texlive
+
+            - name: Install uv
+              if: steps.check-changes.outputs.changed == 'true'
+              uses: astral-sh/setup-uv@v7
+              with:
+                  enable-cache: true
+                  cache-dependency-glob: "browser-tests/pyproject.toml"
+
+            - name: Cache Playwright browsers
+              if: steps.check-changes.outputs.changed == 'true'
+              uses: actions/cache@v5
+              with:
+                  path: .playwright-browsers
+                  key: playwright-${{ runner.os }}-${{ hashFiles('browser-tests/uv.lock') }}
+
+            - name: Install Playwright browsers
+              if: steps.check-changes.outputs.changed == 'true'
+              run: |
+                  uv run --project browser-tests --extra test playwright install chromium firefox --with-deps
+
+            - name: Run tests
+              if: steps.check-changes.outputs.changed == 'true'
+              run: |
+                  lake test -- --verbose --check-tex
+
+            - name: Create branch and open PR
+              if: steps.check-changes.outputs.changed == 'true'
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                  SUBVERSO_REV=$(jq -r '.packages[] | select(.name == "subverso") | .rev' lake-manifest.json)
+                  SHORT_REV="${SUBVERSO_REV:0:8}"
+                  BRANCH="chore/update-subverso-${SHORT_REV}"
+
+                  git checkout -b "$BRANCH"
+                  git add .
+                  git commit -m "chore: bump SubVerso to ${SHORT_REV}"
+                  git push -u origin "$BRANCH"
+
+                  gh pr create \
+                    --base main \
+                    --title "chore: bump SubVerso to ${SHORT_REV}" \
+                    --body "Automated SubVerso update to revision \`${SUBVERSO_REV}\`.
+
+                  Tests have passed in CI prior to opening this PR."

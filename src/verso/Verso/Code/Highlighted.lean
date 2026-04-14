@@ -1168,7 +1168,6 @@ Some CSS frameworks customize details/summary in ways not compatible with Verso'
   /* Without these, mobile Safari will start making font sizes inconsistent when its text size adjustment feature is triggered.*/
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
-
 }
 
 .tippy-box[data-theme~='lean'] {
@@ -1330,41 +1329,50 @@ window.onload = () => {
       return false;
     }
 
+    // Track whether any tippy is visible (O(1) check instead of DOM scan)
+    let visibleTippyCount = 0;
     function blockedByTippy(elem) {
-      // Don't show a new hover until the old ones are all closed.
-      // Scoped to the nearest \"top-level block\" to avoid being O(n) in the size of the document.
-      var block = elem;
-      const topLevel = new Set([\"section\", \"body\", \"html\", \"nav\", \"header\"]);
-      while (block.parentNode && !topLevel.has(block.parentNode.nodeName.toLowerCase())) {
-        block = block.parentNode;
-      }
-      for (const child of block.querySelectorAll(\".token, .has-info\")) {
-        if (child._tippy && child._tippy.state.isVisible) { return true };
-      }
-      return false;
+      return visibleTippyCount > 0;
     }
 
-    for (const c of document.querySelectorAll(\".hl.lean .token\")) {
-        if (c.dataset.binding != \"\") {
-            c.addEventListener(\"mouseover\", (event) => {
-                if (blockedByTactic(c)) {return;}
-                const context = c.closest(\".hl.lean\").dataset.leanContext;
-                for (const example of document.querySelectorAll(\".hl.lean\")) {
-                    if (example.dataset.leanContext == context) {
-                        for (const tok of example.querySelectorAll(\".token\")) {
-                            if (c.dataset.binding == tok.dataset.binding) {
-                                tok.classList.add(\"binding-hl\");
-                            }
-                        }
-                    }
-                }
-            });
-        }
-        c.addEventListener(\"mouseout\", (event) => {
-            for (const tok of document.querySelectorAll(\".hl.lean .token\")) {
-                tok.classList.remove(\"binding-hl\");
+    // Binding highlights via event delegation with cached lookups
+    const bindingCache = new Map(); // context+binding -> [token elements]
+    let highlightedTokens = [];
+    function getBindingTokens(context, binding) {
+      const key = context + \"\\0\" + binding;
+      let tokens = bindingCache.get(key);
+      if (!tokens) {
+        tokens = [];
+        for (const example of document.querySelectorAll(\".hl.lean\")) {
+          if (example.dataset.leanContext == context) {
+            for (const tok of example.querySelectorAll(\".token[data-binding=\\\"\" + CSS.escape(binding) + \"\\\"]\")) {
+              tokens.push(tok);
             }
-        });
+          }
+        }
+        bindingCache.set(key, tokens);
+      }
+      return tokens;
+    }
+    for (const container of document.querySelectorAll(\".hl.lean\")) {
+      container.addEventListener(\"mouseover\", (event) => {
+        const c = event.target.closest(\".token\");
+        if (!c || !c.dataset.binding || c.dataset.binding === \"\" || !container.contains(c)) return;
+        if (blockedByTactic(c)) return;
+        const tokens = getBindingTokens(container.dataset.leanContext, c.dataset.binding);
+        for (const tok of tokens) {
+          tok.classList.add(\"binding-hl\");
+        }
+        highlightedTokens = tokens;
+      });
+      container.addEventListener(\"mouseout\", (event) => {
+        const c = event.target.closest(\".token\");
+        if (!c || !container.contains(c)) return;
+        for (const tok of highlightedTokens) {
+          tok.classList.remove(\"binding-hl\");
+        }
+        highlightedTokens = [];
+      });
     }
     /* Render docstrings */
     if ('undefined' !== typeof marked) {
@@ -1408,13 +1416,12 @@ window.onload = () => {
         followCursor: 'initial',
         onShow(inst) {
           if (inst.reference.className == 'tactic') {
-
             const toggle = inst.reference.querySelector(\"input.tactic-toggle\");
             if (toggle && toggle.checked) {
               return false;
             }
             hideParentTooltips(inst.reference);
-            //if (blockedByTippy(inst.reference)) { return false; }
+            if (blockedByTippy(inst.reference)) { return false; }
 
           } else if (inst.reference.querySelector(\".hover-info\") || \"versoHover\" in inst.reference.dataset) {
             if (blockedByTactic(inst.reference)) { return false };
@@ -1423,6 +1430,8 @@ window.onload = () => {
             return false;
           }
         },
+        onShown(inst) { visibleTippyCount++; },
+        onHidden(inst) { visibleTippyCount = Math.max(0, visibleTippyCount - 1); },
         content (tgt) {
           const content = document.createElement(\"span\");
           if (tgt.className == 'tactic') {
@@ -1502,7 +1511,40 @@ window.onload = () => {
       document.querySelectorAll('.hl.lean .tactic').forEach(element => {
         element.setAttribute('data-tippy-theme', 'tactic');
       });
-      let insts = tippy('.hl.lean .const.token, .hl.lean .keyword.token, .hl.lean .literal.token, .hl.lean .option.token, .hl.lean .var.token, .hl.lean .typed.token, .hl.lean .has-info, .hl.lean .tactic, .hl.lean .level-var, .hl.lean .level-const, .hl.lean .level-op, .hl.lean .sort', defaultTippyProps);
+      // Skip tokens inside closed tactics — they interfere with tactic tippys
+      const closedTactics = new Set();
+      document.querySelectorAll('.hl.lean .tactic').forEach(tactic => {
+        const toggle = tactic.querySelector('input.tactic-toggle');
+        if (toggle && !toggle.checked) closedTactics.add(tactic);
+      });
+      function isInsideClosedTactic(el) {
+        const tactic = el.closest('.tactic');
+        return tactic && tactic !== el && closedTactics.has(tactic);
+      }
+
+      const tokenSelector = '.hl.lean .const.token, .hl.lean .keyword.token, .hl.lean .literal.token, .hl.lean .option.token, .hl.lean .var.token, .hl.lean .typed.token, .hl.lean .has-info, .hl.lean .tactic, .hl.lean .level-var, .hl.lean .level-const, .hl.lean .level-op, .hl.lean .sort';
+      tippy(Array.from(document.querySelectorAll(tokenSelector)).filter(el => !isInsideClosedTactic(el)), defaultTippyProps);
+
+      // Create/destroy token tippys when tactic checkbox toggles
+      const tacticTippySelector = '.const.token, .keyword.token, .literal.token, .option.token, .var.token, .typed.token, .has-info, .level-var, .level-const, .level-op, .sort';
+      document.querySelectorAll('.hl.lean .tactic').forEach(tactic => {
+        const toggle = tactic.querySelector('input.tactic-toggle');
+        if (toggle) toggle.addEventListener('change', () => {
+          if (toggle.checked) {
+            closedTactics.delete(tactic);
+            tactic.querySelectorAll('.token').forEach(tok => {
+              if (!tok._tippy && tok.matches(tacticTippySelector)) {
+                tippy(tok, defaultTippyProps);
+              }
+            });
+          } else {
+            closedTactics.add(tactic);
+            tactic.querySelectorAll('.token').forEach(tok => {
+              if (tok._tippy) tok._tippy.destroy();
+            });
+          }
+        });
+      });
   });
 }
 "

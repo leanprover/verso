@@ -20,3 +20,7 @@ def tippy := include_str "../../../../../vendored-js/tippy/tippy-bundle.umd.min.
 def tippy.map := include_str "../../../../../vendored-js/tippy/tippy-bundle.umd.min.js.map.json"
 
 def tippy.border.css := include_str "../../../../../vendored-js/tippy/border.css"
+
+def marked := include_str "../../../../../vendored-js/marked/marked.umd.min.js"
+
+def marked.map := include_str "../../../../../vendored-js/marked/marked.umd.min.js.map"

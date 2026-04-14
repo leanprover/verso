@@ -3,9 +3,12 @@ Copyright (c) 2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
+module
 import Verso.BEq
-import VersoLiterate.Exported
-import Verso.Doc
+public import VersoLiterate.Exported
+public import Verso.Doc
+
+public section
 
 namespace VersoLiterate
 open Lean
@@ -17,7 +20,8 @@ def loadJsonString (jsonString : String) (blame := "JSON string") : Except Strin
   let itemsJson ← json.getObjVal? "items" |>.mapError (s!"Error decoding items in {blame}: {·}")
   let eItems ← FromJson.fromJson? (α := VersoLiterate.ExportedModuleItems) itemsJson |>.mapError (s!"Error decoding {blame}: {·}")
   let items ← eItems.toModuleItems
-  pure { name := name.toName, contents := items }
+  let images := (json.getObjValAs? (Array String) "images").toOption.getD #[]
+  pure { name := name.toName, contents := items, images }
 
 def loadJsonString! (jsonString : String) (blame := "JSON string") : LitMod :=
   match loadJsonString jsonString blame with
