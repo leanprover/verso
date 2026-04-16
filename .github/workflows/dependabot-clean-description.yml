@@ -15,7 +15,7 @@ jobs:
             - run: npm install marked@latest
 
             - name: Rewrite PR description and post original as comment
-              uses: actions/github-script@v8
+              uses: actions/github-script@v9
               with:
                   script: |
                       const { marked } = require('marked');
