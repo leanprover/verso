@@ -70,8 +70,18 @@ jobs:
 
             - name: Sync test-project lean-toolchains
               run: |
-                  for proj in test-projects/literate-config test-projects/literate-multi-root; do
-                    cp lean-toolchain "$proj/lean-toolchain"
+                  targets=(
+                    test-projects/literate-config/lean-toolchain
+                    test-projects/literate-multi-root/lean-toolchain
+                  )
+                  for t in "${targets[@]}"; do
+                    if [ -L "$t" ]; then
+                      echo "Refusing to write through symlink: $t"
+                      exit 1
+                    fi
+                  done
+                  for t in "${targets[@]}"; do
+                    cp lean-toolchain "$t"
                   done
 
             - name: Commit and push
@@ -79,7 +89,9 @@ jobs:
               run: |
                   git config user.name "github-actions[bot]"
                   git config user.email "github-actions[bot]@users.noreply.github.com"
-                  git add -A
+                  git add -- \
+                    test-projects/literate-config/lean-toolchain \
+                    test-projects/literate-multi-root/lean-toolchain
                   if git diff --cached --quiet; then
                     echo "No consistency fixes needed"
                     echo "changes=false" >> "$GITHUB_OUTPUT"
@@ -98,4 +110,16 @@ jobs:
                         repo: context.repo.repo,
                         comment_id: context.payload.comment.id,
                         content: '${{ steps.commit.outputs.changes == 'true' && 'rocket' || '+1' }}'
+                      });
+
+            - name: Add failure reaction
+              if: failure()
+              uses: actions/github-script@v8
+              with:
+                  script: |
+                      await github.rest.reactions.createForIssueComment({
+                        owner: context.repo.owner,
+                        repo: context.repo.repo,
+                        comment_id: context.payload.comment.id,
+                        content: 'confused'
                       });
