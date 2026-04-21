@@ -55,12 +55,10 @@ jobs:
                   ROOT_TC=$(cat lean-toolchain)
                   echo "Root lean-toolchain: $ROOT_TC"
                   FAILED=0
-                  FIXCMDS=""
                   for proj in test-projects/literate-config test-projects/literate-multi-root; do
                     PROJ_TC=$(cat "$proj/lean-toolchain")
                     if [ "$PROJ_TC" != "$ROOT_TC" ]; then
                       echo "MISMATCH: $proj/lean-toolchain ($PROJ_TC) does not match root ($ROOT_TC)"
-                      FIXCMDS+="cp lean-toolchain $proj/lean-toolchain"$'\n'
                       FAILED=1
                     else
                       echo "OK: $proj/lean-toolchain"
@@ -68,7 +66,6 @@ jobs:
                   done
                   if [ "$FAILED" -ne 0 ]; then
                     echo ""
-                    echo "To fix, run:"
-                    echo "$FIXCMDS"
+                    echo "To fix automatically, comment '!consistent' on the PR."
                     exit 1
                   fi
