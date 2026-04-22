@@ -16,6 +16,7 @@ import Tests.Integration.SampleDoc
 import Tests.Integration.CodeContent
 import Tests.Integration.ExtraFilesDoc
 import Tests.LeanCode
+import Tests.Linters
 import Tests.Integration.InheritanceDoc
 import Tests.Integration.FrontMatter
 import Tests.Integration.LeanSection

@@ -74,7 +74,7 @@ def typography : Linter where
         Syntax.mkStrLit (String.singleton (pos.get text.source))
           (info := .original {str := text.source, startPos := pos, stopPos := pos} pos {str := text.source, startPos := stop, stopPos := stop} stop)
         let h ← liftTermElabM <| MessageData.hint m!"Replace with Unicode" #[{suggestion := replacement}] (ref? := strLit)
-        logLint linter strLit (m!"Use {what} ('{replacement}')" ++ h)
+        logLintIf linter strLit (m!"Use {what} ('{replacement}')" ++ h)
 
     discard <| stx.replaceM fun
       | `(inline|$s:str) => do
