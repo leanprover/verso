@@ -45,8 +45,7 @@ const expandMatches = true;
  * @param {number | undefined | null} p
  * @returns {number}
  */
-export const priorityContribution = (p) =>
-    p == null ? 0 : (p - 50) / 50;
+export const priorityContribution = (p) => (p == null ? 0 : (p - 50) / 50);
 
 /**
  * Combines a raw score with any number of priority layers. Layer contributions are summed in
@@ -591,7 +590,15 @@ class SearchBox {
      * @param {SearchPriorities} searchPriorities
      * @param {Record<string, number>} docPriority
      */
-    constructor(comboboxNode, buttonNode, listboxNode, domainMappers, mappedData, searchPriorities, docPriority) {
+    constructor(
+        comboboxNode,
+        buttonNode,
+        listboxNode,
+        domainMappers,
+        mappedData,
+        searchPriorities,
+        docPriority,
+    ) {
         this.comboboxNode = comboboxNode;
         this.buttonNode = buttonNode;
         this.listboxNode = listboxNode;
@@ -827,7 +834,11 @@ class SearchBox {
         for (const tr of textResults) {
             candidates.push({
                 kind: "fullText",
-                score: combineScore(tr.score, this.searchPriorities.fullText, this.docPriority[tr.ref]),
+                score: combineScore(
+                    tr.score,
+                    this.searchPriorities.fullText,
+                    this.docPriority[tr.ref],
+                ),
                 textMatch: tr,
             });
         }
@@ -859,9 +870,7 @@ class SearchBox {
                     result
                         .highlight((v) => ({ v }))
                         .map((v) =>
-                            typeof v === "string"
-                                ? { t: "text", v }
-                                : { t: "highlight", v: v.v },
+                            typeof v === "string" ? { t: "text", v } : { t: "highlight", v: v.v },
                         ),
                     document,
                 );
@@ -1302,7 +1311,13 @@ class SearchBox {
  * }} RegisterSearchArgs
  * @param {RegisterSearchArgs} args
  */
-export const registerSearch = ({ searchWrapper, data, domainMappers, searchPriorities, docPriority }) => {
+export const registerSearch = ({
+    searchWrapper,
+    data,
+    domainMappers,
+    searchPriorities,
+    docPriority,
+}) => {
     const comboboxNode = /** @type {HTMLDivElement} */ (
         searchWrapper.querySelector("div[contenteditable]")
     );
