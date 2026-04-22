@@ -217,6 +217,9 @@ public instance : GetElem? (NameMap α) Name α fun xs n => n ∈ xs where
        exact ok
   getElem? xs x := xs.get? x
 
+public instance [BEq α] : BEq (NameMap α) where
+  beq xs ys :=
+    xs.size == ys.size && xs.all (fun k v => ys[k.toName]?.isEqSome v)
 
 public instance [Monad m] : ForIn m (NameMap α) (PublicName × α) where
   forIn xs init f := (xs : Std.TreeMap _ _ _).forIn (fun a b acc => f (a, b) acc) init

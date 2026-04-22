@@ -859,7 +859,7 @@ public def mkIndex (p : Verso.Doc.Part g) (ctx : g.TraverseContext) : Except Str
 end
 
 /--
-Builds the per-document priority map as JSON: an object mapping each {lit}`IndexDoc.id` that has
+Builds the per-document priority map as JSON: an object mapping each {name}`IndexDoc.id` that has
 a non-{name}`none` priority to its value. Documents without a priority are omitted. The browser
 reads this map and folds each entry into the log-space scoring sum alongside the global full-text
 priority.

@@ -408,10 +408,10 @@ def testDataFile := testProp <| ∀ (f : Verso.Genre.Manual.DataFile), roundTrip
 def testNumbering := testProp <| ∀ (n : Verso.Genre.Manual.Numbering), roundTripOk n
 def testXrefSource := testProp <| ∀ (src : XrefSource), isEqOk (XrefSource.fromJson? src.toJson) src
 def testRemote := testProp <| ∀ (r : Remote), isEqOk (Remote.fromJson? "" r.toJson) r
-def testSearchPriorities := testProp <| ∀ (semantic fullText searchPriority : Fin 100),
+def testSearchPriorities := testProp <| ∀ (semantic fullText : Fin 100) (domains : Verso.NameMap (Fin 100)),
   let mapper : Search.DomainMapper :=
-    { displayName := "d", className := "c", dataToSearchables := "x => []", searchPriority }
-  let priorities : Search.SearchPriorities := { semantic, fullText }
+    { displayName := "d", className := "c", dataToSearchables := "x => []" }
+  let priorities : Search.SearchPriorities := { semantic, fullText, domains }
   roundTripOk mapper ∧ roundTripOk priorities
 
 /--

@@ -26,35 +26,35 @@ private def assertContains (label : String) (haystack : String) (needle : String
   unless hasSub haystack needle do
     throw <| IO.userError s!"expected {label} output to contain {repr needle}, got:\n{haystack}"
 
-/-- Verifies that `DomainMapper.toJs` emits `searchPriority` alongside the other fields. -/
+/-- Verifies that `DomainMapper.toJs` emits the display/class/data fields without a priority. -/
 def testMapperToJs : IO Unit := do
   let mapper : DomainMapper :=
     { displayName := "Term"
       className := "term"
-      dataToSearchables := "x => []"
-      searchPriority := 73 }
+      dataToSearchables := "x => []" }
   let rendered := (DomainMapper.toJs mapper).pretty (width := 70)
   assertContains "DomainMapper" rendered "displayName:"
   assertContains "DomainMapper" rendered "\"Term\""
   assertContains "DomainMapper" rendered "className:"
   assertContains "DomainMapper" rendered "\"term\""
   assertContains "DomainMapper" rendered "dataToSearchables:"
-  assertContains "DomainMapper" rendered "searchPriority:"
-  assertContains "DomainMapper" rendered "73"
+  if hasSub rendered "searchPriority" then
+    throw <| IO.userError
+      s!"DomainMapper output should not contain `searchPriority` (it lives in SearchPriorities now):\n{rendered}"
 
 /--
 Verifies that `DomainMappers.toJs` emits both the `domainMappers` constant and the
-`searchPriorities` constant with the correct semantic / fullText values, and that an individual
-mapper's `searchPriority` survives into the output.
+`searchPriorities` constant with the correct semantic / fullText values plus the per-domain
+priorities map.
 -/
 def testMappersToJs : IO Unit := do
   let mapper : DomainMapper :=
     { displayName := "Term"
       className := "term"
-      dataToSearchables := "x => []"
-      searchPriority := 73 }
+      dataToSearchables := "x => []" }
   let mappers : DomainMappers := HashMap.ofList [("Verso.Test", mapper)]
-  let priorities : SearchPriorities := { semantic := 60, fullText := 40 }
+  let priorities : SearchPriorities :=
+    { semantic := 60, fullText := 40, domains := ({} : Verso.NameMap _).insert `Verso.Test 73 }
   let rendered := (mappers.toJs priorities).pretty (width := 70)
   assertContains "DomainMappers" rendered "export const domainMappers"
   assertContains "DomainMappers" rendered "export const searchPriorities"
@@ -62,9 +62,9 @@ def testMappersToJs : IO Unit := do
   assertContains "DomainMappers" rendered "60"
   assertContains "DomainMappers" rendered "fullText:"
   assertContains "DomainMappers" rendered "40"
-  assertContains "DomainMappers" rendered "searchPriority:"
-  assertContains "DomainMappers" rendered "73"
+  assertContains "DomainMappers" rendered "domains:"
   assertContains "DomainMappers" rendered "\"Verso.Test\""
+  assertContains "DomainMappers" rendered "73"
 
 /--
 Verifies `Verso.Search.priorityMapJson` produces a keyed map of only the documents that have a

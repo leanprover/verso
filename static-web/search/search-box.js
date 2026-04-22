@@ -91,9 +91,9 @@ export const combineScore = (rawScore, ...priorities) => {
  * @typedef {(domainData: any) => Searchable[]} DomainDataToSearchables
  * @typedef {{t: 'text', v: string} | {t: 'highlight', v: string}} MatchedPart
  * @typedef {(searchable: Searchable, matchedParts: MatchedPart[], document: Document) => HTMLElement} CustomResultRender
- * @typedef {{dataToSearchables: DomainDataToSearchables, customRender?: CustomResultRender, displayName: string, className: string, searchPriority?: number}} DomainMapper
+ * @typedef {{dataToSearchables: DomainDataToSearchables, customRender?: CustomResultRender, displayName: string, className: string}} DomainMapper
  * @typedef {Record<string, DomainMapper>} DomainMappers
- * @typedef {{semantic: number, fullText: number}} SearchPriorities
+ * @typedef {{semantic: number, fullText: number, domains?: Record<string, number>}} SearchPriorities
  * @typedef {{ref: string, score: number, doc: DocContent}} TextMatch
  * @typedef {{item: Searchable, fuzzysortResult: Fuzzysort.Result, htmlItem: HTMLLIElement}|{terms: string, textItem: TextMatch, htmlItem: HTMLLIElement}} SearchResult
  * @typedef {{run: (tokens: string[]) => string[]}} ElasticLunrPipeline
@@ -821,11 +821,10 @@ class SearchBox {
         for (const fr of results) {
             const dataItems = this.mappedData[fr.target];
             for (const searchable of dataItems) {
-                const mapper = this.domainMappers[searchable.domainId];
                 const eff = combineScore(
                     fr.score,
                     this.searchPriorities.semantic,
-                    mapper?.searchPriority,
+                    this.searchPriorities.domains?.[searchable.domainId],
                     searchable.priority,
                 );
                 candidates.push({ kind: "semantic", score: eff, fuzzysortResult: fr, searchable });
@@ -1330,6 +1329,7 @@ export const registerSearch = ({
     const priorities = {
         semantic: searchPriorities?.semantic ?? 50,
         fullText: searchPriorities?.fullText ?? 50,
+        domains: searchPriorities?.domains ?? {},
     };
     if (comboboxNode != null && listboxNode != null) {
         new SearchBox(
