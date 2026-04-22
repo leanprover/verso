@@ -377,7 +377,7 @@ instance [Arbitrary α] : Arbitrary (Verso.NameMap α) where
 open Shrinkable in
 instance [Shrinkable α] : Shrinkable (Verso.NameMap α) where
   shrink v :=
-    shrink v.toArray |>.map fun v => .ofArray v _
+    shrink v.toArray |>.map fun v => TreeMap.ofArray v _
 
 instance : Arbitrary RemoteInfo where
   arbitrary := do
