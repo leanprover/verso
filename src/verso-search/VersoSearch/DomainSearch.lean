@@ -10,6 +10,7 @@ meta import VersoUtil.BinFiles
 import VersoUtil.BinFiles
 import Std.Data.HashMap
 public import Lean.Data.Json.FromToJson
+public import Verso.Instances
 
 open Std (HashMap)
 
@@ -72,6 +73,12 @@ public structure DomainMapper where
    * {lit}`document` is the DOM document object
   -/
   customRender : Option String := none
+  /--
+  Relative priority of matches from this domain in search results, on a scale from {lit}`0` to
+  {lit}`99`. {lit}`50` is the default (no boost); higher values boost matches from this domain and
+  lower values de-emphasize them.
+  -/
+  searchPriority : Fin 100 := 50
 deriving Repr, DecidableEq, ToJson, FromJson
 
 /--
@@ -105,6 +112,7 @@ public def DomainMapper.toJs (mapper : DomainMapper) : Std.Format :=
       | .none => .nil
       | .some customRender =>
           .nest 2 (.group ("customRender:" ++ .line ++ .text customRender)) ++ "," ++ .line) ++
+    .nest 2 (.group ("searchPriority:" ++ .line ++ .text (toString mapper.searchPriority.val))) ++ "," ++ .line ++
     .text "}"
 
 -- Objects could be included as literals, rather than defined, but that makes it more difficult to
@@ -173,6 +181,25 @@ private def jsName (domainName : String) : String := Id.run do
 end
 
 /--
+Global priorities for the two search result streams, on a scale from {lit}`0` to {lit}`99`.
+
+Both default to {lit}`50` (no boost). Raising {lit}`semantic` above {lit}`50` prioritizes fuzzy
+(quick-jump) matches over full-text matches; raising {lit}`fullText` above {lit}`50` does the
+reverse.
+
+These globals compose additively (in log space) with the per-item and per-section priorities in
+each stream: a semantic match is scored against {lit}`semantic` plus its domain, section, and item
+contributions, and a full-text match is scored against {lit}`fullText` plus its per-document
+priority baked in at index time.
+-/
+public structure SearchPriorities where
+  /-- Priority applied to all semantic (fuzzy / quick-jump) match scores. -/
+  semantic : Fin 100 := 50
+  /-- Priority applied to all full-text search match scores. -/
+  fullText : Fin 100 := 50
+deriving Repr, DecidableEq, ToJson, FromJson
+
+/--
 A mapping from Verso domain names to their search customizations.
 -/
 public abbrev DomainMappers : Type := HashMap String DomainMapper
@@ -180,13 +207,21 @@ public abbrev DomainMappers : Type := HashMap String DomainMapper
 open Std.Format in
 /--
 Generates code for the provided collection of domain mappers, constructing a JS constant named
-{lit}`domainMappers` that's suitable for the quick-jump feature.
+{lit}`domainMappers` that's suitable for the quick-jump feature. Also emits a {lit}`searchPriorities`
+constant carrying the global full-text / semantic multipliers.
 -/
-public def DomainMappers.toJs (mappers : DomainMappers) : Std.Format :=
+public def DomainMappers.toJs (mappers : DomainMappers) (priorities : SearchPriorities := {}) : Std.Format :=
   let ms := mappers.fold (init := nil) fun code dom m => code ++ line ++ line ++ gen dom m
   let ms' := mappers.keys.map fun dom => nest 2 <| group <| text dom.quote ++ ":" ++ line ++ jsName dom
+  let prio :=
+    group (nest 2 (
+      "export const searchPriorities = {" ++ line ++
+      nest 2 ("semantic: " ++ text (toString priorities.semantic.val) ++ "," ++ line ++
+              "fullText: " ++ text (toString priorities.fullText.val)) ++ line ++
+      "};"))
   ms ++ line ++ line ++
-  group (nest 2 ("export const domainMappers = {" ++ (text "," ++ line).joinSep ms') ++ line ++ "};")
+  group (nest 2 ("export const domainMappers = {" ++ (text "," ++ line).joinSep ms') ++ line ++ "};") ++
+  line ++ line ++ prio
 where
   gen (dom : String) (m : DomainMapper) :=
     text typeComment ++ line ++

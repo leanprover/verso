@@ -7,6 +7,7 @@ module
 import Std.Data.HashSet
 import Std.Data.TreeSet
 import Verso.Doc
+public import Verso.Instances
 public import Verso.Doc.Html
 public import Verso.Doc.TeX
 public import MultiVerso
@@ -233,6 +234,20 @@ structure PartMetadata where
   htmlToc := true
   /-- How should this document be split when rendering multi-page HTML output? -/
   htmlSplit : HtmlSplitMode := .default
+  /--
+  Relative priority of this section in search results, on a scale from {lean (type := "Fin 100")}`0`
+  to {lean (type := "Fin 100")}`99`. {lean (type := "Fin 100")}`50` is the default (no boost);
+  higher values boost the section's rank and lower values de-emphasize it. The same priority
+  influences both quick-jump and full-text matches for the section.
+
+  Priorities set on ancestor parts are inherited: each ancestor's deviation from
+  {lean (type := "Fin 100")}`50` accumulates into a section's effective priority. For example,
+  setting {lit}`searchPriority` to {lean (type := "Fin 100")}`25` on a top-level “Release Notes”
+  part de-emphasizes every subsection beneath it, while an individual subsection can override by
+  setting a higher value of its own (which is added to, not multiplied with, the ancestor
+  contribution). A chain of neutral ({lean (type := "Fin 100")}`50`) ancestors contributes nothing.
+  -/
+  searchPriority : Fin 100 := 50
 deriving BEq, Hashable, Repr, ToJson, FromJson
 
 
@@ -1272,6 +1287,7 @@ def sectionDomainMapper : DomainMapper := {
       address: `${value[0].address}#${value[0].id}`,
       domainId: 'Verso.Genre.Manual.section',
       ref: value,
+      priority: value[0].data.searchPriority ?? 50,
     }))"
   : DomainMapper }.setFont { family := .structure, weight := .bold }
 
@@ -1280,6 +1296,18 @@ instance : TraversePart Manual where
 
 instance : TraverseBlock Manual where
   inBlock b := (·.inBlock b)
+
+/--
+Sums the search-priority deviations from the neutral 50 across an array of part headers (typically
+a part's ancestor chain including itself) and recenters on 50. The result is consumed by the
+client as a log-space contribution `(p - 50) / 50`, so summing deviations here lets a chain of
+ancestor priorities influence a section's final boost additively — a long or extreme chain can
+drift outside [0, 99], but the downstream math handles that uniformly.
+-/
+def ancestorSearchPriority (headers : Array PartHeader) : Int :=
+  headers.foldl (init := 50) fun acc h =>
+    let p : Int := (h.metadata.map (·.searchPriority.val) |>.getD 50 : Nat)
+    acc + (p - 50)
 
 def savePartXref (slug : Slug) (id : InternalId) (part : Part Manual) : TraverseM Unit := do
   let jsonMetadata :=
@@ -1296,11 +1324,13 @@ def savePartXref (slug : Slug) (id : InternalId) (part : Part Manual) : Traverse
   let num :=
     ((← read).inPart part |>.headers[1:]).toArray.map (fun (h : PartHeader) => h.metadata.bind (·.assignedNumber))
       |>.mapM _root_.id |>.map sectionNumberString
+  let searchPriority := ancestorSearchPriority ((← read).inPart part |>.headers)
   modify fun (st : TraverseState) => st.saveDomainObject sectionDomain slug.toString id |>.saveDomainObjectData sectionDomain slug.toString (json%{
     "context": $jsonMetadata,
     "title": $title,
     "shortTitle": $shortTitle,
-    "sectionNum": $num
+    "sectionNum": $num,
+    "searchPriority": $searchPriority
   })
 
 /--

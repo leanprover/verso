@@ -24,6 +24,7 @@ import Tests.ParserRegression
 import Tests.Paths
 import Tests.PorterStemmer
 import Tests.Refs
+import Tests.SearchJs
 import Tests.Serialization
 import Tests.TeX
 import Tests.TexUnit

@@ -149,6 +149,12 @@ def testSerialization (_ : Config) : IO Unit := do
   if fails > 0 then
     throw <| IO.userError s!"{fails} serialization tests failed"
 
+def testSearchJs (_ : Config) : IO Unit := do
+  IO.println "Running search JS wire-format tests..."
+  let fails ← Verso.Tests.SearchJs.runSearchJsTests
+  if fails > 0 then
+    throw <| IO.userError s!"{fails} search JS tests failed"
+
 def testBlog (_ : Config) : IO Unit := do
   IO.println "Running blog tests with Plausible..."
   let fails ← runBlogTests
@@ -256,6 +262,7 @@ def testSetupLiterate (_ : Config) : IO Unit := do
 open Verso.Integration in
 def tests := [
   testSerialization,
+  testSearchJs,
   testBlog,
   testStemmer,
   testTexOutput "sample-doc" SampleDoc.doc,

@@ -15,6 +15,7 @@ public meta import VersoManual.Html.JsFile
 public meta import VersoManual.Html.CssFile
 public meta import VersoManual.Html.Features
 public meta import VersoManual.LicenseInfo
+public meta import VersoSearch
 public meta import VersoSearch.DomainSearch
 public meta import Verso.Output.Html
 public meta import MultiVerso.Manifest
@@ -407,6 +408,30 @@ def testDataFile := testProp <| ∀ (f : Verso.Genre.Manual.DataFile), roundTrip
 def testNumbering := testProp <| ∀ (n : Verso.Genre.Manual.Numbering), roundTripOk n
 def testXrefSource := testProp <| ∀ (src : XrefSource), isEqOk (XrefSource.fromJson? src.toJson) src
 def testRemote := testProp <| ∀ (r : Remote), isEqOk (Remote.fromJson? "" r.toJson) r
+def testSearchPriorities := testProp <| ∀ (semantic fullText searchPriority : Fin 100),
+  let mapper : Search.DomainMapper :=
+    { displayName := "d", className := "c", dataToSearchables := "x => []", searchPriority }
+  let priorities : Search.SearchPriorities := { semantic, fullText }
+  roundTripOk mapper ∧ roundTripOk priorities
+
+/--
+Randomized check on `Verso.Search.priorityMapJson`: every entry it emits must be a plain integer
+tied to an input doc's {name}`IndexDoc.id`/{name}`IndexDoc.priority`, and every input doc with a
+priority set must have its id present in the emitted map.
+-/
+def testPriorityMapJson := testProp <| ∀ (docs : Array Search.IndexDoc),
+  let j : Json := Search.priorityMapJson docs
+  let entries : Array (String × Json) :=
+    match Json.getObj? j with
+    | .error _ => #[]
+    | .ok obj => obj.toArray
+  let forward := entries.all fun (k, v) =>
+    match Json.getInt? v with
+    | .error _ => false
+    | .ok p => docs.any fun d => d.id == k && d.priority == some p
+  let backward := docs.all fun d =>
+    d.priority.isNone || (Json.getObjVal? j d.id).toOption.isSome
+  forward ∧ backward
 
 def serializationTests : List (Name × (Σ p, IO <| TestResult p)) := [
   (`testInternalId, ⟨_, testInternalId⟩),
@@ -422,6 +447,8 @@ def serializationTests : List (Name × (Σ p, IO <| TestResult p)) := [
   (`testNumbering, ⟨_, testNumbering⟩),
   (`testXrefSource, ⟨_, testXrefSource⟩),
   (`testRemote, ⟨_, testRemote⟩),
+  (`testSearchPriorities, ⟨_, testSearchPriorities⟩),
+  (`testPriorityMapJson, ⟨_, testPriorityMapJson⟩),
 ]
 
 public def runSerializationTests : IO Nat := do

@@ -661,6 +661,14 @@ public structure IndexDoc where
   context : Array String
   /-- The string content to search for this document -/
   content : String
+  /--
+  An optional scoring priority for this document, using the same centered-at-50 convention as
+  {lit}`Searchable.priority` on the quick-jump side: $`50` is neutral, higher values boost the
+  document's rank in full-text results, and values may fall outside $`[0, 99]` when they
+  represent a pre-summed contribution (e.g. an ancestor-inherited section priority).
+  -/
+  priority : Option Int := none
+deriving Repr, BEq
 
 /-- A monad for indexing documents. -/
 public abbrev IndexM (genre : Verso.Doc.Genre) :=
@@ -718,6 +726,14 @@ public class Indexable (genre : Verso.Doc.Genre) where
   book title). Falls back to the chapter title.
   -/
   partShortContextName : Verso.Doc.Part genre → IndexM genre (Option String) := fun _ => pure none
+
+  /--
+  Computes the full-text search priority for a part, using the same centered-at-50 convention as
+  {lit}`Searchable.priority` on the quick-jump side. Returning {lit}`none` leaves the document at
+  neutral; returning a signed integer lets a genre fold section metadata, ancestor inheritance, or
+  other emission-time adjustments into full-text scoring.
+  -/
+  partPriority : Verso.Doc.Part genre → IndexM genre (Option Int) := fun _ => pure none
 
   /--
   How to index block extensions.
@@ -815,7 +831,8 @@ public partial def partText (p : Verso.Doc.Part g) : IndexM g String := do
   match p.metadata >>= idx.partId with
   | none => return header ++ "\n\n" ++ content
   | some id =>
-    IndexM.save {id, header, context, content}
+    let priority ← idx.partPriority p
+    IndexM.save {id, header, context, content, priority}
     return ""
 
 /--
@@ -840,3 +857,15 @@ public def mkIndex (p : Verso.Doc.Part g) (ctx : g.TraverseContext) : Except Str
    partText p |> discard |>.finalize ctx
 
 end
+
+/--
+Builds the per-document priority map as JSON: an object mapping each {lit}`IndexDoc.id` that has
+a non-{name}`none` priority to its value. Documents without a priority are omitted. The browser
+reads this map and folds each entry into the log-space scoring sum alongside the global full-text
+priority.
+-/
+public def priorityMapJson (docs : Array IndexDoc) : Lean.Json :=
+  docs.foldl (init := Lean.Json.mkObj []) fun acc d =>
+    match d.priority with
+    | none => acc
+    | some p => acc.setObjVal! d.id (Lean.toJson p)
