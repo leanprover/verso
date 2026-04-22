@@ -728,10 +728,11 @@ public class Indexable (genre : Verso.Doc.Genre) where
   partShortContextName : Verso.Doc.Part genre → IndexM genre (Option String) := fun _ => pure none
 
   /--
-  Computes the full-text search priority for a part, using the same centered-at-50 convention as
-  {lit}`Searchable.priority` on the quick-jump side. Returning {lit}`none` leaves the document at
-  neutral; returning a signed integer lets a genre fold section metadata, ancestor inheritance, or
-  other emission-time adjustments into full-text scoring.
+  Computes the full-text search priority for a part, using the same centered-at-50 convention as the
+  quick-jump side. Returning {lean}`none` leaves the document at neutral; returning a signed integer
+  lets a genre fold section metadata, ancestor inheritance, or other emission-time adjustments into
+  full-text scoring. This is an {lean}`Int` to allow it to accumulate adjustments that put it
+  outside the usual range.
   -/
   partPriority : Verso.Doc.Part genre → IndexM genre (Option Int) := fun _ => pure none
 
