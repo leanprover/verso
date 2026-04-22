@@ -1301,7 +1301,7 @@ instance : TraverseBlock Manual where
 Sums the search-priority deviations from the neutral 50 across an array of part headers (typically
 a part's ancestor chain including itself) and recenters on 50. The result is consumed by the
 client as a log-space contribution `(p - 50) / 50`, so summing deviations here lets a chain of
-ancestor priorities influence a section's final boost additively — a long or extreme chain can
+ancestor priorities influence a section's final boost additively: a long or extreme chain can
 drift outside [0, 99], but the downstream math handles that uniformly.
 -/
 def ancestorSearchPriority (headers : Array PartHeader) : Int :=
