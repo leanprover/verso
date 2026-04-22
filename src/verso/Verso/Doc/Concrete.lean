@@ -285,7 +285,7 @@ public meta structure DocElabEnvironment where
   partState : PartElabM.State := .init (.node .none nullKind #[])
 deriving Inhabited
 
-meta initialize docEnvironmentExt : EnvExtension DocElabEnvironment ← registerEnvExtension (pure {})
+public meta initialize docEnvironmentExt : EnvExtension DocElabEnvironment ← registerEnvExtension (pure {})
 
 /--
 The original parser for the `command` category, which is restored while elaborating a Verso block so
