@@ -444,10 +444,7 @@ export const computeCandidates = (
 
     // Normalize the scores for text results by capping at a threshold, to better integrate with fuzzysearch results
     const bestPossibleText = 0.8;
-    const maxTextScore = textResults.reduce(
-        (max, item) => Math.max(max, item.score),
-        -Infinity,
-    );
+    const maxTextScore = textResults.reduce((max, item) => Math.max(max, item.score), -Infinity);
     if (maxTextScore > bestPossibleText) {
         const factor = bestPossibleText / maxTextScore;
         for (const res of textResults) res.score = res.score * factor;
@@ -525,7 +522,9 @@ export const renderCandidateLi = async (candidate, opts) => {
             searchable,
             fuzzysortResult
                 .highlight((v) => ({ v }))
-                .map((v) => (typeof v === "string" ? { t: "text", v } : { t: "highlight", v: v.v })),
+                .map((v) =>
+                    typeof v === "string" ? { t: "text", v } : { t: "highlight", v: v.v },
+                ),
             doc,
         );
     }
