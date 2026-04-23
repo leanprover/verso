@@ -85,7 +85,7 @@ export const combineScore = (rawScore, ...priorities) => {
  * as "stops" in photography).
  *
  * Full-text matches use the same scheme via a per-document priority baked in at index time
- * (the `docPriority` map); both search streams therefore honor the same per-section /
+ * (the `docPriorities` map); both search streams therefore honor the same per-section /
  * per-item adjustments, just resolved at different times.
  * @typedef {{searchKey: string, address: string, domainId: string, ref?: any, priority?: number}} Searchable
  * @typedef {(domainData: any) => Searchable[]} DomainDataToSearchables
@@ -93,7 +93,8 @@ export const combineScore = (rawScore, ...priorities) => {
  * @typedef {(searchable: Searchable, matchedParts: MatchedPart[], document: Document) => HTMLElement} CustomResultRender
  * @typedef {{dataToSearchables: DomainDataToSearchables, customRender?: CustomResultRender, displayName: string, className: string}} DomainMapper
  * @typedef {Record<string, DomainMapper>} DomainMappers
- * @typedef {{semantic: number, fullText: number, domains?: Record<string, number>}} SearchPriorities
+ * @typedef {{semantic: number, fullText: number, domains: Record<string, number>}} SearchPriorities
+ * @typedef {{semantic?: number, fullText?: number, domains?: Record<string, number>}} SearchPrioritiesInput
  * @typedef {{ref: string, score: number, doc: DocContent}} TextMatch
  * @typedef {{item: Searchable, fuzzysortResult: Fuzzysort.Result, htmlItem: HTMLLIElement}|{terms: string, textItem: TextMatch, htmlItem: HTMLLIElement}} SearchResult
  * @typedef {{run: (tokens: string[]) => string[]}} ElasticLunrPipeline
@@ -570,7 +571,7 @@ class SearchBox {
      * so full-text matches can be up- or down-weighted per section.
      * @type {Record<string, number>}
      */
-    docPriority;
+    docPriorities;
 
     /** @type {InputAbbreviationRewriter} */
     imeRewriter;
@@ -588,7 +589,7 @@ class SearchBox {
      * @param {DomainMappers} domainMappers
      * @param {Record<string, Searchable[]>} mappedData
      * @param {SearchPriorities} searchPriorities
-     * @param {Record<string, number>} docPriority
+     * @param {Record<string, number>} docPriorities
      */
     constructor(
         comboboxNode,
@@ -597,7 +598,7 @@ class SearchBox {
         domainMappers,
         mappedData,
         searchPriorities,
-        docPriority,
+        docPriorities,
     ) {
         this.comboboxNode = comboboxNode;
         this.buttonNode = buttonNode;
@@ -605,7 +606,7 @@ class SearchBox {
         this.domainMappers = domainMappers;
         this.mappedData = mappedData;
         this.searchPriorities = searchPriorities;
-        this.docPriority = docPriority;
+        this.docPriorities = docPriorities;
         this.preparedData = Object.keys(this.mappedData).map((name) => fuzzysort.prepare(name));
         this.requestCounter = 0;
 
@@ -824,7 +825,7 @@ class SearchBox {
                 const eff = combineScore(
                     fr.score,
                     this.searchPriorities.semantic,
-                    this.searchPriorities.domains?.[searchable.domainId],
+                    this.searchPriorities.domains[searchable.domainId],
                     searchable.priority,
                 );
                 candidates.push({ kind: "semantic", score: eff, fuzzysortResult: fr, searchable });
@@ -836,7 +837,7 @@ class SearchBox {
                 score: combineScore(
                     tr.score,
                     this.searchPriorities.fullText,
-                    this.docPriority[tr.ref],
+                    this.docPriorities[tr.ref],
                 ),
                 textMatch: tr,
             });
@@ -1305,8 +1306,8 @@ class SearchBox {
  *   searchWrapper: HTMLElement;
  *   data: any;
  *   domainMappers: Record<string, DomainMapper>;
- *   searchPriorities?: SearchPriorities;
- *   docPriority?: Record<string, number>;
+ *   searchPriorities?: SearchPrioritiesInput;
+ *   docPriorities?: Record<string, number>;
  * }} RegisterSearchArgs
  * @param {RegisterSearchArgs} args
  */
@@ -1315,7 +1316,7 @@ export const registerSearch = ({
     data,
     domainMappers,
     searchPriorities,
-    docPriority,
+    docPriorities,
 }) => {
     const comboboxNode = /** @type {HTMLDivElement} */ (
         searchWrapper.querySelector("div[contenteditable]")
@@ -1339,7 +1340,7 @@ export const registerSearch = ({
             domainMappers,
             dataToSearchableMap(data, domainMappers),
             priorities,
-            docPriority ?? {},
+            docPriorities ?? {},
         );
     }
 };

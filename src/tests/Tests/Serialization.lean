@@ -415,9 +415,10 @@ def testSearchPriorities := testProp <| ∀ (semantic fullText : Fin 100) (domai
   roundTripOk mapper ∧ roundTripOk priorities
 
 /--
-Randomized check on `Verso.Search.priorityMapJson`: every entry it emits must be a plain integer
-tied to an input doc's {name}`IndexDoc.id`/{name}`IndexDoc.priority`, and every input doc with a
-priority set must have its id present in the emitted map.
+Randomized check on `Verso.Search.priorityMapJson`: every entry it emits must be a plain
+non-neutral integer tied to an input doc's {name}`IndexDoc.id`/{name}`IndexDoc.priority`, and
+every input doc with a non-neutral priority must have its id present in the emitted map.
+Documents with no priority or with the neutral value `50` must be omitted entirely.
 -/
 def testPriorityMapJson := testProp <| ∀ (docs : Array Search.IndexDoc),
   let j : Json := Search.priorityMapJson docs
@@ -428,9 +429,10 @@ def testPriorityMapJson := testProp <| ∀ (docs : Array Search.IndexDoc),
   let forward := entries.all fun (k, v) =>
     match Json.getInt? v with
     | .error _ => false
-    | .ok p => docs.any fun d => d.id == k && d.priority == some p
+    | .ok p => p != 50 && docs.any fun d => d.id == k && d.priority == some p
   let backward := docs.all fun d =>
-    d.priority.isNone || (Json.getObjVal? j d.id).toOption.isSome
+    let isNeutral := d.priority.isNone || d.priority == some 50
+    isNeutral || (Json.getObjVal? j d.id).toOption.isSome
   forward ∧ backward
 
 def serializationTests : List (Name × (Σ p, IO <| TestResult p)) := [

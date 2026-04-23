@@ -190,7 +190,7 @@ public def ofArray
 
 /--
 Constructs a {name}`NameMap` from a list of name-value pairs, given a proof that all names in the
-array are suitably public.
+list are suitably public.
 -/
 public def ofList
     (xs : List (Name × α))

@@ -67,13 +67,15 @@ def testMappersToJs : IO Unit := do
   assertContains "DomainMappers" rendered "73"
 
 /--
-Verifies `Verso.Search.priorityMapJson` produces a keyed map of only the documents that have a
-priority set, using the same centered-at-50 integer convention as `Searchable.priority`.
+Verifies that `Verso.Search.priorityMapJson` produces a keyed map of only the documents whose priority
+differs from neutral, using the same centered-at-50 integer convention as `Searchable.priority`.
 -/
 def testPriorityMap : IO Unit := do
   let docs : Array IndexDoc := #[
     { id := "boosted", header := "", context := #[], content := "", priority := some 80 },
-    { id := "neutral", header := "", context := #[], content := "", priority := none },
+    { id := "no-priority", header := "", context := #[], content := "", priority := none },
+    -- A `some 50` is semantically equivalent to `none` and must not bloat the emitted map:
+    { id := "explicit-neutral", header := "", context := #[], content := "", priority := some 50 },
     { id := "suppressed", header := "", context := #[], content := "", priority := some 10 },
     -- Ancestor-summed priorities can fall outside [0, 99]:
     { id := "deep-subsection", header := "", context := #[], content := "", priority := some (-20) }
@@ -82,10 +84,11 @@ def testPriorityMap : IO Unit := do
   assertContains "priorityMapJson" rendered "\"boosted\":80"
   assertContains "priorityMapJson" rendered "\"suppressed\":10"
   assertContains "priorityMapJson" rendered "\"deep-subsection\":-20"
-  -- Docs without a priority must be omitted, not serialized as null.
-  if hasSub rendered "neutral" then
-    throw <| IO.userError
-      s!"priorityMapJson should omit docs without a priority, but emitted:\n{rendered}"
+  -- Neutral docs (none or some 50) must be omitted entirely, not serialized as null or 50.
+  for omitted in ["no-priority", "explicit-neutral"] do
+    if hasSub rendered omitted then
+      throw <| IO.userError
+        s!"priorityMapJson should omit neutral docs ({omitted}), but emitted:\n{rendered}"
 
 /-- Defaults for `SearchPriorities` are `semantic := 50` and `fullText := 50`. -/
 def testMappersToJsDefaults : IO Unit := do

@@ -571,9 +571,9 @@ def emitSearchIndex (dir : System.FilePath) (state : TraverseState) (ctx : Trave
     inline _ := none
   }
 
-  match Verso.Search.mkIndex doc ctx, Verso.Search.mkIndexDocs doc ctx with
-  | .error e, _ | _, .error e => logError e; return ()
-  | .ok index, .ok indexDocs =>
+  match Verso.Search.mkIndexAndDocs doc ctx with
+  | .error e => logError e; return ()
+  | .ok (index, indexDocs) =>
     -- Split the index into roughly 150k chunks for faster loading
     let (index, docs) := index.extractDocs
     let mut docBuckets : HashMap UInt8 (HashMap String Doc) := {}
@@ -595,7 +595,7 @@ def emitSearchIndex (dir : System.FilePath) (state : TraverseState) (ctx : Trave
     let indexJs := indexJs ++ "const __versoSearchIndex = elasticlunr ? elasticlunr.Index.load(__verso_searchIndexData) : null;\n"
     let indexJs := indexJs ++ "window.docContents = {};\n"
     let indexJs := indexJs ++ "window.searchIndex = elasticlunr ? __versoSearchIndex : null;\n"
-    let indexJs := indexJs ++ "window.docPriority = " ++ priorityJson.compress ++ ";\n"
+    let indexJs := indexJs ++ "window.docPriorities = " ++ priorityJson.compress ++ ";\n"
     IO.FS.writeFile (dir / "searchIndex.js") indexJs
 
     IO.FS.writeFile (dir / "elasticlunr.min.js") Verso.Output.Html.elasticlunr.js

@@ -222,7 +222,8 @@ public def DomainMappers.toJs (mappers : DomainMappers) (priorities : SearchPrio
   -- Emit per-domain priorities as a JS object literal so the browser can look up a domain's
   -- priority by id in one step.
   let domEntries : List Std.Format := priorities.domains.foldl (init := []) fun acc k p =>
-    acc ++ [nest 2 <| group <| text k.toString.quote ++ ":" ++ line ++ text (toString p.val)]
+    (nest 2 <| group <| text k.toString.quote ++ ":" ++ line ++ text (toString p.val)) :: acc
+  let domEntries := domEntries.reverse
   let domainsLit :=
     group (nest 2 ("{" ++ (text "," ++ line).joinSep domEntries) ++ line ++ "}")
   let prio :=

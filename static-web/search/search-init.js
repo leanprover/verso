@@ -41,7 +41,7 @@ window.addEventListener("load", () => {
     main.insertAdjacentHTML("beforeend", searchHTML);
     const searchWrapper = document.querySelector(".combobox-list");
     data.then((data) => {
-        const docPriority = /** @type {any} */ (window).docPriority;
-        registerSearch({ searchWrapper, data, domainMappers, searchPriorities, docPriority });
+        const docPriorities = /** @type {any} */ (window).docPriorities;
+        registerSearch({ searchWrapper, data, domainMappers, searchPriorities, docPriorities });
     });
 });

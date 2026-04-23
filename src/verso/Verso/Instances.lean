@@ -78,11 +78,12 @@ deriving instance Repr for OpenDecl
 
 /--
 Hashes a `Float` by its IEEE 754 bit pattern. `+0.0` and `-0.0` are collapsed to the same hash to
-preserve the `BEq`/`Hashable` contract (they compare equal under `BEq Float`). It is provided so
-that structures containing `Float` fields can derive `Hashable`.
+preserve the `BEq`/`Hashable` contract (they compare equal under `BEq Float`, but have different
+bit patterns). It is provided so that structures containing `Float` fields can derive `Hashable`.
 
-`NaN` values still hash consistently by bit pattern, matching the fact that `BEq Float` reports
-different `NaN`s as distinct.
+`NaN` values are hashed consistently by bit pattern. This trivially preserves the `BEq`/`Hashable`
+contract: `BEq Float` follows IEEE semantics and reports every `NaN` as distinct from every value
+including itself, so the contract holds vacuously.
 -/
 public instance : Hashable Float where
   hash x :=
