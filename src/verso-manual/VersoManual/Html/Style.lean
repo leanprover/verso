@@ -270,6 +270,38 @@ main [id] {
     }
 }
 
+.toc-resize-handle {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 6px;
+    height: 100%;
+    cursor: col-resize;
+    z-index: 12;
+}
+
+.toc-resize-handle::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 3px;
+    width: 1px;
+    height: 100%;
+    background: var(--verso-toc-border-color, #d0d0d0);
+    transition: background 0.15s;
+}
+
+.toc-resize-handle:hover::after,
+.toc-resize-handle.dragging::after {
+    background: var(--verso-toc-resize-handle-color, #888);
+}
+
+@media screen and (max-width: 700px) {
+    .toc-resize-handle {
+        display: none;
+    }
+}
+
 #toggle-toc {
     display: none;
 }
