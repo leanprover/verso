@@ -17,35 +17,36 @@ const fuzzysort = /** @type {{fuzzysort: Fuzzysort.Fuzzysort}} */ (/** @type {un
 
 /**
  * Lazy search state shared across renders. `xref.json` is fetched once, then reused for
- * every keystroke.
- * @type {null | {
+ * every keystroke. Cached as a promise rather than a resolved value so a second call
+ * arriving before the first `fetch` resolves joins the same in-flight request instead
+ * of issuing a duplicate.
+ * @type {null | Promise<{
  *   preparedData: Fuzzysort.Prepared[],
  *   mappedData: any,
  *   searchPriorities: any,
  *   docPriorities: Record<string, number>,
  *   searchIndex: any,
- * }}
+ * }>}
  */
-let sharedState = null;
+let statePromise = null;
 
-const ensureState = async () => {
-    if (sharedState) return sharedState;
-    const json = await fetch("xref.json").then((r) => r.json());
-    const mappedData = buildSearchableMap(json, domainMappers);
-    const preparedData = Object.keys(mappedData).map((name) => fuzzysort.prepare(name));
-    sharedState = {
-        preparedData,
-        mappedData,
-        searchPriorities: {
-            semantic: searchPriorities?.semantic ?? 50,
-            fullText: searchPriorities?.fullText ?? 50,
-            domains: searchPriorities?.domains ?? {},
-        },
-        docPriorities: /** @type {any} */ (window).docPriorities ?? {},
-        searchIndex: /** @type {any} */ (window).searchIndex,
-    };
-    return sharedState;
-};
+const ensureState = () =>
+    (statePromise ??= (async () => {
+        const json = await fetch("xref.json").then((r) => r.json());
+        const mappedData = buildSearchableMap(json, domainMappers);
+        const preparedData = Object.keys(mappedData).map((name) => fuzzysort.prepare(name));
+        return {
+            preparedData,
+            mappedData,
+            searchPriorities: {
+                semantic: searchPriorities?.semantic ?? 50,
+                fullText: searchPriorities?.fullText ?? 50,
+                domains: searchPriorities?.domains ?? {},
+            },
+            docPriorities: /** @type {any} */ (window).docPriorities ?? {},
+            searchIndex: /** @type {any} */ (window).searchIndex,
+        };
+    })());
 
 /**
  * Monotonic token: every call to `renderResultsFor` bumps it. The async render loop
