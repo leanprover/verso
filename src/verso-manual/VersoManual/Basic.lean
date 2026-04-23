@@ -25,6 +25,8 @@ public import Verso.Output.TeX
 public import Verso.BEq
 import Verso.Method
 
+set_option doc.verso true
+
 public section
 
 open Lean (Name Json NameMap ToJson FromJson)
@@ -209,7 +211,7 @@ structure PartMetadata where
   shortTitle : Option String := none
   /--
   A shorter title to be shown in breadcrumbs for search results. Should typically be at least as
-  short as `shortTitle`.
+  short as {name (full := PartMetadata.shortTitle)}`shortTitle`.
   -/
   shortContextTitle : Option String := none
   /-- The book's authors -/
@@ -224,13 +226,13 @@ structure PartMetadata where
   file : Option String := none
   /-- The internal unique ID, which is automatically assigned during traversal. -/
   id : Option InternalId := none
-  /-- Should this section be numbered? If `false`, then it's like `\section*` in LaTeX -/
+  /-- Should this section be numbered? If {name}`false`, then it's like `\section*` in LaTeX -/
   number : Bool := true
-  /-- If `true`, the part is only rendered in draft mode. -/
+  /-- If {name}`true`, the part is only rendered in draft mode. -/
   draft : Bool := false
   /-- Which number has been assigned? This field is set during traversal. -/
   assignedNumber : Option Numbering := none
-  /-- If `true`, this part will display a list of subparts that are separate HTML pages. -/
+  /-- If {name}`true`, this part will display a list of subparts that are separate HTML pages. -/
   htmlToc := true
   /-- How should this document be split when rendering multi-page HTML output? -/
   htmlSplit : HtmlSplitMode := .default
@@ -242,7 +244,7 @@ structure PartMetadata where
 
   Priorities set on ancestor parts are inherited: each ancestor's deviation from
   {lean (type := "Fin 100")}`50` accumulates into a section's effective priority. For example,
-  setting {lit}`searchPriority` to {lean (type := "Fin 100")}`25` on a top-level “Release Notes”
+  setting {name (full := PartMetadata.searchPriority)}`searchPriority` to {lean (type := "Fin 100")}`25` on a top-level “Release Notes”
   part de-emphasizes every subsection beneath it, while an individual subsection can override by
   setting a higher value of its own (which is added to, not multiplied with, the ancestor
   contribution). A chain of neutral ({lean (type := "Fin 100")}`50`) ancestors contributes nothing.
@@ -427,7 +429,12 @@ namespace TraverseState
 def set [ToJson α] (state : TraverseState) (name : Name) (value : α) (ok : NameMap.isPublic name := by first | grind | decide) : TraverseState :=
   { state with contents.contents := state.contents.contents.insert name (ToJson.toJson value) ok }
 
-/-- Returns `none` if the key is not found, or `some (error e)` if JSON deserialization failed -/
+/--
+{open Except}
+{given -show}`e : String`
+
+Returns {lean}`none` if the key is not found, or {lean}`some (error e)` if JSON deserialization failed.
+-/
 def get? [FromJson α] (state : TraverseState) (name : Name) : Option (Except String α) :=
   state.contents.contents.get? name |>.map FromJson.fromJson?
 
@@ -508,7 +515,7 @@ private partial def cmpJson : (j1 j2 : Json) → Ordering
       .eq)
 
 /--
-A custom block. The `name` field should correspond to an entry in the block descriptions table.
+A custom block. The {name (full := Block.name)}`name` field should correspond to an entry in the block descriptions table.
 -/
 structure Block where
   /-- A unique name that identifies the block. -/
@@ -553,7 +560,8 @@ instance : Hashable Block where
         x.quickCmp y |>.then (compare s1 s2) |>.isLT
 
 /--
-A custom inline. The `name` field should correspond to an entry in the block descriptions table.
+A custom inline. The {name (full := Inline.name)}`name` field should correspond to an entry in the
+block descriptions table.
 -/
 structure Inline where
   /-- A unique name that identifies the inline. -/
@@ -602,7 +610,7 @@ deriving Repr
 Information that tracks the current context of traversal for a document.
 -/
 structure TraverseContext where
-  /-- The current URL path - will be [] for non-HTML output or in the root -/
+  /-- The current URL path - will be {lean (type:="Path")}`#[]` for non-HTML output or in the root -/
   path : Path := #[]
   /-- The path from the root to the current header -/
   headers : Array PartHeader := #[]
@@ -713,18 +721,18 @@ structure InlineDescr extends HtmlAssets where
   init : TraverseState → TraverseState := id
 
   /--
-  Given the contents of the `data` field of the corresponding `Manual.Inline` and the contained
-  inline elements, carry out the traversal pass.
+  Given the contents of the {name (full := Inline.data)}`data` field of the corresponding
+  {name}`Manual.Inline` and the contained inline elements, carry out the traversal pass.
 
   In addition to updating the cross-reference state through the available monadic effects, a
-  traversal may additionally replace the element with another one. This can be used to e.g. emit
-  a cross-reference once the target becomes available in the state. To replace the element,
-  return `some`. To leave it as is, return `none`.
+  traversal may additionally replace the element with another one. This can be used to e.g. emit a
+  cross-reference once the target becomes available in the state. To replace the element, return
+  {name}`some`. To leave it as is, return {name}`none`.
   -/
   traverse : InlineTraversal Manual
 
   /--
-  How to generate HTML. If `none`, generating HTML from a document that contains this inline will fail.
+  How to generate HTML. If {name}`none`, generating HTML from a document that contains this inline will fail.
   -/
   toHtml : Option (InlineToHtml Manual (ReaderT AllRemotes (ReaderT ExtensionImpls IO)))
 
@@ -741,7 +749,10 @@ structure InlineDescr extends HtmlAssets where
   localContentItem : InternalId → Json → Array (Doc.Inline Manual) → Except String (Array (String × Verso.Output.Html)) :=
     fun _ _ _ => pure #[]
 
-  /-- How to generate TeX. If `none`, generating TeX from a document that contains this inline will fail. -/
+  /--
+  How to generate TeX. If {name}`none`, generating TeX from a document that contains this inline
+  will fail.
+  -/
   toTeX : Option (InlineToTeX Manual (ReaderT ExtensionImpls IO))
   /-- Required TeX `\usepackage` lines -/
   usePackages : List String := {}
@@ -763,7 +774,8 @@ structure BlockDescr extends HtmlAssets where
   traverse : BlockTraversal Manual
 
   /--
-  How to generate HTML. If `none`, generating HTML from a document that contains this block will fail.
+  How to generate HTML. If {name}`none`, generating HTML from a document that contains this block
+  will fail.
   -/
   toHtml : Option (BlockToHtml Manual (ReaderT AllRemotes (ReaderT ExtensionImpls IO)))
 
@@ -781,7 +793,10 @@ structure BlockDescr extends HtmlAssets where
   localContentItem : InternalId → Json → Array (Doc.Block Manual) → Except String (Array (String × Verso.Output.Html)) :=
     fun _ _ _ => pure #[]
 
-  /-- How to generate TeX. If `none`, generating TeX from a document that contains this block will fail. -/
+  /--
+  How to generate TeX. If {name}`none`, generating TeX from a document that contains this block
+  will fail.
+  -/
   toTeX : Option (BlockToTeX Manual (ReaderT ExtensionImpls IO))
   /-- Required TeX `\usepackage` lines -/
   usePackages : List String := {}
@@ -828,16 +843,16 @@ block_extension NAME PARAMS [via MIXINS,+] where
   data := ...
   fields*
 ```
-defines a new kind of block called `NAME` that takes initialization parameters `PARAMS` for the
-`data` field.
+defines a new kind of block called {lit}`NAME` that takes initialization parameters {lit}`PARAMS`
+for the {name (full := Block.data)}`data` field.
 
-If there are no `PARAMS`, then `NAME` is bound to the block with empty data. If there are `PARAMS`,
-then `NAME` is bound to a function that constructs an instance of the block with the data field
-initialized as directed. `PARAMS` are only in scope for the data field.
+If there are no {lit}`PARAMS`, then {lit}`NAME` is bound to the block with empty data. If there are
+{lit}`PARAMS`, then {lit}`NAME` is bound to a function that constructs an instance of the block with
+the data field initialized as directed. {lit}`PARAMS` are only in scope for the data field.
 
 The remaining fields are used to define traversal and output generation for the block. The resulting
-block descriptor is then processed by `MIXINS`, from left to right, before being added to the block
-descriptor table.
+block descriptor is then processed by {lit}`MIXINS`, from left to right, before being added to the
+block descriptor table.
 -/
 syntax "block_extension" ident (ppSpace bracketedBinder)* (&" via " ident,+)? ppIndent(ppSpace "where" extContents) : command
 /--
@@ -848,16 +863,16 @@ inline_extension NAME PARAMS [via MIXINS,+] where
   data := ...
   fields*
 ```
-defines a new kind of inline called `NAME` that takes initialization parameters `PARAMS` for the
-`data` field.
+defines a new kind of inline called {lit}`NAME` that takes initialization parameters {lit}`PARAMS`
+for the {name (full := Inline.data)}`data` field.
 
-If there are no `PARAMS`, then `NAME` is bound to the inline with empty data. If there are `PARAMS`,
-then `NAME` is bound to a function that constructs an instance of the inline with the data field
-initialized as directed. `PARAMS` are only in scope for the data field.
+If there are no {lit}`PARAMS`, then {lit}`NAME` is bound to the inline with empty data. If there are
+{lit}`PARAMS`, then {lit}`NAME` is bound to a function that constructs an instance of the inline
+with the data field initialized as directed. {lit}`PARAMS` are only in scope for the data field.
 
 The remaining fields are used to define traversal and output generation for the inline. The
-resulting inline descriptor is then processed by `MIXINS`, from left to right, before being added to
-the inline descriptor table.
+resulting inline descriptor is then processed by {lit}`MIXINS`, from left to right, before being
+added to the inline descriptor table.
 -/
 syntax "inline_extension" ident (ppSpace bracketedBinder)* (&" via " ident,+)? ppIndent(ppSpace "where" extContents) : command
 
@@ -1300,9 +1315,9 @@ instance : TraverseBlock Manual where
 /--
 Sums the search-priority deviations from the neutral 50 across an array of part headers (typically
 a part's ancestor chain including itself) and recenters on 50. The result is consumed by the
-client as a log-space contribution `(p - 50) / 50`, so summing deviations here lets a chain of
+client as a log-space contribution $`\frac{p - 50}{50}`, so summing deviations here lets a chain of
 ancestor priorities influence a section's final boost additively: a long or extreme chain can
-drift outside [0, 99], but the downstream math handles that uniformly.
+drift outside $`[0, 99]`, but the downstream math handles that uniformly.
 -/
 def ancestorSearchPriority (headers : Array PartHeader) : Int :=
   headers.foldl (init := 50) fun acc h =>
