@@ -10,13 +10,7 @@
 // the import. The same pattern is used in `search-init.js`.
 
 import { domainMappers, searchPriorities } from "./domain-mappers.js";
-import {
-    buildSearchableMap,
-    candidateTargetUrl,
-    computeCandidates,
-    navigateBaseRelative,
-    renderCandidateLi,
-} from "./search-box.js";
+import { buildSearchableMap, computeCandidates, renderCandidateLi } from "./search-box.js";
 
 const fuzzysort = /** @type {{fuzzysort: Fuzzysort.Fuzzysort}} */ (/** @type {unknown} */ (window))
     .fuzzysort;
@@ -149,9 +143,13 @@ const renderResultsFor = async (query) => {
     // cramped combobox dropdown does; these tune the per-result excerpt sizes.
     const textSnippet = { header: 60, content: 60, maxSnippets: 5 };
 
-    // Render serially — full-text rendering awaits per-bucket loads, and serial order
+    // Render serially: full-text rendering awaits per-bucket loads, and serial order
     // preserves the computed ranking. Between each await we check the token so a newer
     // query abandons this render without corrupting the UI.
+    //
+    // Navigation is handled by the inner `<a class="search-result-link">` emitted by
+    // `renderCandidateLi`, so no click listener is needed here. Middle-click,
+    // open-in-new-tab, and keyboard Enter all work via the anchor's default behaviour.
     for (const candidate of candidates) {
         if (myToken !== renderToken) return;
         const li = await renderCandidateLi(candidate, {
@@ -162,9 +160,6 @@ const renderResultsFor = async (query) => {
         });
         if (myToken !== renderToken) return;
         if (!li) continue;
-        li.addEventListener("click", async () => {
-            navigateBaseRelative(await candidateTargetUrl(candidate, query));
-        });
         listEl.append(li);
     }
 };
@@ -295,7 +290,7 @@ const init = async () => {
     const initialQuery = new URLSearchParams(window.location.search).get("q")?.trim() ?? "";
     const input = mountInput(host, initialQuery);
 
-    // Filter row lives between the input and the results — above the count — so users
+    // Filter row lives between the input and the results, above the count, so users
     // see what's being narrowed before the count.
     const filtersEl = document.createElement("div");
     filtersEl.className = "search-page-filters";
@@ -305,16 +300,21 @@ const init = async () => {
     mountFilters(filtersEl, () => input.value.trim());
 
     // Result count lives above the results list so it's visible even when the list is
-    // short or empty.
+    // short or empty. `aria-live="polite"` makes screen readers announce count changes
+    // (e.g. "12 results") as the user types.
     countEl = document.createElement("p");
     countEl.id = "search-page-count";
     countEl.className = "search-page-count muted";
+    countEl.setAttribute("aria-live", "polite");
     resultsRoot.append(countEl);
 
     // The shared `verso-search-results` class lets the domain-specific CSS (emitted
     // into `domain-display.css`) match here as well as inside the combobox.
+    // `role="listbox"` pairs with the `role="option"` children emitted by
+    // `renderCandidateLi` so assistive tech announces the list coherently.
     listEl = document.createElement("ul");
     listEl.className = "search-page-list verso-search-results";
+    listEl.setAttribute("role", "listbox");
     resultsRoot.append(listEl);
 
     await renderResultsFor(initialQuery);

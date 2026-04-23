@@ -103,6 +103,21 @@
     scroll-margin-bottom: 1.2rem;
 }
 
+/* Each result wraps its contents in an <a> so the destination is exposed to keyboards
+   and assistive tech (middle-click / open-in-new-tab also work). The anchor mirrors
+   its parent's flex column so the existing `.search-result` layout stays intact and
+   descendant rules (`.search-result p`, `.search-result .domain`, etc.) still match. */
+.search-result > .search-result-link {
+    display: flex;
+    flex-direction: inherit;
+    gap: inherit;
+    color: inherit;
+    text-decoration: none;
+}
+
+/* `display: contents` on the anchor would be simpler, but Chromium refuses to move
+   programmatic focus onto a `display: contents` element, breaking keyboard activation. */
+
 /* Couple the domain tighter with the search term on smaller screens,
    otherwise it's easy to get lost in the results. */
 @media screen and (max-width: 700px) {

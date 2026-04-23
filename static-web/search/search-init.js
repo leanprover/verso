@@ -42,7 +42,7 @@ window.addEventListener("load", () => {
     // Pages that render their own search UI (e.g. the full-page search results view,
     // which has a plain input next to live-updating results) opt out of the header
     // combobox entirely by declaring a `[data-search-host]` element. Those pages still
-    // get access to the index data — they import `search-box.js`'s pure helpers
+    // get access to the index data: they import `search-box.js`'s pure helpers
     // directly.
     if (document.querySelector("[data-search-host]")) return;
     const mount = document.querySelector("header");

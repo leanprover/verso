@@ -2,6 +2,12 @@
 
 from playwright.sync_api import Page, expect
 
+from search_page_a11y import SearchPageAccessibilityBase
+
+
+class TestSearchPageAccessibility(SearchPageAccessibilityBase):
+    QUERY = "hello"
+
 
 class TestSearchPage:
     def test_enter_navigates_to_search_page(self, server: str, page: Page):

@@ -7,6 +7,8 @@ since they use different test projects.
 
 from playwright.sync_api import Page, expect
 
+from search_page_a11y import SearchPageAccessibilityBase
+
 
 class TestSearchPage:
     def test_enter_navigates_to_search_page(self, server: str, page: Page):
@@ -308,3 +310,7 @@ class TestSearchPage:
         page.wait_for_load_state("networkidle")
 
         assert "/search/" not in page.url, f"Enter with selection should not go to /search/, got {page.url}"
+
+
+class TestSearchPageAccessibility(SearchPageAccessibilityBase):
+    QUERY = "Html"

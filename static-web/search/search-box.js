@@ -330,8 +330,16 @@ const searchableToHtml = (domainMappers, searchable, matchedParts, document) => 
     li.className = `search-result ${domainMapper.className}`;
     li.title = `${domainMapper.displayName} ${searchable.searchKey}`;
 
+    // Wrap the rendered content in an anchor so each result is keyboard-focusable,
+    // middle-clickable, and exposes its destination to assistive tech. `display: contents`
+    // in CSS keeps the existing `<li>`-based layout/flex rules working unchanged.
+    const link = document.createElement("a");
+    link.className = "search-result-link";
+    link.href = withTermsParam(searchable.address, null);
+    li.appendChild(link);
+
     if (domainMapper.customRender != null) {
-        li.appendChild(domainMapper.customRender(searchable, matchedParts, document));
+        link.appendChild(domainMapper.customRender(searchable, matchedParts, document));
     } else {
         const searchTerm = document.createElement("p");
         for (const { t, v } of matchedParts) {
@@ -343,11 +351,11 @@ const searchableToHtml = (domainMappers, searchable, matchedParts, document) => 
                 emEl.textContent = v;
             }
         }
-        li.appendChild(searchTerm);
+        link.appendChild(searchTerm);
     }
 
     const domainName = document.createElement("p");
-    li.appendChild(domainName);
+    link.appendChild(domainName);
     domainName.className = "domain";
     domainName.textContent = domainMapper.displayName;
 
@@ -589,6 +597,14 @@ const textResultToHtml = async (term, match, document, snippetOpts = {}) => {
     // DEBUG:
     // li.title = `Full-text search result (${match.score}) (${match.ref})`;
 
+    // See `searchableToHtml` for the rationale: wrap contents in an anchor so results are
+    // keyboard-focusable and middle-clickable. `doc.id` is the destination, and we have
+    // it here because `getDocContents` (and therefore the bucket) has already loaded.
+    const link = document.createElement("a");
+    link.className = "search-result-link";
+    link.href = withTermsParam(doc.id, term);
+    li.appendChild(link);
+
     const searchTerm = document.createElement("p");
     let inHeader = true;
     let headerHl = highlightTextResult(doc.header, term, { contextLength: headerContext }); // Only abbreviate huge headers
@@ -619,10 +635,10 @@ const textResultToHtml = async (term, match, document, snippetOpts = {}) => {
         }
     }
     searchTerm.append(contentHl);
-    li.appendChild(searchTerm);
+    link.appendChild(searchTerm);
 
     const domainName = document.createElement("p");
-    li.appendChild(domainName);
+    link.appendChild(domainName);
     domainName.className = "domain";
     if (doc.context.trim() == "") {
         domainName.textContent = "Full-text search";
@@ -990,6 +1006,10 @@ class SearchBox {
                 document,
             });
             if (!option) continue;
+            // The combobox owns keyboard focus (aria-activedescendant on the input).
+            // Keep the inner <a> out of the tab order so Tab doesn't walk into the
+            // open listbox; the click/Enter paths still navigate via `confirmResult`.
+            option.querySelector("a.search-result-link")?.setAttribute("tabindex", "-1");
             /** @type {SearchResult} */
             const searchResult =
                 candidate.kind === "semantic"
