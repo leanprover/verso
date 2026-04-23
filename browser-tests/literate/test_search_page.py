@@ -47,7 +47,9 @@ class TestSearchPage:
         inbody_box.focus()
         inbody_box.type("x", delay=30)
 
-        assert page.locator("[role='listbox']").count() == 0
+        # The results list carries `role="listbox"` for a11y, so restrict the check to
+        # combobox-origin listboxes only.
+        assert page.locator(".combobox-list [role='listbox']").count() == 0
         assert page.locator(".combobox-list").count() == 0
 
     def test_result_count_visible_at_top(self, server: str, page: Page):
