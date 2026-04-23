@@ -75,3 +75,26 @@ end
 deriving instance TypeName for String
 
 deriving instance Repr for OpenDecl
+
+/--
+Hashes a `Float` by its IEEE 754 bit pattern. `+0.0` and `-0.0` are collapsed to the same hash to
+preserve the `BEq`/`Hashable` contract (they compare equal under `BEq Float`, but have different
+bit patterns). It is provided so that structures containing `Float` fields can derive `Hashable`.
+
+`NaN` values are hashed consistently by bit pattern. This trivially preserves the `BEq`/`Hashable`
+contract: `BEq Float` follows IEEE semantics and reports every `NaN` as distinct from every value
+including itself, so the contract holds vacuously.
+-/
+public instance : Hashable Float where
+  hash x :=
+    if x == 0.0 then hash (0 : UInt64)
+    else hash x.toBits
+
+public instance : ToJson (Fin n) where
+  toJson i := toJson i.val
+
+public instance : FromJson (Fin n) where
+  fromJson? v := do
+    let i : Nat ← fromJson? v
+    if h : i < n then return ⟨i, h⟩
+    else throw s!"Expected a value less than {n} but got {i}"

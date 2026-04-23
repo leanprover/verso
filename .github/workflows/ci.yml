@@ -181,6 +181,7 @@ jobs:
               run: |
                   uv run --project browser-tests --extra test pytest \
                     browser-tests/test_search.py \
+                    browser-tests/test_search_priority.py \
                     browser-tests/test_redirect.py \
                     browser-tests/test_katex.py -v
 

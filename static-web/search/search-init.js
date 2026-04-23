@@ -4,7 +4,7 @@
  * Author: David Thrane Christiansen
  */
 
-import { domainMappers } from "./domain-mappers.js";
+import { domainMappers, searchPriorities } from "./domain-mappers.js";
 import { registerSearch } from "./search-box.js";
 
 // The search box itself. TODO: add to template
@@ -41,6 +41,7 @@ window.addEventListener("load", () => {
     main.insertAdjacentHTML("beforeend", searchHTML);
     const searchWrapper = document.querySelector(".combobox-list");
     data.then((data) => {
-        registerSearch({ searchWrapper, data, domainMappers });
+        const docPriorities = /** @type {any} */ (window).docPriorities;
+        registerSearch({ searchWrapper, data, domainMappers, searchPriorities, docPriorities });
     });
 });

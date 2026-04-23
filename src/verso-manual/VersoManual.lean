@@ -224,6 +224,13 @@ structure Config extends HtmlConfig, TeXConfig, OutputConfig where
   Location of the remote config file.
   -/
   remoteConfigFile : Option System.FilePath := none
+
+  /--
+  Global priorities that control the relative ranking of the semantic (quick-jump) and full-text
+  search result streams, each on a scale from {lit}`0` to {lit}`99`. Defaults are {lit}`50` on
+  both sides.
+  -/
+  searchPriorities : Verso.Search.SearchPriorities := {}
 deriving ToJson, FromJson
 
 structure RenderConfig extends Config where
@@ -557,13 +564,16 @@ def emitSearchIndex (dir : System.FilePath) (state : TraverseState) (ctx : Trave
       let id ← m.id
       let link ← state.resolveId id
       pure link.link,
+    partPriority p := do
+      let ctxt ← IndexM.traverseContext
+      return some (ancestorSearchPriority (ctxt.inPart p).headers)
     block _ := none,
     inline _ := none
   }
 
-  match Verso.Search.mkIndex doc ctx with
+  match Verso.Search.mkIndexAndDocs doc ctx with
   | .error e => logError e; return ()
-  | .ok index =>
+  | .ok (index, indexDocs) =>
     -- Split the index into roughly 150k chunks for faster loading
     let (index, docs) := index.extractDocs
     let mut docBuckets : HashMap UInt8 (HashMap String Doc) := {}
@@ -576,10 +586,16 @@ def emitSearchIndex (dir : System.FilePath) (state : TraverseState) (ctx : Trave
       let docJson := docs.fold (init := Json.mkObj []) fun json k v => json.setObjVal! k (v.foldr (init := Json.mkObj []) fun k v js => js.setObjVal! k (Json.str v))
       IO.FS.writeFile (dir / s!"searchIndex_{bucket}.js") s!"window.docContents[{bucket}].resolve({docJson.compress});"
 
+    -- Per-doc priority map, emitted alongside the elasticlunr index inside the eagerly-loaded
+    -- searchIndex.js. Kept separate from the lazily-fetched per-bucket content so full-text
+    -- scoring can consult it without waiting on bucket loads.
+    let priorityJson := Verso.Search.priorityMapJson indexDocs
+
     let indexJs := "const __verso_searchIndexData = " ++ index.toJson.compress ++ ";\n\n"
     let indexJs := indexJs ++ "const __versoSearchIndex = elasticlunr ? elasticlunr.Index.load(__verso_searchIndexData) : null;\n"
     let indexJs := indexJs ++ "window.docContents = {};\n"
     let indexJs := indexJs ++ "window.searchIndex = elasticlunr ? __versoSearchIndex : null;\n"
+    let indexJs := indexJs ++ "window.docPriorities = " ++ priorityJson.compress ++ ";\n"
     IO.FS.writeFile (dir / "searchIndex.js") indexJs
 
     IO.FS.writeFile (dir / "elasticlunr.min.js") Verso.Output.Html.elasticlunr.js
@@ -595,11 +611,11 @@ where
     return hash
 
 
-def emitSearchBox (dir : System.FilePath) (domains : DomainMappers) : IO Unit := do
+def emitSearchBox (dir : System.FilePath) (domains : DomainMappers) (priorities : Verso.Search.SearchPriorities := {}) : IO Unit := do
   ensureDir dir
   for (file, contents) in searchBoxCode do
     IO.FS.writeBinFile (dir / file) contents
-  IO.FS.writeFile (dir / "domain-mappers.js") (domains.toJs.pretty (width := 70))
+  IO.FS.writeFile (dir / "domain-mappers.js") ((domains.toJs priorities).pretty (width := 70))
   IO.FS.writeFile (dir / "domain-display.css") domains.quickJumpCss
 
 end
@@ -635,7 +651,7 @@ def emitHtmlSingle
   let ((), htmlState) ← emitContent dir .empty remoteContent
   IO.FS.writeFile (dir.join "-verso-docs.json") (toString htmlState.dedup.docJson)
   if .search ∈ config.features then
-    emitSearchBox (dir / "-verso-search") state.quickJump
+    emitSearchBox (dir / "-verso-search") state.quickJump config.searchPriorities
     emitSearchIndex (dir / "-verso-search") state {logError, draft := config.draft} logError text
 where
   emitContent (dir : System.FilePath) : StateT (State Html) (ReaderT AllRemotes (ReaderT ExtensionImpls IO)) Unit := do
@@ -723,7 +739,7 @@ def emitHtmlMulti (logError : String → IO Unit) (config : RenderConfig)
   let ((), htmlState) ← emitContent root {} remoteContent
   IO.FS.writeFile (root.join "-verso-docs.json") (toString htmlState.dedup.docJson)
   if .search ∈ config.features then
-    emitSearchBox (root / "-verso-search") state.quickJump
+    emitSearchBox (root / "-verso-search") state.quickJump config.searchPriorities
     emitSearchIndex (root / "-verso-search") state {logError, draft := config.draft} logError text
 where
   /--

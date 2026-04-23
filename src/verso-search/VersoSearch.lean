@@ -661,6 +661,14 @@ public structure IndexDoc where
   context : Array String
   /-- The string content to search for this document -/
   content : String
+  /--
+  An optional scoring priority for this document, using the same centered-at-50 convention as
+  {lit}`Searchable.priority` on the quick-jump side: $`50` is neutral, higher values boost the
+  document's rank in full-text results, and values may fall outside $`[0, 99]` when they
+  represent a pre-summed contribution (e.g. an ancestor-inherited section priority).
+  -/
+  priority : Option Int := none
+deriving Repr, BEq
 
 /-- A monad for indexing documents. -/
 public abbrev IndexM (genre : Verso.Doc.Genre) :=
@@ -718,6 +726,15 @@ public class Indexable (genre : Verso.Doc.Genre) where
   book title). Falls back to the chapter title.
   -/
   partShortContextName : Verso.Doc.Part genre → IndexM genre (Option String) := fun _ => pure none
+
+  /--
+  Computes the full-text search priority for a part, using the same centered-at-50 convention as the
+  quick-jump side. Returning {lean}`none` leaves the document at neutral; returning a signed integer
+  lets a genre fold section metadata, ancestor inheritance, or other emission-time adjustments into
+  full-text scoring. This is an {lean}`Int` to allow it to accumulate adjustments that put it
+  outside the usual range.
+  -/
+  partPriority : Verso.Doc.Part genre → IndexM genre (Option Int) := fun _ => pure none
 
   /--
   How to index block extensions.
@@ -815,28 +832,63 @@ public partial def partText (p : Verso.Doc.Part g) : IndexM g String := do
   match p.metadata >>= idx.partId with
   | none => return header ++ "\n\n" ++ content
   | some id =>
-    IndexM.save {id, header, context, content}
+    let priority ← idx.partPriority p
+    IndexM.save {id, header, context, content, priority}
     return ""
 
 /--
-Constructs a set of documents that can be used with elasticlunr.js by emitting JavaScript arrays and
-code to construct the index. Primarily useful for testing.
+Constructs both the elasticlunr.js-compatible reverse index and the flat array of
+{name}`IndexDoc`s from a single traversal of the document. Use this when a caller needs both
+(e.g. to derive a per-document priority map alongside the index): traversing twice via
+{lit}`mkIndex` and {lit}`mkIndexDocs` runs {name}`partText` over the whole tree twice.
 -/
-public def mkIndexDocs (p : Verso.Doc.Part g) (ctx : g.TraverseContext) : Except String (Array IndexDoc) := do
+public def mkIndexAndDocs (p : Verso.Doc.Part g) (ctx : g.TraverseContext) :
+    Except String (Index × Array IndexDoc) := do
   if p.metadata.bind idx.partId |>.isNone then
-    throw "mkIndexDocs: No ID for root part"
+    throw "No ID for root part"
   else
-    match partText p (#[], ctx) {} with
+    match (partText p |> discard) (#[], ctx) {} with
     | .error e _ => throw e
-    | .ok _ docs => return docs.fold (init := #[]) fun xs _ x => xs.push x
+    | .ok _ docMap =>
+      let mut index : Index :=
+        { refField := "id" : IndexBuilder }
+          |>.addField "id" |>.addField "header" |>.addField "contents" |>.addField "context"
+          |>.build
+      let mut docs : Array IndexDoc := #[]
+      for (_, doc) in docMap do
+        let context := "\t".intercalate doc.context.toList
+        index := index.addDoc doc.id #[doc.id, doc.header, doc.content, context]
+        docs := docs.push doc
+      return (index, docs)
+
+/--
+Constructs the flat array of {name}`IndexDoc`s for the provided document. Primarily useful for
+testing; production code that also needs the elasticlunr index should prefer
+{lit}`mkIndexAndDocs` to avoid traversing the document twice.
+-/
+public def mkIndexDocs (p : Verso.Doc.Part g) (ctx : g.TraverseContext) :
+    Except String (Array IndexDoc) := do
+  let (_, docs) ← mkIndexAndDocs p ctx
+  return docs
 
 /--
 Constructs an elasticlunr.js-compatible reverse index for the provided document.
 -/
 public def mkIndex (p : Verso.Doc.Part g) (ctx : g.TraverseContext) : Except String Index := do
-  if p.metadata.bind idx.partId |>.isNone then
-    throw "No ID for root part"
-  else
-   partText p |> discard |>.finalize ctx
+  let (index, _) ← mkIndexAndDocs p ctx
+  return index
 
 end
+
+/--
+Builds the per-document priority map as JSON: an object mapping each {name}`IndexDoc.id` that has
+a non-neutral priority to its value. Documents with no priority or with the neutral value
+{lit}`50` are omitted, since they would not affect scoring on the browser side and would only
+inflate the eagerly-loaded index. The browser reads this map and folds each entry into the
+log-space scoring sum alongside the global full-text priority.
+-/
+public def priorityMapJson (docs : Array IndexDoc) : Lean.Json :=
+  docs.foldl (init := Lean.Json.mkObj []) fun acc d =>
+    match d.priority with
+    | none | some 50 => acc
+    | some p => acc.setObjVal! d.id (Lean.toJson p)

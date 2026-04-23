@@ -40,14 +40,61 @@ const docContents = ((/** @type {any} */ windowAny) => {
 const expandMatches = true;
 
 /**
+ * Per-layer log-space contribution for a priority value. A priority {@code p} contributes
+ * {@code (p - 50) / 50}; {@code 50} (or {@code null}/{@code undefined}) is neutral (0).
+ * @param {number | undefined | null} p
+ * @returns {number}
+ */
+export const priorityContribution = (p) => (p == null ? 0 : (p - 50) / 50);
+
+/**
+ * Combines a raw score with any number of priority layers. Layer contributions are summed in
+ * log space and the raw score is scaled by {@code 2^sum}, so combining is additive in the
+ * exponent: two layers at 75 stack to {@code 2^(0.5 + 0.5) = 2}, not {@code 1.5 * 1.5 = 2.25}.
+ * Undefined/null layers contribute 0 (neutral), so callers can pass optional priorities
+ * directly without pre-filtering.
+ * @param {number} rawScore
+ * @param {(number | undefined | null)[]} priorities
+ * @returns {number}
+ */
+export const combineScore = (rawScore, ...priorities) => {
+    let sum = 0;
+    for (const p of priorities) sum += priorityContribution(p);
+    return rawScore * Math.pow(2, sum);
+};
+
+/**
  * Type definitions to help if you have typescript enabled.
  *
- * @typedef {{searchKey: string, address: string, domainId: string, ref?: any}} Searchable
+ * Priorities are numbers centered on 50 (the neutral default). Authors typically set them
+ * in [0, 99], but the field accepts any number: pre-summed contributions — e.g. a chain of
+ * ancestor sections — can drift outside that range, and are represented on the same centered
+ * scale so one field covers both uses.
+ *
+ * A priority p is interpreted in log space so that layers compose additively instead of
+ * multiplicatively: each layer contributes (p - 50) / 50 to a running sum, and the final
+ * score multiplier is 2 raised to that sum. Thus 50 contributes 0 (no effect), 99 contributes
+ * ~+0.98 (nearly doubles the score), 0 contributes -1 (halves the score), and larger or
+ * smaller values extend the scale linearly.
+ *
+ * Combining this way allows multiple layers (global, domain, item, ancestor sections)
+ * to stack cleanly: three layers each at 75 contribute +0.5 three times for a 2^1.5 ≈ 2.83× boost,
+ * rather than the 1.5³ = 3.375× we'd get from multiplying per-layer factors directly. The
+ * scheme is symmetric around neutral: +0.5 and -0.5 contributions are true inverses. It is
+ * the standard log-linear weighting used in e.g. ElasticSearch's function_score (also known
+ * as "stops" in photography).
+ *
+ * Full-text matches use the same scheme via a per-document priority baked in at index time
+ * (the `docPriorities` map); both search streams therefore honor the same per-section /
+ * per-item adjustments, just resolved at different times.
+ * @typedef {{searchKey: string, address: string, domainId: string, ref?: any, priority?: number}} Searchable
  * @typedef {(domainData: any) => Searchable[]} DomainDataToSearchables
  * @typedef {{t: 'text', v: string} | {t: 'highlight', v: string}} MatchedPart
  * @typedef {(searchable: Searchable, matchedParts: MatchedPart[], document: Document) => HTMLElement} CustomResultRender
  * @typedef {{dataToSearchables: DomainDataToSearchables, customRender?: CustomResultRender, displayName: string, className: string}} DomainMapper
  * @typedef {Record<string, DomainMapper>} DomainMappers
+ * @typedef {{semantic: number, fullText: number, domains: Record<string, number>}} SearchPriorities
+ * @typedef {{semantic?: number, fullText?: number, domains?: Record<string, number>}} SearchPrioritiesInput
  * @typedef {{ref: string, score: number, doc: DocContent}} TextMatch
  * @typedef {{item: Searchable, fuzzysortResult: Fuzzysort.Result, htmlItem: HTMLLIElement}|{terms: string, textItem: TextMatch, htmlItem: HTMLLIElement}} SearchResult
  * @typedef {{run: (tokens: string[]) => string[]}} ElasticLunrPipeline
@@ -515,6 +562,17 @@ class SearchBox {
     /** @type {DomainMappers} */
     domainMappers;
 
+    /** @type {SearchPriorities} */
+    searchPriorities;
+
+    /**
+     * Priority baked into each full-text document at index time (keyed by doc ref). Feeds the
+     * same per-item log-space contribution that `Searchable.priority` does on the quick-jump side,
+     * so full-text matches can be up- or down-weighted per section.
+     * @type {Record<string, number>}
+     */
+    docPriorities;
+
     /** @type {InputAbbreviationRewriter} */
     imeRewriter;
 
@@ -530,13 +588,25 @@ class SearchBox {
      * @param {HTMLElement} listboxNode
      * @param {DomainMappers} domainMappers
      * @param {Record<string, Searchable[]>} mappedData
+     * @param {SearchPriorities} searchPriorities
+     * @param {Record<string, number>} docPriorities
      */
-    constructor(comboboxNode, buttonNode, listboxNode, domainMappers, mappedData) {
+    constructor(
+        comboboxNode,
+        buttonNode,
+        listboxNode,
+        domainMappers,
+        mappedData,
+        searchPriorities,
+        docPriorities,
+    ) {
         this.comboboxNode = comboboxNode;
         this.buttonNode = buttonNode;
         this.listboxNode = listboxNode;
         this.domainMappers = domainMappers;
         this.mappedData = mappedData;
+        this.searchPriorities = searchPriorities;
+        this.docPriorities = docPriorities;
         this.preparedData = Object.keys(this.mappedData).map((name) => fuzzysort.prepare(name));
         this.requestCounter = 0;
 
@@ -699,8 +769,10 @@ class SearchBox {
             return null;
         }
 
+        // No `limit` here on purpose: priorities are applied below and may promote items that
+        // rank outside the top 30 by raw fuzzysort score into the display window. The threshold
+        // still filters out poor matches, so the working set stays modest.
         let results = fuzzysort.go(filter, this.preparedData, {
-            limit: 30,
             threshold: 0.25,
         });
 
@@ -739,11 +811,40 @@ class SearchBox {
             return null;
         }
 
-        let /** @type {(Fuzzysort.Result|TextMatch) []} */ allResults = [];
-        allResults.push(...textResults);
-        allResults.push(...results);
-        allResults.sort((x, y) => y.score - x.score);
-        allResults = allResults.slice(0, 30);
+        // Flatten results into a single candidate list so per-item priorities can reorder
+        // entries even within a single fuzzysort match (multiple Searchables may share a searchKey).
+        // Text-result scores are scaled by the fullText priority AFTER the normalization above so
+        // that the cap keeps doing its job before the global multiplier is applied. Priority
+        // combining is delegated to `combineScore`; see its definition for the semantics.
+        /** @typedef {{kind: 'semantic', score: number, fuzzysortResult: Fuzzysort.Result, searchable: Searchable} | {kind: 'fullText', score: number, textMatch: TextMatch}} Candidate */
+        /** @type {Candidate[]} */
+        const candidates = [];
+        for (const fr of results) {
+            const dataItems = this.mappedData[fr.target];
+            for (const searchable of dataItems) {
+                const eff = combineScore(
+                    fr.score,
+                    this.searchPriorities.semantic,
+                    this.searchPriorities.domains[searchable.domainId],
+                    searchable.priority,
+                );
+                candidates.push({ kind: "semantic", score: eff, fuzzysortResult: fr, searchable });
+            }
+        }
+        for (const tr of textResults) {
+            candidates.push({
+                kind: "fullText",
+                score: combineScore(
+                    tr.score,
+                    this.searchPriorities.fullText,
+                    this.docPriorities[tr.ref],
+                ),
+                textMatch: tr,
+            });
+        }
+        candidates.sort((a, b) => b.score - a.score);
+        const totalCandidates = candidates.length;
+        const shownCandidates = candidates.slice(0, 30);
 
         // NOTE: Cancellable speculative execution segment begins here! (No awaits before this.)
         // The following computation is async, and so might fall behind later search results if
@@ -759,54 +860,49 @@ class SearchBox {
         let /** @type {SearchResult | null} */ firstOption = null;
         let /** @type {SearchResult | null} */ lastOption = null;
         let /** @type {SearchResult|null} */ newCurrentOption = null;
-        for (let i = 0; i < allResults.length; i++) {
-            const result = allResults[i];
-            if ("target" in result) {
-                const dataItems = this.mappedData[result.target];
-                for (let j = 0; j < dataItems.length; j++) {
-                    const searchable = dataItems[j];
-                    const option = searchableToHtml(
-                        this.domainMappers,
-                        dataItems[j],
-                        result
-                            .highlight((v) => ({ v }))
-                            .map((v) =>
-                                typeof v === "string"
-                                    ? { t: "text", v }
-                                    : { t: "highlight", v: v.v },
-                            ),
-                        document,
-                    );
-                    option.title = option.title; // DEBUG: show scores + ` (${result.score})`;
-                    /** @type {SearchResult} */
-                    const searchResult = {
-                        item: searchable,
-                        fuzzysortResult: result,
-                        htmlItem: option,
-                    };
+        for (let i = 0; i < shownCandidates.length; i++) {
+            const candidate = shownCandidates[i];
+            if (candidate.kind === "semantic") {
+                const { fuzzysortResult: result, searchable } = candidate;
+                const option = searchableToHtml(
+                    this.domainMappers,
+                    searchable,
+                    result
+                        .highlight((v) => ({ v }))
+                        .map((v) =>
+                            typeof v === "string" ? { t: "text", v } : { t: "highlight", v: v.v },
+                        ),
+                    document,
+                );
+                option.title = option.title; // DEBUG: show scores + ` (${candidate.score})`;
+                /** @type {SearchResult} */
+                const searchResult = {
+                    item: searchable,
+                    fuzzysortResult: result,
+                    htmlItem: option,
+                };
 
-                    option.addEventListener("click", this.onOptionClick(searchResult));
-                    option.addEventListener("pointerover", this.onOptionPointerover.bind(this));
-                    option.addEventListener("pointerout", this.onOptionPointerout.bind(this));
-                    filteredOptions.push(searchResult);
-                    listboxResults.push(option);
-                    if (i === 0 && j === 0) {
-                        firstOption = searchResult;
-                    }
-                    if (i === allResults.length - 1 && j === dataItems.length - 1) {
-                        lastOption = searchResult;
-                    }
-                    if (currentOptionText === resultToText(searchResult) && !newCurrentOption) {
-                        newCurrentOption = searchResult;
-                    }
+                option.addEventListener("click", this.onOptionClick(searchResult));
+                option.addEventListener("pointerover", this.onOptionPointerover.bind(this));
+                option.addEventListener("pointerout", this.onOptionPointerout.bind(this));
+                filteredOptions.push(searchResult);
+                listboxResults.push(option);
+                if (i === 0) {
+                    firstOption = searchResult;
+                }
+                if (i === shownCandidates.length - 1) {
+                    lastOption = searchResult;
+                }
+                if (currentOptionText === resultToText(searchResult) && !newCurrentOption) {
+                    newCurrentOption = searchResult;
                 }
             } else {
-                const option = await textResultToHtml(filter, result, document);
+                const option = await textResultToHtml(filter, candidate.textMatch, document);
                 if (option) {
                     /** @type {SearchResult} */
                     const searchResult = {
                         terms: filter,
-                        textItem: result,
+                        textItem: candidate.textMatch,
                         htmlItem: option,
                     };
                     option.addEventListener("click", this.onOptionClick(searchResult));
@@ -817,7 +913,7 @@ class SearchBox {
                     if (i === 0) {
                         firstOption = searchResult;
                     }
-                    if (i === allResults.length - 1) {
+                    if (i === shownCandidates.length - 1) {
                         lastOption = searchResult;
                     }
                     if (currentOptionText === resultToText(searchResult) && !newCurrentOption) {
@@ -828,7 +924,7 @@ class SearchBox {
         }
 
         const moreResults = document.createElement("li");
-        moreResults.textContent = `Showing ${allResults.length}/${results.total + textResults.length} results`;
+        moreResults.textContent = `Showing ${filteredOptions.length}/${totalCandidates} results`;
         moreResults.className = `more-results`;
         listboxResults.push(moreResults);
 
@@ -1210,10 +1306,18 @@ class SearchBox {
  *   searchWrapper: HTMLElement;
  *   data: any;
  *   domainMappers: Record<string, DomainMapper>;
+ *   searchPriorities?: SearchPrioritiesInput;
+ *   docPriorities?: Record<string, number>;
  * }} RegisterSearchArgs
  * @param {RegisterSearchArgs} args
  */
-export const registerSearch = ({ searchWrapper, data, domainMappers }) => {
+export const registerSearch = ({
+    searchWrapper,
+    data,
+    domainMappers,
+    searchPriorities,
+    docPriorities,
+}) => {
     const comboboxNode = /** @type {HTMLDivElement} */ (
         searchWrapper.querySelector("div[contenteditable]")
     );
@@ -1222,6 +1326,12 @@ export const registerSearch = ({ searchWrapper, data, domainMappers }) => {
     const listboxNode = /** @type {HTMLElement | null} */ (
         searchWrapper.querySelector('[role="listbox"]')
     );
+    /** @type {SearchPriorities} */
+    const priorities = {
+        semantic: searchPriorities?.semantic ?? 50,
+        fullText: searchPriorities?.fullText ?? 50,
+        domains: searchPriorities?.domains ?? {},
+    };
     if (comboboxNode != null && listboxNode != null) {
         new SearchBox(
             comboboxNode,
@@ -1229,6 +1339,8 @@ export const registerSearch = ({ searchWrapper, data, domainMappers }) => {
             listboxNode,
             domainMappers,
             dataToSearchableMap(data, domainMappers),
+            priorities,
+            docPriorities ?? {},
         );
     }
 };
