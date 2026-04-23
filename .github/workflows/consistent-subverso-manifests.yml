@@ -65,5 +65,7 @@ jobs:
                     fi
                   done
                   if [ "$FAILED" -ne 0 ]; then
+                    echo ""
+                    echo "To fix automatically, comment '!consistent' on the PR."
                     exit 1
                   fi
