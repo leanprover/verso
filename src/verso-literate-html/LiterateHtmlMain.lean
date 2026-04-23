@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 import VersoLiterateCode
+import VersoSearch.DomainSearch
 
 open Lean
 
@@ -159,7 +160,7 @@ private def renderOutputMessages (items : Array (Nat × ModuleItem')) (showOutpu
       let (msgHtml, st') := msg.blockHtml (g := Literate) (summarize := false) |>.run hlCtx |>.run st
       (html ++ msgHtml, st')
 
-open Verso Output Html in
+open Verso Output Html Search in
 /--
 Builds the `<head>` contents for a literate page. When `includeCodeAssets` is true,
 includes popper/tippy/highlighting/copy-button assets needed for code hover tooltips.
@@ -195,14 +196,7 @@ private def mkHeadContents (litConfig : LiterateConfig) (includeCodeAssets : Boo
     <link rel="stylesheet" href="literate.css"/>
     {{ themeCssTag }}
     {{ copyButtonTag }}
-    <script src="-verso-search/elasticlunr.min.js"></script>
-    <script src="-verso-search/fuzzysort.min.js"></script>
-    <script src="-verso-search/searchIndex.js"></script>
-    <script type="module" src="-verso-search/search-init.js"></script>
-    <link rel="stylesheet" href="-verso-search/search-box.css"/>
-    <link rel="stylesheet" href="-verso-search/search-highlight.css"/>
-    <link rel="stylesheet" href="-verso-search/domain-display.css"/>
-    <script src="-verso-search/search-highlight.js" defer="defer"></script>
+    {{ searchAssetTags }}
     {{ extraCssTags }}
     {{ extraJsTags }}
   }}
@@ -407,6 +401,38 @@ where
     let children := buildToc dir
     {{<li>{{link}}{{children}}</li>}}
 
+open Verso Output Html in
+/--
+Emits the full-page search results view at `search/index.html`. All result rendering is
+deferred to `search-page.js`; this file is just the shell and sets `<base href="../"/>` so
+the search infrastructure (loaded via the shared head) resolves correctly.
+-/
+def emitSearchResultsPage (outDir : System.FilePath) (litConfig : LiterateConfig := {}) : IO Unit := do
+  let headContents := mkHeadContents litConfig (includeCodeAssets := false)
+  let siteTitle := litConfig.metadata.title.getD "Module Index"
+  let pageContents : Html := {{
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <base href="../"/>
+        <title>{{s!"Search — {siteTitle}"}}</title>
+        {{ headContents }}
+      </head>
+      <body>
+        <main class="landing-page search-page" id="main-content">
+          <h1>"Search"</h1>
+          <div data-search-host class="search-page-host"></div>
+          <noscript><p>"This search feature requires JavaScript."</p></noscript>
+          <div id="search-page-results"></div>
+          <script type="module" src="-verso-search/search-page.js"></script>
+        </main>
+      </body>
+    </html>
+  }}
+  IO.FS.createDirAll (outDir / "search")
+  IO.FS.writeFile (outDir / "search" / "index.html") <| "<!DOCTYPE html>\n" ++ pageContents.asString
+
 open Verso Output Doc Html in
 /--
 Emits the landing page using a specific module's rendered content.
@@ -452,7 +478,7 @@ def main (args : List String) : IO UInt32 := do
   IO.FS.writeFile (config.outputDir / "literate.css") literate.css
   -- Copy the copy-button JS
   IO.FS.writeFile (config.outputDir / "copy-button.js") copyButtonJs
-  emitSearchBox (config.outputDir / "-verso-search")
+  emitSearchBox (config.outputDir / "-verso-search") (searchPagePath := some "search/")
   let (dir, srcDirs) ← loadModuleMap config.moduleMapFile
 
   -- Load config from TOML if provided
@@ -513,6 +539,7 @@ def main (args : List String) : IO UInt32 := do
       pure st
 
   emitIndex {} traverseState dir (config.outputDir / "-verso-search") ctx.logError
+  emitSearchResultsPage config.outputDir litConfig
   let domainData : Verso.NameMap Verso.Multi.Domain := ({} : Verso.NameMap _)
     |>.insert constDomainName traverseState.constantDefDomain
     |>.insert moduleDomainName traverseState.moduleDomain

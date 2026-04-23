@@ -1,0 +1,180 @@
+/**
+ * Copyright (c) 2026 Lean FRO LLC. All rights reserved.
+ * Released under Apache 2.0 license as described in the file LICENSE.
+ * Author: David Thrane Christiansen
+ */
+
+.search-page-host {
+    margin: 1rem 0 1rem 0;
+}
+
+.search-page-input {
+    width: 32rem;
+    max-width: 100%;
+    box-sizing: border-box;
+    padding: 0.6rem 0.8rem;
+    font-size: 1.1rem;
+    font-family: inherit;
+    color: var(--verso-text-color, black);
+    background-color: var(--verso-background-color, white);
+    border: 1px solid gray;
+    border-radius: 0.2rem;
+    outline: none;
+}
+
+.search-page-input:focus {
+    border-color: currentColor;
+    box-shadow: 0 0 0 2px var(--selected-color, #def);
+}
+
+.search-page-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem 0.9rem;
+    margin: 0 0 0.75rem 0;
+    font-family: var(--verso-structure-font-family);
+    font-size: 0.9rem;
+    color: var(--verso-muted-color, #444);
+}
+
+.search-page-filter {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    cursor: pointer;
+    user-select: none;
+}
+
+.search-page-filter input[type="checkbox"] {
+    cursor: pointer;
+}
+
+/* Dim buckets with no matches in the current query — the box stays visible so users
+   see which domains exist, but is greyed and not clickable. */
+.search-page-filter--disabled {
+    color: var(--verso-muted-color, #777);
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.search-page-filter--disabled input[type="checkbox"] {
+    cursor: not-allowed;
+}
+
+.search-page-count {
+    color: inherit;
+    font-size: 1rem;
+    font-weight: 500;
+    margin: 0 0 1rem 0;
+}
+
+.search-page-count.muted {
+    color: var(--verso-muted-color, #777);
+    font-weight: normal;
+    font-style: italic;
+}
+
+.search-page-empty {
+    color: var(--verso-muted-color, #777);
+    font-style: italic;
+}
+
+.search-page-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    /* Use the site's body-text font so results read like prose rather than UI chrome.
+       Individual result subclasses (e.g. `.domain` uses the structural font) still
+       override as needed. */
+    font-family: var(--verso-text-font-family);
+}
+
+.search-page-list li.search-result {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding: 0.6rem 0.8rem;
+    border-top: 1px solid var(--verso-border-color, #ddd);
+    cursor: pointer;
+    /* No font-weight/font-family here on purpose — per-domain rules from
+       `domain-display.css` (e.g. bold for `.section-domain`, code-font for `.const`)
+       need to win. A rule here with specificity 0-2-1 would override the domain
+       rules' 0-2-0 and silently drop domain styling. */
+}
+
+.search-page-list li.search-result:hover,
+.search-page-list li.search-result:focus-within {
+    background-color: var(--selected-color, #def);
+}
+
+.search-page-list li.search-result.full-text {
+    font-family: var(--verso-text-font-family);
+}
+
+/* Only the whole `.header` becomes a block — each `em` inside it is a single matched
+   character, and making those block-level too turns one heading into one line per letter. */
+.search-page-list li.search-result.full-text .header {
+    display: block;
+}
+
+.search-page-list li.search-result.full-text .header,
+.search-page-list li.search-result.full-text .header em {
+    font-family: var(--verso-structure-font-family);
+    font-style: normal;
+    font-weight: bold;
+}
+
+.search-page-list li.search-result p {
+    margin: 0;
+    font-family: inherit;
+    font-weight: inherit;
+    font-style: inherit;
+}
+
+/* Match the in-page term highlight used on destination pages (`.text-search-results`)
+   so "highlighted match" looks the same everywhere on the site. Row hover uses the
+   same color as its background; the thin outline keeps em boundaries legible on hover. */
+.search-page-list li.search-result em {
+    font-style: normal;
+    text-decoration: none;
+    background-color: var(--verso-selected-color, #def);
+    border-radius: 0.15em;
+    padding: 0 0.1em;
+}
+
+.search-page-list li.search-result:hover em,
+.search-page-list li.search-result:focus-within em {
+    outline: 1px solid var(--verso-border-color, #bbb);
+}
+
+.search-page-list li.search-result .domain em {
+    font-style: italic;
+}
+
+.search-page-list li.search-result .domain {
+    color: var(--verso-muted-color, #777);
+    font-style: italic;
+    font-family: var(--verso-structure-font-family);
+    font-weight: normal;
+    font-size: 0.75rem;
+}
+
+.search-page-list li.search-result .domain.text-context {
+    /* Truncate on the left with an ellipsis, matching the dropdown convention. */
+    text-overflow: ellipsis;
+    direction: rtl;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.search-page-list li.search-result .domain .context-elem {
+    display: inline-block;
+}
+
+.search-page-list li.search-result .domain .context-elem:not(:last-child)::after {
+    content: "»";
+    margin: 0 0.25em;
+}

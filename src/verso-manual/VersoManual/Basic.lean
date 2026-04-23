@@ -100,7 +100,7 @@ inductive FontWeight where
   | normal
   | bold
   | bolder
-  | numeric (weight : Nat) (ok : weight > 0 ∧ weight < 1000 := by omega)
+  | numeric (weight : Nat) (ok : weight > 0 ∧ weight < 1000 := by grind)
 deriving DecidableEq, Repr, Hashable
 
 def FontWeight.toCss (w : FontWeight) : String :=

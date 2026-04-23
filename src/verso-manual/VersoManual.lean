@@ -543,6 +543,35 @@ def emitFindHtml (toc : List Html.Toc) (dir : System.FilePath) (state : Traverse
   ensureDir (dir / "find")
   IO.FS.writeFile (dir / "find" / "index.html") (Html.doctype ++ (relativizeLinks <| xref toc xrefJson find.js state config).asString)
 
+open Output.Html in
+/--
+Renders the shell HTML for the full-page search results view at `search/index.html`.
+The page reuses the same `<head>` as every other page (so `searchIndex.js`, the combobox,
+and the domain-mappers are loaded) and defers all result rendering to `search-page.js`.
+-/
+def searchResultsPage (toc : List Html.Toc) (bookTitle : Html) (state : TraverseState) (config : Config) : Html :=
+  -- `bookTitle` (fourth arg) becomes the `.header-title` content; the `<h1>"Search"</h1>`
+  -- below is the page heading inside the main content. `"Search"` is only the `<title>`.
+  page toc #["search"] "Search" bookTitle {{
+    <section class="search-page">
+      <h1>"Search"</h1>
+      <div data-search-host class="search-page-host"></div>
+      <noscript><p>"This search feature requires JavaScript."</p></noscript>
+      <div id="search-page-results"></div>
+      <script type="module" src="-verso-search/search-page.js"></script>
+    </section>
+  }}
+  state config
+  (localItems := #[])
+
+def emitSearchResultsHtml
+    (toc : List Html.Toc) (dir : System.FilePath) (bookTitle : Html)
+    (state : TraverseState) (config : Config) : IO Unit := do
+  ensureDir (dir / "search")
+  IO.FS.writeFile
+    (dir / "search" / "index.html")
+    (Html.doctype ++ (relativizeLinks <| searchResultsPage toc bookTitle state config).asString)
+
 
 section
 open Search
@@ -611,12 +640,24 @@ where
     return hash
 
 
-def emitSearchBox (dir : System.FilePath) (domains : DomainMappers) (priorities : Verso.Search.SearchPriorities := {}) : IO Unit := do
+/--
+Emits the search box static assets plus a `search-config.js` loaded by every page.
+`searchPagePath`, when supplied, is the site-root-relative path of the full-page search
+results view. The combobox reads it via `window.searchPagePath` and enables Enter-to-submit.
+-/
+def emitSearchBox
+    (dir : System.FilePath) (domains : DomainMappers)
+    (priorities : Verso.Search.SearchPriorities := {})
+    (searchPagePath : Option String := none) : IO Unit := do
   ensureDir dir
   for (file, contents) in searchBoxCode do
     IO.FS.writeBinFile (dir / file) contents
   IO.FS.writeFile (dir / "domain-mappers.js") ((domains.toJs priorities).pretty (width := 70))
   IO.FS.writeFile (dir / "domain-display.css") domains.quickJumpCss
+  let configJs := match searchPagePath with
+    | some path => s!"window.searchPagePath = {toString (Json.str path)};\n"
+    | none => ""
+  IO.FS.writeFile (dir / "search-config.js") configJs
 
 end
 
@@ -651,7 +692,7 @@ def emitHtmlSingle
   let ((), htmlState) ← emitContent dir .empty remoteContent
   IO.FS.writeFile (dir.join "-verso-docs.json") (toString htmlState.dedup.docJson)
   if .search ∈ config.features then
-    emitSearchBox (dir / "-verso-search") state.quickJump config.searchPriorities
+    emitSearchBox (dir / "-verso-search") state.quickJump config.searchPriorities (searchPagePath := some "search/")
     emitSearchIndex (dir / "-verso-search") state {logError, draft := config.draft} logError text
 where
   emitContent (dir : System.FilePath) : StateT (State Html) (ReaderT AllRemotes (ReaderT ExtensionImpls IO)) Unit := do
@@ -687,8 +728,15 @@ where
       let (errs, items) ← localContents opts.lift ctxt state text
       for e in errs do logError e
       pure <| items.map (·.toHtml)
+    let titleToShow : Html :=
+      open Verso.Output.Html in
+      if let some alt := text.metadata.bind (·.shortTitle) then
+        alt
+      else titleHtml
     let xrefJson ← IO.FS.readFile (dir / "xref.json")
     emitFindHtml toc dir state xrefJson config.toConfig
+    if .search ∈ config.features then
+      emitSearchResultsHtml toc dir titleToShow state config.toConfig
     IO.FS.withFile (dir.join "verso-vars.css") .write fun h => do
       h.putStrLn Html.«verso-vars.css»
     IO.FS.withFile (dir.join "book.css") .write fun h => do
@@ -703,11 +751,6 @@ where
       IO.FS.writeFile (dir / "-verso-data" / f.filename) f.contents.js
       if let some m := f.sourceMap? then
         IO.FS.writeFile (dir / "-verso-data" / m.filename) m.contents
-    let titleToShow : Html :=
-      open Verso.Output.Html in
-      if let some alt := text.metadata.bind (·.shortTitle) then
-        alt
-      else titleHtml
     state.writeFiles (dir / "-verso-data")
 
     IO.FS.withFile (dir.join "index.html") .write fun h => do
@@ -739,7 +782,7 @@ def emitHtmlMulti (logError : String → IO Unit) (config : RenderConfig)
   let ((), htmlState) ← emitContent root {} remoteContent
   IO.FS.writeFile (root.join "-verso-docs.json") (toString htmlState.dedup.docJson)
   if .search ∈ config.features then
-    emitSearchBox (root / "-verso-search") state.quickJump config.searchPriorities
+    emitSearchBox (root / "-verso-search") state.quickJump config.searchPriorities (searchPagePath := some "search/")
     emitSearchIndex (root / "-verso-search") state {logError, draft := config.draft} logError text
 where
   /--
@@ -775,6 +818,8 @@ where
     emitPart titleToShow authors authorshipNote toc opts.lift ctxt state definitionIds linkTargets {} true config.htmlDepth root text
     let xrefJson ← IO.FS.readFile (root / "xref.json")
     emitFindHtml toc root state xrefJson config.toConfig
+    if .search ∈ config.features then
+      emitSearchResultsHtml toc root titleToShow state config.toConfig
 
   /--
   Emits HTML for a given part, and its children if the splitting threshold is not yet reached.
