@@ -43,7 +43,7 @@ private def charValue (c : Char) : UInt32 :=
 /--
 Encodes 4 bytes to 5 characters.
 -/
-private def encodeChunk (bytes : ByteArray) (startIdx : Nat) (ok : startIdx + 3 < bytes.size := by omega) : String := Id.run do
+private def encodeChunk (bytes : ByteArray) (startIdx : Nat) (ok : startIdx + 3 < bytes.size := by grind) : String := Id.run do
   -- Convert 4 bytes to 32-bit value (big-endian)
   let b0 := bytes[startIdx + 0].toUInt32
   let b1 := bytes[startIdx + 1].toUInt32
@@ -106,22 +106,13 @@ private def padBytes (bytes : ByteArray) : ByteArray :=
   | 3 => bytes.push 0 |>.push 0 |>.push 0
   | _ => bytes
 
-@[simp]
+@[simp, grind =]
 theorem byteArray_push_size (xs : ByteArray) : (xs.push x).size = xs.size + 1 := by
   let ⟨xs⟩ := xs
   simp [ByteArray.push, ByteArray.size]
 
 private theorem padBytes_size_mod_4 : (padBytes xs).size % 4 = 0 := by
-  fun_cases padBytes
-  case case1 rem h =>
-    omega
-  case case2 | case3 | case4 =>
-    simp; omega
-  case case5 rem h0 h1 h2 h3 =>
-    simp_all [rem]
-    match h' : xs.size with
-    | 0 | 1 | 2 | 3 => simp_all
-    | k + 4 => simp_all; omega
+  fun_cases padBytes <;> (try (rw [imp_false] at *)) <;> grind
 
 /-- Removes padding from decoded bytes. -/
 private def removePadding (bytes : ByteArray) (originalSize : Nat) : ByteArray :=
@@ -147,11 +138,7 @@ public def encode (data : ByteArray) : String := Id.run do
 
   for h : i in [0:chunks] do
     let startIdx := i * 4
-
-    let encoded ← encodeChunk paddedData startIdx <| by
-      cases h
-      simp_all
-      omega
+    let encoded ← encodeChunk paddedData startIdx <| by (cases h; grind)
     result := result ++ encoded
 
   result

@@ -239,7 +239,6 @@ meta partial def mergeInto (sym : DocumentSymbol) (existing : Array DocumentSymb
   for h : i in [0:existing.size] do
     let ⟨e⟩ := existing[i]
     have : i < existing.size := by get_elem_tactic
-    have : i ≤ existing.size := by omega
     let children := e.children?.getD #[]
 
     -- the symbol to be inserted belongs before the current symbol

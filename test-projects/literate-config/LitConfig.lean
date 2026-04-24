@@ -32,7 +32,7 @@ theorem double_spec {n : Nat} : double n = n * 2 := rfl
 /--
 A variant: {name}`double` is the same as adding {lean}`n` to itself.
 -/
-theorem double_spec' {n : Nat} : double n = n + n := by simp [double]; omega
+theorem double_spec' {n : Nat} : double n = n + n := by grind [double]
 
 /-!
 We can also have inline code references like {name}`hello`.
