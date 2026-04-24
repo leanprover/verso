@@ -5,8 +5,9 @@ genre-appropriate `QUERY` (one that yields at least one result in that genre's t
 corpus). The test bodies themselves are genre-independent — they exercise the shared
 `search-page.js` / `search-page.css` contract.
 
-These are the accessibility gaps identified in the PR #847 review; they're expected to
-fail until each gap is fixed.
+Each test pins one piece of the search page's accessibility contract: live-announced
+result count, keyboard focusability of results, Enter-to-navigate on a focused result,
+and a real `<a href>` on each result (so middle-click and open-in-new-tab work).
 """
 
 from playwright.sync_api import Page, expect
@@ -17,16 +18,21 @@ class SearchPageAccessibilityBase:
 
     QUERY: str = ""
 
-    def test_results_list_has_listbox_role(self, server: str, page: Page):
-        """The result `<ul>` should carry `role="listbox"` so the `role="option"` children
-        emitted by `renderCandidateLi` aren't orphaned from an a11y tree perspective."""
+    def test_results_list_has_no_listbox_role(self, server: str, page: Page):
+        """The result `<ul>` must not carry `role="listbox"`: results are navigated by
+        tabbing through `<a>` elements, not via `aria-activedescendant`/arrow-key
+        selection, so a listbox role would mislead assistive tech."""
         page.goto(f"{server}/search/?q={self.QUERY}")
         page.wait_for_load_state("networkidle")
         page.wait_for_function(
             "document.querySelectorAll('ul.search-page-list li').length > 0",
             timeout=5_000,
         )
-        expect(page.locator("ul.search-page-list")).to_have_attribute("role", "listbox")
+        ul = page.locator("ul.search-page-list")
+        assert ul.get_attribute("role") is None, "search-page-list should not have role=listbox"
+        # And the children shouldn't be `role="option"` either.
+        options = page.locator("ul.search-page-list li[role='option']")
+        assert options.count() == 0, "search page results should not carry role=option"
 
     def test_count_element_is_aria_live(self, server: str, page: Page):
         """The result count should be an `aria-live` region so screen reader users hear
@@ -82,9 +88,9 @@ class SearchPageAccessibilityBase:
         )
 
     def test_result_exposes_target_href(self, server: str, page: Page):
-        """Results should expose their target URL as an `<a href>` so middle-click and
-        open-in-new-tab work. Currently navigation happens via a `click` handler calling
-        `window.location.assign`, which is keyboard- and right-click-hostile."""
+        """Each result should expose its target URL as an `<a href>` so middle-click,
+        open-in-new-tab, and Shift/Ctrl+click all work via the anchor's native behaviour
+        rather than a JS `click` handler."""
         page.goto(f"{server}/search/?q={self.QUERY}")
         page.wait_for_load_state("networkidle")
         page.wait_for_function(

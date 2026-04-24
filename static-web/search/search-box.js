@@ -1,5 +1,4 @@
 /**
-/**
  * Copyright (c) 2024 Lean FRO LLC. All rights reserved.
  * Released under Apache 2.0 license as described in the file LICENSE.
  * Author: Jakob Ambeck Vase
@@ -314,19 +313,22 @@ const dataToSearchableMap = (json, domainMappers) =>
         }, {});
 
 /**
- * Maps from a data item to a HTML LI element
+ * Maps from a data item to a HTML LI element. `asOption` controls whether the `<li>` gets
+ * `role="option"` — true (the default) for the combobox listbox, false for the full-page
+ * results view where the parent `<ul>` is not a listbox and the items are plain links.
  *
  * @param {DomainMappers} domainMappers
  * @param {Searchable} searchable
  * @param {MatchedPart[]} matchedParts
  * @param {Document} document
+ * @param {boolean} [asOption]
  * @return {HTMLLIElement}
  */
-const searchableToHtml = (domainMappers, searchable, matchedParts, document) => {
+const searchableToHtml = (domainMappers, searchable, matchedParts, document, asOption = true) => {
     const domainMapper = domainMappers[searchable.domainId];
 
     const li = document.createElement("li");
-    li.role = "option";
+    if (asOption) li.role = "option";
     li.className = `search-result ${domainMapper.className}`;
     li.title = `${domainMapper.displayName} ${searchable.searchKey}`;
 
@@ -512,17 +514,28 @@ export const navigateBaseRelative = (dest) => {
  * `textSnippet` tunes the per-result snippet sizes for full-text hits. It has no effect
  * on semantic hits, which don't carry excerpt text.
  *
+ * `asOption` controls `role="option"` on the returned `<li>`. Defaults to true for the
+ * combobox listbox; callers rendering into a plain list (the full-page search view) pass
+ * false so the items don't masquerade as listbox options.
+ *
  * @param {Candidate} candidate
  * @param {{
  *   domainMappers: DomainMappers,
  *   filter: string,
  *   document?: Document,
  *   textSnippet?: TextSnippetOptions,
+ *   asOption?: boolean,
  * }} opts
  * @return {Promise<HTMLLIElement|null>}
  */
 export const renderCandidateLi = async (candidate, opts) => {
-    const { domainMappers, filter, document: doc = document, textSnippet } = opts;
+    const {
+        domainMappers,
+        filter,
+        document: doc = document,
+        textSnippet,
+        asOption = true,
+    } = opts;
     if (candidate.kind === "semantic") {
         const { fuzzysortResult, searchable } = candidate;
         return searchableToHtml(
@@ -534,9 +547,10 @@ export const renderCandidateLi = async (candidate, opts) => {
                     typeof v === "string" ? { t: "text", v } : { t: "highlight", v: v.v },
                 ),
             doc,
+            asOption,
         );
     }
-    return await textResultToHtml(filter, candidate.textMatch, doc, textSnippet);
+    return await textResultToHtml(filter, candidate.textMatch, doc, textSnippet, asOption);
 };
 
 /**
@@ -582,16 +596,17 @@ const withTermsParam = (itemAddress, query) => {
  * @param {TextMatch} match
  * @param {Document} document
  * @param {TextSnippetOptions} [snippetOpts]
+ * @param {boolean} [asOption]  Whether to apply `role="option"`. See `searchableToHtml`.
  * @return {Promise<HTMLLIElement|null>}
  */
-const textResultToHtml = async (term, match, document, snippetOpts = {}) => {
+const textResultToHtml = async (term, match, document, snippetOpts = {}, asOption = true) => {
     const headerContext = snippetOpts.header ?? 30;
     const contentContext = snippetOpts.content ?? 10;
     const maxSnippets = snippetOpts.maxSnippets ?? 3;
     const doc = await getDocContents(match.ref);
 
     const li = document.createElement("li");
-    li.role = "option";
+    if (asOption) li.role = "option";
     li.className = `search-result full-text`;
     li.title = "Full-text search result";
     // DEBUG:

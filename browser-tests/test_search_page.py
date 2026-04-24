@@ -55,10 +55,10 @@ class TestSearchPage:
         inbody_box.press("Delete")
         inbody_box.type("Verso", delay=30)
 
-        # No combobox dropdown/popup anywhere on the page. The results list itself is a
-        # `role="listbox"` (for a11y), so the check is scoped to combobox-origin listboxes.
-        combobox_listbox = page.locator(".combobox-list [role='listbox']")
-        assert combobox_listbox.count() == 0, "search page should not render a combobox listbox"
+        # No combobox dropdown/popup anywhere on the page. There's no listbox on this
+        # page at all — the results `<ul>` carries no role, and its children are plain
+        # `<li>`s wrapping an `<a href>`.
+        assert page.locator("[role='listbox']").count() == 0
         # And specifically the combobox wrapper is absent.
         assert page.locator(".combobox-list").count() == 0
 

@@ -158,6 +158,7 @@ const renderResultsFor = async (query) => {
             filter: query,
             document,
             textSnippet,
+            asOption: false,
         });
         if (myToken !== renderToken) return;
         if (!li) continue;
@@ -310,12 +311,13 @@ const init = async () => {
     resultsRoot.append(countEl);
 
     // The shared `verso-search-results` class lets the domain-specific CSS (emitted
-    // into `domain-display.css`) match here as well as inside the combobox.
-    // `role="listbox"` pairs with the `role="option"` children emitted by
-    // `renderCandidateLi` so assistive tech announces the list coherently.
+    // into `domain-display.css`) match here as well as inside the combobox. No
+    // `role="listbox"`: results are navigated by tabbing through the `<a>` inside
+    // each `<li>`, not via arrow-key selection with `aria-activedescendant`. A
+    // listbox role without those semantics misleads assistive tech into announcing
+    // a selectable set that doesn't exist.
     listEl = document.createElement("ul");
     listEl.className = "search-page-list verso-search-results";
-    listEl.setAttribute("role", "listbox");
     resultsRoot.append(listEl);
 
     await renderResultsFor(initialQuery);
@@ -335,7 +337,10 @@ const init = async () => {
         if (e.key === "Enter") e.preventDefault();
     });
 
-    input.focus();
+    // Focus the input only when the page loaded without a query so the user can start
+    // typing immediately. For direct links (`?q=foo`), leave focus alone so the user
+    // can scroll and read results without fighting the browser for focus.
+    if (!initialQuery) input.focus();
 };
 
 if (document.readyState === "loading") {
