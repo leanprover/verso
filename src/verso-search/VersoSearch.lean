@@ -978,3 +978,17 @@ available.
 public def refContextMap (docs : Array IndexDoc) : HashMap String String :=
   docs.foldl (init := {}) fun m d =>
     m.insert d.id ("\t".intercalate d.context.toList)
+
+/--
+Renders a {lean}`UInt64` as a fixed-width 16-character lowercase hex string (padded
+with leading zeros). Used as a content-hash suffix in search-asset filenames so
+buckets can be cached with {lit}`Cache-Control: immutable` — a new build produces a
+new filename, avoiding the RTT cost of HTTP revalidation on repeat visits.
+-/
+public def hashHex (h : UInt64) : String := Id.run do
+  let mut out := ""
+  for i in [0:16] do
+    let shift := UInt64.ofNat (60 - i * 4)
+    let nibble := ((h >>> shift) &&& 0xf).toNat
+    out := out.push (Nat.digitChar nibble)
+  return out

@@ -1097,14 +1097,22 @@ def emitIndex (traverseContext : Context) (traverseState : State) (dir : Dir) (o
       docBuckets := docBuckets.alter h fun v =>
         v.getD {} |>.insert ref content
 
-    for (bucket, docs) in docBuckets do
-      let docJson := bucketDocsToJson docs contextMap
-      IO.FS.writeFile (outputDir / s!"searchIndex_{bucket}.js") s!"window.docContents[{bucket}].resolve({docJson.compress});"
+    -- Content-hashed bucket filenames to allow long cache times on HTTP servers. See the matching
+    -- comment in `VersoManual.emitSearchIndex` for the detailed rationale.
+    -- `window.searchIndexVersion` is emitted below for the loader.
+    let indexData := index.toJson.compress
+    let version := hashHex (hash indexData)
 
-    let indexJs := "const __verso_searchIndexData = " ++ index.toJson.compress ++ ";\n\n"
+    for (bucket, docs) in docBuckets do
+      let docJson := Verso.Search.bucketDocsToJson docs contextMap
+      IO.FS.writeFile (outputDir / s!"searchIndex_{bucket}.{version}.js")
+        s!"window.docContents[{bucket}].resolve({docJson.compress});"
+
+    let indexJs := "const __verso_searchIndexData = " ++ indexData ++ ";\n\n"
     let indexJs := indexJs ++ "const __versoSearchIndex = elasticlunr ? elasticlunr.Index.load(__verso_searchIndexData) : null;\n"
     let indexJs := indexJs ++ "window.docContents = {};\n"
     let indexJs := indexJs ++ "window.searchIndex = elasticlunr ? __versoSearchIndex : null;\n"
+    let indexJs := indexJs ++ "window.searchIndexVersion = " ++ toString (Json.str version) ++ ";\n"
     IO.FS.writeFile (outputDir / "searchIndex.js") indexJs
 
     IO.FS.writeFile (outputDir / "elasticlunr.min.js") Verso.Output.Html.elasticlunr.js

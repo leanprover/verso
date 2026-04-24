@@ -625,20 +625,31 @@ def emitSearchIndex (dir : System.FilePath) (state : TraverseState) (ctx : Trave
       docBuckets := docBuckets.alter h fun v =>
         v.getD {} |>.insert ref content
 
+    -- Content-hashed bucket filenames: a 64-bit hash of the inverted index (which
+    -- is derived from the same source docs as the buckets) is appended to each
+    -- bucket's filename, and exposed via `window.searchIndexVersion` for the
+    -- loader to reconstruct the URL. Since the filename changes whenever the
+    -- index changes, bucket files can be served with `Cache-Control: immutable`
+    -- — no revalidation RTT per bucket on repeat visits.
+    let indexData := index.toJson.compress
+    let version := hashHex (hash indexData)
+
     for (bucket, docs) in docBuckets do
       let docJson := bucketDocsToJson docs contextMap
-      IO.FS.writeFile (dir / s!"searchIndex_{bucket}.js") s!"window.docContents[{bucket}].resolve({docJson.compress});"
+      IO.FS.writeFile (dir / s!"searchIndex_{bucket}.{version}.js")
+        s!"window.docContents[{bucket}].resolve({docJson.compress});"
 
     -- Per-doc priority map, emitted alongside the elasticlunr index inside the eagerly-loaded
     -- searchIndex.js. Kept separate from the lazily-fetched per-bucket content so full-text
     -- scoring can consult it without waiting on bucket loads.
     let priorityJson := priorityMapJson indexDocs
 
-    let indexJs := "const __verso_searchIndexData = " ++ index.toJson.compress ++ ";\n\n"
+    let indexJs := "const __verso_searchIndexData = " ++ indexData ++ ";\n\n"
     let indexJs := indexJs ++ "const __versoSearchIndex = elasticlunr ? elasticlunr.Index.load(__verso_searchIndexData) : null;\n"
     let indexJs := indexJs ++ "window.docContents = {};\n"
     let indexJs := indexJs ++ "window.searchIndex = elasticlunr ? __versoSearchIndex : null;\n"
     let indexJs := indexJs ++ "window.docPriorities = " ++ priorityJson.compress ++ ";\n"
+    let indexJs := indexJs ++ "window.searchIndexVersion = " ++ toString (Json.str version) ++ ";\n"
     IO.FS.writeFile (dir / "searchIndex.js") indexJs
 
     IO.FS.writeFile (dir / "elasticlunr.min.js") Verso.Output.Html.elasticlunr.js

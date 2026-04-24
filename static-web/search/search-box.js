@@ -398,7 +398,13 @@ const loadBucket = async (ref) => {
     /** @type {any} */ (promise).resolve = resolveFun;
     docContents[bucket] = promise;
     const script = document.createElement("script");
-    script.src = `-verso-search/searchIndex_${bucket}.js`;
+    // `window.searchIndexVersion` is emitted by the Lean side alongside the
+    // inverted index. Its value is a content hash of the index, so bucket
+    // filenames change whenever the index does — letting the bucket files be
+    // served with `Cache-Control: immutable` (no revalidation RTT on repeat
+    // visits).
+    const version = /** @type {any} */ (window).searchIndexVersion;
+    script.src = `-verso-search/searchIndex_${bucket}.${version}.js`;
     document.head.appendChild(script);
 
     return await docContents[bucket];
