@@ -11,17 +11,18 @@ class TestSearch:
         expect(page.get_by_label("Results")).to_match_aria_snapshot("""
           - listbox "Results":
             - option "5. Output Formats …reduce the syntactic overhead of constructing ASTs. These libraries may also be used by authors of extensions to the Manual… Writing Documentation in Lean with Verso" [selected]:
-              - paragraph:
-                - text: 5. Output Formats …reduce the
-                - emphasis: syntactic
-                - text: overhead of constructing
-                - emphasis: ASTs.
-                - text: These
-                - emphasis: libraries
-                - text: may also be used by authors of
-                - emphasis: extensions
-                - text: to the Manual…
-              - paragraph: Writing Documentation in Lean with Verso
+              - link "5. Output Formats …reduce the syntactic overhead of constructing ASTs. These libraries may also be used by authors of extensions to the Manual… Writing Documentation in Lean with Verso":
+                - paragraph:
+                  - text: 5. Output Formats …reduce the
+                  - emphasis: syntactic
+                  - text: overhead of constructing
+                  - emphasis: ASTs.
+                  - text: These
+                  - emphasis: libraries
+                  - text: may also be used by authors of
+                  - emphasis: extensions
+                  - text: to the Manual…
+                - paragraph: Writing Documentation in Lean with Verso
             - listitem: Showing 1/1 results""".strip())
 
         page.get_by_role("searchbox").clear()
@@ -29,10 +30,11 @@ class TestSearch:
         expect(page.get_by_label("Results")).to_match_aria_snapshot("""
           - listbox "Results":
             - option "Verso.Output.Html.visitM Documentation" [selected]:
-              - paragraph:
-                - text: Verso.Output.
-                - emphasis: Html.visitM
-              - paragraph: Documentation
+              - link "Verso.Output.Html.visitM Documentation":
+                - paragraph:
+                  - text: Verso.Output.
+                  - emphasis: Html.visitM
+                - paragraph: Documentation
             - listitem: Showing 1/1 results""".strip())
 
         page.get_by_role("searchbox").type("onadsville")
@@ -67,11 +69,12 @@ class TestSearch:
         expect(page.get_by_label("Results")).to_match_aria_snapshot("""
           - listbox "Results":
             - option "Verso.Output.Html.none ↪ Verso.Output.Html.empty Suggestion" [selected]:
-              - paragraph:
-                - text: Verso.Output.
-                - emphasis: Html.none
-                - text: ↪ Verso.Output.Html.empty
-              - paragraph: Suggestion
+              - link "Verso.Output.Html.none ↪ Verso.Output.Html.empty Suggestion":
+                - paragraph:
+                  - text: Verso.Output.
+                  - emphasis: Html.none
+                  - text: ↪ Verso.Output.Html.empty
+                - paragraph: Suggestion
             - listitem: Showing 1/1 results""".strip())
 
         page.get_by_role("searchbox").press("Backspace")
@@ -82,9 +85,10 @@ class TestSearch:
         expect(page.get_by_label("Results")).to_match_aria_snapshot("""
           - listbox "Results":
             - option "Verso.Output.Html.nil ↪ Verso.Output.Html.empty Suggestion" [selected]:
-              - paragraph:
-                - text: Verso.Output.
-                - emphasis: Html.nil
-                - text: ↪ Verso.Output.Html.empty
-              - paragraph: Suggestion
+              - link "Verso.Output.Html.nil ↪ Verso.Output.Html.empty Suggestion":
+                - paragraph:
+                  - text: Verso.Output.
+                  - emphasis: Html.nil
+                  - text: ↪ Verso.Output.Html.empty
+                - paragraph: Suggestion
             - listitem: Showing 1/1 results""".strip())
