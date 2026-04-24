@@ -417,6 +417,10 @@ def emitSearchResultsPage (outDir : System.FilePath) (litConfig : LiterateConfig
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <base href="../"/>
         <title>{{s!"Search — {siteTitle}"}}</title>
+        <!-- Start the xref.json download in parallel with script loading. The
+             search page JS can't fetch it until it runs, so without the preload
+             the data fetch sits at the tail of the critical path. -->
+        <link rel="preload" href="xref.json" as="fetch"/>
         {{ headContents }}
       </head>
       <body>

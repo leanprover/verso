@@ -484,7 +484,8 @@ def page (toc : List Html.Toc)
     (path : Path) (textTitle : String) (htmlBookTitle contents : Html)
     (state : TraverseState) (config : Config)
     (localItems : Array Html)
-    (showNavButtons : Bool := true) (extraJs : List JS := []) : Html :=
+    (showNavButtons : Bool := true) (extraJs : List JS := [])
+    (extraHead : Html := .empty) : Html :=
   let toc := {
     title := htmlBookTitle, path := #[], id := "" , sectionNum := some #[], children := toc
   }
@@ -512,7 +513,7 @@ def page (toc : List Html.Toc)
     (localItems := localItems)
     (extraStylesheets := cssFiles.toList.map ("/-verso-data/" ++ ·))
     (extraJsFiles := featureJsFiles ++ extraJsFiles)
-    (extraHead := config.extraHead)
+    (extraHead := config.extraHead |>.push extraHead)
     (extraContents := config.extraContents)
 
 def relativizeLinks (html : Html) : Html :=
@@ -552,6 +553,7 @@ and the domain-mappers are loaded) and defers all result rendering to `search-pa
 def searchResultsPage (toc : List Html.Toc) (bookTitle : Html) (state : TraverseState) (config : Config) : Html :=
   -- `bookTitle` (fourth arg) becomes the `.header-title` content; the `<h1>"Search"</h1>`
   -- below is the page heading inside the main content. `"Search"` is only the `<title>`.
+  --
   page toc #["search"] "Search" bookTitle {{
     <section class="search-page">
       <h1>"Search"</h1>
@@ -563,6 +565,11 @@ def searchResultsPage (toc : List Html.Toc) (bookTitle : Html) (state : Traverse
   }}
   state config
   (localItems := #[])
+  /-
+  Start the xref.json download in parallel with script loading. The search page JS can't fetch it
+  until it runs, so without the preload the data fetch sits at the tail of the critical path.
+  -/
+  (extraHead := {{<link rel="preload" href="xref.json" as="fetch"/>}})
 
 def emitSearchResultsHtml
     (toc : List Html.Toc) (dir : System.FilePath) (bookTitle : Html)
