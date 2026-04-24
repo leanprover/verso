@@ -247,20 +247,16 @@ where
 /--
 Collects the CSS customizations for each domain.
 
-Domain mappers traditionally scope their rules under {lit}`#search-wrapper` (the
-quick-jump combobox's outer element). The full-page search results view reuses the exact
-same {lit}`.search-result` markup but lives in a different DOM subtree, so the rules need
-to match there too. We rewrite every {lit}`#search-wrapper` to the class
-{lit}`.verso-search-results`, which both the combobox wrapper and the full-page results
-list carry. Keeping the rewrite here means existing {name}`quickJumpCss` values (which
-freely refer to {lit}`#search-wrapper`) keep working without any caller-side changes.
+Domain mappers scope their rules under the class {lit}`.verso-search-results`, which is
+applied to both the quick-jump combobox wrapper and the full-page search results list.
+Using the shared class (rather than either container's id) means one rule matches
+everywhere results appear.
 -/
 public def DomainMappers.quickJumpCss (mappers : DomainMappers) : String :=
-  let raw := mappers.fold (init := "") fun css _ m =>
+  mappers.fold (init := "") fun css _ m =>
     match m.quickJumpCss with
     | none => css
     | some x => css ++ x ++ "\n"
-  raw.replace "#search-wrapper" ".verso-search-results"
 
 
 section

@@ -130,7 +130,7 @@ open Verso.Search in
 defmethod DomainMapper.setFont (mapper : DomainMapper) (font : Font) : DomainMapper :=
   { mapper with
     quickJumpCss :=
-      s!"#search-wrapper .{mapper.className} " ++ "{\n" ++ font.toCss ++ "}\n"
+      s!".verso-search-results .{mapper.className} " ++ "{\n" ++ font.toCss ++ "}\n"
   }
 
 /--

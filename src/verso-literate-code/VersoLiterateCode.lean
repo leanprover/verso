@@ -1000,7 +1000,7 @@ def moduleDomainName := `VersoHtml.module
 def constMapper : DomainMapper where
   displayName := "Declaration"
   className := "const"
-  quickJumpCss := "#search-wrapper .search-result.const :first-child { font-family: var(--verso-code-font-family); }"
+  quickJumpCss := ".verso-search-results .search-result.const :first-child { font-family: var(--verso-code-font-family); }"
   dataToSearchables :=
     "(domainData) =>
   Object.entries(domainData.contents).map(([key, value]) => ({
@@ -1012,7 +1012,7 @@ def constMapper : DomainMapper where
 
 def moduleMapper : DomainMapper :=
   .withDefaultJs moduleDomainName "Module" "module"
-    (css := "#search-wrapper .search-result.module :first-child { font-family: var(--verso-code-font-family); }")
+    (css := ".verso-search-results .search-result.module :first-child { font-family: var(--verso-code-font-family); }")
 
 
 /--

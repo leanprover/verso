@@ -47,7 +47,7 @@ class TestSearchPage:
         inbody_box.focus()
         inbody_box.type("x", delay=30)
 
-        # No listbox on this page at all — the results list is a plain `<ul>` of
+        # No listbox on this page at all: the results list is a plain `<ul>` of
         # `<li>`s, each wrapping an `<a href>`.
         assert page.locator("[role='listbox']").count() == 0
         assert page.locator(".combobox-list").count() == 0

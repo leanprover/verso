@@ -314,7 +314,7 @@ const dataToSearchableMap = (json, domainMappers) =>
 
 /**
  * Maps from a data item to a HTML LI element. `asOption` controls whether the `<li>` gets
- * `role="option"` — true (the default) for the combobox listbox, false for the full-page
+ * `role="option"`: true (the default) for the combobox listbox, false for the full-page
  * results view where the parent `<ul>` is not a listbox and the items are plain links.
  *
  * @param {DomainMappers} domainMappers

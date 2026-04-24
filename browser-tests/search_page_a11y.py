@@ -2,7 +2,7 @@
 
 Each genre's `test_search_page.py` subclasses `SearchPageAccessibilityBase` with a
 genre-appropriate `QUERY` (one that yields at least one result in that genre's test
-corpus). The test bodies themselves are genre-independent — they exercise the shared
+corpus). The test bodies themselves are genre-independent, exercising the shared
 `search-page.js` / `search-page.css` contract.
 
 Each test pins one piece of the search page's accessibility contract: live-announced

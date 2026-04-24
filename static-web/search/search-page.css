@@ -92,13 +92,16 @@
     font-family: var(--verso-text-font-family);
 }
 
+/* Most of what styles a result row (item typography, `.full-text`, `.domain`, and
+   `.context-elem`) is defined once by the shared `.verso-search-results .search-result…`
+   rules in `search-box.css`, so that the combobox dropdown and the full-page view look
+   consistent by default. The rules below only add the things the full-page view does
+   differently: wider padding around each row, a horizontal separator between rows, a
+   slightly larger domain label, and its own style of matched-text highlight. */
 .search-page-list li.search-result {
-    display: flex;
-    flex-direction: column;
     gap: 0.25rem;
     padding: 0.6rem 0.8rem;
     border-top: 1px solid var(--verso-border-color, #ddd);
-    cursor: pointer;
     /* No font-weight/font-family here on purpose — per-domain rules from
        `domain-display.css` (e.g. bold for `.section-domain`, code-font for `.const`)
        need to win. A rule here with specificity 0-2-1 would override the domain
@@ -108,30 +111,6 @@
 .search-page-list li.search-result:hover,
 .search-page-list li.search-result:focus-within {
     background-color: var(--selected-color, #def);
-}
-
-.search-page-list li.search-result.full-text {
-    font-family: var(--verso-text-font-family);
-}
-
-/* Only the whole `.header` becomes a block — each `em` inside it is a single matched
-   character, and making those block-level too turns one heading into one line per letter. */
-.search-page-list li.search-result.full-text .header {
-    display: block;
-}
-
-.search-page-list li.search-result.full-text .header,
-.search-page-list li.search-result.full-text .header em {
-    font-family: var(--verso-structure-font-family);
-    font-style: normal;
-    font-weight: bold;
-}
-
-.search-page-list li.search-result p {
-    margin: 0;
-    font-family: inherit;
-    font-weight: inherit;
-    font-style: inherit;
 }
 
 /* Match the in-page term highlight used on destination pages (`.text-search-results`)
@@ -150,31 +129,7 @@
     outline: 1px solid var(--verso-border-color, #bbb);
 }
 
-.search-page-list li.search-result .domain em {
-    font-style: italic;
-}
-
+/* Slightly larger domain label than in the combobox, since there's room for it on this page. */
 .search-page-list li.search-result .domain {
-    color: var(--verso-muted-color, #777);
-    font-style: italic;
-    font-family: var(--verso-structure-font-family);
-    font-weight: normal;
     font-size: 0.75rem;
-}
-
-.search-page-list li.search-result .domain.text-context {
-    /* Truncate on the left with an ellipsis, matching the dropdown convention. */
-    text-overflow: ellipsis;
-    direction: rtl;
-    white-space: nowrap;
-    overflow: hidden;
-}
-
-.search-page-list li.search-result .domain .context-elem {
-    display: inline-block;
-}
-
-.search-page-list li.search-result .domain .context-elem:not(:last-child)::after {
-    content: "»";
-    margin: 0 0.25em;
 }

@@ -56,7 +56,7 @@ class TestSearchPage:
         inbody_box.type("Verso", delay=30)
 
         # No combobox dropdown/popup anywhere on the page. There's no listbox on this
-        # page at all — the results `<ul>` carries no role, and its children are plain
+        # page at all: the results `<ul>` carries no role, and its children are plain
         # `<li>`s wrapping an `<a href>`.
         assert page.locator("[role='listbox']").count() == 0
         # And specifically the combobox wrapper is absent.
