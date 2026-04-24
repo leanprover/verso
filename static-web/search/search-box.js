@@ -529,13 +529,7 @@ export const navigateBaseRelative = (dest) => {
  * @return {Promise<HTMLLIElement|null>}
  */
 export const renderCandidateLi = async (candidate, opts) => {
-    const {
-        domainMappers,
-        filter,
-        document: doc = document,
-        textSnippet,
-        asOption = true,
-    } = opts;
+    const { domainMappers, filter, document: doc = document, textSnippet, asOption = true } = opts;
     if (candidate.kind === "semantic") {
         const { fuzzysortResult, searchable } = candidate;
         return searchableToHtml(
