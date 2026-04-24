@@ -42,4 +42,4 @@ tag := "feat-full-page-search-interface"
 
 
 Pressing "Enter" in the search box now leads to a full-page search interface that shows more results with more context and includes checkboxes to filter the results by their semantic domain.
-As a result, domains with custom search CSS should repalce the `#search-wrapper` selector with the `.verso-search-results` class.
+As a result, domains with custom search CSS should replace the `#search-wrapper` selector with the `.verso-search-results` class.

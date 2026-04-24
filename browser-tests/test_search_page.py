@@ -153,6 +153,43 @@ class TestSearchPage:
         after = page.locator("ul.search-page-list li").count()
         assert after < before, f"expected fewer results after unchecking full-text, {after} vs {before}"
 
+    def test_filter_state_persists_across_empty_query(self, server: str, page: Page):
+        """Unchecking a filter, clearing the input back to empty (which hides the list),
+        then typing a new query should keep the filter unchecked. Filter state is
+        intentionally preserved so users don't have to redo their selection every time
+        they edit the query down to nothing."""
+        page.goto(f"{server}/search/?q=Html")
+        page.wait_for_load_state("networkidle")
+        page.wait_for_function(
+            "/\\d+ results?$/.test(document.getElementById('search-page-count')?.textContent ?? '')",
+            timeout=5_000,
+        )
+
+        full_text_cb = page.locator(".search-page-filter", has_text="Full-text").locator("input")
+        full_text_cb.uncheck()
+        # After unchecking, the count paragraph switches to the `M of N` form.
+        page.wait_for_function(
+            "/of \\d+ results?$/.test(document.getElementById('search-page-count')?.textContent ?? '')",
+            timeout=5_000,
+        )
+
+        inbody_box = page.locator(".search-page-host .search-page-input")
+        inbody_box.focus()
+        inbody_box.press("ControlOrMeta+a")
+        inbody_box.press("Delete")
+        # The empty-query placeholder confirms we went through the empty state.
+        expect(page.locator("#search-page-count")).to_have_text(
+            "Type a query in the search box to see results."
+        )
+
+        inbody_box.type("Html", delay=20)
+        page.wait_for_function(
+            "/of \\d+ results?$/.test(document.getElementById('search-page-count')?.textContent ?? '')",
+            timeout=5_000,
+        )
+        # Filter choice survived the round-trip through the empty state.
+        expect(full_text_cb).not_to_be_checked()
+
     def test_full_text_header_em_is_inline(self, server: str, page: Page):
         """Matched characters inside a full-text result's `.header` should flow inline,
         not break the title across one line per matched character."""

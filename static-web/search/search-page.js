@@ -30,12 +30,19 @@ const fuzzysort = /** @type {{fuzzysort: Fuzzysort.Fuzzysort}} */ (/** @type {un
  */
 let statePromise = null;
 
+/**
+ * True once `statePromise` has resolved. Used to suppress the "Searching…" placeholder
+ * on post-load renders: once the index is in memory, each keystroke resolves on the next
+ * microtask and flashing "Searching…" every time produces visible flicker.
+ */
+let stateReady = false;
+
 const ensureState = () =>
     (statePromise ??= (async () => {
         const json = await fetch("xref.json").then((r) => r.json());
         const mappedData = buildSearchableMap(json, domainMappers);
         const preparedData = Object.keys(mappedData).map((name) => fuzzysort.prepare(name));
-        return {
+        const state = {
             preparedData,
             mappedData,
             searchPriorities: {
@@ -46,6 +53,8 @@ const ensureState = () =>
             docPriorities: /** @type {any} */ (window).docPriorities ?? {},
             searchIndex: /** @type {any} */ (window).searchIndex,
         };
+        stateReady = true;
+        return state;
     })());
 
 /**
@@ -105,7 +114,10 @@ const renderResultsFor = async (query) => {
         return;
     }
 
-    setCount("Searching…", true);
+    // Only show "Searching…" on the cold first render. After the index is in memory,
+    // `ensureState()` resolves on the next microtask and the existing count would flash
+    // to "Searching…" for a single frame on every keystroke.
+    if (!stateReady) setCount("Searching…", true);
     const state = await ensureState();
     if (myToken !== renderToken) return;
 
