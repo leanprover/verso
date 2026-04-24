@@ -1040,7 +1040,8 @@ def IndexM.inDocstring (declName : Name) (act : IndexM Literate α) : IndexM Lit
   withReader (fun (iCtx, tCtx) => (iCtx.push ctxHeader, tCtx)) act
 
 
-partial def mkIndex (traverseContext : Context) (traverseState : State) (dir : Dir) : Except String Index :=
+partial def mkIndex (traverseContext : Context) (traverseState : State) (dir : Dir) :
+    Except String (Index × Array IndexDoc) :=
   go dir |>.finalize traverseContext
 where
   go (dir : Dir) : IndexM Literate Unit := do
@@ -1082,7 +1083,12 @@ def emitIndex (traverseContext : Context) (traverseState : State) (dir : Dir) (o
   match mkIndex traverseContext traverseState dir with
   | .error e =>
     logError e
-  | .ok index =>
+  | .ok (index, indexDocs) =>
+    -- `context` (the breadcrumb text) is not an indexed field. In the past, it was indexed, but its
+    -- boost was 0.1, so indexing it nearly duplicated another inverted index for negligible scoring
+    -- benefit. `bucketDocsToJson` still merges it into the emitted bucket docs so the search UI can
+    -- show breadcrumbs.
+    let contextMap := refContextMap indexDocs
     -- Split the index into roughly 150k chunks for faster loading
     let (index, docs) := index.extractDocs
     let mut docBuckets : HashMap UInt8 (HashMap String Doc) := {}
@@ -1092,7 +1098,7 @@ def emitIndex (traverseContext : Context) (traverseState : State) (dir : Dir) (o
         v.getD {} |>.insert ref content
 
     for (bucket, docs) in docBuckets do
-      let docJson := docs.fold (init := Json.mkObj []) fun json k v => json.setObjVal! k (v.foldr (init := Json.mkObj []) fun k v js => js.setObjVal! k (Json.str v))
+      let docJson := bucketDocsToJson docs contextMap
       IO.FS.writeFile (outputDir / s!"searchIndex_{bucket}.js") s!"window.docContents[{bucket}].resolve({docJson.compress});"
 
     let indexJs := "const __verso_searchIndexData = " ++ index.toJson.compress ++ ";\n\n"

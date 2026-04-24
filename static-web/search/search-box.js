@@ -444,10 +444,13 @@ export const computeCandidates = (
         ? searchIndex.search(filter, {
               expand: expandMatches,
               bool: "AND",
+              // `context` (the breadcrumb text) isn't an indexed field. It was, in the past, but
+              // the boost was 0.1 and its tokens nearly duplicated the header's, so dropping it
+              // cuts one whole inverted index out of the emitted search index. Breadcrumbs are
+              // still shown for each full-text hit from the per-doc data in the bucket files.
               fields: {
                   header: { boost: 1.25 },
                   contents: { boost: 1 },
-                  context: { boost: 0.1 },
               },
           })
         : [];

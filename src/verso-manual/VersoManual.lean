@@ -215,6 +215,7 @@ structure OutputConfig where
   verbose : Bool := false
 deriving ToJson, FromJson
 
+open Verso.Search in
 structure Config extends HtmlConfig, TeXConfig, OutputConfig where
   extraFiles : List (System.FilePath × String) := []
 
@@ -230,7 +231,7 @@ structure Config extends HtmlConfig, TeXConfig, OutputConfig where
   search result streams, each on a scale from {lit}`0` to {lit}`99`. Defaults are {lit}`50` on
   both sides.
   -/
-  searchPriorities : Verso.Search.SearchPriorities := {}
+  searchPriorities : SearchPriorities := {}
 deriving ToJson, FromJson
 
 structure RenderConfig extends Config where
@@ -607,9 +608,15 @@ def emitSearchIndex (dir : System.FilePath) (state : TraverseState) (ctx : Trave
     inline _ := none
   }
 
-  match Verso.Search.mkIndexAndDocs doc ctx with
+  match mkIndexAndDocs doc ctx with
   | .error e => logError e; return ()
   | .ok (index, indexDocs) =>
+    -- `context` (the breadcrumb text) is no longer an indexed field — it's
+    -- display-only and its boost was 0.1, so indexing it nearly duplicated
+    -- another inverted index for negligible scoring benefit. `bucketDocsToJson`
+    -- still merges it into each emitted bucket's per-doc payload so the search
+    -- UI can render breadcrumbs.
+    let contextMap := refContextMap indexDocs
     -- Split the index into roughly 150k chunks for faster loading
     let (index, docs) := index.extractDocs
     let mut docBuckets : HashMap UInt8 (HashMap String Doc) := {}
@@ -619,13 +626,13 @@ def emitSearchIndex (dir : System.FilePath) (state : TraverseState) (ctx : Trave
         v.getD {} |>.insert ref content
 
     for (bucket, docs) in docBuckets do
-      let docJson := docs.fold (init := Json.mkObj []) fun json k v => json.setObjVal! k (v.foldr (init := Json.mkObj []) fun k v js => js.setObjVal! k (Json.str v))
+      let docJson := bucketDocsToJson docs contextMap
       IO.FS.writeFile (dir / s!"searchIndex_{bucket}.js") s!"window.docContents[{bucket}].resolve({docJson.compress});"
 
     -- Per-doc priority map, emitted alongside the elasticlunr index inside the eagerly-loaded
     -- searchIndex.js. Kept separate from the lazily-fetched per-bucket content so full-text
     -- scoring can consult it without waiting on bucket loads.
-    let priorityJson := Verso.Search.priorityMapJson indexDocs
+    let priorityJson := priorityMapJson indexDocs
 
     let indexJs := "const __verso_searchIndexData = " ++ index.toJson.compress ++ ";\n\n"
     let indexJs := indexJs ++ "const __versoSearchIndex = elasticlunr ? elasticlunr.Index.load(__verso_searchIndexData) : null;\n"
@@ -654,7 +661,7 @@ results view. The combobox reads it via `window.searchPagePath` and enables Ente
 -/
 def emitSearchBox
     (dir : System.FilePath) (domains : DomainMappers)
-    (priorities : Verso.Search.SearchPriorities := {})
+    (priorities : SearchPriorities := {})
     (searchPagePath : Option String := none) : IO Unit := do
   ensureDir dir
   for (file, contents) in searchBoxCode do
