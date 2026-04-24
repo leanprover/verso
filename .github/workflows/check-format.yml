@@ -1,4 +1,4 @@
-name: Check Formatting of JS/CSS/HTML and Markdown
+name: Check Code Formatting
 
 on:
     pull_request:
@@ -17,3 +17,15 @@ jobs:
                   dry: true
                   prettier_options: "--check ."
                   prettier_version: 3.7.4
+
+    check-python-formatting:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v6
+
+            - name: Install uv
+              uses: astral-sh/setup-uv@v7
+
+            - name: Check Python formatting with ruff
+              run: uvx ruff format --check .
