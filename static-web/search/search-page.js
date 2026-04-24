@@ -156,25 +156,76 @@ const renderResultsFor = async (query) => {
     // cramped combobox dropdown does; these tune the per-result excerpt sizes.
     const textSnippet = { header: 60, content: 60, maxSnippets: 5 };
 
-    // Render serially: full-text rendering awaits per-bucket loads, and serial order
-    // preserves the computed ranking. Between each await we check the token so a newer
-    // query abandons this render without corrupting the UI.
+    // Mount the first `EAGER` results synchronously, then schedule the rest for idle
+    // time. On broad queries the full list can be 500+ items, and compositor cost on
+    // slow machines scales with DOM size — deferring the tail keeps keystroke latency
+    // low. The count paragraph already reflects `n` (the full total), so Ctrl-F /
+    // screen-reader counts aren't misleading while the tail is still filling in.
     //
-    // Navigation is handled by the inner `<a class="search-result-link">` emitted by
-    // `renderCandidateLi`, so no click listener is needed here. Middle-click,
-    // open-in-new-tab, and keyboard Enter all work via the anchor's default behaviour.
-    for (const candidate of candidates) {
-        if (myToken !== renderToken) return;
-        const li = await renderCandidateLi(candidate, {
-            domainMappers,
-            filter: query,
-            document,
-            textSnippet,
-            asOption: false,
-        });
-        if (myToken !== renderToken) return;
-        if (!li) continue;
-        listEl.append(li);
+    // `CHUNK` controls fragment-batch size: each chunk builds a DocumentFragment and
+    // appends it in one shot, so the browser commits once per chunk instead of once
+    // per result. Serial `await` inside a chunk is still required — full-text results
+    // load their bucket lazily and depend on that resolving.
+    const EAGER = 200;
+    const CHUNK = 20;
+
+    /**
+     * Render candidates [start, end) into a DocumentFragment, appending to `listEl`
+     * at the end. Returns false if the render was cancelled mid-way by a newer query.
+     * @param {number} start
+     * @param {number} end
+     * @return {Promise<boolean>}
+     */
+    const renderChunk = async (start, end) => {
+        const frag = document.createDocumentFragment();
+        for (let i = start; i < end; i++) {
+            if (myToken !== renderToken) return false;
+            const li = await renderCandidateLi(candidates[i], {
+                domainMappers,
+                filter: query,
+                document,
+                textSnippet,
+                asOption: false,
+            });
+            if (myToken !== renderToken) return false;
+            if (li) frag.append(li);
+        }
+        if (myToken !== renderToken) return false;
+        listEl.append(frag);
+        return true;
+    };
+
+    // Eager pass: mount the first `EAGER` results without yielding between chunks.
+    // These are what the user sees above the fold, so latency matters more than
+    // cooperativeness here. The token check inside `renderChunk` still bails out if
+    // the user starts another query.
+    const eagerEnd = Math.min(n, EAGER);
+    for (let start = 0; start < eagerEnd; start += CHUNK) {
+        if (!(await renderChunk(start, Math.min(start + CHUNK, eagerEnd)))) return;
+    }
+
+    // Tail pass: idle-scheduled, chunked, with a yield between chunks so the main
+    // thread stays responsive. Navigation is handled by the inner
+    // `<a class="search-result-link">` emitted by `renderCandidateLi`, so no click
+    // listener is needed here — middle-click, open-in-new-tab, and keyboard Enter
+    // all work via the anchor's default behaviour.
+    if (n > EAGER) {
+        const schedule =
+            /** @type {any} */ (window).requestIdleCallback ??
+            ((/** @type {() => void} */ fn) => setTimeout(fn, 200));
+        schedule(
+            async () => {
+                if (myToken !== renderToken) return;
+                for (let start = EAGER; start < n; start += CHUNK) {
+                    if (myToken !== renderToken) return;
+                    const ok = await renderChunk(start, Math.min(start + CHUNK, n));
+                    if (!ok) return;
+                    // Hand the main thread back to the scheduler between chunks.
+                    await new Promise((r) => setTimeout(r, 0));
+                }
+            },
+            { timeout: 500 },
+        );
     }
 };
 

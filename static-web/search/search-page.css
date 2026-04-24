@@ -106,6 +106,15 @@
        `domain-display.css` (e.g. bold for `.section-domain`, code-font for `.const`)
        need to win. A rule here with specificity 0-2-1 would override the domain
        rules' 0-2-0 and silently drop domain styling. */
+
+    /* Skip style/layout/paint for off-screen rows. On broad queries the list can hold
+       hundreds of items; `content-visibility: auto` lets the browser defer rendering
+       work for rows outside the viewport while keeping them in the DOM — so Ctrl-F /
+       find-in-page and accessibility tree traversal still see every result. The
+       intrinsic size reserves a placeholder box so the scrollbar doesn't jump as
+       rows resolve into full layout. */
+    content-visibility: auto;
+    contain-intrinsic-size: auto 4rem;
 }
 
 .search-page-list li.search-result:hover,
