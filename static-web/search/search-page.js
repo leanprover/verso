@@ -10,7 +10,12 @@
 // the import. The same pattern is used in `search-init.js`.
 
 import { domainMappers, searchPriorities } from "./domain-mappers.js";
-import { buildSearchableMap, computeCandidates, renderCandidateLi } from "./search-box.js";
+import {
+    buildSearchableMap,
+    computeCandidates,
+    renderCandidateLi,
+    getDocContentsFor,
+} from "./search-box.js";
 
 const fuzzysort = /** @type {{fuzzysort: Fuzzysort.Fuzzysort}} */ (/** @type {unknown} */ (window))
     .fuzzysort;
@@ -195,6 +200,19 @@ const renderResultsFor = async (query) => {
         return true;
     };
 
+    // Pre-warm bucket loads for the candidates we're about to render. Each full-text
+    // result's `renderCandidateLi` awaits `loadBucket(ref)`, which injects a
+    // `<script src="searchIndex_N.js">` for uncached buckets; without pre-warming,
+    // the serial `await` below turns N distinct buckets into N serial round-trips.
+    // `loadBucket` dedups repeat calls for the same bucket, so firing these in a loop
+    // is safe — duplicate refs resolve to the same in-flight promise. Even for
+    // already-cached buckets this matters, because browsers still validate
+    // `<script src>` loads over the network.
+    for (let i = 0; i < Math.min(n, EAGER); i++) {
+        const c = candidates[i];
+        if (c.kind === "fullText") getDocContentsFor(c.textMatch.ref).catch(() => {});
+    }
+
     // Eager pass: mount the first `EAGER` results without yielding between chunks.
     // These are what the user sees above the fold, so latency matters more than
     // cooperativeness here. The token check inside `renderChunk` still bails out if
@@ -216,6 +234,14 @@ const renderResultsFor = async (query) => {
         schedule(
             async () => {
                 if (myToken !== renderToken) return;
+                // Same pre-warm as the eager phase — fire all tail bucket loads in
+                // parallel before starting the serial render loop.
+                for (let i = EAGER; i < n; i++) {
+                    const c = candidates[i];
+                    if (c.kind === "fullText") {
+                        getDocContentsFor(c.textMatch.ref).catch(() => {});
+                    }
+                }
                 for (let start = EAGER; start < n; start += CHUNK) {
                     if (myToken !== renderToken) return;
                     const ok = await renderChunk(start, Math.min(start + CHUNK, n));
