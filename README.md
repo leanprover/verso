@@ -1,5 +1,9 @@
 # Verso: An Authoring Tool for Lean
 
+If this is your first time looking at Verso, please see
+[the project's website](https://verso.lean-lang.org) for an
+introduction.
+
 Writing about Lean takes many forms, including but not limited to:
 
 - Instructional books such as
