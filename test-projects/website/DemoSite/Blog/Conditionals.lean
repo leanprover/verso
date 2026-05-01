@@ -49,7 +49,6 @@ example : 2 < 5 := by
 Here's the error:
 ```leanOutput fst
 unsolved goals
-case a.a
 ⊢ (Nat.succ 2).le 3
 ```
 
