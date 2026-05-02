@@ -405,6 +405,46 @@ r#"(function(){
   }
 })()"#
 
+def tocResizeJs : String :=
+r#"(function(){
+  var handle = document.querySelector('.toc-resize-handle');
+  var toc = document.getElementById('toc');
+  if (!handle || !toc) return;
+  var STORAGE_KEY = 'verso-toc-width';
+  var MIN_WIDTH = 160;
+  var MAX_WIDTH = 800;
+  var saved = localStorage.getItem(STORAGE_KEY);
+  if (saved) {
+    document.documentElement.style.setProperty('--verso-toc-width', saved + 'px');
+  }
+  var dragging = false;
+  var startX = 0;
+  var startWidth = 0;
+  handle.addEventListener('mousedown', function(e) {
+    if (window.matchMedia('(max-width: 700px)').matches) return;
+    dragging = true;
+    startX = e.clientX;
+    startWidth = toc.getBoundingClientRect().width;
+    handle.classList.add('dragging');
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'col-resize';
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', function(e) {
+    if (!dragging) return;
+    var w = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, startWidth + e.clientX - startX));
+    document.documentElement.style.setProperty('--verso-toc-width', w + 'px');
+  });
+  document.addEventListener('mouseup', function() {
+    if (!dragging) return;
+    dragging = false;
+    handle.classList.remove('dragging');
+    document.body.style.userSelect = '';
+    document.body.style.cursor = '';
+    localStorage.setItem(STORAGE_KEY, Math.round(toc.getBoundingClientRect().width));
+  });
+})()"#
+
 public def page
     (toc : Toc) (path : Path)
     (textTitle : String)
@@ -491,6 +531,7 @@ public def page
                 </ul>
                 }} else .empty }}
             </div>
+            <div class="toc-resize-handle" aria-hidden="true"/>
           </nav>
           <main>
             <div class="content-wrapper">
@@ -501,6 +542,7 @@ public def page
             </div>
           </main>
         </div>
+        <script>{{Html.text false tocResizeJs}}</script>
       </body>
     </html>
   }}
