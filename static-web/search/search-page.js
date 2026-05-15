@@ -293,8 +293,6 @@ const mountInput = (host, initialValue) => {
     return input;
 };
 
-let debounceTimer = 0;
-
 /**
  * Build the filter checkboxes: one per known domain (label = the domain's `displayName`)
  * plus a trailing one for the full-text search stream. Toggling any box triggers an
@@ -382,6 +380,13 @@ const clearFilterDisabled = () => {
     clear(filterElements.fullText);
     for (const id of Object.keys(filterElements.domains)) clear(filterElements.domains[id]);
 };
+
+
+/** 
+ * clearTimeout for the input debouncer
+ * @type {number | undefined} 
+ */
+let debounceTimer = undefined;
 
 const init = async () => {
     const host = /** @type {HTMLElement | null} */ (document.querySelector(".search-page-host"));
