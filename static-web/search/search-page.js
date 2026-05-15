@@ -381,10 +381,9 @@ const clearFilterDisabled = () => {
     for (const id of Object.keys(filterElements.domains)) clear(filterElements.domains[id]);
 };
 
-
-/** 
+/**
  * clearTimeout for the input debouncer
- * @type {number | undefined} 
+ * @type {number | undefined}
  */
 let debounceTimer = undefined;
 
