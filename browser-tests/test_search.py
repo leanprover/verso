@@ -27,7 +27,8 @@ class TestSearch:
                   - emphasis: extensions
                   - text: to the Manual…
                 - paragraph: Writing Documentation in Lean with Verso
-            - listitem: Showing 1/1 results""".strip())
+            - listitem: Showing 1/1 results""".strip()
+        )
 
         page.get_by_role("searchbox").clear()
         page.get_by_role("searchbox").type("Html.visitM")
@@ -40,7 +41,8 @@ class TestSearch:
                   - text: Verso.Output.
                   - emphasis: Html.visitM
                 - paragraph: Documentation
-            - listitem: Showing 1/1 results""".strip())
+            - listitem: Showing 1/1 results""".strip()
+        )
 
         page.get_by_role("searchbox").type("onadsville")
         expect(page.get_by_role("searchbox")).to_match_aria_snapshot(
@@ -87,7 +89,8 @@ class TestSearch:
                   - emphasis: Html.none
                   - text: ↪ Verso.Output.Html.empty
                 - paragraph: Suggestion
-            - listitem: Showing 1/1 results""".strip())
+            - listitem: Showing 1/1 results""".strip()
+        )
 
         page.get_by_role("searchbox").press("Backspace")
         page.get_by_role("searchbox").press("Backspace")
@@ -106,4 +109,5 @@ class TestSearch:
                   - emphasis: Html.nil
                   - text: ↪ Verso.Output.Html.empty
                 - paragraph: Suggestion
-            - listitem: Showing 1/1 results""".strip())
+            - listitem: Showing 1/1 results""".strip()
+        )

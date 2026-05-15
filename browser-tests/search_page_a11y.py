@@ -29,7 +29,9 @@ class SearchPageAccessibilityBase:
             timeout=5_000,
         )
         ul = page.locator("ul.search-page-list")
-        assert ul.get_attribute("role") is None, "search-page-list should not have role=listbox"
+        assert ul.get_attribute("role") is None, (
+            "search-page-list should not have role=listbox"
+        )
         # And the children shouldn't be `role="option"` either.
         options = page.locator("ul.search-page-list li[role='option']")
         assert options.count() == 0, "search page results should not carry role=option"
@@ -80,7 +82,9 @@ class SearchPageAccessibilityBase:
             timeout=5_000,
         )
         first_result = page.locator("ul.search-page-list li").first
-        focusable = first_result.locator("a[href], button, [tabindex]:not([tabindex='-1'])").first
+        focusable = first_result.locator(
+            "a[href], button, [tabindex]:not([tabindex='-1'])"
+        ).first
         focusable.press("Enter")
         page.wait_for_load_state("networkidle")
         assert "/search/" not in page.url, (
@@ -99,7 +103,9 @@ class SearchPageAccessibilityBase:
         )
         first_result = page.locator("ul.search-page-list li").first
         anchors = first_result.locator("a[href]")
-        assert anchors.count() >= 1, "first result should contain an <a href=...> for navigation"
+        assert anchors.count() >= 1, (
+            "first result should contain an <a href=...> for navigation"
+        )
         href = anchors.first.get_attribute("href") or ""
         assert href.strip() and href.strip() != "#", (
             f"first result's <a href> should be a real URL, got {href!r}"

@@ -78,7 +78,9 @@ class TestSearchPage:
         first_result.click()
         page.wait_for_load_state("networkidle")
 
-        assert "/search/" not in page.url, f"expected navigation away from /search/, got {page.url}"
+        assert "/search/" not in page.url, (
+            f"expected navigation away from /search/, got {page.url}"
+        )
 
     def test_inbody_box_live_updates_results(self, server: str, page: Page):
         """Editing the in-body search field updates results in-place; URL is synced via

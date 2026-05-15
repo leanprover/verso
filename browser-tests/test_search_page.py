@@ -24,7 +24,9 @@ class TestSearchPage:
         searchbox.press("Enter")
 
         page.wait_for_load_state("networkidle")
-        assert "/search/" in page.url, f"expected to navigate to /search/, got {page.url}"
+        assert "/search/" in page.url, (
+            f"expected to navigate to /search/, got {page.url}"
+        )
         assert "q=Html" in page.url, f"expected q=Html in URL, got {page.url}"
 
     def test_search_page_renders_results(self, server: str, page: Page):
@@ -99,7 +101,9 @@ class TestSearchPage:
 
         # All checked by default.
         checked = page.locator(".search-page-filters input[type='checkbox']:checked")
-        assert checked.count() == boxes.count(), "all filters should be checked by default"
+        assert checked.count() == boxes.count(), (
+            "all filters should be checked by default"
+        )
 
     def test_empty_bucket_filter_is_disabled(self, server: str, page: Page):
         """A query that yields hits in only some buckets should disable + gray the
@@ -113,9 +117,13 @@ class TestSearchPage:
         )
 
         disabled = page.locator(".search-page-filter--disabled")
-        assert disabled.count() >= 1, "expected at least one filter to be disabled for narrow query"
+        assert disabled.count() >= 1, (
+            "expected at least one filter to be disabled for narrow query"
+        )
         # Any disabled label's checkbox should be disabled too.
-        disabled_cbs = page.locator(".search-page-filter--disabled input[type='checkbox']:disabled")
+        disabled_cbs = page.locator(
+            ".search-page-filter--disabled input[type='checkbox']:disabled"
+        )
         assert disabled_cbs.count() == disabled.count(), (
             "every .search-page-filter--disabled should have a :disabled checkbox"
         )
@@ -127,7 +135,9 @@ class TestSearchPage:
 
         labels = page.locator(".search-page-filter").all_text_contents()
         labels = [t.strip() for t in labels]
-        assert labels[0] == "Full-text", f"expected 'Full-text' first, got {labels[0]!r}"
+        assert labels[0] == "Full-text", (
+            f"expected 'Full-text' first, got {labels[0]!r}"
+        )
         tail = labels[1:]
         assert tail == sorted(tail), f"domain filters not alphabetized: {tail}"
 
@@ -142,7 +152,9 @@ class TestSearchPage:
         )
 
         before = page.locator("ul.search-page-list li").count()
-        full_text_cb = page.locator(".search-page-filter", has_text="Full-text").locator("input")
+        full_text_cb = page.locator(
+            ".search-page-filter", has_text="Full-text"
+        ).locator("input")
         full_text_cb.uncheck()
 
         # After unchecking, count paragraph shows `M of N results` and results thin out.
@@ -151,7 +163,9 @@ class TestSearchPage:
             timeout=5_000,
         )
         after = page.locator("ul.search-page-list li").count()
-        assert after < before, f"expected fewer results after unchecking full-text, {after} vs {before}"
+        assert after < before, (
+            f"expected fewer results after unchecking full-text, {after} vs {before}"
+        )
 
     def test_filter_state_persists_across_empty_query(self, server: str, page: Page):
         """Unchecking a filter, clearing the input back to empty (which hides the list),
@@ -165,7 +179,9 @@ class TestSearchPage:
             timeout=5_000,
         )
 
-        full_text_cb = page.locator(".search-page-filter", has_text="Full-text").locator("input")
+        full_text_cb = page.locator(
+            ".search-page-filter", has_text="Full-text"
+        ).locator("input")
         full_text_cb.uncheck()
         # After unchecking, the count paragraph switches to the `M of N` form.
         page.wait_for_function(
@@ -201,9 +217,9 @@ class TestSearchPage:
             "document.querySelector('ul.search-page-list li.search-result.full-text .header em') !== null",
             timeout=5_000,
         )
-        display = page.locator("ul.search-page-list li.search-result.full-text .header em").first.evaluate(
-            "el => getComputedStyle(el).display"
-        )
+        display = page.locator(
+            "ul.search-page-list li.search-result.full-text .header em"
+        ).first.evaluate("el => getComputedStyle(el).display")
         assert display in ("inline", "inline-block"), (
             f"em inside .header should flow inline, got display={display!r}"
         )
@@ -223,7 +239,9 @@ class TestSearchPage:
             "el => getComputedStyle(el).fontWeight"
         )
         # Bold is either "700" or "bold" depending on browser serialization.
-        assert weight in ("700", "bold"), f"expected bold .section-domain, got {weight!r}"
+        assert weight in ("700", "bold"), (
+            f"expected bold .section-domain, got {weight!r}"
+        )
 
     def test_site_title_still_shown_at_top(self, server: str, page: Page):
         """The site's book title is still rendered in the page header, and the page
@@ -247,8 +265,12 @@ class TestSearchPage:
         page.goto(f"{server}/search/?q=Html")
         page.wait_for_load_state("networkidle")
         actual = page.locator(".header-title h1").inner_text().strip()
-        assert actual == expected, f"header-title changed on search page: {actual!r} vs {expected!r}"
-        assert actual.lower() != "search", "header-title should be the book title, not 'Search'"
+        assert actual == expected, (
+            f"header-title changed on search page: {actual!r} vs {expected!r}"
+        )
+        assert actual.lower() != "search", (
+            "header-title should be the book title, not 'Search'"
+        )
 
     def test_inbody_box_live_updates_results(self, server: str, page: Page):
         """Editing the in-body search field updates the results list without a page
@@ -293,7 +315,9 @@ class TestSearchPage:
         inbody_box.type("tml", delay=30)  # extends to "Html"
 
         # Eventually the URL reflects the final query.
-        page.wait_for_function("new URL(location.href).searchParams.get('q') === 'Html'", timeout=5_000)
+        page.wait_for_function(
+            "new URL(location.href).searchParams.get('q') === 'Html'", timeout=5_000
+        )
         assert page.evaluate("window.__noReload") is True, "page reloaded on input"
 
     def test_search_page_has_more_than_dropdown_cap(self, server: str, page: Page):
@@ -331,7 +355,9 @@ class TestSearchPage:
         first_result.click()
         page.wait_for_load_state("networkidle")
 
-        assert "/search/" not in page.url, f"expected navigation away from /search/, got {page.url}"
+        assert "/search/" not in page.url, (
+            f"expected navigation away from /search/, got {page.url}"
+        )
 
     def test_enter_with_listbox_selection_still_jumps(self, server: str, page: Page):
         """Regression: Enter with a selected listbox item still navigates to that item,
@@ -347,7 +373,9 @@ class TestSearchPage:
         searchbox.press("Enter")
         page.wait_for_load_state("networkidle")
 
-        assert "/search/" not in page.url, f"Enter with selection should not go to /search/, got {page.url}"
+        assert "/search/" not in page.url, (
+            f"Enter with selection should not go to /search/, got {page.url}"
+        )
 
 
 class TestSearchPageAccessibility(SearchPageAccessibilityBase):
