@@ -52,7 +52,9 @@ class TestSearch:
 
         # Should have navigated away from the current page
         url = page.url
-        assert url != f"{server}/LitConfig/", f"Expected navigation from search result, still at {url}"
+        assert url != f"{server}/LitConfig/", (
+            f"Expected navigation from search result, still at {url}"
+        )
 
     def test_search_no_results(self, server: str, page: Page):
         """Test that gibberish query shows no results."""

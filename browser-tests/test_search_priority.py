@@ -84,7 +84,9 @@ class TestCombineScore:
         for score in result:
             assert abs(score - 0.42) < 1e-12
 
-    def test_layers_compose_additively_not_multiplicatively(self, server: str, page: Page):
+    def test_layers_compose_additively_not_multiplicatively(
+        self, server: str, page: Page
+    ):
         """Three layers at 75 contribute +0.5 each, stacking to 2^1.5 ≈ 2.828, not 1.5^3 = 3.375.
 
         This is the load-bearing property that justifies the log-space scheme.
@@ -96,7 +98,7 @@ class TestCombineScore:
                 return m.combineScore(1, 75, 75, 75);
             }}"""
         )
-        assert abs(result - (2 ** 1.5)) < 1e-12
+        assert abs(result - (2**1.5)) < 1e-12
         # And crucially: NOT the multiplicative outcome.
         assert abs(result - 3.375) > 0.5
 
