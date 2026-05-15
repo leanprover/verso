@@ -100,7 +100,7 @@ inductive FontWeight where
   | normal
   | bold
   | bolder
-  | numeric (weight : Nat) (ok : weight > 0 ∧ weight < 1000 := by omega)
+  | numeric (weight : Nat) (ok : weight > 0 ∧ weight < 1000 := by grind)
 deriving DecidableEq, Repr, Hashable
 
 def FontWeight.toCss (w : FontWeight) : String :=
@@ -130,7 +130,7 @@ open Verso.Search in
 defmethod DomainMapper.setFont (mapper : DomainMapper) (font : Font) : DomainMapper :=
   { mapper with
     quickJumpCss :=
-      s!"#search-wrapper .{mapper.className} " ++ "{\n" ++ font.toCss ++ "}\n"
+      s!".verso-search-results .{mapper.className} " ++ "{\n" ++ font.toCss ++ "}\n"
   }
 
 /--

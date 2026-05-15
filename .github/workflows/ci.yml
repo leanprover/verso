@@ -182,8 +182,25 @@ jobs:
                   uv run --project browser-tests --extra test pytest \
                     browser-tests/test_search.py \
                     browser-tests/test_search_priority.py \
+                    browser-tests/test_search_page.py \
                     browser-tests/test_redirect.py \
                     browser-tests/test_katex.py -v
+
+            - name: Build the VersoHtml site for browser tests
+              run: |
+                  # The verso-html genre renders literate JSON into a standalone HTML site.
+                  # We reuse the literate-config test project (already cached) as input, then
+                  # run verso-html against its literate-JSON output.
+                  pushd test-projects/literate-config
+                  lake build +LitConfig:literate
+                  popd
+                  lake exe verso-html test-projects/literate-config/.lake/build/literate _out/verso-html
+
+            - name: Run VersoHtml browser tests
+              run: |
+                  uv run --project browser-tests --extra test pytest \
+                    browser-tests/verso-html -v \
+                    --site-dir "$(pwd)/_out/verso-html"
 
             - name: Upload docs to artifact storage
               if: github.ref != 'refs/heads/main'

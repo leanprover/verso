@@ -10,6 +10,7 @@ public import Verso.Output.Html
 public import MultiVerso.Path
 
 public import VersoManual.Basic
+public import VersoSearch.DomainSearch
 import VersoManual.Html.Style
 
 namespace Verso.Genre.Manual.Html
@@ -148,7 +149,6 @@ theorem up_smaller_context (z : Zipper) {p : z.context ≠ []} : sizeOf (z.up p)
 public def rebuild (self : Zipper) : Toc :=
   match h : self.context with
   | f :: more =>
-    have : sizeOf more < sizeOf self.context := by simp_all; omega
     rebuild <| self.up (by simp_all)
   | [] => self.focus
 termination_by self.context
@@ -405,6 +405,7 @@ r#"(function(){
   }
 })()"#
 
+open Verso.Search in
 public def page
     (toc : Toc) (path : Path)
     (textTitle : String)
@@ -437,19 +438,12 @@ public def page
         <link rel="stylesheet" href="book.css" />
         <link rel="stylesheet" href="verso-vars.css" />
         <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js" integrity="sha384-zbcZAIxlvJtNE3Dp5nxLXdXtXyxwOdnILY1TDPVmKFhl4r4nSUG1r8bcFXGVa4Te" crossorigin="anonymous"></script>
-        <script src="-verso-search/elasticlunr.min.js"></script>
-        <script src="-verso-search/fuzzysort.min.js"></script>
-        <script src="-verso-search/searchIndex.js"></script>
-        <script type="module" src="-verso-search/search-init.js"></script>
-        <link rel="stylesheet" href="-verso-search/search-box.css"/>
-        <link rel="stylesheet" href="-verso-search/search-highlight.css"/>
-        <link rel="stylesheet" href="-verso-search/domain-display.css"/>
+        {{ searchAssetTags }}
         {{extraJsFiles.map fun f => ({{<script src=s!"{f.1}" {{if f.2 then defer else #[]}}></script>}})}}
         {{extraStylesheets.map (fun url => {{<link rel="stylesheet" href={{url}}/> }})}}
         {{extraCss.toArray.map ({{<style>{{Html.text false ·.css}}</style>}})}}
         {{extraJs.toArray.map ({{<script>{{Html.text false ·.js}}</script>}})}}
         {{extraHead}}
-        <script src="-verso-search/search-highlight.js" defer="defer"></script>
       </head>
       <body>
         <header>
