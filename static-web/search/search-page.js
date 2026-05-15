@@ -4,10 +4,8 @@
  * Author: David Thrane Christiansen
  */
 
-// `domain-mappers.js` is emitted into the output directory at build time by the Lean
-// genre's `emitSearchBox`, so it is not present in this source tree. That's also why
-// `// @ts-check` is intentionally omitted: tsc's stricter JS pass would fail to resolve
-// the import. The same pattern is used in `search-init.js`.
+// Enable typescript
+// @ts-check
 
 import { domainMappers, searchPriorities } from "./domain-mappers.js";
 import {
@@ -196,7 +194,7 @@ const renderResultsFor = async (query) => {
             if (li) frag.append(li);
         }
         if (myToken !== renderToken) return false;
-        listEl.append(frag);
+        /** @type {NonNullable<typeof listEl>} */ (listEl).append(frag);
         return true;
     };
 
@@ -306,6 +304,11 @@ let debounceTimer = 0;
  * @param {() => string} readQuery  Returns the current input value so re-renders stay in sync.
  */
 const mountFilters = (container, readQuery) => {
+    /**
+     * @param {string} labelText
+     * @param {boolean} initial
+     * @param {(isChecked: boolean) => void} onChange
+     */
     const makeCheckbox = (labelText, initial, onChange) => {
         const label = document.createElement("label");
         label.className = "search-page-filter";
@@ -350,6 +353,10 @@ const mountFilters = (container, readQuery) => {
  * @param {{fullText: number, domains: Record<string, number>}} counts
  */
 const updateFilterDisabled = (counts) => {
+    /**
+     * @param {{ cb: HTMLInputElement, label: HTMLLabelElement } | null} entry
+     * @param {number} count
+     */
     const setState = (entry, count) => {
         if (!entry) return;
         const disabled = count === 0;
@@ -364,6 +371,9 @@ const updateFilterDisabled = (counts) => {
 
 /** Reset all filter checkboxes to enabled (used when the query is empty). */
 const clearFilterDisabled = () => {
+    /**
+     * @param {{ cb: HTMLInputElement, label: HTMLLabelElement } | null} entry
+     */
     const clear = (entry) => {
         if (!entry) return;
         entry.cb.disabled = false;
