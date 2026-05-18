@@ -95,10 +95,12 @@ def runTests (config : Config) : IO Unit := do
         throw <| .userError s!"Test in {config.testDir} failed"
 
     if config.checkTeX then
+      -- `-shell-escape` is required so that documents using the `svg` LaTeX package can call
+      -- Inkscape to rasterise SVG attachments emitted by `diagram` code blocks.
       discard <| IO.Process.run {
         cwd := outputRoot / "tex",
         cmd := "lualatex",
-        args := #["-halt-on-error", "-interaction=nonstopmode", "main.tex"]
+        args := #["-shell-escape", "-halt-on-error", "-interaction=nonstopmode", "main.tex"]
       }
 
   return

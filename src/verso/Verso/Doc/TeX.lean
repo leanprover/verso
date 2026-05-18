@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 module
+public import Std.Data.HashMap
 public import Verso.Doc
 import Verso.Method
 public import Verso.Output.TeX
@@ -32,8 +33,13 @@ public def Options.reinterpret (lift : {α : _} → m α → m' α) (opts : Opti
 public def Options.lift [MonadLiftT m m'] (opts : Options g m) : Options g m' :=
   opts.reinterpret MonadLiftT.monadLift
 
+public structure OutputState where
+  extraFiles : Std.HashMap String String := {}
+
 public abbrev TeXT (genre : Genre) (m : Type → Type) : Type → Type :=
-  ReaderT (Options genre m × genre.TraverseContext × genre.TraverseState × TeXContext) m
+  ReaderT (Options genre m × genre.TraverseContext × genre.TraverseState × TeXContext) <|
+  StateT OutputState <|
+  m
 
 public instance [Monad m] [Inhabited α] : Inhabited (TeXT g m α) := ⟨pure default⟩
 

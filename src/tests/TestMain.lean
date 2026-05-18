@@ -272,6 +272,7 @@ def tests := [
     (extraFiles := [("src/tests/integration/extra-files-doc/test-data/shared", "shared")])
     (extraFilesTeX := [("src/tests/integration/extra-files-doc/test-data/TeX-only", "TeX-only")]),
   testTexOutput "front-matter-doc" FrontMatter.doc,
+  testTexOutput "diagram-doc" DiagramDoc.doc,
   testZip,
   testInteractive,
   testLiterateConfig,

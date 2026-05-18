@@ -16,9 +16,12 @@ file := "v4.30.0"
 %%%
 
 * Add support for custom prioritization of search results (#844)
-
+* Add support for {ref "diagrams"}[diagrams]
 
 # Search Result Prioritization
+%%%
+tag := none
+%%%
 
 This release gives authors the ability to affect search result ordering by assigning custom priorities.
 Priorities may be assigned as follows:
