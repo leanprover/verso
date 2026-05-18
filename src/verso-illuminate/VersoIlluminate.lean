@@ -19,18 +19,22 @@ open Verso.SyntaxUtils (parseStrLitAsCategory)
 namespace Verso.ArgParse.ValDesc
 
 /--
-Parses a decimal float string (e.g. `"3.14"`, `"-0.5"`).
+Parses a decimal float string (e.g. `"3.14"`, `"-0.5"`, `".5"`, `"3."`).
 
 Returns `none` for unrecognized formats.
 -/
 def parseFloatStr (s : String) : Option Float :=
   let (neg, s) : Bool × String :=
     if s.startsWith "-" then (true, (s.drop 1).copy) else (false, s)
+  let parseIntPart (intStr : String) : Option Nat :=
+    if intStr.isEmpty then some 0 else intStr.toNat?
   let result : Option Float := match s.splitOn "." with
     | [intStr] =>
-      intStr.toNat?.map fun n => Float.ofScientific n true 0
+      if intStr.isEmpty then none
+      else intStr.toNat?.map fun n => Float.ofScientific n true 0
     | [intStr, fracStr] =>
-      intStr.toNat?.bind fun n =>
+      if intStr.isEmpty && fracStr.isEmpty then none
+      else parseIntPart intStr |>.bind fun n =>
         if fracStr.isEmpty then some (Float.ofScientific n true 0)
         else fracStr.toNat?.map fun frac =>
           Float.ofScientific n true 0 + Float.ofScientific frac true fracStr.length

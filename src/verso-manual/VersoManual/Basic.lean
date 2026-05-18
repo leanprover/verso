@@ -287,7 +287,7 @@ instance : FromJson Domains where
       else throw s!"The string {name.quote} is not a valid name for a domain"
 
 /--
-Computes a filename for a extra file, to be saved in a map from filenames to contents. If the
+Computes a filename for an extra file, to be saved in a map from filenames to contents. If the
 requested filename already is present but the content differs, a unique filename is chosen. The
 resulting filename and the updated state are returned.
 -/
@@ -378,8 +378,6 @@ instance : ToJson TraverseState where
       "texPreambleItems": $texPreambleItems.toArray,
       "contents": $contents.contents
     }
-
-
 
 public instance : FromJson TraverseState where
   fromJson? v := private do

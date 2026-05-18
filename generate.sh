@@ -2,15 +2,13 @@
 
 set -e
 
-if which inkscape; then
-  INKSCAPE="true"
+if ! command -v inkscape >/dev/null 2>&1; then
+  if [ -f "/Applications/Inkscape.app/Contents/MacOS/inkscape" ]; then
+    PATH="$PATH:/Applications/Inkscape.app/Contents/MacOS"
   else
-    if [ -f "/Applications/Inkscape.app/Contents/MacOS/inkscape" ]; then
-      PATH="$PATH:/Applications/Inkscape.app/Contents/MacOS/"
-    else
-      echo "Error: Could not find 'inkscape' in $PATH or in the Mac OS Applications directory"
-      exit 1
-    fi
+    echo "Error: Could not find 'inkscape' in \$PATH or in the macOS Applications directory" >&2
+    exit 1
+  fi
 fi
 
 echo "Building the user's guide as TeX and HTML"
