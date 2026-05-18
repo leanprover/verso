@@ -98,3 +98,16 @@ public instance : FromJson (Fin n) where
     let i : Nat ← fromJson? v
     if h : i < n then return ⟨i, h⟩
     else throw s!"Expected a value less than {n} but got {i}"
+
+/--
+A `Quote` instance for `UInt64` that emits a numeric literal.
+-/
+public instance : Quote UInt64 numLitKind where
+  quote n := Syntax.mkNumLit (toString n.toNat)
+
+/--
+A `Quote` instance for `Float` that round-trips through the bit pattern via `Float.ofBits`,
+preserving NaN payloads and signed zeros.
+-/
+public instance : Quote Float where
+  quote x := Syntax.mkCApp ``Float.ofBits #[quote x.toBits]

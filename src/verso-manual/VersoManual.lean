@@ -41,6 +41,8 @@ import VersoManual.ExternalLean
 import VersoManual.Literate
 import VersoManual.Marginalia
 import VersoManual.Bibliography
+import VersoManual.Row
+import VersoManual.Diagrams
 import VersoManual.Table
 
 open Lean (Name NameMap Json ToJson FromJson quote)
@@ -376,26 +378,17 @@ def emitTeX (logError : String → IO Unit) (config : Config) (text : Part Manua
   let ctxt := {logError}
   let texCtxt := {}
   let { frontMatter := (frontText, frontParts), mainMatter, backMatter } := DividedDoc.ofPart text
-  let frontMatter := (← frontText.mapM (·.toTeX (opts, ctxt, state, texCtxt)))
+  let (frontMatter, extra) := (← frontText.mapM (·.toTeX (opts, ctxt, state, texCtxt)) {})
   -- Passing `none` as the label is fine here because traversal has assigned labels already so
   -- there's no need for a fallback.
-  let frontMatter := frontMatter ++ (← frontParts.mapM (·.toTeX none (opts, ctxt, state, texCtxt)))
-  let chapters ← mainMatter.mapM (·.toTeX none (opts, ctxt, state, texCtxt))
-  let appendices ← backMatter.mapM (·.toTeX none (opts, ctxt, state, texCtxt))
+  let (frontParts, extra) ← frontParts.mapM (·.toTeX none (opts, ctxt, state, texCtxt)) extra
+  let frontMatter := frontMatter ++ frontParts
+  let (chapters, extra) ← mainMatter.mapM (·.toTeX none (opts, ctxt, state, texCtxt)) extra
+  let (appendices, extra) ← backMatter.mapM (·.toTeX none (opts, ctxt, state, texCtxt)) extra
   let dir := config.destination.join "tex"
   ensureDir dir
-  let mut packages : Std.HashSet String := {}
-  let mut preambleItems : Std.HashSet String := {}
-  for (_, d) in (← read).blockDescrs do
-    let some d := d.get? BlockDescr
-      | continue
-    packages := packages.insertMany d.usePackages
-    preambleItems := preambleItems.insertMany d.preamble
-  for (_, d) in (← read).inlineDescrs do
-    let some d := d.get? InlineDescr
-      | continue
-    packages := packages.insertMany d.usePackages
-    preambleItems := preambleItems.insertMany d.preamble
+  let packages := state.texPackages
+  let preambleItems := state.texPreambleItems
   withFile (dir.join "main.tex") .write fun h => do
     if config.verbose then
       IO.println s!"Saving {dir.join "main.tex"}"
@@ -419,6 +412,8 @@ def emitTeX (logError : String → IO Unit) (config : Config) (text : Part Manua
     copyRecursively logError src (dir.join dest)
   for (src, dest) in config.extraFilesTeX do
     copyRecursively logError src (dir.join dest)
+  for (f, content) in extra.extraFiles do
+    IO.FS.writeFile (dir / f) content
 
 open Verso.Output (Html)
 

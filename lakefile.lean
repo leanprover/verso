@@ -4,6 +4,7 @@ open Lake DSL
 require subverso from git "https://github.com/leanprover/subverso"@"main"
 require MD4Lean from git "https://github.com/acmepjz/md4lean"@"main"
 require plausible from git "https://github.com/leanprover-community/plausible"@"main"
+require illuminate from git "https://github.com/leanprover/illuminate"@"main"
 
 package verso where
   precompileModules := false -- temporarily disabled to work around an issue with nightly-2025-03-30
@@ -48,6 +49,11 @@ lean_lib VersoManual where
   srcDir := "src/verso-manual"
   roots := #[`VersoManual]
   needs := #[staticWeb]
+
+@[default_target]
+lean_lib VersoIlluminate where
+  srcDir := "src/verso-illuminate"
+  roots := #[`VersoIlluminate]
 
 input_file tutorialDefaultCss where
   text := true

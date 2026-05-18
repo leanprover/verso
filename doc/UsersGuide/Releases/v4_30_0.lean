@@ -17,7 +17,7 @@ file := "v4.30.0"
 
 * Add support for custom prioritization of search results (#844)
 * Add full-page search interface (#847). There is a small {ref "feat-full-page-search-interface"}[breaking change] for custom domains with custom result formatting.
-
+* Add support for {ref "diagrams"}[diagrams] (#856)
 
 # Search Result Prioritization
 %%%

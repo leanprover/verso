@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-20.5 -15.5 41 31">
+<g transform="scale(1,-1)">
+<path d="M-15 -10 L15 -10 L15 10 L-15 10 Z" fill="rgb(255,255,255)" fill-opacity="1"/>
+<path d="M-15 -10 L15 -10 L15 10 L-15 10 Z" fill="none" stroke="rgb(0,0,0)" stroke-width="1" stroke-linecap="butt" stroke-linejoin="miter" stroke-opacity="1" stroke-dasharray="none"/>
+</g>
+</svg>

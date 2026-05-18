@@ -286,6 +286,20 @@ instance : FromJson Domains where
         pure <| doms.insert x (← FromJson.fromJson? dom) h
       else throw s!"The string {name.quote} is not a valid name for a domain"
 
+/--
+Computes a filename for an extra file, to be saved in a map from filenames to contents. If the
+requested filename already is present but the content differs, a unique filename is chosen. The
+resulting filename and the updated state are returned.
+-/
+partial def extraFileName (files : HashMap String String) (stem extension content : String) : String :=
+  go none
+where
+  go (counter : Option Nat) :=
+    let fn := s!"{stem}{counter.map (s!"{·}") |>.getD ""}.{extension}"
+    if let some txt := files[fn]? then
+      if txt == content then fn
+      else go <| some (counter.getD 0 + 1)
+    else fn
 
 def StringSet := HashSet String
 
@@ -314,6 +328,17 @@ structure TraverseState extends HtmlAssets where
   domains : Domains := {}
   ids : TreeSet InternalId := {}
   quickJump : DomainMappers := {}
+  /--
+  TeX `\usepackage{…}` lines contributed by block and inline extensions whose blocks actually
+  occur in the document. Populated during traversal at each block/inline occurrence so unused
+  extensions don't pollute the preamble.
+  -/
+  texPackages : HashSet String := {}
+  /--
+  Free-form TeX preamble items contributed by block and inline extensions whose blocks actually
+  occur in the document. Populated during traversal.
+  -/
+  texPreambleItems : HashSet String := {}
   private contents : Contents := {}
 deriving Repr
 
@@ -321,13 +346,21 @@ def TraverseState.initialize (htmlAssets : HtmlAssets) : TraverseState :=
   { toHtmlAssets := htmlAssets }
 
 section
-variable [ToJson α] [ToJson β] [BEq α] [Hashable α]
+variable [ToJson α] [ToJson β] [FromJson α] [FromJson β] [BEq α] [Hashable α]
 private def jsonMap (xs : HashMap α β) : Json :=
   .arr (xs.toArray.map fun (x, y) => json%{"key": $x, "value": $y})
 
+private def fromJsonMap (v : Json) (field : String) : Except String (HashMap α β) := do
+    let v ← v.getObjValAs? (Array Json) field
+    let v ← v.mapM fun j => do
+      let k ← j.getObjValAs? _ "key"
+      let v ← j.getObjValAs? _ "value"
+      pure (k, v)
+    return HashMap.insertMany {} v
+
 instance : ToJson TraverseState where
   toJson st := private
-    let {tags, externalTags, domains, ids, features, extraCss, extraJs, extraJsFiles, extraCssFiles, extraDataFiles, quickJump, licenseInfo, contents} := st
+    let { tags, externalTags, domains, ids, features, extraCss, extraJs, extraJsFiles, extraCssFiles, extraDataFiles, quickJump, licenseInfo, texPackages, texPreambleItems, contents } := st
     json%{
       "tags": $(jsonMap tags),
       "externalTags": $(jsonMap externalTags),
@@ -341,23 +374,15 @@ instance : ToJson TraverseState where
       "extraCssFiles": $extraCssFiles.toArray,
       "quickJump": $quickJump.toArray,
       "licenseInfo": $licenseInfo.toArray,
+      "texPackages": $texPackages.toArray,
+      "texPreambleItems": $texPreambleItems.toArray,
       "contents": $contents.contents
     }
 
 public instance : FromJson TraverseState where
   fromJson? v := private do
-    let tags ← v.getObjValAs? (Array Json) "tags"
-    let tags ← tags.mapM fun j => do
-      let k ← j.getObjValAs? _ "key"
-      let v ← j.getObjValAs? _ "value"
-      pure (k, v)
-    let tags : HashMap _ _ := HashMap.insertMany {} tags
-    let externalTags ← v.getObjValAs? (Array Json) "externalTags"
-    let externalTags ← externalTags.mapM fun j => do
-      let k ← j.getObjValAs? _ "key"
-      let v ← j.getObjValAs? _ "value"
-      pure (k, v)
-    let externalTags : HashMap _ _ := HashMap.insertMany {} externalTags
+    let tags ← fromJsonMap v "tags"
+    let externalTags ← fromJsonMap v "externalTags"
     let domains <- v.getObjValAs? _ "domains"
     let ids <- v.getObjValAs? (Array InternalId) "ids"
     let ids := .ofArray ids
@@ -373,9 +398,11 @@ public instance : FromJson TraverseState where
     let quickJump := HashMap.insertMany {} quickJump
     let licenseInfo <- v.getObjValAs? (Array LicenseInfo) "licenseInfo"
     let licenseInfo := .ofArray licenseInfo
+    let texPackages ← HashSet.ofArray <$> v.getObjValAs? (Array _) "texPackages"
+    let texPreambleItems ← HashSet.ofArray <$> v.getObjValAs? (Array _) "texPreambleItems"
     let contents ← v.getObjValAs? (NameMap Json) "contents"
     let contents := ⟨contents⟩
-    return { tags, externalTags, domains, ids, features, extraCss, extraJs, extraJsFiles, extraCssFiles, extraDataFiles, quickJump, licenseInfo, contents }
+    return { tags, externalTags, domains, ids, features, extraCss, extraJs, extraJsFiles, extraCssFiles, extraDataFiles, quickJump, licenseInfo, texPackages, texPreambleItems, contents }
 end
 /--
 Returns a fresh internal ID.
@@ -1452,7 +1479,11 @@ instance : Traverse Manual TraverseM where
     | ⟨name, id?, data, props⟩, content => do
       if let some id := id? then
         if let some impl := (← readThe ExtensionImpls).getBlock? name then
-          modify fun s => { s with toHtmlAssets := s.toHtmlAssets.combine impl.toHtmlAssets }
+          modify fun s => { s with
+            toHtmlAssets := s.toHtmlAssets.combine impl.toHtmlAssets
+            texPackages := s.texPackages.insertMany impl.usePackages
+            texPreambleItems := s.texPreambleItems.insertMany impl.preamble
+          }
 
           impl.traverse id data content
         else
@@ -1466,7 +1497,11 @@ instance : Traverse Manual TraverseM where
     | ⟨name, id?, data⟩, content => do
       if let some id := id? then
         if let some impl := (← readThe ExtensionImpls).getInline? name then
-          modify fun s => { s with toHtmlAssets := s.toHtmlAssets.combine impl.toHtmlAssets }
+          modify fun s => { s with
+            toHtmlAssets := s.toHtmlAssets.combine impl.toHtmlAssets
+            texPackages := s.texPackages.insertMany impl.usePackages
+            texPreambleItems := s.texPreambleItems.insertMany impl.preamble
+          }
 
           impl.traverse id data content
         else

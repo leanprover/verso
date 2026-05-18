@@ -20,6 +20,7 @@ import Tests.Linters
 import Tests.Integration.InheritanceDoc
 import Tests.Integration.FrontMatter
 import Tests.Integration.LeanSection
+import Tests.Integration.DiagramDoc
 import Tests.Method
 import Tests.ParserRegression
 import Tests.Paths
