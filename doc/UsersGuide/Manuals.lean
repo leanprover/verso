@@ -300,3 +300,7 @@ The {name}`diagram` code block accepts an `inline` flag that marks it for inline
 
 
 :::
+
+Building PDFs from LaTeX output relies on the `svg` LaTeX package, which calls Inkscape to convert each emitted SVG to PDF at build time.
+This requires `inkscape` on the `PATH` as well as running `lualatex` with the `-shell-escape` flag.
+This flag allows LaTeX to execute arbitrary commands during compilation.

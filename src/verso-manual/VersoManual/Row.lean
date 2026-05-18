@@ -31,7 +31,8 @@ block_extension Block.row (alignItems : String) where
       }}
   toTeX :=
     some <| fun _ go _ _ content => do
-      pure <| .seq <| ← content.mapM go
+      let rendered ← content.mapM go
+      pure <| .seq <| rendered.toList.intersperse (.raw "\\quad ") |>.toArray
 
 structure RowConfig where
   align : String
@@ -48,8 +49,8 @@ end
 
 /--
 Arranges the contained blocks in a horizontal row. HTML output uses flexbox; TeX output
-concatenates the rendered blocks with no separation, relying on each block to lay itself out
-inline.
+concatenates the rendered blocks separated by `\quad`, relying on each block to lay itself
+out inline.
 
 The `align` argument controls vertical alignment within the row, accepting `"top"`, `"middle"`, or
 `"bottom"`. It is only meaningful for HTML output.

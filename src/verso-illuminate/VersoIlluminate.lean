@@ -61,13 +61,24 @@ end Verso.ArgParse.ValDesc
 namespace Verso.Illuminate
 
 /--
-Computes the view box width (in diagram units) of an SVG diagram, using the same padding as
-`Illuminate.diagramToSvg` (padding = 5). Returns 0 for empty diagrams.
+Padding (in diagram units) added on each side of the rendered SVG's view box. Used both by
+`renderSvg` and `viewBoxWidth` below, so the width returned to the code-block expander matches
+the actual rendered SVG.
+-/
+private def svgPadding : Float := 5
+
+/-- Renders a diagram to SVG using the local `svgPadding`. -/
+private def renderSvg (d : Illuminate.Diagram Illuminate.SVG) : String :=
+  d.renderDiagram (padding := svgPadding)
+
+/--
+Computes the view box width (in diagram units) of the SVG produced by `renderSvg`. Returns 0
+for empty diagrams.
 -/
 private def viewBoxWidth (d : Illuminate.Diagram Illuminate.SVG) : Float :=
   match d.getEnvelope with
   | .empty => 0
-  | .nonempty env => env Illuminate.Vec2.west + env Illuminate.Vec2.east + 10
+  | .nonempty env => env Illuminate.Vec2.west + env Illuminate.Vec2.east + 2 * svgPadding
 
 section
 
@@ -85,7 +96,7 @@ private meta unsafe def evalDiagramUnsafe (str : StrLit) (stx : Syntax) :
     return ("", 0)
 
   -- Evaluate to get SVG string.
-  let svgExpr := mkApp (mkConst ``Illuminate.diagramToSvg) e
+  let svgExpr := mkApp (mkConst ``renderSvg) e
   let svgStr ← evalExpr String (mkConst ``String) svgExpr
 
   -- Compute the diagram's natural viewBox width.

@@ -84,11 +84,12 @@ block_extension Block.diagram
   toHtml :=
     open Verso.Output.Html in
     some <| fun _ _ _ data _ => do
-      let .arr #[.str svgStr, .str css, .str _tex, .bool inl] := data
+      let .arr #[.str svgStr, .str css, .str _tex, .bool isInline] := data
         | HtmlT.logError "Expected four-element JSON for diagram" *> pure .empty
       let style :=
-        "width: " ++ css ++
-        (if inl then "; display: inline-block; vertical-align: middle" else "")
+        ";".intercalate <|
+          s!"width: {css}" ::
+          (if isInline then ["display: inline-block"] else [])
       pure {{
         <div class="diagram" style={{style}}>
           {{Html.text false svgStr}}
