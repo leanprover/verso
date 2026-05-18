@@ -12,6 +12,7 @@ import Std.Data.HashMap
 public import Lean.Data.Json.FromToJson
 public import Verso.Instances
 public import MultiVerso.NameMap
+public import Verso.Output.Html
 
 open Std (HashMap)
 
@@ -245,6 +246,11 @@ where
 
 /--
 Collects the CSS customizations for each domain.
+
+Domain mappers scope their rules under the class {lit}`.verso-search-results`, which is
+applied to both the quick-jump combobox wrapper and the full-page search results list.
+Using the shared class (rather than either container's id) means one rule matches
+everywhere results appear.
 -/
 public def DomainMappers.quickJumpCss (mappers : DomainMappers) : String :=
   mappers.fold (init := "") fun css _ m =>
@@ -265,3 +271,34 @@ public def searchBoxCode : Array (String × ByteArray) :=
     else some (name.dropPrefix "../../../static-web/search/" |>.copy, contents)
 
 end
+
+/--
+The `<script>` and `<link>` tags every page needs to load the search infrastructure
+(full-text index, quick-jump combobox on normal pages, plain input + live-updating
+list on the full-page search view). All three HTML genres emit the same assets into
+the same sibling directory (by convention {lit}`-verso-search/`), so they all include
+the same fragment — returning it from one place means new search assets get picked up
+by every genre at once.
+
+{name}`searchDir` is the site-root-relative path of the directory containing the
+emitted search assets. It is spliced into every {lit}`src`/{lit}`href`, with a trailing
+slash added automatically if missing.
+-/
+public def searchAssetTags (searchDir : String := "-verso-search") : Verso.Output.Html :=
+  open Verso.Output.Html in
+  let d := if searchDir.endsWith "/" then searchDir else searchDir ++ "/"
+  -- Deferring the four scripts keeps them off the render-blocking path. `search-init.js` below is a
+  -- `type="module"` script and is deferred implicitly; listing it last keeps it after the globals
+  -- it consumes.
+  {{
+    <script defer="defer" src=s!"{d}elasticlunr.min.js"></script>
+    <script defer="defer" src=s!"{d}fuzzysort.min.js"></script>
+    <script defer="defer" src=s!"{d}searchIndex.js"></script>
+    <script defer="defer" src=s!"{d}search-config.js"></script>
+    <script type="module" src=s!"{d}search-init.js"></script>
+    <link rel="stylesheet" href=s!"{d}search-box.css"/>
+    <link rel="stylesheet" href=s!"{d}search-page.css"/>
+    <link rel="stylesheet" href=s!"{d}search-highlight.css"/>
+    <link rel="stylesheet" href=s!"{d}domain-display.css"/>
+    <script src=s!"{d}search-highlight.js" defer="defer"></script>
+  }}

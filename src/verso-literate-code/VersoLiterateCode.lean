@@ -1000,7 +1000,7 @@ def moduleDomainName := `VersoHtml.module
 def constMapper : DomainMapper where
   displayName := "Declaration"
   className := "const"
-  quickJumpCss := "#search-wrapper .search-result.const :first-child { font-family: var(--verso-code-font-family); }"
+  quickJumpCss := ".verso-search-results .search-result.const :first-child { font-family: var(--verso-code-font-family); }"
   dataToSearchables :=
     "(domainData) =>
   Object.entries(domainData.contents).map(([key, value]) => ({
@@ -1012,16 +1012,25 @@ def constMapper : DomainMapper where
 
 def moduleMapper : DomainMapper :=
   .withDefaultJs moduleDomainName "Module" "module"
-    (css := "#search-wrapper .search-result.module :first-child { font-family: var(--verso-code-font-family); }")
+    (css := ".verso-search-results .search-result.module :first-child { font-family: var(--verso-code-font-family); }")
 
 
-def emitSearchBox (dir : System.FilePath) : IO Unit := do
+/--
+Emits the search box static assets plus a tiny `search-config.js` loaded by every page.
+`searchPagePath`, when supplied, is the site-root-relative path of the full-page search
+results view. The combobox reads it via `window.searchPagePath` and enables Enter-to-submit.
+-/
+def emitSearchBox (dir : System.FilePath) (searchPagePath : Option String := none) : IO Unit := do
   let domains : DomainMappers := .ofList [(constDomainName.toString, constMapper), (moduleDomainName.toString, moduleMapper)]
   Verso.FS.ensureDir dir
   for (file, contents) in searchBoxCode do
     IO.FS.writeBinFile (dir / file) contents
   IO.FS.writeFile (dir / "domain-mappers.js") (domains.toJs.pretty (width := 70))
   IO.FS.writeFile (dir / "domain-display.css") domains.quickJumpCss
+  let configJs := match searchPagePath with
+    | some path => s!"window.searchPagePath = {toString (Json.str path)};\n"
+    | none => ""
+  IO.FS.writeFile (dir / "search-config.js") configJs
 
 /--
 Adds a header to the current context and updates the traversal context.
@@ -1031,7 +1040,8 @@ def IndexM.inDocstring (declName : Name) (act : IndexM Literate α) : IndexM Lit
   withReader (fun (iCtx, tCtx) => (iCtx.push ctxHeader, tCtx)) act
 
 
-partial def mkIndex (traverseContext : Context) (traverseState : State) (dir : Dir) : Except String Index :=
+partial def mkIndex (traverseContext : Context) (traverseState : State) (dir : Dir) :
+    Except String (Index × Array IndexDoc) :=
   go dir |>.finalize traverseContext
 where
   go (dir : Dir) : IndexM Literate Unit := do
@@ -1073,7 +1083,12 @@ def emitIndex (traverseContext : Context) (traverseState : State) (dir : Dir) (o
   match mkIndex traverseContext traverseState dir with
   | .error e =>
     logError e
-  | .ok index =>
+  | .ok (index, indexDocs) =>
+    -- `context` (the breadcrumb text) is not an indexed field. In the past, it was indexed, but its
+    -- boost was 0.1, so indexing it nearly duplicated another inverted index for negligible scoring
+    -- benefit. `bucketDocsToJson` still merges it into the emitted bucket docs so the search UI can
+    -- show breadcrumbs.
+    let contextMap := refContextMap indexDocs
     -- Split the index into roughly 150k chunks for faster loading
     let (index, docs) := index.extractDocs
     let mut docBuckets : HashMap UInt8 (HashMap String Doc) := {}
@@ -1082,14 +1097,22 @@ def emitIndex (traverseContext : Context) (traverseState : State) (dir : Dir) (o
       docBuckets := docBuckets.alter h fun v =>
         v.getD {} |>.insert ref content
 
-    for (bucket, docs) in docBuckets do
-      let docJson := docs.fold (init := Json.mkObj []) fun json k v => json.setObjVal! k (v.foldr (init := Json.mkObj []) fun k v js => js.setObjVal! k (Json.str v))
-      IO.FS.writeFile (outputDir / s!"searchIndex_{bucket}.js") s!"window.docContents[{bucket}].resolve({docJson.compress});"
+    -- Content-hashed bucket filenames to allow long cache times on HTTP servers. See the matching
+    -- comment in `VersoManual.emitSearchIndex` for the detailed rationale.
+    -- `window.searchIndexVersion` is emitted below for the loader.
+    let indexData := index.toJson.compress
+    let version := hashHex (hash indexData)
 
-    let indexJs := "const __verso_searchIndexData = " ++ index.toJson.compress ++ ";\n\n"
+    for (bucket, docs) in docBuckets do
+      let docJson := Verso.Search.bucketDocsToJson docs contextMap
+      IO.FS.writeFile (outputDir / s!"searchIndex_{bucket}.{version}.js")
+        s!"window.docContents[{bucket}].resolve({docJson.compress});"
+
+    let indexJs := "const __verso_searchIndexData = " ++ indexData ++ ";\n\n"
     let indexJs := indexJs ++ "const __versoSearchIndex = elasticlunr ? elasticlunr.Index.load(__verso_searchIndexData) : null;\n"
     let indexJs := indexJs ++ "window.docContents = {};\n"
     let indexJs := indexJs ++ "window.searchIndex = elasticlunr ? __versoSearchIndex : null;\n"
+    let indexJs := indexJs ++ "window.searchIndexVersion = " ++ toString (Json.str version) ++ ";\n"
     IO.FS.writeFile (outputDir / "searchIndex.js") indexJs
 
     IO.FS.writeFile (outputDir / "elasticlunr.min.js") Verso.Output.Html.elasticlunr.js

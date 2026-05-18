@@ -9,7 +9,9 @@ import { registerSearch } from "./search-box.js";
 
 // The search box itself. TODO: add to template
 // autocorrect is a safari-only attribute. It is required to prevent autocorrect on iOS.
-const searchHTML = `<div id="search-wrapper">
+// The `verso-search-results` class is shared with the full-page search results view so
+// domain-specific styling (emitted into `domain-display.css`) applies in both places.
+const searchHTML = `<div id="search-wrapper" class="verso-search-results">
   <div class="combobox combobox-list">
     <div class="group">
       <div
@@ -37,11 +39,30 @@ const searchHTML = `<div id="search-wrapper">
 // Initialize search box
 const data = fetch("xref.json").then((data) => data.json());
 window.addEventListener("load", () => {
-    const main = document.querySelector("header");
-    main.insertAdjacentHTML("beforeend", searchHTML);
+    // Pages that render their own search UI (e.g. the full-page search results view,
+    // which has a plain input next to live-updating results) opt out of the header
+    // combobox entirely by declaring a `[data-search-host]` element. Those pages still
+    // get access to the index data: they import `search-box.js`'s pure helpers
+    // directly.
+    if (document.querySelector("[data-search-host]")) return;
+    const mount = document.querySelector("header");
+    if (!mount) return;
+    mount.insertAdjacentHTML("beforeend", searchHTML);
     const searchWrapper = document.querySelector(".combobox-list");
     data.then((data) => {
-        const docPriorities = /** @type {any} */ (window).docPriorities;
-        registerSearch({ searchWrapper, data, domainMappers, searchPriorities, docPriorities });
+        const windowAny = /** @type {any} */ (window);
+        const docPriorities = windowAny.docPriorities;
+        // Set by `search-config.js` (written by `emitSearchBox`) when the genre provides a
+        // full-page search results view. Absent → Enter-without-selection stays a no-op.
+        const searchPagePath =
+            typeof windowAny.searchPagePath === "string" ? windowAny.searchPagePath : null;
+        registerSearch({
+            searchWrapper,
+            data,
+            domainMappers,
+            searchPriorities,
+            docPriorities,
+            searchPagePath,
+        });
     });
 });

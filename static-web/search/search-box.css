@@ -91,7 +91,13 @@
     margin: 0;
 }
 
-#search-wrapper .search-result {
+/* The rules below apply wherever a result list appears. Both the quick-jump combobox and
+   the full-page search view carry the `.verso-search-results` class, and styling the items
+   once for both contexts keeps the two views visually consistent without forcing either
+   one to know about the other. The combobox-only chrome above (popup positioning, the
+   aria-selected highlight, and the per-listbox-item padding) stays scoped to `#search-wrapper`,
+   since those rules would be either meaningless or actively wrong on the full-page view. */
+.verso-search-results .search-result {
     display: flex;
     flex-direction: column;
     gap: 0.2rem;
@@ -103,23 +109,38 @@
     scroll-margin-bottom: 1.2rem;
 }
 
+/* Each result wraps its contents in an <a> so the destination is exposed to keyboards
+   and assistive tech (middle-click / open-in-new-tab also work). The anchor mirrors
+   its parent's flex column so the existing `.search-result` layout stays intact and
+   descendant rules (`.search-result p`, `.search-result .domain`, etc.) still match. */
+.search-result > .search-result-link {
+    display: flex;
+    flex-direction: inherit;
+    gap: inherit;
+    color: inherit;
+    text-decoration: none;
+}
+
+/* `display: contents` on the anchor would be simpler, but Chromium refuses to move
+   programmatic focus onto a `display: contents` element, breaking keyboard activation. */
+
 /* Couple the domain tighter with the search term on smaller screens,
    otherwise it's easy to get lost in the results. */
 @media screen and (max-width: 700px) {
-    #search-wrapper .search-result {
+    .verso-search-results .search-result {
         gap: 0;
         padding: 0.3rem 0.2rem;
     }
 }
 
-#search-wrapper .search-result.full-text {
+.verso-search-results .search-result.full-text {
     font-family: var(--verso-text-font-family);
 }
-#search-wrapper .search-result.full-text .header {
+.verso-search-results .search-result.full-text .header {
     display: block;
 }
-#search-wrapper .search-result.full-text .header,
-#search-wrapper .search-result.full-text .header em {
+.verso-search-results .search-result.full-text .header,
+.verso-search-results .search-result.full-text .header em {
     font-style: normal;
     font-family: var(--verso-structure-font-family);
     font-weight: bold;
@@ -144,24 +165,26 @@
     }
 }
 
-#search-wrapper .search-result p {
+.verso-search-results .search-result p {
     margin: 0;
     font-family: inherit;
     font-weight: inherit;
     font-style: inherit;
 }
 
+/* The two views highlight matched characters differently: the combobox underlines them,
+   while the full-page view wraps them in a tinted background. Each treatment therefore
+   lives with the context it applies to rather than being shared. */
 #search-wrapper .search-result em {
     font-style: normal;
     text-decoration: underline;
 }
 
-#search-wrapper .search-result .domain em {
+.verso-search-results .search-result .domain em {
     font-style: italic;
 }
 
-#search-wrapper .search-result .domain {
-    text-align: right;
+.verso-search-results .search-result .domain {
     color: var(--verso-muted-color, #777);
     font-style: italic;
     font-family: var(--verso-structure-font-family);
@@ -169,7 +192,14 @@
     font-size: 0.7rem;
 }
 
-#search-wrapper .search-result .domain.text-context {
+/* The combobox dropdown is narrow, and right-aligning the domain label reads more cleanly
+   next to the matched search term. The full-page view is much wider and works better with
+   the browser's default start-aligned flow, so this alignment stays scoped to the combobox. */
+#search-wrapper .search-result .domain {
+    text-align: right;
+}
+
+.verso-search-results .search-result .domain.text-context {
     /* For full-text search results, truncate on the left with an ellipsis */
     text-overflow: ellipsis;
     direction: rtl;
@@ -177,17 +207,19 @@
     overflow: hidden;
 }
 
-#search-wrapper .search-result .domain .context-elem {
+.verso-search-results .search-result .domain .context-elem {
     display: inline-block;
 }
 
-#search-wrapper .search-result .domain .context-elem:not(:last-child)::after {
+.verso-search-results .search-result .domain .context-elem:not(:last-child)::after {
     content: "»";
     margin: 0 0.25em;
 }
 
-/* Couple the domain tighter with the search term on smaller screens,
-   otherwise it's easy to get lost in the results. */
+/* On narrow screens the right-aligned domain label drifts far enough from the search term
+   it belongs to that the association becomes hard to follow, so we flip it back to the
+   default alignment. Because the `text-align: right` this is undoing is combobox-only,
+   the override is scoped to the combobox as well. */
 @media screen and (max-width: 700px) {
     #search-wrapper .search-result .domain {
         text-align: left;
