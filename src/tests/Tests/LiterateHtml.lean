@@ -233,8 +233,8 @@ private def testCustomLiterateHandlers (data : TestData) : IO Unit := withTestDi
     throw <| IO.userError "UserExt JSON missing USER-LEANBLOCK-MARKER: `@[block_to_literate]` handler did not run"
 
   let html ← IO.FS.readFile (htmlDir / "LitConfig" / "UserExt" / "index.html")
-  unless hasSubstring html "custom_target" do
-    throw <| IO.userError "UserExt HTML missing 'custom_target'. The `.data` fallback children weren't rendered."
+  unless hasSubstring html "REFER_TO_ME" do
+    throw <| IO.userError "UserExt HTML missing 'REFER_TO_ME'. The `.data` fallback children weren't rendered."
   unless hasSubstring html "trivial" do
     throw <| IO.userError "UserExt HTML missing 'trivial'. The lean code-block fallback children weren't rendered."
 

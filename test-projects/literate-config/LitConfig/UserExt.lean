@@ -59,10 +59,10 @@ end LitConfig.UserExt
 /-! Fixture declarations exercising the user handlers and the no-handler fallback. -/
 
 /-- This definition's name is used later in a test docstring.-/
-def dest : Nat := 0
+def REFER_TO_ME : Nat := 0
 
 /--
-A docstring with a reference to {name}`dest` and a Lean block:
+A docstring with a reference to {name}`REFER_TO_ME` and a Lean block:
 
 ```lean
 example : True := trivial
@@ -71,7 +71,7 @@ example : True := trivial
 If the custom handlers are picked up, the JSON for this module contains
 {lit}`USER-CONST-MARKER` (inline) and {lit}`USER-LEANBLOCK-MARKER` (block).
 -/
-def customDemo : Nat := dest
+def customDemo : Nat := REFER_TO_ME
 
 open LitConfig.UserExt in
 /--
