@@ -334,7 +334,8 @@ where
       for h in handlers do
         if let some v ← h x.name x.val xs then
           return v
-      throwError "No inline handler for {x.name} with type {x.val.typeName}"
+      logWarning m!"No inline handler for {x.name} with type {x.val.typeName}; using fallback content"
+      return .concat xs
 
 
   blockToLit : Lean.Doc.Block ElabInline ElabBlock → HighlightM (Lean.Doc.Block Ext Ext)
@@ -351,7 +352,8 @@ where
       for h in handlers do
         if let some v ← h x.name x.val xs then
           return v
-      throwError "No block handler for {x.name} with type {x.val.typeName}"
+      logWarning m!"No block handler for {x.name} with type {x.val.typeName}; using fallback content"
+      return .concat xs
 
   partToLit (p : Lean.Doc.Part ElabInline ElabBlock Empty) : HighlightM (Lean.Doc.Part Ext Ext Empty) :=
     return { p with
@@ -480,7 +482,20 @@ unsafe def go (suppressedNamespaces : Array Name) (extraImports : Array Name) (m
     let res ← Compat.Frontend.processCommands headerStx pctx cmdSt
     let res := res.updateLeading contents
 
-    let hls ← (Frontend.runCommandElabM <| liftTermElabM <| highlightFrontendResult' res (suppressNamespaces := suppressedNamespaces.toList)) pctx cmdSt
+    -- Report messages resulting from docstring conversion explicitly and separately. This ensures
+    -- that warnings from e.g. missing handlers surface as they should, without double-reporting all
+    -- messages from the original.
+    let savedMsgs ← cmdSt.modifyGet fun s =>
+      (s.commandState.messages, { s with commandState.messages := .empty })
+    let hls ← try
+      let hls ← (Frontend.runCommandElabM <| liftTermElabM <| highlightFrontendResult' res (suppressNamespaces := suppressedNamespaces.toList)) pctx cmdSt
+      pure hls
+    finally
+      let innerMsgs ← cmdSt.modifyGet fun s =>
+        (s.commandState.messages, { s with commandState.messages := .empty })
+      for m in innerMsgs.toArray do
+        IO.eprint (← m.toString)
+      cmdSt.modify ({ · with commandState.messages := savedMsgs ++ innerMsgs })
 
     let env := (← cmdSt.get).commandState.env
 
