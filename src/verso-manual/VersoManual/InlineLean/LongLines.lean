@@ -36,10 +36,11 @@ def warnLongLines [Monad m] [MonadFileMap m] [MonadLog m] [AddMessageContext m] 
         if endCol > maxCol then
           let thisStart := fileMap.lineStart l
           let fakeLiteral := Syntax.mkStrLit (thisStart.extract fileMap.source nextStart) (.synthetic thisStart nextStart)
-          let note := MessageData.note
-            m!"In the Manual genre, example code is rendered in a two-column layout, and long lines \
-              are likely to be truncated in the rendered output."
-          let hint := MessageData.hint'
-            m!"The limit of this linter can be changed with the option `verso.code.warnLineLength`. \
-              This linter can be disabled by setting this option to 0."
+          let note :=
+            MessageData.note m!"Example code is shown on mobile devices and other narrow contexts. \
+              Long lines are likely to be truncated in the rendered output."
+          let hint :=
+            MessageData.hint' m!"The limit of this linter can be changed with the option \
+              `{.ofConstName ``verso.code.warnLineLength}`. This linter can be disabled by setting \
+              this option to 0."
           logWarningAt fakeLiteral m!"Line {l} is too long ({endCol} columns exceeds {maxCol}).{note}{hint}"
