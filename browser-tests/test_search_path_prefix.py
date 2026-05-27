@@ -94,9 +94,7 @@ class TestSearchUnderPathPrefix:
             f"<base href> should anchor at {PREFIX}, got {base_href!r}"
         )
 
-    def test_combobox_arrow_enter_keeps_prefix(
-        self, prefixed_server: str, page: Page
-    ):
+    def test_combobox_arrow_enter_keeps_prefix(self, prefixed_server: str, page: Page):
         """ArrowDown + Enter routes through `navigateBaseRelative`. This path
         was already correct before the fix; included so the matrix is complete."""
         _open_landing(page, prefixed_server)
@@ -172,9 +170,7 @@ class TestSearchUnderPathPrefix:
             f"got href={raw!r} resolved={resolved!r}"
         )
 
-    def test_search_page_click_keeps_prefix(
-        self, prefixed_server: str, page: Page
-    ):
+    def test_search_page_click_keeps_prefix(self, prefixed_server: str, page: Page):
         """Clicking a result on the full search page should land somewhere
         under the prefix and away from `/search/`."""
         page.goto(f"{prefixed_server}{PREFIX}/search/?q=Html")
