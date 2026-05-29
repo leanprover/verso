@@ -8,5 +8,6 @@ module
 public import Verso.Color.Types
 public import Verso.Color.Basic
 public import Verso.Color.Math
+public import Verso.Color.Accessibility
 public import Verso.Color.Widget
 public import Verso.Color.Syntax

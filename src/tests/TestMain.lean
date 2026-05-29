@@ -155,6 +155,12 @@ def testColorMath (_ : Config) : IO Unit := do
   if fails > 0 then
     throw <| IO.userError s!"{fails} color math tests failed"
 
+def testColorAccessibility (_ : Config) : IO Unit := do
+  IO.println "Running color accessibility tests..."
+  let fails ← runColorAccessibilityTests
+  if fails > 0 then
+    throw <| IO.userError s!"{fails} color accessibility tests failed"
+
 def testSearchJs (_ : Config) : IO Unit := do
   IO.println "Running search JS wire-format tests..."
   let fails ← Verso.Tests.SearchJs.runSearchJsTests
@@ -390,6 +396,7 @@ def tests := [
   testBuildLog,
   testColor,
   testColorMath,
+  testColorAccessibility,
   testSerialization,
   testSearchJs,
   testBlog,
