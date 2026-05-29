@@ -349,9 +349,40 @@ def testBuildLog (_ : Config) : IO Unit := do
     throw <| IO.userError "redirected logging should still accumulate into the logger's buffers"
   IO.println "  All build-log tests passed."
 
+open Verso in
+def testColor (_ : Config) : IO Unit := do
+  IO.println "Running color tests..."
+  let check (name got expected : String) : IO Unit :=
+    unless got == expected do
+      throw <| IO.userError s!"{name}: got \"{got}\", expected \"{expected}\""
+  -- Opaque colors render as lowercase `#rrggbb`.
+  check "black.css" Color.black.css "#000000"
+  check "white.css" Color.white.css "#ffffff"
+  check "gray.css" Color.gray.css "#808080"
+  check "red.css" Color.red.css "#ff0000"
+  check "green.css" Color.green.css "#008000"
+  check "blue.css" Color.blue.css "#0000ff"
+  check "transparent.css" Color.transparent.css "#00000000"
+  check "6-digit literal css" (color%#4777ff).css "#4777ff"
+  -- A 3-digit literal doubles each digit.
+  check "3-digit literal css" (color%#fff).css "#ffffff"
+  -- A color with alpha renders as `rgba(...)` with the alpha in [0, 1].
+  check "alpha literal css" (color%#aabbcc80).css "#aabbcc80"
+  -- TeX rendering is six uppercase hex digits with no alpha.
+  check "red.tex" Color.red.tex "FF0000"
+  check "literal tex" (color%#4777ff).tex "4777FF"
+  check "alpha literal tex" (color%#aabbcc80).tex "AABBCC"
+  -- The literal parses to the expected channels.
+  unless (color%#4777ff) = Color.rgba 0x47 0x77 0xff 255 do
+    throw <| IO.userError "6-digit literal parsed to the wrong channels"
+  unless (color%#fff) = Color.rgba 255 255 255 255 do
+    throw <| IO.userError "3-digit literal parsed to the wrong channels"
+  IO.println "  All color tests passed."
+
 open Verso.Integration in
 def tests := [
   testBuildLog,
+  testColor,
   testSerialization,
   testSearchJs,
   testBlog,
