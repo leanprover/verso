@@ -87,7 +87,7 @@ def Site.traverse1 (site : Site) : Blog.TraverseM Site := do
 def Site.traverse
     (site : Site) (config : Config)
     (components : Components) :
-    IO (Site × Blog.TraverseState) := do
+    BuildLogT IO (Site × Blog.TraverseState) := do
   let topCtxt : Blog.TraverseContext := {path := .root, config, components}
   let logVerbose := (if config.verbose then (fun _ => pure ()) else IO.println)
   let remoteContent ← Multi.updateRemotes false config.remoteInfoConfigPath logVerbose

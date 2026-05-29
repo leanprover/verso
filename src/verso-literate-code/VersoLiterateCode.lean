@@ -17,6 +17,7 @@ open Lean
 
 open Verso.Output.Html
 open Verso.Code
+open Verso (MonadBuildLog BuildLogT)
 
 open VersoLiterate
 open Std
@@ -97,7 +98,6 @@ def moduleContext (modName : Name) (litConfig : LiterateConfig)
     return { parents := entries.pop, self := entries.back }
 
 structure HtmlContext where
-  logError : String → IO Unit
   definitionIds : NameMap String
   moduleIds : NameMap String
   traverseState : Literate.TraverseState
@@ -118,10 +118,7 @@ open Verso.Output in
 structure HtmlState where
   hlState : Hover.State Html := {}
 
-abbrev EmitM := ReaderT HtmlContext (StateRefT HtmlState IO)
-
-def logError (msg : String) : EmitM Unit := do
-  (← read).logError msg
+abbrev EmitM := ReaderT HtmlContext (StateRefT HtmlState (BuildLogT IO))
 
 open Verso.Output Html Verso.Multi in
 open MD4Lean in
@@ -1079,10 +1076,10 @@ where
     for (_, ch) in dir.children do
       go ch
 
-def emitIndex (traverseContext : Context) (traverseState : State) (dir : Dir) (outputDir : System.FilePath) (logError : String → IO Unit) : IO Unit := do
+def emitIndex (traverseContext : Context) (traverseState : State) (dir : Dir) (outputDir : System.FilePath) (logger : Verso.Logger IO) : IO Unit := do
   match mkIndex traverseContext traverseState dir with
   | .error e =>
-    logError e
+    logger.reportError e
   | .ok (index, indexDocs) =>
     -- `context` (the breadcrumb text) is not an indexed field. In the past, it was indexed, but its
     -- boost was 0.1, so indexing it nearly duplicated another inverted index for negligible scoring

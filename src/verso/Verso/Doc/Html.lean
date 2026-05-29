@@ -8,26 +8,20 @@ public import Verso.Doc
 import Verso.Output.Html
 import Verso.Method
 public import Verso.Code.Highlighted
+public import Verso.BuildLog
 
 namespace Verso.Doc.Html
 
 open Verso Output Doc Html
+open Verso (Severity SourceSpan MonadBuildLog Logger)
 open Verso.Code (HighlightHtmlM)
 
-public structure Options  (m : Type → Type) where
+public structure Options where
   /-- The level of the top-level headers -/
   headerLevel : Nat := 1
-  logError : String → m Unit
 
-public def Options.reinterpret (lift : {α : _} → m α → m' α) (opts : Options m) : Options m' :=
-  {opts with
-    logError := fun msg => lift <| opts.logError msg}
-
-public def Options.lift [MonadLiftT m m'] (opts : Options m) : Options m' :=
-  opts.reinterpret MonadLiftT.monadLift
-
-public structure HtmlT.Context (genre : Genre) (m : Type → Type) where
-  options : Options m
+public structure HtmlT.Context (genre : Genre) where
+  options : Options
   traverseContext : genre.TraverseContext
   traverseState : genre.TraverseState
   /--
@@ -38,24 +32,17 @@ public structure HtmlT.Context (genre : Genre) (m : Type → Type) where
   linkTargets : Code.LinkTargets genre.TraverseContext
   codeOptions : Code.HighlightHtmlM.Options
 
-public def HtmlT.Context.reinterpret (lift : {α : _} → m α → m' α) (ctx : HtmlT.Context g m) : HtmlT.Context g m' :=
-  {ctx with
-    options := ctx.options.reinterpret lift}
-
-public def HtmlT.Context.lift [MonadLiftT m m'] (ctx : HtmlT.Context g m) : HtmlT.Context g m' :=
-  ctx.reinterpret monadLift
-
 public def HtmlT.Context.cast {g1 g2 : Genre}
-    (ctx : HtmlT.Context g1 m)
+    (ctx : HtmlT.Context g1)
     (context_eq : g1.TraverseContext = g2.TraverseContext := by trivial)
-    (state_eq : g1.TraverseState = g2.TraverseState := by trivial) : HtmlT.Context g2 m :=
+    (state_eq : g1.TraverseState = g2.TraverseState := by trivial) : HtmlT.Context g2 :=
   { ctx with
     traverseContext := context_eq ▸ ctx.traverseContext,
     traverseState := state_eq ▸ ctx.traverseState,
     linkTargets := context_eq ▸ ctx.linkTargets }
 
 public abbrev HtmlT (genre : Genre) (m : Type → Type) : Type → Type :=
-  ReaderT (HtmlT.Context genre m) (StateT (Verso.Code.Hover.State Html) m)
+  ReaderT (HtmlT.Context genre) (StateT (Verso.Code.Hover.State Html) m)
 
 public def HtmlT.cast {g1 g2 : Genre} (act : HtmlT g1 m α)
     (context_eq : g1.TraverseContext = g2.TraverseContext := by trivial)
@@ -64,10 +51,10 @@ public def HtmlT.cast {g1 g2 : Genre} (act : HtmlT g1 m α)
   fun ρ σ =>
     act (ρ.cast context_eq.symm state_eq.symm) σ
 
-public def HtmlT.options [Monad m] : HtmlT genre m (Options m) := do
+public def HtmlT.options [Monad m] : HtmlT genre m Options := do
   return (← read).options
 
-public def HtmlT.withOptions (opts : Options m → Options m) (act : HtmlT g m α) : HtmlT g m α :=
+public def HtmlT.withOptions (opts : Options → Options) (act : HtmlT g m α) : HtmlT g m α :=
   withReader (fun ctxt => {ctxt with options := opts ctxt.options}) act
 
 public def HtmlT.context [Monad m] : HtmlT genre m genre.TraverseContext := do
@@ -85,7 +72,9 @@ public def HtmlT.linkTargets [Monad m] : HtmlT genre m (Code.LinkTargets genre.T
 public def HtmlT.codeOptions [Monad m] : HtmlT genre m Code.HighlightHtmlM.Options := do
   return (← read).codeOptions
 
-public def HtmlT.logError [Monad m] (message : String) : HtmlT genre m Unit := do (← options).logError message
+@[deprecated "Use `Verso.reportError` instead." (since := "2026-05-29")]
+public def HtmlT.logError [Monad m] [MonadBuildLog (HtmlT genre m)] (message : String) : HtmlT genre m Unit :=
+  Verso.reportError message
 
 public instance [Monad m] : MonadLift (HighlightHtmlM genre) (HtmlT genre m) where
   monadLift act := do modifyGet (act ⟨← HtmlT.linkTargets, ← HtmlT.context, ← HtmlT.definitionIds, ← HtmlT.codeOptions⟩)
@@ -196,13 +185,13 @@ partial def Part.toHtml [Monad m] [GenreHtml g m] [TraversePart g] [TraverseBloc
 public instance [Monad m] [GenreHtml g m] [TraversePart g] [TraverseBlock g] : ToHtml g m (Part g) where
   toHtml p := private Part.toHtml p
 
-public instance : GenreHtml .none m where
+public instance : GenreHtml .none Id where
   part _ m := nomatch m
   block _ _ x := nomatch x
   inline _ x := nomatch x
 
 public defmethod Genre.toHtml (g : Genre) [ToHtml g m α]
-    (options : Options m) (context : g.TraverseContext) (state : g.TraverseState)
+    (options : Options) (context : g.TraverseContext) (state : g.TraverseState)
     (definitionIds : Lean.NameMap String)
     (linkTargets : Code.LinkTargets g.TraverseContext) (codeOptions : Code.HighlightHtmlM.Options)
     (x : α) : StateT (Verso.Code.Hover.State Html) m Html :=

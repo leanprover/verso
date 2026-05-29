@@ -8,16 +8,17 @@ public import Std.Data.HashMap
 public import Verso.Doc
 import Verso.Method
 public import Verso.Output.TeX
+public import Verso.BuildLog
 
 namespace Verso.Doc.TeX
 
+open Verso (Severity SourceSpan MonadBuildLog Logger reportError reportWarning)
 open Verso.Output TeX
 
-public structure Options (g : Genre) (m : Type → Type) where
+public structure Options (g : Genre) where
   headerLevels : Array String := #["chapter", "section", "subsection", "subsubsection", "paragraph"]
   /-- The level of the top-level headers -/
   headerLevel : Option (Fin headerLevels.size)
-  logError : String → m Unit
 
 public structure TeXContext where
   /--
@@ -26,66 +27,64 @@ public structure TeXContext where
   -/
   inFragile : Bool := false
 
-public def Options.reinterpret (lift : {α : _} → m α → m' α) (opts : Options g m) : Options g m' :=
-  {opts with
-    logError := fun msg => lift <| opts.logError msg}
-
-public def Options.lift [MonadLiftT m m'] (opts : Options g m) : Options g m' :=
-  opts.reinterpret MonadLiftT.monadLift
-
 public structure OutputState where
   extraFiles : Std.HashMap String String := {}
 
 public abbrev TeXT (genre : Genre) (m : Type → Type) : Type → Type :=
-  ReaderT (Options genre m × genre.TraverseContext × genre.TraverseState × TeXContext) <|
+  ReaderT (Options genre × genre.TraverseContext × genre.TraverseState × TeXContext) <|
   StateT OutputState <|
   m
 
 public instance [Monad m] [Inhabited α] : Inhabited (TeXT g m α) := ⟨pure default⟩
 
-public def options [Monad m] : TeXT g m (Options g m) := do
+public def options [Monad m] : TeXT g m (Options g) := do
   pure (← read).fst
 
 public def state [Monad m] : TeXT g m g.TraverseState := do
   pure (← read).2.2.1
 
-public def logError [Monad m] (message : String) : TeXT g m Unit := do
-  (← options).logError message
+@[deprecated "Use `Verso.reportError` instead." (since := "2026-05-29")]
+public def logError [Monad m] [MonadBuildLog (TeXT g m)] (message : String) : TeXT g m Unit :=
+  reportError message
 
 public def texContext [Monad m] : TeXT g m TeXContext := do
   let ⟨_, _, _, ctx⟩ ← read
   pure ctx
 
-private def mkHeader [Monad m] (opts : Options g m)
+section
+variable [Monad m] [MonadBuildLog (TeXT g m)]
+
+private def mkHeader (opts : Options g)
     (level : Option (Fin opts.headerLevels.size)) (name : TeX) (label : Option String) : TeXT g m TeX := do
   let some i := level
-    | logError s!"No more header nesting available at {name.asString}"; return \TeX{\textbf{\Lean{name}}}
+    | reportError s!"No more header nesting available at {name.asString}"; return \TeX{\textbf{\Lean{name}}}
   let label := label.map (\TeX{\label{\Lean{.raw ·}}}) |>.getD .empty
   pure <| .raw (s!"\\{opts.headerLevels[i]}" ++ "{") ++ name ++ .raw "}" ++ label
 
-public def headerLevel [Monad m] (name : TeX) (level : Nat) (label : Option String) : TeXT g m TeX := do
+public def headerLevel (name : TeX) (level : Nat) (label : Option String) : TeXT g m TeX := do
   let opts ← options
   let lev := if h : level < opts.headerLevels.size then some ⟨level, h⟩ else none
   mkHeader opts lev name label
 
-public def header [Monad m] (name : TeX) (label : Option String) : TeXT g m TeX := do
+public def header (name : TeX) (label : Option String) : TeXT g m TeX := do
   let opts ← options
   mkHeader opts opts.headerLevel name label
 
-public def inFragile [Monad m] (act : TeXT g m α) : TeXT g m α :=
+public def inFragile (act : TeXT g m α) : TeXT g m α :=
   withReader (fun (opts, st, st', tctx) => (opts, st, st', { tctx with inFragile := true })) act
 
-public def inHeader [Monad m] (act : TeXT g m α) : TeXT g m α :=
+public def inHeader (act : TeXT g m α) : TeXT g m α :=
   withReader (fun (opts, st, st', tctx) => (bumpHeader opts, st, st', tctx)) act
 where
-  bumpHeader opts :=
+  bumpHeader (opts : Options g) : Options g :=
     if let some i := opts.headerLevel then
       if h : i.val + 1 < opts.headerLevels.size then
         {opts with headerLevel := some ⟨i.val + 1, h⟩}
       else {opts with headerLevel := none}
     else opts
+end
 
-public class GenreTeX (genre : Genre) (m : Type → Type) where
+public class GenreTeX (genre : Genre) (m : outParam (Type → Type)) where
   part
     (partTeX : Part genre → (label : Option String) → TeXT genre m TeX)
     (metadata : genre.PartMetadata) (contents : Part genre) : TeXT genre m TeX
@@ -184,7 +183,10 @@ public def verbatimInline [Monad m] [GenreTeX g m] (t : TeX) : TeXT g m Verso.Ou
 public def makeLink (url : String) (content : TeX) : TeX :=
   \TeX{\href{\Lean{.raw (escapeForTexHref url)}}{\Lean{content}}}
 
-public partial defmethod Inline.toTeX [Monad m] [GenreTeX g m] : Inline g → TeXT g m TeX
+section
+variable [Monad m] [MonadBuildLog (TeXT g m)] [GenreTeX g m]
+
+public partial defmethod Inline.toTeX : Inline g → TeXT g m TeX
   | .text str => pure <| .text str
   | .link content dest => do
     pure <| makeLink dest (← content.mapM Inline.toTeX)
@@ -203,7 +205,7 @@ public partial defmethod Inline.toTeX [Monad m] [GenreTeX g m] : Inline g → Te
   | .concat inlines => inlines.mapM toTeX
   | .other container content => GenreTeX.inline Inline.toTeX container content
 
-public partial defmethod Block.toTeX [Monad m] [GenreTeX g m] : Block g → TeXT g m TeX
+public partial defmethod Block.toTeX : Block g → TeXT g m TeX
   | .para xs => do
     pure <| (← xs.mapM Inline.toTeX)
   | .blockquote bs => do
@@ -220,7 +222,7 @@ public partial defmethod Block.toTeX [Monad m] [GenreTeX g m] : Block g → TeXT
   | .other container content => GenreTeX.block Inline.toTeX Block.toTeX container content
 
 
-public partial defmethod Part.toTeX [Monad m] [GenreTeX g m] (p : Part g) (label : Option String) : TeXT g m TeX :=
+public partial defmethod Part.toTeX (p : Part g) (label : Option String) : TeXT g m TeX :=
   match p.metadata with
   | .none => do
     pure \TeX{
@@ -232,3 +234,5 @@ public partial defmethod Part.toTeX [Monad m] [GenreTeX g m] (p : Part g) (label
     }
   | some m =>
     GenreTeX.part Part.toTeX m p.withoutMetadata
+
+end

@@ -167,11 +167,11 @@ def blockHtml (g : Genre)
     let ⟨_, _, _, _⟩ := bg
     match (← readThe Components).blocks.find? name with
     | none =>
-      HtmlT.logError s!"No component implementation found for block '{name}' in {(← readThe Components).blocks.toList.map (·.fst)}"
+      reportError s!"No component implementation found for block '{name}' in {(← readThe Components).blocks.toList.map (·.fst)}"
       pure .empty
     | some dyn =>
       let some {toHtml := impl, ..} := dyn.get? BlockComponent
-        | HtmlT.logError s!"Wrong type for block components: {dyn.typeName}"; pure .empty
+        | reportError s!"Wrong type for block components: {dyn.typeName}"; pure .empty
       let id ← modifyGetThe Component.State fun s => s.freshId
       impl ⟨id⟩ json
         (fun x => goI (x.cast bg.inline_eq.symm) |>.cast)
@@ -185,7 +185,7 @@ def blockHtml (g : Genre)
     }}
   | .docstringSection lvl, contents => do
     if lvl > 5 then
-      logError s!"Docstring header level {lvl + 1} is greater than the allowed HTML nesting of `<h6>`"
+      reportError s!"Docstring header level {lvl + 1} is greater than the allowed HTML nesting of `<h6>`"
     if let some (Block.para first) := contents[0]? then
       let contents := contents.extract 1
       return {{
@@ -195,7 +195,7 @@ def blockHtml (g : Genre)
         </section>
       }}
     else
-      logError "Internal error: docstring section missing leading paragraph as title"
+      reportError "Internal error: docstring section missing leading paragraph as title"
       contents.mapM goB
 
 
@@ -222,7 +222,7 @@ def inlineHtml (g : Genre) [bg : BlogGenre g]
     let st ← bg.state_eq ▸ state
     match st.targets.find? x with
     | none =>
-      HtmlT.logError s!"Can't find target {x}"
+      reportError s!"Can't find target {x}"
       pure {{<strong class="internal-error">s!"Can't find target {x}"</strong>}}
     | some tgt =>
       let addr := tgt.relativeLink
@@ -231,7 +231,7 @@ def inlineHtml (g : Genre) [bg : BlogGenre g]
     let st ← bg.state_eq ▸ state
     match st.pageIds.find? x <|> st.pageIds.find? (docName x) with
     | none =>
-      HtmlT.logError s!"Can't find target {x} - options are {st.pageIds.toList.map (·.fst)}"
+      reportError s!"Can't find target {x} - options are {st.pageIds.toList.map (·.fst)}"
       pure {{<strong class="internal-error">s!"Can't find target {x}"</strong>}}
     | some «meta» =>
       let addr := meta.path.relativeLink ++ (id?.map ("#" ++ ·) |>.getD "")
@@ -243,11 +243,11 @@ def inlineHtml (g : Genre) [bg : BlogGenre g]
     let ⟨_, _, _, _⟩ := bg
     match (← readThe Components).inlines.find? name with
     | none =>
-      HtmlT.logError s!"No component implementation found for inline '{name}' in {(← readThe Components).inlines.toList.map (·.fst)}"
+      reportError s!"No component implementation found for inline '{name}' in {(← readThe Components).inlines.toList.map (·.fst)}"
       pure .empty
     | some dyn =>
       let some {toHtml := impl, ..} := dyn.get? InlineComponent
-        | HtmlT.logError s!"Wrong type for block components: {dyn.typeName}"; pure .empty
+        | reportError s!"Wrong type for block components: {dyn.typeName}"; pure .empty
       let id ← modifyGetThe Component.State fun s => s.freshId
       impl ⟨id⟩ json
         (fun x => go (x.cast bg.inline_eq.symm) |>.cast)

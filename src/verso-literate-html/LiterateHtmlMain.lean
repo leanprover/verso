@@ -10,6 +10,7 @@ open Lean
 
 open Verso.Output.Html
 open Verso.Code
+open Verso (withLogger)
 
 open VersoLiterate
 open VersoLiterateCode
@@ -208,22 +209,22 @@ Returns the body HTML and updated highlight state.
 -/
 private def renderModBody (mod : LitMod) (resolved : ResolvedConfig)
     (ctx : HtmlContext) (initHlState : HtmlState) :
-    IO (Html × HtmlState × Array Heading) := do
+    BuildLogT IO (Html × HtmlState × Array Heading) := do
   let emitCtx := { ctx with
-                   options := {logError := ctx.logError}
-                   traverseContext := {currentModule := mod.name}
-                   codeOptions := {} }
-  let hlCtx : HighlightHtmlM.Context Literate :=
-    ⟨emitCtx.linkTargets, emitCtx.traverseContext, emitCtx.definitionIds, emitCtx.codeOptions⟩
+    options := {}
+    traverseContext := { currentModule := mod.name }
+    codeOptions := {}
+  }
+  let hlCtx : HighlightHtmlM.Context Literate := { emitCtx with options := emitCtx.codeOptions }
 
   -- Render a single code item and its output messages
-  let renderCodeItemWithOutput (idx : Nat) (item : ModuleItem') (hlState : HtmlState) : IO (Html × HtmlState) := do
+  let renderCodeItemWithOutput (idx : Nat) (item : ModuleItem') (hlState : HtmlState) : BuildLogT IO (Html × HtmlState) := do
     let ((codeHtml, _, _), st) ← renderCode idx item |>.run emitCtx hlState.hlState
     let (outputHtml, st') := renderOutputMessages #[(idx, item)] resolved.showOutput hlCtx st
     return (codeHtml ++ outputHtml, { hlState with hlState := st' })
 
   -- Render accumulated code items into a code box
-  let flushCodeItems (items : Array (Nat × ModuleItem')) (hlState : HtmlState) : IO (Html × HtmlState) := do
+  let flushCodeItems (items : Array (Nat × ModuleItem')) (hlState : HtmlState) : BuildLogT IO (Html × HtmlState) := do
     if items.isEmpty then return (.empty, hlState)
     let mut boxHtml : Html := .empty
     let mut hlState := hlState
@@ -443,7 +444,7 @@ Emits the landing page using a specific module's rendered content.
 The module still appears at its normal location; we just also render it as index.html.
 -/
 def emitLandingFromModule (outDir : System.FilePath) (root : Dir) (modName : Name)
-    (ctx : HtmlContext) (initHlState : HtmlState := {})
+    (ctx : HtmlContext) (logger : Verso.Logger IO) (initHlState : HtmlState := {})
     (srcDirs : Lean.NameMap System.FilePath := {}) : IO HtmlState := do
   let litConfig := ctx.litConfig
   let resolved := litConfig.resolveForModule modName
@@ -456,7 +457,7 @@ def emitLandingFromModule (outDir : System.FilePath) (root : Dir) (modName : Nam
   let siteRoot := "./"
   let htmlId? := ctx.moduleIds.find? mod.name
 
-  let (body, hlState, headings) ← renderModBody mod resolved ctx initHlState
+  let (body, hlState, headings) ← renderModBody mod resolved ctx initHlState |>.run logger
 
   let headContents := mkHeadContents litConfig
   let tocHtml := if headings.size >= 2 then buildPageToc headings else .empty
@@ -473,87 +474,80 @@ def main (args : List String) : IO UInt32 := do
     match getConfig args with
     | .error e => throw <| .userError e
     | .ok v => pure v
-  let errorCount ← IO.mkRef 0
-  IO.FS.createDirAll config.outputDir
-  IO.FS.writeFile (config.outputDir / "popper.js") Verso.Code.Highlighted.WebAssets.popper
-  IO.FS.writeFile (config.outputDir / "tippy.js") Verso.Code.Highlighted.WebAssets.tippy
-  IO.FS.writeFile (config.outputDir / "tippy-border.css") Verso.Code.Highlighted.WebAssets.tippy.border.css
-  IO.FS.writeFile (config.outputDir / "marked.js") Verso.Code.Highlighted.WebAssets.marked
-  IO.FS.writeFile (config.outputDir / "literate.css") literate.css
-  -- Copy the copy-button JS
-  IO.FS.writeFile (config.outputDir / "copy-button.js") copyButtonJs
-  emitSearchBox (config.outputDir / "-verso-search") (searchPagePath := some "search/")
-  let (dir, srcDirs) ← loadModuleMap config.moduleMapFile
+  withLogger fun logger => do
+    IO.FS.createDirAll config.outputDir
+    IO.FS.writeFile (config.outputDir / "popper.js") Verso.Code.Highlighted.WebAssets.popper
+    IO.FS.writeFile (config.outputDir / "tippy.js") Verso.Code.Highlighted.WebAssets.tippy
+    IO.FS.writeFile (config.outputDir / "tippy-border.css") Verso.Code.Highlighted.WebAssets.tippy.border.css
+    IO.FS.writeFile (config.outputDir / "marked.js") Verso.Code.Highlighted.WebAssets.marked
+    IO.FS.writeFile (config.outputDir / "literate.css") literate.css
+    -- Copy the copy-button JS
+    IO.FS.writeFile (config.outputDir / "copy-button.js") copyButtonJs
+    emitSearchBox (config.outputDir / "-verso-search") (searchPagePath := some "search/")
+    let (dir, srcDirs) ← loadModuleMap config.moduleMapFile
 
-  -- Load config from TOML if provided
-  let litConfig ← match config.configFile with
-    | some path => loadLiterateConfig path
-    | none => pure ({} : LiterateConfig)
+    -- Load config from TOML if provided
+    let litConfig ← match config.configFile with
+      | some path => loadLiterateConfig path
+      | none => pure ({} : LiterateConfig)
 
-  -- Generate theme CSS file if theme overrides are present
-  if let some themeCssContent := generateThemeCss litConfig.theme litConfig.themeDark then
-    IO.FS.writeFile (config.outputDir / "literate-theme.css") themeCssContent
+    -- Generate theme CSS file if theme overrides are present
+    if let some themeCssContent := generateThemeCss litConfig.theme litConfig.themeDark then
+      IO.FS.writeFile (config.outputDir / "literate-theme.css") themeCssContent
 
-  -- Copy extra CSS files to output directory
-  for css in litConfig.extraCss do
-    let name := (⟨css⟩ : System.FilePath).fileName.getD css
-    IO.FS.writeFile (config.outputDir / name) (← IO.FS.readFile css)
-  -- Copy extra JS files to output directory
-  for js in litConfig.extraJs do
-    let name := (⟨js⟩ : System.FilePath).fileName.getD js
-    IO.FS.writeFile (config.outputDir / name) (← IO.FS.readFile js)
-  -- Copy favicon to output directory
-  if let some favicon := litConfig.metadata.favicon then
-    let name := (⟨favicon⟩ : System.FilePath).fileName.getD favicon
-    IO.FS.writeFile (config.outputDir / name) (← IO.FS.readFile favicon)
+    -- Copy extra CSS files to output directory
+    for css in litConfig.extraCss do
+      let name := (⟨css⟩ : System.FilePath).fileName.getD css
+      IO.FS.writeFile (config.outputDir / name) (← IO.FS.readFile css)
+    -- Copy extra JS files to output directory
+    for js in litConfig.extraJs do
+      let name := (⟨js⟩ : System.FilePath).fileName.getD js
+      IO.FS.writeFile (config.outputDir / name) (← IO.FS.readFile js)
+    -- Copy favicon to output directory
+    if let some favicon := litConfig.metadata.favicon then
+      let name := (⟨favicon⟩ : System.FilePath).fileName.getD favicon
+      IO.FS.writeFile (config.outputDir / name) (← IO.FS.readFile favicon)
 
-  -- Apply nav tree transformations (exclude, then order)
-  let dir := dir.applyExcludes litConfig.exclude
-  let dir := dir.applyOrder litConfig.order litConfig.orderChildren
+    -- Apply nav tree transformations (exclude, then order)
+    let dir := dir.applyExcludes litConfig.exclude
+    let dir := dir.applyOrder litConfig.order litConfig.orderChildren
 
-  -- Validate: declarations in show_docstrings_for / hide_docstrings_for must exist
-  if !litConfig.showDocstringsFor.isEmpty || !litConfig.hideDocstringsFor.isEmpty then
-    let declNames := collectDeclNames dir
-    for d in litConfig.showDocstringsFor do
-      unless declNames.contains d do
-        errorCount.modify (· + 1)
-        IO.eprintln s!"Error: declaration '{d}' in show_docstrings_for does not exist"
-    for d in litConfig.hideDocstringsFor do
-      unless declNames.contains d do
-        errorCount.modify (· + 1)
-        IO.eprintln s!"Error: declaration '{d}' in hide_docstrings_for does not exist"
+    -- Validate: declarations in show_docstrings_for / hide_docstrings_for must exist
+    if !litConfig.showDocstringsFor.isEmpty || !litConfig.hideDocstringsFor.isEmpty then
+      let declNames := collectDeclNames dir
+      for d in litConfig.showDocstringsFor do
+        unless declNames.contains d do
+          logger.reportError s!"declaration '{d}' in show_docstrings_for does not exist"
+      for d in litConfig.hideDocstringsFor do
+        unless declNames.contains d do
+          logger.reportError s!"declaration '{d}' in hide_docstrings_for does not exist"
 
-  let (dir, traverseState) ← traverse dir
-  let ctx := {
-    logError msg := errorCount.modify (· + 1) *> IO.eprintln msg
-    definitionIds := traverseState.definitionIds
-    linkTargets := traverseState.linkTargets
-    moduleIds := traverseState.moduleIds
-    traverseState
-    litConfig
-  }
-  let ((), st) ← emitDir config.outputDir dir srcDirs |>.run ctx |>.run {}
+    let (dir, traverseState) ← traverse dir
+    let ctx := {
+      definitionIds := traverseState.definitionIds
+      linkTargets := traverseState.linkTargets
+      moduleIds := traverseState.moduleIds
+      traverseState
+      litConfig
+    }
+    let ((), st) ← emitDir config.outputDir dir srcDirs |>.run ctx |>.run {} |>.run logger
 
-  -- Landing page: use configured module or auto-generated ToC
-  let st ← match litConfig.landingPage with
-    | some landingModName =>
-      emitLandingFromModule config.outputDir dir landingModName ctx st srcDirs
-    | none =>
-      emitLandingPage config.outputDir dir litConfig
-      pure st
+    -- Landing page: use configured module or auto-generated ToC
+    let st ← match litConfig.landingPage with
+      | some landingModName =>
+        emitLandingFromModule config.outputDir dir landingModName ctx logger st srcDirs
+      | none =>
+        emitLandingPage config.outputDir dir litConfig
+        pure st
 
-  emitIndex {} traverseState dir (config.outputDir / "-verso-search") ctx.logError
-  emitSearchResultsPage config.outputDir litConfig
-  let domainData : Verso.NameMap Verso.Multi.Domain := ({} : Verso.NameMap _)
-    |>.insert constDomainName traverseState.constantDefDomain
-    |>.insert moduleDomainName traverseState.moduleDomain
-  IO.FS.writeFile (config.outputDir / "xref.json") <| Json.compress <| Verso.Multi.xrefJson domainData traverseState.allLinks
-  IO.FS.writeFile (config.outputDir / "-verso-docs.json") st.hlState.dedup.docJson.compress
-  let count ← errorCount.get
-  if count > 0 then
-    IO.eprintln s!"{count} errors occurred"
-    return 1
-  else return 0
+    emitIndex {} traverseState dir (config.outputDir / "-verso-search") logger
+    emitSearchResultsPage config.outputDir litConfig
+    let domainData : Verso.NameMap Verso.Multi.Domain := ({} : Verso.NameMap _)
+      |>.insert constDomainName traverseState.constantDefDomain
+      |>.insert moduleDomainName traverseState.moduleDomain
+    IO.FS.writeFile (config.outputDir / "xref.json") <| Json.compress <| Verso.Multi.xrefJson domainData traverseState.allLinks
+    IO.FS.writeFile (config.outputDir / "-verso-docs.json") st.hlState.dedup.docJson.compress
+
 where
   copyButtonJs : String :=
     include_str "../../static-web/literate/copy-button.js"

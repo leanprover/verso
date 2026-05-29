@@ -26,7 +26,7 @@ def addCssFile (filename contents : String) : TraverseM Unit := do
   for (fn, css) in (← get).cssFiles do
     if filename == fn then
       if contents != css then
-        logError s!"Attempted to add different content for CSS file {filename}"
+        reportError s!"Attempted to add different content for CSS file {filename}"
       return
 
   modify fun s => s.addCssFile filename contents
@@ -35,9 +35,9 @@ def addJsFile (filename contents : String) (sourceMap? : Option (String × Strin
   for (fn, js, map?) in (← get).jsFiles do
     if filename == fn then
       if contents != js then
-        logError s!"Attempted to add different content for JS file {filename}"
+        reportError s!"Attempted to add different content for JS file {filename}"
       if sourceMap? != map? then
-        logError s!"Attempted to add different source map for JS file {filename}"
+        reportError s!"Attempted to add different source map for JS file {filename}"
       return
 
   modify fun s => s.addJsFile filename contents sourceMap?
@@ -53,7 +53,7 @@ def genreBlock (g : Genre) [bg : BlogGenre g] : Blog.BlockExt → Array (Block g
       pure none
     | .component name json, contents => do
       let some blk := (← read).components.blocks.find? name
-        | logError s!"No implementation found for block '{name}' during traversal"
+        | reportError s!"No implementation found for block '{name}' during traversal"
           pure none
       let some {traverse, jsFiles, cssFiles, ..} := blk.get? BlockComponent
         | panic! s!"Wrong type for block component! Got {blk.typeName}"
@@ -92,7 +92,7 @@ def genreInline (g : Genre) [bg : BlogGenre g] : Blog.InlineExt → Array (Inlin
     | .htmlSpan .., _ | .blob .., _ | .lexedText .., _ => pure none
     | .component name json, contents => do
       let some inl := (← read).components.inlines.find? name
-        | logError s!"No implementation found for inline '{name}' during traversal"
+        | reportError s!"No implementation found for inline '{name}' during traversal"
           pure none
       let some {traverse, jsFiles, cssFiles, ..} := inl.get? InlineComponent
         | panic! s!"Wrong type for inline component! Got {inl.typeName}"

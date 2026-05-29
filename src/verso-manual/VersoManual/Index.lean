@@ -123,19 +123,19 @@ public def index (args : Array (Doc.Inline Manual)) (subterm : Option String := 
   Doc.Inline.other {Inline.index with data := ToJson.toJson entry} #[]
 
 /-- Adds an internal identifier as a target for a given index entry -/
-public def Index.addEntry [Monad m] [MonadState TraverseState m] [MonadLiftT IO m] [MonadReaderOf TraverseContext m]
+public def Index.addEntry [Monad m] [MonadState TraverseState m] [MonadLiftT IO m] [MonadReaderOf TraverseContext m] [MonadBuildLog m]
     (id : InternalId) (entry : Index.Entry) : m Unit := do
   let ist : Option (Except String Lean.Json) := (← get).get? indexState
   -- This function works directly with the JSON serialization of the index. Otherwise, there's a
   -- quadratic overhead from serialization/deserialization with each entry.
   match ist with
-  | some (.error err) => logError err
+  | some (.error err) => reportError err
   | some (.ok v) =>
     match v.getArr? with
-    | .error err => logError err
+    | .error err => reportError err
     | .ok xs =>
       let #[.arr entries, see] := xs
-        | logError "Expected two elements for index state with first being an array"
+        | reportError "Expected two elements for index state with first being an array"
       let entries' := entries.binInsert cmpEntry (.arr #[ToJson.toJson entry, ToJson.toJson id])
       modify fun i =>
         i.set indexState (Lean.Json.arr #[.arr entries', see]) (by clear entries'; grind)
@@ -157,7 +157,7 @@ def index.descr : InlineDescr where
     let _ ← Verso.Genre.Manual.externalTag id path ("--index-" ++ Index.sortingKey (.concat contents))
     match FromJson.fromJson? data with
     | .error err =>
-      logError err
+      reportError err
       return none
     | .ok (entry : Index.Entry) =>
       Index.addEntry id entry
@@ -189,12 +189,12 @@ def see.descr : InlineDescr where
   traverse _id data _contents := do
     match FromJson.fromJson? data with
     | .error err =>
-      logError err
+      reportError err
       return none
     | .ok (see : Index.See) =>
       let ist : Option (Except String Index) := (← get).get? indexState
       match ist with
-      | some (.error err) => logError err; return none
+      | some (.error err) => reportError err; return none
       | some (.ok v) => modify (·.set indexState {v with see := v.see.binInsert (· < ·) see})
       | none => modify (·.set indexState {entries := {}, see := #[see] : Index})
       pure none
@@ -225,7 +225,8 @@ structure RenderedEntry where
 deriving ToJson
 
 open Verso.Output Html in
-def RenderedEntry.toHtml [Monad m] (inlineHtml : Doc.Inline Manual → Doc.Html.HtmlT Manual m Html) (entry : RenderedEntry) : Doc.Html.HtmlT Manual m Html := do
+def RenderedEntry.toHtml [Monad m] [MonadLiftT IO m] [MonadBuildLog (Doc.Html.HtmlT Manual m)]
+    (inlineHtml : Doc.Inline Manual → Doc.Html.HtmlT Manual m Html) (entry : RenderedEntry) : Doc.Html.HtmlT Manual m Html := do
   let termPart ← oneTerm entry.id entry.term entry.links
   let subPart ←
     if entry.subterms.size != 0 || entry.see.size != 0 then
@@ -255,7 +256,7 @@ where
         let addr := dest.link
         pure {{<a href={{addr}}>{{termHtml}}</a>}}
       else
-        HtmlT.logError s!"No external tag for {id.toString}"
+        reportError s!"No external tag for {id.toString}"
         pure .empty
     | _ =>
       let links ← links.mapIdxM fun i id => do
@@ -263,7 +264,7 @@ where
           let addr := dest.link
           pure {{" " <a href={{addr}}> s!"({i})" </a>}}
         else
-          HtmlT.logError s!"No external tag for {id}"
+          reportError s!"No external tag for {id}"
           pure .empty
 
       pure {{ {{termHtml}} {{links}} }}
@@ -400,10 +401,10 @@ def theIndex.descr : BlockDescr where
       let ist : Option (Except String Index) := (← state).get? indexState
       match ist with
       | some (.error err) =>
-        Verso.Doc.Html.HtmlT.logError err
+        reportError err
         return .empty
       | none =>
-        Verso.Doc.Html.HtmlT.logError "Index data not found"
+        reportError "Index data not found"
         return .empty
       | some (.ok v) =>
         let r := v.render

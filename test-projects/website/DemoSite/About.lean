@@ -38,7 +38,7 @@ block_component gallery where
 block_component image where
   toHtml id data _goI goB contents := do
     let .arr #[.str alt, .str url] := data
-      | HtmlT.logError s!"Failed to deserialize {data}"
+      | reportError s!"Failed to deserialize {data}"
         pure .empty
     pure {{
       <div class="image-item" id={{id}}>
