@@ -5,6 +5,7 @@ Author: David Thrane Christiansen
 -/
 import Tests.Basic
 import Tests.Color
+import Tests.ColorMath
 import Tests.Elab
 import Tests.GenericCode
 import Tests.Golden

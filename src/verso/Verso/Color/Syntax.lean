@@ -17,13 +17,16 @@ meta import Lean.Elab.Term
 public meta import Verso.Color.Basic
 public meta import Verso.Color.Widget
 
+set_option linter.missingDocs true
+set_option doc.verso true
+
 namespace Verso
 
 public section
 
 open Lean Parser PrettyPrinter
 
-/-- The syntax node kind produced by the `colorHex` parser. -/
+/-- The syntax node kind for the hexadecimal body of a `color%` literal. -/
 meta def colorHexKind : SyntaxNodeKind := `Verso.colorHex
 
 private meta def isHexDigit (c : Char) : Bool :=
@@ -55,14 +58,16 @@ meta def colorHex : Parser :=
     info := mkAtomicInfo "colorHex"
   }
 
+/-- Parenthesizer for {name}`colorHex`, which prints as a single token. -/
 @[combinator_parenthesizer colorHex]
 meta def colorHex.parenthesizer : Parenthesizer := Parenthesizer.visitToken
+/-- Formatter for {name}`colorHex`, which prints as a single token. -/
 @[combinator_formatter colorHex]
 meta def colorHex.formatter : Formatter := Formatter.visitAtom colorHexKind
 
 meta initialize register_parser_alias colorHex
 
-/-- The hex digits of a `colorHex` syntax, without the leading `#`. -/
+/-- The hex digits of a {name}`colorHex` syntax, without the leading `#`. -/
 private meta def asHexString (stx : TSyntax colorHexKind) : String :=
   let val := (stx.raw.ifNode (·.getArg 0) (fun _ => stx.raw)).getAtomVal
   match val.toList with
@@ -71,12 +76,14 @@ private meta def asHexString (stx : TSyntax colorHexKind) : String :=
 
 /--
 A color literal: `color%#rgb`, `color%#rrggbb`, or `color%#rrggbbaa` (case-insensitive hex, no space
-before the `#`). It is an ordinary term, usable anywhere a `Color` is expected, including in
-structure-field defaults.
+before the `#`). It is an ordinary term, usable anywhere a {name (full := Verso.Color)}`Color` is
+expected, including in structure-field defaults.
 -/
 syntax (name := colorLit) "color%" noWs colorHex : term
 
 open Elab Term in
+/-- Elaborates a {lit}`color%` literal to a {name (full := Verso.Color)}`Color` and attaches the
+preview widget. -/
 @[term_elab colorLit]
 meta def elabColorLit : TermElab := fun stx expectedType? => do
   let hexStx := stx.getArg 1

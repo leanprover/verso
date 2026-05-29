@@ -7,6 +7,7 @@ module
 
 public meta import Lean.Widget.UserWidget
 public meta import Verso.Color.Basic
+public meta import Verso.Color.Math
 
 set_option linter.missingDocs true
 set_option doc.verso true
@@ -28,7 +29,13 @@ meta def colorWidget : Lean.Widget.Module where
   javascript := include_str "color-swatch.js"
 
 /--
-Attaches the color-preview widget to {name}`stx`, rendering {name}`color` as CSS.
+Attaches the color-preview widget to {name}`stx`. The widget shows {name}`color` together with how
+it appears under each of the three dichromacies, all rendered to CSS in Lean.
 -/
 meta def saveColorWidget (color : Color) (stx : Syntax) : CoreM Unit :=
-  savePanelWidgetInfo colorWidget.javascriptHash (pure (Json.mkObj [("css", .str color.css)])) stx
+  let props := Json.mkObj [
+    ("css", .str color.css),
+    ("protanopia", .str (Color.dichromacy .protanopia color).css),
+    ("deuteranopia", .str (Color.dichromacy .deuteranopia color).css),
+    ("tritanopia", .str (Color.dichromacy .tritanopia color).css)]
+  savePanelWidgetInfo colorWidget.javascriptHash (pure props) stx

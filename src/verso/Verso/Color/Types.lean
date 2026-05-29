@@ -5,6 +5,9 @@ Author: David Thrane Christiansen
 -/
 module
 
+set_option linter.missingDocs true
+set_option doc.verso true
+
 namespace Verso
 
 -- This is an inductive with a single `rgba` constructor rather than a structure so that other color

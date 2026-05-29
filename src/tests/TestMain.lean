@@ -149,6 +149,12 @@ def testSerialization (_ : Config) : IO Unit := do
   if fails > 0 then
     throw <| IO.userError s!"{fails} serialization tests failed"
 
+def testColorMath (_ : Config) : IO Unit := do
+  IO.println "Running color math tests..."
+  let fails ← runColorMathTests
+  if fails > 0 then
+    throw <| IO.userError s!"{fails} color math tests failed"
+
 def testSearchJs (_ : Config) : IO Unit := do
   IO.println "Running search JS wire-format tests..."
   let fails ← Verso.Tests.SearchJs.runSearchJsTests
@@ -383,6 +389,7 @@ open Verso.Integration in
 def tests := [
   testBuildLog,
   testColor,
+  testColorMath,
   testSerialization,
   testSearchJs,
   testBlog,
