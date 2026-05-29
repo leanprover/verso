@@ -185,7 +185,7 @@ block_extension Block.exampleLeanFile (filename : String) where
   open Verso.Output.TeX in
   some <| fun _ goB _ data blocks => do
     let .str filename := data
-      | Verso.Doc.TeX.logError "Failed to deserialize filename from {data.compress} (expected a string)"
+      | reportError "Failed to deserialize filename from {data.compress} (expected a string)"
         return .empty
     let descr := \TeX{\texttt{\Lean{"File: " ++ filename} } }
     pure <| .seq #[.raw "\\begin{FileVerbatim}[label={", descr, .raw "}]\n",
@@ -195,7 +195,7 @@ block_extension Block.exampleLeanFile (filename : String) where
   toHtml := open Verso.Output Html in
     some <| fun _ goB _ data blocks => do
       let .str filename := data
-        | HtmlT.logError "Failed to deserialize filename from {data.compress} (expected a string)"
+        | reportError "Failed to deserialize filename from {data.compress} (expected a string)"
           return .empty
       let descr := {{<code>{{filename}}</code>}}
       return exampleFileHtmlWrapper descr (← blocks.mapM goB)
@@ -237,14 +237,14 @@ def Block.exampleFile.descr : BlockDescr := withHighlighting {
     some <| fun _ _ _ data blocks => do
       match FromJson.fromJson? (α := FileType) data with
       | .error err =>
-        HtmlT.logError <| "Couldn't deserialize file metadata while rendering HTML: " ++ err
+        reportError <| "Couldn't deserialize file metadata while rendering HTML: " ++ err
         pure .empty
       | .ok type =>
         let str ←
           match blocks with
           | #[.code s] => pure s
           | other =>
-            HtmlT.logError <| s!"Expected a single code block in an example file, but got {other.size} blocks"
+            reportError <| s!"Expected a single code block in an example file, but got {other.size} blocks"
             return .empty
         let descr : Html :=
           match type with

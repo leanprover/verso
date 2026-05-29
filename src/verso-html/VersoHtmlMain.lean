@@ -10,6 +10,7 @@ open Lean
 
 open Verso.Output.Html
 open Verso.Code
+open Verso (withLogger)
 
 open VersoLiterate
 open VersoLiterateCode
@@ -69,12 +70,14 @@ def emitMod (root : Dir) (outDir: System.FilePath) (mod : LitMod) : EmitM Unit :
         {{<li><a href={{(components.map toString |> "/".intercalate) ++ "/" ++ toString c.1}}>{{mod.name ++ c.1 |> toString}}</a></li>}}
     else #[]
 
-  let ctx := { (← read) with
-               options := {logError}
-               traverseContext := {currentModule := mod.name}
-               codeOptions := {} }
+  let base ← read
+  let ctx := { base with
+    options := {}
+    traverseContext := { currentModule := mod.name }
+    codeOptions := {}
+  }
 
-  let (results, st) ← mod.contents.mapIdxM (renderCode) |>.run ctx (← get).hlState
+  let (results, st) ← mod.contents.mapIdxM renderCode |>.run ctx (← get).hlState
   -- Discard the accumulated headers because there's no local ToC here
   let body : Html := .seq (results.map (·.1))
 
@@ -139,33 +142,27 @@ def main (args : List String) : IO UInt32 := do
     match getConfig args with
     | .error e => throw <| .userError e
     | .ok v => pure v
-  let errorCount ← IO.mkRef 0
-  IO.FS.createDirAll config.outputDir
-  IO.FS.writeFile (config.outputDir / "popper.js") Verso.Code.Highlighted.WebAssets.popper
-  IO.FS.writeFile (config.outputDir / "tippy.js") Verso.Code.Highlighted.WebAssets.tippy
-  IO.FS.writeFile (config.outputDir / "tippy-border.css") Verso.Code.Highlighted.WebAssets.tippy.border.css
-  IO.FS.writeFile (config.outputDir / "code.css") code.css
-  emitSearchBox (config.outputDir / "-verso-search") (searchPagePath := some "search/")
-  let dir ← loadDir config.inputDir
-  let dir := dir.sort
-  let (dir, traverseState) ← traverse dir
-  let ctx := {
-    logError msg := errorCount.modify (· + 1) *> IO.eprintln msg
-    definitionIds := traverseState.definitionIds
-    linkTargets := traverseState.linkTargets
-    moduleIds := traverseState.moduleIds
-    traverseState
-  }
-  let ((), st) ← emitDir config.outputDir dir |>.run ctx |>.run {}
-  emitIndex {} traverseState dir (config.outputDir / "-verso-search") ctx.logError
-  emitSearchResultsPage config.outputDir
-  let domainData : Verso.NameMap Verso.Multi.Domain := ({} : Verso.NameMap _)
-    |>.insert constDomainName traverseState.constantDefDomain
-    |>.insert moduleDomainName traverseState.moduleDomain
-  IO.FS.writeFile (config.outputDir / "xref.json") <| Json.compress <| Verso.Multi.xrefJson domainData traverseState.allLinks
-  IO.FS.writeFile (config.outputDir / "-verso-docs.json") st.hlState.dedup.docJson.compress
-  let count ← errorCount.get
-  if count > 0 then
-    IO.eprintln s!"{count} errors occurred"
-    return 1
-  else return 0
+  withLogger fun logger => do
+    IO.FS.createDirAll config.outputDir
+    IO.FS.writeFile (config.outputDir / "popper.js") Verso.Code.Highlighted.WebAssets.popper
+    IO.FS.writeFile (config.outputDir / "tippy.js") Verso.Code.Highlighted.WebAssets.tippy
+    IO.FS.writeFile (config.outputDir / "tippy-border.css") Verso.Code.Highlighted.WebAssets.tippy.border.css
+    IO.FS.writeFile (config.outputDir / "code.css") code.css
+    emitSearchBox (config.outputDir / "-verso-search") (searchPagePath := some "search/")
+    let dir ← loadDir config.inputDir
+    let dir := dir.sort
+    let (dir, traverseState) ← traverse dir
+    let ctx := {
+      definitionIds := traverseState.definitionIds
+      linkTargets := traverseState.linkTargets
+      moduleIds := traverseState.moduleIds
+      traverseState
+    }
+    let ((), st) ← emitDir config.outputDir dir |>.run ctx |>.run {} |>.run logger
+    emitIndex {} traverseState dir (config.outputDir / "-verso-search") logger
+    emitSearchResultsPage config.outputDir
+    let domainData : Verso.NameMap Verso.Multi.Domain := ({} : Verso.NameMap _)
+      |>.insert constDomainName traverseState.constantDefDomain
+      |>.insert moduleDomainName traverseState.moduleDomain
+    IO.FS.writeFile (config.outputDir / "xref.json") <| Json.compress <| Verso.Multi.xrefJson domainData traverseState.allLinks
+    IO.FS.writeFile (config.outputDir / "-verso-docs.json") st.hlState.dedup.docJson.compress

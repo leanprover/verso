@@ -525,13 +525,13 @@ def docstringSection.descr : BlockDescr where
   toTeX := some fun _goI goB _id info contents =>
     open Verso.Output.TeX in do
     let .ok header := FromJson.fromJson? (α := String) info
-      | Verso.Doc.TeX.logError "Failed to deserialize docstring section data while generating TeX"; return .empty
+      | reportError "Failed to deserialize docstring section data while generating TeX"; return .empty
     pure \TeX{\par\noindent\textbf{\Lean{header}}\par " " \Lean{.seq (← contents.mapM goB)}}
   toHtml := some fun _goI goB _id info contents =>
     open Verso.Doc.Html HtmlT in
     open Verso.Output Html in do
       let .ok header := FromJson.fromJson? (α := String) info
-        | do Verso.Doc.Html.HtmlT.logError "Failed to deserialize docstring section data while generating HTML"; pure .empty
+        | do reportError "Failed to deserialize docstring section data while generating HTML"; pure .empty
       return {{
         <h1>{{header}}</h1>
         {{← contents.mapM goB}}
@@ -543,7 +543,7 @@ def internalSignature.descr : BlockDescr where
   toTeX := some fun _goI goB _id info contents =>
     open Verso.Output.TeX in do
     let .ok (name, signature) := FromJson.fromJson? (α := Highlighted × Option Highlighted) info
-      | Verso.Doc.TeX.logError "Failed to deserialize docstring section data while generating TeX"; return .empty
+      | reportError "Failed to deserialize docstring section data while generating TeX"; return .empty
     let signatureTeX ← do
       if let some sig := signature then
         pure \TeX{ " : " \Lean{ (← sig.toTeX) } }
@@ -553,7 +553,7 @@ def internalSignature.descr : BlockDescr where
     open Verso.Doc.Html HtmlT in
     open Verso.Output Html in do
       let .ok (name, signature) := FromJson.fromJson? (α := Highlighted × Option Highlighted) info
-        | do Verso.Doc.Html.HtmlT.logError "Failed to deserialize docstring section data while generating HTML"; pure .empty
+        | do reportError "Failed to deserialize docstring section data while generating HTML"; pure .empty
       return {{
         <section class="subdocs">
           <pre class="name-and-type hl lean">
@@ -576,13 +576,13 @@ def inheritance.descr : BlockDescr where
   toTeX := some fun _goI goB _id info contents =>
     open Verso.Output.TeX in do
     let .ok (name, _parents) := FromJson.fromJson? (α := Name × Array Block.Docstring.ParentInfo) info
-      | Verso.Doc.TeX.logError "Failed to deserialize docstring section data while generating TeX"; return .empty
+      | reportError "Failed to deserialize docstring section data while generating TeX"; return .empty
     return \TeX{\Lean{s!"{name}"} \Lean{.seq (← contents.mapM goB)}}
   toHtml := some fun _goI _goB _id info _contents =>
     open Verso.Doc.Html HtmlT in
     open Verso.Output Html in do
       let .ok (name, parents) := FromJson.fromJson? (α := Name × Array Block.Docstring.ParentInfo) info
-        | do Verso.Doc.Html.HtmlT.logError "Failed to deserialize docstring structure inheritance data while generating HTML"; pure .empty
+        | do reportError "Failed to deserialize docstring structure inheritance data while generating HTML"; pure .empty
       let parentRow ← do
         if parents.isEmpty then pure .empty
         else pure {{
@@ -605,7 +605,7 @@ def fieldSignature.descr : BlockDescr where
   toTeX := some fun _goI goB _id info contents =>
     open Verso.Output.TeX in do
     let .ok (visibility, name, signature, inheritedFrom, parents) := FromJson.fromJson? (α := Visibility × Highlighted × Highlighted × Option Nat × Array Highlighted) info
-      | Verso.Doc.TeX.logError "Failed to deserialize docstring section data while generating TeX"; return .empty
+      | reportError "Failed to deserialize docstring section data while generating TeX"; return .empty
     let visibility : Verso.Output.TeX :=
       match visibility with
       | .public => .empty
@@ -621,7 +621,7 @@ def fieldSignature.descr : BlockDescr where
     open Verso.Doc.Html HtmlT in
     open Verso.Output Html in do
       let .ok (visibility, name, signature, inheritedFrom, parents) := FromJson.fromJson? (α := Visibility × Highlighted × Highlighted × Option Nat × Array Highlighted) info
-        | do Verso.Doc.Html.HtmlT.logError "Failed to deserialize docstring section data while generating HTML"; pure .empty
+        | do reportError "Failed to deserialize docstring section data while generating HTML"; pure .empty
       let inheritedAttr : Array (String × String) :=
         inheritedFrom.map (fun i => #[("data-inherited-from", toString i)]) |>.getD #[]
       let visibility : Html :=
@@ -657,7 +657,7 @@ def constructorSignature.descr : BlockDescr where
   toTeX := some fun _goI goB _id info contents =>
     open Verso.Output.TeX in do
       let .ok signature := FromJson.fromJson? (α := Highlighted) info
-        | Verso.Doc.TeX.logError "Failed to deserialize docstring section data while generating TeX"; pure .empty
+        | reportError "Failed to deserialize docstring section data while generating TeX"; pure .empty
       let signat ← signature.toTeX
       pure \TeX{ \Lean{.raw "\\begin{list}{$|$}{\\leftmargin=1em\\topsep=0pt \\partopsep=0pt}\\item "}
                  \Lean{signat}
@@ -669,7 +669,7 @@ def constructorSignature.descr : BlockDescr where
     open Verso.Doc.Html HtmlT in
     open Verso.Output Html in do
       let .ok signature := FromJson.fromJson? (α := Highlighted) info
-        | do Verso.Doc.Html.HtmlT.logError "Failed to deserialize docstring section data while generating HTML"; pure .empty
+        | do reportError "Failed to deserialize docstring section data while generating HTML"; pure .empty
 
       return {{
         <div class="constructor">
@@ -737,7 +737,7 @@ def docstring.descr : BlockDescr := withHighlighting {
   traverse id info _ := do
     let .ok (name, declType, _signature, _customLabel, altNames) :=
       FromJson.fromJson? (α := Name × Block.Docstring.DeclType × Signature × Option String × Array Name) info
-      | do logError "Failed to deserialize docstring data"; pure none
+      | do reportError "Failed to deserialize docstring data"; pure none
 
     match declType with
     | .structure true ctor? fields fieldInfos _parents _ancestors =>
@@ -763,7 +763,7 @@ def docstring.descr : BlockDescr := withHighlighting {
 
     -- Save a backreference
     match (← get).get? `Verso.Genre.Manual.docstring with
-    | some (.error e) => logError e
+    | some (.error e) => reportError e
     | some (.ok (v : Json)) =>
       let found : HashSet InternalId := (v.getObjVal? name.toString).bind fromJson? |>.toOption |>.getD {}
       modify (·.set `Verso.Genre.Manual.docstring <|  v.setObjVal! name.toString (toJson (found.insert id)))
@@ -789,7 +789,7 @@ def docstring.descr : BlockDescr := withHighlighting {
     open Verso.Doc.Html HtmlT in
     open Verso.Output Html in do
       let .ok (name, declType, signature, customLabel, _) := FromJson.fromJson? (α := Name × Block.Docstring.DeclType × Signature × Option String × Array Name) info
-        | do Verso.Doc.Html.HtmlT.logError "Failed to deserialize docstring data while generating HTML"; pure .empty
+        | do reportError "Failed to deserialize docstring data while generating HTML"; pure .empty
       let sig : Html ← signature.toHtml
 
       let xref ← state
@@ -798,7 +798,7 @@ def docstring.descr : BlockDescr := withHighlighting {
       let label := customLabel.getD declType.label
 
       if label == "" then
-        Doc.Html.HtmlT.logError s!"Missing label for '{name}': supply one with 'label := \"LABEL\"'"
+        reportError s!"Missing label for '{name}': supply one with 'label := \"LABEL\"'"
 
       return {{
         <div class="namedocs" {{idAttr}}>
@@ -820,11 +820,11 @@ def docstring.descr : BlockDescr := withHighlighting {
   toTeX := some <| fun _goI goB _id info contents =>
     open Verso.Output.TeX in do
       let .ok (name, declType, signature, customLabel, _) := FromJson.fromJson? (α := Name × Block.Docstring.DeclType × Signature × Option String × Array Name) info
-        | Verso.Doc.TeX.logError "Failed to deserialize docstring data while generating TeX"; return .empty
+        | reportError "Failed to deserialize docstring data while generating TeX"; return .empty
 
       let label := customLabel.getD declType.label
       if label == "" then
-        Verso.Doc.TeX.logError s!"Missing label for '{name}': supply one with 'label := \"LABEL\"'"
+        reportError s!"Missing label for '{name}': supply one with 'label := \"LABEL\"'"
       pure \TeX{\begin{docstringBox}{\Lean{label}} \Lean{← signature.toTeX} \tcblower " " \Lean{← contents.mapM goB} \end{docstringBox}}
 
   extraCss := [docstringStyle]
@@ -834,7 +834,7 @@ where
       (id : InternalId) (name : Name)
       (subterm : Option (Doc.Inline Manual))
       (showName : Option String := none) :
-      ReaderT TraverseContext (StateT TraverseState IO) Unit := do
+      ReaderT TraverseContext (StateT TraverseState (BuildLogT IO)) Unit := do
     let path ← (·.path) <$> read
     let _ ← Verso.Genre.Manual.externalTag id path name.toString
     Index.addEntry id {
@@ -866,7 +866,7 @@ def leanFromMarkdown.inlinedescr : InlineDescr := withHighlighting {
     some <| fun _ _ data _ => do
       match FromJson.fromJson? (α := Highlighted) data with
       | .error err =>
-        HtmlT.logError <| "Couldn't deserialize Lean code while rendering inline HTML: " ++ err
+        reportError <| "Couldn't deserialize Lean code while rendering inline HTML: " ++ err
         pure .empty
       | .ok (hl : Highlighted) =>
         hl.inlineHtml (g := Manual) "docstring-examples"
@@ -885,7 +885,7 @@ def leanFromMarkdown.blockdescr : BlockDescr := withHighlighting {
     some <| fun _ _ _ data _ => do
       match FromJson.fromJson? (α := Highlighted) data with
       | .error err =>
-        HtmlT.logError <| "Couldn't deserialize Lean code while rendering inline HTML: " ++ err
+        reportError <| "Couldn't deserialize Lean code while rendering inline HTML: " ++ err
         pure .empty
       | .ok (hl : Highlighted) =>
         hl.blockHtml (g := Manual) "docstring-examples"
@@ -1559,7 +1559,7 @@ def optionDocs.descr : BlockDescr := withHighlighting {
 
   traverse id info _ := do
     let .ok (name, _defaultValue) := FromJson.fromJson? (α := Name × Highlighted) info
-      | do logError "Failed to deserialize docstring data while traversing an option"; pure none
+      | do reportError "Failed to deserialize docstring data while traversing an option"; pure none
 
     let path ← (·.path) <$> read
     let _ ← Verso.Genre.Manual.externalTag id path name.toString
@@ -1574,7 +1574,7 @@ def optionDocs.descr : BlockDescr := withHighlighting {
     open Verso.Doc.Html in
     open Verso.Output Html in do
       let .ok (name, defaultValue) := FromJson.fromJson? (α := Name × Highlighted) info
-        | do Verso.Doc.Html.HtmlT.logError "Failed to deserialize docstring data while generating HTML for an option"; pure .empty
+        | do reportError "Failed to deserialize docstring data while generating HTML for an option"; pure .empty
       let x : Html := Html.text true <| Name.toString name
 
       let xref ← HtmlT.state
@@ -1730,7 +1730,7 @@ def tactic.descr : BlockDescr := withHighlighting {
 
   traverse id info _ := do
     let .ok (tactic, «show») := FromJson.fromJson? (α := TacticDoc × Option String) info
-      | do logError "Failed to deserialize docstring data while traversing a tactic"; pure none
+      | do reportError "Failed to deserialize docstring data while traversing a tactic"; pure none
     let path ← (·.path) <$> read
     let _ ← Verso.Genre.Manual.externalTag id path <| show.getD tactic.userName
     Index.addEntry id {term := Doc.Inline.code <| show.getD tactic.userName}
@@ -1745,7 +1745,7 @@ def tactic.descr : BlockDescr := withHighlighting {
     open Verso.Doc.Html in
     open Verso.Output Html in do
       let .ok (tactic, «show») := FromJson.fromJson? (α := TacticDoc × Option String) info
-        | do Verso.Doc.Html.HtmlT.logError "Failed to deserialize tactic data while generating HTML for a tactic"; pure .empty
+        | do reportError "Failed to deserialize tactic data while generating HTML for a tactic"; pure .empty
       let x : Highlighted := .token ⟨.keyword tactic.internalName none tactic.docString, show.getD tactic.userName⟩
 
       let xref ← HtmlT.state
@@ -1816,7 +1816,7 @@ def tacticInline.descr : InlineDescr := withHighlighting {
     some <| fun _ _ data _ => do
       match FromJson.fromJson? data with
       | .error err =>
-        HtmlT.logError <| "Couldn't deserialize Lean tactic code while rendering HTML: " ++ err
+        reportError <| "Couldn't deserialize Lean tactic code while rendering HTML: " ++ err
         pure .empty
       | .ok (hl : Highlighted) =>
         hl.inlineHtml (g := Manual) "examples"
@@ -1884,7 +1884,7 @@ def conv.descr : BlockDescr := withHighlighting {
 
   traverse id info _ := do
     let .ok (name, «show», _docs?) := FromJson.fromJson? (α := Name × String × Option String) info
-      | do logError "Failed to deserialize conv docstring data"; pure none
+      | do reportError "Failed to deserialize conv docstring data"; pure none
     let path ← (·.path) <$> read
     let _ ← Verso.Genre.Manual.externalTag id path <| name.toString
     Index.addEntry id {term := Doc.Inline.code <| «show»}
@@ -1897,7 +1897,7 @@ def conv.descr : BlockDescr := withHighlighting {
     open Verso.Doc.Html in
     open Verso.Output Html in do
       let .ok (name, «show», docs?) := FromJson.fromJson? (α := Name × String × Option String) info
-        | do Verso.Doc.Html.HtmlT.logError "Failed to deserialize conv tactic data"; pure .empty
+        | do reportError "Failed to deserialize conv tactic data"; pure .empty
       let x : Highlighted := .token ⟨.keyword (some name) none docs?, «show»⟩
 
       let xref ← HtmlT.state
@@ -1934,7 +1934,7 @@ inline_extension Inline.conv (hl : Highlighted) via withHighlighting where
     some <| fun _ _ data _ => do
       match FromJson.fromJson? data with
       | .error err =>
-        HtmlT.logError <| "Couldn't deserialize conv tactic code while rendering HTML: " ++ err
+        reportError <| "Couldn't deserialize conv tactic code while rendering HTML: " ++ err
         pure .empty
       | .ok (hl : Highlighted) =>
         hl.inlineHtml (g := Manual) "examples"

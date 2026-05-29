@@ -34,16 +34,16 @@ block_extension Block.lean (hls : Highlighted) (cfg : CodeConfig) via withHighli
     Json.arr #[ToJson.toJson cfg, ToJson.toJson hls, ToJson.toJson defined]
   traverse id data _ := do
     let .arr #[cfgJson, _hlJson, definesJson] := data
-      | logError s!"Expected array for Lean block, got {data.compress}"; return none
+      | reportError s!"Expected array for Lean block, got {data.compress}"; return none
     match FromJson.fromJson? cfgJson with
     | .error err =>
-      logError <| "Failed to deserialize code config during traversal:" ++ err
+      reportError <| "Failed to deserialize code config during traversal:" ++ err
       return none
     | .ok (cfg : CodeConfig) =>
       if cfg.defSite.isEqSome false then return none
       match FromJson.fromJson? definesJson with
       | .error err =>
-        logError <| "Failed to deserialize code config during traversal:" ++ err
+        reportError <| "Failed to deserialize code config during traversal:" ++ err
         return none
       | .ok (defines : Array (Name × String)) =>
         saveExampleDefs id defines
@@ -70,16 +70,16 @@ block_extension Block.lean (hls : Highlighted) (cfg : CodeConfig) via withHighli
     open Verso.Output.Html in
     some <| fun _ _ _ data _ => do
       let .arr #[cfgJson, hlJson, _definesJson] := data
-        | HtmlT.logError "Expected four-element JSON for Lean code"
+        | reportError "Expected four-element JSON for Lean code"
           pure .empty
       match FromJson.fromJson? hlJson with
       | .error err =>
-        HtmlT.logError <| "Couldn't deserialize Lean code block while rendering HTML: " ++ err
+        reportError <| "Couldn't deserialize Lean code block while rendering HTML: " ++ err
         pure .empty
       | .ok (hl : Highlighted) =>
         match FromJson.fromJson? cfgJson with
         | .error err =>
-          HtmlT.logError <| "Couldn't deserialize Lean code block config while rendering HTML: " ++ err
+          reportError <| "Couldn't deserialize Lean code block config while rendering HTML: " ++ err
           pure .empty
         | .ok (cfg : CodeConfig) =>
           let i := hl.indentation
@@ -93,16 +93,16 @@ inline_extension Inline.lean (hls : Highlighted) (cfg : CodeConfig) via withHigh
     Json.arr #[ToJson.toJson cfg, ToJson.toJson hls, ToJson.toJson defined]
   traverse id data _ := do
     let .arr #[cfgJson, _hlJson, definesJson] := data
-      | logError s!"Expected array for Lean block, got {data.compress}"; return none
+      | reportError s!"Expected array for Lean block, got {data.compress}"; return none
     match FromJson.fromJson? cfgJson with
     | .error err =>
-      logError <| "Failed to deserialize code config during traversal:" ++ err
+      reportError <| "Failed to deserialize code config during traversal:" ++ err
       return none
     | .ok (cfg : CodeConfig) =>
       unless cfg.defSite.isEqSome true do return none
       match FromJson.fromJson? definesJson with
       | .error err =>
-        logError <| "Failed to deserialize code config during traversal:" ++ err
+        reportError <| "Failed to deserialize code config during traversal:" ++ err
         return none
       | .ok (defines : Array (Name × String)) =>
         saveExampleDefs id defines
@@ -129,16 +129,16 @@ inline_extension Inline.lean (hls : Highlighted) (cfg : CodeConfig) via withHigh
     open Verso.Output.Html in
     some <| fun _ _ data _ => do
       let .arr #[cfgJson, hlJson, _] := data
-        | HtmlT.logError "Expected four-element JSON for Lean code"
+        | reportError "Expected four-element JSON for Lean code"
           pure .empty
       match FromJson.fromJson? hlJson with
       | .error err =>
-        HtmlT.logError <| "Couldn't deserialize Lean code block while rendering HTML: " ++ err
+        reportError <| "Couldn't deserialize Lean code block while rendering HTML: " ++ err
         pure .empty
       | .ok (hl : Highlighted) =>
         match FromJson.fromJson? cfgJson with
         | .error err =>
-          HtmlT.logError <| "Couldn't deserialize Lean code block config while rendering HTML: " ++ err
+          reportError <| "Couldn't deserialize Lean code block config while rendering HTML: " ++ err
           pure .empty
         | .ok (cfg : CodeConfig) =>
           let i := hl.indentation
@@ -160,7 +160,7 @@ block_extension Block.leanOutput
     some <| fun _ _ _ data _ => do
       match FromJson.fromJson? data with
       | .error err =>
-        TeX.logError <| "Couldn't deserialize Lean code while rendering HTML: " ++ err
+        reportError <| "Couldn't deserialize Lean code while rendering HTML: " ++ err
         pure .empty
       | .ok ((msg, _summarize, _expandTraces) : Highlighted.Message × Bool × List Name) =>
         msg.toTeX
@@ -169,7 +169,7 @@ block_extension Block.leanOutput
     some <| fun _ _ _ data _ => do
       match FromJson.fromJson? data with
       | .error err =>
-        HtmlT.logError <| "Couldn't deserialize Lean code while rendering HTML: " ++ err
+        reportError <| "Couldn't deserialize Lean code while rendering HTML: " ++ err
         pure .empty
       | .ok ((msg, summarize, expandTraces) : Highlighted.Message × Bool × List Name) =>
         msg.blockHtml summarize expandTraces (g := Manual)
@@ -186,7 +186,7 @@ inline_extension Inline.leanOutput
     some <| fun _ _ data _ => do
       match FromJson.fromJson? data with
       | .error err =>
-        TeX.logError <| "Couldn't deserialize Lean code while rendering TeX: " ++ err
+        reportError <| "Couldn't deserialize Lean code while rendering TeX: " ++ err
         pure .empty
       | .ok ((txt, plain, expandTraces) : Highlighted.Message × Bool × List Name) =>
         if plain then
@@ -198,7 +198,7 @@ inline_extension Inline.leanOutput
     some <| fun _ _ data _ => do
       match FromJson.fromJson? data with
       | .error err =>
-        HtmlT.logError <| "Couldn't deserialize Lean code while rendering HTML: " ++ err
+        reportError <| "Couldn't deserialize Lean code while rendering HTML: " ++ err
         pure .empty
       | .ok ((txt, plain, expandTraces) : Highlighted.Message × Bool × List Name) =>
         if plain then pure {{<code>{{txt.toString}}</code>}}

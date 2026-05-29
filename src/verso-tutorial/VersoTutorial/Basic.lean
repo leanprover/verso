@@ -241,8 +241,8 @@ open Manual in
 Performs the traversal pass for tutorials until a fixed point is reached or `config.maxTraversals`
 passes have been run.
 -/
-def traverse (logError : String → IO Unit) (tutorials : Tutorials) (config : Manual.Config) : ReaderT ExtensionImpls IO (Tutorials × Manual.TraverseState) := do
-  let topCtxt : Manual.TraverseContext := {logError, draft := config.draft}
+def traverse (logger : Verso.Logger IO) (tutorials : Tutorials) (config : Manual.Config) : ReaderT ExtensionImpls IO (Tutorials × Manual.TraverseState) := do
+  let topCtxt : Manual.TraverseContext := { draft := config.draft }
   let mut state : Manual.TraverseState := .ofConfig ({ config with features := {} }).toHtmlConfig
   let mut tutorials := tutorials
   if config.verbose then
@@ -262,7 +262,7 @@ def traverse (logError : String → IO Unit) (tutorials : Tutorials) (config : M
     if config.verbose then
       IO.println s!"Traversal pass {i}"
     let startTime ← IO.monoMsNow
-    let (tutorials', state') ← tutorials.traverse1 (Genre.traverse Tutorial) |>.run extensionImpls topCtxt state
+    let (tutorials', state') ← tutorials.traverse1 (Genre.traverse Tutorial) |>.run extensionImpls topCtxt state logger
 
     let endTime ← IO.monoMsNow
     if config.verbose then

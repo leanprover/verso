@@ -42,10 +42,10 @@ inline_extension Inline.lean (hls : Highlighted) via withHighlighting where
 
   traverse id data _ := do
     let .arr #[_, defined] := data
-      | logError "Expected two-element JSON for Lean code" *> pure none
+      | reportError "Expected two-element JSON for Lean code" *> pure none
     match FromJson.fromJson? defined with
     | .error err =>
-      logError <| "Couldn't deserialize Lean code while traversing inline example: " ++ err
+      reportError <| "Couldn't deserialize Lean code while traversing inline example: " ++ err
       pure none
     | .ok (defs : Array (Name × String)) =>
       saveExampleDefs id defs
@@ -53,21 +53,21 @@ inline_extension Inline.lean (hls : Highlighted) via withHighlighting where
   toTeX :=
     some <| fun _ _ data _ => do
       let .arr #[hlJson, _] := data
-        | TeX.logError "Expected two-element JSON for Lean code" *> pure .empty
+        | reportError "Expected two-element JSON for Lean code" *> pure .empty
       match FromJson.fromJson? hlJson with
       | .error err =>
-        TeX.logError <| "Couldn't deserialize Lean code while rendering inline HTML: " ++ err
+        reportError <| "Couldn't deserialize Lean code while rendering inline HTML: " ++ err
         pure .empty
       | .ok (hl : Highlighted) =>
-        hl.toTeX (g := Manual) (m := ReaderT ExtensionImpls IO)
+        hl.toTeX (g := Manual) (m := ReaderT ExtensionImpls (BuildLogT IO))
   toHtml :=
     open Verso.Output.Html in
     some <| fun _ _ data _ => do
       let .arr #[hlJson, _] := data
-        | HtmlT.logError "Expected two-element JSON for Lean code" *> pure .empty
+        | reportError "Expected two-element JSON for Lean code" *> pure .empty
       match FromJson.fromJson? hlJson with
       | .error err =>
-        HtmlT.logError <| "Couldn't deserialize Lean code while rendering inline HTML: " ++ err
+        reportError <| "Couldn't deserialize Lean code while rendering inline HTML: " ++ err
         pure .empty
       | .ok (hl : Highlighted) =>
         hl.inlineHtml (g := Manual) "examples"
@@ -626,7 +626,7 @@ block_extension Block.leanOutput via withHighlighting where
     some <| fun _ _ _ data _ => do
       match FromJson.fromJson? data with
       | .error err =>
-        TeX.logError <| "Couldn't deserialize Lean output while rendering TeX: " ++ err ++ "\n" ++ toString data
+        reportError <| "Couldn't deserialize Lean output while rendering TeX: " ++ err ++ "\n" ++ toString data
         pure .empty
       | .ok ((msg, _summarize, expandTraces) : Highlighted.Message × Bool × List Name) =>
         msg.toTeX (expandTraces := expandTraces) (g := Manual)
@@ -635,7 +635,7 @@ block_extension Block.leanOutput via withHighlighting where
     some <| fun _ _ _ data _ => do
       match FromJson.fromJson? data with
       | .error err =>
-        HtmlT.logError <| "Couldn't deserialize Lean output while rendering HTML: " ++ err ++ "\n" ++ toString data
+        reportError <| "Couldn't deserialize Lean output while rendering HTML: " ++ err ++ "\n" ++ toString data
         pure .empty
       | .ok ((msg, summarize, expandTraces) : Highlighted.Message × Bool × List Name) =>
         msg.blockHtml summarize (expandTraces := expandTraces) (g := Manual)
@@ -800,7 +800,7 @@ inline_extension Inline.name via withHighlighting where
     some <| fun _ _ data _ => do
       match FromJson.fromJson? data with
       | .error err =>
-        HtmlT.logError <| "Couldn't deserialize Lean code while rendering HTML: " ++ err
+        reportError <| "Couldn't deserialize Lean code while rendering HTML: " ++ err
         pure .empty
       | .ok (hl : Highlighted) =>
         hl.inlineHtml (g := Manual) "examples"

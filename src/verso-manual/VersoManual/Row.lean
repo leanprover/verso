@@ -22,7 +22,7 @@ block_extension Block.row (alignItems : String) where
     open Verso.Output.Html in
     some <| fun _ blockHtml _ data content => do
       let .str ai := data
-        | HtmlT.logError "Expected string JSON for row" *> pure .empty
+        | reportError "Expected string JSON for row" *> pure .empty
       let style := s!"display: flex; flex-wrap: wrap; align-items: {ai}; gap: 1em;"
       pure {{
         <div class="verso-row" style={{style}}>

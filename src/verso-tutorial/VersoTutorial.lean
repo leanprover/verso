@@ -162,22 +162,21 @@ open Verso.Genre.Blog.Template in
 structure EmitContext where
   components : Blog.Components
   config : Manual.Config
-  logError : String → IO Unit
   theme : Blog.Theme
   remoteContent : AllRemotes
 
 def EmitContext.toBlogContext (ctxt : EmitContext) : Blog.TraverseContext where
-  config := { logError := ctxt.logError }
+  config := {}
   components := ctxt.components
 
 abbrev EmitM :=
   ReaderT EmitContext <|
   ReaderT Manual.TraverseState <|
   ReaderT ExtensionImpls <|
-  StateRefT Blog.Component.State (StateRefT (Code.Hover.State Html) IO)
+  StateRefT Blog.Component.State (StateRefT (Code.Hover.State Html) (BuildLogT IO))
 
 def EmitM.run
-    (config : Manual.Config) (logError : String → IO Unit)
+    (config : Manual.Config) (logger : Verso.Logger IO)
     (state : Manual.TraverseState) (extensionImpls : ExtensionImpls)
     (componentState : Blog.Component.State)
     (hoverState : Code.Hover.State Html)
@@ -186,21 +185,16 @@ def EmitM.run
     (remoteContent : AllRemotes)
     (act : EmitM α) : IO (α × Blog.Component.State × Code.Hover.State Html) := do
   let ((v, st), st') ←
-    ReaderT.run act { config, logError, components, theme, remoteContent }
+    ReaderT.run act { config, components, theme, remoteContent }
       |>.run state
       |>.run extensionImpls
       |>.run componentState
       |>.run hoverState
+      |>.run logger
   return (v, st, st')
 
 def EmitM.config : EmitM Manual.Config := do
   return (← readThe EmitContext).config
-
-def EmitM.logError : EmitM ((message : String) → IO Unit) := do
-  return (← readThe EmitContext).logError
-
-def EmitM.htmlOptions [MonadLiftT IO m] : EmitM (Html.Options m) := do
-  return { logError := ((← EmitM.logError) ·) }
 
 def EmitM.writeFile (path : System.FilePath) (content : String) : EmitM Unit := do
   if (← readThe EmitContext).config.verbose then
@@ -268,8 +262,8 @@ partial def inlineToPage (i : Inline Tutorial) : EmitM (Inline Blog.Page) := do
   | .other .. =>
     let hoverSt ← getThe (Code.Hover.State Html)
     let (html, hoverSt) ←
-      Tutorial.toHtml (m := ReaderT AllRemotes (ReaderT ExtensionImpls IO)) (← EmitM.htmlOptions)
-        { logError := (← read).logError }
+      Tutorial.toHtml (m := ReaderT AllRemotes (ReaderT ExtensionImpls (BuildLogT IO))) {}
+        {}
         (← readThe Manual.TraverseState)
         {} {} {} i
         |>.run hoverSt
@@ -290,8 +284,8 @@ partial def blockToPage (b : Block Tutorial) : EmitM (Block Blog.Page) := do
   | .other .. =>
     let hoverSt ← getThe (Code.Hover.State Html)
     let (html, hoverSt) ←
-      Tutorial.toHtml (m := ReaderT AllRemotes (ReaderT ExtensionImpls IO)) (← EmitM.htmlOptions)
-        { logError := (← read).logError }
+      Tutorial.toHtml (m := ReaderT AllRemotes (ReaderT ExtensionImpls (BuildLogT IO))) {}
+        {}
         (← readThe Manual.TraverseState)
         {} {} {} b
         |>.run hoverSt
@@ -478,7 +472,7 @@ def toSite (tuts : Tutorials) : EmitM Blog.Site := do
   return .page `tutorials { tuts.content with subParts := topicParts } contentPages
 
 def EmitM.blogConfig : EmitM Blog.Config := do
-  return { logError := (← read).logError, verbose := (← EmitM.config).verbose }
+  return { verbose := (← EmitM.config).verbose }
 
 def liftGenerate (act : Blog.GenerateM α) (site : Blog.Site) (state : Blog.TraverseState) (extraParams : Path → Blog.Template.Params:= fun _ => {}) : EmitM α := do
   let st ← getThe (Code.Hover.State _)
@@ -656,10 +650,8 @@ def tutorialsMain (tutorials : Tutorials) (args : List String)
   ReaderT.run go extensionImpls
 
 where
-  go : ReaderT ExtensionImpls IO UInt32 := do
+  go : ReaderT ExtensionImpls IO UInt32 := withLogger fun logger => do
     let config ← opts config args
-    let errorCount : IO.Ref Nat ← IO.mkRef 0
-    let logError msg := do errorCount.modify (· + 1); IO.eprintln msg
 
     IO.FS.createDirAll config.destination
 
@@ -667,35 +659,32 @@ where
     let (tutorials, state) ←
       match config.emit with
       | .immediately =>
-        let (tutorials, state) ← traverse logError tutorials config.toConfig
+        let (tutorials, state) ← traverse logger tutorials config.toConfig
         let json := xrefJson state.domains state.externalTags
 
         IO.FS.writeFile (config.destination / "xref.json") <| toString json
         pure (tutorials, state)
       | .delay f =>
-        let (tutorials, state) ← traverse logError tutorials config.toConfig
+        let (tutorials, state) ← traverse logger tutorials config.toConfig
         SavedState.mk tutorials state |>.save f
         let json := xrefJson state.domains state.externalTags
         IO.FS.writeFile (config.destination / "xref.json") <| toString json
-        return 0
+        -- No HTML is emitted in this mode; returning early here causes the exit code to be derived
+        -- from the surrounding `withLogger` based on whether errors were logged.
+        return
       | .resumeFrom f =>
           try
             let ⟨tutorials, state⟩ ← SavedState.load f
             pure (tutorials, state)
           catch
-            | .userError e => logError e; return (1 : UInt32)
+            | .userError e => logger.reportError e; return
             | other => throw other
 
     if config.verbose then IO.println "Updating remote data"
     let remoteContent ← updateRemotes false config.remoteConfigFile (if config.verbose then IO.println else fun _ => pure ())
 
     -- Emit HTML
-    let ((), _) ← (emit tutorials navSite).run config.toConfig logError state extensionImpls {} {} components theme remoteContent
-
-    match ← errorCount.get with
-    | 0 => return 0
-    | 1 => IO.eprintln "An error was encountered!"; return 1
-    | n => IO.eprintln s!"{n} errors were encountered!"; return 1
+    let ((), _) ← (emit tutorials navSite).run config.toConfig logger state extensionImpls {} {} components theme remoteContent
 
   opts (cfg : Config) : List String → ReaderT ExtensionImpls IO Config
     | ("--output"::dir::more) => opts { cfg with destination := dir } more

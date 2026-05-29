@@ -85,7 +85,7 @@ block_extension Block.diagram
     open Verso.Output.Html in
     some <| fun _ _ _ data _ => do
       let .arr #[.str svgStr, .str css, .str _tex, .bool isInline] := data
-        | HtmlT.logError "Expected four-element JSON for diagram" *> pure .empty
+        | reportError "Expected four-element JSON for diagram" *> pure .empty
       let style :=
         ";".intercalate <|
           s!"width: {css}" ::
@@ -99,7 +99,7 @@ block_extension Block.diagram
   toTeX :=
     some <| fun _ _ _ data _ => do
       let .arr #[.str svgStr, .str _css, .str tex, .bool isInline] := data
-        | TeX.logError "Expected four-element JSON for diagram" *> pure .empty
+        | reportError "Expected four-element JSON for diagram" *> pure .empty
       let filename ← modifyGet fun s =>
         let fn := extraFileName s.extraFiles s!"diagram-{svgStr.hash}" "svg" svgStr
         (fn, { s with extraFiles := s.extraFiles.insert fn svgStr })
