@@ -8,6 +8,7 @@ import Tests.Color
 import Tests.ColorAccessibility
 import Tests.ColorMath
 import Tests.Elab
+import Tests.Font
 import Tests.GenericCode
 import Tests.Golden
 import Tests.CommentSkipping

@@ -7,6 +7,7 @@ module
 import Std.Data.HashSet
 import Std.Data.TreeSet
 import Verso.Doc
+public import Verso.Font
 public import Verso.Instances
 public import Verso.Doc.Html
 public import Verso.Doc.TeX
@@ -83,16 +84,8 @@ def toCss (family : FontFamily) : String := s!"font-family: var({family.toCssVar
 
 end FontFamily
 
-inductive FontStyle where
-  | normal
-  | italic
-deriving DecidableEq, Repr, Hashable
-
-def FontStyle.toCss (s : FontStyle) : String :=
-  "font-style: " ++
-  match s with
-  | .normal => "normal;"
-  | .italic => "italic;"
+-- `FontStyle` was previously defined here; it is re-exported here for backwards compatibility
+export Verso (FontStyle)
 
 inductive FontWeight where
   | lighter

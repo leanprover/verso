@@ -21,6 +21,7 @@ public import Verso.Doc.Lsp
 public import Verso.Doc.Suggestion
 public import Verso.Doc.TeX
 public import Verso.ExpectString
+public import Verso.Font
 public import Verso.Hover
 public import Verso.Instances
 public import Verso.Linters
