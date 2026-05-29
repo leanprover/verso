@@ -122,7 +122,7 @@ public structure Logger (m : Type → Type) where
   /-- The warnings logged so far. -/
   warnings : m (Array LogMessage)
 
-instance [Applicative m] : Inhabited (Logger m) where
+public instance [Applicative m] : Inhabited (Logger m) where
   default.log _ _ _ := pure ()
   default.errors := pure default
   default.warnings := pure default

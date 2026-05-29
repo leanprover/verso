@@ -650,7 +650,7 @@ def tutorialsMain (tutorials : Tutorials) (args : List String)
   ReaderT.run go extensionImpls
 
 where
-  go : ReaderT ExtensionImpls IO UInt32 := Verso.withLogger fun logger => do
+  go : ReaderT ExtensionImpls IO UInt32 := withLogger fun logger => do
     let config ← opts config args
 
     IO.FS.createDirAll config.destination
@@ -669,7 +669,8 @@ where
         SavedState.mk tutorials state |>.save f
         let json := xrefJson state.domains state.externalTags
         IO.FS.writeFile (config.destination / "xref.json") <| toString json
-        -- No HTML is emitted in this mode; fall through so logged errors still set the exit code.
+        -- No HTML is emitted in this mode; returning early here causes the exit code to be derived
+        -- from the surrounding `withLogger` based on whether errors were logged.
         return
       | .resumeFrom f =>
           try
