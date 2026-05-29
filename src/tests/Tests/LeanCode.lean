@@ -114,7 +114,9 @@ end
 def unusedArgFn (unused : Nat) : Nat := 0
 ```
 ```leanOutput unusedVar
-unused variable `unused`
+Variable name `unused` is not explicitly referenced.
+
+The binding can be removed (if unused) or named `_` (if used implicitly).
 
 Note: This linter can be disabled with `set_option linter.unusedVariables false`
 ```
