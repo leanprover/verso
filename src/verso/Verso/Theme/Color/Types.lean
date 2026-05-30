@@ -8,7 +8,7 @@ module
 set_option linter.missingDocs true
 set_option doc.verso true
 
-namespace Verso
+namespace Verso.Theme
 
 -- This is an inductive with a single `rgba` constructor rather than a structure so that other color
 -- models (such as wide-gamut `oklch`) can be added later. The byte channels give a canonical

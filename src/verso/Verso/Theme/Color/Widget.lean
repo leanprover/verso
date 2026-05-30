@@ -6,8 +6,8 @@ Author: David Thrane Christiansen
 module
 
 public meta import Lean.Widget.UserWidget
-public meta import Verso.Color.Basic
-public meta import Verso.Color.Math
+public meta import Verso.Theme.Color.Basic
+public meta import Verso.Theme.Color.Math
 
 set_option linter.missingDocs true
 set_option doc.verso true
@@ -17,7 +17,7 @@ The InfoView preview widget for colors. The CSS form is computed in Lean and han
 so the JavaScript only has to draw the swatch.
 -/
 
-namespace Verso
+namespace Verso.Theme
 
 public section
 

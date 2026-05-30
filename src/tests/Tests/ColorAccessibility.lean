@@ -5,15 +5,15 @@ Author: David Thrane Christiansen
 -/
 module
 public import Plausible
-public meta import Verso.Color
+public meta import Verso.Theme.Color
 public meta import Tests.Arbitrary
 
 /-!
-Unit and property tests for the accessibility predicates and checks in `Verso.Color.Accessibility`.
+Unit and property tests for the accessibility predicates and checks in `Verso.Theme.Color.Accessibility`.
 -/
 
 open Plausible Gen Arbitrary Shrinkable
-open Verso Verso.Color
+open Verso Verso.Theme Verso.Theme.Color
 
 meta section
 

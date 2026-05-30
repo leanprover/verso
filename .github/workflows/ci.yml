@@ -191,6 +191,14 @@ jobs:
                     browser-tests/test_redirect.py \
                     browser-tests/test_katex.py -v
 
+            - name: Run theme customization browser test
+              run: |
+                  lake build theme-test-site
+                  rm -rf _out/theme-test
+                  lake exe theme-test-site --output _out/theme-test
+                  uv run --project browser-tests --extra test pytest \
+                    browser-tests/theme-customization -v
+
             - name: Build the VersoHtml site for browser tests
               run: |
                   # The verso-html genre renders literate JSON into a standalone HTML site.

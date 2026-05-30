@@ -11,6 +11,8 @@ import Verso.Doc.Html
 import Verso.Output.TeX
 import Verso.Output.Html
 import Verso.Output.Html.CssVars
+import Verso.Theme.Code
+import Verso.Theme.Code.Defaults
 import Verso.Output.Html.KaTeX
 import Verso.Output.Html.ElasticLunr
 import Verso.Doc.Lsp
@@ -242,6 +244,11 @@ structure RenderConfig extends Config where
   How to insert links in rendered code
   -/
   linkTargets : TraverseState → Multi.AllRemotes → LinkTargets Manual.TraverseContext := (·.localTargets ++ ·.remoteTargets)
+  /--
+  The active {Lean.Doc.name}`Verso.Theme.CodeTheme`. Its CSS-variable block is written to
+  {lit}`verso-themes.css` so the page-level highlighting rules read the chosen colors.
+  -/
+  codeTheme : Verso.Theme.CodeTheme := Verso.Theme.CodeTheme.Default
 
 namespace Config
 
@@ -762,6 +769,24 @@ where
       h.putStrLn Html.«verso-vars.css»
     IO.FS.withFile (dir.join "book.css") .write fun h => do
       h.putStrLn Html.Css.pageStyle
+    IO.FS.withFile (dir.join "verso-themes.css") .write fun h => do
+      let assetRoot := s!"-verso-data/themes/{config.codeTheme.name}"
+      let faceRules := config.codeTheme.fontFaceRules assetRoot
+      unless faceRules.isEmpty do
+        h.putStrLn faceRules
+      h.putStrLn s!":root \{\n{config.codeTheme.cssVariables}}"
+      let extra := config.codeTheme.extraCss assetRoot
+      unless extra.isEmpty do
+        h.putStrLn ""
+        h.putStrLn extra
+    for (path, bytes, _, _) in config.codeTheme.fontAssets s!"-verso-data/themes/{config.codeTheme.name}" do
+      let abs := dir.join path
+      if let some p := abs.parent then ensureDir p
+      IO.FS.writeBinFile abs bytes
+    for a in config.codeTheme.assets do
+      let path := dir.join "-verso-data" |>.join "themes" |>.join config.codeTheme.name |>.join a.path
+      if let some p := path.parent then ensureDir p
+      IO.FS.writeBinFile path a.contents
     for (src, dest) in config.extraFiles do
       copyRecursively src (dir.join dest)
     for (src, dest) in config.extraFilesHtml do
@@ -830,6 +855,24 @@ where
       h.putStrLn Html.«verso-vars.css»
     IO.FS.withFile (root / "book.css") .write fun h => do
       h.putStrLn Html.Css.pageStyle
+    IO.FS.withFile (root / "verso-themes.css") .write fun h => do
+      let assetRoot := s!"-verso-data/themes/{config.codeTheme.name}"
+      let faceRules := config.codeTheme.fontFaceRules assetRoot
+      unless faceRules.isEmpty do
+        h.putStrLn faceRules
+      h.putStrLn s!":root \{\n{config.codeTheme.cssVariables}}"
+      let extra := config.codeTheme.extraCss assetRoot
+      unless extra.isEmpty do
+        h.putStrLn ""
+        h.putStrLn extra
+    for (path, bytes, _, _) in config.codeTheme.fontAssets s!"-verso-data/themes/{config.codeTheme.name}" do
+      let abs := root.join path
+      if let some p := abs.parent then ensureDir p
+      IO.FS.writeBinFile abs bytes
+    for a in config.codeTheme.assets do
+      let path := root.join "-verso-data" |>.join "themes" |>.join config.codeTheme.name |>.join a.path
+      if let some p := path.parent then ensureDir p
+      IO.FS.writeBinFile path a.contents
     for (src, dest) in config.extraFiles do
       copyRecursively src (root.join dest)
     for (src, dest) in config.extraFilesHtml do
@@ -944,9 +987,11 @@ open Verso.CLI
 
 def manualMain (text : Part Manual)
     (extensionImpls : ExtensionImpls := by exact extension_impls%)
+    (codeThemes : Verso.Theme.CodeThemeTable := by exact code_themes%)
     (options : List String)
     (config : RenderConfig := {})
     (extraSteps : List ExtraStep := []) : IO UInt32 :=
+  let _ := codeThemes
   ReaderT.run go extensionImpls
 
 where

@@ -124,7 +124,7 @@ public inductive Typeface where
   | files (family : String) (faces : Array FontFace)
 
 /-- Quotes a CSS string, escaping backslashes and double quotes so the name cannot break out. -/
-private def cssQuote (s : String) : String :=
+public def cssQuote (s : String) : String :=
   "\"" ++ (s.replace "\\" "\\\\" |>.replace "\"" "\\\"") ++ "\""
 
 /--
@@ -142,9 +142,9 @@ public def Typeface.cssFamily : Typeface → String
 Defines a {name}`FontFace` whose {name}`FontFace.bytes` are embedded from a file at compile time.
 
 The fields, in any order: {lit}`format` (required), {lit}`file` (required, a string literal path
-relative to the current source file), {lit}`weights` (defaults to {lit}`.fixed .regular`),
-{lit}`weight` (sugar: {lit}`weight := w` means {lit}`weights := .fixed w`), and {lit}`style`
-(defaults to {lit}`.normal`). For example:
+relative to the current source file), {lit}`weights` (defaults to {lean}`(.fixed .regular : FaceWeights)`),
+{lit}`weight` (sugar: {lit}`weight := w` is rewritten to a fixed-weight value), and {lit}`style`
+(defaults to {lean}`(.normal : FontStyle)`). For example:
 
 ```
 define_font_face sourceSansVariable where
@@ -156,7 +156,7 @@ define_font_face sourceSansVariable where
 syntax (name := defineFontFace) "define_font_face " ident " where" manyIndent(group(withPosition(ident " := " colGt term))) : command
 
 open Lean Elab Command in
-/-- Elaborates a {lit}`define_font_face` command into a {name}`FontFace` definition. -/
+/-- Elaborates a {kw (of := Verso.defineFontFace)}`define_font_face` command into a {name}`FontFace` definition. -/
 @[command_elab defineFontFace]
 public meta def elabDefineFontFace : CommandElab := fun stx => do
   let nameIdent := stx[1]

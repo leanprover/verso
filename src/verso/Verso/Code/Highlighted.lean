@@ -709,8 +709,8 @@ public def highlightingStyle : String := "
 .hl.lean .token .hover-info {
   display: none;
   position: absolute;
-  background-color: #e5e5e5;
-  border: 1px solid black;
+  background-color: var(--verso-hover-background-color, #e5e5e5);
+  border: 1px solid var(--verso-hover-border-color, black);
   padding: 0.5rem;
   z-index: 300;
 }
@@ -727,7 +727,7 @@ public def highlightingStyle : String := "
 .hl.lean .hover-info code {
   white-space: pre-wrap;
   background: none;
-  color: black;
+  color: var(--verso-hover-text-color, black);
 }
 
 .hl.lean .hover-info.messages > code {
@@ -769,7 +769,7 @@ public def highlightingStyle : String := "
 
 @media (hover: hover) {
   .hl.lean .token.binding-hl, .hl.lean .literal.string:hover, .hl.lean .token.typed:hover {
-    background-color: #eee;
+    background-color: var(--verso-token-highlight-background-color, #eeeeee);
     border-radius: 2px;
     transition: none;
   }
@@ -787,25 +787,25 @@ public def highlightingStyle : String := "
   display: none;
   position: absolute;
   transform: translate(0.25rem, 0.3rem);
-  border: 1px solid black;
+  border: 1px solid var(--verso-hover-border-color, black);
   padding: 0.5rem;
   z-index: 400;
   text-align: left;
 }
 
 .hl.lean .has-info.error :not(.tactic-state):not(.tactic-state *){
-  text-decoration-color: red;
+  text-decoration-color: var(--verso-error-indicator-color, red);
 }
 
 @media (hover: hover) {
   .hl.lean .has-info.error:hover {
-    background-color: #ffb3b3;
+    background-color: var(--verso-token-highlight-background-color, #eeeeee);
   }
 }
 
 .hl.lean .hover-info.messages > code.error {
-  background-color: #e5e5e5;
-  border-left: 0.2rem solid #ffb3b3;
+  background-color: var(--verso-hover-background-color, #e5e5e5);
+  border-left: 0.2rem solid var(--verso-error-indicator-color, red);
 }
 
 .tippy-box[data-theme~='error'] .hl.lean .hover-info.messages > code.error {
@@ -827,12 +827,12 @@ public def highlightingStyle : String := "
 
 @media (hover: hover) {
   .hl.lean .has-info.warning:hover {
-    background-color:var(--verso-warning-color);
+    background-color: var(--verso-token-highlight-background-color, #eeeeee);
   }
 }
 
 .hl.lean .hover-info.messages > code.warning {
-  background-color: var(--verso-warning-color);
+  background-color: var(--verso-hover-background-color, #e5e5e5);
 }
 
 .lean-output {
@@ -854,11 +854,6 @@ public def highlightingStyle : String := "
   border-color: var(--verso-warning-indicator-color);
 }
 
-.hl.lean .hover-info.messages > code.error {
-  background-color: #e5e5e5;
-  border-left: 0.2rem solid var(--verso-warning-color);
-}
-
 .tippy-box[data-theme~='warning'] .hl.lean .hover-info.messages > code.warning {
   background: none;
   border: none;
@@ -871,14 +866,14 @@ public def highlightingStyle : String := "
 
 @media (hover: hover) {
   .hl.lean .has-info.information:hover {
-    background-color: #4777ff;
+    background-color: var(--verso-token-highlight-background-color, #eeeeee);
   }
 }
 
 
 .hl.lean .hover-info.messages > code.information {
-  background-color: #e5e5e5;
-  border-left: 0.2rem solid #4777ff;
+  background-color: var(--verso-hover-background-color, #e5e5e5);
+  border-left: 0.2rem solid var(--verso-info-indicator-color, blue);
 }
 
 .tippy-box[data-theme~='info'] .hl.lean .hover-info.messages > code.information {
@@ -910,7 +905,7 @@ public def highlightingStyle : String := "
   margin-bottom: 0.5rem;
   padding: 0;
   height: 1px;
-  border-top: 1px solid #ccc;
+  border-top: 1px solid var(--verso-hover-separator-color, #cccccc);
 }
 
 .hl.lean code {
@@ -921,11 +916,11 @@ public def highlightingStyle : String := "
   display: none;
   position: relative;
   width: fit-content;
-  border: 1px solid #888888;
+  border: 1px solid var(--verso-tactic-state-border-color, #888888);
   border-radius: 0.1rem;
   padding: 0.5rem;
   font-family: sans-serif;
-  background-color: #ffffff;
+  background-color: var(--verso-tactic-state-background-color, #ffffff);
 }
 
 .hl.lean.popup .tactic-state {
@@ -935,7 +930,7 @@ public def highlightingStyle : String := "
   border: none;
   padding: 0.5rem;
   font-family: sans-serif;
-  background-color: #ffffff;
+  background-color: var(--verso-tactic-state-background-color, #ffffff);
 }
 
 
@@ -968,7 +963,7 @@ public def highlightingStyle : String := "
 
 @media (hover: hover) {
   .hl.lean .tactic:has(.tactic-toggle:not(:checked)) > label:hover {
-    background-color: #eeeeee;
+    background-color: var(--verso-token-highlight-background-color, #eeeeee);
   }
 }
 
@@ -984,7 +979,7 @@ public def highlightingStyle : String := "
 
 .hl.lean .tactic > label::after {
   content: \"\";
-  border: 1px solid #bbbbbb;
+  border: 1px solid var(--verso-ui-on-code-color, #888888);
   /* These need to be em, not rem, to scale with the font */
   border-radius: 1em;
   height: 0.25em;
@@ -1007,8 +1002,8 @@ public def highlightingStyle : String := "
 */
 
 .hl.lean .tactic > label:has(+ .tactic-toggle:checked)::after {
-  border: 1px solid #999999;
-  background-color: #999999;
+  border: 1px solid var(--verso-ui-on-code-color, #888888);
+  background-color: var(--verso-ui-on-code-color, #888888);
   transition: all 0.5s;
 }
 
@@ -1086,7 +1081,7 @@ Some CSS frameworks customize details/summary in ways not compatible with Verso'
 
 .hl.lean .case-label:has(input[type=\"checkbox\"])::before {
   display: inline-block;
-  background-color: black;
+  background-color: var(--verso-code-color, black);
   content: ' ';
   transition: ease 0.2s;
   margin-right: 0.7em;
@@ -1171,25 +1166,25 @@ Some CSS frameworks customize details/summary in ways not compatible with Verso'
 }
 
 .tippy-box[data-theme~='lean'] {
-  background-color: #e5e5e5;
-  color: black;
-  border: 1px solid black;
+  background-color: var(--verso-hover-background-color, #e5e5e5);
+  color: var(--verso-hover-text-color, black);
+  border: 1px solid var(--verso-hover-border-color, black);
 }
 .tippy-box[data-theme~='lean'][data-placement^='top'] > .tippy-arrow::before {
-  border-top-color: #e5e5e5;
+  border-top-color: var(--verso-hover-background-color, #e5e5e5);
 }
 .tippy-box[data-theme~='lean'][data-placement^='bottom'] > .tippy-arrow::before {
-  border-bottom-color: #e5e5e5;
+  border-bottom-color: var(--verso-hover-background-color, #e5e5e5);
 }
 .tippy-box[data-theme~='lean'][data-placement^='left'] > .tippy-arrow::before {
-  border-left-color: #e5e5e5;
+  border-left-color: var(--verso-hover-background-color, #e5e5e5);
 }
 .tippy-box[data-theme~='lean'][data-placement^='right'] > .tippy-arrow::before {
-  border-right-color: #e5e5e5;
+  border-right-color: var(--verso-hover-background-color, #e5e5e5);
 }
 
 .tippy-box[data-theme~='message'][data-placement^='top'] > .tippy-arrow::before {
-  border-top-color: #e5e5e5;
+  border-top-color: var(--verso-hover-background-color, #e5e5e5);
   border-width: 11px 11px 0;
 }
 .tippy-box[data-theme~='message'][data-placement^='top'] > .tippy-arrow::after {
@@ -1204,7 +1199,7 @@ Some CSS frameworks customize details/summary in ways not compatible with Verso'
   border-width: 0 11px 11px;
 }
 .tippy-box[data-theme~='message'][data-placement^='left'] > .tippy-arrow::before {
-  border-left-color: #e5e5e5;
+  border-left-color: var(--verso-hover-background-color, #e5e5e5);
   border-width: 11px 0 11px 11px;
 }
 .tippy-box[data-theme~='message'][data-placement^='left'] > .tippy-arrow::after {
@@ -1213,7 +1208,7 @@ Some CSS frameworks customize details/summary in ways not compatible with Verso'
 }
 
 .tippy-box[data-theme~='message'][data-placement^='right'] > .tippy-arrow::before {
-  border-right-color: #e5e5e5;
+  border-right-color: var(--verso-hover-background-color, #e5e5e5);
   border-width: 11px 11px 11px 0;
 }
 .tippy-box[data-theme~='message'][data-placement^='right'] > .tippy-arrow::after {
@@ -1224,39 +1219,39 @@ Some CSS frameworks customize details/summary in ways not compatible with Verso'
 
 
 .tippy-box[data-theme~='warning'] {
-  background-color: #e5e5e5;
-  color: black;
-  border: 3px solid var(--verso-warning-color);
+  background-color: var(--verso-hover-background-color, #e5e5e5);
+  color: var(--verso-hover-text-color, black);
+  border: 3px solid var(--verso-warning-indicator-color, #e7a71d);
 }
 
 .tippy-box[data-theme~='error'] {
-  background-color: #e5e5e5;
-  color: black;
-  border: 3px solid #f7a7af;
+  background-color: var(--verso-hover-background-color, #e5e5e5);
+  color: var(--verso-hover-text-color, black);
+  border: 3px solid var(--verso-error-indicator-color, red);
 }
 
 .tippy-box[data-theme~='info'] {
-  background-color: #e5e5e5;
-  color: black;
-  border: 3px solid #99b3c2;
+  background-color: var(--verso-hover-background-color, #e5e5e5);
+  color: var(--verso-hover-text-color, black);
+  border: 3px solid var(--verso-info-indicator-color, blue);
 }
 
 .tippy-box[data-theme~='tactic'] {
-  background-color: white;
-  color: black;
-  border: 1px solid black;
+  background-color: var(--verso-tactic-state-background-color, #ffffff);
+  color: var(--verso-hover-text-color, black);
+  border: 1px solid var(--verso-hover-border-color, black);
 }
 .tippy-box[data-theme~='tactic'][data-placement^='top'] > .tippy-arrow::before {
-  border-top-color: white;
+  border-top-color: var(--verso-tactic-state-background-color, #ffffff);
 }
 .tippy-box[data-theme~='tactic'][data-placement^='bottom'] > .tippy-arrow::before {
-  border-bottom-color: white;
+  border-bottom-color: var(--verso-tactic-state-background-color, #ffffff);
 }
 .tippy-box[data-theme~='tactic'][data-placement^='left'] > .tippy-arrow::before {
-  border-left-color: white;
+  border-left-color: var(--verso-tactic-state-background-color, #ffffff);
 }
 .tippy-box[data-theme~='tactic'][data-placement^='right'] > .tippy-arrow::before {
-  border-right-color: white;
+  border-right-color: var(--verso-tactic-state-background-color, #ffffff);
 }
 
 .extra-doc-links {

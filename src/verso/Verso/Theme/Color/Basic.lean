@@ -5,17 +5,17 @@ Author: David Thrane Christiansen
 -/
 module
 
-public import Verso.Color.Types
+public import Verso.Theme.Color.Types
 
 set_option linter.missingDocs true
 set_option doc.verso true
 
 /-!
-The pure Lean API for {name (full := Verso.Color)}`Color`: a small set of named colors, CSS and TeX
+The pure Lean API for {name (full := Verso.Theme.Color)}`Color`: a small set of named colors, CSS and TeX
 rendering, and parsing of hex color strings.
 -/
 
-namespace Verso.Color
+namespace Verso.Theme.Color
 
 /--
 Constructs an opaque color.

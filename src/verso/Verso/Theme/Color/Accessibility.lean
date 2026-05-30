@@ -5,8 +5,8 @@ Author: David Thrane Christiansen
 -/
 module
 
-public import Verso.Color.Types
-public import Verso.Color.Math
+public import Verso.Theme.Color.Types
+public import Verso.Theme.Color.Math
 
 set_option linter.missingDocs true
 set_option doc.verso true
@@ -20,7 +20,7 @@ This module contains genre-neutral accessibility predicates and checks built on 
 
 -/
 
-namespace Verso
+namespace Verso.Theme
 
 namespace Color
 
@@ -32,8 +32,7 @@ deriving DecidableEq, Repr
 
 /--
 An accessibility problem found while checking a set of colors. It carries no severity; the caller
-maps {name}`IssueKind` to a severity. {lit}`offending` lists the colors involved, for error
-messages.
+maps {name}`IssueKind` to a severity. The offending colors are recorded for error messages.
 -/
 public structure Issue where
   /-- Whether this is a contrast or a color-vision-deficiency problem. -/
@@ -56,11 +55,11 @@ palette (which stays above it under all three dichromacies).
 -/
 public def distinguishableThreshold : Float := 5.0
 
-/-- Whether {lit}`fg` on {lit}`bg` meets the given WCAG contrast ratio. -/
+/-- Whether a foreground on a background meets the given WCAG contrast ratio. -/
 public def meetsContrast (threshold : Float) (fg bg : Color) : Bool :=
   contrastRatio fg bg ≥ threshold
 
-/-- Whether two colors differ by at least {lit}`threshold` in CIEDE2000 ΔE. -/
+/-- Whether two colors differ by at least the given threshold in CIEDE2000 ΔE. -/
 public def distinguishable? (threshold : Float) (c1 c2 : Color) : Bool :=
   deltaE c1 c2 ≥ threshold
 
@@ -69,9 +68,9 @@ public def isOpaque : Color → Bool
   | .rgba _ _ _ a => a == 255
 
 /--
-Composites {lit}`fg` over {lit}`bg` using {lit}`fg`'s alpha (straight alpha in sRGB, matching how a
-browser paints translucent content on a solid background). The result is opaque; the background's
-own alpha is ignored.
+Composites a foreground over a background using the foreground's alpha (straight alpha in sRGB,
+matching how a browser paints translucent content on a solid background). The result is opaque; the
+background's own alpha is ignored.
 -/
 public def over (fg bg : Color) : Color :=
   match fg, bg with

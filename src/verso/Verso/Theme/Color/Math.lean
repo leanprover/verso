@@ -5,7 +5,7 @@ Author: David Thrane Christiansen
 -/
 module
 
-public import Verso.Color.Types
+public import Verso.Theme.Color.Types
 
 set_option linter.missingDocs true
 set_option doc.verso true
@@ -31,10 +31,10 @@ Color math for accessibility checking, using the following:
   apart, including under the simulations above.
 
 All channels convert to {name}`Float` at the boundary (`/255`) and the math runs in {name}`Float`;
-the {name (full := Verso.Color)}`Color` type itself stays byte-exact.
+the {name (full := Verso.Theme.Color)}`Color` type itself stays byte-exact.
 -/
 
-namespace Verso
+namespace Verso.Theme
 
 namespace Color
 

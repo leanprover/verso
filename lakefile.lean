@@ -134,6 +134,15 @@ lean_exe «verso-tests» where
   srcDir := "src/tests"
   supportInterpreter := true
 
+lean_lib ThemeTestDoc where
+  srcDir := "src/tests"
+  roots := #[`ThemeTestDoc]
+
+lean_exe «theme-test-site» where
+  root := `ThemeTestMain
+  srcDir := "src/tests"
+  supportInterpreter := true
+
 lean_lib UsersGuide where
   srcDir := "doc"
   leanOptions := #[⟨`weak.linter.verso.manual.headerTags, true⟩]

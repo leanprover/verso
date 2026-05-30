@@ -18,7 +18,7 @@ public meta import VersoManual.LicenseInfo
 public meta import VersoSearch
 public meta import VersoSearch.DomainSearch
 public meta import Verso.Output.Html
-public meta import Verso.Color.Types
+public meta import Verso.Theme.Color.Types
 public meta import MultiVerso.Manifest
 public meta import VersoManual.Basic
 import all VersoManual.Basic
@@ -439,17 +439,17 @@ instance : Shrinkable System.FilePath where
       parent :: (path.fileName.toList.flatMap shrink |>.map path.withFileName)
     else []
 
-instance : Arbitrary Verso.Color where
+instance : Arbitrary Verso.Theme.Color where
   arbitrary := do
     -- Bias the alpha channel: fully opaque (the common case) 60% of the time, fully transparent 5%,
     -- and uniformly random the rest. A uniform alpha would almost never be exactly opaque.
     let a ← frequency (pure 255) [(60, pure 255), (5, pure 0), (35, arbitrary)]
     return .rgba (← arbitrary) (← arbitrary) (← arbitrary) a
 
-instance : Shrinkable Verso.Color where
+instance : Shrinkable Verso.Theme.Color where
   shrink
     | .rgba r g b a =>
-      (shrink r |>.map (Verso.Color.rgba · g b a)) ++
-      (shrink g |>.map (Verso.Color.rgba r · b a)) ++
-      (shrink b |>.map (Verso.Color.rgba r g · a)) ++
-      (shrink a |>.map (Verso.Color.rgba r g b ·))
+      (shrink r |>.map (Verso.Theme.Color.rgba · g b a)) ++
+      (shrink g |>.map (Verso.Theme.Color.rgba r · b a)) ++
+      (shrink b |>.map (Verso.Theme.Color.rgba r g · a)) ++
+      (shrink a |>.map (Verso.Theme.Color.rgba r g b ·))

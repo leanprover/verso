@@ -5,16 +5,16 @@ Author: David Thrane Christiansen
 -/
 module
 public import Plausible
-public meta import Verso.Color
-import all Verso.Color.Math
+public meta import Verso.Theme.Color
+import all Verso.Theme.Color.Math
 public meta import Tests.Arbitrary
 
 /-!
-Unit and property tests for the color math in `Verso.Color.Math`.
+Unit and property tests for the color math in `Verso.Theme.Color.Math`.
 -/
 
 open Plausible Gen Arbitrary Shrinkable
-open Verso Verso.Color
+open Verso Verso.Theme Verso.Theme.Color
 
 meta section
 
@@ -46,7 +46,7 @@ instance : Shrinkable CVD where
 #eval (deltaE .black .black, deltaE .white .black)
 
 -- Dichromacy simulation leaves the gray axis unchanged.
-/-- info: (Verso.Color.rgba 128 128 128 255, Verso.Color.rgba 128 128 128 255, Verso.Color.rgba 128 128 128 255) -/
+/-- info: (Verso.Theme.Color.rgba 128 128 128 255, Verso.Theme.Color.rgba 128 128 128 255, Verso.Theme.Color.rgba 128 128 128 255) -/
 #guard_msgs in
 #eval (dichromacy .protanopia .gray, dichromacy .deuteranopia .gray, dichromacy .tritanopia .gray)
 

@@ -167,6 +167,31 @@ def testSearchJs (_ : Config) : IO Unit := do
   if fails > 0 then
     throw <| IO.userError s!"{fails} search JS tests failed"
 
+open Verso in
+/--
+Golden test for the default code theme's generated CSS. The expected fixture lives at
+`src/tests/golden/theme-css/default.expected` and is regenerated with `--update-expected`.
+-/
+def testThemeCss (cfg : Config) : IO Unit := do
+  IO.println "Running theme CSS golden test..."
+  let runTest (input : String) : IO String := do
+    let name := input.trimAscii
+    if name == "default" then
+      let varsBlock := s!":root \{\n{Theme.CodeTheme.Default.cssVariables}}\n"
+      let combined := varsBlock ++ "\n" ++ Code.highlightingStyle
+      -- Trim the trailing blank lines `highlightingStyle` ships with so the golden file
+      -- ends with a single newline (otherwise `git diff --check` flags the EOF blank).
+      let mut out := combined
+      while out.endsWith "\n\n" do out := (out.dropEnd 1).copy
+      return out
+    else
+      throw <| IO.userError s!"Unknown theme: {name}"
+  GoldenTest.runTests {
+    testDir := "src/tests/golden/theme-css",
+    updateExpected := cfg.updateExpected,
+    runTest
+  }
+
 def testBlog (_ : Config) : IO Unit := do
   IO.println "Running blog tests with Plausible..."
   let fails ← runBlogTests
@@ -361,7 +386,7 @@ def testBuildLog (_ : Config) : IO Unit := do
     throw <| IO.userError "redirected logging should still accumulate into the logger's buffers"
   IO.println "  All build-log tests passed."
 
-open Verso in
+open Verso Theme in
 def testColor (_ : Config) : IO Unit := do
   IO.println "Running color tests..."
   let check (name got expected : String) : IO Unit :=
@@ -397,6 +422,7 @@ def tests := [
   testColor,
   testColorMath,
   testColorAccessibility,
+  testThemeCss,
   testSerialization,
   testSearchJs,
   testBlog,

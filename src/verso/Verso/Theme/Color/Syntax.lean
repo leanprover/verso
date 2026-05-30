@@ -14,13 +14,13 @@ public import Lean.PrettyPrinter.Formatter
 public import Lean.Elab.Term
 meta import Lean.PrettyPrinter
 meta import Lean.Elab.Term
-public meta import Verso.Color.Basic
-public meta import Verso.Color.Widget
+public meta import Verso.Theme.Color.Basic
+public meta import Verso.Theme.Color.Widget
 
 set_option linter.missingDocs true
 set_option doc.verso true
 
-namespace Verso
+namespace Verso.Theme
 
 public section
 
@@ -76,13 +76,13 @@ private meta def asHexString (stx : TSyntax colorHexKind) : String :=
 
 /--
 A color literal: `color%#rgb`, `color%#rrggbb`, or `color%#rrggbbaa` (case-insensitive hex, no space
-before the `#`). It is an ordinary term, usable anywhere a {name (full := Verso.Color)}`Color` is
+before the `#`). It is an ordinary term, usable anywhere a {name (full := Verso.Theme.Color)}`Color` is
 expected, including in structure-field defaults.
 -/
 syntax (name := colorLit) "color%" noWs colorHex : term
 
 open Elab Term in
-/-- Elaborates a {lit}`color%` literal to a {name (full := Verso.Color)}`Color` and attaches the
+/-- Elaborates a {lit}`color%` literal to a {name (full := Verso.Theme.Color)}`Color` and attaches the
 preview widget. -/
 @[term_elab colorLit]
 meta def elabColorLit : TermElab := fun stx expectedType? => do
@@ -94,6 +94,6 @@ meta def elabColorLit : TermElab := fun stx expectedType? => do
     | .error msg => throwErrorAt hexStx msg
   saveColorWidget (.rgba r g b a) stx
   let lit (n : UInt8) : Term := ⟨Syntax.mkNumLit (toString n.toNat)⟩
-  elabTerm (← `(Verso.Color.rgba $(lit r) $(lit g) $(lit b) $(lit a))) expectedType?
+  elabTerm (← `(Verso.Theme.Color.rgba $(lit r) $(lit g) $(lit b) $(lit a))) expectedType?
 
 end

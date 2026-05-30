@@ -8,7 +8,9 @@ module
 -- Import modules here that should be built as part of the library.
 public import Verso.CLI
 public import Verso.Code
-public import Verso.Color
+public import Verso.Theme.Code
+public import Verso.Theme.Code.Defaults
+public import Verso.Theme.Color
 public import Verso.Doc
 public import Verso.Doc.ArgParse
 public import Verso.Doc.Concrete
