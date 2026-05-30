@@ -20,24 +20,39 @@ open Std (HashMap)
 namespace SubVerso.Highlighting
 
 /--
-Given an already escaped-for-verbatim string, and a token kind,
-returns TeX to display that token appropriately syntax-highlighted.
+Given an already escaped-for-verbatim string, and a token kind, returns TeX that wraps the
+content in the matching semantic macro: `\versoKeyword`, `\versoConst`, `\versoVar`, or
+`\versoLiteral`. The macros are defined by the consuming genre's preamble (the manual genre
+uses {Lean.Doc.name}`Verso.Theme.CodeTheme` to style them). For a fallback definition that
+reproduces the pre-theming look, see {Lean.Doc.name}`SubVerso.Highlighting.texMacroFallbacks`.
 -/
 public def highlightToken : String → Token.Kind → TeX
-| c, .keyword _ _ _ => .raw s!"\\textbf\{{c}}"
-| c, .const .. => .raw c
-| c, .anonCtor .. => .raw c
-| c, .option _ _ _ => .raw c
-| c, .var .. => .raw s!"\\textit\{{c}}"
-| c, .str _ => .raw c
-| c, .docComment => .raw c
-| c, .sort _ => .raw c
-| c, .levelVar _ => .raw c
-| c, .levelConst _ => .raw c
-| c, .moduleName _ => .raw c
-| c, .levelOp _ => .raw c
-| c, .withType _ => .raw c
-| c, .unknown => .raw c
+| c, .keyword _ _ _ => .raw s!"\\versoKeyword\{{c}}"
+| c, .const .. => .raw s!"\\versoConst\{{c}}"
+| c, .anonCtor .. => .raw s!"\\versoConst\{{c}}"
+| c, .option _ _ _ => .raw s!"\\versoConst\{{c}}"
+| c, .var .. => .raw s!"\\versoVar\{{c}}"
+| c, .str _ => .raw s!"\\versoLiteral\{{c}}"
+| c, .docComment => .raw s!"\\versoLiteral\{{c}}"
+| c, .sort _ => .raw s!"\\versoLiteral\{{c}}"
+| c, .levelVar _ => .raw s!"\\versoLiteral\{{c}}"
+| c, .levelConst _ => .raw s!"\\versoLiteral\{{c}}"
+| c, .moduleName _ => .raw s!"\\versoLiteral\{{c}}"
+| c, .levelOp _ => .raw s!"\\versoLiteral\{{c}}"
+| c, .withType _ => .raw s!"\\versoLiteral\{{c}}"
+| c, .unknown => .raw s!"\\versoLiteral\{{c}}"
+
+/--
+Fallback definitions for the four semantic token macros emitted by
+{Lean.Doc.name}`SubVerso.Highlighting.highlightToken`. Each uses `\providecommand`, so a genre
+preamble that defines its own (theme-driven) versions wins. The fallbacks reproduce today's
+unthemed look: keywords bold, variables italic, constants and literals plain.
+-/
+public def texMacroFallbacks : String :=
+"\\providecommand{\\versoKeyword}[1]{\\textbf{#1}}\n" ++
+"\\providecommand{\\versoConst}[1]{#1}\n" ++
+"\\providecommand{\\versoVar}[1]{\\textit{#1}}\n" ++
+"\\providecommand{\\versoLiteral}[1]{#1}\n"
 
 defmethod Highlighting.Token.toVerbatimTeX (t : Highlighting.Token) (lineBreaks : Bool := false) : Verso.Output.TeX :=
   highlightToken (escapeForVerbatim t.content lineBreaks) t.kind
@@ -48,6 +63,12 @@ Returns TeX that is appropriate for the content of a `\Verb` environment (from p
 with command characters `\`, `{`, and `}`.
 
 When `lineBreaks` is true, inserts line break opportunities in identifiers.
+
+**Preamble contract.** Output uses the four `\verso…` semantic macros emitted by
+{Lean.Doc.name}`SubVerso.Highlighting.highlightToken`. Any consumer that compiles the result must
+ensure those macros are defined, either by including
+{Lean.Doc.name}`SubVerso.Highlighting.texMacroFallbacks` in the preamble or by defining its own
+theme-driven versions (the manual genre installs both).
 -/
 public defmethod Highlighted.toVerbatimTeX (h : Highlighted) (lineBreaks : Bool := false) : Verso.Output.TeX :=
   match h with

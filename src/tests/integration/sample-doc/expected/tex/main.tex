@@ -51,12 +51,11 @@
 % Work around missing U+2011 (non-breaking hyphen) in Source Serif Pro
 \newunicodechar{‑}{-}
 
-\definecolor{errorColor}{HTML}{B91C1C}
-\definecolor{infoColor}{HTML}{1E6BB8}
-\definecolor{warningColor}{HTML}{D97706}
-\newcommand{\errorDecorate}[1]{\coloredwave{errorColor}{#1}}
-\newcommand{\infoDecorate}[1]{\coloredwave{infoColor}{#1}}
-\newcommand{\warningDecorate}[1]{\coloredwave{warningColor}{#1}}
+% Decoration accents (wavy underlines) use the *indicator* colors, distinct from the message
+% text colors. The theme block below redefines both.
+\newcommand{\errorDecorate}[1]{\coloredwave{errorIndicatorColor}{#1}}
+\newcommand{\infoDecorate}[1]{\coloredwave{infoIndicatorColor}{#1}}
+\newcommand{\warningDecorate}[1]{\coloredwave{warningIndicatorColor}{#1}}
 \DefineVerbatimEnvironment{LeanVerbatim}{Verbatim}
   {commandchars=\\\{\},fontsize=\small,breaklines=true}
 \DefineVerbatimEnvironment{FileVerbatim}{Verbatim}{commandchars=\\\{\},fontsize=\small,breaklines=true,frame=single,framesep=2mm,numbers=left}
@@ -124,6 +123,24 @@ title={#2},#1}
 \renewcommand{\cftsectionfont}{\normalfont\sffamily}
 \renewcommand{\cftchapterpagefont}{\normalfont\sffamily}
 \renewcommand{\cftsectionpagefont}{\normalfont\sffamily}
+\providecommand{\versoKeyword}[1]{\textbf{#1}}
+\providecommand{\versoConst}[1]{#1}
+\providecommand{\versoVar}[1]{\textit{#1}}
+\providecommand{\versoLiteral}[1]{#1}
+\definecolor{versoCodeColor}{HTML}{000000}
+\definecolor{versoConstColor}{HTML}{000000}
+\definecolor{versoKeywordColor}{HTML}{000000}
+\definecolor{versoVarColor}{HTML}{000000}
+\definecolor{errorColor}{HTML}{CC0000}
+\definecolor{warningColor}{HTML}{000000}
+\definecolor{infoColor}{HTML}{000000}
+\definecolor{errorIndicatorColor}{HTML}{FF0000}
+\definecolor{warningIndicatorColor}{HTML}{E7A71D}
+\definecolor{infoIndicatorColor}{HTML}{4777FF}
+\renewcommand{\versoKeyword}[1]{\textcolor{versoKeywordColor}{\fontseries{eb}\fontshape{n}\selectfont #1}}
+\renewcommand{\versoConst}[1]{\textcolor{versoConstColor}{\fontseries{m}\fontshape{n}\selectfont #1}}
+\renewcommand{\versoVar}[1]{\textcolor{versoVarColor}{\fontseries{m}\fontshape{it}\selectfont #1}}
+\renewcommand{\versoLiteral}[1]{\textcolor{versoCodeColor}{#1}}
 \setmonofont{DejaVu Sans Mono}
 
 \title{\sffamily Title of the Doc}
@@ -143,7 +160,7 @@ title={#2},#1}
 
 \cleardoublepage
 \begin{docstringBox}{def}
-\LeanVerb|Verso.\allowbreak{}Integration.\allowbreak{}Sample\-Doc.\allowbreak{}sample_constant : Type|\tcblower This is a docstring.Here's some more text with a \LeanVerb|code inline| in it.
+\LeanVerb|\versoConst{Verso.\allowbreak{}Integration.\allowbreak{}Sample\-Doc.\allowbreak{}sample_constant} \versoLiteral{:} \versoLiteral{Type}|\tcblower This is a docstring.Here's some more text with a \LeanVerb|code inline| in it.
 Here's when a \LeanVerb|code inline|
 occurs right before a line break.And then here's a paragraph break.
 \end{docstringBox}

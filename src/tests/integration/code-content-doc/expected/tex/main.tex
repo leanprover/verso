@@ -51,12 +51,11 @@
 % Work around missing U+2011 (non-breaking hyphen) in Source Serif Pro
 \newunicodechar{‑}{-}
 
-\definecolor{errorColor}{HTML}{B91C1C}
-\definecolor{infoColor}{HTML}{1E6BB8}
-\definecolor{warningColor}{HTML}{D97706}
-\newcommand{\errorDecorate}[1]{\coloredwave{errorColor}{#1}}
-\newcommand{\infoDecorate}[1]{\coloredwave{infoColor}{#1}}
-\newcommand{\warningDecorate}[1]{\coloredwave{warningColor}{#1}}
+% Decoration accents (wavy underlines) use the *indicator* colors, distinct from the message
+% text colors. The theme block below redefines both.
+\newcommand{\errorDecorate}[1]{\coloredwave{errorIndicatorColor}{#1}}
+\newcommand{\infoDecorate}[1]{\coloredwave{infoIndicatorColor}{#1}}
+\newcommand{\warningDecorate}[1]{\coloredwave{warningIndicatorColor}{#1}}
 \DefineVerbatimEnvironment{LeanVerbatim}{Verbatim}
   {commandchars=\\\{\},fontsize=\small,breaklines=true}
 \DefineVerbatimEnvironment{FileVerbatim}{Verbatim}{commandchars=\\\{\},fontsize=\small,breaklines=true,frame=single,framesep=2mm,numbers=left}
@@ -124,6 +123,24 @@ title={#2},#1}
 \renewcommand{\cftsectionfont}{\normalfont\sffamily}
 \renewcommand{\cftchapterpagefont}{\normalfont\sffamily}
 \renewcommand{\cftsectionpagefont}{\normalfont\sffamily}
+\providecommand{\versoKeyword}[1]{\textbf{#1}}
+\providecommand{\versoConst}[1]{#1}
+\providecommand{\versoVar}[1]{\textit{#1}}
+\providecommand{\versoLiteral}[1]{#1}
+\definecolor{versoCodeColor}{HTML}{000000}
+\definecolor{versoConstColor}{HTML}{000000}
+\definecolor{versoKeywordColor}{HTML}{000000}
+\definecolor{versoVarColor}{HTML}{000000}
+\definecolor{errorColor}{HTML}{CC0000}
+\definecolor{warningColor}{HTML}{000000}
+\definecolor{infoColor}{HTML}{000000}
+\definecolor{errorIndicatorColor}{HTML}{FF0000}
+\definecolor{warningIndicatorColor}{HTML}{E7A71D}
+\definecolor{infoIndicatorColor}{HTML}{4777FF}
+\renewcommand{\versoKeyword}[1]{\textcolor{versoKeywordColor}{\fontseries{eb}\fontshape{n}\selectfont #1}}
+\renewcommand{\versoConst}[1]{\textcolor{versoConstColor}{\fontseries{m}\fontshape{n}\selectfont #1}}
+\renewcommand{\versoVar}[1]{\textcolor{versoVarColor}{\fontseries{m}\fontshape{it}\selectfont #1}}
+\renewcommand{\versoLiteral}[1]{\textcolor{versoCodeColor}{#1}}
 \setmonofont{DejaVu Sans Mono}
 
 \title{\sffamily Title of the Doc}
@@ -144,72 +161,72 @@ title={#2},#1}
 \cleardoublepage
 Here is some code with vertical bars:
 \begin{LeanVerbatim}
-\textbf{def} or := (· \symbol{124}\symbol{124} ·)
-
+\versoKeyword{def} \versoConst{or} \versoLiteral{:=} \versoLiteral{(}\versoLiteral{·} \versoLiteral{\symbol{124}\symbol{124}} \versoLiteral{·}\versoLiteral{)}
+\versoLiteral{}
 \end{LeanVerbatim}
 
 Here is some with a variety of interesting Unicode, including characters where UTF-16 is funky:
 \begin{LeanVerbatim}
-\textbf{def} Set (\textit{α} : Type u) : Type u := \textit{α} → Prop
+\versoKeyword{def} \versoConst{Set} \versoLiteral{(}\versoVar{α} \versoLiteral{:} \versoLiteral{Type} \versoLiteral{u}\versoLiteral{)} \versoLiteral{:} \versoLiteral{Type} \versoLiteral{u} \versoLiteral{:=} \versoVar{α} \versoLiteral{→} \versoLiteral{Prop}
 
-\textbf{instance} : EmptyCollection (Set \textit{α}) \textbf{where}
-  emptyCollection := \textbf{fun} _ => False
+\versoKeyword{instance} \versoLiteral{:} \versoConst{EmptyCollection} \versoLiteral{(}\versoConst{Set} \versoVar{α}\versoLiteral{)} \versoKeyword{where}
+  \versoConst{emptyCollection} \versoLiteral{:=} \versoKeyword{fun} \versoLiteral{_} \versoLiteral{=>} \versoConst{False}
 
-\textbf{instance} : Union (Set \textit{α}) \textbf{where}
-  union \textit{a} \textit{b} := \textbf{fun} \textit{x} => \textit{a} \textit{x} ∨ \textit{b} \textit{x}
+\versoKeyword{instance} \versoLiteral{:} \versoConst{Union} \versoLiteral{(}\versoConst{Set} \versoVar{α}\versoLiteral{)} \versoKeyword{where}
+  \versoConst{union} \versoVar{a} \versoVar{b} \versoLiteral{:=} \versoKeyword{fun} \versoVar{x} \versoLiteral{=>} \versoVar{a} \versoVar{x} \versoLiteral{∨} \versoVar{b} \versoVar{x}
 
-\textbf{instance} : Inter (Set \textit{α}) \textbf{where}
-  inter \textit{a} \textit{b} := \textbf{fun} \textit{x} => \textit{a} \textit{x} ∧ \textit{b} \textit{x}
+\versoKeyword{instance} \versoLiteral{:} \versoConst{Inter} \versoLiteral{(}\versoConst{Set} \versoVar{α}\versoLiteral{)} \versoKeyword{where}
+  \versoConst{inter} \versoVar{a} \versoVar{b} \versoLiteral{:=} \versoKeyword{fun} \versoVar{x} \versoLiteral{=>} \versoVar{a} \versoVar{x} \versoLiteral{∧} \versoVar{b} \versoVar{x}
 
-\textbf{instance} : Membership \textit{α} (Set \textit{α}) \textbf{where}
-  mem \textit{a} \textit{x} := \textit{a} \textit{x}
+\versoKeyword{instance} \versoLiteral{:} \versoConst{Membership} \versoVar{α} \versoLiteral{(}\versoConst{Set} \versoVar{α}\versoLiteral{)} \versoKeyword{where}
+  \versoConst{mem} \versoVar{a} \versoVar{x} \versoLiteral{:=} \versoVar{a} \versoVar{x}
 
-@[\textbf{ext}]
-\textbf{theorem} Set.ext \symbol{123}\textit{a} \textit{b} : Set \textit{α}\symbol{125} :
-    (∀ \textit{x}, \textit{x} ∈ \textit{a} ↔ \textit{x} ∈ \textit{b}) → \textit{a} = \textit{b} := \textbf{by}
-  \textbf{intro} \textit{h}
-  \textbf{funext} \textit{x}
-  \textbf{exact} propext (\textit{h} \textit{x})
+\versoLiteral{@[}\versoKeyword{ext}\versoLiteral{]}
+\versoKeyword{theorem} \versoConst{Set.ext} \versoLiteral{\symbol{123}}\versoVar{a} \versoVar{b} \versoLiteral{:} \versoConst{Set} \versoVar{α}\versoLiteral{\symbol{125}} \versoLiteral{:}
+    \versoLiteral{(}\versoLiteral{∀} \versoVar{x}\versoLiteral{,} \versoVar{x} \versoLiteral{∈} \versoVar{a} \versoLiteral{↔} \versoVar{x} \versoLiteral{∈} \versoVar{b}\versoLiteral{)} \versoLiteral{→} \versoVar{a} \versoLiteral{=} \versoVar{b} \versoLiteral{:=} \versoKeyword{by}
+  \versoKeyword{intro} \versoVar{h}
+  \versoKeyword{funext} \versoVar{x}
+  \versoKeyword{exact} \versoConst{propext} \versoLiteral{(}\versoVar{h} \versoVar{x}\versoLiteral{)}
 
-\textbf{instance} : HasSubset (Set \textit{α}) \textbf{where}
-  Subset \textit{a} \textit{b} := ∀ \textit{x}, \textit{x} ∈ \textit{a} → \textit{x} ∈ \textit{b}
+\versoKeyword{instance} \versoLiteral{:} \versoConst{HasSubset} \versoLiteral{(}\versoConst{Set} \versoVar{α}\versoLiteral{)} \versoKeyword{where}
+  \versoConst{Subset} \versoVar{a} \versoVar{b} \versoLiteral{:=} \versoLiteral{∀} \versoVar{x}\versoLiteral{,} \versoVar{x} \versoLiteral{∈} \versoVar{a} \versoLiteral{→} \versoVar{x} \versoLiteral{∈} \versoVar{b}
 
-@[\textbf{simp}, \textbf{grind} .]
-\textbf{theorem} Set.subset_refl \symbol{123}\textit{a} : Set \textit{α}\symbol{125} : \textit{a} ⊆ \textit{a} := \textbf{by}
-  \textbf{simp} [(· ⊆ ·)]
+\versoLiteral{@[}\versoKeyword{simp}\versoLiteral{,} \versoKeyword{grind} \versoLiteral{.}\versoLiteral{]}
+\versoKeyword{theorem} \versoConst{Set.subset_refl} \versoLiteral{\symbol{123}}\versoVar{a} \versoLiteral{:} \versoConst{Set} \versoVar{α}\versoLiteral{\symbol{125}} \versoLiteral{:} \versoVar{a} \versoLiteral{⊆} \versoVar{a} \versoLiteral{:=} \versoKeyword{by}
+  \versoKeyword{simp} \versoLiteral{[}\versoLiteral{(}\versoLiteral{·} \versoLiteral{⊆} \versoLiteral{·}\versoLiteral{)}\versoLiteral{]}
 
-@[\textbf{grind} ←]
-\textbf{theorem} Set.subset_union \symbol{123}\textit{a} \textit{b} \textit{c} : Set \textit{α}\symbol{125} :
-    \textit{a} ⊆ \textit{b} → \textit{a} ⊆ \textit{b} ∪ \textit{c} := \textbf{by}
-  \textbf{simp} [(· ⊆ ·), (· ∪ ·), (· ∈ ·)]
-  \textbf{intro} \textit{h}
-  \textbf{solve_by_elim}
+\versoLiteral{@[}\versoKeyword{grind} \versoLiteral{←}\versoLiteral{]}
+\versoKeyword{theorem} \versoConst{Set.subset_union} \versoLiteral{\symbol{123}}\versoVar{a} \versoVar{b} \versoVar{c} \versoLiteral{:} \versoConst{Set} \versoVar{α}\versoLiteral{\symbol{125}} \versoLiteral{:}
+    \versoVar{a} \versoLiteral{⊆} \versoVar{b} \versoLiteral{→} \versoVar{a} \versoLiteral{⊆} \versoVar{b} \versoLiteral{∪} \versoVar{c} \versoLiteral{:=} \versoKeyword{by}
+  \versoKeyword{simp} \versoLiteral{[}\versoLiteral{(}\versoLiteral{·} \versoLiteral{⊆} \versoLiteral{·}\versoLiteral{)}\versoLiteral{,} \versoLiteral{(}\versoLiteral{·} \versoLiteral{∪} \versoLiteral{·}\versoLiteral{)}\versoLiteral{,} \versoLiteral{(}\versoLiteral{·} \versoLiteral{∈} \versoLiteral{·}\versoLiteral{)}\versoLiteral{]}
+  \versoKeyword{intro} \versoVar{h}
+  \versoKeyword{solve_by_elim}
 
-\textbf{def} Set.powerset (\textit{a} : Set \textit{α}) : Set (Set \textit{α}) :=
-  \textbf{fun} (\textit{x} : Set \textit{α}) => \textit{x} ⊆ \textit{a}
+\versoKeyword{def} \versoConst{Set.powerset} \versoLiteral{(}\versoVar{a} \versoLiteral{:} \versoConst{Set} \versoVar{α}\versoLiteral{)} \versoLiteral{:} \versoConst{Set} \versoLiteral{(}\versoConst{Set} \versoVar{α}\versoLiteral{)} \versoLiteral{:=}
+  \versoKeyword{fun} \versoLiteral{(}\versoVar{x} \versoLiteral{:} \versoConst{Set} \versoVar{α}\versoLiteral{)} \versoLiteral{=>} \versoVar{x} \versoLiteral{⊆} \versoVar{a}
 
-\textbf{notation} "𝒫 " \textit{x} => Set.powerset \textit{x}
+\versoKeyword{notation} \versoLiteral{"𝒫 "} \versoVar{x} \versoLiteral{=>} \versoConst{Set.powerset} \versoVar{x}
 
-\textbf{theorem} Set.powerset_empty_nonempty :
-    ∃ (\textit{a} : Set \textit{α}), \textit{a} ∈ 𝒫 \symbol{123}\symbol{125} := \textbf{by}
-  \textbf{constructor}
-  \textbf{case} w => \textbf{exact} \symbol{123}\symbol{125}
-  \textbf{simp} [(· ∈ ·), powerset]
+\versoKeyword{theorem} \versoConst{Set.powerset_empty_nonempty} \versoLiteral{:}
+    \versoLiteral{∃} \versoLiteral{(}\versoVar{a} \versoLiteral{:} \versoConst{Set} \versoVar{α}\versoLiteral{)}\versoLiteral{,} \versoVar{a} \versoLiteral{∈} \versoLiteral{𝒫} \versoLiteral{\symbol{123}}\versoLiteral{\symbol{125}} \versoLiteral{:=} \versoKeyword{by}
+  \versoKeyword{constructor}
+  \versoKeyword{case} \versoLiteral{w} \versoLiteral{=>} \versoKeyword{exact} \versoLiteral{\symbol{123}}\versoLiteral{\symbol{125}}
+  \versoKeyword{simp} \versoLiteral{[}\versoLiteral{(}\versoLiteral{·} \versoLiteral{∈} \versoLiteral{·}\versoLiteral{)}\versoLiteral{,} \versoConst{powerset}\versoLiteral{]}
 
-@[\infoDecorate{\textbf{grind?} →}]
-\textbf{theorem} Set.powerset_empty_unique (\textit{x} \textit{y} : Set \textit{α}) :
-    \textit{x} ∈ (𝒫 \symbol{123}\symbol{125}) → \textit{y} ∈ (𝒫 \symbol{123}\symbol{125}) → \textit{x} = \textit{y} := \textbf{by}
-  \textbf{intro} \textit{hx} \textit{hy}
-  \textbf{ext} \textit{x'}
-  \textbf{exact} (iff_false_right (\textit{hy} \textit{x'})).mpr (\textit{hx} \textit{x'})
-
+\versoLiteral{@[}\infoDecorate{\versoKeyword{grind?} \versoLiteral{→}}\versoLiteral{]}
+\versoKeyword{theorem} \versoConst{Set.powerset_empty_unique} \versoLiteral{(}\versoVar{x} \versoVar{y} \versoLiteral{:} \versoConst{Set} \versoVar{α}\versoLiteral{)} \versoLiteral{:}
+    \versoVar{x} \versoLiteral{∈} \versoLiteral{(}\versoLiteral{𝒫} \versoLiteral{\symbol{123}}\versoLiteral{\symbol{125}}\versoLiteral{)} \versoLiteral{→} \versoVar{y} \versoLiteral{∈} \versoLiteral{(}\versoLiteral{𝒫} \versoLiteral{\symbol{123}}\versoLiteral{\symbol{125}}\versoLiteral{)} \versoLiteral{→} \versoVar{x} \versoLiteral{=} \versoVar{y} \versoLiteral{:=} \versoKeyword{by}
+  \versoKeyword{intro} \versoVar{hx} \versoVar{hy}
+  \versoKeyword{ext} \versoVar{x'}
+  \versoKeyword{exact} \versoLiteral{(}\versoConst{iff_false_right} \versoLiteral{(}\versoVar{hy} \versoVar{x'}\versoLiteral{)}\versoLiteral{)}\versoLiteral{.}\versoConst{mpr} \versoLiteral{(}\versoVar{hx} \versoVar{x'}\versoLiteral{)}
+\versoLiteral{}
 \end{LeanVerbatim}
 
 And now some inline code:
 \begin{itemize}
-\item \LeanVerb|∀\textit{x} \textit{y} : Set _, \textit{x} ∈ ((𝒫 \textit{x}) ∪ (𝒫 \textit{y}))|
-\item \LeanVerb|true \symbol{124}\symbol{124} false|
-\item \LeanVerb|False → True|
+\item \LeanVerb|\versoLiteral{∀}\versoVar{x} \versoVar{y} \versoLiteral{:} \versoConst{Set} \versoLiteral{_}\versoLiteral{,} \versoVar{x} \versoLiteral{∈} \versoLiteral{(}\versoLiteral{(}\versoLiteral{𝒫} \versoVar{x}\versoLiteral{)} \versoLiteral{∪} \versoLiteral{(}\versoLiteral{𝒫} \versoVar{y}\versoLiteral{)}\versoLiteral{)}|
+\item \LeanVerb|\versoConst{true} \versoLiteral{\symbol{124}\symbol{124}} \versoConst{false}|
+\item \LeanVerb|\versoConst{False} \versoLiteral{→} \versoConst{True}|
 
 \end{itemize}
 

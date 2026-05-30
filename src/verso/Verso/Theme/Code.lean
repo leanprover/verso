@@ -358,6 +358,79 @@ public def cssVariables (theme : CodeTheme) : String :=
 
 end CodeTheme
 
+/-! # TeX preamble -/
+
+namespace CodeTheme
+
+private def fontSeries (w : Weight) : String :=
+  -- The NFSS series codes that are widely supported by fontspec/luaotfload. We map the requested
+  -- numeric weight to the nearest standard series; LuaLaTeX uses the series to pick a face. A
+  -- finer mapping is unnecessary because the variable/extra weights are handled by the font
+  -- loader, not by `\fontseries`.
+  let v := w.val
+  if v ≤ 200 then "ul"
+  else if v ≤ 300 then "el"
+  else if v ≤ 350 then "l"
+  else if v ≤ 450 then "m"
+  else if v ≤ 550 then "sb"
+  else if v ≤ 650 then "b"
+  else if v ≤ 750 then "eb"
+  else "ub"
+
+private def fontShape : FontStyle → String
+  | .normal => "n"
+  | .italic => "it"
+
+private def tokenMacro (name : String) (s : TokenStyle) (colorName : String) : String :=
+  s!"\\renewcommand\{\\verso{name}}[1]\{\\textcolor\{{colorName}}\{\\fontseries\{{fontSeries s.weight}}\\fontshape\{{fontShape s.style}}\\selectfont #1}}\n"
+
+/--
+Returns a TeX preamble fragment that defines a theme-specific {lit}`xcolor` palette, redefines
+the four {lit}`\verso…` token macros so they apply the theme's per-token color, weight, and
+style, and sets the document mono font to {Lean.Doc.name (full := Verso.Typeface.texFamily)}`Verso.Typeface.texFamily` applied to
+{Lean.Doc.name (full := Verso.Theme.CodeTheme.codeFace)}`codeFace`.
+
+Two color names are emitted per severity: {lit}`errorColor`/{lit}`warningColor`/{lit}`infoColor`
+are the message-text colors, and {lit}`errorIndicatorColor`/{lit}`warningIndicatorColor`/{lit}`infoIndicatorColor`
+are the accent colors used for the wavy underlines and frames. The output is intended to be
+appended after Verso's manual preamble (which carries the {lit}`\providecommand` fallbacks for
+the {lit}`\verso…` macros). It uses {lit}`xcolor`'s {lit}`HTML` model and NFSS series/shape
+codes that fontspec understands under LuaLaTeX.
+-/
+public def texPreamble (theme : CodeTheme) : String :=
+  let codeColor := Color.tex theme.codeColor
+  let constColor := Color.tex theme.const.color
+  let keywordColor := Color.tex theme.keyword.color
+  let varColor := Color.tex theme.«var».color
+  -- Per the structure's semantics, the `*Color` fields are message-text colors and
+  -- `*IndicatorColor` are accent colors (underlines, frames, dingbats). Emit both as separate
+  -- `\definecolor` entries so the preamble can reference whichever the rule needs.
+  let errorTextColor := Color.tex theme.errorColor
+  let warningTextColor := Color.tex theme.warningColor
+  let infoTextColor := Color.tex theme.infoColor
+  let errorAccent := Color.tex theme.errorIndicatorColor
+  let warningAccent := Color.tex theme.warningIndicatorColor
+  let infoAccent := Color.tex theme.infoIndicatorColor
+  String.join [
+    s!"\\definecolor\{versoCodeColor}\{HTML}\{{codeColor}}\n",
+    s!"\\definecolor\{versoConstColor}\{HTML}\{{constColor}}\n",
+    s!"\\definecolor\{versoKeywordColor}\{HTML}\{{keywordColor}}\n",
+    s!"\\definecolor\{versoVarColor}\{HTML}\{{varColor}}\n",
+    s!"\\definecolor\{errorColor}\{HTML}\{{errorTextColor}}\n",
+    s!"\\definecolor\{warningColor}\{HTML}\{{warningTextColor}}\n",
+    s!"\\definecolor\{infoColor}\{HTML}\{{infoTextColor}}\n",
+    s!"\\definecolor\{errorIndicatorColor}\{HTML}\{{errorAccent}}\n",
+    s!"\\definecolor\{warningIndicatorColor}\{HTML}\{{warningAccent}}\n",
+    s!"\\definecolor\{infoIndicatorColor}\{HTML}\{{infoAccent}}\n",
+    tokenMacro "Keyword" theme.keyword "versoKeywordColor",
+    tokenMacro "Const" theme.const "versoConstColor",
+    tokenMacro "Var" theme.«var» "versoVarColor",
+    s!"\\renewcommand\{\\versoLiteral}[1]\{\\textcolor\{versoCodeColor}\{#1}}\n",
+    s!"\\setmonofont\{{theme.codeFace.texFamily}}\n"
+  ]
+
+end CodeTheme
+
 /-! # Font assets and {lit}`@font-face` writing -/
 
 namespace CodeTheme
@@ -403,18 +476,22 @@ public def slugFamily (family : String) : String := Id.run do
 
 /--
 Output-relative paths and bytes of every font file the theme uses. Each file is named
-{lit}`<slug>-<index>.<ext>` where {lit}`<slug>` is {Lean.Doc.name}`Verso.Theme.CodeTheme.slugFamily`
-applied to the family. The {lit}`assetRoot` is the directory the paths are relative to (no
-leading or trailing slash); the generated {lit}`@font-face` {lit}`url()`s also resolve from there.
+{lit}`<slug>-<typeface>-<face>.<ext>`, where {lit}`<slug>` is
+{Lean.Doc.name}`Verso.Theme.CodeTheme.slugFamily` applied to the family and {lit}`<typeface>` is
+the index of the typeface within the theme's {Lean.Doc.name}`Verso.Theme.CodeTheme.fileTypefaces`
+array. The typeface index keeps paths distinct even when two families slug to the same string
+(such as {lit}`"A B"` and {lit}`"A/B"` both becoming {lit}`A-B`). The {lit}`assetRoot` is the
+directory the paths are relative to (no leading or trailing slash); the generated
+{lit}`@font-face` {lit}`url()`s also resolve from there.
 -/
 public def fontAssets (theme : CodeTheme) (assetRoot : String) :
     Array (String × ByteArray × FontFace × String) := Id.run do
   let mut out := #[]
-  for tf in theme.fileTypefaces do
+  for (tf, ti) in theme.fileTypefaces.zipIdx do
     if let .files family faces := tf then
       let slug := slugFamily family
       for (face, i) in faces.zipIdx do
-        let path := s!"{assetRoot}/fonts/{slug}-{i}.{face.format.ext}"
+        let path := s!"{assetRoot}/fonts/{slug}-{ti}-{i}.{face.format.ext}"
         out := out.push (path, face.bytes, face, family)
   return out
 

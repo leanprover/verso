@@ -136,6 +136,19 @@ public def Typeface.cssFamily : Typeface → String
   | .mono => "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
   | .files family _ => cssQuote family
 
+/--
+The fontspec family name that LuaLaTeX should pick for a typeface. The built-in
+{name (full := Verso.Typeface.sans)}`sans`/{name (full := Verso.Typeface.serif)}`serif`/{name (full := Verso.Typeface.mono)}`mono`
+typefaces fall back to a system family known to ship with TeXLive's LuaLaTeX bundle; a
+{name (full := Verso.Typeface.files)}`files` typeface uses its declared family name directly so
+the corresponding fontspec files loaded elsewhere in the preamble resolve.
+-/
+public def Typeface.texFamily : Typeface → String
+  | .sans => "DejaVu Sans"
+  | .serif => "DejaVu Serif"
+  | .mono => "DejaVu Sans Mono"
+  | .files family _ => family
+
 /-! # Defining font faces -/
 
 /--

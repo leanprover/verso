@@ -57,7 +57,7 @@ def testTexOutput
   let runTest : IO Unit  :=
     open Verso Genre Manual in do
     let logger ← Verso.Logger.new
-    emitTeX versoConfig doc.toPart |>.run extension_impls% |>.run logger
+    emitTeX ({ versoConfig with : RenderConfig }) doc.toPart |>.run extension_impls% |>.run logger
 
   Verso.Integration.runTests { config with
     testDir := "src/tests/integration" / dir,

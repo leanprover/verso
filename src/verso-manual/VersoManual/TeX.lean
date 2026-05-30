@@ -4,9 +4,15 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 module
+
+public import Verso.Code.HighlightedToTex
+public import Verso.Theme.Code
+
 namespace Verso.Genre.Manual.TeX
 
-public def preamble (title : String) (authors : List String) (date : String) (packages : List String) (extraPreamble : List String) : String :=
+public def preamble (title : String) (authors : List String) (date : String)
+    (packages : List String) (extraPreamble : List String)
+    (codeTheme : Verso.Theme.CodeTheme) : String :=
 r##"
 \documentclass{memoir}
 
@@ -60,12 +66,11 @@ r##"
 % Work around missing U+2011 (non-breaking hyphen) in Source Serif Pro
 \newunicodechar{‑}{-}
 
-\definecolor{errorColor}{HTML}{B91C1C}
-\definecolor{infoColor}{HTML}{1E6BB8}
-\definecolor{warningColor}{HTML}{D97706}
-\newcommand{\errorDecorate}[1]{\coloredwave{errorColor}{#1}}
-\newcommand{\infoDecorate}[1]{\coloredwave{infoColor}{#1}}
-\newcommand{\warningDecorate}[1]{\coloredwave{warningColor}{#1}}
+% Decoration accents (wavy underlines) use the *indicator* colors, distinct from the message
+% text colors. The theme block below redefines both.
+\newcommand{\errorDecorate}[1]{\coloredwave{errorIndicatorColor}{#1}}
+\newcommand{\infoDecorate}[1]{\coloredwave{infoIndicatorColor}{#1}}
+\newcommand{\warningDecorate}[1]{\coloredwave{warningIndicatorColor}{#1}}
 \DefineVerbatimEnvironment{LeanVerbatim}{Verbatim}
   {commandchars=\\\{\},fontsize=\small,breaklines=true}
 \DefineVerbatimEnvironment{FileVerbatim}{Verbatim}{commandchars=\\\{\},fontsize=\small,breaklines=true,frame=single,framesep=2mm,numbers=left}
@@ -135,8 +140,9 @@ r##"
 \renewcommand{\cftsectionfont}{\normalfont\sffamily}
 \renewcommand{\cftchapterpagefont}{\normalfont\sffamily}
 \renewcommand{\cftsectionpagefont}{\normalfont\sffamily}
-\setmonofont{DejaVu Sans Mono}
 "## ++
+SubVerso.Highlighting.texMacroFallbacks ++
+codeTheme.texPreamble ++
 "\n".intercalate extraPreamble ++
 r##"
 \title{\sffamily "## ++ title ++ r##"}

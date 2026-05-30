@@ -379,8 +379,8 @@ where
   isUnnumbered (p : Part Manual) : Bool := p.metadata.map (·.number) |>.isEqSome false
 
 open IO.FS in
-def emitTeX (config : Config) (text : Part Manual) : EmitM Unit := do
-  let (text, state) ← traverse text config
+def emitTeX (config : RenderConfig) (text : Part Manual) : EmitM Unit := do
+  let (text, state) ← traverse text config.toConfig
   let opts : TeX.Options Manual := {
     headerLevels := #["chapter", "section", "subsection", "subsubsection", "paragraph"],
     headerLevel := some ⟨0, by grind⟩
@@ -402,7 +402,7 @@ def emitTeX (config : Config) (text : Part Manual) : EmitM Unit := do
   withFile (dir.join "main.tex") .write fun h => do
     if config.verbose then
       IO.println s!"Saving {dir.join "main.tex"}"
-    h.putStrLn (preamble text.titleString authors date packages.toList preambleItems.toList)
+    h.putStrLn (preamble text.titleString authors date packages.toList preambleItems.toList config.codeTheme)
     -- \frontmatter is inserted by our hardcoded preamble before the ToC, so it doesn't get inserted
     -- here. If there's any text at the start of the front matter, then we need to clear it to a new
     -- recto page after the ToC
@@ -1049,7 +1049,7 @@ where
       if cfg.emitTeX then
         if cfg.verbose then
           IO.println s!"Saving TeX"
-        emitTeX cfg.toConfig text
+        emitTeX cfg text
 
       emitHtml cfg.emitHtmlSingle .single cfg text traverseHtmlSingle emitHtmlSingle
       emitHtml cfg.emitHtmlMulti .multi cfg text traverseHtmlMulti emitHtmlMulti

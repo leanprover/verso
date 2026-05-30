@@ -4,6 +4,8 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 import Verso.Font
+import Verso.Theme.Code
+import Verso.Theme.Code.Defaults
 
 /-!
 Compile-time tests for `Verso.Font`: the `define_font_face` command embeds file bytes, `Weight`
@@ -68,3 +70,23 @@ define_font_face noFormat where
 #guard_msgs in
 define_font_face noFile where
   format := .ttf
+
+-- `slugFamily` keeps a usable hyphen-separated tail and falls back to "font" for empty input.
+/-- info: "Source-Sans-3" -/
+#guard_msgs in #eval Verso.Theme.CodeTheme.slugFamily "Source Sans 3"
+/-- info: "Fira-Mono" -/
+#guard_msgs in #eval Verso.Theme.CodeTheme.slugFamily "Fira/Mono"
+/-- info: "font" -/
+#guard_msgs in #eval Verso.Theme.CodeTheme.slugFamily "///"
+
+-- Two distinct families that slug to the same string get distinct asset paths via the typeface
+-- index, so one font's bytes can never overwrite the other.
+def collidingTheme : Verso.Theme.CodeTheme := {
+  Verso.Theme.CodeTheme.Default with
+  codeFace := .files "A B" #[katexMono],
+  const := { color := color%#000000, weight := .regular, style := .normal,
+             face := .files "A/B" #[katexMono] }
+}
+
+/-- info: #["assets/fonts/A-B-0-0.woff2", "assets/fonts/A-B-1-0.woff2"] -/
+#guard_msgs in #eval (collidingTheme.fontAssets "assets").map (·.1)
