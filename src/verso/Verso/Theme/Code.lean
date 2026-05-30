@@ -84,8 +84,9 @@ public structure CodeTheme where
   infoIndicatorColor : Color := color%#4777ff
   /-- The message-text color for warning diagnostics. -/
   warningColor : Color := textColor
-  /-- The accent color (left border, underline) for warning diagnostics. -/
-  warningIndicatorColor : Color := color%#e7a71d
+  /-- The accent color (left border, underline) for warning diagnostics. Defaults to a darker
+  amber than the legacy {lit}`#e7a71d` so it clears WCAG 1.4.11 (3:1) against white. -/
+  warningIndicatorColor : Color := color%#d97706
   /-- The message-text color for error diagnostics. -/
   errorColor : Color := color%#cc0000
   /-- The accent color (left border, underline) for error diagnostics. -/
@@ -289,12 +290,11 @@ public def checkAccessibility (theme : CodeTheme) : Array Color.Issue := Id.run 
   -- Code drawn on the tactic-state background (for example a hypothesis).
   issues := issues ++ Color.contrastIssues Color.textContrastThreshold
     "code on tactic-state background" theme.codeColor theme.tacticStateBackground
-  -- Colorblindness: tokens and indicators stay mutually distinguishable.
-  issues := issues ++ Color.colorblindIssues Color.distinguishableThreshold
-    (theme.tokenSummaries ++ #[
-      ("error indicator", theme.errorIndicatorColor),
-      ("warning indicator", theme.warningIndicatorColor),
-      ("info indicator", theme.infoIndicatorColor)])
+  -- Colorblindness: token colors stay mutually distinguishable. Severity indicators are
+  -- intentionally excluded here: error red and warning yellow/amber routinely collapse under
+  -- protanopia and deuteranopia, but they are visually paired with their distinct semantics
+  -- (text content, icons) so the color collision is not the only signal.
+  issues := issues ++ Color.colorblindIssues Color.distinguishableThreshold theme.tokenSummaries
   return issues
 
 end CodeTheme

@@ -110,6 +110,11 @@ public def contrastIssues (threshold : Float) (description : String) (fg bg : Co
 Checks that the given named colors stay mutually distinguishable under each of the three
 dichromacies. Reports a {name (full := IssueKind.colorblind)}`colorblind` issue for any pair that
 collapses (ΔE below {name}`threshold`) under some simulation.
+
+Pairs that are already identical in normal vision are skipped: the theme is not relying on color
+to distinguish them, so a color-vision-deficient reader is in no worse a position than a
+normal-vision one. Such pairs typically encode their distinction through weight or style (e.g. a
+bold keyword versus an italic variable, both black).
 -/
 public def colorblindIssues (threshold : Float) (colors : Array (String × Color)) : Array Issue := Id.run do
   let mut out := #[]
@@ -117,6 +122,7 @@ public def colorblindIssues (threshold : Float) (colors : Array (String × Color
     for j in [i + 1:colors.size] do
       let (n1, c1) := colors[i]!
       let (n2, c2) := colors[j]!
+      if c1 == c2 then continue
       for cvd in [CVD.protanopia, CVD.deuteranopia, CVD.tritanopia] do
         unless distinguishable? threshold (dichromacy cvd c1) (dichromacy cvd c2) do
           out := out.push

@@ -436,7 +436,6 @@ public def page
         <meta name="viewport" content="height=device-height, width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1"/>
         <title>{{textTitle}}</title>
         <link rel="stylesheet" href="book.css" />
-        <link rel="stylesheet" href="verso-vars.css" />
         <link rel="stylesheet" href="verso-themes.css" />
         <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js" integrity="sha384-zbcZAIxlvJtNE3Dp5nxLXdXtXyxwOdnILY1TDPVmKFhl4r4nSUG1r8bcFXGVa4Te" crossorigin="anonymous"></script>
         {{ searchAssetTags }}

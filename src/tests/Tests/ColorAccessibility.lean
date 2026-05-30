@@ -6,6 +6,8 @@ Author: David Thrane Christiansen
 module
 public import Plausible
 public meta import Verso.Theme.Color
+public meta import VersoManual.Theme
+public meta import VersoManual.Theme.Defaults
 public meta import Tests.Arbitrary
 
 /-!
@@ -70,6 +72,60 @@ def okabeIto : Array (String × Color) := #[
 /-- info: true -/
 #guard_msgs in
 #eval (colorblindIssues distinguishableThreshold okabeIto).isEmpty
+
+-- A pair of identical colors is not a colorblind issue: the theme is not relying on color to
+-- distinguish them (it might be using weight or style instead, as the default theme does).
+/-- info: true -/
+#guard_msgs in
+#eval (colorblindIssues distinguishableThreshold #[("a", .black), ("b", .black)]).isEmpty
+
+/-! ## `ManualTheme.checkAccessibility` -/
+
+-- The shipped default theme passes its own accessibility check.
+/-- info: true -/
+#guard_msgs in
+#eval ManualTheme.Default.checkAccessibility.isEmpty
+
+-- A low-contrast override (gray text on a near-white background) is flagged as a contrast
+-- problem (one per evaluated text pair against the page background).
+private def lowContrastTheme : ManualTheme := {
+  ManualTheme.Default with
+  textColor := color%#bbbbbb,
+}
+
+/-- info: true -/
+#guard_msgs in
+#eval (lowContrastTheme.checkAccessibility.any (·.kind == .contrast))
+
+-- A token palette that collapses under deuteranopia (a red and a green of matched lightness)
+-- is flagged as a CVD problem.
+private def cvdTheme : ManualTheme := {
+  ManualTheme.Default with
+  const := { ManualTheme.Default.const with color := color%#e60000 },
+  keyword := { ManualTheme.Default.keyword with color := color%#00a000 },
+}
+
+/-- info: true -/
+#guard_msgs in
+#eval (cvdTheme.checkAccessibility.any (·.kind == .colorblind))
+
+-- The contrast and colorblind checks are independent: the low-contrast theme has no colorblind
+-- issues, and the CVD theme has no contrast issues against the page background.
+/-- info: false -/
+#guard_msgs in
+#eval (lowContrastTheme.checkAccessibility.any (·.kind == .colorblind))
+
+-- A theme whose `highlightColor` is too close to `textColor` is flagged: search results render
+-- matched terms with `highlightColor` as their background, so the body text must read on it.
+private def badHighlightTheme : ManualTheme := {
+  ManualTheme.Default with
+  highlightColor := color%#333333,
+}
+
+/-- info: true -/
+#guard_msgs in
+#eval (badHighlightTheme.checkAccessibility.any (fun i =>
+  i.kind == .contrast && (i.message.splitOn "highlight").length > 1))
 
 /-! ## Property tests -/
 

@@ -37,7 +37,7 @@
     margin: 0;
     vertical-align: bottom;
     border: none;
-    border-bottom: 1px solid gray;
+    border-bottom: 1px solid var(--verso-border-color, gray);
     position: relative;
     cursor: pointer;
     width: var(--search-bar-width);
@@ -60,7 +60,7 @@
 #search-wrapper .cb_edit:empty:before {
     content: attr(placeholder);
     pointer-events: none;
-    color: #888;
+    color: var(--verso-muted-color, #888);
     font-family: sans-serif;
     display: block;
 }
@@ -228,7 +228,7 @@
 
 #search-wrapper .more-results {
     text-align: center;
-    color: #777;
+    color: var(--verso-muted-color, #777);
     font-size: 0.7rem;
 }
 

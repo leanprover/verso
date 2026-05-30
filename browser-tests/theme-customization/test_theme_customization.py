@@ -54,6 +54,14 @@ THEME = {
     "constColor": "#001717",
     "keywordColor": "#001818",
     "varColor": "#001919",
+    # ManualTheme additions (chrome).
+    "headerBackground": "#001b1b",
+    "tocBackground": "#001c1c",
+    "linkColor": "#002020",
+    "tocTextColor": "#002222",
+    "borderColor": "#001d1d",
+    "mutedColor": "#001e1e",
+    "highlightColor": "#001f1f",
 }
 
 
@@ -146,4 +154,125 @@ def test_error_indicator(page, server):
         _color(page, "pre.lean-output.error", "border-left-color"),
         THEME["errorIndicatorColor"],
         "lean-output.error indicator border",
+    )
+
+
+def test_page_background(page):
+    _expect(_color(page, "body", "background-color"), THEME["background"], "body background")
+
+
+def test_body_text_color(page):
+    # `body` now sets `color: var(--verso-text-color)`. Inherited text in prose elements
+    # (paragraphs in `main`) should resolve to the theme's textColor rather than the
+    # browser-default black.
+    _expect(_color(page, "main p"), THEME["textColor"], "body prose color")
+
+
+def test_header_background(page):
+    _expect(
+        _color(page, "header", "background-color"),
+        THEME["headerBackground"],
+        "header background",
+    )
+
+
+def test_header_title_color(page):
+    # `.header-title` previously hardcoded `color: black`; the theme's `textColor` is now what
+    # the rendered title actually uses, so a theme with textColor != black is readable on
+    # a non-white header background.
+    _expect(
+        _color(page, ".header-title"),
+        THEME["textColor"],
+        "header title color",
+    )
+
+
+def test_toc_background_and_link_color(page):
+    _expect(
+        _color(page, "#toc", "background-color"),
+        THEME["tocBackground"],
+        "toc background",
+    )
+    # `#toc a` previously hardcoded `color: #333`; the theme's `tocTextColor` is now used,
+    # so a dark ToC background plus a light tocTextColor stays readable.
+    _expect(
+        _color(page, "#toc a"),
+        THEME["tocTextColor"],
+        "toc link color",
+    )
+
+
+def test_content_link_color(page, server):
+    # The doc has an `<a href="https://example.com/">` content link inside `main`. The new
+    # `main a { color: var(--verso-link-color) }` rule should pick up the theme's linkColor.
+    page.goto(server + "/Code-samples/")
+    _expect(
+        _color(page, 'main a[href^="https://example.com"]'),
+        THEME["linkColor"],
+        "content link color",
+    )
+
+
+def _root_var(page, name: str) -> str:
+    """Resolves a CSS custom property at the document-root level to its computed `rgb(...)`."""
+    return page.evaluate(
+        "(name) => {"
+        "  const raw = getComputedStyle(document.documentElement).getPropertyValue(name).trim();"
+        "  if (raw.startsWith('rgb')) return raw;"
+        "  const probe = document.createElement('span');"
+        "  probe.style.color = raw;"
+        "  document.body.appendChild(probe);"
+        "  const out = getComputedStyle(probe).color;"
+        "  probe.remove();"
+        "  return out;"
+        "}",
+        name,
+    ).strip()
+
+
+def test_border_var(page):
+    # `borderColor` is the search-input border color (and other chrome borders); the search box
+    # is mounted by JS so the variable is the most direct verification that the theme value
+    # reaches the page. (The CSS rules in search-box.css / search-page.css use
+    # `var(--verso-border-color, gray)` so a missing variable would fall back to gray.)
+    _expect(_root_var(page, "--verso-border-color"), THEME["borderColor"], "borderColor var")
+
+
+def test_prev_next_nav_color(page, server):
+    # The `.prev-next-buttons > *` rule previously forced `color: black`, ignoring the theme.
+    # It now reads `var(--verso-link-color)` so a dark page can still surface readable nav links.
+    page.goto(server + "/Code-samples/")
+    _expect(
+        _color(page, ".prev-next-buttons > a"),
+        THEME["linkColor"],
+        "prev/next nav link color",
+    )
+
+
+def test_search_placeholder_muted(page, server):
+    # The quick-search placeholder previously hardcoded `#888` and the "more results" row `#777`.
+    # Both now route through `--verso-muted-color`. The search box itself is mounted by JS;
+    # waiting for the placeholder text confirms the rule reaches a real rendered element.
+    page.goto(server + "/Code-samples/")
+    placeholder = page.locator("#search-wrapper .cb_edit:empty").first
+    placeholder.wait_for(state="attached", timeout=10000)
+    color = page.evaluate(
+        "() => getComputedStyle(document.querySelector('#search-wrapper .cb_edit:empty'),"
+        " '::before').getPropertyValue('color')"
+    ).strip()
+    _expect(color, THEME["mutedColor"], "search placeholder color")
+
+
+def test_search_match_highlight(page, server):
+    # Full-page search results render each matched term inside an `<em>`, whose background
+    # comes from `--verso-highlight-color` via `search-page.css`. Driving an actual search
+    # confirms a rendered match `<em>` consumes the theme value (root variable existence is
+    # not enough; the CSS rule has to actually read it).
+    page.goto(server + "/search/?q=hello")
+    em = page.locator(".search-page-list li.search-result em").first
+    em.wait_for(state="attached", timeout=10000)
+    _expect(
+        _color(page, ".search-page-list li.search-result em", "background-color"),
+        THEME["highlightColor"],
+        "search-result match highlight",
     )

@@ -52,6 +52,27 @@ def config : Config where
   emitHtmlMulti := .immediately
   htmlDepth := 1
 
+def testManualTheme : ManualTheme := {
+  ManualTheme.Default with
+  toCodeTheme := testTheme,
+  surfaceColor := color%#001a1a,
+  headerBackground := color%#001b1b,
+  tocBackground := color%#001c1c,
+  borderColor := color%#001d1d,
+  mutedColor := color%#001e1e,
+  highlightColor := color%#001f1f,
+  linkColor := color%#002020,
+  visitedLinkColor := color%#002121,
+  tocTextColor := color%#002222,
+  burgerVisibleColor := color%#002323,
+  burgerVisibleShadowColor := color%#002424,
+  burgerHiddenColor := color%#002525,
+  burgerHiddenShadowColor := color%#002626
+}
+
 def main : List String → IO UInt32 :=
   manualMain (%doc ThemeTestDoc)
-    (config := { config with codeTheme := testTheme })
+    (config := { config with
+      manualTheme := testManualTheme,
+      strictThemeContrast := false,
+      strictThemeColorblind := false })

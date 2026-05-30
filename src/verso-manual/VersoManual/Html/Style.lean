@@ -24,9 +24,6 @@ public def pageStyle : String := r####"
     --verso-logo-height: var(--verso-header-height);
 
     /** Table of Contents appearance **/
-    --verso-toc-background-color: #fafafa;
-    --verso-toc-text-color: var(--verso-text-color);
-
     /* How long should the ToC animation take? */
     --verso-toc-transition-time: 0.4s;
 
@@ -38,10 +35,6 @@ public def pageStyle : String := r####"
     --verso-burger-width: 1.25rem;
     --verso-burger-line-width: 0.2rem;
     --verso-burger-line-radius: 0.2rem;
-    --verso-burger-toc-visible-color: var(--verso-toc-text-color);
-    --verso-burger-toc-visible-shadow-color: #ffffff;
-    --verso-burger-toc-hidden-color: #0e2431;
-    --verso-burger-toc-hidden-shadow-color: #ffffff;
 
     /* The "burger menu" may need to get bigger for mobile screens */
     --verso-mobile-burger-height: 1.5rem;
@@ -85,6 +78,8 @@ html {
 body {
     margin: 0;
     padding: 0;
+    background: var(--verso-background-color);
+    color: var(--verso-text-color);
 }
 
 /******** Theme ********/
@@ -124,7 +119,7 @@ header {
 	z-index: 99;
 	left: 0;
 	right: 0;
-	background: white;
+	background: var(--verso-header-background);
 	display: flex;
 	align-items: center;
 	height: var(--verso-header-height);
@@ -158,7 +153,7 @@ header {
 
 .header-title {
     text-decoration: none;
-    color: black;
+    color: var(--verso-text-color);
     font-size: 2rem;
     font-weight: bold;
     display: block;
@@ -275,13 +270,13 @@ main [id] {
 }
 
 #toc a {
-    color: #333;
+    color: var(--verso-toc-text-color);
     text-decoration: none;
 }
 
 #toc a:hover {
     text-decoration: underline;
-    color: #000;
+    color: var(--verso-toc-text-color);
 }
 
 .toc-title {
@@ -345,7 +340,7 @@ main [id] {
     width: calc(var(--verso-toc-triangle-width) + var(--verso-toc-triangle-left-space));
     height: var(--verso-toc-triangle-height);
     display: inline-block;
-    background-color: black;
+    background-color: var(--verso-toc-text-color);
     content: ' ';
     transition: ease 0.2s;
     margin-right: var(--verso-toc-triangle-margin);
@@ -443,7 +438,7 @@ main [id] {
     flex: 1;
     justify-content: center;
     align-items: center;
-    color: black;
+    color: var(--verso-link-color);
     text-decoration: none;
 }
 
@@ -736,6 +731,16 @@ main .section-toc a, main .section-toc a:visited {
 
 main .section-toc a:hover {
     text-decoration: underline;
+}
+
+/* Content links pick up the theme's link colors. Scoped to `main` so chrome links (header,
+   ToC, search, permalinks) keep their own scoped rules. */
+main a {
+    color: var(--verso-link-color);
+}
+
+main a:visited {
+    color: var(--verso-visited-link-color);
 }
 
 /******** Manual-specific changes to highlighted Lean code ********/

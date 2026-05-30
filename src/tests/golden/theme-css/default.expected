@@ -8,7 +8,7 @@
   --verso-info-color: #000000;
   --verso-info-indicator-color: #4777ff;
   --verso-warning-color: #000000;
-  --verso-warning-indicator-color: #e7a71d;
+  --verso-warning-indicator-color: #d97706;
   --verso-error-color: #cc0000;
   --verso-error-indicator-color: #ff0000;
   --verso-code-font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;

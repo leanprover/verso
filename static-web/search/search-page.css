@@ -17,7 +17,7 @@
     font-family: inherit;
     color: var(--verso-text-color, black);
     background-color: var(--verso-background-color, white);
-    border: 1px solid gray;
+    border: 1px solid var(--verso-border-color, gray);
     border-radius: 0.2rem;
     outline: none;
 }
@@ -128,7 +128,7 @@
 .search-page-list li.search-result em {
     font-style: normal;
     text-decoration: none;
-    background-color: var(--verso-selected-color, #def);
+    background-color: var(--verso-highlight-color, #def);
     border-radius: 0.15em;
     padding: 0 0.1em;
 }

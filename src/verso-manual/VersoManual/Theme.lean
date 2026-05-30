@@ -1,0 +1,246 @@
+/-
+Copyright (c) 2025 Lean FRO LLC. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+Author: David Thrane Christiansen
+-/
+module
+
+public meta import VersoManual.Theme.Ext
+public import Verso.Theme.Code
+public meta import Lean.Elab.Term
+
+set_option linter.missingDocs true
+set_option doc.verso true
+
+/-!
+The manual genre's theme. {lit}`ManualTheme` extends {lit}`CodeTheme` with the additional color
+and font fields the manual chrome (page, header, ToC, search box, burger menu, content links)
+needs. The manual genre emits every {lit}`--verso-*` chrome variable from a single chosen manual
+theme.
+-/
+
+namespace Verso.Theme
+
+/--
+A manual-genre theme: a {Lean.Doc.name}`Verso.Theme.CodeTheme` plus the color and font fields the
+chrome needs (header background, ToC, burger menu, search box, content links). Defaults reproduce
+today's chrome.
+
+The cascade rule from {Lean.Doc.name}`Verso.Theme.CodeTheme` continues: a field that today reads
+the page background or text color defaults from the inherited field, so overriding the inherited
+field carries through.
+-/
+public structure ManualTheme extends CodeTheme where
+  /-- The font used for body prose. -/
+  textFace : Typeface := .sans
+  /-- The font used for headings, the ToC, navigation, and other structural text. -/
+  structureFace : Typeface := .sans
+
+  /-- A raised chrome surface tint (default for the ToC background and the search box). -/
+  surfaceColor : Color := color%#f8f9fa
+  /-- The header bar background. Defaults to the page background. -/
+  headerBackground : Color := background
+  /-- The ToC background. -/
+  tocBackground : Color := color%#fafafa
+
+  /-- The default border color for chrome elements such as the search box outline. Defaults to
+  a slate gray that clears WCAG 1.4.11 (3:1) against both white and the surface color. -/
+  borderColor : Color := color%#878787
+  /-- The default muted text color for chrome elements such as search hints. -/
+  mutedColor : Color := color%#777777
+  /-- The color used to highlight matched search terms. Defaults to the code theme's selection. -/
+  highlightColor : Color := selectedColor
+
+  /-- The color of content links in body prose. -/
+  linkColor : Color := color%#0066cc
+  /-- The color of visited content links. -/
+  visitedLinkColor : Color := linkColor
+
+  /-- The text color used inside the ToC. -/
+  tocTextColor : Color := textColor
+
+  /-- The color of the burger-menu lines while the ToC is visible. -/
+  burgerVisibleColor : Color := tocTextColor
+  /-- The shadow color drawn under the burger-menu lines while the ToC is visible. -/
+  burgerVisibleShadowColor : Color := Color.white
+  /-- The color of the burger-menu lines while the ToC is hidden. -/
+  burgerHiddenColor : Color := color%#0e2431
+  /-- The shadow color drawn under the burger-menu lines while the ToC is hidden. -/
+  burgerHiddenShadowColor : Color := Color.white
+
+/-! # Attribute and materialization -/
+
+public section
+
+/--
+Attribute that registers a {Lean.Doc.name}`ManualTheme` declaration as an available theme. The
+declaration must be in the current module (not imported), and its registration name is the decl's
+name with macro scopes erased.
+-/
+syntax (name := manual_theme) "manual_theme" : attr
+
+open Lean in
+meta initialize
+  registerBuiltinAttribute {
+    name := `manual_theme,
+    ref := by exact decl_name%,
+    add := fun decl _stx kind => do
+      unless kind == AttributeKind.global do
+        throwError "invalid attribute 'manual_theme', must be global"
+      unless ((← getEnv).getModuleIdxFor? decl).isNone do
+        throwError "invalid attribute 'manual_theme', declaration is in an imported module"
+      modifyEnv fun env => manualThemeExt.addEntry env decl.eraseMacroScopes
+    descr := "Registers a definition as an available manual theme"
+  }
+
+end section
+
+/--
+A materialized table of registered {Lean.Doc.name}`ManualTheme` values, keyed by registration
+name. Built at runtime by the {lit}`manual_themes%` term elaborator from the set of
+{Lean.Doc.name}`ManualTheme` declarations tagged with the {lit}`@[manual_theme]` attribute.
+-/
+public structure ManualThemeTable where
+  /-- The map from a theme's registration name to its value. -/
+  themes : Lean.NameMap ManualTheme := {}
+
+namespace ManualThemeTable
+
+/-- The empty table. -/
+public def empty : ManualThemeTable := {}
+
+public instance : EmptyCollection ManualThemeTable := ⟨empty⟩
+
+/-- Looks up a theme by its registration name. -/
+public def find? (t : ManualThemeTable) (n : Lean.Name) : Option ManualTheme :=
+  t.themes.find? n
+
+/-- Inserts a theme under the given registration name. -/
+public def insert (t : ManualThemeTable) (n : Lean.Name) (theme : ManualTheme) : ManualThemeTable :=
+  ⟨t.themes.insert n theme⟩
+
+/-- Builds a table from a list of pairs. -/
+public def fromList (xs : List (Lean.Name × ManualTheme)) : ManualThemeTable :=
+  xs.foldl (fun (acc : ManualThemeTable) (p : Lean.Name × ManualTheme) => acc.insert p.1 p.2) empty
+
+end ManualThemeTable
+
+public section
+
+/-- Term elaborator that materializes the registered manual-theme table at compile time. -/
+syntax (name := manual_themes) "manual_themes%" : term
+
+open Lean Elab Term in
+private meta def manualThemePair [Monad m] [MonadRef m] [MonadQuotation m] (n : Name) : m Term := do
+  let quoted : Term := quote n
+  let ident ← mkCIdentFromRef n
+  `(($quoted, $(⟨ident⟩)))
+
+open Lean Elab Term in
+/-- Elaborator for the {lit}`manual_themes%` macro: emits a
+{Lean.Doc.name}`Verso.Theme.ManualThemeTable` literal whose entries are every registered
+{Lean.Doc.name}`Verso.Theme.ManualTheme` decl. -/
+@[term_elab manual_themes]
+meta def elabManualThemes : TermElab := fun _stx expected? => do
+  let env ← getEnv
+  let mut names : Array Name := #[]
+  for n in manualThemeExt.getState env do
+    names := names.push n
+  for imported in manualThemeExt.toEnvExtension.getState env |>.importedEntries do
+    for n in imported do
+      names := names.push n
+  let stx ← `(Verso.Theme.ManualThemeTable.fromList [$[($(← names.mapM manualThemePair) : Lean.Name × Verso.Theme.ManualTheme)],*])
+  elabTerm stx expected?
+
+end section
+
+/-! # CSS variables -/
+
+namespace ManualTheme
+
+private def cssDecl (name value : String) : String :=
+  s!"  --{name}: {value};\n"
+
+private def colorDecl (name : String) (c : Color) : String :=
+  cssDecl name (Color.css c)
+
+/--
+The CSS-variable body for the manual-chrome fields a {Lean.Doc.name}`ManualTheme` adds on top of
+its inherited {Lean.Doc.name}`Verso.Theme.CodeTheme`. The manual genre concatenates this with
+{Lean.Doc.name}`Verso.Theme.CodeTheme.cssVariables` to produce the contents of its
+{lit}`:root` block.
+-/
+public def manualCssVariables (theme : ManualTheme) : String :=
+  String.join [
+    cssDecl "verso-text-font-family" theme.textFace.cssFamily,
+    cssDecl "verso-structure-font-family" theme.structureFace.cssFamily,
+    colorDecl "verso-surface-color" theme.surfaceColor,
+    colorDecl "verso-header-background" theme.headerBackground,
+    colorDecl "verso-toc-background-color" theme.tocBackground,
+    colorDecl "verso-border-color" theme.borderColor,
+    colorDecl "verso-muted-color" theme.mutedColor,
+    colorDecl "verso-highlight-color" theme.highlightColor,
+    colorDecl "verso-link-color" theme.linkColor,
+    colorDecl "verso-visited-link-color" theme.visitedLinkColor,
+    colorDecl "verso-toc-text-color" theme.tocTextColor,
+    colorDecl "verso-burger-toc-visible-color" theme.burgerVisibleColor,
+    colorDecl "verso-burger-toc-visible-shadow-color" theme.burgerVisibleShadowColor,
+    colorDecl "verso-burger-toc-hidden-color" theme.burgerHiddenColor,
+    colorDecl "verso-burger-toc-hidden-shadow-color" theme.burgerHiddenShadowColor
+  ]
+
+/--
+The full CSS-variable body for a {Lean.Doc.name}`ManualTheme`: the inherited
+{Lean.Doc.name}`Verso.Theme.CodeTheme` variables followed by the manual-chrome additions. This is
+what the manual genre writes into the body of {lit}`verso-themes.css`'s {lit}`:root` block.
+-/
+public def cssVariables (theme : ManualTheme) : String :=
+  theme.toCodeTheme.cssVariables ++ theme.manualCssVariables
+
+end ManualTheme
+
+/-! # Accessibility -/
+
+namespace ManualTheme
+
+/--
+Runs the inherited {Lean.Doc.name}`Verso.Theme.CodeTheme.checkAccessibility` and then verifies
+the manual-chrome pairs:
+
+- content {Lean.Doc.name (full := Verso.Theme.ManualTheme.linkColor)}`linkColor` and
+  {Lean.Doc.name (full := Verso.Theme.ManualTheme.visitedLinkColor)}`visitedLinkColor` against
+  the page background
+- {Lean.Doc.name (full := Verso.Theme.ManualTheme.tocTextColor)}`tocTextColor` against the
+  {Lean.Doc.name (full := Verso.Theme.ManualTheme.tocBackground)}`tocBackground`
+- the header title color (body text) against
+  {Lean.Doc.name (full := Verso.Theme.ManualTheme.headerBackground)}`headerBackground`
+- the search-box muted and border colors against the surface and page backgrounds
+- body text against the
+  {Lean.Doc.name (full := Verso.Theme.ManualTheme.highlightColor)}`highlightColor`, since search
+  results render matched terms with that color as their background
+-/
+public def checkAccessibility (theme : ManualTheme) : Array Color.Issue := Id.run do
+  let mut issues := theme.toCodeTheme.checkAccessibility
+  issues := issues ++ Color.contrastIssues Color.textContrastThreshold
+    "link color on page background" theme.linkColor theme.background
+  issues := issues ++ Color.contrastIssues Color.textContrastThreshold
+    "visited link color on page background" theme.visitedLinkColor theme.background
+  issues := issues ++ Color.contrastIssues Color.textContrastThreshold
+    "toc text on toc background" theme.tocTextColor theme.tocBackground
+  issues := issues ++ Color.contrastIssues Color.textContrastThreshold
+    "header title on header background" theme.textColor theme.headerBackground
+  issues := issues ++ Color.contrastIssues Color.textContrastThreshold
+    "body text on highlight background" theme.textColor theme.highlightColor
+  issues := issues ++ Color.contrastIssues Color.largeContrastThreshold
+    "border color on surface" theme.borderColor theme.surfaceColor
+  issues := issues ++ Color.contrastIssues Color.largeContrastThreshold
+    "border color on page background" theme.borderColor theme.background
+  -- "Muted text" is for incidental hints (search placeholder, secondary metadata) and so
+  -- uses the AA Large / UI 3.0 threshold rather than 4.5 for primary body text.
+  issues := issues ++ Color.contrastIssues Color.largeContrastThreshold
+    "muted text on surface" theme.mutedColor theme.surfaceColor
+  issues := issues ++ Color.contrastIssues Color.largeContrastThreshold
+    "muted text on page background" theme.mutedColor theme.background
+  return issues
+
+end ManualTheme

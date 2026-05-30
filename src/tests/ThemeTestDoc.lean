@@ -15,7 +15,8 @@ set_option pp.rawOnError true
 
 # Code samples
 
-A line of prose, followed by code that mixes a keyword, a const, and a literal.
+A line of prose with an [external content link](https://example.com/) that the browser test
+checks against the theme's `linkColor`. Then code that mixes a keyword, a const, and a literal.
 
 ```lean
 def hello (name : String) : String := s!"hello, {name}"

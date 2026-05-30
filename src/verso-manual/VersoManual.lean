@@ -13,6 +13,8 @@ import Verso.Output.Html
 import Verso.Output.Html.CssVars
 import Verso.Theme.Code
 import Verso.Theme.Code.Defaults
+import VersoManual.Theme
+import VersoManual.Theme.Defaults
 import Verso.Output.Html.KaTeX
 import Verso.Output.Html.ElasticLunr
 import Verso.Doc.Lsp
@@ -237,6 +239,20 @@ structure Config extends HtmlConfig, TeXConfig, OutputConfig where
   both sides.
   -/
   searchPriorities : SearchPriorities := {}
+
+  /--
+  When true (the default), contrast problems reported by
+  {Lean.Doc.name}`Verso.Theme.ManualTheme.checkAccessibility` fail the build. When false they are
+  logged as warnings and the build proceeds.
+  -/
+  strictThemeContrast : Bool := true
+
+  /--
+  When true (the default), color-vision-deficiency problems reported by
+  {Lean.Doc.name}`Verso.Theme.ManualTheme.checkAccessibility` fail the build. When false they are
+  logged as warnings and the build proceeds.
+  -/
+  strictThemeColorblind : Bool := true
 deriving ToJson, FromJson
 
 structure RenderConfig extends Config where
@@ -245,10 +261,12 @@ structure RenderConfig extends Config where
   -/
   linkTargets : TraverseState → Multi.AllRemotes → LinkTargets Manual.TraverseContext := (·.localTargets ++ ·.remoteTargets)
   /--
-  The active {Lean.Doc.name}`Verso.Theme.CodeTheme`. Its CSS-variable block is written to
-  {lit}`verso-themes.css` so the page-level highlighting rules read the chosen colors.
+  The active {Lean.Doc.name}`Verso.Theme.ManualTheme`. Its CSS-variable block (the
+  inherited {Lean.Doc.name}`Verso.Theme.CodeTheme` variables plus the manual-chrome
+  additions) is written to {lit}`verso-themes.css` so the page-level highlighting rules and
+  chrome read the chosen values.
   -/
-  codeTheme : Verso.Theme.CodeTheme := Verso.Theme.CodeTheme.Default
+  manualTheme : Verso.Theme.ManualTheme := Verso.Theme.ManualTheme.Default
 
 namespace Config
 
@@ -402,7 +420,7 @@ def emitTeX (config : RenderConfig) (text : Part Manual) : EmitM Unit := do
   withFile (dir.join "main.tex") .write fun h => do
     if config.verbose then
       IO.println s!"Saving {dir.join "main.tex"}"
-    h.putStrLn (preamble text.titleString authors date packages.toList preambleItems.toList config.codeTheme)
+    h.putStrLn (preamble text.titleString authors date packages.toList preambleItems.toList config.manualTheme.toCodeTheme)
     -- \frontmatter is inserted by our hardcoded preamble before the ToC, so it doesn't get inserted
     -- here. If there's any text at the start of the front matter, then we need to clear it to a new
     -- recto page after the ToC
@@ -765,26 +783,24 @@ where
     emitFindHtml toc dir state xrefJson config.toConfig
     if .search ∈ config.features then
       emitSearchResultsHtml toc dir titleToShow state config.toConfig
-    IO.FS.withFile (dir.join "verso-vars.css") .write fun h => do
-      h.putStrLn Html.«verso-vars.css»
     IO.FS.withFile (dir.join "book.css") .write fun h => do
       h.putStrLn Html.Css.pageStyle
     IO.FS.withFile (dir.join "verso-themes.css") .write fun h => do
-      let assetRoot := s!"-verso-data/themes/{config.codeTheme.name}"
-      let faceRules := config.codeTheme.fontFaceRules assetRoot
+      let assetRoot := s!"-verso-data/themes/{config.manualTheme.name}"
+      let faceRules := config.manualTheme.fontFaceRules assetRoot
       unless faceRules.isEmpty do
         h.putStrLn faceRules
-      h.putStrLn s!":root \{\n{config.codeTheme.cssVariables}}"
-      let extra := config.codeTheme.extraCss assetRoot
+      h.putStrLn s!":root \{\n{config.manualTheme.cssVariables}}"
+      let extra := config.manualTheme.extraCss assetRoot
       unless extra.isEmpty do
         h.putStrLn ""
         h.putStrLn extra
-    for (path, bytes, _, _) in config.codeTheme.fontAssets s!"-verso-data/themes/{config.codeTheme.name}" do
+    for (path, bytes, _, _) in config.manualTheme.fontAssets s!"-verso-data/themes/{config.manualTheme.name}" do
       let abs := dir.join path
       if let some p := abs.parent then ensureDir p
       IO.FS.writeBinFile abs bytes
-    for a in config.codeTheme.assets do
-      let path := dir.join "-verso-data" |>.join "themes" |>.join config.codeTheme.name |>.join a.path
+    for a in config.manualTheme.assets do
+      let path := dir.join "-verso-data" |>.join "themes" |>.join config.manualTheme.name |>.join a.path
       if let some p := path.parent then ensureDir p
       IO.FS.writeBinFile path a.contents
     for (src, dest) in config.extraFiles do
@@ -851,26 +867,24 @@ where
       if let some alt := text.metadata.bind (·.shortTitle) then
         alt
       else titleHtml
-    IO.FS.withFile (root / "verso-vars.css") .write fun h => do
-      h.putStrLn Html.«verso-vars.css»
     IO.FS.withFile (root / "book.css") .write fun h => do
       h.putStrLn Html.Css.pageStyle
     IO.FS.withFile (root / "verso-themes.css") .write fun h => do
-      let assetRoot := s!"-verso-data/themes/{config.codeTheme.name}"
-      let faceRules := config.codeTheme.fontFaceRules assetRoot
+      let assetRoot := s!"-verso-data/themes/{config.manualTheme.name}"
+      let faceRules := config.manualTheme.fontFaceRules assetRoot
       unless faceRules.isEmpty do
         h.putStrLn faceRules
-      h.putStrLn s!":root \{\n{config.codeTheme.cssVariables}}"
-      let extra := config.codeTheme.extraCss assetRoot
+      h.putStrLn s!":root \{\n{config.manualTheme.cssVariables}}"
+      let extra := config.manualTheme.extraCss assetRoot
       unless extra.isEmpty do
         h.putStrLn ""
         h.putStrLn extra
-    for (path, bytes, _, _) in config.codeTheme.fontAssets s!"-verso-data/themes/{config.codeTheme.name}" do
+    for (path, bytes, _, _) in config.manualTheme.fontAssets s!"-verso-data/themes/{config.manualTheme.name}" do
       let abs := root.join path
       if let some p := abs.parent then ensureDir p
       IO.FS.writeBinFile abs bytes
-    for a in config.codeTheme.assets do
-      let path := root.join "-verso-data" |>.join "themes" |>.join config.codeTheme.name |>.join a.path
+    for a in config.manualTheme.assets do
+      let path := root.join "-verso-data" |>.join "themes" |>.join config.manualTheme.name |>.join a.path
       if let some p := path.parent then ensureDir p
       IO.FS.writeBinFile path a.contents
     for (src, dest) in config.extraFiles do
@@ -988,10 +1002,12 @@ open Verso.CLI
 def manualMain (text : Part Manual)
     (extensionImpls : ExtensionImpls := by exact extension_impls%)
     (codeThemes : Verso.Theme.CodeThemeTable := by exact code_themes%)
+    (manualThemes : Verso.Theme.ManualThemeTable := by exact manual_themes%)
     (options : List String)
     (config : RenderConfig := {})
     (extraSteps : List ExtraStep := []) : IO UInt32 :=
   let _ := codeThemes
+  let _ := manualThemes
   ReaderT.run go extensionImpls
 
 where
@@ -1043,9 +1059,26 @@ where
   fixBase (base : String) : String :=
     if base.endsWith "/" then base else base ++ "/"
 
+  /--
+  Runs the theme's accessibility check and routes each {name (full := Verso.Color.Issue)}`Issue`
+  through {name}`MonadBuildLog`: contrast issues use {name (full := Verso.Genre.Manual.RenderConfig.strictThemeContrast)}`strictThemeContrast`
+  and colorblindness issues use {name (full := Verso.Genre.Manual.RenderConfig.strictThemeColorblind)}`strictThemeColorblind`
+  to decide error vs. warning. The build proceeds either way; logged errors set the exit code.
+  -/
+  runThemeAccessibilityCheck (cfg : RenderConfig) : ReaderT ExtensionImpls (BuildLogT IO) Unit := do
+    for issue in cfg.manualTheme.checkAccessibility do
+      let strict := match issue.kind with
+        | .contrast => cfg.strictThemeContrast
+        | .colorblind => cfg.strictThemeColorblind
+      let colors := issue.offending.toList.map Verso.Theme.Color.css |> ", ".intercalate
+      let suffix := if colors.isEmpty then "" else s!" ({colors})"
+      let msg := s!"theme '{cfg.manualTheme.name}': {issue.message}{suffix}"
+      if strict then Verso.reportError msg else Verso.reportWarning msg
+
   go (extensionImpls : ExtensionImpls) : IO UInt32 := do
     let cfg ← opts config options
     runWithLogger <| flip ReaderT.run extensionImpls do
+      runThemeAccessibilityCheck cfg
       if cfg.emitTeX then
         if cfg.verbose then
           IO.println s!"Saving TeX"
