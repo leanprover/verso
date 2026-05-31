@@ -33,6 +33,36 @@ deriving Repr, Inhabited
 namespace Toc
 
 /--
+Link to a generated manual page by explicit file path rather than a directory URL.
+This keeps multi-page manuals navigable when opened directly from disk.
+-/
+private def pageLink (path : Path) (htmlId : Option String := none) : String :=
+  let htmlId :=
+    match htmlId with
+    | some "" => none
+    | other => other
+  let anchor := htmlId.map ("#" ++ ·) |>.getD ""
+  let base :=
+    if path.isEmpty then
+      "/index.html"
+    else
+      "/" ++ String.join (path.toList.map (· ++ "/")) ++ "index.html"
+  base ++ anchor
+
+/--
+Prefer same-page anchors when possible, but use explicit page files for cross-page navigation.
+-/
+private def pageHref (currentPath targetPath : Path) (htmlId : Option String := none) : String :=
+  let htmlId :=
+    match htmlId with
+    | some "" => none
+    | other => other
+  if currentPath == targetPath then
+    htmlId.map ("#" ++ ·) |>.getD (pageLink targetPath)
+  else
+    pageLink targetPath htmlId
+
+/--
 Remove all ToC elements that don't have their own paths.
 -/
 partial def onlyPages (toc : Toc) : Toc :=
@@ -209,13 +239,11 @@ Convert a `Toc` to `HTML`.
 
 The `depth` is a limit for the tree depth of the generated HTML (`none` for no limit).
 -/
-public partial def Toc.html (depth : Option Nat) : Toc → Html
+public partial def Toc.html (currentPath : Path) (depth : Option Nat) : Toc → Html
   | {title, shortTitle := _, path, id, sectionNum, children} =>
     if depth = some 0 then .empty
     else
-      let page :=
-        if path.isEmpty then "/"
-        else path.link id
+      let page := pageHref currentPath path id
       let sectionNum :=
         match sectionNum with
         | none => {{<span class="unnumbered"></span>}}
@@ -224,7 +252,7 @@ public partial def Toc.html (depth : Option Nat) : Toc → Html
         <li>
           <a href={{page}}>{{sectionNum}}{{title}}</a>
           {{if children.isEmpty || depth == some 1 then .empty
-            else {{<ol> {{children.map (·.html (depth.map Nat.pred))}} </ol>}} }}
+            else {{<ol> {{children.map (·.html currentPath (depth.map Nat.pred))}} </ol>}} }}
         </li>
       }}
 
@@ -249,7 +277,7 @@ where
       let relAttr := rel.map (fun r => #[("rel", r)]) |>.getD #[]
       let titleAttr := toc.bind getTitle |>.map (fun t => #[("title", t)]) |>.getD #[]
       {{
-        <a class="local-button active" href={{dest.path.link dest.id}} {{relAttr ++ titleAttr}}>
+        <a class="local-button active" href={{pageHref path dest.path dest.id}} {{relAttr ++ titleAttr}}>
           {{label}}
         </a>
       }}
@@ -370,10 +398,10 @@ where
     splitTocWrapper isTop isOpen true chapterId «section» title children
 
 
-  linkify (path : Path) (id : Option String) (html : Html) :=
+  linkify (targetPath : Path) (id : Option String) (html : Html) :=
     match html with
     | .tag "a" _ _ => html
-    | other => {{<a href={{path.link id}}>{{other}}</a>}}
+    | other => {{<a href={{pageHref path targetPath id}}>{{other}}</a>}}
   sectionNum num :=
       match num with
       | none => {{<span class="unnumbered"></span>}}

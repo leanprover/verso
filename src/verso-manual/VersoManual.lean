@@ -740,7 +740,7 @@ where
       if bookToc.size > 0 then {{
         <section>
         <h2>"Table of Contents"</h2>
-        <ol class="section-toc">{{bookToc.map (·.html config.rootTocDepth)}}</ol>
+        <ol class="section-toc">{{bookToc.map (·.html ctxt.path config.rootTocDepth)}}</ol>
         </section>
       }} else .empty
     let contents ←
@@ -892,7 +892,7 @@ where
         let subTocHtml := if subToc.size > 0 then {{
             <section>
             <h2>"Contents"</h2>
-            <ol class="section-toc">{{subToc.map (·.html config.rootTocDepth)}}</ol>
+            <ol class="section-toc">{{subToc.map (·.html ctxt.path config.rootTocDepth)}}</ol>
             </section>
           }}
         else .empty
@@ -900,7 +900,7 @@ where
       else
         let subTocHtml :=
           if (depth > 0 && part.htmlSplit != .never) && subToc.size > 0 && part.htmlToc then
-            {{<ol class="section-toc">{{subToc.map (·.html config.sectionTocDepth)}}</ol>}}
+            {{<ol class="section-toc">{{subToc.map (·.html ctxt.path config.sectionTocDepth)}}</ol>}}
           else .empty
         {{<section><h1>{{titleHtml}}</h1> {{introHtml}} {{contents}} {{subTocHtml}}</section>}}
 

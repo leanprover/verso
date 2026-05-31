@@ -172,6 +172,9 @@ def testLiterateHtml (_ : Config) : IO Unit :=
 def testLiterateHtmlMultiRoot (_ : Config) : IO Unit :=
   Tests.LiterateHtml.testLiterateHtmlMultiRoot
 
+def testManualHtmlMultiLinks (_ : Config) : IO Unit :=
+  Tests.ManualHtmlMulti.testManualHtmlMultiLinks
+
 -- Interactive tests via the LSP server
 def testInteractive (_ : Config) : IO Unit := do
   IO.println "Running interactive (LSP) tests..."
@@ -370,6 +373,7 @@ def tests := [
   testLiterateConfig,
   testLiterateHtml,
   testLiterateHtmlMultiRoot,
+  testManualHtmlMultiLinks,
   testSetupLiterate
 ]
 
