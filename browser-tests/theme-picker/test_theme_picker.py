@@ -40,8 +40,16 @@ def built_site():
     if SITE_DIR.parent.exists():
         subprocess.check_call(["rm", "-rf", str(SITE_DIR.parent)], cwd=REPO_ROOT)
     subprocess.check_call(
-        ["lake", "exe", "usersguide", "--output", "_out/usersguide",
-         "--without-tex", "--without-html-single", "--with-html-multi"],
+        [
+            "lake",
+            "exe",
+            "usersguide",
+            "--output",
+            "_out/usersguide",
+            "--without-tex",
+            "--without-html-single",
+            "--with-html-multi",
+        ],
         cwd=REPO_ROOT,
     )
     assert SITE_DIR.exists(), f"Manual build did not produce {SITE_DIR}"
@@ -202,13 +210,19 @@ def test_theme_switching_persists(page, server):
     chosen = single.locator("option").nth(1).get_attribute("value")
     single.select_option(value=chosen)
     # The data attribute should reflect the choice immediately.
-    assert page.evaluate("document.documentElement.getAttribute('data-verso-theme')") == chosen
+    assert (
+        page.evaluate("document.documentElement.getAttribute('data-verso-theme')")
+        == chosen
+    )
     # localStorage persists it.
     assert page.evaluate("localStorage.getItem('verso-theme-single')") == chosen
     # Reload: the no-flash script reads localStorage and applies the same theme before paint.
     page.goto(server + "/")
     page.wait_for_load_state("domcontentloaded")
-    assert page.evaluate("document.documentElement.getAttribute('data-verso-theme')") == chosen
+    assert (
+        page.evaluate("document.documentElement.getAttribute('data-verso-theme')")
+        == chosen
+    )
 
 
 def test_match_system_follows_media(page):
@@ -224,8 +238,12 @@ def test_match_system_follows_media(page):
     dark_id = page.evaluate("document.documentElement.getAttribute('data-verso-theme')")
     page.emulate_media(color_scheme="light")
     page.wait_for_timeout(50)
-    light_id = page.evaluate("document.documentElement.getAttribute('data-verso-theme')")
-    assert dark_id != light_id, "auto mode should pick different themes for light vs dark"
+    light_id = page.evaluate(
+        "document.documentElement.getAttribute('data-verso-theme')"
+    )
+    assert dark_id != light_id, (
+        "auto mode should pick different themes for light vs dark"
+    )
 
 
 def test_single_mode_ignores_media(page):
@@ -241,10 +259,16 @@ def test_single_mode_ignores_media(page):
     # Emulating a media change must not override the chosen theme.
     page.emulate_media(color_scheme="dark")
     page.wait_for_timeout(50)
-    assert page.evaluate("document.documentElement.getAttribute('data-verso-theme')") == chosen
+    assert (
+        page.evaluate("document.documentElement.getAttribute('data-verso-theme')")
+        == chosen
+    )
     page.emulate_media(color_scheme="light")
     page.wait_for_timeout(50)
-    assert page.evaluate("document.documentElement.getAttribute('data-verso-theme')") == chosen
+    assert (
+        page.evaluate("document.documentElement.getAttribute('data-verso-theme')")
+        == chosen
+    )
 
 
 def test_auto_commit_applies_dropdown_value(page):
@@ -434,9 +458,7 @@ def test_themes_are_alphabetized(page):
         if not ensure_auto and mode.is_checked():
             mode.uncheck()
         texts = page.locator(f"{sel_id} option").all_text_contents()
-        assert texts == sorted(texts), (
-            f"{sel_id} options not alphabetised: {texts}"
-        )
+        assert texts == sorted(texts), f"{sel_id} options not alphabetised: {texts}"
 
 
 def test_match_system_toggle_hides_rows(page):
@@ -475,7 +497,10 @@ def test_outside_click_dismisses_popover(page):
     page.wait_for_function(
         "document.getElementById('theme-picker-button').getAttribute('aria-expanded') === 'false'"
     )
-    assert page.evaluate("document.documentElement.getAttribute('data-verso-theme')") == initial
+    assert (
+        page.evaluate("document.documentElement.getAttribute('data-verso-theme')")
+        == initial
+    )
 
 
 def test_gear_toggle_close_dismisses_popover(page):
@@ -488,7 +513,10 @@ def test_gear_toggle_close_dismisses_popover(page):
     page.wait_for_function(
         "document.getElementById('theme-picker-button').getAttribute('aria-expanded') === 'false'"
     )
-    assert page.evaluate("document.documentElement.getAttribute('data-verso-theme')") == initial
+    assert (
+        page.evaluate("document.documentElement.getAttribute('data-verso-theme')")
+        == initial
+    )
 
 
 def test_localStorage_disabled_still_loads(page, server):
@@ -503,6 +531,10 @@ def test_localStorage_disabled_still_loads(page, server):
     page.goto(server + "/")
     page.wait_for_load_state("domcontentloaded")
     theme = page.evaluate("document.documentElement.getAttribute('data-verso-theme')")
-    appearance = page.evaluate("document.documentElement.getAttribute('data-verso-appearance')")
-    assert theme is not None and theme != "", "data-verso-theme should be set even without storage"
+    appearance = page.evaluate(
+        "document.documentElement.getAttribute('data-verso-appearance')"
+    )
+    assert theme is not None and theme != "", (
+        "data-verso-theme should be set even without storage"
+    )
     assert appearance in ("light", "dark"), f"unexpected appearance {appearance!r}"

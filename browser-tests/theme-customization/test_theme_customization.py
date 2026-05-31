@@ -130,18 +130,24 @@ def _color(page, selector: str, prop: str = "color") -> str:
 
 def _expect(actual: str, hex_value: str, description: str) -> None:
     expected = _hex_to_rgb(hex_value)
-    assert actual == expected, f"{description}: expected {expected} ({hex_value}), got {actual}"
+    assert actual == expected, (
+        f"{description}: expected {expected} ({hex_value}), got {actual}"
+    )
 
 
 def test_token_colors(page):
     # The first `.keyword` in the only code block is `def`.
-    _expect(_color(page, "code.hl.lean .keyword"), THEME["keywordColor"], "keyword color")
+    _expect(
+        _color(page, "code.hl.lean .keyword"), THEME["keywordColor"], "keyword color"
+    )
     # `.const` on `hello` (the function name) and `String` (the type).
     _expect(_color(page, "code.hl.lean .const"), THEME["constColor"], "const color")
     # `.var` on `name` (the parameter binding).
     _expect(_color(page, "code.hl.lean .var"), THEME["varColor"], "var color")
     # `.unknown` (operator-like tokens) falls back to `--verso-code-color`.
-    _expect(_color(page, "code.hl.lean .unknown"), THEME["codeColor"], "fallback code color")
+    _expect(
+        _color(page, "code.hl.lean .unknown"), THEME["codeColor"], "fallback code color"
+    )
 
 
 def _goto_diagnostics(page, server):
@@ -158,7 +164,9 @@ def test_error_indicator(page, server):
 
 
 def test_page_background(page):
-    _expect(_color(page, "body", "background-color"), THEME["background"], "body background")
+    _expect(
+        _color(page, "body", "background-color"), THEME["background"], "body background"
+    )
 
 
 def test_body_text_color(page):
@@ -235,7 +243,9 @@ def test_border_var(page):
     # is mounted by JS so the variable is the most direct verification that the theme value
     # reaches the page. (The CSS rules in search-box.css / search-page.css use
     # `var(--verso-border-color, gray)` so a missing variable would fall back to gray.)
-    _expect(_root_var(page, "--verso-border-color"), THEME["borderColor"], "borderColor var")
+    _expect(
+        _root_var(page, "--verso-border-color"), THEME["borderColor"], "borderColor var"
+    )
 
 
 def test_prev_next_nav_color(page, server):
