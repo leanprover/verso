@@ -50,7 +50,7 @@ private def hasSub (s sub : String) : Bool := (s.splitOn sub).length > 1
 /-- info: true -/
 #guard_msgs in
 #eval
-  let p := Verso.Theme.CodeTheme.Default.texPreamble
+  let p := Verso.Theme.CodeTheme.ink.texPreamble
   -- Message-text and accent colors are emitted under distinct names: `errorColor` is the
   -- message-body color (#cc0000 by default), `errorIndicatorColor` is the wavy-underline
   -- accent (#ff0000). The keyword macro picks up bold (NFSS `eb`), and the mono font is
@@ -64,7 +64,7 @@ private def hasSub (s sub : String) : Bool := (s.splitOn sub).length > 1
 
 open Verso Verso.Theme in
 private def colorfulTheme : CodeTheme := {
-  CodeTheme.Default with
+  CodeTheme.ink with
   keyword := { color := color%#aa3300, weight := 600, style := .normal, face := .mono },
   const := { color := color%#0044bb, weight := .regular, style := .italic, face := .mono }
 }

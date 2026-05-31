@@ -177,7 +177,7 @@ def testThemeCss (cfg : Config) : IO Unit := do
   let runTest (input : String) : IO String := do
     let name := input.trimAscii
     if name == "default" then
-      let varsBlock := s!":root \{\n{Theme.CodeTheme.Default.cssVariables}}\n"
+      let varsBlock := s!":root \{\n{Theme.CodeTheme.ink.cssVariables}}\n"
       let combined := varsBlock ++ "\n" ++ Code.highlightingStyle
       -- Trim the trailing blank lines `highlightingStyle` ships with so the golden file
       -- ends with a single newline (otherwise `git diff --check` flags the EOF blank).

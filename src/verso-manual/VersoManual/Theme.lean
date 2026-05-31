@@ -244,3 +244,85 @@ public def checkAccessibility (theme : ManualTheme) : Array Color.Issue := Id.ru
   return issues
 
 end ManualTheme
+
+/-! # Theme-set validation -/
+
+namespace ManualThemeTable
+
+/--
+A theme's registration name is used as an identifier in {lit}`data-verso-theme`,
+{lit}`localStorage`, and asset paths. Each character must satisfy {lit}`[A-Za-z0-9._-]`;
+consecutive dots ({lit}`..`) are rejected to prevent path traversal in the asset directory; and
+the slug must contain at least one letter so a bare {lit}`.` is rejected.
+-/
+public def safeNameString (s : String) : Bool := Id.run do
+  if s.isEmpty then return false
+  if (s.splitOn "..").length > 1 then return false
+  let mut hasLetter := false
+  for c in s.toList do
+    if c.isAlpha then hasLetter := true
+    let ok := c.isAlphanum || c == '.' || c == '-' || c == '_'
+    unless ok do return false
+  return hasLetter
+
+/--
+Reasons a theme configuration can be rejected. Each carries enough detail to point an author at
+the specific theme or default slot that needs attention.
+-/
+public inductive ValidationError where
+  /-- The registration `Name.toString` contains characters outside `[A-Za-z0-9._-]`, contains
+  `..`, or has no letter. -/
+  | unsafeName (name : Lean.Name)
+  /-- `availableThemes` named a theme that is not registered with `@[manual_theme]`. -/
+  | unknownAvailable (name : Lean.Name)
+  /-- `defaultLightTheme` is not a registered manual theme. -/
+  | unknownDefaultLight (name : Lean.Name)
+  /-- `defaultDarkTheme` is not a registered manual theme. -/
+  | unknownDefaultDark (name : Lean.Name)
+  /-- `defaultLightTheme` names a theme whose appearance is not `.light`. -/
+  | defaultLightWrongAppearance (name : Lean.Name)
+  /-- `defaultDarkTheme` names a theme whose appearance is not `.dark`. -/
+  | defaultDarkWrongAppearance (name : Lean.Name)
+deriving Inhabited, Repr
+
+/-- Renders a {Lean.Doc.name}`Verso.Theme.ManualThemeTable.ValidationError` as a build-log message. -/
+public def ValidationError.format : ValidationError → String
+  | .unsafeName n =>
+    s!"theme registration name '{n}' is not safe for a URL path segment; only [A-Za-z0-9._-] are allowed, '..' is rejected, and at least one letter is required"
+  | .unknownAvailable n =>
+    s!"availableThemes lists '{n}', which is not a registered @[manual_theme]"
+  | .unknownDefaultLight n =>
+    s!"defaultLightTheme = '{n}' is not a registered @[manual_theme]"
+  | .unknownDefaultDark n =>
+    s!"defaultDarkTheme = '{n}' is not a registered @[manual_theme]"
+  | .defaultLightWrongAppearance n =>
+    s!"defaultLightTheme = '{n}' is registered but its appearance is not .light"
+  | .defaultDarkWrongAppearance n =>
+    s!"defaultDarkTheme = '{n}' is registered but its appearance is not .dark"
+
+/--
+Validates the configured theme set against the registered theme table. Returns the list of
+problems found (empty iff every check passes); the caller routes them through the build log.
+-/
+public def validate (table : ManualThemeTable)
+    (defaultLight defaultDark : Lean.Name)
+    (available : Option (Array Lean.Name)) : Array ValidationError := Id.run do
+  let mut errs := #[]
+  for (n, _) in table.themes.toList do
+    unless safeNameString n.toString do
+      errs := errs.push (.unsafeName n)
+  if let some xs := available then
+    for n in xs do
+      unless (table.find? n).isSome do
+        errs := errs.push (.unknownAvailable n)
+  match table.find? defaultLight with
+  | none => errs := errs.push (.unknownDefaultLight defaultLight)
+  | some t => unless t.appearance == .light do
+      errs := errs.push (.defaultLightWrongAppearance defaultLight)
+  match table.find? defaultDark with
+  | none => errs := errs.push (.unknownDefaultDark defaultDark)
+  | some t => unless t.appearance == .dark do
+      errs := errs.push (.defaultDarkWrongAppearance defaultDark)
+  return errs
+
+end ManualThemeTable

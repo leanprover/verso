@@ -82,6 +82,12 @@ body {
     color: var(--verso-text-color);
 }
 
+/* Light/dark logo switching: when both images are rendered, show one based on the appearance
+   the no-flash script set on `<html>`. When only a light logo is rendered, no rule fires and it
+   is visible in both appearances by default. */
+:root[data-verso-appearance="dark"] #logo .logo-light { display: none; }
+:root[data-verso-appearance="light"] #logo .logo-dark { display: none; }
+
 /******** Theme ********/
 
 h1, h2, h3, h4, h5, h6 {
@@ -433,12 +439,18 @@ main [id] {
     max-width: var(--verso-content-max-width);
 }
 
-.prev-next-buttons > * {
+.prev-next-buttons > *,
+.prev-next-buttons > *:visited {
     display: flex;
     flex: 1;
     justify-content: center;
     align-items: center;
-    color: var(--verso-link-color);
+    /* Section nav is a link in form but reads as body navigation, not a content CTA, so it
+       tracks the body text color rather than `--verso-link-color`. Both `:link` and `:visited`
+       are pinned to text color, otherwise the `main a:visited` rule below (specificity 0,1,2
+       beats `.prev-next-buttons > *` at 0,1,0) recolors visited prev/next links to the
+       visited-link colour. */
+    color: var(--verso-text-color);
     text-decoration: none;
 }
 

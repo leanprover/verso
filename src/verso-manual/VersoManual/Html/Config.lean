@@ -25,6 +25,12 @@ public structure HtmlConfig extends HtmlAssets where
   extraContents : Array Output.Html := #[]
   /-- The URL from which to draw the logo to show, if any -/
   logo : Option String := none
+  /--
+  The URL from which to draw the dark-appearance logo, if any. When set, the page renders both
+  the {lit}`logo` and {lit}`logoDark` images and CSS toggles them via {lit}`data-verso-appearance`.
+  When unset, {lit}`logo` is used in both appearances.
+  -/
+  logoDark : Option String := none
   /-- The URL that the logo should link to, if any (default is site root) -/
   logoLink : Option String := none
   /-- URL for source link -/
@@ -47,7 +53,7 @@ public structure HtmlConfig extends HtmlAssets where
 
 public instance : ToJson HtmlConfig where
   toJson := private fun
-    | { toHtmlAssets, htmlDepth, extraFilesHtml, extraHead, extraContents, logo, logoLink, sourceLink, issueLink, sectionTocDepth, rootTocDepth } =>
+    | { toHtmlAssets, htmlDepth, extraFilesHtml, extraHead, extraContents, logo, logoDark, logoLink, sourceLink, issueLink, sectionTocDepth, rootTocDepth } =>
       json%{
         "toHtmlAssets": $toHtmlAssets,
         "htmlDepth": $htmlDepth,
@@ -55,6 +61,7 @@ public instance : ToJson HtmlConfig where
         "extraHead": $extraHead,
         "extraContents": $extraContents,
         "logo": $logo,
+        "logoDark": $logoDark,
         "logoLink": $logoLink,
         "sourceLink": $sourceLink,
         "issueLink": $issueLink,
@@ -70,9 +77,10 @@ public instance : FromJson HtmlConfig where
     let extraHead <- v.getObjValAs? _ "extraHead"
     let extraContents <- v.getObjValAs? _ "extraContents"
     let logo <- v.getObjValAs? _ "logo"
+    let logoDark <- v.getObjValAs? _ "logoDark"
     let logoLink <- v.getObjValAs? _ "logoLink"
     let sourceLink <- v.getObjValAs? _ "sourceLink"
     let issueLink <- v.getObjValAs? _ "issueLink"
     let sectionTocDepth <- v.getObjValAs? _ "sectionTocDepth"
     let rootTocDepth <- v.getObjValAs? _ "rootTocDepth"
-    return { toHtmlAssets, htmlDepth, extraFilesHtml, extraHead, extraContents, logo, logoLink, sourceLink, issueLink, sectionTocDepth, rootTocDepth }
+    return { toHtmlAssets, htmlDepth, extraFilesHtml, extraHead, extraContents, logo, logoDark, logoLink, sourceLink, issueLink, sectionTocDepth, rootTocDepth }

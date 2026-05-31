@@ -52,8 +52,9 @@ def config : Config where
   emitHtmlMulti := .immediately
   htmlDepth := 1
 
+@[manual_theme]
 def testManualTheme : ManualTheme := {
-  ManualTheme.Default with
+  ManualTheme.ink with
   toCodeTheme := testTheme,
   surfaceColor := color%#001a1a,
   headerBackground := color%#001b1b,
@@ -70,9 +71,24 @@ def testManualTheme : ManualTheme := {
   burgerHiddenShadowColor := color%#002626
 }
 
+/--
+Dark counterpart to `testManualTheme`. The validation pass requires a registered dark theme
+for `defaultDarkTheme`, but the test only inspects the unscoped `:root` block (the
+single-mode default, here `.light`), so the same sentinel palette under `.dark` is fine.
+-/
+@[manual_theme]
+def testManualThemeDark : ManualTheme := {
+  testManualTheme with
+  toCodeTheme := { testTheme with name := "ThemeTest Dark", appearance := .dark }
+}
+
 def main : List String → IO UInt32 :=
   manualMain (%doc ThemeTestDoc)
     (config := { config with
-      manualTheme := testManualTheme,
-      strictThemeContrast := false,
-      strictThemeColorblind := false })
+      defaultLightTheme := ``testManualTheme,
+      defaultDarkTheme := ``testManualThemeDark,
+      -- The sentinel palette deliberately violates accessibility; the test exercises rendering,
+      -- not the accessibility checks.
+      strictThemeCoverage := false,
+      strictDefaultThemeAccessibility := false,
+      warnPerThemeAccessibility := false })

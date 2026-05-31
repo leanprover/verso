@@ -84,12 +84,12 @@ def okabeIto : Array (String × Color) := #[
 -- The shipped default theme passes its own accessibility check.
 /-- info: true -/
 #guard_msgs in
-#eval ManualTheme.Default.checkAccessibility.isEmpty
+#eval ManualTheme.ink.checkAccessibility.isEmpty
 
 -- A low-contrast override (gray text on a near-white background) is flagged as a contrast
 -- problem (one per evaluated text pair against the page background).
 private def lowContrastTheme : ManualTheme := {
-  ManualTheme.Default with
+  ManualTheme.ink with
   textColor := color%#bbbbbb,
 }
 
@@ -100,9 +100,9 @@ private def lowContrastTheme : ManualTheme := {
 -- A token palette that collapses under deuteranopia (a red and a green of matched lightness)
 -- is flagged as a CVD problem.
 private def cvdTheme : ManualTheme := {
-  ManualTheme.Default with
-  const := { ManualTheme.Default.const with color := color%#e60000 },
-  keyword := { ManualTheme.Default.keyword with color := color%#00a000 },
+  ManualTheme.ink with
+  const.color := color%#e60000,
+  keyword.color := color%#00a000,
 }
 
 /-- info: true -/
@@ -118,7 +118,7 @@ private def cvdTheme : ManualTheme := {
 -- A theme whose `highlightColor` is too close to `textColor` is flagged: search results render
 -- matched terms with `highlightColor` as their background, so the body text must read on it.
 private def badHighlightTheme : ManualTheme := {
-  ManualTheme.Default with
+  ManualTheme.ink with
   highlightColor := color%#333333,
 }
 

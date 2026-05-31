@@ -418,11 +418,14 @@ public def page
     (extraContents : Array Html := #[])
     (showNavButtons : Bool := true)
     (logo : Option String := none)
+    (logoDark : Option String := none)
     (logoLink : Option String := none)
     (repoLink : Option String := none)
     (issueLink : Option String := none)
     (extraStylesheets : List String := [])
-    (extraJsFiles : Array (String × Bool) := #[]) : Html :=
+    (extraJsFiles : Array (String × Bool) := #[])
+    (themeInitScript : String := "")
+    (showThemePicker : Bool := false) : Html :=
   let relativeRoot := String.join <| "./" :: path.toList.map (fun _ => "../")
   let defer := #[("defer", "defer")]
   {{
@@ -435,8 +438,19 @@ public def page
         <meta charset="utf-8"/>
         <meta name="viewport" content="height=device-height, width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1"/>
         <title>{{textTitle}}</title>
+        {{if themeInitScript.isEmpty then .empty else
+            {{<script>{{Html.text false themeInitScript}}</script>}} }}
         <link rel="stylesheet" href="book.css" />
         <link rel="stylesheet" href="verso-themes.css" />
+        {{if showThemePicker then
+            {{<link rel="stylesheet" href="-verso-data/theme-picker.css" />}}
+          else .empty }}
+        {{if showThemePicker then
+            {{<script src="-verso-data/verso-themes.js"></script>}}
+          else .empty }}
+        {{if showThemePicker then
+            {{<script src="-verso-data/theme-picker.js" defer="defer"></script>}}
+          else .empty }}
         <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js" integrity="sha384-zbcZAIxlvJtNE3Dp5nxLXdXtXyxwOdnILY1TDPVmKFhl4r4nSUG1r8bcFXGVa4Te" crossorigin="anonymous"></script>
         {{ searchAssetTags }}
         {{extraJsFiles.map fun f => ({{<script src=s!"{f.1}" {{if f.2 then defer else #[]}}></script>}})}}
@@ -449,16 +463,30 @@ public def page
         <header>
           <div class="header-logo-wrapper">
             {{if let some url := logo then
-                let logoHtml := {{<img src={{url}}/>}}
                 let logoDest :=
                   if let some root := logoLink then root
                   else "/"
-                {{<a href={{logoDest}} id="logo">{{logoHtml}}</a>}}
+                let lightImg :=
+                  if logoDark.isSome then
+                    {{<img class="logo-light" src={{url}}/>}}
+                  else
+                    {{<img src={{url}}/>}}
+                let darkImg :=
+                  if let some d := logoDark then {{<img class="logo-dark" src={{d}}/>}}
+                  else .empty
+                {{<a href={{logoDest}} id="logo">{{lightImg}}{{darkImg}}</a>}}
               else .empty }}
           </div>
           <div class="header-title-wrapper">
             <a href={{if let some dest := logoLink then dest else "/"}} class="header-title"><h1>{{bookTitle}}</h1></a>
           </div>
+          {{if showThemePicker then
+              {{<div class="header-tools">
+                  <button id="theme-picker-button" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="theme-picker-dialog" aria-label="Theme settings" title="Theme settings">
+                    <span class="theme-picker-gear" aria-hidden="true">"⚙"</span>
+                  </button>
+                </div>}}
+            else .empty }}
         </header>
         <label for="toggle-toc" id="toggle-toc-click">
           <span class="line line1"/>

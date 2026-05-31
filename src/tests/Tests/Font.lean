@@ -82,7 +82,7 @@ define_font_face noFile where
 -- Two distinct families that slug to the same string get distinct asset paths via the typeface
 -- index, so one font's bytes can never overwrite the other.
 def collidingTheme : Verso.Theme.CodeTheme := {
-  Verso.Theme.CodeTheme.Default with
+  Verso.Theme.CodeTheme.ink with
   codeFace := .files "A B" #[katexMono],
   const := { color := color%#000000, weight := .regular, style := .normal,
              face := .files "A/B" #[katexMono] }

@@ -18,10 +18,11 @@ hardcoded look so existing manuals render unchanged when no override is configur
 namespace Verso.Theme
 
 /--
-The default code theme: typography-only styling that reproduces today's hardcoded look. Other
-built-in themes live alongside it in the {Lean.Doc.name}`Verso.Theme.CodeTheme` namespace.
+The default code theme: typography-only styling that reproduces today's hardcoded look. Named
+after the most ancient writing medium in use; other built-in themes live alongside it in the
+{Lean.Doc.name}`Verso.Theme.CodeTheme` namespace.
 -/
 @[code_theme]
-public def CodeTheme.Default : CodeTheme where
-  name := "Default"
+public def CodeTheme.ink : CodeTheme where
+  name := "Ink"
   appearance := .light

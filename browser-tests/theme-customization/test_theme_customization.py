@@ -239,13 +239,26 @@ def test_border_var(page):
 
 
 def test_prev_next_nav_color(page, server):
-    # The `.prev-next-buttons > *` rule previously forced `color: black`, ignoring the theme.
-    # It now reads `var(--verso-link-color)` so a dark page can still surface readable nav links.
+    # The `.prev-next-buttons > *` rule previously hardcoded `color: black`. It now reads
+    # `var(--verso-text-color)` — section navigation is body-text colored, not link-colored,
+    # so it stays readable on any themed background without competing with content links.
+    # Both `:link` and `:visited` must land on text color; the visited-link rule for `main a`
+    # has higher specificity than `.prev-next-buttons > *` and would otherwise paint visited
+    # prev/next links in the visited-link color.
     page.goto(server + "/Code-samples/")
-    _expect(
-        _color(page, ".prev-next-buttons > a"),
-        THEME["linkColor"],
-        "prev/next nav link color",
+    # Force the prev page into the visited-link state by navigating to it once and back.
+    page.evaluate("history.replaceState({}, '', '/Diagnostics/')")
+    page.goto(server + "/Diagnostics/")
+    page.goto(server + "/Code-samples/")
+    colors = page.evaluate(
+        """() => {
+            const links = Array.from(document.querySelectorAll('.prev-next-buttons > a'));
+            return links.map(a => getComputedStyle(a).color);
+        }"""
+    )
+    expected = _hex_to_rgb(THEME["textColor"])
+    assert colors and all(c == expected for c in colors), (
+        f"all prev/next links should be {expected}; got {colors}"
     )
 
 
