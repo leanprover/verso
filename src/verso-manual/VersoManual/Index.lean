@@ -10,6 +10,7 @@ import Std.Data.HashMap
 import Std.Data.HashSet
 
 import Verso.Doc.Elab
+public meta import Verso.Doc.Elab.Inline
 public import Verso.Doc.Elab.Monad
 meta import Verso.Doc.Elab.Monad
 public import VersoManual.Basic
@@ -187,38 +188,38 @@ def seeAlso (args : Array (Doc.Inline Manual)) (target : String) (subterm : Opti
   let data : Index.See := {source := .concat args, target := .text target, subTarget := subterm.map .text, also := true, index}
   Doc.Inline.other {Inline.see with data := ToJson.toJson data} #[]
 
-structure IndexArgs where
+public structure IndexArgs where
   subterm : Option String
   index : Option String
 
-structure SeeArgs where
+public structure SeeArgs where
   target : String
   subterm : Option String
   index : Option String
 
-instance : FromArgs IndexArgs DocElabM where
+public meta instance : FromArgs IndexArgs DocElabM where
   fromArgs := IndexArgs.mk <$> .named `subterm .string true <*> .named `index .string true
 
-instance : FromArgs SeeArgs DocElabM where
+public meta instance : FromArgs SeeArgs DocElabM where
   fromArgs := SeeArgs.mk <$>
     .positional `target .string <*>
     .named `subterm .string true <*>
     .named `index .string true
 
 @[role index]
-def indexRole : RoleExpanderOf IndexArgs
+public meta def indexRole : RoleExpanderOf IndexArgs
   | {subterm, index}, args => do
     let args ← args.mapM elabInline
     ``(index #[$args,*] $(quote subterm) $(quote index))
 
 @[role see]
-def seeRole : RoleExpanderOf SeeArgs
+public meta def seeRole : RoleExpanderOf SeeArgs
   | {target, subterm, index}, args => do
     let args ← args.mapM elabInline
     ``(see #[$args,*] $(quote target) $(quote subterm) $(quote index))
 
 @[role seeAlso]
-def seeAlsoRole : RoleExpanderOf SeeArgs
+public meta def seeAlsoRole : RoleExpanderOf SeeArgs
   | {target, subterm, index}, args => do
     let args ← args.mapM elabInline
     ``(seeAlso #[$args,*] $(quote target) $(quote subterm) $(quote index))

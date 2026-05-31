@@ -304,19 +304,19 @@ instance : FromArgs DateArgs DocElabM where
     .positional `day .nat
 
 @[role sectionRef]
-def sectionRefRole : RoleExpanderOf SectionRefArgs
+meta def sectionRefRole : RoleExpanderOf SectionRefArgs
   | {dest}, content => do
     let content ← content.mapM elabInline
     ``(sectionRef #[$content,*] $(quote dest))
 
 @[role today]
-def todayRole : RoleExpanderOf Unit
+meta def todayRole : RoleExpanderOf Unit
   | (), content => do
     let content ← content.mapM elabInline
     ``(today #[$content,*])
 
 @[role date]
-def dateRole : RoleExpanderOf DateArgs
+meta def dateRole : RoleExpanderOf DateArgs
   | {year, month, day}, content => do
     let content ← content.mapM elabInline
     ``(date #[$content,*] $(quote year) $(quote month) $(quote day))
