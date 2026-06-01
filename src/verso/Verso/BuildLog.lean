@@ -158,14 +158,14 @@ public instance [MonadLiftT IO m] : Coe (Logger IO) (Logger m) := ⟨Logger.lift
 
 /--
 Reports an error directly through a {name}`Logger` value. Most callers should use
-{name}`Verso.reportError` instead.
+{name}`reportError` instead.
 -/
 public def Logger.reportError (logger : Logger m) (text : String) (loc : Option SourceLoc := none) : m Unit :=
   logger.log .error text loc
 
 /--
 Reports a warning directly through a {name}`Logger` value. Most callers should use
-{name}`Verso.reportWarning` instead.
+{name}`reportWarning` instead.
 -/
 public def Logger.reportWarning (logger : Logger m) (text : String) (loc : Option SourceLoc := none) : m Unit :=
   logger.log .warning text loc

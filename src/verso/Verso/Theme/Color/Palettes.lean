@@ -9,9 +9,11 @@ public import Verso.Theme.Color.Palettes.Solarized
 public import Verso.Theme.Color.Palettes.OkabeIto
 
 /-!
+{open Verso.Theme}
+
 Named reference palettes used by the shipped themes. Each palette module exposes:
 
 - a {lit}`name : String` and {lit}`sourceLink : SourceLink` for the picker to display
   alongside themes that build on the palette;
-- a set of named {name}`Verso.Theme.Color` constants holding the canonical hex values.
+- a set of named {name}`Color` constants holding the canonical hex values.
 -/

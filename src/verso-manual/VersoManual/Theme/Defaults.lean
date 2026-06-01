@@ -6,6 +6,7 @@ Author: David Thrane Christiansen
 module
 
 public import VersoManual.Theme
+public import VersoManual.LicenseInfo.Licenses
 public import Verso.Theme.Code.Defaults
 public import Verso.Theme.Color.Palettes
 
@@ -13,7 +14,9 @@ set_option linter.missingDocs true
 set_option doc.verso true
 
 /-!
-Built-in {name}`Verso.Theme.ManualTheme` values. The default theme reproduces today's
+{open Verso.Theme}
+
+Built-in {name}`ManualTheme` values. The default theme reproduces today's
 chrome so existing manuals render unchanged when no override is configured. The dark counterpart
 inverts the page and code backgrounds while preserving the typography-only token rendering.
 
@@ -30,7 +33,7 @@ The light default manual theme. Named after the most ancient writing medium in u
 inks made from soot or oak gall that have carried text for two thousand years. Typography and
 chrome reproduce today's hardcoded look.
 
-Other built-in themes live alongside it in the {name}`Verso.Theme.ManualTheme` namespace.
+Other built-in themes live alongside it in the {name}`ManualTheme` namespace.
 -/
 @[manual_theme]
 public def ManualTheme.ink : ManualTheme where
@@ -39,7 +42,7 @@ public def ManualTheme.ink : ManualTheme where
 /--
 A common dark-appearance code-theme base: deep-charcoal backgrounds, brightened text, accent
 colors chosen for readability against the dark substrate. Other dark themes extend this. Every
-cascading field is overridden explicitly because Lean evaluates the {name}`Verso.Theme.CodeTheme`
+cascading field is overridden explicitly because Lean evaluates the {name}`CodeTheme`
 defaults at construction time, so {lit}`CodeTheme.ink with textColor := …` would otherwise
 leave dependent fields (token colors, message text colors, hover text) frozen at their
 original-light values.
@@ -85,8 +88,8 @@ A common dark-appearance chrome base reused by the shipped dark themes. The chro
 inherit from the dark code base where possible (so a uniform dark look) and use explicit values
 where contrast requires lighter chrome accents (borders, muted text, links). The burger menu
 lines pick up the text color (so the lines themselves are visible against the page background;
-without this override they default to the light theme's near-black `#0e2431`, which is
-invisible on a dark substrate and shows only the surrounding `drop-shadow`).
+without this override they default to the light theme's near-black {lit}`#0e2431`, which is
+invisible on a dark substrate and shows only the surrounding {lit}`drop-shadow`).
 -/
 private def darkChromeFields (code : CodeTheme) : ManualTheme := {
   toCodeTheme := code,
@@ -107,7 +110,7 @@ The dark default manual theme. Named after silver, the ink of choice for the dar
 manuscript traditions: silver-on-purple Byzantine and Carolingian codices like the *Codex
 Argenteus*, Flemish "Black Hours" such as Morgan MS M.493, and Korean *eunja sagyeong* (은자사경)
 sutras transcribed in silver ink on indigo *kamji* paper during the Goryeo dynasty. Same
-typography-only token rendering as {name}`Verso.Theme.ManualTheme.ink`, with inverted
+typography-only token rendering as {name}`ManualTheme.ink`, with inverted
 backgrounds and a light text color.
 -/
 @[manual_theme]
@@ -219,7 +222,8 @@ public def ManualTheme.solarizedLight : ManualTheme :=
     borderColor := base01,
     mutedColor := base00,
     linkColor := blue,
-    visitedLinkColor := violet
+    visitedLinkColor := violet,
+    licenses := #[Verso.Genre.Manual.Licenses.solarized]
   }
 
 open Color.Palettes.Solarized in
@@ -230,7 +234,7 @@ substrate.
 -/
 @[manual_theme]
 public def ManualTheme.solarizedDark : ManualTheme :=
-  darkChromeFields {
+  { darkChromeFields {
     darkCodeBase with
     name := s!"{Color.Palettes.Solarized.name} Dark",
     sourceLink := some Color.Palettes.Solarized.sourceLink,
@@ -257,9 +261,14 @@ public def ManualTheme.solarizedDark : ManualTheme :=
     keyword.color := color%#b3d100,
     const.color := color%#6cb6ff,
     «var».color := color%#a98aff
-  }
+  } with
+    -- Override the dark-chrome link defaults with the canonical Solarized blue/violet (they
+    -- clear contrast on `base03`).
+    linkColor := blue,
+    visitedLinkColor := violet,
+    licenses := #[Verso.Genre.Manual.Licenses.solarized] }
 
-/-! # Sandstone — warm sepia (Rust/Ayu inspired) -/
+/-! # Sandstone — warm sepia -/
 
 /-- Sandstone light: a warm cream background with terracotta and umber accents. -/
 @[manual_theme]
@@ -301,7 +310,7 @@ public def ManualTheme.sandstoneLight : ManualTheme where
 
 /--
 Sandstone dark: weathered canyon walls at dusk — deep terracotta substrate with sunlit-buff
-text and warm vermilion / honey accents. No cool blues: the previous version's `#80c8e8`
+text and warm vermilion / honey accents. No cool blues: the previous version's {lit}`#80c8e8`
 const broke the warm-palette family. Inspired by the Sedona red rocks, Petra at twilight, and
 the Vermilion Cliffs of Arizona-Utah.
 -/

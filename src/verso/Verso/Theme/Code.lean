@@ -126,7 +126,7 @@ public structure CodeTheme where
   tokenHighlightBackground : Color := color%#eeeeee
   /--
   The background of a displayed tactic state. Defaults to the surrounding
-  {name (full := Verso.Theme.CodeTheme.codeBlockBackground)}`codeBlockBackground`, so a theme
+  {name (full := CodeTheme.codeBlockBackground)}`codeBlockBackground`, so a theme
   that recolors the code surface gets a matching tactic-state surface for free; themes that
   want a distinct tactic-state tint (a slight raise to differentiate it from code) override
   it explicitly.
@@ -137,14 +137,14 @@ public structure CodeTheme where
 
   /--
   An accent background drawn behind highlighted code.
-  {name (full := Verso.Theme.CodeTheme.codeColor)}`codeColor` must read on it.
+  {name (full := CodeTheme.codeColor)}`codeColor` must read on it.
   -/
   highlightOnCode : Color := color%#fff3b0
   /-- An accent background drawn behind highlighted code or prose. Both code and text must read on it. -/
   highlightOnText : Color := highlightOnCode
   /--
   A neutral UI element color drawn against
-  {name (full := Verso.Theme.CodeTheme.codeBlockBackground)}`codeBlockBackground` (e.g. a toggle pill).
+  {name (full := CodeTheme.codeBlockBackground)}`codeBlockBackground` (e.g. a toggle pill).
   -/
   uiOnCode : Color := color%#888888
 
@@ -226,8 +226,8 @@ private meta def themePair [Monad m] [MonadRef m] [MonadQuotation m] (n : Name) 
 
 open Lean Elab Term in
 /--
-Elaborator for the {lit}`code_themes%` macro: emits a {name}`Verso.Theme.CodeThemeTable`
-literal whose entries are every registered {name}`Verso.Theme.CodeTheme` decl.
+Elaborator for the {lit}`code_themes%` macro: emits a {name}`CodeThemeTable`
+literal whose entries are every registered {name}`CodeTheme` decl.
 -/
 @[term_elab code_themes]
 meta def elabCodeThemes : TermElab := fun _stx expected? => do
@@ -412,7 +412,7 @@ private def tokenMacro (name : String) (s : TokenStyle) (colorName : String) : S
 /--
 Returns a TeX preamble fragment that defines a theme-specific {lit}`xcolor` palette, redefines
 the four {lit}`\verso…` token macros so they apply the theme's per-token color, weight, and
-style, and sets the document mono font to {Lean.Doc.name (full := Verso.Typeface.texFamily)}`Verso.Typeface.texFamily` applied to
+style, and sets the document mono font to {Lean.Doc.name (full := Typeface.texFamily)}`texFamily` applied to
 {Lean.Doc.name}`codeFace`.
 
 Two color names are emitted per severity: {lit}`errorColor`/{lit}`warningColor`/{lit}`infoColor`
@@ -461,9 +461,9 @@ end CodeTheme
 namespace CodeTheme
 
 /--
-Every {Lean.Doc.name}`Verso.Typeface` referenced by a theme. Built-in
-{Lean.Doc.name (full := Verso.Typeface.sans)}`sans`/{Lean.Doc.name (full := Verso.Typeface.serif)}`serif`/{Lean.Doc.name (full := Verso.Typeface.mono)}`mono`
-are skipped: only {Lean.Doc.name (full := Verso.Typeface.files)}`files` typefaces contribute font assets.
+Every {Lean.Doc.name}`Typeface` referenced by a theme. Built-in
+{Lean.Doc.name (full := Typeface.sans)}`sans`/{Lean.Doc.name (full := Typeface.serif)}`serif`/{Lean.Doc.name (full := Typeface.mono)}`mono`
+are skipped: only {Lean.Doc.name (full := Typeface.files)}`files` typefaces contribute font assets.
 -/
 public def fileTypefaces (theme : CodeTheme) : Array Typeface :=
   let faces := #[theme.codeFace, theme.const.face, theme.keyword.face, theme.«var».face]
@@ -502,8 +502,8 @@ public def slugFamily (family : String) : String := Id.run do
 /--
 Output-relative paths and bytes of every font file the theme uses. Each file is named
 {lit}`<slug>-<typeface>-<face>.<ext>`, where {lit}`<slug>` is
-{Lean.Doc.name}`Verso.Theme.CodeTheme.slugFamily` applied to the family and {lit}`<typeface>` is
-the index of the typeface within the theme's {Lean.Doc.name}`Verso.Theme.CodeTheme.fileTypefaces`
+{Lean.Doc.name}`slugFamily` applied to the family and {lit}`<typeface>` is
+the index of the typeface within the theme's {Lean.Doc.name}`fileTypefaces`
 array. The typeface index keeps paths distinct even when two families slug to the same string
 (such as {lit}`"A B"` and {lit}`"A/B"` both becoming {lit}`A-B`). The {lit}`assetRoot` is the
 directory the paths are relative to (no leading or trailing slash); the generated
@@ -529,7 +529,7 @@ private def styleString : FontStyle → String
   | .italic => "italic"
 
 /--
-The {lit}`@font-face` rules for every {Lean.Doc.name (full := Verso.Typeface.files)}`files`
+The {lit}`@font-face` rules for every {Lean.Doc.name (full := Typeface.files)}`files`
 typeface the theme uses. The {lit}`url()` paths are relative, so the rules resolve from whatever
 stylesheet they end up in (in the manual genre, {lit}`verso-themes.css` at the site root).
 -/

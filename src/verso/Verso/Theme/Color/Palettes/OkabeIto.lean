@@ -13,11 +13,12 @@ set_option linter.missingDocs true
 set_option doc.verso true
 
 /-!
-Masataka Okabe and Kei Ito's colorblind-safe palette (2002,
-<https://jfly.uni-koeln.de/color/>) as named {name}`Verso.Theme.Color` constants. The eight
-hues stay distinguishable under protanopia, deuteranopia, and tritanopia, so they are a
-standard reference set for data visualization and code highlighting that must remain readable
-to dichromat readers.
+{open Verso.Theme}
+
+[Masataka Okabe and Kei Ito's colorblind-safe palette (2002)](https://jfly.uni-koeln.de/color/) as
+named {name}`Color` constants. The eight hues stay distinguishable under protanopia, deuteranopia,
+and tritanopia, so they are a standard reference set for data visualization and code highlighting
+that must remain readable to dichromat readers.
 -/
 
 namespace Verso.Theme.Color.Palettes.OkabeIto
@@ -28,7 +29,7 @@ namespace Verso.Theme.Color.Palettes.OkabeIto
 public def name : String := "Okabe-Ito"
 
 /-- The canonical Okabe-Ito reference page, shown in the picker for themes that use it. -/
-public def sourceLink : Verso.Theme.SourceLink :=
+public def sourceLink : SourceLink :=
   { url := "https://jfly.uni-koeln.de/color/", text := "jfly.uni-koeln.de/color" }
 
 /-! # Hues -/

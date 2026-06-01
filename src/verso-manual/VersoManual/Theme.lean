@@ -7,6 +7,7 @@ module
 
 public meta import VersoManual.Theme.Ext
 public import Verso.Theme.Code
+public import VersoManual.LicenseInfo
 public meta import Lean.Elab.Term
 
 set_option linter.missingDocs true
@@ -20,15 +21,16 @@ theme.
 -/
 
 open Lean (Name)
+open Verso.Genre.Manual
 
 namespace Verso.Theme
 
 /--
-A manual-genre theme: a {name}`Verso.Theme.CodeTheme` plus the color and font fields the
+A manual-genre theme: a {name}`CodeTheme` plus the color and font fields the
 chrome needs (header background, ToC, burger menu, search box, content links). Defaults reproduce
 today's chrome.
 
-The cascade rule from {name}`Verso.Theme.CodeTheme` continues: a field that today reads
+The cascade rule from {name}`CodeTheme` continues: a field that today reads
 the page background or text color defaults from the inherited field, so overriding the inherited
 field carries through.
 -/
@@ -71,6 +73,11 @@ public structure ManualTheme extends CodeTheme where
   burgerHiddenColor : Color := color%#0e2431
   /-- The shadow color drawn under the burger-menu lines while the ToC is hidden. -/
   burgerHiddenShadowColor : Color := Color.white
+
+  /--
+  Third-party licenses the theme draws on (color palettes, fonts, etc.).
+  -/
+  licenses : Array LicenseInfo := #[]
 
 /-! # Attribute and materialization -/
 
@@ -155,8 +162,8 @@ private meta def manualThemePair [Monad m] [MonadRef m] [MonadQuotation m] (n : 
 open Lean Elab Term in
 /--
 Elaborator for the {lit}`manual_themes%` macro: emits a
-{name}`Verso.Theme.ManualThemeTable` literal whose entries are every registered
-{name}`Verso.Theme.ManualTheme` decl.
+{name}`ManualThemeTable` literal whose entries are every registered
+{name}`ManualTheme` decl.
 -/
 @[term_elab manual_themes]
 meta def elabManualThemes : TermElab := fun _stx expected? => do
@@ -184,8 +191,8 @@ private def colorDecl (name : String) (c : Color) : String :=
 
 /--
 The CSS-variable body for the manual-chrome fields a {name}`ManualTheme` adds on top of
-its inherited {name}`Verso.Theme.CodeTheme`. The manual genre concatenates this with
-{name}`Verso.Theme.CodeTheme.cssVariables` to produce the contents of its
+its inherited {name}`CodeTheme`. The manual genre concatenates this with
+{name}`CodeTheme.cssVariables` to produce the contents of its
 {lit}`:root` block.
 -/
 public def manualCssVariables (theme : ManualTheme) : String :=
@@ -209,7 +216,7 @@ public def manualCssVariables (theme : ManualTheme) : String :=
 
 /--
 The full CSS-variable body for a {name}`ManualTheme`: the inherited
-{name}`Verso.Theme.CodeTheme` variables followed by the manual-chrome additions. This is
+{name}`CodeTheme` variables followed by the manual-chrome additions. This is
 what the manual genre writes into the body of {lit}`verso-themes.css`'s {lit}`:root` block.
 -/
 public def cssVariables (theme : ManualTheme) : String :=
@@ -222,7 +229,7 @@ end ManualTheme
 namespace ManualTheme
 
 /--
-Runs the inherited {name}`Verso.Theme.CodeTheme.checkAccessibility` and then verifies the
+Runs the inherited {name}`CodeTheme.checkAccessibility` and then verifies the
 manual-chrome pairs:
 
 - content {name}`linkColor` and {name}`visitedLinkColor` against the page background

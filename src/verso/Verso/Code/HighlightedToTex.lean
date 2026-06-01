@@ -24,7 +24,7 @@ Given an already escaped-for-verbatim string, and a token kind, returns TeX that
 content in the matching semantic macro: `\versoKeyword`, `\versoConst`, `\versoVar`, or
 `\versoLiteral`. The macros are defined by the consuming genre's preamble (the manual genre
 uses {name}`Verso.Theme.CodeTheme` to style them). For a fallback definition that
-reproduces the pre-theming look, see {name}`SubVerso.Highlighting.texMacroFallbacks`.
+reproduces the pre-theming look, see {name}`texMacroFallbacks`.
 -/
 public def highlightToken : String → Token.Kind → TeX
 | c, .keyword _ _ _ => .raw s!"\\versoKeyword\{{c}}"

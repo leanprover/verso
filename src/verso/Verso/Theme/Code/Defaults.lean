@@ -11,16 +11,18 @@ set_option linter.missingDocs true
 set_option doc.verso true
 
 /-!
-The built-in {Lean.Doc.name}`Verso.Theme.CodeTheme` values. The default theme reproduces today's
-hardcoded look so existing manuals render unchanged when no override is configured.
+{open Verso.Theme}
+
+The built-in {Lean.Doc.name}`CodeTheme` values. The default theme reproduces today's hardcoded look
+so existing manuals render unchanged when no override is configured.
 -/
 
 namespace Verso.Theme
 
 /--
-The default code theme: typography-only styling that reproduces today's hardcoded look. Named
-after the most ancient writing medium in use; other built-in themes live alongside it in the
-{Lean.Doc.name}`Verso.Theme.CodeTheme` namespace.
+The default code theme.
+
+This theme uses only typographical features to distinguish code elements, rather than color.
 -/
 @[code_theme]
 public def CodeTheme.ink : CodeTheme where

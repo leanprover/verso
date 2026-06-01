@@ -3,6 +3,30 @@ Copyright (c) 2026 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
+
+/-
+The Solarized hex constants below are reproduced from Ethan Schoonover's Solarized palette,
+distributed under the MIT license. The notice is reproduced here verbatim per the license's
+attribution clause; the manual genre also includes it in the attribution page of any generated
+manual that includes a Solarized theme.
+
+  Copyright (c) 2011 Ethan Schoonover
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+  associated documentation files (the "Software"), to deal in the Software without restriction,
+  including without limitation the rights to use, copy, modify, merge, publish, distribute,
+  sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in all copies or
+  substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT
+  NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+  NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+  DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
+  OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+-/
 module
 
 public import Verso.Theme.Color.Basic
@@ -13,9 +37,11 @@ set_option linter.missingDocs true
 set_option doc.verso true
 
 /-!
-Ethan Schoonover's *Solarized* palette as named {name}`Verso.Theme.Color` constants. Sixteen
+{open Verso.Theme}
+
+Ethan Schoonover's _Solarized_ palette as named {name}`Color` constants. Sixteen
 colors: eight monotone shades (the {lit}`base*` ramp) plus eight accent hues. The hex values are
-the canonical ones from the upstream reference at <https://ethanschoonover.com/solarized/>.
+the canonical ones from the [upstream reference](https://ethanschoonover.com/solarized/).
 
 The ramp's design rule is that any {lit}`base0X` (with leading zero) is dark-mode body text and
 any {lit}`baseY` is light-mode body text; the rest progress symmetrically between background and
@@ -30,9 +56,9 @@ namespace Verso.Theme.Color.Palettes.Solarized
 public def name : String := "Solarized"
 
 /-- The canonical Solarized homepage, shown in the picker for themes that use this palette. -/
-public def sourceLink : Verso.Theme.SourceLink :=
-  { url := "https://ethanschoonover.com/solarized/",
-    text := "ethanschoonover.com/solarized" }
+public def sourceLink : SourceLink where
+  url := "https://ethanschoonover.com/solarized/"
+  text := "ethanschoonover.com/solarized"
 
 /-! # Monotone ramp -/
 

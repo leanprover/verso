@@ -123,7 +123,7 @@ Produces the body of {lit}`verso-themes.css`:
 - an unscoped `:root` block carrying the {name}`single`'s variables — what the server-rendered
   HTML uses before the no-flash script attaches {lit}`data-verso-theme`. {name}`single` is the
   resolved single-mode default theme;
-- an {lit}`@media (prefers-color-scheme: dark)` block carrying the {name}`Verso.Theme.ManualTheme`
+- an {lit}`@media (prefers-color-scheme: dark)` block carrying the {name}`ManualTheme`
   named by {name}`defaultDark` (no-JS fallback only — the no-flash script always sets a concrete
   attribute);
 - one `:root[data-verso-theme="…"]` block per registered theme so the picker can swap themes by

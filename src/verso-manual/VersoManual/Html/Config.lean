@@ -13,22 +13,29 @@ public import VersoManual.Html.Features
 public import VersoManual.Html.JsFile
 public import VersoManual.LicenseInfo
 
+set_option doc.verso true
+set_option linter.missingDocs true
+
 namespace Verso.Genre.Manual
 open Lean
 
+/--
+Configures the HTML used to render a manual.
+-/
 public structure HtmlConfig extends HtmlAssets where
   htmlDepth := 2
   extraFilesHtml : List (System.FilePath × String) := []
-  /-- Extra elements to add to every page's `head` tag -/
+  /-- Extra elements to add to every page's {lit}`head` tag -/
   extraHead : Array Output.Html := #[]
   /-- Extra elements to add to every page's contents -/
   extraContents : Array Output.Html := #[]
   /-- The URL from which to draw the logo to show, if any -/
   logo : Option String := none
   /--
+  {open HtmlConfig}
   The URL from which to draw the dark-appearance logo, if any. When set, the page renders both
-  the {lit}`logo` and {lit}`logoDark` images and CSS toggles them via {lit}`data-verso-appearance`.
-  When unset, {lit}`logo` is used in both appearances.
+  the {name}`logo` and {name}`logoDark` images and CSS toggles them via {lit}`data-verso-appearance`.
+  When unset, {name}`logo` is used in both appearances.
   -/
   logoDark : Option String := none
   /-- The URL that the logo should link to, if any (default is site root) -/
@@ -39,12 +46,12 @@ public structure HtmlConfig extends HtmlAssets where
   issueLink : Option String := none
   /--
   How deep should the local table of contents on each non-leaf HTML page?
-  `none` means "unlimited".
+  {name}`none` means "unlimited".
   -/
   sectionTocDepth : Option Nat := some 1
   /--
   How deep should the local table of contents on the root HTML page?
-  `none` means "unlimited".
+  {name}`none` means "unlimited".
   -/
   rootTocDepth : Option Nat := some 1
   -- This overrides the default value in HtmlAssets. That type may be used in other contexts where

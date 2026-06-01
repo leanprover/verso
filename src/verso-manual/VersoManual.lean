@@ -247,7 +247,7 @@ structure Config extends HtmlConfig, TeXConfig, OutputConfig where
   When true (the default), it is an error if no theme is accessible. When false the same problems
   become warnings.
 
-  A theme counts as "accessible" if its `Verso.Theme.ManualTheme.checkAccessibility` returns no
+  A theme counts as "accessible" if its `ManualTheme.checkAccessibility` returns no
   issues. In other words:
    * Every checked color pair meets the WCAG AA contrast threshold
    * Every pair of token colors stays mutually distinguishable under each of the three dichromacies
@@ -290,12 +290,12 @@ structure RenderConfig extends Config where
   availableThemes : Option NameSet := none
   /--
   The default light-appearance theme. Its registration name must be a registered
-  `Verso.Theme.ManualTheme` whose appearance is `.light`.
+  `ManualTheme` whose appearance is `.light`.
   -/
   defaultLightTheme : Name := ``Verso.Theme.ManualTheme.ink
   /--
   The default dark-appearance theme. Its registration name must be a registered
-  `Verso.Theme.ManualTheme` whose appearance is `.dark`.
+  `ManualTheme` whose appearance is `.dark`.
   -/
   defaultDarkTheme : Name := ``Verso.Theme.ManualTheme.argent
   /--
@@ -386,6 +386,12 @@ def TraverseState.ofConfig (config : HtmlConfig) : TraverseState := Id.run do
 def traverse (text : Part Manual) (config : Config) : EmitM (Part Manual × TraverseState) := do
   let topCtxt : Manual.TraverseContext := { draft := config.draft }
   let mut state : Manual.TraverseState := .ofConfig config.toHtmlConfig
+  -- Themes contribute their own third-party licenses (color palettes, fonts) on top of the
+  -- HtmlFeature ones already collected by `TraverseState.ofConfig`.
+  let registry ← readThe ThemeRegistry
+  for (_, theme) in registry do
+    for li in theme.licenses do
+      state := state.addLicenseInfo li
   let mut text := text
   if !config.draft then
     text := removeDraftParts text
@@ -448,8 +454,8 @@ def defaultSingleName (config : RenderConfig) : Lean.Name :=
   | .dark => config.defaultDarkTheme
 
 /--
-The single-default `Verso.Theme.ManualTheme` resolved from the active
-{name}`Verso.Theme.ThemeRegistry`. This is the theme that drives
+The single-default `ManualTheme` resolved from the active
+{name}`ThemeRegistry`. This is the theme that drives
 `verso-themes.css`'s unscoped `:root` block — what the server-rendered HTML paints on first
 visit (before the no-flash script attaches a `data-verso-theme`) — and the TeX code styling.
 
@@ -1179,7 +1185,7 @@ where
     theme and the specific issues.
 
   A theme counts as "accessible" iff its
-  `Verso.Theme.ManualTheme.checkAccessibility` returns no issues.
+  `ManualTheme.checkAccessibility` returns no issues.
   -/
   runThemeAccessibilityCheck (cfg : RenderConfig) (registry : ThemeRegistry) :
       ReaderT ExtensionImpls (BuildLogT IO) Unit := do
@@ -1220,10 +1226,10 @@ where
     checkDefault "defaultDarkTheme" cfg.defaultDarkTheme
 
   /--
-  Builds the active {name}`Verso.Theme.ThemeRegistry` from the registered
-  `Verso.Theme.ManualTheme` table, filters it by the configured
+  Builds the active {name}`ThemeRegistry` from the registered
+  `ManualTheme` table, filters it by the configured
   `availableThemes`, and routes every
-  `Verso.Theme.ManualThemeTable.ValidationError` through `MonadBuildLog` as an error.
+  `ManualThemeTable.ValidationError` through `MonadBuildLog` as an error.
   -/
   resolveThemeRegistry (cfg : RenderConfig)
       (table : Verso.Theme.ManualThemeTable) :

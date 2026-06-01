@@ -680,13 +680,11 @@ end Manual
 
 /--
 The monad in which TeX descriptor implementations (`BlockDescr.toTeX`,
-`InlineDescr.toTeX`) and the TeX emit pipeline run. Reads the resolved
-`Verso.Theme.ThemeRegistry`, the extension implementations table, and logs through the build
-log.
+`InlineDescr.toTeX`) and the TeX emit pipeline run. Reads the resolved `ThemeRegistry`, the
+extension implementations table, and logs through the build log.
 
-Defined here (rather than in `VersoManual.lean`) so descriptor type signatures can name it
-without forward references. {name}`Verso.Genre.Manual.EmitM` is an alias to this from
-`VersoManual.lean`.
+Defined here (not in `VersoManual.lean`) so descriptor type signatures can name it without
+forward references.
 -/
 public abbrev Manual.EmitM : Type → Type :=
   ReaderT Verso.Theme.ThemeRegistry (ReaderT Manual.ExtensionImpls (BuildLogT IO))
