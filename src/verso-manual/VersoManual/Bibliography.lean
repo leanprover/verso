@@ -205,7 +205,7 @@ where
 
 open Verso.Doc.TeX in
 open Verso.Output.TeX in
-def Citable.bibTeX (go : Doc.Inline Genre.Manual → TeXT Manual (ReaderT ExtensionImpls (BuildLogT IO)) TeX) (c : Citable) : TeXT Manual (ReaderT ExtensionImpls (BuildLogT IO)) TeX :=   wrap <$> open TeX in do
+def Citable.bibTeX (go : Doc.Inline Genre.Manual → TeXT Manual (EmitM) TeX) (c : Citable) : TeXT Manual (EmitM) TeX :=   wrap <$> open TeX in do
   match c with
   | .inProceedings p =>
     let authors ← andListTeX <$> p.authors.mapM go
@@ -288,10 +288,10 @@ where
 
 open Verso.Doc.TeX in
 def Citable.inlineTeX
-    (go : Doc.Inline Genre.Manual → TeXT Manual (ReaderT ExtensionImpls (BuildLogT IO)) Output.TeX)
+    (go : Doc.Inline Genre.Manual → TeXT Manual (EmitM) Output.TeX)
     (ps : List Citable)
     (fmt : Style) :
-    TeXT Manual (ReaderT ExtensionImpls (BuildLogT IO)) TeX := open TeX in do
+    TeXT Manual (EmitM) TeX := open TeX in do
   match fmt with
   | .textual =>
     let out : Array TeX ← ps.toArray.mapM fun p => do

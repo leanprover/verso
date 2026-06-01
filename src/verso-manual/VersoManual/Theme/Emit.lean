@@ -39,10 +39,10 @@ choices and the live code preview.
 inside a `data-verso-theme`-scoped element to show what each theme will look like.
 -/
 public def windowVersoThemesJs
-    (themes : Array (Lean.Name × ManualTheme))
+    (themes : ThemeRegistry)
     (defaultLight defaultDark defaultSingle : Lean.Name)
     (codeSample : String) : String :=
-  let entries := themes.map (fun (n, t) => themeJson n t)
+  let entries := themes.foldl (init := #[]) (fun acc n t => acc.push (themeJson n t))
   let payload := Json.mkObj [
     ("themes", Json.arr entries),
     ("defaultLight", Json.str defaultLight.toString),
@@ -63,12 +63,12 @@ not follow the system appearance. First visits (no stored mode) use the same fal
 painted frame matches what the reader will see when they open the picker.
 -/
 public def themeInitScript
-    (themes : Array (Lean.Name × ManualTheme))
+    (themes : ThemeRegistry)
     (defaultLight defaultDark defaultSingle : Lean.Name) : String :=
-  let pairs := themes.toList.map fun (n, t) =>
+  let pairs := themes.foldl (init := ([] : List String)) fun acc n t =>
     let a := match t.appearance with | .light => "light" | .dark => "dark"
-    s!"\"{n.toString}\":\"{a}\""
-  let table := "{" ++ ",".intercalate pairs ++ "}"
+    s!"\"{n.toString}\":\"{a}\"" :: acc
+  let table := "{" ++ ",".intercalate pairs.reverse ++ "}"
   s!"(function() \{
   var APPEARANCE = {table};
   var DEFAULT_LIGHT = \"{defaultLight.toString}\";
@@ -129,7 +129,7 @@ page-theme asset root is needed.
 -/
 public def «verso-themes.css»
     (single : ManualTheme)
-    (themes : Array (Lean.Name × ManualTheme))
+    (themes : ThemeRegistry)
     (_defaultLight defaultDark : Lean.Name) : String := Id.run do
   let assetRoot (n : Lean.Name) : String := s!"-verso-data/themes/{n.toString}"
   let mut out := ""
@@ -140,7 +140,7 @@ public def «verso-themes.css»
   -- Unscoped :root block from the single-mode default.
   out := out ++ s!":root \{\n{single.cssVariables}}\n"
   -- @media dark fallback for no-JS visitors.
-  if let some t := themes.findSome? (fun (n, t) => if n == defaultDark then some t else none) then
+  if let some t := themes.find? defaultDark then
     out := out ++ s!"@media (prefers-color-scheme: dark) \{\n  :root \{\n{t.cssVariables}  }\n}\n"
   -- Attribute-scoped blocks for every registered theme.
   for (n, t) in themes do

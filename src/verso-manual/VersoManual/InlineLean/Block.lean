@@ -47,7 +47,7 @@ block_extension Block.lean
         reportError <| "Couldn't deserialize Lean code block while rendering TeX: " ++ err
         pure .empty
       | .ok (hl : Highlighted) =>
-        hl.toTeX (g := Manual) (m := ReaderT ExtensionImpls (BuildLogT IO))
+        hl.toTeX (g := Manual) (m := EmitM)
   toHtml :=
     open Verso.Output.Html in
     some <| fun _ _ _ data _ => do

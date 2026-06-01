@@ -82,8 +82,10 @@ expected, including in structure-field defaults.
 syntax (name := colorLit) "color%" noWs colorHex : term
 
 open Elab Term in
-/-- Elaborates a {lit}`color%` literal to a {name (full := Verso.Theme.Color)}`Color` and attaches the
-preview widget. -/
+/--
+Elaborates a {lit}`color%` literal to a {name (full := Verso.Theme.Color)}`Color` and attaches
+the preview widget.
+-/
 @[term_elab colorLit]
 meta def elabColorLit : TermElab := fun stx expectedType? => do
   let hexStx := stx.getArg 1

@@ -20,6 +20,7 @@ public import VersoSearch.DomainSearch
 import VersoManual.LicenseInfo
 import VersoManual.Html.Config
 public import VersoManual.Html.Features
+public import VersoManual.Theme
 public meta import VersoManual.Ext
 import Verso.Output.Html
 public import Verso.Output.TeX
@@ -677,6 +678,27 @@ structure ExtensionImpls where
 
 end Manual
 
+/--
+The monad in which TeX descriptor implementations (`BlockDescr.toTeX`,
+`InlineDescr.toTeX`) and the TeX emit pipeline run. Reads the resolved
+`Verso.Theme.ThemeRegistry`, the extension implementations table, and logs through the build
+log.
+
+Defined here (rather than in `VersoManual.lean`) so descriptor type signatures can name it
+without forward references. {name}`Verso.Genre.Manual.EmitM` is an alias to this from
+`VersoManual.lean`.
+-/
+public abbrev Manual.EmitM : Type → Type :=
+  ReaderT Verso.Theme.ThemeRegistry (ReaderT Manual.ExtensionImpls (BuildLogT IO))
+
+/--
+The monad in which HTML descriptor implementations (`BlockDescr.toHtml`,
+`InlineDescr.toHtml`) run. Same as {name}`Manual.EmitM`, with the remote cross-reference
+table read in addition.
+-/
+public abbrev Manual.EmitHtmlM : Type → Type :=
+  ReaderT Multi.AllRemotes Manual.EmitM
+
 /-- A genre for writing reference manuals and other book-like documents. -/
 @[expose]
 def Manual : Genre where
@@ -752,7 +774,7 @@ structure InlineDescr extends HtmlAssets where
   /--
   How to generate HTML. If {name}`none`, generating HTML from a document that contains this inline will fail.
   -/
-  toHtml : Option (InlineToHtml Manual (ReaderT AllRemotes (ReaderT ExtensionImpls (BuildLogT IO))))
+  toHtml : Option (InlineToHtml Manual EmitHtmlM)
 
   /--
   Should this inline be an entry in the page-local ToC? If so, how should it be represented?
@@ -771,7 +793,7 @@ structure InlineDescr extends HtmlAssets where
   How to generate TeX. If {name}`none`, generating TeX from a document that contains this inline
   will fail.
   -/
-  toTeX : Option (InlineToTeX Manual (ReaderT ExtensionImpls (BuildLogT IO)))
+  toTeX : Option (InlineToTeX Manual EmitM)
   /-- Required TeX `\usepackage` lines -/
   usePackages : List String := {}
   /-- Required items in the TeX preamble -/
@@ -795,7 +817,7 @@ structure BlockDescr extends HtmlAssets where
   How to generate HTML. If {name}`none`, generating HTML from a document that contains this block
   will fail.
   -/
-  toHtml : Option (BlockToHtml Manual (ReaderT AllRemotes (ReaderT ExtensionImpls (BuildLogT IO))))
+  toHtml : Option (BlockToHtml Manual EmitHtmlM)
 
   /--
   Should this block be an entry in the page-local ToC? If so, how should it be represented?
@@ -815,7 +837,7 @@ structure BlockDescr extends HtmlAssets where
   How to generate TeX. If {name}`none`, generating TeX from a document that contains this block
   will fail.
   -/
-  toTeX : Option (BlockToTeX Manual (ReaderT ExtensionImpls (BuildLogT IO)))
+  toTeX : Option (BlockToTeX Manual EmitM)
   /-- Required TeX `\usepackage` lines -/
   usePackages : List String := {}
   /-- Required items in the TeX preamble -/
@@ -1505,7 +1527,7 @@ instance : Traverse Manual TraverseM where
         pure <| some <| Inline.other ⟨name, some id, data⟩ content
 
 open Verso.Output.TeX in
-instance : TeX.GenreTeX Manual (ReaderT ExtensionImpls (BuildLogT IO)) where
+instance : TeX.GenreTeX Manual EmitM where
   part go metadata txt := do
     let st ← TeX.state
     let label? := do
@@ -1567,7 +1589,7 @@ def permalink (id : InternalId) (st : TraverseState) (inline : Bool := true) : H
 
 
 open Verso.Output.Html in
-instance : Html.GenreHtml Manual (ReaderT AllRemotes (ReaderT ExtensionImpls (BuildLogT IO))) where
+instance : Html.GenreHtml Manual EmitHtmlM where
   part go «meta» txt := do
     let st ← Verso.Doc.Html.HtmlT.state
     let attrs := meta.id.map (st.htmlId) |>.getD #[]

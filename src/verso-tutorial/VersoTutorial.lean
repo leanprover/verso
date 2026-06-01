@@ -262,12 +262,13 @@ partial def inlineToPage (i : Inline Tutorial) : EmitM (Inline Blog.Page) := do
   | .other .. =>
     let hoverSt ← getThe (Code.Hover.State Html)
     let (html, hoverSt) ←
-      Tutorial.toHtml (m := ReaderT AllRemotes (ReaderT ExtensionImpls (BuildLogT IO))) {}
+      Tutorial.toHtml (m := EmitHtmlM) {}
         {}
         (← readThe Manual.TraverseState)
         {} {} {} i
         |>.run hoverSt
         |>.run (← read).remoteContent
+        |>.run ({} : Theme.ThemeRegistry)
         |>.run (← readThe ExtensionImpls)
     set hoverSt
     return .other (.blob html) #[]
@@ -284,12 +285,13 @@ partial def blockToPage (b : Block Tutorial) : EmitM (Block Blog.Page) := do
   | .other .. =>
     let hoverSt ← getThe (Code.Hover.State Html)
     let (html, hoverSt) ←
-      Tutorial.toHtml (m := ReaderT AllRemotes (ReaderT ExtensionImpls (BuildLogT IO))) {}
+      Tutorial.toHtml (m := EmitHtmlM) {}
         {}
         (← readThe Manual.TraverseState)
         {} {} {} b
         |>.run hoverSt
         |>.run (← read).remoteContent
+        |>.run ({} : Theme.ThemeRegistry)
         |>.run (← readThe ExtensionImpls)
     set hoverSt
     return .other (.blob html) #[]

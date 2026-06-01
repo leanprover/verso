@@ -84,8 +84,10 @@ public structure CodeTheme where
   infoIndicatorColor : Color := color%#4777ff
   /-- The message-text color for warning diagnostics. -/
   warningColor : Color := textColor
-  /-- The accent color (left border, underline) for warning diagnostics. Defaults to a darker
-  amber than the legacy {lit}`#e7a71d` so it clears WCAG 1.4.11 (3:1) against white. -/
+  /--
+  The accent color (left border, underline) for warning diagnostics. Defaults to a darker
+  amber than the legacy {lit}`#e7a71d` so it clears WCAG 1.4.11 (3:1) against white.
+  -/
   warningIndicatorColor : Color := color%#d97706
   /-- The message-text color for error diagnostics. -/
   errorColor : Color := color%#cc0000
@@ -204,8 +206,10 @@ private meta def themePair [Monad m] [MonadRef m] [MonadQuotation m] (n : Name) 
   `(($quoted, $(⟨ident⟩)))
 
 open Lean Elab Term in
-/-- Elaborator for the {lit}`code_themes%` macro: emits a {Lean.Doc.name}`Verso.Theme.CodeThemeTable`
-literal whose entries are every registered {Lean.Doc.name}`Verso.Theme.CodeTheme` decl. -/
+/--
+Elaborator for the {lit}`code_themes%` macro: emits a {Lean.Doc.name}`Verso.Theme.CodeThemeTable`
+literal whose entries are every registered {Lean.Doc.name}`Verso.Theme.CodeTheme` decl.
+-/
 @[term_elab code_themes]
 meta def elabCodeThemes : TermElab := fun _stx expected? => do
   let env ← getEnv

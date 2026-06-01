@@ -19,14 +19,16 @@ needs. The manual genre emits every {lit}`--verso-*` chrome variable from a sing
 theme.
 -/
 
+open Lean (Name)
+
 namespace Verso.Theme
 
 /--
-A manual-genre theme: a {Lean.Doc.name}`Verso.Theme.CodeTheme` plus the color and font fields the
+A manual-genre theme: a {name}`Verso.Theme.CodeTheme` plus the color and font fields the
 chrome needs (header background, ToC, burger menu, search box, content links). Defaults reproduce
 today's chrome.
 
-The cascade rule from {Lean.Doc.name}`Verso.Theme.CodeTheme` continues: a field that today reads
+The cascade rule from {name}`Verso.Theme.CodeTheme` continues: a field that today reads
 the page background or text color defaults from the inherited field, so overriding the inherited
 field carries through.
 -/
@@ -43,8 +45,10 @@ public structure ManualTheme extends CodeTheme where
   /-- The ToC background. -/
   tocBackground : Color := color%#fafafa
 
-  /-- The default border color for chrome elements such as the search box outline. Defaults to
-  a slate gray that clears WCAG 1.4.11 (3:1) against both white and the surface color. -/
+  /--
+  The default border color for chrome elements such as the search box outline. Defaults to
+  a slate gray that clears WCAG 1.4.11 (3:1) against both white and the surface color.
+  -/
   borderColor : Color := color%#878787
   /-- The default muted text color for chrome elements such as search hints. -/
   mutedColor : Color := color%#777777
@@ -73,7 +77,7 @@ public structure ManualTheme extends CodeTheme where
 public section
 
 /--
-Attribute that registers a {Lean.Doc.name}`ManualTheme` declaration as an available theme. The
+Attribute that registers a {name}`ManualTheme` declaration as an available theme. The
 declaration must be in the current module (not imported), and its registration name is the decl's
 name with macro scopes erased.
 -/
@@ -96,9 +100,9 @@ meta initialize
 end section
 
 /--
-A materialized table of registered {Lean.Doc.name}`ManualTheme` values, keyed by registration
+A materialized table of registered {name}`ManualTheme` values, keyed by registration
 name. Built at runtime by the {lit}`manual_themes%` term elaborator from the set of
-{Lean.Doc.name}`ManualTheme` declarations tagged with the {lit}`@[manual_theme]` attribute.
+{name}`ManualTheme` declarations tagged with the {lit}`@[manual_theme]` attribute.
 -/
 public structure ManualThemeTable where
   /-- The map from a theme's registration name to its value. -/
@@ -112,18 +116,30 @@ public def empty : ManualThemeTable := {}
 public instance : EmptyCollection ManualThemeTable := ⟨empty⟩
 
 /-- Looks up a theme by its registration name. -/
-public def find? (t : ManualThemeTable) (n : Lean.Name) : Option ManualTheme :=
+public def find? (t : ManualThemeTable) (n : Name) : Option ManualTheme :=
   t.themes.find? n
 
 /-- Inserts a theme under the given registration name. -/
-public def insert (t : ManualThemeTable) (n : Lean.Name) (theme : ManualTheme) : ManualThemeTable :=
+public def insert (t : ManualThemeTable) (n : Name) (theme : ManualTheme) : ManualThemeTable :=
   ⟨t.themes.insert n theme⟩
 
 /-- Builds a table from a list of pairs. -/
-public def fromList (xs : List (Lean.Name × ManualTheme)) : ManualThemeTable :=
-  xs.foldl (fun (acc : ManualThemeTable) (p : Lean.Name × ManualTheme) => acc.insert p.1 p.2) empty
+public def fromList (xs : List (Name × ManualTheme)) : ManualThemeTable :=
+  xs.foldl (fun (acc : ManualThemeTable) (p : Name × ManualTheme) => acc.insert p.1 p.2) empty
 
 end ManualThemeTable
+
+/--
+The active set of themes resolved for a build: the registered table filtered by the
+manual genre's {lit}`availableThemes` config, with the configured defaults auto-included.
+Flows through the emit pipeline via a {lean}`ReaderT` layer in the manual genre's
+{lit}`EmitM` rather than as a config field, since it is build-time state not user-authored
+configuration.
+
+Modeled as a {lean}`Lean.NameMap` so lookups are O(log n) and iteration is in stable name
+order across builds.
+-/
+public abbrev ThemeRegistry : Type := Lean.NameMap ManualTheme
 
 public section
 
@@ -137,9 +153,11 @@ private meta def manualThemePair [Monad m] [MonadRef m] [MonadQuotation m] (n : 
   `(($quoted, $(⟨ident⟩)))
 
 open Lean Elab Term in
-/-- Elaborator for the {lit}`manual_themes%` macro: emits a
-{Lean.Doc.name}`Verso.Theme.ManualThemeTable` literal whose entries are every registered
-{Lean.Doc.name}`Verso.Theme.ManualTheme` decl. -/
+/--
+Elaborator for the {lit}`manual_themes%` macro: emits a
+{name}`Verso.Theme.ManualThemeTable` literal whose entries are every registered
+{name}`Verso.Theme.ManualTheme` decl.
+-/
 @[term_elab manual_themes]
 meta def elabManualThemes : TermElab := fun _stx expected? => do
   let env ← getEnv
@@ -165,9 +183,9 @@ private def colorDecl (name : String) (c : Color) : String :=
   cssDecl name (Color.css c)
 
 /--
-The CSS-variable body for the manual-chrome fields a {Lean.Doc.name}`ManualTheme` adds on top of
-its inherited {Lean.Doc.name}`Verso.Theme.CodeTheme`. The manual genre concatenates this with
-{Lean.Doc.name}`Verso.Theme.CodeTheme.cssVariables` to produce the contents of its
+The CSS-variable body for the manual-chrome fields a {name}`ManualTheme` adds on top of
+its inherited {name}`Verso.Theme.CodeTheme`. The manual genre concatenates this with
+{name}`Verso.Theme.CodeTheme.cssVariables` to produce the contents of its
 {lit}`:root` block.
 -/
 public def manualCssVariables (theme : ManualTheme) : String :=
@@ -190,8 +208,8 @@ public def manualCssVariables (theme : ManualTheme) : String :=
   ]
 
 /--
-The full CSS-variable body for a {Lean.Doc.name}`ManualTheme`: the inherited
-{Lean.Doc.name}`Verso.Theme.CodeTheme` variables followed by the manual-chrome additions. This is
+The full CSS-variable body for a {name}`ManualTheme`: the inherited
+{name}`Verso.Theme.CodeTheme` variables followed by the manual-chrome additions. This is
 what the manual genre writes into the body of {lit}`verso-themes.css`'s {lit}`:root` block.
 -/
 public def cssVariables (theme : ManualTheme) : String :=
@@ -204,20 +222,15 @@ end ManualTheme
 namespace ManualTheme
 
 /--
-Runs the inherited {Lean.Doc.name}`Verso.Theme.CodeTheme.checkAccessibility` and then verifies
-the manual-chrome pairs:
+Runs the inherited {name}`Verso.Theme.CodeTheme.checkAccessibility` and then verifies the
+manual-chrome pairs:
 
-- content {Lean.Doc.name (full := Verso.Theme.ManualTheme.linkColor)}`linkColor` and
-  {Lean.Doc.name (full := Verso.Theme.ManualTheme.visitedLinkColor)}`visitedLinkColor` against
-  the page background
-- {Lean.Doc.name (full := Verso.Theme.ManualTheme.tocTextColor)}`tocTextColor` against the
-  {Lean.Doc.name (full := Verso.Theme.ManualTheme.tocBackground)}`tocBackground`
-- the header title color (body text) against
-  {Lean.Doc.name (full := Verso.Theme.ManualTheme.headerBackground)}`headerBackground`
+- content {name}`linkColor` and {name}`visitedLinkColor` against the page background
+- {name}`tocTextColor` against the {name}`tocBackground`
+- the header title color (body text) against {name}`headerBackground`
 - the search-box muted and border colors against the surface and page backgrounds
-- body text against the
-  {Lean.Doc.name (full := Verso.Theme.ManualTheme.highlightColor)}`highlightColor`, since search
-  results render matched terms with that color as their background
+- body text against the {name}`highlightColor`, since search results render matched terms with that
+  color as their background
 -/
 public def checkAccessibility (theme : ManualTheme) : Array Color.Issue := Id.run do
   let mut issues := theme.toCodeTheme.checkAccessibility
@@ -270,22 +283,24 @@ Reasons a theme configuration can be rejected. Each carries enough detail to poi
 the specific theme or default slot that needs attention.
 -/
 public inductive ValidationError where
-  /-- The registration `Name.toString` contains characters outside `[A-Za-z0-9._-]`, contains
-  `..`, or has no letter. -/
+  /--
+  The registration {name}`Name.toString` contains characters outside `[A-Za-z0-9._-]`, contains
+  `..`, or has no letter.
+  -/
   | unsafeName (name : Lean.Name)
-  /-- `availableThemes` named a theme that is not registered with `@[manual_theme]`. -/
+  /-- The set of avaialable themes named a theme that is not registered with {attr}`@[manual_theme]`. -/
   | unknownAvailable (name : Lean.Name)
-  /-- `defaultLightTheme` is not a registered manual theme. -/
+  /-- The default light theme is not a registered manual theme. -/
   | unknownDefaultLight (name : Lean.Name)
-  /-- `defaultDarkTheme` is not a registered manual theme. -/
+  /-- The default dark theme is not a registered manual theme. -/
   | unknownDefaultDark (name : Lean.Name)
-  /-- `defaultLightTheme` names a theme whose appearance is not `.light`. -/
+  /-- The default light theme is a dark theme. -/
   | defaultLightWrongAppearance (name : Lean.Name)
-  /-- `defaultDarkTheme` names a theme whose appearance is not `.dark`. -/
+  /-- The default dark theme is a light theme. -/
   | defaultDarkWrongAppearance (name : Lean.Name)
 deriving Inhabited, Repr
 
-/-- Renders a {Lean.Doc.name}`Verso.Theme.ManualThemeTable.ValidationError` as a build-log message. -/
+/-- Renders a {name}`ValidationError` as a build-log message. -/
 public def ValidationError.format : ValidationError → String
   | .unsafeName n =>
     s!"theme registration name '{n}' is not safe for a URL path segment; only [A-Za-z0-9._-] are allowed, '..' is rejected, and at least one letter is required"
@@ -300,13 +315,14 @@ public def ValidationError.format : ValidationError → String
   | .defaultDarkWrongAppearance n =>
     s!"defaultDarkTheme = '{n}' is registered but its appearance is not .dark"
 
+open Lean in
 /--
 Validates the configured theme set against the registered theme table. Returns the list of
 problems found (empty iff every check passes); the caller routes them through the build log.
 -/
 public def validate (table : ManualThemeTable)
-    (defaultLight defaultDark : Lean.Name)
-    (available : Option (Array Lean.Name)) : Array ValidationError := Id.run do
+    (defaultLight defaultDark : Name)
+    (available : Option NameSet) : Array ValidationError := Id.run do
   let mut errs := #[]
   for (n, _) in table.themes.toList do
     unless safeNameString n.toString do
@@ -324,5 +340,3 @@ public def validate (table : ManualThemeTable)
   | some t => unless t.appearance == .dark do
       errs := errs.push (.defaultDarkWrongAppearance defaultDark)
   return errs
-
-end ManualThemeTable

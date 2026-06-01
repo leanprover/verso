@@ -76,7 +76,7 @@ block_extension Block.table (columns : Nat) (header : Bool) (tag : Option String
           rows := rows.push (items.take columns |>.map (·.contents))
           items := items.extract columns items.size
 
-        let rowsOut : TeX.TeXT Manual (ReaderT ExtensionImpls (BuildLogT IO)) (Array Output.TeX) := do
+        let rowsOut : TeX.TeXT Manual (EmitM) (Array Output.TeX) := do
           rows.mapIdxM fun i r => do
             let cols ← r.mapM fun c => do
               let cell : Output.TeX ← Array.mapM goB c
