@@ -7,6 +7,7 @@ module
 
 public import Verso.Theme.Color.Palettes.Solarized
 public import Verso.Theme.Color.Palettes.OkabeIto
+public import Verso.Theme.Color.Palettes.Nord
 
 /-!
 {open Verso.Theme}

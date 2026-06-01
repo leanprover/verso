@@ -676,26 +676,27 @@ structure ExtensionImpls where
   inlineDescrs : Lean.NameMap Dynamic
   blockDescrs : Lean.NameMap Dynamic
 
-end Manual
-
 /--
-The monad in which TeX descriptor implementations (`BlockDescr.toTeX`,
-`InlineDescr.toTeX`) and the TeX emit pipeline run. Reads the resolved `ThemeRegistry`, the
-extension implementations table, and logs through the build log.
+{open Verso.Theme}
 
-Defined here (not in `VersoManual.lean`) so descriptor type signatures can name it without
-forward references.
+The monad in which TeX descriptor implementations (`BlockDescr.toTeX`, `InlineDescr.toTeX`) and the
+TeX generation pipeline run. Reads the resolved {name}`ThemeRegistry`, the extension implementations
+table, and logs through the build log.
+
+Defined here (not in `VersoManual.lean`) so descriptor type signatures can name it without forward
+references.
 -/
-public abbrev Manual.EmitM : Type → Type :=
+public abbrev EmitM : Type → Type :=
   ReaderT Verso.Theme.ThemeRegistry (ReaderT Manual.ExtensionImpls (BuildLogT IO))
 
 /--
-The monad in which HTML descriptor implementations (`BlockDescr.toHtml`,
-`InlineDescr.toHtml`) run. Same as {name}`Manual.EmitM`, with the remote cross-reference
-table read in addition.
+The monad in which HTML descriptor implementations (`BlockDescr.toHtml`, `InlineDescr.toHtml`) run.
+Same as {name}`EmitM`, with the remote cross-reference table read in addition.
 -/
-public abbrev Manual.EmitHtmlM : Type → Type :=
-  ReaderT Multi.AllRemotes Manual.EmitM
+public abbrev EmitHtmlM : Type → Type :=
+  ReaderT Multi.AllRemotes EmitM
+
+end Manual
 
 /-- A genre for writing reference manuals and other book-like documents. -/
 @[expose]

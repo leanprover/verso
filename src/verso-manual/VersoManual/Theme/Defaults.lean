@@ -268,6 +268,102 @@ public def ManualTheme.solarizedDark : ManualTheme :=
     visitedLinkColor := violet,
     licenses := #[Verso.Genre.Manual.Licenses.solarized] }
 
+/-! # Nord — Sven Greb's arctic, north-bluish palette -/
+
+open Color.Palettes.Nord in
+/--
+Nord: the canonical Nord palette on its Polar Night substrate ({lit}`nord0` page, {lit}`nord1`
+code blocks). Frost hues color the keyword/const/var tokens; the Aurora reds, yellows, and
+greens drive diagnostics.
+-/
+@[manual_theme]
+public def ManualTheme.nord : ManualTheme :=
+  { darkChromeFields {
+      CodeTheme.ink with
+      name := Color.Palettes.Nord.name,
+      sourceLink := some Color.Palettes.Nord.sourceLink,
+      appearance := .dark,
+      background := nord0,
+      codeBlockBackground := nord1,
+      textColor := nord4,
+      codeColor := nord4,
+      structureColor := nord4,
+      warningColor := nord4,
+      infoColor := nord4,
+      errorColor := nord11,
+      errorIndicatorColor := nord11,
+      warningIndicatorColor := nord13,
+      infoIndicatorColor := nord8,
+      const := { color := nord8, weight := .regular, style := .normal, face := .mono },
+      keyword := { color := nord9, weight := .bold, style := .normal, face := .mono },
+      «var» := { color := nord4, weight := .regular, style := .italic, face := .mono },
+      hoverBackground := nord2,
+      hoverText := nord4,
+      hoverBorderColor := nord3,
+      hoverSeparatorColor := nord3,
+      tokenHighlightBackground := nord2,
+      tacticStateBorderColor := nord3,
+      selectedColor := nord2,
+      highlightOnCode := nord3,
+      highlightOnText := nord3,
+      uiOnCode := nord3
+    } with
+      surfaceColor := nord1,
+      tocBackground := nord0,
+      borderColor := nord3,
+      mutedColor := nord4,
+      linkColor := nord8,
+      visitedLinkColor := nord15,
+      licenses := #[Verso.Genre.Manual.Licenses.nord] }
+
+open Color.Palettes.Nord in
+/--
+Nord Light: the inverse Snow Storm substrate ({lit}`nord6` page, {lit}`nord5` code blocks)
+with darker Frost and Polar Night accents chosen so each token clears WCAG AA contrast on the
+light background. Token mapping matches Nord's documented intent ({lit}`nord10` for
+keywords/declarations, {lit}`nord13` for warnings, {lit}`nord15` for the visited-link purple).
+-/
+@[manual_theme]
+public def ManualTheme.nordLight : ManualTheme where
+  toCodeTheme := {
+    CodeTheme.ink with
+    name := s!"{Color.Palettes.Nord.name} Light",
+    sourceLink := some Color.Palettes.Nord.sourceLink,
+    background := nord6,
+    codeBlockBackground := nord5,
+    textColor := nord0,
+    codeColor := nord0,
+    structureColor := nord0,
+    warningColor := nord0,
+    infoColor := nord0,
+    errorColor := nord11,
+    errorIndicatorColor := nord11,
+    warningIndicatorColor := nord13,
+    infoIndicatorColor := nord10,
+    hoverBackground := nord5,
+    hoverText := nord0,
+    hoverBorderColor := nord3,
+    hoverSeparatorColor := nord3,
+    tokenHighlightBackground := nord5,
+    tacticStateBorderColor := nord3,
+    selectedColor := nord4,
+    highlightOnCode := nord4,
+    uiOnCode := nord3,
+    -- Frost hues for tokens: nord10 (deep blue) for keywords and declarations; nord3 (Polar
+    -- Night, the documented comments color) plus italic distinguishes variables from body
+    -- text without dropping below contrast threshold.
+    keyword.color := nord10,
+    const.color := nord10,
+    «var».color := nord3
+  }
+  surfaceColor := nord5
+  tocBackground := nord5
+  borderColor := nord3
+  mutedColor := nord3
+  linkColor := nord10
+  visitedLinkColor := nord15
+  licenses := #[Verso.Genre.Manual.Licenses.nord]
+
 /-! # Sandstone — warm sepia -/
 
 /-- Sandstone light: a warm cream background with terracotta and umber accents. -/
