@@ -225,10 +225,13 @@ public def ManualTheme.beaconLight : ManualTheme :=
 
 open Color.Palettes.OkabeIto in
 /--
-Beacon dark: the Okabe-Ito palette on a near-black background. Same colorblind-safe goals as
-{Lean.Doc.name}`ManualTheme.beaconLight`, with the hues that are brightest on dark substrates
-({lit}`skyBlue`, {lit}`yellow`) carrying the most-used token kinds. Typography (bold, italic)
-disambiguates kinds that share a hue, the same way the light variant does.
+Beacon dark: a Verso-side adaptation of the Okabe-Ito palette to a near-black background.
+Okabe and Ito designed the palette for scientific visualization on white substrates; the
+upstream specification does not define a dark-substrate syntax theme, so the token-to-hue
+mapping here is a Verso choice that preserves the canonical colorblind-distinguishability
+property while picking which hue carries which token kind. {lit}`skyBlue` and {lit}`yellow`
+carry the most-used kinds because they are brightest on dark substrates; typography (bold,
+italic) disambiguates kinds that share a hue, the same way the light variant does.
 -/
 @[manual_theme]
 public def ManualTheme.beaconDark : ManualTheme :=
@@ -251,15 +254,17 @@ public def ManualTheme.beaconDark : ManualTheme :=
 
 open Color.Palettes.Solarized in
 /--
-Solarized light: Schoonover's standard cream-on-paper palette ({lit}`base3` background,
-{lit}`base01` primary content). Token mapping uses canonical Solarized hues per common port
+Solarized light: Schoonover's standard cream-on-paper palette. Surface and foreground follow
+the canonical rebasing rules — {lit}`base3` background, {lit}`base00` primary body content,
+{lit}`base01` for emphasized content (headings, structural decoration), {lit}`base1` for
+secondary content (comments and muted chrome text). Accent hues map per common port
 conventions:
 
 - {lit}`green` → keywords
 - {lit}`blue` → defined names ({lit}`const`)
 - {lit}`violet` → bound variables ({lit}`var`)
 - {lit}`cyan` → string literals
-- {lit}`base1` → doc comments (Solarized's documented muted comment hue)
+- {lit}`base1` → doc comments (Solarized's documented muted secondary-content hue)
 - {lit}`yellow` → {lit}`Type`/{lit}`Prop`/{lit}`Sort` formers
 - {lit}`orange` → numeric literals (including universe-level numerics)
 - {lit}`magenta` → universe operators ({lit}`max`, {lit}`imax`) and module/namespace paths
@@ -277,17 +282,18 @@ public def ManualTheme.solarizedLight : ManualTheme :=
       sourceLink := some Color.Palettes.Solarized.sourceLink,
       background := base3,
       codeBlockBackground := base2,
-      textColor := base01,
-      codeColor := base01,
+      textColor := base00,
+      codeColor := base00,
+      -- Structural decoration (case labels) uses the canonical emphasized-content shade.
       structureColor := base01,
-      warningColor := base01,
-      infoColor := base01,
+      warningColor := base00,
+      infoColor := base00,
       errorColor := red,
       errorIndicatorColor := red,
       warningIndicatorColor := yellow,
       infoIndicatorColor := blue,
       hoverBackground := base2,
-      hoverText := base01,
+      hoverText := base00,
       hoverBorderColor := base1,
       hoverSeparatorColor := base1,
       tokenHighlightBackground := base2,
@@ -298,7 +304,7 @@ public def ManualTheme.solarizedLight : ManualTheme :=
       keyword := { color := green, weight := .bold, style := .normal, face := .mono },
       const := { color := blue, weight := .regular, style := .normal, face := .mono },
       «var» := { color := violet, weight := .regular, style := .italic, face := .mono },
-      literal := { color := base01, weight := .regular, style := .normal, face := .mono },
+      literal := { color := base00, weight := .regular, style := .normal, face := .mono },
       literalString := { color := cyan, weight := .regular, style := .normal, face := .mono },
       docComment := { color := base1, weight := .regular, style := .italic, face := .mono },
       sort := { color := yellow, weight := .regular, style := .normal, face := .mono },
@@ -310,7 +316,8 @@ public def ManualTheme.solarizedLight : ManualTheme :=
     surfaceColor := base2,
     tocBackground := base2,
     borderColor := base01,
-    mutedColor := base00,
+    -- Muted chrome text uses Solarized's "secondary content" shade.
+    mutedColor := base1,
     linkColor := blue,
     visitedLinkColor := violet,
     burgerVisibleShadowColor := base3,
@@ -321,11 +328,12 @@ public def ManualTheme.solarizedLight : ManualTheme :=
 
 open Color.Palettes.Solarized in
 /--
-Solarized dark: Schoonover's standard {lit}`base03` background with body text on {lit}`base1`.
-Token mapping uses canonical Solarized hues (the same accent assignments as
-{Lean.Doc.name}`ManualTheme.solarizedLight`); the relative-luminance jump comes entirely
-from the substrate. Doc comments use {lit}`base01`, Solarized's documented muted comment hue
-for dark substrates (lower contrast than body text, by design).
+Solarized dark: Schoonover's standard {lit}`base03` background. Surface and foreground follow
+the canonical rebasing rules — {lit}`base03` background, {lit}`base0` primary body content,
+{lit}`base1` for emphasized content (headings, structural decoration), {lit}`base01` for
+secondary content (comments and muted chrome text). Token accent assignments match
+{Lean.Doc.name}`ManualTheme.solarizedLight`; the relative-luminance jump comes entirely from
+the substrate.
 -/
 @[manual_theme]
 public def ManualTheme.solarizedDark : ManualTheme :=
@@ -335,28 +343,29 @@ public def ManualTheme.solarizedDark : ManualTheme :=
     sourceLink := some Color.Palettes.Solarized.sourceLink,
     background := base03,
     codeBlockBackground := base02,
-    textColor := base1,
-    codeColor := base1,
+    textColor := base0,
+    codeColor := base0,
+    -- Structural decoration uses the canonical emphasized-content shade.
     structureColor := base1,
-    warningColor := base1,
-    infoColor := base1,
+    warningColor := base0,
+    infoColor := base0,
     errorColor := red,
     errorIndicatorColor := red,
     warningIndicatorColor := yellow,
     infoIndicatorColor := blue,
     hoverBackground := base02,
-    hoverText := base1,
+    hoverText := base0,
     hoverBorderColor := base01,
     hoverSeparatorColor := base01,
     tokenHighlightBackground := base02,
     tacticStateBorderColor := base01,
     selectedColor := base02,
     highlightOnCode := color%#3a2f00,
-    uiOnCode := base1,
+    uiOnCode := base01,
     keyword := { color := green, weight := .bold, style := .normal, face := .mono },
     const := { color := blue, weight := .regular, style := .normal, face := .mono },
     «var» := { color := violet, weight := .regular, style := .italic, face := .mono },
-    literal := { color := base1, weight := .regular, style := .normal, face := .mono },
+    literal := { color := base0, weight := .regular, style := .normal, face := .mono },
     literalString := { color := cyan, weight := .regular, style := .normal, face := .mono },
     docComment := { color := base01, weight := .regular, style := .italic, face := .mono },
     sort := { color := yellow, weight := .regular, style := .normal, face := .mono },
@@ -365,10 +374,17 @@ public def ManualTheme.solarizedDark : ManualTheme :=
     levelOp := { color := magenta, weight := .regular, style := .normal, face := .mono },
     moduleName := { color := magenta, weight := .regular, style := .normal, face := .mono }
   } with
-    -- Override the dark-chrome link defaults with the canonical Solarized blue/violet (they
-    -- clear contrast on `base03`).
+    -- Solarized-tinted chrome instead of the generic dark-chrome accents.
+    surfaceColor := base02,
+    tocBackground := base02,
+    borderColor := base01,
+    mutedColor := base01,
     linkColor := blue,
     visitedLinkColor := violet,
+    burgerHiddenColor := base0,
+    burgerVisibleColor := base0,
+    burgerHiddenShadowColor := base03,
+    burgerVisibleShadowColor := base03,
     licenses := #[Verso.Genre.Manual.Licenses.solarized] }
 
 /-! # Nord — Sven Greb's arctic, north-bluish palette -/
@@ -437,13 +453,22 @@ public def ManualTheme.nord : ManualTheme :=
 
 open Color.Palettes.Nord in
 /--
-Nord Light: the inverse Snow Storm substrate ({lit}`nord6` page, {lit}`nord5` code blocks)
-with the canonical Nord hues for tokens. The same documented mapping as
-{Lean.Doc.name}`ManualTheme.nord` applies. Note that Nord — like Solarized — wasn't designed
-for a light substrate, so several token colors (Frost {lit}`nord7`–{lit}`nord9`, Aurora
-{lit}`nord13`–{lit}`nord14`) fall below WCAG AA contrast on {lit}`nord6`. Authors who care
-about strict accessibility on a light background should pick a different theme; the canonical
-hex values are preserved here so the look matches other Nord Light ports.
+Nord Light: Nord's bright-ambiance configuration as documented by the upstream spec —
+{lit}`nord6` as page background, {lit}`nord5` as the selection / active-line /
+text-highlight color, {lit}`nord0` as the plain syntax text color. Token accent assignments
+mirror the dark variant: the canonical Nord Frost and Aurora hues drive
+keyword/const/string/sort/etc., per Nord's documented per-color usage table.
+
+The spec does not explicitly designate a bright-ambiance color for syntax variables
+({lit}`nord4` is reserved for the dark-ambiance variable hue and is illegible on {lit}`nord6`),
+so {lit}`nord3` (Polar Night, documented "comments / indent guides") is reused with italic for
+{lit}`var`/{lit}`levelVar`/{lit}`docComment` — a pragmatic choice, not an upstream mapping.
+
+Several canonical Nord token colors — Frost {lit}`nord7`–{lit}`nord9` and Aurora
+{lit}`nord13`/{lit}`nord14` — fall below WCAG AA 4.5 against {lit}`nord6`. The per-theme
+accessibility check flags these and the suite-wide setting `warnPerThemeAccessibility` can
+downgrade them. The canonical hex values are preserved so the look matches other Nord Light
+ports.
 -/
 @[manual_theme]
 public def ManualTheme.nordLight : ManualTheme where
@@ -468,11 +493,15 @@ public def ManualTheme.nordLight : ManualTheme where
     hoverSeparatorColor := nord3,
     tokenHighlightBackground := nord5,
     tacticStateBorderColor := nord3,
-    selectedColor := nord4,
-    highlightOnCode := nord4,
+    -- Per the Nord spec, `nord5` is the documented bright-ambiance selection / text-highlight
+    -- color.
+    selectedColor := nord5,
+    highlightOnCode := nord5,
     uiOnCode := nord3,
-    -- Canonical Nord token mapping. `var` borrows `nord3` (the documented comments color)
-    -- because `nord4` is the dark-mode variable hue, which is illegible on `nord6`.
+    -- Canonical Nord token mapping. `var`/`levelVar`/`docComment` reuse `nord3` (the
+    -- documented "comments / indent guides" color) because the spec does not designate a
+    -- bright-ambiance variable hue and `nord4` (the dark-mode variable color) is illegible
+    -- on `nord6`.
     keyword := { color := nord9, weight := .bold, style := .normal, face := .mono },
     const := { color := nord8, weight := .regular, style := .normal, face := .mono },
     «var» := { color := nord3, weight := .regular, style := .italic, face := .mono },
