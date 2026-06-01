@@ -11,3 +11,4 @@ public import Verso.Theme.Color.Math
 public import Verso.Theme.Color.Accessibility
 public import Verso.Theme.Color.Widget
 public import Verso.Theme.Color.Syntax
+public import Verso.Theme.Color.Palettes

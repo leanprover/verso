@@ -6,6 +6,9 @@ Author: David Thrane Christiansen
 module
 public import Lean.Environment
 
+set_option doc.verso true
+set_option linter.missingDocs true
+
 public section
 
 open Lean
@@ -13,12 +16,11 @@ open Lean
 namespace Verso.Theme
 
 /--
-Environment extension that records every declaration tagged with the `@[code_theme]` attribute.
-Each entry maps the registration name (the decl, erased of macro scopes) to itself, so the table
-is keyed and iterated by registration name.
+Environment extension recording the set of declarations tagged with the {lit}`@[code_theme]`
+attribute.
 -/
 initialize codeThemeExt :
-    PersistentEnvExtension Name Name (NameSet) ←
+    PersistentEnvExtension Name Name NameSet ←
   registerPersistentEnvExtension {
     mkInitial := pure {},
     addImportedFn := fun _ => pure {},

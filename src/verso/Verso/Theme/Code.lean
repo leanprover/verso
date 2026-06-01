@@ -8,6 +8,7 @@ module
 public meta import Verso.Theme.Code.Ext
 public import Verso.Theme.Color
 public import Verso.Theme.Color.Accessibility
+public import Verso.Theme.SourceLink
 public import Verso.Font
 public meta import Lean.Elab.Term
 
@@ -45,18 +46,6 @@ public structure ThemeAsset where
   path : String
   /-- The asset bytes, embedded at compile time. -/
   contents : ByteArray
-
-/--
-A hyperlink shown in the picker alongside a theme: a URL plus the visible link text. Used to
-point readers at a theme's canonical reference (for example the Solarized homepage for a
-Solarized port, or a designer's portfolio page).
--/
-public structure SourceLink where
-  /-- The URL the link points to. -/
-  url : String
-  /-- The visible link text. -/
-  text : String
-deriving Repr
 
 /--
 A typed code theme. Defaults reproduce today's hardcoded chrome, so a default-constructed theme is

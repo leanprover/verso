@@ -7,6 +7,7 @@ module
 
 public import Verso.Theme.Color.Basic
 public import Verso.Theme.Color.Syntax
+public import Verso.Theme.SourceLink
 
 set_option linter.missingDocs true
 set_option doc.verso true
@@ -21,7 +22,17 @@ any {lit}`baseY` is light-mode body text; the rest progress symmetrically betwee
 foreground for each appearance.
 -/
 
-namespace Verso.Theme.Color.Solarized
+namespace Verso.Theme.Color.Palettes.Solarized
+
+/-! # Identity -/
+
+/-- The palette's display name, suitable as a prefix when naming themes built on it. -/
+public def name : String := "Solarized"
+
+/-- The canonical Solarized homepage, shown in the picker for themes that use this palette. -/
+public def sourceLink : Verso.Theme.SourceLink :=
+  { url := "https://ethanschoonover.com/solarized/",
+    text := "ethanschoonover.com/solarized" }
 
 /-! # Monotone ramp -/
 
@@ -61,4 +72,4 @@ public def cyan : Color := color%#2aa198
 /-- Solarized green. -/
 public def green : Color := color%#859900
 
-end Verso.Theme.Color.Solarized
+end Verso.Theme.Color.Palettes.Solarized

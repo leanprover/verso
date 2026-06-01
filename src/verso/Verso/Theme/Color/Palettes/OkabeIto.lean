@@ -7,6 +7,7 @@ module
 
 public import Verso.Theme.Color.Basic
 public import Verso.Theme.Color.Syntax
+public import Verso.Theme.SourceLink
 
 set_option linter.missingDocs true
 set_option doc.verso true
@@ -19,7 +20,18 @@ standard reference set for data visualization and code highlighting that must re
 to dichromat readers.
 -/
 
-namespace Verso.Theme.Color.OkabeIto
+namespace Verso.Theme.Color.Palettes.OkabeIto
+
+/-! # Identity -/
+
+/-- The palette's display name, suitable as a prefix when naming themes built on it. -/
+public def name : String := "Okabe-Ito"
+
+/-- The canonical Okabe-Ito reference page, shown in the picker for themes that use it. -/
+public def sourceLink : Verso.Theme.SourceLink :=
+  { url := "https://jfly.uni-koeln.de/color/", text := "jfly.uni-koeln.de/color" }
+
+/-! # Hues -/
 
 /-- Okabe-Ito black: {lit}`#000000`. -/
 public def black : Color := color%#000000
@@ -38,4 +50,4 @@ public def vermillion : Color := color%#d55e00
 /-- Okabe-Ito reddish purple: {lit}`#cc79a7`. -/
 public def reddishPurple : Color := color%#cc79a7
 
-end Verso.Theme.Color.OkabeIto
+end Verso.Theme.Color.Palettes.OkabeIto

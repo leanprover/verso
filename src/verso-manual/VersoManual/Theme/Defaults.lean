@@ -7,8 +7,7 @@ module
 
 public import VersoManual.Theme
 public import Verso.Theme.Code.Defaults
-public import Verso.Theme.Color.Solarized
-public import Verso.Theme.Color.OkabeIto
+public import Verso.Theme.Color.Palettes
 
 set_option linter.missingDocs true
 set_option doc.verso true
@@ -155,6 +154,7 @@ public def ManualTheme.beaconLight : ManualTheme where
   toCodeTheme := {
     CodeTheme.ink with
     name := "Beacon Light",
+    sourceLink := some Color.Palettes.OkabeIto.sourceLink,
     keyword.color := color%#005b8c,
     const.color := color%#5b3500,
     «var».color := color%#9c2400
@@ -169,14 +169,15 @@ public def ManualTheme.beaconDark : ManualTheme :=
   darkChromeFields {
     darkCodeBase with
     name := "Beacon Dark",
-    keyword.color := color%#56b4e9,
+    sourceLink := some Color.Palettes.OkabeIto.sourceLink,
+    keyword.color := Color.Palettes.OkabeIto.skyBlue,
     const.color := color%#5bd6a4,
     «var».color := color%#f5a85a
   }
 
 /-! # Solarized — Ethan Schoonover's standard palette -/
 
-open Color.Solarized in
+open Color.Palettes.Solarized in
 /--
 Solarized light: Schoonover's standard cream-on-paper palette
 ({lit}`base3` background, {lit}`base01` primary content). Token accents reuse the named hues
@@ -187,11 +188,8 @@ public def ManualTheme.solarizedLight : ManualTheme :=
   {
     toCodeTheme := {
       CodeTheme.ink with
-      name := "Solarized Light",
-      sourceLink := some {
-        url := "https://ethanschoonover.com/solarized/",
-        text := "ethanschoonover.com/solarized"
-      },
+      name := s!"{Color.Palettes.Solarized.name} Light",
+      sourceLink := some Color.Palettes.Solarized.sourceLink,
       background := base3,
       codeBlockBackground := base2,
       textColor := base01,
@@ -224,7 +222,7 @@ public def ManualTheme.solarizedLight : ManualTheme :=
     visitedLinkColor := violet
   }
 
-open Color.Solarized in
+open Color.Palettes.Solarized in
 /--
 Solarized dark: Schoonover's standard {lit}`base03` background with body text on {lit}`base1`.
 Token accents are brightened off the standard palette so they keep clear contrast on the dark
@@ -234,11 +232,8 @@ substrate.
 public def ManualTheme.solarizedDark : ManualTheme :=
   darkChromeFields {
     darkCodeBase with
-    name := "Solarized Dark",
-    sourceLink := some {
-      url := "https://ethanschoonover.com/solarized/",
-      text := "ethanschoonover.com/solarized"
-    },
+    name := s!"{Color.Palettes.Solarized.name} Dark",
+    sourceLink := some Color.Palettes.Solarized.sourceLink,
     background := base03,
     codeBlockBackground := base02,
     textColor := base1,
