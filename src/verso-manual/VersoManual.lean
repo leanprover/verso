@@ -1221,7 +1221,14 @@ where
       | some t =>
         let issues := issuesOf t
         unless issues.isEmpty do
-          routeDefault s!"{slot} '{name.toString}' ({t.name}) has {issues.size} accessibility issue{if issues.size == 1 then "" else "s"}"
+          let plural := if issues.size == 1 then "" else "s"
+          let lines := issues.toList.map fun i =>
+            let colors := i.offending.toList.map Verso.Theme.Color.css |> ", ".intercalate
+            let suffix := if colors.isEmpty then "" else s!" ({colors})"
+            s!"  - {i.message}{suffix}"
+          let body := "\n".intercalate lines
+          routeDefault
+            s!"{slot} '{name.toString}' ({t.name}) has {issues.size} accessibility issue{plural}:\n{body}"
     checkDefault "defaultLightTheme" cfg.defaultLightTheme
     checkDefault "defaultDarkTheme" cfg.defaultDarkTheme
 

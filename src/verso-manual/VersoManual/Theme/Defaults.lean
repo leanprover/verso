@@ -38,14 +38,22 @@ Other built-in themes live alongside it in the {name}`ManualTheme` namespace.
 @[manual_theme]
 public def ManualTheme.ink : ManualTheme where
   toCodeTheme := CodeTheme.ink
+  surfaceColor := color%#f8f9fa
+  tocBackground := color%#fafafa
+  borderColor := color%#878787
+  mutedColor := color%#777777
+  linkColor := color%#0066cc
+  burgerVisibleShadowColor := Color.white
+  burgerHiddenColor := color%#0e2431
+  burgerHiddenShadowColor := Color.white
 
 /--
 A common dark-appearance code-theme base: deep-charcoal backgrounds, brightened text, accent
-colors chosen for readability against the dark substrate. Other dark themes extend this. Every
-cascading field is overridden explicitly because Lean evaluates the {name}`CodeTheme`
-defaults at construction time, so {lit}`CodeTheme.ink with textColor := …` would otherwise
-leave dependent fields (token colors, message text colors, hover text) frozen at their
-original-light values.
+colors chosen for readability against the dark substrate. Other dark themes extend this.
+Every field whose default references another field is overridden explicitly: Lean evaluates
+defaults when the source theme is constructed, so {lit}`CodeTheme.ink with textColor := …`
+would otherwise leave dependent fields (token colors, message text colors, hover text,
+tactic-state background) frozen at their original light-substrate values.
 -/
 private def darkCodeBase : CodeTheme :=
   let bg := color%#16181c
@@ -67,14 +75,25 @@ private def darkCodeBase : CodeTheme :=
   const := { color := text, weight := .regular, style := .normal, face := .mono },
   keyword := { color := text, weight := .bold, style := .normal, face := .mono },
   «var» := { color := text, weight := .regular, style := .italic, face := .mono },
+  literal := { color := text, weight := .regular, style := .normal, face := .mono },
+  literalString := { color := text, weight := .regular, style := .normal, face := .mono },
+  docComment := { color := text, weight := .regular, style := .italic, face := .mono },
+  sort := { color := text, weight := .regular, style := .normal, face := .mono },
+  levelVar := { color := text, weight := .regular, style := .italic, face := .mono },
+  levelConst := { color := text, weight := .regular, style := .normal, face := .mono },
+  levelOp := { color := text, weight := .regular, style := .normal, face := .mono },
+  moduleName := { color := text, weight := .regular, style := .normal, face := .mono },
   -- Hover popups read text on a slightly lighter surface.
   hoverBackground := color%#2a2d33,
   hoverText := text,
   hoverBorderColor := color%#aaaaaa,
   hoverSeparatorColor := color%#3a3d44,
   tokenHighlightBackground := color%#33363d,
-  -- Tactic-state background inherits from `codeBlockBackground`; only the border needs a
-  -- lighter color to read on the dark substrate.
+  -- Tactic state uses the same surface as code blocks. `tacticStateBackground`'s default
+  -- is `codeBlockBackground`, but defaults are evaluated when the source theme is constructed
+  -- — `CodeTheme.ink` froze it at white — and `with` updates don't re-evaluate them. The
+  -- override has to be explicit here so the dark substrate flows through.
+  tacticStateBackground := codeBg,
   tacticStateBorderColor := color%#aaaaaa,
   selectedColor := color%#2a3f55,
   -- Highlight accents on a dark substrate: a saturated tone that the bright text still reads on.
@@ -106,6 +125,24 @@ private def darkChromeFields (code : CodeTheme) : ManualTheme := {
 }
 
 /--
+A light-appearance chrome base reused by the shipped light themes. Mirrors `darkChromeFields`
+for themes that want the default light chrome (Ink-style surface, ToC, borders, link colors,
+and burger lines) without spelling out each field. Themes with custom chrome set the fields
+explicitly.
+-/
+private def lightChromeFields (code : CodeTheme) : ManualTheme := {
+  toCodeTheme := code,
+  surfaceColor := color%#f8f9fa,
+  tocBackground := color%#fafafa,
+  borderColor := color%#878787,
+  mutedColor := color%#777777,
+  linkColor := color%#0066cc,
+  burgerVisibleShadowColor := Color.white,
+  burgerHiddenColor := color%#0e2431,
+  burgerHiddenShadowColor := Color.white
+}
+
+/--
 The dark default manual theme. Named after silver, the ink of choice for the dark-substrate
 manuscript traditions: silver-on-purple Byzantine and Carolingian codices like the *Codex
 Argenteus*, Flemish "Black Hours" such as Morgan MS M.493, and Korean *eunja sagyeong* (은자사경)
@@ -125,8 +162,8 @@ chosen so each token color meets WCAG AA on white and remains visually distinct 
 dichromacies (variables use a dark slate so the bold/italic typography is the dominant signal).
 -/
 @[manual_theme]
-public def ManualTheme.chromaticLight : ManualTheme where
-  toCodeTheme := {
+public def ManualTheme.chromaticLight : ManualTheme :=
+  lightChromeFields {
     CodeTheme.ink with
     name := "Chromatic Light",
     keyword.color := color%#a02828,
@@ -147,25 +184,51 @@ public def ManualTheme.chromaticDark : ManualTheme :=
 
 /-! # Beacon — colorblind-safe syntax accents (Okabe-Ito) -/
 
+open Color.Palettes.OkabeIto in
 /--
-Beacon light: a colorblind-safe syntax palette drawn from the Okabe-Ito set. Black on white
-chrome; tokens use Okabe-Ito blue/orange/bluish-green so they stay distinguishable under all
-three dichromacies.
+Beacon light: a colorblind-safe syntax palette drawn from Okabe and Ito's canonical eight
+hues. Token mapping uses canonical Okabe-Ito hex values throughout, leaning on bold and
+italic typography to disambiguate where two kinds share a hue:
+
+- {lit}`blue` → keywords and universe operators (both bold; context disambiguates)
+- {lit}`bluishGreen` → defined names ({lit}`const`) and module/namespace paths
+- {lit}`vermillion` → bound variables (italic), universe-level variables (italic), and
+  sort formers ({lit}`Type`/{lit}`Prop`/{lit}`Sort`, bold)
+- {lit}`reddishPurple` → string literals
+- {lit}`orange` → numeric literals (universe-level numerics)
+- body text + italic → doc comments
+
+Okabe-Ito was designed for scientific visualization on white substrates and prioritizes
+colorblind safety over WCAG contrast. Several canonical hues sit between 3:1 and 4.5:1 on
+white; the per-theme accessibility check will flag them, and the suite-wide setting
+`warnPerThemeAccessibility` can downgrade those warnings. The colorblind-distinguishability
+property is preserved.
 -/
 @[manual_theme]
-public def ManualTheme.beaconLight : ManualTheme where
-  toCodeTheme := {
+public def ManualTheme.beaconLight : ManualTheme :=
+  lightChromeFields {
     CodeTheme.ink with
     name := "Beacon Light",
     sourceLink := some Color.Palettes.OkabeIto.sourceLink,
-    keyword.color := color%#005b8c,
-    const.color := color%#5b3500,
-    «var».color := color%#9c2400
+    keyword := { color := blue, weight := .bold, style := .normal, face := .mono },
+    const := { color := bluishGreen, weight := .regular, style := .normal, face := .mono },
+    «var» := { color := vermillion, weight := .regular, style := .italic, face := .mono },
+    literal := { color := Color.black, weight := .regular, style := .normal, face := .mono },
+    literalString := { color := reddishPurple, weight := .regular, style := .normal, face := .mono },
+    docComment := { color := Color.black, weight := .regular, style := .italic, face := .mono },
+    sort := { color := vermillion, weight := .bold, style := .normal, face := .mono },
+    levelVar := { color := vermillion, weight := .regular, style := .italic, face := .mono },
+    levelConst := { color := orange, weight := .regular, style := .normal, face := .mono },
+    levelOp := { color := blue, weight := .bold, style := .normal, face := .mono },
+    moduleName := { color := bluishGreen, weight := .regular, style := .normal, face := .mono }
   }
 
+open Color.Palettes.OkabeIto in
 /--
-Beacon dark: the Okabe-Ito palette on a near-black background, with brightened variants chosen
-to keep distance under each dichromacy on the darker substrate.
+Beacon dark: the Okabe-Ito palette on a near-black background. Same colorblind-safe goals as
+{Lean.Doc.name}`ManualTheme.beaconLight`, with the hues that are brightest on dark substrates
+({lit}`skyBlue`, {lit}`yellow`) carrying the most-used token kinds. Typography (bold, italic)
+disambiguates kinds that share a hue, the same way the light variant does.
 -/
 @[manual_theme]
 public def ManualTheme.beaconDark : ManualTheme :=
@@ -173,18 +236,37 @@ public def ManualTheme.beaconDark : ManualTheme :=
     darkCodeBase with
     name := "Beacon Dark",
     sourceLink := some Color.Palettes.OkabeIto.sourceLink,
-    keyword.color := Color.Palettes.OkabeIto.skyBlue,
-    const.color := color%#5bd6a4,
-    «var».color := color%#f5a85a
+    keyword := { color := skyBlue, weight := .bold, style := .normal, face := .mono },
+    const := { color := bluishGreen, weight := .regular, style := .normal, face := .mono },
+    «var» := { color := orange, weight := .regular, style := .italic, face := .mono },
+    literalString := { color := yellow, weight := .regular, style := .normal, face := .mono },
+    sort := { color := reddishPurple, weight := .bold, style := .normal, face := .mono },
+    levelVar := { color := orange, weight := .regular, style := .italic, face := .mono },
+    levelConst := { color := yellow, weight := .regular, style := .normal, face := .mono },
+    levelOp := { color := skyBlue, weight := .bold, style := .normal, face := .mono },
+    moduleName := { color := bluishGreen, weight := .regular, style := .normal, face := .mono }
   }
 
 /-! # Solarized — Ethan Schoonover's standard palette -/
 
 open Color.Palettes.Solarized in
 /--
-Solarized light: Schoonover's standard cream-on-paper palette
-({lit}`base3` background, {lit}`base01` primary content). Token accents reuse the named hues
-from the upstream Solarized definition.
+Solarized light: Schoonover's standard cream-on-paper palette ({lit}`base3` background,
+{lit}`base01` primary content). Token mapping uses canonical Solarized hues per common port
+conventions:
+
+- {lit}`green` → keywords
+- {lit}`blue` → defined names ({lit}`const`)
+- {lit}`violet` → bound variables ({lit}`var`)
+- {lit}`cyan` → string literals
+- {lit}`base1` → doc comments (Solarized's documented muted comment hue)
+- {lit}`yellow` → {lit}`Type`/{lit}`Prop`/{lit}`Sort` formers
+- {lit}`orange` → numeric literals (including universe-level numerics)
+- {lit}`magenta` → universe operators ({lit}`max`, {lit}`imax`) and module/namespace paths
+
+Solarized's documented comment color is base1, which is below WCAG AA 4.5 against base3
+substrate by design; the per-theme accessibility check flags this and the suite-wide setting
+`warnPerThemeAccessibility` can downgrade it.
 -/
 @[manual_theme]
 public def ManualTheme.solarizedLight : ManualTheme :=
@@ -213,9 +295,17 @@ public def ManualTheme.solarizedLight : ManualTheme :=
       selectedColor := base2,
       highlightOnCode := color%#f7e7a3,
       uiOnCode := base1,
-      keyword.color := green,
-      const.color := blue,
-      «var».color := violet
+      keyword := { color := green, weight := .bold, style := .normal, face := .mono },
+      const := { color := blue, weight := .regular, style := .normal, face := .mono },
+      «var» := { color := violet, weight := .regular, style := .italic, face := .mono },
+      literal := { color := base01, weight := .regular, style := .normal, face := .mono },
+      literalString := { color := cyan, weight := .regular, style := .normal, face := .mono },
+      docComment := { color := base1, weight := .regular, style := .italic, face := .mono },
+      sort := { color := yellow, weight := .regular, style := .normal, face := .mono },
+      levelVar := { color := violet, weight := .regular, style := .italic, face := .mono },
+      levelConst := { color := orange, weight := .regular, style := .normal, face := .mono },
+      levelOp := { color := magenta, weight := .regular, style := .normal, face := .mono },
+      moduleName := { color := magenta, weight := .regular, style := .normal, face := .mono }
     },
     surfaceColor := base2,
     tocBackground := base2,
@@ -223,14 +313,19 @@ public def ManualTheme.solarizedLight : ManualTheme :=
     mutedColor := base00,
     linkColor := blue,
     visitedLinkColor := violet,
+    burgerVisibleShadowColor := base3,
+    burgerHiddenColor := base01,
+    burgerHiddenShadowColor := base3,
     licenses := #[Verso.Genre.Manual.Licenses.solarized]
   }
 
 open Color.Palettes.Solarized in
 /--
 Solarized dark: Schoonover's standard {lit}`base03` background with body text on {lit}`base1`.
-Token accents are brightened off the standard palette so they keep clear contrast on the dark
-substrate.
+Token mapping uses canonical Solarized hues (the same accent assignments as
+{Lean.Doc.name}`ManualTheme.solarizedLight`); the relative-luminance jump comes entirely
+from the substrate. Doc comments use {lit}`base01`, Solarized's documented muted comment hue
+for dark substrates (lower contrast than body text, by design).
 -/
 @[manual_theme]
 public def ManualTheme.solarizedDark : ManualTheme :=
@@ -245,7 +340,7 @@ public def ManualTheme.solarizedDark : ManualTheme :=
     structureColor := base1,
     warningColor := base1,
     infoColor := base1,
-    errorColor := color%#ff8b8b,
+    errorColor := red,
     errorIndicatorColor := red,
     warningIndicatorColor := yellow,
     infoIndicatorColor := blue,
@@ -258,9 +353,17 @@ public def ManualTheme.solarizedDark : ManualTheme :=
     selectedColor := base02,
     highlightOnCode := color%#3a2f00,
     uiOnCode := base1,
-    keyword.color := color%#b3d100,
-    const.color := color%#6cb6ff,
-    «var».color := color%#a98aff
+    keyword := { color := green, weight := .bold, style := .normal, face := .mono },
+    const := { color := blue, weight := .regular, style := .normal, face := .mono },
+    «var» := { color := violet, weight := .regular, style := .italic, face := .mono },
+    literal := { color := base1, weight := .regular, style := .normal, face := .mono },
+    literalString := { color := cyan, weight := .regular, style := .normal, face := .mono },
+    docComment := { color := base01, weight := .regular, style := .italic, face := .mono },
+    sort := { color := yellow, weight := .regular, style := .normal, face := .mono },
+    levelVar := { color := violet, weight := .regular, style := .italic, face := .mono },
+    levelConst := { color := orange, weight := .regular, style := .normal, face := .mono },
+    levelOp := { color := magenta, weight := .regular, style := .normal, face := .mono },
+    moduleName := { color := magenta, weight := .regular, style := .normal, face := .mono }
   } with
     -- Override the dark-chrome link defaults with the canonical Solarized blue/violet (they
     -- clear contrast on `base03`).
@@ -273,8 +376,16 @@ public def ManualTheme.solarizedDark : ManualTheme :=
 open Color.Palettes.Nord in
 /--
 Nord: the canonical Nord palette on its Polar Night substrate ({lit}`nord0` page, {lit}`nord1`
-code blocks). Frost hues color the keyword/const/var tokens; the Aurora reds, yellows, and
-greens drive diagnostics.
+code blocks). Token mapping follows Nord's documented hue intent:
+
+- {lit}`nord9` ("keywords, support, operators, tags") → {lit}`keyword`
+- {lit}`nord8` ("declarations, calls, execution statements") → {lit}`const`
+- {lit}`nord4` ("syntax variables and constants") → {lit}`var`, with italic
+- {lit}`nord14` ("string syntax highlighting") → {lit}`literalString`
+- {lit}`nord3` ("comments") → {lit}`docComment`
+- {lit}`nord7` ("classes, types, and primitives") → {lit}`sort` and {lit}`moduleName`
+- {lit}`nord10` ("pragmas, preprocessor") → {lit}`levelOp` (universe-grammar built-ins)
+- {lit}`nord15` ("numbers, floating-point literals") → {lit}`levelConst`
 -/
 @[manual_theme]
 public def ManualTheme.nord : ManualTheme :=
@@ -297,6 +408,14 @@ public def ManualTheme.nord : ManualTheme :=
       const := { color := nord8, weight := .regular, style := .normal, face := .mono },
       keyword := { color := nord9, weight := .bold, style := .normal, face := .mono },
       «var» := { color := nord4, weight := .regular, style := .italic, face := .mono },
+      literal := { color := nord4, weight := .regular, style := .normal, face := .mono },
+      literalString := { color := nord14, weight := .regular, style := .normal, face := .mono },
+      docComment := { color := nord3, weight := .regular, style := .italic, face := .mono },
+      sort := { color := nord7, weight := .regular, style := .normal, face := .mono },
+      levelVar := { color := nord4, weight := .regular, style := .italic, face := .mono },
+      levelConst := { color := nord15, weight := .regular, style := .normal, face := .mono },
+      levelOp := { color := nord10, weight := .regular, style := .normal, face := .mono },
+      moduleName := { color := nord7, weight := .regular, style := .normal, face := .mono },
       hoverBackground := nord2,
       hoverText := nord4,
       hoverBorderColor := nord3,
@@ -319,9 +438,12 @@ public def ManualTheme.nord : ManualTheme :=
 open Color.Palettes.Nord in
 /--
 Nord Light: the inverse Snow Storm substrate ({lit}`nord6` page, {lit}`nord5` code blocks)
-with darker Frost and Polar Night accents chosen so each token clears WCAG AA contrast on the
-light background. Token mapping matches Nord's documented intent ({lit}`nord10` for
-keywords/declarations, {lit}`nord13` for warnings, {lit}`nord15` for the visited-link purple).
+with the canonical Nord hues for tokens. The same documented mapping as
+{Lean.Doc.name}`ManualTheme.nord` applies. Note that Nord — like Solarized — wasn't designed
+for a light substrate, so several token colors (Frost {lit}`nord7`–{lit}`nord9`, Aurora
+{lit}`nord13`–{lit}`nord14`) fall below WCAG AA contrast on {lit}`nord6`. Authors who care
+about strict accessibility on a light background should pick a different theme; the canonical
+hex values are preserved here so the look matches other Nord Light ports.
 -/
 @[manual_theme]
 public def ManualTheme.nordLight : ManualTheme where
@@ -349,12 +471,19 @@ public def ManualTheme.nordLight : ManualTheme where
     selectedColor := nord4,
     highlightOnCode := nord4,
     uiOnCode := nord3,
-    -- Frost hues for tokens: nord10 (deep blue) for keywords and declarations; nord3 (Polar
-    -- Night, the documented comments color) plus italic distinguishes variables from body
-    -- text without dropping below contrast threshold.
-    keyword.color := nord10,
-    const.color := nord10,
-    «var».color := nord3
+    -- Canonical Nord token mapping. `var` borrows `nord3` (the documented comments color)
+    -- because `nord4` is the dark-mode variable hue, which is illegible on `nord6`.
+    keyword := { color := nord9, weight := .bold, style := .normal, face := .mono },
+    const := { color := nord8, weight := .regular, style := .normal, face := .mono },
+    «var» := { color := nord3, weight := .regular, style := .italic, face := .mono },
+    literal := { color := nord0, weight := .regular, style := .normal, face := .mono },
+    literalString := { color := nord14, weight := .regular, style := .normal, face := .mono },
+    docComment := { color := nord3, weight := .regular, style := .italic, face := .mono },
+    sort := { color := nord7, weight := .regular, style := .normal, face := .mono },
+    levelVar := { color := nord3, weight := .regular, style := .italic, face := .mono },
+    levelConst := { color := nord15, weight := .regular, style := .normal, face := .mono },
+    levelOp := { color := nord10, weight := .regular, style := .normal, face := .mono },
+    moduleName := { color := nord7, weight := .regular, style := .normal, face := .mono }
   }
   surfaceColor := nord5
   tocBackground := nord5
@@ -362,7 +491,160 @@ public def ManualTheme.nordLight : ManualTheme where
   mutedColor := nord3
   linkColor := nord10
   visitedLinkColor := nord15
+  burgerVisibleShadowColor := nord6
+  burgerHiddenColor := nord0
+  burgerHiddenShadowColor := nord6
   licenses := #[Verso.Genre.Manual.Licenses.nord]
+
+/-! # Dracula and Alucard — Dracula spec palettes -/
+
+open Color.Palettes.DraculaClassic in
+/--
+Dracula: the canonical dark Dracula palette from the official spec. Token mapping follows
+the spec's documented hue roles:
+
+- Pink: keywords ({lit}`def`, {lit}`theorem`, …).
+- Green: function and definition names ({lit}`const` tokens) — Dracula's "functions, methods,
+  inherited classes" slot.
+- Cyan: module / namespace paths ({lit}`Foo.Bar` in {lit}`import` lines).
+- Purple: universe-grammar reserved words and operators — {lit}`Type`, {lit}`Prop`,
+  {lit}`Sort`, {lit}`max`, {lit}`imax`, {lit}`+`. Matches Dracula's "instance reserved words"
+  category.
+- Yellow: string literals.
+- Orange: numeric literals (currently surfaced via the boolean {lit}`extraCss` override below;
+  integer literals join once SubVerso tags numbers).
+- Red: error states.
+- Comment: doc comments.
+-/
+@[manual_theme]
+public def ManualTheme.dracula : ManualTheme :=
+  let code : CodeTheme := {
+    darkCodeBase with
+    name := Color.Palettes.DraculaClassic.name,
+    sourceLink := some Color.Palettes.DraculaClassic.sourceLink,
+    background := background,
+    codeBlockBackground := background,
+    textColor := foreground,
+    codeColor := foreground,
+    structureColor := foreground,
+    warningColor := foreground,
+    infoColor := foreground,
+    errorColor := red,
+    errorIndicatorColor := red,
+    warningIndicatorColor := orange,
+    infoIndicatorColor := cyan,
+    -- Hover popups land on the Selection color so they read as a raised surface tied to
+    -- the same palette.
+    hoverBackground := selection,
+    hoverText := foreground,
+    hoverBorderColor := currentLine,
+    hoverSeparatorColor := currentLine,
+    tokenHighlightBackground := selection,
+    tacticStateBackground := background,
+    tacticStateBorderColor := currentLine,
+    selectedColor := selection,
+    highlightOnCode := selection,
+    highlightOnText := selection,
+    uiOnCode := currentLine,
+    -- Token mapping per the Dracula spec's documented roles.
+    keyword.color := pink,
+    const.color := green,
+    «var».color := foreground,
+    literalString.color := yellow,
+    docComment.color := comment,
+    -- Universe grammar: sort formers and their operators share Purple, Dracula's
+    -- "instance reserved words" slot. `Type`, `Prop`, `Sort u`, `max`, `imax`, and `+`
+    -- (universe-level) all land on the same color so they read as one syntactic family.
+    sort := { color := purple, weight := .regular, style := .normal, face := .mono },
+    levelOp := { color := purple, weight := .regular, style := .normal, face := .mono },
+    -- Universe variables stay quiet (parallel to value-level `var`): body text, italic.
+    levelVar := { color := foreground, weight := .regular, style := .italic, face := .mono },
+    -- Numeric universe constants get the Orange "numbers" slot.
+    levelConst := { color := orange, weight := .regular, style := .normal, face := .mono },
+    -- Namespace paths land on Cyan ("classes, types, support").
+    moduleName := { color := cyan, weight := .regular, style := .normal, face := .mono },
+    -- The Dracula spec gives Orange to "numbers, constants, booleans". Verso doesn't yet have
+    -- a numeric-literal kind from the highlighter, but the `const` tokens for `Bool.true` and
+    -- `Bool.false` carry a `data-binding` attribute the highlighter emits, so a CSS attribute
+    -- selector can override their `const`-green color to the boolean Orange. When SubVerso
+    -- gains a numeric kind, the same trick (or a new `literal.number` rule) extends the same
+    -- treatment to integer literals.
+    extraCss := fun _ =>
+      ".hl.lean .const[data-binding=\"const-Bool.true\"],\n" ++
+      ".hl.lean .const[data-binding=\"const-Bool.false\"] { color: " ++ Color.css orange ++ "; }\n"
+  }
+  { darkChromeFields code with
+    -- Override the generic dark chrome with Dracula-palette values.
+    surfaceColor := selection,
+    tocBackground := background,
+    borderColor := currentLine,
+    mutedColor := comment,
+    linkColor := cyan,
+    visitedLinkColor := purple,
+    burgerVisibleShadowColor := background,
+    burgerHiddenColor := foreground,
+    burgerHiddenShadowColor := background,
+    licenses := #[Verso.Genre.Manual.Licenses.dracula] }
+
+open Color.Palettes.AlucardClassic in
+/--
+Alucard: the canonical light counterpart to Dracula from the official spec. Same documented
+token roles as {Lean.Doc.name}`ManualTheme.dracula`, drawn from the Alucard hex values
+(deeper saturations so each token meets WCAG AA contrast on the cream background).
+-/
+@[manual_theme]
+public def ManualTheme.alucard : ManualTheme where
+  toCodeTheme := {
+    CodeTheme.ink with
+    name := Color.Palettes.AlucardClassic.name,
+    sourceLink := some Color.Palettes.AlucardClassic.sourceLink,
+    background := background,
+    codeBlockBackground := background,
+    textColor := foreground,
+    codeColor := foreground,
+    structureColor := foreground,
+    warningColor := foreground,
+    infoColor := foreground,
+    errorColor := red,
+    errorIndicatorColor := red,
+    warningIndicatorColor := orange,
+    infoIndicatorColor := cyan,
+    hoverBackground := selection,
+    hoverText := foreground,
+    hoverBorderColor := currentLine,
+    hoverSeparatorColor := currentLine,
+    tokenHighlightBackground := selection,
+    tacticStateBorderColor := currentLine,
+    selectedColor := selection,
+    highlightOnCode := selection,
+    uiOnCode := currentLine,
+    keyword.color := pink,
+    const.color := green,
+    «var».color := foreground,
+    literalString.color := yellow,
+    docComment.color := comment,
+    -- Universe grammar: same Purple-grouped mapping as the dark Dracula. See that def for
+    -- the rationale.
+    sort := { color := purple, weight := .regular, style := .normal, face := .mono },
+    levelOp := { color := purple, weight := .regular, style := .normal, face := .mono },
+    levelVar := { color := foreground, weight := .regular, style := .italic, face := .mono },
+    levelConst := { color := orange, weight := .regular, style := .normal, face := .mono },
+    moduleName := { color := cyan, weight := .regular, style := .normal, face := .mono },
+    -- Same boolean-orange trick as the dark variant; see the Dracula def for the rationale.
+    extraCss := fun _ =>
+      ".hl.lean .const[data-binding=\"const-Bool.true\"],\n" ++
+      ".hl.lean .const[data-binding=\"const-Bool.false\"] { color: " ++ Color.css orange ++ "; }\n"
+  }
+  surfaceColor := selection
+  tocBackground := background
+  borderColor := currentLine
+  mutedColor := comment
+  linkColor := cyan
+  visitedLinkColor := purple
+  burgerVisibleShadowColor := background
+  burgerHiddenColor := foreground
+  burgerHiddenShadowColor := background
+  licenses := #[Verso.Genre.Manual.Licenses.dracula]
 
 /-! # Sandstone — warm sepia -/
 
@@ -403,6 +685,9 @@ public def ManualTheme.sandstoneLight : ManualTheme where
   mutedColor := color%#7a5a40
   linkColor := color%#a04a00
   visitedLinkColor := color%#7a3a91
+  burgerVisibleShadowColor := color%#faf5ee
+  burgerHiddenColor := color%#3b2a17
+  burgerHiddenShadowColor := color%#faf5ee
 
 /--
 Sandstone dark: weathered canyon walls at dusk — deep terracotta substrate with sunlit-buff
@@ -496,6 +781,9 @@ public def ManualTheme.steel : ManualTheme where
   mutedColor := color%#465a70
   linkColor := color%#1a5ea8
   visitedLinkColor := color%#6c4ea8
+  burgerVisibleShadowColor := color%#f4f6f8
+  burgerHiddenColor := color%#0e2431
+  burgerHiddenShadowColor := color%#f4f6f8
 
 /-- Slate dark: coal/navy substrate, brightened slate accents. -/
 @[manual_theme]
@@ -572,6 +860,9 @@ public def ManualTheme.hearthLight : ManualTheme where
   mutedColor := color%#6b5640
   linkColor := color%#2f6e58
   visitedLinkColor := color%#7a3a91
+  burgerVisibleShadowColor := color%#f7f1de
+  burgerHiddenColor := color%#3d2f1f
+  burgerHiddenShadowColor := color%#f7f1de
 
 /--
 Hearth dark: a deep-olive candlelit substrate with warm cream text. Serifed structure font, same

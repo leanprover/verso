@@ -47,7 +47,7 @@ export default function (props) {
         e(
             "div",
             { style: { fontSize: "0.75em", opacity: 0.6, padding: "0 0.4em 0.1em" } },
-            "Color vision deficiency",
+            "Simulated color vision differences",
         ),
         cvdRow("Protanopia", props.protanopia),
         cvdRow("Deuteranopia", props.deuteranopia),

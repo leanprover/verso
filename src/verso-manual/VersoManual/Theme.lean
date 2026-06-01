@@ -41,25 +41,22 @@ public structure ManualTheme extends CodeTheme where
   structureFace : Typeface := .sans
 
   /-- A raised chrome surface tint (default for the ToC background and the search box). -/
-  surfaceColor : Color := color%#f8f9fa
+  surfaceColor : Color
   /-- The header bar background. Defaults to the page background. -/
   headerBackground : Color := background
   /-- The ToC background. -/
-  tocBackground : Color := color%#fafafa
+  tocBackground : Color
 
-  /--
-  The default border color for chrome elements such as the search box outline. Defaults to
-  a slate gray that clears WCAG 1.4.11 (3:1) against both white and the surface color.
-  -/
-  borderColor : Color := color%#878787
-  /-- The default muted text color for chrome elements such as search hints. -/
-  mutedColor : Color := color%#777777
+  /-- The border color for chrome elements such as the search box outline. -/
+  borderColor : Color
+  /-- The muted text color for chrome elements such as search hints. -/
+  mutedColor : Color
   /-- The color used to highlight matched search terms. Defaults to the code theme's selection. -/
   highlightColor : Color := selectedColor
 
   /-- The color of content links in body prose. -/
-  linkColor : Color := color%#0066cc
-  /-- The color of visited content links. -/
+  linkColor : Color
+  /-- The color of visited content links. Defaults to `linkColor`. -/
   visitedLinkColor : Color := linkColor
 
   /-- The text color used inside the ToC. -/
@@ -68,11 +65,11 @@ public structure ManualTheme extends CodeTheme where
   /-- The color of the burger-menu lines while the ToC is visible. -/
   burgerVisibleColor : Color := tocTextColor
   /-- The shadow color drawn under the burger-menu lines while the ToC is visible. -/
-  burgerVisibleShadowColor : Color := Color.white
+  burgerVisibleShadowColor : Color
   /-- The color of the burger-menu lines while the ToC is hidden. -/
-  burgerHiddenColor : Color := color%#0e2431
+  burgerHiddenColor : Color
   /-- The shadow color drawn under the burger-menu lines while the ToC is hidden. -/
-  burgerHiddenShadowColor : Color := Color.white
+  burgerHiddenShadowColor : Color
 
   /--
   Third-party licenses the theme draws on (color palettes, fonts, etc.).

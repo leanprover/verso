@@ -8,6 +8,7 @@ module
 public import Verso.Theme.Color.Palettes.Solarized
 public import Verso.Theme.Color.Palettes.OkabeIto
 public import Verso.Theme.Color.Palettes.Nord
+public import Verso.Theme.Color.Palettes.Dracula
 
 /-!
 {open Verso.Theme}

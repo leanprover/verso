@@ -32,27 +32,35 @@ public def highlightToken : String → Token.Kind → TeX
 | c, .anonCtor .. => .raw s!"\\versoConst\{{c}}"
 | c, .option _ _ _ => .raw s!"\\versoConst\{{c}}"
 | c, .var .. => .raw s!"\\versoVar\{{c}}"
-| c, .str _ => .raw s!"\\versoLiteral\{{c}}"
-| c, .docComment => .raw s!"\\versoLiteral\{{c}}"
-| c, .sort _ => .raw s!"\\versoLiteral\{{c}}"
-| c, .levelVar _ => .raw s!"\\versoLiteral\{{c}}"
-| c, .levelConst _ => .raw s!"\\versoLiteral\{{c}}"
-| c, .moduleName _ => .raw s!"\\versoLiteral\{{c}}"
-| c, .levelOp _ => .raw s!"\\versoLiteral\{{c}}"
+| c, .str _ => .raw s!"\\versoLiteralString\{{c}}"
+| c, .docComment => .raw s!"\\versoDocComment\{{c}}"
+| c, .sort _ => .raw s!"\\versoSort\{{c}}"
+| c, .levelVar _ => .raw s!"\\versoLevelVar\{{c}}"
+| c, .levelConst _ => .raw s!"\\versoLevelConst\{{c}}"
+| c, .moduleName _ => .raw s!"\\versoModuleName\{{c}}"
+| c, .levelOp _ => .raw s!"\\versoLevelOp\{{c}}"
 | c, .withType _ => .raw s!"\\versoLiteral\{{c}}"
 | c, .unknown => .raw s!"\\versoLiteral\{{c}}"
 
 /--
-Fallback definitions for the four semantic token macros emitted by
+Fallback definitions for the semantic token macros emitted by
 {name}`SubVerso.Highlighting.highlightToken`. Each uses `\providecommand`, so a genre
 preamble that defines its own (theme-driven) versions wins. The fallbacks reproduce today's
-unthemed look: keywords bold, variables italic, constants and literals plain.
+unthemed look: keywords bold, variables italic, constants and literals plain, doc comments
+italic.
 -/
 public def texMacroFallbacks : String :=
 "\\providecommand{\\versoKeyword}[1]{\\textbf{#1}}\n" ++
 "\\providecommand{\\versoConst}[1]{#1}\n" ++
 "\\providecommand{\\versoVar}[1]{\\textit{#1}}\n" ++
-"\\providecommand{\\versoLiteral}[1]{#1}\n"
+"\\providecommand{\\versoLiteral}[1]{#1}\n" ++
+"\\providecommand{\\versoLiteralString}[1]{#1}\n" ++
+"\\providecommand{\\versoDocComment}[1]{\\textit{#1}}\n" ++
+"\\providecommand{\\versoSort}[1]{#1}\n" ++
+"\\providecommand{\\versoLevelVar}[1]{\\textit{#1}}\n" ++
+"\\providecommand{\\versoLevelConst}[1]{#1}\n" ++
+"\\providecommand{\\versoLevelOp}[1]{#1}\n" ++
+"\\providecommand{\\versoModuleName}[1]{#1}\n"
 
 defmethod Highlighting.Token.toVerbatimTeX (t : Highlighting.Token) (lineBreaks : Bool := false) : Verso.Output.TeX :=
   highlightToken (escapeForVerbatim t.content lineBreaks) t.kind

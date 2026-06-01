@@ -38,7 +38,7 @@ literal bucket. -/
 preamble that defines its own (theme-driven) versions wins without an explicit `\renewcommand`. -/
 
 /--
-info: "\\providecommand{\\versoKeyword}[1]{\\textbf{#1}}\n\\providecommand{\\versoConst}[1]{#1}\n\\providecommand{\\versoVar}[1]{\\textit{#1}}\n\\providecommand{\\versoLiteral}[1]{#1}\n"
+info: "\\providecommand{\\versoKeyword}[1]{\\textbf{#1}}\n\\providecommand{\\versoConst}[1]{#1}\n\\providecommand{\\versoVar}[1]{\\textit{#1}}\n\\providecommand{\\versoLiteral}[1]{#1}\n\\providecommand{\\versoLiteralString}[1]{#1}\n\\providecommand{\\versoDocComment}[1]{\\textit{#1}}\n\\providecommand{\\versoSort}[1]{#1}\n\\providecommand{\\versoLevelVar}[1]{\\textit{#1}}\n\\providecommand{\\versoLevelConst}[1]{#1}\n\\providecommand{\\versoLevelOp}[1]{#1}\n\\providecommand{\\versoModuleName}[1]{#1}\n"
 -/
 #guard_msgs in #eval texMacroFallbacks
 

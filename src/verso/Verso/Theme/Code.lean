@@ -51,9 +51,13 @@ public structure ThemeAsset where
 A typed code theme. Defaults reproduce today's hardcoded chrome, so a default-constructed theme is
 visually unchanged from the pre-theming look.
 
-Cascade-style defaults: fields that today read a CSS `var()` chain (for example a token color
-defaulting to the body code color) reference the earlier field directly. Lean evaluates the default
-at construction, so overriding a field overrides every later field that defaulted from it.
+Many field defaults refer to earlier fields (for example a token color defaults to
+{lit}`codeColor`, which in turn defaults to {lit}`textColor`). Lean evaluates defaults at
+the moment a theme value is constructed, so on a fresh construction overriding a referenced
+field propagates to every later field that defaulted from it. A {lit}`with` update against
+an *existing* theme value freezes the defaults that were already computed there, so a
+substantially different theme (a dark variant of a light base, say) needs to set the
+dependent fields explicitly.
 -/
 public structure CodeTheme where
   /-- A human-readable name for the theme (shown in the picker). -/
@@ -77,35 +81,32 @@ public structure CodeTheme where
   codeFace : Typeface := .mono
 
   /-- The page and content background color. The contrast reference for body text. -/
-  background : Color := Color.white
+  background : Color
   /-- The background behind code blocks. The contrast reference for token colors. -/
   codeBlockBackground : Color := background
   /-- The background behind inline code in prose. When set, inline code gets padding and rounding. -/
   inlineBackground : Option Color := none
   /-- The color of body prose text. -/
-  textColor : Color := Color.black
+  textColor : Color
   /-- The color of code text. -/
   codeColor : Color := textColor
   /-- The color used for structural decoration (such as case labels). -/
   structureColor : Color := textColor
   /-- The background color used to highlight a selected token in code. -/
-  selectedColor : Color := color%#ddeeff
+  selectedColor : Color
 
   /-- The message-text color for informational diagnostics. -/
   infoColor : Color := textColor
   /-- The accent color (left border, underline) for informational diagnostics. -/
-  infoIndicatorColor : Color := color%#4777ff
+  infoIndicatorColor : Color
   /-- The message-text color for warning diagnostics. -/
   warningColor : Color := textColor
-  /--
-  The accent color (left border, underline) for warning diagnostics. Defaults to a darker
-  amber than the legacy {lit}`#e7a71d` so it clears WCAG 1.4.11 (3:1) against white.
-  -/
-  warningIndicatorColor : Color := color%#d97706
+  /-- The accent color (left border, underline) for warning diagnostics. -/
+  warningIndicatorColor : Color
   /-- The message-text color for error diagnostics. -/
-  errorColor : Color := color%#cc0000
+  errorColor : Color
   /-- The accent color (left border, underline) for error diagnostics. -/
-  errorIndicatorColor : Color := color%#ff0000
+  errorIndicatorColor : Color
 
   /-- Token styling for constants. -/
   const : TokenStyle := { color := codeColor, weight := .regular, style := .normal, face := codeFace }
@@ -113,40 +114,87 @@ public structure CodeTheme where
   keyword : TokenStyle := { color := codeColor, weight := .bold, style := .normal, face := codeFace }
   /-- Token styling for variables (bound names). -/
   «var» : TokenStyle := { color := codeColor, weight := .regular, style := .italic, face := codeFace }
+  /--
+  Token styling for literal tokens. Today only string literals are tagged by the
+  highlighter, so the {lit}`{name}.string` field below is where strings get their color.
+  Other literal kinds (numbers, booleans) will gain distinct tags in future SubVerso
+  releases and will read from this field unless overridden.
+  -/
+  literal : TokenStyle := { color := codeColor, weight := .regular, style := .normal, face := codeFace }
+  /--
+  Token styling for string literals (CSS class {lit}`.literal.string`). Defaults to
+  {lit}`literal`; themes that want strings distinguished from other literals (e.g. Dracula's
+  yellow strings vs orange numbers) override it.
+  -/
+  literalString : TokenStyle := literal
+  /--
+  Token styling for doc comments (CSS class {lit}`.doc-comment`), i.e. {lit}`/-- … -/`
+  documentation blocks. SubVerso does not yet tag ordinary {lit}`--` line comments or
+  {lit}`/- … -/` block comments, so this field affects only the doc-comment kind.
+  -/
+  docComment : TokenStyle := { color := codeColor, weight := .regular, style := .italic, face := codeFace }
+  /--
+  Token styling for sort formers — {lit}`Type`, {lit}`Prop`, {lit}`Sort u`. CSS class
+  {lit}`.sort`. A distinct kind from {lit}`const` because sorts are the universe-of-types
+  formers, not ordinary named constants; themes typically color them in a different family
+  (often the "keyword" or "type" palette slot).
+  -/
+  sort : TokenStyle := { color := codeColor, weight := .regular, style := .normal, face := codeFace }
+  /--
+  Token styling for universe-level variables ({lit}`u`, {lit}`v`, … in a universe-parameter
+  context). CSS class {lit}`.level-var`. Bound-name semantics like {lit}`var`, but in the
+  level grammar.
+  -/
+  levelVar : TokenStyle := { color := codeColor, weight := .regular, style := .italic, face := codeFace }
+  /--
+  Token styling for universe-level numeric constants (the {lit}`3` in {lit}`Type 3`). CSS
+  class {lit}`.level-const`. A numeric literal in the level grammar.
+  -/
+  levelConst : TokenStyle := { color := codeColor, weight := .regular, style := .normal, face := codeFace }
+  /--
+  Token styling for universe-level operators ({lit}`max`, {lit}`imax`, {lit}`+`). CSS class
+  {lit}`.level-op`.
+  -/
+  levelOp : TokenStyle := { color := codeColor, weight := .regular, style := .normal, face := codeFace }
+  /--
+  Token styling for module names (an {lit}`import` target or a fully qualified namespace
+  path). CSS class {lit}`.module-name`. Distinct from {lit}`const` so themes can give
+  namespace paths a different treatment (often a quieter color).
+  -/
+  moduleName : TokenStyle := { color := codeColor, weight := .regular, style := .normal, face := codeFace }
 
   /-- The background of hover popups, diagnostic boxes, and tooltips. -/
-  hoverBackground : Color := color%#e5e5e5
+  hoverBackground : Color
   /-- The border color of hover popups and plain tooltips. -/
-  hoverBorderColor : Color := Color.black
+  hoverBorderColor : Color
   /-- The text color inside hover popups. -/
   hoverText : Color := textColor
   /-- The separator line color inside hover popups. -/
-  hoverSeparatorColor : Color := color%#cccccc
+  hoverSeparatorColor : Color
   /-- The background tint applied to a token on hover (independent of severity). -/
-  tokenHighlightBackground : Color := color%#eeeeee
+  tokenHighlightBackground : Color
   /--
-  The background of a displayed tactic state. Defaults to the surrounding
-  {name (full := CodeTheme.codeBlockBackground)}`codeBlockBackground`, so a theme
-  that recolors the code surface gets a matching tactic-state surface for free; themes that
-  want a distinct tactic-state tint (a slight raise to differentiate it from code) override
-  it explicitly.
+  The background of a displayed tactic state. Defaults to
+  {name (full := CodeTheme.codeBlockBackground)}`codeBlockBackground` for fresh constructions;
+  themes that want a distinct tactic-state tint (a slight raise to differentiate it from code)
+  override it explicitly.
   -/
   tacticStateBackground : Color := codeBlockBackground
   /-- The border color of a displayed tactic state. -/
-  tacticStateBorderColor : Color := color%#888888
+  tacticStateBorderColor : Color
 
   /--
   An accent background drawn behind highlighted code.
   {name (full := CodeTheme.codeColor)}`codeColor` must read on it.
   -/
-  highlightOnCode : Color := color%#fff3b0
+  highlightOnCode : Color
   /-- An accent background drawn behind highlighted code or prose. Both code and text must read on it. -/
   highlightOnText : Color := highlightOnCode
   /--
   A neutral UI element color drawn against
   {name (full := CodeTheme.codeBlockBackground)}`codeBlockBackground` (e.g. a toggle pill).
   -/
-  uiOnCode : Color := color%#888888
+  uiOnCode : Color
 
   /--
   Theme-specific CSS appended after the standard variable block. The asset root path the function
@@ -251,7 +299,15 @@ namespace CodeTheme
 private def tokenSummaries (theme : CodeTheme) : Array (String × Color) := #[
     ("const", theme.const.color),
     ("keyword", theme.keyword.color),
-    ("var", theme.«var».color)
+    ("var", theme.«var».color),
+    ("literal", theme.literal.color),
+    ("literal.string", theme.literalString.color),
+    ("doc-comment", theme.docComment.color),
+    ("sort", theme.sort.color),
+    ("level-var", theme.levelVar.color),
+    ("level-const", theme.levelConst.color),
+    ("level-op", theme.levelOp.color),
+    ("module-name", theme.moduleName.color)
   ]
 
 /--
@@ -369,6 +425,14 @@ public def cssVariables (theme : CodeTheme) : String :=
     styleDecls "verso-code-const" theme.const,
     styleDecls "verso-code-keyword" theme.keyword,
     styleDecls "verso-code-var" theme.«var»,
+    styleDecls "verso-code-literal" theme.literal,
+    styleDecls "verso-code-literal-string" theme.literalString,
+    styleDecls "verso-code-doc-comment" theme.docComment,
+    styleDecls "verso-code-sort" theme.sort,
+    styleDecls "verso-code-level-var" theme.levelVar,
+    styleDecls "verso-code-level-const" theme.levelConst,
+    styleDecls "verso-code-level-op" theme.levelOp,
+    styleDecls "verso-code-module-name" theme.moduleName,
     colorDecl "verso-hover-background-color" theme.hoverBackground,
     colorDecl "verso-hover-border-color" theme.hoverBorderColor,
     colorDecl "verso-hover-text-color" theme.hoverText,
@@ -427,6 +491,14 @@ public def texPreamble (theme : CodeTheme) : String :=
   let constColor := Color.tex theme.const.color
   let keywordColor := Color.tex theme.keyword.color
   let varColor := Color.tex theme.«var».color
+  let literalColor := Color.tex theme.literal.color
+  let literalStringColor := Color.tex theme.literalString.color
+  let docCommentColor := Color.tex theme.docComment.color
+  let sortColor := Color.tex theme.sort.color
+  let levelVarColor := Color.tex theme.levelVar.color
+  let levelConstColor := Color.tex theme.levelConst.color
+  let levelOpColor := Color.tex theme.levelOp.color
+  let moduleNameColor := Color.tex theme.moduleName.color
   -- Per the structure's semantics, the `*Color` fields are message-text colors and
   -- `*IndicatorColor` are accent colors (underlines, frames, dingbats). Emit both as separate
   -- `\definecolor` entries so the preamble can reference whichever the rule needs.
@@ -441,6 +513,14 @@ public def texPreamble (theme : CodeTheme) : String :=
     s!"\\definecolor\{versoConstColor}\{HTML}\{{constColor}}\n",
     s!"\\definecolor\{versoKeywordColor}\{HTML}\{{keywordColor}}\n",
     s!"\\definecolor\{versoVarColor}\{HTML}\{{varColor}}\n",
+    s!"\\definecolor\{versoLiteralColor}\{HTML}\{{literalColor}}\n",
+    s!"\\definecolor\{versoLiteralStringColor}\{HTML}\{{literalStringColor}}\n",
+    s!"\\definecolor\{versoDocCommentColor}\{HTML}\{{docCommentColor}}\n",
+    s!"\\definecolor\{versoSortColor}\{HTML}\{{sortColor}}\n",
+    s!"\\definecolor\{versoLevelVarColor}\{HTML}\{{levelVarColor}}\n",
+    s!"\\definecolor\{versoLevelConstColor}\{HTML}\{{levelConstColor}}\n",
+    s!"\\definecolor\{versoLevelOpColor}\{HTML}\{{levelOpColor}}\n",
+    s!"\\definecolor\{versoModuleNameColor}\{HTML}\{{moduleNameColor}}\n",
     s!"\\definecolor\{errorColor}\{HTML}\{{errorTextColor}}\n",
     s!"\\definecolor\{warningColor}\{HTML}\{{warningTextColor}}\n",
     s!"\\definecolor\{infoColor}\{HTML}\{{infoTextColor}}\n",
@@ -450,7 +530,14 @@ public def texPreamble (theme : CodeTheme) : String :=
     tokenMacro "Keyword" theme.keyword "versoKeywordColor",
     tokenMacro "Const" theme.const "versoConstColor",
     tokenMacro "Var" theme.«var» "versoVarColor",
-    s!"\\renewcommand\{\\versoLiteral}[1]\{\\textcolor\{versoCodeColor}\{#1}}\n",
+    tokenMacro "Literal" theme.literal "versoLiteralColor",
+    tokenMacro "LiteralString" theme.literalString "versoLiteralStringColor",
+    tokenMacro "DocComment" theme.docComment "versoDocCommentColor",
+    tokenMacro "Sort" theme.sort "versoSortColor",
+    tokenMacro "LevelVar" theme.levelVar "versoLevelVarColor",
+    tokenMacro "LevelConst" theme.levelConst "versoLevelConstColor",
+    tokenMacro "LevelOp" theme.levelOp "versoLevelOpColor",
+    tokenMacro "ModuleName" theme.moduleName "versoModuleNameColor",
     s!"\\setmonofont\{{theme.codeFace.texFamily}}\n"
   ]
 

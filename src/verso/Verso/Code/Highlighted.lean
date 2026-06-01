@@ -679,11 +679,70 @@ public def highlightingStyle : String := "
   position: relative;
 }
 
-.hl.lean .literal, .hl.lean .unknown {
+.hl.lean .unknown {
   color: var(--verso-code-color,);
   font-weight: normal;
   font-style: normal;
   font-family: var(--verso-code-font-family,);
+}
+
+.hl.lean .literal {
+  color: var(--verso-code-literal-color, var(--verso-code-color,));
+  font-weight: var(--verso-code-literal-weight, normal);
+  font-style: var(--verso-code-literal-style, normal);
+  font-family: var(--verso-code-literal-font-family, var(--verso-code-font-family,));
+}
+
+/* `.literal.string` is more specific than `.literal`, so its rule wins when both classes
+   apply (string literals). Other future `.literal.*` kinds will fall back to the `.literal`
+   rule above until they get their own variables. */
+.hl.lean .literal.string {
+  color: var(--verso-code-literal-string-color, var(--verso-code-literal-color, var(--verso-code-color,)));
+  font-weight: var(--verso-code-literal-string-weight, normal);
+  font-style: var(--verso-code-literal-string-style, normal);
+  font-family: var(--verso-code-literal-string-font-family, var(--verso-code-font-family,));
+}
+
+.hl.lean .doc-comment {
+  color: var(--verso-code-doc-comment-color, var(--verso-code-color,));
+  font-weight: var(--verso-code-doc-comment-weight, normal);
+  font-style: var(--verso-code-doc-comment-style, italic);
+  font-family: var(--verso-code-doc-comment-font-family, var(--verso-code-font-family,));
+}
+
+.hl.lean .sort {
+  color: var(--verso-code-sort-color, var(--verso-code-color,));
+  font-weight: var(--verso-code-sort-weight, normal);
+  font-style: var(--verso-code-sort-style, normal);
+  font-family: var(--verso-code-sort-font-family, var(--verso-code-font-family,));
+}
+
+.hl.lean .level-var {
+  color: var(--verso-code-level-var-color, var(--verso-code-color,));
+  font-weight: var(--verso-code-level-var-weight, normal);
+  font-style: var(--verso-code-level-var-style, italic);
+  font-family: var(--verso-code-level-var-font-family, var(--verso-code-font-family,));
+}
+
+.hl.lean .level-const {
+  color: var(--verso-code-level-const-color, var(--verso-code-color,));
+  font-weight: var(--verso-code-level-const-weight, normal);
+  font-style: var(--verso-code-level-const-style, normal);
+  font-family: var(--verso-code-level-const-font-family, var(--verso-code-font-family,));
+}
+
+.hl.lean .level-op {
+  color: var(--verso-code-level-op-color, var(--verso-code-color,));
+  font-weight: var(--verso-code-level-op-weight, normal);
+  font-style: var(--verso-code-level-op-style, normal);
+  font-family: var(--verso-code-level-op-font-family, var(--verso-code-font-family,));
+}
+
+.hl.lean .module-name {
+  color: var(--verso-code-module-name-color, var(--verso-code-color,));
+  font-weight: var(--verso-code-module-name-weight, normal);
+  font-style: var(--verso-code-module-name-style, normal);
+  font-family: var(--verso-code-module-name-font-family, var(--verso-code-font-family,));
 }
 
 .hover-container {
