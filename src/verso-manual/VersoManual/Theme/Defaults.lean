@@ -7,12 +7,14 @@ module
 
 public import VersoManual.Theme
 public import Verso.Theme.Code.Defaults
+public import Verso.Theme.Color.Solarized
+public import Verso.Theme.Color.OkabeIto
 
 set_option linter.missingDocs true
 set_option doc.verso true
 
 /-!
-Built-in {Lean.Doc.name}`Verso.Theme.ManualTheme` values. The default theme reproduces today's
+Built-in {name}`Verso.Theme.ManualTheme` values. The default theme reproduces today's
 chrome so existing manuals render unchanged when no override is configured. The dark counterpart
 inverts the page and code backgrounds while preserving the typography-only token rendering.
 
@@ -29,16 +31,16 @@ The light default manual theme. Named after the most ancient writing medium in u
 inks made from soot or oak gall that have carried text for two thousand years. Typography and
 chrome reproduce today's hardcoded look.
 
-Other built-in themes live alongside it in the {Lean.Doc.name}`Verso.Theme.ManualTheme` namespace.
+Other built-in themes live alongside it in the {name}`Verso.Theme.ManualTheme` namespace.
 -/
 @[manual_theme]
 public def ManualTheme.ink : ManualTheme where
-  toCodeTheme := { CodeTheme.ink with name := "Ink" }
+  toCodeTheme := CodeTheme.ink
 
 /--
 A common dark-appearance code-theme base: deep-charcoal backgrounds, brightened text, accent
 colors chosen for readability against the dark substrate. Other dark themes extend this. Every
-cascading field is overridden explicitly because Lean evaluates the {Lean.Doc.name}`Verso.Theme.CodeTheme`
+cascading field is overridden explicitly because Lean evaluates the {name}`Verso.Theme.CodeTheme`
 defaults at construction time, so {lit}`CodeTheme.ink with textColor := …` would otherwise
 leave dependent fields (token colors, message text colors, hover text) frozen at their
 original-light values.
@@ -60,17 +62,17 @@ private def darkCodeBase : CodeTheme :=
   warningColor := text,
   infoColor := text,
   -- Token colors default to the bright code color; colorful themes override these per token.
-  const   := { color := text, weight := .regular, style := .normal, face := .mono },
-  keyword := { color := text, weight := .bold,    style := .normal, face := .mono },
-  «var»   := { color := text, weight := .regular, style := .italic, face := .mono },
+  const := { color := text, weight := .regular, style := .normal, face := .mono },
+  keyword := { color := text, weight := .bold, style := .normal, face := .mono },
+  «var» := { color := text, weight := .regular, style := .italic, face := .mono },
   -- Hover popups read text on a slightly lighter surface.
   hoverBackground := color%#2a2d33,
   hoverText := text,
   hoverBorderColor := color%#aaaaaa,
   hoverSeparatorColor := color%#3a3d44,
   tokenHighlightBackground := color%#33363d,
-  -- Tactic state uses the same surface as code blocks but with a visible border.
-  tacticStateBackground := codeBg,
+  -- Tactic-state background inherits from `codeBlockBackground`; only the border needs a
+  -- lighter color to read on the dark substrate.
   tacticStateBorderColor := color%#aaaaaa,
   selectedColor := color%#2a3f55,
   -- Highlight accents on a dark substrate: a saturated tone that the bright text still reads on.
@@ -106,7 +108,7 @@ The dark default manual theme. Named after silver, the ink of choice for the dar
 manuscript traditions: silver-on-purple Byzantine and Carolingian codices like the *Codex
 Argenteus*, Flemish "Black Hours" such as Morgan MS M.493, and Korean *eunja sagyeong* (은자사경)
 sutras transcribed in silver ink on indigo *kamji* paper during the Goryeo dynasty. Same
-typography-only token rendering as {Lean.Doc.name}`Verso.Theme.ManualTheme.ink`, with inverted
+typography-only token rendering as {name}`Verso.Theme.ManualTheme.ink`, with inverted
 backgrounds and a light text color.
 -/
 @[manual_theme]
@@ -126,8 +128,8 @@ public def ManualTheme.chromaticLight : ManualTheme where
     CodeTheme.ink with
     name := "Chromatic Light",
     keyword.color := color%#a02828,
-    const.color   := color%#0b6b4f,
-    «var».color   := color%#404040
+    const.color := color%#0b6b4f,
+    «var».color := color%#404040
   }
 
 /-- Chromatic dark: the colored Lean palette on a deep-charcoal background. -/
@@ -137,8 +139,8 @@ public def ManualTheme.chromaticDark : ManualTheme :=
     darkCodeBase with
     name := "Chromatic Dark",
     keyword.color := color%#ff8b8b,
-    const.color   := color%#6cb6ff,
-    «var».color   := color%#c4c4c4
+    const.color := color%#6cb6ff,
+    «var».color := color%#c4c4c4
   }
 
 /-! # Beacon — colorblind-safe syntax accents (Okabe-Ito) -/
@@ -154,8 +156,8 @@ public def ManualTheme.beaconLight : ManualTheme where
     CodeTheme.ink with
     name := "Beacon Light",
     keyword.color := color%#005b8c,
-    const.color   := color%#5b3500,
-    «var».color   := color%#9c2400
+    const.color := color%#5b3500,
+    «var».color := color%#9c2400
   }
 
 /--
@@ -168,87 +170,98 @@ public def ManualTheme.beaconDark : ManualTheme :=
     darkCodeBase with
     name := "Beacon Dark",
     keyword.color := color%#56b4e9,
-    const.color   := color%#5bd6a4,
-    «var».color   := color%#f5a85a
+    const.color := color%#5bd6a4,
+    «var».color := color%#f5a85a
   }
 
 /-! # Solarized — Ethan Schoonover's standard palette -/
 
+open Color.Solarized in
 /--
 Solarized light: Schoonover's standard cream-on-paper palette
-({lit}`base3` background, {lit}`base00` body text). Token accents reuse the named hues from
-the upstream Solarized definition.
+({lit}`base3` background, {lit}`base01` primary content). Token accents reuse the named hues
+from the upstream Solarized definition.
 -/
 @[manual_theme]
-public def ManualTheme.solarizedLight : ManualTheme where
-  toCodeTheme := {
-    CodeTheme.ink with
-    name := "Solarized Light",
-    background := color%#fdf6e3,
-    codeBlockBackground := color%#eee8d5,
-    textColor := color%#586e75,
-    codeColor := color%#586e75,
-    structureColor := color%#586e75,
-    warningColor := color%#586e75,
-    infoColor := color%#586e75,
-    errorColor := color%#dc322f,
-    errorIndicatorColor := color%#dc322f,
-    warningIndicatorColor := color%#b58900,
-    infoIndicatorColor := color%#268bd2,
-    hoverBackground := color%#eee8d5,
-    hoverText := color%#586e75,
-    hoverBorderColor := color%#93a1a1,
-    hoverSeparatorColor := color%#93a1a1,
-    tokenHighlightBackground := color%#eee8d5,
-    tacticStateBackground := color%#eee8d5,
-    tacticStateBorderColor := color%#93a1a1,
-    selectedColor := color%#eee8d5,
-    highlightOnCode := color%#f7e7a3,
-    uiOnCode := color%#93a1a1,
-    keyword.color := color%#859900,
-    const.color   := color%#268bd2,
-    «var».color   := color%#6c71c4
+public def ManualTheme.solarizedLight : ManualTheme :=
+  {
+    toCodeTheme := {
+      CodeTheme.ink with
+      name := "Solarized Light",
+      sourceLink := some {
+        url := "https://ethanschoonover.com/solarized/",
+        text := "ethanschoonover.com/solarized"
+      },
+      background := base3,
+      codeBlockBackground := base2,
+      textColor := base01,
+      codeColor := base01,
+      structureColor := base01,
+      warningColor := base01,
+      infoColor := base01,
+      errorColor := red,
+      errorIndicatorColor := red,
+      warningIndicatorColor := yellow,
+      infoIndicatorColor := blue,
+      hoverBackground := base2,
+      hoverText := base01,
+      hoverBorderColor := base1,
+      hoverSeparatorColor := base1,
+      tokenHighlightBackground := base2,
+      tacticStateBorderColor := base1,
+      selectedColor := base2,
+      highlightOnCode := color%#f7e7a3,
+      uiOnCode := base1,
+      keyword.color := green,
+      const.color := blue,
+      «var».color := violet
+    },
+    surfaceColor := base2,
+    tocBackground := base2,
+    borderColor := base01,
+    mutedColor := base00,
+    linkColor := blue,
+    visitedLinkColor := violet
   }
-  surfaceColor := color%#eee8d5
-  tocBackground := color%#eee8d5
-  borderColor := color%#586e75
-  mutedColor := color%#657b83
-  linkColor := color%#268bd2
-  visitedLinkColor := color%#6c71c4
 
+open Color.Solarized in
 /--
-Solarized dark: Schoonover's standard {lit}`base03` background with body text on {lit}`base0`.
-Same accent hues as the light variant; the relative-luminance jump comes from the substrate.
+Solarized dark: Schoonover's standard {lit}`base03` background with body text on {lit}`base1`.
+Token accents are brightened off the standard palette so they keep clear contrast on the dark
+substrate.
 -/
 @[manual_theme]
 public def ManualTheme.solarizedDark : ManualTheme :=
   darkChromeFields {
     darkCodeBase with
     name := "Solarized Dark",
-    background := color%#002b36,
-    codeBlockBackground := color%#073642,
-    textColor := color%#93a1a1,
-    codeColor := color%#93a1a1,
-    structureColor := color%#93a1a1,
-    warningColor := color%#93a1a1,
-    infoColor := color%#93a1a1,
+    sourceLink := some {
+      url := "https://ethanschoonover.com/solarized/",
+      text := "ethanschoonover.com/solarized"
+    },
+    background := base03,
+    codeBlockBackground := base02,
+    textColor := base1,
+    codeColor := base1,
+    structureColor := base1,
+    warningColor := base1,
+    infoColor := base1,
     errorColor := color%#ff8b8b,
-    errorIndicatorColor := color%#dc322f,
-    warningIndicatorColor := color%#b58900,
-    infoIndicatorColor := color%#268bd2,
-    hoverBackground := color%#073642,
-    hoverText := color%#93a1a1,
-    hoverBorderColor := color%#586e75,
-    hoverSeparatorColor := color%#586e75,
-    tokenHighlightBackground := color%#073642,
-    tacticStateBackground := color%#073642,
-    tacticStateBorderColor := color%#586e75,
-    selectedColor := color%#073642,
+    errorIndicatorColor := red,
+    warningIndicatorColor := yellow,
+    infoIndicatorColor := blue,
+    hoverBackground := base02,
+    hoverText := base1,
+    hoverBorderColor := base01,
+    hoverSeparatorColor := base01,
+    tokenHighlightBackground := base02,
+    tacticStateBorderColor := base01,
+    selectedColor := base02,
     highlightOnCode := color%#3a2f00,
-    uiOnCode := color%#93a1a1,
+    uiOnCode := base1,
     keyword.color := color%#b3d100,
-    const.color   := color%#6cb6ff,
-    «var».color   := color%#a98aff
+    const.color := color%#6cb6ff,
+    «var».color := color%#a98aff
   }
 
 /-! # Sandstone — warm sepia (Rust/Ayu inspired) -/
@@ -281,8 +294,8 @@ public def ManualTheme.sandstoneLight : ManualTheme where
     highlightOnCode := color%#f4d5a8,
     uiOnCode := color%#8c7257,
     keyword.color := color%#a04a00,
-    const.color   := color%#1f6f8b,
-    «var».color   := color%#3b2a17
+    const.color := color%#1f6f8b,
+    «var».color := color%#3b2a17
   }
   surfaceColor := color%#f3e9d6
   tocBackground := color%#f3e9d6
@@ -331,8 +344,8 @@ public def ManualTheme.sandstoneDark : ManualTheme :=
     -- by hue *and* lightness so the palette stays distinct under most dichromacies even
     -- without a cool accent.
     keyword.color := color%#ff8c4a,
-    const.color   := color%#ffc266,
-    «var».color   := color%#f3d5a3
+    const.color := color%#ffc266,
+    «var».color := color%#f3d5a3
   }
   -- Override the generic dark-chrome accents with sandstone-tuned values so the search box
   -- border, ToC background, and link colours stay in the warm family.
@@ -374,8 +387,8 @@ public def ManualTheme.steel : ManualTheme where
     highlightOnCode := color%#fff3b0,
     uiOnCode := color%#46566a,
     keyword.color := color%#1a5ea8,
-    const.color   := color%#2a6f4f,
-    «var».color   := color%#0e2431
+    const.color := color%#2a6f4f,
+    «var».color := color%#0e2431
   }
   surfaceColor := color%#e3e8ee
   tocBackground := color%#e3e8ee
@@ -412,8 +425,8 @@ public def ManualTheme.slate : ManualTheme :=
     highlightOnCode := color%#3a2f00,
     uiOnCode := color%#7a8aa0,
     keyword.color := color%#6cb6ff,
-    const.color   := color%#7ad9a0,
-    «var».color   := color%#dfe6ee
+    const.color := color%#7ad9a0,
+    «var».color := color%#dfe6ee
   }
 
 /-! # Hearth — cottagecore (cream/sage light, candlelit deep-olive dark) -/
@@ -448,8 +461,8 @@ public def ManualTheme.hearthLight : ManualTheme where
     highlightOnCode := color%#e3cfae,
     uiOnCode := color%#7a6952,
     keyword.color := color%#2f6e58,
-    const.color   := color%#a04050,
-    «var».color   := color%#3d2f1f
+    const.color := color%#a04050,
+    «var».color := color%#3d2f1f
   }
   textFace := .serif
   structureFace := .serif
@@ -491,7 +504,7 @@ public def ManualTheme.hearthDark : ManualTheme :=
     highlightOnCode := color%#5c4a00,
     uiOnCode := color%#a08a64,
     keyword.color := color%#9adcb0,
-    const.color   := color%#f5a8b8,
-    «var».color   := color%#f1e7d2
+    const.color := color%#f5a8b8,
+    «var».color := color%#f1e7d2
   }
   { base with textFace := .serif, structureFace := .serif }

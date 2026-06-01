@@ -23,8 +23,8 @@ namespace SubVerso.Highlighting
 Given an already escaped-for-verbatim string, and a token kind, returns TeX that wraps the
 content in the matching semantic macro: `\versoKeyword`, `\versoConst`, `\versoVar`, or
 `\versoLiteral`. The macros are defined by the consuming genre's preamble (the manual genre
-uses {Lean.Doc.name}`Verso.Theme.CodeTheme` to style them). For a fallback definition that
-reproduces the pre-theming look, see {Lean.Doc.name}`SubVerso.Highlighting.texMacroFallbacks`.
+uses {name}`Verso.Theme.CodeTheme` to style them). For a fallback definition that
+reproduces the pre-theming look, see {name}`SubVerso.Highlighting.texMacroFallbacks`.
 -/
 public def highlightToken : String → Token.Kind → TeX
 | c, .keyword _ _ _ => .raw s!"\\versoKeyword\{{c}}"
@@ -44,7 +44,7 @@ public def highlightToken : String → Token.Kind → TeX
 
 /--
 Fallback definitions for the four semantic token macros emitted by
-{Lean.Doc.name}`SubVerso.Highlighting.highlightToken`. Each uses `\providecommand`, so a genre
+{name}`SubVerso.Highlighting.highlightToken`. Each uses `\providecommand`, so a genre
 preamble that defines its own (theme-driven) versions wins. The fallbacks reproduce today's
 unthemed look: keywords bold, variables italic, constants and literals plain.
 -/
@@ -65,9 +65,9 @@ with command characters `\`, `{`, and `}`.
 When `lineBreaks` is true, inserts line break opportunities in identifiers.
 
 **Preamble contract.** Output uses the four `\verso…` semantic macros emitted by
-{Lean.Doc.name}`SubVerso.Highlighting.highlightToken`. Any consumer that compiles the result must
+{name}`SubVerso.Highlighting.highlightToken`. Any consumer that compiles the result must
 ensure those macros are defined, either by including
-{Lean.Doc.name}`SubVerso.Highlighting.texMacroFallbacks` in the preamble or by defining its own
+{name}`SubVerso.Highlighting.texMacroFallbacks` in the preamble or by defining its own
 theme-driven versions (the manual genre installs both).
 -/
 public defmethod Highlighted.toVerbatimTeX (h : Highlighted) (lineBreaks : Bool := false) : Verso.Output.TeX :=

@@ -47,6 +47,18 @@ public structure ThemeAsset where
   contents : ByteArray
 
 /--
+A hyperlink shown in the picker alongside a theme: a URL plus the visible link text. Used to
+point readers at a theme's canonical reference (for example the Solarized homepage for a
+Solarized port, or a designer's portfolio page).
+-/
+public structure SourceLink where
+  /-- The URL the link points to. -/
+  url : String
+  /-- The visible link text. -/
+  text : String
+deriving Repr
+
+/--
 A typed code theme. Defaults reproduce today's hardcoded chrome, so a default-constructed theme is
 visually unchanged from the pre-theming look.
 
@@ -59,6 +71,18 @@ public structure CodeTheme where
   name : String
   /-- Whether this theme is intended for a light or a dark display. -/
   appearance : Appearance
+  /--
+  An optional one- or two-sentence description shown alongside the theme in the picker. Useful
+  for noting design intent, palette family, or accessibility trade-offs (for example "Solarized
+  Light — the canonical palette, below WCAG AA on prose by design").
+  -/
+  description : Option String := none
+  /--
+  An optional canonical reference for the theme: a URL plus link text shown next to the name
+  in the picker. Points readers at an upstream homepage or specification when the theme is a
+  port (Solarized, Dracula, etc.).
+  -/
+  sourceLink : Option SourceLink := none
 
   /-- The font used for code blocks and inline code. -/
   codeFace : Typeface := .mono
@@ -111,8 +135,14 @@ public structure CodeTheme where
   hoverSeparatorColor : Color := color%#cccccc
   /-- The background tint applied to a token on hover (independent of severity). -/
   tokenHighlightBackground : Color := color%#eeeeee
-  /-- The background of a displayed tactic state. -/
-  tacticStateBackground : Color := Color.white
+  /--
+  The background of a displayed tactic state. Defaults to the surrounding
+  {name (full := Verso.Theme.CodeTheme.codeBlockBackground)}`codeBlockBackground`, so a theme
+  that recolors the code surface gets a matching tactic-state surface for free; themes that
+  want a distinct tactic-state tint (a slight raise to differentiate it from code) override
+  it explicitly.
+  -/
+  tacticStateBackground : Color := codeBlockBackground
   /-- The border color of a displayed tactic state. -/
   tacticStateBorderColor : Color := color%#888888
 
@@ -142,7 +172,7 @@ public structure CodeTheme where
 public section
 
 /--
-Attribute that registers a {Lean.Doc.name}`CodeTheme` declaration as an available theme. The
+Attribute that registers a {name}`CodeTheme` declaration as an available theme. The
 declaration must be in the current module (not imported), and its registration name is the decl's
 name with macro scopes erased.
 -/
@@ -165,9 +195,9 @@ meta initialize
 end section
 
 /--
-A materialized table of registered {Lean.Doc.name}`CodeTheme` values, keyed by registration name.
+A materialized table of registered {name}`CodeTheme` values, keyed by registration name.
 Built at runtime by the {lit}`code_themes%` term elaborator from the set of
-{Lean.Doc.name}`CodeTheme` declarations tagged with the {lit}`@[code_theme]` attribute.
+{name}`CodeTheme` declarations tagged with the {lit}`@[code_theme]` attribute.
 -/
 public structure CodeThemeTable where
   /-- The map from a theme's registration name to its value. -/
@@ -207,8 +237,8 @@ private meta def themePair [Monad m] [MonadRef m] [MonadQuotation m] (n : Name) 
 
 open Lean Elab Term in
 /--
-Elaborator for the {lit}`code_themes%` macro: emits a {Lean.Doc.name}`Verso.Theme.CodeThemeTable`
-literal whose entries are every registered {Lean.Doc.name}`Verso.Theme.CodeTheme` decl.
+Elaborator for the {lit}`code_themes%` macro: emits a {name}`Verso.Theme.CodeThemeTable`
+literal whose entries are every registered {name}`Verso.Theme.CodeTheme` decl.
 -/
 @[term_elab code_themes]
 meta def elabCodeThemes : TermElab := fun _stx expected? => do
@@ -236,13 +266,15 @@ private def tokenSummaries (theme : CodeTheme) : Array (String × Color) := #[
   ]
 
 /--
+{open Verso.Theme.Color}
+
 Checks a theme for contrast and color-vision-deficiency problems. The checker is pure and genre
-neutral: it returns an {Lean.Doc.name}`Array` of {Lean.Doc.name}`Verso.Theme.Color.Issue` values
-whose {Lean.Doc.name}`Verso.Theme.Color.Issue.kind` field a caller routes to its severity flag.
+neutral: it returns an {Lean.Doc.name}`Array` of {Lean.Doc.name}`Issue` values
+whose {Lean.Doc.name}`Issue.kind` field a caller routes to its severity flag.
 
 Body text uses the WCAG AA 4.5 threshold; UI accents and large-text positions use 3.0. Token
 distinguishability uses the CIEDE2000 threshold from
-{Lean.Doc.name}`Verso.Theme.Color.distinguishableThreshold`.
+{Lean.Doc.name}`distinguishableThreshold`.
 -/
 public def checkAccessibility (theme : CodeTheme) : Array Color.Issue := Id.run do
   let mut issues := #[]
@@ -392,7 +424,7 @@ private def tokenMacro (name : String) (s : TokenStyle) (colorName : String) : S
 Returns a TeX preamble fragment that defines a theme-specific {lit}`xcolor` palette, redefines
 the four {lit}`\verso…` token macros so they apply the theme's per-token color, weight, and
 style, and sets the document mono font to {Lean.Doc.name (full := Verso.Typeface.texFamily)}`Verso.Typeface.texFamily` applied to
-{Lean.Doc.name (full := Verso.Theme.CodeTheme.codeFace)}`codeFace`.
+{Lean.Doc.name}`codeFace`.
 
 Two color names are emitted per severity: {lit}`errorColor`/{lit}`warningColor`/{lit}`infoColor`
 are the message-text colors, and {lit}`errorIndicatorColor`/{lit}`warningIndicatorColor`/{lit}`infoIndicatorColor`

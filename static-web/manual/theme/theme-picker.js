@@ -182,11 +182,70 @@
         preview.innerHTML = data.codeSample || "";
         dialog.appendChild(preview);
 
+        // Per-theme metadata panel: description paragraph and source-link line. Rendered below
+        // the code sample so the visual order is [chooser] [code sample] [about this theme].
+        // Themes without description/sourceLink leave the panel empty (and hidden by CSS).
+        var about = document.createElement("div");
+        about.id = "theme-picker-about";
+        var aboutDesc = document.createElement("p");
+        aboutDesc.id = "theme-picker-description";
+        var aboutLink = document.createElement("p");
+        aboutLink.id = "theme-picker-source";
+        var aboutLinkAnchor = document.createElement("a");
+        aboutLinkAnchor.target = "_blank";
+        aboutLinkAnchor.rel = "noopener noreferrer";
+        aboutLink.appendChild(aboutLinkAnchor);
+        about.appendChild(aboutDesc);
+        about.appendChild(aboutLink);
+        dialog.appendChild(about);
+
+        function activeMetaTheme() {
+            var prefersDark =
+                window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+            var id;
+            if (modeToggle.checked) {
+                id = prefersDark ? darkSel.select.value : lightSel.select.value;
+            } else {
+                id = singleSel.select.value;
+            }
+            return data.themes.find(function (t) {
+                return t.id === id;
+            });
+        }
+
+        function refreshAbout() {
+            var t = activeMetaTheme();
+            if (!t) {
+                about.hidden = true;
+                return;
+            }
+            // Hide rows individually so a theme with only one of the two doesn't leave an
+            // empty paragraph slot.
+            if (t.description) {
+                aboutDesc.textContent = t.description;
+                aboutDesc.hidden = false;
+            } else {
+                aboutDesc.hidden = true;
+                aboutDesc.textContent = "";
+            }
+            if (t.sourceLink && t.sourceLink.url && t.sourceLink.text) {
+                aboutLinkAnchor.href = t.sourceLink.url;
+                aboutLinkAnchor.textContent = t.sourceLink.text;
+                aboutLink.hidden = false;
+            } else {
+                aboutLink.hidden = true;
+                aboutLinkAnchor.removeAttribute("href");
+                aboutLinkAnchor.textContent = "";
+            }
+            about.hidden = aboutDesc.hidden && aboutLink.hidden;
+        }
+
         function refreshLayout() {
             var auto = modeToggle.checked;
             singleSel.row.hidden = auto;
             lightSel.row.hidden = !auto;
             darkSel.row.hidden = !auto;
+            refreshAbout();
         }
         refreshLayout();
 
@@ -224,7 +283,10 @@
             commit();
         });
         [singleSel.select, lightSel.select, darkSel.select].forEach(function (sel) {
-            sel.addEventListener("change", commit);
+            sel.addEventListener("change", function () {
+                commit();
+                refreshAbout();
+            });
             // No focus/hover preview: the picker commits immediately on `change`, so the
             // user already gets visible feedback when they pick an option. Firing a
             // preview on `focus` (or `mouseenter`) painted a stale "what's selected right

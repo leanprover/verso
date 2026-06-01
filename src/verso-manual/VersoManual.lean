@@ -449,7 +449,7 @@ def defaultSingleName (config : RenderConfig) : Lean.Name :=
 
 /--
 The single-default `Verso.Theme.ManualTheme` resolved from the active
-{Lean.Doc.name}`Verso.Theme.ThemeRegistry`. This is the theme that drives
+{name}`Verso.Theme.ThemeRegistry`. This is the theme that drives
 `verso-themes.css`'s unscoped `:root` block — what the server-rendered HTML paints on first
 visit (before the no-flash script attaches a `data-verso-theme`) — and the TeX code styling.
 
@@ -1220,7 +1220,7 @@ where
     checkDefault "defaultDarkTheme" cfg.defaultDarkTheme
 
   /--
-  Builds the active {Lean.Doc.name}`Verso.Theme.ThemeRegistry` from the registered
+  Builds the active {name}`Verso.Theme.ThemeRegistry` from the registered
   `Verso.Theme.ManualTheme` table, filters it by the configured
   `availableThemes`, and routes every
   `Verso.Theme.ManualThemeTable.ValidationError` through `MonadBuildLog` as an error.

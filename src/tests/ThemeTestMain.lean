@@ -12,7 +12,7 @@ open Verso Verso.Theme
 open Verso.Genre Manual
 
 /-!
-The customized {Lean.Doc.name}`Verso.Theme.CodeTheme` used by the browser test. Each color field
+The customized {name}`Verso.Theme.CodeTheme` used by the browser test. Each color field
 holds a distinct sentinel hex value so Playwright can identify which theme field a rendered DOM
 color comes from.
 -/

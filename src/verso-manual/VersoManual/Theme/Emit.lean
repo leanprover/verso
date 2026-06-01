@@ -24,10 +24,16 @@ open Lean (Json)
 /-- The pieces of a theme that the picker / no-flash script need at runtime, JSON-encoded. -/
 private def themeJson (n : Lean.Name) (t : ManualTheme) : Json :=
   let appearance := match t.appearance with | .light => "light" | .dark => "dark"
+  let description : Json := t.description.map Json.str |>.getD .null
+  let sourceLink : Json := match t.sourceLink with
+    | none => .null
+    | some s => Json.mkObj [("url", Json.str s.url), ("text", Json.str s.text)]
   Json.mkObj [
     ("id", Json.str n.toString),
     ("name", Json.str t.name),
-    ("appearance", Json.str appearance)
+    ("appearance", Json.str appearance),
+    ("description", description),
+    ("sourceLink", sourceLink)
   ]
 
 /--
@@ -35,8 +41,8 @@ The contents of {lit}`-verso-data/verso-themes.js`. Exposes {lit}`window.versoTh
 shape `{ themes: [...], defaultLight, defaultDark, codeSample }` so the picker can render the
 choices and the live code preview.
 
-`codeSample` is a small fixed HTML string reusing the `.hl.lean` markup; the picker drops it
-inside a `data-verso-theme`-scoped element to show what each theme will look like.
+{name}`codeSample` is a small fixed HTML string reusing the {lit}`.hl.lean` markup; the picker drops it
+inside a {lit}`data-verso-theme`-scoped element to show what each theme will look like.
 -/
 public def windowVersoThemesJs
     (themes : ThemeRegistry)
@@ -114,16 +120,16 @@ Produces the body of {lit}`verso-themes.css`:
 
 - font-face rules from every available theme (one block per theme; content dedup is the caller's
   job);
-- an unscoped `:root` block carrying the {lit}`single`'s variables — what the server-rendered
-  HTML uses before the no-flash script attaches {lit}`data-verso-theme`. `single` is the
+- an unscoped `:root` block carrying the {name}`single`'s variables — what the server-rendered
+  HTML uses before the no-flash script attaches {lit}`data-verso-theme`. {name}`single` is the
   resolved single-mode default theme;
-- an `@media (prefers-color-scheme: dark)` block carrying the {Lean.Doc.name}`Verso.Theme.ManualTheme`
-  named by `defaultDark` (no-JS fallback only — the no-flash script always sets a concrete
+- an {lit}`@media (prefers-color-scheme: dark)` block carrying the {name}`Verso.Theme.ManualTheme`
+  named by {name}`defaultDark` (no-JS fallback only — the no-flash script always sets a concrete
   attribute);
 - one `:root[data-verso-theme="…"]` block per registered theme so the picker can swap themes by
   flipping the attribute.
 
-`single` is always one of the registered themes, so its font and asset URLs resolve against
+{name}`single` is always one of the registered themes, so its font and asset URLs resolve against
 the same {lit}`-verso-data/themes/<name>` root as the attribute-scoped blocks; no separate
 page-theme asset root is needed.
 -/
@@ -149,5 +155,3 @@ public def «verso-themes.css»
     unless extra.isEmpty do
       out := out ++ s!":where(:root[data-verso-theme=\"{n.toString}\"]) \{\n{extra}}\n"
   return out
-
-end Verso.Theme

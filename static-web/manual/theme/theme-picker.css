@@ -130,6 +130,34 @@
     overflow-x: auto;
 }
 
+#theme-picker-about {
+    /* Theme metadata (description + canonical link) sits below the code preview. Spans both
+       columns and uses the structure font so it reads as prose rather than code. */
+    grid-column: 1 / -1;
+    font-size: 0.85em;
+    line-height: 1.35;
+    color: var(--verso-muted-color, #555);
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+#theme-picker-about[hidden] {
+    display: none;
+}
+
+#theme-picker-about p {
+    margin: 0;
+}
+
+#theme-picker-about p[hidden] {
+    display: none;
+}
+
+#theme-picker-source a {
+    color: var(--verso-link-color, inherit);
+}
+
 @media (max-width: 600px) {
     /* Full-screen sheet on small screens. */
     #theme-picker-dialog {
