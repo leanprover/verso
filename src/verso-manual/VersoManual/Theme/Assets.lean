@@ -9,10 +9,10 @@ meta import Init.System.FilePath
 namespace Verso.Genre.Manual.Theme
 
 /-- The picker JavaScript: builds the dialog opened by `#theme-picker-button`. -/
-public def «theme-picker.js» : String := include_str "../../../../static-web/theme/theme-picker.js"
+public def «theme-picker.js» : String := include_str "../../../../static-web/manual/theme/theme-picker.js"
 
 /-- The picker styles. -/
-public def «theme-picker.css» : String := include_str "../../../../static-web/theme/theme-picker.css"
+public def «theme-picker.css» : String := include_str "../../../../static-web/manual/theme/theme-picker.css"
 
 /--
 A small fixed code sample the picker drops into the preview pane so the user can see what each

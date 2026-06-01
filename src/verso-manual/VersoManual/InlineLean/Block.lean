@@ -46,8 +46,7 @@ block_extension Block.lean
       | .error err =>
         reportError <| "Couldn't deserialize Lean code block while rendering TeX: " ++ err
         pure .empty
-      | .ok (hl : Highlighted) =>
-        hl.toTeX (g := Manual) (m := EmitM)
+      | .ok (hl : Highlighted) => hl.toTeX
   toHtml :=
     open Verso.Output.Html in
     some <| fun _ _ _ data _ => do
@@ -58,5 +57,4 @@ block_extension Block.lean
         reportError <| "Couldn't deserialize Lean code block while rendering HTML: " ++ err
         pure .empty
       | .ok (hl : Highlighted) =>
-
         hl.blockHtml (g := Manual) "examples"
