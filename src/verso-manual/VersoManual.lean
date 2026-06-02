@@ -311,6 +311,10 @@ structure RenderConfig extends Config where
   dropdown).
   -/
   defaultSingleAppearance : Appearance := .light
+  /--
+  The {name}`CodeTheme` used for PDF output.
+  -/
+  pdfCodeTheme : Verso.Theme.CodeTheme := Verso.Theme.CodeTheme.ink
 
 namespace Config
 
@@ -511,7 +515,6 @@ def writeThemeAssets (dir : System.FilePath) (config : RenderConfig) : EmitM Uni
 
 open IO.FS in
 def emitTeX (config : RenderConfig) (text : Part Manual) : EmitM Unit := do
-  let registry ← readThe ThemeRegistry
   let (text, state) ← traverse text config.toConfig
   let opts : TeX.Options Manual := {
     headerLevels := #["chapter", "section", "subsection", "subsubsection", "paragraph"],
@@ -534,7 +537,7 @@ def emitTeX (config : RenderConfig) (text : Part Manual) : EmitM Unit := do
   withFile (dir.join "main.tex") .write fun h => do
     if config.verbose then
       IO.println s!"Saving {dir.join "main.tex"}"
-    h.putStrLn (preamble text.titleString authors date packages.toList preambleItems.toList (singleDefaultTheme registry config).toCodeTheme)
+    h.putStrLn (preamble text.titleString authors date packages.toList preambleItems.toList config.pdfCodeTheme)
     -- \frontmatter is inserted by our hardcoded preamble before the ToC, so it doesn't get inserted
     -- here. If there's any text at the start of the front matter, then we need to clear it to a new
     -- recto page after the ToC

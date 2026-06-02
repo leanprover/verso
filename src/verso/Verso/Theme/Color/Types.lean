@@ -15,8 +15,9 @@ namespace Verso.Theme
 -- `DecidableEq`, so colors round-trip through hex exactly and themes, fonts, and assets deduplicate
 -- by value.
 /--
-A color in sRGB with an alpha channel, each channel a byte.
+A color.
 -/
 public inductive Color where
+  /-- A color in sRGB with an alpha channel, each channel a byte. -/
   | rgba (red green blue alpha : UInt8)
 deriving DecidableEq, Repr, Inhabited
