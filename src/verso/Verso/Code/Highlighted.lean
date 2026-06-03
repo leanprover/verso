@@ -411,8 +411,9 @@ defmethod Token.Kind.hover? (tok : Token.Kind) : HighlightHtmlM g (Option Nat) :
     match tyFmt with
     | some fmt => some <$> addHover {{ <code data-rich-format={{fmt}}>{{type}}</code> }}
     | none => some <$> addHover {{ <code>{{type}}</code> }}
-  | .str s =>
+  | .str (some s) _ =>
     some <$> addHover {{ <code><span class="literal string">{{s.quote}}</span>" : String"</code>}}
+  | .str none _ => pure none
   | .char c =>
     some <$> addHover {{ <code><span class="literal char">{{s!"{repr c}"}}</span>" : Char"</code>}}
   | .withType t =>
