@@ -32,7 +32,7 @@ public def highlightToken : String → Token.Kind → TeX
 | c, .anonCtor .. => .raw s!"\\versoConst\{{c}}"
 | c, .option _ _ _ => .raw s!"\\versoConst\{{c}}"
 | c, .var .. => .raw s!"\\versoVar\{{c}}"
-| c, .str _ => .raw s!"\\versoLiteralString\{{c}}"
+| c, .str .. => .raw s!"\\versoLiteralString\{{c}}"
 | c, .docComment => .raw s!"\\versoDocComment\{{c}}"
 | c, .sort _ => .raw s!"\\versoSort\{{c}}"
 | c, .levelVar _ => .raw s!"\\versoLevelVar\{{c}}"
