@@ -100,4 +100,6 @@ class TestNestedTacticStates:
         assert result["own"] == self.HIGHLIGHT
         # The example really is nested, so this assertion is meaningful.
         assert len(result["ancestors"]) > 0
-        assert all(bg == self.TRANSPARENT for bg in result["ancestors"]), result["ancestors"]
+        assert all(bg == self.TRANSPARENT for bg in result["ancestors"]), result[
+            "ancestors"
+        ]
