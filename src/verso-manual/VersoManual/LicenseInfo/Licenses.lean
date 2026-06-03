@@ -210,7 +210,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 public def nord : LicenseInfo where
   identifier := "MIT"
   dependency := "Nord"
-  howUsed := some "The Nord and Nord Light themes reproduce the canonical Nord color palette by Sven Greb (Arctic Ice Studio)."
+  howUsed := some "The Nord theme reproduces the canonical Nord color palette by Sven Greb (Arctic Ice Studio)."
   link := some "https://www.nordtheme.com/"
   text := #[(some "MIT License (MIT)",
 r#"

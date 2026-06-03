@@ -357,7 +357,6 @@ Hearth Dark (Verso.Theme.ManualTheme.hearthDark)
 Hearth Light (Verso.Theme.ManualTheme.hearthLight)
 Ink (Verso.Theme.ManualTheme.ink)
 Nord (Verso.Theme.ManualTheme.nord)
-Nord Light (Verso.Theme.ManualTheme.nordLight)
 Sandstone Dark (Verso.Theme.ManualTheme.sandstoneDark)
 Sandstone Light (Verso.Theme.ManualTheme.sandstoneLight)
 Slate (Verso.Theme.ManualTheme.slate)
@@ -410,7 +409,7 @@ The remaining shipped themes fall into seven families, each with a light variant
 
 : Nord
 
-  Greb's arctic, north-bluish [Nord](https://www.nordtheme.com/) palette in a Polar Night dark variant and a Snow Storm light variant.
+  Sven Greb's blue-based [Nord](https://www.nordtheme.com/) palette on its Polar Night substrate.
 
 : Sandstone
 
