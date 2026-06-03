@@ -120,15 +120,17 @@ def testDichromacyAlphaPreserved := testProp <| ∀ (cvd : CVD) (c : Color),
 def testLuminanceIgnoresAlpha := testProp <| ∀ (r g b a : UInt8),
   relativeLuminance (.rgba r g b a) == relativeLuminance (.rgba r g b 255)
 
+/-- Replaces a color's alpha channel with full opacity. -/
+private def «opaque» : Color → Color
+  | .rgba r g b _ => .rgba r g b 255
+
 /-- Contrast ratio ignores the alpha channel. -/
-def testContrastIgnoresAlpha := testProp <| ∀ (r1 g1 b1 a1 r2 g2 b2 a2 : UInt8),
-  contrastRatio (.rgba r1 g1 b1 a1) (.rgba r2 g2 b2 a2)
-    == contrastRatio (.rgba r1 g1 b1 255) (.rgba r2 g2 b2 255)
+def testContrastIgnoresAlpha := testProp <| ∀ (c1 c2 : Color),
+  contrastRatio c1 c2 == contrastRatio («opaque» c1) («opaque» c2)
 
 /-- ΔE ignores the alpha channel. -/
-def testDeltaEIgnoresAlpha := testProp <| ∀ (r1 g1 b1 a1 r2 g2 b2 a2 : UInt8),
-  deltaE (.rgba r1 g1 b1 a1) (.rgba r2 g2 b2 a2)
-    == deltaE (.rgba r1 g1 b1 255) (.rgba r2 g2 b2 255)
+def testDeltaEIgnoresAlpha := testProp <| ∀ (c1 c2 : Color),
+  deltaE c1 c2 == deltaE («opaque» c1) («opaque» c2)
 
 open Lean (Name)
 
