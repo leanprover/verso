@@ -37,6 +37,16 @@ public def highlightToken : String → Token.Kind → TeX
 | c, .moduleName _ => .raw c
 | c, .levelOp _ => .raw c
 | c, .withType _ => .raw c
+| c, .delim .. => .raw c
+| c, .wildcard .. => .raw c
+| c, .num .. => .raw c
+| c, .char .. => .raw c
+| c, .lineComment => .raw c
+| c, .blockComment => .raw c
+| c, .commentDelim => .raw c
+| c, .operator .. => .raw c
+| c, .bracket .. => .raw c
+| c, .separator .. => .raw c
 | c, .unknown => .raw c
 
 defmethod Highlighting.Token.toVerbatimTeX (t : Highlighting.Token) (lineBreaks : Bool := false) : Verso.Output.TeX :=
