@@ -127,10 +127,25 @@ title={#2},#1}
 \providecommand{\versoConst}[1]{#1}
 \providecommand{\versoVar}[1]{\textit{#1}}
 \providecommand{\versoLiteral}[1]{#1}
+\providecommand{\versoLiteralString}[1]{#1}
+\providecommand{\versoDocComment}[1]{\textit{#1}}
+\providecommand{\versoSort}[1]{#1}
+\providecommand{\versoLevelVar}[1]{\textit{#1}}
+\providecommand{\versoLevelConst}[1]{#1}
+\providecommand{\versoLevelOp}[1]{#1}
+\providecommand{\versoModuleName}[1]{#1}
 \definecolor{versoCodeColor}{HTML}{000000}
 \definecolor{versoConstColor}{HTML}{000000}
 \definecolor{versoKeywordColor}{HTML}{000000}
 \definecolor{versoVarColor}{HTML}{000000}
+\definecolor{versoLiteralColor}{HTML}{000000}
+\definecolor{versoLiteralStringColor}{HTML}{000000}
+\definecolor{versoDocCommentColor}{HTML}{000000}
+\definecolor{versoSortColor}{HTML}{000000}
+\definecolor{versoLevelVarColor}{HTML}{000000}
+\definecolor{versoLevelConstColor}{HTML}{000000}
+\definecolor{versoLevelOpColor}{HTML}{000000}
+\definecolor{versoModuleNameColor}{HTML}{000000}
 \definecolor{errorColor}{HTML}{CC0000}
 \definecolor{warningColor}{HTML}{000000}
 \definecolor{infoColor}{HTML}{000000}
@@ -140,7 +155,14 @@ title={#2},#1}
 \renewcommand{\versoKeyword}[1]{\textcolor{versoKeywordColor}{\fontseries{eb}\fontshape{n}\selectfont #1}}
 \renewcommand{\versoConst}[1]{\textcolor{versoConstColor}{\fontseries{m}\fontshape{n}\selectfont #1}}
 \renewcommand{\versoVar}[1]{\textcolor{versoVarColor}{\fontseries{m}\fontshape{it}\selectfont #1}}
-\renewcommand{\versoLiteral}[1]{\textcolor{versoCodeColor}{#1}}
+\renewcommand{\versoLiteral}[1]{\textcolor{versoLiteralColor}{\fontseries{m}\fontshape{n}\selectfont #1}}
+\renewcommand{\versoLiteralString}[1]{\textcolor{versoLiteralStringColor}{\fontseries{m}\fontshape{n}\selectfont #1}}
+\renewcommand{\versoDocComment}[1]{\textcolor{versoDocCommentColor}{\fontseries{m}\fontshape{it}\selectfont #1}}
+\renewcommand{\versoSort}[1]{\textcolor{versoSortColor}{\fontseries{m}\fontshape{n}\selectfont #1}}
+\renewcommand{\versoLevelVar}[1]{\textcolor{versoLevelVarColor}{\fontseries{m}\fontshape{it}\selectfont #1}}
+\renewcommand{\versoLevelConst}[1]{\textcolor{versoLevelConstColor}{\fontseries{m}\fontshape{n}\selectfont #1}}
+\renewcommand{\versoLevelOp}[1]{\textcolor{versoLevelOpColor}{\fontseries{m}\fontshape{n}\selectfont #1}}
+\renewcommand{\versoModuleName}[1]{\textcolor{versoModuleNameColor}{\fontseries{m}\fontshape{n}\selectfont #1}}
 \setmonofont{DejaVu Sans Mono}
 
 \title{\sffamily Title of the Doc}
@@ -160,7 +182,7 @@ title={#2},#1}
 
 \cleardoublepage
 \begin{docstringBox}{def}
-\LeanVerb|\versoConst{Verso.\allowbreak{}Integration.\allowbreak{}Sample\-Doc.\allowbreak{}sample_constant} \versoLiteral{:} \versoLiteral{Type}|\tcblower This is a docstring.Here's some more text with a \LeanVerb|code inline| in it.
+\LeanVerb|\versoConst{Verso.\allowbreak{}Integration.\allowbreak{}Sample\-Doc.\allowbreak{}sample_constant} \versoLiteral{:} \versoSort{Type}|\tcblower This is a docstring.Here's some more text with a \LeanVerb|code inline| in it.
 Here's when a \LeanVerb|code inline|
 occurs right before a line break.And then here's a paragraph break.
 \end{docstringBox}
