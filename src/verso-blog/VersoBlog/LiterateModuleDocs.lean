@@ -124,7 +124,7 @@ module {lit}`MOD` in the project directory {lit}`DIR` with title {lit}`TITLE`.
 (`lakefile.toml` or `lakefile.lean`), which should depend on the same version of Verso that this
 website is using.
 -/
-syntax "literate_page " ident optConfig " from " ident " in " str " as " str (" with " term)? : command
+syntax "literate_page " ident Lean.Parser.Tactic.optConfig " from " ident " in " str " as " str (" with " term)? : command
 /--
 Creates a post from a literate Lean module with Verso-based module docstrings in it. Markdown module
 docstrings are supported, but no attempt is made to elaborate included code.
@@ -136,7 +136,7 @@ module {lit}`MOD` in the project directory {lit}`DIR` with title {lit}`TITLE`.
 (`lakefile.toml` or `lakefile.lean`), which should depend on the same version of Verso that this
 website is using.
 -/
-syntax "literate_post " ident optConfig " from " ident " in " str " as " str (" with " term)? : command
+syntax "literate_post " ident Lean.Parser.Tactic.optConfig " from " ident " in " str " as " str (" with " term)? : command
 
 open Verso Doc in
 open Lean Elab Command in
