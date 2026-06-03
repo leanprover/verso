@@ -49,7 +49,6 @@ example : 2 < 5 := by
 Here's the error:
 ```leanOutput fst
 unsolved goals
-case a.a
 ⊢ (Nat.succ 2).le 3
 ```
 
@@ -254,8 +253,8 @@ example : (123123190283102938019238098 * 1234124).toString.length > 14 := by
 ```
 ```leanOutput traces
 [diag] Diagnostics
-  [reduction] unfolded reducible declarations (max: 46, num: 1):
-    [reduction] outParam ↦ 46
+  [reduction] unfolded reducible declarations (max: 40, num: 1):
+    [reduction] outParam ↦ 40
   [type_class] used instances (max: 54, num: 1):
     [type_class] Lean.Grind.CommRing.OfCommSemiring.instOfNatQ ↦ 54
   [reduction] Axioms (possibly imported non-exposed defs) that were tried to be unfolded (max: 22, num: 1):

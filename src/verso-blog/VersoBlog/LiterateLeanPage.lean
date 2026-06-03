@@ -570,7 +570,7 @@ directory that contains a toolchain file and a Lake configuration (`lakefile.tom
 Set the option `verso.literateMarkdown.logInlines` to `true` to see the error messages that
 prevented elaboration of inline elements.
 -/
-syntax "def_literate_page " ident optConfig " from " ident " in " str " as " str (" with " term)? (rewrites)? : command
+syntax "def_literate_page " ident Lean.Parser.Tactic.optConfig " from " ident " in " str " as " str (" with " term)? (rewrites)? : command
 /--
 Creates a post from a literate Lean module with Markdown module docstrings in it, performing a
 best-effort conversion from a large subset of Markdown to Verso documents. Inline code elements are
@@ -587,7 +587,7 @@ directory that contains a toolchain file and a Lake configuration (`lakefile.tom
 Set the option `verso.literateMarkdown.logInlines` to `true` to see the error messages that
 prevented elaboration of inline elements.
 -/
-syntax "def_literate_post " ident optConfig " from " ident " in " str " as " str (" with " term)? (rewrites)? : command
+syntax "def_literate_post " ident Lean.Parser.Tactic.optConfig " from " ident " in " str " as " str (" with " term)? (rewrites)? : command
 
 
 
