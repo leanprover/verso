@@ -401,7 +401,7 @@ The remaining shipped themes fall into several families, some with both light an
 : Solarized
 
   These themes use Schoonover's [Solarized](https://ethanschoonover.com/solarized/) palettes.
-  Note that these low-contrast themes are not particularly accessible, and thus should probably not be the default theme for a document.
+  Note that these low-contrast themes are not particularly accessible, and thus should not be used as the default theme for a document.
 
 : Dracula and Alucard
 
