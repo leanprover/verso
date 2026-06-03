@@ -319,10 +319,10 @@ A theme for a manual includes a {ref "output-code-themes"}[code theme], in addit
 tag := "manual-themes-overview"
 %%%
 
-The rendered HTML for a manual includes a "gear" button in the header that opens a popover widget.
+When multiple themes are available, the rendered HTML for a manual includes a “gear” button in the header that opens a popover widget.
 This widget offers two choices:
- * A single theme, to be chose from a list and always used
- * A light theme and a dark theme, to be selected automatically based on the browser's `prefers-color-scheme` setting.
+ * a single theme, chosen by the user
+ * a light theme and a dark theme, to be selected automatically based on the browser's `prefers-color-scheme` setting.
 
 
 ## The `ManualTheme` Structure
@@ -387,7 +387,8 @@ These themes use understated formatting, relying on typographical features such 
 tag := "manual-other-themes"
 %%%
 
-The remaining shipped themes fall into seven families, each with a light variant and a dark variant.
+:::paragraph
+The remaining shipped themes fall into several families, some with both light and dark variants:
 
 : Chromatic
 
@@ -423,6 +424,7 @@ The remaining shipped themes fall into seven families, each with a light variant
 
   The _Hearth_ themes have a cream-and-sage light variant and a candlelit deep-olive dark variant, and use serif fonts.
 
+:::
 
 
 ## Configuration
@@ -436,6 +438,7 @@ The following fields of {name}`RenderConfig` are relevant to themes:
 
   This field lists the available themes. By default, it contains all themes that are registered with `@[manual_theme]`.
   Authors can restrict readers to a subset of the registered themes by listing the desired themes here.
+  The default light and dark themes are implicitly considered part of the available theme set.
 
 : {name RenderConfig.defaultLightTheme}`defaultLightTheme`
 
@@ -447,7 +450,7 @@ The following fields of {name}`RenderConfig` are relevant to themes:
 
 : {name RenderConfig.defaultSingleAppearance}`defaultSingleAppearance`
 
-  When readers have configured their themes to ignore the browser's request, this is the default theme. It may be light or dark.
+  When readers have configured their themes to ignore the browser's request, this selects between the default light theme or the default dark theme as the single default.
 
 
 ## Accessibility Checking

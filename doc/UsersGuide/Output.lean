@@ -250,7 +250,7 @@ tag := "code-themes-accessibility"
 
 Code themes are checked for accessibility.
 These checks are by nature incomplete: they can discover the _presence_ of problems, but not their absence.
-Nonetheless, ensuring that the default theme used by a document passes these tests is a good first step towards accessbility.
+Nonetheless, ensuring that the default theme used by a document passes these tests is a good first step towards accessibility.
 
 {docstring Theme.CodeTheme.checkAccessibility}
 
@@ -280,7 +280,7 @@ The following contrasts are checked at the large text threshold (3:1):
  * The neutral UI-element color against the code-block background.
  * The tactic-state border against the tactic-state background.
 
-Images that contain text are not automatically checked, and must be checked for accessiblity in some other way.
+Images that contain text are not automatically checked, and must be checked for accessibility in some other way.
 
 ### Color Perception
 %%%
