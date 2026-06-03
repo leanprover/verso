@@ -29,7 +29,7 @@ public def highlightToken : String → Token.Kind → TeX
 | c, .anonCtor .. => .raw c
 | c, .option _ _ _ => .raw c
 | c, .var .. => .raw s!"\\textit\{{c}}"
-| c, .str _ => .raw c
+| c, .str _ _ => .raw c
 | c, .docComment => .raw c
 | c, .sort _ => .raw c
 | c, .levelVar _ => .raw c

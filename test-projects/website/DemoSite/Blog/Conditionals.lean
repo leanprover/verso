@@ -270,4 +270,11 @@ Here's a check:
 fun x => [x] : ?m.18581 → List ?m.18581
 ```
 
+Here is a rewrite sequence:
+```lean demo
+example : a = b → b = c → c = d → a = d := by
+  intro h1 h2 h3
+  rw [h1, h2, h3]
+```
+
 Thank you for looking at my test/demo post.
