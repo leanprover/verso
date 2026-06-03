@@ -413,7 +413,11 @@ defmethod Token.Kind.hover? (tok : Token.Kind) : HighlightHtmlM g (Option Nat) :
     | none => some <$> addHover {{ <code>{{type}}</code> }}
   | .str s =>
     some <$> addHover {{ <code><span class="literal string">{{s.quote}}</span>" : String"</code>}}
+  | .char c =>
+    some <$> addHover {{ <code><span class="literal char">{{s!"{repr c}"}}</span>" : Char"</code>}}
   | .withType t =>
+    some <$> addHover {{ <code>{{t}}</code> }}
+  | .num (some t) _ =>
     some <$> addHover {{ <code>{{t}}</code> }}
   | .sort (some doc) =>
     some <$> addHover {{<code class="docstring">{{doc}}</code>}}
@@ -686,6 +690,21 @@ public def highlightingStyle : String := "
   font-family: var(--verso-code-font-family,);
 }
 
+/* These lexically-classified token kinds default to the `.unknown` appearance. The rule follows
+   `.const` so it wins for the `anon-ctor` tokens, which also carry the `const` class. */
+.hl.lean .anon-ctor,
+.hl.lean .number,
+.hl.lean .char,
+.hl.lean .comment,
+.hl.lean .punctuation,
+.hl.lean .delim,
+.hl.lean .wildcard {
+  color: var(--verso-code-color,);
+  font-weight: normal;
+  font-style: normal;
+  font-family: var(--verso-code-font-family,);
+}
+
 .hover-container {
   width: 0;
   height: 0;
@@ -768,7 +787,7 @@ public def highlightingStyle : String := "
 }
 
 @media (hover: hover) {
-  .hl.lean .token.binding-hl, .hl.lean .literal.string:hover, .hl.lean .token.typed:hover {
+  .hl.lean .token.binding-hl, .hl.lean .literal:hover, .hl.lean .token.typed:hover {
     background-color: #eee;
     border-radius: 2px;
     transition: none;
