@@ -56,6 +56,22 @@
   --verso-code-module-name-weight: 400;
   --verso-code-module-name-style: normal;
   --verso-code-module-name-font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --verso-code-delim-color: #000000;
+  --verso-code-delim-weight: 400;
+  --verso-code-delim-style: normal;
+  --verso-code-delim-font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --verso-code-operator-color: #000000;
+  --verso-code-operator-weight: 400;
+  --verso-code-operator-style: normal;
+  --verso-code-operator-font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --verso-code-bracket-color: #000000;
+  --verso-code-bracket-weight: 400;
+  --verso-code-bracket-style: normal;
+  --verso-code-bracket-font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --verso-code-separator-color: #000000;
+  --verso-code-separator-weight: 400;
+  --verso-code-separator-style: normal;
+  --verso-code-separator-font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --verso-hover-background-color: #e5e5e5;
   --verso-hover-border-color: #000000;
   --verso-hover-text-color: #000000;
@@ -166,6 +182,56 @@
   font-family: var(--verso-code-module-name-font-family, var(--verso-code-font-family,));
 }
 
+/* The lexically-classified token kinds added by SubVerso (anon-ctor, number, char, comment,
+   wildcard) default to the unthemed `.unknown` appearance. The themeable rules above already
+   cover the semantic kinds (`.literal`, `.doc-comment`, etc.) and win when both apply (e.g.
+   `.anon-ctor` also carries `.const`; a number nested inside a literal span is still themed
+   by `.literal`). Future phases may introduce dedicated theme buckets for numbers, characters,
+   and comments. */
+.hl.lean .anon-ctor,
+.hl.lean .number,
+.hl.lean .char,
+.hl.lean .comment,
+.hl.lean .wildcard {
+  color: var(--verso-code-color,);
+  font-weight: normal;
+  font-style: normal;
+  font-family: var(--verso-code-font-family,);
+}
+
+/* `.delim` is the built-in syntactic delimiter family (`:=`, `=>`, `←`, `@`, `:`, `|`). The
+   three punctuation buckets — `.punctuation.operator`, `.punctuation.bracket`,
+   `.punctuation.separator` — are themed independently below; their CSS variables resolve
+   per-theme to either the cascade default (delim's color) or an explicit override. */
+.hl.lean .delim {
+  color: var(--verso-code-delim-color, var(--verso-code-color,));
+  font-weight: var(--verso-code-delim-weight, normal);
+  font-style: var(--verso-code-delim-style, normal);
+  font-family: var(--verso-code-delim-font-family, var(--verso-code-font-family,));
+}
+
+.hl.lean .punctuation.operator {
+  color: var(--verso-code-operator-color, var(--verso-code-color,));
+  font-weight: var(--verso-code-operator-weight, normal);
+  font-style: var(--verso-code-operator-style, normal);
+  font-family: var(--verso-code-operator-font-family, var(--verso-code-font-family,));
+}
+
+.hl.lean .punctuation.bracket {
+  color: var(--verso-code-bracket-color, var(--verso-code-color,));
+  font-weight: var(--verso-code-bracket-weight, normal);
+  font-style: var(--verso-code-bracket-style, normal);
+  font-family: var(--verso-code-bracket-font-family, var(--verso-code-font-family,));
+}
+
+.hl.lean .punctuation.separator {
+  color: var(--verso-code-separator-color, var(--verso-code-color,));
+  font-weight: var(--verso-code-separator-weight, normal);
+  font-style: var(--verso-code-separator-style, normal);
+  font-family: var(--verso-code-separator-font-family, var(--verso-code-font-family,));
+}
+
+
 .hover-container {
   width: 0;
   height: 0;
@@ -248,7 +314,7 @@
 }
 
 @media (hover: hover) {
-  .hl.lean .token.binding-hl, .hl.lean .literal.string:hover, .hl.lean .token.typed:hover {
+  .hl.lean .token.binding-hl, .hl.lean .literal:hover, .hl.lean .token.typed:hover {
     background-color: var(--verso-token-highlight-background-color, #eeeeee);
     border-radius: 2px;
     transition: none;

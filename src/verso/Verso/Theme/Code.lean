@@ -162,6 +162,38 @@ public structure CodeTheme where
   namespace paths a different treatment (often a quieter color).
   -/
   moduleName : TokenStyle := { color := codeColor, weight := .regular, style := .normal, face := codeFace }
+  /--
+  Token styling for built-in syntactic delimiters such as {lit}`:=`, {lit}`=>`, {lit}`←`,
+  {lit}`@`, {lit}`:`, {lit}`|`. CSS class {lit}`.delim`. Cascades from
+  {name (full := CodeTheme.codeColor)}`codeColor`/{name (full := CodeTheme.codeFace)}`codeFace`
+  by default so the unthemed look matches plain code; the three punctuation buckets below
+  ({name (full := CodeTheme.operator)}`operator`, {name (full := CodeTheme.bracket)}`bracket`,
+  {name (full := CodeTheme.separator)}`separator`) cascade from this field, so setting
+  {name (full := CodeTheme.delim)}`delim` re-colors all four at once unless one of the
+  buckets is overridden.
+  -/
+  delim : TokenStyle := { color := codeColor, weight := .regular, style := .normal, face := codeFace }
+  /--
+  Token styling for symbolic operator atoms such as {lit}`+`, {lit}`::`, {lit}`>>=`. CSS
+  class {lit}`.punctuation.operator`. Defaults to
+  {name (full := CodeTheme.delim)}`delim` because most themes group operators with the
+  binding-marker family; themes that treat operators distinctly (Nord paints operators
+  {lit}`nord9`; Dracula leaves brackets plain but colors operators Pink) override this field.
+  -/
+  operator : TokenStyle := delim
+  /--
+  Token styling for paired delimiter atoms such as {lit}`(` {lit}`)`, {lit}`[` {lit}`]`,
+  {lit}`{` {lit}`}`, {lit}`⟨`, {lit}`⟩`. CSS class {lit}`.punctuation.bracket`. Defaults to
+  {name (full := CodeTheme.delim)}`delim`; themes that want brackets in body color while
+  operators carry a syntax-accent override this back to a foreground color.
+  -/
+  bracket : TokenStyle := delim
+  /--
+  Token styling for item-separator atoms such as {lit}`,` and {lit}`;`. CSS class
+  {lit}`.punctuation.separator`. Defaults to {name (full := CodeTheme.delim)}`delim` for the
+  same reason as {name (full := CodeTheme.bracket)}`bracket`.
+  -/
+  separator : TokenStyle := delim
 
   /-- The background of hover popups, diagnostic boxes, and tooltips. -/
   hoverBackground : Color
@@ -307,7 +339,11 @@ private def tokenSummaries (theme : CodeTheme) : Array (String × Color) := #[
     ("level-var", theme.levelVar.color),
     ("level-const", theme.levelConst.color),
     ("level-op", theme.levelOp.color),
-    ("module-name", theme.moduleName.color)
+    ("module-name", theme.moduleName.color),
+    ("delim", theme.delim.color),
+    ("punctuation.operator", theme.operator.color),
+    ("punctuation.bracket", theme.bracket.color),
+    ("punctuation.separator", theme.separator.color)
   ]
 
 /--
@@ -433,6 +469,10 @@ public def cssVariables (theme : CodeTheme) : String :=
     styleDecls "verso-code-level-const" theme.levelConst,
     styleDecls "verso-code-level-op" theme.levelOp,
     styleDecls "verso-code-module-name" theme.moduleName,
+    styleDecls "verso-code-delim" theme.delim,
+    styleDecls "verso-code-operator" theme.operator,
+    styleDecls "verso-code-bracket" theme.bracket,
+    styleDecls "verso-code-separator" theme.separator,
     colorDecl "verso-hover-background-color" theme.hoverBackground,
     colorDecl "verso-hover-border-color" theme.hoverBorderColor,
     colorDecl "verso-hover-text-color" theme.hoverText,
@@ -499,6 +539,10 @@ public def texPreamble (theme : CodeTheme) : String :=
   let levelConstColor := Color.tex theme.levelConst.color
   let levelOpColor := Color.tex theme.levelOp.color
   let moduleNameColor := Color.tex theme.moduleName.color
+  let delimColor := Color.tex theme.delim.color
+  let operatorColor := Color.tex theme.operator.color
+  let bracketColor := Color.tex theme.bracket.color
+  let separatorColor := Color.tex theme.separator.color
   -- Per the structure's semantics, the `*Color` fields are message-text colors and
   -- `*IndicatorColor` are accent colors (underlines, frames, dingbats). Emit both as separate
   -- `\definecolor` entries so the preamble can reference whichever the rule needs.
@@ -521,6 +565,10 @@ public def texPreamble (theme : CodeTheme) : String :=
     s!"\\definecolor\{versoLevelConstColor}\{HTML}\{{levelConstColor}}\n",
     s!"\\definecolor\{versoLevelOpColor}\{HTML}\{{levelOpColor}}\n",
     s!"\\definecolor\{versoModuleNameColor}\{HTML}\{{moduleNameColor}}\n",
+    s!"\\definecolor\{versoDelimColor}\{HTML}\{{delimColor}}\n",
+    s!"\\definecolor\{versoOperatorColor}\{HTML}\{{operatorColor}}\n",
+    s!"\\definecolor\{versoBracketColor}\{HTML}\{{bracketColor}}\n",
+    s!"\\definecolor\{versoSeparatorColor}\{HTML}\{{separatorColor}}\n",
     s!"\\definecolor\{errorColor}\{HTML}\{{errorTextColor}}\n",
     s!"\\definecolor\{warningColor}\{HTML}\{{warningTextColor}}\n",
     s!"\\definecolor\{infoColor}\{HTML}\{{infoTextColor}}\n",
@@ -538,6 +586,10 @@ public def texPreamble (theme : CodeTheme) : String :=
     tokenMacro "LevelConst" theme.levelConst "versoLevelConstColor",
     tokenMacro "LevelOp" theme.levelOp "versoLevelOpColor",
     tokenMacro "ModuleName" theme.moduleName "versoModuleNameColor",
+    tokenMacro "Delim" theme.delim "versoDelimColor",
+    tokenMacro "Operator" theme.operator "versoOperatorColor",
+    tokenMacro "Bracket" theme.bracket "versoBracketColor",
+    tokenMacro "Separator" theme.separator "versoSeparatorColor",
     s!"\\setmonofont\{{theme.codeFace.texFamily}}\n"
   ]
 
@@ -553,7 +605,8 @@ Every {Lean.Doc.name}`Typeface` referenced by a theme. Built-in
 are skipped: only {Lean.Doc.name (full := Typeface.files)}`files` typefaces contribute font assets.
 -/
 public def fileTypefaces (theme : CodeTheme) : Array Typeface :=
-  let faces := #[theme.codeFace, theme.const.face, theme.keyword.face, theme.«var».face]
+  let faces := #[theme.codeFace, theme.const.face, theme.keyword.face, theme.«var».face,
+    theme.delim.face, theme.operator.face, theme.bracket.face, theme.separator.face]
   faces.filter fun
     | .files _ _ => true
     | _ => false

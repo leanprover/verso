@@ -17,3 +17,8 @@ single.json
 *.html
 *.produced.out
 __pycache__
+main.toc
+main.aux
+main.log
+main.out
+main.pdf

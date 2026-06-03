@@ -83,6 +83,10 @@ private def darkCodeBase : CodeTheme :=
   levelConst := { color := text, weight := .regular, style := .normal, face := .mono },
   levelOp := { color := text, weight := .regular, style := .normal, face := .mono },
   moduleName := { color := text, weight := .regular, style := .normal, face := .mono },
+  delim := { color := text, weight := .regular, style := .normal, face := .mono },
+  operator := { color := text, weight := .regular, style := .normal, face := .mono },
+  bracket := { color := text, weight := .regular, style := .normal, face := .mono },
+  separator := { color := text, weight := .regular, style := .normal, face := .mono },
   -- Hover popups read text on a slightly lighter surface.
   hoverBackground := color%#2a2d33,
   hoverText := text,
@@ -402,6 +406,12 @@ code blocks). Token mapping follows Nord's documented hue intent:
 - {lit}`nord7` ("classes, types, and primitives") → {lit}`sort` and {lit}`moduleName`
 - {lit}`nord10` ("pragmas, preprocessor") → {lit}`levelOp` (universe-grammar built-ins)
 - {lit}`nord15` ("numbers, floating-point literals") → {lit}`levelConst`
+- {lit}`nord9` ("operators, support, tags") → {lit}`operator` (symbolic operators like
+  {lit}`+`, {lit}`::`, {lit}`>>=`). The built-in {lit}`delim` family stays on body color:
+  SubVerso bundles type ascription {lit}`:` and pattern alternative {lit}`|` into
+  {lit}`.delim` alongside {lit}`:=`/{lit}`=>`, and applying a syntax accent to every typed
+  binder would be visually heavy. {lit}`bracket` and {lit}`separator` cascade from
+  {lit}`delim` and also land on body color, matching the Nord spec's silence on these.
 -/
 @[manual_theme]
 public def ManualTheme.nord : ManualTheme :=
@@ -432,6 +442,11 @@ public def ManualTheme.nord : ManualTheme :=
       levelConst := { color := nord15, weight := .regular, style := .normal, face := .mono },
       levelOp := { color := nord10, weight := .regular, style := .normal, face := .mono },
       moduleName := { color := nord7, weight := .regular, style := .normal, face := .mono },
+      -- Symbolic operators → nord9, the Nord syntax doc's "operators, support, tags" slot.
+      -- `delim` is left at the body color: it bundles `:` and `|` along with `:=`/`=>`,
+      -- and painting the whole family nord9 would put a syntax accent on every typed binder.
+      -- `bracket` and `separator` cascade from `delim` and so also stay on nord4.
+      operator := { color := nord9, weight := .regular, style := .normal, face := .mono },
       hoverBackground := nord2,
       hoverText := nord4,
       hoverBorderColor := nord3,
@@ -512,7 +527,11 @@ public def ManualTheme.nordLight : ManualTheme where
     levelVar := { color := nord3, weight := .regular, style := .italic, face := .mono },
     levelConst := { color := nord15, weight := .regular, style := .normal, face := .mono },
     levelOp := { color := nord10, weight := .regular, style := .normal, face := .mono },
-    moduleName := { color := nord7, weight := .regular, style := .normal, face := .mono }
+    moduleName := { color := nord7, weight := .regular, style := .normal, face := .mono },
+    -- Symbolic operators → nord9 (the Nord syntax doc's "operators, support, tags" slot).
+    -- See `ManualTheme.nord` for the rationale that keeps `delim` on body color rather than
+    -- accenting it.
+    operator := { color := nord9, weight := .regular, style := .normal, face := .mono }
   }
   surfaceColor := nord5
   tocBackground := nord5
@@ -532,18 +551,31 @@ open Color.Palettes.DraculaClassic in
 Dracula: the canonical dark Dracula palette from the official spec. Token mapping follows
 the spec's documented hue roles:
 
-- Pink: keywords ({lit}`def`, {lit}`theorem`, …).
-- Green: function and definition names ({lit}`const` tokens) — Dracula's "functions, methods,
-  inherited classes" slot.
-- Cyan: module / namespace paths ({lit}`Foo.Bar` in {lit}`import` lines).
-- Purple: universe-grammar reserved words and operators — {lit}`Type`, {lit}`Prop`,
-  {lit}`Sort`, {lit}`max`, {lit}`imax`, {lit}`+`. Matches Dracula's "instance reserved words"
-  category.
-- Yellow: string literals.
-- Orange: numeric literals (currently surfaced via the boolean {lit}`extraCss` override below;
-  integer literals join once SubVerso tags numbers).
-- Red: error states.
-- Comment: doc comments.
+- Pink ("Keywords, Storage Types"): {lit}`keyword`, the symbolic-operator bucket
+  {lit}`operator` ({lit}`+`, {lit}`::`, {lit}`>>=`, …), and the universe operators
+  {lit}`max` / {lit}`imax` / {lit}`+` via {lit}`levelOp`. Built-in delimiters are *not*
+  painted Pink because SubVerso's {lit}`delim` kind also covers the type-ascription
+  {lit}`:` and the pattern-alternative {lit}`|`; applying a syntax accent there would
+  cost every typed binder a heavy color, which no Dracula port does.
+- Cyan ("Classes, Types, Support, Regular Expressions"): {lit}`sort` ({lit}`Type`,
+  {lit}`Prop`, {lit}`Sort u`) and {lit}`moduleName` (namespace paths in {lit}`import` lines).
+- Green ("Functions, Methods, Inherited Classes"): {lit}`const` — Lean's named-constant
+  references are largely function and definition names.
+- Yellow ("Strings, Text Content"): {lit}`literalString`.
+- Orange ("Numbers, Constants, Booleans"): {lit}`levelConst` (universe numerals) and the
+  boolean {lit}`Bool.true` / {lit}`Bool.false` (surfaced through {lit}`extraCss` for now;
+  integer literals join once SubVerso gains a {lit}`literal.number` field).
+- Red ("Errors, Warnings, Deletions"): {lit}`errorColor` / {lit}`errorIndicatorColor`.
+- Comment ("Comments and disabled code"): {lit}`docComment`.
+- Foreground: bound variables ({lit}`var`, {lit}`levelVar`), the built-in delimiter family
+  ({lit}`delim` — {lit}`:=`, {lit}`=>`, {lit}`:`, {lit}`|`, …), and the {lit}`bracket` /
+  {lit}`separator` punctuation buckets, since the Dracula spec does not assign a syntax
+  color to any of these and SubVerso's {lit}`.delim` is too coarse to single out the
+  binding-marker subset.
+
+Purple ("Instance reserved words and Constants") has no Lean syntax analog (no "instance
+reserved words"; the constants slot is already covered by {lit}`const` on Green), so the
+palette uses it as a chrome accent for visited links rather than for any token kind.
 -/
 @[manual_theme]
 public def ManualTheme.dracula : ManualTheme :=
@@ -581,17 +613,25 @@ public def ManualTheme.dracula : ManualTheme :=
     «var».color := foreground,
     literalString.color := yellow,
     docComment.color := comment,
-    -- Universe grammar: sort formers and their operators share Purple, Dracula's
-    -- "instance reserved words" slot. `Type`, `Prop`, `Sort u`, `max`, `imax`, and `+`
-    -- (universe-level) all land on the same color so they read as one syntactic family.
-    sort := { color := purple, weight := .regular, style := .normal, face := .mono },
-    levelOp := { color := purple, weight := .regular, style := .normal, face := .mono },
+    -- Sort formers (`Type`, `Prop`, `Sort u`) → Cyan, the spec's "Classes, Types, Support"
+    -- slot.
+    sort := { color := cyan, weight := .regular, style := .normal, face := .mono },
+    -- Universe operators (`max`, `imax`, `+` at the level grammar) → Pink, joining the
+    -- "Keywords, Storage Types" / operator family.
+    levelOp := { color := pink, weight := .regular, style := .normal, face := .mono },
     -- Universe variables stay quiet (parallel to value-level `var`): body text, italic.
     levelVar := { color := foreground, weight := .regular, style := .italic, face := .mono },
     -- Numeric universe constants get the Orange "numbers" slot.
     levelConst := { color := orange, weight := .regular, style := .normal, face := .mono },
     -- Namespace paths land on Cyan ("classes, types, support").
     moduleName := { color := cyan, weight := .regular, style := .normal, face := .mono },
+    -- Symbolic operators (`+`, `::`, `>>=`, …) → Pink, joining the "Keywords, Storage Types"
+    -- family. `delim` stays on the body foreground (cascade default) because SubVerso bundles
+    -- `:` and `|` into `.delim` alongside `:=`/`=>`, and painting every typed binder Pink
+    -- would be too heavy; `bracket` and `separator` cascade from `delim` and so also land on
+    -- foreground, matching Dracula's convention of leaving brackets and item separators
+    -- unstyled.
+    operator := { color := pink, weight := .regular, style := .normal, face := .mono },
     -- The Dracula spec gives Orange to "numbers, constants, booleans". Verso doesn't yet have
     -- a numeric-literal kind from the highlighter, but the `const` tokens for `Bool.true` and
     -- `Bool.false` carry a `data-binding` attribute the highlighter emits, so a CSS attribute
@@ -652,13 +692,19 @@ public def ManualTheme.alucard : ManualTheme where
     «var».color := foreground,
     literalString.color := yellow,
     docComment.color := comment,
-    -- Universe grammar: same Purple-grouped mapping as the dark Dracula. See that def for
-    -- the rationale.
-    sort := { color := purple, weight := .regular, style := .normal, face := .mono },
-    levelOp := { color := purple, weight := .regular, style := .normal, face := .mono },
+    -- Sort formers (`Type`, `Prop`, `Sort u`) → Cyan, the spec's "Classes, Types, Support"
+    -- slot. See `ManualTheme.dracula` for the rationale shared with the dark variant.
+    sort := { color := cyan, weight := .regular, style := .normal, face := .mono },
+    -- Universe operators (`max`, `imax`, `+`) → Pink, the spec's keyword/operator family.
+    levelOp := { color := pink, weight := .regular, style := .normal, face := .mono },
     levelVar := { color := foreground, weight := .regular, style := .italic, face := .mono },
     levelConst := { color := orange, weight := .regular, style := .normal, face := .mono },
     moduleName := { color := cyan, weight := .regular, style := .normal, face := .mono },
+    -- Symbolic operators → Pink; `delim`, `bracket`, and `separator` stay on body
+    -- foreground. See `ManualTheme.dracula` for the rationale (SubVerso's `.delim` is too
+    -- coarse to single out binding markers, so painting the whole bucket would also paint
+    -- every type-ascription `:`).
+    operator := { color := pink, weight := .regular, style := .normal, face := .mono },
     -- Same boolean-orange trick as the dark variant; see the Dracula def for the rationale.
     extraCss := fun _ =>
       ".hl.lean .const[data-binding=\"const-Bool.true\"],\n" ++

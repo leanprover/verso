@@ -134,6 +134,10 @@ title={#2},#1}
 \providecommand{\versoLevelConst}[1]{#1}
 \providecommand{\versoLevelOp}[1]{#1}
 \providecommand{\versoModuleName}[1]{#1}
+\providecommand{\versoDelim}[1]{#1}
+\providecommand{\versoOperator}[1]{#1}
+\providecommand{\versoBracket}[1]{#1}
+\providecommand{\versoSeparator}[1]{#1}
 \definecolor{versoCodeColor}{HTML}{000000}
 \definecolor{versoConstColor}{HTML}{000000}
 \definecolor{versoKeywordColor}{HTML}{000000}
@@ -146,6 +150,10 @@ title={#2},#1}
 \definecolor{versoLevelConstColor}{HTML}{000000}
 \definecolor{versoLevelOpColor}{HTML}{000000}
 \definecolor{versoModuleNameColor}{HTML}{000000}
+\definecolor{versoDelimColor}{HTML}{000000}
+\definecolor{versoOperatorColor}{HTML}{000000}
+\definecolor{versoBracketColor}{HTML}{000000}
+\definecolor{versoSeparatorColor}{HTML}{000000}
 \definecolor{errorColor}{HTML}{CC0000}
 \definecolor{warningColor}{HTML}{000000}
 \definecolor{infoColor}{HTML}{000000}
@@ -163,6 +171,10 @@ title={#2},#1}
 \renewcommand{\versoLevelConst}[1]{\textcolor{versoLevelConstColor}{\fontseries{m}\fontshape{n}\selectfont #1}}
 \renewcommand{\versoLevelOp}[1]{\textcolor{versoLevelOpColor}{\fontseries{m}\fontshape{n}\selectfont #1}}
 \renewcommand{\versoModuleName}[1]{\textcolor{versoModuleNameColor}{\fontseries{m}\fontshape{n}\selectfont #1}}
+\renewcommand{\versoDelim}[1]{\textcolor{versoDelimColor}{\fontseries{m}\fontshape{n}\selectfont #1}}
+\renewcommand{\versoOperator}[1]{\textcolor{versoOperatorColor}{\fontseries{m}\fontshape{n}\selectfont #1}}
+\renewcommand{\versoBracket}[1]{\textcolor{versoBracketColor}{\fontseries{m}\fontshape{n}\selectfont #1}}
+\renewcommand{\versoSeparator}[1]{\textcolor{versoSeparatorColor}{\fontseries{m}\fontshape{n}\selectfont #1}}
 \setmonofont{DejaVu Sans Mono}
 
 \title{\sffamily Title of the Doc}
@@ -183,72 +195,72 @@ title={#2},#1}
 \cleardoublepage
 Here is some code with vertical bars:
 \begin{LeanVerbatim}
-\versoKeyword{def} \versoConst{or} \versoLiteral{:=} \versoLiteral{(}\versoLiteral{·} \versoLiteral{\symbol{124}\symbol{124}} \versoLiteral{·}\versoLiteral{)}
+\versoKeyword{def} \versoConst{or} \versoDelim{:=} \versoBracket{(}\versoVar{·} \versoOperator{\symbol{124}\symbol{124}} \versoVar{·}\versoBracket{)}
 \versoLiteral{}
 \end{LeanVerbatim}
 
 Here is some with a variety of interesting Unicode, including characters where UTF-16 is funky:
 \begin{LeanVerbatim}
-\versoKeyword{def} \versoConst{Set} \versoLiteral{(}\versoVar{α} \versoLiteral{:} \versoSort{Type} \versoLevelVar{u}\versoLiteral{)} \versoLiteral{:} \versoSort{Type} \versoLevelVar{u} \versoLiteral{:=} \versoVar{α} \versoLiteral{→} \versoSort{Prop}
+\versoKeyword{def} \versoConst{Set} \versoBracket{(}\versoVar{α} \versoDelim{:} \versoSort{Type} \versoLevelVar{u}\versoBracket{)} \versoDelim{:} \versoSort{Type} \versoLevelVar{u} \versoDelim{:=} \versoVar{α} \versoOperator{→} \versoSort{Prop}
 
-\versoKeyword{instance} \versoLiteral{:} \versoConst{EmptyCollection} \versoLiteral{(}\versoConst{Set} \versoVar{α}\versoLiteral{)} \versoKeyword{where}
-  \versoConst{emptyCollection} \versoLiteral{:=} \versoKeyword{fun} \versoLiteral{_} \versoLiteral{=>} \versoConst{False}
+\versoKeyword{instance} \versoDelim{:} \versoConst{EmptyCollection} \versoBracket{(}\versoConst{Set} \versoVar{α}\versoBracket{)} \versoKeyword{where}
+  \versoConst{emptyCollection} \versoDelim{:=} \versoKeyword{fun} \versoLiteral{_} \versoDelim{=>} \versoConst{False}
 
-\versoKeyword{instance} \versoLiteral{:} \versoConst{Union} \versoLiteral{(}\versoConst{Set} \versoVar{α}\versoLiteral{)} \versoKeyword{where}
-  \versoConst{union} \versoVar{a} \versoVar{b} \versoLiteral{:=} \versoKeyword{fun} \versoVar{x} \versoLiteral{=>} \versoVar{a} \versoVar{x} \versoLiteral{∨} \versoVar{b} \versoVar{x}
+\versoKeyword{instance} \versoDelim{:} \versoConst{Union} \versoBracket{(}\versoConst{Set} \versoVar{α}\versoBracket{)} \versoKeyword{where}
+  \versoConst{union} \versoVar{a} \versoVar{b} \versoDelim{:=} \versoKeyword{fun} \versoVar{x} \versoDelim{=>} \versoVar{a} \versoVar{x} \versoOperator{∨} \versoVar{b} \versoVar{x}
 
-\versoKeyword{instance} \versoLiteral{:} \versoConst{Inter} \versoLiteral{(}\versoConst{Set} \versoVar{α}\versoLiteral{)} \versoKeyword{where}
-  \versoConst{inter} \versoVar{a} \versoVar{b} \versoLiteral{:=} \versoKeyword{fun} \versoVar{x} \versoLiteral{=>} \versoVar{a} \versoVar{x} \versoLiteral{∧} \versoVar{b} \versoVar{x}
+\versoKeyword{instance} \versoDelim{:} \versoConst{Inter} \versoBracket{(}\versoConst{Set} \versoVar{α}\versoBracket{)} \versoKeyword{where}
+  \versoConst{inter} \versoVar{a} \versoVar{b} \versoDelim{:=} \versoKeyword{fun} \versoVar{x} \versoDelim{=>} \versoVar{a} \versoVar{x} \versoOperator{∧} \versoVar{b} \versoVar{x}
 
-\versoKeyword{instance} \versoLiteral{:} \versoConst{Membership} \versoVar{α} \versoLiteral{(}\versoConst{Set} \versoVar{α}\versoLiteral{)} \versoKeyword{where}
-  \versoConst{mem} \versoVar{a} \versoVar{x} \versoLiteral{:=} \versoVar{a} \versoVar{x}
+\versoKeyword{instance} \versoDelim{:} \versoConst{Membership} \versoVar{α} \versoBracket{(}\versoConst{Set} \versoVar{α}\versoBracket{)} \versoKeyword{where}
+  \versoConst{mem} \versoVar{a} \versoVar{x} \versoDelim{:=} \versoVar{a} \versoVar{x}
 
-\versoLiteral{@[}\versoKeyword{ext}\versoLiteral{]}
-\versoKeyword{theorem} \versoConst{Set.ext} \versoLiteral{\symbol{123}}\versoVar{a} \versoVar{b} \versoLiteral{:} \versoConst{Set} \versoVar{α}\versoLiteral{\symbol{125}} \versoLiteral{:}
-    \versoLiteral{(}\versoLiteral{∀} \versoVar{x}\versoLiteral{,} \versoVar{x} \versoLiteral{∈} \versoVar{a} \versoLiteral{↔} \versoVar{x} \versoLiteral{∈} \versoVar{b}\versoLiteral{)} \versoLiteral{→} \versoVar{a} \versoLiteral{=} \versoVar{b} \versoLiteral{:=} \versoKeyword{by}
+\versoLiteral{@[}\versoKeyword{ext}\versoBracket{]}
+\versoKeyword{theorem} \versoConst{Set.ext} \versoBracket{\symbol{123}}\versoVar{a} \versoVar{b} \versoDelim{:} \versoConst{Set} \versoVar{α}\versoBracket{\symbol{125}} \versoDelim{:}
+    \versoBracket{(}\versoLiteral{∀} \versoVar{x}\versoSeparator{,} \versoVar{x} \versoOperator{∈} \versoVar{a} \versoOperator{↔} \versoVar{x} \versoOperator{∈} \versoVar{b}\versoBracket{)} \versoOperator{→} \versoVar{a} \versoOperator{=} \versoVar{b} \versoDelim{:=} \versoKeyword{by}
   \versoKeyword{intro} \versoVar{h}
   \versoKeyword{funext} \versoVar{x}
-  \versoKeyword{exact} \versoConst{propext} \versoLiteral{(}\versoVar{h} \versoVar{x}\versoLiteral{)}
+  \versoKeyword{exact} \versoConst{propext} \versoBracket{(}\versoVar{h} \versoVar{x}\versoBracket{)}
 
-\versoKeyword{instance} \versoLiteral{:} \versoConst{HasSubset} \versoLiteral{(}\versoConst{Set} \versoVar{α}\versoLiteral{)} \versoKeyword{where}
-  \versoConst{Subset} \versoVar{a} \versoVar{b} \versoLiteral{:=} \versoLiteral{∀} \versoVar{x}\versoLiteral{,} \versoVar{x} \versoLiteral{∈} \versoVar{a} \versoLiteral{→} \versoVar{x} \versoLiteral{∈} \versoVar{b}
+\versoKeyword{instance} \versoDelim{:} \versoConst{HasSubset} \versoBracket{(}\versoConst{Set} \versoVar{α}\versoBracket{)} \versoKeyword{where}
+  \versoConst{Subset} \versoVar{a} \versoVar{b} \versoDelim{:=} \versoLiteral{∀} \versoVar{x}\versoSeparator{,} \versoVar{x} \versoOperator{∈} \versoVar{a} \versoOperator{→} \versoVar{x} \versoOperator{∈} \versoVar{b}
 
-\versoLiteral{@[}\versoKeyword{simp}\versoLiteral{,} \versoKeyword{grind} \versoLiteral{.}\versoLiteral{]}
-\versoKeyword{theorem} \versoConst{Set.subset_refl} \versoLiteral{\symbol{123}}\versoVar{a} \versoLiteral{:} \versoConst{Set} \versoVar{α}\versoLiteral{\symbol{125}} \versoLiteral{:} \versoVar{a} \versoLiteral{⊆} \versoVar{a} \versoLiteral{:=} \versoKeyword{by}
-  \versoKeyword{simp} \versoLiteral{[}\versoLiteral{(}\versoLiteral{·} \versoLiteral{⊆} \versoLiteral{·}\versoLiteral{)}\versoLiteral{]}
+\versoLiteral{@[}\versoKeyword{simp}\versoSeparator{,} \versoKeyword{grind} \versoDelim{.}\versoBracket{]}
+\versoKeyword{theorem} \versoConst{Set.subset_refl} \versoBracket{\symbol{123}}\versoVar{a} \versoDelim{:} \versoConst{Set} \versoVar{α}\versoBracket{\symbol{125}} \versoDelim{:} \versoVar{a} \versoOperator{⊆} \versoVar{a} \versoDelim{:=} \versoKeyword{by}
+  \versoKeyword{simp} \versoBracket{[}\versoBracket{(}\versoDelim{·} \versoOperator{⊆} \versoDelim{·}\versoBracket{)}\versoBracket{]}
 
-\versoLiteral{@[}\versoKeyword{grind} \versoLiteral{←}\versoLiteral{]}
-\versoKeyword{theorem} \versoConst{Set.subset_union} \versoLiteral{\symbol{123}}\versoVar{a} \versoVar{b} \versoVar{c} \versoLiteral{:} \versoConst{Set} \versoVar{α}\versoLiteral{\symbol{125}} \versoLiteral{:}
-    \versoVar{a} \versoLiteral{⊆} \versoVar{b} \versoLiteral{→} \versoVar{a} \versoLiteral{⊆} \versoVar{b} \versoLiteral{∪} \versoVar{c} \versoLiteral{:=} \versoKeyword{by}
-  \versoKeyword{simp} \versoLiteral{[}\versoLiteral{(}\versoLiteral{·} \versoLiteral{⊆} \versoLiteral{·}\versoLiteral{)}\versoLiteral{,} \versoLiteral{(}\versoLiteral{·} \versoLiteral{∪} \versoLiteral{·}\versoLiteral{)}\versoLiteral{,} \versoLiteral{(}\versoLiteral{·} \versoLiteral{∈} \versoLiteral{·}\versoLiteral{)}\versoLiteral{]}
+\versoLiteral{@[}\versoKeyword{grind} \versoDelim{←}\versoBracket{]}
+\versoKeyword{theorem} \versoConst{Set.subset_union} \versoBracket{\symbol{123}}\versoVar{a} \versoVar{b} \versoVar{c} \versoDelim{:} \versoConst{Set} \versoVar{α}\versoBracket{\symbol{125}} \versoDelim{:}
+    \versoVar{a} \versoOperator{⊆} \versoVar{b} \versoOperator{→} \versoVar{a} \versoOperator{⊆} \versoVar{b} \versoOperator{∪} \versoVar{c} \versoDelim{:=} \versoKeyword{by}
+  \versoKeyword{simp} \versoBracket{[}\versoBracket{(}\versoDelim{·} \versoOperator{⊆} \versoDelim{·}\versoBracket{)}\versoSeparator{,} \versoBracket{(}\versoDelim{·} \versoOperator{∪} \versoDelim{·}\versoBracket{)}\versoSeparator{,} \versoBracket{(}\versoDelim{·} \versoOperator{∈} \versoDelim{·}\versoBracket{)}\versoBracket{]}
   \versoKeyword{intro} \versoVar{h}
   \versoKeyword{solve_by_elim}
 
-\versoKeyword{def} \versoConst{Set.powerset} \versoLiteral{(}\versoVar{a} \versoLiteral{:} \versoConst{Set} \versoVar{α}\versoLiteral{)} \versoLiteral{:} \versoConst{Set} \versoLiteral{(}\versoConst{Set} \versoVar{α}\versoLiteral{)} \versoLiteral{:=}
-  \versoKeyword{fun} \versoLiteral{(}\versoVar{x} \versoLiteral{:} \versoConst{Set} \versoVar{α}\versoLiteral{)} \versoLiteral{=>} \versoVar{x} \versoLiteral{⊆} \versoVar{a}
+\versoKeyword{def} \versoConst{Set.powerset} \versoBracket{(}\versoVar{a} \versoDelim{:} \versoConst{Set} \versoVar{α}\versoBracket{)} \versoDelim{:} \versoConst{Set} \versoBracket{(}\versoConst{Set} \versoVar{α}\versoBracket{)} \versoDelim{:=}
+  \versoKeyword{fun} \versoBracket{(}\versoVar{x} \versoDelim{:} \versoConst{Set} \versoVar{α}\versoBracket{)} \versoDelim{=>} \versoVar{x} \versoOperator{⊆} \versoVar{a}
 
-\versoKeyword{notation} \versoLiteralString{"𝒫 "} \versoVar{x} \versoLiteral{=>} \versoConst{Set.powerset} \versoVar{x}
+\versoKeyword{notation} \versoLiteralString{"𝒫 "} \versoVar{x} \versoDelim{=>} \versoConst{Set.powerset} \versoVar{x}
 
-\versoKeyword{theorem} \versoConst{Set.powerset_empty_nonempty} \versoLiteral{:}
-    \versoLiteral{∃} \versoLiteral{(}\versoVar{a} \versoLiteral{:} \versoConst{Set} \versoVar{α}\versoLiteral{)}\versoLiteral{,} \versoVar{a} \versoLiteral{∈} \versoLiteral{𝒫} \versoLiteral{\symbol{123}}\versoLiteral{\symbol{125}} \versoLiteral{:=} \versoKeyword{by}
+\versoKeyword{theorem} \versoConst{Set.powerset_empty_nonempty} \versoDelim{:}
+    \versoLiteral{∃} \versoBracket{(}\versoVar{a} \versoDelim{:} \versoConst{Set} \versoVar{α}\versoBracket{)}\versoSeparator{,} \versoVar{a} \versoOperator{∈} \versoLiteral{𝒫} \versoBracket{\symbol{123}}\versoBracket{\symbol{125}} \versoDelim{:=} \versoKeyword{by}
   \versoKeyword{constructor}
-  \versoKeyword{case} \versoLiteral{w} \versoLiteral{=>} \versoKeyword{exact} \versoLiteral{\symbol{123}}\versoLiteral{\symbol{125}}
-  \versoKeyword{simp} \versoLiteral{[}\versoLiteral{(}\versoLiteral{·} \versoLiteral{∈} \versoLiteral{·}\versoLiteral{)}\versoLiteral{,} \versoConst{powerset}\versoLiteral{]}
+  \versoKeyword{case} \versoLiteral{w} \versoDelim{=>} \versoKeyword{exact} \versoBracket{\symbol{123}}\versoBracket{\symbol{125}}
+  \versoKeyword{simp} \versoBracket{[}\versoBracket{(}\versoDelim{·} \versoOperator{∈} \versoDelim{·}\versoBracket{)}\versoSeparator{,} \versoConst{powerset}\versoBracket{]}
 
-\versoLiteral{@[}\infoDecorate{\versoKeyword{grind?} \versoLiteral{→}}\versoLiteral{]}
-\versoKeyword{theorem} \versoConst{Set.powerset_empty_unique} \versoLiteral{(}\versoVar{x} \versoVar{y} \versoLiteral{:} \versoConst{Set} \versoVar{α}\versoLiteral{)} \versoLiteral{:}
-    \versoVar{x} \versoLiteral{∈} \versoLiteral{(}\versoLiteral{𝒫} \versoLiteral{\symbol{123}}\versoLiteral{\symbol{125}}\versoLiteral{)} \versoLiteral{→} \versoVar{y} \versoLiteral{∈} \versoLiteral{(}\versoLiteral{𝒫} \versoLiteral{\symbol{123}}\versoLiteral{\symbol{125}}\versoLiteral{)} \versoLiteral{→} \versoVar{x} \versoLiteral{=} \versoVar{y} \versoLiteral{:=} \versoKeyword{by}
+\versoLiteral{@[}\infoDecorate{\versoKeyword{grind?} \versoOperator{→}}\versoBracket{]}
+\versoKeyword{theorem} \versoConst{Set.powerset_empty_unique} \versoBracket{(}\versoVar{x} \versoVar{y} \versoDelim{:} \versoConst{Set} \versoVar{α}\versoBracket{)} \versoDelim{:}
+    \versoVar{x} \versoOperator{∈} \versoBracket{(}\versoLiteral{𝒫} \versoBracket{\symbol{123}}\versoBracket{\symbol{125}}\versoBracket{)} \versoOperator{→} \versoVar{y} \versoOperator{∈} \versoBracket{(}\versoLiteral{𝒫} \versoBracket{\symbol{123}}\versoBracket{\symbol{125}}\versoBracket{)} \versoOperator{→} \versoVar{x} \versoOperator{=} \versoVar{y} \versoDelim{:=} \versoKeyword{by}
   \versoKeyword{intro} \versoVar{hx} \versoVar{hy}
   \versoKeyword{ext} \versoVar{x'}
-  \versoKeyword{exact} \versoLiteral{(}\versoConst{iff_false_right} \versoLiteral{(}\versoVar{hy} \versoVar{x'}\versoLiteral{)}\versoLiteral{)}\versoLiteral{.}\versoConst{mpr} \versoLiteral{(}\versoVar{hx} \versoVar{x'}\versoLiteral{)}
+  \versoKeyword{exact} \versoBracket{(}\versoConst{iff_false_right} \versoBracket{(}\versoVar{hy} \versoVar{x'}\versoBracket{)}\versoBracket{)}\versoDelim{.}\versoConst{mpr} \versoBracket{(}\versoVar{hx} \versoVar{x'}\versoBracket{)}
 \versoLiteral{}
 \end{LeanVerbatim}
 
 And now some inline code:
 \begin{itemize}
-\item \LeanVerb|\versoLiteral{∀}\versoVar{x} \versoVar{y} \versoLiteral{:} \versoConst{Set} \versoLiteral{_}\versoLiteral{,} \versoVar{x} \versoLiteral{∈} \versoLiteral{(}\versoLiteral{(}\versoLiteral{𝒫} \versoVar{x}\versoLiteral{)} \versoLiteral{∪} \versoLiteral{(}\versoLiteral{𝒫} \versoVar{y}\versoLiteral{)}\versoLiteral{)}|
-\item \LeanVerb|\versoConst{true} \versoLiteral{\symbol{124}\symbol{124}} \versoConst{false}|
-\item \LeanVerb|\versoConst{False} \versoLiteral{→} \versoConst{True}|
+\item \LeanVerb|\versoLiteral{∀}\versoVar{x} \versoVar{y} \versoDelim{:} \versoConst{Set} \versoLiteral{_}\versoSeparator{,} \versoVar{x} \versoOperator{∈} \versoBracket{(}\versoBracket{(}\versoLiteral{𝒫} \versoVar{x}\versoBracket{)} \versoOperator{∪} \versoBracket{(}\versoLiteral{𝒫} \versoVar{y}\versoBracket{)}\versoBracket{)}|
+\item \LeanVerb|\versoConst{true} \versoOperator{\symbol{124}\symbol{124}} \versoConst{false}|
+\item \LeanVerb|\versoConst{False} \versoOperator{→} \versoConst{True}|
 
 \end{itemize}
 

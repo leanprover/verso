@@ -25,11 +25,11 @@ public def codeSampleHtml : String :=
   "<span class=\"keyword\">def</span> " ++
   "<span class=\"const\">greet</span> " ++
   "<span class=\"var\">name</span> " ++
-  "<span class=\"unknown\">:=</span> " ++
+  "<span class=\"delim\">:=</span> " ++
   "<span class=\"keyword\">s!</span>" ++
-  "<span class=\"literal\">&quot;Hello, {</span>" ++
+  "<span class=\"literal string\">&quot;Hello, {</span>" ++
   "<span class=\"var\">name</span>" ++
-  "<span class=\"literal\">}&quot;</span>" ++
+  "<span class=\"literal string\">}&quot;</span>" ++
   "</code>"
 
 end Verso.Genre.Manual.Theme

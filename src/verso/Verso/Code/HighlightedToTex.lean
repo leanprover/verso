@@ -40,6 +40,25 @@ public def highlightToken : String → Token.Kind → TeX
 | c, .moduleName _ => .raw s!"\\versoModuleName\{{c}}"
 | c, .levelOp _ => .raw s!"\\versoLevelOp\{{c}}"
 | c, .withType _ => .raw s!"\\versoLiteral\{{c}}"
+-- Built-in delimiters (`:=`, `=>`, `←`, `@`, `:`, `|`) and the three punctuation buckets
+-- (operator / bracket / separator) each get their own semantic macro; the manual preamble
+-- ties them to `delim`/`operator`/`bracket`/`separator` `TokenStyle` fields, which by
+-- default cascade from `delim` and thus from the body code color.
+| c, .delim .. => .raw s!"\\versoDelim\{{c}}"
+| c, .operator .. => .raw s!"\\versoOperator\{{c}}"
+| c, .bracket .. => .raw s!"\\versoBracket\{{c}}"
+| c, .separator .. => .raw s!"\\versoSeparator\{{c}}"
+-- The remaining lexical-ish kinds added by SubVerso (wildcard, num, char, line/block
+-- comments, comment delimiter) currently route through `\versoLiteral` so PDF output keeps
+-- the "default to the unknown/code appearance" semantics the HTML side gives them via its
+-- lexical-default CSS rule. They are likely to gain their own theme buckets (numbers,
+-- characters, comments) in a later phase.
+| c, .wildcard .. => .raw s!"\\versoLiteral\{{c}}"
+| c, .num .. => .raw s!"\\versoLiteral\{{c}}"
+| c, .char .. => .raw s!"\\versoLiteral\{{c}}"
+| c, .lineComment => .raw s!"\\versoLiteral\{{c}}"
+| c, .blockComment => .raw s!"\\versoLiteral\{{c}}"
+| c, .commentDelim => .raw s!"\\versoLiteral\{{c}}"
 | c, .unknown => .raw s!"\\versoLiteral\{{c}}"
 
 /--
@@ -60,7 +79,11 @@ public def texMacroFallbacks : String :=
 "\\providecommand{\\versoLevelVar}[1]{\\textit{#1}}\n" ++
 "\\providecommand{\\versoLevelConst}[1]{#1}\n" ++
 "\\providecommand{\\versoLevelOp}[1]{#1}\n" ++
-"\\providecommand{\\versoModuleName}[1]{#1}\n"
+"\\providecommand{\\versoModuleName}[1]{#1}\n" ++
+"\\providecommand{\\versoDelim}[1]{#1}\n" ++
+"\\providecommand{\\versoOperator}[1]{#1}\n" ++
+"\\providecommand{\\versoBracket}[1]{#1}\n" ++
+"\\providecommand{\\versoSeparator}[1]{#1}\n"
 
 defmethod Highlighting.Token.toVerbatimTeX (t : Highlighting.Token) (lineBreaks : Bool := false) : Verso.Output.TeX :=
   highlightToken (escapeForVerbatim t.content lineBreaks) t.kind

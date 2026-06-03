@@ -413,7 +413,11 @@ defmethod Token.Kind.hover? (tok : Token.Kind) : HighlightHtmlM g (Option Nat) :
     | none => some <$> addHover {{ <code>{{type}}</code> }}
   | .str s =>
     some <$> addHover {{ <code><span class="literal string">{{s.quote}}</span>" : String"</code>}}
+  | .char c =>
+    some <$> addHover {{ <code><span class="literal char">{{s!"{repr c}"}}</span>" : Char"</code>}}
   | .withType t =>
+    some <$> addHover {{ <code>{{t}}</code> }}
+  | .num (some t) _ =>
     some <$> addHover {{ <code>{{t}}</code> }}
   | .sort (some doc) =>
     some <$> addHover {{<code class="docstring">{{doc}}</code>}}
@@ -745,6 +749,56 @@ public def highlightingStyle : String := "
   font-family: var(--verso-code-module-name-font-family, var(--verso-code-font-family,));
 }
 
+/* The lexically-classified token kinds added by SubVerso (anon-ctor, number, char, comment,
+   wildcard) default to the unthemed `.unknown` appearance. The themeable rules above already
+   cover the semantic kinds (`.literal`, `.doc-comment`, etc.) and win when both apply (e.g.
+   `.anon-ctor` also carries `.const`; a number nested inside a literal span is still themed
+   by `.literal`). Future phases may introduce dedicated theme buckets for numbers, characters,
+   and comments. */
+.hl.lean .anon-ctor,
+.hl.lean .number,
+.hl.lean .char,
+.hl.lean .comment,
+.hl.lean .wildcard {
+  color: var(--verso-code-color,);
+  font-weight: normal;
+  font-style: normal;
+  font-family: var(--verso-code-font-family,);
+}
+
+/* `.delim` is the built-in syntactic delimiter family (`:=`, `=>`, `←`, `@`, `:`, `|`). The
+   three punctuation buckets — `.punctuation.operator`, `.punctuation.bracket`,
+   `.punctuation.separator` — are themed independently below; their CSS variables resolve
+   per-theme to either the cascade default (delim's color) or an explicit override. */
+.hl.lean .delim {
+  color: var(--verso-code-delim-color, var(--verso-code-color,));
+  font-weight: var(--verso-code-delim-weight, normal);
+  font-style: var(--verso-code-delim-style, normal);
+  font-family: var(--verso-code-delim-font-family, var(--verso-code-font-family,));
+}
+
+.hl.lean .punctuation.operator {
+  color: var(--verso-code-operator-color, var(--verso-code-color,));
+  font-weight: var(--verso-code-operator-weight, normal);
+  font-style: var(--verso-code-operator-style, normal);
+  font-family: var(--verso-code-operator-font-family, var(--verso-code-font-family,));
+}
+
+.hl.lean .punctuation.bracket {
+  color: var(--verso-code-bracket-color, var(--verso-code-color,));
+  font-weight: var(--verso-code-bracket-weight, normal);
+  font-style: var(--verso-code-bracket-style, normal);
+  font-family: var(--verso-code-bracket-font-family, var(--verso-code-font-family,));
+}
+
+.hl.lean .punctuation.separator {
+  color: var(--verso-code-separator-color, var(--verso-code-color,));
+  font-weight: var(--verso-code-separator-weight, normal);
+  font-style: var(--verso-code-separator-style, normal);
+  font-family: var(--verso-code-separator-font-family, var(--verso-code-font-family,));
+}
+
+
 .hover-container {
   width: 0;
   height: 0;
@@ -827,7 +881,7 @@ public def highlightingStyle : String := "
 }
 
 @media (hover: hover) {
-  .hl.lean .token.binding-hl, .hl.lean .literal.string:hover, .hl.lean .token.typed:hover {
+  .hl.lean .token.binding-hl, .hl.lean .literal:hover, .hl.lean .token.typed:hover {
     background-color: var(--verso-token-highlight-background-color, #eeeeee);
     border-radius: 2px;
     transition: none;
