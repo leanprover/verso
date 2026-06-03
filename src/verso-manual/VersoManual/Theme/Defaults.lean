@@ -87,6 +87,10 @@ private def darkCodeBase : CodeTheme :=
   operator := { color := text, weight := .regular, style := .normal, face := .mono },
   bracket := { color := text, weight := .regular, style := .normal, face := .mono },
   separator := { color := text, weight := .regular, style := .normal, face := .mono },
+  literalNumber := { color := text, weight := .regular, style := .normal, face := .mono },
+  literalChar := { color := text, weight := .regular, style := .normal, face := .mono },
+  comment := { color := text, weight := .regular, style := .normal, face := .mono },
+  commentDelim := { color := text, weight := .regular, style := .normal, face := .mono },
   -- Hover popups read text on a slightly lighter surface.
   hoverBackground := color%#2a2d33,
   hoverText := text,
@@ -219,6 +223,10 @@ public def ManualTheme.beaconLight : ManualTheme :=
     «var» := { color := vermillion, weight := .regular, style := .italic, face := .mono },
     literal := { color := Color.black, weight := .regular, style := .normal, face := .mono },
     literalString := { color := reddishPurple, weight := .regular, style := .normal, face := .mono },
+    -- Per the docstring's "orange → numeric literals": real number literals get orange too,
+    -- not just `levelConst`. Character literals share the string hue.
+    literalNumber := { color := orange, weight := .regular, style := .normal, face := .mono },
+    literalChar := { color := reddishPurple, weight := .regular, style := .normal, face := .mono },
     docComment := { color := Color.black, weight := .regular, style := .italic, face := .mono },
     sort := { color := vermillion, weight := .bold, style := .normal, face := .mono },
     levelVar := { color := vermillion, weight := .regular, style := .italic, face := .mono },
@@ -247,6 +255,9 @@ public def ManualTheme.beaconDark : ManualTheme :=
     const := { color := bluishGreen, weight := .regular, style := .normal, face := .mono },
     «var» := { color := orange, weight := .regular, style := .italic, face := .mono },
     literalString := { color := yellow, weight := .regular, style := .normal, face := .mono },
+    -- Pair real number literals with `levelConst` on yellow; characters share the string hue.
+    literalNumber := { color := yellow, weight := .regular, style := .normal, face := .mono },
+    literalChar := { color := yellow, weight := .regular, style := .normal, face := .mono },
     sort := { color := reddishPurple, weight := .bold, style := .normal, face := .mono },
     levelVar := { color := orange, weight := .regular, style := .italic, face := .mono },
     levelConst := { color := yellow, weight := .regular, style := .normal, face := .mono },
@@ -310,11 +321,27 @@ public def ManualTheme.solarizedLight : ManualTheme :=
       «var» := { color := violet, weight := .regular, style := .italic, face := .mono },
       literal := { color := base00, weight := .regular, style := .normal, face := .mono },
       literalString := { color := cyan, weight := .regular, style := .normal, face := .mono },
+      -- Numbers and characters → cyan, matching Solarized vim's `Number`/`Character` mapping
+      -- (the `Constant` family). Operator → green (links to `Statement`).
+      literalNumber := { color := cyan, weight := .regular, style := .normal, face := .mono },
+      literalChar := { color := cyan, weight := .regular, style := .normal, face := .mono },
+      operator := { color := green, weight := .regular, style := .normal, face := .mono },
+      -- `delim`/`bracket`/`separator` are spelled out at base00 (Solarized Light's body
+      -- code color). Without these, `CodeTheme.ink with` would leave them frozen at Ink's
+      -- black `codeColor`.
+      delim := { color := base00, weight := .regular, style := .normal, face := .mono },
+      bracket := { color := base00, weight := .regular, style := .normal, face := .mono },
+      separator := { color := base00, weight := .regular, style := .normal, face := .mono },
       docComment := { color := base1, weight := .regular, style := .italic, face := .mono },
+      -- Comments → base1, Solarized's documented "secondary content" shade on the light
+      -- substrate. This is intentionally sub-AA per the spec (Schoonover's contrast trade-off
+      -- to background-out commentary); the per-theme accessibility check flags it.
+      comment := { color := base1, weight := .regular, style := .italic, face := .mono },
+      commentDelim := { color := base1, weight := .regular, style := .italic, face := .mono },
       sort := { color := yellow, weight := .regular, style := .normal, face := .mono },
       levelVar := { color := violet, weight := .regular, style := .italic, face := .mono },
-      levelConst := { color := orange, weight := .regular, style := .normal, face := .mono },
-      levelOp := { color := magenta, weight := .regular, style := .normal, face := .mono },
+      levelConst := { color := cyan, weight := .regular, style := .normal, face := .mono },
+      levelOp := { color := green, weight := .regular, style := .normal, face := .mono },
       moduleName := { color := magenta, weight := .regular, style := .normal, face := .mono }
     },
     surfaceColor := base2,
@@ -371,11 +398,24 @@ public def ManualTheme.solarizedDark : ManualTheme :=
     «var» := { color := violet, weight := .regular, style := .italic, face := .mono },
     literal := { color := base0, weight := .regular, style := .normal, face := .mono },
     literalString := { color := cyan, weight := .regular, style := .normal, face := .mono },
+    -- Spec-aligned: cyan for Number/Character, green for Operator. See `solarizedLight`
+    -- for the same role rationale.
+    literalNumber := { color := cyan, weight := .regular, style := .normal, face := .mono },
+    literalChar := { color := cyan, weight := .regular, style := .normal, face := .mono },
+    operator := { color := green, weight := .regular, style := .normal, face := .mono },
+    -- `delim`/`bracket`/`separator` spelled out at base0 (Solarized Dark's body code
+    -- color). `darkCodeBase with` leaves them at the generic dark base's `#e8e8e8`
+    -- otherwise — readable but off-palette.
+    delim := { color := base0, weight := .regular, style := .normal, face := .mono },
+    bracket := { color := base0, weight := .regular, style := .normal, face := .mono },
+    separator := { color := base0, weight := .regular, style := .normal, face := .mono },
     docComment := { color := base01, weight := .regular, style := .italic, face := .mono },
+    comment := { color := base01, weight := .regular, style := .italic, face := .mono },
+    commentDelim := { color := base01, weight := .regular, style := .italic, face := .mono },
     sort := { color := yellow, weight := .regular, style := .normal, face := .mono },
     levelVar := { color := violet, weight := .regular, style := .italic, face := .mono },
-    levelConst := { color := orange, weight := .regular, style := .normal, face := .mono },
-    levelOp := { color := magenta, weight := .regular, style := .normal, face := .mono },
+    levelConst := { color := cyan, weight := .regular, style := .normal, face := .mono },
+    levelOp := { color := green, weight := .regular, style := .normal, face := .mono },
     moduleName := { color := magenta, weight := .regular, style := .normal, face := .mono }
   } with
     -- Solarized-tinted chrome instead of the generic dark-chrome accents.
@@ -443,10 +483,21 @@ public def ManualTheme.nord : ManualTheme :=
       levelOp := { color := nord10, weight := .regular, style := .normal, face := .mono },
       moduleName := { color := nord7, weight := .regular, style := .normal, face := .mono },
       -- Symbolic operators → nord9, the Nord syntax doc's "operators, support, tags" slot.
-      -- `delim` is left at the body color: it bundles `:` and `|` along with `:=`/`=>`,
-      -- and painting the whole family nord9 would put a syntax accent on every typed binder.
-      -- `bracket` and `separator` cascade from `delim` and so also stay on nord4.
+      -- `delim`, `bracket`, and `separator` ride on nord4 (the body color): `.delim` bundles
+      -- `:` and `|` with `:=`/`=>`, and painting them nord9 would put a syntax accent on every
+      -- typed binder. These are spelled out because `CodeTheme.ink with` doesn't re-evaluate
+      -- the cascade defaults — they'd otherwise stay frozen at Ink's black `codeColor`.
+      delim := { color := nord4, weight := .regular, style := .normal, face := .mono },
       operator := { color := nord9, weight := .regular, style := .normal, face := .mono },
+      bracket := { color := nord4, weight := .regular, style := .normal, face := .mono },
+      separator := { color := nord4, weight := .regular, style := .normal, face := .mono },
+      -- Per the Nord syntax doc: nord15 ("numbers, floating-point literals") → numbers;
+      -- chars share nord14 with strings (no separate slot); nord3 ("comments / indent
+      -- guides") → ordinary line and block comments and their delimiters.
+      literalNumber := { color := nord15, weight := .regular, style := .normal, face := .mono },
+      literalChar := { color := nord14, weight := .regular, style := .normal, face := .mono },
+      comment := { color := nord3, weight := .regular, style := .normal, face := .mono },
+      commentDelim := { color := nord3, weight := .regular, style := .normal, face := .mono },
       hoverBackground := nord2,
       hoverText := nord4,
       hoverBorderColor := nord3,
@@ -529,9 +580,18 @@ public def ManualTheme.nordLight : ManualTheme where
     levelOp := { color := nord10, weight := .regular, style := .normal, face := .mono },
     moduleName := { color := nord7, weight := .regular, style := .normal, face := .mono },
     -- Symbolic operators → nord9 (the Nord syntax doc's "operators, support, tags" slot).
-    -- See `ManualTheme.nord` for the rationale that keeps `delim` on body color rather than
-    -- accenting it.
-    operator := { color := nord9, weight := .regular, style := .normal, face := .mono }
+    -- `delim`/`bracket`/`separator` ride on nord0 (the body code color). See
+    -- `ManualTheme.nord` for the rationale and the `with`-doesn't-re-evaluate-defaults note.
+    delim := { color := nord0, weight := .regular, style := .normal, face := .mono },
+    operator := { color := nord9, weight := .regular, style := .normal, face := .mono },
+    bracket := { color := nord0, weight := .regular, style := .normal, face := .mono },
+    separator := { color := nord0, weight := .regular, style := .normal, face := .mono },
+    -- Same per-spec role assignments as the dark variant: nord15 numbers, nord14 chars,
+    -- nord3 comments.
+    literalNumber := { color := nord15, weight := .regular, style := .normal, face := .mono },
+    literalChar := { color := nord14, weight := .regular, style := .normal, face := .mono },
+    comment := { color := nord3, weight := .regular, style := .normal, face := .mono },
+    commentDelim := { color := nord3, weight := .regular, style := .normal, face := .mono }
   }
   surfaceColor := nord5
   tocBackground := nord5
@@ -561,12 +621,14 @@ the spec's documented hue roles:
   {lit}`Prop`, {lit}`Sort u`) and {lit}`moduleName` (namespace paths in {lit}`import` lines).
 - Green ("Functions, Methods, Inherited Classes"): {lit}`const` — Lean's named-constant
   references are largely function and definition names.
-- Yellow ("Strings, Text Content"): {lit}`literalString`.
-- Orange ("Numbers, Constants, Booleans"): {lit}`levelConst` (universe numerals) and the
-  boolean {lit}`Bool.true` / {lit}`Bool.false` (surfaced through {lit}`extraCss` for now;
-  integer literals join once SubVerso gains a {lit}`literal.number` field).
+- Yellow ("Strings, Text Content"): {lit}`literalString` and {lit}`literalChar` (the
+  Dracula spec does not give characters a separate slot).
+- Orange ("Numbers, Constants, Booleans"): {lit}`literalNumber`, {lit}`levelConst` (universe
+  numerals), and the boolean {lit}`Bool.true` / {lit}`Bool.false` (still surfaced through
+  {lit}`extraCss` until SubVerso classifies booleans).
 - Red ("Errors, Warnings, Deletions"): {lit}`errorColor` / {lit}`errorIndicatorColor`.
-- Comment ("Comments and disabled code"): {lit}`docComment`.
+- Comment ("Comments and disabled code"): {lit}`docComment` plus the new {lit}`comment` /
+  {lit}`commentDelim` fields for ordinary {lit}`--` and {lit}`/- … -/` comments.
 - Foreground: bound variables ({lit}`var`, {lit}`levelVar`), the built-in delimiter family
   ({lit}`delim` — {lit}`:=`, {lit}`=>`, {lit}`:`, {lit}`|`, …), and the {lit}`bracket` /
   {lit}`separator` punctuation buckets, since the Dracula spec does not assign a syntax
@@ -632,6 +694,16 @@ public def ManualTheme.dracula : ManualTheme :=
     -- foreground, matching Dracula's convention of leaving brackets and item separators
     -- unstyled.
     operator := { color := pink, weight := .regular, style := .normal, face := .mono },
+    -- Numbers → Orange ("Numbers, Constants, Booleans"). Chars share Yellow with strings
+    -- (Dracula does not give characters a distinct slot). Comments and their delimiters →
+    -- Dracula's Comment color (a soft steel-blue), no italic — italic is reserved for
+    -- doc comments in our default rendering. `commentDelim` is spelled out explicitly: the
+    -- `comment := comment` cascade was frozen at `CodeTheme.ink`'s black `codeColor` when
+    -- this struct was constructed, so a bare `comment` override wouldn't reach it.
+    literalNumber := { color := orange, weight := .regular, style := .normal, face := .mono },
+    literalChar := { color := yellow, weight := .regular, style := .normal, face := .mono },
+    comment := { color := comment, weight := .regular, style := .normal, face := .mono },
+    commentDelim := { color := comment, weight := .regular, style := .normal, face := .mono },
     -- The Dracula spec gives Orange to "numbers, constants, booleans". Verso doesn't yet have
     -- a numeric-literal kind from the highlighter, but the `const` tokens for `Bool.true` and
     -- `Bool.false` carry a `data-binding` attribute the highlighter emits, so a CSS attribute
@@ -700,11 +772,20 @@ public def ManualTheme.alucard : ManualTheme where
     levelVar := { color := foreground, weight := .regular, style := .italic, face := .mono },
     levelConst := { color := orange, weight := .regular, style := .normal, face := .mono },
     moduleName := { color := cyan, weight := .regular, style := .normal, face := .mono },
-    -- Symbolic operators → Pink; `delim`, `bracket`, and `separator` stay on body
-    -- foreground. See `ManualTheme.dracula` for the rationale (SubVerso's `.delim` is too
-    -- coarse to single out binding markers, so painting the whole bucket would also paint
-    -- every type-ascription `:`).
+    -- Symbolic operators → Pink. `delim`/`bracket`/`separator` are spelled out at the
+    -- Alucard foreground rather than relying on the cascade default: `CodeTheme.ink with`
+    -- doesn't re-evaluate the `{ color := codeColor, ... }` cascades, so without these
+    -- explicit overrides they'd stay frozen at Ink's black `codeColor`.
+    delim := { color := foreground, weight := .regular, style := .normal, face := .mono },
     operator := { color := pink, weight := .regular, style := .normal, face := .mono },
+    bracket := { color := foreground, weight := .regular, style := .normal, face := .mono },
+    separator := { color := foreground, weight := .regular, style := .normal, face := .mono },
+    -- Numbers → Orange; chars → Yellow (same as strings); comments and their delimiters →
+    -- Alucard's Comment color. Same role assignments as the dark variant.
+    literalNumber := { color := orange, weight := .regular, style := .normal, face := .mono },
+    literalChar := { color := yellow, weight := .regular, style := .normal, face := .mono },
+    comment := { color := comment, weight := .regular, style := .normal, face := .mono },
+    commentDelim := { color := comment, weight := .regular, style := .normal, face := .mono },
     -- Same boolean-orange trick as the dark variant; see the Dracula def for the rationale.
     extraCss := fun _ =>
       ".hl.lean .const[data-binding=\"const-Bool.true\"],\n" ++
@@ -752,7 +833,17 @@ public def ManualTheme.sandstoneLight : ManualTheme where
     uiOnCode := color%#8c7257,
     keyword.color := color%#a04a00,
     const.color := color%#1f6f8b,
-    «var».color := color%#3b2a17
+    «var».color := color%#3b2a17,
+    -- Spell out the punctuation, literal, and comment families at the Sandstone body
+    -- color so `CodeTheme.ink with` doesn't leave them frozen at Ink's black `codeColor`.
+    delim := { color := color%#3b2a17, weight := .regular, style := .normal, face := .mono },
+    operator := { color := color%#3b2a17, weight := .regular, style := .normal, face := .mono },
+    bracket := { color := color%#3b2a17, weight := .regular, style := .normal, face := .mono },
+    separator := { color := color%#3b2a17, weight := .regular, style := .normal, face := .mono },
+    literalNumber := { color := color%#3b2a17, weight := .regular, style := .normal, face := .mono },
+    literalChar := { color := color%#3b2a17, weight := .regular, style := .normal, face := .mono },
+    comment := { color := color%#3b2a17, weight := .regular, style := .normal, face := .mono },
+    commentDelim := { color := color%#3b2a17, weight := .regular, style := .normal, face := .mono }
   }
   surfaceColor := color%#f3e9d6
   tocBackground := color%#f3e9d6
@@ -805,7 +896,17 @@ public def ManualTheme.sandstoneDark : ManualTheme :=
     -- without a cool accent.
     keyword.color := color%#ff8c4a,
     const.color := color%#ffc266,
-    «var».color := color%#f3d5a3
+    «var».color := color%#f3d5a3,
+    -- Align punctuation, literals, and comments with the Sandstone Dark sunlit-buff body
+    -- color rather than `darkCodeBase`'s generic `#e8e8e8`.
+    delim := { color := color%#f3d5a3, weight := .regular, style := .normal, face := .mono },
+    operator := { color := color%#f3d5a3, weight := .regular, style := .normal, face := .mono },
+    bracket := { color := color%#f3d5a3, weight := .regular, style := .normal, face := .mono },
+    separator := { color := color%#f3d5a3, weight := .regular, style := .normal, face := .mono },
+    literalNumber := { color := color%#f3d5a3, weight := .regular, style := .normal, face := .mono },
+    literalChar := { color := color%#f3d5a3, weight := .regular, style := .normal, face := .mono },
+    comment := { color := color%#f3d5a3, weight := .regular, style := .normal, face := .mono },
+    commentDelim := { color := color%#f3d5a3, weight := .regular, style := .normal, face := .mono }
   }
   -- Override the generic dark-chrome accents with sandstone-tuned values so the search box
   -- border, ToC background, and link colours stay in the warm family.
@@ -848,7 +949,17 @@ public def ManualTheme.steel : ManualTheme where
     uiOnCode := color%#46566a,
     keyword.color := color%#1a5ea8,
     const.color := color%#2a6f4f,
-    «var».color := color%#0e2431
+    «var».color := color%#0e2431,
+    -- Spell out the punctuation, literal, and comment families at the Steel deep-navy body
+    -- color so `CodeTheme.ink with` doesn't leave them frozen at Ink's black `codeColor`.
+    delim := { color := color%#0e2431, weight := .regular, style := .normal, face := .mono },
+    operator := { color := color%#0e2431, weight := .regular, style := .normal, face := .mono },
+    bracket := { color := color%#0e2431, weight := .regular, style := .normal, face := .mono },
+    separator := { color := color%#0e2431, weight := .regular, style := .normal, face := .mono },
+    literalNumber := { color := color%#0e2431, weight := .regular, style := .normal, face := .mono },
+    literalChar := { color := color%#0e2431, weight := .regular, style := .normal, face := .mono },
+    comment := { color := color%#0e2431, weight := .regular, style := .normal, face := .mono },
+    commentDelim := { color := color%#0e2431, weight := .regular, style := .normal, face := .mono }
   }
   surfaceColor := color%#e3e8ee
   tocBackground := color%#e3e8ee
@@ -889,7 +1000,17 @@ public def ManualTheme.slate : ManualTheme :=
     uiOnCode := color%#7a8aa0,
     keyword.color := color%#6cb6ff,
     const.color := color%#7ad9a0,
-    «var».color := color%#dfe6ee
+    «var».color := color%#dfe6ee,
+    -- Align punctuation, literals, and comments with the Slate body color so they don't
+    -- inherit `darkCodeBase`'s generic `#e8e8e8` (close, but off-palette).
+    delim := { color := color%#dfe6ee, weight := .regular, style := .normal, face := .mono },
+    operator := { color := color%#dfe6ee, weight := .regular, style := .normal, face := .mono },
+    bracket := { color := color%#dfe6ee, weight := .regular, style := .normal, face := .mono },
+    separator := { color := color%#dfe6ee, weight := .regular, style := .normal, face := .mono },
+    literalNumber := { color := color%#dfe6ee, weight := .regular, style := .normal, face := .mono },
+    literalChar := { color := color%#dfe6ee, weight := .regular, style := .normal, face := .mono },
+    comment := { color := color%#dfe6ee, weight := .regular, style := .normal, face := .mono },
+    commentDelim := { color := color%#dfe6ee, weight := .regular, style := .normal, face := .mono }
   }
 
 /-! # Hearth — cottagecore (cream/sage light, candlelit deep-olive dark) -/
@@ -925,7 +1046,17 @@ public def ManualTheme.hearthLight : ManualTheme where
     uiOnCode := color%#7a6952,
     keyword.color := color%#2f6e58,
     const.color := color%#a04050,
-    «var».color := color%#3d2f1f
+    «var».color := color%#3d2f1f,
+    -- Spell out the punctuation, literal, and comment families at the Hearth body color so
+    -- `CodeTheme.ink with` doesn't leave them frozen at Ink's black `codeColor`.
+    delim := { color := color%#3d2f1f, weight := .regular, style := .normal, face := .mono },
+    operator := { color := color%#3d2f1f, weight := .regular, style := .normal, face := .mono },
+    bracket := { color := color%#3d2f1f, weight := .regular, style := .normal, face := .mono },
+    separator := { color := color%#3d2f1f, weight := .regular, style := .normal, face := .mono },
+    literalNumber := { color := color%#3d2f1f, weight := .regular, style := .normal, face := .mono },
+    literalChar := { color := color%#3d2f1f, weight := .regular, style := .normal, face := .mono },
+    comment := { color := color%#3d2f1f, weight := .regular, style := .normal, face := .mono },
+    commentDelim := { color := color%#3d2f1f, weight := .regular, style := .normal, face := .mono }
   }
   textFace := .serif
   structureFace := .serif
@@ -971,6 +1102,16 @@ public def ManualTheme.hearthDark : ManualTheme :=
     uiOnCode := color%#a08a64,
     keyword.color := color%#9adcb0,
     const.color := color%#f5a8b8,
-    «var».color := color%#f1e7d2
+    «var».color := color%#f1e7d2,
+    -- Align punctuation, literals, and comments with the Hearth Dark candlelit-cream body
+    -- color rather than `darkCodeBase`'s generic `#e8e8e8`.
+    delim := { color := color%#f1e7d2, weight := .regular, style := .normal, face := .mono },
+    operator := { color := color%#f1e7d2, weight := .regular, style := .normal, face := .mono },
+    bracket := { color := color%#f1e7d2, weight := .regular, style := .normal, face := .mono },
+    separator := { color := color%#f1e7d2, weight := .regular, style := .normal, face := .mono },
+    literalNumber := { color := color%#f1e7d2, weight := .regular, style := .normal, face := .mono },
+    literalChar := { color := color%#f1e7d2, weight := .regular, style := .normal, face := .mono },
+    comment := { color := color%#f1e7d2, weight := .regular, style := .normal, face := .mono },
+    commentDelim := { color := color%#f1e7d2, weight := .regular, style := .normal, face := .mono }
   }
   { base with textFace := .serif, structureFace := .serif }

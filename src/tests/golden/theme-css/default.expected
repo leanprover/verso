@@ -32,10 +32,26 @@
   --verso-code-literal-string-weight: 400;
   --verso-code-literal-string-style: normal;
   --verso-code-literal-string-font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --verso-code-literal-number-color: #000000;
+  --verso-code-literal-number-weight: 400;
+  --verso-code-literal-number-style: normal;
+  --verso-code-literal-number-font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --verso-code-literal-char-color: #000000;
+  --verso-code-literal-char-weight: 400;
+  --verso-code-literal-char-style: normal;
+  --verso-code-literal-char-font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --verso-code-doc-comment-color: #000000;
   --verso-code-doc-comment-weight: 400;
   --verso-code-doc-comment-style: italic;
   --verso-code-doc-comment-font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --verso-code-comment-color: #000000;
+  --verso-code-comment-weight: 400;
+  --verso-code-comment-style: normal;
+  --verso-code-comment-font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --verso-code-comment-delim-color: #000000;
+  --verso-code-comment-delim-weight: 400;
+  --verso-code-comment-delim-style: normal;
+  --verso-code-comment-delim-font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --verso-code-sort-color: #000000;
   --verso-code-sort-weight: 400;
   --verso-code-sort-style: normal;
@@ -182,21 +198,48 @@
   font-family: var(--verso-code-module-name-font-family, var(--verso-code-font-family,));
 }
 
-/* The lexically-classified token kinds added by SubVerso (anon-ctor, number, char, comment,
-   wildcard) default to the unthemed `.unknown` appearance. The themeable rules above already
-   cover the semantic kinds (`.literal`, `.doc-comment`, etc.) and win when both apply (e.g.
-   `.anon-ctor` also carries `.const`; a number nested inside a literal span is still themed
-   by `.literal`). Future phases may introduce dedicated theme buckets for numbers, characters,
-   and comments. */
+/* `.anon-ctor` (anonymous-constructor brackets) and `.wildcard` (`_` holes) default to the
+   unthemed `.unknown` appearance — neither has its own theme bucket yet. `.anon-ctor` also
+   carries the `.const` class, so the themeable `.const` rule above wins for it where set.
+   Number, character, and comment kinds are themed via their own rules further down. */
 .hl.lean .anon-ctor,
-.hl.lean .number,
-.hl.lean .char,
-.hl.lean .comment,
 .hl.lean .wildcard {
   color: var(--verso-code-color,);
   font-weight: normal;
   font-style: normal;
   font-family: var(--verso-code-font-family,);
+}
+
+.hl.lean .literal.number {
+  color: var(--verso-code-literal-number-color, var(--verso-code-literal-color, var(--verso-code-color,)));
+  font-weight: var(--verso-code-literal-number-weight, normal);
+  font-style: var(--verso-code-literal-number-style, normal);
+  font-family: var(--verso-code-literal-number-font-family, var(--verso-code-font-family,));
+}
+
+.hl.lean .literal.char {
+  color: var(--verso-code-literal-char-color, var(--verso-code-literal-string-color, var(--verso-code-literal-color, var(--verso-code-color,))));
+  font-weight: var(--verso-code-literal-char-weight, normal);
+  font-style: var(--verso-code-literal-char-style, normal);
+  font-family: var(--verso-code-literal-char-font-family, var(--verso-code-font-family,));
+}
+
+/* `.comment` covers line and block comments (their elements carry `comment line` and
+   `comment block` class pairs respectively); `.comment.delimiter` is a more specific
+   override for the `--` / `/-` / `-/` punctuation. The themeable `.doc-comment` rule above
+   wins for doc comments since SubVerso tags them with their own class entirely. */
+.hl.lean .comment {
+  color: var(--verso-code-comment-color, var(--verso-code-color,));
+  font-weight: var(--verso-code-comment-weight, normal);
+  font-style: var(--verso-code-comment-style, normal);
+  font-family: var(--verso-code-comment-font-family, var(--verso-code-font-family,));
+}
+
+.hl.lean .comment.delimiter {
+  color: var(--verso-code-comment-delim-color, var(--verso-code-comment-color, var(--verso-code-color,)));
+  font-weight: var(--verso-code-comment-delim-weight, normal);
+  font-style: var(--verso-code-comment-delim-style, normal);
+  font-family: var(--verso-code-comment-delim-font-family, var(--verso-code-font-family,));
 }
 
 /* `.delim` is the built-in syntactic delimiter family (`:=`, `=>`, `←`, `@`, `:`, `|`). The

@@ -480,7 +480,8 @@ picker `.js`/`.css`, the `window.versoThemes` data file, every theme's font byte
 assets. Content-addressed font filenames in the theme registry ensure that two themes sharing the
 same font end up with one byte payload on disk.
 -/
-def writeThemeAssets (dir : System.FilePath) (config : RenderConfig) : EmitM Unit := do
+def writeThemeAssets (dir : System.FilePath) (config : RenderConfig)
+    (codeSampleHtml : String) : EmitM Unit := do
   let themes ← readThe ThemeRegistry
   ensureDir (dir / "-verso-data")
   let single := singleDefaultTheme themes config
@@ -511,7 +512,7 @@ def writeThemeAssets (dir : System.FilePath) (config : RenderConfig) : EmitM Uni
   writeFile (dir / "-verso-data" / "theme-picker.css") Manual.Theme.«theme-picker.css»
   writeFile (dir / "-verso-data" / "verso-themes.js")
     (Verso.Theme.windowVersoThemesJs themes config.defaultLightTheme config.defaultDarkTheme
-      (defaultSingleName config) Manual.Theme.codeSampleHtml)
+      (defaultSingleName config) codeSampleHtml)
 
 open IO.FS in
 def emitTeX (config : RenderConfig) (text : Part Manual) : EmitM Unit := do
@@ -907,7 +908,16 @@ where
       emitSearchResultsHtml toc dir titleToShow state config.toConfig
     IO.FS.withFile (dir.join "book.css") .write fun h => do
       h.putStrLn Html.Css.pageStyle
-    writeThemeAssets dir config
+    -- Render the picker preview against the in-progress hover state so its `data-verso-hover`
+    -- IDs end up in the global `-verso-docs.json` the page loads — the same lookup the picker
+    -- JS already does for every other token. Without this the picker tokens have hover IDs
+    -- that reference nothing.
+    let codeSampleCtx : Verso.Code.HighlightHtmlM.Context Manual := {
+      linkTargets := {}, traverseContext := {}, definitionIds := {}, options := {}
+    }
+    let (codeSampleHtml, htmlState') := Manual.Theme.codeSampleHtml codeSampleCtx (← get)
+    set htmlState'
+    writeThemeAssets dir config codeSampleHtml
     for (src, dest) in config.extraFiles do
       copyRecursively src (dir.join dest)
     for (src, dest) in config.extraFilesHtml do
@@ -985,7 +995,16 @@ where
       else titleHtml
     IO.FS.withFile (root / "book.css") .write fun h => do
       h.putStrLn Html.Css.pageStyle
-    writeThemeAssets root config
+    -- Render the picker preview against the in-progress hover state so its `data-verso-hover`
+    -- IDs end up in the global `-verso-docs.json` the page loads — the same lookup the picker
+    -- JS already does for every other token. Without this the picker tokens have hover IDs
+    -- that reference nothing.
+    let codeSampleCtx : Verso.Code.HighlightHtmlM.Context Manual := {
+      linkTargets := {}, traverseContext := {}, definitionIds := {}, options := {}
+    }
+    let (codeSampleHtml, htmlState') := Manual.Theme.codeSampleHtml codeSampleCtx (← get)
+    set htmlState'
+    writeThemeAssets root config codeSampleHtml
     for (src, dest) in config.extraFiles do
       copyRecursively src (root.join dest)
     for (src, dest) in config.extraFilesHtml do

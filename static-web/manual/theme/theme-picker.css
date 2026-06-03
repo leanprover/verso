@@ -66,7 +66,14 @@
     border-radius: 0.4rem;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
     padding: 0.75rem;
-    width: min(22rem, calc(100vw - 1rem));
+    /* Size the popup to its content — typically the longest line of the code preview —
+       rather than capping it at 22rem. The min-width keeps short content (a one-row picker
+       with no source link) from collapsing too narrow; the viewport-minus-margin max-width
+       keeps it on screen at small widths, at which point `overflow-x: auto` on
+       `#theme-picker-preview` takes over for any line still wider than the viewport. */
+    width: max-content;
+    min-width: min(22rem, calc(100vw - 1rem));
+    max-width: calc(100vw - 1rem);
     box-sizing: border-box;
     /* Two-column grid: the label column auto-sizes to the widest label across all visible rows,
        so Light/Dark/Theme dropdowns share a left edge. The rows themselves use
@@ -127,6 +134,9 @@
     padding: 0.5rem;
     font-family: var(--verso-code-font-family, monospace);
     font-size: 0.85em;
+    /* Fallback for when the dialog itself has hit its viewport-minus-margin cap and a line of
+       the code sample is still wider — at that point we can't grow further, so scroll. The
+       dialog's `width: max-content` handles the normal case by sizing to the longest line. */
     overflow-x: auto;
 }
 

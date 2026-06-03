@@ -749,21 +749,48 @@ public def highlightingStyle : String := "
   font-family: var(--verso-code-module-name-font-family, var(--verso-code-font-family,));
 }
 
-/* The lexically-classified token kinds added by SubVerso (anon-ctor, number, char, comment,
-   wildcard) default to the unthemed `.unknown` appearance. The themeable rules above already
-   cover the semantic kinds (`.literal`, `.doc-comment`, etc.) and win when both apply (e.g.
-   `.anon-ctor` also carries `.const`; a number nested inside a literal span is still themed
-   by `.literal`). Future phases may introduce dedicated theme buckets for numbers, characters,
-   and comments. */
+/* `.anon-ctor` (anonymous-constructor brackets) and `.wildcard` (`_` holes) default to the
+   unthemed `.unknown` appearance — neither has its own theme bucket yet. `.anon-ctor` also
+   carries the `.const` class, so the themeable `.const` rule above wins for it where set.
+   Number, character, and comment kinds are themed via their own rules further down. */
 .hl.lean .anon-ctor,
-.hl.lean .number,
-.hl.lean .char,
-.hl.lean .comment,
 .hl.lean .wildcard {
   color: var(--verso-code-color,);
   font-weight: normal;
   font-style: normal;
   font-family: var(--verso-code-font-family,);
+}
+
+.hl.lean .literal.number {
+  color: var(--verso-code-literal-number-color, var(--verso-code-literal-color, var(--verso-code-color,)));
+  font-weight: var(--verso-code-literal-number-weight, normal);
+  font-style: var(--verso-code-literal-number-style, normal);
+  font-family: var(--verso-code-literal-number-font-family, var(--verso-code-font-family,));
+}
+
+.hl.lean .literal.char {
+  color: var(--verso-code-literal-char-color, var(--verso-code-literal-string-color, var(--verso-code-literal-color, var(--verso-code-color,))));
+  font-weight: var(--verso-code-literal-char-weight, normal);
+  font-style: var(--verso-code-literal-char-style, normal);
+  font-family: var(--verso-code-literal-char-font-family, var(--verso-code-font-family,));
+}
+
+/* `.comment` covers line and block comments (their elements carry `comment line` and
+   `comment block` class pairs respectively); `.comment.delimiter` is a more specific
+   override for the `--` / `/-` / `-/` punctuation. The themeable `.doc-comment` rule above
+   wins for doc comments since SubVerso tags them with their own class entirely. */
+.hl.lean .comment {
+  color: var(--verso-code-comment-color, var(--verso-code-color,));
+  font-weight: var(--verso-code-comment-weight, normal);
+  font-style: var(--verso-code-comment-style, normal);
+  font-family: var(--verso-code-comment-font-family, var(--verso-code-font-family,));
+}
+
+.hl.lean .comment.delimiter {
+  color: var(--verso-code-comment-delim-color, var(--verso-code-comment-color, var(--verso-code-color,)));
+  font-weight: var(--verso-code-comment-delim-weight, normal);
+  font-style: var(--verso-code-comment-delim-style, normal);
+  font-family: var(--verso-code-comment-delim-font-family, var(--verso-code-font-family,));
 }
 
 /* `.delim` is the built-in syntactic delimiter family (`:=`, `=>`, `←`, `@`, `:`, `|`). The
@@ -1462,7 +1489,7 @@ window.onload = () => {
       }
       return tokens;
     }
-    for (const container of document.querySelectorAll(\".hl.lean\")) {
+    function attachBindingHighlights(container) {
       container.addEventListener(\"mouseover\", (event) => {
         const c = event.target.closest(\".token\");
         if (!c || !c.dataset.binding || c.dataset.binding === \"\" || !container.contains(c)) return;
@@ -1481,6 +1508,12 @@ window.onload = () => {
         }
         highlightedTokens = [];
       });
+    }
+    // Exposed for the theme picker, which builds its code-sample preview after this script
+    // has already scanned the document.
+    window.versoAttachBindingHighlights = attachBindingHighlights;
+    for (const container of document.querySelectorAll(\".hl.lean\")) {
+      attachBindingHighlights(container);
     }
     /* Render docstrings */
     if ('undefined' !== typeof marked) {
@@ -1631,7 +1664,31 @@ window.onload = () => {
       }
 
       const tokenSelector = '.hl.lean .const.token, .hl.lean .keyword.token, .hl.lean .literal.token, .hl.lean .option.token, .hl.lean .var.token, .hl.lean .typed.token, .hl.lean .has-info, .hl.lean .tactic, .hl.lean .level-var, .hl.lean .level-const, .hl.lean .level-op, .hl.lean .sort';
-      tippy(Array.from(document.querySelectorAll(tokenSelector)).filter(el => !isInsideClosedTactic(el)), defaultTippyProps);
+      // Tippy + data-tippy-theme initialization, scoped to `root` so it can run on a DOM
+      // subtree that didn't exist at DOMContentLoaded — the picker preview is built on first
+      // popover open and needs this same wiring applied to its tokens.
+      function versoInitTippy(root) {
+        root.querySelectorAll('.hl.lean .const.token, .hl.lean .keyword.token, .hl.lean .literal.token, .hl.lean .option.token, .hl.lean .var.token, .hl.lean .typed.token, .hl.lean .level-var, .hl.lean .level-const, .hl.lean .level-op, .hl.lean .sort').forEach(element => {
+          element.setAttribute('data-tippy-theme', 'lean');
+        });
+        root.querySelectorAll('.hl.lean .has-info.warning').forEach(element => {
+          element.setAttribute('data-tippy-theme', 'warning message');
+        });
+        root.querySelectorAll('.hl.lean .has-info.information').forEach(element => {
+          element.setAttribute('data-tippy-theme', 'info message');
+        });
+        root.querySelectorAll('.hl.lean .has-info.error').forEach(element => {
+          element.setAttribute('data-tippy-theme', 'error message');
+        });
+        root.querySelectorAll('.hl.lean .tactic').forEach(element => {
+          element.setAttribute('data-tippy-theme', 'tactic');
+        });
+        tippy(Array.from(root.querySelectorAll(tokenSelector)).filter(el => !el._tippy && !isInsideClosedTactic(el)), defaultTippyProps);
+      }
+      // Exposed for the theme picker (which builds its code-sample preview after this script
+      // has already scanned the document).
+      window.versoInitTippy = versoInitTippy;
+      versoInitTippy(document);
 
       // Create/destroy token tippys when tactic checkbox toggles
       const tacticTippySelector = '.const.token, .keyword.token, .literal.token, .option.token, .var.token, .typed.token, .has-info, .level-var, .level-const, .level-op, .sort';

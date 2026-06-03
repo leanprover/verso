@@ -151,13 +151,27 @@ header {
 }
 
 .header-title-wrapper {
-    /* The title wrapper grows to fill up the header */
+    /* The title wrapper grows to fill up the header. `min-width: 0` overrides flex's
+       default min-content sizing so the wrapper can shrink narrower than the title's
+       intrinsic width — the title is then clipped (ellipsis) instead of expanding the flex
+       row and pushing the gear off screen. */
     flex: 1;
-}
-
-@media screen and (max-width: 1500px) {
-    /* Add the padding of the content when the content moves to the left */
-    padding-left: var(--verso--content-padding-x);
+    min-width: 0;
+    /* Center the inline-block title within the wrapper. The `@media (max-width: 1500px)`
+       block below switches this to `left` so the title aligns with the left-aligned content
+       column at narrow viewport widths. */
+    text-align: center;
+    /* Reserve room on the right for the absolutely-positioned gear at the right of the
+       header, plus a 1rem spacer between the title text and the gear. Without this, a
+       long title could run flush against the gear (or under it), and the spacer would
+       still be clickable as part of the title link. The reservation is:
+         search-bar-width   the absolute offset reserved for the search box
+         + 1rem             the gear's `right: calc(... + 1rem)` from theme-picker.css
+         + 2.5rem           visual width of the gear glyph button
+         + 1rem             the spacer between the title and the gear
+       The `--search-bar-width` variable shrinks to 12rem under the mobile breakpoint, so
+       this stays sensible at narrow widths automatically. */
+    padding-right: calc(var(--search-bar-width, 24rem) + 4.5rem);
 }
 
 .header-title {
@@ -165,26 +179,33 @@ header {
     color: var(--verso-text-color);
     font-size: 2rem;
     font-weight: bold;
-    display: block;
-    margin: 0 auto;
-    max-width: var(--verso-content-max-width);
+    /* `inline-block` so the clickable anchor only spans its content (the h1), not the entire
+       wrapper width — clicks in the empty area around the title text no longer follow the
+       title link. `max-width: 100%` plus `overflow: hidden` constrains the anchor to its
+       wrapper, so the `text-overflow: ellipsis` on the h1 below has a width to clip
+       against. */
+    display: inline-block;
+    max-width: 100%;
+    overflow: hidden;
+    vertical-align: middle;
 }
 
 @media screen and (max-width: 1500px) {
-    /* Move the title to the left, to align with the content that does the same. */
-    .header-title {
-        margin: 0;
-        max-width: unset;
+    /* Left-align the title to match the left-aligned content column at narrower viewports
+       (replacing the older `margin: 0; max-width: unset` rule on the `<a>`, which only made
+       sense while the title was `display: block`). */
+    .header-title-wrapper {
+        text-align: left;
+        padding-left: var(--verso--content-padding-x);
     }
 }
 
 @media screen and (max-width: 700px) {
-    /* There's no header logo on mobile, so the title just needs to reserve space for the burger */
-    .header-title {
-        margin-left: calc(
-            var(--verso-burger-width) + 1.5rem
-        ); /* There's 0.5 rem padding on the burger, and we want some space */
-        max-width: unset;
+    /* No header logo on mobile; the title wrapper reserves burger room on the left via
+       `padding-left` on itself (replacing the older `margin-left` on `.header-title`, which
+       no longer makes sense with the inline-block anchor). */
+    .header-title-wrapper {
+        padding-left: calc(var(--verso-burger-width) + 1.5rem);
     }
 }
 
@@ -192,7 +213,12 @@ header {
     margin: 0;
     font-size: inherit;
     font-weight: inherit;
-    text-wrap: nowrap;
+    /* `white-space: nowrap` + `overflow: hidden` clips a too-long title at the wrapper's
+       reserved boundary (no ellipsis — the "…" eats character space we'd rather give the
+       title itself). The previous `text-wrap: nowrap` only suppressed wrapping without
+       giving the overflow a clip strategy. */
+    white-space: nowrap;
+    overflow: hidden;
 }
 
 :root:has(header:empty) {

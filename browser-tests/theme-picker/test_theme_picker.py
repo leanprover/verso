@@ -538,3 +538,79 @@ def test_localStorage_disabled_still_loads(page, server):
         "data-verso-theme should be set even without storage"
     )
     assert appearance in ("light", "dark"), f"unexpected appearance {appearance!r}"
+
+
+def test_picker_preview_token_hover_shows_tippy(page):
+    """Hovering a token in the picker's code-sample preview should pop a Tippy tooltip, the
+    same way it does for tokens in the main page body.
+
+    The picker preview is built on first popover open via `preview.innerHTML = data.codeSample`.
+    The page's tippy-init script runs at DOMContentLoaded over `document.querySelectorAll(
+    tokenSelector)` — before the picker preview exists — so without follow-up wiring those
+    tokens get no `_tippy` instance and hovering them does nothing. This test currently fails
+    and is the acceptance criterion for that fix.
+    """
+    btn = _picker_button(page)
+    btn.click()
+    _dialog(page).wait_for(state="attached", timeout=5000)
+    preview = page.locator("#theme-picker-preview")
+    preview.wait_for(state="attached", timeout=5000)
+    # Pick a real hover-bearing token from the baked sample (e.g. `def greet (...) := ...`
+    # produces `.const.token` and `.var.token` entries with `data-verso-hover` IDs that
+    # reference the global `-verso-docs.json`).
+    token = preview.locator(".token[data-verso-hover]").first
+    token.wait_for(state="attached", timeout=5000)
+    # The bug shows up two ways and the test asserts both. (1) The preview token has no
+    # `_tippy` instance attached (the page-level tippy-init scanned the DOM before the
+    # picker preview existed). (2) Hovering the token does not produce a `.tippy-box`.
+    has_tippy = page.evaluate(
+        "el => !!el._tippy",
+        token.element_handle(),
+    )
+    assert has_tippy, "picker preview token should have a Tippy instance bound"
+    token.scroll_into_view_if_needed()
+    token.hover()
+    # The page-body tippy-init uses `delay: [100, null]`, so allow a brief settle window.
+    page.wait_for_selector(".tippy-box", state="visible", timeout=3000)
+
+
+def test_picker_preview_binding_highlight(page):
+    """Hovering an identifier in the picker preview should add `.binding-hl` to its other
+    occurrences in the preview — the same binding-highlight effect the manual's body code
+    gets.
+
+    The per-`.hl.lean` mouseover handler is attached at DOMContentLoaded over
+    `document.querySelectorAll('.hl.lean')`; the picker preview is built later, so without a
+    follow-up `window.versoAttachBindingHighlights(...)` call the listener never fires and
+    hovering one `name` leaves the other one untouched.
+    """
+    btn = _picker_button(page)
+    btn.click()
+    _dialog(page).wait_for(state="attached", timeout=5000)
+    preview = page.locator("#theme-picker-preview")
+    preview.wait_for(state="attached", timeout=5000)
+    # The code sample is `def greet (name : String) (count := 1) := ...intercalate count s!"Hello, {name}"`,
+    # so there are two `.var.token` elements with the same `data-binding` for `name` and two
+    # for `count`. Pick the first var token's binding, then count its peers before / after
+    # the hover.
+    bindings = preview.locator(".token[data-binding^='var-']")
+    bindings.first.wait_for(state="attached", timeout=5000)
+    first_binding = bindings.first.get_attribute("data-binding")
+    assert first_binding, "expected first var token to have a data-binding"
+    peers = preview.locator(f".token[data-binding='{first_binding}']")
+    peer_count = peers.count()
+    assert peer_count >= 2, (
+        f"expected at least two `{first_binding}` tokens in the preview, got {peer_count}"
+    )
+    # Hover the first occurrence and confirm the others gain `.binding-hl`.
+    bindings.first.scroll_into_view_if_needed()
+    bindings.first.hover()
+    page.wait_for_function(
+        f"""() => {{
+            const peers = document.querySelectorAll(
+                "#theme-picker-preview .token[data-binding='{first_binding}']");
+            const hl = Array.from(peers).filter(el => el.classList.contains('binding-hl'));
+            return hl.length === peers.length && peers.length >= 2;
+        }}""",
+        timeout=3000,
+    )

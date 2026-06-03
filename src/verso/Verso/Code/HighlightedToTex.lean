@@ -48,17 +48,14 @@ public def highlightToken : String → Token.Kind → TeX
 | c, .operator .. => .raw s!"\\versoOperator\{{c}}"
 | c, .bracket .. => .raw s!"\\versoBracket\{{c}}"
 | c, .separator .. => .raw s!"\\versoSeparator\{{c}}"
--- The remaining lexical-ish kinds added by SubVerso (wildcard, num, char, line/block
--- comments, comment delimiter) currently route through `\versoLiteral` so PDF output keeps
--- the "default to the unknown/code appearance" semantics the HTML side gives them via its
--- lexical-default CSS rule. They are likely to gain their own theme buckets (numbers,
--- characters, comments) in a later phase.
+| c, .num .. => .raw s!"\\versoLiteralNumber\{{c}}"
+| c, .char .. => .raw s!"\\versoLiteralChar\{{c}}"
+| c, .lineComment => .raw s!"\\versoComment\{{c}}"
+| c, .blockComment => .raw s!"\\versoComment\{{c}}"
+| c, .commentDelim => .raw s!"\\versoCommentDelim\{{c}}"
+-- Wildcards (`_` holes) have no dedicated theme bucket yet, so they route through
+-- `\versoLiteral` like `.unknown` does.
 | c, .wildcard .. => .raw s!"\\versoLiteral\{{c}}"
-| c, .num .. => .raw s!"\\versoLiteral\{{c}}"
-| c, .char .. => .raw s!"\\versoLiteral\{{c}}"
-| c, .lineComment => .raw s!"\\versoLiteral\{{c}}"
-| c, .blockComment => .raw s!"\\versoLiteral\{{c}}"
-| c, .commentDelim => .raw s!"\\versoLiteral\{{c}}"
 | c, .unknown => .raw s!"\\versoLiteral\{{c}}"
 
 /--
@@ -83,7 +80,11 @@ public def texMacroFallbacks : String :=
 "\\providecommand{\\versoDelim}[1]{#1}\n" ++
 "\\providecommand{\\versoOperator}[1]{#1}\n" ++
 "\\providecommand{\\versoBracket}[1]{#1}\n" ++
-"\\providecommand{\\versoSeparator}[1]{#1}\n"
+"\\providecommand{\\versoSeparator}[1]{#1}\n" ++
+"\\providecommand{\\versoLiteralNumber}[1]{#1}\n" ++
+"\\providecommand{\\versoLiteralChar}[1]{#1}\n" ++
+"\\providecommand{\\versoComment}[1]{#1}\n" ++
+"\\providecommand{\\versoCommentDelim}[1]{#1}\n"
 
 defmethod Highlighting.Token.toVerbatimTeX (t : Highlighting.Token) (lineBreaks : Bool := false) : Verso.Output.TeX :=
   highlightToken (escapeForVerbatim t.content lineBreaks) t.kind

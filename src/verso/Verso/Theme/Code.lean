@@ -66,14 +66,13 @@ public structure CodeTheme where
   appearance : Appearance
   /--
   An optional one- or two-sentence description shown alongside the theme in the picker. Useful
-  for noting design intent, palette family, or accessibility trade-offs (for example "Solarized
-  Light — the canonical palette, below WCAG AA on prose by design").
+  for noting design intent, palette family, or accessibility trade-offs.
   -/
   description : Option String := none
   /--
   An optional canonical reference for the theme: a URL plus link text shown next to the name
   in the picker. Points readers at an upstream homepage or specification when the theme is a
-  port (Solarized, Dracula, etc.).
+  port.
   -/
   sourceLink : Option SourceLink := none
 
@@ -115,83 +114,73 @@ public structure CodeTheme where
   /-- Token styling for variables (bound names). -/
   «var» : TokenStyle := { color := codeColor, weight := .regular, style := .italic, face := codeFace }
   /--
-  Token styling for literal tokens. Today only string literals are tagged by the
-  highlighter, so the {lit}`{name}.string` field below is where strings get their color.
-  Other literal kinds (numbers, booleans) will gain distinct tags in future SubVerso
-  releases and will read from this field unless overridden.
+  Token styling for literal tokens.
   -/
   literal : TokenStyle := { color := codeColor, weight := .regular, style := .normal, face := codeFace }
   /--
-  Token styling for string literals (CSS class {lit}`.literal.string`). Defaults to
-  {lit}`literal`; themes that want strings distinguished from other literals (e.g. Dracula's
-  yellow strings vs orange numbers) override it.
+  Token styling for string literals.
   -/
   literalString : TokenStyle := literal
   /--
-  Token styling for doc comments (CSS class {lit}`.doc-comment`), i.e. {lit}`/-- … -/`
-  documentation blocks. SubVerso does not yet tag ordinary {lit}`--` line comments or
-  {lit}`/- … -/` block comments, so this field affects only the doc-comment kind.
+  Token styling for numeric literals.
+  -/
+  literalNumber : TokenStyle := literal
+  /--
+  Token styling for character literals.
+  -/
+  literalChar : TokenStyle := literalString
+  /--
+  Token styling for docstrings.
   -/
   docComment : TokenStyle := { color := codeColor, weight := .regular, style := .italic, face := codeFace }
   /--
-  Token styling for sort formers — {lit}`Type`, {lit}`Prop`, {lit}`Sort u`. CSS class
-  {lit}`.sort`. A distinct kind from {lit}`const` because sorts are the universe-of-types
-  formers, not ordinary named constants; themes typically color them in a different family
-  (often the "keyword" or "type" palette slot).
+  Token styling for the body text of ordinary comments, both {lit}`--` line comments and
+  {lit}`/- … -/` block comments.
+  -/
+  comment : TokenStyle := { color := codeColor, weight := .regular, style := .normal, face := codeFace }
+  /--
+  Token styling for comment delimiters — the {lit}`--` opener of a line comment and the
+  {lit}`/-`/{lit}`-/` openers/closers of a block comment.
+  -/
+  commentDelim : TokenStyle := comment
+  /--
+  Token styling for sort formers: {lit}`Type`, {lit}`Prop`, {lit}`Sort`.
   -/
   sort : TokenStyle := { color := codeColor, weight := .regular, style := .normal, face := codeFace }
   /--
   Token styling for universe-level variables ({lit}`u`, {lit}`v`, … in a universe-parameter
-  context). CSS class {lit}`.level-var`. Bound-name semantics like {lit}`var`, but in the
-  level grammar.
+  context).
   -/
   levelVar : TokenStyle := { color := codeColor, weight := .regular, style := .italic, face := codeFace }
   /--
-  Token styling for universe-level numeric constants (the {lit}`3` in {lit}`Type 3`). CSS
-  class {lit}`.level-const`. A numeric literal in the level grammar.
+  Token styling for universe-level numeric constants (the {lit}`3` in {lit}`Type 3`).
   -/
   levelConst : TokenStyle := { color := codeColor, weight := .regular, style := .normal, face := codeFace }
   /--
-  Token styling for universe-level operators ({lit}`max`, {lit}`imax`, {lit}`+`). CSS class
-  {lit}`.level-op`.
+  Token styling for universe-level operators ({lit}`max`, {lit}`imax`, {lit}`+`).
   -/
   levelOp : TokenStyle := { color := codeColor, weight := .regular, style := .normal, face := codeFace }
   /--
-  Token styling for module names (an {lit}`import` target or a fully qualified namespace
-  path). CSS class {lit}`.module-name`. Distinct from {lit}`const` so themes can give
-  namespace paths a different treatment (often a quieter color).
+  Token styling for module names (e.g. an {lit}`import` target).
   -/
   moduleName : TokenStyle := { color := codeColor, weight := .regular, style := .normal, face := codeFace }
   /--
-  Token styling for built-in syntactic delimiters such as {lit}`:=`, {lit}`=>`, {lit}`←`,
-  {lit}`@`, {lit}`:`, {lit}`|`. CSS class {lit}`.delim`. Cascades from
-  {name (full := CodeTheme.codeColor)}`codeColor`/{name (full := CodeTheme.codeFace)}`codeFace`
-  by default so the unthemed look matches plain code; the three punctuation buckets below
-  ({name (full := CodeTheme.operator)}`operator`, {name (full := CodeTheme.bracket)}`bracket`,
-  {name (full := CodeTheme.separator)}`separator`) cascade from this field, so setting
-  {name (full := CodeTheme.delim)}`delim` re-colors all four at once unless one of the
-  buckets is overridden.
+  Token styling for built-in syntactic delimiters such as {lit}`:=`, {lit}`=>`, {lit}`←`, {lit}`@`,
+  {lit}`:`, {lit}`|`. CSS class {lit}`.delim`.
   -/
   delim : TokenStyle := { color := codeColor, weight := .regular, style := .normal, face := codeFace }
   /--
-  Token styling for symbolic operator atoms such as {lit}`+`, {lit}`::`, {lit}`>>=`. CSS
-  class {lit}`.punctuation.operator`. Defaults to
-  {name (full := CodeTheme.delim)}`delim` because most themes group operators with the
-  binding-marker family; themes that treat operators distinctly (Nord paints operators
-  {lit}`nord9`; Dracula leaves brackets plain but colors operators Pink) override this field.
+  Token styling for symbolic operator atoms such as {lit}`+`, {lit}`::`, {lit}`>>=`. CSS class
+  {lit}`.punctuation.operator`.
   -/
   operator : TokenStyle := delim
   /--
-  Token styling for paired delimiter atoms such as {lit}`(` {lit}`)`, {lit}`[` {lit}`]`,
-  {lit}`{` {lit}`}`, {lit}`⟨`, {lit}`⟩`. CSS class {lit}`.punctuation.bracket`. Defaults to
-  {name (full := CodeTheme.delim)}`delim`; themes that want brackets in body color while
-  operators carry a syntax-accent override this back to a foreground color.
+  Token styling for paired delimiter atoms such as {lit}`(` {lit}`)`, {lit}`[` {lit}`]`, {lit}`{`
+  {lit}`}`, {lit}`⟨`, {lit}`⟩`.
   -/
   bracket : TokenStyle := delim
   /--
-  Token styling for item-separator atoms such as {lit}`,` and {lit}`;`. CSS class
-  {lit}`.punctuation.separator`. Defaults to {name (full := CodeTheme.delim)}`delim` for the
-  same reason as {name (full := CodeTheme.bracket)}`bracket`.
+  Token styling for item-separator atoms such as {lit}`,` and {lit}`;`.
   -/
   separator : TokenStyle := delim
 
@@ -206,10 +195,7 @@ public structure CodeTheme where
   /-- The background tint applied to a token on hover (independent of severity). -/
   tokenHighlightBackground : Color
   /--
-  The background of a displayed tactic state. Defaults to
-  {name (full := CodeTheme.codeBlockBackground)}`codeBlockBackground` for fresh constructions;
-  themes that want a distinct tactic-state tint (a slight raise to differentiate it from code)
-  override it explicitly.
+  The background of a displayed tactic state.
   -/
   tacticStateBackground : Color := codeBlockBackground
   /-- The border color of a displayed tactic state. -/
@@ -334,7 +320,11 @@ private def tokenSummaries (theme : CodeTheme) : Array (String × Color) := #[
     ("var", theme.«var».color),
     ("literal", theme.literal.color),
     ("literal.string", theme.literalString.color),
+    ("literal.number", theme.literalNumber.color),
+    ("literal.char", theme.literalChar.color),
     ("doc-comment", theme.docComment.color),
+    ("comment", theme.comment.color),
+    ("comment.delimiter", theme.commentDelim.color),
     ("sort", theme.sort.color),
     ("level-var", theme.levelVar.color),
     ("level-const", theme.levelConst.color),
@@ -463,7 +453,11 @@ public def cssVariables (theme : CodeTheme) : String :=
     styleDecls "verso-code-var" theme.«var»,
     styleDecls "verso-code-literal" theme.literal,
     styleDecls "verso-code-literal-string" theme.literalString,
+    styleDecls "verso-code-literal-number" theme.literalNumber,
+    styleDecls "verso-code-literal-char" theme.literalChar,
     styleDecls "verso-code-doc-comment" theme.docComment,
+    styleDecls "verso-code-comment" theme.comment,
+    styleDecls "verso-code-comment-delim" theme.commentDelim,
     styleDecls "verso-code-sort" theme.sort,
     styleDecls "verso-code-level-var" theme.levelVar,
     styleDecls "verso-code-level-const" theme.levelConst,
@@ -533,7 +527,11 @@ public def texPreamble (theme : CodeTheme) : String :=
   let varColor := Color.tex theme.«var».color
   let literalColor := Color.tex theme.literal.color
   let literalStringColor := Color.tex theme.literalString.color
+  let literalNumberColor := Color.tex theme.literalNumber.color
+  let literalCharColor := Color.tex theme.literalChar.color
   let docCommentColor := Color.tex theme.docComment.color
+  let commentColor := Color.tex theme.comment.color
+  let commentDelimColor := Color.tex theme.commentDelim.color
   let sortColor := Color.tex theme.sort.color
   let levelVarColor := Color.tex theme.levelVar.color
   let levelConstColor := Color.tex theme.levelConst.color
@@ -559,7 +557,11 @@ public def texPreamble (theme : CodeTheme) : String :=
     s!"\\definecolor\{versoVarColor}\{HTML}\{{varColor}}\n",
     s!"\\definecolor\{versoLiteralColor}\{HTML}\{{literalColor}}\n",
     s!"\\definecolor\{versoLiteralStringColor}\{HTML}\{{literalStringColor}}\n",
+    s!"\\definecolor\{versoLiteralNumberColor}\{HTML}\{{literalNumberColor}}\n",
+    s!"\\definecolor\{versoLiteralCharColor}\{HTML}\{{literalCharColor}}\n",
     s!"\\definecolor\{versoDocCommentColor}\{HTML}\{{docCommentColor}}\n",
+    s!"\\definecolor\{versoCommentColor}\{HTML}\{{commentColor}}\n",
+    s!"\\definecolor\{versoCommentDelimColor}\{HTML}\{{commentDelimColor}}\n",
     s!"\\definecolor\{versoSortColor}\{HTML}\{{sortColor}}\n",
     s!"\\definecolor\{versoLevelVarColor}\{HTML}\{{levelVarColor}}\n",
     s!"\\definecolor\{versoLevelConstColor}\{HTML}\{{levelConstColor}}\n",
@@ -580,7 +582,11 @@ public def texPreamble (theme : CodeTheme) : String :=
     tokenMacro "Var" theme.«var» "versoVarColor",
     tokenMacro "Literal" theme.literal "versoLiteralColor",
     tokenMacro "LiteralString" theme.literalString "versoLiteralStringColor",
+    tokenMacro "LiteralNumber" theme.literalNumber "versoLiteralNumberColor",
+    tokenMacro "LiteralChar" theme.literalChar "versoLiteralCharColor",
     tokenMacro "DocComment" theme.docComment "versoDocCommentColor",
+    tokenMacro "Comment" theme.comment "versoCommentColor",
+    tokenMacro "CommentDelim" theme.commentDelim "versoCommentDelimColor",
     tokenMacro "Sort" theme.sort "versoSortColor",
     tokenMacro "LevelVar" theme.levelVar "versoLevelVarColor",
     tokenMacro "LevelConst" theme.levelConst "versoLevelConstColor",

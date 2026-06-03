@@ -181,6 +181,19 @@
         preview.id = "theme-picker-preview";
         preview.innerHTML = data.codeSample || "";
         dialog.appendChild(preview);
+        // Attach the same tippy popovers and binding-highlight mouseover handlers the
+        // manual's body code gets. Both initializers are exposed on `window` by the
+        // page-level highlighting script in `Highlighted.lean`; they scan a given root, so
+        // we can apply them to the preview after the page-level init has already finished
+        // scanning the document. Without these calls the preview's tokens get no `_tippy`
+        // instance and hovering a binding doesn't highlight its other occurrences.
+        if (typeof window.versoInitTippy === "function") {
+            window.versoInitTippy(preview);
+        }
+        if (typeof window.versoAttachBindingHighlights === "function") {
+            var hl = preview.querySelector(".hl.lean");
+            if (hl) window.versoAttachBindingHighlights(hl);
+        }
 
         // Per-theme metadata panel: description paragraph and source-link line. Rendered below
         // the code sample so the visual order is [chooser] [code sample] [about this theme].
