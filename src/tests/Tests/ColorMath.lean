@@ -19,12 +19,12 @@ open Verso Verso.Theme Verso.Theme.Color
 meta section
 
 /-- Approximate float equality to a tolerance. -/
-def approx (tol a b : Float) : Bool := (a - b).abs ≤ tol
+def approx (ε a b : Float) : Bool := (a - b).abs ≤ ε
 
-/-- Whether two colors' channels are all within `tol` of each other. -/
-def channelsClose (tol : Nat) : Color → Color → Bool
+/-- Whether two colors' channels are all within `ε` of each other. -/
+def channelsClose (ε : Nat) : Color → Color → Bool
   | .rgba r1 g1 b1 a1, .rgba r2 g2 b2 a2 =>
-    let near (x y : UInt8) : Bool := (Int.ofNat x.toNat - Int.ofNat y.toNat).natAbs ≤ tol
+    let near (x y : UInt8) : Bool := (Int.ofNat x.toNat - Int.ofNat y.toNat).natAbs ≤ ε
     near r1 r2 && near g1 g2 && near b1 b2 && near a1 a2
 
 instance : Arbitrary CVD where
@@ -53,7 +53,7 @@ instance : Shrinkable CVD where
 -- Red and green, far apart normally, collapse closer together under deuteranopia.
 /-- info: true -/
 #guard_msgs in
-#eval decide (deltaE (dichromacy .deuteranopia .red) (dichromacy .deuteranopia .green) < deltaE .red .green)
+#eval deltaE (dichromacy .deuteranopia .red) (dichromacy .deuteranopia .green) < deltaE .red .green
 
 /-! ## Property tests -/
 
@@ -132,6 +132,39 @@ def testContrastIgnoresAlpha := testProp <| ∀ (c1 c2 : Color),
 def testDeltaEIgnoresAlpha := testProp <| ∀ (c1 c2 : Color),
   deltaE c1 c2 == deltaE («opaque» c1) («opaque» c2)
 
+/--
+Deuteranopia collapses pure red and pure green toward each other: the simulated ΔE between
+{lit}`(r, 0, 0)` and {lit}`(0, g, 0)` never exceeds the original ΔE (within a small numerical
+tolerance for sRGB round-trip and 8-bit rounding).
+
+`≤` rather than strict `<` because the degenerate `r = g = 0` case has both colors equal to
+black and both ΔEs equal to zero. The strict inequality is exercised by the targeted
+spot-check {Lean.Doc.name}`testDeuteranopiaRedGreenSpotCheck` below, which uses pure-saturated
+red and green so the collapse is unambiguous.
+-/
+def testDeuteranopiaCollapsesRedGreen := testProp <| ∀ (r g : UInt8),
+  let red : Color := .rgba r 0 0 255
+  let green : Color := .rgba 0 g 0 255
+  let simRed := dichromacy .deuteranopia red
+  let simGreen := dichromacy .deuteranopia green
+  -- A tiny tolerance absorbs sRGB encode-decode round-trip plus 8-bit rounding noise on the
+  -- ΔE pipeline. Without it the inequality can flip by ~1e-3 at boundary inputs.
+  deltaE simRed simGreen ≤ deltaE red green + 0.001
+
+/--
+Spot check: pure saturated red and pure saturated green are far apart normally but collapse
+much closer together under deuteranopia. Asserts the simulated ΔE drops to less than half the
+unsimulated one — well outside any quantization noise band, so the directionality of the
+collapse is what the test actually exercises (where the bounded-form property
+{Lean.Doc.name}`testDeuteranopiaCollapsesRedGreen` only asserts non-increase).
+-/
+def testDeuteranopiaRedGreenSpotCheck := testProp <|
+  let red : Color := .rgba 255 0 0 255
+  let green : Color := .rgba 0 255 0 255
+  let simRed := dichromacy .deuteranopia red
+  let simGreen := dichromacy .deuteranopia green
+  deltaE simRed simGreen < deltaE red green / 2
+
 open Lean (Name)
 
 def colorMathTests : List (Name × (Σ p, IO <| TestResult p)) := [
@@ -148,6 +181,8 @@ def colorMathTests : List (Name × (Σ p, IO <| TestResult p)) := [
   (`testLuminanceIgnoresAlpha, ⟨_, testLuminanceIgnoresAlpha⟩),
   (`testContrastIgnoresAlpha, ⟨_, testContrastIgnoresAlpha⟩),
   (`testDeltaEIgnoresAlpha, ⟨_, testDeltaEIgnoresAlpha⟩),
+  (`testDeuteranopiaCollapsesRedGreen, ⟨_, testDeuteranopiaCollapsesRedGreen⟩),
+  (`testDeuteranopiaRedGreenSpotCheck, ⟨_, testDeuteranopiaRedGreenSpotCheck⟩),
 ]
 
 public def runColorMathTests : IO Nat := do
@@ -228,7 +263,7 @@ def cvdReferenceVectors : List (Color × Color × Color × Color) := [
 private def chanMaxDiff : Color → Color → Nat
   | .rgba r1 g1 b1 _, .rgba r2 g2 b2 _ =>
     let d (x y : UInt8) : Nat := (Int.ofNat x.toNat - Int.ofNat y.toNat).natAbs
-    Nat.max (d r1 r2) (Nat.max (d g1 g2) (d b1 b2))
+    max (d r1 r2) <| max (d g1 g2) (d b1 b2)
 
 /--
 The greatest per-channel deviation of `dichromacy` from the DaltonLens reference, over all vectors
@@ -237,9 +272,9 @@ explains) fails the test.
 -/
 def cvdReferenceMaxDeviation : Nat :=
   cvdReferenceVectors.foldl (init := 0) fun acc (c, p, de, t) =>
-    Nat.max acc <|
-      Nat.max (chanMaxDiff (dichromacy .protanopia c) p) <|
-        Nat.max (chanMaxDiff (dichromacy .deuteranopia c) de) (chanMaxDiff (dichromacy .tritanopia c) t)
+    max acc <|
+      max (chanMaxDiff (dichromacy .protanopia c) p) <|
+        max (chanMaxDiff (dichromacy .deuteranopia c) de) (chanMaxDiff (dichromacy .tritanopia c) t)
 
 -- `dichromacy` matches the DaltonLens reference across all 50 vectors and all three deficiencies. The
 -- largest per-channel deviation is 7, for one tritanopia color (`rgba 81 61 202`) that sits near the
@@ -312,4 +347,4 @@ def sharmaMaxDeviation : Float :=
 -- hue-rotation and near-zero-chroma cases).
 /-- info: true -/
 #guard_msgs in
-#eval decide (sharmaMaxDeviation < 0.0001)
+#eval sharmaMaxDeviation < 0.0001

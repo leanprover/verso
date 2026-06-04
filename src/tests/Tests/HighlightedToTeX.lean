@@ -45,7 +45,7 @@ info: "\\providecommand{\\versoKeyword}[1]{\\textbf{#1}}\n\\providecommand{\\ver
 /-! The default code theme emits `\definecolor` blocks for its token and severity colors and
 redefines each `\verso…` macro to apply the resolved color, weight, and style. -/
 
-private def hasSub (s sub : String) : Bool := (s.splitOn sub).length > 1
+private def hasSub (s sub : String) : Bool := s.any sub
 
 /-- info: true -/
 #guard_msgs in

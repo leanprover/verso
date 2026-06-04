@@ -21,7 +21,7 @@ define_font_face katexMono where
   file := "../../../vendored-js/katex/fonts/KaTeX_Typewriter-Regular.woff2"
 
 /-- info: true -/
-#guard_msgs in #eval decide (katexMono.bytes.size > 1000)
+#guard_msgs in #eval katexMono.bytes.size > 1000
 /-- info: Verso.FontFormat.woff2 -/
 #guard_msgs in #eval katexMono.format
 /-- info: Verso.FontStyle.normal -/
