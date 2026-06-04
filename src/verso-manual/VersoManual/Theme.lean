@@ -56,7 +56,7 @@ public structure ManualTheme extends CodeTheme where
 
   /-- The color of content links in body prose. -/
   linkColor : Color
-  /-- The color of visited content links. Defaults to `linkColor`. -/
+  /-- The color of visited content links. Defaults to {name (full := ManualTheme.linkColor)}`linkColor`. -/
   visitedLinkColor : Color := linkColor
 
   /-- The text color used inside the ToC. -/
@@ -262,6 +262,51 @@ public def checkAccessibility (theme : ManualTheme) : Array Color.Issue := Id.ru
 
 end ManualTheme
 
+/-! # Font Asset Enumeration -/
+
+namespace ManualTheme
+
+/--
+The file-backed typefaces that this manual theme needs to emit as font assets.
+
+This starts with the code faces from {name}`CodeTheme.fileTypefaces`, then adds {name}`textFace` and
+{name}`structureFace`, which the manual chrome reads from CSS variables emitted by
+{name}`manualCssVariables`. Built-in typefaces are omitted; only
+{name (full := Typeface.files)}`files` values need copied font bytes and {lit}`@font-face` rules.
+-/
+public def fileTypefaces (theme : ManualTheme) : Array Verso.Typeface :=
+  let inherited := theme.toCodeTheme.fileTypefaces
+  let extras := #[theme.textFace, theme.structureFace].filter fun
+    | .files _ _ => true
+    | _ => false
+  inherited ++ extras
+
+/--
+Output-relative paths and bytes of every font file the manual theme uses, including the
+chrome's {name}`textFace` and {name}`structureFace`. Same naming scheme as
+{name}`CodeTheme.fontAssets`.
+-/
+public def fontAssets (theme : ManualTheme) (assetRoot : String) :
+    Array (String × ByteArray × Verso.FontFace × String) := Id.run do
+  let mut out := #[]
+  for (tf, ti) in theme.fileTypefaces.zipIdx do
+    if let .files family faces := tf then
+      let slug := Verso.Theme.CodeTheme.slugFamily family
+      for (face, i) in faces.zipIdx do
+        let path := s!"{assetRoot}/fonts/{slug}-{ti}-{i}.{face.format.ext}"
+        out := out.push (path, face.bytes, face, family)
+  return out
+
+/--
+The {lit}`@font-face` rules for every {name (full := Typeface.files)}`files`
+typeface the manual theme uses, including the chrome faces. Same content shape as
+{name}`CodeTheme.fontFaceRules`.
+-/
+public def fontFaceRules (theme : ManualTheme) (assetRoot : String) : String :=
+  Verso.Theme.CodeTheme.formatFontFaceRules (theme.fontAssets assetRoot)
+
+end ManualTheme
+
 /-! # Theme-set validation -/
 
 namespace ManualThemeTable
@@ -292,6 +337,11 @@ public inductive ValidationError where
   `..`, or has no letter.
   -/
   | unsafeName (name : Lean.Name)
+  /--
+  The theme {lit}`theme` includes a {name}`Verso.Theme.ThemeAsset` whose {lit}`path` would escape the
+  theme's asset directory ({lit}`-verso-data/themes/<name>/`).
+  -/
+  | unsafeAssetPath (theme : Lean.Name) (path : String)
   /-- The set of avaialable themes named a theme that is not registered with {attr}`@[manual_theme]`. -/
   | unknownAvailable (name : Lean.Name)
   /-- The default light theme is not a registered manual theme. -/
@@ -308,6 +358,8 @@ deriving Inhabited, Repr
 public def ValidationError.format : ValidationError → String
   | .unsafeName n =>
     s!"theme registration name '{n}' is not safe for a URL path segment; only [A-Za-z0-9._-] are allowed, '..' is rejected, and at least one letter is required"
+  | .unsafeAssetPath t p =>
+    s!"theme '{t}' includes an asset whose path '{p}' would escape its asset directory (-verso-data/themes/{t}/); paths must be relative, contain no '..' or '.' segments, no backslash, and no leading/trailing/double '/'"
   | .unknownAvailable n =>
     s!"availableThemes lists '{n}', which is not a registered @[manual_theme]"
   | .unknownDefaultLight n =>
@@ -328,9 +380,12 @@ public def validate (table : ManualThemeTable)
     (defaultLight defaultDark : Name)
     (available : Option NameSet) : Array ValidationError := Id.run do
   let mut errs := #[]
-  for (n, _) in table.themes.toList do
+  for (n, t) in table.themes.toList do
     unless safeNameString n.toString do
       errs := errs.push (.unsafeName n)
+    for asset in t.assets do
+      unless Verso.Theme.ThemeAsset.safePath asset.path do
+        errs := errs.push (.unsafeAssetPath n asset.path)
   if let some xs := available then
     for n in xs do
       unless (table.find? n).isSome do

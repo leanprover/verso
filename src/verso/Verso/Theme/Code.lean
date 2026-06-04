@@ -48,6 +48,23 @@ public structure ThemeAsset where
   contents : ByteArray
 
 /--
+Whether a {Lean.Doc.name (full := ThemeAsset.path)}`ThemeAsset.path` is safe to join under the
+theme's asset directory ({lit}`-verso-data/themes/<name>/`) without escaping it. Required so a
+theme can't ship an asset whose path contains {lit}`..` segments or starts with {lit}`/` and
+silently clobber site files outside its own root.
+
+A path is safe iff: it is non-empty; contains no backslash; and every {lit}`/`-separated segment
+is non-empty (rejects leading/trailing/double slashes) and is neither {lit}`.` nor {lit}`..`.
+-/
+public def ThemeAsset.safePath (p : String) : Bool := Id.run do
+  if p.isEmpty then return false
+  if p.contains '\\' then return false
+  for segment in p.splitOn "/" do
+    if segment.isEmpty then return false
+    if segment == "." || segment == ".." then return false
+  return true
+
+/--
 A typed code theme. Defaults reproduce today's hardcoded chrome, so a default-constructed theme is
 visually unchanged from the pre-theming look.
 
@@ -606,13 +623,30 @@ end CodeTheme
 namespace CodeTheme
 
 /--
-Every {Lean.Doc.name}`Typeface` referenced by a theme. Built-in
-{Lean.Doc.name (full := Typeface.sans)}`sans`/{Lean.Doc.name (full := Typeface.serif)}`serif`/{Lean.Doc.name (full := Typeface.mono)}`mono`
-are skipped: only {Lean.Doc.name (full := Typeface.files)}`files` typefaces contribute font assets.
+The file-backed typefaces that this code theme needs to emit as font assets.
+
+{Lean.Doc.name}`cssVariables` writes a {lit}`font-family` value for each code-face field. When one
+of those fields uses {Lean.Doc.name (full := Typeface.files)}`files`, the generated stylesheet also
+needs matching {lit}`@font-face` rules and copied font bytes. This function therefore checks every
+code-face field that can appear in CSS variables and keeps only {lit}`files` values.
+
+Built-in {Lean.Doc.name (full := Typeface.sans)}`sans`,
+{Lean.Doc.name (full := Typeface.serif)}`serif`, and
+{Lean.Doc.name (full := Typeface.mono)}`mono` typefaces are omitted because they resolve to system
+fonts. Later asset generation deduplicates repeated typefaces, so the same file-backed family may
+safely appear in multiple fields.
 -/
 public def fileTypefaces (theme : CodeTheme) : Array Typeface :=
-  let faces := #[theme.codeFace, theme.const.face, theme.keyword.face, theme.«var».face,
-    theme.delim.face, theme.operator.face, theme.bracket.face, theme.separator.face]
+  let faces := #[
+    theme.codeFace,
+    theme.const.face, theme.keyword.face, theme.«var».face,
+    theme.literal.face, theme.literalString.face,
+    theme.literalNumber.face, theme.literalChar.face,
+    theme.docComment.face, theme.comment.face, theme.commentDelim.face,
+    theme.sort.face, theme.levelVar.face, theme.levelConst.face,
+    theme.levelOp.face, theme.moduleName.face,
+    theme.delim.face, theme.operator.face, theme.bracket.face, theme.separator.face
+  ]
   faces.filter fun
     | .files _ _ => true
     | _ => false
@@ -666,28 +700,41 @@ public def fontAssets (theme : CodeTheme) (assetRoot : String) :
         out := out.push (path, face.bytes, face, family)
   return out
 
-private def weightDecl : FaceWeights → String
+/-- The CSS {lit}`font-weight` value for a face — either a single number for a fixed-weight
+face or a {lit}`<lo> <hi>` range for a variable face. -/
+public def faceWeightDecl : FaceWeights → String
   | .fixed w => toString w.val
   | .variable lo hi _ => s!"{lo.val} {hi.val}"
 
-private def styleString : FontStyle → String
+/-- The CSS {lit}`font-style` value for a face: {lit}`normal` or {lit}`italic`. -/
+public def faceStyleDecl : FontStyle → String
   | .normal => "normal"
   | .italic => "italic"
+
+/--
+Renders an {lit}`@font-face` block per entry in an asset list (as returned by
+{Lean.Doc.name (full := CodeTheme.fontAssets)}`fontAssets`). Factored out so the manual genre can
+build {lit}`verso-themes.css` rules from its own asset enumeration (which also covers chrome
+{lit}`textFace` / {lit}`structureFace`) without reimplementing the formatter.
+-/
+public def formatFontFaceRules (assets : Array (String × ByteArray × FontFace × String)) :
+    String := Id.run do
+  let mut out := ""
+  for (path, _bytes, face, family) in assets do
+    out := out ++ s!"@font-face \{\n"
+    out := out ++ s!"  font-family: {cssQuote family};\n"
+    out := out ++ s!"  font-weight: {faceWeightDecl face.weights};\n"
+    out := out ++ s!"  font-style: {faceStyleDecl face.style};\n"
+    out := out ++ s!"  src: url({cssQuote path}) format({cssQuote face.format.css});\n"
+    out := out ++ "}\n"
+  return out
 
 /--
 The {lit}`@font-face` rules for every {Lean.Doc.name (full := Typeface.files)}`files`
 typeface the theme uses. The {lit}`url()` paths are relative, so the rules resolve from whatever
 stylesheet they end up in (in the manual genre, {lit}`verso-themes.css` at the site root).
 -/
-public def fontFaceRules (theme : CodeTheme) (assetRoot : String) : String := Id.run do
-  let mut out := ""
-  for (path, _bytes, face, family) in theme.fontAssets assetRoot do
-    out := out ++ s!"@font-face \{\n"
-    out := out ++ s!"  font-family: {cssQuote family};\n"
-    out := out ++ s!"  font-weight: {weightDecl face.weights};\n"
-    out := out ++ s!"  font-style: {styleString face.style};\n"
-    out := out ++ s!"  src: url({cssQuote path}) format({cssQuote face.format.css});\n"
-    out := out ++ "}\n"
-  return out
+public def fontFaceRules (theme : CodeTheme) (assetRoot : String) : String :=
+  formatFontFaceRules (theme.fontAssets assetRoot)
 
 end CodeTheme

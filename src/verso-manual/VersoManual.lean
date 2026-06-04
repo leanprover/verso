@@ -501,9 +501,18 @@ def writeThemeAssets (dir : System.FilePath) (config : RenderConfig)
       let abs := dir.join path
       if let some p := abs.parent then ensureDir p
       writeBinFile abs bytes
-  -- Theme-bundled assets (images, etc.).
+  -- Theme-bundled assets (images, etc.). Defensively skip any asset whose path is unsafe
+  -- (`..` segments, leading/trailing/double `/`, backslashes) — the validation pass logs an
+  -- `unsafeAssetPath` error for these, but build-log errors are non-fatal and the build
+  -- continues into emission, so the writer must independently refuse to honor the bad path.
+  -- Without this guard a malicious or buggy theme could clobber files outside its asset root
+  -- via a path like `../../book.css`.
   for (n, t) in themes do
     for a in t.assets do
+      unless Verso.Theme.ThemeAsset.safePath a.path do
+        Verso.reportError
+          s!"refusing to write theme asset for '{n.toString}': unsafe path '{a.path}'"
+        continue
       let path := dir / "-verso-data" / "themes" / n.toString / a.path
       if let some p := path.parent then ensureDir p
       writeBinFile path a.contents
