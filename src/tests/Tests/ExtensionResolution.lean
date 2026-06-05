@@ -120,6 +120,16 @@ def distanceRegistered : RoleExpanderOf Unit
   | (), _ => do
     `(Verso.Doc.Inline.text "distance-role")
 
+@[role]
+def yyyyy : RoleExpanderOf Unit
+  | (), _ => do
+    `(Verso.Doc.Inline.text "middle-cutoff-role")
+
+@[role]
+def zzzzzz : RoleExpanderOf Unit
+  | (), _ => do
+    `(Verso.Doc.Inline.text "long-cutoff-role")
+
 /--
 error: No registered role `ac`.
 
@@ -139,6 +149,55 @@ error: No registered role `zz`.
 #docs (.none) shortDistanceNoMatch "Short distance no match" :=
 :::::::
 {zz}[]
+:::::::
+
+/-
+The suggestion cutoff table is:
+* input length less than 3: Levenshtein distance at most 1
+* input length less than 6: Levenshtein distance at most 2
+* otherwise: Levenshtein distance at most 3
+-/
+
+/--
+error: No registered role `yyyxx`.
+
+Hint: Did you mean role `yyyyy`?
+  yyyx̵x̵y̲y̲
+-/
+#guard_msgs in
+#docs (.none) middleDistanceMatch "Middle distance match" :=
+:::::::
+{yyyxx}[]
+:::::::
+
+/--
+error: No registered role `yyxxx`.
+-/
+#guard_msgs in
+#docs (.none) middleDistanceNoMatch "Middle distance no match" :=
+:::::::
+{yyxxx}[]
+:::::::
+
+/--
+error: No registered role `zzzaaa`.
+
+Hint: Did you mean role `zzzzzz`?
+  zzza̵a̵a̵z̲z̲z̲
+-/
+#guard_msgs in
+#docs (.none) longBoundaryDistanceMatch "Long boundary distance match" :=
+:::::::
+{zzzaaa}[]
+:::::::
+
+/--
+error: No registered role `zzaaaa`.
+-/
+#guard_msgs in
+#docs (.none) longBoundaryDistanceNoMatch "Long boundary distance no match" :=
+:::::::
+{zzaaaa}[]
 :::::::
 
 /--

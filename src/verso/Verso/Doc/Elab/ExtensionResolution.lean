@@ -32,9 +32,10 @@ private meta def extensionSuggestionDistance (candidate : Name × String) (input
       #[candidate.2, extensionBaseName candidate.1]
   candidates.foldl (init := none) fun best? cand =>
     let limit := extensionSuggestionThreshold input cand
+    -- `levenshtein` may return `some` distance above the cutoff; `none` only means definitely above.
     match EditDistance.levenshtein cand input limit, best? with
-    | some dist, some best => some (min dist best)
-    | some dist, none => some dist
+    | some dist, some best => if dist <= limit then some (min dist best) else some best
+    | some dist, none => if dist <= limit then some dist else none
     | none, best? => best?
 
 private meta def extensionSuggestions (candidates : Array (Name × String)) (input : String) (count : Nat := 10) : Array (Name × String) :=
