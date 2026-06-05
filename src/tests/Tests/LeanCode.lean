@@ -65,10 +65,20 @@ info: (some (Verso.Genre.Manual.InlineLean.Inline.lean, [{"seq":
          "docs": null}},
        "content": "x"}}},
     {"text": {"str": " "}},
-    {"token": {"tok": {"kind": "unknown", "content": "+"}}},
+    {"token":
+     {"tok":
+      {"kind":
+       {"operator":
+        {"occurrence": "«term_+_»-827",
+         "name": ["term_+_"],
+         "docs":
+         "`a + b` computes the sum of `a` and `b`.\nThe meaning of this notation is type-dependent. \n\nConventions for notations in identifiers:\n\n * The recommended spelling of `+` in identifiers is `add`."}},
+       "content": "+"}}},
     {"text": {"str": " "}},
     {"token":
-     {"tok": {"kind": {"withType": {"type": "Nat"}}, "content": "3"}}}]}},
+     {"tok":
+      {"kind": {"num": {"typeFormat": null, "type": "Nat"}},
+       "content": "3"}}}]}},
  []]))
 -/
 #guard_msgs in

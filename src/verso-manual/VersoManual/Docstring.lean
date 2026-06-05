@@ -1521,7 +1521,7 @@ elab "sig_for%" name:ident : term => do
 def highlightDataValue (v : DataValue) : Highlighted :=
   .token <|
     match v with
-    | .ofString (v : String) => ⟨.str v, toString v⟩
+    | .ofString (v : String) => ⟨.str (some v) false, toString v⟩
     | .ofBool b =>
       if b then
         ⟨.const ``true (sig_for% true) (some <| docs_for% true) false none, "true"⟩

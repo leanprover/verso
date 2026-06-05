@@ -411,9 +411,14 @@ defmethod Token.Kind.hover? (tok : Token.Kind) : HighlightHtmlM g (Option Nat) :
     match tyFmt with
     | some fmt => some <$> addHover {{ <code data-rich-format={{fmt}}>{{type}}</code> }}
     | none => some <$> addHover {{ <code>{{type}}</code> }}
-  | .str s =>
+  | .str (some s) _ =>
     some <$> addHover {{ <code><span class="literal string">{{s.quote}}</span>" : String"</code>}}
+  | .str none _ => pure none
+  | .char c =>
+    some <$> addHover {{ <code><span class="literal char">{{s!"{repr c}"}}</span>" : Char"</code>}}
   | .withType t =>
+    some <$> addHover {{ <code>{{t}}</code> }}
+  | .num (some t) _ =>
     some <$> addHover {{ <code>{{t}}</code> }}
   | .sort (some doc) =>
     some <$> addHover {{<code class="docstring">{{doc}}</code>}}
@@ -686,6 +691,21 @@ public def highlightingStyle : String := "
   font-family: var(--verso-code-font-family,);
 }
 
+/* These lexically-classified token kinds default to the `.unknown` appearance. The rule follows
+   `.const` so it wins for the `anon-ctor` tokens, which also carry the `const` class. */
+.hl.lean .anon-ctor,
+.hl.lean .number,
+.hl.lean .char,
+.hl.lean .comment,
+.hl.lean .punctuation,
+.hl.lean .delim,
+.hl.lean .wildcard {
+  color: var(--verso-code-color,);
+  font-weight: normal;
+  font-style: normal;
+  font-family: var(--verso-code-font-family,);
+}
+
 .hover-container {
   width: 0;
   height: 0;
@@ -768,7 +788,7 @@ public def highlightingStyle : String := "
 }
 
 @media (hover: hover) {
-  .hl.lean .token.binding-hl, .hl.lean .literal.string:hover, .hl.lean .token.typed:hover {
+  .hl.lean .token.binding-hl, .hl.lean .literal:hover, .hl.lean .token.typed:hover {
     background-color: #eee;
     border-radius: 2px;
     transition: none;
@@ -948,7 +968,7 @@ public def highlightingStyle : String := "
   text-size-adjust: 100%;
 }
 
-.hl.lean .tactic:has(.tactic-toggle:checked) {
+.hl.lean .tactic:has(> .tactic-toggle:checked) {
   display: inline-grid;
   grid-template-columns: 1fr;
 }
@@ -967,7 +987,10 @@ public def highlightingStyle : String := "
 }
 
 @media (hover: hover) {
-  .hl.lean .tactic:has(.tactic-toggle:not(:checked)) > label:hover {
+  /* Highlight a region on hover only when its own toggle is unchecked, and only the innermost
+     hovered region: `label:hover` bubbles to ancestor labels, so suppress the highlight on a region
+     whose label contains a more deeply nested hovered tactic label. */
+  .hl.lean .tactic:has(> .tactic-toggle:not(:checked)) > label:hover:not(:has(.tactic > label:hover)) {
     background-color: #eeeeee;
   }
 }
@@ -1319,7 +1342,7 @@ window.onload = () => {
       let parent = elem.parentNode;
       while (parent && \"classList\" in parent) {
         if (parent.classList.contains(\"tactic\")) {
-          const toggle = parent.querySelector(\"input.tactic-toggle\");
+          const toggle = parent.querySelector(\":scope > input.tactic-toggle\");
           if (toggle) {
             return !toggle.checked;
           }
@@ -1416,7 +1439,7 @@ window.onload = () => {
         followCursor: 'initial',
         onShow(inst) {
           if (inst.reference.className == 'tactic') {
-            const toggle = inst.reference.querySelector(\"input.tactic-toggle\");
+            const toggle = inst.reference.querySelector(\":scope > input.tactic-toggle\");
             if (toggle && toggle.checked) {
               return false;
             }
@@ -1435,7 +1458,7 @@ window.onload = () => {
         content (tgt) {
           const content = document.createElement(\"span\");
           if (tgt.className == 'tactic') {
-            const state = tgt.querySelector(\".tactic-state\").cloneNode(true);
+            const state = tgt.querySelector(\":scope > .tactic-state\").cloneNode(true);
             state.style.display = \"block\";
             content.appendChild(state);
             content.style.display = \"block\";
@@ -1514,7 +1537,7 @@ window.onload = () => {
       // Skip tokens inside closed tactics — they interfere with tactic tippys
       const closedTactics = new Set();
       document.querySelectorAll('.hl.lean .tactic').forEach(tactic => {
-        const toggle = tactic.querySelector('input.tactic-toggle');
+        const toggle = tactic.querySelector(':scope > input.tactic-toggle');
         if (toggle && !toggle.checked) closedTactics.add(tactic);
       });
       function isInsideClosedTactic(el) {
@@ -1528,7 +1551,7 @@ window.onload = () => {
       // Create/destroy token tippys when tactic checkbox toggles
       const tacticTippySelector = '.const.token, .keyword.token, .literal.token, .option.token, .var.token, .typed.token, .has-info, .level-var, .level-const, .level-op, .sort';
       document.querySelectorAll('.hl.lean .tactic').forEach(tactic => {
-        const toggle = tactic.querySelector('input.tactic-toggle');
+        const toggle = tactic.querySelector(':scope > input.tactic-toggle');
         if (toggle) toggle.addEventListener('change', () => {
           if (toggle.checked) {
             closedTactics.delete(tactic);
