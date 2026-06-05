@@ -12,8 +12,11 @@
 (function () {
     try {
         const saved = localStorage.getItem("verso-toc-width");
-        if (saved !== null && isFinite(Number(saved))) {
-            document.documentElement.style.setProperty("--verso-toc-user-width", `${saved}px`);
+        // Parse to a number (as toc-resize.js does) and write that back, so a stored
+        // value with stray whitespace becomes a valid length rather than `" 420 px"`.
+        const width = saved === null ? NaN : Number(saved);
+        if (Number.isFinite(width)) {
+            document.documentElement.style.setProperty("--verso-toc-user-width", `${width}px`);
         }
     } catch (_) {
         // Leave the default width in place when local storage is unavailable.

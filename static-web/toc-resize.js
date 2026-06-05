@@ -42,7 +42,10 @@
     }
 
     function syncAria() {
-        handle.setAttribute("aria-valuenow", String(Math.round(currentWidth())));
+        const width = Math.round(currentWidth());
+        handle.setAttribute("aria-valuenow", String(width));
+        // aria-valuenow is a bare number, so give screen readers a spoken value with units.
+        handle.setAttribute("aria-valuetext", `${width} pixels`);
         handle.setAttribute("aria-valuemax", String(Math.round(maxWidth())));
     }
 

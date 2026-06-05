@@ -292,13 +292,15 @@ main [id] {
 }
 
 .toc-resize-handle {
-    /* Fixed and centered on the ToC's right edge. It lives outside #toc (the scroll
-       container) so it neither scrolls with the ToC contents nor hides behind the
-       ToC's scrollbar. #toc is fixed at top: header height, left: 0, so its right
-       edge sits at --verso-toc-effective-width. */
+    /* Fixed along the ToC's right edge. It lives outside #toc (the scroll container)
+       and starts at the edge rather than straddling it, so it neither scrolls with the
+       ToC contents nor overlaps the ToC's scrollbar. #toc is fixed at top: header
+       height, left: 0, so its right edge sits at --verso-toc-effective-width; the
+       handle begins there and extends a few pixels into the margin <main> reserves for
+       the ToC. */
     position: fixed;
     top: var(--verso-header-height);
-    left: calc(var(--verso-toc-effective-width) - 3px);
+    left: var(--verso-toc-effective-width);
     width: 6px;
     height: calc(100dvh - var(--verso-header-height));
     z-index: 12;
@@ -309,10 +311,12 @@ main [id] {
 }
 
 .toc-resize-handle::after {
+    /* The visible divider, drawn at the handle's left edge so it sits exactly on the
+       ToC's right edge while the grab area extends into the margin to its right. */
     content: '';
     position: absolute;
     top: 0;
-    left: 3px;
+    left: 0;
     width: 1px;
     height: 100%;
     background: var(--verso-toc-border-color, #d0d0d0);

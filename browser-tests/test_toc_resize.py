@@ -58,6 +58,8 @@ class TestTocResize:
         initial_value = handle.get_attribute("aria-valuenow")
         assert initial_value is not None
         assert abs(float(initial_value) - round(initial)) <= 1
+        # aria-valuenow is a bare number, so a spoken value with units is exposed too.
+        expect(handle).to_have_attribute("aria-valuetext", f"{initial_value} pixels")
 
         handle.focus()
         expect(handle).to_be_focused()
