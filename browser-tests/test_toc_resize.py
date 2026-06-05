@@ -2,9 +2,7 @@ from playwright.sync_api import Page, expect
 
 
 def toc_width(page: Page) -> float:
-    return page.locator("#toc").evaluate(
-        "el => el.getBoundingClientRect().width"
-    )
+    return page.locator("#toc").evaluate("el => el.getBoundingClientRect().width")
 
 
 class TestTocResize:
@@ -125,7 +123,9 @@ class TestTocResize:
             f"Expected the saved width to remain as a custom property, got {user_width!r}"
         )
 
-    def test_saved_width_applies_when_widening_from_mobile(self, server: str, page: Page):
+    def test_saved_width_applies_when_widening_from_mobile(
+        self, server: str, page: Page
+    ):
         """Growing past the mobile breakpoint applies the saved width without a reload."""
         page.set_viewport_size({"width": 1200, "height": 800})
         page.goto(f"{server}/")
