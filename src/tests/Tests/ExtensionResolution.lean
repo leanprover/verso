@@ -110,10 +110,39 @@ end RoleCases
 
 namespace DistanceCases
 
+/-
+The suggestion cutoff table is:
+* input length less than 3: Levenshtein distance at most 1
+* input length less than 6: Levenshtein distance at most 2
+* otherwise: Levenshtein distance at most 3
+
+The length-1 no-match case appears before this namespace declares a local single-character role,
+because any single-character role is within distance 1 of any single-character typo.
+-/
+
+/--
+error: No registered role `q`.
+-/
+#guard_msgs in
+#docs (.none) oneCharDistanceNoMatch "One-character distance no match" :=
+:::::::
+{q}[]
+:::::::
+
+@[role]
+def r : RoleExpanderOf Unit
+  | (), _ => do
+    `(Verso.Doc.Inline.text "one-character-cutoff-role")
+
 @[role]
 def ab : RoleExpanderOf Unit
   | (), _ => do
     `(Verso.Doc.Inline.text "short-distance-role")
+
+@[role]
+def vvv : RoleExpanderOf Unit
+  | (), _ => do
+    `(Verso.Doc.Inline.text "three-character-cutoff-role")
 
 @[role]
 def distanceRegistered : RoleExpanderOf Unit
@@ -141,6 +170,18 @@ def multiAlphi : RoleExpanderOf Unit
     `(Verso.Doc.Inline.text "multi-alphi-role")
 
 /--
+error: No registered role `q`.
+
+Hint: Did you mean role `r`?
+  q̵r̲
+-/
+#guard_msgs in
+#docs (.none) oneCharDistanceMatch "One-character distance match" :=
+:::::::
+{q}[]
+:::::::
+
+/--
 error: No registered role `ac`.
 
 Hint: Did you mean role `ab`?
@@ -161,12 +202,26 @@ error: No registered role `zz`.
 {zz}[]
 :::::::
 
-/-
-The suggestion cutoff table is:
-* input length less than 3: Levenshtein distance at most 1
-* input length less than 6: Levenshtein distance at most 2
-* otherwise: Levenshtein distance at most 3
+/--
+error: No registered role `vww`.
+
+Hint: Did you mean role `vvv`?
+  vw̵w̵v̲v̲
 -/
+#guard_msgs in
+#docs (.none) threeCharDistanceMatch "Three-character distance match" :=
+:::::::
+{vww}[]
+:::::::
+
+/--
+error: No registered role `www`.
+-/
+#guard_msgs in
+#docs (.none) threeCharDistanceNoMatch "Three-character distance no match" :=
+:::::::
+{www}[]
+:::::::
 
 /--
 error: No registered role `yyyxx`.
