@@ -108,6 +108,62 @@ error: No registered role `nothereatallzzzz`.
 
 end RoleCases
 
+namespace DistanceCases
+
+@[role]
+def ab : RoleExpanderOf Unit
+  | (), _ => do
+    `(Verso.Doc.Inline.text "short-distance-role")
+
+@[role]
+def distanceRegistered : RoleExpanderOf Unit
+  | (), _ => do
+    `(Verso.Doc.Inline.text "distance-role")
+
+/--
+error: No registered role `ac`.
+
+Hint: Did you mean role `ab`?
+  ac̵b̲
+-/
+#guard_msgs in
+#docs (.none) shortDistanceMatch "Short distance match" :=
+:::::::
+{ac}[]
+:::::::
+
+/--
+error: No registered role `zz`.
+-/
+#guard_msgs in
+#docs (.none) shortDistanceNoMatch "Short distance no match" :=
+:::::::
+{zz}[]
+:::::::
+
+/--
+error: No registered role `distanceRegistred`.
+
+Hint: Did you mean role `distanceRegistered`?
+  distanceRegiste̲red
+-/
+#guard_msgs in
+#docs (.none) longDistanceMatch "Long distance match" :=
+:::::::
+{distanceRegistred}[]
+:::::::
+
+/--
+error: No registered role `distanceNoMatchzzzz`.
+-/
+#guard_msgs in
+#docs (.none) longDistanceNoMatch "Long distance no match" :=
+:::::::
+{distanceNoMatchzzzz}[]
+:::::::
+
+end DistanceCases
+
 namespace ShadowSource
 
 @[role]
