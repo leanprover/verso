@@ -114,9 +114,79 @@ class TestTocResize:
         assert abs(width - 288) <= 1, (
             f"Expected mobile ToC to keep the 18rem CSS default width, got {width}px"
         )
-        inline_width = page.evaluate(
-            "document.documentElement.style.getPropertyValue('--verso-toc-width')"
+        # The saved width is recorded as a custom property; the
+        # stylesheet, not the script, is what ignores it on mobile.
+        user_width = page.evaluate(
+            "document.documentElement.style.getPropertyValue('--verso-toc-user-width')"
         )
-        assert inline_width == "", (
-            f"Expected no inline ToC width on mobile, got {inline_width!r}"
+        assert user_width == "640px", (
+            f"Expected the saved width to remain as a custom property, got {user_width!r}"
+        )
+
+    def test_saved_width_applies_when_widening_from_mobile(self, server: str, page: Page):
+        """Growing past the mobile breakpoint applies the saved width without a reload."""
+        page.set_viewport_size({"width": 1200, "height": 800})
+        page.goto(f"{server}/")
+        page.wait_for_load_state("networkidle")
+        page.evaluate("localStorage.setItem('verso-toc-width', '420')")
+
+        # Load narrow, then widen in place. The stylesheet swaps to the saved width.
+        page.set_viewport_size({"width": 390, "height": 800})
+        page.reload()
+        page.wait_for_load_state("networkidle")
+        assert abs(toc_width(page) - 288) <= 1
+
+        page.set_viewport_size({"width": 1200, "height": 800})
+        widened = toc_width(page)
+        assert abs(widened - 420) <= 1, (
+            f"Expected the saved 420px width on desktop, got {widened}px"
+        )
+
+    def test_resize_reflows_content_layout_live(self, server: str, page: Page):
+        """Resizing the ToC re-evaluates main-width container queries without a reload.
+
+        The content centering and margin-note layout are driven by ``@container``
+        queries on ``<main>``, whose width tracks the ToC width. This is a regression
+        test for a Firefox-specific bug: when ``<main>`` reserved space for the ToC with
+        ``padding`` (driven by an inherited custom property), Firefox did not
+        re-evaluate the container queries on the live size change, so the layout only
+        updated after a reload. Reserving the space with ``margin`` keeps ``<main>``'s
+        border-box width tied to the ToC width, which every engine re-queries on. This
+        test only catches the regression when run under Firefox; the conftest runs it
+        under both engines.
+        """
+        # A wide viewport so the content column starts centered with the default ToC.
+        page.set_viewport_size({"width": 1600, "height": 900})
+        page.goto(f"{server}/")
+        page.wait_for_load_state("networkidle")
+        page.evaluate("localStorage.removeItem('verso-toc-width')")
+        page.reload()
+        page.wait_for_load_state("networkidle")
+
+        def content_max_width() -> str:
+            # The centered regime gives .content-wrapper a max-width; the left-aligned
+            # regime does not. So max-width is a clean signal for which @container rule
+            # is currently applied.
+            return page.locator(".content-wrapper").first.evaluate(
+                "el => getComputedStyle(el).maxWidth"
+            )
+
+        assert content_max_width() != "none", (
+            "Expected the content to start centered at a wide viewport with the default ToC"
+        )
+
+        # Drag the ToC wide enough to shrink the main content area below the centering
+        # threshold, without reloading.
+        handle = page.locator(".toc-resize-handle")
+        box = handle.bounding_box()
+        assert box is not None, "Expected a visible ToC resize handle"
+        page.mouse.move(box["x"] + box["width"] / 2, box["y"] + 200)
+        page.mouse.down()
+        page.mouse.move(box["x"] + box["width"] / 2 + 500, box["y"] + 200)
+        page.mouse.up()
+
+        assert content_max_width() == "none", (
+            "Expected the content to stop centering once the widened ToC shrinks the "
+            "main content area, without a reload (the container query must re-evaluate "
+            "live)"
         )

@@ -405,6 +405,17 @@ r#"(function(){
   }
 })()"#
 
+/--
+Applies a saved table-of-contents width before the first paint.
+
+This is the inline counterpart to `static-web/toc-resize.js`: running it in the page head
+sets `--verso-toc-user-width` early enough that returning desktop readers do not see the
+default width flash to their saved width. The deferred script then takes over the
+interactive resizing, and the stylesheet ignores this width on mobile. The source lives
+next to `toc-resize.js` so the two stay in sync and are type-checked together.
+-/
+def tocWidthPreloadJs : String := include_str "../../../static-web/toc-resize-preload.js"
+
 open Verso.Search in
 public def page
     (toc : Toc) (path : Path)
@@ -430,6 +441,9 @@ public def page
       <head>
         <script>
           {{addSlashJs}}
+        </script>
+        <script>
+          {{tocWidthPreloadJs}}
         </script>
         <base href={{relativeRoot}}/>
         <meta charset="utf-8"/>
@@ -486,8 +500,8 @@ public def page
                 </ul>
                 }} else .empty }}
             </div>
-            <div class="toc-resize-handle"/>
           </nav>
+          <div class="toc-resize-handle"/>
           <main>
             <div class="content-wrapper">
               {{if showNavButtons then toc.navButtons path else .empty}}
