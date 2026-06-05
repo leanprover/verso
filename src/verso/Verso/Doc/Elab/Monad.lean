@@ -627,17 +627,22 @@ private unsafe def roleExpandersForUnsafe (x : Name) : DocElabM (Array (RoleExpa
 @[implemented_by roleExpandersForUnsafe]
 public opaque roleExpandersFor (x : Name) : DocElabM (Array (RoleExpander × Option String × Option SigDoc))
 
-private unsafe def registeredRoleNamesUnsafe : DocElabM (Array Name) := do
+private def registeredExpanderNames
+    (ext : PersistentEnvExtension (Name × Array Name) (Name × Name) (NameMap (Array Name)))
+    (attr : KeyedDeclsAttribute α) : DocElabM (Array Name) := do
   let env ← getEnv
   let mut names : NameSet := {}
-  for (n, _) in roleExpanderExt.getState env do
+  for (n, _) in ext.getState env do
     names := names.insert n
   for (n, _) in env.constants do
-    if !(roleExpanderAttr.getEntries env n).isEmpty then
+    if !(attr.getEntries env n).isEmpty then
       names := names.insert n
   pure names.toList.toArray
 
-@[implemented_by registeredRoleNamesUnsafe]
+private def registeredRoleNamesImpl : DocElabM (Array Name) :=
+  registeredExpanderNames roleExpanderExt roleExpanderAttr
+
+@[implemented_by registeredRoleNamesImpl]
 public opaque registeredRoleNames : DocElabM (Array Name)
 
 private unsafe def evalIOOptStringUnsafe (x : Name) : MetaM (Option SigDoc) := do
@@ -817,6 +822,12 @@ private unsafe def codeBlockExpandersForUnsafe (x : Name) : DocElabM (Array (Cod
 @[implemented_by codeBlockExpandersForUnsafe]
 public opaque codeBlockExpandersFor (x : Name) : DocElabM (Array (CodeBlockExpander × Option String × Option SigDoc))
 
+private def registeredCodeBlockNamesImpl : DocElabM (Array Name) :=
+  registeredExpanderNames codeBlockExpanderExt codeBlockExpanderAttr
+
+@[implemented_by registeredCodeBlockNamesImpl]
+public opaque registeredCodeBlockNames : DocElabM (Array Name)
+
 public abbrev DirectiveExpander := Array Arg → TSyntaxArray `block → DocElabM (Array (TSyntax `term))
 
 public abbrev DirectiveExpanderOf α := α → TSyntaxArray `block → DocElabM Term
@@ -913,6 +924,12 @@ private unsafe def directiveExpandersForUnsafe (x : Name) : DocElabM (Array (Dir
 @[implemented_by directiveExpandersForUnsafe]
 public opaque directiveExpandersFor (x : Name) : DocElabM (Array (DirectiveExpander × Option String × Option SigDoc))
 
+private def registeredDirectiveNamesImpl : DocElabM (Array Name) :=
+  registeredExpanderNames directiveExpanderExt directiveExpanderAttr
+
+@[implemented_by registeredDirectiveNamesImpl]
+public opaque registeredDirectiveNames : DocElabM (Array Name)
+
 
 public abbrev BlockCommandExpander := Array Arg → DocElabM (Array (TSyntax `term))
 
@@ -1007,3 +1024,9 @@ private unsafe def blockCommandExpandersForUnsafe (x : Name) : DocElabM (Array (
 
 @[implemented_by blockCommandExpandersForUnsafe]
 public opaque blockCommandExpandersFor (x : Name) : DocElabM (Array (BlockCommandExpander × Option String × Option SigDoc))
+
+private def registeredBlockCommandNamesImpl : DocElabM (Array Name) :=
+  registeredExpanderNames blockCommandExpanderExt blockCommandExpanderAttr
+
+@[implemented_by registeredBlockCommandNamesImpl]
+public opaque registeredBlockCommandNames : DocElabM (Array Name)
