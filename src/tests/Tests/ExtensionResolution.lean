@@ -177,6 +177,11 @@ namespace ShadowUse
 
 def shadowedRegistered : Nat := 0
 
+/-
+The registered role's basename is shadowed here by a non-role declaration. Suggestions should
+therefore use a qualified name that resolves to the registered role instead of the local declaration.
+-/
+
 /--
 error: No registered role `ShadowSource.shadowedRegistred`.
 
@@ -187,6 +192,18 @@ Hint: Did you mean role `ShadowSource.shadowedRegistered`?
 #docs (.none) roleShadowedSuggestion "Shadowed role suggestion" :=
 :::::::
 {ShadowSource.shadowedRegistred}[]
+:::::::
+
+/--
+error: No registered role `shadowedRegistred`.
+
+Hint: Did you mean role `ShadowSource.shadowedRegistered`?
+  s̵h̵a̵d̵o̵w̵e̵d̵R̵e̵g̵i̵s̵t̵r̵e̵d̵S̲h̲a̲d̲o̲w̲S̲o̲u̲r̲c̲e̲.̲s̲h̲a̲d̲o̲w̲e̲d̲R̲e̲g̲i̲s̲t̲e̲r̲e̲d̲
+-/
+#guard_msgs in
+#docs (.none) roleUnqualifiedShadowedSuggestion "Unqualified shadowed role suggestion" :=
+:::::::
+{shadowedRegistred}[]
 :::::::
 
 end ShadowUse
