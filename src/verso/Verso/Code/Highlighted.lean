@@ -684,27 +684,148 @@ public def highlightingStyle : String := "
   position: relative;
 }
 
-.hl.lean .literal, .hl.lean .unknown {
+.hl.lean .unknown {
   color: var(--verso-code-color,);
   font-weight: normal;
   font-style: normal;
   font-family: var(--verso-code-font-family,);
 }
 
-/* These lexically-classified token kinds default to the `.unknown` appearance. The rule follows
-   `.const` so it wins for the `anon-ctor` tokens, which also carry the `const` class. */
+.hl.lean .literal {
+  color: var(--verso-code-literal-color, var(--verso-code-color,));
+  font-weight: var(--verso-code-literal-weight, normal);
+  font-style: var(--verso-code-literal-style, normal);
+  font-family: var(--verso-code-literal-font-family, var(--verso-code-font-family,));
+}
+
+/* `.literal.string` is more specific than `.literal`, so its rule wins when both classes
+   apply (string literals). Other future `.literal.*` kinds will fall back to the `.literal`
+   rule above until they get their own variables. */
+.hl.lean .literal.string {
+  color: var(--verso-code-literal-string-color, var(--verso-code-literal-color, var(--verso-code-color,)));
+  font-weight: var(--verso-code-literal-string-weight, normal);
+  font-style: var(--verso-code-literal-string-style, normal);
+  font-family: var(--verso-code-literal-string-font-family, var(--verso-code-font-family,));
+}
+
+.hl.lean .doc-comment {
+  color: var(--verso-code-doc-comment-color, var(--verso-code-color,));
+  font-weight: var(--verso-code-doc-comment-weight, normal);
+  font-style: var(--verso-code-doc-comment-style, italic);
+  font-family: var(--verso-code-doc-comment-font-family, var(--verso-code-font-family,));
+}
+
+.hl.lean .sort {
+  color: var(--verso-code-sort-color, var(--verso-code-color,));
+  font-weight: var(--verso-code-sort-weight, normal);
+  font-style: var(--verso-code-sort-style, normal);
+  font-family: var(--verso-code-sort-font-family, var(--verso-code-font-family,));
+}
+
+.hl.lean .level-var {
+  color: var(--verso-code-level-var-color, var(--verso-code-color,));
+  font-weight: var(--verso-code-level-var-weight, normal);
+  font-style: var(--verso-code-level-var-style, italic);
+  font-family: var(--verso-code-level-var-font-family, var(--verso-code-font-family,));
+}
+
+.hl.lean .level-const {
+  color: var(--verso-code-level-const-color, var(--verso-code-color,));
+  font-weight: var(--verso-code-level-const-weight, normal);
+  font-style: var(--verso-code-level-const-style, normal);
+  font-family: var(--verso-code-level-const-font-family, var(--verso-code-font-family,));
+}
+
+.hl.lean .level-op {
+  color: var(--verso-code-level-op-color, var(--verso-code-color,));
+  font-weight: var(--verso-code-level-op-weight, normal);
+  font-style: var(--verso-code-level-op-style, normal);
+  font-family: var(--verso-code-level-op-font-family, var(--verso-code-font-family,));
+}
+
+.hl.lean .module-name {
+  color: var(--verso-code-module-name-color, var(--verso-code-color,));
+  font-weight: var(--verso-code-module-name-weight, normal);
+  font-style: var(--verso-code-module-name-style, normal);
+  font-family: var(--verso-code-module-name-font-family, var(--verso-code-font-family,));
+}
+
+/* `.anon-ctor` (anonymous-constructor brackets) and `.wildcard` (`_` holes) default to the
+   unthemed `.unknown` appearance — neither has its own theme bucket yet. `.anon-ctor` also
+   carries the `.const` class, so the themeable `.const` rule above wins for it where set.
+   Number, character, and comment kinds are themed via their own rules further down. */
 .hl.lean .anon-ctor,
-.hl.lean .number,
-.hl.lean .char,
-.hl.lean .comment,
-.hl.lean .punctuation,
-.hl.lean .delim,
 .hl.lean .wildcard {
   color: var(--verso-code-color,);
   font-weight: normal;
   font-style: normal;
   font-family: var(--verso-code-font-family,);
 }
+
+.hl.lean .literal.number {
+  color: var(--verso-code-literal-number-color, var(--verso-code-literal-color, var(--verso-code-color,)));
+  font-weight: var(--verso-code-literal-number-weight, normal);
+  font-style: var(--verso-code-literal-number-style, normal);
+  font-family: var(--verso-code-literal-number-font-family, var(--verso-code-font-family,));
+}
+
+.hl.lean .literal.char {
+  color: var(--verso-code-literal-char-color, var(--verso-code-literal-string-color, var(--verso-code-literal-color, var(--verso-code-color,))));
+  font-weight: var(--verso-code-literal-char-weight, normal);
+  font-style: var(--verso-code-literal-char-style, normal);
+  font-family: var(--verso-code-literal-char-font-family, var(--verso-code-font-family,));
+}
+
+/* `.comment` covers line and block comments (their elements carry `comment line` and
+   `comment block` class pairs respectively); `.comment.delimiter` is a more specific
+   override for the `--` / `/-` / `-/` punctuation. The themeable `.doc-comment` rule above
+   wins for doc comments since SubVerso tags them with their own class entirely. */
+.hl.lean .comment {
+  color: var(--verso-code-comment-color, var(--verso-code-color,));
+  font-weight: var(--verso-code-comment-weight, normal);
+  font-style: var(--verso-code-comment-style, normal);
+  font-family: var(--verso-code-comment-font-family, var(--verso-code-font-family,));
+}
+
+.hl.lean .comment.delimiter {
+  color: var(--verso-code-comment-delim-color, var(--verso-code-comment-color, var(--verso-code-color,)));
+  font-weight: var(--verso-code-comment-delim-weight, normal);
+  font-style: var(--verso-code-comment-delim-style, normal);
+  font-family: var(--verso-code-comment-delim-font-family, var(--verso-code-font-family,));
+}
+
+/* `.delim` is the built-in syntactic delimiter family (`:=`, `=>`, `←`, `@`, `:`, `|`). The
+   three punctuation buckets — `.punctuation.operator`, `.punctuation.bracket`,
+   `.punctuation.separator` — are themed independently below; their CSS variables resolve
+   per-theme to either the cascade default (delim's color) or an explicit override. */
+.hl.lean .delim {
+  color: var(--verso-code-delim-color, var(--verso-code-color,));
+  font-weight: var(--verso-code-delim-weight, normal);
+  font-style: var(--verso-code-delim-style, normal);
+  font-family: var(--verso-code-delim-font-family, var(--verso-code-font-family,));
+}
+
+.hl.lean .punctuation.operator {
+  color: var(--verso-code-operator-color, var(--verso-code-color,));
+  font-weight: var(--verso-code-operator-weight, normal);
+  font-style: var(--verso-code-operator-style, normal);
+  font-family: var(--verso-code-operator-font-family, var(--verso-code-font-family,));
+}
+
+.hl.lean .punctuation.bracket {
+  color: var(--verso-code-bracket-color, var(--verso-code-color,));
+  font-weight: var(--verso-code-bracket-weight, normal);
+  font-style: var(--verso-code-bracket-style, normal);
+  font-family: var(--verso-code-bracket-font-family, var(--verso-code-font-family,));
+}
+
+.hl.lean .punctuation.separator {
+  color: var(--verso-code-separator-color, var(--verso-code-color,));
+  font-weight: var(--verso-code-separator-weight, normal);
+  font-style: var(--verso-code-separator-style, normal);
+  font-family: var(--verso-code-separator-font-family, var(--verso-code-font-family,));
+}
+
 
 .hover-container {
   width: 0;
@@ -729,8 +850,8 @@ public def highlightingStyle : String := "
 .hl.lean .token .hover-info {
   display: none;
   position: absolute;
-  background-color: #e5e5e5;
-  border: 1px solid black;
+  background-color: var(--verso-hover-background-color, #e5e5e5);
+  border: 1px solid var(--verso-hover-border-color, black);
   padding: 0.5rem;
   z-index: 300;
 }
@@ -747,7 +868,7 @@ public def highlightingStyle : String := "
 .hl.lean .hover-info code {
   white-space: pre-wrap;
   background: none;
-  color: black;
+  color: var(--verso-hover-text-color, black);
 }
 
 .hl.lean .hover-info.messages > code {
@@ -789,7 +910,7 @@ public def highlightingStyle : String := "
 
 @media (hover: hover) {
   .hl.lean .token.binding-hl, .hl.lean .literal:hover, .hl.lean .token.typed:hover {
-    background-color: #eee;
+    background-color: var(--verso-token-highlight-background-color, #eeeeee);
     border-radius: 2px;
     transition: none;
   }
@@ -807,25 +928,25 @@ public def highlightingStyle : String := "
   display: none;
   position: absolute;
   transform: translate(0.25rem, 0.3rem);
-  border: 1px solid black;
+  border: 1px solid var(--verso-hover-border-color, black);
   padding: 0.5rem;
   z-index: 400;
   text-align: left;
 }
 
 .hl.lean .has-info.error :not(.tactic-state):not(.tactic-state *){
-  text-decoration-color: red;
+  text-decoration-color: var(--verso-error-indicator-color, red);
 }
 
 @media (hover: hover) {
   .hl.lean .has-info.error:hover {
-    background-color: #ffb3b3;
+    background-color: var(--verso-token-highlight-background-color, #eeeeee);
   }
 }
 
 .hl.lean .hover-info.messages > code.error {
-  background-color: #e5e5e5;
-  border-left: 0.2rem solid #ffb3b3;
+  background-color: var(--verso-hover-background-color, #e5e5e5);
+  border-left: 0.2rem solid var(--verso-error-indicator-color, red);
 }
 
 .tippy-box[data-theme~='error'] .hl.lean .hover-info.messages > code.error {
@@ -847,12 +968,12 @@ public def highlightingStyle : String := "
 
 @media (hover: hover) {
   .hl.lean .has-info.warning:hover {
-    background-color:var(--verso-warning-color);
+    background-color: var(--verso-token-highlight-background-color, #eeeeee);
   }
 }
 
 .hl.lean .hover-info.messages > code.warning {
-  background-color: var(--verso-warning-color);
+  background-color: var(--verso-hover-background-color, #e5e5e5);
 }
 
 .lean-output {
@@ -874,11 +995,6 @@ public def highlightingStyle : String := "
   border-color: var(--verso-warning-indicator-color);
 }
 
-.hl.lean .hover-info.messages > code.error {
-  background-color: #e5e5e5;
-  border-left: 0.2rem solid var(--verso-warning-color);
-}
-
 .tippy-box[data-theme~='warning'] .hl.lean .hover-info.messages > code.warning {
   background: none;
   border: none;
@@ -891,14 +1007,14 @@ public def highlightingStyle : String := "
 
 @media (hover: hover) {
   .hl.lean .has-info.information:hover {
-    background-color: #4777ff;
+    background-color: var(--verso-token-highlight-background-color, #eeeeee);
   }
 }
 
 
 .hl.lean .hover-info.messages > code.information {
-  background-color: #e5e5e5;
-  border-left: 0.2rem solid #4777ff;
+  background-color: var(--verso-hover-background-color, #e5e5e5);
+  border-left: 0.2rem solid var(--verso-info-indicator-color, blue);
 }
 
 .tippy-box[data-theme~='info'] .hl.lean .hover-info.messages > code.information {
@@ -930,7 +1046,7 @@ public def highlightingStyle : String := "
   margin-bottom: 0.5rem;
   padding: 0;
   height: 1px;
-  border-top: 1px solid #ccc;
+  border-top: 1px solid var(--verso-hover-separator-color, #cccccc);
 }
 
 .hl.lean code {
@@ -941,11 +1057,11 @@ public def highlightingStyle : String := "
   display: none;
   position: relative;
   width: fit-content;
-  border: 1px solid #888888;
+  border: 1px solid var(--verso-tactic-state-border-color, #888888);
   border-radius: 0.1rem;
   padding: 0.5rem;
   font-family: sans-serif;
-  background-color: #ffffff;
+  background-color: var(--verso-tactic-state-background-color, #ffffff);
 }
 
 .hl.lean.popup .tactic-state {
@@ -955,7 +1071,7 @@ public def highlightingStyle : String := "
   border: none;
   padding: 0.5rem;
   font-family: sans-serif;
-  background-color: #ffffff;
+  background-color: var(--verso-tactic-state-background-color, #ffffff);
 }
 
 
@@ -991,7 +1107,7 @@ public def highlightingStyle : String := "
      hovered region: `label:hover` bubbles to ancestor labels, so suppress the highlight on a region
      whose label contains a more deeply nested hovered tactic label. */
   .hl.lean .tactic:has(> .tactic-toggle:not(:checked)) > label:hover:not(:has(.tactic > label:hover)) {
-    background-color: #eeeeee;
+    background-color: var(--verso-token-highlight-background-color, #eeeeee);
   }
 }
 
@@ -1007,7 +1123,7 @@ public def highlightingStyle : String := "
 
 .hl.lean .tactic > label::after {
   content: \"\";
-  border: 1px solid #bbbbbb;
+  border: 1px solid var(--verso-ui-on-code-color, #888888);
   /* These need to be em, not rem, to scale with the font */
   border-radius: 1em;
   height: 0.25em;
@@ -1030,8 +1146,8 @@ public def highlightingStyle : String := "
 */
 
 .hl.lean .tactic > label:has(+ .tactic-toggle:checked)::after {
-  border: 1px solid #999999;
-  background-color: #999999;
+  border: 1px solid var(--verso-ui-on-code-color, #888888);
+  background-color: var(--verso-ui-on-code-color, #888888);
   transition: all 0.5s;
 }
 
@@ -1109,7 +1225,7 @@ Some CSS frameworks customize details/summary in ways not compatible with Verso'
 
 .hl.lean .case-label:has(input[type=\"checkbox\"])::before {
   display: inline-block;
-  background-color: black;
+  background-color: var(--verso-code-color, black);
   content: ' ';
   transition: ease 0.2s;
   margin-right: 0.7em;
@@ -1194,25 +1310,25 @@ Some CSS frameworks customize details/summary in ways not compatible with Verso'
 }
 
 .tippy-box[data-theme~='lean'] {
-  background-color: #e5e5e5;
-  color: black;
-  border: 1px solid black;
+  background-color: var(--verso-hover-background-color, #e5e5e5);
+  color: var(--verso-hover-text-color, black);
+  border: 1px solid var(--verso-hover-border-color, black);
 }
 .tippy-box[data-theme~='lean'][data-placement^='top'] > .tippy-arrow::before {
-  border-top-color: #e5e5e5;
+  border-top-color: var(--verso-hover-background-color, #e5e5e5);
 }
 .tippy-box[data-theme~='lean'][data-placement^='bottom'] > .tippy-arrow::before {
-  border-bottom-color: #e5e5e5;
+  border-bottom-color: var(--verso-hover-background-color, #e5e5e5);
 }
 .tippy-box[data-theme~='lean'][data-placement^='left'] > .tippy-arrow::before {
-  border-left-color: #e5e5e5;
+  border-left-color: var(--verso-hover-background-color, #e5e5e5);
 }
 .tippy-box[data-theme~='lean'][data-placement^='right'] > .tippy-arrow::before {
-  border-right-color: #e5e5e5;
+  border-right-color: var(--verso-hover-background-color, #e5e5e5);
 }
 
 .tippy-box[data-theme~='message'][data-placement^='top'] > .tippy-arrow::before {
-  border-top-color: #e5e5e5;
+  border-top-color: var(--verso-hover-background-color, #e5e5e5);
   border-width: 11px 11px 0;
 }
 .tippy-box[data-theme~='message'][data-placement^='top'] > .tippy-arrow::after {
@@ -1227,7 +1343,7 @@ Some CSS frameworks customize details/summary in ways not compatible with Verso'
   border-width: 0 11px 11px;
 }
 .tippy-box[data-theme~='message'][data-placement^='left'] > .tippy-arrow::before {
-  border-left-color: #e5e5e5;
+  border-left-color: var(--verso-hover-background-color, #e5e5e5);
   border-width: 11px 0 11px 11px;
 }
 .tippy-box[data-theme~='message'][data-placement^='left'] > .tippy-arrow::after {
@@ -1236,7 +1352,7 @@ Some CSS frameworks customize details/summary in ways not compatible with Verso'
 }
 
 .tippy-box[data-theme~='message'][data-placement^='right'] > .tippy-arrow::before {
-  border-right-color: #e5e5e5;
+  border-right-color: var(--verso-hover-background-color, #e5e5e5);
   border-width: 11px 11px 11px 0;
 }
 .tippy-box[data-theme~='message'][data-placement^='right'] > .tippy-arrow::after {
@@ -1247,39 +1363,39 @@ Some CSS frameworks customize details/summary in ways not compatible with Verso'
 
 
 .tippy-box[data-theme~='warning'] {
-  background-color: #e5e5e5;
-  color: black;
-  border: 3px solid var(--verso-warning-color);
+  background-color: var(--verso-hover-background-color, #e5e5e5);
+  color: var(--verso-hover-text-color, black);
+  border: 3px solid var(--verso-warning-indicator-color, #e7a71d);
 }
 
 .tippy-box[data-theme~='error'] {
-  background-color: #e5e5e5;
-  color: black;
-  border: 3px solid #f7a7af;
+  background-color: var(--verso-hover-background-color, #e5e5e5);
+  color: var(--verso-hover-text-color, black);
+  border: 3px solid var(--verso-error-indicator-color, red);
 }
 
 .tippy-box[data-theme~='info'] {
-  background-color: #e5e5e5;
-  color: black;
-  border: 3px solid #99b3c2;
+  background-color: var(--verso-hover-background-color, #e5e5e5);
+  color: var(--verso-hover-text-color, black);
+  border: 3px solid var(--verso-info-indicator-color, blue);
 }
 
 .tippy-box[data-theme~='tactic'] {
-  background-color: white;
-  color: black;
-  border: 1px solid black;
+  background-color: var(--verso-tactic-state-background-color, #ffffff);
+  color: var(--verso-hover-text-color, black);
+  border: 1px solid var(--verso-hover-border-color, black);
 }
 .tippy-box[data-theme~='tactic'][data-placement^='top'] > .tippy-arrow::before {
-  border-top-color: white;
+  border-top-color: var(--verso-tactic-state-background-color, #ffffff);
 }
 .tippy-box[data-theme~='tactic'][data-placement^='bottom'] > .tippy-arrow::before {
-  border-bottom-color: white;
+  border-bottom-color: var(--verso-tactic-state-background-color, #ffffff);
 }
 .tippy-box[data-theme~='tactic'][data-placement^='left'] > .tippy-arrow::before {
-  border-left-color: white;
+  border-left-color: var(--verso-tactic-state-background-color, #ffffff);
 }
 .tippy-box[data-theme~='tactic'][data-placement^='right'] > .tippy-arrow::before {
-  border-right-color: white;
+  border-right-color: var(--verso-tactic-state-background-color, #ffffff);
 }
 
 .extra-doc-links {
@@ -1377,7 +1493,7 @@ window.onload = () => {
       }
       return tokens;
     }
-    for (const container of document.querySelectorAll(\".hl.lean\")) {
+    function attachBindingHighlights(container) {
       container.addEventListener(\"mouseover\", (event) => {
         const c = event.target.closest(\".token\");
         if (!c || !c.dataset.binding || c.dataset.binding === \"\" || !container.contains(c)) return;
@@ -1396,6 +1512,12 @@ window.onload = () => {
         }
         highlightedTokens = [];
       });
+    }
+    // Exposed for the theme picker, which builds its code-sample preview after this script
+    // has already scanned the document.
+    window.versoAttachBindingHighlights = attachBindingHighlights;
+    for (const container of document.querySelectorAll(\".hl.lean\")) {
+      attachBindingHighlights(container);
     }
     /* Render docstrings */
     if ('undefined' !== typeof marked) {
@@ -1546,7 +1668,31 @@ window.onload = () => {
       }
 
       const tokenSelector = '.hl.lean .const.token, .hl.lean .keyword.token, .hl.lean .literal.token, .hl.lean .option.token, .hl.lean .var.token, .hl.lean .typed.token, .hl.lean .has-info, .hl.lean .tactic, .hl.lean .level-var, .hl.lean .level-const, .hl.lean .level-op, .hl.lean .sort';
-      tippy(Array.from(document.querySelectorAll(tokenSelector)).filter(el => !isInsideClosedTactic(el)), defaultTippyProps);
+      // Tippy + data-tippy-theme initialization, scoped to `root` so it can run on a DOM
+      // subtree that didn't exist at DOMContentLoaded — the picker preview is built on first
+      // popover open and needs this same wiring applied to its tokens.
+      function versoInitTippy(root) {
+        root.querySelectorAll('.hl.lean .const.token, .hl.lean .keyword.token, .hl.lean .literal.token, .hl.lean .option.token, .hl.lean .var.token, .hl.lean .typed.token, .hl.lean .level-var, .hl.lean .level-const, .hl.lean .level-op, .hl.lean .sort').forEach(element => {
+          element.setAttribute('data-tippy-theme', 'lean');
+        });
+        root.querySelectorAll('.hl.lean .has-info.warning').forEach(element => {
+          element.setAttribute('data-tippy-theme', 'warning message');
+        });
+        root.querySelectorAll('.hl.lean .has-info.information').forEach(element => {
+          element.setAttribute('data-tippy-theme', 'info message');
+        });
+        root.querySelectorAll('.hl.lean .has-info.error').forEach(element => {
+          element.setAttribute('data-tippy-theme', 'error message');
+        });
+        root.querySelectorAll('.hl.lean .tactic').forEach(element => {
+          element.setAttribute('data-tippy-theme', 'tactic');
+        });
+        tippy(Array.from(root.querySelectorAll(tokenSelector)).filter(el => !el._tippy && !isInsideClosedTactic(el)), defaultTippyProps);
+      }
+      // Exposed for the theme picker (which builds its code-sample preview after this script
+      // has already scanned the document).
+      window.versoInitTippy = versoInitTippy;
+      versoInitTippy(document);
 
       // Create/destroy token tippys when tactic checkbox toggles
       const tacticTippySelector = '.const.token, .keyword.token, .literal.token, .option.token, .var.token, .typed.token, .has-info, .level-var, .level-const, .level-op, .sort';

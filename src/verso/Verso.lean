@@ -8,6 +8,7 @@ module
 -- Import modules here that should be built as part of the library.
 public import Verso.CLI
 public import Verso.Code
+public import Verso.Theme
 public import Verso.Doc
 public import Verso.Doc.ArgParse
 public import Verso.Doc.Concrete
@@ -20,6 +21,7 @@ public import Verso.Doc.Lsp
 public import Verso.Doc.Suggestion
 public import Verso.Doc.TeX
 public import Verso.ExpectString
+public import Verso.Font
 public import Verso.Hover
 public import Verso.Instances
 public import Verso.Linters

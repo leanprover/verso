@@ -1,0 +1,238 @@
+/* Theme picker — gear button + popover + dropdowns.
+   Mounted by static-web/theme/theme-picker.js into `<div class="header-tools">`.
+   The gear is always rendered server-side as static HTML; the popover is built
+   on first open. */
+
+#theme-picker-button {
+    /* Plain glyph button — no box, matching the search input (also no border at rest) and
+       the burger menu (no box at all). Color flips to the link color when the popover is
+       open to signal the toggled state. */
+    appearance: none;
+    background: transparent;
+    border: none;
+    padding: 0;
+    color: var(--verso-text-color, inherit);
+    cursor: pointer;
+    font-family: var(--verso-structure-font-family);
+    font-size: 0.9rem;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    /* Ensure the gear paints above the title — `.header-title-wrapper` and friends have
+       no explicit z-index, but a positioned element without z-index can still get sorted
+       behind a later sibling in some rendering paths. Pin it. */
+    z-index: 2;
+}
+
+#theme-picker-button:focus-visible {
+    outline: 2px solid var(--verso-link-color, currentColor);
+    outline-offset: 2px;
+    border-radius: 0.2rem;
+}
+
+/* Pressed/open state — the dialog is showing. With no border or background, a color flip
+   does the toggled-state signalling. `aria-expanded` is what the JS already toggles, and
+   it is what screen readers announce. */
+#theme-picker-button[aria-expanded="true"] {
+    color: var(--verso-link-color, currentColor);
+}
+
+#theme-picker-button .theme-picker-gear {
+    /* The Unicode `⚙` glyph (U+2699) has a small drawn cog relative to its em-box — the
+       visible cog ink is roughly 70-75% of the rendered ink rect, so even a glyph whose
+       ink rect matches the search input still *reads* as noticeably smaller than the
+       adjacent text. To compensate, scale the font-size so the rendered ink rect is
+       ~115-125% of the search input outer height; that lands the optical cog size on the
+       search input's text cap-height plus a small visual halo, which reads as the "same
+       size as the search field" the user was after. The button itself is vertically
+       centered in the full-height header by `align-items: center` (set on `.header-tools`),
+       so the gear's line-box center sits at the header's vertical midline — same as the
+       search input's center, since the search wrapper also spans the full header height. */
+    font-size: 1.7rem;
+    line-height: 1;
+}
+
+#theme-picker-dialog {
+    /* Fixed so the right offset can match the gear's (also relative to the viewport's right
+       edge, via the same `--search-bar-width` math) and the popup drops directly under it. */
+    position: fixed;
+    top: calc(var(--verso-header-height, 3rem) + 0.25rem);
+    right: calc(var(--search-bar-width, 24rem) + 1rem);
+    z-index: 200;
+    background: var(--verso-surface-color, #f8f9fa);
+    color: var(--verso-text-color, #111);
+    border: 1px solid var(--verso-border-color, #999);
+    border-radius: 0.4rem;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+    padding: 0.75rem;
+    /* Size the popup to its content — typically the longest line of the code preview —
+       rather than capping it at 22rem. The min-width keeps short content (a one-row picker
+       with no source link) from collapsing too narrow; the viewport-minus-margin max-width
+       keeps it on screen at small widths, at which point `overflow-x: auto` on
+       `#theme-picker-preview` takes over for any line still wider than the viewport. */
+    width: max-content;
+    min-width: min(22rem, calc(100vw - 1rem));
+    max-width: calc(100vw - 1rem);
+    box-sizing: border-box;
+    /* Stack the controls vertically: the Appearance radios, the collapsible theme choices,
+       the code preview, and the per-theme metadata. Each is laid out on its own below. */
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+    font-family: var(--verso-structure-font-family);
+}
+
+#theme-picker-dialog[hidden] {
+    display: none;
+}
+
+/* Appearance radio group. Strip the fieldset's default border and inset so it reads as a
+   labeled cluster of radios rather than a boxed form section. */
+#theme-picker-mode {
+    border: none;
+    margin: 0;
+    padding: 0;
+    min-width: 0;
+}
+
+#theme-picker-mode > legend {
+    padding: 0;
+    margin-bottom: 0.35rem;
+    color: inherit;
+}
+
+#theme-picker-mode .theme-picker-radios {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1rem;
+}
+
+#theme-picker-mode .theme-picker-radio {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    cursor: pointer;
+}
+
+/* The collapsible "Theme choices" section holds the Light and Dark theme dropdowns. */
+#theme-picker-choices > summary {
+    cursor: pointer;
+    color: inherit;
+    margin-bottom: 0.5rem;
+}
+
+#theme-picker-choices > summary:focus-visible {
+    outline: 2px solid var(--verso-link-color, currentColor);
+    outline-offset: 2px;
+    border-radius: 0.2rem;
+}
+
+/* Each theme row is its own two-column grid with a fixed label column, so the Light and Dark
+   selects share a left edge regardless of label width. */
+#theme-picker-dialog .theme-picker-row {
+    display: grid;
+    grid-template-columns: 3rem 1fr;
+    align-items: center;
+    column-gap: 0.5rem;
+}
+
+#theme-picker-dialog .theme-picker-row + .theme-picker-row {
+    margin-top: 0.5rem;
+}
+
+#theme-picker-dialog select {
+    min-width: 0;
+    font: inherit;
+    padding: 0.2rem 0.3rem;
+    color: inherit;
+    background: var(--verso-background-color, white);
+    border: 1px solid var(--verso-border-color, #999);
+    border-radius: 0.25rem;
+}
+
+#theme-picker-preview {
+    border: 1px solid var(--verso-border-color, #999);
+    border-radius: 0.3rem;
+    background: var(--verso-code-background-color, #fff);
+    padding: 0.5rem;
+    font-family: var(--verso-code-font-family, monospace);
+    font-size: 0.85em;
+    /* Fallback for when the dialog itself has hit its viewport-minus-margin cap and a line of
+       the code sample is still wider — at that point we can't grow further, so scroll. The
+       dialog's `width: max-content` handles the normal case by sizing to the longest line. */
+    overflow-x: auto;
+}
+
+#theme-picker-about {
+    /* Theme metadata (description + canonical link) sits below the code preview, using the
+       structure font so it reads as prose rather than code. */
+    font-size: 0.85em;
+    line-height: 1.35;
+    color: var(--verso-muted-color, #555);
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+#theme-picker-about[hidden] {
+    display: none;
+}
+
+#theme-picker-about p {
+    margin: 0;
+}
+
+#theme-picker-about p[hidden] {
+    display: none;
+}
+
+#theme-picker-source a {
+    color: var(--verso-link-color, inherit);
+}
+
+@media (max-width: 600px) {
+    /* Full-screen sheet on small screens. */
+    #theme-picker-dialog {
+        position: fixed;
+        inset: 0;
+        top: var(--verso-header-height, 3rem);
+        right: 0;
+        bottom: 0;
+        left: 0;
+        width: auto;
+        max-width: none;
+        border-radius: 0;
+        border-width: 1px 0 0 0;
+    }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    #theme-picker-dialog {
+        transition: opacity 0.15s ease;
+    }
+}
+
+@media print {
+    /* Don't show the picker (or its outputs) on print. */
+    #theme-picker-button,
+    #theme-picker-dialog {
+        display: none !important;
+    }
+}
+
+header .header-tools {
+    /* The search box is absolutely positioned at the right edge of `<header>` (see
+       static-web/search/search-box.css:#search-wrapper), so a normal-flow gear ends up either
+       at the far left or overlapping the search box. Mirror the search-box positioning with
+       an offset equal to the search bar width plus a small gap, so the visible order is
+       [logo] [title] ............ [theme-picker] [search]. */
+    position: absolute;
+    top: 0;
+    right: calc(var(--search-bar-width, 24rem) + 1rem);
+    height: var(--verso-header-height, 3rem);
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}

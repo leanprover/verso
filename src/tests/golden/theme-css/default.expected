@@ -1,0 +1,896 @@
+:root {
+  --verso-background-color: #ffffff;
+  --verso-code-background-color: #ffffff;
+  --verso-text-color: #000000;
+  --verso-code-color: #000000;
+  --verso-structure-color: #000000;
+  --verso-selected-color: #ddeeff;
+  --verso-info-color: #000000;
+  --verso-info-indicator-color: #4777ff;
+  --verso-warning-color: #000000;
+  --verso-warning-indicator-color: #d97706;
+  --verso-error-color: #cc0000;
+  --verso-error-indicator-color: #ff0000;
+  --verso-code-font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --verso-code-const-color: #000000;
+  --verso-code-const-weight: 400;
+  --verso-code-const-style: normal;
+  --verso-code-const-font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --verso-code-keyword-color: #000000;
+  --verso-code-keyword-weight: 700;
+  --verso-code-keyword-style: normal;
+  --verso-code-keyword-font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --verso-code-var-color: #000000;
+  --verso-code-var-weight: 400;
+  --verso-code-var-style: italic;
+  --verso-code-var-font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --verso-code-literal-color: #000000;
+  --verso-code-literal-weight: 400;
+  --verso-code-literal-style: normal;
+  --verso-code-literal-font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --verso-code-literal-string-color: #000000;
+  --verso-code-literal-string-weight: 400;
+  --verso-code-literal-string-style: normal;
+  --verso-code-literal-string-font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --verso-code-literal-number-color: #000000;
+  --verso-code-literal-number-weight: 400;
+  --verso-code-literal-number-style: normal;
+  --verso-code-literal-number-font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --verso-code-literal-char-color: #000000;
+  --verso-code-literal-char-weight: 400;
+  --verso-code-literal-char-style: normal;
+  --verso-code-literal-char-font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --verso-code-doc-comment-color: #000000;
+  --verso-code-doc-comment-weight: 400;
+  --verso-code-doc-comment-style: italic;
+  --verso-code-doc-comment-font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --verso-code-comment-color: #000000;
+  --verso-code-comment-weight: 400;
+  --verso-code-comment-style: normal;
+  --verso-code-comment-font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --verso-code-comment-delim-color: #000000;
+  --verso-code-comment-delim-weight: 400;
+  --verso-code-comment-delim-style: normal;
+  --verso-code-comment-delim-font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --verso-code-sort-color: #000000;
+  --verso-code-sort-weight: 400;
+  --verso-code-sort-style: normal;
+  --verso-code-sort-font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --verso-code-level-var-color: #000000;
+  --verso-code-level-var-weight: 400;
+  --verso-code-level-var-style: italic;
+  --verso-code-level-var-font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --verso-code-level-const-color: #000000;
+  --verso-code-level-const-weight: 400;
+  --verso-code-level-const-style: normal;
+  --verso-code-level-const-font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --verso-code-level-op-color: #000000;
+  --verso-code-level-op-weight: 400;
+  --verso-code-level-op-style: normal;
+  --verso-code-level-op-font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --verso-code-module-name-color: #000000;
+  --verso-code-module-name-weight: 400;
+  --verso-code-module-name-style: normal;
+  --verso-code-module-name-font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --verso-code-delim-color: #000000;
+  --verso-code-delim-weight: 400;
+  --verso-code-delim-style: normal;
+  --verso-code-delim-font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --verso-code-operator-color: #000000;
+  --verso-code-operator-weight: 400;
+  --verso-code-operator-style: normal;
+  --verso-code-operator-font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --verso-code-bracket-color: #000000;
+  --verso-code-bracket-weight: 400;
+  --verso-code-bracket-style: normal;
+  --verso-code-bracket-font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --verso-code-separator-color: #000000;
+  --verso-code-separator-weight: 400;
+  --verso-code-separator-style: normal;
+  --verso-code-separator-font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --verso-hover-background-color: #e5e5e5;
+  --verso-hover-border-color: #000000;
+  --verso-hover-text-color: #000000;
+  --verso-hover-separator-color: #cccccc;
+  --verso-token-highlight-background-color: #eeeeee;
+  --verso-tactic-state-background-color: #ffffff;
+  --verso-tactic-state-border-color: #888888;
+  --verso-highlight-on-code-color: #fff3b0;
+  --verso-highlight-on-text-color: #fff3b0;
+  --verso-ui-on-code-color: #888888;
+}
+
+
+
+.hl.lean {
+  white-space: pre;
+  font-weight: normal;
+  font-style: normal;
+  font-size: inherit;
+}
+
+.hl.lean .keyword {
+  color: var(--verso-code-keyword-color,);
+  font-weight: var(--verso-code-keyword-weight, bold);
+  font-style: var(--verso-code-keyword-style, normal);
+  font-family: var(--verso-code-keyword-font-family,);
+}
+
+.hl.lean .const {
+  color: var(--verso-code-const-color,);
+  font-weight: var(--verso-code-const-weight, normal);
+  font-style: var(--verso-code-const-style, normal);
+  font-family: var(--verso-code-const-font-family,);
+}
+
+.hl.lean .var {
+  color: var(--verso-code-var-color,);
+  font-weight: var(--verso-code-var-weight, normal);
+  font-style: var(--verso-code-var-style, italic);
+  font-family: var(--verso-code-var-font-family,);
+
+  position: relative;
+}
+
+.hl.lean .unknown {
+  color: var(--verso-code-color,);
+  font-weight: normal;
+  font-style: normal;
+  font-family: var(--verso-code-font-family,);
+}
+
+.hl.lean .literal {
+  color: var(--verso-code-literal-color, var(--verso-code-color,));
+  font-weight: var(--verso-code-literal-weight, normal);
+  font-style: var(--verso-code-literal-style, normal);
+  font-family: var(--verso-code-literal-font-family, var(--verso-code-font-family,));
+}
+
+/* `.literal.string` is more specific than `.literal`, so its rule wins when both classes
+   apply (string literals). Other future `.literal.*` kinds will fall back to the `.literal`
+   rule above until they get their own variables. */
+.hl.lean .literal.string {
+  color: var(--verso-code-literal-string-color, var(--verso-code-literal-color, var(--verso-code-color,)));
+  font-weight: var(--verso-code-literal-string-weight, normal);
+  font-style: var(--verso-code-literal-string-style, normal);
+  font-family: var(--verso-code-literal-string-font-family, var(--verso-code-font-family,));
+}
+
+.hl.lean .doc-comment {
+  color: var(--verso-code-doc-comment-color, var(--verso-code-color,));
+  font-weight: var(--verso-code-doc-comment-weight, normal);
+  font-style: var(--verso-code-doc-comment-style, italic);
+  font-family: var(--verso-code-doc-comment-font-family, var(--verso-code-font-family,));
+}
+
+.hl.lean .sort {
+  color: var(--verso-code-sort-color, var(--verso-code-color,));
+  font-weight: var(--verso-code-sort-weight, normal);
+  font-style: var(--verso-code-sort-style, normal);
+  font-family: var(--verso-code-sort-font-family, var(--verso-code-font-family,));
+}
+
+.hl.lean .level-var {
+  color: var(--verso-code-level-var-color, var(--verso-code-color,));
+  font-weight: var(--verso-code-level-var-weight, normal);
+  font-style: var(--verso-code-level-var-style, italic);
+  font-family: var(--verso-code-level-var-font-family, var(--verso-code-font-family,));
+}
+
+.hl.lean .level-const {
+  color: var(--verso-code-level-const-color, var(--verso-code-color,));
+  font-weight: var(--verso-code-level-const-weight, normal);
+  font-style: var(--verso-code-level-const-style, normal);
+  font-family: var(--verso-code-level-const-font-family, var(--verso-code-font-family,));
+}
+
+.hl.lean .level-op {
+  color: var(--verso-code-level-op-color, var(--verso-code-color,));
+  font-weight: var(--verso-code-level-op-weight, normal);
+  font-style: var(--verso-code-level-op-style, normal);
+  font-family: var(--verso-code-level-op-font-family, var(--verso-code-font-family,));
+}
+
+.hl.lean .module-name {
+  color: var(--verso-code-module-name-color, var(--verso-code-color,));
+  font-weight: var(--verso-code-module-name-weight, normal);
+  font-style: var(--verso-code-module-name-style, normal);
+  font-family: var(--verso-code-module-name-font-family, var(--verso-code-font-family,));
+}
+
+/* `.anon-ctor` (anonymous-constructor brackets) and `.wildcard` (`_` holes) default to the
+   unthemed `.unknown` appearance — neither has its own theme bucket yet. `.anon-ctor` also
+   carries the `.const` class, so the themeable `.const` rule above wins for it where set.
+   Number, character, and comment kinds are themed via their own rules further down. */
+.hl.lean .anon-ctor,
+.hl.lean .wildcard {
+  color: var(--verso-code-color,);
+  font-weight: normal;
+  font-style: normal;
+  font-family: var(--verso-code-font-family,);
+}
+
+.hl.lean .literal.number {
+  color: var(--verso-code-literal-number-color, var(--verso-code-literal-color, var(--verso-code-color,)));
+  font-weight: var(--verso-code-literal-number-weight, normal);
+  font-style: var(--verso-code-literal-number-style, normal);
+  font-family: var(--verso-code-literal-number-font-family, var(--verso-code-font-family,));
+}
+
+.hl.lean .literal.char {
+  color: var(--verso-code-literal-char-color, var(--verso-code-literal-string-color, var(--verso-code-literal-color, var(--verso-code-color,))));
+  font-weight: var(--verso-code-literal-char-weight, normal);
+  font-style: var(--verso-code-literal-char-style, normal);
+  font-family: var(--verso-code-literal-char-font-family, var(--verso-code-font-family,));
+}
+
+/* `.comment` covers line and block comments (their elements carry `comment line` and
+   `comment block` class pairs respectively); `.comment.delimiter` is a more specific
+   override for the `--` / `/-` / `-/` punctuation. The themeable `.doc-comment` rule above
+   wins for doc comments since SubVerso tags them with their own class entirely. */
+.hl.lean .comment {
+  color: var(--verso-code-comment-color, var(--verso-code-color,));
+  font-weight: var(--verso-code-comment-weight, normal);
+  font-style: var(--verso-code-comment-style, normal);
+  font-family: var(--verso-code-comment-font-family, var(--verso-code-font-family,));
+}
+
+.hl.lean .comment.delimiter {
+  color: var(--verso-code-comment-delim-color, var(--verso-code-comment-color, var(--verso-code-color,)));
+  font-weight: var(--verso-code-comment-delim-weight, normal);
+  font-style: var(--verso-code-comment-delim-style, normal);
+  font-family: var(--verso-code-comment-delim-font-family, var(--verso-code-font-family,));
+}
+
+/* `.delim` is the built-in syntactic delimiter family (`:=`, `=>`, `←`, `@`, `:`, `|`). The
+   three punctuation buckets — `.punctuation.operator`, `.punctuation.bracket`,
+   `.punctuation.separator` — are themed independently below; their CSS variables resolve
+   per-theme to either the cascade default (delim's color) or an explicit override. */
+.hl.lean .delim {
+  color: var(--verso-code-delim-color, var(--verso-code-color,));
+  font-weight: var(--verso-code-delim-weight, normal);
+  font-style: var(--verso-code-delim-style, normal);
+  font-family: var(--verso-code-delim-font-family, var(--verso-code-font-family,));
+}
+
+.hl.lean .punctuation.operator {
+  color: var(--verso-code-operator-color, var(--verso-code-color,));
+  font-weight: var(--verso-code-operator-weight, normal);
+  font-style: var(--verso-code-operator-style, normal);
+  font-family: var(--verso-code-operator-font-family, var(--verso-code-font-family,));
+}
+
+.hl.lean .punctuation.bracket {
+  color: var(--verso-code-bracket-color, var(--verso-code-color,));
+  font-weight: var(--verso-code-bracket-weight, normal);
+  font-style: var(--verso-code-bracket-style, normal);
+  font-family: var(--verso-code-bracket-font-family, var(--verso-code-font-family,));
+}
+
+.hl.lean .punctuation.separator {
+  color: var(--verso-code-separator-color, var(--verso-code-color,));
+  font-weight: var(--verso-code-separator-weight, normal);
+  font-style: var(--verso-code-separator-style, normal);
+  font-family: var(--verso-code-separator-font-family, var(--verso-code-font-family,));
+}
+
+
+.hover-container {
+  width: 0;
+  height: 0;
+  position: relative;
+  display: inline;
+}
+
+.hl.lean a {
+  color: inherit;
+  text-decoration: currentcolor underline dotted;
+}
+
+.hl.lean a:hover {
+  text-decoration: currentcolor underline solid;
+}
+
+.hl.lean .hover-info {
+  white-space: normal;
+}
+
+.hl.lean .token .hover-info {
+  display: none;
+  position: absolute;
+  background-color: var(--verso-hover-background-color, #e5e5e5);
+  border: 1px solid var(--verso-hover-border-color, black);
+  padding: 0.5rem;
+  z-index: 300;
+}
+
+.hl.lean .hover-info.messages {
+  max-height: 10rem;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+  padding: 0 0.5rem 0 0;
+  display: block;
+}
+
+.hl.lean .hover-info code {
+  white-space: pre-wrap;
+  background: none;
+  color: var(--verso-hover-text-color, black);
+}
+
+.hl.lean .hover-info.messages > code {
+  padding: 0.5rem;
+  display: block;
+  width: fit-content;
+}
+
+.hl.lean .hover-info.messages > code:only-child {
+  margin: 0;
+}
+
+.hl.lean .hover-info.messages > code {
+  margin: 0.1rem;
+}
+
+.hl.lean .hover-info.messages > code:not(:first-child) {
+  margin-top: 0rem;
+}
+
+.hl.lean {
+}
+
+.hl.lean.block {
+  display: block;
+}
+
+.hl.lean.inline {
+  display: inline;
+  white-space: pre-wrap;
+}
+
+.hl.lean * {
+}
+
+.hl.lean .token {
+  transition: all 0.25s; /* Slight fade for highlights */
+}
+
+@media (hover: hover) {
+  .hl.lean .token.binding-hl, .hl.lean .literal:hover, .hl.lean .token.typed:hover {
+    background-color: var(--verso-token-highlight-background-color, #eeeeee);
+    border-radius: 2px;
+    transition: none;
+  }
+}
+
+
+.hl.lean .has-info .token:not(.tactic-state):not(.tactic-state *), .hl.lean .has-info .inter-text:not(.tactic-state):not(.tactic-state *) {
+  text-decoration-style: wavy;
+  text-decoration-line: underline;
+  text-decoration-thickness: from-font;
+  text-decoration-skip-ink: none;
+}
+
+.hl.lean .has-info .hover-info {
+  display: none;
+  position: absolute;
+  transform: translate(0.25rem, 0.3rem);
+  border: 1px solid var(--verso-hover-border-color, black);
+  padding: 0.5rem;
+  z-index: 400;
+  text-align: left;
+}
+
+.hl.lean .has-info.error :not(.tactic-state):not(.tactic-state *){
+  text-decoration-color: var(--verso-error-indicator-color, red);
+}
+
+@media (hover: hover) {
+  .hl.lean .has-info.error:hover {
+    background-color: var(--verso-token-highlight-background-color, #eeeeee);
+  }
+}
+
+.hl.lean .hover-info.messages > code.error {
+  background-color: var(--verso-hover-background-color, #e5e5e5);
+  border-left: 0.2rem solid var(--verso-error-indicator-color, red);
+}
+
+.tippy-box[data-theme~='error'] .hl.lean .hover-info.messages > code.error {
+  background: none;
+  border: none;
+}
+
+.error .verso-message, .error .verso-message .token, .error .verso-message label {
+  color: var(--verso-error-color);
+}
+
+.error .verso-message .case-label:has(input[type="checkbox"])::before {
+  background-color: var(--verso-error-color) !important;
+}
+
+.hl.lean .has-info.warning :not(.tactic-state):not(.tactic-state *) {
+  text-decoration-color: var(--verso-warning-indicator-color);
+}
+
+@media (hover: hover) {
+  .hl.lean .has-info.warning:hover {
+    background-color: var(--verso-token-highlight-background-color, #eeeeee);
+  }
+}
+
+.hl.lean .hover-info.messages > code.warning {
+  background-color: var(--verso-hover-background-color, #e5e5e5);
+}
+
+.lean-output {
+  border-left: 0.2em solid transparent;
+  padding: 0 0 0 0.5em;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.lean-output.error {
+  border-color: var(--verso-error-indicator-color);
+}
+
+.lean-output.information {
+  border-color: var(--verso-info-indicator-color);
+}
+
+.lean-output.warning {
+  border-color: var(--verso-warning-indicator-color);
+}
+
+.tippy-box[data-theme~='warning'] .hl.lean .hover-info.messages > code.warning {
+  background: none;
+  border: none;
+}
+
+
+.hl.lean .has-info.information :not(.tactic-state):not(.tactic-state *) {
+  text-decoration-color: var(--verso-info-indicator-color, blue);
+}
+
+@media (hover: hover) {
+  .hl.lean .has-info.information:hover {
+    background-color: var(--verso-token-highlight-background-color, #eeeeee);
+  }
+}
+
+
+.hl.lean .hover-info.messages > code.information {
+  background-color: var(--verso-hover-background-color, #e5e5e5);
+  border-left: 0.2rem solid var(--verso-info-indicator-color, blue);
+}
+
+.tippy-box[data-theme~='info'] .hl.lean .hover-info.messages > code.information {
+  background: none;
+  border: none;
+}
+
+.hl.lean div.docstring {
+  font-family: var(--verso-text-font-family, sans-serif);
+  white-space: normal;
+  max-width: calc(min(40rem, 90vw));
+  width: max-content;
+}
+
+.hl.lean div.docstring > :last-child {
+  margin-bottom: 0;
+}
+
+.hl.lean div.docstring > :first-child {
+  margin-top: 0;
+}
+
+.hl.lean .hover-info .sep {
+  display: block;
+  width: auto;
+  margin-left: 1rem;
+  margin-right: 1rem;
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+  padding: 0;
+  height: 1px;
+  border-top: 1px solid var(--verso-hover-separator-color, #cccccc);
+}
+
+.hl.lean code {
+  font-family: var(--verso-code-font-family);
+}
+
+.hl.lean .tactic-state {
+  display: none;
+  position: relative;
+  width: fit-content;
+  border: 1px solid var(--verso-tactic-state-border-color, #888888);
+  border-radius: 0.1rem;
+  padding: 0.5rem;
+  font-family: sans-serif;
+  background-color: var(--verso-tactic-state-background-color, #ffffff);
+}
+
+.hl.lean.popup .tactic-state {
+  position: static;
+  display: block;
+  width: auto;
+  border: none;
+  padding: 0.5rem;
+  font-family: sans-serif;
+  background-color: var(--verso-tactic-state-background-color, #ffffff);
+}
+
+
+.hl.lean .tactic {
+  position: relative;
+  display: inline;
+  vertical-align: top;
+  /* Without these, mobile Safari will start making font sizes inconsistent when its text size adjustment feature is triggered.*/
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+.hl.lean .tactic:has(> .tactic-toggle:checked) {
+  display: inline-grid;
+  grid-template-columns: 1fr;
+}
+
+.hl.lean .tactic-toggle:checked ~ .tactic-state {
+  display: inline-block;
+  vertical-align: top;
+  grid-row: 2;
+  justify-self: start;
+}
+
+.hl.lean .tactic > label {
+  position: relative;
+  grid-row: 1;
+  display: inline;
+}
+
+@media (hover: hover) {
+  /* Highlight a region on hover only when its own toggle is unchecked, and only the innermost
+     hovered region: `label:hover` bubbles to ancestor labels, so suppress the highlight on a region
+     whose label contains a more deeply nested hovered tactic label. */
+  .hl.lean .tactic:has(> .tactic-toggle:not(:checked)) > label:hover:not(:has(.tactic > label:hover)) {
+    background-color: var(--verso-token-highlight-background-color, #eeeeee);
+  }
+}
+
+.hl.lean .tactic-toggle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 0;
+  height: 0;
+  width: 0;
+  z-index: -10;
+}
+
+.hl.lean .tactic > label::after {
+  content: "";
+  border: 1px solid var(--verso-ui-on-code-color, #888888);
+  /* These need to be em, not rem, to scale with the font */
+  border-radius: 1em;
+  height: 0.25em;
+  vertical-align: middle;
+  width: 0.6em;
+  margin-left: 0.1em;
+  margin-right: 0.1em;
+  display: inline-block;
+  transition: all 0.5s;
+}
+
+/*
+@media (hover: hover) {
+  .hl.lean .tactic > label:hover::after {
+    border: 1px solid #aaaaaa;
+    background-color: #aaaaaa;
+    transition: all 0.5s;
+  }
+}
+*/
+
+.hl.lean .tactic > label:has(+ .tactic-toggle:checked)::after {
+  border: 1px solid var(--verso-ui-on-code-color, #888888);
+  background-color: var(--verso-ui-on-code-color, #888888);
+  transition: all 0.5s;
+}
+
+.hl.lean .tactic-state .goal + .goal {
+  margin-top: 1.5em;
+}
+
+/*
+Some CSS frameworks customize details/summary in ways not compatible with Verso's output.
+*/
+
+.hl.lean details {
+  display: block !important;
+  margin: 0;
+}
+
+.hl.lean details summary {
+  display: list-item !important;
+  margin: 0;
+}
+
+.hl.lean details summary:focus {
+  outline: none;
+  outline-offset: none;
+  color: inherit;
+}
+
+.hl.lean ul > li {
+  margin-bottom: 0;
+}
+
+.hl.lean details summary::marker {
+  display: inline !important;
+}
+
+.hl.lean details > summary:first-of-type {
+  list-style-type: disclosure-closed;
+  list-style-position: inside;
+}
+
+.hl.lean details[open] > summary:first-of-type {
+  list-style-type: disclosure-open;
+}
+
+.hl.lean details summary::before, .hl.lean details summary::after {
+  content: "" !important;
+  background: none;
+  display: none;
+}
+
+.hl.lean .tactic-state summary {
+  /* These need to be em, not rem, to scale with the font */
+  margin-left: -0.5em;
+}
+
+.hl.lean .tactic-state details {
+  /* These need to be em, not rem, to scale with the font */
+  padding-left: 0.5em;
+}
+
+.hl.lean .case-label {
+  display: block;
+  position: relative;
+}
+
+.hl.lean .case-label input[type="checkbox"] {
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 0;
+  height: 0;
+  width: 0;
+  z-index: -10;
+}
+
+.hl.lean .case-label:has(input[type="checkbox"])::before {
+  display: inline-block;
+  background-color: var(--verso-code-color, black);
+  content: ' ';
+  transition: ease 0.2s;
+  margin-right: 0.7em;
+  clip-path: polygon(100% 0, 0 0, 50% 100%);
+  width: 0.6em;
+  height: 0.6em;
+  vertical-align: middle;
+}
+
+.hl.lean .case-label:has(input[type="checkbox"]:not(:checked))::before {
+  transform: rotate(-90deg);
+}
+
+.hl.lean .case-label:has(input[type="checkbox"]) {
+
+}
+
+.hl.lean .case-label:has(input[type="checkbox"]:checked) {
+
+}
+
+
+.hl.lean .labeled-case > :not(:first-child) {
+  max-height: 0px;
+  display: block;
+  overflow: hidden;
+  transition: max-height 0.1s ease-in;
+  /* These need to be em, not rem, to scale with the font */
+  margin-left: 0.5em;
+  margin-top: 0.1em;
+}
+
+.hl.lean .labeled-case:has(.case-label input[type="checkbox"]:checked) > :not(:first-child) {
+  max-height: 100%;
+}
+
+
+.hl.lean .goal-name::before {
+  font-style: normal;
+  content: "case ";
+}
+
+.hl.lean .goal-name {
+  font-style: italic;
+  font-family: var(--verso-code-font-family);
+  color: inherit;
+}
+
+.hl.lean .hypotheses {
+  display: table;
+}
+
+.hl.lean .hypothesis {
+  display: table-row;
+}
+
+.hl.lean .hypothesis > * {
+  display: table-cell;
+}
+
+
+.hl.lean .hypotheses .colon {
+  text-align: center;
+  /* This needs to be em, not rem, to scale with the font */
+  min-width: 1em;
+}
+
+.hl.lean .hypotheses .name {
+  text-align: right;
+}
+
+.hl.lean .hypotheses .name,
+.hl.lean .hypotheses .type,
+.hl.lean .conclusion .type {
+  font-family: var(--verso-code-font-family);
+}
+
+.tippy-box {
+  /* Without these, mobile Safari will start making font sizes inconsistent when its text size adjustment feature is triggered.*/
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+.tippy-box[data-theme~='lean'] {
+  background-color: var(--verso-hover-background-color, #e5e5e5);
+  color: var(--verso-hover-text-color, black);
+  border: 1px solid var(--verso-hover-border-color, black);
+}
+.tippy-box[data-theme~='lean'][data-placement^='top'] > .tippy-arrow::before {
+  border-top-color: var(--verso-hover-background-color, #e5e5e5);
+}
+.tippy-box[data-theme~='lean'][data-placement^='bottom'] > .tippy-arrow::before {
+  border-bottom-color: var(--verso-hover-background-color, #e5e5e5);
+}
+.tippy-box[data-theme~='lean'][data-placement^='left'] > .tippy-arrow::before {
+  border-left-color: var(--verso-hover-background-color, #e5e5e5);
+}
+.tippy-box[data-theme~='lean'][data-placement^='right'] > .tippy-arrow::before {
+  border-right-color: var(--verso-hover-background-color, #e5e5e5);
+}
+
+.tippy-box[data-theme~='message'][data-placement^='top'] > .tippy-arrow::before {
+  border-top-color: var(--verso-hover-background-color, #e5e5e5);
+  border-width: 11px 11px 0;
+}
+.tippy-box[data-theme~='message'][data-placement^='top'] > .tippy-arrow::after {
+  bottom: -11px;
+  border-width: 11px 11px 0;
+}
+.tippy-box[data-theme~='message'][data-placement^='bottom'] > .tippy-arrow::before {
+  border-width: 0 11px 11px;
+}
+.tippy-box[data-theme~='message'][data-placement^='bottom'] > .tippy-arrow::after {
+  top: -11px;
+  border-width: 0 11px 11px;
+}
+.tippy-box[data-theme~='message'][data-placement^='left'] > .tippy-arrow::before {
+  border-left-color: var(--verso-hover-background-color, #e5e5e5);
+  border-width: 11px 0 11px 11px;
+}
+.tippy-box[data-theme~='message'][data-placement^='left'] > .tippy-arrow::after {
+  right: -11px;
+  border-width: 11px 0 11px 11px;
+}
+
+.tippy-box[data-theme~='message'][data-placement^='right'] > .tippy-arrow::before {
+  border-right-color: var(--verso-hover-background-color, #e5e5e5);
+  border-width: 11px 11px 11px 0;
+}
+.tippy-box[data-theme~='message'][data-placement^='right'] > .tippy-arrow::after {
+  left: -11px;
+  border-width: 11px 11px 11px 0;
+}
+
+
+
+.tippy-box[data-theme~='warning'] {
+  background-color: var(--verso-hover-background-color, #e5e5e5);
+  color: var(--verso-hover-text-color, black);
+  border: 3px solid var(--verso-warning-indicator-color, #e7a71d);
+}
+
+.tippy-box[data-theme~='error'] {
+  background-color: var(--verso-hover-background-color, #e5e5e5);
+  color: var(--verso-hover-text-color, black);
+  border: 3px solid var(--verso-error-indicator-color, red);
+}
+
+.tippy-box[data-theme~='info'] {
+  background-color: var(--verso-hover-background-color, #e5e5e5);
+  color: var(--verso-hover-text-color, black);
+  border: 3px solid var(--verso-info-indicator-color, blue);
+}
+
+.tippy-box[data-theme~='tactic'] {
+  background-color: var(--verso-tactic-state-background-color, #ffffff);
+  color: var(--verso-hover-text-color, black);
+  border: 1px solid var(--verso-hover-border-color, black);
+}
+.tippy-box[data-theme~='tactic'][data-placement^='top'] > .tippy-arrow::before {
+  border-top-color: var(--verso-tactic-state-background-color, #ffffff);
+}
+.tippy-box[data-theme~='tactic'][data-placement^='bottom'] > .tippy-arrow::before {
+  border-bottom-color: var(--verso-tactic-state-background-color, #ffffff);
+}
+.tippy-box[data-theme~='tactic'][data-placement^='left'] > .tippy-arrow::before {
+  border-left-color: var(--verso-tactic-state-background-color, #ffffff);
+}
+.tippy-box[data-theme~='tactic'][data-placement^='right'] > .tippy-arrow::before {
+  border-right-color: var(--verso-tactic-state-background-color, #ffffff);
+}
+
+.extra-doc-links {
+  list-style-type: none;
+  margin-left: 0;
+  padding: 0;
+}
+
+.extra-doc-links > li {
+  display: inline-block;
+}
+
+.extra-doc-links > li:not(:last-child)::after {
+  content: '|';
+  display: inline-block;
+  margin: 0 0.25em;
+}
+
+.verso-message .trace {
+  display: block;
+}
+
+.verso-message .trace > summary::marker {
+  color: var(--verso-text-color);
+}
+
+.verso-message .trace-children {
+  margin: 0;
+  padding: 0;
+}
+
+.verso-message .trace-children > li {
+  list-style-type: none;
+  margin-left: 1.5em;
+}
+
+.verso-message .trace-children > li:not(:has(.trace)) {
+  margin-left: 0;
+}
+
+.verso-message .trace-class {
+  color: color-mix(in srgb, currentColor 70%, transparent);
+  font-weight: bold;
+  margin: 0;
+  padding: 0;
+}
+
+.verso-message .text {
+  white-space: pre-wrap;
+}

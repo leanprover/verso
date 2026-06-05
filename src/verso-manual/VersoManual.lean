@@ -11,6 +11,12 @@ import Verso.Doc.Html
 import Verso.Output.TeX
 import Verso.Output.Html
 import Verso.Output.Html.CssVars
+import Verso.Theme.Code
+import Verso.Theme.Code.Defaults
+import VersoManual.Theme
+import VersoManual.Theme.Defaults
+import VersoManual.Theme.Emit
+import VersoManual.Theme.Assets
 import Verso.Output.Html.KaTeX
 import Verso.Output.Html.ElasticLunr
 import Verso.Doc.Lsp
@@ -60,6 +66,7 @@ open Verso.Code (LinkTargets)
 open Verso.Code.Hover (Dedup State)
 open Verso.ArgParse
 open Verso (Logger Severity withLogger BuildLogT)
+open Verso.Theme (ThemeRegistry)
 
 namespace Verso.Genre
 
@@ -231,17 +238,74 @@ structure Config extends HtmlConfig, TeXConfig, OutputConfig where
 
   /--
   Global priorities that control the relative ranking of the semantic (quick-jump) and full-text
-  search result streams, each on a scale from {lit}`0` to {lit}`99`. Defaults are {lit}`50` on
+  search result streams, each on a scale from `0` to `99`. Defaults are `50` on
   both sides.
   -/
   searchPriorities : SearchPriorities := {}
+
+  /--
+  When true (the default), it is an error if no theme is accessible. When false the same problems
+  become warnings.
+
+  A theme counts as "accessible" if its `ManualTheme.checkAccessibility` returns no
+  issues. In other words:
+   * Every checked color pair meets the WCAG AA contrast threshold
+   * Every pair of token colors stays mutually distinguishable under each of the three dichromacies
+     (`protanopia`, `deuteranopia`, `tritanopia`).
+
+  With a single registered theme, that theme must be accessible. With multiple themes, there must be
+  at least one accessible light theme and one accessible dark theme so a reader on either appearance
+  can pick a usable theme.
+  -/
+  strictThemeCoverage : Bool := true
+
+  /--
+  When `true` (the default), the build errors if the configured `defaultLightTheme` or
+  `defaultDarkTheme` has any accessibility issues. When false the same problems become build-log
+  warnings and the build proceeds.
+  -/
+  strictDefaultThemeAccessibility : Bool := true
+
+  /--
+  When `true` (the default), every registered theme that has accessibility issues emits a build-log
+  warning that names the theme and the specific issues. Setting this to `false` silences these
+  per-theme warnings — useful when shipping a documented trade-off (for example the canonical
+  Solarized palette, whose token colors are below WCAG AA's 4.5:1 contrast threshold for normal text
+  by design).
+  -/
+  warnPerThemeAccessibility : Bool := true
 deriving ToJson, FromJson
 
+open Lean in
+open Verso.Theme in
 structure RenderConfig extends Config where
   /--
   How to insert links in rendered code
   -/
   linkTargets : TraverseState → Multi.AllRemotes → LinkTargets Manual.TraverseContext := (·.localTargets ++ ·.remoteTargets)
+  /--
+  The manual themes that should be available in the picker. When `none` (the default), every
+  theme registered with `@[manual_theme]` is available.
+  -/
+  availableThemes : Option NameSet := none
+  /--
+  The default light-appearance theme. Its registration name must be a registered
+  `ManualTheme` whose appearance is `.light`.
+  -/
+  defaultLightTheme : Name := ``ManualTheme.ink
+  /--
+  The default dark-appearance theme. Its registration name must be a registered
+  `ManualTheme` whose appearance is `.dark`.
+  -/
+  defaultDarkTheme : Name := ``ManualTheme.argent
+  /--
+  The appearance new readers start in.
+  -/
+  defaultAppearance : ThemeMode := .followSystem
+  /--
+  The {name}`CodeTheme` used for PDF output.
+  -/
+  pdfCodeTheme : CodeTheme := CodeTheme.ink
 
 namespace Config
 
@@ -313,14 +377,16 @@ def TraverseState.ofConfig (config : HtmlConfig) : TraverseState := Id.run do
       st := st.addLicenseInfo li
   return st
 
-/--
-The monad in which manuals are converted to an output format.
--/
-abbrev EmitM : Type → Type := ReaderT ExtensionImpls (BuildLogT IO)
 
 def traverse (text : Part Manual) (config : Config) : EmitM (Part Manual × TraverseState) := do
   let topCtxt : Manual.TraverseContext := { draft := config.draft }
   let mut state : Manual.TraverseState := .ofConfig config.toHtmlConfig
+  -- Themes contribute their own third-party licenses (color palettes, fonts) on top of the
+  -- HtmlFeature ones already collected by `TraverseState.ofConfig`.
+  let registry ← readThe ThemeRegistry
+  for (_, theme) in registry do
+    for li in theme.licenses do
+      state := state.addLicenseInfo li
   let mut text := text
   if !config.draft then
     text := removeDraftParts text
@@ -372,8 +438,57 @@ where
   isUnnumbered (p : Part Manual) : Bool := p.metadata.map (·.number) |>.isEqSome false
 
 open IO.FS in
-def emitTeX (config : Config) (text : Part Manual) : EmitM Unit := do
-  let (text, state) ← traverse text config
+/--
+Writes every theme-related asset for an output root: the multi-theme `verso-themes.css`, the
+picker `.js`/`.css`, the `window.versoThemes` data file, every theme's font bytes and bundled
+assets. Content-addressed font filenames in the theme registry ensure that two themes sharing the
+same font end up with one byte payload on disk.
+-/
+def writeThemeAssets (dir : System.FilePath) (config : RenderConfig)
+    (codeSampleHtml : String) : EmitM Unit := do
+  let themes ← readThe ThemeRegistry
+  ensureDir (dir / "-verso-data")
+  -- verso-themes.css
+  withFile (dir / "verso-themes.css") .write fun h => do
+    h.putStrLn (Theme.«verso-themes.css» themes
+      config.defaultLightTheme config.defaultDarkTheme config.defaultAppearance)
+  -- Font bytes, deduplicated by output path: a theme's @font-face rules embed the per-theme
+  -- asset-root path, so writing one path and skipping a structurally-identical-bytes path under
+  -- a different theme root would leave that rule pointing at a missing file.
+  let mut writtenPaths : Std.HashSet String := {}
+  for (n, t) in themes do
+    let assetRoot := s!"-verso-data/themes/{n.toString}"
+    for (path, bytes, _, _) in t.fontAssets assetRoot do
+      if writtenPaths.contains path then continue
+      writtenPaths := writtenPaths.insert path
+      let abs := dir.join path
+      if let some p := abs.parent then ensureDir p
+      writeBinFile abs bytes
+  -- Theme-bundled assets (images, etc.). Defensively skip any asset whose path is unsafe
+  -- (`..` segments, leading/trailing/double `/`, backslashes) — the validation pass logs an
+  -- `unsafeAssetPath` error for these, but build-log errors are non-fatal and the build
+  -- continues into emission, so the writer must independently refuse to honor the bad path.
+  -- Without this guard a malicious or buggy theme could clobber files outside its asset root
+  -- via a path like `../../book.css`.
+  for (n, t) in themes do
+    for a in t.assets do
+      unless Theme.ThemeAsset.safePath a.path do
+        Verso.reportError
+          s!"refusing to write theme asset for '{n.toString}': unsafe path '{a.path}'"
+        continue
+      let path := dir / "-verso-data" / "themes" / n.toString / a.path
+      if let some p := path.parent then ensureDir p
+      writeBinFile path a.contents
+  -- Picker assets + data file.
+  writeFile (dir / "-verso-data" / "theme-picker.js") Manual.Theme.«theme-picker.js»
+  writeFile (dir / "-verso-data" / "theme-picker.css") Manual.Theme.«theme-picker.css»
+  writeFile (dir / "-verso-data" / "verso-themes.js")
+    (Theme.windowVersoThemesJs themes config.defaultLightTheme config.defaultDarkTheme
+      config.defaultAppearance codeSampleHtml)
+
+open IO.FS in
+def emitTeX (config : RenderConfig) (text : Part Manual) : EmitM Unit := do
+  let (text, state) ← traverse text config.toConfig
   let opts : TeX.Options Manual := {
     headerLevels := #["chapter", "section", "subsection", "subsubsection", "paragraph"],
     headerLevel := some ⟨0, by grind⟩
@@ -395,7 +510,7 @@ def emitTeX (config : Config) (text : Part Manual) : EmitM Unit := do
   withFile (dir.join "main.tex") .write fun h => do
     if config.verbose then
       IO.println s!"Saving {dir.join "main.tex"}"
-    h.putStrLn (preamble text.titleString authors date packages.toList preambleItems.toList)
+    h.putStrLn (preamble text.titleString authors date packages.toList preambleItems.toList config.pdfCodeTheme)
     -- \frontmatter is inserted by our hardcoded preamble before the ToC, so it doesn't get inserted
     -- here. If there's any text at the start of the front matter, then we need to clear it to a new
     -- recto page after the ToC
@@ -482,7 +597,8 @@ def page (toc : List Html.Toc)
     (state : TraverseState) (config : Config)
     (localItems : Array Html)
     (showNavButtons : Bool := true) (extraJs : List JS := [])
-    (extraHead : Html := .empty) : Html :=
+    (extraHead : Html := .empty)
+    (themeInitScript : String := "") (showThemePicker : Bool := false) : Html :=
   let toc := {
     title := htmlBookTitle, path := #[], id := "" , sectionNum := some #[], children := toc
   }
@@ -504,6 +620,7 @@ def page (toc : List Html.Toc)
     state.extraCss (state.extraJs.insertMany extraJs)
     (showNavButtons := showNavButtons)
     (logo := config.logo)
+    (logoDark := config.logoDark)
     (logoLink := config.logoLink)
     (repoLink := config.sourceLink)
     (issueLink := config.issueLink)
@@ -512,6 +629,8 @@ def page (toc : List Html.Toc)
     (extraJsFiles := featureJsFiles ++ extraJsFiles)
     (extraHead := config.extraHead |>.push extraHead)
     (extraContents := config.extraContents)
+    (themeInitScript := themeInitScript)
+    (showThemePicker := showThemePicker)
 
 def relativizeLinks (html : Html) : Html :=
     -- Make all absolute URLS be relative to the site root, because that'll make them `<base>`-relative
@@ -716,7 +835,8 @@ def emitHtmlSingle
     emitSearchBox (dir / "-verso-search") state.quickJump config.searchPriorities (searchPagePath := some "search/")
     emitSearchIndex (dir / "-verso-search") state { draft := config.draft } text
 where
-  emitContent (dir : System.FilePath) : StateT (State Html) (ReaderT AllRemotes (ReaderT ExtensionImpls (BuildLogT IO))) Unit := do
+  emitContent (dir : System.FilePath) : StateT (State Html) (ReaderT AllRemotes EmitM) Unit := do
+    let registry ← readThe ThemeRegistry
     let authors := text.metadata.map (·.authors) |>.getD []
     let authorshipNote := text.metadata.bind (·.authorshipNote)
     let _date := text.metadata.bind (·.date) |>.getD "" -- TODO
@@ -758,10 +878,18 @@ where
     emitFindHtml toc dir state xrefJson config.toConfig
     if .search ∈ config.features then
       emitSearchResultsHtml toc dir titleToShow state config.toConfig
-    IO.FS.withFile (dir.join "verso-vars.css") .write fun h => do
-      h.putStrLn Html.«verso-vars.css»
     IO.FS.withFile (dir.join "book.css") .write fun h => do
       h.putStrLn Html.Css.pageStyle
+    -- Render the picker preview against the in-progress hover state so its `data-verso-hover`
+    -- IDs end up in the global `-verso-docs.json` the page loads — the same lookup the picker
+    -- JS already does for every other token. Without this the picker tokens have hover IDs
+    -- that reference nothing.
+    let codeSampleCtx : Verso.Code.HighlightHtmlM.Context Manual := {
+      linkTargets := {}, traverseContext := {}, definitionIds := {}, options := {}
+    }
+    let (codeSampleHtml, htmlState') := Manual.Theme.codeSampleHtml codeSampleCtx (← get)
+    set htmlState'
+    writeThemeAssets dir config codeSampleHtml
     for (src, dest) in config.extraFiles do
       copyRecursively src (dir.join dest)
     for (src, dest) in config.extraFilesHtml do
@@ -778,8 +906,19 @@ where
       if config.verbose then
         IO.println s!"Saving {dir.join "index.html"}"
       h.putStrLn Html.doctype
+      -- Offer the picker only when the reader has a real choice. A registry with one entry
+      -- (or none) means the unscoped `:root` block already paints the only available theme.
+      let showThemePicker := registry.size > 1
+      let themeInitScript :=
+        if showThemePicker then
+          Verso.Theme.themeInitScript registry
+            config.defaultLightTheme config.defaultDarkTheme config.defaultAppearance
+        else ""
       h.putStrLn <| Html.asString <| relativizeLinks <|
-        page toc ctxt.path text.titleString titleToShow pageContent state config.toConfig thisPageToc (showNavButtons := false)
+        page toc ctxt.path text.titleString titleToShow pageContent state config.toConfig thisPageToc
+          (showNavButtons := false)
+          (themeInitScript := themeInitScript)
+          (showThemePicker := showThemePicker)
 
 
 /--
@@ -810,7 +949,7 @@ where
   Emits the data used by all pages in the site, such as JS and CSS, and then emits the root page
   (and thus its children).
   -/
-  emitContent (root : System.FilePath) : StateT (State Html) (ReaderT AllRemotes (ReaderT ExtensionImpls (BuildLogT IO))) Unit := do
+  emitContent (root : System.FilePath) : StateT (State Html) (ReaderT AllRemotes EmitM) Unit := do
     let authors := text.metadata.map (·.authors) |>.getD []
     let authorshipNote := text.metadata >>= (·.authorshipNote)
     let _date := text.metadata.bind (·.date) |>.getD "" -- TODO
@@ -826,10 +965,18 @@ where
       if let some alt := text.metadata.bind (·.shortTitle) then
         alt
       else titleHtml
-    IO.FS.withFile (root / "verso-vars.css") .write fun h => do
-      h.putStrLn Html.«verso-vars.css»
     IO.FS.withFile (root / "book.css") .write fun h => do
       h.putStrLn Html.Css.pageStyle
+    -- Render the picker preview against the in-progress hover state so its `data-verso-hover`
+    -- IDs end up in the global `-verso-docs.json` the page loads — the same lookup the picker
+    -- JS already does for every other token. Without this the picker tokens have hover IDs
+    -- that reference nothing.
+    let codeSampleCtx : Verso.Code.HighlightHtmlM.Context Manual := {
+      linkTargets := {}, traverseContext := {}, definitionIds := {}, options := {}
+    }
+    let (codeSampleHtml, htmlState') := Manual.Theme.codeSampleHtml codeSampleCtx (← get)
+    set htmlState'
+    writeThemeAssets root config codeSampleHtml
     for (src, dest) in config.extraFiles do
       copyRecursively src (root.join dest)
     for (src, dest) in config.extraFilesHtml do
@@ -847,7 +994,8 @@ where
   -/
   emitPart (bookTitle : Html) (authors : List String) (authorshipNote : Option String) (bookContents)
       (opts ctxt state definitionIds linkTargets codeOptions)
-      (root : Bool) (depth : Nat) (dir : System.FilePath) (part : Part Manual) : StateT (State Html) (ReaderT AllRemotes (ReaderT ExtensionImpls (BuildLogT IO))) Unit := do
+      (root : Bool) (depth : Nat) (dir : System.FilePath) (part : Part Manual) : StateT (State Html) (ReaderT AllRemotes EmitM) Unit := do
+    let registry ← readThe ThemeRegistry
     let thisFile := part.metadata.bind (·.file) |>.getD (part.titleString.sluggify.toString)
     let dir := if root then dir else dir.join thisFile
     let sectionNum := sectionHtml ctxt
@@ -898,8 +1046,18 @@ where
       if config.verbose then
         IO.println s!"Saving {dir.join "index.html"}"
       h.putStrLn Html.doctype
+      -- Offer the picker only when the reader has a real choice. A registry with one entry
+      -- (or none) means the unscoped `:root` block already paints the only available theme.
+      let showThemePicker := registry.size > 1
+      let themeInitScript :=
+        if showThemePicker then
+          Verso.Theme.themeInitScript registry
+            config.defaultLightTheme config.defaultDarkTheme config.defaultAppearance
+        else ""
       h.putStrLn <| Html.asString <| relativizeLinks <|
         page bookContents ctxt.path part.titleString bookTitle pageContent state config.toConfig thisPageToc
+          (themeInitScript := themeInitScript)
+          (showThemePicker := showThemePicker)
     if depth > 0 ∧ part.htmlSplit != .never then
       for p in part.subParts do
         let nextFile := p.metadata.bind (·.file) |>.getD (p.titleString.sluggify.toString)
@@ -944,10 +1102,13 @@ open Verso.CLI
 
 def manualMain (text : Part Manual)
     (extensionImpls : ExtensionImpls := by exact extension_impls%)
+    (codeThemes : Verso.Theme.CodeThemeTable := by exact code_themes%)
+    (manualThemes : Verso.Theme.ManualThemeTable := by exact manual_themes%)
     (options : List String)
     (config : RenderConfig := {})
     (extraSteps : List ExtraStep := []) : IO UInt32 :=
-  ReaderT.run go extensionImpls
+  let _ := codeThemes
+  go extensionImpls manualThemes
 
 where
 
@@ -998,21 +1159,122 @@ where
   fixBase (base : String) : String :=
     if base.endsWith "/" then base else base ++ "/"
 
-  go (extensionImpls : ExtensionImpls) : IO UInt32 := do
+  /--
+  Runs the theme set's accessibility checks at three tiers:
+
+  - **Coverage** (gated by
+    `strictThemeCoverage`):
+    the build must offer a usable theme. With a single registered theme it must be accessible;
+    with multiple themes at least one accessible light *and* one accessible dark must exist.
+
+  - **Default theme** (gated by
+    `strictDefaultThemeAccessibility`):
+    the configured `defaultLightTheme`
+    and `defaultDarkTheme`
+    must themselves be accessible.
+
+  - **Per-theme advisory** (gated by
+    `warnPerThemeAccessibility`):
+    every registered theme with any accessibility issues emits a build-log warning naming the
+    theme and the specific issues.
+
+  A theme counts as "accessible" iff its
+  `ManualTheme.checkAccessibility` returns no issues.
+  -/
+  runThemeAccessibilityCheck (cfg : RenderConfig) (registry : ThemeRegistry) :
+      ReaderT ExtensionImpls (BuildLogT IO) Unit := do
+    let issuesOf (t : Verso.Theme.ManualTheme) := t.checkAccessibility
+    let isAccessible (t : Verso.Theme.ManualTheme) : Bool := (issuesOf t).isEmpty
+    -- Per-theme advisory.
+    if cfg.warnPerThemeAccessibility then
+      for (n, t) in registry do
+        for issue in issuesOf t do
+          let colors := issue.offending.toList.map Verso.Theme.Color.css |> ", ".intercalate
+          let suffix := if colors.isEmpty then "" else s!" ({colors})"
+          Verso.reportWarning s!"theme '{n.toString}' ({t.name}): {issue.message}{suffix}"
+    -- Coverage.
+    let routeCoverage (msg : String) : ReaderT ExtensionImpls (BuildLogT IO) Unit :=
+      if cfg.strictThemeCoverage then Verso.reportError msg else Verso.reportWarning msg
+    let accessible := registry.filter (fun _ t => isAccessible t)
+    if accessible.isEmpty then
+      routeCoverage "no registered theme is accessible; readers cannot pick a usable theme"
+    else if registry.size > 1 then
+      let anyLight := accessible.any (fun _ t => t.appearance == Verso.Theme.Appearance.light)
+      let anyDark := accessible.any (fun _ t => t.appearance == Verso.Theme.Appearance.dark)
+      unless anyLight do
+        routeCoverage "no registered light theme is accessible; readers on a light system cannot pick a usable theme"
+      unless anyDark do
+        routeCoverage "no registered dark theme is accessible; readers on a dark system cannot pick a usable theme"
+    -- Default theme accessibility.
+    let routeDefault (msg : String) : ReaderT ExtensionImpls (BuildLogT IO) Unit :=
+      if cfg.strictDefaultThemeAccessibility then Verso.reportError msg else Verso.reportWarning msg
+    let checkDefault (slot : String) (name : Lean.Name) :
+        ReaderT ExtensionImpls (BuildLogT IO) Unit := do
+      match registry.find? name with
+      | none => pure ()  -- already reported by validate
+      | some t =>
+        let issues := issuesOf t
+        unless issues.isEmpty do
+          let plural := if issues.size == 1 then "" else "s"
+          let lines := issues.toList.map fun i =>
+            let colors := i.offending.toList.map Verso.Theme.Color.css |> ", ".intercalate
+            let suffix := if colors.isEmpty then "" else s!" ({colors})"
+            s!"  - {i.message}{suffix}"
+          let body := "\n".intercalate lines
+          routeDefault
+            s!"{slot} '{name.toString}' ({t.name}) has {issues.size} accessibility issue{plural}:\n{body}"
+    checkDefault "defaultLightTheme" cfg.defaultLightTheme
+    checkDefault "defaultDarkTheme" cfg.defaultDarkTheme
+
+  /--
+  Builds the active {name}`ThemeRegistry` from the registered
+  `ManualTheme` table, filters it by the configured
+  `availableThemes`, and routes every
+  `ManualThemeTable.ValidationError` through `MonadBuildLog` as an error.
+  -/
+  resolveThemeRegistry (cfg : RenderConfig)
+      (table : Verso.Theme.ManualThemeTable) :
+      ReaderT ExtensionImpls (BuildLogT IO) ThemeRegistry := do
+    for e in table.validate cfg.defaultLightTheme cfg.defaultDarkTheme cfg.availableThemes do
+      Verso.reportError e.format
+    -- `availableThemes` semantics:
+    --   `none`        → every registered theme is available
+    --   `some [..xs]` → exactly those themes, with `defaultLightTheme` and
+    --                   `defaultDarkTheme` implicitly added if missing so the picker always
+    --                   contains the resolved default for each appearance.
+    -- The result always contains at least `defaultLightTheme` and `defaultDarkTheme` if those
+    -- are registered, so `verso-themes.css` always has a light and a dark default to fall back
+    -- to for readers without JavaScript.
+    match cfg.availableThemes with
+    | none => return table.themes
+    | some xs =>
+      let withDefaults := xs
+        |>.append (if xs.contains cfg.defaultLightTheme then {} else {cfg.defaultLightTheme})
+        |>.append (if xs.contains cfg.defaultDarkTheme then {} else {cfg.defaultDarkTheme})
+      return withDefaults.foldl (init := ({} : ThemeRegistry)) fun acc n =>
+        match table.find? n with
+        | some t => acc.insert n t
+        | none => acc
+
+  go (extensionImpls : ExtensionImpls) (manualThemes : Verso.Theme.ManualThemeTable) : IO UInt32 := do
     let cfg ← opts config options
     runWithLogger <| flip ReaderT.run extensionImpls do
-      if cfg.emitTeX then
-        if cfg.verbose then
-          IO.println s!"Saving TeX"
-        emitTeX cfg.toConfig text
+      let registry ← resolveThemeRegistry cfg manualThemes
+      runThemeAccessibilityCheck cfg registry
+      let body : EmitM Unit := do
+        if cfg.emitTeX then
+          if cfg.verbose then
+            IO.println s!"Saving TeX"
+          emitTeX cfg text
 
-      emitHtml cfg.emitHtmlSingle .single cfg text traverseHtmlSingle emitHtmlSingle
-      emitHtml cfg.emitHtmlMulti .multi cfg text traverseHtmlMulti emitHtmlMulti
+        emitHtml cfg.emitHtmlSingle .single cfg text traverseHtmlSingle emitHtmlSingle
+        emitHtml cfg.emitHtmlMulti .multi cfg text traverseHtmlMulti emitHtmlMulti
 
-      if let some wcFile := cfg.wordCount then
-        if cfg.verbose then
-          IO.println s!"Saving word counts to {wcFile}"
-        wordCount wcFile cfg.toConfig text
+        if let some wcFile := cfg.wordCount then
+          if cfg.verbose then
+            IO.println s!"Saving word counts to {wcFile}"
+          wordCount wcFile cfg.toConfig text
+      body.run registry
 
   emitHtml
       (how : EmitHtml) (mode : Mode) (cfg : RenderConfig) (text : Part Manual)

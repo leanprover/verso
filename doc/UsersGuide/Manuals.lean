@@ -304,3 +304,205 @@ The {name}`diagram` code block accepts an `inline` flag that marks it for inline
 Building PDFs from LaTeX output relies on the `svg` LaTeX package, which calls Inkscape to convert each emitted SVG to PDF at build time.
 This requires `inkscape` on the `PATH` as well as running `lualatex` with the `-shell-escape` flag.
 This flag allows LaTeX to execute arbitrary commands during compilation.
+
+# Themes
+%%%
+tag := "manual-themes"
+%%%
+
+The manual genre includes support for themes.
+Authors may select any number of themes to include, and readers may select any of these themes while reading.
+A theme for a manual includes a {ref "output-code-themes"}[code theme], in addition to selecting fonts and colors for the text and navigation interface.
+
+## Overview
+%%%
+tag := "manual-themes-overview"
+%%%
+
+When multiple themes are available, the rendered HTML for a manual includes a “gear” button in the header that opens a popover widget.
+At the top, an _Appearance_ selector offers radio buttons for _Light_, _Dark_, and _Follow system_.
+Beneath it, a collapsible _Theme choices_ section provides dropdown menus to select specific themes for light and dark modes.
+The light theme is used in _Light_ mode and the dark theme in _Dark_ mode, while _Follow system_ switches between them automatically based on the browser's `prefers-color-scheme` setting.
+
+## The `ManualTheme` Structure
+%%%
+tag := "manual-themes-structure"
+%%%
+
+Authors specify a manual theme as a definition of type {name Verso.Theme.ManualTheme}`ManualTheme`.
+Manual themes must be registered using the `@[manual_theme]` attribute.
+Manual themes extend {ref "output-code-themes"}[code themes] with fonts and colors for textual content and navigation features.
+
+{docstring Theme.ManualTheme}
+
+## Built-In Themes
+%%%
+tag := "manual-themes-builtins"
+%%%
+
+
+```lean -show
+open Verso.Theme in
+/--
+info:
+Alucard (Verso.Theme.ManualTheme.alucard)
+Argent (Verso.Theme.ManualTheme.argent)
+Beacon Dark (Verso.Theme.ManualTheme.beaconDark)
+Beacon Light (Verso.Theme.ManualTheme.beaconLight)
+Chromatic Dark (Verso.Theme.ManualTheme.chromaticDark)
+Chromatic Light (Verso.Theme.ManualTheme.chromaticLight)
+Dracula (Verso.Theme.ManualTheme.dracula)
+Hearth Dark (Verso.Theme.ManualTheme.hearthDark)
+Hearth Light (Verso.Theme.ManualTheme.hearthLight)
+Ink (Verso.Theme.ManualTheme.ink)
+Nord (Verso.Theme.ManualTheme.nord)
+Sandstone Dark (Verso.Theme.ManualTheme.sandstoneDark)
+Sandstone Light (Verso.Theme.ManualTheme.sandstoneLight)
+Slate (Verso.Theme.ManualTheme.slate)
+Solarized Dark (Verso.Theme.ManualTheme.solarizedDark)
+Solarized Light (Verso.Theme.ManualTheme.solarizedLight)
+Steel (Verso.Theme.ManualTheme.steel)
+-/
+#guard_msgs in
+#eval show IO Unit from do
+  let table : ManualThemeTable := manual_themes%
+  let entries := table.themes.toList.map
+    (fun (p : Lean.Name × ManualTheme) => s!"{p.snd.name} ({p.fst})")
+  IO.println ""
+  for line in entries.toArray.qsort (· < ·) do
+    IO.println line
+```
+
+### Defaults: Ink and Argent
+%%%
+tag := "manual-default-themes"
+%%%
+
+The default light and dark themes are called _Ink_ and _Argent_, respectively.
+These themes use understated formatting, relying on typographical features such as weight and slant syntax and semantic highlighting.
+
+### Other Included Themes
+%%%
+tag := "manual-other-themes"
+%%%
+
+:::paragraph
+The remaining shipped themes fall into several families, some with both light and dark variants:
+
+: Chromatic
+
+  The _Chromatic_ themes are versions of _Ink_ and _Argent_ that use color in addition to typographical features for syntax highlighting.
+
+: Beacon
+
+  The _Beacon_ themes are variants of _Ink_ and _Argent_ that use the [Okabe-Ito palette](https://jfly.uni-koeln.de/color/) to ensure that different colors are distinct for readers with various forms of colorblindness.
+
+: Solarized
+
+  These themes use Schoonover's [Solarized](https://ethanschoonover.com/solarized/) palettes.
+  Note that these low-contrast themes are not particularly accessible, and thus should not be used as the default theme for a document.
+
+: Dracula and Alucard
+
+  _Dracula_ and _Alucard_ implement the [Dracula](https://draculatheme.com/spec) family of themes.
+
+
+: Nord
+
+  Sven Greb's blue-based [Nord](https://www.nordtheme.com/) palette on its Polar Night substrate.
+
+: Sandstone
+
+  The _Sandstone_ themes are a warm-sepia family: a cream-with-terracotta light variant and a deep canyon-shadow dark variant, both inspired by the deserts of the Southwest USA.
+
+: Steel and Slate
+
+  _Steel_ and _Slate_ use cool, high-contrast neutral colors.
+
+: Hearth
+
+  The _Hearth_ themes have a cream-and-sage light variant and a candlelit deep-olive dark variant, and use serif fonts.
+
+:::
+
+
+## Configuration
+%%%
+tag := "manual-themes-configuration"
+%%%
+
+The following fields of {name}`RenderConfig` are relevant to themes:
+
+: {name RenderConfig.availableThemes}`availableThemes`
+
+  This field lists the available themes. By default, it contains all themes that are registered with `@[manual_theme]`.
+  Authors can restrict readers to a subset of the registered themes by listing the desired themes here.
+  The default light and dark themes are implicitly considered part of the available theme set.
+
+: {name RenderConfig.defaultLightTheme}`defaultLightTheme`
+
+  When readers have configured their themes to follow the system preference, this is the default light theme.
+
+: {name RenderConfig.defaultDarkTheme}`defaultDarkTheme`
+
+  When readers have configured their themes to follow the system preference, this is the default dark theme.
+
+: {name RenderConfig.defaultAppearance}`defaultAppearance`
+
+  The mode that new readers start in. With {name Verso.Theme.ThemeMode.followSystem}`followSystem` (the default), the picker starts on _Follow system_. With {name Verso.Theme.ThemeMode.light}`light` or {name Verso.Theme.ThemeMode.dark}`dark`, new readers start on that fixed appearance instead, which is useful when a document should default to one appearance regardless of the reader's operating system setting. Readers can always switch in the picker.
+
+In {name Verso.Theme.ThemeMode.followSystem}`followSystem` mode, readers without JavaScript are served the default light theme, with the default dark theme swapped in via a `prefers-color-scheme: dark` media query, so they follow their system appearance too; in {name Verso.Theme.ThemeMode.light}`light` or {name Verso.Theme.ThemeMode.dark}`dark` mode they are served that appearance's default unconditionally.
+
+## Accessibility Checking
+%%%
+tag := "manual-themes-accessibility"
+%%%
+
+By default, manual themes are checked for common accessibility problems, including insufficient contrast between text and background and the use of colors that not all readers can distinguish.
+Verso issues a warning when an inaccessible theme is included, and it is an error when an inaccessible theme is the default.
+These checks are incomplete: themes may have accessibility problems that are not related to their choices of colors, and the automated tests do not take custom CSS into account.
+
+
+: {name Config.strictThemeCoverage}`strictThemeCoverage`
+
+  Verifies that the set of available themes offers at least one accessible choice for each appearance a reader might select.
+  With a single available theme, that theme must be accessible; with multiple available themes, at least one accessible light theme and one accessible dark theme must exist.
+  If {lean}`true` (the default), failing this check is an error.
+  If {lean}`false`, failing this check results in a warning.
+
+: {name Config.strictDefaultThemeAccessibility}`strictDefaultThemeAccessibility`
+
+  When {name}`true` (the default), Verso verifies that the configured {name RenderConfig.defaultLightTheme}`defaultLightTheme` and {name RenderConfig.defaultDarkTheme}`defaultDarkTheme` are accessible.
+  It is an error if either fails the accessibility check.
+
+: {name Config.warnPerThemeAccessibility}`warnPerThemeAccessibility`
+
+  Emits a build-log warning for every registered theme that has accessibility issues, naming the theme and the specific colors involved.
+  Defaults to {lean}`true`; set it to {lean}`false` to silence the per-theme advisories.
+
+### Downgrading Documented Trade-Offs
+%%%
+tag := "manual-themes-accessibility-downgrade"
+%%%
+
+Not all themes included with Verso are accessible to all readers.
+This is intentional on the part of their designers.
+For example, the _Solarized_ themes are intentionally low-contrast, and _Beacon Light_ prioritizes the Okabe-Ito palette's distinguishability for many varieties of color perception over contrast.
+
+By default, Verso warns about these themes if they're included in {name RenderConfig.availableThemes}`availableThemes`.
+To silence this warning, set {name Config.warnPerThemeAccessibility}`warnPerThemeAccessibility` to {name}`false`.
+By default, it is an error if a non-accessible theme is set as the default theme.
+Set {name Config.strictDefaultThemeAccessibility}`strictDefaultThemeAccessibility` to {name}`false` to disable this error.
+
+
+## PDF Output
+%%%
+tag := "manual-themes-pdf"
+%%%
+
+
+PDF output via TeX uses only a {ref "output-code-themes"}[code theme].
+The {name RenderConfig.pdfCodeTheme}`pdfCodeTheme` configuration field selects the code theme to be used to generate PDFs, defaulting to {name Theme.CodeTheme.ink}`ink`.
+This setting ignores the theme used for HTML output.
+The preamble in the resulting TeX uses `xcolor`'s `\definecolor` to define a named LaTeX color for each themeable color.
+Code is generated using _semantic_ macros such as `\versoVar` and `\versoConst`, so a `\renewcommand` is also generated to configure each category.

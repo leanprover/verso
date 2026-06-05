@@ -7,6 +7,7 @@ module
 import Std.Data.HashSet
 import Std.Data.TreeSet
 import Verso.Doc
+public import Verso.Font
 public import Verso.Instances
 public import Verso.Doc.Html
 public import Verso.Doc.TeX
@@ -19,6 +20,7 @@ public import VersoSearch.DomainSearch
 import VersoManual.LicenseInfo
 import VersoManual.Html.Config
 public import VersoManual.Html.Features
+public import VersoManual.Theme
 public meta import VersoManual.Ext
 import Verso.Output.Html
 public import Verso.Output.TeX
@@ -83,16 +85,8 @@ def toCss (family : FontFamily) : String := s!"font-family: var({family.toCssVar
 
 end FontFamily
 
-inductive FontStyle where
-  | normal
-  | italic
-deriving DecidableEq, Repr, Hashable
-
-def FontStyle.toCss (s : FontStyle) : String :=
-  "font-style: " ++
-  match s with
-  | .normal => "normal;"
-  | .italic => "italic;"
+-- `FontStyle` was previously defined here; it is re-exported here for backwards compatibility
+export Verso (FontStyle)
 
 inductive FontWeight where
   | lighter
@@ -682,6 +676,26 @@ structure ExtensionImpls where
   inlineDescrs : Lean.NameMap Dynamic
   blockDescrs : Lean.NameMap Dynamic
 
+/--
+{open Verso.Theme}
+
+The monad in which TeX descriptor implementations (`BlockDescr.toTeX`, `InlineDescr.toTeX`) and the
+TeX generation pipeline run. Reads the resolved {name}`ThemeRegistry`, the extension implementations
+table, and logs through the build log.
+
+Defined here (not in `VersoManual.lean`) so descriptor type signatures can name it without forward
+references.
+-/
+public abbrev EmitM : Type → Type :=
+  ReaderT Verso.Theme.ThemeRegistry (ReaderT Manual.ExtensionImpls (BuildLogT IO))
+
+/--
+The monad in which HTML descriptor implementations (`BlockDescr.toHtml`, `InlineDescr.toHtml`) run.
+Same as {name}`EmitM`, with the remote cross-reference table read in addition.
+-/
+public abbrev EmitHtmlM : Type → Type :=
+  ReaderT Multi.AllRemotes EmitM
+
 end Manual
 
 /-- A genre for writing reference manuals and other book-like documents. -/
@@ -759,7 +773,7 @@ structure InlineDescr extends HtmlAssets where
   /--
   How to generate HTML. If {name}`none`, generating HTML from a document that contains this inline will fail.
   -/
-  toHtml : Option (InlineToHtml Manual (ReaderT AllRemotes (ReaderT ExtensionImpls (BuildLogT IO))))
+  toHtml : Option (InlineToHtml Manual EmitHtmlM)
 
   /--
   Should this inline be an entry in the page-local ToC? If so, how should it be represented?
@@ -778,7 +792,7 @@ structure InlineDescr extends HtmlAssets where
   How to generate TeX. If {name}`none`, generating TeX from a document that contains this inline
   will fail.
   -/
-  toTeX : Option (InlineToTeX Manual (ReaderT ExtensionImpls (BuildLogT IO)))
+  toTeX : Option (InlineToTeX Manual EmitM)
   /-- Required TeX `\usepackage` lines -/
   usePackages : List String := {}
   /-- Required items in the TeX preamble -/
@@ -802,7 +816,7 @@ structure BlockDescr extends HtmlAssets where
   How to generate HTML. If {name}`none`, generating HTML from a document that contains this block
   will fail.
   -/
-  toHtml : Option (BlockToHtml Manual (ReaderT AllRemotes (ReaderT ExtensionImpls (BuildLogT IO))))
+  toHtml : Option (BlockToHtml Manual EmitHtmlM)
 
   /--
   Should this block be an entry in the page-local ToC? If so, how should it be represented?
@@ -822,7 +836,7 @@ structure BlockDescr extends HtmlAssets where
   How to generate TeX. If {name}`none`, generating TeX from a document that contains this block
   will fail.
   -/
-  toTeX : Option (BlockToTeX Manual (ReaderT ExtensionImpls (BuildLogT IO)))
+  toTeX : Option (BlockToTeX Manual EmitM)
   /-- Required TeX `\usepackage` lines -/
   usePackages : List String := {}
   /-- Required items in the TeX preamble -/
@@ -1512,7 +1526,7 @@ instance : Traverse Manual TraverseM where
         pure <| some <| Inline.other ⟨name, some id, data⟩ content
 
 open Verso.Output.TeX in
-instance : TeX.GenreTeX Manual (ReaderT ExtensionImpls (BuildLogT IO)) where
+instance : TeX.GenreTeX Manual EmitM where
   part go metadata txt := do
     let st ← TeX.state
     let label? := do
@@ -1574,7 +1588,7 @@ def permalink (id : InternalId) (st : TraverseState) (inline : Bool := true) : H
 
 
 open Verso.Output.Html in
-instance : Html.GenreHtml Manual (ReaderT AllRemotes (ReaderT ExtensionImpls (BuildLogT IO))) where
+instance : Html.GenreHtml Manual EmitHtmlM where
   part go «meta» txt := do
     let st ← Verso.Doc.Html.HtmlT.state
     let attrs := meta.id.map (st.htmlId) |>.getD #[]

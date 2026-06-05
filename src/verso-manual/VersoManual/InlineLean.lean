@@ -59,7 +59,7 @@ inline_extension Inline.lean (hls : Highlighted) via withHighlighting where
         reportError <| "Couldn't deserialize Lean code while rendering inline HTML: " ++ err
         pure .empty
       | .ok (hl : Highlighted) =>
-        hl.toTeX (g := Manual) (m := ReaderT ExtensionImpls (BuildLogT IO))
+        hl.toTeX (g := Manual) (m := EmitM)
   toHtml :=
     open Verso.Output.Html in
     some <| fun _ _ data _ => do

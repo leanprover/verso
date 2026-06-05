@@ -10,6 +10,8 @@ import Verso.Method
 public import Verso.Output.TeX
 public import Verso.BuildLog
 
+set_option doc.verso true
+
 namespace Verso.Doc.TeX
 
 open Verso (Severity SourceSpan MonadBuildLog Logger reportError reportWarning)
@@ -23,7 +25,7 @@ public structure Options (g : Genre) where
 public structure TeXContext where
   /--
   True if we are currently rendering TeX in a fragile environment
-  (specifically, one which cannot accommodate `\Verb`)
+  (specifically, one which cannot accommodate {lit}`\Verb`)
   -/
   inFragile : Bool := false
 
@@ -110,9 +112,9 @@ def replaceChars (s : String) (replace : Char → Option String) : String :=
   loop "" 0
 
 /--
-Escapes a single character in an appropriate way for uses of `\Verb` and
-`\begin{Verbatim}...\end{Verbatim}` (from package `fancyvrb`) with
-command characters `\`, `{`, and `}`.
+Escapes a single character in an appropriate way for uses of {lit}`\Verb` and
+`\begin{Verbatim}...\end{Verbatim}` (from package {lit}`fancyvrb`) with
+command characters {lit}`\`, {lit}`{`, and {lit}`}`.
 -/
 private def escapeCharForVerbatim (c : Char) : Option String :=
   match c with
@@ -122,6 +124,26 @@ private def escapeCharForVerbatim (c : Char) : Option String :=
   | '\\' => some "\\symbol{92}"
   | '#' => some "\\symbol{35}" -- FIXME: this is really just a test
   | _ => none
+
+/--
+Escapes a string for use as the argument of {lit}`\texttt{…}` in a fragile environment (a
+section heading, a {lit}`\href` link text — places where {lit}`\Verb` is not allowed). All
+ten TeX special characters need replacement: {lit}`\`, {lit}`{`, {lit}`}`,
+{lit}`%`, {lit}`#`, {lit}`$`, {lit}`&`, {lit}`_`, {lit}`^`, and {lit}`~`.
+-/
+private def escapeForTexttt (s : String) : String :=
+  replaceChars s fun
+    | '\\' => some "\\textbackslash{}"
+    | '{' => some "\\{"
+    | '}' => some "\\}"
+    | '%' => some "\\%"
+    | '#' => some "\\#"
+    | '$' => some "\\$"
+    | '&' => some "\\&"
+    | '_' => some "\\_"
+    | '^' => some "\\textasciicircum{}"
+    | '~' => some "\\textasciitilde{}"
+    | _ => none
 
 /--
 Tracks the previous character class for inserting line break opportunities.
@@ -137,12 +159,12 @@ private inductive PrevChar
   | other
 
 /--
-Escapes a string in an appropriate way for uses of `\Verb` and
-`\begin{Verbatim}...\end{Verbatim}` (from package `fancyvrb`) with
-command characters `\`, `{`, and `}`.
+Escapes a string in an appropriate way for uses of {lit}`\Verb` and
+{lit}`\begin{Verbatim}...\end{Verbatim}` (from package {lit}`fancyvrb`) with command characters {lit}`\`, {lit}`{`, and
+{lit}`}`.
 
-When `lineBreaks` is true, inserts line break opportunities:
-- After `.`: insert `\allowbreak{}` (no hyphen on break)
+When {lit}`lineBreaks` is true, inserts line break opportunities:
+- After {lit}`.`: insert {lit}`\allowbreak{}` (no hyphen on break)
 - On lowercase→uppercase transition: insert `\-` (soft hyphen)
 - On digit→letter transition: insert `\-` (soft hyphen)
 -/
@@ -176,7 +198,10 @@ verbatim-like environment depending on whether we're in a fragile environment.
 -/
 public def verbatimInline [Monad m] [GenreTeX g m] (t : TeX) : TeXT g m Verso.Output.TeX := do
   if (← texContext).inFragile then
-    pure (.seq #[.raw "\\texttt{", t, .raw "}"]) -- TODO: better escaping for texttt
+    -- Callers pre-escape `t` for their target environment. For plain code spans the
+    -- branching is in the `.code` arm of `Inline.toTeX`, which picks `escapeForTexttt` for
+    -- this branch and `escapeForVerbatim` for the `\LeanVerb` branch below.
+    pure (.seq #[.raw "\\texttt{", t, .raw "}"])
   else
     pure (.seq #[.raw "\\LeanVerb|", t, .raw "|"])
 
@@ -199,7 +224,16 @@ public partial defmethod Inline.toTeX : Inline g → TeXT g m TeX
     pure \TeX{\emph{\Lean{← content.mapM toTeX}}}
   | .bold content => do
     pure \TeX{\textbf{\Lean{← content.mapM toTeX}}}
-  | .code str => verbatimInline (.raw <| escapeForVerbatim str)
+  | .code str => do
+    -- In a fragile environment (section heading, `\href` link text — anywhere `\Verb` is
+    -- disallowed) we wrap with `\texttt{…}` instead, which means the body has to be escaped
+    -- against all ten TeX special characters rather than just the four that matter inside
+    -- `\Verb|…|`. The verbatim escape leaves `%` literal, which would start a TeX comment
+    -- that eats the rest of the heading.
+    if (← texContext).inFragile then
+      pure <| .seq #[.raw "\\texttt{", .raw (escapeForTexttt str), .raw "}"]
+    else
+      verbatimInline (.raw <| escapeForVerbatim str)
   | .math .inline str => pure <| .raw s!"${str}$"
   | .math .display str => pure <| .raw s!"\\[{str}\\]"
   | .concat inlines => inlines.mapM toTeX

@@ -1,5 +1,5 @@
 .text-search-results {
-    background-color: var(--verso-selected-color);
+    background-color: var(--verso-highlight-color);
 }
 
 .text-search-results.focused {
