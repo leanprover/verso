@@ -9,3 +9,5 @@ public meta import Init.System.FilePath
 namespace Verso.Genre.Manual
 
 public def find.js := include_str "../../../static-web/find.js"
+
+public def tocResize.js := include_str "../../../static-web/toc-resize.js"

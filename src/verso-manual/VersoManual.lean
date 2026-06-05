@@ -683,6 +683,9 @@ def emitSearchBox
 
 end
 
+def emitTocResizeJs (dir : System.FilePath) : IO Unit := do
+  IO.FS.writeFile (dir / "toc-resize.js") tocResize.js
+
 def wordCount
     (wcPath : System.FilePath) (config : Config)
     (text : Part Manual) : EmitM Unit := do
@@ -762,6 +765,7 @@ where
       h.putStrLn Html.«verso-vars.css»
     IO.FS.withFile (dir.join "book.css") .write fun h => do
       h.putStrLn Html.Css.pageStyle
+    emitTocResizeJs dir
     for (src, dest) in config.extraFiles do
       copyRecursively src (dir.join dest)
     for (src, dest) in config.extraFilesHtml do
@@ -830,6 +834,7 @@ where
       h.putStrLn Html.«verso-vars.css»
     IO.FS.withFile (root / "book.css") .write fun h => do
       h.putStrLn Html.Css.pageStyle
+    emitTocResizeJs root
     for (src, dest) in config.extraFiles do
       copyRecursively src (root.join dest)
     for (src, dest) in config.extraFilesHtml do

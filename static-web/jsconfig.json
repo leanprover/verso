@@ -4,5 +4,5 @@
         "target": "ES2024",
         "noEmit": true
     },
-    "include": ["find.js"]
+    "include": ["find.js", "toc-resize.js", "toc-resize-preload.js"]
 }
