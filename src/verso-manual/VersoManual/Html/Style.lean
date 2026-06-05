@@ -276,8 +276,11 @@ main [id] {
     right: 0;
     width: 6px;
     height: 100%;
-    cursor: col-resize;
     z-index: 12;
+}
+
+.toc-resize-enabled .toc-resize-handle {
+    cursor: col-resize;
 }
 
 .toc-resize-handle::after {
@@ -291,9 +294,15 @@ main [id] {
     transition: background 0.15s;
 }
 
-.toc-resize-handle:hover::after,
-.toc-resize-handle.dragging::after {
+.toc-resize-enabled .toc-resize-handle:hover::after,
+.toc-resize-enabled .toc-resize-handle.dragging::after,
+.toc-resize-enabled .toc-resize-handle:focus-visible::after {
     background: var(--verso-toc-resize-handle-color, #888);
+}
+
+.toc-resize-enabled .toc-resize-handle:focus-visible {
+    outline: 2px solid var(--verso-link-color, Highlight);
+    outline-offset: -2px;
 }
 
 @media screen and (max-width: 700px) {

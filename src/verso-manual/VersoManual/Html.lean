@@ -405,46 +405,6 @@ r#"(function(){
   }
 })()"#
 
-def tocResizeJs : String :=
-r#"(function(){
-  var handle = document.querySelector('.toc-resize-handle');
-  var toc = document.getElementById('toc');
-  if (!handle || !toc) return;
-  var STORAGE_KEY = 'verso-toc-width';
-  var MIN_WIDTH = 160;
-  var MAX_WIDTH = 800;
-  var saved = localStorage.getItem(STORAGE_KEY);
-  if (saved) {
-    document.documentElement.style.setProperty('--verso-toc-width', saved + 'px');
-  }
-  var dragging = false;
-  var startX = 0;
-  var startWidth = 0;
-  handle.addEventListener('mousedown', function(e) {
-    if (window.matchMedia('(max-width: 700px)').matches) return;
-    dragging = true;
-    startX = e.clientX;
-    startWidth = toc.getBoundingClientRect().width;
-    handle.classList.add('dragging');
-    document.body.style.userSelect = 'none';
-    document.body.style.cursor = 'col-resize';
-    e.preventDefault();
-  });
-  document.addEventListener('mousemove', function(e) {
-    if (!dragging) return;
-    var w = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, startWidth + e.clientX - startX));
-    document.documentElement.style.setProperty('--verso-toc-width', w + 'px');
-  });
-  document.addEventListener('mouseup', function() {
-    if (!dragging) return;
-    dragging = false;
-    handle.classList.remove('dragging');
-    document.body.style.userSelect = '';
-    document.body.style.cursor = '';
-    localStorage.setItem(STORAGE_KEY, Math.round(toc.getBoundingClientRect().width));
-  });
-})()"#
-
 open Verso.Search in
 public def page
     (toc : Toc) (path : Path)
@@ -479,6 +439,7 @@ public def page
         <link rel="stylesheet" href="verso-vars.css" />
         <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js" integrity="sha384-zbcZAIxlvJtNE3Dp5nxLXdXtXyxwOdnILY1TDPVmKFhl4r4nSUG1r8bcFXGVa4Te" crossorigin="anonymous"></script>
         {{ searchAssetTags }}
+        <script src="toc-resize.js" defer="defer"></script>
         {{extraJsFiles.map fun f => ({{<script src=s!"{f.1}" {{if f.2 then defer else #[]}}></script>}})}}
         {{extraStylesheets.map (fun url => {{<link rel="stylesheet" href={{url}}/> }})}}
         {{extraCss.toArray.map ({{<style>{{Html.text false ·.css}}</style>}})}}
@@ -525,7 +486,7 @@ public def page
                 </ul>
                 }} else .empty }}
             </div>
-            <div class="toc-resize-handle" aria-hidden="true"/>
+            <div class="toc-resize-handle"/>
           </nav>
           <main>
             <div class="content-wrapper">
@@ -536,7 +497,6 @@ public def page
             </div>
           </main>
         </div>
-        <script>{{Html.text false tocResizeJs}}</script>
       </body>
     </html>
   }}

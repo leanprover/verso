@@ -188,6 +188,7 @@ jobs:
                     browser-tests/test_search.py \
                     browser-tests/test_search_priority.py \
                     browser-tests/test_search_page.py \
+                    browser-tests/test_toc_resize.py \
                     browser-tests/test_redirect.py \
                     browser-tests/test_katex.py -v
 
