@@ -5,9 +5,11 @@ Builds the user's guide (which ships multiple themes via @[manual_theme]) and ex
   * gear placement in header-tools, left of the search box
   * popover open/close, role + aria-* attributes, Escape returns focus to the gear
   * focus trap inside the popover
-  * theme switching via dropdown sets data-verso-theme and data-verso-appearance
-  * persistence across reloads via localStorage
-  * "match system" auto-mode follows matchMedia(prefers-color-scheme), single mode does not
+  * the Appearance radios (Light / Dark / Follow system) drive data-verso-theme and
+    data-verso-appearance, and persist across reloads via localStorage
+  * "Follow system" tracks matchMedia(prefers-color-scheme); Light/Dark lock the appearance
+  * the collapsible "Theme choices" section is expanded only when a non-default light or dark
+    theme is stored
   * graceful degradation when localStorage throws (page still loads, default theme applied)
 """
 
@@ -97,6 +99,18 @@ def _picker_button(page):
 
 def _dialog(page):
     return page.locator("#theme-picker-dialog")
+
+
+def _expand_choices(page):
+    """Open the collapsible Light/Dark "Theme choices" section if it isn't already open."""
+    choices = page.locator("#theme-picker-choices")
+    if choices.count() and choices.get_attribute("open") is None:
+        page.locator("#theme-picker-choices > summary").click()
+
+
+def _set_mode(page, mode):
+    """Select an Appearance radio button: 'light', 'dark', or 'auto'."""
+    page.locator(f"#theme-picker-mode-{mode}").check()
 
 
 def test_gear_height_and_centering_match_search(page):
@@ -193,29 +207,69 @@ def test_focus_trap(page):
         assert in_dialog, "focus escaped the dialog"
 
 
-def test_theme_switching_persists(page, server):
+def test_appearance_radios_offer_light_dark_follow_system(page):
+    """The Appearance group offers exactly Light / Dark / Follow system radios, in that order."""
     btn = _picker_button(page)
     btn.click()
     _dialog(page).wait_for(state="attached", timeout=5000)
-    # Force single mode (the toggle starts on auto/checked when the picker has both
-    # light and dark themes; unchecking it switches to single).
-    mode = page.locator("#theme-picker-mode")
-    if mode.is_checked():
-        mode.uncheck()
-    # Pick the second option in the single dropdown.
-    single = page.locator("#theme-picker-single")
-    options = single.locator("option").all_text_contents()
-    if len(options) < 2:
-        pytest.skip("not enough themes registered to test switching")
-    chosen = single.locator("option").nth(1).get_attribute("value")
-    single.select_option(value=chosen)
-    # The data attribute should reflect the choice immediately.
+    radios = page.locator("#theme-picker-mode input[type=radio]")
+    values = radios.evaluate_all("els => els.map(e => e.value)")
+    labels = page.locator("#theme-picker-mode .theme-picker-radio").all_text_contents()
+    assert values == ["light", "dark", "auto"], f"unexpected radio values {values!r}"
+    assert [t.strip() for t in labels] == ["Light", "Dark", "Follow system"], (
+        f"unexpected radio labels {labels!r}"
+    )
+
+
+def test_first_visit_defaults_to_follow_system(page):
+    """A fresh visitor (no stored mode) sees the Appearance group on 'Follow system'."""
+    btn = _picker_button(page)
+    btn.click()
+    _dialog(page).wait_for(state="attached", timeout=5000)
+    assert page.locator("#theme-picker-mode-auto").is_checked()
+    assert not page.locator("#theme-picker-mode-light").is_checked()
+    assert not page.locator("#theme-picker-mode-dark").is_checked()
+
+
+def test_default_mode_exposed_and_drives_initial_radio(page):
+    """`window.versoThemes.defaultMode` is the author-configured starting mode (the user's guide
+    uses the default `followSystem`, encoded as `auto`), and the picker starts on it when nothing
+    is stored."""
+    default_mode = page.evaluate("window.versoThemes.defaultMode")
+    assert default_mode == "auto", (
+        f"expected exposed defaultMode 'auto', got {default_mode!r}"
+    )
+    btn = _picker_button(page)
+    btn.click()
+    _dialog(page).wait_for(state="attached", timeout=5000)
+    assert page.locator(f"#theme-picker-mode-{default_mode}").is_checked()
+
+
+def test_light_mode_switching_persists(page, server):
+    """Selecting Light mode and a non-default light theme sets the data attributes and
+    survives a reload (the no-flash script reapplies it before paint)."""
+    btn = _picker_button(page)
+    btn.click()
+    _dialog(page).wait_for(state="attached", timeout=5000)
+    _set_mode(page, "light")
+    _expand_choices(page)
+    light = page.locator("#theme-picker-light")
+    current = page.evaluate("document.documentElement.getAttribute('data-verso-theme')")
+    chosen = None
+    for opt in light.locator("option").all():
+        v = opt.get_attribute("value")
+        if v and v != current:
+            chosen = v
+            break
+    if chosen is None:
+        pytest.skip("not enough light themes registered to test switching")
+    light.select_option(value=chosen)
     assert (
         page.evaluate("document.documentElement.getAttribute('data-verso-theme')")
         == chosen
     )
-    # localStorage persists it.
-    assert page.evaluate("localStorage.getItem('verso-theme-single')") == chosen
+    assert page.evaluate("localStorage.getItem('verso-theme-light')") == chosen
+    assert page.evaluate("localStorage.getItem('verso-theme-mode')") == "light"
     # Reload: the no-flash script reads localStorage and applies the same theme before paint.
     page.goto(server + "/")
     page.wait_for_load_state("domcontentloaded")
@@ -225,43 +279,48 @@ def test_theme_switching_persists(page, server):
     )
 
 
-def test_match_system_follows_media(page):
+def test_follow_system_tracks_media(page):
     btn = _picker_button(page)
     btn.click()
     _dialog(page).wait_for(state="attached", timeout=5000)
-    mode = page.locator("#theme-picker-mode")
-    if not mode.is_checked():
-        mode.check()
+    _set_mode(page, "auto")
     # Emulate dark, then light; the inline script's matchMedia listener should swap themes.
     page.emulate_media(color_scheme="dark")
     page.wait_for_timeout(50)
     dark_id = page.evaluate("document.documentElement.getAttribute('data-verso-theme')")
+    dark_appearance = page.evaluate(
+        "document.documentElement.getAttribute('data-verso-appearance')"
+    )
     page.emulate_media(color_scheme="light")
     page.wait_for_timeout(50)
     light_id = page.evaluate(
         "document.documentElement.getAttribute('data-verso-theme')"
     )
-    assert dark_id != light_id, (
-        "auto mode should pick different themes for light vs dark"
+    light_appearance = page.evaluate(
+        "document.documentElement.getAttribute('data-verso-appearance')"
     )
+    assert dark_id != light_id, (
+        "Follow system should pick different themes for light vs dark"
+    )
+    assert dark_appearance == "dark" and light_appearance == "light"
 
 
-def test_single_mode_ignores_media(page):
+def test_locked_appearance_ignores_media(page):
+    """Light mode locks the appearance: a system media change must not override the theme."""
     btn = _picker_button(page)
     btn.click()
     _dialog(page).wait_for(state="attached", timeout=5000)
-    mode = page.locator("#theme-picker-mode")
-    if mode.is_checked():
-        mode.uncheck()
-    # Pick a specific theme.
-    chosen = page.locator("#theme-picker-single option").nth(0).get_attribute("value")
-    page.locator("#theme-picker-single").select_option(value=chosen)
-    # Emulating a media change must not override the chosen theme.
+    _set_mode(page, "light")
+    chosen = page.evaluate("document.documentElement.getAttribute('data-verso-theme')")
     page.emulate_media(color_scheme="dark")
     page.wait_for_timeout(50)
     assert (
         page.evaluate("document.documentElement.getAttribute('data-verso-theme')")
         == chosen
+    )
+    assert (
+        page.evaluate("document.documentElement.getAttribute('data-verso-appearance')")
+        == "light"
     )
     page.emulate_media(color_scheme="light")
     page.wait_for_timeout(50)
@@ -272,17 +331,15 @@ def test_single_mode_ignores_media(page):
 
 
 def test_auto_commit_applies_dropdown_value(page):
-    """In auto mode, changing the light dropdown while `prefers-color-scheme: light` is active
+    """In Follow-system mode under `prefers-color-scheme: light`, changing the light dropdown
     should immediately apply the chosen light theme. The committed `data-verso-theme` must
     match the dropdown's value, not whatever was previously painted."""
     page.emulate_media(color_scheme="light")
     btn = _picker_button(page)
     btn.click()
     _dialog(page).wait_for(state="attached", timeout=5000)
-    mode = page.locator("#theme-picker-mode")
-    if not mode.is_checked():
-        mode.check()
-    # Find a light-appearance option that differs from the currently visible theme.
+    _set_mode(page, "auto")
+    _expand_choices(page)
     light = page.locator("#theme-picker-light")
     current = page.evaluate("document.documentElement.getAttribute('data-verso-theme')")
     chosen = None
@@ -293,7 +350,6 @@ def test_auto_commit_applies_dropdown_value(page):
             break
     assert chosen is not None, "need at least two light themes to test commit"
     light.select_option(value=chosen)
-    # The select-change handler fires `commit()`, which must apply the dropdown's value.
     after = page.evaluate("document.documentElement.getAttribute('data-verso-theme')")
     assert after == chosen, (
         f"auto-mode commit should apply dropdown value {chosen!r}, got {after!r}"
@@ -302,18 +358,16 @@ def test_auto_commit_applies_dropdown_value(page):
 
 def test_switching_themes_has_no_intermediate_state(page):
     """Selecting a new theme in the dropdown must take `data-verso-theme` directly from the
-    old value to the new value. Any intermediate state — e.g. a hover/focus preview on the
-    *other* mode's dropdown firing during the click, or a transient default — would cause a
-    visible flash to an unrelated theme."""
+    old value to the new value. Any intermediate state — e.g. a transient default — would
+    cause a visible flash to an unrelated theme."""
     btn = _picker_button(page)
     btn.click()
     _dialog(page).wait_for(state="attached", timeout=5000)
-    # Single mode keeps the test deterministic: only one dropdown is visible, so the test
-    # exercises the user path of "open the dialog, pick a different theme, see only the new
-    # theme paint."
-    mode = page.locator("#theme-picker-mode")
-    if mode.is_checked():
-        mode.uncheck()
+    # Light mode keeps the test deterministic: the active theme is exactly the light dropdown's
+    # value, so the test exercises "open the dialog, pick a different light theme, see only the
+    # new theme paint."
+    _set_mode(page, "light")
+    _expand_choices(page)
     # Install a MutationObserver that logs every value `data-verso-theme` takes from this
     # point on, so we can assert the sequence after the switch.
     page.evaluate(
@@ -332,41 +386,37 @@ def test_switching_themes_has_no_intermediate_state(page):
             window.__versoStopObserver = () => obs.disconnect();
         }"""
     )
-    single = page.locator("#theme-picker-single")
+    light = page.locator("#theme-picker-light")
     initial = page.evaluate("document.documentElement.getAttribute('data-verso-theme')")
     target = None
-    for opt in single.locator("option").all():
+    for opt in light.locator("option").all():
         v = opt.get_attribute("value")
         if v and v != initial:
             target = v
             break
-    assert target is not None, "need at least two themes to test a switch"
-    single.select_option(value=target)
-    # Give the change handler a moment to run any cascaded events (focus/mouseenter previews,
-    # outside-click handler, etc.) so they show up in the recorded sequence.
+    assert target is not None, "need at least two light themes to test a switch"
+    light.select_option(value=target)
+    # Give the change handler a moment to run any cascaded events so they show up in the
+    # recorded sequence.
     page.wait_for_timeout(100)
     page.evaluate("window.__versoStopObserver()")
     states = page.evaluate("window.__versoThemeStates")
     # The only value `data-verso-theme` should take during the switch is the chosen target.
-    # Any other id (e.g. PageTheme, defaultDark, etc.) means there was an intermediate paint.
     bad = [s for s in states if s != target]
     assert not bad, (
-        f"intermediate theme states during single-mode switch from {initial!r} to {target!r}: {bad}"
+        f"intermediate theme states during light-mode switch from {initial!r} to {target!r}: {bad}"
     )
 
 
 def test_switching_light_themes_in_auto_has_no_dark_flash(page):
-    """In auto mode under `prefers-color-scheme: light`, switching the *light* dropdown must
-    not paint a dark theme in between. The hover/focus preview handlers were attached to the
-    dark dropdown too, so a stray mouseenter (Playwright's `select_option` walks the cursor
-    over the dialog) could fire `previewTheme(darkSel.value)` mid-switch."""
+    """In Follow-system mode under `prefers-color-scheme: light`, switching the *light*
+    dropdown must not paint a dark theme in between."""
     page.emulate_media(color_scheme="light")
     btn = _picker_button(page)
     btn.click()
     _dialog(page).wait_for(state="attached", timeout=5000)
-    mode = page.locator("#theme-picker-mode")
-    if not mode.is_checked():
-        mode.check()
+    _set_mode(page, "auto")
+    _expand_choices(page)
     light = page.locator("#theme-picker-light")
     dark = page.locator("#theme-picker-dark")
     page.evaluate(
@@ -394,19 +444,13 @@ def test_switching_light_themes_in_auto_has_no_dark_flash(page):
             break
     assert target is not None, "need at least two light themes to test a switch"
     dark_value = dark.locator("option").first.get_attribute("value")
-    # Real-user flow: focus the light dropdown (as a normal user would click on it) and
-    # pick a new option. Hovering the *other* dropdown is also part of the picked-up bug,
-    # but a previous version fired the dark preview because a stray mouseenter on the dark
-    # dropdown landed during Playwright's option-click; both paths should land on the
-    # target theme and only on the target theme.
     light.focus()
     light.select_option(value=target)
     page.wait_for_timeout(100)
     page.evaluate("window.__versoStopObserver()")
     states = page.evaluate("window.__versoThemeStates")
-    # The forbidden state is the *dark* one. Re-applying `initial` (the value the page
-    # already had when the test snapshotted it) is invisible to the user; only a flash to
-    # a different appearance, or to a third unrelated theme, is a real flicker.
+    # The forbidden state is the *dark* one. Re-applying `initial` (the value the page already
+    # had) is invisible; only a flash to a different appearance is a real flicker.
     assert dark_value not in states, (
         f"dark theme {dark_value!r} appeared during a light-to-light switch; full sequence: {states}"
     )
@@ -416,79 +460,91 @@ def test_switching_light_themes_in_auto_has_no_dark_flash(page):
     )
 
 
-def test_single_mode_marks_single_default(page):
-    """The single-mode dropdown marks `data.defaultSingle` with " (default)", not the light
-    default unconditionally. Authors who set `defaultSingleAppearance := .dark` should see
-    the dark theme labelled as the default in single mode."""
+def test_theme_dropdowns_mark_their_defaults(page):
+    """The light dropdown marks `defaultLight` with ' (default)' and the dark dropdown marks
+    `defaultDark` — each appearance's own default, not the other's."""
     btn = _picker_button(page)
     btn.click()
     _dialog(page).wait_for(state="attached", timeout=5000)
-    mode = page.locator("#theme-picker-mode")
-    if mode.is_checked():
-        mode.uncheck()
-    single_default_id = page.evaluate("window.versoThemes.defaultSingle")
-    # The option text for the single-default id is the only one with " (default)" appended.
-    marked = page.evaluate(
-        """(id) => {
-            const opts = Array.from(document.querySelectorAll('#theme-picker-single option'));
-            return opts
-                .filter(o => o.textContent.endsWith(' (default)'))
-                .map(o => o.value);
-        }""",
-        single_default_id,
+    _expand_choices(page)
+    default_light = page.evaluate("window.versoThemes.defaultLight")
+    default_dark = page.evaluate("window.versoThemes.defaultDark")
+    light_marked = page.evaluate(
+        """() => Array.from(document.querySelectorAll('#theme-picker-light option'))
+            .filter(o => o.textContent.endsWith(' (default)')).map(o => o.value)"""
     )
-    assert marked == [single_default_id], (
-        f"single-mode (default) should mark only {single_default_id!r}, got {marked!r}"
+    dark_marked = page.evaluate(
+        """() => Array.from(document.querySelectorAll('#theme-picker-dark option'))
+            .filter(o => o.textContent.endsWith(' (default)')).map(o => o.value)"""
+    )
+    assert light_marked == [default_light], (
+        f"light dropdown (default) should mark only {default_light!r}, got {light_marked!r}"
+    )
+    assert dark_marked == [default_dark], (
+        f"dark dropdown (default) should mark only {default_dark!r}, got {dark_marked!r}"
     )
 
 
-def test_themes_are_alphabetized(page):
-    """Every dropdown lists its themes in alphabetical order by display name."""
+def test_theme_dropdowns_are_alphabetized(page):
+    """The Light and Dark theme dropdowns list their themes in alphabetical order by display
+    name."""
     btn = _picker_button(page)
     btn.click()
     _dialog(page).wait_for(state="attached", timeout=5000)
-    mode = page.locator("#theme-picker-mode")
-    for sel_id, ensure_auto in [
-        ("#theme-picker-single", False),
-        ("#theme-picker-light", True),
-        ("#theme-picker-dark", True),
-    ]:
-        if ensure_auto and not mode.is_checked():
-            mode.check()
-        if not ensure_auto and mode.is_checked():
-            mode.uncheck()
+    _expand_choices(page)
+    for sel_id in ["#theme-picker-light", "#theme-picker-dark"]:
         texts = page.locator(f"{sel_id} option").all_text_contents()
         assert texts == sorted(texts), f"{sel_id} options not alphabetised: {texts}"
 
 
-def test_match_system_toggle_hides_rows(page):
-    """The 'Theme' (single) row is visible only when Match system is OFF; Light and Dark are
-    visible only when Match system is ON. The `[hidden]` attribute on the row elements must
-    actually hide them — earlier CSS made the `.theme-picker-row { display: flex }` rule
-    win over the default `[hidden] { display: none }`, so the toggle did nothing."""
+def test_choices_collapsed_by_default(page):
+    """With nothing customized, the 'Theme choices' section is collapsed (so the picker is a
+    one-line Appearance dropdown)."""
     btn = _picker_button(page)
     btn.click()
     _dialog(page).wait_for(state="attached", timeout=5000)
-    mode = page.locator("#theme-picker-mode")
-
-    # Auto on -> Light + Dark visible, Theme hidden.
-    if not mode.is_checked():
-        mode.check()
-    assert page.locator("#theme-picker-light").is_visible()
-    assert page.locator("#theme-picker-dark").is_visible()
-    assert not page.locator("#theme-picker-single").is_visible()
-
-    # Auto off -> Theme visible, Light + Dark hidden.
-    mode.uncheck()
-    assert page.locator("#theme-picker-single").is_visible()
+    choices = page.locator("#theme-picker-choices")
+    assert choices.count() == 1, "expected a collapsible #theme-picker-choices section"
+    assert choices.get_attribute("open") is None, "choices should start collapsed"
     assert not page.locator("#theme-picker-light").is_visible()
-    assert not page.locator("#theme-picker-dark").is_visible()
+
+
+def test_choices_expanded_when_custom_theme_stored(page, server):
+    """Once a non-default light theme is stored, the 'Theme choices' section opens by default
+    on the next load so the customized choice is visible."""
+    btn = _picker_button(page)
+    btn.click()
+    _dialog(page).wait_for(state="attached", timeout=5000)
+    _expand_choices(page)
+    light = page.locator("#theme-picker-light")
+    default_light = page.evaluate("window.versoThemes.defaultLight")
+    chosen = None
+    for opt in light.locator("option").all():
+        v = opt.get_attribute("value")
+        if v and v != default_light:
+            chosen = v
+            break
+    if chosen is None:
+        pytest.skip(
+            "only one light theme registered; cannot store a non-default choice"
+        )
+    light.select_option(value=chosen)
+    # Reload: a fresh dialog is built, reading the stored non-default light theme.
+    page.goto(server + "/")
+    page.wait_for_load_state("domcontentloaded")
+    btn = _picker_button(page)
+    btn.click()
+    _dialog(page).wait_for(state="attached", timeout=5000)
+    choices = page.locator("#theme-picker-choices")
+    assert choices.get_attribute("open") is not None, (
+        "choices should be expanded when a non-default theme is stored"
+    )
+    assert page.locator("#theme-picker-light").is_visible()
 
 
 def test_outside_click_dismisses_popover(page):
     """Clicking outside the popover closes the dialog and leaves the page on whatever theme
-    is currently committed. (The picker commits on `change` and no longer has a hover/focus
-    preview path, so dismissal is purely a "close the popover" action.)"""
+    is currently committed."""
     btn = _picker_button(page)
     btn.click()
     _dialog(page).wait_for(state="attached", timeout=5000)
@@ -547,8 +603,7 @@ def test_picker_preview_token_hover_shows_tippy(page):
     The picker preview is built on first popover open via `preview.innerHTML = data.codeSample`.
     The page's tippy-init script runs at DOMContentLoaded over `document.querySelectorAll(
     tokenSelector)` — before the picker preview exists — so without follow-up wiring those
-    tokens get no `_tippy` instance and hovering them does nothing. This test currently fails
-    and is the acceptance criterion for that fix.
+    tokens get no `_tippy` instance and hovering them does nothing.
     """
     btn = _picker_button(page)
     btn.click()
@@ -560,9 +615,6 @@ def test_picker_preview_token_hover_shows_tippy(page):
     # reference the global `-verso-docs.json`).
     token = preview.locator(".token[data-verso-hover]").first
     token.wait_for(state="attached", timeout=5000)
-    # The bug shows up two ways and the test asserts both. (1) The preview token has no
-    # `_tippy` instance attached (the page-level tippy-init scanned the DOM before the
-    # picker preview existed). (2) Hovering the token does not produce a `.tippy-box`.
     has_tippy = page.evaluate(
         "el => !!el._tippy",
         token.element_handle(),
@@ -578,11 +630,6 @@ def test_picker_preview_binding_highlight(page):
     """Hovering an identifier in the picker preview should add `.binding-hl` to its other
     occurrences in the preview — the same binding-highlight effect the manual's body code
     gets.
-
-    The per-`.hl.lean` mouseover handler is attached at DOMContentLoaded over
-    `document.querySelectorAll('.hl.lean')`; the picker preview is built later, so without a
-    follow-up `window.versoAttachBindingHighlights(...)` call the listener never fires and
-    hovering one `name` leaves the other one untouched.
     """
     btn = _picker_button(page)
     btn.click()

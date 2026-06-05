@@ -73,14 +73,42 @@ def testManualTheme : ManualTheme := {
 
 /--
 Dark counterpart to `testManualTheme`. The validation pass requires a registered dark theme
-for `defaultDarkTheme`, but the test only inspects the unscoped `:root` block (the
-single-mode default, here `.light`), so the same sentinel palette under `.dark` is fine.
+for `defaultDarkTheme`, but the browser test only inspects the unscoped `:root` block (the light
+default in the default follow-system mode), so the same sentinel palette under `.dark` is fine.
 -/
 @[manual_theme]
 def testManualThemeDark : ManualTheme := {
   testManualTheme with
   toCodeTheme := { testTheme with name := "ThemeTest Dark", appearance := .dark }
 }
+
+/-!
+Unit checks for the no-JavaScript / picker scaffolding driven by {name}`Verso.Theme.ThemeMode`. A
+two-theme registry (one light, one dark) stands in for a real build's available set. The report
+below records, per generated output, whether the mode-dependent content is present.
+
+Follow-system mode pairs a light `:root` with a `prefers-color-scheme: dark` media block; light and
+dark mode emit a single `:root` with no media swap. The configured mode must also reach the
+no-flash script (as `DEFAULT_MODE`) and the picker's `window.versoThemes` data file.
+-/
+private def modeCheckRegistry : ThemeRegistry :=
+  (({} : ThemeRegistry).insert `light ManualTheme.ink).insert `dark ManualTheme.argent
+
+private def hasSubstr (haystack needle : String) : Bool :=
+  (haystack.splitOn needle).length > 1
+
+/--
+info: css @media(dark) by mode -> followSystem=true light=false dark=false
+themeInitScript inlines the configured mode: true
+windowVersoThemesJs carries the configured mode: true
+-/
+#guard_msgs in
+#eval do
+  let mediaFor (m : ThemeMode) : Bool :=
+    hasSubstr («verso-themes.css» modeCheckRegistry `light `dark m) "@media (prefers-color-scheme: dark)"
+  IO.println s!"css @media(dark) by mode -> followSystem={mediaFor .followSystem} light={mediaFor .light} dark={mediaFor .dark}"
+  IO.println s!"themeInitScript inlines the configured mode: {hasSubstr (themeInitScript modeCheckRegistry `light `dark .dark) "var DEFAULT_MODE = \"dark\""}"
+  IO.println s!"windowVersoThemesJs carries the configured mode: {hasSubstr (windowVersoThemesJs modeCheckRegistry `light `dark .light "sample") "\"defaultMode\":\"light\""}"
 
 def main : List String → IO UInt32 :=
   manualMain (%doc ThemeTestDoc)

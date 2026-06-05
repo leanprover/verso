@@ -4,7 +4,13 @@
  * server-side as static HTML). Reads `window.versoThemes`, populates the dropdowns,
  * persists choices to localStorage, and live-previews on hover/focus. The inline head
  * script in `verso-themes.css`-paired no-flash block already set the initial theme;
- * this file only handles user interaction. */
+ * this file only handles user interaction.
+ *
+ * Controls: an "Appearance" radio group (Light / Dark / Follow system) chooses the mode, and a
+ * collapsible "Theme choices" section holds a Light-theme and a Dark-theme dropdown. The mode
+ * is stored in `verso-theme-mode` ("light" | "dark" | "auto"); the two theme choices in
+ * `verso-theme-light` / `verso-theme-dark`. A new reader with nothing stored starts on
+ * `data.defaultMode` (the author-configured default, "auto" unless overridden). */
 
 (function () {
     "use strict";
@@ -50,6 +56,10 @@
         } catch (e) {
             /* localStorage may be disabled */
         }
+    }
+
+    function prefersDark() {
+        return !!(window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
     }
 
     function applyTheme(id) {
@@ -106,29 +116,11 @@
         });
         var hasMixed = lightThemes.length > 0 && darkThemes.length > 0;
 
-        // "Match system" toggle, only when there's a mix of light and dark.
-        var modeRow = document.createElement("div");
-        modeRow.className = "theme-picker-row";
-        var modeLabel = document.createElement("label");
-        modeLabel.setAttribute("for", "theme-picker-mode");
-        modeLabel.textContent = "Match system";
-        var modeToggle = document.createElement("input");
-        modeToggle.type = "checkbox";
-        modeToggle.id = "theme-picker-mode";
-        modeToggle.checked = (readMode() || "auto") === "auto";
-        modeRow.appendChild(modeToggle);
-        modeRow.appendChild(modeLabel);
-        if (hasMixed) dialog.appendChild(modeRow);
-
-        // Appearance-scoped defaults: a theme is "the default" relative to a given dropdown.
-        // The light dropdown marks `defaultLight`; the dark dropdown marks `defaultDark`. The
-        // single-mode dropdown marks `defaultSingle` — the theme an author chose for readers
-        // who do not follow the system (either `defaultLight` or `defaultDark`, configured via
-        // `defaultSingleAppearance` on `RenderConfig`).
+        // A theme is "the default" relative to a given appearance: the light dropdown marks
+        // `defaultLight`, the dark dropdown marks `defaultDark`.
         function isDefault(t, scope) {
             if (scope === "dark") return t.id === data.defaultDark;
-            if (scope === "light") return t.id === data.defaultLight;
-            return t.id === data.defaultSingle;
+            return t.id === data.defaultLight;
         }
 
         function makeSelect(id, labelText, items, selected, scope) {
@@ -151,31 +143,138 @@
             return { row: row, select: s };
         }
 
-        var singleSel = makeSelect(
-            "theme-picker-single",
-            "Theme",
-            sortedThemes,
-            readKey("verso-theme-single") || data.defaultSingle,
-            "single",
-        );
-        var lightSel = makeSelect(
-            "theme-picker-light",
-            "Light",
-            lightThemes,
-            readKey("verso-theme-light") || data.defaultLight,
-            "light",
-        );
-        var darkSel = makeSelect(
-            "theme-picker-dark",
-            "Dark",
-            darkThemes,
-            readKey("verso-theme-dark") || data.defaultDark,
-            "dark",
-        );
+        // `getActive` returns the theme id the current control state selects; `commit` persists
+        // the choices and applies the active theme. Both are wired up per layout below.
+        var getActive;
+        var commit;
 
-        dialog.appendChild(singleSel.row);
-        dialog.appendChild(lightSel.row);
-        dialog.appendChild(darkSel.row);
+        if (hasMixed) {
+            // Appearance: a Light / Dark / Follow system radio group.
+            var modeGroup = document.createElement("fieldset");
+            modeGroup.id = "theme-picker-mode";
+            var modeLegend = document.createElement("legend");
+            modeLegend.textContent = "Appearance";
+            modeGroup.appendChild(modeLegend);
+            var modeOptions = document.createElement("div");
+            modeOptions.className = "theme-picker-radios";
+            var currentMode = readMode() || data.defaultMode || "auto";
+            var modeInputs = [];
+            [
+                ["light", "Light"],
+                ["dark", "Dark"],
+                ["auto", "Follow system"],
+            ].forEach(function (m) {
+                var wrap = document.createElement("label");
+                wrap.className = "theme-picker-radio";
+                var input = document.createElement("input");
+                input.type = "radio";
+                input.name = "verso-appearance";
+                input.value = m[0];
+                input.id = "theme-picker-mode-" + m[0];
+                if (m[0] === currentMode) input.checked = true;
+                var span = document.createElement("span");
+                span.textContent = m[1];
+                wrap.appendChild(input);
+                wrap.appendChild(span);
+                modeOptions.appendChild(wrap);
+                modeInputs.push(input);
+            });
+            modeGroup.appendChild(modeOptions);
+            dialog.appendChild(modeGroup);
+
+            function currentModeValue() {
+                for (var i = 0; i < modeInputs.length; i++) {
+                    if (modeInputs[i].checked) return modeInputs[i].value;
+                }
+                return "auto";
+            }
+
+            // Collapsible light/dark theme choices. Expanded by default only when the reader has
+            // moved either choice off its default, so the common case stays a one-line picker.
+            var details = document.createElement("details");
+            details.id = "theme-picker-choices";
+            var summary = document.createElement("summary");
+            summary.textContent = "Theme choices";
+            details.appendChild(summary);
+
+            var lightSel = makeSelect(
+                "theme-picker-light",
+                "Light",
+                lightThemes,
+                readKey("verso-theme-light") || data.defaultLight,
+                "light",
+            );
+            var darkSel = makeSelect(
+                "theme-picker-dark",
+                "Dark",
+                darkThemes,
+                readKey("verso-theme-dark") || data.defaultDark,
+                "dark",
+            );
+            details.appendChild(lightSel.row);
+            details.appendChild(darkSel.row);
+            details.open =
+                lightSel.select.value !== data.defaultLight ||
+                darkSel.select.value !== data.defaultDark;
+            dialog.appendChild(details);
+
+            getActive = function () {
+                var mode = currentModeValue();
+                if (mode === "light") return lightSel.select.value;
+                if (mode === "dark") return darkSel.select.value;
+                return prefersDark() ? darkSel.select.value : lightSel.select.value;
+            };
+            commit = function () {
+                writeMode(currentModeValue());
+                writeKey("verso-theme-light", lightSel.select.value);
+                writeKey("verso-theme-dark", darkSel.select.value);
+                var id = getActive();
+                applyTheme(id);
+                trackedCommitted = id;
+            };
+
+            modeInputs.forEach(function (input) {
+                input.addEventListener("change", function () {
+                    commit();
+                    refreshAbout();
+                });
+            });
+            [lightSel.select, darkSel.select].forEach(function (sel) {
+                sel.addEventListener("change", function () {
+                    commit();
+                    refreshAbout();
+                });
+            });
+        } else {
+            // Single-appearance fallback: only one of light/dark themes exists, so there is no
+            // appearance choice to make. (In practice the available set always contains both a
+            // light and a dark default, so this path is defensive.)
+            var only = lightThemes.length ? lightThemes : darkThemes;
+            var scope = lightThemes.length ? "light" : "dark";
+            var soleSel = makeSelect(
+                "theme-picker-single",
+                "Theme",
+                only,
+                readKey("verso-theme-" + scope) ||
+                    (scope === "light" ? data.defaultLight : data.defaultDark),
+                scope,
+            );
+            dialog.appendChild(soleSel.row);
+
+            getActive = function () {
+                return soleSel.select.value;
+            };
+            commit = function () {
+                writeMode(scope);
+                writeKey("verso-theme-" + scope, soleSel.select.value);
+                applyTheme(soleSel.select.value);
+                trackedCommitted = soleSel.select.value;
+            };
+            soleSel.select.addEventListener("change", function () {
+                commit();
+                refreshAbout();
+            });
+        }
 
         var preview = document.createElement("div");
         preview.id = "theme-picker-preview";
@@ -213,14 +312,7 @@
         dialog.appendChild(about);
 
         function activeMetaTheme() {
-            var prefersDark =
-                window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-            var id;
-            if (modeToggle.checked) {
-                id = prefersDark ? darkSel.select.value : lightSel.select.value;
-            } else {
-                id = singleSel.select.value;
-            }
+            var id = getActive();
             return data.themes.find(function (t) {
                 return t.id === id;
             });
@@ -252,72 +344,32 @@
             }
             about.hidden = aboutDesc.hidden && aboutLink.hidden;
         }
+        refreshAbout();
 
-        function refreshLayout() {
-            var auto = modeToggle.checked;
-            singleSel.row.hidden = auto;
-            lightSel.row.hidden = !auto;
-            darkSel.row.hidden = !auto;
-            refreshAbout();
-        }
-        refreshLayout();
-
-        // The auto-mode active theme is the dropdown that matches the current
-        // `prefers-color-scheme`. Distinct from `committedActiveId()`, which reads the visible
-        // `data-verso-theme` and is only meaningful for cancel/revert paths.
-        function activeAutoThemeId() {
-            var prefersDark =
-                window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-            return prefersDark ? darkSel.select.value : lightSel.select.value;
-        }
-
-        function commit() {
-            var newId;
-            if (modeToggle.checked) {
-                writeMode("auto");
-                writeKey("verso-theme-light", lightSel.select.value);
-                writeKey("verso-theme-dark", darkSel.select.value);
-                newId = activeAutoThemeId();
-            } else {
-                writeMode("single");
-                writeKey("verso-theme-single", singleSel.select.value);
-                newId = singleSel.select.value;
-            }
-            applyTheme(newId);
-            trackedCommitted = newId;
-        }
-
-        function previewTheme(id) {
-            if (id) applyTheme(id);
-        }
-
-        modeToggle.addEventListener("change", function () {
-            refreshLayout();
-            commit();
-        });
-        [singleSel.select, lightSel.select, darkSel.select].forEach(function (sel) {
-            sel.addEventListener("change", function () {
-                commit();
-                refreshAbout();
-            });
-            // No focus/hover preview: the picker commits immediately on `change`, so the
-            // user already gets visible feedback when they pick an option. Firing a
-            // preview on `focus` (or `mouseenter`) painted a stale "what's selected right
-            // now in this dropdown" theme between the user opening the dropdown and
-            // committing a new value — a perceivable mid-switch flash to the dropdown's
-            // current default or to the opposite-mode theme. Escape and outside-click
-            // still revert any in-flight preview, so a future re-introduction can hook
-            // back in here once the preview-vs-commit semantics are stabilised.
-        });
+        // The picker commits immediately on `change`, so the user already gets visible feedback
+        // when they pick an option. There is no focus/hover preview: firing a preview on `focus`
+        // painted a stale "what's selected right now in this dropdown" theme between the user
+        // opening the dropdown and committing a new value — a perceivable mid-switch flash.
+        // Escape and outside-click still revert any in-flight preview, so a future
+        // re-introduction can hook back in here once the preview-vs-commit semantics are
+        // stabilised.
 
         document.body.appendChild(dialog);
     }
 
     function focusable() {
         return Array.from(
-            dialog.querySelectorAll("select, input, button, [tabindex]:not([tabindex='-1'])"),
+            dialog.querySelectorAll(
+                "select, input, button, summary, a[href], [tabindex]:not([tabindex='-1'])",
+            ),
         ).filter(function (el) {
-            return !el.hidden && !el.disabled;
+            if (el.hidden || el.disabled || el.offsetParent === null) return false;
+            // A collapsed <details> drops its content from the tab order, but the controls
+            // inside still report a non-null `offsetParent`. Exclude them explicitly so the
+            // trap's last element is the summary, not an unreachable select — otherwise Tab
+            // walks past the summary toward those phantom controls and escapes the dialog.
+            if (el.tagName !== "SUMMARY" && el.closest("details:not([open])")) return false;
+            return true;
         });
     }
 

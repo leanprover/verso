@@ -292,29 +292,20 @@ structure RenderConfig extends Config where
   The default light-appearance theme. Its registration name must be a registered
   `ManualTheme` whose appearance is `.light`.
   -/
-  defaultLightTheme : Name := ``Verso.Theme.ManualTheme.ink
+  defaultLightTheme : Name := ``ManualTheme.ink
   /--
   The default dark-appearance theme. Its registration name must be a registered
   `ManualTheme` whose appearance is `.dark`.
   -/
-  defaultDarkTheme : Name := ``Verso.Theme.ManualTheme.argent
+  defaultDarkTheme : Name := ``ManualTheme.argent
   /--
-  The default for readers who do not follow the system appearance (the "single" picker mode):
-  choose `.light` so single-mode falls back to
-  `defaultLightTheme`,
-  or `.dark` so it falls back to
-  `defaultDarkTheme`.
-
-  Auto-mode behavior is unchanged either way: a reader who keeps "Match system" on still gets
-  the light or dark default depending on their OS preference. This setting only governs the
-  single-mode fallback (and what the picker marks as ` (default)` in the single-mode
-  dropdown).
+  The appearance new readers start in.
   -/
-  defaultSingleAppearance : Appearance := .light
+  defaultAppearance : ThemeMode := .followSystem
   /--
   The {name}`CodeTheme` used for PDF output.
   -/
-  pdfCodeTheme : Verso.Theme.CodeTheme := Verso.Theme.CodeTheme.ink
+  pdfCodeTheme : CodeTheme := CodeTheme.ink
 
 namespace Config
 
@@ -446,33 +437,6 @@ def DividedDoc.ofPart (part : Part Manual) : DividedDoc :=
 where
   isUnnumbered (p : Part Manual) : Bool := p.metadata.map (·.number) |>.isEqSome false
 
-/--
-Resolves the single-mode default theme name from the configured
-`Verso.Genre.Manual.RenderConfig.defaultSingleAppearance` — either
-`Verso.Genre.Manual.RenderConfig.defaultLightTheme` or
-`Verso.Genre.Manual.RenderConfig.defaultDarkTheme`.
--/
-def defaultSingleName (config : RenderConfig) : Lean.Name :=
-  match config.defaultSingleAppearance with
-  | .light => config.defaultLightTheme
-  | .dark => config.defaultDarkTheme
-
-/--
-The single-default `ManualTheme` resolved from the active
-{name}`ThemeRegistry`. This is the theme that drives
-`verso-themes.css`'s unscoped `:root` block — what the server-rendered HTML paints on first
-visit (before the no-flash script attaches a `data-verso-theme`) — and the TeX code styling.
-
-Falls back to a bare default `ManualTheme.ink` if neither the resolved single-default name
-nor either configured default appears in the registry (a defensive case; the validation pass
-in `manualMain` rejects unregistered defaults before this is called).
--/
-def singleDefaultTheme (registry : ThemeRegistry) (config : RenderConfig) :
-    Verso.Theme.ManualTheme :=
-  (registry.find? (defaultSingleName config)
-    <|> registry.find? config.defaultLightTheme
-    <|> registry.find? config.defaultDarkTheme).getD Verso.Theme.ManualTheme.ink
-
 open IO.FS in
 /--
 Writes every theme-related asset for an output root: the multi-theme `verso-themes.css`, the
@@ -484,11 +448,10 @@ def writeThemeAssets (dir : System.FilePath) (config : RenderConfig)
     (codeSampleHtml : String) : EmitM Unit := do
   let themes ← readThe ThemeRegistry
   ensureDir (dir / "-verso-data")
-  let single := singleDefaultTheme themes config
   -- verso-themes.css
   withFile (dir / "verso-themes.css") .write fun h => do
-    h.putStrLn (Verso.Theme.«verso-themes.css» single themes
-      config.defaultLightTheme config.defaultDarkTheme)
+    h.putStrLn (Theme.«verso-themes.css» themes
+      config.defaultLightTheme config.defaultDarkTheme config.defaultAppearance)
   -- Font bytes, deduplicated by output path: a theme's @font-face rules embed the per-theme
   -- asset-root path, so writing one path and skipping a structurally-identical-bytes path under
   -- a different theme root would leave that rule pointing at a missing file.
@@ -509,7 +472,7 @@ def writeThemeAssets (dir : System.FilePath) (config : RenderConfig)
   -- via a path like `../../book.css`.
   for (n, t) in themes do
     for a in t.assets do
-      unless Verso.Theme.ThemeAsset.safePath a.path do
+      unless Theme.ThemeAsset.safePath a.path do
         Verso.reportError
           s!"refusing to write theme asset for '{n.toString}': unsafe path '{a.path}'"
         continue
@@ -520,8 +483,8 @@ def writeThemeAssets (dir : System.FilePath) (config : RenderConfig)
   writeFile (dir / "-verso-data" / "theme-picker.js") Manual.Theme.«theme-picker.js»
   writeFile (dir / "-verso-data" / "theme-picker.css") Manual.Theme.«theme-picker.css»
   writeFile (dir / "-verso-data" / "verso-themes.js")
-    (Verso.Theme.windowVersoThemesJs themes config.defaultLightTheme config.defaultDarkTheme
-      (defaultSingleName config) codeSampleHtml)
+    (Theme.windowVersoThemesJs themes config.defaultLightTheme config.defaultDarkTheme
+      config.defaultAppearance codeSampleHtml)
 
 open IO.FS in
 def emitTeX (config : RenderConfig) (text : Part Manual) : EmitM Unit := do
@@ -949,7 +912,7 @@ where
       let themeInitScript :=
         if showThemePicker then
           Verso.Theme.themeInitScript registry
-            config.defaultLightTheme config.defaultDarkTheme (defaultSingleName config)
+            config.defaultLightTheme config.defaultDarkTheme config.defaultAppearance
         else ""
       h.putStrLn <| Html.asString <| relativizeLinks <|
         page toc ctxt.path text.titleString titleToShow pageContent state config.toConfig thisPageToc
@@ -1089,7 +1052,7 @@ where
       let themeInitScript :=
         if showThemePicker then
           Verso.Theme.themeInitScript registry
-            config.defaultLightTheme config.defaultDarkTheme (defaultSingleName config)
+            config.defaultLightTheme config.defaultDarkTheme config.defaultAppearance
         else ""
       h.putStrLn <| Html.asString <| relativizeLinks <|
         page bookContents ctxt.path part.titleString bookTitle pageContent state config.toConfig thisPageToc
@@ -1280,7 +1243,8 @@ where
     --                   `defaultDarkTheme` implicitly added if missing so the picker always
     --                   contains the resolved default for each appearance.
     -- The result always contains at least `defaultLightTheme` and `defaultDarkTheme` if those
-    -- are registered, so `singleDefaultTheme` can always resolve.
+    -- are registered, so `verso-themes.css` always has a light and a dark default to fall back
+    -- to for readers without JavaScript.
     match cfg.availableThemes with
     | none => return table.themes
     | some xs =>

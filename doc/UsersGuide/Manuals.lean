@@ -320,10 +320,9 @@ tag := "manual-themes-overview"
 %%%
 
 When multiple themes are available, the rendered HTML for a manual includes a “gear” button in the header that opens a popover widget.
-This widget offers two choices:
- * a single theme, chosen by the user
- * a light theme and a dark theme, to be selected automatically based on the browser's `prefers-color-scheme` setting.
-
+At the top, an _Appearance_ selector offers radio buttons for _Light_, _Dark_, and _Follow system_.
+Beneath it, a collapsible _Theme choices_ section provides dropdown menus to select specific themes for light and dark modes.
+The light theme is used in _Light_ mode and the dark theme in _Dark_ mode, while _Follow system_ switches between them automatically based on the browser's `prefers-color-scheme` setting.
 
 ## The `ManualTheme` Structure
 %%%
@@ -448,10 +447,11 @@ The following fields of {name}`RenderConfig` are relevant to themes:
 
   When readers have configured their themes to follow the system preference, this is the default dark theme.
 
-: {name RenderConfig.defaultSingleAppearance}`defaultSingleAppearance`
+: {name RenderConfig.defaultAppearance}`defaultAppearance`
 
-  When readers have configured their themes to ignore the browser's request, this selects between the default light theme or the default dark theme as the single default.
+  The mode that new readers start in. With {name Verso.Theme.ThemeMode.followSystem}`followSystem` (the default), the picker starts on _Follow system_. With {name Verso.Theme.ThemeMode.light}`light` or {name Verso.Theme.ThemeMode.dark}`dark`, new readers start on that fixed appearance instead, which is useful when a document should default to one appearance regardless of the reader's operating system setting. Readers can always switch in the picker.
 
+In {name Verso.Theme.ThemeMode.followSystem}`followSystem` mode, readers without JavaScript are served the default light theme, with the default dark theme swapped in via a `prefers-color-scheme: dark` media query, so they follow their system appearance too; in {name Verso.Theme.ThemeMode.light}`light` or {name Verso.Theme.ThemeMode.dark}`dark` mode they are served that appearance's default unconditionally.
 
 ## Accessibility Checking
 %%%
