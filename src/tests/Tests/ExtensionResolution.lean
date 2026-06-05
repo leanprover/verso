@@ -130,6 +130,16 @@ def zzzzzz : RoleExpanderOf Unit
   | (), _ => do
     `(Verso.Doc.Inline.text "long-cutoff-role")
 
+@[role]
+def multiAlpha : RoleExpanderOf Unit
+  | (), _ => do
+    `(Verso.Doc.Inline.text "multi-alpha-role")
+
+@[role]
+def multiAlphi : RoleExpanderOf Unit
+  | (), _ => do
+    `(Verso.Doc.Inline.text "multi-alphi-role")
+
 /--
 error: No registered role `ac`.
 
@@ -198,6 +208,19 @@ error: No registered role `zzaaaa`.
 #docs (.none) longBoundaryDistanceNoMatch "Long boundary distance no match" :=
 :::::::
 {zzaaaa}[]
+:::::::
+
+/--
+error: No registered role `multiAlphx`.
+
+Hint: Did you mean role `multiAlpha`?
+  • multiAlphx̵a̲
+  • multiAlphx̵i̲
+-/
+#guard_msgs in
+#docs (.none) multiDistanceSuggestions "Multiple distance suggestions" :=
+:::::::
+{multiAlphx}[]
 :::::::
 
 /--
