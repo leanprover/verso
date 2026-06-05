@@ -9,10 +9,7 @@ import Lean.Data.Json.FromToJson
 import Std.Data.HashMap
 import Std.Data.HashSet
 
-import Verso.Doc.Elab
 public meta import Verso.Doc.Elab.Inline
-public import Verso.Doc.Elab.Monad
-meta import Verso.Doc.Elab.Monad
 public import VersoManual.Basic
 import VersoManual.Html.SoftHyphenate
 import MultiVerso
