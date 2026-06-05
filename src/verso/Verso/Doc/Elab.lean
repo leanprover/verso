@@ -7,7 +7,7 @@ module
 public import Verso.Doc.Elab.Monad
 meta import Verso.Doc.Elab.Monad
 public import Lean.DocString.Syntax
-public meta import Lean.Data.EditDistance
+public meta import Verso.Doc.Elab.ExtensionResolution
 import Verso.Doc.Elab.Inline
 public import Verso.Doc.Elab.Inline
 public meta import Verso.Doc.Elab.Inline
@@ -119,129 +119,21 @@ private meta def expanderDocHover (stx : Syntax) (what : String) (name : Name) (
     out := out ++ "\n\n" ++ d
   Hover.addCustomHover stx out
 
-private meta def extensionSuggestionThreshold (input _candidate : String) : Nat :=
-  if input.length < 3 then 1 else if input.length < 6 then 2 else 3
-
-private meta def displayExtensionName (name : Name) : DocElabM String := do
-  return (← unresolveNameGlobal name).toString
-
-private meta def extensionBaseName (name : Name) : String :=
-  match name with
-  | .anonymous => toString name
-  | .str _ s => s
-  | .num _ n => toString n
-
-private meta def extensionSuggestionDistance (candidate : Name × String) (input : String) : Option Nat :=
-  let candidates :=
-    if candidate.2 == extensionBaseName candidate.1 then
-      #[candidate.2]
-    else
-      #[candidate.2, extensionBaseName candidate.1]
-  candidates.foldl (init := none) fun best? cand =>
-    let limit := extensionSuggestionThreshold input cand
-    match EditDistance.levenshtein cand input limit, best? with
-    | some dist, some best => some (min dist best)
-    | some dist, none => some dist
-    | none, best? => best?
-
-private meta def extensionSuggestions (candidates : Array (Name × String)) (input : String) (count : Nat := 10) : Array (Name × String) :=
-  let close := candidates.filterMap fun candidate =>
-    extensionSuggestionDistance candidate input <&> (candidate, ·)
-  let close := close.qsort (fun x y => x.2 < y.2 || (x.2 == y.2 && x.1.2 < y.1.2))
-  close.take count |>.map (·.1)
-
-private meta def availableExtensionDisplayNames (registeredNames : DocElabM (Array Name)) : DocElabM (Array (Name × String)) := do
-  let names := (← registeredNames).qsort (·.toString < ·.toString)
-  let entries ← names.mapM fun full => do
-    return (full, ← displayExtensionName full)
-  return entries.qsort (fun x y => x.2 < y.2 || (x.2 == y.2 && x.1.toString < y.1.toString))
-
-private meta def isExpanderTargetType (declName typeName adapterName : Name) : DocElabM Bool := do
-  let asCoreExpander ← Meta.withNewMCtxDepth do
-    let c ← mkConstWithLevelParams declName
-    let t ← Meta.inferType c
-    Meta.isDefEq t (mkConst typeName)
-  if asCoreExpander then return true
-
-  Meta.withNewMCtxDepth do
-    try
-      let c ← mkConstWithLevelParams declName
-      discard <| Meta.mkAppM adapterName #[c]
-      return true
-    catch
-      | _ => return false
-
-private meta def isRoleExpanderTargetType (declName : Name) : DocElabM Bool :=
-  isExpanderTargetType declName ``RoleExpander ``toRole
-
-private meta def isCodeBlockExpanderTargetType (declName : Name) : DocElabM Bool :=
-  isExpanderTargetType declName ``CodeBlockExpander ``toCodeBlock
-
-private meta def isDirectiveExpanderTargetType (declName : Name) : DocElabM Bool :=
-  isExpanderTargetType declName ``DirectiveExpander ``toDirective
-
-private meta def throwExtensionNotRegisteredError
-    (kind attrName : String) (isExpanderTarget : Name → DocElabM Bool) (name : Ident) (resolvedName : Name) :
-    DocElabM α := do
-  let shownName ← displayExtensionName resolvedName
-  if ← isExpanderTarget resolvedName then
-    throwErrorAt name m!"Declaration `{shownName}` can be used as a {kind} expander but is not registered as a {kind}. Register it with `{attrName}`."
-  else
-    throwErrorAt name m!"Declaration `{shownName}` was found but is not registered as a {kind}."
-
-private meta def throwUnknownExtensionError (kind : String) (registeredNames : DocElabM (Array Name)) (name : Ident) :
-    DocElabM α := do
-  let requested := name.getId.toString
-  let available ← availableExtensionDisplayNames registeredNames
-  let suggestions := extensionSuggestions available requested
-  match suggestions.toList with
-  | _ :: _ =>
-    let best := suggestions[0]!.2
-    let hintSuggestions := suggestions.map fun (_, extensionName) =>
-      ({suggestion := .string extensionName} : Lean.Meta.Hint.Suggestion)
-    let hint ← MessageData.hint
-      m!"Did you mean {kind} `{best}`?"
-      hintSuggestions
-      (ref? := some name) (forceList := suggestions.size > 1)
-    throwErrorAt name m!"No registered {kind} `{name.getId}`.{hint}"
-  | [] =>
-    throwErrorAt name m!"No registered {kind} `{name.getId}`."
-
-private meta def resolveExtensionName? (kind : String) (name : Ident) : DocElabM (Option Name) := do
-  match (← observing (realizeGlobalConstWithInfos name)) with
-  | .ok [n] => pure (some n)
-  | .ok [] => pure none
-  | .ok ns => do
-    let candidates ← ns.mapM displayExtensionName
-    throwErrorAt name m!"{kind} name `{name.getId}` is ambiguous. Candidates: {String.intercalate ", " candidates}"
-  | .error _ => pure none
-
-
 open Lean.Parser.Term in
 @[inline_expander Lean.Doc.Syntax.role]
 public meta def _root_.Lean.Doc.Syntax.role.expand : InlineExpander
   | inline@`(inline| role{$name $args*} [$subjects*]) => do
       withRef inline <| withFreshMacroScope <| withIncRecDepth <| do
         let genre := (← readThe DocElabContext).genreSyntax
-        let some resolvedName ← resolveExtensionName? "role" name
-          | throwUnknownExtensionError "role" registeredRoleNames name
-        let exp ← roleExpandersFor resolvedName
-        if exp.isEmpty then
-          throwExtensionNotRegisteredError "role" "@[role]" isRoleExpanderTargetType name resolvedName
+        let (resolvedName, exp) ← registeredExtensionExpanders
+          "role" "@[role]" registeredRoleNames roleExpandersFor isRoleExpanderTargetType name
         let argVals ← parseArgs args
-        for (e, doc?, sig?) in exp do
-          try
-            let termStxs ← withFreshMacroScope <| e argVals subjects
-            expanderDocHover name "Role" resolvedName doc? sig?
-            let termStxs ← termStxs.mapM fun t => (``(($t : Inline $(⟨genre⟩))))
-            if h : termStxs.size = 1 then return termStxs[0]
-            else return (← ``(Inline.concat (genre := $(⟨genre⟩)) #[$[$termStxs],*]))
-          catch
-            | ex@(.internal id) =>
-              if id == unsupportedSyntaxExceptionId then pure ()
-              else throw ex
-            | ex => throw ex
-        throwUnsupportedSyntax
+        tryExtensionExpanders exp fun (e, doc?, sig?) => do
+          let termStxs ← withFreshMacroScope <| e argVals subjects
+          expanderDocHover name "Role" resolvedName doc? sig?
+          let termStxs ← termStxs.mapM fun t => (``(($t : Inline $(⟨genre⟩))))
+          if h : termStxs.size = 1 then return termStxs[0]
+          else return (← ``(Inline.concat (genre := $(⟨genre⟩)) #[$[$termStxs],*]))
   | _ => throwUnsupportedSyntax
 
 @[inline_expander Lean.Doc.Syntax.link]
@@ -431,23 +323,15 @@ public meta def _root_.Lean.Doc.Syntax.command.expand : BlockExpander := fun blo
     withTraceNode `Elab.Verso.block (fun _ => pure m!"Block role {name}") <|
     withRef block <| withFreshMacroScope <| withIncRecDepth <| do
       let genre := (← readThe DocElabContext).genreSyntax
-      let some resolvedName ← resolveExtensionName? "block command" name
-        | throwUnknownExtensionError "block command" registeredBlockCommandNames name
+      let resolvedName ← resolveKnownExtensionName "block command" registeredBlockCommandNames name
       let exp ← blockCommandExpandersFor resolvedName
       let argVals ← parseArgs args
       if exp.isEmpty then
         return ← appFallback block name resolvedName argVals none
-      for (e, doc?, sig?) in exp do
-        try
-          let termStxs ← withFreshMacroScope <| e argVals
-          expanderDocHover name "Command" resolvedName doc? sig?
-          return (← ``(Block.concat (genre := $(⟨genre⟩)) #[$[$termStxs],*]))
-        catch
-          | ex@(.internal id) =>
-            if id == unsupportedSyntaxExceptionId then pure ()
-            else throw ex
-          | ex => throw ex
-      throwUnsupportedSyntax
+      tryExtensionExpanders exp fun (e, doc?, sig?) => do
+        let termStxs ← withFreshMacroScope <| e argVals
+        expanderDocHover name "Command" resolvedName doc? sig?
+        return (← ``(Block.concat (genre := $(⟨genre⟩)) #[$[$termStxs],*]))
   | _ => throwUnsupportedSyntax
 
 @[block_expander Lean.Doc.Syntax.para]
@@ -542,24 +426,14 @@ public meta def _root_.Lean.Doc.Syntax.blockquote.expand : BlockExpander
 public meta def _root_.Lean.Doc.Syntax.codeblock.expand : BlockExpander
   | `(block|``` $nameStx:ident $argsStx* | $contents:str ```) => do
     let genre := (← readThe DocElabContext).genreSyntax
-    let some name ← resolveExtensionName? "code block" nameStx
-      | throwUnknownExtensionError "code block" registeredCodeBlockNames nameStx
-    let exp ← codeBlockExpandersFor name
-    if exp.isEmpty then
-      throwExtensionNotRegisteredError "code block" "@[code_block]" isCodeBlockExpanderTargetType nameStx name
+    let (name, exp) ← registeredExtensionExpanders
+      "code block" "@[code_block]" registeredCodeBlockNames codeBlockExpandersFor isCodeBlockExpanderTargetType nameStx
     -- TODO typed syntax here
     let args ← parseArgs <| argsStx.map (⟨·⟩)
-    for (e, doc?, sig?) in exp do
-      try
-        let termStxs ← withFreshMacroScope <| e args contents
-        expanderDocHover nameStx "Code block" name doc? sig?
-        return (← ``(Block.concat (genre := $(⟨genre⟩)) #[$[$termStxs],*]))
-      catch
-        | ex@(.internal id) =>
-          if id == unsupportedSyntaxExceptionId then pure ()
-          else throw ex
-        | ex => throw ex
-    throwUnsupportedSyntax
+    tryExtensionExpanders exp fun (e, doc?, sig?) => do
+      let termStxs ← withFreshMacroScope <| e args contents
+      expanderDocHover nameStx "Code block" name doc? sig?
+      return (← ``(Block.concat (genre := $(⟨genre⟩)) #[$[$termStxs],*]))
   | `(block|``` | $contents:str ```) => do
     ``(Block.code $(quote contents.getString))
   | _ =>
@@ -569,22 +443,12 @@ public meta def _root_.Lean.Doc.Syntax.codeblock.expand : BlockExpander
 public meta def _root_.Lean.Doc.Syntax.directive.expand : BlockExpander
   | `(block| ::: $nameStx:ident $argsStx* { $contents:block* } ) => do
     let genre := (← readThe DocElabContext).genreSyntax
-    let some name ← resolveExtensionName? "directive" nameStx
-      | throwUnknownExtensionError "directive" registeredDirectiveNames nameStx
-    let exp ← directiveExpandersFor name
-    if exp.isEmpty then
-      throwExtensionNotRegisteredError "directive" "@[directive]" isDirectiveExpanderTargetType nameStx name
+    let (name, exp) ← registeredExtensionExpanders
+      "directive" "@[directive]" registeredDirectiveNames directiveExpandersFor isDirectiveExpanderTargetType nameStx
     let args ← parseArgs argsStx
-    for (e, doc?, sig?) in exp do
-      try
-        let termStxs ← withFreshMacroScope <| e args contents
-        expanderDocHover nameStx "Directive" name doc? sig?
-        return (← ``(Block.concat (genre := $(⟨genre⟩)) #[$[$termStxs],*]))
-      catch
-        | ex@(.internal id) =>
-          if id == unsupportedSyntaxExceptionId then pure ()
-          else throw ex
-        | ex => throw ex
-    throwUnsupportedSyntax
+    tryExtensionExpanders exp fun (e, doc?, sig?) => do
+      let termStxs ← withFreshMacroScope <| e args contents
+      expanderDocHover nameStx "Directive" name doc? sig?
+      return (← ``(Block.concat (genre := $(⟨genre⟩)) #[$[$termStxs],*]))
   | _ =>
     throwUnsupportedSyntax
