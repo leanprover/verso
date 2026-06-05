@@ -86,6 +86,21 @@ class TestNestedTacticStates:
         rw = self._rw_keyword(page)
         rw.hover()
 
+        # The highlight is a live CSS `:hover` effect (see the `:has(.tactic > label:hover)` rule in
+        # `Highlighted.lean`). Hovering also spawns the proof-state tooltip and makes Firefox
+        # recompute `:has(:hover)` on the next paint, so the background is not reliably settled on the
+        # first read. Poll until the region's own label is highlighted before reading the rest. The
+        # mouse stays put, so `:hover` persists across polls.
+        handle = rw.element_handle()
+        page.wait_for_function(
+            """el => {
+                const region = el.closest('.tactic');
+                const bg = getComputedStyle(region.querySelector(':scope > label')).backgroundColor;
+                return bg === 'rgb(238, 238, 238)';
+            }""",
+            arg=handle,
+        )
+
         result = rw.evaluate(
             """el => {
                 const bg = t => getComputedStyle(t.querySelector(':scope > label')).backgroundColor;
