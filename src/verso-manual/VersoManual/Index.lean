@@ -9,7 +9,7 @@ import Lean.Data.Json.FromToJson
 import Std.Data.HashMap
 import Std.Data.HashSet
 
-import Verso.Doc.Elab
+public meta import Verso.Doc.Elab.Inline
 public import VersoManual.Basic
 import VersoManual.Html.SoftHyphenate
 import MultiVerso
@@ -19,7 +19,8 @@ public import Verso.Doc
 open Verso Genre Manual
 open Verso.Multi
 open Verso.Doc.Elab
-open Lean (ToJson FromJson)
+open Verso.ArgParse
+open Lean (ToJson FromJson quote)
 open Std (HashMap HashSet)
 
 namespace Verso.Genre.Manual.Index
@@ -183,6 +184,42 @@ def see (args : Array (Doc.Inline Manual)) (target : String) (subterm : Option S
 def seeAlso (args : Array (Doc.Inline Manual)) (target : String) (subterm : Option String := none) (index : Option String := none) : Doc.Inline Manual :=
   let data : Index.See := {source := .concat args, target := .text target, subTarget := subterm.map .text, also := true, index}
   Doc.Inline.other {Inline.see with data := ToJson.toJson data} #[]
+
+public structure IndexArgs where
+  subterm : Option String
+  index : Option String
+
+public structure SeeArgs where
+  target : String
+  subterm : Option String
+  index : Option String
+
+public meta instance : FromArgs IndexArgs DocElabM where
+  fromArgs := IndexArgs.mk <$> .named `subterm .string true <*> .named `index .string true
+
+public meta instance : FromArgs SeeArgs DocElabM where
+  fromArgs := SeeArgs.mk <$>
+    .positional `target .string <*>
+    .named `subterm .string true <*>
+    .named `index .string true
+
+@[role index]
+public meta def indexRole : RoleExpanderOf IndexArgs
+  | {subterm, index}, args => do
+    let args ← args.mapM elabInline
+    ``(index #[$args,*] $(quote subterm) $(quote index))
+
+@[role see]
+public meta def seeRole : RoleExpanderOf SeeArgs
+  | {target, subterm, index}, args => do
+    let args ← args.mapM elabInline
+    ``(see #[$args,*] $(quote target) $(quote subterm) $(quote index))
+
+@[role seeAlso]
+public meta def seeAlsoRole : RoleExpanderOf SeeArgs
+  | {target, subterm, index}, args => do
+    let args ← args.mapM elabInline
+    ``(seeAlso #[$args,*] $(quote target) $(quote subterm) $(quote index))
 
 @[inline_extension see]
 def see.descr : InlineDescr where
