@@ -654,7 +654,7 @@ private unsafe def roleExpandersForUnsafe (x : Name) : DocElabM (Array (RoleExpa
 public opaque roleExpandersFor (x : Name) : DocElabM (Array (RoleExpander × Option String × Option SigDoc))
 
 private def registeredExpanderNames
-    (ext : PersistentEnvExtension (Name × Array Name) (Name × Name) (NameMap (Array Name)))
+    (ext : LocalPersistentEnvExtension (Name × Array Name) (Name × Name) (NameMap (Array Name)))
     (attr : KeyedDeclsAttribute α) : DocElabM (Array Name) := do
   let env ← getEnv
   let mut names : NameSet := {}
