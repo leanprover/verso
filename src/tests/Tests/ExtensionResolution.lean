@@ -503,6 +503,3 @@ Hint: Did you mean block command `registeredCommand`?
 {registeredComand}
 :::::::
 
-end BlockCommandCases
-
-end Verso.ExtensionResolutionTest
