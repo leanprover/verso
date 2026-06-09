@@ -84,6 +84,8 @@ class TestNestedTacticStates:
         """Hovering lights up only the most specific region containing the pointer; the enclosing
         regions, whose labels also receive `:hover`, stay unhighlighted."""
         self._load(server, page)
+        # Linux headless Firefox can report no hover support, so the guarded CSS rule is disabled:
+        # https://bugzilla.mozilla.org/show_bug.cgi?id=2037020
         if not page.evaluate("matchMedia('(hover: hover)').matches"):
             pytest.skip("Browser does not enable CSS guarded by @media (hover: hover)")
         rw = self._rw_keyword(page)
