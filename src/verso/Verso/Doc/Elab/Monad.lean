@@ -550,6 +550,19 @@ unsafe def blockExpandersForUnsafe (x : Name) : DocElabM (Array BlockExpander) :
 @[implemented_by blockExpandersForUnsafe]
 public opaque blockExpandersFor (x : Name) : DocElabM (Array BlockExpander)
 
+-- We eagerly rebuild a `NameMap` from imported entries instead of keeping the
+-- exported arrays sorted and doing binary search at lookup time, which is the
+-- more common pattern for local persistent extensions.
+--
+-- This preserves the existing eager lookup-state initialization: doc expander
+-- signatures are looked up by name repeatedly during elaboration, so the hot path
+-- should be a single map lookup. The import-time cost should be small in the
+-- expected case, since few signatures are exported by typical modules.
+--
+-- Another reason not to rely on per-module sorted arrays is that expanders are
+-- not required to be registered in the same module as their associated
+-- identifier, so lookup would otherwise need to search all imported arrays unless
+-- we built an index anyway.
 initialize expanderSignatureExt :
     LocalPersistentEnvExtension (Name × SigDoc) (Name × SigDoc) (NameMap SigDoc) ←
   LocalPersistentEnvExtension.register {

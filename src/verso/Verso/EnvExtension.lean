@@ -30,12 +30,9 @@ lookup should use `PersistentEnvExtension` directly and keep a custom serialized
 -/
 public structure LocalPersistentEnvExtension (α β σ : Type) where
   private ext : PersistentEnvExtension α β (σ × σ)
+deriving Inhabited
 
 namespace LocalPersistentEnvExtension
-
-public instance {α β σ : Type} [Inhabited σ] :
-    Nonempty (LocalPersistentEnvExtension α β σ) :=
-  ⟨{ ext := default }⟩
 
 public structure Descr (α β σ : Type) where
   name : Name := by exact decl_name%
