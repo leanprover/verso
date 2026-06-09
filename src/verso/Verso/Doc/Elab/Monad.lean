@@ -14,6 +14,7 @@ import Lean.DocString
 
 import SubVerso.Highlighting
 import Verso.Doc
+import Verso.EnvExtension
 public import Verso.Doc.ArgParse
 public import Verso.Doc.Elab.InlineString
 meta import Verso.Doc.Elab.InlineString
@@ -549,18 +550,32 @@ unsafe def blockExpandersForUnsafe (x : Name) : DocElabM (Array BlockExpander) :
 @[implemented_by blockExpandersForUnsafe]
 public opaque blockExpandersFor (x : Name) : DocElabM (Array BlockExpander)
 
-initialize expanderSignatureExt : PersistentEnvExtension (Name × SigDoc) (Name × SigDoc) (NameMap SigDoc) ←
-  registerPersistentEnvExtension {
-    mkInitial := pure {},
-    addImportedFn xss :=
-      pure <| xss.foldl (init := {}) fun ns xs =>
-        xs.foldl (init := ns) fun ns (x, s) =>
-          ns.insert x s
+-- We eagerly rebuild a `NameMap` from imported entries instead of keeping the
+-- exported arrays sorted and doing binary search at lookup time, which is the
+-- more common pattern for local persistent extensions.
+--
+-- This preserves the existing eager lookup-state initialization: doc expander
+-- signatures are looked up by name repeatedly during elaboration, so the hot path
+-- should be a single map lookup. The import-time cost should be small in the
+-- expected case, since few signatures are exported by typical modules.
+--
+-- Another reason not to rely on per-module sorted arrays is that expanders are
+-- not required to be registered in the same module as their associated
+-- identifier, so lookup would otherwise need to search all imported arrays unless
+-- we built an index anyway.
+initialize expanderSignatureExt :
+    LocalPersistentEnvExtension (Name × SigDoc) (Name × SigDoc) (NameMap SigDoc) ←
+  LocalPersistentEnvExtension.register {
+    name := `expanderSignatureExt
+    mkInitialState := pure {}
+    addImportedEntryFn
+      | entries, (x, y) =>
+        entries.insert x y
     addEntryFn
-      | xs, (x, y) =>
-        xs.insert x y
-    exportEntriesFn xs :=
-      xs.toArray
+      | entries, (x, y) =>
+        entries.insert x y
+    exportEntriesFn _ entries :=
+      .uniform entries.toArray
   }
 
 public def sig (α) [inst : FromArgs α DocElabM] : Option ArgParse.SigDoc :=
@@ -579,6 +594,28 @@ unsafe def partCommandsForUnsafe (x : Name) : PartElabM (Array PartCommand) := d
 public opaque partCommandsFor (x : Name) : PartElabM (Array PartCommand)
 
 
+private def addExpanderEntry (entries : NameMap (Array Name)) (key value : Name) :
+    NameMap (Array Name) :=
+  entries.insert key <| (entries.find? key |>.getD #[]).push value
+
+private abbrev ExpanderExtension :=
+  LocalPersistentEnvExtension (Name × Array Name) (Name × Name) (NameMap (Array Name))
+
+private def mkExpanderExtension (name : Name) : IO ExpanderExtension :=
+  LocalPersistentEnvExtension.register {
+    name
+    mkInitialState := pure {}
+    addImportedEntryFn
+      | entries, (x, ys) =>
+        ys.foldl (init := entries) fun entries y =>
+          addExpanderEntry entries x y
+    addEntryFn
+      | entries, (x, y) =>
+        addExpanderEntry entries x y
+    exportEntriesFn _ entries :=
+      .uniform entries.toArray
+  }
+
 public abbrev RoleExpander := Array Arg → TSyntaxArray `inline → DocElabM (Array (TSyntax `term))
 
 public abbrev RoleExpanderOf α := α → TSyntaxArray `inline → DocElabM Term
@@ -595,19 +632,8 @@ public section
 syntax (name := role) "role " (ident)? : attr
 end
 
-initialize roleExpanderExt : PersistentEnvExtension (Name × Array Name) (Name × Name) (NameMap (Array Name)) ←
-  registerPersistentEnvExtension {
-    mkInitial := pure {},
-    addImportedFn xss :=
-      pure <| xss.foldl (init := {}) fun ns xs =>
-        xs.foldl (init := ns) fun ns (x, ys) =>
-          ns.insert x <| (ns.find? x |>.getD #[]) ++ ys
-    addEntryFn
-      | xs, (x, y) =>
-        xs.insert x (xs.find? x |>.getD #[] |>.push y)
-    exportEntriesFn xs :=
-      xs.toArray
-  }
+initialize roleExpanderExt : ExpanderExtension ←
+  mkExpanderExtension `roleExpanderExt
 
 private unsafe def roleExpandersForUnsafe' (x : Name) : DocElabM (Array (RoleExpander × Option String × Option SigDoc)) := do
   let expanders := roleExpanderExt.getState (← getEnv) |>.find? x |>.getD #[]
@@ -628,7 +654,7 @@ private unsafe def roleExpandersForUnsafe (x : Name) : DocElabM (Array (RoleExpa
 public opaque roleExpandersFor (x : Name) : DocElabM (Array (RoleExpander × Option String × Option SigDoc))
 
 private def registeredExpanderNames
-    (ext : PersistentEnvExtension (Name × Array Name) (Name × Name) (NameMap (Array Name)))
+    (ext : LocalPersistentEnvExtension (Name × Array Name) (Name × Name) (NameMap (Array Name)))
     (attr : KeyedDeclsAttribute α) : DocElabM (Array Name) := do
   let env ← getEnv
   let mut names : NameSet := {}
@@ -741,19 +767,8 @@ public def toCodeBlock {α : Type} [FromArgs α DocElabM] (expander : α → Str
 
 syntax (name := code_block) "code_block " (ident)? : attr
 
-initialize codeBlockExpanderExt : PersistentEnvExtension (Name × Array Name) (Name × Name) (NameMap (Array Name)) ←
-  registerPersistentEnvExtension {
-    mkInitial := pure {},
-    addImportedFn xss :=
-      pure <| xss.foldl (init := {}) fun ns xs =>
-        xs.foldl (init := ns) fun ns (x, ys) =>
-          ns.insert x <| (ns.find? x |>.getD #[]) ++ ys
-    addEntryFn
-      | xs, (x, y) =>
-        xs.insert x (xs.find? x |>.getD #[] |>.push y)
-    exportEntriesFn xs :=
-      xs.toArray
-  }
+initialize codeBlockExpanderExt : ExpanderExtension ←
+  mkExpanderExtension `codeBlockExpanderExt
 
 unsafe initialize registerBuiltinAttribute {
   name := `code_block,
@@ -843,19 +858,8 @@ public def toDirective {α : Type} [FromArgs α DocElabM] (expander : α → TSy
 
 syntax (name := directive) "directive " (ident)? : attr
 
-initialize directiveExpanderExt : PersistentEnvExtension (Name × Array Name) (Name × Name) (NameMap (Array Name)) ←
-  registerPersistentEnvExtension {
-    mkInitial := pure {},
-    addImportedFn xss :=
-      pure <| xss.foldl (init := {}) fun ns xs =>
-        xs.foldl (init := ns) fun ns (x, ys) =>
-          ns.insert x <| (ns.find? x |>.getD #[]) ++ ys
-    addEntryFn
-      | xs, (x, y) =>
-        xs.insert x (xs.find? x |>.getD #[] |>.push y)
-    exportEntriesFn xs :=
-      xs.toArray
-  }
+initialize directiveExpanderExt : ExpanderExtension ←
+  mkExpanderExtension `directiveExpanderExt
 
 unsafe initialize registerBuiltinAttribute {
   name := `directive,
@@ -945,19 +949,8 @@ public def toBlockCommand {α : Type} [FromArgs α DocElabM] (expander : α → 
 
 syntax (name := block_command) "block_command " (ident)? : attr
 
-initialize blockCommandExpanderExt : PersistentEnvExtension (Name × Array Name) (Name × Name) (NameMap (Array Name)) ←
-  registerPersistentEnvExtension {
-    mkInitial := pure {},
-    addImportedFn xss :=
-      pure <| xss.foldl (init := {}) fun ns xs =>
-        xs.foldl (init := ns) fun ns (x, ys) =>
-          ns.insert x <| (ns.find? x |>.getD #[]) ++ ys
-    addEntryFn
-      | xs, (x, y) =>
-        xs.insert x (xs.find? x |>.getD #[] |>.push y)
-    exportEntriesFn xs :=
-      xs.toArray
-  }
+initialize blockCommandExpanderExt : ExpanderExtension ←
+  mkExpanderExtension `blockCommandExpanderExt
 
 unsafe initialize registerBuiltinAttribute {
   name := `block_command,
