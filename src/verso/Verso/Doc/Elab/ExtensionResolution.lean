@@ -140,4 +140,3 @@ public meta def tryExtensionExpanders (expanders : Array α) (run : α → DocEl
       | ex => throw ex
   throwUnsupportedSyntax
 
-end Verso.Doc.Elab
