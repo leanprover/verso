@@ -21,8 +21,8 @@ loaded and given precedence over built-in handlers.
 -/
 @[inline_to_literate]
 def customConst : InlineToLiterate
-  | ``Lean.Doc.Data.Const, _val, content =>
-    return some <| .other (.data "USER-CONST-MARKER") content
+  | ``Lean.Doc.Data.Const, _val, _content =>
+    return some <| .other (.data "USER-CONST-MARKER") #[.text "(looks like you're defining a const)"]
   | _, _, _ => return none
 
 /--
@@ -32,8 +32,8 @@ loaded and given precedence over built-in handlers.
 -/
 @[block_to_literate]
 def customLeanBlock : BlockToLiterate
-  | ``Lean.Doc.Data.LeanBlock, _val, content =>
-    return some <| .other (.data "USER-LEANBLOCK-MARKER") content
+  | ``Lean.Doc.Data.LeanBlock, _val, _content =>
+    return some <| .other (.data "USER-LEANBLOCK-MARKER") #[.blockquote #[.para #[.text "Replacement For A Lean Block"]]]
   | _, _, _ => return none
 
 /-- Payload type for the unknown-extension fixture role. -/

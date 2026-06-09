@@ -22,13 +22,13 @@ set_option doc.verso.suggestions false in
 
 {lean}`1 + 2 * 3` is an inline Lean term.
 
-{module -checked}`LitConfig.Core` is a module reference.
+{module}`LitConfig.Core` is a module reference, {module -checked}`LitConfig.Bogus` is an invalid module reference.
 
 {tactic}`rfl` is a tactic; {conv}`rfl` is a conv tactic.
 
 {attr}`@[simp]` is an attribute.
 
-{syntaxCat}`term` is a syntax category, and {syntax term}`1 + 2` is syntax in it.
+{syntaxCat}`term` is a syntax category, and {syntax term}`1 + [] - (· / ·)` is syntax in it.
 
 {kw (of := Lean.«command__Unif_hint____Where_|_-⊢__»)}`unif_hint` is a keyword atom.
 
