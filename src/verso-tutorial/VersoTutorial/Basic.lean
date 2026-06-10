@@ -188,8 +188,8 @@ instance : Traverse Tutorial TraverseM where
     let id ← if let some i := meta.id then pure i else freshId
     «meta» := { «meta» with id := some id }
 
-    -- Next, assign a tag, prioritizing user-chosen external IDs
-    «meta» := { «meta» with tag := ← withReader (TraversePart.inPart part) <| tagPart part «meta» (·.id) (·.tag) savePartXref }
+    -- Next, assign a tag, prioritizing user-chosen external IDs.
+    «meta» := { «meta» with tag := ← tagPart part «meta» (·.id) (·.tag) savePartXref }
 
     -- Traverse the metadata's description
     «meta» := { «meta» with summary := ← withReader (TraversePart.inPart part) <| Genre.traverseInline Manual «meta».summary }
@@ -232,7 +232,7 @@ def Tutorials.traverse1  (traversal : Part Tutorial → Manual.TraverseM (Part T
       return { topic with
         tutorials := ← topic.tutorials.mapM fun tut => do
           let tut := { tut with metadata := tut.metadata.getD (defaultMetadata tut) }
-          withReader (TraversePart.inPart tut) <| traversal tut
+          traversal tut
       }
   }
 
