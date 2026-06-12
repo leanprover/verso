@@ -209,13 +209,21 @@ private def jsonPath (jsonDir : System.FilePath) (mod : String) : System.FilePat
 
 /--
 Ensures that the HTML rendering pass accepts every built-in docstring extension (that is, they all
-have handlers).
+have handlers), and that the tactic and conv handlers attach the syntax kind's docstring for
+hovers.
 -/
 private def testAllBuiltinDocRoles (data : TestData) : IO Unit := withTestDir data fun jsonDir htmlDir _ _ => do
   runLiterateHtml jsonDir htmlDir
   let builtinsHtml := htmlDir / "LitConfig" / "Builtins" / "index.html"
   unless ← builtinsHtml.pathExists do
     throw <| IO.userError s!"Expected Builtins HTML page at {builtinsHtml}"
+  let jsonContent ← IO.FS.readFile (jsonPath jsonDir "LitConfig.Builtins")
+  unless hasSubstring jsonContent "\"content\":\"rfl\",\"kind\":{\"keyword\":{\"docs\":\"" do
+    throw <| IO.userError "Builtins JSON has no docs on the `rfl` keyword token. \
+      The tactic handler did not attach the syntax kind's docstring."
+  unless hasSubstring jsonContent "\"content\":\"lhs\",\"kind\":{\"keyword\":{\"docs\":\"" do
+    throw <| IO.userError "Builtins JSON has no docs on the `lhs` keyword token. \
+      The conv handler did not attach the syntax kind's docstring."
 
 /--
 Checks that user-registered `@[inline_to_literate]` and `@[block_to_literate]` handlers shadow the
@@ -239,6 +247,28 @@ private def testCustomLiterateHandlers (data : TestData) : IO Unit := withTestDi
     throw <| IO.userError "UserExt HTML missing the block replacement text. The user handler's children weren't rendered."
   if hasSubstring html "trivial" then
     throw <| IO.userError "UserExt HTML contains 'trivial'. The built-in lean code-block handler ran instead of the user handler."
+
+/--
+Checks that messages produced by code blocks in docstrings are attached to the rendered code block
+rather than to the command that carries the docstring.
+
+{lit}`LitConfig.Builtins.codeBlockDemos` has a docstring whose `lean` code block runs
+{lit}`#eval 1 + 1`. The resulting info message is logged at the code's position inside the doc
+comment. The literate pipeline re-attaches it to the rendered code block, so the JSON contains
+exactly one message span, and that span wraps the {lit}`#eval` token.
+-/
+private def testDocstringCodeBlockMessages (data : TestData) : IO Unit := do
+  let jsonFile := jsonPath data.jsonDir "LitConfig.Builtins"
+  unless ← jsonFile.pathExists do
+    throw <| IO.userError s!"Expected JSON for LitConfig.Builtins at {jsonFile}"
+  let jsonContent ← IO.FS.readFile jsonFile
+  unless hasSubstring jsonContent "\"span\":{\"content\":{\"token\":{\"tok\":{\"content\":\"#eval\"" do
+    throw <| IO.userError "Builtins JSON has no message span on the docstring's `#eval`. \
+      Messages from docstring code blocks were not re-attached to the rendered code."
+  let spanCount := (jsonContent.splitOn "\"span\":").length - 1
+  unless spanCount == 1 do
+    throw <| IO.userError s!"Expected exactly one message span in Builtins JSON, got {spanCount}. \
+      A message from a docstring code block may have been attached to the surrounding command."
 
 /--
 When a docstring contains an extension that has no handler, the conversion logs a warning and emits
@@ -1171,6 +1201,7 @@ private def htmlTests (data : TestData) (projectDir : System.FilePath) : List (S
   ("keyword role", testKeywordRole data),
   ("all built-in doc roles", testAllBuiltinDocRoles data),
   ("custom literate handlers", testCustomLiterateHandlers data),
+  ("docstring code block messages", testDocstringCodeBlockMessages data),
   ("unknown extension fallback", testUnknownExtensionFallback)
 ]
 

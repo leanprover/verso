@@ -16,6 +16,7 @@ pipeline must accept all of them and render their contents.
 /-- A target for {name}`builtinName` and {lean}`builtinName` references. -/
 def builtinName : Nat := 42
 
+-- Untested roles: `assert'`, because it cannot be used after the equality type's notation is defined.
 set_option doc.verso.suggestions false in
 /--
 {name}`builtinName` is a constant reference.
@@ -24,13 +25,15 @@ set_option doc.verso.suggestions false in
 
 {module}`LitConfig.Core` is a module reference, {module -checked}`LitConfig.Bogus` is an invalid module reference.
 
-{tactic}`rfl` is a tactic; {conv}`rfl` is a conv tactic.
+{tactic}`rfl` is a tactic; {conv}`lhs` is a conv tactic.
 
 {attr}`@[simp]` is an attribute.
 
 {syntaxCat}`term` is a syntax category, and {syntax term}`1 + [] - (· / ·)` is syntax in it.
 
 {kw (of := Lean.«command__Unif_hint____Where_|_-⊢__»)}`unif_hint` is a keyword atom.
+{kw? (of := Lean.«command__Unif_hint____Where_|_-⊢__»)}`where` is also a keyword atom, and
+{kw! (of := Lean.Parser.Command.definition)}`def` is an unchecked keyword atom.
 
 {option}`maxHeartbeats` is an option name; {option}`set_option maxHeartbeats 1000` is a `set_option`.
 
@@ -39,8 +42,6 @@ set_option doc.verso.suggestions false in
 {manual section "some-section"}`a manual link` references a section.
 
 The {assert}`Nat.zero = Nat.zero` defeq assertion.
-
-The {lit}`assert'` role also runs an equality check and can be used in bootstrapping.
 
 Given {given}`n : Nat`, the function operates on {name}`n`. Given {givenInstance}`Add Nat`, addition is available.
 -/
