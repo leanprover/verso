@@ -77,7 +77,11 @@ public def HtmlT.logError [Monad m] [MonadBuildLog (HtmlT genre m)] (message : S
   Verso.reportError message
 
 public instance [Monad m] : MonadLift (HighlightHtmlM genre) (HtmlT genre m) where
-  monadLift act := do modifyGet (act ⟨← HtmlT.linkTargets, ← HtmlT.context, ← HtmlT.definitionIds, ← HtmlT.codeOptions⟩)
+  monadLift act := do
+    let ctx : Code.HighlightHtmlM.Context genre :=
+      { linkTargets := ← HtmlT.linkTargets, traverseContext := ← HtmlT.context,
+        definitionIds := ← HtmlT.definitionIds, options := ← HtmlT.codeOptions }
+    modifyGet (act ctx)
 
 open HtmlT
 

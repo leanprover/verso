@@ -344,6 +344,27 @@ Removes leading and trailing whitespace from highlighted code.
 -/
 public defmethod Highlighted.trim (hl : Highlighted) : Highlighted := hl.trimLeft.trimRight
 
+/--
+Removes proof states in which all goals are solved that are the last element of a surrounding proof
+state. This relies on the positions tracked for the goal states being accurate, as it compares end
+position markers.
+
+This is to prevent extra nested highlight widgets for tactics that themselves contain tactic
+scripts.
+-/
+public partial defmethod Highlighted.elideRedundantProofStates
+    (hl : Highlighted) (goalEnds : Array Nat := #[]) : Highlighted :=
+  match hl with
+  | .seq hls => .seq (hls.map (·.elideRedundantProofStates goalEnds))
+  | .span infos hl => .span infos (hl.elideRedundantProofStates goalEnds)
+  | .tactics info startPos endPos hl =>
+    if info.isEmpty && goalEnds.contains endPos then
+      hl.elideRedundantProofStates goalEnds
+    else
+      let goalEnds := if info.isEmpty then goalEnds else goalEnds.push endPos
+      .tactics info startPos endPos (hl.elideRedundantProofStates goalEnds)
+  | .token .. | .text .. | .unparsed .. | .point .. => hl
+
 public defmethod Highlighted.trimOneLeadingNl : Highlighted → Highlighted
   | .text s => .text <| (s.dropPrefix "\n").copy
   | .unparsed s => .unparsed <| (s.dropPrefix "\n").copy
@@ -629,12 +650,12 @@ public partial defmethod Highlighted.toHtml : Highlighted → HighlightHtmlM g H
   | .seq hls => hls.mapM toHtml
 
 public defmethod Highlighted.blockHtml (contextName : String) (code : Highlighted) (trim : Bool := true) (htmlId : Option String := none) : HighlightHtmlM g Html := do
-  let code := if trim then code.trim else code
+  let code := (if trim then code.trim else code).elideRedundantProofStates
   let idAttr := htmlId.map (fun x => #[("id", x)]) |>.getD #[]
   pure {{ <code class="hl lean block" "data-lean-context"={{toString contextName}} {{idAttr}}> {{ ← code.toHtml }} </code> }}
 
 public defmethod Highlighted.inlineHtml (contextName : Option String) (code : Highlighted) (trim : Bool := true) (htmlId : Option String := none) : HighlightHtmlM g Html := do
-  let code := if trim then code.trim else code
+  let code := (if trim then code.trim else code).elideRedundantProofStates
   let idAttr := htmlId.map (fun x => #[("id", x)]) |>.getD #[]
   if let some ctx := contextName then
     pure {{ <code class="hl lean inline" "data-lean-context"={{toString ctx}} {{idAttr}}> {{ ← code.toHtml }} </code> }}
