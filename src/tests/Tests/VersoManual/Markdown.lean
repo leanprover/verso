@@ -21,7 +21,7 @@ the number of # characters in the opening sequence. (cf. [CommonMark
 Spec](https://spec.commonmark.org/0.31.2/))
 -/
 def displayPartStructure (part : FinishedPart) (level : Nat := 1) : String := match part with
-  | .mk _ _ title _ _ subParts _ =>
+  | .mk _ _ _ title _ _ subParts _ =>
        let partsStr : String := subParts.map (displayPartStructure · (level + 1))
          |>.toList |> String.join
        let pref := "".pushn '#' level

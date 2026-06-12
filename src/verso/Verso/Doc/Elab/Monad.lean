@@ -168,8 +168,8 @@ public structure PartElabM.State where
   deferredBlocks : Array (Name × Term) := #[]
 deriving Inhabited
 
-public def PartElabM.State.init (title : Syntax) (expandedTitle : Option (String × Array (TSyntax `term)) := none) : PartElabM.State where
-  partContext := {titleSyntax := title, expandedTitle, metadata := none, blocks := #[], priorParts := #[], parents := #[]}
+public def PartElabM.State.init (rangeSyntax : Syntax) (selectionSyntax : Syntax) (expandedTitle : Option (String × Array (TSyntax `term)) := none) : PartElabM.State where
+  partContext := {rangeSyntax, selectionSyntax, expandedTitle, metadata := none, blocks := #[], priorParts := #[], parents := #[]}
 
 /--
 Top-level document elaboration monad. Can modify both DocElabM.State and PartElabM.State

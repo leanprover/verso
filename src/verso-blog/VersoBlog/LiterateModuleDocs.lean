@@ -54,7 +54,8 @@ def elabFromModuleDocs (x : Ident) (path : StrLit) (mod : Ident) (title : StrLit
 
   let titleParts ← stringToInlines title
   let titleString := inlinesToString (← getEnv) titleParts
-  let initState : PartElabM.State := .init (.node .none nullKind titleParts)
+  let titleSyntax := .node .none nullKind titleParts
+  let initState : PartElabM.State := .init titleSyntax titleSyntax
 
   let ctx ← runTermElabM fun _ => DocElabContext.fromGenreTerm genre
   let g := ctx.genre

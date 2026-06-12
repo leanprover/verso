@@ -91,7 +91,8 @@ def getModuleWithDocs (path : StrLit) (mod : Ident) (title : StrLit) (metadata? 
 
   let titleParts ← stringToInlines title
   let titleString := inlinesToString (← getEnv) titleParts
-  let initState : PartElabM.State := .init (.node .none nullKind titleParts)
+  let titleSyntax := .node .none nullKind titleParts
+  let initState : PartElabM.State := .init titleSyntax titleSyntax
 
   let g ← elabTerm genre (some (.const ``Genre []))
 

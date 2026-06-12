@@ -691,7 +691,7 @@ def leanOutput : CodeBlockExpanderOf LeanOutputConfig
 
     PointOfInterest.save (← getRef) (config.name.getId.toString)
       (kind := Lsp.SymbolKind.file)
-      (selectionRange := config.name)
+      (selectionSyntax? := some config.name)
       (detail? := some ("Lean output" ++ (config.severity.map (s!" ({sevStr ·})") |>.getD "")))
 
     let msgs : List Highlighted.Message ← getOutputs config.name

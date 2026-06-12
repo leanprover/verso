@@ -313,8 +313,10 @@ private partial def addPartFromMarkdownAux {m} [Monad m]
       | .ok t => pure t
       | .error e => throwError m!"Unsupported Markdown in header:\n{e}"
     let titleText := titleTexts.foldl (· ++ ·) ""
+    let titleSyntax := quote (k := `str) titleText
     startMarkdownSection level {
-      titleSyntax := quote (k := `str) titleText
+      rangeSyntax := titleSyntax
+      selectionSyntax := titleSyntax
       expandedTitle := some (titleText, txtStxs)
       metadata := none
       blocks := #[]

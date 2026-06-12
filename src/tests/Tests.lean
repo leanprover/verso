@@ -9,6 +9,7 @@ import Tests.GenericCode
 import Tests.Golden
 import Tests.CommentSkipping
 import Tests.DocElabExtensions.Use
+import Tests.DocTerm
 import Tests.HighlightedToTeX
 import Tests.Html
 import Tests.HtmlEntities
