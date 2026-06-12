@@ -233,10 +233,12 @@ private def testCustomLiterateHandlers (data : TestData) : IO Unit := withTestDi
     throw <| IO.userError "UserExt JSON missing USER-LEANBLOCK-MARKER: `@[block_to_literate]` handler did not run"
 
   let html ← IO.FS.readFile (htmlDir / "LitConfig" / "UserExt" / "index.html")
-  unless hasSubstring html "REFER_TO_ME" do
-    throw <| IO.userError "UserExt HTML missing 'REFER_TO_ME'. The `.data` fallback children weren't rendered."
-  unless hasSubstring html "trivial" do
-    throw <| IO.userError "UserExt HTML missing 'trivial'. The lean code-block fallback children weren't rendered."
+  unless hasSubstring html "looks like you're defining a const" do
+    throw <| IO.userError "UserExt HTML missing the inline replacement text. The user handler's children weren't rendered."
+  unless hasSubstring html "Replacement For A Lean Block" do
+    throw <| IO.userError "UserExt HTML missing the block replacement text. The user handler's children weren't rendered."
+  if hasSubstring html "trivial" then
+    throw <| IO.userError "UserExt HTML contains 'trivial'. The built-in lean code-block handler ran instead of the user handler."
 
 /--
 When a docstring contains an extension that has no handler, the conversion logs a warning and emits
