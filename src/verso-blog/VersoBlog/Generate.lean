@@ -32,7 +32,7 @@ structure Generate.Context where
   dir : System.FilePath
   config : Config
   header : String
-  rewriteHtml : Option ((logError : String → IO Unit) → TraverseContext → Html → IO Html) := none
+  rewriteHtml : Option (TraverseContext → Html → BuildLogT IO Html) := none
   components : Components := {}
   theme : Theme
   extraParams : Multi.Path → Template.Params := fun _ => {}
@@ -50,20 +50,17 @@ def Generate.Context.templateContext (ctxt : Generate.Context) (params : Templat
     components := ctxt.components
   }
 
-abbrev GenerateM := ReaderT Generate.Context (StateT (State Html) (StateT Component.State IO))
+abbrev GenerateM := ReaderT Generate.Context (StateT (State Html) (StateT Component.State (BuildLogT IO)))
 
 instance : Template.MonadComponents GenerateM where
   componentImpls := do return (← read).components
   saveJs js := modifyThe Component.State fun s => {s with headerJs := s.headerJs.insert js}
   saveCss css := modifyThe Component.State fun s => {s with headerCss := s.headerCss.insert css}
 
-instance : MonadLift IO GenerateM where
-  monadLift act := fun _ st => (·, st) <$> act
-
 def Generate.rewriteOutput (html : Html) : GenerateM Html := do
-  let {ctxt, config, rewriteHtml := some rewriter, ..} := (← read)
+  let {ctxt, rewriteHtml := some rewriter, ..} := (← read)
     | pure html
-  rewriter config.logError ctxt html
+  rewriter ctxt html
 
 instance : MonadPath GenerateM where
   currentPath := do return (← read).ctxt.path
@@ -78,7 +75,7 @@ def GenerateM.toHtml (g : Genre)
   let {ctxt := ctxt, xref := state, linkTargets, ..} ← read
   let (out, st') ← g.toHtml
     (m := ComponentM)
-    {logError := fun x => ctxt.config.logError x, headerLevel := 2}
+    { headerLevel := 2 }
     (bg.context_eq ▸ ctxt)
     (bg.state_eq ▸ state)
     {}
@@ -185,7 +182,7 @@ def writeBlog (theme : Theme) (id : Lean.Name) (txt : Part Page) (posts : Array 
 
   let «meta» ←
     match (← read).xref.blogs.find? id with
-    | none => logError s!"Blog {id} not found in traverse pass!"; pure {}
+    | none => reportError s!"Blog {id} not found in traverse pass!"; pure {}
     | some «meta» => pure «meta»
 
   for (cat, contents) in meta.categories.toArray.qsort (·.1.name < ·.1.name) do
@@ -242,7 +239,7 @@ partial def Dir.generate (theme : Theme) (dir : Dir) : GenerateM Unit :=
         IO.FS.removeDirAll dest
       else
         IO.FS.removeFile dest
-    copyRecursively (← currentConfig).logError file dest
+    copyRecursively file dest
 
 def Site.generate (theme : Theme) (site : Site) : GenerateM Unit := do
   match site with

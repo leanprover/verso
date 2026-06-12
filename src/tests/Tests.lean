@@ -8,6 +8,8 @@ import Tests.Elab
 import Tests.GenericCode
 import Tests.Golden
 import Tests.CommentSkipping
+import Tests.DocElabExtensions.Use
+import Tests.DocTerm
 import Tests.HighlightedToTeX
 import Tests.Html
 import Tests.HtmlEntities
@@ -22,11 +24,13 @@ import Tests.Integration.FrontMatter
 import Tests.Integration.LeanSection
 import Tests.Integration.DiagramDoc
 import Tests.Method
+import Tests.NestedTacticHtml
 import Tests.ParserRegression
 import Tests.Paths
 import Tests.PorterStemmer
 import Tests.Refs
 import Tests.SearchJs
+import Tests.ExtensionResolution
 import Tests.Serialization
 import Tests.TeX
 import Tests.TexUnit

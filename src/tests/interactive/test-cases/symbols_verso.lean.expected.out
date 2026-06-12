@@ -1,0 +1,128 @@
+{"textDocument":
+ {"uri": "file:///src/tests/interactive/test-cases/symbols_verso.lean"},
+ "position": {"line": 56, "character": 2}}
+[{"selectionRange":
+  {"start": {"line": 7, "character": 26}, "end": {"line": 7, "character": 44}},
+  "range":
+  {"start": {"line": 7, "character": 0}, "end": {"line": 14, "character": 7}},
+  "name": "Docs heading one",
+  "kind": 15,
+  "children":
+  [{"selectionRange":
+    {"start": {"line": 9, "character": 0}, "end": {"line": 9, "character": 18}},
+    "range":
+    {"start": {"line": 9, "character": 0}, "end": {"line": 14, "character": 7}},
+    "name": "Docs heading one",
+    "kind": 15,
+    "children":
+    [{"selectionRange":
+      {"start": {"line": 12, "character": 0},
+       "end": {"line": 12, "character": 22}},
+      "range":
+      {"start": {"line": 12, "character": 0},
+       "end": {"line": 14, "character": 7}},
+      "name": "Docs subheading one",
+      "kind": 15}]}]},
+ {"selectionRange":
+  {"start": {"line": 16, "character": 26},
+   "end": {"line": 16, "character": 42}},
+  "range":
+  {"start": {"line": 16, "character": 0}, "end": {"line": 23, "character": 7}},
+  "name": "Docs title two",
+  "kind": 15,
+  "children":
+  [{"selectionRange":
+    {"start": {"line": 18, "character": 0},
+     "end": {"line": 18, "character": 18}},
+    "range":
+    {"start": {"line": 18, "character": 0},
+     "end": {"line": 23, "character": 7}},
+    "name": "Docs heading two",
+    "kind": 15,
+    "children":
+    [{"selectionRange":
+      {"start": {"line": 21, "character": 0},
+       "end": {"line": 21, "character": 22}},
+      "range":
+      {"start": {"line": 21, "character": 0},
+       "end": {"line": 23, "character": 7}},
+      "name": "Docs subheading two",
+      "kind": 15}]}]},
+ {"selectionRange":
+  {"start": {"line": 25, "character": 28},
+   "end": {"line": 25, "character": 48}},
+  "range":
+  {"start": {"line": 25, "character": 0}, "end": {"line": 32, "character": 7}},
+  "name": "Docs heading three",
+  "kind": 15,
+  "children":
+  [{"selectionRange":
+    {"start": {"line": 27, "character": 0},
+     "end": {"line": 27, "character": 20}},
+    "range":
+    {"start": {"line": 27, "character": 0},
+     "end": {"line": 32, "character": 7}},
+    "name": "Docs heading three",
+    "kind": 15,
+    "children":
+    [{"selectionRange":
+      {"start": {"line": 30, "character": 0},
+       "end": {"line": 30, "character": 24}},
+      "range":
+      {"start": {"line": 30, "character": 0},
+       "end": {"line": 32, "character": 7}},
+      "name": "Docs subheading three",
+      "kind": 15}]}]},
+ {"selectionRange":
+  {"start": {"line": 34, "character": 14},
+   "end": {"line": 34, "character": 27}},
+  "range":
+  {"start": {"line": 34, "character": 0}, "end": {"line": 59, "character": 0}},
+  "name": "Doc heading",
+  "kind": 15,
+  "children":
+  [{"selectionRange":
+    {"start": {"line": 35, "character": 0},
+     "end": {"line": 35, "character": 13}},
+    "range":
+    {"start": {"line": 35, "character": 0},
+     "end": {"line": 59, "character": 0}},
+    "name": "Doc heading",
+    "kind": 15,
+    "children":
+    [{"selectionRange":
+      {"start": {"line": 38, "character": 0},
+       "end": {"line": 38, "character": 17}},
+      "range":
+      {"start": {"line": 38, "character": 0},
+       "end": {"line": 59, "character": 0}},
+      "name": "Doc subheading",
+      "kind": 15,
+      "children":
+      [{"selectionRange":
+        {"start": {"line": 44, "character": 0},
+         "end": {"line": 46, "character": 3}},
+        "range":
+        {"start": {"line": 44, "character": 0},
+         "end": {"line": 46, "character": 3}},
+        "name": "#check Nat.succ⏎…",
+        "kind": 1,
+        "detail": "Lean code "},
+       {"selectionRange":
+        {"start": {"line": 48, "character": 0},
+         "end": {"line": 50, "character": 3}},
+        "range":
+        {"start": {"line": 48, "character": 0},
+         "end": {"line": 50, "character": 3}},
+        "name": "symbolOut",
+        "kind": 1,
+        "detail": "Lean code "},
+       {"selectionRange":
+        {"start": {"line": 52, "character": 14},
+         "end": {"line": 52, "character": 23}},
+        "range":
+        {"start": {"line": 52, "character": 0},
+         "end": {"line": 54, "character": 3}},
+        "name": "symbolOut",
+        "kind": 1,
+        "detail": "Lean output"}]}]}]}]

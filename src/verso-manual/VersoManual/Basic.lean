@@ -645,14 +645,12 @@ structure TraverseContext where
   blockContext : Array BlockContext := #[]
   /-- Whether the current build is a draft (used for hiding TODOs, etc from public builds) -/
   draft : Bool := false
-  logError : String → IO Unit
-
 def TraverseContext.inFile (self : TraverseContext) (file : String) : TraverseContext :=
   {self with path := self.path.push file}
 
 abbrev BlockTraversal genre :=
   InternalId → Json → Array (Doc.Block genre) →
-  ReaderT TraverseContext (StateT TraverseState IO) (Option (Doc.Block genre))
+  ReaderT TraverseContext (StateT TraverseState (BuildLogT IO)) (Option (Doc.Block genre))
 
 abbrev BlockToHtml (genre : Genre) (m) :=
   (Doc.Inline genre → Html.HtmlT genre m Output.Html) →
@@ -666,7 +664,7 @@ abbrev BlockToTeX (genre : Genre) (m) :=
 
 abbrev InlineTraversal genre :=
   InternalId → Json → Array (Doc.Inline genre) →
-  ReaderT TraverseContext (StateT TraverseState IO) (Option (Doc.Inline genre))
+  ReaderT TraverseContext (StateT TraverseState (BuildLogT IO)) (Option (Doc.Inline genre))
 
 abbrev InlineToHtml (genre : Genre) (m) :=
   (Doc.Inline genre → Html.HtmlT genre m Output.Html) →
@@ -761,7 +759,7 @@ structure InlineDescr extends HtmlAssets where
   /--
   How to generate HTML. If {name}`none`, generating HTML from a document that contains this inline will fail.
   -/
-  toHtml : Option (InlineToHtml Manual (ReaderT AllRemotes (ReaderT ExtensionImpls IO)))
+  toHtml : Option (InlineToHtml Manual (ReaderT AllRemotes (ReaderT ExtensionImpls (BuildLogT IO))))
 
   /--
   Should this inline be an entry in the page-local ToC? If so, how should it be represented?
@@ -780,7 +778,7 @@ structure InlineDescr extends HtmlAssets where
   How to generate TeX. If {name}`none`, generating TeX from a document that contains this inline
   will fail.
   -/
-  toTeX : Option (InlineToTeX Manual (ReaderT ExtensionImpls IO))
+  toTeX : Option (InlineToTeX Manual (ReaderT ExtensionImpls (BuildLogT IO)))
   /-- Required TeX `\usepackage` lines -/
   usePackages : List String := {}
   /-- Required items in the TeX preamble -/
@@ -804,7 +802,7 @@ structure BlockDescr extends HtmlAssets where
   How to generate HTML. If {name}`none`, generating HTML from a document that contains this block
   will fail.
   -/
-  toHtml : Option (BlockToHtml Manual (ReaderT AllRemotes (ReaderT ExtensionImpls IO)))
+  toHtml : Option (BlockToHtml Manual (ReaderT AllRemotes (ReaderT ExtensionImpls (BuildLogT IO))))
 
   /--
   Should this block be an entry in the page-local ToC? If so, how should it be represented?
@@ -824,7 +822,7 @@ structure BlockDescr extends HtmlAssets where
   How to generate TeX. If {name}`none`, generating TeX from a document that contains this block
   will fail.
   -/
-  toTeX : Option (BlockToTeX Manual (ReaderT ExtensionImpls IO))
+  toTeX : Option (BlockToTeX Manual (ReaderT ExtensionImpls (BuildLogT IO)))
   /-- Required TeX `\usepackage` lines -/
   usePackages : List String := {}
   /-- Required items in the TeX preamble -/
@@ -1013,13 +1011,13 @@ def ExtensionImpls.fromLists (inlineImpls : List (Name × InlineDescr)) (blockIm
 open Lean Elab Term in
 elab "extension_impls%" : term => do elabTerm (← ``(ExtensionImpls.fromLists inline_extensions% block_extensions%)) none
 
-abbrev TraverseM := ReaderT ExtensionImpls (ReaderT Manual.TraverseContext (StateT Manual.TraverseState IO))
+abbrev TraverseM := ReaderT ExtensionImpls (ReaderT Manual.TraverseContext (StateT Manual.TraverseState (BuildLogT IO)))
 
 def TraverseM.run
     (impls : ExtensionImpls)
     (ctxt : Manual.TraverseContext)
     (state : Manual.TraverseState)
-    (act : TraverseM α) : IO (α × Manual.TraverseState) :=
+    (act : TraverseM α) : BuildLogT IO (α × Manual.TraverseState) :=
   act impls ctxt state
 
 instance : MonadReader Manual.TraverseContext TraverseM where
@@ -1028,8 +1026,9 @@ instance : MonadReader Manual.TraverseContext TraverseM where
 instance : MonadWithReader Manual.TraverseContext TraverseM where
   withReader := withTheReader Manual.TraverseContext
 
-def logError [Monad m] [MonadLiftT IO m] [MonadReaderOf Manual.TraverseContext m] (err : String) : m Unit := do
-  (← readThe Manual.TraverseContext).logError err
+@[deprecated "Use `Verso.reportError` instead." (since := "2026-05-29")]
+def logError [MonadBuildLog m] (err : String) : m Unit :=
+  Verso.reportError err
 
 def isDraft [Functor m] [MonadReaderOf Manual.TraverseContext m] : m Bool :=
   (·.draft) <$> (readThe Manual.TraverseContext)
@@ -1395,7 +1394,7 @@ def tagPart
     (saveXref : Slug → InternalId → Lean.Doc.Part Manual.Inline Manual.Block m → TraverseM Unit) :
     TraverseM Tag := do
   let some id := getId metadata
-    | logError "No internal ID assigned while tagging part"; return default
+    | reportError "No internal ID assigned while tagging part"; return default
   match getTag metadata with
   | none =>
     -- Assign an internal tag - the next round will make it external. This is done in two rounds to
@@ -1407,7 +1406,7 @@ def tagPart
     -- Ensure uniqueness
     if let some id' := (← get).tags[t]? then
       if id != id' then
-        logError s!"Duplicate tag '{t}'"
+        reportError s!"Duplicate tag '{t}'"
     else
       modify fun st => {st with tags := st.tags.insert t id}
     let path := (← readThe TraverseContext).path
@@ -1425,7 +1424,7 @@ def tagPart
       let external := Tag.external slug
 
       let t ← if let some id' := (← get).tags[external]? then
-        if id != id' then logError s!"Duplicate tag '{t}'"
+        if id != id' then reportError s!"Duplicate tag '{t}'"
           pure t
         else
           modify fun st => { st with
@@ -1487,7 +1486,7 @@ instance : Traverse Manual TraverseM where
 
           impl.traverse id data content
         else
-          logError s!"No block traversal implementation found for {name}"
+          reportError s!"No block traversal implementation found for {name}"
           pure none
       else
         -- Assign a fresh ID if there is none. It can then be used on the next traversal pass.
@@ -1505,7 +1504,7 @@ instance : Traverse Manual TraverseM where
 
           impl.traverse id data content
         else
-          logError s!"No inline traversal implementation found for {name}"
+          reportError s!"No inline traversal implementation found for {name}"
           pure none
       else
         -- Assign a fresh ID if there is none. It can then be used on the next traversal pass.
@@ -1513,7 +1512,7 @@ instance : Traverse Manual TraverseM where
         pure <| some <| Inline.other ⟨name, some id, data⟩ content
 
 open Verso.Output.TeX in
-instance : TeX.GenreTeX Manual (ReaderT ExtensionImpls IO) where
+instance : TeX.GenreTeX Manual (ReaderT ExtensionImpls (BuildLogT IO)) where
   part go metadata txt := do
     let st ← TeX.state
     let label? := do
@@ -1527,7 +1526,7 @@ instance : TeX.GenreTeX Manual (ReaderT ExtensionImpls IO) where
     let some descr := (← readThe ExtensionImpls).getBlock? b.name
       | panic! s!"Unknown block {b.name} while rendering.\n\nKnown blocks: {(← readThe ExtensionImpls).blockDescrs.toArray |>.map (·.fst) |>.qsort (·.toString < ·.toString)}"
     let some impl := descr.toTeX
-      | TeX.logError s!"Block {b.name} doesn't support TeX"
+      | reportError s!"Block {b.name} doesn't support TeX"
         return .empty
     impl goI goB id b.data content
   inline go i content := do
@@ -1536,7 +1535,7 @@ instance : TeX.GenreTeX Manual (ReaderT ExtensionImpls IO) where
     let some descr := (← readThe ExtensionImpls).getInline? i.name
       | panic! s!"Unknown inline {i.name} while rendering.\n\nKnown inlines: {(← readThe ExtensionImpls).inlineDescrs.toArray |>.map (·.fst) |>.qsort (·.toString < ·.toString)}"
     let some impl := descr.toTeX
-      | TeX.logError s!"Inline {i.name} doesn't support TeX"
+      | reportError s!"Inline {i.name} doesn't support TeX"
         return .empty
     impl go id i.data content
 
@@ -1575,7 +1574,7 @@ def permalink (id : InternalId) (st : TraverseState) (inline : Bool := true) : H
 
 
 open Verso.Output.Html in
-instance : Html.GenreHtml Manual (ReaderT AllRemotes (ReaderT ExtensionImpls IO)) where
+instance : Html.GenreHtml Manual (ReaderT AllRemotes (ReaderT ExtensionImpls (BuildLogT IO))) where
   part go «meta» txt := do
     let st ← Verso.Doc.Html.HtmlT.state
     let attrs := meta.id.map (st.htmlId) |>.getD #[]

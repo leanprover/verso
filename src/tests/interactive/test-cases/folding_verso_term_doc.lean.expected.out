@@ -1,0 +1,18 @@
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/folding_verso_term_doc.lean"},
+ "position": {"line": 24, "character": 2}}
+[{"startLine": 11, "endLine": 20},
+ {"startLine": 13, "endLine": 20},
+ {"startLine": 16, "endLine": 20},
+ {"startLine": 28, "endLine": 38},
+ {"startLine": 29, "endLine": 38},
+ {"startLine": 33, "endLine": 38},
+ {"startLine": 19, "endLine": 20},
+ {"startLine": 19, "endLine": 20},
+ {"startLine": 37, "endLine": 39},
+ {"startLine": 37, "endLine": 39},
+ {"startLine": 0, "kind": "imports", "endLine": 1},
+ {"startLine": 5, "kind": "imports", "endLine": 6},
+ {"startLine": 11, "kind": "region", "endLine": 21},
+ {"startLine": 28, "kind": "region", "endLine": 39}]

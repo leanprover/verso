@@ -220,7 +220,6 @@ structure Config where
   destination : System.FilePath := "./_site"
   showDrafts : Bool := false
   postName : Date → String → String := defaultPostName
-  logError : String → IO Unit
   remoteInfoConfigPath : Option System.FilePath := none
   verbose : Bool := false
 deriving Inhabited
@@ -230,8 +229,9 @@ class MonadConfig (m : Type → Type u) where
 
 export MonadConfig (currentConfig)
 
-def logError [Monad m] [MonadConfig m] [MonadLiftT IO m] (message : String) : m Unit := do
-  (← currentConfig).logError message
+@[deprecated "Use `Verso.reportError` instead." (since := "2026-05-29")]
+def logError [MonadBuildLog m] (message : String) : m Unit :=
+  Verso.reportError message
 
 structure Components where
   /--
@@ -483,7 +483,7 @@ instance : BEq TraverseState where
       err1.toList == err2.toList &&
       rem1 == rem2
 
-abbrev TraverseM := ReaderT Blog.TraverseContext (StateT Blog.TraverseState IO)
+abbrev TraverseM := ReaderT Blog.TraverseContext (StateT Blog.TraverseState (BuildLogT IO))
 
 instance : MonadConfig TraverseM where
   currentConfig := do pure (← read).config

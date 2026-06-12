@@ -147,6 +147,23 @@ jobs:
                   npx tsc --noEmit -p jsconfig.json
                   popd
 
+            - name: Check the ToC width storage key stays in sync
+              run: |
+                  # toc-resize.js and toc-resize-preload.js must agree on the localStorage
+                  # key, since the preload primes the value the main script later reads.
+                  main_key=$(grep -oE 'STORAGE_KEY = "[^"]+"' static-web/toc-resize.js | grep -oE '"[^"]+"')
+                  preload_key=$(grep -oE 'getItem\("[^"]+"\)' static-web/toc-resize-preload.js | grep -oE '"[^"]+"')
+                  echo "toc-resize.js storage key:         ${main_key:-<none>}"
+                  echo "toc-resize-preload.js storage key: ${preload_key:-<none>}"
+                  if [ -z "$main_key" ] || [ -z "$preload_key" ]; then
+                      echo "::error::Could not find the ToC width storage key in one of the scripts" >&2
+                      exit 1
+                  fi
+                  if [ "$main_key" != "$preload_key" ]; then
+                      echo "::error::ToC width localStorage key differs between toc-resize.js and toc-resize-preload.js" >&2
+                      exit 1
+                  fi
+
             - name: Generate the demo site and make sure page_link works
               run: |
                   lake exe demosite --output _out/demosite
@@ -188,6 +205,7 @@ jobs:
                     browser-tests/test_search.py \
                     browser-tests/test_search_priority.py \
                     browser-tests/test_search_page.py \
+                    browser-tests/test_toc_resize.py \
                     browser-tests/test_redirect.py \
                     browser-tests/test_katex.py -v
 
@@ -245,7 +263,7 @@ jobs:
 
             - name: Deploy Verso manual
               id: deploy-lang
-              uses: nwtgck/actions-netlify@v3.0
+              uses: nwtgck/actions-netlify@v4.0
               if: github.event_name == 'push' && github.ref_name == 'main'
               with:
                   publish-dir: _out/html-multi

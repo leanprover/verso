@@ -59,6 +59,7 @@ open Verso.Genre.Manual.WordCount
 open Verso.Code (LinkTargets)
 open Verso.Code.Hover (Dedup State)
 open Verso.ArgParse
+open Verso (Logger Severity withLogger BuildLogT)
 
 namespace Verso.Genre
 
@@ -82,7 +83,7 @@ inline_extension Inline.ref (canonicalName : String) (domain : Option Name) (rem
   traverse := fun _ info content => do
     match FromJson.fromJson? (α := RefInfo) info with
     | .error e =>
-      logError e; pure none
+      reportError e; pure none
     | .ok { canonicalName := name, domain, remote := none, resolvedDestination := none } =>
       let domain := domain.getD sectionDomain
       match (← get).resolveDomainObject domain name with
@@ -99,11 +100,11 @@ inline_extension Inline.ref (canonicalName : String) (domain : Option Name) (rem
     some <| fun go _ info content => do
       match FromJson.fromJson? (α := RefInfo) info with
       | .error e =>
-        TeX.logError e; content.mapM go
+        reportError e; content.mapM go
       | .ok { canonicalName := name, domain, remote := none, resolvedDestination := none } =>
-        TeX.logError ("No destination found for tag '" ++ name ++ "' in " ++ toString domain); content.mapM go
+        reportError ("No destination found for tag '" ++ name ++ "' in " ++ toString domain); content.mapM go
       | .ok { canonicalName := name, domain, remote := some remote, resolvedDestination := none } =>
-        TeX.logError ("No destination found for remote '" ++ remote ++ "' tag '" ++ name ++ "' in " ++ toString domain); content.mapM go
+        reportError ("No destination found for remote '" ++ remote ++ "' tag '" ++ name ++ "' in " ++ toString domain); content.mapM go
       | .ok {resolvedDestination := some dest, remote, ..} =>
         if remote.isSome then
           -- Inter-document links should be URLs
@@ -118,9 +119,9 @@ inline_extension Inline.ref (canonicalName : String) (domain : Option Name) (rem
     some <| fun go _ info content => do
       match FromJson.fromJson? (α := RefInfo) info with
       | .error e =>
-        Html.HtmlT.logError e; content.mapM go
+        reportError e; content.mapM go
       | .ok { canonicalName := name, domain, remote := none, resolvedDestination := none } =>
-        Html.HtmlT.logError ("No destination found for tag '" ++ name ++ "' in " ++ toString domain); content.mapM go
+        reportError ("No destination found for tag '" ++ name ++ "' in " ++ toString domain); content.mapM go
       | .ok { canonicalName := name, domain, remote := some remote, resolvedDestination := _ } =>
         let domain := domain |>.getD sectionDomain
         let remoteData ← readThe AllRemotes
@@ -133,10 +134,10 @@ inline_extension Inline.ref (canonicalName : String) (domain : Option Name) (rem
                 return {{<a href={{dest}} data-verso-remote={{remote}}>{{← content.mapM go}}</a>}}
               else
                 let dests := objs.map (s!" * {·.link.link}") |>.toList |> "\n".intercalate
-                Html.HtmlT.logError s!"Remote '{remote}' domain '{domain}' contains multiple destinations for '{name}':\n{dests}"
-            else Html.HtmlT.logError s!"Remote '{remote}' contains domain '{domain}, but it not item '{name}'"
-          else Html.HtmlT.logError s!"Remote '{remote}' does not contain domain '{domain}' (looking up '{name}')"
-        else Html.HtmlT.logError s!"Remote '{remote}' not found for tag '{name}' in domain '{domain}'"
+                reportError s!"Remote '{remote}' domain '{domain}' contains multiple destinations for '{name}':\n{dests}"
+            else reportError s!"Remote '{remote}' contains domain '{domain}, but it not item '{name}'"
+          else reportError s!"Remote '{remote}' does not contain domain '{domain}' (looking up '{name}')"
+        else reportError s!"Remote '{remote}' not found for tag '{name}' in domain '{domain}'"
         -- If any error was logged, just don't emit a link
         content.mapM go
       | .ok {resolvedDestination := some dest, ..} =>
@@ -312,8 +313,13 @@ def TraverseState.ofConfig (config : HtmlConfig) : TraverseState := Id.run do
       st := st.addLicenseInfo li
   return st
 
-def traverse (logError : String → IO Unit) (text : Part Manual) (config : Config) : ReaderT ExtensionImpls IO (Part Manual × TraverseState) := do
-  let topCtxt : Manual.TraverseContext := {logError, draft := config.draft}
+/--
+The monad in which manuals are converted to an output format.
+-/
+abbrev EmitM : Type → Type := ReaderT ExtensionImpls (BuildLogT IO)
+
+def traverse (text : Part Manual) (config : Config) : EmitM (Part Manual × TraverseState) := do
+  let topCtxt : Manual.TraverseContext := { draft := config.draft }
   let mut state : Manual.TraverseState := .ofConfig config.toHtmlConfig
   let mut text := text
   if !config.draft then
@@ -366,25 +372,22 @@ where
   isUnnumbered (p : Part Manual) : Bool := p.metadata.map (·.number) |>.isEqSome false
 
 open IO.FS in
-def emitTeX (logError : String → IO Unit) (config : Config) (text : Part Manual) : ReaderT ExtensionImpls IO Unit := do
-  let (text, state) ← traverse logError text config
-  let opts : TeX.Options Manual (ReaderT ExtensionImpls IO) := {
+def emitTeX (config : Config) (text : Part Manual) : EmitM Unit := do
+  let (text, state) ← traverse text config
+  let opts : TeX.Options Manual := {
     headerLevels := #["chapter", "section", "subsection", "subsubsection", "paragraph"],
-    headerLevel := some ⟨0, by simp +arith [Array.size, List.length]⟩,
-    logError := fun msg => logError msg
+    headerLevel := some ⟨0, by grind⟩
   }
   let authors := text.metadata.map (·.authors) |>.getD []
   let date := text.metadata.bind (·.date) |>.getD ""
-  let ctxt := {logError}
-  let texCtxt := {}
   let { frontMatter := (frontText, frontParts), mainMatter, backMatter } := DividedDoc.ofPart text
-  let (frontMatter, extra) := (← frontText.mapM (·.toTeX (opts, ctxt, state, texCtxt)) {})
+  let (frontMatter, extra) ← frontText.mapM (·.toTeX (m := EmitM) (opts, {}, state, {})) {}
   -- Passing `none` as the label is fine here because traversal has assigned labels already so
   -- there's no need for a fallback.
-  let (frontParts, extra) ← frontParts.mapM (·.toTeX none (opts, ctxt, state, texCtxt)) extra
+  let (frontParts, extra) ← frontParts.mapM (·.toTeX (m := EmitM) none (opts, {}, state, {})) extra
   let frontMatter := frontMatter ++ frontParts
-  let (chapters, extra) ← mainMatter.mapM (·.toTeX none (opts, ctxt, state, texCtxt)) extra
-  let (appendices, extra) ← backMatter.mapM (·.toTeX none (opts, ctxt, state, texCtxt)) extra
+  let (chapters, extra) ← mainMatter.mapM (·.toTeX (m := EmitM) none (opts, {}, state, {})) extra
+  let (appendices, extra) ← backMatter.mapM (·.toTeX (m := EmitM) none (opts, {}, state, {})) extra
   let dir := config.destination.join "tex"
   ensureDir dir
   let packages := state.texPackages
@@ -409,17 +412,15 @@ def emitTeX (logError : String → IO Unit) (config : Config) (text : Part Manua
         h.putStrLn a.asString
     h.putStrLn postamble
   for (src, dest) in config.extraFiles do
-    copyRecursively logError src (dir.join dest)
+    copyRecursively src (dir.join dest)
   for (src, dest) in config.extraFilesTeX do
-    copyRecursively logError src (dir.join dest)
+    copyRecursively src (dir.join dest)
   for (f, content) in extra.extraFiles do
     IO.FS.writeFile (dir / f) content
 
 open Verso.Output (Html)
 
-instance : Inhabited (StateT (State Html) (ReaderT ExtensionImpls IO) Html.Toc) where
-  default := fun _ => default
-
+instance [Monad m] : Inhabited (StateT (State Html) m Html.Toc) := ⟨pure default⟩
 
 /--
 Generate a ToC structure for a document.
@@ -428,14 +429,14 @@ Here, `depth` is the current depth at which pages no longer receive their own HT
 depth of the table of contents in the document (which is controlled by a parameter to `Toc.html`).
 -/
 partial def toc [Monad m] [Html.ToHtml Manual m (Doc.Inline Manual)] [MonadLiftT IO m]
-    (depth : Nat) (opts : Html.Options IO)
+    (depth : Nat) (opts : Html.Options)
     (ctxt : TraverseContext)
     (state : TraverseState)
     (definitionIds : Lean.NameMap String)
     (linkTargets : LinkTargets Manual.TraverseContext) :
     Part Manual → StateT (State Html) m Html.Toc
   | .mk title sTitle «meta» _ sub => do
-    let titleHtml ← Html.seq <$> title.mapM (Manual.toHtml opts.lift ctxt state definitionIds linkTargets {} ·)
+    let titleHtml ← Html.seq <$> title.mapM (Manual.toHtml opts ctxt state definitionIds linkTargets {} ·)
 
     let some {id := some id, ..} := «meta»
       | (throw <| .userError s!"No ID for {sTitle} - {repr «meta»}" : IO _)
@@ -579,7 +580,8 @@ def emitSearchResultsHtml
 section
 open Search
 
-def emitSearchIndex (dir : System.FilePath) (state : TraverseState) (ctx : TraverseContext) (logError : String → IO Unit) (doc : Part Manual) : IO Unit := do
+def emitSearchIndex [Monad m] [MonadLiftT IO m] [MonadBuildLog m]
+    (dir : System.FilePath) (state : TraverseState) (ctx : TraverseContext) (doc : Part Manual) : m Unit := do
   have : Indexable Manual := {
     partHeader p := do
       let ctxt ← IndexM.traverseContext
@@ -604,7 +606,7 @@ def emitSearchIndex (dir : System.FilePath) (state : TraverseState) (ctx : Trave
   }
 
   match mkIndexAndDocs doc ctx with
-  | .error e => logError e; return ()
+  | .error e => reportError e; return ()
   | .ok (index, indexDocs) =>
     -- `context` (the breadcrumb text) is no longer an indexed field — it's
     -- display-only and its boost was 0.1, so indexing it nearly duplicated
@@ -681,11 +683,13 @@ def emitSearchBox
 
 end
 
+def emitTocResizeJs (dir : System.FilePath) : IO Unit := do
+  IO.FS.writeFile (dir / "toc-resize.js") tocResize.js
+
 def wordCount
-    (wcPath : System.FilePath)
-    (logError : String → IO Unit) (config : Config)
-    (text : Part Manual) : ReaderT ExtensionImpls IO Unit := do
-  let (text, _) ← traverse logError text config
+    (wcPath : System.FilePath) (config : Config)
+    (text : Part Manual) : EmitM Unit := do
+  let (text, _) ← traverse text config
   IO.FS.writeFile wcPath (wordCountReport skip "" 2 text |>.snd)
 where
   -- Skip included docstrings for word count purposes
@@ -694,9 +698,9 @@ where
 /--
 Resolves cross-references in a manner suitable for single-page HTML output.
 -/
-def traverseHtmlSingle (logError : String → IO Unit) (config : RenderConfig)
-    (text : Part Manual) : ReaderT ExtensionImpls IO (Part Manual × TraverseState) := do
-  traverse logError text {config with htmlDepth := 0}
+def traverseHtmlSingle (config : RenderConfig)
+    (text : Part Manual) : EmitM (Part Manual × TraverseState) := do
+  traverse text { config with htmlDepth := 0 }
 
 /--
 Emits single-page HTML for the document.
@@ -704,27 +708,27 @@ Emits single-page HTML for the document.
 The provided `text` and `state` parameters should be the result of running `traverseHtmlSingle`.
 -/
 def emitHtmlSingle
-    (logError : String → IO Unit) (config : RenderConfig)
-    (text : Part Manual) (state : TraverseState) : ReaderT ExtensionImpls IO Unit := do
+    (config : RenderConfig)
+    (text : Part Manual) (state : TraverseState) : EmitM Unit := do
   let dir := config.destination.join "html-single"
   ensureDir dir
   let remoteContent ← updateRemotes false config.remoteConfigFile (if config.verbose then IO.println else fun _ => pure ())
-  let ((), htmlState) ← emitContent dir .empty remoteContent
+  let ((), htmlState) ← emitContent dir |>.run .empty |>.run remoteContent
   IO.FS.writeFile (dir.join "-verso-docs.json") (toString htmlState.dedup.docJson)
   if .search ∈ config.features then
     emitSearchBox (dir / "-verso-search") state.quickJump config.searchPriorities (searchPagePath := some "search/")
-    emitSearchIndex (dir / "-verso-search") state {logError, draft := config.draft} logError text
+    emitSearchIndex (dir / "-verso-search") state { draft := config.draft } text
 where
-  emitContent (dir : System.FilePath) : StateT (State Html) (ReaderT AllRemotes (ReaderT ExtensionImpls IO)) Unit := do
+  emitContent (dir : System.FilePath) : StateT (State Html) (ReaderT AllRemotes (ReaderT ExtensionImpls (BuildLogT IO))) Unit := do
     let authors := text.metadata.map (·.authors) |>.getD []
     let authorshipNote := text.metadata.bind (·.authorshipNote)
     let _date := text.metadata.bind (·.date) |>.getD "" -- TODO
-    let opts : Html.Options IO := {logError := fun msg => logError msg}
-    let ctxt := {logError}
+    let opts : Html.Options := { }
+    let ctxt : Manual.TraverseContext := {}
     let definitionIds := state.definitionIds ctxt
-    let linkTargets := config.linkTargets state (← read)
-    let titleHtml ← Html.seq <$> text.title.mapM (Manual.toHtml opts.lift ctxt state definitionIds linkTargets {})
-    let introHtml ← Html.seq <$> text.content.mapM (Manual.toHtml opts.lift ctxt state definitionIds linkTargets {})
+    let linkTargets := config.linkTargets state (← readThe AllRemotes)
+    let titleHtml ← Html.seq <$> text.title.mapM (Manual.toHtml opts ctxt state definitionIds linkTargets {})
+    let introHtml ← Html.seq <$> text.content.mapM (Manual.toHtml opts ctxt state definitionIds linkTargets {})
     let bookToc ← text.subParts.mapM (fun p => toc 0 opts (ctxt.inPart p) state definitionIds linkTargets p)
     let bookTocHtml := open Verso.Output.Html in
       if bookToc.size > 0 then {{
@@ -736,7 +740,7 @@ where
     let contents ←
       Html.seq <$>
       text.subParts.mapM fun p =>
-        Manual.toHtml {opts.lift with headerLevel := 2} (ctxt.inPart p) state definitionIds linkTargets {} p
+        Manual.toHtml { opts with headerLevel := 2 } (ctxt.inPart p) state definitionIds linkTargets {} p
     let pageContent := open Verso.Output.Html in
       {{<section>
           {{Html.titlePage titleHtml authors authorshipNote introHtml}}
@@ -745,8 +749,8 @@ where
         </section>}}
     let toc := (← text.subParts.mapM (toc 0 opts ctxt state definitionIds linkTargets)).toList
     let thisPageToc : Array Html ← do
-      let (errs, items) ← localContents opts.lift ctxt state text
-      for e in errs do logError e
+      let (errs, items) ← localContents opts ctxt state text
+      for e in errs do reportError e
       pure <| items.map (·.toHtml)
     let titleToShow : Html :=
       open Verso.Output.Html in
@@ -761,10 +765,11 @@ where
       h.putStrLn Html.«verso-vars.css»
     IO.FS.withFile (dir.join "book.css") .write fun h => do
       h.putStrLn Html.Css.pageStyle
+    emitTocResizeJs dir
     for (src, dest) in config.extraFiles do
-      copyRecursively logError src (dir.join dest)
+      copyRecursively src (dir.join dest)
     for (src, dest) in config.extraFilesHtml do
-      copyRecursively logError src (dir.join dest)
+      copyRecursively src (dir.join dest)
     for f in state.extraJsFiles do
       ensureDir (dir.join "-verso-data")
       (dir / "-verso-data" / f.filename).parent |>.forM fun d => ensureDir d
@@ -784,9 +789,9 @@ where
 /--
 Resolves cross-references in a manner suitable for multi-page HTML output.
 -/
-def traverseHtmlMulti (logError : String → IO Unit) (config : RenderConfig)
-    (text : Part Manual) : ReaderT ExtensionImpls IO (Part Manual × TraverseState) := do
-  traverse logError text config.toConfig
+def traverseHtmlMulti (config : RenderConfig)
+    (text : Part Manual) : EmitM (Part Manual × TraverseState) := do
+  traverse text config.toConfig
 
 open Verso.Output.Html in
 /--
@@ -794,32 +799,32 @@ Emits multi-page HTML for the document.
 
 The provided `text` and `state` parameters should be the result of running `traverseHtmlSingle`.
 -/
-def emitHtmlMulti (logError : String → IO Unit) (config : RenderConfig)
-    (text : Part Manual) (state : TraverseState) : ReaderT ExtensionImpls IO Unit := do
+def emitHtmlMulti (config : RenderConfig)
+    (text : Part Manual) (state : TraverseState) : EmitM Unit := do
   let remoteContent ← updateRemotes false config.remoteConfigFile (if config.verbose then IO.println else fun _ => pure ())
   let root := config.destination.join "html-multi"
   ensureDir root
-  let ((), htmlState) ← emitContent root {} remoteContent
+  let ((), htmlState) ← emitContent root |>.run .empty |>.run remoteContent
   IO.FS.writeFile (root.join "-verso-docs.json") (toString htmlState.dedup.docJson)
   if .search ∈ config.features then
     emitSearchBox (root / "-verso-search") state.quickJump config.searchPriorities (searchPagePath := some "search/")
-    emitSearchIndex (root / "-verso-search") state {logError, draft := config.draft} logError text
+    emitSearchIndex (root / "-verso-search") state { draft := config.draft } text
 where
   /--
   Emits the data used by all pages in the site, such as JS and CSS, and then emits the root page
   (and thus its children).
   -/
-  emitContent (root : System.FilePath) : StateT (State Html) (ReaderT AllRemotes (ReaderT ExtensionImpls IO)) Unit := do
+  emitContent (root : System.FilePath) : StateT (State Html) (ReaderT AllRemotes (ReaderT ExtensionImpls (BuildLogT IO))) Unit := do
     let authors := text.metadata.map (·.authors) |>.getD []
     let authorshipNote := text.metadata >>= (·.authorshipNote)
     let _date := text.metadata.bind (·.date) |>.getD "" -- TODO
-    let opts : Html.Options IO := {logError := fun msg => logError msg}
-    let ctxt := {logError}
+    let opts : Html.Options := { }
+    let ctxt : Manual.TraverseContext := {}
     let definitionIds := state.definitionIds ctxt
-    let linkTargets := config.linkTargets state (← read)
+    let linkTargets := config.linkTargets state (← readThe AllRemotes)
     let toc ← text.subParts.toList.mapM fun p =>
       toc config.htmlDepth opts (ctxt.inPart p) state definitionIds linkTargets p
-    let titleHtml ← Html.seq <$> text.title.mapM (Manual.toHtml opts.lift ctxt state definitionIds linkTargets {} ·)
+    let titleHtml ← Html.seq <$> text.title.mapM (Manual.toHtml opts ctxt state definitionIds linkTargets {} ·)
     let titleToShow : Html :=
       open Verso.Output.Html in
       if let some alt := text.metadata.bind (·.shortTitle) then
@@ -829,13 +834,14 @@ where
       h.putStrLn Html.«verso-vars.css»
     IO.FS.withFile (root / "book.css") .write fun h => do
       h.putStrLn Html.Css.pageStyle
+    emitTocResizeJs root
     for (src, dest) in config.extraFiles do
-      copyRecursively logError src (root.join dest)
+      copyRecursively src (root.join dest)
     for (src, dest) in config.extraFilesHtml do
-      copyRecursively logError src (root.join dest)
+      copyRecursively src (root.join dest)
     state.writeFiles (root / "-verso-data")
 
-    emitPart titleToShow authors authorshipNote toc opts.lift ctxt state definitionIds linkTargets {} true config.htmlDepth root text
+    emitPart titleToShow authors authorshipNote toc opts ctxt state definitionIds linkTargets {} true config.htmlDepth root text
     let xrefJson ← IO.FS.readFile (root / "xref.json")
     emitFindHtml toc root state xrefJson config.toConfig
     if .search ∈ config.features then
@@ -846,26 +852,26 @@ where
   -/
   emitPart (bookTitle : Html) (authors : List String) (authorshipNote : Option String) (bookContents)
       (opts ctxt state definitionIds linkTargets codeOptions)
-      (root : Bool) (depth : Nat) (dir : System.FilePath) (part : Part Manual) : StateT (State Html) (ReaderT AllRemotes (ReaderT ExtensionImpls IO)) Unit := do
+      (root : Bool) (depth : Nat) (dir : System.FilePath) (part : Part Manual) : StateT (State Html) (ReaderT AllRemotes (ReaderT ExtensionImpls (BuildLogT IO))) Unit := do
     let thisFile := part.metadata.bind (·.file) |>.getD (part.titleString.sluggify.toString)
     let dir := if root then dir else dir.join thisFile
     let sectionNum := sectionHtml ctxt
-    let pageTitleHtml := sectionNum ++ (← Html.seq <$> part.title.mapM (Manual.toHtml opts.lift ctxt state definitionIds linkTargets codeOptions))
+    let pageTitleHtml := sectionNum ++ (← Html.seq <$> part.title.mapM (Manual.toHtml opts ctxt state definitionIds linkTargets codeOptions))
     let titleHtml :=
       pageTitleHtml ++
       if let some id := part.metadata.bind (·.id) then
         permalink id state
       else .empty
-    let introHtml ← Html.seq <$> part.content.mapM (Manual.toHtml opts.lift ctxt state definitionIds linkTargets codeOptions)
+    let introHtml ← Html.seq <$> part.content.mapM (Manual.toHtml opts ctxt state definitionIds linkTargets codeOptions)
     let contents ←
       if depth == 0 || part.htmlSplit == .never then
-        Html.seq <$> part.subParts.mapM (fun p => Manual.toHtml {opts.lift with headerLevel := 2} (ctxt.inPart p) state definitionIds linkTargets codeOptions p)
+        Html.seq <$> part.subParts.mapM (fun p => Manual.toHtml {opts with headerLevel := 2} (ctxt.inPart p) state definitionIds linkTargets codeOptions p)
       else pure .empty
 
     let includeSubparts := if (depth == 0 || part.htmlSplit == .never) then .all else .depth 0
     let thisPageToc : Array LocalContentItem ← do
-      let (errs, items) ← localContents opts.lift ctxt state (includeTitle := false) (includeSubparts := includeSubparts) part
-      for e in errs do logError e
+      let (errs, items) ← localContents opts ctxt state (includeTitle := false) (includeSubparts := includeSubparts) part
+      for e in errs do reportError e
       pure items
 
     -- If there's no elements, then get rid of the contents entirely. This causes the ToC generation code in the HTML to fall back to the ordinary collapsible ones.
@@ -928,16 +934,15 @@ inductive Mode where | single | multi
 /--
 Extra steps to be performed after building the manual.
 
-`ExtraStep` is short for `Mode → (String → IO Unit) → Config → TraverseState → Part Manual → IO Unit`.
+`ExtraStep` is short for `Mode → Config → TraverseState → Part Manual → BuildLogT IO Unit`.
 
 The parameters are:
  * A mode, which is whether the HTML was generated in one or multiple files
- * An error logger
  * The configuration, as determined from the initial value passed to `manualMain` and modified via the command line
  * The final state of the traversal pass
  * The final text, post-traversal
 -/
-abbrev ExtraStep := Mode → (String → IO Unit) → Config → TraverseState → Part Manual → IO Unit
+abbrev ExtraStep := Mode → Config → TraverseState → Part Manual → BuildLogT IO Unit
 
 
 open Verso.CLI
@@ -951,7 +956,7 @@ def manualMain (text : Part Manual)
 
 where
 
-  opts (cfg : RenderConfig) : List String → ReaderT ExtensionImpls IO RenderConfig
+  opts (cfg : RenderConfig) : List String → IO RenderConfig
     | ("--output"::dir::more) => opts { cfg with destination := dir } more
     | ("--depth"::n::more) => opts { cfg with htmlDepth := n.toNat! } more
 
@@ -998,34 +1003,27 @@ where
   fixBase (base : String) : String :=
     if base.endsWith "/" then base else base ++ "/"
 
-  go : ReaderT ExtensionImpls IO UInt32 := do
-    let errorCount : IO.Ref Nat ← IO.mkRef 0
-    let logError msg := do errorCount.modify (· + 1); IO.eprintln msg
+  go (extensionImpls : ExtensionImpls) : IO UInt32 := do
     let cfg ← opts config options
+    runWithLogger <| flip ReaderT.run extensionImpls do
+      if cfg.emitTeX then
+        if cfg.verbose then
+          IO.println s!"Saving TeX"
+        emitTeX cfg.toConfig text
 
-    if cfg.emitTeX then
-      if cfg.verbose then
-        IO.println s!"Saving TeX"
-      emitTeX logError cfg.toConfig text
+      emitHtml cfg.emitHtmlSingle .single cfg text traverseHtmlSingle emitHtmlSingle
+      emitHtml cfg.emitHtmlMulti .multi cfg text traverseHtmlMulti emitHtmlMulti
 
-    emitHtml cfg.emitHtmlSingle .single logError cfg text traverseHtmlSingle emitHtmlSingle
-    emitHtml cfg.emitHtmlMulti .multi logError cfg text traverseHtmlMulti emitHtmlMulti
-
-    if let some wcFile := cfg.wordCount then
-      if cfg.verbose then
-        IO.println s!"Saving word counts to {wcFile}"
-      wordCount wcFile logError cfg.toConfig text
-
-    match ← errorCount.get with
-    | 0 => return 0
-    | 1 => IO.eprintln "An error was encountered!"; return 1
-    | n => IO.eprintln s!"{n} errors were encountered!"; return 1
+      if let some wcFile := cfg.wordCount then
+        if cfg.verbose then
+          IO.println s!"Saving word counts to {wcFile}"
+        wordCount wcFile cfg.toConfig text
 
   emitHtml
-      (how : EmitHtml) (mode : Mode) (logError : String → IO Unit) (cfg : RenderConfig) (text : Part Manual)
-      (traverse : (String → IO Unit) → RenderConfig → Part Manual → ReaderT ExtensionImpls IO (Part Manual × TraverseState))
-      (emit : (String → IO Unit) → RenderConfig → Part Manual → TraverseState → ReaderT ExtensionImpls IO Unit) :
-      ReaderT ExtensionImpls IO Unit := do
+      (how : EmitHtml) (mode : Mode) (cfg : RenderConfig) (text : Part Manual)
+      (traverse : RenderConfig → Part Manual → EmitM (Part Manual × TraverseState))
+      (emit : RenderConfig → Part Manual → TraverseState → EmitM Unit) :
+      EmitM Unit := do
     let outDir :=
       match mode with | .single => "html-single" | .multi => "html-multi"
     match how with
@@ -1033,17 +1031,17 @@ where
     | .immediately =>
       if cfg.verbose then
         IO.println s!"Saving {match mode with | .single => "single" | .multi => "multi"}-page HTML"
-      let (text', traverseState) ← traverse logError cfg text
+      let (text', traverseState) ← traverse cfg text
       emitXrefsJson (cfg.destination / outDir) traverseState
-      emit logError cfg text' traverseState
+      emit cfg text' traverseState
       for step in extraSteps do
-        step mode logError cfg.toConfig traverseState text'
+        step mode cfg.toConfig traverseState text'
     | .delay f =>
-      let (text', traverseState) ← traverse logError cfg text
+      let (text', traverseState) ← traverse cfg text
       emitXrefsJson (cfg.destination / outDir) traverseState
       SavedState.mk text' traverseState |>.save f
     | .resumeFrom f =>
       let {text, traverseState} ← SavedState.load f
-      emit logError cfg text traverseState
+      emit cfg text traverseState
       for step in extraSteps do
-        step .single logError cfg.toConfig traverseState text
+        step .single cfg.toConfig traverseState text

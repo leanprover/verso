@@ -54,7 +54,7 @@ block_extension Block.table (columns : Nat) (header : Bool) (tag : Option String
 
   traverse id data contents := do
     match FromJson.fromJson? data (α := Nat × Bool × Option String × Option Tag × Option TableConfig.Alignment) with
-    | .error e => logError s!"Error deserializing table data: {e}"; pure none
+    | .error e => reportError s!"Error deserializing table data: {e}"; pure none
     | .ok (_, _, none, _) => pure none
     | .ok (c, hdr, some x, none, align) =>
       let path ← (·.path) <$> read
@@ -76,7 +76,7 @@ block_extension Block.table (columns : Nat) (header : Bool) (tag : Option String
           rows := rows.push (items.take columns |>.map (·.contents))
           items := items.extract columns items.size
 
-        let rowsOut : TeX.TeXT Manual (ReaderT ExtensionImpls IO) (Array Output.TeX) := do
+        let rowsOut : TeX.TeXT Manual (ReaderT ExtensionImpls (BuildLogT IO)) (Array Output.TeX) := do
           rows.mapIdxM fun i r => do
             let cols ← r.mapM fun c => do
               let cell : Output.TeX ← Array.mapM goB c
@@ -97,7 +97,7 @@ block_extension Block.table (columns : Nat) (header : Bool) (tag : Option String
     some <| fun _goI goB id data blocks => do
       match FromJson.fromJson? data (α := Nat × Bool × Option String × Option Tag × Option TableConfig.Alignment) with
       | .error e =>
-        HtmlT.logError s!"Error deserializing table data: {e}"
+        reportError s!"Error deserializing table data: {e}"
         return .empty
       | .ok (columns, header, _, _, align) =>
       if let #[.ul items] := blocks then
@@ -128,7 +128,7 @@ block_extension Block.table (columns : Nat) (header : Bool) (tag : Option String
         }}
 
       else
-        HtmlT.logError "Malformed table"
+        reportError "Malformed table"
         return .empty
 
   extraCss := [

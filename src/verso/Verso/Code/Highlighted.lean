@@ -344,6 +344,27 @@ Removes leading and trailing whitespace from highlighted code.
 -/
 public defmethod Highlighted.trim (hl : Highlighted) : Highlighted := hl.trimLeft.trimRight
 
+/--
+Removes proof states in which all goals are solved that are the last element of a surrounding proof
+state. This relies on the positions tracked for the goal states being accurate, as it compares end
+position markers.
+
+This is to prevent extra nested highlight widgets for tactics that themselves contain tactic
+scripts.
+-/
+public partial defmethod Highlighted.elideRedundantProofStates
+    (hl : Highlighted) (goalEnds : Array Nat := #[]) : Highlighted :=
+  match hl with
+  | .seq hls => .seq (hls.map (·.elideRedundantProofStates goalEnds))
+  | .span infos hl => .span infos (hl.elideRedundantProofStates goalEnds)
+  | .tactics info startPos endPos hl =>
+    if info.isEmpty && goalEnds.contains endPos then
+      hl.elideRedundantProofStates goalEnds
+    else
+      let goalEnds := if info.isEmpty then goalEnds else goalEnds.push endPos
+      .tactics info startPos endPos (hl.elideRedundantProofStates goalEnds)
+  | .token .. | .text .. | .unparsed .. | .point .. => hl
+
 public defmethod Highlighted.trimOneLeadingNl : Highlighted → Highlighted
   | .text s => .text <| (s.dropPrefix "\n").copy
   | .unparsed s => .unparsed <| (s.dropPrefix "\n").copy
@@ -411,9 +432,14 @@ defmethod Token.Kind.hover? (tok : Token.Kind) : HighlightHtmlM g (Option Nat) :
     match tyFmt with
     | some fmt => some <$> addHover {{ <code data-rich-format={{fmt}}>{{type}}</code> }}
     | none => some <$> addHover {{ <code>{{type}}</code> }}
-  | .str s =>
+  | .str (some s) _ =>
     some <$> addHover {{ <code><span class="literal string">{{s.quote}}</span>" : String"</code>}}
+  | .str none _ => pure none
+  | .char c =>
+    some <$> addHover {{ <code><span class="literal char">{{s!"{repr c}"}}</span>" : Char"</code>}}
   | .withType t =>
+    some <$> addHover {{ <code>{{t}}</code> }}
+  | .num (some t) _ =>
     some <$> addHover {{ <code>{{t}}</code> }}
   | .sort (some doc) =>
     some <$> addHover {{<code class="docstring">{{doc}}</code>}}
@@ -624,12 +650,12 @@ public partial defmethod Highlighted.toHtml : Highlighted → HighlightHtmlM g H
   | .seq hls => hls.mapM toHtml
 
 public defmethod Highlighted.blockHtml (contextName : String) (code : Highlighted) (trim : Bool := true) (htmlId : Option String := none) : HighlightHtmlM g Html := do
-  let code := if trim then code.trim else code
+  let code := (if trim then code.trim else code).elideRedundantProofStates
   let idAttr := htmlId.map (fun x => #[("id", x)]) |>.getD #[]
   pure {{ <code class="hl lean block" "data-lean-context"={{toString contextName}} {{idAttr}}> {{ ← code.toHtml }} </code> }}
 
 public defmethod Highlighted.inlineHtml (contextName : Option String) (code : Highlighted) (trim : Bool := true) (htmlId : Option String := none) : HighlightHtmlM g Html := do
-  let code := if trim then code.trim else code
+  let code := (if trim then code.trim else code).elideRedundantProofStates
   let idAttr := htmlId.map (fun x => #[("id", x)]) |>.getD #[]
   if let some ctx := contextName then
     pure {{ <code class="hl lean inline" "data-lean-context"={{toString ctx}} {{idAttr}}> {{ ← code.toHtml }} </code> }}
@@ -680,6 +706,21 @@ public def highlightingStyle : String := "
 }
 
 .hl.lean .literal, .hl.lean .unknown {
+  color: var(--verso-code-color,);
+  font-weight: normal;
+  font-style: normal;
+  font-family: var(--verso-code-font-family,);
+}
+
+/* These lexically-classified token kinds default to the `.unknown` appearance. The rule follows
+   `.const` so it wins for the `anon-ctor` tokens, which also carry the `const` class. */
+.hl.lean .anon-ctor,
+.hl.lean .number,
+.hl.lean .char,
+.hl.lean .comment,
+.hl.lean .punctuation,
+.hl.lean .delim,
+.hl.lean .wildcard {
   color: var(--verso-code-color,);
   font-weight: normal;
   font-style: normal;
@@ -768,7 +809,7 @@ public def highlightingStyle : String := "
 }
 
 @media (hover: hover) {
-  .hl.lean .token.binding-hl, .hl.lean .literal.string:hover, .hl.lean .token.typed:hover {
+  .hl.lean .token.binding-hl, .hl.lean .literal:hover, .hl.lean .token.typed:hover {
     background-color: #eee;
     border-radius: 2px;
     transition: none;
@@ -948,7 +989,7 @@ public def highlightingStyle : String := "
   text-size-adjust: 100%;
 }
 
-.hl.lean .tactic:has(.tactic-toggle:checked) {
+.hl.lean .tactic:has(> .tactic-toggle:checked) {
   display: inline-grid;
   grid-template-columns: 1fr;
 }
@@ -967,7 +1008,10 @@ public def highlightingStyle : String := "
 }
 
 @media (hover: hover) {
-  .hl.lean .tactic:has(.tactic-toggle:not(:checked)) > label:hover {
+  /* Highlight a region on hover only when its own toggle is unchecked, and only the innermost
+     hovered region: `label:hover` bubbles to ancestor labels, so suppress the highlight on a region
+     whose label contains a more deeply nested hovered tactic label. */
+  .hl.lean .tactic:has(> .tactic-toggle:not(:checked)) > label:hover:not(:has(.tactic > label:hover)) {
     background-color: #eeeeee;
   }
 }
@@ -1319,7 +1363,7 @@ window.onload = () => {
       let parent = elem.parentNode;
       while (parent && \"classList\" in parent) {
         if (parent.classList.contains(\"tactic\")) {
-          const toggle = parent.querySelector(\"input.tactic-toggle\");
+          const toggle = parent.querySelector(\":scope > input.tactic-toggle\");
           if (toggle) {
             return !toggle.checked;
           }
@@ -1416,7 +1460,7 @@ window.onload = () => {
         followCursor: 'initial',
         onShow(inst) {
           if (inst.reference.className == 'tactic') {
-            const toggle = inst.reference.querySelector(\"input.tactic-toggle\");
+            const toggle = inst.reference.querySelector(\":scope > input.tactic-toggle\");
             if (toggle && toggle.checked) {
               return false;
             }
@@ -1435,7 +1479,7 @@ window.onload = () => {
         content (tgt) {
           const content = document.createElement(\"span\");
           if (tgt.className == 'tactic') {
-            const state = tgt.querySelector(\".tactic-state\").cloneNode(true);
+            const state = tgt.querySelector(\":scope > .tactic-state\").cloneNode(true);
             state.style.display = \"block\";
             content.appendChild(state);
             content.style.display = \"block\";
@@ -1514,7 +1558,7 @@ window.onload = () => {
       // Skip tokens inside closed tactics — they interfere with tactic tippys
       const closedTactics = new Set();
       document.querySelectorAll('.hl.lean .tactic').forEach(tactic => {
-        const toggle = tactic.querySelector('input.tactic-toggle');
+        const toggle = tactic.querySelector(':scope > input.tactic-toggle');
         if (toggle && !toggle.checked) closedTactics.add(tactic);
       });
       function isInsideClosedTactic(el) {
@@ -1528,7 +1572,7 @@ window.onload = () => {
       // Create/destroy token tippys when tactic checkbox toggles
       const tacticTippySelector = '.const.token, .keyword.token, .literal.token, .option.token, .var.token, .typed.token, .has-info, .level-var, .level-const, .level-op, .sort';
       document.querySelectorAll('.hl.lean .tactic').forEach(tactic => {
-        const toggle = tactic.querySelector('input.tactic-toggle');
+        const toggle = tactic.querySelector(':scope > input.tactic-toggle');
         if (toggle) toggle.addEventListener('change', () => {
           if (toggle.checked) {
             closedTactics.delete(tactic);

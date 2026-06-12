@@ -134,10 +134,10 @@ block_extension MarkupExample (title : String) where
   traverse _ _ _ := pure none
   toHtml := some fun _goI goB _id data contents => open Verso.Output.Html in do
     let .str title := data
-      | Verso.Doc.Html.HtmlT.logError s!"Expected a string, got {data.compress}"
+      | reportError s!"Expected a string, got {data.compress}"
         return .empty
     let #[stx, parsed] := contents
-      | Verso.Doc.Html.HtmlT.logError s!"Expected two blocks, got {contents.size}"
+      | reportError s!"Expected two blocks, got {contents.size}"
         return .empty
     pure {{
       <div class="markup-example">
@@ -212,10 +212,10 @@ r#"
   ]
   toTeX := some fun _goI _goB _id data contents => open Verso.Output.TeX in open Verso.Doc.TeX in do
     let .str title := data
-      | logError s!"Expected title as string, got {data.compress}"
+      | reportError s!"Expected title as string, got {data.compress}"
         return \TeX{}
     let #[.code stx, .code parsed] := contents
-      | logError s!"Expected two code blocks, got {contents.size}"
+      | reportError s!"Expected two code blocks, got {contents.size}"
         return \TeX{}
     pure \TeX{
       \begin{markupexample}{\Lean{title}}

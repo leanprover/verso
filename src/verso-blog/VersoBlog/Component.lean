@@ -83,7 +83,7 @@ def State.freshId (state : State) : String × State := Id.run do
 
 end Component
 
-abbrev ComponentM := ReaderT Components (StateT Component.State IO)
+abbrev ComponentM := ReaderT Components (StateT Component.State (BuildLogT IO))
 
 abbrev HtmlM genre := HtmlT genre ComponentM
 
@@ -259,7 +259,7 @@ def deJson [Monad m] [MonadQuotation m]
   let (x, t) := b
   `(Lean.Parser.Term.doSeqItem| let $x ← match FromJson.fromJson? (α := $t) $x with
       | .error e => do
-        (HtmlT.logError e : HtmlM Page Unit)
+        (reportError e : HtmlM Page Unit)
         return Html.empty
       | .ok v => pure v)
 
@@ -288,7 +288,7 @@ elab_rules : command
                   $noJson*
                   ($tm id json goI goB contents)
                 | _ => do
-                  HtmlT.logError s!"Expected array, got {json}"
+                  reportError s!"Expected array, got {json}"
                   return .empty)
     let other := toHtml.toArray ++ other
     let cmd2 ←
@@ -340,7 +340,7 @@ elab_rules : command
                   $noJson*
                   ($tm id json goI contents)
                 | _ => do
-                  HtmlT.logError s!"Expected array, got {json}"
+                  reportError s!"Expected array, got {json}"
                   return .empty)
     let other := toHtml.toArray ++ other
     let cmd2 ←

@@ -337,7 +337,7 @@ const searchableToHtml = (domainMappers, searchable, matchedParts, document, asO
     // in CSS keeps the existing `<li>`-based layout/flex rules working unchanged.
     const link = document.createElement("a");
     link.className = "search-result-link";
-    link.href = withTermsParam(searchable.address, null);
+    link.href = resolveAgainstBase(withTermsParam(searchable.address, null));
     li.appendChild(link);
 
     if (domainMapper.customRender != null) {
@@ -500,20 +500,31 @@ export const computeCandidates = (
 };
 
 /**
- * Resolve a relative URL against the page's `<base href>` and navigate there. Mirrors the
- * resolution logic the search box uses to confirm a result.
+ * Resolve a site-root-relative address (as stored in `xref.json`) against the page's
+ * `<base href>`. Addresses in `xref.json` start with `/`, but this denotes the site's
+ * root rather than `/` for the browser. This helper bridges that gap so anchors and
+ * `window.location` navigations land on the right page regardless of where the site
+ * is mounted.
+ *
+ * @param {string} dest
+ * @return {string}
+ */
+export const resolveAgainstBase = (dest) => {
+    const base = document.querySelector("base");
+    if (!base) return dest;
+    const baseNoSlash = base.href.endsWith("/") ? base.href.slice(0, -1) : base.href;
+    const destNoSlash = dest.startsWith("/") ? dest.slice(1) : dest;
+    return baseNoSlash + "/" + destNoSlash;
+};
+
+/**
+ * Resolve a site-root-relative address against the page's `<base href>` and navigate
+ * there. Mirrors the resolution logic the search box uses to confirm a result.
  *
  * @param {string} dest
  */
 export const navigateBaseRelative = (dest) => {
-    const base = document.querySelector("base");
-    if (base) {
-        const baseNoSlash = base.href.endsWith("/") ? base.href.slice(0, -1) : base.href;
-        const destNoSlash = dest.startsWith("/") ? dest.slice(1) : dest;
-        window.location.assign(baseNoSlash + "/" + destNoSlash);
-    } else {
-        window.location.assign(dest);
-    }
+    window.location.assign(resolveAgainstBase(dest));
 };
 
 /**
@@ -558,8 +569,9 @@ export const renderCandidateLi = async (candidate, opts) => {
 
 /**
  * Resolve the target page for a candidate, accounting for full-text hits that need a
- * bucket load to know which page hosts the match. Returns the URL (relative to site root)
- * including any anchor and `?terms=` highlight parameter.
+ * bucket load to know which page hosts the match. Returns the URL, resolved against
+ * the page's `<base href>` so it works under a non-root site mount, including any
+ * anchor and `?terms=` highlight parameter.
  *
  * @param {Candidate} candidate
  * @param {string} filter
@@ -567,12 +579,12 @@ export const renderCandidateLi = async (candidate, opts) => {
  */
 export const candidateTargetUrl = async (candidate, filter) => {
     if (candidate.kind === "semantic") {
-        return withTermsParam(candidate.searchable.address, null);
+        return resolveAgainstBase(withTermsParam(candidate.searchable.address, null));
     }
     const resultBucket = await Promise.resolve(loadBucket(candidate.textMatch.ref));
     /** @type {DocContent} */
     const doc = resultBucket[candidate.textMatch.ref];
-    return withTermsParam(doc.id, filter);
+    return resolveAgainstBase(withTermsParam(doc.id, filter));
 };
 
 /**
@@ -620,7 +632,7 @@ const textResultToHtml = async (term, match, document, snippetOpts = {}, asOptio
     // it here because `getDocContents` (and therefore the bucket) has already loaded.
     const link = document.createElement("a");
     link.className = "search-result-link";
-    link.href = withTermsParam(doc.id, term);
+    link.href = resolveAgainstBase(withTermsParam(doc.id, term));
     li.appendChild(link);
 
     const searchTerm = document.createElement("p");
