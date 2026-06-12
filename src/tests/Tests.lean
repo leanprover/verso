@@ -23,6 +23,7 @@ import Tests.Integration.FrontMatter
 import Tests.Integration.LeanSection
 import Tests.Integration.DiagramDoc
 import Tests.Method
+import Tests.NestedTacticHtml
 import Tests.ParserRegression
 import Tests.Paths
 import Tests.PorterStemmer
