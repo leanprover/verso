@@ -28,7 +28,7 @@ open Verso ArgParse Doc Elab Genre.Manual Html Code Highlighted.WebAssets Expect
 open Lean Elab
 open SubVerso.Highlighting
 
-open Verso.SyntaxUtils (runParserCategory' SyntaxError parseStrLitAsCategory strLitInputContext)
+open Verso.SyntaxUtils (SyntaxError parseStrLitAsCategory strLitInputContext)
 
 open Lean.Doc.Syntax
 open Lean.Elab.Tactic.GuardMsgs
@@ -392,15 +392,15 @@ def leanTerm : CodeBlockExpanderOf LeanInlineConfig
         Core.resetMessageLog
 
         let tree' ← runWithOpenDecls <| runWithVariables fun _vars => do
-          let expectedType ← config.type.mapM fun (s : StrLit) => do
-            match Parser.runParserCategory (← getEnv) `term s.getString (← getFileName) with
+          let expectedType ← config.type.mapM fun (str : StrLit) => do
+            match (← SyntaxUtils.runParserCategory `term str) with
             | .error e => throwErrorAt stx e
             | .ok stx => withEnableInfoTree false do
               let t ← leveller <| Elab.Term.elabType stx
               Term.synthesizeSyntheticMVarsNoPostponing
               let t ← instantiateMVars t
               if t.hasExprMVar || t.hasLevelMVar then
-                throwErrorAt s "Type contains metavariables: {t}"
+                throwErrorAt str "Type contains metavariables: {t}"
               pure t
 
           let e ← Elab.Term.elabTerm (catchExPostpone := true) stx expectedType
@@ -469,15 +469,15 @@ def leanInline : RoleExpanderOf LeanInlineConfig
         Core.resetMessageLog
         let (tree', t) ← runWithOpenDecls <| runWithVariables fun _ => do
 
-          let expectedType ← config.type.mapM fun (s : StrLit) => do
-            match Parser.runParserCategory (← getEnv) `term s.getString (← getFileName) with
+          let expectedType ← config.type.mapM fun (str : StrLit) => do
+            match (← SyntaxUtils.runParserCategory `term str) with
             | .error e => throwErrorAt term e
             | .ok stx => withEnableInfoTree false do
               let t ← leveller <| Elab.Term.elabType stx
               Term.synthesizeSyntheticMVarsNoPostponing
               let t ← instantiateMVars t
               if t.hasExprMVar || t.hasLevelMVar then
-                throwErrorAt s "Type contains metavariables: {t}"
+                throwErrorAt str "Type contains metavariables: {t}"
               pure t
 
           let e ← leveller <| Elab.Term.elabTerm (catchExPostpone := true) stx expectedType
