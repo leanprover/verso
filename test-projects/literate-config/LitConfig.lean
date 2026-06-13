@@ -1,5 +1,7 @@
 import LitConfig.Core
 import LitConfig.NoDocstrings
+import LitConfig.Builtins
+import LitConfig.UserExt
 import Verso
 
 /-!
