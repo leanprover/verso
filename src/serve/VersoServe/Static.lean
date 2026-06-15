@@ -357,11 +357,10 @@ def handleGet (cfg : ServeConfig) (mounts : Array ResolvedMount) (req : Request 
             respondEmpty .movedPermanently (policy.push ("Location", urlPath ++ "/"))
           else
             let indexPath := real / "index.html"
-            -- The index file may itself be a symlink that escapes the root, so reconfine it.
-            if (← indexPath.pathExists) && (← withinMounts cfg mounts indexPath) then
-              serveContent indexPath
-            else if (← indexPath.pathExists) then
-              respondEmpty .forbidden policy
+            if ← indexPath.pathExists then
+              -- The index file may itself be a symlink that escapes the root, so reconfine it.
+              if ← withinMounts cfg mounts indexPath then serveContent indexPath
+              else respondEmpty .forbidden policy
             else if cfg.directoryListing then serveListing real urlPath policy
             else respondEmpty .forbidden policy
         | _ => serveContent real
