@@ -161,6 +161,12 @@ def testBlog (_ : Config) : IO Unit := do
   if fails > 0 then
     throw <| IO.userError s!"{fails} blog tests failed"
 
+def testServe (_ : Config) : IO Unit := do
+  IO.println "Running serve tests..."
+  let fails ← Verso.Tests.Serve.runServeTests
+  if fails > 0 then
+    throw <| IO.userError s!"{fails} serve tests failed"
+
 def testLiterateConfig (_ : Config) : IO Unit := do
   let fails ← Tests.LiterateConfig.runLiterateConfigTests
   if fails > 0 then
@@ -355,6 +361,7 @@ def tests := [
   testSerialization,
   testSearchJs,
   testBlog,
+  testServe,
   testStemmer,
   testTexOutput "sample-doc" SampleDoc.doc,
   testTexOutput "inheritance-doc" InheritanceDoc.doc,

@@ -12,6 +12,7 @@ import UsersGuide.Extensions
 import UsersGuide.Output
 import UsersGuide.Releases
 import UsersGuide.Literate
+import UsersGuide.Serve
 
 open Verso.Genre Manual
 
@@ -112,6 +113,8 @@ Mixing incompatible features results in an ordinary Lean type error.
 {include 0 UsersGuide.Manuals}
 
 {include 0 UsersGuide.Literate}
+
+{include 0 UsersGuide.Serve}
 
 # Index
 %%%
