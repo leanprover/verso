@@ -162,10 +162,10 @@ def decodeMount (v : Value) : EDecodeM Mount := do
 
 instance : DecodeToml Mount := ⟨decodeMount⟩
 
-/-- Decodes a {lit}`[[redirect]]` entry into a {name}`RedirectRule`. -/
+/-- Decodes a {lit}`[[redirects]]` entry into a {name}`RedirectRule`. -/
 def decodeRedirect (v : Value) : EDecodeM RedirectRule := do
   let t ← v.decodeTable
-  rejectUnknownKeys "key in a [[redirect]] entry" [`«from», `to, `status] t
+  rejectUnknownKeys "key in a [[redirects]] entry" [`«from», `to, `status] t
   let fromPath ← t.decode? (α := String) `«from»
   let toPath ← t.decode? (α := String) `to
   let statusNum ← t.decode? (α := Nat) `status
@@ -220,7 +220,7 @@ def decodeServeConfig (table : Table) : Except (Array DecodeError) ServeConfig :
   let action : DecodeM ServeConfig := do
     let topKnown : List Lean.Name :=
       [`port, `banner, `cors, `directory_listing, `trailing_slash_redirect,
-       `follow_symlinks_outside_root, `mounts, `redirect, `headers]
+       `follow_symlinks_outside_root, `mounts, `redirects, `headers]
     logUnknownKeys "top-level key" topKnown table
     let portNum ← table.tryDecode? (α := Nat) `port
     let port : Port ← match portNum with
@@ -239,7 +239,7 @@ def decodeServeConfig (table : Table) : Except (Array DecodeError) ServeConfig :
     let followSymlinksOutsideRoot ←
       Table.tryDecodeD `follow_symlinks_outside_root (false : Bool) table
     let mounts ← Table.tryDecodeD `mounts (#[] : Array Mount) table
-    let redirects ← Table.tryDecodeD `redirect (#[] : Array RedirectRule) table
+    let redirects ← Table.tryDecodeD `redirects (#[] : Array RedirectRule) table
     let headers ← Table.tryDecodeD `headers (#[] : Array HeaderRule) table
     return {
       port,
