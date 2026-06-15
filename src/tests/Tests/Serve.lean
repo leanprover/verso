@@ -135,6 +135,17 @@ def units : List (String × Bool) := [
     matchRedirect #[{ fromPath := "/a", toPath := "/x", status := .movedPermanently },
                     { fromPath := "/a", toPath := "/y", status := .found }] "/a" ==
       some (.movedPermanently, "/x")),
+  -- exact match leaves nothing to append beneath the prefix
+  ("redirect exact",
+    matchRedirect #[{ fromPath := "/old", toPath := "/new", status := .movedPermanently }] "/old"
+      |>.isEqSome (.movedPermanently, "/new")),
+  -- the root prefix matches every path and carries the whole path onto the target
+  ("redirect root prefix",
+    matchRedirect #[{ fromPath := "/", toPath := "/new", status := .movedPermanently }] "/foo/bar"
+      |>.isEqSome (.movedPermanently, "/new/foo/bar")),
+  ("redirect root exact",
+    matchRedirect #[{ fromPath := "/", toPath := "/new", status := .movedPermanently }] "/"
+      |>.isEqSome (.movedPermanently, "/new")),
   -- redirect status validation rejects non-redirect codes
   ("redirect status valid", RedirectStatus.ofNat? 308 == some .permanentRedirect),
   ("redirect status invalid", RedirectStatus.ofNat? 404 == none),

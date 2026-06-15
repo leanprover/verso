@@ -61,6 +61,8 @@ def printBanner (config : ServeConfig) (mounts : Array ResolvedMount) (port : UI
   if port != config.port.toUInt16 then
     IO.println s!"  (the requested port {config.port.toNat} was unavailable, using {port})"
   IO.println "  Use Ctrl+C to exit."
+  -- Flush so the banner appears at once, even when the server's output is captured or piped.
+  (← IO.getStdout).flush
 
 /-- The loopback socket address for a port. -/
 def loopback (port : UInt16) : Net.SocketAddress :=

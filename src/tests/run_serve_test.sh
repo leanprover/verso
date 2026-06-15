@@ -5,8 +5,8 @@ set -euo pipefail
 # Builds the executable, serves a small fixture directory, and checks status
 # codes and the cache, ETag, and Range headers with curl.
 
-PORT=8731
 FIXTURE="$(mktemp -d)"
+BANNER="$(mktemp)"
 SERVER_PID=""
 
 cleanup() {
@@ -15,6 +15,7 @@ cleanup() {
         wait "$SERVER_PID" 2>/dev/null || true
     fi
     rm -rf "$FIXTURE"
+    rm -f "$BANNER"
 }
 trap cleanup EXIT
 
@@ -32,9 +33,20 @@ printf '0123456789abcdef' > "$FIXTURE/data.txt"
 mkdir -p "$FIXTURE/sub"
 printf 'child' > "$FIXTURE/sub/page.html"
 
-echo "Starting serve on port ${PORT}..."
-./.lake/build/bin/serve --port "$PORT" --strict-port --quiet "$FIXTURE" &
+echo "Starting serve (scanning for a free port)..."
+# No fixed port: let the server take the first free one and report it in its banner.
+./.lake/build/bin/serve --quiet "$FIXTURE" > "$BANNER" 2>/dev/null &
 SERVER_PID=$!
+
+# Read the chosen port from the startup banner, waiting up to ~10 seconds for it.
+PORT=""
+for _ in $(seq 1 50); do
+    PORT="$(sed -nE 's#.*http://127\.0\.0\.1:([0-9]+)/.*#\1#p' "$BANNER" | head -1)"
+    [[ -n "$PORT" ]] && break
+    sleep 0.2
+done
+[[ -n "$PORT" ]] || fail "server did not report a port"
+echo "  using port ${PORT}"
 
 BASE="http://127.0.0.1:${PORT}"
 

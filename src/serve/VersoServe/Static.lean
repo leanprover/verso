@@ -108,14 +108,18 @@ def etag (bytes : ByteArray) : String :=
 /--
 The first redirect rule that matches {name}`urlPath`, returning its status code and target location.
 
-A rule matches when its prefix equals the path or is a leading path segment. The path beneath the
-matched prefix is appended to the target.
+A rule matches when its prefix equals the path, is a leading path segment, or is the root prefix
+{lit}`/`, which matches everything. The path beneath the matched prefix is appended to the target.
 -/
 def matchRedirect (rules : Array RedirectRule) (urlPath : String) :
     Option (RedirectStatus × String) :=
   rules.findSome? fun r =>
-    if urlPath == r.fromPath || urlPath.startsWith (r.fromPath ++ "/") then
-      some (r.status, r.toPath ++ urlPath.drop r.fromPath.length)
+    if r.fromPath == "/" || urlPath == r.fromPath || urlPath.startsWith (r.fromPath ++ "/") then
+      let rest :=
+        if urlPath == r.fromPath then ""
+        else if r.fromPath == "/" then urlPath
+        else (urlPath.drop r.fromPath.length).copy
+      some (r.status, r.toPath ++ rest)
     else none
 
 /--
