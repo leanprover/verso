@@ -137,11 +137,29 @@ def matchHeaderRules (rules : Array HeaderRule) (urlPath : String) : Array (Stri
 def htmlEscape (s : String) : String :=
   s.replace "&" "&amp;" |>.replace "<" "&lt;" |>.replace ">" "&gt;" |>.replace "\"" "&quot;"
 
+/-- The uppercase hexadecimal digit for a value below sixteen. -/
+def hexDigit (n : Nat) : Char :=
+  if n < 10 then Char.ofNat (n + '0'.toNat) else Char.ofNat (n - 10 + 'A'.toNat)
+
+/-- Percent-encodes a string's UTF-8 bytes, leaving the unreserved URL characters unchanged. -/
+def percentEncode (s : String) : String :=
+  s.toUTF8.foldl (init := "") fun acc b =>
+    let n := b.toNat
+    let unreserved :=
+      (n >= 0x30 && n <= 0x39) || (n >= 0x41 && n <= 0x5a) || (n >= 0x61 && n <= 0x7a)
+        || n == 0x2d || n == 0x2e || n == 0x5f || n == 0x7e
+    if unreserved then acc.push (Char.ofNat n)
+    else acc ++ s!"%{hexDigit (n / 16)}{hexDigit (n % 16)}"
+
 /-- Renders a directory listing as an HTML page. -/
 def renderListing (urlPath : String) (entries : Array (String × Bool)) : String :=
   let rows := entries.foldl (init := "") fun acc (name, isDir) =>
-    let display := if isDir then name ++ "/" else name
-    acc ++ s!"<li><a href=\"{htmlEscape display}\">{htmlEscape display}</a></li>\n"
+    let suffix := if isDir then "/" else ""
+    -- The link text shows the name; the href percent-encodes it so `?`, `#`, spaces, and the like
+    -- stay part of the path rather than becoming URL syntax.
+    let href := percentEncode name ++ suffix
+    let display := name ++ suffix
+    acc ++ s!"<li><a href=\"{htmlEscape href}\">{htmlEscape display}</a></li>\n"
   "<!DOCTYPE html>\n" ++
     s!"<html><head><meta charset=\"utf-8\"><title>Index of {htmlEscape urlPath}</title></head>" ++
     s!"<body><h1>Index of {htmlEscape urlPath}</h1><ul>\n{rows}</ul></body></html>\n"
@@ -305,11 +323,16 @@ Normalizes path segments by dropping each {lit}`.` and letting each {lit}`..` re
 before it. The result is the list of names to descend from a mount's root.
 
 A {lit}`..` with no earlier segment to remove would point above the root, so that case yields
-{name}`none`. This is a purely textual check that never consults the filesystem.
+{name}`none`. A segment that contains a platform path separator (which can appear once a {lit}`%2F`
+or {lit}`%5C` is decoded) or that names an absolute location such as a drive letter is also refused,
+so an encoded separator cannot smuggle a {lit}`..` or an absolute path past this check. The check is
+purely textual and never consults the filesystem.
 -/
 def confineSegments (segs : Array String) : Option (Array String) := do
   let mut out : Array String := #[]
   for s in segs do
+    if s.any (System.FilePath.pathSeparators.contains ·) then failure
+    if (s : System.FilePath).isAbsolute then failure
     if s == "." then continue
     else if s == ".." then
       if out.isEmpty then failure

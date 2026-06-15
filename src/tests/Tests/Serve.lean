@@ -161,6 +161,13 @@ def units : List (String × Bool) := [
     matchHeaderRules #[{ path := "/assets", set := #[("X-Frame-Options", "DENY")] }] "/other" == #[]),
   -- escaping
   ("html escape", htmlEscape "<a>&\"" == "&lt;a&gt;&amp;&quot;"),
+  -- listing links percent-encode the href while the link text stays readable
+  ("listing href encodes",
+    let html := renderListing "/" #[("a b#c.txt", false)]
+    (html.splitOn "href=\"a%20b%23c.txt\"").length != 1 && (html.splitOn ">a b#c.txt<").length != 1),
+  ("listing dir href keeps slash",
+    let html := renderListing "/" #[("my dir", true)]
+    (html.splitOn "href=\"my%20dir/\"").length != 1),
   -- header dedup keeps the last value for a name, matched case-insensitively
   ("dedup last wins",
     dedupHeaders #[("Cache-Control", "no-cache"), ("cache-control", "max-age=1"), ("ETag", "x")] ==
@@ -180,6 +187,9 @@ def units : List (String × Bool) := [
   ("confine dotdot pops", confineSegments #["a", "..", "b"] |>.isEqSome #["b"]),
   ("confine escape rejected", confineSegments #[".."] |>.isNone),
   ("confine deep escape rejected", confineSegments #["a", "..", "..", "b"] |>.isNone),
+  -- a segment that decoded to contain a separator is refused, so it cannot carry a `..`
+  ("confine rejects embedded slash", confineSegments #["a/b"] |>.isNone),
+  ("confine rejects encoded traversal", confineSegments #["../secret.txt"] |>.isNone),
   -- command-line flags fold into the configuration they override
   ("cli no-listing disables",
     ({ directoryListing := true : ServeConfig }.withCli { noListing := true }).directoryListing == false),
@@ -234,20 +244,6 @@ def head (path : String) : String :=
 def headerValue (response : String) (name : String) : Option String :=
   (response.splitOn "\r\n").find? (·.toLower.startsWith (name.toLower ++ ":"))
     |>.map fun line => (line.drop (name.length + 1)).trimAscii.copy
-
-/-- The uppercase hexadecimal digit for a value below sixteen. -/
-def hexDigit (n : Nat) : Char :=
-  if n < 10 then Char.ofNat (n + '0'.toNat) else Char.ofNat (n - 10 + 'A'.toNat)
-
-/-- Percent-encodes a string's UTF-8 bytes, leaving the unreserved characters as they are. -/
-def percentEncode (s : String) : String :=
-  s.toUTF8.foldl (init := "") fun acc b =>
-    let n := b.toNat
-    let unreserved :=
-      (n >= 0x30 && n <= 0x39) || (n >= 0x41 && n <= 0x5a) || (n >= 0x61 && n <= 0x7a)
-        || n == 0x2d || n == 0x2e || n == 0x5f || n == 0x7e
-    if unreserved then acc.push (Char.ofNat n)
-    else acc ++ s!"%{hexDigit (n / 16)}{hexDigit (n % 16)}"
 
 /-- File names in scripts the server should serve unchanged. -/
 def unicodeNames : List String :=
@@ -358,6 +354,10 @@ def integrationFailures : IO (Array String) := do
     let escaped ← runRequest followHandler (get "/%2e%2e/secret.txt")
     unless !escaped.startsWith "HTTP/1.1 200" && (escaped.splitOn "TOPSECRET").length == 1 do
       modify (·.push "follow-symlinks still confines traversal")
+    -- An encoded slash must not smuggle `..` past confinement, even with symlinks relaxed.
+    let slashEscaped ← runRequest followHandler (get "/..%2Fsecret.txt")
+    unless !slashEscaped.startsWith "HTTP/1.1 200" && (slashEscaped.splitOn "TOPSECRET").length == 1 do
+      modify (·.push "follow-symlinks still confines encoded-slash traversal")
     -- A complete configuration parses into ports, mounts, redirects, and headers.
     let goodConfig :=
       "port = 4000\n[[mounts]]\npath = \"/api\"\ndir = \"out\"\n" ++
