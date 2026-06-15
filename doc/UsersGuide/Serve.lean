@@ -58,16 +58,45 @@ As requests arrive, each is logged with the active port, the method, the path, a
 tag := "serve-options"
 %%%
 
- * `DIR` — the directory served at `/`, relative to the current directory (default: the current directory).
- * `--port PORT`, `-p PORT` — the port to listen on (default: `8000`).
- * `--strict-port` — fail if the port is in use instead of trying another.
- * `--config FILE` — load configuration from `FILE` (default: `./serve.toml` if it exists).
- * `--no-listing` — disable directory listings.
- * `--no-trailing-slash-redirect` — serve directories in place instead of redirecting to add a trailing slash.
- * `--cors` — send permissive cross-origin headers.
- * `--quiet` — suppress per-request logging.
- * `--verbose`, `-v` — log additional detail.
- * `--help`, `-h` — show usage and exit.
+: `DIR`
+
+  The directory served at `/`, relative to the current directory. Defaults to the current directory.
+
+: `--port PORT`, `-p PORT`
+
+  The port to listen on. Defaults to `8000`.
+
+: `--strict-port`
+
+  Fail if the port is in use instead of trying another.
+
+: `--config FILE`
+
+  Load configuration from `FILE`. Defaults to `./serve.toml` if it exists.
+
+: `--no-listing`
+
+  Disable directory listings.
+
+: `--no-trailing-slash-redirect`
+
+  Serve directories in place instead of redirecting to add a trailing slash.
+
+: `--cors`
+
+  Send permissive cross-origin headers.
+
+: `--quiet`
+
+  Suppress per-request logging.
+
+: `--verbose`, `-v`
+
+  Log additional detail.
+
+: `--help`, `-h`
+
+  Show usage and exit.
 
 Command-line options override values from the configuration file.
 
@@ -119,7 +148,7 @@ The sections that follow add detail on mounts, redirects, and custom headers.
 
     The directory served under the prefix. Must be a string, resolved relative to the configuration file.
 
-: `[[redirect]]`
+: `[[redirects]]`
 
   Configures a redirect. Redirects are matched by their path prefix in order. The first match wins.
 
@@ -162,7 +191,7 @@ dir = "_out/html"
 path = "/api"
 dir = "_out/api"
 
-[[redirect]]
+[[redirects]]
 from = "/index.htm"
 to = "/"
 
@@ -214,12 +243,12 @@ Redirect rules are matched against the request path by prefix, in order, and the
 The path beneath the matched prefix is appended to the target.
 
 ```
-[[redirect]]
+[[redirects]]
 from = "/old"
 to = "/new"
 status = 301
 
-[[redirect]]
+[[redirects]]
 from = "/legacy"
 to = "/current"
 status = 302

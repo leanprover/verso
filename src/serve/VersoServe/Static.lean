@@ -97,8 +97,12 @@ def parseRange (header : String) (size : Nat) : RangeResult := Id.run do
         if stop < start then return .unsatisfiable else return .range start stop
   | _ => return .full
 
-/-- The ETag for a file's contents, including surrounding quotes. -/
+/--
+The ETag for a file's contents, including surrounding quotes.
+-/
 def etag (bytes : ByteArray) : String :=
+  -- The validator follows the contents rather than the modification time, so rebuilding the site
+  -- without changing a file still revalidates as unchanged.
   "\"" ++ toString (hash bytes) ++ "\""
 
 /--
@@ -265,21 +269,21 @@ def serveFile (req : Request Body.Stream) (file : System.FilePath)
     | none => respondBytes .ok fileHdrs bytes
 
 /--
-Answers a {lit}`HEAD` request for a file from its metadata alone, without reading the contents.
-
-The {lit}`ETag` is derived from the contents, so it is omitted here; conditional {lit}`HEAD`
-requests revalidate against {lit}`Last-Modified`.
+Answers a {lit}`HEAD` request for a file, producing the same headers a {lit}`GET` would but without
+the body.
 -/
 def serveHead (req : Request Body.Stream) (file : System.FilePath)
     (policy : Array (String × String)) : Async (Response Body.Any) := do
+  let bytes ← IO.FS.readBinFile file
   let md ← file.metadata
+  let etagVal := etag bytes
   let lastMod := httpDate md.modified
-  let commonHdrs := #[("Last-Modified", lastMod)] ++ policy
-  if header? req "if-modified-since" == some lastMod then
+  let commonHdrs := #[("ETag", etagVal), ("Last-Modified", lastMod)] ++ policy
+  if header? req "if-none-match" == some etagVal || header? req "if-modified-since" == some lastMod then
     respondEmpty .notModified commonHdrs
   else
     let hdrs := #[("Content-Type", contentTypeForPath file), ("Accept-Ranges", "bytes")] ++ commonHdrs
-    respondHead .ok hdrs md.byteSize.toNat
+    respondHead .ok hdrs bytes.size
 
 /-- Serves an HTML listing of a directory's entries. The {name}`policy` headers are added. -/
 def serveListing (dir : System.FilePath) (urlPath : String)
@@ -293,8 +297,29 @@ def serveListing (dir : System.FilePath) (urlPath : String)
   respondBytes .ok (#[("Content-Type", "text/html; charset=utf-8")] ++ policy) html.toUTF8
 
 /--
-Resolves {name}`path` and reports whether it stays inside a mounted root, honoring the
-{name (full := ServeConfig.followSymlinksOutsideRoot)}`followSymlinksOutsideRoot` setting.
+Normalizes path segments by dropping each {lit}`.` and letting each {lit}`..` remove the segment
+before it. The result is the list of names to descend from a mount's root.
+
+A {lit}`..` with no earlier segment to remove would point above the root, so that case yields
+{name}`none`. This is a purely textual check that never consults the filesystem.
+-/
+def confineSegments (segs : Array String) : Option (Array String) := do
+  let mut out : Array String := #[]
+  for s in segs do
+    if s == "." then continue
+    else if s == ".." then
+      if out.isEmpty then failure
+      else out := out.pop
+    else out := out.push s
+  return out
+
+/--
+Reports whether {name}`path` resolves to a target inside a mounted root.
+
+{open ServeConfig}
+
+Symbolic links can still point outside a root, so this follows the path with {name}`IO.FS.realPath`
+and checks the result, unless {name}`followSymlinksOutsideRoot` is set.
 -/
 def withinMounts (cfg : ServeConfig) (mounts : Array ResolvedMount) (path : System.FilePath) :
     IO Bool := do
@@ -306,7 +331,7 @@ def withinMounts (cfg : ServeConfig) (mounts : Array ResolvedMount) (path : Syst
 def handleGet (cfg : ServeConfig) (mounts : Array ResolvedMount) (req : Request Body.Stream)
     (fsSegs : Array String) (hasSlash : Bool) (urlPath : String)
     (policy : Array (String × String)) : Async (Response Body.Any) := do
-  -- A HEAD request returns the headers a GET would, but without reading the file contents.
+  -- A HEAD request returns the headers a GET would, but with no body.
   let serveContent := fun (file : System.FilePath) =>
     if req.line.method matches .head then serveHead req file policy else serveFile req file policy
   match matchRedirect cfg.redirects urlPath with
@@ -315,7 +340,10 @@ def handleGet (cfg : ServeConfig) (mounts : Array ResolvedMount) (req : Request 
     match resolveMountBy ResolvedMount.urlPrefix mounts fsSegs with
     | none => respondEmpty .notFound policy
     | some (mount, rest) =>
-      let candidate := rest.foldl (init := mount.root) fun p s => p / s
+      -- `..` is resolved here, before touching the filesystem, so it can never climb above the mount.
+      let some safe := confineSegments rest
+        | respondEmpty .forbidden policy
+      let candidate := safe.foldl (init := mount.root) fun p s => p / s
       if !(← candidate.pathExists) then
         respondEmpty .notFound policy
       else if !(← withinMounts cfg mounts candidate) then
@@ -353,7 +381,7 @@ def handle (cfg : ServeConfig) (mounts : Array ResolvedMount)
   let segs := req.line.uri.path.normalize.toDecodedSegments
   -- A control character can only arrive percent-encoded; reject it so it cannot reach a header.
   if hasControlChar segs then
-    return ← respondEmpty .badRequest (corsHeaders cfg)
+    return ← respondEmpty .badRequest (#[("Cache-Control", "no-cache")] ++ corsHeaders cfg)
   let fsSegs := segs.filter (· != "")
   let hasSlash := fsSegs.isEmpty || segs.back? == some ""
   let urlPath := "/" ++ "/".intercalate fsSegs.toList
@@ -375,7 +403,7 @@ def handleRequest (cfg : ServeConfig) (mounts : Array ResolvedMount)
     handle cfg mounts req
   catch e =>
     IO.eprintln s!"Error handling {req.line.uri}: {e}"
-    respondEmpty .internalServerError (corsHeaders cfg)
+    respondEmpty .internalServerError (#[("Cache-Control", "no-cache")] ++ corsHeaders cfg)
 
 /-- Builds the stateless handler for a configuration and its resolved mounts. -/
 def mkHandler (cfg : ServeConfig) (mounts : Array ResolvedMount) : Server.StatelessHandler :=

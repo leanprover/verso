@@ -163,6 +163,40 @@ def units : List (String × Bool) := [
   ("unicode fraktur ok", !hasControlChar #["𝔏𝔢𝔞𝔫"]),
   ("c0 control detected", hasControlChar #[String.singleton (Char.ofNat 0x0d)]),
   ("c1 control detected", hasControlChar #[String.singleton (Char.ofNat 0x85)]),
+  -- path confinement drops `.`, pops `..`, and refuses to climb above the root
+  ("confine plain", confineSegments #["a", "b"] |>.isEqSome #["a", "b"]),
+  ("confine dot dropped", confineSegments #["a", ".", "b"] |>.isEqSome #["a", "b"]),
+  ("confine dotdot pops", confineSegments #["a", "..", "b"] |>.isEqSome #["b"]),
+  ("confine escape rejected", confineSegments #[".."] |>.isNone),
+  ("confine deep escape rejected", confineSegments #["a", "..", "..", "b"] |>.isNone),
+  -- command-line flags fold into the configuration they override
+  ("cli no-listing disables",
+    ({ directoryListing := true : ServeConfig }.withCli { noListing := true }).directoryListing == false),
+  ("cli keeps listing by default",
+    ({ directoryListing := true : ServeConfig }.withCli {}).directoryListing == true),
+  ("cli cors enables",
+    ({ cors := false : ServeConfig }.withCli { cors := true }).cors == true),
+  ("cli no-trailing-slash disables",
+    ({ trailingSlashRedirect := true : ServeConfig }.withCli { noTrailingSlash := true }).trailingSlashRedirect == false),
+  ("cli port overrides",
+    (({} : ServeConfig).withCli { port := Port.ofNat? 9000 }).port.toNat == 9000),
+  -- argument parsing accepts valid forms and rejects malformed ones
+  ("args long port", parseArgs ["--port", "9000"] |>.toOption.bind (·.port) |>.map (·.toNat) |>.isEqSome 9000),
+  ("args short port", parseArgs ["-p", "3000"] |>.toOption.bind (·.port) |>.map (·.toNat) |>.isEqSome 3000),
+  ("args positional dir", parseArgs ["site"] |>.toOption.bind (·.dir) |>.map (·.toString) |>.isEqSome "site"),
+  ("args boolean flags",
+    parseArgs ["--cors", "--quiet"] |>.toOption.map (fun a => a.cors && a.quiet) |>.isEqSome true),
+  ("args unknown option rejected", (parseArgs ["--nope"]).toOption.isNone),
+  ("args missing port value rejected", (parseArgs ["--port"]).toOption.isNone),
+  ("args non-numeric port rejected", (parseArgs ["--port", "x"]).toOption.isNone),
+  ("args out-of-range port rejected", (parseArgs ["--port", "0"]).toOption.isNone),
+  ("args extra positional rejected", (parseArgs ["a", "b"]).toOption.isNone),
+  -- port scanning skips taken ports and reports the one it settled on
+  ("port scan skips taken",
+    (Id.run <| firstAvailable (m := Id) (fun p => if [8000, 8001].contains p.toNat then none else some p) 8000)
+      |>.map (·.1.toNat) |>.isEqSome 8002),
+  ("port scan all taken",
+    (Id.run <| firstAvailable (m := Id) (fun (_ : UInt16) => (none : Option UInt16)) 8000).isNone),
 ]
 
 /-! ## In-process integration (Mock transport) -/
@@ -224,6 +258,13 @@ def integrationFailures : IO (Array String) := do
   let overrideCfg : ServeConfig :=
     { headers := #[{ path := "/", set := #[("Cache-Control", "max-age=99")] }] }
   let overrideHandler := mkHandler overrideCfg mounts
+  -- Further configurations exercise CORS, redirects, listings, and the trailing-slash toggle.
+  let corsHandler := mkHandler { cors := true } mounts
+  let redirectHandler :=
+    mkHandler { redirects := #[{ fromPath := "/old", toPath := "/new" }] } mounts
+  let noListingHandler := mkHandler { directoryListing := false } mounts
+  let noSlashHandler := mkHandler { trailingSlashRedirect := false } mounts
+  let followHandler := mkHandler { followSymlinksOutsideRoot := true } mounts
   let check (name : String) (raw : String) (pred : String → Bool) :
       StateT (Array String) IO Unit := do
     unless pred (← runRequest handler raw) do modify (·.push name)
@@ -265,6 +306,66 @@ def integrationFailures : IO (Array String) := do
     unless (over.toLower.splitOn "cache-control: max-age=99").length == 2
         && (over.toLower.splitOn "cache-control: no-cache").length == 1 do
       modify (·.push "custom header override")
+    -- A directory without an index file is served as a generated HTML listing of its entries.
+    IO.FS.createDirAll (root / "listing")
+    IO.FS.writeFile (root / "listing" / "note.txt") "hi"
+    check "directory listing" (get "/listing/") fun r =>
+      r.startsWith "HTTP/1.1 200" && (r.splitOn "Index of").length > 1 && (r.splitOn "note.txt").length > 1
+    -- With listings disabled, the same directory is refused.
+    unless (← runRequest noListingHandler (get "/listing/")).startsWith "HTTP/1.1 403" do
+      modify (·.push "no-listing 403")
+    -- A directory requested without a trailing slash redirects to add one.
+    check "trailing slash redirect" (get "/listing") fun r =>
+      r.startsWith "HTTP/1.1 301" && (r.toLower.splitOn "location: /listing/").length == 2
+    -- With the redirect disabled, the directory is served in place.
+    unless (← runRequest noSlashHandler (get "/listing")).startsWith "HTTP/1.1 200" do
+      modify (·.push "no-trailing-slash serves in place")
+    -- A configured redirect rule returns a 301 whose location carries the path beneath the prefix.
+    let red ← runRequest redirectHandler (get "/old/page")
+    unless red.startsWith "HTTP/1.1 301" && (red.toLower.splitOn "location: /new/page").length == 2 do
+      modify (·.push "redirect rule")
+    -- CORS: a preflight is answered with 204, and a GET carries the cross-origin header.
+    let pre ← runRequest corsHandler "OPTIONS / HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n"
+    unless pre.startsWith "HTTP/1.1 204"
+        && (pre.toLower.splitOn "access-control-allow-methods").length > 1 do
+      modify (·.push "cors preflight")
+    unless ((← runRequest corsHandler (get "/data.txt")).toLower.splitOn "access-control-allow-origin: *").length > 1 do
+      modify (·.push "cors get header")
+    -- Without CORS, OPTIONS is not allowed.
+    unless (← runRequest handler "OPTIONS / HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n").startsWith "HTTP/1.1 405" do
+      modify (·.push "options 405")
+    -- A Range request returns the requested slice with 206 and a Content-Range header.
+    let ranged ← runRequest handler "GET /data.txt HTTP/1.1\r\nHost: x\r\nRange: bytes=2-5\r\nConnection: close\r\n\r\n"
+    unless ranged.startsWith "HTTP/1.1 206"
+        && (ranged.toLower.splitOn "content-range: bytes 2-5/10").length == 2
+        && (ranged.splitOn "2345").length > 1 do
+      modify (·.push "range 206")
+    -- An unsatisfiable range is rejected with 416.
+    unless (← runRequest handler "GET /data.txt HTTP/1.1\r\nHost: x\r\nRange: bytes=50-60\r\nConnection: close\r\n\r\n").startsWith "HTTP/1.1 416" do
+      modify (·.push "range 416")
+    -- Relaxing symlink confinement still does not permit `..` to climb above the mount.
+    let escaped ← runRequest followHandler (get "/%2e%2e/secret.txt")
+    unless !escaped.startsWith "HTTP/1.1 200" && (escaped.splitOn "TOPSECRET").length == 1 do
+      modify (·.push "follow-symlinks still confines traversal")
+    -- A complete configuration parses into ports, mounts, redirects, and headers.
+    let goodConfig :=
+      "port = 4000\n[[mounts]]\npath = \"/api\"\ndir = \"out\"\n" ++
+        "[[redirects]]\nfrom = \"/old\"\nto = \"/new\"\nstatus = 302\n" ++
+        "[[headers]]\npath = \"/\"\nset = { \"X-Frame-Options\" = \"DENY\" }"
+    match ← (parseServeConfig goodConfig).toBaseIO with
+    | .error _ => modify (·.push "valid config rejected")
+    | .ok cfg =>
+      unless cfg.port.toNat == 4000 && cfg.mounts.size == 1
+          && cfg.redirects.any (·.status == .found) && cfg.headers.size == 1 do
+        modify (·.push "valid config fields")
+    -- An unknown top-level key is rejected.
+    match ← (parseServeConfig "nonsense = 1").toBaseIO with
+    | .ok _ => modify (·.push "unknown key accepted")
+    | .error _ => pure ()
+    -- A status that is not a redirect code is rejected.
+    match ← (parseServeConfig "[[redirects]]\nfrom = \"/a\"\nto = \"/b\"\nstatus = 404").toBaseIO with
+    | .ok _ => modify (·.push "bad redirect status accepted")
+    | .error _ => pure ()
     -- An invalid header name in the config is rejected when the file is parsed.
     let badConfig := "[[headers]]\npath = \"/\"\nset = { \"bad name\" = \"x\" }"
     match ← (parseServeConfig badConfig).toBaseIO with
