@@ -64,7 +64,6 @@ inductive RangeResult where
   | unsatisfiable
 deriving Repr, BEq, Inhabited
 
-
 /--
 Interprets a single-range {lit}`Range` header value against a content size of {name}`size` bytes.
 
@@ -97,9 +96,7 @@ def parseRange (header : String) (size : Nat) : RangeResult := Id.run do
         if stop < start then return .unsatisfiable else return .range start stop
   | _ => return .full
 
-/--
-The ETag for a file's contents, including surrounding quotes.
--/
+/-- The ETag for a file's contents, including surrounding quotes. -/
 def etag (bytes : ByteArray) : String :=
   -- The validator follows the contents rather than the modification time, so rebuilding the site
   -- without changing a file still revalidates as unchanged.
@@ -248,7 +245,7 @@ def respondBytes (status : Status) (hdrs : Array (String × String))
 
 /--
 Builds a response with the given headers and a declared content length of {name}`size`, but no body
-bytes. The body is never produced, so the content is not read.
+bytes.
 -/
 def respondHead (status : Status) (hdrs : Array (String × String)) (size : Nat) :
     Async (Response Body.Any) := do
@@ -260,20 +257,41 @@ def respondHead (status : Status) (hdrs : Array (String × String)) (size : Nat)
 def header? (req : Request Body.Stream) (name : String) : Option String :=
   (req.line.headers.get? (Header.Name.ofString! name)).map toString
 
+/-- The response data for a file. -/
+structure FileResponse where
+  /-- The contents of the file -/
+  bytes : ByteArray
+  /--
+  The headers to return, including the {lit}`ETag` and {lit}`Last-Modified` headers along with any provided by the framework.
+  -/
+  headers : Array (String × String)
+  /--
+  Whether the {lit}`ETag` and {lit}`Last-Modified` headers show that the client's cached copy is already current.
+  -/
+  notModified : Bool
+
+/--
+Reads a file and the information every response to a request for it shares.
+-/
+def fileResponseState (req : Request Body.Stream) (file : System.FilePath)
+    (policy : Array (String × String)) : Async FileResponse := do
+  let bytes ← IO.FS.readBinFile file
+  let md ← file.metadata
+  let etagVal := etag bytes
+  let lastMod := httpDate md.modified
+  let commonHdrs := #[("ETag", etagVal), ("Last-Modified", lastMod)] ++ policy
+  let notModified :=
+    header? req "if-none-match" == some etagVal || header? req "if-modified-since" == some lastMod
+  return { bytes, headers := commonHdrs, notModified }
+
 /--
 Serves a single file, applying caching, conditional requests, and ranges. The {name}`policy`
 headers are added to every response.
 -/
 def serveFile (req : Request Body.Stream) (file : System.FilePath)
     (policy : Array (String × String)) : Async (Response Body.Any) := do
-  let bytes ← IO.FS.readBinFile file
-  let md ← file.metadata
-  let etagVal := etag bytes
-  let lastMod := httpDate md.modified
-  let commonHdrs := #[("ETag", etagVal), ("Last-Modified", lastMod)] ++ policy
-  let inm := header? req "if-none-match"
-  let ims := header? req "if-modified-since"
-  if inm == some etagVal || ims == some lastMod then
+  let { bytes, headers := commonHdrs, notModified } ← fileResponseState req file policy
+  if notModified then
     respondEmpty .notModified commonHdrs
   else
     let fileHdrs :=
@@ -296,12 +314,9 @@ the body.
 -/
 def serveHead (req : Request Body.Stream) (file : System.FilePath)
     (policy : Array (String × String)) : Async (Response Body.Any) := do
-  let bytes ← IO.FS.readBinFile file
-  let md ← file.metadata
-  let etagVal := etag bytes
-  let lastMod := httpDate md.modified
-  let commonHdrs := #[("ETag", etagVal), ("Last-Modified", lastMod)] ++ policy
-  if header? req "if-none-match" == some etagVal || header? req "if-modified-since" == some lastMod then
+  -- The file is read in full because the ETag follows its contents.
+  let { bytes, headers := commonHdrs, notModified } ← fileResponseState req file policy
+  if notModified then
     respondEmpty .notModified commonHdrs
   else
     let hdrs := #[("Content-Type", contentTypeForPath file), ("Accept-Ranges", "bytes")] ++ commonHdrs
@@ -433,9 +448,7 @@ def handleRequest (cfg : ServeConfig) (mounts : Array ResolvedMount)
 
 /-- Builds the stateless handler for a configuration and its resolved mounts. -/
 def mkHandler (cfg : ServeConfig) (mounts : Array ResolvedMount) : Server.StatelessHandler :=
-  Server.Handler.ofFn fun req => do
-    let r ← handleRequest cfg mounts req
-    return r
+  Server.Handler.ofFn fun req => handleRequest cfg mounts req
 
 /-- The number of consecutive ports to try, starting from the requested one. -/
 def portScanCount : Nat := 50
