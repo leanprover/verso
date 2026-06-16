@@ -199,11 +199,13 @@ structure ResolvedMount where
   root : System.FilePath
 deriving Repr, Inhabited
 
-/-- Whether {name}`real` lies within {name}`root` (equal to it or beneath it). -/
+/--
+Whether {name}`real` lies within {name}`root` (equal to it or beneath it).
+-/
 def isWithin (root real : System.FilePath) : Bool :=
-  let r := root.toString
-  let p := real.toString
-  p == r || p.startsWith (r ++ "/")
+  -- The comparison is by path component, so it holds on platforms whose separator is not `/` and is
+  -- not fooled by a sibling whose name extends the root's.
+  root.components.isPrefixOf real.components
 
 /-- Formats a filesystem modification time as an HTTP date. -/
 def httpDate (t : IO.FS.SystemTime) : String :=

@@ -125,6 +125,10 @@ def units : List (String × Bool) := [
   ("range malformed end", parseRange "bytes=5-x" 100 == .full),
   ("range malformed start", parseRange "bytes=x-5" 100 == .full),
   ("range both empty", parseRange "bytes=-" 100 == .full),
+  -- confinement is by path component, so a sibling whose name extends the root is outside it
+  ("within self", isWithin "/site" "/site"),
+  ("within child", isWithin "/site" "/site/index.html"),
+  ("within rejects sibling", !isWithin "/site" "/sitething"),
   -- etag
   ("etag stable", etag "abc".toUTF8 == etag "abc".toUTF8),
   ("etag distinct", etag "abc".toUTF8 != etag "abd".toUTF8),
@@ -384,6 +388,16 @@ def integrationFailures : IO (Array String) := do
     let badConfig := "[[headers]]\npath = \"/\"\nset = { \"bad name\" = \"x\" }"
     match ← (parseServeConfig badConfig).toBaseIO with
     | .ok _ => modify (·.push "invalid header name accepted")
+    | .error _ => pure ()
+    -- Entries missing a required field are rejected rather than filled with a silent default.
+    match ← (parseServeConfig "[[mounts]]\npath = \"/api\"").toBaseIO with
+    | .ok _ => modify (·.push "mount without dir accepted")
+    | .error _ => pure ()
+    match ← (parseServeConfig "[[redirects]]\nfrom = \"/old\"").toBaseIO with
+    | .ok _ => modify (·.push "redirect without target accepted")
+    | .error _ => pure ()
+    match ← (parseServeConfig "[[headers]]\npath = \"/\"").toBaseIO with
+    | .ok _ => modify (·.push "header without set accepted")
     | .error _ => pure ()
   IO.FS.removeDirAll tmp
   return fails

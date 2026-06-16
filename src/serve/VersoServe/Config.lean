@@ -156,9 +156,9 @@ def rejectUnknownKeys (context : String) (known : List Lean.Name) (t : Table) : 
 def decodeMount (v : Value) : EDecodeM Mount := do
   let t ← v.decodeTable
   rejectUnknownKeys "key in a [[mounts]] entry" [`path, `dir] t
-  let path ← t.decode? (α := String) `path
-  let dir ← t.decode? (α := String) `dir
-  return { urlPrefix := normalizePrefix (path.getD "/"), dir := dir.getD "." }
+  let path ← t.decode (α := String) `path
+  let dir ← t.decode (α := String) `dir
+  return { urlPrefix := normalizePrefix path, dir := dir }
 
 instance : DecodeToml Mount := ⟨decodeMount⟩
 
@@ -166,8 +166,8 @@ instance : DecodeToml Mount := ⟨decodeMount⟩
 def decodeRedirect (v : Value) : EDecodeM RedirectRule := do
   let t ← v.decodeTable
   rejectUnknownKeys "key in a [[redirects]] entry" [`«from», `to, `status] t
-  let fromPath ← t.decode? (α := String) `«from»
-  let toPath ← t.decode? (α := String) `to
+  let fromPath ← t.decode (α := String) `«from»
+  let toPath ← t.decode (α := String) `to
   let statusNum ← t.decode? (α := Nat) `status
   let status ← match statusNum with
     | none => pure RedirectStatus.movedPermanently
@@ -177,20 +177,20 @@ def decodeRedirect (v : Value) : EDecodeM RedirectRule := do
         let ref := (t.find? `status).map (·.ref) |>.getD .missing
         throwDecodeErrorAt ref s!"redirect status must be one of 301, 302, 303, 307, 308; got {n}"
   return {
-    fromPath := normalizePrefix (fromPath.getD "/"),
-    toPath := toPath.getD "/",
+    fromPath := normalizePrefix fromPath,
+    toPath := toPath,
     status
   }
 
 instance : DecodeToml RedirectRule := ⟨decodeRedirect⟩
 
 /--
-Decodes an inline `set = { ... }` table into name and value pairs, rejecting names and values that
-are not valid HTTP header fields.
+Decodes an inline {lit}`set = { ... }` table into name and value pairs, rejecting names and values
+that are not valid HTTP header fields. A missing {lit}`set` is reported at {name}`ref`.
 -/
-def decodeHeaderSet (t : Table) : EDecodeM (Array (String × String)) := do
+def decodeHeaderSet (t : Table) (ref : Lean.Syntax) : EDecodeM (Array (String × String)) := do
   match t.find? `set with
-  | none => return #[]
+  | none => throwDecodeErrorAt ref "missing required key: 'set'"
   | some (.table' _ setTable) =>
     setTable.items.foldlM (init := #[]) fun acc (k, v) => do
       let name := k.toString (escape := false)
@@ -207,8 +207,8 @@ def decodeHeaderSet (t : Table) : EDecodeM (Array (String × String)) := do
 def decodeHeaderRule (v : Value) : EDecodeM HeaderRule := do
   let t ← v.decodeTable
   rejectUnknownKeys "key in a [[headers]] entry" [`path, `set] t
-  let path ← t.decode? (α := String) `path
-  return { path := normalizePrefix (path.getD "/"), set := ← decodeHeaderSet t }
+  let path ← t.decode (α := String) `path
+  return { path := normalizePrefix path, set := ← decodeHeaderSet t v.ref }
 
 instance : DecodeToml HeaderRule := ⟨decodeHeaderRule⟩
 
