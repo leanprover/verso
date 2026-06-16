@@ -122,6 +122,9 @@ def units : List (String × Bool) := [
   ("range reversed", parseRange "bytes=5-2" 100 == .unsatisfiable),
   ("range multi", parseRange "bytes=0-9,20-30" 100 == .full),
   ("range absent", parseRange "items=0-9" 100 == .full),
+  ("range malformed end", parseRange "bytes=5-x" 100 == .full),
+  ("range malformed start", parseRange "bytes=x-5" 100 == .full),
+  ("range both empty", parseRange "bytes=-" 100 == .full),
   -- etag
   ("etag stable", etag "abc".toUTF8 == etag "abc".toUTF8),
   ("etag distinct", etag "abc".toUTF8 != etag "abd".toUTF8),

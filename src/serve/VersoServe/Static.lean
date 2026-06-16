@@ -64,6 +64,22 @@ inductive RangeResult where
   | unsatisfiable
 deriving Repr, BEq, Inhabited
 
+/-- One side of a single-range {lit}`Range` specification. -/
+inductive RangeEnd where
+  /-- The side was omitted, as in the open form {lit}`bytes=start-` or suffix form {lit}`bytes=-count`. -/
+  | empty
+  /-- The side named a byte offset. -/
+  | ofNat (n : Nat)
+  /-- The side was present but not a number. -/
+  | malformed
+deriving Repr, BEq, Inhabited
+
+/-- Classifies one side of a {lit}`Range` specification. -/
+def RangeEnd.ofSlice (s : String.Slice) : RangeEnd :=
+  if s.isEmpty then .empty
+  else if let some n := s.toNat? then .ofNat n
+  else .malformed
+
 /--
 Interprets a single-range {lit}`Range` header value against a content size of {name}`size` bytes.
 
@@ -80,21 +96,25 @@ def parseRange (header : String) (size : Nat) : RangeResult := Id.run do
   if spec.contains ',' then return .full
   match spec.split "-" |>.toArray with
   | #[a, b] =>
-    if a.isEmpty then
-      match b.toNat? with
-      | some n =>
-        if n == 0 then return .unsatisfiable
-        let start := if n >= size then 0 else size - n
-        return .range start (size - 1)
-      | none => return .full
-    else
-      match a.toNat? with
-      | none => return .full
-      | some start =>
-        if start >= size then return .unsatisfiable
-        let stop := if b.isEmpty then size - 1 else min (b.toNat?.getD (size - 1)) (size - 1)
-        if stop < start then return .unsatisfiable else return .range start stop
+    return getRange (RangeEnd.ofSlice a) (RangeEnd.ofSlice b)
   | _ => return .full
+where
+  getRange : (start stop : RangeEnd) → RangeResult
+    -- Suffix form `bytes=-count`: the last `count` bytes.
+  | .empty, .ofNat n =>
+    if n == 0 then .unsatisfiable
+    else .range (if n >= size then 0 else size - n) (size - 1)
+  -- Open form `bytes=start-`: from `start` to the end of the content.
+  | .ofNat start, .empty =>
+    if start >= size then .unsatisfiable else .range start (size - 1)
+  -- Closed form `bytes=start-stop`.
+  | .ofNat start, .ofNat stop =>
+    if start >= size then .unsatisfiable
+    else
+      let stop := min stop (size - 1)
+      if stop < start then .unsatisfiable else .range start stop
+  -- Both sides empty, or a non-numeric side: unparseable.
+  | _, _ => .full
 
 /-- The ETag for a file's contents, including surrounding quotes. -/
 def etag (bytes : ByteArray) : String :=
