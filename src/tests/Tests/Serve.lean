@@ -77,9 +77,12 @@ def resolvedPrefix (mounts : Array Mount) (path : String) : Option String :=
 /-- The deterministic unit checks, paired with display names. -/
 def units : List (String × Bool) := [
   -- MIME
-  ("mime html", mimeType? "HTML" == some "text/html"),
+  ("mime html", mimeType? "HTML" == some ⟨"text", "html"⟩),
   ("mime css charset", contentTypeForPath "a.css" == "text/css; charset=utf-8"),
-  ("mime png case", contentTypeForPath "A.PNG" == "image/png"),
+  ("mime svg charset", contentTypeForPath "a.svg" == "image/svg+xml; charset=utf-8"),
+  ("mime json charset", contentTypeForPath "a.json" == "application/json; charset=utf-8"),
+  ("mime xml charset", contentTypeForPath "a.xml" == "application/xml; charset=utf-8"),
+  ("mime png no charset", contentTypeForPath "A.PNG" == "image/png"),
   ("mime unknown", contentTypeForPath "a.xyz" == "application/octet-stream"),
   -- prefix normalization
   ("normalize adds slash", normalizePrefix "foo" == "/foo"),
@@ -125,6 +128,8 @@ def units : List (String × Bool) := [
   ("range malformed end", parseRange "bytes=5-x" 100 == .full),
   ("range malformed start", parseRange "bytes=x-5" 100 == .full),
   ("range both empty", parseRange "bytes=-" 100 == .full),
+  ("range oversized header", parseRange ("bytes=0-" ++ String.ofList (List.replicate 300 '0')) 100 == .full),
+  ("range zero size", parseRange "bytes=0-9" 0 == .unsatisfiable),
   -- confinement is by path component, so a sibling whose name extends the root is outside it
   ("within self", isWithin "/site" "/site"),
   ("within child", isWithin "/site" "/site/index.html"),
@@ -225,6 +230,9 @@ def units : List (String × Bool) := [
       |>.map (·.1.toNat) |>.isEqSome 8002),
   ("port scan all taken",
     (Id.run <| firstAvailable (m := Id) (fun (_ : UInt16) => (none : Option UInt16)) 8000).isNone),
+  -- scanning never wraps past the maximum port: offsets above 65535 are skipped, not retried
+  ("port scan stops at max",
+    (Id.run <| firstAvailable (m := Id) (fun p => if p.toNat == 65535 then none else some p) 65535).isNone),
 ]
 
 /-! ## In-process integration (Mock transport) -/
@@ -403,6 +411,44 @@ def integrationFailures : IO (Array String) := do
     match ← (parseServeConfig "[[headers]]\npath = \"/\"").toBaseIO with
     | .ok _ => modify (·.push "header without set accepted")
     | .error _ => pure ()
+    -- An empty or whitespace-only config behaves the same as no file: defaults throughout.
+    for blank in ["", "   \n  \t\n"] do
+      match ← (parseServeConfig blank).toBaseIO with
+      | .error _ => modify (·.push "empty config rejected")
+      | .ok cfg =>
+        unless cfg.port.toNat == 8000 && cfg.mounts.isEmpty && cfg.directoryListing
+            && cfg.trailingSlashRedirect && !cfg.cors do
+          modify (·.push "empty config not default")
+    -- Every unknown key in an entry is reported, not only the first.
+    let twoBad := "[[mounts]]\npath = \"/\"\ndir = \"d\"\nbad1 = \"x\"\nbad2 = \"y\""
+    match ← (parseServeConfig twoBad).toBaseIO with
+    | .ok _ => modify (·.push "unknown entry keys accepted")
+    | .error e =>
+      let msg := toString e
+      unless (msg.splitOn "bad1").length > 1 && (msg.splitOn "bad2").length > 1 do
+        modify (·.push "not all unknown entry keys reported")
+    -- Mount directories in a config file are resolved relative to the file's own directory.
+    let cfgDir := tmp / "proj"
+    IO.FS.createDirAll cfgDir
+    IO.FS.writeFile (cfgDir / "serve.toml") "[[mounts]]\npath = \"/\"\ndir = \"site\""
+    let loaded ← loadServeConfig (cfgDir / "serve.toml")
+    unless loaded.mounts.size == 1 && loaded.mounts[0]!.dir == cfgDir / "site" do
+      modify (·.push "config mount not rebased to config dir")
+    -- An explicit config path that is missing is fatal; an existing one is returned.
+    match ← (resolveConfigFile { configPath := some (tmp / "nope.toml") }).toBaseIO with
+    | .ok _ => modify (·.push "missing config path accepted")
+    | .error _ => pure ()
+    match ← (resolveConfigFile { configPath := some (cfgDir / "serve.toml") }).toBaseIO with
+    | .ok (some _) => pure ()
+    | _ => modify (·.push "existing config path not found")
+    -- A mount whose directory is missing is fatal; an existing one resolves to an absolute root.
+    match ← (resolveMounts #[{ urlPrefix := "/", dir := tmp / "absent" }]).toBaseIO with
+    | .ok _ => modify (·.push "missing mount dir accepted")
+    | .error _ => pure ()
+    match ← (resolveMounts #[{ urlPrefix := "/", dir := root }]).toBaseIO with
+    | .ok rms =>
+      unless rms.size == 1 && rms[0]!.root.isAbsolute do modify (·.push "mount dir not resolved")
+    | .error _ => modify (·.push "existing mount dir rejected")
   IO.FS.removeDirAll tmp
   return fails
 

@@ -118,8 +118,8 @@ where
 
 /-- The ETag for a file's contents, including surrounding quotes. -/
 def etag (bytes : ByteArray) : String :=
-  -- The validator follows the contents rather than the modification time, so rebuilding the site
-  -- without changing a file still revalidates as unchanged.
+  -- The validator is derived from the file contents, so rebuilding the site without changing a
+  -- file still revalidates as unchanged.
   "\"" ++ toString (hash bytes) ++ "\""
 
 /--
@@ -168,18 +168,30 @@ def percentEncode (s : String) : String :=
     if unreserved then acc.push (Char.ofNat n)
     else acc ++ s!"%{hexDigit (n / 16)}{hexDigit (n % 16)}"
 
+/-- The stylesheet inlined into every generated directory listing. -/
+def listingCss : String := include_str "listing.css"
+
 /-- Renders a directory listing as an HTML page. -/
 def renderListing (urlPath : String) (entries : Array (String × Bool)) : String :=
+  let row := fun (cls href display : String) =>
+    s!"<li class=\"{cls}\"><a href=\"{htmlEscape href}\">{htmlEscape display}</a></li>\n"
+  let parent := if urlPath == "/" then "" else row "up" "../" "Parent directory"
   let rows := entries.foldl (init := "") fun acc (name, isDir) =>
     let suffix := if isDir then "/" else ""
     -- The link text shows the name; the href percent-encodes it so `?`, `#`, spaces, and the like
     -- stay part of the path rather than becoming URL syntax.
     let href := percentEncode name ++ suffix
     let display := name ++ suffix
-    acc ++ s!"<li><a href=\"{htmlEscape href}\">{htmlEscape display}</a></li>\n"
-  "<!DOCTYPE html>\n" ++
-    s!"<html><head><meta charset=\"utf-8\"><title>Index of {htmlEscape urlPath}</title></head>" ++
-    s!"<body><h1>Index of {htmlEscape urlPath}</h1><ul>\n{rows}</ul></body></html>\n"
+    acc ++ row (if isDir then "dir" else "file") href display
+  "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n" ++
+    "<meta charset=\"utf-8\">\n" ++
+    "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n" ++
+    s!"<title>Index of {htmlEscape urlPath}</title>\n" ++
+    s!"<style>{listingCss}</style>\n" ++
+    "</head>\n<body>\n<main>\n" ++
+    s!"<h1><span class=\"label\">Index of</span>{htmlEscape urlPath}</h1>\n" ++
+    s!"<ul>\n{parent}{rows}</ul>\n" ++
+    "</main>\n</body>\n</html>\n"
 
 /-- The HTTP {name}`Status` for a redirect rule. -/
 def RedirectStatus.toStatus : RedirectStatus → Status
@@ -198,6 +210,18 @@ structure ResolvedMount where
   /-- The absolute, symlink-resolved directory served under {name}`ResolvedMount.urlPrefix`. -/
   root : System.FilePath
 deriving Repr, Inhabited
+
+/--
+Resolves each mount's directory to an absolute path.
+
+A directory that does not exist is a fatal error naming the offending mount. The resolved roots form
+the confinement set used for symlink and traversal checks.
+-/
+def resolveMounts (mounts : Array Mount) : IO (Array ResolvedMount) :=
+  mounts.mapM fun m => do
+    unless ← m.dir.pathExists do
+      throw <| IO.userError s!"Mount directory not found: {m.dir} (serving {m.urlPrefix})"
+    return { urlPrefix := m.urlPrefix, root := ← IO.FS.realPath m.dir }
 
 /--
 Whether {name}`real` lies within {name}`root` (equal to it or beneath it).
@@ -225,8 +249,8 @@ def corsHeaders (cfg : ServeConfig) : Array (String × String) :=
 /--
 Collapses repeated header names so the last value for each name wins, matched case-insensitively.
 
-Header names are emitted at the position of their final occurrence, so a custom rule that sets a
-header already present replaces it rather than adding a second copy.
+Each header name appears once, at the position of its final occurrence, so a custom rule that sets a
+header already present updates the existing one in place.
 -/
 def dedupHeaders (hdrs : Array (String × String)) : Array (String × String) := Id.run do
   -- Keyed by lowercased name; the stored index is the position of the name's last occurrence.
@@ -284,11 +308,13 @@ structure FileResponse where
   /-- The contents of the file -/
   bytes : ByteArray
   /--
-  The headers to return, including the {lit}`ETag` and {lit}`Last-Modified` headers along with any provided by the framework.
+  The headers to return, including the {lit}`ETag` and {lit}`Last-Modified` headers along with any
+  provided by the framework.
   -/
   headers : Array (String × String)
   /--
-  Whether the {lit}`ETag` and {lit}`Last-Modified` headers show that the client's cached copy is already current.
+  Whether the {lit}`ETag` and {lit}`Last-Modified` headers show that the client's cached copy is
+  already current.
   -/
   notModified : Bool
 

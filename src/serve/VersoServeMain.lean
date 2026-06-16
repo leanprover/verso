@@ -24,33 +24,6 @@ def methodName : Method → String
   | .patch => "PATCH"
   | _ => "?"
 
-/--
-Determines which config file to load.
-
-An explicit {lit}`--config` path that does not exist is a fatal error. With no flag, an existing
-{lit}`serve.toml` in the current directory is used, and otherwise no file is loaded.
--/
-def resolveConfigFile (cli : CliArgs) : IO (Option System.FilePath) := do
-  match cli.configPath with
-  | some p =>
-    if ← p.pathExists then return some p
-    else throw <| IO.userError s!"Config file not found: {p}"
-  | none =>
-    let default : System.FilePath := "serve.toml"
-    if ← default.pathExists then return some default else return none
-
-/--
-Resolves each mount's directory to an absolute path.
-
-A directory that does not exist is a fatal error naming the offending mount. The resolved roots form
-the confinement set used for symlink and traversal checks.
--/
-def resolveMounts (mounts : Array Mount) : IO (Array ResolvedMount) :=
-  mounts.mapM fun m => do
-    unless ← m.dir.pathExists do
-      throw <| IO.userError s!"Mount directory not found: {m.dir} (serving {m.urlPrefix})"
-    return { urlPrefix := m.urlPrefix, root := ← IO.FS.realPath m.dir }
-
 /-- Prints the startup banner, including the always-present local-only notice. -/
 def printBanner (config : ServeConfig) (mounts : Array ResolvedMount) (port : UInt16) : IO Unit := do
   IO.println "Verso HTTP server. This is for local writing and development only; it is not designed for production use."

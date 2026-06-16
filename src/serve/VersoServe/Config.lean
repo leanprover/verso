@@ -146,11 +146,13 @@ def logUnknownKeys (context : String) (known : List Lean.Name) (t : Table) : Dec
     unless known.contains k do
       logDecodeErrorAt v.ref s!"unknown {context}: '{k.toString (escape := false)}'"
 
-/-- Fails the decode at the first key of {name}`t` outside the given set. -/
-def rejectUnknownKeys (context : String) (known : List Lean.Name) (t : Table) : EDecodeM Unit := do
-  for (k, v) in t.items do
-    unless known.contains k do
-      throwDecodeErrorAt v.ref s!"unknown {context}: '{k.toString (escape := false)}'"
+/-- Reports every key of {name}`t` outside {name}`known`. It is an error if any are present. -/
+def rejectUnknownKeys (context : String) (known : List Lean.Name) (t : Table) : EDecodeM Unit :=
+  fun errors =>
+    let unknown := t.items.filter fun (k, _) => !known.contains k
+    let errors := unknown.foldl (init := errors) fun errors (k, v) =>
+      errors.push { ref := v.ref, msg := s!"unknown {context}: '{k.toString (escape := false)}'" }
+    if unknown.isEmpty then .ok () errors else .error () errors
 
 /-- Decodes a {lit}`[[mounts]]` entry into a {name}`Mount`. -/
 def decodeMount (v : Value) : EDecodeM Mount := do
@@ -389,3 +391,18 @@ def ServeConfig.withCli (config : ServeConfig) (cli : CliArgs) : ServeConfig :=
     | none => config
   if config.mounts.any (fun (m : Mount) => m.urlPrefix == "/") then config
   else { config with mounts := config.mounts.push { urlPrefix := "/", dir := "." } }
+
+/--
+Determines which config file to load.
+
+An explicit {lit}`--config` path that does not exist is a fatal error. With no {lit}`--config`, an
+existing {lit}`serve.toml` in the current directory is used. Otherwise, no file is loaded.
+-/
+def resolveConfigFile (cli : CliArgs) : IO (Option System.FilePath) := do
+  match cli.configPath with
+  | some p =>
+    if ← p.pathExists then return some p
+    else throw <| IO.userError s!"Config file not found: {p}"
+  | none =>
+    let default : System.FilePath := "serve.toml"
+    if ← default.pathExists then return some default else return none
