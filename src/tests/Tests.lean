@@ -13,6 +13,7 @@ import Tests.DocTerm
 import Tests.HighlightedToTeX
 import Tests.Html
 import Tests.HtmlEntities
+import Tests.InlineStringPositions
 import Tests.Integration
 import Tests.Integration.SampleDoc
 import Tests.Integration.CodeContent

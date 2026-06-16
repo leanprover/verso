@@ -983,15 +983,16 @@ end Verso.Parser
 
 namespace Verso.Doc.Concrete
 open Verso.Parser
+open Verso.SyntaxUtils
 open Lean Elab Term
 
-public def stringToInlines [Monad m] [MonadError m] [MonadEnv m] [MonadQuotation m] (s : StrLit) : m (Array Syntax) :=
+public def stringToInlines [Monad m] [MonadFileMap m] [MonadError m] [MonadEnv m] [MonadQuotation m] (s : StrLit) : m (Array Syntax) :=
   withRef s do
-    return (← textLine.parseString s.getString).getArgs
+    return (← parseMarkupStrLit textLine s).getArgs
 
 open Lean Elab Term in
-public def stringToBlocks [Monad m] [MonadError m] [MonadEnv m] [MonadQuotation m] (s : StrLit) : m (Array Syntax) :=
+public def stringToBlocks [Monad m] [MonadFileMap m] [MonadError m] [MonadEnv m] [MonadQuotation m] (s : StrLit) : m (Array Syntax) :=
   withRef s do
-    return (← (blocks {}).parseString s.getString).getArgs
+    return (← parseMarkupStrLit (blocks {}) s).getArgs
 
 end Verso.Doc.Concrete
