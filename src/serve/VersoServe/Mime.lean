@@ -99,3 +99,30 @@ def contentTypeForPath (path : System.FilePath) : String :=
   path.extension.bind mimeType?
     |>.map MimeType.contentType
     |>.getD "application/octet-stream"
+
+/--
+Whether a file's contents look like UTF-8 text rather than binary data.
+
+The contents are text when they are valid UTF-8 and contain no NUL byte, the strongest signal of
+binary content.
+-/
+def looksTextual (bytes : ByteArray) : Bool := Id.run do
+  for b in bytes do
+    if b == 0 then return false
+  return bytes.validateUTF8
+
+/--
+The {lit}`Content-Type` header value for a file whose contents are {name}`bytes`.
+
+If the extension is known, the type is selected accordingly. If the extension is not known, but the
+contents are valid UTF-8 and contain no null bytes, then the type is
+{lit}`text/plain; charset=utf-8`. Otherwise, the type is {lit}`application/octet-stream`.
+-/
+def contentTypeForFile (path : System.FilePath) (bytes : ByteArray) : String :=
+  if let some mime := path.extension.bind mimeType? then
+    mime.contentType
+  else if looksTextual bytes then
+    plainText.contentType
+  else "application/octet-stream"
+where
+  plainText : MimeType := ⟨"text", "plain"⟩

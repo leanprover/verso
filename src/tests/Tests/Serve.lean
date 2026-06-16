@@ -84,6 +84,12 @@ def units : List (String × Bool) := [
   ("mime xml charset", contentTypeForPath "a.xml" == "application/xml; charset=utf-8"),
   ("mime png no charset", contentTypeForPath "A.PNG" == "image/png"),
   ("mime unknown", contentTypeForPath "a.xyz" == "application/octet-stream"),
+  -- an unknown extension is sniffed from the contents, so a text script is shown rather than downloaded
+  ("sniff text script", contentTypeForFile "foo.sh" "#!/bin/sh\necho hi\n".toUTF8 == "text/plain; charset=utf-8"),
+  ("sniff binary octet-stream", contentTypeForFile "blob.xyz" (ByteArray.mk #[0x00, 0x01, 0x02]) == "application/octet-stream"),
+  ("sniff known extension wins", contentTypeForFile "page.html" (ByteArray.mk #[0x00]) == "text/html; charset=utf-8"),
+  ("looks textual utf-8", looksTextual "héllo".toUTF8),
+  ("looks binary on nul", !looksTextual (ByteArray.mk #[0x41, 0x00, 0x42])),
   -- prefix normalization
   ("normalize adds slash", normalizePrefix "foo" == "/foo"),
   ("normalize drops trailing", normalizePrefix "/foo/" == "/foo"),
@@ -303,6 +309,14 @@ def integrationFailures : IO (Array String) := do
     -- Path traversal: an encoded `..` must not escape the mount root or leak the sibling file.
     check "encoded traversal blocked" (get "/%2e%2e/secret.txt") fun r =>
       !r.startsWith "HTTP/1.1 200" && (r.splitOn "TOPSECRET").length == 1
+    -- An unknown extension is sniffed: a UTF-8 text script is served inline as text/plain.
+    IO.FS.writeFile (root / "script.sh") "#!/bin/sh\necho hi\n"
+    check "unknown text served inline" (get "/script.sh") fun r =>
+      r.startsWith "HTTP/1.1 200" && (r.toLower.splitOn "content-type: text/plain").length == 2
+    -- A binary file with an unknown extension stays application/octet-stream.
+    IO.FS.writeBinFile (root / "blob.xyz") (ByteArray.mk #[0x00, 0x01, 0x02, 0x00])
+    check "unknown binary octet-stream" (get "/blob.xyz") fun r =>
+      r.startsWith "HTTP/1.1 200" && (r.toLower.splitOn "content-type: application/octet-stream").length == 2
     -- A control character in the path (here CR LF, percent-encoded) is rejected with 400.
     check "control char rejected" (get "/foo%0d%0abar") (·.startsWith "HTTP/1.1 400")
     -- Files named in non-ASCII scripts are served when requested with their percent-encoded names.

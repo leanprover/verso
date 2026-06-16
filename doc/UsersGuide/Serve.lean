@@ -284,6 +284,8 @@ Because the `ETag` follows the contents, a rebuild that rewrites a file without 
 tag := "serve-behavior"
 %%%
 
+ * A file's `Content-Type` comes from its extension.
+  A file whose extension is unknown is served as `text/plain` when its contents are valid UTF-8 text, so text-like files open in the browser instead of downloading, and as `application/octet-stream` otherwise.
  * Directories are served by their `index.html` when one is present; otherwise a generated listing is shown unless listings are disabled, in which case the request is refused with `403 Forbidden`.
  * A request for a directory without a trailing slash is redirected to add one, so relative links resolve correctly. This can be turned off.
  * `Range` requests are supported, so media files can be sought and large files resumed.

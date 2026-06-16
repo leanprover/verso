@@ -343,7 +343,7 @@ def serveFile (req : Request Body.Stream) (file : System.FilePath)
     respondEmpty .notModified commonHdrs
   else
     let fileHdrs :=
-      #[("Content-Type", contentTypeForPath file), ("Accept-Ranges", "bytes")] ++ commonHdrs
+      #[("Content-Type", contentTypeForFile file bytes), ("Accept-Ranges", "bytes")] ++ commonHdrs
     match header? req "range" with
     | some rangeHeader =>
       match parseRange rangeHeader bytes.size with
@@ -367,7 +367,7 @@ def serveHead (req : Request Body.Stream) (file : System.FilePath)
   if notModified then
     respondEmpty .notModified commonHdrs
   else
-    let hdrs := #[("Content-Type", contentTypeForPath file), ("Accept-Ranges", "bytes")] ++ commonHdrs
+    let hdrs := #[("Content-Type", contentTypeForFile file bytes), ("Accept-Ranges", "bytes")] ++ commonHdrs
     respondHead .ok hdrs bytes.size
 
 /-- Serves an HTML listing of a directory's entries. The {name}`policy` headers are added. -/
