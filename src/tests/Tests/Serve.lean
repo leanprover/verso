@@ -384,6 +384,10 @@ def integrationFailures : IO (Array String) := do
     match ← (parseServeConfig "[[redirects]]\nfrom = \"/a\"\nto = \"/b\"\nstatus = 404").toBaseIO with
     | .ok _ => modify (·.push "bad redirect status accepted")
     | .error _ => pure ()
+    -- Redirect targets are emitted as Location headers, so invalid header values are rejected.
+    match ← (parseServeConfig "[[redirects]]\nfrom = \"/a\"\nto = \"/b\nX: y\"").toBaseIO with
+    | .ok _ => modify (·.push "invalid redirect target accepted")
+    | .error _ => pure ()
     -- An invalid header name in the config is rejected when the file is parsed.
     let badConfig := "[[headers]]\npath = \"/\"\nset = { \"bad name\" = \"x\" }"
     match ← (parseServeConfig badConfig).toBaseIO with

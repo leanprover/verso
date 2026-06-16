@@ -168,6 +168,9 @@ def decodeRedirect (v : Value) : EDecodeM RedirectRule := do
   rejectUnknownKeys "key in a [[redirects]] entry" [`«from», `to, `status] t
   let fromPath ← t.decode (α := String) `«from»
   let toPath ← t.decode (α := String) `to
+  unless (Std.Http.Header.Value.ofString? toPath).isSome do
+    let ref := (t.find? `to).map (·.ref) |>.getD .missing
+    throwDecodeErrorAt ref s!"invalid redirect target: {toPath.quote}"
   let statusNum ← t.decode? (α := Nat) `status
   let status ← match statusNum with
     | none => pure RedirectStatus.movedPermanently
