@@ -434,7 +434,6 @@ public def page
     (issueLink : Option String := none)
     (extraStylesheets : List String := [])
     (extraJsFiles : Array (String × Bool) := #[]) : Html :=
-  let relativeRoot := String.join <| "./" :: path.toList.map (fun _ => "../")
   let defer := #[("defer", "defer")]
   {{
     <html>
@@ -445,7 +444,7 @@ public def page
         <script>
           {{tocWidthPreloadJs}}
         </script>
-        <base href={{relativeRoot}}/>
+        <base href="/verso/view/"/>
         <meta charset="utf-8"/>
         <meta name="viewport" content="height=device-height, width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1"/>
         <title>{{textTitle}}</title>
