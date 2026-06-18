@@ -1355,7 +1355,7 @@ Some CSS frameworks customize details/summary in ways not compatible with Verso'
 "
 
 /--
-fetch highlighting data from `-verso-docs.json` (default behavior)
+fetch highlighting data from `-verso-docs.json` (default behavior for `highlightingJs`)
 -/
 public def fetchDocsJson : String :=
 "fetch(\"-verso-docs.json\").then((resp) => resp.json())"
