@@ -1364,7 +1364,7 @@ public def fetchDocsJson : String :=
 Given an await-able JavaScript expression for obtaining highlighting data,
 render highlights and hovers.
 -/
-public def highlightingJs (highlightJson : String := fetchDocsJson) : String :=
+public def highlightingJs (highlightJsonPromise : String := fetchDocsJson) : String :=
 "
 window.onload = async () => {
 
@@ -1440,7 +1440,7 @@ window.onload = async () => {
         }
     }
     // Add hovers
-    const versoDocData = await " ++ highlightJson ++ "
+    const versoDocData = await (" ++ highlightJsonPromise ++ ");
 
     function hideParentTooltips(element) {
       let parent = element.parentElement;
