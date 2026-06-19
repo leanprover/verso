@@ -16,6 +16,5 @@ open Lean
 @[match_pattern]
 private def versoModuleDocNameString : String := "the canonical document object name"
 
-
 public def docName (moduleName : Name) : Name :=
   id <| .str moduleName versoModuleDocNameString
