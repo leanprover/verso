@@ -19,5 +19,3 @@ private def versoModuleDocNameString : String := "the canonical document object 
 
 public def docName (moduleName : Name) : Name :=
   id <| .str moduleName versoModuleDocNameString
-
-#eval docName `Module
