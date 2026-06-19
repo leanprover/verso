@@ -473,7 +473,7 @@ partial def parseArgs : ArgParse m α → ExceptT (Array Doc.Arg × Exception) (
           | true => some val
           | false => val
       | .error e => throwThe (Array Doc.Arg × Exception) e
-    else match optional with
+    else match (dependent := true) optional with
       | true => Pure.pure none
       | false => throwThe (Array Doc.Arg × Exception) ((← get).remaining, .error (← getRef) m!"Named argument '{x}' ({vp.description}) not found")
   | .anyNamed x vp doc? => do

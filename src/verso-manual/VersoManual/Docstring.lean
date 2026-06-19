@@ -583,20 +583,19 @@ def inheritance.descr : BlockDescr where
     open Verso.Output Html in do
       let .ok (name, parents) := FromJson.fromJson? (α := Name × Array Block.Docstring.ParentInfo) info
         | do reportError "Failed to deserialize docstring structure inheritance data while generating HTML"; pure .empty
-      let parentRow ← do
-        if parents.isEmpty then pure .empty
-        else pure {{
-            <ul class="extends">
-              {{← parents.mapM fun parent => do
-                let filterId := s!"{parent.index}-{parent.name}-{name}"
-                pure {{
-                  <li>
-                    <input type="checkbox" id={{filterId}} data-parent-idx={{toString parent.index}}/>
-                    <label for={{filterId}}><code class="hl lean inline">{{← parent.parent.toHtml (g := Manual)}}</code></label>
-                  </li>}}
-              }}
-            </ul>
-          }}
+      if parents.isEmpty then pure .empty
+      else pure {{
+          <ul class="extends">
+            {{← parents.mapM fun parent => do
+              let filterId := s!"{parent.index}-{parent.name}-{name}"
+              pure {{
+                <li>
+                  <input type="checkbox" id={{filterId}} data-parent-idx={{toString parent.index}}/>
+                  <label for={{filterId}}><code class="hl lean inline">{{← parent.parent.toHtml (g := Manual)}}</code></label>
+                </li>}}
+            }}
+          </ul>
+        }}
 
 open Block.Docstring (Visibility) in
 @[block_extension Block.fieldSignature]
