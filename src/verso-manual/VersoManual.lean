@@ -1068,6 +1068,7 @@ open Lean
 inductive VersoDocumentData where
   | success : String → VersoDocumentData
   | errors : Array String → VersoDocumentData
+  | noDoc : VersoDocumentData
 deriving ToJson, FromJson
 
 initialize versoDocumentExt : EnvExtension (Option VersoDocumentData) ←
@@ -1128,10 +1129,10 @@ unsafe def liveDocFinalizer : CommandElabM Unit := do
 def _root_.Verso.getLiveDocument (_ : Unit) : RequestM (RequestTask VersoDocumentData) := do
   let doc ← RequestM.readDoc
   let endPos := doc.meta.text.source.rawEndPos
-  RequestM.withWaitFindSnap doc (·.endPos >= endPos) (notFoundX := pure (.errors #["notFoundX???"]))
+  RequestM.withWaitFindSnap doc (·.endPos >= endPos) (notFoundX := pure (.errors #["Internal invariant violated: notFoundX"]))
     fun snap =>
       match versoDocumentExt.getState snap.env with
-      | .none => return .errors #["No document here"]
+      | .none => return .noDoc
       | .some s =>
         return s
 
