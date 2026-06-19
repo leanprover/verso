@@ -427,4 +427,3 @@ public meta def elabVersoLastBlock : Command.CommandElab
     finishDoc
     Finalize.runFinalizers
   | _ => throwUnsupportedSyntax
-
