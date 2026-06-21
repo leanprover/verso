@@ -341,6 +341,8 @@ mutual
     | succ : Even n → Odd (n + 1)
 end
 
+set_option linter.unusedVariables false
+
 -- Trees with different node types
 mutual
   inductive TreeA (α : Type) where

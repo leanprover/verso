@@ -487,8 +487,8 @@ example (h : ∃ n, P n) : True := by
   trivial
 
 -- Or just:
-example (h : ∃ n, P n) : True := by
-  trivial  -- h not needed at all
+example (_ : ∃ n, P n) : True := by
+  trivial  -- hypothesis not needed at all
 end
 ```
 
