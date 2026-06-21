@@ -283,9 +283,8 @@ To use this in your project:
     lake exe verso-html .lake/build/literate html
     ```
 
-You can preview the resulting files by running
-`python3 -m http.server 8000 -d html` and pointing a web browser to
-http://localhost:8000/
+You can preview the resulting files by running `lake exe serve html`
+and pointing a web browser to http://localhost:8000/
 
 In this output, Verso docstrings and moduledocs are rendered. Setting
 `doc.verso` to `true` enables these in source files.

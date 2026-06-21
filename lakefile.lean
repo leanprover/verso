@@ -77,6 +77,16 @@ lean_exe «verso» where
   supportInterpreter := true
 
 @[default_target]
+lean_lib VersoServe where
+  roots := #[`VersoServe]
+  srcDir := "src/serve"
+
+@[default_target]
+lean_exe «serve» where
+  root := `VersoServeMain
+  srcDir := "src/serve"
+
+@[default_target]
 lean_lib VersoLiterate where
   roots := #[`VersoLiterate]
   srcDir := "src/verso-literate"
