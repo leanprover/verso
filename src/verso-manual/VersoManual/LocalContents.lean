@@ -223,8 +223,8 @@ def SubpartSpec.decr : SubpartSpec → SubpartSpec
 instance : LT SubpartSpec := Ord.toLT inferInstance
 instance : LE SubpartSpec := Ord.toLE inferInstance
 
-partial def localContentsCore [Monad m] [ToHtml Manual m (Doc.Inline Manual)] [MonadReaderOf ExtensionImpls m]
-    (opts : Html.Options m) (ctxt : TraverseContext) (xref : TraverseState)
+partial def localContentsCore [Monad m] [MonadLiftT IO m] [ToHtml Manual m (Doc.Inline Manual)] [MonadReaderOf ExtensionImpls m]
+    (opts : Html.Options) (ctxt : TraverseContext) (xref : TraverseState)
     (p : Part Manual) (sectionNumPrefix : Option String)
     (includeTitle : Bool) (includeSubparts : SubpartSpec) (fromLevel : Nat) :
     StateT LocalItemState (StateT (Code.Hover.State Html) m) Unit := do
@@ -236,7 +236,7 @@ partial def localContentsCore [Monad m] [ToHtml Manual m (Doc.Inline Manual)] [M
       if let some title := shortTitle then
         pure (Html.ofString title)
       else
-        let (html, _) ← p.title.mapM (Manual.toHtml opts ctxt xref {} {} {} ·) |>.run {}
+        let (html, _) ← p.title.mapM (Manual.toHtml (m := m) opts ctxt xref {} {} {} ·) |>.run {}
         pure html
 
     let partDest : Option LocalContentItem := do
@@ -259,8 +259,8 @@ where
   withoutPrefix (str : String) (prefix? : Option String) : String :=
     prefix?.bind (str.dropPrefix? · |>.map String.Slice.copy) |>.getD str
 
-def localContents [Monad m] [ToHtml Manual m (Doc.Inline Manual)] [MonadReaderOf ExtensionImpls m]
-    (opts : Html.Options m) (ctxt : TraverseContext) (xref : TraverseState)
+def localContents [Monad m] [MonadLiftT IO m] [ToHtml Manual m (Doc.Inline Manual)] [MonadReaderOf ExtensionImpls m]
+    (opts : Html.Options) (ctxt : TraverseContext) (xref : TraverseState)
     (p : Part Manual)
     (sectionNumPrefix : Option String := none)
     (includeTitle : Bool := true) (includeSubparts : SubpartSpec := .all) (fromLevel : Nat := 0) :

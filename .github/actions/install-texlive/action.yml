@@ -46,6 +46,11 @@ runs:
                   etoolbox
                   ulem
                   newunicodechar
+                  svg
+                  transparent
+                  trimspaces
+                  xkeyval
+                  catchfile
 
         - name: Check `tlmgr` version
           shell: bash

@@ -33,6 +33,11 @@ public def pageStyle : String := r####"
     /* How wide should the ToC be on non-mobile? */
     --verso-toc-width: 18rem;
 
+    /* Color of the divider line along the ToC's right edge */
+    --verso-toc-border-color: #d0d0d0;
+    /* Color of that divider when the resize handle is hovered, focused, or dragged */
+    --verso-toc-resize-handle-color: #888;
+
     /** Variables that control the “burger menu” appearance **/
     --verso-burger-height: 1.25rem;
     --verso-burger-width: 1.25rem;
@@ -59,12 +64,23 @@ public def pageStyle : String := r####"
     /* Vertical margin for definition boxes and examples */
     --verso--box-vertical-margin: 1.5rem;
     --verso--box-padding: 1rem;
+
+    /* The ToC width that the layout actually uses. It is the user's chosen width
+       (set as --verso-toc-user-width by static-web/toc-resize.js), clamped so the
+       main content always keeps at least 320px, and otherwise the default. The
+       bounds here mirror MIN_WIDTH/MAX_WIDTH/MIN_MAIN_WIDTH in toc-resize.js; keep
+       them in sync. On mobile this is reset to the default below, which is how a
+       saved desktop width gets ignored on narrow screens. */
+    --verso-toc-effective-width:
+        clamp(160px, var(--verso-toc-user-width, var(--verso-toc-width)), min(800px, 100vw - 320px));
 }
 
 @media screen and (max-width: 700px) {
   :root {
     /* Reduce the standard padding on mobile */
     --verso--content-padding-x: 1rem;
+    /* Ignore any saved desktop ToC width and use the default on mobile */
+    --verso-toc-effective-width: var(--verso-toc-width);
   }
 }
 
@@ -133,7 +149,7 @@ header {
 
 .header-logo-wrapper {
     /* Make the logo always take up the same space as the toc */
-    flex-basis: var(--verso-toc-width);
+    flex-basis: var(--verso-toc-effective-width);
     /* Make padding be included in the width calculation */
     box-sizing: border-box;
     /* Add padding so it doesn't sit at the very edge of the screen. */
@@ -149,11 +165,10 @@ header {
 .header-title-wrapper {
     /* The title wrapper grows to fill up the header */
     flex: 1;
-}
-
-@media screen and (max-width: 1500px) {
-    /* Add the padding of the content when the content moves to the left */
-    padding-left: var(--verso--content-padding-x);
+    /* Its width tracks the main content area (viewport minus the ToC), so make it a
+       query container. That lets the title center or left-align in step with the body
+       content as the ToC is resized. See the container query on .header-title. */
+    container: header-title / inline-size;
 }
 
 .header-title {
@@ -162,15 +177,17 @@ header {
     font-size: 2rem;
     font-weight: bold;
     display: block;
-    margin: 0 auto;
-    max-width: var(--verso-content-max-width);
+    /* Left-aligned by default, to align with the content that does the same. Centered
+       only when the content area is wide enough (see below). */
+    margin: 0;
 }
 
-@media screen and (max-width: 1500px) {
-    /* Move the title to the left, to align with the content that does the same. */
+/* Center the title once the content area is wide, matching the content wrapper. At the
+   default ToC width this is the old 1500px viewport breakpoint. */
+@container header-title (width >= 1212px) {
     .header-title {
-        margin: 0;
-        max-width: unset;
+        margin: 0 auto;
+        max-width: var(--verso-content-max-width);
     }
 }
 
@@ -210,14 +227,18 @@ main [id] {
 
 /** Non-mobile **/
 .with-toc > main {
-    /* NB main > section also has padding that's added to this in practice */
-    padding-left: var(--verso-toc-width);
+    /* Reserve space for the fixed ToC with a margin rather than padding, so that the
+       width of <main> (the margin-note query container) shrinks as the ToC widens.
+       Firefox only re-evaluates container queries when the container's border-box
+       width changes, not when an inherited custom property changes its padding.
+       NB main > section also has padding that's added to this in practice. */
+    margin-left: var(--verso-toc-effective-width);
 }
 
 /** Mobile **/
 @media screen and (max-width: 700px) {
     .with-toc > main {
-        padding-left: 0;
+        margin-left: 0;
     }
 }
 
@@ -255,7 +276,7 @@ main [id] {
     flex-direction: column;
     justify-content: space-between;
     height: calc(100dvh - var(--verso-header-height));
-    width: var(--verso-toc-width);
+    width: var(--verso-toc-effective-width);
 }
 
 @media screen and (max-width: 700px) {
@@ -267,6 +288,55 @@ main [id] {
 
     #toc:has(#toggle-toc:checked) {
         transform: translateX(var(--verso-toc-width));
+    }
+}
+
+.toc-resize-handle {
+    /* Fixed along the ToC's right edge. It lives outside #toc (the scroll container)
+       and starts at the edge rather than straddling it, so it neither scrolls with the
+       ToC contents nor overlaps the ToC's scrollbar. #toc is fixed at top: header
+       height, left: 0, so its right edge sits at --verso-toc-effective-width; the
+       handle begins there and extends a few pixels into the margin <main> reserves for
+       the ToC. */
+    position: fixed;
+    top: var(--verso-header-height);
+    left: var(--verso-toc-effective-width);
+    width: 6px;
+    height: calc(100dvh - var(--verso-header-height));
+    z-index: 12;
+}
+
+.toc-resize-enabled .toc-resize-handle {
+    cursor: col-resize;
+}
+
+.toc-resize-handle::after {
+    /* The visible divider, drawn at the handle's left edge so it sits exactly on the
+       ToC's right edge while the grab area extends into the margin to its right. */
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 1px;
+    height: 100%;
+    background: var(--verso-toc-border-color, #d0d0d0);
+    transition: background 0.15s;
+}
+
+.toc-resize-enabled .toc-resize-handle:hover::after,
+.toc-resize-enabled .toc-resize-handle.dragging::after,
+.toc-resize-enabled .toc-resize-handle:focus-visible::after {
+    background: var(--verso-toc-resize-handle-color, #888);
+}
+
+.toc-resize-enabled .toc-resize-handle:focus-visible {
+    outline: 2px solid var(--verso-link-color, Highlight);
+    outline-offset: -2px;
+}
+
+@media screen and (max-width: 700px) {
+    .toc-resize-handle {
+        display: none;
     }
 }
 
@@ -676,16 +746,27 @@ main .authors:has(.author) .note::before {
 
 .content-wrapper {
     padding: var(--verso--content-padding-x);
-    max-width: var(--verso-content-max-width);
-    margin: 0 auto;
+    /* Left-aligned by default, to make room for the margin notes on the right. The text
+       itself is still capped by `main section { max-width }`. Centered only when the
+       content area is wide enough (see below). */
+    margin: 0;
 }
 
-@media screen and (max-width: 1500px) {
-    /* Left align the content when less than 1500px, to make room for the footnotes on the right. */
+/* Center the content once there is room for symmetric whitespace plus margin notes.
+   The content area (viewport minus the ToC) is the query container, so this tracks the
+   ToC width; at the default ToC width it matches the old 1500px viewport breakpoint. */
+@container main (width >= 1212px) {
     .content-wrapper {
-        margin: 0;
-        max-width: unset;
+        margin: 0 auto;
+        max-width: var(--verso-content-max-width);
     }
+}
+
+/* Make <main> a query container so margin notes (and the float-clearing rules below)
+   can respond to the actual content width, which shrinks as the ToC is widened, rather
+   than to the raw viewport width. See Marginalia.css. */
+main {
+    container: main / inline-size;
 }
 
 main > section {
@@ -807,20 +888,20 @@ main .section-toc a:hover {
 }
 
 /*
-Don't shrink code blocks when there's marginalia that overlaps
+Don't shrink code blocks when there's marginalia that overlaps. This matches the
+margin-note "overlap" regime in Marginalia.css: a non-mobile viewport whose main
+content area is too narrow to hold notes in the true margin.
 */
-@media screen and (700px < width <= 1400px) {
-  .hl.lean.block {
-    clear: right;
-  }
-}
+@media screen and (min-width: 701px) {
+  @container main (width <= 1112px) {
+    .hl.lean.block {
+      clear: right;
+    }
 
-/*
-Don't shrink doc blocks when there's marginalia that overlaps
-*/
-@media screen and (700px < width <= 1400px) {
-  .namedocs {
-    clear: right;
+    /* Don't shrink doc blocks when there's marginalia that overlaps */
+    .namedocs {
+      clear: right;
+    }
   }
 }
 

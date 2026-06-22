@@ -1,0 +1,70 @@
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/symbols_verso_term_doc.lean"},
+ "position": {"line": 30, "character": 2}}
+[{"selectionRange":
+  {"start": {"line": 11, "character": 4}, "end": {"line": 11, "character": 15}},
+  "range":
+  {"start": {"line": 11, "character": 0}, "end": {"line": 18, "character": 7}},
+  "name": "termDocsSym",
+  "kind": 6,
+  "children":
+  [{"selectionRange":
+    {"start": {"line": 11, "character": 34},
+     "end": {"line": 11, "character": 51}},
+    "range":
+    {"start": {"line": 11, "character": 19},
+     "end": {"line": 18, "character": 7}},
+    "name": "Term docs title",
+    "kind": 15,
+    "children":
+    [{"selectionRange":
+      {"start": {"line": 13, "character": 0},
+       "end": {"line": 13, "character": 19}},
+      "range":
+      {"start": {"line": 13, "character": 0},
+       "end": {"line": 18, "character": 7}},
+      "name": "Term docs heading",
+      "kind": 15,
+      "children":
+      [{"selectionRange":
+        {"start": {"line": 16, "character": 0},
+         "end": {"line": 16, "character": 23}},
+        "range":
+        {"start": {"line": 16, "character": 0},
+         "end": {"line": 18, "character": 7}},
+        "name": "Term docs subheading",
+        "kind": 15}]}]}]},
+ {"selectionRange":
+  {"start": {"line": 20, "character": 4}, "end": {"line": 20, "character": 14}},
+  "range":
+  {"start": {"line": 20, "character": 0}, "end": {"line": 33, "character": 0}},
+  "name": "termDocSym",
+  "kind": 6,
+  "children":
+  [{"selectionRange":
+    {"start": {"line": 20, "character": 32},
+     "end": {"line": 20, "character": 48}},
+    "range":
+    {"start": {"line": 20, "character": 18},
+     "end": {"line": 33, "character": 0}},
+    "name": "Term doc title",
+    "kind": 15,
+    "children":
+    [{"selectionRange":
+      {"start": {"line": 21, "character": 0},
+       "end": {"line": 21, "character": 18}},
+      "range":
+      {"start": {"line": 21, "character": 0},
+       "end": {"line": 33, "character": 0}},
+      "name": "Term doc heading",
+      "kind": 15,
+      "children":
+      [{"selectionRange":
+        {"start": {"line": 24, "character": 0},
+         "end": {"line": 24, "character": 22}},
+        "range":
+        {"start": {"line": 24, "character": 0},
+         "end": {"line": 33, "character": 0}},
+        "name": "Term doc subheading",
+        "kind": 15}]}]}]}]

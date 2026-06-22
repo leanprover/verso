@@ -835,39 +835,33 @@ Optional parameters:
 def blogMain (theme : Theme) (site : Site) (linkTargets : Code.LinkTargets TraverseContext := {})
     (options : List String) (components : Components := by exact %registered_components)
     (header : String := Html.doctype) :
-    IO UInt32 := do
-  let hasError ← IO.mkRef false
-  let logError msg := do hasError.set true; IO.eprintln msg
-  let cfg ← opts {logError := logError} options
-  let (site, xref) ← site.traverse cfg components
-  let initGenCtx : Generate.Context := {
-    theme, site,
-    ctxt := { path := .root, config := cfg, components },
-    xref := xref,
-    dir := cfg.destination,
-    config := cfg,
-    header := header,
-    linkTargets := linkTargets,
-    components := components
-  }
-  let (((), st), _) ← site.generate theme initGenCtx .empty {}
-  IO.FS.writeFile (cfg.destination.join "-verso-docs.json") (toString st.dedup.docJson)
-  for (name, content, srcMap?) in xref.jsFiles do
-    FS.ensureDir (cfg.destination.join "-verso-data")
-    IO.FS.writeFile (cfg.destination.join "-verso-data" |>.join name) content
-    if let some (name, content) := srcMap? then
+    IO UInt32 :=
+  withLogger fun logger => do
+    let cfg ← opts {} options
+    let (site, xref) ← site.traverse cfg components |>.run logger
+    let initGenCtx : Generate.Context := {
+      theme, site,
+      ctxt := { path := .root, config := cfg, components },
+      xref := xref,
+      dir := cfg.destination,
+      config := cfg,
+      header := header,
+      linkTargets := linkTargets,
+      components := components
+    }
+    let (((), st), _) ← site.generate theme initGenCtx .empty {} |>.run logger
+    IO.FS.writeFile (cfg.destination.join "-verso-docs.json") (toString st.dedup.docJson)
+    for (name, content, srcMap?) in xref.jsFiles do
+      FS.ensureDir (cfg.destination.join "-verso-data")
       IO.FS.writeFile (cfg.destination.join "-verso-data" |>.join name) content
-  for (name, content, _) in theme.jsFiles do
-    FS.ensureDir (cfg.destination.join "-verso-data")
-    IO.FS.writeFile (cfg.destination.join "-verso-data" |>.join name) content
-  for (name, content) in theme.cssFiles ++ xref.cssFiles do
-    FS.ensureDir (cfg.destination.join "-verso-data")
-    IO.FS.writeFile (cfg.destination.join "-verso-data" |>.join name) content
-  if (← hasError.get) then
-    IO.eprintln "Errors were encountered!"
-    return 1
-  else
-    return 0
+      if let some (name, content) := srcMap? then
+        IO.FS.writeFile (cfg.destination.join "-verso-data" |>.join name) content
+    for (name, content, _) in theme.jsFiles do
+      FS.ensureDir (cfg.destination.join "-verso-data")
+      IO.FS.writeFile (cfg.destination.join "-verso-data" |>.join name) content
+    for (name, content) in theme.cssFiles ++ xref.cssFiles do
+      FS.ensureDir (cfg.destination.join "-verso-data")
+      IO.FS.writeFile (cfg.destination.join "-verso-data" |>.join name) content
 where
   opts (cfg : Config)
     | ("--output"::dir::more) => opts {cfg with destination := dir} more

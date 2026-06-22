@@ -9,6 +9,7 @@ import Std.Data.TreeMap.Lemmas
 import Std.Data.TreeMap.Raw.Lemmas
 import Std.Data.TreeMap.Raw.WF
 public import Std.Data.HashSet
+public import Std.Data.HashMap
 
 import Lean.Data.Json
 public import Lean.Data.Json.Basic
@@ -179,6 +180,48 @@ public def getFieldLength (self : DocumentStore) (ref : String) (field : String)
 end DocumentStore
 
 /--
+A {lean}`Float` wrapper whose JSON serialization rounds to the number of significant digits given by
+{name (full := RoundedFloat.precision)}`precision`. Used to shrink serialized term frequencies in
+the search index: the raw {lit}`sqrt(count)` value produces 16-significant-digit mantissas in JSON,
+which add bytes to every trie leaf for no scoring benefit. The ranking is stable well under 4
+significant digits.
+-/
+public structure RoundedFloat where
+  /-- The underlying value. -/
+  val : Float
+  /-- Number of significant digits retained at serialization time. -/
+  precision : Nat := 4
+deriving Repr
+
+private def RoundedFloat.floatToInt (f : Float) : Int :=
+  if f < 0.0 then -((-f).toUInt64.toNat : Int)
+  else (f.toUInt64.toNat : Int)
+
+/--
+Converts a {name}`RoundedFloat` to JSON, rounding to {name}`RoundedFloat.precision`
+significant digits. Uses the {name}`Lean.JsonNumber` mantissa/exponent representation
+directly so that trailing zeros are dropped by {name}`Lean.JsonNumber.toString` (e.g.
+{lit}`1.000` serializes as {lit}`"1"`).
+-/
+public protected def RoundedFloat.toJson (rf : RoundedFloat) : Json :=
+  if rf.val == 0.0 || !rf.val.isFinite then
+    Json.num ⟨0, 0⟩
+  else
+    let absVal := rf.val.abs
+    -- Magnitude of the most-significant digit: `floor(log10(|val|))`.
+    -- e.g. `0.00123 → -3`, `1.234 → 0`, `123.4 → 2`.
+    let magnitude := RoundedFloat.floatToInt absVal.log10.floor
+    -- Digits to the right of the decimal in the rounded value; clamped to 0 so that
+    -- values larger than `10^(precision-1)` round to the nearest integer rather than
+    -- attempting a negative `JsonNumber.exponent` (which the type disallows).
+    let scale : Nat := (Int.ofNat rf.precision - 1 - magnitude).toNat
+    let factor := (10.0 : Float) ^ scale.toFloat
+    let mantissa := RoundedFloat.floatToInt (rf.val * factor).round
+    Json.num ⟨mantissa, scale⟩
+
+public instance : ToJson RoundedFloat := ⟨RoundedFloat.toJson⟩
+
+/--
 The frequency of a term.
 
 Stored in a wrapper to trigger appropriate serialization for elasticlunr.js.
@@ -188,9 +231,13 @@ public structure TermFrequency where
   termFreq : Float
 
 /--
-Serializes a term frequency to an elasticlunr-compatible representation.
+Serializes a term frequency to an elasticlunr-compatible representation. The raw
+{lean}`Float` is routed through {name}`RoundedFloat` so the mantissa never carries
+the 16-significant-digit tail of {lit}`sqrt(count)`.
 -/
-protected def TermFrequency.toJson (freq : TermFrequency) : Json := json%{"tf": $freq.termFreq}
+protected def TermFrequency.toJson (freq : TermFrequency) : Json :=
+  let rf : RoundedFloat := { val := freq.termFreq }
+  json%{"tf": $rf}
 
 private structure IndexItem.Raw where
   docs : TreeMap String TermFrequency := {}
@@ -333,10 +380,20 @@ public def removeToken (self : IndexItem) (ref token : String) : IndexItem :=
   ⟨self.raw.removeToken ref token⟩
 
 private partial def Raw.toJson (self: IndexItem.Raw) : Json :=
-  let metadata := json%{
-    "docs": $(self.docs.foldr (init := Json.mkObj []) (fun f freq json => json.setObjVal! f freq.toJson)),
-    "df": $self.docFreq.toInt
-  }
+  -- Internal trie nodes (pure prefixes) have `docs = {}` and `docFreq = 0` by
+  -- construction in `addToken`. Emitting `"docs":{},"df":0,` on every one of them
+  -- adds ~16 bytes per node for no query-side benefit: `elasticlunr`'s `getNode`
+  -- traverses by character keys only, `expandToken` already skips `docs`/`df` keys
+  -- when iterating children and treats missing `df` as zero, and the score path
+  -- only consults these on terminal nodes (which still carry them here).
+  let metadata : Json :=
+    if self.docs.isEmpty && self.docFreq == 0 then
+      json%{}
+    else
+      json%{
+        "docs": $(self.docs.foldr (init := json%{}) (fun f freq json => json.setObjVal! f freq.toJson)),
+        "df": $self.docFreq.toInt
+      }
   self.children.foldr (init := metadata) fun c ch json => json.setObjVal! c.toString (Raw.toJson ch)
 
 /-- Converts an index item into the elasticlunr.js JSON format. -/
@@ -661,6 +718,14 @@ public structure IndexDoc where
   context : Array String
   /-- The string content to search for this document -/
   content : String
+  /--
+  An optional scoring priority for this document, using the same centered-at-50 convention as
+  {lit}`Searchable.priority` on the quick-jump side: $`50` is neutral, higher values boost the
+  document's rank in full-text results, and values may fall outside $`[0, 99]` when they
+  represent a pre-summed contribution (e.g. an ancestor-inherited section priority).
+  -/
+  priority : Option Int := none
+deriving Repr, BEq
 
 /-- A monad for indexing documents. -/
 public abbrev IndexM (genre : Verso.Doc.Genre) :=
@@ -686,17 +751,28 @@ Returns the stack of headers within which indexing is occurring.
 public def IndexM.currentContext : IndexM g (Array String) := read <&> (·.1)
 
 /--
-Runs an indexing computation and constructs the resulting index.
+Runs an indexing computation and constructs both the resulting index and the flat
+array of indexed documents. The document array is returned alongside the index so
+callers can emit per-document metadata (e.g. the breadcrumb context) into out-of-band
+files without needing to include a separate inverted index for that data — the
+{name}`IndexDoc.context` breadcrumb in particular is display-only and contributes
+negligibly to full-text ranking, so it is intentionally omitted from the index fields.
 -/
-public def IndexM.finalize (traverseContext : g.TraverseContext) (act : IndexM g Unit) : Except String Index := do
+public def IndexM.finalize
+    (traverseContext : g.TraverseContext) (act : IndexM g Unit) :
+    Except String (Index × Array IndexDoc) := do
   match act (#[], traverseContext) {} with
   | .error e _ => throw e
-  | .ok _ docs =>
-    let mut index : Index := { refField := "id" : IndexBuilder } |>.addField "id" |>.addField "header" |>.addField "contents" |>.addField "context" |>.build
-    for (_, doc) in docs do
-      let context := "\t".intercalate doc.context.toList
-      index := index.addDoc doc.id #[doc.id, doc.header, doc.content, context]
-    return index
+  | .ok _ docMap =>
+    let mut index : Index :=
+      { refField := "id" : IndexBuilder }
+        |>.addField "id" |>.addField "header" |>.addField "contents"
+        |>.build
+    let mut docs : Array IndexDoc := #[]
+    for (_, doc) in docMap do
+      index := index.addDoc doc.id #[doc.id, doc.header, doc.content]
+      docs := docs.push doc
+    return (index, docs)
 
 /--
 A genre is indexable if there are instructions for constructing an index for use with elasticlunr.js.
@@ -718,6 +794,15 @@ public class Indexable (genre : Verso.Doc.Genre) where
   book title). Falls back to the chapter title.
   -/
   partShortContextName : Verso.Doc.Part genre → IndexM genre (Option String) := fun _ => pure none
+
+  /--
+  Computes the full-text search priority for a part, using the same centered-at-50 convention as the
+  quick-jump side. Returning {lean}`none` leaves the document at neutral; returning a signed integer
+  lets a genre fold section metadata, ancestor inheritance, or other emission-time adjustments into
+  full-text scoring. This is an {lean}`Int` to allow it to accumulate adjustments that put it
+  outside the usual range.
+  -/
+  partPriority : Verso.Doc.Part genre → IndexM genre (Option Int) := fun _ => pure none
 
   /--
   How to index block extensions.
@@ -815,28 +900,95 @@ public partial def partText (p : Verso.Doc.Part g) : IndexM g String := do
   match p.metadata >>= idx.partId with
   | none => return header ++ "\n\n" ++ content
   | some id =>
-    IndexM.save {id, header, context, content}
+    let priority ← idx.partPriority p
+    IndexM.save {id, header, context, content, priority}
     return ""
 
 /--
-Constructs a set of documents that can be used with elasticlunr.js by emitting JavaScript arrays and
-code to construct the index. Primarily useful for testing.
+Constructs both the elasticlunr.js-compatible reverse index and the flat array of
+{name}`IndexDoc`s from a single traversal of the document. Use this when a caller needs both
+(e.g. to derive a per-document priority map alongside the index): traversing twice via
+{lit}`mkIndex` and {lit}`mkIndexDocs` runs {name}`partText` over the whole tree twice.
 -/
-public def mkIndexDocs (p : Verso.Doc.Part g) (ctx : g.TraverseContext) : Except String (Array IndexDoc) := do
+public def mkIndexAndDocs (p : Verso.Doc.Part g) (ctx : g.TraverseContext) :
+    Except String (Index × Array IndexDoc) := do
   if p.metadata.bind idx.partId |>.isNone then
-    throw "mkIndexDocs: No ID for root part"
+    throw "No ID for root part"
   else
-    match partText p (#[], ctx) {} with
-    | .error e _ => throw e
-    | .ok _ docs => return docs.fold (init := #[]) fun xs _ x => xs.push x
+    IndexM.finalize ctx (partText p |> discard)
+
+/--
+Constructs the flat array of {name}`IndexDoc`s for the provided document. Primarily useful for
+testing; production code that also needs the elasticlunr index should prefer
+{lit}`mkIndexAndDocs` to avoid traversing the document twice.
+-/
+public def mkIndexDocs (p : Verso.Doc.Part g) (ctx : g.TraverseContext) :
+    Except String (Array IndexDoc) := do
+  let (_, docs) ← mkIndexAndDocs p ctx
+  return docs
 
 /--
 Constructs an elasticlunr.js-compatible reverse index for the provided document.
 -/
 public def mkIndex (p : Verso.Doc.Part g) (ctx : g.TraverseContext) : Except String Index := do
-  if p.metadata.bind idx.partId |>.isNone then
-    throw "No ID for root part"
-  else
-   partText p |> discard |>.finalize ctx
+  let (index, _) ← mkIndexAndDocs p ctx
+  return index
 
 end
+
+/--
+Builds the per-document priority map as JSON: an object mapping each {name}`IndexDoc.id` that has
+a non-neutral priority to its value. Documents with no priority or with the neutral value
+{lit}`50` are omitted, since they would not affect scoring on the browser side and would only
+inflate the eagerly-loaded index. The browser reads this map and folds each entry into the
+log-space scoring sum alongside the global full-text priority.
+-/
+public def priorityMapJson (docs : Array IndexDoc) : Lean.Json :=
+  docs.foldl (init := Lean.Json.mkObj []) fun acc d =>
+    match d.priority with
+    | none | some 50 => acc
+    | some p => acc.setObjVal! d.id (Lean.toJson p)
+
+/--
+Serializes one bucket's documents for the lazily-fetched
+{lit}`searchIndex_<bucket>.js` files. Each document's stored fields are emitted as a
+JSON object, and {name}`IndexDoc.context` (looked up by ref in the supplied context
+map) is merged in as a {lit}`"context"` property so the search UI can render
+breadcrumbs even though {lit}`context` is no longer part of the inverted index.
+-/
+public def bucketDocsToJson
+    (docs : HashMap String Doc) (contextMap : HashMap String String) : Lean.Json :=
+  docs.fold (init := Lean.Json.mkObj []) fun json ref doc =>
+    let base := doc.foldr (init := Lean.Json.mkObj []) fun f v js =>
+      js.setObjVal! f (Lean.Json.str v)
+    let withContext := match contextMap[ref]? with
+      | some ctx => base.setObjVal! "context" (Lean.Json.str ctx)
+      | none => base
+    json.setObjVal! ref withContext
+
+/--
+Builds a ref → breadcrumb-context map from the flat array of indexed documents. The
+breadcrumb is joined with tabs so the browser can split on {lit}`"\t"` when rendering
+it. Kept separate from the inverted index because {name}`IndexDoc.context` is no
+longer an indexed field — it's display-only, and its tokens nearly duplicated the
+header field's for negligible ranking benefit. Emitted alongside each bucket's
+per-doc payload via {name}`bucketDocsToJson` so the search UI still has breadcrumbs
+available.
+-/
+public def refContextMap (docs : Array IndexDoc) : HashMap String String :=
+  docs.foldl (init := {}) fun m d =>
+    m.insert d.id ("\t".intercalate d.context.toList)
+
+/--
+Renders a {lean}`UInt64` as a fixed-width 16-character lowercase hex string (padded
+with leading zeros). Used as a content-hash suffix in search-asset filenames so
+buckets can be cached with {lit}`Cache-Control: immutable` — a new build produces a
+new filename, avoiding the RTT cost of HTTP revalidation on repeat visits.
+-/
+public def hashHex (h : UInt64) : String := Id.run do
+  let mut out := ""
+  for i in [0:16] do
+    let shift := UInt64.ofNat (60 - i * 4)
+    let nibble := ((h >>> shift) &&& 0xf).toNat
+    out := out.push (Nat.digitChar nibble)
+  return out

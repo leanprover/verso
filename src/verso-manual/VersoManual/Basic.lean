@@ -7,6 +7,7 @@ module
 import Std.Data.HashSet
 import Std.Data.TreeSet
 import Verso.Doc
+public import Verso.Instances
 public import Verso.Doc.Html
 public import Verso.Doc.TeX
 public import MultiVerso
@@ -23,6 +24,8 @@ import Verso.Output.Html
 public import Verso.Output.TeX
 public import Verso.BEq
 import Verso.Method
+
+set_option doc.verso true
 
 public section
 
@@ -97,7 +100,7 @@ inductive FontWeight where
   | normal
   | bold
   | bolder
-  | numeric (weight : Nat) (ok : weight > 0 ∧ weight < 1000 := by omega)
+  | numeric (weight : Nat) (ok : weight > 0 ∧ weight < 1000 := by grind)
 deriving DecidableEq, Repr, Hashable
 
 def FontWeight.toCss (w : FontWeight) : String :=
@@ -127,7 +130,7 @@ open Verso.Search in
 defmethod DomainMapper.setFont (mapper : DomainMapper) (font : Font) : DomainMapper :=
   { mapper with
     quickJumpCss :=
-      s!"#search-wrapper .{mapper.className} " ++ "{\n" ++ font.toCss ++ "}\n"
+      s!".verso-search-results .{mapper.className} " ++ "{\n" ++ font.toCss ++ "}\n"
   }
 
 /--
@@ -208,7 +211,7 @@ structure PartMetadata where
   shortTitle : Option String := none
   /--
   A shorter title to be shown in breadcrumbs for search results. Should typically be at least as
-  short as `shortTitle`.
+  short as {name (full := PartMetadata.shortTitle)}`shortTitle`.
   -/
   shortContextTitle : Option String := none
   /-- The book's authors -/
@@ -223,16 +226,30 @@ structure PartMetadata where
   file : Option String := none
   /-- The internal unique ID, which is automatically assigned during traversal. -/
   id : Option InternalId := none
-  /-- Should this section be numbered? If `false`, then it's like `\section*` in LaTeX -/
+  /-- Should this section be numbered? If {name}`false`, then it's like `\section*` in LaTeX -/
   number : Bool := true
-  /-- If `true`, the part is only rendered in draft mode. -/
+  /-- If {name}`true`, the part is only rendered in draft mode. -/
   draft : Bool := false
   /-- Which number has been assigned? This field is set during traversal. -/
   assignedNumber : Option Numbering := none
-  /-- If `true`, this part will display a list of subparts that are separate HTML pages. -/
+  /-- If {name}`true`, this part will display a list of subparts that are separate HTML pages. -/
   htmlToc := true
   /-- How should this document be split when rendering multi-page HTML output? -/
   htmlSplit : HtmlSplitMode := .default
+  /--
+  Relative priority of this section in search results, on a scale from {lean (type := "Fin 100")}`0`
+  to {lean (type := "Fin 100")}`99`. {lean (type := "Fin 100")}`50` is the default (no boost);
+  higher values boost the section's rank and lower values de-emphasize it. The same priority
+  influences both quick-jump and full-text matches for the section.
+
+  Priorities set on ancestor parts are inherited: each ancestor's deviation from
+  {lean (type := "Fin 100")}`50` accumulates into a section's effective priority. For example,
+  setting {name (full := PartMetadata.searchPriority)}`searchPriority` to {lean (type := "Fin 100")}`25` on a top-level “Release Notes”
+  part de-emphasizes every subsection beneath it, while an individual subsection can override by
+  setting a higher value of its own (which is added to, not multiplied with, the ancestor
+  contribution). A chain of neutral ({lean (type := "Fin 100")}`50`) ancestors contributes nothing.
+  -/
+  searchPriority : Fin 100 := 50
 deriving BEq, Hashable, Repr, ToJson, FromJson
 
 
@@ -269,6 +286,20 @@ instance : FromJson Domains where
         pure <| doms.insert x (← FromJson.fromJson? dom) h
       else throw s!"The string {name.quote} is not a valid name for a domain"
 
+/--
+Computes a filename for an extra file, to be saved in a map from filenames to contents. If the
+requested filename already is present but the content differs, a unique filename is chosen. The
+resulting filename and the updated state are returned.
+-/
+partial def extraFileName (files : HashMap String String) (stem extension content : String) : String :=
+  go none
+where
+  go (counter : Option Nat) :=
+    let fn := s!"{stem}{counter.map (s!"{·}") |>.getD ""}.{extension}"
+    if let some txt := files[fn]? then
+      if txt == content then fn
+      else go <| some (counter.getD 0 + 1)
+    else fn
 
 def StringSet := HashSet String
 
@@ -297,6 +328,17 @@ structure TraverseState extends HtmlAssets where
   domains : Domains := {}
   ids : TreeSet InternalId := {}
   quickJump : DomainMappers := {}
+  /--
+  TeX `\usepackage{…}` lines contributed by block and inline extensions whose blocks actually
+  occur in the document. Populated during traversal at each block/inline occurrence so unused
+  extensions don't pollute the preamble.
+  -/
+  texPackages : HashSet String := {}
+  /--
+  Free-form TeX preamble items contributed by block and inline extensions whose blocks actually
+  occur in the document. Populated during traversal.
+  -/
+  texPreambleItems : HashSet String := {}
   private contents : Contents := {}
 deriving Repr
 
@@ -304,13 +346,21 @@ def TraverseState.initialize (htmlAssets : HtmlAssets) : TraverseState :=
   { toHtmlAssets := htmlAssets }
 
 section
-variable [ToJson α] [ToJson β] [BEq α] [Hashable α]
+variable [ToJson α] [ToJson β] [FromJson α] [FromJson β] [BEq α] [Hashable α]
 private def jsonMap (xs : HashMap α β) : Json :=
   .arr (xs.toArray.map fun (x, y) => json%{"key": $x, "value": $y})
 
+private def fromJsonMap (v : Json) (field : String) : Except String (HashMap α β) := do
+    let v ← v.getObjValAs? (Array Json) field
+    let v ← v.mapM fun j => do
+      let k ← j.getObjValAs? _ "key"
+      let v ← j.getObjValAs? _ "value"
+      pure (k, v)
+    return HashMap.insertMany {} v
+
 instance : ToJson TraverseState where
   toJson st := private
-    let {tags, externalTags, domains, ids, features, extraCss, extraJs, extraJsFiles, extraCssFiles, extraDataFiles, quickJump, licenseInfo, contents} := st
+    let { tags, externalTags, domains, ids, features, extraCss, extraJs, extraJsFiles, extraCssFiles, extraDataFiles, quickJump, licenseInfo, texPackages, texPreambleItems, contents } := st
     json%{
       "tags": $(jsonMap tags),
       "externalTags": $(jsonMap externalTags),
@@ -324,23 +374,15 @@ instance : ToJson TraverseState where
       "extraCssFiles": $extraCssFiles.toArray,
       "quickJump": $quickJump.toArray,
       "licenseInfo": $licenseInfo.toArray,
+      "texPackages": $texPackages.toArray,
+      "texPreambleItems": $texPreambleItems.toArray,
       "contents": $contents.contents
     }
 
 public instance : FromJson TraverseState where
   fromJson? v := private do
-    let tags ← v.getObjValAs? (Array Json) "tags"
-    let tags ← tags.mapM fun j => do
-      let k ← j.getObjValAs? _ "key"
-      let v ← j.getObjValAs? _ "value"
-      pure (k, v)
-    let tags : HashMap _ _ := HashMap.insertMany {} tags
-    let externalTags ← v.getObjValAs? (Array Json) "externalTags"
-    let externalTags ← externalTags.mapM fun j => do
-      let k ← j.getObjValAs? _ "key"
-      let v ← j.getObjValAs? _ "value"
-      pure (k, v)
-    let externalTags : HashMap _ _ := HashMap.insertMany {} externalTags
+    let tags ← fromJsonMap v "tags"
+    let externalTags ← fromJsonMap v "externalTags"
     let domains <- v.getObjValAs? _ "domains"
     let ids <- v.getObjValAs? (Array InternalId) "ids"
     let ids := .ofArray ids
@@ -356,9 +398,11 @@ public instance : FromJson TraverseState where
     let quickJump := HashMap.insertMany {} quickJump
     let licenseInfo <- v.getObjValAs? (Array LicenseInfo) "licenseInfo"
     let licenseInfo := .ofArray licenseInfo
+    let texPackages ← HashSet.ofArray <$> v.getObjValAs? (Array _) "texPackages"
+    let texPreambleItems ← HashSet.ofArray <$> v.getObjValAs? (Array _) "texPreambleItems"
     let contents ← v.getObjValAs? (NameMap Json) "contents"
     let contents := ⟨contents⟩
-    return { tags, externalTags, domains, ids, features, extraCss, extraJs, extraJsFiles, extraCssFiles, extraDataFiles, quickJump, licenseInfo, contents }
+    return { tags, externalTags, domains, ids, features, extraCss, extraJs, extraJsFiles, extraCssFiles, extraDataFiles, quickJump, licenseInfo, texPackages, texPreambleItems, contents }
 end
 /--
 Returns a fresh internal ID.
@@ -412,7 +456,12 @@ namespace TraverseState
 def set [ToJson α] (state : TraverseState) (name : Name) (value : α) (ok : NameMap.isPublic name := by first | grind | decide) : TraverseState :=
   { state with contents.contents := state.contents.contents.insert name (ToJson.toJson value) ok }
 
-/-- Returns `none` if the key is not found, or `some (error e)` if JSON deserialization failed -/
+/--
+{open Except}
+{given -show}`e : String`
+
+Returns {lean}`none` if the key is not found, or {lean}`some (error e)` if JSON deserialization failed.
+-/
 def get? [FromJson α] (state : TraverseState) (name : Name) : Option (Except String α) :=
   state.contents.contents.get? name |>.map FromJson.fromJson?
 
@@ -493,7 +542,7 @@ private partial def cmpJson : (j1 j2 : Json) → Ordering
       .eq)
 
 /--
-A custom block. The `name` field should correspond to an entry in the block descriptions table.
+A custom block. The {name (full := Block.name)}`name` field should correspond to an entry in the block descriptions table.
 -/
 structure Block where
   /-- A unique name that identifies the block. -/
@@ -538,7 +587,8 @@ instance : Hashable Block where
         x.quickCmp y |>.then (compare s1 s2) |>.isLT
 
 /--
-A custom inline. The `name` field should correspond to an entry in the block descriptions table.
+A custom inline. The {name (full := Inline.name)}`name` field should correspond to an entry in the
+block descriptions table.
 -/
 structure Inline where
   /-- A unique name that identifies the inline. -/
@@ -587,7 +637,7 @@ deriving Repr
 Information that tracks the current context of traversal for a document.
 -/
 structure TraverseContext where
-  /-- The current URL path - will be [] for non-HTML output or in the root -/
+  /-- The current URL path - will be {lean (type:="Path")}`#[]` for non-HTML output or in the root -/
   path : Path := #[]
   /-- The path from the root to the current header -/
   headers : Array PartHeader := #[]
@@ -595,14 +645,12 @@ structure TraverseContext where
   blockContext : Array BlockContext := #[]
   /-- Whether the current build is a draft (used for hiding TODOs, etc from public builds) -/
   draft : Bool := false
-  logError : String → IO Unit
-
 def TraverseContext.inFile (self : TraverseContext) (file : String) : TraverseContext :=
   {self with path := self.path.push file}
 
 abbrev BlockTraversal genre :=
   InternalId → Json → Array (Doc.Block genre) →
-  ReaderT TraverseContext (StateT TraverseState IO) (Option (Doc.Block genre))
+  ReaderT TraverseContext (StateT TraverseState (BuildLogT IO)) (Option (Doc.Block genre))
 
 abbrev BlockToHtml (genre : Genre) (m) :=
   (Doc.Inline genre → Html.HtmlT genre m Output.Html) →
@@ -616,7 +664,7 @@ abbrev BlockToTeX (genre : Genre) (m) :=
 
 abbrev InlineTraversal genre :=
   InternalId → Json → Array (Doc.Inline genre) →
-  ReaderT TraverseContext (StateT TraverseState IO) (Option (Doc.Inline genre))
+  ReaderT TraverseContext (StateT TraverseState (BuildLogT IO)) (Option (Doc.Inline genre))
 
 abbrev InlineToHtml (genre : Genre) (m) :=
   (Doc.Inline genre → Html.HtmlT genre m Output.Html) →
@@ -698,20 +746,20 @@ structure InlineDescr extends HtmlAssets where
   init : TraverseState → TraverseState := id
 
   /--
-  Given the contents of the `data` field of the corresponding `Manual.Inline` and the contained
-  inline elements, carry out the traversal pass.
+  Given the contents of the {name (full := Inline.data)}`data` field of the corresponding
+  {name}`Manual.Inline` and the contained inline elements, carry out the traversal pass.
 
   In addition to updating the cross-reference state through the available monadic effects, a
-  traversal may additionally replace the element with another one. This can be used to e.g. emit
-  a cross-reference once the target becomes available in the state. To replace the element,
-  return `some`. To leave it as is, return `none`.
+  traversal may additionally replace the element with another one. This can be used to e.g. emit a
+  cross-reference once the target becomes available in the state. To replace the element, return
+  {name}`some`. To leave it as is, return {name}`none`.
   -/
   traverse : InlineTraversal Manual
 
   /--
-  How to generate HTML. If `none`, generating HTML from a document that contains this inline will fail.
+  How to generate HTML. If {name}`none`, generating HTML from a document that contains this inline will fail.
   -/
-  toHtml : Option (InlineToHtml Manual (ReaderT AllRemotes (ReaderT ExtensionImpls IO)))
+  toHtml : Option (InlineToHtml Manual (ReaderT AllRemotes (ReaderT ExtensionImpls (BuildLogT IO))))
 
   /--
   Should this inline be an entry in the page-local ToC? If so, how should it be represented?
@@ -726,8 +774,11 @@ structure InlineDescr extends HtmlAssets where
   localContentItem : InternalId → Json → Array (Doc.Inline Manual) → Except String (Array (String × Verso.Output.Html)) :=
     fun _ _ _ => pure #[]
 
-  /-- How to generate TeX. If `none`, generating TeX from a document that contains this inline will fail. -/
-  toTeX : Option (InlineToTeX Manual (ReaderT ExtensionImpls IO))
+  /--
+  How to generate TeX. If {name}`none`, generating TeX from a document that contains this inline
+  will fail.
+  -/
+  toTeX : Option (InlineToTeX Manual (ReaderT ExtensionImpls (BuildLogT IO)))
   /-- Required TeX `\usepackage` lines -/
   usePackages : List String := {}
   /-- Required items in the TeX preamble -/
@@ -748,9 +799,10 @@ structure BlockDescr extends HtmlAssets where
   traverse : BlockTraversal Manual
 
   /--
-  How to generate HTML. If `none`, generating HTML from a document that contains this block will fail.
+  How to generate HTML. If {name}`none`, generating HTML from a document that contains this block
+  will fail.
   -/
-  toHtml : Option (BlockToHtml Manual (ReaderT AllRemotes (ReaderT ExtensionImpls IO)))
+  toHtml : Option (BlockToHtml Manual (ReaderT AllRemotes (ReaderT ExtensionImpls (BuildLogT IO))))
 
   /--
   Should this block be an entry in the page-local ToC? If so, how should it be represented?
@@ -766,8 +818,11 @@ structure BlockDescr extends HtmlAssets where
   localContentItem : InternalId → Json → Array (Doc.Block Manual) → Except String (Array (String × Verso.Output.Html)) :=
     fun _ _ _ => pure #[]
 
-  /-- How to generate TeX. If `none`, generating TeX from a document that contains this block will fail. -/
-  toTeX : Option (BlockToTeX Manual (ReaderT ExtensionImpls IO))
+  /--
+  How to generate TeX. If {name}`none`, generating TeX from a document that contains this block
+  will fail.
+  -/
+  toTeX : Option (BlockToTeX Manual (ReaderT ExtensionImpls (BuildLogT IO)))
   /-- Required TeX `\usepackage` lines -/
   usePackages : List String := {}
   /-- Required items in the TeX preamble -/
@@ -813,16 +868,16 @@ block_extension NAME PARAMS [via MIXINS,+] where
   data := ...
   fields*
 ```
-defines a new kind of block called `NAME` that takes initialization parameters `PARAMS` for the
-`data` field.
+defines a new kind of block called {lit}`NAME` that takes initialization parameters {lit}`PARAMS`
+for the {name (full := Block.data)}`data` field.
 
-If there are no `PARAMS`, then `NAME` is bound to the block with empty data. If there are `PARAMS`,
-then `NAME` is bound to a function that constructs an instance of the block with the data field
-initialized as directed. `PARAMS` are only in scope for the data field.
+If there are no {lit}`PARAMS`, then {lit}`NAME` is bound to the block with empty data. If there are
+{lit}`PARAMS`, then {lit}`NAME` is bound to a function that constructs an instance of the block with
+the data field initialized as directed. {lit}`PARAMS` are only in scope for the data field.
 
 The remaining fields are used to define traversal and output generation for the block. The resulting
-block descriptor is then processed by `MIXINS`, from left to right, before being added to the block
-descriptor table.
+block descriptor is then processed by {lit}`MIXINS`, from left to right, before being added to the
+block descriptor table.
 -/
 syntax "block_extension" ident (ppSpace bracketedBinder)* (&" via " ident,+)? ppIndent(ppSpace "where" extContents) : command
 /--
@@ -833,16 +888,16 @@ inline_extension NAME PARAMS [via MIXINS,+] where
   data := ...
   fields*
 ```
-defines a new kind of inline called `NAME` that takes initialization parameters `PARAMS` for the
-`data` field.
+defines a new kind of inline called {lit}`NAME` that takes initialization parameters {lit}`PARAMS`
+for the {name (full := Inline.data)}`data` field.
 
-If there are no `PARAMS`, then `NAME` is bound to the inline with empty data. If there are `PARAMS`,
-then `NAME` is bound to a function that constructs an instance of the inline with the data field
-initialized as directed. `PARAMS` are only in scope for the data field.
+If there are no {lit}`PARAMS`, then {lit}`NAME` is bound to the inline with empty data. If there are
+{lit}`PARAMS`, then {lit}`NAME` is bound to a function that constructs an instance of the inline
+with the data field initialized as directed. {lit}`PARAMS` are only in scope for the data field.
 
 The remaining fields are used to define traversal and output generation for the inline. The
-resulting inline descriptor is then processed by `MIXINS`, from left to right, before being added to
-the inline descriptor table.
+resulting inline descriptor is then processed by {lit}`MIXINS`, from left to right, before being
+added to the inline descriptor table.
 -/
 syntax "inline_extension" ident (ppSpace bracketedBinder)* (&" via " ident,+)? ppIndent(ppSpace "where" extContents) : command
 
@@ -956,13 +1011,13 @@ def ExtensionImpls.fromLists (inlineImpls : List (Name × InlineDescr)) (blockIm
 open Lean Elab Term in
 elab "extension_impls%" : term => do elabTerm (← ``(ExtensionImpls.fromLists inline_extensions% block_extensions%)) none
 
-abbrev TraverseM := ReaderT ExtensionImpls (ReaderT Manual.TraverseContext (StateT Manual.TraverseState IO))
+abbrev TraverseM := ReaderT ExtensionImpls (ReaderT Manual.TraverseContext (StateT Manual.TraverseState (BuildLogT IO)))
 
 def TraverseM.run
     (impls : ExtensionImpls)
     (ctxt : Manual.TraverseContext)
     (state : Manual.TraverseState)
-    (act : TraverseM α) : IO (α × Manual.TraverseState) :=
+    (act : TraverseM α) : BuildLogT IO (α × Manual.TraverseState) :=
   act impls ctxt state
 
 instance : MonadReader Manual.TraverseContext TraverseM where
@@ -971,8 +1026,9 @@ instance : MonadReader Manual.TraverseContext TraverseM where
 instance : MonadWithReader Manual.TraverseContext TraverseM where
   withReader := withTheReader Manual.TraverseContext
 
-def logError [Monad m] [MonadLiftT IO m] [MonadReaderOf Manual.TraverseContext m] (err : String) : m Unit := do
-  (← readThe Manual.TraverseContext).logError err
+@[deprecated "Use `Verso.reportError` instead." (since := "2026-05-29")]
+def logError [MonadBuildLog m] (err : String) : m Unit :=
+  Verso.reportError err
 
 def isDraft [Functor m] [MonadReaderOf Manual.TraverseContext m] : m Bool :=
   (·.draft) <$> (readThe Manual.TraverseContext)
@@ -1272,6 +1328,7 @@ def sectionDomainMapper : DomainMapper := {
       address: `${value[0].address}#${value[0].id}`,
       domainId: 'Verso.Genre.Manual.section',
       ref: value,
+      priority: value[0].data.searchPriority ?? 50,
     }))"
   : DomainMapper }.setFont { family := .structure, weight := .bold }
 
@@ -1280,6 +1337,18 @@ instance : TraversePart Manual where
 
 instance : TraverseBlock Manual where
   inBlock b := (·.inBlock b)
+
+/--
+Sums the search-priority deviations from the neutral 50 across an array of part headers (typically
+a part's ancestor chain including itself) and recenters on 50. The result is consumed by the
+client as a log-space contribution $`\frac{p - 50}{50}`, so summing deviations here lets a chain of
+ancestor priorities influence a section's final boost additively: a long or extreme chain can
+drift outside $`[0, 99]`, but the downstream math handles that uniformly.
+-/
+def ancestorSearchPriority (headers : Array PartHeader) : Int :=
+  headers.foldl (init := 50) fun acc h =>
+    let p : Int := (h.metadata.map (·.searchPriority.val) |>.getD 50 : Nat)
+    acc + (p - 50)
 
 def savePartXref (slug : Slug) (id : InternalId) (part : Part Manual) : TraverseM Unit := do
   let jsonMetadata :=
@@ -1296,11 +1365,13 @@ def savePartXref (slug : Slug) (id : InternalId) (part : Part Manual) : Traverse
   let num :=
     ((← read).inPart part |>.headers[1:]).toArray.map (fun (h : PartHeader) => h.metadata.bind (·.assignedNumber))
       |>.mapM _root_.id |>.map sectionNumberString
+  let searchPriority := ancestorSearchPriority ((← read).inPart part |>.headers)
   modify fun (st : TraverseState) => st.saveDomainObject sectionDomain slug.toString id |>.saveDomainObjectData sectionDomain slug.toString (json%{
     "context": $jsonMetadata,
     "title": $title,
     "shortTitle": $shortTitle,
-    "sectionNum": $num
+    "sectionNum": $num,
+    "searchPriority": $searchPriority
   })
 
 /--
@@ -1323,7 +1394,7 @@ def tagPart
     (saveXref : Slug → InternalId → Lean.Doc.Part Manual.Inline Manual.Block m → TraverseM Unit) :
     TraverseM Tag := do
   let some id := getId metadata
-    | logError "No internal ID assigned while tagging part"; return default
+    | reportError "No internal ID assigned while tagging part"; return default
   match getTag metadata with
   | none =>
     -- Assign an internal tag - the next round will make it external. This is done in two rounds to
@@ -1335,7 +1406,7 @@ def tagPart
     -- Ensure uniqueness
     if let some id' := (← get).tags[t]? then
       if id != id' then
-        logError s!"Duplicate tag '{t}'"
+        reportError s!"Duplicate tag '{t}'"
     else
       modify fun st => {st with tags := st.tags.insert t id}
     let path := (← readThe TraverseContext).path
@@ -1353,7 +1424,7 @@ def tagPart
       let external := Tag.external slug
 
       let t ← if let some id' := (← get).tags[external]? then
-        if id != id' then logError s!"Duplicate tag '{t}'"
+        if id != id' then reportError s!"Duplicate tag '{t}'"
           pure t
         else
           modify fun st => { st with
@@ -1407,11 +1478,15 @@ instance : Traverse Manual TraverseM where
     | ⟨name, id?, data, props⟩, content => do
       if let some id := id? then
         if let some impl := (← readThe ExtensionImpls).getBlock? name then
-          modify fun s => { s with toHtmlAssets := s.toHtmlAssets.combine impl.toHtmlAssets }
+          modify fun s => { s with
+            toHtmlAssets := s.toHtmlAssets.combine impl.toHtmlAssets
+            texPackages := s.texPackages.insertMany impl.usePackages
+            texPreambleItems := s.texPreambleItems.insertMany impl.preamble
+          }
 
           impl.traverse id data content
         else
-          logError s!"No block traversal implementation found for {name}"
+          reportError s!"No block traversal implementation found for {name}"
           pure none
       else
         -- Assign a fresh ID if there is none. It can then be used on the next traversal pass.
@@ -1421,11 +1496,15 @@ instance : Traverse Manual TraverseM where
     | ⟨name, id?, data⟩, content => do
       if let some id := id? then
         if let some impl := (← readThe ExtensionImpls).getInline? name then
-          modify fun s => { s with toHtmlAssets := s.toHtmlAssets.combine impl.toHtmlAssets }
+          modify fun s => { s with
+            toHtmlAssets := s.toHtmlAssets.combine impl.toHtmlAssets
+            texPackages := s.texPackages.insertMany impl.usePackages
+            texPreambleItems := s.texPreambleItems.insertMany impl.preamble
+          }
 
           impl.traverse id data content
         else
-          logError s!"No inline traversal implementation found for {name}"
+          reportError s!"No inline traversal implementation found for {name}"
           pure none
       else
         -- Assign a fresh ID if there is none. It can then be used on the next traversal pass.
@@ -1433,7 +1512,7 @@ instance : Traverse Manual TraverseM where
         pure <| some <| Inline.other ⟨name, some id, data⟩ content
 
 open Verso.Output.TeX in
-instance : TeX.GenreTeX Manual (ReaderT ExtensionImpls IO) where
+instance : TeX.GenreTeX Manual (ReaderT ExtensionImpls (BuildLogT IO)) where
   part go metadata txt := do
     let st ← TeX.state
     let label? := do
@@ -1447,7 +1526,7 @@ instance : TeX.GenreTeX Manual (ReaderT ExtensionImpls IO) where
     let some descr := (← readThe ExtensionImpls).getBlock? b.name
       | panic! s!"Unknown block {b.name} while rendering.\n\nKnown blocks: {(← readThe ExtensionImpls).blockDescrs.toArray |>.map (·.fst) |>.qsort (·.toString < ·.toString)}"
     let some impl := descr.toTeX
-      | TeX.logError s!"Block {b.name} doesn't support TeX"
+      | reportError s!"Block {b.name} doesn't support TeX"
         return .empty
     impl goI goB id b.data content
   inline go i content := do
@@ -1456,7 +1535,7 @@ instance : TeX.GenreTeX Manual (ReaderT ExtensionImpls IO) where
     let some descr := (← readThe ExtensionImpls).getInline? i.name
       | panic! s!"Unknown inline {i.name} while rendering.\n\nKnown inlines: {(← readThe ExtensionImpls).inlineDescrs.toArray |>.map (·.fst) |>.qsort (·.toString < ·.toString)}"
     let some impl := descr.toTeX
-      | TeX.logError s!"Inline {i.name} doesn't support TeX"
+      | reportError s!"Inline {i.name} doesn't support TeX"
         return .empty
     impl go id i.data content
 
@@ -1495,7 +1574,7 @@ def permalink (id : InternalId) (st : TraverseState) (inline : Bool := true) : H
 
 
 open Verso.Output.Html in
-instance : Html.GenreHtml Manual (ReaderT AllRemotes (ReaderT ExtensionImpls IO)) where
+instance : Html.GenreHtml Manual (ReaderT AllRemotes (ReaderT ExtensionImpls (BuildLogT IO))) where
   part go «meta» txt := do
     let st ← Verso.Doc.Html.HtmlT.state
     let attrs := meta.id.map (st.htmlId) |>.getD #[]

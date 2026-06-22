@@ -176,6 +176,30 @@ public def insert! (m : NameMap α) (n : Name) (a : α) :=
     Std.TreeMap.insert m ⟨n, h⟩ a
   else panic! s!"The name `{n}` is not suitably public to be inserted into a Verso `NameMap`"
 
+/--
+Constructs a {name}`NameMap` from an array of name-value pairs, given a proof that all names in the
+array are suitably public.
+-/
+public def ofArray
+    (xs : Array (Name × α))
+    (allOk : ∀ (i : Nat) (h : i < xs.size), isPublic xs[i].1 := by first | decide | grind) :
+    NameMap α :=
+  xs.size.fold (init := TreeMap.empty) fun i h m =>
+    have := allOk i h
+    m.insert xs[i].fst xs[i].snd
+
+/--
+Constructs a {name}`NameMap` from a list of name-value pairs, given a proof that all names in the
+list are suitably public.
+-/
+public def ofList
+    (xs : List (Name × α))
+    (allOk : ∀ kv ∈ xs, isPublic kv.1 := by first | decide | grind) :
+    NameMap α :=
+  xs.attach.foldl (init := TreeMap.empty) fun m ⟨(k, v), h⟩ =>
+    have := allOk _ h
+    m.insert k v
+
 @[inherit_doc Std.TreeMap.contains]
 public def contains (m : NameMap α) (n : Name) : Bool :=
   if h : isPublic n then
@@ -217,6 +241,9 @@ public instance : GetElem? (NameMap α) Name α fun xs n => n ∈ xs where
        exact ok
   getElem? xs x := xs.get? x
 
+public instance [BEq α] : BEq (NameMap α) where
+  beq xs ys :=
+    xs.size == ys.size && xs.all (fun k v => ys[k.toName]?.isEqSome v)
 
 public instance [Monad m] : ForIn m (NameMap α) (PublicName × α) where
   forIn xs init f := (xs : Std.TreeMap _ _ _).forIn (fun a b acc => f (a, b) acc) init

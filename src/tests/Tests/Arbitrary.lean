@@ -15,6 +15,7 @@ public meta import VersoManual.Html.JsFile
 public meta import VersoManual.Html.CssFile
 public meta import VersoManual.Html.Features
 public meta import VersoManual.LicenseInfo
+public meta import VersoSearch
 public meta import VersoSearch.DomainSearch
 public meta import Verso.Output.Html
 public meta import MultiVerso.Manifest
@@ -50,6 +51,58 @@ instance : Shrinkable InternalId where
   shrink private
     | { id } => Shrinkable.shrink id <&> InternalId.mk
 
+instance : Arbitrary Float where
+  arbitrary := do
+    frequency fromBits [(1, fromBits), (1, small), (1, integral), (1, smallInt), (2, special)]
+where
+  fromBits : Gen Float := do
+    let i : UInt64 ← arbitrary
+    return Float.ofBits i
+  small : Gen Float := do
+    let n : UInt32 ← arbitrary
+    let d : UInt32 ← arbitrary
+    let sign : Bool ← arbitrary
+    return (min n d).toFloat / (max n d).toFloat * (if sign then 1.0 else (-1.0))
+  integral : Gen Float := do
+    let i := Int64.ofUInt64 (← arbitrary)
+    return i.toFloat
+  smallInt : Gen Float := do
+    let i : Int8 := Int8.ofUInt8 (← arbitrary)
+    return i.toFloat
+  special : Gen Float :=
+  .elements [
+    0.0, -0.0, 1.0, -1.0, 2.0, -2.0, 0.5, -0.5,
+    (1.0 / 0.0), -(1.0 / 0.0), (0.0 / 0.0), -- ±∞, NaN
+    Float.ofBits 1, Float.ofBits (((1 : UInt64) <<< 63) ||| 1),   -- smallest ±subnormal
+    -- Around the precision boundary where consecutive integers stop being representable.
+    -- `2 ^ 53 + 1` is not representable (rounds to `2 ^ 53`), so we use `2 ^ 53 + 2` instead.
+    2.0 ^ 53 - 1.0, 2.0 ^ 53, 2.0 ^ 53 + 2.0,
+    0.1, 0.2, 0.1 + 0.2
+  ] (by grind)
+
+instance : Shrinkable Float where
+  shrink i :=
+    if i.isNaN then [0.0]
+    else if !i.isFinite then [0.0]
+    else if i > 0.0 then [0.0, i / 2.0]
+    else if i < 0.0 then [0.0, i / 2.0, -i]
+    else []
+
+instance : Arbitrary Verso.Search.IndexDoc where
+  arbitrary := do
+    let id ← arbitrary
+    let header ← arbitrary
+    let context ← arbitrary
+    let content ← arbitrary
+    let priority ← arbitrary
+    return { id, header, context, content, priority }
+
+instance : Shrinkable Verso.Search.IndexDoc where
+  shrink d :=
+    (shrink d.priority).map ({ d with priority := · }) ++
+    (shrink d.content).map ({ d with content := · }) ++
+    (shrink d.header).map ({ d with header := · }) ++
+    (shrink d.id).map ({ d with id := · })
 
 instance : Arbitrary JsonNumber where
   arbitrary := do
@@ -324,7 +377,7 @@ instance [Arbitrary α] : Arbitrary (Verso.NameMap α) where
 open Shrinkable in
 instance [Shrinkable α] : Shrinkable (Verso.NameMap α) where
   shrink v :=
-    shrink v.toArray |>.map fun v => .ofArray v _
+    shrink v.toArray |>.map fun v => TreeMap.ofArray v _
 
 instance : Arbitrary RemoteInfo where
   arbitrary := do

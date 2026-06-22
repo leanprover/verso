@@ -58,7 +58,7 @@ info: Verso.Output.Html.tag
               (Verso.Output.Html.text true "(define (zero f z) z)\n(define (succ n) (lambda (f x) (f (n f z))))\n")])])
 -/
 #guard_msgs in
-  #eval Doc.Genre.none.toHtml (m:=Id) {logError := fun _ => ()} () () {} {} {} code1.toPart |>.run .empty |>.fst
+  #eval Doc.Genre.none.toHtml (m := Id) {} () () {} {} {} code1.toPart |>.run .empty |>.fst
 
 
 /- ----- -/

@@ -32,7 +32,7 @@ block_extension Block.signature via withHighlighting where
     some <| fun _ _ _ data _ => do
       match FromJson.fromJson? data with
       | .error err =>
-        HtmlT.logError <| "Couldn't deserialize Lean code while rendering HTML signature: " ++ err ++ "\n" ++ toString data
+        reportError <| "Couldn't deserialize Lean code while rendering HTML signature: " ++ err ++ "\n" ++ toString data
         pure .empty
       | .ok (hl : Highlighted) =>
         hl.blockHtml (g := Manual) "examples"

@@ -200,6 +200,105 @@ private def testKeywordRole (data : TestData) : IO Unit := withTestDir data fun 
   unless hasSubstring coreHtml "keyword" do
     throw <| IO.userError "Core page does not contain 'keyword' CSS class for {kw} role"
 
+/--
+Per-module JSON path used by the tests. The literate facet writes
+`jsonDir/A/B/.../<leaf>.json` mirroring the module name.
+-/
+private def jsonPath (jsonDir : System.FilePath) (mod : String) : System.FilePath :=
+  mod.splitOn "." |>.foldl (init := jsonDir) (· / ·) |>.withExtension "json"
+
+/--
+Ensures that the HTML rendering pass accepts every built-in docstring extension (that is, they all
+have handlers), and that the tactic and conv handlers attach the syntax kind's docstring for
+hovers.
+-/
+private def testAllBuiltinDocRoles (data : TestData) : IO Unit := withTestDir data fun jsonDir htmlDir _ _ => do
+  runLiterateHtml jsonDir htmlDir
+  let builtinsHtml := htmlDir / "LitConfig" / "Builtins" / "index.html"
+  unless ← builtinsHtml.pathExists do
+    throw <| IO.userError s!"Expected Builtins HTML page at {builtinsHtml}"
+  let jsonContent ← IO.FS.readFile (jsonPath jsonDir "LitConfig.Builtins")
+  unless hasSubstring jsonContent "\"content\":\"rfl\",\"kind\":{\"keyword\":{\"docs\":\"" do
+    throw <| IO.userError "Builtins JSON has no docs on the `rfl` keyword token. \
+      The tactic handler did not attach the syntax kind's docstring."
+  unless hasSubstring jsonContent "\"content\":\"lhs\",\"kind\":{\"keyword\":{\"docs\":\"" do
+    throw <| IO.userError "Builtins JSON has no docs on the `lhs` keyword token. \
+      The conv handler did not attach the syntax kind's docstring."
+
+/--
+Checks that user-registered `@[inline_to_literate]` and `@[block_to_literate]` handlers shadow the
+built-ins.
+-/
+private def testCustomLiterateHandlers (data : TestData) : IO Unit := withTestDir data fun jsonDir htmlDir _ _ => do
+  runLiterateHtml jsonDir htmlDir
+  let jsonFile := jsonPath jsonDir "LitConfig.UserExt"
+  unless ← jsonFile.pathExists do
+    throw <| IO.userError s!"Expected JSON for LitConfig.UserExt at {jsonFile}"
+  let jsonContent ← IO.FS.readFile jsonFile
+  unless hasSubstring jsonContent "USER-CONST-MARKER" do
+    throw <| IO.userError "UserExt JSON missing USER-CONST-MARKER: `@[inline_to_literate]` handler did not run"
+  unless hasSubstring jsonContent "USER-LEANBLOCK-MARKER" do
+    throw <| IO.userError "UserExt JSON missing USER-LEANBLOCK-MARKER: `@[block_to_literate]` handler did not run"
+
+  let html ← IO.FS.readFile (htmlDir / "LitConfig" / "UserExt" / "index.html")
+  unless hasSubstring html "looks like you're defining a const" do
+    throw <| IO.userError "UserExt HTML missing the inline replacement text. The user handler's children weren't rendered."
+  unless hasSubstring html "Replacement For A Lean Block" do
+    throw <| IO.userError "UserExt HTML missing the block replacement text. The user handler's children weren't rendered."
+  if hasSubstring html "trivial" then
+    throw <| IO.userError "UserExt HTML contains 'trivial'. The built-in lean code-block handler ran instead of the user handler."
+
+/--
+Checks that messages produced by code blocks in docstrings are attached to the rendered code block
+rather than to the command that carries the docstring.
+
+{lit}`LitConfig.Builtins.codeBlockDemos` has a docstring whose `lean` code block runs
+{lit}`#eval 1 + 1`. The resulting info message is logged at the code's position inside the doc
+comment. The literate pipeline re-attaches it to the rendered code block, so the JSON contains
+exactly one message span, and that span wraps the {lit}`#eval` token.
+-/
+private def testDocstringCodeBlockMessages (data : TestData) : IO Unit := do
+  let jsonFile := jsonPath data.jsonDir "LitConfig.Builtins"
+  unless ← jsonFile.pathExists do
+    throw <| IO.userError s!"Expected JSON for LitConfig.Builtins at {jsonFile}"
+  let jsonContent ← IO.FS.readFile jsonFile
+  unless hasSubstring jsonContent "\"span\":{\"content\":{\"token\":{\"tok\":{\"content\":\"#eval\"" do
+    throw <| IO.userError "Builtins JSON has no message span on the docstring's `#eval`. \
+      Messages from docstring code blocks were not re-attached to the rendered code."
+  let spanCount := (jsonContent.splitOn "\"span\":").length - 1
+  unless spanCount == 1 do
+    throw <| IO.userError s!"Expected exactly one message span in Builtins JSON, got {spanCount}. \
+      A message from a docstring code block may have been attached to the surrounding command."
+
+/--
+When a docstring contains an extension that has no handler, the conversion logs a warning and emits
+the fallback content instead of aborting the build.
+
+`LitConfig.UserExt` defines a `@[doc_role]` whose payload type is unhandled. The resulting document
+node has the marker text `"THIS IS THE FALLBACK"` as a fallback. Building the `:literateHtml` Lake
+facet exercises both the conversion fallback (which logs the warning) and the HTML rendering path
+(which recurses into the children); this test then searches the build output for the warning and the
+generated HTML for the marker text.
+-/
+private def testUnknownExtensionFallback : IO Unit := do
+  let result ← IO.Process.output {
+    cmd := "lake"
+    args := #["build", ":literateHtml"]
+    cwd := "test-projects/literate-config"
+  }
+  if result.exitCode != 0 then
+    throw <| IO.userError s!"lake build :literateHtml failed (exit {result.exitCode}):\nstdout: {result.stdout}\nstderr: {result.stderr}"
+  unless hasSubstring result.stdout "No inline handler for LitConfig.UserExt.FallbackPayload" do
+    throw <| IO.userError s!"Expected warning about unhandled extension in build output, got stdout: {result.stdout}\nstderr: {result.stderr}"
+  let htmlFile : System.FilePath :=
+    "test-projects/literate-config" / ".lake" / "build" / "literate-html"
+      / "LitConfig" / "UserExt" / "index.html"
+  unless ← htmlFile.pathExists do
+    throw <| IO.userError s!"Expected HTML page at {htmlFile}"
+  let html ← IO.FS.readFile htmlFile
+  unless hasSubstring html "THIS IS THE FALLBACK" do
+    throw <| IO.userError "HTML missing 'THIS IS THE FALLBACK' marker. The conversion's fallback children were not rendered."
+
 /-- Excluded modules produce no HTML output and are absent from the navbar. -/
 private def testExclude (data : TestData) : IO Unit := withTestDir data fun jsonDir htmlDir planFile tomlFile => do
   IO.FS.writeFile tomlFile "exclude = [\"LitConfig.NoDocstrings\"]\n"
@@ -1099,13 +1198,17 @@ private def htmlTests (data : TestData) (projectDir : System.FilePath) : List (S
   ("single-root nav flattening", testSingleRootNavFlattening data),
   ("docstrings_as_text", testDocstringsAsText data),
   ("docstrings_as_text default", testDocstringsAsTextDefault data),
-  ("keyword role", testKeywordRole data)
+  ("keyword role", testKeywordRole data),
+  ("all built-in doc roles", testAllBuiltinDocRoles data),
+  ("custom literate handlers", testCustomLiterateHandlers data),
+  ("docstring code block messages", testDocstringCodeBlockMessages data),
+  ("unknown extension fallback", testUnknownExtensionFallback)
 ]
 
 def testLiterateHtml : IO Unit := do
   IO.println "Running literate HTML tests..."
   let projectDir := "test-projects/literate-config"
-  let modules := #["LitConfig", "LitConfig.Core", "LitConfig.Core.Basic", "LitConfig.NoDocstrings"]
+  let modules := #["LitConfig", "LitConfig.Core", "LitConfig.Core.Basic", "LitConfig.NoDocstrings", "LitConfig.Builtins", "LitConfig.UserExt"]
 
   -- First verify test project toolchain matches root toolchain
   let rootToolchain := (← IO.FS.readFile "lean-toolchain").trimAscii

@@ -24,7 +24,7 @@ jobs:
                   ./elan-init -y --default-toolchain none
                   echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
 
-            - uses: actions/checkout@v6
+            - uses: actions/checkout@v7
 
             - name: List all files
               run: |
@@ -125,6 +125,29 @@ jobs:
               run: |
                   uv run --project browser-tests --extra test playwright install chromium firefox --with-deps
 
+            # Inkscape is needed by the LaTeX `svg` package, which converts
+            # SVG files emitted by `diagram` code blocks to PDF at build time.
+            - name: Install Inkscape
+              run: sudo apt-get update && sudo apt-get install -y --no-install-recommends inkscape
+
+            # Install uv and Playwright before tests, since lake test
+            # runs literate browser tests that need them
+            - name: Install uv
+              uses: astral-sh/setup-uv@v7
+              with:
+                  enable-cache: true
+                  cache-dependency-glob: "browser-tests/pyproject.toml"
+
+            - name: Cache Playwright browsers
+              uses: actions/cache@v5
+              with:
+                  path: .playwright-browsers
+                  key: playwright-${{ runner.os }}-${{ hashFiles('browser-tests/uv.lock') }}
+
+            - name: Install Playwright browsers
+              run: |
+                  uv run --project browser-tests --extra test playwright install chromium firefox --with-deps
+
             - name: Run tests
               run: |
                   lake test -- --verbose --check-tex
@@ -184,6 +207,23 @@ jobs:
                   npx tsc --noEmit -p jsconfig.json
                   popd
 
+            - name: Check the ToC width storage key stays in sync
+              run: |
+                  # toc-resize.js and toc-resize-preload.js must agree on the localStorage
+                  # key, since the preload primes the value the main script later reads.
+                  main_key=$(grep -oE 'STORAGE_KEY = "[^"]+"' static-web/toc-resize.js | grep -oE '"[^"]+"')
+                  preload_key=$(grep -oE 'getItem\("[^"]+"\)' static-web/toc-resize-preload.js | grep -oE '"[^"]+"')
+                  echo "toc-resize.js storage key:         ${main_key:-<none>}"
+                  echo "toc-resize-preload.js storage key: ${preload_key:-<none>}"
+                  if [ -z "$main_key" ] || [ -z "$preload_key" ]; then
+                      echo "::error::Could not find the ToC width storage key in one of the scripts" >&2
+                      exit 1
+                  fi
+                  if [ "$main_key" != "$preload_key" ]; then
+                      echo "::error::ToC width localStorage key differs between toc-resize.js and toc-resize-preload.js" >&2
+                      exit 1
+                  fi
+
             - name: Generate the demo site and make sure page_link works
               run: |
                   lake exe demosite --output _out/demosite
@@ -223,8 +263,27 @@ jobs:
               run: |
                   uv run --project browser-tests --extra test pytest \
                     browser-tests/test_search.py \
+                    browser-tests/test_search_priority.py \
+                    browser-tests/test_search_page.py \
+                    browser-tests/test_toc_resize.py \
                     browser-tests/test_redirect.py \
                     browser-tests/test_katex.py -v
+
+            - name: Build the VersoHtml site for browser tests
+              run: |
+                  # The verso-html genre renders literate JSON into a standalone HTML site.
+                  # We reuse the literate-config test project (already cached) as input, then
+                  # run verso-html against its literate-JSON output.
+                  pushd test-projects/literate-config
+                  lake build +LitConfig:literate
+                  popd
+                  lake exe verso-html test-projects/literate-config/.lake/build/literate _out/verso-html
+
+            - name: Run VersoHtml browser tests
+              run: |
+                  uv run --project browser-tests --extra test pytest \
+                    browser-tests/verso-html -v \
+                    --site-dir "$(pwd)/_out/verso-html"
 
             - name: Upload docs to artifact storage
               if: github.ref != 'refs/heads/main'
@@ -264,7 +323,7 @@ jobs:
 
             - name: Deploy Verso manual
               id: deploy-lang
-              uses: nwtgck/actions-netlify@v3.0
+              uses: nwtgck/actions-netlify@v4.0
               if: github.event_name == 'push' && github.ref_name == 'main'
               with:
                   publish-dir: _out/html-multi

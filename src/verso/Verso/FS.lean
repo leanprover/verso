@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 module
+public import Verso.BuildLog
 set_option doc.verso true
 
 namespace Verso.FS
@@ -21,18 +22,20 @@ public def ensureDir (dir : System.FilePath) : IO Unit := do
     throw (↑ s!"Not a directory: {dir}")
 
 /--
-Recursively copies a directory of files from {name}`src` to {name}`tgt`. Any errors are logged using
-{name}`logError`, and paths that don't satisfy {name}`copyFile` are skipped.
+Recursively copies a directory of files from {name}`src` to {name}`tgt`. Any errors are reported via
+{name}`MonadBuildLog`, and paths that don't satisfy {name}`copyFile` are skipped.
 -/
-public partial def copyRecursively (logError : String → IO Unit) (src tgt : System.FilePath)
-    (copyFile : System.FilePath → IO Bool := fun _ => pure true) : IO Unit := do
-  unless (← copyFile src) do return
-  if (← src.metadata).type == .symlink then
-    logError s!"Can't copy '{src}' - symlinks not currently supported"
-  if ← src.isDir then
-    ensureDir tgt
-    for d in ← src.readDir do
-      copyRecursively logError d.path (tgt / d.fileName) (copyFile := copyFile)
+public partial def copyRecursively
+    [Monad m] [MonadLiftT IO m] [MonadBuildLog m]
+    (src tgt : System.FilePath) (copyFile : System.FilePath → IO Bool := fun _ => pure true) :
+    m Unit := do
+  unless ← (copyFile src : IO _) do return
+  if (← (src.metadata : IO _)).type == .symlink then
+    Verso.reportError s!"Can't copy '{src}' - symlinks not currently supported"
+  if ← (src.isDir : IO _) then
+    (ensureDir tgt : IO _)
+    for d in ← (src.readDir : IO _) do
+      copyRecursively d.path (tgt / d.fileName) (copyFile := copyFile)
   else
     withFile src .read fun h =>
       withFile tgt .write fun h' => do

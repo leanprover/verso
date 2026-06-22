@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 module
+public import Verso.Doc.SourceRange
 public import Lean.Server.CodeActions
 
 namespace Verso.Doc
@@ -17,8 +18,21 @@ public structure PointOfInterest where
   detail? : Option String
 deriving TypeName
 
+/--
+Save a document-symbol entry for `stx`.
+
+When provided, `selectionSyntax?` marks the smaller source range selected by document-symbol
+clients; it must be contained in `stx`'s range. Without it, clients select the whole `stx` range.
+-/
 public def PointOfInterest.save [Monad m] [MonadInfoTree m] (stx : Syntax) (title : String)
-    (selectionRange : Syntax := stx)
+    (selectionSyntax? : Option Syntax := none)
     (kind : Lean.Lsp.SymbolKind := .constant)
     (detail? : Option String := none) : m Unit := do
-  pushInfoLeaf <| .ofCustomInfo {stx := stx, value := Dynamic.mk (PointOfInterest.mk title selectionRange.getRange? kind detail?)}
+  let selectionRange :=
+    selectionSyntax?.map fun selectionSyntax =>
+      let range := requireSyntaxRange s!"PointOfInterest syntax for '{title}'" stx
+      let selectionRange := requireSyntaxRange s!"PointOfInterest selection syntax for '{title}'"
+        selectionSyntax
+      requireContainedSyntaxRange s!"Invalid PointOfInterest selection range for '{title}'"
+        range.start range.stop selectionRange
+  pushInfoLeaf <| .ofCustomInfo {stx := stx, value := Dynamic.mk (PointOfInterest.mk title selectionRange kind detail?)}

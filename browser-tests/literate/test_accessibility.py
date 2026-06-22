@@ -54,7 +54,12 @@ class TestAccessibility:
 
     def test_heading_hierarchy(self, server: str, page: Page):
         """Test at most one h1 per page and no heading level gaps."""
-        for path in ["/LitConfig/", "/LitConfig/Core/", "/LitConfig/Core/Basic/", "/LitConfig/NoDocstrings/"]:
+        for path in [
+            "/LitConfig/",
+            "/LitConfig/Core/",
+            "/LitConfig/Core/Basic/",
+            "/LitConfig/NoDocstrings/",
+        ]:
             page.goto(f"{server}{path}")
             page.wait_for_load_state("networkidle")
 
@@ -74,7 +79,7 @@ class TestAccessibility:
             for i in range(1, len(levels)):
                 gap = levels[i] - levels[i - 1]
                 assert gap <= 1, (
-                    f"Page {path}: heading gap from h{levels[i-1]} to h{levels[i]} "
+                    f"Page {path}: heading gap from h{levels[i - 1]} to h{levels[i]} "
                     f"(levels: {levels})"
                 )
 
@@ -92,7 +97,9 @@ class TestAccessibility:
         found_search = False
         for _ in range(10):
             page.keyboard.press("Tab")
-            focused = page.evaluate("() => document.activeElement?.getAttribute('role')")
+            focused = page.evaluate(
+                "() => document.activeElement?.getAttribute('role')"
+            )
             if focused == "searchbox":
                 found_search = True
                 break
@@ -109,7 +116,9 @@ class TestAccessibility:
         expect(skip_link).to_be_focused()
 
         outline = skip_link.evaluate("el => getComputedStyle(el).outlineStyle")
-        assert outline != "none", f"Expected focus outline on skip-link, got outline-style: {outline}"
+        assert outline != "none", (
+            f"Expected focus outline on skip-link, got outline-style: {outline}"
+        )
 
     def test_collapsible_aria(self, server: str, page: Page):
         """Test <details> open/closed state is correct and keyboard-operable."""
@@ -139,7 +148,12 @@ class TestAccessibility:
         page.wait_for_load_state("networkidle")
 
         # Inject axe-core from vendored local copy
-        axe_js_path = Path(__file__).parent.parent.parent / "vendored-js" / "axe-core" / "axe.min.js"
+        axe_js_path = (
+            Path(__file__).parent.parent.parent
+            / "vendored-js"
+            / "axe-core"
+            / "axe.min.js"
+        )
         page.evaluate(axe_js_path.read_text())
 
         results = page.evaluate("""() => {
@@ -165,7 +179,9 @@ class TestAccessibility:
                 nodes = ", ".join(n.get("html", "?") for n in v.get("nodes", [])[:3])
                 messages.append(f"  - {v['id']}: {v['help']} ({nodes})")
             violation_report = "\n".join(messages)
-            assert False, f"axe-core found {len(violations)} accessibility violation(s):\n{violation_report}"
+            assert False, (
+                f"axe-core found {len(violations)} accessibility violation(s):\n{violation_report}"
+            )
 
     def test_reduced_motion(self, server: str, page: Page):
         """Test that with prefers-reduced-motion: reduce, transition durations are near 0."""
@@ -231,7 +247,7 @@ class TestAccessibility:
 
         # Parse RGB values and compute relative luminance
         def parse_rgb(color_str):
-            match = re.search(r'rgb[a]?\((\d+),\s*(\d+),\s*(\d+)', color_str)
+            match = re.search(r"rgb[a]?\((\d+),\s*(\d+),\s*(\d+)", color_str)
             if match:
                 return int(match.group(1)), int(match.group(2)), int(match.group(3))
             return None
@@ -249,7 +265,9 @@ class TestAccessibility:
         bg = parse_rgb(colors["backgroundColor"])
 
         assert fg is not None, f"Failed to parse foreground color: {colors['color']}"
-        assert bg is not None, f"Failed to parse background color: {colors['backgroundColor']}"
+        assert bg is not None, (
+            f"Failed to parse background color: {colors['backgroundColor']}"
+        )
 
         l1 = relative_luminance(*fg)
         l2 = relative_luminance(*bg)

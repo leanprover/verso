@@ -76,7 +76,7 @@ block_extension Block.syntaxError via withHighlighting where
     some <| fun _ _ _ data _ => do
       match FromJson.fromJson? data with
       | .error err =>
-        HtmlT.logError <| "Couldn't deserialize Lean code while rendering HTML: " ++ err
+        reportError <| "Couldn't deserialize Lean code while rendering HTML: " ++ err
         pure .empty
       | .ok (str, (msgs : (Array SyntaxError))) =>
         let mut pos : String.Pos.Raw := ⟨0⟩

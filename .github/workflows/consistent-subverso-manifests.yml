@@ -12,7 +12,7 @@ jobs:
         name: SubVerso version consistency
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v6
+            - uses: actions/checkout@v7
 
             - name: Check for consistent Subverso versions in all manifests
               run: |
@@ -65,5 +65,7 @@ jobs:
                     fi
                   done
                   if [ "$FAILED" -ne 0 ]; then
+                    echo ""
+                    echo "To fix automatically, comment '!consistent' on the PR."
                     exit 1
                   fi

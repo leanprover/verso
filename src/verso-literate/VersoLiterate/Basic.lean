@@ -126,6 +126,13 @@ def handleTerm : InlineToLiterate
     throwError "Wrong data"
   | _, _, _ => pure none
 
+def handleSetOption : InlineToLiterate
+  | ``Lean.Doc.Data.SetOption, val, content => do
+    if let some { term, ..} := val.get? Lean.Doc.Data.SetOption then
+      return some <| .other (.highlighted <| highlightDocCode term) content
+    throwError "Wrong data"
+  | _, _, _ => pure none
+
 def handleOption : InlineToLiterate
   | ``Lean.Doc.Data.Option, val, content => do
     if let some { name, declName } := val.get? Lean.Doc.Data.Option then
@@ -145,7 +152,23 @@ def handleTactic : InlineToLiterate
   | ``Lean.Doc.Data.Tactic, val, content => do
     if let some { name } := val.get? Lean.Doc.Data.Tactic then
       let s := if let #[.code s] := content then s else name.toString
-      return some <| .other (.highlighted <| .token ⟨.keyword (some name) none none, s⟩) content
+      let docs ← findDocString? (← getEnv) name
+      return some <| .other (.highlighted <| .token ⟨.keyword (some name) none docs, s⟩) content
+    throwError "Wrong data"
+  | _, _, _ => pure none
+
+def handleConvTactic : InlineToLiterate
+  | ``Lean.Doc.Data.ConvTactic, val, content => do
+    -- The `conv` role currently stores a `Data.Tactic` value in its `Data.ConvTactic` extension,
+    -- so both payload types are accepted here.
+    let name? : Option Name :=
+      if let some { name } := val.get? Lean.Doc.Data.ConvTactic then some name
+      else if let some { name } := val.get? Lean.Doc.Data.Tactic then some name
+      else none
+    if let some name := name? then
+      let s := if let #[.code s] := content then s else name.toString
+      let docs ← findDocString? (← getEnv) name
+      return some <| .other (.highlighted <| .token ⟨.keyword (some name) none docs, s⟩) content
     throwError "Wrong data"
   | _, _, _ => pure none
 
@@ -171,7 +194,23 @@ def handleSyntaxCat : InlineToLiterate
     throwError "Wrong data"
   | _, _, _ => pure none
 
-def inline := #[handleLocal, handleConst, handlePostponed, handleAttr, handleTerm, handleOption, handleModName, handleTactic, handleKwAtom, handleSyntax, handleSyntaxCat]
+def inline := #[handleLocal, handleConst, handlePostponed, handleAttr, handleTerm, handleSetOption, handleOption, handleModName, handleTactic, handleConvTactic, handleKwAtom, handleSyntax, handleSyntaxCat]
+
+def handleLeanBlock : BlockToLiterate
+  | ``Lean.Doc.Data.LeanBlock, val, content => do
+    if let some { commands } := val.get? Lean.Doc.Data.LeanBlock then
+      return some <| .other (.highlighted <| highlightDocCode commands) content
+    throwError "Wrong data"
+  | _, _, _ => pure none
+
+def handleLeanTermBlock : BlockToLiterate
+  | ``Lean.Doc.Data.LeanTerm, val, content => do
+    if let some { term, .. } := val.get? Lean.Doc.Data.LeanTerm then
+      return some <| .other (.highlighted <| highlightDocCode term) content
+    throwError "Wrong data"
+  | _, _, _ => pure none
+
+def block := #[handleLeanBlock, handleLeanTermBlock]
 
 end Builtin
 
@@ -190,9 +229,9 @@ unsafe def getBlockToLiterateUnsafe [Monad m] [MonadEnv m] [MonadError m] [Monad
   let env ← getEnv
   let mut all := #[]
   for modIdx in [0:env.header.modules.size] do
-    all := all ++ inlineToLiterateAttr.ext.getModuleEntries env modIdx
-  all := all ++ (inlineToLiterateAttr.ext.getState env).toArray
-  all.mapM (evalConstCheck BlockToLiterate ``BlockToLiterate)
+    all := all ++ blockToLiterateAttr.ext.getModuleEntries env modIdx
+  all := all ++ (blockToLiterateAttr.ext.getState env).toArray
+  return (← all.mapM (evalConstCheck BlockToLiterate ``BlockToLiterate)) ++ Builtin.block
 
 @[implemented_by getBlockToLiterateUnsafe]
 opaque getBlockToLiterate [Monad m] [MonadEnv m] [MonadError m] [MonadOptions m] : m (Array BlockToLiterate)

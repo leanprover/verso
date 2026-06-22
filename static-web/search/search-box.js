@@ -1,5 +1,4 @@
 /**
-/**
  * Copyright (c) 2024 Lean FRO LLC. All rights reserved.
  * Released under Apache 2.0 license as described in the file LICENSE.
  * Author: Jakob Ambeck Vase
@@ -34,20 +33,74 @@ const docContents = ((/** @type {any} */ windowAny) => {
     return windowAny.docContents;
 })(window);
 
+/**
+ * A single ranked hit: either a semantic (fuzzysort) match against a `Searchable`, or a
+ * full-text hit from the elasticlunr index.
+ * @typedef {{kind: 'semantic', score: number, fuzzysortResult: Fuzzysort.Result, searchable: Searchable}
+ *         | {kind: 'fullText', score: number, textMatch: TextMatch}} Candidate
+ */
+
 /** Whether to search word prefixes or whole words in full-text searches. Should match the setting in search-highlight.js.
  * @type {boolean}
  */
 const expandMatches = true;
 
 /**
+ * Per-layer log-space contribution for a priority value. A priority {@code p} contributes
+ * {@code (p - 50) / 50}; {@code 50} (or {@code null}/{@code undefined}) is neutral (0).
+ * @param {number | undefined | null} p
+ * @returns {number}
+ */
+export const priorityContribution = (p) => (p == null ? 0 : (p - 50) / 50);
+
+/**
+ * Combines a raw score with any number of priority layers. Layer contributions are summed in
+ * log space and the raw score is scaled by {@code 2^sum}, so combining is additive in the
+ * exponent: two layers at 75 stack to {@code 2^(0.5 + 0.5) = 2}, not {@code 1.5 * 1.5 = 2.25}.
+ * Undefined/null layers contribute 0 (neutral), so callers can pass optional priorities
+ * directly without pre-filtering.
+ * @param {number} rawScore
+ * @param {(number | undefined | null)[]} priorities
+ * @returns {number}
+ */
+export const combineScore = (rawScore, ...priorities) => {
+    let sum = 0;
+    for (const p of priorities) sum += priorityContribution(p);
+    return rawScore * Math.pow(2, sum);
+};
+
+/**
  * Type definitions to help if you have typescript enabled.
  *
- * @typedef {{searchKey: string, address: string, domainId: string, ref?: any}} Searchable
+ * Priorities are numbers centered on 50 (the neutral default). Authors typically set them
+ * in [0, 99], but the field accepts any number: pre-summed contributions — e.g. a chain of
+ * ancestor sections — can drift outside that range, and are represented on the same centered
+ * scale so one field covers both uses.
+ *
+ * A priority p is interpreted in log space so that layers compose additively instead of
+ * multiplicatively: each layer contributes (p - 50) / 50 to a running sum, and the final
+ * score multiplier is 2 raised to that sum. Thus 50 contributes 0 (no effect), 99 contributes
+ * ~+0.98 (nearly doubles the score), 0 contributes -1 (halves the score), and larger or
+ * smaller values extend the scale linearly.
+ *
+ * Combining this way allows multiple layers (global, domain, item, ancestor sections)
+ * to stack cleanly: three layers each at 75 contribute +0.5 three times for a 2^1.5 ≈ 2.83× boost,
+ * rather than the 1.5³ = 3.375× we'd get from multiplying per-layer factors directly. The
+ * scheme is symmetric around neutral: +0.5 and -0.5 contributions are true inverses. It is
+ * the standard log-linear weighting used in e.g. ElasticSearch's function_score (also known
+ * as "stops" in photography).
+ *
+ * Full-text matches use the same scheme via a per-document priority baked in at index time
+ * (the `docPriorities` map); both search streams therefore honor the same per-section /
+ * per-item adjustments, just resolved at different times.
+ * @typedef {{searchKey: string, address: string, domainId: string, ref?: any, priority?: number}} Searchable
  * @typedef {(domainData: any) => Searchable[]} DomainDataToSearchables
  * @typedef {{t: 'text', v: string} | {t: 'highlight', v: string}} MatchedPart
  * @typedef {(searchable: Searchable, matchedParts: MatchedPart[], document: Document) => HTMLElement} CustomResultRender
  * @typedef {{dataToSearchables: DomainDataToSearchables, customRender?: CustomResultRender, displayName: string, className: string}} DomainMapper
  * @typedef {Record<string, DomainMapper>} DomainMappers
+ * @typedef {{semantic: number, fullText: number, domains: Record<string, number>}} SearchPriorities
+ * @typedef {{semantic?: number, fullText?: number, domains?: Record<string, number>}} SearchPrioritiesInput
  * @typedef {{ref: string, score: number, doc: DocContent}} TextMatch
  * @typedef {{item: Searchable, fuzzysortResult: Fuzzysort.Result, htmlItem: HTMLLIElement}|{terms: string, textItem: TextMatch, htmlItem: HTMLLIElement}} SearchResult
  * @typedef {{run: (tokens: string[]) => string[]}} ElasticLunrPipeline
@@ -260,24 +313,35 @@ const dataToSearchableMap = (json, domainMappers) =>
         }, {});
 
 /**
- * Maps from a data item to a HTML LI element
+ * Maps from a data item to a HTML LI element. `asOption` controls whether the `<li>` gets
+ * `role="option"`: true (the default) for the combobox listbox, false for the full-page
+ * results view where the parent `<ul>` is not a listbox and the items are plain links.
  *
  * @param {DomainMappers} domainMappers
  * @param {Searchable} searchable
  * @param {MatchedPart[]} matchedParts
  * @param {Document} document
+ * @param {boolean} [asOption]
  * @return {HTMLLIElement}
  */
-const searchableToHtml = (domainMappers, searchable, matchedParts, document) => {
+const searchableToHtml = (domainMappers, searchable, matchedParts, document, asOption = true) => {
     const domainMapper = domainMappers[searchable.domainId];
 
     const li = document.createElement("li");
-    li.role = "option";
+    if (asOption) li.role = "option";
     li.className = `search-result ${domainMapper.className}`;
     li.title = `${domainMapper.displayName} ${searchable.searchKey}`;
 
+    // Wrap the rendered content in an anchor so each result is keyboard-focusable,
+    // middle-clickable, and exposes its destination to assistive tech. `display: contents`
+    // in CSS keeps the existing `<li>`-based layout/flex rules working unchanged.
+    const link = document.createElement("a");
+    link.className = "search-result-link";
+    link.href = resolveAgainstBase(withTermsParam(searchable.address, null));
+    li.appendChild(link);
+
     if (domainMapper.customRender != null) {
-        li.appendChild(domainMapper.customRender(searchable, matchedParts, document));
+        link.appendChild(domainMapper.customRender(searchable, matchedParts, document));
     } else {
         const searchTerm = document.createElement("p");
         for (const { t, v } of matchedParts) {
@@ -289,11 +353,11 @@ const searchableToHtml = (domainMappers, searchable, matchedParts, document) => 
                 emEl.textContent = v;
             }
         }
-        li.appendChild(searchTerm);
+        link.appendChild(searchTerm);
     }
 
     const domainName = document.createElement("p");
-    li.appendChild(domainName);
+    link.appendChild(domainName);
     domainName.className = "domain";
     domainName.textContent = domainMapper.displayName;
 
@@ -334,7 +398,13 @@ const loadBucket = async (ref) => {
     /** @type {any} */ (promise).resolve = resolveFun;
     docContents[bucket] = promise;
     const script = document.createElement("script");
-    script.src = `-verso-search/searchIndex_${bucket}.js`;
+    // `window.searchIndexVersion` is emitted by the Lean side alongside the
+    // inverted index. Its value is a content hash of the index, so bucket
+    // filenames change whenever the index does — letting the bucket files be
+    // served with `Cache-Control: immutable` (no revalidation RTT on repeat
+    // visits).
+    const version = /** @type {any} */ (window).searchIndexVersion;
+    script.src = `-verso-search/searchIndex_${bucket}.${version}.js`;
     document.head.appendChild(script);
 
     return await docContents[bucket];
@@ -352,25 +422,222 @@ const getDocContents = async (ref) => {
 };
 
 /**
+ * Score and sort all hits for `filter` across both the semantic (fuzzysort) and full-text
+ * (elasticlunr) streams. Pure with respect to the DOM: callers slice / render the result.
+ *
+ * @param {string} filter
+ * @param {{
+ *   preparedData: Fuzzysort.Prepared[],
+ *   mappedData: Record<string, Searchable[]>,
+ *   searchPriorities: SearchPriorities,
+ *   docPriorities: Record<string, number>,
+ *   searchIndex: TextSearchIndex,
+ * }} opts
+ * @return {Candidate[]}
+ */
+export const computeCandidates = (
+    filter,
+    { preparedData, mappedData, searchPriorities, docPriorities, searchIndex },
+) => {
+    if (filter.length === 0) return [];
+
+    // No `limit` here on purpose: priorities are applied below and may promote items that
+    // rank outside the top 30 by raw fuzzysort score into the display window. The threshold
+    // still filters out poor matches, so the working set stays modest.
+    const results = fuzzysort.go(filter, preparedData, { threshold: 0.25 });
+
+    const textResults = searchIndex
+        ? searchIndex.search(filter, {
+              expand: expandMatches,
+              bool: "AND",
+              // `context` (the breadcrumb text) isn't an indexed field. It was, in the past, but
+              // the boost was 0.1 and its tokens nearly duplicated the header's, so dropping it
+              // cuts one whole inverted index out of the emitted search index. Breadcrumbs are
+              // still shown for each full-text hit from the per-doc data in the bucket files.
+              fields: {
+                  header: { boost: 1.25 },
+                  contents: { boost: 1 },
+              },
+          })
+        : [];
+
+    // Normalize the scores for text results by capping at a threshold, to better integrate with fuzzysearch results
+    const bestPossibleText = 0.8;
+    const maxTextScore = textResults.reduce((max, item) => Math.max(max, item.score), -Infinity);
+    if (maxTextScore > bestPossibleText) {
+        const factor = bestPossibleText / maxTextScore;
+        for (const res of textResults) res.score = res.score * factor;
+    }
+
+    // Flatten results into a single candidate list so per-item priorities can reorder
+    // entries even within a single fuzzysort match (multiple Searchables may share a searchKey).
+    // Text-result scores are scaled by the fullText priority AFTER the normalization above so
+    // that the cap keeps doing its job before the global multiplier is applied. Priority
+    // combining is delegated to `combineScore`; see its definition for the semantics.
+    /** @type {Candidate[]} */
+    const candidates = [];
+    for (const fr of results) {
+        const dataItems = mappedData[fr.target];
+        for (const searchable of dataItems) {
+            const eff = combineScore(
+                fr.score,
+                searchPriorities.semantic,
+                searchPriorities.domains[searchable.domainId],
+                searchable.priority,
+            );
+            candidates.push({ kind: "semantic", score: eff, fuzzysortResult: fr, searchable });
+        }
+    }
+    for (const tr of textResults) {
+        candidates.push({
+            kind: "fullText",
+            score: combineScore(tr.score, searchPriorities.fullText, docPriorities[tr.ref]),
+            textMatch: tr,
+        });
+    }
+    candidates.sort((a, b) => b.score - a.score);
+    return candidates;
+};
+
+/**
+ * Resolve a site-root-relative address (as stored in `xref.json`) against the page's
+ * `<base href>`. Addresses in `xref.json` start with `/`, but this denotes the site's
+ * root rather than `/` for the browser. This helper bridges that gap so anchors and
+ * `window.location` navigations land on the right page regardless of where the site
+ * is mounted.
+ *
+ * @param {string} dest
+ * @return {string}
+ */
+export const resolveAgainstBase = (dest) => {
+    const base = document.querySelector("base");
+    if (!base) return dest;
+    const baseNoSlash = base.href.endsWith("/") ? base.href.slice(0, -1) : base.href;
+    const destNoSlash = dest.startsWith("/") ? dest.slice(1) : dest;
+    return baseNoSlash + "/" + destNoSlash;
+};
+
+/**
+ * Resolve a site-root-relative address against the page's `<base href>` and navigate
+ * there. Mirrors the resolution logic the search box uses to confirm a result.
+ *
+ * @param {string} dest
+ */
+export const navigateBaseRelative = (dest) => {
+    window.location.assign(resolveAgainstBase(dest));
+};
+
+/**
+ * Render a ranked candidate as a listbox option `<li>`. Returns `null` for full-text hits
+ * whose header and body both yielded no visible highlight (the caller should skip it).
+ *
+ * `textSnippet` tunes the per-result snippet sizes for full-text hits. It has no effect
+ * on semantic hits, which don't carry excerpt text.
+ *
+ * `asOption` controls `role="option"` on the returned `<li>`. Defaults to true for the
+ * combobox listbox; callers rendering into a plain list (the full-page search view) pass
+ * false so the items don't masquerade as listbox options.
+ *
+ * @param {Candidate} candidate
+ * @param {{
+ *   domainMappers: DomainMappers,
+ *   filter: string,
+ *   document?: Document,
+ *   textSnippet?: TextSnippetOptions,
+ *   asOption?: boolean,
+ * }} opts
+ * @return {Promise<HTMLLIElement|null>}
+ */
+export const renderCandidateLi = async (candidate, opts) => {
+    const { domainMappers, filter, document: doc = document, textSnippet, asOption = true } = opts;
+    if (candidate.kind === "semantic") {
+        const { fuzzysortResult, searchable } = candidate;
+        return searchableToHtml(
+            domainMappers,
+            searchable,
+            fuzzysortResult
+                .highlight((v) => ({ v }))
+                .map((v) =>
+                    typeof v === "string" ? { t: "text", v } : { t: "highlight", v: v.v },
+                ),
+            doc,
+            asOption,
+        );
+    }
+    return await textResultToHtml(filter, candidate.textMatch, doc, textSnippet, asOption);
+};
+
+/**
+ * Resolve the target page for a candidate, accounting for full-text hits that need a
+ * bucket load to know which page hosts the match. Returns the URL, resolved against
+ * the page's `<base href>` so it works under a non-root site mount, including any
+ * anchor and `?terms=` highlight parameter.
+ *
+ * @param {Candidate} candidate
+ * @param {string} filter
+ * @return {Promise<string>}
+ */
+export const candidateTargetUrl = async (candidate, filter) => {
+    if (candidate.kind === "semantic") {
+        return resolveAgainstBase(withTermsParam(candidate.searchable.address, null));
+    }
+    const resultBucket = await Promise.resolve(loadBucket(candidate.textMatch.ref));
+    /** @type {DocContent} */
+    const doc = resultBucket[candidate.textMatch.ref];
+    return resolveAgainstBase(withTermsParam(doc.id, filter));
+};
+
+/**
+ * Insert a `?terms=<query>` highlight parameter into an address (before any fragment).
+ * @param {string} itemAddress
+ * @param {string|null} query
+ */
+const withTermsParam = (itemAddress, query) => {
+    const q = query ? "?terms=" + encodeURIComponent(query) : "";
+    const [addr, id] = itemAddress.split("#", 2);
+    return id ? addr + q + "#" + id : addr + q;
+};
+
+/**
+ * Snippet sizing knobs for full-text results, shared by the combobox dropdown and the
+ * full-page search view. The two UIs use different defaults: the dropdown is cramped
+ * and wants terse snippets, the full page has room to show more.
+ * @typedef {{header?: number, content?: number, maxSnippets?: number}} TextSnippetOptions
+ */
+
+/**
  * Maps from a data item to a HTML LI element
  * @param {string} term
  * @param {TextMatch} match
  * @param {Document} document
+ * @param {TextSnippetOptions} [snippetOpts]
+ * @param {boolean} [asOption]  Whether to apply `role="option"`. See `searchableToHtml`.
  * @return {Promise<HTMLLIElement|null>}
  */
-const textResultToHtml = async (term, match, document) => {
+const textResultToHtml = async (term, match, document, snippetOpts = {}, asOption = true) => {
+    const headerContext = snippetOpts.header ?? 30;
+    const contentContext = snippetOpts.content ?? 10;
+    const maxSnippets = snippetOpts.maxSnippets ?? 3;
     const doc = await getDocContents(match.ref);
 
     const li = document.createElement("li");
-    li.role = "option";
+    if (asOption) li.role = "option";
     li.className = `search-result full-text`;
     li.title = "Full-text search result";
     // DEBUG:
     // li.title = `Full-text search result (${match.score}) (${match.ref})`;
 
+    // See `searchableToHtml` for the rationale: wrap contents in an anchor so results are
+    // keyboard-focusable and middle-clickable. `doc.id` is the destination, and we have
+    // it here because `getDocContents` (and therefore the bucket) has already loaded.
+    const link = document.createElement("a");
+    link.className = "search-result-link";
+    link.href = resolveAgainstBase(withTermsParam(doc.id, term));
+    li.appendChild(link);
+
     const searchTerm = document.createElement("p");
     let inHeader = true;
-    let headerHl = highlightTextResult(doc.header, term, { contextLength: 30 }); // Only abbreviate huge headers
+    let headerHl = highlightTextResult(doc.header, term, { contextLength: headerContext }); // Only abbreviate huge headers
     if (!headerHl) {
         inHeader = false;
         headerHl = document.createElement("span");
@@ -378,7 +645,10 @@ const textResultToHtml = async (term, match, document) => {
     }
     headerHl.className = "header";
     searchTerm.append(headerHl);
-    let contentHl = highlightTextResult(doc.contents, term, { contextLength: 10 });
+    let contentHl = highlightTextResult(doc.contents, term, {
+        contextLength: contentContext,
+        maxSnippets,
+    });
     if (!contentHl) {
         if (!inHeader) {
             // Exclude this result. It'd be cleaner to do this elsewhere, but duplicating the string
@@ -395,10 +665,10 @@ const textResultToHtml = async (term, match, document) => {
         }
     }
     searchTerm.append(contentHl);
-    li.appendChild(searchTerm);
+    link.appendChild(searchTerm);
 
     const domainName = document.createElement("p");
-    li.appendChild(domainName);
+    link.appendChild(domainName);
     domainName.className = "domain";
     if (doc.context.trim() == "") {
         domainName.textContent = "Full-text search";
@@ -515,6 +785,25 @@ class SearchBox {
     /** @type {DomainMappers} */
     domainMappers;
 
+    /** @type {SearchPriorities} */
+    searchPriorities;
+
+    /**
+     * Priority baked into each full-text document at index time (keyed by doc ref). Feeds the
+     * same per-item log-space contribution that `Searchable.priority` does on the quick-jump side,
+     * so full-text matches can be up- or down-weighted per section.
+     * @type {Record<string, number>}
+     */
+    docPriorities;
+
+    /**
+     * Site-root-relative path of the full-page search results view, e.g. `"search/"`. When
+     * unset, pressing Enter with no listbox selection is a no-op (the combobox is still
+     * fully usable for jump-to-result).
+     * @type {string | null}
+     */
+    searchPagePath;
+
     /** @type {InputAbbreviationRewriter} */
     imeRewriter;
 
@@ -530,13 +819,28 @@ class SearchBox {
      * @param {HTMLElement} listboxNode
      * @param {DomainMappers} domainMappers
      * @param {Record<string, Searchable[]>} mappedData
+     * @param {SearchPriorities} searchPriorities
+     * @param {Record<string, number>} docPriorities
+     * @param {string | null} searchPagePath
      */
-    constructor(comboboxNode, buttonNode, listboxNode, domainMappers, mappedData) {
+    constructor(
+        comboboxNode,
+        buttonNode,
+        listboxNode,
+        domainMappers,
+        mappedData,
+        searchPriorities,
+        docPriorities,
+        searchPagePath,
+    ) {
         this.comboboxNode = comboboxNode;
         this.buttonNode = buttonNode;
         this.listboxNode = listboxNode;
         this.domainMappers = domainMappers;
         this.mappedData = mappedData;
+        this.searchPriorities = searchPriorities;
+        this.docPriorities = docPriorities;
+        this.searchPagePath = searchPagePath;
         this.preparedData = Object.keys(this.mappedData).map((name) => fuzzysort.prepare(name));
         this.requestCounter = 0;
 
@@ -550,8 +854,11 @@ class SearchBox {
             comboboxNode,
         );
 
-        // Initialize with a full-text result's query, if one is being presented
-        const query = new URLSearchParams(window.location.search).get("terms")?.trim();
+        // Pre-fill from the URL: `?q=` is used on the full-page search view, `?terms=` is
+        // used on destination pages reached through a full-text result. `q` wins if both
+        // are present.
+        const params = new URLSearchParams(window.location.search);
+        const query = (params.get("q") ?? params.get("terms"))?.trim();
         comboboxNode.textContent = query ? query : "";
 
         this.comboboxHasVisualFocus = false;
@@ -620,20 +927,7 @@ class SearchBox {
      * @param {string|null} query
      */
     confirmResult(itemAddress, query = null) {
-        query = query ? "?terms=" + encodeURIComponent(query) : "";
-        const [addr, id] = itemAddress.split("#", 2);
-        itemAddress = id ? addr + query + "#" + id : addr + query;
-
-        const base = document.querySelector("base");
-        if (base) {
-            let baseNoSlash = base.href.endsWith("/") ? base.href.slice(0, -1) : base.href;
-            let itemAddressNoSlash = itemAddress.startsWith("/")
-                ? itemAddress.slice(1)
-                : itemAddress;
-            window.location.assign(baseNoSlash + "/" + itemAddressNoSlash);
-        } else {
-            window.location.assign(itemAddress);
-        }
+        navigateBaseRelative(withTermsParam(itemAddress, query));
     }
 
     /**
@@ -699,37 +993,15 @@ class SearchBox {
             return null;
         }
 
-        let results = fuzzysort.go(filter, this.preparedData, {
-            limit: 30,
-            threshold: 0.25,
+        const candidates = computeCandidates(filter, {
+            preparedData: this.preparedData,
+            mappedData: this.mappedData,
+            searchPriorities: this.searchPriorities,
+            docPriorities: this.docPriorities,
+            searchIndex,
         });
 
-        const textResults = searchIndex
-            ? searchIndex.search(filter, {
-                  expand: expandMatches,
-                  bool: "AND",
-                  fields: {
-                      header: { boost: 1.25 },
-                      contents: { boost: 1 },
-                      context: { boost: 0.1 },
-                  },
-              })
-            : [];
-
-        // Normalize the scores for text results by capping at a threshold, to better integrate with fuzzysearch results
-        const bestPossibleText = 0.8;
-        const maxTextScore = textResults.reduce(
-            (max, item) => Math.max(max, item.score),
-            -Infinity,
-        );
-        if (maxTextScore > bestPossibleText) {
-            const factor = bestPossibleText / maxTextScore;
-            for (const res of textResults) {
-                res.score = res.score * factor;
-            }
-        }
-
-        if (results.length === 0 && textResults.length === 0) {
+        if (candidates.length === 0) {
             this.filteredOptions = [];
             this.firstOption = null;
             this.lastOption = null;
@@ -739,11 +1011,8 @@ class SearchBox {
             return null;
         }
 
-        let /** @type {(Fuzzysort.Result|TextMatch) []} */ allResults = [];
-        allResults.push(...textResults);
-        allResults.push(...results);
-        allResults.sort((x, y) => y.score - x.score);
-        allResults = allResults.slice(0, 30);
+        const totalCandidates = candidates.length;
+        const shownCandidates = candidates.slice(0, 30);
 
         // NOTE: Cancellable speculative execution segment begins here! (No awaits before this.)
         // The following computation is async, and so might fall behind later search results if
@@ -759,76 +1028,41 @@ class SearchBox {
         let /** @type {SearchResult | null} */ firstOption = null;
         let /** @type {SearchResult | null} */ lastOption = null;
         let /** @type {SearchResult|null} */ newCurrentOption = null;
-        for (let i = 0; i < allResults.length; i++) {
-            const result = allResults[i];
-            if ("target" in result) {
-                const dataItems = this.mappedData[result.target];
-                for (let j = 0; j < dataItems.length; j++) {
-                    const searchable = dataItems[j];
-                    const option = searchableToHtml(
-                        this.domainMappers,
-                        dataItems[j],
-                        result
-                            .highlight((v) => ({ v }))
-                            .map((v) =>
-                                typeof v === "string"
-                                    ? { t: "text", v }
-                                    : { t: "highlight", v: v.v },
-                            ),
-                        document,
-                    );
-                    option.title = option.title; // DEBUG: show scores + ` (${result.score})`;
-                    /** @type {SearchResult} */
-                    const searchResult = {
-                        item: searchable,
-                        fuzzysortResult: result,
-                        htmlItem: option,
-                    };
-
-                    option.addEventListener("click", this.onOptionClick(searchResult));
-                    option.addEventListener("pointerover", this.onOptionPointerover.bind(this));
-                    option.addEventListener("pointerout", this.onOptionPointerout.bind(this));
-                    filteredOptions.push(searchResult);
-                    listboxResults.push(option);
-                    if (i === 0 && j === 0) {
-                        firstOption = searchResult;
-                    }
-                    if (i === allResults.length - 1 && j === dataItems.length - 1) {
-                        lastOption = searchResult;
-                    }
-                    if (currentOptionText === resultToText(searchResult) && !newCurrentOption) {
-                        newCurrentOption = searchResult;
-                    }
-                }
-            } else {
-                const option = await textResultToHtml(filter, result, document);
-                if (option) {
-                    /** @type {SearchResult} */
-                    const searchResult = {
-                        terms: filter,
-                        textItem: result,
-                        htmlItem: option,
-                    };
-                    option.addEventListener("click", this.onOptionClick(searchResult));
-                    option.addEventListener("pointerover", this.onOptionPointerover.bind(this));
-                    option.addEventListener("pointerout", this.onOptionPointerout.bind(this));
-                    filteredOptions.push(searchResult);
-                    listboxResults.push(option);
-                    if (i === 0) {
-                        firstOption = searchResult;
-                    }
-                    if (i === allResults.length - 1) {
-                        lastOption = searchResult;
-                    }
-                    if (currentOptionText === resultToText(searchResult) && !newCurrentOption) {
-                        newCurrentOption = searchResult;
-                    }
-                }
+        for (let i = 0; i < shownCandidates.length; i++) {
+            const candidate = shownCandidates[i];
+            const option = await renderCandidateLi(candidate, {
+                domainMappers: this.domainMappers,
+                filter,
+                document,
+            });
+            if (!option) continue;
+            // The combobox owns keyboard focus (aria-activedescendant on the input).
+            // Keep the inner <a> out of the tab order so Tab doesn't walk into the
+            // open listbox; the click/Enter paths still navigate via `confirmResult`.
+            option.querySelector("a.search-result-link")?.setAttribute("tabindex", "-1");
+            /** @type {SearchResult} */
+            const searchResult =
+                candidate.kind === "semantic"
+                    ? {
+                          item: candidate.searchable,
+                          fuzzysortResult: candidate.fuzzysortResult,
+                          htmlItem: option,
+                      }
+                    : { terms: filter, textItem: candidate.textMatch, htmlItem: option };
+            option.addEventListener("click", this.onOptionClick(searchResult));
+            option.addEventListener("pointerover", this.onOptionPointerover.bind(this));
+            option.addEventListener("pointerout", this.onOptionPointerout.bind(this));
+            filteredOptions.push(searchResult);
+            listboxResults.push(option);
+            if (i === 0) firstOption = searchResult;
+            if (i === shownCandidates.length - 1) lastOption = searchResult;
+            if (currentOptionText === resultToText(searchResult) && !newCurrentOption) {
+                newCurrentOption = searchResult;
             }
         }
 
         const moreResults = document.createElement("li");
-        moreResults.textContent = `Showing ${allResults.length}/${results.total + textResults.length} results`;
+        moreResults.textContent = `Showing ${filteredOptions.length}/${totalCandidates} results`;
         moreResults.className = `more-results`;
         listboxResults.push(moreResults);
 
@@ -967,6 +1201,11 @@ class SearchBox {
                             this.confirmResult(doc.id, this.currentOption.terms);
                         }
                     }
+                } else if (this.searchPagePath && this.filter.trim().length > 0) {
+                    // Submit the query to the full-page search results view.
+                    navigateBaseRelative(
+                        this.searchPagePath + "?q=" + encodeURIComponent(this.filter.trim()),
+                    );
                 }
                 this.close(true);
                 this.setVisualFocusCombobox();
@@ -1210,10 +1449,20 @@ class SearchBox {
  *   searchWrapper: HTMLElement;
  *   data: any;
  *   domainMappers: Record<string, DomainMapper>;
+ *   searchPriorities?: SearchPrioritiesInput;
+ *   docPriorities?: Record<string, number>;
+ *   searchPagePath?: string | null;
  * }} RegisterSearchArgs
  * @param {RegisterSearchArgs} args
  */
-export const registerSearch = ({ searchWrapper, data, domainMappers }) => {
+export const registerSearch = ({
+    searchWrapper,
+    data,
+    domainMappers,
+    searchPriorities,
+    docPriorities,
+    searchPagePath,
+}) => {
     const comboboxNode = /** @type {HTMLDivElement} */ (
         searchWrapper.querySelector("div[contenteditable]")
     );
@@ -1222,6 +1471,12 @@ export const registerSearch = ({ searchWrapper, data, domainMappers }) => {
     const listboxNode = /** @type {HTMLElement | null} */ (
         searchWrapper.querySelector('[role="listbox"]')
     );
+    /** @type {SearchPriorities} */
+    const priorities = {
+        semantic: searchPriorities?.semantic ?? 50,
+        fullText: searchPriorities?.fullText ?? 50,
+        domains: searchPriorities?.domains ?? {},
+    };
     if (comboboxNode != null && listboxNode != null) {
         new SearchBox(
             comboboxNode,
@@ -1229,6 +1484,27 @@ export const registerSearch = ({ searchWrapper, data, domainMappers }) => {
             listboxNode,
             domainMappers,
             dataToSearchableMap(data, domainMappers),
+            priorities,
+            docPriorities ?? {},
+            searchPagePath ?? null,
         );
     }
 };
+
+/**
+ * Exported for use by `search-page.js`, which maps full-text candidates to their host page
+ * before navigating.
+ * @param {string} ref
+ * @return {Promise<DocContent>}
+ */
+export const getDocContentsFor = (ref) => getDocContents(ref);
+
+/**
+ * Exported wrapper around the internal `dataToSearchableMap` so the full-page search view
+ * can build the same `Record<string, Searchable[]>` shape the combobox uses.
+ *
+ * @param {any} json
+ * @param {DomainMappers} domainMappers
+ * @return {Record<string, Searchable[]>}
+ */
+export const buildSearchableMap = (json, domainMappers) => dataToSearchableMap(json, domainMappers);

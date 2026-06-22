@@ -1,5 +1,6 @@
 from playwright.sync_api import expect, Page
 
+
 class TestKaTeX:
     def test_katex_render(self, server: str, page: Page):
         """Test that the markup page contains at least one rendered KaTeX math."""

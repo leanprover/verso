@@ -205,7 +205,7 @@ where
 
 open Verso.Doc.TeX in
 open Verso.Output.TeX in
-def Citable.bibTeX (go : Doc.Inline Genre.Manual → TeXT Manual (ReaderT ExtensionImpls IO) TeX) (c : Citable) : TeXT Manual (ReaderT ExtensionImpls IO) TeX :=   wrap <$> open TeX in do
+def Citable.bibTeX (go : Doc.Inline Genre.Manual → TeXT Manual (ReaderT ExtensionImpls (BuildLogT IO)) TeX) (c : Citable) : TeXT Manual (ReaderT ExtensionImpls (BuildLogT IO)) TeX :=   wrap <$> open TeX in do
   match c with
   | .inProceedings p =>
     let authors ← andListTeX <$> p.authors.mapM go
@@ -288,10 +288,10 @@ where
 
 open Verso.Doc.TeX in
 def Citable.inlineTeX
-    (go : Doc.Inline Genre.Manual → TeXT Manual (ReaderT ExtensionImpls IO) Output.TeX)
+    (go : Doc.Inline Genre.Manual → TeXT Manual (ReaderT ExtensionImpls (BuildLogT IO)) Output.TeX)
     (ps : List Citable)
     (fmt : Style) :
-    TeXT Manual (ReaderT ExtensionImpls IO) TeX := open TeX in do
+    TeXT Manual (ReaderT ExtensionImpls (BuildLogT IO)) TeX := open TeX in do
   match fmt with
   | .textual =>
     let out : Array TeX ← ps.toArray.mapM fun p => do
@@ -357,13 +357,13 @@ inline_extension Inline.cite (citations : List Citable) (style : Style := .paren
   data := ToJson.toJson (ToJson.toJson citations, style)
   traverse _ data _ := do
     match FromJson.fromJson? data with
-    | .error e => logError s!"Failed to deserialize citation: {e}"; return none
+    | .error e => reportError s!"Failed to deserialize citation: {e}"; return none
     | .ok (v : Json × Style) =>
       let cited : Option (Except String (Array Json)) := (← get).get? `Manual.Bibliography
       match cited with
       | .none =>
         modify (·.set `Manual.Bibliography (Json.arr #[v.1]))
-      | .some (.error e) => logError e
+      | .some (.error e) => reportError e
       | .some (.ok citedSet) =>
         if citedSet.binSearchContains v.1 (cmpCite · · == .lt) then pure ()
         else modify (·.set `Manual.Bibliography <| citedSet.binInsert (cmpCite · · == .lt) v.1)
@@ -372,10 +372,10 @@ inline_extension Inline.cite (citations : List Citable) (style : Style := .paren
     open Verso.Output.TeX in
     some <| fun go _ data _content => do -- TODO repurpose "content" for e.g. "page 5"
       match FromJson.fromJson? data with
-      | .error e => TeX.logError s!"Failed to deserialize citation/style: {e}"; return .empty
+      | .error e => reportError s!"Failed to deserialize citation/style: {e}"; return .empty
       | .ok (v : Json × Style) =>
         match FromJson.fromJson? v.1 with
-        | .error e => TeX.logError s!"Failed to deserialize citation: {e}"; return .empty
+        | .error e => reportError s!"Failed to deserialize citation: {e}"; return .empty
         | .ok (v' : List Citable) =>
           Citable.inlineTeX go v' v.2
   extraCss := [Marginalia.css]
@@ -383,10 +383,10 @@ inline_extension Inline.cite (citations : List Citable) (style : Style := .paren
     open Verso.Output.Html in
     some <| fun go _ data _content => do -- TODO repurpose "content" for e.g. "page 5"
       match FromJson.fromJson? data with
-      | .error e => HtmlT.logError s!"Failed to deserialize citation/style: {e}"; return {{""}}
+      | .error e => reportError s!"Failed to deserialize citation/style: {e}"; return {{""}}
       | .ok (v : Json × Style) =>
         match FromJson.fromJson? v.1 with
-        | .error e => HtmlT.logError s!"Failed to deserialize citation: {e}"; return {{""}}
+        | .error e => reportError s!"Failed to deserialize citation: {e}"; return {{""}}
         | .ok (v' : List Citable) =>
           Citable.inlineHtml go v' v.2
 
