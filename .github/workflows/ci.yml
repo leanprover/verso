@@ -148,6 +148,14 @@ jobs:
               run: |
                   uv run --project browser-tests --extra test playwright install chromium firefox --with-deps
 
+            # The LaTeX `svg` package shells out to `inkscape --version` during
+            # the `--check-tex` build. Fail here with a clear message if Inkscape
+            # is missing or its version can't be read, rather than deep inside a
+            # lualatex run.
+            - name: Check Inkscape is available
+              run: |
+                  inkscape --version
+
             - name: Run tests
               run: |
                   lake test -- --verbose --check-tex
