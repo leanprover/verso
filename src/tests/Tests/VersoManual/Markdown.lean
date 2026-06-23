@@ -3,9 +3,15 @@ Copyright (c) 2024-2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-import VersoManual.Markdown
-import Verso.Doc.Elab.Monad
-import Lean.Elab.Term
+module
+public import VersoManual.Markdown
+public import Verso.Doc.Elab.Monad
+public import Lean.Elab.Term
+meta import all VersoManual.Markdown
+meta import all Verso.Doc.Elab.Monad
+meta import all Lean.Elab.Term
+
+public section
 
 open Verso Doc Elab
 open Verso.Genre Manual Markdown

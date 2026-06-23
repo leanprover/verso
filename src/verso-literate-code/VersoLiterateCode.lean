@@ -3,15 +3,19 @@ Copyright (c) 2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-import Lean.Data.Json
-import VersoLiterate
-import Verso.Doc.Html
-import Verso.Output.Html
-import Verso.Output.Html.ElasticLunr
-import Std.Data.HashMap
-import Verso.FS
-import VersoSearch
-import Verso.Code.External.Code
+module
+public import Lean.Data.Json
+public import VersoLiterate
+public import Verso.Doc.Html
+public import Verso.Output.Html
+public import Verso.Output.Html.ElasticLunr
+public import Std.Data.HashMap
+public import Verso.FS
+public import VersoSearch
+public import VersoSearch.DomainSearch
+public import Verso.Code.External.Code
+
+public section
 
 open Lean
 
@@ -993,6 +997,11 @@ open Verso.Search
 
 def constDomainName := `VersoHtml.constant
 def moduleDomainName := `VersoHtml.module
+
+@[grind =]
+theorem constDomainName.isPublic : Verso.NameMap.isPublic constDomainName := by grind [constDomainName]
+@[grind =]
+theorem moduleDomainName.isPublic : Verso.NameMap.isPublic moduleDomainName := by grind [moduleDomainName]
 
 def constMapper : DomainMapper where
   displayName := "Declaration"

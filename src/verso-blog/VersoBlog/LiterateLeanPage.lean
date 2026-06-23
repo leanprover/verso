@@ -3,12 +3,24 @@ Copyright (c) 2023-2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-import SubVerso.Helper
-import SubVerso.Module
-import Verso.Doc.Concrete
-import VersoBlog.Basic
-import VersoBlog.LiterateLeanPage.Options
-import MD4Lean
+module
+public import SubVerso.Helper
+public import SubVerso.Module
+public import Verso.Doc.Concrete
+public import Verso.Doc.DocName
+public import Verso.Instances
+public import VersoBlog.Basic
+public import VersoBlog.LiterateLeanPage.Options
+public meta import VersoBlog.LiterateLeanPage.Options
+public import VersoBlog.LiterateLeanPage.Config
+public meta import VersoBlog.LiterateLeanPage.Config
+public import VersoBlog.LiterateLeanPage.Rewrite
+public meta import VersoBlog.LiterateLeanPage.Rewrite
+public import MD4Lean
+public import Std.Sync.Mutex
+public import Verso.Parser
+
+public section
 
 open Verso Doc
 open Lean
@@ -20,11 +32,8 @@ open Verso.Doc.Concrete (stringToInlines)
 
 namespace Verso.Genre.Blog.Literate
 
-structure LitPageConfig where
-  header : Bool := false
-
 open System in
-def loadModuleContent
+meta def loadModuleContent
     (leanProject : FilePath) (mod : String)
     (overrideToolchain : Option String := none) : IO (Array ModuleItem) := do
 
@@ -94,7 +103,7 @@ structure Helper where
   highlight (term : String) (type? : Option String) : IO Highlighted
 
 open System in
-def Helper.fromModule
+meta def Helper.fromModule
     (leanProject : FilePath) (mod : String)
     (overrideToolchain : Option String := none) : IO Helper := do
 
@@ -191,67 +200,9 @@ where
       decorateOut "stderr" res.stderr
 
 
-def loadLiteratePage (root : System.FilePath) (module : String) : IO (Array ModuleItem) := do
+meta def loadLiteratePage (root : System.FilePath) (module : String) : IO (Array ModuleItem) := do
   loadModuleContent root module
 
-
-inductive Pat where
-  | char : Char → Pat
-  | str : String → Pat
-  | var : Name → Pat
-  | any : Pat
-deriving BEq, Hashable, Repr, Inhabited
-
--- TODO rewrite with dynamic programming
-partial def Pat.match (p : List Pat) (str : String) : Option (Lean.NameMap String) :=
-  go str.startPos p
-where
-  go iter
-    | [] => if iter = str.endPos then pure {} else failure
-    | .char c :: p' =>
-      if h : iter ≠ str.endPos then
-        if iter.get h == c then
-          go (iter.next h) p'
-        else failure
-      else failure
-    | .str s :: p' =>
-      go iter (s.toList.map .char ++ p')
-    | .var x :: p' => do
-      let mut iter' := str.endPos
-      while iter' ≥ iter do
-        try
-          let rest ← go iter' p'
-          return rest.insert x (str.extract iter iter')
-        catch
-          | () =>
-            if h : iter' = str.startPos then
-              break
-            else
-              iter' := iter'.prev h
-              continue
-      failure
-    | .any :: p' => do
-      let mut iter' := str.endPos
-      while iter' ≥ iter do
-        try
-          return (← go iter' p')
-        catch
-          | () =>
-            if h : iter' = str.startPos then
-              break
-            else
-              iter' := iter'.prev h
-              continue
-      failure
-
-inductive Template where
-  | str : String → Template
-  | var : Name → Template
-deriving BEq, Hashable, Repr, Inhabited
-
-def Template.subst (vars : Lean.NameMap String) : Template → Except String String
-  | .str s => pure s
-  | .var x => if let some s := vars.find? x then pure s else throw s!"Not found: '{x}'"
 
 syntax url_pattern := "*" <|> str <|> char <|> ident
 syntax url_template := str <|> ident
@@ -282,7 +233,7 @@ macro_rules
 #guard_msgs in
 #eval (url_subst "xy/" z "/static/" pic ".jpg" => "foo/" z "/" pic ".png") "xy/foo/static/bar/baz/f.jpg"
 
-def getSubst [Monad m] : TSyntax ``url_case → m (List Pat × List Template)
+meta def getSubst [Monad m] : TSyntax ``url_case → m (List Pat × List Template)
   | `(url_case|$pat* => $template*) => do
     let pat := pat.map fun
       | `(url_pattern| *) => Pat.any
@@ -308,7 +259,7 @@ section
 variable [Monad m] [MonadError m] [MonadQuotation m]
 
 
-partial def getModuleDocString (hl : Highlighted) : m String := do
+meta partial def getModuleDocString (hl : Highlighted) : m String := do
   let str := (← getString hl).trimAscii
   let str := str.dropPrefix "/-!" |>.dropSuffix "-/" |>.trimAscii |>.copy
   pure str
@@ -321,7 +272,7 @@ where getString : Highlighted → m String
   | .token ⟨_, txt⟩ => pure txt
 end
 
-def getFirstMessage : Highlighted → Option (Highlighted.Span.Kind × Highlighted.MessageContents Highlighted)
+meta def getFirstMessage : Highlighted → Option (Highlighted.Span.Kind × Highlighted.MessageContents Highlighted)
   | .span msgs x =>
     msgs[0]? <|> getFirstMessage x
   | .point k m => pure (k, m)
@@ -351,7 +302,7 @@ partial def examplesFromMod [Monad m] [MonadError m]
 
 open Elab PartElabM in
 open Lean.Parser.Command in
-partial def docFromMod (project : System.FilePath) (mod : String)
+meta partial def docFromMod (project : System.FilePath) (mod : String)
     (config : LitPageConfig) (content : Array ModuleItem)
     (rewriter : Array (List Pat × List Template)) : PartElabM Unit := do
   let mut mdHeaders : Array Nat := #[]
@@ -496,7 +447,7 @@ syntax rewrites := "rewriting " ("| " url_case)+
 open Verso Doc in
 open Lean Elab Command in
 open PartElabM in
-def elabLiteratePage (x : Ident) (path : StrLit) (mod : Ident) (config : LitPageConfig) (title : StrLit) (genre : Term) (metadata? : Option Term) (rw : Option (TSyntax ``rewrites)) : CommandElabM Unit :=
+meta def elabLiteratePage (x : Ident) (path : StrLit) (mod : Ident) (config : LitPageConfig) (title : StrLit) (genre : Term) (metadata? : Option Term) (rw : Option (TSyntax ``rewrites)) : CommandElabM Unit :=
   withTraceNode `verso.blog.literate (fun _ => pure m!"Literate '{title.getString}'") do
 
   let rewriter ← rw.mapM fun
@@ -590,7 +541,6 @@ syntax "def_literate_post " ident Lean.Parser.Tactic.optConfig " from " ident " 
 
 
 
-declare_config_elab litPageConfig LitPageConfig
 
 open Verso Doc in
 open Lean Elab Command in

@@ -677,18 +677,28 @@ private unsafe def evalIOOptStringUnsafe (x : Name) : MetaM (Option SigDoc) := d
 @[implemented_by evalIOOptStringUnsafe]
 private opaque evalOptMsg (x : Name) : MetaM (Option SigDoc)
 
+private meta unsafe def evalSigDocUnsafe (s : Expr) : MetaM (Option SigDoc) :=
+  Meta.evalExpr (Option SigDoc) (.app (.const ``Option [0]) (.const ``SigDoc [])) s (checkMeta := false)
+
+@[implemented_by evalSigDocUnsafe]
+private opaque evalSigDoc (s : Expr) : MetaM (Option SigDoc)
+
 private def saveSignature (expanderName : Name) (argTy : Expr) : MetaM Unit := do
   let s ← Meta.mkAppM ``sig #[argTy]
   let inst ← Meta.synthInstance (mkApp2 (.const ``FromArgs []) argTy (.const ``DocElabM []))
   let s := .app s inst
   let s ← instantiateExprMVars s
-  let s ← Meta.whnf s
+  -- Evaluate the signature now, while the argument parser's definitions are available in the
+  -- elaboration environment, and store the result as data. The parser may be built from `partial`
+  -- or meta definitions; storing the parser expression unevaluated would re-run it when the module
+  -- is loaded, where those definitions are absent.
+  let sig ← evalSigDoc s
   let name ← mkFreshUserName <| expanderName ++ `signature
   let decl := Declaration.defnDecl {
     name,
     levelParams := [],
     type := .app (.const ``Option [0]) (.const ``SigDoc []),
-    value := s,
+    value := toExpr sig,
     hints := .opaque,
     safety := .safe
   }

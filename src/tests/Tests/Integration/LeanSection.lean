@@ -2,9 +2,12 @@
 Copyright (c) 2026 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import Verso
-import VersoManual
-
+module
+public import Verso
+public import VersoManual
+public meta import Verso
+public meta import VersoManual
+public section
 namespace Verso.Integration.LeanSection
 
 open Verso Genre Manual InlineLean

@@ -3,11 +3,14 @@ Copyright (c) 2023-2024 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
+module
+public import Verso.FS
+public import MultiVerso.Path
+public import VersoBlog.Basic
+public import VersoBlog.Template
+public import VersoBlog.Theme
 
-import Verso.FS
-import VersoBlog.Basic
-import VersoBlog.Template
-import VersoBlog.Theme
+public section
 
 open Verso Doc Output Html HtmlT FS
 open Verso.Code.Hover (State)

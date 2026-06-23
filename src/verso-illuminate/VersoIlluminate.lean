@@ -65,17 +65,17 @@ Padding (in diagram units) added on each side of the rendered SVG's view box. Us
 `renderSvg` and `viewBoxWidth` below, so the width returned to the code-block expander matches
 the actual rendered SVG.
 -/
-private def svgPadding : Float := 5
+public def svgPadding : Float := 5
 
 /-- Renders a diagram to SVG using the local `svgPadding`. -/
-private def renderSvg (d : Illuminate.Diagram Illuminate.SVG) : String :=
+public def renderSvg (d : Illuminate.Diagram Illuminate.SVG) : String :=
   d.renderDiagram (padding := svgPadding)
 
 /--
 Computes the view box width (in diagram units) of the SVG produced by `renderSvg`. Returns 0
 for empty diagrams.
 -/
-private def viewBoxWidth (d : Illuminate.Diagram Illuminate.SVG) : Float :=
+public def viewBoxWidth (d : Illuminate.Diagram Illuminate.SVG) : Float :=
   match d.getEnvelope with
   | .empty => 0
   | .nonempty env => env Illuminate.Vec2.west + env Illuminate.Vec2.east + 2 * svgPadding

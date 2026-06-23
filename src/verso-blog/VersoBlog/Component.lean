@@ -3,10 +3,15 @@ Copyright (c) 2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-import VersoBlog.Basic
-import VersoBlog.Component.Ext
-import Verso.Doc.ArgParse
-import Std.Data.HashSet
+module
+public import VersoBlog.Basic
+public import VersoBlog.Component.Ext
+public meta import VersoBlog.Component.Ext
+public import Verso.Doc.ArgParse
+public meta import Verso.Doc.Elab.Block
+public import Std.Data.HashSet
+
+public section
 
 open Verso Genre Blog
 open Verso.Doc
@@ -142,7 +147,7 @@ def Components.fromLists (blocks : List (Name × BlockComponent)) (inlines : Lis
   inlines := .ofList (inlines.map fun (x, b) => (x, Dynamic.mk b)) _
 
 open Lean in
-private def nameAndDef [Monad m] [MonadRef m] [MonadQuotation m] (ext : Name × Name) : m Term := do
+private meta def nameAndDef [Monad m] [MonadRef m] [MonadQuotation m] (ext : Name × Name) : m Term := do
   let quoted : Term := quote ext.fst
   let ident ← mkCIdentFromRef ext.snd
   `(($quoted, $(⟨ident⟩)))
@@ -173,7 +178,7 @@ scoped elab "%registered_inline_components" : term => do
 
 
 open Lean.Parser Term in
-def extContents := structInstFields (sepByIndent Term.structInstField "; " (allowTrailingSep := true))
+meta def extContents := structInstFields (sepByIndent Term.structInstField "; " (allowTrailingSep := true))
 
 /--
 Defines a new block component.
@@ -193,7 +198,7 @@ syntax (docComment)? "inline_component " ident (ppSpace bracketedBinder)* ppInde
 
 
 open Lean in
-def argNames : Lean.TSyntax ``Lean.Parser.Term.bracketedBinder → Array Ident
+meta def argNames : Lean.TSyntax ``Lean.Parser.Term.bracketedBinder → Array Ident
   | `(bracketedBinder| ($xs* : $_) )
   | `(bracketedBinder| {$xs* : $_} )
   | `(bracketedBinder| ⦃$xs* : $_⦄ ) => xs.filterMap getIdents
@@ -203,14 +208,14 @@ where
     if x.raw.isIdent then pure ⟨x.raw⟩ else none
 
 open Lean in
-def argType : Lean.TSyntax ``Lean.Parser.Term.bracketedBinder → Option Term
+meta def argType : Lean.TSyntax ``Lean.Parser.Term.bracketedBinder → Option Term
   | `(bracketedBinder| ($_* : $t) )
   | `(bracketedBinder| {$_* : $t} )
   | `(bracketedBinder| ⦃$_* : $t⦄ ) => pure t
   | _ => none
 
 open Lean in
-def argNamesTypes : Lean.TSyntax ``Lean.Parser.Term.bracketedBinder → Array (Ident × Term)
+meta def argNamesTypes : Lean.TSyntax ``Lean.Parser.Term.bracketedBinder → Array (Ident × Term)
   | `(bracketedBinder| ($xs* : $t) )
   | `(bracketedBinder| {$xs* : $t} )
   | `(bracketedBinder| ⦃$xs* : $t⦄ ) => xs.filterMap getIdents |>.map ((·, t))
@@ -222,7 +227,7 @@ where
 
 
 open Lean Elab Command in
-def splitToHtml (fields : Array (TSyntax ``Lean.Parser.Term.structInstField)) :
+meta def splitToHtml (fields : Array (TSyntax ``Lean.Parser.Term.structInstField)) :
     CommandElabM (Option Term × Array (TSyntax ``Lean.Parser.Term.structInstField)) := do
   let (is, isNot) := fields.partition fun
     | `(Lean.Parser.Term.structInstField|toHtml) => true
@@ -254,7 +259,7 @@ where
       `(_)
 
 open Lean in
-def deJson [Monad m] [MonadQuotation m]
+meta def deJson [Monad m] [MonadQuotation m]
     (b : Ident × Term) : m (TSyntax `Lean.Parser.Term.doSeqItem) :=
   let (x, t) := b
   `(Lean.Parser.Term.doSeqItem| let $x ← match FromJson.fromJson? (α := $t) $x with
@@ -314,7 +319,7 @@ elab_rules : command
         `(command|
           @[directive $x]
           def $dirName : DirectiveExpanderOf T
-            | $argPat, blocks => do `($qArgs #[$$(← blocks.mapM elabBlock),*]))
+            | $argPat, blocks => do `($qArgs #[$$(← blocks.mapM Verso.Doc.Elab.elabBlock),*]))
       elabCommand cmd3
 
 

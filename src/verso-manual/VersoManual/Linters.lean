@@ -3,26 +3,24 @@ Copyright (c) 2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-import Lean.Linter.Basic
-import Lean.Meta.Hint
-import Verso.Doc.Concrete
-import MultiVerso.Slug
+module
+public meta import Lean.Linter.Basic
+public meta import Lean.Meta.Hint
+public meta import Verso.Doc.Concrete
+public meta import MultiVerso.Slug
+public meta import VersoManual.Linters.Options
+
+public section
 
 set_option linter.missingDocs true
 
 open Lean Linter Elab Command
 open Lean.Doc.Syntax
 
-/-- Warns when headers don't have tags -/
-register_option linter.verso.manual.headerTags : Bool := {
-  defValue := false
-  descr := "if true, warn when headers don't have tags"
-}
-
 /--
 Lints for tagless headers.
 -/
-partial def headerTagLinter : Linter where
+meta partial def headerTagLinter : Linter where
   run := withSetOptionIn fun stx => do
     unless (`Verso.Doc.Concrete).isPrefixOf stx.getKind do return
     unless getLinterValue linter.verso.manual.headerTags (← getLinterOptions) do return
@@ -141,4 +139,4 @@ where
       | _ => pure ()
     return strTitle
 
-initialize addLinter headerTagLinter
+meta initialize addLinter headerTagLinter

@@ -4,12 +4,15 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 
-import Verso
-import VersoManual.Basic
-import VersoManual.HighlightedCode
-import Verso.Code.External
-import Verso.Code.HighlightedToTex
-import SubVerso.Examples.Messages
+module
+public import Verso
+public import VersoManual.Basic
+public import VersoManual.HighlightedCode
+public import Verso.Code.External
+public import Verso.Code.HighlightedToTex
+public import SubVerso.Examples.Messages
+
+public section
 
 set_option linter.missingDocs true
 

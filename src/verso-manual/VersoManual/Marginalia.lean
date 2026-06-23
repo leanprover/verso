@@ -4,11 +4,15 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 
-import Verso
-import Verso.Doc.ArgParse
-import Verso.Doc.Elab.Monad
-import Verso.Code
-import VersoManual.Basic
+module
+public import Verso
+public import Verso.Doc.ArgParse
+public import Verso.Doc.Elab.Monad
+public import Verso.Code
+public import VersoManual.Basic
+public meta import Verso.Doc.Elab.Inline
+
+public section
 
 namespace Verso.Genre.Manual
 
@@ -145,7 +149,7 @@ inline_extension Inline.margin where
       Marginalia.html <$> content.mapM goI
 
 @[role]
-def margin : RoleExpanderOf Unit
+meta def margin : RoleExpanderOf Unit
   | (), inlines => do
     let content ← inlines.mapM elabInline
     ``(Doc.Inline.other Inline.margin #[$content,*])

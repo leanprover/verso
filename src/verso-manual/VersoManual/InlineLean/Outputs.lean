@@ -3,10 +3,16 @@ Copyright (c) 2024-2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-import Lean.Environment
-import Lean.Message
-import Lean.Exception
-import Verso
+module
+
+public import Lean.Data.EditDistance
+public import Lean.Environment
+public import Lean.Message
+public import Lean.Exception
+public import Verso
+public import Verso.Doc.Suggestion.Basic
+
+public section
 
 open Lean
 open SubVerso.Highlighting

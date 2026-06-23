@@ -3,15 +3,22 @@ Copyright (c) 2023-2024 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-import SubVerso.Compat
-import SubVerso.Examples.Env
-import SubVerso.Module
-import SubVerso.Highlighting.Export
-import MD4Lean
-import Lean.DocString.Syntax
-import Lean.DocString.Extension
+module
+public import SubVerso.Compat
+public import SubVerso.Examples.Env
+public import SubVerso.Module
+public import SubVerso.Highlighting.Export
+public import MD4Lean
+public import Lean.DocString.Syntax
+public import Lean.DocString.Extension
+public import Lean.Elab.Frontend
+public import Lean.Server.InfoUtils
+public import Lean.Server.References
 
-import VersoLiterate
+public import VersoLiterate
+public import Verso.SyntaxUtils
+
+public section
 
 open Lean Elab Frontend
 open Lean.Elab.Command hiding Context

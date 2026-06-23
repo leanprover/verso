@@ -3,37 +3,49 @@ Copyright (c) 2024 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-import Lean.PrettyPrinter.Delaborator.Builtins
-import Lean.Elab.Term
-import Lean.DocString
-import Lean.Widget.TaggedText
-import Lean.Meta.Reduce
+module
+-- `docs_for%` reads the docstrings of `Bool`'s constructors at elaboration time; `import all`
+-- makes that metadata available when building in batch mode.
+meta import all Init.Prelude
+public import Lean.PrettyPrinter.Delaborator.Builtins
+public import Lean.Elab.Term
+public import Lean.DocString
+public meta import Lean.DocString
+public import Lean.Widget.TaggedText
+public import Lean.Meta.Reduce
 
-import Std.Data.HashSet
+public import Std.Data.HashSet
 
-import VersoManual.Basic
-import VersoManual.HighlightedCode
-import VersoManual.Index
-import VersoManual.Markdown
-import VersoManual.Docstring.Basic
-import VersoManual.Docstring.Config
-import VersoManual.Docstring.DocName
-import VersoManual.Docstring.PrettyPrint
-import VersoManual.Docstring.Progress
+public import VersoManual.Basic
+public import VersoManual.HighlightedCode
+public import VersoManual.Index
+public import VersoManual.Markdown
+public meta import VersoManual.Markdown
+public import VersoManual.Docstring.Basic
+public meta import VersoManual.Docstring.Basic
+public import VersoManual.Docstring.Config
+public meta import VersoManual.Docstring.Config
+public import VersoManual.Docstring.DocName
+public meta import VersoManual.Docstring.DocName
+public import VersoManual.Docstring.PrettyPrint
+public meta import VersoManual.Docstring.PrettyPrint
+public import VersoManual.Docstring.Progress
 
-import Verso.Instances
-import Verso.Code
-import Verso.Doc.Elab.Block
-import Verso.Doc.Elab.Monad
-import Verso.Doc.ArgParse
-import Verso.Doc.DocName
-import Verso.Doc.PointOfInterest
-import Verso.Doc.Suggestion.Basic
+public import Verso.Instances
+public import Verso.Code
+public meta import Verso.Code.Highlighted
+public import Verso.Doc.Elab.Block
+public import Verso.Doc.Elab.Monad
+public import Verso.Doc.ArgParse
+public import Verso.Doc.DocName
+public import Verso.Doc.PointOfInterest
+public meta import Verso.Doc.PointOfInterest
+public import Verso.Doc.Suggestion.Basic
 
 
-import SubVerso.Highlighting
+public import SubVerso.Highlighting
 
-import MD4Lean
+public import MD4Lean
 
 
 open Lean
@@ -57,7 +69,7 @@ open Verso.Doc.Suggestion
 
 variable {m} [Monad m] [MonadOptions m] [MonadEnv m] [MonadLiftT CoreM m] [MonadError m] [MonadLog m] [AddMessageContext m] [MonadInfoTree m] [MonadLiftT MetaM m]
 
-def ValDesc.documentableName : ValDesc m (Ident × Name) where
+meta def ValDesc.documentableName : ValDesc m (Ident × Name) where
   description := "a name with documentation"
   signature := .Ident
   get
@@ -83,7 +95,7 @@ def ValDesc.documentableName : ValDesc m (Ident × Name) where
 
 end Verso.ArgParse
 
-private def renderTaggedInMeta (code : Lean.Widget.CodeWithInfos) : MetaM Highlighted := do
+private meta def renderTaggedInMeta (code : Lean.Widget.CodeWithInfos) : MetaM Highlighted := do
   let hlCtx : SubVerso.Highlighting.Context := ⟨{}, false, false, [], false, (← IO.mkRef {})⟩
   (renderTagged none code : ReaderT SubVerso.Highlighting.Context MetaM _) hlCtx
 
@@ -91,9 +103,15 @@ namespace Verso.Genre.Manual.Block.Docstring
 
 inductive Visibility where
   | «public» | «private» | «protected»
-deriving Inhabited, Repr, ToJson, FromJson, DecidableEq, Ord, Quote
+deriving Inhabited, Repr, ToJson, FromJson, DecidableEq, Ord
 
-def Visibility.of (env : Environment) (n : Name) : Visibility :=
+meta instance : Quote Visibility where
+  quote
+    | .public => Syntax.mkCApp ``Visibility.public #[]
+    | .private => Syntax.mkCApp ``Visibility.private #[]
+    | .protected => Syntax.mkCApp ``Visibility.protected #[]
+
+meta def Visibility.of (env : Environment) (n : Name) : Visibility :=
   if isPrivateName n then .private else if isProtected env n then .protected else .public
 
 structure FieldInfo where
@@ -111,7 +129,14 @@ structure FieldInfo where
   autoParam  : Bool
   docString? : Option String
   visibility : Visibility
-deriving Inhabited, Repr, ToJson, FromJson, Quote
+deriving Inhabited, Repr, ToJson, FromJson
+
+meta instance : Quote FieldInfo where
+  quote
+    | {fieldName, fieldFrom, type, projFn, subobject?, binderInfo, autoParam, docString?, visibility} =>
+      Syntax.mkCApp ``FieldInfo.mk #[
+        quote fieldName, quote fieldFrom, quote type, quote projFn, quote subobject?,
+        quote binderInfo, quote autoParam, quote docString?, quote visibility]
 
 
 structure ParentInfo where
@@ -119,7 +144,12 @@ structure ParentInfo where
   name : Name
   parent : Highlighted
   index : Nat
-deriving ToJson, FromJson, Quote
+deriving ToJson, FromJson
+
+meta instance : Quote ParentInfo where
+  quote
+    | {projFn, name, parent, index} =>
+      Syntax.mkCApp ``ParentInfo.mk #[quote projFn, quote name, quote parent, quote index]
 
 inductive DeclType where
   /--
@@ -135,7 +165,23 @@ inductive DeclType where
   | recursor (safety : DefinitionSafety)
   | quotPrim (kind : QuotKind)
   | other
-deriving ToJson, FromJson, Quote
+deriving ToJson, FromJson
+
+meta instance : Quote DeclType where
+  quote
+    | .structure isClass constructor fieldNames fieldInfo parents ancestors =>
+      Syntax.mkCApp ``DeclType.structure #[
+        quote isClass, quote constructor, quote fieldNames, quote fieldInfo, quote parents, quote ancestors]
+    | .def safety => Syntax.mkCApp ``DeclType.def #[quote safety]
+    | .opaque safety => Syntax.mkCApp ``DeclType.opaque #[quote safety]
+    | .inductive constructors numArgs propOnly =>
+      Syntax.mkCApp ``DeclType.inductive #[quote constructors, quote numArgs, quote propOnly]
+    | .axiom safety => Syntax.mkCApp ``DeclType.axiom #[quote safety]
+    | .theorem => Syntax.mkCApp ``DeclType.theorem #[]
+    | .ctor ofInductive safety => Syntax.mkCApp ``DeclType.ctor #[quote ofInductive, quote safety]
+    | .recursor safety => Syntax.mkCApp ``DeclType.recursor #[quote safety]
+    | .quotPrim kind => Syntax.mkCApp ``DeclType.quotPrim #[quote kind]
+    | .other => Syntax.mkCApp ``DeclType.other #[]
 
 def DeclType.label : DeclType → String
   | .structure false .. => "structure"
@@ -158,7 +204,7 @@ def DeclType.label : DeclType → String
   | .other => ""
 
 
-partial def getStructurePathToBaseStructureAux (env : Environment) (baseStructName : Name) (structName : Name) (path : List Name) : Option (List Name) :=
+meta partial def getStructurePathToBaseStructureAux (env : Environment) (baseStructName : Name) (structName : Name) (path : List Name) : Option (List Name) :=
   if baseStructName == structName then
     some path.reverse
   else
@@ -180,12 +226,12 @@ partial def getStructurePathToBaseStructureAux (env : Environment) (baseStructNa
 If `baseStructName` is an ancestor structure for `structName`, then return a sequence of projection functions
 to go from `structName` to `baseStructName`. Returns `[]` if `baseStructName == structName`.
 -/
-def getStructurePathToBaseStructure? (env : Environment) (baseStructName : Name) (structName : Name) : Option (List Name) :=
+meta def getStructurePathToBaseStructure? (env : Environment) (baseStructName : Name) (structName : Name) : Option (List Name) :=
   getStructurePathToBaseStructureAux env baseStructName structName []
 
 
 open Meta in
-def DeclType.ofName (c : Name)
+meta def DeclType.ofName (c : Name)
     (hideFields : Bool := false)
     (hideStructureConstructor : Bool := false) :
     MetaM DeclType := do
@@ -311,7 +357,7 @@ def constructorSignature (signature : Highlighted) : Block where
 end Block
 
 
-def Signature.forName [Monad m] [MonadWithOptions m] [MonadEnv m] [MonadMCtx m] [MonadOptions m] [MonadResolveName m] [MonadNameGenerator m] [MonadLiftT MetaM m] [MonadLiftT BaseIO m] [MonadLiftT IO m] [MonadFileMap m] [Alternative m] (name : Name) : m Signature := do
+meta def Signature.forName [Monad m] [MonadWithOptions m] [MonadEnv m] [MonadMCtx m] [MonadOptions m] [MonadResolveName m] [MonadNameGenerator m] [MonadLiftT MetaM m] [MonadLiftT BaseIO m] [MonadLiftT IO m] [MonadFileMap m] [Alternative m] (name : Name) : m Signature := do
   let (⟨fmt, infos⟩ : FormatWithInfos) ← withOptions (·.setBool `pp.tagAppFns true) <| Block.Docstring.ppSignature name (constantInfo := false)
 
   let ctx := {
@@ -891,7 +937,7 @@ def leanFromMarkdown.blockdescr : BlockDescr := withHighlighting {
 }
 
 open Lean Elab Term in
-def tryElabCodeTermWith (mk : Highlighted → String → DocElabM α) (str : String) (ignoreElabErrors := false) (identOnly := false) : DocElabM α := do
+meta def tryElabCodeTermWith (mk : Highlighted → String → DocElabM α) (str : String) (ignoreElabErrors := false) (identOnly := false) : DocElabM α := do
   let loc := (← getRef).getPos?.map (← getFileMap).utf8PosToLspPos
   let src :=
     if let some ⟨line, col⟩ := loc then s!"<docstring at {← getFileName}:{line}:{col}>"
@@ -936,7 +982,7 @@ scoped syntax (name := docMetavar) term ":" term : doc_metavar
 
 
 open Lean Elab Term in
-def tryElabCodeMetavarTermWith (mk : Highlighted → String → DocElabM α) (str : String) (ignoreElabErrors := false) : DocElabM α := do
+meta def tryElabCodeMetavarTermWith (mk : Highlighted → String → DocElabM α) (str : String) (ignoreElabErrors := false) : DocElabM α := do
   let loc := (← getRef).getPos?.map (← getFileMap).utf8PosToLspPos
   let src :=
     if let some ⟨line, col⟩ := loc then s!"<docstring at {← getFileName}:{line}:{col}>"
@@ -976,25 +1022,25 @@ def tryElabCodeMetavarTermWith (mk : Highlighted → String → DocElabM α) (st
       throwError "Not a doc metavar: {stx}"
 
 open Lean Elab Term in
-def tryElabInlineCodeTerm (str : String) (ignoreElabErrors := false) (identOnly := false) : DocElabM Term :=
+meta def tryElabInlineCodeTerm (str : String) (ignoreElabErrors := false) (identOnly := false) : DocElabM Term :=
   tryElabCodeTermWith (ignoreElabErrors := ignoreElabErrors) (identOnly := identOnly) (fun hls str =>
     ``(Verso.Doc.Inline.other (Inline.leanFromMarkdown $(quote hls)) #[Verso.Doc.Inline.code $(quote str)]))
     str
 
 open Lean Elab Term in
-def tryElabInlineCodeMetavarTerm (str : String) (ignoreElabErrors := false) : DocElabM Term :=
+meta def tryElabInlineCodeMetavarTerm (str : String) (ignoreElabErrors := false) : DocElabM Term :=
   tryElabCodeMetavarTermWith (ignoreElabErrors := ignoreElabErrors) (fun hls str =>
     ``(Verso.Doc.Inline.other (Inline.leanFromMarkdown $(quote hls)) #[Verso.Doc.Inline.code $(quote str)]))
     str
 
 open Lean Elab Term in
-def tryElabBlockCodeTerm (str : String)  (ignoreElabErrors := false) : DocElabM Term :=
+meta def tryElabBlockCodeTerm (str : String)  (ignoreElabErrors := false) : DocElabM Term :=
   tryElabCodeTermWith (ignoreElabErrors := ignoreElabErrors) (fun hls str =>
     ``(Verso.Doc.Block.other (Block.leanFromMarkdown $(quote hls)) #[Verso.Doc.Block.code $(quote str)]))
     str
 
 open Lean Elab Term in
-def tryParseInlineCodeTactic (str : String) : DocElabM Term := do
+meta def tryParseInlineCodeTactic (str : String) : DocElabM Term := do
   let loc := (← getRef).getPos?.map (← getFileMap).utf8PosToLspPos
   let src :=
     if let some ⟨line, col⟩ := loc then s!"<docstring at {← getFileName}:{line}:{col}>"
@@ -1008,7 +1054,7 @@ def tryParseInlineCodeTactic (str : String) : DocElabM Term := do
     ``(Verso.Doc.Inline.other (Inline.leanFromMarkdown $(quote hls)) #[Verso.Doc.Inline.code $(quote str)])
 
 open Lean Elab Term in
-def tryInlineOption (str : String) : DocElabM Term := do
+meta def tryInlineOption (str : String) : DocElabM Term := do
   let optName := str.trimAscii.toName
   let optDecl ← getOptionDecl optName
   let hl : Highlighted := optTok optName optDecl.declName optDecl.descr
@@ -1018,7 +1064,7 @@ where
     .token ⟨.option name declName descr, name.toString⟩
 
 open Lean Elab in
-def tryTacticName (tactics : Array Tactic.Doc.TacticDoc) (str : String) : DocElabM Term := do
+meta def tryTacticName (tactics : Array Tactic.Doc.TacticDoc) (str : String) : DocElabM Term := do
   for t in tactics do
     if t.userName == str then
       let hl : Highlighted := tacToken t
@@ -1030,7 +1076,7 @@ where
 
 open Lean Elab Term in
 open Lean.Parser in
-def tryHighlightKeywords (extraKeywords : Array String) (str : String) : DocElabM Term := do
+meta def tryHighlightKeywords (extraKeywords : Array String) (str : String) : DocElabM Term := do
   let loc := (← getRef).getPos?.map (← getFileMap).utf8PosToLspPos
   let src :=
     if let some ⟨line, col⟩ := loc then s!"<docstring at {← getFileName}:{line}:{col}>"
@@ -1070,14 +1116,14 @@ syntax (name := plain) attr : braces_attr
 syntax (name := bracketed) "[" attr "]" : braces_attr
 syntax (name := atBracketed) "@[" attr "]" : braces_attr
 
-private def getAttr : Syntax → Syntax
+private meta def getAttr : Syntax → Syntax
   | `(plain| $a)
   | `(bracketed| [ $a ] )
   | `(atBracketed| @[ $a ]) => a
   | _ => .missing
 
 open Lean Elab Term in
-def tryParseInlineCodeAttribute (validate := true) (str : String) : DocElabM Term := do
+meta def tryParseInlineCodeAttribute (validate := true) (str : String) : DocElabM Term := do
   let loc := (← getRef).getPos?.map (← getFileMap).utf8PosToLspPos
   let src :=
     if let some ⟨line, col⟩ := loc then s!"<docstring at {← getFileName}:{line}:{col}>"
@@ -1104,7 +1150,7 @@ def tryParseInlineCodeAttribute (validate := true) (str : String) : DocElabM Ter
       ``(Verso.Doc.Inline.other (Inline.leanFromMarkdown $(quote hls)) #[Verso.Doc.Inline.code $(quote str)])
 
 
-private def indentColumn (str : String) : Nat := Id.run do
+private meta def indentColumn (str : String) : Nat := Id.run do
   let mut i : Option Nat := none
   for line in str.splitToList (· == '\n') do
     let leading := line.takeWhile Char.isWhitespace
@@ -1135,7 +1181,7 @@ private def indentColumn (str : String) : Nat := Id.run do
 #eval indentColumn "   abc\n\n  def\n    a"
 
 open Lean Elab Term in
-def tryElabBlockCodeCommand (str : String) (ignoreElabErrors := false) : DocElabM Term := do
+meta def tryElabBlockCodeCommand (str : String) (ignoreElabErrors := false) : DocElabM Term := do
     let loc := (← getRef).getPos?.map (← getFileMap).utf8PosToLspPos
     let src :=
       if let some ⟨line, col⟩ := loc then s!"<docstring at {← getFileName}:{line}:{col}>"
@@ -1178,7 +1224,7 @@ def tryElabBlockCodeCommand (str : String) (ignoreElabErrors := false) : DocElab
 
 
 open Lean Elab Term in
-def tryElabInlineCodeName (str : String) : DocElabM Term := do
+meta def tryElabInlineCodeName (str : String) : DocElabM Term := do
   let str := str.trimAscii
   let x := str.toName
   if x.toString.toSlice == str then
@@ -1198,7 +1244,7 @@ where
     pure <| .token ⟨.const name sig docs false none, str⟩
 
 open Lean Elab Term in
-private def attempt (str : String) (xs : List (String → DocElabM α)) : DocElabM α := do
+private meta def attempt (str : String) (xs : List (String → DocElabM α)) : DocElabM α := do
   match xs with
   | [] => throwError "No attempt succeeded"
   | [x] => x str
@@ -1216,7 +1262,7 @@ private def attempt (str : String) (xs : List (String → DocElabM α)) : DocEla
 
 
 open Lean Elab Term in
-def tryElabInlineCodeUsing (elabs : List (String → DocElabM Term))
+meta def tryElabInlineCodeUsing (elabs : List (String → DocElabM Term))
     (priorWord : Option String) (str : String) : DocElabM Term := do
   -- Don't try to show Lake commands as terms
   if "lake ".isPrefixOf str then return (← ``(Verso.Doc.Inline.code $(quote str)))
@@ -1239,7 +1285,7 @@ where
     | _ => []
 
 open Elab in
-def tryElabInlineCode (allTactics : Array Tactic.Doc.TacticDoc) (extraKeywords : Array String)
+meta def tryElabInlineCode (allTactics : Array Tactic.Doc.TacticDoc) (extraKeywords : Array String)
     (priorWord : Option String) (str : String) : DocElabM Term :=
   tryElabInlineCodeUsing [
     tryElabInlineCodeName,
@@ -1262,7 +1308,7 @@ Like `tryElabInlineCode`, but prefers producing un-highlighted code blocks to
 displaying metavariable-typed terms (e.g., through auto-bound implicits or
 elaboration failures).
 -/
-def tryElabInlineCodeStrict (allTactics : Array Tactic.Doc.TacticDoc) (extraKeywords : Array String)
+meta def tryElabInlineCodeStrict (allTactics : Array Tactic.Doc.TacticDoc) (extraKeywords : Array String)
     (priorWord : Option String) (str : String) : DocElabM Term :=
   tryElabInlineCodeUsing [
     tryElabInlineCodeName,
@@ -1278,7 +1324,7 @@ def tryElabInlineCodeStrict (allTactics : Array Tactic.Doc.TacticDoc) (extraKeyw
   ] priorWord str
 
 open Lean Elab Term in
-def tryElabBlockCode (_info? _lang? : Option String) (str : String) : DocElabM Term := do
+meta def tryElabBlockCode (_info? _lang? : Option String) (str : String) : DocElabM Term := do
   try
     attempt str [
       tryElabBlockCodeCommand,
@@ -1304,7 +1350,7 @@ Heuristically elaborate Lean fragments in Markdown code. The provided names are 
 from left to right, with the names bound by the signature being available in the local scope in
 which the Lean fragments are elaborated.
 -/
-def blockFromMarkdownWithLean (names : List Name) (b : MD4Lean.Block) : DocElabM Term := do
+meta def blockFromMarkdownWithLean (names : List Name) (b : MD4Lean.Block) : DocElabM Term := do
   unless (← Docstring.getElabMarkdown) do
     return (← Markdown.blockFromMarkdown b (handleHeaders := Markdown.strongEmphHeaders))
   let tactics ← Elab.Tactic.Doc.allTacticDocs
@@ -1365,7 +1411,7 @@ section
 variable [Monad m] [MonadOptions m] [MonadEnv m] [MonadLiftT CoreM m] [MonadLiftT MetaM m] [MonadError m]
 variable [MonadLog m] [AddMessageContext m] [Elab.MonadInfoTree m]
 
-def DocstringConfig.parse : ArgParse m DocstringConfig :=
+meta def DocstringConfig.parse : ArgParse m DocstringConfig :=
   DocstringConfig.mk <$>
     .positional `name .documentableName <*>
     .flagM `allowMissing (verso.docstring.allowMissing.get <$> getOptions)
@@ -1374,12 +1420,12 @@ def DocstringConfig.parse : ArgParse m DocstringConfig :=
     .flag `hideStructureConstructor false <*>
     .named `label .string true
 
-instance : FromArgs DocstringConfig m := ⟨DocstringConfig.parse⟩
+meta instance : FromArgs DocstringConfig m := ⟨DocstringConfig.parse⟩
 
 end
 
 @[block_command]
-def docstring : BlockCommandOf DocstringConfig
+meta def docstring : BlockCommandOf DocstringConfig
   | ⟨(x, name), allowMissing, hideFields, hideCtor, customLabel⟩ => do
     let opts : Options → Options := (verso.docstring.allowMissing.set · allowMissing)
 
@@ -1470,16 +1516,16 @@ structure IncludeDocstringOpts where
   name : Name
   elaborate : Bool
 
-def IncludeDocstringOpts.parse : ArgParse m IncludeDocstringOpts :=
+meta def IncludeDocstringOpts.parse : ArgParse m IncludeDocstringOpts :=
   IncludeDocstringOpts.mk <$> (.positional `name .documentableName <&> (·.2)) <*> .flag `elab true
 
-instance : FromArgs IncludeDocstringOpts m where
+meta instance : FromArgs IncludeDocstringOpts m where
   fromArgs := IncludeDocstringOpts.parse
 
 end
 
 @[block_command]
-def includeDocstring : BlockCommandOf IncludeDocstringOpts
+meta def includeDocstring : BlockCommandOf IncludeDocstringOpts
   | {name, elaborate} => do
     let fromMd :=
       if elaborate then
@@ -1517,7 +1563,7 @@ elab "sig_for%" name:ident : term => do
   pure <| .lit <| .strVal tt.stripTags
 
 
-def highlightDataValue (v : DataValue) : Highlighted :=
+meta def highlightDataValue (v : DataValue) : Highlighted :=
   .token <|
     match v with
     | .ofString (v : String) => ⟨.str (some v) false, toString v⟩
@@ -1533,10 +1579,10 @@ def highlightDataValue (v : DataValue) : Highlighted :=
 
 @[expose]
 def optionDocs.Args := Ident
-instance : FromArgs optionDocs.Args DocElabM := ⟨.positional `name .ident "The option name"⟩
+meta instance : FromArgs optionDocs.Args DocElabM := ⟨.positional `name .ident "The option name"⟩
 
 @[block_command]
-def optionDocs : BlockCommandOf optionDocs.Args
+meta def optionDocs : BlockCommandOf optionDocs.Args
   | x => do
     let optDecl ← getOptionDecl x.getId
     Doc.PointOfInterest.save x.raw optDecl.declName.toString
@@ -1614,7 +1660,7 @@ section
 
 variable [Monad m] [MonadError m] [MonadLiftT CoreM m] [MonadOptions m]
 
-def TacticDocsOptions.parse  : ArgParse m TacticDocsOptions :=
+meta def TacticDocsOptions.parse  : ArgParse m TacticDocsOptions :=
   TacticDocsOptions.mk <$>
     .positional `name strOrName <*>
     .named `show .string true <*>
@@ -1631,12 +1677,12 @@ where
       | .num n => throwErrorAt n "Expected tactic name (either first token as string, or internal parser name)"
   }
 
-instance : FromArgs TacticDocsOptions m := ⟨TacticDocsOptions.parse⟩
+meta instance : FromArgs TacticDocsOptions m := ⟨TacticDocsOptions.parse⟩
 
 end
 
 open Lean Elab Term Parser Tactic Doc in
-private def getTactic (name : StrLit ⊕ Ident) : TermElabM TacticDoc := do
+private meta def getTactic (name : StrLit ⊕ Ident) : TermElabM TacticDoc := do
   for t in ← allTacticDocs do
     match name with
     | .inr name => if t.internalName == name.getId then return t
@@ -1650,7 +1696,7 @@ private def getTactic (name : StrLit ⊕ Ident) : TermElabM TacticDoc := do
 
 
 open Lean Elab Term Parser Tactic Doc in
-private def getTacticOverloads (name : StrLit ⊕ Ident) : TermElabM (Array TacticDoc) := do
+private meta def getTacticOverloads (name : StrLit ⊕ Ident) : TermElabM (Array TacticDoc) := do
   let mut out := #[]
   for t in ← allTacticDocs do
     match name with
@@ -1667,14 +1713,14 @@ private def getTacticOverloads (name : StrLit ⊕ Ident) : TermElabM (Array Tact
 
 
 open Lean Elab Term Parser Tactic Doc in
-private def getTactic? (name : String ⊕ Name) : TermElabM (Option TacticDoc) := do
+private meta def getTactic? (name : String ⊕ Name) : TermElabM (Option TacticDoc) := do
   for t in ← allTacticDocs do
     if .inr t.internalName == name || .inl t.userName == name then
       return some t
   return none
 
 @[directive]
-def tactic : DirectiveExpanderOf TacticDocsOptions
+meta def tactic : DirectiveExpanderOf TacticDocsOptions
   | opts, more => do
     let tactics ← getTacticOverloads opts.name
     let blame : Syntax := opts.name.elim TSyntax.raw TSyntax.raw
@@ -1774,15 +1820,15 @@ structure TacticInlineOptions where
 section
 variable [Monad m] [MonadError m]
 
-def TacticInlineOptions.parse : ArgParse m TacticInlineOptions :=
+meta def TacticInlineOptions.parse : ArgParse m TacticInlineOptions :=
   TacticInlineOptions.mk <$> .named `show .string true
 
-instance : FromArgs TacticInlineOptions m where
+meta instance : FromArgs TacticInlineOptions m where
   fromArgs := TacticInlineOptions.parse
 end
 
 @[role tactic]
-def tacticInline : RoleExpanderOf TacticInlineOptions
+meta def tacticInline : RoleExpanderOf TacticInlineOptions
   | {«show»}, inlines => do
     let #[arg] := inlines
       | throwError "Expected exactly one argument"
@@ -1831,7 +1877,7 @@ structure ConvTacticDoc where
   docs? : Option String
 
 open Lean Elab Term Parser Tactic Doc in
-def getConvTactic (name : StrLit ⊕ Ident) (allowMissing : Option Bool) : TermElabM ConvTacticDoc :=
+meta def getConvTactic (name : StrLit ⊕ Ident) (allowMissing : Option Bool) : TermElabM ConvTacticDoc :=
   withOptions (allowMissing.map (fun b opts => verso.docstring.allowMissing.set opts b) |>.getD id) do
     let .inr kind := name
       | throwError "Strings not yet supported here"
@@ -1844,7 +1890,7 @@ def getConvTactic (name : StrLit ⊕ Ident) (allowMissing : Option Bool) : TermE
     throwError m!"Conv tactic not found: {kind}"
 
 @[directive]
-def conv : DirectiveExpanderOf TacticDocsOptions
+meta def conv : DirectiveExpanderOf TacticDocsOptions
   | opts, more => do
     let tactic ← getConvTactic opts.name opts.allowMissing
     Doc.PointOfInterest.save (← getRef) tactic.name.toString
@@ -1939,7 +1985,7 @@ inline_extension Inline.conv (hl : Highlighted) via withHighlighting where
         hl.inlineHtml (g := Manual) "examples"
 
 @[role_expander conv]
-def convInline : RoleExpander
+meta def convInline : RoleExpander
   | _args, inlines => do
     let #[arg] := inlines
       | throwError "Expected exactly one argument"

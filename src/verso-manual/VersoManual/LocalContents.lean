@@ -3,10 +3,12 @@ Copyright (c) 2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-import Verso
-import MultiVerso.Slug
-import VersoManual.Basic
+module
+public import Verso
+public import MultiVerso.Slug
+public import VersoManual.Basic
 
+public section
 
 open Lean
 open Verso.Multi
@@ -22,10 +24,10 @@ def LocalContentItemRecognizer.failure : LocalContentItemRecognizer := fun _ => 
 
 def LocalContentItemRecognizer.orElse (r1 r2 : LocalContentItemRecognizer) : LocalContentItemRecognizer := fun b => r1 b <|> r2 b
 
-initialize localContentAttr : TagAttribute ←
+meta initialize localContentAttr : TagAttribute ←
   registerTagAttribute `local_content_list "Functions that recognize items for the page-local table of contents"
 
-private def localContentRecognizers [Monad m] [MonadLiftT MetaM m] [MonadOptions m] [MonadEnv m] [MonadError m] : m (Array Name) := do
+private meta def localContentRecognizers [Monad m] [MonadLiftT MetaM m] [MonadOptions m] [MonadEnv m] [MonadError m] : m (Array Name) := do
   let st := localContentAttr.ext.toEnvExtension.getState (← getEnv)
   let st' := st.importedEntries.flatten ++ st.state.toArray
 

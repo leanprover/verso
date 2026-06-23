@@ -4,16 +4,19 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 
-import Lean.Data.Json
-import Lean.Elab.InfoTree.Types
+module
+public import Lean.Data.Json
+public import Lean.Elab.InfoTree.Types
 
-import Verso.Output.Html
-import Verso.Output.TeX
-import MultiVerso.Path
-import MultiVerso.Slug
-import VersoManual.Basic
-import VersoManual.Marginalia
+public import Verso.Output.Html
+public import Verso.Output.TeX
+public import MultiVerso.Path
+public import MultiVerso.Slug
+public import VersoManual.Basic
+public import VersoManual.Marginalia
+public meta import Verso.Doc.Elab.Monad
 
+public section
 
 open Lean Elab
 open Verso Doc Elab Html
@@ -396,12 +399,12 @@ structure CiteConfig where
 section
 variable [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m] [MonadFileMap m]
 
-partial def CiteConfig.parse : ArgParse m CiteConfig :=
+meta partial def CiteConfig.parse : ArgParse m CiteConfig :=
   CiteConfig.mk <$> many1 (.positional `citation .resolvedName)
 where
   many1 p := (· :: ·) <$> p <*> .many p
 
-instance : FromArgs CiteConfig m where
+meta instance : FromArgs CiteConfig m where
   fromArgs := CiteConfig.parse
 
 end
@@ -413,19 +416,19 @@ export Verso.Genre.Manual.Bibliography (InProceedings Thesis ArXiv Article)
 open Bibliography
 
 @[role]
-def citep : RoleExpanderOf CiteConfig
+meta def citep : RoleExpanderOf CiteConfig
   | config, extra => do
     let xs := config.citations.map mkIdent |>.toArray
     ``(Doc.Inline.other (Inline.cite ([$xs,*] : List Citable) Style.parenthetical) #[$(← extra.mapM elabInline),*])
 
 @[role]
-def citet : RoleExpanderOf CiteConfig
+meta def citet : RoleExpanderOf CiteConfig
   | config, extra => do
     let xs := config.citations.map mkIdent |>.toArray
     ``(Doc.Inline.other (Inline.cite ([$xs,*] : List Citable) Style.textual) #[$(← extra.mapM elabInline),*])
 
 @[role]
-def citehere : RoleExpanderOf CiteConfig
+meta def citehere : RoleExpanderOf CiteConfig
   | config, extra => do
     let xs := config.citations.map mkIdent |>.toArray
     ``(Doc.Inline.other (Inline.cite ([$xs,*] : List Citable) Style.here) #[$(← extra.mapM elabInline),*])

@@ -174,6 +174,9 @@ results in
 
 {docstring List.forM}
 
+When using the module system, docstrings from imported modules are not available by default when building from the command line.
+To include these docstrings in a document, use `import all` to import them.
+
 The {name}`docstring` command takes a positional parameter which is the documented name.
 It also accepts the following optional named parameters:
 

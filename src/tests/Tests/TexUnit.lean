@@ -3,7 +3,11 @@ Copyright (c) 2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: Jason Reed
 -/
-import Tests.TexUtil
+module
+public import Tests.TexUtil
+public meta import Tests.TexUtil
+
+public section
 
 /-!
 Unit tests covering TeX output given given concrete Verso structures.
