@@ -119,7 +119,7 @@ public def progress.descr : BlockDescr where
   toHtml := some fun _ _ _ info _blocks => open Output.Html in do
     let documented ← match ((← Doc.Html.HtmlT.state).get? `Verso.Genre.Manual.docstring).getD (pure <| .mkObj []) >>= Json.getObj? with
       | .error e =>
-        Doc.Html.HtmlT.logError e
+        reportError e
         pure {}
       | .ok v =>
         pure v

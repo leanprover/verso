@@ -248,3 +248,59 @@ These contain a {name}`LicenseInfo`:
 The {name}`licenseInfo` command displays the licenses for all components that were included in the generated document:
 
 {docstring licenseInfo}
+
+# Diagrams
+%%%
+tag := "diagrams"
+%%%
+
+Diagrams can be defined using the `illuminate` library and added to documents using the {name}`diagram` code block.
+*This library is experimental, and its API is subject to change.*
+
+:::paragraph
+For example, a diagram with a connected circle and rectangle can be rendered using the following code:
+````
+```diagram (cssWidth := "50%") (texWidth := "0.5\\textwidth")
+open Illuminate Diagram in
+let c := circle 50 (name := `c)
+let r := rect 80 90 (name := `r)
+hsep 10 [c, r]
+  |>.connectEdge
+    { point := `c, angle := some (pi / 4), pull := 0.5 }
+    { point := `r, angle := some (2 * pi / 3), pull := 1 }
+```
+````
+
+It results in the following output:
+
+```diagram (cssWidth := "50%") (texWidth := "0.5\\textwidth")
+open Illuminate Diagram in
+let c := circle 50 (name := `c)
+let r := rect 80 90 (name := `r)
+hsep 10 [c, r]
+  |>.connectEdge
+    { point := `c, angle := some (pi / 4), pull := 0.5 }
+    { point := `r, angle := some (2 * pi / 3), pull := 1 }
+```
+:::
+:::paragraph
+The {name}`diagram` code block accepts an `inline` flag that marks it for inline rendering in CSS. It also accepts the following named arguments:
+
+: `cssWidth`
+
+  A width in CSS format that is copied verbatim to the width of the output image in HTML.
+
+: `cssScale`
+
+  A scaling factor that relates the diagram's width to `em` in rendered HTML. Use this to have consistent sizing between multiple diagrams.
+
+: `texWidth`
+
+  The `width` parameter passed verbatim to `\includesvg` in TeX output.
+
+
+:::
+
+Building PDFs from LaTeX output relies on the `svg` LaTeX package, which calls Inkscape to convert each emitted SVG to PDF at build time.
+This requires `inkscape` on the `PATH` as well as running `lualatex` with the `-shell-escape` flag.
+This flag allows LaTeX to execute arbitrary commands during compilation.

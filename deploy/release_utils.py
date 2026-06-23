@@ -4,9 +4,11 @@ import subprocess
 import shlex
 from pathlib import Path
 
+
 def eprint(*args, **kwargs):
     """Print to stderr instead of stdout"""
     print(*args, file=sys.stderr, **kwargs)
+
 
 def parse_version(version_str):
     """
@@ -24,7 +26,7 @@ def parse_version(version_str):
         "minor": None,
         "patch": None,
         "rc": None,
-        "date": None
+        "date": None,
     }
 
     # Check for nightly builds (date-based versions)
@@ -78,6 +80,7 @@ def parse_version(version_str):
             return None
 
     return result
+
 
 def compare_versions(version1, version2):
     """
@@ -150,13 +153,17 @@ def compare_versions(version1, version2):
     # If we get here, the types are unknown or incomparable
     return None
 
+
 def find_latest_version(versions_dir):
     """Find the latest version in the versions directory"""
     if not os.path.exists(versions_dir):
         return None
 
-    version_dirs = [d for d in os.listdir(versions_dir)
-                   if os.path.isdir(os.path.join(versions_dir, d)) and d != "latest"]
+    version_dirs = [
+        d
+        for d in os.listdir(versions_dir)
+        if os.path.isdir(os.path.join(versions_dir, d)) and d != "latest"
+    ]
 
     if not version_dirs:
         return None
@@ -165,7 +172,11 @@ def find_latest_version(versions_dir):
     parsed_versions = [(d, parse_version(d)) for d in version_dirs]
 
     # Filter out any unparseable versions
-    valid_versions = [(d, pv) for d, pv in parsed_versions if pv is not None and pv["type"] is not None]
+    valid_versions = [
+        (d, pv)
+        for d, pv in parsed_versions
+        if pv is not None and pv["type"] is not None
+    ]
 
     if not valid_versions:
         return None
@@ -179,13 +190,17 @@ def find_latest_version(versions_dir):
 
     return latest[0]
 
+
 def find_latest_stable_version(versions_dir):
     """Find the latest stable version in the versions directory"""
     if not os.path.exists(versions_dir):
         return None
 
-    version_dirs = [d for d in os.listdir(versions_dir)
-                   if os.path.isdir(os.path.join(versions_dir, d)) and d != "latest"]
+    version_dirs = [
+        d
+        for d in os.listdir(versions_dir)
+        if os.path.isdir(os.path.join(versions_dir, d)) and d != "latest"
+    ]
 
     if not version_dirs:
         return None
@@ -194,7 +209,11 @@ def find_latest_stable_version(versions_dir):
     parsed_versions = [(d, parse_version(d)) for d in version_dirs]
 
     # Filter out any unparseable, nightly, or rc versions
-    valid_versions = [(d, pv) for d, pv in parsed_versions if pv is not None and pv["type"] == "semantic" and pv["rc"] is None]
+    valid_versions = [
+        (d, pv)
+        for d, pv in parsed_versions
+        if pv is not None and pv["type"] == "semantic" and pv["rc"] is None
+    ]
 
     if not valid_versions:
         return None
@@ -208,6 +227,7 @@ def find_latest_stable_version(versions_dir):
 
     return latest[0]
 
+
 def run_git_command(command):
     """Run a git command and return the output"""
     print(f"\tRunning {shlex.join(command)}")
@@ -217,6 +237,7 @@ def run_git_command(command):
         eprint(f"Stdout: {result.stdout}\nStderr: {result.stderr}")
         sys.exit(1)
     return result.stdout.strip()
+
 
 def is_git_ancestor(branch1, branch2):
     """
@@ -229,8 +250,11 @@ def is_git_ancestor(branch1, branch2):
     Returns:
         bool: True iff branch1 is an ancestor of branch2
     """
-    result = subprocess.run(["git", "merge-base", "--is-ancestor", branch1, branch2], capture_output=False)
+    result = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", branch1, branch2], capture_output=False
+    )
     return result.returncode == 0
+
 
 def git_has_changes():
     """Check if the git repository has any changes that could be
@@ -240,7 +264,7 @@ def git_has_changes():
     result = subprocess.run(
         ["git", "status", "--porcelain", "--untracked-files=no"],
         capture_output=True,
-        text=True
+        text=True,
     )
 
     # If successful and output is empty, there are no changes

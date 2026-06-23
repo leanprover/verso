@@ -2,8 +2,6 @@ name: Check toolchain file
 
 on:
     pull_request:
-        branches:
-            - main
     merge_group:
 
 jobs:
@@ -13,14 +11,19 @@ jobs:
 
         steps:
             - name: Checkout code
-              uses: actions/checkout@v6
+              uses: actions/checkout@v7
 
             - name: Check whether lean-toolchain contains nightly
               id: check-nightly
               run: |
-                  if grep -q "nightly" lean-toolchain; then
-                    echo "::error::The lean-toolchain file contains 'nightly', which is not allowed in PRs to main"
-                    exit 1
-                  else
+                  BASE="${{ github.base_ref || github.event.merge_group.base_ref }}"
+                  echo "Base ref: $BASE"
+                  if [ "$BASE" = "main" ] || [ "$BASE" = "refs/heads/main" ]; then
+                    if grep -q "nightly" lean-toolchain; then
+                      echo "::error::The lean-toolchain file contains 'nightly', which is not allowed in PRs to main"
+                      exit 1
+                    fi
                     echo "Lean toolchain is valid for main branch - no 'nightly' found"
+                  else
+                    echo "Base branch '$BASE' is not main; nightly toolchains are allowed."
                   fi

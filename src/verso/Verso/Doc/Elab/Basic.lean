@@ -5,6 +5,7 @@ Author: David Thrane Christiansen, Rob Simmons
 -/
 module
 public import Verso.Doc
+public import Verso.Doc.SourceRange
 
 open Lean
 
@@ -15,12 +16,16 @@ set_option doc.verso true
 namespace Verso.Doc.Elab
 
 public inductive TOC where
-  | mk (title : String) (titleSyntax : Syntax) (endPos : String.Pos.Raw) (children : Array TOC)
+  -- `rangeSyntax` anchors the whole document-symbol/folding range, while `selectionSyntax`
+  -- is what document-symbol clients should select, usually the visible title.
+  | mk (title : String) (rangeSyntax : Syntax) (selectionSyntax : Syntax) (endPos : String.Pos.Raw) (children : Array TOC)
   | included (name : Ident)
 deriving Repr, TypeName, Inhabited
 
 public inductive FinishedPart where
-  | mk (titleSyntax : Syntax) (expandedTitle : Array (TSyntax `term)) (titlePreview : String) (metadata : Option (TSyntax `term)) (blocks : Array (TSyntax `term)) (subParts : Array FinishedPart) (endPos : String.Pos.Raw)
+  -- `rangeSyntax` anchors the whole document-symbol/folding range, while `selectionSyntax`
+  -- is what document-symbol clients should select, usually the visible title.
+  | mk (rangeSyntax : Syntax) (selectionSyntax : Syntax) (expandedTitle : Array (TSyntax `term)) (titlePreview : String) (metadata : Option (TSyntax `term)) (blocks : Array (TSyntax `term)) (subParts : Array FinishedPart) (endPos : String.Pos.Raw)
     /-- A name representing a value of type {lean}`VersoDoc` -/
   | included (name : Ident)
 deriving Repr, BEq
@@ -31,7 +36,7 @@ From a finished part, constructs syntax that denotes its {lean}`Part` value.
 public partial def FinishedPart.toSyntax [Monad m] [MonadQuotation m]
     (genre : TSyntax `term)
     : FinishedPart → m Term
-  | .mk _titleStx titleInlines titleString metadata blocks subParts _endPos => do
+  | .mk _rangeStx _selectionStx titleInlines titleString metadata blocks subParts _endPos => do
     let subStx ← subParts.mapM (toSyntax genre)
     let metaStx ←
       match metadata with
@@ -44,9 +49,33 @@ public partial def FinishedPart.toSyntax [Monad m] [MonadQuotation m]
     ``(Part.mk #[$titleInlines,*] $(quote titleString) $metaStx #[$typedBlocks,*] #[$subStx,*])
   | .included name => ``(VersoDoc.toPart $name)
 
+/-- Replace a finished part's metadata, preserving its source-range anchors and contents. -/
+public def FinishedPart.withMetadata (metadata : Option (TSyntax `term)) : FinishedPart → FinishedPart
+  | .mk rangeSyntax selectionSyntax expandedTitle titlePreview _ blocks subParts endPos =>
+    .mk rangeSyntax selectionSyntax expandedTitle titlePreview metadata blocks subParts endPos
+  | .included name => .included name
+
+/--
+Validate the source ranges stored in a TOC entry before it reaches the LSP handlers.
+
+This is only a validation gate; it does not rewrite the stored syntax. The document-symbol and
+folding handlers later convert these syntax values with Lean's standard {lit}`FileMap.lspRangeOfStx?`
+helper. Checking here keeps malformed source provenance from reaching clients that may reject a
+whole response if any emitted range is invalid.
+-/
+private def requireValidTOCRanges (title : String) (rangeStx selectionStx : Syntax)
+    (endPos : String.Pos.Raw) : Syntax × Syntax :=
+  let range := requireSyntaxRange s!"TOC syntax for '{title}'" rangeStx
+  -- The full part range starts at `rangeStx` and ends at `endPos`, because section contents extend
+  -- beyond the heading syntax.
+  let selectionStx := requireSyntaxWithContainedRange s!"TOC selection syntax for '{title}'"
+    range.start endPos selectionStx
+  (rangeStx, selectionStx)
+
 public partial def FinishedPart.toTOC : FinishedPart → TOC
-  | .mk titleStx _titleInlines titleString _metadata _blocks subParts endPos =>
-    .mk titleString titleStx endPos (subParts.map toTOC)
+  | .mk rangeStx selectionStx _titleInlines titleString _metadata _blocks subParts endPos =>
+    let (rangeStx, selectionStx) := requireValidTOCRanges titleString rangeStx selectionStx endPos
+    .mk titleString rangeStx selectionStx endPos (subParts.map toTOC)
   | .included name => .included name
 
 
@@ -60,7 +89,10 @@ encounters new headers, stack frames are pushed and popped as
 indicated by the header's level.
 -/
 public structure PartFrame where
-  titleSyntax : Syntax
+  /-- Syntax whose start anchors the whole document-symbol/folding range. -/
+  rangeSyntax : Syntax
+  /-- Syntax selected by document-symbol clients, usually the visible title. -/
+  selectionSyntax : Syntax
   expandedTitle : Option (String × Array (TSyntax `term)) := none
   metadata : Option (TSyntax `term)
   blocks : Array (TSyntax `term)
@@ -74,7 +106,7 @@ deriving Repr, Inhabited
 /-- Turn an previously active {name}`PartFrame` into a {name}`FinishedPart`. -/
 public def PartFrame.close (fr : PartFrame) (endPos : String.Pos.Raw) : FinishedPart :=
   let (titlePreview, titleInlines) := fr.expandedTitle.getD ("<anonymous>", #[])
-  .mk fr.titleSyntax titleInlines titlePreview fr.metadata fr.blocks fr.priorParts endPos
+  .mk fr.rangeSyntax fr.selectionSyntax titleInlines titlePreview fr.metadata fr.blocks fr.priorParts endPos
 
 
 /-- References that must be local to the current blob of concrete document syntax -/
@@ -117,7 +149,8 @@ public def PartContext.close (ctxt : PartContext) (endPos : String.Pos.Raw) : Op
   pure {
     parents := ctxt.parents.pop,
     blocks := fr.blocks,
-    titleSyntax := fr.titleSyntax,
+    rangeSyntax := fr.rangeSyntax,
+    selectionSyntax := fr.selectionSyntax,
     expandedTitle := fr.expandedTitle,
     metadata := fr.metadata
     priorParts := fr.priorParts.push <| ctxt.toPartFrame.close endPos

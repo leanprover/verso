@@ -21,7 +21,7 @@ the number of # characters in the opening sequence. (cf. [CommonMark
 Spec](https://spec.commonmark.org/0.31.2/))
 -/
 def displayPartStructure (part : FinishedPart) (level : Nat := 1) : String := match part with
-  | .mk _ _ title _ _ subParts _ =>
+  | .mk _ _ _ title _ _ subParts _ =>
        let partsStr : String := subParts.map (displayPartStructure · (level + 1))
          |>.toList |> String.join
        let pref := "".pushn '#' level
@@ -42,6 +42,46 @@ def testAddPartFromMarkdown (input : String) : Elab.TermElabM String := do
     closePartsUntil 0 0
   let (_, _, part) ← addParts.run ⟨Syntax.node .none identKind #[], mkConst ``Manual, .always, .none⟩ default default
   part.partContext.priorParts.toList.map displayPartStructure |> String.join |> pure
+
+/--
+Every part produced from Markdown headers must have range and selection syntax whose recovered
+ranges satisfy the TOC invariant: the selection range lies within `[rangeStart, endPos]`. Violating
+it (position-less syntax, or an `endPos` of zero) panics in `requireValidTOCRanges` during the
+document-symbol/folding conversion.
+-/
+partial def partRangesValid : FinishedPart → Bool
+  | .mk rangeStx selectionStx _ _ _ _ subParts endPos =>
+    match rangeStx.getRange?, selectionStx.getRange? with
+    | some r, some sel => (r.start ≤ sel.start) && (sel.stop ≤ endPos) && subParts.all partRangesValid
+    | _, _ => false
+  | .included _ => true
+
+open PartElabM in
+/--
+Parses Markdown under a positioned reference and closes the document at that reference's end, as a
+real document's Markdown block elaborator would, then reports whether every resulting part has a
+valid TOC range.
+-/
+def markdownPartRangesValid (input : String) : Elab.TermElabM Bool := do
+  let some parsed := MD4Lean.parse input
+    | throwError m!"Couldn't parse markdown {input}"
+  let ref := Syntax.node (.synthetic ⟨0⟩ ⟨100⟩) identKind #[]
+  withRef ref do
+    let addParts : PartElabM Unit := do
+      let mut levels := []
+      for block in parsed.blocks do
+        levels ← addPartFromMarkdown block levels
+      closePartsUntil 0 (ref.getTailPos?.getD default)
+    let (_, _, part) ← addParts.run ⟨Syntax.node .none identKind #[], mkConst ``Manual, .always, .none⟩ default default
+    return part.partContext.priorParts.all partRangesValid
+
+/-- info: true -/
+#guard_msgs in
+#eval markdownPartRangesValid r#"
+# Acknowledgements
+## Contributors
+# Another Section
+"#
 
 /--
 info:

@@ -12,7 +12,9 @@ genre as simply as possible.
 
 -/
 
-open Verso Doc
+open Verso Doc Elab
+open Verso.ArgParse
+open Lean (quote)
 
 namespace Tutorial
 
@@ -192,7 +194,7 @@ datatypes, but they require instances of `GenreHtml` or `GenreTeX` to render gen
 
 open Verso.Output Html
 
-instance : GenreHtml SimplePage IO where
+instance : GenreHtml SimplePage (BuildLogT IO) where
   -- When rendering a part to HTMl, extract the incoming links from the final traversal state and
   -- insert back-references
   part recur metadata | (.mk title titleString _ content subParts) => do
@@ -216,7 +218,7 @@ instance : GenreHtml SimplePage IO where
       pure <| renderDate d m y
     -- If no ID was assigned, log an error
     | .inr ⟨dest, none⟩, contents => do
-      HtmlT.logError s!"No ID assigned to section link of {dest}"
+      reportError s!"No ID assigned to section link of {dest}"
       pure {{<a href=s!"#{dest}"> {{← contents.mapM recur}} </a>}}
     -- Otherwise emit the right ID
     | .inr ⟨dest, some t⟩, contents => do
@@ -244,35 +246,25 @@ def render (doc : Part SimplePage) : IO UInt32 := do
     iterations := iterations + 1
   IO.println s!"Traversal completed after {iterations} iterations"
 
-  -- Render the resulting document to HTML. This requires a way to log errors.
-  let hadError ← IO.mkRef false
-  let logError str := do
-    hadError.set true
-    IO.eprintln str
+  -- Render the resulting document to HTML. This requires a logger to record errors and warnings.
+  Verso.withLogger fun logger => do
+    IO.println "Rendering HTML"
+    -- toHtml returns both deduplicated hover contents and the actual content.
+    -- Since we're not rendering Lean code, we can ignore the hover contents.
+    let (content, _) ← SimplePage.toHtml (m := BuildLogT IO) {} context state {} {} {} doc .empty |>.run logger
+    let html := {{
+      <html>
+        <head>
+          <title>{{doc.titleString}}</title>
+          <meta charset="utf-8"/>
+        </head>
+        <body>{{ content }}</body>
+      </html>
+    }}
 
-  IO.println "Rendering HTML"
-  -- toHtml returns both deduplicated hover contents and the actual content.
-  -- Since we're not rendering Lean code, we can ignore the hover contents.
-  let (content, _) ← SimplePage.toHtml {logError} context state {} {} {} doc .empty
-  let html := {{
-    <html>
-      <head>
-        <title>{{doc.titleString}}</title>
-        <meta charset="utf-8"/>
-      </head>
-      <body>{{ content }}</body>
-    </html>
-  }}
-
-  IO.println "Writing to index.html"
-  IO.FS.withFile "index.html" .write fun h => do
-    h.putStrLn html.asString
-
-  if (← hadError.get) then
-    IO.eprintln "Errors occurred while rendering"
-    pure 1
-  else
-    pure 0
+    IO.println "Writing to index.html"
+    IO.FS.withFile "index.html" .write fun h => do
+      h.putStrLn html.asString
 
 end SimplePage
 
@@ -293,3 +285,38 @@ def today (_content : Array (Inline SimplePage)) : Inline SimplePage :=
 /-- Insert a particular date here -/
 def date (_content : Array (Inline SimplePage)) (year month day : Nat) : Inline SimplePage :=
   .other (.inl (.specific day month year)) #[]
+
+structure SectionRefArgs where
+  dest : String
+
+structure DateArgs where
+  year : Nat
+  month : Nat
+  day : Nat
+
+instance : FromArgs SectionRefArgs DocElabM where
+  fromArgs := SectionRefArgs.mk <$> .positional `dest .string
+
+instance : FromArgs DateArgs DocElabM where
+  fromArgs := DateArgs.mk <$>
+    .positional `year .nat <*>
+    .positional `month .nat <*>
+    .positional `day .nat
+
+@[role sectionRef]
+meta def sectionRefRole : RoleExpanderOf SectionRefArgs
+  | {dest}, content => do
+    let content ← content.mapM elabInline
+    ``(sectionRef #[$content,*] $(quote dest))
+
+@[role today]
+meta def todayRole : RoleExpanderOf Unit
+  | (), content => do
+    let content ← content.mapM elabInline
+    ``(today #[$content,*])
+
+@[role date]
+meta def dateRole : RoleExpanderOf DateArgs
+  | {year, month, day}, content => do
+    let content ← content.mapM elabInline
+    ``(date #[$content,*] $(quote year) $(quote month) $(quote day))

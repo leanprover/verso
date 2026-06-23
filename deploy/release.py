@@ -7,14 +7,20 @@ import argparse
 import datetime
 import functools
 from release_utils import (
-    run_git_command, find_latest_version, find_latest_stable_version,
-    git_has_changes, parse_version, compare_versions
+    run_git_command,
+    find_latest_version,
+    find_latest_stable_version,
+    git_has_changes,
+    parse_version,
+    compare_versions,
 )
 
 
 def stamp_html_files(source_dir, commit_sha):
     """Prepend a commit stamp comment to every HTML file in source_dir."""
-    timestamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    timestamp = datetime.datetime.now(datetime.timezone.utc).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
     stamp = f"<!-- Generated from commit {commit_sha} at {timestamp} -->\n"
     for root, _, files in os.walk(source_dir):
         for filename in files:
@@ -58,7 +64,9 @@ def generate_index_html(latest_version, stable_version):
 
     stable_link = ""
     if stable_version:
-        stable_link = f'<a href="stable/">Latest stable ({stable_version})</a> &middot; '
+        stable_link = (
+            f'<a href="stable/">Latest stable ({stable_version})</a> &middot; '
+        )
 
     latest_link = ""
     if latest_version:
@@ -120,7 +128,9 @@ def deploy_version(source_dir, version, commit_sha, branch):
 
             # Switch to the deploy branch
             print(f"Checking out branch: {branch}")
-            run_git_command(["git", "switch", "-c", branch, "--track", "origin/" + branch])
+            run_git_command(
+                ["git", "switch", "-c", branch, "--track", "origin/" + branch]
+            )
 
             # Remove existing version directory if it exists
             version_dir = version
@@ -190,7 +200,9 @@ def main():
 
     args = parser.parse_args()
 
-    print(f"Deploying from {args.source_dir} as version {args.version} into {args.branch}")
+    print(
+        f"Deploying from {args.source_dir} as version {args.version} into {args.branch}"
+    )
 
     deploy_version(args.source_dir, args.version, args.commit_sha, args.branch)
 

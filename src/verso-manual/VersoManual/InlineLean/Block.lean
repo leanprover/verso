@@ -30,10 +30,10 @@ block_extension Block.lean
 
   traverse id data _ := do
     let .arr #[_, defined, _, _] := data
-      | logError "Expected two-element JSON for Lean code" *> pure none
+      | reportError "Expected two-element JSON for Lean code" *> pure none
     match FromJson.fromJson? defined with
     | .error err =>
-      logError <| "Couldn't deserialize Lean code while traversing block example: " ++ err
+      reportError <| "Couldn't deserialize Lean code while traversing block example: " ++ err
       pure none
     | .ok (defs : Array (Name × String)) =>
       saveExampleDefs id defs
@@ -41,21 +41,21 @@ block_extension Block.lean
   toTeX :=
     some <| fun _ _ _ data _ => do
       let .arr #[hlJson, _ds, _, _] := data
-        | TeX.logError "Expected four-element JSON for Lean code" *> pure .empty
+        | reportError "Expected four-element JSON for Lean code" *> pure .empty
       match FromJson.fromJson? hlJson with
       | .error err =>
-        TeX.logError <| "Couldn't deserialize Lean code block while rendering TeX: " ++ err
+        reportError <| "Couldn't deserialize Lean code block while rendering TeX: " ++ err
         pure .empty
       | .ok (hl : Highlighted) =>
-        hl.toTeX (g := Manual) (m := ReaderT ExtensionImpls IO)
+        hl.toTeX (g := Manual) (m := ReaderT ExtensionImpls (BuildLogT IO))
   toHtml :=
     open Verso.Output.Html in
     some <| fun _ _ _ data _ => do
       let .arr #[hlJson, _ds, _, _] := data
-        | HtmlT.logError "Expected four-element JSON for Lean code" *> pure .empty
+        | reportError "Expected four-element JSON for Lean code" *> pure .empty
       match FromJson.fromJson? hlJson with
       | .error err =>
-        HtmlT.logError <| "Couldn't deserialize Lean code block while rendering HTML: " ++ err
+        reportError <| "Couldn't deserialize Lean code block while rendering HTML: " ++ err
         pure .empty
       | .ok (hl : Highlighted) =>
 

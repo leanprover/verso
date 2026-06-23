@@ -25,56 +25,59 @@ open Lean Elab Term Command in
 /--
 Extract the marked exercises and example code.
 -/
-partial def buildExercises (mode : Mode) (logError : String → IO Unit) (cfg : Config) (_state : TraverseState) (text : Part Manual) : IO Unit := do
+partial def buildExercises (mode : Mode) (cfg : Config) (_state : TraverseState) (text : Part Manual) : BuildLogT IO Unit := do
   let .multi := mode
     | pure ()
-  let code := (← part text |>.run {}).snd
-  let dest := cfg.destination / "example-code"
-  let some mainDir := mainFileName.parent
-    | throw <| IO.userError "Can't find directory of `DemoTextbookMain.lean`"
-
-  IO.FS.createDirAll <| dest
-  for ⟨fn, f⟩ in code do
-    -- Make sure the path is relative to that of this one
-    if let some fn' := fn.dropPrefix? mainDir.toString then
-      let fn' := fn'.toString.dropWhile (· ∈ System.FilePath.pathSeparators : Char → Bool)
-      let fn := dest / fn'.copy
-      fn.parent.forM IO.FS.createDirAll
-      if (← fn.pathExists) then IO.FS.removeFile fn
-      IO.FS.writeFile fn f
-    else
-      logError s!"Couldn't save example code. The path '{fn}' is not underneath '{mainDir}'."
+  let logger ← readThe (Logger IO)
+  saveExampleCode logger cfg text
 
 where
-  part : Part Manual → StateT (HashMap String String) IO Unit
+  saveExampleCode (logger : Verso.Logger IO) (cfg : Config) (text : Part Manual) : IO Unit := do
+    let code := (← part logger text |>.run {}).snd
+    let dest := cfg.destination / "example-code"
+    let some mainDir := mainFileName.parent
+      | throw <| IO.userError "Can't find directory of `DemoTextbookMain.lean`"
+
+    IO.FS.createDirAll <| dest
+    for ⟨fn, f⟩ in code do
+      -- Make sure the path is relative to that of this one
+      if let some fn' := fn.dropPrefix? mainDir.toString then
+        let fn' := fn'.toString.dropWhile (· ∈ System.FilePath.pathSeparators : Char → Bool)
+        let fn := dest / fn'.copy
+        fn.parent.forM IO.FS.createDirAll
+        if (← fn.pathExists) then IO.FS.removeFile fn
+        IO.FS.writeFile fn f
+      else
+        logger.reportError s!"Couldn't save example code. The path '{fn}' is not underneath '{mainDir}'."
+  part (logger : Verso.Logger IO) : Part Manual → StateT (HashMap String String) IO Unit
     | .mk _ _ _ intro subParts => do
-      for b in intro do block b
-      for p in subParts do part p
-  block : Block Manual → StateT (HashMap String String) IO Unit
+      for b in intro do block logger b
+      for p in subParts do part logger p
+  block (logger : Verso.Logger IO) : Block Manual → StateT (HashMap String String) IO Unit
     | .other which contents => do
       if which.name == ``Block.savedLean then
         let .arr #[.str fn, .str code] := which.data
-          | logError s!"Failed to deserialize saved Lean data {which.data}"
+          | logger.reportError s!"Failed to deserialize saved Lean data {which.data}"
         modify fun saved =>
           let prior := saved[fn]?.getD ""
           saved.insert fn (prior ++ code ++ "\n")
 
       if which.name == ``Block.savedImport then
         let .arr #[.str fn, .str code] := which.data
-          | logError s!"Failed to deserialize saved Lean import data {which.data}"
+          | logger.reportError s!"Failed to deserialize saved Lean import data {which.data}"
         modify fun saved =>
           let prior := saved[fn]?.getD ""
           saved.insert fn (code.trimAsciiEnd.copy ++ "\n" ++ prior)
 
-      for b in contents do block b
+      for b in contents do block logger b
     | .concat bs | .blockquote bs =>
-      for b in bs do block b
+      for b in bs do block logger b
     | .ol _ lis | .ul lis =>
       for li in lis do
-        for b in li.contents do block b
+        for b in li.contents do block logger b
     | .dl dis =>
       for di in dis do
-        for b in di.desc do block b
+        for b in di.desc do block logger b
     | .para .. | .code .. => pure ()
 
 

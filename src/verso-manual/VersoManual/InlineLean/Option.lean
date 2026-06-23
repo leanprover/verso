@@ -48,7 +48,7 @@ def option.descr : InlineDescr := withHighlighting {
     some <| fun _ _ data _ => do
       match FromJson.fromJson? data with
       | .error err =>
-        HtmlT.logError <| "Couldn't deserialize Lean option code while rendering HTML: " ++ err
+        reportError <| "Couldn't deserialize Lean option code while rendering HTML: " ++ err
         pure .empty
       | .ok (hl : Highlighted) =>
         hl.inlineHtml (g := Manual) "examples"

@@ -203,6 +203,151 @@ where
 
 
 /--
+A message positioned inside a doc comment, with its byte ranges in the source file.
+
+Messages inside doc comments come from code embedded in documentation. For example, `lean` code
+blocks log the diagnostics of their commands at the code's position in the docstring. The doc
+comment produces no code tokens, so these messages cannot be attached to the command's highlighted
+code. Instead, {name}`relocateDocMessages` re-attaches them to the highlighted code that docstring
+handlers produce.
+-/
+structure DocMessage where
+  message : Message
+  /-- The start of the message in the source file. -/
+  start : String.Pos.Raw
+  /-- The end of the message in the source file. -/
+  stop : String.Pos.Raw
+  /-- The start of the doc comment that contains the message. -/
+  commentStart : String.Pos.Raw
+  /-- The end of the doc comment that contains the message. -/
+  commentStop : String.Pos.Raw
+
+/-- Collects the source ranges of the doc comments and module docstrings in `stx`. -/
+partial def docCommentRanges (stx : Syntax) : Array (String.Pos.Raw × String.Pos.Raw) :=
+  go stx #[]
+where
+  go (stx : Syntax) (acc : Array (String.Pos.Raw × String.Pos.Raw)) :
+      Array (String.Pos.Raw × String.Pos.Raw) :=
+    if stx.isOfKind ``docComment || stx.isOfKind ``moduleDoc then
+      match stx.getPos?, stx.getTailPos? with
+      | some b, some e => acc.push (b, e)
+      | _, _ => acc
+    else if let .node _ _ args := stx then
+      args.foldl (fun acc a => go a acc) acc
+    else acc
+
+/-- Splits a command's messages into those positioned inside one of its doc comments and the rest. -/
+def splitDocMessages (text : FileMap) (stx : Syntax) (msgs : Array Message) :
+    Array DocMessage × Array Message := Id.run do
+  let ranges := docCommentRanges stx
+  if ranges.isEmpty then return (#[], msgs)
+  let mut inDoc := #[]
+  let mut rest := #[]
+  for msg in msgs do
+    let start := text.ofPosition msg.pos
+    let stop := msg.endPos.map text.ofPosition |>.getD start
+    if let some (b, e) := ranges.find? fun (b, e) => b ≤ start && stop ≤ e then
+      inDoc := inDoc.push ⟨msg, start, stop, b, e⟩
+    else
+      rest := rest.push msg
+  return (inDoc, rest)
+
+/-- Returns the text of highlighted code that is a single token or text run. -/
+private def atomText : Highlighted → String
+  | .token ⟨_, s⟩ => s
+  | .text s => s
+  | _ => ""
+
+/--
+Flattens highlighted code into an array of single tokens and text runs. Returns `none` if the code
+contains anything else, such as an existing message span.
+-/
+private partial def flatAtoms? : Highlighted → Option (Array Highlighted)
+  | .seq xs => xs.foldlM (fun acc x => (acc ++ ·) <$> flatAtoms? x) #[]
+  | t@(.token _) => some #[t]
+  | t@(.text _) => some #[t]
+  | _ => none
+
+/--
+Wraps regions of `atoms` (single tokens and text runs) in message spans. Each span is a byte range
+relative to the concatenated text of `atoms`, with the message to attach.
+
+The atoms are traversed once, tracking the current byte position. A span opens at the atom that
+contains its start and closes at the end of the first atom that reaches its end, so spans cover
+whole atoms. A message that starts while a span is open is merged into it.
+-/
+private def wrapSpans (atoms : Array Highlighted)
+    (spans : Array (Nat × Nat × Highlighted.Span.Kind × Highlighted.MessageContents Highlighted)) :
+    Highlighted := Id.run do
+  let sorted := spans.qsort fun (s1, _) (s2, _) => s1 < s2
+  let mut result := Highlighted.empty
+  -- The contents of the currently open span, with its end position and messages
+  let mut acc := Highlighted.empty
+  let mut current? : Option (Nat × Array (Highlighted.Span.Kind × Highlighted.MessageContents Highlighted)) := none
+  let mut next := 0
+  let mut pos := 0
+  for a in atoms do
+    let stop := pos + (atomText a).utf8ByteSize
+    while h : next < sorted.size do
+      let (s, e, k, c) := sorted[next]
+      if s ≥ stop then break
+      current? :=
+        match current? with
+        | none => some (e, #[(k, c)])
+        | some (e', infos) => some (max e e', infos.push (k, c))
+      next := next + 1
+    match current? with
+    | none => result := result ++ a
+    | some (e, infos) =>
+      acc := acc ++ a
+      if e ≤ stop then
+        result := result ++ .span infos acc
+        acc := Highlighted.empty
+        current? := none
+    pos := stop
+  if let some (_, infos) := current? then
+    result := result ++ .span infos acc
+  return result
+
+/--
+Attaches messages from code embedded in docstrings to the highlighted code that docstring handlers
+produce.
+
+Docstring data payloads such as {name}`Lean.Doc.Data.LeanBlock` contain highlighted code without
+source positions, but their text reproduces a region of the doc comment verbatim. Each message is
+matched to an occurrence of the highlighted code's text that contains the message's source range,
+which recovers the message's position within the code.
+-/
+def relocateDocMessages (docMsgs : Array DocMessage) (hl : Highlighted) : HighlightM Highlighted := do
+  if docMsgs.isEmpty then return hl
+  let some atoms := flatAtoms? hl | return hl
+  let code := atoms.foldl (fun s a => s ++ atomText a) ""
+  if code.isEmpty then return hl
+  let src := (← getFileMap).source
+  let mut spans : Array (Nat × Nat × Highlighted.Span.Kind × Highlighted.MessageContents Highlighted) := #[]
+  for dm in docMsgs do
+    let comment := String.Pos.Raw.extract src dm.commentStart dm.commentStop
+    let mut offset := dm.commentStart
+    for piece in (comment.splitOn code).dropLast do
+      let b := offset + piece
+      let e := b + code
+      if b ≤ dm.start && dm.stop ≤ e then
+        spans := spans.push (dm.start.byteIdx - b.byteIdx, dm.stop.byteIdx - b.byteIdx,
+          .ofSeverity dm.message.severity,
+          ← messageContents dm.message)
+        break
+      offset := e
+  if spans.isEmpty then return hl
+  return wrapSpans atoms spans
+
+/--
+The monad for converting elaborated docstrings to their literate representation. The reader
+context carries the messages positioned inside the current command's doc comments, so that they
+can be re-attached to the rendered code. See {name}`DocMessage`.
+-/
+abbrev ToLitM := ReaderT (Array DocMessage) HighlightM
+
+/--
 Highlights a sequence of syntaxes, each with its own info tree. Typically used for highlighting a
 module, where each command has its own corresponding tree.
 
@@ -223,15 +368,19 @@ partial def highlightFrontendResult' (result : Compat.Frontend.FrontendResult)
   let ((), headerSt) ← highlight' #[] result.headerSyntax true |>.run ctx |>.run infoTable |>.run (← HighlightState.ofMessages result.headerSyntax #[])
   code := code.push #[.highlighted <| Highlighted.fromOutput headerSt.output]
 
+  let text ← getFileMap
   for cmd in result.items do
-    let st ← HighlightState.ofMessages cmd.commandSyntax (Compat.messageLogArray cmd.messages)
-    let (hl, _) ← go cmd |>.run ctx |>.run infoTable |>.run st
+    -- Messages positioned inside doc comments are re-attached to the rendered docstring's code
+    -- rather than to the command's own tokens. See `DocMessage`.
+    let (docMsgs, cmdMsgs) := splitDocMessages text cmd.commandSyntax (Compat.messageLogArray cmd.messages)
+    let st ← HighlightState.ofMessages cmd.commandSyntax cmdMsgs
+    let (hl, _) ← go cmd docMsgs |>.run ctx |>.run infoTable |>.run st
     code := code.push hl
 
   return code
 where
 
-  go (res : Compat.Frontend.FrontendItem) : HighlightM (Array Code) := do
+  go (res : Compat.Frontend.FrontendItem) (docMsgs : Array DocMessage) : HighlightM (Array Code) := do
     if res.info.size > 1 then panic! s!"Command {res.commandSyntax.getKind} has {res.info.size} info trees, expected at most 1"
     let stx ←
       if let some t := res.info[0]? then
@@ -247,7 +396,7 @@ where
             -- trailing moduledoc wouldn't compare properly here.
             guard (s.declarationRange.pos == declRange.pos) *> some s
           if let some doc := doc? then
-            return #[.modDoc (← toModLit doc)]
+            return #[.modDoc (← toModLit doc |>.run docMsgs)]
         else if stx[1].isAtom then
           if let some doc := MD4Lean.parse (stx[1].getAtomVal.dropSuffix "-/").copy then
             return #[.markdownModDoc doc]
@@ -268,7 +417,7 @@ where
               | pure (Code.markdown i (some declName) ⟨#[.code #[] #[] none #["Failed to parse Markdown:\n", x]]⟩)
             pure (Code.markdown i (some declName) md)
           | .inr x =>
-            let x ← toLit x
+            let x ← toLit x |>.run docMsgs
             pure <| Code.verso i (some declName) x
         else pure none
       else pure none
@@ -311,13 +460,31 @@ where
     | .token ⟨.docComment, text⟩ => #[parseDocComment text]
     | _ => #[Code.highlighted hl]
 
-  toLit (doc : VersoDocString) : HighlightM (LitVersoDocString) := do
+  toLit (doc : VersoDocString) : ToLitM (LitVersoDocString) := do
     pure { text := ← doc.text.mapM blockToLit, subsections := ← doc.subsections.mapM partToLit }
 
-  toModLit (doc : VersoModuleDocs.Snippet) : HighlightM (LitVersoModuleDocs.Snippet) := do
+  toModLit (doc : VersoModuleDocs.Snippet) : ToLitM (LitVersoModuleDocs.Snippet) := do
     pure { text := ← doc.text.mapM blockToLit, sections := ← doc.sections.mapM fun (l, _, p) => (l, ·) <$> partToLit p }
 
-  inlineToLit : Lean.Doc.Inline ElabInline → HighlightM (Lean.Doc.Inline Ext)
+  /--
+  Re-attaches messages from code embedded in the docstring to a handler's result, if the result is
+  highlighted code.
+  -/
+  relocateInline : Lean.Doc.Inline Ext → ToLitM (Lean.Doc.Inline Ext)
+    | .other (.highlighted hl) content => do
+      pure <| .other (.highlighted (← relocateDocMessages (← read) hl)) content
+    | i => pure i
+
+  /--
+  Re-attaches messages from code embedded in the docstring to a handler's result, if the result is
+  highlighted code.
+  -/
+  relocateBlock : Lean.Doc.Block Ext Ext → ToLitM (Lean.Doc.Block Ext Ext)
+    | .other (.highlighted hl) content => do
+      pure <| .other (.highlighted (← relocateDocMessages (← read) hl)) content
+    | b => pure b
+
+  inlineToLit : Lean.Doc.Inline ElabInline → ToLitM (Lean.Doc.Inline Ext)
     | .text s => pure <| .text s
     | .linebreak s => pure <| .linebreak s
     | .concat xs => .concat <$> xs.mapM inlineToLit
@@ -333,11 +500,12 @@ where
       let handlers ← getInlineToLiterate
       for h in handlers do
         if let some v ← h x.name x.val xs then
-          return v
-      throwError "No inline handler for {x.name} with type {x.val.typeName}"
+          return ← relocateInline v
+      logWarning m!"No inline handler for {x.name} with type {x.val.typeName}; using fallback content"
+      return .concat xs
 
 
-  blockToLit : Lean.Doc.Block ElabInline ElabBlock → HighlightM (Lean.Doc.Block Ext Ext)
+  blockToLit : Lean.Doc.Block ElabInline ElabBlock → ToLitM (Lean.Doc.Block Ext Ext)
     | .para xs => .para <$> xs.mapM inlineToLit
     | .concat xs => .concat <$> xs.mapM blockToLit
     | .ul items => .ul <$> items.mapM fun x => ListItem.mk <$> x.contents.mapM blockToLit
@@ -350,10 +518,11 @@ where
       let handlers ← getBlockToLiterate
       for h in handlers do
         if let some v ← h x.name x.val xs then
-          return v
-      throwError "No block handler for {x.name} with type {x.val.typeName}"
+          return ← relocateBlock v
+      logWarning m!"No block handler for {x.name} with type {x.val.typeName}; using fallback content"
+      return .concat xs
 
-  partToLit (p : Lean.Doc.Part ElabInline ElabBlock Empty) : HighlightM (Lean.Doc.Part Ext Ext Empty) :=
+  partToLit (p : Lean.Doc.Part ElabInline ElabBlock Empty) : ToLitM (Lean.Doc.Part Ext Ext Empty) :=
     return { p with
       title := ← p.title.mapM inlineToLit
       content := ← p.content.mapM blockToLit
@@ -480,7 +649,20 @@ unsafe def go (suppressedNamespaces : Array Name) (extraImports : Array Name) (m
     let res ← Compat.Frontend.processCommands headerStx pctx cmdSt
     let res := res.updateLeading contents
 
-    let hls ← (Frontend.runCommandElabM <| liftTermElabM <| highlightFrontendResult' res (suppressNamespaces := suppressedNamespaces.toList)) pctx cmdSt
+    -- Report messages resulting from docstring conversion explicitly and separately. This ensures
+    -- that warnings from e.g. missing handlers surface as they should, without double-reporting all
+    -- messages from the original.
+    let savedMsgs ← cmdSt.modifyGet fun s =>
+      (s.commandState.messages, { s with commandState.messages := .empty })
+    let hls ← try
+      let hls ← (Frontend.runCommandElabM <| liftTermElabM <| highlightFrontendResult' res (suppressNamespaces := suppressedNamespaces.toList)) pctx cmdSt
+      pure hls
+    finally
+      let innerMsgs ← cmdSt.modifyGet fun s =>
+        (s.commandState.messages, { s with commandState.messages := .empty })
+      for m in innerMsgs.toArray do
+        IO.eprint (← m.toString)
+      cmdSt.modify ({ · with commandState.messages := savedMsgs ++ innerMsgs })
 
     let env := (← cmdSt.get).commandState.env
 

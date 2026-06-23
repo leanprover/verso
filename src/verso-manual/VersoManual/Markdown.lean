@@ -284,8 +284,11 @@ private partial def closeMarkdownSections {m} [Monad m]
   | [] => pure ()
   | docLevel :: more =>
     if docLevel ≥ level then
-      -- `default` here because the Markdown parser provides no source position
-      let some ctxt' := (← getThe PartElabM.State).partContext.close default
+      -- Markdown headers carry no source extent of their own, so end the section at the end of the
+      -- current reference. This keeps each part's range valid (the selection stays within
+      -- `[rangeStart, endPos]`) for the TOC range conversion.
+      let endPos := (← getRef).getTailPos?.getD default
+      let some ctxt' := (← getThe PartElabM.State).partContext.close endPos
         |  throwError m!"Failed to close verso part corresponding to markdown section: no parts left"
       modifyThe PartElabM.State fun st => {st with partContext := ctxt'}
       modifyThe MDState ({· with inHeaders := more})
@@ -313,8 +316,12 @@ private partial def addPartFromMarkdownAux {m} [Monad m]
       | .ok t => pure t
       | .error e => throwError m!"Unsupported Markdown in header:\n{e}"
     let titleText := titleTexts.foldl (· ++ ·) ""
+    -- Markdown headers have no source syntax of their own, so anchor TOC ranges to the current
+    -- reference, which has a real source position.
+    let titleSyntax ← getRef
     startMarkdownSection level {
-      titleSyntax := quote (k := `str) titleText
+      rangeSyntax := titleSyntax
+      selectionSyntax := titleSyntax
       expandedTitle := some (titleText, txtStxs)
       metadata := none
       blocks := #[]
