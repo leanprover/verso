@@ -4,12 +4,15 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 
-import Lean.Data.Json
-import Lean.Data.NameMap
-import Std.Data.HashMap
-import Std.Time.DateTime
+module
+public import Lean.Data.Json
+public import Lean.Data.NameMap
+public import Std.Data.HashMap
+public import Std.Time.DateTime
 
-import MultiVerso
+public import MultiVerso
+
+public section
 
 open Lean (Json NameMap)
 open Verso.Multi

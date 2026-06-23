@@ -3,8 +3,11 @@ Copyright (c) 2026 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-import VersoLiterate
-import Std.Data.HashMap
+module
+public import VersoLiterate
+public import Std.Data.HashMap
+
+public section
 
 open Lean
 open VersoLiterate

@@ -3,8 +3,11 @@ Copyright (c) 2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-import VersoLiterate
-import VersoLiterateCode
+module
+public import VersoLiterate
+public import VersoLiterateCode
+
+public section
 
 set_option maxRecDepth 1024
 

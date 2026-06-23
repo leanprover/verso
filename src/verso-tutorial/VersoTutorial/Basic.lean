@@ -4,17 +4,22 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 
-import MultiVerso
-import Verso.Doc
-import VersoManual.Basic
-import VersoManual
-import Lean.Data.Json
-import VersoUtil.LzCompress
-import VersoUtil.Zip
-import VersoBlog.Basic
-import VersoBlog.Component
-import VersoBlog.Template
-import VersoBlog.Generate
+module
+public import MultiVerso
+public import Verso.Doc
+public import Verso.Doc.Concrete.InlineString
+public import VersoManual.Basic
+public import VersoManual
+public import Lean.Data.Json
+public import VersoUtil.LzCompress
+public import VersoUtil.Zip
+public import VersoBlog.Basic
+public import VersoBlog.Component
+public import VersoBlog.Template
+public import VersoBlog.Generate
+public meta import Verso.Doc.Elab.Block
+
+public section
 
 set_option linter.missingDocs true
 
@@ -25,13 +30,13 @@ open Lean
 open Verso.Doc (Genre)
 open Verso.Multi
 
-private def defaultToolchain :=
+@[expose] def defaultToolchain :=
   if Lean.versionString.find? "nightly" |>.isSome then
     "leanprover/lean4:nightly" ++ (Lean.versionString.split "nightly" |>.toArray[1]!).copy
   else
     "leanprover/lean4:" ++ Lean.versionString
 
-private def defaultLive := "lean-v" ++ Lean.versionString
+@[expose] def defaultLive := "lean-v" ++ Lean.versionString
 
 /-- A style by which example code in a tutorial should be made runnable. -/
 inductive ExampleCodeStyle where
@@ -59,13 +64,13 @@ deriving BEq, Hashable, Inhabited, Repr, ToJson, FromJson
 /--
 Information that tracks the current context of traversal for a set of tutorials.
 -/
-def Tutorial.TraverseContext := Manual.TraverseContext
+@[expose] def Tutorial.TraverseContext := Manual.TraverseContext
 
 /--
 Tutorials may use all the extensions of the manual genre, but are rendered as ordinary single web
 pages via the blog genre. They may contain example code, which can be extracted and tested.
 -/
-def Tutorial : Genre :=
+@[expose] def Tutorial : Genre :=
   { Manual with
     TraverseContext := Tutorial.TraverseContext
     PartMetadata := Tutorial.PartMetadata
@@ -151,7 +156,7 @@ block_extension Block.displayOnly where
 
 /-- Indicates code that is to be displayed in tutorials, but not extracted or run. -/
 @[directive]
-def displayOnly : Elab.DirectiveExpanderOf Unit
+meta def displayOnly : Elab.DirectiveExpanderOf Unit
   | (), contents => do
     ``(Block.other Block.displayOnly #[$(← contents.mapM Elab.elabBlock),*])
 
@@ -162,7 +167,7 @@ block_extension Block.codeOnly where
 
 /-- Indicates code that is to be extracted and run from tutorials, but not rendered to HTML. -/
 @[directive]
-def codeOnly : Elab.DirectiveExpanderOf Unit
+meta def codeOnly : Elab.DirectiveExpanderOf Unit
   | (), contents => do
     ``(Block.other Block.codeOnly #[$(← contents.mapM Elab.elabBlock),*])
 

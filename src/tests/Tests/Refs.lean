@@ -3,7 +3,11 @@ Copyright (c) 2023 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: Rob Simmons
 -/
-import Verso
+module
+public import Verso
+public meta import Verso
+meta import all Verso.Doc.Elab.Monad
+public section
 namespace Verso.RefsTest
 set_option guard_msgs.diff true
 

@@ -3,8 +3,10 @@ Copyright (c) 2026 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-import Tests.CommentSkipping.Doc
-import Tests.CommentSkipping.Doc2
+module
+public meta import Tests.CommentSkipping.Doc
+public meta import Tests.CommentSkipping.Doc2
+public section
 
 /-!
 This test ensures that Lean's parser doesn't skip Lean comment syntax while parsing Verso blocks as

@@ -4,46 +4,52 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 
-import Verso.Doc
-import Verso.Doc.Concrete
-import Verso.Doc.TeX
-import Verso.Doc.Html
-import Verso.Output.TeX
-import Verso.Output.Html
-import Verso.Output.Html.CssVars
-import Verso.Output.Html.KaTeX
-import Verso.Output.Html.ElasticLunr
-import Verso.Doc.Lsp
-import Verso.Doc.Elab
-import Verso.FS
+module
+public import Verso.Doc
+public import Verso.Doc.Concrete
+public import Verso.Doc.TeX
+public import Verso.Doc.Html
+public import Verso.Output.TeX
+public import Verso.Output.Html
+public import Verso.Output.Html.CssVars
+public import Verso.Output.Html.KaTeX
+public import Verso.Output.Html.ElasticLunr
+public import Verso.Doc.Lsp
+public import Verso.Doc.Elab
+public import Verso.FS
 
-import VersoSearch
+public import VersoSearch
+public import VersoSearch.DomainSearch
 
-import MultiVerso
+public import MultiVerso
 
-import VersoManual.Basic
-import VersoManual.TeX
-import VersoManual.TeX.Config
-import VersoManual.Html
-import VersoManual.Html.Style
-import VersoManual.Draft
-import VersoManual.Imports
-import VersoManual.Index
-import VersoManual.License
-import VersoManual.Glossary
-import VersoManual.Docstring
-import VersoManual.WebAssets
-import VersoManual.WordCount
-import VersoManual.Linters
-import VersoManual.LocalContents
-import VersoManual.InlineLean
-import VersoManual.ExternalLean
-import VersoManual.Literate
-import VersoManual.Marginalia
-import VersoManual.Bibliography
-import VersoManual.Row
-import VersoManual.Diagrams
-import VersoManual.Table
+public import VersoManual.Basic
+public import VersoManual.TeX
+public import VersoManual.TeX.Config
+public import VersoManual.Html
+public import VersoManual.Html.Config
+public import VersoManual.Html.Features
+public import VersoManual.Html.Style
+public import VersoManual.Draft
+public import VersoManual.Imports
+public import VersoManual.Index
+public import VersoManual.License
+public import VersoManual.Glossary
+public import VersoManual.Docstring
+public import VersoManual.WebAssets
+public import VersoManual.WordCount
+public import VersoManual.Linters
+public import VersoManual.LocalContents
+public import VersoManual.InlineLean
+public import VersoManual.ExternalLean
+public import VersoManual.Literate
+public import VersoManual.Marginalia
+public import VersoManual.Bibliography
+public import VersoManual.Row
+public import VersoManual.Diagrams
+public import VersoManual.Table
+
+public section
 
 open Lean (Name NameMap Json ToJson FromJson quote)
 
@@ -152,7 +158,7 @@ structure RoleArgs where
   domain : Option Name
   remote : Option String := none
 
-instance : FromArgs RoleArgs m where
+meta instance : FromArgs RoleArgs m where
   fromArgs :=
     RoleArgs.mk <$>
       .positional `canonicalName (ValDesc.string.as "canonical name (string literal)") <*>
@@ -172,7 +178,7 @@ end
 Inserts a reference to the provided tag.
 -/
 @[role]
-def ref : RoleExpanderOf RoleArgs
+meta def ref : RoleExpanderOf RoleArgs
   | {canonicalName, domain, remote}, content => do
     let content ← content.mapM elabInline
     ``(Inline.other (Inline.ref $(quote canonicalName) $(quote domain) $(quote remote)) #[$content,*])
@@ -194,7 +200,7 @@ paragraph. In HTML output, they are rendered with less space between them, and L
 a single paragraph (e.g. without extraneous indentation).
 -/
 @[directive]
-def paragraph : DirectiveExpanderOf Unit
+meta def paragraph : DirectiveExpanderOf Unit
   | (), stxs => do
     let args ← stxs.mapM elabBlock
     ``(Block.other Block.paragraph #[ $[ $args ],* ])

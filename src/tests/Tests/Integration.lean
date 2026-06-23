@@ -3,7 +3,11 @@ Copyright (c) 2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: Jason Reed
 -/
-import Lean.Util.Diff
+module
+
+public import Lean.Util.Diff
+
+public section
 
 namespace Verso.Integration
 

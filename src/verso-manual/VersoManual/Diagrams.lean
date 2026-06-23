@@ -3,10 +3,16 @@ Copyright (c) 2024-2026 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
+module
 
-import VersoManual.Basic
-import VersoManual.InlineLean.Scopes
-import VersoIlluminate
+public import VersoManual.Basic
+public import VersoManual.InlineLean.Scopes
+public meta import VersoManual.InlineLean.Scopes
+public import VersoIlluminate
+public meta import VersoIlluminate
+public meta import Verso.Doc.Elab.Monad
+
+public section
 
 open Lean Elab
 open Verso ArgParse Doc Elab Genre.Manual Html
@@ -55,7 +61,7 @@ section
 variable [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m]
 
 /-- Argument parser for `DiagramConfig`. -/
-def DiagramConfig.parse : ArgParse m DiagramConfig :=
+meta def DiagramConfig.parse : ArgParse m DiagramConfig :=
   DiagramConfig.mk <$>
     (CssWidth.width <$> .named' `cssWidth false <|>
       CssWidth.scale <$> .named `cssScale .float false <|>
@@ -63,7 +69,7 @@ def DiagramConfig.parse : ArgParse m DiagramConfig :=
     <*> .named' `texWidth true
     <*> .flag `inline false
 
-instance : FromArgs DiagramConfig m := ⟨DiagramConfig.parse⟩
+meta instance : FromArgs DiagramConfig m := ⟨DiagramConfig.parse⟩
 
 end
 
@@ -144,7 +150,7 @@ automatically to the preamble), the `inkscape` binary, and `lualatex -shell-esca
 those, the document compiles to HTML but the PDF build will fail when it reaches a diagram.
 -/
 @[code_block]
-def diagram : CodeBlockExpanderOf DiagramConfig
+meta def diagram : CodeBlockExpanderOf DiagramConfig
   | cfg, str => do
     let (svg, diagramWidth) ← elabAndStoreDiagram str
       (scope := fun act => runWithOpenDecls <| runWithVariables fun _ => act)

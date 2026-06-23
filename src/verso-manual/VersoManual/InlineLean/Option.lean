@@ -3,9 +3,14 @@ Copyright (c) 2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-import Verso
-import VersoManual.Basic
-import VersoManual.HighlightedCode
+module
+
+public import Verso
+public meta import Verso.WithoutAsync
+public import VersoManual.Basic
+public import VersoManual.HighlightedCode
+
+public section
 
 open SubVerso.Highlighting
 
@@ -20,7 +25,7 @@ namespace Verso.Genre.Manual.InlineLean
 def Inline.option : Inline where
 
 @[role]
-def option : RoleExpanderOf Unit
+meta def option : RoleExpanderOf Unit
   | (), inlines => withoutAsync do
     let #[arg] := inlines
       | throwError "Expected exactly one argument"

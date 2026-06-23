@@ -3,8 +3,12 @@ Copyright (c) 2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: Rob Simmons
 -/
-import Verso
-import VersoManual
+module
+public import Verso
+public meta import Verso
+public import VersoManual
+public meta import VersoManual
+public section
 namespace Verso.BlocksTest
 open Genre Manual InlineLean
 
@@ -23,7 +27,7 @@ open Lean
 open Doc.Elab
 
 @[role]
-def insertSyntaxGivingRiseToMetavariables : RoleExpanderOf Unit
+meta def insertSyntaxGivingRiseToMetavariables : RoleExpanderOf Unit
   | (), _ => do
     ``(Doc.Inline.text s!"{4}")
 
@@ -33,7 +37,7 @@ I can {insertSyntaxGivingRiseToMetavariables}[]
 :::::::
 
 @[role]
-def totallyUndefined : RoleExpanderOf Unit
+meta def totallyUndefined : RoleExpanderOf Unit
   | (), _content => do
     `(_)
 
