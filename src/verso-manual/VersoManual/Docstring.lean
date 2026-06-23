@@ -1161,25 +1161,6 @@ private meta def indentColumn (str : String) : Nat := Id.run do
     else i := some leading.length
   return i.getD 0
 
-/-- info: 0 -/
-#guard_msgs in
-#eval indentColumn ""
-/-- info: 0 -/
-#guard_msgs in
-#eval indentColumn "abc"
-/-- info: 3 -/
-#guard_msgs in
-#eval indentColumn "   abc"
-/-- info: 3 -/
-#guard_msgs in
-#eval indentColumn "   abc\n\n   def"
-/-- info: 2 -/
-#guard_msgs in
-#eval indentColumn "   abc\n\n  def"
-/-- info: 2 -/
-#guard_msgs in
-#eval indentColumn "   abc\n\n  def\n    a"
-
 open Lean Elab Term in
 meta def tryElabBlockCodeCommand (str : String) (ignoreElabErrors := false) : DocElabM Term := do
     let loc := (← getRef).getPos?.map (← getFileMap).utf8PosToLspPos

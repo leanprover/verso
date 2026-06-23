@@ -9,6 +9,7 @@ public import Plausible.ArbitraryFueled
 public import VersoBlog
 public meta import VersoBlog.Basic
 public import VersoBlog.LiterateLeanPage
+public import Tests.VersoBlog.LiterateLeanPage
 public import Tests.Arbitrary
 public meta import Tests.Arbitrary
 
