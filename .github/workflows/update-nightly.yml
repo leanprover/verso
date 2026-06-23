@@ -49,8 +49,18 @@ jobs:
 
             - name: Get latest release tag from leanprover/lean4-nightly
               id: latest-available
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               run: |
-                  RELEASE_TAG="$(curl -s "https://api.github.com/repos/leanprover/lean4-nightly/releases" | jq -r '.[0].tag_name')"
+                  RELEASE_TAG="$(gh release list \
+                    --repo leanprover/lean4-nightly \
+                    --limit 1 \
+                    --json tagName \
+                    --jq '.[0].tagName')"
+                  if [ -z "$RELEASE_TAG" ]; then
+                    echo "Error: could not determine latest nightly release tag" >&2
+                    exit 1
+                  fi
                   echo "RELEASE_TAG=$RELEASE_TAG" >> "${GITHUB_ENV}"
                   echo "version=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
 
