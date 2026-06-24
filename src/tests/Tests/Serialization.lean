@@ -6,23 +6,22 @@ Author: David Thrane Christiansen
 module
 public import Plausible
 public import Plausible.ArbitraryFueled
-public meta import Plausible.ArbitraryFueled
 import Lean.Data.Json.FromToJson
 import all MultiVerso.InternalId
-public meta import MultiVerso.NameMap
-public meta import MultiVerso
-public meta import VersoManual.Html.JsFile
-public meta import VersoManual.Html.CssFile
-public meta import VersoManual.Html.Features
-public meta import VersoManual.LicenseInfo
-public meta import VersoSearch
-public meta import VersoSearch.DomainSearch
-public meta import Verso.Output.Html
-public meta import MultiVerso.Manifest
-public meta import VersoManual.Basic
+public import MultiVerso.NameMap
+public import MultiVerso
+public import VersoManual.Html.JsFile
+public import VersoManual.Html.CssFile
+public import VersoManual.Html.Features
+public import VersoManual.LicenseInfo
+public import VersoSearch
+public import VersoSearch.DomainSearch
+public import Verso.Output.Html
+public import MultiVerso.Manifest
+public import VersoManual.Basic
 import all VersoManual.Basic
 import VersoManual.Html.CssFile
-public meta import Tests.Arbitrary
+public import Tests.Arbitrary
 
 open Lean
 open Plausible Gen Arbitrary
@@ -30,7 +29,7 @@ open Verso Multi
 open Shrinkable
 open Std
 
-meta section
+section
 
 def isEqOk [BEq α] (actual : Except ε α) (expected : α) : Bool :=
   match actual with

@@ -6,8 +6,7 @@ Author: David Thrane Christiansen
 module
 
 public import Verso
-public import Errata
-public meta import Errata
+import Errata
 
 open Verso Errata
 
@@ -18,7 +17,7 @@ format, and how logging interacts with the exit code and the ambient output stre
 
 /-- A message logged with a `pos` location is saved with that file and position. -/
 @[test]
-def savesPosition : TestM Unit := do
+def savesPosition : Test := do
   let logger ← Logger.new
   let pos : Lean.Lsp.Position := { line := 4, character := 2 }
   (reportError "boom" (some { file := "PosSave.lean", span := .pos pos }) : BuildLogT IO Unit).run logger
@@ -34,7 +33,7 @@ def savesPosition : TestM Unit := do
 
 /-- A `range` span is likewise saved. -/
 @[test]
-def savesRange : TestM Unit := do
+def savesRange : Test := do
   let logger ← Logger.new
   let r : Lean.Lsp.Range :=
     { start := { line := 1, character := 0 }, «end» := { line := 1, character := 5 } }
@@ -50,7 +49,7 @@ Range formatting defers to Lean's `mkErrorStringWithPos`: `file:line:col-line:co
 line and 0-based column, keeping the full end position even within one line.
 -/
 @[test]
-def rangeFormat : TestM Unit := do
+def rangeFormat : Test := do
   let crossLine : LogMessage := {
     severity := .error, text := "msg",
     loc := some {
@@ -70,7 +69,7 @@ def rangeFormat : TestM Unit := do
 
 /-- A located message is formatted uniformly as `file:line:col: text` on stderr. -/
 @[test]
-def fileLocationFormat : TestM Unit := do
+def fileLocationFormat : Test := do
   let logger ← Logger.new
   let out ← captureOutput <|
     (reportError "bad term" (some { file := "FileLoc.lean", span := .pos { line := 6, character := 3 } })
@@ -82,7 +81,7 @@ def fileLocationFormat : TestM Unit := do
 
 /-- Errors set a non-zero exit code; warnings do not. -/
 @[test]
-def exitCode : TestM Unit := do
+def exitCode : Test := do
   let withErrors ← Logger.new
   (do reportError "e1"; reportWarning "w1"; reportError "e2" : BuildLogT IO Unit).run withErrors
   assertEq 2 (← withErrors.errors).size
@@ -97,7 +96,7 @@ Logging writes to the ambient stderr, resolved at log time: a logger created bef
 redirection still writes into the redirected stream, and nothing goes to stdout.
 -/
 @[test]
-def ambientStderr : TestM Unit := do
+def ambientStderr : Test := do
   let logger ← Logger.new
   let out ← captureOutput do
     (do

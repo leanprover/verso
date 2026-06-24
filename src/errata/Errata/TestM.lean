@@ -24,6 +24,9 @@ failure, which the interpreter distinguishes from an {name}`IO.Error` that escap
 -/
 abbrev TestM := ReaderT Context (ExceptT TestFailure IO)
 
+/-- A test: a {name}`TestM` action that succeeds unless it fails an assertion or raises an error. -/
+abbrev Test := TestM Unit
+
 /--
 Fails at the location recorded in the context. The runner seeds that with the test's own source
 range, so a failure with no more specific location still points at the test. This is the primitive

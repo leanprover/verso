@@ -18,33 +18,33 @@ def onePlusOne : Bool := 1 + 1 == 2
 
 /-- An assertion-based test. -/
 @[test]
-def equality : TestM Unit := do
+def equality : Test := do
   assertEq 4 (2 + 2)
 
 /-- A test with named results. -/
 @[test]
-def named : TestM Unit := do
+def named : Test := do
   result "first" (assertEq 1 1)
   result "second" (assertContains "b" "abc")
 
 /-- A test that completes without any check is a bare success. -/
 @[test]
-def emptyBody : TestM Unit := pure ()
+def emptyBody : Test := pure ()
 
 /-- A test that expects a failure. -/
 @[test]
-def expectsFailure : TestM Unit :=
+def expectsFailure : Test :=
   expectFail (assertEq 1 2)
 
 /-- A data-driven family expressed as a plain loop. -/
 @[test]
-def squares : TestM Unit := do
+def squares : Test := do
   for (n, sq) in [(1, 1), (2, 4), (3, 9)] do
     result s!"square {n}" (assertEq sq (n * n))
 
 /-- A subprocess test. -/
 @[test]
-def echoRuns : TestM Unit := do
+def echoRuns : Test := do
   let out ← IO.Process.output { cmd := "echo", args := #["hello"] }
   assertExitCode 0 out
   assertContains "hello" out.stdout
@@ -61,7 +61,7 @@ set_option doc.verso true in
 
 /-- A property test. -/
 @[test]
-def addComm : TestM Unit :=
+def addComm : Test :=
   property (∀ a b : Nat, a + b = b + a)
 
 open Lean (toJson fromJson?)
@@ -76,12 +76,12 @@ deriving instance Plausible.Shrinkable, Plausible.Arbitrary for Result
 
 /-- The JSON encoding of a result round-trips: decoding the encoding recovers the result. -/
 @[test]
-def jsonRoundTrips : TestM Unit :=
+def jsonRoundTrips : Test :=
   property (∀ r : Result, (fromJson? (toJson r)).toOption = some r)
 
 /-- A temp-directory fixture with a golden file. -/
 @[test]
-def goldenRoundTrip : TestM Unit :=
+def goldenRoundTrip : Test :=
   IO.FS.withTempDir fun dir => do
     let cfg ← read
     -- In update mode this would write; here we drive it through a temp golden file.
@@ -93,7 +93,7 @@ def goldenRoundTrip : TestM Unit :=
 
 /-- The `Verbosity` predicates and accumulation behave as the report relies on. -/
 @[test]
-def verbosityLevels : TestM Unit := do
+def verbosityLevels : Test := do
   assertEq false Verbosity.silent.showsPasses
   assertEq true Verbosity.quiet.showsPasses
   assertEq true Verbosity.verbose.showsPasses
@@ -106,7 +106,7 @@ def verbosityLevels : TestM Unit := do
 
 /-- At silent verbosity the report hides passes but shows failures and the summary line. -/
 @[test]
-def reportSilent : TestM Unit := do
+def reportSilent : Test := do
   let pass : Result := { package := "p", moduleName := "M", test := "t", status := .pass }
   let fail : Result := { package := "p", moduleName := "M", test := "u", status := .fail { message := "boom" } }
   let out ← captureOutput do discard <| humanReport .silent #[pass, fail]
@@ -116,14 +116,14 @@ def reportSilent : TestM Unit := do
 
 /-- At verbose verbosity the report shows passes too. -/
 @[test]
-def reportVerbose : TestM Unit := do
+def reportVerbose : Test := do
   let pass : Result := { package := "p", moduleName := "M", test := "t", status := .pass }
   let out ← captureOutput do discard <| humanReport .verbose #[pass]
   assertContains "ok    p/M  t" out.stdout
 
 /-- A test's results are truncated after the cap at quiet verbosity, with a summary, but not at verbose. -/
 @[test]
-def reportTruncates : TestM Unit := do
+def reportTruncates : Test := do
   let many := (Array.range 60).map fun i =>
     ({ package := "p", moduleName := "M", test := "many", resultPath := #[s!"case {i}"], status := .pass } : Result)
   let quiet ← captureOutput do discard <| humanReport .quiet many
@@ -135,7 +135,7 @@ def reportTruncates : TestM Unit := do
 
 /-- `humanReport` returns the number of failures and errors. -/
 @[test]
-def reportFailureCount : TestM Unit := do
+def reportFailureCount : Test := do
   let pass : Result := { package := "p", moduleName := "M", test := "t", status := .pass }
   let fail : Result := { package := "p", moduleName := "M", test := "u", status := .fail { message := "x" } }
   let err : Result := { package := "p", moduleName := "M", test := "v", status := .error "oops" }

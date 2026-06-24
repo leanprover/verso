@@ -134,34 +134,6 @@ lean_lib Errata where
   roots := #[`Errata]
   needs := #[errataUsageFile]
 
--- Enumerates the Errata tests defined in a module.
-lean_exe «errata-enumerate» where
-  root := `ErrataEnumerateMain
-  srcDir := "src/errata"
-  supportInterpreter := true
-
--- Writes the fully-qualified names of the Errata tests defined directly in a module.
-module_facet errataTests mod : System.FilePath := do
-  let ws ← getWorkspace
-  let exeJob ← «errata-enumerate».fetch
-  -- Depend on `leanArts`, not `olean`: enumeration reads the whole module, including private and
-  -- `meta` test declarations, which the public olean's trace excludes. The `leanArts` trace inherits
-  -- the source trace, so adding or removing any test invalidates the manifest.
-  let modJob ← mod.leanArts.fetch
-  let buildDir := ws.root.buildDir
-  let outFile := mod.filePath (buildDir / "errata-tests") "json"
-  exeJob.bindM fun exeFile =>
-    modJob.mapM fun _arts => do
-      addLeanTrace
-      addTrace (← computeTrace exeFile)
-      buildFileUnlessUpToDate' (text := true) outFile <|
-        proc {
-          cmd := exeFile.toString
-          args := #[mod.name.toString, outFile.toString]
-          env := ← getAugmentedEnv
-        }
-      pure outFile
-
 -- Tests that exercise Errata using Errata itself.
 lean_lib ErrataTests where
   srcDir := "src/errata-tests"
@@ -184,62 +156,34 @@ lean_exe «errata-runner» where
   srcDir := ".lake/errata-runner"
   supportInterpreter := true
 
-/-- The test's name below its module: the declaration's components past the module prefix, dotted. -/
-private def errataTestName (moduleName declName : Lean.Name) : String :=
-  let modComps := moduleName.components
-  let declComps := declName.components
-  let below := if moduleName.isPrefixOf declName then declComps.drop modComps.length else declComps
-  ".".intercalate (below.map (·.toString))
+/-- Whether a source file introduces Errata tests, by an `@[test]` attribute or a `#test_msgs`
+command, the only two ways a test enters a module. -/
+private def errataSourceHasTests (lines : List String) : Bool :=
+  lines.any fun line =>
+    let t := line.trimAsciiStart.copy
+    t.startsWith "@[test]" || t.startsWith "#test_msgs"
 
-/-- A discovered test: its user-facing name and its source range. -/
-private structure ErrataTest where
-  name : String
-  startLine : Nat
-  startColumn : Nat
-  endLine : Nat
-  endColumn : Nat
+/-- Whether a source file participates in the module system: it leads with a `module` declaration. -/
+private def errataSourceIsModule (lines : List String) : Bool :=
+  lines.any fun line => line.trimAscii.copy == "module"
 
-/-- Parse a per-module JSON manifest into the tests' names and source ranges. -/
-private def errataParseManifest (content : String) : Array ErrataTest :=
-  match Lean.Json.parse content with
-  | .error _ => #[]
-  | .ok json =>
-    match json.getArr? with
-    | .error _ => #[]
-    | .ok arr => arr.filterMap fun j => do
-      return {
-        name := ← (j.getObjValAs? String "name").toOption
-        startLine := ← (j.getObjValAs? Nat "startLine").toOption
-        startColumn := ← (j.getObjValAs? Nat "startColumn").toOption
-        endLine := ← (j.getObjValAs? Nat "endLine").toOption
-        endColumn := ← (j.getObjValAs? Nat "endColumn").toOption
-      }
+/-- Generate the bridge module: `import all` the module-system test modules so their private tests
+are reachable, gathering them into `allTests` through `getAllTests%`. -/
+private def errataDiscoveredSource (packageName : String) (mods : Array Lean.Name) : String :=
+  let imports := "\n".intercalate ("public import Errata" :: mods.toList.map (s!"import all {·}"))
+  let modList := " ".intercalate (mods.toList.map (·.toString))
+  s!"module\n\n{imports}\n\n\
+    public def allTests : Array Errata.TestEntry := getAllTests% \"{packageName}\" {modList}\n"
 
-/-- Generate the discovered-tests module: `import all` the test modules and collect their tests. -/
-private def errataDiscoveredSource (packageName : String)
-    (mods : Array (Lean.Name × Array ErrataTest)) : String := Id.run do
-  let mut imports := #["public import Errata"]
-  let mut entries : Array String := #[]
-  for (moduleName, tests) in mods do
-    imports := imports.push s!"import all {moduleName}"
-    for t in tests do
-      let test := errataTestName moduleName t.name.toName
-      let loc := s!"(Errata.Location.mk \"{moduleName}\" \
-        (Errata.Position.mk {t.startLine} {t.startColumn}) \
-        (Errata.Position.mk {t.endLine} {t.endColumn}))"
-      entries := entries.push
-        s!"  Errata.TestEntry.of \"{packageName}\" \"{moduleName}\" \"{test}\" {loc} (@{t.name})"
-  let header := "\n".intercalate imports.toList
-  let body := ",\n".intercalate entries.toList
-  return s!"module\n\n{header}\n\n\
-    public def allTests : Array Errata.TestEntry := #[\n{body}\n]\n"
-
-/-- The main that runs the discovered tests. -/
-private def errataMainSource : String :=
-  "import Errata\n\
-   import ErrataDiscovered\n\n\
-   def main (args : List String) : IO UInt32 :=\n  \
-   Errata.runMain allTests args\n"
+/-- Generate the non-module main: import the bridge module and the non-module test modules (which a
+`module` cannot import), then run their combined tests. -/
+private def errataMainSource (packageName : String) (mods : Array Lean.Name) : String :=
+  let imports := "\n".intercalate
+    ("import Errata" :: "import ErrataDiscovered" :: mods.toList.map (s!"import {·}"))
+  let modList := " ".intercalate (mods.toList.map (·.toString))
+  s!"{imports}\n\n\
+    def main (args : List String) : IO UInt32 :=\n  \
+    Errata.runMain (allTests ++ getAllTests% \"{packageName}\" {modList}) args\n"
 
 /-- The module a target spec `[package/]module[#test]` selects (the unit of execution). -/
 private def errataSpecModule (s : String) : String :=
@@ -322,36 +266,40 @@ script «errata-test» (args) do
         Select the module '{errataSpecModule spec}' instead."
       return 1
   let moduleSpecs := specs.map errataSpecModule
-  -- Discover the tests in the selected modules, building the per-module enumeration facet.
-  let (allNames, perModule) ← runBuild do
-    let mut names : Array Lean.Name := #[]
-    let mut jobs : Array (Job (Lean.Name × System.FilePath)) := #[]
+  -- Gather the built modules and their source files. The module set is authoritative (it respects
+  -- each library's globs), so no annotated test is silently dropped.
+  let modInfos ← runBuild do
+    let mut infos : Array (Lean.Name × System.FilePath) := #[]
     for lib in ws.root.leanLibs do
       -- The generated runner lib has no source until this script writes it, and it holds no tests.
       if lib.name == `ErrataGenerated then continue
       let mods ← (← lib.modules.fetch).await
       for m in mods do
-        names := names.push m.name
-        if errataModuleSelected moduleSpecs m.name then
-          let job ← m.facet `errataTests |>.fetch
-          jobs := jobs.push (job.map fun p => (m.name, p))
-    pure ((Job.collectArray jobs).map fun ps => (names, ps))
+        infos := infos.push (m.name, m.leanFile)
+    pure (Job.pure infos)
+  let allNames := modInfos.map (·.1)
   -- Every selector must name a real module.
   for spec in moduleSpecs do
     unless allNames.any (fun n => n.toString == spec || n.toString.startsWith (spec ++ ".")) do
       IO.eprintln s!"error: no module matches '{spec}'"
       return 1
   errataWarnUncovered ws
-  let mut mods : Array (Lean.Name × Array ErrataTest) := #[]
-  for (moduleName, path) in perModule do
-    let tests := errataParseManifest (← IO.FS.readFile path)
-    unless tests.isEmpty do
-      mods := mods.push (moduleName, tests)
+  -- A test module is a selected one whose source introduces tests. Module-system test modules go in
+  -- the bridge module (`import all`); non-module ones can only be imported by the non-module main.
+  let mut moduleMods : Array Lean.Name := #[]
+  let mut nonModuleMods : Array Lean.Name := #[]
+  for (moduleName, path) in modInfos do
+    unless errataModuleSelected moduleSpecs moduleName do continue
+    let lines := (← IO.FS.readFile path).splitOn "\n"
+    if errataSourceHasTests lines then
+      if errataSourceIsModule lines then moduleMods := moduleMods.push moduleName
+      else nonModuleMods := nonModuleMods.push moduleName
   -- Write the two generated sources, only when they change, so the build is reused across runs.
   let dir := ws.root.dir / ".lake" / "errata-runner"
   IO.FS.createDirAll dir
-  for (name, src) in [("ErrataDiscovered.lean", errataDiscoveredSource ws.root.prettyName mods),
-      ("ErrataRunnerMain.lean", errataMainSource)] do
+  for (name, src) in
+      [("ErrataDiscovered.lean", errataDiscoveredSource ws.root.prettyName moduleMods),
+       ("ErrataRunnerMain.lean", errataMainSource ws.root.prettyName nonModuleMods)] do
     let file := dir / name
     let changed ← if ← file.pathExists then pure ((← IO.FS.readFile file) != src) else pure true
     if changed then IO.FS.writeFile file src

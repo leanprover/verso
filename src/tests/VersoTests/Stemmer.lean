@@ -6,8 +6,7 @@ Author: David Thrane Christiansen
 module
 
 public import VersoSearch.PorterStemmer
-public import Errata
-public meta import Errata
+import Errata
 
 open Verso.Search.Stemmer.Porter Errata
 
@@ -17,7 +16,7 @@ Tests the Porter stemmer against the standard vocabulary and its expected output
 
 /-- The Porter stemmer reproduces the reference output for every word in the standard vocabulary. -/
 @[test]
-def porterStemmer : TestM Unit := do
+def porterStemmer : Test := do
   let vocabulary := (include_str "../stemmer/voc.txt").splitOn "\n"
   let expected := (include_str "../stemmer/output.txt").splitOn "\n"
   let mut mismatches : Array String := #[]

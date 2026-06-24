@@ -26,7 +26,7 @@ meta def elabHere : TermElab := fun _stx _expectedType? => do
   let fileMap ← getFileMap
   let startPos := fileMap.toPosition (ref.getPos?.getD 0)
   let endPos := fileMap.toPosition (ref.getTailPos?.getD (ref.getPos?.getD 0))
-  let moduleName := (← getMainModule).toString
-  elabTerm (← `(Errata.Location.mk $(quote moduleName)
+  let file ← getFileName
+  elabTerm (← `(Errata.Location.mk $(quote file)
       (Errata.Position.mk $(quote startPos.line) $(quote startPos.column))
       (Errata.Position.mk $(quote endPos.line) $(quote endPos.column)))) none

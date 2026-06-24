@@ -6,8 +6,7 @@ Author: David Thrane Christiansen
 module
 
 public import VersoUtil.Zip
-public import Errata
-public meta import Errata
+import Errata
 
 open Verso.Zip Errata
 
@@ -48,7 +47,7 @@ def extractRoundTrips (files : Array (String × ByteArray)) (method : Compressio
 
 /-- Fixed file sets round-trip under both compression methods. -/
 @[test]
-def zipFixed : TestM Unit := do
+def zipFixed : Test := do
   let files := #[("x.txt", "abcdef\nlkjlkj".toByteArray), ("y.txt", "".toByteArray),
     ("z.txt", "abc\n\n".toByteArray)]
   for method in [CompressionMethod.store, .deflate] do
@@ -58,7 +57,7 @@ def zipFixed : TestM Unit := do
 
 /-- Increasingly large prefixes of a block round-trip, alone and paired with another. -/
 @[test]
-def zipChunked : TestM Unit := do
+def zipChunked : Test := do
   let me := sampleBytes
   let bwd := me.foldl (init := .empty) fun acc b => ByteArray.empty.push b ++ acc
   let chunk := me.size / 10
@@ -70,7 +69,7 @@ def zipChunked : TestM Unit := do
 
 /-- Random file sets round-trip under both compression methods. -/
 @[test]
-def zipRandom : TestM Unit := do
+def zipRandom : Test := do
   for _ in [0:10] do
     let seed ← IO.monoNanosNow
     IO.setRandSeed seed

@@ -24,6 +24,10 @@ def failureCount (results : Array Result) : Nat :=
 private def indentLines (text : String) : String :=
   "\n".intercalate ((text.splitOn "\n").map (fun l => "    " ++ l))
 
+/-- A source location rendered as the clickable `file:line:col` of the span's start. -/
+private def locationText (l : Location) : String :=
+  s!"{l.file}:{l.startPos.line}:{l.startPos.column}"
+
 /-- Prints one result: its status line, and for a failure its detail and captured output. -/
 private def printResult (r : Result) : IO Unit := do
   let name := s!"{r.moduleTarget}  {r.testName}"
@@ -32,6 +36,7 @@ private def printResult (r : Result) : IO Unit := do
   | .skip reason => IO.println s!"skip  {name}: {reason}"
   | .fail f =>
     IO.println s!"FAIL  {name}: {f.message}"
+    if let some l := f.location? then IO.println (indentLines (locationText l))
     if let some d := f.detail? then IO.println (indentLines d)
     unless r.output.isEmpty do IO.println (indentLines s!"output:\n{r.output.all}")
   | .error m =>
@@ -109,13 +114,9 @@ private def xmlEscape (s : String) : String :=
   s.replace "&" "&amp;" |>.replace "<" "&lt;" |>.replace ">" "&gt;"
     |>.replace "\"" "&quot;"
 
-/-- A source span rendered as `module:line:col-line:col`. -/
-private def locationText (l : Location) : String :=
-  s!"{l.moduleName}:{l.startPos.line}:{l.startPos.column}-{l.endPos.line}:{l.endPos.column}"
-
 instance : ToJson Location where
   toJson l := json%{
-    "module": $l.moduleName,
+    "file": $l.file,
     "startLine": $l.startPos.line,
     "startColumn": $l.startPos.column,
     "endLine": $l.endPos.line,
@@ -125,7 +126,7 @@ instance : ToJson Location where
 instance : FromJson Location where
   fromJson? j := do
     return {
-      moduleName := ← j.getObjValAs? String "module",
+      file := ← j.getObjValAs? String "file",
       startPos := ⟨← j.getObjValAs? Nat "startLine", ← j.getObjValAs? Nat "startColumn"⟩,
       endPos := ⟨← j.getObjValAs? Nat "endLine", ← j.getObjValAs? Nat "endColumn"⟩ }
 

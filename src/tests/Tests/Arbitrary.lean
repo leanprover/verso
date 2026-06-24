@@ -6,20 +6,19 @@ Author: David Thrane Christiansen
 module
 public import Plausible
 public import Plausible.ArbitraryFueled
-public meta import Plausible.ArbitraryFueled
 import Lean.Data.Json.FromToJson
 import all MultiVerso.InternalId
-public meta import MultiVerso.NameMap
-public meta import MultiVerso
-public meta import VersoManual.Html.JsFile
-public meta import VersoManual.Html.CssFile
-public meta import VersoManual.Html.Features
-public meta import VersoManual.LicenseInfo
-public meta import VersoSearch
-public meta import VersoSearch.DomainSearch
-public meta import Verso.Output.Html
-public meta import MultiVerso.Manifest
-public meta import VersoManual.Basic
+public import MultiVerso.NameMap
+public import MultiVerso
+public import VersoManual.Html.JsFile
+public import VersoManual.Html.CssFile
+public import VersoManual.Html.Features
+public import VersoManual.LicenseInfo
+public import VersoSearch
+public import VersoSearch.DomainSearch
+public import Verso.Output.Html
+public import MultiVerso.Manifest
+public import VersoManual.Basic
 import all VersoManual.Basic
 import VersoManual.Html.CssFile
 
@@ -35,7 +34,7 @@ deserializes.
 -/
 
 
-public meta section
+public section
 
 def sizedArrayOf (gen : Gen α) : Gen (Array α) := do
   let count ← chooseNat
@@ -251,12 +250,11 @@ instance : Shrinkable LetterString where
       (instShrinkableLetter.shrink first |>.map (String.singleton · ++ rest))
     else []
 
-def slugChars := Slug.validChars.toArray
+def slugChars : Array Char := Slug.validChars.toArray
 
 def slugChar : Gen Char := do
-  have : slugChars.size > 0 := by decide +native
-  let ⟨i, ⟨_, h⟩⟩ ← choose Nat 0 (slugChars.size - 1) (by simp)
-  return slugChars[i]'(by grind)
+  let ⟨i, _⟩ ← choose Nat 0 (slugChars.size - 1) (by omega)
+  return slugChars[i]!
 
 def slugString : Gen String := do
   let len ← chooseNat

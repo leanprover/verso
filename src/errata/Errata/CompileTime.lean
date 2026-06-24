@@ -59,7 +59,7 @@ meta def elabTestMsgs : Command.CommandElab
         `(Errata.TestResult.pass)
       else
         `(Errata.TestResult.mismatch "compile-time messages do not match" $(quote actual)
-            $(quote (← getMainModule).toString)
+            $(quote (← getFileName))
             $(quote startPos.line) $(quote startPos.column)
             $(quote endPos.line) $(quote endPos.column))
     elabCommand (← `(@[test] def $(mkIdent declName) : Errata.TestResult := $verdict))

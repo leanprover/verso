@@ -47,8 +47,8 @@ deriving Repr, Inhabited, BEq, DecidableEq
 
 /-- A source span, used in failure messages and editor integration. -/
 structure Location where
-  /-- The module that contains the span, rendered as a string. -/
-  moduleName : String
+  /-- The source file that contains the span. -/
+  file : String
   /-- The start of the span. -/
   startPos : Position
   /-- The end of the span. -/
@@ -163,12 +163,12 @@ def Result.moduleTarget (result : Result) : String :=
   result.package ++ "/" ++ result.moduleName
 
 /-- A failed verdict from a compile-time message mismatch, carrying its source span. -/
-def TestResult.mismatch (message detail moduleName : String)
+def TestResult.mismatch (message detail file : String)
     (startLine startCol endLine endCol : Nat) : TestResult :=
   .fail {
     message,
     detail? := some detail,
     location? := some {
-      moduleName,
+      file,
       startPos := { line := startLine, column := startCol },
       endPos := { line := endLine, column := endCol } } }
