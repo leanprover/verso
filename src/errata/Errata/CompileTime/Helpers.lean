@@ -23,13 +23,17 @@ def formatMessage (msg : Lean.Message) : IO String := do
   let mut str ← msg.data.toString
   unless msg.caption == "" do
     str := msg.caption ++ ":\n" ++ str
-  let pfx :=
-    if msg.isTrace then "trace:"
+  -- The severity is followed by a space only when the body stays on the same line, matching the
+  -- rendering that `#guard_msgs` compares against.
+  unless str.startsWith "\n" do str := " " ++ str
+  str :=
+    if msg.isTrace then "trace:" ++ str
     else match msg.severity with
-      | .information => "info: "
-      | .warning => "warning: "
-      | .error => "error: "
-  return pfx ++ str
+      | .information => "info:" ++ str
+      | .warning => "warning:" ++ str
+      | .error => "error:" ++ str
+  unless str.endsWith "\n" do str := str ++ "\n"
+  return str
 
 open Lean.Elab.Tactic.GuardMsgs (WhitespaceMode) in
 /-- Whether the expected and actual message blocks match, normalizing whitespace as `#guard_msgs` does. -/

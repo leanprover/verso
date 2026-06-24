@@ -36,24 +36,28 @@ syntax (name := testMsgsCmd) (plainDocComment)? "#test_msgs" "in" command : comm
 meta def elabTestMsgs : Command.CommandElab
   | `($[$dc?:docComment]? #test_msgs%$tk in $cmd) => do
     let expected := ((← dc?.mapM (getDocStringText ·)).getD "").trimAscii.copy
-    -- Elaborate the command, capturing its messages instead of letting them surface.
+    -- Elaborate the command, capturing its messages instead of letting them surface. Both the
+    -- synchronous log and the asynchronous snapshot tasks are collected, so messages from linters
+    -- (which run after elaboration) are included, as `#guard_msgs` does.
     let saved := (← get).messages
     modify ({ · with messages := {} })
-    try
-      elabCommand cmd
-    catch e =>
-      logError (← e.toMessageData.toString)
-    let produced := (← get).messages
-    modify ({ · with messages := saved })
+    withReader ({ · with snap? := none }) do
+      elabCommandTopLevel cmd #[]
+    let produced := (← get).messages ++
+      (← get).snapshotTasks.foldl (· ++ ·.get.getAll.foldl (· ++ ·.diagnostics.msgLog) .empty) .empty
+    modify ({ · with messages := saved, snapshotTasks := #[] })
     let visible := produced.toList.filter (!·.isSilent)
     let strings ← (visible.mapM formatMessage : IO (List String))
-    let actual := ("\n".intercalate strings).trimAscii.copy
+    -- Multiple messages are separated by `---`, matching the block `#guard_msgs` compares against.
+    let actual := ("---\n".intercalate strings).trimAscii.copy
     let passed := messagesMatch expected actual
-    -- Reify the verdict into a discovered test, named after the source position.
+    -- Reify the verdict into a discovered test, named after the source position. The module name
+    -- qualifies it so that two modules with a `#test_msgs` at the same position do not collide.
     let fileMap ← getFileMap
     let startPos := fileMap.toPosition (tk.getPos?.getD 0)
     let endPos := fileMap.toPosition (tk.getTailPos?.getD 0)
-    let declName := Name.mkSimple s!"errataMsgTest_L{startPos.line}_C{startPos.column}"
+    let declName := `_root_ ++ (← getMainModule) ++
+      Name.mkSimple s!"errataMsgTest_L{startPos.line}_C{startPos.column}"
     let verdict ←
       if passed then
         `(Errata.TestResult.pass)

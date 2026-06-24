@@ -139,7 +139,9 @@ lean_lib ErrataTests where
   srcDir := "src/errata-tests"
   roots := #[`ErrataTests]
 
--- Errata ports of the Verso test suite. Submodules are globbed so each feature is discoverable.
+-- All test code: Errata test modules, compile-time tests, fixtures, and generators. Submodules are
+-- globbed so each is built and every `@[test]` module is discoverable.
+@[default_target]
 lean_lib VersoTests where
   srcDir := "src/tests"
   roots := #[`VersoTests]
@@ -309,10 +311,6 @@ script «errata-test» (args) do
   let exePath ← runBuild exe.fetch
   let child ← IO.Process.spawn { cmd := exePath.toString, args := runnerArgs.toArray }
   child.wait
-
-@[default_target]
-lean_lib Tests where
-  srcDir := "src/tests"
 
 lean_lib UsersGuide where
   srcDir := "doc"

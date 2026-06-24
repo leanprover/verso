@@ -8,7 +8,7 @@ itself is not part of the module system; the Errata runner imports it through it
 -/
 import VersoBlog
 import VersoBlog.LiterateLeanPage
-import Tests.Arbitrary
+import VersoTests.Arbitrary
 import Errata
 
 open Lean
