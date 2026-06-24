@@ -43,3 +43,21 @@ def assertFileExists (path : System.FilePath)
     (loc : Location := by exact here%) : TestM Unit := do
   unless ← path.pathExists do
     failAt loc s!"file does not exist: {path}"
+
+/-- Asserts that an option is absent. -/
+def assertNone {α} [Repr α] (value : Option α)
+    (loc : Location := by exact here%) : Test := do
+  if let some v := value then
+    failAt loc s!"expected none, got {repr v}"
+
+/-- Asserts that an option is present, returning its contents. -/
+def assertSome {α} (value : Option α)
+    (loc : Location := by exact here%) : TestM α :=
+  match value with
+  | some v => pure v
+  | none => throw { message := "expected some, got none", location? := some loc }
+
+/-- Asserts that an option is present, without inspecting its contents. -/
+def assertIsSome {α} (value : Option α)
+    (loc : Location := by exact here%) : Test :=
+  discard (assertSome value loc)

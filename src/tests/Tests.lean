@@ -30,7 +30,6 @@ import Tests.ParserRegression
 import Tests.Paths
 import Tests.PorterStemmer
 import Tests.Refs
-import Tests.SearchJs
 import Tests.ExtensionResolution
 import Tests.Serialization
 import Tests.TeX
@@ -40,5 +39,3 @@ import Tests.VersoBlog
 import Tests.VersoManual
 import Tests.Z85
 import Tests.Zip
-import Tests.LiterateConfig
-import Tests.LiterateHtml

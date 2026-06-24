@@ -314,12 +314,6 @@ script «errata-test» (args) do
 lean_lib Tests where
   srcDir := "src/tests"
 
--- The legacy ad-hoc test runner. The Errata driver below is the active test driver.
-lean_exe «verso-tests» where
-  root := `TestMain
-  srcDir := "src/tests"
-  supportInterpreter := true
-
 lean_lib UsersGuide where
   srcDir := "doc"
   leanOptions := #[⟨`weak.linter.verso.manual.headerTags, true⟩]
