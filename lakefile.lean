@@ -262,6 +262,51 @@ private def errataSplitArgs (args : List String) : List String × List String :=
 /-- Usage information for `lake test`, shared with `Errata.usage` through one text file. -/
 private def errataUsage : String := include_str "src/errata/Errata/usage.txt"
 
+/-- Every `.lean` file below a directory, recursively. -/
+private partial def errataLeanFiles (dir : System.FilePath) : IO (Array System.FilePath) := do
+  unless ← dir.pathExists do return #[]
+  let mut out := #[]
+  for entry in ← dir.readDir do
+    if ← entry.path.isDir then
+      out := out ++ (← errataLeanFiles entry.path)
+    else if entry.path.extension == some "lean" then
+      out := out.push entry.path
+  return out
+
+/-- The module name of a `.lean` file relative to a source directory, if it lies within it. -/
+private def errataModuleOfPath (srcDir path : System.FilePath) : Option Lean.Name := do
+  guard (path.extension == some "lean")
+  let stem ← path.fileStem
+  let parent ← path.parent
+  guard (srcDir.components.isPrefixOf parent.components)
+  let comps := parent.components.drop srcDir.components.length ++ [stem]
+  some (".".intercalate comps).toName
+
+/--
+Warns about modules that define `@[test]` tests but whose library's globs do not cover them, so
+the tests would be silently undiscovered. A module within a library's root that is not matched by
+the library's globs, in a file mentioning `@[test]`, is the signal.
+-/
+private def errataWarnUncovered (ws : Lake.Workspace) : IO Unit := do
+  let mut missed : Array Lean.Name := #[]
+  for lib in ws.root.leanLibs do
+    if lib.name == `ErrataGenerated then continue
+    let srcDir := lib.srcDir
+    for path in ← errataLeanFiles srcDir do
+      let some mod := errataModuleOfPath srcDir path | continue
+      let withinRoot := lib.roots.any (·.isPrefixOf mod)
+      let globbed := lib.config.globs.any (·.matches mod)
+      if withinRoot && !globbed && !missed.contains mod then
+        let lines := (← IO.FS.readFile path).splitOn "\n"
+        if lines.any (fun line => line.trimAsciiStart.copy.startsWith "@[test]") then
+          missed := missed.push mod
+  unless missed.isEmpty do
+    IO.eprintln "warning: these modules define @[test] tests but their library's globs do not cover \
+      them, so the tests are not discovered. Widen the library's `globs` \
+      (e.g. `globs := #[Glob.andSubmodules `Root]`):"
+    for mod in missed do
+      IO.eprintln s!"  {mod}"
+
 @[test_driver]
 script «errata-test» (args) do
   let ws ← getWorkspace
@@ -296,6 +341,7 @@ script «errata-test» (args) do
     unless allNames.any (fun n => n.toString == spec || n.toString.startsWith (spec ++ ".")) do
       IO.eprintln s!"error: no module matches '{spec}'"
       return 1
+  errataWarnUncovered ws
   let mut mods : Array (Lean.Name × Array ErrataTest) := #[]
   for (moduleName, path) in perModule do
     let tests := errataParseManifest (← IO.FS.readFile path)
