@@ -67,6 +67,46 @@ def Status.isSuccess : Status → Bool
   | .pass | .skip _ => true
   | .fail _ | .error _ => false
 
+/-- A fragment of captured output, tagged by the stream it was written to. -/
+inductive Output where
+  /-- Text written to standard output. -/
+  | stdout (text : String)
+  /-- Text written to standard error. -/
+  | stderr (text : String)
+deriving Repr, Inhabited, DecidableEq
+
+/-- The text of an output fragment, regardless of stream. -/
+def Output.text : Output → String
+  | .stdout s | .stderr s => s
+
+/-- All captured output, concatenated in order. -/
+def capturedText (output : Array Output) : String :=
+  output.foldl (fun acc o => acc ++ o.text) ""
+
+/-- Output captured from an action, in order and tagged by stream. -/
+structure OutputLog where
+  /-- The captured fragments, in order, tagged by stream. -/
+  log : Array Output := #[]
+deriving Repr, Inhabited, DecidableEq
+
+namespace OutputLog
+
+/-- Whether no output was captured. -/
+def isEmpty (o : OutputLog) : Bool := o.log.isEmpty
+
+/-- The text written to stdout, concatenated in order. -/
+def stdout (o : OutputLog) : String :=
+  o.log.foldl (fun acc out => match out with | .stdout s => acc ++ s | .stderr _ => acc) ""
+
+/-- The text written to stderr, concatenated in order. -/
+def stderr (o : OutputLog) : String :=
+  o.log.foldl (fun acc out => match out with | .stderr s => acc ++ s | .stdout _ => acc) ""
+
+/-- The text written to stdout and stderr, concatenated in order. -/
+def all (o : OutputLog) : String := capturedText o.log
+
+end OutputLog
+
 /-- One entry collected during a run and rendered by the reporters. -/
 structure Result where
   /-- The package that defines the test. -/
@@ -81,6 +121,8 @@ structure Result where
   status : Status
   /-- How long the check took, in milliseconds. -/
   durationMs : Nat := 0
+  /-- What the test wrote to stdout and stderr. -/
+  output : OutputLog := {}
 deriving Repr, Inhabited, DecidableEq
 
 /-- The test name below the module: the declaration and any named result, dotted. -/

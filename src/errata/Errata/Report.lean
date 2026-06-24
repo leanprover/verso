@@ -43,9 +43,11 @@ def humanReport (verbose : Bool) (results : Array Result) : IO Nat := do
       failed := failed + 1
       IO.println s!"FAIL  {name}: {f.message}"
       if let some d := f.detail? then IO.println (indentLines d)
+      unless r.output.isEmpty do IO.println (indentLines s!"output:\n{r.output.all}")
     | .error m =>
       errored := errored + 1
       IO.println s!"ERROR {name}: {m}"
+      unless r.output.isEmpty do IO.println (indentLines s!"output:\n{r.output.all}")
   IO.println s!"{passed} passed, {failed} failed, {errored} errored, {skipped} skipped"
   return failed + errored
 
@@ -72,6 +74,25 @@ instance : FromJson Location where
       moduleName := ← j.getObjValAs? String "module",
       startPos := ⟨← j.getObjValAs? Nat "startLine", ← j.getObjValAs? Nat "startColumn"⟩,
       endPos := ⟨← j.getObjValAs? Nat "endLine", ← j.getObjValAs? Nat "endColumn"⟩ }
+
+instance : ToJson Output where
+  toJson
+    | .stdout s => json%{ "stream": "stdout", "text": $s }
+    | .stderr s => json%{ "stream": "stderr", "text": $s }
+
+instance : FromJson Output where
+  fromJson? j := do
+    let text ← j.getObjValAs? String "text"
+    match ← j.getObjValAs? String "stream" with
+    | "stdout" => return .stdout text
+    | "stderr" => return .stderr text
+    | other => .error s!"unknown output stream: {other}"
+
+instance : ToJson OutputLog where
+  toJson o := ToJson.toJson o.log
+
+instance : FromJson OutputLog where
+  fromJson? j := return { log := ← FromJson.fromJson? j }
 
 /-- The suite a result belongs to: its module. -/
 private def suiteOf (r : Result) : String :=
@@ -130,7 +151,8 @@ instance : ToJson Result where
       [("package", Json.str r.package), ("module", Json.str r.moduleName),
         ("test", Json.str r.test), ("resultPath", ToJson.toJson r.resultPath),
         ("durationMs", ToJson.toJson r.durationMs)] ++
-      statusFields r.status
+      statusFields r.status ++
+      (if r.output.isEmpty then [] else [("output", ToJson.toJson r.output)])
 
 /-- Decodes an optional field: absent maps to {lean}`none`. -/
 private def optField [FromJson α] (j : Json) (key : String) : Except String (Option α) :=
@@ -151,14 +173,15 @@ instance : FromJson Status where
     | other => .error s!"unknown status: {other}"
 
 instance : FromJson Result where
-  fromJson? j := do
+  fromJson? j := private do
     return {
       package := ← j.getObjValAs? String "package",
       moduleName := ← j.getObjValAs? String "module",
       test := ← j.getObjValAs? String "test",
       resultPath := ← j.getObjValAs? (Array String) "resultPath",
       durationMs := ← j.getObjValAs? Nat "durationMs",
-      status := ← FromJson.fromJson? j }
+      status := ← FromJson.fromJson? j,
+      output := (← optField j "output").getD {} }
 
 /-- Renders the results as a JSON array of objects. -/
 def jsonReport (results : Array Result) : String := (ToJson.toJson results).pretty

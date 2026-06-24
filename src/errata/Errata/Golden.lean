@@ -24,7 +24,8 @@ private def goldenDiff (expected actual : String) : String :=
   "- expected, + actual:\n" ++ Lean.Diff.linesToString diff
 
 /-- Compares a produced string against a golden file, or rewrites it under `--update-golden`. -/
-def goldenFile (expected : System.FilePath) (actual : String) : TestM Unit := do
+def goldenFile (expected : System.FilePath) (actual : String)
+    (loc : Location := by exact here%) : TestM Unit := do
   let ctx ← read
   if ctx.updateGolden then
     if let some parent := expected.parent then IO.FS.createDirAll parent
@@ -32,10 +33,9 @@ def goldenFile (expected : System.FilePath) (actual : String) : TestM Unit := do
   else if ← expected.pathExists then
     let want ← IO.FS.readFile expected
     unless want == actual do
-      fail s!"golden mismatch for {expected}"
-        (detail? := some (goldenDiff want actual))
+      failAt loc s!"golden mismatch for {expected}" (detail? := some (goldenDiff want actual))
   else
-    fail s!"missing golden file {expected}"
+    failAt loc s!"missing golden file {expected}"
       (detail? := some "Run with --update-golden to create it.")
 
 /-- All files below a directory, recursively. -/
@@ -53,7 +53,8 @@ private def relativeTo (base file : System.FilePath) : String :=
   (file.toString.drop (base.toString.length + 1)).copy
 
 /-- Compares a produced directory tree against a golden tree, or rewrites it under `--update-golden`. -/
-def goldenDir (expected actual : System.FilePath) : TestM Unit := do
+def goldenDir (expected actual : System.FilePath)
+    (loc : Location := by exact here%) : TestM Unit := do
   let ctx ← read
   let actualFiles ← filesUnder actual
   if ctx.updateGolden then
@@ -69,19 +70,18 @@ def goldenDir (expected actual : System.FilePath) : TestM Unit := do
           IO.FS.removeFile file
     return
   unless ← expected.pathExists do
-    fail s!"missing golden directory {expected}"
+    failAt loc s!"missing golden directory {expected}"
       (detail? := some "Run with --update-golden to create it.")
   for file in actualFiles do
     let rel := relativeTo actual file
     let want := expected / rel
     unless ← want.pathExists do
-      fail s!"file not present in the golden directory: {rel}"
+      failAt loc s!"file not present in the golden directory: {rel}"
     let wantContent ← IO.FS.readFile want
     let gotContent ← IO.FS.readFile file
     unless wantContent == gotContent do
-      fail s!"golden mismatch for {rel}"
-        (detail? := some (goldenDiff wantContent gotContent))
+      failAt loc s!"golden mismatch for {rel}" (detail? := some (goldenDiff wantContent gotContent))
   for file in ← filesUnder expected do
     let rel := relativeTo expected file
     unless ← (actual / rel).pathExists do
-      fail s!"file missing from the produced output: {rel}"
+      failAt loc s!"file missing from the produced output: {rel}"

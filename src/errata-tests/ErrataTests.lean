@@ -13,34 +13,41 @@ public meta import Errata
 open Errata
 
 /-- A bare boolean is a passing test. -/
-@[test] def onePlusOne : Bool := 1 + 1 == 2
+@[test]
+def onePlusOne : Bool := 1 + 1 == 2
 
 /-- An assertion-based test. -/
-@[test] def equality : TestM Unit := do
-  assertEq (expected := 4) (actual := 2 + 2)
+@[test]
+def equality : TestM Unit := do
+  assertEq 4 (2 + 2)
 
 /-- A test with named results. -/
-@[test] def named : TestM Unit := do
+@[test]
+def named : TestM Unit := do
   result "first" (assertEq 1 1)
-  result "second" (assertContains (expected := "b") (actual := "abc"))
+  result "second" (assertContains "b" "abc")
 
 /-- A test that completes without any check is a bare success. -/
-@[test] def emptyBody : TestM Unit := pure ()
+@[test]
+def emptyBody : TestM Unit := pure ()
 
 /-- A test that expects a failure. -/
-@[test] def expectsFailure : TestM Unit :=
+@[test]
+def expectsFailure : TestM Unit :=
   expectFail (assertEq 1 2)
 
 /-- A data-driven family expressed as a plain loop. -/
-@[test] def squares : TestM Unit := do
+@[test]
+def squares : TestM Unit := do
   for (n, sq) in [(1, 1), (2, 4), (3, 9)] do
-    result s!"square {n}" (assertEq (expected := sq) (actual := n * n))
+    result s!"square {n}" (assertEq sq (n * n))
 
 /-- A subprocess test. -/
-@[test] def echoRuns : TestM Unit := do
+@[test]
+def echoRuns : TestM Unit := do
   let out ← IO.Process.output { cmd := "echo", args := #["hello"] }
   assertExitCode 0 out
-  assertContains (expected := "hello") (actual := out.stdout)
+  assertContains "hello" out.stdout
 
 /-- info: 3 -/
 #test_msgs in
@@ -53,7 +60,8 @@ set_option doc.verso true in
 #eval 3 + 4
 
 /-- A property test. -/
-@[test] def addComm : TestM Unit :=
+@[test]
+def addComm : TestM Unit :=
   property (∀ a b : Nat, a + b = b + a)
 
 open Lean (toJson fromJson?)
@@ -62,14 +70,18 @@ deriving instance Plausible.Shrinkable, Plausible.Arbitrary for Position
 deriving instance Plausible.Shrinkable, Plausible.Arbitrary for Location
 deriving instance Plausible.Shrinkable, Plausible.Arbitrary for TestFailure
 deriving instance Plausible.Shrinkable, Plausible.Arbitrary for Status
+deriving instance Plausible.Shrinkable, Plausible.Arbitrary for Output
+deriving instance Plausible.Shrinkable, Plausible.Arbitrary for OutputLog
 deriving instance Plausible.Shrinkable, Plausible.Arbitrary for Result
 
 /-- The JSON encoding of a result round-trips: decoding the encoding recovers the result. -/
-@[test] def jsonRoundTrips : TestM Unit :=
+@[test]
+def jsonRoundTrips : TestM Unit :=
   property (∀ r : Result, (fromJson? (toJson r)).toOption = some r)
 
 /-- A temp-directory fixture with a golden file. -/
-@[test] def goldenRoundTrip : TestM Unit :=
+@[test]
+def goldenRoundTrip : TestM Unit :=
   IO.FS.withTempDir fun dir => do
     let cfg ← read
     -- In update mode this would write; here we drive it through a temp golden file.

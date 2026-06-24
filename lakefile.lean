@@ -167,6 +167,12 @@ lean_lib ErrataTests where
   srcDir := "src/errata-tests"
   roots := #[`ErrataTests]
 
+-- Errata ports of the Verso test suite. Submodules are globbed so each feature is discoverable.
+lean_lib VersoTests where
+  srcDir := "src/tests"
+  roots := #[`VersoTests]
+  globs := #[Glob.andSubmodules `VersoTests]
+
 -- The generated discovered-tests module (`allTests`), written by the Errata driver.
 lean_lib ErrataGenerated where
   srcDir := ".lake/errata-runner"
@@ -185,26 +191,44 @@ private def errataTestName (moduleName declName : Lean.Name) : String :=
   let below := if moduleName.isPrefixOf declName then declComps.drop modComps.length else declComps
   ".".intercalate (below.map (·.toString))
 
-/-- Parse a per-module JSON manifest into the tests' user-facing names. -/
-private def errataParseManifest (content : String) : Array String :=
+/-- A discovered test: its user-facing name and its source range. -/
+private structure ErrataTest where
+  name : String
+  startLine : Nat
+  startColumn : Nat
+  endLine : Nat
+  endColumn : Nat
+
+/-- Parse a per-module JSON manifest into the tests' names and source ranges. -/
+private def errataParseManifest (content : String) : Array ErrataTest :=
   match Lean.Json.parse content with
   | .error _ => #[]
   | .ok json =>
     match json.getArr? with
     | .error _ => #[]
-    | .ok arr => arr.filterMap fun j => (j.getStr?).toOption
+    | .ok arr => arr.filterMap fun j => do
+      return {
+        name := ← (j.getObjValAs? String "name").toOption
+        startLine := ← (j.getObjValAs? Nat "startLine").toOption
+        startColumn := ← (j.getObjValAs? Nat "startColumn").toOption
+        endLine := ← (j.getObjValAs? Nat "endLine").toOption
+        endColumn := ← (j.getObjValAs? Nat "endColumn").toOption
+      }
 
 /-- Generate the discovered-tests module: `import all` the test modules and collect their tests. -/
 private def errataDiscoveredSource (packageName : String)
-    (mods : Array (Lean.Name × Array String)) : String := Id.run do
+    (mods : Array (Lean.Name × Array ErrataTest)) : String := Id.run do
   let mut imports := #["public import Errata"]
   let mut entries : Array String := #[]
   for (moduleName, tests) in mods do
     imports := imports.push s!"import all {moduleName}"
-    for name in tests do
-      let test := errataTestName moduleName name.toName
+    for t in tests do
+      let test := errataTestName moduleName t.name.toName
+      let loc := s!"(Errata.Location.mk \"{moduleName}\" \
+        (Errata.Position.mk {t.startLine} {t.startColumn}) \
+        (Errata.Position.mk {t.endLine} {t.endColumn}))"
       entries := entries.push
-        s!"  Errata.TestEntry.of \"{packageName}\" \"{moduleName}\" \"{test}\" (@{name})"
+        s!"  Errata.TestEntry.of \"{packageName}\" \"{moduleName}\" \"{test}\" {loc} (@{t.name})"
   let header := "\n".intercalate imports.toList
   let body := ",\n".intercalate entries.toList
   return s!"module\n\n{header}\n\n\
@@ -272,7 +296,7 @@ script «errata-test» (args) do
     unless allNames.any (fun n => n.toString == spec || n.toString.startsWith (spec ++ ".")) do
       IO.eprintln s!"error: no module matches '{spec}'"
       return 1
-  let mut mods : Array (Lean.Name × Array String) := #[]
+  let mut mods : Array (Lean.Name × Array ErrataTest) := #[]
   for (moduleName, path) in perModule do
     let tests := errataParseManifest (← IO.FS.readFile path)
     unless tests.isEmpty do

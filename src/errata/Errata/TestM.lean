@@ -7,6 +7,7 @@ module
 
 public import Errata.Context
 public import Errata.Result
+public import Errata.Here
 
 public section
 
@@ -23,10 +24,33 @@ failure, which the interpreter distinguishes from an {name}`IO.Error` that escap
 -/
 abbrev TestM := ReaderT Context (ExceptT TestFailure IO)
 
+/--
+Fails at the location recorded in the context. The runner seeds that with the test's own source
+range, so a failure with no more specific location still points at the test. This is the primitive
+the internal layer uses when no call site is available.
+-/
+def failHere (message : String) (detail? : Option String := none) : TestM α := do
+  throw { message, detail?, location? := some (← read).location }
+
+/--
+Fails at an explicit source location. The assertion language captures its call site with
+{lit}`here%` and reports through this primitive.
+-/
+def failAt (loc : Location) (message : String) (detail? : Option String := none) : TestM α :=
+  throw { message, detail?, location? := some loc }
+
 /-- Fails the current test, or named result, with a message and optional detail. -/
 def fail (message : String) (detail? : Option String := none)
-    (location? : Option Location := none) : TestM α :=
-  throw { message, detail?, location? }
+    (loc : Location := by exact here%) : TestM α :=
+  failAt loc message detail?
+
+/--
+Runs an action with the current failure location set to a call site, which defaults to the caller.
+A user-defined assertion helper can wrap its checks in this so their failures report at the helper's
+call site rather than inside the helper.
+-/
+def withLocation (loc : Location := by exact here%) (act : TestM α) : TestM α :=
+  withReader ({ · with location := loc }) act
 
 /-- All values supplied for a project option, in order; records that the option was read. -/
 def optionValues (name : String) : TestM (Array String) := do
@@ -70,12 +94,36 @@ def skip (reason : String) : TestM Unit := do
   let ctx ← read
   ctx.log.modify (·.push (ctx.skip reason))
 
-/-- Runs a test action, capturing its outcome as data rather than letting it propagate. -/
-def captureOutcome (act : TestM Unit) :
-    TestM (Except IO.Error (Except TestFailure Unit)) := do
-  let ctx ← read
-  let outcome ← ((act ctx).run).toBaseIO
-  pure outcome
+/-- A stream that appends each write to a log, tagged by the stream it came from. -/
+private def captureStream (log : IO.Ref (Array Output)) (mk : String → Output) : IO.FS.Stream where
+  flush := pure ()
+  read _ := pure .empty
+  write bytes := log.modify (·.push (mk (String.fromUTF8! bytes)))
+  getLine := pure ""
+  putStr s := log.modify (·.push (mk s))
+  isTty := pure false
+
+/--
+Runs a test action with the given context, capturing its outcome as data rather than letting it
+propagate. The action's stdout and stderr are recorded, in order and tagged by stream, and returned
+alongside the outcome, so a test's output is shown only when it fails.
+-/
+def runCapturing (ctx : Context) (act : TestM Unit) :
+    IO (Except IO.Error (Except TestFailure Unit) × OutputLog) := do
+  let log ← IO.mkRef (#[] : Array Output)
+  let outcome ← IO.withStdout (captureStream log .stdout) <|
+    IO.withStderr (captureStream log .stderr) <| ((act ctx).run).toBaseIO
+  return (outcome, { log := ← log.get })
+
+/--
+Runs an action with stdout and stderr captured into a fresh log, then returns the captured output
+in order. The redirection is local to the action, so a test can make assertions about what the
+action wrote.
+-/
+def captureOutput (act : TestM Unit) : TestM OutputLog := do
+  let log ← IO.mkRef (#[] : Array Output)
+  IO.withStdout (captureStream log .stdout) <| IO.withStderr (captureStream log .stderr) act
+  return { log := ← log.get }
 
 /--
 Runs a named result within the current test.
@@ -89,15 +137,15 @@ def result (name : String) (act : TestM Unit) : TestM Unit :=
     let ctx ← read
     let before := (← ctx.log.get).size
     let start ← IO.monoMsNow
-    let outcome ← captureOutcome act
+    let (outcome, output) ← runCapturing ctx act
     let stop ← IO.monoMsNow
     let dur := stop - start
     let after := (← ctx.log.get).size
     match outcome with
     | .error e =>
-      ctx.log.modify (·.push (ctx.error (toString e) dur))
+      ctx.log.modify (·.push { ctx.error (toString e) dur with output })
     | .ok (.error f) =>
-      ctx.log.modify (·.push (ctx.fail f dur))
+      ctx.log.modify (·.push { ctx.fail f dur with output })
     | .ok (.ok ()) =>
       if after == before then
         ctx.log.modify (·.push (ctx.pass dur))
@@ -107,9 +155,9 @@ Expects the action to fail an assertion. The current scope passes if it does and
 succeeds. An escaping {name}`IO.Error` is not an expected failure: it propagates and is reported as an
 error, so broken setup is not mistaken for a passing negative test.
 -/
-def expectFail (act : TestM Unit) : TestM Unit := do
+def expectFail (act : TestM Unit) (loc : Location := by exact here%) : TestM Unit := do
   try
     act
   catch _ =>
     return
-  fail "expected the action to fail, but it passed"
+  failAt loc "expected the action to fail, but it passed"

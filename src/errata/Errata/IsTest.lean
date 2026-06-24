@@ -36,7 +36,7 @@ instance : IsTest (IO TestResult) where
   toTest act := do (← act).toTest
 
 instance : IsTest Bool where
-  toTest b := unless b do fail "expected true, got false"
+  toTest b := unless b do failHere "expected true, got false"
 
 instance : IsTest (IO Bool) where
-  toTest act := do unless (← act) do fail "expected true, got false"
+  toTest act := do unless (← act) do failHere "expected true, got false"

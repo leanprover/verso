@@ -39,6 +39,11 @@ structure Context where
   test : String := ""
   /-- The named result currently being recorded, below the test. -/
   resultPath : Array String := #[]
+  /--
+  The source location reported for the next failure. The runner seeds it with the test's own
+  source range; the assertion language refines it to each call site.
+  -/
+  location : Location := default
   /-- The results collected so far during the current test. -/
   log : IO.Ref (Array Result)
   /-- The option names read during the run, shared across all tests, for reporting unused options. -/

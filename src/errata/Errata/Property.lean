@@ -21,7 +21,7 @@ open Plausible
 
 open scoped Plausible.Decorations in
 /-- Checks a property with Plausible, failing with the counterexample if it is falsified. -/
-def property (p : Prop) (cfg : Configuration := {})
+def property (p : Prop) (cfg : Configuration := {}) (loc : Location := by exact here%)
     (p' : Decorations.DecorationsOf p := by mk_decorations) [Testable p'] : TestM Unit := do
   let ctx ← read
   let cfg := { cfg with
@@ -29,6 +29,6 @@ def property (p : Prop) (cfg : Configuration := {})
     randomSeed := if ctx.seed == 0 then cfg.randomSeed else some ctx.seed }
   match ← Testable.checkIO p' (cfg := cfg) with
   | .success _ => pure ()
-  | .gaveUp n => fail s!"property gave up after discarding {n} cases"
+  | .gaveUp n => failAt loc s!"property gave up after discarding {n} cases"
   | .failure _ counterExample _ =>
-    fail "property falsified" (detail? := some ("\n".intercalate counterExample))
+    failAt loc "property falsified" (detail? := some ("\n".intercalate counterExample))

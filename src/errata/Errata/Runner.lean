@@ -24,14 +24,18 @@ structure TestEntry where
   moduleName : String
   /-- The test declaration's name below its module. -/
   test : String
+  /-- The test's own source range, used as the default failure location. -/
+  location : Location
   /-- The action to run. -/
   run : TestM Unit
 
 /-- Builds a test entry from any testable value. -/
-def TestEntry.of {α} [IsTest α] (package moduleName test : String) (value : α) : TestEntry where
+def TestEntry.of {α} [IsTest α] (package moduleName test : String) (location : Location)
+    (value : α) : TestEntry where
   package := package
   moduleName := moduleName
   test := test
+  location := location
   run := IsTest.toTest value
 
 /-- Runs a single test entry, collecting all of its results. -/
@@ -39,15 +43,15 @@ def runEntry (cfg : Context) (entry : TestEntry) : IO (Array Result) := do
   let log ← IO.mkRef (#[] : Array Result)
   let ctx := { cfg with
     package := entry.package, moduleName := entry.moduleName, test := entry.test,
-    resultPath := #[], log }
+    resultPath := #[], location := entry.location, log }
   let start ← IO.monoMsNow
-  let outcome ← ((entry.run ctx).run).toBaseIO
+  let (outcome, output) ← runCapturing ctx entry.run
   let stop ← IO.monoMsNow
   let dur := stop - start
   let logged ← log.get
   match outcome with
-  | .error e => return logged.push (ctx.error (toString e) dur)
-  | .ok (.error f) => return logged.push (ctx.fail f dur)
+  | .error e => return logged.push { ctx.error (toString e) dur with output }
+  | .ok (.error f) => return logged.push { ctx.fail f dur with output }
   | .ok (.ok ()) =>
     if logged.isEmpty then return #[ctx.pass dur] else return logged
 

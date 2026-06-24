@@ -19,5 +19,5 @@ namespace Errata
 def assertExitCode (expected : UInt32) (output : IO.Process.Output)
     (loc : Location := by exact here%) : TestM Unit :=
   unless output.exitCode == expected do
-    fail s!"process exited with code {output.exitCode}, expected {expected}"
-      (detail? := some s!"stderr:\n{output.stderr}") (location? := some loc)
+    failAt loc s!"process exited with code {output.exitCode}, expected {expected}"
+      (detail? := some s!"stderr:\n{output.stderr}")
