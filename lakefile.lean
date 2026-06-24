@@ -147,16 +147,24 @@ lean_lib VersoTests where
   roots := #[`VersoTests]
   globs := #[Glob.andSubmodules `VersoTests]
 
+-- The selected test set, written by the driver. The generated targets depend on it, so changing
+-- the selection changes their trace and Lake rebuilds them rather than relinking a stale object.
+input_file errataSelection where
+  text := true
+  path := ".lake/errata-runner/selection"
+
 -- The generated discovered-tests module (`allTests`), written by the Errata driver.
 lean_lib ErrataGenerated where
   srcDir := ".lake/errata-runner"
   roots := #[`ErrataDiscovered]
+  needs := #[errataSelection]
 
 -- The generated, discovered test runner. Its source is written by the Errata test driver.
 lean_exe «errata-runner» where
   root := `ErrataRunnerMain
   srcDir := ".lake/errata-runner"
   supportInterpreter := true
+  needs := #[errataSelection]
 
 /-- Whether a source file introduces Errata tests, by an `@[test]` attribute or a `#test_msgs`
 command, the only two ways a test enters a module. -/
@@ -179,9 +187,10 @@ private def errataDiscoveredSource (packageName : String) (mods : Array Lean.Nam
 
 /-- Generate the non-module main: import the bridge module and the non-module test modules (which a
 `module` cannot import), then run their combined tests. -/
-private def errataMainSource (packageName : String) (mods : Array Lean.Name) : String :=
+private def errataMainSource (packageName : String) (mods : Array Lean.Name) (discovered : Lean.Name) :
+    String :=
   let imports := "\n".intercalate
-    ("import Errata" :: "import ErrataDiscovered" :: mods.toList.map (s!"import {·}"))
+    ("import Errata" :: s!"import {discovered}" :: mods.toList.map (s!"import {·}"))
   let modList := " ".intercalate (mods.toList.map (·.toString))
   s!"{imports}\n\n\
     def main (args : List String) : IO UInt32 :=\n  \
@@ -296,12 +305,15 @@ script «errata-test» (args) do
     if errataSourceHasTests lines then
       if errataSourceIsModule lines then moduleMods := moduleMods.push moduleName
       else nonModuleMods := nonModuleMods.push moduleName
-  -- Write the two generated sources, only when they change, so the build is reused across runs.
+  -- Write the generated sources, plus a `selection` file naming the chosen test set. The generated
+  -- targets depend on that file, so a changed selection invalidates them through Lake's own trace.
   let dir := ws.root.dir / ".lake" / "errata-runner"
   IO.FS.createDirAll dir
+  let selection := "\n".intercalate ((moduleMods ++ nonModuleMods).map (·.toString) |>.qsort (· < ·)).toList
   for (name, src) in
-      [("ErrataDiscovered.lean", errataDiscoveredSource ws.root.prettyName moduleMods),
-       ("ErrataRunnerMain.lean", errataMainSource ws.root.prettyName nonModuleMods)] do
+      [("selection", selection ++ "\n"),
+       ("ErrataDiscovered.lean", errataDiscoveredSource ws.root.prettyName moduleMods),
+       ("ErrataRunnerMain.lean", errataMainSource ws.root.prettyName nonModuleMods `ErrataDiscovered)] do
     let file := dir / name
     let changed ← if ← file.pathExists then pure ((← IO.FS.readFile file) != src) else pure true
     if changed then IO.FS.writeFile file src
