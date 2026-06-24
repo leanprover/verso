@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 import VersoManual.Html
+import VersoManual
 
 namespace Verso.Genre.Manual.Html
 
@@ -112,3 +113,65 @@ Done
       break
 
 end
+
+namespace DocstringSectionRegression
+
+open Verso
+open Verso.Output
+open Verso.Genre.Manual
+
+/-- A fixture for Manual docstring subsection HTML rendering. -/
+structure SectionFixture where
+  /-- Field documentation. -/
+  field : Nat
+
+#docs (Manual) doc "Docstring section labels" :=
+:::::::
+
+{docstring SectionFixture}
+
+:::::::
+
+private def hasSubstring (s sub : String) : Bool :=
+  s.find? sub |>.isSome
+
+private def compactHtml (s : String) : String :=
+  String.ofList <| s.toList.filter (fun c => !c.isWhitespace)
+
+private def renderDoc : IO String := do
+  let cfg : RenderConfig := {}
+  let logger ← Logger.new
+  let (part, state) ← (traverseHtmlSingle cfg doc.toPart).run extension_impls% |>.run logger
+  let ctxt : Manual.TraverseContext := {}
+  let definitionIds := state.definitionIds ctxt
+  let remotes : Multi.AllRemotes := {}
+  let linkTargets := cfg.linkTargets state remotes
+  let (html, _) ←
+    (Manual.toHtml (m := ReaderT Multi.AllRemotes (ReaderT ExtensionImpls (BuildLogT IO)))
+        {} ctxt state definitionIds linkTargets {} part).run {}
+      |>.run remotes
+      |>.run extension_impls%
+      |>.run logger
+  unless (← logger.exitCode) == 0 do
+    throw <| IO.userError "Manual docstring HTML rendering logged errors"
+  pure html.asString
+
+/--
+info: docstring section labels render as labeled groups
+-/
+#guard_msgs in
+#eval show IO Unit from do
+  let compact := compactHtml (← renderDoc)
+  let group :=
+    "<divclass=\"docstring-section\"role=\"group\"aria-labelledby=\"docstring-section-Fields\">"
+  unless hasSubstring compact group do
+    throw <| IO.userError "Fields section should render as a named group"
+  let label :=
+    "<pclass=\"docstring-section-label\"id=\"docstring-section-Fields\">Fields</p>"
+  unless hasSubstring compact label do
+    throw <| IO.userError "Fields section should use a paragraph label with the group's ID"
+  if hasSubstring compact "<h1>Fields</h1>" then
+    throw <| IO.userError "Fields section label should not render as h1"
+  IO.println "docstring section labels render as labeled groups"
+
+end DocstringSectionRegression
