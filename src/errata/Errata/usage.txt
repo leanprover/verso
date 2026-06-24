@@ -1,0 +1,16 @@
+Errata test runner
+
+Usage:
+  lake test                            run every test in the package
+  lake test -- MODULE...               run the tests in the given modules
+  lake test -- MODULE... -- OPTION...  pass runner options after a second `--`
+
+Modules use Lake target syntax. Runner options:
+  -v, --verbose        Report passing results, not only failures.
+      --update-golden  Rewrite golden expected files instead of comparing.
+      --seed N         Seed property tests with N, to reproduce a failure.
+      --junit PATH     Write a JUnit XML report to PATH.
+      --json PATH      Write a JSON report to PATH.
+  -h, --help           Show this help and exit.
+
+Any other `--name value` option is passed through to the tests.
