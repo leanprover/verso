@@ -12,6 +12,31 @@ set_option doc.verso true
 
 namespace Errata
 
+/-- How much the human-readable report prints. -/
+inductive Verbosity where
+  /-- Print only failures and errors. -/
+  | silent
+  /-- Also print passes and skips, truncating each test's results after a cap. -/
+  | quiet
+  /-- Print every result. -/
+  | verbose
+deriving Repr, Inhabited, DecidableEq, BEq
+
+/-- Whether passes and skips are printed at this verbosity. -/
+def Verbosity.showsPasses : Verbosity → Bool
+  | .silent => false
+  | .quiet | .verbose => true
+
+/-- Whether each test's results are truncated after a cap at this verbosity. -/
+def Verbosity.truncates : Verbosity → Bool
+  | .quiet => true
+  | .silent | .verbose => false
+
+/-- The next verbosity up, for an accumulating {lit}`-v` / {lit}`-vv`. -/
+def Verbosity.increase : Verbosity → Verbosity
+  | .silent => .quiet
+  | .quiet | .verbose => .verbose
+
 /-- A line and column within a source file, counting from one. -/
 structure Position where
   /-- The line, counting from one. -/

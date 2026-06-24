@@ -24,30 +24,84 @@ def failureCount (results : Array Result) : Nat :=
 private def indentLines (text : String) : String :=
   "\n".intercalate ((text.splitOn "\n").map (fun l => "    " ++ l))
 
-/-- Prints a human-readable report and returns the number of failures. -/
-def humanReport (verbose : Bool) (results : Array Result) : IO Nat := do
+/-- Prints one result: its status line, and for a failure its detail and captured output. -/
+private def printResult (r : Result) : IO Unit := do
+  let name := s!"{r.moduleTarget}  {r.testName}"
+  match r.status with
+  | .pass => IO.println s!"ok    {name} ({r.durationMs}ms)"
+  | .skip reason => IO.println s!"skip  {name}: {reason}"
+  | .fail f =>
+    IO.println s!"FAIL  {name}: {f.message}"
+    if let some d := f.detail? then IO.println (indentLines d)
+    unless r.output.isEmpty do IO.println (indentLines s!"output:\n{r.output.all}")
+  | .error m =>
+    IO.println s!"ERROR {name}: {m}"
+    unless r.output.isEmpty do IO.println (indentLines s!"output:\n{r.output.all}")
+
+/-- A running tally of results suppressed by truncation. -/
+private structure Suppressed where
+  passed : Nat := 0
+  failed : Nat := 0
+  errored : Nat := 0
+  skipped : Nat := 0
+
+/-- Counts one more suppressed result. -/
+private def Suppressed.add (s : Suppressed) : Status → Suppressed
+  | .pass => { s with passed := s.passed + 1 }
+  | .fail _ => { s with failed := s.failed + 1 }
+  | .error _ => { s with errored := s.errored + 1 }
+  | .skip _ => { s with skipped := s.skipped + 1 }
+
+/-- The number of suppressed results. -/
+private def Suppressed.total (s : Suppressed) : Nat :=
+  s.passed + s.failed + s.errored + s.skipped
+
+/-- Prints the truncation summary for a test whose results were capped, if any were suppressed. -/
+private def printSuppressed (s : Suppressed) : IO Unit := do
+  if s.total > 0 then
+    let parts := #[s!"{s.passed} more passed", s!"{s.failed} more failed"]
+      ++ (if s.errored > 0 then #[s!"{s.errored} more errored"] else #[])
+      ++ (if s.skipped > 0 then #[s!"{s.skipped} more skipped"] else #[])
+    IO.println s!"    (... and {", ".intercalate parts.toList})"
+
+/--
+Prints a human-readable report and returns the number of failures. Verbosity 0 shows only failures
+and errors; 1 also shows passes and skips but truncates each test's results after a cap, summarizing
+the rest; 2 shows everything.
+-/
+def humanReport (verbosity : Verbosity) (results : Array Result) : IO Nat := do
+  let cap := 50
   let mut passed := 0
   let mut failed := 0
   let mut errored := 0
   let mut skipped := 0
+  let mut curKey : Option (String × String) := none
+  let mut shown := 0
+  let mut more : Suppressed := {}
   for r in results do
-    let name := s!"{r.moduleTarget}  {r.testName}"
     match r.status with
-    | .pass =>
-      passed := passed + 1
-      if verbose then IO.println s!"ok    {name} ({r.durationMs}ms)"
-    | .skip reason =>
-      skipped := skipped + 1
-      if verbose then IO.println s!"skip  {name}: {reason}"
-    | .fail f =>
-      failed := failed + 1
-      IO.println s!"FAIL  {name}: {f.message}"
-      if let some d := f.detail? then IO.println (indentLines d)
-      unless r.output.isEmpty do IO.println (indentLines s!"output:\n{r.output.all}")
-    | .error m =>
-      errored := errored + 1
-      IO.println s!"ERROR {name}: {m}"
-      unless r.output.isEmpty do IO.println (indentLines s!"output:\n{r.output.all}")
+    | .pass => passed := passed + 1
+    | .fail _ => failed := failed + 1
+    | .error _ => errored := errored + 1
+    | .skip _ => skipped := skipped + 1
+    -- Results of one test are contiguous; truncation is per test (its data-driven sub-results).
+    let key := (r.moduleTarget, r.test)
+    if curKey != some key then
+      printSuppressed more
+      curKey := some key
+      shown := 0
+      more := {}
+    let displayable :=
+      match r.status with
+      | .pass | .skip _ => verbosity.showsPasses
+      | .fail _ | .error _ => true
+    if displayable then
+      if verbosity.truncates && shown ≥ cap then
+        more := more.add r.status
+      else
+        printResult r
+        shown := shown + 1
+  printSuppressed more
   IO.println s!"{passed} passed, {failed} failed, {errored} errored, {skipped} skipped"
   return failed + errored
 

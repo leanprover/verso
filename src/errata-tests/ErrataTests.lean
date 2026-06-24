@@ -90,3 +90,53 @@ def goldenRoundTrip : TestM Unit :=
     assertFileExists goldenPath
     let _ := cfg
     goldenFile goldenPath "contents\n"
+
+/-- The `Verbosity` predicates and accumulation behave as the report relies on. -/
+@[test]
+def verbosityLevels : TestM Unit := do
+  assertEq false Verbosity.silent.showsPasses
+  assertEq true Verbosity.quiet.showsPasses
+  assertEq true Verbosity.verbose.showsPasses
+  assertEq false Verbosity.silent.truncates
+  assertEq true Verbosity.quiet.truncates
+  assertEq false Verbosity.verbose.truncates
+  assertEq Verbosity.quiet Verbosity.silent.increase
+  assertEq Verbosity.verbose Verbosity.quiet.increase
+  assertEq Verbosity.verbose Verbosity.verbose.increase
+
+/-- At silent verbosity the report hides passes but shows failures and the summary line. -/
+@[test]
+def reportSilent : TestM Unit := do
+  let pass : Result := { package := "p", moduleName := "M", test := "t", status := .pass }
+  let fail : Result := { package := "p", moduleName := "M", test := "u", status := .fail { message := "boom" } }
+  let out ← captureOutput do discard <| humanReport .silent #[pass, fail]
+  assertContains "FAIL  p/M  u: boom" out.stdout
+  assertContains "1 passed, 1 failed, 0 errored, 0 skipped" out.stdout
+  assertEq 1 (out.stdout.splitOn "ok    ").length
+
+/-- At verbose verbosity the report shows passes too. -/
+@[test]
+def reportVerbose : TestM Unit := do
+  let pass : Result := { package := "p", moduleName := "M", test := "t", status := .pass }
+  let out ← captureOutput do discard <| humanReport .verbose #[pass]
+  assertContains "ok    p/M  t" out.stdout
+
+/-- A test's results are truncated after the cap at quiet verbosity, with a summary, but not at verbose. -/
+@[test]
+def reportTruncates : TestM Unit := do
+  let many := (Array.range 60).map fun i =>
+    ({ package := "p", moduleName := "M", test := "many", resultPath := #[s!"case {i}"], status := .pass } : Result)
+  let quiet ← captureOutput do discard <| humanReport .quiet many
+  assertEq 51 (quiet.stdout.splitOn "ok    ").length
+  assertContains "(... and 10 more passed, 0 more failed)" quiet.stdout
+  let verbose ← captureOutput do discard <| humanReport .verbose many
+  assertEq 61 (verbose.stdout.splitOn "ok    ").length
+  assertEq 1 (verbose.stdout.splitOn "(... and").length
+
+/-- `humanReport` returns the number of failures and errors. -/
+@[test]
+def reportFailureCount : TestM Unit := do
+  let pass : Result := { package := "p", moduleName := "M", test := "t", status := .pass }
+  let fail : Result := { package := "p", moduleName := "M", test := "u", status := .fail { message := "x" } }
+  let err : Result := { package := "p", moduleName := "M", test := "v", status := .error "oops" }
+  assertEq 2 (← humanReport .silent #[pass, fail, err])

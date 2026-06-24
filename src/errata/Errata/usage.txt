@@ -6,7 +6,7 @@ Usage:
   lake test -- MODULE... -- OPTION...  pass runner options after a second `--`
 
 Modules use Lake target syntax. Runner options:
-  -v, --verbose        Report passing results, not only failures.
+  -v, --verbose        Also report passes (truncating each test's results); repeat (-vv) for all.
       --update-golden  Rewrite golden expected files instead of comparing.
       --seed N         Seed property tests with N, to reproduce a failure.
       --junit PATH     Write a JUnit XML report to PATH.

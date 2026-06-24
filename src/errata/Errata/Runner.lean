@@ -63,16 +63,16 @@ def run (cfg : Context) (entries : Array TestEntry) : IO (Array Result) := do
   return all
 
 /-- A base context with the given settings and a fresh, empty log. -/
-def mkContext (verbose : Bool := false) (updateGolden : Bool := false)
+def mkContext (verbosity : Verbosity := .silent) (updateGolden : Bool := false)
     (options : OptionMap := {}) (seed : Nat := 0) : IO Context := do
   let log ← IO.mkRef (#[] : Array Result)
   let usedOptions ← IO.mkRef ({} : Std.HashSet String)
-  return { verbose, updateGolden, options, seed, log, usedOptions }
+  return { verbosity, updateGolden, options, seed, log, usedOptions }
 
 /-- The settings parsed from the runner's command line. -/
 structure Options where
-  /-- Reports passing results, not only failures. -/
-  verbose : Bool := false
+  /-- The reporting verbosity. -/
+  verbosity : Verbosity := .silent
   /-- Rewrites golden expected files instead of comparing. -/
   updateGolden : Bool := false
   /-- The seed for property tests, for reproducing a failure. -/
@@ -126,7 +126,7 @@ def parseArgs (args : List String) : Except String Options := do
   let mut opts : Options := {}
   for (name, value) in raw do
     match name with
-    | "verbose" | "v" => opts := { opts with verbose := true }
+    | "verbose" | "v" => opts := { opts with verbosity := opts.verbosity.increase }
     | "update-golden" => opts := { opts with updateGolden := true }
     | "seed" =>
       match value.toNat? with
@@ -159,12 +159,12 @@ def runMain (entries : Array TestEntry) (args : List String) : IO UInt32 := do
   if opts.help then
     IO.println usage
     return 0
-  let cfg ← mkContext (verbose := opts.verbose) (updateGolden := opts.updateGolden)
+  let cfg ← mkContext (verbosity := opts.verbosity) (updateGolden := opts.updateGolden)
     (options := opts.options) (seed := opts.seed.getD 0)
   let results ← run cfg entries
   if let some path := opts.junitPath then IO.FS.writeFile path (junitReport results)
   if let some path := opts.jsonPath then IO.FS.writeFile path (jsonReport results)
-  let failures ← humanReport opts.verbose results
+  let failures ← humanReport opts.verbosity results
   -- Warn about options that were supplied but never read by any test (typos, removed flags).
   let used ← cfg.usedOptions.get
   let unused := opts.options.toList.filterMap fun (k, _) => if used.contains k then none else some k
