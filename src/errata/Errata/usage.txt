@@ -11,6 +11,7 @@ Modules use Lake target syntax. Runner options:
       --seed N         Seed property tests with N, to reproduce a failure.
       --junit PATH     Write a JUnit XML report to PATH.
       --json PATH      Write a JSON report to PATH.
+      --markdown PATH  Write a Markdown report (for a CI job summary) to PATH.
   -h, --help           Show this help and exit.
 
 Any other `--name value` option is passed through to the tests.

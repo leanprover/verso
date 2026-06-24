@@ -140,3 +140,15 @@ def reportFailureCount : Test := do
   let fail : Result := { package := "p", moduleName := "M", test := "u", status := .fail { message := "x" } }
   let err : Result := { package := "p", moduleName := "M", test := "v", status := .error "oops" }
   assertEq 2 (← humanReport .silent #[pass, fail, err])
+
+/-- `markdownReport` gives a tally, an open collapsible per failure, and a per-module table. -/
+@[test]
+def reportMarkdown : Test := do
+  let pass : Result := { package := "p", moduleName := "M", test := "t", status := .pass }
+  let f : TestFailure := { message := "boom", detail? := some "expected 1\nactual 2" }
+  let fail : Result := { package := "p", moduleName := "M", test := "u", status := .fail f }
+  let md := markdownReport #[pass, fail]
+  assertContains "**1** passed · **1** failed" md
+  assertContains "<details open><summary>❌ <code>p/M</code> u: boom</summary>" md
+  assertContains "expected 1\nactual 2" md
+  assertContains "Summary by module" md

@@ -240,3 +240,38 @@ instance : FromJson Result where
 
 /-- Renders the results as a JSON array of objects. -/
 def jsonReport (results : Array Result) : String := (ToJson.toJson results).pretty
+
+/--
+Renders the results as Markdown for a CI job summary: a headline tally, each failure and error in an
+open collapsible block with its location and detail, and a per-module table in a closed one.
+-/
+def markdownReport (results : Array Result) : String := Id.run do
+  let passed := countWhere results (· matches .pass)
+  let failed := countWhere results (· matches .fail _)
+  let errored := countWhere results (· matches .error _)
+  let skipped := countWhere results (· matches .skip _)
+  let icon := if failed + errored == 0 then "✅" else "❌"
+  let mut out := s!"## {icon} Errata test results\n\n"
+  out := out ++
+    s!"**{passed}** passed · **{failed}** failed · **{errored}** errored · **{skipped}** skipped\n\n"
+  for r in results do
+    let render (mark message : String) (detail? : Option String) : String := Id.run do
+      let mut s := s!"<details open><summary>{mark} <code>{xmlEscape r.moduleTarget}</code> \
+        {xmlEscape r.testName}: {xmlEscape message}</summary>\n\n"
+      if let .fail f := r.status then
+        if let some l := f.location? then s := s ++ s!"`{locationText l}`\n\n"
+      if let some d := detail? then s := s ++ s!"```\n{d}\n```\n\n"
+      unless r.output.isEmpty do
+        s := s ++ s!"<details><summary>output</summary>\n\n```\n{r.output.all}\n```\n\n</details>\n\n"
+      return s ++ "</details>\n\n"
+    match r.status with
+    | .fail f => out := out ++ render "❌" f.message f.detail?
+    | .error m => out := out ++ render "💥" m none
+    | _ => pure ()
+  out := out ++ "<details><summary>Summary by module</summary>\n\n"
+  out := out ++ "| Module | ✅ | ❌ | 💥 | ⏭️ |\n| :-- | --: | --: | --: | --: |\n"
+  for m in results.toList.map suiteOf |>.eraseDups do
+    let cs := results.filter (suiteOf · == m)
+    out := out ++ s!"| {m} | {countWhere cs (· matches .pass)} | {countWhere cs (· matches .fail _)} \
+      | {countWhere cs (· matches .error _)} | {countWhere cs (· matches .skip _)} |\n"
+  return out ++ "\n</details>\n"

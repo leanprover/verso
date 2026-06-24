@@ -81,6 +81,8 @@ structure Options where
   junitPath : Option String := none
   /-- Writes a JSON report to this path. -/
   jsonPath : Option String := none
+  /-- Writes a Markdown report to this path. -/
+  markdownPath : Option String := none
   /-- Project-specific options, as a multi-map so repeated options accumulate. -/
   options : OptionMap := {}
   /-- Prints usage information instead of running the tests. -/
@@ -138,6 +140,9 @@ def parseArgs (args : List String) : Except String Options := do
     | "json" =>
       if value.isEmpty then throw "--json expects a path"
       opts := { opts with jsonPath := some value }
+    | "markdown" =>
+      if value.isEmpty then throw "--markdown expects a path"
+      opts := { opts with markdownPath := some value }
     | "help" | "h" => opts := { opts with help := true }
     | _ =>
       let prev := opts.options.getD name #[]
@@ -164,6 +169,7 @@ def runMain (entries : Array TestEntry) (args : List String) : IO UInt32 := do
   let results ← run cfg entries
   if let some path := opts.junitPath then IO.FS.writeFile path (junitReport results)
   if let some path := opts.jsonPath then IO.FS.writeFile path (jsonReport results)
+  if let some path := opts.markdownPath then IO.FS.writeFile path (markdownReport results)
   let failures ← humanReport opts.verbosity results
   -- Warn about options that were supplied but never read by any test (typos, removed flags).
   let used ← cfg.usedOptions.get
