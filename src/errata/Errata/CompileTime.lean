@@ -79,3 +79,59 @@ meta def elabTestMsgs : Command.CommandElab
       else
         logWarningAt tk (body ++ hint)
   | _ => throwUnsupportedSyntax
+
+/-- Checks that a Boolean expression evaluates to {lean}`true`, registering the verdict as a test. -/
+syntax (name := testGuardCmd) "#test_guard" term : command
+
+@[command_elab testGuardCmd]
+meta def elabTestGuard : Command.CommandElab
+  | `(#test_guard%$tk $e:term) => do
+    -- Evaluate the expression to a `Bool` at elaboration time, as `#guard` does.
+    let passed ← Command.liftTermElabM do
+      let v ← Term.elabTermEnsuringType e (mkConst ``Bool)
+      Term.synthesizeSyntheticMVarsNoPostponing
+      let v ← instantiateMVars v
+      let mvars ← Lean.Meta.getMVars v
+      if mvars.isEmpty then
+        unsafe Lean.Meta.evalExpr (checkMeta := false) Bool (mkConst ``Bool) v
+      else
+        discard <| Term.logUnassignedUsingErrorInfos mvars
+        pure false
+    -- The checked expression's source text and span, for naming, location, and detail.
+    let fileMap ← getFileMap
+    let startStr := e.raw.getPos?.getD 0
+    let endStr := e.raw.getTailPos?.getD startStr
+    let source := ({ str := fileMap.source, startPos := startStr, stopPos := endStr } : Substring.Raw).toString
+    let startPos := fileMap.toPosition startStr
+    let endPos := fileMap.toPosition endStr
+    -- Name the test after the first line of the expression, in the current namespace, marking a
+    -- truncated multi-line expression with an ellipsis and disambiguating against earlier ones.
+    let lines := source.splitOn "\n"
+    -- Strip guillemets so an escaped name in the source does not nest inside the test's own name.
+    let firstLine := (((lines.headD source).trimAscii.copy).replace "«" "").replace "»" ""
+    let base :=
+      if (lines.drop 1).any (fun l => !l.trimAscii.copy.isEmpty) then firstLine ++ "…" else firstLine
+    let ns ← getCurrNamespace
+    let env ← getEnv
+    let mut name := base
+    let mut n := 1
+    while env.contains (ns ++ Name.mkSimple name) do
+      n := n + 1
+      name := s!"{base} ({n})"
+    let verdict ←
+      if passed then
+        `(Errata.TestResult.pass)
+      else
+        `(Errata.TestResult.mismatch "expression did not evaluate to `true`" $(quote source)
+            $(quote (← getFileName))
+            $(quote startPos.line) $(quote startPos.column)
+            $(quote endPos.line) $(quote endPos.column))
+    elabCommand (← `(@[test] def $(mkIdent (Name.mkSimple name)) : Errata.TestResult := $verdict))
+    -- Report a failure at build time, as `#test_msgs` does.
+    unless passed do
+      let body := m!"Errata #test_guard: the expression did not evaluate to `true`:\n{source}"
+      if (← getOptions).getBool `Errata.failOnError false then
+        logErrorAt tk body
+      else
+        logWarningAt tk body
+  | _ => throwUnsupportedSyntax

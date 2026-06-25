@@ -238,11 +238,11 @@ private def errataModuleOfPath (srcDir path : System.FilePath) : Option Lean.Nam
   some (".".intercalate comps).toName
 
 /--
-Warns about modules that define `@[test]` tests but whose library's globs do not cover them, so
-the tests would be silently undiscovered. A module within a library's root that is not matched by
-the library's globs, in a file mentioning `@[test]`, is the signal.
+Reports modules that define `@[test]` tests but whose library's globs do not cover them, so the
+tests would be silently undiscovered, and returns them. A module within a library's root that is not
+matched by the library's globs, in a file mentioning `@[test]`, is the signal.
 -/
-private def errataWarnUncovered (ws : Lake.Workspace) : IO Unit := do
+private def errataUncoveredTestModules (ws : Lake.Workspace) : IO (Array Lean.Name) := do
   let mut missed : Array Lean.Name := #[]
   for lib in ws.root.leanLibs do
     if lib.name == `ErrataGenerated then continue
@@ -256,11 +256,12 @@ private def errataWarnUncovered (ws : Lake.Workspace) : IO Unit := do
         if lines.any (fun line => line.trimAsciiStart.copy.startsWith "@[test]") then
           missed := missed.push mod
   unless missed.isEmpty do
-    IO.eprintln "warning: these modules define @[test] tests but their library's globs do not cover \
+    IO.eprintln "error: these modules define @[test] tests but their library's globs do not cover \
       them, so the tests are not discovered. Widen the library's `globs` \
       (e.g. `globs := #[Glob.andSubmodules `Root]`):"
     for mod in missed do
       IO.eprintln s!"  {mod}"
+  return missed
 
 @[test_driver]
 script «errata-test» (args) do
@@ -294,7 +295,8 @@ script «errata-test» (args) do
     unless allNames.any (fun n => n.toString == spec || n.toString.startsWith (spec ++ ".")) do
       IO.eprintln s!"error: no module matches '{spec}'"
       return 1
-  errataWarnUncovered ws
+  -- Uncovered @[test] modules are a configuration error: fail rather than run an incomplete suite.
+  unless (← errataUncoveredTestModules ws).isEmpty do return 1
   -- A test module is a selected one whose source introduces tests. Module-system test modules go in
   -- the bridge module (`import all`); non-module ones can only be imported by the non-module main.
   let mut moduleMods : Array Lean.Name := #[]

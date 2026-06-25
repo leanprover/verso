@@ -77,8 +77,9 @@ def zipRandom : Test := do
     IO.println s!"random seed: {seed}"
     let count ← IO.rand 0 15
     let mut files := #[]
-    for _ in [0:count] do
+    for i in [0:count] do
       let bytes ← IO.getRandomBytes (.ofNat (← IO.rand 0 50000))
-      files := files.push (← randName, bytes)
+      -- A numbered prefix keeps every name distinct even when two random stems collide.
+      files := files.push (s!"{i + 1}-{← randName}", bytes)
     for method in [CompressionMethod.store, .deflate] do
       extractRoundTrips files method

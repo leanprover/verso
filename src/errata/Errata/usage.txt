@@ -15,3 +15,4 @@ Modules use Lake target syntax. Runner options:
   -h, --help           Show this help and exit.
 
 Any other `--name value` option is passed through to the tests.
+Write a value that begins with `-` as `--name=value`.

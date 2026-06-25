@@ -15,9 +15,9 @@ set_option doc.verso true
 
 namespace Errata
 
-/-- Asserts that a process exited with the expected code, showing its error output otherwise. -/
+/-- Asserts that a process exited with the expected code, showing its output otherwise. -/
 def assertExitCode (expected : UInt32) (output : IO.Process.Output)
     (loc : Location := by exact here%) : TestM Unit :=
   unless output.exitCode == expected do
     failAt loc s!"process exited with code {output.exitCode}, expected {expected}"
-      (detail? := some s!"stderr:\n{output.stderr}")
+      (detail? := some s!"stdout:\n{output.stdout}\nstderr:\n{output.stderr}")

@@ -29,8 +29,8 @@ structure Context where
   updateGolden : Bool := false
   /-- Project-specific options, as a multi-map so repeated options accumulate. -/
   options : OptionMap := {}
-  /-- The seed used for property tests. -/
-  seed : Nat := 0
+  /-- The seed used for property tests, or {lean}`none` to draw a fresh one. -/
+  seed : Option Nat := none
   /-- The package that defines the running test. -/
   package : String := ""
   /-- The module that defines the running test, as a dotted name. -/

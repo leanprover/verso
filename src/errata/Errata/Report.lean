@@ -241,6 +241,16 @@ instance : FromJson Result where
 /-- Renders the results as a JSON array of objects. -/
 def jsonReport (results : Array Result) : String := (ToJson.toJson results).pretty
 
+/-- The length of the longest run of consecutive backticks in {name}`s`. -/
+private def longestBacktickRun (s : String) : Nat :=
+  (s.foldl (init := (0, 0)) fun (cur, best) c =>
+    if c == '`' then (cur + 1, Nat.max best (cur + 1)) else (0, best)).2
+
+/-- Wraps {name}`body` in a fenced code block whose fence outlasts any backtick run inside it. -/
+private def fencedBlock (body : String) : String :=
+  let fence := String.ofList (List.replicate (Nat.max 3 (longestBacktickRun body + 1)) '`')
+  s!"{fence}\n{body}\n{fence}"
+
 /--
 Renders the results as Markdown for a CI job summary: a headline tally, each failure and error in an
 open collapsible block with its location and detail, and a per-module table in a closed one.
@@ -260,9 +270,9 @@ def markdownReport (results : Array Result) : String := Id.run do
         {xmlEscape r.testName}: {xmlEscape message}</summary>\n\n"
       if let .fail f := r.status then
         if let some l := f.location? then s := s ++ s!"`{locationText l}`\n\n"
-      if let some d := detail? then s := s ++ s!"```\n{d}\n```\n\n"
+      if let some d := detail? then s := s ++ s!"{fencedBlock d}\n\n"
       unless r.output.isEmpty do
-        s := s ++ s!"<details><summary>output</summary>\n\n```\n{r.output.all}\n```\n\n</details>\n\n"
+        s := s ++ s!"<details><summary>output</summary>\n\n{fencedBlock r.output.all}\n\n</details>\n\n"
       return s ++ "</details>\n\n"
     match r.status with
     | .fail f => out := out ++ render "❌" f.message f.detail?

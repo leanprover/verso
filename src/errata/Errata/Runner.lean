@@ -64,7 +64,7 @@ def run (cfg : Context) (entries : Array TestEntry) : IO (Array Result) := do
 
 /-- A base context with the given settings and a fresh, empty log. -/
 def mkContext (verbosity : Verbosity := .silent) (updateGolden : Bool := false)
-    (options : OptionMap := {}) (seed : Nat := 0) : IO Context := do
+    (options : OptionMap := {}) (seed : Option Nat := none) : IO Context := do
   let log ← IO.mkRef (#[] : Array Result)
   let usedOptions ← IO.mkRef ({} : Std.HashSet String)
   return { verbosity, updateGolden, options, seed, log, usedOptions }
@@ -93,9 +93,11 @@ structure Options where
 
 Parses arguments into {lean}`(name, value)` pairs.
 
-A long option is {lit}`--name`, {lit}`--name=value`, or {lit}`--name value`, taking the next token as
-its value unless that token is itself an option. Short options bundle: {lit}`-xyz` is equivalent to
-{lit}`--x --y --z`, and the last may take a following value. Any other argument is rejected.
+A long option is {lit}`--name`, {lit}`--name=value`, or {lit}`--name value`. The {lit}`--name value`
+form takes the next token as the value when that token is an ordinary argument; a token beginning with
+{lit}`-` starts the next option instead, so a value beginning with {lit}`-` uses the {lit}`--name=value`
+form. Short options bundle: {lit}`-xyz` is equivalent to {lit}`--x --y --z`, and the last may take a
+following value. Any other argument is rejected.
 -/
 partial def rawOptions : List String → Except String (List (String × String))
   | [] => .ok []
@@ -165,7 +167,7 @@ def runMain (entries : Array TestEntry) (args : List String) : IO UInt32 := do
     IO.println usage
     return 0
   let cfg ← mkContext (verbosity := opts.verbosity) (updateGolden := opts.updateGolden)
-    (options := opts.options) (seed := opts.seed.getD 0)
+    (options := opts.options) (seed := opts.seed)
   let results ← run cfg entries
   if let some path := opts.junitPath then IO.FS.writeFile path (junitReport results)
   if let some path := opts.jsonPath then IO.FS.writeFile path (jsonReport results)

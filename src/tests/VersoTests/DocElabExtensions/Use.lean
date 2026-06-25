@@ -46,5 +46,5 @@ Directive body
 {inheritedCommand}
 :::::::
 
-#guard importedThroughMiddle
-#guard inheritedDocElabExtensions.toPart.content.size == 4
+#test_guard importedThroughMiddle
+#test_guard inheritedDocElabExtensions.toPart.content.size == 4

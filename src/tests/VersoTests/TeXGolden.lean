@@ -42,9 +42,7 @@ def texGolden (dir : System.FilePath) (doc : Verso.Doc.VersoDoc Manual)
       cmd := "lualatex"
       args := #["-shell-escape", "-halt-on-error", "-interaction=nonstopmode", "main.tex"]
     }
-    unless out.exitCode == 0 do
-      failHere s!"lualatex exited with code {out.exitCode}"
-        (detail? := some (out.stdout ++ out.stderr))
+    assertExitCode 0 out
 
 /-- The sample document renders to its golden TeX. -/
 @[test]

@@ -41,29 +41,29 @@ def checkDecode
 
 -- A markup delimiter after an escape maps past the multi-byte source of the escape, not by a
 -- constant shift: in `"a\n*b*"` the `*` is decoded byte 2 but source byte 4.
-#guard checkDecode decodeStrLitWithMap "\"a\\n*b*\"" "a\n*b*" [(1, 2, "\\n"), (2, 3, "*")]
+#test_guard checkDecode decodeStrLitWithMap "\"a\\n*b*\"" "a\n*b*" [(1, 2, "\\n"), (2, 3, "*")]
 
 -- A unicode escape decodes to a multi-byte character whose source span is the whole `\uHHHH`.
-#guard checkDecode decodeStrLitWithMap "\"\\u00e9x\"" "éx" [(0, 2, "\\u00e9"), (2, 3, "x")]
+#test_guard checkDecode decodeStrLitWithMap "\"\\u00e9x\"" "éx" [(0, 2, "\\u00e9"), (2, 3, "x")]
 
 -- A string gap decodes to nothing; the character after it maps past the whole gap to source byte 6.
-#guard checkDecode decodeStrLitWithMap "\"a\\\n  b\"" "ab" [(1, 2, "b")]
+#test_guard checkDecode decodeStrLitWithMap "\"a\\\n  b\"" "ab" [(1, 2, "b")]
 
 -- Raw string literals are not escape-decoded: `\n` stays two characters.
-#guard checkDecode decodeStrLitWithMap "r\"a\\n*\"" "a\\n*" [(3, 4, "*")]
+#test_guard checkDecode decodeStrLitWithMap "r\"a\\n*\"" "a\\n*" [(3, 4, "*")]
 
 -- Every character a unicode escape: each decoded character maps to its whole six-byte `\uHHHH`.
-#guard checkDecode decodeStrLitWithMap "\"\\u002A\\u0062\\u002A\"" "*b*"
+#test_guard checkDecode decodeStrLitWithMap "\"\\u002A\\u0062\\u002A\"" "*b*"
   [(0, 1, "\\u002A"), (1, 2, "\\u0062"), (2, 3, "\\u002A")]
 
 -- A bare content region (no surrounding quotes) decodes the same way; this drives re-parsing escaped
 -- code spans as Lean.
-#guard checkDecode decodeContentWithMap "\\u004E\\u0061\\u0074" "Nat"
+#test_guard checkDecode decodeContentWithMap "\\u004E\\u0061\\u0074" "Nat"
   [(0, 1, "\\u004E"), (1, 2, "\\u0061"), (2, 3, "\\u0074")]
 
 -- Remapping reanchors a token's leading and trailing whitespace into the source string, so the
 -- syntax round-trips, and the token's positions become absolute.
-#guard
+#test_guard
   let src := "\"a\\n*b*\""
   let (_, m) := decodeStrLitWithMap src ⟨0⟩ src.rawEndPos
   let leading : Substring.Raw := { str := "a\n*b*", startPos := ⟨2⟩, stopPos := ⟨2⟩ }

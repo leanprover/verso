@@ -26,7 +26,7 @@ def property (p : Prop) (cfg : Configuration := {}) (loc : Location := by exact 
   let ctx ← read
   let cfg := { cfg with
     quiet := true,
-    randomSeed := if ctx.seed == 0 then cfg.randomSeed else some ctx.seed }
+    randomSeed := ctx.seed.orElse (fun _ => cfg.randomSeed) }
   match ← Testable.checkIO p' (cfg := cfg) with
   | .success _ => pure ()
   | .gaveUp n => failAt loc s!"property gave up after discarding {n} cases"

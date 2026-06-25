@@ -50,3 +50,54 @@ def freshIdFirst : Test := property (∀ h p, freshIdFirstIsHint h p)
 /-- The second identifier generated for a hint is the hint with `1` appended. -/
 @[test]
 def freshIdSecond : Test := property (∀ h p, freshIdSecondIsHintWith1 h p)
+
+/-! ## Compile-time regression tests for the blog genre -/
+
+/-- info: #[(`a.b.c, 1), (`a.c, 4), (`b.c, 6), (`c, 3)] -/
+#test_msgs in
+#eval NameSuffixMap.empty |>.insert `a.b.c 1 |>.insert `b.c 2 |>.insert `c 3 |>.insert `a.c 4 |>.insert `a.b 5 |>.insert `b.c 6 |>.get `c
+
+-- The deprecated inline Lean role warns. This standalone document asserts the warning, ahead of the
+-- streaming blog blocks below that a `#test_msgs` wrapper cannot enclose.
+/--
+warning: `{leanInline}` is deprecated; use `{lean}` instead.
+-/
+#test_msgs in
+#docs (Post) inlineLeanRoleNamesDeprecated "Inline Lean Role Names (deprecated alias)" :=
+:::::::
+```leanInit post2
+```
+
+Legacy role: {leanInline post2}`Nat.succ 1`.
+:::::::
+
+-- Hidden blog Lean blocks elaborate with their show/keep/error flags.
+#doc (Post) "Hidden Lean Block Flags" =>
+```leanInit post
+```
+
+```lean post -show
+def base : Nat := 40
+```
+
+```lean post -keep
+def scratch : Nat := base + 2
+```
+
+```lean post
+example : base = 40 := rfl
+```
+
+```lean post +error
+#check scratch
+```
+
+-- The canonical inline Lean role works without warnings.
+#docs (Post) inlineLeanRoleNames "Inline Lean Role Names" :=
+```leanInit post
+```
+
+Canonical role: {lean post}`Nat.succ 1`.
+
+#test_guard inlineLeanRoleNames.toPart.content.size > 0
+#test_guard inlineLeanRoleNamesDeprecated.toPart.content.size > 0
