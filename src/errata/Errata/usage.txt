@@ -1,11 +1,12 @@
 Errata test runner
 
 Usage:
-  lake test                            run every test in the package
-  lake test -- MODULE...               run the tests in the given modules
-  lake test -- MODULE... -- OPTION...  pass runner options after a second `--`
+  lake test                                         run every test in the package
+  lake test -- MODULE...                            run the tests in the given modules
+  lake test -- MODULE... --test-options OPTION...   pass runner options after the marker
 
-Modules use Lake target syntax. Runner options:
+Runner options go after `--test-options`; tokens before it name modules in Lake target syntax.
+Runner options:
   -v, --verbose        Also report passes (truncating each test's results); repeat (-vv) for all.
       --update-golden  Rewrite golden expected files instead of comparing.
       --seed N         Seed property tests with N, to reproduce a failure.

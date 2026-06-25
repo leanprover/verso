@@ -13,9 +13,6 @@ namespace VersoTests.LiterateHtml
 
 open Errata
 
-private def hasSubstring (s : String) (sub : String) : Bool :=
-  s.find? sub |>.isSome
-
 private def cleanDir (dir : System.FilePath) : IO Unit := do
   if ← dir.pathExists then
     IO.FS.removeDirAll dir
@@ -170,38 +167,38 @@ private def testDefaultBehavior (data : TestData) : Test := withTestDir data fun
       fail s!"Expected HTML file not found: {f}"
 
   let landingHtml ← IO.FS.readFile (htmlDir / "index.html")
-  unless hasSubstring landingHtml "LitConfig" do
-    fail "Landing page does not contain 'LitConfig'"
+  assertContains "LitConfig" landingHtml
+    "Landing page does not contain 'LitConfig'"
 
   let litConfigHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "index.html")
-  unless hasSubstring litConfigHtml "<title>LitConfig</title>" do
-    fail "LitConfig page title is not 'LitConfig'"
-  unless hasSubstring litConfigHtml "A Test Module" do
-    fail "LitConfig page does not contain module docstring content 'A Test Module'"
-  unless hasSubstring litConfigHtml "code-box" do
-    fail "LitConfig page does not contain any code boxes"
-  unless hasSubstring litConfigHtml "module-tree" do
-    fail "LitConfig page does not contain module tree navigation"
-  unless hasSubstring litConfigHtml "breadcrumbs" do
-    fail "LitConfig page does not contain breadcrumbs"
+  assertContains "<title>LitConfig</title>" litConfigHtml
+    "LitConfig page title is not 'LitConfig'"
+  assertContains "A Test Module" litConfigHtml
+    "LitConfig page does not contain module docstring content 'A Test Module'"
+  assertContains "code-box" litConfigHtml
+    "LitConfig page does not contain any code boxes"
+  assertContains "module-tree" litConfigHtml
+    "LitConfig page does not contain module tree navigation"
+  assertContains "breadcrumbs" litConfigHtml
+    "LitConfig page does not contain breadcrumbs"
 
   let coreHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "Core" / "index.html")
-  unless hasSubstring coreHtml "Core Module" do
-    fail "Core page does not contain module docstring content 'Core Module'"
+  assertContains "Core Module" coreHtml
+    "Core page does not contain module docstring content 'Core Module'"
 
   let noDocHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "NoDocstrings" / "index.html")
-  unless hasSubstring noDocHtml "code-box" do
-    fail "NoDocstrings page does not contain code boxes"
+  assertContains "code-box" noDocHtml
+    "NoDocstrings page does not contain code boxes"
 
 /-- The `{kw}` docstring role renders keyword atoms in the HTML output. -/
 private def testKeywordRole (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ _ => do
   runLiterateHtml jsonDir htmlDir
   let coreHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "Core" / "index.html")
   -- The module docstring contains {kw}`where`, which should render as a keyword-highlighted token
-  unless hasSubstring coreHtml "where" do
-    fail "Core page does not contain keyword 'where' from {kw} role"
-  unless hasSubstring coreHtml "keyword" do
-    fail "Core page does not contain 'keyword' CSS class for {kw} role"
+  assertContains "where" coreHtml
+    "Core page does not contain keyword 'where' from {kw} role"
+  assertContains "keyword" coreHtml
+    "Core page does not contain 'keyword' CSS class for {kw} role"
 
 /--
 Per-module JSON path used by the tests. The literate facet writes
@@ -221,11 +218,11 @@ private def testAllBuiltinDocRoles (data : TestData) : Test := withTestDir data 
   unless ← builtinsHtml.pathExists do
     fail s!"Expected Builtins HTML page at {builtinsHtml}"
   let jsonContent ← IO.FS.readFile (jsonPath jsonDir "LitConfig.Builtins")
-  unless hasSubstring jsonContent "\"content\":\"rfl\",\"kind\":{\"keyword\":{\"docs\":\"" do
-    fail "Builtins JSON has no docs on the `rfl` keyword token. \
+  assertContains "\"content\":\"rfl\",\"kind\":{\"keyword\":{\"docs\":\"" jsonContent
+    "Builtins JSON has no docs on the `rfl` keyword token. \
       The tactic handler did not attach the syntax kind's docstring."
-  unless hasSubstring jsonContent "\"content\":\"lhs\",\"kind\":{\"keyword\":{\"docs\":\"" do
-    fail "Builtins JSON has no docs on the `lhs` keyword token. \
+  assertContains "\"content\":\"lhs\",\"kind\":{\"keyword\":{\"docs\":\"" jsonContent
+    "Builtins JSON has no docs on the `lhs` keyword token. \
       The conv handler did not attach the syntax kind's docstring."
 
 /--
@@ -238,18 +235,18 @@ private def testCustomLiterateHandlers (data : TestData) : Test := withTestDir d
   unless ← jsonFile.pathExists do
     fail s!"Expected JSON for LitConfig.UserExt at {jsonFile}"
   let jsonContent ← IO.FS.readFile jsonFile
-  unless hasSubstring jsonContent "USER-CONST-MARKER" do
-    fail "UserExt JSON missing USER-CONST-MARKER: `@[inline_to_literate]` handler did not run"
-  unless hasSubstring jsonContent "USER-LEANBLOCK-MARKER" do
-    fail "UserExt JSON missing USER-LEANBLOCK-MARKER: `@[block_to_literate]` handler did not run"
+  assertContains "USER-CONST-MARKER" jsonContent
+    "UserExt JSON missing USER-CONST-MARKER: `@[inline_to_literate]` handler did not run"
+  assertContains "USER-LEANBLOCK-MARKER" jsonContent
+    "UserExt JSON missing USER-LEANBLOCK-MARKER: `@[block_to_literate]` handler did not run"
 
   let html ← IO.FS.readFile (htmlDir / "LitConfig" / "UserExt" / "index.html")
-  unless hasSubstring html "looks like you're defining a const" do
-    fail "UserExt HTML missing the inline replacement text. The user handler's children weren't rendered."
-  unless hasSubstring html "Replacement For A Lean Block" do
-    fail "UserExt HTML missing the block replacement text. The user handler's children weren't rendered."
-  if hasSubstring html "trivial" then
-    fail "UserExt HTML contains 'trivial'. The built-in lean code-block handler ran instead of the user handler."
+  assertContains "looks like you're defining a const" html
+    "UserExt HTML missing the inline replacement text. The user handler's children weren't rendered."
+  assertContains "Replacement For A Lean Block" html
+    "UserExt HTML missing the block replacement text. The user handler's children weren't rendered."
+  assertNotContains "trivial" html
+    "UserExt HTML contains 'trivial'. The built-in lean code-block handler ran instead of the user handler."
 
 /--
 Checks that messages produced by code blocks in docstrings are attached to the rendered code block
@@ -265,8 +262,8 @@ private def testDocstringCodeBlockMessages (data : TestData) : Test := do
   unless ← jsonFile.pathExists do
     fail s!"Expected JSON for LitConfig.Builtins at {jsonFile}"
   let jsonContent ← IO.FS.readFile jsonFile
-  unless hasSubstring jsonContent "\"span\":{\"content\":{\"token\":{\"tok\":{\"content\":\"#eval\"" do
-    fail "Builtins JSON has no message span on the docstring's `#eval`. \
+  assertContains "\"span\":{\"content\":{\"token\":{\"tok\":{\"content\":\"#eval\"" jsonContent
+    "Builtins JSON has no message span on the docstring's `#eval`. \
       Messages from docstring code blocks were not re-attached to the rendered code."
   let spanCount := (jsonContent.splitOn "\"span\":").length - 1
   unless spanCount == 1 do
@@ -291,16 +288,16 @@ private def testUnknownExtensionFallback : Test := do
   }
   if result.exitCode != 0 then
     fail s!"lake build :literateHtml failed (exit {result.exitCode}):\nstdout: {result.stdout}\nstderr: {result.stderr}"
-  unless hasSubstring result.stdout "No inline handler for LitConfig.UserExt.FallbackPayload" do
-    fail s!"Expected warning about unhandled extension in build output, got stdout: {result.stdout}\nstderr: {result.stderr}"
+  assertContains "No inline handler for LitConfig.UserExt.FallbackPayload" result.stdout
+    s!"Expected warning about unhandled extension in build output, got stdout: {result.stdout}\nstderr: {result.stderr}"
   let htmlFile : System.FilePath :=
     "test-projects/literate-config" / ".lake" / "build" / "literate-html"
       / "LitConfig" / "UserExt" / "index.html"
   unless ← htmlFile.pathExists do
     fail s!"Expected HTML page at {htmlFile}"
   let html ← IO.FS.readFile htmlFile
-  unless hasSubstring html "THIS IS THE FALLBACK" do
-    fail "HTML missing 'THIS IS THE FALLBACK' marker. The conversion's fallback children were not rendered."
+  assertContains "THIS IS THE FALLBACK" html
+    "HTML missing 'THIS IS THE FALLBACK' marker. The conversion's fallback children were not rendered."
 
 /-- Excluded modules produce no HTML output and are absent from the navbar. -/
 private def testExclude (data : TestData) : Test := withTestDir data fun jsonDir htmlDir planFile tomlFile => do
@@ -316,8 +313,8 @@ private def testExclude (data : TestData) : Test := withTestDir data fun jsonDir
     fail "LitConfig.Core should still have HTML output after exclude"
   let litConfigHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "index.html")
   let navbarSection := litConfigHtml.splitOn "module-tree" |>.getD 1 "" |>.splitOn "</nav>" |>.head!
-  if hasSubstring navbarSection "NoDocstrings" then
-    fail "Navbar should not contain excluded module 'NoDocstrings'"
+  assertNotContains "NoDocstrings" navbarSection
+    "Navbar should not contain excluded module 'NoDocstrings'"
 
 /-- The `order` config controls the ordering of modules in the navbar. -/
 private def testNavbarOrder (data : TestData) : Test := withTestDir data fun jsonDir htmlDir planFile tomlFile => do
@@ -339,8 +336,8 @@ private def testLandingPage (data : TestData) : Test := withTestDir data fun jso
   runLiterateHtml jsonDir htmlDir (some planFile) (some tomlFile)
 
   let landingHtml ← IO.FS.readFile (htmlDir / "index.html")
-  unless hasSubstring landingHtml "Core Module" do
-    fail "Landing page should contain 'Core Module' content from the configured landing module"
+  assertContains "Core Module" landingHtml
+    "Landing page should contain 'Core Module' content from the configured landing module"
   unless ← (htmlDir / "LitConfig" / "Core" / "index.html").pathExists do
     fail "Core module should still exist at its normal location"
 
@@ -354,8 +351,8 @@ private def testHtmlLandingPageNotFound (data : TestData) : Test := withTestDir 
   let (exitCode, _, stderr) ← runLiterateHtmlCapture jsonDir htmlDir (some planFile) (some tomlFile)
   if exitCode == 0 then
     fail "HTML landing_page not found: should have failed with non-zero exit code"
-  unless hasSubstring stderr "not found" do
-    fail "HTML landing_page not found: stderr should mention 'not found'"
+  assertContains "not found" stderr
+    "HTML landing_page not found: stderr should mention 'not found'"
 
 /-- Excluding a parent module also removes all its children from the output. -/
 private def testRecursiveExclusion (data : TestData) : Test := withTestDir data fun jsonDir htmlDir planFile tomlFile => do
@@ -480,10 +477,10 @@ private def testHideCommands (data : TestData) : Test := withTestDir data fun js
   runLiterateHtml jsonDir htmlDir (configFile := some tomlFile)
 
   let litConfigHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "index.html")
-  if hasSubstring litConfigHtml "set_option" then
-    fail "hide_commands: LitConfig page should not contain 'set_option' text"
-  unless hasSubstring litConfigHtml "hello" do
-    fail "hide_commands: LitConfig page should still contain 'hello'"
+  assertNotContains "set_option" litConfigHtml
+    "hide_commands: LitConfig page should not contain 'set_option' text"
+  assertContains "hello" litConfigHtml
+    "hide_commands: LitConfig page should still contain 'hello'"
 
 /-- The metadata title appears in the landing page and module page `<title>` tags. -/
 private def testMetadataTitle (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ tomlFile => do
@@ -491,13 +488,13 @@ private def testMetadataTitle (data : TestData) : Test := withTestDir data fun j
   runLiterateHtml jsonDir htmlDir (configFile := some tomlFile)
 
   let landingHtml ← IO.FS.readFile (htmlDir / "index.html")
-  unless hasSubstring landingHtml "<title>Test Site</title>" do
-    fail "metadata title: landing page <title> should contain 'Test Site'"
+  assertContains "<title>Test Site</title>" landingHtml
+    "metadata title: landing page <title> should contain 'Test Site'"
   let litConfigHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "index.html")
-  unless hasSubstring litConfigHtml "LitConfig" do
-    fail "metadata title: module page should still contain module name 'LitConfig'"
-  unless hasSubstring litConfigHtml "Test Site" do
-    fail "metadata title: module page title should contain 'Test Site'"
+  assertContains "LitConfig" litConfigHtml
+    "metadata title: module page should still contain module name 'LitConfig'"
+  assertContains "Test Site" litConfigHtml
+    "metadata title: module page title should contain 'Test Site'"
 
 /-- Extra CSS files are copied to the output directory and linked in the HTML head. -/
 private def testExtraCss (data : TestData) : Test := IO.FS.withTempDir fun tmpDir => do
@@ -512,8 +509,8 @@ private def testExtraCss (data : TestData) : Test := IO.FS.withTempDir fun tmpDi
   unless ← (htmlDir / "custom-test.css").pathExists do
     fail "extra CSS: custom-test.css was not copied to output"
   let litConfigHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "index.html")
-  unless hasSubstring litConfigHtml "custom-test.css" do
-    fail "extra CSS: HTML does not reference custom-test.css"
+  assertContains "custom-test.css" litConfigHtml
+    "extra CSS: HTML does not reference custom-test.css"
 
 /-- Declaration docstrings are hidden globally while module docstrings remain visible. -/
 private def testShowDocstringsFalse (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ tomlFile => do
@@ -521,10 +518,10 @@ private def testShowDocstringsFalse (data : TestData) : Test := withTestDir data
   runLiterateHtml jsonDir htmlDir (configFile := some tomlFile)
 
   let litConfigHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "index.html")
-  if hasSubstring litConfigHtml "A greeting message" then
-    fail "show_docstrings=false: declaration docstring 'A greeting message' should be hidden"
-  unless hasSubstring litConfigHtml "A Test Module" do
-    fail "show_docstrings=false: module docstring 'A Test Module' should still appear"
+  assertNotContains "A greeting message" litConfigHtml
+    "show_docstrings=false: declaration docstring 'A greeting message' should be hidden"
+  assertContains "A Test Module" litConfigHtml
+    "show_docstrings=false: module docstring 'A Test Module' should still appear"
 
 /-- `show_imports = false` hides the imports list. -/
 private def testShowImportsFalse (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ tomlFile => do
@@ -532,18 +529,18 @@ private def testShowImportsFalse (data : TestData) : Test := withTestDir data fu
   runLiterateHtml jsonDir htmlDir (configFile := some tomlFile)
 
   let coreHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "Core" / "index.html")
-  if hasSubstring coreHtml "imports-list" then
-    fail "show_imports=false: page should not contain 'imports-list'"
+  assertNotContains "imports-list" coreHtml
+    "show_imports=false: page should not contain 'imports-list'"
 
 /-- Default config shows imports in a collapsible details element. -/
 private def testShowImportsDefault (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ _ => do
   runLiterateHtml jsonDir htmlDir
 
   let coreHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "Core" / "index.html")
-  unless hasSubstring coreHtml "imports-list" do
-    fail "show_imports default: Core page should contain 'imports-list'"
-  unless hasSubstring coreHtml "<details" do
-    fail "show_imports default: imports should be in a collapsible <details> element"
+  assertContains "imports-list" coreHtml
+    "show_imports default: Core page should contain 'imports-list'"
+  assertContains "<details" coreHtml
+    "show_imports default: imports should be in a collapsible <details> element"
 
 /-- Default config renders output blocks for #eval commands. -/
 private def testShowOutput (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ _ => do
@@ -551,8 +548,8 @@ private def testShowOutput (data : TestData) : Test := withTestDir data fun json
 
   let coreHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "Core" / "index.html")
   -- Check for an actual lean-output element (class on a <pre> tag), not just the CSS rules
-  unless hasSubstring coreHtml "class=\"hl lean lean-output" do
-    fail "show_output default: Core page should contain output block elements for #eval commands"
+  assertContains "class=\"hl lean lean-output" coreHtml
+    "show_output default: Core page should contain output block elements for #eval commands"
 
 /-- `show_output = []` suppresses all output blocks. -/
 private def testShowOutputEmpty (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ tomlFile => do
@@ -561,8 +558,8 @@ private def testShowOutputEmpty (data : TestData) : Test := withTestDir data fun
 
   let coreHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "Core" / "index.html")
   -- Check that no actual lean-output elements exist (CSS rules in `<style>` don't count)
-  if hasSubstring coreHtml "class=\"hl lean lean-output" then
-    fail "show_output=[]: Core page should not contain output block elements"
+  assertNotContains "class=\"hl lean lean-output" coreHtml
+    "show_output=[]: Core page should not contain output block elements"
 
 /-- Docstrings are hidden for specific named declarations while other content remains. -/
 private def testHideDocstringsFor (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ tomlFile => do
@@ -570,10 +567,10 @@ private def testHideDocstringsFor (data : TestData) : Test := withTestDir data f
   runLiterateHtml jsonDir htmlDir (configFile := some tomlFile)
 
   let litConfigHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "index.html")
-  if hasSubstring litConfigHtml "A greeting message" then
-    fail "hide_docstrings_for: 'A greeting message' should be hidden for 'hello'"
-  unless hasSubstring litConfigHtml "A Test Module" do
-    fail "hide_docstrings_for: module docstring 'A Test Module' should still appear"
+  assertNotContains "A greeting message" litConfigHtml
+    "hide_docstrings_for: 'A greeting message' should be hidden for 'hello'"
+  assertContains "A Test Module" litConfigHtml
+    "hide_docstrings_for: module docstring 'A Test Module' should still appear"
 
 /-- Favicon is copied to the output directory and linked in the HTML. -/
 private def testFavicon (data : TestData) : Test := IO.FS.withTempDir fun tmpDir => do
@@ -588,8 +585,8 @@ private def testFavicon (data : TestData) : Test := IO.FS.withTempDir fun tmpDir
   unless ← (htmlDir / "test-favicon.png").pathExists do
     fail "favicon: test-favicon.png was not copied to output"
   let litConfigHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "index.html")
-  unless hasSubstring litConfigHtml "test-favicon.png" do
-    fail "favicon: HTML does not reference test-favicon.png"
+  assertContains "test-favicon.png" litConfigHtml
+    "favicon: HTML does not reference test-favicon.png"
 
 /-- Extra JS files are copied to the output directory and linked in the HTML. -/
 private def testExtraJs (data : TestData) : Test := IO.FS.withTempDir fun tmpDir => do
@@ -604,8 +601,8 @@ private def testExtraJs (data : TestData) : Test := IO.FS.withTempDir fun tmpDir
   unless ← (htmlDir / "custom-test.js").pathExists do
     fail "extra JS: custom-test.js was not copied to output"
   let litConfigHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "index.html")
-  unless hasSubstring litConfigHtml "custom-test.js" do
-    fail "extra JS: HTML does not reference custom-test.js"
+  assertContains "custom-test.js" litConfigHtml
+    "extra JS: HTML does not reference custom-test.js"
 
 /-- Targets + exclude: exclusion narrows the target set. -/
 private def testTargetsPlusExclude (data : TestData) : Test := withTestDir data fun jsonDir htmlDir planFile tomlFile => do
@@ -626,12 +623,12 @@ private def testShowDocstringsForExceptions (data : TestData) : Test := withTest
   runLiterateHtml jsonDir htmlDir (configFile := some tomlFile)
 
   let litConfigHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "index.html")
-  unless hasSubstring litConfigHtml "A greeting message" do
-    fail "show_docstrings_for exception: 'A greeting message' should be visible for 'hello'"
+  assertContains "A greeting message" litConfigHtml
+    "show_docstrings_for exception: 'A greeting message' should be visible for 'hello'"
   -- Other declaration docstrings should be hidden (e.g., in Core module)
   let coreHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "Core" / "index.html")
-  if hasSubstring coreHtml "Doubles a natural number" then
-    fail "show_docstrings_for exception: 'Doubles a natural number' should be hidden"
+  assertNotContains "Doubles a natural number" coreHtml
+    "show_docstrings_for exception: 'Doubles a natural number' should be hidden"
 
 /-- Metadata description appears as a meta tag in the HTML. -/
 private def testMetadataDescription (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ tomlFile => do
@@ -639,10 +636,10 @@ private def testMetadataDescription (data : TestData) : Test := withTestDir data
   runLiterateHtml jsonDir htmlDir (configFile := some tomlFile)
 
   let litConfigHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "index.html")
-  unless hasSubstring litConfigHtml "A test description" do
-    fail "metadata description: HTML should contain 'A test description'"
-  unless hasSubstring litConfigHtml "meta" do
-    fail "metadata description: HTML should contain a meta tag"
+  assertContains "A test description" litConfigHtml
+    "metadata description: HTML should contain 'A test description'"
+  assertContains "meta" litConfigHtml
+    "metadata description: HTML should contain a meta tag"
 
 /-- The current page is highlighted in the navbar with the 'current' class. -/
 private def testCurrentPageHighlighting (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ _ => do
@@ -651,8 +648,8 @@ private def testCurrentPageHighlighting (data : TestData) : Test := withTestDir 
   let coreHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "Core" / "index.html")
   let navbarSection := coreHtml.splitOn "module-tree" |>.getD 1 "" |>.splitOn "</nav>" |>.head!
   -- The Core entry should have a 'current' class
-  unless hasSubstring navbarSection "current" do
-    fail "current page highlighting: navbar should contain 'current' class"
+  assertContains "current" navbarSection
+    "current page highlighting: navbar should contain 'current' class"
 
 /-- Plan with targets + exclude combined produces the correct reduced module set. -/
 private def testPlanTargetsPlusExclude (data : TestData) : Test := IO.FS.withTempDir fun tmpDir => do
@@ -677,8 +674,8 @@ private def testPlanLandingPageNotInSet (data : TestData) : Test := IO.FS.withTe
   let (exitCode, _, stderr) ← runLiteratePlanCapture data.moduleListFile planFile (some tomlFile)
   if exitCode == 0 then
     fail "plan landing_page validation: should have failed with non-zero exit code"
-  unless hasSubstring stderr "landing_page" do
-    fail "plan landing_page validation: stderr should mention 'landing_page'"
+  assertContains "landing_page" stderr
+    "plan landing_page validation: stderr should mention 'landing_page'"
 
 /-- Plan fails with error when all modules are excluded (empty module set). -/
 private def testPlanEmptyModuleSet (data : TestData) : Test := IO.FS.withTempDir fun tmpDir => do
@@ -688,8 +685,8 @@ private def testPlanEmptyModuleSet (data : TestData) : Test := IO.FS.withTempDir
   let (exitCode, _, stderr) ← runLiteratePlanCapture data.moduleListFile planFile (some tomlFile)
   if exitCode == 0 then
     fail "plan empty module set: should have failed with non-zero exit code"
-  unless hasSubstring stderr "no modules" do
-    fail "plan empty module set: stderr should mention 'no modules'"
+  assertContains "no modules" stderr
+    "plan empty module set: stderr should mention 'no modules'"
 
 /-- Plan succeeds with a warning when an ordered module does not exist. -/
 private def testPlanOrderWarning (data : TestData) : Test := IO.FS.withTempDir fun tmpDir => do
@@ -699,10 +696,10 @@ private def testPlanOrderWarning (data : TestData) : Test := IO.FS.withTempDir f
   let (exitCode, _, stderr) ← runLiteratePlanCapture data.moduleListFile planFile (some tomlFile)
   if exitCode != 0 then
     fail "plan order warning: should succeed (warning only, not error)"
-  unless hasSubstring stderr "Warning" do
-    fail "plan order warning: stderr should contain a warning"
-  unless hasSubstring stderr "NonExistent.Module" do
-    fail "plan order warning: stderr should mention 'NonExistent.Module'"
+  assertContains "Warning" stderr
+    "plan order warning: stderr should contain a warning"
+  assertContains "NonExistent.Module" stderr
+    "plan order warning: stderr should mention 'NonExistent.Module'"
 
 /-- HTML generation fails when hide_docstrings_for names a nonexistent declaration. -/
 private def testHtmlInvalidDocstringFor (data : TestData) : Test := IO.FS.withTempDir fun tmpDir => do
@@ -713,8 +710,8 @@ private def testHtmlInvalidDocstringFor (data : TestData) : Test := IO.FS.withTe
   let (exitCode, _, stderr) ← runLiterateHtmlCapture data.jsonDir htmlDir (configFile := some tomlFile)
   if exitCode == 0 then
     fail "HTML invalid docstring_for: should have failed with non-zero exit code"
-  unless hasSubstring stderr "nonexistent_decl" do
-    fail "HTML invalid docstring_for: stderr should mention 'nonexistent_decl'"
+  assertContains "nonexistent_decl" stderr
+    "HTML invalid docstring_for: stderr should mention 'nonexistent_decl'"
 
 /-- Theme CSS file is generated and linked when theme overrides are present. -/
 private def testThemeCss (data : TestData) : Test := IO.FS.withTempDir fun tmpDir => do
@@ -735,19 +732,19 @@ private def testThemeCss (data : TestData) : Test := IO.FS.withTempDir fun tmpDi
   unless ← (htmlDir / "literate-theme.css").pathExists do
     fail "theme: literate-theme.css was not generated"
   let themeCss ← IO.FS.readFile (htmlDir / "literate-theme.css")
-  unless hasSubstring themeCss "--verso-code-box-background-color" do
-    fail "theme: literate-theme.css does not contain code box variable"
-  unless hasSubstring themeCss "#f0f0f0" do
-    fail "theme: literate-theme.css does not contain light value"
-  unless hasSubstring themeCss "prefers-color-scheme: dark" do
-    fail "theme: literate-theme.css does not contain dark media query"
-  unless hasSubstring themeCss "#ddd" do
-    fail "theme: literate-theme.css does not contain dark value"
-  unless hasSubstring themeCss "data-theme" do
-    fail "theme: literate-theme.css does not contain data-theme selector"
+  assertContains "--verso-code-box-background-color" themeCss
+    "theme: literate-theme.css does not contain code box variable"
+  assertContains "#f0f0f0" themeCss
+    "theme: literate-theme.css does not contain light value"
+  assertContains "prefers-color-scheme: dark" themeCss
+    "theme: literate-theme.css does not contain dark media query"
+  assertContains "#ddd" themeCss
+    "theme: literate-theme.css does not contain dark value"
+  assertContains "data-theme" themeCss
+    "theme: literate-theme.css does not contain data-theme selector"
   let litConfigHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "index.html")
-  unless hasSubstring litConfigHtml "literate-theme.css" do
-    fail "theme: HTML does not link literate-theme.css"
+  assertContains "literate-theme.css" litConfigHtml
+    "theme: HTML does not link literate-theme.css"
 
 /-- No theme CSS file is generated when theme is empty. -/
 private def testThemeCssEmpty (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ _ => do
@@ -755,8 +752,8 @@ private def testThemeCssEmpty (data : TestData) : Test := withTestDir data fun j
   if ← (htmlDir / "literate-theme.css").pathExists then
     fail "theme empty: literate-theme.css should not exist with default config"
   let litConfigHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "index.html")
-  if hasSubstring litConfigHtml "literate-theme.css" then
-    fail "theme empty: HTML should not link literate-theme.css when no theme is set"
+  assertNotContains "literate-theme.css" litConfigHtml
+    "theme empty: HTML should not link literate-theme.css when no theme is set"
 
 /-- Per-module hide_commands overrides global config. -/
 private def testPerModuleHideCommands (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ tomlFile => do
@@ -768,12 +765,12 @@ private def testPerModuleHideCommands (data : TestData) : Test := withTestDir da
   runLiterateHtml jsonDir htmlDir (configFile := some tomlFile)
 
   let litConfigHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "index.html")
-  if hasSubstring litConfigHtml "set_option" then
-    fail "per-module hide_commands: LitConfig should not contain 'set_option'"
+  assertNotContains "set_option" litConfigHtml
+    "per-module hide_commands: LitConfig should not contain 'set_option'"
   -- Core should NOT be affected (no module config)
   let coreHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "Core" / "index.html")
-  unless hasSubstring coreHtml "code-box" do
-    fail "per-module hide_commands: Core should still have code boxes"
+  assertContains "code-box" coreHtml
+    "per-module hide_commands: Core should still have code boxes"
 
 /-- Per-module title appears in the page title and navbar. -/
 private def testPerModuleTitle (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ tomlFile => do
@@ -785,13 +782,13 @@ private def testPerModuleTitle (data : TestData) : Test := withTestDir data fun 
   runLiterateHtml jsonDir htmlDir (configFile := some tomlFile)
 
   let coreHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "Core" / "index.html")
-  unless hasSubstring coreHtml "Core Library" do
-    fail "per-module title: page should contain 'Core Library'"
+  assertContains "Core Library" coreHtml
+    "per-module title: page should contain 'Core Library'"
   -- Check navbar
   let litConfigHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "index.html")
   let navbarSection := litConfigHtml.splitOn "module-tree" |>.getD 1 "" |>.splitOn "</nav>" |>.head!
-  unless hasSubstring navbarSection "Core Library" do
-    fail "per-module title: navbar should contain 'Core Library'"
+  assertContains "Core Library" navbarSection
+    "per-module title: navbar should contain 'Core Library'"
 
 /-- Per-module title appears in breadcrumbs without code formatting. -/
 private def testPerModuleTitleBreadcrumbs (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ tomlFile => do
@@ -806,21 +803,21 @@ private def testPerModuleTitleBreadcrumbs (data : TestData) : Test := withTestDi
   let coreHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "Core" / "index.html")
   let breadcrumbSection := coreHtml.splitOn "breadcrumbs" |>.getD 1 "" |>.splitOn "</ol>" |>.head!
   -- Custom title should appear without <code> wrapping
-  unless hasSubstring breadcrumbSection "Core Library" do
-    fail "title breadcrumbs: should display custom title 'Core Library'"
-  if hasSubstring breadcrumbSection "<code>Core Library</code>" then
-    fail "title breadcrumbs: custom title should not be wrapped in <code>"
+  assertContains "Core Library" breadcrumbSection
+    "title breadcrumbs: should display custom title 'Core Library'"
+  assertNotContains "<code>Core Library</code>" breadcrumbSection
+    "title breadcrumbs: custom title should not be wrapped in <code>"
   -- On a child page, the ancestor breadcrumb should show "Core Library" as a link
   let basicHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "Core" / "Basic" / "index.html")
   let childBcSection := basicHtml.splitOn "breadcrumbs" |>.getD 1 "" |>.splitOn "</ol>" |>.head!
-  unless hasSubstring childBcSection "Core Library" do
-    fail "title breadcrumbs: child page should show ancestor custom title 'Core Library'"
+  assertContains "Core Library" childBcSection
+    "title breadcrumbs: child page should show ancestor custom title 'Core Library'"
   -- The ancestor link with custom title should not use <code>
-  if hasSubstring childBcSection "<code>Core Library</code>" then
-    fail "title breadcrumbs: ancestor custom title should not be wrapped in <code>"
+  assertNotContains "<code>Core Library</code>" childBcSection
+    "title breadcrumbs: ancestor custom title should not be wrapped in <code>"
   -- But the "LitConfig" ancestor should still use <code> (no custom title)
-  unless hasSubstring childBcSection "<code>LitConfig</code>" do
-    fail "title breadcrumbs: module name ancestor should be in <code>"
+  assertContains "<code>LitConfig</code>" childBcSection
+    "title breadcrumbs: module name ancestor should be in <code>"
 
 /-- Per-module URL override places the HTML at the custom path and updates navbar links. -/
 private def testPerModuleUrl (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ tomlFile => do
@@ -839,26 +836,26 @@ private def testPerModuleUrl (data : TestData) : Test := withTestDir data fun js
   -- Navbar should link to the custom URL
   let litConfigHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "index.html")
   let navbarSection := litConfigHtml.splitOn "module-tree" |>.getD 1 "" |>.splitOn "</nav>" |>.head!
-  unless hasSubstring navbarSection "core-docs/" do
-    fail "per-module url: navbar should link to 'core-docs/'"
+  assertContains "core-docs/" navbarSection
+    "per-module url: navbar should link to 'core-docs/'"
   -- Base href should reflect custom URL depth (1 segment = "../"), not module name depth
   let coreDocsHtml ← IO.FS.readFile (htmlDir / "core-docs" / "index.html")
-  unless hasSubstring coreDocsHtml "base href=\"../\"" do
-    fail "per-module url: base href should be '../' (depth 1), not '../../../' (depth 3)"
+  assertContains "base href=\"../\"" coreDocsHtml
+    "per-module url: base href should be '../' (depth 1), not '../../../' (depth 3)"
   -- Breadcrumbs should show module name labels (not URL segments)
   let breadcrumbSection := coreDocsHtml.splitOn "breadcrumbs" |>.getD 1 "" |>.splitOn "</ol>" |>.head!
   -- The breadcrumb should display "Core" (module name), not "core-docs" (URL segment)
-  unless hasSubstring breadcrumbSection ">Core<" do
-    fail "per-module url: breadcrumb should display module name 'Core'"
+  assertContains ">Core<" breadcrumbSection
+    "per-module url: breadcrumb should display module name 'Core'"
   -- The ancestor breadcrumb should link to LitConfig/
-  unless hasSubstring breadcrumbSection "href=\"LitConfig/\"" do
-    fail "per-module url: ancestor breadcrumb should link to 'LitConfig/'"
+  assertContains "href=\"LitConfig/\"" breadcrumbSection
+    "per-module url: ancestor breadcrumb should link to 'LitConfig/'"
   -- Landing page should link to custom URL
   let landingHtml ← IO.FS.readFile (htmlDir / "index.html")
-  unless hasSubstring landingHtml "core-docs/" do
-    fail "per-module url: landing page should link to 'core-docs/'"
-  if hasSubstring (landingHtml.splitOn "module-toc" |>.getD 1 "" |>.splitOn "</ul>" |>.head!) "LitConfig/Core/" then
-    fail "per-module url: landing page should not link to 'LitConfig/Core/'"
+  assertContains "core-docs/" landingHtml
+    "per-module url: landing page should link to 'core-docs/'"
+  assertNotContains "LitConfig/Core/" (landingHtml.splitOn "module-toc" |>.getD 1 "" |>.splitOn "</ul>" |>.head!)
+    "per-module url: landing page should not link to 'LitConfig/Core/'"
 
 /-- URL overrides on a parent module propagate to children via relative append. -/
 private def testPerModuleUrlInheritance (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ tomlFile => do
@@ -876,12 +873,12 @@ private def testPerModuleUrlInheritance (data : TestData) : Test := withTestDir 
     fail "url inheritance: HTML should not exist at default path LitConfig/Core/Basic/"
   -- Base href for child should reflect depth 2 (core-docs/Basic)
   let childHtml ← IO.FS.readFile (htmlDir / "core-docs" / "Basic" / "index.html")
-  unless hasSubstring childHtml "base href=\"../../\"" do
-    fail "url inheritance: child base href should be '../../' (depth 2)"
+  assertContains "base href=\"../../\"" childHtml
+    "url inheritance: child base href should be '../../' (depth 2)"
   -- Navbar should link to the child at core-docs/Basic/
   let navbarSection := childHtml.splitOn "module-tree" |>.getD 1 "" |>.splitOn "</nav>" |>.head!
-  unless hasSubstring navbarSection "core-docs/Basic/" do
-    fail "url inheritance: navbar should link to 'core-docs/Basic/'"
+  assertContains "core-docs/Basic/" navbarSection
+    "url inheritance: navbar should link to 'core-docs/Basic/'"
 
 /-- Plan fails when two modules resolve to the same URL. -/
 private def testPlanDuplicateUrl (data : TestData) : Test := IO.FS.withTempDir fun tmpDir => do
@@ -897,8 +894,8 @@ private def testPlanDuplicateUrl (data : TestData) : Test := IO.FS.withTempDir f
   let (exitCode, _, stderr) ← runLiteratePlanCapture data.moduleListFile planFile (some tomlFile)
   if exitCode == 0 then
     fail "plan duplicate url: should have failed with non-zero exit code"
-  unless hasSubstring stderr "same URL" do
-    fail s!"plan duplicate url: stderr should mention 'same URL', got: {stderr}"
+  assertContains "same URL" stderr
+    s!"plan duplicate url: stderr should mention 'same URL', got: {stderr}"
 
 /-- URLs that differ only by a trailing slash are detected as duplicates. -/
 private def testPlanDuplicateUrlTrailingSlash (data : TestData) : Test := IO.FS.withTempDir fun tmpDir => do
@@ -912,8 +909,8 @@ private def testPlanDuplicateUrlTrailingSlash (data : TestData) : Test := IO.FS.
   let (exitCode, _, stderr) ← runLiteratePlanCapture data.moduleListFile planFile (some tomlFile)
   if exitCode == 0 then
     fail "plan duplicate url trailing slash: should have failed with non-zero exit code"
-  unless hasSubstring stderr "same URL" do
-    fail s!"plan duplicate url trailing slash: stderr should mention 'same URL', got: {stderr}"
+  assertContains "same URL" stderr
+    s!"plan duplicate url trailing slash: stderr should mention 'same URL', got: {stderr}"
 
 /-- URLs that differ only in case are detected as duplicates. -/
 private def testPlanDuplicateUrlCase (data : TestData) : Test := IO.FS.withTempDir fun tmpDir => do
@@ -929,42 +926,42 @@ private def testPlanDuplicateUrlCase (data : TestData) : Test := IO.FS.withTempD
   let (exitCode, _, stderr) ← runLiteratePlanCapture data.moduleListFile planFile (some tomlFile)
   if exitCode == 0 then
     fail "plan duplicate url case: should have failed with non-zero exit code"
-  unless hasSubstring stderr "differ only in case" do
-    fail s!"plan duplicate url case: stderr should mention 'differ only in case', got: {stderr}"
+  assertContains "differ only in case" stderr
+    s!"plan duplicate url case: stderr should mention 'differ only in case', got: {stderr}"
 
 /-- CSS contains focus-visible indicators. -/
 private def testAccessibilityFocusVisible (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ _ => do
   runLiterateHtml jsonDir htmlDir
   let css ← IO.FS.readFile (htmlDir / "literate.css")
-  unless hasSubstring css "focus-visible" do
-    fail "accessibility: literate.css does not contain focus-visible rules"
+  assertContains "focus-visible" css
+    "accessibility: literate.css does not contain focus-visible rules"
 
 /-- CSS contains prefers-reduced-motion rules. -/
 private def testAccessibilityReducedMotion (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ _ => do
   runLiterateHtml jsonDir htmlDir
   let css ← IO.FS.readFile (htmlDir / "literate.css")
-  unless hasSubstring css "prefers-reduced-motion" do
-    fail "accessibility: literate.css does not contain prefers-reduced-motion"
+  assertContains "prefers-reduced-motion" css
+    "accessibility: literate.css does not contain prefers-reduced-motion"
 
 /-- Hamburger menu has ARIA attributes. -/
 private def testAccessibilityAria (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ _ => do
   runLiterateHtml jsonDir htmlDir
   let litConfigHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "index.html")
-  unless hasSubstring litConfigHtml "aria-label=\"Menu\"" do
-    fail "accessibility: hamburger input missing aria-label"
-  unless hasSubstring litConfigHtml "aria-label=\"Toggle navigation\"" do
-    fail "accessibility: hamburger label missing aria-label"
+  assertContains "aria-label=\"Menu\"" litConfigHtml
+    "accessibility: hamburger input missing aria-label"
+  assertContains "aria-label=\"Toggle navigation\"" litConfigHtml
+    "accessibility: hamburger label missing aria-label"
 
 /-- LitConfig root module (with headings) gets a page ToC. -/
 private def testPageToc (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ _ => do
   runLiterateHtml jsonDir htmlDir
   let litConfigHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "index.html")
-  unless hasSubstring litConfigHtml "page-toc" do
-    fail "page ToC: LitConfig page should contain page-toc"
-  unless hasSubstring litConfigHtml "Page table of contents" do
-    fail "page ToC: page-toc should have aria-label"
-  unless hasSubstring litConfigHtml "On this page" do
-    fail "page ToC: page-toc should contain 'On this page' title"
+  assertContains "page-toc" litConfigHtml
+    "page ToC: LitConfig page should contain page-toc"
+  assertContains "Page table of contents" litConfigHtml
+    "page ToC: page-toc should have aria-label"
+  assertContains "On this page" litConfigHtml
+    "page ToC: page-toc should contain 'On this page' title"
 
 /-- Page ToC entries for headings in the same modDoc block have distinct anchors. -/
 private def testPageTocDistinctAnchors (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ _ => do
@@ -985,16 +982,16 @@ private def testPageTocDistinctAnchors (data : TestData) : Test := withTestDir d
   for href in hrefs do
     let parts := href.splitOn "#"
     if let _ :: anchor :: _ := parts then
-      unless hasSubstring litConfigHtml s!"id=\"{anchor}\"" do
-        fail s!"page ToC distinct anchors: anchor '{anchor}' not found as an id in the HTML"
+      assertContains s!"id=\"{anchor}\"" litConfigHtml
+        s!"page ToC distinct anchors: anchor '{anchor}' not found as an id in the HTML"
 
 /-- Nested Verso sections produce distinct ToC entries at each level. -/
 private def testPageTocNestedSections (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ _ => do
   runLiterateHtml jsonDir htmlDir
   let coreHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "Core" / "index.html")
   -- Should have a page ToC
-  unless hasSubstring coreHtml "page-toc" do
-    fail "nested ToC: Core page should have a page-toc"
+  assertContains "page-toc" coreHtml
+    "nested ToC: Core page should have a page-toc"
   let tocSection := coreHtml.splitOn "<nav class=\"page-toc\"" |>.getD 1 "" |>.splitOn "</nav>" |>.head!
   let hrefs := tocSection.splitOn "href=\"" |>.drop 1 |>.map fun s => s.splitOn "\"" |>.head!
   -- Should have at least 3 headings (Core Module, Natural Number Utilities, Doubling)
@@ -1008,22 +1005,22 @@ private def testPageTocNestedSections (data : TestData) : Test := withTestDir da
   for href in hrefs do
     let parts := href.splitOn "#"
     if let _ :: anchor :: _ := parts then
-      unless hasSubstring coreHtml s!"id=\"{anchor}\"" do
-        fail s!"nested ToC: anchor '{anchor}' not found as id in HTML"
+      assertContains s!"id=\"{anchor}\"" coreHtml
+        s!"nested ToC: anchor '{anchor}' not found as id in HTML"
 
 /-- NoDocstrings module (no headings) should not get a page ToC. -/
 private def testPageTocAbsent (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ _ => do
   runLiterateHtml jsonDir htmlDir
   let noDocHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "NoDocstrings" / "index.html")
-  if hasSubstring noDocHtml "page-toc" then
-    fail "page ToC absent: NoDocstrings page should not have a page-toc"
+  assertNotContains "page-toc" noDocHtml
+    "page ToC absent: NoDocstrings page should not have a page-toc"
 
 /-- CSS contains dark mode defaults. -/
 private def testCssDarkMode (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ _ => do
   runLiterateHtml jsonDir htmlDir
   let css ← IO.FS.readFile (htmlDir / "literate.css")
-  unless hasSubstring css "prefers-color-scheme: dark" do
-    fail "dark mode: literate.css does not contain dark mode media query"
+  assertContains "prefers-color-scheme: dark" css
+    "dark mode: literate.css does not contain dark mode media query"
 
 /-- Images referenced in module docstrings are copied to the output and their URLs are rewritten. -/
 private def testImageCopying (data : TestData) (projectDir : System.FilePath) : Test := IO.FS.withTempDir fun tmpDir => do
@@ -1045,13 +1042,13 @@ private def testImageCopying (data : TestData) (projectDir : System.FilePath) : 
 
   -- Verify the HTML references the rewritten URL
   let litConfigHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "index.html")
-  unless hasSubstring litConfigHtml "-verso-images/LitConfig--test-diagram.png" do
-    fail "image copying: HTML should reference rewritten image URL '-verso-images/LitConfig--test-diagram.png'"
+  assertContains "-verso-images/LitConfig--test-diagram.png" litConfigHtml
+    "image copying: HTML should reference rewritten image URL '-verso-images/LitConfig--test-diagram.png'"
 
   -- Verify the raw source-relative path does NOT appear as an unprocessed img src
   let srcAttrRaw := "src=\"images/test-diagram.png\""
-  if hasSubstring litConfigHtml srcAttrRaw then
-    fail s!"image copying: HTML should not contain unprocessed '{srcAttrRaw}'"
+  assertNotContains srcAttrRaw litConfigHtml
+    s!"image copying: HTML should not contain unprocessed '{srcAttrRaw}'"
 
 /-- Image paths with '..' are resolved correctly and copied into the flat output directory. -/
 private def testImagePathTraversal : Test := IO.FS.withTempDir fun tmpDir => do
@@ -1089,12 +1086,12 @@ private def testSingleRootNavFlattening (data : TestData) : Test := withTestDir 
   let litConfigHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "index.html")
   let navbarSection := litConfigHtml.splitOn "module-tree" |>.getD 1 "" |>.splitOn "</nav>" |>.head!
   -- Should have a nav-title div for the single root
-  unless hasSubstring navbarSection "nav-title" do
-    fail "single-root nav: navbar should contain 'nav-title' class"
+  assertContains "nav-title" navbarSection
+    "single-root nav: navbar should contain 'nav-title' class"
   -- The top-level children should be direct leaves/details, not nested inside a root <details>
   -- Check that LitConfig appears in a nav-title, not in a <summary>
-  unless hasSubstring navbarSection "<div class=\"nav-title" do
-    fail "single-root nav: root entry should be a nav-title div, not a collapsible details"
+  assertContains "<div class=\"nav-title" navbarSection
+    "single-root nav: root entry should be a nav-title div, not a collapsible details"
 
 /-- `docstrings_as_text = true` renders declaration docstrings as prose (mod-doc class). -/
 private def testDocstringsAsText (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ tomlFile => do
@@ -1103,10 +1100,10 @@ private def testDocstringsAsText (data : TestData) : Test := withTestDir data fu
 
   let litConfigHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "index.html")
   -- "A greeting message" docstring should appear as prose with mod-doc class
-  unless hasSubstring litConfigHtml "A greeting message" do
-    fail "docstrings_as_text: 'A greeting message' should still appear"
-  unless hasSubstring litConfigHtml "mod-doc" do
-    fail "docstrings_as_text: page should contain 'mod-doc' class for declaration docstrings"
+  assertContains "A greeting message" litConfigHtml
+    "docstrings_as_text: 'A greeting message' should still appear"
+  assertContains "mod-doc" litConfigHtml
+    "docstrings_as_text: page should contain 'mod-doc' class for declaration docstrings"
 
 /-- `docstrings_as_text` defaults to false: declaration docstrings render inside code boxes. -/
 private def testDocstringsAsTextDefault (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ _ => do
@@ -1114,8 +1111,8 @@ private def testDocstringsAsTextDefault (data : TestData) : Test := withTestDir 
 
   let litConfigHtml ← IO.FS.readFile (htmlDir / "LitConfig" / "index.html")
   -- "A greeting message" should appear but NOT with mod-doc class on the declaration docstring div
-  unless hasSubstring litConfigHtml "A greeting message" do
-    fail "docstrings_as_text default: 'A greeting message' should appear"
+  assertContains "A greeting message" litConfigHtml
+    "docstrings_as_text default: 'A greeting message' should appear"
   -- The declaration docstring should be in a verso-text or md-text div WITHOUT mod-doc
   -- Check that the docstring text is not in a mod-doc div
   let parts := litConfigHtml.splitOn "A greeting message"
@@ -1132,14 +1129,14 @@ private def testDocstringsAsTextDefault (data : TestData) : Test := withTestDir 
 private def testCssCustomProperties (data : TestData) : Test := withTestDir data fun jsonDir htmlDir _ _ => do
   runLiterateHtml jsonDir htmlDir
   let css ← IO.FS.readFile (htmlDir / "literate.css")
-  unless hasSubstring css "--verso-text-color" do
-    fail "CSS vars: literate.css does not define --verso-text-color"
-  unless hasSubstring css "--verso-background-color" do
-    fail "CSS vars: literate.css does not define --verso-background-color"
-  unless hasSubstring css "--verso-link-color" do
-    fail "CSS vars: literate.css does not define --verso-link-color"
-  unless hasSubstring css "var(--verso-text-color)" do
-    fail "CSS vars: literate.css does not use var(--verso-text-color)"
+  assertContains "--verso-text-color" css
+    "CSS vars: literate.css does not define --verso-text-color"
+  assertContains "--verso-background-color" css
+    "CSS vars: literate.css does not define --verso-background-color"
+  assertContains "--verso-link-color" css
+    "CSS vars: literate.css does not define --verso-link-color"
+  assertContains "var(--verso-text-color)" css
+    "CSS vars: literate.css does not use var(--verso-text-color)"
 
 -- ===== Test runner =====
 
@@ -1268,16 +1265,16 @@ private def testMultiRootNavTree (data : TestData) : Test := withTestDir data fu
   let libAHtml ← IO.FS.readFile (htmlDir / "LibA" / "index.html")
   let navbarSection := libAHtml.splitOn "module-tree" |>.getD 1 "" |>.splitOn "</nav>" |>.head!
   -- Should NOT have nav-title (that's for single-root only)
-  if hasSubstring navbarSection "nav-title" then
-    fail "multi-root nav: navbar should not contain 'nav-title' class"
+  assertNotContains "nav-title" navbarSection
+    "multi-root nav: navbar should not contain 'nav-title' class"
   -- Should have both LibA and LibB as collapsible details
-  unless hasSubstring navbarSection "LibA" do
-    fail "multi-root nav: navbar should contain 'LibA'"
-  unless hasSubstring navbarSection "LibB" do
-    fail "multi-root nav: navbar should contain 'LibB'"
+  assertContains "LibA" navbarSection
+    "multi-root nav: navbar should contain 'LibA'"
+  assertContains "LibB" navbarSection
+    "multi-root nav: navbar should contain 'LibB'"
   -- Should use <details> for top-level entries
-  unless hasSubstring navbarSection "<details" do
-    fail "multi-root nav: navbar should use <details> for top-level entries"
+  assertContains "<details" navbarSection
+    "multi-root nav: navbar should use <details> for top-level entries"
 
 private def multiRootHtmlTests (data : TestData) : List (String × Test) := [
   ("multi-root nav tree", testMultiRootNavTree data)

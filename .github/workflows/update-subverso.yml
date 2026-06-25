@@ -84,7 +84,7 @@ jobs:
             - name: Run tests
               if: steps.check-changes.outputs.changed == 'true'
               run: |
-                  lake test -- --verbose --check-tex
+                  lake test -- --test-options --verbose --check-tex
 
             - name: Create branch and open PR
               if: steps.check-changes.outputs.changed == 'true'

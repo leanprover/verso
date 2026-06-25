@@ -33,10 +33,16 @@ def assertNe {α} [BEq α] [Repr α] (unexpected actual : α)
     failAt loc "values are equal but should differ" (detail? := some s!"both: {repr actual}")
 
 /-- Asserts that the actual string contains the expected substring. -/
-def assertContains (expected actual : String)
+def assertContains (expected actual : String) (message : String := "substring not found")
+    (loc : Location := by exact here%) : TestM Unit := do
+  unless (actual.find? expected).isSome do
+    failAt loc message (detail? := some s!"expected to contain: {expected}\nactual: {actual}")
+
+/-- Asserts that the actual string does not contain the unexpected substring. -/
+def assertNotContains (unexpected actual : String) (message : String := "unexpected substring found")
     (loc : Location := by exact here%) : TestM Unit :=
-  unless (actual.splitOn expected).length > 1 do
-    failAt loc "substring not found" (detail? := some s!"expected to contain: {expected}\nactual: {actual}")
+  unless (actual.find? unexpected).isNone do
+    failAt loc message (detail? := some s!"expected not to contain: {unexpected}\nactual: {actual}")
 
 /-- Asserts that a file exists. -/
 def assertFileExists (path : System.FilePath)

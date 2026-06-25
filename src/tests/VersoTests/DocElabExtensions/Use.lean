@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: Emilio Jesus Gallego Arias
 -/
 import VersoTests.DocElabExtensions.Middle
+import Errata
 
 namespace Verso.Tests.DocElabExtensions
 

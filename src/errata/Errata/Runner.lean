@@ -112,10 +112,9 @@ partial def rawOptions : List String → Except String (List (String × String))
             if value.startsWith "-" then (((name, "") :: ·)) <$> rawOptions rest
             else (((name, value) :: ·)) <$> rawOptions rest'
           | [] => .ok [(name, "")]
-      | [name, value] =>
+      | name :: valueParts =>
         if name.isEmpty then .error s!"unexpected argument: {arg}"
-        else (((name, value) :: ·)) <$> rawOptions rest
-      | _ => .error s!"unexpected argument: {arg}"
+        else (((name, "=".intercalate valueParts) :: ·)) <$> rawOptions rest
     else if arg.startsWith "-" && arg.length > 1 then
       -- Expand bundled short flags: `-xyz` becomes `--x --y --z`.
       let expanded := (arg.drop 1).copy.toList.map (fun c => "--" ++ toString c)

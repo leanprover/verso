@@ -207,12 +207,21 @@ private def errataModuleSelected (specs : List String) (moduleName : Lean.Name) 
     let n := moduleName.toString
     n == s || n.startsWith (s ++ ".")
 
-/-- Split driver arguments into module target specs and runner passthrough arguments. -/
-private def errataSplitArgs (args : List String) : List String × List String :=
-  match args.span (· != "--") with
-  | (before, _ :: after) => (before, after)
-  | (before, []) =>
-    (before.filter (fun a => !a.startsWith "-"), before.filter (fun a => a.startsWith "-"))
+/--
+Splits driver arguments at the `--test-options` marker into module target specs and runner
+passthrough arguments. Module specs precede the marker and may not look like options; everything
+after the marker goes to the runner.
+-/
+private def errataSplitArgs (args : List String) : Except String (List String × List String) :=
+  let (specs, rest) :=
+    match args.span (· != "--test-options") with
+    | (specs, _ :: after) => (specs, after)
+    | (specs, []) => (specs, [])
+  match specs.find? (·.startsWith "-") with
+  | some opt =>
+    .error s!"unexpected option '{opt}' among module specs; pass runner options after \
+      `--test-options` (e.g. `lake test -- --test-options {opt}`)"
+  | none => .ok (specs, rest)
 
 /-- Usage information for `lake test`, shared with `Errata.usage` through one text file. -/
 private def errataUsage : String := include_str "src/errata/Errata/usage.txt"
@@ -238,9 +247,9 @@ private def errataModuleOfPath (srcDir path : System.FilePath) : Option Lean.Nam
   some (".".intercalate comps).toName
 
 /--
-Reports modules that define `@[test]` tests but whose library's globs do not cover them, so the
-tests would be silently undiscovered, and returns them. A module within a library's root that is not
-matched by the library's globs, in a file mentioning `@[test]`, is the signal.
+Reports modules that define tests but whose library's globs do not cover them, so the tests would be
+silently undiscovered, and returns them. A module within a library's root that is not matched by the
+library's globs, in a file that introduces tests, is the signal.
 -/
 private def errataUncoveredTestModules (ws : Lake.Workspace) : IO (Array Lean.Name) := do
   let mut missed : Array Lean.Name := #[]
@@ -253,10 +262,10 @@ private def errataUncoveredTestModules (ws : Lake.Workspace) : IO (Array Lean.Na
       let globbed := lib.config.globs.any (·.matches mod)
       if withinRoot && !globbed && !missed.contains mod then
         let lines := (← IO.FS.readFile path).splitOn "\n"
-        if lines.any (fun line => line.trimAsciiStart.copy.startsWith "@[test]") then
+        if errataSourceHasTests lines then
           missed := missed.push mod
   unless missed.isEmpty do
-    IO.eprintln "error: these modules define @[test] tests but their library's globs do not cover \
+    IO.eprintln "error: these modules define tests but their library's globs do not cover \
       them, so the tests are not discovered. Widen the library's `globs` \
       (e.g. `globs := #[Glob.andSubmodules `Root]`):"
     for mod in missed do
@@ -266,11 +275,17 @@ private def errataUncoveredTestModules (ws : Lake.Workspace) : IO (Array Lean.Na
 @[test_driver]
 script «errata-test» (args) do
   let ws ← getWorkspace
-  let (specs, runnerArgs) := errataSplitArgs args
   -- Answer `--help` before discovering or building anything.
-  if runnerArgs.any (fun a => a == "--help" || a == "-h") then
+  if args.any (fun a => a == "--help" || a == "-h") then
     IO.println errataUsage
     return 0
+  let (specs, runnerArgs) ←
+    match errataSplitArgs args with
+    | .ok result => pure result
+    | .error msg =>
+      IO.eprintln s!"error: {msg}"
+      IO.eprintln errataUsage
+      return 1
   -- The module is the unit of execution; a test-level selector is rejected, not silently broadened.
   for spec in specs do
     if (spec.splitOn "#").length > 1 then

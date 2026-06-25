@@ -7,6 +7,7 @@ module
 
 public import Errata.Result
 public import Lean.Data.Json
+import Std.Data.HashMap
 
 public section
 
@@ -160,12 +161,20 @@ private def caseOf (r : Result) : String :=
 private def countWhere (results : Array Result) (p : Status → Bool) : Nat :=
   results.foldl (fun n r => if p r.status then n + 1 else n) 0
 
+/-- Groups results by their module in a single pass, keeping each module's first-seen order. -/
+private def byModule (results : Array Result) : Array (String × Array Result) := Id.run do
+  let mut order : Array String := #[]
+  let mut groups : Std.HashMap String (Array Result) := {}
+  for r in results do
+    let s := suiteOf r
+    if !groups.contains s then order := order.push s
+    groups := groups.insert s ((groups.getD s #[]).push r)
+  return order.map fun s => (s, groups.getD s #[])
+
 /-- Renders the results as JUnit XML, grouping by the module path. -/
 def junitReport (results : Array Result) : String := Id.run do
-  let suites := results.toList.map suiteOf |>.eraseDups
   let mut out := "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<testsuites>\n"
-  for suite in suites do
-    let cases := results.filter (fun r => suiteOf r == suite)
+  for (suite, cases) in byModule results do
     let pkg := (cases[0]?.map (·.package)).getD ""
     let failures := countWhere cases (fun s => s matches .fail _)
     let errors := countWhere cases (fun s => s matches .error _)
@@ -280,8 +289,7 @@ def markdownReport (results : Array Result) : String := Id.run do
     | _ => pure ()
   out := out ++ "<details><summary>Summary by module</summary>\n\n"
   out := out ++ "| Module | ✅ | ❌ | 💥 | ⏭️ |\n| :-- | --: | --: | --: | --: |\n"
-  for m in results.toList.map suiteOf |>.eraseDups do
-    let cs := results.filter (suiteOf · == m)
+  for (m, cs) in byModule results do
     out := out ++ s!"| {m} | {countWhere cs (· matches .pass)} | {countWhere cs (· matches .fail _)} \
       | {countWhere cs (· matches .error _)} | {countWhere cs (· matches .skip _)} |\n"
   return out ++ "\n</details>\n"
