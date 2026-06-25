@@ -177,4 +177,6 @@ def runMain (entries : Array TestEntry) (args : List String) : IO UInt32 := do
   let unused := opts.options.toList.filterMap fun (k, _) => if used.contains k then none else some k
   unless unused.isEmpty do
     IO.eprintln s!"warning: option(s) provided but never read: {", ".intercalate unused}"
-  return UInt32.ofNat failures
+  -- A process exit status keeps only its low 8 bits, so report a failing run as 1 rather than the
+  -- count, which a multiple of 256 would otherwise wrap to 0.
+  return if failures == 0 then 0 else 1

@@ -2,10 +2,11 @@ Errata test runner
 
 Usage:
   lake test                                         run every test in the package
-  lake test -- MODULE...                            run the tests in the given modules
-  lake test -- MODULE... --test-options OPTION...   pass runner options after the marker
+  lake test -- LIBRARY...                           run the tests in the given libraries
+  lake test -- LIBRARY... --test-options OPTION...  pass runner options after the marker
 
-Runner options go after `--test-options`; tokens before it name modules in Lake target syntax.
+Runner options go after `--test-options`; tokens before it name libraries. A library is a bare
+`Library` in this package or a `package/Library` reaching into a dependency.
 Runner options:
   -v, --verbose        Also report passes (truncating each test's results); repeat (-vv) for all.
       --update-golden  Rewrite golden expected files instead of comparing.
