@@ -159,7 +159,7 @@ b
 :::::::
 
 /--
-error: Didn't match within tolerance of 1 - got: ⏎
+error: Didn't match even with allowDiff := 1 - got: ⏎
   [a
    b
    c]
