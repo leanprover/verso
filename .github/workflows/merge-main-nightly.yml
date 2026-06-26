@@ -66,6 +66,11 @@ jobs:
             - name: Install PDF Dependencies
               uses: ./.github/actions/install-texlive
 
+            # Inkscape is needed by the LaTeX `svg` package, which converts
+            # SVG files emitted by `diagram` code blocks to PDF at build time.
+            - name: Install Inkscape
+              run: sudo apt-get update && sudo apt-get install -y --no-install-recommends inkscape
+
             - name: Generate the manual
               run: |
                   ./generate.sh
