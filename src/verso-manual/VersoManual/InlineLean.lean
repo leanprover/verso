@@ -738,7 +738,8 @@ def leanOutput : CodeBlockExpanderOf LeanOutputConfig
     else
       let mut best : Option (Nat × String × Highlighted.Message) := none
       for msg in msgs do
-        let txt := msg.toString
+        let txt := msg.toString (expandTraces := config.expandTraces)git
+        texts := texts.push (msg.severity, txt)
         let actual :=
           if config.normalizeMetas then
             normalizeMetavars txt
@@ -770,7 +771,7 @@ def leanOutput : CodeBlockExpanderOf LeanOutputConfig
     let hintMsg := if suggs.size > 1 then m!"Replace with one of the actual messages:" else m!"Replace with the actual message:"
     let hint ← hintAt str hintMsg suggs
 
-    throwErrorAt str (m!"Didn't match - got: {indentD (toMessageData <| texts.map (Std.Format.text ·.2))}\nbut expected:{indentD (toMessageData str.getString)}" ++ hint)
+    throwErrorAt str (m!"Didn't match{if config.allowDiff > 0 then s!" within tolerance of {config.allowDiff}" else ""} - got: {indentD (toMessageData <| texts.map (Std.Format.text ·.2))}\nbut expected:{indentD (toMessageData str.getString)}" ++ hint)
 where
   sevStr : MessageSeverity → String
     | .error => "error"
