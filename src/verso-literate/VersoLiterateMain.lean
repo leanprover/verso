@@ -67,9 +67,9 @@ where
     | i => i
 
 instance : ToJson ElabInline where
-  toJson v := s!"{v.name}"
+  toJson v := s!"{v.val.typeName}"
 instance : ToJson ElabBlock where
-  toJson v := s!"{v.name}"
+  toJson v := s!"{v.val.typeName}"
 instance : ToJson Empty where
   toJson := nofun
 
@@ -506,9 +506,9 @@ where
       let xs ← xs.mapM inlineToLit
       let handlers ← getInlineToLiterate
       for h in handlers do
-        if let some v ← h x.name x.val xs then
+        if let some v ← h x.val xs then
           return ← relocateInline v
-      logWarning m!"No inline handler for {x.name} with type {x.val.typeName}; using fallback content"
+      logWarning m!"No inline handler for {x.val.typeName}; using fallback content"
       return .concat xs
 
 
@@ -524,9 +524,9 @@ where
       let xs ← xs.mapM blockToLit
       let handlers ← getBlockToLiterate
       for h in handlers do
-        if let some v ← h x.name x.val xs then
+        if let some v ← h x.val xs then
           return ← relocateBlock v
-      logWarning m!"No block handler for {x.name} with type {x.val.typeName}; using fallback content"
+      logWarning m!"No block handler for {x.val.typeName}; using fallback content"
       return .concat xs
 
   partToLit (p : Lean.Doc.Part ElabInline ElabBlock Empty) : ToLitM (Lean.Doc.Part Ext Ext Empty) :=
