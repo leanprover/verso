@@ -60,10 +60,10 @@ initialize blockToLiterateAttr : TagAttribute ← registerTagAttribute `block_to
 namespace Builtin
 def handleLocal : InlineToLiterate
   | val, content => do
-    let some { name, type, lctx, fvarId } := val.get? Lean.Doc.Data.Local | return none
+    let some { type, lctx, fvarId, .. } := val.get? Lean.Doc.Data.Local | return none
     let (t, _) ← (Lean.Meta.ppExpr type).run {lctx := lctx} {}
-    let s := match content with | #[.code s] => s | _ => name.toString
-    let i := .other (.highlighted <| .token ⟨.var fvarId (toString t) none, s⟩) #[.code s]
+    let #[.code s] := content | throwError "Wrong data (role checks onlyCode)"
+    let i := .other (.highlighted <| .token ⟨.var fvarId (toString t) none, s⟩) content
     return some i
 
 def handleConst : InlineToLiterate
@@ -72,8 +72,8 @@ def handleConst : InlineToLiterate
     let signature ← PrettyPrinter.ppSignature name
     let docs ← findDocString? (← getEnv) name
     let k := .const name (toString signature.fmt) docs false none
-    let s := match content with | #[.code s] => s | _ => name.toString
-    let i := .other (.highlighted <| .token ⟨k, s⟩) #[.code s]
+    let #[.code s] := content | throwError "Wrong data (role checks onlyCode)"
+    let i := .other (.highlighted <| .token ⟨k, s⟩) content
     return some i
 
 def handlePostponed : InlineToLiterate
@@ -123,8 +123,8 @@ def handleSetOption : InlineToLiterate
 def handleOption : InlineToLiterate
   | val, content => do
     let some { name, declName } := val.get? Lean.Doc.Data.Option | return none
-    let str := if let #[.code s] := content then s else toString name
-    return some <| .other (.highlighted <| .token ⟨.option name declName none, str⟩) content
+    let #[.code s] := content | throwError "Wrong data (role checks onlyCode)"
+    return some <| .other (.highlighted <| .token ⟨.option name declName none, s⟩) content
 
 def handleModName : InlineToLiterate
   | val, content => do
@@ -134,21 +134,21 @@ def handleModName : InlineToLiterate
 def handleTactic : InlineToLiterate
   | val, content => do
     let some { name } := val.get? Lean.Doc.Data.Tactic | return none
-    let s := if let #[.code s] := content then s else name.toString
+    let #[.code s] := content | throwError "Wrong data (role checks onlyCode)"
     let docs ← findDocString? (← getEnv) name
     return some <| .other (.highlighted <| .token ⟨.keyword (some name) none docs, s⟩) content
 
 def handleConvTactic : InlineToLiterate
   | val, content => do
     let some { name } := val.get? Lean.Doc.Data.ConvTactic | return none
-    let s := if let #[.code s] := content then s else name.toString
+    let #[.code s] := content | throwError "Wrong data (role checks onlyCode)"
     let docs ← findDocString? (← getEnv) name
     return some <| .other (.highlighted <| .token ⟨.keyword (some name) none docs, s⟩) content
 
 def handleKwAtom : InlineToLiterate
   | val, content => do
     let some { name, .. } := val.get? Lean.Doc.Data.Atom | return none
-    let #[.code s] := content | return none
+    let #[.code s] := content | throwError "Wrong data (role checks onlyCode)"
     let docs ← findDocString? (← getEnv) name
     return some <| .other (.highlighted <| .token ⟨.keyword (some name) none docs, s⟩) content
 
