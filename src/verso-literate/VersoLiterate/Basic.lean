@@ -48,45 +48,39 @@ instance : BEq Ext where
 
 @[expose]
 def InlineToLiterate :=
-  Name → Dynamic → Array (Doc.Inline Ext) → TermElabM (Option (Doc.Inline Ext))
+  Dynamic → Array (Doc.Inline Ext) → TermElabM (Option (Doc.Inline Ext))
 
 @[expose]
 def BlockToLiterate :=
-  Name → Dynamic → Array (Doc.Block Ext Ext) → TermElabM (Option (Doc.Block Ext Ext))
+  Dynamic → Array (Doc.Block Ext Ext) → TermElabM (Option (Doc.Block Ext Ext))
 
 initialize inlineToLiterateAttr : TagAttribute ← registerTagAttribute `inline_to_literate ""
 initialize blockToLiterateAttr : TagAttribute ← registerTagAttribute `block_to_literate ""
 
 namespace Builtin
 def handleLocal : InlineToLiterate
-  | ``Lean.Doc.Data.Local, val, content => do
-    if let some { name, type, lctx, fvarId } := val.get? Lean.Doc.Data.Local then
-      let (t, _) ← (Lean.Meta.ppExpr type).run {lctx := lctx} {}
-      let s := match content with | #[.code s] => s | _ => name.toString
-      let i := .other (.highlighted <| .token ⟨.var fvarId (toString t) none, s⟩) #[.code s]
-      return some i
-    throwError "Wrong data"
-  | _, _, _ => pure none
+  | val, content => do
+    let some { name, type, lctx, fvarId } := val.get? Lean.Doc.Data.Local | return none
+    let (t, _) ← (Lean.Meta.ppExpr type).run {lctx := lctx} {}
+    let s := match content with | #[.code s] => s | _ => name.toString
+    let i := .other (.highlighted <| .token ⟨.var fvarId (toString t) none, s⟩) #[.code s]
+    return some i
 
 def handleConst : InlineToLiterate
-  | ``Lean.Doc.Data.Const, val, content => do
-    if let some { name } := val.get? Lean.Doc.Data.Const then
-      let signature ← PrettyPrinter.ppSignature name
-      let docs ← findDocString? (← getEnv) name
-      let k := .const name (toString signature.fmt) docs false none
-      let s := match content with | #[.code s] => s | _ => name.toString
-      let i := .other (.highlighted <| .token ⟨k, s⟩) #[.code s]
-      return some i
-    throwError "Wrong data"
-  | _, _, _ => pure none
+  | val, content => do
+    let some { name } := val.get? Lean.Doc.Data.Const | return none
+    let signature ← PrettyPrinter.ppSignature name
+    let docs ← findDocString? (← getEnv) name
+    let k := .const name (toString signature.fmt) docs false none
+    let s := match content with | #[.code s] => s | _ => name.toString
+    let i := .other (.highlighted <| .token ⟨k, s⟩) #[.code s]
+    return some i
 
 def handlePostponed : InlineToLiterate
-  | ``Lean.Doc.PostponedCheck, val, content => do
-    if let some { .. } := val.get? Lean.Doc.PostponedCheck then
-      -- TODO postponed checks need a solution here
-      return some <| .concat content
-    throwError "Wrong data"
-  | _, _, _ => pure none
+  | val, content => do
+    let some { .. } := val.get? Lean.Doc.PostponedCheck | return none
+    -- TODO postponed checks need a solution here
+    return some <| .concat content
 
 def highlightDocCode : Lean.Doc.DocCode → Highlighted
   | ⟨code⟩ => Id.run do
@@ -107,108 +101,79 @@ def highlightDocCode : Lean.Doc.DocCode → Highlighted
     return out
 
 def handleAttr : InlineToLiterate
-  | ``Lean.Doc.Data.Attribute, val, content => do
+  | val, content => do
     if let some { .. } := val.get? Lean.Doc.Data.Attribute then
       -- TODO highlight upstream
       return some <| .concat content
-    throwError "Wrong data"
-  | ``Lean.Doc.Data.Attributes, val, content => do
-    if let some { .. } := val.get? Lean.Doc.Data.Attributes then
+    else if let some { .. } := val.get? Lean.Doc.Data.Attributes then
       -- TODO highlight upstream
       return some <| .concat content
-    throwError "Wrong data"
-  | _, _, _ => pure none
+    return none
 
 def handleTerm : InlineToLiterate
-  | ``Lean.Doc.Data.LeanTerm, val, content => do
-    if let some { term, ..} := val.get? Lean.Doc.Data.LeanTerm then
-      return some <| .other (.highlighted <| highlightDocCode term) content
-    throwError "Wrong data"
-  | _, _, _ => pure none
+  | val, content => do
+    let some { term, ..} := val.get? Lean.Doc.Data.LeanTerm | return none
+    return some <| .other (.highlighted <| highlightDocCode term) content
 
 def handleSetOption : InlineToLiterate
-  | ``Lean.Doc.Data.SetOption, val, content => do
-    if let some { term, ..} := val.get? Lean.Doc.Data.SetOption then
-      return some <| .other (.highlighted <| highlightDocCode term) content
-    throwError "Wrong data"
-  | _, _, _ => pure none
+  | val, content => do
+    let some { term, ..} := val.get? Lean.Doc.Data.SetOption | return none
+    return some <| .other (.highlighted <| highlightDocCode term) content
 
 def handleOption : InlineToLiterate
-  | ``Lean.Doc.Data.Option, val, content => do
-    if let some { name, declName } := val.get? Lean.Doc.Data.Option then
-      let str := if let #[.code s] := content then s else toString name
-      return some <| .other (.highlighted <| .token ⟨.option name declName none, str⟩) content
-    throwError "Wrong data"
-  | _, _, _ => pure none
+  | val, content => do
+    let some { name, declName } := val.get? Lean.Doc.Data.Option | return none
+    let str := if let #[.code s] := content then s else toString name
+    return some <| .other (.highlighted <| .token ⟨.option name declName none, str⟩) content
 
 def handleModName : InlineToLiterate
-  | ``Lean.Doc.Data.ModuleName, val, content => do
-    if let some { module } := val.get? Lean.Doc.Data.ModuleName then
-      return some <| .other (.highlighted <| .token ⟨.moduleName module, module.toString⟩) content
-    throwError "Wrong data"
-  | _, _, _ => pure none
+  | val, content => do
+    let some { module } := val.get? Lean.Doc.Data.ModuleName | return none
+    return some <| .other (.highlighted <| .token ⟨.moduleName module, module.toString⟩) content
 
 def handleTactic : InlineToLiterate
-  | ``Lean.Doc.Data.Tactic, val, content => do
-    if let some { name } := val.get? Lean.Doc.Data.Tactic then
-      let s := if let #[.code s] := content then s else name.toString
-      let docs ← findDocString? (← getEnv) name
-      return some <| .other (.highlighted <| .token ⟨.keyword (some name) none docs, s⟩) content
-    throwError "Wrong data"
-  | _, _, _ => pure none
+  | val, content => do
+    let some { name } := val.get? Lean.Doc.Data.Tactic | return none
+    let s := if let #[.code s] := content then s else name.toString
+    let docs ← findDocString? (← getEnv) name
+    return some <| .other (.highlighted <| .token ⟨.keyword (some name) none docs, s⟩) content
 
 def handleConvTactic : InlineToLiterate
-  | ``Lean.Doc.Data.ConvTactic, val, content => do
-    -- The `conv` role currently stores a `Data.Tactic` value in its `Data.ConvTactic` extension,
-    -- so both payload types are accepted here.
-    let name? : Option Name :=
-      if let some { name } := val.get? Lean.Doc.Data.ConvTactic then some name
-      else if let some { name } := val.get? Lean.Doc.Data.Tactic then some name
-      else none
-    if let some name := name? then
-      let s := if let #[.code s] := content then s else name.toString
-      let docs ← findDocString? (← getEnv) name
-      return some <| .other (.highlighted <| .token ⟨.keyword (some name) none docs, s⟩) content
-    throwError "Wrong data"
-  | _, _, _ => pure none
+  | val, content => do
+    let some { name } := val.get? Lean.Doc.Data.ConvTactic | return none
+    let s := if let #[.code s] := content then s else name.toString
+    let docs ← findDocString? (← getEnv) name
+    return some <| .other (.highlighted <| .token ⟨.keyword (some name) none docs, s⟩) content
 
 def handleKwAtom : InlineToLiterate
-  | name, _val, content => do
+  | val, content => do
     -- Data.Atom is mistakenly marked private in Lean. Here's a workaround until we fix that.
     -- Check the name's suffix because private names have a mangled prefix:
-    unless name.toString.endsWith "Lean.Doc.Data.Atom" do return none
+    unless val.typeName.toString.endsWith "Lean.Doc.Data.Atom" do return none
     let some s := (match content with | #[.code s] => some s | _ => none) | return none
     return some <| .other (.highlighted <| .token ⟨.keyword none none none, s⟩) content
 
 def handleSyntax : InlineToLiterate
-  | ``Lean.Doc.Data.Syntax, val, content => do
-    if let some { .. } := val.get? Lean.Doc.Data.Syntax then
-      return some <| .concat content
-    throwError "Wrong data"
-  | _, _, _ => pure none
+  | val, content => do
+    let some { .. } := val.get? Lean.Doc.Data.Syntax | return none
+    return some <| .concat content
 
 def handleSyntaxCat : InlineToLiterate
-  | ``Lean.Doc.Data.SyntaxCat, val, content => do
-    if let some { .. } := val.get? Lean.Doc.Data.SyntaxCat then
-      return some <| .concat content
-    throwError "Wrong data"
-  | _, _, _ => pure none
+  | val, content => do
+    let some { .. } := val.get? Lean.Doc.Data.SyntaxCat | return none
+    return some <| .concat content
 
 def inline := #[handleLocal, handleConst, handlePostponed, handleAttr, handleTerm, handleSetOption, handleOption, handleModName, handleTactic, handleConvTactic, handleKwAtom, handleSyntax, handleSyntaxCat]
 
 def handleLeanBlock : BlockToLiterate
-  | ``Lean.Doc.Data.LeanBlock, val, content => do
-    if let some { commands } := val.get? Lean.Doc.Data.LeanBlock then
-      return some <| .other (.highlighted <| highlightDocCode commands) content
-    throwError "Wrong data"
-  | _, _, _ => pure none
+  | val, content => do
+    let some { commands } := val.get? Lean.Doc.Data.LeanBlock | return none
+    return some <| .other (.highlighted <| highlightDocCode commands) content
 
 def handleLeanTermBlock : BlockToLiterate
-  | ``Lean.Doc.Data.LeanTerm, val, content => do
-    if let some { term, .. } := val.get? Lean.Doc.Data.LeanTerm then
-      return some <| .other (.highlighted <| highlightDocCode term) content
-    throwError "Wrong data"
-  | _, _, _ => pure none
+  | val, content => do
+    let some { term, .. } := val.get? Lean.Doc.Data.LeanTerm | return none
+    return some <| .other (.highlighted <| highlightDocCode term) content
 
 def block := #[handleLeanBlock, handleLeanTermBlock]
 

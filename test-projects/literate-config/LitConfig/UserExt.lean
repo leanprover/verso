@@ -21,9 +21,9 @@ loaded and given precedence over built-in handlers.
 -/
 @[inline_to_literate]
 def customConst : InlineToLiterate
-  | ``Lean.Doc.Data.Const, _val, _content =>
+  | val, _content => do
+    let .some _ := val.get? Lean.Doc.Data.Const | return none
     return some <| .other (.data "USER-CONST-MARKER") #[.text "(looks like you're defining a const)"]
-  | _, _, _ => return none
 
 /--
 Intercepts {name}`Lean.Doc.Data.LeanBlock` docstring extensions and replaces them with a bogus
@@ -32,9 +32,9 @@ loaded and given precedence over built-in handlers.
 -/
 @[block_to_literate]
 def customLeanBlock : BlockToLiterate
-  | ``Lean.Doc.Data.LeanBlock, _val, _content =>
+  | val, _content => do
+    let .some _ := val.get? Lean.Doc.Data.LeanBlock | return none
     return some <| .other (.data "USER-LEANBLOCK-MARKER") #[.blockquote #[.para #[.text "Replacement For A Lean Block"]]]
-  | _, _, _ => return none
 
 /-- Payload type for the unknown-extension fixture role. -/
 structure FallbackPayload where
@@ -50,8 +50,7 @@ The content of the role is ignored.
 @[doc_role]
 def unknownRole (_ : TSyntaxArray `inline) : Lean.Doc.DocM (Lean.Doc.Inline ElabInline) := do
   return .other
-    { name := `LitConfig.UserExt.FallbackPayload,
-      val := .mk (FallbackPayload.mk "no-handler-fallback") }
+    { val := .mk (FallbackPayload.mk "no-handler-fallback") }
     #[.text "THIS IS THE FALLBACK"]
 
 end LitConfig.UserExt
