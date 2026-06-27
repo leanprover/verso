@@ -227,6 +227,9 @@ private def testAllBuiltinDocRoles (data : TestData) : IO Unit := withTestDir da
   unless hasSubstring jsonContent "\"content\":\"lhs\",\"kind\":{\"keyword\":{\"docs\":\"" do
     throw <| IO.userError "Builtins JSON has no docs on the `lhs` keyword token. \
       The conv handler did not attach the syntax kind's docstring."
+  unless hasSubstring jsonContent "{\"content\":\"funext\",\"kind\":{\"keyword\":{\"docs\":\"" do
+    throw <| IO.userError "Builtins JSON has no docs on the `funext` keyword token. \
+      The kw handler did not attach the syntax kind's docstring."
 
 /--
 Checks that user-registered `@[inline_to_literate]` and `@[block_to_literate]` handlers shadow the

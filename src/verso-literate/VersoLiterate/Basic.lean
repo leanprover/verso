@@ -147,11 +147,10 @@ def handleConvTactic : InlineToLiterate
 
 def handleKwAtom : InlineToLiterate
   | val, content => do
-    -- Data.Atom is mistakenly marked private in Lean. Here's a workaround until we fix that.
-    -- Check the name's suffix because private names have a mangled prefix:
-    unless val.typeName.toString.endsWith "Lean.Doc.Data.Atom" do return none
-    let some s := (match content with | #[.code s] => some s | _ => none) | return none
-    return some <| .other (.highlighted <| .token ⟨.keyword none none none, s⟩) content
+    let some { name, .. } := val.get? Lean.Doc.Data.Atom | return none
+    let #[.code s] := content | return none
+    let docs ← findDocString? (← getEnv) name
+    return some <| .other (.highlighted <| .token ⟨.keyword (some name) none docs, s⟩) content
 
 def handleSyntax : InlineToLiterate
   | val, content => do
