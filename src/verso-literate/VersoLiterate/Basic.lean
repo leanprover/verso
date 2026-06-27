@@ -140,17 +140,10 @@ def handleTactic : InlineToLiterate
 
 def handleConvTactic : InlineToLiterate
   | val, content => do
-    -- The `conv` role currently stores a `Data.Tactic` value in its `Data.ConvTactic` extension,
-    -- so both payload types are accepted here.
-    let name? : Option Name :=
-      if let some { name } := val.get? Lean.Doc.Data.ConvTactic then some name
-      else if let some { name } := val.get? Lean.Doc.Data.Tactic then some name
-      else none
-    if let some name := name? then
-      let s := if let #[.code s] := content then s else name.toString
-      let docs ← findDocString? (← getEnv) name
-      return some <| .other (.highlighted <| .token ⟨.keyword (some name) none docs, s⟩) content
-    return none
+    let some { name } := val.get? Lean.Doc.Data.ConvTactic | return none
+    let s := if let #[.code s] := content then s else name.toString
+    let docs ← findDocString? (← getEnv) name
+    return some <| .other (.highlighted <| .token ⟨.keyword (some name) none docs, s⟩) content
 
 def handleKwAtom : InlineToLiterate
   | val, content => do
