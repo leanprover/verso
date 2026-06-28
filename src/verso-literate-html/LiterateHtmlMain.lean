@@ -5,6 +5,7 @@ Author: David Thrane Christiansen
 -/
 import VersoLiterateCode
 import VersoSearch.DomainSearch
+import Verso.Output.Html.KaTeX
 
 open Lean
 
@@ -166,7 +167,7 @@ open Verso Output Html Search in
 Builds the `<head>` contents for a literate page. When `includeCodeAssets` is true,
 includes popper/tippy/highlighting/copy-button assets needed for code hover tooltips.
 -/
-private def mkHeadContents (litConfig : LiterateConfig) (includeCodeAssets : Bool := true) : Html :=
+private def mkHeadContents (litConfig : LiterateConfig) (includeCodeAssets : Bool := true) (includeKatexAssets : Bool := true) : Html :=
   let faviconTag : Html := match litConfig.metadata.favicon with
     | some fav => {{<link rel="icon" href={{(System.FilePath.fileName fav).getD fav}}/>}}
     | none => {{<link rel="icon" href="data:,"/>}}
@@ -179,6 +180,11 @@ private def mkHeadContents (litConfig : LiterateConfig) (includeCodeAssets : Boo
     acc ++ {{<script src={{(⟨js⟩ : System.FilePath).fileName.getD js}} defer="defer"></script>}}
   let hasThemeCss := !litConfig.theme.isEmpty || !litConfig.themeDark.isEmpty
   let themeCssTag : Html := if hasThemeCss then {{<link rel="stylesheet" href="literate-theme.css"/>}} else .empty
+  let katexAssets : Html := if includeKatexAssets then {{
+    <script src="katex/katex.js"></script>
+    <script src="katex/math.js"></script>
+    <link rel="stylesheet" href="katex/katex.css"/>
+  }} else .empty
   let codeAssets : Html := if includeCodeAssets then {{
     <script src="popper.js"></script>
     <script src="tippy.js"></script>
@@ -193,6 +199,7 @@ private def mkHeadContents (litConfig : LiterateConfig) (includeCodeAssets : Boo
   {{
     {{ faviconTag }}
     {{ descTag }}
+    {{ katexAssets }}
     {{ codeAssets }}
     <link rel="stylesheet" href="literate.css"/>
     {{ themeCssTag }}
@@ -367,7 +374,7 @@ def emitDir (outDir : System.FilePath) (dir : Dir)
 
 open Verso Output Html in
 partial def emitLandingPage (outDir : System.FilePath) (dir : Dir) (litConfig : LiterateConfig := {}) : IO Unit := do
-  let headContents := mkHeadContents litConfig (includeCodeAssets := false)
+  let headContents := mkHeadContents litConfig (includeCodeAssets := false) (includeKatexAssets := false)
   let landingTitle := litConfig.metadata.title.getD "Module Index"
   let toc := buildToc dir
   let pageContents : Html := {{
@@ -409,7 +416,7 @@ deferred to `search-page.js`; this file is just the shell and sets `<base href="
 the search infrastructure (loaded via the shared head) resolves correctly.
 -/
 def emitSearchResultsPage (outDir : System.FilePath) (litConfig : LiterateConfig := {}) : IO Unit := do
-  let headContents := mkHeadContents litConfig (includeCodeAssets := false)
+  let headContents := mkHeadContents litConfig (includeCodeAssets := false) (includeKatexAssets := false)
   let siteTitle := litConfig.metadata.title.getD "Module Index"
   let pageContents : Html := {{
     <html>
@@ -481,6 +488,15 @@ def main (args : List String) : IO UInt32 := do
     IO.FS.writeFile (config.outputDir / "tippy-border.css") Verso.Code.Highlighted.WebAssets.tippy.border.css
     IO.FS.writeFile (config.outputDir / "marked.js") Verso.Code.Highlighted.WebAssets.marked
     IO.FS.writeFile (config.outputDir / "literate.css") literate.css
+    -- Copy KaTeX dependencies
+    IO.FS.createDirAll (config.outputDir / "katex")
+    IO.FS.writeFile (config.outputDir / "katex" / "katex.css") katex.css
+    IO.FS.writeFile (config.outputDir / "katex" / "katex.js") katex.js
+    IO.FS.writeFile (config.outputDir / "katex" / "math.js") math.js
+    for (name, contents) in katexFonts do
+      let path := config.outputDir / name
+      path.parent.forM IO.FS.createDirAll
+      IO.FS.writeBinFile path contents
     -- Copy the copy-button JS
     IO.FS.writeFile (config.outputDir / "copy-button.js") copyButtonJs
     emitSearchBox (config.outputDir / "-verso-search") (searchPagePath := some "search/")
