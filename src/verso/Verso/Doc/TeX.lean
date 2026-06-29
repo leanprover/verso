@@ -215,7 +215,10 @@ public partial defmethod Block.toTeX : Block g → TeXT g m TeX
   | .ol _start items => do -- TODO start numbering here
     pure \TeX{\begin{enumerate} \Lean{← items.mapM fun li => do pure \TeX{\item " " \Lean{← li.contents.mapM Block.toTeX} s!"\n"}}\end{enumerate} }
   | .dl items => do
-    pure \TeX{\begin{description} \Lean{← items.mapM fun li => do pure \TeX{\item[\Lean{← li.term.mapM Inline.toTeX}] " " \Lean{← li.desc.mapM Block.toTeX}}} \end{description} }
+    pure \TeX{\begin{description} \Lean{← items.mapM fun li => do
+      -- Protect the item label with curly braces, avoiding an error if it includes a literal `]`
+      let itemLabel : TeX := .seq (#[.raw "{"] ++ (← li.term.mapM Inline.toTeX) ++ #[.raw "}"])
+      pure \TeX{\item[\Lean{itemLabel}] " " \Lean{← li.desc.mapM Block.toTeX}}} \end{description} }
   | .code content => do
     pure \TeX{\begin{verbatim} \Lean{.raw content} \end{verbatim}}
   | .concat items => TeX.seq <$> items.mapM Block.toTeX
