@@ -171,6 +171,25 @@ public def escapeForVerbatim (s : String) (lineBreaks : Bool := false) : String 
     return result
 
 /--
+Escapes a string for use inside `\texttt{...}`, where the ordinary LaTeX special characters keep
+their usual meanings. This is the right escaping for code in fragile positions such as section
+headings and description-list terms, where the `\Verb` command cannot be used.
+-/
+public def escapeForTexttt (s : String) : String :=
+  replaceChars s fun
+    | '\\' => some "\\textbackslash{}"
+    | '{' => some "\\{"
+    | '}' => some "\\}"
+    | '$' => some "\\$"
+    | '&' => some "\\&"
+    | '#' => some "\\#"
+    | '%' => some "\\%"
+    | '_' => some "\\_"
+    | '^' => some "\\textasciicircum{}"
+    | '~' => some "\\textasciitilde{}"
+    | _ => none
+
+/--
 Wraps some TeX (which is already assumed to be appropriately escaped in the appropriate
 verbatim-like environment depending on whether we're in a fragile environment.
 -/
@@ -199,7 +218,11 @@ public partial defmethod Inline.toTeX : Inline g → TeXT g m TeX
     pure \TeX{\emph{\Lean{← content.mapM toTeX}}}
   | .bold content => do
     pure \TeX{\textbf{\Lean{← content.mapM toTeX}}}
-  | .code str => verbatimInline (.raw <| escapeForVerbatim str)
+  | .code str => do
+    if (← texContext).inFragile then
+      pure (.seq #[.raw "\\texttt{", .raw (escapeForTexttt str), .raw "}"])
+    else
+      verbatimInline (.raw <| escapeForVerbatim str)
   | .math .inline str => pure <| .raw s!"${str}$"
   | .math .display str => pure <| .raw s!"\\[{str}\\]"
   | .concat inlines => inlines.mapM toTeX
@@ -215,7 +238,12 @@ public partial defmethod Block.toTeX : Block g → TeXT g m TeX
   | .ol _start items => do -- TODO start numbering here
     pure \TeX{\begin{enumerate} \Lean{← items.mapM fun li => do pure \TeX{\item " " \Lean{← li.contents.mapM Block.toTeX} s!"\n"}}\end{enumerate} }
   | .dl items => do
-    pure \TeX{\begin{description} \Lean{← items.mapM fun li => do pure \TeX{\item[\Lean{← li.term.mapM Inline.toTeX}] " " \Lean{← li.desc.mapM Block.toTeX}}} \end{description} }
+    pure \TeX{\begin{description} \Lean{← items.mapM fun li => do
+      -- The term sits in the optional argument of `\item`, so its content is wrapped in braces to
+      -- keep any `]` from ending the argument early, and rendered as fragile (so code uses
+      -- `\texttt` rather than `\Verb`, which cannot appear in this position).
+      let term : TeX := .seq (#[.raw "{"] ++ (← inFragile <| li.term.mapM Inline.toTeX) ++ #[.raw "}"])
+      pure \TeX{\item[\Lean{term}] " " \Lean{← li.desc.mapM Block.toTeX}}} \end{description} }
   | .code content => do
     pure \TeX{\begin{verbatim} \Lean{.raw content} \end{verbatim}}
   | .concat items => TeX.seq <$> items.mapM Block.toTeX

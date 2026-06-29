@@ -9,7 +9,7 @@ import VersoManual
 open Verso.Genre Manual InlineLean
 
 
-#doc (Manual) "Verso 4.31.0 (unreleased)" =>
+#doc (Manual) "Verso 4.31.0" =>
 %%%
 tag := "release-v4.31.0"
 file := "v4.31.0"
