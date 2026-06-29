@@ -29,6 +29,29 @@ info: Verso.Doc.Part.mk
 
 /- ----- -/
 
+#docs (.none) parenthesizedUrlLink "Parenthesized URL link" :=
+:::::::
+Here is [a link](https://en.wikipedia.org/wiki/Function_(mathematics)).
+:::::::
+/--
+info: Verso.Doc.Part.mk
+  #[Verso.Doc.Inline.text "Parenthesized URL link"]
+  "Parenthesized URL link"
+  none
+  #[Verso.Doc.Block.para
+      #[Verso.Doc.Inline.text "Here is ",
+        Verso.Doc.Inline.link
+          #[(Verso.Doc.Inline.text "a link")]
+          "https://en.wikipedia.org/wiki/Function_(mathematics)",
+        Verso.Doc.Inline.text "."]]
+  #[]
+-/
+#guard_msgs in
+  #eval parenthesizedUrlLink.toPart
+
+
+/- ----- -/
+
 #docs (.none) refLink "Ref link" :=
 :::::::
 Here's [a link][to here]
