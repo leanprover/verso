@@ -167,7 +167,7 @@ open Verso Output Html Search in
 Builds the `<head>` contents for a literate page. When `includeCodeAssets` is true,
 includes popper/tippy/highlighting/copy-button assets needed for code hover tooltips.
 -/
-private def mkHeadContents (litConfig : LiterateConfig) (includeCodeAssets : Bool := true) (includeKatexAssets : Bool := true) : Html :=
+private def mkHeadContents (litConfig : LiterateConfig) (includeCodeAssets : Bool := true) (includeKaTeXAssets : Bool := true) : Html :=
   let faviconTag : Html := match litConfig.metadata.favicon with
     | some fav => {{<link rel="icon" href={{(System.FilePath.fileName fav).getD fav}}/>}}
     | none => {{<link rel="icon" href="data:,"/>}}
@@ -180,7 +180,7 @@ private def mkHeadContents (litConfig : LiterateConfig) (includeCodeAssets : Boo
     acc ++ {{<script src={{(⟨js⟩ : System.FilePath).fileName.getD js}} defer="defer"></script>}}
   let hasThemeCss := !litConfig.theme.isEmpty || !litConfig.themeDark.isEmpty
   let themeCssTag : Html := if hasThemeCss then {{<link rel="stylesheet" href="literate-theme.css"/>}} else .empty
-  let katexAssets : Html := if includeKatexAssets then {{
+  let katexAssets : Html := if includeKaTeXAssets then {{
     <script src="katex/katex.js"></script>
     <script src="katex/math.js"></script>
     <link rel="stylesheet" href="katex/katex.css"/>
@@ -374,7 +374,7 @@ def emitDir (outDir : System.FilePath) (dir : Dir)
 
 open Verso Output Html in
 partial def emitLandingPage (outDir : System.FilePath) (dir : Dir) (litConfig : LiterateConfig := {}) : IO Unit := do
-  let headContents := mkHeadContents litConfig (includeCodeAssets := false) (includeKatexAssets := false)
+  let headContents := mkHeadContents litConfig (includeCodeAssets := false) (includeKaTeXAssets := false)
   let landingTitle := litConfig.metadata.title.getD "Module Index"
   let toc := buildToc dir
   let pageContents : Html := {{
@@ -416,7 +416,7 @@ deferred to `search-page.js`; this file is just the shell and sets `<base href="
 the search infrastructure (loaded via the shared head) resolves correctly.
 -/
 def emitSearchResultsPage (outDir : System.FilePath) (litConfig : LiterateConfig := {}) : IO Unit := do
-  let headContents := mkHeadContents litConfig (includeCodeAssets := false) (includeKatexAssets := false)
+  let headContents := mkHeadContents litConfig (includeCodeAssets := false) (includeKaTeXAssets := false)
   let siteTitle := litConfig.metadata.title.getD "Module Index"
   let pageContents : Html := {{
     <html>
