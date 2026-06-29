@@ -516,6 +516,35 @@ public def page
   }}
 
 
+public def standalonePage (contents : Html) (highlightingJson : Lean.Json)
+  (extraJsFiles : Array (String × Bool) := #[])
+  (extraStylesheets : List String := []) :=
+  let defer := #[("defer", "defer")]
+  {{
+    <html>
+      <head>
+        <link rel="icon" href="data:," />
+        <meta charset="utf-8"/>
+        <meta name="viewport" content="height=device-height, width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1"/>
+        <title>{{"Verso Document"}}</title>
+        <link rel="stylesheet" href="/verso/view/book.css" />
+        <link rel="stylesheet" href="/verso/view/verso-vars.css" />
+        <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js" integrity="sha384-zbcZAIxlvJtNE3Dp5nxLXdXtXyxwOdnILY1TDPVmKFhl4r4nSUG1r8bcFXGVa4Te" crossorigin="anonymous"></script>
+        {{extraJsFiles.map fun f => ({{<script src=s!"{f.1}" {{if f.2 then defer else #[]}}></script>}})}}
+        {{extraStylesheets.map (fun url => {{<link rel="stylesheet" href={{url}}/> }})}}
+        <script>{{Html.text false <| Code.highlightingJs (highlightJsonPromise := "Promise.resolve(" ++ highlightingJson.compress ++ ")")}}</script>
+        <style>{{Html.text false Code.highlightingStyle}}</style>
+      </head>
+      <body>
+        <main>
+          <div class="content-wrapper titlepage">
+            {{contents}}
+          </div>
+        </main>
+      </body>
+    </html>
+  }}
+
 
 public def relativize (path : Path) (html : Html) : Html :=
   html.visitM (m := ReaderT Path Id) (tag := rwTag) |>.run path

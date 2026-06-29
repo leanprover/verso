@@ -1045,3 +1045,96 @@ where
       emit cfg text traverseState
       for step in extraSteps do
         step .single cfg.toConfig traverseState text
+
+
+
+
+section HtmlRPC
+/-!
+What we *are* doing: doc finalizer elaborates and stores HTML string in
+environment extension, RPC retrieves string from environment extension.
+
+What we *should be* doing:
+ - Verso is proactively storing a representation of the document in an
+   environment extension
+ - The RPC is looking up that representation of the document, incurring the
+   cost of elaboration and translation to an HTML string, and returning that
+-/
+
+open Lean
+
+/-! The environment extension in question -/
+
+inductive VersoDocumentData where
+  | success : String → VersoDocumentData
+  | errors : Array String → VersoDocumentData
+  | noDoc : VersoDocumentData
+deriving ToJson, FromJson
+
+initialize versoDocumentExt : EnvExtension (Option VersoDocumentData) ←
+  registerEnvExtension (pure .none)
+
+/-! Alternative route to HTML output -/
+
+def shortcutToHtml (extensionImpls : ExtensionImpls) (part : Lean.Doc.Part Genre.Manual.Inline Genre.Manual.Block Genre.Manual.PartMetadata) : IO VersoDocumentData := do
+  let (logs, result) ← runWithLogs do
+    let (part, traverseState) ← traverse part { htmlDepth := 0 }
+    let contentGenerator : StateT (State Html) (ReaderT AllRemotes (ReaderT ExtensionImpls (BuildLogT IO))) Html := do
+      Manual.toHtml {} {} traverseState (traverseState.definitionIds {}) {} {} part
+    let (html, htmlState) ← contentGenerator |>.run .empty |>.run {}
+
+    let featureJsFiles :=
+      traverseState.features.toArray.flatMap fun f =>
+        f.jsFilePaths.map fun (name, defer) => ("/verso/view/-verso-data/" ++ name, defer)
+    let extraJsFiles :=
+      sortJs <|
+        traverseState.extraJsFiles.toArray.map (false, ·.toStaticJsFile)
+    let extraJsFiles := featureJsFiles ++ extraJsFiles.map fun
+      | (true, f) => (f.filename, f.defer)
+      | (false, f) => ("/verso/view/-verso-data/" ++ f.filename, f.defer)
+    let cssFiles :=
+      traverseState.extraCssFiles.toArray.map (·.filename) ++
+      traverseState.features.toArray.flatMap (fun f => f.cssFilePaths)
+
+    let page := Html.standalonePage html htmlState.dedup.docJson
+      (extraJsFiles := extraJsFiles)
+      (extraStylesheets := cssFiles.toList.map ("/verso/view/-verso-data/" ++ ·))
+    return Html.doctype ++ page.asString
+  if logs.size > 0 then
+    return .errors (logs.map (·.format))
+  return .success result
+where
+  runWithLogs {a} (act : ReaderT ExtensionImpls (BuildLogT IO) a) : IO (Array LogMessage × a) := do
+    let logger ← Logger.new
+    let result ← ReaderT.run act extensionImpls |> (ReaderT.run · logger)
+    return (← logger.errors, result)
+
+/-! When the document is finished parsing, generate HTML and put it in the extension -/
+
+open Elab.Command in
+def putDocInContext (doc : VersoDocumentData) : CommandElabM Unit := do
+  modifyEnv (versoDocumentExt.setState · (.some doc))
+
+section RPC
+open Elab.Command Server
+
+@[doc_finalize]
+unsafe def liveDocFinalizer : CommandElabM Unit := do
+  let name := docName (← getEnv).mainModule
+  let versoDoc ← liftTermElabM <| evalConst (VersoDoc Manual) name
+  let htmlDoc ← shortcutToHtml (by exact extension_impls%) (versoDoc.toPart)
+  putDocInContext htmlDoc
+
+@[server_rpc_method]
+def _root_.Verso.getLiveDocument (_ : Unit) : RequestM (RequestTask VersoDocumentData) := do
+  let doc ← RequestM.readDoc
+  let endPos := doc.meta.text.source.rawEndPos
+  RequestM.withWaitFindSnap doc (·.endPos >= endPos) (notFoundX := pure (.errors #["Internal invariant violated: notFoundX"]))
+    fun snap =>
+      match versoDocumentExt.getState snap.env with
+      | .none => return .noDoc
+      | .some s =>
+        return s
+
+end RPC
+end HtmlRPC
