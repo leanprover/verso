@@ -48,3 +48,8 @@ structure Context where
   log : IO.Ref (Array Result)
   /-- The option names read during the run, shared across all tests, for reporting unused options. -/
   usedOptions : IO.Ref (HashSet String)
+  /--
+  Receives each captured output fragment as it is written, in order. The default discards them; a
+  live runner sets it to stream output as the test produces it.
+  -/
+  writeOutput : Output → IO Unit := fun _ => pure ()

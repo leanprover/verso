@@ -129,10 +129,21 @@ input_file errataUsageFile where
   text := true
   path := "src/errata/Errata/usage.txt"
 
+input_file errataRunTestWidgetJs where
+  text := true
+  path := "src/errata/Errata/widget/run_test_widget.js"
+
 lean_lib Errata where
   srcDir := "src/errata"
   roots := #[`Errata]
-  needs := #[errataUsageFile]
+  needs := #[errataUsageFile, errataRunTestWidgetJs]
+
+-- Runs one test in a fresh process so the widget can stream its output and kill it on cancel.
+@[default_target]
+lean_exe «errata-run-one» where
+  srcDir := "src/errata"
+  root := `ErrataRunOne
+  supportInterpreter := true
 
 -- Tests that exercise Errata using Errata itself.
 lean_lib ErrataTests where

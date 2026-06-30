@@ -15,6 +15,8 @@ public import Errata.Process
 public import Errata.Golden
 public import Errata.Report
 public import Errata.Runner
+public import Errata.NameJson
+public import Errata.RunOne
 public import Errata.Discovery
 public import Errata.CompileTime
 public import Errata.Property

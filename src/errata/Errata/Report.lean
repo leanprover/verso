@@ -18,7 +18,7 @@ set_option doc.verso true
 
 namespace Errata
 
-/-- The number of failed or errored results. -/
+/-- The number of results that did not pass. -/
 def failureCount (results : Array Result) : Nat :=
   results.foldl (fun n r => if r.status.isSuccess then n else n + 1) 0
 
@@ -48,25 +48,25 @@ private def printResult (r : Result) : IO Unit := do
 private structure Suppressed where
   passed : Nat := 0
   failed : Nat := 0
-  errored : Nat := 0
+  errors : Nat := 0
   skipped : Nat := 0
 
 /-- Counts one more suppressed result. -/
 private def Suppressed.add (s : Suppressed) : Status → Suppressed
   | .pass => { s with passed := s.passed + 1 }
   | .fail _ => { s with failed := s.failed + 1 }
-  | .error _ => { s with errored := s.errored + 1 }
+  | .error _ => { s with errors := s.errors + 1 }
   | .skip _ => { s with skipped := s.skipped + 1 }
 
 /-- The number of suppressed results. -/
 private def Suppressed.total (s : Suppressed) : Nat :=
-  s.passed + s.failed + s.errored + s.skipped
+  s.passed + s.failed + s.errors + s.skipped
 
 /-- Prints the truncation summary for a test whose results were capped, if any were suppressed. -/
 private def printSuppressed (s : Suppressed) : IO Unit := do
   if s.total > 0 then
     let parts := #[s!"{s.passed} more passed", s!"{s.failed} more failed"]
-      ++ (if s.errored > 0 then #[s!"{s.errored} more errored"] else #[])
+      ++ (if s.errors > 0 then #[s!"{s.errors} more errors"] else #[])
       ++ (if s.skipped > 0 then #[s!"{s.skipped} more skipped"] else #[])
     IO.println s!"    (... and {", ".intercalate parts.toList})"
 
@@ -79,7 +79,7 @@ def humanReport (verbosity : Verbosity) (results : Array Result) : IO Nat := do
   let cap := 50
   let mut passed := 0
   let mut failed := 0
-  let mut errored := 0
+  let mut errors := 0
   let mut skipped := 0
   let mut curKey : Option (String × String) := none
   let mut shown := 0
@@ -88,7 +88,7 @@ def humanReport (verbosity : Verbosity) (results : Array Result) : IO Nat := do
     match r.status with
     | .pass => passed := passed + 1
     | .fail _ => failed := failed + 1
-    | .error _ => errored := errored + 1
+    | .error _ => errors := errors + 1
     | .skip _ => skipped := skipped + 1
     -- Results of one test are contiguous; truncation is per test (its data-driven sub-results).
     let key := (r.moduleTarget, r.test)
@@ -108,8 +108,8 @@ def humanReport (verbosity : Verbosity) (results : Array Result) : IO Nat := do
         printResult r
         shown := shown + 1
   printSuppressed more
-  IO.println s!"{passed} passed, {failed} failed, {errored} errored, {skipped} skipped"
-  return failed + errored
+  IO.println s!"{passed} passed, {failed} failed, {errors} errors, {skipped} skipped"
+  return failed + errors
 
 private def xmlEscape (s : String) : String :=
   s.replace "&" "&amp;" |>.replace "<" "&lt;" |>.replace ">" "&gt;"
@@ -267,12 +267,12 @@ open collapsible block with its location and detail, and a per-module table in a
 def markdownReport (results : Array Result) : String := Id.run do
   let passed := countWhere results (· matches .pass)
   let failed := countWhere results (· matches .fail _)
-  let errored := countWhere results (· matches .error _)
+  let errors := countWhere results (· matches .error _)
   let skipped := countWhere results (· matches .skip _)
-  let icon := if failed + errored == 0 then "✅" else "❌"
+  let icon := if failed + errors == 0 then "✅" else "❌"
   let mut out := s!"## {icon} Errata test results\n\n"
   out := out ++
-    s!"**{passed}** passed · **{failed}** failed · **{errored}** errored · **{skipped}** skipped\n\n"
+    s!"**{passed}** passed · **{failed}** failed · **{errors}** errors · **{skipped}** skipped\n\n"
   for r in results do
     let render (mark message : String) (detail? : Option String) : String := Id.run do
       let mut s := s!"<details open><summary>{mark} <code>{xmlEscape r.moduleTarget}</code> \

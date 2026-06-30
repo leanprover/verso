@@ -9,6 +9,8 @@ public import Errata.IsTest
 public import Errata.Runner
 public import Lean
 public meta import Lean
+public meta import Errata.NameJson
+public meta import Errata.Widget
 
 open Lean Meta Elab Term
 
@@ -63,6 +65,70 @@ meta def recordTest (decl : Name) : AttrM Unit := do
   (checkIsTest decl).run'
   modifyEnv (testExt.addEntry · { name := decl, file := ← getFileName })
 
+/-- A synthetic syntax carrying the given source range, used to position the widget. -/
+meta def rangeSyntax [Monad m] [MonadFileMap m]
+    (startPos stopPos : String.Pos.Raw) : m Syntax := do
+  let str := (← getFileMap).source
+  let leading : Substring.Raw := { str, startPos, stopPos := startPos }
+  let trailing : Substring.Raw := { str, startPos := stopPos, stopPos }
+  return Syntax.atom (.original leading startPos trailing stopPos) ""
+
+/-- The text of line {lean}`i`, trimmed of surrounding whitespace. -/
+private meta def lineText (lines : Array String) (i : Nat) : String :=
+  ((lines[i]?).getD "").trimAscii.copy
+
+/-- The first non-blank line at or above {lean}`i`, or {lean}`none` if all are blank up to the top. -/
+private meta partial def firstNonBlankUp (lines : Array String) (i : Nat) : Option Nat :=
+  if (lineText lines i).isEmpty then
+    if i == 0 then none else firstNonBlankUp lines (i - 1)
+  else some i
+
+/-- Scanning up from {lean}`i`, the line that opens a doc comment, stopping at a non-comment line. -/
+private meta partial def docOpenLine (lines : Array String) (i : Nat) : Option Nat :=
+  if (lineText lines i).startsWith "/--" then some i
+  else if (lineText lines i).startsWith "/-" then none
+  else if i == 0 then none
+  else docOpenLine lines (i - 1)
+
+/--
+The 0-based start line of a doc comment immediately above {lean}`markerLineIdx`, if any. To avoid
+mistaking an unrelated trailing comment for one, the comment must be a single-line doc comment or
+have its closing delimiter on its own line opened by a doc-comment line.
+-/
+private meta def docStartLine? (lines : Array String) (markerLineIdx : Nat) : Option Nat := do
+  guard (markerLineIdx > 0)
+  let endLine ← firstNonBlankUp lines (markerLineIdx - 1)
+  let t := lineText lines endLine
+  if t.startsWith "/--" && t.endsWith "-/" then return endLine
+  guard (t == "-/" && endLine > 0)
+  docOpenLine lines (endLine - 1)
+
+/--
+The source range to show the test's widget over: the whole declaration. When the attribute is applied
+separately (as in {lit}`attribute [test] foo`), the declaration's range is already recorded. When it
+is applied inline (as in {lit}`@[test] def foo`), that range is not yet available, so the command is
+re-parsed from the start of the marker's line to recover it. Falls back to the marker itself.
+-/
+meta def widgetRangeSyntax (decl : Name) (attrStx : Syntax) : AttrM Syntax := do
+  let fileMap ← getFileMap
+  if let some ranges ← findDeclarationRanges? decl then
+    let stx ← rangeSyntax (fileMap.ofPosition ranges.range.pos) (fileMap.ofPosition ranges.range.endPos)
+    return stx
+  let some attrPos := attrStx.getPos? | return attrStx
+  let lineStart := fileMap.ofPosition ⟨(fileMap.toPosition attrPos).line, 0⟩
+  let inputCtx := Parser.mkInputContext fileMap.source (← getFileName)
+  let pmctx : Parser.ParserModuleContext := { env := ← getEnv, options := ← getOptions }
+  let (cmdStx, _, _) := Parser.parseCommand inputCtx pmctx { pos := lineStart } {}
+  match cmdStx.getRange? with
+  | some range =>
+    -- Extend the span up over a doc comment immediately above the marker, when there is one.
+    let lines := (fileMap.source.splitOn "\n").toArray
+    let startPos := match docStartLine? lines ((fileMap.toPosition attrPos).line - 1) with
+      | some docIdx => fileMap.ofPosition ⟨docIdx + 1, 0⟩
+      | none => range.start
+    rangeSyntax startPos range.stop
+  | none => return attrStx
+
 /-- Marks a definition as a test, discovered and run by the Errata test runner. -/
 meta initialize
   registerBuiltinAttribute {
@@ -74,6 +140,22 @@ meta initialize
       Attribute.Builtin.ensureNoArgs stx
       unless kind == AttributeKind.global do throwAttrMustBeGlobal `test kind
       recordTest decl
+      -- Show the widget when the cursor is anywhere on the declaration, not just on the marker.
+      let widgetStx ← widgetRangeSyntax decl stx
+      -- A hash of the test's source, so a run is invalidated when the test is edited.
+      let source := (← getFileMap).source
+      let version := match widgetStx.getRange? with
+        | some range =>
+          let sub : Substring.Raw := { str := source, startPos := range.start, stopPos := range.stop }
+          toString sub.toString.hash
+        | none => ""
+      let props := pure <| json% {
+        decl: $(Errata.nameToJson decl),
+        module: $(toString (← getMainModule)),
+        name: $(toString (privateToUserName decl)),
+        version: $version
+      }
+      Lean.Widget.savePanelWidgetInfo Errata.Widget.runTestWidget.javascriptHash.val props widgetStx
   }
 
 /-- The test's name below its module: the declaration's components past the module prefix, dotted. -/

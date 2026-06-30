@@ -48,6 +48,15 @@ def fail (message : String) (detail? : Option String := none)
   failAt loc message detail?
 
 /--
+{lit}`failure` fails the test at the context's location, and {lit}`<|>` recovers from an assertion
+failure by running the alternative. An escaping {name}`IO.Error` still propagates, so {lit}`<|>` does
+not mask a broken setup.
+-/
+instance : Alternative TestM where
+  failure := failHere "failure"
+  orElse x y := tryCatch x fun _ => y ()
+
+/--
 Runs an action with the current failure location set to a call site, which defaults to the caller.
 A user-defined assertion helper can wrap its checks in this so their failures report at the helper's
 call site rather than inside the helper.
@@ -84,7 +93,7 @@ def Context.pass (ctx : Context) (durationMs : Nat := 0) : Result :=
 def Context.fail (ctx : Context) (failure : TestFailure) (durationMs : Nat := 0) : Result :=
   ctx.mkResult (.fail failure) durationMs
 
-/-- An errored result for the current scope. -/
+/-- A result for the current scope that raised an error. -/
 def Context.error (ctx : Context) (message : String) (durationMs : Nat := 0) : Result :=
   ctx.mkResult (.error message) durationMs
 
@@ -97,25 +106,27 @@ def skip (reason : String) : TestM Unit := do
   let ctx ← read
   ctx.log.modify (·.push (ctx.skip reason))
 
-/-- A stream that appends each write to a log, tagged by the stream it came from. -/
-private def captureStream (log : IO.Ref (Array Output)) (mk : String → Output) : IO.FS.Stream where
+/-- A stream that hands each write to a destination as a fragment tagged by the stream it came from. -/
+private def captureStream (emit : Output → IO Unit) (mk : String → Output) : IO.FS.Stream where
   flush := pure ()
   read _ := pure .empty
-  write bytes := log.modify (·.push (mk (String.fromUTF8! bytes)))
+  write bytes := emit (mk (String.fromUTF8! bytes))
   getLine := pure ""
-  putStr s := log.modify (·.push (mk s))
+  putStr s := emit (mk s)
   isTty := pure false
 
 /--
 Runs a test action with the given context, capturing its outcome as data rather than letting it
 propagate. The action's stdout and stderr are recorded, in order and tagged by stream, and returned
-alongside the outcome, so a test's output is shown only when it fails.
+alongside the outcome. Each fragment is also handed to the context's output destination as it is
+written, so a live runner can stream output while the test runs.
 -/
 def runCapturing (ctx : Context) (act : TestM Unit) :
     IO (Except IO.Error (Except TestFailure Unit) × OutputLog) := do
   let log ← IO.mkRef (#[] : Array Output)
-  let outcome ← IO.withStdout (captureStream log .stdout) <|
-    IO.withStderr (captureStream log .stderr) <| ((act ctx).run).toBaseIO
+  let emit (o : Output) : IO Unit := do log.modify (·.push o); ctx.writeOutput o
+  let outcome ← IO.withStdout (captureStream emit .stdout) <|
+    IO.withStderr (captureStream emit .stderr) <| ((act ctx).run).toBaseIO
   return (outcome, { log := ← log.get })
 
 /--
@@ -125,7 +136,8 @@ action wrote.
 -/
 def captureOutput (act : TestM Unit) : TestM OutputLog := do
   let log ← IO.mkRef (#[] : Array Output)
-  IO.withStdout (captureStream log .stdout) <| IO.withStderr (captureStream log .stderr) act
+  let emit (o : Output) : IO Unit := log.modify (·.push o)
+  IO.withStdout (captureStream emit .stdout) <| IO.withStderr (captureStream emit .stderr) act
   return { log := ← log.get }
 
 /--
@@ -133,7 +145,7 @@ Runs a named result within the current test.
 
 Its path extends the current path, and its failure is isolated from sibling results. If the action
 records no nested results and completes, it contributes one passing result; if it throws, it
-contributes one failed or errored result.
+contributes one failed result or one that raised an error.
 -/
 def result (name : String) (act : TestM Unit) : TestM Unit :=
   withReader (fun c => { c with resultPath := c.resultPath.push name }) do
