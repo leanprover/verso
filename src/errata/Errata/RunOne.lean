@@ -30,7 +30,7 @@ def OutputChunk.ofOutput : Output → OutputChunk
   | .stderr s => { stream := "stderr", text := s }
 
 /--
-The outcome of running a single test, in a form the infoview widget renders. The status is one of
+The outcome of running a single test, in a form the InfoView widget renders. The status is one of
 {lit}`"passed"`, {lit}`"failed"`, {lit}`"error"`, or {lit}`"skipped"`.
 -/
 structure RunOutcome where
@@ -44,6 +44,8 @@ structure RunOutcome where
   detail? : Option String := none
   /-- The captured output, in order, with each chunk tagged by the stream it was written to. -/
   output : Array OutputChunk := #[]
+  /-- The test's docstring, rendered as Markdown, when it has one. -/
+  description? : Option String := none
 deriving Lean.FromJson, Lean.ToJson, Repr, Inhabited
 
 /-- The status name a single result contributes. -/
@@ -107,10 +109,12 @@ def runValue {α} [IsTest α] (location : Location) (value : α)
   let dur := (← IO.monoMsNow) - start
   let logged ← log.get
   let results :=
-    match outcome with
-    | .error e => logged.push { cfg.error (toString e) dur with output }
-    | .ok (.error f) => logged.push { cfg.fail f dur with output }
-    | .ok (.ok ()) => if logged.isEmpty then #[{ cfg.pass dur with output }] else logged
+    match cfg.resultOfOutcome outcome output dur (!logged.isEmpty) with
+    | some r => logged.push r
+    | none =>
+      -- A passing test with named results: the results stand for it, but keep the test's own
+      -- top-level output (written outside any result block) so the widget still shows it.
+      if output.log.isEmpty then logged else logged.push { cfg.pass 0 with output }
   return summarizeResults results
 
 /-- Runs one testable value with a default failure location, for callers without a source range. -/

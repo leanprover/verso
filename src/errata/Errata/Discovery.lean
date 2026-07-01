@@ -46,7 +46,9 @@ structure TestDecl where
   name : Name
   /-- The source file that defines the test. -/
   file : String
-  deriving Inhabited
+  /-- The test's docstring, rendered as Markdown, captured when the attribute is applied. -/
+  docstring? : Option String := none
+deriving Inhabited
 
 /--
 The tests recorded by {lit}`@[test]`, per module. The attribute is an elaboration-time feature:
@@ -60,10 +62,13 @@ meta initialize testExt : SimplePersistentEnvExtension TestDecl (Array TestDecl)
     addImportedFn := fun es => es.foldl Array.append #[]
   }
 
-/-- Records a declaration as a test, capturing the source file that defines it. -/
+/-- Records a declaration as a test, capturing the source file that defines it and its docstring.
+The docstring is read here, while it is still in the live environment, since a downstream build does
+not load the imported docstrings. -/
 meta def recordTest (decl : Name) : AttrM Unit := do
   (checkIsTest decl).run'
-  modifyEnv (testExt.addEntry · { name := decl, file := ← getFileName })
+  let docstring? ← findDocString? (← getEnv) decl
+  modifyEnv (testExt.addEntry · { name := decl, file := ← getFileName, docstring? })
 
 /-- A synthetic syntax carrying the given source range, used to position the widget. -/
 meta def rangeSyntax [Monad m] [MonadFileMap m]
@@ -104,10 +109,10 @@ private meta def docStartLine? (lines : Array String) (markerLineIdx : Nat) : Op
   docOpenLine lines (endLine - 1)
 
 /--
-The source range to show the test's widget over: the whole declaration. When the attribute is applied
-separately (as in {lit}`attribute [test] foo`), the declaration's range is already recorded. When it
-is applied inline (as in {lit}`@[test] def foo`), that range is not yet available, so the command is
-re-parsed from the start of the marker's line to recover it. Falls back to the marker itself.
+The source range to show the test's widget over: the whole declaration, including a doc comment above
+it. The recorded declaration range is used when available; otherwise the command is re-parsed from the
+start of the marker's line, extending up over an immediately preceding doc comment. Falls back to the
+marker itself.
 -/
 meta def widgetRangeSyntax (decl : Name) (attrStx : Syntax) : AttrM Syntax := do
   let fileMap ← getFileMap
@@ -135,7 +140,8 @@ meta initialize
     ref := `Errata.test
     name := `test
     descr := "Marks a definition as a test, discovered and run by the Errata test runner."
-    applicationTime := .afterTypeChecking
+    -- Applied after compilation so the declaration's docstring is in the environment to capture.
+    applicationTime := .afterCompilation
     add := fun decl stx kind => do
       Attribute.Builtin.ensureNoArgs stx
       unless kind == AttributeKind.global do throwAttrMustBeGlobal `test kind
@@ -190,10 +196,14 @@ meta def elabGetAllTests : TermElab := fun stx expectedType? => do
       let range ← findDeclarationRanges? test.name
       let pos := (range.map (·.range.pos)).getD ⟨0, 0⟩
       let endPos := (range.map (·.range.endPos)).getD ⟨0, 0⟩
+      -- The docstring captured when the attribute was applied, so the report and widget can show it.
+      let docStx ← match test.docstring? with
+        | some doc => `(some $(quote doc))
+        | none => `((none : Option String))
       entries := entries.push <| ←
         `(Errata.TestEntry.of $(quote package) $(quote moduleStr) $(quote testName)
             (Errata.Location.mk $(quote test.file)
               (Errata.Position.mk $(quote pos.line) $(quote pos.column))
               (Errata.Position.mk $(quote endPos.line) $(quote endPos.column)))
-            (@$(mkIdent userName)))
+            (@$(mkIdent userName)) (docstring? := $docStx))
   elabTerm (← `(#[$entries,*])) expectedType?

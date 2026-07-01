@@ -21,15 +21,12 @@ open Lean
 namespace Errata.Widget
 
 /--
-The infoview widget shown when the text cursor is on a test's {lit}`@[test]` marker. It offers a Run
+The InfoView widget shown when the text cursor is on a test's {lit}`@[test]` marker. It offers a Run
 button that runs the test in the language server, streaming its output as it is produced.
 -/
 @[widget_module]
 meta def runTestWidget : Lean.Widget.Module where
   javascript := include_str "widget/run_test_widget.js"
-
-/-- The single-test runner exe, relative to the workspace root the server runs in. -/
-private meta def runnerPath : String := ".lake/build/bin/errata-run-one"
 
 /-- The current wall-clock time in milliseconds since the Unix epoch. -/
 private meta def nowMs : IO Nat :=
@@ -59,7 +56,10 @@ meta structure RunState where
   buildMs : IO.Ref Nat
   /-- When the test body started (reported by the runner), in epoch ms; 0 until then. -/
   execStartTime : IO.Ref Nat
-  /-- Kills the current process (the build, then the runner); updated as each is spawned. -/
+  /--
+  The process to be killed if the run is cancelled. Contains first the build, then the runner.
+  Updated as each is spawned.
+  -/
   kill : IO.Ref (IO Unit)
 
 /-- The live runs, keyed by the test's declaration name so a run survives re-elaboration. -/
@@ -160,29 +160,43 @@ private meta partial def readLoop (out : IO.FS.Handle) (state : RunState) : IO U
     readLoop out state
 
 /-- The outcome shown when the build step fails, carrying its message and detail. -/
-private meta def buildFailure (detail : String) : Errata.RunOutcome :=
-  { status := "error", durationMs := 0, message? := some "lake build failed", detail? := some detail }
+private meta def buildFailure (detail : String) : Errata.RunOutcome := {
+  status := "error", durationMs := 0, message? := some "lake build failed", detail? := some detail
+}
 
 /--
 Builds the test's module from the saved source, then runs the test, streaming its output into the
 run state. Building first means a Run reflects the latest saved version of the test.
 -/
 private meta def buildAndRun (module declJson : String) (state : RunState) : IO Unit := do
+  -- `lake query` builds the runner exe and the test's module (so the run reflects the saved source)
+  -- and prints the exe's absolute path on stdout; progress and errors go to stderr.
   let build ← IO.Process.spawn {
     stdin := .null, stdout := .piped, stderr := .piped
-    cmd := "lake", args := #["build", "errata-run-one", module] }
+    cmd := "lake", args := #["query", "errata-run-one", module]
+  }
   state.kill.set build.kill
   let errTask ← IO.asTask build.stderr.readToEnd
-  let _ ← build.stdout.readToEnd
+  let queryOut ← build.stdout.readToEnd
   let buildErr := (← IO.wait errTask).toOption.getD ""
   if (← build.wait) != 0 then
     state.outcome.set (some (buildFailure buildErr))
     state.finished.set true
     signalRun state
     return
+  let some runnerPath := (queryOut.splitOn "\n").find? (!·.trimAscii.isEmpty) |>.map (·.trimAscii.copy)
+    | state.outcome.set (some (buildFailure "lake query did not report the runner's path"))
+      state.finished.set true
+      signalRun state
+      return
+  -- Spawn the runner directly rather than through `lake exe` so it inherits the language server's
+  -- broad `LEAN_PATH`. The runner imports the arbitrary test module at runtime, which is not a
+  -- dependency of the exe, so `lake exe` would narrow `LEAN_PATH` to the exe's own deps and the
+  -- import would fail.
   let run ← IO.Process.spawn {
     stdin := .null, stdout := .piped, stderr := .inherit
-    cmd := runnerPath, args := #[module, declJson] }
+    cmd := runnerPath, args := #[module, declJson]
+  }
   state.kill.set run.kill
   state.buildMs.set ((← nowMs) - state.startTime)
   state.phase.set "running"
@@ -217,7 +231,8 @@ meta def startTest (req : StartRequest) : RequestM (RequestTask Unit) := do
     chunks := ← IO.mkRef #[], finished := ← IO.mkRef false, outcome := ← IO.mkRef none,
     wakeup := ← IO.mkRef (← IO.Promise.new), phase := ← IO.mkRef "building", version := req.version,
     startTime := ← nowMs, buildMs := ← IO.mkRef 0, execStartTime := ← IO.mkRef 0,
-    kill := ← IO.mkRef (pure ()) }
+    kill := ← IO.mkRef (pure ())
+  }
   runRegistry.modify (·.insert declName state)
   let _ ← IO.asTask (buildAndRun req.module req.decl.compress state)
   return RequestTask.pure ()

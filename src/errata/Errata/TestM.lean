@@ -81,9 +81,10 @@ def flag (name : String) : TestM Bool :=
     | none => false
 
 /-- Builds a result for the current scope with the given status and duration. -/
-def Context.mkResult (ctx : Context) (status : Status) (durationMs : Nat := 0) : Result :=
-  { package := ctx.package, moduleName := ctx.moduleName, test := ctx.test,
-    resultPath := ctx.resultPath, status, durationMs }
+def Context.mkResult (ctx : Context) (status : Status) (durationMs : Nat := 0) : Result := {
+  package := ctx.package, moduleName := ctx.moduleName, test := ctx.test,
+  resultPath := ctx.resultPath, status, durationMs, description? := ctx.description?
+}
 
 /-- A passing result for the current scope. -/
 def Context.pass (ctx : Context) (durationMs : Nat := 0) : Result :=
@@ -101,6 +102,21 @@ def Context.error (ctx : Context) (message : String) (durationMs : Nat := 0) : R
 def Context.skip (ctx : Context) (reason : String) (durationMs : Nat := 0) : Result :=
   ctx.mkResult (.skip reason) durationMs
 
+/--
+The result a captured run contributes beyond any nested results it recorded.
+
+A raised error or a failed assertion becomes one error or failed result carrying the captured output.
+A clean run becomes one passing result with the output when it recorded no nested results; when it did
+record some, those results stand for it and it adds nothing of its own.
+-/
+def Context.resultOfOutcome (ctx : Context)
+    (outcome : Except IO.Error (Except TestFailure Unit)) (output : OutputLog) (durationMs : Nat)
+    (hasNested : Bool) : Option Result :=
+  match outcome with
+  | .error e => some { ctx.error (toString e) durationMs with output }
+  | .ok (.error f) => some { ctx.fail f durationMs with output }
+  | .ok (.ok ()) => if hasNested then none else some { ctx.pass durationMs with output }
+
 /-- Records a skipped result for the current scope. -/
 def skip (reason : String) : TestM Unit := do
   let ctx ← read
@@ -110,7 +126,10 @@ def skip (reason : String) : TestM Unit := do
 private def captureStream (emit : Output → IO Unit) (mk : String → Output) : IO.FS.Stream where
   flush := pure ()
   read _ := pure .empty
-  write bytes := emit (mk (String.fromUTF8! bytes))
+  write bytes :=
+    match String.fromUTF8? bytes with
+    | some s => emit (mk s)
+    | none => throw (.userError "captured test output was not valid UTF-8")
   getLine := pure ""
   putStr s := emit (mk s)
   isTty := pure false
@@ -156,14 +175,8 @@ def result (name : String) (act : TestM Unit) : TestM Unit :=
     let stop ← IO.monoMsNow
     let dur := stop - start
     let after := (← ctx.log.get).size
-    match outcome with
-    | .error e =>
-      ctx.log.modify (·.push { ctx.error (toString e) dur with output })
-    | .ok (.error f) =>
-      ctx.log.modify (·.push { ctx.fail f dur with output })
-    | .ok (.ok ()) =>
-      if after == before then
-        ctx.log.modify (·.push (ctx.pass dur))
+    if let some r := ctx.resultOfOutcome outcome output dur (after != before) then
+      ctx.log.modify (·.push r)
 
 /--
 Expects the action to fail an assertion. The current scope passes if it does and fails if it

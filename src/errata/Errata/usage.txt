@@ -8,7 +8,8 @@ Usage:
 Runner options go after `--test-options`; tokens before it name libraries. A library is a bare
 `Library` in this package or a `package/Library` reaching into a dependency.
 Runner options:
-  -v, --verbose        Also report passes (truncating each test's results); repeat (-vv) for all.
+  -v, --verbose        Also report passes (truncating each test's results); repeat (-vv) for all,
+                       -vvv to also show every test's docstring, not only those that fail.
       --update-golden  Rewrite golden expected files instead of comparing.
       --seed N         Seed property tests with N, to reproduce a failure.
       --junit PATH     Write a JUnit XML report to PATH.

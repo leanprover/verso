@@ -26,16 +26,19 @@ structure TestEntry where
   test : String
   /-- The test's own source range, used as the default failure location. -/
   location : Location
+  /-- The test's docstring, rendered as Markdown, when it has one. -/
+  docstring? : Option String := none
   /-- The action to run. -/
   run : TestM Unit
 
 /-- Builds a test entry from any testable value. -/
 def TestEntry.of {α} [IsTest α] (package moduleName test : String) (location : Location)
-    (value : α) : TestEntry where
+    (value : α) (docstring? : Option String := none) : TestEntry where
   package := package
   moduleName := moduleName
   test := test
   location := location
+  docstring? := docstring?
   run := IsTest.toTest value
 
 /-- Runs a single test entry, collecting all of its results. -/
@@ -43,17 +46,16 @@ def runEntry (cfg : Context) (entry : TestEntry) : IO (Array Result) := do
   let log ← IO.mkRef (#[] : Array Result)
   let ctx := { cfg with
     package := entry.package, moduleName := entry.moduleName, test := entry.test,
-    resultPath := #[], location := entry.location, log }
+    resultPath := #[], location := entry.location, log, description? := entry.docstring?
+  }
   let start ← IO.monoMsNow
   let (outcome, output) ← runCapturing ctx entry.run
   let stop ← IO.monoMsNow
   let dur := stop - start
   let logged ← log.get
-  match outcome with
-  | .error e => return logged.push { ctx.error (toString e) dur with output }
-  | .ok (.error f) => return logged.push { ctx.fail f dur with output }
-  | .ok (.ok ()) =>
-    if logged.isEmpty then return #[ctx.pass dur] else return logged
+  return match ctx.resultOfOutcome outcome output dur (!logged.isEmpty) with
+    | some r => logged.push r
+    | none => logged
 
 /-- Runs all the test entries and collects their results. -/
 def run (cfg : Context) (entries : Array TestEntry) : IO (Array Result) := do

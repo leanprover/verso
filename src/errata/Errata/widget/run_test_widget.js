@@ -4,7 +4,7 @@ import { useRpcSession } from "@leanprover/infoview";
 
 const e = React.createElement;
 
-// Persists the last outcome per test for the lifetime of the infoview session, so leaving and
+// Persists the last outcome per test for the lifetime of the InfoView session, so leaving and
 // returning to a test's `@[test]` marker shows its previous result rather than a blank widget.
 const resultCache = new Map();
 
@@ -201,7 +201,7 @@ export default function (props) {
         );
     }
 
-    // The infoview reuses one component instance for whichever test the cursor is on, so reset and
+    // The InfoView reuses one component instance for whichever test the cursor is on, so reset and
     // reconnect whenever the test changes (keyed on `cacheKey`), not just on mount. Restores any cached
     // outcome for this test and replays an in-progress run from the start.
     React.useEffect(
@@ -481,9 +481,34 @@ export default function (props) {
     if (outcome && outcome.message) extras.push(e("div", { key: "msg" }, block(outcome.message)));
     if (outcome && outcome.detail) extras.push(e("div", { key: "detail" }, block(outcome.detail)));
 
+    // The test's docstring, rendered by Lean to Markdown and shown as text alongside its result.
+    const descriptionSection =
+        outcome && outcome.description
+            ? e(
+                  "div",
+                  {
+                      key: "description",
+                      style: {
+                          marginTop: "4px",
+                          fontSize: "12px",
+                          opacity: 0.85,
+                          whiteSpace: "pre-wrap",
+                      },
+                  },
+                  outcome.description,
+              )
+            : null;
+
     const body =
-        infoRow || extras.length || outputSection
-            ? e("div", { style: { marginTop: "4px" } }, infoRow, ...extras, outputSection)
+        infoRow || descriptionSection || extras.length || outputSection
+            ? e(
+                  "div",
+                  { style: { marginTop: "4px" } },
+                  infoRow,
+                  descriptionSection,
+                  ...extras,
+                  outputSection,
+              )
             : null;
 
     return e("div", { style: { padding: "2px 0" } }, header, body);

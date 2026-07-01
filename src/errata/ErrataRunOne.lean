@@ -21,7 +21,7 @@ Evaluates the test named by {lean}`declName` in the current environment to a run
 The action is reached through {name}`Errata.IsTest.toTest` so any testable type works, and through
 {lit}`import all` of its module so a module-private test is still reachable.
 -/
-unsafe def evalTestM (declName : Name) : CoreM (Errata.TestM Unit) :=
+unsafe def evalTestM (declName : Name) : CoreM (Errata.TestM Unit × Option String) :=
   MetaM.run' do
     let env ← getEnv
     -- The widget passes the declaration's real name, but a module-private test is mangled, so fall
@@ -40,7 +40,8 @@ unsafe def evalTestM (declName : Name) : CoreM (Errata.TestM Unit) :=
       | _ => throwError "`{declName}` is not a test"
     let act := mkApp3 (mkConst ``Errata.IsTest.toTest) declType inst decl
     let ty := mkApp (mkConst ``Errata.TestM) (mkConst ``Unit)
-    evalExpr (Errata.TestM Unit) ty act (safety := .unsafe)
+    let test ← evalExpr (Errata.TestM Unit) ty act (safety := .unsafe)
+    return (test, ← findDocString? env realName)
 
 /-- Writes one JSON protocol line to the runner's real stdout and flushes it for prompt streaming. -/
 private def emitLine (out : IO.FS.Stream) (key : String) (value : Json) : IO Unit := do
@@ -66,7 +67,7 @@ unsafe def runImpl (args : List String) : IO UInt32 := do
   let env ← importModules
     #[{ module := targetModule, importAll := true }, { module := `Errata }] {} (loadExts := true)
   let coreCtx : Core.Context := { fileName := "<errata-run-one>", fileMap := default }
-  let (act, _) ← (evalTestM declName).toIO coreCtx { env }
+  let ((act, doc?), _) ← (evalTestM declName).toIO coreCtx { env }
   -- Mark when the test body starts, so the widget shows output offsets within the test itself,
   -- excluding the build and module-import time before this point.
   emitLine out "exec" (toJson (← nowMs))
@@ -74,7 +75,7 @@ unsafe def runImpl (args : List String) : IO UInt32 := do
     let chunk := { Errata.OutputChunk.ofOutput o with time := ← nowMs }
     emitLine out "chunk" (toJson chunk)
   let outcome ← Errata.runValue default act (sink := sink)
-  emitLine out "outcome" (toJson outcome)
+  emitLine out "outcome" (toJson { outcome with description? := doc? })
   return 0
 
 @[implemented_by runImpl]

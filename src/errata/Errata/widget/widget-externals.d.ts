@@ -1,5 +1,5 @@
 // Minimal ambient declarations for the npm packages the run-test widget imports. The widget is
-// served as-is to the infoview, which supplies React and the infoview RPC API at runtime, so only
+// served as-is to the InfoView, which supplies React and the InfoView RPC API at runtime, so only
 // the surface the widget uses is declared here, enough for `tsc` to type-check the rest.
 
 declare module "react" {

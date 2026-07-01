@@ -37,6 +37,8 @@ structure Context where
   moduleName : String := ""
   /-- The running test declaration's name below its module. -/
   test : String := ""
+  /-- The running test's docstring, rendered as Markdown, when it has one. -/
+  description? : Option String := none
   /-- The named result currently being recorded, below the test. -/
   resultPath : Array String := #[]
   /--

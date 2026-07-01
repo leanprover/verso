@@ -22,14 +22,21 @@ set_option doc.verso true
 /--
 When true, a failing Errata compile-time test is an elaboration error rather than a warning.
 -/
-register_option Errata.failOnError : Bool := {
+register_option errata.failOnError : Bool := {
   defValue := false
   descr := "Make a failing Errata compile-time test an elaboration error rather than a warning."
 }
 
 namespace Errata
 
-/-- Checks that the command below produces the messages given in the preceding doc comment. -/
+/--
+Checks that the command below produces the messages given in the preceding doc comment.
+
+This is a version of `#guard_msgs` that is specialized for use in Errata. If the messages
+don't match, it is not a compile-time error unless the option {lit}`errata.failOnError` is
+{name}`true`. This allows failing compile-time tests to appear in the test output together
+with failing run-time tests.
+-/
 syntax (name := testMsgsCmd) (plainDocComment)? "#test_msgs" "in" command : command
 
 @[command_elab testMsgsCmd]
@@ -74,13 +81,21 @@ meta def elabTestMsgs : Command.CommandElab
         #[{ suggestion := suggestedDoc actual }] (ref? := some fixRef)
       let body := m!"Errata #test_msgs: the messages do not match.\n\n\
         Expected:\n{expected}\n\nActual:\n{actual}"
-      if (← getOptions).getBool `Errata.failOnError false then
+      if (← getOptions).getBool `errata.failOnError false then
         logErrorAt tk (body ++ hint)
       else
         logWarningAt tk (body ++ hint)
   | _ => throwUnsupportedSyntax
 
-/-- Checks that a Boolean expression evaluates to {lean}`true`, registering the verdict as a test. -/
+/--
+Checks that a Boolean expression evaluates to {lean}`true`, registering the verdict as a test.
+
+This is a version of `#guard` that is specialized for use in Errata. If the condition does not
+hold, it is not a compile-time error unless the option {lit}`errata.failOnError` is
+{name}`true`. This allows failing compile-time tests to appear in the test output together
+with failing run-time tests.
+
+-/
 syntax (name := testGuardCmd) "#test_guard" term : command
 
 @[command_elab testGuardCmd]
@@ -108,9 +123,9 @@ meta def elabTestGuard : Command.CommandElab
     -- truncated multi-line expression with an ellipsis and disambiguating against earlier ones.
     let lines := source.splitOn "\n"
     -- Strip guillemets so an escaped name in the source does not nest inside the test's own name.
-    let firstLine := (((lines.headD source).trimAscii.copy).replace "«" "").replace "»" ""
+    let firstLine := lines.headD source |>.trimAscii |>.replace "«" "" |>.replace "»" ""
     let base :=
-      if (lines.drop 1).any (fun l => !l.trimAscii.copy.isEmpty) then firstLine ++ "…" else firstLine
+      if (lines.drop 1).any (fun l => !l.trimAscii.isEmpty) then firstLine ++ "…" else firstLine
     let ns ← getCurrNamespace
     let env ← getEnv
     let mut name := base
@@ -130,7 +145,7 @@ meta def elabTestGuard : Command.CommandElab
     -- Report a failure at build time, as `#test_msgs` does.
     unless passed do
       let body := m!"Errata #test_guard: the expression did not evaluate to `true`:\n{source}"
-      if (← getOptions).getBool `Errata.failOnError false then
+      if (← getOptions).getBool `errata.failOnError false then
         logErrorAt tk body
       else
         logWarningAt tk body

@@ -20,22 +20,30 @@ inductive Verbosity where
   | quiet
   /-- Print every result. -/
   | verbose
+  /-- Print every result, and each test's docstring alongside it, not only those that fail. -/
+  | superVerbose
 deriving Repr, Inhabited, DecidableEq, BEq
 
 /-- Whether passes and skips are printed at this verbosity. -/
 def Verbosity.showsPasses : Verbosity → Bool
   | .silent => false
-  | .quiet | .verbose => true
+  | .quiet | .verbose | .superVerbose => true
 
 /-- Whether each test's results are truncated after a cap at this verbosity. -/
 def Verbosity.truncates : Verbosity → Bool
   | .quiet => true
-  | .silent | .verbose => false
+  | .silent | .verbose | .superVerbose => false
 
-/-- The next verbosity up, for an accumulating {lit}`-v` / {lit}`-vv`. -/
+/-- Whether every result's docstring is shown, not only those of failures and errors. -/
+def Verbosity.showsAllDocstrings : Verbosity → Bool
+  | .superVerbose => true
+  | .silent | .quiet | .verbose => false
+
+/-- The next verbosity up, for an accumulating {lit}`-v` / {lit}`-vv` / {lit}`-vvv`. -/
 def Verbosity.increase : Verbosity → Verbosity
   | .silent => .quiet
-  | .quiet | .verbose => .verbose
+  | .quiet => .verbose
+  | .verbose | .superVerbose => .superVerbose
 
 /-- A line and column within a source file, counting from one. -/
 structure Position where
@@ -148,6 +156,8 @@ structure Result where
   durationMs : Nat := 0
   /-- What the test wrote to stdout and stderr. -/
   output : OutputLog := {}
+  /-- The test's docstring, rendered as Markdown, when it has one. -/
+  description? : Option String := none
 deriving Repr, Inhabited, DecidableEq
 
 /-- The test name below the module: the declaration and any named result, dotted. -/
@@ -171,4 +181,6 @@ def TestResult.mismatch (message detail file : String)
     location? := some {
       file,
       startPos := { line := startLine, column := startCol },
-      endPos := { line := endLine, column := endCol } } }
+      endPos := { line := endLine, column := endCol }
+    }
+  }

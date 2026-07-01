@@ -29,19 +29,26 @@ private def indentLines (text : String) : String :=
 private def locationText (l : Location) : String :=
   s!"{l.file}:{l.startPos.line}:{l.startPos.column}"
 
-/-- Prints one result: its status line, and for a failure its detail and captured output. -/
-private def printResult (r : Result) : IO Unit := do
+/-- Prints one result: its status line, its docstring when shown, and for a failure its detail and
+captured output. A failure or error shows its docstring; a pass or skip shows it only when the
+verbosity does. -/
+private def printResult (verbosity : Verbosity) (r : Result) : IO Unit := do
   let name := s!"{r.moduleTarget}  {r.testName}"
+  let printDoc : IO Unit := do
+    if verbosity.showsAllDocstrings || !r.status.isSuccess then
+      if let some d := r.description? then IO.println (indentLines d)
   match r.status with
-  | .pass => IO.println s!"ok    {name} ({r.durationMs}ms)"
-  | .skip reason => IO.println s!"skip  {name}: {reason}"
+  | .pass => IO.println s!"ok    {name} ({r.durationMs}ms)"; printDoc
+  | .skip reason => IO.println s!"skip  {name}: {reason}"; printDoc
   | .fail f =>
     IO.println s!"FAIL  {name}: {f.message}"
+    printDoc
     if let some l := f.location? then IO.println (indentLines (locationText l))
     if let some d := f.detail? then IO.println (indentLines d)
     unless r.output.isEmpty do IO.println (indentLines s!"output:\n{r.output.all}")
   | .error m =>
     IO.println s!"ERROR {name}: {m}"
+    printDoc
     unless r.output.isEmpty do IO.println (indentLines s!"output:\n{r.output.all}")
 
 /-- A running tally of results suppressed by truncation. -/
@@ -105,15 +112,27 @@ def humanReport (verbosity : Verbosity) (results : Array Result) : IO Nat := do
       if verbosity.truncates && shown ≥ cap then
         more := more.add r.status
       else
-        printResult r
+        printResult verbosity r
         shown := shown + 1
   printSuppressed more
   IO.println s!"{passed} passed, {failed} failed, {errors} errors, {skipped} skipped"
   return failed + errors
 
+/--
+Drops the control characters XML 1.0 forbids even when escaped: those below {lit}`U+0020` other than
+tab, newline, and carriage return.
+-/
+private def dropXmlForbidden (s : String) : String :=
+  s.foldl (init := "") fun acc c =>
+    if c == '\t' || c == '\n' || c == '\r' || Nat.ble 0x20 c.toNat then acc.push c else acc
+
+/--
+Escapes text for XML and drops characters XML 1.0 forbids even when escaped, so a captured ANSI escape
+or NUL byte in a message or output fragment cannot make the report malformed.
+-/
 private def xmlEscape (s : String) : String :=
-  s.replace "&" "&amp;" |>.replace "<" "&lt;" |>.replace ">" "&gt;"
-    |>.replace "\"" "&quot;"
+  dropXmlForbidden <|
+    s.replace "&" "&amp;" |>.replace "<" "&lt;" |>.replace ">" "&gt;" |>.replace "\"" "&quot;"
 
 instance : ToJson Location where
   toJson l := json%{
@@ -129,7 +148,8 @@ instance : FromJson Location where
     return {
       file := ← j.getObjValAs? String "file",
       startPos := ⟨← j.getObjValAs? Nat "startLine", ← j.getObjValAs? Nat "startColumn"⟩,
-      endPos := ⟨← j.getObjValAs? Nat "endLine", ← j.getObjValAs? Nat "endColumn"⟩ }
+      endPos := ⟨← j.getObjValAs? Nat "endLine", ← j.getObjValAs? Nat "endColumn"⟩
+    }
 
 instance : ToJson Output where
   toJson
@@ -168,7 +188,7 @@ private def byModule (results : Array Result) : Array (String × Array Result) :
   for r in results do
     let s := suiteOf r
     if !groups.contains s then order := order.push s
-    groups := groups.insert s ((groups.getD s #[]).push r)
+    groups := groups.alter s fun cur => some ((cur.getD #[]).push r)
   return order.map fun s => (s, groups.getD s #[])
 
 /-- Renders the results as JUnit XML, grouping by the module path. -/
@@ -216,7 +236,8 @@ instance : ToJson Result where
         ("test", Json.str r.test), ("resultPath", ToJson.toJson r.resultPath),
         ("durationMs", ToJson.toJson r.durationMs)] ++
       statusFields r.status ++
-      (if r.output.isEmpty then [] else [("output", ToJson.toJson r.output)])
+      (if r.output.isEmpty then [] else [("output", ToJson.toJson r.output)]) ++
+      (match r.description? with | some d => [("description", Json.str d)] | none => [])
 
 /-- Decodes an optional field: absent maps to {lean}`none`. -/
 private def optField [FromJson α] (j : Json) (key : String) : Except String (Option α) :=
@@ -233,7 +254,8 @@ instance : FromJson Status where
     | "fail" => return .fail {
         message := ← j.getObjValAs? String "message",
         detail? := ← optField j "detail",
-        location? := ← optField j "location" }
+        location? := ← optField j "location"
+      }
     | other => .error s!"unknown status: {other}"
 
 instance : FromJson Result where
@@ -245,7 +267,9 @@ instance : FromJson Result where
       resultPath := ← j.getObjValAs? (Array String) "resultPath",
       durationMs := ← j.getObjValAs? Nat "durationMs",
       status := ← FromJson.fromJson? j,
-      output := (← optField j "output").getD {} }
+      output := (← optField j "output").getD {},
+      description? := ← optField j "description"
+    }
 
 /-- Renders the results as a JSON array of objects. -/
 def jsonReport (results : Array Result) : String := (ToJson.toJson results).pretty
@@ -277,6 +301,7 @@ def markdownReport (results : Array Result) : String := Id.run do
     let render (mark message : String) (detail? : Option String) : String := Id.run do
       let mut s := s!"<details open><summary>{mark} <code>{xmlEscape r.moduleTarget}</code> \
         {xmlEscape r.testName}: {xmlEscape message}</summary>\n\n"
+      if let some d := r.description? then s := s ++ s!"{d}\n\n"
       if let .fail f := r.status then
         if let some l := f.location? then s := s ++ s!"`{locationText l}`\n\n"
       if let some d := detail? then s := s ++ s!"{fencedBlock d}\n\n"

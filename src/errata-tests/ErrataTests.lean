@@ -83,12 +83,9 @@ def jsonRoundTrips : Test :=
 @[test]
 def goldenRoundTrip : Test :=
   IO.FS.withTempDir fun dir => do
-    let cfg ← read
-    -- In update mode this would write; here we drive it through a temp golden file.
     let goldenPath := dir / "expected.txt"
     IO.FS.writeFile goldenPath "contents\n"
     assertFileExists goldenPath
-    let _ := cfg
     goldenFile goldenPath "contents\n"
 
 /-- The `Verbosity` predicates and accumulation behave as the report relies on. -/
@@ -97,12 +94,17 @@ def verbosityLevels : Test := do
   assertEq false Verbosity.silent.showsPasses
   assertEq true Verbosity.quiet.showsPasses
   assertEq true Verbosity.verbose.showsPasses
+  assertEq true Verbosity.superVerbose.showsPasses
   assertEq false Verbosity.silent.truncates
   assertEq true Verbosity.quiet.truncates
   assertEq false Verbosity.verbose.truncates
+  assertEq false Verbosity.superVerbose.truncates
+  assertEq false Verbosity.verbose.showsAllDocstrings
+  assertEq true Verbosity.superVerbose.showsAllDocstrings
   assertEq Verbosity.quiet Verbosity.silent.increase
   assertEq Verbosity.verbose Verbosity.quiet.increase
-  assertEq Verbosity.verbose Verbosity.verbose.increase
+  assertEq Verbosity.superVerbose Verbosity.verbose.increase
+  assertEq Verbosity.superVerbose Verbosity.superVerbose.increase
 
 /-- At silent verbosity the report hides passes but shows failures and the summary line. -/
 @[test]
