@@ -10,11 +10,11 @@ import Errata
 open Errata
 
 /--
-The interactive tests exercise the LSP server through a shell harness. The harness inherits this
-process's standard streams, so its own output appears directly; a non-zero exit is the failure.
+Use a shell harness to test the LSP server.
 -/
 @[test]
 def interactive : Test := do
-  let child ← IO.Process.spawn { cmd := "src/tests/interactive/run_interactive.sh" }
-  let exitCode ← child.wait
-  assert (exitCode == 0) s!"interactive LSP tests failed with exit code {exitCode}"
+  let out ← IO.Process.output { cmd := "src/tests/interactive/run_interactive.sh" }
+  IO.print out.stdout
+  IO.eprint out.stderr
+  assert (out.exitCode == 0) s!"interactive LSP tests failed with exit code {out.exitCode}"

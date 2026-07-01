@@ -134,13 +134,13 @@ Note: This linter can be disabled with `set_option linter.unusedVariables false`
 :::::::
 
 /--
-error: Didn't match - got: ⏎
+error: Didn't match - got: 
   [a
    b
    c]
 but expected:
   b
-  ⏎
+  
 
 Hint: Replace with the actual message:
   information: a̲
@@ -148,7 +148,7 @@ Hint: Replace with the actual message:
   c̲
   ̲
 -/
-#guard_msgs in
+#test_msgs in
 #docs (Genre.Manual) allowDiff30 "Not enough allowDiff" :=
 :::::::
 ```lean (name := foo)
@@ -160,13 +160,13 @@ b
 :::::::
 
 /--
-error: Didn't match even with allowDiff := 1 - got: ⏎
+error: Didn't match even with allowDiff := 1 - got: 
   [a
    b
    c]
 but expected:
   b
-  ⏎
+  
 
 Hint: Replace with the actual message:
   information: a̲
@@ -174,7 +174,7 @@ Hint: Replace with the actual message:
   c̲
   ̲
 -/
-#guard_msgs in
+#test_msgs in
 #docs (Genre.Manual) allowDiff31 "Not enough allowDiff" :=
 :::::::
 ```lean (name := foo)
@@ -185,7 +185,7 @@ b
 ```
 :::::::
 
-#guard_msgs in
+#test_msgs in
 #docs (Genre.Manual) allowDiff32 "Enough allowDiff" :=
 :::::::
 ```lean (name := foo)
