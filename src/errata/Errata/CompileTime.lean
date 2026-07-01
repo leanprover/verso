@@ -9,7 +9,6 @@ public import Errata.Result
 public meta import Errata.CompileTime.Helpers
 public import Lean.Elab.Command
 public import Lean.Data.Options
-import Lean
 
 open Lean Elab Command Errata.CompileTime
 
