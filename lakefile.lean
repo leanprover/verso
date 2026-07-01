@@ -366,9 +366,7 @@ script «errata-test» (args) do
     let changed ← if ← file.pathExists then pure ((← IO.FS.readFile file) != src) else pure true
     if changed then IO.FS.writeFile file src
   -- Build and run the discovered runner.
-  let some exe := ws.findLeanExe? `«errata-runner»
-    | IO.eprintln "errata-runner executable is not configured"; return 1
-  let exePath ← runBuild exe.fetch
+  let exePath ← runBuild «errata-runner».fetch
   let child ← IO.Process.spawn { cmd := exePath.toString, args := runnerArgs.toArray }
   child.wait
 
