@@ -25,10 +25,11 @@ jobs:
                     fi
                   done < <(find ./src -path ./src/tests -prune -o \
                     -path ./src/test-projects -prune -o \
+                    -path ./src/errata-tests -prune -o \
                     -name "*.lean" -type f -print0)
 
                   if [ ${#OFFENDING_FILES[@]} -gt 0 ]; then
-                    echo "Found #eval statements in module source files (should be in src/tests/):"
+                    echo "Found #eval statements in module source files (should be in src/tests/ or src/errata-tests/):"
                     printf '%s\n' "${OFFENDING_FILES[@]}"
                     echo ""
                     echo "Offending lines:"

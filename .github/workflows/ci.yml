@@ -13,6 +13,9 @@ jobs:
     build:
         name: Build and test
         runs-on: nscloud-ubuntu-22.04-amd64-8x16
+        permissions:
+            contents: read
+            checks: write
         env:
             # Used for browser tests. Placing them here allows caching to work right.
             PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers
@@ -90,7 +93,31 @@ jobs:
 
             - name: Run tests
               run: |
-                  lake test -- --verbose --check-tex
+                  lake test -- --test-options --verbose --check-tex --junit=errata-report.xml --markdown=errata-summary.md
+
+            - name: Add test results to the job summary
+              if: always()
+              run: |
+                  if [ -f errata-summary.md ]; then cat errata-summary.md >> "$GITHUB_STEP_SUMMARY"; fi
+
+            - name: Publish the JUnit test report
+              if: always()
+              uses: dorny/test-reporter@v1
+              with:
+                  name: Errata tests
+                  path: errata-report.xml
+                  reporter: java-junit
+                  fail-on-error: false
+
+            - name: Upload the raw test reports
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: errata-test-reports
+                  path: |
+                      errata-report.xml
+                      errata-summary.md
+                  if-no-files-found: ignore
 
             - name: Generate the test website
               run: |
@@ -144,6 +171,12 @@ jobs:
             - name: Type check the xref redirect JS code
               run: |
                   pushd static-web
+                  npx tsc --noEmit -p jsconfig.json
+                  popd
+
+            - name: Type check the run-test widget JS code
+              run: |
+                  pushd src/errata/Errata/widget
                   npx tsc --noEmit -p jsconfig.json
                   popd
 

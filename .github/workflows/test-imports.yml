@@ -1,3 +1,8 @@
+# This check is retained only to satisfy the required "Check all test modules are imported" status
+# check on the protected branch. It is a no-op on this layout: test modules now live under
+# src/tests/VersoTests and are discovered by globbing, and src/tests/Tests no longer exists, so the
+# scan below finds nothing. Coverage is instead enforced by `errataWarnUncoveredTestModules` during
+# `lake test`. Remove this workflow (and drop the required check) once merged.
 name: All test modules imported
 
 on: [pull_request, merge_group]
