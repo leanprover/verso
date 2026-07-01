@@ -528,8 +528,8 @@ a:visited {
     line-height: 1.7;
 }
 
-.code-content > .verso-text.mod-doc > *,
-.code-content > .md-text.mod-doc > * {
+.code-content > .verso-text.mod-doc :is(p, ul, ol, blockquote, pre, table),
+.code-content > .md-text.mod-doc :is(p, ul, ol, blockquote, pre, table) {
     margin-bottom: 0.75rem;
     display: block;
 }
