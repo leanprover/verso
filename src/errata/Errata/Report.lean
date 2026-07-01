@@ -7,7 +7,6 @@ module
 
 public import Errata.Result
 public import Lean.Data.Json
-import Std.Data.HashMap
 
 public section
 

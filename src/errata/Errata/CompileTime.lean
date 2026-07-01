@@ -6,11 +6,9 @@ Author: David Thrane Christiansen
 module
 
 public import Errata.Result
-import Errata.Discovery
 public meta import Errata.CompileTime.Helpers
 public import Lean.Elab.Command
 public import Lean.Data.Options
-import Lean.Meta.Hint
 import Lean
 
 open Lean Elab Command Errata.CompileTime

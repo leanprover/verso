@@ -5,7 +5,8 @@ Author: David Thrane Christiansen
 -/
 module
 
-public import Errata.Runner
+public import Errata.IsTest
+public import Lean.Data.Json
 
 public section
 
