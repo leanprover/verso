@@ -21,8 +21,9 @@ open Lean
 namespace Errata.Widget
 
 /--
-The InfoView widget shown when the text cursor is on a test's {lit}`@[test]` marker. It offers a Run
-button that runs the test in the language server, streaming its output as it is produced.
+Shown when the text cursor is on a test's source span.
+It offers a Run button that runs the test in the language server,
+streaming its output as it is produced.
 -/
 @[widget_module]
 meta def runTestWidget : Lean.Widget.Module where
