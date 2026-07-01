@@ -389,8 +389,10 @@ export default function (props) {
                   {
                       key: "output",
                       open: outputOpen,
-                      onToggle: function (ev) {
-                          setOutputOpen(ev.target.open);
+                      onToggle: /** @param ev {React.ToggleEvent<HTMLDetailsElement>} */ function (
+                          ev,
+                      ) {
+                          setOutputOpen(ev.currentTarget.open);
                       },
                       style: { marginTop: "4px" },
                   },
