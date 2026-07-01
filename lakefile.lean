@@ -343,8 +343,7 @@ script «errata-test» (args) do
       for m in mods do
         oleanJobs := oleanJobs.push (← m.olean.fetch)
         infos := infos.push (m.name, m.oleanFile)
-    let _ ← (Job.collectArray oleanJobs).await
-    pure (Job.pure infos)
+    (Job.collectArray oleanJobs).map (sync := true) fun _ => infos
   -- A test module is one whose `.olean` records a test. Module-system test modules go in the bridge
   -- module (`import all`); non-module ones can only be imported by the non-module main.
   let mut moduleMods : Array Lean.Name := #[]
