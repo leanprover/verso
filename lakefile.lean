@@ -124,6 +124,18 @@ lean_exe «verso-literate-plan» where
   srcDir := "src/verso-literate-plan"
   supportInterpreter := true
 
+-- All test code: Errata test modules, compile-time tests, fixtures, and generators. Submodules are
+-- globbed so each is built and every `@[test]` module is discoverable.
+@[default_target]
+lean_lib VersoTests where
+  srcDir := "src/tests"
+  roots := #[`VersoTests]
+  globs := #[Glob.andSubmodules `VersoTests]
+
+-- Everything below is Errata's own implementation: its library, the single-test runner and widget
+-- support exe, its self-tests, the generated discovery runner, and the `lake test` driver.
+section Errata
+
 @[default_target]
 input_file errataUsageFile where
   text := true
@@ -149,14 +161,6 @@ lean_exe «errata-run-one» where
 lean_lib ErrataTests where
   srcDir := "src/errata-tests"
   roots := #[`ErrataTests]
-
--- All test code: Errata test modules, compile-time tests, fixtures, and generators. Submodules are
--- globbed so each is built and every `@[test]` module is discoverable.
-@[default_target]
-lean_lib VersoTests where
-  srcDir := "src/tests"
-  roots := #[`VersoTests]
-  globs := #[Glob.andSubmodules `VersoTests]
 
 -- The selected test set, written by the driver. The generated targets depend on it, so changing
 -- the selection changes their trace and Lake rebuilds them rather than relinking a stale object.
@@ -368,6 +372,8 @@ script «errata-test» (args) do
   let exePath ← runBuild exe.fetch
   let child ← IO.Process.spawn { cmd := exePath.toString, args := runnerArgs.toArray }
   child.wait
+
+end Errata
 
 lean_lib UsersGuide where
   srcDir := "doc"
