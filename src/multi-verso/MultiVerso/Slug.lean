@@ -5,7 +5,7 @@ Author: David Thrane Christiansen
 -/
 module
 import Std.Data.HashSet
-import Verso.Method
+import MultiVerso.Method
 public import Lean.Data.Json.FromToJson.Basic
 import Std.Tactic.BVDecide
 meta import Lean.Elab.Command
