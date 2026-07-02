@@ -21,9 +21,8 @@ open Lean
 namespace Errata.Widget
 
 /--
-Shown when the text cursor is on a test's source span.
-It offers a Run button that runs the test in the language server,
-streaming its output as it is produced.
+Shown when the text cursor is on a test's source span. It offers a "run" button that runs the test
+in the language server, streaming its output as it is produced.
 -/
 @[widget_module]
 meta def runTestWidget : Lean.Widget.Module where

@@ -7,6 +7,10 @@ declare module "react" {
     export function useState(initial: any): [any, (value: any) => void];
     export function useEffect(effect: () => void | (() => void), deps?: any[]): void;
     export function useRef(initial: any): { current: any };
+    export interface ToggleEvent<T = Element> {
+        currentTarget: T;
+        target: EventTarget;
+    }
 }
 
 declare module "@leanprover/infoview" {
