@@ -66,14 +66,6 @@ where
     | .original l l' t _ => .original l l' t contents.rawEndPos
     | i => i
 
-instance : ToJson ElabInline where
-  toJson v := s!"{v.val.typeName}"
-instance : ToJson ElabBlock where
-  toJson v := s!"{v.val.typeName}"
-instance : ToJson Empty where
-  toJson := nofun
-
-
 section
 open SubVerso.Highlighting
 open Lean.Parser.Command
@@ -502,13 +494,16 @@ where
     | .link txt url => (.link · url) <$> txt.mapM inlineToLit
     | .image alt url => pure <| .image alt url
     | .footnote name xs => .footnote name <$> xs.mapM inlineToLit
-    | .other x xs => do
+    | .other (.deferred _) xs =>
+      -- TODO deferred checks need a solution here
+      .concat <$> xs.mapM inlineToLit
+    | .other (.custom val) xs => do
       let xs ← xs.mapM inlineToLit
       let handlers ← getInlineToLiterate
       for h in handlers do
-        if let some v ← h x.val xs then
+        if let some v ← h val xs then
           return ← relocateInline v
-      logWarning m!"No inline handler for {x.val.typeName}; using fallback content"
+      logWarning m!"No inline handler for {val.typeName}; using fallback content"
       return .concat xs
 
 
@@ -520,13 +515,16 @@ where
     | .dl items => .dl <$> items.mapM fun x => DescItem.mk <$> x.term.mapM inlineToLit <*> x.desc.mapM blockToLit
     | .blockquote xs => .blockquote <$> xs.mapM blockToLit
     | .code s => pure <| .code s
-    | .other x xs => do
+    | .other (.deferred _) xs =>
+      -- TODO deferred checks need a solution here
+      .concat <$> xs.mapM blockToLit
+    | .other (.custom val) xs => do
       let xs ← xs.mapM blockToLit
       let handlers ← getBlockToLiterate
       for h in handlers do
-        if let some v ← h x.val xs then
+        if let some v ← h val xs then
           return ← relocateBlock v
-      logWarning m!"No block handler for {x.val.typeName}; using fallback content"
+      logWarning m!"No block handler for {val.typeName}; using fallback content"
       return .concat xs
 
   partToLit (p : Lean.Doc.Part ElabInline ElabBlock Empty) : ToLitM (Lean.Doc.Part Ext Ext Empty) :=

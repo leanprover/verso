@@ -76,12 +76,6 @@ def handleConst : InlineToLiterate
     let i := .other (.highlighted <| .token ⟨k, s⟩) content
     return some i
 
-def handlePostponed : InlineToLiterate
-  | val, content => do
-    let some { .. } := val.get? Lean.Doc.PostponedCheck | return none
-    -- TODO postponed checks need a solution here
-    return some <| .concat content
-
 def highlightDocCode : Lean.Doc.DocCode → Highlighted
   | ⟨code⟩ => Id.run do
     let mut out : Highlighted := .empty
@@ -162,7 +156,7 @@ def handleSyntaxCat : InlineToLiterate
     let some { .. } := val.get? Lean.Doc.Data.SyntaxCat | return none
     return some <| .concat content
 
-def inline := #[handleLocal, handleConst, handlePostponed, handleAttr, handleTerm, handleSetOption, handleOption, handleModName, handleTactic, handleConvTactic, handleKwAtom, handleSyntax, handleSyntaxCat]
+def inline := #[handleLocal, handleConst, handleAttr, handleTerm, handleSetOption, handleOption, handleModName, handleTactic, handleConvTactic, handleKwAtom, handleSyntax, handleSyntaxCat]
 
 def handleLeanBlock : BlockToLiterate
   | val, content => do
