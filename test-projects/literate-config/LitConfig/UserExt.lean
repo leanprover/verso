@@ -49,8 +49,8 @@ The content of the role is ignored.
 -/
 @[doc_role]
 def unknownRole (_ : TSyntaxArray `inline) : Lean.Doc.DocM (Lean.Doc.Inline ElabInline) := do
-  return .other
-    { val := .mk (FallbackPayload.mk "no-handler-fallback") }
+  return .custom
+    (FallbackPayload.mk "no-handler-fallback")
     #[.text "THIS IS THE FALLBACK"]
 
 end LitConfig.UserExt
