@@ -39,7 +39,7 @@ jobs:
               run: echo "short_sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
 
             - name: Cache .lake
-              uses: actions/cache@v5
+              uses: actions/cache@v6
               with:
                   path: .lake
                   # The SHA is in the key to get the most recent cache possible, rather than just saving a single one for each Lean/deps version and not touching it.
@@ -65,24 +65,6 @@ jobs:
             - name: Install PDF Dependencies
               uses: ./.github/actions/install-texlive
 
-            # Install uv and Playwright before tests, since lake test
-            # runs literate browser tests that need them
-            - name: Install uv
-              uses: astral-sh/setup-uv@v7
-              with:
-                  enable-cache: true
-                  cache-dependency-glob: "browser-tests/pyproject.toml"
-
-            - name: Cache Playwright browsers
-              uses: actions/cache@v5
-              with:
-                  path: .playwright-browsers
-                  key: playwright-${{ runner.os }}-${{ hashFiles('browser-tests/uv.lock') }}
-
-            - name: Install Playwright browsers
-              run: |
-                  uv run --project browser-tests --extra test playwright install chromium firefox --with-deps
-
             # Inkscape is needed by the LaTeX `svg` package, which converts
             # SVG files emitted by `diagram` code blocks to PDF at build time.
             - name: Install Inkscape
@@ -97,7 +79,7 @@ jobs:
                   cache-dependency-glob: "browser-tests/pyproject.toml"
 
             - name: Cache Playwright browsers
-              uses: actions/cache@v5
+              uses: actions/cache@v6
               with:
                   path: .playwright-browsers
                   key: playwright-${{ runner.os }}-${{ hashFiles('browser-tests/uv.lock') }}
@@ -199,7 +181,7 @@ jobs:
 
             # uv and Playwright are installed before `lake test` above.
             - name: Cache literate-config test project
-              uses: actions/cache@v5
+              uses: actions/cache@v6
               with:
                   path: test-projects/literate-config/.lake
                   key:
@@ -211,7 +193,7 @@ jobs:
                       literate-config-${{ runner.os }}-${{ hashFiles('test-projects/literate-config/lean-toolchain') }}-${{ hashFiles('test-projects/literate-config/lake-manifest.json') }}-
 
             - name: Cache literate-multi-root test project
-              uses: actions/cache@v5
+              uses: actions/cache@v6
               with:
                   path: test-projects/literate-multi-root/.lake
                   key:
