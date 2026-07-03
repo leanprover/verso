@@ -26,6 +26,8 @@ instance : Quote String (k := ``docComment) where
 
 deriving instance Quote for String.Pos.Raw
 
+deriving instance Ord for String.Pos.Raw
+
 deriving instance Quote for SourceInfo
 
 deriving instance Quote for Position

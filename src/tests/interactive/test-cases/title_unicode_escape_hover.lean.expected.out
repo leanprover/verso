@@ -1,0 +1,10 @@
+{"textDocument":
+ {"uri":
+  "file:///src/tests/interactive/test-cases/title_unicode_escape_hover.lean"},
+ "position": {"line": 4, "character": 60}}
+{"range":
+ {"start": {"line": 4, "character": 57}, "end": {"line": 4, "character": 75}},
+ "contents":
+ {"value":
+  "```lean\nNat : Type\n```\n***\nThe natural numbers, starting at zero.\n\nThis type is special-cased by both the kernel and the compiler, and overridden with an efficient\nimplementation. Both use a fast arbitrary-precision arithmetic library (usually\n[GMP](https://gmplib.org/)); at runtime, `Nat` values that are sufficiently small are unboxed.\n\n***\n*import Init.Prelude*",
+  "kind": "markdown"}}

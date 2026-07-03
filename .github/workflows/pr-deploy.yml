@@ -101,7 +101,7 @@ jobs:
                   fi
 
             - name: Download HTML manual artifact
-              uses: actions/download-artifact@v7
+              uses: actions/download-artifact@v8
               with:
                   run-id: ${{ github.event.workflow_run.id }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}

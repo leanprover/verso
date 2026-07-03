@@ -18,7 +18,7 @@ jobs:
         if: github.repository == 'leanprover/verso'
         steps:
             - name: Checkout repository
-              uses: actions/checkout@v6
+              uses: actions/checkout@v7
               with:
                   ref: ${{ env.TARGET_BRANCH }}
                   fetch-depth: 0
@@ -65,6 +65,11 @@ jobs:
 
             - name: Install PDF Dependencies
               uses: ./.github/actions/install-texlive
+
+            # Inkscape is needed by the LaTeX `svg` package, which converts
+            # SVG files emitted by `diagram` code blocks to PDF at build time.
+            - name: Install Inkscape
+              run: sudo apt-get update && sudo apt-get install -y --no-install-recommends inkscape
 
             - name: Generate the manual
               run: |

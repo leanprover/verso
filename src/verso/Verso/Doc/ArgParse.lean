@@ -473,7 +473,7 @@ partial def parseArgs : ArgParse m α → ExceptT (Array Doc.Arg × Exception) (
           | true => some val
           | false => val
       | .error e => throwThe (Array Doc.Arg × Exception) e
-    else match optional with
+    else match (dependent := true) optional with
       | true => Pure.pure none
       | false => throwThe (Array Doc.Arg × Exception) ((← get).remaining, .error (← getRef) m!"Named argument '{x}' ({vp.description}) not found")
   | .anyNamed x vp doc? => do
@@ -692,35 +692,18 @@ def ValDesc.nat : ValDesc m Nat where
 instance : FromArgVal Nat m where
   fromArgVal := .nat
 
-open Lean.Parser in
+open Verso.SyntaxUtils in
+open Verso.Parser in
 /--
-Parses a sequence of Verso inline elements from a string literal. Returns a FileMap within which
-they can be related to their original source.
+Parses a sequence of Verso inline elements from a string literal. The resulting syntax is adjusted
+so that escapes in the string literal are accounted for in source positions.
 -/
-def ValDesc.inlinesString [MonadFileMap m] : ValDesc m (FileMap × TSyntaxArray `inline) where
+def ValDesc.inlinesString [MonadFileMap m] : ValDesc m (TSyntaxArray `inline) where
   description := doc!"a string that contains a sequence of inline elements"
   signature := .String
   get
-    | .str s => open Lean.Parser in do
-      let text ← getFileMap
-      let input := s.getString
-      let ictxt := mkInputContext input s!"string literal on line {s.raw.getPos?.map ((s!" on line {text.toPosition · |>.line}")) |>.getD ""}"
-      let env ← getEnv
-      let pmctx : ParserModuleContext := {env, options := {}}
-      let p := Verso.Parser.textLine -- TODO use upstreamed once public
-      let s' := p.run ictxt pmctx (getTokenTable env) (mkParserState input)
-      if s'.allErrors.isEmpty then
-        if s'.stxStack.size = 1 then
-          match s'.stxStack.back with
-          | .node _ _ contents => Pure.pure (FileMap.ofString input, contents.map (⟨·⟩))
-          | other => throwError "Unexpected syntax from Verso parser. Expected a node, got {other}"
-        else throwError "Unexpected internal stack size from Verso parser. Expected 1, got {s'.stxStack.size}"
-      else
-        let mut msg := "Failed to parse:"
-        for (p, _, e) in s'.allErrors do
-          let {line, column} := text.toPosition p
-          msg := msg ++ s!"  {line}:{column}: {toString e}\n    {repr <| p.extract input input.rawEndPos}\n"
-        throwError msg
+    | .str s => do
+      return (← parseMarkupStrLit textLine s).getArgs.map (⟨·⟩)
     | other => throwError "Expected string, got {repr other}"
 
 def ValDesc.messageSeverity : ValDesc m MessageSeverity where

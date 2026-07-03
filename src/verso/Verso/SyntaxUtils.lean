@@ -5,6 +5,7 @@ Author: David Thrane Christiansen
 -/
 module
 public import Lean.Parser.Types
+public import Std.Data.TreeMap
 public meta import Verso.Instances
 import Verso.Instances
 import Verso.Method
@@ -236,15 +237,117 @@ public defmethod ParserFn.parseString [Monad m] [MonadError m] [MonadEnv m] (p :
   else
     pure stk[0]
 
+open Lean.Syntax in
+/--
+Decodes the region of `source` between `startPos` and `stopPos`, which holds the bare contents of a
+string literal (no surrounding quotes), applying escape sequences. Returns the decoded string and a
+map from decoded byte positions to absolute source positions.
+
+The map records, for each decoded character, the position where its source representation begins,
+followed by a final entry pairing the end of the decoded string with `stopPos`.
+-/
+public def decodeContentWithMap (source : String) (startPos stopPos : String.Pos.Raw) :
+    String × Std.TreeMap String.Pos.Raw String.Pos.Raw := Id.run do
+  let mut i := startPos
+  let mut decoded := ""
+  let mut map : Std.TreeMap String.Pos.Raw String.Pos.Raw := {}
+  while i.byteIdx < stopPos.byteIdx do
+    let c := i.get source
+    if c == '\\' then
+      if let some (ch, i') := decodeQuotedChar source (i.next source) then
+        map := map.insert decoded.rawEndPos i
+        decoded := decoded.push ch
+        i := i'
+      else if let some i' := decodeStringGap source (i.next source) then
+        i := i'
+      else
+        break
+    else
+      map := map.insert decoded.rawEndPos i
+      decoded := decoded.push c
+      i := i.next source
+  return (decoded, map.insert decoded.rawEndPos i)
+
+/--
+Decodes the contents of a string literal, returning the decoded string together with a map from byte
+positions in the decoded string to absolute byte positions in `source`. `startPos` and `stopPos`
+delimit the literal, including its quotes, within `source`.
+-/
+public def decodeStrLitWithMap (source : String) (startPos stopPos : String.Pos.Raw) :
+    String × Std.TreeMap String.Pos.Raw String.Pos.Raw :=
+  if startPos.get source == 'r' then Id.run do
+    -- Raw string literals are not escape-decoded.
+    let mut i := startPos.next source
+    let mut num := 0
+    while i.get source == '#' do
+      num := num + 1
+      i := i.next source
+    let contentStart := i.next source
+    let contentClose : String.Pos.Raw := ⟨stopPos.byteIdx - (num + 1)⟩
+    let decoded := contentStart.extract source contentClose
+    return (decoded, Std.TreeMap.empty.insert ⟨0⟩ contentStart |>.insert decoded.rawEndPos contentClose)
+  else
+    -- The contents lie between the opening and closing quotes.
+    decodeContentWithMap source (startPos.next source) ⟨stopPos.byteIdx - 1⟩
+
+/--
+Maps a byte position in a decoded string to the corresponding absolute source position, using a map
+produced by `decodeStrLitWithMap`.
+-/
+public def mapDecodedPos (map : Std.TreeMap String.Pos.Raw String.Pos.Raw) (p : String.Pos.Raw) :
+    String.Pos.Raw :=
+  match map.getEntryLE? p with
+  | some (decodedPos, sourcePos) => ⟨sourcePos.byteIdx + (p.byteIdx - decodedPos.byteIdx)⟩
+  | none => p
+
+private def remapSubstring (source : String) (mapPos : String.Pos.Raw → String.Pos.Raw)
+    (w : Substring.Raw) : Substring.Raw :=
+  { str := source, startPos := mapPos w.startPos, stopPos := mapPos w.stopPos }
+
+private def remapSourceInfo (source : String) (mapPos : String.Pos.Raw → String.Pos.Raw) :
+    SourceInfo → SourceInfo
+  | .original leading pos trailing endPos =>
+    .original
+      (remapSubstring source mapPos leading) (mapPos pos)
+      (remapSubstring source mapPos trailing) (mapPos endPos)
+  | .synthetic pos endPos canonical =>
+    .synthetic (mapPos pos) (mapPos endPos) canonical
+  | .none => .none
+
+/--
+Rewrites every source position in `stx`, mapping positions in a decoded string back to absolute
+positions in `source`. The leading and trailing whitespace of original tokens is reanchored to
+`source`, so the syntax round-trips back to the original text.
+-/
+public partial def remapSyntaxPos (source : String) (mapPos : String.Pos.Raw → String.Pos.Raw) :
+    Syntax → Syntax
+  | .node info kind args =>
+    .node (remapSourceInfo source mapPos info) kind (args.map (remapSyntaxPos source mapPos))
+  | .atom info val =>
+    .atom (remapSourceInfo source mapPos info) val
+  | .ident info rawVal val preresolved =>
+    .ident (remapSourceInfo source mapPos info) rawVal val preresolved
+  | .missing => .missing
+
 /--
 Parses an original string literal.
 
 The provided string literal is used only for source positions; the `FileMap` is used to acquire the
-actual string contents.
+actual string contents. When the literal's source text differs from its contents because of escape
+sequences, the decoded contents are parsed and the resulting positions are mapped back to the
+source.
 -/
 public def parseStrLitWith [Monad m] [MonadLog m] [MonadEnv m] [MonadOptions m] [MonadError m] [AddMessageContext m] (p : ParserFn) (input : StrLit) : m Syntax := do
-  let (ictx, startPos) ← strLitInputContext input.raw (← getFileName)
   let text ← getFileMap
+  if let some startPos := input.raw.getPos? then
+    let endPos := input.raw.getTailPos?.getD startPos
+    let stopPos := if endPos > text.source.rawEndPos then text.source.rawEndPos else endPos
+    if startPos.extract text.source stopPos != input.getString then
+      let (decoded, posMap) := decodeContentWithMap text.source startPos stopPos
+      if decoded == input.getString then
+        return ← parseDecoded p decoded (mapDecodedPos posMap) text
+  -- The contents appear verbatim in the source: parse it directly for exact source positions.
+  let (ictx, startPos) ← strLitInputContext input.raw (← getFileName)
   let s := { mkParserState text.source with pos := startPos }
   let env ← getEnv
   let s := p.run ictx { env, options := ← getOptions } (getTokenTable env) s
@@ -260,6 +363,20 @@ public def parseStrLitWith [Monad m] [MonadLog m] [MonadEnv m] [MonadOptions m] 
     return s.stxStack.back
   else
     throwErrorAt input "Unparsed input: `{s.pos.extract text.source ictx.endPos}`"
+where
+  parseDecoded (p : ParserFn) (decoded : String) (mapPos : String.Pos.Raw → String.Pos.Raw) (text : FileMap) : m Syntax := do
+    let env ← getEnv
+    let ictx := mkInputContext decoded (← getFileName)
+    let s := p.run ictx { env, options := ← getOptions } (getTokenTable env) (mkParserState decoded)
+    if !s.allErrors.isEmpty then
+      for (pos, stk, err) in s.allErrors do
+        let serr := mkSyntaxError ictx pos stk err
+        logErrorAt (Syntax.atom (.synthetic (mapPos pos) (mapPos pos)) "") serr.text
+      return .missing
+    else if ictx.atEnd s.pos then
+      return remapSyntaxPos text.source mapPos s.stxStack.back
+    else
+      throwErrorAt input "Unparsed input: `{s.pos.extract decoded ictx.endPos}`"
 
 /--
 Parses an original string literal as part of a syntax category.
@@ -269,6 +386,43 @@ actual string contents.
 -/
 public def parseStrLitAsCategory [Monad m] [MonadLog m] [MonadEnv m] [MonadOptions m] [MonadError m] [AddMessageContext m] (catName : Name) (input : StrLit) : m Syntax :=
   parseStrLitWith (andthenFn whitespace (categoryParserFnImpl catName)) input
+
+/--
+Parses the contents of a string literal as Verso markup using `p`, producing syntax whose source
+positions are absolute positions in the enclosing file. Escape sequences are decoded before parsing,
+and the resulting positions are mapped back to the original source.
+
+When the literal has no source position (for example, one synthesized by a macro), the contents are
+parsed directly and positions refer to the decoded string.
+-/
+public def parseMarkupStrLit [Monad m] [MonadFileMap m] [MonadEnv m] [MonadError m]
+    (p : ParserFn) (s : StrLit) : m Syntax := do
+  let text ← getFileMap
+  let env ← getEnv
+  let pmctx : ParserModuleContext := { env, options := {} }
+  let (input, mapPos, remap) :=
+    match s.raw.getPos?, s.raw.getTailPos? with
+    | some startPos, some stopPos =>
+      let (input, posMap) := decodeStrLitWithMap text.source startPos stopPos
+      if input == s.getString then
+        let mapPos := mapDecodedPos posMap
+        (input, mapPos, remapSyntaxPos text.source mapPos)
+      else
+        (s.getString, id, id)
+    | _, _ => (s.getString, id, id)
+  let st := p.run (mkInputContext input "<string literal>") pmctx (getTokenTable env) (mkParserState input)
+  if st.allErrors.isEmpty then
+    if st.stxStack.size = 1 then
+      return remap st.stxStack.back
+    else
+      throwError "Unexpected syntax from Verso parser: expected a single node, got {st.stxStack.size}"
+  else
+    let mut msg := "Failed to parse Verso markup:"
+    for (errPos, _, e) in st.allErrors do
+      let pos := text.toPosition (mapPos errPos)
+      msg := msg ++ s!"\n  {pos.line}:{pos.column}: {toString e}"
+    let blamePos := mapPos (((st.allErrors[0]?).map (·.1)).getD ⟨0⟩)
+    throwErrorAt (Syntax.atom (.synthetic blamePos blamePos) "") msg
 
 open Lean.Parser in
 /--

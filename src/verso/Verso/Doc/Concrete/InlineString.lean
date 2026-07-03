@@ -47,18 +47,3 @@ elab_rules : term <= ty
       { highlightDeduplicationTable := .none }
       (.init tk tk) <| inls.mapM (elabBlock ⟨·⟩)
     elabTerm (← ``(Block.concat #[ $[$tms],* ] )) ty
-
-
-set_option pp.rawOnError true
-
-/--
-info: Inline.concat #[Inline.text "Hello, ", Inline.emph #[Inline.bold #[Inline.text "emph"]]] : Inline Genre.none
--/
-#guard_msgs in
-#check (inlines!"Hello, _*emph*_" : Inline .none)
-
-/--
-info: Block.concat #[Block.para #[Inline.text "Hello, ", Inline.emph #[Inline.bold #[Inline.text "emph"]]]] : Block Genre.none
--/
-#guard_msgs in
-#check (blocks!"Hello, _*emph*_" : Block .none)

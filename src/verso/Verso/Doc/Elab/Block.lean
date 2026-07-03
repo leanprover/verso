@@ -36,7 +36,7 @@ public partial def elabBlock (block : TSyntax `block) : DocElabM (TSyntax `term)
     ``(sorryAx (Block _) (synthetic := true))
   | stx@(.node _ kind _) =>
     let env ← getEnv
-    let result ← match (← liftMacroM (expandMacroImpl? env stx)) with
+    match (← liftMacroM (expandMacroImpl? env stx)) with
     | some (_decl, stxNew?) => -- TODO terminfo here? Right now, we suppress most uses of it.
       let stxNew ← liftMacroM <| liftExcept stxNew?
       withMacroExpansionInfo stx stxNew <|

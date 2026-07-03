@@ -31,7 +31,7 @@ set_option doc.verso.suggestions false in
 
 {syntaxCat}`term` is a syntax category, and {syntax term}`1 + [] - (· / ·)` is syntax in it.
 
-{kw (of := Lean.«command__Unif_hint____Where_|_-⊢__»)}`unif_hint` is a keyword atom.
+{kw}`funext` is a keyword atom.
 {kw? (of := Lean.«command__Unif_hint____Where_|_-⊢__»)}`where` is also a keyword atom, and
 {kw! (of := Lean.Parser.Command.definition)}`def` is an unchecked keyword atom.
 
