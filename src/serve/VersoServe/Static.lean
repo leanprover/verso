@@ -234,7 +234,7 @@ def isWithin (root real : System.FilePath) : Bool :=
 /-- Formats a filesystem modification time as an HTTP date. -/
 def httpDate (t : IO.FS.SystemTime) : String :=
   let ts := Std.Time.Timestamp.ofSecondsSinceUnixEpoch (Std.Time.Second.Offset.ofInt t.sec)
-  (Std.Time.DateTime.ofTimestamp ts .GMT).toRFC822String
+  (Std.Time.DateTime.ofTimestampWithZone ts .GMT).toRFC822String
 
 /-! # Request handling -/
 
