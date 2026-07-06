@@ -392,10 +392,15 @@ def docstringStyle := r#"
   color: #555;
 }
 
-.namedocs h1 {
-  font-size: inherit;
-  font-weight: bold
+.namedocs .docstring-section {
   margin-top: 1rem;
+  margin-bottom: 1rem;
+}
+
+.namedocs .docstring-section-label {
+  font-size: inherit;
+  font-weight: bold;
+  margin-top: 0;
   margin-bottom: 1rem;
 }
 
@@ -521,21 +526,35 @@ where
 
 @[block_extension Block.docstringSection]
 def docstringSection.descr : BlockDescr where
-  traverse _ _ _ := pure none
+  traverse id info _ := do
+    let .ok header := FromJson.fromJson? (α := String) info
+      | reportError "Failed to deserialize docstring section data while traversing"; return none
+    let path ← (·.path) <$> read
+    let _ ← externalTag id path s!"docstring-section-{header}"
+    pure none
   toTeX := some fun _goI goB _id info contents =>
     open Verso.Output.TeX in do
     let .ok header := FromJson.fromJson? (α := String) info
       | reportError "Failed to deserialize docstring section data while generating TeX"; return .empty
     pure \TeX{\par\noindent\textbf{\Lean{header}}\par " " \Lean{.seq (← contents.mapM goB)}}
-  toHtml := some fun _goI goB _id info contents =>
+  toHtml := some fun _goI goB id info contents =>
     open Verso.Doc.Html HtmlT in
     open Verso.Output Html in do
       let .ok header := FromJson.fromJson? (α := String) info
-        | do reportError "Failed to deserialize docstring section data while generating HTML"; pure .empty
-      return {{
-        <h1>{{header}}</h1>
-        {{← contents.mapM goB}}
-      }}
+        | do reportError "Failed to deserialize docstring section data while generating HTML"; pure Html.empty
+      let xref : TraverseState ← HtmlT.state (genre := Manual)
+      match xref.externalTags[id]? with
+      | none =>
+        reportError s!"No HTML ID registered for docstring section '{header}'"
+        pure Html.empty
+      | some dest =>
+        let renderedContents ← contents.mapM goB
+        pure (Html.labeledGroup
+          "docstring-section"
+          "docstring-section-label"
+          (toString dest.htmlId)
+          header
+          (.seq renderedContents))
 
 @[block_extension Block.internalSignature]
 def internalSignature.descr : BlockDescr where
