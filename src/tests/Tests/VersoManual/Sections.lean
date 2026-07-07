@@ -7,9 +7,7 @@ import VersoManual
 
 namespace DocstringSectionRegression
 
-open Verso
-open Verso.Output
-open Verso.Genre.Manual
+open Verso Output Genre Manual
 
 /-- A fixture for Manual docstring subsection HTML rendering. -/
 structure SectionFixture where
