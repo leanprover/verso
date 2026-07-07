@@ -1550,7 +1550,6 @@ def highlightDataValue (v : DataValue) : Highlighted :=
     | .ofInt (v : Int) => ⟨.unknown, toString v⟩
     | .ofSyntax (v : Syntax) => ⟨.unknown, toString v⟩ -- TODO
 
-@[expose]
 def optionDocs.Args := Ident
 instance : FromArgs optionDocs.Args DocElabM := ⟨.positional `name .ident "The option name"⟩
 
