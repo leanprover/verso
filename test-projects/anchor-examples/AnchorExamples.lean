@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 import AnchorExamples.Basic
-import Lean
+import Std.Time.Zoned.DateTime
 
 -- ANCHOR: t
 def someTree : Tree Nat :=
