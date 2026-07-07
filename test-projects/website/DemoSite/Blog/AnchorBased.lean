@@ -103,7 +103,6 @@ v4.31.0, we can use that code here:
 ```anchor works_only_if_leq_v4_31
 example (tz : Std.Time.TimeZone) : Type := Std.Time.DateTime tz
 
-/-- info: "4.31.0" -/
 #guard_msgs in
 #eval Lean.versionString
 ```
