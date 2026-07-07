@@ -18,6 +18,7 @@ set_option verso.exampleModule "AnchorExamples"
 
 set_option pp.rawOnError true
 
+#eval Lean.versionString
 #doc (Post) "Anchor-Based Examples from Subprojects" =>
 
 %%%
@@ -91,4 +92,18 @@ theorem Tree.flip_flip_eq_id :
   | leaf => rfl
   | branch l v r ih1 ih2 =>
     simp_all [flip]
+```
+
+Note that anchored text doesn't have to work in the version of Lean that
+you're using to build this document, it can be older. This snippet doesn't
+work in Lean after v4.31.0 (due to changes in Lean's standard library and
+due to checking the version string), but because the anchored project uses
+v4.31.0, we can use that code here:
+
+```anchor works_only_if_leq_v4_31
+example (tz : Std.Time.TimeZone) : Type := Std.Time.DateTime tz
+
+/-- info: "4.31.0" -/
+#guard_msgs in
+#eval Lean.versionString
 ```
