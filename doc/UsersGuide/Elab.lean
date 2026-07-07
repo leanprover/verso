@@ -85,7 +85,7 @@ This traversal is repeated until the resulting document and metadata tables are 
 Verso provides a general-purpose traversal mechanism for {name Verso.Doc.Part}`Part`, {name Verso.Doc.Block}`Block`, and {name Verso.Doc.Inline}`Inline` that genres may use.
 {name Verso.Doc.Genre.TraverseState}`Genre.TraverseState` contains the genre-specific information that's accumulated during traversal, while {name Verso.Doc.Genre.TraverseContext}`Genre.TraverseContext` provides a means of tracking the surrounding document context.
 To use this framework, genres should define instances of {name Verso.Doc.Traverse}`Traverse`, which specifies the traversal of a genre's custom elements.
-Additionally, instances of {name Verso.Doc.TraversePart}`GenrePart` and {name Verso.Doc.TraverseBlock}`GenreBlock` specify how traversal keeps track of the current position in a document.
+Additionally, instances of {name Verso.Doc.TraversePart}`TraversePart` and {name Verso.Doc.TraverseBlock}`TraverseBlock` specify how traversal keeps track of the current position in a document.
 
 {docstring Verso.Doc.Traverse}
 
