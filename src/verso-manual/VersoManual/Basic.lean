@@ -841,6 +841,7 @@ meta initialize
       name := name,
       ref := by exact decl_name%,
       add := fun decl stx kind => do
+        ensureAttrDeclIsPublic name decl kind
         unless kind == AttributeKind.global do throwError "invalid attribute '{name}', must be global"
         unless ((← getEnv).getModuleIdxFor? decl).isNone do
           throwError "invalid attribute '{name}', declaration is in an imported module"
@@ -926,7 +927,7 @@ elab_rules : command
     let cmd3 ←
       `(command|
         @[block_extension $x]
-        private def $descrName : BlockDescr := $(← applyMixins innerDescrName))
+        public def $descrName : BlockDescr := $(← applyMixins innerDescrName))
     elabCommand cmd1
     elabCommand cmd2
     elabCommand cmd3
@@ -951,7 +952,7 @@ elab_rules : command
     let cmd3 ←
       `(command|
         @[inline_extension $x]
-        private def $descrName : InlineDescr := $(← applyMixins innerDescrName))
+        public def $descrName : InlineDescr := $(← applyMixins innerDescrName))
     elabCommand cmd1
     elabCommand cmd2
     elabCommand cmd3
