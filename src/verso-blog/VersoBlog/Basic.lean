@@ -208,16 +208,19 @@ where
   pad (n : Nat) : String :=
     (if n ≤ 9 then "0" else "") ++ toString n
 
-def defaultPostName (date : Date) (title : String) : String :=
-  s!"{date.year}-{date.month}-{date.day}-{slugify title}"
-where
-  slugify str := Id.run do
+def slugifyTitle (str: String) := Id.run do
     let mut slug := ""
     for c in str.toList do
       if c == ' ' then slug := slug.push '-'
       else if c.isAlpha || c.isDigit then slug := slug.push c.toLower
       else continue
     pure slug
+
+@[deprecated slugifyTitle (since := "2026-07-07")]
+def defaultPostName.slugify := slugifyTitle
+
+def defaultPostName (date : Date) (title : String) : String :=
+  s!"{date.year}-{date.month}-{date.day}-{slugifyTitle title}"
 
 structure Config where
   destination : System.FilePath := "./_site"
