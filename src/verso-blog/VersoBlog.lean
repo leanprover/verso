@@ -7,6 +7,7 @@ Author: David Thrane Christiansen
 import SubVerso.Highlighting
 import SubVerso.Examples
 
+<<<<<<< Updated upstream
 import VersoBlog.Basic
 import VersoBlog.LiterateLeanPage
 import VersoBlog.LiterateModuleDocs
@@ -21,6 +22,10 @@ import Verso.Doc.Lsp
 import Verso.Doc.Suggestion
 import Verso.Hover
 import Verso.WithoutAsync
+=======
+#check Verso.Genre.Blog.defaultPostName
+
+>>>>>>> Stashed changes
 open Verso.Output Html
 
 namespace Verso.Genre.Blog
