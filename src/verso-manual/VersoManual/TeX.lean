@@ -9,6 +9,8 @@ namespace Verso.Genre.Manual.TeX
 public def preamble (title : String) (authors : List String) (date : String) (packages : List String) (extraPreamble : List String) : String :=
 r##"
 \documentclass{memoir}
+\setlrmarginsandblock{1.7in}{1.7in}{*}
+\checkandfixthelayout
 
 \usepackage{sourcecodepro}
 \usepackage{sourcesanspro}
