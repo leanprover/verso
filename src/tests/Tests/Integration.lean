@@ -32,7 +32,9 @@ This differs from `System.FilePath.walkRoot`, in that the latter returns
 absolute paths, and includes subdirectories.
 -/
 partial def filesBelow (root : System.FilePath) :
-    IO (Array System.FilePath) := Prod.snd <$> StateT.run (go ".") #[]
+    IO (Array System.FilePath) := do
+  let files ← Prod.snd <$> StateT.run (go ".") #[]
+  return files.qsort (·.toString < ·.toString) -- Ensure deterministic result
 where
   go (p : System.FilePath) := do
     for d in (← (root / p).readDir) do

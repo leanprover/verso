@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # While SubVerso works in every Lean release, a Verso project and the
 # code that it's documenting must have the same version of SubVerso.

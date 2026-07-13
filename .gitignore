@@ -15,5 +15,6 @@ profile.json.gz
 multi.json
 single.json
 *.html
+!/doc/stats.html
 *.produced.out
 __pycache__
