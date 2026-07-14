@@ -4,7 +4,6 @@ on:
     push:
         tags:
             - "v4*"
-    workflow_dispatch: # Allow manual triggering (possibly not something we want always)
 
 jobs:
     deploy:
