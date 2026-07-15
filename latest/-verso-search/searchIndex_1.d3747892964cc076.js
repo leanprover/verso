@@ -1,0 +1,1 @@
+window.docContents[1].resolve({"/Extensions/#extensions":{"contents":"Verso's markup language features four extension points:\n\n* Roles* Directives* Code blocks* Commands\n\nThese can be used to extend Verso to support new documentation features.\n\n\n\n\n\n","context":"Writing Documentation in Lean with Verso","header":"4. Extensions","id":"/Extensions/#extensions"}});
