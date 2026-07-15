@@ -3,8 +3,13 @@ Copyright (c) 2023-2026 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-import Verso
-import Verso.Doc.Concrete.InlineString
+module
+public import Verso
+public meta import Verso
+public import Verso.Doc.Concrete.InlineString
+public meta import Verso.Doc.Concrete.InlineString
+
+public section
 
 open Lean
 open Verso.Doc

@@ -4,9 +4,13 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 
-import VersoManual.Basic
-import Verso.Doc.ArgParse
-import Verso.Doc.Elab
+module
+public import VersoManual.Basic
+public import Verso.Doc.ArgParse
+public import Verso.Doc.Elab
+public meta import Verso.Doc.Elab.Block
+
+public section
 
 open Verso Doc Elab
 open Verso.Genre Manual
@@ -25,7 +29,7 @@ deriving ToJson, FromJson, DecidableEq, Repr, Ord
 
 open Syntax in
 open TableConfig.Alignment in
-instance : Quote TableConfig.Alignment where
+meta instance : Quote TableConfig.Alignment where
   quote
     | .left => mkCApp ``left #[]
     | .center => mkCApp ``center #[]
@@ -164,7 +168,7 @@ table.tabular td > p:last-child, table.tabular th > p:first-child {
 section
 variable [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m] [MonadFileMap m]
 
-def TableConfig.parse : ArgParse m TableConfig :=
+meta def TableConfig.parse : ArgParse m TableConfig :=
   TableConfig.mk <$> .named `tag .string true <*> .flag `header true <*> .named `align alignment true
 where
   alignment := {
@@ -180,12 +184,12 @@ where
       | .num x | .str x => throwErrorAt x "Expected 'left', 'right', or 'center'"
   }
 
-instance : FromArgs TableConfig m := ⟨TableConfig.parse⟩
+meta instance : FromArgs TableConfig m := ⟨TableConfig.parse⟩
 
 end
 
 @[directive]
-def table : DirectiveExpanderOf TableConfig
+meta def table : DirectiveExpanderOf TableConfig
   | cfg, contents => do
     -- The table should be a list of lists. Extract them!
     let #[oneBlock] := contents

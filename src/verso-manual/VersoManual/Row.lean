@@ -4,9 +4,13 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 
-import VersoManual.Basic
-import Verso.Doc.ArgParse
-import Verso.Doc.Elab
+module
+public import VersoManual.Basic
+public import Verso.Doc.ArgParse
+public import Verso.Doc.Elab
+public meta import Verso.Doc.Elab.Block
+
+public section
 
 open Lean Elab
 open Verso ArgParse Doc Elab Genre.Manual Html
@@ -40,10 +44,10 @@ structure RowConfig where
 section
 variable [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m]
 
-def RowConfig.parse : ArgParse m RowConfig :=
+meta def RowConfig.parse : ArgParse m RowConfig :=
   RowConfig.mk <$> .namedD' `align "top"
 
-instance : FromArgs RowConfig m := ⟨RowConfig.parse⟩
+meta instance : FromArgs RowConfig m := ⟨RowConfig.parse⟩
 
 end
 
@@ -56,7 +60,7 @@ The `align` argument controls vertical alignment within the row, accepting `"top
 `"bottom"`. It is only meaningful for HTML output.
 -/
 @[directive]
-def row : DirectiveExpanderOf RowConfig
+meta def row : DirectiveExpanderOf RowConfig
   | config, stxs => do
     let alignItems ←
       match config.align with

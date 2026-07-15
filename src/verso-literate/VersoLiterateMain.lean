@@ -3,15 +3,22 @@ Copyright (c) 2023-2024 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-import SubVerso.Compat
-import SubVerso.Examples.Env
-import SubVerso.Module
-import SubVerso.Highlighting.Export
-import MD4Lean
-import Lean.DocString.Syntax
-import Lean.DocString.Extension
+module
+public import SubVerso.Compat
+public import SubVerso.Examples.Env
+public import SubVerso.Module
+public import SubVerso.Highlighting.Export
+public import MD4Lean
+public import Lean.DocString.Syntax
+public import Lean.DocString.Extension
+public import Lean.Elab.Frontend
+public import Lean.Server.InfoUtils
+public import Lean.Server.References
 
-import VersoLiterate
+public import VersoLiterate
+public import Verso.SyntaxUtils
+
+public section
 
 open Lean Elab Frontend
 open Lean.Elab.Command hiding Context
@@ -58,14 +65,6 @@ where
   wholeFileInfo : SourceInfo → SourceInfo
     | .original l l' t _ => .original l l' t contents.rawEndPos
     | i => i
-
-instance : ToJson ElabInline where
-  toJson v := s!"{v.name}"
-instance : ToJson ElabBlock where
-  toJson v := s!"{v.name}"
-instance : ToJson Empty where
-  toJson := nofun
-
 
 section
 open SubVerso.Highlighting
@@ -495,13 +494,16 @@ where
     | .link txt url => (.link · url) <$> txt.mapM inlineToLit
     | .image alt url => pure <| .image alt url
     | .footnote name xs => .footnote name <$> xs.mapM inlineToLit
-    | .other x xs => do
+    | .other (.deferred _) xs =>
+      -- TODO deferred checks need a solution here
+      .concat <$> xs.mapM inlineToLit
+    | .other (.custom val) xs => do
       let xs ← xs.mapM inlineToLit
       let handlers ← getInlineToLiterate
       for h in handlers do
-        if let some v ← h x.name x.val xs then
+        if let some v ← h val xs then
           return ← relocateInline v
-      logWarning m!"No inline handler for {x.name} with type {x.val.typeName}; using fallback content"
+      logWarning m!"No inline handler for {val.typeName}; using fallback content"
       return .concat xs
 
 
@@ -513,13 +515,16 @@ where
     | .dl items => .dl <$> items.mapM fun x => DescItem.mk <$> x.term.mapM inlineToLit <*> x.desc.mapM blockToLit
     | .blockquote xs => .blockquote <$> xs.mapM blockToLit
     | .code s => pure <| .code s
-    | .other x xs => do
+    | .other (.deferred _) xs =>
+      -- TODO deferred checks need a solution here
+      .concat <$> xs.mapM blockToLit
+    | .other (.custom val) xs => do
       let xs ← xs.mapM blockToLit
       let handlers ← getBlockToLiterate
       for h in handlers do
-        if let some v ← h x.name x.val xs then
+        if let some v ← h val xs then
           return ← relocateBlock v
-      logWarning m!"No block handler for {x.name} with type {x.val.typeName}; using fallback content"
+      logWarning m!"No block handler for {val.typeName}; using fallback content"
       return .concat xs
 
   partToLit (p : Lean.Doc.Part ElabInline ElabBlock Empty) : ToLitM (Lean.Doc.Part Ext Ext Empty) :=

@@ -3,11 +3,17 @@ Copyright (c) 2026 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-import Plausible
-import Plausible.ArbitraryFueled
-import VersoBlog
-import VersoBlog.LiterateLeanPage
-import Tests.Arbitrary
+module
+public import Plausible
+public import Plausible.ArbitraryFueled
+public import VersoBlog
+public meta import VersoBlog.Basic
+public import VersoBlog.LiterateLeanPage
+public import Tests.VersoBlog.LiterateLeanPage
+public import Tests.Arbitrary
+public meta import Tests.Arbitrary
+
+public section
 
 open Lean
 open Verso Genre Blog
@@ -20,6 +26,8 @@ open Plausible Gen Arbitrary
 /-- info: #[(`a.b.c, 1), (`a.c, 4), (`b.c, 6), (`c, 3)] -/
 #guard_msgs in
 #eval NameSuffixMap.empty |>.insert `a.b.c 1 |>.insert `b.c 2 |>.insert `c 3 |>.insert `a.c 4 |>.insert `a.b 5 |>.insert `b.c 6 |>.get `c
+
+meta section
 
 def freshIdOk (hint : LetterString) (path : Path) (howMany : Nat) : Bool := Id.run do
   let mut st : TraverseState := { remoteContent := {} }
@@ -64,6 +72,8 @@ def runBlogTests : IO Nat := do
     unless res matches .success .. do
       failures := failures + 1
   return failures
+
+end
 
 -- Regression test for hidden blog Lean blocks.
 #doc (Post) "Hidden Lean Block Flags" =>

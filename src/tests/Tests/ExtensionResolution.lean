@@ -3,7 +3,11 @@ Copyright (c) 2026 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: Emilio J. Gallego Arias
 -/
-import Verso
+module
+public import Verso
+public meta import Verso
+
+public section
 
 namespace Verso.ExtensionResolutionTest
 set_option guard_msgs.diff true
@@ -22,7 +26,7 @@ Extension resolution has four relevant outcomes:
 namespace RoleCases
 
 @[role]
-def registered : RoleExpanderOf Unit
+meta def registered : RoleExpanderOf Unit
   | (), _ => do
     `(Verso.Doc.Inline.text "registered-role")
 
@@ -36,7 +40,7 @@ def registered : RoleExpanderOf Unit
 #eval roleRegistered.toPart.content
 
 @[role_expander legacyRegistered]
-def legacyRegistered : RoleExpander
+meta def legacyRegistered : RoleExpander
   | _, _ => do
     pure #[← `(Verso.Doc.Inline.text "legacy-role")]
 
@@ -130,42 +134,42 @@ error: No registered role `q`.
 :::::::
 
 @[role]
-def r : RoleExpanderOf Unit
+meta def r : RoleExpanderOf Unit
   | (), _ => do
     `(Verso.Doc.Inline.text "one-character-cutoff-role")
 
 @[role]
-def ab : RoleExpanderOf Unit
+meta def ab : RoleExpanderOf Unit
   | (), _ => do
     `(Verso.Doc.Inline.text "short-distance-role")
 
 @[role]
-def vvv : RoleExpanderOf Unit
+meta def vvv : RoleExpanderOf Unit
   | (), _ => do
     `(Verso.Doc.Inline.text "three-character-cutoff-role")
 
 @[role]
-def distanceRegistered : RoleExpanderOf Unit
+meta def distanceRegistered : RoleExpanderOf Unit
   | (), _ => do
     `(Verso.Doc.Inline.text "distance-role")
 
 @[role]
-def yyyyy : RoleExpanderOf Unit
+meta def yyyyy : RoleExpanderOf Unit
   | (), _ => do
     `(Verso.Doc.Inline.text "middle-cutoff-role")
 
 @[role]
-def zzzzzz : RoleExpanderOf Unit
+meta def zzzzzz : RoleExpanderOf Unit
   | (), _ => do
     `(Verso.Doc.Inline.text "long-cutoff-role")
 
 @[role]
-def multiAlpha : RoleExpanderOf Unit
+meta def multiAlpha : RoleExpanderOf Unit
   | (), _ => do
     `(Verso.Doc.Inline.text "multi-alpha-role")
 
 @[role]
-def multiAlphi : RoleExpanderOf Unit
+meta def multiAlphi : RoleExpanderOf Unit
   | (), _ => do
     `(Verso.Doc.Inline.text "multi-alphi-role")
 
@@ -304,7 +308,7 @@ end DistanceCases
 namespace ShadowSource
 
 @[role]
-def shadowedRegistered : RoleExpanderOf Unit
+meta def shadowedRegistered : RoleExpanderOf Unit
   | (), _ => do
     `(Verso.Doc.Inline.text "shadowed-role")
 
@@ -348,7 +352,7 @@ end ShadowUse
 namespace CodeBlockCases
 
 @[code_block]
-def registeredBlock : CodeBlockExpanderOf Unit
+meta def registeredBlock : CodeBlockExpanderOf Unit
   | (), str => do
     `(Verso.Doc.Block.code $(quote str.getString))
 
@@ -406,7 +410,7 @@ end CodeBlockCases
 namespace DirectiveCases
 
 @[directive]
-def registeredDirective : DirectiveExpanderOf Unit
+meta def registeredDirective : DirectiveExpanderOf Unit
   | (), blocks => do
     let blocks ← blocks.mapM Verso.Doc.Elab.elabBlock
     `(Verso.Doc.Block.concat #[$blocks,*])
@@ -466,7 +470,7 @@ end DirectiveCases
 namespace BlockCommandCases
 
 @[block_command]
-def registeredCommand : BlockCommandOf Unit
+meta def registeredCommand : BlockCommandOf Unit
   | () => do
     `(Verso.Doc.Block.para #[Verso.Doc.Inline.text "registered-command"])
 
