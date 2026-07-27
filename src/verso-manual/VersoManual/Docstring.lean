@@ -341,7 +341,7 @@ def internalSignature (name : Highlighted) (signature : Option Highlighted) : Bl
   name := `Verso.Genre.Manual.Block.internalSignature
   data := ToJson.toJson (name, signature)
 
-open Docstring in
+open Block.Docstring in
 def fieldSignature (visibility : Visibility) (name : Highlighted) (signature : Highlighted) (inheritedFrom : Option Nat) (inheritance : Array Highlighted) : Block where
   name := `Verso.Genre.Manual.Block.fieldSignature
   data := ToJson.toJson (visibility, name, signature, inheritedFrom, inheritance)
