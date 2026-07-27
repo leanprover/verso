@@ -488,7 +488,7 @@ meta def lean : CodeBlockExpanderOf LeanBlockConfig
     -- Process with empty messages to avoid duplicate output
     let s ←
       withTraceNode `Elab.Verso.block.lean (fun _ => pure m!"Elaborating commands") <|
-      IO.processCommands context { state with pos := startPos } { commandState with messages.unreported := {} }
+      IO.processCommands context { state with pos := startPos, hasLeading := false } { commandState with messages.unreported := {} }
     for t in s.commandState.infoState.trees do
       pushInfoTree t
 
