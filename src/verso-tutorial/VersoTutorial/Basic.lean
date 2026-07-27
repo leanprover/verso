@@ -30,12 +30,21 @@ open Lean
 open Verso.Doc (Genre)
 open Verso.Multi
 
+/--
+The default toolchain to be used for example code when no other toolchain is specified.
+
+This default toolchain is the current toolchain version.
+-/
 @[expose] def defaultToolchain :=
   if Lean.versionString.find? "nightly" |>.isSome then
     "leanprover/lean4:nightly" ++ (Lean.versionString.split "nightly" |>.toArray[1]!).copy
   else
     "leanprover/lean4:" ++ Lean.versionString
 
+/--
+The default toolchain to be used for links to `live.lean-lang.org`, which is the toolchain that
+corresponds to the current Lean version.
+-/
 @[expose] def defaultLive := "lean-v" ++ Lean.versionString
 
 /-- A style by which example code in a tutorial should be made runnable. -/
