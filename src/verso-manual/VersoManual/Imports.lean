@@ -4,10 +4,14 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 
-import Verso.Doc.ArgParse
-import Verso.Doc.Elab
-import SubVerso.Highlighting.Code
-import VersoManual.ExternalLean
+module
+public import Verso.Doc.ArgParse
+public import Verso.Doc.Elab
+public import SubVerso.Highlighting.Code
+public import VersoManual.ExternalLean
+public meta import Verso.Doc.Elab.Monad
+
+public section
 
 open scoped Lean.Doc.Syntax
 
@@ -22,14 +26,14 @@ namespace Verso.Genre.Manual
 structure ImportsParams where
   «show» : Bool := true
 
-instance : FromArgs ImportsParams m where
+meta instance : FromArgs ImportsParams m where
   fromArgs := ImportsParams.mk <$> .flag `show true (some "Whether to show the import header")
 
 /--
 Parses, but does not validate, a module header.
 -/
 @[code_block]
-def imports : CodeBlockExpanderOf ImportsParams
+meta def imports : CodeBlockExpanderOf ImportsParams
   | { «show» } , str => do
     let p := Parser.whitespace >> Parser.Module.header.fn
     let headerStx ← parseStrLitWith p str

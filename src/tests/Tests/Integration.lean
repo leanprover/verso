@@ -3,7 +3,11 @@ Copyright (c) 2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: Jason Reed
 -/
-import Lean.Util.Diff
+module
+
+public import Lean.Util.Diff
+
+public section
 
 namespace Verso.Integration
 
@@ -28,7 +32,9 @@ This differs from `System.FilePath.walkRoot`, in that the latter returns
 absolute paths, and includes subdirectories.
 -/
 partial def filesBelow (root : System.FilePath) :
-    IO (Array System.FilePath) := Prod.snd <$> StateT.run (go ".") #[]
+    IO (Array System.FilePath) := do
+  let files ← Prod.snd <$> StateT.run (go ".") #[]
+  return files.qsort (·.toString < ·.toString) -- Ensure deterministic result
 where
   go (p : System.FilePath) := do
     for d in (← (root / p).readDir) do
@@ -97,10 +103,25 @@ def runTests (config : Config) : IO Unit := do
     if config.checkTeX then
       -- `-shell-escape` is required so that documents using the `svg` LaTeX package can call
       -- Inkscape to rasterise SVG attachments emitted by `diagram` code blocks.
-      discard <| IO.Process.run {
-        cwd := outputRoot / "tex",
+      let texDir := outputRoot / "tex"
+      let result ← IO.Process.output {
+        cwd := texDir,
         cmd := "lualatex",
         args := #["-shell-escape", "-halt-on-error", "-interaction=nonstopmode", "main.tex"]
       }
+      if result.exitCode != 0 then
+        -- lualatex writes its diagnostics to stdout and `main.log`, not stderr, so report all
+        -- three. Each is wrapped in a GitHub Actions log group so the output stays collapsible.
+        let group (title : String) (body : String) : IO Unit := do
+          IO.println s!"::group::{title}"
+          IO.println body
+          IO.println "::endgroup::"
+        let context := s!"lualatex in {config.testDir}"
+        group s!"{context}: stdout" result.stdout
+        group s!"{context}: stderr" result.stderr
+        let logFile := texDir / "main.log"
+        if ← logFile.pathExists then
+          group s!"{context}: {logFile}" (← IO.FS.readFile logFile)
+        throw <| .userError s!"lualatex exited with code {result.exitCode} in {config.testDir}"
 
   return

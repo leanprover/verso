@@ -30,6 +30,7 @@ inductive SigDoc where
   | text (str : String)
   | name (name : Name)
   | append (d1 d2 : SigDoc)
+deriving ToExpr
 
 instance : Append SigDoc := ⟨.append⟩
 

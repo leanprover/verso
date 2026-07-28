@@ -3,14 +3,17 @@ Copyright (c) 2024-2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
+module
 
-import Lean.Data.Json.Basic
-import VersoManual.Basic
-import VersoManual.HighlightedCode
-import Verso.Code.Highlighted.WebAssets
-import Verso.Code.HighlightedToTex
+public import Lean.Data.Json.Basic
+public import VersoManual.Basic
+public import VersoManual.HighlightedCode
+public import Verso.Code.Highlighted.WebAssets
+public import Verso.Code.HighlightedToTex
 
-import SubVerso.Highlighting
+public import SubVerso.Highlighting
+
+public section
 
 open Verso Genre Manual
 open Verso Code Highlighted WebAssets

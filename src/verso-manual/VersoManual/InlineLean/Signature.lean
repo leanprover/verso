@@ -3,12 +3,18 @@ Copyright (c) 2024-2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-import Lean.Elab.InfoTree.Types
+module
 
-import Verso
-import VersoManual.Basic
-import VersoManual.HighlightedCode
-import SubVerso.Examples
+public import Lean.Elab.InfoTree.Types
+
+public import Verso
+public meta import Verso.WithoutAsync
+public meta import Verso.Code.Highlighted
+public import VersoManual.Basic
+public import VersoManual.HighlightedCode
+public import SubVerso.Examples
+
+public section
 
 open SubVerso.Highlighting
 
@@ -48,16 +54,16 @@ section
 
 variable [Monad m] [MonadError m] [MonadLiftT CoreM m]
 
-def SignatureConfig.parse  : ArgParse m SignatureConfig :=
+meta def SignatureConfig.parse  : ArgParse m SignatureConfig :=
   SignatureConfig.mk <$>
     (.flag `show true)
 
-instance : FromArgs SignatureConfig m where
+meta instance : FromArgs SignatureConfig m where
   fromArgs := SignatureConfig.parse
 end
 
 @[code_block]
-def signature : CodeBlockExpanderOf SignatureConfig
+meta def signature : CodeBlockExpanderOf SignatureConfig
   | {«show»}, str => withoutAsync do
     let col? := (← getRef).getPos? |>.map (← getFileMap).utf8PosToLspPos |>.map (·.character)
 
