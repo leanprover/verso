@@ -6,9 +6,10 @@ Author: David Thrane Christiansen
 module
 namespace Verso.Genre.Manual.TeX
 
-public def preamble (title : String) (authors : List String) (date : String) (packages : List String) (extraPreamble : List String) : String :=
+public def preamble (title : String) (authors : List String) (date : String) (packages : List String)
+                    (extraPreamble : List String) (twoside: Bool) : String :=
 r##"
-\documentclass{memoir}
+\documentclass["## ++ (if twoside then "twoside" else "oneside") ++ r##"]{memoir}
 
 \usepackage{sourcecodepro}
 \usepackage{sourcesanspro}
