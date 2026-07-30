@@ -44,12 +44,14 @@ def testTexOutput
     (dir : System.FilePath)
     (doc : Verso.Doc.VersoDoc Verso.Genre.Manual)
     (config : Config)
+    (twoside : Bool := false)
     (extraFiles : List (System.FilePath × String) := [])
     (extraFilesTeX : List (System.FilePath × String) := []) : IO Unit := do
   let versoConfig : Verso.Genre.Manual.Config := {
     destination := "src/tests/integration" / dir / "output",
     emitTeX := true,
     emitHtmlMulti := .no,
+    twoside,
     extraFiles,
     extraFilesTeX
   }
@@ -365,6 +367,7 @@ def tests := [
   testTexOutput "escape-doc" Escape.doc,
   testTexOutput "front-matter-doc" FrontMatter.doc,
   testTexOutput "diagram-doc" DiagramDoc.doc,
+  testTexOutput "twoside-doc" TwoSideDoc.doc (twoside := true),
   testZip,
   testInteractive,
   testLiterateConfig,
