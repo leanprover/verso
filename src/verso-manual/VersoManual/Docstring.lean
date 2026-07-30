@@ -613,7 +613,7 @@ def internalSignature.descr : BlockDescr where
       if let some sig := signature then
         pure \TeX{ " : " \Lean{ (← sig.toTeX) } }
       else pure .empty
-    pure \TeX{\par " " \Lean{← name.toTeX} \Lean{signatureTeX} \Lean{.seq (← contents.mapM goB)}}
+    pure \TeX{\par\noindent " " \Lean{← name.toTeX} \Lean{signatureTeX} \Lean{.seq (← contents.mapM goB)}}
   toHtml := some fun _goI goB _id info contents =>
     open Verso.Doc.Html HtmlT in
     open Verso.Output Html in do
@@ -675,7 +675,7 @@ def fieldSignature.descr : BlockDescr where
       | .public => .empty
       | .private => \TeX{ \textbf{"private"} }
       | .protected => .empty
-    let desc := \TeX{ \par " " \Lean{visibility} \Lean{← name.toTeX} " : " \Lean{← signature.toTeX} \par " " \Lean{.seq (← contents.mapM goB)}}
+    let desc := \TeX{ \par\noindent " " \Lean{visibility} \Lean{← name.toTeX} " : " \Lean{← signature.toTeX} \par " " \Lean{.seq (← contents.mapM goB)}}
     let parentsTeX := (← parents.toList.mapM (·.toTeX)).intersperse (.raw ", ")
     let inheritedExtra : Output.TeX := match inheritedFrom with
     | .none => ""
@@ -889,7 +889,8 @@ def docstring.descr : BlockDescr := withHighlighting {
       let label := customLabel.getD declType.label
       if label == "" then
         reportError s!"Missing label for '{name}': supply one with 'label := \"LABEL\"'"
-      pure \TeX{\begin{docstringBox}{\Lean{label}} \Lean{← signature.toTeX} \tcblower " " \Lean{← contents.mapM goB} \end{docstringBox}}
+      pure \TeX{\begin{docstringBox}{\Lean{label}} \Lean{← signature.toTeX} \tcblower " "
+                \Lean{← contents.mapM (fun b => do pure <| seq #[← goB b, .paragraphBreak])} \end{docstringBox}}
 
   extraCss := [docstringStyle]
 }
