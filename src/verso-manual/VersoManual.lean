@@ -220,7 +220,6 @@ structure OutputConfig where
   emitHtmlMulti : EmitHtml := .immediately
   wordCount : Option System.FilePath := none
   draft : Bool := false
-  twoside : Bool := false  -- two-sided output for printing
   /-- Be verbose while generating output -/
   verbose : Bool := false
 deriving ToJson, FromJson

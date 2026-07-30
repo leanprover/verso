@@ -12,4 +12,6 @@ open Lean
 
 public structure TeXConfig where
   extraFilesTeX : List (System.FilePath × String) := []
+  /-- two-sided output for printing -/
+  twoside : Bool := false
 deriving ToJson, FromJson
