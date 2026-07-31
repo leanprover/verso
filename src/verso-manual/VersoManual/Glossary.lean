@@ -12,7 +12,7 @@ public meta import Verso.Doc.Elab.Inline
 public meta import Verso.Doc.PointOfInterest
 public import VersoManual.Basic
 public import VersoManual.Glossary.Norm
-meta import VersoManual.Glossary.Norm
+public meta import VersoManual.Glossary.Norm
 public import Verso.Doc.Elab.Monad
 
 open Verso Genre Manual ArgParse
