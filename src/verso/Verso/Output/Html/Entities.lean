@@ -64,18 +64,18 @@ The JSON HTML entity database, from [the specification](https://html.spec.whatwg
 public def json := entityInfo.1
 
 /--
-A table mapping HTML entity strings (such as `&amp;`) to the strings that they denote (such as `&`).
+A table mapping HTML entity strings (such as `&amp;amp;`) to the strings that they denote (such as `&`).
 Most entities denote just one character, but some entities are represented by combining characters,
 so the returned string may have a length greater than one.
 -/
 public def entityStrings := entityInfo.2.1
 
 /--
-A table mapping strings (such as `&`) to the named entities that denote them (such as `&amp;`).
+A table mapping strings (such as `&`) to the named entities that denote them (such as `&amp;amp;`).
 
 Most entities denote just one character, but some entities are represented by combining characters.
 Some strings are denoted by more than one named entity; for example, `&` can be represented by both
-`&amp;` and `&AMP`. Not all named entities end in a semicolon.
+`&amp;amp;` and `&AMP`. Not all named entities end in a semicolon.
 -/
 public def stringEntities := entityInfo.2.2
 

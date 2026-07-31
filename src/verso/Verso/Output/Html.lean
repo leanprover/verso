@@ -31,7 +31,7 @@ A representation of HTML, used to render Verso to the web.
 public inductive Html where
   /--
   Textual content. If `escape` is `true`, then characters such as `'&'` are escaped to entities such
-  as `"&amp;"` during rendering.
+  as `"&amp;amp;"` during rendering.
   -/
   | text (escape : Bool) (string : String)
   /--
