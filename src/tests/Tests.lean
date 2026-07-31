@@ -10,6 +10,7 @@ import Tests.Golden
 import Tests.CommentSkipping
 import Tests.DocElabExtensions.Use
 import Tests.DocTerm
+import Tests.DocVisibility
 import Tests.DocstringMissing
 import Tests.DocstringMissingLegacy
 import Tests.HighlightedToTeX
