@@ -28,6 +28,7 @@ import Tests.Integration.ExtraFilesDoc
 import Tests.Integration.FrontMatter
 import Tests.Integration.InheritanceDoc
 import Tests.Integration.LeanSection
+import Tests.Integration.TwoSideDoc
 import Tests.LeanCode
 import Tests.Linters
 import Tests.Method
