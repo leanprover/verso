@@ -1,5 +1,5 @@
 
-\documentclass[oneside]{memoir}
+\documentclass[twoside]{memoir}
 
 \usepackage{sourcecodepro}
 \usepackage{sourcesanspro}
@@ -100,7 +100,7 @@ fonttitle=\sffamily\fontsize{6pt}{7pt}\selectfont,
 boxed title style={top=-0.3mm,bottom=-0.3mm,left=-0.3mm,right=-0.3mm,boxrule=0.4pt},
 title={#2},#1}
 
-\usepackage{svg}
+
 \makechapterstyle{lean}{%
 \renewcommand*{\chaptitlefont}{\sffamily\HUGE}
 \renewcommand*{\chapnumfont}{\chaptitlefont}
@@ -127,8 +127,8 @@ title={#2},#1}
 \renewcommand{\cftsectionpagefont}{\normalfont\sffamily}
 \setmonofont{DejaVu Sans Mono}
 
-\title{\sffamily Diagrams in the Manual genre}
-\author{\sffamily Harry Q. Bovik}
+\title{\sffamily Two-Sided Test Document}
+\author{\sffamily Test Author}
 \date{\sffamily }
 
 \begin{document}
@@ -142,13 +142,13 @@ title={#2},#1}
 \tableofcontents
 
 
-\cleardoublepage
-A standalone diagram:
-\begin{center}\includesvg[width=10em]{diagram-13689199090725553280.svg}\end{center}
-
-A pair of diagrams composed inside a row, exercising both the row directive (which lives in
-core \LeanVerb|VersoManual|) and the \LeanVerb|inline| flag on the diagram block:
-\includesvg[width=5em]{diagram-2112632156013695513.svg}\quad \includesvg[width=5em]{diagram-304385950480262083.svg}
 
 \mainmatter
+\chapter{Testing Two-Sided Output}\label{Two--Sided--Test--Document----Testing--Two--Sided--Output}
+
+This document is for testing the \LeanVerb|--twoside| option.
+
+
+
+
 \end{document}

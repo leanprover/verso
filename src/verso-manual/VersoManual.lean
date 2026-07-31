@@ -401,7 +401,7 @@ def emitTeX (config : Config) (text : Part Manual) : EmitM Unit := do
   withFile (dir.join "main.tex") .write fun h => do
     if config.verbose then
       IO.println s!"Saving {dir.join "main.tex"}"
-    h.putStrLn (preamble text.titleString authors date packages.toList preambleItems.toList)
+    h.putStrLn (preamble text.titleString authors date packages.toList preambleItems.toList config.twoside)
     -- \frontmatter is inserted by our hardcoded preamble before the ToC, so it doesn't get inserted
     -- here. If there's any text at the start of the front matter, then we need to clear it to a new
     -- recto page after the ToC
@@ -997,6 +997,7 @@ where
       | .error e => throw (↑ e)
     | ("--without-word-count"::more) => opts { cfg with wordCount := none } more
     | ("--draft"::more) => opts { cfg with draft := true } more
+    | ("--twoside"::more) => opts { cfg with twoside := true } more
     | ("--verbose"::more) => opts { cfg with verbose := true } more
     | ("--remote-config"::more) =>
       match requireFilename "--remote-config" more with
