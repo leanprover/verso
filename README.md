@@ -72,7 +72,7 @@ In the past, the `main` branch tracked upstream Lean closely, but
 these procedures make it easier to coordinate PRs across many
 repositories.
 
-When a Lean release is created, a correponding tag for the compatible
+When a Lean release is created, a corresponding tag for the compatible
 version of Verso is also created. For example, the `v4.19.0` tag
 should be used for projects that are built in Lean 4.19.0.
 
