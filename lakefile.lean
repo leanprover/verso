@@ -378,3 +378,18 @@ package_facet literateHtml pkg : System.FilePath := do
         checkDeployActions pkg
 
         pure htmlDir
+
+-- Declared by SubVerso's `library_facet orphanMods`.
+-- Dependency lakefiles cannot be imported,
+-- so the data mapping is redeclared here.
+library_data orphanMods : Array Lean.Name
+
+/-- Compute the orphaned modules across libraries exported by Verso (not internal ones or demos).
+See the `library_facet` in SubVerso. -/
+package_facet orphanMods : Array Lean.Name :=
+  #[VersoUtil, Verso, MultiVerso, VersoSearch, VersoBlog, VersoManual, VersoIlluminate,
+    VersoTutorial, VersoLiterate, VersoLiterateCode]
+      |>.foldlM (init := .pure #[]) fun job libDecl => do
+    let lib ← libDecl.get
+    let namesJob ← (lib.facet `orphanMods).fetch
+    return job.zipWith Array.append namesJob
