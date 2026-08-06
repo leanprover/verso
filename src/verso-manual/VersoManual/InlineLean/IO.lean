@@ -428,11 +428,6 @@ meta def check
           logErrorAt (loc (some o)) s!"Output file {f} mismatch. Got:\n{contents}"
       else Lean.logError s!"Output file {f} not found"
 
-    let out ← IO.Process.output {cmd := "lake", args := #["update", "subverso"], cwd := some dirname}
-    if out.exitCode != 0 then
-      throwError
-        m!"When running 'lake update subverso' in {dirname}, the exit code was {out.exitCode}\n" ++
-        m!"Stderr:\n{out.stderr}\n\nStdout:\n{out.stdout}\n\n"
     let jsonFile := s!"{leanCodeName}.json"
     let out ← IO.Process.output {cmd := toString «subverso-extract-mod» , args := #[leanCodeName, jsonFile], cwd := some dirname}
     if out.exitCode != 0 then
