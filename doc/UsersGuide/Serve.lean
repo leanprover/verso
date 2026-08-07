@@ -266,7 +266,7 @@ Every response carries `Cache-Control: no-cache`, which directs the browser to r
 Each file response also carries an `ETag` derived from the file's contents and a `Last-Modified` time.
 
 When a browser revalidates with `If-None-Match` or `If-Modified-Since` and the file is unchanged, the server replies `304 Not Modified` with no body.
-Because the `ETag` follows the contents, a rebuild that rewrites a file without changing it still revalidates cheaply.
+Because the `ETag` follows the contents, a rebuild that rewrites a file without changing it still will still be cheap to load.
 
 # Other Behavior
 %%%
