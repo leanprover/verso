@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Exercise the `serve` development server against a real loopback socket.
+# Exercise the `verso-serve` development server against a real loopback socket.
 # Builds the executable, serves a small fixture directory, and checks status
 # codes and the cache, ETag, and Range headers with curl.
 
@@ -24,8 +24,8 @@ fail() {
     exit 1
 }
 
-echo "Building serve..."
-lake build serve
+echo "Building verso-serve..."
+lake build verso-serve
 
 printf '<h1>home</h1>' > "$FIXTURE/index.html"
 printf 'body{color:red}' > "$FIXTURE/style.css"
@@ -33,9 +33,9 @@ printf '0123456789abcdef' > "$FIXTURE/data.txt"
 mkdir -p "$FIXTURE/sub"
 printf 'child' > "$FIXTURE/sub/page.html"
 
-echo "Starting serve (scanning for a free port)..."
+echo "Starting verso-serve (scanning for a free port)..."
 # No fixed port: let the server take the first free one and report it in its banner.
-./.lake/build/bin/serve --quiet "$FIXTURE" > "$BANNER" 2>/dev/null &
+./.lake/build/bin/verso-serve --quiet "$FIXTURE" > "$BANNER" 2>/dev/null &
 SERVER_PID=$!
 
 # Read the chosen port from the startup banner, waiting up to ~10 seconds for it.
