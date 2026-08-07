@@ -107,7 +107,7 @@ The sections that follow add detail on mounts, redirects, and custom headers.
 
 : `banner`
 
-  A line shown in the startup banner to identify the project. Must be a string. No banner is shown by default.
+  A line shown in the command-line's startup banner to identify the project. Must be a string. No banner is shown by default. This can be helpful to distinguish between multiple Verso projects or to inform co-authors about relevant project-specific information.
 
 : `cors`
 
