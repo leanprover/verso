@@ -16,7 +16,7 @@ htmlSplit := .never
 %%%
 
 Verso includes a small HTTP server for previewing generated HTML on your own machine.
-Run it with `lake exe serve`.
+Run it with `lake exe verso-serve`.
 
 The server is for *local development only*.
 It offers no HTTPS and no authentication.
@@ -31,13 +31,13 @@ tag := "serve-running"
 With no arguments, the current directory is served at `http://127.0.0.1:8000/`:
 
 ```
-$ lake exe serve
+$ lake exe verso-serve
 ```
 
 A directory to serve and a port may be given on the command line:
 
 ```
-$ lake exe serve --port 8000 _out/html
+$ lake exe verso-serve --port 8000 _out/html
 ```
 :::
 

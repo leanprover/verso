@@ -79,12 +79,12 @@ lean_exe «verso» where
 @[default_target]
 lean_lib VersoServe where
   roots := #[`VersoServe]
-  srcDir := "src/serve"
+  srcDir := "src/verso-serve"
 
 @[default_target]
-lean_exe «serve» where
+lean_exe «verso-serve» where
   root := `VersoServeMain
-  srcDir := "src/serve"
+  srcDir := "src/verso-serve"
 
 @[default_target]
 lean_lib VersoLiterate where

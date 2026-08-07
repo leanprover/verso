@@ -128,9 +128,9 @@ Verso's HTML doesn't presently work correctly when opened directly in a browser,
 Python has a simple web server module that's useful for this.
 In the output directory, run:
 ```
-python3 -m http.server 8000 --directory .
+lake exe verso-serve
 ```
-The port and root can be customized by modifying the appropriate parameters.
+The port and root can be customized by passing command-line parameters.
 
 One downside of this simple server is that it sets cache headers optimistically.
 If incorrect hovers are appearing locally, then try disabling caching in your browser's development tools.

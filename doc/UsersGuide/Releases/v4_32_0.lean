@@ -14,7 +14,7 @@ tag := "release-v4.32.0"
 file := "v4.32.0"
 %%%
 
-* Added a {ref "feat-serve"}[development server] for previewing generated HTML locally with `lake exe serve` (#876).
+* Added a {ref "feat-serve"}[development server] for previewing generated HTML locally with `lake exe verso-serve` (#876).
 
 # Development Server
 %%%
@@ -22,7 +22,7 @@ tag := "feat-serve"
 %%%
 
 Verso now includes a small HTTP server for previewing generated HTML on your own machine.
-Running `lake exe serve` serves the current directory at `http://127.0.0.1:8000/`, and a directory and `--port` may be given on the command line.
+Running `lake exe verso-serve` serves the current directory at `http://127.0.0.1:8000/`, and a directory and `--port` may be given on the command line.
 
 The server is meant for local writing and development.
 It binds to `127.0.0.1` only and offers no HTTPS or authentication.
