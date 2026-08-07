@@ -193,7 +193,7 @@ Verso's HTML doesn't presently work correctly when opened directly in a browser,
 Python has a simple web server module that's useful for this.
 In the output directory, run:
 ```
-python3 -m http.server 8000 --directory .
+lake exe verso-serve
 ```
 The port and root can be customized by modifying the appropriate parameters.
 
