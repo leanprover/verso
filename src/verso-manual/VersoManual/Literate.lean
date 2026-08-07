@@ -3,11 +3,15 @@ Copyright (c) 2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-import VersoManual.Basic
-import VersoManual.ExternalLean
-import VersoLiterate
-import Lean.Data.Json
-import Lean.Compiler.LCNF.ConfigOptions
+module
+public import VersoManual.Basic
+public import VersoManual.ExternalLean
+public import VersoLiterate
+public meta import VersoLiterate.Module
+public import Lean.Data.Json
+public meta import Lean.Compiler.LCNF.ConfigOptions
+
+public section
 
 namespace Verso.Genre.Manual
 
@@ -86,7 +90,7 @@ open Verso.Doc Elab Concrete
 open Lean.Elab Command Term
 open PartElabM
 
-def getModuleWithDocs (path : StrLit) (mod : Ident) (title : StrLit) (metadata? : Option Term) (genre : Syntax := mkIdent ``Manual) : TermElabM Name :=
+meta def getModuleWithDocs (path : StrLit) (mod : Ident) (title : StrLit) (metadata? : Option Term) (genre : Syntax := mkIdent ``Manual) : TermElabM Name :=
   withTraceNode `verso.blog.literate (fun _ => pure m!"Literate '{title.getString}'") do
 
   let titleParts ← stringToInlines title
@@ -146,13 +150,13 @@ structure IncludeLiterateConfig where
   modName : Ident
   title : StrLit
 
-instance : FromArgs IncludeLiterateConfig m where
+meta instance : FromArgs IncludeLiterateConfig m where
   fromArgs :=
     IncludeLiterateConfig.mk <$> .positional' `path  <*> .named' `level true <*> .positional' `name <*> .positional' `title
 
 
 @[part_command Lean.Doc.Syntax.command]
-def includeLiterateSection : PartCommand
+meta def includeLiterateSection : PartCommand
   | `(block|command{includeLiterate $args* }) => do
     let {path, level, modName, title} ← parseThe IncludeLiterateConfig (← parseArgs args)
     let ref ← getRef

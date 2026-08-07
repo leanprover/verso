@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 import AnchorExamples.Basic
-
+import Std.Time.Zoned.DateTime
 
 -- ANCHOR: t
 def someTree : Tree Nat :=
@@ -49,3 +49,11 @@ theorem Tree.flip_flip_id' (t : Tree α) :
     simp only [flip]
     rw [ih1]; . rw [ih2]
 --ANCHOR_END: proof2
+
+-- ANCHOR: works_only_if_leq_v4_31
+example (tz : Std.Time.TimeZone) : Type := Std.Time.DateTime tz
+
+/-- info: "4.31.0" -/
+#guard_msgs in
+#eval Lean.versionString
+-- ANCHOR_END: works_only_if_leq_v4_31

@@ -3,10 +3,14 @@ Copyright (c) 2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-import Lean.Data.Lsp.Utf16
-import Lean.Data.Options
-import Lean.Data.Position
-import Lean.Log
+module
+
+public import Lean.Data.Lsp.Utf16
+public import Lean.Data.Options
+public import Lean.Data.Position
+public import Lean.Log
+
+public section
 
 open Lean MonadOptions
 

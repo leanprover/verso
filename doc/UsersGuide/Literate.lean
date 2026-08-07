@@ -25,6 +25,9 @@ Only two steps are necessary:
   Using `lake query` instead of `lake build` means that after the HTML is built, its path is printed to the console.
 
 # HTML Output
+%%%
+tag := "literate-html-output"
+%%%
 
 By default, HTML is generated for all of the current package's default targets.
 The resulting website includes a search box that can search both defined names and documentation and a navigation bar with a hierarchical overview of all included modules.
@@ -32,6 +35,9 @@ Both Markdown and Verso docstrings are rendered to HTML, though Verso docstrings
 The site has both light and dark mode themes.
 
 # Configuration
+%%%
+tag := "literate-configuration"
+%%%
 
 The default site can be customized by placing a `literate.toml` file at the workspace root.
 The following aspects can be customized:
@@ -199,6 +205,9 @@ hide_docstrings_for = ["MyLib.Internal.helper"]
 ```
 
 ### Declaration Docstrings as Text
+%%%
+tag := "literate-declaration-docstrings-as-text"
+%%%
 
 By default, declaration docstrings render inside code boxes, visually grouped with the code.
 However, in some documents, the docstrings should be seen as part of the text.
@@ -356,6 +365,9 @@ Running `lake query :literateHtml` builds the HTML and prints its path; this can
 Verso includes tools to automate the setup of deployment to [GitHub Pages](https://docs.github.com/en/pages).
 
 ## GitHub Pages
+%%%
+tag := "literate-github-pages-setup"
+%%%
 
 To enable deployment to GitHub Pages, run:
 

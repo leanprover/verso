@@ -3,8 +3,13 @@ Copyright (c) 2026 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: Emilio Jesus Gallego Arias
 -/
-import Lean.Elab.Command
-import Verso.EnvExtension
+module
+public import Lean.Elab.Command
+public meta import Lean.Elab.Command
+public import Verso.EnvExtension
+public meta import Verso.EnvExtension
+
+public section
 
 namespace Verso.Tests.DocElabExtensions
 
@@ -17,14 +22,14 @@ extension are empty.
 
 open Lean Elab Command
 
-private def addTestEntry (entries : Lean.NameMap (Array Name)) (key value : Name) :
+meta def addTestEntry (entries : Lean.NameMap (Array Name)) (key value : Name) :
     Lean.NameMap (Array Name) :=
   entries.insert key <| (entries.find? key |>.getD #[]).push value
 
-private abbrev TestLocalExtension :=
+abbrev TestLocalExtension :=
   LocalPersistentEnvExtension (Name × Array Name) (Name × Name) (Lean.NameMap (Array Name))
 
-initialize testLocalExt : TestLocalExtension ←
+public meta initialize testLocalExt : TestLocalExtension ←
   LocalPersistentEnvExtension.register {
     name := `Verso.Tests.DocElabExtensions.testLocalExt
     mkInitialState := pure {}
@@ -39,10 +44,10 @@ initialize testLocalExt : TestLocalExtension ←
       .uniform entries.toArray
   }
 
-def testLocalExtensionEntries (env : Environment) (key : Name) : Array Name :=
+meta def testLocalExtensionEntries (env : Environment) (key : Name) : Array Name :=
   testLocalExt.getState env |>.find? key |>.getD #[]
 
-def testLocalExtensionModuleEntries (env : Environment) (moduleIdx : ModuleIdx) :
+meta def testLocalExtensionModuleEntries (env : Environment) (moduleIdx : ModuleIdx) :
     Array (Name × Array Name) :=
   testLocalExt.getModuleEntries env moduleIdx
 

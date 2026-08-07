@@ -109,7 +109,7 @@ The {name}`table` directive is used to implement tables.
 Tables are written as bulleted list of bulleted lists; the outer lists are rows, and the inner lists are columns; each row must contain the same number of columns.
 
 The flag `header` determines whether the first row should be considered as table data or as headers for the remaining rows.
-The named paramter `align`, which may be {name TableConfig.Alignment.left}`left`, {name TableConfig.Alignment.center}`center`, or {name TableConfig.Alignment.right}`right`, determines the alignment of the table with respect to the surrounding text.
+The named parameter `align`, which may be {name TableConfig.Alignment.left}`left`, {name TableConfig.Alignment.center}`center`, or {name TableConfig.Alignment.right}`right`, determines the alignment of the table with respect to the surrounding text.
 
 ::::paragraph
 This table maps $`n` to $`n!`:
@@ -173,6 +173,9 @@ Docstrings can be included using the `docstring` directive. For instance,
 results in
 
 {docstring List.forM}
+
+When using the module system, docstrings from imported modules are not available by default when building from the command line.
+To include these docstrings in a document, use `import all` to import them.
 
 The {name}`docstring` command takes a positional parameter which is the documented name.
 It also accepts the following optional named parameters:

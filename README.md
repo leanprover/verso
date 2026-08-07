@@ -72,7 +72,7 @@ In the past, the `main` branch tracked upstream Lean closely, but
 these procedures make it easier to coordinate PRs across many
 repositories.
 
-When a Lean release is created, a correponding tag for the compatible
+When a Lean release is created, a corresponding tag for the compatible
 version of Verso is also created. For example, the `v4.19.0` tag
 should be used for projects that are built in Lean 4.19.0.
 
@@ -498,15 +498,6 @@ Currently-applied overlays:
 - **Canonical URL**: Added to every HTML file, pointing to the
   corresponding page under `latest/`. This tells search engines where
   the authoritative version lives.
-- **Unicode input JS files**: The vendored Unicode input files
-  (`unicode-input.min.js` and `unicode-input-component.min.js`) in
-  every version's `-verso-search/` directory are replaced with the
-  versions from `main` at the time of deployment. This ensures all
-  deployed versions use the latest Unicode input implementation.
-- **Statistics HTML**: The contents of `static-web/stats.html` from
-  `main` are injected as the last element of `<head>` in every HTML
-  file in every version directory. This allows site-wide statistics or
-  analytics code to be updated without rebuilding old versions.
 
 Examples of additional overlays we might add in the future:
 

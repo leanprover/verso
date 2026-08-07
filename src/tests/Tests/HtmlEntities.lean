@@ -3,7 +3,12 @@ Copyright (c) 2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-import Verso.Output.Html.Entities
+module
+
+public import Verso.Output.Html.Entities
+public meta import Verso.Output.Html.Entities
+
+public section
 
 open Verso.Output.Html
 

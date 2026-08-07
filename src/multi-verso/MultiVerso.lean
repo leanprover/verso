@@ -281,7 +281,7 @@ public structure RefDomain where
   contents : HashMap String (Array RefObject)
 deriving Inhabited, Repr
 
-instance : GetElem? RefDomain String (Array RefObject) fun dom name => name ∈ dom.contents where
+public instance : GetElem? RefDomain String (Array RefObject) fun dom name => name ∈ dom.contents where
   getElem dom name ok := dom.contents[name]'ok
   getElem? dom name := dom.contents[name]?
 
@@ -478,10 +478,10 @@ private def RemoteInfo.structBEq (x y : RemoteInfo) : Bool :=
 private unsafe def RemoteInfo.fastBEq (x y : RemoteInfo) : Bool :=
   if ptrEq x y then true else RemoteInfo.structBEq x y
 
-instance : Membership Name RemoteInfo where
+public instance : Membership Name RemoteInfo where
   mem ri dom := dom ∈ ri.domains
 
-instance : GetElem? RemoteInfo Name RefDomain (fun ri d => d ∈ ri) where
+public instance : GetElem? RemoteInfo Name RefDomain (fun ri d => d ∈ ri) where
   getElem xs x ok := xs.domains[x]'ok
   getElem? xs x := xs.domains[x]?
 
