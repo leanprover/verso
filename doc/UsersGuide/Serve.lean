@@ -58,9 +58,8 @@ As requests arrive, each is logged with the active port, the method, the path, a
 tag := "serve-options"
 %%%
 
-: `DIR`
-
-  The directory served at `/`, relative to the current directory. Defaults to the current directory.
+A single optional positional argument is accepted, which is the directory to be served at `/`. It defaults to the current directory.
+The following options are also accepted:
 
 : `--port PORT`, `-p PORT`
 
