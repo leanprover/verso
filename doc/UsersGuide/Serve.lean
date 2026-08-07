@@ -103,7 +103,7 @@ The sections that follow add detail on mounts, redirects, and custom headers.
 
 : `port`
 
-  The port to listen on. Must be a number from `1` to `65535`. Defaults to `8000`.
+  The port to listen on. Must be a number from `1` to `65535`. Defaults to `8000`. If a port is also specified on the command line, the command-line option will be preferred.
 
 : `banner`
 
