@@ -54,7 +54,7 @@ public def main (args : List String) : IO UInt32 := do
       let base ← match cfgFile with
         | some f => loadServeConfig f
         | none => pure {}
-      let config := base.withCli cli
+      let config ← IO.ofExcept (base.withCli cli)
       pure (config, ← resolveMounts config.mounts)
     catch e =>
       IO.eprintln s!"{e}"

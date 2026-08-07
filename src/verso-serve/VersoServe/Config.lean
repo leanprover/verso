@@ -314,7 +314,8 @@ Serve a directory over HTTP for local development. Binds 127.0.0.1 only;
 it is not for production use.
 
 Arguments:
-  DIR                            Directory to serve at '/' (default: current directory)
+  DIR                            Directory to serve at '/' (default: current directory).
+                                 Conflicts with [[mounts]] in the config file.
 
 Options:
   -p, --port PORT                Port to listen on (default: 8000)
@@ -351,11 +352,12 @@ def parseArgs (args : List String) : Except String CliArgs :=
 /--
 Applies command-line overrides to a config loaded from a file.
 
-Scalar flags override the corresponding config values. A positional directory replaces the `/`
-mount. If no `/` mount remains, a default one serving the current directory is added, so `/` is
-always mapped.
+Scalar flags override the corresponding config values. A positional directory becomes the `/`
+mount, and it is an error if is provided while there are mounts in a config file. If no `/`
+mount is configured, a default one serving the current directory is added, so `/` is always
+mapped.
 -/
-def ServeConfig.withCli (config : ServeConfig) (cli : CliArgs) : ServeConfig :=
+def ServeConfig.withCli (config : ServeConfig) (cli : CliArgs) : Except String ServeConfig := do
   let config := {
     config with
     port := cli.port.getD config.port,
@@ -363,18 +365,16 @@ def ServeConfig.withCli (config : ServeConfig) (cli : CliArgs) : ServeConfig :=
     quiet := cli.quiet,
     verbose := cli.verbose
   }
-  let config :=
+  let config ←
     match cli.dir with
     | some d =>
-      let root : Mount := { urlPrefix := "/", dir := d }
-      if config.mounts.any (fun (m : Mount) => m.urlPrefix == "/") then
-        { config with
-          mounts := config.mounts.map fun (m : Mount) => if m.urlPrefix == "/" then root else m }
+      if config.mounts.isEmpty then
+        pure { config with mounts := #[{ urlPrefix := "/", dir := d }] }
       else
-        { config with mounts := config.mounts.push root }
-    | none => config
-  if config.mounts.any (fun (m : Mount) => m.urlPrefix == "/") then config
-  else { config with mounts := config.mounts.push { urlPrefix := "/", dir := "." } }
+        throw s!"Cannot serve directory '{d}': the config file defines [[mounts]]. Drop the directory argument, or remove the [[mounts]] entries."
+    | none => pure config
+  if config.mounts.any (fun (m : Mount) => m.urlPrefix == "/") then return config
+  else return { config with mounts := config.mounts.push { urlPrefix := "/", dir := "." } }
 
 /--
 Determines which config file to load.

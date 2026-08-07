@@ -104,25 +104,34 @@ def units : List (String × Bool) := [
   ("mounts same dir",
     let ms : Array Mount := #[{ urlPrefix := "/a", dir := "d" }, { urlPrefix := "/b", dir := "d" }]
     resolvedPrefix ms "/a/x" == some "/a" && resolvedPrefix ms "/b/y" == some "/b"),
-  -- root precedence: positional dir, else config root, else current directory
+  -- the root mount comes from the positional dir, else the config root, else the current directory
   ("root from positional",
-    let cfg : ServeConfig := { mounts := #[{ urlPrefix := "/", dir := "fromconfig" }] }
-    cfg.withCli { dir := some "fromcli" }
-      |>.mounts.find? (·.urlPrefix == "/")
+    ({} : ServeConfig).withCli { dir := some "fromcli" }
+      |>.toOption
+      |>.bind (·.mounts.find? (·.urlPrefix == "/"))
       |>.map (·.dir.toString)
       |>.isEqSome "fromcli"),
   ("root from config",
     let cfg : ServeConfig := { mounts := #[{ urlPrefix := "/", dir := "fromconfig" }] }
     cfg.withCli {}
-      |>.mounts.find? (·.urlPrefix == "/")
+      |>.toOption
+      |>.bind (·.mounts.find? (·.urlPrefix == "/"))
       |>.map (·.dir.toString)
       |>.isEqSome "fromconfig"),
   ("root falls back to cwd alongside other mounts",
     let cfg : ServeConfig := { mounts := #[{ urlPrefix := "/foo", dir := "f" }] }
     cfg.withCli {}
-      |>.mounts.find? (·.urlPrefix == "/")
+      |>.toOption
+      |>.bind (·.mounts.find? (·.urlPrefix == "/"))
       |>.map (·.dir.toString)
       |>.isEqSome "."),
+  -- a positional dir is rejected when the config file defines mounts, root or otherwise
+  ("positional rejected with config root mount",
+    let cfg : ServeConfig := { mounts := #[{ urlPrefix := "/", dir := "fromconfig" }] }
+    (cfg.withCli { dir := some "fromcli" }).toOption.isNone),
+  ("positional rejected with other config mounts",
+    let cfg : ServeConfig := { mounts := #[{ urlPrefix := "/foo", dir := "f" }] }
+    (cfg.withCli { dir := some "fromcli" }).toOption.isNone),
   -- range parsing
   ("range explicit", parseRange "bytes=0-9" 100 == .range 0 9),
   ("range suffix", parseRange "bytes=-10" 100 == .range 90 99),
@@ -210,9 +219,11 @@ def units : List (String × Bool) := [
   ("confine rejects encoded traversal", confineSegments #["../secret.txt"] |>.isNone),
   -- command-line flags fold into the configuration they override
   ("cli keeps listing by default",
-    ({ directoryListing := true : ServeConfig }.withCli {}).directoryListing == true),
+    ({ directoryListing := true : ServeConfig }.withCli {}).toOption
+      |>.map (·.directoryListing) |>.isEqSome true),
   ("cli port overrides",
-    (({} : ServeConfig).withCli { port := Port.ofNat? 9000 }).port.toNat == 9000),
+    (({} : ServeConfig).withCli { port := Port.ofNat? 9000 }).toOption
+      |>.map (·.port.toNat) |>.isEqSome 9000),
   -- argument parsing accepts valid forms and rejects malformed ones
   ("args long port", parseArgs ["--port", "9000"] |>.toOption.bind (·.port) |>.map (·.toNat) |>.isEqSome 9000),
   ("args short port", parseArgs ["-p", "3000"] |>.toOption.bind (·.port) |>.map (·.toNat) |>.isEqSome 3000),
