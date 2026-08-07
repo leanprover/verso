@@ -52,7 +52,9 @@ As requests arrive, each is logged with the active port, the method, the path, a
 tag := "serve-options"
 %%%
 
-A single optional positional argument is accepted, which is the directory to be served at `/`. It defaults to the current directory.
+A single optional positional argument is accepted, which is the directory to be served at `/`.
+It defaults to the current directory unless {ref "serve-config"}[a configuration file] is provided.
+If the configuration file defines {ref "serve-mounts"}[mounts], then the positional argument is rejected.
 The following options are also accepted:
 
 : `--port PORT`, `-p PORT`
