@@ -75,18 +75,6 @@ tag := "serve-options"
   Load configuration from `FILE`. Defaults to `./verso-serve.toml` if it exists.
   If no configuration file is provided, the default values {ref "serve-config"}[for the configuration format] are used.
 
-: `--no-listing`
-
-  Disable directory listings.
-
-: `--no-trailing-slash-redirect`
-
-  Serve directories in place instead of redirecting to add a trailing slash.
-
-: `--cors`
-
-  Send permissive cross-origin headers.
-
 : `--quiet`
 
   Suppress per-request logging.

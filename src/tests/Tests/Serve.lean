@@ -224,7 +224,7 @@ def units : List (String × Bool) := [
   ("args short port", parseArgs ["-p", "3000"] |>.toOption.bind (·.port) |>.map (·.toNat) |>.isEqSome 3000),
   ("args positional dir", parseArgs ["site"] |>.toOption.bind (·.dir) |>.map (·.toString) |>.isEqSome "site"),
   ("args boolean flags",
-    parseArgs ["--cors", "--quiet"] |>.toOption.map (fun a => a.cors && a.quiet) |>.isEqSome true),
+    parseArgs ["--quiet"] |>.toOption.map (fun a => a.cors && a.quiet) |>.isEqSome true),
   ("args unknown option rejected", (parseArgs ["--nope"]).toOption.isNone),
   ("args missing port value rejected", (parseArgs ["--port"]).toOption.isNone),
   ("args non-numeric port rejected", (parseArgs ["--port", "x"]).toOption.isNone),

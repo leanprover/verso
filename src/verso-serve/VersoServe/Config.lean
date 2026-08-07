@@ -298,12 +298,6 @@ structure CliArgs where
   dir : Option System.FilePath := none
   /-- Whether `--strict-port` was given. -/
   strictPort : Bool := false
-  /-- Whether `--no-listing` was given. -/
-  noListing : Bool := false
-  /-- Whether `--no-trailing-slash-redirect` was given. -/
-  noTrailingSlash : Bool := false
-  /-- Whether `--cors` was given. -/
-  cors : Bool := false
   /-- Whether `--quiet` was given. -/
   quiet : Bool := false
   /-- Whether {lit}`-v`/`--verbose` was given. -/
@@ -326,10 +320,6 @@ Options:
   -p, --port PORT                Port to listen on (default: 8000)
       --strict-port              Fail if the port is taken instead of trying the next free one
       --config FILE              Load configuration from FILE (default: ./verso-serve.toml if present)
-      --no-listing               Disable directory listings
-      --no-trailing-slash-redirect
-                                 Serve directories in place instead of redirecting to add a slash
-      --cors                     Send permissive CORS headers
       --quiet                    Suppress per-request logging
   -v, --verbose                  Log additional detail
   -h, --help                     Show this help and exit"
@@ -350,9 +340,6 @@ def parseArgs (args : List String) : Except String CliArgs :=
     | "--config" :: c :: more => loop { acc with configPath := some c } more
     | ["--config"] => throw "Missing value after '--config'"
     | "--strict-port" :: more => loop { acc with strictPort := true } more
-    | "--no-listing" :: more => loop { acc with noListing := true } more
-    | "--no-trailing-slash-redirect" :: more => loop { acc with noTrailingSlash := true } more
-    | "--cors" :: more => loop { acc with cors := true } more
     | "--quiet" :: more => loop { acc with quiet := true } more
     | "-v" :: more | "--verbose" :: more => loop { acc with verbose := true } more
     | other :: more =>
@@ -372,9 +359,6 @@ def ServeConfig.withCli (config : ServeConfig) (cli : CliArgs) : ServeConfig :=
   let config := {
     config with
     port := cli.port.getD config.port,
-    cors := config.cors || cli.cors,
-    directoryListing := config.directoryListing && !cli.noListing,
-    trailingSlashRedirect := config.trailingSlashRedirect && !cli.noTrailingSlash,
     strictPort := cli.strictPort,
     quiet := cli.quiet,
     verbose := cli.verbose
