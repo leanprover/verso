@@ -38,14 +38,6 @@ $ lake exe serve --port 8000 _out/html
 If the requested port is already in use, the server scans the following ports for a free one and prints the port it settled on, so several servers started with default settings can run at once.
 Pass `--strict-port` to fail instead.
 
-:::paragraph
-As requests arrive, each is logged with the active port, the method, the path, and the response status:
-
-```
-[8000] GET /index.html 200
-[8000] GET /missing 404
-```
-:::
 
 # Command-Line Options
 %%%
