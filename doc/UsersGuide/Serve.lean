@@ -72,7 +72,8 @@ tag := "serve-options"
 
 : `--config FILE`
 
-  Load configuration from `FILE`. Defaults to `./serve.toml` if it exists.
+  Load configuration from `FILE`. Defaults to `./verso-serve.toml` if it exists.
+  If no configuration file is provided, the default values {ref "serve-config"}[for the configuration format] are used.
 
 : `--no-listing`
 
@@ -105,7 +106,7 @@ Command-line options override values from the configuration file.
 tag := "serve-config"
 %%%
 
-For anything beyond serving a single directory, place a `serve.toml` file next to the project, or point at one with `--config`.
+For anything beyond serving a single directory, place a `verso-serve.toml` file next to the project, or point at one with `--config`.
 Directories named in the configuration file are resolved relative to the configuration file itself.
 Every setting is optional, and an empty file behaves the same as no file.
 

@@ -444,15 +444,15 @@ def integrationFailures : IO (Array String) := do
     -- Mount directories in a config file are resolved relative to the file's own directory.
     let cfgDir := tmp / "proj"
     IO.FS.createDirAll cfgDir
-    IO.FS.writeFile (cfgDir / "serve.toml") "[[mounts]]\npath = \"/\"\ndir = \"site\""
-    let loaded ← loadServeConfig (cfgDir / "serve.toml")
+    IO.FS.writeFile (cfgDir / "verso-serve.toml") "[[mounts]]\npath = \"/\"\ndir = \"site\""
+    let loaded ← loadServeConfig (cfgDir / "verso-serve.toml")
     unless loaded.mounts.size == 1 && loaded.mounts[0]!.dir == cfgDir / "site" do
       modify (·.push "config mount not rebased to config dir")
     -- An explicit config path that is missing is fatal; an existing one is returned.
     match ← (resolveConfigFile { configPath := some (tmp / "nope.toml") }).toBaseIO with
     | .ok _ => modify (·.push "missing config path accepted")
     | .error _ => pure ()
-    match ← (resolveConfigFile { configPath := some (cfgDir / "serve.toml") }).toBaseIO with
+    match ← (resolveConfigFile { configPath := some (cfgDir / "verso-serve.toml") }).toBaseIO with
     | .ok (some _) => pure ()
     | _ => modify (·.push "existing config path not found")
     -- A mount whose directory is missing is fatal; an existing one resolves to an absolute root.

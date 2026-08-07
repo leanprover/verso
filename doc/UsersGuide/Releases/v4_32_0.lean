@@ -28,7 +28,7 @@ The server is meant for local writing and development.
 It binds to `127.0.0.1` only and offers no HTTPS or authentication.
 
 Its defaults suit Verso output.
-Additionally, a `serve.toml` file configures mounts, redirects, and custom headers for projects that need more than a single directory.
+Additionally, a `verso-serve.toml` file configures mounts, redirects, and custom headers for projects that need more than a single directory.
 Because the server ships with Verso, previewing a site no longer depends on having another language ecosystem installed.
 
 See the {ref "serve"}[development server documentation] for the full set of options.

@@ -276,8 +276,8 @@ def parseServeConfig (input : String) (source := "<string>") : IO ServeConfig :=
     throw <| IO.userError s!"Failed to parse {source}:\n{"\n".intercalate msgs}"
 
 /--
-Loads and parses a `serve.toml` file, rebasing each mount's {name (full := Mount.dir)}`dir` onto the
-directory that contains the config file so paths are written relative to the config.
+Loads and parses a {lit}`verso-serve.toml` file, rebasing each mount's {name (full := Mount.dir)}`dir`
+onto the directory that contains the config file so paths are written relative to the config.
 -/
 def loadServeConfig (path : System.FilePath) : IO ServeConfig := do
   let input ← IO.FS.readFile path
@@ -325,7 +325,7 @@ Arguments:
 Options:
   -p, --port PORT                Port to listen on (default: 8000)
       --strict-port              Fail if the port is taken instead of trying the next free one
-      --config FILE              Load configuration from FILE (default: ./serve.toml if present)
+      --config FILE              Load configuration from FILE (default: ./verso-serve.toml if present)
       --no-listing               Disable directory listings
       --no-trailing-slash-redirect
                                  Serve directories in place instead of redirecting to add a slash
@@ -396,7 +396,7 @@ def ServeConfig.withCli (config : ServeConfig) (cli : CliArgs) : ServeConfig :=
 Determines which config file to load.
 
 An explicit {lit}`--config` path that does not exist is a fatal error. With no {lit}`--config`, an
-existing {lit}`serve.toml` in the current directory is used. Otherwise, no file is loaded.
+existing {lit}`verso-serve.toml` in the current directory is used. Otherwise, no file is loaded.
 -/
 def resolveConfigFile (cli : CliArgs) : IO (Option System.FilePath) := do
   match cli.configPath with
@@ -404,5 +404,5 @@ def resolveConfigFile (cli : CliArgs) : IO (Option System.FilePath) := do
     if ← p.pathExists then return some p
     else throw <| IO.userError s!"Config file not found: {p}"
   | none =>
-    let default : System.FilePath := "serve.toml"
+    let default : System.FilePath := "verso-serve.toml"
     if ← default.pathExists then return some default else return none
