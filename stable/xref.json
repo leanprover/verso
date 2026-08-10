@@ -8,6 +8,7 @@
      {"title": "Websites",
       "shortTitle": null,
       "sectionNum": "6.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -20,6 +21,7 @@
      {"title": "Verso Markup",
       "shortTitle": null,
       "sectionNum": "2.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -32,6 +34,7 @@
      {"title": "Traversal",
       "shortTitle": null,
       "sectionNum": "3.3.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -44,7 +47,8 @@
      "data":
      {"title": "Technical Terminology",
       "shortTitle": "Glossary",
-      "sectionNum": "7.4.",
+      "sectionNum": "7.5.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -52,7 +56,21 @@
        {"title": "Manuals and Books", "shortTitle": null, "number": "7"},
        {"title": "Technical Terminology",
         "shortTitle": "Glossary",
-        "number": "4"}]},
+        "number": "5"}]},
+     "address": "/Manuals-and-Books/"}],
+   "table-directive":
+   [{"id": "table-directive",
+     "data":
+     {"title": "Tables",
+      "shortTitle": null,
+      "sectionNum": "7.3.",
+      "searchPriority": 50,
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Manuals and Books", "shortTitle": null, "number": "7"},
+       {"title": "Tables", "shortTitle": null, "number": "3"}]},
      "address": "/Manuals-and-Books/"}],
    "syntax-errors":
    [{"id": "syntax-errors",
@@ -60,6 +78,7 @@
      {"title": "Syntax Errors",
       "shortTitle": null,
       "sectionNum": "2.3.1.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -76,6 +95,7 @@
      {"title": "Configuring a Site",
       "shortTitle": null,
       "sectionNum": "6.2.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -83,12 +103,141 @@
        {"title": "Websites", "shortTitle": null, "number": "6"},
        {"title": "Configuring a Site", "shortTitle": null, "number": "2"}]},
      "address": "/Websites/"}],
+   "serve-running":
+   [{"id": "serve-running",
+     "data":
+     {"title": "Running the Server",
+      "shortTitle": null,
+      "sectionNum": "9.1.",
+      "searchPriority": 50,
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Development Server", "shortTitle": null, "number": "9"},
+       {"title": "Running the Server", "shortTitle": null, "number": "1"}]},
+     "address": "/Development-Server/"}],
+   "serve-redirects":
+   [{"id": "serve-redirects",
+     "data":
+     {"title": "Redirects",
+      "shortTitle": null,
+      "sectionNum": "9.3.2.",
+      "searchPriority": 50,
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Development Server", "shortTitle": null, "number": "9"},
+       {"title": "Configuration File", "shortTitle": null, "number": "3"},
+       {"title": "Redirects", "shortTitle": null, "number": "2"}]},
+     "address": "/Development-Server/"}],
+   "serve-options":
+   [{"id": "serve-options",
+     "data":
+     {"title": "Command-Line Options",
+      "shortTitle": null,
+      "sectionNum": "9.2.",
+      "searchPriority": 50,
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Development Server", "shortTitle": null, "number": "9"},
+       {"title": "Command-Line Options", "shortTitle": null, "number": "2"}]},
+     "address": "/Development-Server/"}],
+   "serve-mounts":
+   [{"id": "serve-mounts",
+     "data":
+     {"title": "Mounts",
+      "shortTitle": null,
+      "sectionNum": "9.3.1.",
+      "searchPriority": 50,
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Development Server", "shortTitle": null, "number": "9"},
+       {"title": "Configuration File", "shortTitle": null, "number": "3"},
+       {"title": "Mounts", "shortTitle": null, "number": "1"}]},
+     "address": "/Development-Server/"}],
+   "serve-headers":
+   [{"id": "serve-headers",
+     "data":
+     {"title": "Custom Headers",
+      "shortTitle": null,
+      "sectionNum": "9.3.3.",
+      "searchPriority": 50,
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Development Server", "shortTitle": null, "number": "9"},
+       {"title": "Configuration File", "shortTitle": null, "number": "3"},
+       {"title": "Custom Headers", "shortTitle": null, "number": "3"}]},
+     "address": "/Development-Server/"}],
+   "serve-config":
+   [{"id": "serve-config",
+     "data":
+     {"title": "Configuration File",
+      "shortTitle": null,
+      "sectionNum": "9.3.",
+      "searchPriority": 50,
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Development Server", "shortTitle": null, "number": "9"},
+       {"title": "Configuration File", "shortTitle": null, "number": "3"}]},
+     "address": "/Development-Server/"}],
+   "serve-caching":
+   [{"id": "serve-caching",
+     "data":
+     {"title": "Caching",
+      "shortTitle": null,
+      "sectionNum": "9.4.",
+      "searchPriority": 50,
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Development Server", "shortTitle": null, "number": "9"},
+       {"title": "Caching", "shortTitle": null, "number": "4"}]},
+     "address": "/Development-Server/"}],
+   "serve-behavior":
+   [{"id": "serve-behavior",
+     "data":
+     {"title": "Other Behavior",
+      "shortTitle": null,
+      "sectionNum": "9.5.",
+      "searchPriority": 50,
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Development Server", "shortTitle": null, "number": "9"},
+       {"title": "Other Behavior", "shortTitle": null, "number": "5"}]},
+     "address": "/Development-Server/"}],
+   "serve":
+   [{"id": "serve",
+     "data":
+     {"title": "Development Server",
+      "shortTitle": null,
+      "sectionNum": "9.",
+      "searchPriority": 50,
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Development Server", "shortTitle": null, "number": "9"}]},
+     "address": "/Development-Server/"}],
    "removed-md-features":
    [{"id": "removed-md-features",
      "data":
      {"title": "Fewer Unused Features",
       "shortTitle": null,
       "sectionNum": "2.3.5.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -99,12 +248,59 @@
         "number": "3"},
        {"title": "Fewer Unused Features", "shortTitle": null, "number": "5"}]},
      "address": "/Verso-Markup/"}],
+   "release-v4___32___0":
+   [{"id": "release-v4___32___0",
+     "data":
+     {"title": "Verso 4.32.0 (unreleased)",
+      "shortTitle": null,
+      "sectionNum": null,
+      "searchPriority": 50,
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Release Notes", "shortTitle": null, "number": null},
+       {"title": "Verso 4.32.0 (unreleased)",
+        "shortTitle": null,
+        "number": "1"}]},
+     "address": "/releases/"}],
+   "release-v4___31___0":
+   [{"id": "release-v4___31___0",
+     "data":
+     {"title": "Verso 4.31.0",
+      "shortTitle": null,
+      "sectionNum": null,
+      "searchPriority": 50,
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Release Notes", "shortTitle": null, "number": null},
+       {"title": "Verso 4.31.0", "shortTitle": null, "number": "2"}]},
+     "address": "/releases/"}],
+   "release-v4___30___0":
+   [{"id": "release-v4___30___0",
+     "data":
+     {"title": "Verso 4.30.0 (unreleased)",
+      "shortTitle": null,
+      "sectionNum": null,
+      "searchPriority": 50,
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Release Notes", "shortTitle": null, "number": null},
+       {"title": "Verso 4.30.0 (unreleased)",
+        "shortTitle": null,
+        "number": "3"}]},
+     "address": "/releases/"}],
    "release-v4___29___0":
    [{"id": "release-v4___29___0",
      "data":
      {"title": "Verso 4.29.0 (unreleased)",
       "shortTitle": null,
       "sectionNum": null,
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -112,7 +308,7 @@
        {"title": "Release Notes", "shortTitle": null, "number": null},
        {"title": "Verso 4.29.0 (unreleased)",
         "shortTitle": null,
-        "number": "1"}]},
+        "number": "4"}]},
      "address": "/releases/"}],
    "release-v4___28___0":
    [{"id": "release-v4___28___0",
@@ -120,12 +316,13 @@
      {"title": "Verso 4.28.0",
       "shortTitle": null,
       "sectionNum": null,
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Release Notes", "shortTitle": null, "number": null},
-       {"title": "Verso 4.28.0", "shortTitle": null, "number": "2"}]},
+       {"title": "Verso 4.28.0", "shortTitle": null, "number": "5"}]},
      "address": "/releases/"}],
    "release-notes":
    [{"id": "release-notes",
@@ -133,6 +330,7 @@
      {"title": "Release Notes",
       "shortTitle": null,
       "sectionNum": null,
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -145,6 +343,7 @@
      {"title": "Reduced Lookahead",
       "shortTitle": null,
       "sectionNum": "2.3.2.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -161,6 +360,7 @@
      {"title": "Quotes",
       "shortTitle": null,
       "sectionNum": "2.2.2.2.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -176,6 +376,7 @@
      {"title": "Paragraphs",
       "shortTitle": null,
       "sectionNum": "7.2.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -189,6 +390,7 @@
      {"title": "Output Formats",
       "shortTitle": null,
       "sectionNum": "5.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -201,6 +403,7 @@
      {"title": "TeX",
       "shortTitle": null,
       "sectionNum": "5.2.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -214,6 +417,7 @@
      {"title": "HTML",
       "shortTitle": null,
       "sectionNum": "5.1.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -227,6 +431,7 @@
      {"title": "Output Generation",
       "shortTitle": null,
       "sectionNum": "3.4.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -239,13 +444,14 @@
      "data":
      {"title": "Open-Source Licenses",
       "shortTitle": null,
-      "sectionNum": "7.5.",
+      "sectionNum": "7.6.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Manuals and Books", "shortTitle": null, "number": "7"},
-       {"title": "Open-Source Licenses", "shortTitle": null, "number": "5"}]},
+       {"title": "Open-Source Licenses", "shortTitle": null, "number": "6"}]},
      "address": "/Manuals-and-Books/"}],
    "markup-syntax":
    [{"id": "markup-syntax",
@@ -253,6 +459,7 @@
      {"title": "Syntax",
       "shortTitle": null,
       "sectionNum": "2.2.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -266,6 +473,7 @@
      {"title": "Design Principles",
       "shortTitle": null,
       "sectionNum": "2.1.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -279,6 +487,7 @@
      {"title": "Tags and References",
       "shortTitle": null,
       "sectionNum": "7.1.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -292,6 +501,7 @@
      {"title": "Manuals and Books",
       "shortTitle": null,
       "sectionNum": "7.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -304,6 +514,7 @@
      {"title": "Literate Programming",
       "shortTitle": null,
       "sectionNum": null,
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -311,7 +522,7 @@
        {"title": "Release Notes", "shortTitle": null, "number": null},
        {"title": "Verso 4.29.0 (unreleased)",
         "shortTitle": null,
-        "number": "1"},
+        "number": "4"},
        {"title": "Literate Programming", "shortTitle": null, "number": "1"}]},
      "address": "/releases/"}],
    "literate-theming":
@@ -320,6 +531,7 @@
      {"title": "Theming",
       "shortTitle": null,
       "sectionNum": "8.3.11.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -336,6 +548,7 @@
      {"title": "Targets",
       "shortTitle": null,
       "sectionNum": "8.3.1.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -352,6 +565,7 @@
      {"title": "Command Output",
       "shortTitle": null,
       "sectionNum": "8.3.6.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -368,6 +582,7 @@
      {"title": "Per-Module Configuration",
       "shortTitle": null,
       "sectionNum": "8.3.9.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -386,6 +601,7 @@
      {"title": "Ordering",
       "shortTitle": null,
       "sectionNum": "8.3.3.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -402,6 +618,7 @@
      {"title": "Site Metadata",
       "shortTitle": null,
       "sectionNum": "8.3.10.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -418,6 +635,7 @@
      {"title": "Landing Page",
       "shortTitle": null,
       "sectionNum": "8.3.4.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -434,6 +652,7 @@
      {"title": "Imports List",
       "shortTitle": null,
       "sectionNum": "8.3.7.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -444,12 +663,27 @@
         "number": "3"},
        {"title": "Imports List", "shortTitle": null, "number": "7"}]},
      "address": "/Literate-Programming/"}],
+   "literate-html-output":
+   [{"id": "literate-html-output",
+     "data":
+     {"title": "HTML Output",
+      "shortTitle": null,
+      "sectionNum": "8.1.",
+      "searchPriority": 50,
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Literate Programming", "shortTitle": null, "number": "8"},
+       {"title": "HTML Output", "shortTitle": null, "number": "1"}]},
+     "address": "/Literate-Programming/"}],
    "literate-hide-commands":
    [{"id": "literate-hide-commands",
      "data":
      {"title": "Command Visibility",
       "shortTitle": null,
       "sectionNum": "8.3.5.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -460,12 +694,28 @@
         "number": "3"},
        {"title": "Command Visibility", "shortTitle": null, "number": "5"}]},
      "address": "/Literate-Programming/"}],
+   "literate-github-pages-setup":
+   [{"id": "literate-github-pages-setup",
+     "data":
+     {"title": "GitHub Pages",
+      "shortTitle": null,
+      "sectionNum": "8.4.1.",
+      "searchPriority": 50,
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Literate Programming", "shortTitle": null, "number": "8"},
+       {"title": "Deployment", "shortTitle": null, "number": "4"},
+       {"title": "GitHub Pages", "shortTitle": null, "number": "1"}]},
+     "address": "/Literate-Programming/"}],
    "literate-extra-assets":
    [{"id": "literate-extra-assets",
      "data":
      {"title": "Extra CSS and JavaScript",
       "shortTitle": null,
       "sectionNum": "8.3.12.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -484,6 +734,7 @@
      {"title": "Exclusion",
       "shortTitle": null,
       "sectionNum": "8.3.2.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -500,6 +751,7 @@
      {"title": "Declaration Docstrings",
       "shortTitle": null,
       "sectionNum": "8.3.8.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -516,6 +768,7 @@
      {"title": "Deployment",
       "shortTitle": null,
       "sectionNum": "8.4.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -523,12 +776,47 @@
        {"title": "Literate Programming", "shortTitle": null, "number": "8"},
        {"title": "Deployment", "shortTitle": null, "number": "4"}]},
      "address": "/Literate-Programming/"}],
+   "literate-declaration-docstrings-as-text":
+   [{"id": "literate-declaration-docstrings-as-text",
+     "data":
+     {"title": "Declaration Docstrings as Text",
+      "shortTitle": null,
+      "sectionNum": "8.3.8.1.",
+      "searchPriority": 50,
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Literate Programming", "shortTitle": null, "number": "8"},
+       {"title": "Configuration File Reference",
+        "shortTitle": null,
+        "number": "3"},
+       {"title": "Declaration Docstrings", "shortTitle": null, "number": "8"},
+       {"title": "Declaration Docstrings as Text",
+        "shortTitle": null,
+        "number": "1"}]},
+     "address": "/Literate-Programming/"}],
+   "literate-configuration":
+   [{"id": "literate-configuration",
+     "data":
+     {"title": "Configuration",
+      "shortTitle": null,
+      "sectionNum": "8.2.",
+      "searchPriority": 50,
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Literate Programming", "shortTitle": null, "number": "8"},
+       {"title": "Configuration", "shortTitle": null, "number": "2"}]},
+     "address": "/Literate-Programming/"}],
    "literate-config-ref":
    [{"id": "literate-config-ref",
      "data":
      {"title": "Configuration File Reference",
       "shortTitle": null,
       "sectionNum": "8.3.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -544,6 +832,7 @@
      {"title": "Literate Programming",
       "shortTitle": null,
       "sectionNum": "8.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -556,6 +845,7 @@
      {"title": "Lists",
       "shortTitle": null,
       "sectionNum": "2.2.2.1.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -571,6 +861,7 @@
      {"title": "Inline Syntax",
       "shortTitle": null,
       "sectionNum": "2.2.3.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -585,6 +876,7 @@
      {"title": "Index",
       "shortTitle": null,
       "sectionNum": null,
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -597,6 +889,7 @@
      {"title": "Header Nesting",
       "shortTitle": null,
       "sectionNum": "2.3.3.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -613,6 +906,7 @@
      {"title": "Genres",
       "shortTitle": null,
       "sectionNum": "1.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -625,6 +919,7 @@
      {"title": "Genre-Specific Extensions",
       "shortTitle": null,
       "sectionNum": "2.3.4.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -637,12 +932,82 @@
         "shortTitle": null,
         "number": "4"}]},
      "address": "/Verso-Markup/"}],
+   "feat-serve":
+   [{"id": "feat-serve",
+     "data":
+     {"title": "Development Server",
+      "shortTitle": null,
+      "sectionNum": null,
+      "searchPriority": 50,
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Release Notes", "shortTitle": null, "number": null},
+       {"title": "Verso 4.32.0 (unreleased)",
+        "shortTitle": null,
+        "number": "1"},
+       {"title": "Development Server", "shortTitle": null, "number": "1"}]},
+     "address": "/releases/"}],
+   "feat-full-page-search-interface":
+   [{"id": "feat-full-page-search-interface",
+     "data":
+     {"title": "Full-Page Search Interface",
+      "shortTitle": null,
+      "sectionNum": null,
+      "searchPriority": 50,
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Release Notes", "shortTitle": null, "number": null},
+       {"title": "Verso 4.30.0 (unreleased)",
+        "shortTitle": null,
+        "number": "3"},
+       {"title": "Full-Page Search Interface",
+        "shortTitle": null,
+        "number": "2"}]},
+     "address": "/releases/"}],
+   "feat-build-log-breaking":
+   [{"id": "feat-build-log-breaking",
+     "data":
+     {"title": "Breaking Change:  ExtraStep",
+      "shortTitle": null,
+      "sectionNum": null,
+      "searchPriority": 50,
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Release Notes", "shortTitle": null, "number": null},
+       {"title": "Verso 4.31.0", "shortTitle": null, "number": "2"},
+       {"title": "Logging Abstraction", "shortTitle": null, "number": "1"},
+       {"title": "Breaking Change:  ExtraStep",
+        "shortTitle": null,
+        "number": "1"}]},
+     "address": "/releases/"}],
+   "feat-build-log":
+   [{"id": "feat-build-log",
+     "data":
+     {"title": "Logging Abstraction",
+      "shortTitle": null,
+      "sectionNum": null,
+      "searchPriority": 50,
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Release Notes", "shortTitle": null, "number": null},
+       {"title": "Verso 4.31.0", "shortTitle": null, "number": "2"},
+       {"title": "Logging Abstraction", "shortTitle": null, "number": "1"}]},
+     "address": "/releases/"}],
    "extensions":
    [{"id": "extensions",
      "data":
      {"title": "Extensions",
       "shortTitle": null,
       "sectionNum": "4.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -655,6 +1020,7 @@
      {"title": "Syntax",
       "shortTitle": null,
       "sectionNum": "4.1.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -668,6 +1034,7 @@
      {"title": "Elaboration",
       "shortTitle": null,
       "sectionNum": "3.1.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -681,6 +1048,7 @@
      {"title": "Elaborating Extensions",
       "shortTitle": null,
       "sectionNum": "4.2.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -694,6 +1062,7 @@
      {"title": "Document Structure",
       "shortTitle": null,
       "sectionNum": "2.2.1.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -707,13 +1076,14 @@
      "data":
      {"title": "Docstrings",
       "shortTitle": null,
-      "sectionNum": "7.3.",
+      "sectionNum": "7.4.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
         "number": null},
        {"title": "Manuals and Books", "shortTitle": null, "number": "7"},
-       {"title": "Docstrings", "shortTitle": null, "number": "3"}]},
+       {"title": "Docstrings", "shortTitle": null, "number": "4"}]},
      "address": "/Manuals-and-Books/"}],
    "directive-syntax":
    [{"id": "directive-syntax",
@@ -721,6 +1091,7 @@
      {"title": "Directives",
       "shortTitle": null,
       "sectionNum": "2.2.2.4.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -736,6 +1107,7 @@
      {"title": "Differences from Markdown",
       "shortTitle": null,
       "sectionNum": "2.3.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -745,12 +1117,27 @@
         "shortTitle": null,
         "number": "3"}]},
      "address": "/Verso-Markup/"}],
+   "diagrams":
+   [{"id": "diagrams",
+     "data":
+     {"title": "Diagrams",
+      "shortTitle": null,
+      "sectionNum": "7.7.",
+      "searchPriority": 50,
+      "context":
+      [{"title": "Writing Documentation in Lean with Verso",
+        "shortTitle": "Documentation with Verso",
+        "number": null},
+       {"title": "Manuals and Books", "shortTitle": null, "number": "7"},
+       {"title": "Diagrams", "shortTitle": null, "number": "7"}]},
+     "address": "/Manuals-and-Books/"}],
    "dependencies":
    [{"id": "dependencies",
      "data":
      {"title": "Dependencies",
       "shortTitle": null,
       "sectionNum": null,
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -763,6 +1150,7 @@
      {"title": "Compilation",
       "shortTitle": null,
       "sectionNum": "3.2.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -776,6 +1164,7 @@
      {"title": "Commands",
       "shortTitle": null,
       "sectionNum": "2.2.2.5.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -791,6 +1180,7 @@
      {"title": "Code Blocks",
       "shortTitle": null,
       "sectionNum": "2.2.2.3.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -806,6 +1196,7 @@
      {"title": "Building Documents",
       "shortTitle": null,
       "sectionNum": "3.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -818,6 +1209,7 @@
      {"title": "Generating a Site",
       "shortTitle": null,
       "sectionNum": "6.1.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -831,6 +1223,7 @@
      {"title": "Block Syntax",
       "shortTitle": null,
       "sectionNum": "2.2.2.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -839,75 +1232,33 @@
        {"title": "Syntax", "shortTitle": null, "number": "2"},
        {"title": "Block Syntax", "shortTitle": null, "number": "2"}]},
      "address": "/Verso-Markup/"}],
-   "Writing-Documentation-in-Lean-with-Verso--Literate-Programming--HTML-Output":
+   "Writing-Documentation-in-Lean-with-Verso--Release-Notes--Verso-4___30___0-_LPAR_unreleased_RPAR_--Search-Result-Prioritization":
    [{"id":
-     "Writing-Documentation-in-Lean-with-Verso--Literate-Programming--HTML-Output",
+     "Writing-Documentation-in-Lean-with-Verso--Release-Notes--Verso-4___30___0-_LPAR_unreleased_RPAR_--Search-Result-Prioritization",
      "data":
-     {"title": "HTML Output",
+     {"title": "Search Result Prioritization",
       "shortTitle": null,
-      "sectionNum": "8.1.",
+      "sectionNum": null,
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
         "number": null},
-       {"title": "Literate Programming", "shortTitle": null, "number": "8"},
-       {"title": "HTML Output", "shortTitle": null, "number": "1"}]},
-     "address": "/Literate-Programming/"}],
-   "Writing-Documentation-in-Lean-with-Verso--Literate-Programming--Deployment--GitHub-Pages":
-   [{"id":
-     "Writing-Documentation-in-Lean-with-Verso--Literate-Programming--Deployment--GitHub-Pages",
-     "data":
-     {"title": "GitHub Pages",
-      "shortTitle": null,
-      "sectionNum": "8.4.1.",
-      "context":
-      [{"title": "Writing Documentation in Lean with Verso",
-        "shortTitle": "Documentation with Verso",
-        "number": null},
-       {"title": "Literate Programming", "shortTitle": null, "number": "8"},
-       {"title": "Deployment", "shortTitle": null, "number": "4"},
-       {"title": "GitHub Pages", "shortTitle": null, "number": "1"}]},
-     "address": "/Literate-Programming/"}],
-   "Writing-Documentation-in-Lean-with-Verso--Literate-Programming--Configuration-File-Reference--Declaration-Docstrings--Declaration-Docstrings-as-Text":
-   [{"id":
-     "Writing-Documentation-in-Lean-with-Verso--Literate-Programming--Configuration-File-Reference--Declaration-Docstrings--Declaration-Docstrings-as-Text",
-     "data":
-     {"title": "Declaration Docstrings as Text",
-      "shortTitle": null,
-      "sectionNum": "8.3.8.1.",
-      "context":
-      [{"title": "Writing Documentation in Lean with Verso",
-        "shortTitle": "Documentation with Verso",
-        "number": null},
-       {"title": "Literate Programming", "shortTitle": null, "number": "8"},
-       {"title": "Configuration File Reference",
+       {"title": "Release Notes", "shortTitle": null, "number": null},
+       {"title": "Verso 4.30.0 (unreleased)",
         "shortTitle": null,
         "number": "3"},
-       {"title": "Declaration Docstrings", "shortTitle": null, "number": "8"},
-       {"title": "Declaration Docstrings as Text",
+       {"title": "Search Result Prioritization",
         "shortTitle": null,
         "number": "1"}]},
-     "address": "/Literate-Programming/"}],
-   "Writing-Documentation-in-Lean-with-Verso--Literate-Programming--Configuration":
-   [{"id":
-     "Writing-Documentation-in-Lean-with-Verso--Literate-Programming--Configuration",
-     "data":
-     {"title": "Configuration",
-      "shortTitle": null,
-      "sectionNum": "8.2.",
-      "context":
-      [{"title": "Writing Documentation in Lean with Verso",
-        "shortTitle": "Documentation with Verso",
-        "number": null},
-       {"title": "Literate Programming", "shortTitle": null, "number": "8"},
-       {"title": "Configuration", "shortTitle": null, "number": "2"}]},
-     "address": "/Literate-Programming/"}],
+     "address": "/releases/"}],
    "Writing-Documentation-in-Lean-with-Verso":
    [{"id": "Writing-Documentation-in-Lean-with-Verso",
      "data":
      {"title": "Writing Documentation in Lean with Verso",
       "shortTitle": "Documentation with Verso",
       "sectionNum": "",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -919,6 +1270,7 @@
      {"title": "Parsing Arguments",
       "shortTitle": null,
       "sectionNum": "4.2.1.",
+      "searchPriority": 50,
       "context":
       [{"title": "Writing Documentation in Lean with Verso",
         "shortTitle": "Documentation with Verso",
@@ -1059,10 +1411,10 @@
   "description": "Documentation for Lean constants",
   "contents":
   {"[anonymous]":
-   [{"id": "Verso___Genre___Manual___InlineDescr___mk",
+   [{"id": "Verso___Genre___Manual___BlockDescr___mk",
      "data": null,
      "address": "/Manuals-and-Books/"},
-    {"id": "Verso___Genre___Manual___BlockDescr___mk",
+    {"id": "Verso___Genre___Manual___InlineDescr___mk",
      "data": null,
      "address": "/Manuals-and-Books/"}],
    "Verso.Output.TeX.text":
@@ -1166,6 +1518,10 @@
      "data": null,
      "address": "/Manuals-and-Books/"}],
    "Verso.Genre.Manual.PartMetadata.shortContextTitle":
+   [{"id": "Verso___Genre___Manual___PartMetadata___mk",
+     "data": null,
+     "address": "/Manuals-and-Books/"}],
+   "Verso.Genre.Manual.PartMetadata.searchPriority":
    [{"id": "Verso___Genre___Manual___PartMetadata___mk",
      "data": null,
      "address": "/Manuals-and-Books/"}],
