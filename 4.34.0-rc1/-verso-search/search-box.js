@@ -1,0 +1,1510 @@
+/**
+ * Copyright (c) 2024 Lean FRO LLC. All rights reserved.
+ * Released under Apache 2.0 license as described in the file LICENSE.
+ * Author: Jakob Ambeck Vase
+ *
+ * This software or document includes material copied from or derived from https://www.w3.org/WAI/ARIA/apg/patterns/combobox/examples/combobox-autocomplete-both/.
+ * Copyright © 2024 World Wide Web Consortium. https://www.w3.org/copyright/software-license-2023/
+ */
+
+// Enable typescript
+// @ts-check
+
+let /** @type Promise<null|SearchResult> */ bigPromise = Promise.resolve(null);
+import { Range } from "./unicode-input.min.js";
+import { InputAbbreviationRewriter } from "./unicode-input-component.min.js";
+
+// Hacky way to import the fuzzysort library and get the types working. It's just `window.fuzzysort`.
+const fuzzysort = /** @type {{fuzzysort: Fuzzysort.Fuzzysort}} */ (/** @type {unknown} */ (window))
+    .fuzzysort;
+
+const searchIndex = /** @type {{searchIndex: TextSearchIndex}} */ (/** @type {unknown} */ (window))
+    .searchIndex;
+
+/**
+ * @typedef {{id: string, header: string, context: string, contents: string}} DocContent
+ * @typedef {Promise<Record<number, DocContent>> & {resolve?: (data : any) => void}} DocContentPromise
+ */
+/**
+ * @type {Record<string, DocContentPromise>}
+ */
+const docContents = ((/** @type {any} */ windowAny) => {
+    if (!windowAny.docContents) windowAny.docContents = {};
+    return windowAny.docContents;
+})(window);
+
+/**
+ * A single ranked hit: either a semantic (fuzzysort) match against a `Searchable`, or a
+ * full-text hit from the elasticlunr index.
+ * @typedef {{kind: 'semantic', score: number, fuzzysortResult: Fuzzysort.Result, searchable: Searchable}
+ *         | {kind: 'fullText', score: number, textMatch: TextMatch}} Candidate
+ */
+
+/** Whether to search word prefixes or whole words in full-text searches. Should match the setting in search-highlight.js.
+ * @type {boolean}
+ */
+const expandMatches = true;
+
+/**
+ * Per-layer log-space contribution for a priority value. A priority {@code p} contributes
+ * {@code (p - 50) / 50}; {@code 50} (or {@code null}/{@code undefined}) is neutral (0).
+ * @param {number | undefined | null} p
+ * @returns {number}
+ */
+export const priorityContribution = (p) => (p == null ? 0 : (p - 50) / 50);
+
+/**
+ * Combines a raw score with any number of priority layers. Layer contributions are summed in
+ * log space and the raw score is scaled by {@code 2^sum}, so combining is additive in the
+ * exponent: two layers at 75 stack to {@code 2^(0.5 + 0.5) = 2}, not {@code 1.5 * 1.5 = 2.25}.
+ * Undefined/null layers contribute 0 (neutral), so callers can pass optional priorities
+ * directly without pre-filtering.
+ * @param {number} rawScore
+ * @param {(number | undefined | null)[]} priorities
+ * @returns {number}
+ */
+export const combineScore = (rawScore, ...priorities) => {
+    let sum = 0;
+    for (const p of priorities) sum += priorityContribution(p);
+    return rawScore * Math.pow(2, sum);
+};
+
+/**
+ * Type definitions to help if you have typescript enabled.
+ *
+ * Priorities are numbers centered on 50 (the neutral default). Authors typically set them
+ * in [0, 99], but the field accepts any number: pre-summed contributions — e.g. a chain of
+ * ancestor sections — can drift outside that range, and are represented on the same centered
+ * scale so one field covers both uses.
+ *
+ * A priority p is interpreted in log space so that layers compose additively instead of
+ * multiplicatively: each layer contributes (p - 50) / 50 to a running sum, and the final
+ * score multiplier is 2 raised to that sum. Thus 50 contributes 0 (no effect), 99 contributes
+ * ~+0.98 (nearly doubles the score), 0 contributes -1 (halves the score), and larger or
+ * smaller values extend the scale linearly.
+ *
+ * Combining this way allows multiple layers (global, domain, item, ancestor sections)
+ * to stack cleanly: three layers each at 75 contribute +0.5 three times for a 2^1.5 ≈ 2.83× boost,
+ * rather than the 1.5³ = 3.375× we'd get from multiplying per-layer factors directly. The
+ * scheme is symmetric around neutral: +0.5 and -0.5 contributions are true inverses. It is
+ * the standard log-linear weighting used in e.g. ElasticSearch's function_score (also known
+ * as "stops" in photography).
+ *
+ * Full-text matches use the same scheme via a per-document priority baked in at index time
+ * (the `docPriorities` map); both search streams therefore honor the same per-section /
+ * per-item adjustments, just resolved at different times.
+ * @typedef {{searchKey: string, address: string, domainId: string, ref?: any, priority?: number}} Searchable
+ * @typedef {(domainData: any) => Searchable[]} DomainDataToSearchables
+ * @typedef {{t: 'text', v: string} | {t: 'highlight', v: string}} MatchedPart
+ * @typedef {(searchable: Searchable, matchedParts: MatchedPart[], document: Document) => HTMLElement} CustomResultRender
+ * @typedef {{dataToSearchables: DomainDataToSearchables, customRender?: CustomResultRender, displayName: string, className: string}} DomainMapper
+ * @typedef {Record<string, DomainMapper>} DomainMappers
+ * @typedef {{semantic: number, fullText: number, domains: Record<string, number>}} SearchPriorities
+ * @typedef {{semantic?: number, fullText?: number, domains?: Record<string, number>}} SearchPrioritiesInput
+ * @typedef {{ref: string, score: number, doc: DocContent}} TextMatch
+ * @typedef {{item: Searchable, fuzzysortResult: Fuzzysort.Result, htmlItem: HTMLLIElement}|{terms: string, textItem: TextMatch, htmlItem: HTMLLIElement}} SearchResult
+ * @typedef {{run: (tokens: string[]) => string[]}} ElasticLunrPipeline
+ * @typedef {{bool?: "AND"|"OR", fields?:Record<string, {boost?: number}>, expand?: boolean}} SearchConfig
+ * @typedef {{search: ((term: string, config: SearchConfig) => TextMatch[]), pipeline: ElasticLunrPipeline}|undefined|null} TextSearchIndex
+ * @typedef {{original: string, stem: string, start: number, end: number}} TextToken
+ * @typedef {{start: number, end: number, index: number, matches: TextToken[]}} TextSnippet
+ */
+
+/**
+ * @param {TextSnippet} s1
+ * @param {TextSnippet} s2
+ * @return {number}
+ */
+const compareSnippets = (s1, s2) => {
+    // First compare by number of unique terms
+    let terms1 = new Set(s1.matches.map((x) => x.stem));
+    let terms2 = new Set(s2.matches.map((x) => x.stem));
+    let terms = terms1.size - terms2.size;
+    if (terms !== 0) {
+        return terms;
+    }
+
+    // Then by number of matches
+    let matches = s1.matches.length - s2.matches.length;
+    if (matches !== 0) {
+        return matches;
+    }
+
+    // Finally by index
+    return s1.index - s2.index;
+};
+
+/**
+ * @param {string} text
+ * @return {TextToken[]}
+ */
+const tokenizeText = (text) => {
+    /** @type {TextToken[]} */
+    const toks = [];
+    const regex = /\S+/g;
+    let match;
+    while ((match = regex.exec(text)) !== null) {
+        let stems = searchIndex.pipeline.run([match[0]]);
+        for (const stem of stems) {
+            toks.push({
+                original: match[0],
+                start: match.index,
+                end: match.index + match[0].length,
+                stem: stem.toLowerCase(),
+            });
+        }
+    }
+    return toks;
+};
+
+/**
+ * @type {RegExp}
+ */
+const wordChar = /\p{L}/u;
+
+/**
+ * @param {string} text
+ * @param {number} i
+ * @return {number}
+ */
+const wordStartBefore = (text, i) => {
+    while (i > 0) {
+        if (!wordChar.test(text[i])) return i + 1; /* Adjust due to start indices being inclusive */
+        i--;
+    }
+    return i;
+};
+
+/**
+ * @param {string} text
+ * @param {number} i
+ * @return {number}
+ */
+const wordEndAfter = (text, i) => {
+    while (i < text.length) {
+        if (!wordChar.test(text[i]))
+            return i; /* This is used as the (exclusive) end index in a slice, so one greater is correct */
+        i++;
+    }
+    return i;
+};
+
+/**
+ * @param {string} text
+ * @param {string} query
+ * @param {{contextLength?: number, maxSnippets?: number}} options
+ * @return {Element|null}
+ */
+const highlightTextResult = (text, query, options = {}) => {
+    const {
+        contextLength = 50, // characters of context around each match
+        maxSnippets = 3, // maximum number of snippets to return
+    } = options;
+
+    const terms = searchIndex.pipeline.run(
+        query
+            .trim()
+            .toLowerCase()
+            .split(/\s+/)
+            .filter((term) => term.length > 0),
+    );
+    const toks = tokenizeText(text);
+    const matches = expandMatches
+        ? toks.filter((t) => terms.some((tm) => t.stem.startsWith(tm)))
+        : toks.filter((t) => terms.includes(t.stem));
+
+    if (matches.length === 0) {
+        return null; // No matches found
+    }
+
+    // Group nearby matches into snippets
+    /** @type {TextSnippet[]} */
+    const snippets = [];
+    let currentSnippet = null;
+    for (const match of matches) {
+        if (!currentSnippet || match.start > currentSnippet.end + contextLength * 2) {
+            // Start new snippet
+            currentSnippet = {
+                start: wordStartBefore(text, Math.max(0, match.start - contextLength)),
+                end: wordEndAfter(text, Math.min(text.length, match.end + contextLength)),
+                index: snippets.length,
+                matches: [match],
+            };
+            snippets.push(currentSnippet);
+        } else {
+            // Extend current snippet
+            currentSnippet.end = wordEndAfter(
+                text,
+                Math.min(text.length, match.end + contextLength),
+            );
+            currentSnippet.matches.push(match);
+        }
+    }
+
+    // Limit number of snippets. First, sort them by quality (which takes unique term occurrences and
+    // total term count into consideration), then take the N best, then put them back in document order.
+    const limitedSnippets = snippets
+        .sort(compareSnippets)
+        .slice(0, maxSnippets)
+        .sort((s1, s2) => s1.index - s2.index);
+
+    // Generate highlighted text for each snippet
+    const highlightedSnippets = limitedSnippets.map((snippet) => {
+        let snippetText = text.substring(snippet.start, snippet.end);
+
+        // Adjust match positions relative to snippet start
+        const relativeMatches = snippet.matches.map((match) => ({
+            term: match.original,
+            start: match.start - snippet.start,
+            end: match.end - snippet.start,
+        }));
+
+        // Sort matches by position (descending) to avoid position shifts during replacement
+        relativeMatches.sort((a, b) => b.start - a.start);
+
+        // Apply highlighting
+        for (const match of relativeMatches) {
+            const before = snippetText.substring(0, match.start);
+            const highlighted = `<em>${match.term}</em>`;
+            const after = snippetText.substring(match.end);
+            snippetText = before + highlighted + after;
+        }
+
+        // Add ellipses
+        const prefix = snippet.start > 0 ? " …" : "";
+        const suffix = snippet.end < text.length ? "… " : "";
+
+        const elem = document.createElement("span");
+        elem.appendChild(document.createTextNode(prefix));
+        const m = document.createElement("span");
+        m.innerHTML = snippetText;
+        elem.appendChild(m);
+        elem.appendChild(document.createTextNode(suffix));
+        return elem;
+    });
+
+    const elem = document.createElement("span");
+    elem.append(...highlightedSnippets);
+    return elem;
+};
+
+/**
+ * Maps data from Lean to an object with search terms as keys and a list of results as values.
+ *
+ * @param {any} json
+ * @param {DomainMappers} domainMappers
+ * @return {Record<string, Searchable[]>}
+ */
+const dataToSearchableMap = (json, domainMappers) =>
+    Object.entries(json)
+        .flatMap(([key, value]) =>
+            key in domainMappers ? domainMappers[key].dataToSearchables(value) : undefined,
+        )
+        .reduce((acc, cur) => {
+            if (cur == null) {
+                return acc;
+            }
+
+            if (!acc.hasOwnProperty(cur.searchKey)) {
+                acc[cur.searchKey] = [];
+            }
+            acc[cur.searchKey].push(cur);
+            return acc;
+        }, {});
+
+/**
+ * Maps from a data item to a HTML LI element. `asOption` controls whether the `<li>` gets
+ * `role="option"`: true (the default) for the combobox listbox, false for the full-page
+ * results view where the parent `<ul>` is not a listbox and the items are plain links.
+ *
+ * @param {DomainMappers} domainMappers
+ * @param {Searchable} searchable
+ * @param {MatchedPart[]} matchedParts
+ * @param {Document} document
+ * @param {boolean} [asOption]
+ * @return {HTMLLIElement}
+ */
+const searchableToHtml = (domainMappers, searchable, matchedParts, document, asOption = true) => {
+    const domainMapper = domainMappers[searchable.domainId];
+
+    const li = document.createElement("li");
+    if (asOption) li.role = "option";
+    li.className = `search-result ${domainMapper.className}`;
+    li.title = `${domainMapper.displayName} ${searchable.searchKey}`;
+
+    // Wrap the rendered content in an anchor so each result is keyboard-focusable,
+    // middle-clickable, and exposes its destination to assistive tech. `display: contents`
+    // in CSS keeps the existing `<li>`-based layout/flex rules working unchanged.
+    const link = document.createElement("a");
+    link.className = "search-result-link";
+    link.href = resolveAgainstBase(withTermsParam(searchable.address, null));
+    li.appendChild(link);
+
+    if (domainMapper.customRender != null) {
+        link.appendChild(domainMapper.customRender(searchable, matchedParts, document));
+    } else {
+        const searchTerm = document.createElement("p");
+        for (const { t, v } of matchedParts) {
+            if (t === "text") {
+                searchTerm.append(v);
+            } else {
+                const emEl = document.createElement("em");
+                searchTerm.append(emEl);
+                emEl.textContent = v;
+            }
+        }
+        link.appendChild(searchTerm);
+    }
+
+    const domainName = document.createElement("p");
+    link.appendChild(domainName);
+    domainName.className = "domain";
+    domainName.textContent = domainMapper.displayName;
+
+    return li;
+};
+
+/**
+ * Gets the sort bucket for a given document ID.
+ * @param {string} ref
+ * @return {number}
+ */
+const docBucket = (ref) => {
+    const utf8 = new TextEncoder().encode(ref);
+    let hash = 0;
+    for (let i = 0; i < utf8.length; i++) {
+        hash = (hash + utf8[i]) % 256;
+    }
+    return hash;
+};
+
+/**
+ * Loads the needed document bucket as a promise.
+ * @param {string} ref
+ * @return {Promise<Record<string, DocContent>>}
+ */
+const loadBucket = async (ref) => {
+    const bucket = docBucket(ref);
+    let bucketDocs = docContents[bucket];
+    if (bucketDocs) {
+        return bucketDocs;
+    }
+
+    /** @type {(data : any) => void} */
+    let resolveFun;
+    const promise = new Promise((resolve) => {
+        resolveFun = resolve;
+    });
+    /** @type {any} */ (promise).resolve = resolveFun;
+    docContents[bucket] = promise;
+    const script = document.createElement("script");
+    // `window.searchIndexVersion` is emitted by the Lean side alongside the
+    // inverted index. Its value is a content hash of the index, so bucket
+    // filenames change whenever the index does — letting the bucket files be
+    // served with `Cache-Control: immutable` (no revalidation RTT on repeat
+    // visits).
+    const version = /** @type {any} */ (window).searchIndexVersion;
+    script.src = `-verso-search/searchIndex_${bucket}.${version}.js`;
+    document.head.appendChild(script);
+
+    return await docContents[bucket];
+};
+
+/**
+ * @param {string} ref The identifier of the document to fetch from the store
+ * @return {Promise<DocContent>}
+ */
+const getDocContents = async (ref) => {
+    const resultBucket = await Promise.resolve(loadBucket(ref));
+
+    /** @type {DocContent} */
+    return resultBucket[ref];
+};
+
+/**
+ * Score and sort all hits for `filter` across both the semantic (fuzzysort) and full-text
+ * (elasticlunr) streams. Pure with respect to the DOM: callers slice / render the result.
+ *
+ * @param {string} filter
+ * @param {{
+ *   preparedData: Fuzzysort.Prepared[],
+ *   mappedData: Record<string, Searchable[]>,
+ *   searchPriorities: SearchPriorities,
+ *   docPriorities: Record<string, number>,
+ *   searchIndex: TextSearchIndex,
+ * }} opts
+ * @return {Candidate[]}
+ */
+export const computeCandidates = (
+    filter,
+    { preparedData, mappedData, searchPriorities, docPriorities, searchIndex },
+) => {
+    if (filter.length === 0) return [];
+
+    // No `limit` here on purpose: priorities are applied below and may promote items that
+    // rank outside the top 30 by raw fuzzysort score into the display window. The threshold
+    // still filters out poor matches, so the working set stays modest.
+    const results = fuzzysort.go(filter, preparedData, { threshold: 0.25 });
+
+    const textResults = searchIndex
+        ? searchIndex.search(filter, {
+              expand: expandMatches,
+              bool: "AND",
+              // `context` (the breadcrumb text) isn't an indexed field. It was, in the past, but
+              // the boost was 0.1 and its tokens nearly duplicated the header's, so dropping it
+              // cuts one whole inverted index out of the emitted search index. Breadcrumbs are
+              // still shown for each full-text hit from the per-doc data in the bucket files.
+              fields: {
+                  header: { boost: 1.25 },
+                  contents: { boost: 1 },
+              },
+          })
+        : [];
+
+    // Normalize the scores for text results by capping at a threshold, to better integrate with fuzzysearch results
+    const bestPossibleText = 0.8;
+    const maxTextScore = textResults.reduce((max, item) => Math.max(max, item.score), -Infinity);
+    if (maxTextScore > bestPossibleText) {
+        const factor = bestPossibleText / maxTextScore;
+        for (const res of textResults) res.score = res.score * factor;
+    }
+
+    // Flatten results into a single candidate list so per-item priorities can reorder
+    // entries even within a single fuzzysort match (multiple Searchables may share a searchKey).
+    // Text-result scores are scaled by the fullText priority AFTER the normalization above so
+    // that the cap keeps doing its job before the global multiplier is applied. Priority
+    // combining is delegated to `combineScore`; see its definition for the semantics.
+    /** @type {Candidate[]} */
+    const candidates = [];
+    for (const fr of results) {
+        const dataItems = mappedData[fr.target];
+        for (const searchable of dataItems) {
+            const eff = combineScore(
+                fr.score,
+                searchPriorities.semantic,
+                searchPriorities.domains[searchable.domainId],
+                searchable.priority,
+            );
+            candidates.push({ kind: "semantic", score: eff, fuzzysortResult: fr, searchable });
+        }
+    }
+    for (const tr of textResults) {
+        candidates.push({
+            kind: "fullText",
+            score: combineScore(tr.score, searchPriorities.fullText, docPriorities[tr.ref]),
+            textMatch: tr,
+        });
+    }
+    candidates.sort((a, b) => b.score - a.score);
+    return candidates;
+};
+
+/**
+ * Resolve a site-root-relative address (as stored in `xref.json`) against the page's
+ * `<base href>`. Addresses in `xref.json` start with `/`, but this denotes the site's
+ * root rather than `/` for the browser. This helper bridges that gap so anchors and
+ * `window.location` navigations land on the right page regardless of where the site
+ * is mounted.
+ *
+ * @param {string} dest
+ * @return {string}
+ */
+export const resolveAgainstBase = (dest) => {
+    const base = document.querySelector("base");
+    if (!base) return dest;
+    const baseNoSlash = base.href.endsWith("/") ? base.href.slice(0, -1) : base.href;
+    const destNoSlash = dest.startsWith("/") ? dest.slice(1) : dest;
+    return baseNoSlash + "/" + destNoSlash;
+};
+
+/**
+ * Resolve a site-root-relative address against the page's `<base href>` and navigate
+ * there. Mirrors the resolution logic the search box uses to confirm a result.
+ *
+ * @param {string} dest
+ */
+export const navigateBaseRelative = (dest) => {
+    window.location.assign(resolveAgainstBase(dest));
+};
+
+/**
+ * Render a ranked candidate as a listbox option `<li>`. Returns `null` for full-text hits
+ * whose header and body both yielded no visible highlight (the caller should skip it).
+ *
+ * `textSnippet` tunes the per-result snippet sizes for full-text hits. It has no effect
+ * on semantic hits, which don't carry excerpt text.
+ *
+ * `asOption` controls `role="option"` on the returned `<li>`. Defaults to true for the
+ * combobox listbox; callers rendering into a plain list (the full-page search view) pass
+ * false so the items don't masquerade as listbox options.
+ *
+ * @param {Candidate} candidate
+ * @param {{
+ *   domainMappers: DomainMappers,
+ *   filter: string,
+ *   document?: Document,
+ *   textSnippet?: TextSnippetOptions,
+ *   asOption?: boolean,
+ * }} opts
+ * @return {Promise<HTMLLIElement|null>}
+ */
+export const renderCandidateLi = async (candidate, opts) => {
+    const { domainMappers, filter, document: doc = document, textSnippet, asOption = true } = opts;
+    if (candidate.kind === "semantic") {
+        const { fuzzysortResult, searchable } = candidate;
+        return searchableToHtml(
+            domainMappers,
+            searchable,
+            fuzzysortResult
+                .highlight((v) => ({ v }))
+                .map((v) =>
+                    typeof v === "string" ? { t: "text", v } : { t: "highlight", v: v.v },
+                ),
+            doc,
+            asOption,
+        );
+    }
+    return await textResultToHtml(filter, candidate.textMatch, doc, textSnippet, asOption);
+};
+
+/**
+ * Resolve the target page for a candidate, accounting for full-text hits that need a
+ * bucket load to know which page hosts the match. Returns the URL, resolved against
+ * the page's `<base href>` so it works under a non-root site mount, including any
+ * anchor and `?terms=` highlight parameter.
+ *
+ * @param {Candidate} candidate
+ * @param {string} filter
+ * @return {Promise<string>}
+ */
+export const candidateTargetUrl = async (candidate, filter) => {
+    if (candidate.kind === "semantic") {
+        return resolveAgainstBase(withTermsParam(candidate.searchable.address, null));
+    }
+    const resultBucket = await Promise.resolve(loadBucket(candidate.textMatch.ref));
+    /** @type {DocContent} */
+    const doc = resultBucket[candidate.textMatch.ref];
+    return resolveAgainstBase(withTermsParam(doc.id, filter));
+};
+
+/**
+ * Insert a `?terms=<query>` highlight parameter into an address (before any fragment).
+ * @param {string} itemAddress
+ * @param {string|null} query
+ */
+const withTermsParam = (itemAddress, query) => {
+    const q = query ? "?terms=" + encodeURIComponent(query) : "";
+    const [addr, id] = itemAddress.split("#", 2);
+    return id ? addr + q + "#" + id : addr + q;
+};
+
+/**
+ * Snippet sizing knobs for full-text results, shared by the combobox dropdown and the
+ * full-page search view. The two UIs use different defaults: the dropdown is cramped
+ * and wants terse snippets, the full page has room to show more.
+ * @typedef {{header?: number, content?: number, maxSnippets?: number}} TextSnippetOptions
+ */
+
+/**
+ * Maps from a data item to a HTML LI element
+ * @param {string} term
+ * @param {TextMatch} match
+ * @param {Document} document
+ * @param {TextSnippetOptions} [snippetOpts]
+ * @param {boolean} [asOption]  Whether to apply `role="option"`. See `searchableToHtml`.
+ * @return {Promise<HTMLLIElement|null>}
+ */
+const textResultToHtml = async (term, match, document, snippetOpts = {}, asOption = true) => {
+    const headerContext = snippetOpts.header ?? 30;
+    const contentContext = snippetOpts.content ?? 10;
+    const maxSnippets = snippetOpts.maxSnippets ?? 3;
+    const doc = await getDocContents(match.ref);
+
+    const li = document.createElement("li");
+    if (asOption) li.role = "option";
+    li.className = `search-result full-text`;
+    li.title = "Full-text search result";
+    // DEBUG:
+    // li.title = `Full-text search result (${match.score}) (${match.ref})`;
+
+    // See `searchableToHtml` for the rationale: wrap contents in an anchor so results are
+    // keyboard-focusable and middle-clickable. `doc.id` is the destination, and we have
+    // it here because `getDocContents` (and therefore the bucket) has already loaded.
+    const link = document.createElement("a");
+    link.className = "search-result-link";
+    link.href = resolveAgainstBase(withTermsParam(doc.id, term));
+    li.appendChild(link);
+
+    const searchTerm = document.createElement("p");
+    let inHeader = true;
+    let headerHl = highlightTextResult(doc.header, term, { contextLength: headerContext }); // Only abbreviate huge headers
+    if (!headerHl) {
+        inHeader = false;
+        headerHl = document.createElement("span");
+        headerHl.append(document.createTextNode(doc.header));
+    }
+    headerHl.className = "header";
+    searchTerm.append(headerHl);
+    let contentHl = highlightTextResult(doc.contents, term, {
+        contextLength: contentContext,
+        maxSnippets,
+    });
+    if (!contentHl) {
+        if (!inHeader) {
+            // Exclude this result. It'd be cleaner to do this elsewhere, but duplicating the string
+            // processing would be expensive.
+            return null;
+        }
+        contentHl = document.createElement("span");
+        contentHl.appendChild(document.createTextNode("..."));
+        for (const t of term.split(/\s+/)) {
+            const tm = document.createElement("em");
+            tm.appendChild(document.createTextNode(t));
+            contentHl.appendChild(tm);
+            contentHl.appendChild(document.createTextNode("..."));
+        }
+    }
+    searchTerm.append(contentHl);
+    link.appendChild(searchTerm);
+
+    const domainName = document.createElement("p");
+    link.appendChild(domainName);
+    domainName.className = "domain";
+    if (doc.context.trim() == "") {
+        domainName.textContent = "Full-text search";
+    } else {
+        // This is a slight abuse of "domain", but it seems to work well
+        let context = doc.context.replaceAll("\t", " » ");
+        domainName.append(document.createTextNode(context));
+        domainName.classList.add("text-context");
+    }
+
+    return li;
+};
+
+/**
+ * @param {SearchResult} result
+ * @returns string
+ */
+const resultToText = (result) => {
+    if ("fuzzysortResult" in result) {
+        return result.fuzzysortResult.target;
+    } else {
+        return result.terms;
+    }
+};
+
+/**
+ * @template T
+ * @template Y
+ * @param {T | null | undefined} v
+ * @param {(t: T) => Y} fn
+ * @returns Y | undefined
+ */
+const opt = (v, fn) => (v != null ? fn(v) : undefined);
+
+/**
+ * This is a modified version of the combobox at https://www.w3.org/WAI/ARIA/apg/patterns/combobox/examples/combobox-autocomplete-both/
+ *
+ * The license for the combobox is in `licenses.md`.
+ */
+class SearchBox {
+    /**
+     * @type {HTMLDivElement}
+     */
+    comboboxNode;
+
+    /**
+     * @type {HTMLButtonElement | null}
+     */
+    buttonNode;
+
+    /**
+     * @type {HTMLElement}
+     */
+    listboxNode;
+
+    /**
+     * @type {boolean}
+     */
+    comboboxHasVisualFocus;
+
+    /**
+     * @type {boolean}
+     */
+    listboxHasVisualFocus;
+
+    /**
+     * @type {boolean}
+     */
+    hasHover;
+
+    /**
+     * @type {SearchResult | null}
+     */
+    currentOption;
+
+    /**
+     * @type {SearchResult | null}
+     */
+    firstOption;
+
+    /**
+     * @type {SearchResult | null}
+     */
+    lastOption;
+
+    /**
+     * @type {SearchResult[]}
+     */
+    filteredOptions;
+
+    /**
+     * @type {string}
+     */
+    filter;
+
+    /**
+     * @type {Fuzzysort.Prepared[]}
+     */
+    preparedData;
+
+    /**
+     * Map from search term to list of results
+     *
+     * @type {Record<string, Searchable[]>}
+     */
+    mappedData;
+
+    /** @type {HTMLLIElement} */
+    noResultsElement = document.createElement("li");
+
+    /** @type {HTMLLIElement[]} */
+    domainFilters;
+
+    /** @type {DomainMappers} */
+    domainMappers;
+
+    /** @type {SearchPriorities} */
+    searchPriorities;
+
+    /**
+     * Priority baked into each full-text document at index time (keyed by doc ref). Feeds the
+     * same per-item log-space contribution that `Searchable.priority` does on the quick-jump side,
+     * so full-text matches can be up- or down-weighted per section.
+     * @type {Record<string, number>}
+     */
+    docPriorities;
+
+    /**
+     * Site-root-relative path of the full-page search results view, e.g. `"search/"`. When
+     * unset, pressing Enter with no listbox selection is a no-op (the combobox is still
+     * fully usable for jump-to-result).
+     * @type {string | null}
+     */
+    searchPagePath;
+
+    /** @type {InputAbbreviationRewriter} */
+    imeRewriter;
+
+    /**
+     * Incrementing counter used to detect and cancel stale computations
+     * @type {number}
+     * */
+    requestCounter;
+
+    /**
+     * @param {HTMLDivElement} comboboxNode
+     * @param {HTMLButtonElement | null} buttonNode
+     * @param {HTMLElement} listboxNode
+     * @param {DomainMappers} domainMappers
+     * @param {Record<string, Searchable[]>} mappedData
+     * @param {SearchPriorities} searchPriorities
+     * @param {Record<string, number>} docPriorities
+     * @param {string | null} searchPagePath
+     */
+    constructor(
+        comboboxNode,
+        buttonNode,
+        listboxNode,
+        domainMappers,
+        mappedData,
+        searchPriorities,
+        docPriorities,
+        searchPagePath,
+    ) {
+        this.comboboxNode = comboboxNode;
+        this.buttonNode = buttonNode;
+        this.listboxNode = listboxNode;
+        this.domainMappers = domainMappers;
+        this.mappedData = mappedData;
+        this.searchPriorities = searchPriorities;
+        this.docPriorities = docPriorities;
+        this.searchPagePath = searchPagePath;
+        this.preparedData = Object.keys(this.mappedData).map((name) => fuzzysort.prepare(name));
+        this.requestCounter = 0;
+
+        // Add IME
+        this.imeRewriter = new InputAbbreviationRewriter(
+            {
+                abbreviationCharacter: "\\",
+                customTranslations: [],
+                eagerReplacementEnabled: true,
+            },
+            comboboxNode,
+        );
+
+        // Pre-fill from the URL: `?q=` is used on the full-page search view, `?terms=` is
+        // used on destination pages reached through a full-text result. `q` wins if both
+        // are present.
+        const params = new URLSearchParams(window.location.search);
+        const query = (params.get("q") ?? params.get("terms"))?.trim();
+        comboboxNode.textContent = query ? query : "";
+
+        this.comboboxHasVisualFocus = false;
+        this.listboxHasVisualFocus = false;
+
+        this.hasHover = false;
+
+        this.currentOption = null;
+        this.firstOption = null;
+        this.lastOption = null;
+
+        this.filteredOptions = [];
+        this.filter = "";
+
+        this.comboboxNode.addEventListener("keydown", this.onComboboxKeyDown.bind(this));
+        this.comboboxNode.addEventListener("keyup", this.onComboboxKeyUp.bind(this));
+        this.comboboxNode.addEventListener("click", this.onComboboxClick.bind(this));
+        this.comboboxNode.addEventListener("focus", this.onComboboxFocus.bind(this));
+        this.comboboxNode.addEventListener("blur", this.onComboboxBlur.bind(this));
+
+        document.body.addEventListener("pointerup", this.onBackgroundPointerUp.bind(this), true);
+
+        // initialize pop up menu
+
+        this.listboxNode.addEventListener("pointerover", this.onListboxPointerover.bind(this));
+        this.listboxNode.addEventListener("pointerout", this.onListboxPointerout.bind(this));
+
+        this.domainFilters = [];
+        const docDomainFilter = document.createElement("li");
+        docDomainFilter.innerHTML = `<label><input type="checkbox" checked> Doc domain</label>`;
+        docDomainFilter.classList.add("domain-filter");
+        // TODO more work on the domain filters
+        // this.domainFilters.push(docDomainFilter);
+
+        // It's important not to call setValue with a blank string when query
+        // is false, because that puts keyboard focus in the box.
+        if (query) {
+            this.setValue(query);
+        }
+
+        // Open Button
+
+        const button = this.comboboxNode.nextElementSibling;
+
+        if (button && button.tagName === "BUTTON") {
+            button.addEventListener("click", this.onButtonClick.bind(this));
+        }
+
+        this.noResultsElement.textContent = "No results";
+    }
+
+    /**
+     * @param {HTMLLIElement | null | undefined} option
+     */
+    setActiveDescendant(option) {
+        if (option && this.listboxHasVisualFocus) {
+            this.comboboxNode.setAttribute("aria-activedescendant", option.id);
+            option.scrollIntoView({ behavior: "instant", block: "nearest" });
+        } else {
+            this.comboboxNode.setAttribute("aria-activedescendant", "");
+        }
+    }
+
+    /**
+     * @param {string} itemAddress
+     * @param {string|null} query
+     */
+    confirmResult(itemAddress, query = null) {
+        navigateBaseRelative(withTermsParam(itemAddress, query));
+    }
+
+    /**
+     * @param {string} value
+     */
+    setValue(value) {
+        this.filter = value;
+        this.comboboxNode.textContent = this.filter;
+        this.imeRewriter.setSelections([new Range(this.filter.length, 0)]);
+    }
+
+    /**
+     * @param {SearchResult} option
+     */
+    setOption(option) {
+        if (option) {
+            this.currentOption = option;
+            this.setCurrentOptionStyle(this.currentOption);
+            this.setActiveDescendant(this.currentOption.htmlItem);
+        }
+    }
+
+    setVisualFocusCombobox() {
+        this.listboxNode.classList.remove("focus");
+        this.comboboxNode.parentElement?.classList.add("focus"); // set the focus class to the parent for easier styling
+        this.comboboxHasVisualFocus = true;
+        this.listboxHasVisualFocus = false;
+        this.setActiveDescendant(null);
+    }
+
+    setVisualFocusListbox() {
+        this.comboboxNode.parentElement?.classList.remove("focus");
+        this.comboboxHasVisualFocus = false;
+        this.listboxHasVisualFocus = true;
+        this.listboxNode.classList.add("focus");
+        this.setActiveDescendant(this.currentOption?.htmlItem);
+    }
+
+    removeVisualFocusAll() {
+        this.comboboxNode.parentElement?.classList.remove("focus");
+        this.comboboxHasVisualFocus = false;
+        this.listboxHasVisualFocus = false;
+        this.listboxNode.classList.remove("focus");
+        this.currentOption = null;
+        this.setActiveDescendant(null);
+    }
+
+    // ComboboxAutocomplete Events
+
+    /**
+     * @returns {Promise<SearchResult|null>}
+     */
+    async filterOptions() {
+        const currentOptionText = opt(this.currentOption, resultToText);
+        const filter = this.filter;
+
+        if (filter.length === 0) {
+            this.filteredOptions = [];
+            this.firstOption = null;
+            this.lastOption = null;
+            this.currentOption = null;
+            this.listboxNode.textContent = "";
+            return null;
+        }
+
+        const candidates = computeCandidates(filter, {
+            preparedData: this.preparedData,
+            mappedData: this.mappedData,
+            searchPriorities: this.searchPriorities,
+            docPriorities: this.docPriorities,
+            searchIndex,
+        });
+
+        if (candidates.length === 0) {
+            this.filteredOptions = [];
+            this.firstOption = null;
+            this.lastOption = null;
+            this.currentOption = null;
+            this.listboxNode.textContent = "";
+            this.listboxNode.append(this.noResultsElement);
+            return null;
+        }
+
+        const totalCandidates = candidates.length;
+        const shownCandidates = candidates.slice(0, 30);
+
+        // NOTE: Cancellable speculative execution segment begins here! (No awaits before this.)
+        // The following computation is async, and so might fall behind later search results if
+        // the user types quickly. This counter detects whether the current function has become
+        // stale due to a later-starting search request
+        this.requestCounter += 1;
+        const requestCount = this.requestCounter;
+
+        // All variables need to be stored in the function and only written to the object once
+        // we decide the request was not stale
+        const /** @type {HTMLLIElement[]} */ listboxResults = [];
+        const /** @type {SearchResult[]} */ filteredOptions = [];
+        let /** @type {SearchResult | null} */ firstOption = null;
+        let /** @type {SearchResult | null} */ lastOption = null;
+        let /** @type {SearchResult|null} */ newCurrentOption = null;
+        for (let i = 0; i < shownCandidates.length; i++) {
+            const candidate = shownCandidates[i];
+            const option = await renderCandidateLi(candidate, {
+                domainMappers: this.domainMappers,
+                filter,
+                document,
+            });
+            if (!option) continue;
+            // The combobox owns keyboard focus (aria-activedescendant on the input).
+            // Keep the inner <a> out of the tab order so Tab doesn't walk into the
+            // open listbox; the click/Enter paths still navigate via `confirmResult`.
+            option.querySelector("a.search-result-link")?.setAttribute("tabindex", "-1");
+            /** @type {SearchResult} */
+            const searchResult =
+                candidate.kind === "semantic"
+                    ? {
+                          item: candidate.searchable,
+                          fuzzysortResult: candidate.fuzzysortResult,
+                          htmlItem: option,
+                      }
+                    : { terms: filter, textItem: candidate.textMatch, htmlItem: option };
+            option.addEventListener("click", this.onOptionClick(searchResult));
+            option.addEventListener("pointerover", this.onOptionPointerover.bind(this));
+            option.addEventListener("pointerout", this.onOptionPointerout.bind(this));
+            filteredOptions.push(searchResult);
+            listboxResults.push(option);
+            if (i === 0) firstOption = searchResult;
+            if (i === shownCandidates.length - 1) lastOption = searchResult;
+            if (currentOptionText === resultToText(searchResult) && !newCurrentOption) {
+                newCurrentOption = searchResult;
+            }
+        }
+
+        const moreResults = document.createElement("li");
+        moreResults.textContent = `Showing ${filteredOptions.length}/${totalCandidates} results`;
+        moreResults.className = `more-results`;
+        listboxResults.push(moreResults);
+
+        if (this.requestCounter !== requestCount) {
+            return null; // Cancel stale computation
+        }
+
+        // Finalize completed computation, store intermediate results back to object
+        this.filteredOptions = filteredOptions;
+        this.firstOption = firstOption;
+        this.lastOption = lastOption;
+        if (newCurrentOption) {
+            this.currentOption = newCurrentOption;
+        }
+        if (!this.currentOption) {
+            this.currentOption = this.firstOption;
+        }
+        this.listboxNode.textContent = "";
+        this.listboxNode.append(...listboxResults);
+
+        return newCurrentOption ?? this.firstOption;
+    }
+
+    /**
+     * @param {SearchResult | null} option
+     */
+    setCurrentOptionStyle(option) {
+        for (const opt of this.filteredOptions) {
+            const el = opt.htmlItem;
+            if (opt === option) {
+                el.setAttribute("aria-selected", "true");
+                if (
+                    this.listboxNode.scrollTop + this.listboxNode.offsetHeight <
+                    el.offsetTop + el.offsetHeight
+                ) {
+                    this.listboxNode.scrollTop =
+                        el.offsetTop + el.offsetHeight - this.listboxNode.offsetHeight;
+                } else if (this.listboxNode.scrollTop > el.offsetTop + 2) {
+                    this.listboxNode.scrollTop = el.offsetTop;
+                }
+            } else {
+                el.removeAttribute("aria-selected");
+            }
+        }
+    }
+
+    /**
+     * @param {SearchResult} currentOption
+     * @param {SearchResult} lastOption
+     */
+    getPreviousOption(currentOption, lastOption) {
+        if (currentOption !== this.firstOption) {
+            var index = this.filteredOptions.indexOf(currentOption);
+            return this.filteredOptions[index - 1];
+        }
+        return lastOption;
+    }
+
+    /**
+     * @param {SearchResult | null} currentOption
+     * @param {SearchResult} firstOption
+     */
+    getNextOption(currentOption, firstOption) {
+        if (currentOption != null && currentOption !== this.lastOption) {
+            var index = this.filteredOptions.indexOf(currentOption);
+            return this.filteredOptions[index + 1];
+        }
+        return firstOption;
+    }
+
+    /* MENU DISPLAY METHODS */
+
+    doesOptionHaveFocus() {
+        return this.comboboxNode.getAttribute("aria-activedescendant") !== "";
+    }
+
+    isOpen() {
+        return this.listboxNode.style.display === "block";
+    }
+
+    isClosed() {
+        return this.listboxNode.style.display !== "block";
+    }
+
+    open() {
+        this.listboxNode.style.display = "block";
+        this.comboboxNode.setAttribute("aria-expanded", "true");
+        this.buttonNode?.setAttribute("aria-expanded", "true");
+    }
+
+    /**
+     * @param {boolean} [force]
+     */
+    close(force) {
+        if (
+            force ||
+            (!this.comboboxHasVisualFocus && !this.listboxHasVisualFocus && !this.hasHover)
+        ) {
+            this.setCurrentOptionStyle(null);
+            this.listboxNode.style.display = "none";
+            this.comboboxNode.setAttribute("aria-expanded", "false");
+            this.buttonNode?.setAttribute("aria-expanded", "false");
+            this.setActiveDescendant(null);
+        }
+    }
+
+    /* combobox Events */
+
+    /**
+     * @param {KeyboardEvent} event
+     * @returns void
+     */
+    async onComboboxKeyDown(event) {
+        let eventHandled = false;
+        const altKey = event.altKey;
+
+        if (event.ctrlKey || event.shiftKey) {
+            return;
+        }
+
+        switch (event.key) {
+            case "Enter":
+                if (this.listboxHasVisualFocus) {
+                    this.setValue(opt(this.currentOption, resultToText) ?? "");
+                    if (this.currentOption) {
+                        if ("fuzzysortResult" in this.currentOption) {
+                            this.confirmResult(this.currentOption.item.address);
+                        } else {
+                            const resultBucket = await Promise.resolve(
+                                loadBucket(this.currentOption.textItem.ref),
+                            );
+
+                            /** @type {DocContent} */
+                            const doc = resultBucket[this.currentOption.textItem.ref];
+
+                            this.confirmResult(doc.id, this.currentOption.terms);
+                        }
+                    }
+                } else if (this.searchPagePath && this.filter.trim().length > 0) {
+                    // Submit the query to the full-page search results view.
+                    navigateBaseRelative(
+                        this.searchPagePath + "?q=" + encodeURIComponent(this.filter.trim()),
+                    );
+                }
+                this.close(true);
+                this.setVisualFocusCombobox();
+                eventHandled = true;
+                break;
+
+            case "Down":
+            case "ArrowDown":
+                if (this.filteredOptions.length > 0 && this.firstOption != null) {
+                    if (altKey) {
+                        this.open();
+                    } else {
+                        this.open();
+                        if (this.listboxHasVisualFocus) {
+                            this.setOption(
+                                this.getNextOption(this.currentOption, this.firstOption),
+                            );
+                            this.setVisualFocusListbox();
+                        } else {
+                            this.setOption(this.firstOption);
+                            this.setVisualFocusListbox();
+                        }
+                    }
+                }
+                eventHandled = true;
+                break;
+
+            case "Up":
+            case "ArrowUp":
+                if (
+                    this.filteredOptions.length > 0 &&
+                    this.currentOption != null &&
+                    this.lastOption != null
+                ) {
+                    if (this.listboxHasVisualFocus) {
+                        this.setOption(this.getPreviousOption(this.currentOption, this.lastOption));
+                    } else {
+                        this.open();
+                        if (!altKey) {
+                            this.setOption(this.lastOption);
+                            this.setVisualFocusListbox();
+                        }
+                    }
+                }
+                eventHandled = true;
+                break;
+
+            case "Esc":
+            case "Escape":
+                if (this.isOpen()) {
+                    this.close(true);
+                    this.filter = this.comboboxNode.textContent;
+                    await this.filterOptions();
+                    this.setVisualFocusCombobox();
+                } else {
+                    this.setValue("");
+                    this.comboboxNode.textContent = "";
+                }
+                eventHandled = true;
+                break;
+
+            case "Tab":
+                this.close(true);
+                break;
+
+            case "Home":
+                this.imeRewriter.setSelections([new Range(0, 0)]);
+                eventHandled = true;
+                break;
+
+            case "End":
+                var length = this.comboboxNode.textContent.length;
+                this.imeRewriter.setSelections([new Range(length, 0)]);
+                eventHandled = true;
+                break;
+
+            default:
+                break;
+        }
+
+        if (eventHandled) {
+            event.stopImmediatePropagation();
+            event.preventDefault();
+        }
+    }
+
+    /**
+     * @param {KeyboardEvent} event
+     * @returns void
+     */
+    async onComboboxKeyUp(event) {
+        let eventHandled = false;
+
+        if (event.key === "Escape" || event.key === "Esc") {
+            return;
+        }
+
+        switch (event.key) {
+            case "Left":
+            case "ArrowLeft":
+            case "Right":
+            case "ArrowRight":
+            case "Home":
+            case "End":
+                this.setCurrentOptionStyle(null);
+                this.setVisualFocusCombobox();
+                eventHandled = true;
+                break;
+
+            default:
+                if (this.comboboxNode.textContent !== this.filter) {
+                    this.filter = this.comboboxNode.textContent;
+                    this.setVisualFocusCombobox();
+                    this.setCurrentOptionStyle(null);
+                    eventHandled = true;
+                    const option = await this.filterOptions();
+                    if (option) {
+                        if (this.isClosed() && this.comboboxNode.textContent.length) {
+                            this.open();
+                        }
+
+                        this.setCurrentOptionStyle(option);
+                        this.setOption(option);
+                    } else {
+                        this.close();
+                        this.setActiveDescendant(null);
+                    }
+                }
+
+                break;
+        }
+
+        if (eventHandled) {
+            event.stopImmediatePropagation();
+            event.preventDefault();
+        }
+    }
+
+    onComboboxClick() {
+        if (this.isOpen()) {
+            this.close(true);
+        } else {
+            this.open();
+        }
+    }
+
+    async onComboboxFocus() {
+        this.filter = this.comboboxNode.textContent;
+        await this.filterOptions();
+        this.setVisualFocusCombobox();
+        this.setCurrentOptionStyle(null);
+    }
+
+    onComboboxBlur() {
+        this.removeVisualFocusAll();
+        // Remove empty space created by browser after user deletes entered text.
+        // Makes the placeholder appear again.
+        if (this.comboboxNode.textContent.trim().length === 0) {
+            this.comboboxNode.textContent = "";
+        }
+    }
+
+    /**
+     * @param {PointerEvent} event
+     * @returns void
+     */
+    onBackgroundPointerUp(event) {
+        const node = /** @type {Node | null} */ (event.target);
+        if (
+            !this.comboboxNode.contains(node) &&
+            !this.listboxNode.contains(node) &&
+            (this.buttonNode == null || !this.buttonNode.contains(node))
+        ) {
+            this.comboboxHasVisualFocus = false;
+            this.setCurrentOptionStyle(null);
+            this.removeVisualFocusAll();
+            setTimeout(this.close.bind(this, true), 100);
+        }
+    }
+
+    onButtonClick() {
+        if (this.isOpen()) {
+            this.close(true);
+        } else {
+            this.open();
+        }
+        this.comboboxNode.focus();
+        this.setVisualFocusCombobox();
+    }
+
+    /* Listbox Events */
+
+    onListboxPointerover() {
+        this.hasHover = true;
+    }
+
+    onListboxPointerout() {
+        this.hasHover = false;
+        setTimeout(this.close.bind(this, false), 300);
+    }
+
+    // Listbox Option Events
+
+    /**
+     * @param {SearchResult} result
+     * @returns MouseEventHandler
+     */
+    onOptionClick(result) {
+        /**
+         * @returns void
+         */
+        return async () => {
+            this.comboboxNode.textContent = resultToText(result);
+            if ("fuzzysortResult" in result) {
+                this.confirmResult(result.item.address);
+            } else {
+                const resultBucket = await Promise.resolve(loadBucket(result.textItem.ref));
+
+                /** @type {DocContent} */
+                const doc = resultBucket[result.textItem.ref];
+
+                this.confirmResult(doc.id, resultToText(result));
+            }
+            this.close(true);
+        };
+    }
+
+    onOptionPointerover() {
+        this.hasHover = true;
+        this.open();
+    }
+
+    onOptionPointerout() {
+        this.hasHover = false;
+        setTimeout(this.close.bind(this, false), 300);
+    }
+}
+
+/**
+ * @typedef {{
+ *   searchWrapper: HTMLElement;
+ *   data: any;
+ *   domainMappers: Record<string, DomainMapper>;
+ *   searchPriorities?: SearchPrioritiesInput;
+ *   docPriorities?: Record<string, number>;
+ *   searchPagePath?: string | null;
+ * }} RegisterSearchArgs
+ * @param {RegisterSearchArgs} args
+ */
+export const registerSearch = ({
+    searchWrapper,
+    data,
+    domainMappers,
+    searchPriorities,
+    docPriorities,
+    searchPagePath,
+}) => {
+    const comboboxNode = /** @type {HTMLDivElement} */ (
+        searchWrapper.querySelector("div[contenteditable]")
+    );
+
+    const buttonNode = searchWrapper.querySelector("button");
+    const listboxNode = /** @type {HTMLElement | null} */ (
+        searchWrapper.querySelector('[role="listbox"]')
+    );
+    /** @type {SearchPriorities} */
+    const priorities = {
+        semantic: searchPriorities?.semantic ?? 50,
+        fullText: searchPriorities?.fullText ?? 50,
+        domains: searchPriorities?.domains ?? {},
+    };
+    if (comboboxNode != null && listboxNode != null) {
+        new SearchBox(
+            comboboxNode,
+            buttonNode,
+            listboxNode,
+            domainMappers,
+            dataToSearchableMap(data, domainMappers),
+            priorities,
+            docPriorities ?? {},
+            searchPagePath ?? null,
+        );
+    }
+};
+
+/**
+ * Exported for use by `search-page.js`, which maps full-text candidates to their host page
+ * before navigating.
+ * @param {string} ref
+ * @return {Promise<DocContent>}
+ */
+export const getDocContentsFor = (ref) => getDocContents(ref);
+
+/**
+ * Exported wrapper around the internal `dataToSearchableMap` so the full-page search view
+ * can build the same `Record<string, Searchable[]>` shape the combobox uses.
+ *
+ * @param {any} json
+ * @param {DomainMappers} domainMappers
+ * @return {Record<string, Searchable[]>}
+ */
+export const buildSearchableMap = (json, domainMappers) => dataToSearchableMap(json, domainMappers);
