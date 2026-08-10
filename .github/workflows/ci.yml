@@ -26,6 +26,12 @@ jobs:
 
             - uses: actions/checkout@v7
 
+            - name: Install subproject toolchains
+              run: |
+                  find . -name lean-toolchain -type f -not -path './.*' | while read -r f; do
+                      elan toolchain install "$(cat "$f")"
+                  done
+
             - name: List all files
               run: |
                   find . -name "*.lean" -type f
@@ -113,6 +119,10 @@ jobs:
             - name: Run tests
               run: |
                   lake test -- --verbose --check-tex
+
+            - name: Test the dev server
+              run: |
+                  ./src/tests/run_serve_test.sh
 
             - name: Generate the test website
               run: |

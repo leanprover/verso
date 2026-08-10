@@ -23,6 +23,12 @@ jobs:
               with:
                   fetch-depth: 0
 
+            - name: Install subproject toolchains
+              run: |
+                  find . -name lean-toolchain -type f -not -path './.*' | while read -r f; do
+                      elan toolchain install "$(cat "$f")"
+                  done
+
             - name: Lean version
               run: lean --version
 
