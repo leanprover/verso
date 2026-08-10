@@ -26,6 +26,12 @@ jobs:
 
             - uses: actions/checkout@v7
 
+            - name: Install subproject toolchains
+              run: |
+                  find . -name lean-toolchain -type f -not -path './.*' | while read -r f; do
+                      elan toolchain install "$(cat "$f")"
+                  done
+
             - name: List all files
               run: |
                   find . -name "*.lean" -type f
