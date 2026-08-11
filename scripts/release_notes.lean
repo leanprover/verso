@@ -34,7 +34,7 @@ def entryFile (mod : Name) : System.FilePath :=
 /-- The module that a release note entry file defines. -/
 def entryModule (file : System.FilePath) : Name :=
   let rel : String := file.toString.drop (entriesDir.toString.length + 1) |>.copy
-  let rel : String := if rel.endsWith ".lean" then rel.dropRight 5 else rel
+  let rel : String := if rel.endsWith ".lean" then (rel.dropEnd 5).copy else rel
   (rel.splitOn "/").foldl (init := entriesNamespace) fun mod c => mod ++ c.toName
 
 /-- Every release note entry file on disk, including those in subdirectories. -/
@@ -94,6 +94,10 @@ def changedEntryFiles (base : String) : IO (Array (System.FilePath × Bool)) := 
       | [] => none)
     |>.toArray
 
+/-- A list of pull request numbers as it is written in an entry. -/
+def prsText (prs : List Nat) : String :=
+  "[" ++ String.intercalate ", " (prs.map toString) ++ "]"
+
 /--
 The reason a `No-Changelog:` line gives, if the text has one. The line may sit anywhere in the
 text.
@@ -152,15 +156,21 @@ run_cmd Elab.Command.liftTermElabM do
     if let some pr := pr then
       if isNew && override?.isNone then
         unless metadata.prs.contains pr do
+          let named :=
+            match metadata.prs with
+            | [] => m!"names no pull requests"
+            | [one] => m!"names only pull request #{one}"
+            | many => m!"names pull requests {prsText many}"
           problems := problems.push m!"\
-            {file} names pull requests {metadata.prs}, which leave out this one, #{pr}.\n\
-            Change its metadata to `prs := {pr :: metadata.prs}`."
+            {file} {named}, leaving out this one, #{pr}.\n\
+            Change its metadata to `prs := {prsText (metadata.prs ++ [pr])}`, or say why the change needs \
+            no release note with a `No-Changelog:` line in the pull request description."
     unless override?.isSome || metadata.version == inDevelopment do
       problems := problems.push m!"\
         {file} describes Verso {metadata.version}, but Verso {inDevelopment} is under development.\n\
         Change its metadata to `version := ⟨{inDevelopment.major}, {inDevelopment.minor}, \
-        {inDevelopment.patch}⟩`, or say why not with a `No-Changelog:` line in the pull request \
-        description."
+        {inDevelopment.patch}⟩`, or say why the change needs no release note with a \
+        `No-Changelog:` line in the pull request description."
 
   unless problems.isEmpty do
     throwError MessageData.joinSep problems.toList "\n\n"

@@ -12,7 +12,6 @@ jobs:
     check-release-note:
         name: "Check the PR has a release note"
         runs-on: ubuntu-latest
-        if: ${{ !contains(github.event.pull_request.labels.*.name, 'no-changelog') }}
         steps:
             # A release note entry names the pull requests that made its change in `prs`. This
             # pull request's number is new, so it reaches an entry through this diff: either a
@@ -27,8 +26,17 @@ jobs:
                   PR: ${{ github.event.pull_request.number }}
                   REPO: ${{ github.repository }}
                   HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+                  DESCRIPTION: ${{ github.event.pull_request.body }}
               run: |
                   set -o pipefail
+
+                  # A `No-Changelog:` line in the description says the change belongs in no
+                  # release note, and gives the reason. The same line waives the version rules
+                  # in the main workflow, so there is one thing to write.
+                  if grep -Eq '^[[:space:]]*No-Changelog:' <<<"$DESCRIPTION"; then
+                    grep -E '^[[:space:]]*No-Changelog:' <<<"$DESCRIPTION"
+                    exit 0
+                  fi
                   TOUCHED=$(gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '
                     .[]
                     | select(.status != "removed")
@@ -53,8 +61,9 @@ jobs:
                     echo ""
                     echo "Add a file under doc/UsersGuide/Releases/Entries/ with 'prs := [${PR}]'"
                     echo "and import it from doc/UsersGuide/Releases/Entries.lean, add ${PR} to the"
-                    echo "'prs' of an entry that already describes this change, or apply the"
-                    echo "'no-changelog' label to this pull request."
+                    echo "'prs' of an entry that already describes this change, or say why the"
+                    echo "change needs no release note with a 'No-Changelog:' line in the"
+                    echo "pull request description."
                     exit 1
                   fi
                   echo "Release note entries naming this pull request:"
