@@ -18,3 +18,5 @@ single.json
 !/doc/stats.html
 *.produced.out
 __pycache__
+test-projects/literate-config/lake-manifest.json
+test-projects/literate-multi-root/lake-manifest.json
