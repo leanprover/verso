@@ -2,7 +2,7 @@ name: Release note required
 
 on:
     pull_request:
-        types: [opened, synchronize, reopened, labeled, unlabeled]
+        types: [opened, synchronize, reopened, edited]
 
 permissions:
     contents: read
@@ -26,13 +26,16 @@ jobs:
                   PR: ${{ github.event.pull_request.number }}
                   REPO: ${{ github.repository }}
                   HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-                  DESCRIPTION: ${{ github.event.pull_request.body }}
               run: |
                   set -o pipefail
 
                   # A `No-Changelog:` line in the description says the change belongs in no
                   # release note, and gives the reason. The same line waives the version rules
                   # in the main workflow, so there is one thing to write.
+                  #
+                  # The description is read through the API so that a re-run sees the current
+                  # text; the event payload holds whatever it said when the run was triggered.
+                  DESCRIPTION="$(gh api "repos/$REPO/pulls/$PR" --jq '.body')"
                   if grep -Eq '^[[:space:]]*No-Changelog:' <<<"$DESCRIPTION"; then
                     grep -E '^[[:space:]]*No-Changelog:' <<<"$DESCRIPTION"
                     exit 0

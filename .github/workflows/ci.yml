@@ -96,10 +96,19 @@ jobs:
             # messages on merge_group and push runs.
             - name: Check the release notes
               env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  REPO: ${{ github.repository }}
                   RELEASE_NOTES_BASE: HEAD^1
                   RELEASE_NOTES_PR: ${{ github.event.pull_request.number }}
-                  RELEASE_NOTES_DESCRIPTION: ${{ github.event.pull_request.body }}
               run: |
+                  # The description is read through the API so that re-running this job after
+                  # editing it sees the current text; the event payload holds whatever it said
+                  # when the run was triggered.
+                  if [ -n "$RELEASE_NOTES_PR" ]; then
+                    RELEASE_NOTES_DESCRIPTION="$(gh api "repos/$REPO/pulls/$RELEASE_NOTES_PR" \
+                      --jq '.body')"
+                    export RELEASE_NOTES_DESCRIPTION
+                  fi
                   lake lean scripts/release_notes.lean
 
             - name: Install PDF Dependencies
