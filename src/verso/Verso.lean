@@ -6,6 +6,7 @@ Author: David Thrane Christiansen
 module
 -- This module serves as the root of the `Verso` library.
 -- Import modules here that should be built as part of the library.
+public import Verso.BEq
 public import Verso.CLI
 public import Verso.Code
 public import Verso.Doc
@@ -20,6 +21,7 @@ public import Verso.Doc.Lsp
 public import Verso.Doc.Suggestion
 public import Verso.Doc.TeX
 public import Verso.ExpectString
+public import Verso.FS
 public import Verso.Hover
 public import Verso.Instances
 public import Verso.Linters
@@ -27,6 +29,9 @@ public import Verso.Log
 public import Verso.Method
 public import Verso.Output
 public import Verso.Output.Html
+public import Verso.Output.Html.CssVars
+public import Verso.Output.Html.ElasticLunr
+public import Verso.Output.Html.KaTeX
 public import Verso.Output.TeX
 public import Verso.SyntaxUtils
 public import Verso.WithoutAsync
