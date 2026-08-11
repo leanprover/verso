@@ -64,6 +64,20 @@ jobs:
                   lake build :examples
                   popd
 
+            - name: Check for orphaned modules
+              run: |
+                  # These are all the library modules; docs and tests are excluded
+                  out="$(lake query VersoUtil:orphanMods Verso:orphanMods MultiVerso:orphanMods \
+                    VersoSearch:orphanMods VersoBlog:orphanMods VersoManual:orphanMods \
+                    VersoIlluminate:orphanMods VersoTutorial:orphanMods VersoLiterate:orphanMods \
+                    VersoLiterateCode:orphanMods)"
+                  if [ -n "$(printf '%s' "$out" | tr -d '[:space:]')" ]; then
+                    echo "Found orphaned modules:"
+                    echo "$out"
+                    exit 1
+                  fi
+                  echo "No orphaned modules."
+
             - name: Build the project
               run: |
                   lake build
