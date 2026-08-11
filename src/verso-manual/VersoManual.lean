@@ -118,7 +118,7 @@ inline_extension Inline.ref (canonicalName : String) (domain : Option Name) (rem
         else
           -- Intra-document links should be page references
           let label := labelForTeX dest.htmlId
-          pure \TeX{\autoref{\Lean{label}}" (p."~\pageref{\Lean{label}} ")"}
+          pure \TeX{\hyperref[\Lean{label}]{\Lean{← content.mapM go}}" (p."~\pageref{\Lean{label}} ")"}
 
   toHtml :=
     open Verso.Output.Html in
