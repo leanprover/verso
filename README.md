@@ -103,6 +103,82 @@ libraries. If you've attempted to implement your desired feature as an
 extension and run into a limitation, please open an issue so we can
 try to make the system more extensible.
 
+## Adding a Release Note
+
+Every pull request describes its change in the manual's release notes.
+Create a file under `doc/UsersGuide/Releases/Entries/`:
+
+```lean
+module
+
+public import UsersGuide.Releases.Entry
+
+open Verso.Genre Manual InlineLean UsersGuide.Releases
+
+release_note
+  version := ⟨4, 34, 0⟩
+  breaking := false
+  tag := "feat-serve"
+  prs := [876]
+
+#doc (Manual) "Development Server" =>
+
+Added a development server for previewing generated HTML locally.
+```
+
+Every entry module declares a `release_note` alongside its `#doc`;
+`lake build` fails on a module under `Entries/` that is missing
+either.
+
+The version is the one currently under development. When
+`lean-toolchain` names a release, that release is already tagged and
+the next minor version is under development; a release candidate or a
+nightly is preparing the version it reports. CI checks this, so a pull
+request that was written before a release and lands after one is told
+which version to name.
+
+The tag is the entry's permanent name. It becomes the anchor of a
+shared link, and the name the entry is known by in the release note
+domain, so pick one that will still describe the change later, and
+leave it alone once it has shipped. Refer to an entry as
+`{ref "the-tag" (domain := UsersGuide.Releases.entry)}`, which reaches
+the entry's line in the release's list of changes whether or not it
+has grown past its summary. An entry with more to say links on from
+that line to its own section.
+
+Set `breaking := true` when the change needs something of its readers.
+Breaking changes are called out in the release's list of changes.
+
+`prs` lists the pull requests that made the change, and is where pull
+request numbers belong; the summary's links are rendered from it, so
+leave them out of the prose.
+
+The first paragraph is the entry's summary in the list of changes for
+that version. Anything after it becomes a section of its own, headed
+by the entry's title.
+
+Add a `public import` for the new module to
+`doc/UsersGuide/Releases/Entries.lean`. An entry file that nothing
+imports is not built and does not reach the manual.
+
+CI asks that some entry name the pull request in its `prs`, so a
+change that belongs with an entry that already exists can add its
+number there instead of adding a file. Changes that belong in no
+release note at all, such as dependency bumps, take the `no-changelog`
+label.
+
+Every entry a branch adds or changes has to name the version under
+development. A change that has to waive that, such as re-filing an
+entry under the release it actually shipped in, says so in a commit
+message:
+
+```
+No-Changelog: re-filing the development server entry under 4.33.0
+```
+
+Put it in the pull request description too, since that seeds the
+squash commit and so carries it past the merge queue.
+
 ## Building Documentation
 
 To generate the Verso documentation for Verso itself, run
