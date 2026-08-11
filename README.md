@@ -107,7 +107,7 @@ try to make the system more extensible.
 
 Significant pull requests should describe their changes in the Verso
 manual's release notes. CI will check that this has been done. To skip
-the check, add a `No-Changelog` line in the PR desciption, like this:
+the check, add a `No-Changelog` line in the PR description, like this:
 
 ```
 No-Changelog: trivial typo fix
