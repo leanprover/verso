@@ -19,6 +19,7 @@ import Tests.ExpanderSignaturesLegacy
 import Tests.Html
 import Tests.HtmlEntities
 import Tests.InlineStringPositions
+import Tests.Tags
 import Tests.Integration
 import Tests.Integration.SampleDoc
 import Tests.Integration.CodeContent

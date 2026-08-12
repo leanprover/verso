@@ -25,6 +25,10 @@ jobs:
                   echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
 
             - uses: actions/checkout@v7
+              with:
+                  # Two commits, so that the release note check below resolves HEAD^1 and passes
+                  # it to the script as RELEASE_NOTES_BASE.
+                  fetch-depth: 2
 
             - name: Install subproject toolchains
               run: |
@@ -81,6 +85,31 @@ jobs:
             - name: Build the project
               run: |
                   lake build
+
+            # RELEASE_NOTES_BASE is what keeps this working against the shallow checkout above:
+            # HEAD^1 is the base branch for both pull_request and merge_group runs, and is one
+            # of the two commits that are fetched.
+            #
+            # A `No-Changelog:` line waives the rules about an entry's version and pull
+            # requests, and gives the reason. A pull request is squashed into a commit whose
+            # message is its description, so the description is read here and the commit
+            # messages on merge_group and push runs.
+            - name: Check the release notes
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  REPO: ${{ github.repository }}
+                  RELEASE_NOTES_BASE: HEAD^1
+                  RELEASE_NOTES_PR: ${{ github.event.pull_request.number }}
+              run: |
+                  # The description is read through the API so that re-running this job after
+                  # editing it sees the current text; the event payload holds whatever it said
+                  # when the run was triggered.
+                  if [ -n "$RELEASE_NOTES_PR" ]; then
+                    RELEASE_NOTES_DESCRIPTION="$(gh api "repos/$REPO/pulls/$RELEASE_NOTES_PR" \
+                      --jq '.body')"
+                    export RELEASE_NOTES_DESCRIPTION
+                  fi
+                  lake lean scripts/release_notes.lean
 
             - name: Install PDF Dependencies
               uses: ./.github/actions/install-texlive

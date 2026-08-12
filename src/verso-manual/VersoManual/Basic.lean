@@ -1055,6 +1055,31 @@ def externalTag [Monad m] [MonadState TraverseState m] (id : InternalId) (path :
     }
     pure t'
 
+/--
+Assigns a tag that a user chose to the element with the given internal ID.
+
+User-chosen tags become the element's external tag exactly as written, once sluggified. Any other
+element already holding that tag makes this an error, whether a user chose it or
+{name}`externalTag` assigned it, since both draw on one set of names. {name}`none` is returned in
+that case, leaving this element without an external tag.
+
+Providing the same tag to the same element again is not an error.
+-/
+def providedTag [Monad m] [MonadState TraverseState m] [MonadBuildLog m]
+    (id : InternalId) (path : Path) (name : String) : m (Option Tag) := do
+  let slug := name.sluggify
+  let tag := Tag.external slug
+  if let some id' := (← get).tags[tag]? then
+    if id' != id then
+      -- Another element holds this tag, so this one is left without an external tag.
+      reportError s!"Duplicate tag '{name}'"
+      return none
+  modify fun st => { st with
+    tags := st.tags.insert tag id,
+    externalTags := st.externalTags.insert id { path, htmlId := slug }
+  }
+  return some tag
+
 def TraverseState.resolveId (st : TraverseState) (id : InternalId) : Option Link :=
   if let some x := st.externalTags[id]? then
       pure x
@@ -1420,20 +1445,8 @@ def tagPart
     | Tag.internal name =>
       return (← externalTag id path name)
     | Tag.provided n =>
-      let slug := n.sluggify
       -- Convert to an external tag, and fail if we can't (users should control their link IDs)
-      let external := Tag.external slug
-
-      let t ← if let some id' := (← get).tags[external]? then
-        if id != id' then reportError s!"Duplicate tag '{t}'"
-          pure t
-        else
-          modify fun st => { st with
-              tags := st.tags.insert external id,
-              externalTags := st.externalTags.insert id { path, htmlId := slug }
-            }
-          pure external
-      return t
+      return (← providedTag id path n).getD t
 
 
 instance : Traverse Manual TraverseM where
