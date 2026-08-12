@@ -962,18 +962,18 @@ main section li ol {
     overflow-x: auto;
     margin: 0px;
     margin: 0.5em .85em;
-    border-left: 0.2em solid red;
+    border-left: 0.2em solid var(--verso-output-error-color);
     padding: 0 0.45em;
 }
 
 /* Different color for warning */
 .lean-output.warning {
-    border-color: var(--verso-warning-color);
+    border-color: var(--verso-output-warning-color);
 }
 
 /* Different color for information */
 .lean-output.information {
-    border-color: #0000c0;
+    border-color: var(--verso-output-info-color);
 }
 
 

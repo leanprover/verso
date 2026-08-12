@@ -7,6 +7,7 @@ module
 public import VersoLiterateCode
 public import VersoSearch.DomainSearch
 public import Verso.Code.Highlighted.WebAssets
+public import Verso.Output.Html.CssVars
 
 public section
 
@@ -45,6 +46,7 @@ private def headContents : Html := {{
   <script src="tippy.js"></script>
   <script>{{Html.text false highlightingJs}}</script>
   <style>{{Html.text false highlightingStyle}}</style>
+  <link rel="stylesheet" href="verso-vars.css"/>
   <link rel="stylesheet" href="tippy-border.css"/>
   <link rel="stylesheet" href="code.css"/>
 
@@ -152,6 +154,7 @@ def main (args : List String) : IO UInt32 := do
     IO.FS.writeFile (config.outputDir / "tippy.js") Verso.Code.Highlighted.WebAssets.tippy
     IO.FS.writeFile (config.outputDir / "tippy-border.css") Verso.Code.Highlighted.WebAssets.tippy.border.css
     IO.FS.writeFile (config.outputDir / "code.css") code.css
+    IO.FS.writeFile (config.outputDir / "verso-vars.css") «verso-vars.css»
     emitSearchBox (config.outputDir / "-verso-search") (searchPagePath := some "search/")
     let dir ← loadDir config.inputDir
     let dir := dir.sort
