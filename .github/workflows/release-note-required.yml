@@ -1,0 +1,73 @@
+name: Release note required
+
+on:
+    pull_request:
+        types: [opened, synchronize, reopened, edited]
+
+permissions:
+    contents: read
+    pull-requests: read
+
+jobs:
+    check-release-note:
+        name: "Check the PR has a release note"
+        runs-on: ubuntu-latest
+        steps:
+            # A release note entry names the pull requests that made its change in `prs`. This
+            # pull request's number is new, so it reaches an entry through this diff: either a
+            # new entry, or this number appended to the `prs` of an entry that already exists.
+            #
+            # Each candidate entry is read at the head commit. The files API reports which files
+            # the pull request touches, and omits `patch` for large diffs, so the file list is
+            # what is taken from it and the deciding content comes from the contents API.
+            - name: Check an entry names this pull request
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  PR: ${{ github.event.pull_request.number }}
+                  REPO: ${{ github.repository }}
+                  HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+              run: |
+                  set -o pipefail
+
+                  # A `No-Changelog:` line in the description says the change belongs in no
+                  # release note, and gives the reason. The same line waives the version rules
+                  # in the main workflow, so there is one thing to write.
+                  #
+                  # The description is read through the API so that a re-run sees the current
+                  # text; the event payload holds whatever it said when the run was triggered.
+                  DESCRIPTION="$(gh api "repos/$REPO/pulls/$PR" --jq '.body')"
+                  if grep -Eq '^[[:space:]]*No-Changelog:' <<<"$DESCRIPTION"; then
+                    grep -E '^[[:space:]]*No-Changelog:' <<<"$DESCRIPTION"
+                    exit 0
+                  fi
+                  TOUCHED=$(gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '
+                    .[]
+                    | select(.status != "removed")
+                    | select(.filename | startswith("doc/UsersGuide/Releases/Entries/"))
+                    | select(.filename | endswith(".lean"))
+                    | .filename')
+
+                  # The file is read into a variable and matched there: a pipeline into `grep -q`
+                  # would exit at the first match and kill `gh` with SIGPIPE, which pipefail
+                  # reports as failure, and would make an API error look like "no match".
+                  NAMED=""
+                  for file in $TOUCHED; do
+                    CONTENT=$(gh api "repos/$REPO/contents/${file}?ref=${HEAD_SHA}" \
+                      -H "Accept: application/vnd.github.raw")
+                    if grep -Eq "prs *:= *\[[^]]*\b${PR}\b" <<<"${CONTENT//$'\n'/ }"; then
+                      NAMED="${NAMED}${file}"$'\n'
+                    fi
+                  done
+
+                  if [ -z "$NAMED" ]; then
+                    echo "::error::No release note entry names this pull request, #${PR}."
+                    echo ""
+                    echo "Add a file under doc/UsersGuide/Releases/Entries/ with 'prs := [${PR}]'"
+                    echo "and import it from doc/UsersGuide/Releases/Entries.lean, add ${PR} to the"
+                    echo "'prs' of an entry that already describes this change, or say why the"
+                    echo "change needs no release note with a 'No-Changelog:' line in the"
+                    echo "pull request description."
+                    exit 1
+                  fi
+                  echo "Release note entries naming this pull request:"
+                  printf '%s' "$NAMED"

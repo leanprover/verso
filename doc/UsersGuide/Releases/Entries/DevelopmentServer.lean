@@ -3,23 +3,21 @@ Copyright (c) 2026 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
+module
 
-import VersoManual
+public import UsersGuide.Releases.Entry
 
-open Verso.Genre Manual InlineLean
+open Verso.Genre Manual InlineLean UsersGuide.Releases
 
-#doc (Manual) "Verso 4.32.0 (unreleased)" =>
-%%%
-tag := "release-v4.32.0"
-file := "v4.32.0"
-%%%
+release_note
+  version := ⟨4, 33, 0⟩
+  breaking := false
+  tag := "feat-serve"
+  prs := [876]
 
-* Added a {ref "feat-serve"}[development server] for previewing generated HTML locally with `lake exe verso-serve` (#876).
+#doc (Manual) "Development Server" =>
 
-# Development Server
-%%%
-tag := "feat-serve"
-%%%
+Added a {ref "feat-serve"}[development server] for previewing generated HTML locally with `lake exe verso-serve`.
 
 Verso now includes a small HTTP server for previewing generated HTML on your own machine.
 Running `lake exe verso-serve` serves the current directory at `http://127.0.0.1:8000/`, and a directory and `--port` may be given on the command line.

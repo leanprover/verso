@@ -103,6 +103,67 @@ libraries. If you've attempted to implement your desired feature as an
 extension and run into a limitation, please open an issue so we can
 try to make the system more extensible.
 
+## Adding a Release Note
+
+Significant pull requests should describe their changes in the Verso
+manual's release notes. CI will check that this has been done. To skip
+the check, add a `No-Changelog` line in the PR description, like this:
+
+```
+No-Changelog: trivial typo fix
+```
+
+To add an entry, create a module for it under
+[`doc/UsersGuide/Releases/Entries/`](doc/UsersGuide/Releases/Entries/),
+similar to this one:
+
+```lean
+module
+
+public import UsersGuide.Releases.Entry
+
+open Verso.Genre Manual InlineLean UsersGuide.Releases
+
+release_note
+  version := ⟨4, 34, 0⟩
+  breaking := false
+  tag := "feat-serve"
+  prs := [876]
+
+#doc (Manual) "Development Server" =>
+
+Added a development server for previewing generated HTML locally.
+```
+
+Every entry module declares a `release_note` alongside its `#doc` to
+associate extra metadata with the description.
+
+The version should be the one currently under development. When
+`lean-toolchain` names a stable release, that release is already
+tagged and the next minor version is under development. Otherwise, the
+version number reported by Lean itself is the one under development.
+CI checks this, so a pull request that was initially written before a
+release and lands afterwards is told which version to name.
+
+The tag is the entry's permanent name. If needed, an entry can be
+linked to using
+`{ref "the-tag" (domain := UsersGuide.Releases.entry)}[...]`.
+
+Set `breaking := true` for breaking changes. Breaking changes are
+called out in the release's list of changes.
+
+`prs` lists the pull requests that made the change. These numbers are
+automatically included in the changelog and should be omitted from the
+prose.
+
+The **first paragraph** is the entry's summary in the list of changes
+for that version, shown in a bulleted list. **Anything after** it
+becomes a section of its own, headed by the entry's title.
+
+Add a `public import` for the new module to
+`doc/UsersGuide/Releases/Entries.lean`. An entry file that nothing
+imports is not built and does not reach the manual.
+
 ## Building Documentation
 
 To generate the Verso documentation for Verso itself, run

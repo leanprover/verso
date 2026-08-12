@@ -144,9 +144,16 @@ lean_exe «verso-tests» where
   srcDir := "src/tests"
   supportInterpreter := true
 
+-- The release notes compute the version under development from this file while they elaborate,
+-- so its contents are an input to the library.
+input_file leanToolchain where
+  text := true
+  path := "lean-toolchain"
+
 lean_lib UsersGuide where
   srcDir := "doc"
   leanOptions := #[⟨`weak.linter.verso.manual.headerTags, true⟩]
+  needs := #[leanToolchain]
 
 @[default_target]
 lean_exe usersguide where
