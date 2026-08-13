@@ -611,28 +611,28 @@ partial def isEmptyHtml : Html → Bool
   | .tag .. => false
 
 /--
-Removes the attribute `attr` from the outermost element of `html`, returning its value
-alongside the remaining HTML. The attribute is taken only when it is unambiguous: a
-sequence is searched only when trimming its empty prefix and suffix leaves a single element,
-and the search stops at the first occurrence found.
+Removes the attributes named in `attrs` from `html`, returning their values alongside the
+remaining HTML. The search descends while unambiguous (through tags, and through sequences
+that hold a single element once empty text is trimmed), and takes each attribute from the
+outermost element that carries it.
 -/
-partial def takeAttr (attr : String) : Html → Option String × Html
-  | html@(.tag name attrs contents) =>
-    if let some (_, v) := attrs.find? (·.1 == attr) then
-      (some v, .tag name (attrs.filter (·.1 != attr)) contents)
-    else
-      match takeAttr attr contents with
-      | (some v, contents) => (some v, .tag name attrs contents)
-      | (none, _) => (none, html)
-  | html@(.seq xs) =>
-    let trimmed := xs.popWhile isEmptyHtml
-    let trimmed := trimmed.extract (trimmed.findIdx (!isEmptyHtml ·)) trimmed.size
-    if h : trimmed.size = 1 then
-      match takeAttr attr trimmed[0] with
-      | (some v, x) => (some v, x)
-      | (none, _) => (none, html)
-    else (none, html)
-  | html => (none, html)
+partial def takeAttrs (attrs : Array String) (html : Html) : Array (String × String) × Html :=
+  go attrs html
+where
+  go (remaining : Array String) : Html → Array (String × String) × Html
+    | html@(.tag name as contents) =>
+      let here := as.filter (remaining.contains ·.1)
+      let (found, contents') := go (remaining.filter (fun r => !here.any (·.1 == r))) contents
+      if here.isEmpty && found.isEmpty then (#[], html)
+      else (here ++ found, .tag name (as.filter (!remaining.contains ·.1)) contents')
+    | html@(.seq xs) =>
+      let trimmed := xs.popWhile isEmptyHtml
+      let trimmed := trimmed.extract (trimmed.findIdx (!isEmptyHtml ·)) trimmed.size
+      if h : trimmed.size = 1 then
+        let (found, x) := go remaining trimmed[0]
+        if found.isEmpty then (#[], html) else (found, x)
+      else (#[], html)
+    | html => (#[], html)
 
 /--
 Normalizes the sequence structure of highlighted code: empty text is removed from the ends
@@ -660,12 +660,7 @@ public partial defmethod Highlighted.toHtml : Highlighted → HighlightHtmlM g H
       let inner ← toHtml hl
       let (spanAttrs, inner) :=
         if let .token _ := hl then
-          let (hoverVal, inner) := takeAttr "data-verso-hover" inner
-          let (linksVal, inner) := takeAttr "data-verso-links" inner
-          let attrs :=
-            (hoverVal.map (("data-verso-hover", ·))).toArray ++
-            (linksVal.map (("data-verso-links", ·))).toArray
-          (attrs, inner)
+          takeAttrs #["data-verso-hover", "data-verso-links"] inner
         else (#[], inner)
       pure {{<span class={{"has-info " ++ cls}} {{spanAttrs}}>
           <span class="hover-container">

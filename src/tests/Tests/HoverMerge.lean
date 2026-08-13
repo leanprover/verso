@@ -9,7 +9,7 @@ meta import Verso.Output.Html
 meta import SubVerso.Highlighting
 
 open SubVerso.Highlighting (Highlighted)
-open Verso.Code (takeAttr)
+open Verso.Code (takeAttrs)
 open Verso.Output (Html)
 
 namespace Verso.HoverMergeTest
@@ -17,43 +17,68 @@ namespace Verso.HoverMergeTest
 /-!
 These helpers support merging a documented token's hover content into a message span that
 shares the token's extent: `Highlighted.normalize` makes the sole-token shape recognizable,
-and `takeAttr` moves the token's hover attributes up to the span.
+and `takeAttrs` moves the token's hover attributes up to the span.
 -/
 
 def tok : Html := .tag "span" #[("class", "token"), ("data-verso-hover", "5")] (.text true "x")
 def tokNoHover : Html := .tag "span" #[("class", "token")] (.text true "x")
 
 -- The attribute is taken from a bare element.
-#guard takeAttr "data-verso-hover" tok == (some "5", tokNoHover)
+#guard takeAttrs #["data-verso-hover"] tok == (#[("data-verso-hover", "5")], tokNoHover)
 
 -- The attribute is found through a wrapping element, such as a link.
-#guard takeAttr "data-verso-hover" (.tag "a" #[("href", "x.html")] tok) ==
-  (some "5", .tag "a" #[("href", "x.html")] tokNoHover)
+#guard takeAttrs #["data-verso-hover"] (.tag "a" #[("href", "x.html")] tok) ==
+  (#[("data-verso-hover", "5")], .tag "a" #[("href", "x.html")] tokNoHover)
 
--- Other attributes are found where they live, such as extra links on the wrapping element.
-#guard takeAttr "data-verso-links" (.tag "a" #[("data-verso-links", "[]")] tok) ==
-  (some "[]", .tag "a" #[] tok)
+-- Attributes are gathered across the wrappers of a sole element: the hover from the token
+-- and the extra links from the link element around it.
+#guard takeAttrs #["data-verso-hover", "data-verso-links"]
+    (.tag "a" #[("data-verso-links", "[]")] tok) ==
+  (#[("data-verso-links", "[]"), ("data-verso-hover", "5")], .tag "a" #[] tokNoHover)
+
+-- Only the attributes that are present appear in the result.
+#guard takeAttrs #["data-verso-hover", "data-verso-links"]
+    (.tag "a" #[("data-verso-links", "[]")] tokNoHover) ==
+  (#[("data-verso-links", "[]")], .tag "a" #[] tokNoHover)
+
+def tokLinked : Html :=
+  .tag "span" #[("class", "token"), ("data-verso-hover", "5"), ("data-verso-links", "[2]")]
+    (.text true "x")
+
+-- Each attribute is taken from the outermost element that carries it, and repeats on
+-- elements nested inside stay in place.
+#guard takeAttrs #["data-verso-hover", "data-verso-links"]
+    (.tag "a" #[("data-verso-hover", "9")] tokLinked) ==
+  (#[("data-verso-hover", "9"), ("data-verso-links", "[2]")],
+   .tag "a" #[] (.tag "span" #[("class", "token"), ("data-verso-hover", "5")] (.text true "x")))
+#guard takeAttrs #["data-verso-hover", "data-verso-links"]
+    (.tag "a" #[("data-verso-links", "[1]")] tokLinked) ==
+  (#[("data-verso-links", "[1]"), ("data-verso-hover", "5")],
+   .tag "a" #[] (.tag "span" #[("class", "token"), ("data-verso-links", "[2]")] (.text true "x")))
 
 -- The outermost attribute wins, and inner ones are left in place.
-#guard takeAttr "data-verso-hover" (.tag "a" #[("data-verso-hover", "9")] tok) ==
-  (some "9", .tag "a" #[] tok)
+#guard takeAttrs #["data-verso-hover"] (.tag "a" #[("data-verso-hover", "9")] tok) ==
+  (#[("data-verso-hover", "9")], .tag "a" #[] tok)
 
 -- Empty content around a sole element does not block the search.
-#guard takeAttr "data-verso-hover" (.seq #[.text true "", tok, .seq #[]]) == (some "5", tokNoHover)
+#guard takeAttrs #["data-verso-hover"] (.seq #[.text true "", tok, .seq #[]]) ==
+  (#[("data-verso-hover", "5")], tokNoHover)
 
 -- Adjacent content blocks the search, including whitespace.
-#guard takeAttr "data-verso-hover" (.seq #[tok, .text true "y"]) == (none, .seq #[tok, .text true "y"])
-#guard takeAttr "data-verso-hover" (.seq #[tok, tokNoHover]) == (none, .seq #[tok, tokNoHover])
-#guard takeAttr "data-verso-hover" (.seq #[.text true " ", tok]) == (none, .seq #[.text true " ", tok])
+#guard takeAttrs #["data-verso-hover"] (.seq #[tok, .text true "y"]) ==
+  (#[], .seq #[tok, .text true "y"])
+#guard takeAttrs #["data-verso-hover"] (.seq #[tok, tokNoHover]) == (#[], .seq #[tok, tokNoHover])
+#guard takeAttrs #["data-verso-hover"] (.seq #[.text true " ", tok]) ==
+  (#[], .seq #[.text true " ", tok])
 
 -- Adjacent content inside a wrapper blocks the search.
-#guard takeAttr "data-verso-hover" (.tag "a" #[] (.seq #[tok, tokNoHover])) ==
-  (none, .tag "a" #[] (.seq #[tok, tokNoHover]))
+#guard takeAttrs #["data-verso-hover"] (.tag "a" #[] (.seq #[tok, tokNoHover])) ==
+  (#[], .tag "a" #[] (.seq #[tok, tokNoHover]))
 
--- Content without the attribute is unchanged.
-#guard takeAttr "data-verso-hover" tokNoHover == (none, tokNoHover)
-#guard takeAttr "data-verso-hover" (.text true "x") == (none, .text true "x")
-#guard takeAttr "data-verso-hover" (.seq #[]) == (none, .seq #[])
+-- Content without the attributes is unchanged.
+#guard takeAttrs #["data-verso-hover"] tokNoHover == (#[], tokNoHover)
+#guard takeAttrs #["data-verso-hover"] (.text true "x") == (#[], .text true "x")
+#guard takeAttrs #["data-verso-hover"] (.seq #[]) == (#[], .seq #[])
 
 def hlTok : Highlighted := .token ⟨.keyword none none none, "rfl"⟩
 def hlTok' : Highlighted := .token ⟨.keyword none none none, "skip"⟩
