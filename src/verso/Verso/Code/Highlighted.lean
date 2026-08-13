@@ -640,11 +640,10 @@ of each sequence, and a sequence around a single element becomes that element.
 -/
 public partial defmethod Highlighted.normalize : Highlighted → Highlighted
   | .seq xs =>
-    let xs := xs.map normalize
-    let xs := xs.toList.dropWhile (·.isEmpty) |>.reverse.dropWhile (·.isEmpty) |>.reverse
-    match xs with
-    | [x] => x
-    | xs => .seq xs.toArray
+    let xs := (xs.map normalize).popWhile (·.isEmpty)
+    let xs := xs.extract (xs.findIdx (!·.isEmpty)) xs.size
+    if h : xs.size = 1 then xs[0]
+    else .seq xs
   | .span infos hl => .span infos hl.normalize
   | .tactics i s e hl => .tactics i s e hl.normalize
   | hl => hl
