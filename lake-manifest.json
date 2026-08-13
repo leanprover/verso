@@ -35,7 +35,7 @@
    "type": "git",
    "subDir": null,
    "scope": "",
-   "rev": "0f99c2a4badea6c42cad43bf7a33203c45bd6cda",
+   "rev": "847084e80500726e4331dded5f17007ddaf89c31",
    "name": "subverso",
    "manifestFile": "lake-manifest.json",
    "inputRev": "main",
