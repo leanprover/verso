@@ -5,10 +5,18 @@ these tests check that each one is present in the generated page and that hoveri
 produces the right tooltip theme.
 """
 
+import pytest
 from playwright.sync_api import Page
 
 
 GALLERY = "/LitConfig/Gallery/"
+
+
+def require_hover_media(page: Page):
+    # Linux headless Firefox can report no hover support, so CSS guarded by
+    # @media (hover: hover) is disabled: https://bugzilla.mozilla.org/show_bug.cgi?id=2037020
+    if not page.evaluate("matchMedia('(hover: hover)').matches"):
+        pytest.skip("Browser does not enable CSS guarded by @media (hover: hover)")
 
 
 class TestGalleryContents:
@@ -93,6 +101,7 @@ class TestGalleryContents:
         whole span; the token hover highlight is removed so it reads as one region."""
         page.goto(f"{server}{GALLERY}")
         page.wait_for_load_state("networkidle")
+        require_hover_media(page)
         token = page.locator(".hl.lean .has-info.warning > .token").first
         token.hover()
         span_bg = page.evaluate(
@@ -208,6 +217,8 @@ class TestGalleryContents:
         box = page.locator(".tippy-box").first
         box.wait_for(state="visible")
         assert "Runs a tactic sequence" in box.inner_text()
+        # The highlight assertions read CSS that is guarded by @media (hover: hover).
+        require_hover_media(page)
         result = page.evaluate(
             """() => {
                 const token = Array.from(document.querySelectorAll('.hl.lean .has-info.warning .token'))
@@ -300,13 +311,17 @@ class TestGalleryContents:
         page.goto(f"{server}{GALLERY}")
         page.wait_for_load_state("networkidle")
         label = page.locator(".hl.lean .has-info.warning .tactic > label").first
-        label.hover()
+        # Aim at whitespace inside the label: hovering the label's center would land on
+        # whichever token the browser's font metrics put there, and a documented token
+        # would rightly claim the tooltip for itself once the region is expanded.
+        target = label.locator(".inter-text").first
+        target.hover()
         page.locator(".tippy-box[data-theme~='tactic']").first.wait_for(state="visible")
-        label.click()
+        target.click()
         page.locator(".tippy-box[data-theme~='warning']").first.wait_for(
             state="visible"
         )
-        label.click()
+        target.click()
         page.locator(".tippy-box[data-theme~='tactic']").first.wait_for(state="visible")
 
     def test_message_tooltip_after_expanding_proof(self, server: str, page: Page):
