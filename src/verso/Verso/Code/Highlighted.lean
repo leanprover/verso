@@ -625,13 +625,13 @@ partial def takeAttr (attr : String) : Html → Option String × Html
       | (some v, contents) => (some v, .tag name attrs contents)
       | (none, _) => (none, html)
   | html@(.seq xs) =>
-    let trimmed := xs.toList.dropWhile isEmptyHtml |>.reverse.dropWhile isEmptyHtml |>.reverse
-    match trimmed with
-    | [x] =>
-      match takeAttr attr x with
+    let trimmed := xs.popWhile isEmptyHtml
+    let trimmed := trimmed.extract (trimmed.findIdx (!isEmptyHtml ·)) trimmed.size
+    if h : trimmed.size = 1 then
+      match takeAttr attr trimmed[0] with
       | (some v, x) => (some v, x)
       | (none, _) => (none, html)
-    | _ => (none, html)
+    else (none, html)
   | html => (none, html)
 
 /--
