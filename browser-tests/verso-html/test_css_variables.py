@@ -11,6 +11,8 @@ is injected so the elements' styles are computed from the overridden values.
 import pytest
 from playwright.sync_api import Page
 
+from hover_media import require_hover_media
+
 # (CSS class, variable infix, tippy theme token) for each severity
 SEVERITIES = [
     ("error", "error", "error"),
@@ -94,6 +96,8 @@ class TestSeverityVariables:
         assert (
             computed(page, "#vt-token", "text-decoration-color") == "rgb(100, 110, 120)"
         )
+        # The hover background reads CSS that is guarded by @media (hover: hover).
+        require_hover_media(page)
         page.locator("#vt-span").hover()
         assert computed(page, "#vt-span", "background-color") == "rgb(70, 80, 90)"
 
@@ -145,6 +149,7 @@ class TestNestedSeverityHover:
         span's own severity assignment must be the one in effect."""
         page.goto(f"{server}/LitConfig/")
         page.wait_for_load_state("networkidle")
+        require_hover_media(page)
         page.evaluate(
             """() => {
                 const s = document.documentElement.style;

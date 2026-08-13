@@ -5,18 +5,12 @@ these tests check that each one is present in the generated page and that hoveri
 produces the right tooltip theme.
 """
 
-import pytest
 from playwright.sync_api import Page
+
+from hover_media import require_hover_media
 
 
 GALLERY = "/LitConfig/Gallery/"
-
-
-def require_hover_media(page: Page):
-    # Linux headless Firefox can report no hover support, so CSS guarded by
-    # @media (hover: hover) is disabled: https://bugzilla.mozilla.org/show_bug.cgi?id=2037020
-    if not page.evaluate("matchMedia('(hover: hover)').matches"):
-        pytest.skip("Browser does not enable CSS guarded by @media (hover: hover)")
 
 
 class TestGalleryContents:

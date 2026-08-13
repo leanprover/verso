@@ -1,5 +1,6 @@
-import pytest
 from playwright.sync_api import Page
+
+from hover_media import require_hover_media
 
 
 # `rw [h1, h2, h3]` in `LitConfig.lean` highlights as nested tactic regions: the whole-invocation
@@ -81,12 +82,6 @@ class TestNestedTacticStates:
         assert "All goals completed" not in text
         assert "Nat" in text  # a real intermediate goal
 
-    def _require_hover_media(self, page: Page):
-        # Linux headless Firefox can report no hover support, so the guarded CSS rule is disabled:
-        # https://bugzilla.mozilla.org/show_bug.cgi?id=2037020
-        if not page.evaluate("matchMedia('(hover: hover)').matches"):
-            pytest.skip("Browser does not enable CSS guarded by @media (hover: hover)")
-
     @staticmethod
     def _region_label_backgrounds(tok):
         """Backgrounds of the labels of every tactic region enclosing `tok`, innermost first."""
@@ -104,7 +99,7 @@ class TestNestedTacticStates:
     def test_hover_highlights_own_region_label(self, server: str, page: Page):
         """Hovering a region's plain content highlights that region's label."""
         self._load(server, page)
-        self._require_hover_media(page)
+        require_hover_media(page)
         # The `rw` keyword is direct content of the whole-`rw` region.
         tok = self._rw_keyword(page)
         tok.hover()
@@ -121,7 +116,7 @@ class TestNestedTacticStates:
         token: the region's proof state is the tooltip shown there, so the token itself stays
         plain and enclosing regions' labels stay unhighlighted."""
         self._load(server, page)
-        self._require_hover_media(page)
+        require_hover_media(page)
         # The first rewrite rule (`h1`, a documented token) is nested inside its own step region,
         # which is nested inside the whole-`rw` region.
         tok = self._rw_keyword(page).locator(
