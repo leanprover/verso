@@ -141,13 +141,18 @@ class TestNestedTacticStates:
         )
 
         regions = self._region_label_backgrounds(tok)
-        assert tok.evaluate("el => getComputedStyle(el).backgroundColor") == self.TRANSPARENT
+        assert (
+            tok.evaluate("el => getComputedStyle(el).backgroundColor")
+            == self.TRANSPARENT
+        )
         # The example really is nested, so the outer-region assertion is meaningful.
         assert len(regions) > 1
         assert regions[0] == self.HIGHLIGHT
         assert all(bg == self.TRANSPARENT for bg in regions[1:]), regions
 
-    def test_collapsed_step_owns_tooltip_inside_expanded_region(self, server: str, page: Page):
+    def test_collapsed_step_owns_tooltip_inside_expanded_region(
+        self, server: str, page: Page
+    ):
         """Expanding the whole-`rw` region attaches tippy instances to the content of the step
         regions nested inside it, which stay collapsed. Hovering a documented token in a
         collapsed step still shows that step's proof state, tippy instance notwithstanding."""
@@ -159,7 +164,9 @@ class TestNestedTacticStates:
         tok = self._rw_keyword(page).locator(
             "xpath=following::span[contains(@class,'var') and contains(@class,'token')][1]"
         )
-        assert tok.evaluate("el => !!el._tippy"), "expansion should attach a tippy to the token"
+        assert tok.evaluate("el => !!el._tippy"), (
+            "expansion should attach a tippy to the token"
+        )
         tok.hover()
         box = page.locator(".tippy-box[data-theme~='tactic']").first
         box.wait_for(state="visible")

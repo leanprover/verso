@@ -44,7 +44,7 @@ class TestGalleryContents:
         information severity."""
         page.goto(f"{server}{GALLERY}")
         page.wait_for_load_state("networkidle")
-        span = page.locator('.hl.lean .has-info', has_text='"three"').last
+        span = page.locator(".hl.lean .has-info", has_text='"three"').last
         assert span.count() > 0
         msg = span.locator(".verso-message").first.inner_text()
         assert "Type mismatch" in msg
@@ -139,7 +139,9 @@ class TestGalleryContents:
         page.goto(f"{server}{GALLERY}")
         page.wait_for_load_state("networkidle")
         # The deprecated use site's tooltip message links to both constants.
-        page.locator(".hl.lean .has-info.warning > a > .token", has_text="oldGallerySort").first.hover()
+        page.locator(
+            ".hl.lean .has-info.warning > a > .token", has_text="oldGallerySort"
+        ).first.hover()
         box = page.locator(".tippy-box").first
         box.wait_for(state="visible")
         assert box.locator("a").count() > 0
@@ -147,7 +149,6 @@ class TestGalleryContents:
             "() => getComputedStyle(document.querySelector('.tippy-box a')).textDecorationLine"
         )
         assert deco == "none"
-
 
     def test_nested_message_regions(self, server: str, page: Page):
         """A warning region nested inside an informational region keeps its own text and
@@ -302,7 +303,9 @@ class TestGalleryContents:
         label.hover()
         page.locator(".tippy-box[data-theme~='tactic']").first.wait_for(state="visible")
         label.click()
-        page.locator(".tippy-box[data-theme~='warning']").first.wait_for(state="visible")
+        page.locator(".tippy-box[data-theme~='warning']").first.wait_for(
+            state="visible"
+        )
         label.click()
         page.locator(".tippy-box[data-theme~='tactic']").first.wait_for(state="visible")
 

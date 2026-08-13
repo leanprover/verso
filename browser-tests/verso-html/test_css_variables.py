@@ -91,12 +91,16 @@ class TestSeverityVariables:
         assert computed(page, "#vt-span", "color") == "rgb(10, 20, 30)"
         assert computed(page, "#vt-span", "background-color") == "rgb(40, 50, 60)"
         # The wavy underline marking the message's presence
-        assert computed(page, "#vt-token", "text-decoration-color") == "rgb(100, 110, 120)"
+        assert (
+            computed(page, "#vt-token", "text-decoration-color") == "rgb(100, 110, 120)"
+        )
         page.locator("#vt-span").hover()
         assert computed(page, "#vt-span", "background-color") == "rgb(70, 80, 90)"
 
     @pytest.mark.parametrize(("cls", "v", "theme"), SEVERITIES)
-    def test_message_and_output(self, server: str, page: Page, cls: str, v: str, theme: str):
+    def test_message_and_output(
+        self, server: str, page: Page, cls: str, v: str, theme: str
+    ):
         setup(
             page,
             server,
@@ -111,7 +115,9 @@ class TestSeverityVariables:
         assert computed(page, "#vt-output", "border-left-color") == "rgb(160, 170, 180)"
 
     @pytest.mark.parametrize(("cls", "v", "theme"), SEVERITIES)
-    def test_tooltip_chrome(self, server: str, page: Page, cls: str, v: str, theme: str):
+    def test_tooltip_chrome(
+        self, server: str, page: Page, cls: str, v: str, theme: str
+    ):
         setup(
             page,
             server,
@@ -193,9 +199,21 @@ class TestTacticStateIsland:
 
 # (tippy theme, background variable, border variable) for every themed tooltip
 ARROW_THEMES = [
-    ("error message", "--verso-tooltip-error-bg-color", "--verso-tooltip-error-border-color"),
-    ("warning message", "--verso-tooltip-warning-bg-color", "--verso-tooltip-warning-border-color"),
-    ("info message", "--verso-tooltip-info-bg-color", "--verso-tooltip-info-border-color"),
+    (
+        "error message",
+        "--verso-tooltip-error-bg-color",
+        "--verso-tooltip-error-border-color",
+    ),
+    (
+        "warning message",
+        "--verso-tooltip-warning-bg-color",
+        "--verso-tooltip-warning-border-color",
+    ),
+    (
+        "info message",
+        "--verso-tooltip-info-bg-color",
+        "--verso-tooltip-info-border-color",
+    ),
     ("lean", "--verso-tooltip-bg-color", "--verso-tooltip-border-color"),
     ("tactic", "--verso-tactic-state-bg-color", "--verso-tactic-state-border-color"),
 ]
@@ -218,7 +236,9 @@ class TestTooltipArrows:
     only `color` on its arrow."""
 
     @pytest.mark.parametrize(("theme", "bg_var", "border_var"), ARROW_THEMES)
-    def test_arrow_follows_variables(self, server: str, page: Page, theme: str, bg_var: str, border_var: str):
+    def test_arrow_follows_variables(
+        self, server: str, page: Page, theme: str, bg_var: str, border_var: str
+    ):
         page.goto(f"{server}/LitConfig/")
         page.wait_for_load_state("networkidle")
         page.evaluate(
@@ -233,8 +253,12 @@ class TestTooltipArrows:
             arrow_markup(theme),
         )
         for p in PLACEMENTS:
-            fill = computed_pseudo(page, f"#vt-arrow-{p}", "::before", f"border-{p}-color")
-            outline = computed_pseudo(page, f"#vt-arrow-{p}", "::after", f"border-{p}-color")
+            fill = computed_pseudo(
+                page, f"#vt-arrow-{p}", "::before", f"border-{p}-color"
+            )
+            outline = computed_pseudo(
+                page, f"#vt-arrow-{p}", "::after", f"border-{p}-color"
+            )
             assert fill == "rgb(21, 22, 23)", f"{theme} {p} arrow fill"
             assert outline == "rgb(31, 32, 33)", f"{theme} {p} arrow outline"
 
@@ -244,7 +268,9 @@ class TestTooltipArrows:
         page.goto(f"{server}/LitConfig/")
         page.wait_for_load_state("networkidle")
         for theme, _, _ in ARROW_THEMES:
-            page.evaluate("() => document.querySelectorAll('.tippy-box').forEach(e => e.remove())")
+            page.evaluate(
+                "() => document.querySelectorAll('.tippy-box').forEach(e => e.remove())"
+            )
             page.evaluate(
                 "html => document.body.insertAdjacentHTML('beforeend', html)",
                 arrow_markup(theme),
@@ -252,10 +278,16 @@ class TestTooltipArrows:
             for p in PLACEMENTS:
                 box_bg = computed(page, f"#vt-box-{p}", "background-color")
                 box_border = computed(page, f"#vt-box-{p}", f"border-{p}-color")
-                fill = computed_pseudo(page, f"#vt-arrow-{p}", "::before", f"border-{p}-color")
-                outline = computed_pseudo(page, f"#vt-arrow-{p}", "::after", f"border-{p}-color")
+                fill = computed_pseudo(
+                    page, f"#vt-arrow-{p}", "::before", f"border-{p}-color"
+                )
+                outline = computed_pseudo(
+                    page, f"#vt-arrow-{p}", "::after", f"border-{p}-color"
+                )
                 assert fill == box_bg, f"{theme} {p}: fill {fill} != box bg {box_bg}"
-                assert outline == box_border, f"{theme} {p}: outline {outline} != box border {box_border}"
+                assert outline == box_border, (
+                    f"{theme} {p}: outline {outline} != box border {box_border}"
+                )
 
     def test_real_tooltip_arrow(self, server: str, page: Page):
         """Hovering a real token produces a tooltip whose arrow fill matches its
@@ -304,7 +336,13 @@ class TestDerivedDefaults:
         assert computed(page, "#vt-tippy-lean", "background-color") == "rgb(14, 15, 16)"
 
     def test_output_bar_defaults_to_indicator(self, server: str, page: Page):
-        setup(page, server, {"--verso-warning-indicator-color": "rgb(17, 18, 19)"}, "warning", "warning")
+        setup(
+            page,
+            server,
+            {"--verso-warning-indicator-color": "rgb(17, 18, 19)"},
+            "warning",
+            "warning",
+        )
         assert computed(page, "#vt-output", "border-left-color") == "rgb(17, 18, 19)"
 
     def test_tactic_tooltip_uses_proof_state_colors(self, server: str, page: Page):
