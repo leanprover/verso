@@ -217,11 +217,11 @@ def project_install_deps(project_directory: Path, needs_mathlib_cache_get: bool)
         print(f"unexpected error {e}")
         return False
 
-def project_build_default(project_directory: Path) -> float | None:
+def project_build_default(project_directory: Path, targets: list[str]) -> float | None:
     try:
         start: float = time.time()
         result = subprocess.run(
-            ["lake", "build", "--no-ansi", "--keep-toolchain"],
+            ["lake", "build", "--no-ansi", "--keep-toolchain"] + targets,
             cwd=project_directory,
             capture_output=True,
         )
@@ -244,11 +244,11 @@ def project_build_default(project_directory: Path) -> float | None:
         return None
 
 
-def project_build_exe(project_directory: Path, name: str) -> float | None:
+def project_build_exe(project_directory: Path, main_module: str) -> float | None:
     try:
         start: float = time.time()
         result = subprocess.run(
-            ["lake", "build", name, "--no-ansi", "--keep-toolchain"],
+            ["lake", "lean", main_module],
             cwd=project_directory,
             capture_output=True,
         )
@@ -266,14 +266,14 @@ def project_build_exe(project_directory: Path, name: str) -> float | None:
         append_result("build/exe", "success", 0, more_is_better=True)
         return None
 
-def project_measure_exe(project_directory: Path, exe_name: str) -> bool:
+def project_measure_exe(project_directory: Path, main_module: str) -> bool:
     try:
-        exe_path = Path.cwd() / project_directory / ".lake" / "build" / "bin" / exe_name
-        exe_size = os.path.getsize(exe_path)
-        append_result("build/exe", "generated exe", exe_size, "B")
+        # exe_path = Path.cwd() / project_directory / ".lake" / "build" / "bin" / exe_name
+        # exe_size = os.path.getsize(exe_path)
+        append_result("build/exe", "generated exe", 0, "B")
         start: float = time.time()
         subprocess.run(
-            [str(exe_path)] + cmdargs,
+            ["lake", "lean", main_module, "--", "--run", main_module] + cmdargs,
             cwd=project_directory,
             check=True,
         )
@@ -442,12 +442,28 @@ def main() -> None:
     if not args.pre_build_cmd is None:
         subprocess.run([args.pre_build_cmd], cwd=directory, check=True)
 
-    default_time = project_build_default(directory)
+    if str(directory) == "lean4-cs1":
+        main_module = "Main.lean"
+        targets = []
+    elif str(directory) == "sherlock":
+        main_module = "SherlockMain.lean"
+        targets = []
+    elif str(directory) == "refman":
+        main_module = "Main.lean"
+        # The default targets *except* doc-generating `lean_exe`s (generate-manual and generate-tutorials)
+        targets = ["IndexMap", "IndexMapGrind", "Manual", "@/subversoExtractMod", "@/extract-lakefile", "Main", "Tutorial", "TutorialMain"]
+    elif str(directory) == "verso-natson":
+        main_module = "BlueprintMain.lean"
+        targets = []
+    else:
+        raise Exception("unknown package")
+
+    default_time = project_build_default(directory, targets)
     if default_time is None:
         print("default build step did not succeed")
         sys.exit(1)
 
-    exe_time = project_build_exe(directory, binary)
+    exe_time = project_build_exe(directory, main_module)
     if exe_time is None:
         print("exe build step did not succeed")
         sys.exit(1)
@@ -465,7 +481,7 @@ def main() -> None:
                 f"build/{top_level_package}/.total", f"{key} time", total, "s"
             )
 
-    did_run = project_measure_exe(directory, binary)
+    did_run = project_measure_exe(directory, main_module)
     if not did_run:
         print("exe measure step did not succeed")
         sys.exit(1)
