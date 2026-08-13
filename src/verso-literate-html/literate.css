@@ -50,16 +50,16 @@
     --verso-hamburger-border: #dee2e6;
     --verso-hamburger-bar-color: #333;
 
-    /* Diagnostic colors */
-    --verso-warning-color: #fff3cd;
-    --verso-error-color: #cc0000;
-    --verso-warning-indicator-color: #b8860b;
-    --verso-error-indicator-color: #dc3545;
+    /* Diagnostic colors (all others come from verso-vars.css) */
+    --verso-code-info-hover-bg-color: #cfe2ff;
     --verso-info-indicator-color: #0066cc;
-
-    /* Syntax highlighting weight/style */
-    --verso-code-keyword-weight: bold;
-    --verso-code-keyword-style: normal;
+    --verso-tooltip-info-border-color: #cfe2ff;
+    --verso-code-warning-hover-bg-color: #fff3cd;
+    --verso-warning-indicator-color: #b8860b;
+    --verso-tooltip-warning-border-color: #fff3cd;
+    --verso-code-error-hover-bg-color: #f8d7da;
+    --verso-error-indicator-color: #dc3545;
+    --verso-tooltip-error-border-color: #f8d7da;
 }
 
 /* Dark mode defaults */
@@ -93,51 +93,27 @@
         --verso-hamburger-bg: #16213e;
         --verso-hamburger-border: #2a2a4a;
         --verso-hamburger-bar-color: #e0e0e0;
-        --verso-warning-color: #3d3000;
-        --verso-error-color: #ff6b6b;
-        --verso-warning-indicator-color: #ffc107;
-        --verso-error-indicator-color: #ff6b6b;
+        --verso-code-hover-bg-color: #3a3a5a;
+        --verso-tooltip-color: #e0e0e0;
+        --verso-tooltip-bg-color: #2a2a4a;
+        --verso-tooltip-border-color: #4a4a6a;
+        --verso-tooltip-separator-color: #4a4a6a;
+        --verso-code-info-hover-bg-color: #0c2a4d;
         --verso-info-indicator-color: #64b5f6;
+        --verso-message-info-color: #e0e0e0;
+        --verso-tooltip-info-border-color: #4a4a6a;
+        --verso-code-warning-hover-bg-color: #3d3000;
+        --verso-warning-indicator-color: #ffc107;
+        --verso-message-warning-color: #e0e0e0;
+        --verso-tooltip-warning-border-color: #4a4a6a;
+        --verso-code-error-hover-bg-color: #3d0f12;
+        --verso-error-indicator-color: #ff6b6b;
+        --verso-message-error-color: #ff6b6b;
+        --verso-tooltip-error-border-color: #4a4a6a;
+        --verso-tactic-state-color: #e0e0e0;
+        --verso-tactic-state-bg-color: #2a2a4a;
+        --verso-tactic-state-border-color: #4a4a6a;
         --verso-selected-color: #1a2744;
-    }
-
-    /* Hover tooltips (tippy) */
-    .tippy-box[data-theme~="lean"],
-    .tippy-box[data-theme~="error"],
-    .tippy-box[data-theme~="warning"],
-    .tippy-box[data-theme~="info"] {
-        background-color: #2a2a4a;
-        color: #e0e0e0;
-        border-color: #4a4a6a;
-    }
-    .tippy-box[data-theme~="lean"] > .tippy-arrow::before,
-    .tippy-box[data-theme~="error"] > .tippy-arrow::before,
-    .tippy-box[data-theme~="warning"] > .tippy-arrow::before,
-    .tippy-box[data-theme~="info"] > .tippy-arrow::before {
-        border-color: #2a2a4a;
-    }
-    .tippy-box[data-theme~="tactic"] {
-        background-color: #2a2a4a;
-        color: #e0e0e0;
-        border-color: #4a4a6a;
-    }
-    .tippy-box[data-theme~="tactic"] > .tippy-arrow::before {
-        border-color: #2a2a4a;
-    }
-    .tippy-box[data-theme~="message"] > .tippy-arrow::before {
-        border-color: #2a2a4a;
-    }
-
-    /* Binding highlight on hover */
-    .hl.lean .token.binding-hl,
-    .hl.lean .literal.string:hover,
-    .hl.lean .token.typed:hover {
-        background-color: #3a3a5a;
-    }
-
-    /* Tactic/proof state hover */
-    .hl.lean .tactic:has(.tactic-toggle:not(:checked)) > label:hover {
-        background-color: #3a3a5a;
     }
 
     /* Popup content inside tooltips */
@@ -145,29 +121,12 @@
         background-color: #2a2a4a;
         color: #e0e0e0;
     }
-    .hl.lean .hover-info {
-        color: #e0e0e0;
-    }
-    .hl.lean .hover-info code {
-        color: #e0e0e0;
-    }
-    .hl.lean .hover-info .sep {
-        border-top-color: #4a4a6a;
-    }
 
     /* Diagnostic message backgrounds */
     .hl.lean .hover-info.messages > code.error,
     .hl.lean .hover-info.messages > code.warning,
     .hl.lean .hover-info.messages > code.information {
         background-color: #1a1a2e;
-    }
-
-    /* Tactic state */
-    .hl.lean .tactic-state,
-    .hl.lean.popup .tactic-state {
-        background-color: #2a2a4a;
-        color: #e0e0e0;
-        border-color: #4a4a6a;
     }
 }
 

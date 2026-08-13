@@ -345,24 +345,26 @@ Removes leading and trailing whitespace from highlighted code.
 public defmethod Highlighted.trim (hl : Highlighted) : Highlighted := hl.trimLeft.trimRight
 
 /--
-Removes proof states in which all goals are solved that are the last element of a surrounding proof
-state. This relies on the positions tracked for the goal states being accurate, as it compares end
-position markers.
+Removes redundant proof states. A proof state is redundant if either it has no open goals and ends
+at the same position as a surrounding state, or when it has the same goals and source range as a
+surrounding state. This relies on the positions tracked for the goal states being accurate.
 
-This is to prevent extra nested highlight widgets for tactics that themselves contain tactic
-scripts.
+This is to prevent extra nested widgets for tactics that themselves contain tactic scripts or that
+elaboration records more than once at the same position.
 -/
 public partial defmethod Highlighted.elideRedundantProofStates
-    (hl : Highlighted) (goalEnds : Array Nat := #[]) : Highlighted :=
+    (hl : Highlighted) (goalEnds : Array Nat := #[])
+    (seen : Array (Array (Highlighted.Goal Highlighted) × Nat × Nat) := #[]) : Highlighted :=
   match hl with
-  | .seq hls => .seq (hls.map (·.elideRedundantProofStates goalEnds))
-  | .span infos hl => .span infos (hl.elideRedundantProofStates goalEnds)
+  | .seq hls => .seq (hls.map (·.elideRedundantProofStates goalEnds seen))
+  | .span infos hl => .span infos (hl.elideRedundantProofStates goalEnds seen)
   | .tactics info startPos endPos hl =>
-    if info.isEmpty && goalEnds.contains endPos then
-      hl.elideRedundantProofStates goalEnds
+    if (info.isEmpty && goalEnds.contains endPos) || seen.contains (info, startPos, endPos) then
+      hl.elideRedundantProofStates goalEnds seen
     else
       let goalEnds := if info.isEmpty then goalEnds else goalEnds.push endPos
-      .tactics info startPos endPos (hl.elideRedundantProofStates goalEnds)
+      .tactics info startPos endPos
+        (hl.elideRedundantProofStates goalEnds (seen.push (info, startPos, endPos)))
   | .token .. | .text .. | .unparsed .. | .point .. => hl
 
 public defmethod Highlighted.trimOneLeadingNl : Highlighted → Highlighted
@@ -511,9 +513,8 @@ defmethod Token.htmlContent (tok : Token) : HighlightHtmlM g Html := do
     return content
 
 public defmethod Token.toHtml (tok : Token) : HighlightHtmlM g Html := do
-  let hoverId ← tok.kind.hover?
   let idAttr ← tok.kind.idAttr
-  let hoverAttr := hoverId.map (fun i => #[("data-verso-hover", toString i)]) |>.getD #[]
+  let hoverAttr := (← tok.kind.hover?).map (fun i => #[("data-verso-hover", toString i)]) |>.getD #[]
   tok.kind.addLink {{
     <span class={{tok.kind.«class» ++ " token"}} data-binding={{tok.kind.data}} {{hoverAttr}} {{idAttr}}>{{← tok.htmlContent}}</span>
   }}
@@ -603,12 +604,65 @@ where
     | .warning, _ => .warning
     | .info, other => other
 
+/-- HTML that renders no visible content. -/
+partial def isEmptyHtml : Html → Bool
+  | .text _ s => s.isEmpty
+  | .seq xs => xs.all isEmptyHtml
+  | .tag .. => false
+
+/--
+Removes the attributes named in `attrs` from `html`, returning their values alongside the
+remaining HTML. The search descends while unambiguous (through tags, and through sequences
+that hold a single element once empty text is trimmed), and takes each attribute from the
+outermost element that carries it.
+-/
+partial def takeAttrs (attrs : Array String) (html : Html) : Array (String × String) × Html :=
+  go attrs html
+where
+  go (remaining : Array String) : Html → Array (String × String) × Html
+    | html@(.tag name as contents) =>
+      let here := as.filter (remaining.contains ·.1)
+      let (found, contents') := go (remaining.filter (fun r => !here.any (·.1 == r))) contents
+      if here.isEmpty && found.isEmpty then (#[], html)
+      else (here ++ found, .tag name (as.filter (!remaining.contains ·.1)) contents')
+    | html@(.seq xs) =>
+      let trimmed := xs.popWhile isEmptyHtml
+      let trimmed := trimmed.extract (trimmed.findIdx (!isEmptyHtml ·)) trimmed.size
+      if h : trimmed.size = 1 then
+        let (found, x) := go remaining trimmed[0]
+        if found.isEmpty then (#[], html) else (found, x)
+      else (#[], html)
+    | html => (#[], html)
+
+/--
+Normalizes the sequence structure of highlighted code: empty text is removed from the ends
+of each sequence, and a sequence around a single element becomes that element.
+-/
+public partial defmethod Highlighted.normalize : Highlighted → Highlighted
+  | .seq xs =>
+    let xs := (xs.map normalize).popWhile (·.isEmpty)
+    let xs := xs.extract (xs.findIdx (!·.isEmpty)) xs.size
+    if h : xs.size = 1 then xs[0]
+    else .seq xs
+  | .span infos hl => .span infos hl.normalize
+  | .tactics i s e hl => .tactics i s e hl.normalize
+  | hl => hl
+
 public partial defmethod Highlighted.toHtml : Highlighted → HighlightHtmlM g Html
   | .token t => t.toHtml
   | .text str | .unparsed str => pure {{<span class="inter-text">{{str}}</span>}}
   | .span infos hl =>
     if let some cls := spanClass infos then do
-      pure {{<span class={{"has-info " ++ cls}}>
+      -- A span around a single token shares the token's extent, so the token's documentation
+      -- and extra link targets become part of the span's hover, which shows all of the
+      -- content for that extent in one place.
+      let hl := hl.normalize
+      let inner ← toHtml hl
+      let (spanAttrs, inner) :=
+        if let .token _ := hl then
+          takeAttrs #["data-verso-hover", "data-verso-links"] inner
+        else (#[], inner)
+      pure {{<span class={{"has-info " ++ cls}} {{spanAttrs}}>
           <span class="hover-container">
             <span class={{"hover-info messages"}}>
               {{←  infos.mapM fun (s, info) => do return {{
@@ -616,7 +670,7 @@ public partial defmethod Highlighted.toHtml : Highlighted → HighlightHtmlM g H
               }}
             </span>
           </span>
-          {{← toHtml hl}}
+          {{inner}}
         </span>
       }}
     else
@@ -743,6 +797,11 @@ public def highlightingStyle : String := "
   text-decoration: currentcolor underline solid;
 }
 
+/* Links inside tooltips show their underline only when hovered. */
+.tippy-box .hl.lean a {
+  text-decoration: none;
+}
+
 .hl.lean .hover-info {
   white-space: normal;
 }
@@ -750,8 +809,9 @@ public def highlightingStyle : String := "
 .hl.lean .token .hover-info {
   display: none;
   position: absolute;
-  background-color: #e5e5e5;
-  border: 1px solid black;
+  color: var(--verso-tooltip-color, black);
+  background-color: var(--verso-tooltip-bg-color, #e5e5e5);
+  border: 1px solid var(--verso-tooltip-border-color, black);
   padding: 0.5rem;
   z-index: 300;
 }
@@ -768,7 +828,10 @@ public def highlightingStyle : String := "
 .hl.lean .hover-info code {
   white-space: pre-wrap;
   background: none;
-  color: black;
+}
+
+.hl.lean .hover-info code:not(.verso-message) {
+  color: var(--verso-tooltip-color, black);
 }
 
 .hl.lean .hover-info.messages > code {
@@ -809,10 +872,24 @@ public def highlightingStyle : String := "
 }
 
 @media (hover: hover) {
-  .hl.lean .token.binding-hl, .hl.lean .literal:hover, .hl.lean .token.typed:hover {
-    background-color: #eee;
+  /* Hovered content nested in a collapsed tactic region keeps its plain background: the
+     region's proof state is the tooltip that appears there, and its label is what
+     highlights. `:where` keeps the exclusion out of the specificity computation. */
+  .hl.lean .token.binding-hl,
+  .hl.lean :is(.literal, .token.typed, .token[data-verso-hover]):hover:not(:where(.tactic:has(> .tactic-toggle:not(:checked)) > label *)) {
+    background-color: var(--verso-code-hover-bg-color, #eeeeee);
     border-radius: 2px;
     transition: none;
+  }
+
+  /* Within a hovered message span, token hover backgrounds are removed so the span's own
+     hover background shows across the whole span. The exception is a hovered documented
+     token, which keeps its background because its tooltip is the one shown. */
+  .hl.lean .has-info:hover .token.binding-hl:not(:hover),
+  .hl.lean .has-info:hover .token.binding-hl:not([data-verso-hover]),
+  .hl.lean .has-info:hover .literal:hover:not([data-verso-hover]),
+  .hl.lean .has-info:hover .token.typed:hover:not([data-verso-hover]) {
+    background-color: transparent;
   }
 }
 
@@ -824,56 +901,93 @@ public def highlightingStyle : String := "
   text-decoration-skip-ink: none;
 }
 
+/*
+The underline color comes from the nearest enclosing message span: each severity's span rule
+sets `--verso--region-indicator-color`, which inherits, so a region nested inside one of
+another severity keeps its own indicator color.
+*/
+.hl.lean .has-info :not(.tactic-state):not(.tactic-state *) {
+  text-decoration-color: var(--verso--region-indicator-color);
+}
+
 .hl.lean .has-info .hover-info {
   display: none;
   position: absolute;
   transform: translate(0.25rem, 0.3rem);
-  border: 1px solid black;
+  color: var(--verso-tooltip-color, black);
+  border: 1px solid var(--verso-tooltip-border-color, black);
   padding: 0.5rem;
   z-index: 400;
   text-align: left;
 }
 
-.hl.lean .has-info.error :not(.tactic-state):not(.tactic-state *){
-  text-decoration-color: red;
+.hl.lean .has-info.error {
+  --verso--region-indicator-color: var(--verso-error-indicator-color, #ff0000);
+  --verso--region-hover-color: var(--verso-code-error-hover-color, currentcolor);
+  --verso--region-hover-bg-color: var(--verso-code-error-hover-bg-color, #ffb3b3);
+  color: var(--verso-code-error-color, currentcolor);
+  background-color: var(--verso-code-error-bg-color, transparent);
 }
 
+/*
+The hover highlight follows the tooltip: a message span highlights only when its own tooltip
+is the one that appears. When a hovered nested message span, a hovered documented token, or
+a hovered collapsed tactic label shows its own tooltip instead, the message span does not
+highlight. A span nested in a collapsed tactic region likewise stays plain, because hovering
+it shows the region's proof state; `:where` keeps that exclusion out of the specificity
+computation.
+
+The hover colors come from `--verso--region-hover-color` and `--verso--region-hover-bg-color`,
+which each severity's span rule sets. This keeps the hover conditions in this one rule, and
+because the properties inherit, a region nested inside one of another severity keeps its own
+hover colors.
+*/
 @media (hover: hover) {
-  .hl.lean .has-info.error:hover {
-    background-color: #ffb3b3;
+  .hl.lean .has-info:hover:not(:has(.has-info:hover)):not(:has([data-verso-hover]:hover)):not(:has(.tactic > label:hover + .tactic-toggle:not(:checked))):not(:where(.tactic:has(> .tactic-toggle:not(:checked)) > label *)) {
+    color: var(--verso--region-hover-color, currentcolor);
+    background-color: var(--verso--region-hover-bg-color, transparent);
   }
 }
 
 .hl.lean .hover-info.messages > code.error {
-  background-color: #e5e5e5;
-  border-left: 0.2rem solid #ffb3b3;
+  background-color: var(--verso-tooltip-error-bg-color, #e5e5e5);
+  border-left: 0.2rem solid var(--verso-tooltip-error-border-color, #ffb3b3);
 }
 
-.tippy-box[data-theme~='error'] .hl.lean .hover-info.messages > code.error {
+/*
+A tooltip that shows only messages of the box's own severity leaves severity styling to the
+box itself. When messages of several severities share the tooltip, or a `mixed` tooltip
+combines messages with other content (such as documentation), each message keeps its
+severity accent to distinguish them.
+*/
+.tippy-box .hl.lean.mixed > .hover-info.messages {
+  margin-bottom: 0.5rem;
+}
+
+.tippy-box[data-theme~='error'] .hl.lean:not(.mixed) .hover-info.messages:not(:has(> code.warning)):not(:has(> code.information)) > code.error {
   background: none;
   border: none;
 }
 
 .error .verso-message, .error .verso-message .token, .error .verso-message label {
-  color: var(--verso-error-color);
+  color: var(--verso-message-error-color, #cc0000);
 }
 
 .error .verso-message .case-label:has(input[type=\"checkbox\"])::before {
-  background-color: var(--verso-error-color) !important;
+  background-color: var(--verso-message-error-color, #cc0000) !important;
 }
 
-.hl.lean .has-info.warning :not(.tactic-state):not(.tactic-state *) {
-  text-decoration-color: var(--verso-warning-indicator-color);
-}
-
-@media (hover: hover) {
-  .hl.lean .has-info.warning:hover {
-    background-color:var(--verso-warning-color);
-  }
+.hl.lean .has-info.warning {
+  --verso--region-indicator-color: var(--verso-warning-indicator-color, #e7a71d);
+  --verso--region-hover-color: var(--verso-code-warning-hover-color, currentcolor);
+  --verso--region-hover-bg-color: var(--verso-code-warning-hover-bg-color, #ffd580);
+  color: var(--verso-code-warning-color, currentcolor);
+  background-color: var(--verso-code-warning-bg-color, transparent);
 }
 
 .hl.lean .hover-info.messages > code.warning {
-  background-color: var(--verso-warning-color);
+  background-color: var(--verso-tooltip-warning-bg-color, #e5e5e5);
+  border-left: 0.2rem solid var(--verso-tooltip-warning-border-color, #ffd580);
 }
 
 .lean-output {
@@ -884,47 +998,56 @@ public def highlightingStyle : String := "
 }
 
 .lean-output.error {
-  border-color: var(--verso-error-indicator-color);
+  border-color: var(--verso-output-error-color, var(--verso-error-indicator-color, #ff0000));
 }
 
 .lean-output.information {
-  border-color: var(--verso-info-indicator-color);
+  border-color: var(--verso-output-info-color, var(--verso-info-indicator-color, #4777ff));
 }
 
 .lean-output.warning {
-  border-color: var(--verso-warning-indicator-color);
+  border-color: var(--verso-output-warning-color, var(--verso-warning-indicator-color, #e7a71d));
 }
 
-.hl.lean .hover-info.messages > code.error {
-  background-color: #e5e5e5;
-  border-left: 0.2rem solid var(--verso-warning-color);
-}
-
-.tippy-box[data-theme~='warning'] .hl.lean .hover-info.messages > code.warning {
+.tippy-box[data-theme~='warning'] .hl.lean:not(.mixed) .hover-info.messages:not(:has(> code.error)):not(:has(> code.information)) > code.warning {
   background: none;
   border: none;
 }
 
-
-.hl.lean .has-info.information :not(.tactic-state):not(.tactic-state *) {
-  text-decoration-color: var(--verso-info-indicator-color, blue);
+.warning .verso-message, .warning .verso-message .token, .warning .verso-message label {
+  color: var(--verso-message-warning-color, black);
 }
 
-@media (hover: hover) {
-  .hl.lean .has-info.information:hover {
-    background-color: #4777ff;
-  }
+.warning .verso-message .case-label:has(input[type=\"checkbox\"])::before {
+  background-color: var(--verso-message-warning-color, black) !important;
+}
+
+
+.hl.lean .has-info.information {
+  --verso--region-indicator-color: var(--verso-info-indicator-color, #4777ff);
+  --verso--region-hover-color: var(--verso-code-info-hover-color, currentcolor);
+  --verso--region-hover-bg-color: var(--verso-code-info-hover-bg-color, #4777ff);
+  color: var(--verso-code-info-color, currentcolor);
+  background-color: var(--verso-code-info-bg-color, transparent);
 }
 
 
 .hl.lean .hover-info.messages > code.information {
-  background-color: #e5e5e5;
-  border-left: 0.2rem solid #4777ff;
+  background-color: var(--verso-tooltip-info-bg-color, #e5e5e5);
+  border-left: 0.2rem solid var(--verso-tooltip-info-border-color, #4777ff);
 }
 
-.tippy-box[data-theme~='info'] .hl.lean .hover-info.messages > code.information {
+.tippy-box[data-theme~='info'] .hl.lean:not(.mixed) .hover-info.messages:not(:has(> code.error)):not(:has(> code.warning)) > code.information {
   background: none;
   border: none;
+}
+
+.information .verso-message, .information .verso-message .token, .information .verso-message label {
+  color: var(--verso-message-info-color, black);
+}
+
+.information .verso-message .case-label:has(input[type=\"checkbox\"])::before {
+  background-color: var(--verso-message-info-color, black) !important;
 }
 
 .hl.lean div.docstring {
@@ -951,7 +1074,7 @@ public def highlightingStyle : String := "
   margin-bottom: 0.5rem;
   padding: 0;
   height: 1px;
-  border-top: 1px solid #ccc;
+  border-top: 1px solid var(--verso-tooltip-separator-color, #ccc);
 }
 
 .hl.lean code {
@@ -962,11 +1085,12 @@ public def highlightingStyle : String := "
   display: none;
   position: relative;
   width: fit-content;
-  border: 1px solid #888888;
+  border: 1px solid var(--verso-tactic-state-border-color, #888888);
   border-radius: 0.1rem;
   padding: 0.5rem;
   font-family: sans-serif;
-  background-color: #ffffff;
+  color: var(--verso-tactic-state-color, black);
+  background-color: var(--verso-tactic-state-bg-color, white);
 }
 
 .hl.lean.popup .tactic-state {
@@ -976,7 +1100,7 @@ public def highlightingStyle : String := "
   border: none;
   padding: 0.5rem;
   font-family: sans-serif;
-  background-color: #ffffff;
+  background-color: var(--verso-tactic-state-bg-color, white);
 }
 
 
@@ -1010,9 +1134,11 @@ public def highlightingStyle : String := "
 @media (hover: hover) {
   /* Highlight a region on hover only when its own toggle is unchecked, and only the innermost
      hovered region: `label:hover` bubbles to ancestor labels, so suppress the highlight on a region
-     whose label contains a more deeply nested hovered tactic label. */
+     whose label contains a more deeply nested hovered tactic label. The region's proof state is the
+     tooltip for everything else in its label, so the label keeps its highlight while any of that
+     content is hovered. */
   .hl.lean .tactic:has(> .tactic-toggle:not(:checked)) > label:hover:not(:has(.tactic > label:hover)) {
-    background-color: #eeeeee;
+    background-color: var(--verso-code-hover-bg-color, #eeeeee);
   }
 }
 
@@ -1028,7 +1154,7 @@ public def highlightingStyle : String := "
 
 .hl.lean .tactic > label::after {
   content: \"\";
-  border: 1px solid #bbbbbb;
+  border: 1px solid var(--verso-tactic-toggle-color, #bbbbbb);
   /* These need to be em, not rem, to scale with the font */
   border-radius: 1em;
   height: 0.25em;
@@ -1051,8 +1177,8 @@ public def highlightingStyle : String := "
 */
 
 .hl.lean .tactic > label:has(+ .tactic-toggle:checked)::after {
-  border: 1px solid #999999;
-  background-color: #999999;
+  border: 1px solid var(--verso-tactic-toggle-checked-color, #999999);
+  background-color: var(--verso-tactic-toggle-checked-color, #999999);
   transition: all 0.5s;
 }
 
@@ -1130,7 +1256,7 @@ Some CSS frameworks customize details/summary in ways not compatible with Verso'
 
 .hl.lean .case-label:has(input[type=\"checkbox\"])::before {
   display: inline-block;
-  background-color: black;
+  background-color: currentcolor;
   content: ' ';
   transition: ease 0.2s;
   margin-right: 0.7em;
@@ -1214,26 +1340,22 @@ Some CSS frameworks customize details/summary in ways not compatible with Verso'
   text-size-adjust: 100%;
 }
 
+/*
+Tippy's stylesheet paints each arrow's fill triangle with the arrow element's `color` (its
+placement-specific `::before` rules use `border-color: initial`, which is `currentcolor`),
+and its border extension paints the outline triangle with the box's border color. Setting
+`color` on the arrow therefore matches it to the tooltip background for every placement.
+*/
 .tippy-box[data-theme~='lean'] {
-  background-color: #e5e5e5;
-  color: black;
-  border: 1px solid black;
+  background-color: var(--verso-tooltip-bg-color, #e5e5e5);
+  color: var(--verso-tooltip-color, black);
+  border: 1px solid var(--verso-tooltip-border-color, black);
 }
-.tippy-box[data-theme~='lean'][data-placement^='top'] > .tippy-arrow::before {
-  border-top-color: #e5e5e5;
-}
-.tippy-box[data-theme~='lean'][data-placement^='bottom'] > .tippy-arrow::before {
-  border-bottom-color: #e5e5e5;
-}
-.tippy-box[data-theme~='lean'][data-placement^='left'] > .tippy-arrow::before {
-  border-left-color: #e5e5e5;
-}
-.tippy-box[data-theme~='lean'][data-placement^='right'] > .tippy-arrow::before {
-  border-right-color: #e5e5e5;
+.tippy-box[data-theme~='lean'] > .tippy-arrow {
+  color: var(--verso-tooltip-bg-color, #e5e5e5);
 }
 
 .tippy-box[data-theme~='message'][data-placement^='top'] > .tippy-arrow::before {
-  border-top-color: #e5e5e5;
   border-width: 11px 11px 0;
 }
 .tippy-box[data-theme~='message'][data-placement^='top'] > .tippy-arrow::after {
@@ -1248,7 +1370,6 @@ Some CSS frameworks customize details/summary in ways not compatible with Verso'
   border-width: 0 11px 11px;
 }
 .tippy-box[data-theme~='message'][data-placement^='left'] > .tippy-arrow::before {
-  border-left-color: #e5e5e5;
   border-width: 11px 0 11px 11px;
 }
 .tippy-box[data-theme~='message'][data-placement^='left'] > .tippy-arrow::after {
@@ -1257,7 +1378,6 @@ Some CSS frameworks customize details/summary in ways not compatible with Verso'
 }
 
 .tippy-box[data-theme~='message'][data-placement^='right'] > .tippy-arrow::before {
-  border-right-color: #e5e5e5;
   border-width: 11px 11px 11px 0;
 }
 .tippy-box[data-theme~='message'][data-placement^='right'] > .tippy-arrow::after {
@@ -1268,39 +1388,39 @@ Some CSS frameworks customize details/summary in ways not compatible with Verso'
 
 
 .tippy-box[data-theme~='warning'] {
-  background-color: #e5e5e5;
-  color: black;
-  border: 3px solid var(--verso-warning-color);
+  background-color: var(--verso-tooltip-warning-bg-color, #e5e5e5);
+  color: var(--verso-tooltip-warning-color, black);
+  border: 3px solid var(--verso-tooltip-warning-border-color, #ffd580);
+}
+.tippy-box[data-theme~='warning'] > .tippy-arrow {
+  color: var(--verso-tooltip-warning-bg-color, #e5e5e5);
 }
 
 .tippy-box[data-theme~='error'] {
-  background-color: #e5e5e5;
-  color: black;
-  border: 3px solid #f7a7af;
+  background-color: var(--verso-tooltip-error-bg-color, #e5e5e5);
+  color: var(--verso-tooltip-error-color, black);
+  border: 3px solid var(--verso-tooltip-error-border-color, #ffb3b3);
+}
+.tippy-box[data-theme~='error'] > .tippy-arrow {
+  color: var(--verso-tooltip-error-bg-color, #e5e5e5);
 }
 
 .tippy-box[data-theme~='info'] {
-  background-color: #e5e5e5;
-  color: black;
-  border: 3px solid #99b3c2;
+  background-color: var(--verso-tooltip-info-bg-color, #e5e5e5);
+  color: var(--verso-tooltip-info-color, black);
+  border: 3px solid var(--verso-tooltip-info-border-color, #4777ff);
+}
+.tippy-box[data-theme~='info'] > .tippy-arrow {
+  color: var(--verso-tooltip-info-bg-color, #e5e5e5);
 }
 
 .tippy-box[data-theme~='tactic'] {
-  background-color: white;
-  color: black;
-  border: 1px solid black;
+  background-color: var(--verso-tactic-state-bg-color, white);
+  color: var(--verso-tactic-state-color, black);
+  border: 1px solid var(--verso-tactic-state-border-color, #888888);
 }
-.tippy-box[data-theme~='tactic'][data-placement^='top'] > .tippy-arrow::before {
-  border-top-color: white;
-}
-.tippy-box[data-theme~='tactic'][data-placement^='bottom'] > .tippy-arrow::before {
-  border-bottom-color: white;
-}
-.tippy-box[data-theme~='tactic'][data-placement^='left'] > .tippy-arrow::before {
-  border-left-color: white;
-}
-.tippy-box[data-theme~='tactic'][data-placement^='right'] > .tippy-arrow::before {
-  border-right-color: white;
+.tippy-box[data-theme~='tactic'] > .tippy-arrow {
+  color: var(--verso-tactic-state-bg-color, white);
 }
 
 .extra-doc-links {
@@ -1324,7 +1444,7 @@ Some CSS frameworks customize details/summary in ways not compatible with Verso'
 }
 
 .verso-message .trace > summary::marker {
-  color: var(--verso-text-color);
+  color: var(--verso-text-color, black);
 }
 
 .verso-message .trace-children {
@@ -1383,10 +1503,39 @@ window.onload = async () => {
       return false;
     }
 
-    // Track whether any tippy is visible (O(1) check instead of DOM scan)
-    let visibleTippyCount = 0;
+    // The innermost element under the pointer, used to show only the most specific hover
+    let hoverTarget = null;
+    document.addEventListener('mouseover', (e) => { hoverTarget = e.target; }, true);
+
+    // Visible tippy references; a tooltip is blocked while an unrelated one is visible
+    const visibleTippies = new Set();
     function blockedByTippy(elem) {
-      return visibleTippyCount > 0;
+      for (const ref of visibleTippies) {
+        if (!ref.contains(elem) && !elem.contains(ref)) return true;
+      }
+      return false;
+    }
+
+    // Whether the element's tooltip would have content to show. Content nested in a
+    // collapsed tactic region is covered by the region's proof-state tooltip, whether or
+    // not a tippy instance is currently attached to it.
+    function showsContent(el) {
+      if (!el._tippy) return false;
+      if (el.classList.contains('tactic')) {
+        const toggle = el.querySelector(':scope > input.tactic-toggle');
+        return !!toggle && !toggle.checked;
+      }
+      return (!!el.querySelector('.hover-info') || 'versoHover' in el.dataset) &&
+        !blockedByTactic(el);
+    }
+
+    // The nearest enclosing element whose tooltip has content
+    function innermostShowable(el) {
+      while (el && el.nodeType === Node.ELEMENT_NODE) {
+        if (showsContent(el)) return el;
+        el = el.parentElement;
+      }
+      return null;
     }
 
     // Binding highlights via event delegation with cached lookups
@@ -1453,6 +1602,40 @@ window.onload = async () => {
       }
     }
 
+    function hideDescendantTooltips(element) {
+      for (const ref of visibleTippies) {
+        if (ref !== element && element.contains(ref)) {
+          ref._tippy.hide();
+        }
+      }
+    }
+
+    // Renders the documentation for a hover ID from the doc table
+    function docHoverContent(hoverId) {
+      const info = document.createElement('span');
+      info.className = 'hover-info';
+      info.style.display = 'block';
+      const data = versoDocData[hoverId];
+      if (data) {
+        info.innerHTML = data;
+        /* Render docstrings - TODO server-side */
+        if ('undefined' !== typeof marked) {
+          for (const d of info.querySelectorAll('code.docstring, pre.docstring')) {
+            const str = d.innerText;
+            const html = marked.parse(str);
+            const rendered = document.createElement('div');
+            rendered.classList.add('docstring');
+            rendered.innerHTML = html;
+            d.parentNode.replaceChild(rendered, d);
+          }
+        }
+      } else {
+        info.innerHTML = 'Failed to load doc ID: ' + hoverId;
+      }
+      return info;
+    }
+
+
 
 
     const defaultTippyProps = {
@@ -1468,23 +1651,27 @@ window.onload = async () => {
       /* ignoreAttributes: true, */
       followCursor: 'initial',
       onShow(inst) {
-        if (inst.reference.className == 'tactic') {
-          const toggle = inst.reference.querySelector(\":scope > input.tactic-toggle\");
+        const ref = inst.reference;
+        if (ref.className == 'tactic') {
+          const toggle = ref.querySelector(\":scope > input.tactic-toggle\");
           if (toggle && toggle.checked) {
             return false;
           }
-          hideParentTooltips(inst.reference);
-          if (blockedByTippy(inst.reference)) { return false; }
-
-        } else if (inst.reference.querySelector(\".hover-info\") || \"versoHover\" in inst.reference.dataset) {
-          if (blockedByTactic(inst.reference)) { return false };
-          if (blockedByTippy(inst.reference)) { return false; }
+        } else if (ref.querySelector(\".hover-info\") || \"versoHover\" in ref.dataset) {
+          if (blockedByTactic(ref)) { return false };
         } else { // Nothing to show here!
           return false;
         }
+        // Show only the most specific hover under the pointer
+        if (hoverTarget && ref.contains(hoverTarget) && innermostShowable(hoverTarget) !== ref) {
+          return false;
+        }
+        hideParentTooltips(ref);
+        hideDescendantTooltips(ref);
+        if (blockedByTippy(ref)) { return false; }
       },
-      onShown(inst) { visibleTippyCount++; },
-      onHidden(inst) { visibleTippyCount = Math.max(0, visibleTippyCount - 1); },
+      onShown(inst) { visibleTippies.add(inst.reference); },
+      onHidden(inst) { visibleTippies.delete(inst.reference); },
       content (tgt) {
         const content = document.createElement(\"span\");
         if (tgt.className == 'tactic') {
@@ -1499,35 +1686,22 @@ window.onload = async () => {
           content.style.maxHeight = \"300px\";
           content.style.overflowY = \"auto\";
           content.style.overflowX = \"hidden\";
+          // Messages come from the inline hover-info; documentation comes from the doc
+          // table. An element with both (a message span sharing a documented token's
+          // extent) shows both in one tooltip.
           const hoverId = tgt.dataset.versoHover;
           const hoverInfo = tgt.querySelector(\".hover-info\");
-          if (hoverId) { // Docstrings from the table
-            // TODO stop doing an implicit conversion from string to number here
-            let data = versoDocData[hoverId];
-            if (data) {
-              const info = document.createElement(\"span\");
-              info.className = \"hover-info\";
-              info.style.display = \"block\";
-              info.innerHTML = data;
-              content.appendChild(info);
-              /* Render docstrings - TODO server-side */
-              if ('undefined' !== typeof marked) {
-                  for (const d of content.querySelectorAll(\"code.docstring, pre.docstring\")) {
-                      const str = d.innerText;
-                      const html = marked.parse(str);
-                      const rendered = document.createElement(\"div\");
-                      rendered.classList.add(\"docstring\");
-                      rendered.innerHTML = html;
-                      d.parentNode.replaceChild(rendered, d);
-                  }
-              }
-            } else {
-              content.innerHTML = \"Failed to load doc ID: \" + hoverId;
-            }
-          } else if (hoverInfo) { // The inline info, still used for compiler messages
+          if (hoverInfo) {
             content.appendChild(hoverInfo.cloneNode(true));
           }
-          const extraLinks = tgt.parentElement.dataset['versoLinks'];
+          if (hoverId) {
+            // TODO stop doing an implicit conversion from string to number here
+            content.appendChild(docHoverContent(hoverId));
+          }
+          if (hoverInfo && hoverId) {
+            content.classList.add('mixed');
+          }
+          const extraLinks = tgt.dataset['versoLinks'] || tgt.parentElement.dataset['versoLinks'];
           if (extraLinks) {
             try {
               const extras = JSON.parse(extraLinks);
@@ -1585,17 +1759,26 @@ window.onload = async () => {
       if (toggle) toggle.addEventListener('change', () => {
         if (toggle.checked) {
           closedTactics.delete(tactic);
-          tactic.querySelectorAll('.token').forEach(tok => {
-            if (!tok._tippy && tok.matches(tacticTippySelector)) {
-              tippy(tok, defaultTippyProps);
+          tactic.querySelectorAll(tacticTippySelector).forEach(el => {
+            if (!el._tippy) {
+              tippy(el, defaultTippyProps);
             }
           });
         } else {
           closedTactics.add(tactic);
-          tactic.querySelectorAll('.token').forEach(tok => {
-            if (tok._tippy) tok._tippy.destroy();
+          tactic.querySelectorAll(tacticTippySelector).forEach(el => {
+            if (el._tippy) el._tippy.destroy();
           });
         }
+        // The toggle changes which element's tooltip belongs to the pointer's position,
+        // but the pointer stays put, so no hover event announces the change. Show the
+        // right tooltip once the click that flipped the toggle has hidden the old one.
+        setTimeout(() => {
+          if (hoverTarget && hoverTarget.isConnected) {
+            const showable = innermostShowable(hoverTarget);
+            if (showable && showable._tippy) showable._tippy.show();
+          }
+        }, 0);
       });
   });
 }

@@ -1,5 +1,6 @@
-import pytest
 from playwright.sync_api import Page
+
+from hover_media import require_hover_media
 
 
 # `rw [h1, h2, h3]` in `LitConfig.lean` highlights as nested tactic regions: the whole-invocation
@@ -8,8 +9,9 @@ from playwright.sync_api import Page
 # be trivially true must be checked:
 #   1. each region's hover shows that region's *own* state, not a nested descendant's (the original
 #      bug showed the first rewrite step's state on the whole `rw`), and
-#   2. hovering highlights only the most specific region under the pointer, even though `label:hover`
-#      bubbles up to every enclosing region.
+#   2. hovering highlights only the innermost region under the pointer, even though `label:hover`
+#      bubbles up to every enclosing region. A collapsed region's proof state is the tooltip for
+#      everything in its label, documented tokens included, so the label is what highlights.
 class TestNestedTacticStates:
     """Hover behavior for nested tactic regions (multi-step `rw`)."""
 
@@ -80,46 +82,89 @@ class TestNestedTacticStates:
         assert "All goals completed" not in text
         assert "Nat" in text  # a real intermediate goal
 
-    def test_hover_highlights_most_specific_region(self, server: str, page: Page):
-        """Hovering lights up only the most specific region containing the pointer; the enclosing
-        regions, whose labels also receive `:hover`, stay unhighlighted."""
-        self._load(server, page)
-        # Linux headless Firefox can report no hover support, so the guarded CSS rule is disabled:
-        # https://bugzilla.mozilla.org/show_bug.cgi?id=2037020
-        if not page.evaluate("matchMedia('(hover: hover)').matches"):
-            pytest.skip("Browser does not enable CSS guarded by @media (hover: hover)")
-        rw = self._rw_keyword(page)
-        rw.hover()
-
-        # The highlight is a live CSS `:hover` effect (see the `:has(.tactic > label:hover)` rule in
-        # `Highlighted.lean`). Hovering also spawns the proof-state tooltip and makes Firefox
-        # recompute `:has(:hover)` on the next paint, so the background is not reliably settled on the
-        # first read. Poll until the region's own label is highlighted before reading the rest. The
-        # mouse stays put, so `:hover` persists across polls.
-        handle = rw.element_handle()
-        page.wait_for_function(
+    @staticmethod
+    def _region_label_backgrounds(tok):
+        """Backgrounds of the labels of every tactic region enclosing `tok`, innermost first."""
+        return tok.evaluate(
             """el => {
-                const region = el.closest('.tactic');
-                const bg = getComputedStyle(region.querySelector(':scope > label')).backgroundColor;
-                return bg === 'rgb(238, 238, 238)';
-            }""",
+                const bg = t => getComputedStyle(t.querySelector(':scope > label')).backgroundColor;
+                const regions = [];
+                for (let a = el.closest('.tactic'); a; a = a.parentElement.closest('.tactic')) {
+                    regions.push(bg(a));
+                }
+                return regions;
+            }"""
+        )
+
+    def test_hover_highlights_own_region_label(self, server: str, page: Page):
+        """Hovering a region's plain content highlights that region's label."""
+        self._load(server, page)
+        require_hover_media(page)
+        # The `rw` keyword is direct content of the whole-`rw` region.
+        tok = self._rw_keyword(page)
+        tok.hover()
+        # The highlight is a live CSS `:hover` effect that Firefox settles on the next paint,
+        # so poll until it lands. The mouse stays put, so `:hover` persists across polls.
+        page.wait_for_function(
+            """el => getComputedStyle(el.closest('.tactic').querySelector(':scope > label'))
+                .backgroundColor === 'rgb(238, 238, 238)'""",
+            arg=tok.element_handle(),
+        )
+
+    def test_hover_highlights_most_specific_region(self, server: str, page: Page):
+        """Hovering lights up only the innermost tactic region's label, even for a documented
+        token: the region's proof state is the tooltip shown there, so the token itself stays
+        plain and enclosing regions' labels stay unhighlighted."""
+        self._load(server, page)
+        require_hover_media(page)
+        # The first rewrite rule (`h1`, a documented token) is nested inside its own step region,
+        # which is nested inside the whole-`rw` region.
+        tok = self._rw_keyword(page).locator(
+            "xpath=following::span[contains(@class,'var') and contains(@class,'token')][1]"
+        )
+        tok.hover()
+
+        # The highlight is a live CSS `:hover` effect. Hovering also spawns a tooltip and makes
+        # Firefox recompute `:has(:hover)` on the next paint, so the background is not reliably
+        # settled on the first read. Poll until the step label is highlighted before reading the
+        # rest. The mouse stays put, so `:hover` persists across polls.
+        handle = tok.element_handle()
+        page.wait_for_function(
+            """el => getComputedStyle(el.closest('.tactic').querySelector(':scope > label'))
+                .backgroundColor === 'rgb(238, 238, 238)'""",
             arg=handle,
         )
 
-        result = rw.evaluate(
-            """el => {
-                const bg = t => getComputedStyle(t.querySelector(':scope > label')).backgroundColor;
-                const region = el.closest('.tactic');
-                const ancestors = [];
-                for (let a = region.parentElement.closest('.tactic'); a; a = a.parentElement.closest('.tactic')) {
-                    ancestors.push(bg(a));
-                }
-                return { own: bg(region), ancestors };
-            }"""
+        regions = self._region_label_backgrounds(tok)
+        assert (
+            tok.evaluate("el => getComputedStyle(el).backgroundColor")
+            == self.TRANSPARENT
         )
-        assert result["own"] == self.HIGHLIGHT
-        # The example really is nested, so this assertion is meaningful.
-        assert len(result["ancestors"]) > 0
-        assert all(bg == self.TRANSPARENT for bg in result["ancestors"]), result[
-            "ancestors"
-        ]
+        # The example really is nested, so the outer-region assertion is meaningful.
+        assert len(regions) > 1
+        assert regions[0] == self.HIGHLIGHT
+        assert all(bg == self.TRANSPARENT for bg in regions[1:]), regions
+
+    def test_collapsed_step_owns_tooltip_inside_expanded_region(
+        self, server: str, page: Page
+    ):
+        """Expanding the whole-`rw` region attaches tippy instances to the content of the step
+        regions nested inside it, which stay collapsed. Hovering a documented token in a
+        collapsed step still shows that step's proof state, tippy instance notwithstanding."""
+        self._load(server, page)
+        # Expand the whole-`rw` region; the step regions inside stay collapsed.
+        self._rw_keyword(page).evaluate(
+            "el => el.closest('.tactic').querySelector(':scope > input.tactic-toggle').click()"
+        )
+        tok = self._rw_keyword(page).locator(
+            "xpath=following::span[contains(@class,'var') and contains(@class,'token')][1]"
+        )
+        assert tok.evaluate("el => !!el._tippy"), (
+            "expansion should attach a tippy to the token"
+        )
+        tok.hover()
+        box = page.locator(".tippy-box[data-theme~='tactic']").first
+        box.wait_for(state="visible")
+        # The step's own intermediate goal, not the whole `rw`'s final state.
+        assert "All goals completed" not in box.inner_text()
+        assert "Nat" in box.inner_text()

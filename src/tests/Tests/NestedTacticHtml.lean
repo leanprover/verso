@@ -222,3 +222,46 @@ def checkElision : CommandElabM Unit := do
 
 #guard_msgs in
 #eval checkElision
+
+/-!
+## Duplicated proof states
+
+Elaboration can record the same tactic more than once, producing nested proof states with
+identical goals at identical positions. These render as adjacent duplicate toggle widgets, so
+the elision pass also removes them.
+-/
+
+/-- Whether `hl` contains a proof state nested in one with the same goals and position. -/
+partial def hlHasDuplicate (hl : Highlighted)
+    (seen : List (Array (Highlighted.Goal Highlighted) × Nat × Nat) := []) : Bool :=
+  match hl with
+  | .seq xs => xs.any (hlHasDuplicate · seen)
+  | .span _ x => hlHasDuplicate x seen
+  | .tactics info s e content =>
+    seen.contains (info, s, e) || hlHasDuplicate content ((info, s, e) :: seen)
+  | _ => false
+
+/-- The number of proof state displays in `hl`. -/
+partial def tacticNodeCount : Highlighted → Nat
+  | .seq xs => xs.foldl (fun n x => n + tacticNodeCount x) 0
+  | .span _ x => tacticNodeCount x
+  | .tactics _ _ _ x => 1 + tacticNodeCount x
+  | _ => 0
+
+/-- A proof state with the same goals and position nested directly inside another. -/
+def duplicated : Highlighted :=
+  let goal : Highlighted.Goal Highlighted :=
+    { name := none, goalPrefix := "⊢ ", hypotheses := #[], conclusion := .text "1 + 1 = 2" }
+  .tactics #[goal] 5 10 (.tactics #[goal] 5 10 (.token ⟨.keyword none none none, "rfl"⟩))
+
+def checkDuplicateElision : CommandElabM Unit := do
+  unless hlHasDuplicate duplicated do
+    throwError "expected the example to contain duplicated proof states"
+  let elided := duplicated.elideRedundantProofStates
+  if hlHasDuplicate elided then
+    throwError "`elideRedundantProofStates` left a duplicated proof state behind"
+  unless tacticNodeCount elided == 1 do
+    throwError "expected exactly one proof state to remain, but found {tacticNodeCount elided}"
+
+#guard_msgs in
+#eval checkDuplicateElision
