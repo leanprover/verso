@@ -61,7 +61,7 @@ block_extension Block.syntaxError via withHighlighting where
 }
 
 :is(.syntax-error > .line):has(.parse-message)::before {
-  color: red;
+  color: var(--verso-message-error-color);
   font-weight: bold;
 }
 
@@ -72,7 +72,7 @@ block_extension Block.syntaxError via withHighlighting where
 .syntax-error .parse-message {
   white-space: pre;
   text-decoration-skip-ink: none;
-  color: red;
+  color: var(--verso-message-error-color);
   font-weight: 600;
 }
 "

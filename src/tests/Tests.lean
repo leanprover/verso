@@ -41,6 +41,7 @@ import Tests.Refs
 import Tests.SearchJs
 import Tests.ExtensionResolution
 import Tests.Serialization
+import Tests.HoverMerge
 import Tests.TeX
 import Tests.TexUnit
 import Tests.TexUtil
