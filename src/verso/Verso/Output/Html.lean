@@ -346,7 +346,7 @@ Converts HTML into a pretty-printer document. This is useful for debugging, but 
 whitespace around preformatted content and scripts.
 -/
 public partial def format : Html → Std.Format
-  | .text true str => .text (str.replace "<" "&lt;" |>.replace ">" "&gt;")
+  | .text true str => .text (str.replace "&" "&amp;" |>.replace "<" "&lt;" |>.replace ">" "&gt;")
   | .text false str => .text str
   | .tag name attrs (.seq #[]) =>
       Format.group (("<" ++ name) ++ group (line.prefixJoin (attrs.toList.map fun (k, v) => group (k ++ "=" ++ Format.line ++ s!"\"{v}\""))) ++ "/>")
@@ -366,7 +366,7 @@ Converts HTML into a string that's suitable for sending to browsers, but is also
 -/
 public partial def asString (html : Html) (indent : Nat := 0) (breakLines := true) : String :=
   match html with
-  | .text true str => str.replace "<" "&lt;" |>.replace ">" "&gt;"
+  | .text true str => str.replace "&" "&amp;" |>.replace "<" "&lt;" |>.replace ">" "&gt;"
   | .text false str => str
   | .tag "pre" attrs body =>
     "<pre" ++ attrsAsString attrs ++ ">" ++
