@@ -29,3 +29,5 @@ Each test's docstring and source range are saved for failure reporting.
 The test runner discovers every test in the package; it can restrict the run to named libraries, rerun property tests with a fixed seed, update golden files, fail the run on warnings with `--wfail`, and write JUnit XML, JSON, and Markdown reports.
 
 Elaboration-time tests can be written with `#test_msgs` and `#test_guard`, variants of `#guard_msgs` and `#guard` that run their check at compile time and record the outcome as a test case, reported together with the rest of the suite.
+
+Verso's own test suite runs on Errata: `lake test` discovers and runs every test in the package, and CI publishes the resulting reports.
