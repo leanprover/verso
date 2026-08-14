@@ -404,7 +404,9 @@ const loadBucket = async (ref) => {
     // served with `Cache-Control: immutable` (no revalidation RTT on repeat
     // visits).
     const version = /** @type {any} */ (window).searchIndexVersion;
-    script.src = `-verso-search/searchIndex_${bucket}.${version}.js`;
+    // Bucket files are emitted into the same directory as this script, so resolving
+    // against the module's own URL finds them wherever the genre put the search assets.
+    script.src = new URL(`searchIndex_${bucket}.${version}.js`, import.meta.url).href;
     document.head.appendChild(script);
 
     return await docContents[bucket];

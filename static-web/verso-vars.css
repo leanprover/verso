@@ -30,7 +30,7 @@
     /** Message colors **/
     /*
     These colors are used to render Lean's feedback. Each severity (info, warning, error)
-    colors four surfaces:
+    has four sets of related styles:
 
     - The affected code itself: foreground and background, both at rest and while hovered,
       plus the indicator color, which draws the wavy underline marking that a message is
@@ -107,7 +107,7 @@
     --verso-code-var-color: var(--verso-code-color);
     --verso-code-var-weight: normal;
     --verso-code-var-style: italic;
-    --verso-code-kw-font-family: var(--verso-code-font-family);
+    --verso-code-var-font-family: var(--verso-code-font-family);
 
     /* The background of interactive code while hovered (hoverable tokens, occurrences of a
        hovered binding, and the tactics that expand to a proof state) */
