@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 module
+import Errata
 public import VersoManual
 
 open Lean Elab Command
@@ -25,6 +26,6 @@ Hint: If `Signature.mk` is documented, add `import all VersoManual.Docstring.Bas
 
 Set option 'verso.docstring.allowMissing' to 'true' to allow missing docstrings.
 -/
-#guard_msgs in
+#test_msgs in
 run_cmd do
   discard <| getDocString? (← getEnv) ``Verso.Genre.Manual.Signature.mk

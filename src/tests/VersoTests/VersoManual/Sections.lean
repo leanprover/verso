@@ -3,10 +3,12 @@ Copyright (c) 2024-2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: Emilio J. Gallego Arias
 -/
+import Errata
 import VersoManual
 
 namespace DocstringSectionRegression
 
+open Errata
 open Verso Output Genre Manual
 
 /-- A fixture for Manual docstring subsection HTML rendering. -/
@@ -55,23 +57,19 @@ private def renderDoc : IO String := do
     throw <| IO.userError "Manual docstring HTML rendering logged errors"
   rendered.get
 
-private def assertLabeledSection (compact label : String) : IO Unit := do
+private def assertLabeledSection (compact label : String) : TestM Unit := do
   let id := s!"docstring-section-{label}"
   let group := s!"<divclass=\"docstring-section\"role=\"group\"aria-labelledby=\"{id}\">"
-  unless hasSubstring compact group do
-    throw <| IO.userError s!"{label} section should render as a named group"
+  assert (hasSubstring compact group) s!"{label} section should render as a named group"
   let labelHtml := s!"<pclass=\"docstring-section-label\"id=\"{id}\">{label}</p>"
-  unless hasSubstring compact labelHtml do
-    throw <| IO.userError s!"{label} section should use a paragraph label with the group's ID"
-  if hasSubstring compact s!"<h1>{label}</h1>" then
-    throw <| IO.userError s!"{label} section label should not render as h1"
+  assert (hasSubstring compact labelHtml)
+    s!"{label} section should use a paragraph label with the group's ID"
+  assert (!hasSubstring compact s!"<h1>{label}</h1>")
+    s!"{label} section label should not render as h1"
 
-/--
-info: docstring section labels render as labeled groups
--/
-#guard_msgs in
-#eval show IO Unit from do
+/-- Docstring section labels render as labeled groups. -/
+@[test]
+def sectionLabels : Test := do
   let compact := compactHtml (← renderDoc)
   assertLabeledSection compact "Fields"
   assertLabeledSection compact "Constructors"
-  IO.println "docstring section labels render as labeled groups"

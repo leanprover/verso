@@ -127,7 +127,9 @@ meta def elabTestGuard : Command.CommandElab
     let env ← getEnv
     let mut name := base
     let mut n := 1
-    while env.contains (ns ++ Name.mkSimple name) do
+    -- In a `module`, the generated definition is private, so probe its mangled name as well.
+    while env.contains (ns ++ Name.mkSimple name)
+        || env.contains (mkPrivateName env (ns ++ Name.mkSimple name)) do
       n := n + 1
       name := s!"{base} ({n})"
     let verdict ←

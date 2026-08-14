@@ -4,12 +4,14 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 
+import Errata
 import Std.Http
 import Plausible
 import Plausible.ArbitraryFueled
 import VersoServe
 import VersoServe.Static
 
+open Errata
 open Plausible
 open Std Async Http
 open VersoServe
@@ -18,28 +20,23 @@ namespace Verso.Tests.Serve
 
 /-! ## Property-based checks (Plausible) -/
 
-open scoped Plausible.Decorations in
-/-- Runs a Plausible property as an `IO` test. -/
-def testProp
-    (p : Prop) (cfg : Configuration := {})
-    (p' : Decorations.DecorationsOf p := by mk_decorations) [Testable p'] :
-    IO (TestResult p') :=
-  Testable.checkIO p' (cfg := cfg)
-
 /-- A range result stays within bounds whenever it selects a sub-range. -/
-def propRangeBounds := testProp <| ∀ (a b size : Nat), show Bool from
+@[test]
+def rangeBounds : Test := property <| ∀ (a b size : Nat), show Bool from
   match parseRange s!"bytes={a}-{b}" size with
   | .range s e => s ≤ e && e < size
   | _ => true
 
 /-- The resolved mount's prefix is genuinely a prefix of the request, and no match is missed. -/
-def propMountPrefix := testProp <| ∀ (prefixes segs : Array String), show Bool from
+@[test]
+def mountPrefix : Test := property <| ∀ (prefixes segs : Array String), show Bool from
   match resolveMountBy id prefixes segs with
   | some (p, _) => (prefixSegments p).isPrefixOf segs
   | none => prefixes.all fun q => !(prefixSegments q).isPrefixOf segs
 
 /-- The chosen mount has the longest matching prefix of any candidate. -/
-def propMountLongest := testProp <| ∀ (prefixes segs : Array String), show Bool from
+@[test]
+def mountLongest : Test := property <| ∀ (prefixes segs : Array String), show Bool from
   match resolveMountBy id prefixes segs with
   | some (p, _) =>
     prefixes.all fun q =>
@@ -47,18 +44,10 @@ def propMountLongest := testProp <| ∀ (prefixes segs : Array String), show Boo
   | none => True
 
 /-- Mount resolution does not depend on the order of the mount table. -/
-def propMountShuffle := testProp <| ∀ (prefixes segs : Array String),
+@[test]
+def mountShuffle : Test := property <| ∀ (prefixes segs : Array String),
   (resolveMountBy id prefixes segs).map (·.1) ==
     (resolveMountBy id prefixes.reverse segs).map (·.1)
-
-open Lean in
-/-- The properties to check, paired with display names. -/
-meta def props : List (Name × (Σ p, IO (TestResult p))) := [
-  (`propRangeBounds, ⟨_, propRangeBounds⟩),
-  (`propMountPrefix, ⟨_, propMountPrefix⟩),
-  (`propMountLongest, ⟨_, propMountLongest⟩),
-  (`propMountShuffle, ⟨_, propMountShuffle⟩),
-]
 
 /-! ## Unit checks -/
 
@@ -75,7 +64,7 @@ def resolvedPrefix (mounts : Array Mount) (path : String) : Option String :=
   (resolveMount mounts segs).map (·.1.urlPrefix)
 
 /-- The deterministic unit checks, paired with display names. -/
-def units : List (String × Bool) := [
+private def units : List (String × Bool) := [
   -- MIME
   ("mime html", mimeType? "HTML" == some ⟨"text", "html"⟩),
   ("mime css charset", contentTypeForPath "a.css" == "text/css; charset=utf-8"),
@@ -225,16 +214,16 @@ def units : List (String × Bool) := [
     (({} : ServeConfig).withCli { port := Port.ofNat? 9000 }).toOption
       |>.map (·.port.toNat) |>.isEqSome 9000),
   -- argument parsing accepts valid forms and rejects malformed ones
-  ("args long port", parseArgs ["--port", "9000"] |>.toOption.bind (·.port) |>.map (·.toNat) |>.isEqSome 9000),
-  ("args short port", parseArgs ["-p", "3000"] |>.toOption.bind (·.port) |>.map (·.toNat) |>.isEqSome 3000),
-  ("args positional dir", parseArgs ["site"] |>.toOption.bind (·.dir) |>.map (·.toString) |>.isEqSome "site"),
+  ("args long port", VersoServe.parseArgs ["--port", "9000"] |>.toOption.bind (·.port) |>.map (·.toNat) |>.isEqSome 9000),
+  ("args short port", VersoServe.parseArgs ["-p", "3000"] |>.toOption.bind (·.port) |>.map (·.toNat) |>.isEqSome 3000),
+  ("args positional dir", VersoServe.parseArgs ["site"] |>.toOption.bind (·.dir) |>.map (·.toString) |>.isEqSome "site"),
   ("args boolean flags",
-    parseArgs ["--quiet"] |>.toOption.map (fun a => a.quiet) |>.isEqSome true),
-  ("args unknown option rejected", (parseArgs ["--nope"]).toOption.isNone),
-  ("args missing port value rejected", (parseArgs ["--port"]).toOption.isNone),
-  ("args non-numeric port rejected", (parseArgs ["--port", "x"]).toOption.isNone),
-  ("args out-of-range port rejected", (parseArgs ["--port", "0"]).toOption.isNone),
-  ("args extra positional rejected", (parseArgs ["a", "b"]).toOption.isNone),
+    VersoServe.parseArgs ["--quiet"] |>.toOption.map (fun a => a.quiet) |>.isEqSome true),
+  ("args unknown option rejected", (VersoServe.parseArgs ["--nope"]).toOption.isNone),
+  ("args missing port value rejected", (VersoServe.parseArgs ["--port"]).toOption.isNone),
+  ("args non-numeric port rejected", (VersoServe.parseArgs ["--port", "x"]).toOption.isNone),
+  ("args out-of-range port rejected", (VersoServe.parseArgs ["--port", "0"]).toOption.isNone),
+  ("args extra positional rejected", (VersoServe.parseArgs ["a", "b"]).toOption.isNone),
   -- port scanning skips taken ports and reports the one it settled on
   ("port scan skips taken",
     (Id.run <| firstAvailable (m := Id) (fun p => if [8000, 8001].contains p.toNat then none else some p) 8000)
@@ -245,6 +234,12 @@ def units : List (String × Bool) := [
   ("port scan stops at max",
     (Id.run <| firstAvailable (m := Id) (fun p => if p.toNat == 65535 then none else some p) 65535).isNone),
 ]
+
+/-- Every deterministic unit check in {name}`units` passes. -/
+@[test]
+def unitChecks : Test := do
+  let failed := units.filter (!·.2) |>.map (·.1)
+  assert failed.isEmpty s!"failed unit checks: {", ".intercalate failed}"
 
 /-! ## In-process integration (Mock transport) -/
 
@@ -276,7 +271,7 @@ def unicodeNames : List String :=
   ["øllebrød", "اَلْعَرَبِيَّةُ", "中文文件", "नमस्ते", "All goals proved!🎉", "𝔏𝔢𝔞𝔫"]
 
 /-- Runs the integration checks against a temporary directory tree, returning failure messages. -/
-def integrationFailures : IO (Array String) := do
+private def integrationFailures : IO (Array String) := do
   let tmp ← IO.FS.createTempDir
   -- The served directory is a subdirectory, so a sibling file lets us probe traversal escapes.
   let root := tmp / "site"
@@ -471,23 +466,8 @@ def integrationFailures : IO (Array String) := do
   IO.FS.removeDirAll tmp
   return fails
 
-/-! ## Entry point -/
-
-/-- Runs every serve test, printing each result and returning the number of failures. -/
-public def runServeTests : IO Nat := do
-  let mut failures := 0
-  for (name, test) in props do
-    IO.print s!"{name}: "
-    let res ← test.2
-    IO.println res
-    unless res matches .success .. do failures := failures + 1
-  for (name, ok) in units do
-    if ok then
-      IO.println s!"{name}: ok"
-    else
-      IO.println s!"{name}: FAILED"
-      failures := failures + 1
-  for name in ← integrationFailures do
-    IO.println s!"integration {name}: FAILED"
-    failures := failures + 1
-  return failures
+/-- Every in-process integration check against the mock transport passes. -/
+@[test]
+def integration : Test := do
+  let fails ← integrationFailures
+  assert fails.isEmpty s!"failed integration checks: {", ".intercalate fails.toList}"

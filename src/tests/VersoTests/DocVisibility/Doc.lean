@@ -8,8 +8,8 @@ public import Verso
 public meta import Verso
 
 /-!
-This document is deliberately not wrapped in a `public section`, so that `Tests.DocVisibility` can
-check that `#doc` results in a public name.
+This document is deliberately not wrapped in a `public section`, so that `VersoTests.DocVisibility`
+can check that `#doc` results in a public name.
 -/
 
 #doc (.none) "Title" =>

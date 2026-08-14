@@ -4,7 +4,8 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 module
-public meta import Tests.DocVisibility.Doc
+public import Errata
+public meta import VersoTests.DocVisibility.Doc
 public section
 
 /-!
@@ -20,5 +21,5 @@ info: Verso.Doc.Part.mk
   #[Verso.Doc.Block.para #[Verso.Doc.Inline.text "A paragraph.", Verso.Doc.Inline.linebreak "\n"]]
   #[]
 -/
-#guard_msgs in
-#eval %doc Tests.DocVisibility.Doc
+#test_msgs in
+#eval %doc VersoTests.DocVisibility.Doc

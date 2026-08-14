@@ -3,6 +3,7 @@ Copyright (c) 2026 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
+import Errata
 import Verso
 import VersoManual
 
@@ -13,7 +14,7 @@ open Lean Elab Command
 open Verso Doc Elab ArgParse
 
 /-!
-The non-`module` counterpart of `Tests/ExpanderSignatures.lean`. The expanders are defined in a
+The non-`module` counterpart of `VersoTests/ExpanderSignatures.lean`. The expanders are defined in a
 legacy source file, so the parsers are ordinary (non-`meta`) definitions and the generated
 signature constants are not marked `meta`. The signatures must still be computed correctly, and
 loading this file must not crash on the `.many` parser's constant.
@@ -60,7 +61,7 @@ Ident
 attr : String (key/value)*
 ```
 -/
-#guard_msgs in
+#test_msgs in
 run_cmd do
   let report (label : String) (s : Option SigDoc) : CommandElabM Unit :=
     match s with

@@ -38,7 +38,7 @@ def goldenFile (expected : System.FilePath) (actual : String)
     failAt loc s!"missing golden file {expected}"
       (detail? := some "Run with --update-golden to create it.")
 
-/-- All files below a directory, recursively. -/
+/-- All files below a directory, recursively, in a deterministic order. -/
 partial def filesUnder (dir : System.FilePath) : IO (Array System.FilePath) := do
   let mut out : Array System.FilePath := #[]
   for entry in ← dir.readDir do
@@ -46,7 +46,7 @@ partial def filesUnder (dir : System.FilePath) : IO (Array System.FilePath) := d
       out := out ++ (← filesUnder entry.path)
     else
       out := out.push entry.path
-  return out
+  return out.qsort (·.toString < ·.toString)
 
 /-- The path of a file relative to a base directory. -/
 private def relativeTo (base file : System.FilePath) : String :=

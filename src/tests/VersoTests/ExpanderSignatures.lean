@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 module
+public import Errata
 public import Verso
 public import VersoManual
 public meta import Verso
@@ -23,8 +24,8 @@ expander is defined. These tests pin down that the signature is computed correct
 particular that defining an expander whose parser is built from `.many`/`partial` combinators does
 not crash when the module holding the constant is loaded.
 
-This file defines the expanders in a `module`, so the parsers are `meta`. `Tests/ExpanderSignaturesLegacy.lean`
-checks the same thing for a non-`module` source file.
+This file defines the expanders in a `module`, so the parsers are `meta`.
+`VersoTests/ExpanderSignaturesLegacy.lean` checks the same thing for a non-`module` source file.
 -/
 
 structure ManyArgs where
@@ -68,7 +69,7 @@ Ident
 attr : String (key/value)*
 ```
 -/
-#guard_msgs in
+#test_msgs in
 run_cmd do
   let report (label : String) (s : Option SigDoc) : CommandElabM Unit :=
     match s with

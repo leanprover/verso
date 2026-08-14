@@ -12,8 +12,10 @@ import VersoTests.Integration.SampleDoc
 import VersoTests.Integration.InheritanceDoc
 import VersoTests.Integration.CodeContent
 import VersoTests.Integration.ExtraFilesDoc
+import VersoTests.Integration.Escape
 import VersoTests.Integration.FrontMatter
 import VersoTests.Integration.DiagramDoc
+import VersoTests.Integration.TwoSideDoc
 import Errata
 
 open Verso Genre Manual
@@ -26,12 +28,14 @@ Renders `doc` to TeX under `integration/<dir>/output`, checks the produced tree 
 lists place additional assets alongside the output, matching the document's expectations.
 -/
 def texGolden (dir : System.FilePath) (doc : Verso.Doc.VersoDoc Manual)
+    (twoside : Bool := false)
     (extraFiles extraFilesTeX : List (System.FilePath × String) := []) : Test := do
   let base : System.FilePath := "src/tests/integration" / dir
   let output := base / "output"
   if ← output.pathExists then IO.FS.removeDirAll output
   let config : Manual.Config :=
-    { destination := output, emitTeX := true, emitHtmlMulti := .no, extraFiles, extraFilesTeX }
+    { destination := output, emitTeX := true, emitHtmlMulti := .no, twoside, extraFiles,
+      extraFilesTeX }
   let logger ← Verso.Logger.new
   emitTeX config doc.toPart |>.run extension_impls% |>.run logger
   goldenDir (base / "expected") output
@@ -42,7 +46,12 @@ def texGolden (dir : System.FilePath) (doc : Verso.Doc.VersoDoc Manual)
       cmd := "lualatex"
       args := #["-shell-escape", "-halt-on-error", "-interaction=nonstopmode", "main.tex"]
     }
-    assertExitCode 0 out
+    unless out.exitCode == 0 do
+      -- lualatex writes its diagnostics to stdout and `main.log`, not stderr, so report all three.
+      let logFile := output / "tex" / "main.log"
+      let log ← if ← logFile.pathExists then IO.FS.readFile logFile else pure ""
+      fail s!"lualatex exited with code {out.exitCode}"
+        (detail? := some s!"stdout:\n{out.stdout}\nstderr:\n{out.stderr}\n{logFile}:\n{log}")
 
 /-- The sample document renders to its golden TeX. -/
 @[test]
@@ -63,9 +72,17 @@ def extraFilesDoc : Test :=
     (extraFiles := [("src/tests/integration/extra-files-doc/test-data/shared", "shared")])
     (extraFilesTeX := [("src/tests/integration/extra-files-doc/test-data/TeX-only", "TeX-only")])
 
+/-- A document exercising escaped `]` in item descriptions renders to its golden TeX. -/
+@[test]
+def escapeDoc : Test := texGolden "escape-doc" Escape.doc
+
 /-- A document with front matter renders to its golden TeX. -/
 @[test]
 def frontMatterDoc : Test := texGolden "front-matter-doc" FrontMatter.doc
+
+/-- A document rendered with two-sided layout renders to its golden TeX. -/
+@[test]
+def twoSideDoc : Test := texGolden "twoside-doc" TwoSideDoc.doc (twoside := true)
 
 /-- A document with diagrams renders to its golden TeX. -/
 @[test]

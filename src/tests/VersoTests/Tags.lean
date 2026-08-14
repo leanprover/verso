@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 module
+import Errata
 import VersoManual
 
 set_option doc.verso true
@@ -32,7 +33,7 @@ private def htmlId (state : TraverseState) (id : InternalId) : Option String :=
 A tag that nobody else holds is assigned exactly as written, and gives the element its HTML id.
 -/
 /-- info: (true, some "my-tag", false) -/
-#guard_msgs in
+#test_msgs in
 #eval show IO _ from do
   let ((tag, id), state, failed) ← run do
     let id ← freshId
@@ -45,7 +46,7 @@ Assigning the same tag to the same element again is what later traversal rounds 
 error.
 -/
 /-- info: (true, some "my-tag", false) -/
-#guard_msgs in
+#test_msgs in
 #eval show IO _ from do
   let ((tag, id), state, failed) ← run do
     let id ← freshId
@@ -64,7 +65,7 @@ An error was encountered!
 ---
 info: (false, some "my-tag", none, true)
 -/
-#guard_msgs in
+#test_msgs in
 #eval show IO _ from do
   let ((tag, first, second), state, failed) ← run do
     let first ← freshId
@@ -84,7 +85,7 @@ An error was encountered!
 ---
 info: (false, some "my-tag", none, true)
 -/
-#guard_msgs in
+#test_msgs in
 #eval show IO _ from do
   let ((tag, machine, chosen), state, failed) ← run do
     let machine ← freshId
