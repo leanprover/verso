@@ -149,11 +149,13 @@ lean_exe «verso-tests» where
 -- discovery runner, and the runner script.
 namespace Errata
 
+@[default_target]
 lean_lib Errata where
   srcDir := "src/errata"
   roots := #[`Errata]
 
 -- Tests that exercise Errata using Errata itself.
+@[default_target]
 lean_lib ErrataTests where
   srcDir := "src/errata-tests"
   roots := #[`ErrataTests]
@@ -231,7 +233,7 @@ private def splitArgs (args : List String) : Except String (List String × List 
   | some opt =>
     .error s!"unexpected option '{opt}': arguments before the `--test-options` marker name the \
       libraries to test. Put runner options after the marker, \
-      e.g. `lake test -- --test-options {opt}`."
+      e.g. `lake run Errata.run --test-options {opt}`."
   | none => .ok (names, rest)
 
 /-- Usage information for `lake test`. -/
