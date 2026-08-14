@@ -31,3 +31,5 @@ The test runner discovers every test in the package; it can restrict the run to 
 Elaboration-time tests can be written with `#test_msgs` and `#test_guard`, variants of `#guard_msgs` and `#guard` that run their check at compile time and record the outcome as a test case, reported together with the rest of the suite.
 
 Verso's own test suite runs on Errata: `lake test` discovers and runs every test in the package, and CI publishes the resulting reports.
+
+Tests can also be run interactively from the editor: a panel widget shown on a test's declaration runs it in a separate process, streaming its output as it is produced.
