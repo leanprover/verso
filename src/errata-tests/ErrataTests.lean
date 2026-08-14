@@ -155,6 +155,62 @@ def reportMarkdown : Test := do
   assertContains "expected 1\nactual 2" md
   assertContains "Summary by module" md
 
+/-- `runValue` reports a passing value as passed. -/
+@[test]
+def runOnePasses : Test := do
+  let o ← runValue default (pure () : Test)
+  assertEq "passed" o.status
+
+/-- `runValue` reports a failing value as failed and carries its message. -/
+@[test]
+def runOneFails : Test := do
+  let o ← runValue default (TestResult.fail { message := "boom" })
+  assertEq "failed" o.status
+  assertEq (some "boom") o.message?
+
+/-- `runValue` reports a skipped value as skipped. -/
+@[test]
+def runOneSkips : Test := do
+  let o ← runValue default (TestResult.skip "later")
+  assertEq "skipped" o.status
+
+/-- A failing run surfaces its captured output in the outcome. -/
+@[test]
+def runOneCapturesOutput : Test := do
+  let o ← runValue default (do IO.println "trace line"; failHere "nope" : Test)
+  assertEq "failed" o.status
+  assertEq 1 o.output.size
+  assertEq "stdout" o.output[0]!.stream
+  assertContains "trace line" o.output[0]!.text
+
+/-- An outcome takes the most severe verdict among several named results. -/
+@[test]
+def runOneAggregates : Test := do
+  let o ← runValue default (do result "a" (pure ()); result "b" (failHere "bad") : Test)
+  assertEq "failed" o.status
+
+/-- A passing run still surfaces its captured output. -/
+@[test]
+def runOnePassOutput : Test := do
+  let o ← runValue default (do IO.println "printed"; return true : IO Bool)
+  assertEq "passed" o.status
+  assertEq 1 o.output.size
+  assertEq "stdout" o.output[0]!.stream
+  assertContains "printed" o.output[0]!.text
+
+/-- Captured output keeps stdout and stderr distinct and interleaved in order. -/
+@[test]
+def runOneStreams : Test := do
+  let o ← runValue default (do
+    IO.println "out one"
+    IO.eprintln "err one"
+    IO.println "out two"
+    return true : IO Bool)
+  assertEq "passed" o.status
+  assertEq 3 o.output.size
+  assertEq "stdout" o.output[0]!.stream
+  assertEq "stderr" o.output[1]!.stream
+  assertEq "stdout" o.output[2]!.stream
 /-- `failure` from the `Alternative` instance fails a test. -/
 @[test]
 def alternativeFailure : Test := expectFail failure

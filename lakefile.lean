@@ -142,8 +142,8 @@ lean_lib VersoTests where
   roots := #[`VersoTests]
   globs := #[Glob.andSubmodules `VersoTests]
 
--- Everything below is Errata's own implementation: its library, its self-tests, the generated
--- discovery runner, and the `lake test` driver.
+-- Everything below is Errata's own implementation: its library, the single-test runner and widget
+-- support exe, its self-tests, the generated discovery runner, and the `lake test` driver.
 namespace Errata
 
 @[default_target]
@@ -151,10 +151,21 @@ input_file errataUsageFile where
   text := true
   path := "src/errata/Errata/usage.txt"
 
+input_file errataRunTestWidgetJs where
+  text := true
+  path := "src/errata/Errata/widget/run_test_widget.js"
+
 lean_lib Errata where
   srcDir := "src/errata"
   roots := #[`Errata]
-  needs := #[errataUsageFile]
+  needs := #[errataUsageFile, errataRunTestWidgetJs]
+
+-- Runs one test in a fresh process so the widget can stream its output and kill it on cancel.
+@[default_target]
+lean_exe «errata-run-one» where
+  srcDir := "src/errata"
+  root := `ErrataRunOne
+  supportInterpreter := true
 
 -- Tests that exercise Errata using Errata itself.
 lean_lib ErrataTests where
