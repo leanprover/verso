@@ -109,3 +109,17 @@ info: |
 -/
 #guard_msgs in
   #eval IO.println <| "|\n" ++ test.asString
+
+/-! ## Tests for escaping -/
+
+/-- info: "<p>x &amp; y &amp;lt; &lt;z&gt;</p>" -/
+#guard_msgs in
+  #eval Html.asString {{ <p>"x & y &lt; <z>"</p> }} (breakLines := false)
+
+/-- info: "<p>x & y &lt; <em>z</em></p>" -/
+#guard_msgs in
+  #eval Html.asString (.tag "p" #[] (.text false "x & y &lt; <em>z</em>")) (breakLines := false)
+
+/-- info: "<p class=\"a&amp;b&quot;c\">x</p>" -/
+#guard_msgs in
+  #eval Html.asString {{ <p class="a&b\"c">"x"</p> }} (breakLines := false)
