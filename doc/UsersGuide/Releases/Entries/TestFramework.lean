@@ -13,11 +13,16 @@ release_note
   version := ⟨4, 34, 0⟩
   breaking := false
   tag := "feat-test-framework"
-  prs := []
+  prs := [956]
 
 #doc (Manual) "Test Framework" =>
 
-Added Errata, a test framework with test discovery, uniform failure reporting, and CI-friendly report formats.
+Added `Errata`, a testing framework with test discovery, uniform failure reporting, and CI-friendly report formats.
+
+Previously, Verso's tests were all essentially _ad hoc_ IO actions that were run in sequence or elaborations that would fail.
+Each item was tested with the appropriate tool for the job (random testing, golden testing, traditional unit tests, etc), but there was no overarching test code.
+In particular, there were no universal conventions about output or failure reporting, and it could be difficult to see which test had actually failed at a glance.
+`Errata` unifies reporting and eliminates the need to plumb lists of tests through the system.
 
 Tests are marked with the `@[test]` attribute, and a test's value can have any type with an `IsTest` instance.
 Each test's docstring and source range are saved for failure reporting.
