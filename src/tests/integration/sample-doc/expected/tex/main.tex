@@ -1,5 +1,5 @@
 
-\documentclass{memoir}
+\documentclass[oneside]{memoir}
 
 \usepackage{sourcecodepro}
 \usepackage{sourcesanspro}
@@ -88,6 +88,7 @@
 \definecolor{bordercolor}{HTML}{98B2C0}
 \definecolor{medgray}{HTML}{555555}
 \newtcolorbox{docstringBox}[2][]{colback=white,
+before lower={\parindent15pt\noindent}, % indent all paragraphs after first within lower part of box
 breakable,
 colframe=bordercolor,
 colbacktitle=white,
@@ -143,9 +144,15 @@ title={#2},#1}
 
 \cleardoublepage
 \begin{docstringBox}{def}
-\LeanVerb|Verso.\allowbreak{}Integration.\allowbreak{}Sample\-Doc.\allowbreak{}sample_constant : Type|\tcblower This is a docstring.Here's some more text with a \LeanVerb|code inline| in it.
+\LeanVerb|Verso.\allowbreak{}Integration.\allowbreak{}Sample\-Doc.\allowbreak{}sample_constant : Type|\tcblower This is a docstring.
+
+Here's some more text with a \LeanVerb|code inline| in it.
 Here's when a \LeanVerb|code inline|
-occurs right before a line break.And then here's a paragraph break.
+occurs right before a line break.
+
+And then here's a paragraph break.
+
+
 \end{docstringBox}
 
 Here is a test of \LeanVerb|escaping of things like \symbol{92}TeX in code inlines|

@@ -3,9 +3,14 @@ Copyright (c) 2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-import VersoLiterateCode
-import VersoSearch.DomainSearch
+module
+public import VersoLiterateCode
+public import VersoSearch.DomainSearch
+public import Verso.Code.Highlighted.WebAssets
+import Verso.Output.Html.CssVars
 import Verso.Output.Html.KaTeX
+
+public section
 
 open Lean
 
@@ -201,6 +206,7 @@ private def mkHeadContents (litConfig : LiterateConfig) (includeCodeAssets : Boo
     {{ descTag }}
     {{ katexAssets }}
     {{ codeAssets }}
+    <link rel="stylesheet" href="verso-vars.css"/>
     <link rel="stylesheet" href="literate.css"/>
     {{ themeCssTag }}
     {{ copyButtonTag }}
@@ -487,6 +493,7 @@ def main (args : List String) : IO UInt32 := do
     IO.FS.writeFile (config.outputDir / "tippy.js") Verso.Code.Highlighted.WebAssets.tippy
     IO.FS.writeFile (config.outputDir / "tippy-border.css") Verso.Code.Highlighted.WebAssets.tippy.border.css
     IO.FS.writeFile (config.outputDir / "marked.js") Verso.Code.Highlighted.WebAssets.marked
+    IO.FS.writeFile (config.outputDir / "verso-vars.css") Verso.Output.Html.«verso-vars.css»
     IO.FS.writeFile (config.outputDir / "literate.css") literate.css
     -- Copy KaTeX dependencies
     IO.FS.createDirAll (config.outputDir / "katex")

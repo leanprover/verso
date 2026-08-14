@@ -77,6 +77,16 @@ lean_exe «verso» where
   supportInterpreter := true
 
 @[default_target]
+lean_lib VersoServe where
+  roots := #[`VersoServe]
+  srcDir := "src/verso-serve"
+
+@[default_target]
+lean_exe «verso-serve» where
+  root := `VersoServeMain
+  srcDir := "src/verso-serve"
+
+@[default_target]
 lean_lib VersoLiterate where
   roots := #[`VersoLiterate]
   srcDir := "src/verso-literate"
@@ -372,9 +382,16 @@ script run (args) do
 
 end Errata
 
+-- The release notes compute the version under development from this file while they elaborate,
+-- so its contents are an input to the library.
+input_file leanToolchain where
+  text := true
+  path := "lean-toolchain"
+
 lean_lib UsersGuide where
   srcDir := "doc"
   leanOptions := #[⟨`weak.linter.verso.manual.headerTags, true⟩]
+  needs := #[leanToolchain]
 
 @[default_target]
 lean_exe usersguide where

@@ -12,3 +12,4 @@ htmlout
 vendored-js
 *.min.js
 licenses.md
+doc/stats.html

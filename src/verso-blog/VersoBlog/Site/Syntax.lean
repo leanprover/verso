@@ -3,9 +3,13 @@ Copyright (c) 2023-2024 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
+module
 
-import Verso.Doc.Concrete
-import VersoBlog.Site
+public import Verso.Doc.Concrete
+public import Verso.Doc.DocName
+public import VersoBlog.Site
+
+public section
 
 open Lean Elab Macro Term
 

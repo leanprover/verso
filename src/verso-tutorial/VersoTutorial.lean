@@ -4,18 +4,21 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
 
-import MultiVerso
-import Verso.Doc
-import VersoManual.Basic
-import VersoManual
-import Lean.Data.Json
-import VersoUtil.LzCompress
-import VersoUtil.Zip
-import VersoBlog.Basic
-import VersoBlog.Component
-import VersoBlog.Template
-import VersoBlog.Generate
-import VersoTutorial.Basic
+module
+public import MultiVerso
+public import Verso.Doc
+public import VersoManual.Basic
+public import VersoManual
+public import Lean.Data.Json
+public import VersoUtil.LzCompress
+public import VersoUtil.Zip
+public import VersoBlog.Basic
+public import VersoBlog.Component
+public import VersoBlog.Template
+public import VersoBlog.Generate
+public import VersoTutorial.Basic
+
+public section
 
 open Lean
 open Std

@@ -3,13 +3,19 @@ Copyright (c) 2024-2025 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-import Lean.Elab.InfoTree.Types
+module
 
-import Verso
-import VersoManual.Basic
-import VersoManual.HighlightedCode
-import VersoManual.InlineLean.Outputs
-import SubVerso.Examples
+public import Lean.Elab.InfoTree.Types
+
+public import Verso
+public meta import Verso.WithoutAsync
+public import VersoManual.Basic
+public import VersoManual.HighlightedCode
+public import VersoManual.InlineLean.Outputs
+public meta import VersoManual.InlineLean.Outputs
+public import SubVerso.Examples
+
+public section
 
 open SubVerso.Highlighting
 
@@ -55,7 +61,7 @@ block_extension Block.syntaxError via withHighlighting where
 }
 
 :is(.syntax-error > .line):has(.parse-message)::before {
-  color: red;
+  color: var(--verso-message-error-color);
   font-weight: bold;
 }
 
@@ -66,7 +72,7 @@ block_extension Block.syntaxError via withHighlighting where
 .syntax-error .parse-message {
   white-space: pre;
   text-decoration-skip-ink: none;
-  color: red;
+  color: var(--verso-message-error-color);
   font-weight: 600;
 }
 "
@@ -119,20 +125,20 @@ structure SyntaxErrorConfig where
 section
 variable [Monad m] [MonadInfoTree m] [MonadLiftT CoreM m] [MonadEnv m] [MonadError m]
 
-def SyntaxErrorConfig.parse : ArgParse m SyntaxErrorConfig :=
+meta def SyntaxErrorConfig.parse : ArgParse m SyntaxErrorConfig :=
   SyntaxErrorConfig.mk <$>
     .positional `name (ValDesc.name.as "name for later reference") <*>
     .flag `show true <*>
     .namedD `category (ValDesc.name.as "syntax category (default `command`)") `command <*>
     .namedD `precedence .nat 0
 
-instance : FromArgs SyntaxErrorConfig m := ⟨SyntaxErrorConfig.parse⟩
+meta instance : FromArgs SyntaxErrorConfig m := ⟨SyntaxErrorConfig.parse⟩
 
 end
 
 open Lean.Parser in
 @[code_block]
-def syntaxError : CodeBlockExpanderOf SyntaxErrorConfig
+meta def syntaxError : CodeBlockExpanderOf SyntaxErrorConfig
   | config, str => withoutAsync do
 
     PointOfInterest.save (← getRef) config.name.toString

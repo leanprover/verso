@@ -3,9 +3,13 @@ Copyright (c) 2023-2024 Lean FRO LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: David Thrane Christiansen
 -/
-import Lean.Parser
-import Lean.Data.Json.FromToJson
-import Verso.Instances.Deriving
+module
+public import Lean.Parser
+public import Lean.DocString.Parser
+public import Lean.Data.Json.FromToJson
+meta import Verso.Instances.Deriving
+
+public section
 
 open Lean (ToJson FromJson)
 

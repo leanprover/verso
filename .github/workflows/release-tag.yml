@@ -23,6 +23,12 @@ jobs:
               with:
                   fetch-depth: 0
 
+            - name: Install subproject toolchains
+              run: |
+                  find . -name lean-toolchain -type f -not -path './.*' | while read -r f; do
+                      elan toolchain install "$(cat "$f")"
+                  done
+
             - name: Lean version
               run: lean --version
 
@@ -48,6 +54,9 @@ jobs:
 
             - name: Install PDF Dependencies
               uses: ./.github/actions/install-texlive
+
+            - name: Install Inkscape
+              run: sudo apt-get update && sudo apt-get install -y --no-install-recommends inkscape
 
             - name: Generate the manual
               run: ./deploy/generate.sh

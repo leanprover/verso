@@ -28,6 +28,16 @@ jobs:
                   echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
 
             - uses: actions/checkout@v7
+              with:
+                  # Two commits, so that the release note check below resolves HEAD^1 and passes
+                  # it to the script as RELEASE_NOTES_BASE.
+                  fetch-depth: 2
+
+            - name: Install subproject toolchains
+              run: |
+                  find . -name lean-toolchain -type f -not -path './.*' | while read -r f; do
+                      elan toolchain install "$(cat "$f")"
+                  done
 
             - name: List all files
               run: |
@@ -61,9 +71,48 @@ jobs:
                   lake build :examples
                   popd
 
+            - name: Check for orphaned modules
+              run: |
+                  # These are all the library modules; docs and tests are excluded
+                  out="$(lake query VersoUtil:orphanMods Verso:orphanMods MultiVerso:orphanMods \
+                    VersoSearch:orphanMods VersoBlog:orphanMods VersoManual:orphanMods \
+                    VersoIlluminate:orphanMods VersoTutorial:orphanMods VersoLiterate:orphanMods \
+                    VersoLiterateCode:orphanMods)"
+                  if [ -n "$(printf '%s' "$out" | tr -d '[:space:]')" ]; then
+                    echo "Found orphaned modules:"
+                    echo "$out"
+                    exit 1
+                  fi
+                  echo "No orphaned modules."
+
             - name: Build the project
               run: |
                   lake build
+
+            # RELEASE_NOTES_BASE is what keeps this working against the shallow checkout above:
+            # HEAD^1 is the base branch for both pull_request and merge_group runs, and is one
+            # of the two commits that are fetched.
+            #
+            # A `No-Changelog:` line waives the rules about an entry's version and pull
+            # requests, and gives the reason. A pull request is squashed into a commit whose
+            # message is its description, so the description is read here and the commit
+            # messages on merge_group and push runs.
+            - name: Check the release notes
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  REPO: ${{ github.repository }}
+                  RELEASE_NOTES_BASE: HEAD^1
+                  RELEASE_NOTES_PR: ${{ github.event.pull_request.number }}
+              run: |
+                  # The description is read through the API so that re-running this job after
+                  # editing it sees the current text; the event payload holds whatever it said
+                  # when the run was triggered.
+                  if [ -n "$RELEASE_NOTES_PR" ]; then
+                    RELEASE_NOTES_DESCRIPTION="$(gh api "repos/$REPO/pulls/$RELEASE_NOTES_PR" \
+                      --jq '.body')"
+                    export RELEASE_NOTES_DESCRIPTION
+                  fi
+                  lake lean scripts/release_notes.lean
 
             - name: Install PDF Dependencies
               uses: ./.github/actions/install-texlive
@@ -90,6 +139,14 @@ jobs:
             - name: Install Playwright browsers
               run: |
                   uv run --project browser-tests --extra test playwright install chromium firefox --with-deps
+
+            # The LaTeX `svg` package shells out to `inkscape --version` during
+            # the `--check-tex` build. Fail here with a clear message if Inkscape
+            # is missing or its version can't be read, rather than deep inside a
+            # lualatex run.
+            - name: Check Inkscape is available
+              run: |
+                  inkscape --version
 
             - name: Run tests
               run: |
@@ -118,6 +175,10 @@ jobs:
                       errata-report.xml
                       errata-summary.md
                   if-no-files-found: ignore
+
+            - name: Test the dev server
+              run: |
+                  ./src/tests/run_serve_test.sh
 
             - name: Generate the test website
               run: |
@@ -155,7 +216,7 @@ jobs:
                   cp README-html.md html-multi/README.md
                   zip -r html-manual.zip html-multi
 
-            - uses: actions/setup-node@v6
+            - uses: actions/setup-node@v7
               with:
                   node-version: "lts/*"
                   cache: npm

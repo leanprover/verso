@@ -6,9 +6,10 @@ Author: David Thrane Christiansen
 module
 namespace Verso.Genre.Manual.TeX
 
-public def preamble (title : String) (authors : List String) (date : String) (packages : List String) (extraPreamble : List String) : String :=
+public def preamble (title : String) (authors : List String) (date : String) (packages : List String)
+                    (extraPreamble : List String) (twoside: Bool) : String :=
 r##"
-\documentclass{memoir}
+\documentclass["## ++ (if twoside then "twoside" else "oneside") ++ r##"]{memoir}
 
 \usepackage{sourcecodepro}
 \usepackage{sourcesanspro}
@@ -97,6 +98,7 @@ r##"
 \definecolor{bordercolor}{HTML}{98B2C0}
 \definecolor{medgray}{HTML}{555555}
 \newtcolorbox{docstringBox}[2][]{colback=white,
+before lower={\parindent15pt\noindent}, % indent all paragraphs after first within lower part of box
 breakable,
 colframe=bordercolor,
 colbacktitle=white,

@@ -3,6 +3,7 @@
         "typeRoots": ["."],
         "lib": ["ES2024", "DOM", "DOM.Iterable"],
         "target": "ES2024",
+        "module": "es2022",
         "noEmit": true
     },
     "include": ["**/*.js", "**/*.d.ts"]

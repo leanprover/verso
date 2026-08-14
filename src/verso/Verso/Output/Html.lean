@@ -187,6 +187,28 @@ namespace Html
 public abbrev doctype := "<!DOCTYPE html>"
 
 /--
+Wrap content in a named group whose visible label should not participate in the document heading
+outline.
+
+Use this for labels that name a grouped region for assistive technology, but are not section
+headings. The label is rendered as a paragraph and connected to the group with `aria-labelledby`.
+-/
+public def labeledGroup
+    (groupClass labelClass id label : String)
+    (contents : Html) : Html :=
+  let groupAttrs :=
+    (if groupClass.isEmpty then #[] else #[("class", groupClass)]) ++
+      #[("role", "group"), ("aria-labelledby", id)]
+  let labelAttrs :=
+    (if labelClass.isEmpty then #[] else #[("class", labelClass)]) ++
+      #[("id", id)]
+  .tag "div" groupAttrs <|
+    .seq #[
+      .tag "p" labelAttrs (.text true label),
+      contents
+    ]
+
+/--
 Visit the entire tree, applying rewrites in some monad. Return `none` to signal that no rewrites are
 to be performed.
 -/
@@ -324,7 +346,7 @@ Converts HTML into a pretty-printer document. This is useful for debugging, but 
 whitespace around preformatted content and scripts.
 -/
 public partial def format : Html → Std.Format
-  | .text true str => .text (str.replace "<" "&lt;" |>.replace ">" "&gt;")
+  | .text true str => .text (str.replace "&" "&amp;" |>.replace "<" "&lt;" |>.replace ">" "&gt;")
   | .text false str => .text str
   | .tag name attrs (.seq #[]) =>
       Format.group (("<" ++ name) ++ group (line.prefixJoin (attrs.toList.map fun (k, v) => group (k ++ "=" ++ Format.line ++ s!"\"{v}\""))) ++ "/>")
@@ -344,7 +366,7 @@ Converts HTML into a string that's suitable for sending to browsers, but is also
 -/
 public partial def asString (html : Html) (indent : Nat := 0) (breakLines := true) : String :=
   match html with
-  | .text true str => str.replace "<" "&lt;" |>.replace ">" "&gt;"
+  | .text true str => str.replace "&" "&amp;" |>.replace "<" "&lt;" |>.replace ">" "&gt;"
   | .text false str => str
   | .tag "pre" attrs body =>
     "<pre" ++ attrsAsString attrs ++ ">" ++
