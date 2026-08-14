@@ -357,6 +357,15 @@ def testBuildLog (_ : Config) : IO Unit := do
     throw <| IO.userError "redirected logging should still accumulate into the logger's buffers"
   IO.println "  All build-log tests passed."
 
+/-- Runs Errata's own tests, reporting them the way the Errata runner does. -/
+def testErrata (config : Config) : IO Unit := do
+  let verbosity := if config.verbose then Errata.Verbosity.quiet else .silent
+  let cfg ← Errata.mkContext (verbosity := verbosity)
+  let results ← Errata.run cfg errataTests
+  let failures ← Errata.humanReport verbosity results
+  unless failures == 0 do
+    throw <| IO.userError s!"{failures} Errata test(s) failed"
+
 open Verso.Integration in
 def tests := [
   testBuildLog,
@@ -380,7 +389,8 @@ def tests := [
   testLiterateConfig,
   testLiterateHtml,
   testLiterateHtmlMultiRoot,
-  testSetupLiterate
+  testSetupLiterate,
+  testErrata
 ]
 
 def getConfig (config : Config) : List String → IO Config

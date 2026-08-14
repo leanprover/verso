@@ -14,6 +14,7 @@ import Tests.DocVisibility
 import Tests.DocstringMissing
 import Tests.DocstringMissingLegacy
 import Tests.HighlightedToTeX
+import Tests.ErrataSuite
 import Tests.ExpanderSignatures
 import Tests.ExpanderSignaturesLegacy
 import Tests.Html
