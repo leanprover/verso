@@ -50,36 +50,32 @@ private def printResult (verbosity : Verbosity) (r : Result) : IO Unit := do
     printDoc
     unless r.output.isEmpty do IO.println (indentLines s!"output:\n{r.output.all}")
 
-/-- A running tally of results suppressed by truncation. -/
+/-- A running tally of results suppressed by truncation. Only passes and skips are ever suppressed;
+failures and errors always print. -/
 private structure Suppressed where
   passed : Nat := 0
-  failed : Nat := 0
-  errors : Nat := 0
   skipped : Nat := 0
 
 /-- Counts one more suppressed result. -/
 private def Suppressed.add (s : Suppressed) : Status → Suppressed
-  | .pass => { s with passed := s.passed + 1 }
-  | .fail _ => { s with failed := s.failed + 1 }
-  | .error _ => { s with errors := s.errors + 1 }
   | .skip _ => { s with skipped := s.skipped + 1 }
+  | _ => { s with passed := s.passed + 1 }
 
 /-- The number of suppressed results. -/
 private def Suppressed.total (s : Suppressed) : Nat :=
-  s.passed + s.failed + s.errors + s.skipped
+  s.passed + s.skipped
 
 /-- Prints the truncation summary for a test whose results were capped, if any were suppressed. -/
 private def printSuppressed (s : Suppressed) : IO Unit := do
   if s.total > 0 then
-    let parts := #[s!"{s.passed} more passed", s!"{s.failed} more failed"]
-      ++ (if s.errors > 0 then #[s!"{s.errors} more errors"] else #[])
+    let parts := (if s.passed > 0 then #[s!"{s.passed} more passed"] else #[])
       ++ (if s.skipped > 0 then #[s!"{s.skipped} more skipped"] else #[])
     IO.println s!"    (... and {", ".intercalate parts.toList})"
 
 /--
-Prints a human-readable report and returns the number of failures. Verbosity 0 shows only failures
-and errors; 1 also shows passes and skips but truncates each test's results after a cap, summarizing
-the rest; 2 shows everything.
+Prints a human-readable report and returns the number of failures. Failures and errors are printed
+at every verbosity. Verbosity 0 shows nothing else; 1 also shows passes and skips but truncates each
+test's passes and skips after a cap, summarizing the rest; 2 shows everything.
 -/
 def humanReport (verbosity : Verbosity) (results : Array Result) : IO Nat := do
   let cap := 50
@@ -103,16 +99,17 @@ def humanReport (verbosity : Verbosity) (results : Array Result) : IO Nat := do
       curKey := some key
       shown := 0
       more := {}
-    let displayable :=
-      match r.status with
-      | .pass | .skip _ => verbosity.showsPasses
-      | .fail _ | .error _ => true
-    if displayable then
-      if verbosity.truncates && shown ≥ cap then
-        more := more.add r.status
-      else
-        printResult verbosity r
-        shown := shown + 1
+    match r.status with
+    | .fail _ | .error _ =>
+      printResult verbosity r
+      shown := shown + 1
+    | .pass | .skip _ =>
+      if verbosity.showsPasses then
+        if verbosity.truncates && shown ≥ cap then
+          more := more.add r.status
+        else
+          printResult verbosity r
+          shown := shown + 1
   printSuppressed more
   IO.println s!"{passed} passed, {failed} failed, {errors} errors, {skipped} skipped"
   return failed + errors

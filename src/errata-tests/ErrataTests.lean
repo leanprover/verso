@@ -106,6 +106,43 @@ def verbosityLevels : Test := do
   assertEq Verbosity.superVerbose Verbosity.verbose.increase
   assertEq Verbosity.superVerbose Verbosity.superVerbose.increase
 
+/-- The runner's command line: the `-v` forms select the verbosity, declared flags parse, and
+options for the tests go after `--`. -/
+@[test]
+def runnerArgParsing : Test := do
+  result "default verbosity" do
+    assertEq (some Verbosity.silent) ((parseOptions []).toOption.map (·.verbosity))
+  result "-v" do
+    assertEq (some Verbosity.quiet) ((parseOptions ["-v"]).toOption.map (·.verbosity))
+  result "--verbose" do
+    assertEq (some Verbosity.quiet) ((parseOptions ["--verbose"]).toOption.map (·.verbosity))
+  result "-vv" do
+    assertEq (some Verbosity.verbose) ((parseOptions ["-vv"]).toOption.map (·.verbosity))
+  result "-vvv" do
+    assertEq (some Verbosity.superVerbose) ((parseOptions ["-vvv"]).toOption.map (·.verbosity))
+  result "update-golden" do
+    assertEq (some true) ((parseOptions ["--update-golden"]).toOption.map (·.updateGolden))
+  result "seed" do
+    assertEq (some (some 42)) ((parseOptions ["--seed", "42"]).toOption.map (·.seed))
+  result "non-numeric seed rejected" do
+    assert ((parseOptions ["--seed", "x"]) matches .error _)
+  result "junit path" do
+    assertEq (some (some "r.xml")) ((parseOptions ["--junit", "r.xml"]).toOption.map (·.junitPath))
+  result "missing junit path rejected" do
+    assert ((parseOptions ["--junit"]) matches .error _)
+  result "test options after --" do
+    let opts := (parseOptions ["--", "--golden", "on", "--flag=v=1", "--golden", "two"]).toOption
+    assertEq (some #["on", "two"]) (opts.map (·.options.getD "golden" #[]))
+    assertEq (some #["v=1"]) (opts.map (·.options.getD "flag" #[]))
+  result "valueless test option" do
+    assertEq (some #[""]) ((parseOptions ["--", "--fast"]).toOption.map (·.options.getD "fast" #[]))
+  result "unknown flag rejected" do
+    assert ((parseOptions ["--golden", "on"]) matches .error _)
+  result "misplaced library name diagnosed" do
+    match parseOptions ["--verbose", "ErrataTests"] with
+    | .error msg => assertContains "ErrataTests" msg
+    | .ok _ => assert false "expected an error"
+
 /-- At silent verbosity the report hides passes but shows failures and the summary line. -/
 @[test]
 def reportSilent : Test := do
@@ -130,10 +167,21 @@ def reportTruncates : Test := do
     ({ package := "p", moduleName := "M", test := "many", resultPath := #[s!"case {i}"], status := .pass } : Result)
   let quiet ← captureOutput do discard <| humanReport .quiet many
   assertEq 51 (quiet.stdout.splitOn "ok    ").length
-  assertContains "(... and 10 more passed, 0 more failed)" quiet.stdout
+  assertContains "(... and 10 more passed)" quiet.stdout
   let verbose ← captureOutput do discard <| humanReport .verbose many
   assertEq 61 (verbose.stdout.splitOn "ok    ").length
   assertEq 1 (verbose.stdout.splitOn "(... and").length
+
+/-- Truncation never suppresses a failure or error: past the cap they print in full and only the
+passes around them are summarized. -/
+@[test]
+def reportTruncationShowsFailures : Test := do
+  let many := (Array.range 60).map fun i =>
+    let status : Status := if i == 55 then .fail { message := "boom" } else .pass
+    ({ package := "p", moduleName := "M", test := "many", resultPath := #[s!"case {i}"], status } : Result)
+  let quiet ← captureOutput do discard <| humanReport .quiet many
+  assertContains "FAIL  p/M  many.case 55: boom" quiet.stdout
+  assertContains "(... and 9 more passed)" quiet.stdout
 
 /-- `humanReport` returns the number of failures and errors. -/
 @[test]
