@@ -134,18 +134,16 @@ lean_exe «verso-literate-plan» where
   srcDir := "src/verso-literate-plan"
   supportInterpreter := true
 
+-- All test code: Errata test modules, compile-time tests, fixtures, and generators. Submodules are
+-- globbed so each is built and every `@[test]` module is discoverable.
 @[default_target]
-lean_lib Tests where
+lean_lib VersoTests where
   srcDir := "src/tests"
-
-@[test_driver]
-lean_exe «verso-tests» where
-  root := `TestMain
-  srcDir := "src/tests"
-  supportInterpreter := true
+  roots := #[`VersoTests]
+  globs := #[Glob.andSubmodules `VersoTests]
 
 -- Everything below is Errata's own implementation: its library, its self-tests, the generated
--- discovery runner, and the runner script.
+-- discovery runner, and the `lake test` driver.
 namespace Errata
 
 @[default_target]
@@ -288,6 +286,7 @@ private def warnUncoveredTestModules (ws : Lake.Workspace) : IO Unit := do
     for mod in missed do
       IO.eprintln s!"  {mod}"
 
+@[test_driver]
 script run (args) do
   let ws ← getWorkspace
   -- Answer `--help` before discovering or building anything.
