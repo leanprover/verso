@@ -1,0 +1,15 @@
+/-
+Copyright (c) 2025 Lean FRO LLC. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+Author: Jason Reed
+-/
+module
+import Errata
+meta import all Verso.Code.HighlightedToTex
+open Verso.Doc.TeX (escapeForVerbatim)
+
+open SubVerso.Highlighting
+
+/-- info: "\\symbol{123}\\symbol{124}\\symbol{125}\\symbol{92}" -/
+#test_msgs in
+#eval escapeForVerbatim "{|}\\"
