@@ -135,18 +135,16 @@ lean_exe «verso-literate-plan» where
   srcDir := "src/verso-literate-plan"
   supportInterpreter := true
 
+-- All test code: Errata test modules, compile-time tests, fixtures, and generators. Submodules are
+-- globbed so each is built and every `@[test]` module is discoverable.
 @[default_target]
-lean_lib Tests where
+lean_lib VersoTests where
   srcDir := "src/tests"
-
-@[test_driver]
-lean_exe «verso-tests» where
-  root := `TestMain
-  srcDir := "src/tests"
-  supportInterpreter := true
+  roots := #[`VersoTests]
+  globs := #[Glob.andSubmodules `VersoTests]
 
 -- Everything below is Errata's own implementation: its library, its self-tests, the generated
--- discovery runner, and the runner script.
+-- discovery runner, and the `lake test` driver.
 namespace Errata
 
 @[default_target]
@@ -249,12 +247,13 @@ private def splitArgs (args : List String) : Except String (List String × List 
   | some opt =>
     .error s!"unexpected option '{opt}': arguments before the `--test-options` marker name the \
       libraries to test. Put runner options after the marker, \
-      e.g. `lake run Errata.run --test-options {opt}`."
+      e.g. `lake test -- --test-options {opt}`."
   | none => .ok (names, rest)
 
-/-- Usage information for `lake run Errata.run`. -/
+/-- Usage information for `lake test`. -/
 private def usage : String := include_str "src/errata/Errata/usage.txt"
 
+@[test_driver]
 script run (args) do
   let ws ← getWorkspace
   -- Answer the driver's own `--help` before discovering or building anything. A `--help` after the
