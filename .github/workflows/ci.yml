@@ -149,6 +149,10 @@ jobs:
               run: |
                   lake test -- --verbose --check-tex
 
+            - name: Run Errata's self-tests
+              run: |
+                  lake run Errata.run ErrataTests --test-options --verbose
+
             - name: Test the dev server
               run: |
                   ./src/tests/run_serve_test.sh
