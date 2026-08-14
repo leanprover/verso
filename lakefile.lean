@@ -5,6 +5,7 @@ require subverso from git "https://github.com/leanprover/subverso"@"main"
 require MD4Lean from git "https://github.com/acmepjz/md4lean"@"main"
 require plausible from git "https://github.com/leanprover-community/plausible"@"main"
 require illuminate from git "https://github.com/leanprover/illuminate"@"main"
+require Cli from git "https://github.com/leanprover/lean4-cli"@"main"
 
 package verso where
   precompileModules := true
@@ -148,15 +149,9 @@ lean_exe «verso-tests» where
 -- discovery runner, and the runner script.
 namespace Errata
 
-@[default_target]
-input_file errataUsageFile where
-  text := true
-  path := "src/errata/Errata/usage.txt"
-
 lean_lib Errata where
   srcDir := "src/errata"
   roots := #[`Errata]
-  needs := #[errataUsageFile]
 
 -- Tests that exercise Errata using Errata itself.
 lean_lib ErrataTests where
@@ -239,7 +234,7 @@ private def splitArgs (args : List String) : Except String (List String × List 
       e.g. `lake test -- --test-options {opt}`."
   | none => .ok (names, rest)
 
-/-- Usage information for `lake test`, shared with `Errata.usage` through one text file. -/
+/-- Usage information for `lake test`. -/
 private def usage : String := include_str "src/errata/Errata/usage.txt"
 
 /-- Every `.lean` file below a directory, recursively. -/
@@ -290,8 +285,9 @@ private def warnUncoveredTestModules (ws : Lake.Workspace) : IO Unit := do
 
 script run (args) do
   let ws ← getWorkspace
-  -- Answer `--help` before discovering or building anything.
-  if args.any (fun a => a == "--help" || a == "-h") then
+  -- Answer the driver's own `--help` before discovering or building anything. A `--help` after the
+  -- marker asks for the runner's options, so it goes to the runner along with the other arguments.
+  if (args.takeWhile (· != "--test-options")).any (fun a => a == "--help" || a == "-h") then
     IO.println usage
     return 0
   let (libNames, runnerArgs) ←
