@@ -115,3 +115,12 @@ Legacy role: {lean post2}`Nat.succ 1`.
 
 #guard inlineLeanRoleNames.toPart.content.size > 0
 #guard inlineLeanRoleNamesDeprecated.toPart.content.size > 0
+
+```leanInit env
+```
+
+```lean env
+def x := 1
+```
+
+Role is aware of the environment: {lean env}`x`
