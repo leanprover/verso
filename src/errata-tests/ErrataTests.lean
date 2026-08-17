@@ -59,6 +59,12 @@ set_option doc.verso true in
 #test_msgs in
 #eval 3 + 4
 
+/--
+error: Module `NoSuchModule` is not imported, so its tests cannot be reached. Import it, using `import all NoSuchModule` if it belongs to the module system.
+-/
+#test_msgs in
+example : Array TestEntry := getAllTests% "verso" NoSuchModule
+
 /-- A property test. -/
 @[test]
 def addComm : Test :=
