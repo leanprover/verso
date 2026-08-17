@@ -228,9 +228,10 @@ def project_build_targets(project_directory: Path, targets: list[str] = []) -> t
     try:
         start: float = time.time()
         result = subprocess.run(
-            ["lake", "build", "--no-ansi", "--keep-toolchain"] + targets,
+            ["taskset", "-c", "0-3", "lake", "build", "--no-ansi", "--keep-toolchain"] + targets,
             cwd=project_directory,
             capture_output=True,
+            env={**os.environ, "LEAN_NUM_THREADS": "4"},
         )
         end: float = time.time()
         print(result.stderr.decode("utf-8"), file=sys.stderr)
@@ -249,9 +250,10 @@ def project_measure_exe(project_directory: Path, main_module: str) -> tuple[floa
     try:
         start: float = time.time()
         subprocess.run(
-            ["lake", "lean", f"{main_module}.lean", "--", "--run", f"{main_module}.lean"] + cmdargs,
+            ["taskset", "-c", "0-3", "lake", "lean", f"{main_module}.lean", "--", "--run", f"{main_module}.lean"] + cmdargs,
             cwd=project_directory,
             check=True,
+            env={**os.environ, "LEAN_NUM_THREADS": "4"},
         )
         end: float = time.time()
         return (end - start, 0)
@@ -263,12 +265,13 @@ def project_measure_exe(project_directory: Path, main_module: str) -> tuple[floa
 def project_measure_reelab(project_directory: Path, file_name: Path, edit_pos: tuple[int, int]) -> float | None:
     try:
         result = subprocess.run(
-            ["lean", "--run", str(INTERACTIVE_BENCH_PATH), str(file_name), DUMMY_COMMAND, str(edit_pos[0]), str(edit_pos[1])],
+            ["taskset", "-c", "0-3", "lean", "--run", str(INTERACTIVE_BENCH_PATH), str(file_name), DUMMY_COMMAND, str(edit_pos[0]), str(edit_pos[1])],
             # Use the project's Lean toolchain
             cwd=project_directory,
             stdout=subprocess.PIPE,
             text=True,
             check=True,
+            env={**os.environ, "LEAN_NUM_THREADS": "4"},
         )
         timings = dict(re.findall(
             r"^([a-z- ]+)=([0-9]+)$",
