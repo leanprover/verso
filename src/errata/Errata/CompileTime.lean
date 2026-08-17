@@ -8,6 +8,7 @@ module
 public import Errata.Result
 public meta import Errata.CompileTime.Helpers
 public import Lean.Elab.Command
+public import Lean.Elab.GuardMsgs
 public import Lean.Data.Options
 
 open Lean Elab Command Errata.CompileTime
@@ -40,16 +41,13 @@ syntax (name := testMsgsCmd) (plainDocComment)? "#test_msgs" "in" command : comm
 meta def elabTestMsgs : Command.CommandElab
   | `($[$dc?:docComment]? #test_msgs%$tk in $cmd) => do
     let expected := ((← dc?.mapM (getDocStringText ·)).getD "").trimAscii.copy
-    -- Elaborate the command, capturing its messages instead of letting them surface. Both the
-    -- synchronous log and the asynchronous snapshot tasks are collected, so messages from linters
-    -- (which run after elaboration) are included, as `#guard_msgs` does.
+    -- Elaborate the command, capturing its messages instead of letting them surface. Collection
+    -- covers the asynchronous snapshot tasks as well as the synchronous log, so messages from
+    -- linters, which run after elaboration, are included. Elaborating the command replaces the
+    -- message log, so the surrounding one is put back afterwards.
     let saved := (← get).messages
-    modify ({ · with messages := {} })
-    withReader ({ · with snap? := none }) do
-      elabCommandTopLevel cmd #[]
-    let produced := (← get).messages ++
-      (← get).snapshotTasks.foldl (· ++ ·.get.getAll.foldl (· ++ ·.diagnostics.msgLog) .empty) .empty
-    modify ({ · with messages := saved, snapshotTasks := #[] })
+    let produced ← Lean.Elab.Tactic.GuardMsgs.runAndCollectMessages cmd
+    modify ({ · with messages := saved })
     let visible := produced.toList.filter (!·.isSilent)
     let strings ← (visible.mapM formatMessage : IO (List String))
     -- Multiple messages are separated by `---`, matching the block `#guard_msgs` compares against.
