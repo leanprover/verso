@@ -221,9 +221,10 @@ def project_build_default(project_directory: Path, targets: list[str]) -> float 
     try:
         start: float = time.time()
         result = subprocess.run(
-            ["lake", "build", "--no-ansi", "--keep-toolchain"] + targets,
+            ["taskset", "-c", "0-3", "lake", "build", "--no-ansi", "--keep-toolchain"] + targets,
             cwd=project_directory,
             capture_output=True,
+            env={**os.environ, "LEAN_NUM_THREADS": "4"},
         )
         end: float = time.time()
         dt = end - start
@@ -248,9 +249,10 @@ def project_build_exe(project_directory: Path, main_module: str) -> float | None
     try:
         start: float = time.time()
         result = subprocess.run(
-            ["lake", "lean", main_module],
+            ["taskset", "-c", "0-3", "lake", "lean", main_module],
             cwd=project_directory,
             capture_output=True,
+            env={**os.environ, "LEAN_NUM_THREADS": "4"},
         )
         end: float = time.time()
         dt = end - start
@@ -273,9 +275,10 @@ def project_measure_exe(project_directory: Path, main_module: str) -> bool:
         append_result("build/exe", "generated exe", 0, "B")
         start: float = time.time()
         subprocess.run(
-            ["lake", "lean", main_module, "--", "--run", main_module] + cmdargs,
+            ["taskset", "-c", "0-3", "lake", "lean", main_module, "--", "--run", main_module] + cmdargs,
             cwd=project_directory,
             check=True,
+            env={**os.environ, "LEAN_NUM_THREADS": "4"},
         )
         end: float = time.time()
         append_result("execute", "generation time", end - start, "s")
