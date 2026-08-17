@@ -106,7 +106,9 @@ meta def elabGetAllTests : TermElab := fun stx expectedType? => do
   let mut entries : Array Term := #[]
   for modStx in mods do
     let moduleName := modStx.getId
-    let some idx := env.getModuleIdx? moduleName | continue
+    let some idx := env.getModuleIdx? moduleName
+      | throwErrorAt modStx "Module `{moduleName}` is not imported, so its tests cannot be \
+          reached. Import it, using `import all {moduleName}` if it belongs to the module system."
     let moduleStr := moduleName.toString
     for test in testExt.getModuleEntries env idx do
       let userName := privateToUserName test.name

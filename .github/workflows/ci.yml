@@ -74,7 +74,7 @@ jobs:
                   out="$(lake query VersoUtil:orphanMods Verso:orphanMods MultiVerso:orphanMods \
                     VersoSearch:orphanMods VersoBlog:orphanMods VersoManual:orphanMods \
                     VersoIlluminate:orphanMods VersoTutorial:orphanMods VersoLiterate:orphanMods \
-                    VersoLiterateCode:orphanMods)"
+                    VersoLiterateCode:orphanMods Errata:orphanMods)"
                   if [ -n "$(printf '%s' "$out" | tr -d '[:space:]')" ]; then
                     echo "Found orphaned modules:"
                     echo "$out"
